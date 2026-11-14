@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Du gène au caractère — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="genetique.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Schéma bilan de l’expression de l’information génétique : dans le noyau, le gène (ADN) est transcrit par l’ARN polymérase en ARNm ; l’ARNm sort par un pore nucléaire ; dans le cytoplasme, un ribosome le traduit en une chaîne d’acides aminés, la protéine, qui détermine le caractère"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="etapes.js"></script>
+<script src="molecules.js"></script>
+<script>
+/*
+ * Schéma bilan « du gène au caractère » (cours « Expression de l’information génétique », 2 Bac PC BIOF, 11 novembre 2026). Capacité RGP8.
+ * Vue `schema` : la cellule peinte (cytoplasme rosé, noyau bleuté avec pores) ; chaque élément apparaît et s’étiquette à son moment ;
+ * en bas, la chaîne écrite à la craie verte « gène (ADN) → transcription → ARNm → traduction → protéine → caractère ».
+ * Vue `construire` : le même schéma sans étiquettes ; sept étiquettes à glisser (poignées) ; une étiquette bien posée devient verte
+ * et s’aimante ; `places` (lecture seule) compte les bonnes ; set_parameters {corrige: true} (ou le moment corrige) les pose toutes.
+ */
+const { lisse, rampe, entre } = window.Etapes;
+const M = window.Molecules;
+const NO = { cx: 200, cy: 210, rx: 145, ry: 115 };                 // noyau
+const PORE = M.pore(NO.cx, NO.cy, NO.rx, NO.ry, 0);                 // (≈ 340, 245) : le pore de sortie, à droite
+const XD = 80, PD = 12, ADN_H = 'ATGCGCAGTCAGTAGCAT', ADN_B = ADN_H.split('').map(b => M.COMP_ADN[b]).join('');
+const XG0 = 152, XG1 = 272;                                          // le gène : bases 6 à 15 de l’ADN
+const ARN = 'AUGCGCAGUC', YN = 212, YS = PORE[1];                   // ARNm : 10 nucléotides (120 px)
+const CH = ['Met', 'Val', 'His', 'Leu', 'Thr', 'Pro', 'Glu'];
+const AMAS = [[410, 112], [425, 112], [440, 112], [455, 112], [447, 128], [432, 128], [417, 128]];   // la protéine repliée
+const RIBOS_LIBRES = [[548, 190], [66, 290], [250, 355]];
+const MS = { gene: 2.5, transcription: 5.5, arnm: 8.5, pore: 11.5, traduction: 14.5, proteine: 17.5, caractere: 20.5 };
+
+/* ── l’état du schéma à l’instant t (vue schema) ── */
+function etat(t) {
+  const xp = 160 + 108 * rampe(t, 3.2, 3.2), ap = rampe(t, 3.0, .4) * (1 - rampe(t, 6.6, .5));
+  const nb = Math.round(10 * rampe(t, 3.4, 3.0));
+  const ya = YN + (YS - YN) * rampe(t, 6.6, 1.0), xa = XG0 + 243 * Math.min(1, Math.max(0, (t - 9) / 4.5));
+  const ar = rampe(t, 13.4, .6), xr = 410 + 70 * rampe(t, 14.4, 3.8);
+  const n = t < 14.4 ? 0 : Math.min(7, 1 + Math.floor((xr - 410) / 10.5)), lib = rampe(t, 18.4, 1.2);
+  const pts = []; for (let i = 0; i < n; i++) { const j = n - 1 - i; pts.push([entre(xr - 6 - 9 * j, AMAS[i][0], lib), entre(175 - 9 * j, AMAS[i][1], lib)]); }
+  return { xp, ap, nb, ya, xa, ar, xr, n, lib, pts, ac: rampe(t, 19.6, .6) };
+}
+function peindreCellule(x, a = 1) {
+  x.save(); x.globalAlpha *= a;
+  M.cytoplasme(x, 300, 215, 285, 175);
+  M.noyau(x, NO.cx, NO.cy, NO.rx, NO.ry, { pores: 10 });
+  // nucléoplasme assombri (pour l’œil seulement) : la craie reste lisible dessus
+  x.fillStyle = 'rgba(23,37,84,.45)'; x.beginPath(); x.ellipse(NO.cx, NO.cy, NO.rx - 1, NO.ry - 1, 0, 0, Math.PI * 2); x.fill();
+  RIBOS_LIBRES.forEach(([px, py]) => M.sphere(x, px, py, 5, '#2dd4bf'));
+  M.brin(x, XD, 150, PD, ADN_H, 'adn', 1, { lb: 9, lettres: false });
+  M.brin(x, XD, 168, PD, ADN_B, 'adn', -1, { lb: 9, lettres: false });
+  x.restore();
+}
+function polymerase(x, px, a) {
+  if (a <= 0) return; x.save(); x.globalAlpha *= a;
+  const g = x.createRadialGradient(px - 5, 152, 2, px, 159, 18); g.addColorStop(0, '#f5d0fe'); g.addColorStop(.6, '#d946ef'); g.addColorStop(1, '#86198f');
+  x.fillStyle = g; x.beginPath(); x.ellipse(px, 159, 17, 14, 0, 0, Math.PI * 2); x.fill(); x.strokeStyle = 'rgba(80,10,90,.7)'; x.lineWidth = 1; x.stroke(); x.restore();
+}
+function ribosome(x, xr, a) { if (a > 0) M.ribosome(x, xr, YS, .75, { petite: a, grande: a, dyg: -16 }); }
+function chaine(x, pts) { if (pts.length > 1) M.chaine(x, pts, CH.slice(0, pts.length), 7); else if (pts.length) M.perle(x, pts[0][0], pts[0][1], 7, 'Met'); }
+function hematies(x, a) { if (a <= 0) return; [[640, 205], [692, 228], [718, 186]].forEach(([px, py], i) => M.hematie(x, px, py, 17, 0, i * .7, a)); }
+
+function dessinerSchema(c, k) {
+  const t = k.t, E = etat(t);
+  c.direct(() => {
+    const x = c.ctx;
+    peindreCellule(x, rampe(t, .1, .6));
+    polymerase(x, E.xp, E.ap);
+    if (E.nb > 0) M.brin(x, E.xa, E.ya, PD, ARN, 'arn', -1, { lb: 10, lettres: false, a: E.nb });
+    ribosome(x, E.xr, E.ar);
+    chaine(x, E.pts);
+    hematies(x, E.ac);
+  });
+  c.texte('Du gène au caractère : schéma bilan', 20, 26, { couleur: 'cyan', taille: 19 });
+  c.repere('noyau', NO.cx - NO.rx, NO.cy - NO.ry, 2 * NO.rx, 2 * NO.ry, 'le noyau');
+  c.repere('cytoplasme', 350, 60, 230, 300, 'le cytoplasme');
+  c.repere('pore', PORE[0] - 13, PORE[1] - 13, 26, 26, 'le pore nucléaire');
+  if (k.ecrit(c, 'cel', .4)) { k.T(c, 'noyau', 200, 305, { couleur: 'blanc', taille: 16, align: 'center' }); k.T(c, 'cytoplasme', 360, 82, { couleur: 'rose', taille: 16 }); }
+  // la chaîne écrite en bas, maillon par maillon
+  const PIECES = [['gène (ADN)', 2.0], [' → transcription', 4.8], [' → ARNm', 7.8], [' → traduction', 13.9], [' → protéine', 16.9], [' → caractère', 19.9]];
+  const total = c.largeurTexte(PIECES.map(p => p[0]).join(''), 16); let xc = 380 - total / 2;
+  const maillon = i => { const [s, tEv] = PIECES[i], x0 = xc; xc += c.largeurTexte(s, 16); if (t >= tEv && k.ecrit(c, 'ch' + i, tEv)) k.T(c, s, x0, 406, { couleur: 'vert', taille: 16 }); };
+  const xDebut = xc;
+  if (t >= 1.8) c.repere('gene', XG0, 112, XG1 - XG0, 64, 'le gène (portion d’ADN)');
+  if (t >= 1.8 && k.ecrit(c, 'gene', 1.8)) {
+    c.trait([[XG0, 146], [XG0 + 4, 139], [(XG0 + XG1) / 2 - 6, 139], [(XG0 + XG1) / 2, 133], [(XG0 + XG1) / 2 + 6, 139], [XG1 - 4, 139], [XG1, 146]], { couleur: 'orange', largeur: 2 });
+    k.T(c, 'gène (ADN)', 212, 128, { couleur: 'orange', taille: 16, align: 'center' });
+  }
+  maillon(0);
+  if (t >= 3.0) c.repere('transcription', 64, 150, 230, 70, 'la transcription (ARN polymérase)');
+  if (t >= 4.4 && k.ecrit(c, 'tr', 4.4)) { c.fleche(186, 178, 186, 199, { couleur: 'jaune', largeur: 1.8, tete: 7 }); k.T(c, 'transcription', 108, 196, { couleur: 'jaune', taille: 16, align: 'center' }); }
+  maillon(1);
+  if (t >= 5.0 && t < 6.9 && k.ecrit(c, 'pol', 5.0)) { k.T(c, 'ARN', 284, 198, { couleur: 'rose', taille: 14 }); k.T(c, 'polymérase', 284, 214, { couleur: 'rose', taille: 14 }); }
+  if (E.nb > 0) c.repere('arnm', E.xa, E.ya - 14, E.nb * PD, 22, 'l’ARNm');
+  if (t >= 7.4 && k.ecrit(c, 'arnm', 7.4)) k.T(c, 'ARNm', E.xa - 6, E.ya + 6, { couleur: 'orange', taille: 16, align: 'right' });
+  maillon(2);
+  if (t >= 10.4 && k.ecrit(c, 'pore', 10.4)) { c.ligne(348, 292, PORE[0] + 1, PORE[1] + 8, { couleur: 'faible', largeur: 1.2 }); k.T(c, 'pore nucléaire', 362, 308, { couleur: 'blanc', taille: 15, align: 'center' }); }
+  if (t >= 13.4) c.repere('ribosome', E.xr - 40, YS - 70, 80, 98, 'le ribosome');
+  if (t >= 13.8) c.repere('traduction', 380, 170, 140, 185, 'la traduction (ribosome)');
+  if (t >= 13.8 && k.ecrit(c, 'trad', 13.8)) { k.T(c, 'ribosome', 505, 306, { couleur: 'cyan', taille: 15, align: 'center' }); k.T(c, 'traduction', 420, 350, { couleur: 'jaune', taille: 16, align: 'center' }); }
+  maillon(3);
+  if (E.pts.length) { const xs = E.pts.map(p => p[0]), ys = E.pts.map(p => p[1]); c.repere('proteine', Math.min(...xs) - 9, Math.min(...ys) - 9, Math.max(...xs) - Math.min(...xs) + 18, Math.max(...ys) - Math.min(...ys) + 18, 'la protéine (chaîne d’acides aminés)'); }
+  if (t >= 16.8 && k.ecrit(c, 'prot', 16.8)) k.T(c, 'protéine', 500, 106, { couleur: 'jaune', taille: 16, align: 'center' });
+  maillon(4);
+  if (t >= 19.6) c.repere('caractere', 600, 130, 150, 165, 'le caractère (phénotype)');
+  if (t >= 19.6 && k.ecrit(c, 'car', 19.6)) {
+    c.fleche(530, 112, 612, 160, { couleur: 'blanc', largeur: 1.8 });
+    k.T(c, 'caractère', 680, 150, { couleur: 'jaune', taille: 17, align: 'center' });
+    k.T(c, 'hématies rondes', 680, 268, { couleur: 'blanc', taille: 15, align: 'center' }); k.T(c, '(phénotype)', 680, 287, { couleur: 'faible', taille: 14, align: 'center' });
+  }
+  maillon(5);
+  if (t >= 2.0) c.repere('chaine_ecrite', xDebut - 4, 388, total + 8, 24, 'gène (ADN) → transcription → ARNm → traduction → protéine → caractère');
+}
+function voitSchema(k) {
+  const t = k.t, E = etat(t), m = [];
+  m.push('Une cellule peinte : cytoplasme rosé, noyau bleuté à gauche avec ses pores ; dans le noyau, une molécule d’ADN horizontale (deux brins bleu-violet) ; quelques ribosomes libres dans le cytoplasme. Écrit « noyau » et « cytoplasme ».');
+  if (t >= 1.8) m.push('Une accolade orange au-dessus d’une portion de l’ADN : écrit « gène (ADN) ».');
+  if (E.ap > .05 && t < 7) m.push(`L’ARN polymérase (ovale rose-violet) avance le long du gène, de gauche à droite (${Math.round((E.xp - XG0) / (XG1 - XG0) * 100)} % du gène) ; sous l’ADN, l’ARNm orange s’allonge (${E.nb} nucléotides sur 10).`);
+  if (t >= 4.4) m.push('Une flèche jaune de l’ADN vers l’ARNm, écrit « transcription »' + (t >= 5.0 && t < 6.9 ? ' et « ARN polymérase ».' : '.'));
+  if (t >= 6.6 && t < 9) m.push('L’ARNm, terminé, se détache de l’ADN, dans le noyau' + (t >= 7.4 ? ' (écrit « ARNm »).' : '.'));
+  if (t >= 9 && t < 13.5) m.push(`L’ARNm se dirige vers la droite et passe par un pore nucléaire${E.xa < PORE[0] && E.xa + 120 > PORE[0] ? ' : il est à cheval sur l’enveloppe du noyau' : ''}` + (t >= 10.4 ? ' (écrit « pore nucléaire »).' : '.'));
+  if (t >= 13.5) m.push('L’ARNm est dans le cytoplasme, à droite du noyau.');
+  if (E.ar > .05) m.push(`Un ribosome (deux sous-unités turquoise) est posé sur l’ARNm et l’avance de gauche à droite` + (t >= 13.8 ? ' ; écrit « ribosome » et « traduction ».' : '.'));
+  if (E.n > 0 && E.lib <= 0) m.push(`Une chaîne de ${E.n} acide${E.n > 1 ? 's' : ''} aminé${E.n > 1 ? 's' : ''} (perles) sort du ribosome : ${CH.slice(0, E.n).join(' – ')}.`);
+  if (E.lib > 0) m.push('La chaîne d’acides aminés se détache du ribosome et se replie en haut du cytoplasme : la protéine.');
+  if (t >= 16.8) m.push('Écrit « protéine » près de la chaîne.');
+  if (t >= 19.6) m.push('À droite, hors de la cellule, trois hématies rondes peintes ; une flèche de la protéine vers elles ; écrit « caractère », « hématies rondes (phénotype) ».');
+  const PIECES = [['gène (ADN)', 2.0], ['transcription', 4.8], ['ARNm', 7.8], ['traduction', 13.9], ['protéine', 16.9], ['caractère', 19.9]].filter(p => t >= p[1]).map(p => p[0]);
+  if (PIECES.length) m.push(`En bas, à la craie verte : « ${PIECES.join(' → ')} ».`);
+  return m;
+}
+
+/* ── vue construire : le même schéma sans étiquettes, sept étiquettes à poser ── */
+const NOMS = { gene: 'gène', arnm: 'ARNm', pore: 'pore', ribosome: 'ribosome', proteine: 'protéine', transcription: 'transcription', traduction: 'traduction' };
+const SLOT = { gene: [212, 124], transcription: [108, 190], arnm: [110, 236], pore: [362, 304], ribosome: [505, 300], proteine: [470, 100], traduction: [420, 345] };
+const ORDRE = ['ribosome', 'gene', 'traduction', 'pore', 'proteine', 'arnm', 'transcription'];
+const COL = i => [675, 78 + 38 * i];
+const MC = { etiquettes: 2.5, corrige: 6.5 };
+const T_CORR = 4.6;
+let ET = {}, dernierT = 0;
+function remiseEtiquettes() { ET = {}; ORDRE.forEach((id, i) => { const [x, y] = COL(i); ET[id] = { x, y, ok: false }; }); }
+remiseEtiquettes();
+const largeurEt = id => 18 + 8.2 * NOMS[id].length;
+/** Positions affichées (la correction les amène à leur place). */
+function positions(k) {
+  const out = {};
+  ORDRE.forEach((id, i) => {
+    const e = ET[id];
+    if (k.P.corrige && k.t >= T_CORR) { const u = rampe(k.t, T_CORR + .15 * i, 1.0), [sx, sy] = SLOT[id]; out[id] = { x: entre(e.x, sx, u), y: entre(e.y, sy, u), ok: e.ok || u >= 1 }; }
+    else out[id] = { ...e };
+  });
+  return out;
+}
+const compte = pos => ORDRE.filter(id => pos[id].ok).length;
+function dessinerConstruire(c, k) {
+  const t = k.t;
+  if (t + .3 < dernierT) { remiseEtiquettes(); k.P.places = 0; }
+  dernierT = t;
+  c.direct(() => {
+    const x = c.ctx;
+    peindreCellule(x, rampe(t, .1, .6));
+    polymerase(x, 232, rampe(t, .1, .6));
+    M.brin(x, XG0, YN, PD, ARN, 'arn', -1, { lb: 10, lettres: false, a: 6, alpha: rampe(t, .1, .6) });
+    M.brin(x, 395, YS, PD, ARN, 'arn', -1, { lb: 10, lettres: false, alpha: rampe(t, .1, .6) });
+    x.save(); x.globalAlpha = rampe(t, .1, .6);
+    ribosome(x, 470, 1);
+    chaine(x, Array.from({ length: 6 }, (_, i) => { const j = 5 - i; return [470 - 6 - 9 * j, 175 - 9 * j]; }));
+    x.restore();
+  });
+  c.texte('Construis le schéma : pose les étiquettes', 20, 26, { couleur: 'cyan', taille: 19 });
+  c.repere('schema', 15, 40, 570, 350, 'le schéma de la cellule');
+  c.repere('zone_transcription', 64, 120, 240, 105, 'la zone de la transcription (dans le noyau)');
+  c.repere('zone_traduction', 380, 110, 150, 175, 'la zone de la traduction (ribosome, cytoplasme)');
+  if (t >= 1.0) c.repere('etiquettes', 600, 58, 152, 270, 'les étiquettes à poser');
+  const pos = positions(k);
+  if (k.P.corrige && t >= T_CORR + 1.9) k.P.places = 7;
+  if (t >= 1.0 && k.ecrit(c, 'et', 1.0)) {
+    ORDRE.forEach(id => {
+      const p = pos[id], w = largeurEt(id), coul = p.ok ? 'vert' : 'blanc';
+      c.rect(p.x - w / 2, p.y - 13, w, 26, { couleur: coul, largeur: 1.6, fond: p.ok ? '#14532d' : '#1e293b', fondAlpha: .82, arrondi: 6 });
+      c.texte(NOMS[id], p.x, p.y + 6, { couleur: coul, taille: 16, align: 'center', duree: .25 });
+    });
+  }
+  if (t >= 1.6 && k.ecrit(c, 'consigne', 1.6)) k.T(c, 'glisse chaque étiquette à sa place', 676, 352, { couleur: 'faible', taille: 14, align: 'center' });
+  if (k.P.corrige && t >= T_CORR + 1.9 && k.ecrit(c, 'bravo', T_CORR + 1.9)) k.T(c, 'corrigé : les 7 étiquettes sont à leur place', 300, 404, { couleur: 'vert', taille: 16, align: 'center' });
+}
+function voitConstruire(k) {
+  const t = k.t, pos = positions(k), m = [];
+  m.push('Le schéma de la cellule SANS étiquettes : noyau bleuté (ADN avec un gène, ARN polymérase, ARNm en formation), un pore, et dans le cytoplasme rosé un ARNm avec un ribosome et une chaîne d’acides aminés.');
+  if (t < 1.0) return m;
+  const col = [], bien = [], ailleurs = [];
+  ORDRE.forEach((id, i) => {
+    const p = pos[id], [cx0, cy0] = COL(i);
+    if (p.ok) bien.push(`« ${NOMS[id]} »`);
+    else if (Math.hypot(p.x - cx0, p.y - cy0) < 4) col.push(`« ${NOMS[id]} »`);
+    else { let best = null, d = 1e9; for (const [s, [sx, sy]] of Object.entries(SLOT)) { const dd = Math.hypot(p.x - sx, p.y - sy); if (dd < d) { d = dd; best = s; } } ailleurs.push(`« ${NOMS[id]} » (posée près de la place de « ${NOMS[best]} »)`); }
+  });
+  if (col.length) m.push(`Dans la colonne de droite, étiquettes à poser : ${col.join(', ')}.`);
+  if (bien.length) m.push(`Bien posées (vertes, aimantées) : ${bien.join(', ')}.`);
+  if (ailleurs.length) m.push(`Mal posées (blanches) : ${ailleurs.join(', ')}.`);
+  if (k.P.corrige && t >= T_CORR && t < T_CORR + 1.9) m.push('Correction : les étiquettes glissent vers leur place.');
+  m.push(`Bien posées : ${compte(pos)} sur 7.`);
+  return m;
+}
+
+window.Etapes.lancer({
+  id: 'svt_schema_bilan', titre: 'Du gène au caractère', graine: 61,
+  parametres: {
+    places: { defaut: 0, schema: 'lecture seule : nombre d’étiquettes bien posées (0..7), vue construire', lire: () => undefined },
+    corrige: { defaut: false, schema: 'true | false (true : toutes les étiquettes vont à leur place, vue construire)', lire: v => v === true || v === 'true' || v === 1 || v === '1' },
+  },
+  apresReglage: (k, cles) => { if (cles.includes('corrige') && !k.P.corrige) { remiseEtiquettes(); k.P.places = 0; } },
+  poignees: {
+    toucher: (x, y, k) => {
+      if (k.vue !== 'construire' || k.t < 1.8 || (k.P.corrige && k.t >= T_CORR)) return null;
+      for (let i = ORDRE.length - 1; i >= 0; i--) { const id = ORDRE[i], e = ET[id]; if (Math.abs(x - e.x) <= largeurEt(id) / 2 + 4 && Math.abs(y - e.y) <= 16) return id; }
+      return null;
+    },
+    bouger: (id, x, y) => { ET[id] = { x: Math.min(735, Math.max(25, x)), y: Math.min(400, Math.max(40, y)), ok: false }; },
+    lacher: (id, k) => {
+      const [sx, sy] = SLOT[id], e = ET[id];
+      if (Math.hypot(e.x - sx, e.y - sy) <= 42) ET[id] = { x: sx, y: sy, ok: true };
+      k.P.places = ORDRE.filter(n => ET[n].ok).length;
+    },
+  },
+  vues: {
+    schema: { titre: 'Du gène au caractère', fin: 22, moments: MS, dessiner: dessinerSchema, voit: voitSchema,
+      motifs: { gene: 'le gène, une portion d’ADN dans le noyau', transcription: 'la transcription : l’ARN polymérase fabrique l’ARNm', arnm: 'l’ARNm se détache de l’ADN',
+        pore: 'l’ARNm sort du noyau par un pore nucléaire', traduction: 'dans le cytoplasme, le ribosome traduit l’ARNm', proteine: 'la chaîne d’acides aminés : la protéine', caractere: 'la protéine détermine le caractère' },
+      conclusion: 'Gène (ADN) → transcription → ARNm → traduction → protéine → caractère.',
+      texte: 'Schéma bilan : dans le noyau, le gène (ADN) est transcrit par l’ARN polymérase en ARNm ; l’ARNm sort par un pore nucléaire ; dans le cytoplasme, le ribosome le traduit en une chaîne d’acides aminés (protéine) ; la protéine détermine le caractère (hématies rondes, phénotype).',
+      explication: [{ repere: 'gene', texte: 'Le gène est une portion d’ADN, dans le noyau.' }, { repere: 'transcription', texte: 'La transcription fabrique l’ARNm.' }, { repere: 'pore', texte: 'L’ARNm sort par un pore nucléaire.' },
+        { repere: 'traduction', texte: 'Le ribosome traduit l’ARNm en protéine.' }, { repere: 'caractere', texte: 'La protéine détermine le caractère.' }, { repere: 'chaine_ecrite', texte: 'Gène, transcription, ARNm, traduction, protéine, caractère.' }] },
+    construire: { titre: 'Construis le schéma', fin: 8, moments: MC, reglages: { etiquettes: { corrige: false }, corrige: { corrige: true } },
+      dessiner: dessinerConstruire, voit: voitConstruire,
+      motifs: { etiquettes: 'pose chaque étiquette à sa place', corrige: 'la correction : toutes les étiquettes à leur place' },
+      conclusion: 'Pose les sept étiquettes : gène, transcription, ARNm, pore, ribosome, traduction, protéine.',
+      surReglage: (k, cles, api) => { if (cles.includes('corrige')) { if (k.P.corrige) api.playUntil({ moment: 'corrige' }); else api.start(); } },
+      texte: 'Le schéma sans étiquettes ; sept étiquettes à glisser (gène, ARNm, pore, ribosome, protéine, transcription, traduction) ; bien posée, une étiquette devient verte et s’aimante ; corrige : toutes à leur place.',
+      explication: [{ repere: 'etiquettes', texte: 'Glisse chaque étiquette sur le schéma.' }, { repere: 'zone_transcription', texte: 'Ici, dans le noyau : la transcription.' }, { repere: 'zone_traduction', texte: 'Ici, dans le cytoplasme : la traduction.' }] },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

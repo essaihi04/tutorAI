@@ -1,0 +1,651 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le tableau d’avancement — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="cin.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Tableau d’avancement à la craie de H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O : état initial, en cours, état final, réactif limitant, lien n(I₂) = x, composition à une date choisie sur la courbe x(t)"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Le tableau d’avancement de l’exemple A (cours « Suivi temporel d’une transformation, vitesse de réaction », 2e Bac PC BIOF, novembre 2026).
+ * Contrat : outils/cours/notes/cours/cinetique_contrat_simulations.md § 2.
+ * Vues (?vue=) : tableau (défaut) | limitant | lien | composition (poignée t, 0 à 40 min, défaut 8).
+ * Modèle (pour le calcul seulement, jamais écrit) : x(t) = 2,0·(1 − e^(−t/8)) mmol.
+ */
+/* ── Formules chimiques à la craie : indices ₂ et charges ⁺ ⁻ ²⁻ rendus (sans modifier exposants.js ni le kit) ──────────
+ * « MnO₄⁻ » devient « MnO_{4}^{−} » ; le découpage « _{…} » accepte tout caractère avant (« [I⁻]₀ »). */
+(function () {
+  const C = window.Tableau.Craie, P = C.prototype, texteAvant = P.texte, segAvant = C.segments;
+  const SUP = { '⁺': '+', '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+  const SUB = { '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9' };
+  const chim = s => String(s).replace(/[⁺⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUP[ch]).join('') + '}')
+    .replace(/[₀₁₂₃₄₅₆₇₈₉]+/g, g => '_{' + [...g].map(ch => SUB[ch]).join('') + '}');
+  C.segments = function (s) {
+    const out = [], re = /_\{([^}]+)\}/g; let i = 0, m;
+    while ((m = re.exec(s))) { if (m.index > i) out.push(...segAvant(s.slice(i, m.index))); out.push({ t: m[1], sub: true }); i = re.lastIndex; }
+    if (i < s.length) out.push(...segAvant(s.slice(i)));
+    return out;
+  };
+  P.texte = function (s, x, y, o) { return texteAvant.call(this, chim(s), x, y, o); };
+  window.chim = chim;
+})();
+
+/* ── Moteur du déroulé (copie de physics/circuit-rlc-tableau/circuit-lc.html, + M.evs) ─────────────────────────────────── */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lisse = p => p * p * (3 - 2 * p);
+const lerp = (a, b, f) => a + (b - a) * f;
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');
+const ECRITURE = 2.5;
+function Moteur(o) {
+  const q = new URLSearchParams(location.search);
+  const S = { vue: o.vues.includes(q.get('vue')) ? q.get('vue') : o.vues[0], t: 0, running: false, pause: false, fait: false,
+    jusqua: null, motif: '', emis: 0, dit: '', mesure: false };
+  const V = o.vitesse ?? 1.7, T0 = o.T0 ?? .8, HOLD = {};
+  let TL = null;
+  function construire() {
+    let s = T0; const ev = [];
+    for (const e of o.etapes(S.vue)) {
+      const anim = e.anim || 0, d = { ...e, anim, debut: s, ecrit: s + (e.ecritDes ?? anim) };
+      d.fin = Math.max(s + anim, d.ecrit + (HOLD[e.nom] ?? 1.5)) + .35;
+      s = d.fin; ev.push(d);
+    }
+    const mom = {}; for (const e of ev) mom[e.nom] = e.fin; mom.fin = s + (o.queue ?? .6);
+    TL = { ev, M: mom };
+  }
+  const ev = nom => TL.ev.find(e => e.nom === nom);
+  const M = {
+    S, ev, evs: () => TL.ev, Moments: () => TL.M,
+    p(nom) { const e = ev(nom); if (!e) return 0; return e.anim > 0 ? clamp((S.t - e.debut) / e.anim, 0, 1) : (S.t >= e.debut - 1e-6 ? 1 : 0); },
+    commence(nom) { const e = ev(nom); return !!e && S.t > e.debut + 1e-6; },
+    vu(nom) { if (nom === 'fin') return S.t >= TL.M.fin - 1e-6; const e = ev(nom); return !!e && S.t >= e.fin - 1e-6; },
+    etape(c, nom, fn) {
+      const e = ev(nom); if (!e) return;
+      const t = c.t, cur = c.cur, comp = c.complet, w0 = e.ecrit;
+      c.t = S.t > 1e5 ? 1e9 : w0 + (S.t - w0) * V; c.cur = w0;
+      try { fn(); } finally { if (S.mesure) HOLD[nom] = Math.max(HOLD[nom] || 0, (c.cur - w0) / V); c.t = t; c.cur = cur; if (!S.running) c.complet = comp; }
+    },
+    etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
+  };
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const cadreBase = scene.cadre;
+  scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
+  M.scene = scene; M.craie = scene.craie;
+  function calculer() {
+    construire();
+    const t = S.t, r = S.running; S.t = 1e6; S.running = false; S.mesure = true;
+    for (const k of Object.keys(HOLD)) delete HOLD[k];   // une étape dessinée en plusieurs morceaux garde le plus long (max ci-dessus)
+    try { o.dessiner(scene.craie, M); } finally { S.t = t; S.running = r; S.mesure = false; }
+    construire(); scene.sale = true;
+  }
+  const sansSouligne = s => String(s).replace(/([A-Za-zΔτθ])_\{?([A-Za-z0-9]+)\}?/g, (m, a, i) => a + (/^\d+$/.test(i) ? [...i].map(d => '₀₁₂₃₄₅₆₇₈₉'[d]).join('') : i));
+  const dire = (texte, kind = '') => { texte = sansSouligne(texte); S.dit = texte; bulle($('feedback'), texte, kind); };
+  const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+  let pont = null;
+  const emettre = () => pont && pont.emettre();
+  const noter = (a, d) => pont && pont.noter(a, d);
+  scene.avancer = dt => {
+    if (!S.running) return !!(o.anime && o.anime());
+    const avant = S.t; S.t += dt;
+    for (const e of TL.ev) if (avant < e.debut && S.t >= e.debut && e.bulle) dire(e.bulle());
+    if (S.jusqua != null && S.t >= S.jusqua) {
+      S.t = S.jusqua; S.jusqua = null; S.running = false;
+      if (S.t >= TL.M.fin - 1e-6) { finir(); return true; }
+      S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fx(S.t, 1)} s`) + '.');
+      noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); return true;
+    }
+    if (S.t >= TL.M.fin) { S.t = TL.M.fin; finir(); return true; }
+    if (performance.now() - S.emis > 500) { S.emis = performance.now(); emettre(); }
+    return true;
+  };
+  function finir() { S.running = false; S.fait = true; S.pause = false; S.jusqua = null; etiquette(); dire(o.messageFin(M), 'good'); noter('measurement', o.params(M)); emettre(); }
+  function start() { o.reprise && o.reprise(); S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire(o.depart(M)); noter('start', o.params(M)); emettre(); }
+  function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); }
+  function resume() { if (S.running) return; o.reprise && o.reprise(); if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('Ça repart…'); noter('resume'); emettre(); }
+  function setTime(p) {
+    const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+    o.reprise && o.reprise(); S.running = false; S.jusqua = null; S.t = clamp(t, 0, TL.M.fin); S.fait = S.t >= TL.M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+    etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fx(S.t, 1)} s.`); noter('set_time', { time_s: S.t }); emettre();
+  }
+  function playUntil(p) {
+    const noms = o.etapes(S.vue).map(e => e.nom).concat('fin');
+    const nom = noms.includes(p.moment) ? p.moment : null, cible = nom ? TL.M[nom] : +p.time_s;
+    if (!Number.isFinite(cible) || (p.moment && !nom && (p.time_s == null || p.time_s === ''))) { dire(`Moment inconnu : ${p.moment}.`, 'bad'); emettre(); return; }
+    o.reprise && o.reprise();
+    if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+    S.jusqua = clamp(cible, .01, TL.M.fin); S.motif = nom ? (o.motifs[nom] || nom) : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+    noter('play_until', { moment: nom, time_s: S.jusqua }); emettre();
+  }
+  function setParameters(p) {
+    p = p || {};
+    const r = o.appliquer(p, M) || {};
+    if (r.vue && o.vues.includes(r.vue) && r.vue !== S.vue) { S.vue = r.vue; r.change = true; r.vueChange = true; }
+    if (r.change) { calculer(); if (r.vueChange) scene.reecrire(); }
+    noter('set_parameters', o.params(M));
+    if (r.apres) r.apres();
+    else if (r.change && !r.garder) start();
+    else { scene.sale = true; emettre(); }
+  }
+  Object.assign(M, { noter, calculer, dire, start, pause, resume, setTime, playUntil, setParameters, emettre, etiquette });
+  $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+  window.Tableau.explication(o.explications);
+  const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+  M.lancer = () => {
+    calculer();
+    const listeMoments = o.vues.map(v => `${o.vues.length > 1 ? v + ' : ' : ''}${o.etapes(v).map(e => e.nom).concat('fin').join(' | ')}`).join(' ; ');
+    const config = { id: o.id, version: '1.0', title: o.titre, variants: o.vues.length > 1 ? o.vues.map(id => ({ id, label: o.titres[id] })) : [], commands: commandes,
+      command_schema: { set_parameters: o.schema, set_time: { time_s: '0..fin (arrêt sur cet instant de la scène, en s ; voir moments)' },
+        play_until: { moment: listeMoments, time_s: 'ou un instant en s' } } };
+    pont = protocole({ id: o.id, commandes, config, texte: o.texte,
+      etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle',
+        ce_qui_se_voit: o.voir(M) + (S.dit ? ` La bulle dit : « ${S.dit} »` : ''), current_variant: S.vue, time_s: +S.t.toFixed(2),
+        parameters: o.params(M), moments: Object.fromEntries(Object.entries(TL.M).map(([k, v]) => [k, +v.toFixed(2)])) }),
+      progression: () => (S.fait ? 1 : 0),
+      executer: (cmd, p) => ({ start, reset: start, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+    dire(o.depart(M));
+    setTimeout(() => { if (!S.running && S.t === 0 && !S.pause && !S.fait) start(); }, 900);
+  };
+  return M;
+}
+/** Zone d’écriture du bas : le professeur efface les plus vieilles lignes (copie du modèle). */
+function zoneEcriture(c, M, liste, ys, o = {}) {
+  const S = M.S, x = o.x ?? 14, max = o.max ?? 730, taille = o.taille ?? 17, n = ys.length, vues = [];
+  if (S.mesure) {
+    for (const e of liste) M.etape(c, e.nom, () => { for (const [t, col] of e.lignes) c.texte(t, x, ys[0], { couleur: col, taille, max }); e.plus && e.plus(c); });
+    return vues;
+  }
+  let k = -1;
+  liste.forEach((e, j) => { const ev = M.ev(e.nom); if (ev && S.t > ev.ecrit + .05) k = j; });
+  const garde = new Set(); let nb = 0;
+  for (let j = k; j >= 0; j--) { const l = liste[j].lignes.length; if (nb + l > n) break; garde.add(j); nb += l; }
+  let y = 0;
+  liste.forEach((e, j) => {
+    if (j > k) return;
+    M.etape(c, e.nom, () => {
+      if (garde.has(j)) for (const [t, col] of e.lignes) { c.texte(t, x, ys[y++], { couleur: col, taille, max }); vues.push(t); }
+      e.plus && e.plus(c);
+    });
+  });
+  return vues;
+}
+/** Largeur (cadre) d’une formule écrite à la craie, indices et charges compris. */
+function larg(c, s, taille = 17) {
+  const T = window.Tableau, ctx = c.ctx; if (c.echelle && c.tailleMin) taille = Math.max(taille, c.tailleMin / c.echelle);
+  return T.Craie.segments(window.chim(s)).reduce((w, g) => { ctx.font = `${(g.sub || g.sup) ? taille * .62 : taille}px ${T.POLICE}`; return w + ctx.measureText(g.t).width; }, 0);
+}
+/** Équation « gauche → droite » : la flèche est DESSINÉE (la police n’a pas toutes les flèches). Renvoie { x, w }. */
+function eqn(c, x, y, gauche, droite, o = {}) {
+  const t = o.taille ?? 17, w1 = larg(c, gauche, t), w2 = larg(c, droite, t), fl = 30, tot = w1 + fl + 16 + w2;
+  const x0 = o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x, col = o.couleur ?? 'blanc';
+  c.texte(gauche, x0, y, { couleur: col, taille: t });
+  c.fleche(x0 + w1 + 8, y - t * .3, x0 + w1 + 8 + fl, y - t * .3, { couleur: col, largeur: 1.8, tete: 7 });
+  c.texte(droite, x0 + w1 + 16 + fl, y, { couleur: col, taille: t });
+  return { x: x0, w: tot };
+}
+/** Petit triangle « attention » à la craie (orange), le « ! » dedans. */
+function attention(c, x, y, o = {}) {
+  const col = o.couleur ?? 'orange', h = o.h ?? 16;
+  c.trait([[x, y], [x + h * .58, y - h], [x + h * 1.16, y]], { couleur: col, largeur: 1.8, ferme: true });
+  c.texte('!', x + h * .58, y - 3, { couleur: col, taille: h * .8, align: 'center' });
+}
+
+const rgba = ([r, g, b, a], k = 1) => `rgba(${Math.round(r)},${Math.round(g)},${Math.round(b)},${(a * k).toFixed(3)})`;
+const melange = (c1, c2, f) => c1.map((v, i) => lerp(v, c2[i], clamp(f, 0, 1)));
+const eclair = (c, k) => [lerp(c[0], 255, k), lerp(c[1], 255, k), lerp(c[2], 255, k), c[3]];
+const sombre = (c, k) => [c[0] * (1 - k), c[1] * (1 - k), c[2] * (1 - k), Math.min(1, c[3] * (1 + k * .4))];
+const EAU = [222, 234, 244, .12];
+/** Teinte du diiode : incolore → jaune → brun (#8a4b12 au maximum), selon la part f (0 → 1) de la teinte finale. */
+const TEINTE = [[0, EAU], [.2, [246, 226, 120, .40]], [.5, [226, 160, 48, .64]], [.8, [168, 96, 26, .80]], [1, [138, 75, 18, .90]]];
+function teinte(f) {
+  f = clamp(f, 0, 1);
+  for (let i = 1; i < TEINTE.length; i++) if (f <= TEINTE[i][0]) { const [a, ca] = TEINTE[i - 1], [b, cb] = TEINTE[i]; return melange(ca, cb, (f - a) / (b - a)); }
+  return TEINTE[TEINTE.length - 1][1];
+}
+const nomTeinte = f => (f < .04 ? 'incolore' : f < .25 ? 'jaune pâle' : f < .55 ? 'jaune' : f < .85 ? 'orangé, qui brunit' : f < .999 ? 'brune' : 'brune (teinte finale)');
+/** Part de la teinte finale à t (min) pour τ (min) : 1 − e^(−t/τ), ramenée à 1 à t = 5τ (pour l’œil). */
+const avance = (t, tau) => clamp((1 - Math.exp(-t / tau)) / (1 - Math.exp(-5)), 0, 1);
+const Peint = {
+  sphere(ctx, x, y, r, [clair, milieu, foncé], a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r); g.addColorStop(0, clair); g.addColorStop(.45, milieu); g.addColorStop(1, foncé);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  },
+  /** Bécher vu de face : verre, solution (dégradé, ménisque, reflet), bec, graduations. niveau 0 → 1. */
+  becher(ctx, B, niveau, col, a = 1) {
+    const { x, y, w, h } = B, ep = 3, fond = y + h, yS = fond - ep - niveau * (h - 16);
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.beginPath(); ctx.ellipse(x + w / 2 + 3, fond + 4, w / 2, 4.5, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(210,230,250,.06)'; ctx.beginPath(); ctx.roundRect(x, y, w, h, [2, 2, 10, 10]); ctx.fill();
+    if (niveau > .004) {
+      ctx.save(); ctx.beginPath(); ctx.roundRect(x + ep, y, w - 2 * ep, h - ep, [0, 0, 8, 8]); ctx.clip();
+      const g = ctx.createLinearGradient(0, yS, 0, fond); g.addColorStop(0, rgba(eclair(col, .18))); g.addColorStop(1, rgba(sombre(col, .22)));
+      ctx.fillStyle = g; ctx.fillRect(x, yS, w, fond - yS);
+      ctx.fillStyle = 'rgba(255,255,255,.07)'; ctx.fillRect(x + w * .64, yS + 5, w * .09, Math.max(0, fond - yS - 10));
+      ctx.restore();
+      ctx.fillStyle = rgba(eclair(col, .35), 1.1); ctx.beginPath(); ctx.ellipse(x + w / 2, yS, w / 2 - ep, 3, 0, 0, 7); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,.32)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x + ep + 2, yS); ctx.lineTo(x + w - ep - 2, yS); ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(225,238,250,.78)'; ctx.lineWidth = 2.2; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(x - 6, y - 4); ctx.quadraticCurveTo(x - 1, y - 2, x, y + 5); ctx.lineTo(x, fond - 10); ctx.quadraticCurveTo(x, fond, x + 10, fond);
+    ctx.lineTo(x + w - 10, fond); ctx.quadraticCurveTo(x + w, fond, x + w, fond - 10); ctx.lineTo(x + w, y); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.14)'; ctx.fillRect(x + w * .11, y + 12, w * .05, h - 28);
+    ctx.strokeStyle = 'rgba(225,238,250,.35)'; ctx.lineWidth = 1;
+    for (let k = 1; k <= 4; k++) { const gy = fond - 8 - k * (h - 24) / 5; ctx.beginPath(); ctx.moveTo(x + w - 14, gy); ctx.lineTo(x + w - 4, gy); ctx.stroke(); }
+    ctx.restore();
+    return yS;
+  },
+  /** Eau d’un bain (cristallisoir) peinte PAR-DESSUS le bécher : il paraît plongé dedans. */
+  bain(ctx, B, ySurf, col, a = 1) {
+    const { x, y, w, h } = B, fond = y + h;
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createLinearGradient(0, ySurf, 0, fond); g.addColorStop(0, rgba(eclair(col, .2))); g.addColorStop(1, rgba(sombre(col, .3)));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x + 3, ySurf, w - 6, fond - ySurf - 3, [0, 0, 12, 12]); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(x + 5, ySurf); ctx.lineTo(x + w - 5, ySurf); ctx.stroke();
+    ctx.strokeStyle = 'rgba(225,238,250,.7)'; ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, fond - 14); ctx.quadraticCurveTo(x, fond, x + 14, fond); ctx.lineTo(x + w - 14, fond); ctx.quadraticCurveTo(x + w, fond, x + w, fond - 14); ctx.lineTo(x + w, y); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.1)'; ctx.fillRect(x + 7, y + 8, 4, h - 22);
+    ctx.restore();
+  },
+  glacon(ctx, x, y, s, ang, a = 1) {
+    ctx.save(); ctx.globalAlpha = a; ctx.translate(x, y); ctx.rotate(ang);
+    const g = ctx.createLinearGradient(-s / 2, -s / 2, s / 2, s / 2); g.addColorStop(0, 'rgba(245,252,255,.85)'); g.addColorStop(1, 'rgba(170,215,240,.55)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(-s / 2, -s / 2, s, s * .85, 4); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.fillRect(-s / 2 + 3, -s / 2 + 3, s * .3, 2);
+    ctx.restore();
+  },
+  /** Pipette jaugée (pointe en (x, yp)), poire rouge en haut ; `rempli` 0 → 1 de solution `col`. */
+  pipette(ctx, x, yp, rempli, col, a = 1) {
+    if (a <= 0) return;
+    const L = 92, yH = yp - L;
+    ctx.save(); ctx.globalAlpha = a;
+    if (rempli > 0) { ctx.fillStyle = rgba(col, 1.2); ctx.fillRect(x - 2.4, yp - 4 - rempli * (L - 26), 4.8, rempli * (L - 26)); }
+    ctx.strokeStyle = 'rgba(225,238,250,.85)'; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(x - 1.2, yp); ctx.lineTo(x - 3.5, yp - 10); ctx.lineTo(x - 3.5, yH + 18); ctx.moveTo(x + 1.2, yp); ctx.lineTo(x + 3.5, yp - 10); ctx.lineTo(x + 3.5, yH + 18); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.beginPath(); ctx.moveTo(x - 5, yp - 58); ctx.lineTo(x + 5, yp - 58); ctx.stroke();   // trait de jauge
+    const g = ctx.createRadialGradient(x - 3, yH + 4, 1, x, yH + 8, 11); g.addColorStop(0, '#ff9a8a'); g.addColorStop(.5, '#d33a2c'); g.addColorStop(1, '#6e1209');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x, yH + 8, 8, 11, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#8e1d12'; ctx.fillRect(x - 4, yH + 17, 8, 4);
+    ctx.restore();
+  },
+  /** Burette graduée sur son support : solution `col` jusqu’à `niveau` (0 → 1), robinet, pointe en (x, yp). */
+  burette(ctx, x, yH, yp, niveau, col, a = 1, pied = 120) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = '#5c6670'; ctx.fillRect(x + 46, yH - 10, 5, yp + pied - yH); ctx.fillRect(x + 6, yH + 30, 44, 5);
+    const yR = yp - 16;
+    ctx.fillStyle = rgba(col, 1.3); const yl = lerp(yR - 4, yH + 6, niveau); ctx.fillRect(x - 4, yl, 8, yR - yl);
+    ctx.strokeStyle = 'rgba(225,238,250,.85)'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.roundRect(x - 5.5, yH, 11, yR - yH, 2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(225,238,250,.4)'; ctx.lineWidth = 1;
+    for (let k = 1; k < 10; k++) { const gy = yH + k * (yR - yH) / 10; ctx.beginPath(); ctx.moveTo(x - 5, gy); ctx.lineTo(x, gy); ctx.stroke(); }
+    ctx.fillStyle = '#3b4148'; ctx.fillRect(x - 3, yR, 6, 8); ctx.fillStyle = '#c7ccd2'; ctx.fillRect(x - 11, yR + 2, 22, 4);
+    ctx.strokeStyle = 'rgba(225,238,250,.85)'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(x - 1.5, yR + 8); ctx.lineTo(x - .6, yp); ctx.moveTo(x + 1.5, yR + 8); ctx.lineTo(x + .6, yp); ctx.stroke();
+    ctx.restore();
+  },
+  /** Compte-gouttes (pointe en (x, yp)), poire noire. */
+  compteGouttes(ctx, x, yp, col, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = rgba(col, 1.4); ctx.fillRect(x - 2.5, yp - 30, 5, 26);
+    ctx.strokeStyle = 'rgba(225,238,250,.85)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x - 1, yp); ctx.lineTo(x - 4, yp - 14); ctx.lineTo(x - 4, yp - 46); ctx.moveTo(x + 1, yp); ctx.lineTo(x + 4, yp - 14); ctx.lineTo(x + 4, yp - 46); ctx.stroke();
+    const g = ctx.createRadialGradient(x - 3, yp - 58, 1, x, yp - 54, 11); g.addColorStop(0, '#6b6b6b'); g.addColorStop(.5, '#2a2a2a'); g.addColorStop(1, '#050505');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x, yp - 56, 7.5, 11, 0, 0, 7); ctx.fill();
+    ctx.restore();
+  },
+  goutte(ctx, x, y, col, a = 1) {
+    ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = rgba(col, 1.5);
+    ctx.beginPath(); ctx.moveTo(x, y - 6); ctx.quadraticCurveTo(x + 4, y, x, y + 3.5); ctx.quadraticCurveTo(x - 4, y, x, y - 6); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.fillRect(x - 1.2, y - 1, 1.2, 1.6); ctx.restore();
+  },
+  /** Filet de liquide qui coule (versement). */
+  filet(ctx, x, y1, y2, col, a = 1) { ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = rgba(col, 2.2); ctx.fillRect(x - 1.6, y1, 3.2, y2 - y1); ctx.restore(); },
+};
+
+
+/* ── Exemple A (contrat) : x(t) = 2,0·(1 − e^(−t/8)) mmol, POUR LE CALCUL SEULEMENT (jamais écrit) ─────────────────── */
+const xA = t => 2 * (1 - Math.exp(-t / 8));
+const q0 = new URLSearchParams(location.search);
+const PAR = { t: clamp(Math.round(+(q0.get('t') ?? 8)), 0, 40) };
+if (!Number.isFinite(PAR.t)) PAR.t = 8;
+let DRAG = null;
+const tVu = () => DRAG ?? PAR.t;
+/** Valeurs lues à la date t (arrondies à 0,01 comme au tableau : la vérification « 2,0 − 1,26 = 0,74 » reste juste). */
+function compo(t) {
+  const x = Math.round(xA(t) * 100) / 100;
+  return { t, x, h2o2: Math.round((2 - x) * 100) / 100, iod: Math.round((10 - 2 * x) * 100) / 100, i2: x };
+}
+const f2 = v => fr(v, 2);
+
+const VUES = ['tableau', 'limitant', 'lien', 'composition'];
+const TITRES = { tableau: 'le tableau d’avancement', limitant: 'le réactif limitant', lien: 'n(I₂) = x', composition: 'la composition à une date t' };
+const TITRE_TABLEAU = { tableau: 'Le tableau d’avancement (exemple A)', limitant: 'Trouver x_max et le réactif limitant', lien: 'Mesurer n(I₂), c’est connaître x', composition: 'La composition du mélange à une date t' };
+function ETAPES(v) {
+  return ({
+    tableau: [
+      { nom: 'equation', anim: .3, motif: 'l’équation en tête du tableau : H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O', bulle: () => 'On écrit l’équation en tête du tableau.' },
+      { nom: 'etat_initial', anim: .3, motif: 'état initial (x = 0) : 2,0 · 10,0 · excès · 0 mmol', bulle: () => 'L’état initial : x = 0.' },
+      { nom: 'en_cours', anim: .3, motif: 'en cours : 2,0 − x · 10,0 − 2x · excès · x', bulle: () => 'En cours : l’avancement vaut x.' },
+      { nom: 'etat_final', anim: .3, motif: 'état final : 2,0 − x_max · 10,0 − 2x_max · excès · x_max', bulle: () => 'À la fin : x = x_max.' },
+    ],
+    limitant: [
+      { nom: 'tableau', anim: .3, motif: 'le tableau d’avancement complet, ligne état final', bulle: () => 'Voici le tableau d’avancement.' },
+      { nom: 'hypothese_1', anim: .3, motif: 'si H₂O₂ est épuisé : 2,0 − x_max = 0 → x_max = 2,0 mmol', bulle: () => 'Première hypothèse : H₂O₂ est épuisé.' },
+      { nom: 'hypothese_2', anim: .3, motif: 'si I⁻ est épuisé : 10,0 − 2x_max = 0 → x_max = 5,0 mmol', bulle: () => 'Deuxième hypothèse : I⁻ est épuisé.' },
+      { nom: 'plus_petite', anim: .3, motif: 'on garde la plus petite : x_max = 2,0 mmol', bulle: () => 'Laquelle garder ?' },
+      { nom: 'limitant', anim: .3, motif: 'H₂O₂ est le réactif limitant', bulle: () => 'Le réactif limitant…' },
+    ],
+    lien: [
+      { nom: 'tableau', anim: .3, motif: 'le tableau d’avancement de l’exemple A', bulle: () => 'Le tableau d’avancement.' },
+      { nom: 'colonne_i2', anim: .3, motif: 'la colonne I₂ surlignée : 0, puis x, puis x_max', bulle: () => 'Regarde la colonne du diiode.' },
+      { nom: 'egalite', anim: .3, motif: '« n(I₂) = x » à chaque date', bulle: () => 'Que vaut n(I₂) à chaque date ?' },
+      { nom: 'mesure', anim: .8, motif: '« on mesure n(I₂) → on connaît x »', bulle: () => 'Donc, pour connaître x…' },
+    ],
+    composition: [
+      { nom: 'date', anim: .6, motif: () => `la date choisie : t = ${tVu()} min`, bulle: () => 'On choisit une date sur la courbe x(t).' },
+      { nom: 'lecture', anim: .6, motif: () => { const k = compo(tVu()); return `lecture sur la courbe : x(${k.t} min) = ${f2(k.x)} mmol`; }, bulle: () => 'On lit x sur la courbe.' },
+      { nom: 'remplir', anim: .3, motif: () => { const k = compo(tVu()); return `ligne « en cours » : H₂O₂ ${f2(k.h2o2)} ; I⁻ ${f2(k.iod)} ; I₂ ${f2(k.i2)} mmol`; }, bulle: () => 'On remplace x par sa valeur.' },
+      { nom: 'verifier', anim: .3, motif: () => { const k = compo(tVu()); return `vérification : 2,0 − ${f2(k.x)} = ${f2(k.h2o2)} mmol`; }, bulle: () => 'On vérifie un calcul.' },
+    ],
+  })[v];
+}
+const MOTIFS = new Proxy({}, { get: (_, nom) => { if (nom === 'fin') return 'fin'; const e = ETAPES(MO ? MO.S.vue : VUES[0]).find(e => e.nom === nom) || {}; return typeof e.motif === 'function' ? e.motif() : e.motif; } });
+let MO = null;
+const ZY = [352, 376, 400];
+
+/* ── Le tableau à la craie ───────────────────────────────────────────── */
+const ESP = [['h2o2', 'H₂O₂'], ['iodure', '2I⁻'], ['hplus', '2H⁺'], ['i2', 'I₂'], ['h2o', '2H₂O']];
+const LIGNES = {
+  initial: { nom: 'état initial (x = 0)', v: ['2,0', '10,0', 'excès', '0', 'solvant'] },
+  en_cours: { nom: 'en cours (x)', v: ['2,0 − x', '10,0 − 2x', 'excès', 'x', 'solvant'] },
+  final: { nom: 'état final (x_max)', v: ['2,0 − x_max', '10,0 − 2x_max', 'excès', 'x_max', 'solvant'] },
+};
+/** Géométrie du tableau selon la vue : large (tableau, limitant) ou étroit, à gauche (lien, composition). */
+function TB(v = MO.S.vue) {
+  const large = v === 'tableau' || v === 'limitant';
+  const g = large ? { x: 14, y: 48, wl: 176, cols: [112, 132, 84, 96, 96], h: 38, taille: 18 } : { x: 10, y: 48, wl: 136, cols: [82, 100, 66, 70, 66], h: 34, taille: 15 };
+  g.hc = v === 'composition' ? 56 : g.h;                    // la ligne « en cours » plus haute : formule puis nombre
+  g.xs = []; let x = g.x + g.wl; for (const w of g.cols) { g.xs.push(x); x += w; } g.xf = x;
+  g.ys = { entete: g.y, initial: g.y + g.h, en_cours: g.y + 2 * g.h, final: g.y + 2 * g.h + g.hc }; g.yf = g.ys.final + g.h;
+  g.cx = k => g.xs[k] + g.cols[k] / 2;
+  return g;
+}
+function grille(c, g) {
+  c.rect(g.x, g.y, g.xf - g.x, g.yf - g.y, { arrondi: 4, largeur: 1.8 });
+  for (const y of [g.ys.initial, g.ys.en_cours, g.ys.final]) c.ligne(g.x, y, g.xf, y, { largeur: 1.4, duree: .1 });
+  c.ligne(g.xs[0], g.y, g.xs[0], g.yf, { largeur: 1.4, duree: .1 });
+  for (let k = 1; k < 5; k++) c.ligne(g.xs[k], g.ys.initial, g.xs[k], g.yf, { largeur: 1.2, couleur: 'faible', duree: .08 });
+}
+function entete(c, g) {
+  const yb = g.y + g.h * .68, t = g.taille + 1;
+  c.texte('équation', g.x + 8, yb, { couleur: 'cyan', taille: g.taille });
+  ESP.forEach(([, s], k) => {
+    c.texte(s, g.cx(k), yb, { taille: t, align: 'center' });
+    if (k === 2) c.fleche(g.xs[3] - 12, yb - t * .3, g.xs[3] + (g.cols[3] < 90 ? 6 : 12), yb - t * .3, { largeur: 1.8, tete: 7 });
+    else if (k < 4) c.texte('+', g.xs[k + 1], yb, { taille: t, align: 'center' });
+  });
+}
+function ligne(c, g, id, o = {}) {
+  const L = LIGNES[id], y = g.ys[id], hh = id === 'en_cours' ? g.hc : g.h, yb = y + (id === 'en_cours' && g.hc > g.h ? 24 : hh * .68);
+  c.texte(L.nom, g.x + 8, yb, { taille: g.taille, max: g.wl - 14, couleur: 'blanc' });
+  L.v.forEach((s, k) => c.texte(s, g.cx(k), yb, { taille: g.taille, align: 'center', max: g.cols[k] - 8, couleur: (k === 2 || k === 4) ? 'faible' : (o.couleur || 'blanc') }));
+}
+function tableauComplet(c, g) { grille(c, g); entete(c, g); for (const id of ['initial', 'en_cours', 'final']) ligne(c, g, id); }
+
+/* ── Dessin ──────────────────────────────────────────────────────────── */
+function dessiner(c, M) {
+  MO = M; M.scene.cadre(67);
+  const v = M.S.vue;
+  c.texte(TITRE_TABLEAU[v], 14, 26, { couleur: 'cyan', taille: 20 });
+  M.vues = ({ tableau: vueTableau, limitant: vueLimitant, lien: vueLien, composition: vueComposition })[v](c, M) || [];
+  reperes(c, M);
+  return c.fin();
+}
+function vueTableau(c, M) {
+  const g = TB(), yA = g.yf + 30;
+  M.etape(c, 'equation', () => { grille(c, g); entete(c, g); c.texte('quantités de matière en mmol (V = 100 mL de mélange)', g.x, g.yf + 64, { couleur: 'faible', taille: 16 }); });
+  M.etape(c, 'etat_initial', () => ligne(c, g, 'initial'));
+  M.etape(c, 'en_cours', () => {
+    ligne(c, g, 'en_cours');
+    c.texte('au cours de la réaction :', g.x + 8, yA, { couleur: 'jaune', taille: 16 });
+    [[0, '− x'], [1, '− 2x'], [3, '+ x']].forEach(([k, s]) => c.texte(s, g.cx(k), yA, { couleur: 'jaune', taille: 18, align: 'center' }));
+  });
+  M.etape(c, 'etat_final', () => ligne(c, g, 'final'));
+  return zoneEcriture(c, M, [
+    { nom: 'equation', lignes: [['en tête : l’équation ; une colonne par espèce ; H⁺ en excès, H₂O solvant', 'blanc']] },
+    { nom: 'etat_initial', lignes: [['état initial : n₀(H₂O₂) = 2,0 mmol, n₀(I⁻) = 10,0 mmol, pas encore de I₂', 'blanc']] },
+    { nom: 'en_cours', lignes: [['en cours : un réactif perd (coefficient × x), un produit gagne (coefficient × x)', 'jaune']] },
+    { nom: 'etat_final', lignes: [['état final : x a atteint sa valeur maximale x_max', 'blanc']] },
+  ], ZY);
+}
+const HY = { h1: 248, h2: 280, pp: 318 };
+function vueLimitant(c, M) {
+  const g = TB(), X0 = 24;
+  M.etape(c, 'tableau', () => tableauComplet(c, g));
+  M.etape(c, 'hypothese_1', () => { c.texte('si H₂O₂ est épuisé :', X0, HY.h1, { taille: 18 }); eqn(c, X0 + 190, HY.h1, '2,0 − x_max = 0', 'x_max = 2,0 mmol', { taille: 18 }); });
+  M.etape(c, 'hypothese_2', () => { c.texte('si I⁻ est épuisé :', X0, HY.h2, { taille: 18 }); eqn(c, X0 + 190, HY.h2, '10,0 − 2x_max = 0', 'x_max = 5,0 mmol', { taille: 18 }); });
+  M.etape(c, 'plus_petite', () => {
+    c.texte('on garde la plus petite :', X0, HY.pp, { couleur: 'jaune', taille: 19 });
+    c.rect(X0 + 206, HY.pp - 24, 176, 32, { couleur: 'jaune', largeur: 2, arrondi: 8 });
+    c.texte('x_max = 2,0 mmol', X0 + 216, HY.pp, { couleur: 'jaune', taille: 20 });
+  });
+  M.etape(c, 'limitant', () => {
+    c.texte('H₂O₂ est le réactif limitant', X0 + 400, HY.pp, { couleur: 'jaune', taille: 19 });
+    c.rect(g.xs[0] + 16, g.y + 3, g.cols[0] - 32, g.h - 6, { couleur: 'jaune', largeur: 2, arrondi: 8 });
+    c.texte('= 0 à la fin', g.cx(0), g.yf + 18, { couleur: 'jaune', taille: 15, align: 'center' });
+  });
+  return zoneEcriture(c, M, [
+    { nom: 'hypothese_1', lignes: [['à l’état final, un réactif est épuisé : on essaie chacun', 'blanc']] },
+    { nom: 'plus_petite', lignes: [['la plus grande (5,0 mmol) est impossible : H₂O₂ serait négatif', 'orange']] },
+    { nom: 'limitant', lignes: [['x_max = 2,0 mmol : il reste 10,0 − 2 × 2,0 = 6,0 mmol de I⁻ (en excès)', 'blanc']] },
+  ], [368, 396]);
+}
+/* Vue lien. */
+const BL = { x: 600, y: 96, w: 100, h: 118 };
+function vueLien(c, M) {
+  const g = TB(), k3 = 3, yE = g.yf + 40;
+  M.etape(c, 'tableau', () => tableauComplet(c, g));
+  M.etape(c, 'colonne_i2', () => c.rect(g.xs[k3] + 10, g.y + 3, g.cols[k3] - 20, g.yf - g.y - 6, { couleur: 'jaune', largeur: 2.4, arrondi: 8 }));
+  M.etape(c, 'egalite', () => {
+    c.texte('n(I₂) = x', g.cx(k3), yE, { couleur: 'jaune', taille: 24, align: 'center' });
+    c.texte('à chaque date t', g.cx(k3), yE + 24, { couleur: 'jaune', taille: 15, align: 'center' });
+  });
+  if (M.commence('mesure')) c.direct(() => Peint.becher(c.ctx, BL, .6 * lisse(clamp(M.p('mesure') * 2, 0, 1)) + .001, teinte(.63), lisse(clamp(M.p('mesure') * 2, 0, 1))));
+  M.etape(c, 'mesure', () => {
+    c.texte('le mélange (I₂ brun)', BL.x + BL.w / 2, BL.y + BL.h + 26, { couleur: 'faible', taille: 15, align: 'center' });
+    c.fleche(BL.x - 14, BL.y + BL.h - 10, g.cx(k3) + 62, yE - 8, { couleur: 'jaune', largeur: 2.2 });
+    eqn(c, 380, 300, 'on mesure n(I₂)', 'on connaît x', { align: 'center', taille: 21, couleur: 'jaune' });
+  });
+  return zoneEcriture(c, M, [
+    { nom: 'tableau', lignes: [['le tableau de l’exemple A (quantités en mmol)', 'blanc']] },
+    { nom: 'colonne_i2', lignes: [['colonne I₂ : 0 au départ, puis x, puis x_max (coefficient 1 devant I₂)', 'blanc']] },
+    { nom: 'egalite', lignes: [['la quantité de diiode formé est égale à l’avancement', 'jaune']] },
+    { nom: 'mesure', lignes: [['par titrage, on mesure n(I₂) à une date : c’est la valeur de x à cette date', 'blanc']] },
+  ], [352, 378, 404]);
+}
+/* Vue composition : petite courbe x(t) à droite, poignée t sur l’axe des temps. */
+const G2 = { x0: 566, y0: 270, w: 164, h: 140 };
+const XG = t => G2.x0 + t / 40 * G2.w, YG = x => G2.y0 - x / 2.5 * G2.h;
+function vueComposition(c, M) {
+  const g = TB(), k = compo(tVu()), xp = XG(k.t), yp = YG(xA(k.t));
+  // La petite courbe : écrite dès l’ouverture (partie fixe).
+  c.fleche(G2.x0, G2.y0, G2.x0 + G2.w + 12, G2.y0, { largeur: 1.6 });
+  c.fleche(G2.x0, G2.y0, G2.x0, G2.y0 - G2.h - 12, { largeur: 1.6 });
+  for (const t of [10, 20, 30, 40]) { c.ligne(XG(t), G2.y0 - 3, XG(t), G2.y0 + 3, { largeur: 1.2, duree: .02 }); c.texte(String(t), XG(t), G2.y0 + 17, { couleur: 'faible', taille: 13, align: 'center', duree: .05 }); }
+  c.texte('0', G2.x0 - 6, G2.y0 + 15, { couleur: 'faible', taille: 13, align: 'right', duree: .05 });
+  for (const x of [1, 2]) { c.ligne(G2.x0 - 3, YG(x), G2.x0 + 3, YG(x), { largeur: 1.2, duree: .02 }); c.texte(String(x), G2.x0 - 7, YG(x) + 5, { couleur: 'faible', taille: 13, align: 'right', duree: .05 }); }
+  c.texte('t (min)', G2.x0 + G2.w + 10, G2.y0 + 34, { taille: 14, align: 'right' });
+  c.texte('x (mmol)', G2.x0 + 6, G2.y0 - G2.h - 6, { taille: 14 });
+  c.courbe(u => [XG(40 * u), YG(xA(40 * u))], 60, { couleur: 'bleu', largeur: 2.4 });
+  grille(c, g); entete(c, g); ligne(c, g, 'initial'); ligne(c, g, 'en_cours'); ligne(c, g, 'final');
+  // Poignée : anneau jaune sur l’axe des temps (glisser de 0 à 40 min).
+  c.direct(() => {
+    const ctx = c.ctx; ctx.save(); ctx.strokeStyle = '#facc15'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(xp, G2.y0, 7, 0, 7); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(xp - 12, G2.y0 - 4); ctx.lineTo(xp - 17, G2.y0); ctx.lineTo(xp - 12, G2.y0 + 4); ctx.moveTo(xp + 12, G2.y0 - 4); ctx.lineTo(xp + 17, G2.y0); ctx.lineTo(xp + 12, G2.y0 + 4); ctx.stroke(); ctx.restore();
+    if (M.commence('date')) {
+      c.ligne(xp, G2.y0, xp, lerp(G2.y0, yp, lisse(M.p('date'))), { couleur: 'jaune', largeur: 1.6, pointille: [4, 4] });
+    }
+    if (M.commence('lecture')) {
+      const p = lisse(M.p('lecture'));
+      c.point(xp, yp, 4.5, 'jaune');
+      c.ligne(xp, yp, lerp(xp, G2.x0, p), yp, { couleur: 'jaune', largeur: 1.6, pointille: [4, 4] });
+    }
+  });
+  M.etape(c, 'date', () => c.texte(`date choisie : t = ${k.t} min`, 548, 70, { couleur: 'jaune', taille: 17 }));
+  M.etape(c, 'lecture', () => c.texte(`x(${k.t} min) = ${f2(k.x)} mmol`, 548, 96, { couleur: 'jaune', taille: 18 }));
+  M.etape(c, 'remplir', () => {
+    const yb = g.ys.en_cours + 47;
+    c.texte(`t = ${k.t} min`, g.x + 8, yb, { couleur: 'jaune', taille: g.taille });
+    [[0, k.h2o2], [1, k.iod], [3, k.i2]].forEach(([j, val]) => c.texte(`= ${f2(val)}`, g.cx(j), yb, { couleur: 'jaune', taille: g.taille + 1, align: 'center' }));
+  });
+  M.etape(c, 'verifier', () => {
+    c.texte(`vérification : 2,0 − ${f2(k.x)} = ${f2(k.h2o2)} mmol`, g.x + 8, g.yf + 32, { couleur: 'jaune', taille: 18 });
+    c.texte(`et 10,0 − 2 × ${f2(k.x)} = ${f2(k.iod)} mmol`, g.x + 8, g.yf + 58, { couleur: 'faible', taille: 16 });
+  });
+  return zoneEcriture(c, M, [
+    { nom: 'date', lignes: [[`on choisit une date : t = ${k.t} min (glisse l’anneau jaune sur l’axe des temps)`, 'blanc']] },
+    { nom: 'lecture', lignes: [[`on lit l’avancement sur la courbe : x = ${f2(k.x)} mmol`, 'blanc']] },
+    { nom: 'remplir', lignes: [['on remplace x par sa valeur dans la ligne « en cours » (en mmol)', 'blanc']] },
+    { nom: 'verifier', lignes: [[`à t = ${k.t} min : H₂O₂ ${f2(k.h2o2)} ; I⁻ ${f2(k.iod)} ; I₂ ${f2(k.i2)} mmol (H⁺ en excès)`, 'jaune']] },
+  ], ZY);
+}
+
+/* ── Repères ─────────────────────────────────────────────────────────── */
+function reperes(c, M) {
+  const v = M.S.vue, g = TB(), quand = nom => (M.vu(nom) ? '' : ` (au moment « ${nom} »)`);
+  const R = (id, x, y, w, h, l) => c.repere(id, x, y, w, h, l);
+  const rangee = (id, l, nom) => R(id, g.x, g.ys[id === 'ligne_initial' ? 'initial' : id === 'ligne_en_cours' ? 'en_cours' : 'final'], g.xf - g.x, id === 'ligne_en_cours' ? g.hc : g.h, l + (nom ? quand(nom) : ''));
+  const colonne = (id, k, l, nom) => R(id, g.xs[k], g.y, g.cols[k], g.yf - g.y, l + (nom ? quand(nom) : ''));
+  if (v === 'tableau') {
+    R('equation', g.x, g.y, g.xf - g.x, g.h, `la ligne de l’équation : H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O${quand('equation')}`);
+    rangee('ligne_initial', 'la ligne « état initial (x = 0) » : 2,0 · 10,0 · excès · 0 · solvant', 'etat_initial');
+    rangee('ligne_en_cours', 'la ligne « en cours (x) » : 2,0 − x · 10,0 − 2x · excès · x · solvant', 'en_cours');
+    rangee('ligne_final', 'la ligne « état final (x_max) » : 2,0 − x_max · 10,0 − 2x_max · excès · x_max · solvant', 'etat_final');
+    colonne('colonne_h2o2', 0, 'la colonne de H₂O₂ : 2,0 ; 2,0 − x ; 2,0 − x_max');
+    colonne('colonne_iodure', 1, 'la colonne de I⁻ : 10,0 ; 10,0 − 2x ; 10,0 − 2x_max');
+    colonne('colonne_i2', 3, 'la colonne de I₂ : 0 ; x ; x_max');
+  } else if (v === 'limitant') {
+    R('hypothese_1', 18, HY.h1 - 22, 560, 30, `« si H₂O₂ est épuisé : 2,0 − x_max = 0 → x_max = 2,0 mmol »${quand('hypothese_1')}`);
+    R('hypothese_2', 18, HY.h2 - 22, 560, 30, `« si I⁻ est épuisé : 10,0 − 2x_max = 0 → x_max = 5,0 mmol »${quand('hypothese_2')}`);
+    R('x_max', 228, HY.pp - 26, 180, 36, `« x_max = 2,0 mmol », la plus petite${quand('plus_petite')}`);
+    R('limitant', 420, HY.pp - 24, 280, 32, `« H₂O₂ est le réactif limitant »${quand('limitant')}`);
+    rangee('ligne_final', 'la ligne « état final (x_max) » : 2,0 − x_max · 10,0 − 2x_max · excès · x_max · solvant', 'tableau');
+  } else if (v === 'lien') {
+    colonne('colonne_i2', 3, 'la colonne de I₂ (surlignée) : 0 ; x ; x_max', 'colonne_i2');
+    R('egalite', g.cx(3) - 70, g.yf + 12, 140, 60, `« n(I₂) = x », à chaque date t${quand('egalite')}`);
+    R('becher', BL.x - 8, BL.y - 6, BL.w + 16, BL.h + 40, `le bécher du mélange (diiode brun)${quand('mesure')}`);
+    R('fleche', g.cx(3) + 56, BL.y + BL.h - 20, BL.x - g.cx(3) - 56, 32, `la flèche « on mesure n(I₂) → on connaît x »${quand('mesure')}`);
+  } else {
+    const k = compo(tVu()), xp = XG(k.t), yp = YG(xA(k.t)), yb = g.ys.en_cours + 47;
+    R('poignee_t', xp - 18, G2.y0 - 12, 36, 24, `la poignée : glisser l’anneau jaune pour choisir la date t (${k.t} min, de 0 à 40 min)`);
+    R('courbe', G2.x0, G2.y0 - G2.h, G2.w, G2.h, 'la petite courbe x(t) de l’exemple A');
+    R('point_lu', xp - 10, yp - 10, 20, 20, `le point lu sur la courbe : x(${k.t} min) = ${f2(k.x)} mmol${quand('lecture')}`);
+    rangee('ligne_en_cours', `la ligne « en cours » : à t = ${k.t} min, H₂O₂ ${f2(k.h2o2)} ; I⁻ ${f2(k.iod)} ; I₂ ${f2(k.i2)} mmol`, 'remplir');
+    R('case_h2o2', g.xs[0], g.ys.en_cours, g.cols[0], g.hc, `la case H₂O₂ en cours : 2,0 − x = ${f2(k.h2o2)} mmol${quand('remplir')}`);
+    R('case_iodure', g.xs[1], g.ys.en_cours, g.cols[1], g.hc, `la case I⁻ en cours : 10,0 − 2x = ${f2(k.iod)} mmol${quand('remplir')}`);
+    R('case_i2', g.xs[3], g.ys.en_cours, g.cols[3], g.hc, `la case I₂ en cours : x = ${f2(k.i2)} mmol${quand('remplir')}`);
+    void yb;
+  }
+}
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
+function voir(M) {
+  const v = M.S.vue, m = [`Vue « ${v} » (${TITRES[v]}), ${M.etat()}.`];
+  const etape = (() => { let n = 'avant le début'; for (const e of M.evs()) if (M.commence(e.nom)) n = e.nom; return n; })();
+  m.push(`Étape en cours : ${etape}.`);
+  const L = id => `« ${LIGNES[id].nom} » : ${LIGNES[id].v.join(' · ')}`;
+  const tout = `Tableau d’avancement (mmol) : équation H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O ; ${L('initial')} ; ${L('en_cours')} ; ${L('final')}.`;
+  if (v === 'tableau') {
+    const vus = [['equation', 'ligne de l’équation (colonnes H₂O₂ · I⁻ · H⁺ · I₂ · H₂O)'], ['etat_initial', L('initial')], ['en_cours', L('en_cours') + ' ; sous le tableau en jaune : − x, − 2x, + x'], ['etat_final', L('final')]].filter(([n]) => M.commence(n)).map(([, s]) => s);
+    m.push(vus.length ? `Tableau à la craie (mmol, V = 100 mL) : ${vus.join(' ; ')}.` : 'Tableau pas encore écrit.');
+  } else if (v === 'limitant') {
+    if (M.commence('tableau')) m.push(tout);
+    if (M.commence('hypothese_1')) m.push('Écrit : « si H₂O₂ est épuisé : 2,0 − x_max = 0 → x_max = 2,0 mmol ».');
+    if (M.commence('hypothese_2')) m.push('Écrit : « si I⁻ est épuisé : 10,0 − 2x_max = 0 → x_max = 5,0 mmol ».');
+    if (M.commence('plus_petite')) m.push('Écrit en jaune : « on garde la plus petite : x_max = 2,0 mmol ».');
+    if (M.commence('limitant')) m.push('Écrit : « H₂O₂ est le réactif limitant » ; la case H₂O₂ de l’équation est entourée.');
+  } else if (v === 'lien') {
+    if (M.commence('tableau')) m.push(tout);
+    if (M.commence('colonne_i2')) m.push('La colonne I₂ est surlignée en jaune (0 ; x ; x_max).');
+    if (M.commence('egalite')) m.push('Écrit sous la colonne : « n(I₂) = x », à chaque date t.');
+    if (M.commence('mesure')) m.push('À droite : un bécher du mélange (diiode brun) et une flèche ; écrit : « on mesure n(I₂) → on connaît x ».');
+  } else {
+    const k = compo(tVu());
+    m.push(`${tout} À droite, petite courbe x(t) (0 à 40 min, palier vers 2,0 mmol). Poignée (anneau jaune sur l’axe des temps) : t = ${k.t} min.`);
+    if (M.commence('date')) m.push(`Pointillé vertical à t = ${k.t} min.`);
+    if (M.commence('lecture')) m.push(`Point lu sur la courbe et pointillé horizontal : x(${k.t} min) = ${f2(k.x)} mmol.`);
+    if (M.commence('remplir')) m.push(`Ligne « en cours » remplie : H₂O₂ = ${f2(k.h2o2)} ; I⁻ = ${f2(k.iod)} ; H⁺ excès ; I₂ = ${f2(k.i2)} mmol.`);
+    if (M.commence('verifier')) m.push(`Écrit : « vérification : 2,0 − ${f2(k.x)} = ${f2(k.h2o2)} mmol » et « 10,0 − 2 × ${f2(k.x)} = ${f2(k.iod)} mmol ».`);
+  }
+  if (M.vues && M.vues.length) m.push(`Lignes écrites en bas : ${M.vues.map(s => `« ${s} »`).join(' ; ')}.`);
+  return m.join(' ');
+}
+const params = M => {
+  const v = M.S.vue, p = { vue: v, n0_H2O2_mmol: 2, n0_I_mmol: 10, x_max_mmol: 2 };
+  if (v === 'composition') { const k = compo(PAR.t); Object.assign(p, { t: PAR.t, x_mmol: k.x, n_H2O2_mmol: k.h2o2, n_I_mmol: k.iod, n_I2_mmol: k.i2 }); }
+  return p;
+};
+const MOT = Moteur({
+  id: 'cin_avancement', titre: 'Le tableau d’avancement de l’exemple A : tableau, réactif limitant, n(I₂) = x, composition à une date', vues: VUES, titres: TITRES,
+  etapes: ETAPES, motifs: MOTIFS, dessiner, voir, params,
+  depart: M => ({ tableau: 'Construisons le tableau d’avancement de l’exemple A.', limitant: 'Quel réactif est épuisé le premier ?', lien: 'Comment connaître x à une date ?',
+    composition: 'Quelle est la composition du mélange à une date t ?' })[M.S.vue],
+  messageFin: M => ({ tableau: 'État initial, en cours (x), état final (x_max) : chaque case dépend de x et des coefficients.',
+    limitant: 'x_max = 2,0 mmol (la plus petite valeur) : H₂O₂ est le réactif limitant.',
+    lien: 'n(I₂) = x : mesurer la quantité de diiode, c’est connaître l’avancement.',
+    composition: (() => { const k = compo(PAR.t); return `À t = ${k.t} min : x = ${f2(k.x)} mmol ; H₂O₂ ${f2(k.h2o2)} ; I⁻ ${f2(k.iod)} ; I₂ ${f2(k.i2)} mmol.`; })() })[M.S.vue],
+  appliquer: (p, M) => {
+    const r = {};
+    if (VUES.includes(p.vue)) r.vue = p.vue;
+    if (p.t != null && p.t !== '' && Number.isFinite(+p.t)) { PAR.t = clamp(Math.round(+p.t), 0, 40); DRAG = null; r.vue = 'composition'; r.change = true; }
+    else r.change = !!(r.vue && r.vue !== M.S.vue);
+    return r;
+  },
+  schema: { vue: VUES.join(' | ') + ' (change la vue et relance)', t: '0..40 (min, pas 1 ; date choisie de la vue composition, défaut 8 ; relance)' },
+  texte: 'Tableau d’avancement de l’exemple A : H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O (100 mL), en mmol. État initial (x = 0) : 2,0 · 10,0 · excès · 0 · solvant ; en cours (x) : 2,0 − x · 10,0 − 2x · excès · x · solvant ; état final (x_max) : 2,0 − x_max · 10,0 − 2x_max · excès · x_max · solvant. Réactif limitant : 2,0 − x_max = 0 → x_max = 2,0 mmol ; 10,0 − 2x_max = 0 → x_max = 5,0 mmol ; on garde la plus petite : x_max = 2,0 mmol, H₂O₂ limitant. Lien : n(I₂) = x ; on mesure n(I₂) → on connaît x. Composition : poignée t (0 à 40 min, défaut 8) ; à 8 min, x = 1,26 ; H₂O₂ 0,74 ; I⁻ 7,48 ; I₂ 1,26 mmol ; vérification 2,0 − 1,26 = 0,74 mmol.',
+  explications: {
+    tableau: [
+      { repere: 'equation', texte: 'L’équation en tête, une colonne par espèce.' },
+      { repere: 'ligne_initial', texte: 'L’état initial : x = 0.' },
+      { repere: 'ligne_en_cours', texte: 'En cours : on retire x fois le coefficient aux réactifs, on l’ajoute aux produits.' },
+      { repere: 'colonne_i2', texte: 'Le diiode : 0, puis x, puis x_max.' },
+      { repere: 'ligne_final', texte: 'À l’état final, x vaut x_max.' },
+    ],
+    limitant: [
+      { repere: 'hypothese_1', texte: 'Si H₂O₂ est épuisé, x_max vaut 2,0 mmol.' },
+      { repere: 'hypothese_2', texte: 'Si I⁻ est épuisé, x_max vaut 5,0 mmol.' },
+      { repere: 'x_max', texte: 'On garde la plus petite : 2,0 mmol.' },
+      { repere: 'limitant', texte: 'H₂O₂ est le réactif limitant.' },
+    ],
+    lien: [
+      { repere: 'colonne_i2', texte: 'Dans la colonne du diiode, on lit x.' },
+      { repere: 'egalite', texte: 'n(I₂) = x à chaque date.' },
+      { repere: 'fleche', texte: 'On mesure n(I₂) : on connaît x.' },
+    ],
+    composition: [
+      { repere: 'poignee_t', texte: 'Tu peux choisir la date en glissant l’anneau jaune.' },
+      { repere: 'point_lu', texte: 'On lit x sur la courbe.' },
+      { repere: 'ligne_en_cours', texte: 'On remplace x par sa valeur dans la ligne en cours.' },
+      { repere: 'case_h2o2', texte: '2,0 − 1,26 = 0,74 mmol à 8 minutes.' },
+    ],
+  },
+});
+MOT.lancer();
+window.Tableau.glisser(MOT.scene.craie.canvas, {
+  toucher: (px, py) => {
+    if (MOT.S.vue !== 'composition') return null;
+    const [x, y] = MOT.scene.local(px, py);
+    return x > G2.x0 - 14 && x < G2.x0 + G2.w + 14 && Math.abs(y - G2.y0) < 18 ? 't' : null;
+  },
+  bouger: (id, px, py) => { const [x] = MOT.scene.local(px, py); DRAG = clamp(Math.round((x - G2.x0) / G2.w * 40), 0, 40); MOT.scene.sale = true; },
+  lacher: () => { if (DRAG != null) { const t = DRAG; MOT.setParameters({ t }); } },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

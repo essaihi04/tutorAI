@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Marquage radioactif — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="genetique.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Une cellule en coupe : noyau avec l’ADN et des pores, cytoplasme avec des ribosomes. Uracile radioactif : les grains d’autoradiographie apparaissent d’abord dans le noyau, l’ARN sort par les pores, puis les grains sont dans le cytoplasme. Leucine radioactive : les grains sont seulement sur les ribosomes du cytoplasme. Frise du temps en minutes"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="etapes.js"></script>
+<script src="molecules.js"></script>
+<script>
+/*
+ * Marquage radioactif : où est fabriqué l’ARN, où sont fabriquées les protéines (cours « Expression de l’information génétique »,
+ * 2 Bac PC BIOF, diapositives 10 à 12, capacités RGP3 et RGP4, 11 novembre 2026). Document reconstitué.
+ * Une cellule en coupe peinte : cytoplasme rosé, noyau bleuté avec pores, ADN (chromatine) dans le noyau, ribosomes (grains
+ * turquoise) dans le cytoplasme. Autoradiographie : grains d’argent noirs là où est la radioactivité. Frise du temps en minutes
+ * (curseur à glisser : temps_min, la scène s’affiche à cet instant).
+ * Vue uracile : uracile radioactif (base propre à l’ARN) → grains d’abord dans le noyau (5 min), l’ARN (orange) sort par les
+ * pores, puis grains dans le cytoplasme (30 min) ; le noyau se vide en partie.
+ * Vue acides_amines : leucine radioactive → grains seulement dans le cytoplasme, sur les ribosomes ; conclusion : l’ARNm porte
+ * l’information du noyau aux ribosomes.
+ */
+const { lisse, rampe, entre, Peint } = window.Etapes;
+const M = window.Molecules;
+const TAU = Math.PI * 2;
+const C = { cx: 290, cy: 200, rx: 240, ry: 138 };                    // la cellule
+const N = { cx: 290, cy: 196, rx: 92, ry: 76, np: 8, ph: .3 };       // le noyau
+const F = { x0: 110, x1: 500, y: 366, max: 30 };                     // la frise du temps (minutes)
+const COL = 560;                                                    // colonne des légendes, à droite
+const hasard = graine => { let s = graine; return () => { s = (Math.imul(s, 1103515245) + 12345) >>> 0; return s / 4294967296; }; };
+const dansCyto = (px, py) => ((px - C.cx) / C.rx) ** 2 + ((py - C.cy) / C.ry) ** 2 < .84 && ((px - N.cx) / (N.rx + 18)) ** 2 + ((py - N.cy) / (N.ry + 18)) ** 2 > 1;
+const dansNoyau = (px, py) => ((px - N.cx) / N.rx) ** 2 + ((py - N.cy) / N.ry) ** 2 < .78;
+function tirer(n, garde, graine, premiers = []) { const r = hasard(graine), out = premiers.slice(); let essais = 0; while (out.length < n && essais++ < 20000) { const px = C.cx + (r() * 2 - 1) * C.rx, py = C.cy + (r() * 2 - 1) * C.ry; if (garde(px, py) && out.every(([qx, qy]) => Math.hypot(px - qx, py - qy) > 9)) out.push([px, py]); } return out; }
+const RIBOS = tirer(46, dansCyto, 31, [[120, 150]]);                  // le premier est celui que montre la légende
+const G_NOYAU = (() => { const r = hasard(57), out = []; while (out.length < 70) { const px = N.cx + (r() * 2 - 1) * N.rx, py = N.cy + (r() * 2 - 1) * N.ry; if (dansNoyau(px, py)) out.push([px, py]); } return out; })();
+const G_CYTO = (() => { const r = hasard(83), out = []; while (out.length < 90) { const px = C.cx + (r() * 2 - 1) * C.rx, py = C.cy + (r() * 2 - 1) * C.ry; if (dansCyto(px, py)) out.push([px, py]); } return out; })();
+/** La chromatine (ADN) : fins filaments bleu-violet enchevêtrés dans le noyau, tracés une fois pour toutes. */
+const CHROMATINE = (() => { const r = hasard(12345), fils = [];
+  for (let j = 0; j < 8; j++) { let px = N.cx + (r() - .5) * N.rx, py = N.cy + (r() - .5) * N.ry, ang = r() * TAU; const pts = [[px, py]];
+    for (let i = 0; i < 30; i++) { ang += (r() - .5) * 1.6; px += Math.cos(ang) * 7; py += Math.sin(ang) * 6; if (!dansNoyau(px, py)) { ang += Math.PI; px = N.cx + (px - N.cx) * .85; py = N.cy + (py - N.cy) * .85; } pts.push([px, py]); }
+    fils.push(pts); } return fils; })();
+const PORE_LEG = 6;                                                 // le pore montré par la légende
+const posPore = i => M.pore(N.cx, N.cy, N.rx, N.ry, i, N.np, N.ph);
+
+/* ── Temps de la scène (s) ↔ temps de l’expérience (min) ── */
+function interp(pts, v) { if (v <= pts[0][0]) return pts[0][1]; for (let i = 1; i < pts.length; i++) if (v <= pts[i][0]) { const [a, b] = [pts[i - 1], pts[i]]; return a[1] + (b[1] - a[1]) * (v - a[0]) / (b[0] - a[0]); } return pts[pts.length - 1][1]; }
+const TU = [[5.5, 0], [8.5, 5], [12, 15], [15.5, 30]];               // vue uracile
+const TA = [[3, 0], [6, 5], [9.5, 30]];                             // vue acides_amines
+const tauDe = (vue, t) => interp(vue === 'uracile' ? TU : TA, t);
+const tDe = (vue, tau) => interp((vue === 'uracile' ? TU : TA).map(([a, b]) => [b, a]), tau);
+const minutes = tau => Math.round(tau);
+
+/* ── Peinture ──────────────────────────────────────────────────────── */
+function cellule(x) {
+  // un voile clair sous le cytoplasme : les grains noirs se lisent mieux, comme sur une coupe
+  x.save(); x.fillStyle = 'rgba(255,240,245,.22)'; x.beginPath(); x.ellipse(C.cx, C.cy, C.rx, C.ry, 0, 0, TAU); x.fill(); x.restore();
+  M.cytoplasme(x, C.cx, C.cy, C.rx, C.ry);
+  x.save(); x.fillStyle = 'rgba(235,245,255,.25)'; x.beginPath(); x.ellipse(N.cx, N.cy, N.rx, N.ry, 0, 0, TAU); x.fill(); x.restore();
+  M.noyau(x, N.cx, N.cy, N.rx, N.ry, { pores: N.np, phase: N.ph });
+  // ADN (chromatine)
+  x.save(); x.lineCap = 'round'; x.lineJoin = 'round';
+  CHROMATINE.forEach((pts, j) => {
+    x.strokeStyle = j % 2 ? 'rgba(67,56,202,.75)' : 'rgba(99,102,241,.7)'; x.lineWidth = 1.8; x.beginPath(); x.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length - 1; i++) x.quadraticCurveTo(pts[i][0], pts[i][1], (pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2);
+    x.stroke();
+  });
+  x.restore();
+  for (const [px, py] of RIBOS) ribosome(x, px, py);
+}
+/** Un ribosome vu en coupe : deux petites sous-unités turquoise ombrées. */
+function ribosome(x, px, py) { M.sphere(x, px, py - 1.6, 3.6, '#2dd4bf'); M.sphere(x, px + .8, py + 2.8, 2.6, '#14b8a6'); }
+/** Précurseur radioactif apporté (uracile ou leucine) : petit point lumineux. */
+function radioactif(x, px, py, a) { if (a <= 0) return; Peint.halo(x, px, py, 8, 'rgba(190,242,100,.8)', a); x.save(); x.globalAlpha = a; x.fillStyle = '#ecfccb'; x.beginPath(); x.arc(px, py, 2.4, 0, TAU); x.fill(); x.restore(); }
+/** Les précurseurs arrivent du milieu et entrent dans la cellule entre t0 et t1, puis s’effacent. */
+function precurseurs(x, t, t0, t1) {
+  if (t < t0 || t > t1 + .9) return;
+  const u = rampe(t, t0 + .3, t1 - t0 - .3), a = rampe(t, t0, .4) * (1 - rampe(t, t1, .8));
+  for (let i = 0; i < 34; i++) { const th = i * 2.39996, f = entre(1.1, .62 + .2 * ((i * 7) % 5) / 5, u); radioactif(x, C.cx + Math.cos(th) * C.rx * f, C.cy + Math.sin(th) * C.ry * f, a); }
+}
+/** Un petit ARN (squelette orange, bases colorées) qui sort du noyau par le pore i ; u de 0 (dedans) à 1 (dans le cytoplasme). */
+const PORES_ARN = [4, 5, 6, 7, 0, 2];
+function arnSortant(x, i, u) {
+  const th = i / N.np * TAU + N.ph, f = u < .5 ? entre(.5, 1.03, u / .5) : entre(1.03, 1.55, (u - .5) / .5);
+  const px = N.cx + Math.cos(th) * (N.rx + 2) * f, py = N.cy + Math.sin(th) * (N.ry + 2) * f, a = Math.min(1, u * 6, (1 - u) * 6);
+  x.save(); x.globalAlpha = a; x.translate(px, py); x.rotate(th); x.scale(1.35, 1.35);
+  x.strokeStyle = '#ea580c'; x.lineWidth = 3; x.lineCap = 'round'; x.beginPath();
+  for (let s = -9; s <= 9; s += 1.5) { const yy = Math.sin(s * .7 + u * 8) * 2.2; s === -9 ? x.moveTo(s, yy) : x.lineTo(s, yy); } x.stroke();
+  const coul = ['#c026d3', '#dc2626', '#16a34a', '#2563eb'];
+  for (let s = -7, j = 0; s <= 7; s += 3.5, j++) { x.strokeStyle = coul[(j + i) % 4]; x.lineWidth = 1.6; x.beginPath(); const yy = Math.sin(s * .7 + u * 8) * 2.2; x.moveTo(s, yy); x.lineTo(s, yy - 4.5); x.stroke(); }
+  x.restore();
+}
+
+/* ── Frise du temps (craie) + curseur ── */
+function frise(c, k, tau) {
+  const xf = m => F.x0 + (F.x1 - F.x0) * m / F.max;
+  c.ligne(F.x0, F.y, F.x1, F.y, { couleur: 'faible', largeur: 1.6, duree: .25 });
+  for (let m = 0; m <= F.max; m += 5) { c.ligne(xf(m), F.y - 5, xf(m), F.y + 5, { couleur: 'faible', largeur: 1.3, duree: .03 }); c.texte(String(m), xf(m), F.y + 22, { couleur: 'faible', taille: 13, align: 'center', duree: .05 }); }
+  c.texte('temps (min)', F.x0 - 12, F.y + 5, { couleur: 'faible', taille: 13, align: 'right', duree: .3 });
+  c.direct(() => {
+    const x = c.ctx, px = xf(Math.min(F.max, Math.max(0, tau)));
+    x.save(); x.fillStyle = 'rgba(250,204,21,.95)'; x.shadowColor = 'rgba(250,204,21,.8)'; x.shadowBlur = 6; x.beginPath(); x.arc(px, F.y, 6, 0, TAU); x.fill(); x.restore();
+    c.texte(`t = ${minutes(tau)} min`, Math.min(F.x1 - 20, Math.max(F.x0 + 20, px)), F.y - 12, { couleur: 'jaune', taille: 14, align: 'center' });
+  });
+  c.repere('frise', F.x0 - 8, F.y - 26, F.x1 - F.x0 + 16, 52, 'la frise du temps (minutes), curseur à glisser');
+}
+/** Légendes communes de la cellule. */
+function legendesCellule(c, k) {
+  const W = (s, x, y, o) => k.T(c, s, x, y, { duree: .45, ...o });
+  if (k.ecrit(c, 'cell', .2)) {
+    W('noyau : ADN', COL, 92, { couleur: 'bleu', taille: 15 }); c.ligne(COL - 4, 88, N.cx + N.rx - 12, 160, { couleur: 'bleu', largeur: 1.1 });
+    W('cytoplasme : ribosomes,', COL, 132, { couleur: 'rose', taille: 15 }); W('synthèse des protéines', COL, 150, { couleur: 'rose', taille: 15 });
+    c.ligne(COL - 4, 136, 505, 168, { couleur: 'rose', largeur: 1.1 });
+    W('ribosomes', 36, 78, { couleur: 'cyan', taille: 14 }); c.ligne(80, 84, RIBOS[0][0] - 4, RIBOS[0][1] - 6, { couleur: 'cyan', largeur: 1.1 });
+    const [qx, qy] = posPore(PORE_LEG);
+    W('pore', qx + 32, qy - 24, { couleur: 'blanc', taille: 14 }); c.ligne(qx + 4, qy - 4, qx + 28, qy - 22, { couleur: 'blanc', largeur: 1.1 });
+  }
+}
+function reperesCellule(c) {
+  c.repere('noyau', N.cx - N.rx - 4, N.cy - N.ry - 4, 2 * N.rx + 8, 2 * N.ry + 8, 'le noyau');
+  c.repere('cytoplasme', C.cx - C.rx, C.cy - C.ry, 2 * C.rx, 2 * C.ry, 'le cytoplasme');
+  c.repere('ribosomes', RIBOS[0][0] - 30, RIBOS[0][1] - 24, 70, 56, 'des ribosomes (grains turquoise)');
+}
+
+/* ── Vue uracile ───────────────────────────────────────────────────── */
+const MU = { cellule: 3.0, uracile_apporte: 5.5, noyau_marque: 8.5, arn_sort_pores: 12.0, cytoplasme_marque: 15.5 };
+const nNoyauU = tau => (tau <= 0 ? 0 : tau < 5 ? Math.round(64 * tau / 5) : Math.round(64 - 30 * Math.min(1, Math.max(0, (tau - 8) / 22))));
+const nCytoU = tau => Math.round(84 * Math.min(1, Math.max(0, (tau - 9) / 21)));
+function dessinerUracile(c, k) {
+  const t = k.t, tau = tauDe('uracile', t); k.P.temps_min = minutes(tau);
+  const nN = nNoyauU(tau), nC = nCytoU(tau);
+  c.direct(() => {
+    const x = c.ctx;
+    cellule(x);
+    precurseurs(x, t, 3.4, 5.5);
+    if (t >= 9 && t < 15.4) PORES_ARN.forEach((i, j) => { const d = t - 9 - j * .43; if (d >= 0) arnSortant(x, i, (d % 2.6) / 2.6); });
+    for (let i = 0; i < nN; i++) M.grain(x, G_NOYAU[i][0], G_NOYAU[i][1]);
+    for (let i = 0; i < nC; i++) M.grain(x, G_CYTO[i][0], G_CYTO[i][1]);
+  });
+  c.texte('Marquage à l’uracile radioactif', 14, 26, { couleur: 'cyan', taille: 19, duree: .6 });
+  c.texte('document reconstitué', 748, 22, { couleur: 'faible', taille: 12, align: 'right', duree: .3 });
+  frise(c, k, tau);
+  reperesCellule(c);
+  c.repere('adn', N.cx - N.rx * .7, N.cy - N.ry * .7, N.rx * 1.4, N.ry * 1.4, 'l’ADN (chromatine), dans le noyau');
+  const [qx, qy] = posPore(PORE_LEG); c.repere('pore', qx - 10, qy - 10, 20, 20, 'un pore du noyau');
+  legendesCellule(c, k);
+  if (k.ecrit(c, 'question', 1.2)) { k.T(c, 'comment l’information', COL, 190, { couleur: 'jaune', taille: 15, duree: .5 }); k.T(c, 'passe-t-elle ?', COL, 208, { couleur: 'jaune', taille: 15, duree: .4 }); }
+  if (k.ecrit(c, 'ura', 3.6)) { k.T(c, 'uracile radioactif', COL, 246, { couleur: 'vert', taille: 15, duree: .6 }); k.T(c, '(base propre à l’ARN)', COL, 264, { couleur: 'faible', taille: 13, duree: .6 }); }
+  if (nN > 0) c.repere('grains_noyau', N.cx - N.rx, N.cy - N.ry, 2 * N.rx, 2 * N.ry, 'les grains noirs dans le noyau');
+  if (k.ecrit(c, 't5', 7.6)) k.T(c, '5 min : grains dans le noyau', COL, 298, { couleur: 'blanc', taille: 13, duree: .7 });
+  if (k.ecrit(c, 't15', 10.8)) k.T(c, 'puis l’ARN sort par les pores', COL, 318, { couleur: 'orange', taille: 13, duree: .7 });
+  if (nC > 0) c.repere('grains_cytoplasme', C.cx + N.rx + 20, C.cy - 80, 110, 160, 'les grains noirs dans le cytoplasme');
+  if (k.ecrit(c, 't30', 14.4)) k.T(c, '30 min : cytoplasme marqué', COL, 338, { couleur: 'blanc', taille: 13, duree: .7 });
+  if (k.ecrit(c, 'concl', 16.2)) { k.T(c, 'l’ARN est fabriqué dans le noyau', 545, 386, { couleur: 'vert', taille: 13, duree: .7 }); k.T(c, 'puis passe dans le cytoplasme', 545, 403, { couleur: 'vert', taille: 13, duree: .7 }); }
+}
+function voitUracile(k) {
+  const t = k.t, tau = tauDe('uracile', t), nN = nNoyauU(tau), nC = nCytoU(tau);
+  const m = ['Une cellule en coupe peinte (document reconstitué) : cytoplasme rosé avec des ribosomes (petits grains turquoise), noyau bleuté avec ses pores et l’ADN en fins filaments bleu-violet. À droite, écrit « noyau : ADN » et « cytoplasme : ribosomes, synthèse des protéines » ; légendes « ribosomes » et « pore ».'];
+  if (t >= 1.2) m.push('Écrit en jaune : « comment l’information passe-t-elle ? ».');
+  if (t >= 3.4 && t < 6.3) m.push('Des points lumineux vert-jaune (l’uracile radioactif) arrivent du milieu et entrent dans la cellule.');
+  if (t >= 3.6) m.push('Écrit « uracile radioactif (base propre à l’ARN) ».');
+  m.push(`En bas, la frise du temps : le curseur est à t = ${minutes(tau)} min.`);
+  if (nN > 0 || nC > 0) m.push(`Grains noirs d’autoradiographie : ${nN} dans le noyau, ${nC} dans le cytoplasme.`);
+  if (tau > 0 && tau < 5) m.push('Les grains noirs apparaissent dans le noyau.');
+  if (t >= 7.6) m.push('Écrit « 5 min : grains dans le noyau ».');
+  if (t >= 9 && t < 15.4) m.push('De petits ARN orange sortent du noyau par les pores vers le cytoplasme.');
+  if (t >= 10.8) m.push('Écrit « puis l’ARN sort par les pores ».');
+  if (tau >= 15) m.push('Le noyau se vide en partie, le cytoplasme se marque.');
+  if (t >= 14.4) m.push('Écrit « 30 min : cytoplasme marqué ».');
+  if (t >= 16.2) m.push('Écrit en vert en bas à droite : « l’ARN est fabriqué dans le noyau puis passe dans le cytoplasme ».');
+  return m;
+}
+
+/* ── Vue acides_amines ─────────────────────────────────────────────── */
+const MA = { acides_amines_apportes: 3.0, ribosomes_marques: 6.5, conclusion: 12.0 };
+const seuil1 = i => .3 + (i % 10) * .45, seuil2 = i => 8 + (i % 7) * 2.5;
+const nRibosMarques = tau => RIBOS.filter((_, i) => tau >= seuil1(i)).length;
+const CONCL = [['conclusion : l’ARN est fabriqué', 'vert'], ['dans le noyau, passe dans le', 'vert'], ['cytoplasme ; les protéines sont', 'vert'], ['fabriquées dans le cytoplasme,', 'vert'],
+  ['sur les ribosomes :', 'vert'], ['l’ARN messager (ARNm) porte', 'jaune'], ['l’information du noyau aux', 'jaune'], ['ribosomes.', 'jaune']];
+function dessinerAcides(c, k) {
+  const t = k.t, tau = tauDe('acides_amines', t); k.P.temps_min = minutes(tau);
+  c.direct(() => {
+    const x = c.ctx;
+    cellule(x);
+    precurseurs(x, t, 1.0, 3.0);
+    RIBOS.forEach(([px, py], i) => { if (tau >= seuil1(i)) M.grain(x, px + 3, py - 4); if (tau >= seuil2(i)) M.grain(x, px - 4, py + 3); });
+  });
+  c.texte('Marquage aux acides aminés radioactifs', 14, 26, { couleur: 'cyan', taille: 19, duree: .6 });
+  c.texte('document reconstitué', 748, 22, { couleur: 'faible', taille: 12, align: 'right', duree: .3 });
+  frise(c, k, tau);
+  reperesCellule(c);
+  legendesCellule(c, k);
+  if (k.ecrit(c, 'leu', 1.2)) { k.T(c, 'leucine radioactive', COL, 186, { couleur: 'vert', taille: 15, duree: .6 }); k.T(c, '(un acide aminé)', COL, 204, { couleur: 'faible', taille: 13, duree: .5 }); }
+  if (tau >= seuil1(0)) c.repere('grains_ribosomes', RIBOS[0][0] - 30, RIBOS[0][1] - 24, 70, 56, 'les grains noirs sur les ribosomes');
+  if (k.ecrit(c, 'rib', 5.4)) { k.T(c, 'grains sur les ribosomes ;', COL, 232, { couleur: 'blanc', taille: 13, duree: .6 }); k.T(c, 'noyau non marqué', COL, 249, { couleur: 'blanc', taille: 13, duree: .5 }); }
+  if (t >= 8.4) c.repere('conclusion', COL - 4, 262, 196, 150, 'la conclusion');
+  if (k.ecrit(c, 'concl', 8.4)) CONCL.forEach(([s, coul], i) => k.T(c, s, COL, 278 + i * 17, { couleur: coul, taille: 13, duree: .5 }));
+}
+function voitAcides(k) {
+  const t = k.t, tau = tauDe('acides_amines', t), n = nRibosMarques(tau);
+  const m = ['La même cellule en coupe peinte (document reconstitué) : cytoplasme rosé avec des ribosomes (grains turquoise), noyau bleuté avec pores et ADN. Écrit « noyau : ADN » et « cytoplasme : ribosomes, synthèse des protéines ».'];
+  if (t >= 1.0 && t < 3.8) m.push('Des points lumineux vert-jaune (les acides aminés radioactifs) entrent dans la cellule.');
+  if (t >= 1.2) m.push('Écrit « leucine radioactive (un acide aminé) ».');
+  m.push(`En bas, la frise du temps : le curseur est à t = ${minutes(tau)} min.`);
+  if (n > 0) m.push(`Grains noirs d’autoradiographie sur ${n} ribosomes sur ${RIBOS.length}, seulement dans le cytoplasme ; aucun grain dans le noyau.`);
+  if (t >= 5.4) m.push('Écrit « grains sur les ribosomes ; noyau non marqué ».');
+  if (t >= 8.4) m.push('À droite s’écrit la conclusion : « l’ARN est fabriqué dans le noyau, passe dans le cytoplasme ; les protéines sont fabriquées dans le cytoplasme, sur les ribosomes : l’ARN messager (ARNm) porte l’information du noyau aux ribosomes. »');
+  return m;
+}
+
+window.Etapes.lancer({
+  id: 'expression_marquage', titre: 'Marquage radioactif : ARN et protéines', graine: 29,
+  parametres: {
+    temps_min: { defaut: 0, schema: '0..30, pas 1 (minutes depuis l’apport du produit radioactif ; la scène s’affiche à cet instant)', lire: v => { const n = Math.round(+v); return Number.isFinite(n) ? Math.min(30, Math.max(0, n)) : undefined; } },
+  },
+  poignees: {
+    toucher: (x, y) => (Math.abs(y - F.y) < 16 && x > F.x0 - 14 && x < F.x1 + 14 ? 'curseur' : null),
+    bouger: (id, x, y, k, api) => { const tau = Math.round(Math.min(1, Math.max(0, (x - F.x0) / (F.x1 - F.x0))) * F.max); api.poser({ temps_min: tau }); api.setTime({ time_s: tDe(k.vue, tau) }); },
+  },
+  vues: {
+    uracile: { titre: 'Marquage à l’uracile radioactif', fin: 18, moments: MU, dessiner: dessinerUracile, voit: voitUracile,
+      motifs: { cellule: 'la cellule : l’ADN dans le noyau, les ribosomes dans le cytoplasme ; comment l’information passe-t-elle ?', uracile_apporte: 'on apporte de l’uracile radioactif, une base propre à l’ARN', noyau_marque: 't = 5 min : les grains sont dans le noyau, l’ARN y est fabriqué', arn_sort_pores: 't = 15 min : l’ARN sort du noyau par les pores', cytoplasme_marque: 't = 30 min : le cytoplasme est marqué, le noyau s’est vidé en partie' },
+      conclusion: 'L’ARN est fabriqué dans le noyau, puis passe dans le cytoplasme par les pores.',
+      surReglage: (k, cles, api) => { if (cles.includes('temps_min')) api.setTime({ time_s: tDe('uracile', k.P.temps_min) }); },
+      texte: 'Uracile radioactif (base propre à l’ARN) : à 5 min les grains d’autoradiographie sont dans le noyau ; l’ARN sort par les pores ; à 30 min le cytoplasme est marqué et le noyau s’est vidé en partie. Document reconstitué.',
+      explication: [{ repere: 'adn', texte: 'L’ADN reste dans le noyau.' }, { repere: 'grains_noyau', texte: 'D’abord, les grains sont dans le noyau : l’ARN y est fabriqué.' }, { repere: 'pore', texte: 'L’ARN sort par les pores.' }, { repere: 'grains_cytoplasme', texte: 'Puis l’ARN est dans le cytoplasme.' }] },
+    acides_amines: { titre: 'Marquage aux acides aminés radioactifs', fin: 14.5, moments: MA, dessiner: dessinerAcides, voit: voitAcides,
+      motifs: { acides_amines_apportes: 'on apporte un acide aminé radioactif, la leucine', ribosomes_marques: 'les grains sont sur les ribosomes du cytoplasme, aucun dans le noyau', conclusion: 'l’ARN messager porte l’information du noyau aux ribosomes' },
+      conclusion: 'Les protéines sont fabriquées dans le cytoplasme, sur les ribosomes ; l’ARNm porte l’information du noyau aux ribosomes.',
+      surReglage: (k, cles, api) => { if (cles.includes('temps_min')) api.setTime({ time_s: tDe('acides_amines', k.P.temps_min) }); },
+      texte: 'Leucine radioactive : les grains sont seulement dans le cytoplasme, sur les ribosomes. Conclusion : l’ARN est fabriqué dans le noyau et passe dans le cytoplasme ; les protéines sont fabriquées sur les ribosomes ; l’ARNm porte l’information du noyau aux ribosomes.',
+      explication: [{ repere: 'grains_ribosomes', texte: 'Les grains sont sur les ribosomes : les protéines y sont fabriquées.' }, { repere: 'noyau', texte: 'Le noyau n’est pas marqué.' }, { repere: 'conclusion', texte: 'L’ARN messager porte l’information du noyau aux ribosomes.' }] },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

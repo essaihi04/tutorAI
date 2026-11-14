@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>L’énergie de liaison — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="nucleaire.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un noyau en sphères : on lui fournit l’énergie E_ℓ et il se sépare en ses nucléons ; ou les nucléons se rapprochent, forment le noyau et libèrent E_ℓ ; à droite, une barre de niveaux d’énergie avec la flèche E_ℓ"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * L’énergie de liaison (cours « Noyaux, masse et énergie », 2e Bac PC BIOF, novembre 2026).
+ * Vue « Le noyau » : un noyau en sphères ombrées (proton rouge, neutron gris-bleu).
+ * Vue « L’énergie » : une barre de niveaux — en bas « noyau au repos », en haut « nucléons séparés au repos », la flèche E_ℓ.
+ * Paramètres : sens = separer (défaut) | former ; noyau = helium (défaut) | deuterium | tritium (?sens=, ?noyau=,
+ * set_parameters). Une touche sur le noyau (ou un nucléon) = noyau suivant.
+ * Physique : E_ℓ = 28,30 MeV (⁴₂He), 2,23 MeV (²₁H), 8,48 MeV (³₁H) — valeurs du cours, exactes sur la craie.
+ * Pour l’œil seulement (écrit au tableau) : l’écart entre les deux niveaux n’est pas à l’échelle ; le faisceau d’énergie,
+ * la vibration du noyau et l’éclair sont peints.
+ */
+const { fr, protocole } = window.Tableau;
+const bulle = (el, t, k) => window.Tableau.bulle(el, String(t).replace(/_\{?([^}\s]*)\}?/g, '$1'), k);   // la bulle : jamais de « _ » visible
+const $ = id => document.getElementById(id);
+const SENS = ['separer', 'former'], LISTE = ['helium', 'deuterium', 'tritium'];
+const q = new URLSearchParams(location.search);
+const P = { sens: SENS.includes(q.get('sens')) ? q.get('sens') : 'separer', noyau: LISTE.includes(q.get('noyau')) ? q.get('noyau') : 'helium' };
+const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0 };
+const NOYAUX = {
+  helium: { A: 4, Z: 2, X: 'He', nom: 'hélium 4', El: '28,30' },
+  deuterium: { A: 2, Z: 1, X: 'H', nom: 'deutérium', El: '2,23' },
+  tritium: { A: 3, Z: 1, X: 'H', nom: 'tritium', El: '8,48' },
+};
+const NUC = () => NOYAUX[P.noyau];
+const SUP = { 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴' }, SUB = { 0: '₀', 1: '₁', 2: '₂', 3: '₃', 4: '₄' };
+const uni = (A, Z, X) => String(A).split('').map(ch => SUP[ch]).join('') + String(Z).split('').map(ch => SUB[ch]).join('') + X;
+const SEP = () => P.sens === 'separer';
+
+/* ── Instants clés ─────────────────────────────────────────────────────────────────────────── */
+const AV = 1.6;
+function suite() {
+  if (SEP()) return [['noyau_repos', 1.2, 'le noyau est au repos'], ['energie_fournie', 3.2, 'on fournit de l’énergie au noyau : la flèche E_ℓ monte'],
+    ['noyau_se_casse', 4.8, 'le noyau se casse : les nucléons s’écartent'], ['nucleons_separes', 6.4, 'les nucléons sont séparés et au repos'],
+    ['definition', 8.4, 'la définition de E_ℓ est écrite'], ['fin', 9.4, 'fin']];
+  return [['nucleons_separes', 1.2, 'les nucléons sont séparés et au repos'], ['nucleons_s_approchent', 3.0, 'les nucléons s’approchent'],
+    ['noyau_forme', 4.8, 'le noyau se forme : E_ℓ est libérée'], ['masse_diminue', 6.6, 'la masse diminue de Δm'], ['fin', 7.6, 'fin']];
+}
+let SUITE = suite();
+const moments = () => Object.fromEntries(SUITE.map(([n, t]) => [n, t]));
+let M = moments();
+const FIN = () => M.fin;
+const a_ = nom => (nom in M ? M[nom] - AV : Infinity);
+const fini = nom => nom in M && (S.fait || S.t >= M[nom] - 1e-6);   // annotation entièrement écrite
+const vu = nom => nom in M && (S.fait || S.t >= a_(nom));
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lisse = u => { u = clamp(u, 0, 1); return u * u * (3 - 2 * u); };
+const T_ = () => (S.fait ? 99 : S.t);
+
+/* Déroulé : séparation u (0 = lié, 1 = séparé), faisceau, vibration, éclair, flèche E_ℓ (0..1). */
+function separation() {
+  const t = T_();
+  if (SEP()) return 1 - Math.pow(1 - clamp((t - 3.3) / 1.3, 0, 1), 2);       // les nucléons s’écartent puis s’arrêtent
+  return 1 - Math.pow(clamp((t - 1.2) / 1.8, 0, 1), 2);                       // ils s’approchent de plus en plus vite
+}
+const faisceau = () => (SEP() && !S.fait ? lisse((S.t - 1.4) / .4) * (1 - lisse((S.t - 3.2) / .4)) : 0);
+const vibration = () => (SEP() && !S.fait && S.t < 3.3 ? 2.6 * lisse((S.t - 1.6) / 1.6) : 0);
+const eclairU = () => (!SEP() && !S.fait ? (S.t - 3.0) / 2.2 : -1);
+const flecheU = () => (SEP() ? lisse((T_() - 1.6) / 1.6) : lisse((T_() - 3.2) / 1.6));
+function etat() {
+  const u = separation();
+  if (SEP()) return u <= 0 ? (S.t >= 1.4 && !S.fait ? 'lié (il reçoit de l’énergie)' : 'lié') : u < 1 ? 'en train de se séparer' : 'séparé';
+  return u >= 1 ? 'séparé' : u > 0 ? 'en train de se former (les nucléons s’approchent)' : 'lié';
+}
+
+/* ── Géométrie ─────────────────────────────────────────────────────────────────────────────── */
+const VN = { x: 6, y: 32, w: 468, h: 332 }, VE = { x: 482, y: 32, w: 272, h: 332 };
+const CX = 240, CY = 205, R = 17;
+const AXE = 512, YB = 300, YT = 100, XF = 562;
+function positionsLiees(A) {
+  const d = 1.7 * R;
+  if (A === 2) return [[-.5 * d, 0], [.5 * d, 0]];
+  if (A === 3) return [[-.5 * d, .29 * d], [.5 * d, .29 * d], [0, -.58 * d]];
+  return [[-.5 * d, .25 * d], [.5 * d, .25 * d], [0, -.6 * d], [0, .05 * d]];
+}
+function positionsSeparees(A) {
+  if (A === 2) return [[-150, 0], [150, 0]];
+  if (A === 3) return [[-150, 70], [150, 70], [0, -95]];
+  return [[-160, -95], [160, -95], [-160, 95], [160, 95]];
+}
+const estProton = (i, Z, A) => Math.floor((i + 1) * Z / A) > Math.floor(i * Z / A);
+function nucleons() {
+  const N = NUC(), u = separation(), L = positionsLiees(N.A), Sp = positionsSeparees(N.A), v = vibration();
+  return L.map(([x, y], i) => {
+    const [xs, ys] = Sp[i], k = estProton(i, N.Z, N.A) ? 'p' : 'n';
+    const vx = v * Math.sin(S.t * 47 + i * 1.9), vy = v * Math.cos(S.t * 53 + i * 2.3);
+    return { x: CX + x + (xs - x) * u + vx, y: CY + y + (ys - y) * u + vy, k, i };
+  });
+}
+
+/* ── Peinture ──────────────────────────────────────────────────────────────────────────────── */
+const TEINTES = { p: ['#f6b6b0', '#d9534f', '#6e1d1a'], n: ['#e3ebf3', '#8fa3b8', '#3a4757'] };
+function sphere(ctx, x, y, r, k) {
+  const [cl, cb, cf] = TEINTES[k];
+  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(x + r * .3, y + r * 1.05, r * .85, r * .2, 0, 0, Math.PI * 2); ctx.fill();
+  const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .08, x, y, r);
+  g.addColorStop(0, cl); g.addColorStop(.42, cb); g.addColorStop(1, cf);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.ellipse(x - r * .38, y - r * .42, r * .22, r * .14, -.6, 0, Math.PI * 2); ctx.fill();
+}
+function peindreFaisceau(ctx) {
+  const f = faisceau(); if (f <= 0) return;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const x0 = 16, x1 = CX - 8;
+  for (const [w, al] of [[16, .18], [7, .45], [2.5, .85]]) {
+    const g = ctx.createLinearGradient(0, CY - w, 0, CY + w);
+    g.addColorStop(0, 'rgba(251,191,36,0)'); g.addColorStop(.5, `rgba(255,${w < 3 ? 245 : 200},${w < 3 ? 190 : 80},${al * f})`); g.addColorStop(1, 'rgba(251,191,36,0)');
+    ctx.fillStyle = g; ctx.fillRect(x0, CY - w, x1 - x0, 2 * w);
+  }
+  for (let k = 0; k < 6; k++) {                                  // des paquets d’énergie qui avancent vers le noyau
+    const x = x0 + ((S.t * 230 + k * 40) % (x1 - x0)), g = ctx.createRadialGradient(x, CY, 0, x, CY, 10);
+    g.addColorStop(0, `rgba(255,250,220,${.8 * f})`); g.addColorStop(1, 'rgba(255,180,60,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, CY, 10, 0, Math.PI * 2); ctx.fill();
+  }
+  const g = ctx.createRadialGradient(CX, CY, 0, CX, CY, 60);      // le noyau s’illumine en recevant l’énergie
+  g.addColorStop(0, `rgba(255,220,120,${.35 * f})`); g.addColorStop(1, 'rgba(255,160,60,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(CX, CY, 60, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+function peindreEclair(ctx) {
+  const u = eclairU(); if (u <= 0 || u >= 1) return;
+  const Rr = 20 + 130 * Math.sqrt(u), al = Math.sin(Math.PI * Math.min(1, u * 1.1)) * .9;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const g = ctx.createRadialGradient(CX, CY, 0, CX, CY, Rr);
+  g.addColorStop(0, `rgba(255,250,215,${al})`); g.addColorStop(.25, `rgba(255,214,102,${al * .8})`); g.addColorStop(.6, `rgba(251,146,60,${al * .35})`); g.addColorStop(1, 'rgba(251,146,60,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(CX, CY, Rr, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = `rgba(255,230,150,${al * .7})`; ctx.lineWidth = 2.2;
+  for (let k = 0; k < 12; k++) { const a = k * Math.PI / 6 + .15, r0 = Rr * .4, r1 = Rr * .9; ctx.beginPath(); ctx.moveTo(CX + r0 * Math.cos(a), CY + r0 * Math.sin(a)); ctx.lineTo(CX + r1 * Math.cos(a), CY + r1 * Math.sin(a)); ctx.stroke(); }
+  ctx.restore();
+}
+function peindreNoyau(ctx) {
+  const pts = nucleons();
+  const ordre = separation() < .5 && NUC().A === 4 ? pts : pts.slice().sort((a, b) => a.y - b.y);
+  for (const p of ordre) sphere(ctx, p.x, p.y, R, p.k);
+}
+/** Le point « état du système » sur la barre d’énergie (peint, il suit la flèche). */
+function peindreEtat(ctx) {
+  const f = flecheU(), y = SEP() ? YB + (YT - YB) * f : YT + (YB - YT) * f, x = AXE + 22;
+  const g = ctx.createRadialGradient(x - 2, y - 2, .5, x, y, 6);
+  g.addColorStop(0, '#fff7d6'); g.addColorStop(.5, '#facc15'); g.addColorStop(1, '#a16207');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fill();
+}
+
+/* ── Craie ─────────────────────────────────────────────────────────────────────────────────── */
+const VIT = 46;
+function ecrit(c, nom, fn) {
+  if (!vu(nom)) return;
+  const t0 = a_(nom), t = c.t, cur = c.cur, comp = c.complet, tip = c.tip;
+  let k = 1;
+  if (!S.fait) { c.t = -1e9; c.cur = t0; try { fn(); } finally { k = Math.max(1, (c.cur - t0) / AV); } }
+  c.t = S.fait ? Infinity : t0 + (S.t - t0) * k; c.cur = t0; c.tip = tip;
+  try { fn(); } finally { const nt = c.tip; c.t = t; c.cur = cur; c.complet = comp; c.tip = nt; }
+}
+const T = (c, s, x, y, o = {}) => c.texte(s, x, y, { duree: Math.max(.12, String(s).length / VIT), ...o });
+/** Écrit un noyau ᴬ_ZX : A en haut à gauche, Z en bas à gauche, alignés à droite contre le symbole. Renvoie la largeur. */
+function noyauTexte(c, A, Z, X, x, y, o = {}) {
+  const t = o.taille ?? 18, tn = t * .6, wN = Math.max(c.largeurTexte(String(A), tn), c.largeurTexte(String(Z), tn));
+  const w = wN + 1 + c.largeurTexte(X, t);
+  const x0 = o.align === 'center' ? x - w / 2 : o.align === 'right' ? x - w : x;
+  if (o.mesure) return w;
+  const d = s => Math.max(.06, String(s).length / VIT);
+  c.texte(String(A), x0 + wN, y - .45 * t, { couleur: o.couleur, taille: tn, align: 'right', duree: d(A) });
+  c.texte(String(Z), x0 + wN, y + .3 * t, { couleur: o.couleur, taille: tn, align: 'right', duree: d(Z) });
+  c.texte(X, x0 + wN + 1, y, { couleur: o.couleur, taille: t, duree: d(X) });
+  return w;
+}
+function ligne(c, parts, x, y, o = {}) {
+  const taille = o.taille ?? 16;
+  const larg = p => (typeof p === 'string' ? c.largeurTexte(p.replace(/[_{}]/g, ''), taille) : noyauTexte(c, p.A, p.Z, p.X, 0, 0, { taille, mesure: true }));
+  const tot = parts.reduce((s, p) => s + larg(p), 0);
+  let px = o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x;
+  for (const p of parts) {
+    if (typeof p === 'string') T(c, p, px, y, { couleur: o.couleur, taille });
+    else noyauTexte(c, p.A, p.Z, p.X, px, y, { taille, couleur: o.couleur });
+    px += larg(p);
+  }
+  return tot;
+}
+const NOY = () => { const N = NUC(); return { A: N.A, Z: N.Z, X: N.X }; };
+
+function dessinerNoyau(c) {
+  const N = NUC();
+  c.texte('Le noyau', 14, 24, { couleur: 'cyan', taille: 17 });
+  c.rect(VN.x, VN.y, VN.w, VN.h, { couleur: 'tresfaible', arrondi: 8, duree: .5 });
+  c.repere('vue_noyau', VN.x, VN.y, VN.w, VN.h, 'le noyau');
+  c.direct(() => { const ctx = c.ctx; sphere(ctx, 22, 48, 6, 'p'); sphere(ctx, 84, 48, 6, 'n'); });
+  c.texte('proton', 32, 53, { couleur: 'faible', taille: 13 });
+  c.texte('neutron', 94, 53, { couleur: 'faible', taille: 13 });
+  c.texte('(touche le noyau : noyau suivant)', VN.x + VN.w - 8, 53, { couleur: 'faible', taille: 12, align: 'right' });
+  c.direct(() => {
+    const ctx = c.ctx;
+    peindreFaisceau(ctx); peindreEclair(ctx); peindreNoyau(ctx);
+    const pts = nucleons(), u = separation();
+    const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+    const box = [Math.min(...xs) - R - 4, Math.min(...ys) - R - 4, Math.max(...xs) - Math.min(...xs) + 2 * R + 8, Math.max(...ys) - Math.min(...ys) + 2 * R + 8];
+    c.repere('noyau', CX - 46, CY - 46, 92, 92, `le noyau ${uni(N.A, N.Z, N.X)} (${N.nom}) — ${u >= 1 ? 'séparé en ses nucléons' : u > 0 ? 'en train de ' + (SEP() ? 'se séparer' : 'se former') : 'lié'}`);
+    c.repere('nucleons', box[0], box[1], box[2], box[3], `les nucléons : ${N.Z} proton${N.Z > 1 ? 's' : ''} et ${N.A - N.Z} neutron${N.A - N.Z > 1 ? 's' : ''}`);
+    c.repere('energie', SEP() ? 14 : CX - 110, SEP() ? CY - 22 : CY - 110, SEP() ? CX - 14 : 220, SEP() ? 44 : 220, SEP() ? 'l’énergie fournie au noyau (faisceau)' : 'l’énergie libérée (éclair)');
+    // Les nucléons séparés et immobiles portent leur nom.
+    if (u >= 1) for (const p of pts) noyauTexte(c, 1, p.k === 'p' ? 1 : 0, p.k, p.x, p.y + R + 20, { taille: 15, couleur: 'blanc', align: 'center' });
+  });
+  // Annotations.
+  if (SEP()) {
+    if (vu('noyau_repos') && (S.fait ? false : S.t < 3.4)) ecrit(c, 'noyau_repos', () => ligne(c, ['noyau ', NOY(), ' au repos'], CX, 152, { taille: 17, couleur: 'blanc', align: 'center' }));
+    if (vu('energie_fournie')) ecrit(c, 'energie_fournie', () => T(c, 'énergie fournie', 24, CY - 26, { couleur: 'jaune', taille: 15 }));
+    if (vu('noyau_se_casse')) ecrit(c, 'noyau_se_casse', () => {
+      for (const [dx, dy] of positionsSeparees(N.A)) { const l = Math.hypot(dx, dy), ux = dx / l, uy = dy / l; c.fleche(CX + ux * 46, CY + uy * 46, CX + ux * 84, CY + uy * 84, { couleur: 'vert', largeur: 1.5, tete: 8 }); }
+      T(c, 'le noyau se casse', CX, 346, { couleur: 'vert', taille: 15, align: 'center' });
+    });
+    if (vu('nucleons_separes')) ecrit(c, 'nucleons_separes', () => {
+      T(c, 'nucléons séparés, au repos', CX, 76, { couleur: 'blanc', taille: 16, align: 'center' });
+      T(c, 'il a fallu fournir', CX, CY - 4, { couleur: 'jaune', taille: 16, align: 'center' });
+      T(c, `E_{ℓ} = ${N.El} MeV`, CX, CY + 20, { couleur: 'jaune', taille: 18, align: 'center' });
+    });
+    if (vu('definition')) ecrit(c, 'definition', () => {
+      c.rect(150, 370, 460, 48, { couleur: 'vert', arrondi: 8, largeur: 1.5, duree: .3 });
+      T(c, 'E_{ℓ} : énergie à fournir à un noyau au repos', 380, 390, { couleur: 'vert', taille: 17, align: 'center' });
+      T(c, 'pour le séparer en ses nucléons au repos', 380, 411, { couleur: 'vert', taille: 17, align: 'center' });
+    });
+    c.repere('definition', 150, 370, 460, 48, 'la définition de l’énergie de liaison E_ℓ');
+  } else {
+    if (vu('nucleons_separes') && !S.fait && S.t < 3.0) ecrit(c, 'nucleons_separes', () => T(c, 'nucléons séparés, au repos', CX, 76, { couleur: 'blanc', taille: 16, align: 'center' }));
+    if (vu('nucleons_s_approchent')) ecrit(c, 'nucleons_s_approchent', () => {
+      for (const [dx, dy] of positionsSeparees(N.A)) { const l = Math.hypot(dx, dy), ux = dx / l, uy = dy / l; c.fleche(CX + ux * 118, CY + uy * 118, CX + ux * 70, CY + uy * 70, { couleur: 'vert', largeur: 1.5, tete: 8, alpha: .8 }); }
+      T(c, 'les nucléons s’approchent', CX, 346, { couleur: 'vert', taille: 15, align: 'center' });
+    });
+    if (vu('noyau_forme')) ecrit(c, 'noyau_forme', () => {
+      ligne(c, ['noyau ', NOY(), ' formé'], CX, 152, { taille: 17, couleur: 'blanc', align: 'center' });
+      T(c, 'E_{ℓ} est libérée', CX, 272, { couleur: 'jaune', taille: 18, align: 'center' });
+    });
+    if (vu('masse_diminue')) ecrit(c, 'masse_diminue', () => {
+      c.rect(170, 372, 420, 34, { couleur: 'vert', arrondi: 8, largeur: 1.5, duree: .3 });
+      T(c, 'la masse diminue de Δm : E_{ℓ} = Δm·c²', 380, 396, { couleur: 'vert', taille: 17, align: 'center' });
+    });
+    c.repere('definition', 170, 372, 420, 34, 'la masse diminue de Δm : E_ℓ = Δm·c²');
+  }
+}
+
+function dessinerEnergie(c) {
+  const N = NUC();
+  c.texte('L’énergie', VE.x + 6, 24, { couleur: 'cyan', taille: 17 });
+  c.rect(VE.x, VE.y, VE.w, VE.h, { couleur: 'tresfaible', arrondi: 8, duree: .5 });
+  c.repere('vue_energie', VE.x, VE.y, VE.w, VE.h, 'la barre des niveaux d’énergie');
+  c.fleche(AXE, 334, AXE, 50, { couleur: 'faible', largeur: 1.6 });
+  c.texte('E', AXE - 8, 62, { couleur: 'faible', taille: 16, align: 'right' });
+  c.ligne(AXE, YT, 604, YT, { couleur: 'blanc', largeur: 2.6 });
+  c.texte('nucléons séparés', 608, YT - 2, { couleur: 'blanc', taille: 15 });
+  c.texte('au repos', 608, YT + 17, { couleur: 'blanc', taille: 15 });
+  c.ligne(AXE, YB, 604, YB, { couleur: 'blanc', largeur: 2.6 });
+  c.texte('noyau', 608, YB - 2, { couleur: 'blanc', taille: 15 });
+  c.texte('au repos', 608, YB + 17, { couleur: 'blanc', taille: 15 });
+  c.texte('écart non à l’échelle', VE.x + 10, 356, { couleur: 'faible', taille: 12 });
+  c.repere('niveau_nucleons', AXE, YT - 16, 240, 40, 'le niveau « nucléons séparés au repos »');
+  c.repere('niveau_noyau', AXE, YB - 16, 240, 40, 'le niveau « noyau au repos »');
+  c.direct(() => peindreEtat(c.ctx));
+  // La flèche E_ℓ : elle se trace en même temps que l’énergie passe (montante pour séparer, descendante pour former).
+  const f = flecheU();
+  c.direct(() => {
+    if (f > 0) {
+      const y0 = SEP() ? YB : YT, y1 = y0 + ((SEP() ? YT : YB) - y0) * f;
+      if (f < 1) c.ligne(XF, y0, XF, y1, { couleur: 'jaune', largeur: 2.4 });
+      else c.fleche(XF, y0, XF, y1, { couleur: 'jaune', largeur: 2.4, tete: 12 });
+    }
+  });
+  c.repere('fleche_El', XF - 14, YT, 120, YB - YT, `la flèche E_ℓ = ${N.El} MeV (${SEP() ? 'fournie : on monte' : 'libérée : on descend'})`);
+  const nomF = SEP() ? 'energie_fournie' : 'noyau_forme';
+  if (vu(nomF)) ecrit(c, nomF, () => {
+    T(c, 'E_{ℓ}', XF + 12, 192, { couleur: 'jaune', taille: 19 });
+    T(c, `= ${N.El} MeV`, XF + 12, 216, { couleur: 'jaune', taille: 17 });
+    T(c, SEP() ? '(fournie)' : '(libérée)', XF + 12, 238, { couleur: 'faible', taille: 14 });
+  });
+}
+
+function dessiner(c) {
+  dessinerNoyau(c); dessinerEnergie(c);
+  c.direct(() => { if (S.running || S.t > 0) c.texte(S.fait ? 'fin' : `t = ${fr(S.t, 1)} s`, 748, 24, { couleur: 'faible', taille: 13, align: 'right' }); });
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(43); dessiner(c); return c.fin(); });
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(FIN(), S.t + dt);
+  if (S.jusqua != null && S.t >= S.jusqua && S.jusqua < FIN()) {
+    S.t = S.jusqua; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 2)} s`) + '.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre();
+    return true;
+  }
+  if (S.t >= FIN()) { S.running = false; S.fait = true; S.jusqua = null; $('run').textContent = 'Rejouer'; bulle($('feedback'), message(), 'good'); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+
+/* ── Ce que l’on voit, en mots ─────────────────────────────────────────────────────────────── */
+function phase() {
+  let dernier = null; for (const [n, t, m] of SUITE) if (S.t >= t - 1e-6) dernier = [n, m];
+  if (S.fait) return 'fin, tout est écrit';
+  if (S.t <= 0) return SEP() ? 'le noyau est au repos, rien ne se passe encore' : 'les nucléons sont séparés et au repos, rien ne se passe encore';
+  if (faisceau() > .05) return 'un faisceau d’énergie entre dans le noyau, qui vibre ; la flèche E_ℓ monte';
+  const u = separation();
+  if (SEP() && u > 0 && u < 1) return 'le noyau se casse : les nucléons s’écartent';
+  if (!SEP() && u > 0 && u < 1) return 'les nucléons s’approchent';
+  if (!SEP() && eclairU() > 0 && eclairU() < 1) return 'le noyau est formé : un éclair d’énergie sort, E_ℓ est libérée, la flèche E_ℓ descend';
+  return dernier ? dernier[1] : (SEP() ? 'le noyau est au repos' : 'les nucléons sont séparés et au repos');
+}
+function ceQuiSeVoit() {
+  const N = NUC(), m = [], f = flecheU();
+  const st = S.running ? 'la scène se déroule' : S.fait ? 'fin de la scène' : S.t > 0 ? 'scène arrêtée' : 'scène pas encore lancée';
+  m.push(`Sens « ${P.sens} » (${SEP() ? 'séparer le noyau en ses nucléons' : 'former le noyau à partir de ses nucléons'}), noyau ${uni(N.A, N.Z, N.X)} (${N.nom} : ${N.Z} proton${N.Z > 1 ? 's' : ''}, ${N.A - N.Z} neutron${N.A - N.Z > 1 ? 's' : ''}), E_ℓ = ${N.El} MeV ; t = ${fr(S.t, 2)} s (${st}).`);
+  m.push(`Vue « Le noyau » : état ${etat()}${faisceau() > .05 ? ' ; un faisceau d’énergie peint entre dans le noyau' : ''}${eclairU() > 0 && eclairU() < 1 ? ' ; un éclair peint sort du noyau' : ''}.`);
+  const fl = f <= 0 ? 'pas encore tracée' : f < 1 ? `en cours (${SEP() ? 'elle monte' : 'elle descend'})` : `tracée (${SEP() ? 'vers le haut : on fournit' : 'vers le bas : on libère'} E_ℓ = ${N.El} MeV)`;
+  m.push(`Vue « L’énergie » : niveau du bas « noyau au repos », niveau du haut « nucléons séparés au repos » (écart non à l’échelle) ; le système est ${f >= 1 ? (SEP() ? 'en haut' : 'en bas') : f > 0 ? 'entre les deux niveaux' : (SEP() ? 'en bas' : 'en haut')} ; flèche E_ℓ ${fl}.`);
+  const ec = [];
+  if (SEP()) {
+    if (fini('noyau_repos') && !S.fait && S.t < 3.4) ec.push(`« noyau ${uni(N.A, N.Z, N.X)} au repos »`);
+    if (fini('energie_fournie')) ec.push(`« énergie fournie » et E_ℓ = ${N.El} MeV (fournie) près de la flèche`);
+    if (fini('noyau_se_casse')) ec.push('« le noyau se casse »');
+    if (fini('nucleons_separes')) ec.push(`« nucléons séparés, au repos » et « il a fallu fournir E_ℓ = ${N.El} MeV »`);
+    if (fini('definition')) ec.push('la définition « E_ℓ : énergie à fournir à un noyau au repos pour le séparer en ses nucléons au repos »');
+  } else {
+    if (fini('nucleons_separes') && !S.fait && S.t < 3.0) ec.push('« nucléons séparés, au repos »');
+    if (fini('nucleons_s_approchent')) ec.push('« les nucléons s’approchent »');
+    if (fini('noyau_forme')) ec.push(`« noyau ${uni(N.A, N.Z, N.X)} formé », « E_ℓ est libérée » et E_ℓ = ${N.El} MeV (libérée) près de la flèche`);
+    if (fini('masse_diminue')) ec.push('« la masse diminue de Δm : E_ℓ = Δm·c² »');
+  }
+  if (ec.length) m.push('Écrit à la craie : ' + ec.join(' ; ') + '.');
+  m.push(`Phase : ${phase()}.`);
+  return m.join(' ');
+}
+function message() {
+  const N = NUC();
+  return SEP() ? `Pour séparer ${uni(N.A, N.Z, N.X)} en ses nucléons, il faut fournir E_ℓ = ${N.El} MeV.` : `En se formant, ${uni(N.A, N.Z, N.X)} libère E_ℓ = ${N.El} MeV : sa masse diminue de Δm.`;
+}
+
+/* ── Commandes ─────────────────────────────────────────────────────────────────────────────── */
+function playUntil(p) {
+  const nom = p && p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-4) S.t = 0;
+  S.jusqua = Math.min(FIN(), Math.max(0.001, cible));
+  S.motif = nom ? SUITE.find(s => s[0] === nom)[2] : '';
+  S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+function start() { S.jusqua = null; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), SEP() ? 'On fournit de l’énergie au noyau…' : 'Les nucléons vont se rapprocher…'); pont.noter('start', params()); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait || S.t >= FIN()) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  const t = +p.time_s; if (!Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = clamp(t, 0, FIN()); S.fait = S.t >= FIN();
+  $('run').textContent = S.fait ? 'Rejouer' : 'Reprendre'; scene.sale = true;
+  bulle($('feedback'), `Arrêt sur image : t = ${fr(S.t, 2)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function setParameters(p) {
+  p = p || {};
+  const avant = P.sens;
+  if (SENS.includes(p.sens)) P.sens = p.sens;
+  if (LISTE.includes(p.noyau)) P.noyau = p.noyau;
+  SUITE = suite(); M = moments();
+  if (P.sens !== avant) { S.running = false; S.jusqua = null; S.t = 0; S.fait = false; $('run').textContent = 'Lancer'; }
+  scene.sale = true; bulle($('feedback'), reglage());
+  pont.noter('set_parameters', params()); pont.emettre(); pont.manifeste();
+}
+function reglage() { const N = NUC(); return `${SEP() ? 'Séparer' : 'Former'} le noyau ${uni(N.A, N.Z, N.X)} (${N.nom}) : E_ℓ = ${N.El} MeV.`; }
+function params() { const N = NUC(); return { sens: P.sens, noyau: P.noyau, A: N.A, Z: N.Z, El_MeV: N.El, etat: etat() }; }
+$('run').onclick = () => (S.running ? pause() : (S.t > 0 && S.t < FIN() && !S.fait ? resume() : start()));
+
+/* Poignée de l’élève : une touche sur le noyau (ou sur un nucléon) = noyau suivant. */
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => {
+    const [x, y] = scene.local(px, py);
+    if (Math.hypot(x - CX, y - CY) < 50) return 'noyau';
+    return nucleons().some(p => Math.hypot(x - p.x, y - p.y) < R + 8) ? 'noyau' : null;
+  },
+  bouger: () => {},
+  lacher: () => {
+    P.noyau = LISTE[(LISTE.indexOf(P.noyau) + 1) % LISTE.length];
+    scene.sale = true; bulle($('feedback'), reglage()); pont.noter('set_parameters', params()); pont.emettre();
+  },
+});
+
+window.Tableau.explication({
+  separer: [
+    { repere: 'noyau', texte: 'Un noyau d’hélium 4 au repos : deux protons et deux neutrons liés.' },
+    { repere: 'energie', texte: 'Pour le casser, il faut lui fournir de l’énergie.' },
+    { repere: 'fleche_El', texte: 'Cette énergie fait passer le système du niveau du noyau au niveau des nucléons séparés.' },
+    { repere: 'nucleons', texte: 'Les nucléons sont maintenant séparés et au repos : il a fallu fournir E_ℓ = 28,30 MeV.' },
+    { repere: 'definition', texte: 'E_ℓ est l’énergie à fournir à un noyau au repos pour le séparer en ses nucléons au repos.' },
+  ],
+  former: [
+    { repere: 'nucleons', texte: 'Quatre nucléons séparés, au repos.' },
+    { repere: 'noyau', texte: 'Ils s’approchent et forment le noyau d’hélium 4.' },
+    { repere: 'energie', texte: 'En se formant, le noyau libère l’énergie E_ℓ.' },
+    { repere: 'niveau_noyau', texte: 'Le système descend au niveau du noyau au repos.' },
+    { repere: 'definition', texte: 'La masse diminue de Δm : E_ℓ = Δm·c².' },
+  ],
+});
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'energie_nucleaire_liaison', version: '1.0', title: 'L’énergie de liaison', variants: SENS.map(v => ({ id: v, label: v })), commands: commandes,
+  command_schema: {
+    set_parameters: { sens: 'separer | former (change le déroulé et le remet à zéro)', noyau: 'helium | deuterium | tritium' },
+    set_time: { time_s: '0..fin (arrêt sur cet instant, s ; voir moments)' },
+    play_until: { moment: 'separer : noyau_repos | energie_fournie | noyau_se_casse | nucleons_separes | definition | fin ; former : nucleons_separes | nucleons_s_approchent | noyau_forme | masse_diminue | fin (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'L’énergie de liaison : pour séparer un noyau au repos en ses nucléons au repos, il faut lui fournir E_ℓ ; quand le noyau se forme à partir de ses nucléons, E_ℓ est libérée et la masse diminue de Δm (E_ℓ = Δm·c²). ⁴₂He : 28,30 MeV ; ²₁H : 2,23 MeV ; ³₁H : 8,48 MeV. Barre de niveaux : en bas le noyau au repos, en haut les nucléons séparés au repos (écart non à l’échelle).',
+  etat: () => ({ simulation_status: S.running ? 'running' : (S.fait ? 'finished' : (S.t > 0 ? 'paused' : 'idle')), ce_qui_se_voit: ceQuiSeVoit(), current_variant: P.sens,
+    time_s: +S.t.toFixed(3), parameters: params(), moments: moments() }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), SEP() ? 'Un noyau au repos…' : 'Des nucléons séparés, au repos…');
+setTimeout(() => { if (!S.running && S.t === 0) start(); }, 1600);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

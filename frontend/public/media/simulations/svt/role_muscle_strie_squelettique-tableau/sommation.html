@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fusion des secousses et tétanos — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="muscle.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Myogrammes à la craie : deux stimulations de même intensité plus ou moins rapprochées, une série de stimulations (tétanos), la fatigue, et un exercice pour nommer un tracé"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_parameters">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="myogramme.js"></script>
+<script>
+/*
+ * Deux stimulations, série, fatigue, « nomme le tracé » (cours « Rôle du muscle strié squelettique », novembre 2026).
+ * Même secousse de référence que myographe.html (latence 0,01 s, contraction 0,04 s, relâchement 0,05 s, 20 mm) ;
+ * toutes les stimulations ont la même intensité. Superposition des secousses avec saturation douce (myogramme.js) :
+ * Δ = 0,15 s → deux secousses isolées identiques ; Δ = 0,07 s → fusion incomplète (deux sommets, 20 puis ≈ 31 mm) ;
+ * Δ = 0,03 s → fusion complète (un seul sommet ≈ 39 mm) ; Δ = 0,005 s (pendant la latence) → une seule secousse.
+ * Série de 12 stimulations : 5 Hz secousses isolées ; 15 Hz tétanos imparfait (plateau dentelé ≈ 14–32 mm) ;
+ * 40 Hz tétanos parfait (plateau lisse ≈ 60 mm, ≈ 3 × la secousse).
+ * Fatigue : 30 secousses à 2 Hz ; l’amplitude baisse (20 → 8 mm) et le relâchement s’allonge (0,05 → 0,13 s).
+ * Vues (?vue=) : deux (défaut), serie, fatigue, nomme. Le muscle peint (en haut à gauche) raccourcit avec la courbe.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const MG = window.Myogramme, P = MG.peindre;
+const $ = id => document.getElementById(id);
+const VUES = ['deux', 'serie', 'fatigue', 'nomme'];
+const demande = new URLSearchParams(location.search).get('vue');
+const vue = VUES.includes(demande) ? demande : 'deux';
+const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, fige: false, emis: 0, ecrit: {}, delta: 0.07, f: 15, trace: 2, pxFige: null, arretFin: false };
+const NOMS = { latence: 'une seule secousse', contraction: 'fusion complète', relachement: 'fusion incomplète', apres: 'deux secousses isolées' };
+const fmt = (v, d = 3) => { let s = fr(v, d); if (s.includes(',')) s = s.replace(/0+$/, '').replace(/,$/, ''); return s; };
+const fmm = v => fr(v, 0);
+/* Chaque élément tardif s’écrit à partir de son apparition, sans attendre les autres (base = fin des parties fixes, prise au 1er appel). */
+const quandFab = c => { let base = null; return nom => { if (base == null) base = c.cur; if (S.ecrit[nom] == null) S.ecrit[nom] = (performance.now() - scene.ouvert) / 1000; c.cur = Math.max(base, S.ecrit[nom]); }; };
+
+/* Le petit muscle peint qui raccourcit avec la courbe (a = amplitude actuelle, amax = amplitude du haut de l’échelle). */
+function petitMuscle(c, a, amax, haut, L0) {
+  c.direct(() => { const r = a / amax; P.os(c.ctx, 10, haut - 10, 24, 10); P.muscle(c.ctx, { cx: 22, haut, L: L0 * (1 - 0.18 * r), hw: 9 * (1 + 0.25 * r), tendon: 16, excite: Math.min(1, r * 2) }); });
+  c.repere('muscle', 4, haut - 12, 38, L0 + 34, 'le muscle : il raccourcit quand la courbe monte');
+}
+/* Bande de la phase (de la secousse précédente) où tombe la stimulation suivante. */
+const COUL_PH = { latence: 'rgba(251,146,60,.17)', contraction: 'rgba(244,114,182,.15)', relachement: 'rgba(96,165,250,.16)', apres: 'rgba(74,222,128,.12)' };
+const CRAIE_PH = { latence: 'orange', contraction: 'rose', relachement: 'bleu', apres: 'vert' };
+function bornesPhase(ph, d) { return { latence: [0, 0.01], contraction: [0.01, 0.05], relachement: [0.05, 0.10], apres: [0.10, Math.max(0.12, d)] }[ph]; }
+function bandePhase(c, G, ph, d, yh, s0 = 0) {
+  const [a, b] = bornesPhase(ph, d);
+  c.direct(() => { const ctx = c.ctx; ctx.save(); ctx.fillStyle = COUL_PH[ph]; ctx.fillRect(MG.X(G, s0 + a), yh, MG.X(G, s0 + b) - MG.X(G, s0 + a), G.y0 - yh); ctx.restore(); });
+  c.repere('phase_s2', MG.X(G, s0 + a), yh, Math.max(8, MG.X(G, s0 + b) - MG.X(G, s0 + a)), G.y0 - yh, `la phase de la secousse précédente où tombe la stimulation suivante : ${MG.NOM_PHASE[ph]}`);
+}
+const pasT = span => (span <= 0.5 ? 0.1 : span <= 1.2 ? 0.2 : span <= 3 ? 0.5 : 1);
+function gradT(G, span, xmax) { const p = pasT(span), out = []; for (let v = 0; v <= span + 1e-9; v += p) { const x = MG.X(G, v); if (x <= xmax) out.push([+v.toFixed(3), fmt(v, 2)]); } return out; }
+
+/* ════════════════════════ Vue « deux » : deux stimulations ════════════════════════ */
+const DEUX = {
+  lent: 1 / 25, G: { x0: 92, px: 2150, y0: 262, py: 4.2, xa: 72, xb: 746, haut: 86 },
+  stims: () => [0, S.delta], tr: () => MG.train([0, S.delta]),
+  finRec: () => Math.max(0.13, S.delta + 0.12), fin: () => DEUX.finRec() + 0.01,
+  moments: () => ({ s2_apres_la_fin: 0.28, s2_pendant_relachement: 0.2, s2_pendant_contraction: 0.16, s2_pendant_latence: 0.14, stimulation_2: +S.delta.toFixed(3) }),   // réglage → fin de l’enregistrement avec ce Δ
+  reglages: { s2_apres_la_fin: 0.15, s2_pendant_relachement: 0.07, s2_pendant_contraction: 0.03, s2_pendant_latence: 0.005 },
+  motifs: {
+    s2_apres_la_fin: 'S2 tombe après la fin de la 1re secousse : deux secousses isolées identiques',
+    s2_pendant_relachement: 'S2 tombe pendant le relâchement : fusion incomplète, deux sommets, le second plus haut',
+    s2_pendant_contraction: 'S2 tombe pendant la contraction : fusion complète, un seul sommet, plus haut',
+    s2_pendant_latence: 'S2 tombe pendant la latence : une seule secousse, S2 sans effet visible',
+    stimulation_2: () => `l’instant de S2 (Δ = ${fmt(S.delta)} s), pendant ${MG.NOM_PHASE[MG.phase(S.delta)]} de la 1re secousse`,
+  },
+  analyse() {
+    const T = DEUX.tr(), ph = MG.phase(S.delta), som = MG.sommets(T.y, 0, DEUX.finRec());
+    return { T, ph, som, creux: som.length > 1 ? MG.creux(T.y, som[0].t, som[1].t) : null };
+  },
+  dessiner(c) {
+    const G = DEUX.G, t = S.t, A = DEUX.analyse(), te = Math.min(t, DEUX.finRec()), quand = quandFab(c);
+    petitMuscle(c, A.T.y(te), 40, 108, 92);
+    c.texte('muscle', 22, 250, { couleur: 'rose', taille: 12, align: 'center' });
+    c.texte('Deux stimulations de même intensité', 12, 26, { couleur: 'cyan', taille: 17 });
+    MG.axes(c, G, { xa: G.xa, xb: G.xb, haut: G.haut, mm: [[0, '0'], [10, '10'], [20, '20'], [30, '30'], [40, '40']], t: [[0, '0'], [0.05, '0,05'], [0.1, '0,10'], [0.15, '0,15'], [0.2, '0,20'], [0.25, '0,25']], titreT: 't (s)' });
+    c.texte('mm', G.xa + 8, G.haut + 8, { couleur: 'faible', taille: 13 });
+    MG.ligneTemps(c, G, 350, G.xa, G.xb - 6, 0.01);
+    c.texte('1 dent = 0,01 s', G.xb - 6, 374, { couleur: 'faible', taille: 13, align: 'right' });
+    c.repere('ligne_temps', G.xa, 338, G.xb - G.xa, 40, 'la ligne du temps : 1 dent = 0,01 s');
+    c.texte('même intensité pour S1 et S2', G.xb - 6, 327, { couleur: 'jaune', taille: 13, align: 'right' });
+    c.ligne(528, 100, 556, 100, { couleur: 'faible', largeur: 1.6, pointille: [4, 4] });
+    c.texte('S1 seule (référence)', 562, 105, { couleur: 'faible', taille: 13 });
+    c.direct(() => {
+      c.texte(`Δ = ${fmt(S.delta)} s    ${t <= 0 ? '' : `t = ${fr(te, 3)} s `}(ralenti ×25)`, G.xb, 26, { couleur: 'faible', taille: 14, align: 'right' });
+      if (t >= S.delta && t > 0) bandePhase(c, G, A.ph, S.delta, 112);
+      MG.signal(c, G, 308, G.xa, G.xb - 6, DEUX.stims(), t > 0 ? t : -1);
+      if (t > 0) c.texte('S1', MG.X(G, 0) + 2, 334, { couleur: 'jaune', taille: 13, align: 'center' });
+      const x2 = MG.X(G, S.delta);
+      if (t >= S.delta && t > 0) c.texte('S2', x2 + (S.delta < 0.012 ? 14 : 2), 334, { couleur: 'jaune', taille: 13, align: 'center' });
+      c.cercle(x2 + 2, 316, 5, { couleur: 'jaune', largeur: 1.6 });
+      c.repere('s2', x2 - 8, 296, 20, 28, `S2, à Δ = ${fmt(S.delta)} s de S1 (à glisser)`);
+      c.repere('stimulations', G.xa, 290, Math.max(60, x2 - G.xa + 30), 42, 'les deux stimulations S1 et S2');
+      // la secousse de référence (S1 seule), en pointillé, puis le tracé réel
+      if (te > 0) MG.courbe(c, G, MG.secousse, 0, Math.min(te, 0.11), { couleur: 'faible', largeur: 1.6, pointille: [4, 4] });
+      if (te > 0) MG.courbe(c, G, A.T.y, 0, te, { couleur: 'blanc', largeur: 2.6 });
+      MG.courbe(c, G, () => 0, -0.009, 0, { couleur: 'blanc', largeur: 2.6 });
+      c.repere('reference', MG.X(G, 0), MG.Y(G, 20) - 4, MG.X(G, 0.10) - MG.X(G, 0), G.y0 - MG.Y(G, 20) + 4, 'la 1re secousse seule (référence, en pointillé)');
+      if (t > 0) c.repere('trace', MG.X(G, 0), MG.Y(G, 40), MG.X(G, Math.max(0.02, te)) - MG.X(G, 0), G.y0 - MG.Y(G, 40), 'le tracé obtenu');
+      A.som.forEach((s, i) => {
+        if (s.t > te) return;
+        c.texte(`${fmm(s.y)} mm`, MG.X(G, s.t), MG.Y(G, s.y) - 9, { couleur: 'vert', taille: 14, align: 'center' });
+        c.repere(i ? 'sommet_2' : 'sommet_1', MG.X(G, s.t) - 14, MG.Y(G, s.y) - 24, 28, 30, `${i ? 'le second sommet' : A.som.length > 1 ? 'le premier sommet' : 'le sommet'} : ${fmm(s.y)} mm`);
+      });
+    });
+    if (t >= S.delta && t > 0) {
+      quand('ph');
+      const phr = A.ph === 'latence' ? 'S2 tombe pendant la latence de la 1re secousse : sans effet visible' : A.ph === 'apres' ? 'S2 tombe après la fin de la 1re secousse' : `S2 tombe pendant ${MG.NOM_PHASE[A.ph]} de la 1re secousse`;
+      c.texte(phr, 400, 76, { couleur: CRAIE_PH[A.ph], taille: 15, align: 'center' });
+    }
+    if (t >= DEUX.finRec()) {
+      quand('nom');
+      const det = { latence: 'S2 sans effet visible (20 mm)', contraction: 'un seul sommet, plus haut', relachement: 'deux sommets, le second plus haut', apres: 'deux secousses identiques' }[A.ph];
+      c.texte(`→ ${NOMS[A.ph]} : ${det}`, 400, 52, { couleur: 'vert', taille: 19, align: 'center' });
+      c.repere('nom_trace', 170, 32, 460, 26, `le nom du tracé : ${NOMS[A.ph]}`);
+    }
+  },
+  ceQuiSeVoit() {
+    const t = S.t, A = DEUX.analyse(), te = Math.min(t, DEUX.finRec());
+    const m = [`Vue « deux ». Deux stimulations S1 et S2 de même intensité, séparées de Δ = ${fmt(S.delta)} s. ${t <= 0 ? 'Pas encore lancée.' : `t = ${fr(te, 3)} s${S.running ? ' (la scène défile, ralentie 25 fois)' : S.fait ? ' (fin)' : ' (arrêt sur image)'}.`}`];
+    m.push('Axes : amplitude (mm) de 0 à 40, temps de 0 à 0,25 s ; sous la courbe, le signal (créneaux S1, S2) et la ligne du temps (1 dent = 0,01 s) ; en pointillé, la secousse de S1 seule (référence, 20 mm, sommet à 0,05 s). Le petit muscle peint à gauche raccourcit quand la courbe monte.');
+    if (t > 0) m.push(`Courbe tracée jusqu’à t = ${fr(te, 3)} s ; amplitude actuelle ${fr(A.T.y(te), 1)} mm.`);
+    if (t >= S.delta && t > 0) m.push(`S2 est arrivée (${A.ph === 'latence' ? 'pendant la latence de la 1re secousse : sans effet visible' : A.ph === 'apres' ? 'après la fin de la 1re secousse' : 'pendant ' + MG.NOM_PHASE[A.ph] + ' de la 1re secousse'}) : cette phase est colorée.`);
+    const vus = A.som.filter(s => s.t <= te);
+    if (vus.length) m.push('Sommet(s) tracé(s) : ' + vus.map(s => `${fr(s.y, 1)} mm à ${fr(s.t, 3)} s`).join(' ; ') + (A.creux && A.som[1].t <= te ? ` ; entre les deux, la courbe redescend à ${fr(A.creux.y, 1)} mm sans revenir à zéro` : '') + '.');
+    if (t >= DEUX.finRec()) m.push(`Écrit : « → ${NOMS[A.ph]} ».`);
+    return m.join(' ');
+  },
+  params: () => ({ delta_s: +S.delta.toFixed(3), phase_s2: MG.phase(S.delta), nom_trace: NOMS[MG.phase(S.delta)], sommets_mm: DEUX.analyse().som.map(s => +s.y.toFixed(1)) }),
+  regler(p) { if (!Number.isFinite(+p.delta_s)) return false; S.delta = Math.min(0.2, Math.max(0.002, Math.round(+p.delta_s * 1000) / 1000)); return `Δ = ${fmt(S.delta)} s`; },
+  schema: { delta_s: '0.002..0.20 (écart S1 → S2 en s, pas de 0,001)' },
+  poignee: {
+    toucher: (x, y) => (Math.abs(x - MG.X(DEUX.G, S.delta)) < 14 && Math.abs(y - 308) < 16 ? 's2' : null),
+    bouger: (x) => { const d = Math.min(0.2, Math.max(0.002, Math.round((x - DEUX.G.x0) / DEUX.G.px * 1000) / 1000)); if (d !== S.delta) { S.delta = d; return true; } return false; },
+  },
+  message: () => { const ph = MG.phase(S.delta); return `Δ = ${fmt(S.delta)} s : S2 tombe ${ph === 'apres' ? 'après la fin' : 'pendant ' + MG.NOM_PHASE[ph]} de la 1re secousse → ${NOMS[ph]}.`; },
+};
+
+/* ════════════════════════ Vue « serie » : 12 stimulations ════════════════════════ */
+const SERIE = {
+  span: () => 11 / S.f + 0.15,
+  G() { const px = S.pxFige ?? 650 / SERIE.span(); return { x0: 92, px, y0: 262, py: 2.6, xa: 72, xb: 746, haut: 96 }; },
+  stims: () => Array.from({ length: 12 }, (_, k) => k / S.f), tr: () => MG.train(SERIE.stims()),
+  lent: () => SERIE.span() / Math.max(5, SERIE.span()),
+  finRec: () => SERIE.span(), fin: () => SERIE.span() + 0.005,
+  nom: () => { const T = 1 / S.f; return T >= 0.1 ? 'secousses isolées' : T >= 0.05 ? 'tétanos imparfait' : 'tétanos parfait'; },
+  phase: () => MG.phase(1 / S.f),
+  moments: () => ({ secousses_isolees: +(11 / 5 + 0.155).toFixed(3), tetanos_imparfait: +(11 / 15 + 0.155).toFixed(3), tetanos_parfait: +(11 / 40 + 0.155).toFixed(3), plateau: +(5.5 / S.f + 0.01).toFixed(3) }),
+  reglages: { secousses_isolees: 5, tetanos_imparfait: 15, tetanos_parfait: 40 },
+  motifs: {
+    secousses_isolees: '5 Hz : chaque stimulation tombe après la fin de la secousse précédente, secousses isolées',
+    tetanos_imparfait: '15 Hz : chaque stimulation tombe pendant le relâchement, tétanos imparfait (plateau dentelé)',
+    tetanos_parfait: '40 Hz : chaque stimulation tombe pendant la contraction, tétanos parfait (plateau lisse)',
+    plateau: () => `le milieu du ${SERIE.nom() === 'secousses isolées' ? 'tracé' : 'plateau'} à ${fmt(S.f, 1)} Hz`,
+  },
+  analyse() {
+    const T = SERIE.tr(), st = SERIE.stims(), a = st[5], b = st[10];
+    const som = MG.sommets(T.y, a, b), cr = MG.creux(T.y, a, b);
+    return { T, ymax: som.length ? Math.max(...som.map(s => s.y)) : Math.max(T.y(a + 0.05), T.y(b)), ymin: cr.y };
+  },
+  dessiner(c) {
+    const G = SERIE.G(), t = S.t, A = SERIE.analyse(), span = SERIE.span(), te = Math.min(t, SERIE.finRec()), quand = quandFab(c), st = SERIE.stims();
+    petitMuscle(c, A.T.y(te), 60, 108, 92);
+    c.texte('muscle', 22, 250, { couleur: 'rose', taille: 12, align: 'center' });
+    c.texte('Une série de 12 stimulations de même intensité', 12, 26, { couleur: 'cyan', taille: 17 });
+    c.direct(() => {
+      MG.axes(c, G, { xa: G.xa, xb: G.xb, haut: G.haut, mm: [[0, '0'], [20, '20'], [40, '40'], [60, '60']], t: gradT(G, span, G.xb - 40), titreT: 't (s)' });
+      c.texte('mm', G.xa + 8, G.haut + 8, { couleur: 'faible', taille: 13 });
+      const pas = 0.01 * G.px >= 6 ? 0.01 : 0.1;
+      MG.ligneTemps(c, G, 350, G.xa, G.xb - 6, pas);
+      c.texte(`1 dent = ${fmt(pas, 2)} s`, G.xb - 6, 374, { couleur: 'faible', taille: 13, align: 'right' });
+      c.repere('ligne_temps', G.xa, 338, G.xb - G.xa, 40, `la ligne du temps : 1 dent = ${fmt(pas, 2)} s`);
+      const k = 1 / SERIE.lent();
+      c.texte(`${fmt(S.f, 1)} Hz (une stimulation toutes les ${fmt(1 / S.f, 3)} s)   ${k > 1.05 ? `ralenti ×${fmt(k, 0)}` : 'temps réel'}`, G.xb, 26, { couleur: 'faible', taille: 14, align: 'right' });
+      MG.signal(c, G, 308, G.xa, G.xb - 6, st, t > 0 ? t : -1);
+      if (t > 0) c.texte('S1', MG.X(G, 0) + 2, 334, { couleur: 'jaune', taille: 13, align: 'center' });
+      if (t >= st[1]) c.texte('S2', MG.X(G, st[1]) + 2, 334, { couleur: 'jaune', taille: 13, align: 'center' });
+      if (t >= st[11]) c.texte('S12', MG.X(G, st[11]) + 2, 334, { couleur: 'jaune', taille: 13, align: 'center' });
+      c.cercle(MG.X(G, st[1]) + 2, 316, 5, { couleur: 'jaune', largeur: 1.6 });
+      c.repere('s2', MG.X(G, st[1]) - 8, 296, 20, 28, `S2 : la glisser vers S1 augmente la fréquence (${fmt(S.f, 1)} Hz)`);
+      c.repere('stimulations', G.xa, 290, MG.X(G, st[11]) - G.xa + 20, 42, `12 stimulations à ${fmt(S.f, 1)} Hz`);
+      if (te > 0) MG.courbe(c, G, A.T.y, 0, te, { couleur: 'blanc', largeur: 2.4, pas: 1.2 });
+      MG.courbe(c, G, () => 0, -0.02 * span / 0.4, 0, { couleur: 'blanc', largeur: 2.4 });
+      if (t > 0) c.repere('trace', MG.X(G, 0), MG.Y(G, 62), MG.X(G, Math.max(0.03, te)) - MG.X(G, 0), G.y0 - MG.Y(G, 62), 'le tracé obtenu');
+      const xp1 = MG.X(G, st[4]), xp2 = MG.X(G, st[11] + 0.04);
+      if (te >= st[11]) c.repere('plateau', xp1, MG.Y(G, A.ymax) - 8, xp2 - xp1, MG.Y(G, A.ymin) - MG.Y(G, A.ymax) + 16, SERIE.nom() === 'secousses isolées' ? 'des secousses séparées' : 'le plateau');
+    });
+    if (t >= st[1] + 0.012) {
+      quand('ph');
+      const ph = SERIE.phase();
+      c.texte(ph === 'apres' ? 'chaque stimulation tombe après la fin de la secousse précédente' : `chaque stimulation tombe pendant ${MG.NOM_PHASE[ph]} de la secousse précédente`, 400, 76, { couleur: CRAIE_PH[ph], taille: 15, align: 'center' });
+    }
+    if (t >= SERIE.finRec()) {
+      quand('nom');
+      const nom = SERIE.nom(), xm = MG.X(G, (st[5] + st[11]) / 2);
+      c.texte(`→ ${nom}${nom === 'tétanos imparfait' ? ' : plateau dentelé' : nom === 'tétanos parfait' ? ' : plateau lisse' : ''}`, 400, 52, { couleur: 'vert', taille: 19, align: 'center' });
+      c.repere('nom_trace', 170, 32, 460, 26, `le nom du tracé : ${nom}`);
+      const lib = nom === 'secousses isolées' ? `secousses séparées, toutes de ${fmm(A.ymax)} mm` : nom === 'tétanos imparfait' ? `plateau dentelé : de ${fmm(A.ymin)} à ${fmm(A.ymax)} mm` : `plateau lisse : ${fmm(A.ymax)} mm, ≈ 3 × la secousse`;
+      c.texte(lib, Math.min(560, Math.max(260, xm)), nom === 'tétanos parfait' ? MG.Y(G, A.ymax) + 26 : MG.Y(G, A.ymax) - 12, { couleur: 'vert', taille: 14, align: 'center' });
+    }
+  },
+  ceQuiSeVoit() {
+    const t = S.t, A = SERIE.analyse(), te = Math.min(t, SERIE.finRec()), st = SERIE.stims(), n = st.filter(s => s <= t && t > 0).length;
+    const m = [`Vue « serie ». 12 stimulations de même intensité à ${fmt(S.f, 1)} Hz (une toutes les ${fmt(1 / S.f, 3)} s). ${t <= 0 ? 'Pas encore lancée.' : `t = ${fr(te, 3)} s${S.running ? ' (la scène défile)' : S.fait ? ' (fin)' : ' (arrêt sur image)'} ; ${n} stimulation(s) arrivée(s).`}`];
+    m.push(`Axes : amplitude (mm) de 0 à 60 ; temps de 0 à ${fmt(SERIE.span(), 2)} s ; sous la courbe, les 12 créneaux du signal et la ligne du temps. Le petit muscle peint à gauche ${A.T.y(te) > 30 ? 'reste raccourci' : 'raccourcit et s’allonge'} avec la courbe.`);
+    if (t > 0) m.push(`Amplitude actuelle ${fr(A.T.y(te), 1)} mm.`);
+    if (t >= st[1] + 0.012) m.push(`Chaque stimulation tombe ${SERIE.phase() === 'apres' ? 'après la fin de' : 'pendant ' + MG.NOM_PHASE[SERIE.phase()] + ' de'} la secousse précédente (écrit).`);
+    if (te >= st[11]) m.push(SERIE.nom() === 'secousses isolées' ? `Secousses séparées, toutes de ${fr(A.ymax, 1)} mm, la courbe revient à zéro entre deux.` : SERIE.nom() === 'tétanos imparfait' ? `Plateau dentelé : la courbe oscille entre ${fr(A.ymin, 1)} et ${fr(A.ymax, 1)} mm sans revenir à zéro.` : `Plateau lisse à ${fr(A.ymax, 1)} mm (≈ 3 × la secousse isolée de 20 mm).`);
+    if (t >= SERIE.finRec()) m.push(`Écrit : « → ${SERIE.nom()} ». Après la dernière stimulation, la courbe redescend à zéro.`);
+    return m.join(' ');
+  },
+  params: () => { const A = SERIE.analyse(); return { frequence_hz: +S.f.toFixed(1), periode_s: +(1 / S.f).toFixed(4), nom_trace: SERIE.nom(), plateau_min_mm: +A.ymin.toFixed(1), plateau_max_mm: +A.ymax.toFixed(1) }; },
+  regler(p) { if (!Number.isFinite(+p.frequence_hz)) return false; S.f = Math.min(50, Math.max(2, Math.round(+p.frequence_hz * 2) / 2)); S.pxFige = null; return `fréquence ${fmt(S.f, 1)} Hz`; },
+  schema: { frequence_hz: '2..50 (fréquence des stimulations, pas de 0,5)' },
+  poignee: {
+    toucher: (x, y) => { const G = SERIE.G(); if (Math.abs(x - MG.X(G, 1 / S.f)) < 14 && Math.abs(y - 308) < 16) { S.pxFige = G.px; return 's2'; } return null; },
+    bouger: (x) => { const G = SERIE.G(), T = Math.max(0.02, (x - G.x0) / G.px), f = Math.min(50, Math.max(2, Math.round(2 / T) / 2)); if (f !== S.f) { S.f = f; return true; } return false; },
+    lacher: () => { S.pxFige = null; },
+  },
+  message: () => `${fmt(S.f, 1)} Hz : ${SERIE.nom()}${SERIE.nom() === 'secousses isolées' ? '' : SERIE.nom() === 'tétanos parfait' ? ' (plateau lisse)' : ' (plateau dentelé)'}.`,
+};
+
+/* ════════════════════════ Vue « fatigue » : 30 secousses à 2 Hz ════════════════════════ */
+const NFAT = 30, FFAT = 2;
+const fat = k => { const r = k / (NFAT - 1); return { amp: 20 * (1 - 0.6 * Math.pow(r, 1.2)), rel: 0.05 * (1 + 1.6 * Math.pow(r, 1.4)), con: 0.04 * (1 + 0.25 * r) }; };
+const FAT = {
+  lent: 2, G: { x0: 92, px: 650 / 15, y0: 170, py: 4, xa: 72, xb: 746, haut: 82 },
+  stims: () => Array.from({ length: NFAT }, (_, k) => k / FFAT),
+  y: t => { const k = Math.floor(t * FFAT + 1e-9); let v = 0; for (const j of [k - 1, k]) if (j >= 0 && j < NFAT) v += MG.secousse(t - j / FFAT, fat(j)); return v; },
+  finRec: () => (NFAT - 1) / FFAT + 0.25, fin: () => 15.2,
+  moments: () => ({ debut: 1.6, fatigue_visible: 7.6, fatigue_forte: 12.6, comparaison: 15.0 }),
+  reglages: {},
+  motifs: {
+    debut: 'les premières secousses : toutes de 20 mm', fatigue_visible: 'la fatigue se voit : les secousses sont moins hautes',
+    fatigue_forte: 'fatigue forte : amplitude bien plus faible, relâchement plus long', comparaison: 'la 1re et la 30e secousse comparées, à la même échelle',
+  },
+  dessiner(c) {
+    const G = FAT.G, t = S.t, te = Math.min(t, FAT.finRec()), quand = quandFab(c), st = FAT.stims();
+    petitMuscle(c, FAT.y(te), 20, 74, 70);
+    c.texte('muscle', 22, 186, { couleur: 'rose', taille: 12, align: 'center' });
+    c.texte('Fatigue : une longue série de secousses isolées (2 Hz)', 12, 26, { couleur: 'cyan', taille: 17 });
+    c.texte('même intensité ; une stimulation toutes les 0,5 s', 12, 52, { couleur: 'faible', taille: 14 });
+    MG.axes(c, G, { xa: G.xa, xb: G.xb, haut: G.haut, mm: [[0, '0'], [10, '10'], [20, '20']], t: [[0, '0'], [5, '5'], [10, '10']], titreT: 't (s)' });
+    c.texte('mm', G.xa + 8, G.haut + 8, { couleur: 'faible', taille: 13 });
+    MG.ligneTemps(c, G, 234, G.xa, G.xb - 6, 0.5);
+    c.texte('1 dent = 0,5 s', G.xb - 6, 254, { couleur: 'faible', taille: 13, align: 'right' });
+    c.repere('ligne_temps', G.xa, 222, G.xb - G.xa, 36, 'la ligne du temps : 1 dent = 0,5 s');
+    c.direct(() => {
+      c.texte(t <= 0 ? 'accéléré ×2' : `t = ${fr(te, 1)} s   (accéléré ×2)`, G.xb, 26, { couleur: 'faible', taille: 14, align: 'right' });
+      MG.signal(c, G, 210, G.xa, G.xb - 6, st, t > 0 ? t : -1, { largeurS: 0.04 });
+      c.repere('stimulations', G.xa, 196, G.xb - G.xa, 20, '30 stimulations de même intensité, à 2 Hz');
+      if (te > 0) MG.courbe(c, G, FAT.y, 0, te, { couleur: 'blanc', largeur: 2, pas: 0.6, tremble: .05 });
+      MG.courbe(c, G, () => 0, -0.4, 0, { couleur: 'blanc', largeur: 2 });
+      if (t > 0) c.repere('trace', MG.X(G, 0), MG.Y(G, 20) - 4, MG.X(G, Math.max(0.3, te)) - MG.X(G, 0), G.y0 - MG.Y(G, 20) + 8, 'le tracé : 30 secousses');
+      if (t > 0.1) { c.texte('1re', MG.X(G, 0.3), MG.Y(G, 20) - 6, { couleur: 'vert', taille: 13 }); c.repere('premiere_secousse', MG.X(G, 0) - 8, MG.Y(G, 20) - 22, 24, G.y0 - MG.Y(G, 20) + 22, 'la première secousse : 20 mm, relâchement 0,05 s'); }
+      if (te >= st[NFAT - 1] + 0.1) { const f = fat(NFAT - 1); c.texte('30e', MG.X(G, st[NFAT - 1] + 0.06), MG.Y(G, f.amp) - 8, { couleur: 'orange', taille: 13, align: 'center' }); c.repere('derniere_secousse', MG.X(G, st[NFAT - 1]) - 8, MG.Y(G, f.amp) - 22, 26, G.y0 - MG.Y(G, f.amp) + 22, `la dernière secousse : ${fmm(f.amp)} mm, relâchement ${fmt(f.rel, 2)} s`); }
+    });
+    if (t >= FAT.moments().comparaison - 0.05) {
+      quand('cmp');
+      c.texte('Fatigue : l’amplitude diminue et le relâchement s’allonge.', 92, 264, { couleur: 'vert', taille: 15 });
+      for (const [k, x0, coul, titre, id] of [[0, 112, 'blanc', '1re secousse', 'premiere_secousse'], [NFAT - 1, 466, 'orange', '30e secousse (même échelle)', 'derniere_secousse']]) {
+        const f = fat(k), Gi = { x0, px: 1150, y0: 372, py: 3.8 };
+        c.texte(titre, x0, 288, { couleur: coul, taille: 14 });
+        c.ligne(x0 - 8, Gi.y0, x0 + 236, Gi.y0, { couleur: 'faible', largeur: 1.4 });
+        MG.courbe(c, Gi, tau => MG.secousse(tau, f), 0, 0.2, { couleur: coul, largeur: 2.4 });
+        c.cote(x0 - 6, Gi.y0, x0 - 6, MG.Y(Gi, f.amp), '', { couleur: 'vert' });
+        c.texte(`${fmm(f.amp)} mm`, x0 - 12, (Gi.y0 + MG.Y(Gi, f.amp)) / 2 + 5, { couleur: 'vert', taille: 14, align: 'right' });
+        const a = MG.X(Gi, 0.01 + f.con), b = MG.X(Gi, 0.01 + f.con + f.rel);
+        MG.accolade(c, a, b, Gi.y0 + 6, { couleur: 'bleu' });
+        c.texte(`relâchement : ${fmt(f.rel, 2)} s`, (a + b) / 2, Gi.y0 + 30, { couleur: 'bleu', taille: 14, align: 'center' });
+        c.repere(id, x0 - 50, 272, 290, 142, k ? `la 30e secousse agrandie : ${fmm(f.amp)} mm, relâchement ${fmt(f.rel, 2)} s` : 'la 1re secousse agrandie : 20 mm, relâchement 0,05 s');
+      }
+    }
+  },
+  ceQuiSeVoit() {
+    const t = S.t, te = Math.min(t, FAT.finRec()), st = FAT.stims(), n = t > 0 ? st.filter(s => s <= te).length : 0;
+    const m = [`Vue « fatigue ». 30 stimulations de même intensité à 2 Hz (une toutes les 0,5 s), tracé compressé (accéléré ×2). ${t <= 0 ? 'Pas encore lancée.' : `t = ${fr(te, 1)} s${S.running ? ' (la scène défile)' : S.fait ? ' (fin)' : ' (arrêt sur image)'} ; ${n} secousse(s) tracée(s).`}`];
+    if (n) { const f = fat(n - 1); m.push(`Secousses isolées (le tracé revient à zéro entre deux). La 1re fait 20 mm (relâchement 0,05 s) ; la ${n}e fait ${fr(f.amp, 1)} mm, relâchement ${fmt(f.rel, 3)} s : l’amplitude diminue peu à peu et le relâchement s’allonge.`); }
+    if (t >= FAT.moments().comparaison - 0.05) { const f = fat(NFAT - 1); m.push(`Comparaison écrite en dessous, à la même échelle : 1re secousse 20 mm, relâchement 0,05 s ; 30e secousse ${fmm(f.amp)} mm, relâchement ${fmt(f.rel, 2)} s (accolades) ; « Fatigue : l’amplitude diminue et le relâchement s’allonge. »`); }
+    return m.join(' ');
+  },
+  params: () => ({ frequence_hz: FFAT, nombre_secousses: NFAT, premiere_amplitude_mm: 20, derniere_amplitude_mm: +fat(NFAT - 1).amp.toFixed(1), premier_relachement_s: 0.05, dernier_relachement_s: +fat(NFAT - 1).rel.toFixed(3) }),
+  regler: () => false, schema: {},
+  message: () => `Fatigue : de 20 à ${fmm(fat(NFAT - 1).amp)} mm, relâchement de 0,05 à ${fmt(fat(NFAT - 1).rel, 2)} s.`,
+};
+
+/* ════════════════════════ Vue « nomme » : exercice ════════════════════════ */
+const TRACES = [
+  { nom: 'secousse isolée', stims: [0], cas: 'une', ph: null },
+  { nom: 'deux secousses isolées', stims: [0, 0.15], cas: 'deux', ph: 'apres' },
+  { nom: 'fusion incomplète', stims: [0, 0.07], cas: 'deux', ph: 'relachement' },
+  { nom: 'fusion complète', stims: [0, 0.03], cas: 'deux', ph: 'contraction' },
+  { nom: 'tétanos imparfait', stims: Array.from({ length: 12 }, (_, k) => k / 15), cas: 'serie', ph: 'relachement' },
+  { nom: 'tétanos parfait', stims: Array.from({ length: 12 }, (_, k) => k / 40), cas: 'serie', ph: 'contraction' },
+];
+const GRILLE = { x: [404, 484, 572, 660, 748], y: [108, 160, 216, 272] };
+const caseDe = k => { const T = TRACES[k]; if (T.cas === 'une') return [0, 1, 4]; const r = T.cas === 'deux' ? 1 : 2, col = { apres: 1, relachement: 2, contraction: 3 }[T.ph]; return [r, col, col + 1]; };
+const NOM = {
+  tr: () => TRACES[S.trace], span: () => { const st = TRACES[S.trace].stims; return st[st.length - 1] + 0.15; },
+  G() { return { x0: 92, px: 290 / NOM.span(), y0: 262, py: 2.6, xa: 72, xb: 396, haut: 98 }; },
+  lent: 1, finRec: () => 2.4, fin: () => 5.8,
+  moments: () => ({ trace_affiche: 2.5, stimulations_comptees: 3.4, phase_reperee: 4.4, nom_ecrit: 5.4 }),
+  reglages: {},
+  motifs: {
+    trace_affiche: 'le tracé est affiché : à toi de le nommer', stimulations_comptees: () => `on compte les stimulations : ${NOM.compte()}`,
+    phase_reperee: () => (NOM.tr().ph ? `la stimulation suivante tombe ${NOM.tr().ph === 'apres' ? 'après la fin' : 'pendant ' + MG.NOM_PHASE[NOM.tr().ph]} de la secousse précédente` : 'une seule stimulation : pas de suivante'),
+    nom_ecrit: () => `c’est ${NOM.tr().nom === 'fusion incomplète' || NOM.tr().nom === 'fusion complète' ? 'une ' : NOM.tr().nom.startsWith('t') ? 'un ' : NOM.tr().nom.startsWith('s') ? 'une ' : ''}${NOM.tr().nom}`,
+  },
+  compte: () => { const n = NOM.tr().stims.length; return n === 1 ? '1 stimulation' : n === 2 ? '2 stimulations' : `${n} stimulations : une série`; },
+  dessiner(c) {
+    const G = NOM.G(), t = S.t, T = NOM.tr(), tr = MG.train(T.stims), span = NOM.span(), M = NOM.moments(), quand = quandFab(c);
+    c.texte('Exercice : nomme le tracé', 12, 26, { couleur: 'cyan', taille: 17 });
+    // la grille de lecture (fixe)
+    c.texte('la stimulation suivante tombe :', 616, 62, { couleur: 'faible', taille: 14, align: 'center' });
+    [['après', 'la fin'], ['pendant le', 'relâchement'], ['pendant la', 'contraction']].forEach(([a, b], i) => { const x = (GRILLE.x[i + 1] + GRILLE.x[i + 2]) / 2; c.texte(a, x, 84, { couleur: 'faible', taille: 13, align: 'center' }); c.texte(b, x, 100, { couleur: 'faible', taille: 13, align: 'center' }); });
+    for (const yy of GRILLE.y) c.ligne(GRILLE.x[0], yy, GRILLE.x[4], yy, { couleur: 'tresfaible', largeur: 1.4 });
+    c.ligne(GRILLE.x[0], GRILLE.y[0], GRILLE.x[0], GRILLE.y[3], { couleur: 'tresfaible', largeur: 1.4 });
+    c.ligne(GRILLE.x[1], GRILLE.y[0], GRILLE.x[1], GRILLE.y[3], { couleur: 'tresfaible', largeur: 1.4 });
+    for (const i of [2, 3]) c.ligne(GRILLE.x[i], GRILLE.y[1], GRILLE.x[i], GRILLE.y[3], { couleur: 'tresfaible', largeur: 1.4 });
+    c.ligne(GRILLE.x[4], GRILLE.y[0], GRILLE.x[4], GRILLE.y[3], { couleur: 'tresfaible', largeur: 1.4 });
+    [['une', 'stimulation'], ['deux', 'stimulations'], ['série de', 'stimulations']].forEach(([a, b], r) => { const ym = (GRILLE.y[r] + GRILLE.y[r + 1]) / 2; c.texte(a, 444, ym - 3, { couleur: 'faible', taille: 13, align: 'center' }); c.texte(b, 444, ym + 13, { couleur: 'faible', taille: 13, align: 'center' }); });
+    const cell = (r, c1, c2, l1, l2) => { const x = (GRILLE.x[c1] + GRILLE.x[c2]) / 2, ym = (GRILLE.y[r] + GRILLE.y[r + 1]) / 2; if (l2) { c.texte(l1, x, ym - 3, { couleur: 'blanc', taille: 13, align: 'center' }); c.texte(l2, x, ym + 13, { couleur: 'blanc', taille: 13, align: 'center' }); } else c.texte(l1, x, ym + 5, { couleur: 'blanc', taille: 14, align: 'center' }); };
+    cell(0, 1, 4, 'secousse isolée'); cell(1, 1, 2, 'deux secousses', 'isolées'); cell(1, 2, 3, 'fusion', 'incomplète'); cell(1, 3, 4, 'fusion', 'complète');
+    cell(2, 2, 3, 'tétanos', 'imparfait'); cell(2, 3, 4, 'tétanos', 'parfait');
+    c.repere('grille', GRILLE.x[0], 48, GRILLE.x[4] - GRILLE.x[0], GRILLE.y[3] - 48, 'la grille : nombre de stimulations × phase où tombe la suivante');
+    // le tracé
+    c.direct(() => {
+      MG.axes(c, G, { xa: G.xa, xb: G.xb, haut: G.haut, mm: [[0, '0'], [20, '20'], [40, '40'], [60, '60']], t: gradT(G, span, G.xb - 34), titreT: 't (s)' });
+      c.texte('mm', G.xa + 8, G.haut + 8, { couleur: 'faible', taille: 13 });
+      const pas = 0.01 * G.px >= 5 ? 0.01 : 0.1;
+      MG.ligneTemps(c, G, 340, G.xa, G.xb - 6, pas);
+      c.texte(`1 dent = ${fmt(pas, 2)} s`, G.xb - 6, 362, { couleur: 'faible', taille: 13, align: 'right' });
+      c.texte(`tracé n° ${S.trace + 1} / 6    ▸ autre tracé`, 748, 304, { couleur: 'jaune', taille: 14, align: 'right' });
+      c.repere('autre_trace', 560, 288, 190, 22, 'toucher ici : un autre tracé');
+      const tt = span * Math.min(1, t / NOM.finRec());
+      MG.signal(c, G, 300, G.xa, G.xb - 6, T.stims, t > 0 ? tt : -1);
+      c.repere('stimulations', G.xa, 284, G.xb - G.xa, 40, 'les stimulations (créneaux du signal)');
+      if (t >= M.phase_reperee - 0.05 && T.ph) bandePhase(c, G, T.ph, T.stims[1], 112);
+      if (t >= M.phase_reperee - 0.05 && T.stims.length > 1) MG.courbe(c, G, MG.secousse, 0, 0.11, { couleur: 'faible', largeur: 1.6, pointille: [4, 4] });
+      if (tt > 0) MG.courbe(c, G, tr.y, 0, tt, { couleur: 'blanc', largeur: 2.4, pas: 1 });
+      MG.courbe(c, G, () => 0, -0.07 * span, 0, { couleur: 'blanc', largeur: 2.4 });
+      c.repere('trace', MG.X(G, 0), MG.Y(G, 62), G.xb - MG.X(G, 0), G.y0 - MG.Y(G, 62), 'le tracé à nommer');
+      if (t >= M.stimulations_comptees - 0.05) T.stims.forEach((s, i) => c.texte(String(i + 1), MG.X(G, s) + 2, 318, { couleur: 'jaune', taille: 12, align: 'center' }));
+    });
+    if (t >= M.stimulations_comptees - 0.05) { quand('cpt'); c.texte(NOM.compte(), 92, 388, { couleur: 'jaune', taille: 16 }); }
+    if (t >= M.phase_reperee - 0.05) {
+      quand('ph');
+      const ph = T.ph;
+      c.texte(!ph ? 'une seule stimulation : pas de suivante' : `la suivante tombe ${ph === 'apres' ? 'après la fin' : 'pendant ' + MG.NOM_PHASE[ph]} de la secousse précédente`, 12, 76, { couleur: ph ? CRAIE_PH[ph] : 'faible', taille: 14, max: 384 });
+    }
+    if (t >= M.nom_ecrit - 0.05) {
+      quand('nom');
+      c.texte(`→ ${T.nom}`, 12, 52, { couleur: 'vert', taille: 20 });
+      c.repere('nom_trace', 8, 32, 380, 26, `le nom du tracé : ${T.nom}`);
+      const [r, c1, c2] = caseDe(S.trace);
+      c.rect(GRILLE.x[c1] + 3, GRILLE.y[r] + 3, GRILLE.x[c2] - GRILLE.x[c1] - 6, GRILLE.y[r + 1] - GRILLE.y[r] - 6, { couleur: 'jaune', largeur: 2.2, arrondi: 6 });
+      c.texte('✓', GRILLE.x[c2] - 10, GRILLE.y[r] + 18, { couleur: 'vert', taille: 16, align: 'right' });
+    }
+  },
+  ceQuiSeVoit() {
+    const t = S.t, T = NOM.tr(), M = NOM.moments(), tr = MG.train(T.stims), som = MG.sommets(tr.y, 0, NOM.span());
+    const m = [`Vue « nomme » (exercice). Tracé n° ${S.trace + 1} sur 6${t >= M.nom_ecrit - 0.05 ? ` (${T.nom})` : ' (son nom n’est pas encore écrit)'}. ${S.running ? 'Le tracé s’écrit.' : S.fait ? 'Fin.' : t > 0 ? 'Arrêt sur image.' : 'Pas encore lancé.'}`];
+    m.push('À droite, la grille de lecture : lignes « une stimulation », « deux stimulations », « série de stimulations » ; colonnes « la suivante tombe après la fin / pendant le relâchement / pendant la contraction » ; cases : secousse isolée, deux secousses isolées, fusion incomplète, fusion complète, tétanos imparfait, tétanos parfait.');
+    if (t > 0) {
+      const desc = T.cas === 'une' ? 'une secousse de 20 mm' : T.cas === 'serie' ? (T.ph === 'contraction' ? `un plateau lisse à ${fr(Math.max(...som.map(s => s.y)), 0)} mm` : `un plateau dentelé (sommets jusqu’à ${fr(Math.max(...som.map(s => s.y)), 0)} mm)`) : som.length > 1 ? `deux sommets : ${som.map(s => fr(s.y, 0) + ' mm').join(' puis ')}` : `un seul sommet de ${fr(som[0].y, 0)} mm`;
+      m.push(`Le tracé ${t >= NOM.finRec() ? 'complet' : 'en cours'} montre ${desc} ; amplitude de 0 à 60 mm.`);
+    }
+    if (t >= M.stimulations_comptees - 0.05) m.push(`Les créneaux sont numérotés : « ${NOM.compte()} ».`);
+    if (t >= M.phase_reperee - 0.05) m.push(T.ph ? `La phase de la secousse précédente où tombe la suivante est colorée (${MG.NOM_PHASE[T.ph]}), la secousse seule en pointillé.` : 'Écrit : une seule stimulation, pas de suivante.');
+    if (t >= M.nom_ecrit - 0.05) m.push(`Écrit : « → ${T.nom} » ; la case correspondante de la grille est encadrée et cochée.`);
+    return m.join(' ');
+  },
+  params: () => ({ trace: S.trace, nom_trace: TRACES[S.trace].nom, stimulations: TRACES[S.trace].stims.length }),
+  regler(p) { if (!Number.isFinite(+p.trace)) return false; S.trace = Math.min(5, Math.max(0, Math.round(+p.trace))); S.arretFin = false; return `tracé n° ${S.trace + 1}`; },
+  schema: { trace: '0..5 (0 secousse isolée, 1 deux secousses isolées, 2 fusion incomplète, 3 fusion complète, 4 tétanos imparfait, 5 tétanos parfait)' },
+  poignee: {
+    toucher: (x, y) => (x > 560 && x < 752 && y > 286 && y < 312 ? 'autre' : null),
+    bouger: () => false,
+    lacher: () => { S.trace = (S.trace + 1) % 6; },
+  },
+  message: () => `Tracé n° ${S.trace + 1} : ${TRACES[S.trace].nom}.`,
+};
+
+const V = { deux: DEUX, serie: SERIE, fatigue: FAT, nomme: NOM }[vue];
+const lent = () => (typeof V.lent === 'function' ? V.lent() : V.lent);
+
+const canvas = $('canvas');
+const scene = window.MuscleTableau.Scene(canvas, (c) => { scene.cadre(61); V.dessiner(c); return c.fin(); });
+const etiquetteBouton = () => { $('run').textContent = S.running ? 'Pause' : S.fait ? 'Rejouer' : (S.t > 0 ? 'Reprendre' : 'Lancer'); };
+const motif = nom => { const m = V.motifs[nom]; return typeof m === 'function' ? m() : m; };
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(V.fin(), S.t + dt * lent());
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.running = false; S.jusqua = null; S.fige = true; etiquetteBouton();
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 3)} s`) + '.'); pont.noter('pause', { time_s: +S.t.toFixed(4) }); pont.emettre();
+    return true;
+  }
+  if (S.t >= V.fin()) {
+    S.running = false; S.fait = true; etiquetteBouton();
+    if (S.motif && S.arretFin) bulle($('feedback'), 'Arrêt sur image : ' + S.motif + '.', 'good'); else bulle($('feedback'), V.message(), 'good');
+    S.arretFin = false; pont.noter('measurement', V.params()); pont.emettre();
+  } else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+
+function lancer(jusqua, motifTxt, depuisZero) {
+  if (depuisZero) { S.t = 0; S.ecrit = {}; }
+  S.jusqua = jusqua; S.motif = motifTxt || ''; S.running = true; S.fait = false; S.fige = false; etiquetteBouton(); scene.sale = true;
+}
+function playUntil(p) {
+  const M = V.moments(), nom = p.moment in M || p.moment in V.reglages ? p.moment : null;
+  if (nom && nom in V.reglages) {        // un moment-réglage : on pose le réglage, on rejoue jusqu’à la fin de l’enregistrement, on se fige
+    V.regler({ delta_s: V.reglages[nom], frequence_hz: V.reglages[nom] });
+    S.arretFin = true; lancer(null, motif(nom), true);
+    bulle($('feedback'), 'Réglage posé : ' + V.message().replace(/\.$/, '') + '… observe.');
+    pont.noter('play_until', { moment: nom, ...V.params() }); pont.emettre(); return;
+  }
+  const cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  const depuisZero = S.fait || S.t >= cible - 1e-6;
+  lancer(Math.min(V.fin(), Math.max(0.001, cible)), nom ? motif(nom) : '', depuisZero);
+  bulle($('feedback'), 'Observe…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+function start() { S.arretFin = false; lancer(null, '', true); bulle($('feedback'), { deux: 'Deux stimulations de même intensité… (ralenti 25 fois)', serie: 'Une série de 12 stimulations…', fatigue: 'Trente stimulations à 2 Hz…', nomme: 'Observe le tracé : comment s’appelle-t-il ?' }[vue]); pont.noter('start', V.params()); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.jusqua = null; S.fige = true; etiquetteBouton(); bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(4) }); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait || S.t >= V.fin()) return start(); S.running = true; S.fige = false; etiquetteBouton(); bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  const t = +p.time_s; if (!Number.isFinite(t)) return;
+  const nt = Math.min(V.fin(), Math.max(0, t)); if (nt < S.t) S.ecrit = {};
+  S.running = false; S.jusqua = null; S.t = nt; S.fait = S.t >= V.fin(); S.fige = !S.fait; etiquetteBouton(); scene.sale = true;
+  bulle($('feedback'), `Arrêt sur image : t = ${fr(S.t, 3)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function setParameters(p) {
+  const dit = V.regler(p || {}); if (!dit) { bulle($('feedback'), vue === 'fatigue' ? 'Rien à régler ici : lance la série.' : 'Réglage non reconnu.'); return; }
+  pont.noter('set_parameters', V.params());
+  if (vue === 'nomme') { lancer(NOM.moments().trace_affiche, 'le tracé est affiché : à toi de le nommer', true); bulle($('feedback'), `${dit} : observe-le et nomme-le.`); }
+  else { S.arretFin = false; lancer(null, '', true); bulle($('feedback'), `${dit}… observe.`); }
+  pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : (S.t > 0 && S.t < V.fin() && !S.fait ? resume() : start()));
+
+if (V.poignee) window.Tableau.glisser(canvas, {
+  toucher: (px, py) => { const [x, y] = scene.local(px, py); return V.poignee.toucher(x, y); },
+  bouger: (id, px, py) => { const [x, y] = scene.local(px, py); if (V.poignee.bouger(x, y)) { S.ecrit = {}; S.t = 0; S.running = false; S.fait = false; scene.sale = true; } },
+  lacher: () => {
+    if (V.poignee.lacher) V.poignee.lacher();
+    pont.noter('set_parameters', V.params());
+    if (vue === 'nomme') { lancer(NOM.moments().trace_affiche, 'le tracé est affiché : à toi de le nommer', true); bulle($('feedback'), `Tracé n° ${S.trace + 1} : comment s’appelle-t-il ?`); }
+    else { S.arretFin = false; lancer(null, '', true); bulle($('feedback'), vue === 'deux' ? `Δ = ${fmt(S.delta)} s… observe.` : `${fmt(S.f, 1)} Hz… observe.`); }
+    pont.emettre();
+  },
+});
+
+const EXPLICATIONS = {
+  deux: [
+    { repere: 'stimulations', texte: 'Deux stimulations de même intensité, S1 puis S2.' },
+    { repere: 'reference', texte: 'En pointillé, la secousse que donnerait S1 seule.' },
+    { repere: 'phase_s2', texte: 'La phase de la 1re secousse où tombe S2 décide du tracé.' },
+    { repere: 'sommet_2', texte: 'La 2e secousse s’ajoute à la 1re : le sommet est plus haut.' },
+    { repere: 'nom_trace', texte: 'Pendant le relâchement : fusion incomplète ; pendant la contraction : fusion complète ; après la fin : deux secousses isolées.' },
+    { repere: 's2', texte: 'Glisse S2 pour la rapprocher ou l’éloigner de S1.' },
+  ],
+  serie: [
+    { repere: 'stimulations', texte: 'Une série de stimulations de même intensité, à fréquence fixe.' },
+    { repere: 'trace', texte: 'Les secousses se fusionnent quand chaque stimulation arrive avant la fin de la précédente.' },
+    { repere: 'plateau', texte: 'Pendant le relâchement : plateau dentelé, tétanos imparfait ; pendant la contraction : plateau lisse, tétanos parfait.' },
+    { repere: 'nom_trace', texte: 'Plus la fréquence est grande, plus la fusion est complète et le plateau haut.' },
+    { repere: 's2', texte: 'Rapproche S2 de S1 pour augmenter la fréquence.' },
+  ],
+  fatigue: [
+    { repere: 'stimulations', texte: 'Une longue série de stimulations de même intensité, assez espacées : secousses isolées.' },
+    { repere: 'trace', texte: 'Au fil des secousses, l’amplitude diminue : c’est la fatigue.' },
+    { repere: 'premiere_secousse', texte: 'La première secousse : 20 mm, relâchement 0,05 s.' },
+    { repere: 'derniere_secousse', texte: 'La dernière : plus petite, et son relâchement est plus long.' },
+  ],
+  nomme: [
+    { repere: 'trace', texte: 'Voici un tracé : comment s’appelle-t-il ?' },
+    { repere: 'stimulations', texte: 'D’abord, compte les stimulations.' },
+    { repere: 'phase_s2', texte: 'Ensuite, regarde où tombe la suivante dans la secousse précédente.' },
+    { repere: 'grille', texte: 'La grille donne le nom : nombre de stimulations et phase.' },
+    { repere: 'nom_trace', texte: 'Le nom du tracé.' },
+  ],
+};
+window.Tableau.explication({ [vue]: EXPLICATIONS[vue] });
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+const tousMoments = () => Object.keys(V.moments()).concat(Object.keys(V.reglages).filter(k => !(k in V.moments())));
+const config = { id: 'muscle_sommation', version: '1.0', title: 'Fusion des secousses et tétanos — ' + vue, variants: [{ id: vue, label: vue }], commands: commandes,
+  command_schema: {
+    set_parameters: Object.keys(V.schema).length ? V.schema : { note: 'aucun réglage dans cette vue' },
+    set_time: { time_s: `0..${fr(V.fin(), 3)} (arrêt sur cet instant${vue === 'nomme' ? ' de l’exercice' : ', en s de l’expérience'})` },
+    play_until: { moment: tousMoments().join(' | ') + ' (rejoue et se fige ; un moment-réglage pose le réglage puis rejoue jusqu’à la fin)', time_s: 'ou un instant en s' } } };
+const TEXTES = {
+  deux: 'Deux stimulations de même intensité, séparées de Δ. S2 pendant la latence de la 1re secousse : une seule secousse ; pendant la contraction : fusion complète (un seul sommet, plus haut) ; pendant le relâchement : fusion incomplète (deux sommets, le second plus haut) ; après la fin : deux secousses isolées identiques. Secousse de référence : latence 0,01 s, contraction 0,04 s, relâchement 0,05 s, 20 mm.',
+  serie: 'Série de 12 stimulations de même intensité. Si chaque stimulation tombe après la fin de la secousse précédente : secousses isolées ; pendant le relâchement : tétanos imparfait (plateau dentelé) ; pendant la contraction : tétanos parfait (plateau lisse, environ 3 fois la secousse).',
+  fatigue: 'Longue série de secousses isolées (2 Hz, même intensité) : avec la fatigue, l’amplitude des secousses diminue et leur relâchement s’allonge.',
+  nomme: 'Exercice : nommer un myogramme (secousse isolée, deux secousses isolées, fusion incomplète, fusion complète, tétanos imparfait, tétanos parfait) en comptant les stimulations et en repérant la phase de la secousse précédente où tombe la suivante.',
+};
+const pont = protocole({ id: config.id, commandes, config, texte: TEXTES[vue],
+  etat: () => ({ simulation_status: S.running ? 'running' : (S.fait ? 'finished' : (S.t > 0 || S.fige ? 'paused' : 'idle')), ce_qui_se_voit: V.ceQuiSeVoit(), current_variant: vue,
+    time_s: +S.t.toFixed(4), parameters: V.params(), moments: V.moments() }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), vue === 'nomme' ? 'Un tracé va s’écrire : à toi de le nommer.' : 'Le graphique s’écrit… puis les stimulations.');
+setTimeout(() => { if (!S.running && S.t === 0 && !S.fige) { if (vue === 'nomme') { lancer(NOM.moments().trace_affiche, 'le tracé est affiché : à toi de le nommer', true); bulle($('feedback'), 'Observe le tracé : comment s’appelle-t-il ?'); } else start(); } }, 3000);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

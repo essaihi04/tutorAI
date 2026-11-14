@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>L’acide pyruvique devient acétyl-CoA — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="svt.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="L’acide pyruvique (trois billes de carbone, CH3-CO-COOH) passe du hyaloplasme à la matrice à travers les deux membranes de la mitochondrie ; son groupe COOH part en CO2 (décarboxylation), un NAD+ prend deux hydrogènes (déshydrogénation), le coenzyme A s’accroche : acétyl-CoA, CH3-CO-CoA"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="peinture.js"></script>
+<script>
+/*
+ * La formation de l’acétyl-CoA dans la matrice (cours SVT « Libération de l’énergie »), 10 novembre 2026.
+ * Ce qui se voit, dans l’ordre (t en s de la scène) :
+ *   entre_dans_matrice (3) : l’acide pyruvique (3 C) traverse les deux membranes et entre dans la matrice ;
+ *   cooh_entoure (5)       : son groupe COOH est entouré ;
+ *   co2_part (7,5)         : la bille COOH part en CO2 : décarboxylation, il reste 2 carbones ;
+ *   taxi_prend_2h (10)     : un NAD+ prend deux hydrogènes : NADH,H+ (déshydrogénation) ;
+ *   coa_s_accroche (12,5)  : le coenzyme A (CoA-H), transporteur du groupement acétyl, s’accroche à CH3-CO ;
+ *   acetyl_coa (15)        : acétyl-CoA, CH3-CO-CoA, et l’équation ; pour un glucose : × 2.
+ * Le coenzyme A n’est pas une enzyme : c’est un transporteur du groupement acétyl.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const { Scene, Chrono, Apparitions, doux, mix } = window.SVTTableau;
+const P = window.SVTPeinture;
+const $ = id => document.getElementById(id);
+
+const M = { entre_dans_matrice: 3, cooh_entoure: 5, co2_part: 7.5, taxi_prend_2h: 10, coa_s_accroche: 12.5, acetyl_coa: 15 };
+const FIN = 16.5;
+const MOTIFS = {
+  entre_dans_matrice: 'l’acide pyruvique a traversé les deux membranes : il est dans la matrice',
+  cooh_entoure: 'le groupe COOH de l’acide pyruvique',
+  co2_part: 'décarboxylation : un CO2 part, il reste deux carbones',
+  taxi_prend_2h: 'déshydrogénation : un NAD+ prend deux hydrogènes',
+  coa_s_accroche: 'le coenzyme A s’accroche au groupement acétyl CH3-CO',
+  acetyl_coa: 'l’acétyl-CoA, CH3-CO-CoA, et l’équation de sa formation',
+};
+const CARBONE = [250, 204, 21], HYDRO = [235, 240, 245], TAXI = [34, 190, 220], COA = [168, 110, 220];
+const PAS = 34, Y = 214, X0 = 120, X1 = 470;            // les billes de l’acide pyruvique, son départ et son arrivée
+const CO2 = [660, 140], TX = { depart: [470, 404], pose: [470, 296] }, CA = { depart: [700, 214], pose: [X1 + 11 + 30, 214] };
+const MEMB = { ext: 250, esp: 262, int: 288, mat: 304 };
+
+const canvas = $('canvas');
+const scene = Scene(canvas, (c) => { scene.cadre(43); dessiner(c); return c.fin(); });
+const ecrit = Apparitions(scene);
+const chrono = Chrono({ fin: () => FIN, moments: () => M, motifs: MOTIFS, bouton: $('run'), bulle: $('feedback'), pont: () => pont,
+  depart: 'Observe l’acide pyruvique dans le hyaloplasme…', reinit: () => ecrit.oublier(),
+  fini: () => 'CH3-CO-COOH + CoA-H + NAD+ → CH3-CO-CoA + CO2 + NADH,H+ (deux fois pour un glucose).' });
+scene.avancer = chrono.avancer;
+
+/* ── Peinture : hyaloplasme, les deux membranes, la matrice ── */
+const R = P.graine(29), GH = [], GM = [];
+for (let i = 0; i < 40; i++) GH.push([16 + R() * 230, 50 + R() * 360, .7 + R() * 1.4]);
+for (let i = 0; i < 70; i++) GM.push([310 + R() * 432, 50 + R() * 360, .7 + R() * 1.3]);
+function peindre(ctx) {
+  ctx.save(); ctx.beginPath(); ctx.roundRect ? ctx.roundRect(12, 44, 736, 372, 22) : ctx.rect(12, 44, 736, 372); ctx.clip();
+  let g = ctx.createLinearGradient(12, 0, MEMB.ext, 0); g.addColorStop(0, P.rgba(P.T.hyalo, .10)); g.addColorStop(1, P.rgba(P.T.hyalo, .24));
+  ctx.fillStyle = g; ctx.fillRect(12, 44, MEMB.ext - 12, 372);
+  ctx.fillStyle = P.rgba([200, 220, 180], .14); for (const [x, y, r] of GH) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
+  // membrane externe
+  g = ctx.createLinearGradient(MEMB.ext, 0, MEMB.esp, 0); g.addColorStop(0, P.rgba(P.T.mitoExt, .95)); g.addColorStop(1, P.rgba(P.T.mitoExt, .6));
+  ctx.fillStyle = g; ctx.fillRect(MEMB.ext, 44, MEMB.esp - MEMB.ext, 372);
+  // espace intermembranaire
+  ctx.fillStyle = P.rgba(P.T.mitoEsp, .42); ctx.fillRect(MEMB.esp, 44, MEMB.int - MEMB.esp, 372);
+  // matrice
+  g = ctx.createLinearGradient(MEMB.mat, 0, 748, 0); g.addColorStop(0, P.rgba(P.T.matrice, .50)); g.addColorStop(1, P.rgba(P.T.matrice, .30));
+  ctx.fillStyle = g; ctx.fillRect(MEMB.mat, 44, 748 - MEMB.mat, 372);
+  ctx.fillStyle = 'rgba(230,240,250,.20)'; for (const [x, y, r] of GM) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
+  // membrane interne : une double couche debout (repère du dessin couché, mis debout par la transformation)
+  ctx.save(); ctx.transform(0, 1, -1, 0, MEMB.mat, 44); P.membrane(ctx, 0, 0, 372, MEMB.mat - MEMB.int, { pas: 8 }); ctx.restore();
+  ctx.restore();
+}
+function capsule(c, x, y, w, couleur, nom, a = 1) {
+  c.direct(() => { P.proteine(c.ctx, x, y, w, 22, { couleur, alpha: .85 * a }); c.texte(nom, x, y + 5, { couleur: 'blanc', taille: 13, align: 'center', alpha: a }); });
+}
+
+/* Le centre de l’acide pyruvique à l’instant t. */
+const centre = (t) => mix(X0, X1, doux(chrono.part(1, 3, t)));
+
+function dessiner(c) {
+  const t = chrono.t, cx = centre(t);
+  c.direct(() => peindre(c.ctx));
+  c.texte('L’acide pyruvique entre dans la matrice : l’acétyl-CoA', 18, 30, { couleur: 'cyan', taille: 20 });
+  c.texte('hyaloplasme', 24, 96, { couleur: 'vert', taille: 14 });
+  c.texte('membrane externe', 250, 64, { couleur: 'orange', taille: 13, align: 'right' });
+  c.fleche(244, 70, 255, 94, { couleur: 'orange', largeur: 1.3, tete: 7 });
+  c.texte('membrane interne', 312, 64, { couleur: 'jaune', taille: 13 });
+  c.fleche(318, 70, 299, 94, { couleur: 'jaune', largeur: 1.3, tete: 7 });
+  c.texte('matrice', 700, 96, { couleur: 'bleu', taille: 15, align: 'center' });
+  c.repere('hyaloplasme', 14, 80, 230, 40, 'le hyaloplasme');
+  c.repere('membranes', MEMB.ext - 4, 80, MEMB.mat - MEMB.ext + 8, 300, 'les deux membranes de la mitochondrie');
+  c.repere('matrice', 640, 80, 104, 24, 'la matrice');
+
+  const a = doux(chrono.part(0, .8, t));
+  // les billes de carbone : 1 (CH3), 2 (CO), 3 (COOH, qui part en CO2)
+  c.direct(() => { P.bille(c.ctx, cx - PAS, Y, 11, CARBONE, { alpha: Math.max(.05, a) }); P.bille(c.ctx, cx, Y, 11, CARBONE, { alpha: Math.max(.05, a) }); });
+  const u3 = doux(chrono.part(5.5, 7.3, t));
+  const b3 = [mix(cx + PAS, CO2[0], u3), mix(Y, CO2[1], u3)];
+  c.direct(() => {
+    P.bille(c.ctx, b3[0], b3[1], 11 - 3 * u3, CARBONE, { alpha: Math.max(.05, a) });
+    if (u3 > 0) P.bulleGaz(c.ctx, b3[0], b3[1], 11 + 6 * u3);
+  });
+  // les deux hydrogènes, sous la molécule, jusqu’au NAD+
+  const uh = doux(chrono.part(9, 9.8, t));
+  if (t < 9.8) for (let i = 0; i < 2; i++) c.direct(() => P.bille(c.ctx, mix(cx - PAS - 4 + 16 * i, TX.pose[0] - 9 + 18 * i, uh), mix(Y + 24, TX.pose[1] - 4, uh), 5, HYDRO, { alpha: Math.max(.05, a) }));
+  // la formule au-dessus
+  const fx = t < 6.3 ? cx : t < 13 ? cx - PAS / 2 : (cx - PAS + CA.pose[0] + 28) / 2;
+  const formule = t < 6.3 ? 'CH_3-CO-COOH' : t < 13 ? 'CH_3-CO' : 'CH_3-CO-CoA';
+  ecrit.ecrire(c, 'f' + formule, () => c.texte(formule, fx, Y - 26, { couleur: 'jaune', taille: 16, align: 'center' }));
+  c.repere('formule', fx - 56, Y - 46, 112, 26, 'la formule ' + formule.replace(/_/g, ''));
+  if (t < 3.2) ecrit.ecrire(c, 'nom', () => c.texte('acide pyruvique (3 C)', cx, Y + 50, { couleur: 'blanc', taille: 14, align: 'center' }));
+  // le groupe COOH entouré
+  if (t >= 3.6 && t < 6.3) {
+    const W = c.largeurTexte('CH3-CO-COOH', 16), d = cx - W / 2 + c.largeurTexte('CH3-CO-', 16);
+    const x0 = Math.min(d - 3, cx + PAS - 15), x1 = Math.max(cx + W / 2, cx + PAS + 13) + 6;
+    ecrit.ecrire(c, 'cooh', () => c.rect(x0, Y - 46, x1 - x0, 64, { couleur: 'orange', largeur: 1.8, arrondi: 12 }));
+    c.repere('cooh', x0, Y - 46, x1 - x0, 64, 'le groupe COOH');
+  }
+  // le CO2 parti
+  if (t >= 6) {
+    ecrit.ecrire(c, 'decarb', () => {
+      c.texte('décarboxylation : un CO_{2} part', 330, 122, { couleur: 'orange', taille: 15 });
+      c.texte('(il reste 2 carbones)', 330, 144, { couleur: 'faible', taille: 14 });
+    });
+    if (t >= 7.2) ecrit.ecrire(c, 'co2', () => c.texte('CO_{2}', CO2[0] + 24, CO2[1] + 6, { couleur: 'blanc', taille: 15 }));
+    c.repere('co2', CO2[0] - 22, CO2[1] - 22, 74, 44, 'le CO2 qui part');
+  }
+  // le NAD+ prend deux hydrogènes
+  if (t >= 8) {
+    const u = doux(chrono.part(8, 9, t));
+    capsule(c, mix(TX.depart[0], TX.pose[0], u), mix(TX.depart[1], TX.pose[1], u), t >= 9.8 ? 78 : 50, TAXI, t >= 9.8 ? 'NADH,H+' : 'NAD+', doux(chrono.part(8, 8.5, t)));
+    if (t >= 9.8) ecrit.ecrire(c, 'deshydro', () => c.texte('déshydrogénation', 520, 301, { couleur: 'cyan', taille: 15 }));
+    c.repere('taxi', TX.pose[0] - 42, TX.pose[1] - 14, 84, 28, t >= 9.8 ? 'NADH,H+' : 'NAD+');
+  }
+  // le coenzyme A s’accroche
+  if (t >= 10.5) {
+    const u = doux(chrono.part(10.5, 12, t));
+    capsule(c, mix(CA.depart[0], CA.pose[0], u), mix(CA.depart[1], CA.pose[1], u), 56, COA, t >= 12.2 ? 'CoA' : 'CoA-H', doux(chrono.part(10.5, 11, t)));
+    if (t >= 11.6) ecrit.ecrire(c, 'coa', () => {
+      c.texte('coenzyme A (CoA-H) :', 552, 196, { couleur: 'violet', taille: 13 });
+      c.texte('transporteur du', 552, 212, { couleur: 'violet', taille: 13 });
+      c.texte('groupement acétyl', 552, 228, { couleur: 'violet', taille: 13 });
+    });
+    c.repere('coa', CA.pose[0] - 30, Y - 14, 60 + 140, 30, 'le coenzyme A, transporteur du groupement acétyl');
+  }
+  // l’acétyl-CoA et l’équation
+  if (t >= 13) {
+    ecrit.ecrire(c, 'acetyl', () => c.texte('acétyl-CoA : CH_3-CO-CoA', fx, 258, { couleur: 'jaune', taille: 16, align: 'center' }));
+    c.repere('acetyl', fx - 90, 240, 180, 24, 'l’acétyl-CoA');
+  }
+  if (t >= 13.6) {
+    ecrit.ecrire(c, 'equation', () => {
+      c.texte('CH_3-CO-COOH + CoA-H + NAD+ → CH_3-CO-CoA + CO_{2} + NADH,H+', 527, 352, { couleur: 'blanc', taille: 15, align: 'center', max: 428 });
+      c.texte('pour un glucose : × 2', 527, 378, { couleur: 'jaune', taille: 15, align: 'center' });
+    });
+    c.repere('equation', 312, 334, 432, 50, 'l’équation de la formation de l’acétyl-CoA');
+  }
+}
+
+function phase(t) {
+  if (t < 1) return 'L’acide pyruvique (3 billes de carbone, formule CH3-CO-COOH au-dessus) est dans le hyaloplasme, à gauche des deux membranes de la mitochondrie.';
+  if (t < 3) return 'L’acide pyruvique traverse la membrane externe puis la membrane interne.';
+  if (t < 3.6) return 'L’acide pyruvique (3 C) est dans la matrice.';
+  if (t < 5.5) return 'Le groupe COOH (la bille de droite) est entouré.';
+  if (t < 8) return 'La bille COOH part en CO2 (bulle) : décarboxylation, il reste 2 carbones (CH3-CO).';
+  if (t < 9.8) return 'Un NAD+ arrive sous la molécule et prend deux hydrogènes.';
+  if (t < 10.5) return 'Le NAD+ est devenu NADH,H+ : déshydrogénation.';
+  if (t < 12.2) return 'Le coenzyme A (CoA-H, capsule violette), transporteur du groupement acétyl, arrive vers CH3-CO.';
+  if (t < 13) return 'Le coenzyme A est accroché à CH3-CO.';
+  if (t < 13.6) return 'Écrit : acétyl-CoA : CH3-CO-CoA.';
+  return 'Écrit : acétyl-CoA : CH3-CO-CoA ; en bas l’équation CH3-CO-COOH + CoA-H + NAD+ → CH3-CO-CoA + CO2 + NADH,H+ et « pour un glucose : × 2 ».';
+}
+function ceQuiSeVoit() {
+  const t = chrono.t;
+  return `t = ${fr(t, 1)} s${chrono.running ? ' (ça avance)' : chrono.fait ? ' (fin)' : ' (arrêté)'}. De gauche à droite : hyaloplasme, membrane externe, espace intermembranaire, membrane interne, matrice. ${phase(t)} Produits visibles : CO2 ${t >= 7.3 ? 1 : 0}, NADH,H+ ${t >= 9.8 ? 1 : 0}, acétyl-CoA ${t >= 12.2 ? 1 : 0}.`;
+}
+
+$('run').onclick = chrono.clic;
+window.Tableau.explication({ acetyl_coa: [
+  { repere: 'hyaloplasme', texte: 'L’acide pyruvique formé par la glycolyse est dans le hyaloplasme.' },
+  { repere: 'membranes', texte: 'Il traverse les deux membranes de la mitochondrie.' },
+  { repere: 'matrice', texte: 'Il arrive dans la matrice.' },
+  { repere: 'cooh', texte: 'Son groupe COOH…' },
+  { repere: 'co2', texte: '…part en CO2 : c’est une décarboxylation.' },
+  { repere: 'taxi', texte: 'Un NAD+ prend deux hydrogènes : déshydrogénation, il devient NADH,H+.' },
+  { repere: 'coa', texte: 'Le coenzyme A, transporteur du groupement acétyl, s’accroche.' },
+  { repere: 'acetyl', texte: 'On obtient l’acétyl-CoA, CH3-CO-CoA.' },
+  { repere: 'equation', texte: 'L’équation, deux fois pour un glucose.' } ] });
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'play_until'];
+const config = { id: 'svt_energie_pyruvate', version: '1.0', title: 'L’acide pyruvique devient acétyl-CoA dans la matrice', variants: [{ id: 'acetyl_coa', label: 'formation de l’acétyl-CoA' }], commands: commandes,
+  command_schema: { set_time: { time_s: `0..${FIN} (arrêt sur cet instant)` }, play_until: { moment: Object.keys(M).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'L’acide pyruvique (CH3-CO-COOH) traverse les deux membranes de la mitochondrie et entre dans la matrice. Son groupe COOH part en CO2 (décarboxylation), un NAD+ prend deux hydrogènes et devient NADH,H+ (déshydrogénation), le coenzyme A (CoA-H, transporteur du groupement acétyl) s’accroche : acétyl-CoA, CH3-CO-CoA. CH3-CO-COOH + CoA-H + NAD+ → CH3-CO-CoA + CO2 + NADH,H+ ; pour un glucose : × 2.',
+  etat: () => ({ simulation_status: chrono.statut(), ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'acetyl_coa', time_s: +chrono.t.toFixed(2), parameters: {}, moments: M }),
+  progression: () => chrono.t / FIN,
+  executer: (cmd, p) => ({ start: chrono.start, reset: chrono.start, pause: chrono.pause, resume: chrono.resume, set_time: () => { chrono.setTime(p); scene.sale = true; }, play_until: () => chrono.playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'L’acide pyruvique, dans le hyaloplasme…');
+setTimeout(() => { if (!chrono.running && chrono.t === 0) chrono.start(); }, 1600);
+window.__sim = { chrono, scene, M, ecrit };
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

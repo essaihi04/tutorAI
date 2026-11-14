@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Seuil et recrutement — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="muscle.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Excitations d’intensité croissante de 1 à 11 mV : sur le cylindre, les réponses du muscle côte à côte ; à droite, une coupe transversale du muscle dont les fibres excitées s’allument"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_parameters">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="myogramme.js"></script>
+<script>
+/*
+ * Seuil d’excitation et recrutement des fibres (cours « Rôle du muscle strié squelettique », novembre 2026).
+ * Le cylindre est tourné à la main entre deux excitations : les réponses s’inscrivent côte à côte (petites secousses
+ * compressées), l’intensité écrite sous chacune. À droite, une coupe transversale du muscle PEINTE (≈ 40 fibres
+ * polygonales) : les fibres excitées s’allument en rouge vif ; leur nombre est proportionnel à l’amplitude.
+ * Modèle : A(i) = 0 si i < 4 mV ; A(i) = Amax·(i − 3)/6 de 4 à 9 mV ; A = Amax au-delà (seuil 4 mV, maximum à 9 mV),
+ * Amax = 20 mm. Le bouton envoie la série 1, 2, … 11 mV (une réponse toutes les 0,9 s) ; la poignée de l’excitateur
+ * (ou set_parameters {intensite_mv}) ajoute UNE réponse à l’intensité choisie, après la série.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const MG = window.Myogramme, P = MG.peindre;
+const $ = id => document.getElementById(id);
+const AMAX = 20, SEUIL = 4, IMAX = 9, NF = 40, DT = 0.9, T1 = 0.8, DUREE_REP = 0.35;
+const A = i => (i < SEUIL ? 0 : i >= IMAX ? AMAX : AMAX * (i - 3) / 6);
+const nFibres = i => Math.round(NF * A(i) / AMAX);
+const SERIE = Array.from({ length: 11 }, (_, k) => ({ i: k + 1, t0: T1 + k * DT }));
+const FIN_SERIE = SERIE[10].t0 + 0.7;
+const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, fige: false, emis: 0, ecrit: {}, extras: [], choisie: null, glisse: false };
+
+/* Géométrie (cadre 760 × 420). */
+const BOX = { x: 14, y: 40, w: 290, h: 80 }, TRK = { x0: 40, x1: 270, y: 88 };
+const xI = i => TRK.x0 + (i - 1) * (TRK.x1 - TRK.x0) / 11;
+const PAP = { x: 14, y: 160, w: 478, h: 152 }, BASE = 294, PYMM = 5.6;
+const xSlot = k => 70 + (k - 1) * 31;          // k = 1 … 13
+const C = MG.coupe(628, 238, 96, NF, 9);
+
+const fin = () => Math.max(FIN_SERIE, ...S.extras.map(e => e.t0 + 0.7));
+/* Les réponses visibles : la série, puis au plus deux réponses ajoutées (les dernières). */
+function reponses() {
+  const ext = S.extras.slice(-2).map((e, j) => ({ ...e, slot: 12 + j, extra: true }));
+  return SERIE.map((r, k) => ({ ...r, slot: k + 1 })).concat(ext).filter(r => S.t >= r.t0);
+}
+const derniere = () => { const v = reponses(); return v.length ? v[v.length - 1] : null; };
+/* L’intensité affichée : celle qu’on glisse, sinon celle de la dernière excitation envoyée. */
+const iCourante = () => (S.glisse && S.choisie != null ? S.choisie : derniere() ? derniere().i : (S.choisie ?? 1));
+
+function peindre(ctx) {
+  // l’excitateur et son curseur
+  P.excitateur(ctx, BOX.x, BOX.y, BOX.w, BOX.h, { bornes: [[BOX.x + BOX.w - 24, BOX.y + 17], [BOX.x + BOX.w - 12, BOX.y + 17]], cadran: false,
+    voyant: (() => { const d = derniere(); return d && S.t - d.t0 < 0.12; })() });
+  ctx.save(); ctx.strokeStyle = 'rgba(15,23,42,.9)'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(TRK.x0, TRK.y); ctx.lineTo(TRK.x1, TRK.y); ctx.stroke(); ctx.restore();
+  const xk = xI(iCourante()), gk = ctx.createRadialGradient(xk - 2, TRK.y - 2, 1, xk, TRK.y, 8);
+  gk.addColorStop(0, '#fef9c3'); gk.addColorStop(1, '#a16207');
+  ctx.save(); ctx.fillStyle = gk; ctx.beginPath(); ctx.arc(xk, TRK.y, 7, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  // le papier du cylindre et l’encre des réponses
+  MG.peindre.cylindre(ctx, PAP.x, PAP.y, PAP.w, PAP.h, { ry: 6 });
+  const vis = reponses(), dern = vis[vis.length - 1];
+  const xFin = dern ? xSlot(dern.slot) + 16 : xSlot(1) - 14;
+  P.encre(ctx, [[PAP.x + 8, BASE], [Math.min(PAP.x + PAP.w - 8, xFin), BASE]], 1.3);
+  let stylo = [xFin, BASE];
+  for (const r of vis) {
+    const p = Math.min(1, (S.t - r.t0) / DUREE_REP), x0 = xSlot(r.slot) - 4, pts = [];
+    for (let j = 0; j <= 40 * p; j++) { const tau = j / 40 * 0.12; pts.push([x0 + j / 40 * 18, BASE - PYMM * A(r.i) * MG.unite(tau)]); }
+    P.encre(ctx, pts, 1.6);
+    if (r === dern && p < 1) stylo = pts[pts.length - 1] || stylo;
+  }
+  // le stylet (au point d’écriture)
+  P.barre(ctx, stylo[0] + 34, stylo[1] - 26, stylo[0] + 4, stylo[1] - 3, 3, 'laiton');
+  ctx.save(); ctx.fillStyle = '#1f2937'; ctx.beginPath(); ctx.moveTo(stylo[0] + 6, stylo[1] - 6); ctx.lineTo(stylo[0], stylo[1]); ctx.lineTo(stylo[0] + 8, stylo[1] - 2); ctx.closePath(); ctx.fill(); ctx.restore();
+  // la coupe transversale : les fibres de la dernière réponse restent allumées
+  const n = dern ? nFibres(dern.i) : 0, ec = dern ? Math.max(0, 1 - (S.t - dern.t0) / 0.5) : 0;
+  P.coupe(ctx, C, n, ec);
+}
+
+function dessiner(c) {
+  const t = S.t, mom = moments(), vis = reponses(), dern = vis[vis.length - 1];
+  c.direct(() => peindre(c.ctx));
+  // parties fixes
+  c.texte('Intensité de l’excitation et réponse du muscle', 12, 26, { couleur: 'cyan', taille: 17 });
+  c.texte('excitateur', BOX.x + 12, BOX.y + 22, { couleur: 'jaune', taille: 15 });
+  c.texte('intensité i (mV)', BOX.x + BOX.w - 40, BOX.y + 22, { couleur: 'faible', taille: 13, align: 'right' });
+  for (let i = 1; i <= 12; i++) { c.ligne(xI(i), TRK.y + 6, xI(i), TRK.y + 10, { couleur: 'faible', largeur: 1.2, duree: .02 }); c.texte(String(i), xI(i), TRK.y + 25, { couleur: 'faible', taille: 12, align: 'center', duree: .05 }); }
+  c.repere('excitateur', BOX.x, BOX.y, BOX.w, BOX.h, 'l’excitateur');
+  c.texte('coupe transversale du muscle', C.cx, 128, { couleur: 'rose', taille: 15, align: 'center' });
+  c.repere('coupe', C.cx - C.r - 4, C.cy - C.r - 4, 2 * C.r + 8, 2 * C.r + 8, 'la coupe transversale du muscle : les fibres excitées s’allument');
+  c.texte('i (mV)', 16, 334, { couleur: 'faible', taille: 13 });
+  c.texte('cylindre enregistreur, tourné à la main entre deux excitations', 16, 398, { couleur: 'faible', taille: 13 });
+  c.repere('trace', PAP.x, PAP.y - 6, PAP.w, PAP.h + 12, 'les réponses du muscle, côte à côte');
+
+  c.direct(() => {
+    const ic = iCourante();
+    c.texte(`i = ${ic} mV`, 748, 26, { couleur: 'jaune', taille: 18, align: 'right' });
+    c.cercle(xI(ic), TRK.y, 10, { couleur: 'jaune', largeur: 1.6 });
+    c.repere('intensite', xI(ic) - 14, TRK.y - 14, 28, 28, `le curseur d’intensité : ${ic} mV`);
+    const n = dern ? nFibres(dern.i) : 0;
+    c.texte(`fibres excitées : ${n} / ${NF}${n === NF ? ' (toutes)' : ''}`, C.cx, 360, { couleur: n ? 'rouge' : 'faible', taille: 15, align: 'center' });
+  });
+
+  // ce qui s’écrit en route : les intensités sous les réponses, puis les conclusions
+  // chaque élément s’écrit à partir de son apparition, sans attendre les autres (le professeur écrit au moment dit)
+  const base = c.cur, quand = nom => { if (S.ecrit[nom] == null) S.ecrit[nom] = (performance.now() - scene.ouvert) / 1000; c.cur = Math.max(base, S.ecrit[nom]); };
+  for (const r of vis) { quand('i' + r.slot + '_' + r.t0); c.texte(String(r.i), xSlot(r.slot) + 5, 334, { couleur: r.extra ? 'cyan' : 'blanc', taille: 13, align: 'center', duree: .1 }); }
+  if (t >= SERIE[2].t0 + 0.4) {
+    quand('inef'); MG.accolade(c, xSlot(1) - 6, xSlot(3) + 16, 344, { couleur: 'orange' });
+    c.texte('excitations inefficaces', 40, 368, { couleur: 'orange', taille: 14 });
+    c.repere('inefficaces', xSlot(1) - 8, 196, xSlot(3) - xSlot(1) + 26, 180, 'trois excitations inefficaces : tracés plats');
+  }
+  if (t >= SERIE[3].t0 + 0.4) {
+    quand('seuil'); c.texte('seuil d’excitation = 4 mV', xSlot(4) + 5, 148, { couleur: 'vert', taille: 15, align: 'center' });
+    c.fleche(xSlot(4) + 5, 152, xSlot(4) + 5, 166, { couleur: 'vert', largeur: 1.6, tete: 7 });
+    c.repere('seuil', xSlot(4) - 10, 132, 30, 170, 'la première réponse : seuil d’excitation = 4 mV');
+  }
+  if (t >= SERIE[6].t0 + 0.4) {
+    quand('recr'); c.texte('recrutement des fibres : plus i augmente,', C.cx, 384, { couleur: 'vert', taille: 14, align: 'center' });
+    c.texte('plus de fibres répondent', C.cx, 402, { couleur: 'vert', taille: 14, align: 'center' });
+  }
+  if (t >= SERIE[8].t0 + 0.4) {
+    quand('amax'); c.texte('amplitude maximale', xSlot(9) + 5, 148, { couleur: 'rose', taille: 15, align: 'center' });
+    c.fleche(xSlot(9) + 5, 152, xSlot(9) + 5, 166, { couleur: 'rose', largeur: 1.6, tete: 7 });
+    c.repere('amplitude_max', xSlot(9) - 10, 132, xSlot(11) - xSlot(9) + 30, 170, 'l’amplitude maximale, atteinte à 9 mV');
+  }
+  if (t >= SERIE[10].t0 + 0.4) {
+    quand('dela'); MG.accolade(c, xSlot(9) - 6, xSlot(11) + 16, 344, { couleur: 'rose' });
+    c.texte('au-delà de 9 mV : même amplitude', 488, 368, { couleur: 'rose', taille: 14, align: 'right' });
+  }
+  return c.fin();
+}
+
+const canvas = $('canvas');
+const scene = window.MuscleTableau.Scene(canvas, (c) => { scene.cadre(53); return dessiner(c); });
+const etiquetteBouton = () => { $('run').textContent = S.running ? 'Pause' : S.fait ? 'Rejouer' : (S.t > 0 ? 'Reprendre' : 'Lancer'); };
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(fin(), S.t + dt);
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.running = false; S.jusqua = null; S.fige = true; etiquetteBouton();
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 2)} s`) + '.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre();
+    return true;
+  }
+  if (S.t >= fin()) {
+    S.running = false; S.fait = true; etiquetteBouton();
+    const d = derniere();
+    bulle($('feedback'), d && d.extra ? `À ${d.i} mV : amplitude ${fr(A(d.i), 1)} mm, ${nFibres(d.i)} fibres sur ${NF} excitées.` : 'Seuil 4 mV ; de 4 à 9 mV, de plus en plus de fibres répondent ; au-delà de 9 mV, toutes : amplitude maximale.', 'good');
+    pont.noter('measurement', { reponses: reponses().map(r => ({ intensite_mv: r.i, amplitude_mm: +A(r.i).toFixed(1) })) }); pont.emettre();
+  } else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+
+function moments() {
+  const m = { inefficace: SERIE[2].t0 + 0.5, seuil: SERIE[3].t0 + 0.45, recrutement: SERIE[6].t0 + 0.45, amplitude_max: SERIE[8].t0 + 0.45, au_dela: SERIE[10].t0 + 0.45 };
+  for (const k in m) m[k] = +m[k].toFixed(2);
+  return m;
+}
+const MOTIFS = {
+  inefficace: '1, 2 et 3 mV : trois tracés plats, excitations inefficaces',
+  seuil: 'à 4 mV, la première petite réponse : seuil d’excitation = 4 mV',
+  recrutement: 'à 7 mV : réponses de plus en plus grandes, de plus en plus de fibres excitées',
+  amplitude_max: 'à 9 mV : toutes les fibres répondent, amplitude maximale',
+  au_dela: 'à 10 et 11 mV : même hauteur qu’à 9 mV',
+};
+function playUntil(p) {
+  const M = moments(), nom = p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-6) { S.t = 0; S.ecrit = {}; }
+  S.jusqua = Math.min(fin(), Math.max(0.01, cible)); S.motif = nom ? MOTIFS[nom] : ''; S.choisie = null;
+  S.running = true; S.fait = false; S.fige = false; etiquetteBouton(); bulle($('feedback'), 'Observe : l’intensité augmente d’une excitation à l’autre…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+
+function ceQuiSeVoit() {
+  const t = S.t, vis = reponses(), dern = vis[vis.length - 1], M = moments();
+  const m = [`t = ${fr(t, 2)} s${S.running ? ' (la série défile)' : S.fait ? ' (fin)' : t > 0 ? ' (arrêt sur image)' : ' (pas encore lancée)'}. En haut, l’excitateur et son curseur d’intensité réglé sur ${iCourante()} mV (graduations 1 à 12 mV). Au milieu, le papier du cylindre, tourné à la main entre deux excitations ; à droite, la coupe transversale du muscle (${NF} fibres).`];
+  if (!vis.length) m.push('Aucune réponse encore : le stylet trace une ligne droite ; aucune fibre allumée.');
+  else {
+    m.push('Réponses inscrites côte à côte (intensité écrite dessous) : ' + vis.map(r => `${r.i} mV → ${A(r.i) ? fr(A(r.i), 1) + ' mm' : 'tracé plat'}`).join(' ; ') + '.');
+    m.push(`Dernière excitation : ${dern.i} mV, ${nFibres(dern.i)} fibres sur ${NF} allumées en rouge vif sur la coupe${nFibres(dern.i) === NF ? ' (toutes)' : ''}.`);
+  }
+  if (t >= SERIE[2].t0 + 0.4) m.push('Écrit sous les trois premières : « excitations inefficaces ».');
+  if (t >= SERIE[3].t0 + 0.4) m.push('Écrit au-dessus de la réponse à 4 mV : « seuil d’excitation = 4 mV ».');
+  if (t >= SERIE[6].t0 + 0.4) m.push('Écrit sous la coupe : « recrutement des fibres : plus i augmente, plus de fibres répondent ».');
+  if (t >= SERIE[8].t0 + 0.4) m.push('Écrit au-dessus de la réponse à 9 mV : « amplitude maximale » (20 mm).');
+  if (t >= SERIE[10].t0 + 0.4) m.push('Écrit sous les réponses 9 à 11 mV : « au-delà de 9 mV : même amplitude ».');
+  const ext = vis.filter(r => r.extra);
+  if (ext.length) m.push('Réponses ajoutées après la série (intensité en cyan) : ' + ext.map(r => `${r.i} mV → ${fr(A(r.i), 1)} mm`).join(' ; ') + '.');
+  return m.join(' ');
+}
+
+function start() {
+  S.extras = []; S.ecrit = {}; S.choisie = null; S.jusqua = null; S.t = 0; S.running = true; S.fait = false; S.fige = false; etiquetteBouton();
+  bulle($('feedback'), 'Excitations de 1 à 11 mV, une à une…'); pont.noter('start'); pont.emettre();
+}
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.jusqua = null; S.fige = true; etiquetteBouton(); bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait || S.t >= fin()) return start(); S.running = true; S.fige = false; etiquetteBouton(); bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  const t = +p.time_s; if (!Number.isFinite(t)) return;
+  const nt = Math.min(fin(), Math.max(0, t)); if (nt < S.t) S.ecrit = {};
+  S.running = false; S.jusqua = null; S.t = nt; S.fait = S.t >= fin(); S.fige = !S.fait; etiquetteBouton(); scene.sale = true;
+  bulle($('feedback'), `Arrêt sur image : t = ${fr(S.t, 2)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+/* Une réponse de plus à l’intensité choisie, après la série (et après les réponses déjà demandées). */
+function ajouter(i) {
+  i = Math.min(12, Math.max(1, Math.round(i)));
+  const dernierT0 = Math.max(SERIE[10].t0, ...S.extras.map(e => e.t0));
+  const t0 = Math.max(S.t + 0.2, dernierT0 + DT);
+  S.extras.push({ i, t0 }); S.choisie = i; S.jusqua = null;
+  S.running = true; S.fait = false; S.fige = false; etiquetteBouton(); scene.sale = true;
+  bulle($('feedback'), S.t < SERIE[10].t0 ? `Excitation à ${i} mV ajoutée après la série.` : `Excitation à ${i} mV…`);
+  pont.noter('set_parameters', { intensite_mv: i }); pont.emettre();
+}
+function setParameters(p) { const i = +p.intensite_mv; if (Number.isFinite(i)) ajouter(i); }
+$('run').onclick = () => (S.running ? pause() : (S.t > 0 && S.t < fin() && !S.fait ? resume() : start()));
+
+/* La poignée : le bouton du curseur de l’excitateur, glissé le long de sa graduation. */
+const iDeX = x => Math.min(12, Math.max(1, Math.round(1 + (x - TRK.x0) * 11 / (TRK.x1 - TRK.x0))));
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => { const [x, y] = scene.local(px, py); return Math.abs(y - TRK.y) < 16 && x > TRK.x0 - 14 && x < TRK.x1 + 14 ? 'curseur' : null; },
+  bouger: (id, px, py) => { const [x] = scene.local(px, py), i = iDeX(x); S.glisse = true; if (i !== S.choisie) { S.choisie = i; scene.sale = true; } },
+  lacher: () => { S.glisse = false; ajouter(S.choisie ?? 1); },
+});
+
+window.Tableau.explication({ intensite: [
+  { repere: 'excitateur', texte: 'On excite le muscle avec une intensité croissante, de 1 à 11 mV.' },
+  { repere: 'inefficaces', texte: 'À 1, 2 et 3 mV, pas de réponse : ces excitations sont inefficaces.' },
+  { repere: 'seuil', texte: 'À 4 mV, la première petite réponse : c’est le seuil d’excitation.' },
+  { repere: 'coupe', texte: 'Seules quelques fibres sont excitées ; plus l’intensité augmente, plus elles sont nombreuses : c’est le recrutement.' },
+  { repere: 'amplitude_max', texte: 'À 9 mV, toutes les fibres répondent : amplitude maximale.' },
+  { repere: 'trace', texte: 'Au-delà, l’amplitude ne change plus.' },
+  { repere: 'intensite', texte: 'Glisse le curseur pour ajouter une excitation de ton choix.' },
+] });
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'muscle_intensite', version: '1.0', title: 'Seuil d’excitation et recrutement', variants: [{ id: 'intensite', label: 'intensite' }], commands: commandes,
+  command_schema: {
+    set_parameters: { intensite_mv: '1..12 (ajoute UNE réponse à cette intensité, après la série ; pas de 1)' },
+    set_time: { time_s: `0..${fr(FIN_SERIE, 2)} (arrêt sur cet instant de la série)` },
+    play_until: { moment: Object.keys(moments()).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Excitations d’intensité croissante (1 à 11 mV) d’un muscle de grenouille ; le cylindre est tourné à la main entre deux excitations. Seuil d’excitation 4 mV ; de 4 à 9 mV, l’amplitude augmente avec le nombre de fibres excitées (recrutement) ; à partir de 9 mV, toutes les fibres répondent : amplitude maximale (20 mm), qui ne change plus au-delà.',
+  etat: () => ({ simulation_status: S.running ? 'running' : (S.fait ? 'finished' : (S.t > 0 || S.fige ? 'paused' : 'idle')), ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'intensite',
+    time_s: +S.t.toFixed(2), parameters: { intensite_mv: iCourante(), seuil_mv: SEUIL, intensite_amplitude_max_mv: IMAX, amplitude_max_mm: AMAX,
+      reponses: reponses().map(r => ({ intensite_mv: r.i, amplitude_mm: +A(r.i).toFixed(1), fibres_excitees: nFibres(r.i) })) }, moments: moments() }),
+  progression: () => (S.t >= FIN_SERIE ? 1 : S.t / FIN_SERIE),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'L’excitateur s’écrit… puis la série d’excitations.');
+setTimeout(() => { if (!S.running && S.t === 0 && !S.fige) start(); }, 3000);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

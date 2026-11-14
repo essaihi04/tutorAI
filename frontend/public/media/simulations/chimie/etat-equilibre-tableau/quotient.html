@@ -1,0 +1,1010 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le quotient de réaction Qr — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ee.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Le quotient de réaction Qr à la craie : définition (produits en haut, réactifs en bas), forme générale avec les coefficients en exposants, eau solvant et solides absents, Qr sans unité, Qr,i dans l’état initial et après un mélange, Qr au cours de la transformation (poignée x), nationaux 2020 R et 2017 N"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Le quotient de réaction Qr (cours « État d’équilibre d’un système chimique », 2e Bac PC BIOF, novembre 2026).
+ * Contrat : outils/cours/notes/cours/etat_equilibre_contrat_simulations.md § 2.
+ * Vues (?vue=) : definition (défaut) | generale | eau | solides | sans_unite | initial | melange | au_cours | national | pile.
+ * Une seule poignée (vue au_cours) : x, avancement relatif 0 → 1 (défaut 0), [H₃O⁺] = x × 3,89·10⁻⁴ mol/L.
+ */
+/* ── Formules chimiques à la craie : indices ₂ et charges ⁺ ⁻ ²⁻ rendus (sans modifier exposants.js ni le kit) ──────────
+ * « MnO₄⁻ » devient « MnO_{4}^{−} » ; le découpage « _{…} » accepte tout caractère avant (« [I⁻]₀ »). */
+(function () {
+  const C = window.Tableau.Craie, P = C.prototype, texteAvant = P.texte, segAvant = C.segments;
+  const SUP = { '⁺': '+', '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+  const SUB = { '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9' };
+  const chim = s => String(s).replace(/[⁺⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUP[ch]).join('') + '}')
+    .replace(/[₀₁₂₃₄₅₆₇₈₉]+/g, g => '_{' + [...g].map(ch => SUB[ch]).join('') + '}');
+  C.segments = function (s) {
+    const out = [], re = /_\{([^}]+)\}/g; let i = 0, m;
+    while ((m = re.exec(s))) { if (m.index > i) out.push(...segAvant(s.slice(i, m.index))); out.push({ t: m[1], sub: true }); i = re.lastIndex; }
+    if (i < s.length) out.push(...segAvant(s.slice(i)));
+    return out;
+  };
+  P.texte = function (s, x, y, o = {}) {
+    const s2 = chim(s);
+    // « [HCOOH]_{i} » : un indice après un crochet, sans exposant — le kit ne le verrait pas ; on passe par l’écriture à indices.
+    if (/_\{/.test(s2) && !/\^/.test(s2) && !/[A-Za-zτθΔλωφ]_/.test(s2)) {
+      let taille = o.taille ?? 18;
+      this.ctx.font = `${o.gras ? '700 ' : ''}${taille}px ${window.Tableau.POLICE}`;
+      this._verifierCadre(s2.replace(/[_^{}]/g, ''), x, y, taille, o.align);
+      if (this.echelle && this.tailleMin) taille = Math.max(taille, this.tailleMin / this.echelle);
+      return this._texteIndices(s2, x, y, o, taille);
+    }
+    return texteAvant.call(this, s2, x, y, o);
+  };
+  window.chim = chim;
+})();
+
+/* ── Moteur du déroulé (copie de transformations-deux-sens-tableau/ph.html, + M.finir) ─────────────────────────────────── */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lisse = p => p * p * (3 - 2 * p);
+const lerp = (a, b, f) => a + (b - a) * f;
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');
+const ECRITURE = 2.5;
+function Moteur(o) {
+  const q = new URLSearchParams(location.search);
+  const S = { vue: o.vues.includes(q.get('vue')) ? q.get('vue') : o.vues[0], t: 0, running: false, pause: false, fait: false,
+    jusqua: null, motif: '', emis: 0, dit: '', mesure: false };
+  const V = o.vitesse ?? 1.7, T0 = o.T0 ?? .8, HOLD = {};
+  let TL = null;
+  function construire() {
+    let s = T0; const ev = [];
+    for (const e of o.etapes(S.vue)) {
+      const anim = e.anim || 0, d = { ...e, anim, debut: s, ecrit: s + (e.ecritDes ?? anim) };
+      d.fin = Math.max(s + anim, d.ecrit + (HOLD[e.nom] ?? 1.5)) + .35;
+      s = d.fin; ev.push(d);
+    }
+    const mom = {}; for (const e of ev) mom[e.nom] = e.fin; mom.fin = s + (o.queue ?? .6);
+    TL = { ev, M: mom };
+  }
+  const ev = nom => TL.ev.find(e => e.nom === nom);
+  const M = {
+    S, ev, evs: () => TL.ev, Moments: () => TL.M,
+    p(nom) { const e = ev(nom); if (!e) return 0; return e.anim > 0 ? clamp((S.t - e.debut) / e.anim, 0, 1) : (S.t >= e.debut - 1e-6 ? 1 : 0); },
+    commence(nom) { const e = ev(nom); return !!e && S.t > e.debut + 1e-6; },
+    vu(nom) { if (nom === 'fin') return S.t >= TL.M.fin - 1e-6; const e = ev(nom); return !!e && S.t >= e.fin - 1e-6; },
+    etape(c, nom, fn) {
+      const e = ev(nom); if (!e) return;
+      const t = c.t, cur = c.cur, comp = c.complet, w0 = e.ecrit;
+      c.t = S.t > 1e5 ? 1e9 : w0 + (S.t - w0) * V; c.cur = w0;
+      try { fn(); } finally { if (S.mesure) HOLD[nom] = Math.max(HOLD[nom] || 0, (c.cur - w0) / V); c.t = t; c.cur = cur; if (!S.running) c.complet = comp; }
+    },
+    etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
+  };
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const cadreBase = scene.cadre;
+  scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
+  M.scene = scene; M.craie = scene.craie;
+  function calculer() {
+    construire();
+    const t = S.t, r = S.running; S.t = 1e6; S.running = false; S.mesure = true;
+    for (const k of Object.keys(HOLD)) delete HOLD[k];   // une étape dessinée en plusieurs morceaux garde le plus long (max ci-dessus)
+    try { o.dessiner(scene.craie, M); } finally { S.t = t; S.running = r; S.mesure = false; }
+    construire(); scene.sale = true;
+  }
+  const sansSouligne = s => String(s).replace(/([A-Za-zΔτθ])_\{?([A-Za-z0-9]+)\}?/g, (m, a, i) => a + (/^\d+$/.test(i) ? [...i].map(d => '₀₁₂₃₄₅₆₇₈₉'[d]).join('') : i));
+  const dire = (texte, kind = '') => { texte = sansSouligne(texte); S.dit = texte; bulle($('feedback'), texte, kind); };
+  const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+  let pont = null;
+  const emettre = () => pont && pont.emettre();
+  const noter = (a, d) => pont && pont.noter(a, d);
+  scene.avancer = dt => {
+    if (!S.running) return !!(o.anime && o.anime());
+    const avant = S.t; S.t += dt;
+    for (const e of TL.ev) if (avant < e.debut && S.t >= e.debut && e.bulle) dire(e.bulle());
+    if (S.jusqua != null && S.t >= S.jusqua) {
+      S.t = S.jusqua; S.jusqua = null; S.running = false;
+      if (S.t >= TL.M.fin - 1e-6) { finir(); return true; }
+      S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fx(S.t, 1)} s`) + '.');
+      noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); return true;
+    }
+    if (S.t >= TL.M.fin) { S.t = TL.M.fin; finir(); return true; }
+    if (performance.now() - S.emis > 500) { S.emis = performance.now(); emettre(); }
+    return true;
+  };
+  function finir() { S.running = false; S.fait = true; S.pause = false; S.jusqua = null; etiquette(); dire(o.messageFin(M), 'good'); noter('measurement', o.params(M)); emettre(); }
+  function start() { o.reprise && o.reprise(); S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire(o.depart(M)); noter('start', o.params(M)); emettre(); }
+  function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); }
+  function resume() { if (S.running) return; o.reprise && o.reprise(); if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('Ça repart…'); noter('resume'); emettre(); }
+  function setTime(p) {
+    const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+    o.reprise && o.reprise(); S.running = false; S.jusqua = null; S.t = clamp(t, 0, TL.M.fin); S.fait = S.t >= TL.M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+    etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fx(S.t, 1)} s.`); noter('set_time', { time_s: S.t }); emettre();
+  }
+  function playUntil(p) {
+    const noms = o.etapes(S.vue).map(e => e.nom).concat('fin');
+    const nom = noms.includes(p.moment) ? p.moment : null, cible = nom ? TL.M[nom] : +p.time_s;
+    if (!Number.isFinite(cible) || (p.moment && !nom && (p.time_s == null || p.time_s === ''))) { dire(`Moment inconnu : ${p.moment}.`, 'bad'); emettre(); return; }
+    o.reprise && o.reprise();
+    if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+    S.jusqua = clamp(cible, .01, TL.M.fin); S.motif = nom ? (o.motifs[nom] || nom) : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+    noter('play_until', { moment: nom, time_s: S.jusqua }); emettre();
+  }
+  function setParameters(p) {
+    p = p || {};
+    const r = o.appliquer(p, M) || {};
+    if (r.vue && o.vues.includes(r.vue) && r.vue !== S.vue) { S.vue = r.vue; r.change = true; r.vueChange = true; }
+    if (r.change) { calculer(); if (r.vueChange) scene.reecrire(); }
+    noter('set_parameters', o.params(M));
+    if (r.apres) r.apres();
+    else if (r.change && !r.garder) start();
+    else { scene.sale = true; emettre(); }
+  }
+  Object.assign(M, { noter, calculer, dire, start, pause, resume, setTime, playUntil, setParameters, emettre, etiquette, finir });
+  $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+  window.Tableau.explication(o.explications);
+  const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+  M.lancer = () => {
+    calculer();
+    const listeMoments = o.vues.map(v => `${o.vues.length > 1 ? v + ' : ' : ''}${o.etapes(v).map(e => e.nom).concat('fin').join(' | ')}`).join(' ; ');
+    const config = { id: o.id, version: '1.0', title: o.titre, variants: o.vues.length > 1 ? o.vues.map(id => ({ id, label: o.titres[id] })) : [], commands: commandes,
+      command_schema: { set_parameters: o.schema, set_time: { time_s: '0..fin (arrêt sur cet instant de la scène, en s ; voir moments)' },
+        play_until: { moment: listeMoments, time_s: 'ou un instant en s' } } };
+    pont = protocole({ id: o.id, commandes, config, texte: o.texte,
+      etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle',
+        ce_qui_se_voit: o.voir(M) + (S.dit ? ` La bulle dit : « ${S.dit} »` : ''), current_variant: S.vue, time_s: +S.t.toFixed(2),
+        parameters: o.params(M), moments: Object.fromEntries(Object.entries(TL.M).map(([k, v]) => [k, +v.toFixed(2)])) }),
+      progression: () => (S.fait ? 1 : 0),
+      executer: (cmd, p) => ({ start, reset: start, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+    dire(o.depart(M));
+    setTimeout(() => { if (!S.running && S.t === 0 && !S.pause && !S.fait) start(); }, 900);
+  };
+  return M;
+}
+
+/* ── Aides d’écriture : largeur, flèches dessinées (→, ⇌), expressions avec fractions dessinées (imbriquées) ─────────── */
+function larg(c, s, taille = 17) {
+  const T = window.Tableau, ctx = c.ctx; if (c.echelle && c.tailleMin) taille = Math.max(taille, c.tailleMin / c.echelle);
+  return T.Craie.segments(window.chim(s)).reduce((w, g) => { ctx.font = `${(g.sub || g.sup) ? taille * .62 : taille}px ${T.POLICE}`; return w + ctx.measureText(g.t).width; }, 0);
+}
+const FL = 34;
+function flecheSimple(c, x, y, w, col = 'blanc') { c.fleche(x + 2, y, x + w - 2, y, { couleur: col, largeur: 1.9, tete: 8 }); }
+function flecheDouble(c, x, y, w, col = 'blanc') {
+  c.trait([[x + 2, y - 3.5], [x + w - 2, y - 3.5], [x + w - 10, y - 10]], { couleur: col, largeur: 1.9 });
+  c.trait([[x + w - 2, y + 3.5], [x + 2, y + 3.5], [x + 10, y + 10]], { couleur: col, largeur: 1.9, duree: .12 });
+}
+/*
+ * Expression : 'texte' | { t, col, id, ph } | [ … ] (ligne) | { row: […], gap, col, id, ph } | { frac: [haut, bas], k, col, id, ph, phBarre }.
+ * La barre de fraction est DESSINÉE (numérateur sur dénominateur). `o.ph` : n’écrire que les morceaux de ces étapes (la mise en page,
+ * elle, ne dépend pas du temps : chaque étape écrit les siens à leur place). `o.rec[id]` : boîte de chaque morceau nommé.
+ */
+const norm = n => (typeof n === 'string' ? { t: n } : Array.isArray(n) ? { row: n } : n);
+const SUPS = /[\^⁺⁻⁰¹²³⁴⁵⁶⁷⁸⁹]/;
+function exMes(c, n, t) {
+  n = norm(n);
+  if (n.t != null) {
+    if (n.t === '→' || n.t === '⇌') return { w: FL, up: t * .55, down: t * .2 };
+    return { w: larg(c, n.t, t), up: t * (SUPS.test(n.t) ? 1.0 : .8), down: t * (/[₀-₉_]/.test(n.t) ? .3 : .22) };
+  }
+  if (n.row) {
+    const g = n.gap ?? t * .32; let w = 0, up = 0, down = 0;
+    n.row.forEach((m, i) => { const k = exMes(c, m, t); w += k.w + (i ? g : 0); up = Math.max(up, k.up); down = Math.max(down, k.down); });
+    return { w, up, down };
+  }
+  const tt = t * (n.k ?? 1), a = exMes(c, n.frac[0], tt), b = exMes(c, n.frac[1], tt), m = t * .32, e = 5;
+  return { w: Math.max(a.w, b.w) + 12, up: m + e + a.down + a.up, down: e + b.up + b.down - m };
+}
+function ex(c, n, x, y, t, o = {}, h = {}) {
+  n = norm(n);
+  const ph = n.ph ?? h.ph, col = n.col ?? h.col ?? o.col ?? 'blanc', k = exMes(c, n, t);
+  if (h.top !== false && o.align === 'center') x -= k.w / 2;
+  const ok = p => !o.ph || o.ph.includes(p);
+  if (n.id && o.rec) o.rec[n.id] = { x, y, w: k.w, up: k.up, down: k.down, t };
+  const sous = { ph, col, top: false };
+  if (n.t != null) {
+    if (ok(ph)) {
+      if (n.t === '→') flecheSimple(c, x, y - t * .32, FL, col);
+      else if (n.t === '⇌') flecheDouble(c, x, y - t * .32, FL, col);
+      else c.texte(n.t, x, y, { taille: t, couleur: col });
+    }
+    return { ...k, x };
+  }
+  if (n.row) {
+    const g = n.gap ?? t * .32; let px = x;
+    n.row.forEach(m => { const km = ex(c, m, px, y, t, o, sous); px += km.w + g; });
+    return { ...k, x };
+  }
+  const tt = t * (n.k ?? 1), a = exMes(c, n.frac[0], tt), b = exMes(c, n.frac[1], tt), yb = y - t * .32, e = 5, xc = x + k.w / 2;
+  ex(c, n.frac[0], xc - a.w / 2, yb - e - a.down, tt, o, sous);
+  if (ok(n.phBarre ?? ph)) c.ligne(x + 1, yb, x + k.w - 1, yb, { couleur: n.colBarre ?? col, largeur: 1.8, duree: .1 });
+  ex(c, n.frac[1], xc - b.w / 2, yb + e + b.up, tt, o, sous);
+  return { ...k, x };
+}
+const boite = r => [r.x - 6, r.y - r.up - 5, r.w + 12, r.up + r.down + 10];
+/** Encadré à la craie autour d’une boîte d’expression. */
+function encadreR(c, r, col = 'jaune') { const [x, y, w, h] = boite(r); c.rect(x - 2, y - 2, w + 4, h + 4, { couleur: col, largeur: 2, arrondi: 8 }); }
+/** Barre (orange) un morceau : trait en biais sur sa boîte. */
+function barrer(c, r, col = 'orange') { c.ligne(r.x - 3, r.y + r.down - 1, r.x + r.w + 3, r.y - r.up + 3, { couleur: col, largeur: 2.6, duree: .12 }); }
+/** Encadré autour d’un texte simple (ligne de base y, taille t). */
+function encadre(c, x, y, w, t, col = 'jaune') { c.rect(x - 8, y - t - 4, w + 16, t + 14, { couleur: col, largeur: 2, arrondi: 8 }); }
+/** Petit triangle « attention » à la craie (orange), le « ! » dedans. */
+function attention(c, x, y, o = {}) {
+  const col = o.couleur ?? 'orange', h = o.h ?? 18;
+  c.trait([[x, y], [x + h * .58, y - h], [x + h * 1.16, y]], { couleur: col, largeur: 1.8, ferme: true });
+  c.texte('!', x + h * .58, y - 3, { couleur: col, taille: h * .8, align: 'center' });
+}
+/** Flèche courbe (Bézier quadratique) à la craie, tête à l’arrivée. */
+function flecheCourbe(c, P0, P1, P2, col = 'jaune') {
+  const B = u => [(1 - u) ** 2 * P0[0] + 2 * (1 - u) * u * P1[0] + u * u * P2[0], (1 - u) ** 2 * P0[1] + 2 * (1 - u) * u * P1[1] + u * u * P2[1]];
+  c.courbe(B, 28, { couleur: col, largeur: 2 });
+  const [x, y] = P2, [xa, ya] = B(.94), a = Math.atan2(y - ya, x - xa), T = 10;
+  c.trait([[x - T * Math.cos(a - .45), y - T * Math.sin(a - .45)], [x, y], [x - T * Math.cos(a + .45), y - T * Math.sin(a + .45)]], { couleur: col, largeur: 2, duree: .1 });
+}
+/** « 1,57·10⁻⁵ » : trois chiffres significatifs, virgule, exposant. */
+const SUPC = { '-': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' };
+function sci(v, d = 2) {
+  if (!v) return '0';
+  let e = Math.floor(Math.log10(Math.abs(v))), m = v / 10 ** e;
+  if (+m.toFixed(d) >= 10) { e += 1; m = v / 10 ** e; }
+  return `${fr(m, d)}·10${String(e).split('').map(ch => SUPC[ch]).join('')}`;
+}
+
+/* ── Pièces peintes : bécher, flacon, lame de métal ─────────────────────────────────────────────────────────────────── */
+const rgba = ([r, g, b, a], k = 1) => `rgba(${Math.round(r)},${Math.round(g)},${Math.round(b)},${Math.min(1, a * k).toFixed(3)})`;
+const eclair = (c, k) => [lerp(c[0], 255, k), lerp(c[1], 255, k), lerp(c[2], 255, k), c[3]];
+const sombre = (c, k) => [c[0] * (1 - k), c[1] * (1 - k), c[2] * (1 - k), Math.min(1, c[3] * (1 + k * .4))];
+const EAU = [214, 230, 246, .16];      // solutions acides, sulfate de zinc, sulfate d’aluminium : incolores (comme en vrai)
+const BLEU = [52, 120, 226, .62];      // solution de sulfate de cuivre : bleue
+const Peint = {
+  /** Bécher vu de face : verre, solution (dégradé, ménisque, reflet), graduations. niveau 0 → 1. */
+  becher(ctx, B, niveau, col, a = 1) {
+    const { x, y, w, h } = B, ep = 3, fond = y + h, yS = fond - ep - niveau * (h - 16);
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.beginPath(); ctx.ellipse(x + w / 2 + 3, fond + 4, w / 2, 4.5, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(210,230,250,.06)'; ctx.beginPath(); ctx.roundRect(x, y, w, h, [2, 2, 10, 10]); ctx.fill();
+    if (niveau > .004) {
+      ctx.save(); ctx.beginPath(); ctx.roundRect(x + ep, y, w - 2 * ep, h - ep, [0, 0, 8, 8]); ctx.clip();
+      const g = ctx.createLinearGradient(0, yS, 0, fond); g.addColorStop(0, rgba(eclair(col, .18))); g.addColorStop(1, rgba(sombre(col, .22)));
+      ctx.fillStyle = g; ctx.fillRect(x, yS, w, fond - yS);
+      ctx.fillStyle = 'rgba(255,255,255,.07)'; ctx.fillRect(x + w * .64, yS + 5, w * .09, Math.max(0, fond - yS - 10));
+      ctx.restore();
+      ctx.fillStyle = rgba(eclair(col, .35), 1.1); ctx.beginPath(); ctx.ellipse(x + w / 2, yS, w / 2 - ep, 3, 0, 0, 7); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,.32)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x + ep + 2, yS); ctx.lineTo(x + w - ep - 2, yS); ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(225,238,250,.78)'; ctx.lineWidth = 2.2; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(x - 6, y - 4); ctx.quadraticCurveTo(x - 1, y - 2, x, y + 5); ctx.lineTo(x, fond - 10); ctx.quadraticCurveTo(x, fond, x + 10, fond);
+    ctx.lineTo(x + w - 10, fond); ctx.quadraticCurveTo(x + w, fond, x + w, fond - 10); ctx.lineTo(x + w, y); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.14)'; ctx.fillRect(x + w * .11, y + 12, w * .05, h - 28);
+    ctx.strokeStyle = 'rgba(225,238,250,.35)'; ctx.lineWidth = 1;
+    for (let k = 1; k <= 4; k++) { const gy = fond - 8 - k * (h - 24) / 5; ctx.beginPath(); ctx.moveTo(x + w - 14, gy); ctx.lineTo(x + w - 4, gy); ctx.stroke(); }
+    ctx.restore();
+    return yS;
+  },
+  /** Flacon de verre (corps, épaule, col, bouchon sombre) ; niveau 0 → 1 du corps. Repère local : (0,0) = milieu du fond. */
+  flaconLocal(ctx, w, h, niveau, col, bouchon = true) {
+    const hc = h * .7, xs = -w / 2, yC = -hc, wc = w * .38;
+    ctx.fillStyle = 'rgba(0,0,0,.2)'; ctx.beginPath(); ctx.ellipse(2, 3, w / 2, 3.5, 0, 0, 7); ctx.fill();
+    const contour = () => {
+      ctx.beginPath(); ctx.moveTo(-wc / 2, -h + 6); ctx.lineTo(-wc / 2, yC - h * .1); ctx.quadraticCurveTo(xs, yC - h * .08, xs, yC + 6);
+      ctx.lineTo(xs, -6); ctx.quadraticCurveTo(xs, 0, xs + 6, 0); ctx.lineTo(-xs - 6, 0); ctx.quadraticCurveTo(-xs, 0, -xs, -6);
+      ctx.lineTo(-xs, yC + 6); ctx.quadraticCurveTo(-xs, yC - h * .08, wc / 2, yC - h * .1); ctx.lineTo(wc / 2, -h + 6);
+    };
+    ctx.fillStyle = 'rgba(210,230,250,.07)'; contour(); ctx.closePath(); ctx.fill();
+    if (niveau > .01) {
+      ctx.save(); contour(); ctx.closePath(); ctx.clip();
+      const yS = -3 - niveau * (hc - 8), g = ctx.createLinearGradient(0, yS, 0, 0);
+      g.addColorStop(0, rgba(eclair(col, .2))); g.addColorStop(1, rgba(sombre(col, .2)));
+      ctx.fillStyle = g; ctx.fillRect(xs, yS, w, -yS);
+      ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(xs + 3, yS); ctx.lineTo(-xs - 3, yS); ctx.stroke();
+      ctx.restore();
+    }
+    ctx.strokeStyle = 'rgba(225,238,250,.78)'; ctx.lineWidth = 1.9; ctx.lineJoin = 'round'; contour(); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.13)'; ctx.fillRect(xs + w * .14, yC + 8, w * .07, hc - 16);
+    if (bouchon) {
+      const gb = ctx.createLinearGradient(-wc / 2 - 2, 0, wc / 2 + 2, 0); gb.addColorStop(0, '#1c2024'); gb.addColorStop(.45, '#4a5157'); gb.addColorStop(1, '#15181b');
+      ctx.fillStyle = gb; ctx.beginPath(); ctx.roundRect(-wc / 2 - 2, -h - 4, wc + 4, 12, 2); ctx.fill();
+    }
+  },
+  flacon(ctx, x, y, w, h, niveau, col, o = {}) {
+    ctx.save(); ctx.globalAlpha = o.a ?? 1; ctx.translate(x, y); if (o.angle) ctx.rotate(o.angle);
+    Peint.flaconLocal(ctx, w, h, niveau, col, o.bouchon !== false); ctx.restore();
+  },
+  /** Lame de métal (rectangle, dégradé métallique, reflet) : dessinée AVANT le bécher, la solution passe devant. */
+  lame(ctx, x, y, w, h, [clair, milieu, fonce]) {
+    ctx.save();
+    const g = ctx.createLinearGradient(x, 0, x + w, 0); g.addColorStop(0, fonce); g.addColorStop(.35, clair); g.addColorStop(.6, milieu); g.addColorStop(1, fonce);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(x + w * .3, y + 4, w * .12, h - 8);
+    ctx.restore();
+  },
+};
+const ZINC = ['#cfd8e2', '#8f9cab', '#5d6875'], CUIVRE = ['#f0a87a', '#c06a3a', '#7a3518'], ALU = ['#f2f4f6', '#c3c8cd', '#8d949b'];
+
+/* ── Données du contrat (exemples A, F, G, H, I ; nationaux 2020 R et 2017 N) — vérifiées avec python ──────────────── */
+const C_A = 1.0e-2, H_EQ = 3.89e-4;
+const qrDe = h => h * h / (C_A - h);              // Qr = [CH₃COO⁻]·[H₃O⁺]/[CH₃COOH] avec [CH₃COO⁻] = [H₃O⁺] = h (exemple F)
+const F_H = [0, 1.0e-4, 2.0e-4, 3.0e-4, H_EQ];
+const F_HT = ['0', '1,0·10⁻⁴', '2,0·10⁻⁴', '3,0·10⁻⁴', '3,89·10⁻⁴'];
+const F_QT = ['0', '1,01·10⁻⁶', '4,08·10⁻⁶', '9,28·10⁻⁶', '1,57·10⁻⁵'];
+const PAR = { x: 0 };                               // poignée x de la vue au_cours (avancement relatif 0 → 1, défaut 0)
+let DRAG = null;
+const xVu = () => (DRAG ?? PAR.x);
+const hDe = x => x * H_EQ;
+
+const VUES = ['definition', 'generale', 'eau', 'solides', 'sans_unite', 'initial', 'melange', 'au_cours', 'national', 'pile'];
+const TITRES = {
+  definition: 'le quotient de réaction Qr', generale: 'forme générale : les coefficients en exposants', eau: 'l’eau solvant n’apparaît pas dans Qr',
+  solides: 'les solides n’apparaissent pas dans Qr', sans_unite: 'calculer Qr : concentrations en mol/L, Qr sans unité', initial: 'Qr,i : l’état initial',
+  melange: 'Qr,i d’un mélange (concentrations après mélange)', au_cours: 'Qr au cours de la transformation (poignée x)',
+  national: 'national 2020 R : Qr,i d’un mélange', pile: 'national 2017 N : Qr,i (solides, exposants)',
+};
+const TITRE_TABLEAU = {
+  definition: 'Le quotient de réaction Q_r', generale: 'Forme générale de Q_r', eau: 'Et l’eau ?', solides: 'Et les solides ?',
+  sans_unite: 'Calculer Q_r', initial: 'Q_{r,i} : le quotient de réaction dans l’état initial', melange: 'Q_{r,i} d’un mélange',
+  au_cours: 'Q_r au cours de la transformation', national: 'National 2020 R : Q_{r,i} d’un mélange', pile: 'National 2017 N : Q_{r,i} avec des solides',
+};
+const NOTE = { national: 'II.2.3 — 0,5 pt', pile: 'I.1 — 0,5 pt' };
+
+/* Chaque étape : nom (moment du contrat), anim (s), motif (arrêt sur image), bulle, vu (ce qui est écrit, pour le tuteur). */
+function ETAPES(v) {
+  return ({
+    definition: [
+      { nom: 'equation', anim: .3, motif: 'l’équation CH₃COOH + H₂O ⇌ CH₃COO⁻ + H₃O⁺ (réactifs à gauche, produits à droite)', bulle: () => 'Partons de l’équation de l’exemple A.', vu: 'Équation écrite : « CH₃COOH + H₂O ⇌ CH₃COO⁻ + H₃O⁺ » (double flèche dessinée) ; au-dessus : « réactifs » à gauche, « produits » à droite.' },
+      { nom: 'produits', anim: .3, motif: 'les produits montent au numérateur : [CH₃COO⁻]·[H₃O⁺]', bulle: () => 'Les produits vont en haut.', vu: 'Deux flèches jaunes partent de CH₃COO⁻ et de H₃O⁺ vers le haut de la fraction ; écrit au numérateur : « [CH₃COO⁻]·[H₃O⁺] ».' },
+      { nom: 'reactifs', anim: .3, motif: 'le réactif descend au dénominateur : [CH₃COOH]', bulle: () => 'Le réactif va en bas.', vu: 'Une flèche bleue part de CH₃COOH vers le bas de la fraction ; barre de fraction dessinée ; écrit au dénominateur : « [CH₃COOH] ».' },
+      { nom: 'quotient', anim: .3, motif: 'Qr = [CH₃COO⁻]·[H₃O⁺]/[CH₃COOH]', bulle: () => 'Voici le quotient de réaction.', vu: 'Encadré en jaune : « Qr = [CH₃COO⁻]·[H₃O⁺] / [CH₃COOH] » (barre de fraction dessinée).' },
+      { nom: 'phrase', anim: .3, motif: 'quotient de réaction : produits en haut, réactifs en bas', bulle: () => 'Retiens la règle.', vu: 'Écrit en bas : « quotient de réaction : produits en haut, réactifs en bas » ; « [X] : concentration de X en mol/L ».' },
+    ],
+    generale: [
+      { nom: 'forme', anim: .3, motif: 'aA + bB ⇌ cC + dD ; Qr = [C]·[D]/([A]·[B]) sans les exposants', bulle: () => 'Une équation quelconque.', vu: 'Écrit : « aA + bB ⇌ cC + dD » (a, b, c, d en jaune : les coefficients) ; dessous : « Qr = [C]·[D] / ([A]·[B]) », des places vides pour les exposants.' },
+      { nom: 'exposants', anim: 1.4, motif: 'les coefficients glissent en exposants : Qr = [C]^c·[D]^d/([A]^a·[B]^b)', bulle: () => 'Regarde les coefficients.', vu: 'Les coefficients a, b, c, d (jaunes) glissent de l’équation vers les exposants ; formule complète : « Qr = [C]^c·[D]^d / ([A]^a·[B]^b) » ; écrit : « les coefficients deviennent des exposants ».' },
+      { nom: 'exemple', anim: .3, motif: 'exemple : 2I⁻ + S₂O₈²⁻ ⇌ I₂ + 2SO₄²⁻', bulle: () => 'Un exemple du chapitre de cinétique.', vu: 'Écrit : « exemple : 2I⁻ + S₂O₈²⁻ ⇌ I₂ + 2SO₄²⁻ » (coefficients 2 en jaune).' },
+      { nom: 'qr_exemple', anim: .3, motif: 'Qr = [I₂]·[SO₄²⁻]²/([I⁻]²·[S₂O₈²⁻])', bulle: () => 'Écrivons son quotient.', vu: 'Écrit et encadré : « Qr = [I₂]·[SO₄²⁻]² / ([I⁻]²·[S₂O₈²⁻]) » (exposants 2 en jaune).' },
+    ],
+    eau: [
+      { nom: 'equation', anim: .3, motif: 'l’équation CH₃COOH + H₂O ⇌ CH₃COO⁻ + H₃O⁺', bulle: () => 'Reprenons l’exemple A.', vu: 'Équation écrite : « CH₃COOH + H₂O ⇌ CH₃COO⁻ + H₃O⁺ ».' },
+      { nom: 'eau', anim: .3, motif: 'la molécule d’eau H₂O entourée : c’est le solvant', bulle: () => 'Et l’eau, un réactif ?', vu: 'H₂O est entourée en jaune dans l’équation ; écrit dessous : « solvant ».' },
+      { nom: 'barree', anim: .3, motif: '[H₂O] barré dans le quotient : Qr = [CH₃COO⁻]·[H₃O⁺]/[CH₃COOH]', bulle: () => 'On ne l’écrit pas dans Qr.', vu: 'Écrit : « Qr = [CH₃COO⁻]·[H₃O⁺] / ([CH₃COOH]·[H₂O]) » avec [H₂O] barré en orange, puis une flèche et « Qr = [CH₃COO⁻]·[H₃O⁺] / [CH₃COOH] ».' },
+      { nom: 'phrase', anim: .3, motif: 'l’eau est le solvant : elle n’apparaît pas dans Qr', bulle: () => 'Pourquoi ?', vu: 'Écrit : « l’eau est le solvant : elle n’apparaît pas dans Qr ».' },
+      { nom: 'piege', anim: .3, motif: '⚠ pas de concentration pour l’eau solvant', bulle: () => 'Attention au piège.', vu: 'En orange, avec un triangle ⚠ : « pas de concentration pour l’eau solvant ».' },
+    ],
+    solides: [
+      { nom: 'becher', anim: 1, motif: 'le bécher bleu de Cu²⁺ et la lame de zinc', bulle: () => 'Une lame de zinc dans une solution de sulfate de cuivre.', vu: 'Bécher peint : solution bleue (ions Cu²⁺), une lame de zinc (gris bleuté) plonge dedans ; écrit dessous : « solution de Cu²⁺ (bleue) », « lame de zinc Zn(s) ».' },
+      { nom: 'equation', anim: .3, motif: 'Cu²⁺ + Zn(s) ⇌ Cu(s) + Zn²⁺', bulle: () => 'L’équation de la réaction.', vu: 'Écrit : « Cu²⁺ + Zn(s) ⇌ Cu(s) + Zn²⁺ ».' },
+      { nom: 'solides', anim: .3, motif: 'Zn(s) et Cu(s) barrés : ce sont des solides', bulle: () => 'Repère les solides.', vu: 'Zn(s) et Cu(s) sont barrés en orange dans l’équation, avec « solide » écrit sous chacun.' },
+      { nom: 'quotient', anim: .3, motif: 'Qr = [Zn²⁺]/[Cu²⁺]', bulle: () => 'Il ne reste que les ions.', vu: 'Écrit et encadré : « Qr = [Zn²⁺] / [Cu²⁺] ».' },
+      { nom: 'phrase', anim: .3, motif: 'les solides n’apparaissent pas dans Qr', bulle: () => 'Retiens.', vu: 'Écrit : « les solides n’apparaissent pas dans Qr » ; « seules les espèces dissoutes y figurent ».' },
+    ],
+    sans_unite: [
+      { nom: 'donnees', anim: .3, motif: '[H₃O⁺] = [CH₃COO⁻] = 2,0·10⁻⁴ mol/L ; [CH₃COOH] = 9,8·10⁻³ mol/L', bulle: () => 'Un état de l’exemple A pendant la transformation.', vu: 'Écrit : « [H₃O⁺] = [CH₃COO⁻] = 2,0·10⁻⁴ mol/L » et « [CH₃COOH] = 9,8·10⁻³ mol/L » ; « un état de l’exemple A pendant la transformation ».' },
+      { nom: 'remplacer', anim: .3, motif: 'Qr = (2,0·10⁻⁴ × 2,0·10⁻⁴)/(9,8·10⁻³)', bulle: () => 'On remplace par les valeurs.', vu: 'Écrit : « Qr = [CH₃COO⁻]·[H₃O⁺] / [CH₃COOH] = (2,0·10⁻⁴ × 2,0·10⁻⁴) / (9,8·10⁻³) » (fractions dessinées).' },
+      { nom: 'resultat', anim: .3, motif: 'Qr = 4,08·10⁻⁶', bulle: () => 'Le résultat…', vu: 'Écrit et encadré en jaune : « = 4,08·10⁻⁶ ».' },
+      { nom: 'unite', anim: .3, motif: 'concentrations en mol/L ; Qr sans unité', bulle: () => 'Et l’unité ?', vu: 'Encadré : « concentrations en mol/L ; Qr sans unité » ; dessous : « on écrit 4,08·10⁻⁶, sans unité ».' },
+    ],
+    initial: [
+      { nom: 'versement', anim: 2, ecritDes: 1.2, motif: 'l’acide éthanoïque est versé dans l’eau : l’état initial', bulle: () => 'On verse l’acide dans l’eau.', vu: 'Un flacon d’acide éthanoïque se penche et se vide dans un bécher d’eau (solutions incolores) ; écrit : « CH₃COOH + H₂O ⇌ CH₃COO⁻ + H₃O⁺ » et sous le bécher « C = 1,0·10⁻² mol/L ; V = 100 mL ».' },
+      { nom: 'concentrations', anim: .3, motif: '[CH₃COO⁻]ᵢ = [H₃O⁺]ᵢ = 0', bulle: () => 'Au tout début, y a-t-il des produits ?', vu: 'Écrit : « [CH₃COO⁻]ᵢ = [H₃O⁺]ᵢ = 0 » ; « (pas encore de produit ; les ions H₃O⁺ de l’eau sont négligés) » ; « [CH₃COOH]ᵢ = C = 1,0·10⁻² mol/L ».' },
+      { nom: 'qr_i', anim: .3, motif: 'Qr,i = 0', bulle: () => 'Le quotient au départ…', vu: 'Écrit : « Qr,i = [CH₃COO⁻]ᵢ·[H₃O⁺]ᵢ / [CH₃COOH]ᵢ » et encadré « = 0 ».' },
+      { nom: 'phrase', anim: .3, motif: 'Qr,i : quotient de réaction dans l’état initial', bulle: () => 'Un nom pour ce quotient.', vu: 'Encadré : « Qr,i : quotient de réaction dans l’état initial ».' },
+    ],
+    melange: [
+      { nom: 'flacons', anim: 1, motif: 'quatre flacons : HCOOH 100 mL, CH₃COO⁻ 100 mL, CH₃COOH 50 mL, HCOO⁻ 50 mL (0,10 mol/L)', bulle: () => 'Quatre solutions à mélanger.', vu: 'Quatre flacons peints (incolores) : acide méthanoïque HCOOH 100 mL, éthanoate de sodium CH₃COO⁻ 100 mL, acide éthanoïque CH₃COOH 50 mL, méthanoate de sodium HCOO⁻ 50 mL, toutes à 0,10 mol/L.' },
+      { nom: 'melange', anim: 2, ecritDes: 1.4, motif: 'tout est versé dans un grand bécher : V_T = 300 mL', bulle: () => 'On verse tout dans un grand bécher.', vu: 'Les flacons se vident, le grand bécher se remplit ; écrit dessous : « V_T = 100 + 100 + 50 + 50 = 300 mL » (équation de l’exercice : HCOOH + CH₃COO⁻ ⇌ HCOO⁻ + CH₃COOH).' },
+      { nom: 'concentrations', anim: .3, motif: '[X]ᵢ = n/V_T', bulle: () => 'Les concentrations après mélange.', vu: 'Écrit : « [X]ᵢ = n(X) / V_T » (fraction dessinée) ; « n(HCOOH) = n(CH₃COO⁻) = 1,0·10⁻² mol » ; « n(CH₃COOH) = n(HCOO⁻) = 5,0·10⁻³ mol » ; « ex. : [HCOOH]ᵢ = 1,0·10⁻² mol ÷ 0,300 L = 3,33·10⁻² mol/L ».' },
+      { nom: 'quotient', anim: .3, motif: 'Qr,i = [HCOO⁻]ᵢ·[CH₃COOH]ᵢ/([HCOOH]ᵢ·[CH₃COO⁻]ᵢ)', bulle: () => 'Le quotient dans l’état initial.', vu: 'Écrit : « Qr,i = [HCOO⁻]ᵢ·[CH₃COOH]ᵢ / ([HCOOH]ᵢ·[CH₃COO⁻]ᵢ) ».' },
+      { nom: 'simplifier', anim: .3, motif: 'chaque concentration = n/V_T : V_T barré quatre fois', bulle: () => 'Que devient V_T ?', vu: 'Écrit : « = (5,0·10⁻³/V_T × 5,0·10⁻³/V_T) / (1,0·10⁻²/V_T × 1,0·10⁻²/V_T) » (fractions dessinées) ; les quatre V_T barrés en orange ; « V_T se simplifie ».' },
+      { nom: 'resultat', anim: .3, motif: 'Qr,i = (5,0·10⁻³ × 5,0·10⁻³)/(1,0·10⁻² × 1,0·10⁻²) = 0,25', bulle: () => 'Le résultat…', vu: 'Écrit : « = (5,0·10⁻³ × 5,0·10⁻³) / (1,0·10⁻² × 1,0·10⁻²) » et encadré en jaune « = 0,25 ».' },
+    ],
+    au_cours: [
+      { nom: 'axes', anim: .3, motif: 'les axes : [H₃O⁺] (0 → 4,0·10⁻⁴ mol/L) et Qr (0 → 2,0·10⁻⁵)', bulle: () => 'Suivons Qr pendant la transformation.', vu: 'Axes à la craie : horizontal [H₃O⁺] (mol/L) gradué 0 ; 1,0·10⁻⁴ ; 2,0·10⁻⁴ ; 3,0·10⁻⁴ ; 4,0·10⁻⁴ ; vertical Qr gradué 0,5·10⁻⁵ … 2,0·10⁻⁵ ; à droite un tableau vide « [H₃O⁺] (mol/L) | Qr ».' },
+      { nom: 'depart', anim: .3, motif: 'au départ : [H₃O⁺] = 0, Qr,i = 0 (le point violet à l’origine)', bulle: () => 'Au départ, pas de produit.', vu: 'Premier point à l’origine ; tableau : « 0 | 0 » ; écrit « Qr,i = 0 » ; le point violet (poignée x) est à l’origine.' },
+      { nom: 'points', anim: .3, motif: 'trois points qui montent : 1,01·10⁻⁶ ; 4,08·10⁻⁶ ; 9,28·10⁻⁶', bulle: () => 'La réaction avance : Qr monte.', vu: 'Le tableau se remplit : 1,0·10⁻⁴ | 1,01·10⁻⁶ ; 2,0·10⁻⁴ | 4,08·10⁻⁶ ; 3,0·10⁻⁴ | 9,28·10⁻⁶ ; un point placé pour chaque ligne, de plus en plus haut.' },
+      { nom: 'arrivee', anim: .8, ecritDes: .2, motif: 'le dernier point : [H₃O⁺] = 3,89·10⁻⁴ mol/L, Qr = 1,57·10⁻⁵ = Qr,éq', bulle: () => 'Le dernier point : l’état d’équilibre.', vu: 'Dernière ligne surlignée en jaune : 3,89·10⁻⁴ | 1,57·10⁻⁵ ; dernier point (Qr,éq) ; une courbe violette relie les points.' },
+      { nom: 'palier', anim: .3, motif: 'Qr,éq = 1,57·10⁻⁵ : Qr ne bouge plus', bulle: () => 'Ensuite, Qr ne change plus.', vu: 'Trait jaune pointillé horizontal à Qr,éq = 1,57·10⁻⁵ ; écrit « Qr,éq = 1,57·10⁻⁵ : Qr ne bouge plus ».' },
+      { nom: 'phrase', anim: .3, motif: 'Qr augmente de Qr,i = 0 jusqu’à Qr,éq = 1,57·10⁻⁵, puis ne bouge plus', bulle: () => 'Résumons.', vu: 'Écrit en bas : « Qr augmente de Qr,i = 0 jusqu’à Qr,éq = 1,57·10⁻⁵, puis ne bouge plus ».' },
+    ],
+    national: [
+      { nom: 'donnees', anim: 1, motif: 'HCOOH + CH₃COO⁻ ⇌ HCOO⁻ + CH₃COOH ; quatre flacons de 100 mL à 0,1 mol/L', bulle: () => 'Les données de l’exercice.', vu: 'Écrit : « HCOOH + CH₃COO⁻ ⇌ HCOO⁻ + CH₃COOH » ; quatre flacons peints : (1) HCOOH, (2) CH₃COO⁻, (3) CH₃COOH, (4) HCOO⁻ ; « chacun : V = 100 mL ; C = 0,1 mol/L ».' },
+      { nom: 'volume_total', anim: .3, motif: 'V_T = 400 mL ; [X]ᵢ = C·V/V_T', bulle: () => 'Le volume du mélange.', vu: 'Écrit : « V_T = 4 × 100 mL = 400 mL » et « [X]ᵢ = C·V / V_T (après mélange) ».' },
+      { nom: 'quotient', anim: .3, motif: 'Qr,i = (C₃V₃·C₄V₄)/(C₁V₁·C₂V₂)', bulle: () => 'On écrit Qr,i, puis on remplace.', vu: 'Écrit : « Qr,i = [HCOO⁻]ᵢ·[CH₃COOH]ᵢ / ([HCOOH]ᵢ·[CH₃COO⁻]ᵢ) = (C₃V₃·C₄V₄) / (C₁V₁·C₂V₂) » ; « V_T se simplifie ».' },
+      { nom: 'resultat', anim: .3, motif: 'Qr,i = 1', bulle: () => 'Le résultat…', vu: 'Écrit et encadré : « = 1 » (les quatre C·V valent 1,0·10⁻² mol).' },
+      { nom: 'phrase', anim: .3, motif: 'Qr,i se calcule avec les concentrations APRÈS mélange', bulle: () => 'Le point à ne pas rater.', vu: 'Encadré : « Qr,i se calcule avec les concentrations APRÈS mélange ».' },
+    ],
+    pile: [
+      { nom: 'bechers', anim: 1, motif: 'deux béchers : Cu²⁺ (bleu) + lame de cuivre ; Al³⁺ (incolore) + lame d’aluminium', bulle: () => 'Les deux béchers de l’exercice.', vu: 'Deux béchers peints : solution bleue de Cu²⁺ avec une lame de cuivre ; solution incolore de Al³⁺ avec une lame d’aluminium ; écrit dessous : « [Cu²⁺]ᵢ = 6,5·10⁻¹ mol/L » et « [Al³⁺]ᵢ = 6,5·10⁻¹ mol/L ».' },
+      { nom: 'equation', anim: .3, motif: '3Cu²⁺ + 2Al(s) ⇌ 3Cu(s) + 2Al³⁺', bulle: () => 'L’équation, avec ses coefficients.', vu: 'Écrit : « 3Cu²⁺ + 2Al(s) ⇌ 3Cu(s) + 2Al³⁺ » (coefficients en jaune) ; dessous : « Al(s) et Cu(s) : solides, absents de Qr ».' },
+      { nom: 'quotient', anim: .3, motif: 'Qr,i = [Al³⁺]ᵢ²/[Cu²⁺]ᵢ³', bulle: () => 'Le quotient : coefficients en exposants.', vu: 'Écrit : « Qr,i = [Al³⁺]ᵢ² / [Cu²⁺]ᵢ³ » (exposants 2 et 3 en jaune) ; « coefficients en exposants ».' },
+      { nom: 'application', anim: .3, motif: 'Qr,i = (6,5·10⁻¹)²/(6,5·10⁻¹)³ = 1,5', bulle: () => 'Application numérique.', vu: 'Écrit : « Qr,i = (6,5·10⁻¹)² / (6,5·10⁻¹)³ » et encadré « = 1,5 ».' },
+      { nom: 'renvoi', anim: .3, motif: 'la suite (piles) : au semestre 2', bulle: () => 'Et la suite de l’exercice ?', vu: 'Encadré bleu : « la suite (piles) : au semestre 2 ».' },
+    ],
+  })[v];
+}
+let MO = null;
+const MOTIFS = new Proxy({}, { get: (_, nom) => { if (nom === 'fin') return 'fin'; const e = ETAPES(MO ? MO.S.vue : VUES[0]).find(e => e.nom === nom) || {}; return e.motif; } });
+
+/* ── Dessin ──────────────────────────────────────────────────────────── */
+const VUE_FN = {};
+function dessiner(c, M) {
+  MO = M; M.scene.cadre(73);
+  const v = M.S.vue;
+  c.texte(TITRE_TABLEAU[v], 14, 28, { couleur: 'cyan', taille: 21 });
+  if (NOTE[v]) c.texte(NOTE[v], 746, 28, { couleur: 'faible', taille: 15, align: 'right' });
+  M.geo = {}; M.rec = {};
+  VUE_FN[v](c, M);
+  reperes(c, M);
+  return c.fin();
+}
+const espece = (t, id, o = {}) => ({ t, id, ...o });
+const coef = (k, t, id) => ({ row: [{ t: k, col: 'jaune' }, { t, id }], gap: 2 });
+
+/* Vue definition : produits en haut, réactifs en bas. */
+VUE_FN.definition = (c, M) => {
+  const R = M.rec, yE = 112, tE = 26;
+  const EQ = { row: [espece('CH₃COOH', 'e_acide'), '+', espece('H₂O', 'e_eau'), '⇌', espece('CH₃COO⁻', 'e_base'), '+', espece('H₃O⁺', 'e_h3o')], gap: 12, id: 'equation' };
+  M.etape(c, 'equation', () => {
+    ex(c, EQ, 380, yE, tE, { align: 'center', rec: R });
+    const g = R.e_acide, d = R.e_base, h = R.e_h3o;
+    c.texte('réactifs', (g.x + R.e_eau.x + R.e_eau.w) / 2, 70, { taille: 17, align: 'center', couleur: 'bleu' });
+    c.texte('produits', (d.x + h.x + h.w) / 2, 70, { taille: 17, align: 'center', couleur: 'jaune' });
+  });
+  const Q = { row: [{ t: 'Q_r =', ph: 'quotient' }, { frac: [{ row: [espece('[CH₃COO⁻]', 'q_base'), '·', espece('[H₃O⁺]', 'q_h3o')], gap: 2, ph: 'produits', col: 'jaune', id: 'num' }, { t: '[CH₃COOH]', ph: 'reactifs', col: 'bleu', id: 'den' }], phBarre: 'reactifs', id: 'frac' }], gap: 10, id: 'quotient' };
+  const yQ = 286, tQ = 28;
+  M.etape(c, 'produits', () => {
+    ex(c, Q, 380, yQ, tQ, { align: 'center', rec: R, ph: ['produits'] });
+    const a = R.e_base, b = R.e_h3o, qa = R.q_base, qb = R.q_h3o;
+    c.fleche(a.x + a.w / 2, yE + 12, qa.x + qa.w / 2, qa.y - qa.up - 14, { couleur: 'jaune', largeur: 2, tete: 10 });
+    c.fleche(b.x + b.w / 2, yE + 12, qb.x + qb.w / 2, qb.y - qb.up - 14, { couleur: 'jaune', largeur: 2, tete: 10 });
+    c.texte('en haut', Math.max(qb.x + qb.w + 30, b.x + b.w / 2 + 10), 196, { taille: 17, couleur: 'jaune' });
+  });
+  M.etape(c, 'reactifs', () => {
+    ex(c, Q, 380, yQ, tQ, { align: 'center', rec: R, ph: ['reactifs'] });
+    const a = R.e_acide, d = R.den;
+    const x0 = a.x + a.w / 2;
+    flecheCourbe(c, [x0, yE + 12], [x0 - 40, d.y + 96], [d.x + 14, d.y + d.down + 12], 'bleu');
+    c.texte('en bas', x0 - 22, d.y + 22, { taille: 17, align: 'right', couleur: 'bleu' });
+  });
+  M.etape(c, 'quotient', () => { ex(c, Q, 380, yQ, tQ, { align: 'center', rec: R, ph: ['quotient'] }); encadreR(c, R.quotient); });
+  M.etape(c, 'phrase', () => {
+    c.texte('quotient de réaction : produits en haut, réactifs en bas', 380, 382, { taille: 22, align: 'center', couleur: 'jaune' });
+    c.texte('[X] : concentration de l’espèce X, en mol/L', 380, 410, { taille: 16, align: 'center', couleur: 'faible' });
+  });
+};
+
+/* Vue generale : aA + bB ⇌ cC + dD ; les coefficients glissent en exposants ; exemple I. */
+const expo = (k, id) => ({ t: `^{${k}}`, col: 'jaune', ph: 'exposants', id });
+VUE_FN.generale = (c, M) => {
+  const R = M.rec, X = 40, yE = 88, t = 26, yF = 198;
+  const EQ = { row: [coef('a', 'A', 'cA'), '+', coef('b', 'B', 'cB'), '⇌', coef('c', 'C', 'cC'), '+', coef('d', 'D', 'cD')], gap: 12, id: 'forme' };
+  // Les coefficients a, b, c, d : positions dans l’équation (le premier morceau de chaque terme).
+  const F = { row: [{ t: 'Q_r =' }, { frac: [{ row: ['[C]', expo('c', 'xc'), '·[D]', expo('d', 'xd')], gap: 1 }, { row: ['[A]', expo('a', 'xa'), '·[B]', expo('b', 'xb')], gap: 1 }] }], gap: 10, id: 'formule' };
+  M.etape(c, 'forme', () => {
+    const k = ex(c, EQ, X, yE, t, { rec: R });
+    c.texte('a, b, c, d : les coefficients', k.x + k.w + 40, yE, { taille: 17, couleur: 'faible' });
+    ex(c, F, X, yF, t, { rec: R, ph: [undefined] });
+  });
+  // Les positions des coefficients dans l’équation (le terme vaut coefficient + espèce, écart 2).
+  const coefPos = id => { const r = R[id]; const wk = larg(c, id === 'cA' ? 'a' : id === 'cB' ? 'b' : id === 'cC' ? 'c' : 'd', t); return [r.x - 2 - wk, r.y]; };
+  const p = M.commence('exposants') ? lisse(M.p('exposants')) : 0;
+  if (p > 0 && p < 1) {
+    c.direct(() => {
+      const ctx = c.ctx; ctx.save(); ctx.fillStyle = window.Tableau.COULEURS.jaune; ctx.globalAlpha = .95; ctx.textBaseline = 'alphabetic';
+      for (const [k, de, vers] of [['a', 'cA', 'xa'], ['b', 'cB', 'xb'], ['c', 'cC', 'xc'], ['d', 'cD', 'xd']]) {
+        const [x0, y0] = coefPos(de), r = R[vers], x1 = r.x, y1 = r.y - t * .42, tt = lerp(t, t * .62, p);
+        ctx.font = `${tt}px ${window.Tableau.POLICE}`; ctx.fillText(k, lerp(x0, x1, p), lerp(y0, y1, p) - Math.sin(Math.PI * p) * 30);
+      }
+      ctx.restore();
+    });
+  }
+  M.etape(c, 'exposants', () => {
+    ex(c, F, X, yF, t, { rec: R, ph: ['exposants'] });
+    c.texte('les coefficients deviennent des exposants', 340, yF, { taille: 19, couleur: 'jaune' });
+  });
+  const yX = 288, tX = 24;
+  const EX = { row: [{ t: 'exemple :', col: 'faible' }, coef('2', 'I⁻', 'i1'), '+', 'S₂O₈²⁻', '⇌', 'I₂', '+', coef('2', 'SO₄²⁻', 'i2')], gap: 11, id: 'exemple' };
+  M.etape(c, 'exemple', () => {
+    const k = ex(c, EX, X, yX, tX, { rec: R });
+    c.texte('(réaction du chapitre de cinétique)', k.x + k.w + 24, yX, { taille: 16, couleur: 'faible' });
+  });
+  const QX = { row: [{ t: 'Q_r =' }, { frac: [{ row: ['[I₂]·[SO₄²⁻]', { t: '^{2}', col: 'jaune' }], gap: 1 }, { row: ['[I⁻]', { t: '^{2}', col: 'jaune' }, '·[S₂O₈²⁻]'], gap: 1 }] }], gap: 10, id: 'qr_exemple' };
+  M.etape(c, 'qr_exemple', () => { ex(c, QX, X + 110, 368, tX, { rec: R }); encadreR(c, R.qr_exemple); });
+};
+
+/* Vue eau : H₂O entourée puis [H₂O] barré dans Qr. */
+VUE_FN.eau = (c, M) => {
+  const R = M.rec, yE = 96, t = 26;
+  const EQ = { row: [espece('CH₃COOH', 'e_acide'), '+', espece('H₂O', 'e_eau'), '⇌', 'CH₃COO⁻', '+', 'H₃O⁺'], gap: 24, id: 'equation' };
+  M.etape(c, 'equation', () => ex(c, EQ, 380, yE, t, { align: 'center', rec: R }));
+  M.etape(c, 'eau', () => {
+    const r = R.e_eau, cx = r.x + r.w / 2, cy = r.y - t * .3;
+    c.courbe(u => [cx + (r.w / 2 + 9) * Math.cos(u * 6.6 - 2), cy + 22 * Math.sin(u * 6.6 - 2)], 40, { couleur: 'jaune', largeur: 2.2 });
+    c.texte('solvant', cx, yE + 48, { taille: 18, align: 'center', couleur: 'jaune' });
+  });
+  const yQ = 232, tQ = 24;
+  const Q = { row: [{ row: ['Q_r =', { frac: [['[CH₃COO⁻]', '·', '[H₃O⁺]'], { row: ['[CH₃COOH]', '·', { t: '[H₂O]', id: 'h2o' }] }] }], gap: 10, id: 'q_faux' }, '→',
+    { row: ['Q_r =', { frac: [['[CH₃COO⁻]', '·', '[H₃O⁺]'], '[CH₃COOH]'] }], gap: 10, id: 'q_juste' }], gap: 22, id: 'quotient' };
+  M.etape(c, 'barree', () => {
+    const k = ex(c, Q.row[0], 30, yQ, tQ, { rec: R });
+    barrer(c, R.h2o);
+    const x2 = k.x + k.w + 22;
+    flecheSimple(c, x2, yQ - tQ * .32, FL, 'blanc');
+    ex(c, Q.row[2], x2 + FL + 22, yQ, tQ, { rec: R });
+    encadreR(c, R.q_juste);
+  });
+  M.geo.quotient = R.q_faux && R.q_juste ? { x: R.q_faux.x, y: R.q_faux.y, w: R.q_juste.x + R.q_juste.w - R.q_faux.x, up: R.q_faux.up, down: R.q_faux.down } : null;
+  M.etape(c, 'phrase', () => c.texte('l’eau est le solvant : elle n’apparaît pas dans Q_r', 30, 330, { taille: 23 }));
+  M.etape(c, 'piege', () => {
+    attention(c, 30, 382, { h: 22 });
+    c.texte('pas de concentration pour l’eau solvant', 66, 380, { taille: 23, couleur: 'orange' });
+  });
+};
+
+/* Vue solides : bécher bleu de Cu²⁺ et lame de zinc ; Zn(s), Cu(s) barrés ; Qr = [Zn²⁺]/[Cu²⁺]. */
+const BS = { x: 40, y: 104, w: 150, h: 160 }, LZ = { x: 104, y: 70, w: 24, h: 180 };
+VUE_FN.solides = (c, M) => {
+  const R = M.rec, a = M.commence('becher') ? lisse(clamp(M.p('becher') * 1.3, 0, 1)) : 0;
+  if (a > 0) c.direct(() => { const ctx = c.ctx; ctx.save(); ctx.globalAlpha = a; Peint.lame(ctx, LZ.x, LZ.y, LZ.w, LZ.h, ZINC); ctx.restore(); Peint.becher(ctx, BS, .72, BLEU, a); });
+  M.etape(c, 'becher', () => {
+    const cx = BS.x + BS.w / 2;
+    c.texte('solution de Cu²⁺ (bleue)', cx, BS.y + BS.h + 30, { taille: 16, align: 'center' });
+    c.texte('lame de zinc Zn(s)', cx, BS.y + BS.h + 52, { taille: 16, align: 'center', couleur: 'faible' });
+  });
+  const X = 250, yE = 112, t = 26;
+  const EQ = { row: ['Cu²⁺', '+', espece('Zn(s)', 'zn'), '⇌', espece('Cu(s)', 'cu'), '+', 'Zn²⁺'], gap: 12, id: 'equation' };
+  M.etape(c, 'equation', () => ex(c, EQ, X, yE, t, { rec: R }));
+  M.etape(c, 'solides', () => {
+    for (const id of ['zn', 'cu']) { const r = R[id]; barrer(c, r); c.texte('solide', r.x + r.w / 2, yE + 34, { taille: 17, align: 'center', couleur: 'orange' }); }
+  });
+  const Q = { row: ['Q_r =', { frac: ['[Zn²⁺]', '[Cu²⁺]'] }], gap: 10, id: 'quotient' };
+  M.etape(c, 'quotient', () => { ex(c, Q, X, 232, 28, { rec: R }); encadreR(c, R.quotient); });
+  M.etape(c, 'phrase', () => {
+    c.texte('les solides n’apparaissent pas dans Q_r', X, 334, { taille: 23, couleur: 'jaune' });
+    c.texte('seules les espèces dissoutes y figurent', X, 366, { taille: 18, couleur: 'faible' });
+  });
+};
+
+/* Vue sans_unite : un état de l’exemple A en cours de transformation. */
+VUE_FN.sans_unite = (c, M) => {
+  const R = M.rec, X = 30;
+  M.etape(c, 'donnees', () => {
+    c.texte('[H₃O⁺] = [CH₃COO⁻] = 2,0·10⁻⁴ mol/L', X, 80, { taille: 22 });
+    c.texte('[CH₃COOH] = 9,8·10⁻³ mol/L', X, 116, { taille: 22 });
+    c.texte('un état de l’exemple A pendant la transformation', X, 148, { taille: 16, couleur: 'faible' });
+  });
+  const Q = { row: [{ t: 'Q_r =', ph: 'remplacer' }, { frac: [['[CH₃COO⁻]', '·', '[H₃O⁺]'], '[CH₃COOH]'], ph: 'remplacer' }, { t: '=', ph: 'remplacer' },
+    { frac: ['2,0·10⁻⁴ × 2,0·10⁻⁴', '9,8·10⁻³'], ph: 'remplacer', id: 'valeurs' }, { t: '= 4,08·10⁻⁶', ph: 'resultat', col: 'jaune', id: 'resultat' }], gap: 16, id: 'remplacer' };
+  const y = 230, t = 24;
+  M.etape(c, 'remplacer', () => ex(c, Q, X, y, t, { rec: R, ph: ['remplacer'] }));
+  M.etape(c, 'resultat', () => { ex(c, Q, X, y, t, { rec: R, ph: ['resultat'] }); encadreR(c, R.resultat); });
+  M.etape(c, 'unite', () => {
+    const s = 'concentrations en mol/L ; Q_r sans unité';
+    c.texte(s, X + 8, 336, { taille: 24, couleur: 'jaune' }); encadre(c, X + 8, 336, larg(c, s, 24), 24);
+    c.texte('on écrit Q_r = 4,08·10⁻⁶, sans unité', X + 8, 380, { taille: 18, couleur: 'faible' });
+  });
+};
+
+/* Vue initial : l’acide versé dans l’eau ; Qr,i = 0. */
+const BI = { x: 50, y: 178, w: 150, h: 140 }, FI = { x: 84, y: 150, w: 46, h: 76 };
+VUE_FN.initial = (c, M) => {
+  const R = M.rec, p = M.commence('versement') ? M.p('versement') : 0;
+  const ang = lisse(clamp(p / .3, 0, 1)) * 1.95, vide = clamp((p - .3) / .6, 0, 1), flot = p > .3 && p < .93;
+  const niveau = .18 + .5 * lisse(vide);
+  c.direct(() => {
+    const ctx = c.ctx;
+    Peint.becher(ctx, BI, niveau, EAU);
+    const fx0 = FI.x, fy0 = FI.y, A = p > 0 ? ang : 0;
+    // Le flacon tourne autour de son fond : le goulot se retrouve au-dessus du bécher.
+    Peint.flacon(ctx, fx0, fy0 - 40 * Math.min(1, A), FI.w, FI.h, .8 * (1 - lisse(vide)) + .02, EAU, { angle: A, bouchon: false });
+    if (flot) {
+      const gx = fx0 + Math.sin(A) * FI.h, gy = fy0 - 40 - Math.cos(A) * FI.h, yS = BI.y + BI.h - 3 - niveau * (BI.h - 16);
+      const g = ctx.createLinearGradient(0, gy, 0, yS); g.addColorStop(0, 'rgba(214,230,246,.55)'); g.addColorStop(1, 'rgba(214,230,246,.25)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(gx - 2, gy); ctx.quadraticCurveTo(gx + 6, gy + 10, gx + 3, yS); ctx.lineTo(gx - 1, yS); ctx.quadraticCurveTo(gx + 1, gy + 12, gx - 4, gy + 2); ctx.fill();
+    }
+  });
+  c.texte('acide éthanoïque', FI.x + FI.w / 2 - 20, 62, { taille: 16, align: 'center' });
+  c.texte('eau', BI.x + BI.w + 10, BI.y + BI.h - 20, { taille: 16, couleur: 'faible' });
+  M.etape(c, 'versement', () => {
+    c.texte('C = 1,0·10⁻² mol/L ; V = 100 mL', BI.x + BI.w / 2, BI.y + BI.h + 30, { taille: 15, align: 'center', couleur: 'faible' });
+    c.texte('état initial : on vient de verser l’acide', BI.x + BI.w / 2, BI.y + BI.h + 52, { taille: 15, align: 'center', couleur: 'faible' });
+    ex(c, ['CH₃COOH', '+', 'H₂O', '⇌', 'CH₃COO⁻', '+', 'H₃O⁺'], 272, 84, 22, { rec: R });
+  });
+  const X = 272;
+  M.etape(c, 'concentrations', () => {
+    ex(c, { row: ['[CH₃COO⁻]_{i} = [H₃O⁺]_{i} = 0'], id: 'conc' }, X, 146, 23, { rec: R });
+    c.texte('(pas encore de produit ; les ions H₃O⁺ de l’eau sont négligés)', X, 174, { taille: 15, couleur: 'faible' });
+    c.texte('[CH₃COOH]_{i} = C = 1,0·10⁻² mol/L', X, 208, { taille: 19 });
+  });
+  const Q = { row: ['Q_{r,i} =', { frac: [['[CH₃COO⁻]_{i}', '·', '[H₃O⁺]_{i}'], '[CH₃COOH]_{i}'] }, { t: '= 0', col: 'jaune', id: 'zero' }], gap: 16, id: 'qr_i' };
+  M.etape(c, 'qr_i', () => { ex(c, Q, X, 290, 24, { rec: R }); encadreR(c, R.zero); });
+  M.etape(c, 'phrase', () => {
+    const s = 'Q_{r,i} : quotient de réaction dans l’état initial';
+    c.texte(s, X + 8, 384, { taille: 21, couleur: 'jaune' }); encadre(c, X + 8, 384, larg(c, s, 21), 21);
+  });
+};
+
+/* Vue melange : exemple G. */
+const FM = [0, 1, 2, 3].map(i => ({ x: 46 + i * 72, y: 118, w: 44, h: 70 }));
+const FM_NOM = ['HCOOH', 'CH₃COO⁻', 'CH₃COOH', 'HCOO⁻'], FM_V = ['100 mL', '100 mL', '50 mL', '50 mL'], FM_N = [.8, .8, .45, .45];
+const BM = { x: 70, y: 214, w: 170, h: 120 };
+VUE_FN.melange = (c, M) => {
+  const R = M.rec, a = M.commence('flacons') ? lisse(clamp(M.p('flacons') * 1.3, 0, 1)) : 0, pm = M.commence('melange') ? lisse(clamp(M.p('melange') / .85, 0, 1)) : 0;
+  c.direct(() => {
+    const ctx = c.ctx;
+    if (a > 0) FM.forEach((f, i) => Peint.flacon(ctx, f.x, f.y, f.w, f.h, FM_N[i] * (1 - pm) + .02, EAU, { a }));
+    if (a > 0) Peint.becher(ctx, BM, .02 + .7 * pm, EAU, a);
+  });
+  M.etape(c, 'flacons', () => {
+    FM.forEach((f, i) => { c.texte(FM_NOM[i], f.x, f.y + 20, { taille: 15, align: 'center' }); c.texte(FM_V[i], f.x, f.y + 38, { taille: 14, align: 'center', couleur: 'faible' }); });
+    c.texte('(chaque solution : 0,10 mol/L)', BM.x + BM.w / 2, BM.y + BM.h + 56, { taille: 15, align: 'center', couleur: 'faible' });
+  });
+  M.etape(c, 'melange', () => {
+    FM.forEach((f, i) => c.fleche(f.x, f.y + 44, lerp(BM.x + 30, BM.x + BM.w - 30, i / 3), BM.y - 8, { couleur: 'faible', largeur: 1.4, tete: 7, pointille: [4, 4] }));
+    ex(c, { row: ['V_T = 100 + 100 + 50 + 50 = 300 mL'], id: 'vt' }, BM.x + BM.w / 2, BM.y + BM.h + 32, 17, { rec: R, align: 'center', col: 'jaune' });
+  });
+  const X = 322;
+  M.etape(c, 'concentrations', () => {
+    ex(c, { row: ['[X]_{i} =', { frac: ['n(X)', 'V_T'] }], id: 'conc' }, X, 76, 21, { rec: R });
+    c.texte('n(HCOOH) = n(CH₃COO⁻) = 1,0·10⁻² mol', 470, 66, { taille: 15 });
+    c.texte('n(CH₃COOH) = n(HCOO⁻) = 5,0·10⁻³ mol', 470, 90, { taille: 15 });
+    c.texte('ex. : [HCOOH]_{i} = 1,0·10⁻² mol ÷ 0,300 L = 3,33·10⁻² mol/L', X, 124, { taille: 15, couleur: 'faible' });
+  });
+  const Q = { row: ['Q_{r,i} =', { frac: [['[HCOO⁻]_{i}', '·', '[CH₃COOH]_{i}'], ['[HCOOH]_{i}', '·', '[CH₃COO⁻]_{i}']] }], gap: 10, id: 'quotient' };
+  M.etape(c, 'quotient', () => ex(c, Q, X, 182, 20, { rec: R }));
+  const vt = id => ({ t: 'V_T', id });
+  const S = { row: ['=', { frac: [[{ frac: ['5,0·10⁻³', vt('v1')] }, '×', { frac: ['5,0·10⁻³', vt('v2')] }], [{ frac: ['1,0·10⁻²', vt('v3')] }, '×', { frac: ['1,0·10⁻²', vt('v4')] }]] }], gap: 10, id: 'simplifier' };
+  M.etape(c, 'simplifier', () => {
+    const k = ex(c, S, X + 56, 290, 17, { rec: R });
+    for (const id of ['v1', 'v2', 'v3', 'v4']) barrer(c, R[id]);
+    c.texte('V_T se simplifie', k.x + k.w + 22, 290, { taille: 17, couleur: 'orange' });
+  });
+  const F = { row: ['=', { frac: ['5,0·10⁻³ × 5,0·10⁻³', '1,0·10⁻² × 1,0·10⁻²'] }, { t: '= 0,25', col: 'jaune', id: 'res' }], gap: 16, id: 'resultat' };
+  M.etape(c, 'resultat', () => { ex(c, F, X + 56, 386, 18, { rec: R }); encadreR(c, R.res); });
+};
+
+/* Vue au_cours : exemple F, Qr en fonction de [H₃O⁺] ; poignée x. */
+const G = { x0: 96, y0: 300, w: 330, h: 220, hmax: 4.0e-4, qmax: 2.0e-5 };
+const GX = h => G.x0 + h / G.hmax * G.w, GY = q => G.y0 - q / G.qmax * G.h;
+const TA = { x: 466, y: 54, w1: 146, w2: 134, h: 30 };
+function poignee(ctx, x, y) {
+  ctx.save(); ctx.strokeStyle = '#c084fc'; ctx.fillStyle = 'rgba(192,132,252,.35)'; ctx.lineWidth = 2.4; ctx.globalAlpha = .98;
+  ctx.beginPath(); ctx.arc(x, y, 8, 0, 7); ctx.fill(); ctx.stroke();
+  ctx.lineWidth = 1.8;
+  ctx.beginPath(); ctx.moveTo(x - 14, y - 4); ctx.lineTo(x - 19, y); ctx.lineTo(x - 14, y + 4); ctx.moveTo(x + 14, y - 4); ctx.lineTo(x + 19, y); ctx.lineTo(x + 14, y + 4); ctx.stroke();
+  ctx.restore();
+}
+VUE_FN.au_cours = (c, M) => {
+  const xH = G.x0 + G.w + 20, yQ = G.y0 - G.h - 20;
+  M.etape(c, 'axes', () => {
+    c.axe(G.x0, G.y0, xH, G.y0, [1, 2, 3, 4].map(i => [i * G.w / 4 / (G.w + 20), `${i},0·10⁻⁴`]), { taille: 14 });
+    c.axe(G.x0, G.y0, G.x0, yQ, [1, 2, 3, 4].map(i => [i * G.h / 4 / (G.h + 20), `${fr(i * .5, 1)}·10⁻⁵`]), { vertical: true, taille: 14 });
+    c.texte('0', G.x0 - 6, G.y0 + 20, { taille: 14, align: 'center', couleur: 'faible' });
+    c.texte('Q_r', G.x0 + 12, yQ + 8, { taille: 19, couleur: 'violet' });
+    c.texte('[H₃O⁺] (mol/L)', G.x0 + G.w, G.y0 + 44, { taille: 16, align: 'right', couleur: 'faible' });
+    // Tableau de valeurs (vide).
+    const yf = TA.y + 6 * TA.h;
+    c.rect(TA.x, TA.y, TA.w1 + TA.w2, 6 * TA.h, { arrondi: 4, largeur: 1.6 });
+    c.ligne(TA.x, TA.y + TA.h, TA.x + TA.w1 + TA.w2, TA.y + TA.h, { largeur: 1.3, duree: .1 });
+    c.ligne(TA.x + TA.w1, TA.y, TA.x + TA.w1, yf, { largeur: 1.3, duree: .1 });
+    c.texte('[H₃O⁺] (mol/L)', TA.x + TA.w1 / 2, TA.y + 21, { taille: 16, align: 'center', couleur: 'cyan' });
+    c.texte('Q_r', TA.x + TA.w1 + TA.w2 / 2, TA.y + 21, { taille: 17, align: 'center', couleur: 'violet' });
+  });
+  const ligne = i => {
+    const y = TA.y + (i + 1) * TA.h + 21;
+    c.texte(F_HT[i], TA.x + TA.w1 / 2, y, { taille: 16, align: 'center' });
+    c.texte(F_QT[i], TA.x + TA.w1 + TA.w2 / 2, y, { taille: 16, align: 'center', couleur: 'violet' });
+    c.point(GX(F_H[i]), GY(qrDe(F_H[i])), 4.5, i === 4 ? 'jaune' : 'blanc');
+  };
+  M.etape(c, 'depart', () => { ligne(0); c.texte('Q_{r,i} = 0', G.x0 + 28, G.y0 - 18, { taille: 17, couleur: 'violet' }); });
+  M.etape(c, 'points', () => { ligne(1); ligne(2); ligne(3); });
+  if (M.commence('arrivee')) {
+    const p = lisse(M.p('arrivee'));
+    c.direct(() => {
+      const ctx = c.ctx; ctx.save(); ctx.strokeStyle = 'rgba(192,132,252,.75)'; ctx.lineWidth = 2; ctx.beginPath();
+      for (let k = 0; k <= 60 * p; k++) { const h = H_EQ * k / 60; k ? ctx.lineTo(GX(h), GY(qrDe(h))) : ctx.moveTo(GX(h), GY(qrDe(h))); }
+      ctx.stroke(); ctx.restore();
+    });
+  }
+  M.etape(c, 'arrivee', () => {
+    c.rect(TA.x + 4, TA.y + 5 * TA.h + 3, TA.w1 + TA.w2 - 8, TA.h - 6, { couleur: 'jaune', largeur: 2, arrondi: 6 });
+    ligne(4);
+    c.texte('Q_{r,éq}', GX(H_EQ) + 10, GY(qrDe(H_EQ)) + 22, { taille: 16, couleur: 'jaune' });
+  });
+  M.etape(c, 'palier', () => {
+    const y = GY(qrDe(H_EQ));
+    c.ligne(G.x0, y, G.x0 + G.w + 10, y, { couleur: 'jaune', largeur: 1.8, pointille: [6, 6] });
+    c.texte('Q_{r,éq} = 1,57·10⁻⁵ : Q_r ne bouge plus', G.x0 + 10, y - 12, { taille: 17, couleur: 'jaune' });
+  });
+  M.etape(c, 'phrase', () => {
+    c.texte('Q_r augmente de Q_{r,i} = 0 jusqu’à Q_{r,éq} = 1,57·10⁻⁵, puis ne bouge plus', 380, 394, { taille: 20, align: 'center', couleur: 'jaune' });
+  });
+  // Poignée x (point violet sur la courbe) et sa lecture, dès le départ.
+  if (M.commence('depart') || DRAG != null) {
+    const x = xVu(), h = hDe(x), q = qrDe(h), px = GX(h), py = GY(q);
+    M.geo.poignee = [px, py];
+    c.direct(() => poignee(c.ctx, px, py));
+    c.direct(() => {
+      const ctx = c.ctx, T = window.Tableau; ctx.save(); ctx.font = `15px ${T.POLICE}`; ctx.fillStyle = T.COULEURS.violet; ctx.globalAlpha = .95;
+      ctx.fillText(`poignée : x = ${fr(x, 2)}`, TA.x, 270); ctx.restore();
+    });
+    c.texte(`[H₃O⁺] = ${h ? sci(h) : '0'} mol/L`, TA.x, 296, { taille: 16, couleur: 'violet', duree: .05 });
+    c.texte(`Q_r = ${q ? sci(q) : '0'}`, TA.x, 322, { taille: 16, couleur: 'violet', duree: .05 });
+  }
+  M.geo.poignee ||= [G.x0, G.y0];
+};
+
+/* Vue national (2020 R). */
+const FN = [0, 1, 2, 3].map(i => ({ x: 50 + i * 94, y: 160, w: 44, h: 70 }));
+const FN_NOM = ['(1) HCOOH', '(2) CH₃COO⁻', '(3) CH₃COOH', '(4) HCOO⁻'];
+VUE_FN.national = (c, M) => {
+  const R = M.rec, a = M.commence('donnees') ? lisse(clamp(M.p('donnees') * 1.3, 0, 1)) : 0;
+  if (a > 0) c.direct(() => FN.forEach(f => Peint.flacon(c.ctx, f.x, f.y, f.w, f.h, .8, EAU, { a })));
+  M.etape(c, 'donnees', () => {
+    ex(c, { row: ['HCOOH', '+', 'CH₃COO⁻', '⇌', 'HCOO⁻', '+', 'CH₃COOH'], gap: 10, id: 'equation' }, 20, 66, 21, { rec: R });
+    FN.forEach((f, i) => c.texte(FN_NOM[i], f.x, f.y + 22, { taille: 14, align: 'center' }));
+    c.texte('chacun : V = 100 mL ; C = 0,1 mol/L', 191, 206, { taille: 15, align: 'center', couleur: 'faible' });
+  });
+  const X = 410;
+  M.etape(c, 'volume_total', () => {
+    ex(c, { row: ['V_T = 4 × 100 mL = 400 mL'], id: 'vt' }, X, 116, 21, { rec: R, col: 'jaune' });
+    const k = ex(c, { row: ['[X]_{i} =', { frac: ['C·V', 'V_T'] }], id: 'conc' }, X, 180, 20, { rec: R });
+    c.texte('(après mélange)', k.x + k.w + 16, 180, { taille: 16, couleur: 'faible' });
+  });
+  const Q = { row: ['Q_{r,i} =', { frac: [['[HCOO⁻]_{i}', '·', '[CH₃COOH]_{i}'], ['[HCOOH]_{i}', '·', '[CH₃COO⁻]_{i}']] }, '=',
+    { frac: ['C₃V₃·C₄V₄', 'C₁V₁·C₂V₂'] }, { t: '= 1', col: 'jaune', ph: 'resultat', id: 'res' }], gap: 14, id: 'quotient' };
+  M.etape(c, 'quotient', () => {
+    const k = ex(c, Q, 20, 290, 21, { rec: R, ph: [undefined] });
+    c.texte('V_T se simplifie', k.x + k.w + 24, 290, { taille: 16, couleur: 'faible' });
+  });
+  M.etape(c, 'resultat', () => {
+    ex(c, Q, 20, 290, 21, { rec: R, ph: ['resultat'] }); encadreR(c, R.res);
+    c.texte('(les quatre C·V valent 1,0·10⁻² mol)', 20 + R.quotient.w + 24, 314, { taille: 15, couleur: 'faible' });
+  });
+  M.etape(c, 'phrase', () => {
+    const s = 'Q_{r,i} se calcule avec les concentrations APRÈS mélange';
+    c.texte(s, 28, 384, { taille: 22, couleur: 'jaune' }); encadre(c, 28, 384, larg(c, s, 22), 22);
+  });
+};
+
+/* Vue pile (2017 N). */
+const BC = { x: 30, y: 84, w: 124, h: 124 }, BA = { x: 196, y: 84, w: 124, h: 124 };
+VUE_FN.pile = (c, M) => {
+  const R = M.rec, a = M.commence('bechers') ? lisse(clamp(M.p('bechers') * 1.3, 0, 1)) : 0;
+  if (a > 0) c.direct(() => {
+    const ctx = c.ctx; ctx.save(); ctx.globalAlpha = a;
+    Peint.lame(ctx, BC.x + 52, 58, 22, 136, CUIVRE); Peint.lame(ctx, BA.x + 52, 58, 22, 136, ALU); ctx.restore();
+    Peint.becher(ctx, BC, .7, BLEU, a); Peint.becher(ctx, BA, .7, EAU, a);
+  });
+  M.etape(c, 'bechers', () => {
+    c.texte('Cu²⁺ + lame de cuivre', BC.x + BC.w / 2, BC.y + BC.h + 28, { taille: 15, align: 'center' });
+    c.texte('Al³⁺ + lame d’aluminium', BA.x + BA.w / 2, BA.y + BA.h + 28, { taille: 15, align: 'center' });
+    c.texte('[Cu²⁺]_{i} = 6,5·10⁻¹ mol/L', BC.x + BC.w / 2, BC.y + BC.h + 50, { taille: 14, align: 'center', couleur: 'faible' });
+    c.texte('[Al³⁺]_{i} = 6,5·10⁻¹ mol/L', BA.x + BA.w / 2, BA.y + BA.h + 50, { taille: 14, align: 'center', couleur: 'faible' });
+  });
+  const X = 360;
+  M.etape(c, 'equation', () => {
+    ex(c, { row: [coef('3', 'Cu²⁺'), '+', coef('2', 'Al(s)'), '⇌', coef('3', 'Cu(s)'), '+', coef('2', 'Al³⁺')], gap: 10, id: 'equation' }, X, 90, 22, { rec: R });
+    c.texte('Al(s) et Cu(s) : solides, absents de Q_r', X, 124, { taille: 16, couleur: 'faible' });
+  });
+  const Q = { row: ['Q_{r,i} =', { frac: [{ row: ['[Al³⁺]_{i}', { t: '^{2}', col: 'jaune' }], gap: 1 }, { row: ['[Cu²⁺]_{i}', { t: '^{3}', col: 'jaune' }], gap: 1 }] }], gap: 10, id: 'quotient' };
+  M.etape(c, 'quotient', () => {
+    const k = ex(c, Q, X, 210, 25, { rec: R });
+    c.texte('coefficients en exposants', k.x + k.w + 24, 210, { taille: 16, couleur: 'jaune' });
+  });
+  const A = { row: ['Q_{r,i} =', { frac: ['(6,5·10⁻¹)²', '(6,5·10⁻¹)³'] }, { t: '= 1,5', col: 'jaune', id: 'res' }], gap: 16, id: 'application' };
+  M.etape(c, 'application', () => { ex(c, A, 30, 318, 24, { rec: R }); encadreR(c, R.res); });
+  M.etape(c, 'renvoi', () => {
+    c.rect(420, 290, 300, 50, { couleur: 'cyan', largeur: 1.8, arrondi: 10 });
+    c.texte('la suite (piles) : au semestre 2', 570, 322, { taille: 19, align: 'center', couleur: 'cyan' });
+  });
+};
+
+/* ── Repères (déclarés à chaque image ; le libellé dit à quel moment l’élément apparaît) ───────────── */
+function reperes(c, M) {
+  const v = M.S.vue, quand = nom => (M.vu(nom) ? '' : ` (au moment « ${nom} »)`), R = M.rec;
+  const D = (id, x, y, w, h, l) => c.repere(id, x, y, w, h, l);
+  const DR = (id, r, l) => { if (r) { const [x, y, w, h] = boite(r); D(id, x, y, w, h, l); } };
+  if (v === 'definition') {
+    DR('equation', R.equation, `l’équation « CH₃COOH + H₂O ⇌ CH₃COO⁻ + H₃O⁺ »${quand('equation')}`);
+    DR('numerateur', R.num, `le numérateur « [CH₃COO⁻]·[H₃O⁺] » : les produits${quand('produits')}`);
+    DR('denominateur', R.den, `le dénominateur « [CH₃COOH] » : le réactif${quand('reactifs')}`);
+    DR('quotient', R.quotient, `« Qr = [CH₃COO⁻]·[H₃O⁺] / [CH₃COOH] »${quand('quotient')}`);
+    D('phrase', 60, 358, 640, 58, `« quotient de réaction : produits en haut, réactifs en bas »${quand('phrase')}`);
+  } else if (v === 'generale') {
+    DR('forme', R.forme, `« aA + bB ⇌ cC + dD »${quand('forme')}`);
+    DR('formule', R.formule, `« Qr = [C]^c·[D]^d / ([A]^a·[B]^b) »${quand('forme')}`);
+    D('exposants', 330, 172, 400, 36, `« les coefficients deviennent des exposants »${quand('exposants')}`);
+    DR('exemple', R.exemple, `« 2I⁻ + S₂O₈²⁻ ⇌ I₂ + 2SO₄²⁻ »${quand('exemple')}`);
+    DR('qr_exemple', R.qr_exemple, `« Qr = [I₂]·[SO₄²⁻]² / ([I⁻]²·[S₂O₈²⁻]) »${quand('qr_exemple')}`);
+  } else if (v === 'eau') {
+    DR('equation', R.equation, `l’équation « CH₃COOH + H₂O ⇌ CH₃COO⁻ + H₃O⁺ »${quand('equation')}`);
+    if (R.e_eau) { const r = R.e_eau; D('eau', r.x - 16, r.y - 46, r.w + 32, 104, `la molécule d’eau H₂O, entourée : le solvant${quand('eau')}`); }
+    DR('quotient', M.geo.quotient, `le quotient : [H₂O] barré, puis « Qr = [CH₃COO⁻]·[H₃O⁺] / [CH₃COOH] »${quand('barree')}`);
+    D('phrase', 22, 306, 560, 36, `« l’eau est le solvant : elle n’apparaît pas dans Qr »${quand('phrase')}`);
+    D('piege', 22, 354, 470, 38, `⚠ « pas de concentration pour l’eau solvant »${quand('piege')}`);
+  } else if (v === 'solides') {
+    D('becher', BS.x - 8, BS.y - 8, BS.w + 16, BS.h + 16, `le bécher : solution bleue de Cu²⁺${quand('becher')}`);
+    D('lame', LZ.x - 4, LZ.y - 4, LZ.w + 8, 60, `la lame de zinc Zn(s), gris bleuté${quand('becher')}`);
+    DR('equation', R.equation, `« Cu²⁺ + Zn(s) ⇌ Cu(s) + Zn²⁺ »${quand('equation')}`);
+    if (R.zn && R.cu) { const a = R.zn, b = R.cu; D('solides', a.x - 6, a.y - a.up - 6, b.x + b.w - a.x + 12, a.up + 46, `Zn(s) et Cu(s) barrés : des solides${quand('solides')}`); }
+    DR('quotient', R.quotient, `« Qr = [Zn²⁺] / [Cu²⁺] »${quand('quotient')}`);
+    D('phrase', 242, 310, 470, 66, `« les solides n’apparaissent pas dans Qr »${quand('phrase')}`);
+  } else if (v === 'sans_unite') {
+    D('donnees', 22, 56, 440, 98, `les données : [H₃O⁺] = [CH₃COO⁻] = 2,0·10⁻⁴ mol/L ; [CH₃COOH] = 9,8·10⁻³ mol/L${quand('donnees')}`);
+    if (R.remplacer && R.resultat) { const r = R.remplacer; D('remplacer', r.x - 6, r.y - r.up - 5, R.resultat.x - r.x, r.up + r.down + 10, `« Qr = (2,0·10⁻⁴ × 2,0·10⁻⁴) / (9,8·10⁻³) »${quand('remplacer')}`); }
+    DR('resultat', R.resultat, `« = 4,08·10⁻⁶ »${quand('resultat')}`);
+    D('unite', 22, 306, 470, 84, `« concentrations en mol/L ; Qr sans unité »${quand('unite')}`);
+  } else if (v === 'initial') {
+    D('becher', BI.x - 8, BI.y - 8, BI.w + 16, BI.h + 16, `le bécher : l’acide éthanoïque vient d’être versé dans l’eau${quand('versement')}`);
+    DR('concentrations', R.conc, `« [CH₃COO⁻]ᵢ = [H₃O⁺]ᵢ = 0 »${quand('concentrations')}`);
+    DR('qr_i', R.qr_i, `« Qr,i = … = 0 »${quand('qr_i')}`);
+    D('phrase', 266, 356, 470, 40, `« Qr,i : quotient de réaction dans l’état initial »${quand('phrase')}`);
+  } else if (v === 'melange') {
+    D('flacons', 14, 40, 290, 160, `les quatre flacons : HCOOH 100 mL, CH₃COO⁻ 100 mL, CH₃COOH 50 mL, HCOO⁻ 50 mL (0,10 mol/L)${quand('flacons')}`);
+    D('becher', BM.x - 8, BM.y - 8, BM.w + 16, BM.h + 16, `le grand bécher : le mélange${quand('melange')}`);
+    DR('volume_total', R.vt, `« V_T = 300 mL »${quand('melange')}`);
+    DR('concentrations', R.conc, `« [X]ᵢ = n/V_T »${quand('concentrations')}`);
+    DR('quotient', R.quotient, `« Qr,i = [HCOO⁻]ᵢ·[CH₃COOH]ᵢ / ([HCOOH]ᵢ·[CH₃COO⁻]ᵢ) »${quand('quotient')}`);
+    DR('resultat', R.resultat, `« = (5,0·10⁻³ × 5,0·10⁻³) / (1,0·10⁻² × 1,0·10⁻²) = 0,25 »${quand('resultat')}`);
+  } else if (v === 'au_cours') {
+    D('axe_h3o', G.x0, G.y0 - 10, G.w + 24, 56, `l’axe horizontal : [H₃O⁺] de 0 à 4,0·10⁻⁴ mol/L${quand('axes')}`);
+    D('axe_qr', 14, G.y0 - G.h - 30, G.x0 - 4, G.h + 40, `l’axe vertical : Qr de 0 à 2,0·10⁻⁵${quand('axes')}`);
+    const [px, py] = M.geo.poignee; D('poignee_x', px - 20, py - 14, 40, 28, `la poignée violette : x = ${fr(xVu(), 2)} (glisser de 0 à 1)${quand('depart')}`);
+    D('tableau', TA.x, TA.y, TA.w1 + TA.w2, 6 * TA.h, `le tableau des valeurs [H₃O⁺] et Qr${quand('points')}`);
+    D('point_eq', GX(H_EQ) - 14, GY(qrDe(H_EQ)) - 14, 28, 28, `le dernier point : Qr,éq = 1,57·10⁻⁵${quand('arrivee')}`);
+    D('phrase', 30, 370, 700, 34, `« Qr augmente de Qr,i = 0 jusqu’à Qr,éq = 1,57·10⁻⁵, puis ne bouge plus »${quand('phrase')}`);
+  } else if (v === 'national') {
+    D('donnees', 14, 40, 340, 176, `les données : quatre flacons de 100 mL à 0,1 mol/L${quand('donnees')}`);
+    DR('volume_total', R.vt, `« V_T = 400 mL »${quand('volume_total')}`);
+    DR('quotient', R.quotient, `« Qr,i = (C₃V₃·C₄V₄) / (C₁V₁·C₂V₂) »${quand('quotient')}`);
+    DR('resultat', R.res, `« = 1 »${quand('resultat')}`);
+    D('phrase', 18, 356, 600, 44, `« Qr,i se calcule avec les concentrations APRÈS mélange »${quand('phrase')}`);
+  } else if (v === 'pile') {
+    D('becher_cuivre', BC.x - 6, 52, BC.w + 12, BC.h + 40, `le bécher de Cu²⁺ (bleu) et la lame de cuivre${quand('bechers')}`);
+    D('becher_aluminium', BA.x - 6, 52, BA.w + 12, BA.h + 40, `le bécher de Al³⁺ (incolore) et la lame d’aluminium${quand('bechers')}`);
+    DR('equation', R.equation, `« 3Cu²⁺ + 2Al(s) ⇌ 3Cu(s) + 2Al³⁺ »${quand('equation')}`);
+    DR('quotient', R.quotient, `« Qr,i = [Al³⁺]ᵢ² / [Cu²⁺]ᵢ³ »${quand('quotient')}`);
+    DR('resultat', R.res, `« = 1,5 »${quand('application')}`);
+    D('renvoi', 420, 290, 300, 50, `« la suite (piles) : au semestre 2 »${quand('renvoi')}`);
+  }
+}
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
+function voir(M) {
+  const v = M.S.vue, m = [`Vue « ${v} » (${TITRES[v]}), ${M.etat()}.`];
+  const etape = (() => { let n = 'avant le début'; for (const e of M.evs()) if (M.commence(e.nom)) n = e.nom; return n; })();
+  m.push(`Étape en cours : ${etape}.`);
+  const vus = ETAPES(v).filter(e => M.commence(e.nom)).map(e => e.vu);
+  m.push(vus.length ? vus.join(' ') : 'Rien encore d’écrit (le titre seulement).');
+  if (v === 'au_cours' && (M.commence('depart') || DRAG != null)) {
+    const x = xVu(), h = hDe(x), q = qrDe(h);
+    m.push(`Poignée x = ${fr(x, 2)} (point violet sur la courbe) : [H₃O⁺] = ${h ? sci(h) : '0'} mol/L ; Qr = ${q ? sci(q) : '0'}${x >= 1 ? ' = Qr,éq' : ''}.`);
+  }
+  return m.join(' ');
+}
+const params = M => {
+  const v = M.S.vue, p = { vue: v };
+  if (['definition', 'eau'].includes(v)) Object.assign(p, { equation: 'CH₃COOH + H₂O ⇌ CH₃COO⁻ + H₃O⁺' });
+  if (v === 'sans_unite') Object.assign(p, { h3o_mol_L: 2.0e-4, ch3cooh_mol_L: 9.8e-3, Qr: 4.08e-6 });
+  if (v === 'initial') Object.assign(p, { C_mol_L: 0.01, V_mL: 100, Qr_i: 0 });
+  if (v === 'melange') Object.assign(p, { V_T_mL: 300, Qr_i: 0.25 });
+  if (v === 'au_cours') { const h = hDe(PAR.x); Object.assign(p, { x: PAR.x, h3o_mol_L: +h.toPrecision(3), Qr: +qrDe(h).toPrecision(3), Qr_eq: 1.57e-5 }); }
+  if (v === 'national') Object.assign(p, { V_T_mL: 400, Qr_i: 1 });
+  if (v === 'pile') Object.assign(p, { cu_mol_L: 0.65, al_mol_L: 0.65, Qr_i: 1.5 });
+  if (v === 'solides') Object.assign(p, { equation: 'Cu²⁺ + Zn(s) ⇌ Cu(s) + Zn²⁺' });
+  return p;
+};
+const lireX = x => { if (x == null || x === '') return null; const n = +String(x).replace(',', '.'); return Number.isFinite(n) ? clamp(Math.round(n * 100) / 100, 0, 1) : null; };
+const DEPART = {
+  definition: 'Comment écrire le quotient de réaction ?', generale: 'Et pour une équation quelconque ?', eau: 'Et l’eau, où la met-on ?',
+  solides: 'Et les solides ?', sans_unite: 'Calculons Qr pour un état de l’exemple A.', initial: 'Que vaut Qr juste après avoir versé l’acide ?',
+  melange: 'Qr,i d’un mélange de quatre solutions.', au_cours: 'Comment Qr change-t-il pendant la transformation ?',
+  national: 'National 2020 R : calculer Qr,i d’un mélange.', pile: 'National 2017 N : Qr,i avec des solides et des coefficients.',
+};
+const FIN = {
+  definition: 'Qr = [CH₃COO⁻]·[H₃O⁺]/[CH₃COOH] : produits en haut, réactifs en bas.',
+  generale: 'aA + bB ⇌ cC + dD : Qr = [C]^c·[D]^d/([A]^a·[B]^b) ; exemple : Qr = [I₂]·[SO₄²⁻]²/([I⁻]²·[S₂O₈²⁻]).',
+  eau: 'L’eau est le solvant : elle n’apparaît pas dans Qr.', solides: 'Qr = [Zn²⁺]/[Cu²⁺] : les solides n’apparaissent pas dans Qr.',
+  sans_unite: 'Qr = 4,08·10⁻⁶ : concentrations en mol/L, Qr sans unité.', initial: 'Qr,i = 0 : pas de produit dans l’état initial.',
+  melange: 'V_T se simplifie : Qr,i = 0,25.', au_cours: 'Qr monte de 0 à Qr,éq = 1,57·10⁻⁵, puis ne bouge plus. Glisse le point violet.',
+  national: 'Qr,i = 1, avec les concentrations après mélange.', pile: 'Qr,i = [Al³⁺]ᵢ²/[Cu²⁺]ᵢ³ = 1,5 ; la suite (piles) au semestre 2.',
+};
+const MOT = Moteur({
+  id: 'ee_quotient', titre: 'Le quotient de réaction Qr : définition, forme générale, eau solvant et solides absents, sans unité, Qr,i, mélange, Qr au cours de la transformation, deux nationaux', vues: VUES, titres: TITRES,
+  etapes: ETAPES, motifs: MOTIFS, dessiner, voir, params,
+  depart: M => DEPART[M.S.vue], messageFin: M => FIN[M.S.vue],
+  appliquer: (p, M) => {
+    const r = {};
+    if (VUES.includes(p.vue)) r.vue = p.vue;
+    const x = lireX(p.x);
+    if (x != null) {
+      PAR.x = x; DRAG = null; r.vue = 'au_cours'; r.change = true;
+      if (M.S.vue === 'au_cours') {
+        r.garder = true;
+        r.apres = () => {
+          const h = hDe(x), dit = `x = ${fr(x, 2)} : [H₃O⁺] = ${h ? sci(h) : '0'} mol/L ; Qr = ${h ? sci(qrDe(h)) : '0'}.`;
+          if (!M.S.running && !M.commence('depart')) { M.S.t = M.Moments().fin; M.finir(); }
+          M.scene.sale = true; M.dire(dit, 'good'); M.emettre();
+        };
+      }
+    } else r.change = !!(r.vue && r.vue !== M.S.vue);
+    return r;
+  },
+  schema: { vue: VUES.join(' | ') + ' (change la vue et relance)', x: '0..1 (pas 0,01 ; vue au_cours : avancement relatif, [H₃O⁺] = x × 3,89·10⁻⁴ mol/L ; défaut 0)' },
+  texte: 'Quotient de réaction. Exemple A : CH₃COOH + H₂O ⇌ CH₃COO⁻ + H₃O⁺ ; Qr = [CH₃COO⁻]·[H₃O⁺]/[CH₃COOH] (produits en haut, réactifs en bas). Forme générale aA + bB ⇌ cC + dD : Qr = [C]^c·[D]^d/([A]^a·[B]^b) ; exemple 2I⁻ + S₂O₈²⁻ ⇌ I₂ + 2SO₄²⁻ : Qr = [I₂]·[SO₄²⁻]²/([I⁻]²·[S₂O₈²⁻]). L’eau solvant n’apparaît pas dans Qr (pas de concentration pour l’eau solvant). Solides : Cu²⁺ + Zn(s) ⇌ Cu(s) + Zn²⁺, Qr = [Zn²⁺]/[Cu²⁺]. Calcul : [H₃O⁺] = [CH₃COO⁻] = 2,0·10⁻⁴ mol/L, [CH₃COOH] = 9,8·10⁻³ mol/L : Qr = 4,08·10⁻⁶ ; concentrations en mol/L, Qr sans unité. État initial : [CH₃COO⁻]ᵢ = [H₃O⁺]ᵢ = 0, Qr,i = 0. Mélange (HCOOH 100 mL, CH₃COO⁻ 100 mL, CH₃COOH 50 mL, HCOO⁻ 50 mL, 0,10 mol/L) : V_T = 300 mL, [X]ᵢ = n/V_T, V_T se simplifie, Qr,i = (5,0·10⁻³ × 5,0·10⁻³)/(1,0·10⁻² × 1,0·10⁻²) = 0,25. Au cours de la transformation (exemple A) : [H₃O⁺] 0 ; 1,0·10⁻⁴ ; 2,0·10⁻⁴ ; 3,0·10⁻⁴ ; 3,89·10⁻⁴ mol/L → Qr 0 ; 1,01·10⁻⁶ ; 4,08·10⁻⁶ ; 9,28·10⁻⁶ ; 1,57·10⁻⁵ = Qr,éq, puis Qr ne bouge plus ; poignée x de 0 à 1. National 2020 R : quatre flacons de 100 mL à 0,1 mol/L, V_T = 400 mL, Qr,i = (C₃V₃·C₄V₄)/(C₁V₁·C₂V₂) = 1, concentrations après mélange. National 2017 N : 3Cu²⁺ + 2Al(s) ⇌ 3Cu(s) + 2Al³⁺, Qr,i = [Al³⁺]ᵢ²/[Cu²⁺]ᵢ³ = (6,5·10⁻¹)²/(6,5·10⁻¹)³ = 1,5 ; la suite (piles) au semestre 2.',
+  explications: {
+    definition: [
+      { repere: 'equation', texte: 'Les réactifs à gauche, les produits à droite.' },
+      { repere: 'numerateur', texte: 'Les concentrations des produits, multipliées, en haut.' },
+      { repere: 'denominateur', texte: 'La concentration du réactif en bas.' },
+      { repere: 'quotient', texte: 'C’est le quotient de réaction Qr.' },
+    ],
+    generale: [
+      { repere: 'forme', texte: 'Une équation avec ses coefficients a, b, c, d.' },
+      { repere: 'formule', texte: 'Chaque concentration est élevée à la puissance de son coefficient.' },
+      { repere: 'qr_exemple', texte: 'Ici, les coefficients 2 deviennent des carrés.' },
+    ],
+    eau: [
+      { repere: 'eau', texte: 'L’eau est le solvant.' },
+      { repere: 'quotient', texte: 'On ne l’écrit pas dans Qr.' },
+      { repere: 'piege', texte: 'Pas de concentration pour l’eau solvant.' },
+    ],
+    solides: [
+      { repere: 'lame', texte: 'Le zinc est un solide.' },
+      { repere: 'solides', texte: 'Les solides sont barrés.' },
+      { repere: 'quotient', texte: 'Il ne reste que les ions : Qr = [Zn²⁺]/[Cu²⁺].' },
+    ],
+    sans_unite: [
+      { repere: 'donnees', texte: 'Les concentrations, en mol/L.' },
+      { repere: 'remplacer', texte: 'On remplace dans Qr.' },
+      { repere: 'resultat', texte: 'Qr = 4,08·10⁻⁶.' },
+      { repere: 'unite', texte: 'Qr n’a pas d’unité.' },
+    ],
+    initial: [
+      { repere: 'becher', texte: 'On vient de verser l’acide : c’est l’état initial.' },
+      { repere: 'concentrations', texte: 'Pas encore de produit.' },
+      { repere: 'qr_i', texte: 'Donc Qr,i = 0.' },
+    ],
+    melange: [
+      { repere: 'becher', texte: 'Tout est mélangé : V_T = 300 mL.' },
+      { repere: 'concentrations', texte: 'Chaque concentration vaut n divisé par V_T.' },
+      { repere: 'quotient', texte: 'On écrit Qr,i avec les concentrations après mélange.' },
+      { repere: 'resultat', texte: 'V_T se simplifie : Qr,i = 0,25.' },
+    ],
+    au_cours: [
+      { repere: 'axe_qr', texte: 'Qr en fonction de [H₃O⁺].' },
+      { repere: 'tableau', texte: 'Plus la réaction avance, plus Qr est grand.' },
+      { repere: 'point_eq', texte: 'À l’état d’équilibre, Qr,éq = 1,57·10⁻⁵.' },
+      { repere: 'poignee_x', texte: 'Glisse le point violet pour suivre Qr.' },
+    ],
+    national: [
+      { repere: 'volume_total', texte: 'Le volume total : 400 mL.' },
+      { repere: 'quotient', texte: 'V_T se simplifie.' },
+      { repere: 'resultat', texte: 'Qr,i = 1.' },
+      { repere: 'phrase', texte: 'Toujours les concentrations après mélange.' },
+    ],
+    pile: [
+      { repere: 'equation', texte: 'Les métaux sont des solides.' },
+      { repere: 'quotient', texte: 'Les coefficients 2 et 3 deviennent des exposants.' },
+      { repere: 'resultat', texte: 'Qr,i = 1,5.' },
+      { repere: 'renvoi', texte: 'La suite, avec les piles, au semestre 2.' },
+    ],
+  },
+});
+MOT.lancer();
+window.Tableau.glisser(MOT.scene.craie.canvas, {
+  toucher: (px, py) => {
+    if (MOT.S.vue !== 'au_cours' || !MOT.commence('depart')) return null;
+    const [x, y] = MOT.scene.local(px, py), [hx, hy] = MOT.geo.poignee || [0, 0];
+    return Math.hypot(x - hx, y - hy) < 24 ? 'x' : null;
+  },
+  bouger: (id, px) => { const [x] = MOT.scene.local(px, 0); DRAG = clamp(Math.round((x - G.x0) / G.w * G.hmax / H_EQ * 100) / 100, 0, 1); MOT.scene.sale = true; },
+  lacher: () => { if (DRAG != null) { const x = DRAG; MOT.setParameters({ x }); } },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

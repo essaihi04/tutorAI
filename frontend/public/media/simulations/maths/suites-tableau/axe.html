@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Les termes d’une suite — cases, machine, axe</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Tableau à la craie : les termes d’une suite rangés dans des cases numérotées, fabriqués par une machine, placés sur un axe gradué"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/suites-tableau/su-outils.js"></script>
+<script>
+/*
+ * Cours « Suites numériques » (math_ch3_suites_numeriques) : les termes d’une suite.
+ * Vues : ?vue=questions | cases | indices | machine | arith | geom | serrement | colonnes | image_f.
+ * Fil rouge : u₀ = 17, uₙ₊₁ = ¼uₙ + 12 (national 2017 R) : uₙ = 16 + (¼)ⁿ, limite 16.
+ */
+const { fr } = MathsTableau;
+const f17 = u => u / 4 + 12;
+const U17 = SU.suite(17, f17, 6);              // 17 ; 16,25 ; 16,0625 ; 16,015625 …
+const ecrire = (v) => fr(v, 4);
+
+/* Une rangée de cases : renvoie le centre de chaque case. */
+function cases(c, x0, y, n, w, h, o = {}) {
+  const centres = [];
+  for (let i = 0; i < n; i++) {
+    const x = x0 + i * (w + 10);
+    c.rect(x, y, w, h, { couleur: o.couleur || 'blanc', arrondi: 6, largeur: 1.8, duree: .18 });
+    centres.push(x + w / 2);
+  }
+  return centres;
+}
+/* Un axe gradué horizontal de vmin à vmax : renvoie X(v). */
+function axeH(c, x0, x1, y, vmin, vmax, grads) {
+  const X = v => x0 + (v - vmin) / (vmax - vmin) * (x1 - x0);
+  c.fleche(x0 - 10, y, x1 + 22, y, { couleur: 'faible', largeur: 1.6 });
+  for (const g of grads) { c.ligne(X(g), y - 5, X(g), y + 5, { couleur: 'faible', largeur: 1.3, duree: .03 }); c.texte(fr(g), X(g), y + 24, { couleur: 'faible', taille: 14, align: 'center', duree: .06 }); }
+  return X;
+}
+/* Un arc de craie au-dessus de l’axe, de xa à xb, avec un libellé. */
+function arc(c, xa, xb, y, haut, lib, coul) {
+  c.courbe(u => [xa + (xb - xa) * u, y - Math.sin(Math.PI * u) * haut], 18, { couleur: coul, largeur: 1.8 });
+  c.fleche(xb - 6, y - 8, xb, y - 1, { couleur: coul, largeur: 1.8, tete: 7 });
+  c.texte(lib, (xa + xb) / 2, y - haut - 8, { couleur: coul, taille: 15, align: 'center' });
+}
+
+MathsTableau.page({
+  id: 'su_axe', titre: 'Les termes d’une suite',
+  texte: 'Constructions à la craie du cours Suites numériques : la suite comme une liste de cases numérotées, la machine uₙ₊₁ = ¼uₙ + 12, les suites arithmétique et géométrique sur un axe, les termes qui se serrent vers 16, la suite auxiliaire en colonnes, l’image f(uₙ)',
+  vues: {
+    questions: {
+      titre: 'Une suite : une liste de nombres, cinq questions',
+      dessiner(c, K) {
+        K.titre('Une suite : une liste de nombres');
+        const xs = cases(c, 120, 52, 6, 74, 48);
+        ['u_0', 'u_1', 'u_2', 'u_3', 'u_4', '…'].forEach((t, i) => c.texte(t, xs[i], 84, { couleur: 'cyan', taille: 21, align: 'center' }));
+        c.repere('cases', 116, 48, 6 * 84, 56, 'la rangée de cases u₀, u₁, u₂…'); K.marque('cases');
+        const Q = [
+          ['① une inégalité pour tout n', 'la récurrence', 'q1_recurrence', 'q1'],
+          ['② monte ou descend', 'le sens de variation', 'q2_monotonie', 'q2'],
+          ['③ a-t-elle une limite finie', 'convergente', 'q3_convergence', 'q3'],
+          ['④ la formule de u_n', 'la suite auxiliaire', 'q4_formule', 'q4'],
+          ['⑤ où va-t-elle', 'la limite', 'q5_limite', 'q5'],
+        ];
+        Q.forEach(([a, b, m, r], i) => {
+          const y = 145 + i * 38;
+          c.pause(.25);
+          c.texte(a, 70, y, { couleur: 'blanc', taille: 20 });
+          c.fleche(390, y - 7, 440, y - 7, { couleur: 'faible', largeur: 1.6, tete: 8 });
+          c.texte(b, 455, y, { couleur: 'jaune', taille: 20 });
+          c.repere(r, 62, y - 24, 640, 32, a.slice(2) + ' : ' + b); K.marque(m);
+        });
+        c.pause(.3);
+        c.texte('au national : un exercice de suites dans chaque sujet', 70, 340, { couleur: 'orange', taille: 17 });
+        K.marque('national');
+      },
+      decrire: {
+        cases: 'En haut, une rangée de cases : u₀, u₁, u₂, u₃, u₄… une suite est une liste de nombres numérotés.',
+        q1_recurrence: '① une inégalité pour tout n → la récurrence.',
+        q2_monotonie: '② monte ou descend → le sens de variation.',
+        q3_convergence: '③ a-t-elle une limite finie → convergente.',
+        q4_formule: '④ la formule de uₙ → la suite auxiliaire.',
+        q5_limite: '⑤ où va-t-elle → la limite.',
+        national: 'En bas, en orange : au national, un exercice de suites dans chaque sujet.',
+      },
+      motifs: { cases: 'la rangée de cases', q1_recurrence: 'la récurrence', q2_monotonie: 'le sens de variation', q3_convergence: 'convergente', q4_formule: 'la suite auxiliaire', q5_limite: 'la limite' },
+      explication: [{ repere: 'cases', texte: 'Une suite : un nombre dans chaque case numérotée.' }, { repere: 'q1', texte: 'La première question est presque toujours une récurrence.' }, { repere: 'q5', texte: 'La dernière : la limite.' }],
+    },
+
+    cases: {
+      titre: 'n : le numéro de la case ; uₙ : le nombre dedans',
+      dessiner(c, K) {
+        K.titre('Une suite, c’est une liste numérotée');
+        c.texte('rang n', 18, 112, { couleur: 'faible', taille: 16 });
+        for (let i = 0; i < 5; i++) c.texte(String(i), 160 + i * 112, 112, { couleur: 'jaune', taille: 20, align: 'center' });
+        const xs = cases(c, 110, 125, 5, 100, 64);
+        c.repere('rang', 100, 92, 560, 28, 'les numéros des cases : le rang n');
+        K.marque('cases_vides');
+        c.pause(.3);
+        c.texte('17', xs[0], 167, { couleur: 'cyan', taille: 24, align: 'center' });
+        c.texte('u_0 = 17', xs[0], 222, { couleur: 'cyan', taille: 17, align: 'center' });
+        K.marque('u0');
+        ['16,25', '16,06', '16,02', '16,004'].forEach((v, i) => {
+          c.pause(.2);
+          c.texte(v, xs[i + 1], 167, { couleur: 'cyan', taille: 22, align: 'center' });
+          c.texte('u_' + (i + 1), xs[i + 1], 222, { couleur: 'cyan', taille: 17, align: 'center' });
+        });
+        c.repere('valeur', 106, 121, 560, 72, 'les nombres dans les cases : les termes');
+        c.repere('case_2', xs[2] - 54, 121, 108, 72, 'la case numéro 2 : u₂');
+        K.marque('remplies');
+        c.pause(.4);
+        c.fleche(xs[2] + 60, 80, xs[2] + 8, 104, { couleur: 'jaune', largeur: 1.8 });
+        c.texte('n : le numéro de la case', xs[2] + 66, 76, { couleur: 'jaune', taille: 17 });
+        c.fleche(xs[2] + 34, 290, xs[2] + 18, 198, { couleur: 'cyan', largeur: 1.8 });
+        c.texte('u_n : le nombre dedans', xs[2] - 40, 314, { couleur: 'cyan', taille: 18 });
+        K.marque('n_et_un');
+      },
+      decrire: {
+        cases_vides: 'Cinq cases vides numérotées 0, 1, 2, 3, 4 : les numéros sont les rangs n.',
+        u0: 'Dans la case 0, le nombre 17 : u₀ = 17.',
+        remplies: 'Les cases 1 à 4 se remplissent : u₁ = 16,25 ; u₂ = 16,06 ; u₃ = 16,02 ; u₄ = 16,004.',
+        n_et_un: 'Deux flèches : « n : le numéro de la case » (en jaune, au-dessus) et « uₙ : le nombre dedans » (en cyan, en dessous).',
+      },
+      explication: [{ repere: 'rang', texte: 'Le rang n : le numéro de la case.' }, { repere: 'case_2', texte: 'Dans la case 2, il y a u₂ = 16,06, pas le nombre 2.' }],
+    },
+
+    indices: {
+      titre: 'uₙ₊₁ n’est pas uₙ + 1',
+      dessiner(c, K) {
+        K.titre('Changer de case ou changer la valeur ?');
+        c.rect(150, 140, 140, 70, { couleur: 'blanc', arrondi: 8, largeur: 1.8 });
+        c.texte('u_n', 220, 186, { couleur: 'cyan', taille: 28, align: 'center' });
+        c.texte('case n', 220, 130, { couleur: 'faible', taille: 15, align: 'center' });
+        K.marque('case_n');
+        c.pause(.3);
+        c.rect(380, 140, 140, 70, { couleur: 'blanc', arrondi: 8, largeur: 1.8 });
+        c.texte('u_{n+1}', 450, 186, { couleur: 'cyan', taille: 28, align: 'center' });
+        c.texte('case n + 1', 450, 130, { couleur: 'faible', taille: 15, align: 'center' });
+        c.fleche(296, 175, 374, 175, { couleur: 'jaune', largeur: 2 });
+        c.texte('u_{n+1} : le terme suivant', 380, 92, { couleur: 'jaune', taille: 19 });
+        c.repere('suivante', 376, 70, 300, 145, 'la case suivante : uₙ₊₁');
+        K.marque('fleche_case');
+        c.pause(.3);
+        c.fleche(220, 268, 220, 216, { couleur: 'orange', largeur: 2 });
+        c.texte('u_n + 1 : la valeur plus 1', 120, 292, { couleur: 'orange', taille: 19 });
+        c.texte('même case', 232, 248, { couleur: 'orange', taille: 14 });
+        c.repere('plus_un', 112, 230, 280, 72, 'uₙ + 1 : la même case, la valeur plus 1');
+        K.marque('fleche_valeur');
+        c.pause(.4);
+        c.texte('u_2 = 5  →  u_2 + 1 = 6 ;   u_3 = ?  on ne sait pas sans la relation', 40, 338, { couleur: 'blanc', taille: 18, max: 690 });
+        c.repere('exemple', 34, 316, 700, 30, 'l’exemple u₂ = 5');
+        K.marque('exemple');
+      },
+      decrire: {
+        case_n: 'Une case « uₙ » : le terme de rang n.',
+        fleche_case: 'Une flèche jaune vers la case d’à côté « uₙ₊₁ » : le terme suivant (l’indice change).',
+        fleche_valeur: 'Une flèche orange sous la même case : « uₙ + 1 », la valeur plus 1 (la case ne change pas).',
+        exemple: 'Écrit : u₂ = 5 → u₂ + 1 = 6 ; u₃ = ? on ne sait pas sans la relation.',
+      },
+      explication: [{ repere: 'suivante', texte: 'Le petit n + 1 en bas change de case.' }, { repere: 'plus_un', texte: 'Le + 1 en ligne change la valeur.' }],
+    },
+
+    machine: {
+      titre: 'Fabriquer la case suivante',
+      dessiner(c, K) {
+        K.titre('Calculer les premiers termes');
+        c.texte('u_n = 3n + 2 : on remplace n  →  u_0 = 2,  u_1 = 5', 30, 78, { couleur: 'blanc', taille: 19 });
+        c.repere('explicite', 24, 56, 500, 30, 'suite donnée en fonction de n');
+        K.marque('explicite');
+        c.pause(.4);
+        c.rect(290, 150, 180, 70, { couleur: 'jaune', arrondi: 10, largeur: 2.2 });
+        c.texte('× ¼ puis + 12', 380, 192, { couleur: 'jaune', taille: 21, align: 'center' });
+        c.fleche(150, 185, 286, 185, { couleur: 'faible', largeur: 1.8 });
+        c.fleche(474, 185, 610, 185, { couleur: 'faible', largeur: 1.8 });
+        c.texte('u_n', 120, 192, { couleur: 'cyan', taille: 22, align: 'center' });
+        c.texte('u_{n+1}', 640, 192, { couleur: 'cyan', taille: 22, align: 'center' });
+        c.texte('u_{n+1} = ¼ u_n + 12', 290, 135, { couleur: 'blanc', taille: 17 });
+        c.repere('machine', 286, 115, 190, 110, 'la relation : × ¼ puis + 12');
+        K.marque('machine');
+        c.pause(.4);
+        c.texte('17', 210, 172, { couleur: 'cyan', taille: 20, align: 'center' });
+        c.texte('16,25', 540, 172, { couleur: 'cyan', taille: 20, align: 'center' });
+        c.texte('u_1 = ¼ × 17 + 12 = 65/4 = 16,25', 230, 268, { couleur: 'cyan', taille: 19 });
+        c.repere('sortie', 490, 150, 110, 30, 'la sortie : u₁ = 16,25');
+        K.marque('u1');
+        c.pause(.4);
+        c.trait([[640, 205], [640, 238], [120, 238], [120, 210]], { couleur: 'vert', largeur: 1.8, pointille: [6, 5] });
+        c.fleche(120, 222, 120, 206, { couleur: 'vert', largeur: 1.8, tete: 8 });
+        c.texte('la sortie redevient l’entrée', 560, 262, { couleur: 'vert', taille: 14 });
+        c.texte('u_2 = ¼ × 16,25 + 12 = 16,0625', 230, 302, { couleur: 'cyan', taille: 19 });
+        c.texte('u_3 = ¼ × 16,0625 + 12 = 16,015625', 230, 336, { couleur: 'cyan', taille: 19 });
+        K.marque('u2_u3');
+      },
+      decrire: {
+        explicite: 'En haut : uₙ = 3n + 2, on remplace n par 0 puis 1 : u₀ = 2, u₁ = 5.',
+        machine: 'Une machine (cadre jaune) « × ¼ puis + 12 » : uₙ entre à gauche, uₙ₊₁ sort à droite.',
+        u1: '17 entre, 16,25 sort : u₁ = ¼ × 17 + 12 = 65/4 = 16,25.',
+        u2_u3: 'Une flèche verte ramène la sortie à l’entrée : u₂ = 16,0625, puis u₃ = 16,015625.',
+      },
+      explication: [{ repere: 'machine', texte: 'La relation dit comment fabriquer la case suivante.' }, { repere: 'sortie', texte: 'Ce qui sort, c’est u₁.' }],
+    },
+
+    arith: {
+      titre: 'Suite arithmétique : on ajoute toujours 3',
+      dessiner(c, K) {
+        K.titre('Suite arithmétique : u_n = 3n + 2');
+        const X = axeH(c, 50, 700, 220, 0, 16, [0, 2, 4, 6, 8, 10, 12, 14, 16]);
+        [2, 5, 8, 11, 14].forEach((v, i) => { c.pause(.2); c.point(X(v), 220, 6, 'cyan'); c.texte('u_' + i, X(v), 200, { couleur: 'cyan', taille: 17, align: 'center' }); });
+        K.marque('termes');
+        c.pause(.3);
+        [2, 5, 8, 11].forEach(v => arc(c, X(v), X(v + 3), 184, 34, '+ 3', 'jaune'));
+        c.repere('pas', X(2), 120, X(14) - X(2), 70, 'les pas réguliers : + 3');
+        K.marque('pas');
+        c.pause(.4);
+        c.rect(150, 282, 430, 44, { couleur: 'jaune', arrondi: 8, largeur: 1.6 });
+        c.texte('u_{n+1} − u_n = 3 : raison r = 3', 365, 312, { couleur: 'jaune', taille: 22, align: 'center' });
+        c.repere('raison', 146, 278, 438, 52, 'la raison r = 3');
+        K.marque('raison');
+      },
+      decrire: {
+        termes: 'Sur un axe gradué de 0 à 16 : u₀ = 2, u₁ = 5, u₂ = 8, u₃ = 11, u₄ = 14.',
+        pas: 'Au-dessus, quatre arcs jaunes « + 3 » : d’un terme au suivant, on ajoute toujours 3.',
+        raison: 'Encadré : uₙ₊₁ − uₙ = 3 : raison r = 3.',
+      },
+      explication: [{ repere: 'pas', texte: 'Le même pas à chaque fois : + 3.' }, { repere: 'raison', texte: 'La différence constante, c’est la raison.' }],
+    },
+
+    geom: {
+      titre: 'Suite géométrique : on multiplie toujours par 2',
+      dessiner(c, K) {
+        K.titre('Suite géométrique : u_n = 5 × 2^{n}');
+        const X = axeH(c, 50, 700, 220, 0, 45, [0, 5, 10, 15, 20, 25, 30, 35, 40, 45]);
+        [5, 10, 20, 40].forEach((v, i) => { c.pause(.2); c.point(X(v), 220, 6, 'cyan'); c.texte('u_' + i, X(v), 200, { couleur: 'cyan', taille: 17, align: 'center' }); });
+        K.marque('termes');
+        c.pause(.3);
+        [5, 10, 20].forEach((v, i) => arc(c, X(v), X(2 * v), 184, 26 + 18 * i, '× 2', 'jaune'));
+        c.repere('fois', X(5), 110, X(40) - X(5), 80, 'à chaque pas : × 2');
+        K.marque('fois');
+        c.pause(.4);
+        c.rect(150, 282, 430, 44, { couleur: 'jaune', arrondi: 8, largeur: 1.6 });
+        c.texte('u_{n+1} = 2 u_n : raison q = 2', 365, 312, { couleur: 'jaune', taille: 22, align: 'center' });
+        c.repere('raison', 146, 278, 438, 52, 'la raison q = 2');
+        K.marque('raison');
+      },
+      decrire: {
+        termes: 'Sur un axe gradué de 0 à 45 : u₀ = 5, u₁ = 10, u₂ = 20, u₃ = 40.',
+        fois: 'Trois arcs jaunes « × 2 » de plus en plus grands : on multiplie toujours par 2, les pas grandissent.',
+        raison: 'Encadré : uₙ₊₁ = 2uₙ : raison q = 2.',
+      },
+      explication: [{ repere: 'fois', texte: 'On ne rajoute pas la même chose : on multiplie par 2.' }, { repere: 'raison', texte: 'Le nombre par lequel on multiplie, c’est la raison q.' }],
+    },
+
+    serrement: {
+      titre: 'Les termes se serrent vers 16',
+      params: { u0: { min: 14, max: 19, pas: 0.25, defaut: 17, sens: 'premier terme u₀ (glisser sur l’axe)' } },
+      dessiner(c, K) {
+        K.titre('Une suite qui se rapproche d’un nombre');
+        const u0 = K.P.u0, U = SU.suite(u0, f17, 7);
+        c.texte('u_{n+1} = ¼ u_n + 12', 470, 30, { couleur: 'blanc', taille: 18 });
+        const X = axeH(c, 50, 700, 180, 14, 19, [14, 15, 17, 18, 19]); c.ligne(X(16), 175, X(16), 185, { couleur: 'faible', largeur: 1.3 });
+        c.ligne(X(16), 95, X(16), 205, { couleur: 'jaune', largeur: 1.6, pointille: [5, 5] });
+        c.texte('16', X(16), 86, { couleur: 'jaune', taille: 18, align: 'center' });
+        c.repere('seize', X(16) - 16, 70, 32, 140, 'le nombre 16');
+        K.marque('axe');
+        c.pause(.3);
+        U.forEach((v, i) => {
+          c.pause(.3); c.point(X(v), 180, i ? 5 : 6.5, i ? 'cyan' : 'orange');
+          if (i < 3 && (i === 0 || Math.abs(X(v) - X(U[i - 1])) > 18)) c.texte('u_' + i, X(v), i % 2 ? 218 : 158, { couleur: i ? 'cyan' : 'orange', taille: 16, align: 'center' });
+        });
+        const xs = U.map(X), xa = Math.min(...xs), xb = Math.max(...xs);
+        c.repere('termes', xa - 10, 150, xb - xa + 20, 70, 'les termes u₀, u₁, u₂…');
+        c.repere('u0', X(u0) - 14, 166, 28, 28, 'u₀ : glisse-le sur l’axe');
+        K.marque('termes');
+        c.pause(.4);
+        if (u0 !== 16) {
+          const g = u0 > 16;
+          c.fleche(X(u0) + (g ? 0 : -10), 252, X(16) + (g ? 14 : -14), 252, { couleur: 'jaune', largeur: 2 });
+          c.texte('les termes se serrent vers 16', 360, 290, { couleur: 'jaune', taille: 19, align: 'center' });
+        } else c.texte('u_0 = 16 : tous les termes valent 16', 360, 290, { couleur: 'jaune', taille: 19, align: 'center' });
+        K.marque('serrement');
+        c.pause(.4);
+        c.rect(180, 308, 400, 42, { couleur: 'jaune', arrondi: 8, largeur: 1.6 });
+        c.texte('(u_n) converge vers 16 : lim u_n = 16', 380, 337, { couleur: 'jaune', taille: 21, align: 'center' });
+        K.marque('conclusion');
+      },
+      poignees(K) { const X = v => 50 + (v - 14) / 5 * 650; return [{ id: 'u0', x: X(K.P.u0), y: 180, bouger: (x) => ({ u0: 14 + (x - 50) / 650 * 5 }) }]; },
+      lecture: K => { const U = SU.suite(K.P.u0, f17, 3); return K.P.u0 === 16 ? 'u₀ = 16 : u₁ = ¼ × 16 + 12 = 16, tous les termes valent 16.' : `u₀ = ${fr(K.P.u0)} : u₁ = ${ecrire(U[1])}, u₂ = ${ecrire(U[2])}, u₃ = ${ecrire(U[3])} : les termes se serrent vers 16.`; },
+      decrire: K => ({
+        axe: 'Un axe gradué de 14 à 19 ; un pointillé jaune vertical en 16.',
+        termes: `Les termes placés un à un : u₀ = ${fr(K.P.u0)} (orange), puis u₁ = ${ecrire(f17(K.P.u0))}, u₂ = ${ecrire(f17(f17(K.P.u0)))}… (cyan).`,
+        serrement: K.P.u0 === 16 ? 'u₀ = 16 : tous les termes valent 16.' : 'Une flèche jaune : les termes se serrent vers 16.',
+        conclusion: 'Encadré : (uₙ) converge vers 16 : lim uₙ = 16.',
+      }),
+      explication: [{ repere: 'seize', texte: 'Le nombre dont les termes se rapprochent : 16.' }, { repere: 'u0', texte: 'Glisse u₀ : d’où qu’on parte, les termes se serrent vers 16.' }],
+    },
+
+    colonnes: {
+      titre: 'La suite auxiliaire vₙ = uₙ − 16',
+      dessiner(c, K) {
+        K.titre('Pourquoi une suite auxiliaire ?');
+        const XC = [110, 260, 470], Y = [130, 172, 214, 256];
+        c.texte('n', XC[0], 86, { couleur: 'faible', taille: 20, align: 'center' });
+        c.texte('u_n', XC[1], 86, { couleur: 'cyan', taille: 22, align: 'center' });
+        c.ligne(60, 100, 600, 100, { couleur: 'faible', largeur: 1.3 });
+        Y.forEach((y, i) => { c.texte(String(i), XC[0], y, { couleur: 'faible', taille: 19, align: 'center' }); c.texte(fr(U17[i], 6), XC[1], y, { couleur: 'cyan', taille: 20, align: 'center' }); });
+        c.repere('colonne_u', XC[1] - 70, 66, 140, 200, 'la colonne uₙ');
+        K.marque('colonne_u');
+        c.pause(.4);
+        c.texte('v_n = u_n − 16', XC[2], 86, { couleur: 'jaune', taille: 22, align: 'center' });
+        ['1', '0,25', '0,0625', '0,015625'].forEach((v, i) => { c.pause(.15); c.texte(v, XC[2], Y[i], { couleur: 'jaune', taille: 20, align: 'center' }); });
+        c.repere('colonne_v', XC[2] - 85, 66, 170, 200, 'la colonne vₙ = uₙ − 16');
+        K.marque('colonne_v');
+        c.pause(.3);
+        for (let i = 0; i < 3; i++) {
+          c.courbe(u => [560 + Math.sin(Math.PI * u) * 22, Y[i] - 6 + u * 42], 12, { couleur: 'vert', largeur: 1.8 });
+          c.texte('× ¼', 590, Y[i] + 18, { couleur: 'vert', taille: 17 });
+        }
+        c.repere('fois', 550, 118, 90, 140, 'chaque vₙ : le quart du précédent');
+        K.marque('fois_quart');
+        c.pause(.4);
+        c.texte('v_n géométrique  →  v_n = (¼)^{n}  →  u_n = 16 + (¼)^{n}', 60, 320, { couleur: 'blanc', taille: 21, max: 660 });
+        K.marque('detour');
+      },
+      decrire: {
+        colonne_u: 'Une colonne uₙ : 17 ; 16,25 ; 16,0625 ; 16,015625 (pas de formule visible).',
+        colonne_v: 'À côté, la colonne vₙ = uₙ − 16 : 1 ; 0,25 ; 0,0625 ; 0,015625.',
+        fois_quart: 'Des flèches vertes « × ¼ » entre deux vₙ successifs : chaque vₙ est le quart du précédent.',
+        detour: 'Écrit : vₙ géométrique → vₙ = (¼)ⁿ → uₙ = 16 + (¼)ⁿ.',
+      },
+      explication: [{ repere: 'colonne_v', texte: 'vₙ fait le travail : elle est géométrique.' }, { repere: 'fois', texte: 'On multiplie toujours par un quart.' }],
+    },
+
+    image_f: {
+      titre: 'La limite de f(uₙ)',
+      dessiner(c, K) {
+        K.titre('Si u_n tend vers 2, où va √(u_n + 7) ?');
+        const u = n => 2 + 1 / (n + 1), g = x => Math.sqrt(x + 7);
+        const XU = v => 70 + (v - 1.8) / 1.4 * 600, XV = v => 70 + (v - 2.95) / 0.25 * 600;
+        c.fleche(60, 110, 700, 110, { couleur: 'faible', largeur: 1.6 });
+        [2, 2.5, 3].forEach(v => { c.ligne(XU(v), 105, XU(v), 115, { couleur: 'faible', largeur: 1.3, duree: .03 }); c.texte(fr(v), XU(v), 134, { couleur: 'faible', taille: 14, align: 'center' }); });
+        c.texte('u_n', 30, 116, { couleur: 'cyan', taille: 18 });
+        for (let n = 0; n < 8; n++) { c.pause(.12); c.point(XU(u(n)), 110, 4.5, 'cyan'); }
+        c.point(XU(2), 110, 6, 'jaune');
+        c.texte('u_n → 2', XU(2) - 6, 84, { couleur: 'jaune', taille: 18, align: 'right' });
+        c.repere('a', XU(2) - 16, 92, 32, 34, 'a = 2');
+        K.marque('u_tend');
+        c.pause(.4);
+        for (let n = 0; n < 4; n++) { c.pause(.15); c.fleche(XU(u(n)), 118, XV(g(u(n))), 246, { couleur: 'tresfaible', largeur: 1.4, tete: 8 }); }
+        c.texte('f(x) = √(x + 7)', 560, 186, { couleur: 'blanc', taille: 18 });
+        K.marque('f_applique');
+        c.pause(.3);
+        c.fleche(60, 250, 700, 250, { couleur: 'faible', largeur: 1.6 });
+        [3, 3.1, 3.2].forEach(v => { c.ligne(XV(v), 245, XV(v), 255, { couleur: 'faible', largeur: 1.3, duree: .03 }); c.texte(fr(v), XV(v), 274, { couleur: 'faible', taille: 14, align: 'center' }); });
+        c.texte('f(u_n)', 14, 256, { couleur: 'vert', taille: 18 });
+        for (let n = 0; n < 8; n++) { c.pause(.12); c.point(XV(g(u(n))), 250, 4.5, 'vert'); }
+        c.point(XV(3), 250, 6, 'jaune');
+        c.texte('f(u_n) → f(2) = √9 = 3', XV(3) - 6, 298, { couleur: 'jaune', taille: 18, align: 'left' });
+        c.repere('fa', XV(3) - 16, 232, 32, 34, 'f(a) = 3');
+        K.marque('f_tend');
+        c.pause(.4);
+        c.rect(70, 314, 610, 40, { couleur: 'jaune', arrondi: 8, largeur: 1.6 });
+        c.texte('lim u_n = a  et  f continue en a   ⇒   lim f(u_n) = f(a)', 375, 342, { couleur: 'jaune', taille: 20, align: 'center' });
+        c.repere('regle', 66, 310, 618, 48, 'la règle de la limite de f(uₙ)');
+        K.marque('regle');
+      },
+      decrire: {
+        u_tend: 'En haut, sur un axe : les termes uₙ = 2 + 1/(n + 1) (3 ; 2,5 ; 2,33 ; 2,25…) se serrent vers 2 (point jaune).',
+        f_applique: 'Des flèches descendent de chaque uₙ vers son image par f(x) = √(x + 7).',
+        f_tend: 'En bas : les images f(uₙ) (3,16 ; 3,08 ; 3,06 ; 3,04…) se serrent vers f(2) = √9 = 3.',
+        regle: 'Encadré : lim uₙ = a et f continue en a ⇒ lim f(uₙ) = f(a).',
+      },
+      explication: [{ repere: 'a', texte: 'Les termes uₙ vont vers a = 2.' }, { repere: 'fa', texte: 'Leurs images vont vers f(2) = 3, car f est continue en 2.' }],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

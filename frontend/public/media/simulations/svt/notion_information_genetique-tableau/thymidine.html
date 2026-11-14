@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La thymidine radioactive — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="genetique.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Expérience de la thymidine radioactive sur des cellules de racine de fève : un cycle en milieu radioactif, les deux chromatides marquées ; un cycle en milieu normal, une chromatide marquée sur deux ; les molécules d’ADN en deux couleurs"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="etapes.js"></script>
+<script>
+/*
+ * La thymidine radioactive (cours « Notion de l’information génétique », 2 Bac PC BIOF, 11 novembre 2026). Capacité NIG9 ; d’après le
+ * national 2017 R. Des cellules de racine de fève : un cycle en milieu à thymidine radioactive, puis un cycle en milieu normal.
+ * Au centre, un chromosome suivi ; à droite, ses molécules d’ADN : brin ancien bleu, brin radioactif rouge lumineux (pointillés),
+ * brin nouveau non radioactif blanc. Une chromatide marquée est couverte de grains noirs (autoradiographie).
+ */
+const { lisse, rampe, entre, Peint } = window.Etapes;
+const TAU = Math.PI * 2;
+const BLEU = '#3b82f6', ROUGE = '#ef4444', BLANC = '#f1f5f9';
+const MT = { milieu_radioactif: 2.6, replication_1: 6.2, metaphase_1: 8.8, milieu_normal: 11.2, replication_2: 14.6, metaphase_2: 17.2, schema_brins: 20.2 };
+
+function plantule(x, a, radio) {
+  x.save(); x.globalAlpha = a;
+  const cx = 92, yl = 236; // bécher
+  const g = x.createLinearGradient(40, 0, 144, 0);
+  g.addColorStop(0, radio > 0 ? `rgba(134,239,172,${.25 + .25 * radio})` : 'rgba(186,230,253,.3)'); g.addColorStop(1, radio > 0 ? `rgba(74,222,128,${.2 + .25 * radio})` : 'rgba(125,211,252,.28)');
+  x.fillStyle = g; x.fillRect(42, yl, 100, 92);
+  if (radio > 0) Peint.halo(x, cx, yl + 46, 70, `rgba(134,239,172,${.18 * radio})`);
+  x.strokeStyle = 'rgba(226,240,250,.8)'; x.lineWidth = 1.6; x.beginPath(); x.moveTo(40, 190); x.lineTo(40, 330); x.lineTo(144, 330); x.lineTo(144, 190); x.stroke();
+  // la graine de fève, posée sur le bord, ses racines dans le liquide, deux petites feuilles
+  x.strokeStyle = '#f5f0e1'; x.lineWidth = 3; x.lineCap = 'round'; x.beginPath(); x.moveTo(cx, 196); x.quadraticCurveTo(cx + 4, 260, cx - 2, 312); x.stroke();
+  x.lineWidth = 1.5; for (const [dx, dy] of [[-16, 280], [14, 270], [-10, 300]]) { x.beginPath(); x.moveTo(cx + 1, dy - 22); x.lineTo(cx + dx, dy); x.stroke(); }
+  const gs = x.createRadialGradient(cx - 8, 180, 2, cx, 186, 26); gs.addColorStop(0, '#d6c08a'); gs.addColorStop(1, '#7c5a2a');
+  x.fillStyle = gs; x.beginPath(); x.ellipse(cx, 186, 26, 15, -.2, 0, TAU); x.fill();
+  x.fillStyle = '#65a30d'; for (const s of [-1, 1]) { x.beginPath(); x.ellipse(cx + s * 10, 160, 10, 5, s * .6, 0, TAU); x.fill(); }
+  x.strokeStyle = '#4d7c0f'; x.lineWidth = 2; x.beginPath(); x.moveTo(cx, 172); x.lineTo(cx, 160); x.stroke();
+  x.restore();
+}
+/** Une chromatide (bâtonnet violet) ; `marquee` : couverte de grains noirs d’autoradiographie. */
+function chromatide(x, cx, cy, L, marquee, a = 1, dx = 0) {
+  Peint.chromatide(x, [[cx + dx, cy - L / 2], [cx + dx * .3, cy], [cx + dx, cy + L / 2]], Peint.VIOLET, 13, a);
+  if (marquee) { x.save(); x.globalAlpha = a; x.fillStyle = 'rgba(10,10,10,.9)'; for (let i = 0; i < 26; i++) { const u = (i * 37 % 26) / 26 - .5; x.beginPath(); x.arc(cx + dx * (Math.abs(u) * 2 * .7 + .3) + Math.sin(i * 2.7) * 4.5, cy + u * L, 1.6, 0, TAU); x.fill(); } x.restore(); }
+}
+/** Molécule d’ADN horizontale à deux brins colorés (rouge = radioactif, en pointillés lumineux). */
+function moleculeH(x, x0, y, L, haut, bas, a = 1) {
+  x.save(); x.globalAlpha = a;
+  for (const [coul, yy] of [[haut, y - 6], [bas, y + 6]]) {
+    if (coul === ROUGE) { Peint.halo(x, x0 + L / 2, yy, L / 2, 'rgba(239,68,68,.25)'); x.setLineDash([6, 3]); }
+    x.strokeStyle = coul; x.lineWidth = 5; x.lineCap = 'round'; x.beginPath(); x.moveTo(x0, yy); x.lineTo(x0 + L, yy); x.stroke(); x.setLineDash([]);
+  }
+  x.strokeStyle = 'rgba(148,163,184,.55)'; x.lineWidth = 1; for (let i = 1; i < L / 10; i++) { x.beginPath(); x.moveTo(x0 + i * 10, y - 3); x.lineTo(x0 + i * 10, y + 3); x.stroke(); }
+  x.restore();
+}
+function dessiner(c, k) {
+  const t = k.t;
+  const radio = t < 9.4 ? rampe(t, .4, .8) : 1 - rampe(t, 9.4, 1.2);
+  const rep1 = rampe(t, 3.4, 2.4), cond1 = rampe(t, 6.6, 1.6), mito = rampe(t, 9.4, 1.4), rep2 = rampe(t, 11.8, 2.4), cond2 = rampe(t, 15.0, 1.6);
+  const CXc = 300, CYc = 210;
+  c.direct(() => {
+    const x = c.ctx;
+    plantule(x, rampe(t, .2, .6), radio);
+    // le chromosome suivi
+    if (t < 9.4) {
+      const L = entre(150, 96, cond1), ec = entre(0, 12, rep1) - 5 * cond1;
+      chromatide(x, CXc - ec, CYc, L, cond1 > .5, 1, -cond1 * 8); if (rep1 > 0) chromatide(x, CXc + ec, CYc, L, cond1 > .5, rep1, cond1 * 8);
+      if (cond1 > 0) { x.save(); x.fillStyle = '#2e1065'; x.beginPath(); x.arc(CXc, CYc, 5, 0, TAU); x.fill(); x.restore(); }
+    } else {
+      // après la mitose : on suit une cellule fille, son chromosome à une chromatide (bleu + rouge), puis la réplication en milieu normal
+      const Lc = cond2 > 0 ? entre(150, 96, cond2) : entre(96, 150, mito), ec = entre(0, 12, rep2) - 5 * cond2;
+      chromatide(x, CXc - ec, CYc, Lc, cond2 > .5 ? false : false, 1, -cond2 * 8);
+      if (rep2 > 0) chromatide(x, CXc + ec, CYc, Lc, cond2 > .5, rep2, cond2 * 8);
+      if (cond2 > 0) { x.save(); x.fillStyle = '#2e1065'; x.beginPath(); x.arc(CXc, CYc, 5, 0, TAU); x.fill(); x.restore(); }
+    }
+    // les molécules d’ADN, à droite
+    const X0 = 470, LL = 230;
+    if (t < 9.4) {
+      if (rep1 <= 0) moleculeH(x, X0, 200, LL, BLEU, BLEU, rampe(t, .3, .5));
+      else { const d = 34 * rep1; moleculeH(x, X0, 200 - d, LL, BLEU, ROUGE, 1); moleculeH(x, X0, 200 + d, LL, ROUGE, BLEU, 1); }
+    } else {
+      if (rep2 <= 0) moleculeH(x, X0, 200, LL, BLEU, ROUGE, 1);
+      else { const d = 34 * rep2; moleculeH(x, X0, 200 - d, LL, BLEU, BLANC, 1); moleculeH(x, X0, 200 + d, LL, BLANC, ROUGE, 1); }
+    }
+  });
+  c.texte('La thymidine radioactive (national 2017 R)', 14, 26, { couleur: 'cyan', taille: 19 });
+  c.repere('plantule', 40, 140, 106, 192, 'la plantule de fève'); c.repere('milieu', 42, 236, 100, 92, 'le milieu de culture');
+  c.repere('chromosome', CXc - 50, CYc - 80, 100, 160, 'le chromosome suivi'); c.repere('molecules', 460, 140, 250, 120, 'les molécules d’ADN');
+  if (k.ecrit(c, 'mr', 1.0)) { k.T(c, 'cellules de racine de fève', 92, 120, { couleur: 'blanc', taille: 13, align: 'center' }); }
+  if (t < 9.4 && k.ecrit(c, 'radio', 1.4)) { k.T(c, 'milieu à thymidine', 92, 356, { couleur: 'vert', taille: 14, align: 'center' }); k.T(c, 'radioactive', 92, 372, { couleur: 'vert', taille: 14, align: 'center' }); }
+  if (t >= 10.6 && k.ecrit(c, 'norm', 10.6)) { k.T(c, 'milieu normal', 92, 356, { couleur: 'cyan', taille: 14, align: 'center' }); k.T(c, '(non radioactif)', 92, 372, { couleur: 'cyan', taille: 13, align: 'center' }); }
+  if (k.ecrit(c, 'regle', 2.0)) k.T(c, 'La thymidine radioactive n’entre que dans l’ADN, lors de la réplication.', 380, 404, { couleur: 'jaune', taille: 15, align: 'center' });
+  if (k.ecrit(c, 'c1', t < 9.4 ? 0 : 99)) k.T(c, '1er cycle : milieu radioactif', 585, 72, { couleur: 'vert', taille: 15, align: 'center' });
+  if (t >= 9.4 && k.ecrit(c, 'c2', 9.4)) k.T(c, '2e cycle : milieu normal', 585, 72, { couleur: 'cyan', taille: 15, align: 'center' });
+  if (t >= 3.4) { c.repere('brin_ancien', 460, 150, 250, 20, 'un brin ancien (bleu)'); c.repere('brin_radioactif', 460, 180, 250, 30, 'un brin radioactif (rouge)'); }
+  if (t < 9.4 && k.ecrit(c, 'm1', MT.metaphase_1 - .6)) { k.T(c, 'chromosome en métaphase :', CXc, 316, { couleur: 'blanc', taille: 14, align: 'center' }); k.T(c, 'les deux chromatides sont marquées', CXc, 336, { couleur: 'vert', taille: 14, align: 'center' }); c.repere('chromatide_marquee', CXc - 30, CYc - 50, 60, 100, 'chromatides marquées'); }
+  if (t >= 9.4 && k.ecrit(c, 'm2', MT.metaphase_2 - .6)) {
+    k.T(c, 'chromosome en métaphase :', CXc, 316, { couleur: 'blanc', taille: 14, align: 'center' }); k.T(c, 'une chromatide marquée sur deux', CXc, 336, { couleur: 'orange', taille: 14, align: 'center' });
+    c.repere('chromatide_marquee', CXc + 2, CYc - 50, 30, 100, 'la chromatide marquée'); c.repere('chromatide_non_marquee', CXc - 32, CYc - 50, 30, 100, 'la chromatide non marquée');
+  }
+  if (k.ecrit(c, 'schema', MT.schema_brins - .8)) {
+    k.T(c, 'brin ancien', 720, 134, { couleur: 'bleu', taille: 13, align: 'right' }); k.T(c, 'brin radioactif', 720, 300, { couleur: 'rouge', taille: 13, align: 'right' }); k.T(c, 'brin non radioactif', 720, 316, { couleur: 'blanc', taille: 13, align: 'right' });
+    k.T(c, 'La réplication est semi-conservative.', 585, 360, { couleur: 'vert', taille: 16, align: 'center' });
+    c.repere('schema', 460, 120, 290, 250, 'le schéma des brins');
+  }
+}
+function voit(k) {
+  const t = k.t, m = ['À gauche une plantule de fève, ses racines dans un bécher ; au centre un chromosome suivi ; à droite ses molécules d’ADN (bleu : brin ancien, rouge pointillé lumineux : brin radioactif, blanc : brin nouveau non radioactif).'];
+  m.push(t < 9.4 ? 'Milieu à thymidine radioactive (liquide vert lumineux) ; écrit « La thymidine radioactive n’entre que dans l’ADN, lors de la réplication. »' : 'Milieu normal, non radioactif (liquide bleu clair).');
+  if (t < 3.4) m.push('Une molécule d’ADN à deux brins bleus ; le chromosome a une chromatide.');
+  if (t >= 3.4 && t < 9.4) m.push('1er cycle : réplication : deux molécules, chacune un brin bleu ancien et un brin rouge radioactif ; le chromosome a deux chromatides' + (t >= 6.6 ? ', condensées en métaphase et TOUTES LES DEUX couvertes de grains noirs (écrit « les deux chromatides sont marquées »).' : '.'));
+  if (t >= 9.4 && t < 11.8) m.push('Après la mitose, on suit une cellule fille : son chromosome a une chromatide, une molécule bleu + rouge.');
+  if (t >= 11.8) m.push('2e cycle en milieu normal : chaque brin sert de modèle à un brin blanc non radioactif : une molécule bleu + blanc (non marquée) et une molécule blanc + rouge (marquée)' + (t >= 15 ? ' ; en métaphase, UNE chromatide sur deux est couverte de grains noirs (écrit « une chromatide marquée sur deux »).' : '.'));
+  if (t >= MT.schema_brins - .8) m.push('Légendes « brin ancien », « brin radioactif », « brin non radioactif » et « La réplication est semi-conservative. »');
+  return m;
+}
+
+window.Etapes.lancer({
+  id: 'genetique_thymidine', titre: 'La thymidine radioactive', graine: 43,
+  vues: {
+    experience: { titre: 'La thymidine radioactive', fin: 21.6, moments: MT, dessiner, voit,
+      motifs: { milieu_radioactif: 'les cellules dans un milieu à thymidine radioactive', replication_1: 'réplication : chaque molécule a un brin ancien et un brin radioactif', metaphase_1: '1er cycle : les deux chromatides sont marquées', milieu_normal: 'les cellules passent dans un milieu normal', replication_2: 'réplication en milieu normal : chaque brin sert de modèle', metaphase_2: '2e cycle : une chromatide marquée sur deux', schema_brins: 'le schéma des brins : la réplication est semi-conservative' },
+      conclusion: 'Une chromatide marquée sur deux après le 2e cycle : la réplication est semi-conservative.',
+      texte: 'Thymidine radioactive (national 2017 R) : 1er cycle en milieu radioactif → les deux chromatides marquées ; 2e cycle en milieu normal → une chromatide marquée sur deux : réplication semi-conservative.',
+      explication: [{ repere: 'milieu', texte: 'La thymidine radioactive n’entre que dans l’ADN, à la réplication.' }, { repere: 'chromosome', texte: 'Après le premier cycle, les deux chromatides sont marquées.' }, { repere: 'molecules', texte: 'Au second cycle, chaque brin sert de modèle à un brin non radioactif.' }, { repere: 'chromatide_marquee', texte: 'Une seule chromatide sur deux reste marquée.' }] },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

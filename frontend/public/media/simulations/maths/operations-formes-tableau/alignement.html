@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Alignement — nombres complexes</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Plan complexe à la craie : trois points A, B, C et le quotient (c − a)/(b − a) placé dans un petit plan ; sur l’axe réel quand les points sont alignés ; sujet 2021 : A, C, D alignés"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Nombres complexes (première partie) » (math_ch6_nombres_complexes) : l’alignement par un quotient réel.
+ * Vues : ?vue=alignes (params cx, cy : le point C) | national.
+ * alignes : vecteurs, alignes, sort, revient (en plus).   national : points, vecteurs, quotient, conclusion.
+ * Chaque moment est aussi un repère du même nom.
+ */
+const fr = MathsTableau.fr;
+const PI = Math.PI, R2 = Math.SQRT2, R3 = Math.sqrt(3);
+const SUPS = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+/** Largeur réelle d’un texte à la craie (exposants et indices compris, sans le signe ¯ de la barre). */
+function L(c, s, t = 18) {
+  s = String(s).replace(/¯/g, '').replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUPS[ch]).join('') + '}');
+  let w = 0;
+  for (const seg of Tableau.Craie.segments(s)) { c.ctx.font = `${seg.sub || seg.sup ? t * .62 : t}px ${Tableau.POLICE}`; w += c.ctx.measureText(seg.t).width; }
+  return w;
+}
+/** La barre du conjugué, dessinée au trait au-dessus de la lettre. */
+function barre(c, x, y, w, couleur) { c.ligne(x + 1, y, x + w - 1, y, { couleur: couleur || 'blanc', largeur: 1.7, tremble: .2, duree: .08 }); }
+/** Texte à la craie ; « z¯ » s’écrit z surmonté d’une barre dessinée. Renvoie la largeur. */
+function ecrire(c, s, x, y, o = {}) {
+  const t = o.taille ?? 18, total = L(c, s, t);
+  let px = o.align === 'center' ? x - total / 2 : o.align === 'right' ? x - total : x;
+  const morceaux = String(s).split('¯');
+  morceaux.forEach((m, i) => {
+    if (m) c.texte(m, px, y, { ...o, align: 'left' });
+    const w = L(c, m, t);
+    if (i < morceaux.length - 1 && m) { const lw = L(c, m.slice(-1), t); barre(c, px + w - lw, y - t * .66, lw, o.couleur); }
+    px += w;
+  });
+  return total;
+}
+/** Texte encadré ; renvoie le rectangle [x, y, w, h]. */
+function encadre(c, s, x, y, taille, couleur, coulTexte) {
+  const w = L(c, s, taille) + 18;
+  ecrire(c, s, x, y, { couleur: coulTexte || couleur, taille });
+  c.rect(x - 9, y - taille - 4, w, taille + 14, { couleur, arrondi: 8, largeur: 1.6 });
+  return [x - 9, y - taille - 4, w, taille + 14];
+}
+/** Plusieurs lignes dans un même cadre ; renvoie le rectangle. */
+function bloc(c, lignes, x, y, taille, couleur, inter = 30) {
+  const w = Math.max(...lignes.map(l => L(c, l.t, taille))) + 20, h = (lignes.length - 1) * inter + taille + 16;
+  lignes.forEach((l, i) => ecrire(c, l.t, x, y + i * inter, { couleur: l.c || 'blanc', taille }));
+  c.rect(x - 10, y - taille - 5, w, h, { couleur, arrondi: 9, largeur: 1.7 });
+  return [x - 10, y - taille - 5, w, h];
+}
+function pgcd(a, b) { a = Math.abs(a); b = Math.abs(b); while (b) [a, b] = [b, a % b]; return a || 1; }
+/** n·π/d écrit au tableau : π/4, −π/3, 5π/12, 0… */
+function piSur(n, d = 12) {
+  if (n === 0) return '0';
+  const g = pgcd(n, d); n /= g; d /= g;
+  const a = Math.abs(n);
+  return (n < 0 ? '−' : '') + (a === 1 ? '' : a) + 'π' + (d === 1 ? '' : '/' + d);
+}
+const angleDeg = deg => piSur(Math.round(deg / 15), 12);
+/** Petit nom de vecteur (u, v) avec sa flèche au-dessus. */
+function nomVec(c, l, x, y, t = 14) {
+  c.texte(l, x, y, { couleur: 'blanc', taille: t, align: 'center', duree: .1 });
+  c.fleche(x - 4, y - t * .8, x + 5, y - t * .8, { couleur: 'blanc', largeur: 1.1, tete: 3.5, duree: .06 });
+}
+/** Plan complexe orthonormé : o = {ox, oy (origine en px), u (px par unité), xmin, xmax, ymin, ymax}. */
+function plan(c, o, dessin = true) {
+  const G = { ...o, X: x => o.ox + x * o.u, Y: y => o.oy - y * o.u, inv: (px, py) => [(px - o.ox) / o.u, (o.oy - py) / o.u] };
+  if (!dessin) return G;
+  if (o.grad) {
+    for (let k = Math.ceil(o.xmin); k <= o.xmax - .3; k++) if (k) c.ligne(G.X(k), o.oy - 3, G.X(k), o.oy + 3, { couleur: 'faible', largeur: 1.1, duree: .02 });
+    for (let k = Math.ceil(o.ymin); k <= o.ymax - .3; k++) if (k) c.ligne(o.ox - 3, G.Y(k), o.ox + 3, G.Y(k), { couleur: 'faible', largeur: 1.1, duree: .02 });
+  }
+  c.fleche(G.X(o.xmin), o.oy, G.X(o.xmax), o.oy, { couleur: 'faible', largeur: 1.5 });
+  c.fleche(o.ox, G.Y(o.ymin), o.ox, G.Y(o.ymax), { couleur: 'faible', largeur: 1.5 });
+  c.texte('axe réel', G.X(o.xmax), o.oy + (o.reelDessus ? -8 : 18), { couleur: 'faible', taille: o.taille || 13, align: 'right' });
+  if (o.imGauche) c.texte('axe imaginaire', o.ox - 8, G.Y(o.ymax) + 8, { couleur: 'faible', taille: o.taille || 13, align: 'right' });
+  else c.texte('axe imaginaire', o.ox + 8, G.Y(o.ymax) + 8, { couleur: 'faible', taille: o.taille || 13 });
+  c.texte('O', o.ox - 14, o.oy + 16, { couleur: 'faible', taille: 14 });
+  c.fleche(o.ox, o.oy, G.X(1), o.oy, { couleur: 'blanc', largeur: 2, tete: 7 });
+  c.fleche(o.ox, o.oy, o.ox, G.Y(1), { couleur: 'blanc', largeur: 2, tete: 7 });
+  nomVec(c, 'u', G.X(.5), o.oy + 17); nomVec(c, 'v', o.ox - 12, G.Y(.5) + 5);
+  return G;
+}
+/** Arc d’angle orienté (angles en radians, sens direct vers le haut), avec sa pointe de flèche au bout. */
+function arc(c, cx, cy, r, a0, a1, o = {}) {
+  const couleur = o.couleur || 'jaune', largeur = o.largeur ?? 1.8;
+  const n = Math.max(6, Math.ceil(Math.abs(a1 - a0) * r / 6)), pts = [];
+  for (let i = 0; i <= n; i++) { const a = a0 + (a1 - a0) * i / n; pts.push([cx + r * Math.cos(a), cy - r * Math.sin(a)]); }
+  c.trait(pts, { tremble: .3, couleur, largeur, duree: o.duree, pointille: o.pointille });
+  if (o.tete === 0 || Math.abs(a1 - a0) * r < 5) return;
+  const s = Math.sign(a1 - a0), ex = cx + r * Math.cos(a1), ey = cy - r * Math.sin(a1);
+  const ang = Math.atan2(-s * Math.cos(a1), -s * Math.sin(a1)), t = o.tete ?? 8;
+  c.trait([[ex - t * Math.cos(ang - .5), ey - t * Math.sin(ang - .5)], [ex, ey], [ex - t * Math.cos(ang + .5), ey - t * Math.sin(ang + .5)]], { couleur, largeur, duree: .08, tremble: .2 });
+}
+/** Texte placé à l’angle a (radians) et à la distance r du centre. */
+function auBout(c, s, G, a, r, o = {}) {
+  const x = G.ox + r * Math.cos(a), y = G.oy - r * Math.sin(a) + (o.taille || 16) * .35;
+  ecrire(c, s, x, y, { align: 'center', taille: 16, ...o });
+}
+function pt(c, G, x, y, couleur = 'cyan', r = 4.5) { c.point(G.X(x), G.Y(y), r, couleur); }
+
+
+/** a + ib écrit au tableau (virgule, signe −, « i » seul pour ±1). */
+function cplx(re, im) {
+  const r = Math.abs(re) < 1e-9 ? 0 : re, i = Math.abs(im) < 1e-9 ? 0 : im;
+  const fi = Math.abs(Math.abs(i) - 1) < 1e-9 ? 'i' : fr(Math.abs(i), 2) + 'i';
+  if (!i) return fr(r, 2);
+  if (!r) return (i < 0 ? '−' : '') + fi;
+  return fr(r, 2) + (i < 0 ? ' − ' : ' + ') + fi;
+}
+/* --- vue alignes : A(−1 − i), B(1) ; b − a = 2 + i --- */
+const PA = { ox: 190, oy: 205, u: 36, xmin: -4.4, xmax: 4.6, ymin: -3.3, ymax: 3.5, grad: true };
+const PQ = { ox: 520, oy: 296, u: 30, xmin: -1.8, xmax: 3.1, ymin: -1.8, ymax: 2.3, grad: true, taille: 12 };
+const A = [-1, -1], B = [1, 0];
+const quot = C => [(2 * (C[0] + 1) + (C[1] + 1)) / 5, (2 * (C[1] + 1) - (C[0] + 1)) / 5];
+const aligne = C => Math.abs(quot(C)[1]) < 1e-9;
+const projete = C => { const t = quot(C)[0]; return [-1 + 2 * t, -1 + t]; };
+const tire = C => (C[0] - .5 >= -4 && C[1] + 1 <= 3 ? [C[0] - .5, C[1] + 1] : [C[0] + .5, C[1] - 1]);
+const borneQ = (Q, [x, y]) => [Math.min(Q.xmax - .15, Math.max(Q.xmin + .1, x)), Math.min(Q.ymax - .15, Math.max(Q.ymin + .1, y))];
+/* --- vue national (2021 R) --- */
+const PN_ = { ox: 200, oy: 165, u: 34, xmin: -4.3, xmax: 4.4, ymin: -4.9, ymax: 3.1, grad: true };
+
+MathsTableau.page({
+  id: 'nc_alignement', titre: 'Nombres complexes : l’alignement',
+  texte: 'Construction à la craie dans le plan complexe : A, B et C sont alignés exactement quand le quotient (c − a)/(b − a) est un réel ; on voit ce quotient dans un petit plan à part, sur l’axe réel ou hors de l’axe réel ; sujet 2021 (rattrapage) : A, C et D alignés',
+  vues: {
+    alignes: {
+      titre: 'Trois points alignés : un quotient réel',
+      params: { cx: { min: -4, max: 4, pas: .5, defaut: 2, sens: 'partie réelle de c' }, cy: { min: -3, max: 3, pas: .5, defaut: .5, sens: 'partie imaginaire de c' } },
+      dessiner(c, K) {
+        K.titre('Trois points alignés : un quotient réel');
+        const G = plan(c, PA), XR = 400;
+        const Cp = [K.P.cx, K.P.cy], ok = aligne(Cp), C1 = ok ? Cp : projete(Cp), Cs = ok ? tire(Cp) : Cp;
+        const q1 = quot(C1);
+        c.pause(.2);
+        pt(c, G, A[0], A[1], 'cyan'); c.texte('A', G.X(A[0]) - 8, G.Y(A[1]) + 18, { couleur: 'cyan', taille: 17, align: 'center' });
+        pt(c, G, B[0], B[1], 'cyan'); c.texte('B', G.X(B[0]) + 4, G.Y(B[1]) + 19, { couleur: 'cyan', taille: 17 });
+        pt(c, G, C1[0], C1[1], 'jaune'); c.texte('C', G.X(C1[0]) + 6, G.Y(C1[1]) - 8, { couleur: 'jaune', taille: 17 });
+        c.fleche(G.X(A[0]), G.Y(A[1]), G.X(B[0]), G.Y(B[1]), { couleur: 'cyan', largeur: 2.4 });
+        c.fleche(G.X(A[0]), G.Y(A[1]), G.X(C1[0]), G.Y(C1[1]), { couleur: 'jaune', largeur: 2, pointille: [7, 4] });
+        K.lignes(XR, 84, [
+          { t: 'b − a = 2 + i', couleur: 'cyan', taille: 18 },
+          { t: `c − a = ${cplx(C1[0] + 1, C1[1] + 1)}`, couleur: 'jaune', taille: 18 },
+        ], 26);
+        c.repere('vecteurs', G.X(-1.6), G.Y(Math.max(C1[1], 0) + .7), G.X(Math.max(C1[0], 1) + .6) - G.X(-1.6), G.Y(-1.6) - G.Y(Math.max(C1[1], 0) + .7), 'les vecteurs AB et AC partent de A');
+        K.marque('vecteurs');
+        c.pause(.4);
+        c.ligne(G.X(-4.4), G.Y(-2.7), G.X(4.6), G.Y(1.8), { couleur: 'vert', largeur: 1.6, pointille: [8, 6] });
+        c.texte('(AB)', G.X(4.3), G.Y(1.65) - 10, { couleur: 'vert', taille: 15, align: 'center' });
+        const Q = plan(c, PQ);
+        c.texte('le quotient', Q.X(Q.xmin) + 2, Q.Y(1.6), { couleur: 'faible', taille: 13 });
+        const qq = borneQ(Q, q1);
+        c.point(Q.X(qq[0]), Q.Y(0), 5, 'vert');
+        c.texte('k = ' + fr(q1[0], 2), Q.X(qq[0]), Q.oy - 10, { couleur: 'vert', taille: 15, align: 'center' });
+        K.lignes(XR, 140, [
+          { t: `(c − a)/(b − a) = ${fr(q1[0], 2)}`, couleur: 'jaune', taille: 18 },
+          { t: `k = ${fr(q1[0], 2)} : réel ⇒ A, B, C alignés`, couleur: 'vert', taille: 17 },
+        ], 26);
+        c.repere('alignes', XR - 6, 120, 350, 52, '(c − a)/(b − a) = k réel : alignés');
+        K.marque('alignes');
+        c.pause(.4);
+        const enCours = (p) => {
+          const C = [C1[0] + (Cs[0] - C1[0]) * p, C1[1] + (Cs[1] - C1[1]) * p], q = borneQ(Q, quot(C));
+          c.ligne(G.X(A[0]), G.Y(A[1]), G.X(C[0]), G.Y(C[1]), { couleur: 'rouge', largeur: 1.6, pointille: [5, 4] });
+          c.point(G.X(C[0]), G.Y(C[1]), 5.5, 'rouge');
+          c.texte('C', G.X(C[0]) - 8, G.Y(C[1]) - 9, { couleur: 'rouge', taille: 17, align: 'right' });
+          c.ligne(Q.X(q[0]), Q.Y(q[1]), Q.X(q[0]), Q.oy, { couleur: 'rouge', largeur: 1.3, pointille: [4, 4] });
+          c.point(Q.X(q[0]), Q.Y(q[1]), 5, 'rouge');
+        };
+        const pS = K.anime(1.8, () => {});
+        const qs = quot(Cs);
+        K.lignes(XR, 196, [
+          { t: `(c − a)/(b − a) = ${cplx(qs[0], qs[1])}`, couleur: 'rouge', taille: 17 },
+          { t: 'pas réel : pas alignés', couleur: 'rouge', taille: 18 },
+        ], 24);
+        c.repere('sort', XR - 6, 178, 350, 50, 'C hors de la droite : le quotient n’est pas réel');
+        K.marque('sort');
+        c.pause(.4);
+        let pB = 0;
+        if (ok) {
+          pB = K.anime(1.4, () => {});
+          c.texte('C revient sur (AB) :', 624, 306, { couleur: 'vert', taille: 14, max: 130 });
+          c.texte('de nouveau réel', 624, 324, { couleur: 'vert', taille: 14, max: 130 });
+        } else {
+          c.texte('glisse C sur (AB)', 624, 306, { couleur: 'faible', taille: 14, max: 130 });
+          c.texte('pour l’aligner', 624, 324, { couleur: 'faible', taille: 14, max: 130 });
+        }
+        c.repere('revient', 618, 290, 136, 40, ok ? 'C revient sur la droite' : 'glisse C sur la droite');
+        // le point C tiré (rouge) : il sort de la droite, puis (si C est réglé sur la droite) il y revient
+        if (pS > 0 && pB < 1) c.direct(() => enCours(pS * (1 - pB)));
+        K.marque('revient');
+      },
+      poignees(K) { const G = plan(null, PA, false); return [{ id: 'C', x: G.X(K.P.cx), y: G.Y(K.P.cy), bouger: (px, py) => { const [x, y] = G.inv(px, py); return { cx: x, cy: y }; } }]; },
+      lecture: K => { const C = [K.P.cx, K.P.cy], q = quot(C); return `C(${cplx(C[0], C[1])}) : (c − a)/(b − a) = ${cplx(q[0], q[1])}, ${aligne(C) ? 'un réel : A, B et C sont alignés' : 'pas un réel : A, B et C ne sont pas alignés'}.`; },
+      decrire: K => {
+        const Cp = [K.P.cx, K.P.cy], ok = aligne(Cp), C1 = ok ? Cp : projete(Cp), Cs = ok ? tire(Cp) : Cp, q1 = quot(C1), qs = quot(Cs);
+        return {
+          vecteurs: `Un plan complexe gradué ; A(−1 − i) et B(1) en cyan, C(${cplx(C1[0], C1[1])}) en jaune ; les vecteurs AB (cyan) et AC (jaune) partent de A. À droite « b − a = 2 + i », « c − a = ${cplx(C1[0] + 1, C1[1] + 1)} ».`,
+          alignes: `La droite (AB) en pointillé vert passe par C. Dans un petit plan à droite, le quotient (c − a)/(b − a) = ${fr(q1[0], 2)} est un point vert sur l’axe réel, « k = ${fr(q1[0], 2)} : réel ⇒ A, B, C alignés ».`,
+          sort: `C (en rouge) est tiré hors de la droite jusqu’à ${cplx(Cs[0], Cs[1])} : son quotient ${cplx(qs[0], qs[1])} quitte l’axe réel (point rouge au-dessus ou au-dessous) ; « pas réel : pas alignés » en rouge.`,
+          revient: ok ? 'C revient sur la droite (AB) ; le quotient retombe sur l’axe réel : « de nouveau réel ».' : 'C reste hors de la droite ; « glisse C sur (AB) pour l’aligner ».',
+        };
+      },
+      motifs: { vecteurs: 'les vecteurs AB et AC', alignes: 'le quotient réel', sort: 'C hors de la droite', revient: 'C revient sur la droite' },
+      explication: [
+        { repere: 'vecteurs', texte: 'b − a est l’affixe du vecteur AB, c − a celle du vecteur AC ; tous deux partent de A.' },
+        { repere: 'alignes', texte: 'C est sur (AB) : le quotient (c − a)/(b − a) est un réel k ; AC = k AB.' },
+        { repere: 'sort', texte: 'Quand C quitte la droite, le quotient quitte l’axe réel : il n’est plus réel, les points ne sont plus alignés.' },
+        { repere: 'revient', texte: 'Sur la droite, le quotient redevient réel.' },
+      ],
+    },
+
+    national: {
+      titre: '2021 R : A, C, D',
+      dessiner(c, K) {
+        K.titre('2021 R : A, C, D');
+        const G = plan(c, PN_), XR = 390;
+        c.pause(.2);
+        const P = { A: [3, 2], C: [-1, -2], D: [-3, -4] };
+        pt(c, G, 3, 2, 'cyan'); c.texte('A', G.X(3) - 10, G.Y(2) - 8, { couleur: 'cyan', taille: 18, align: 'right' });
+        pt(c, G, -1, -2, 'cyan'); c.texte('C', G.X(-1) + 9, G.Y(-2) + 6, { couleur: 'cyan', taille: 18 });
+        pt(c, G, -3, -4, 'cyan'); c.texte('D', G.X(-3) + 9, G.Y(-4) + 6, { couleur: 'cyan', taille: 18 });
+        c.texte('A(3 + 2i) ; C(−1 − 2i) ; D(−3 − 4i)', XR, 80, { couleur: 'cyan', taille: 17 });
+        c.repere('points', G.X(-3.4), G.Y(2.5), G.X(3.4) - G.X(-3.4), G.Y(-4.4) - G.Y(2.5), 'A, C et D');
+        K.marque('points');
+        c.pause(.4);
+        c.fleche(G.X(3), G.Y(2), G.X(-3), G.Y(-4), { couleur: 'orange', largeur: 4 });
+        c.fleche(G.X(3), G.Y(2), G.X(-1), G.Y(-2), { couleur: 'jaune', largeur: 2 });
+        K.lignes(XR, 116, [
+          { t: 'c − a = −4 − 4i', couleur: 'jaune', taille: 18 },
+          { t: 'd − a = −6 − 6i', couleur: 'orange', taille: 18 },
+        ], 26);
+        c.repere('vecteurs', XR - 6, 98, 200, 52, 'c − a = −4 − 4i ; d − a = −6 − 6i');
+        K.marque('vecteurs');
+        c.pause(.4);
+        K.lignes(XR, 180, [
+          { t: '(d − a)/(c − a) = (−6 − 6i)/(−4 − 4i)', couleur: 'blanc', taille: 17 },
+          { t: '= 6(−1 − i) / (4(−1 − i)) = 6/4 = 3/2', couleur: 'blanc', taille: 17 },
+          { t: '3/2 : un réel', couleur: 'vert', taille: 18 },
+        ], 26);
+        c.repere('quotient', XR - 6, 162, 360, 80, '(d − a)/(c − a) = 3/2 : réel');
+        K.marque('quotient');
+        c.pause(.4);
+        c.ligne(G.X(-3.9), G.Y(-4.9), G.X(4.1), G.Y(3.1), { couleur: 'vert', largeur: 1.8, pointille: [8, 6] });
+        c.texte('quotient réel ⇒', XR, 276, { couleur: 'blanc', taille: 17 });
+        const b = encadre(c, 'A, C et D alignés', XR + 9, 320, 21, 'jaune');
+        c.repere('conclusion', b[0], b[1], b[2], b[3], 'A, C et D alignés');
+        K.marque('conclusion');
+      },
+      decrire: {
+        points: 'Un plan complexe gradué ; les points A(3 + 2i), C(−1 − 2i) et D(−3 − 4i) en cyan.',
+        vecteurs: 'Depuis A, la flèche jaune vers C et la flèche orange vers D, sur la même direction ; à droite « c − a = −4 − 4i » et « d − a = −6 − 6i ».',
+        quotient: 'Le calcul « (d − a)/(c − a) = (−6 − 6i)/(−4 − 4i) = 6/4 = 3/2 » et « 3/2 : un réel » en vert.',
+        conclusion: 'Une droite verte en pointillé passe par A, C et D ; « quotient réel ⇒ » et l’encadré jaune « A, C et D alignés ».',
+      },
+      motifs: { points: 'A, C et D', vecteurs: 'c − a et d − a', quotient: 'le quotient 3/2', conclusion: 'alignés' },
+      explication: [
+        { repere: 'points', texte: 'Les trois points du sujet : A(3 + 2i), C(−1 − 2i), D(−3 − 4i).' },
+        { repere: 'vecteurs', texte: 'c − a = −4 − 4i et d − a = −6 − 6i : le second est 3/2 fois le premier.' },
+        { repere: 'quotient', texte: 'Le quotient (d − a)/(c − a) vaut 3/2 : c’est un réel.' },
+        { repere: 'conclusion', texte: 'Quotient réel : A, C et D sont alignés.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

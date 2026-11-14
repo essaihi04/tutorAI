@@ -1,0 +1,684 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le transfert d’électrons — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="tlr.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Une lame de zinc grise plongée dans un bécher de sulfate de cuivre bleu, un dépôt rouge de cuivre, une loupe sur la surface de la lame où un atome Zn cède deux électrons à un ion Cu²⁺ ; ou une balance Ox + n e⁻ ⇌ Red"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Le transfert d’électrons (cours « Transformations lentes et transformations rapides », 2e Bac PC BIOF, novembre 2026).
+ * Contrat : outils/cours/notes/cours/transformations_lentes_rapides_contrat_simulations.md, § 1.
+ * Vues (?vue=) : zinc (défaut) | couple.
+ *  - zinc : lame de zinc dans le sulfate de cuivre (20 °C, temps accéléré ≈ 1 h) ; dépôt rouge de cuivre, le bleu pâlit ;
+ *    loupe : un atome Zn cède 2 e⁻ (flèches vertes) à un ion Cu²⁺ qui devient Cu ; Zn²⁺ part en solution ; bilan Zn + Cu²⁺ → Zn²⁺ + Cu.
+ *  - couple : balance de Roberval, Ox + n e⁻ à gauche, Red à droite, double flèche dessinée ; réduction = gain, oxydation = perte d’électrons.
+ * Couleurs : vert = réducteur / électrons cédés, rouge = oxydant / électrons captés, jaune = surlignage ; Cu²⁺ bleu #3a7bd5, cuivre #b5562b.
+ */
+/* ── Moteur du déroulé (modèle : physics/circuit-rlc-tableau/circuit-lc.html, recopié dans chaque page) ──────────────
+ * Une page déclare des étapes par vue : { nom, anim (s), ecritDes (s, défaut = anim), motif, bulle() }.
+ * Chaque étape : d’abord son animation, puis la craie écrit ce qu’il faut dire ; le moment `nom` est la fin de cette écriture.
+ * Les durées d’écriture sont mesurées au dessin (calculer). Les parties fixes s’écrivent à l’horloge de la scène, ECRITURE fois plus vite.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lisse = p => p * p * (3 - 2 * p);
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');   // 1,50 → 1,5 ; 2,00 → 2
+const ECRITURE = 2.5;
+function Moteur(o) {
+  const q = new URLSearchParams(location.search);
+  const S = { vue: o.vues.includes(q.get('vue')) ? q.get('vue') : o.vues[0], t: 0, running: false, pause: false, fait: false,
+    jusqua: null, motif: '', emis: 0, dit: '', mesure: false };
+  const V = o.vitesse ?? 1.7, T0 = o.T0 ?? .8, HOLD = {};
+  let TL = null;
+  function construire() {
+    let s = T0; const ev = [];
+    for (const e of o.etapes(S.vue)) {
+      const anim = e.anim || 0, d = { ...e, anim, debut: s, ecrit: s + (e.ecritDes ?? anim) };
+      d.fin = Math.max(s + anim, d.ecrit + (HOLD[e.nom] ?? 1.5)) + .35;
+      s = d.fin; ev.push(d);
+    }
+    const mom = {}; for (const e of ev) mom[e.nom] = e.fin; mom.fin = s + (o.queue ?? .6);
+    TL = { ev, M: mom };
+  }
+  const ev = nom => TL.ev.find(e => e.nom === nom);
+  const M = {
+    S, ev, Moments: () => TL.M,
+    /** Avancement (0 → 1) de l’animation de l’étape `nom`. */
+    p(nom) { const e = ev(nom); if (!e) return 0; return e.anim > 0 ? clamp((S.t - e.debut) / e.anim, 0, 1) : (S.t >= e.debut - 1e-6 ? 1 : 0); },
+    commence(nom) { const e = ev(nom); return !!e && S.t > e.debut + 1e-6; },
+    vu(nom) { if (nom === 'fin') return S.t >= TL.M.fin - 1e-6; const e = ev(nom); return !!e && S.t >= e.fin - 1e-6; },
+    /** Ce qui s’écrit à l’étape `nom` : la craie écrit à partir de la fin de son animation. */
+    etape(c, nom, fn) {
+      const e = ev(nom); if (!e) return;
+      const t = c.t, cur = c.cur, comp = c.complet, w0 = e.ecrit;
+      c.t = S.t > 1e5 ? 1e9 : w0 + (S.t - w0) * V; c.cur = w0;
+      try { fn(); } finally { if (S.mesure) HOLD[nom] = (c.cur - w0) / V; c.t = t; c.cur = cur; if (!S.running) c.complet = comp; }
+    },
+    etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
+  };
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const cadreBase = scene.cadre;
+  scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
+  M.scene = scene; M.craie = scene.craie;
+  function calculer() {
+    construire();
+    const t = S.t, r = S.running; S.t = 1e6; S.running = false; S.mesure = true;
+    try { o.dessiner(scene.craie, M); } finally { S.t = t; S.running = r; S.mesure = false; }
+    construire(); scene.sale = true;
+  }
+  // La bulle est du texte simple : jamais de « _ » visible (u_C → uC, I_0 → I₀).
+  const sansSouligne = s => String(s).replace(/([A-Za-zΔτ])_\{?([A-Za-z0-9]+)\}?/g, (m, a, i) => a + (/^\d+$/.test(i) ? [...i].map(d => '₀₁₂₃₄₅₆₇₈₉'[d]).join('') : i));
+  const dire = (texte, kind = '') => { texte = sansSouligne(texte); S.dit = texte; bulle($('feedback'), texte, kind); };
+  const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+  let pont = null;
+  const emettre = () => pont && pont.emettre();
+  const noter = (a, d) => pont && pont.noter(a, d);
+  scene.avancer = dt => {
+    if (!S.running) return !!(o.anime && o.anime());
+    const avant = S.t; S.t += dt;
+    for (const e of TL.ev) if (avant < e.debut && S.t >= e.debut && e.bulle) dire(e.bulle());
+    if (S.jusqua != null && S.t >= S.jusqua) {
+      S.t = S.jusqua; S.jusqua = null; S.running = false;
+      if (S.t >= TL.M.fin - 1e-6) { finir(); return true; }
+      S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fx(S.t, 1)} s`) + '.');
+      noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); return true;
+    }
+    if (S.t >= TL.M.fin) { S.t = TL.M.fin; finir(); return true; }
+    if (performance.now() - S.emis > 500) { S.emis = performance.now(); emettre(); }
+    return true;
+  };
+  function finir() { S.running = false; S.fait = true; S.pause = false; S.jusqua = null; etiquette(); dire(o.messageFin(M), 'good'); noter('measurement', o.params(M)); emettre(); }
+  function start() { o.reprise && o.reprise(); S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire(o.depart(M)); noter('start', o.params(M)); emettre(); }
+  function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); }
+  function resume() { if (S.running) return; o.reprise && o.reprise(); if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('Ça repart…'); noter('resume'); emettre(); }
+  function setTime(p) {
+    const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+    o.reprise && o.reprise(); S.running = false; S.jusqua = null; S.t = clamp(t, 0, TL.M.fin); S.fait = S.t >= TL.M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+    etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fx(S.t, 1)} s.`); noter('set_time', { time_s: S.t }); emettre();
+  }
+  function playUntil(p) {
+    const noms = o.etapes(S.vue).map(e => e.nom).concat('fin');
+    const nom = noms.includes(p.moment) ? p.moment : null, cible = nom ? TL.M[nom] : +p.time_s;
+    if (!Number.isFinite(cible) || (p.moment && !nom && (p.time_s == null || p.time_s === ''))) { dire(`Moment inconnu : ${p.moment}.`, 'bad'); emettre(); return; }
+    o.reprise && o.reprise();
+    if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+    S.jusqua = clamp(cible, .01, TL.M.fin); S.motif = nom ? (o.motifs[nom] || nom) : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+    noter('play_until', { moment: nom, time_s: S.jusqua }); emettre();
+  }
+  function setParameters(p) {
+    p = p || {};
+    const r = o.appliquer(p, M) || {};
+    if (r.vue && o.vues.includes(r.vue) && r.vue !== S.vue) { S.vue = r.vue; r.change = true; r.vueChange = true; }
+    if (r.change) { calculer(); if (r.vueChange) scene.reecrire(); }
+    noter('set_parameters', o.params(M));
+    if (r.apres) r.apres();
+    else if (r.change && !r.garder) start();
+    else { scene.sale = true; emettre(); }
+  }
+  Object.assign(M, { noter, calculer, dire, start, pause, resume, setTime, playUntil, setParameters, emettre, etiquette });
+  $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+  window.Tableau.explication(o.explications);
+  const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+  M.lancer = () => {
+    calculer();
+    const listeMoments = o.vues.map(v => `${o.vues.length > 1 ? v + ' : ' : ''}${o.etapes(v).map(e => e.nom).concat('fin').join(' | ')}`).join(' ; ');
+    const config = { id: o.id, version: '1.0', title: o.titre, variants: o.vues.length > 1 ? o.vues.map(id => ({ id, label: o.titres[id] })) : [], commands: commandes,
+      command_schema: { set_parameters: o.schema, set_time: { time_s: '0..fin (arrêt sur cet instant de la scène, en s ; voir moments)' },
+        play_until: { moment: listeMoments, time_s: 'ou un instant en s' } } };
+    pont = protocole({ id: o.id, commandes, config, texte: o.texte,
+      etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle',
+        ce_qui_se_voit: o.voir(M) + (S.dit ? ` La bulle dit : « ${S.dit} »` : ''), current_variant: S.vue, time_s: +S.t.toFixed(2),
+        parameters: o.params(M), moments: Object.fromEntries(Object.entries(TL.M).map(([k, v]) => [k, +v.toFixed(2)])) }),
+      progression: () => (S.fait ? 1 : 0),
+      executer: (cmd, p) => ({ start, reset: start, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+    dire(o.depart(M));
+    setTimeout(() => { if (!S.running && S.t === 0 && !S.pause && !S.fait) start(); }, 900);
+  };
+  return M;
+}
+
+/**
+ * Zone d’écriture : comme au tableau, le professeur efface les plus vieilles lignes. `liste` = [{ nom, lignes: [[texte, couleur], …],
+ * plus(c) }] dans l’ordre des étapes ; on garde les lignes des dernières étapes écrites, au plus `n` lignes (aux hauteurs `ys`).
+ * `plus` (annotations près des objets : cotes, valeurs) s’écrit dans la même étape, et reste au tableau.
+ * Renvoie les lignes visibles (pour ce_qui_se_voit).
+ */
+function zoneEcriture(c, M, liste, ys, o = {}) {
+  const S = M.S, x = o.x ?? 14, max = o.max ?? 406, taille = o.taille ?? 16, n = ys.length, vues = [];
+  if (S.mesure) {
+    for (const e of liste) M.etape(c, e.nom, () => { for (const [t, col] of e.lignes) ecrireChim(c, t, x, ys[0], { couleur: col, taille, max }); e.plus && e.plus(c); });
+    return vues;
+  }
+  let k = -1;
+  liste.forEach((e, j) => { const ev = M.ev(e.nom); if (ev && S.t > ev.ecrit + .05) k = j; });   // l’instant même d’un moment n’efface pas encore ses lignes
+  const garde = new Set(); let nb = 0;
+  for (let j = k; j >= 0; j--) { const l = liste[j].lignes.length; if (nb + l > n) break; garde.add(j); nb += l; }
+  let y = 0;
+  liste.forEach((e, j) => {
+    if (j > k) return;
+    M.etape(c, e.nom, () => {
+      if (garde.has(j)) for (const [t, col] of e.lignes) { ecrireChim(c, t, x, ys[y++], { couleur: col, taille, max }); vues.push(t); }
+      e.plus && e.plus(c);
+    });
+  });
+  return vues;
+}
+/** Rejoue une seule étape (depuis son début) et se fige à sa fin : un réglage ne refait pas toute l’histoire. */
+function rejouerEtape(M, nom, motif, jusqua) {
+  const e = M.ev(nom); if (!e) return;
+  const S = M.S; S.t = e.debut; S.fait = false; S.pause = false; S.running = true;
+  S.jusqua = jusqua === undefined ? M.Moments()[nom] : jusqua; S.motif = motif || nom;
+  M.etiquette(); M.dire('Observe…'); M.noter('play_until', { moment: nom, time_s: S.jusqua }); M.emettre();
+}
+
+/* ── Écriture chimique à la craie ─────────────────────────────────────────
+ * Les formules s’écrivent en Unicode (MnO₄⁻, Cu²⁺, H₂O₂) ; `chim` les traduit pour le kit : indices « _{4} », charges « ^{2+} ».
+ * exposants.js ne gère pas « ⁺ » : la charge entière (« 2+ », « − ») passe donc par « ^{…} », écrite petite et relevée.
+ * Les flèches → et ⇌ sont DESSINÉES au trait (la police n’a pas ⇌) : voir `equation`.
+ */
+const SUPS = { '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9', '⁺': '+', '⁻': '−' };
+const SUBS = { '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9' };
+const chim = s => String(s)
+  .replace(/[₀₁₂₃₄₅₆₇₈₉]+/g, g => '_{' + [...g].map(ch => SUBS[ch]).join('') + '}')
+  .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻]+/g, g => '^{' + [...g].map(ch => SUPS[ch]).join('') + '}');
+/** Texte chimique à la craie (mêmes options que craie.texte). */
+const ecrireChim = (c, s, x, y, o = {}) => c.texte(chim(s), x, y, o);
+/** Largeur (unités du dessin) d’un texte chimique : indices et charges plus petits. Avant la mise en page (cadre minuscule), taille nominale. */
+function largeur(c, s, taille = 18) {
+  const k = c.echelle >= .6 && c.tailleMin ? Math.max(taille, c.tailleMin / c.echelle) : taille, ctx = c.ctx;
+  let w = 0;
+  for (const ch of String(s)) { const p = SUPS[ch] ?? SUBS[ch]; ctx.font = `${p ? k * .62 : k}px ${window.Tableau.POLICE}`; w += ctx.measureText(p ?? ch).width; }
+  return w;
+}
+/** Double flèche des demi-équations : deux demi-flèches (haut : vers la droite, bas : vers la gauche). */
+function doubleFleche(c, x1, x2, y, o = {}) {
+  const h = 3.4, t = 8, col = o.couleur || 'blanc', lw = o.largeur ?? 1.8;
+  c.trait([[x1, y - h], [x2, y - h], [x2 - t, y - h - t * .62]], { couleur: col, largeur: lw });
+  c.trait([[x2, y + h], [x1, y + h], [x1 + t, y + h + t * .62]], { couleur: col, largeur: lw });
+}
+/**
+ * Équation écrite à la craie : `morceaux` = textes et flèches ('→' ou '⇌', dessinées). o : taille, couleur, couleurs[i],
+ * couleurFleche, align ('left' | 'center' | 'right'), fleche (longueur). Renvoie [x début, x fin].
+ */
+function equation(c, morceaux, x, y, o = {}) {
+  const taille = o.taille ?? 18, L = o.fleche ?? 32, esp = 7, estF = m => m === '→' || m === '⇌';
+  const ws = morceaux.map(m => (estF(m) ? L + 2 * esp : largeur(c, m, taille)));
+  const total = ws.reduce((a, b) => a + b, 0);
+  let px = o.align === 'center' ? x - total / 2 : o.align === 'right' ? x - total : x;
+  const x0 = px, ym = y - taille * .3;
+  morceaux.forEach((m, i) => {
+    const col = (o.couleurs && o.couleurs[i]) || o.couleur || 'blanc';
+    if (m === '→') c.fleche(px + esp, ym, px + esp + L, ym, { couleur: o.couleurFleche || col, largeur: 1.8, tete: 8 });
+    else if (m === '⇌') doubleFleche(c, px + esp, px + esp + L, ym, { couleur: o.couleurFleche || col });
+    else ecrireChim(c, m, px, y, { couleur: col, taille });
+    px += ws[i];
+  });
+  return [x0, px];
+}
+/** Une équation en texte simple (bulle, ce_qui_se_voit). */
+const enTexte = morceaux => morceaux.join(' ');
+
+/* ── Verrerie et solutions peintes (règle 7 : elles ressemblent aux vraies ; le peint ne change jamais la chimie) ── */
+const rgba = (k, a = 1) => `rgba(${Math.round(k[0])},${Math.round(k[1])},${Math.round(k[2])},${((k[3] ?? 1) * a).toFixed(3)})`;
+const melange = (a, b, f) => a.map((v, i) => v + ((b[i] ?? 1) - v) * clamp(f, 0, 1));
+/** Couleurs des solutions [r, g, b, opacité] (contrat : permanganate #7b2a8c, Cu²⁺ #3a7bd5, diiode brun #8a4b12, cuivre #b5562b). */
+const COUL = {
+  incolore: [214, 230, 240, .13],
+  permanganate: [123, 42, 140, .9],
+  mn2: [236, 226, 240, .14],          // Mn²⁺ : presque incolore
+  fe3: [246, 214, 120, .2],           // Fe³⁺ : jaune-orangé (très pâle à cette concentration)
+  fe2: [196, 228, 178, .3],           // Fe²⁺ : vert très pâle
+  cu2: [58, 123, 213, .84],
+  cu2pale: [168, 204, 238, .2],
+  jaune: [242, 202, 58, .55],
+  brun: [138, 75, 18, .93],
+  soufre: [238, 232, 196, 1],
+};
+/** Teinte du diiode selon l’avancement relatif f (0 → 1) : incolore → jaune → brun. */
+const teinteIode = f => (f < .3 ? melange(COUL.incolore, COUL.jaune, f / .3) : melange(COUL.jaune, COUL.brun, (f - .3) / .7));
+const Peint = {
+  /** Sphère ombrée. */
+  sphere(ctx, x, y, r, [clair, milieu, sombre], a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r); g.addColorStop(0, clair); g.addColorStop(.45, milieu); g.addColorStop(1, sombre);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  },
+  /**
+   * Bécher vu de côté : B = {x, y (bord), w, h} ; `niv` = hauteur du liquide (fraction de h) ; `coul` = [r,g,b,opacité].
+   * o.trouble (0..1) : soufre en suspension (trouble blanc-jaune) ; o.a : opacité d’ensemble.
+   */
+  becher(ctx, B, niv, coul, o = {}) {
+    const { x, y, w, h } = B, yb = y + h, r = Math.min(14, w * .1), a = o.a ?? 1, yl = yb - h * niv;
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(x + w / 2 + 4, yb + 5, w / 2 + 6, 5.5, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(200,225,255,.05)'; ctx.beginPath(); ctx.roundRect(x, y, w, h, [0, 0, r, r]); ctx.fill();
+    if (niv > 0) {
+      const forme = () => { ctx.beginPath(); ctx.roundRect(x + 2.5, yl, w - 5, yb - yl - 2.5, [0, 0, r - 2, r - 2]); };
+      const g = ctx.createLinearGradient(0, yl, 0, yb);
+      g.addColorStop(0, rgba(melange(coul, [255, 255, 255, coul[3]], .22)));
+      g.addColorStop(.35, rgba(coul));
+      g.addColorStop(1, rgba(melange(coul, [0, 0, 0, Math.min(1, coul[3] * 1.08)], .28)));
+      ctx.fillStyle = g; forme(); ctx.fill();
+      if (o.trouble > 0) {
+        // Soufre en suspension : un voile laiteux, un peu plus dense vers le bas (pour l’œil).
+        const gt = ctx.createLinearGradient(0, yl, 0, yb);
+        gt.addColorStop(0, rgba(COUL.soufre, .78 * o.trouble)); gt.addColorStop(1, rgba(COUL.soufre, .97 * o.trouble));
+        ctx.fillStyle = gt; forme(); ctx.fill();
+      }
+      // Ménisque : une ellipse un peu plus claire, et sa ligne brillante.
+      ctx.fillStyle = rgba(melange(coul, [255, 255, 255, Math.max(.18, coul[3])], .4), .8);
+      ctx.beginPath(); ctx.ellipse(x + w / 2, yl, w / 2 - 2.5, 4, 0, 0, 7); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(x + w / 2, yl, w / 2 - 2.5, 4, 0, 0, Math.PI); ctx.stroke();
+    }
+    // Le verre : contour, bec verseur, bord, graduations et reflet.
+    ctx.strokeStyle = 'rgba(225,238,255,.8)'; ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.moveTo(x - 7, y - 5); ctx.quadraticCurveTo(x - 1, y - 2, x, y + 6);
+    ctx.lineTo(x, yb - r); ctx.arcTo(x, yb, x + r, yb, r); ctx.lineTo(x + w - r, yb); ctx.arcTo(x + w, yb, x + w, yb - r, r); ctx.lineTo(x + w, y); ctx.stroke();
+    ctx.strokeStyle = 'rgba(225,238,255,.35)'; ctx.lineWidth = 1;
+    for (let k = 1; k <= 4; k++) { const gy = yb - k * h / 5.2; ctx.beginPath(); ctx.moveTo(x + w - 4, gy); ctx.lineTo(x + w - (k % 2 ? 13 : 20), gy); ctx.stroke(); }
+    const gr = ctx.createLinearGradient(x + w * .08, 0, x + w * .2, 0); gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(.5, 'rgba(255,255,255,.2)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = gr; ctx.fillRect(x + w * .08, y + 10, w * .12, h - 22);
+    ctx.restore();
+    return yl;
+  },
+  /** Burette graduée : axe x, tube de y1 à y2, robinet en y2, pointe jusqu’à y2 + 20 ; liquide depuis `yLiq`. */
+  burette(ctx, x, y1, y2, yLiq, coul, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    const w = 13;
+    ctx.fillStyle = 'rgba(200,225,255,.06)'; ctx.fillRect(x - w / 2, y1, w, y2 - y1);
+    const g = ctx.createLinearGradient(x - w / 2, 0, x + w / 2, 0);
+    g.addColorStop(0, rgba(melange(coul, [0, 0, 0, coul[3]], .2))); g.addColorStop(.5, rgba(melange(coul, [255, 255, 255, coul[3]], .25))); g.addColorStop(1, rgba(melange(coul, [0, 0, 0, coul[3]], .2)));
+    ctx.fillStyle = g; ctx.fillRect(x - w / 2 + 1.5, yLiq, w - 3, y2 - yLiq);
+    ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x - w / 2 + 2, yLiq); ctx.lineTo(x + w / 2 - 2, yLiq); ctx.stroke();
+    ctx.strokeStyle = 'rgba(225,238,255,.8)'; ctx.lineWidth = 1.8;
+    ctx.beginPath(); ctx.moveTo(x - w / 2, y1); ctx.lineTo(x - w / 2, y2); ctx.lineTo(x - 2, y2 + 20); ctx.moveTo(x + w / 2, y1); ctx.lineTo(x + w / 2, y2); ctx.lineTo(x + 2, y2 + 20); ctx.stroke();
+    ctx.strokeStyle = 'rgba(225,238,255,.4)'; ctx.lineWidth = 1;
+    for (let gy = y1 + 8; gy < y2 - 4; gy += 9) { ctx.beginPath(); ctx.moveTo(x - w / 2, gy); ctx.lineTo(x - w / 2 + ((gy - y1) % 45 < 9 ? 7 : 4), gy); ctx.stroke(); }
+    // Robinet : boisseau et clé.
+    Peint.sphere(ctx, x, y2 + 6, 5, ['#f4f4f4', '#b9c0c7', '#4b5157']);
+    ctx.fillStyle = '#2f6fd0'; ctx.beginPath(); ctx.roundRect(x + 4, y2 + 3, 14, 6, 2); ctx.fill();
+    ctx.restore();
+  },
+  /** Goutte qui tombe (forme de larme). */
+  goutte(ctx, x, y, coul, r = 3.4) {
+    ctx.save();
+    ctx.fillStyle = rgba(melange(coul, [255, 255, 255, Math.max(.45, coul[3] * 1.6)], .25));
+    ctx.beginPath(); ctx.moveTo(x, y - r * 2.1); ctx.quadraticCurveTo(x + r, y - r * .4, x + r, y); ctx.arc(x, y, r, 0, Math.PI); ctx.quadraticCurveTo(x - r, y - r * .4, x, y - r * 2.1); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.beginPath(); ctx.arc(x - r * .35, y - r * .2, r * .3, 0, 7); ctx.fill();
+    ctx.restore();
+  },
+};
+/** Chronomètre à la craie : cadran, aiguille (une minute par tour, `tours` = minutes simulées), lecture dessous. */
+function chrono(c, x, y, r, minutes, lignes = []) {
+  c.cercle(x, y, r, { couleur: 'blanc', largeur: 2 });
+  c.rect(x - 6, y - r - 9, 12, 7, { arrondi: 2, largeur: 1.6 });
+  for (let k = 0; k < 12; k++) { const a = k / 12 * Math.PI * 2; c.ligne(x + Math.cos(a) * r * .8, y + Math.sin(a) * r * .8, x + Math.cos(a) * r * .92, y + Math.sin(a) * r * .92, { largeur: 1.2, couleur: 'faible', duree: .02 }); }
+  c.direct(() => {
+    const a = -Math.PI / 2 + (minutes % 1) * Math.PI * 2;
+    c.ligne(x, y, x + Math.cos(a) * r * .74, y + Math.sin(a) * r * .74, { couleur: 'jaune', largeur: 2.4 });
+    c.point(x, y, 3, 'jaune');
+    lignes.forEach(([t, col, taille], i) => c.texte(t, x, y + r + 24 + i * 22, { couleur: col || 'blanc', taille: taille || 17, align: 'center' }));
+  });
+}
+/** Durée simulée lisible : « 45 s », « 2 min 40 s », « 12 min », « 1 h 05 ». */
+function duree(min) {
+  const s = Math.round(min * 60);
+  if (s < 60) return `${s} s`;
+  if (min < 10) { const m = Math.floor(s / 60), r = s % 60; return r ? `${m} min ${String(r).padStart(2, '0')} s` : `${m} min`; }
+  if (min < 60) return `${Math.round(min)} min`;
+  const h = Math.floor(min / 60), m = Math.round(min - 60 * h); return `${h} h ${String(m).padStart(2, '0')}`;
+}
+
+/* ── Le transfert d’électrons ────────────────────────────────────────────── */
+const VUES = ['zinc', 'couple'];
+const TITRES = { zinc: 'zinc et ions cuivre II', couple: 'le couple oxydant / réducteur' };
+const ETAPES = {
+  zinc: [
+    { nom: 'depart', anim: .8, motif: 'la lame de zinc grise plonge dans la solution bleue de sulfate de cuivre', bulle: () => 'Une lame de zinc dans une solution bleue d’ions cuivre II (Cu²⁺).' },
+    { nom: 'depot', anim: 4, motif: 'un dépôt rouge-brun de cuivre recouvre la lame', bulle: () => 'Le temps passe (accéléré) : regarde la lame…' },
+    { nom: 'palit', anim: 3.5, motif: 'le bleu a pâli : il reste moins d’ions Cu²⁺', bulle: () => 'Et la couleur de la solution ?' },
+    { nom: 'loupe', anim: 1, motif: 'la loupe sur la surface de la lame : des atomes Zn et un ion Cu²⁺', bulle: () => 'Regardons de très près la surface de la lame.' },
+    { nom: 'electrons', anim: 5, motif: 'un atome Zn a cédé 2 e⁻ à l’ion Cu²⁺ : Cu reste sur la lame, Zn²⁺ part en solution', bulle: () => 'Un ion Cu²⁺ arrive contre la lame…' },
+    { nom: 'etiquettes', anim: 0, motif: 'Zn : réducteur, cède 2 e⁻ ; Cu²⁺ : oxydant, capte 2 e⁻', bulle: () => 'Qui cède les électrons ? Qui les capte ?' },
+    { nom: 'bilan', anim: 0, motif: 'le bilan : Zn + Cu²⁺ → Zn²⁺ + Cu', bulle: () => 'Le bilan tient en une équation.' },
+  ],
+  couple: [
+    { nom: 'oxydant', anim: .8, motif: 'à gauche l’oxydant Ox avec n e⁻', bulle: () => 'Un oxydant peut capter des électrons.' },
+    { nom: 'gagne', anim: 0, motif: 'flèche → : réduction, gain d’électrons', bulle: () => 'Dans ce sens, Ox gagne des électrons.' },
+    { nom: 'reducteur', anim: 0, motif: 'à droite le réducteur Red', bulle: () => 'Un réducteur peut céder des électrons.' },
+    { nom: 'perd', anim: 0, motif: 'flèche ← : oxydation, perte d’électrons', bulle: () => 'Dans l’autre sens, Red perd des électrons.' },
+    { nom: 'couple', anim: 0, motif: 'la double flèche : le couple Ox/Red et sa définition', bulle: () => 'Les deux sens ensemble : c’est un couple.' },
+    { nom: 'exemples', anim: 0, motif: 'trois couples : Cu²⁺/Cu, Zn²⁺/Zn, I₂/I⁻', bulle: () => 'Des couples du cours…' },
+    { nom: 'oxydation_reduction', anim: 0, motif: 'les deux mots encadrés : réduction = gain, oxydation = perte d’électrons', bulle: () => 'Les deux mots à retenir.' },
+  ],
+};
+const MOTIFS = { fin: 'fin' }; for (const v of VUES) for (const e of ETAPES[v]) MOTIFS[e.nom] = e.motif;
+let MO = null;
+
+/* ── Vue zinc : géométrie (cadre 760 × 420) ─────────────────────────────── */
+const BEC = { x: 40, y: 120, w: 190, h: 200 }, NIV = .8, YL = BEC.y + BEC.h * (1 - NIV);
+const LAME = { x: 122, y: 74, w: 22, h: 214 };
+const LC = [575, 168], LR = 104, XS = 535;            // loupe : centre, rayon ; XS = surface de la lame dans la loupe
+const A0 = [523, 218], P0 = [652, 92], PL = [545, 130], P2 = [622, 226];   // atome Zn qui part ; ion Cu²⁺ : départ, arrivée ; Zn²⁺ en solution
+const ZY = [374, 398];
+/** Temps simulé (min), en accéléré : le dépôt sur 20 min, le bleu qui pâlit jusqu’à 1 h. Température : 20 °C. */
+const tZinc = () => (MO.commence('palit') ? 20 + 40 * MO.p('palit') : 20 * MO.p('depot'));
+const depot = () => .75 * lisse(MO.p('depot')) + .25 * MO.p('palit');
+const pali = () => .2 * MO.p('depot') + .8 * lisse(MO.p('palit'));
+const couleurCu = () => melange(COUL.cu2, COUL.cu2pale, pali());
+const ue = () => MO.p('electrons');
+const ionPos = () => { const f = lisse(clamp(ue() / .3, 0, 1)); return [P0[0] + (PL[0] - P0[0]) * f, P0[1] + (PL[1] - P0[1]) * f]; };
+const transforme = () => clamp((ue() - .65) / .2, 0, 1);    // 0 : Cu²⁺ et Zn ; 1 : Cu et Zn²⁺
+const atomePos = () => { const f = lisse(clamp((ue() - .7) / .3, 0, 1)); return [A0[0] + (P2[0] - A0[0]) * f, A0[1] + (P2[1] - A0[1]) * f]; };
+/** Le trajet des électrons dans le métal : de l’atome Zn à l’ion posé sur la surface (courbe de Bézier). */
+const CHEMIN = [[517, 206], [490, 168], [534, 138]];
+const bez = (P, u) => { const [a, b, d] = P, v = 1 - u; return [v * v * a[0] + 2 * v * u * b[0] + u * u * d[0], v * v * a[1] + 2 * v * u * b[1] + u * u * d[1]]; };
+const decale = (P, dx) => P.map(([x, y]) => [x + dx, y]);
+
+const SPH = {
+  zn: ['#f2f4f6', '#9aa3ab', '#3c4249'],
+  zn2: ['#ffffff', '#d5dade', '#7d858c'],
+  cu2: ['#dbeaff', '#3a7bd5', '#123a7a'],
+  cu: ['#ffd2b8', '#c8693a', '#5e2410'],
+  e: ['#e9ffe6', '#4ade80', '#14632f'],
+};
+function peindreZinc(c, a) {
+  c.direct(() => {
+    const ctx = c.ctx, d = depot();
+    Peint.becher(ctx, BEC, NIV, couleurCu(), { a });
+    ctx.save(); ctx.globalAlpha = a;
+    // La lame de zinc : métal gris mat, un reflet ; la pince en haut.
+    const g = ctx.createLinearGradient(LAME.x, 0, LAME.x + LAME.w, 0); g.addColorStop(0, '#6f777e'); g.addColorStop(.45, '#c9cfd4'); g.addColorStop(1, '#5c646b');
+    ctx.fillStyle = g; ctx.fillRect(LAME.x, LAME.y, LAME.w, LAME.h);
+    ctx.fillStyle = '#2b2f33'; ctx.beginPath(); ctx.roundRect(LAME.x - 6, LAME.y - 8, LAME.w + 12, 14, 3); ctx.fill();
+    // Le dépôt de cuivre (rouge-brun #b5562b) sur la partie immergée : un voile, puis des grains (fixes, pour l’œil).
+    if (d > 0) {
+      ctx.fillStyle = `rgba(181,86,43,${(.75 * d).toFixed(3)})`; ctx.fillRect(LAME.x - 1, YL + 4, LAME.w + 2, LAME.y + LAME.h - YL - 4);
+      const r = window.Tableau.graine(11);
+      for (let k = 0; k < 70; k++) {
+        const gx = LAME.x - 3 + r() * (LAME.w + 6), gy = YL + 6 + r() * (LAME.y + LAME.h - YL - 6), gr = 1.4 + r() * 2.4, seuil = k / 70;
+        if (d > seuil) { ctx.fillStyle = `rgba(${150 + 40 * r() | 0},${60 + 30 * r() | 0},${30 + 20 * r() | 0},${Math.min(1, (d - seuil) * 4).toFixed(2)})`; ctx.beginPath(); ctx.arc(gx, gy, gr, 0, 7); ctx.fill(); }
+      }
+    }
+    // La solution passe devant la partie immergée de la lame (elle y est plongée).
+    ctx.fillStyle = rgba(couleurCu(), .35); ctx.fillRect(LAME.x - 3, YL + 2, LAME.w + 6, LAME.y + LAME.h - YL);
+    ctx.restore();
+  });
+}
+function peindreLoupe(c, a) {
+  c.direct(() => {
+    const ctx = c.ctx, [cx, cy] = LC, u = ue(), tr = transforme();
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.arc(cx + 4, cy + 5, LR, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, cy, LR, 0, 7); ctx.clip();
+    const k = couleurCu(), gs = ctx.createLinearGradient(XS, 0, cx + LR, 0);
+    gs.addColorStop(0, rgba(melange(k, [20, 40, 70, .9], .55))); gs.addColorStop(1, rgba(melange(k, [10, 25, 50, .9], .7)));
+    ctx.fillStyle = gs; ctx.fillRect(cx - LR, cy - LR, 2 * LR, 2 * LR);
+    const gm = ctx.createLinearGradient(cx - LR, 0, XS, 0); gm.addColorStop(0, '#3a4046'); gm.addColorStop(1, '#5b636a');
+    ctx.fillStyle = gm; ctx.fillRect(cx - LR, cy - LR, XS - cx + LR, 2 * LR);
+    // Les atomes de zinc du métal (empilement serré) ; la place de l’atome qui part se vide.
+    for (let col = 0; col < 3; col++) for (let j = 0; j < 11; j++) {
+      const x = 479 + 22 * col, y = 64 + 22 * j + (col % 2) * 11;
+      if (x === A0[0] && y === A0[1]) continue;
+      Peint.sphere(ctx, x, y, 10.5, SPH.zn);
+    }
+    // Deux autres ions Cu²⁺ en solution (plus loin, plus pâles).
+    Peint.sphere(ctx, 618, 168, 9, SPH.cu2, .55 * (1 - .6 * pali())); Peint.sphere(ctx, 660, 140, 9, SPH.cu2, .5 * (1 - .6 * pali()));
+    // L’atome Zn (devient Zn²⁺ et part) ; l’ion Cu²⁺ (devient Cu, reste sur la lame).
+    const [ax, ay] = atomePos(), [ix, iy] = ionPos();
+    Peint.sphere(ctx, ax, ay, 10.5 - 2.5 * tr, tr < .5 ? SPH.zn : SPH.zn2);
+    Peint.sphere(ctx, ix, iy, 9 + 1.5 * tr, tr < .5 ? SPH.cu2 : SPH.cu);
+    // Les deux électrons voyagent dans le métal (de l’atome Zn vers l’ion Cu²⁺).
+    const pe = clamp((u - .3) / .35, 0, 1);
+    if (pe > 0 && pe < 1) for (const dx of [-6, 6]) { const [ex, ey] = bez(decale(CHEMIN, dx), pe); Peint.sphere(ctx, ex, ey, 4, SPH.e); }
+    ctx.restore();
+    ctx.save(); ctx.globalAlpha = .55 * a; ctx.strokeStyle = 'rgba(225,238,255,.9)'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(cx, cy, LR + 2, 0, 7); ctx.stroke(); ctx.restore();
+  });
+}
+/** Flèche courbe à la craie (Bézier P), tête à l’arrivée. */
+function flecheCourbe(c, P, o) {
+  c.courbe(u => bez(P, u), 18, o);
+  const [x1, y1] = bez(P, .9), [x2, y2] = P[2], an = Math.atan2(y2 - y1, x2 - x1), t = 8;
+  c.trait([[x2 - t * Math.cos(an - .45), y2 - t * Math.sin(an - .45)], [x2, y2], [x2 - t * Math.cos(an + .45), y2 - t * Math.sin(an + .45)]], { ...o, duree: .1 });
+}
+function dessinerZinc(c, M) {
+  const a = lisse(M.p('depart'));
+  peindreZinc(c, a);
+  ecrireChim(c, 'lame de zinc (Zn)', 158, 84, { couleur: 'blanc', taille: 15 });
+  ecrireChim(c, 'sulfate de cuivre', 240, 290, { couleur: 'bleu', taille: 15 });
+  ecrireChim(c, '(Cu²⁺ + SO₄²⁻)', 240, 312, { couleur: 'bleu', taille: 15 });
+  c.direct(() => c.texte(`t = ${duree(tZinc())} (temps accéléré) · 20 °C`, BEC.x + BEC.w / 2, 346, { couleur: 'faible', taille: 15, align: 'center' }));
+  const vues = zoneEcriture(c, M, [
+    { nom: 'depart', lignes: [['une lame de zinc (Zn) dans une solution', 'blanc'], ['bleue d’ions cuivre II (Cu²⁺)', 'bleu']] },
+    { nom: 'depot', lignes: [['un dépôt rouge de cuivre (Cu)', 'blanc'], ['se forme sur la lame', 'blanc']],
+      plus: () => { c.fleche(236, 246, 150, 238, { couleur: 'faible', largeur: 1.4, tete: 8 }); c.texte('dépôt de cuivre', 240, 252, { couleur: 'blanc', taille: 15 }); } },
+    { nom: 'palit', lignes: [['le bleu pâlit : les ions Cu²⁺', 'bleu'], ['disparaissent de la solution', 'bleu']] },
+    { nom: 'loupe', lignes: [['à la loupe : la surface de la lame', 'blanc']],
+      plus: () => {
+        c.cercle(133, 224, 15, { couleur: 'jaune', largeur: 1.6 });
+        c.ligne(148, 214, 478, 132, { couleur: 'tresfaible', largeur: 1.2 }); c.ligne(148, 234, 478, 204, { couleur: 'tresfaible', largeur: 1.2 });
+        c.texte('à la loupe', LC[0], 54, { couleur: 'jaune', taille: 16, align: 'center' });
+        c.texte('zinc (métal)', 500, 298, { couleur: 'faible', taille: 14, align: 'center' });
+        c.texte('solution', 648, 298, { couleur: 'faible', taille: 14, align: 'center' });
+      } },
+    { nom: 'electrons', lignes: [['un atome Zn cède 2 e⁻ à un ion Cu²⁺ :', 'vert'], ['Cu²⁺ devient Cu ; Zn devient Zn²⁺', 'blanc']] },
+    { nom: 'etiquettes', lignes: [],
+      plus: () => { ecrireChim(c, 'Zn : réducteur, cède 2 e⁻', 404, 328, { couleur: 'vert', taille: 18 }); ecrireChim(c, 'Cu²⁺ : oxydant, capte 2 e⁻', 404, 354, { couleur: 'rouge', taille: 18 }); } },
+    { nom: 'bilan', lignes: [],
+      plus: () => { const [x0, x1] = equation(c, EQ_ZINC, LC[0], 400, { taille: 22, align: 'center' }); c.rect(x0 - 10, 376, x1 - x0 + 20, 32, { couleur: 'jaune', largeur: 1.6, arrondi: 8 }); } },
+  ], ZY, { max: 370 });
+  if (M.commence('loupe')) {
+    const al = lisse(M.p('loupe')), u = ue(), tr = transforme();
+    peindreLoupe(c, al);
+    c.direct(() => {
+      const [ax, ay] = atomePos(), [ix, iy] = ionPos();
+      if (al > .5) {
+        if (tr < .5) { c.texte('Zn', ax + 14, ay + 24, { couleur: 'vert', taille: 17 }); ecrireChim(c, 'Cu²⁺', ix + 13, iy - 10, { couleur: 'rouge', taille: 17 }); }
+        else { ecrireChim(c, 'Zn²⁺', ax - 13, ay - 10, { couleur: 'vert', taille: 17, align: 'right' }); c.texte('Cu', ix + 14, iy - 9, { couleur: '#e9916a', taille: 17 }); }
+      }
+      if (u >= .3) {
+        const f = clamp((u - .3) / .35, 0, 1);
+        for (const dx of [-6, 6]) c.courbe(w => bez(decale(CHEMIN, dx), w * Math.max(.05, f)), 16, { couleur: 'vert', largeur: 2 });
+        if (f >= 1) for (const dx of [-6, 6]) flecheCourbe(c, decale(CHEMIN, dx), { couleur: 'vert', largeur: 2 });
+        ecrireChim(c, '2 e⁻', 550, 186, { couleur: 'vert', taille: 18 });
+      }
+    });
+  }
+  return vues;
+}
+const EQ_ZINC = ['Zn + Cu²⁺', '→', 'Zn²⁺ + Cu'];
+function reperesZinc(c, M) {
+  const [ax, ay] = atomePos(), [ix, iy] = ionPos(), plus = nom => (M.vu(nom) ? '' : ` (au moment « ${nom} »)`);
+  c.repere('becher', BEC.x - 10, BEC.y - 10, BEC.w + 20, BEC.h + 20, 'le bécher de sulfate de cuivre');
+  c.repere('lame', LAME.x - 8, LAME.y - 10, LAME.w + 16, LAME.h + 12, 'la lame de zinc (Zn), grise');
+  c.repere('solution', BEC.x + 4, YL - 4, BEC.w - 8, BEC.y + BEC.h - YL, `la solution d’ions Cu²⁺ : ${pali() > .6 ? 'bleu pâle' : 'bleue'}`);
+  c.repere('depot', LAME.x - 6, YL, LAME.w + 12, LAME.y + LAME.h - YL, `le dépôt rouge de cuivre sur la lame${plus('depot')}`);
+  c.repere('loupe', LC[0] - LR, LC[1] - LR, 2 * LR, 2 * LR, `la loupe : la surface de la lame${plus('loupe')}`);
+  c.repere('atome_zn', ax - 14, ay - 14, 28, 28, transforme() < .5 ? `un atome Zn de la lame${plus('loupe')}` : 'l’atome Zn devenu ion Zn²⁺');
+  c.repere('ion_cu', ix - 14, iy - 14, 28, 28, transforme() < .5 ? `un ion Cu²⁺ de la solution${plus('loupe')}` : 'l’ion Cu²⁺ devenu atome Cu, sur la lame');
+  c.repere('fleche_electrons', 478, 122, 72, 100, `les 2 e⁻ cédés par Zn à Cu²⁺ (flèches vertes)${plus('electrons')}`);
+  c.repere('ion_zn', P2[0] - 50, P2[1] - 28, 66, 44, `l’ion Zn²⁺ qui part en solution${plus('electrons')}`);
+  c.repere('etiquette_reducteur', 398, 308, 230, 26, `« Zn : réducteur, cède 2 e⁻ »${plus('etiquettes')}`);
+  c.repere('etiquette_oxydant', 398, 334, 240, 26, `« Cu²⁺ : oxydant, capte 2 e⁻ »${plus('etiquettes')}`);
+  c.repere('equation', LC[0] - 140, 372, 280, 40, `l’équation Zn + Cu²⁺ → Zn²⁺ + Cu${plus('bilan')}`);
+}
+function voirZinc(M) {
+  const m = [], t = tZinc(), coul = pali() > .7 ? 'bleu pâle' : pali() > .25 ? 'bleu qui pâlit' : 'bleu';
+  m.push(`Bécher de sulfate de cuivre (ions Cu²⁺ ${coul}) ; une lame de zinc grise y plonge. Température 20 °C ; temps simulé (accéléré) t = ${duree(t)}.`);
+  if (depot() > .05) m.push(`Dépôt rouge-brun de cuivre sur la partie immergée de la lame (${depot() > .7 ? 'épais' : 'qui grandit'}).`);
+  if (M.commence('loupe')) {
+    const u = ue(), tr = transforme();
+    m.push('Loupe (cercle à droite) : à gauche les atomes Zn gris de la lame, à droite la solution.');
+    if (u < .3) m.push('Un ion Cu²⁺ (sphère bleue, étiquette rouge) s’approche de la surface de la lame.');
+    else if (tr < .5) m.push('L’ion Cu²⁺ touche la lame ; deux électrons (flèches vertes « 2 e⁻ ») vont de l’atome Zn vers l’ion Cu²⁺.');
+    else m.push(`L’ion Cu²⁺ a capté 2 e⁻ : il est devenu un atome Cu (sphère cuivrée) posé sur la lame ; l’atome Zn a cédé 2 e⁻ : il est devenu un ion Zn²⁺ ${tr >= 1 && u >= 1 ? 'parti dans la solution' : 'qui quitte la lame'}. Flèches vertes « 2 e⁻ » de Zn vers Cu²⁺.`);
+  }
+  if (M.vu('etiquettes')) m.push('À droite, à la craie : « Zn : réducteur, cède 2 e⁻ » (vert) et « Cu²⁺ : oxydant, capte 2 e⁻ » (rouge).');
+  if (M.vu('bilan')) m.push('En bas à droite, encadrée en jaune : Zn + Cu²⁺ → Zn²⁺ + Cu.');
+  return m;
+}
+
+/* ── Vue couple : la balance de Roberval (cadre 760 × 420) ──────────────── */
+const PAN_G = 125, PAN_D = 375, YT = 160, TT = 28;
+const YR = 318, YO = 362;           // flèches « réduction » (→) et « oxydation » (←)
+function peindreBalance(c, a) {
+  c.direct(() => {
+    const ctx = c.ctx;
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(254, 282, 100, 6, 0, 0, 7); ctx.fill();
+    const gb = ctx.createLinearGradient(0, 262, 0, 278); gb.addColorStop(0, '#7a5232'); gb.addColorStop(1, '#3e2814');
+    ctx.fillStyle = gb; ctx.beginPath(); ctx.roundRect(160, 262, 180, 16, 4); ctx.fill();
+    const laiton = (x0, x1) => { const g = ctx.createLinearGradient(x0, 0, x1, 0); g.addColorStop(0, '#7a5a1c'); g.addColorStop(.5, '#e8c46a'); g.addColorStop(1, '#6e4f14'); return g; };
+    ctx.fillStyle = laiton(232, 268); ctx.beginPath(); ctx.moveTo(230, 262); ctx.lineTo(270, 262); ctx.lineTo(259, 202); ctx.lineTo(241, 202); ctx.closePath(); ctx.fill();
+    const gf = ctx.createLinearGradient(0, 194, 0, 203); gf.addColorStop(0, '#f2d68a'); gf.addColorStop(.5, '#c79a3a'); gf.addColorStop(1, '#6e4f14');
+    ctx.fillStyle = gf; ctx.beginPath(); ctx.roundRect(96, 194, 308, 9, 4); ctx.fill();
+    for (const x of [PAN_G, PAN_D]) {
+      ctx.fillStyle = laiton(x - 4, x + 4); ctx.fillRect(x - 3, 176, 6, 19);
+      const gp = ctx.createLinearGradient(0, 166, 0, 180); gp.addColorStop(0, '#f6e2a8'); gp.addColorStop(1, '#8a6420');
+      ctx.fillStyle = gp; ctx.beginPath(); ctx.ellipse(x, 172, 64, 7, 0, 0, 7); ctx.fill();
+    }
+    Peint.sphere(ctx, 250, 198, 6, ['#fff3c4', '#d8a92e', '#5b4108']);
+    ctx.fillStyle = '#3a2a10'; ctx.beginPath(); ctx.moveTo(247, 192); ctx.lineTo(253, 192); ctx.lineTo(250, 178); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  });
+}
+/** Positions (début, largeur) des deux parties du plateau gauche : « Ox » et « + n e⁻ ». */
+const gauche = c => { const w1 = largeur(c, 'Ox', TT), w2 = largeur(c, ' + n e⁻', TT), x0 = PAN_G - (w1 + w2) / 2; return { x0, w1, w2 }; };
+const EXEMPLES = [
+  { id: 'couple_cu', nom: 'Cu²⁺/Cu', eq: ['Cu²⁺ + 2e⁻', '⇌', 'Cu'], y: 112 },
+  { id: 'couple_zn', nom: 'Zn²⁺/Zn', eq: ['Zn²⁺ + 2e⁻', '⇌', 'Zn'], y: 186 },
+  { id: 'couple_i', nom: 'I₂/I⁻', eq: ['I₂ + 2e⁻', '⇌', '2I⁻'], y: 260 },
+];
+const CAP_R = 'réduction : gain d’électrons', CAP_O = 'oxydation : perte d’électrons';
+function dessinerCouple(c, M) {
+  peindreBalance(c, lisse(M.p('oxydant')));
+  const g = gauche(c);
+  M.etape(c, 'oxydant', () => {
+    c.texte('Ox', g.x0, YT, { couleur: 'rouge', taille: TT });
+    ecrireChim(c, ' + n e⁻', g.x0 + g.w1, YT, { couleur: 'blanc', taille: TT });
+    c.texte('l’oxydant capte des électrons', PAN_G, 232, { couleur: 'rouge', taille: 15, align: 'center', max: 190 });
+  });
+  M.etape(c, 'gagne', () => {
+    c.texte(CAP_R, 250, YR - 12, { couleur: 'rouge', taille: 18, align: 'center' });
+    c.fleche(70, YR, 430, YR, { couleur: 'rouge', largeur: 2.2, tete: 12 });
+  });
+  M.etape(c, 'reducteur', () => {
+    c.texte('Red', PAN_D, YT, { couleur: 'vert', taille: TT, align: 'center' });
+    c.texte('le réducteur cède des électrons', PAN_D, 232, { couleur: 'vert', taille: 15, align: 'center', max: 200 });
+  });
+  M.etape(c, 'perd', () => {
+    c.texte(CAP_O, 250, YO - 12, { couleur: 'vert', taille: 18, align: 'center' });
+    c.fleche(430, YO, 70, YO, { couleur: 'vert', largeur: 2.2, tete: 12 });
+  });
+  M.etape(c, 'couple', () => {
+    doubleFleche(c, 202, 298, YT - TT * .3, { couleur: 'jaune', largeur: 2.2 });
+    c.texte('couple Ox/Red', 250, 84, { couleur: 'jaune', taille: 24, align: 'center' });
+    c.texte('un couple : un oxydant et un réducteur liés par', 14, 392, { couleur: 'blanc', taille: 16 });
+    equation(c, ['Ox + n e⁻', '⇌', 'Red'], 14, 414, { taille: 18, couleur: 'jaune' });
+    c.texte('(demi-équation)', 196, 414, { couleur: 'faible', taille: 15 });
+  });
+  M.etape(c, 'exemples', () => {
+    c.texte('Exemples de couples', 490, 70, { couleur: 'blanc', taille: 18 });
+    for (const ex of EXEMPLES) {
+      ecrireChim(c, ex.nom, 490, ex.y, { couleur: 'jaune', taille: 18 });
+      equation(c, ex.eq, 510, ex.y + 30, { taille: 20, couleurs: ['rouge', '', 'vert'] });
+    }
+  });
+  M.etape(c, 'oxydation_reduction', () => {
+    for (const [cap, y] of [[CAP_R, YR - 12], [CAP_O, YO - 12]]) {
+      const mot = cap.split(' ')[0], wt = largeur(c, cap, 18), wm = largeur(c, mot, 18), x0 = 250 - wt / 2;
+      c.rect(x0 - 5, y - 19, wm + 10, 26, { couleur: 'jaune', largeur: 1.8, arrondi: 6 });
+    }
+    c.texte('gain d’électrons = réduction', 490, 346, { couleur: 'rouge', taille: 17 });
+    c.texte('perte d’électrons = oxydation', 490, 372, { couleur: 'vert', taille: 17 });
+  });
+  return [];
+}
+function reperesCouple(c, M) {
+  const g = gauche(c), plus = nom => (M.vu(nom) ? '' : ` (au moment « ${nom} »)`);
+  c.repere('ox', g.x0 - 4, YT - 26, g.w1 + 8, 34, `l’oxydant Ox (il capte des électrons)${plus('oxydant')}`);
+  c.repere('electrons', g.x0 + g.w1, YT - 26, g.w2 + 6, 34, `les n électrons e⁻ captés par Ox${plus('oxydant')}`);
+  c.repere('red', PAN_D - 34, YT - 26, 68, 34, `le réducteur Red (il cède des électrons)${plus('reducteur')}`);
+  c.repere('double_fleche', 196, YT - 22, 108, 26, `la double flèche du couple : les deux sens${plus('couple')}`);
+  c.repere('sens_reduction', 62, YR - 32, 376, 42, `→ réduction : gain d’électrons${plus('gagne')}`);
+  c.repere('sens_oxydation', 62, YO - 32, 376, 42, `← oxydation : perte d’électrons${plus('perd')}`);
+  for (const ex of EXEMPLES) c.repere(ex.id, 484, ex.y - 22, 266, 60, `le couple ${ex.nom} : ${enTexte(ex.eq)}${plus('exemples')}`);
+  c.repere('definition', 10, 374, 470, 46, `la définition : un couple Ox/Red, Ox + n e⁻ ⇌ Red${plus('couple')}`);
+}
+function voirCouple(M) {
+  const m = ['Une balance de Roberval (peinte, laiton).'];
+  if (M.vu('oxydant')) m.push('Plateau gauche : « Ox + n e⁻ » (Ox en rouge) ; dessous « l’oxydant capte des électrons ».');
+  else m.push('La balance apparaît.');
+  if (M.vu('gagne')) m.push('Flèche rouge vers la droite : « réduction : gain d’électrons ».');
+  if (M.vu('reducteur')) m.push('Plateau droit : « Red » (vert) ; dessous « le réducteur cède des électrons ».');
+  if (M.vu('perd')) m.push('Flèche verte vers la gauche : « oxydation : perte d’électrons ».');
+  if (M.vu('couple')) m.push('Double flèche jaune entre les plateaux : Ox + n e⁻ ⇌ Red ; en haut « couple Ox/Red » ; en bas la définition : un couple, un oxydant et un réducteur liés par Ox + n e⁻ ⇌ Red (demi-équation).');
+  if (M.vu('exemples')) m.push('À droite, trois exemples : Cu²⁺/Cu (Cu²⁺ + 2e⁻ ⇌ Cu), Zn²⁺/Zn (Zn²⁺ + 2e⁻ ⇌ Zn), I₂/I⁻ (I₂ + 2e⁻ ⇌ 2I⁻).');
+  if (M.vu('oxydation_reduction')) m.push('Les mots « réduction » et « oxydation » sont encadrés en jaune ; à droite : « gain d’électrons = réduction », « perte d’électrons = oxydation ».');
+  m.push('Pas de temps simulé ici (définitions) ; 20 °C sans objet.');
+  return m;
+}
+
+/* ── Dessin et ce que voit le tuteur ─────────────────────────────────────── */
+function dessiner(c, M) {
+  MO = M; M.scene.cadre(17);
+  const v = M.S.vue;
+  c.texte(v === 'zinc' ? 'Transfert d’électrons : zinc et ions cuivre II' : 'Oxydant, réducteur : le couple Ox/Red', 14, 28, { couleur: 'cyan', taille: 21, max: v === 'zinc' ? 430 : 460 });
+  M.vues = v === 'zinc' ? dessinerZinc(c, M) : dessinerCouple(c, M);
+  if (v === 'zinc') reperesZinc(c, M); else reperesCouple(c, M);
+  return c.fin();
+}
+function voir(M) {
+  const v = M.S.vue, m = [`Vue « ${v} » (${TITRES[v]}), ${M.etat()}.`];
+  m.push(...(v === 'zinc' ? voirZinc(M) : voirCouple(M)));
+  if (M.vues && M.vues.length) m.push(`Lignes écrites en bas à gauche : ${M.vues.map(t => `« ${t} »`).join(' ; ')}.`);
+  return m.join(' ');
+}
+const params = M => (M.S.vue === 'zinc'
+  ? { vue: 'zinc', temps_simule_min: +tZinc().toFixed(1), temperature_C: 20, depot: +depot().toFixed(2), bleu_restant: +(1 - pali()).toFixed(2) }
+  : { vue: 'couple' });
+const MOT = Moteur({
+  id: 'tlr_transfert', titre: 'Le transfert d’électrons : zinc et ions cuivre II, couple oxydant / réducteur', vues: VUES, titres: TITRES,
+  etapes: v => ETAPES[v], motifs: MOTIFS, dessiner, voir, params,
+  depart: M => ({ zinc: 'Plongeons une lame de zinc dans une solution de sulfate de cuivre.', couple: 'Un oxydant, un réducteur : une balance d’électrons.' })[M.S.vue],
+  messageFin: M => ({ zinc: 'Zn cède 2 e⁻ (réducteur), Cu²⁺ les capte (oxydant) : Zn + Cu²⁺ → Zn²⁺ + Cu.',
+    couple: 'Ox + n e⁻ ⇌ Red : réduction = gain d’électrons, oxydation = perte d’électrons.' })[M.S.vue],
+  appliquer: (p, M) => { const r = {}; if (VUES.includes(p.vue)) r.vue = p.vue; r.change = !!(r.vue && r.vue !== M.S.vue); return r; },
+  schema: { vue: VUES.join(' | ') + ' (change la vue et relance)' },
+  texte: 'Transfert d’électrons. Vue zinc : une lame de zinc dans une solution bleue de sulfate de cuivre (Cu²⁺ + SO₄²⁻), à 20 °C, en temps accéléré (environ 1 h) : un dépôt rouge de cuivre se forme sur la lame et le bleu pâlit. À la loupe : un atome Zn cède 2 e⁻ à un ion Cu²⁺, qui devient un atome Cu ; Zn devient Zn²⁺ et part en solution. Zn : réducteur, cède 2 e⁻ ; Cu²⁺ : oxydant, capte 2 e⁻. Bilan : Zn + Cu²⁺ → Zn²⁺ + Cu. Vue couple : une balance, Ox + n e⁻ à gauche, Red à droite, la double flèche ; réduction = gain d’électrons (→), oxydation = perte d’électrons (←) ; un couple Ox/Red ; exemples Cu²⁺/Cu, Zn²⁺/Zn, I₂/I⁻.',
+  explications: {
+    zinc: [
+      { repere: 'lame', texte: 'Une lame de zinc plonge dans une solution bleue d’ions cuivre II.' },
+      { repere: 'depot', texte: 'Un dépôt rouge de cuivre se forme sur la lame.' },
+      { repere: 'solution', texte: 'Le bleu pâlit : les ions Cu²⁺ disparaissent.' },
+      { repere: 'loupe', texte: 'Regardons la surface de la lame de très près.' },
+      { repere: 'fleche_electrons', texte: 'Un atome de zinc cède deux électrons à un ion cuivre II.' },
+      { repere: 'ion_zn', texte: 'L’atome de zinc devient un ion Zn²⁺ qui part dans la solution.' },
+      { repere: 'etiquette_reducteur', texte: 'Le zinc cède des électrons : c’est le réducteur.' },
+      { repere: 'etiquette_oxydant', texte: 'Cu²⁺ capte des électrons : c’est l’oxydant.' },
+      { repere: 'equation', texte: 'Bilan : Zn + Cu²⁺ donne Zn²⁺ + Cu.' },
+    ],
+    couple: [
+      { repere: 'ox', texte: 'L’oxydant peut capter des électrons.' },
+      { repere: 'sens_reduction', texte: 'Gagner des électrons, c’est une réduction.' },
+      { repere: 'red', texte: 'Le réducteur peut céder des électrons.' },
+      { repere: 'sens_oxydation', texte: 'Perdre des électrons, c’est une oxydation.' },
+      { repere: 'double_fleche', texte: 'Les deux sens ensemble : le couple Ox/Red.' },
+      { repere: 'couple_cu', texte: 'Exemple : le couple Cu²⁺/Cu.' },
+      { repere: 'definition', texte: 'Un couple : un oxydant et son réducteur, liés par une demi-équation.' },
+    ],
+  },
+});
+MOT.lancer();
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

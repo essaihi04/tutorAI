@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le chemin retour — fonction réciproque</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Repère à la craie : le chemin aller de x à f(x), le chemin retour ; la courbe de la fonction réciproque, symétrique par rapport à la droite y = x"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/limites-continuite-tableau/lc-outils.js"></script>
+<script>
+/*
+ * Cours « Limites et continuité » (math_ch1_limites_continuite), bloc fonction réciproque (r1 à r7). Construction propre à ce cours.
+ * Vues : ?vue=aller_retour (param x_m) | parabole | I_et_J | tableaux | reflet (param x_m) | asymptotes. `fin` = construction complète.
+ * aller_retour, reflet : f(x) = x² + 1 sur [0 ; +∞[, f⁻¹(x) = √(x − 1) ; asymptotes : f(x) = 2 + 1/x sur ]0 ; +∞[, f⁻¹(x) = 1/(x − 2).
+ * Les repères de reflet et asymptotes sont égaux (même échelle en x et en y) : la symétrie par rapport à y = x se voit juste.
+ */
+const fr = MathsTableau.fr;
+const f1 = x => x * x + 1;
+const OPT_AR = { x0: 60, y0: 60, w: 330, h: 285, xmin: -0.3, xmax: 3, ymin: -0.6, ymax: 7.6, gx: [], gy: [] };
+const OPT_RE = { x0: 60, y0: 56, w: 292, h: 292, xmin: -0.5, xmax: 5.5, ymin: -0.5, ymax: 5.5, gx: [[1, '1'], [2, '2'], [5, '5']], gy: [[1, '1'], [2, '2'], [5, '5']] };
+const COL = 430;
+
+MathsTableau.page({
+  id: 'lc_miroir', titre: 'Le chemin retour',
+  texte: 'Construction à la craie du cours Limites et continuité : la fonction réciproque, chemin retour de f, et sa courbe symétrique par rapport à la droite y = x',
+  vues: {
+    aller_retour: {
+      titre: 'f(x) = x² + 1 sur [0 ; +∞[ : l’aller et le retour',
+      params: { x_m: { min: 0, max: 2.5, pas: 0.1, defaut: 2, sens: 'le nombre de départ x' } },
+      dessiner(c, K) {
+        K.titre('Le chemin aller, le chemin retour');
+        const G = K.axes(OPT_AR), x = K.P.x_m, y = f1(x);
+        c.texte('f(x) = x² + 1 sur [0 ; +∞[', COL, 84, { couleur: 'cyan', taille: 19 });
+        K.anime(1.6, p => K.courbePart(G, f1, 0, 2.6, p, { couleur: 'cyan' }));
+        K.rond(G, 0, 1, true, 'cyan');
+        K.marque('courbe_tracee');
+        c.pause(.3);
+        c.texte(fr(x, 1), G.X(x), G.Y(0) + 22, { couleur: 'cyan', taille: 17, align: 'center' });
+        c.fleche(G.X(x), G.Y(0) - 3, G.X(x), G.Y(y) + 8, { couleur: 'cyan', largeur: 2 });
+        c.fleche(G.X(x) - 6, G.Y(y), G.X(0) + 6, G.Y(y), { couleur: 'cyan', largeur: 2 });
+        c.texte(fr(y, 2), G.X(0) - 8, G.Y(y) + 6, { couleur: 'cyan', taille: 17, align: 'right' });
+        c.texte(`aller : f(${fr(x, 1)}) = ${fr(y, 2)}`, COL, 140, { couleur: 'cyan', taille: 20 });
+        c.repere('aller', G.X(0), G.Y(y) - 8, G.X(x) - G.X(0) + 8, G.Y(0) - G.Y(y) + 8, 'le chemin aller');
+        c.repere('x', G.X(x) - 14, G.Y(0) + 4, 28, 24, 'le nombre de départ');
+        c.repere('y', G.X(0) - 40, G.Y(y) - 12, 36, 24, 'son image');
+        K.marque('aller');
+        c.pause(.4);
+        c.fleche(G.X(0) + 6, G.Y(y) - 7, G.X(x) - 2, G.Y(y) - 7, { couleur: 'orange', largeur: 2, pointille: [6, 4] });
+        c.fleche(G.X(x) + 7, G.Y(y) + 4, G.X(x) + 7, G.Y(0) - 4, { couleur: 'orange', largeur: 2, pointille: [6, 4] });
+        c.texte(`retour : f⁻¹(${fr(y, 2)}) = ${fr(x, 1)}`, COL, 178, { couleur: 'orange', taille: 20 });
+        c.repere('retour', G.X(0), G.Y(y) - 14, G.X(x) - G.X(0) + 16, G.Y(0) - G.Y(y) + 14, 'le chemin retour');
+        K.marque('retour');
+        c.pause(.4);
+        K.lignes(COL, 236, [
+          { t: 'f⁻¹ défait ce que f a fait.', couleur: 'jaune', cadre: 'jaune' },
+          { t: 'f⁻¹ n’est pas 1/f :', couleur: 'orange' },
+          { t: `1/f(${fr(x, 1)}) = 1/${fr(y, 2)}, pas ${fr(x, 1)}.`, couleur: 'faible' },
+        ], 36);
+        K.marque('defait');
+      },
+      poignees(K) { const G = K.grille(OPT_AR); return [{ id: 'x_m', x: G.X(K.P.x_m), y: G.Y(0), bouger: (px) => ({ x_m: G.inv(px, 0)[0] }) }]; },
+      lecture: K => `x = ${fr(K.P.x_m, 1)} : f(x) = ${fr(f1(K.P.x_m), 2)}, et f⁻¹(${fr(f1(K.P.x_m), 2)}) = ${fr(K.P.x_m, 1)}.`,
+      decrire: K => ({
+        courbe_tracee: 'La courbe de f(x) = x² + 1 pour x ≥ 0, qui part de (0 ; 1) et monte.',
+        aller: `Le chemin aller en cyan : de ${fr(K.P.x_m, 1)} sur l’axe des abscisses, on monte à la courbe, puis on va lire ${fr(f1(K.P.x_m), 2)} sur l’axe des ordonnées : f(${fr(K.P.x_m, 1)}) = ${fr(f1(K.P.x_m), 2)}.`,
+        retour: `Le chemin retour en orange pointillé : de ${fr(f1(K.P.x_m), 2)} sur l’axe des ordonnées, on revient à la courbe puis à ${fr(K.P.x_m, 1)} : f⁻¹(${fr(f1(K.P.x_m), 2)}) = ${fr(K.P.x_m, 1)}.`,
+        defait: 'Écrit : f⁻¹ défait ce que f a fait ; f⁻¹ n’est pas 1/f.',
+      }),
+      motifs: { aller: 'le chemin aller', retour: 'le chemin retour', defait: 'f⁻¹ défait f' },
+      explication: [{ repere: 'aller', texte: 'f envoie x sur son image.' }, { repere: 'retour', texte: 'f⁻¹ ramène l’image à son point de départ.' }],
+    },
+    parabole: {
+      titre: 'x ↦ x² sur ℝ : deux antécédents, puis la restriction',
+      dessiner(c, K) {
+        K.titre('Un seul antécédent : strictement monotone');
+        const G = K.axes({ x0: 50, y0: 60, w: 340, h: 285, xmin: -2.8, xmax: 2.8, ymin: -0.6, ymax: 6.6, gx: [[-2, '−2'], [2, '2']], gy: [[4, '4']] });
+        const pale = K.vu('restriction');
+        c.texte('x ↦ x²', COL, 84, { couleur: 'cyan', taille: 20 });
+        K.anime(1.8, p => {
+          K.courbePart(G, x => x * x, -2.55, 0, Math.min(1, p * 2), { couleur: pale ? 'tresfaible' : 'cyan' });
+          if (p > .5) K.courbePart(G, x => x * x, 0, 2.55, (p - .5) * 2, { couleur: 'cyan' });
+        });
+        K.marque('courbe_tracee');
+        c.pause(.3);
+        c.ligne(G.X(-2.7), G.Y(4), G.X(2.7), G.Y(4), { couleur: 'orange', largeur: 1.6, pointille: [7, 5] });
+        c.direct(() => K.rond(G, -2, 4, true, pale ? 'tresfaible' : 'rouge'));
+        K.rond(G, 2, 4, true, 'rouge');
+        K.proj(G, 2, 4, { couleur: 'rouge', versY: false });
+        c.direct(() => K.proj(G, -2, 4, { couleur: pale ? 'tresfaible' : 'rouge', versY: false }));
+        K.lignes(COL, 140, [{ t: 'y = 4 : deux antécédents,', couleur: 'rouge' }, { t: '−2 et 2 : le retour hésite.', couleur: 'rouge' }], 30);
+        c.repere('droite_y4', G.X(-2.7), G.Y(4) - 10, G.X(2.7) - G.X(-2.7), 20, 'la droite y = 4');
+        c.repere('deux_points', G.X(-2) - 12, G.Y(4) - 12, G.X(2) - G.X(-2) + 24, 24, 'les deux antécédents');
+        K.marque('deux_antecedents');
+        c.pause(.4);
+        K.lignes(COL, 230, [
+          { t: 'Restriction à [0 ; +∞[ :', couleur: 'vert' },
+          { t: 'g(x) = x², un seul antécédent : 2.', couleur: 'vert' },
+          { t: 'g est strictement croissante.', couleur: 'jaune', cadre: 'jaune' },
+        ], 34);
+        c.repere('restriction', G.X(0), G.y0, G.X(2.6) - G.X(0), G.h, 'la restriction à [0 ; +∞[');
+        K.marque('restriction');
+      },
+      decrire: {
+        courbe_tracee: 'La parabole de x ↦ x² sur ℝ.',
+        deux_antecedents: 'La droite y = 4 en pointillés orange coupe la parabole en deux points : −2 et 2. Le retour hésite.',
+        restriction: 'La moitié gauche pâlit : on garde [0 ; +∞[ ; écrit : restriction g(x) = x², un seul antécédent 2, g strictement croissante.',
+      },
+      motifs: { deux_antecedents: 'deux antécédents', restriction: 'la restriction' },
+      explication: [{ repere: 'deux_points', texte: '4 a deux antécédents : pas de chemin retour unique.' }, { repere: 'restriction', texte: 'Sur [0 ; +∞[, un seul antécédent : la réciproque existe.' }],
+    },
+    I_et_J: {
+      titre: 'f(x) = x² − 4x + 1 sur I = [2 ; +∞[ : J = f(I)',
+      dessiner(c, K) {
+        K.titre('f⁻¹ part de J = f(I)');
+        const f = x => x * x - 4 * x + 1;
+        const G = K.axes({ x0: 70, y0: 60, w: 330, h: 285, xmin: -0.5, xmax: 5.6, ymin: -4, ymax: 7, gx: [[2, '2']], gy: [[-3, '−3']] });
+        c.texte('f(x) = x² − 4x + 1', COL, 84, { couleur: 'cyan', taille: 19 });
+        K.anime(1.6, p => K.courbePart(G, f, 2, 5.4, p, { couleur: 'cyan' }));
+        K.rond(G, 2, -3, true, 'cyan');
+        K.marque('courbe_tracee');
+        c.pause(.3);
+        LC.segment(c, G, 2, 5.5, { couleur: 'cyan', largeur: 7 });
+        c.texte('I', G.X(4), G.Y(0) + 24, { couleur: 'cyan', taille: 20 });
+        c.texte('I = [2 ; +∞[', COL, 140, { couleur: 'cyan', taille: 20 });
+        c.repere('I', G.X(2) - 4, G.Y(0) - 8, G.X(5.5) - G.X(2) + 8, 32, 'I sur l’axe des abscisses');
+        K.marque('I_colore');
+        c.pause(.3);
+        K.proj(G, 2, -3, { couleur: 'jaune', versX: false });
+        LC.segment(c, G, -3, 6.9, { vertical: true, couleur: 'jaune', largeur: 7 });
+        c.texte('J', G.X(0) - 22, G.Y(3), { couleur: 'jaune', taille: 20 });
+        c.texte('J = f(I) = [−3 ; +∞[', COL, 178, { couleur: 'jaune', taille: 20 });
+        c.repere('J', G.X(0) - 26, G.y0, 34, G.Y(-3) - G.y0 + 8, 'J sur l’axe des ordonnées');
+        K.marque('J_colore');
+        c.pause(.3);
+        K.lignes(COL, 238, [
+          { t: 'f : I → J', couleur: 'cyan' },
+          { t: 'f⁻¹ : J → I', couleur: 'orange', cadre: 'orange' },
+        ], 40);
+        K.marque('sens');
+      },
+      decrire: {
+        courbe_tracee: 'La courbe de f(x) = x² − 4x + 1 pour x ≥ 2, qui part de (2 ; −3) et monte.',
+        I_colore: 'I = [2 ; +∞[ est coloré en cyan sur l’axe des abscisses.',
+        J_colore: 'J = f(I) = [−3 ; +∞[ est coloré en jaune sur l’axe des ordonnées.',
+        sens: 'Écrit : f va de I vers J ; f⁻¹ va de J vers I.',
+      },
+      motifs: { I_colore: 'I', J_colore: 'J = f(I)', sens: 'f et f⁻¹' },
+      explication: [{ repere: 'I', texte: 'f part de I.' }, { repere: 'J', texte: 'f⁻¹ part de J = f(I).' }],
+    },
+    tableaux: {
+      titre: 'Les tableaux de f et de f⁻¹ échangent leurs lignes',
+      dessiner(c, K) {
+        K.titre('Même sens de variation');
+        c.texte('f strictement décroissante sur I = [a ; b]', 30, 78, { couleur: 'cyan', taille: 17, max: 330 });
+        LC.tabVar(c, 30, 94, 320, 'f(x)', ['a', 'b'], [['f(a)', 'h'], ['f(b)', 'b']], { couleur: 'cyan' });
+        c.repere('tableau_f', 26, 90, 328, 100, 'le tableau de f');
+        K.marque('tableau_f');
+        c.pause(.4);
+        c.texte('f⁻¹ sur J = [f(b) ; f(a)]', 420, 78, { couleur: 'orange', taille: 17, max: 320 });
+        LC.tabVar(c, 420, 94, 320, 'f⁻¹(x)', ['f(b)', 'f(a)'], [['b', 'h'], ['a', 'b']], { couleur: 'orange' });
+        c.repere('tableau_reciproque', 416, 90, 328, 100, 'le tableau de f⁻¹');
+        K.marque('tableau_reciproque');
+        c.pause(.4);
+        c.fleche(352, 110, 446, 166, { couleur: 'jaune', largeur: 1.8 });
+        c.fleche(352, 166, 446, 110, { couleur: 'jaune', largeur: 1.8 });
+        K.lignes(40, 240, [
+          { t: 'Les deux lignes s’échangent.', couleur: 'jaune' },
+          { t: 'f⁻¹ a le même sens de variation que f : strictement décroissante sur J.', couleur: 'vert', cadre: 'vert' },
+          { t: 'f continue sur I, donc f⁻¹ continue sur J. Rien à dériver.', couleur: 'blanc' },
+        ], 38);
+        K.marque('tableaux_echanges');
+      },
+      decrire: {
+        tableau_f: 'À gauche, le tableau de f : x de a à b, f décroît de f(a) à f(b).',
+        tableau_reciproque: 'À droite, le tableau de f⁻¹ : x de f(b) à f(a), f⁻¹ décroît de b à a.',
+        tableaux_echanges: 'Deux flèches jaunes croisées : les lignes s’échangent ; écrit : même sens de variation, f⁻¹ strictement décroissante sur J, f⁻¹ continue sur J.',
+      },
+      motifs: { tableau_f: 'le tableau de f', tableau_reciproque: 'le tableau de f⁻¹', tableaux_echanges: 'les lignes s’échangent' },
+      explication: [{ repere: 'tableau_f', texte: 'f décroît.' }, { repere: 'tableau_reciproque', texte: 'f⁻¹ décroît aussi : même sens de variation.' }],
+    },
+    reflet: {
+      titre: 'La courbe de f⁻¹ : le reflet par rapport à y = x',
+      params: { x_m: { min: 0, max: 2, pas: 0.1, defaut: 1, sens: 'abscisse de M sur (C_f)' } },
+      dessiner(c, K) {
+        K.titre('Le miroir y = x');
+        const G = K.axes(OPT_RE), a = K.P.x_m, b = f1(a), g = x => Math.sqrt(x - 1);
+        c.texte('(C_f) : y = x² + 1, x ≥ 0', 400, 84, { couleur: 'cyan', taille: 18 });
+        K.anime(1.4, p => K.courbePart(G, f1, 0, 2.12, p, { couleur: 'cyan' }));
+        K.marque('courbe_tracee');
+        c.pause(.3);
+        c.ligne(G.X(-0.5), G.Y(-0.5), G.X(5.5), G.Y(5.5), { couleur: 'faible', largeur: 1.6, pointille: [8, 6] });
+        c.texte('y = x', G.X(4.6) + 6, G.Y(4.6) + 4, { couleur: 'faible', taille: 16 });
+        c.repere('droite_y_x', G.X(3.5) - 20, G.Y(5) - 10, 60, 60, 'la droite y = x');
+        K.marque('droite_y_x');
+        c.pause(.3);
+        K.rond(G, a, b, true, 'jaune'); c.texte(`M(${fr(a, 1)} ; ${fr(b, 2)})`, G.X(a) - 10, G.Y(b) - 10, { couleur: 'jaune', taille: 15, align: 'right' });
+        c.ligne(G.X(a), G.Y(b), G.X(b), G.Y(a), { couleur: 'jaune', largeur: 1.3, pointille: [4, 4] });
+        K.rond(G, b, a, true, 'vert'); c.texte(`M’(${fr(b, 2)} ; ${fr(a, 1)})`, G.X(b) + 8, G.Y(a) + 20, { couleur: 'vert', taille: 15 });
+        c.texte('M(a ; b) → M’(b ; a)', 400, 140, { couleur: 'jaune', taille: 19 });
+        c.repere('M', G.X(a) - 12, G.Y(b) - 12, 24, 24, 'le point M de (C_f)');
+        c.repere('M_prime', G.X(b) - 12, G.Y(a) - 12, 24, 24, 'son reflet M′');
+        K.marque('reflet_du_point');
+        c.pause(.4);
+        K.anime(2.4, p => {
+          K.courbePart(G, g, 1, 5.5, p, { couleur: 'vert' });
+          if (p < 1) { const u = Math.sqrt(4.5 * p); K.rond(G, u, f1(u), true, 'jaune'); K.rond(G, f1(u), u, true, 'vert'); }
+        });
+        c.texte('(C_f⁻¹) : y = √(x − 1)', 400, 178, { couleur: 'vert', taille: 18 });
+        c.repere('courbe_reflet', G.X(1), G.Y(2.1), G.X(5.5) - G.X(1), G.Y(0) - G.Y(2.1), 'la courbe de f⁻¹');
+        K.marque('courbe_reflet');
+        c.pause(.4);
+        [[0, 1], [2, 5]].forEach(([u, v]) => { K.rond(G, u, v, true, 'cyan'); K.rond(G, v, u, true, 'vert'); });
+        K.lignes(400, 232, [
+          { t: '(0 ; 1) → (1 ; 0)', couleur: 'blanc' },
+          { t: '(2 ; 5) → (5 ; 2)', couleur: 'blanc' },
+          { t: '(C_f⁻¹) est la symétrique de (C_f)', couleur: 'jaune' },
+          { t: 'par rapport à la droite y = x.', couleur: 'jaune' },
+        ], 30);
+        K.marque('points_echanges');
+      },
+      poignees(K) { const G = K.grille(OPT_RE); return [{ id: 'x_m', x: G.X(K.P.x_m), y: G.Y(f1(K.P.x_m)), bouger: (px) => ({ x_m: G.inv(px, 0)[0] }) }]; },
+      lecture: K => `M(${fr(K.P.x_m, 1)} ; ${fr(f1(K.P.x_m), 2)}) sur (C_f), son reflet M’(${fr(f1(K.P.x_m), 2)} ; ${fr(K.P.x_m, 1)}) sur (C_f⁻¹).`,
+      decrire: K => ({
+        courbe_tracee: 'La courbe (C_f) de x² + 1 pour x ≥ 0, en cyan, dans un repère de même échelle sur les deux axes.',
+        droite_y_x: 'La droite y = x en pointillés : le miroir.',
+        reflet_du_point: `M(${fr(K.P.x_m, 1)} ; ${fr(f1(K.P.x_m), 2)}) en jaune sur (C_f), son reflet M’(${fr(f1(K.P.x_m), 2)} ; ${fr(K.P.x_m, 1)}) en vert : on échange les coordonnées.`,
+        courbe_reflet: 'M glisse sur (C_f) ; M′ trace en vert la courbe de f⁻¹ : y = √(x − 1).',
+        points_echanges: 'Points échangés : (0 ; 1) donne (1 ; 0), (2 ; 5) donne (5 ; 2) ; écrit : (C_f⁻¹) est la symétrique de (C_f) par rapport à la droite y = x.',
+      }),
+      motifs: { droite_y_x: 'la droite y = x', reflet_du_point: 'M et son reflet M′', courbe_reflet: 'la courbe de f⁻¹', points_echanges: 'les points échangés' },
+      explication: [{ repere: 'droite_y_x', texte: 'La droite y = x est le miroir.' }, { repere: 'M_prime', texte: 'M′ a les coordonnées de M échangées.' }, { repere: 'courbe_reflet', texte: 'Tous les reflets forment la courbe de f⁻¹.' }],
+    },
+    asymptotes: {
+      titre: 'f(x) = 2 + 1/x : les asymptotes s’échangent',
+      dessiner(c, K) {
+        K.titre('Asymptote verticale ↔ horizontale');
+        const G = K.axes({ x0: 60, y0: 56, w: 292, h: 292, xmin: -0.5, xmax: 6, ymin: -0.5, ymax: 6, gx: [[2, '2']], gy: [[2, '2']] });
+        const f = x => 2 + 1 / x, g = x => 1 / (x - 2);
+        c.texte('(C_f) : y = 2 + 1/x, x > 0', 400, 84, { couleur: 'cyan', taille: 18 });
+        K.anime(1.4, p => K.courbePart(G, f, 0.24, 5.9, p, { couleur: 'cyan' }));
+        c.ligne(G.X(-0.4), G.Y(2), G.X(6), G.Y(2), { couleur: 'cyan', largeur: 1.3, pointille: [6, 6], alpha: .7 });
+        c.texte('y = 2', G.X(5.2), G.Y(2) - 8, { couleur: 'cyan', taille: 14 });
+        c.repere('asymptote_h', G.X(0), G.Y(2) - 10, G.w - 20, 20, 'l’asymptote horizontale y = 2');
+        K.marque('courbe_tracee');
+        c.pause(.3);
+        c.ligne(G.X(-0.5), G.Y(-0.5), G.X(6), G.Y(6), { couleur: 'faible', largeur: 1.6, pointille: [8, 6] });
+        c.texte('y = x', G.X(5.3) - 40, G.Y(5.3) + 4, { couleur: 'faible', taille: 16 });
+        K.marque('droite_y_x');
+        c.pause(.3);
+        K.anime(1.6, p => K.courbePart(G, g, 2.17, 5.9, p, { couleur: 'vert' }));
+        c.texte('(C_f⁻¹)', G.X(4.6), G.Y(g(4.6)) - 10, { couleur: 'vert', taille: 15 });
+        c.repere('courbe_reflet', G.X(2.1), G.Y(6), G.X(6) - G.X(2.1), G.Y(0) - G.Y(6), 'la courbe de f⁻¹');
+        K.marque('courbe_reflet');
+        c.pause(.3);
+        c.ligne(G.X(2), G.Y(-0.4), G.X(2), G.Y(6), { couleur: 'vert', largeur: 1.3, pointille: [6, 6], alpha: .8 });
+        c.texte('x = 2', G.X(2) + 6, G.y0 + 14, { couleur: 'vert', taille: 14 });
+        c.repere('asymptote_v', G.X(2) - 10, G.y0, 20, G.h, 'l’asymptote verticale x = 2');
+        K.lignes(400, 150, [
+          { t: '(C_f) : y = 2 asymptote horizontale', couleur: 'cyan' },
+          { t: '(C_f⁻¹) : x = 2 asymptote verticale', couleur: 'vert' },
+          { t: 'y = 2  ↔  x = 2', couleur: 'jaune', cadre: 'jaune' },
+          { t: 'x = 0  ↔  y = 0', couleur: 'jaune', cadre: 'jaune' },
+        ], 40);
+        K.marque('asymptotes_echangees');
+      },
+      decrire: {
+        courbe_tracee: 'La courbe (C_f) de 2 + 1/x pour x > 0, avec ses asymptotes : l’axe des ordonnées (x = 0) et la droite y = 2 en pointillés.',
+        droite_y_x: 'La droite y = x en pointillés : le miroir.',
+        courbe_reflet: 'La courbe de f⁻¹ en vert, symétrique de (C_f) par rapport à y = x.',
+        asymptotes_echangees: 'La droite x = 2 en pointillés verts ; écrit : y = 2 ↔ x = 2 et x = 0 ↔ y = 0 : une asymptote horizontale devient verticale.',
+      },
+      motifs: { droite_y_x: 'la droite y = x', courbe_reflet: 'la courbe de f⁻¹', asymptotes_echangees: 'les asymptotes échangées' },
+      explication: [{ repere: 'asymptote_h', texte: 'y = 2 pour (C_f).' }, { repere: 'asymptote_v', texte: 'devient x = 2 pour (C_f⁻¹).' }],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

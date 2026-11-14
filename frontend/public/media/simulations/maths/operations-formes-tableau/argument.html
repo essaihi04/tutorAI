@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>L’argument d’un complexe</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Plan complexe à la craie : le point M sur un cercle, l’angle orienté (u, OM) avec sa flèche, un tour de plus, les arguments des réels et imaginaires purs, les quatre quarts du plan"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Nombres complexes (première partie) » (math_ch6_nombres_complexes) : l’argument.
+ * Vues : ?vue=angle (param t) | tour | axes | projections | quadrants.
+ * angle : point, angle, glisse · tour : point, angle, tour, zero · axes : positif, negatif, haut, bas ·
+ * projections : point, projections, formules · quadrants : quatre, angles, signes. Repères : les mêmes noms.
+ */
+const fr = MathsTableau.fr;
+const PI = Math.PI;
+/* Mouvements : MOB[nom] = instant d’écriture où un point commence à bouger (d’une image à l’autre) ;
+ * avant(c, nom) : on est avant ce mouvement, la version fixe du point se dessine (sinon c’est le point qui bouge). */
+const MOB = {};
+const avant = (c, nom) => Number.isFinite(c.t) && !(c.t > (MOB[nom] ?? Infinity));
+const debut = (c, nom) => { if (Number.isFinite(c.t)) MOB[nom] = c.cur; };
+/* Nom de vecteur : la lettre et une petite flèche dessinée au-dessus. */
+function vecNom(c, s, x, y, t = 16, couleur = 'blanc', align = 'center') {
+  const w = c.largeurTexte(s, t), xm = align === 'center' ? x : align === 'right' ? x - w / 2 : x + w / 2;
+  c.texte(s, x, y, { couleur, taille: t, align });
+  const yh = y - t * (/[A-Z]/.test(s) ? .9 : .72);
+  c.fleche(xm - w / 2 - 1, yh, xm + w / 2 + 3, yh, { couleur, largeur: 1.2, tete: 4, duree: .06 });
+}
+/* Texte en morceaux : [texte, estUnVecteur] ; un vecteur reçoit sa flèche. */
+function texteVec(c, x, y, parties, o = {}) {
+  const t = o.taille || 19;
+  for (const [s, v] of parties) {
+    if (v) vecNom(c, s, x, y, t, o.couleur, 'left'); else c.texte(s, x, y, { couleur: o.couleur, taille: t });
+    x += c.largeurTexte(s, t);
+  }
+  return x;
+}
+/* Largeur d’un texte avec exposants (écrits plus petits par exposants.js). */
+function larg(c, s, t) {
+  const sup = s.match(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁻]/g) || [];
+  return c.largeurTexte(s.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁻]/g, ''), t) + c.largeurTexte('0'.repeat(sup.length), t * .62);
+}
+/* Plan complexe orthonormé : axes, O, vecteurs u et v, « axe réel », « axe imaginaire ». */
+function plan(c, K, o) {
+  const G = K.axes({ nomx: '', nomy: '', ...o });
+  const U = G.X(1) - G.X(0), x0 = G.X(0), y0 = G.Y(0);
+  c.fleche(x0, y0, x0 + U, y0, { couleur: 'cyan', largeur: 2.2, tete: 7 });
+  c.fleche(x0, y0, x0, y0 - U, { couleur: 'cyan', largeur: 2.2, tete: 7 });
+  vecNom(c, 'u', x0 + U / 2, y0 + 17, 15, 'cyan');
+  vecNom(c, 'v', x0 - 11, y0 - U / 2 + 5, 15, 'cyan');
+  c.texte('axe réel', G.x0 + G.w + 12, y0 + 36, { couleur: 'faible', taille: 14, align: 'right' });
+  c.texte('axe imaginaire', x0 + 8, G.y0 - 2, { couleur: 'faible', taille: 14 });
+  return G;
+}
+/* Coordonnées px d’un point du plan donné par son module r et son angle a (radians). */
+const pol = (G, r, a) => [G.X(r * Math.cos(a)), G.Y(r * Math.sin(a))];
+/* Arc d’angle ORIENTÉ de a0 à a1 (radians, sens direct), rayon r (unités du plan, r1 : rayon d’arrivée
+ * pour une spirale), centré en O, avec une pointe de flèche à l’arrivée. */
+function arc(c, G, r, a0, a1, o = {}) {
+  const cx = G.X(0), cy = G.Y(0), U = G.X(1) - G.X(0), R0 = r * U, R1 = (o.r1 ?? r) * U, d = a1 - a0;
+  if (Math.abs(d) < 1e-3) return;
+  const n = Math.max(6, Math.ceil(Math.abs(d) * Math.max(R0, R1) / 5)), pts = [];
+  for (let i = 0; i <= n; i++) { const f = i / n, a = a0 + d * f, R = R0 + (R1 - R0) * f; pts.push([cx + R * Math.cos(a), cy - R * Math.sin(a)]); }
+  const opt = { couleur: o.couleur || 'jaune', largeur: o.largeur ?? 2, tremble: .3, duree: o.duree };
+  c.trait(pts, opt);
+  const [xa, ya] = pts[n], [xb, yb] = pts[n - 1], th = Math.atan2(ya - yb, xa - xb), t = o.tete ?? 8;
+  c.trait([[xa - t * Math.cos(th - .5), ya - t * Math.sin(th - .5)], [xa, ya], [xa - t * Math.cos(th + .5), ya - t * Math.sin(th + .5)]], { ...opt, duree: .08 });
+}
+/* Texte posé à l’angle a, à la distance r de O (unités du plan). */
+function aAngle(c, G, r, a, s, o = {}) { const [x, y] = pol(G, r, a); c.texte(s, x, y + 6, { align: 'center', taille: 17, couleur: 'jaune', ...o }); }
+/* Angle en radians écrit en fraction de π (degrés multiples de 15). */
+function radPi(deg) {
+  const k = Math.round(deg / 15); if (k === 0) return '0';
+  const pg = (a, b) => (b ? pg(b, a % b) : a), g = pg(Math.abs(k), 12);
+  const n = Math.abs(k) / g, d = 12 / g;
+  return (k < 0 ? '−' : '') + (n === 1 ? '' : n) + 'π' + (d === 1 ? '' : '/' + d);
+}
+/* a + ib écrit à la française. */
+function cplx(a, b, d = 2) {
+  a = +a.toFixed(d); b = +b.toFixed(d);
+  if (b === 0) return fr(a, d);
+  const ib = (Math.abs(b) === 1 ? '' : fr(Math.abs(b), d)) + 'i';
+  if (a === 0) return (b < 0 ? '−' : '') + ib;
+  return `${fr(a, d)} ${b < 0 ? '−' : '+'} ${ib}`;
+}
+
+const T4 = [[-2, '−2'], [-1, '−1'], [1, '1'], [2, '2']];
+const OPT_A = { x0: 30, y0: 52, w: 291.2, h: 291.2, xmin: -2.6, xmax: 2.6, ymin: -2.6, ymax: 2.6, gx: T4, gy: T4 };
+const OPT_X = { x0: 30, y0: 60, w: 330, h: 270, xmin: -3.7, xmax: 2.9, ymin: -2.7, ymax: 2.7, gx: [], gy: [] };
+const OPT_P = { x0: 40, y0: 70, w: 240, h: 232, xmin: -0.6, xmax: 2.4, ymin: -0.6, ymax: 2.3, gx: [], gy: [] };
+const OPT_Q = { x0: 30, y0: 56, w: 312, h: 288, xmin: -2.6, xmax: 2.6, ymin: -2.4, ymax: 2.4, gx: [], gy: [] };
+const XR = 360;
+const unite = (G) => G.X(1) - G.X(0);
+/* M sur le cercle de rayon r, à l’angle a : segment OM, point, nom. */
+function pointM(c, G, r, a, nom = 'M') {
+  const [x, y] = pol(G, r, a), [lx, ly] = pol(G, r + .28, a);
+  c.ligne(G.X(0), G.Y(0), x, y, { couleur: 'cyan', largeur: 2.4 });
+  c.point(x, y, 5.5, 'cyan');
+  if (nom) c.texte(nom, lx, ly + 6, { couleur: 'cyan', taille: 17, align: 'center' });
+}
+/* Angle principal (dans ]−π ; π]). */
+const principal = (a) => { let b = Math.atan2(Math.sin(a), Math.cos(a)); if (b <= -PI + 1e-9) b = PI; return b; };
+
+MathsTableau.page({
+  id: 'nc_argument', titre: 'Nombres complexes : l’argument',
+  texte: 'Construction à la craie : l’argument de z ≠ 0 est une mesure de l’angle orienté (u, OM), défini à 2π près ; 0 n’a pas d’argument ; les réels et imaginaires purs ont pour argument 0, π, π/2, −π/2 ; cos θ = a/r et sin θ = b/r ; les signes de a et b choisissent le quart du plan',
+  vues: {
+    angle: {
+      titre: 'L’argument : l’angle (u, OM)',
+      params: { t: { min: -180, max: 180, pas: 15, defaut: 60, sens: 'angle en degrés' } },
+      dessiner(c, K) {
+        K.titre('L’argument : l’angle (u, OM)');
+        const G = plan(c, K, OPT_A), U = unite(G);
+        const t = K.P.t, a = t * PI / 180, fixe = avant(c, 'glisse');
+        c.cercle(G.X(0), G.Y(0), 2 * U, { couleur: 'faible', largeur: 1.6 });
+        const dessArc = (b) => { arc(c, G, .55, 0, b); if (Math.abs(b) > .05) aAngle(c, G, .85, b / 2, 'θ', { taille: 19 }); };
+        K.anime(.5, () => { if (fixe) pointM(c, G, 2, a); });
+        c.texte('|z| = OM = 2', XR, 95, { couleur: 'blanc', taille: 19 });
+        const [mx, my] = pol(G, 2, a);
+        c.repere('point', mx - 20, my - 20, 40, 40, 'le point M sur le cercle de rayon 2');
+        K.marque('point');
+        c.pause(.3);
+        K.anime(.8, p => { if (fixe) dessArc(a * p); });
+        texteVec(c, XR, 140, [['θ = (', false], ['u', true], [', ', false], ['OM', true], [')', false]], { taille: 20, couleur: 'jaune' });
+        c.rect(XR - 10, 160, 176, 38, { couleur: 'jaune', arrondi: 8, largeur: 1.7 });
+        c.texte('arg z ≡ θ [2π]', XR, 187, { couleur: 'jaune', taille: 21 });
+        c.texte(`ici θ = ${radPi(t)}`, XR, 230, { couleur: 'blanc', taille: 19 });
+        c.repere('angle', XR - 12, 116, 260, 124, 'l’angle orienté θ = (u, OM) : arg z ≡ θ [2π]');
+        K.marque('angle');
+        c.pause(.3);
+        debut(c, 'glisse');
+        K.anime(3.6, p => {
+          const b = p >= 1 ? a : a + 2 * PI * p;
+          pointM(c, G, 2, b); dessArc(p >= 1 ? a : principal(b));
+        });
+        c.texte('M fait le tour : θ change,', XR, 280, { couleur: 'blanc', taille: 18 });
+        c.texte('le module reste |z| = 2', XR, 308, { couleur: 'vert', taille: 18 });
+        c.repere('glisse', G.X(-2) - 8, G.Y(2) - 8, 4 * U + 16, 4 * U + 16, 'M parcourt le cercle : θ suit, le module reste 2');
+        K.marque('glisse');
+      },
+      poignees(K) {
+        const G = K.grille(OPT_A), [x, y] = pol(G, 2, K.P.t * PI / 180);
+        return [{ id: 't', x, y, bouger: (px, py) => ({ t: Math.atan2(G.Y(0) - py, px - G.X(0)) * 180 / PI }) }];
+      },
+      lecture: K => { const a = K.P.t * PI / 180; return `θ = ${radPi(K.P.t)} (${fr(K.P.t, 0)}°) : M = 2(cos θ + i sin θ), z ≈ ${cplx(2 * Math.cos(a), 2 * Math.sin(a))} ; |z| = 2.`; },
+      decrire: K => ({
+        point: `Un plan complexe (axe réel, axe imaginaire, O, u, v) et le cercle de centre O et de rayon 2 ; le point M sur ce cercle, relié à O ; à droite « |z| = OM = 2 ».`,
+        angle: `Un arc jaune orienté (avec sa pointe de flèche) va de u vers OM, marqué « θ » ; à droite « θ = (u, OM) », encadré jaune « arg z ≡ θ [2π] », et « ici θ = ${radPi(K.P.t)} ».`,
+        glisse: `M fait un tour complet du cercle, l’arc θ le suit, puis M revient à l’angle ${radPi(K.P.t)} ; à droite « M fait le tour : θ change, le module reste |z| = 2 ».`,
+      }),
+      motifs: { point: 'le point M', angle: 'l’angle θ = (u, OM)', glisse: 'M fait le tour' },
+      explication: [
+        { repere: 'point', texte: 'M est sur le cercle de centre O et de rayon 2 : |z| = OM = 2.' },
+        { repere: 'angle', texte: 'L’argument de z est l’angle orienté (u, OM), à 2π près : arg z ≡ θ [2π].' },
+        { repere: 'glisse', texte: 'Quand M tourne sur le cercle, l’angle change mais le module reste 2.' },
+      ],
+    },
+    tour: {
+      titre: 'Un tour de plus : [2π]',
+      dessiner(c, K) {
+        K.titre('Un tour de plus : [2π]');
+        const G = plan(c, K, OPT_A), U = unite(G), a = PI / 3, fixe = avant(c, 'tour');
+        c.cercle(G.X(0), G.Y(0), 2 * U, { couleur: 'faible', largeur: 1.6 });
+        K.anime(.5, () => { if (fixe) pointM(c, G, 2, a); });
+        c.texte('M sur le cercle de rayon 2', XR, 95, { couleur: 'blanc', taille: 18 });
+        const [mx, my] = pol(G, 2, a);
+        c.repere('point', mx - 20, my - 20, 40, 40, 'le point M');
+        K.marque('point');
+        c.pause(.3);
+        K.anime(.7, p => arc(c, G, .4, 0, a * p));
+        aAngle(c, G, .7, .42, 'π/3', { taille: 16 });
+        c.texte('arg z ≡ π/3 [2π]', XR, 135, { couleur: 'jaune', taille: 20 });
+        c.repere('angle', XR - 10, 112, 200, 32, 'arg z ≡ π/3 [2π]');
+        K.marque('angle');
+        c.pause(.3);
+        debut(c, 'tour');
+        const fin = a + 2 * PI;
+        K.anime(3.4, p => {
+          const b = a + 2 * PI * p;
+          arc(c, G, .98, 0, b, { r1: .98 + .55 * b / fin, couleur: 'orange' });
+          pointM(c, G, 2, b);
+          if (p >= 1) aAngle(c, G, 1.72, 7 * PI / 6, '+ 2π', { couleur: 'orange' });
+        });
+        K.lignes(XR, 185, [
+          { t: 'π/3 + 2π = 7π/3', couleur: 'jaune', taille: 20 },
+          { t: 'même point M', couleur: 'blanc', taille: 18 },
+          { t: 'arg z ≡ π/3 ≡ 7π/3 [2π]', couleur: 'blanc', taille: 18 },
+        ], 30);
+        c.repere('tour', XR - 10, 162, 250, 96, 'un tour de plus : π/3 + 2π = 7π/3, même point M');
+        K.marque('tour');
+        c.pause(.3);
+        c.cercle(G.X(0), G.Y(0), 13, { couleur: 'rouge', largeur: 2.2 });
+        c.rect(XR - 10, 280, 222, 38, { couleur: 'rouge', arrondi: 8, largeur: 1.7 });
+        c.texte('0 n’a pas d’argument', XR, 306, { couleur: 'rouge', taille: 20 });
+        c.texte('M = O : pas d’angle (u, OM)', XR, 342, { couleur: 'blanc', taille: 16 });
+        c.repere('zero', XR - 12, 278, 240, 72, '0 n’a pas d’argument');
+        K.marque('zero');
+      },
+      decrire: {
+        point: 'Un plan complexe et le cercle de centre O et de rayon 2 ; le point M sur ce cercle, relié à O ; à droite « M sur le cercle de rayon 2 ».',
+        angle: 'Un arc jaune orienté de u vers OM, marqué « π/3 » ; à droite « arg z ≡ π/3 [2π] ».',
+        tour: 'M fait un tour complet et revient au même endroit ; une spirale orange avec sa flèche fait π/3 plus un tour, marquée « + 2π » ; à droite « π/3 + 2π = 7π/3 », « même point M », « arg z ≡ π/3 ≡ 7π/3 [2π] ».',
+        zero: 'O entouré en rouge ; à droite, encadré rouge « 0 n’a pas d’argument », dessous « M = O : pas d’angle (u, OM) ».',
+      },
+      motifs: { point: 'le point M', angle: 'l’angle π/3', tour: 'un tour de plus : 7π/3', zero: '0 n’a pas d’argument' },
+      explication: [
+        { repere: 'angle', texte: 'L’angle (u, OM) mesure π/3.' },
+        { repere: 'tour', texte: 'Un tour de plus ramène M au même point : π/3 et 7π/3 sont deux mesures du même argument, à 2π près.' },
+        { repere: 'zero', texte: 'Pour z = 0, M est en O : pas de vecteur OM, donc pas d’argument.' },
+      ],
+    },
+    axes: {
+      titre: 'Réels et imaginaires purs',
+      dessiner(c, K) {
+        K.titre('Réels et imaginaires purs');
+        const G = plan(c, K, OPT_X), O = [G.X(0), G.Y(0)], X2 = 410;
+        // 2 → 0
+        c.ligne(O[0], O[1] - 1, G.X(2), G.Y(0) - 1, { couleur: 'jaune', largeur: 3 });
+        c.point(G.X(2), G.Y(0), 5.5, 'cyan');
+        c.texte('2', G.X(2), G.Y(0) - 12, { couleur: 'cyan', taille: 18, align: 'center' });
+        c.texte('angle 0', G.X(1.35), G.Y(0) - 10, { couleur: 'jaune', taille: 15, align: 'center' });
+        c.texte('arg 2 ≡ 0 [2π]', X2, 100, { couleur: 'jaune', taille: 20 });
+        c.repere('positif', X2 - 8, 78, 220, 30, 'arg 2 ≡ 0 [2π]');
+        K.marque('positif');
+        c.pause(.3);
+        // −3 → π
+        c.ligne(O[0], O[1], G.X(-3), G.Y(0), { couleur: 'cyan', largeur: 2 });
+        c.point(G.X(-3), G.Y(0), 5.5, 'cyan');
+        c.texte('−3', G.X(-3), G.Y(0) - 12, { couleur: 'cyan', taille: 18, align: 'center' });
+        K.anime(.7, p => arc(c, G, .7, 0, PI * p));
+        aAngle(c, G, 1.0, 5 * PI / 6, 'π');
+        c.texte('arg(−3) ≡ π [2π]', X2, 140, { couleur: 'jaune', taille: 20 });
+        c.repere('negatif', X2 - 8, 118, 220, 30, 'arg(−3) ≡ π [2π]');
+        K.marque('negatif');
+        c.pause(.3);
+        // 2i → π/2
+        c.ligne(O[0], O[1], G.X(0), G.Y(2), { couleur: 'cyan', largeur: 2 });
+        c.point(G.X(0), G.Y(2), 5.5, 'cyan');
+        c.texte('2i', G.X(0) + 10, G.Y(2) - 4, { couleur: 'cyan', taille: 18 });
+        K.anime(.6, p => arc(c, G, .45, 0, PI / 2 * p));
+        aAngle(c, G, .82, PI / 4, 'π/2');
+        c.texte('arg(2i) ≡ π/2 [2π]', X2, 180, { couleur: 'jaune', taille: 20 });
+        c.repere('haut', X2 - 8, 158, 220, 30, 'arg(2i) ≡ π/2 [2π]');
+        K.marque('haut');
+        c.pause(.3);
+        // −2i → −π/2
+        c.ligne(O[0], O[1], G.X(0), G.Y(-2), { couleur: 'cyan', largeur: 2 });
+        c.point(G.X(0), G.Y(-2), 5.5, 'cyan');
+        c.texte('−2i', G.X(0) + 10, G.Y(-2) + 16, { couleur: 'cyan', taille: 18 });
+        K.anime(.6, p => arc(c, G, 1.1, 0, -PI / 2 * p));
+        aAngle(c, G, 1.5, -PI / 4, '−π/2');
+        c.texte('arg(−2i) ≡ −π/2 [2π]', X2, 220, { couleur: 'jaune', taille: 20 });
+        c.repere('bas', X2 - 8, 198, 240, 30, 'arg(−2i) ≡ −π/2 [2π]');
+        K.marque('bas');
+        c.pause(.3);
+        K.lignes(X2, 270, [
+          { t: 'réel > 0 : 0 ; réel < 0 : π', couleur: 'blanc', taille: 17 },
+          { t: 'imaginaire pur : π/2 ou −π/2', couleur: 'blanc', taille: 17 },
+        ], 28);
+      },
+      decrire: {
+        positif: 'Un plan complexe ; le point 2 sur l’axe réel, le segment de O à 2 en jaune marqué « angle 0 » ; à droite « arg 2 ≡ 0 [2π] ».',
+        negatif: 'Le point −3 sur l’axe réel ; un arc orienté d’un demi-tour, de u vers la gauche (au-dessus de O), marqué « π » ; à droite « arg(−3) ≡ π [2π] ».',
+        haut: 'Le point 2i sur l’axe imaginaire ; un arc orienté d’un quart de tour vers le haut, marqué « π/2 » ; à droite « arg(2i) ≡ π/2 [2π] ».',
+        bas: 'Le point −2i ; un arc orienté d’un quart de tour vers le bas (sens indirect), marqué « −π/2 » ; à droite « arg(−2i) ≡ −π/2 [2π] ».',
+        fin: 'Dessous : « réel > 0 : 0 ; réel < 0 : π » et « imaginaire pur : π/2 ou −π/2 ».',
+      },
+      motifs: { positif: 'arg 2 = 0', negatif: 'arg(−3) = π', haut: 'arg(2i) = π/2', bas: 'arg(−2i) = −π/2' },
+      explication: [
+        { repere: 'positif', texte: 'Un réel positif est sur la demi-droite de u : son argument est 0.' },
+        { repere: 'negatif', texte: 'Un réel négatif est de l’autre côté : un demi-tour, argument π.' },
+        { repere: 'haut', texte: 'Un imaginaire pur bi avec b > 0 : un quart de tour, argument π/2.' },
+        { repere: 'bas', texte: 'Avec b < 0 : un quart de tour dans l’autre sens, argument −π/2.' },
+      ],
+    },
+    projections: {
+      titre: 'cos θ = a/r, sin θ = b/r',
+      dessiner(c, K) {
+        K.titre('cos θ = a/r, sin θ = b/r');
+        const G = plan(c, K, OPT_P), a = PI / 3, [mx, my] = pol(G, 2, a);
+        pointM(c, G, 2, a, '');
+        c.texte('M(a ; b)', mx + 10, my - 6, { couleur: 'cyan', taille: 17 });
+        const [rx, ry] = pol(G, 1.15, a);
+        c.texte('r', rx - 10, ry, { couleur: 'jaune', taille: 19, align: 'right' });
+        K.anime(.6, p => arc(c, G, .42, 0, a * p));
+        aAngle(c, G, .66, a / 2.4, 'θ', { taille: 18 });
+        c.texte('r = OM = |z|', XR, 100, { couleur: 'jaune', taille: 19 });
+        c.repere('point', G.X(0) - 4, my - 24, mx - G.X(0) + 80, G.Y(0) - my + 28, 'le point M(a ; b), à la distance r de O, à l’angle θ');
+        K.marque('point');
+        c.pause(.3);
+        c.ligne(mx, my, mx, G.Y(0), { couleur: 'orange', largeur: 1.6, pointille: [5, 5] });
+        c.ligne(mx, my, G.X(0), my, { couleur: 'orange', largeur: 1.6, pointille: [5, 5] });
+        c.texte('a', mx, G.Y(0) + 20, { couleur: 'vert', taille: 19, align: 'center' });
+        c.texte('b', G.X(0) - 9, my + 6, { couleur: 'orange', taille: 19, align: 'right' });
+        c.texte('a = r cos θ', XR, 145, { couleur: 'vert', taille: 20 });
+        c.texte('b = r sin θ', XR, 177, { couleur: 'orange', taille: 20 });
+        c.repere('projections', G.X(0) - 24, my - 10, mx - G.X(0) + 34, G.Y(0) - my + 36, 'les projections : a = r cos θ et b = r sin θ');
+        K.marque('projections');
+        c.pause(.3);
+        c.rect(XR - 10, 205, 270, 38, { couleur: 'jaune', arrondi: 8, largeur: 1.7 });
+        c.texte('cos θ = a/r ; sin θ = b/r', XR, 232, { couleur: 'jaune', taille: 21 });
+        c.texte('r = √(a² + b²)', XR, 274, { couleur: 'blanc', taille: 19 });
+        c.texte('exemple : 1 + i√3 : r = 2, cos θ = 1/2, sin θ = √3/2', XR, 310, { couleur: 'blanc', taille: 15, max: 390 });
+        c.texte('donc θ = π/3', XR, 336, { couleur: 'jaune', taille: 16 });
+        c.repere('formules', XR - 12, 203, 280, 42, 'cos θ = a/r ; sin θ = b/r');
+        K.marque('formules');
+      },
+      decrire: {
+        point: 'Un plan complexe ; le point M(a ; b) relié à O, le segment marqué « r » ; un arc orienté θ de u vers OM ; à droite « r = OM = |z| ».',
+        projections: 'Des pointillés orange de M vers les deux axes : « a » sur l’axe réel (vert), « b » sur l’axe imaginaire (orange) ; à droite « a = r cos θ » en vert et « b = r sin θ » en orange.',
+        formules: 'Encadré jaune « cos θ = a/r ; sin θ = b/r » ; dessous « r = √(a² + b²) », l’exemple « 1 + i√3 : r = 2, cos θ = 1/2, sin θ = √3/2 » et « donc θ = π/3 ».',
+      },
+      motifs: { point: 'M, r et θ', projections: 'les projections a et b', formules: 'cos θ = a/r, sin θ = b/r' },
+      explication: [
+        { repere: 'point', texte: 'M est à la distance r de O et l’angle (u, OM) vaut θ.' },
+        { repere: 'projections', texte: 'En projetant M sur les axes : a = r cos θ et b = r sin θ.' },
+        { repere: 'formules', texte: 'Donc cos θ = a/r et sin θ = b/r : on trouve θ avec ces deux valeurs.' },
+      ],
+    },
+    quadrants: {
+      titre: 'Les signes choisissent le quart',
+      dessiner(c, K) {
+        K.titre('Les signes choisissent le quart');
+        const G = plan(c, K, OPT_Q), U = unite(G), s3 = Math.sqrt(3), X2 = 380;
+        c.cercle(G.X(0), G.Y(0), 2 * U, { couleur: 'tresfaible', largeur: 1.4 });
+        const P = [
+          { x: s3, y: 1, nom: '√3 + i', ang: PI / 6, r: .45, lab: ['π/6'] },
+          { x: -s3, y: 1, nom: '−√3 + i', ang: 5 * PI / 6, r: .6, lab: ['π − π/6', '= 5π/6'] },
+          { x: -s3, y: -1, nom: '−√3 − i', ang: -5 * PI / 6, r: .75, lab: ['−π + π/6', '= −5π/6'] },
+          { x: s3, y: -1, nom: '√3 − i', ang: -PI / 6, r: .9, lab: ['−π/6'] },
+        ];
+        for (const q of P) {
+          const px = G.X(q.x), py = G.Y(q.y);
+          c.ligne(G.X(0), G.Y(0), px, py, { couleur: 'cyan', largeur: 1.6, alpha: .6 });
+          c.point(px, py, 5.5, 'cyan');
+          c.texte(q.nom, px + (q.x > 0 ? 10 : -10), py + 6, { couleur: 'cyan', taille: 17, align: q.x > 0 ? 'left' : 'right' });
+        }
+        c.texte('r = 2 pour les quatre', X2, 95, { couleur: 'blanc', taille: 18 });
+        c.texte('cos θ = a/2 ; sin θ = b/2', X2, 123, { couleur: 'blanc', taille: 18 });
+        c.repere('quatre', G.X(-2.2), G.Y(1.3), G.X(2.2) - G.X(-2.2), G.Y(-1.3) - G.Y(1.3), 'les points √3 + i, −√3 + i, −√3 − i, √3 − i');
+        K.marque('quatre');
+        c.pause(.3);
+        for (const q of P) {
+          K.anime(.5, p => arc(c, G, q.r, 0, q.ang * p));
+          const px = G.X(q.x), py = G.Y(q.y), haut = q.y > 0;
+          q.lab.forEach((l, i) => {
+            const y = haut ? py - 18 - 20 * (q.lab.length - 1 - i) : py + 26 + 20 * i;
+            c.texte(l, px, y, { couleur: 'jaune', taille: 16, align: 'center' });
+          });
+        }
+        c.texte('même angle de base : π/6', X2, 165, { couleur: 'jaune', taille: 18 });
+        c.repere('angles', G.X(-2.4), G.Y(2), G.X(2.4) - G.X(-2.4), G.Y(-2) - G.Y(2), 'les angles π/6, 5π/6, −5π/6, −π/6');
+        K.marque('angles');
+        c.pause(.3);
+        const S = [[1.45, 2.05, 'a > 0, b > 0'], [-1.45, 2.05, 'a < 0, b > 0'], [-1.45, -2.15, 'a < 0, b < 0'], [1.45, -2.15, 'a > 0, b < 0']];
+        for (const [x, y, s] of S) c.texte(s, G.X(x), G.Y(y) + 5, { couleur: 'blanc', taille: 14, align: 'center' });
+        K.lignes(X2, 212, [
+          { t: 'a > 0, b > 0 : θ = π/6', couleur: 'blanc', taille: 17 },
+          { t: 'a < 0, b > 0 : θ = π − π/6', couleur: 'blanc', taille: 17 },
+          { t: 'a < 0, b < 0 : θ = −π + π/6', couleur: 'blanc', taille: 17 },
+          { t: 'a > 0, b < 0 : θ = −π/6', couleur: 'blanc', taille: 17 },
+        ], 28);
+        c.repere('signes', X2 - 8, 192, 260, 118, 'les signes de a et b choisissent le quart du plan');
+        K.marque('signes');
+      },
+      decrire: {
+        quatre: 'Un plan complexe et un cercle pâle de rayon 2 ; les quatre points √3 + i, −√3 + i, −√3 − i, √3 − i, reliés à O ; à droite « r = 2 pour les quatre » et « cos θ = a/2 ; sin θ = b/2 ».',
+        angles: 'Quatre arcs orientés depuis u : vers √3 + i « π/6 », vers −√3 + i « π − π/6 = 5π/6 », vers −√3 − i (sens indirect) « −π + π/6 = −5π/6 », vers √3 − i « −π/6 », écrits près de chaque point ; à droite « même angle de base : π/6 ».',
+        signes: 'Dans chaque quart du plan, les signes : « a > 0, b > 0 », « a < 0, b > 0 », « a < 0, b < 0 », « a > 0, b < 0 » ; à droite la liste des quatre cas avec leur angle.',
+      },
+      motifs: { quatre: 'les quatre points', angles: 'les quatre angles', signes: 'les signes de a et b' },
+      explication: [
+        { repere: 'quatre', texte: 'Les quatre points ont le même module 2 ; seuls les signes de a et b changent.' },
+        { repere: 'angles', texte: 'L’angle de base est π/6 ; selon le quart : π/6, π − π/6, −π + π/6 ou −π/6.' },
+        { repere: 'signes', texte: 'Les signes de a = r cos θ et b = r sin θ disent dans quel quart est M.' },
+      ],
+    },
+  },
+});
+// Le bouton ne liste set_parameters que pour la vue qui a un paramètre.
+if (window.__maths && !window.__maths.def.vues[window.__maths.vue].params) document.getElementById('run').dataset.professorControl = 'start reset pause resume play_until set_time';
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

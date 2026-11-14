@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Myographe et secousse musculaire — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="muscle.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Myographe : un muscle gastrocnémien de grenouille suspendu, excité par des électrodes, tire un levier inscripteur dont le stylet trace la secousse sur un cylindre ; à droite, le myogramme agrandi avec le signal d’excitation et la ligne du temps"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until fire_pulse">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="myogramme.js"></script>
+<script>
+/*
+ * La secousse musculaire (cours « Rôle du muscle strié squelettique », 2 Bac PC BIOF, novembre 2026).
+ * À gauche, le myographe PEINT (règle 7) : support, muscle gastrocnémien de grenouille suspendu (rose-rouge, tendon nacré),
+ * électrodes excitatrices reliées à l’excitateur, levier inscripteur dont le stylet appuie sur le papier clair du cylindre
+ * enregistreur. Le muscle raccourcit et s’épaissit quand la courbe monte, s’allonge quand elle descend (même modèle).
+ * À droite, le myogramme agrandi à la craie, avec SOUS la courbe le signal d’excitation (créneau en S) et la ligne du temps
+ * (1 dent = 0,01 s).
+ * Modèle (myogramme.js) : latence 0,01 s, contraction 0,04 s (sommet à 0,05 s), relâchement 0,05 s (retour à 0,10 s),
+ * amplitude 20 mm. Ralenti ×40 pour l’œil. Vues (?vue=) : secousse (défaut), montage (dispositif plus grand).
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const MG = window.Myogramme, P = MG.peindre;
+const $ = id => document.getElementById(id);
+const VUES = ['secousse', 'montage'];
+const demande = new URLSearchParams(location.search).get('vue');
+const vue = VUES.includes(demande) ? demande : 'secousse';
+const MONTAGE = vue === 'montage';
+const LENT = 1 / 40;                                   // ralenti ×40
+const FIN_ENR = 0.12, T_AMP = 0.13, T_DUR = 0.145, FIN = 0.16;
+const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, fige: false, emis: 0, ecrit: {} };
+
+/* Géométrie : le dispositif est dessiné en « unités dispositif » puis mis à l’échelle (k) ; le myogramme a son repère G. */
+const D = MONTAGE ? { k: 1.2, ox: 6, oy: -8 } : { k: 1, ox: 0, oy: 0 };
+const px = x => D.ox + D.k * x, py = y => D.oy + D.k * y, tk = s => Math.round(s * (MONTAGE ? 1.12 : 1));
+const G = MONTAGE ? { x0: 520, px: 1750, y0: 230, py: 6.5, xa: 497, xb: 744, haut: 76 } : { x0: 390, px: 3000, y0: 250, py: 8, xa: 360, xb: 746, haut: 66 };
+const R = { sig: G.y0 + 46, lt: G.y0 + 72 }; R.dent = R.lt + 24; R.acc = R.lt + 36;
+const XT = t => MG.X(G, t), YM = mm => MG.Y(G, mm);
+
+/* Le muscle : raccourcissement (unités dispositif) proportionnel à l’amplitude enregistrée. */
+const y = t => MG.secousse(t);                         // mm, t en s depuis l’excitation S (t = 0)
+const RAC = 7, L0 = 118, HW = 17, PIV = { x: 24, y: 300 }, ATT = 100, BRAS = 264;
+function geometrie(t) {
+  const a = y(Math.min(t, FIN_ENR)), d = RAC * a / 20, th = Math.atan(d / (ATT - PIV.x));
+  return { a, d, L: L0 - d, hw: HW * (1 + 0.14 * a / 20), th, tip: { x: PIV.x + BRAS * Math.cos(th), y: PIV.y - BRAS * Math.sin(th) } };
+}
+const DRUM = { x: 226, y: 196, w: 72, h: 140 }, VPAP = 400;   // le papier défile à 400 unités/s (dispositif)
+
+function peindreDispositif(ctx, t) {
+  const g = geometrie(t);
+  ctx.save(); ctx.translate(D.ox, D.oy); ctx.scale(D.k, D.k);
+  // support et socle
+  P.barre(ctx, 24, 40, 24, 344, 7); P.barre(ctx, 4, 346, 132, 346, 8);
+  P.barre(ctx, 22, 49, 104, 49, 6);
+  // le cylindre enregistreur (papier clair) et son axe
+  P.barre(ctx, DRUM.x + DRUM.w / 2, DRUM.y - 12, DRUM.x + DRUM.w / 2, DRUM.y, 4);
+  P.cylindre(ctx, DRUM.x, DRUM.y, DRUM.w, DRUM.h);
+  P.barre(ctx, DRUM.x + 14, DRUM.y + DRUM.h + 8, DRUM.x + DRUM.w - 14, DRUM.y + DRUM.h + 8, 8);
+  // l’encre : ce que le stylet a déjà écrit (le papier défile vers la gauche pendant l’enregistrement)
+  const te = Math.min(t, FIN_ENR), pts = [];
+  for (let i = 0; i <= 90; i++) {
+    const back = i / 90 * (g.tip.x - DRUM.x - 6) / VPAP, tp = te - back, gp = geometrie(tp > 0 ? tp : 0);
+    pts.push([g.tip.x - back * VPAP, gp.tip.y]);
+  }
+  ctx.save(); ctx.beginPath(); ctx.rect(DRUM.x + 2, DRUM.y + 4, DRUM.w - 4, DRUM.h - 8); ctx.clip(); P.encre(ctx, pts, 1.3); ctx.restore();
+  // l’os (bout de fémur dans la pince), le muscle, le tendon
+  P.os(ctx, 84, 51, 34, 13);
+  const m = P.muscle(ctx, { cx: ATT, haut: 62, L: g.L, hw: g.hw, tendon: 26, excite: Math.min(1, g.a / 12) });
+  // le fil du tendon au levier
+  ctx.strokeStyle = 'rgba(241,245,249,.85)'; ctx.lineWidth = 1.1; ctx.beginPath(); ctx.moveTo(ATT, m.bas); ctx.lineTo(ATT, PIV.y - g.d); ctx.stroke();
+  // le levier inscripteur (laiton) et le stylet, l’axe du levier sur le support
+  P.barre(ctx, PIV.x, PIV.y, g.tip.x - 8 * Math.cos(g.th), g.tip.y + 8 * Math.sin(g.th), 3.4, 'laiton');
+  ctx.fillStyle = '#1f2937'; ctx.beginPath();
+  ctx.moveTo(g.tip.x - 9 * Math.cos(g.th) - 2 * Math.sin(g.th), g.tip.y + 9 * Math.sin(g.th) - 2.4); ctx.lineTo(g.tip.x + 1, g.tip.y); ctx.lineTo(g.tip.x - 9 * Math.cos(g.th) + 2 * Math.sin(g.th), g.tip.y + 9 * Math.sin(g.th) + 2.4); ctx.closePath(); ctx.fill();
+  const gp = ctx.createRadialGradient(PIV.x - 1, PIV.y - 1, 1, PIV.x, PIV.y, 5); gp.addColorStop(0, '#f3f4f6'); gp.addColorStop(1, '#4b5563');
+  ctx.fillStyle = gp; ctx.beginPath(); ctx.arc(PIV.x, PIV.y, 5, 0, Math.PI * 2); ctx.fill();
+  // l’excitateur, ses fils et les deux électrodes (aiguilles) posées sur le muscle
+  const bornes = P.excitateur(ctx, 150, 84, 64, 42, { voyant: t > 0 && t < 0.006, angle: -1.2 });
+  const el = [0.3, 0.55].map(s => ({ x: ATT + m.bord(s) - .5, y: 62 + s * g.L }));
+  P.fil(ctx, bornes[0][0], bornes[0][1], 132, el[0].y, '#dc2626', 14); P.fil(ctx, bornes[1][0], bornes[1][1], 132, el[1].y, '#1f2937', 10);
+  for (const e of el) { P.barre(ctx, 132, e.y, e.x, e.y, 1.6); }
+  if (t > 0 && t < 0.006) for (const e of el) P.eclair(ctx, e.x + 2, e.y, 6);
+  ctx.restore();
+  return { g, el };
+}
+
+/* Les étiquettes du dispositif (craie), propres à chaque vue pour ne jamais se chevaucher. */
+const ETIQ = MONTAGE ? {
+  muscle: [72, 122, 'right'], tendon: [92, 202, 'right'], excitateur: [182, 78, 'center'], electrodes: [134, 160, 'left'],
+  levier: [34, 326, 'left'], stylet: [300, 304, 'left'], cylindre: [306, 252, 'left'], cyl2: [306, 268, 'left'],
+} : {
+  muscle: [72, 122, 'right'], tendon: [92, 202, 'right'], excitateur: [182, 78, 'center'], electrodes: [134, 160, 'left'],
+  levier: [34, 326, 'left'], stylet: [300, 304, 'left'], cylindre: [262, 362, 'center'], cyl2: [262, 379, 'center'],
+};
+function etiquette(c, cle, texte, o = {}) { const [x, yy, align] = ETIQ[cle]; c.texte(texte, px(x), py(yy), { couleur: o.couleur || 'blanc', taille: tk(o.taille || 14), align }); }
+
+function dessiner(c) {
+  const t = S.t, mom = moments();
+  let geo;
+  c.direct(() => { geo = peindreDispositif(c.ctx, t); });
+  // ── parties fixes, écrites trait par trait ──
+  c.texte(MONTAGE ? 'Le montage : le myographe' : 'Secousse musculaire : muscle gastrocnémien de grenouille', 12, 26, { couleur: 'cyan', taille: 17 });
+  etiquette(c, 'muscle', 'muscle', { couleur: 'rose' });
+  etiquette(c, 'tendon', 'tendon', { taille: 13 });
+  etiquette(c, 'excitateur', 'excitateur', { couleur: 'jaune' });
+  etiquette(c, 'electrodes', 'électrodes excitatrices', { couleur: 'jaune' });
+  etiquette(c, 'levier', 'levier inscripteur');
+  etiquette(c, 'stylet', 'stylet');
+  etiquette(c, 'cylindre', 'cylindre'); etiquette(c, 'cyl2', 'enregistreur');
+  c.repere('dispositif', px(2), py(36), px(300) - px(2), py(390) - py(36), 'le myographe');
+  c.repere('muscle', px(78), py(56), px(124) - px(78), py(212) - py(56), 'le muscle gastrocnémien de grenouille');
+  c.repere('electrodes', px(112), py(90), px(150) - px(112), py(140) - py(90), 'les électrodes excitatrices');
+  c.repere('excitateur', px(146), py(64), px(218) - px(146), py(130) - py(64), 'l’excitateur');
+  c.repere('levier', px(20), py(280), px(290) - px(20), py(312) - py(280), 'le levier inscripteur et son stylet');
+  c.repere('cylindre', px(222), py(184), px(302) - px(222), py(350) - py(184), 'le cylindre enregistreur');
+  // flèche de rotation du cylindre
+  c.courbe(u => [px(246 + 32 * u), py(182 - 5 * Math.sin(Math.PI * u))], 10, { couleur: 'faible', largeur: 1.4 });
+  c.fleche(px(274), py(179), px(279), py(182), { couleur: 'faible', largeur: 1.4, tete: 6 });
+  // le myogramme : axes, signal d’excitation, ligne du temps
+  MG.axes(c, G, { xa: G.xa, xb: G.xb, haut: G.haut, mm: [[0, '0'], [5, '5'], [10, '10'], [15, '15'], [20, '20']], t: [[0, '0'], [0.05, '0,05'], [0.1, '0,10']], titreT: 't (s)' });
+  c.texte('amplitude (mm)', G.xa - 6, G.haut + 2, { couleur: 'faible', taille: 13, align: 'right' });
+  MG.ligneTemps(c, G, R.lt, G.xa, G.xb - 6, 0.01);
+  c.texte('1 dent = 0,01 s', G.xb - 6, R.dent, { couleur: 'faible', taille: 13, align: 'right' });
+  c.repere('ligne_temps', G.xa, R.lt - 12, G.xb - G.xa, 32, 'la ligne du temps : 1 dent = 0,01 s');
+  c.texte('signal d’excitation', G.xb - 6, R.sig - 6, { couleur: 'jaune', taille: 13, align: 'right' });
+
+  // ── ce qui bouge : signal, zones de phase, courbe ──
+  c.direct(() => {
+    const ctx = c.ctx;
+    c.texte(t <= 0 ? 'avant l’excitation' : t <= FIN_ENR ? `t = ${fr(Math.min(t, FIN_ENR), 3)} s   (ralenti ×40)` : 'enregistrement terminé', G.xb, 26, { couleur: 'faible', taille: 14, align: 'right' });
+    // zones de phase peintes très légèrement, à mesure qu’elles sont finies
+    const zone = (a, b, coul) => { ctx.save(); ctx.fillStyle = coul; ctx.fillRect(XT(a), YM(20) - 4, XT(b) - XT(a), G.y0 - YM(20) + 4); ctx.restore(); };
+    if (t >= mom.fin_latence) zone(0, 0.01, 'rgba(251,146,60,.16)');
+    if (t >= mom.sommet) zone(0.01, 0.05, 'rgba(244,114,182,.12)');
+    if (t >= mom.retour_repos) zone(0.05, 0.10, 'rgba(96,165,250,.12)');
+    MG.signal(c, G, R.sig, G.xa, G.xb - 6, [0], t > 0 ? t : -1);
+    if (t > 0) c.texte('S', XT(0) + 9, R.sig - 4, { couleur: 'jaune', taille: 14 });
+    c.repere('signal_excitation', G.xa, R.sig - 16, G.xb - G.xa, 22, 'le signal d’excitation : le créneau en S');
+    const te = Math.min(t, FIN_ENR);
+    MG.courbe(c, G, () => 0, -0.01, Math.min(0, te > 0 ? 0 : 0), { couleur: 'blanc' });
+    if (te > 0) MG.courbe(c, G, y, 0, te, { couleur: 'blanc', largeur: 2.6 });
+    if (t > 0) c.repere('trace', XT(0), YM(20) - 6, XT(Math.max(0.012, te)) - XT(0), G.y0 - YM(20) + 12, 'le myogramme : la secousse');
+    if (t >= mom.fin_latence) c.repere('latence', XT(0), YM(20) - 4, XT(0.01) - XT(0), G.y0 - YM(20) + 4, 'le temps de latence : 0,01 s');
+    if (t >= mom.sommet) c.repere('contraction', XT(0.01), YM(20) - 4, XT(0.05) - XT(0.01), G.y0 - YM(20) + 4, 'la phase de contraction : 0,04 s');
+    if (t >= mom.retour_repos) c.repere('relachement', XT(0.05), YM(20) - 4, XT(0.10) - XT(0.05), G.y0 - YM(20) + 4, 'la phase de relâchement : 0,05 s');
+  });
+
+  // ── ce qui s’écrit en route ──
+  // chaque élément s’écrit à partir de son apparition, sans attendre les autres
+  const base = c.cur, quand = nom => { if (S.ecrit[nom] == null) S.ecrit[nom] = (performance.now() - scene.ouvert) / 1000; c.cur = Math.max(base, S.ecrit[nom]); };
+  const yPh = MONTAGE ? [70, 86, 86] : [82, 82, 82];
+  if (t >= mom.fin_latence) { quand('lat'); c.texte('latence', XT(0.005), yPh[0], { couleur: 'orange', taille: 14, align: 'center' }); }
+  if (t >= mom.sommet) { quand('con'); c.texte('contraction', XT(0.03), yPh[1], { couleur: 'rose', taille: 14, align: 'center' }); }
+  if (t >= mom.retour_repos) { quand('rel'); c.texte('relâchement', XT(0.075), yPh[2], { couleur: 'bleu', taille: 14, align: 'center' }); }
+  if (t >= mom.mesure_amplitude) {
+    quand('amp');
+    c.ligne(G.xa, YM(20), XT(0.05), YM(20), { couleur: 'vert', largeur: 1.2, pointille: [4, 5] });
+    c.cote(G.xa + 15, G.y0, G.xa + 15, YM(20), '', { couleur: 'vert' });
+    c.texte('amplitude', G.xa + 22, YM(10) - 4, { couleur: 'vert', taille: 14 });
+    c.texte('20 mm', G.xa + 22, YM(10) + 15, { couleur: 'vert', taille: 15 });
+    c.repere('amplitude', G.xa + 4, YM(20) - 4, 70, G.y0 - YM(20) + 8, 'l’amplitude : 20 mm');
+  }
+  if (t >= mom.mesure_durees) {
+    quand('dur');
+    const ya = R.acc, yv = ya + 22;
+    MG.accolade(c, XT(0) + 1, XT(0.01) - 1, ya, { couleur: 'orange' }); c.texte('0,01 s', XT(0.005), yv, { couleur: 'orange', taille: 14, align: 'center' });
+    MG.accolade(c, XT(0.01) + 1, XT(0.05) - 1, ya, { couleur: 'rose' }); c.texte('0,04 s', XT(0.03), yv, { couleur: 'rose', taille: 14, align: 'center' });
+    MG.accolade(c, XT(0.05) + 1, XT(0.10) - 1, ya, { couleur: 'bleu' }); c.texte('0,05 s', XT(0.075), yv, { couleur: 'bleu', taille: 14, align: 'center' });
+    MG.accolade(c, XT(0), XT(0.10), ya + 30, { couleur: 'vert' });
+    c.texte('durée de la secousse : 0,10 s', XT(0.05), ya + 50, { couleur: 'vert', taille: 15, align: 'center' });
+  }
+  return c.fin();
+}
+
+const canvas = $('canvas');
+const scene = window.MuscleTableau.Scene(canvas, (c) => { scene.cadre(41); return dessiner(c); });
+const etiquetteBouton = () => { $('run').textContent = S.running ? 'Pause' : S.fait ? 'Rejouer' : (S.t > 0 ? 'Reprendre' : 'Lancer'); };
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(FIN, S.t + dt * LENT);
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.running = false; S.jusqua = null; S.fige = true; etiquetteBouton();
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 3)} s`) + '.'); pont.noter('pause', { time_s: +S.t.toFixed(4) }); pont.emettre();
+    return true;
+  }
+  if (S.t >= FIN) {
+    S.running = false; S.fait = true; etiquetteBouton();
+    bulle($('feedback'), 'Une seule excitation → une secousse : latence 0,01 s, contraction 0,04 s, relâchement 0,05 s ; amplitude 20 mm.', 'good');
+    pont.noter('measurement', { amplitude_mm: 20, latence_s: 0.01, contraction_s: 0.04, relachement_s: 0.05, duree_s: 0.1 }); pont.emettre();
+  } else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+
+function moments() {
+  return { montage: 0, stimulation: 0.0001, fin_latence: 0.01, sommet: 0.05, retour_repos: 0.10, mesure_amplitude: T_AMP, mesure_durees: T_DUR };
+}
+const MOTIFS = {
+  montage: 'le montage : muscle, électrodes excitatrices, excitateur, levier inscripteur, stylet, cylindre enregistreur',
+  stimulation: 'l’excitation S part (éclair sur les électrodes, créneau sur le signal)',
+  fin_latence: 'fin du temps de latence (0,01 s) : le muscle va commencer à se raccourcir',
+  sommet: 'le sommet : fin de la contraction (0,04 s), le muscle est le plus court',
+  retour_repos: 'retour au repos à 0,10 s : fin du relâchement (0,05 s)',
+  mesure_amplitude: 'l’amplitude de la secousse : 20 mm',
+  mesure_durees: 'les durées : latence 0,01 s, contraction 0,04 s, relâchement 0,05 s ; secousse 0,10 s',
+};
+function remonter(t) { if (t < S.t - 1e-9 || t === 0) S.ecrit = {}; }
+function playUntil(p) {
+  const M = moments(), nom = p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (cible <= 0) {        // le montage : avant l’excitation
+    remonter(0); S.t = 0; S.running = false; S.jusqua = null; S.fait = false; S.fige = true; etiquetteBouton(); scene.sale = true;
+    bulle($('feedback'), 'Arrêt sur image : ' + (nom ? MOTIFS[nom] : 'avant l’excitation') + '.'); pont.noter('play_until', { moment: nom, time_s: 0 }); pont.emettre();
+    return;
+  }
+  if (S.fait || S.t >= cible - 1e-6) { remonter(0); S.t = 0; }
+  S.jusqua = Math.min(FIN, cible); S.motif = nom ? MOTIFS[nom] : '';
+  S.running = true; S.fait = false; S.fige = false; etiquetteBouton(); bulle($('feedback'), 'Observe… (ralenti 40 fois)');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+
+function ceQuiSeVoit() {
+  const t = S.t, mom = moments(), g = geometrie(t), te = Math.min(t, FIN_ENR);
+  const m = [`Vue « ${vue} ». ${t <= 0 ? 'Avant l’excitation' : `t = ${fr(te, 3)} s après l’excitation S`}${S.running ? ' (la scène défile, ralentie 40 fois)' : S.fait ? ' (fin)' : S.fige || t > 0 ? ' (arrêt sur image)' : ' (pas encore lancée)'}.`];
+  m.push(`À gauche, le myographe${MONTAGE ? ' (dessiné en grand)' : ''} : un muscle gastrocnémien de grenouille suspendu à une pince, son tendon relié par un fil au levier inscripteur ; deux électrodes excitatrices reliées à l’excitateur touchent le muscle ; le stylet du levier appuie sur le papier du cylindre enregistreur. Légendes écrites : muscle, tendon, excitateur, électrodes excitatrices, levier inscripteur, stylet, cylindre enregistreur.`);
+  m.push('À droite, le myogramme agrandi : axe « amplitude (mm) » gradué de 0 à 20, axe du temps gradué 0 ; 0,05 ; 0,10 s ; sous la courbe, le signal d’excitation puis la ligne du temps (1 dent = 0,01 s).');
+  if (t <= 0) m.push('Le muscle est au repos ; le stylet trace une ligne droite ; le signal d’excitation est plat.');
+  else if (te <= 0.01 + 1e-9) m.push(`L’excitation S est partie (créneau sur le signal${t < 0.006 ? ', éclair sur les électrodes' : ''}). ${te >= 0.01 - 1e-9 ? 'Fin du temps de latence (0,01 s) : le muscle n’a pas encore bougé, il va commencer à se raccourcir' : 'Temps de latence : le muscle ne bouge pas encore, la courbe reste plate'}.`);
+  else if (te < 0.05) m.push(`Phase de contraction : le muscle raccourcit (de ${fr(100 * g.d / L0, 1)} %) et s’épaissit, le levier monte ; la courbe monte : ${fr(g.a, 1)} mm.`);
+  else if (te < 0.10) m.push(`Phase de relâchement : le muscle s’allonge, le levier redescend ; la courbe descend, plus lentement qu’elle n’est montée : ${fr(g.a, 1)} mm.`);
+  else m.push('Le muscle est revenu à sa longueur de repos ; la courbe est revenue à la ligne de base à 0,10 s : la secousse est complète.');
+  if (t >= mom.fin_latence) m.push('La zone de latence (0 → 0,01 s) est colorée en orange, écrite « latence ».');
+  if (t >= mom.sommet) m.push('Le sommet est atteint à 0,05 s (20 mm) ; la zone de contraction (0,01 → 0,05 s) est écrite « contraction ».');
+  if (t >= mom.retour_repos) m.push('La zone de relâchement (0,05 → 0,10 s) est écrite « relâchement ».');
+  if (t >= mom.mesure_amplitude) m.push('Mesure écrite : flèche d’amplitude du repos au sommet, « amplitude 20 mm ».');
+  if (t >= mom.mesure_durees) m.push('Accolades écrites sous la ligne du temps : latence 0,01 s, contraction 0,04 s, relâchement 0,05 s, et « durée de la secousse : 0,10 s ».');
+  return m.join(' ');
+}
+
+function start() {
+  remonter(0); S.jusqua = null; S.t = 0; S.running = true; S.fait = false; S.fige = false; etiquetteBouton();
+  bulle($('feedback'), 'Une excitation S… (ralenti 40 fois)'); pont.noter('start'); pont.emettre();
+}
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.jusqua = null; S.fige = true; etiquetteBouton(); bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(4) }); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait || S.t >= FIN) return start(); S.running = true; S.fige = false; etiquetteBouton(); bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  const t = +p.time_s; if (!Number.isFinite(t)) return;
+  const nt = Math.min(FIN, Math.max(0, t)); remonter(nt);
+  S.running = false; S.jusqua = null; S.t = nt; S.fait = S.t >= FIN; S.fige = !S.fait; etiquetteBouton(); scene.sale = true;
+  bulle($('feedback'), `Arrêt sur image : t = ${fr(S.t, 3)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function setParameters() { bulle($('feedback'), 'Rien à régler ici : le bouton envoie une excitation.'); pont.noter('set_parameters', {}); pont.emettre(); }
+$('run').onclick = () => (S.running ? pause() : (S.t > 0 && S.t < FIN && !S.fait ? resume() : start()));
+
+const EXPLICATIONS = {
+  secousse: [
+    { repere: 'muscle', texte: 'Le muscle gastrocnémien de grenouille, suspendu par son os, est relié par son tendon au levier.' },
+    { repere: 'electrodes', texte: 'Les électrodes excitatrices, reliées à l’excitateur, lui envoient une excitation.' },
+    { repere: 'cylindre', texte: 'Le stylet du levier écrit le mouvement du muscle sur le cylindre qui tourne.' },
+    { repere: 'signal_excitation', texte: 'Le créneau marque l’instant de l’excitation S.' },
+    { repere: 'latence', texte: 'Pendant 0,01 s, rien ne bouge : c’est le temps de latence.' },
+    { repere: 'contraction', texte: 'Le muscle se raccourcit : phase de contraction, 0,04 s.' },
+    { repere: 'relachement', texte: 'Il s’allonge et revient au repos : phase de relâchement, 0,05 s, plus lente.' },
+    { repere: 'amplitude', texte: 'L’amplitude de la secousse se mesure du repos au sommet : 20 mm.' },
+    { repere: 'ligne_temps', texte: 'Les durées se lisent sur la ligne du temps : une dent vaut 0,01 s.' },
+  ],
+  montage: [
+    { repere: 'dispositif', texte: 'Le myographe enregistre les contractions d’un muscle.' },
+    { repere: 'muscle', texte: 'Le muscle gastrocnémien de grenouille est suspendu ; son tendon tire le levier.' },
+    { repere: 'excitateur', texte: 'L’excitateur envoie une excitation électrique par les électrodes excitatrices.' },
+    { repere: 'levier', texte: 'Le levier inscripteur amplifie le raccourcissement du muscle.' },
+    { repere: 'cylindre', texte: 'Son stylet écrit sur le papier du cylindre enregistreur qui tourne : c’est le myogramme.' },
+    { repere: 'trace', texte: 'Le muscle raccourcit, le tracé monte ; il s’allonge, le tracé redescend.' },
+  ],
+};
+window.Tableau.explication({ [vue]: EXPLICATIONS[vue] });
+const commandes = ['start', 'reset', 'pause', 'resume', 'fire_pulse', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'muscle_myographe', version: '1.0', title: 'Myographe et secousse musculaire — ' + vue, variants: [{ id: vue, label: vue }], commands: commandes,
+  command_schema: {
+    fire_pulse: { note: 'envoie une excitation (comme le bouton)' },
+    set_parameters: { note: 'aucun réglage : le bouton lance une excitation' },
+    set_time: { time_s: `0..${fr(FIN, 3)} (arrêt sur cet instant, en s après l’excitation)` },
+    play_until: { moment: Object.keys(moments()).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Myographe : un muscle gastrocnémien de grenouille suspendu, excité par des électrodes excitatrices reliées à un excitateur, tire un levier inscripteur dont le stylet écrit sur un cylindre enregistreur. Une excitation efficace donne une secousse musculaire : temps de latence 0,01 s, phase de contraction 0,04 s, phase de relâchement 0,05 s (durée 0,10 s), amplitude 20 mm. Mouvement ralenti 40 fois.',
+  etat: () => ({ simulation_status: S.running ? 'running' : (S.fait ? 'finished' : (S.t > 0 || S.fige ? 'paused' : 'idle')), ce_qui_se_voit: ceQuiSeVoit(), current_variant: vue,
+    time_s: +S.t.toFixed(4), parameters: { amplitude_mm: 20, latence_s: 0.01, contraction_s: 0.04, relachement_s: 0.05, duree_secousse_s: 0.1, ralenti: 40, amplitude_actuelle_mm: +geometrie(S.t).a.toFixed(1) }, moments: moments() }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, fire_pulse: start, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), MONTAGE ? 'Le montage s’écrit… puis une excitation.' : 'Le myographe s’écrit… puis une excitation.');
+setTimeout(() => { if (!S.running && S.t === 0 && !S.fige) start(); }, 3000);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

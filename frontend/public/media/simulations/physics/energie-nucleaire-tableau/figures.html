@@ -1,0 +1,922 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Figures à la craie — noyaux, masse et énergie</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="nucleaire.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Une figure du cours « Noyaux, masse et énergie », écrite à la craie pas à pas"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Figures fixes du cours « Noyaux, masse et énergie » (phys_ch5_energie_nucleaire, 2e Bac PC BIOF, novembre 2026), écrites
+ * à la craie pas à pas, comme un professeur au tableau : ?fig=fig_soleil | fig_einstein | fig_unites | fig_931 |
+ * fig_composition | fig_defaut | fig_liaison | fig_stabilite | fig_spontanee_provoquee | fig_soddy | fig_methode_masses |
+ * fig_methode_liaison | fig_echantillon | fig_comparaison | fig_cas_types | fig_enonce_2016 | fig_enonce_2017 |
+ * fig_enonce_2023 | fig_enonce_2025. Même architecture que ondes-lumineuses-tableau/figures.html.
+ * Chaque figure : des étapes nommées (les moments), puis `fin`. Le tuteur fige l’écriture sur une étape (`play_until {moment}`)
+ * et montre chaque élément (`highlight {target}`) : le repère `figure`, et un repère par étape (même nom que l’étape).
+ * Rendu « réel » (règle 7) : le Soleil, les nucléons (sphères ombrées : proton rouge #d9534f, neutron gris-bleu #8fa3b8,
+ * comme balance.html), le baril de pétrole sont peints ; la craie écrit le reste. Les valeurs sont celles du cours.
+ * Les énoncés d’examen sont des paraphrases courtes, données exactes (nationaux 2016 N, 2017 R, 2023 N, 2025 N).
+ */
+const { bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const P = new URLSearchParams(location.search);
+const FIGS = {
+  fig_soleil: { titre: 'Le Soleil rayonne : d’où vient son énergie ?', etapes: ['soleil', 'masse', 'question', 'fin'] },
+  fig_einstein: { titre: 'La relation d’Einstein E = m·c²', etapes: ['relation', 'termes', 'exemple', 'sens', 'fin'] },
+  fig_unites: { titre: 'L’escalier des unités : u, eV, MeV, MeV/c²', etapes: ['u', 'eV', 'MeV', 'MeV_c2', 'fin'] },
+  fig_931: { titre: 'Démonstration : 1 u = 931,5 MeV/c²', etapes: ['E', 'joule', 'mev', 'resultat', 'fin'] },
+  fig_composition: { titre: 'La composition d’un noyau', etapes: ['noyau', 'protons', 'neutrons', 'exemples', 'fin'] },
+  fig_defaut: { titre: 'Le défaut de masse Δm', etapes: ['formule', 'signe', 'calcul', 'kg', 'fin'] },
+  fig_liaison: { titre: 'L’énergie de liaison E_ℓ', etapes: ['formule', 'calcul', 'par_nucleon', 'joule', 'fin'] },
+  fig_stabilite: { titre: 'Le plus stable : ⁶⁰Ni ou ⁵⁶Ni (national 2017 R)', etapes: ['trace', 'calcul', 'compare', 'conclusion', 'piege', 'fin'] },
+  fig_spontanee_provoquee: { titre: 'Réaction spontanée, réaction provoquée', etapes: ['trace', 'spontanee', 'provoquee', 'soddy', 'fin'] },
+  fig_soddy: { titre: 'Trouver x neutrons : les lois de Soddy', etapes: ['equation', 'A', 'Z', 'fin'] },
+  fig_methode_masses: { titre: 'Énergie libérée à partir des masses', etapes: ['equation', 'delta_m', 'delta_E', 'E_lib', 'fin'] },
+  fig_methode_liaison: { titre: 'Énergie libérée à partir des énergies de liaison', etapes: ['formule', 'A_fois', 'nucleon_libre', 'E_lib', 'fin'] },
+  fig_echantillon: { titre: 'L’énergie libérée par un échantillon', etapes: ['un_noyau', 'nombre', 'total', 'joule', 'petrole', 'fin'] },
+  fig_comparaison: { titre: 'Fission ou fusion : laquelle libère le plus ?', etapes: ['trace', 'par_reaction', 'par_nucleon', 'conclusion', 'fin'] },
+  fig_cas_types: { titre: 'Le mot de la question → la méthode', etapes: ['trace', 'liaison', 'stabilite', 'masses', 'energies', 'diagramme', 'echantillon', 'equation', 'fin'] },
+  fig_enonce_2016: { titre: 'Énoncé type national 2016 N : la fusion ²H + ³H', etapes: ['trace', 'donnees', 'fin'] },
+  fig_enonce_2017: { titre: 'Énoncé type national 2017 R : le cobalt 60', etapes: ['trace', 'donnees', 'fin'] },
+  fig_enonce_2023: { titre: 'Énoncé type national 2023 N : un tableau d’énergies de liaison', etapes: ['trace', 'donnees', 'fin'] },
+  fig_enonce_2025: { titre: 'Énoncé type national 2025 N : le cadmium 107', etapes: ['trace', 'donnees', 'fin'] },
+};
+let fig = FIGS[P.get('fig')] ? P.get('fig') : 'fig_soleil';
+const VITESSE = 1.6;                              // l’écriture va un peu plus vite que la craie du kit
+const S = { tw: 0, running: true, pause: false, fait: false, jusqua: null, motif: '', emis: 0 };
+let M = {};                                       // étape → instant d’écriture (s), relevé pendant le dessin
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+const craie = scene.craie;
+/* Même cadre que commun.js, mais l’écriture suit l’horloge de la figure (S.tw) : le tuteur peut la figer sur une étape. */
+scene.cadre = function (graine) {
+  const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  craie.debut(graine, S.tw);
+  const s = Math.min(W / VW, H / VH);
+  scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
+  craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
+  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+  return craie;
+};
+let MM = {};
+const marque = (c, nom) => { MM[nom] = c.cur; };
+/* Une partie peinte (Soleil, nucléons, baril) apparaît quand l’écriture arrive à elle, d’un coup. */
+const peindre = (c, fn) => { if (c.t >= c.cur) c.direct(() => { c.ctx.save(); try { fn(c.ctx); } finally { c.ctx.restore(); } }); };
+const vu = nom => M[nom] !== undefined && S.tw >= M[nom] - 1e-6;
+
+// ───────────────────────── Le rendu « réel » (peint, pour l’œil ; la physique reste dans la craie) ─────────────────────────
+/* Les nucléons : mêmes sphères ombrées que balance.html (proton rouge, neutron gris-bleu). */
+const TEINTES = { p: ['#f6b6b0', '#d9534f', '#6e1d1a'], n: ['#e3ebf3', '#8fa3b8', '#3a4757'] };
+function sphere(ctx, x, y, r, k) {
+  const [cl, cb, cf] = TEINTES[k];
+  const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .08, x, y, r);
+  g.addColorStop(0, cl); g.addColorStop(.42, cb); g.addColorStop(1, cf);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  if (r > 3.5) { ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.ellipse(x - r * .38, y - r * .42, r * .22, r * .14, -.6, 0, Math.PI * 2); ctx.fill(); }
+}
+function ombre(ctx, x, y, rx) {
+  ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(x, y, rx, Math.max(2, rx * .18), 0, 0, Math.PI * 2); ctx.fill();
+}
+const MELANGE = {};
+const estProton = (i, Z, A) => {                                // protons et neutrons mêlés au hasard (fixé), sans motif
+  if (A <= 4) return Math.floor((i + 1) * Z / A) > Math.floor(i * Z / A);
+  const h = k => { let x = (k + 1) * 2654435761 % 4294967296; x ^= x >>> 15; x = Math.imul(x, 2246822519) >>> 0; return x / 4294967296; };
+  const cle = A + '/' + Z;
+  if (!MELANGE[cle]) { const rang = Array.from({ length: A }, (_, k) => k).sort((a, b) => h(a) - h(b)); MELANGE[cle] = new Set(rang.slice(0, Z)); }
+  return MELANGE[cle].has(i);
+};
+/** Positions (relatives au centre) des nucléons d’un amas compact de A nucléons de rayon r. */
+function positionsAmas(A, r) {
+  const d = 1.7 * r;
+  if (A === 1) return [[0, 0]];
+  if (A === 2) return [[-.5 * d, 0], [.5 * d, 0]];
+  if (A === 3) return [[-.5 * d, .29 * d], [.5 * d, .29 * d], [0, -.58 * d]];
+  if (A === 4) return [[-.5 * d, .25 * d], [.5 * d, .25 * d], [0, -.6 * d], [0, .05 * d]];
+  const pts = []; for (let i = 0; i < A; i++) { const rho = r * 1.05 * Math.sqrt(i), th = i * 2.39996; pts.push([rho * Math.cos(th), rho * Math.sin(th)]); }
+  return pts;
+}
+const rayonAmas = (A, r) => Math.max(...positionsAmas(A, r).map(([x, y]) => Math.hypot(x, y))) + r;
+/** Un noyau : amas compact de sphères qui se touchent, centré en (cx, cy) ; renvoie son rayon. */
+function amas(ctx, cx, cy, A, Z, r) {
+  const R = rayonAmas(A, r), pts = positionsAmas(A, r).map(([x, y], i) => [x, y, i]);
+  if (A > 4) pts.sort((a, b) => Math.hypot(b[0], b[1]) - Math.hypot(a[0], a[1]));   // le cœur devant : une boule
+  ombre(ctx, cx + 2, cy + R + 1, R * .9);
+  for (const [x, y, i] of pts) sphere(ctx, cx + x, cy + y, r, A === 1 ? (Z ? 'p' : 'n') : (estProton(i, Z, A) ? 'p' : 'n'));
+  return R;
+}
+const nucleon = (ctx, x, y, r, k) => { ombre(ctx, x + 1, y + r + 1, r * .9); sphere(ctx, x, y, r, k); };
+/** Le Soleil : disque lumineux, halo, rayons qui partent (pour l’œil seulement). */
+function soleil(ctx, x, y, r) {
+  ctx.globalCompositeOperation = 'lighter';
+  for (let k = 0; k < 18; k++) {
+    const a = k * Math.PI / 9 + .1, r0 = r * 1.15, r1 = r * (k % 2 ? 2.05 : 2.45);
+    const g = ctx.createLinearGradient(x + r0 * Math.cos(a), y + r0 * Math.sin(a), x + r1 * Math.cos(a), y + r1 * Math.sin(a));
+    g.addColorStop(0, 'rgba(255,214,102,.55)'); g.addColorStop(1, 'rgba(251,146,60,0)');
+    ctx.strokeStyle = g; ctx.lineWidth = 5; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(x + r0 * Math.cos(a), y + r0 * Math.sin(a)); ctx.lineTo(x + r1 * Math.cos(a), y + r1 * Math.sin(a)); ctx.stroke();
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  let g = ctx.createRadialGradient(x, y, 0, x, y, r * 2.4);
+  g.addColorStop(0, '#fffbe8'); g.addColorStop(.3, '#fde047'); g.addColorStop(.42, 'rgba(251,160,60,.75)'); g.addColorStop(.62, 'rgba(251,146,60,.16)'); g.addColorStop(1, 'rgba(251,146,60,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r * 2.4, 0, 7); ctx.fill();
+  g = ctx.createRadialGradient(x - r * .3, y - r * .3, r * .1, x, y, r * .98);           // le disque, un peu plus sombre au bord
+  g.addColorStop(0, 'rgba(255,255,240,.95)'); g.addColorStop(.7, 'rgba(254,224,120,.9)'); g.addColorStop(1, 'rgba(249,150,50,.85)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r * .98, 0, 7); ctx.fill();
+}
+/** Un baril de pétrole (métal sombre, cerclages, reflet). */
+function baril(ctx, x, y, w, h) {
+  const g = ctx.createLinearGradient(x, 0, x + w, 0);
+  g.addColorStop(0, '#1f2937'); g.addColorStop(.3, '#4b5563'); g.addColorStop(.45, '#9ca3af'); g.addColorStop(.7, '#374151'); g.addColorStop(1, '#111827');
+  ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(x + w / 2 + 3, y + h + 2, w * .55, 4, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = '#6b7280'; ctx.beginPath(); ctx.ellipse(x + w / 2, y, w / 2, 5, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = '#111827'; ctx.beginPath(); ctx.ellipse(x + w / 2, y, w / 2 - 4, 3.2, 0, 0, 7); ctx.fill();
+  ctx.strokeStyle = 'rgba(15,23,42,.9)'; ctx.lineWidth = 3;
+  for (const f of [.3, .7]) { ctx.beginPath(); ctx.moveTo(x, y + h * f); ctx.lineTo(x + w, y + h * f); ctx.stroke(); }
+  ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(x + w * .38, y + 6, 4, h - 12);
+}
+
+// ───────────────────────── Morceaux de craie ─────────────────────────
+const SUPC = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+/** Largeur écrite d’une chaîne de craie (indices et exposants plus petits, comme exposants.js). */
+function largeur(c, s, t) {
+  s = String(s).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUPC[ch]).join('') + '}');
+  return window.Tableau.Craie.segments(s).reduce((w, seg) => w + c.largeurTexte(seg.t, seg.sub || seg.sup ? t * .62 : t), 0);
+}
+/** Écrit un noyau ᴬ_ZX : A en haut à gauche, Z en bas à gauche, alignés à droite contre le symbole. Renvoie la largeur. */
+function noyauTexte(c, A, Z, X, x, y, o = {}) {
+  const t = o.taille ?? 18, tn = t * .6, wN = Math.max(c.largeurTexte(String(A), tn), c.largeurTexte(String(Z), tn));
+  const w = wN + 1 + c.largeurTexte(X, t);
+  const x0 = o.align === 'center' ? x - w / 2 : o.align === 'right' ? x - w : x;
+  if (o.mesure) return w;
+  const d = s => Math.max(.06, String(s).length / 16);
+  c.texte(String(A), x0 + wN, y - .45 * t, { couleur: o.couleur, taille: tn, align: 'right', duree: d(A) });
+  c.texte(String(Z), x0 + wN, y + .3 * t, { couleur: o.couleur, taille: tn, align: 'right', duree: d(Z) });
+  c.texte(X, x0 + wN + 1, y, { couleur: o.couleur, taille: t, duree: d(X) });
+  return w;
+}
+const N = (A, Z, X) => ({ A, Z, X });
+const NEUTRON = N(1, 0, 'n');
+/** Une ligne faite de morceaux : texte (chaîne ou {t, couleur}) ou noyau {A, Z, X}. Options : taille, couleur, align, max. */
+function ligne(c, parts, x, y, o = {}) {
+  let taille = o.taille ?? 20;
+  const larg = (p, t) => (typeof p === 'string' || p.t != null ? largeur(c, p.t ?? p, t) : noyauTexte(c, p.A, p.Z, p.X, 0, 0, { taille: t, mesure: true }));
+  let tot = parts.reduce((s, p) => s + larg(p, taille), 0);
+  if (o.max && tot > o.max) { taille *= o.max / tot; tot = parts.reduce((s, p) => s + larg(p, taille), 0); }
+  let px = o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x;
+  for (const p of parts) {
+    if (typeof p === 'string' || p.t != null) c.texte(String(p.t ?? p), px, y, { couleur: p.couleur || o.couleur, taille });
+    else noyauTexte(c, p.A, p.Z, p.X, px, y, { taille, couleur: p.couleur || o.couleur });
+    px += larg(p, taille);
+  }
+  return tot;
+}
+/** Un tableau à la craie : colonnes X[], lignes Y[] (traits extérieurs plus marqués). */
+function grille(c, X, Y) {
+  c.rect(X[0], Y[0], X[X.length - 1] - X[0], Y[Y.length - 1] - Y[0], { couleur: 'faible', arrondi: 6 });
+  for (let i = 1; i < X.length - 1; i++) c.ligne(X[i], Y[0], X[i], Y[Y.length - 1], { couleur: 'faible', largeur: 1.5, duree: .15 });
+  for (let j = 1; j < Y.length - 1; j++) c.ligne(X[0], Y[j], X[X.length - 1], Y[j], { couleur: j === 1 ? 'faible' : 'tresfaible', largeur: j === 1 ? 1.6 : 1.2, duree: .12 });
+}
+/** Encadré « Données » des énoncés : renvoie l’ordonnée sous la dernière ligne. */
+function donnees(c, x, y, w, lignes, o = {}) {
+  const pas = o.pas ?? 32, h = 46 + pas * lignes.length;
+  c.rect(x, y, w, h, { couleur: 'faible', arrondi: 8 });
+  c.texte('Données', x + 12, y + 28, { couleur: 'cyan', taille: 19 });
+  lignes.forEach((l, i) => (Array.isArray(l) ? ligne(c, l, x + 12, y + 62 + pas * i, { taille: o.taille ?? 18, couleur: 'blanc', max: w - 22 })
+    : c.texte(l, x + 12, y + 62 + pas * i, { couleur: 'blanc', taille: o.taille ?? 18, max: w - 22 })));
+  return y + h;
+}
+function cherche(c, x, y, lignes, w) {
+  c.texte('On cherche :', x, y, { couleur: 'cyan', taille: 18 });
+  lignes.forEach((t, i) => c.texte('• ' + t, x, y + 25 + 23 * i, { couleur: 'blanc', taille: 16, max: w }));
+}
+
+// ───────────────────────── Les figures ─────────────────────────
+const DESSINS = {
+  fig_soleil(c) {
+    c.texte('Le Soleil et son énergie', 40, 30, { couleur: 'cyan', taille: 20 });
+    c.repere('figure', 20, 44, 720, 360, 'le Soleil qui rayonne et la question : d’où vient cette énergie ?');
+    const xs = 190, ys = 214, r = 60;
+    peindre(c, ctx => soleil(ctx, xs, ys, r));
+    c.texte('le Soleil', xs, ys + r + 74, { couleur: 'jaune', align: 'center', taille: 19 });
+    c.texte('Le Soleil rayonne de l’énergie', 384, 108, { couleur: 'blanc', taille: 23, max: 350 });
+    c.texte('depuis des milliards d’années', 384, 140, { couleur: 'blanc', taille: 23, max: 350 });
+    c.repere('soleil', 30, 54, 704, 300, 'le Soleil rayonne de l’énergie depuis des milliards d’années');
+    marque(c, 'soleil');
+    c.pause(.4);
+    c.fleche(372, 186, 372, 236, { couleur: 'rose', largeur: 2 });
+    c.texte('Chaque seconde, sa masse diminue', 384, 204, { couleur: 'jaune', taille: 21, max: 350 });
+    c.texte('d’environ 4 millions de tonnes', 384, 236, { couleur: 'jaune', taille: 21, max: 350 });
+    c.repere('masse', 364, 180, 372, 66, 'chaque seconde, sa masse diminue d’environ 4 millions de tonnes');
+    marque(c, 'masse');
+    c.pause(.4);
+    c.texte('D’où vient cette énergie ?', 558, 316, { couleur: 'vert', align: 'center', taille: 30, max: 350 });
+    c.repere('question', 384, 284, 350, 46, 'd’où vient cette énergie ?');
+    marque(c, 'question');
+    marque(c, 'fin');
+  },
+
+  fig_einstein(c) {
+    c.texte('La relation d’Einstein', 40, 30, { couleur: 'cyan', taille: 20 });
+    c.repere('figure', 20, 44, 720, 340, 'la relation E = m·c², ses unités, un exemple et son sens');
+    c.texte('E = m·c²', 380, 118, { couleur: 'jaune', align: 'center', taille: 56 });
+    c.rect(256, 64, 248, 74, { couleur: 'jaune', arrondi: 10 });
+    c.repere('relation', 252, 60, 256, 82, 'E = m·c²');
+    marque(c, 'relation');
+    c.pause(.4);
+    c.texte('E en joule (J)', 130, 186, { couleur: 'blanc', align: 'center', taille: 21 });
+    c.texte('m en kilogramme (kg)', 380, 186, { couleur: 'blanc', align: 'center', taille: 21 });
+    c.texte('c = 3,00·10⁸ m/s', 630, 186, { couleur: 'blanc', align: 'center', taille: 21 });
+    c.repere('termes', 30, 160, 700, 36, 'E en joule (J), m en kilogramme (kg), c = 3,00·10⁸ m/s');
+    marque(c, 'termes');
+    c.pause(.4);
+    c.texte('Exemple', 40, 238, { couleur: 'cyan', taille: 18 });
+    c.texte('m = 1 g = 10⁻³ kg → E = 10⁻³ × (3,00·10⁸)² = 9·10¹³ J', 380, 272, { couleur: 'vert', align: 'center', taille: 23, max: 700 });
+    c.repere('exemple', 30, 218, 700, 64, 'm = 1 g = 10⁻³ kg → E = 10⁻³ × (3,00·10⁸)² = 9·10¹³ J');
+    marque(c, 'exemple');
+    c.pause(.4);
+    c.texte('Toute masse correspond à une énergie :', 40, 330, { couleur: 'jaune', taille: 21, max: 690 });
+    c.texte('si la masse d’un système diminue de Δm, il libère ΔE = Δm·c²', 40, 362, { couleur: 'jaune', taille: 21, max: 690 });
+    c.repere('sens', 30, 306, 700, 66, 'toute masse correspond à une énergie : si la masse d’un système diminue de Δm, il libère ΔE = Δm·c²');
+    marque(c, 'sens');
+    marque(c, 'fin');
+  },
+
+  fig_unites(c) {
+    c.texte('L’escalier des unités', 40, 30, { couleur: 'cyan', taille: 20 });
+    c.repere('figure', 20, 44, 720, 340, 'l’escalier des unités : u, eV, MeV, MeV/c²');
+    const L = [['u', '1 u = 1,66·10⁻²⁷ kg : un douzième de la masse d’un atome de carbone 12', 'blanc'],
+      ['eV', '1 eV = 1,6·10⁻¹⁹ J', 'blanc'], ['MeV', '1 MeV = 10⁶ eV = 1,6·10⁻¹³ J', 'blanc'],
+      ['MeV_c2', 'MeV/c² : une unité de masse, car m = E/c²', 'jaune']];
+    const X = i => 30 + 60 * i, Y = i => 110 + 74 * i;
+    L.forEach(([id, t, col], i) => {
+      if (i) c.pause(.4);
+      const pts = [[X(i), Y(i)], [X(i) + 60, Y(i)]]; if (i < L.length - 1) pts.push([X(i) + 60, Y(i + 1)]);
+      c.trait(pts, { couleur: 'faible', largeur: 2 });
+      c.texte(t, X(i) + 6, Y(i) - 12, { couleur: col, taille: i ? 21 : 18, max: 724 - X(i) });
+      c.repere(id, X(i), Y(i) - 40, 730 - X(i), 46, t);
+      marque(c, id);
+    });
+    c.pause(.3);
+    c.texte('Énergies des noyaux : en MeV ; masses des noyaux : en u ou en MeV/c²', 40, 396, { couleur: 'vert', taille: 18, max: 690 });
+    marque(c, 'fin');
+  },
+
+  fig_931(c) {
+    c.texte('Démonstration : 1 u = 931,5 MeV/c²', 40, 30, { couleur: 'cyan', taille: 20 });
+    c.repere('figure', 20, 44, 720, 340, 'la démonstration de 1 u = 931,5 MeV/c²');
+    c.texte('E = m·c² avec m = 1 u = 1,66054·10⁻²⁷ kg', 50, 104, { couleur: 'blanc', taille: 24, max: 660 });
+    c.repere('E', 40, 76, 680, 38, 'E = m·c² avec m = 1 u = 1,66054·10⁻²⁷ kg');
+    marque(c, 'E');
+    c.pause(.4);
+    c.texte('E = 1,66054·10⁻²⁷ × (2,99792·10⁸)² = 1,4924·10⁻¹⁰ J', 50, 170, { couleur: 'blanc', taille: 21, max: 660 });
+    c.texte('en joule', 712, 196, { couleur: 'faible', align: 'right', taille: 15 });
+    c.repere('joule', 40, 142, 680, 62, 'E = 1,66054·10⁻²⁷ × (2,99792·10⁸)² = 1,4924·10⁻¹⁰ J');
+    marque(c, 'joule');
+    c.pause(.4);
+    c.texte('E = 1,4924·10⁻¹⁰ / 1,60218·10⁻¹³ = 931,5 MeV', 50, 244, { couleur: 'blanc', taille: 24, max: 660 });
+    c.texte('en MeV (1 MeV = 1,60218·10⁻¹³ J)', 712, 270, { couleur: 'faible', align: 'right', taille: 15 });
+    c.repere('mev', 40, 216, 680, 62, 'E = 1,4924·10⁻¹⁰ / 1,60218·10⁻¹³ = 931,5 MeV');
+    marque(c, 'mev');
+    c.pause(.4);
+    c.texte('1 u·c² = 931,5 MeV ; donc 1 u = 931,5 MeV/c²', 380, 340, { couleur: 'vert', align: 'center', taille: 27, max: 640 });
+    c.rect(60, 304, 640, 52, { couleur: 'vert', arrondi: 10 });
+    c.repere('resultat', 56, 300, 648, 60, '1 u·c² = 931,5 MeV ; donc 1 u = 931,5 MeV/c²');
+    marque(c, 'resultat');
+    marque(c, 'fin');
+  },
+
+  fig_composition(c) {
+    c.texte('La composition d’un noyau', 40, 30, { couleur: 'cyan', taille: 20 });
+    c.repere('figure', 20, 44, 720, 366, 'le noyau ᴬ_ZX : Z protons, N = A − Z neutrons, A nucléons ; exemples ⁴₂He et ²³⁵₉₂U');
+    const t = 84, x0 = 120, y0 = 172, w = noyauTexte(c, 'A', 'Z', 'X', x0, y0, { taille: t, couleur: 'jaune', mesure: true });
+    noyauTexte(c, 'A', 'Z', 'X', x0, y0, { taille: t, couleur: 'jaune' });
+    const wN = Math.max(c.largeurTexte('A', t * .6), c.largeurTexte('Z', t * .6));
+    c.fleche(318, 92, x0 + wN + 6, y0 - .45 * t - 18, { couleur: 'rose', largeur: 1.8 });
+    c.texte('A : nombre de nucléons (nombre de masse)', 326, 98, { couleur: 'blanc', taille: 19, max: 410 });
+    c.fleche(318, 150, x0 + w + 8, y0 - 26, { couleur: 'rose', largeur: 1.8 });
+    c.texte('X : symbole de l’élément', 326, 156, { couleur: 'blanc', taille: 19, max: 410 });
+    c.repere('noyau', 96, 60, 640, 110, 'le noyau ᴬ_ZX : A nucléons, symbole X');
+    marque(c, 'noyau');
+    c.pause(.4);
+    c.fleche(318, 214, x0 + wN + 6, y0 + .3 * t - 6, { couleur: 'rose', largeur: 1.8 });
+    c.texte('Z : nombre de protons (nombre de charge)', 326, 220, { couleur: 'blanc', taille: 19, max: 410 });
+    c.repere('protons', 96, 176, 640, 54, 'Z : nombre de protons');
+    marque(c, 'protons');
+    c.pause(.4);
+    c.texte('N = A − Z : nombre de neutrons', 326, 266, { couleur: 'vert', taille: 21, max: 410 });
+    c.rect(316, 240, 330, 36, { couleur: 'vert', arrondi: 8 });
+    c.repere('neutrons', 312, 236, 338, 44, 'N = A − Z : nombre de neutrons');
+    marque(c, 'neutrons');
+    c.pause(.4);
+    peindre(c, ctx => {
+      amas(ctx, 74, 350, 4, 2, 11);
+      nucleon(ctx, 270, 318, 8, 'p'); nucleon(ctx, 270, 356, 8, 'n');
+      amas(ctx, 512, 344, 235, 92, 3.3);
+    });
+    ligne(c, [N(4, 2, 'He'), ' : 2 p, 2 n'], 108, 358, { taille: 22, couleur: 'blanc' });
+    c.texte('proton', 284, 323, { couleur: 'rouge', taille: 16 }).texte('neutron', 284, 361, { couleur: 'bleu', taille: 16 });
+    ligne(c, [N(235, 92, 'U'), ' : 92 p, 143 n'], 578, 352, { taille: 22, couleur: 'blanc', max: 162 });
+    c.repere('exemples', 30, 286, 710, 120, 'exemples : ⁴₂He (2 p, 2 n) ; ²³⁵₉₂U (92 p, 143 n)');
+    marque(c, 'exemples');
+    marque(c, 'fin');
+  },
+
+  fig_defaut(c) {
+    c.texte('Le défaut de masse', 40, 30, { couleur: 'cyan', taille: 20 });
+    c.repere('figure', 20, 44, 720, 340, 'le défaut de masse : formule, signe, calcul pour ⁴₂He, conversion en kg');
+    ligne(c, ['Δm = Z·m_p + (A − Z)·m_n − m(', N('A', 'Z', 'X'), ')'], 380, 104, { taille: 28, couleur: 'jaune', align: 'center' });
+    c.rect(150, 66, 460, 56, { couleur: 'jaune', arrondi: 10 });
+    c.repere('formule', 146, 62, 468, 64, 'Δm = Z·m_p + (A − Z)·m_n − m(ᴬ_ZX)');
+    marque(c, 'formule');
+    c.pause(.4);
+    c.texte('Δm > 0 : le noyau est plus léger que ses nucléons séparés', 40, 170, { couleur: 'vert', taille: 22, max: 690 });
+    c.repere('signe', 30, 146, 700, 34, 'Δm > 0 : le noyau est plus léger que ses nucléons séparés');
+    marque(c, 'signe');
+    c.pause(.4);
+    ligne(c, ['m_p = 1,00728 u ; m_n = 1,00866 u ; m(', N(4, 2, 'He'), ') = 4,00150 u'], 40, 222, { taille: 17, couleur: 'faible' });
+    ligne(c, [N(4, 2, 'He'), ' : Δm = 2 × 1,00728 + 2 × 1,00866 − 4,00150 = 0,03038 u'], 40, 262, { taille: 23, couleur: 'blanc', max: 690 });
+    c.repere('calcul', 30, 200, 700, 72, '⁴₂He : Δm = 2 × 1,00728 + 2 × 1,00866 − 4,00150 = 0,03038 u');
+    marque(c, 'calcul');
+    c.pause(.4);
+    c.texte('Δm = 0,03038 × 1,66·10⁻²⁷ = 5,04·10⁻²⁹ kg', 40, 324, { couleur: 'blanc', taille: 23, max: 690 });
+    c.texte('(1 u = 1,66·10⁻²⁷ kg)', 40, 356, { couleur: 'faible', taille: 16 });
+    c.repere('kg', 30, 298, 700, 66, 'Δm = 0,03038 × 1,66·10⁻²⁷ = 5,04·10⁻²⁹ kg');
+    marque(c, 'kg');
+    marque(c, 'fin');
+  },
+
+  fig_liaison(c) {
+    c.texte('L’énergie de liaison', 40, 30, { couleur: 'cyan', taille: 20 });
+    c.repere('figure', 20, 44, 720, 340, 'l’énergie de liaison de ⁴₂He : formule, calcul, par nucléon, en joule');
+    c.texte('E_{ℓ} = Δm·c²', 380, 110, { couleur: 'jaune', align: 'center', taille: 40 });
+    c.rect(270, 68, 220, 60, { couleur: 'jaune', arrondi: 10 });
+    c.repere('formule', 266, 64, 228, 68, 'E_ℓ = Δm·c²');
+    marque(c, 'formule');
+    c.pause(.4);
+    ligne(c, ['Pour ', N(4, 2, 'He'), ' :'], 40, 172, { taille: 18, couleur: 'cyan' });
+    c.texte('E_{ℓ} = 0,03038 u × 931,5 MeV/u = 28,30 MeV', 40, 206, { couleur: 'blanc', taille: 24, max: 690 });
+    c.repere('calcul', 30, 150, 700, 66, 'E_ℓ = 0,03038 u × 931,5 MeV/u = 28,30 MeV');
+    marque(c, 'calcul');
+    c.pause(.4);
+    c.texte('E_{ℓ}/A = 28,30 / 4 = 7,07 MeV/nucléon', 40, 266, { couleur: 'vert', taille: 24, max: 690 });
+    c.repere('par_nucleon', 30, 240, 700, 36, 'E_ℓ/A = 28,30 / 4 = 7,07 MeV/nucléon');
+    marque(c, 'par_nucleon');
+    c.pause(.4);
+    c.texte('E_{ℓ} = 28,30 × 1,6·10⁻¹³ = 4,53·10⁻¹² J', 40, 326, { couleur: 'blanc', taille: 24, max: 690 });
+    c.texte('(1 MeV = 1,6·10⁻¹³ J)', 40, 358, { couleur: 'faible', taille: 16 });
+    c.repere('joule', 30, 300, 700, 66, 'E_ℓ = 28,30 × 1,6·10⁻¹³ = 4,53·10⁻¹² J');
+    marque(c, 'joule');
+    marque(c, 'fin');
+  },
+
+  fig_stabilite(c) {
+    c.texte('Le plus stable : ⁶⁰Ni ou ⁵⁶Ni ? (national 2017 R)', 40, 30, { couleur: 'cyan', taille: 20, max: 690 });
+    c.repere('figure', 20, 42, 720, 362, 'le tableau ⁶⁰Ni / ⁵⁶Ni et la comparaison des E_ℓ/A');
+    const X = [30, 190, 350, 470, 730], Y = [46, 88, 138, 188], cx = i => (X[i] + X[i + 1]) / 2;
+    grille(c, X, Y);
+    c.texte('noyau', cx(0), Y[0] + 28, { couleur: 'cyan', align: 'center', taille: 18 });
+    c.texte('E_{ℓ} (MeV)', cx(1), Y[0] + 28, { couleur: 'cyan', align: 'center', taille: 18 });
+    c.texte('A', cx(2), Y[0] + 28, { couleur: 'cyan', align: 'center', taille: 18 });
+    c.texte('E_{ℓ}/A (MeV/nucléon)', cx(3), Y[0] + 28, { couleur: 'cyan', align: 'center', taille: 18 });
+    ligne(c, [N(60, 28, 'Ni')], cx(0), Y[1] + 34, { taille: 24, align: 'center' });
+    c.texte('526,8', cx(1), Y[1] + 33, { align: 'center', taille: 21 }).texte('60', cx(2), Y[1] + 33, { align: 'center', taille: 21 });
+    c.texte('?', 560, Y[1] + 33, { couleur: 'rose', align: 'center', taille: 23 });
+    ligne(c, [N(56, 28, 'Ni')], cx(0), Y[2] + 34, { taille: 24, align: 'center' });
+    c.texte('—', cx(1), Y[2] + 33, { couleur: 'faible', align: 'center', taille: 21 }).texte('56', cx(2), Y[2] + 33, { align: 'center', taille: 21 });
+    c.texte('8,64', cx(3), Y[2] + 33, { align: 'center', taille: 21 });
+    c.repere('trace', X[0], Y[0], X[4] - X[0], Y[3] - Y[0], 'le tableau : ⁶⁰Ni (E_ℓ = 526,8 MeV, A = 60) ; ⁵⁶Ni (A = 56, E_ℓ/A = 8,64 MeV/nucléon)');
+    marque(c, 'trace');
+    c.pause(.4);
+    c.texte('= 8,78', 578, Y[1] + 33, { couleur: 'jaune', taille: 21 });
+    c.texte('E_{ℓ}(⁶⁰Ni)/A = 526,8 / 60 = 8,78 MeV/nucléon', 40, 232, { couleur: 'jaune', taille: 23, max: 690 });
+    c.repere('calcul', 30, 206, 700, 36, 'E_ℓ(⁶⁰Ni)/A = 526,8 / 60 = 8,78 MeV/nucléon');
+    marque(c, 'calcul');
+    c.pause(.4);
+    c.texte('8,78 > 8,64', 380, 282, { couleur: 'blanc', align: 'center', taille: 30 });
+    c.repere('compare', 280, 252, 200, 40, '8,78 > 8,64');
+    marque(c, 'compare');
+    c.pause(.4);
+    c.texte('⁶⁰Ni est plus stable : la plus grande énergie de liaison par nucléon', 380, 332, { couleur: 'vert', align: 'center', taille: 21, max: 700 });
+    c.repere('conclusion', 26, 308, 708, 34, '⁶⁰Ni est plus stable : la plus grande énergie de liaison par nucléon');
+    marque(c, 'conclusion');
+    c.pause(.4);
+    c.texte('⚠ comparer E_{ℓ}/A, jamais E_{ℓ}', 380, 382, { couleur: 'orange', align: 'center', taille: 24 });
+    c.repere('piege', 200, 354, 360, 38, '⚠ comparer E_ℓ/A, jamais E_ℓ');
+    marque(c, 'piege');
+    marque(c, 'fin');
+  },
+
+  fig_spontanee_provoquee(c) {
+    c.texte('Deux sortes de réactions nucléaires', 40, 28, { couleur: 'cyan', taille: 20 });
+    c.repere('figure', 16, 40, 728, 364, 'le tableau réaction spontanée | réaction provoquée, et les lois de Soddy');
+    const X0 = 20, XM = 380, X1 = 740, Y0 = 44, YH = 92, YB = 300;
+    c.rect(X0, Y0, X1 - X0, YB - Y0, { couleur: 'faible', arrondi: 6 });
+    c.ligne(XM, Y0, XM, YB, { couleur: 'faible', largeur: 1.6, duree: .2 }).ligne(X0, YH, X1, YH, { couleur: 'faible', largeur: 1.6, duree: .2 });
+    c.texte('Réaction spontanée (radioactivité α, β⁻, β⁺)', (X0 + XM) / 2, 76, { couleur: 'jaune', align: 'center', taille: 17, max: 340 });
+    c.texte('Réaction provoquée (fission, fusion)', (XM + X1) / 2, 76, { couleur: 'jaune', align: 'center', taille: 19, max: 340 });
+    c.repere('trace', X0, Y0, X1 - X0, YB - Y0, 'le tableau : réaction spontanée (radioactivité α, β⁻, β⁺) | réaction provoquée (fission, fusion)');
+    marque(c, 'trace');
+    c.pause(.4);
+    peindre(c, ctx => { amas(ctx, 130, 170, 40, 18, 5.2); amas(ctx, 286, 136, 4, 2, 7); });
+    c.fleche(180, 158, 262, 140, { couleur: 'blanc', largeur: 1.8 });
+    c.texte('rien ne le touche', 130, 228, { couleur: 'faible', align: 'center', taille: 15 });
+    c.texte('le noyau se transforme seul', (X0 + XM) / 2, 270, { couleur: 'vert', align: 'center', taille: 21, max: 340 });
+    c.repere('spontanee', X0, YH, XM - X0, YB - YH, 'réaction spontanée : le noyau se transforme seul');
+    marque(c, 'spontanee');
+    c.pause(.4);
+    peindre(c, ctx => {
+      ctx.strokeStyle = 'rgba(143,163,184,.35)'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(410, 156); ctx.lineTo(452, 156); ctx.stroke();
+      nucleon(ctx, 462, 156, 7, 'n'); amas(ctx, 560, 156, 60, 26, 4.4);
+    });
+    c.fleche(474, 156, 520, 156, { couleur: 'blanc', largeur: 1.8 });
+    c.texte('neutron', 462, 132, { couleur: 'bleu', align: 'center', taille: 15 });
+    c.texte('il faut un neutron (fission)', (XM + X1) / 2, 238, { couleur: 'vert', align: 'center', taille: 20, max: 340 });
+    c.texte('ou une température très élevée (fusion)', (XM + X1) / 2, 270, { couleur: 'vert', align: 'center', taille: 20, max: 340 });
+    c.repere('provoquee', XM, YH, X1 - XM, YB - YH, 'réaction provoquée : il faut un neutron (fission) ou une température très élevée (fusion)');
+    marque(c, 'provoquee');
+    c.pause(.4);
+    c.texte('dans toutes : conservation de A et conservation de Z (lois de Soddy)', 380, 346, { couleur: 'jaune', align: 'center', taille: 22, max: 710 });
+    c.repere('soddy', 20, 320, 720, 38, 'dans toutes : conservation de A et conservation de Z (lois de Soddy)');
+    marque(c, 'soddy');
+    marque(c, 'fin');
+  },
+
+  fig_soddy(c) {
+    c.texte('Trouver x neutrons : les lois de Soddy', 40, 30, { couleur: 'cyan', taille: 20 });
+    c.repere('figure', 20, 44, 720, 340, 'l’équation de fission avec x neutrons, conservation de A puis de Z');
+    ligne(c, [N(235, 92, 'U'), ' + ', NEUTRON, ' → ', N(94, 38, 'Sr'), ' + ', N(140, 54, 'Xe'), ' + x ', NEUTRON], 380, 116, { taille: 34, align: 'center', couleur: 'blanc', max: 690 });
+    c.repere('equation', 40, 66, 680, 72, '²³⁵₉₂U + ¹₀n → ⁹⁴₃₈Sr + ¹⁴⁰₅₄Xe + x ¹₀n');
+    marque(c, 'equation');
+    c.pause(.4);
+    c.texte('Conservation de A (en haut) :', 60, 196, { couleur: 'cyan', taille: 19 });
+    c.texte('235 + 1 = 94 + 140 + x donc x = 2', 80, 236, { couleur: 'jaune', taille: 26, max: 640 });
+    c.repere('A', 50, 172, 660, 74, '235 + 1 = 94 + 140 + x donc x = 2');
+    marque(c, 'A');
+    c.pause(.4);
+    c.texte('Conservation de Z (en bas) :', 60, 296, { couleur: 'cyan', taille: 19 });
+    c.texte('92 + 0 = 38 + 54 + 0 : vérifié', 80, 336, { couleur: 'vert', taille: 26, max: 640 });
+    c.repere('Z', 50, 272, 660, 74, '92 + 0 = 38 + 54 + 0 : vérifié');
+    marque(c, 'Z');
+    marque(c, 'fin');
+  },
+
+  fig_methode_masses(c) {
+    c.texte('Énergie libérée : la méthode des masses', 40, 30, { couleur: 'cyan', taille: 20 });
+    c.repere('figure', 20, 44, 720, 360, 'la méthode des masses en quatre lignes, avec l’exemple de la fusion ²₁H + ³₁H');
+    c.texte('exemple : la fusion', 724, 30, { couleur: 'faible', align: 'right', taille: 15 });
+    const Y = [78, 166, 254, 342];
+    c.texte('1. L’équation de la réaction, toutes les particules :', 40, Y[0], { couleur: 'blanc', taille: 21, max: 690 });
+    ligne(c, [N(2, 1, 'H'), ' + ', N(3, 1, 'H'), ' → ', N(4, 2, 'He'), ' + ', NEUTRON], 70, Y[0] + 38, { taille: 23, couleur: 'vert' });
+    c.repere('equation', 30, Y[0] - 26, 700, 74, 'l’équation de la réaction, toutes les particules : ²₁H + ³₁H → ⁴₂He + ¹₀n');
+    marque(c, 'equation');
+    c.pause(.4);
+    c.texte('2. Δm = Σm(produits) − Σm(réactifs)', 40, Y[1], { couleur: 'blanc', taille: 22, max: 690 });
+    c.texte('Δm = 5,01016 − 5,02905 = −0,01889 u', 70, Y[1] + 36, { couleur: 'vert', taille: 21, max: 660 });
+    c.repere('delta_m', 30, Y[1] - 26, 700, 72, 'Δm = Σm(produits) − Σm(réactifs)');
+    marque(c, 'delta_m');
+    c.pause(.4);
+    c.texte('3. ΔE = Δm·c² (Δm en u × 931,5 → MeV)', 40, Y[2], { couleur: 'blanc', taille: 22, max: 690 });
+    c.texte('ΔE = −0,01889 × 931,5 = −17,6 MeV', 70, Y[2] + 36, { couleur: 'vert', taille: 21, max: 660 });
+    c.repere('delta_E', 30, Y[2] - 26, 700, 72, 'ΔE = Δm·c² (Δm en u × 931,5 → MeV)');
+    marque(c, 'delta_E');
+    c.pause(.4);
+    c.texte('4. ΔE < 0 : E_lib = |ΔE|', 40, Y[3], { couleur: 'jaune', taille: 22, max: 690 });
+    c.texte('E_lib = 17,6 MeV', 70, Y[3] + 36, { couleur: 'vert', taille: 21, max: 660 });
+    c.repere('E_lib', 30, Y[3] - 26, 700, 72, 'ΔE < 0 : E_lib = |ΔE|');
+    marque(c, 'E_lib');
+    marque(c, 'fin');
+  },
+
+  fig_methode_liaison(c) {
+    c.texte('Énergie libérée : la méthode des énergies de liaison', 40, 30, { couleur: 'cyan', taille: 20, max: 690 });
+    c.repere('figure', 20, 44, 720, 360, 'la méthode des énergies de liaison et l’exemple du national 2023 N');
+    c.texte('ΔE = Σ E_{ℓ}(réactifs) − Σ E_{ℓ}(produits)', 380, 104, { couleur: 'jaune', align: 'center', taille: 28, max: 640 });
+    c.rect(80, 66, 600, 56, { couleur: 'jaune', arrondi: 10 });
+    c.repere('formule', 76, 62, 608, 64, 'ΔE = Σ E_ℓ(réactifs) − Σ E_ℓ(produits)');
+    marque(c, 'formule');
+    c.pause(.4);
+    c.texte('E_{ℓ} = A·(E_{ℓ}/A) pour chaque noyau', 40, 170, { couleur: 'blanc', taille: 23, max: 690 });
+    c.repere('A_fois', 30, 144, 700, 36, 'E_ℓ = A·(E_ℓ/A) pour chaque noyau');
+    marque(c, 'A_fois');
+    c.pause(.4);
+    ligne(c, ['un nucléon seul (', NEUTRON, ', ', N(1, 1, 'p'), ') : E_{ℓ} = 0'], 40, 224, { taille: 23, couleur: 'blanc' });
+    c.repere('nucleon_libre', 30, 196, 700, 38, 'un nucléon seul (¹₀n, ¹₁p) : E_ℓ = 0');
+    marque(c, 'nucleon_libre');
+    c.pause(.4);
+    c.texte('E_lib = |ΔE|', 40, 280, { couleur: 'vert', taille: 26 });
+    c.texte('Exemple (²H + ³H → ⁴He + n) :', 40, 330, { couleur: 'faible', taille: 17 });
+    c.texte('ΔE = (2,366 + 8,475) − (28,296 + 0) = −17,455 MeV ; E_lib ≈ 17,5 MeV', 40, 364, { couleur: 'vert', taille: 18, max: 690 });
+    c.repere('E_lib', 30, 252, 700, 122, 'E_lib = |ΔE| ; exemple : ΔE = −17,455 MeV, E_lib ≈ 17,5 MeV');
+    marque(c, 'E_lib');
+    marque(c, 'fin');
+  },
+
+  fig_echantillon(c) {
+    c.texte('L’énergie libérée par un échantillon d’uranium 235', 40, 30, { couleur: 'cyan', taille: 20, max: 690 });
+    c.repere('figure', 20, 44, 720, 360, 'd’un noyau à 1 g d’uranium 235 : nombre de noyaux, énergie totale, en joule, en pétrole');
+    peindre(c, ctx => amas(ctx, 680, 96, 235, 92, 2.6));
+    c.texte('fission d’un noyau d’²³⁵U : E_lib ≈ 185 MeV', 40, 84, { couleur: 'blanc', taille: 23, max: 580 });
+    c.repere('un_noyau', 30, 56, 700, 74, 'fission d’un noyau d’²³⁵U : E_lib ≈ 185 MeV');
+    marque(c, 'un_noyau');
+    c.pause(.4);
+    c.texte('dans m = 1 g : N = m·N_A/M = 1 × 6,02·10²³ / 235 = 2,56·10²¹ noyaux', 40, 162, { couleur: 'blanc', taille: 17, max: 600 });
+    c.texte('(m en g, M = 235 g/mol)', 40, 188, { couleur: 'faible', taille: 15 });
+    c.repere('nombre', 30, 136, 610, 58, 'dans m = 1 g : N = m·N_A/M = 1 × 6,02·10²³ / 235 = 2,56·10²¹ noyaux');
+    marque(c, 'nombre');
+    c.pause(.4);
+    c.texte('E = N·E_lib = 2,56·10²¹ × 185 = 4,7·10²³ MeV', 40, 236, { couleur: 'jaune', taille: 23, max: 600 });
+    c.repere('total', 30, 210, 610, 36, 'E = N·E_lib = 2,56·10²¹ × 185 = 4,7·10²³ MeV');
+    marque(c, 'total');
+    c.pause(.4);
+    c.texte('E = 4,7·10²³ × 1,6·10⁻¹³ = 7,6·10¹⁰ J', 40, 292, { couleur: 'jaune', taille: 23, max: 600 });
+    c.repere('joule', 30, 266, 610, 36, 'E = 4,7·10²³ × 1,6·10⁻¹³ = 7,6·10¹⁰ J');
+    marque(c, 'joule');
+    c.pause(.4);
+    peindre(c, ctx => baril(ctx, 650, 318, 54, 72));
+    c.texte('≈ l’énergie de la combustion de 1,8 tonne de pétrole', 40, 360, { couleur: 'vert', taille: 23, max: 580 });
+    c.texte('pétrole', 677, 410, { couleur: 'faible', align: 'center', taille: 14 });
+    c.repere('petrole', 30, 312, 700, 102, '≈ l’énergie de la combustion de 1,8 tonne de pétrole');
+    marque(c, 'petrole');
+    marque(c, 'fin');
+  },
+
+  fig_comparaison(c) {
+    c.texte('Fission ou fusion : laquelle libère le plus ?', 40, 28, { couleur: 'cyan', taille: 20 });
+    c.repere('figure', 16, 40, 728, 366, 'le tableau fission de l’²³⁵U | fusion ²H + ³H, par réaction et par nucléon');
+    const X = [20, 230, 485, 740], Y = [44, 92, 154, 216], cx = i => (X[i] + X[i + 1]) / 2;
+    grille(c, X, Y);
+    c.texte('Fission de l’²³⁵U', cx(1), Y[0] + 32, { couleur: 'jaune', align: 'center', taille: 21 });
+    c.texte('Fusion ²H + ³H', cx(2), Y[0] + 32, { couleur: 'jaune', align: 'center', taille: 21 });
+    c.texte('énergie libérée', cx(0), Y[1] + 28, { couleur: 'faible', align: 'center', taille: 16 }).texte('par réaction', cx(0), Y[1] + 50, { couleur: 'faible', align: 'center', taille: 16 });
+    c.texte('énergie libérée', cx(0), Y[2] + 28, { couleur: 'faible', align: 'center', taille: 16 }).texte('par nucléon', cx(0), Y[2] + 50, { couleur: 'faible', align: 'center', taille: 16 });
+    peindre(c, ctx => {
+      ctx.strokeStyle = 'rgba(143,163,184,.35)'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(272, 272); ctx.lineTo(304, 272); ctx.stroke();
+      nucleon(ctx, 312, 272, 6, 'n'); amas(ctx, 386, 270, 235, 92, 2.4);
+      amas(ctx, 572, 272, 2, 1, 8); amas(ctx, 660, 272, 3, 1, 8);
+    });
+    c.fleche(322, 272, 338, 272, { couleur: 'blanc', largeur: 1.6, tete: 7 });
+    c.fleche(560, 296, 590, 296, { couleur: 'blanc', largeur: 1.6, tete: 7 }).fleche(672, 296, 642, 296, { couleur: 'blanc', largeur: 1.6, tete: 7 });
+    c.texte('ils s’approchent', 616, 318, { couleur: 'faible', align: 'center', taille: 13 });
+    c.repere('trace', X[0], Y[0], X[3] - X[0], 280 - Y[0], 'le tableau : fission de l’²³⁵U | fusion ²H + ³H');
+    marque(c, 'trace');
+    c.pause(.4);
+    c.texte('185 MeV', cx(1), Y[1] + 40, { couleur: 'blanc', align: 'center', taille: 24 });
+    c.texte('17,6 MeV', cx(2), Y[1] + 40, { couleur: 'blanc', align: 'center', taille: 24 });
+    c.repere('par_reaction', X[0], Y[1], X[3] - X[0], Y[2] - Y[1], 'par réaction : 185 MeV (fission) | 17,6 MeV (fusion)');
+    marque(c, 'par_reaction');
+    c.pause(.4);
+    c.texte('185 / 236 ≈ 0,78 MeV', cx(1), Y[2] + 40, { couleur: 'blanc', align: 'center', taille: 23, max: 240 });
+    c.texte('17,6 / 5 ≈ 3,5 MeV', cx(2), Y[2] + 40, { couleur: 'vert', align: 'center', taille: 23, max: 240 });
+    c.repere('par_nucleon', X[0], Y[2], X[3] - X[0], Y[3] - Y[2], 'par nucléon : 185 / 236 ≈ 0,78 MeV | 17,6 / 5 ≈ 3,5 MeV');
+    marque(c, 'par_nucleon');
+    c.pause(.4);
+    c.texte('à masse égale, la fusion libère plus d’énergie que la fission', 380, 352, { couleur: 'vert', align: 'center', taille: 23, max: 710 });
+    c.repere('conclusion', 20, 326, 720, 36, 'à masse égale, la fusion libère plus d’énergie que la fission');
+    marque(c, 'conclusion');
+    marque(c, 'fin');
+  },
+
+  fig_cas_types(c) {
+    c.texte('Le mot de la question → la méthode', 40, 28, { couleur: 'cyan', taille: 20 });
+    c.repere('figure', 16, 40, 728, 362, 'le tableau des cas types');
+    const X0 = 20, XM = 316, X1 = 740, Y0 = 40, H0 = 36, RH = 46, NL = 7, Yr = i => Y0 + H0 + RH * i;
+    c.rect(X0, Y0, X1 - X0, H0 + RH * NL, { couleur: 'faible', arrondi: 6 });
+    c.ligne(XM, Y0, XM, Yr(NL), { couleur: 'faible', largeur: 1.6, duree: .2 });
+    c.ligne(X0, Yr(0), X1, Yr(0), { couleur: 'faible', largeur: 1.6, duree: .2 });
+    for (let i = 1; i < NL; i++) c.ligne(X0, Yr(i), X1, Yr(i), { couleur: 'tresfaible', largeur: 1.1, duree: .08 });
+    c.texte('le mot de la question', (X0 + XM) / 2, Y0 + 26, { couleur: 'cyan', align: 'center', taille: 18 });
+    c.texte('la méthode', (XM + X1) / 2, Y0 + 26, { couleur: 'cyan', align: 'center', taille: 18 });
+    c.repere('trace', X0, Y0, X1 - X0, H0 + RH * NL, 'le tableau : le mot de la question, la méthode');
+    marque(c, 'trace');
+    R_CAS.forEach(([id, q, m], i) => {
+      c.pause(.35);
+      const yy = Yr(i) + 30;
+      c.texte(q, X0 + 8, yy, { couleur: 'jaune', taille: 16, max: XM - X0 - 22 });
+      c.fleche(XM - 4, yy - 6, XM + 14, yy - 6, { couleur: 'rose', largeur: 1.8, tete: 7 });
+      c.texte(m, XM + 20, yy, { couleur: 'vert', taille: 17, max: X1 - XM - 28 });
+      c.repere(id, X0, Yr(i), X1 - X0, RH, `${q} → ${m.replace(/_\{?([^}\s]*)\}?/g, '$1')}`);
+      marque(c, id);
+    });
+    marque(c, 'fin');
+  },
+
+  fig_enonce_2016(c) {
+    // D’après le national 2016 N : fusion du deutérium et du tritium ; masses en u ; 1 u = 931,5 MeV/c².
+    c.texte('Énoncé type national 2016 N : la fusion', 40, 26, { couleur: 'cyan', taille: 19, max: 430 });
+    c.repere('figure', 16, 36, 728, 380, 'l’énoncé du national 2016 N : la fusion ²₁H + ³₁H et ses données');
+    c.texte('Dans le Soleil et dans les étoiles, des noyaux', 26, 74, { couleur: 'blanc', taille: 17, max: 430 });
+    c.texte('de deutérium et de tritium fusionnent :', 26, 98, { couleur: 'blanc', taille: 17, max: 430 });
+    ligne(c, [N(2, 1, 'H'), ' + ', N(3, 1, 'H'), ' → ', N('A', 'Z', 'He'), ' + ', NEUTRON], 236, 156, { taille: 30, couleur: 'jaune', align: 'center', max: 420 });
+    peindre(c, ctx => { amas(ctx, 70, 246, 2, 1, 11); amas(ctx, 150, 246, 3, 1, 11); amas(ctx, 320, 246, 4, 2, 11); nucleon(ctx, 400, 246, 11, 'n'); });
+    c.fleche(196, 246, 276, 246, { couleur: 'blanc', largeur: 2 });
+    c.texte('deutérium', 70, 292, { couleur: 'faible', align: 'center', taille: 14 }).texte('tritium', 150, 292, { couleur: 'faible', align: 'center', taille: 14 });
+    c.texte('hélium', 320, 292, { couleur: 'faible', align: 'center', taille: 14 }).texte('neutron', 400, 292, { couleur: 'faible', align: 'center', taille: 14 });
+    c.texte('A et Z du noyau d’hélium : à trouver.', 26, 336, { couleur: 'blanc', taille: 17, max: 430 });
+    c.repere('trace', 18, 52, 440, 294, 'la réaction : ²₁H + ³₁H → ᴬ_ZHe + ¹₀n');
+    marque(c, 'trace');
+    c.pause(.4);
+    const bas = donnees(c, 478, 44, 266, [['m(', N(2, 1, 'H'), ') = 2,01355 u'], ['m(', N(3, 1, 'H'), ') = 3,01550 u'], ['m(He) = 4,00150 u'], ['m(n) = 1,00866 u'], ['1 u = 931,5 MeV/c²']]);
+    c.repere('donnees', 478, 44, 266, bas - 44, 'les données : m(²H) = 2,01355 u ; m(³H) = 3,01550 u ; m(He) = 4,00150 u ; m(n) = 1,00866 u ; 1 u = 931,5 MeV/c²');
+    marque(c, 'donnees');
+    c.pause(.4);
+    cherche(c, 490, bas + 36, ['A et Z (lois de Soddy)', 'Δm de la réaction', 'l’énergie libérée E_lib (MeV)'], 250);
+    c.repere('fin', 482, bas + 12, 262, 104, 'ce qu’on cherche : A et Z, Δm, E_lib');
+    marque(c, 'fin');
+  },
+
+  fig_enonce_2017(c) {
+    // D’après le national 2017 R : le cobalt 60 se désintègre en nickel 60 ; données de masses ; E_ℓ/A(⁵⁶Ni) = 8,64 MeV/nucléon.
+    c.texte('Énoncé type national 2017 R : le cobalt 60', 40, 26, { couleur: 'cyan', taille: 19, max: 430 });
+    c.repere('figure', 16, 36, 728, 380, 'l’énoncé du national 2017 R : ⁶⁰₂₇Co → ⁶⁰₂₈Ni + X et ses données');
+    c.texte('Le cobalt 60 est radioactif :', 26, 78, { couleur: 'blanc', taille: 17, max: 430 });
+    c.texte('il se transforme seul en nickel 60.', 26, 102, { couleur: 'blanc', taille: 17, max: 430 });
+    ligne(c, [N(60, 27, 'Co'), ' → ', N(60, 28, 'Ni'), ' + X'], 236, 162, { taille: 32, couleur: 'jaune', align: 'center', max: 420 });
+    peindre(c, ctx => { amas(ctx, 110, 256, 60, 27, 4.2); amas(ctx, 330, 256, 60, 28, 4.2); });
+    c.fleche(170, 256, 268, 256, { couleur: 'blanc', largeur: 2 });
+    c.texte('X = ?', 404, 262, { couleur: 'rose', taille: 20 });
+    c.texte('Puis on compare la stabilité de ⁶⁰Ni et de ⁵⁶Ni.', 26, 344, { couleur: 'blanc', taille: 17, max: 430 });
+    c.repere('trace', 18, 52, 440, 302, 'la réaction : ⁶⁰₂₇Co → ⁶⁰₂₈Ni + X');
+    marque(c, 'trace');
+    c.pause(.4);
+    const bas = donnees(c, 478, 44, 266, ['m(Co) = 59,91901 u', 'm(Ni) = 59,91543 u', 'm(e) = 0,00055 u', 'm_p = 1,00728 u', 'm_n = 1,00866 u',
+      ['E_{ℓ}/A(', N(56, 28, 'Ni'), ') = 8,64 MeV/nucléon']], { pas: 30, taille: 17 });
+    c.repere('donnees', 478, 44, 266, bas - 44, 'les données : m(Co) = 59,91901 u ; m(Ni) = 59,91543 u ; m(e) = 0,00055 u ; m_p = 1,00728 u ; m_n = 1,00866 u ; E_ℓ/A(⁵⁶Ni) = 8,64 MeV/nucléon');
+    marque(c, 'donnees');
+    c.pause(.4);
+    cherche(c, 490, bas + 30, ['identifier X (lois de Soddy)', 'E_{ℓ}(⁶⁰Ni) et E_{ℓ}/A', 'le plus stable : ⁶⁰Ni ou ⁵⁶Ni'], 250);
+    c.repere('fin', 482, bas + 8, 262, 98, 'ce qu’on cherche : X, E_ℓ(⁶⁰Ni) et E_ℓ/A, le plus stable');
+    marque(c, 'fin');
+  },
+
+  fig_enonce_2023(c) {
+    // D’après le national 2023 N : fusion ³₁H + ²₁H → ⁴₂He + ¹₀n ; tableau des énergies de liaison (MeV).
+    c.texte('Énoncé type national 2023 N : énergies de liaison', 40, 26, { couleur: 'cyan', taille: 19, max: 430 });
+    c.repere('figure', 16, 36, 728, 380, 'l’énoncé du national 2023 N : la fusion ³₁H + ²₁H et le tableau des E_ℓ');
+    c.texte('On étudie la réaction de fusion :', 26, 80, { couleur: 'blanc', taille: 17, max: 430 });
+    ligne(c, [N(3, 1, 'H'), ' + ', N(2, 1, 'H'), ' → ', N(4, 2, 'He'), ' + ', NEUTRON], 236, 140, { taille: 30, couleur: 'jaune', align: 'center', max: 420 });
+    peindre(c, ctx => { amas(ctx, 70, 232, 3, 1, 11); amas(ctx, 150, 232, 2, 1, 11); amas(ctx, 320, 232, 4, 2, 11); nucleon(ctx, 400, 232, 11, 'n'); });
+    c.fleche(196, 232, 276, 232, { couleur: 'blanc', largeur: 2 });
+    c.texte('On donne les énergies de liaison des noyaux.', 26, 330, { couleur: 'blanc', taille: 17, max: 430 });
+    c.repere('trace', 18, 56, 440, 284, 'la réaction : ³₁H + ²₁H → ⁴₂He + ¹₀n');
+    marque(c, 'trace');
+    c.pause(.4);
+    const X = [478, 604, 744], Y = [44, 84, 124, 164, 204], cx = i => (X[i] + X[i + 1]) / 2;
+    grille(c, X, Y);
+    c.texte('noyau', cx(0), Y[0] + 27, { couleur: 'cyan', align: 'center', taille: 17 });
+    c.texte('E_{ℓ} (MeV)', cx(1), Y[0] + 27, { couleur: 'cyan', align: 'center', taille: 17 });
+    [[N(2, 1, 'H'), '2,366'], [N(3, 1, 'H'), '8,475'], [N(4, 2, 'He'), '28,296']].forEach(([n, v], i) => {
+      ligne(c, [n], cx(0), Y[i + 1] + 28, { taille: 21, align: 'center' });
+      c.texte(v, cx(1), Y[i + 1] + 27, { align: 'center', taille: 20 });
+    });
+    c.repere('donnees', X[0], Y[0], X[2] - X[0], Y[4] - Y[0], 'le tableau des E_ℓ (MeV) : ²H 2,366 ; ³H 8,475 ; ⁴He 28,296');
+    marque(c, 'donnees');
+    c.pause(.4);
+    cherche(c, 490, 250, ['ΔE à partir des E_{ℓ}', 'l’énergie libérée E_lib', 'le diagramme d’énergie'], 250);
+    c.repere('fin', 482, 226, 262, 98, 'ce qu’on cherche : ΔE, E_lib, le diagramme d’énergie');
+    marque(c, 'fin');
+  },
+
+  fig_enonce_2025(c) {
+    // D’après le national 2025 N : ¹⁰⁷₄₈Cd → ¹⁰⁷₄₇Ag + ⁰₁e ; masses ; nombre de noyaux désintégrés entre t₁ et t₂.
+    c.texte('Énoncé type national 2025 N : le cadmium 107', 40, 26, { couleur: 'cyan', taille: 19, max: 430 });
+    c.repere('figure', 16, 36, 728, 380, 'l’énoncé du national 2025 N : ¹⁰⁷₄₈Cd → ¹⁰⁷₄₇Ag + ⁰₁e et ses données');
+    c.texte('Le cadmium 107 est radioactif :', 26, 78, { couleur: 'blanc', taille: 17, max: 430 });
+    ligne(c, [N(107, 48, 'Cd'), ' → ', N(107, 47, 'Ag'), ' + ', N(0, 1, 'e')], 236, 140, { taille: 32, couleur: 'jaune', align: 'center', max: 420 });
+    peindre(c, ctx => { amas(ctx, 100, 236, 107, 48, 3.4); amas(ctx, 300, 236, 107, 47, 3.4); });
+    c.fleche(150, 236, 248, 236, { couleur: 'blanc', largeur: 2 });
+    c.texte('+ e', 360, 242, { couleur: 'blanc', taille: 20 });
+    c.texte('Entre les instants t_1 et t_2, un échantillon', 26, 318, { couleur: 'blanc', taille: 17, max: 430 });
+    c.texte('perd N_d noyaux de cadmium 107.', 26, 342, { couleur: 'blanc', taille: 17, max: 430 });
+    c.repere('trace', 18, 54, 440, 298, 'la réaction : ¹⁰⁷₄₈Cd → ¹⁰⁷₄₇Ag + ⁰₁e');
+    marque(c, 'trace');
+    c.pause(.4);
+    const bas = donnees(c, 478, 44, 266, ['m(Cd) = 106,88045 u', 'm(Ag) = 106,87947 u', 'm(e) = 5,486·10⁻⁴ u', '1 u = 931,49 MeV/c²', 'N_d ≈ 5,62·10¹⁵', '(désintégrés entre t_1 et t_2)'], { pas: 29, taille: 17 });
+    c.repere('donnees', 478, 44, 266, bas - 44, 'les données : m(Cd) = 106,88045 u ; m(Ag) = 106,87947 u ; m(e) = 5,486·10⁻⁴ u ; 1 u = 931,49 MeV/c² ; N_d ≈ 5,62·10¹⁵');
+    marque(c, 'donnees');
+    c.pause(.4);
+    cherche(c, 490, bas + 30, ['le type de radioactivité', 'E_lib pour un noyau', 'l’énergie libérée entre t_1 et t_2'], 250);
+    c.repere('fin', 482, bas + 8, 262, 98, 'ce qu’on cherche : le type, E_lib, l’énergie entre t₁ et t₂');
+    marque(c, 'fin');
+  },
+};
+const R_CAS = [
+  ['liaison', '« énergie de liaison d’un noyau »', 'Δm = Z·m_p + (A − Z)·m_n − m ; E_{ℓ} = Δm·c²'],
+  ['stabilite', '« le plus stable »', 'comparer E_{ℓ}/A'],
+  ['masses', '« énergie libérée, masses données »', 'Δm = Σm(produits) − Σm(réactifs) ; E_lib = |ΔE|'],
+  ['energies', '« tableau d’E_{ℓ} »', 'ΔE = Σ E_{ℓ}(réactifs) − Σ E_{ℓ}(produits)'],
+  ['diagramme', '« diagramme d’énergie »', 'lire les paliers'],
+  ['echantillon', '« énergie d’un échantillon, de m grammes »', 'N = m·N_A/M ; E = N·E_lib'],
+  ['equation', '« déterminer A et Z, x neutrons »', 'lois de Soddy'],
+];
+
+function dessiner(c) {
+  scene.cadre(31);
+  MM = {};
+  DESSINS[fig](c);
+  M = MM;
+  return c.fin() || !S.running;   // figée sur une étape : l’image ne change plus, on cesse de la redessiner
+}
+
+// ───────────────────────── Ce que le tuteur voit et peut faire ─────────────────────────
+const MOTIFS = {
+  fig_soleil: { soleil: 'le Soleil qui rayonne', masse: 'la masse du Soleil qui diminue', question: 'la question', fin: 'figure complète' },
+  fig_einstein: { relation: 'la relation E = m·c²', termes: 'les unités', exemple: 'l’exemple de 1 g', sens: 'le sens de la relation', fin: 'figure complète' },
+  fig_unites: { u: 'l’unité de masse atomique u', eV: 'l’électronvolt', MeV: 'le MeV', MeV_c2: 'le MeV/c²', fin: 'figure complète' },
+  fig_931: { E: 'E = m·c² pour 1 u', joule: 'le calcul en joule', mev: 'la conversion en MeV', resultat: '1 u = 931,5 MeV/c²', fin: 'figure complète' },
+  fig_composition: { noyau: 'le noyau ᴬ_ZX', protons: 'Z protons', neutrons: 'N = A − Z neutrons', exemples: 'les exemples ⁴₂He et ²³⁵₉₂U', fin: 'figure complète' },
+  fig_defaut: { formule: 'la formule du défaut de masse', signe: 'Δm > 0', calcul: 'le calcul pour ⁴₂He', kg: 'Δm en kg', fin: 'figure complète' },
+  fig_liaison: { formule: 'E_ℓ = Δm·c²', calcul: 'E_ℓ = 28,30 MeV', par_nucleon: 'E_ℓ/A = 7,07 MeV/nucléon', joule: 'E_ℓ en joule', fin: 'figure complète' },
+  fig_stabilite: { trace: 'le tableau des deux noyaux', calcul: 'E_ℓ/A du ⁶⁰Ni', compare: '8,78 > 8,64', conclusion: 'la conclusion', piege: 'le piège', fin: 'figure complète' },
+  fig_spontanee_provoquee: { trace: 'le tableau', spontanee: 'la réaction spontanée', provoquee: 'la réaction provoquée', soddy: 'les lois de Soddy', fin: 'figure complète' },
+  fig_soddy: { equation: 'l’équation avec x neutrons', A: 'la conservation de A : x = 2', Z: 'la conservation de Z', fin: 'figure complète' },
+  fig_methode_masses: { equation: 'la ligne 1 : l’équation', delta_m: 'la ligne 2 : Δm', delta_E: 'la ligne 3 : ΔE', E_lib: 'la ligne 4 : E_lib', fin: 'figure complète' },
+  fig_methode_liaison: { formule: 'la formule ΔE = Σ E_ℓ(réactifs) − Σ E_ℓ(produits)', A_fois: 'E_ℓ = A·(E_ℓ/A)', nucleon_libre: 'un nucléon seul : E_ℓ = 0', E_lib: 'E_lib = |ΔE|', fin: 'figure complète' },
+  fig_echantillon: { un_noyau: 'l’énergie d’une fission', nombre: 'le nombre de noyaux dans 1 g', total: 'l’énergie totale en MeV', joule: 'l’énergie totale en joule', petrole: 'la comparaison avec le pétrole', fin: 'figure complète' },
+  fig_comparaison: { trace: 'le tableau fission | fusion', par_reaction: 'l’énergie par réaction', par_nucleon: 'l’énergie par nucléon', conclusion: 'la conclusion', fin: 'figure complète' },
+  fig_cas_types: { trace: 'le tableau des cas types', liaison: 'l’énergie de liaison', stabilite: 'le plus stable', masses: 'les masses données', energies: 'le tableau d’E_ℓ', diagramme: 'le diagramme', echantillon: 'l’échantillon', equation: 'A, Z et x neutrons', fin: 'figure complète' },
+  fig_enonce_2016: { trace: 'la réaction de l’énoncé', donnees: 'les données', fin: 'ce qu’on cherche' },
+  fig_enonce_2017: { trace: 'la réaction de l’énoncé', donnees: 'les données', fin: 'ce qu’on cherche' },
+  fig_enonce_2023: { trace: 'la réaction de l’énoncé', donnees: 'le tableau des énergies de liaison', fin: 'ce qu’on cherche' },
+  fig_enonce_2025: { trace: 'la réaction de l’énoncé', donnees: 'les données', fin: 'ce qu’on cherche' },
+};
+const DESCRIPTIONS = {
+  fig_soleil: {
+    soleil: 'Le Soleil peint (disque lumineux jaune-orangé, halo et rayons) et la phrase « Le Soleil rayonne de l’énergie depuis des milliards d’années ».',
+    masse: 'Flèche rose vers le bas et phrase « Chaque seconde, sa masse diminue d’environ 4 millions de tonnes ».',
+    question: 'La question en vert : « D’où vient cette énergie ? ».' },
+  fig_einstein: {
+    relation: 'La relation « E = m·c² » écrite en grand et encadrée.',
+    termes: 'Les unités : E en joule (J) ; m en kilogramme (kg) ; c = 3,00·10⁸ m/s.',
+    exemple: 'Exemple : m = 1 g = 10⁻³ kg → E = 10⁻³ × (3,00·10⁸)² = 9·10¹³ J.',
+    sens: 'Phrase : « Toute masse correspond à une énergie : si la masse d’un système diminue de Δm, il libère ΔE = Δm·c² ».' },
+  fig_unites: {
+    u: 'Première marche de l’escalier : 1 u = 1,66·10⁻²⁷ kg : un douzième de la masse d’un atome de carbone 12.',
+    eV: 'Deuxième marche : 1 eV = 1,6·10⁻¹⁹ J.',
+    MeV: 'Troisième marche : 1 MeV = 10⁶ eV = 1,6·10⁻¹³ J.',
+    MeV_c2: 'Quatrième marche : MeV/c² : une unité de masse, car m = E/c².',
+    fin: 'Phrase : énergies des noyaux en MeV ; masses des noyaux en u ou en MeV/c².' },
+  fig_931: {
+    E: 'Ligne 1 : E = m·c² avec m = 1 u = 1,66054·10⁻²⁷ kg.',
+    joule: 'Ligne 2 : E = 1,66054·10⁻²⁷ × (2,99792·10⁸)² = 1,4924·10⁻¹⁰ J.',
+    mev: 'Ligne 3 : E = 1,4924·10⁻¹⁰ / 1,60218·10⁻¹³ = 931,5 MeV.',
+    resultat: 'Résultat encadré en vert : 1 u·c² = 931,5 MeV ; donc 1 u = 931,5 MeV/c².' },
+  fig_composition: {
+    noyau: 'Le noyau ᴬ_ZX écrit en grand (A en haut à gauche, Z en bas à gauche) ; flèches : « A : nombre de nucléons (nombre de masse) », « X : symbole de l’élément ».',
+    protons: 'Flèche vers Z : « Z : nombre de protons (nombre de charge) ».',
+    neutrons: 'Encadré vert : « N = A − Z : nombre de neutrons ».',
+    exemples: 'Exemples peints en sphères (protons rouges, neutrons gris-bleu) : ⁴₂He : 2 p, 2 n ; ²³⁵₉₂U : 92 p, 143 n (gros amas).' },
+  fig_defaut: {
+    formule: 'Formule encadrée : Δm = Z·m_p + (A − Z)·m_n − m(ᴬ_ZX).',
+    signe: 'Phrase : « Δm > 0 : le noyau est plus léger que ses nucléons séparés ».',
+    calcul: 'Données m_p = 1,00728 u, m_n = 1,00866 u, m(⁴₂He) = 4,00150 u ; calcul : ⁴₂He : Δm = 2 × 1,00728 + 2 × 1,00866 − 4,00150 = 0,03038 u.',
+    kg: 'Conversion : Δm = 0,03038 × 1,66·10⁻²⁷ = 5,04·10⁻²⁹ kg (1 u = 1,66·10⁻²⁷ kg).' },
+  fig_liaison: {
+    formule: 'Formule encadrée : E_ℓ = Δm·c².',
+    calcul: 'Pour ⁴₂He : E_ℓ = 0,03038 u × 931,5 MeV/u = 28,30 MeV.',
+    par_nucleon: 'E_ℓ/A = 28,30 / 4 = 7,07 MeV/nucléon.',
+    joule: 'E_ℓ = 28,30 × 1,6·10⁻¹³ = 4,53·10⁻¹² J (1 MeV = 1,6·10⁻¹³ J).' },
+  fig_stabilite: {
+    trace: 'Tableau : ⁶⁰₂₈Ni : E_ℓ = 526,8 MeV, A = 60, E_ℓ/A = ? ; ⁵⁶₂₈Ni : A = 56, E_ℓ/A = 8,64 MeV/nucléon.',
+    calcul: 'Calcul (la case ? devient 8,78) : E_ℓ(⁶⁰Ni)/A = 526,8 / 60 = 8,78 MeV/nucléon.',
+    compare: 'Comparaison : 8,78 > 8,64.',
+    conclusion: 'Conclusion : « ⁶⁰Ni est plus stable : la plus grande énergie de liaison par nucléon ».',
+    piege: 'Piège en orange : « ⚠ comparer E_ℓ/A, jamais E_ℓ ».' },
+  fig_spontanee_provoquee: {
+    trace: 'Tableau à deux colonnes : « Réaction spontanée (radioactivité α, β⁻, β⁺) » | « Réaction provoquée (fission, fusion) ».',
+    spontanee: 'Colonne gauche : un noyau peint qui émet seul un petit noyau (rien ne le touche) ; « le noyau se transforme seul ».',
+    provoquee: 'Colonne droite : un neutron peint qui arrive sur un noyau ; « il faut un neutron (fission) ou une température très élevée (fusion) ».',
+    soddy: 'Sous le tableau : « dans toutes : conservation de A et conservation de Z (lois de Soddy) ».' },
+  fig_soddy: {
+    equation: 'Équation : ²³⁵₉₂U + ¹₀n → ⁹⁴₃₈Sr + ¹⁴⁰₅₄Xe + x ¹₀n.',
+    A: 'Conservation de A (nombres du haut) : 235 + 1 = 94 + 140 + x donc x = 2.',
+    Z: 'Conservation de Z (nombres du bas) : 92 + 0 = 38 + 54 + 0 : vérifié.' },
+  fig_methode_masses: {
+    equation: 'Ligne 1 : l’équation de la réaction, toutes les particules ; exemple ²₁H + ³₁H → ⁴₂He + ¹₀n.',
+    delta_m: 'Ligne 2 : Δm = Σm(produits) − Σm(réactifs) ; exemple Δm = 5,01016 − 5,02905 = −0,01889 u.',
+    delta_E: 'Ligne 3 : ΔE = Δm·c² (Δm en u × 931,5 → MeV) ; exemple ΔE = −0,01889 × 931,5 = −17,6 MeV.',
+    E_lib: 'Ligne 4 : ΔE < 0 : E_lib = |ΔE| ; exemple E_lib = 17,6 MeV.' },
+  fig_methode_liaison: {
+    formule: 'Formule encadrée : ΔE = Σ E_ℓ(réactifs) − Σ E_ℓ(produits).',
+    A_fois: 'E_ℓ = A·(E_ℓ/A) pour chaque noyau.',
+    nucleon_libre: 'Un nucléon seul (¹₀n, ¹₁p) : E_ℓ = 0.',
+    E_lib: 'E_lib = |ΔE| ; exemple : ΔE = (2,366 + 8,475) − (28,296 + 0) = −17,455 MeV ; E_lib ≈ 17,5 MeV.' },
+  fig_echantillon: {
+    un_noyau: 'Un noyau d’uranium 235 peint en sphères ; « fission d’un noyau d’²³⁵U : E_lib ≈ 185 MeV ».',
+    nombre: 'Dans m = 1 g : N = m·N_A/M = 1 × 6,02·10²³ / 235 = 2,56·10²¹ noyaux (m en g, M = 235 g/mol).',
+    total: 'E = N·E_lib = 2,56·10²¹ × 185 = 4,7·10²³ MeV.',
+    joule: 'E = 4,7·10²³ × 1,6·10⁻¹³ = 7,6·10¹⁰ J.',
+    petrole: 'Un baril de pétrole peint ; « ≈ l’énergie de la combustion de 1,8 tonne de pétrole ».' },
+  fig_comparaison: {
+    trace: 'Tableau « Fission de l’²³⁵U » | « Fusion ²H + ³H », lignes « énergie libérée par réaction » et « par nucléon » ; dessous, un neutron qui arrive sur un gros noyau d’uranium et deux petits noyaux ²H et ³H qui s’approchent.',
+    par_reaction: 'Par réaction : 185 MeV (fission) | 17,6 MeV (fusion).',
+    par_nucleon: 'Par nucléon : 185 / 236 ≈ 0,78 MeV (fission) | 17,6 / 5 ≈ 3,5 MeV (fusion).',
+    conclusion: 'Conclusion : « à masse égale, la fusion libère plus d’énergie que la fission ».' },
+  fig_cas_types: {
+    trace: 'Tableau à deux colonnes : « le mot de la question » | « la méthode ».',
+    liaison: '« énergie de liaison d’un noyau » → Δm = Z·m_p + (A − Z)·m_n − m ; E_ℓ = Δm·c².',
+    stabilite: '« le plus stable » → comparer E_ℓ/A.',
+    masses: '« énergie libérée, masses données » → Δm = Σm(produits) − Σm(réactifs) ; E_lib = |ΔE|.',
+    energies: '« tableau d’E_ℓ » → ΔE = Σ E_ℓ(réactifs) − Σ E_ℓ(produits).',
+    diagramme: '« diagramme d’énergie » → lire les paliers.',
+    echantillon: '« énergie d’un échantillon, de m grammes » → N = m·N_A/M ; E = N·E_lib.',
+    equation: '« déterminer A et Z, x neutrons » → lois de Soddy.' },
+  fig_enonce_2016: {
+    trace: 'Énoncé (national 2016 N) : fusion du deutérium et du tritium, ²₁H + ³₁H → ᴬ_ZHe + ¹₀n (A et Z à trouver) ; les noyaux peints en sphères.',
+    donnees: 'Données : m(²H) = 2,01355 u ; m(³H) = 3,01550 u ; m(He) = 4,00150 u ; m(n) = 1,00866 u ; 1 u = 931,5 MeV/c².',
+    fin: 'On cherche : A et Z (lois de Soddy) ; Δm de la réaction ; l’énergie libérée E_lib (MeV).' },
+  fig_enonce_2017: {
+    trace: 'Énoncé (national 2017 R) : le cobalt 60 se transforme seul, ⁶⁰₂₇Co → ⁶⁰₂₈Ni + X (X à identifier) ; puis on compare la stabilité de ⁶⁰Ni et ⁵⁶Ni.',
+    donnees: 'Données : m(Co) = 59,91901 u ; m(Ni) = 59,91543 u ; m(e) = 0,00055 u ; m_p = 1,00728 u ; m_n = 1,00866 u ; E_ℓ/A(⁵⁶Ni) = 8,64 MeV/nucléon.',
+    fin: 'On cherche : identifier X (lois de Soddy) ; E_ℓ(⁶⁰Ni) et E_ℓ/A ; le plus stable : ⁶⁰Ni ou ⁵⁶Ni.' },
+  fig_enonce_2023: {
+    trace: 'Énoncé (national 2023 N) : la fusion ³₁H + ²₁H → ⁴₂He + ¹₀n, noyaux peints en sphères.',
+    donnees: 'Tableau des énergies de liaison (MeV) : ²H : 2,366 ; ³H : 8,475 ; ⁴He : 28,296.',
+    fin: 'On cherche : ΔE à partir des E_ℓ ; l’énergie libérée E_lib ; le diagramme d’énergie.' },
+  fig_enonce_2025: {
+    trace: 'Énoncé (national 2025 N) : le cadmium 107 se transforme seul, ¹⁰⁷₄₈Cd → ¹⁰⁷₄₇Ag + ⁰₁e ; entre t₁ et t₂, l’échantillon perd N_d noyaux.',
+    donnees: 'Données : m(Cd) = 106,88045 u ; m(Ag) = 106,87947 u ; m(e) = 5,486·10⁻⁴ u ; 1 u = 931,49 MeV/c² ; N_d ≈ 5,62·10¹⁵ noyaux désintégrés entre t₁ et t₂.',
+    fin: 'On cherche : le type de radioactivité ; E_lib pour un noyau ; l’énergie libérée entre t₁ et t₂.' },
+};
+
+const etapes = () => FIGS[fig].etapes;
+const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : 'Rejouer'; };
+const sansIndice = s => String(s).replace(/_\{?([^}\s]*)\}?/g, '$1');   // la bulle : jamais de « _ » visible
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.tw += dt * VITESSE;
+  if (S.jusqua != null && S.tw >= S.jusqua) {
+    S.tw = S.jusqua; S.jusqua = null; S.running = false;
+    if (M.fin !== undefined && S.tw >= M.fin - 1e-6) { S.pause = false; S.fait = true; etiquette(); bulle($('feedback'), 'Arrêt sur image : figure complète.'); pont.noter('measurement', { figure: fig }); pont.emettre(); return true; }
+    S.pause = true; etiquette();
+    bulle($('feedback'), 'Arrêt sur image : ' + sansIndice(S.motif || 'instant choisi') + '.'); pont.noter('pause', { moment: S.motif }); pont.emettre();
+    return true;
+  }
+  if (M.fin !== undefined && S.tw >= M.fin + 0.05) {
+    S.running = false; S.pause = false; S.fait = true; etiquette(); pont.noter('measurement', { figure: fig }); pont.emettre();
+  } else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function calculer() { if (M.fin === undefined) { const t = S.tw; S.tw = 1e6; dessiner(craie); S.tw = t; scene.sale = true; } }
+function start() { S.tw = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; scene.sale = true; etiquette(); bulle($('feedback'), ''); pont.noter('start', { figure: fig }); pont.emettre(); }
+function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); bulle($('feedback'), 'Pause.'); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); bulle($('feedback'), ''); pont.noter('resume'); pont.emettre(); }
+function playUntil(p) {
+  calculer();
+  const nom = p.moment in M && etapes().includes(p.moment) ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || !(S.running || S.pause) || S.tw >= cible - 1e-3) { S.tw = 0; S.fait = false; }
+  S.jusqua = cible; S.motif = nom ? MOTIFS[fig][nom] : `t = ${cible.toFixed(1).replace('.', ',')} s d’écriture`; S.running = true; S.pause = false; etiquette(); bulle($('feedback'), '');
+  scene.sale = true;
+  pont.noter('play_until', { moment: nom, time_s: +cible.toFixed(2) }); pont.emettre();
+}
+function setTime(p) {
+  calculer(); const t = Math.max(0, Math.min(+p.time_s, M.fin ?? 0)); if (!Number.isFinite(t)) return;
+  S.tw = t; S.jusqua = null; S.running = false; S.fait = t >= (M.fin ?? 0) - 1e-6; S.pause = !S.fait; scene.sale = true; etiquette();
+  bulle($('feedback'), 'Arrêt sur image : ' + (S.fait ? 'figure complète' : `t = ${t.toFixed(1).replace('.', ',')} s d’écriture`) + '.'); pont.noter('set_time', { time_s: t }); pont.emettre();
+}
+function setParameters(p) {
+  const f = p.fig || p.figure || p.variant;
+  if (!f || !FIGS[f] || f === fig) return;
+  fig = f; M = {}; config.title = 'Figure — ' + FIGS[fig].titre; config.variants = [{ id: fig, label: FIGS[fig].titre }];
+  config.command_schema.play_until.moment = FIGS[fig].etapes.join(' | ') + ' (réécrit la figure et s’arrête après cette étape)';
+  start(); setTimeout(() => pont.manifeste(), 400);
+}
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+
+function ceQuiSeVoit() {
+  const D = DESCRIPTIONS[fig], faites = etapes().filter(n => vu(n));
+  const m = [`Figure « ${fig} » : ${FIGS[fig].titre}.`];
+  if (!faites.length) m.push(S.running ? 'La figure est en train de s’écrire à la craie (première étape pas encore finie).' : 'Rien d’écrit encore.');
+  faites.forEach(n => { if (D[n]) m.push(D[n]); });
+  m.push(S.running ? 'La craie écrit encore.' : S.pause ? `Écriture arrêtée après l’étape « ${faites.length ? faites[faites.length - 1] : 'aucune'} ».` : 'Figure complète.');
+  return m.join(' ');
+}
+window.Tableau.explication(Object.fromEntries(Object.keys(FIGS).map(f => [f,
+  FIGS[f].etapes.filter(e => DESCRIPTIONS[f][e]).map(e => ({ repere: e, texte: DESCRIPTIONS[f][e] }))])));
+const commandes = ['start', 'reset', 'pause', 'resume', 'play_until', 'set_time', 'set_parameters'];
+const config = { id: 'energie_nucleaire_figures', version: '1.0', title: 'Figure — ' + FIGS[fig].titre, variants: [{ id: fig, label: FIGS[fig].titre }], commands: commandes,
+  command_schema: { play_until: { moment: FIGS[fig].etapes.join(' | ') + ' (réécrit la figure et s’arrête après cette étape)', time_s: 'instant d’écriture (s)' },
+    set_time: { time_s: 'instant d’écriture (s), figé' }, set_parameters: { fig: Object.keys(FIGS).join(' | ') } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: `Figure du cours « Noyaux, masse et énergie » : ${FIGS[fig].titre}. Étapes d’écriture : ${FIGS[fig].etapes.join(', ')}.`,
+  etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : 'finished', ce_qui_se_voit: ceQuiSeVoit(), current_variant: fig,
+    time_s: +S.tw.toFixed(2), parameters: { fig },
+    moments: Object.fromEntries(etapes().filter(n => M[n] !== undefined).map(n => [n, +M[n].toFixed(2)])), etapes_ecrites: etapes().filter(n => vu(n)) }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset: start, pause, resume, play_until: () => playUntil(p), set_time: () => setTime(p), set_parameters: () => setParameters(p) })[cmd]?.() });
+etiquette();
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

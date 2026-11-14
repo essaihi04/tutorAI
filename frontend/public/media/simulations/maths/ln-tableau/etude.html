@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Étude d’une fonction avec ln</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Deux problèmes du national à la craie : la position d’une courbe par rapport à y = x, puis la courbe de 2x ln x − 2x"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Fonctions logarithmiques » (math_ch5_fonctions_ln) : étude complète (nationaux).
+ * Vues : ?vue=position (2019 N : f(x) = x + ½ − ln x + ½(ln x)² ; moments repere, asymptote, droite, ecart, contact, courbe ;
+ *        repères droite, contact, courbe)
+ *        ?vue=national (2021 N : f(x) = 2x ln x − 2x, f(0) = 0 ; moments repere, origine, minimum, zero, courbe, inegalite ;
+ *        repères minimum, courbe, inegalite).
+ */
+const E = Math.E;
+const f1 = x => x + 0.5 - Math.log(x) + 0.5 * Math.log(x) ** 2;
+const f2 = x => (x <= 0 ? 0 : 2 * x * Math.log(x) - 2 * x);
+const OPT1 = { x0: 50, y0: 46, w: 380, h: 300, xmin: 0, xmax: 6, ymin: 0, ymax: 7,
+  gx: [[1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5']], gy: [[1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5'], [6, '6']], nomx: 'x', nomy: 'y' };
+const OPT2 = { x0: 50, y0: 46, w: 380, h: 300, xmin: -0.3, xmax: 3.6, ymin: -2.6, ymax: 2.4,
+  gx: [[1, '1'], [2, '2'], [3, '3']], gy: [[-2, '−2'], [-1, '−1'], [1, '1'], [2, '2']], nomx: 'x', nomy: 'y' };
+const XR = 452;
+
+MathsTableau.page({
+  id: 'ln_etude', titre: 'Fonctions logarithmiques',
+  texte: 'Construction à la craie de deux problèmes du national : position de la courbe de f(x) = x + ½ − ln x + ½(ln x)² par rapport à y = x (f(x) − x = ½(ln x − 1)² ≥ 0, contact en x = e) ; courbe de f(x) = 2x ln x − 2x (f(0) = 0, minimum f(1) = −2, f(e) = 0) et l’inégalité ln x ≥ (x − 1)/x',
+  vues: {
+    position: {
+      titre: 'Position par rapport à y = x',
+      dessiner(c, K) {
+        K.titre('Position par rapport à y = x');
+        const G = K.axes(OPT1);
+        K.marque('repere');
+        c.pause(.2);
+        c.ligne(G.X(0), G.y0, G.X(0), G.y0 + G.h, { couleur: 'orange', largeur: 2, pointille: [7, 6] });
+        c.texte('x = 0', G.X(0) + 6, G.y0 + 18, { couleur: 'orange', taille: 15 });
+        K.marque('asymptote');
+        c.pause(.3);
+        K.anime(1, p => K.courbePart(G, x => x, 0, 6.8, p, { couleur: 'jaune', largeur: 2 }));
+        c.texte('(Δ) : y = x', G.X(4.9), G.Y(5.0) + 26, { couleur: 'jaune', taille: 17 });
+        c.repere('droite', G.x0, G.y0, G.w, G.h, '(Δ) : y = x');
+        K.marque('droite');
+        c.pause(.3);
+        K.lignes(XR, 76, [
+          { t: 'f(x) − x = ½(ln x − 1)²', couleur: 'blanc', taille: 19 },
+          { t: '≥ 0 : (C) au-dessus de (Δ)', couleur: 'vert', taille: 18 },
+        ], 30);
+        for (const x of [0.5, 1, 1.6, 4, 5]) {
+          c.ligne(G.X(x), G.Y(x), G.X(x), G.Y(Math.min(f1(x), 6.9)), { couleur: 'vert', largeur: 1.6 });
+          c.pause(.1);
+        }
+        K.marque('ecart');
+        c.pause(.3);
+        K.rond(G, E, E, true, 'jaune');
+        c.texte('(e ; e)', G.X(E) + 8, G.Y(E) + 20, { couleur: 'jaune', taille: 16 });
+        c.texte('contact en x = e', XR, 150, { couleur: 'jaune', taille: 18 });
+        c.repere('contact', G.X(E) - 14, G.Y(E) - 14, 28, 28, 'le point de contact (e ; e)');
+        K.marque('contact');
+        c.pause(.3);
+        K.anime(1.6, p => K.courbePart(G, f1, 0.32, 5.9, p, { couleur: 'cyan' }));
+        c.texte('(C)', G.X(5.4), G.Y(f1(5.4)) - 10, { couleur: 'cyan', taille: 18 });
+        K.rond(G, 1, 1.5, true, 'blanc');
+        c.texte('min (1 ; 3/2)', G.X(1) + 8, G.Y(1.5) - 10, { couleur: 'blanc', taille: 15 });
+        c.repere('courbe', G.x0, G.y0, G.w, G.h, 'la courbe (C) au-dessus de (Δ)');
+        K.marque('courbe');
+      },
+      decrire: {
+        repere: 'Un repère, x de 0 à 6, y de 0 à 7.',
+        asymptote: 'La droite x = 0 en pointillés orange : asymptote verticale.',
+        droite: 'La droite (Δ) : y = x en jaune, nommée.',
+        ecart: 'À droite : « f(x) − x = ½(ln x − 1)² », « ≥ 0 : (C) au-dessus de (Δ) » ; des petits segments verts verticaux au-dessus de (Δ).',
+        contact: 'Le point (e ; e) en jaune ; à droite « contact en x = e ».',
+        courbe: 'La courbe (C) en cyan, au-dessus de (Δ), touchant la droite en (e ; e), minimum (1 ; 3/2) marqué.',
+      },
+      motifs: { repere: 'le repère', asymptote: 'l’asymptote x = 0', droite: 'la droite y = x', ecart: 'le signe de f(x) − x', contact: 'le contact en e', courbe: 'la courbe' },
+      explication: [
+        { repere: 'droite', texte: 'Pour la position, on étudie le signe de f(x) − x.' },
+        { repere: 'contact', texte: 'f(x) − x = 0 pour ln x = 1, soit x = e.' },
+        { repere: 'courbe', texte: 'f(x) − x ≥ 0 : (C) est au-dessus de (Δ).' },
+      ],
+    },
+    national: {
+      titre: 'Un problème du national, 2021',
+      dessiner(c, K) {
+        K.titre('Un problème du national, 2021');
+        const G = K.axes(OPT2);
+        c.texte('f(x) = 2x ln x − 2x', XR, 76, { couleur: 'blanc', taille: 19 });
+        K.marque('repere');
+        c.pause(.3);
+        K.rond(G, 0, 0, true, 'blanc');
+        c.ligne(G.X(0), G.Y(0) - 26, G.X(0), G.Y(0) + 26, { couleur: 'blanc', largeur: 2.2 });
+        c.texte('f(0) = 0', XR, 106, { couleur: 'blanc', taille: 18 });
+        c.texte('demi-tangente verticale en O', XR, 132, { couleur: 'faible', taille: 16, max: 300 });
+        K.marque('origine');
+        c.pause(.3);
+        K.proj(G, 1, -2, { lx: '1', ly: '−2' });
+        K.rond(G, 1, -2, true, 'jaune');
+        c.texte('minimum f(1) = −2', XR, 162, { couleur: 'jaune', taille: 18 });
+        c.repere('minimum', G.X(1) - 14, G.Y(-2) - 14, 28, 28, 'le minimum (1 ; −2)');
+        K.marque('minimum');
+        c.pause(.3);
+        K.rond(G, E, 0, true, 'jaune');
+        c.texte('e', G.X(E) - 4, G.Y(0) - 10, { couleur: 'jaune', taille: 17 });
+        c.texte('f(e) = 0', XR, 190, { couleur: 'jaune', taille: 18 });
+        K.marque('zero');
+        c.pause(.3);
+        K.anime(1.6, p => K.courbePart(G, f2, 0, 3.5, p, { couleur: 'cyan' }));
+        c.texte('(C)', G.X(3.3), G.Y(f2(3.3)) - 10, { couleur: 'cyan', taille: 18 });
+        c.repere('courbe', G.x0, G.y0, G.w, G.h, 'la courbe (C)');
+        K.marque('courbe');
+        c.pause(.3);
+        c.rect(XR - 8, 226, 280, 48, { couleur: 'jaune', arrondi: 8, largeur: 1.7 });
+        c.texte('ln x ≥ (x − 1)/x  pour x > 0', XR, 256, { couleur: 'jaune', taille: 18, max: 268 });
+        c.repere('inegalite', XR - 8, 226, 280, 48, 'ln x ≥ (x − 1)/x');
+        K.marque('inegalite');
+      },
+      decrire: {
+        repere: 'Un repère ; à droite « f(x) = 2x ln x − 2x ».',
+        origine: 'Le point O avec un petit trait vertical : « f(0) = 0 », « demi-tangente verticale en O ».',
+        minimum: 'Le point (1 ; −2) en jaune avec ses pointillés : « minimum f(1) = −2 ».',
+        zero: 'Le point (e ; 0) en jaune : « f(e) = 0 ».',
+        courbe: 'La courbe (C) en cyan : part de O, descend jusqu’à (1 ; −2), remonte et coupe l’axe en e.',
+        inegalite: 'À droite, un encadré jaune : « ln x ≥ (x − 1)/x pour x > 0 ».',
+      },
+      motifs: { repere: 'la fonction', origine: 'f(0) = 0', minimum: 'le minimum', zero: 'f(e) = 0', courbe: 'la courbe', inegalite: 'l’inégalité' },
+      explication: [
+        { repere: 'minimum', texte: 'f’(x) = 2 ln x : négatif avant 1, positif après ; minimum f(1) = −2.' },
+        { repere: 'courbe', texte: 'La courbe part de O, descend jusqu’à (1 ; −2) puis remonte.' },
+        { repere: 'inegalite', texte: 'Une inégalité avec ln se prouve par l’étude d’une fonction.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

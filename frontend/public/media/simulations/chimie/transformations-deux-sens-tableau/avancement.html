@@ -1,0 +1,1034 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Avancement final et taux d’avancement — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="tds.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Réaction d’un acide et d’une base avec l’eau, tableau d’avancement de l’acide éthanoïque, x_max, x_f, taux d’avancement τ, réaction totale ou limitée, τ = 10^(−pH)/C, deux exercices des nationaux"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Avancement final et taux d’avancement (cours « Transformations chimiques s’effectuant dans les deux sens », 2e Bac PC BIOF, novembre 2026).
+ * Contrat : outils/cours/notes/cours/transformations_deux_sens_contrat_simulations.md § 3.
+ * Vues (?vue=) : acide_eau (défaut) | base_eau | attendu | tableau | x_max | x_f | taux | totale | relation | proportion | dosage.
+ * Aucune poignée (le contrat n’en met pas) : set_parameters ne change que la vue.
+ */
+/* ── Formules chimiques à la craie : indices ₂ et charges ⁺ ⁻ rendus (copie de cinetique-tableau/avancement.html) ───────── */
+(function () {
+  const C = window.Tableau.Craie, P = C.prototype, texteAvant = P.texte, segAvant = C.segments;
+  const SUP = { '⁺': '+', '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+  const SUB = { '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9' };
+  const chim = s => String(s).replace(/[⁺⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUP[ch]).join('') + '}')
+    .replace(/[₀₁₂₃₄₅₆₇₈₉]+/g, g => '_{' + [...g].map(ch => SUB[ch]).join('') + '}');
+  C.segments = function (s) {
+    const out = [], re = /_\{([^}]+)\}/g; let i = 0, m;
+    while ((m = re.exec(s))) { if (m.index > i) out.push(...segAvant(s.slice(i, m.index))); out.push({ t: m[1], sub: true }); i = re.lastIndex; }
+    if (i < s.length) out.push(...segAvant(s.slice(i)));
+    return out;
+  };
+  P.texte = function (s, x, y, o) { return texteAvant.call(this, chim(s), x, y, o); };
+  window.chim = chim;
+})();
+
+/* ── Moteur du déroulé (copie de cinetique-tableau/avancement.html, lui-même copié de circuit-lc.html) ────────────────── */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lisse = p => p * p * (3 - 2 * p);
+const lerp = (a, b, f) => a + (b - a) * f;
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');
+const ECRITURE = 2.5;
+function Moteur(o) {
+  const q = new URLSearchParams(location.search);
+  const S = { vue: o.vues.includes(q.get('vue')) ? q.get('vue') : o.vues[0], t: 0, running: false, pause: false, fait: false,
+    jusqua: null, motif: '', emis: 0, dit: '', mesure: false };
+  const V = o.vitesse ?? 1.7, T0 = o.T0 ?? .8, HOLD = {};
+  let TL = null;
+  function construire() {
+    let s = T0; const ev = [];
+    for (const e of o.etapes(S.vue)) {
+      const anim = e.anim || 0, d = { ...e, anim, debut: s, ecrit: s + (e.ecritDes ?? anim) };
+      d.fin = Math.max(s + anim, d.ecrit + (HOLD[e.nom] ?? 1.5)) + .35;
+      s = d.fin; ev.push(d);
+    }
+    const mom = {}; for (const e of ev) mom[e.nom] = e.fin; mom.fin = s + (o.queue ?? .6);
+    TL = { ev, M: mom };
+  }
+  const ev = nom => TL.ev.find(e => e.nom === nom);
+  const M = {
+    S, ev, evs: () => TL.ev, Moments: () => TL.M,
+    p(nom) { const e = ev(nom); if (!e) return 0; return e.anim > 0 ? clamp((S.t - e.debut) / e.anim, 0, 1) : (S.t >= e.debut - 1e-6 ? 1 : 0); },
+    commence(nom) { const e = ev(nom); return !!e && S.t > e.debut + 1e-6; },
+    vu(nom) { if (nom === 'fin') return S.t >= TL.M.fin - 1e-6; const e = ev(nom); return !!e && S.t >= e.fin - 1e-6; },
+    etape(c, nom, fn) {
+      const e = ev(nom); if (!e) return;
+      const t = c.t, cur = c.cur, comp = c.complet, w0 = e.ecrit;
+      c.t = S.t > 1e5 ? 1e9 : w0 + (S.t - w0) * V; c.cur = w0;
+      try { fn(); } finally { if (S.mesure) HOLD[nom] = Math.max(HOLD[nom] || 0, (c.cur - w0) / V); c.t = t; c.cur = cur; if (!S.running) c.complet = comp; }
+    },
+    etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
+  };
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const cadreBase = scene.cadre;
+  scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
+  M.scene = scene; M.craie = scene.craie;
+  function calculer() {
+    construire();
+    const t = S.t, r = S.running; S.t = 1e6; S.running = false; S.mesure = true;
+    for (const k of Object.keys(HOLD)) delete HOLD[k];
+    try { o.dessiner(scene.craie, M); } finally { S.t = t; S.running = r; S.mesure = false; }
+    construire(); scene.sale = true;
+  }
+  const sansSouligne = s => String(s).replace(/([A-Za-zΔτθ])_\{?([A-Za-z0-9]+)\}?/g, (m, a, i) => a + (/^\d+$/.test(i) ? [...i].map(d => '₀₁₂₃₄₅₆₇₈₉'[d]).join('') : i));
+  const dire = (texte, kind = '') => { texte = sansSouligne(texte); S.dit = texte; bulle($('feedback'), texte, kind); };
+  const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+  let pont = null;
+  const emettre = () => pont && pont.emettre();
+  const noter = (a, d) => pont && pont.noter(a, d);
+  scene.avancer = dt => {
+    if (!S.running) return !!(o.anime && o.anime());
+    const avant = S.t; S.t += dt;
+    for (const e of TL.ev) if (avant < e.debut && S.t >= e.debut && e.bulle) dire(e.bulle());
+    if (S.jusqua != null && S.t >= S.jusqua) {
+      S.t = S.jusqua; S.jusqua = null; S.running = false;
+      if (S.t >= TL.M.fin - 1e-6) { finir(); return true; }
+      S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fx(S.t, 1)} s`) + '.');
+      noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); return true;
+    }
+    if (S.t >= TL.M.fin) { S.t = TL.M.fin; finir(); return true; }
+    if (performance.now() - S.emis > 500) { S.emis = performance.now(); emettre(); }
+    return true;
+  };
+  function finir() { S.running = false; S.fait = true; S.pause = false; S.jusqua = null; etiquette(); dire(o.messageFin(M), 'good'); noter('measurement', o.params(M)); emettre(); }
+  function start() { S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire(o.depart(M)); noter('start', o.params(M)); emettre(); }
+  function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); }
+  function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('Ça repart…'); noter('resume'); emettre(); }
+  function setTime(p) {
+    const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+    S.running = false; S.jusqua = null; S.t = clamp(t, 0, TL.M.fin); S.fait = S.t >= TL.M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+    etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fx(S.t, 1)} s.`); noter('set_time', { time_s: S.t }); emettre();
+  }
+  function playUntil(p) {
+    const noms = o.etapes(S.vue).map(e => e.nom).concat('fin');
+    const nom = noms.includes(p.moment) ? p.moment : null, cible = nom ? TL.M[nom] : +p.time_s;
+    if (!Number.isFinite(cible) || (p.moment && !nom && (p.time_s == null || p.time_s === ''))) { dire(`Moment inconnu : ${p.moment}.`, 'bad'); emettre(); return; }
+    if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+    S.jusqua = clamp(cible, .01, TL.M.fin); S.motif = nom ? (o.motifs[nom] || nom) : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+    noter('play_until', { moment: nom, time_s: S.jusqua }); emettre();
+  }
+  function setParameters(p) {
+    p = p || {};
+    const r = o.appliquer(p, M) || {};
+    if (r.vue && o.vues.includes(r.vue) && r.vue !== S.vue) { S.vue = r.vue; r.change = true; r.vueChange = true; }
+    if (r.change) { calculer(); if (r.vueChange) scene.reecrire(); }
+    noter('set_parameters', o.params(M));
+    if (r.change) start();
+    else { scene.sale = true; emettre(); }
+  }
+  Object.assign(M, { noter, calculer, dire, start, pause, resume, setTime, playUntil, setParameters, emettre, etiquette });
+  $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+  window.Tableau.explication(o.explications);
+  const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+  M.lancer = () => {
+    calculer();
+    const listeMoments = o.vues.map(v => `${v} : ${o.etapes(v).map(e => e.nom).concat('fin').join(' | ')}`).join(' ; ');
+    const config = { id: o.id, version: '1.0', title: o.titre, variants: o.vues.map(id => ({ id, label: o.titres[id] })), commands: commandes,
+      command_schema: { set_parameters: o.schema, set_time: { time_s: '0..fin (arrêt sur cet instant de la scène, en s ; voir moments)' },
+        play_until: { moment: listeMoments, time_s: 'ou un instant en s' } } };
+    pont = protocole({ id: o.id, commandes, config, texte: o.texte,
+      etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle',
+        ce_qui_se_voit: o.voir(M) + (S.dit ? ` La bulle dit : « ${S.dit} »` : ''), current_variant: S.vue, time_s: +S.t.toFixed(2),
+        parameters: o.params(M), moments: Object.fromEntries(Object.entries(TL.M).map(([k, v]) => [k, +v.toFixed(2)])) }),
+      progression: () => (S.fait ? 1 : 0),
+      executer: (cmd, p) => ({ start, reset: start, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+    dire(o.depart(M));
+    setTimeout(() => { if (!S.running && S.t === 0 && !S.pause && !S.fait) start(); }, 900);
+  };
+  return M;
+}
+
+/* ── Aides d’écriture : largeur d’une formule, flèches dessinées (→, ⇌), suites de morceaux, fractions ────────────────── */
+function larg(c, s, taille = 17) {
+  const T = window.Tableau, ctx = c.ctx; if (c.echelle && c.tailleMin) taille = Math.max(taille, c.tailleMin / c.echelle);
+  return T.Craie.segments(window.chim(s)).reduce((w, g) => { ctx.font = `${(g.sub || g.sup) ? taille * .62 : taille}px ${T.POLICE}`; return w + ctx.measureText(g.t).width; }, 0);
+}
+const FL = 34;
+/** Flèche simple → (milieu à la hauteur y). */
+function flecheSimple(c, x, y, w, col = 'blanc') { c.fleche(x + 2, y, x + w - 2, y, { couleur: col, largeur: 1.9, tete: 8 }); }
+/** Double flèche ⇌ (deux demi-flèches), milieu à la hauteur y. */
+function flecheDouble(c, x, y, w, col = 'blanc') {
+  c.trait([[x + 2, y - 3.5], [x + w - 2, y - 3.5], [x + w - 10, y - 10]], { couleur: col, largeur: 1.9 });
+  c.trait([[x + w - 2, y + 3.5], [x + 2, y + 3.5], [x + 10, y + 10]], { couleur: col, largeur: 1.9, duree: .12 });
+}
+/** Morceau : texte, '→', '⇌', ou { frac: [numérateur, dénominateur] }. */
+function largeurMorceau(c, p, t) {
+  if (p === '→' || p === '⇌') return FL;
+  if (p && p.frac) return Math.max(larg(c, p.frac[0], t), larg(c, p.frac[1], t)) + 14;
+  return larg(c, p, t);
+}
+/** Positions x de chaque morceau d’une ligne (gap entre deux) : elles ne dépendent pas du temps, chaque étape écrit les siens. */
+function placer(c, x, morceaux, t, o = {}) {
+  const gap = o.gap ?? 8, ws = morceaux.map(p => largeurMorceau(c, p, t)), tot = ws.reduce((a, b) => a + b, 0) + gap * (morceaux.length - 1);
+  let px = o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x;
+  const xs = ws.map(w => { const r = px; px += w + gap; return r; });
+  return { xs, ws, x0: xs[0], tot };
+}
+function morceau(c, p, x, y, t, col = 'blanc') {
+  if (p === '→') return flecheSimple(c, x, y - t * .32, FL, col);
+  if (p === '⇌') return flecheDouble(c, x, y - t * .32, FL, col);
+  if (p && p.frac) {
+    const w = largeurMorceau(c, p, t), yb = y - t * .32;
+    c.texte(p.frac[0], x + w / 2, yb - 7, { taille: t, align: 'center', couleur: col });
+    c.ligne(x, yb, x + w, yb, { couleur: col, largeur: 1.8, duree: .1 });
+    c.texte(p.frac[1], x + w / 2, yb + t * .98, { taille: t, align: 'center', couleur: col });
+    return;
+  }
+  c.texte(p, x, y, { taille: t, couleur: col });
+}
+/** Écrit une ligne entière ; `cols[i]` colore le morceau i. Renvoie les positions. */
+function ligneM(c, x, y, morceaux, o = {}) {
+  const t = o.taille ?? 20, P = placer(c, x, morceaux, t, o);
+  morceaux.forEach((p, i) => morceau(c, p, P.xs[i], y, t, (o.cols && o.cols[i]) || o.couleur || 'blanc'));
+  return P;
+}
+/** Encadré à la craie autour d’un texte (ligne de base y, taille t). */
+function encadre(c, x, y, w, t, col = 'jaune') { c.rect(x - 8, y - t - 4, w + 16, t + 14, { couleur: col, largeur: 2, arrondi: 8 }); }
+/** Petit triangle « attention » à la craie (orange), le « ! » dedans. */
+function attention(c, x, y, o = {}) {
+  const col = o.couleur ?? 'orange', h = o.h ?? 16;
+  c.trait([[x, y], [x + h * .58, y - h], [x + h * 1.16, y]], { couleur: col, largeur: 1.8, ferme: true });
+  c.texte('!', x + h * .58, y - 3, { couleur: col, taille: h * .8, align: 'center' });
+}
+
+/* ── Pièces peintes : bécher, pH-mètre, sonde, câble, atomes et molécules ─────────────────────────────────────────── */
+const rgba = ([r, g, b, a], k = 1) => `rgba(${Math.round(r)},${Math.round(g)},${Math.round(b)},${Math.min(1, a * k).toFixed(3)})`;
+const eclair = (c, k) => [lerp(c[0], 255, k), lerp(c[1], 255, k), lerp(c[2], 255, k), c[3]];
+const sombre = (c, k) => [c[0] * (1 - k), c[1] * (1 - k), c[2] * (1 - k), Math.min(1, c[3] * (1 + k * .4))];
+const EAU = [214, 230, 246, .16];   // solutions acides et basiques incolores (comme en vrai)
+const Peint = {
+  sphere(ctx, x, y, r, [clair, milieu, fonce], a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r); g.addColorStop(0, clair); g.addColorStop(.45, milieu); g.addColorStop(1, fonce);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  },
+  /** Bécher vu de face : verre, solution (dégradé, ménisque, reflet), bec, graduations. niveau 0 → 1. */
+  becher(ctx, B, niveau, col, a = 1) {
+    const { x, y, w, h } = B, ep = 3, fond = y + h, yS = fond - ep - niveau * (h - 16);
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.beginPath(); ctx.ellipse(x + w / 2 + 3, fond + 4, w / 2, 4.5, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(210,230,250,.06)'; ctx.beginPath(); ctx.roundRect(x, y, w, h, [2, 2, 10, 10]); ctx.fill();
+    if (niveau > .004) {
+      ctx.save(); ctx.beginPath(); ctx.roundRect(x + ep, y, w - 2 * ep, h - ep, [0, 0, 8, 8]); ctx.clip();
+      const g = ctx.createLinearGradient(0, yS, 0, fond); g.addColorStop(0, rgba(eclair(col, .18))); g.addColorStop(1, rgba(sombre(col, .22)));
+      ctx.fillStyle = g; ctx.fillRect(x, yS, w, fond - yS);
+      ctx.fillStyle = 'rgba(255,255,255,.07)'; ctx.fillRect(x + w * .64, yS + 5, w * .09, Math.max(0, fond - yS - 10));
+      ctx.restore();
+      ctx.fillStyle = rgba(eclair(col, .35), 1.1); ctx.beginPath(); ctx.ellipse(x + w / 2, yS, w / 2 - ep, 3, 0, 0, 7); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,.32)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x + ep + 2, yS); ctx.lineTo(x + w - ep - 2, yS); ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(225,238,250,.78)'; ctx.lineWidth = 2.2; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(x - 6, y - 4); ctx.quadraticCurveTo(x - 1, y - 2, x, y + 5); ctx.lineTo(x, fond - 10); ctx.quadraticCurveTo(x, fond, x + 10, fond);
+    ctx.lineTo(x + w - 10, fond); ctx.quadraticCurveTo(x + w, fond, x + w, fond - 10); ctx.lineTo(x + w, y); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.14)'; ctx.fillRect(x + w * .11, y + 12, w * .05, h - 28);
+    ctx.strokeStyle = 'rgba(225,238,250,.35)'; ctx.lineWidth = 1;
+    for (let k = 1; k <= 4; k++) { const gy = fond - 8 - k * (h - 24) / 5; ctx.beginPath(); ctx.moveTo(x + w - 14, gy); ctx.lineTo(x + w - 4, gy); ctx.stroke(); }
+    ctx.restore();
+    return yS;
+  },
+  /** Sonde de verre du pH-mètre : tête noire en haut (yH), tube de verre, boule en bas (yB). */
+  sonde(ctx, x, yH, yB) {
+    ctx.save();
+    const g = ctx.createLinearGradient(x - 7, 0, x + 7, 0); g.addColorStop(0, '#15181b'); g.addColorStop(.45, '#4a5157'); g.addColorStop(1, '#101214');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x - 7, yH, 14, 24, 3); ctx.fill();
+    ctx.fillStyle = 'rgba(225,238,250,.16)'; ctx.fillRect(x - 5, yH + 24, 10, yB - yH - 34);
+    ctx.strokeStyle = 'rgba(225,238,250,.8)'; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(x - 5, yH + 24); ctx.lineTo(x - 5, yB - 11); ctx.moveTo(x + 5, yH + 24); ctx.lineTo(x + 5, yB - 11); ctx.stroke();
+    const gb = ctx.createRadialGradient(x - 2, yB - 8, 1, x, yB - 5, 8); gb.addColorStop(0, 'rgba(255,255,255,.75)'); gb.addColorStop(1, 'rgba(190,215,240,.22)');
+    ctx.fillStyle = gb; ctx.beginPath(); ctx.arc(x, yB - 5, 7, 0, 7); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = 'rgba(200,210,220,.6)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x, yH + 26); ctx.lineTo(x, yB - 10); ctx.stroke();
+    ctx.restore();
+  },
+  cable(ctx, x1, y1, x2, y2, creux = 30) {
+    ctx.save(); ctx.strokeStyle = '#2b2f35'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.bezierCurveTo(x1, y1 + creux, x2, y2 - creux, x2, y2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1; ctx.stroke(); ctx.restore();
+  },
+};
+const ATOME = {
+  C: { r: 9, col: ['#a3a9ae', '#3d4247', '#0e1012'] }, O: { r: 9, col: ['#ffb7ab', '#e0412f', '#6d140b'] },
+  N: { r: 9, col: ['#bcd5ff', '#3b6fd8', '#13306e'] }, H: { r: 5.5, col: ['#ffffff', '#d6dce2', '#7d868f'] },
+  P: { r: 6.5, col: ['#fff7b8', '#facc15', '#8a6a00'] },   // le proton H⁺ : petite boule jaune
+};
+/* Molécules (coordonnées relatives, échelle 1) : [dx, dy, atome]. Les liaisons relient l’atome 0 (ou l’indiqué) aux autres. */
+const MOL = {
+  acide: { at: [[-16, 4, 'C'], [8, -2, 'C'], [16, -20, 'O'], [26, 10, 'O'], [-30, -4, 'H'], [-24, 18, 'H'], [-14, -12, 'H']], li: [[0, 1], [1, 2], [1, 3], [0, 4], [0, 5], [0, 6]], proton: [40, 4], lieP: 3 },
+  eau_base: { at: [[0, 0, 'O'], [-11, 9, 'H'], [11, 9, 'H']], li: [[0, 1], [0, 2]], arrivee: [0, -16] },
+  ammoniac: { at: [[0, 0, 'N'], [-13, 5, 'H'], [-3, 14, 'H'], [-8, -12, 'H']], li: [[0, 1], [0, 2], [0, 3]], arrivee: [14, -8] },
+  eau_acide: { at: [[0, 0, 'O'], [-11, 9, 'H']], li: [[0, 1]], proton: [12, -9], lieP: 0 },
+};
+const KM = 1.3;   // échelle des molécules dans la loupe
+function molecule(ctx, m, x, y, a = 1) {
+  ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = 'rgba(230,236,242,.55)'; ctx.lineWidth = 3;
+  for (const [i, j] of m.li) { const A = m.at[i], B = m.at[j]; ctx.beginPath(); ctx.moveTo(x + A[0] * KM, y + A[1] * KM); ctx.lineTo(x + B[0] * KM, y + B[1] * KM); ctx.stroke(); }
+  ctx.restore();
+  for (const [dx, dy, e] of m.at) Peint.sphere(ctx, x + dx * KM, y + dy * KM, ATOME[e].r * KM, ATOME[e].col, a);
+}
+function proton(ctx, x, y, a = 1, lien = null) {
+  if (lien) { ctx.save(); ctx.globalAlpha = a * .7; ctx.strokeStyle = 'rgba(250,204,21,.7)'; ctx.lineWidth = 2.6; ctx.beginPath(); ctx.moveTo(lien[0], lien[1]); ctx.lineTo(x, y); ctx.stroke(); ctx.restore(); }
+  Peint.sphere(ctx, x, y, ATOME.P.r * KM, ATOME.P.col, a);
+}
+/** pH-mètre peint : boîtier gris, écran vert, « pH » et la valeur (à 0,1 près), deux boutons. */
+const ecranPH = A => ({ x: A.x + 10, y: A.y + 10, w: A.w - 20, h: 40 });
+function phmetre(c, A, valeur) {
+  c.direct(() => {
+    const ctx = c.ctx, { x, y, w, h } = A; ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.roundRect(x + 4, y + 5, w, h, 9); ctx.fill();
+    const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#9aa3ab'); g.addColorStop(1, '#4e565e');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 9); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.lineWidth = 1.2; ctx.stroke();
+    const e = ecranPH(A), ge = ctx.createLinearGradient(0, e.y, 0, e.y + e.h); ge.addColorStop(0, '#c2e0ae'); ge.addColorStop(1, '#8fb47c');
+    ctx.fillStyle = ge; ctx.beginPath(); ctx.roundRect(e.x, e.y, e.w, e.h, 4); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.fillRect(e.x + 3, e.y + 3, e.w - 6, 3);
+    ctx.fillStyle = '#16260f'; ctx.textBaseline = 'middle';
+    ctx.font = '700 14px "Courier New", monospace'; ctx.textAlign = 'left'; ctx.fillText('pH', e.x + 6, e.y + e.h / 2 + 1);
+    ctx.font = '700 24px "Courier New", monospace'; ctx.textAlign = 'right'; ctx.fillText(valeur, e.x + e.w - 7, e.y + e.h / 2 + 1);
+    for (let i = 0; i < 2; i++) Peint.sphere(ctx, x + 18 + i * 22, y + h - 14, 6, ['#e5e9ec', '#9aa3ab', '#4a5158']);
+    ctx.restore();
+  });
+}
+
+/* ── Données du contrat (exemples A et B, nationaux 2023 N et 2024 R) — vérifiées avec python ─────────────────────── */
+const A_ = { C: 1.0e-2, V: 0.100, pH: 3.4, h3o: 4.0e-4, xmax: 1.0e-3, xf: 4.0e-5, tau: 0.040 };
+
+const VUES = ['acide_eau', 'base_eau', 'attendu', 'tableau', 'x_max', 'x_f', 'taux', 'totale', 'relation', 'proportion', 'dosage'];
+const TITRES = {
+  acide_eau: 'un acide réagit avec l’eau', base_eau: 'une base réagit avec l’eau', attendu: 'pH attendu et pH mesuré', tableau: 'le tableau d’avancement',
+  x_max: 'l’avancement maximal x_max', x_f: 'l’avancement final x_f', taux: 'le taux d’avancement final τ', totale: 'une réaction totale : τ = 1',
+  relation: 'τ = 10^(−pH)/C', proportion: 'national 2023 N : α = 1 − τ', dosage: 'national 2024 R : dosage d’une amine',
+};
+const TITRE_TABLEAU = {
+  acide_eau: 'Un acide réagit avec l’eau', base_eau: 'Une base réagit avec l’eau', attendu: 'Si la réaction était totale…',
+  tableau: 'Tableau d’avancement de l’acide éthanoïque', x_max: 'L’avancement maximal x_max', x_f: 'L’avancement final x_f',
+  taux: 'Le taux d’avancement final τ', totale: 'Acide chlorhydrique : une réaction totale', relation: 'Une relation utile : τ et le pH',
+  proportion: 'National 2023 N : proportion d’acide restant', dosage: 'National 2024 R : la réaction de dosage est-elle totale ?',
+};
+/* Chaque étape : nom (moment du contrat), anim (s), motif (arrêt sur image), bulle, vu (ce qui est écrit, pour le tuteur). */
+function ETAPES(v) {
+  return ({
+    acide_eau: [
+      { nom: 'becher', anim: .8, motif: 'le bécher d’acide éthanoïque (C = 1,0·10⁻² mol/L, incolore)', bulle: () => 'Une solution d’acide éthanoïque.', vu: 'Bécher peint (solution incolore) : « acide éthanoïque, C = 1,0·10⁻² mol/L, V = 100 mL ».' },
+      { nom: 'loupe', anim: 1, motif: 'la loupe : une molécule CH₃COOH et une molécule H₂O', bulle: () => 'Regardons à la loupe.', vu: 'Loupe : une molécule CH₃COOH (son proton H⁺ en jaune) et une molécule H₂O.' },
+      { nom: 'transfert', anim: 1.6, motif: 'CH₃COOH cède son proton H⁺ à H₂O : CH₃COO⁻ et H₃O⁺', bulle: () => 'Regarde la boule jaune : le proton H⁺.', vu: 'Le proton jaune saute de CH₃COOH à H₂O ; dans la loupe on lit maintenant CH₃COO⁻ et H₃O⁺. Écrit : « CH₃COOH cède un proton H⁺ », « H₂O le capte : il devient H₃O⁺ ».' },
+      { nom: 'equation', anim: .3, motif: 'l’équation CH₃COOH + H₂O ⇌ CH₃COO⁻ + H₃O⁺', bulle: () => 'On écrit l’équation, avec la double flèche.', vu: 'Équation écrite : « CH₃COOH + H₂O ⇌ CH₃COO⁻ + H₃O⁺ » (double flèche dessinée).' },
+      { nom: 'couples', anim: .3, motif: 'les couples CH₃COOH/CH₃COO⁻ et H₃O⁺/H₂O ; l’eau joue le rôle de base', bulle: () => 'Quels couples ?', vu: 'Couples soulignés dans l’équation (jaune : CH₃COOH/CH₃COO⁻, bleu : H₃O⁺/H₂O) ; écrit « l’eau joue le rôle de base » et « forme générale : AH + H₂O ⇌ A⁻ + H₃O⁺ ».' },
+    ],
+    base_eau: [
+      { nom: 'becher', anim: .8, motif: 'le bécher d’une solution d’ammoniac (incolore)', bulle: () => 'Une solution d’ammoniac.', vu: 'Bécher peint (solution incolore) : « solution d’ammoniac NH₃ ».' },
+      { nom: 'loupe', anim: 1, motif: 'la loupe : une molécule NH₃ et une molécule H₂O', bulle: () => 'Regardons à la loupe.', vu: 'Loupe : une molécule NH₃ et une molécule H₂O (le proton H⁺ de l’eau en jaune).' },
+      { nom: 'transfert', anim: 1.6, motif: 'H₂O cède un proton H⁺ à NH₃ : NH₄⁺ et HO⁻', bulle: () => 'Cette fois, qui cède le proton ?', vu: 'Le proton jaune saute de H₂O à NH₃ ; dans la loupe on lit NH₄⁺ et HO⁻. Écrit : « H₂O cède un proton H⁺ », « NH₃ le capte : il devient NH₄⁺ ».' },
+      { nom: 'equation', anim: .3, motif: 'NH₃ + H₂O ⇌ NH₄⁺ + HO⁻ ; l’eau joue le rôle d’acide', bulle: () => 'On écrit l’équation.', vu: 'Écrit : « NH₃ + H₂O ⇌ NH₄⁺ + HO⁻ », couples « NH₄⁺/NH₃ et H₂O/HO⁻ », « l’eau joue le rôle d’acide », « forme générale : B + H₂O ⇌ BH⁺ + HO⁻ ».' },
+      { nom: 'renvoi', anim: .3, motif: 'τ d’une base : au chapitre des réactions acide-base', bulle: () => 'Et le taux d’avancement d’une base ?', vu: 'Encadré : « τ d’une base : au chapitre des réactions acide-base ».' },
+    ],
+    attendu: [
+      { nom: 'hypothese', anim: .3, motif: 'si la réaction était totale : [H₃O⁺] = C = 1,0·10⁻² mol/L', bulle: () => 'Faisons une hypothèse.', vu: 'Écrit : « si la réaction était totale : tout l’acide réagirait : [H₃O⁺] = C = 1,0·10⁻² mol/L ».' },
+      { nom: 'calcul_attendu', anim: .3, motif: 'pH attendu = −log(1,0·10⁻²) = 2,0', bulle: () => 'Quel pH attendre ?', vu: 'Écrit : « pH = −log[H₃O⁺] = −log(1,0·10⁻²) » et encadré « pH attendu = 2,0 ».' },
+      { nom: 'mesure', anim: 2, ecritDes: 1.6, motif: 'le pH-mètre affiche 3,4', bulle: () => 'Mesurons avec le pH-mètre.', vu: 'La sonde est dans le bécher d’acide éthanoïque ; l’afficheur se stabilise à 3,4 ; écrit à côté : « pH mesuré = 3,4 ».' },
+      { nom: 'comparer', anim: .3, motif: 'pH mesuré = 3,4 > pH attendu = 2,0', bulle: () => 'Comparons.', vu: 'Écrit : « pH mesuré = 3,4 > pH attendu = 2,0 ».' },
+      { nom: 'conclusion', anim: .3, motif: 'moins de H₃O⁺ que prévu : la réaction n’est pas totale', bulle: () => 'Que conclure ?', vu: 'Écrit : « il y a moins de H₃O⁺ que prévu : » et encadré « la réaction n’est pas totale ».' },
+    ],
+    tableau: [
+      { nom: 'equation', anim: .3, motif: 'l’équation en tête : CH₃COOH + H₂O ⇌ CH₃COO⁻ + H₃O⁺', bulle: () => 'L’équation en tête du tableau.', vu: 'Ligne de l’équation : CH₃COOH + H₂O ⇌ CH₃COO⁻ + H₃O⁺ ; écrit dessous « quantités de matière en mol ; l’eau est le solvant : en excès ».' },
+      { nom: 'etat_initial', anim: .3, motif: 'état initial (x = 0) : C·V · excès · 0 · 0', bulle: () => 'L’état initial : x = 0.', vu: 'Ligne « état initial (x = 0) » : C·V · excès · 0 · 0 ; écrit « C·V = 1,0·10⁻² × 0,100 = 1,0·10⁻³ mol ».' },
+      { nom: 'en_cours', anim: .3, motif: 'en cours : C·V − x · excès · x · x', bulle: () => 'En cours : l’avancement vaut x.', vu: 'Ligne « en cours (x) » : C·V − x · excès · x · x ; sous le tableau en jaune : − x, + x, + x.' },
+      { nom: 'etat_final', anim: .3, motif: 'état final : C·V − x_f · excès · x_f · x_f', bulle: () => 'À l’état final : x = x_f.', vu: 'Ligne « état final (x_f) » : C·V − x_f · excès · x_f · x_f ; écrit « l’avancement s’arrête à x_f : l’avancement final ».' },
+    ],
+    x_max: [
+      { nom: 'hypothese', anim: .3, motif: 'si la réaction était totale : C·V − x_max = 0', bulle: () => 'Si la réaction était totale…', vu: 'Tableau d’avancement en haut ; la case CH₃COOH entourée ; écrit : « si la réaction était totale, CH₃COOH serait épuisé : C·V − x_max = 0 ».' },
+      { nom: 'relation', anim: .3, motif: 'x_max = C·V', bulle: () => 'On en tire x_max.', vu: 'Écrit : « x_max = C·V ».' },
+      { nom: 'application', anim: .3, motif: 'x_max = 1,0·10⁻² × 0,100', bulle: () => 'On remplace par les valeurs.', vu: 'Écrit à la suite : « = 1,0·10⁻² × 0,100 ».' },
+      { nom: 'resultat', anim: .3, motif: 'x_max = 1,0·10⁻³ mol', bulle: () => 'Le résultat…', vu: 'Écrit et encadré : « = 1,0·10⁻³ mol » ; dessous : « x_max : l’avancement si la réaction était totale ».' },
+    ],
+    x_f: [
+      { nom: 'colonne', anim: .3, motif: 'la colonne H₃O⁺ surlignée : n(H₃O⁺) = x_f', bulle: () => 'Regarde la colonne de H₃O⁺.', vu: 'Tableau en haut, colonne H₃O⁺ surlignée en jaune ; écrit dessous : « n(H₃O⁺) = x_f ».' },
+      { nom: 'relation', anim: .3, motif: 'x_f = [H₃O⁺]éq·V = 10^(−pH)·V', bulle: () => 'Comment calculer x_f ?', vu: 'Écrit : « x_f = [H₃O⁺]éq·V = 10^(−pH)·V ».' },
+      { nom: 'application', anim: .3, motif: 'x_f = 4,0·10⁻⁴ × 0,100', bulle: () => 'Avec pH = 3,4 : [H₃O⁺] = 4,0·10⁻⁴ mol/L.', vu: 'Écrit : « x_f = 4,0·10⁻⁴ × 0,100 » (pH = 3,4).' },
+      { nom: 'resultat', anim: .3, motif: 'x_f = 4,0·10⁻⁵ mol', bulle: () => 'Le résultat…', vu: 'Écrit et encadré : « x_f = 4,0·10⁻⁵ mol ».' },
+      { nom: 'comparer', anim: 1.2, ecritDes: 0, motif: 'deux barres : x_f (petite) et x_max (25 fois plus haute)', bulle: () => 'Comparons x_f et x_max.', vu: 'Deux barres à droite : x_f = 4,0·10⁻⁵ mol (toute petite) et x_max = 1,0·10⁻³ mol (25 fois plus haute) ; écrit « x_f est 25 fois plus petit que x_max ».' },
+    ],
+    taux: [
+      { nom: 'definition', anim: .3, motif: 'τ = x_f / x_max', bulle: () => 'On définit le taux d’avancement final.', vu: 'Écrit : « τ = x_f / x_max » (fraction) ; « taux d’avancement final, sans unité ».' },
+      { nom: 'application', anim: .3, motif: 'τ = 4,0·10⁻⁵ / 1,0·10⁻³', bulle: () => 'On remplace par les valeurs.', vu: 'Écrit : « τ = 4,0·10⁻⁵ / 1,0·10⁻³ ».' },
+      { nom: 'resultat', anim: .3, motif: 'τ = 0,040 = 4,0 %', bulle: () => 'Le résultat…', vu: 'Écrit et encadré : « = 0,040 = 4,0 % ».' },
+      { nom: 'barres', anim: 1.2, ecritDes: 0, motif: 'la barre x_f posée contre la barre x_max', bulle: () => 'Posons x_f contre x_max.', vu: 'Deux barres collées : x_max = 1,0·10⁻³ mol (haute) et x_f = 4,0·10⁻⁵ mol (4,0 % de sa hauteur).' },
+      { nom: 'limitee', anim: .3, motif: 'τ < 1 : réaction limitée', bulle: () => 'Que conclure ?', vu: 'Écrit et encadré : « τ < 1 : la réaction est limitée » ; « τ = 1 : réaction totale ».' },
+    ],
+    totale: [
+      { nom: 'donnees', anim: .8, motif: 'HCl + H₂O → Cl⁻ + H₃O⁺ ; C = 1,0·10⁻² mol/L ; pH = 2,0', bulle: () => 'Même concentration, un autre acide.', vu: 'Écrit : « HCl + H₂O → Cl⁻ + H₃O⁺ », « C = 1,0·10⁻² mol/L ; V = 100 mL ; pH = 2,0 » ; à droite, bécher d’acide chlorhydrique et pH-mètre qui affiche 2,0.' },
+      { nom: 'x_f', anim: .3, motif: 'x_f = [H₃O⁺]·V = 1,0·10⁻³ mol = x_max', bulle: () => 'Calculons x_f.', vu: 'Écrit : « [H₃O⁺] = 10^(−2,0) = 1,0·10⁻² mol/L », « x_f = [H₃O⁺]·V = 1,0·10⁻³ mol = x_max ».' },
+      { nom: 'taux', anim: .3, motif: 'τ = x_f/x_max = 1', bulle: () => 'Et le taux ?', vu: 'Écrit : « τ = x_f / x_max = 1 ».' },
+      { nom: 'totale', anim: .3, motif: 'τ = 1 : réaction totale', bulle: () => 'Que conclure ?', vu: 'Encadré : « τ = 1 : réaction totale ».' },
+      { nom: 'fleches', anim: .3, motif: 'flèche simple → (totale) et ⇌ (limitée), côte à côte', bulle: () => 'Comparons les deux écritures.', vu: 'En bas, côte à côte : « acide chlorhydrique : τ = 1 » avec HCl + H₂O → Cl⁻ + H₃O⁺ (flèche simple) et « acide éthanoïque : τ = 0,040 » avec CH₃COOH + H₂O ⇌ CH₃COO⁻ + H₃O⁺ (double flèche).' },
+    ],
+    relation: [
+      { nom: 'depart', anim: .3, motif: 'on part de τ = x_f / x_max', bulle: () => 'On part de la définition.', vu: 'Écrit : « τ = x_f / x_max ».' },
+      { nom: 'remplacer', anim: .3, motif: 'τ = [H₃O⁺]·V / (C·V)', bulle: () => 'On remplace x_f et x_max.', vu: 'Écrit à la suite : « = [H₃O⁺]·V / (C·V) » ; dessous : « x_f = [H₃O⁺]·V et x_max = C·V ».' },
+      { nom: 'simplifier', anim: .3, motif: 'V barré deux fois : τ = [H₃O⁺]/C', bulle: () => 'Que remarques-tu ?', vu: 'Les deux V sont barrés en orange ; écrit : « = [H₃O⁺] / C ».' },
+      { nom: 'relation', anim: .3, motif: 'τ = 10^(−pH)/C', bulle: () => 'Avec [H₃O⁺] = 10^(−pH)…', vu: 'Encadré en jaune : « τ = 10^(−pH) / C » (C en mol/L).' },
+      { nom: 'verifier', anim: .3, motif: 'vérification : 10^(−3,4)/1,0·10⁻² = 0,040', bulle: () => 'Vérifions avec l’exemple.', vu: 'Écrit : « exemple : τ = 10^(−3,4) / 1,0·10⁻² = 0,040 », « même valeur que x_f / x_max ».' },
+    ],
+    proportion: [
+      { nom: 'donnees', anim: .3, motif: 'C_A = 5,0·10⁻² mol/L ; pH = 3,05', bulle: () => 'Les données de l’exercice.', vu: 'Écrit : « acide éthanoïque : C_A = 5,0·10⁻² mol/L ; pH = 3,05 (national 2023 N, 1.2) ».' },
+      { nom: 'definition_alpha', anim: .3, motif: 'α(CH₃COOH) = [CH₃COOH] / ([CH₃COOH] + [CH₃COO⁻])', bulle: () => 'On définit la proportion α.', vu: 'Écrit : « α(CH₃COOH) = [CH₃COOH] / ([CH₃COOH] + [CH₃COO⁻]) ».' },
+      { nom: 'tableau', anim: .3, motif: '[CH₃COOH] = C_A(1 − τ) ; [CH₃COO⁻] = C_A·τ', bulle: () => 'Le tableau d’avancement donne…', vu: 'Écrit : « tableau : x_f = τ·C_A·V » et « [CH₃COOH] = C_A(1 − τ) ; [CH₃COO⁻] = C_A·τ ».' },
+      { nom: 'relation', anim: .3, motif: 'α = 1 − τ', bulle: () => 'On remplace dans α.', vu: 'Écrit : « α = C_A(1 − τ) / (C_A(1 − τ) + C_A·τ) » et encadré « = 1 − τ ».' },
+      { nom: 'application', anim: .3, motif: 'τ = 0,0178 → α = 0,982 = 98,2 %', bulle: () => 'Application numérique.', vu: 'Écrit : « τ = 10^(−3,05) / 5,0·10⁻² = 0,0178 » et encadré « α = 1 − 0,0178 = 0,982 = 98,2 % ».' },
+    ],
+    dosage: [
+      { nom: 'donnees', anim: .3, motif: 'V_B = 10,0 mL d’amine (C_B = 9,0·10⁻² mol/L), V_A = 16,0 mL d’acide (C_A = 4,5·10⁻² mol/L), pH = 10,2', bulle: () => 'Les données de l’exercice.', vu: 'Écrit : « amine R–NH₂ : V_B = 10,0 mL ; C_B = 9,0·10⁻² mol/L » et « acide chlorhydrique : V_A = 16,0 mL ; C_A = 4,5·10⁻² mol/L ; pH = 10,2 ».' },
+      { nom: 'tableau', anim: .3, motif: 'R–NH₂ + H₃O⁺ → R–NH₃⁺ + H₂O ; le tableau', bulle: () => 'Le tableau d’avancement.', vu: 'Tableau : équation R–NH₂ + H₃O⁺ → R–NH₃⁺ + H₂O ; état initial C_B·V_B = 9,0·10⁻⁴ · C_A·V_A = 7,2·10⁻⁴ · 0 · excès (mol) ; état final C_B·V_B − x_f · C_A·V_A − x_f · x_f · excès.' },
+      { nom: 'x_f', anim: .3, motif: 'x_f = C_A·V_A − 10^(−pH)·(V_A + V_B) = 7,2·10⁻⁴ mol', bulle: () => 'Il reste un peu de H₃O⁺ : calculons x_f.', vu: 'Écrit : « H₃O⁺ restant : C_A·V_A − x_f = 10^(−pH)·(V_A + V_B) » puis « x_f = C_A·V_A − 10^(−pH)·(V_A + V_B) = 7,2·10⁻⁴ mol » (10^(−pH)·(V_A + V_B) = 1,6·10⁻¹² mol, négligeable).' },
+      { nom: 'x_max', anim: .3, motif: 'H₃O⁺ limitant : x_max = C_A·V_A = 7,2·10⁻⁴ mol', bulle: () => 'Quel réactif est limitant ?', vu: 'Écrit : « C_A·V_A = 7,2·10⁻⁴ mol < C_B·V_B = 9,0·10⁻⁴ mol : H₃O⁺ limitant » et « x_max = C_A·V_A = 7,2·10⁻⁴ mol ».' },
+      { nom: 'taux', anim: .3, motif: 'τ = 1 : la réaction de dosage est totale', bulle: () => 'Que conclure ?', vu: 'Encadré : « τ = x_f / x_max = 1 : la réaction de dosage est totale ».' },
+    ],
+  })[v];
+}
+let MO = null;
+const MOTIFS = new Proxy({}, { get: (_, nom) => { if (nom === 'fin') return 'fin'; const e = ETAPES(MO ? MO.S.vue : VUES[0]).find(e => e.nom === nom) || {}; return e.motif; } });
+
+/* ── Le tableau d’avancement de l’exemple A, à la craie ───────────────────────────────────────── */
+const ESP = ['CH₃COOH', 'H₂O', 'CH₃COO⁻', 'H₃O⁺'], SIGNES = ['+', '⇌', '+'];
+const LIGNES = {
+  initial: { nom: 'état initial (x = 0)', v: ['C·V', 'excès', '0', '0'] },
+  en_cours: { nom: 'en cours (x)', v: ['C·V − x', 'excès', 'x', 'x'] },
+  final: { nom: 'état final (x_f)', v: ['C·V − x_f', 'excès', 'x_f', 'x_f'] },
+};
+/** Géométrie : grand tableau (vue tableau) ou compact en haut (vues x_max, x_f). */
+function TB(v = MO.S.vue) {
+  const g = v === 'tableau' ? { x: 20, y: 46, wl: 186, cols: [150, 108, 136, 136], h: 40, taille: 19 }
+    : { x: 14, y: 42, wl: 150, cols: [140, 96, 120, 120], h: 30, taille: 16 };
+  g.xs = []; let x = g.x + g.wl; for (const w of g.cols) { g.xs.push(x); x += w; } g.xf = x;
+  g.ys = { entete: g.y, initial: g.y + g.h, en_cours: g.y + 2 * g.h, final: g.y + 3 * g.h }; g.yf = g.y + 4 * g.h;
+  g.cx = k => g.xs[k] + g.cols[k] / 2;
+  return g;
+}
+function grille(c, g) {
+  c.rect(g.x, g.y, g.xf - g.x, g.yf - g.y, { arrondi: 4, largeur: 1.8 });
+  for (const y of [g.ys.initial, g.ys.en_cours, g.ys.final]) c.ligne(g.x, y, g.xf, y, { largeur: 1.4, duree: .1 });
+  c.ligne(g.xs[0], g.y, g.xs[0], g.yf, { largeur: 1.4, duree: .1 });
+  for (let k = 1; k < 4; k++) c.ligne(g.xs[k], g.ys.initial, g.xs[k], g.yf, { largeur: 1.2, couleur: 'faible', duree: .08 });
+}
+function entete(c, g) {
+  const yb = g.y + g.h * .68, t = g.taille + 1;
+  c.texte('équation', g.x + 8, yb, { couleur: 'cyan', taille: g.taille });
+  ESP.forEach((s, k) => {
+    c.texte(s, g.cx(k), yb, { taille: t, align: 'center' });
+    if (k < 3) { const xb = g.xs[k + 1]; if (SIGNES[k] === '⇌') flecheDouble(c, xb - 15, yb - t * .32, 30); else c.texte('+', xb, yb, { taille: t, align: 'center' }); }
+  });
+}
+function ligneT(c, g, id, o = {}) {
+  const L = LIGNES[id], yb = g.ys[id] + g.h * .68;
+  c.texte(L.nom, g.x + 8, yb, { taille: g.taille, max: g.wl - 14 });
+  L.v.forEach((s, k) => c.texte(s, g.cx(k), yb, { taille: g.taille, align: 'center', max: g.cols[k] - 8, couleur: k === 1 ? 'faible' : (o.couleur || 'blanc') }));
+}
+function tableauComplet(c, g) { grille(c, g); entete(c, g); for (const id of ['initial', 'en_cours', 'final']) ligneT(c, g, id); }
+
+/* ── Dessin ──────────────────────────────────────────────────────────── */
+const VUE_FN = {};
+function dessiner(c, M) {
+  MO = M; M.scene.cadre(71);
+  const v = M.S.vue;
+  c.texte(TITRE_TABLEAU[v], 14, 26, { couleur: 'cyan', taille: 20 });
+  M.geo = {};
+  VUE_FN[v](c, M);
+  reperes(c, M);
+  return c.fin();
+}
+
+/* Loupe (vues acide_eau et base_eau) : donneur de proton, accepteur, proton jaune qui saute. */
+const BE = { x: 34, y: 122, w: 112, h: 128 }, LP = { x: 318, y: 162, r: 100 };
+const POS_G = [LP.x - 46, LP.y - 8], POS_D = [LP.x + 50, LP.y - 8];
+function vueLoupe(c, M, base) {
+  const a0 = lisse(clamp(M.p('becher') * 1.4, 0, 1));
+  if (M.commence('becher')) c.direct(() => Peint.becher(c.ctx, BE, .72 * a0 + .001, EAU, a0));
+  M.etape(c, 'becher', () => {
+    const cx = BE.x + BE.w / 2;
+    if (base) { c.texte('solution d’ammoniac', cx, BE.y + BE.h + 30, { taille: 16, align: 'center' }); c.texte('NH₃ (incolore)', cx, BE.y + BE.h + 52, { taille: 15, align: 'center', couleur: 'faible' }); }
+    else {
+      c.texte('acide éthanoïque', cx, BE.y + BE.h + 30, { taille: 16, align: 'center' });
+      c.texte('C = 1,0·10⁻² mol/L', cx, BE.y + BE.h + 52, { taille: 15, align: 'center', couleur: 'faible' });
+      c.texte('V = 100 mL', cx, BE.y + BE.h + 72, { taille: 15, align: 'center', couleur: 'faible' });
+    }
+  });
+  // Molécules (peintes) : base_eau → NH₃ à gauche (capte), H₂O à droite (cède) ; acide_eau → CH₃COOH à gauche (cède), H₂O à droite (capte).
+  const pt = M.commence('transfert') ? lisse(M.p('transfert')) : 0, apres = pt >= .999;
+  if (M.commence('loupe')) {
+    const a = lisse(clamp(M.p('loupe') * 1.5, 0, 1));
+    c.direct(() => {
+      const ctx = c.ctx; ctx.save(); ctx.beginPath(); ctx.arc(LP.x, LP.y, LP.r - 2, 0, 7); ctx.clip();
+      const gl = ctx.createRadialGradient(LP.x - 30, LP.y - 40, 10, LP.x, LP.y, LP.r); gl.addColorStop(0, `rgba(225,240,255,${(.13 * a).toFixed(3)})`); gl.addColorStop(1, `rgba(200,225,250,${(.05 * a).toFixed(3)})`);
+      ctx.fillStyle = gl; ctx.fillRect(LP.x - LP.r, LP.y - LP.r, 2 * LP.r, 2 * LP.r);
+      let depart, arrivee, lienD, lienA;
+      if (!base) {
+        const m = MOL.acide, e = MOL.eau_base, [gx, gy] = POS_G, [dx, dy] = POS_D;
+        molecule(ctx, m, gx, gy, a); molecule(ctx, e, dx, dy, a);
+        depart = [gx + m.proton[0] * KM, gy + m.proton[1] * KM]; lienD = [gx + m.at[m.lieP][0] * KM, gy + m.at[m.lieP][1] * KM];
+        arrivee = [dx + e.arrivee[0] * KM, dy + e.arrivee[1] * KM]; lienA = [dx, dy];
+      } else {
+        const m = MOL.ammoniac, e = MOL.eau_acide, [gx, gy] = POS_G, [dx, dy] = POS_D;
+        molecule(ctx, m, gx, gy, a); molecule(ctx, e, dx, dy, a);
+        depart = [dx + e.proton[0] * KM, dy + e.proton[1] * KM]; lienD = [dx, dy];
+        arrivee = [gx + m.arrivee[0] * KM, gy + m.arrivee[1] * KM]; lienA = [gx, gy];
+      }
+      const px = lerp(depart[0], arrivee[0], pt), py = lerp(depart[1], arrivee[1], pt) - Math.sin(Math.PI * pt) * 46;
+      proton(ctx, px, py, a, pt <= .02 ? lienD : apres ? lienA : null);
+      ctx.restore();
+    });
+  }
+  M.etape(c, 'loupe', () => {
+    c.cercle(BE.x + BE.w / 2 + 6, BE.y + 70, 16, { couleur: 'faible', largeur: 1.4 });
+    c.ligne(BE.x + BE.w / 2 + 20, BE.y + 62, LP.x - LP.r * .92, LP.y - 40, { couleur: 'faible', largeur: 1.2, pointille: [4, 5] });
+    c.ligne(BE.x + BE.w / 2 + 20, BE.y + 78, LP.x - LP.r * .92, LP.y + 40, { couleur: 'faible', largeur: 1.2, pointille: [4, 5] });
+    c.cercle(LP.x, LP.y, LP.r, { largeur: 2.6 });
+    c.texte('loupe', LP.x + LP.r * .74, LP.y + LP.r * .86, { couleur: 'faible', taille: 15 });
+    c.direct(() => Peint.sphere(c.ctx, 470, 72, ATOME.P.r * KM, ATOME.P.col));
+    c.texte('proton H⁺', 486, 78, { couleur: 'jaune', taille: 17 });
+  });
+  // Noms sous les molécules (dans la loupe) : avant, puis après le saut du proton.
+  if (M.commence('loupe')) {
+    const yN = LP.y + 54, noms = base ? (apres ? ['NH₄⁺', 'HO⁻'] : ['NH₃', 'H₂O']) : (apres ? ['CH₃COO⁻', 'H₃O⁺'] : ['CH₃COOH', 'H₂O']);
+    if (!apres) M.etape(c, 'loupe', () => { c.texte(noms[0], POS_G[0], yN, { taille: 18, align: 'center' }); c.texte(noms[1], POS_D[0], yN, { taille: 18, align: 'center' }); });
+    else M.etape(c, 'transfert', () => { c.texte(noms[0], POS_G[0], yN, { taille: 18, align: 'center', couleur: 'jaune' }); c.texte(noms[1], POS_D[0], yN, { taille: 18, align: 'center', couleur: 'jaune' }); });
+  }
+  M.etape(c, 'transfert', () => {
+    const [x1, x2] = base ? [POS_D[0] + 6, POS_G[0] + 14] : [POS_G[0] + 50, POS_D[0] - 4];
+    c.courbe(u => [lerp(x1, x2, u), LP.y - 46 - Math.sin(Math.PI * u) * 34], 24, { couleur: 'jaune', largeur: 1.8 });
+    const fa = Math.atan2(16, x2 > x1 ? 6 : -6);   // petite tête de flèche à l’arrivée
+    void fa;
+    c.trait([[x2 + (x2 > x1 ? -9 : 9), LP.y - 56], [x2, LP.y - 46], [x2 + (x2 > x1 ? -1 : 1), LP.y - 60]], { couleur: 'jaune', largeur: 1.8, duree: .1 });
+    if (base) { c.texte('H₂O cède un proton H⁺', 452, 124, { taille: 18 }); c.texte('NH₃ le capte : il devient NH₄⁺', 452, 152, { taille: 18 }); c.texte('H₂O devient HO⁻', 452, 180, { taille: 18, couleur: 'faible' }); }
+    else { c.texte('CH₃COOH cède un proton H⁺', 452, 124, { taille: 18 }); c.texte('H₂O le capte : il devient H₃O⁺', 452, 152, { taille: 18 }); c.texte('CH₃COOH devient CH₃COO⁻', 452, 180, { taille: 18, couleur: 'faible' }); }
+  });
+  const yE = 316, eq = base ? ['NH₃', '+', 'H₂O', '⇌', 'NH₄⁺', '+', 'HO⁻'] : ['CH₃COOH', '+', 'H₂O', '⇌', 'CH₃COO⁻', '+', 'H₃O⁺'];
+  const P = placer(c, 380, eq, 24, { align: 'center' });
+  M.geo.eq = { x: P.x0, w: P.tot, y: yE };
+  M.etape(c, 'equation', () => eq.forEach((p, i) => morceau(c, p, P.xs[i], yE, 24)));
+  if (!base) {
+    M.etape(c, 'couples', () => {
+      for (const [i, col] of [[0, 'jaune'], [4, 'jaune'], [2, 'cyan'], [6, 'cyan']]) c.ligne(P.xs[i], yE + 8, P.xs[i] + P.ws[i], yE + 8, { couleur: col, largeur: 2.2, duree: .12 });
+      const C1 = ligneM(c, 20, 354, ['couples :', 'CH₃COOH/CH₃COO⁻', 'et', 'H₃O⁺/H₂O'], { taille: 18, cols: ['blanc', 'jaune', 'blanc', 'cyan'] });
+      c.texte('l’eau joue le rôle de base (elle capte H⁺)', C1.x0 + C1.tot + 24, 354, { taille: 18 });
+      const F = ligneM(c, 20, 390, ['forme générale :', 'AH', '+', 'H₂O', '⇌', 'A⁻', '+', 'H₃O⁺'], { taille: 19, cols: ['faible'] });
+      M.geo.couples = { x: 14, y: 332, w: C1.tot + 12, h: 30 }; M.geo.forme = F;
+    });
+    M.geo.couples ||= { x: 14, y: 332, w: 420, h: 30 };
+  } else {
+    M.etape(c, 'equation', () => {
+      const C1 = ligneM(c, 20, 354, ['couples :', 'NH₄⁺/NH₃', 'et', 'H₂O/HO⁻'], { taille: 18, cols: ['blanc', 'jaune', 'blanc', 'cyan'] });
+      c.texte('l’eau joue le rôle d’acide (elle cède H⁺)', C1.x0 + C1.tot + 24, 354, { taille: 18 });
+      ligneM(c, 20, 390, ['forme générale :', 'B', '+', 'H₂O', '⇌', 'BH⁺', '+', 'HO⁻'], { taille: 19, cols: ['faible'] });
+      for (const [i, col] of [[0, 'jaune'], [4, 'jaune'], [2, 'cyan'], [6, 'cyan']]) c.ligne(P.xs[i], yE + 8, P.xs[i] + P.ws[i], yE + 8, { couleur: col, largeur: 2.2, duree: .12 });
+    });
+    M.etape(c, 'renvoi', () => {
+      c.rect(450, 208, 290, 62, { couleur: 'cyan', largeur: 1.8, arrondi: 10 });
+      c.texte('τ d’une base :', 464, 233, { taille: 18, couleur: 'cyan' });
+      c.texte('au chapitre des réactions acide-base', 464, 258, { taille: 17, couleur: 'cyan' });
+    });
+  }
+}
+VUE_FN.acide_eau = (c, M) => vueLoupe(c, M, false);
+VUE_FN.base_eau = (c, M) => vueLoupe(c, M, true);
+
+/* Vue attendu : hypothèse « totale », pH attendu 2,0 ; le pH-mètre affiche 3,4. */
+const PA = { x: 596, y: 60, w: 146, h: 96 }, BA = { x: 466, y: 196, w: 120, h: 128 }, XS = 520;
+function montagePH(c, M, B, A, xs, valeur, a = 1) {
+  c.direct(() => {
+    Peint.becher(c.ctx, B, .7 * a + .001, EAU, a);
+    c.ctx.save(); c.ctx.globalAlpha = a; Peint.cable(c.ctx, A.x + 26, A.y + A.h - 2, xs, B.y - 40, 40); Peint.sonde(c.ctx, xs, B.y - 42, B.y + B.h - 12); c.ctx.restore();
+  });
+  if (a > .3) phmetre(c, A, valeur);
+}
+VUE_FN.attendu = (c, M) => {
+  const X = 20;
+  M.etape(c, 'hypothese', () => {
+    c.texte('si la réaction était totale :', X, 70, { taille: 20, couleur: 'jaune' });
+    c.texte('tout l’acide réagirait : [H₃O⁺] = C = 1,0·10⁻² mol/L', X, 102, { taille: 18 });
+  });
+  M.etape(c, 'calcul_attendu', () => {
+    c.texte('pH = −log[H₃O⁺] = −log(1,0·10⁻²)', X, 142, { taille: 19 });
+    c.texte('pH attendu = 2,0', X + 10, 180, { taille: 21, couleur: 'jaune' }); encadre(c, X + 10, 180, larg(c, 'pH attendu = 2,0', 21), 21);
+  });
+  // Montage (pH-mètre, sonde, bécher) : peint dès le début ; l’afficheur se stabilise pendant « mesure ».
+  let val = '- - -';
+  if (M.commence('mesure')) { const p = M.p('mesure'); val = p < .15 ? '- - -' : fr(lerp(6.2, 3.4, lisse(clamp((p - .15) / .7, 0, 1))), 1); }
+  montagePH(c, M, BA, PA, XS, val);
+  c.texte('pH-mètre', PA.x + PA.w / 2, PA.y + PA.h + 22, { taille: 16, align: 'center', couleur: 'faible' });
+  c.texte('acide éthanoïque', BA.x + BA.w / 2, BA.y + BA.h + 26, { taille: 16, align: 'center' });
+  c.texte('C = 1,0·10⁻² mol/L', BA.x + BA.w / 2, BA.y + BA.h + 48, { taille: 15, align: 'center', couleur: 'faible' });
+  M.etape(c, 'mesure', () => c.texte('pH mesuré = 3,4', PA.x + PA.w / 2, PA.y + PA.h + 50, { taille: 20, align: 'center', couleur: 'jaune' }));
+  M.etape(c, 'comparer', () => ligneM(c, X, 240, ['pH mesuré = 3,4', '>', 'pH attendu = 2,0'], { taille: 20, cols: ['jaune', 'blanc', 'blanc'] }));
+  M.etape(c, 'conclusion', () => {
+    c.texte('il y a moins de H₃O⁺ que prévu :', X, 284, { taille: 19 });
+    c.texte('la réaction n’est pas totale', X + 10, 322, { taille: 22, couleur: 'jaune' }); encadre(c, X + 10, 322, larg(c, 'la réaction n’est pas totale', 22), 22);
+  });
+};
+
+/* Vue tableau. */
+VUE_FN.tableau = (c, M) => {
+  const g = TB(), yA = g.yf + 30;
+  M.etape(c, 'equation', () => { grille(c, g); entete(c, g); c.texte('quantités de matière en mol ; l’eau est le solvant : en excès', g.x, g.yf + 68, { couleur: 'faible', taille: 17 }); });
+  M.etape(c, 'etat_initial', () => {
+    ligneT(c, g, 'initial');
+    c.texte('acide apporté : C·V = 1,0·10⁻² × 0,100 = 1,0·10⁻³ mol', g.x, g.yf + 104, { taille: 18 });
+  });
+  M.etape(c, 'en_cours', () => {
+    ligneT(c, g, 'en_cours');
+    c.texte('au cours de la réaction :', g.x + 8, yA, { couleur: 'jaune', taille: 17 });
+    [[0, '− x'], [2, '+ x'], [3, '+ x']].forEach(([k, s]) => c.texte(s, g.cx(k), yA, { couleur: 'jaune', taille: 19, align: 'center' }));
+  });
+  M.etape(c, 'etat_final', () => {
+    ligneT(c, g, 'final');
+    c.texte('état final : l’avancement s’arrête à x_f, l’avancement final', g.x, g.yf + 140, { taille: 18 });
+  });
+};
+
+/* Vue x_max. */
+VUE_FN.x_max = (c, M) => {
+  const g = TB(), X = 20;
+  tableauComplet(c, g);
+  M.etape(c, 'hypothese', () => {
+    c.rect(g.xs[0] + 6, g.ys.final + 3, g.cols[0] - 12, g.h - 6, { couleur: 'jaune', largeur: 2.2, arrondi: 8 });
+    c.texte('si la réaction était totale, CH₃COOH serait épuisé :', X, 204, { taille: 19, couleur: 'jaune' });
+    c.texte('C·V − x_max = 0', X + 10, 240, { taille: 22 });
+  });
+  const L = ['x_max = C·V', '= 1,0·10⁻² × 0,100', '= 1,0·10⁻³ mol'], P = placer(c, X + 10, L, 23, { gap: 22 }), y = 292;
+  M.geo.xmax = P;
+  M.etape(c, 'relation', () => morceau(c, L[0], P.xs[0], y, 23));
+  M.etape(c, 'application', () => morceau(c, L[1], P.xs[1], y, 23));
+  M.etape(c, 'resultat', () => {
+    morceau(c, L[2], P.xs[2], y, 23, 'jaune'); encadre(c, P.xs[2], y, P.ws[2], 23);
+    c.texte('x_max : l’avancement si la réaction était totale (avancement maximal)', X, 344, { taille: 17, couleur: 'faible' });
+  });
+};
+
+/* Vue x_f : colonne H₃O⁺ surlignée, calcul, deux barres. */
+const BX = { base: 366, hmax: 150, xf: 572, xm: 664, w: 40 };
+function barres(c, M, nom, B, colle) {
+  const p = M.commence(nom) ? lisse(M.p(nom)) : 0;
+  const xm = B.xm, xfB = colle ? B.xm - B.w : B.xf, hM = B.hmax * p, hF = B.hmax * A_.tau * p;
+  if (p > 0) c.direct(() => {
+    const ctx = c.ctx; ctx.save();
+    for (const [x, h, col] of [[xm, hM, [96, 165, 250]], [xfB, hF, [250, 204, 21]]]) {
+      const gr = ctx.createLinearGradient(x, 0, x + B.w, 0); gr.addColorStop(0, `rgba(${col},.55)`); gr.addColorStop(1, `rgba(${col},.28)`);
+      ctx.fillStyle = gr; ctx.fillRect(x, B.base - h, B.w, h);
+      ctx.strokeStyle = `rgba(${col},.95)`; ctx.lineWidth = 1.6; ctx.strokeRect(x, B.base - h, B.w, h);
+    }
+    ctx.restore();
+  });
+  return { xm, xfB };
+}
+VUE_FN.x_f = (c, M) => {
+  const g = TB(), X = 20, k3 = 3;
+  tableauComplet(c, g);
+  M.etape(c, 'colonne', () => {
+    c.rect(g.xs[k3] + 13, g.y + 3, g.cols[k3] - 20, g.yf - g.y - 6, { couleur: 'jaune', largeur: 2.4, arrondi: 8 });
+    c.texte('n(H₃O⁺) = x_f', g.cx(k3), g.yf + 28, { couleur: 'jaune', taille: 21, align: 'center' });
+  });
+  M.etape(c, 'relation', () => c.texte('x_f = [H₃O⁺]_{éq}·V = 10^{−pH}·V', X, 236, { taille: 22 }));
+  M.etape(c, 'application', () => {
+    c.texte('pH = 3,4 : [H₃O⁺]_{éq} = 10^{−3,4} = 4,0·10⁻⁴ mol/L', X, 274, { taille: 17, couleur: 'faible' });
+    c.texte('x_f = 4,0·10⁻⁴ × 0,100', X, 308, { taille: 22 });
+  });
+  M.etape(c, 'resultat', () => {
+    const x0 = X + larg(c, 'x_f = 4,0·10⁻⁴ × 0,100', 22) + 24;
+    c.texte('= 4,0·10⁻⁵ mol', x0, 308, { taille: 22, couleur: 'jaune' }); encadre(c, x0, 308, larg(c, '= 4,0·10⁻⁵ mol', 22), 22);
+  });
+  const B = { ...BX, base: 372, hmax: 140 }, r = barres(c, M, 'comparer', B, false);
+  M.geo.barres = B;
+  M.etape(c, 'comparer', () => {
+    c.ligne(B.xf - 16, B.base, B.xm + B.w + 16, B.base, { largeur: 1.6 });
+    c.texte('x_f', B.xf + B.w / 2, B.base + 22, { taille: 18, align: 'center', couleur: 'jaune' });
+    c.texte('x_max', B.xm + B.w / 2, B.base + 22, { taille: 18, align: 'center', couleur: 'bleu' });
+    c.texte('1,0·10⁻³ mol', B.xm + B.w / 2, B.base - B.hmax - 10, { taille: 16, align: 'center', couleur: 'bleu' });
+    c.texte('4,0·10⁻⁵ mol', B.xf + B.w / 2, B.base - 18, { taille: 16, align: 'center', couleur: 'jaune' });
+    c.texte('x_f est 25 fois plus petit que x_max', X, 356, { taille: 19, couleur: 'jaune' });
+    void r;
+  });
+};
+
+/* Vue taux. */
+VUE_FN.taux = (c, M) => {
+  const X = 24, t = 24;
+  const L1 = ['τ =', { frac: ['x_f', 'x_max'] }], P1 = placer(c, X, L1, t, { gap: 10 });
+  M.etape(c, 'definition', () => { L1.forEach((p, i) => morceau(c, p, P1.xs[i], 104, t)); c.texte('taux d’avancement final (sans unité)', P1.xs[1] + P1.ws[1] + 24, 104, { taille: 17, couleur: 'faible' }); });
+  const L2 = ['τ =', { frac: ['4,0·10⁻⁵', '1,0·10⁻³'] }, '= 0,040 = 4,0 %'], P2 = placer(c, X, L2, t, { gap: 22 });
+  M.geo.l2 = P2;
+  M.etape(c, 'application', () => { morceau(c, L2[0], P2.xs[0], 200, t); morceau(c, L2[1], P2.xs[1], 200, t); });
+  M.etape(c, 'resultat', () => { morceau(c, L2[2], P2.xs[2], 200, t, 'jaune'); encadre(c, P2.xs[2], 200, P2.ws[2], t); });
+  const B = { base: 330, hmax: 220, xm: 640, w: 52 }; barres(c, M, 'barres', B, true);
+  M.geo.barres = B;
+  M.etape(c, 'barres', () => {
+    c.ligne(B.xm - B.w - 18, B.base, B.xm + B.w + 18, B.base, { largeur: 1.6 });
+    c.texte('x_max', B.xm + B.w / 2, B.base + 24, { taille: 18, align: 'center', couleur: 'bleu' });
+    c.texte('x_f', B.xm - B.w / 2, B.base + 24, { taille: 18, align: 'center', couleur: 'jaune' });
+    c.texte('1,0·10⁻³ mol', B.xm + B.w / 2, B.base - B.hmax - 10, { taille: 16, align: 'center', couleur: 'bleu' });
+    c.texte('4,0·10⁻⁵ mol', B.xm - B.w - 10, B.base - 4, { taille: 16, align: 'right', couleur: 'jaune' });
+    c.texte('4,0 % de x_max', B.xm - B.w - 10, B.base - 26, { taille: 15, align: 'right', couleur: 'faible' });
+  });
+  M.etape(c, 'limitee', () => {
+    c.texte('τ < 1 : la réaction est limitée', X + 8, 284, { taille: 23, couleur: 'jaune' }); encadre(c, X + 8, 284, larg(c, 'τ < 1 : la réaction est limitée', 23), 23);
+    c.texte('(τ = 1 : réaction totale)', X + 8, 324, { taille: 18, couleur: 'faible' });
+  });
+};
+
+/* Vue totale : exemple B, puis les deux flèches côte à côte. */
+const PT = { x: 600, y: 58, w: 140, h: 92 }, BT = { x: 480, y: 152, w: 104, h: 104 }, XT = 520;
+VUE_FN.totale = (c, M) => {
+  const X = 20;
+  const a = M.commence('donnees') ? lisse(clamp(M.p('donnees') * 1.3, 0, 1)) : 0;
+  if (a > 0) {
+    montagePH(c, M, BT, PT, XT, a > .9 ? '2,0' : '- - -', a);
+  }
+  M.etape(c, 'donnees', () => {
+    c.texte('acide chlorhydrique', BT.x + BT.w / 2, BT.y + BT.h + 24, { taille: 16, align: 'center', couleur: 'faible' });
+    ligneM(c, X, 70, ['HCl', '+', 'H₂O', '→', 'Cl⁻', '+', 'H₃O⁺'], { taille: 21 });
+    c.texte('C = 1,0·10⁻² mol/L ; V = 100 mL ; pH = 2,0', X, 104, { taille: 18 });
+  });
+  M.etape(c, 'x_f', () => {
+    c.texte('[H₃O⁺] = 10^{−2,0} = 1,0·10⁻² mol/L', X, 144, { taille: 19 });
+    c.texte('x_f = [H₃O⁺]·V = 1,0·10⁻³ mol = x_max', X, 176, { taille: 19 });
+  });
+  M.etape(c, 'taux', () => ligneM(c, X, 226, ['τ =', { frac: ['x_f', 'x_max'] }, '= 1'], { taille: 21 }));
+  M.etape(c, 'totale', () => { c.texte('τ = 1 : réaction totale', X + 160, 226, { taille: 22, couleur: 'jaune' }); encadre(c, X + 160, 226, larg(c, 'τ = 1 : réaction totale', 22), 22); });
+  M.etape(c, 'fleches', () => {
+    c.rect(14, 290, 322, 92, { largeur: 1.6, arrondi: 10, couleur: 'faible' });
+    c.texte('acide chlorhydrique : τ = 1', 26, 314, { taille: 17, couleur: 'jaune' });
+    const F1 = ligneM(c, 26, 350, ['HCl', '+', 'H₂O', '→', 'Cl⁻', '+', 'H₃O⁺'], { taille: 20 });
+    c.texte('flèche simple : réaction totale', 26, 374, { taille: 15, couleur: 'faible' });
+    c.rect(348, 290, 398, 92, { largeur: 1.6, arrondi: 10, couleur: 'faible' });
+    c.texte('acide éthanoïque : τ = 0,040', 360, 314, { taille: 17, couleur: 'jaune' });
+    const F2 = ligneM(c, 360, 350, ['CH₃COOH', '+', 'H₂O', '⇌', 'CH₃COO⁻', '+', 'H₃O⁺'], { taille: 20 });
+    c.texte('double flèche : réaction limitée', 360, 374, { taille: 15, couleur: 'faible' });
+    M.geo.f1 = F1; M.geo.f2 = F2;
+  });
+};
+
+/* Vue relation : démonstration de τ = 10^(−pH)/C. */
+VUE_FN.relation = (c, M) => {
+  const X = 24, t = 24, y1 = 106;
+  const L = ['τ =', { frac: ['x_f', 'x_max'] }, '=', { frac: ['[H₃O⁺]·V', 'C·V'] }, '=', { frac: ['[H₃O⁺]', 'C'] }], P = placer(c, X, L, t, { gap: 12 });
+  M.geo.l1 = P;
+  M.etape(c, 'depart', () => { morceau(c, L[0], P.xs[0], y1, t); morceau(c, L[1], P.xs[1], y1, t); });
+  M.etape(c, 'remplacer', () => {
+    morceau(c, L[2], P.xs[2], y1, t); morceau(c, L[3], P.xs[3], y1, t);
+    c.texte('car x_f = [H₃O⁺]·V et x_max = C·V', X, 178, { taille: 17, couleur: 'faible' });
+  });
+  M.etape(c, 'simplifier', () => {
+    // V barré deux fois (numérateur et dénominateur).
+    const w = P.ws[3], xc = P.xs[3] + w / 2, yb = y1 - t * .32;
+    const wn = larg(c, '[H₃O⁺]·V', t), xv1 = xc - wn / 2 + larg(c, '[H₃O⁺]·', t), wv = larg(c, 'V', t);
+    const wd = larg(c, 'C·V', t), xv2 = xc - wd / 2 + larg(c, 'C·', t);
+    c.ligne(xv1 - 2, yb - 9, xv1 + wv + 2, yb - 7 - t * .8, { couleur: 'orange', largeur: 2.4, duree: .12 });
+    c.ligne(xv2 - 2, yb + t * .98 + 2, xv2 + wv + 2, yb + t * .98 - t * .78, { couleur: 'orange', largeur: 2.4, duree: .12 });
+    morceau(c, L[4], P.xs[4], y1, t); morceau(c, L[5], P.xs[5], y1, t);
+  });
+  const L2 = ['τ =', { frac: ['10^{−pH}', 'C'] }], P2 = placer(c, X + 10, L2, 26, { gap: 12 }), y2 = y2Rel;
+  M.geo.l2 = P2;
+  M.etape(c, 'relation', () => {
+    c.texte('avec [H₃O⁺] = 10^{−pH} :', X, 204, { taille: 17, couleur: 'faible' });
+    L2.forEach((p, i) => morceau(c, p, P2.xs[i], y2, 26, 'jaune'));
+    c.rect(X, y2 - 46, P2.tot + 22, 80, { couleur: 'jaune', largeur: 2.2, arrondi: 10 });
+    c.texte('(C en mol/L)', X + P2.tot + 40, y2, { taille: 17, couleur: 'faible' });
+  });
+  const L3 = ['vérification (exemple) :', 'τ =', { frac: ['10^{−3,4}', '1,0·10⁻²'] }, '= 0,040'], P3 = placer(c, X, L3, 22, { gap: 12 }), y3 = 360;
+  M.geo.l3 = P3;
+  M.etape(c, 'verifier', () => {
+    L3.forEach((p, i) => morceau(c, p, P3.xs[i], y3, i === 0 ? 19 : 22, i === 3 ? 'jaune' : 'blanc'));
+    c.texte('même valeur que x_f / x_max', P3.xs[3] + P3.ws[3] + 20, y3, { taille: 17, couleur: 'faible' });
+  });
+};
+
+/* Vue proportion (national 2023 N). */
+VUE_FN.proportion = (c, M) => {
+  const X = 20;
+  M.etape(c, 'donnees', () => {
+    c.texte('acide éthanoïque : C_A = 5,0·10⁻² mol/L ; pH = 3,05', X, 62, { taille: 19 });
+    c.texte('national 2023 N (1.2)', 742, 62, { taille: 15, align: 'right', couleur: 'faible' });
+  });
+  const L1 = ['α(CH₃COOH) =', { frac: ['[CH₃COOH]', '[CH₃COOH] + [CH₃COO⁻]'] }], P1 = placer(c, X, L1, 20, { gap: 10 });
+  M.geo.l1 = P1;
+  M.etape(c, 'definition_alpha', () => L1.forEach((p, i) => morceau(c, p, P1.xs[i], 116, 20)));
+  M.etape(c, 'tableau', () => {
+    c.texte('tableau : x_f = τ·C_A·V, donc', X, 178, { taille: 18, couleur: 'faible' });
+    c.texte('[CH₃COOH] = C_A(1 − τ)  ;  [CH₃COO⁻] = C_A·τ', X, 206, { taille: 19 });
+  });
+  const L2 = ['α =', { frac: ['C_A(1 − τ)', 'C_A(1 − τ) + C_A·τ'] }, '= 1 − τ'], P2 = placer(c, X, L2, 20, { gap: 20 });
+  M.geo.l2 = P2;
+  M.etape(c, 'relation', () => {
+    morceau(c, L2[0], P2.xs[0], 262, 20); morceau(c, L2[1], P2.xs[1], 262, 20);
+    morceau(c, L2[2], P2.xs[2], 262, 22, 'jaune'); encadre(c, P2.xs[2], 262, larg(c, L2[2], 22), 22);
+  });
+  M.etape(c, 'application', () => {
+    ligneM(c, X, 334, ['τ =', { frac: ['10^{−3,05}', '5,0·10⁻²'] }, '= 0,0178'], { taille: 20, gap: 10 });
+    c.texte('α = 1 − 0,0178 = 0,982 = 98,2 %', 380, 334, { taille: 21, couleur: 'jaune' }); encadre(c, 380, 334, larg(c, 'α = 1 − 0,0178 = 0,982 = 98,2 %', 21), 21);
+    c.texte('presque tout l’acide reste sous la forme CH₃COOH', 380, 368, { taille: 16, couleur: 'faible' });
+  });
+};
+
+/* Vue dosage (national 2024 R). */
+const ESP_D = ['R–NH₂', 'H₃O⁺', 'R–NH₃⁺', 'H₂O'];
+const TD = { x: 14, y: 96, wl: 132, cols: [150, 150, 96, 82], h: 30, taille: 16 };
+(() => { TD.xs = []; let x = TD.x + TD.wl; for (const w of TD.cols) { TD.xs.push(x); x += w; } TD.xf = x; TD.yf = TD.y + 3 * TD.h; TD.cx = k => TD.xs[k] + TD.cols[k] / 2; })();
+VUE_FN.dosage = (c, M) => {
+  const X = 20, g = TD;
+  M.etape(c, 'donnees', () => {
+    c.texte('amine R–NH₂ : V_B = 10,0 mL ; C_B = 9,0·10⁻² mol/L', X, 58, { taille: 17 });
+    c.texte('acide chlorhydrique : V_A = 16,0 mL ; C_A = 4,5·10⁻² mol/L ; pH = 10,2', X, 82, { taille: 17 });
+    c.texte('national 2024 R', 742, 58, { taille: 15, align: 'right', couleur: 'faible' });
+  });
+  M.etape(c, 'tableau', () => {
+    c.rect(g.x, g.y, g.xf - g.x, g.yf - g.y, { arrondi: 4, largeur: 1.8 });
+    for (const y of [g.y + g.h, g.y + 2 * g.h]) c.ligne(g.x, y, g.xf, y, { largeur: 1.4, duree: .1 });
+    c.ligne(g.xs[0], g.y, g.xs[0], g.yf, { largeur: 1.4, duree: .1 });
+    for (let k = 1; k < 4; k++) c.ligne(g.xs[k], g.y + g.h, g.xs[k], g.yf, { largeur: 1.2, couleur: 'faible', duree: .08 });
+    const yb = g.y + g.h * .7;
+    c.texte('équation', g.x + 8, yb, { couleur: 'cyan', taille: 16 });
+    ESP_D.forEach((s, k) => {
+      c.texte(s, g.cx(k), yb, { taille: 17, align: 'center' });
+      if (k < 3) { const xb = g.xs[k + 1]; if (k === 1) flecheSimple(c, xb - 15, yb - 5, 30); else c.texte('+', xb, yb, { taille: 17, align: 'center' }); }
+    });
+    const rangs = [['état initial (mol)', ['C_B·V_B = 9,0·10⁻⁴', 'C_A·V_A = 7,2·10⁻⁴', '0', 'excès']], ['état final', ['C_B·V_B − x_f', 'C_A·V_A − x_f', 'x_f', 'excès']]];
+    rangs.forEach(([nom, vals], j) => {
+      const y = g.y + (j + 1) * g.h + g.h * .7;
+      c.texte(nom, g.x + 8, y, { taille: 15, max: g.wl - 12 });
+      vals.forEach((s, k) => c.texte(s, g.cx(k), y, { taille: 15, align: 'center', max: g.cols[k] - 8, couleur: k === 3 ? 'faible' : 'blanc' }));
+    });
+    c.texte('mélange :', g.xf + 14, g.y + 30, { taille: 15, couleur: 'faible' });
+    c.texte('V_A + V_B', g.xf + 14, g.y + 52, { taille: 15, couleur: 'faible' });
+    c.texte('= 26,0 mL', g.xf + 14, g.y + 74, { taille: 15, couleur: 'faible' });
+  });
+  M.etape(c, 'x_f', () => {
+    c.texte('H₃O⁺ restant : C_A·V_A − x_f = 10^{−pH}·(V_A + V_B)', X, 222, { taille: 18 });
+    c.texte('x_f = C_A·V_A − 10^{−pH}·(V_A + V_B) = 7,2·10⁻⁴ mol', X, 252, { taille: 19, couleur: 'jaune' });
+    c.texte('(10^{−10,2} × 0,026 = 1,6·10⁻¹² mol : négligeable)', X, 278, { taille: 15, couleur: 'faible' });
+  });
+  M.etape(c, 'x_max', () => {
+    c.texte('C_A·V_A = 7,2·10⁻⁴ mol < C_B·V_B = 9,0·10⁻⁴ mol : H₃O⁺ est limitant', X, 314, { taille: 18 });
+    c.texte('x_max = C_A·V_A = 7,2·10⁻⁴ mol', X, 342, { taille: 19, couleur: 'jaune' });
+  });
+  M.etape(c, 'taux', () => {
+    const s = 'τ = x_f / x_max = 1 : la réaction de dosage est totale';
+    c.texte(s, X + 8, 388, { taille: 21, couleur: 'jaune' }); encadre(c, X + 8, 388, larg(c, s, 21), 21);
+  });
+};
+
+/* ── Repères (déclarés à chaque image ; le libellé dit à quel moment l’élément apparaît) ───────────── */
+function reperes(c, M) {
+  const v = M.S.vue, quand = nom => (M.vu(nom) ? '' : ` (au moment « ${nom} »)`);
+  const R = (id, x, y, w, h, l) => c.repere(id, x, y, w, h, l);
+  if (v === 'acide_eau' || v === 'base_eau') {
+    const base = v === 'base_eau', eq = M.geo.eq;
+    R('becher', BE.x - 8, BE.y - 8, BE.w + 16, BE.h + 16, `le bécher : ${base ? 'solution d’ammoniac' : 'acide éthanoïque, C = 1,0·10⁻² mol/L'}${quand('becher')}`);
+    R('loupe', LP.x - LP.r, LP.y - LP.r, 2 * LP.r, 2 * LP.r, `la loupe : ${base ? 'NH₃ et H₂O' : 'CH₃COOH et H₂O'}, le proton H⁺ en jaune${quand('loupe')}`);
+    R('equation', eq.x - 6, eq.y - 28, eq.w + 12, 40, `l’équation « ${base ? 'NH₃ + H₂O ⇌ NH₄⁺ + HO⁻' : 'CH₃COOH + H₂O ⇌ CH₃COO⁻ + H₃O⁺'} »${quand('equation')}`);
+    if (!base) {
+      R('molecule_acide', POS_G[0] - 48, POS_G[1] - 36, 96, 100, `la molécule d’acide CH₃COOH (devient CH₃COO⁻)${quand('loupe')}`);
+      R('molecule_eau', POS_D[0] - 32, POS_D[1] - 36, 64, 100, `la molécule d’eau H₂O (devient H₃O⁺)${quand('loupe')}`);
+      const k = M.geo.couples; R('couples', k.x, k.y, k.w, k.h, `les couples CH₃COOH/CH₃COO⁻ et H₃O⁺/H₂O${quand('couples')}`);
+    } else {
+      R('couples', 14, 332, 260, 30, `les couples NH₄⁺/NH₃ et H₂O/HO⁻${quand('equation')}`);
+      R('renvoi', 450, 208, 290, 62, `« τ d’une base : au chapitre des réactions acide-base »${quand('renvoi')}`);
+    }
+  } else if (v === 'attendu') {
+    const e = ecranPH(PA);
+    R('hypothese', 14, 48, 440, 64, `« si la réaction était totale : [H₃O⁺] = C = 1,0·10⁻² mol/L »${quand('hypothese')}`);
+    R('ph_attendu', 14, 154, 200, 36, `« pH attendu = 2,0 »${quand('calcul_attendu')}`);
+    R('afficheur', e.x, e.y, e.w, e.h, `l’afficheur du pH-mètre : 3,4${quand('mesure')}`);
+    R('ph_mesure', PA.x - 6, PA.y + PA.h + 30, PA.w + 12, 28, `« pH mesuré = 3,4 »${quand('mesure')}`);
+    R('conclusion', 14, 264, 360, 70, `« moins de H₃O⁺ que prévu : la réaction n’est pas totale »${quand('conclusion')}`);
+  } else if (v === 'tableau' || v === 'x_max' || v === 'x_f') {
+    const g = TB(), rang = (id, k, l, nom) => R(id, g.x, g.ys[k], g.xf - g.x, g.h, l + (nom ? quand(nom) : ''));
+    const colH = (l, nom) => R('colonne_h3o', g.xs[3], g.y, g.cols[3], g.yf - g.y, l + (nom ? quand(nom) : ''));
+    if (v === 'tableau') {
+      R('equation', g.x, g.y, g.xf - g.x, g.h, `la ligne de l’équation : CH₃COOH + H₂O ⇌ CH₃COO⁻ + H₃O⁺${quand('equation')}`);
+      rang('ligne_initial', 'initial', 'la ligne « état initial (x = 0) » : C·V · excès · 0 · 0', 'etat_initial');
+      rang('ligne_en_cours', 'en_cours', 'la ligne « en cours (x) » : C·V − x · excès · x · x', 'en_cours');
+      rang('ligne_final', 'final', 'la ligne « état final (x_f) » : C·V − x_f · excès · x_f · x_f', 'etat_final');
+      colH('la colonne de H₃O⁺ : 0 ; x ; x_f');
+    } else if (v === 'x_max') {
+      R('hypothese', 14, 184, 520, 66, `« si la réaction était totale : C·V − x_max = 0 »${quand('hypothese')}`);
+      const P = M.geo.xmax, y = 292;
+      R('relation', P.xs[0] - 4, y - 28, P.ws[0] + 8, 38, `« x_max = C·V »${quand('relation')}`);
+      R('application', P.xs[1] - 4, y - 32, P.ws[1] + 8, 42, `« = 1,0·10⁻² × 0,100 »${quand('application')}`);
+      R('resultat', P.xs[2] - 8, y - 32, P.ws[2] + 16, 44, `« x_max = 1,0·10⁻³ mol »${quand('resultat')}`);
+    } else {
+      colH('la colonne de H₃O⁺ (surlignée) : n(H₃O⁺) = x_f', 'colonne');
+      R('relation', 14, 210, 400, 36, `« x_f = [H₃O⁺]éq·V = 10^(−pH)·V »${quand('relation')}`);
+      R('application', 14, 256, 430, 62, `« x_f = 4,0·10⁻⁴ × 0,100 »${quand('application')}`);
+      R('resultat', 262, 284, 190, 36, `« x_f = 4,0·10⁻⁵ mol »${quand('resultat')}`);
+      const B = M.geo.barres; R('barres', B.xf - 16, B.base - B.hmax - 30, B.xm + B.w - B.xf + 32, B.hmax + 58, `les deux barres : x_f (petite) et x_max (25 fois plus haute)${quand('comparer')}`);
+    }
+  } else if (v === 'taux') {
+    const P2 = M.geo.l2, B = M.geo.barres;
+    R('definition', 14, 66, 300, 68, `« τ = x_f / x_max »${quand('definition')}`);
+    R('application', P2.xs[0] - 6, 162, P2.xs[2] - P2.xs[0], 68, `« τ = 4,0·10⁻⁵ / 1,0·10⁻³ »${quand('application')}`);
+    R('resultat', P2.xs[2] - 8, 172, P2.ws[2] + 16, 40, `« = 0,040 = 4,0 % »${quand('resultat')}`);
+    R('barre_xf', B.xm - B.w - 4, B.base - 30, B.w + 4, 58, `la barre x_f = 4,0·10⁻⁵ mol, posée contre x_max${quand('barres')}`);
+    R('barre_xmax', B.xm, B.base - B.hmax - 28, B.w + 4, B.hmax + 56, `la barre x_max = 1,0·10⁻³ mol${quand('barres')}`);
+    R('limitee', 14, 256, 400, 76, `« τ < 1 : la réaction est limitée »${quand('limitee')}`);
+  } else if (v === 'totale') {
+    R('donnees', 14, 48, 440, 64, `« HCl + H₂O → Cl⁻ + H₃O⁺ ; C = 1,0·10⁻² mol/L ; pH = 2,0 »${quand('donnees')}`);
+    R('calcul_xf', 14, 124, 440, 60, `« x_f = [H₃O⁺]·V = 1,0·10⁻³ mol = x_max »${quand('x_f')}`);
+    R('taux', 14, 196, 150, 60, `« τ = x_f / x_max = 1 »${quand('taux')}`);
+    R('totale', 170, 202, 250, 36, `« τ = 1 : réaction totale »${quand('totale')}`);
+    R('fleche_simple', 14, 290, 322, 92, `la flèche simple → : HCl + H₂O → Cl⁻ + H₃O⁺, réaction totale${quand('fleches')}`);
+    R('double_fleche', 348, 290, 398, 92, `la double flèche ⇌ : CH₃COOH + H₂O ⇌ CH₃COO⁻ + H₃O⁺, réaction limitée${quand('fleches')}`);
+  } else if (v === 'relation') {
+    const P = M.geo.l1, P2 = M.geo.l2, P3 = M.geo.l3;
+    R('depart', P.xs[0] - 6, 66, P.xs[2] - P.xs[0], 70, `« τ = x_f / x_max »${quand('depart')}`);
+    R('remplacer', P.xs[2] - 4, 66, P.xs[4] - P.xs[2], 70, `« = [H₃O⁺]·V / (C·V) »${quand('remplacer')}`);
+    R('simplifier', P.xs[4] - 4, 66, P.xs[5] + P.ws[5] - P.xs[4] + 8, 70, `les V barrés : « = [H₃O⁺] / C »${quand('simplifier')}`);
+    R('relation', 20, y2Rel - 46, P2.tot + 26, 80, `« τ = 10^(−pH) / C », encadré${quand('relation')}`);
+    R('verifier', 14, 314, P3.xs[3] + P3.ws[3] - 4, 76, `« 10^(−3,4) / 1,0·10⁻² = 0,040 »${quand('verifier')}`);
+  } else if (v === 'proportion') {
+    const P1 = M.geo.l1, P2 = M.geo.l2;
+    R('donnees', 14, 42, 480, 28, `« C_A = 5,0·10⁻² mol/L ; pH = 3,05 »${quand('donnees')}`);
+    R('definition_alpha', 14, 78, P1.tot + 12, 70, `« α(CH₃COOH) = [CH₃COOH] / ([CH₃COOH] + [CH₃COO⁻]) »${quand('definition_alpha')}`);
+    R('tableau', 14, 160, 470, 54, `« [CH₃COOH] = C_A(1 − τ) ; [CH₃COO⁻] = C_A·τ »${quand('tableau')}`);
+    R('relation', 14, 224, P2.tot + 24, 70, `« α = 1 − τ »${quand('relation')}`);
+    R('application', 14, 296, 300, 70, `« τ = 10^(−3,05) / 5,0·10⁻² = 0,0178 »${quand('application')}`);
+    R('resultat', 370, 306, 352, 40, `« α = 1 − 0,0178 = 0,982 = 98,2 % »${quand('application')}`);
+  } else if (v === 'dosage') {
+    R('donnees', 14, 40, 600, 50, `les données : V_B = 10,0 mL, C_B = 9,0·10⁻² mol/L ; V_A = 16,0 mL, C_A = 4,5·10⁻² mol/L ; pH = 10,2${quand('donnees')}`);
+    R('tableau', TD.x, TD.y, TD.xf - TD.x, TD.yf - TD.y, `le tableau : R–NH₂ + H₃O⁺ → R–NH₃⁺ + H₂O${quand('tableau')}`);
+    R('x_f', 14, 202, 560, 82, `« x_f = C_A·V_A − 10^(−pH)·(V_A + V_B) = 7,2·10⁻⁴ mol »${quand('x_f')}`);
+    R('x_max', 14, 296, 640, 54, `« H₃O⁺ limitant : x_max = C_A·V_A = 7,2·10⁻⁴ mol »${quand('x_max')}`);
+    R('taux', 14, 360, 560, 40, `« τ = 1 : la réaction de dosage est totale »${quand('taux')}`);
+  }
+}
+const y2Rel = 266;
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
+function voir(M) {
+  const v = M.S.vue, m = [`Vue « ${v} » (${TITRES[v]}), ${M.etat()}.`];
+  const etape = (() => { let n = 'avant le début'; for (const e of M.evs()) if (M.commence(e.nom)) n = e.nom; return n; })();
+  m.push(`Étape en cours : ${etape}.`);
+  if (v === 'x_max' || v === 'x_f') m.push('En haut : tableau d’avancement de l’acide éthanoïque (mol) : équation CH₃COOH + H₂O ⇌ CH₃COO⁻ + H₃O⁺ ; état initial C·V · excès · 0 · 0 ; en cours C·V − x · excès · x · x ; état final C·V − x_f · excès · x_f · x_f.');
+  if (v === 'attendu') {
+    const p = M.commence('mesure') ? M.p('mesure') : 0;
+    m.push(`À droite : pH-mètre (afficheur ${p < .15 ? 'vide' : p >= 1 ? '3,4' : 'qui descend vers 3,4'}) et sa sonde dans le bécher d’acide éthanoïque (C = 1,0·10⁻² mol/L).`);
+  }
+  const vus = ETAPES(v).filter(e => M.commence(e.nom)).map(e => e.vu);
+  m.push(vus.length ? vus.join(' ') : 'Rien encore d’écrit (le titre seulement).');
+  return m.join(' ');
+}
+const params = M => {
+  const v = M.S.vue, p = { vue: v };
+  if (['acide_eau', 'attendu', 'tableau', 'x_max', 'x_f', 'taux', 'relation'].includes(v)) Object.assign(p, { C_mol_L: 0.01, V_L: 0.1, pH: 3.4, x_max_mol: 1.0e-3, x_f_mol: 4.0e-5, tau: 0.04 });
+  if (v === 'totale') Object.assign(p, { C_mol_L: 0.01, V_L: 0.1, pH: 2.0, x_f_mol: 1.0e-3, x_max_mol: 1.0e-3, tau: 1 });
+  if (v === 'proportion') Object.assign(p, { C_A_mol_L: 0.05, pH: 3.05, tau: 0.0178, alpha: 0.982 });
+  if (v === 'dosage') Object.assign(p, { V_B_mL: 10, C_B_mol_L: 0.09, V_A_mL: 16, C_A_mol_L: 0.045, pH: 10.2, x_f_mol: 7.2e-4, x_max_mol: 7.2e-4, tau: 1 });
+  return p;
+};
+const DEPART = {
+  acide_eau: 'Que se passe-t-il quand l’acide éthanoïque est dans l’eau ?', base_eau: 'Et une base, comme l’ammoniac, dans l’eau ?',
+  attendu: 'La réaction de l’acide éthanoïque avec l’eau est-elle totale ?', tableau: 'Construisons le tableau d’avancement.',
+  x_max: 'Que vaudrait x si la réaction était totale ?', x_f: 'Que vaut vraiment x à la fin ?', taux: 'Comparons x_f et x_max.',
+  totale: 'Et avec l’acide chlorhydrique ?', relation: 'Une relation pour calculer τ directement avec le pH.',
+  proportion: 'National 2023 N : quelle part de l’acide reste sous la forme CH₃COOH ?', dosage: 'National 2024 R : la réaction de dosage est-elle totale ?',
+};
+const FIN = {
+  acide_eau: 'CH₃COOH + H₂O ⇌ CH₃COO⁻ + H₃O⁺ : l’acide cède un proton à l’eau, qui joue le rôle de base.',
+  base_eau: 'NH₃ + H₂O ⇌ NH₄⁺ + HO⁻ : l’eau cède un proton à la base, elle joue le rôle d’acide.',
+  attendu: 'pH mesuré 3,4 > pH attendu 2,0 : la réaction n’est pas totale.',
+  tableau: 'État initial C·V · excès · 0 · 0 ; en cours C·V − x · excès · x · x ; état final C·V − x_f · excès · x_f · x_f.',
+  x_max: 'x_max = C·V = 1,0·10⁻³ mol.', x_f: 'x_f = 10^(−pH)·V = 4,0·10⁻⁵ mol, 25 fois plus petit que x_max.',
+  taux: 'τ = x_f/x_max = 0,040 = 4,0 % : τ < 1, la réaction est limitée.', totale: 'Acide chlorhydrique : τ = 1, réaction totale (→) ; acide éthanoïque : τ = 0,040 (⇌).',
+  relation: 'τ = 10^(−pH)/C ; exemple : 10^(−3,4)/1,0·10⁻² = 0,040.', proportion: 'α = 1 − τ = 1 − 0,0178 = 0,982 = 98,2 %.',
+  dosage: 'x_f = x_max = 7,2·10⁻⁴ mol : τ = 1, la réaction de dosage est totale.',
+};
+const MOT = Moteur({
+  id: 'tds_avancement', titre: 'Réaction d’un acide (ou d’une base) avec l’eau, tableau d’avancement, x_max, x_f, taux d’avancement final τ', vues: VUES, titres: TITRES,
+  etapes: ETAPES, motifs: MOTIFS, dessiner, voir, params,
+  depart: M => DEPART[M.S.vue], messageFin: M => FIN[M.S.vue],
+  appliquer: (p, M) => { const r = {}; if (VUES.includes(p.vue)) { r.vue = p.vue; r.change = p.vue !== M.S.vue; } return r; },
+  schema: { vue: VUES.join(' | ') + ' (change la vue et relance)' },
+  texte: 'Exemple A : acide éthanoïque, C = 1,0·10⁻² mol/L, V = 100 mL, pH mesuré 3,4. CH₃COOH + H₂O ⇌ CH₃COO⁻ + H₃O⁺ (l’eau joue le rôle de base) ; AH + H₂O ⇌ A⁻ + H₃O⁺. NH₃ + H₂O ⇌ NH₄⁺ + HO⁻ (l’eau joue le rôle d’acide) ; B + H₂O ⇌ BH⁺ + HO⁻ ; τ d’une base : au chapitre des réactions acide-base. Si la réaction était totale : [H₃O⁺] = C → pH attendu 2,0 ; mesuré 3,4 : pas totale. Tableau (mol) : état initial C·V · excès · 0 · 0 ; en cours C·V − x · excès · x · x ; état final C·V − x_f · excès · x_f · x_f. x_max = C·V = 1,0·10⁻³ mol ; x_f = [H₃O⁺]éq·V = 10^(−pH)·V = 4,0·10⁻⁵ mol ; τ = x_f/x_max = 0,040 = 4,0 % < 1 : réaction limitée. Exemple B : HCl + H₂O → Cl⁻ + H₃O⁺, pH 2,0, x_f = x_max = 1,0·10⁻³ mol, τ = 1 : totale. τ = [H₃O⁺]·V/(C·V) = 10^(−pH)/C. National 2023 N : C_A = 5,0·10⁻² mol/L, pH 3,05, α = 1 − τ, τ = 0,0178, α = 0,982. National 2024 R : R–NH₂ + H₃O⁺ → R–NH₃⁺ + H₂O, x_f = C_A·V_A − 10^(−pH)·(V_A + V_B) = 7,2·10⁻⁴ mol = x_max, τ = 1 : dosage total.',
+  explications: {
+    acide_eau: [
+      { repere: 'becher', texte: 'Une solution d’acide éthanoïque, incolore.' },
+      { repere: 'molecule_acide', texte: 'La molécule CH₃COOH porte un proton H⁺, en jaune.' },
+      { repere: 'molecule_eau', texte: 'La molécule d’eau capte ce proton : elle devient H₃O⁺.' },
+      { repere: 'equation', texte: 'On écrit l’équation avec la double flèche.' },
+      { repere: 'couples', texte: 'Deux couples : CH₃COOH/CH₃COO⁻ et H₃O⁺/H₂O. Ici l’eau joue le rôle de base.' },
+    ],
+    base_eau: [
+      { repere: 'loupe', texte: 'Cette fois, c’est l’eau qui cède un proton.' },
+      { repere: 'equation', texte: 'NH₃ + H₂O ⇌ NH₄⁺ + HO⁻.' },
+      { repere: 'couples', texte: 'Couples NH₄⁺/NH₃ et H₂O/HO⁻ : l’eau joue le rôle d’acide.' },
+      { repere: 'renvoi', texte: 'Le taux d’avancement d’une base sera vu au chapitre des réactions acide-base.' },
+    ],
+    attendu: [
+      { repere: 'hypothese', texte: 'Si tout l’acide réagissait, [H₃O⁺] serait égale à C.' },
+      { repere: 'ph_attendu', texte: 'On attendrait pH = 2,0.' },
+      { repere: 'afficheur', texte: 'Le pH-mètre affiche 3,4.' },
+      { repere: 'conclusion', texte: 'Il y a moins de H₃O⁺ que prévu : la réaction n’est pas totale.' },
+    ],
+    tableau: [
+      { repere: 'equation', texte: 'L’équation en tête, une colonne par espèce.' },
+      { repere: 'ligne_initial', texte: 'Au départ : C·V d’acide, pas encore d’ions.' },
+      { repere: 'ligne_en_cours', texte: 'En cours : l’acide perd x, chaque ion gagne x.' },
+      { repere: 'ligne_final', texte: 'À la fin, l’avancement vaut x_f.' },
+    ],
+    x_max: [
+      { repere: 'hypothese', texte: 'Si la réaction était totale, il ne resterait plus d’acide.' },
+      { repere: 'relation', texte: 'Donc x_max = C·V.' },
+      { repere: 'resultat', texte: 'x_max = 1,0·10⁻³ mol.' },
+    ],
+    x_f: [
+      { repere: 'colonne_h3o', texte: 'Dans la colonne de H₃O⁺, on lit x_f à la fin.' },
+      { repere: 'relation', texte: 'x_f = [H₃O⁺]·V, et [H₃O⁺] = 10^(−pH).' },
+      { repere: 'resultat', texte: 'x_f = 4,0·10⁻⁵ mol.' },
+      { repere: 'barres', texte: 'x_f est 25 fois plus petit que x_max.' },
+    ],
+    taux: [
+      { repere: 'definition', texte: 'Le taux d’avancement final : τ = x_f/x_max.' },
+      { repere: 'resultat', texte: 'Ici τ = 0,040, soit 4,0 %.' },
+      { repere: 'barre_xf', texte: 'La barre x_f ne fait que 4 % de la barre x_max.' },
+      { repere: 'limitee', texte: 'τ < 1 : la réaction est limitée.' },
+    ],
+    totale: [
+      { repere: 'calcul_xf', texte: 'Avec l’acide chlorhydrique, x_f = x_max.' },
+      { repere: 'totale', texte: 'τ = 1 : la réaction est totale.' },
+      { repere: 'fleche_simple', texte: 'Réaction totale : une flèche simple.' },
+      { repere: 'double_fleche', texte: 'Réaction limitée : une double flèche.' },
+    ],
+    relation: [
+      { repere: 'remplacer', texte: 'On remplace x_f et x_max.' },
+      { repere: 'simplifier', texte: 'Le volume V se simplifie.' },
+      { repere: 'relation', texte: 'τ = 10^(−pH)/C.' },
+      { repere: 'verifier', texte: 'On retrouve 0,040.' },
+    ],
+    proportion: [
+      { repere: 'definition_alpha', texte: 'α : la part de l’acide qui reste sous la forme CH₃COOH.' },
+      { repere: 'tableau', texte: 'Le tableau donne les deux concentrations.' },
+      { repere: 'relation', texte: 'α = 1 − τ.' },
+      { repere: 'resultat', texte: 'α = 98,2 %.' },
+    ],
+    dosage: [
+      { repere: 'tableau', texte: 'Le tableau de la réaction de dosage.' },
+      { repere: 'x_f', texte: 'Il ne reste presque plus de H₃O⁺ : x_f = 7,2·10⁻⁴ mol.' },
+      { repere: 'x_max', texte: 'H₃O⁺ est limitant : x_max = 7,2·10⁻⁴ mol.' },
+      { repere: 'taux', texte: 'τ = 1 : la réaction de dosage est totale.' },
+    ],
+  },
+});
+MOT.lancer();
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

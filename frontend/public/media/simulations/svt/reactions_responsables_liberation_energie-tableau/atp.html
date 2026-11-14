@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>L’ATP, petite monnaie de la cellule — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="svt.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Une molécule d'ATP peinte : l'adénosine et trois phosphates reliés par deux liaisons ; la dernière liaison se rompt, l'énergie libérée fait contracter une fibre musculaire (30,5 kJ par mole d'ATP), il reste ADP + Pi ; puis l'énergie de la respiration ou de la fermentation raccroche le Pi : l'ATP est reformé ; le petit cycle hydrolyse / phosphorylation s'écrit en bas"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="peinture.js"></script>
+<script>
+/*
+ * L’ATP, la petite monnaie de la cellule (cours SVT « Libération de l’énergie »), 10 novembre 2026.
+ * Ce qui se voit, dans l’ordre (t en s de la scène) :
+ *   atp_entier (2)        : une molécule d’ATP peinte : l’adénosine + trois phosphates (billes P) reliés par deux liaisons ;
+ *   liaison_rompue (4,5)  : la dernière liaison s’illumine puis se rompt, un éclat ;
+ *   energie_liberee (6,5) : l’énergie part vers un travail de la cellule : une fibre musculaire se contracte ;
+ *                           30,5 kJ par mole d’ATP ;
+ *   adp_pi (8,5)          : il reste ADP + Pi ; ATP + H2O → ADP + Pi + énergie : hydrolyse ;
+ *   recharge (12)         : l’énergie de la respiration ou de la fermentation (glucose) arrive, le Pi se raccroche ;
+ *   atp_reforme (14)      : ADP + Pi + énergie → ATP : phosphorylation ; puis le petit cycle ATP ⇄ ADP + Pi.
+ * Aucune enzyme nommée. Le rythme est celui d’une explication.
+ */
+const { bulle, protocole } = window.Tableau;
+const { Scene, Chrono, Apparitions, doux, mix, fr } = window.SVTTableau;
+const P = window.SVTPeinture;
+const $ = id => document.getElementById(id);
+
+const M = { atp_entier: 2, liaison_rompue: 4.5, energie_liberee: 6.5, adp_pi: 8.5, recharge: 12, atp_reforme: 14 };
+const FIN = 19;
+const MOTIFS = {
+  atp_entier: 'l’ATP : une adénosine et trois phosphates',
+  liaison_rompue: 'la dernière liaison se rompt',
+  energie_liberee: 'l’énergie libérée sert à un travail : la fibre musculaire se contracte',
+  adp_pi: 'il reste ADP + Pi : c’est l’hydrolyse de l’ATP',
+  recharge: 'l’énergie de la respiration ou de la fermentation raccroche le Pi',
+  atp_reforme: 'l’ATP est reformé : c’est la phosphorylation',
+};
+const AD = { x: 150, y: 135, w: 130, h: 64 }, PX = [255, 325, 395], PY = 135, PR = 19, LIBRE = { x: 458, y: 200 };
+const FIB = { x: 640, y: 140, w: 200, h: 44 }, SOURCE = { x: 640, y: 262 };
+const PHOS = [240, 150, 60], ADENO = [150, 120, 200], CARBONE = [250, 204, 21], MUSCLE = [196, 84, 84];
+
+const canvas = $('canvas');
+const scene = Scene(canvas, (c) => { scene.cadre(31); dessiner(c); return c.fin(); });
+const ecrit = Apparitions(scene);
+const chrono = Chrono({ fin: () => FIN, moments: () => M, motifs: MOTIFS, bouton: $('run'), bulle: $('feedback'), pont: () => pont,
+  depart: 'Observe la molécule d’ATP…', reinit: () => ecrit.oublier(),
+  fini: () => 'ATP ⇄ ADP + Pi : hydrolyse (énergie libérée), phosphorylation (énergie apportée).' });
+scene.avancer = chrono.avancer;
+
+/* Le troisième phosphate : attaché, puis libre (Pi), puis raccroché. */
+function pos3(t) {
+  const u1 = doux(chrono.part(4.5, 5.5, t)), u2 = doux(chrono.part(11.8, 13.2, t));
+  return [mix(mix(PX[2], LIBRE.x, u1), PX[2], u2), mix(mix(PY, LIBRE.y, u1), PY, u2)];
+}
+const lie3 = (t) => t < 4.5 || t >= 13.2;
+/* L’adénosine peinte : deux masses arrondies soudées (pour l’œil seulement). */
+function adenosine(ctx, a) {
+  P.proteine(ctx, AD.x - 18, AD.y, AD.w - 40, AD.h, { couleur: ADENO, alpha: .85 * a });
+  P.proteine(ctx, AD.x + 34, AD.y + 4, 56, 46, { couleur: [130, 110, 190], alpha: .85 * a });
+}
+/* Une liaison peinte entre deux billes ; `eclat` la fait briller. */
+function liaison(ctx, x1, x2, y, a, brille = 0) {
+  ctx.save(); ctx.globalAlpha = a; ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgba(250,230,160,.9)'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2, y); ctx.stroke();
+  ctx.strokeStyle = 'rgba(120,80,30,.6)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x1, y + 2); ctx.lineTo(x2, y + 2); ctx.stroke();
+  ctx.restore();
+  if (brille > 0) P.eclat(ctx, (x1 + x2) / 2, y, 12 + 14 * brille, .5 + .5 * brille);
+}
+/* Une fibre musculaire peinte, striée ; `w` diminue quand elle se contracte. */
+function fibre(ctx, cx, cy, w, h) {
+  ctx.save();
+  const g = ctx.createLinearGradient(0, cy - h / 2, 0, cy + h / 2);
+  g.addColorStop(0, P.rgba(MUSCLE.map(v => Math.min(255, v + 50)), .75)); g.addColorStop(1, P.rgba(MUSCLE, .7));
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(cx - w / 2, cy - h / 2, w, h, h / 2); ctx.fill();
+  ctx.clip();
+  const n = 15, pas = w / n;
+  for (let k = 1; k < n; k++) { ctx.fillStyle = k % 2 ? 'rgba(90,20,30,.35)' : 'rgba(255,220,220,.18)'; ctx.fillRect(cx - w / 2 + k * pas - pas * .22, cy - h / 2, pas * .44, h); }
+  ctx.fillStyle = 'rgba(120,90,170,.6)';
+  for (const [dx, dy] of [[-.3, -.22], [.12, .25], [.36, -.18]]) { ctx.beginPath(); ctx.ellipse(cx + dx * w, cy + dy * h, 7, 3.5, 0, 0, Math.PI * 2); ctx.fill(); }
+  ctx.restore();
+  ctx.save(); ctx.strokeStyle = 'rgba(255,200,200,.55)'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.roundRect(cx - w / 2, cy - h / 2, w, h, h / 2); ctx.stroke(); ctx.restore();
+}
+function accolade(c, x1, x2, nom, couleur) {
+  c.trait([[x1, 94], [x1, 88], [x2, 88], [x2, 94]], { couleur, largeur: 1.8 });
+  c.texte(nom, (x1 + x2) / 2, 80, { couleur, taille: 17, align: 'center' });
+}
+/* Arc de cycle (de x1 vers x2), bombé vers le haut (h < 0) ou le bas (h > 0), avec sa tête. */
+function arc(c, x1, x2, y, h, couleur) {
+  const pts = []; for (let i = 0; i <= 16; i++) { const u = i / 16; pts.push([mix(x1, x2, u), y + h * 4 * u * (1 - u)]); }
+  c.trait(pts, { couleur, largeur: 2 });
+  const [xa, ya] = pts[14], [xb, yb] = pts[16], a = Math.atan2(yb - ya, xb - xa);
+  c.trait([[xb - 11 * Math.cos(a - .45), yb - 11 * Math.sin(a - .45)], [xb, yb], [xb - 11 * Math.cos(a + .45), yb - 11 * Math.sin(a + .45)]], { couleur, largeur: 2, duree: .1 });
+}
+
+function dessiner(c) {
+  const t = chrono.t;
+  const a0 = doux(chrono.part(.2, 1.4, t));
+  const contraction = doux(chrono.part(6, 6.8, t)) * (1 - doux(chrono.part(9.5, 10.5, t)));
+  const fw = FIB.w * (1 - .25 * contraction);
+  const [x3, y3] = pos3(t);
+  // ── la peinture ──
+  c.direct(() => {
+    const ctx = c.ctx;
+    fibre(ctx, FIB.x, FIB.y, fw, FIB.h * (1 + .12 * contraction));
+    if (a0 > 0) {
+      adenosine(ctx, a0);
+      liaison(ctx, AD.x + 62, PX[0] - PR + 2, PY, a0);
+      liaison(ctx, PX[0] + PR - 2, PX[1] - PR + 2, PY, a0);
+      const brille = t >= 3 && t < 4.5 ? .4 + .6 * chrono.part(3, 4.5, t) * (.75 + .25 * Math.sin(t * 14)) : (t >= 13.2 && t < 14.4 ? 1 - chrono.part(13.2, 14.4, t) : 0);
+      if (lie3(t)) liaison(ctx, PX[1] + PR - 2, x3 - PR + 2, PY, a0, brille);
+      for (const x of PX.slice(0, 2)) P.bille(ctx, x, PY, PR, PHOS, { alpha: a0 });
+      P.bille(ctx, x3, y3, PR, PHOS, { alpha: a0 });
+    }
+    // l’éclat de la rupture
+    if (t >= 4.2 && t < 5.8) { const v = chrono.part(4.5, 5.8, t); P.eclat(ctx, 360, PY, 30 + 18 * v, t < 4.5 ? chrono.part(4.2, 4.5, t) : 1 - v); }
+    // l’énergie qui part vers la fibre
+    if (t >= 4.7 && t < 6.6) {
+      for (let k = 0; k < 3; k++) { const u = doux(chrono.part(4.7 + k * .18, 6.2 + k * .18, t)); if (u > 0 && u < 1) P.eclat(ctx, mix(362, 545, u), mix(126, 136, u), 13 - k * 2, .9 - k * .2); }
+    }
+    if (contraction > .05) P.eclat(ctx, FIB.x, FIB.y, 50 * contraction, .35 * contraction);
+    // la source d’énergie : un glucose dégradé par la respiration ou la fermentation
+    if (t >= 9.8) {
+      const a = chrono.part(9.8, 10.6, t);
+      for (let i = 0; i < 6; i++) { const an = i / 6 * Math.PI * 2; P.bille(ctx, SOURCE.x + Math.cos(an) * 15, SOURCE.y + Math.sin(an) * 9, 6, CARBONE, { alpha: a }); }
+      if (t < 12.6) for (let k = 0; k < 3; k++) { const u = doux(chrono.part(10.6 + k * .25, 11.9 + k * .25, t)); if (u > 0 && u < 1) P.eclat(ctx, mix(SOURCE.x - 34, LIBRE.x + 18, u), mix(SOURCE.y - 10, LIBRE.y + 10, u), 12 - k * 2, .9 - k * .2); }
+    }
+  });
+  // ── la craie ──
+  c.texte('L’ATP, la petite monnaie de la cellule', 18, 30, { couleur: 'cyan', taille: 20 });
+  c.texte('un travail de la cellule :', FIB.x, 90, { couleur: 'faible', taille: 13, align: 'center' });
+  c.texte('fibre musculaire', FIB.x, 108, { couleur: 'orange', taille: 14, align: 'center' });
+  if (a0 > 0) {
+    ecrit.ecrire(c, 'adenosine', () => c.texte('adénosine', AD.x, 186, { couleur: 'violet', taille: 14, align: 'center' }));
+    ecrit.ecrire(c, 'lettresP', () => { for (const x of PX.slice(0, 2)) c.texte('P', x, PY + 6, { couleur: 'blanc', taille: 15, align: 'center', duree: .1 }); });
+    c.direct(() => c.texte('P', x3, y3 + 6, { couleur: 'blanc', taille: 15, align: 'center' }));
+  }
+  if (t >= 1.2 && t < 4.5) ecrit.ecrire(c, 'accATP1', () => accolade(c, 85, 414, 'ATP', 'jaune'));
+  if ((t >= 1.2 && t < 4.5) || t >= 13.2) ecrit.ecrire(c, t < 4.5 ? 'trois1' : 'trois2', () => c.texte('3 phosphates', PX[1], 186, { couleur: 'orange', taille: 14, align: 'center' }));
+  if (t >= 2) ecrit.ecrire(c, 'atp_entier', () => c.texte('ATP : adénosine + 3 phosphates', 250, 230, { couleur: 'cyan', taille: 16, align: 'center' }));
+  if (t >= 3 && t < 4.5) ecrit.ecrire(c, 'brille', () => c.texte('la dernière liaison', 360, 112, { couleur: 'jaune', taille: 13, align: 'center' }));
+  if (t >= 6.2) ecrit.ecrire(c, 'energie', () => { c.fleche(424, 120, 530, 124, { couleur: 'jaune', largeur: 1.8 }); c.texte('énergie', 476, 108, { couleur: 'jaune', taille: 14, align: 'center' }); });
+  if (t >= 6.3) ecrit.ecrire(c, 'contracte', () => c.texte('elle se contracte', FIB.x, 186, { couleur: 'orange', taille: 14, align: 'center' }));
+  if (t >= 6.5) ecrit.ecrire(c, 'kj', () => c.texte('30,5 kJ par mole d’ATP', FIB.x, 208, { couleur: 'jaune', taille: 15, align: 'center' }));
+  if (t >= 7.2 && t < 13.2) {
+    ecrit.ecrire(c, 'accADP', () => accolade(c, 85, 346, 'ADP', 'blanc'));
+    if (t < 11.8) ecrit.ecrire(c, 'pi', () => c.texte('Pi', LIBRE.x + 26, LIBRE.y + 6, { couleur: 'orange', taille: 16 }));
+  }
+  if (t >= 8.5) ecrit.ecrire(c, 'hydrolyse', () => c.texte('ATP + H_{2}O → ADP + Pi + énergie : hydrolyse', 20, 262, { couleur: 'blanc', taille: 16 }));
+  if (t >= 10) ecrit.ecrire(c, 'source', () => c.texte('respiration ou fermentation (glucose)', 628, 300, { couleur: 'vert', taille: 14, align: 'center' }));
+  if (t >= 11) ecrit.ecrire(c, 'fl_recharge', () => c.fleche(606, 254, 490, 212, { couleur: 'vert', largeur: 1.8 }));
+  if (t >= 13.4) ecrit.ecrire(c, 'accATP2', () => accolade(c, 85, 414, 'ATP', 'jaune'));
+  if (t >= 14) ecrit.ecrire(c, 'phospho', () => c.texte('ADP + Pi + énergie → ATP : phosphorylation', 20, 288, { couleur: 'blanc', taille: 16 }));
+  if (t >= 14.4) {
+    ecrit.ecrire(c, 'cycle', () => {
+      c.texte('ATP', 170, 368, { couleur: 'jaune', taille: 19, align: 'center' });
+      c.texte('ADP + Pi', 430, 368, { couleur: 'blanc', taille: 18, align: 'center' });
+      arc(c, 205, 392, 350, -26, 'orange');
+      c.texte('hydrolyse : énergie libérée', 300, 318, { couleur: 'orange', taille: 14, align: 'center' });
+      arc(c, 392, 205, 376, 22, 'vert');
+      c.texte('phosphorylation : énergie apportée', 300, 414, { couleur: 'vert', taille: 14, align: 'center' });
+      c.texte('l’ATP ne se stocke presque pas :', 618, 352, { couleur: 'cyan', taille: 15, align: 'center' });
+      c.texte('il est régénéré en permanence', 618, 374, { couleur: 'cyan', taille: 15, align: 'center' });
+    });
+  }
+  // ── repères ──
+  c.repere('adenosine', AD.x - 66, AD.y - 34, 130, 92, 'l’adénosine');
+  c.repere('phosphates', PX[0] - 26, PY - 26, 168, 92, 'les trois phosphates');
+  c.repere('liaison', PX[1] + 12, PY - 22, 56, 44, 'la dernière liaison, celle qui se rompt');
+  c.repere('energie', 418, 94, 120, 44, 'l’énergie libérée');
+  c.repere('travail', 534, 76, 214, 140, 'le travail : une fibre musculaire qui se contracte');
+  c.repere('recharge', 470, 200, 280, 108, 'la recharge : énergie de la respiration ou de la fermentation');
+  c.repere('equation', 14, 242, 420, 54, 'les équations : hydrolyse et phosphorylation');
+  c.repere('cycle', 130, 300, 600, 120, 'le cycle ATP ⇄ ADP + Pi');
+}
+
+function phase(t) {
+  if (t < 1.2) return 'La molécule d’ATP apparaît.';
+  if (t < 3) return 'Une molécule d’ATP : l’adénosine (masse violette) et trois phosphates (billes P) reliés par deux liaisons ; « ATP : adénosine + 3 phosphates ».';
+  if (t < 4.5) return 'La dernière liaison, entre le 2e et le 3e phosphate, s’illumine.';
+  if (t < 5.8) return 'La dernière liaison s’est rompue : un éclat ; le troisième phosphate se détache.';
+  if (t < 7.2) return 'L’énergie libérée part vers la fibre musculaire, qui se contracte ; 30,5 kJ par mole d’ATP.';
+  if (t < 9.8) return 'Il reste ADP (adénosine + 2 phosphates) et Pi ; écrit : ATP + H2O → ADP + Pi + énergie : hydrolyse.';
+  if (t < 11.8) return 'L’énergie de la respiration ou de la fermentation (un glucose dégradé) arrive vers le Pi.';
+  if (t < 13.2) return 'Le Pi revient se raccrocher à l’ADP, grâce à cette énergie.';
+  if (t < 14.4) return 'L’ATP est reformé : écrit ADP + Pi + énergie → ATP : phosphorylation.';
+  return 'Le cycle à la craie : ATP → ADP + Pi (hydrolyse, énergie libérée) et ADP + Pi → ATP (phosphorylation, énergie apportée) ; « l’ATP ne se stocke presque pas : il est régénéré en permanence ».';
+}
+function ceQuiSeVoit() {
+  const t = chrono.t;
+  return `t = ${fr(t, 1)} s${chrono.running ? ' (ça avance)' : chrono.fait ? ' (fin)' : ' (arrêté)'}. ${phase(t)} Molécule affichée : ${lie3(t) ? 'ATP (3 phosphates liés)' : 'ADP + Pi'} ; fibre musculaire ${t >= 6 && t < 10.5 ? 'contractée' : 'au repos'}.`;
+}
+
+$('run').onclick = chrono.clic;
+window.Tableau.explication({ atp: [
+  { repere: 'adenosine', texte: 'L’ATP, c’est une adénosine…' },
+  { repere: 'phosphates', texte: '… et trois phosphates reliés par deux liaisons.' },
+  { repere: 'liaison', texte: 'Quand la dernière liaison se rompt, de l’énergie est libérée.' },
+  { repere: 'travail', texte: 'Cette énergie sert à un travail de la cellule, ici une contraction : 30,5 kJ par mole d’ATP.' },
+  { repere: 'equation', texte: 'ATP + H2O donne ADP + Pi + énergie : c’est l’hydrolyse.' },
+  { repere: 'recharge', texte: 'L’énergie de la respiration ou de la fermentation raccroche le Pi : c’est la phosphorylation.' },
+  { repere: 'cycle', texte: 'L’ATP ne se stocke presque pas : il est régénéré en permanence.' } ] });
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'play_until'];
+const config = { id: 'svt_energie_atp', version: '1.0', title: 'L’ATP, la petite monnaie de la cellule', variants: [{ id: 'atp', label: 'ATP' }], commands: commandes,
+  command_schema: { set_time: { time_s: `0..${FIN} (arrêt sur cet instant)` }, play_until: { moment: Object.keys(M).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'L’ATP, petite monnaie de la cellule : adénosine + 3 phosphates. La rupture de la dernière liaison libère de l’énergie utilisée pour un travail de la cellule (contraction musculaire) : 30,5 kJ par mole d’ATP. ATP + H2O → ADP + Pi + énergie : hydrolyse. L’énergie de la respiration ou de la fermentation (dégradation du glucose) régénère l’ATP : ADP + Pi + énergie → ATP : phosphorylation. L’ATP ne se stocke presque pas : il est régénéré en permanence.',
+  etat: () => ({ simulation_status: chrono.statut(), ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'atp', time_s: +chrono.t.toFixed(2), parameters: {}, moments: M }),
+  progression: () => chrono.t / FIN,
+  executer: (cmd, p) => ({ start: chrono.start, reset: chrono.start, pause: chrono.pause, resume: chrono.resume, set_time: () => chrono.setTime(p), play_until: () => chrono.playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Une molécule d’ATP va apparaître…');
+setTimeout(() => { if (!chrono.running && chrono.t === 0) chrono.start(); }, 1600);
+window.__sim = { chrono, scene, M };
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

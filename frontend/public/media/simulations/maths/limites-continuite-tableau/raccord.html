@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Soudée ou coupée — continuité en un point</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Repère à la craie : une courbe arrive en un point a ; elle est soudée au point (a ; f(a)), ou elle saute, ou le point est ailleurs"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/limites-continuite-tableau/lc-outils.js"></script>
+<script>
+/*
+ * Cours « Limites et continuité » (math_ch1_limites_continuite), bloc continuité en un point (c1 à c5).
+ * Vues : ?vue=trois_cas | limite_image (param fa) | deux_branches (param m). `fin` = construction complète.
+ * limite_image : f(x) = x + 1 pour x ≠ 1, f(1) = fa : continue en 1 seulement si fa = 2.
+ * deux_branches : f(x) = 3x − 1 si x < 1, x² + m si x ≥ 1 : limite à gauche 2, limite à droite et f(1) = 1 + m ; soudée pour m = 1.
+ */
+const fr = MathsTableau.fr;
+const COL = 470;
+const OPT_LI = { x0: 56, y0: 66, w: 370, h: 270, xmin: -0.4, xmax: 2.4, ymin: -0.5, ymax: 4, gx: [[1, '1'], [2, '2']], gy: [[1, '1'], [2, '2'], [3, '3']] };
+const OPT_DB = { x0: 50, y0: 60, w: 380, h: 285, xmin: -0.4, xmax: 2.2, ymin: -2.5, ymax: 8, gx: [[1, '1'], [2, '2']], gy: [[2, '2'], [4, '4'], [6, '6']] };
+
+MathsTableau.page({
+  id: 'lc_raccord', titre: 'Soudée ou coupée',
+  texte: 'Construction à la craie du cours Limites et continuité : la continuité en un point, où la courbe arrive et où est le point (a ; f(a))',
+  vues: {
+    trois_cas: {
+      titre: 'Trois courbes en a : soudée, saut, point ailleurs',
+      dessiner(c, K) {
+        K.titre('Que se passe-t-il en a ?');
+        const CAS = [
+          { x0: 40, mot: 'continue en a ✓', coul: 'vert', id: 'courbe_soudee' },
+          { x0: 292, mot: 'saut : pas continue ✗', coul: 'orange', id: 'saut' },
+          { x0: 544, mot: 'point ailleurs : pas continue ✗', coul: 'orange', id: 'point_ailleurs' },
+        ];
+        CAS.forEach((k, i) => {
+          const G = K.axes({ x0: k.x0, y0: 92, w: 176, h: 170, xmin: -0.3, xmax: 2.4, ymin: -0.3, ymax: 3.3, gx: [[1, 'a']], gy: [], origine: false });
+          if (i === 0) {
+            K.anime(1.2, p => K.courbePart(G, x => 0.5 * x + 1, -0.2, 2.3, p, { couleur: 'cyan' }));
+            K.rond(G, 1, 1.5, true, 'jaune');
+          } else if (i === 1) {
+            K.anime(.7, p => K.courbePart(G, x => 0.5 * x + 0.5, -0.2, 1, p, { couleur: 'cyan' }));
+            K.rond(G, 1, 1, true, 'jaune');
+            K.anime(.7, p => K.courbePart(G, x => 0.5 * x + 1.6, 1, 2.3, p, { couleur: 'cyan' }));
+            K.rond(G, 1, 2.1, false, 'cyan');
+          } else {
+            K.anime(1.2, p => K.courbePart(G, x => (Math.abs(x - 1) < 0.05 ? NaN : 0.5 * x + 1), -0.2, 2.3, p, { couleur: 'cyan' }));
+            K.rond(G, 1, 1.5, false, 'cyan');
+            K.rond(G, 1, 2.8, true, 'jaune');
+          }
+          c.texte(k.mot, k.x0 + 88, 300, { couleur: k.coul, taille: 16, align: 'center', max: 210 });
+          c.repere('cas' + (i + 1), k.x0 - 6, 80, 200, 230, k.mot);
+          K.marque(k.id);
+          c.pause(.4);
+        });
+        c.texte('Continue en a : la courbe arrive exactement sur le point (a ; f(a)).', 380, 346, { couleur: 'jaune', taille: 18, align: 'center', max: 730 });
+        K.marque('conclusion');
+      },
+      decrire: {
+        courbe_soudee: 'Premier repère : la courbe passe d’un seul trait par le point (a ; f(a)) : continue en a.',
+        saut: 'Deuxième repère : la courbe saute en a, le point plein est en bas et la suite repart plus haut : pas continue en a.',
+        point_ailleurs: 'Troisième repère : la courbe a un trou en a et le point (a ; f(a)) est posé plus haut : pas continue en a.',
+        conclusion: 'Écrit : continue en a, la courbe arrive exactement sur le point (a ; f(a)).',
+      },
+      motifs: { courbe_soudee: 'courbe soudée', saut: 'un saut', point_ailleurs: 'le point ailleurs', conclusion: 'la conclusion' },
+      explication: [{ repere: 'cas1', texte: 'Ici la courbe arrive sur le point : continue.' }, { repere: 'cas2', texte: 'Ici elle saute : pas continue.' }, { repere: 'cas3', texte: 'Ici le point est ailleurs : pas continue.' }],
+    },
+    limite_image: {
+      titre: 'La limite et l’image en 1',
+      params: { fa: { min: 0.5, max: 3.5, pas: 0.5, defaut: 3, sens: 'valeur de f(1)' } },
+      dessiner(c, K) {
+        K.titre('La limite égale-t-elle l’image ?');
+        const G = K.axes(OPT_LI), fa = K.P.fa, cont = Math.abs(fa - 2) < 1e-9;
+        c.texte('f(x) = x + 1 si x ≠ 1', COL, 90, { couleur: 'cyan', taille: 19 });
+        c.texte('f(1) = ' + fr(fa, 1), COL, 118, { couleur: 'vert', taille: 19 });
+        K.anime(1.8, p => K.courbePart(G, x => (Math.abs(x - 1) < 0.025 ? NaN : x + 1), -0.3, 2.3, p, { couleur: 'cyan' }));
+        K.rond(G, 1, 2, false, 'cyan');
+        K.marque('courbe_tracee');
+        c.pause(.3);
+        c.fleche(G.X(1) - 16, G.Y(2), G.X(0) + 6, G.Y(2), { couleur: 'jaune', largeur: 1.6, pointille: [6, 5] });
+        c.texte('la limite : 2', G.X(0.15), G.Y(2) - 12, { couleur: 'jaune', taille: 16 });
+        LC.limite(c, COL, 172, 'x → 1', 'f(x) = 2', { couleur: 'jaune', taille: 20 });
+        c.repere('limite', G.X(0) - 4, G.Y(2) - 30, G.X(1) - G.X(0) + 16, 42, 'la limite en 1 : 2');
+        K.marque('limite_lue');
+        c.pause(.3);
+        K.rond(G, 1, fa, true, 'vert');
+        c.texte('f(1) = ' + fr(fa, 1), G.X(1) + 12, G.Y(fa) + (fa > 2 ? -8 : 20), { couleur: 'vert', taille: 16 });
+        c.repere('image', G.X(1) - 14, G.Y(fa) - 14, 28, 28, 'le point (1 ; f(1))');
+        K.marque('image_placee');
+        c.pause(.3);
+        K.lignes(COL, 232, cont ? [
+          { t: 'lim f(x) = f(1) = 2', couleur: 'vert', taille: 17 },
+          { t: 'donc f est continue en 1.', couleur: 'vert', cadre: 'vert', taille: 17 },
+        ] : [
+          { t: 'lim f(x) = 2 ≠ f(1) = ' + fr(fa, 1), couleur: 'orange', taille: 17 },
+          { t: 'donc f n’est pas continue en 1.', couleur: 'orange', cadre: 'orange', taille: 17 },
+        ], 36);
+        K.marque('comparaison');
+      },
+      poignees(K) { const G = K.grille(OPT_LI); return [{ id: 'fa', x: G.X(1), y: G.Y(K.P.fa), bouger: (x, y) => ({ fa: G.inv(x, y)[1] }) }]; },
+      lecture: K => (Math.abs(K.P.fa - 2) < 1e-9 ? 'f(1) = 2 : le point bouche le trou, la limite égale l’image, f est continue en 1.' : `f(1) = ${fr(K.P.fa, 1)} : la limite en 1 vaut 2, elle n’égale pas f(1), f n’est pas continue en 1.`),
+      decrire: K => ({
+        courbe_tracee: 'La courbe de f(x) = x + 1 pour x ≠ 1 : une droite avec un trou en (1 ; 2).',
+        limite_lue: 'Une flèche jaune mène du trou à la hauteur 2 : la limite de f en 1 est 2.',
+        image_placee: `Le point vert (1 ; f(1)) est posé à la hauteur ${fr(K.P.fa, 1)}.`,
+        comparaison: Math.abs(K.P.fa - 2) < 1e-9 ? 'Écrit : lim f(x) = f(1) = 2, donc f est continue en 1.' : `Écrit : lim f(x) = 2 ≠ f(1) = ${fr(K.P.fa, 1)}, donc f n’est pas continue en 1.`,
+      }),
+      motifs: { limite_lue: 'la limite : 2', image_placee: 'l’image f(1)', comparaison: 'limite et image comparées' },
+      explication: [{ repere: 'limite', texte: 'Là où arrive la courbe : la limite.' }, { repere: 'image', texte: 'Là où est le point : f(1).' }],
+    },
+    deux_branches: {
+      titre: 'Deux expressions : f(x) = 3x − 1 si x < 1, x² + m si x ≥ 1',
+      params: { m: { min: -2, max: 3, pas: 0.5, defaut: 3, sens: 'le réel m de la branche droite' } },
+      dessiner(c, K) {
+        K.titre('Chaque côté sa branche');
+        const G = K.axes(OPT_DB), m = K.P.m, soude = Math.abs(m - 1) < 1e-9;
+        c.texte('f(x) = 3x − 1  si x < 1', COL, 88, { couleur: 'rouge', taille: 18 });
+        c.texte('f(x) = x² + m  si x ≥ 1', COL, 116, { couleur: 'vert', taille: 18 });
+        K.anime(1.4, p => K.courbePart(G, x => 3 * x - 1, -0.3, 0.995, p, { couleur: 'rouge' }));
+        K.rond(G, 1, 2, false, 'rouge');
+        c.texte('limite à gauche : 2', COL, 162, { couleur: 'rouge', taille: 18 });
+        c.repere('limite_gauche', G.X(1) - 14, G.Y(2) - 14, 28, 28, 'la limite à gauche : 2');
+        K.marque('branche_gauche_arrive');
+        c.pause(.3);
+        K.anime(1.4, p => K.courbePart(G, x => x * x + m, 1, 2.15, p, { couleur: 'vert' }));
+        c.texte('limite à droite : 1 + m = ' + fr(1 + m, 1), COL, 196, { couleur: 'vert', taille: 18 });
+        c.repere('limite_droite', G.X(1) - 6, G.Y(1 + m) - 14, 50, 28, 'la limite à droite : 1 + m');
+        K.marque('branche_droite_part');
+        c.pause(.3);
+        K.rond(G, 1, 1 + m, true, 'jaune');
+        c.texte('f(1) = 1 + m = ' + fr(1 + m, 1), COL, 230, { couleur: 'jaune', taille: 18 });
+        c.repere('f1', G.X(1) - 14, G.Y(1 + m) - 14, 28, 28, 'f(1)');
+        K.marque('point_image');
+        c.pause(.3);
+        K.lignes(COL, 280, soude ? [
+          { t: 'm = 1 : soudée,', couleur: 'vert' },
+          { t: 'f est continue en 1.', couleur: 'vert', cadre: 'vert' },
+        ] : [
+          { t: `coupée : saut de ${fr(Math.abs(m - 1), 1)}`, couleur: 'orange' },
+          { t: 'f n’est pas continue en 1.', couleur: 'orange', cadre: 'orange' },
+        ], 34);
+        c.repere('verdict', COL - 8, 256, 270, 76, 'le verdict');
+        K.marque('verdict');
+      },
+      poignees(K) { const G = K.grille(OPT_DB); return [{ id: 'm', x: G.X(1), y: G.Y(1 + K.P.m), bouger: (x, y) => ({ m: G.inv(x, y)[1] - 1 }) }]; },
+      lecture: K => `m = ${fr(K.P.m, 1)} : limite à gauche 2, limite à droite et f(1) = ${fr(1 + K.P.m, 1)} : ${Math.abs(K.P.m - 1) < 1e-9 ? 'soudée, f est continue en 1' : 'coupée, f n’est pas continue en 1'}.`,
+      decrire: K => ({
+        branche_gauche_arrive: 'La branche rouge 3x − 1 arrive en x = 1 à la hauteur 2 (rond vide) : limite à gauche 2.',
+        branche_droite_part: `La branche verte x² + m part de x = 1 à la hauteur 1 + m = ${fr(1 + K.P.m, 1)} : limite à droite ${fr(1 + K.P.m, 1)}.`,
+        point_image: `Le point jaune (1 ; f(1)) est sur la branche droite, car f(1) se calcule avec x² + m (x ≥ 1) : f(1) = ${fr(1 + K.P.m, 1)}.`,
+        verdict: Math.abs(K.P.m - 1) < 1e-9 ? 'Écrit : m = 1, soudée, f est continue en 1.' : `Écrit : coupée, saut de ${fr(Math.abs(K.P.m - 1), 1)} ; f n’est pas continue en 1.`,
+      }),
+      motifs: { branche_gauche_arrive: 'la branche gauche arrive', branche_droite_part: 'la branche droite part', point_image: 'le point f(1)', verdict: 'soudée ou coupée' },
+      explication: [{ repere: 'limite_gauche', texte: 'À gauche de 1, on prend 3x − 1 : limite 2.' }, { repere: 'limite_droite', texte: 'À droite, on prend x² + m : limite 1 + m.' }, { repere: 'f1', texte: 'f(1) avec la branche qui porte l’égalité : 1 + m.' }],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

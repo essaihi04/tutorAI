@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>L’énergie du condensateur — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="rc.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un condensateur chargé relié à une petite lampe qui s’allume puis faiblit ; à droite la courbe u_C(t) et une barre E_e = ½·C·u_C² ; ou le calcul de l’énergie stockée"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * L’énergie du condensateur (cours « Dipôle RC », 2e Bac PC BIOF, 12 novembre 2026). E_e = ½·C·u_C² = q²/(2C).
+ * Vues (?vue= ou set_parameters {vue}) :
+ *  - lampe (défaut) : un condensateur chargé (u_C = 12 V) relié à une petite lampe. Moments : decharge_lampe (K se ferme :
+ *    la lampe s’allume puis faiblit, u_C(t) descend en bleu), barre (barre E_e à côté de la courbe ; E_e = ½·C·u_C²),
+ *    carre (u_C double : la barre est × 4), fin. L’axe des temps de la lampe est une allure (pas de graduations) :
+ *    la lampe n’est pas un résistor de valeur connue.
+ *  - calcul : C = 220 µF, E = 12 V. Moments : regime_permanent (E_e = ½·C·E² = ½ × 220·10⁻⁶ × 12² ≈ 1,6·10⁻² J),
+ *    a_tau (u_C = 0,63·E : E_e ≈ 0,40 × ½·C·E² ≈ 6,3·10⁻³ J), reste_70 (l’énergie diminue de 30 % : il en reste 70 % ;
+ *    u_C = √0,70 × E ≈ 0,84 × 12 ≈ 10 V), fin.
+ * Poignée : la tension de départ u_C (0 → 12 V), glissée sur l’axe des tensions. Paramètres : vue, u_C, C_uF.
+ * Rendu réel : condensateur chimique bleu peint, lampe qui s’allume (halo), électrons = petites sphères bleues ; la craie
+ * garde les fils, les lettres, les axes, les formules. Le peint ne change pas la physique. Bleu = décharge, rouge = charge.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');
+const VUES = {
+  lampe: ['decharge_lampe', 'barre', 'carre', 'fin'],
+  calcul: ['regime_permanent', 'a_tau', 'reste_70', 'fin'],
+};
+const TITRES = { lampe: 'le condensateur allume une lampe', calcul: 'calculer l’énergie stockée' };
+const q = new URLSearchParams(location.search);
+const S = { vue: VUES[q.get('vue')] ? q.get('vue') : 'lampe', U: 12, C: 220, t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0, dit: '' };
+let M = {}, MM = {};
+const VITESSE = 2, D_DECHARGE = 3.2, T_LAMPE = 5;   // durée du tracé de la décharge (s de scène) ; axe de la lampe : 5 « τ »
+
+/* ── Physique ──────────────────────────────────────────────────────────── */
+const Ee = u => .5 * S.C * 1e-6 * u * u;                     // J
+/** Écriture scientifique française : 0,01584 → « 1,6·10⁻² » (deux chiffres significatifs). */
+function sci(v, n = 2) {
+  if (!(v > 0)) return '0';
+  let e = Math.floor(Math.log10(v)), m = Number((v / 10 ** e).toPrecision(n));
+  if (m >= 10) { m /= 10; e += 1; }
+  return e === 0 ? fr(m, n - 1) : `${fr(m, n - 1)}·10^{${e}}`;
+}
+const SUP = { '-': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' };
+const sciTxt = v => sci(v).replace(/\^\{(-?\d+)\}/, (_, e) => [...e].map(ch => SUP[ch]).join(''));
+const fC = C => `${fx(C, 1)} µF`;
+const fV = u => `${fx(u, 2)} V`;
+function echelleY(v) {
+  const p10 = 10 ** Math.floor(Math.log10(v)); let lab = p10;
+  for (const m of [.1, .2, .5, 1, 2, 5, 10]) if (Math.ceil(1.15 * v / (m * p10) - 1e-9) <= 7) { lab = m * p10; break; }
+  return { lab, pas: lab / 2, max: Math.ceil(1.15 * v / lab - 1e-9) * lab };
+}
+const EB = () => echelleY(Ee(12) * 1e3);                       // axe de la barre (mJ) : fixe, jusqu’à u_C = 12 V
+
+/* ── Géométrie (cadre 760 × 420) ───────────────────────────────────────── */
+const PC = { x: 8, y: 40, w: 300, h: 372 }, PG = { x: 316, y: 40, w: 436, h: 372 };
+const GL = { O: { x: 366, y: 316 }, AXL: 196, AYL: 228 };     // vue lampe : graphe u_C(t)
+const GC = { O: { x: 62, y: 352 }, AXL: 300, AYL: 268 };      // vue calcul : graphe u_C(t) de la charge
+const BAR = { x0: 652, w: 32, x2: 704 };                       // barres E_e (vue lampe)
+const UMAX = 14;
+const G = () => (S.vue === 'lampe' ? GL : GC);
+const PY = u => G().O.y - u * G().AYL / UMAX;
+const PYb = e => GL.O.y - e * 1e3 * GL.AYL / EB().max;
+const marque = (c, nom) => { MM[nom] = c.cur; };
+
+/* Circuit (vue lampe) : condensateur à gauche, K en haut, lampe à droite. */
+const CI = { g: 62, d: 252, h: 112, b: 290, ym: 200 };
+const progres = c => (M._d0 === undefined ? 0 : clamp((c.t - M._d0) / D_DECHARGE));
+const kFerme = c => (M._k === undefined ? 0 : clamp((c.t - M._k) / .5));
+const uLampe = p => S.U * Math.exp(-p * T_LAMPE);
+
+/** Condensateur chimique peint (cylindre bleu, chapeau argenté, bande claire « − »). */
+function peindreCondensateur(ctx, x, y) {
+  const w = 28, h = 50;
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(x + w / 2 + 3, y + h + 3, w / 2 + 2, 4, 0, 0, Math.PI * 2); ctx.fill();
+  const g = ctx.createLinearGradient(x, 0, x + w, 0);
+  g.addColorStop(0, '#1e3a8a'); g.addColorStop(.35, '#3b82f6'); g.addColorStop(.55, '#60a5fa'); g.addColorStop(1, '#1e3a8a');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 5); ctx.fill();
+  ctx.fillStyle = 'rgba(226,232,240,.55)'; ctx.fillRect(x + w - 9, y + 4, 5, h - 8);
+  ctx.fillStyle = '#1e3a8a'; ctx.font = '10px sans-serif'; for (let k = 0; k < 3; k++) ctx.fillText('−', x + w - 9, y + 14 + k * 14);
+  const a = ctx.createLinearGradient(x, 0, x + w, 0); a.addColorStop(0, '#94a3b8'); a.addColorStop(.5, '#e2e8f0'); a.addColorStop(1, '#94a3b8');
+  ctx.fillStyle = a; ctx.beginPath(); ctx.ellipse(x + w / 2, y + 2, w / 2, 3.5, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+/** Lampe peinte : ampoule de verre, filament, culot ; halo selon la puissance (∝ u_C²). Pour l’œil seulement. */
+function peindreLampe(ctx, x, y, b) {
+  ctx.save();
+  if (b > .01) {
+    const h = ctx.createRadialGradient(x, y, 4, x, y, 24 + 46 * b);
+    h.addColorStop(0, `rgba(255,236,170,${.75 * b})`); h.addColorStop(.45, `rgba(255,200,90,${.32 * b})`); h.addColorStop(1, 'rgba(255,200,90,0)');
+    ctx.fillStyle = h; ctx.beginPath(); ctx.arc(x, y, 24 + 46 * b, 0, Math.PI * 2); ctx.fill();
+  }
+  const v = ctx.createRadialGradient(x - 5, y - 6, 2, x, y, 17);
+  v.addColorStop(0, b > .05 ? `rgba(255,250,220,${.5 + .5 * b})` : 'rgba(226,232,240,.35)'); v.addColorStop(1, b > .05 ? `rgba(255,214,120,${.25 + .4 * b})` : 'rgba(148,163,184,.18)');
+  ctx.fillStyle = v; ctx.beginPath(); ctx.arc(x, y, 15, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(226,232,240,.6)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.strokeStyle = b > .05 ? `rgba(255,${200 + 55 * b},${120 + 120 * b},1)` : 'rgba(120,113,108,.9)'; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.moveTo(x - 6, y + 6); ctx.lineTo(x - 4, y - 3); ctx.lineTo(x - 1, y + 2); ctx.lineTo(x + 2, y - 3); ctx.lineTo(x + 4, y + 2); ctx.lineTo(x + 6, y - 3); ctx.lineTo(x + 6, y + 6); ctx.stroke();
+  const c = ctx.createLinearGradient(x - 8, 0, x + 8, 0); c.addColorStop(0, '#64748b'); c.addColorStop(.5, '#cbd5e1'); c.addColorStop(1, '#64748b');
+  ctx.fillStyle = c; ctx.fillRect(x - 8, y + 14, 16, 10);
+  ctx.restore();
+}
+/** Électron : petite sphère bleue ombrée. */
+function electron(ctx, x, y) {
+  const g = ctx.createRadialGradient(x - 1.5, y - 1.5, .5, x, y, 4.5);
+  g.addColorStop(0, '#dbeafe'); g.addColorStop(.5, '#3b82f6'); g.addColorStop(1, '#1e3a8a');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+}
+/** Chemin des électrons pendant la décharge : de l’armature − (en bas) vers l’armature + (en haut), par la lampe. */
+const CHEMIN = [[CI.g, CI.ym + 12], [CI.g, CI.b], [CI.d, CI.b], [CI.d, CI.h], [CI.g, CI.h], [CI.g, CI.ym - 12]];
+function surChemin(s) {
+  for (let k = 0; k < CHEMIN.length - 1; k++) {
+    const [x1, y1] = CHEMIN[k], [x2, y2] = CHEMIN[k + 1], L = Math.hypot(x2 - x1, y2 - y1);
+    if (s <= L) return [x1 + (x2 - x1) * s / L, y1 + (y2 - y1) * s / L];
+    s -= L;
+  }
+  return null;
+}
+
+function dessiner(c) {
+  scene.cadre(53); MM = {};
+  if (S.vue === 'lampe') vueLampe(c); else vueCalcul(c);
+  c.pause(.6); marque(c, 'fin');
+  // La poignée se voit : un petit anneau rose sur l’axe des tensions, à la tension de départ.
+  c.direct(() => { c.cercle(G().O.x, PY(S.U), 7, { couleur: 'rose', largeur: 2 }); });
+  declarerReperes(c);
+  const fini = c.fin();
+  M = MM;
+  return fini || !S.running;
+}
+function axeU(c, g, couleur = 'faible') {
+  const { O, AYL } = g, L = AYL * 14 / UMAX + 14, ug = [];
+  for (let v = 1; v <= 14; v++) ug.push([(v * AYL / UMAX) / L, v % 2 === 0 ? String(v) : null]);
+  c.axe(O.x, O.y, O.x, O.y - L, ug, { taille: 12, vertical: true, couleur });
+  c.texte('u_C (V)', O.x + 8, O.y - L + 4, { couleur: 'blanc', taille: 15, duree: .3 });
+  c.texte('0', O.x - 8, O.y + 16, { couleur: 'faible', taille: 12, align: 'right', duree: .05 });
+}
+function vueLampe(c) {
+  const U = S.U, ctx = c.ctx;
+  // Le peint d’abord (la craie reste par-dessus) : condensateur, lampe, électrons.
+  const p = progres(c), u = uLampe(p);
+  c.direct(() => {
+    peindreCondensateur(ctx, CI.g + 22, CI.ym - 25);
+    peindreLampe(ctx, CI.d, CI.ym, p > 0 && p < 1.0001 ? (u / 12) ** 2 : 0);
+    if (p > 0 && p < 1 && U > 0) {
+      const L = 2 * (CI.b - CI.h) + 2 * (CI.d - CI.g), avance = 140 * (1 - Math.exp(-p * T_LAMPE));
+      for (let k = 0; k < 9; k++) { const pt = surChemin((k * L / 9 + avance) % (L - 30)); if (pt) electron(ctx, pt[0], pt[1]); }
+    }
+  });
+  c.texte(`Énergie : ${TITRES.lampe}`, PC.x + 6, 30, { couleur: 'cyan', taille: 17, duree: .9 });
+  c.rect(PC.x, PC.y, PC.w, PC.h, { couleur: 'tresfaible', arrondi: 10, duree: .3 });
+  c.rect(PG.x, PG.y, PG.w, PG.h, { couleur: 'tresfaible', arrondi: 10, duree: .3 });
+  // Le circuit à la craie : condensateur (symbole), K, lampe (symbole).
+  const xk = (CI.g + CI.d) / 2;
+  c.trait([[CI.g, CI.ym - 7], [CI.g, CI.h], [xk - 20, CI.h]], { couleur: 'blanc', largeur: 2 });
+  c.trait([[xk + 20, CI.h], [CI.d, CI.h], [CI.d, CI.ym - 17]], { couleur: 'blanc', largeur: 2 });
+  c.trait([[CI.d, CI.ym + 17], [CI.d, CI.b], [CI.g, CI.b], [CI.g, CI.ym + 7]], { couleur: 'blanc', largeur: 2 });
+  c.ligne(CI.g - 18, CI.ym - 7, CI.g + 18, CI.ym - 7, { couleur: 'blanc', largeur: 3 });
+  c.ligne(CI.g - 18, CI.ym + 7, CI.g + 18, CI.ym + 7, { couleur: 'blanc', largeur: 3 });
+  c.texte('+q', CI.g - 22, CI.ym - 14, { couleur: 'rouge', taille: 15, align: 'right' });
+  c.texte('−q', CI.g - 22, CI.ym + 24, { couleur: 'bleu', taille: 15, align: 'right' });
+  c.texte('C', CI.g - 36, CI.ym + 5, { couleur: 'blanc', taille: 17, align: 'right' });
+  c.point(xk - 20, CI.h, 3.5, 'blanc'); c.point(xk + 20, CI.h, 3.5, 'blanc');
+  c.texte('K', xk, CI.h - 26, { couleur: 'blanc', taille: 17, align: 'center' });
+  c.texte('lampe', CI.d - 26, CI.ym + 46, { couleur: 'blanc', taille: 15, align: 'center' });
+  c.texte(`au départ : u_C = ${fx(U, 1)} V`, CI.g + 30, CI.ym + 70, { couleur: 'faible', taille: 14 });
+  // Graphe u_C(t) (allure : pas de graduations sur t) et l’axe de la barre.
+  const { O, AXL } = GL;
+  axeU(c, GL);
+  c.fleche(O.x, O.y, O.x + AXL + 14, O.y, { couleur: 'faible', largeur: 1.6 });
+  c.texte('t', O.x + AXL + 18, O.y + 5, { couleur: 'blanc', taille: 15, duree: .1 });
+  c.texte('décharge dans la lampe', O.x + 4, PG.y + 22, { couleur: 'faible', taille: 14, duree: .6 });
+  c.pause(.3);
+  // decharge_lampe : K se ferme, la lampe s’allume puis faiblit, u_C descend.
+  MM._k = c.cur; c.pause(.6);
+  c.direct(() => {
+    const f = kFerme(c), a = -.55 * (1 - f);
+    c.ligne(xk - 20, CI.h, xk - 20 + 40 * Math.cos(a), CI.h + 40 * Math.sin(a), { couleur: 'blanc', largeur: 2.2 });
+  });
+  MM._d0 = c.cur; c.pause(D_DECHARGE);
+  c.direct(() => {
+    if (p > 0) {
+      const n = Math.max(2, Math.round(70 * p));
+      c.courbe(k => { const ts = k * p * T_LAMPE; return [O.x + ts * AXL / T_LAMPE, PY(S.U * Math.exp(-ts))]; }, n, { couleur: 'bleu', largeur: 2.6 });
+      const ts = p * T_LAMPE; c.point(O.x + ts * AXL / T_LAMPE, PY(u), 4, 'bleu');
+    }
+  });
+  c.texte('le condensateur rend', PC.x + 12, 346, { couleur: 'bleu', taille: 17 });
+  c.texte('l’énergie stockée', PC.x + 12, 368, { couleur: 'bleu', taille: 17 });
+  marque(c, 'decharge_lampe');
+  c.pause(.4);
+  // barre : E_e = ½·C·u_C² à côté de la courbe.
+  const eb = EB(), LB = GL.AYL + 14, bg = [];
+  for (let i = 1; i * eb.pas <= eb.max + 1e-9; i++) { const v = i * eb.pas; bg.push([(v * GL.AYL / eb.max) / LB, i % 2 === 0 ? fx(v, 3) : null]); }
+  c.axe(BAR.x0 - 10, O.y, BAR.x0 - 10, O.y - LB, bg, { taille: 11, vertical: true });
+  c.texte('E_e (mJ)', BAR.x0 - 4, O.y - LB + 2, { couleur: 'blanc', taille: 14, duree: .3 });
+  barre(c, BAR.x0, U, 'vert');
+  c.texte(`${fx(U, 1)} V`, BAR.x0 + BAR.w / 2, O.y + 18, { couleur: 'vert', taille: 13, align: 'center' });
+  c.texte('E_e = ½·C·u_C²', PG.x + 12, 360, { couleur: 'blanc', taille: 19 });
+  c.texte(`= ½ × ${fx(S.C, 1)}·10⁻⁶ × ${fx(U, 1)}² ≈ ${sci(Ee(U))} J`, PG.x + 12, 392, { couleur: 'vert', taille: 16, max: PG.w - 24 });
+  marque(c, 'barre');
+  c.pause(.4);
+  // carre : la tension double → l’énergie × 4 (barre pour u_C/2 à côté).
+  barre(c, BAR.x2, U / 2, 'cyan');
+  c.texte(`${fx(U / 2, 1)} V`, BAR.x2 + BAR.w / 2, O.y + 18, { couleur: 'cyan', taille: 13, align: 'center' });
+  c.texte('× 4', BAR.x0 + BAR.w / 2, PYb(Ee(U)) - 8, { couleur: 'jaune', taille: 16, align: 'center' });
+  c.texte('u_C × 2 → E_e × 4', PC.x + 12, 400, { couleur: 'jaune', taille: 18 });
+  marque(c, 'carre');
+}
+function barre(c, x, u, couleur) {
+  const y = PYb(Ee(u)), h = GL.O.y - y;
+  if (h <= .5) return;
+  c.rect(x, y, BAR.w, h, { couleur, largeur: 2, arrondi: 3 });
+  // Le remplissage n’apparaît qu’une fois le cadre de la barre tracé (écriture en direct).
+  if (c.t >= c.cur) c.direct(() => { const k = c.ctx; k.globalAlpha = .35; k.fillStyle = c.couleur(couleur); k.fillRect(x + 1, y + 1, BAR.w - 2, h - 2); k.globalAlpha = 1; });
+}
+function vueCalcul(c) {
+  const U = S.U, E = U, C = S.C, { O, AXL, AYL } = GC, X = 400, T = 1;   // axe des temps en « τ » (0 à 6τ)
+  const px = t => O.x + t * AXL / 6.4, uc = t => E * (1 - Math.exp(-t / T));
+  c.texte(`Énergie : ${TITRES.calcul}`, 14, 30, { couleur: 'cyan', taille: 17, duree: .9 });
+  c.rect(8, 40, 384, 372, { couleur: 'tresfaible', arrondi: 10, duree: .3 });
+  c.rect(X - 2, 40, 752 - X + 2, 372, { couleur: 'tresfaible', arrondi: 10, duree: .3 });
+  axeU(c, GC);
+  const tg = []; for (let k = 1; k <= 6; k++) tg.push([(px(k) - O.x) / (AXL + 14), k === 1 ? 'τ' : `${k}τ`]);
+  c.axe(O.x, O.y, O.x + AXL + 14, O.y, tg, { taille: 13 });
+  c.texte('t', O.x + AXL + 14, O.y - 10, { couleur: 'blanc', taille: 15, duree: .1 });
+  c.texte(`C = ${fC(C)} ; E = ${fx(E, 1)} V`, X + 10, 66, { couleur: 'faible', taille: 15, duree: .8 });
+  c.pause(.3);
+  // regime_permanent
+  c.courbe(k => { const t = k * 6.2; return [px(t), PY(uc(t))]; }, 80, { couleur: 'rouge', largeur: 2.6, duree: 1.4 });
+  c.ligne(px(5), PY(E) - 14, px(6.2), PY(E) - 14, { couleur: 'faible', largeur: 1.2, duree: .2 });
+  c.texte('régime permanent : u_C = E', px(6.2), PY(E) - 22, { couleur: 'faible', taille: 14, align: 'right' });
+  c.texte('E_e = ½·C·u_C²', X + 10, 100, { couleur: 'blanc', taille: 20 });
+  c.texte('régime permanent : u_C = E', X + 10, 130, { couleur: 'faible', taille: 14 });
+  c.texte('E_e = ½·C·E²', X + 10, 156, { couleur: 'blanc', taille: 17 });
+  c.texte(`= ½ × ${fx(C, 1)}·10⁻⁶ × ${fx(E, 1)}²`, X + 10, 182, { couleur: 'blanc', taille: 17, max: 752 - X - 20 });
+  c.texte(`≈ ${sci(Ee(E))} J`, X + 22, 214, { couleur: 'vert', taille: 21 });
+  c.rect(X + 10, 192, 150, 32, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  marque(c, 'regime_permanent');
+  c.pause(.4);
+  // a_tau
+  const u63 = .63 * E;
+  c.ligne(O.x, PY(u63), px(T), PY(u63), { couleur: 'cyan', largeur: 1.6, pointille: [6, 5] });
+  c.ligne(px(T), PY(u63), px(T), O.y, { couleur: 'cyan', largeur: 1.6, pointille: [6, 5] });
+  c.cercle(px(T), PY(u63), 5, { couleur: 'cyan', largeur: 1.8 });
+  c.texte('0,63·E', px(T) + 10, PY(u63) + 20, { couleur: 'cyan', taille: 14 });
+  c.texte('à t = τ : u_C = 0,63·E', X + 10, 254, { couleur: 'cyan', taille: 16 });
+  c.texte('E_e = ½·C·(0,63·E)² ≈ 0,40 × ½·C·E²', X + 10, 278, { couleur: 'cyan', taille: 15, max: 752 - X - 20 });
+  c.texte(`E_e ≈ ${sci(.3969 * Ee(E))} J`, X + 10, 302, { couleur: 'cyan', taille: 15 });
+  marque(c, 'a_tau');
+  c.pause(.4);
+  // reste_70
+  const u70 = Math.sqrt(.7) * E;
+  c.ligne(O.x, PY(u70), px(6.2), PY(u70), { couleur: 'bleu', largeur: 1.4, pointille: [3, 5] });
+  c.texte(`u_C ≈ ${fx(u70, 1)} V`, px(6.2), PY(u70) + 18, { couleur: 'bleu', taille: 14, align: 'right' });
+  c.texte('l’énergie diminue de 30 % : il en reste 70 %', X + 10, 336, { couleur: 'bleu', taille: 15, max: 752 - X - 20 });
+  c.texte(`½·C·u_C² = 0,70 × ½·C·E² ≈ ${sci(.7 * Ee(E))} J`, X + 10, 360, { couleur: 'bleu', taille: 15, max: 752 - X - 20 });
+  c.texte(`u_C = √0,70 × E ≈ 0,84 × ${fx(E, 1)} ≈ ${fx(Math.round(u70 * 10) / 10, 1)} V`, X + 10, 386, { couleur: 'bleu', taille: 15, max: 752 - X - 20 });
+  marque(c, 'reste_70');
+}
+function declarerReperes(c) {
+  const U = S.U, lampe = S.vue === 'lampe', ici = v => (S.vue === v ? '' : ` (vue « ${v} »)`), X = 400;
+  c.repere('lampe', CI.d - 30, CI.ym - 30, 60, 76, `la lampe : elle s’allume puis faiblit${ici('lampe')}`);
+  c.repere('condensateur', CI.g - 40, CI.ym - 30, 100, 60, `le condensateur chargé (u_C = ${fx(U, 1)} V)${ici('lampe')}`);
+  if (lampe) {
+    c.repere('barre', BAR.x0 - 6, GL.O.y - GL.AYL - 14, BAR.x2 + BAR.w - BAR.x0 + 12, GL.AYL + 34, `la barre E_e = ½·C·u_C² ≈ ${sciTxt(Ee(U))} J (u_C = ${fx(U, 1)} V)`);
+    c.repere('courbe', GL.O.x, PY(U), GL.AXL, GL.O.y - PY(U), `la courbe u_C(t) de la décharge dans la lampe, de ${fx(U, 1)} V vers 0`);
+    c.repere('formule', PG.x + 8, 340, 170, 28, 'E_e = ½·C·u_C²');
+    c.repere('calcul', PG.x + 8, 372, PG.w - 16, 28, `E_e = ½ × ${fx(S.C, 1)}·10⁻⁶ × ${fx(U, 1)}²`);
+    c.repere('resultat', PG.x + 8, 372, PG.w - 16, 28, `E_e ≈ ${sciTxt(Ee(U))} J`);
+  } else {
+    c.repere('barre', X + 4, 84, 230, 24, `E_e = ½·C·u_C² (la barre est dans la vue « lampe »)`);
+    c.repere('courbe', GC.O.x, PY(U), GC.AXL, GC.O.y - PY(U), `la courbe de charge u_C(t), palier E = ${fx(U, 1)} V`);
+    c.repere('formule', X + 4, 82, 200, 26, 'E_e = ½·C·u_C²');
+    c.repere('calcul', X + 4, 140, 752 - X - 12, 50, `E_e = ½·C·E² = ½ × ${fx(S.C, 1)}·10⁻⁶ × ${fx(U, 1)}²`);
+    c.repere('resultat', X + 8, 190, 156, 36, `E_e ≈ ${sciTxt(Ee(U))} J`);
+  }
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+const craie = scene.craie;
+scene.cadre = function (graine) {
+  const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  craie.debut(graine, S.t);
+  const s = Math.min(W / VW, H / VH) || 1;
+  scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
+  craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
+  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+  return craie;
+};
+function calculer() { const t = S.t, r = S.running; S.t = 1e6; S.running = false; try { dessiner(craie); dessiner(craie); } finally { S.t = t; S.running = r; } scene.sale = true; }
+function moments() { if (M.fin === undefined) calculer(); const out = {}; for (const k of VUES[S.vue]) out[k] = +M[k].toFixed(2); return out; }
+const vu = n => M[n] !== undefined && S.t >= M[n] - 1e-6;
+
+const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+/** La bulle est du texte HTML : pas de « _ » visible (E_e → Eₑ, I_0 → I₀, u_C → uC). */
+const INDICES = { 0: '₀', 1: '₁', 2: '₂', e: 'ₑ', m: 'ₘ', a: 'ₐ', o: 'ₒ', x: 'ₓ' };
+const lisible = s => String(s).replace(/_\{?([A-Za-z0-9]+)\}?/g, (_, x) => [...x].map(ch => INDICES[ch] || ch).join(''));
+const dire = (texte, kind = '') => { S.dit = texte; bulle($('feedback'), lisible(texte), kind); };
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t += dt * VITESSE;
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.jusqua = null; S.running = false;
+    if (S.t >= M.fin - 1e-6) { finir(); return true; }
+    S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 1)} s`) + '.');
+    pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); return true;
+  }
+  if (M.fin !== undefined && S.t >= M.fin) { S.t = M.fin; finir(); return true; }
+  if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function conclusion() {
+  const U = S.U;
+  return S.vue === 'lampe'
+    ? `Le condensateur chargé rend son énergie à la lampe. E_e = ½·C·u_C² ≈ ${sciTxt(Ee(U))} J pour u_C = ${fx(U, 1)} V : si u_C double, E_e est multipliée par 4.`
+    : `E_e = ½·C·E² = ½ × ${fx(S.C, 1)}·10⁻⁶ × ${fx(U, 1)}² ≈ ${sciTxt(Ee(U))} J ; à t = τ, E_e ≈ 0,40 × ½·C·E² ; s’il reste 70 % de l’énergie, u_C ≈ 0,84 × E ≈ ${fx(Math.round(Math.sqrt(.7) * U * 10) / 10, 1)} V.`;
+}
+function finir() { S.running = false; S.fait = true; S.pause = false; etiquette(); dire(conclusion(), 'good'); pont.noter('measurement', { vue: S.vue }); pont.emettre(); }
+const MOTIFS = {
+  decharge_lampe: 'K fermé : la lampe s’allume puis faiblit', barre: 'la barre E_e = ½·C·u_C²', carre: 'u_C × 2 → E_e × 4',
+  regime_permanent: 'E_e = ½·C·E² ≈ 1,6·10⁻² J', a_tau: 'à t = τ : E_e ≈ 0,40 × ½·C·E²', reste_70: 'il reste 70 % de l’énergie', fin: 'tout est écrit',
+};
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
+function ceQuiSeVoit() {
+  if (M.fin === undefined) calculer();
+  const U = S.U, E = sciTxt(Ee(U));
+  const m = [`Vue « ${S.vue} » (${TITRES[S.vue]})${S.running ? ', la craie écrit' : S.fait ? ', fin : tout est écrit' : S.pause ? ', arrêt sur image' : ', pas encore lancée'}. C = ${fC(S.C)}, u_C de départ = ${fx(U, 1)} V.`];
+  const L = [];
+  if (S.vue === 'lampe') {
+    const p = M._d0 === undefined ? 0 : clamp((S.t - M._d0) / D_DECHARGE), u = uLampe(p);
+    L.push(`circuit : condensateur chimique bleu chargé (+q en haut, −q en bas), interrupteur K ${S.t >= (M._k ?? 1e9) ? 'fermé' : 'ouvert'}, petite lampe`);
+    if (p > 0 && p < 1) L.push(`décharge en cours : u_C ≈ ${fx(u, 1)} V, la lampe ${u > U * .3 ? 'brille' : 'faiblit'}, les électrons (sphères bleues) circulent`);
+    if (vu('decharge_lampe')) L.push(`la lampe s’est allumée puis s’est éteinte ; courbe bleue u_C(t) de ${fx(U, 1)} V vers 0 (axe des temps sans graduation : allure) ; « le condensateur rend l’énergie stockée »`);
+    if (vu('barre')) L.push(`barre verte E_e à côté de la courbe ; « E_e = ½·C·u_C² = ½ × ${fx(S.C, 1)}·10⁻⁶ × ${fx(U, 1)}² ≈ ${E} J »`);
+    if (vu('carre')) L.push(`deuxième barre pour u_C = ${fx(U / 2, 1)} V : ${sciTxt(Ee(U / 2))} J, quatre fois plus petite ; « u_C × 2 → E_e × 4 »`);
+  } else {
+    if (vu('regime_permanent')) L.push(`courbe rouge de charge jusqu’au palier E = ${fx(U, 1)} V (axe des temps gradué en τ) ; « E_e = ½·C·E² = ½ × ${fx(S.C, 1)}·10⁻⁶ × ${fx(U, 1)}² ≈ ${E} J » (encadré)`);
+    if (vu('a_tau')) L.push(`point à t = τ, u_C = 0,63·E = ${fV(.63 * U)} ; « E_e = ½·C·(0,63·E)² ≈ 0,40 × ½·C·E² ≈ ${sciTxt(.3969 * Ee(U))} J »`);
+    if (vu('reste_70')) L.push(`« l’énergie diminue de 30 % : il en reste 70 % » ; ½·C·u_C² = 0,70 × ½·C·E² ≈ ${sciTxt(.7 * Ee(U))} J ; u_C = √0,70 × E ≈ 0,84 × ${fx(U, 1)} ≈ ${fx(Math.round(Math.sqrt(.7) * U * 10) / 10, 1)} V (pointillé bleu)`);
+  }
+  m.push(L.length ? `Au tableau : ${L.join(' ; ')}.` : 'Rien encore de tracé.');
+  m.push(`Poignée : la tension de départ u_C, à glisser sur l’axe des tensions (0 à 12 V).`);
+  if (S.fait) m.push(`Conclusion : ${conclusion()}`);
+  return m.join(' ');
+}
+
+/* ── Commandes ─────────────────────────────────────────────────────────── */
+function start() { S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire(S.vue === 'lampe' ? 'Le condensateur est chargé ; on va fermer K…' : 'On calcule l’énergie stockée…'); pont.noter('start', { vue: S.vue }); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
+function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('La craie continue…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  calculer(); const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = clamp(t, 0, M.fin); S.fait = S.t >= M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+  etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fr(S.t, 1)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function playUntil(p) {
+  calculer();
+  const nom = VUES[S.vue].includes(p.moment) ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+  S.jusqua = clamp(cible, .01, M.fin); S.motif = nom ? MOTIFS[nom] : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+const auPas = v => Math.round(clamp(v, 0, 12) * 2) / 2;
+function setParameters(p) {
+  p = p || {}; let vue = false, phys = false;
+  if (p.vue && VUES[p.vue] && p.vue !== S.vue) { S.vue = p.vue; vue = true; }
+  const uc = p.u_C ?? p.uC ?? p.U;
+  if (uc !== undefined && uc !== null && uc !== '' && Number.isFinite(+uc)) { const v = auPas(+uc); if (v !== S.U) { S.U = v; phys = true; } }
+  if (p.C_uF !== undefined && p.C_uF !== null && p.C_uF !== '' && Number.isFinite(+p.C_uF)) { const v = clamp(+p.C_uF, 10, 1000); if (v !== S.C) { S.C = v; phys = true; } }
+  M = {}; calculer();
+  pont.noter('set_parameters', { vue: S.vue, u_C: S.U, C_uF: S.C });
+  if (vue) { start(); return; }
+  if (phys) { S.running = false; S.jusqua = null; S.t = M.fin; S.fait = true; S.pause = false; etiquette(); scene.sale = true; dire(`u_C = ${fx(S.U, 1)} V, C = ${fC(S.C)} : E_e = ½·C·u_C² ≈ ${sciTxt(Ee(S.U))} J.`); }
+  pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+
+/* Poignée : la tension de départ u_C, glissée le long de l’axe des tensions. */
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => { const [x, y] = scene.local(px, py), g = G(); return Math.abs(x - g.O.x) < 18 && Math.abs(y - PY(S.U)) < 16 ? 'u' : null; },
+  bouger: (id, px, py) => { const [, y] = scene.local(px, py), g = G(), v = auPas((g.O.y - y) * UMAX / g.AYL); if (v !== S.U) { S.U = v; scene.sale = true; } },
+  lacher: () => { pont.noter('set_parameters', { u_C: S.U }); dire(`u_C = ${fx(S.U, 1)} V : E_e = ½·C·u_C² ≈ ${sciTxt(Ee(S.U))} J.`); pont.emettre(); },
+});
+
+window.Tableau.explication({
+  lampe: [
+    { repere: 'condensateur', texte: 'Le condensateur est chargé : il stocke de l’énergie.' },
+    { repere: 'lampe', texte: 'On ferme K : la lampe s’allume puis faiblit. Le condensateur rend l’énergie stockée.' },
+    { repere: 'formule', texte: 'L’énergie stockée : E_e = ½·C·u_C².' },
+    { repere: 'barre', texte: 'u_C double : l’énergie est multipliée par 4, car u_C est au carré.' },
+  ],
+  calcul: [
+    { repere: 'formule', texte: 'E_e = ½·C·u_C² ; au régime permanent u_C = E.' },
+    { repere: 'resultat', texte: 'E_e = ½ × 220·10⁻⁶ × 12² ≈ 1,6·10⁻² J.' },
+    { repere: 'courbe', texte: 'À t = τ, u_C = 0,63·E : E_e ≈ 0,40 × ½·C·E².' },
+    { repere: 'calcul', texte: 'Si l’énergie diminue de 30 %, il en reste 70 %.' },
+  ],
+});
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+calculer();
+const config = { id: 'dipole_rc_energie', version: '1.0', title: 'L’énergie du condensateur', variants: Object.keys(VUES).map(id => ({ id, label: TITRES[id] })), commands: commandes,
+  command_schema: {
+    set_parameters: { vue: 'lampe | calcul (change la vue et la retrace depuis le début)', u_C: '0..12 pas 0,5 (V) : tension de départ (poignée sur l’axe des tensions)', C_uF: '10..1000 pas 10 (µF)' },
+    set_time: { time_s: '0..fin (arrêt sur cet instant de l’écriture, en s ; voir moments)' },
+    play_until: { moment: 'lampe : decharge_lampe | barre | carre | fin ; calcul : regime_permanent | a_tau | reste_70 | fin', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Énergie stockée dans un condensateur : E_e = ½·C·u_C² = q²/(2C). Un condensateur chargé allume une lampe : il rend l’énergie stockée. Si u_C double, E_e est multipliée par 4. Avec C = 220 µF et E = 12 V : E_e = ½·C·E² = ½ × 220·10⁻⁶ × 12² ≈ 1,6·10⁻² J ; à t = τ, u_C = 0,63·E et E_e ≈ 0,40 × ½·C·E² ; si l’énergie diminue de 30 %, il en reste 70 %.',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle', ce_qui_se_voit: ceQuiSeVoit(), current_variant: S.vue,
+    time_s: +S.t.toFixed(2), parameters: { vue: S.vue, u_C: S.U, C_uF: S.C, E_e_J: +Ee(S.U).toPrecision(4) }, moments: moments() }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+dire('L’énergie du condensateur…');
+setTimeout(() => { if (!S.running && S.t === 0 && !S.pause) start(); }, 900);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

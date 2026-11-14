@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Calculs au tableau — dérivation et étude des fonctions</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Calcul écrit à la craie, ligne après ligne, comme au tableau : les mots importants encadrés, les tableaux de signe et de variations qui se remplissent"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/derivation-tableau/calculs-vues.js"></script>
+<script>
+/*
+ * Cours « Dérivation et étude des fonctions » (math_ch2_derivation_etude_fonctions) : les calculs écrits à la main
+ * au tableau (?vue=<id>). Le contenu de chaque vue vient de calculs-vues.js, ÉCRIT PAR LE BUILD DU COURS
+ * (maths_build/derivation_etude_fonctions/build.py, depuis les p*.py) : ne pas le modifier à la main.
+ * Ligne : {t, c: couleur, m: moment marqué après elle, cadre: couleur, r: [repère, libellé], barre: true, x, dx,
+ *          meme: true (même hauteur que la précédente), taille, inter, p: pause avant (s), tab: tableau}.
+ * Tableau (tab) : {w, cols: [libellés de la ligne x], rows: [{nom, cells: [[pos, texte, couleur]], var: [[pos, texte, 'h'|'b'|'m']], m, r}], barres: [pos]}
+ *   pos = indice de colonne (0 … n−1), un demi pour « entre deux colonnes » ; var : flèches entre valeurs successives.
+ * Le prime s’écrit f' au tableau (le ′ est invisible dans la police de la craie).
+ */
+const IND = { '0': '₀', '1': '₁', '2': '₂', 'd': 'd', 'g': 'g', 'f': 'f' };
+const lisible = s => String(s).replace(/_\{([^}]+)\}|_([A-Za-z0-9])/g, (m, a, b) => (a || b)).replace(/\^\{([^}]+)\}/g, '^$1');
+const craie = s => String(s).replace(/′/g, "'").replace(/″/g, "''")
+  .replace(/([fg])'_([dg])/g, "$1_$2'")                                   // f'_d(0) → f indice d, puis le prime
+  .replace(/_\{([^}]*)\}/g, (m, a) => '_{' + a.replace(/⁻/g, '−').replace(/⁺/g, '+') + '}');   // pas d’exposant dans un indice
+const larg = (c, s, t) => c.largeurTexte(String(s).replace(/[_^{}]/g, ''), t);
+function barre(c, x, y, w) { c.ligne(x - 3, y + 2, x + w + 3, y - 14, { couleur: 'rouge', largeur: 2.4 }); }
+const HL = 34, HV = 62;
+function hauteurTab(T) { return 30 + T.rows.reduce((h, r) => h + (r.var ? HV : HL), 0); }
+function tableau(c, K, T, x0, ytop) {
+  const w = T.w || 600, n = T.cols.length, nomW = T.nomW || 96, marge = 30;
+  const X = pos => x0 + nomW + marge + (w - nomW - 2 * marge) * (n > 1 ? pos / (n - 1) : .5);
+  const H = hauteurTab(T);
+  c.rect(x0, ytop, w, H, { couleur: 'faible', arrondi: 4, largeur: 1.4 });
+  c.ligne(x0 + nomW, ytop, x0 + nomW, ytop + H, { couleur: 'faible', largeur: 1.4 });
+  c.ligne(x0, ytop + 30, x0 + w, ytop + 30, { couleur: 'faible', largeur: 1.4 });
+  c.texte('x', x0 + nomW / 2, ytop + 21, { couleur: 'blanc', taille: 17, align: 'center' });
+  T.cols.forEach((l, i) => c.texte(craie(l), X(i), ytop + 21, { couleur: 'blanc', taille: 16, align: 'center' }));
+  if (T.m0) K.marque(T.m0);
+  let y = ytop + 30;
+  for (const r of T.rows) {
+    const h = r.var ? HV : HL;
+    c.pause(.15);
+    c.ligne(x0, y + h, x0 + w, y + h, { couleur: 'faible', largeur: 1.2, duree: .05 });
+    c.texte(craie(r.nom), x0 + nomW / 2, y + h / 2 + 6, { couleur: 'jaune', taille: 15, align: 'center', max: nomW - 8 });
+    for (const b of T.barres || []) { c.ligne(X(b) - 2, y, X(b) - 2, y + h, { couleur: 'blanc', largeur: 1.2, duree: .04 }); c.ligne(X(b) + 2, y, X(b) + 2, y + h, { couleur: 'blanc', largeur: 1.2, duree: .04 }); }
+    if (r.cells) for (const [p, t, coul] of r.cells) c.texte(craie(t), X(p), y + h / 2 + 7, { couleur: coul || 'blanc', taille: r.taille || 17, align: 'center', max: r.max || 200 });
+    if (r.var) {
+      const yy = k => (k === 'h' ? y + 18 : k === 'b' ? y + h - 8 : y + h / 2 + 6);
+      let prec = null;
+      r.var.forEach(([p, t, k, sansFleche], i) => {
+        const dxv = (r.var[i + 1] && r.var[i + 1][0] === p) ? -20 : (r.var[i - 1] && r.var[i - 1][0] === p) ? 20 : 0;
+        if (prec && !sansFleche) {
+          const xa = X(prec[0]) + 22 + prec[3], xb = X(p) - 22 + dxv, ya = yy(prec[2]) + (prec[2] === 'h' ? 4 : -10), yb = yy(k) + (k === 'h' ? 4 : -10);
+          c.fleche(xa, ya, xb, yb, { couleur: 'cyan', largeur: 1.8, tete: 8 });
+        }
+        c.texte(craie(t), X(p) + dxv, yy(k), { couleur: 'blanc', taille: 15, align: 'center' });
+        prec = [p, t, k, dxv];
+      });
+    }
+    if (r.r) c.repere(r.r[0], x0, y, w, h, r.r[1]);
+    if (r.m) K.marque(r.m);
+    y += h;
+  }
+  if (T.r) c.repere(T.r[0], x0, ytop, w, H, T.r[1]);
+  return H;
+}
+const vues = {};
+for (const [id, d] of Object.entries(window.CALCULS || {})) {
+  vues[id] = {
+    titre: d.titre,
+    dessiner(c, K) {
+      K.titre(craie(d.titre));
+      let y = d.y0 || 82, yPrec = y, xPrec = 30;
+      for (const l of d.lignes) {
+        c.pause(l.p ?? .25);
+        const taille = l.taille || d.taille || 19;
+        if (l.meme) y = yPrec;
+        const x = l.x ?? (l.meme ? xPrec : 30 + (l.dx || 0));
+        if (l.tab) {
+          const H = tableau(c, K, l.tab, x, y - 18);
+          if (l.m) K.marque(l.m);
+          yPrec = y; y += l.inter ?? (H + 26);
+          continue;
+        }
+        const t = craie(l.t), w = Math.min(740 - x, larg(c, t, taille));
+        c.texte(t, x, y, { couleur: l.c || 'blanc', taille, max: 740 - x });
+        if (l.cadre) c.rect(x - 8, y - taille - 4, w + 16, taille + 14, { couleur: l.cadre, arrondi: 7, largeur: 1.6 });
+        if (l.barre) barre(c, x, y - 4, w);
+        if (l.r) c.repere(l.r[0], x - 6, y - taille - 6, w + 12, taille + 16, l.r[1]);
+        if (l.m) K.marque(l.m);
+        yPrec = y; xPrec = x + w + 14;
+        y += l.inter ?? Math.round(taille * 1.8);
+      }
+    },
+    decrire(K) {
+      const D = {}; let acc = [];
+      for (const l of d.lignes) {
+        if (l.tab) { acc.push('un tableau : x = ' + l.tab.cols.join(', ') + ' ; ' + l.tab.rows.map(r => r.nom + ' : ' + (r.cells || r.var || []).map(e => e[1]).join(' ')).join(' ; ')); }
+        else acc.push(lisible(l.t) + (l.barre ? ' (barré)' : ''));
+        for (const r of (l.tab ? l.tab.rows : [])) if (r.m) { D[r.m] = 'Écrit : ' + acc.join(' ; ') + '.'; }
+        if (l.m) { D[l.m] = 'Écrit : ' + acc.join(' ; ') + '.'; acc = []; }
+      }
+      return D;
+    },
+    explication: d.lignes.filter(l => l.r).map(l => ({ repere: l.r[0], texte: lisible(l.r[1]) })),
+  };
+}
+MathsTableau.page({
+  id: 'df_calculs', titre: 'Calculs au tableau',
+  texte: 'Calculs et démonstrations du cours Dérivation et étude des fonctions écrits à la craie, ligne après ligne, rédigés comme au barème du national',
+  vues,
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

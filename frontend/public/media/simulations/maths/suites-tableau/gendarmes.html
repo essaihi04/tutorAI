@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Coincée entre deux — critère de comparaison</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Tableau à la craie : inégalités recollées l’une dans l’autre ; une suite coincée entre 0 et une borne qui tend vers 0 ; une bande qui se resserre autour de la limite 2"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/suites-tableau/su-outils.js"></script>
+<script>
+/*
+ * Cours « Suites numériques » (math_ch3_suites_numeriques) : critère de comparaison (c4, c6, c7, c8).
+ * Vues : ?vue=membre (image : les inégalités recollées) | encadre (paramètre k de 0,2 à 0,9 : la borne (3/2)kⁿ ;
+ * k = 0,4 : la suite du national 2020, u₀ = 3/2, uₙ₊₁ = 2uₙ/(2uₙ + 5)) | bande (2025 R : 0 < 2 − uₙ ≤ (1/2)(2/7)ⁿ).
+ */
+const { fr } = MathsTableau;
+const NS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+const U20 = SU.suite(1.5, x => 2 * x / (2 * x + 5), 10);
+const OPT = { x0: 70, y0: 56, w: 420, h: 274, xmin: -0.4, xmax: 10.6, ymin: -0.15, ymax: 1.65, nomx: 'n', nomy: '', gx: [[0, '0'], [1, '1'], [5, '5'], [10, '10']], gy: [[0.5, '0,5'], [1, '1'], [1.5, '1,5']] };
+const milieu = (k, n) => (Math.abs(k - 0.4) < 1e-6 ? U20[n] : 1.5 * Math.pow(k, n) / (1 + 0.3 * n));
+
+MathsTableau.page({
+  id: 'su_gendarmes', titre: 'Critère de comparaison',
+  texte: 'Constructions à la craie : les inégalités uₙ₊₁ ≤ (2/5)uₙ recollées jusqu’à uₙ ≤ (2/5)ⁿu₀ ; une suite coincée entre 0 et (3/2)kⁿ qui tend vers 0 ; la bande autour de ℓ = 2 qui se resserre',
+  vues: {
+    membre: {
+      titre: 'On recolle les inégalités',
+      dessiner(c, K) {
+        K.titre('Chaque terme : au plus les 2/5 du précédent');
+        const x = 60, Y = [86, 134, 182, 222, 270];
+        c.texte('u_1 ≤ (2/5) u_0', x, Y[0], { couleur: 'blanc', taille: 22 });
+        K.marque('ligne1');
+        c.pause(.3);
+        const xs = SU.morceaux(c, x, Y[1], [{ t: 'u_2 ≤ (2/5) ' }, { t: 'u_1', couleur: 'cyan' }, { t: ' ≤ (2/5)² u_0' }], { taille: 22 });
+        K.marque('ligne2');
+        c.pause(.3);
+        c.cercle(x + 10, Y[0] - 8, 17, { couleur: 'cyan', largeur: 1.6 });
+        c.courbe(t => [x + 26 + (xs[1] + 4 - x - 26) * t, Y[0] + 6 + (Y[1] - 30 - Y[0] - 6) * t - Math.sin(Math.PI * t) * 10], 16, { couleur: 'cyan', largeur: 1.8 });
+        c.fleche(xs[1], Y[1] - 34, xs[1] + 6, Y[1] - 24, { couleur: 'cyan', largeur: 1.8, tete: 8 });
+        c.texte('on recolle', xs[1] + 30, Y[0] + 22, { couleur: 'cyan', taille: 18 });
+        c.repere('recolle', x - 10, Y[0] - 28, xs[2] - x + 20, Y[1] - Y[0] + 36, 'u₁ se recolle dans la ligne suivante');
+        K.marque('recolle');
+        c.pause(.3);
+        c.texte('u_3 ≤ (2/5) u_2 ≤ (2/5)³ u_0', x, Y[2], { couleur: 'blanc', taille: 22 });
+        K.marque('ligne3');
+        c.pause(.3);
+        c.texte('⋮', x + 20, Y[3], { couleur: 'faible', taille: 24 });
+        c.rect(x - 10, Y[4] - 30, 460, 44, { couleur: 'jaune', arrondi: 8, largeur: 1.8 });
+        c.texte('u_n ≤ (2/5)^{n} u_0 = (3/2)(2/5)^{n}', x, Y[4], { couleur: 'jaune', taille: 23 });
+        c.texte('la preuve propre : une récurrence', x, 334, { couleur: 'orange', taille: 19 });
+        c.repere('ligne_n', x - 14, Y[4] - 34, 470, 52, 'uₙ ≤ (3/2)(2/5)ⁿ');
+        K.marque('ligne_n');
+      },
+      decrire: {
+        ligne1: 'Écrit : u₁ ≤ (2/5)u₀.',
+        ligne2: 'Dessous : u₂ ≤ (2/5)u₁ ≤ (2/5)²u₀.',
+        recolle: 'Une flèche cyan ramène le u₁ de la première ligne dans la deuxième : « on recolle ».',
+        ligne3: 'Puis : u₃ ≤ (2/5)u₂ ≤ (2/5)³u₀.',
+        ligne_n: 'Après « ⋮ », encadré en jaune : uₙ ≤ (2/5)ⁿu₀ = (3/2)(2/5)ⁿ ; en orange : la preuve propre : une récurrence.',
+      },
+      explication: [{ repere: 'recolle', texte: 'On remplace u₁ par ce qu’on sait déjà de lui.' }, { repere: 'ligne_n', texte: 'Au rang n : la puissance n de 2/5.' }],
+    },
+    encadre: {
+      titre: 'Coincée entre 0 et une borne qui tend vers 0',
+      params: { k: { min: 0.2, max: 0.9, pas: 0.05, defaut: 0.4, sens: 'la raison k de la borne (3/2)kⁿ (glisser le point orange n = 1)' } },
+      dessiner(c, K) {
+        const k = K.P.k;
+        K.titre('0 < u_n ≤ (3/2) k^{n}');
+        const G = K.axes(OPT);
+        K.marque('repere');
+        SU.points(c, G, NS.map(n => [n, 0]), { couleur: 'vert', pas: .05, r: 3.6 });
+        c.repere('bas', G.X(0) - 8, G.Y(0) - 10, G.X(10) - G.X(0) + 16, 20, 'en bas : 0');
+        K.lignes(520, 110, [{ t: 'en bas : 0', couleur: 'vert', moment: 'bas' }], 32);
+        c.pause(.3);
+        SU.points(c, G, NS.map(n => [n, 1.5 * Math.pow(k, n)]), { couleur: 'orange', pas: .08 });
+        c.direct(() => c.cercle(G.X(1), G.Y(1.5 * k), 9, { couleur: 'orange', largeur: 1.8 }));
+        c.repere('haut', G.X(0) - 8, G.Y(1.5) - 10, G.X(10) - G.X(0) + 16, G.Y(0) - G.Y(1.5) + 6, 'en haut : (3/2)kⁿ');
+        K.lignes(520, 144, [{ t: 'en haut : (3/2)(' + fr(k) + ')^{n}', couleur: 'orange', moment: 'haut' }], 32);
+        c.pause(.3);
+        SU.points(c, G, NS.map(n => [n + 0.12, milieu(k, n)]), { couleur: 'cyan', pas: .1, r: 4 });
+        c.repere('entre', G.X(0) - 8, G.Y(1.5) - 10, G.X(10) - G.X(0) + 16, G.Y(0) - G.Y(1.5) + 20, 'la suite, entre les deux');
+        K.lignes(520, 178, [{ t: 'u_n : entre les deux', couleur: 'cyan', moment: 'entre' }], 32);
+        c.pause(.4);
+        c.fleche(G.X(6.5), G.Y(0.55), G.X(9.4), G.Y(0.12), { couleur: 'jaune', largeur: 2 });
+        c.fleche(G.X(6.5), G.Y(-0.12), G.X(9.4), G.Y(-0.04), { couleur: 'jaune', largeur: 2 });
+        c.repere('resserre', G.X(6), G.Y(0.6), G.X(10) - G.X(6), G.Y(-0.15) - G.Y(0.6), 'tout se resserre vers 0');
+        K.lignes(520, 240, [{ t: 'les deux bornes → 0,', couleur: 'jaune' }, { t: 'donc u_n → 0', couleur: 'jaune', taille: 22, moment: 'resserre' }], 32);
+      },
+      poignees(K) { const G = K.grille(OPT); return [{ id: 'k', x: G.X(1), y: G.Y(1.5 * K.P.k), bouger: (x, y) => ({ k: G.inv(x, y)[1] / 1.5 }) }]; },
+      lecture: K => `k = ${fr(K.P.k)} : la borne (3/2)kⁿ vaut ${fr(1.5 * K.P.k, 3)} pour n = 1, ${fr(1.5 * Math.pow(K.P.k, 5), 3)} pour n = 5 ; comme 0 < k < 1, elle tend vers 0 et la suite coincée aussi.`,
+      decrire: K => ({
+        repere: 'Un repère : n de 0 à 10, ordonnées de 0 à 1,5.',
+        bas: 'En bas, des points verts sur l’axe : 0.',
+        haut: `En haut, des points orange : la borne (3/2)kⁿ avec k = ${fr(K.P.k)} (1,5 ; ${fr(1.5 * K.P.k, 3)} ; …), qui descend vers 0.`,
+        entre: Math.abs(K.P.k - 0.4) < 1e-6 ? 'Entre les deux, la suite du national 2020 en cyan : 1,5 ; 0,375 ; 0,13 … toujours entre 0 et la borne.' : 'Entre les deux, une suite en cyan, toujours entre 0 et la borne.',
+        resserre: 'Deux flèches jaunes se resserrent vers 0 : les deux bornes → 0, donc uₙ → 0.',
+      }),
+      explication: [{ repere: 'bas', texte: 'Un camarade à 0 en dessous.' }, { repere: 'haut', texte: 'Un camarade qui va vers 0 au-dessus.' }, { repere: 'resserre', texte: 'Coincée entre les deux : elle va vers 0 aussi.' }],
+    },
+    bande: {
+      titre: 'L’écart à la limite se resserre',
+      dessiner(c, K) {
+        K.titre('0 < 2 − u_n ≤ (1/2)(2/7)^{n}');
+        const G = K.axes({ ...OPT, ymin: 1.35, ymax: 2.15, gy: [[1.5, '1,5'], [2, '2']] });
+        K.marque('repere');
+        SU.hligne(c, G, 2, { couleur: 'jaune', x0: -0.3, x1: 10.5, label: 'ℓ = 2', ly: -10 });
+        c.repere('ligne_l', G.X(-0.3), G.Y(2) - 12, G.X(10.5) - G.X(-0.3), 24, 'la limite ℓ = 2');
+        K.marque('limite_l');
+        c.pause(.3);
+        SU.points(c, G, NS.map(n => [n, 2 - 0.4 * Math.pow(2 / 7, n)]), { couleur: 'cyan', pas: .12 });
+        K.marque('points');
+        c.pause(.4);
+        NS.forEach(n => { c.pause(.06); c.ligne(G.X(n) + 7, G.Y(2 - 0.5 * Math.pow(2 / 7, n)), G.X(n) + 7, G.Y(2), { couleur: 'orange', largeur: 2.2 }); });
+        c.repere('bande', G.X(0) - 4, G.Y(2), G.X(10) - G.X(0) + 20, G.Y(1.5) - G.Y(2) + 6, 'l’écart 2 − uₙ, de plus en plus petit');
+        K.lignes(520, 120, [{ t: 'écart 2 − u_n', couleur: 'orange' }, { t: 'de plus en plus petit', couleur: 'orange', moment: 'bande_l' }], 32);
+        c.pause(.4);
+        K.lignes(520, 210, [{ t: '(1/2)(2/7)^{n} → 0', couleur: 'jaune' }, { t: 'donc 2 − u_n → 0', couleur: 'jaune' }, { t: 'lim u_n = 2', couleur: 'jaune', taille: 23, moment: 'conclusion' }], 34);
+      },
+      decrire: {
+        repere: 'Un repère : n de 0 à 10, ordonnées de 1,4 à 2,1.',
+        limite_l: 'Une droite jaune pointillée y = 2 : la limite ℓ = 2.',
+        points: 'Les points de la suite sous la droite : 1,6 ; 1,89 ; 1,97 ; 1,99… ils montent vers 2.',
+        bande_l: 'Pour chaque n, un trait orange de la borne 2 − (1/2)(2/7)ⁿ jusqu’à 2 : l’écart permis 2 − uₙ, de plus en plus petit.',
+        conclusion: 'Écrit : (1/2)(2/7)ⁿ → 0, donc 2 − uₙ → 0 : lim uₙ = 2.',
+      },
+      explication: [{ repere: 'bande', texte: 'L’écart à 2 est coincé dans une bande qui rétrécit.' }, { repere: 'ligne_l', texte: 'Si l’écart tend vers 0, la suite tend vers 2.' }],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

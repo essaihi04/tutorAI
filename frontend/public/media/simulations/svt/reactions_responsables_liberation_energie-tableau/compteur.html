@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Faisons la caisse — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="svt.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Le bilan en ATP de la respiration : à gauche le hyaloplasme peint (glycolyse), à droite une mitochondrie peinte (matrice : acétyl-CoA et cycle de Krebs ; membrane interne : chaîne respiratoire) ; un tableau de caisse se remplit étape par étape, les NADH,H+ et FADH2 sont convertis en ATP sur la chaîne respiratoire, les cartes ATP s'empilent dans la caisse : 38 ATP"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="peinture.js"></script>
+<script>
+/*
+ * « Faisons la caisse » : le bilan en ATP de la respiration d’un glucose (cours SVT « Libération de l’énergie »),
+ * 10 novembre 2026. Ce qui se voit (t en s de la scène) :
+ *   glycolyse_comptee (3) : hyaloplasme : 2 ATP directs, 2 NADH,H+ ;
+ *   acetyl_compte (6)     : matrice, formation de l’acétyl-CoA (× 2) : 0 ATP, 2 NADH,H+ ;
+ *   krebs_fois_deux (9)   : matrice, cycle de Krebs (× 2) : 2 ATP, 6 NADH,H+, 2 FADH2 ;
+ *   conversion (13)       : sur la chaîne respiratoire, chaque NADH,H+ donne 3 ATP, chaque FADH2 2 ATP :
+ *                           10 NADH,H+ × 3 = 30 ATP ; 2 FADH2 × 2 = 4 ATP ;
+ *   total_34 (16)         : chaîne respiratoire : 30 + 4 = 34 ATP ;
+ *   total_38 (19)         : bilan = 2 + 2 + (10 × 3) + (2 × 2) = 38 ATP (le cours suit l’énoncé ; certains documents écrivent 36).
+ * Aucun intermédiaire du cycle, aucun nom de complexe, aucune navette.
+ */
+const { bulle, protocole } = window.Tableau;
+const { Scene, Chrono, Apparitions, doux, mix, fr } = window.SVTTableau;
+const P = window.SVTPeinture;
+const $ = id => document.getElementById(id);
+
+const M = { glycolyse_comptee: 3, acetyl_compte: 6, krebs_fois_deux: 9, conversion: 13, total_34: 16, total_38: 19 };
+const FIN = 21;
+const MOTIFS = {
+  glycolyse_comptee: 'glycolyse : 2 ATP et 2 NADH,H+',
+  acetyl_compte: 'formation de l’acétyl-CoA : 2 NADH,H+',
+  krebs_fois_deux: 'cycle de Krebs, deux fois : 2 ATP, 6 NADH,H+, 2 FADH2',
+  conversion: 'chaque NADH,H+ donne 3 ATP, chaque FADH2 en donne 2',
+  total_34: 'la chaîne respiratoire : 34 ATP',
+  total_38: 'le bilan : 38 ATP par glucose',
+};
+const MITO = { x: 430, y: 100, rx: 145, ry: 54 }, CHAINE = { x: 556, y: 100 }, GLYBOX = { x: 120, y: 86 };
+const TAXI = [34, 190, 220], FAD = [192, 132, 252], CARTE = [250, 190, 60];
+/* Les taxis : où ils naissent, quand, de quel type ; puis l’ordre de conversion (les 10 NADH,H+, puis les 2 FADH2). */
+const TAXIS = [
+  { x: 92, y: 142, n: 1.2, fad: false }, { x: 152, y: 142, n: 1.5, fad: false },                                   // glycolyse
+  { x: 365, y: 78, n: 4.2, fad: false }, { x: 420, y: 78, n: 4.5, fad: false },                                    // acétyl-CoA
+  { x: 475, y: 78, n: 7, fad: false }, { x: 365, y: 100, n: 7.15, fad: false }, { x: 420, y: 100, n: 7.3, fad: false },
+  { x: 475, y: 100, n: 7.45, fad: false }, { x: 365, y: 122, n: 7.6, fad: false }, { x: 420, y: 122, n: 7.75, fad: false }, // Krebs
+  { x: 475, y: 122, n: 7.9, fad: true }, { x: 530, y: 122, n: 8.05, fad: true },
+];
+TAXIS.forEach((tx, i) => { tx.dep = 10.3 + .16 * i; tx.arr = tx.dep + .35; });
+/* Les cartes ATP : d’où elles partent, quand, et leur place dans la caisse. */
+const CARTES = [];
+for (let k = 0; k < 2; k++) CARTES.push({ x: GLYBOX.x, y: GLYBOX.y, t0: 1.4 + .3 * k, d: .9 });
+for (let k = 0; k < 2; k++) CARTES.push({ x: 475, y: 100, t0: 7.4 + .3 * k, d: .9 });
+TAXIS.forEach(tx => { for (let m = 0; m < (tx.fad ? 2 : 3); m++) CARTES.push({ x: CHAINE.x, y: CHAINE.y, t0: tx.arr + .05 * m, d: .4 }); });
+const slot = (k) => [628 + (k % 4) * 34, 384 - Math.floor(k / 4) * 17];
+const COL = { etape: 30, atp: 285, nadh: 400, fadh: 520 }, ROWS = [212, 234, 256], TOT = 284;
+
+const canvas = $('canvas');
+const scene = Scene(canvas, (c) => { scene.cadre(53); dessiner(c); return c.fin(); });
+const ecrit = Apparitions(scene);
+const chrono = Chrono({ fin: () => FIN, moments: () => M, motifs: MOTIFS, bouton: $('run'), bulle: $('feedback'), pont: () => pont,
+  depart: 'On compte les ATP d’un glucose, étape par étape…', reinit: () => ecrit.oublier(),
+  fini: () => 'Respiration : 38 ATP par glucose.' });
+scene.avancer = chrono.avancer;
+
+/* Une portion de cellule peinte : le hyaloplasme granuleux, la membrane plasmique en haut, à gauche et en bas. */
+function hyaloplasme(ctx, x, y, w, h) {
+  ctx.save();
+  const g = ctx.createLinearGradient(x, y, x + w, y + h);
+  g.addColorStop(0, P.rgba(P.T.hyalo, .30)); g.addColorStop(1, P.rgba(P.T.hyalo, .14));
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 26); ctx.fill(); ctx.clip();
+  const r = P.graine(29); ctx.fillStyle = P.rgba([200, 220, 180], .16);
+  for (let k = 0; k < 140; k++) { ctx.beginPath(); ctx.arc(x + r() * w, y + r() * h, .8 + r() * 1.5, 0, Math.PI * 2); ctx.fill(); }
+  ctx.restore();
+  ctx.save(); ctx.strokeStyle = P.rgba(P.T.membrane, .75); ctx.lineWidth = 2.2;
+  ctx.beginPath(); ctx.moveTo(x + w, y); ctx.lineTo(x + 26, y); ctx.arcTo(x, y, x, y + 26, 26); ctx.lineTo(x, y + h - 26); ctx.arcTo(x, y + h, x + 26, y + h, 26); ctx.lineTo(x + w, y + h); ctx.stroke();
+  ctx.restore();
+}
+function taxi(c, x, y, fad, a = 1) {
+  if (a <= 0) return;
+  c.direct(() => { P.proteine(c.ctx, x, y, 50, 15, { couleur: fad ? FAD : TAXI, alpha: .9 * a }); c.texte(fad ? 'FADH_{2}' : 'NADH,H+', x, y + 4, { couleur: 'blanc', taille: 11, align: 'center', alpha: a }); });
+}
+function carte(c, x, y, a = 1) {
+  c.direct(() => { P.proteine(c.ctx, x, y, 31, 14, { couleur: CARTE, alpha: .9 * a }); c.texte('ATP', x, y + 4, { couleur: 'rgba(60,40,0,.85)', taille: 11, align: 'center', alpha: a }); });
+}
+const posees = (t) => CARTES.filter(k => t >= k.t0 + k.d).length;
+
+function dessiner(c) {
+  const t = chrono.t;
+  c.direct(() => {
+    hyaloplasme(c.ctx, 10, 36, 586, 128);
+    P.mitochondrie(c.ctx, MITO.x, MITO.y, MITO.rx, MITO.ry, { cretes: 5, graine: 7 });
+    if (t >= 10.2 && t < 13) P.eclat(c.ctx, CHAINE.x, CHAINE.y, 26, .55);
+    if (t >= 15 && t < 16.6) P.eclat(c.ctx, CHAINE.x, CHAINE.y, 22 + 12 * chrono.part(15, 16.6, t), .7);
+  });
+  // ── craie fixe : le schéma ──
+  c.texte('Faisons la caisse : les ATP d’un glucose respiré', 18, 26, { couleur: 'cyan', taille: 18 });
+  c.texte('hyaloplasme', 24, 58, { couleur: 'vert', taille: 13 });
+  c.rect(GLYBOX.x - 75, GLYBOX.y - 18, 150, 28, { couleur: 'blanc', largeur: 1.6 });
+  c.texte('glycolyse', GLYBOX.x, GLYBOX.y + 2, { couleur: 'blanc', taille: 15, align: 'center' });
+  c.texte('glucose → 2 acides pyruviques', GLYBOX.x, 118, { couleur: 'faible', taille: 12, align: 'center' });
+  c.fleche(206, 112, 286, 104, { couleur: 'faible', largeur: 1.5 });
+  c.texte('matrice :', 600, 62, { couleur: 'bleu', taille: 14 });
+  c.texte('acétyl-CoA,', 600, 80, { couleur: 'bleu', taille: 14 });
+  c.texte('cycle de Krebs', 600, 98, { couleur: 'bleu', taille: 14 });
+  c.fleche(598, 70, 560, 78, { couleur: 'bleu', largeur: 1.4 });
+  c.texte('membrane interne :', 600, 128, { couleur: 'orange', taille: 14 });
+  c.texte('chaîne respiratoire', 600, 146, { couleur: 'orange', taille: 14 });
+  c.fleche(598, 124, 568, 112, { couleur: 'orange', largeur: 1.4 });
+  // ── craie fixe : le tableau de caisse ──
+  c.texte('étape', COL.etape, 186, { couleur: 'faible', taille: 14 });
+  c.texte('ATP directs', COL.atp, 186, { couleur: 'jaune', taille: 14, align: 'center' });
+  c.texte('NADH,H+', COL.nadh, 186, { couleur: 'cyan', taille: 14, align: 'center' });
+  c.texte('FADH_{2}', COL.fadh, 186, { couleur: 'violet', taille: 14, align: 'center' });
+  c.ligne(20, 194, 580, 194, { couleur: 'faible', largeur: 1.3 });
+  for (const x of [230, 340, 460]) c.ligne(x, 172, x, 292, { couleur: 'tresfaible', largeur: 1.2 });
+  c.ligne(20, 266, 580, 266, { couleur: 'faible', largeur: 1.3 });
+  c.texte('la caisse', 680, 186, { couleur: 'jaune', taille: 15, align: 'center' });
+  c.repere('glycolyse', 10, 36, 270, 128, 'la glycolyse, dans le hyaloplasme');
+  c.repere('matrice', MITO.x - MITO.rx, MITO.y - MITO.ry, 2 * MITO.rx - 20, 2 * MITO.ry, 'la matrice : acétyl-CoA et cycle de Krebs');
+  c.repere('chaine', 536, 110, 216, 44, 'la membrane interne : chaîne respiratoire');
+  c.repere('tableau', 16, 170, 568, 124, 'le tableau de caisse');
+  c.repere('caisse', 606, 168, 148, 226, 'la caisse : les ATP empilés');
+
+  const ligne = (y, cle, vals, couleur = 'blanc') => ecrit.ecrire(c, cle, () => {
+    c.texte(vals[0], COL.etape, y, { couleur, taille: 14 });
+    c.texte(vals[1], COL.atp, y, { couleur: 'jaune', taille: 15, align: 'center' });
+    c.texte(vals[2], COL.nadh, y, { couleur: 'cyan', taille: 15, align: 'center' });
+    c.texte(vals[3], COL.fadh, y, { couleur: 'violet', taille: 15, align: 'center' });
+  });
+  if (t >= 2.3) ligne(ROWS[0], 'r1', ['glycolyse', '2', '2', '0']);
+  if (t >= 5.2) ligne(ROWS[1], 'r2', ['acétyl-CoA (× 2)', '0', '2', '0']);
+  if (t >= 8.2) ligne(ROWS[2], 'r3', ['cycle de Krebs (× 2)', '2', '6', '2']);
+  if (t >= 9.5) ligne(TOT, 'tot', ['total', '4', '10', '2'], 'jaune');
+  if (t >= 10) ecrit.ecrire(c, 'regle', () => c.texte('règle : 1 NADH,H+ → 3 ATP ; 1 FADH_{2} → 2 ATP', 20, 312, { couleur: 'cyan', taille: 15 }));
+  if (t >= 12.3) ecrit.ecrire(c, 'conv', () => c.texte('10 NADH,H+ × 3 = 30 ATP ; 2 FADH_{2} × 2 = 4 ATP', 20, 336, { couleur: 'blanc', taille: 15 }));
+  if (t >= 15.2) ecrit.ecrire(c, 't34', () => c.texte('chaîne respiratoire : 30 + 4 = 34 ATP', 20, 360, { couleur: 'vert', taille: 15 }));
+  if (t >= 18) ecrit.ecrire(c, 't38', () => c.texte('bilan = 2 + 2 + (10 × 3) + (2 × 2) = 38 ATP', 20, 388, { couleur: 'jaune', taille: 18 }));
+  if (t >= 19.2) ecrit.ecrire(c, 'note', () => c.texte('certains documents écrivent 36 ATP : on suit l’énoncé', 20, 410, { couleur: 'faible', taille: 12 }));
+  if (t >= 10) c.repere('conversion', 16, 296, 572, 46, 'la conversion des NADH,H+ et FADH2 en ATP');
+  if (t >= 15.2) c.repere('total', 16, 344, 572, 72, 'le total : 34 puis 38 ATP');
+
+  // les taxis : ils naissent à leur étape, puis vont se convertir sur la chaîne respiratoire
+  for (const tx of TAXIS) {
+    if (t < tx.n) continue;
+    const a = chrono.part(tx.n, tx.n + .5, t);
+    if (t < tx.dep) { taxi(c, tx.x, tx.y, tx.fad, a); continue; }
+    const u = doux(chrono.part(tx.dep, tx.arr, t));
+    if (u < 1) taxi(c, mix(tx.x, CHAINE.x, u), mix(tx.y, CHAINE.y, u), tx.fad, 1 - .3 * u);
+  }
+  // les cartes ATP : en vol, puis posées dans la caisse
+  CARTES.forEach((k, i) => {
+    if (t < k.t0) return;
+    const u = doux(chrono.part(k.t0, k.t0 + k.d, t)), [sx, sy] = slot(i);
+    carte(c, mix(k.x, sx, u), mix(k.y, sy, u) - Math.sin(u * Math.PI) * 30);
+  });
+  const n = posees(t);
+  c.direct(() => c.texte(`${n} ATP`, 680, 208, { couleur: n === 38 ? 'vert' : 'blanc', taille: 16, align: 'center' }));
+}
+
+function phase(t) {
+  if (t < 1.2) return 'Le schéma : hyaloplasme (glycolyse) à gauche, mitochondrie à droite (matrice : acétyl-CoA, cycle de Krebs ; membrane interne : chaîne respiratoire). Le tableau de caisse est vide.';
+  if (t < 4) return 'Glycolyse comptée : 2 ATP directs (deux cartes vont dans la caisse) et 2 NADH,H+ (deux taxis dans le hyaloplasme).';
+  if (t < 7) return 'Formation de l’acétyl-CoA (× 2), dans la matrice : 0 ATP, 2 NADH,H+.';
+  if (t < 10) return 'Cycle de Krebs (× 2), dans la matrice : 2 ATP directs, 6 NADH,H+, 2 FADH2. Ligne total : 4 ATP directs, 10 NADH,H+, 2 FADH2.';
+  if (t < 13) return 'Conversion sur la chaîne respiratoire : chaque taxi NADH,H+ s’y décharge et donne 3 cartes ATP, chaque FADH2 en donne 2 ; règle écrite : 1 NADH,H+ → 3 ATP ; 1 FADH2 → 2 ATP.';
+  if (t < 15.2) return 'Écrit : 10 NADH,H+ × 3 = 30 ATP ; 2 FADH2 × 2 = 4 ATP.';
+  if (t < 18) return 'Écrit : chaîne respiratoire : 30 + 4 = 34 ATP.';
+  return 'Écrit : bilan = 2 + 2 + (10 × 3) + (2 × 2) = 38 ATP ; en petit : certains documents écrivent 36 ATP, on suit l’énoncé.';
+}
+function ceQuiSeVoit() {
+  const t = chrono.t;
+  return `t = ${fr(t, 1)} s${chrono.running ? ' (ça avance)' : chrono.fait ? ' (fin)' : ' (arrêté)'}. ${phase(t)} Caisse : ${posees(t)} ATP.`;
+}
+
+$('run').onclick = chrono.clic;
+window.Tableau.explication({ caisse: [
+  { repere: 'glycolyse', texte: 'La glycolyse : 2 ATP et 2 NADH,H+.' },
+  { repere: 'matrice', texte: 'Dans la matrice : 2 NADH,H+ pour l’acétyl-CoA, puis le cycle de Krebs deux fois : 2 ATP, 6 NADH,H+, 2 FADH2.' },
+  { repere: 'tableau', texte: 'Le tableau de caisse : 4 ATP directs, 10 NADH,H+, 2 FADH2.' },
+  { repere: 'chaine', texte: 'Sur la chaîne respiratoire, chaque NADH,H+ donne 3 ATP, chaque FADH2 en donne 2.' },
+  { repere: 'conversion', texte: '10 fois 3 font 30, 2 fois 2 font 4 : 34 ATP.' },
+  { repere: 'total', texte: 'Au total : 2 + 2 + 30 + 4 = 38 ATP par glucose.' } ] });
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'play_until'];
+const config = { id: 'svt_energie_compteur_atp', version: '1.0', title: 'Faisons la caisse : le bilan en ATP de la respiration', variants: [{ id: 'caisse', label: 'bilan en ATP' }], commands: commandes,
+  command_schema: { set_time: { time_s: `0..${FIN} (arrêt sur cet instant)` }, play_until: { moment: Object.keys(M).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Bilan en ATP de la respiration d’un glucose. Glycolyse (hyaloplasme) : 2 ATP, 2 NADH,H+. Formation de l’acétyl-CoA (matrice, × 2) : 2 NADH,H+. Cycle de Krebs (matrice, × 2) : 2 ATP, 6 NADH,H+, 2 FADH2. Chaîne respiratoire (membrane interne) : 1 NADH,H+ → 3 ATP, 1 FADH2 → 2 ATP ; 10 × 3 = 30 ATP, 2 × 2 = 4 ATP, soit 34 ATP. Bilan = 2 + 2 + (10 × 3) + (2 × 2) = 38 ATP (certains documents écrivent 36 ATP : on suit l’énoncé).',
+  etat: () => ({ simulation_status: chrono.statut(), ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'caisse', time_s: +chrono.t.toFixed(2), parameters: {}, moments: M }),
+  progression: () => chrono.t / FIN,
+  executer: (cmd, p) => ({ start: chrono.start, reset: chrono.start, pause: chrono.pause, resume: chrono.resume, set_time: () => chrono.setTime(p), play_until: () => chrono.playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Faisons la caisse : combien d’ATP pour un glucose ?');
+setTimeout(() => { if (!chrono.running && chrono.t === 0) chrono.start(); }, 1600);
+window.__sim = { chrono, scene, M };
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

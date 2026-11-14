@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Traverser l’axe — théorème des valeurs intermédiaires</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Repère à la craie : une courbe continue part sous l’axe des abscisses et arrive au-dessus, elle le coupe en un point α"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Limites et continuité » (math_ch1_limites_continuite), bloc TVI (diapositives t1 à t9).
+ * Vues : ?vue=une | coupee | au_dessus | vague | droite_k | alpha.
+ * Fonction fil rouge : f(x) = x³ + x − 1 sur [0 ; 1] : f(0) = −1 < 0, f(1) = 1 > 0, α ≈ 0,68.
+ * Moments nommés (play_until) : voir chaque vue ; `fin` = construction complète.
+ */
+const f = x => x * x * x + x - 1;
+const ALPHA = 0.6823;
+const OPT = { x0: 70, y0: 70, w: 380, h: 300, xmin: -0.3, xmax: 1.35, ymin: -1.6, ymax: 1.7, gx: [[0, ''], [1, '']], gy: [[1, '1'], [-1, '−1']] };
+const base = (K, o = {}) => K.axes({ ...OPT, ...o });
+function bornes(c, K, G, a, b) {
+  c.ligne(G.X(a), G.Y(-1.5), G.X(a), G.Y(1.6), { couleur: 'tresfaible', largeur: 1.2, pointille: [4, 6] });
+  c.ligne(G.X(b), G.Y(-1.5), G.X(b), G.Y(1.6), { couleur: 'tresfaible', largeur: 1.2, pointille: [4, 6] });
+  c.texte('a', G.X(a) - 4, G.Y(0) + 20, { couleur: 'jaune', taille: 17 });
+  c.texte('b', G.X(b) + 4, G.Y(0) + 20, { couleur: 'jaune', taille: 17 });
+}
+function texteDroite(c, K, liste) { return K.lignes(470, 110, liste.map(l => ({ taille: 17, ...l })), 32); }
+
+MathsTableau.page({
+  id: 'lc_traversee', titre: 'Le théorème des valeurs intermédiaires',
+  texte: 'Construction à la craie du cours Limites et continuité : une courbe continue sur [a ; b], une image sous l’axe, une au-dessus ; elle coupe l’axe des abscisses en au moins un point α',
+  vues: {
+    une: {
+      titre: 'Une courbe continue sur [a ; b], f(a) < 0 < f(b)',
+      dessiner(c, K) {
+        K.titre('Couper l’axe sans résoudre');
+        const G = base(K); c.repere('repere', G.x0, G.y0, G.w, G.h, 'le repère');
+        bornes(c, K, G, 0, 1); K.marque('repere_pose');
+        K.anime(2.2, p => K.courbePart(G, f, -0.15, 1.2, p, { couleur: 'cyan' }));
+        c.repere('courbe', G.X(0), G.Y(1.2), G.X(1) - G.X(0), G.Y(-1.2) - G.Y(1.2), 'la courbe de f');
+        K.marque('courbe_tracee');
+        c.pause(.3); K.rond(G, 0, f(0), true, 'rouge'); K.proj(G, 0, f(0), { versX: false, ly: '', couleur: 'rouge' });
+        c.texte('f(a) < 0', G.X(0) + 12, G.Y(-1) + 22, { couleur: 'rouge', taille: 17 });
+        c.repere('fa', G.X(0) - 10, G.Y(-1) - 10, 90, 40, 'f(a), sous l’axe'); K.marque('fa_place');
+        c.pause(.3); K.rond(G, 1, f(1), true, 'vert');
+        c.texte('f(b) > 0', G.X(1) - 80, G.Y(1) - 12, { couleur: 'vert', taille: 17 });
+        c.repere('fb', G.X(1) - 84, G.Y(1) - 30, 100, 40, 'f(b), au-dessus de l’axe'); K.marque('fb_place');
+        c.pause(.4); K.rond(G, ALPHA, 0, true, 'jaune'); c.cercle(G.X(ALPHA), G.Y(0), 12, { couleur: 'jaune', largeur: 1.6 });
+        c.repere('croisement', G.X(ALPHA) - 16, G.Y(0) - 16, 32, 32, 'le point où la courbe coupe l’axe'); K.marque('croisement');
+        c.pause(.3); c.texte('α', G.X(ALPHA) - 5, G.Y(0) + 34, { couleur: 'jaune', taille: 22 });
+        c.texte('f(α) = 0', G.X(ALPHA) + 14, G.Y(0) - 14, { couleur: 'jaune', taille: 16 });
+        K.marque('alpha_nomme');
+        c.pause(.3);
+        texteDroite(c, K, [
+          { t: 'f continue sur [a ; b]', couleur: 'cyan', repere: 'cond_continue' },
+          { t: 'f(a) × f(b) < 0', couleur: 'cyan', repere: 'cond_produit' },
+          { t: 'donc f(x) = 0 admet au moins', couleur: 'blanc' },
+          { t: 'une solution α dans ]a ; b[', couleur: 'blanc', moment: 'conclusion' },
+        ]);
+      },
+      decrire: {
+        repere_pose: 'Un repère ; deux pointillés verticaux aux abscisses a et b.',
+        courbe_tracee: 'La courbe de f (cyan) est tracée d’un seul trait, sans lever la craie, de a à b.',
+        fa_place: 'f(a) est marqué en rouge, sous l’axe des abscisses : f(a) < 0.',
+        fb_place: 'f(b) est marqué en vert, au-dessus de l’axe : f(b) > 0.',
+        croisement: 'Un rond jaune entoure le point où la courbe coupe l’axe des abscisses.',
+        alpha_nomme: 'Ce point a pour abscisse α, avec f(α) = 0.',
+        conclusion: 'À droite, écrit : f continue sur [a ; b], f(a) × f(b) < 0, donc f(x) = 0 admet au moins une solution α dans ]a ; b[.',
+      },
+      motifs: { courbe_tracee: 'la courbe tracée d’un trait', fa_place: 'f(a) sous l’axe', fb_place: 'f(b) au-dessus', croisement: 'la courbe coupe l’axe', alpha_nomme: 'α nommé' },
+      explication: [{ repere: 'fa', texte: 'f(a) est négatif : la courbe part sous l’axe.' }, { repere: 'fb', texte: 'f(b) est positif : elle arrive au-dessus.' }, { repere: 'croisement', texte: 'Sans lever la craie, elle doit couper l’axe : là, f(α) = 0.' }],
+    },
+    coupee: {
+      titre: 'Une fonction non continue : la courbe saute',
+      dessiner(c, K) {
+        K.titre('Sans continuité, la courbe saute');
+        const G = base(K); bornes(c, K, G, 0, 1); K.marque('repere_pose');
+        const g1 = x => 0.6 * x - 1, g2 = x => 0.5 * x + 0.4, xs = 0.55;
+        K.anime(1.2, p => K.courbePart(G, g1, -0.15, xs, p, { couleur: 'cyan' }));
+        K.rond(G, xs, g1(xs), true, 'cyan');
+        K.anime(1.0, p => K.courbePart(G, g2, xs, 1.2, p, { couleur: 'cyan' }));
+        K.rond(G, xs, g2(xs), false, 'cyan');
+        K.marque('courbe_tracee');
+        K.rond(G, 0, g1(0), true, 'rouge'); c.texte('f(a) < 0', G.X(0) + 12, G.Y(g1(0)) + 22, { couleur: 'rouge', taille: 17 });
+        K.rond(G, 1, g2(1), true, 'vert'); c.texte('f(b) > 0', G.X(1) - 80, G.Y(g2(1)) - 14, { couleur: 'vert', taille: 17 });
+        K.marque('signes_places');
+        c.pause(.4);
+        c.fleche(G.X(xs) + 40, G.Y(-0.3), G.X(xs) + 6, G.Y(-0.4), { couleur: 'orange' });
+        c.texte('saut', G.X(xs) + 44, G.Y(-0.3) + 6, { couleur: 'orange', taille: 18 });
+        c.repere('saut', G.X(xs) - 20, G.Y(g2(xs)) - 10, 80, G.Y(g1(xs)) - G.Y(g2(xs)) + 20, 'le saut de la courbe');
+        K.marque('saut_sans_croisement');
+        c.pause(.3);
+        texteDroite(c, K, [
+          { t: 'f(a) × f(b) < 0', couleur: 'cyan' },
+          { t: 'mais f n’est pas continue :', couleur: 'orange' },
+          { t: 'la courbe passe de l’autre côté', couleur: 'blanc' },
+          { t: 'sans couper l’axe.', couleur: 'blanc' },
+          { t: '1ʳᵉ condition : f continue', couleur: 'jaune', repere: 'cond_continue', moment: 'conclusion' },
+        ]);
+      },
+      decrire: {
+        repere_pose: 'Un repère ; pointillés aux abscisses a et b.',
+        courbe_tracee: 'Une courbe en deux morceaux : le premier s’arrête sous l’axe, le second repart au-dessus (rond vide).',
+        signes_places: 'f(a) < 0 en rouge, f(b) > 0 en vert.',
+        saut_sans_croisement: 'Flèche orange « saut » : la courbe passe au-dessus de l’axe sans le couper.',
+        conclusion: 'Écrit : sans continuité pas de solution assurée ; 1ʳᵉ condition : f continue.',
+      },
+    },
+    au_dessus: {
+      titre: 'Deux images du même signe',
+      dessiner(c, K) {
+        K.titre('Une image dessous, une dessus');
+        const G = base(K); bornes(c, K, G, 0, 1); K.marque('repere_pose');
+        const h = x => 0.9 * (x - 0.5) * (x - 0.5) + 0.35;
+        K.anime(1.8, p => K.courbePart(G, h, -0.15, 1.2, p, { couleur: 'cyan' }));
+        K.rond(G, 0, h(0), true, 'vert'); K.rond(G, 1, h(1), true, 'vert');
+        c.texte('f(a) > 0', G.X(0) + 10, G.Y(h(0)) - 12, { couleur: 'vert', taille: 17 });
+        c.texte('f(b) > 0', G.X(1) - 30, G.Y(h(1)) - 14, { couleur: 'vert', taille: 17 });
+        K.marque('toute_au_dessus');
+        c.pause(.3);
+        texteDroite(c, K, [
+          { t: 'f(a) > 0 et f(b) > 0', couleur: 'vert' },
+          { t: 'f(a) × f(b) > 0 :', couleur: 'blanc' },
+          { t: 'rien n’oblige la courbe', couleur: 'blanc' },
+          { t: 'à couper l’axe.', couleur: 'blanc' },
+          { t: 'Signes contraires ⇔ produit < 0', couleur: 'jaune', repere: 'regle_produit', moment: 'conclusion' },
+        ]);
+      },
+      decrire: { repere_pose: 'Un repère, a et b.', toute_au_dessus: 'Une courbe en creux qui reste au-dessus de l’axe : f(a) > 0 et f(b) > 0.', conclusion: 'Écrit : produit positif, rien n’oblige à couper l’axe ; signes contraires ⇔ produit < 0.' },
+    },
+    vague: {
+      titre: 'Au moins une solution : la courbe peut couper plusieurs fois',
+      dessiner(c, K) {
+        K.titre('Au moins une solution');
+        const G = base(K); bornes(c, K, G, 0, 1); K.marque('repere_pose');
+        const w = x => -Math.cos(3 * Math.PI * x) * 0.9 + 0.1 * x;
+        K.anime(2.2, p => K.courbePart(G, w, -0.1, 1.15, p, { couleur: 'cyan' }));
+        K.rond(G, 0, w(0), true, 'rouge'); K.rond(G, 1, w(1), true, 'vert');
+        K.marque('courbe_tracee');
+        const Z = [1 / 6, 0.5, 5 / 6].map(z => { let a = z - .1, b = z + .1; for (let i = 0; i < 40; i++) { const m = (a + b) / 2; if (w(a) * w(m) <= 0) b = m; else a = m; } return (a + b) / 2; });
+        Z.forEach((z, i) => { c.pause(.25); K.rond(G, z, 0, true, 'jaune'); c.texte(['α₁', 'α₂', 'α₃'][i], G.X(z) - 8, G.Y(0) + 30, { couleur: 'jaune', taille: 18 }); });
+        c.repere('trois', G.X(Z[0]) - 14, G.Y(0) - 14, G.X(Z[2]) - G.X(Z[0]) + 28, 46, 'trois points de rencontre');
+        K.marque('trois_croisements');
+        c.pause(.3);
+        texteDroite(c, K, [
+          { t: 'Le théorème dit « au moins une ».', couleur: 'blanc' },
+          { t: 'Ici : trois solutions.', couleur: 'jaune' },
+          { t: 'Pour « une seule » :', couleur: 'blanc' },
+          { t: 'f strictement monotone.', couleur: 'cyan', repere: 'monotone', moment: 'conclusion' },
+        ]);
+      },
+      decrire: { repere_pose: 'Un repère, a et b.', courbe_tracee: 'Une courbe en vague, de f(a) < 0 à f(b) > 0.', trois_croisements: 'Elle coupe l’axe trois fois : α₁, α₂, α₃.', conclusion: 'Écrit : au moins une ; pour une seule, f strictement monotone.' },
+    },
+    alpha: {
+      titre: 'Unique : f strictement croissante, la courbe ne revient pas',
+      dessiner(c, K) {
+        K.titre('Unique : la courbe ne revient pas');
+        const G = base(K); bornes(c, K, G, 0, 1); K.marque('repere_pose');
+        K.anime(2, p => K.courbePart(G, f, -0.15, 1.2, p, { couleur: 'cyan' }));
+        K.rond(G, 0, f(0), true, 'rouge'); K.rond(G, 1, f(1), true, 'vert');
+        K.marque('courbe_tracee');
+        c.pause(.2);
+        c.fleche(G.X(0.15), G.Y(f(0.15)) + 26, G.X(0.95), G.Y(f(0.95)) + 26, { couleur: 'vert', largeur: 2 });
+        c.texte('strictement croissante', G.X(0.5) + 6, G.Y(f(0.5)) + 54, { couleur: 'vert', taille: 16 });
+        c.repere('croissante', G.X(0.1), G.Y(f(0.9)), G.X(0.9) - G.X(0.1), G.Y(f(0.1)) - G.Y(f(0.9)) + 60, 'f strictement croissante');
+        K.marque('monotone');
+        c.pause(.3); K.rond(G, ALPHA, 0, true, 'jaune'); c.texte('α', G.X(ALPHA) - 5, G.Y(0) + 32, { couleur: 'jaune', taille: 22 });
+        c.repere('alpha', G.X(ALPHA) - 14, G.Y(0) - 14, 28, 50, 'la solution unique α'); K.marque('alpha_nomme');
+        c.pause(.3);
+        texteDroite(c, K, [
+          { t: 'f continue sur [a ; b]', couleur: 'cyan' },
+          { t: 'f strictement croissante', couleur: 'cyan' },
+          { t: 'f(a) × f(b) < 0', couleur: 'cyan' },
+          { t: 'donc f(x) = 0 admet une', couleur: 'blanc' },
+          { t: 'solution unique α dans ]a ; b[', couleur: 'jaune', repere: 'conclusion_unique', moment: 'conclusion' },
+        ]);
+      },
+      decrire: { repere_pose: 'Un repère, a et b.', courbe_tracee: 'La courbe de x³ + x − 1, de f(a) = −1 à f(b) = 1.', monotone: 'Flèche verte : f strictement croissante, elle monte sans jamais redescendre.', alpha_nomme: 'Elle coupe l’axe une seule fois, en α ≈ 0,68.', conclusion: 'Écrit : les trois conditions, donc solution unique α dans ]a ; b[.' },
+    },
+    signe: {
+      titre: 'Se servir de f(α) = 0 : le signe de f avant et après α',
+      dessiner(c, K) {
+        K.titre('Que sait-on de α ?');
+        const G = base(K); bornes(c, K, G, 0, 1); K.marque('repere_pose');
+        K.anime(1.8, p => K.courbePart(G, f, -0.15, 1.2, p, { couleur: 'cyan' }));
+        K.marque('courbe_tracee');
+        c.pause(.3); K.rond(G, ALPHA, 0, true, 'jaune'); c.texte('α', G.X(ALPHA) - 5, G.Y(0) + 32, { couleur: 'jaune', taille: 22 });
+        c.texte('f(α) = 0', G.X(ALPHA) - 70, G.Y(0) - 14, { couleur: 'jaune', taille: 16 });
+        c.repere('alpha', G.X(ALPHA) - 14, G.Y(0) - 14, 28, 50, 'α, où f(α) = 0'); K.marque('alpha_nomme');
+        c.pause(.3);
+        c.ligne(G.X(0), G.Y(0) + 6, G.X(ALPHA) - 8, G.Y(0) + 6, { couleur: 'rouge', largeur: 5, alpha: .7 });
+        c.texte('f(x) < 0', G.X(0.12), G.Y(-0.75), { couleur: 'rouge', taille: 17 });
+        c.repere('avant', G.X(0), G.Y(0), G.X(ALPHA) - G.X(0), 60, 'avant α : f négative');
+        K.marque('signe_avant');
+        c.pause(.3);
+        c.ligne(G.X(ALPHA) + 8, G.Y(0) + 6, G.X(1), G.Y(0) + 6, { couleur: 'vert', largeur: 5, alpha: .7 });
+        c.texte('f(x) > 0', G.X(0.82), G.Y(0.75), { couleur: 'vert', taille: 17 });
+        c.repere('apres', G.X(ALPHA), G.Y(1), G.X(1) - G.X(ALPHA), G.Y(0) - G.Y(1), 'après α : f positive');
+        K.marque('signe_apres');
+        c.pause(.3);
+        texteDroite(c, K, [
+          { t: 'f(α) = 0 :', couleur: 'jaune' },
+          { t: 'α³ + α − 1 = 0', couleur: 'blanc' },
+          { t: 'donc α³ = 1 − α', couleur: 'jaune', repere: 'egalite' },
+          { t: 'f < 0 avant α, f > 0 après α', couleur: 'blanc', moment: 'egalite' },
+        ]);
+      },
+      decrire: { repere_pose: 'Un repère, a = 0 et b = 1.', courbe_tracee: 'La courbe de x³ + x − 1 sur [0 ; 1].', alpha_nomme: 'Le point α où la courbe coupe l’axe ; écrit : f(α) = 0.', signe_avant: 'Avant α, trait rouge : f(x) < 0, la courbe est sous l’axe.', signe_apres: 'Après α, trait vert : f(x) > 0, la courbe est au-dessus.', egalite: 'Écrit : f(α) = 0, α³ + α − 1 = 0, donc α³ = 1 − α ; f < 0 avant α, f > 0 après α.' },
+      motifs: { alpha_nomme: 'α nommé', signe_avant: 'f négative avant α', signe_apres: 'f positive après α', egalite: 'l’égalité vérifiée par α' },
+      explication: [{ repere: 'alpha', texte: 'α est solution : f(α) = 0.' }, { repere: 'egalite', texte: 'On remplace x par α et on isole.' }],
+    },
+    droite_k: {
+      titre: 'L’équation f(x) = k : la droite y = k',
+      params: { k: { min: -1.5, max: 1.6, pas: 0.1, defaut: 0.5, sens: 'hauteur de la droite y = k' } },
+      dessiner(c, K) {
+        K.titre('Toute valeur entre f(a) et f(b)');
+        const G = base(K); bornes(c, K, G, 0, 1); K.marque('repere_pose');
+        const g = x => (x < -0.15 || x > 1.2) ? NaN : f(x);
+        K.courbe(G, f, 0, 1, { couleur: 'cyan' });
+        K.rond(G, 0, f(0), true, 'rouge'); K.rond(G, 1, f(1), true, 'vert');
+        c.texte('f(a)', G.X(0) - 40, G.Y(f(0)) + 6, { couleur: 'rouge', taille: 16 });
+        c.texte('f(b)', G.X(1) + 10, G.Y(f(1)) + 6, { couleur: 'vert', taille: 16 });
+        K.marque('courbe_tracee');
+        const k = K.P.k, dedans = k >= f(0) && k <= f(1);
+        K.anime(.8, p => { c.ligne(G.X(-0.25), G.Y(k), G.X(-0.25) + p * (G.X(1.3) - G.X(-0.25)), G.Y(k), { couleur: dedans ? 'jaune' : 'orange', largeur: 2 }); });
+        c.texte('y = ' + K.fr(k, 1), G.X(1.3) - 70, G.Y(k) - 8, { couleur: dedans ? 'jaune' : 'orange', taille: 16 });
+        c.repere('droite_k', G.X(-0.25), G.Y(k) - 12, G.X(1.3) - G.X(-0.25), 24, 'la droite y = k');
+        if (dedans) {
+          let a = 0, b = 1; for (let i = 0; i < 40; i++) { const m = (a + b) / 2; if ((f(a) - k) * (f(m) - k) <= 0) b = m; else a = m; }
+          K.rond(G, a, k, true, 'jaune'); K.proj(G, a, k, { versY: false, couleur: 'jaune' }); c.texte('c', G.X(a) - 4, G.Y(0) + 34, { couleur: 'jaune', taille: 18 });
+        }
+        K.marque(dedans ? 'k_entre' : 'k_hors');
+        c.pause(.3);
+        texteDroite(c, K, dedans ? [
+          { t: 'f(a) ≤ k ≤ f(b) :', couleur: 'jaune' },
+          { t: 'la droite coupe la courbe,', couleur: 'blanc' },
+          { t: 'f(x) = k a au moins', couleur: 'blanc' },
+          { t: 'une solution c dans [a ; b].', couleur: 'blanc', moment: 'conclusion' },
+        ] : [
+          { t: 'k n’est pas entre f(a) et f(b) :', couleur: 'orange' },
+          { t: 'sur [a ; b], la droite ne', couleur: 'blanc' },
+          { t: 'rencontre pas la courbe.', couleur: 'blanc', moment: 'conclusion' },
+        ]);
+      },
+      poignees(K) { const G = K.grille(OPT);
+        return [{ id: 'k', x: G.X(-0.25), y: G.Y(K.P.k), bouger: (x, y) => ({ k: G.inv(x, y)[1] }) }]; },
+      lecture: K => (K.P.k >= -1 && K.P.k <= 1 ? `k = ${K.fr(K.P.k, 1)} est entre f(a) = −1 et f(b) = 1 : la droite coupe la courbe, f(x) = k a une solution dans [a ; b].` : `k = ${K.fr(K.P.k, 1)} n’est pas entre f(a) = −1 et f(b) = 1 : pas de rencontre sur [a ; b].`),
+      decrire: K => ({ repere_pose: 'Un repère, a et b.', courbe_tracee: 'La courbe de f sur [a ; b], de f(a) = −1 (rouge) à f(b) = 1 (vert).', k_entre: 'La droite horizontale y = k (jaune) coupe la courbe en un point d’abscisse c.', k_hors: 'La droite horizontale y = k (orange) est hors de [f(a) ; f(b)] : elle ne coupe pas la courbe au-dessus de [a ; b].', conclusion: K.P.k >= -1 && K.P.k <= 1 ? 'Écrit : f(a) ≤ k ≤ f(b), donc f(x) = k a au moins une solution c dans [a ; b].' : 'Écrit : k hors de [f(a) ; f(b)], pas de rencontre.' }),
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

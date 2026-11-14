@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Position relative de la courbe et d’une droite</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Repère à la craie : la courbe de f(x) = 2x + 1 + 1/x et la droite (Δ) : y = 2x + 1 ; un segment vertical entre la droite et la courbe, vert quand la courbe est au-dessus, rouge quand elle est en dessous ; à droite, le tableau du signe de f(x) − y et de la position"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Dérivation et étude des fonctions » (math_ch2_derivation_etude_fonctions) : position relative de (Cf) et de (Δ).
+ * Vue : ?vue=ecart.
+ * f(x) = 2x + 1 + 1/x sur ℝ*, (Δ) : y = 2x + 1 ; f(x) − y = 1/x, du signe de x :
+ * x > 0 : f(x) − y > 0, (Cf) au-dessus de (Δ) ; x < 0 : f(x) − y < 0, (Cf) en dessous de (Δ).
+ * f(1) − y = 1 (f(1) = 4, y = 3) ; f(−1) − y = −1 (f(−1) = −2, y = −1).
+ * Repère à gauche (x ∈ [−3,2 ; 3,2], y ∈ [−8 ; 9]) ; à droite les écritures, en bas à droite le tableau de signe.
+ * Moments : repere_pose, courbe_tracee, droite_tracee, ecart_positif, ecart_negatif, tableau_rempli ; `fin` = segment en x.
+ */
+const f = x => 2 * x + 1 + 1 / x;
+const d = x => 2 * x + 1;
+const OPT = { x0: 40, y0: 50, w: 300, h: 300, xmin: -3.2, xmax: 3.2, ymin: -8, ymax: 9,
+  gx: [[-3, '−3'], [-2, '−2'], [-1, '−1'], [1, '1'], [2, '2'], [3, '3']], gy: [[5, '5'], [-5, '']] };
+const XR = 372;                                    // colonne des écritures, à droite du repère
+// Le tableau de signe, en bas à droite (rien sous y = 356).
+const TB = { g: 372, lab: 494, d: 750, haut: 210, l1: 236, l2: 262, l3: 290, bas: 354 };
+const C0 = (TB.lab + TB.d) / 2;                    // colonne de 0
+const sur = x => (Math.abs(x) < 0.05 ? (x < 0 ? -0.05 : 0.05) : x);   // x = 0 interdit
+const fr = MathsTableau.fr;
+const exact = v => Math.abs(+v.toFixed(2) - v) < 1e-9;
+const dans = x => (x < 0 ? '(' + fr(x, 2) + ')' : fr(x, 2));
+/* « f(x) − y = 1/x = … » avec les valeurs de x */
+function ecritDiff(x) {
+  const v = 1 / x;
+  return `f(${fr(x, 2)}) − y = 1/${dans(x)} ${exact(v) ? '=' : '≈'} ${fr(v, 2)} ${v > 0 ? '> 0' : '< 0'}`;
+}
+
+/* Le segment vertical entre (Δ) et la courbe, à l'abscisse x, sur la fraction g de sa longueur (coupé au bord du repère). */
+function segment(c, G, x, g = 1) {
+  const y1 = d(x), y2f = f(x), y2 = y1 + (y2f - y1) * g;
+  const clip = y => Math.max(G.ymin, Math.min(G.ymax, y));
+  const coul = x > 0 ? 'vert' : 'rouge';
+  c.ligne(G.X(x), G.Y(clip(y1)), G.X(x), G.Y(clip(y2)), { couleur: coul, largeur: 4 });
+  c.point(G.X(x), G.Y(y1), 5, 'orange');
+  if (g >= 1 && y2f <= G.ymax && y2f >= G.ymin) c.point(G.X(x), G.Y(y2f), 5, 'cyan');
+  const ya = G.Y(clip(Math.max(y1, y2f))), yb = G.Y(clip(Math.min(y1, y2f)));
+  c.repere('segment', G.X(x) - 12, ya - 8, 24, yb - ya + 16, 'le segment entre (Δ) et la courbe, de longueur |1/x|');
+}
+/* Les écritures en direct, à droite : f(x) − y et la position. */
+function ecrits(c, x) {
+  const v = 1 / x, coul = v > 0 ? 'vert' : 'rouge';
+  c.texte(ecritDiff(x), XR, 160, { couleur: coul, taille: 18, max: 750 - XR });
+  c.texte(v > 0 ? '(C_f) au-dessus de (Δ)' : '(C_f) en dessous de (Δ)', XR, 188, { couleur: coul, taille: 18 });
+  c.repere('difference', XR - 4, 112, 750 - XR, 84, 'f(x) − y = 1/x');
+}
+function tableau(c) {
+  const o = { couleur: 'faible', largeur: 1.4 };
+  for (const y of [TB.haut, TB.l1, TB.l2, TB.l3, TB.bas]) c.ligne(TB.g, y, TB.d, y, o);
+  c.ligne(TB.lab, TB.haut, TB.lab, TB.bas, o);
+  c.texte('x', (TB.g + TB.lab) / 2, TB.l1 - 7, { couleur: 'blanc', taille: 17, align: 'center' });
+  c.texte('−∞', TB.lab + 16, TB.l1 - 7, { couleur: 'blanc', taille: 16, align: 'center' });
+  c.texte('0', C0, TB.l1 - 7, { couleur: 'blanc', taille: 17, align: 'center' });
+  c.texte('+∞', TB.d - 16, TB.l1 - 7, { couleur: 'blanc', taille: 16, align: 'center' });
+  // la double barre en 0
+  c.ligne(C0 - 3, TB.l1, C0 - 3, TB.bas, { couleur: 'blanc', largeur: 1.6 });
+  c.ligne(C0 + 3, TB.l1, C0 + 3, TB.bas, { couleur: 'blanc', largeur: 1.6 });
+  const gauche = (TB.lab + C0) / 2, droite = (C0 + TB.d) / 2;
+  c.texte('x', (TB.g + TB.lab) / 2, TB.l2 - 7, { couleur: 'blanc', taille: 17, align: 'center' });
+  c.texte('−', gauche, TB.l2 - 6, { couleur: 'rouge', taille: 20, align: 'center' });
+  c.texte('+', droite, TB.l2 - 6, { couleur: 'vert', taille: 20, align: 'center' });
+  c.texte('f(x) − y = 1/x', (TB.g + TB.lab) / 2, TB.l3 - 8, { couleur: 'blanc', taille: 16, align: 'center' });
+  c.texte('−', gauche, TB.l3 - 7, { couleur: 'rouge', taille: 20, align: 'center' });
+  c.texte('+', droite, TB.l3 - 7, { couleur: 'vert', taille: 20, align: 'center' });
+  c.texte('position', (TB.g + TB.lab) / 2, (TB.l3 + TB.bas) / 2 + 6, { couleur: 'blanc', taille: 17, align: 'center' });
+  c.texte('(C_f) en dessous', gauche, TB.l3 + 26, { couleur: 'rouge', taille: 15, align: 'center' });
+  c.texte('de (Δ)', gauche, TB.l3 + 50, { couleur: 'rouge', taille: 15, align: 'center' });
+  c.texte('(C_f) au-dessus', droite, TB.l3 + 26, { couleur: 'vert', taille: 15, align: 'center' });
+  c.texte('de (Δ)', droite, TB.l3 + 50, { couleur: 'vert', taille: 15, align: 'center' });
+}
+
+MathsTableau.page({
+  id: 'de_position', titre: 'Position relative de (Cf) et d’une droite',
+  texte: 'Construction à la craie du cours Dérivation et étude des fonctions : la courbe de f(x) = 2x + 1 + 1/x et la droite (Δ) : y = 2x + 1 ; un segment vertical entre (Δ) et (Cf) à l’abscisse x mesure f(x) − y = 1/x : vert si (Cf) est au-dessus (x > 0), rouge si elle est en dessous (x < 0) ; le tableau de signe de f(x) − y donne la position',
+  vues: {
+    ecart: {
+      titre: 'Le signe de f(x) − y donne la position',
+      params: { x: { min: -3, max: 3, pas: 0.05, defaut: 1, sens: 'abscisse du segment entre (Δ) et la courbe (x = 0 interdit : ±0,05)' } },
+      dessiner(c, K) {
+        K.titre('Position de (C_f) par rapport à (Δ)');
+        const G = K.axes(OPT);
+        c.repere('repere', G.x0, G.y0, G.w, G.h, 'le repère');
+        K.marque('repere_pose');
+        K.anime(1.4, p => K.courbePart(G, f, -3.2, -0.1, p, { couleur: 'cyan' }));
+        K.anime(1.4, p => K.courbePart(G, f, 0.1, 3.2, p, { couleur: 'cyan' }));
+        c.texte('(C_f)', G.X(0.45), G.Y(8), { couleur: 'cyan', taille: 18 });
+        c.texte('f(x) = 2x + 1 + 1/x', XR, 72, { couleur: 'cyan', taille: 18 });
+        c.repere('courbe', G.x0, G.y0, G.w, G.h, 'la courbe (Cf)');
+        K.marque('courbe_tracee');
+        c.pause(.2);
+        c.ligne(G.X(-3.2), G.Y(d(-3.2)), G.X(3.2), G.Y(d(3.2)), { couleur: 'orange', largeur: 2.2 });
+        c.texte('(Δ)', G.X(-3.1), G.Y(-3.2), { couleur: 'orange', taille: 18 });
+        c.texte('(Δ) : y = 2x + 1', XR, 100, { couleur: 'orange', taille: 18 });
+        c.repere('droite', G.X(-3.2), G.Y(d(3.2)), G.X(3.2) - G.X(-3.2), G.Y(d(-3.2)) - G.Y(d(3.2)), 'la droite (Δ) : y = 2x + 1');
+        K.marque('droite_tracee');
+        // f(x) − y, la différence qu'on étudie
+        c.pause(.2);
+        c.texte('f(x) − y = 1/x', XR, 132, { couleur: 'blanc', taille: 18 });
+        let xr = null, g = 0;
+        // 1. En x = 1 : le segment pousse de (Δ) vers la courbe, vert
+        const g1 = K.anime(1.0, () => {}); if (g1 > 0) { xr = 1; g = g1; }
+        K.marque('ecart_positif');
+        // 2. x passe à −1 (le segment saute par-dessus x = 0, interdit) : il devient rouge
+        const glisse = (de, a, duree) => { const p = K.anime(duree, () => {}); if (p > 0) { xr = de + (a - de) * p; g = 1; } };
+        c.pause(.3); glisse(1, -1, 1.6);
+        K.marque('ecart_negatif');
+        // 3. Le tableau de signe et de position
+        c.pause(.3);
+        tableau(c);
+        c.repere('tableau', TB.g, TB.haut, TB.d - TB.g, TB.bas - TB.haut, 'le tableau : signe de f(x) − y et position');
+        K.marque('tableau_rempli');
+        // Après la construction : le segment va en x (la poignée de l'élève).
+        glisse(-1, sur(K.P.x), 0.8);
+        if (xr !== null) c.direct(() => {
+          const x = Math.abs(xr) < 0.05 ? null : xr;    // pendant le saut au-dessus de 0, pas de segment
+          if (x !== null) { segment(c, G, x, g); if (g >= 1) ecrits(c, x); }
+        });
+      },
+      poignees(K) { const G = K.grille(OPT); const x = sur(K.P.x);
+        return [{ id: 'x', x: G.X(x), y: G.Y(d(x)), bouger: (px) => { const v = G.inv(px, 0)[0]; return { x: sur(v) }; } }]; },
+      lecture: K => { const x = sur(K.P.x), v = 1 / x;
+        return `x = ${K.fr(x, 2)}, f(x) − y = 1/x ${exact(v) ? '=' : '≈'} ${K.fr(v, 2)} : ${v > 0 ? '(Cf) au-dessus de (Δ)' : '(Cf) en dessous de (Δ)'}.`; },
+      decrire: {
+        repere_pose: 'Un repère à gauche (x de −3,2 à 3,2, y de −8 à 9).',
+        courbe_tracee: 'La courbe (Cf) de f(x) = 2x + 1 + 1/x (cyan) est tracée en deux morceaux, de part et d’autre de x = 0 ; à droite est écrit f(x) = 2x + 1 + 1/x.',
+        droite_tracee: 'La droite (Δ) : y = 2x + 1 (orange) est tracée ; la courbe s’en approche aux deux bouts.',
+        ecart_positif: 'En x = 1, un segment vertical vert va de (Δ) (y = 3) à la courbe (f(1) = 4) ; écrit : f(1) − y = 1/1 = 1 > 0, (Cf) au-dessus de (Δ).',
+        ecart_negatif: 'Le segment passe en x = −1 : il est rouge, de (Δ) (y = −1) vers le bas jusqu’à la courbe (f(−1) = −2) ; écrit : f(−1) − y = 1/(−1) = −1 < 0, (Cf) en dessous de (Δ).',
+        tableau_rempli: 'Le tableau est rempli : x : −∞, 0, +∞ ; ligne x : − ‖ + ; ligne f(x) − y = 1/x : − ‖ + ; position : (Cf) en dessous de (Δ) ‖ (Cf) au-dessus de (Δ) ; double barre en 0.',
+      },
+      motifs: { courbe_tracee: 'la courbe tracée', droite_tracee: 'la droite (Δ) tracée', ecart_positif: 'x = 1 : (Cf) au-dessus', ecart_negatif: 'x = −1 : (Cf) en dessous', tableau_rempli: 'le tableau de position' },
+      explication: [
+        { repere: 'droite', texte: '(Δ) : y = 2x + 1 ; on compare f(x) et y pour la même abscisse x.' },
+        { repere: 'segment', texte: 'Le segment mesure f(x) − y : vert vers le haut si la courbe est au-dessus, rouge vers le bas si elle est en dessous.' },
+        { repere: 'difference', texte: 'f(x) − y = 1/x : son signe est celui de x.' },
+        { repere: 'tableau', texte: 'Le tableau de signe de f(x) − y donne la position : en dessous sur ]−∞ ; 0[, au-dessus sur ]0 ; +∞[.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

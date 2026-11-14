@@ -1,0 +1,564 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Courant triangulaire dans une bobine — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="rl.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un GBF fait passer dans une bobine de résistance négligeable (L = 20 mH) un courant triangulaire : i monte de 0 à 0,2 A en 10 ms puis redescend en 10 ms. Sous le graphe de i(t), la tension u_b(t) est en créneaux : +0,4 V pendant la montée, −0,4 V pendant la descente. Pente 20 A/s, palier 0,4 V : leur rapport vaut 0,02 H = L"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Bobine idéale (r négligeable) alimentée par un GBF : courant triangulaire (cours « Dipôle RL », RL1 : u_b = L·di/dt).
+ * i(t) : de 0 à 0,2 A en 10 ms, puis de 0,2 A à 0 en 10 ms (période 20 ms) ; deux périodes tracées (0 à 40 ms).
+ * di/dt = +20 A/s à la montée, −20 A/s à la descente ; u_b = L·di/dt = ±L × 20 (L = 20 mH → ±0,4 V).
+ * Deux graphes l’un sous l’autre, même axe du temps (verticales en pointillé à 10, 20, 30, 40 ms).
+ * Moments : courant (i se trace), pente_montee (triangle de pente coté), palier_haut (u_b = +0,4 V se trace pendant les
+ * montées), pente_descente, palier_bas (u_b = −0,4 V pendant les descentes), rapport (« u_b/(di/dt) = L »), fin.
+ * Paramètre : L_mH (10 → 40, pas 5 ; palier = L × 20). Poignée : le point sur la petite règle « L » sous la bobine.
+ */
+/* ── Moteur du déroulé (commun aux pages « appareils » des dossiers dipole-rc-tableau et dipole-rl-tableau, recopié dans chaque page) ──────────────
+ * Une page déclare des étapes par vue : { nom, anim (s), ecritDes (s, défaut = anim), motif, bulle() }.
+ * Chaque étape : d’abord son animation (aiguille, électrons, courbe qui s’enregistre…), puis la craie écrit ce
+ * qu’il faut dire ; le moment `nom` est la fin de cette écriture (l’animation est finie, le texte est écrit).
+ * Les durées d’écriture sont mesurées au dessin (calculer), donc les moments suivent les paramètres.
+ * Les parties fixes (titres, axes, montage déjà dessiné) s’écrivent à l’horloge de la scène, ECRITURE fois plus vite.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lisse = p => p * p * (3 - 2 * p);
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');   // 1,50 → 1,5 ; 2,00 → 2
+const ECRITURE = 2.5;
+function Moteur(o) {
+  const q = new URLSearchParams(location.search);
+  const S = { vue: o.vues.includes(q.get('vue')) ? q.get('vue') : o.vues[0], t: 0, running: false, pause: false, fait: false,
+    jusqua: null, motif: '', emis: 0, dit: '', mesure: false };
+  const V = o.vitesse ?? 1.7, T0 = o.T0 ?? .8, HOLD = {};
+  let TL = null;
+  function construire() {
+    let s = T0; const ev = [];
+    for (const e of o.etapes(S.vue)) {
+      const anim = e.anim || 0, d = { ...e, anim, debut: s, ecrit: s + (e.ecritDes ?? anim) };
+      d.fin = Math.max(s + anim, d.ecrit + (HOLD[e.nom] ?? 1.5)) + .35;
+      s = d.fin; ev.push(d);
+    }
+    const mom = {}; for (const e of ev) mom[e.nom] = e.fin; mom.fin = s + (o.queue ?? .6);
+    TL = { ev, M: mom };
+  }
+  const ev = nom => TL.ev.find(e => e.nom === nom);
+  const M = {
+    S, ev, Moments: () => TL.M,
+    /** Avancement (0 → 1) de l’animation de l’étape `nom`. */
+    p(nom) { const e = ev(nom); if (!e) return 0; return e.anim > 0 ? clamp((S.t - e.debut) / e.anim, 0, 1) : (S.t >= e.debut - 1e-6 ? 1 : 0); },
+    commence(nom) { const e = ev(nom); return !!e && S.t > e.debut + 1e-6; },
+    vu(nom) { if (nom === 'fin') return S.t >= TL.M.fin - 1e-6; const e = ev(nom); return !!e && S.t >= e.fin - 1e-6; },
+    /** Ce qui s’écrit à l’étape `nom` : la craie écrit à partir de la fin de son animation. */
+    etape(c, nom, fn) {
+      const e = ev(nom); if (!e) return;
+      const t = c.t, cur = c.cur, comp = c.complet, w0 = e.ecrit;
+      c.t = S.t > 1e5 ? 1e9 : w0 + (S.t - w0) * V; c.cur = w0;
+      try { fn(); } finally { if (S.mesure) HOLD[nom] = (c.cur - w0) / V; c.t = t; c.cur = cur; if (!S.running) c.complet = comp; }
+    },
+    etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
+  };
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const cadreBase = scene.cadre;
+  scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
+  M.scene = scene; M.craie = scene.craie;
+  function calculer() {
+    construire();
+    const t = S.t, r = S.running; S.t = 1e6; S.running = false; S.mesure = true;
+    try { o.dessiner(scene.craie, M); } finally { S.t = t; S.running = r; S.mesure = false; }
+    construire(); scene.sale = true;
+  }
+  // La bulle est du texte simple : jamais de « _ » visible (u_C → uC, I_0 → I₀).
+  const sansSouligne = s => String(s).replace(/([A-Za-zΔτ])_\{?([A-Za-z0-9]+)\}?/g, (m, a, i) => a + (/^\d+$/.test(i) ? [...i].map(d => '₀₁₂₃₄₅₆₇₈₉'[d]).join('') : i));
+  const dire = (texte, kind = '') => { texte = sansSouligne(texte); S.dit = texte; bulle($('feedback'), texte, kind); };
+  const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+  let pont = null;
+  const emettre = () => pont && pont.emettre();
+  const noter = (a, d) => pont && pont.noter(a, d);
+  scene.avancer = dt => {
+    if (!S.running) return !!(o.anime && o.anime());
+    const avant = S.t; S.t += dt;
+    for (const e of TL.ev) if (avant < e.debut && S.t >= e.debut && e.bulle) dire(e.bulle());
+    if (S.jusqua != null && S.t >= S.jusqua) {
+      S.t = S.jusqua; S.jusqua = null; S.running = false;
+      if (S.t >= TL.M.fin - 1e-6) { finir(); return true; }
+      S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fx(S.t, 1)} s`) + '.');
+      noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); return true;
+    }
+    if (S.t >= TL.M.fin) { S.t = TL.M.fin; finir(); return true; }
+    if (performance.now() - S.emis > 500) { S.emis = performance.now(); emettre(); }
+    return true;
+  };
+  function finir() { S.running = false; S.fait = true; S.pause = false; S.jusqua = null; etiquette(); dire(o.messageFin(M), 'good'); noter('measurement', o.params(M)); emettre(); }
+  function start() { o.reprise && o.reprise(); S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire(o.depart(M)); noter('start', o.params(M)); emettre(); }
+  function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); }
+  function resume() { if (S.running) return; o.reprise && o.reprise(); if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('Ça repart…'); noter('resume'); emettre(); }
+  function setTime(p) {
+    const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+    o.reprise && o.reprise(); S.running = false; S.jusqua = null; S.t = clamp(t, 0, TL.M.fin); S.fait = S.t >= TL.M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+    etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fx(S.t, 1)} s.`); noter('set_time', { time_s: S.t }); emettre();
+  }
+  function playUntil(p) {
+    const noms = o.etapes(S.vue).map(e => e.nom).concat('fin');
+    const nom = noms.includes(p.moment) ? p.moment : null, cible = nom ? TL.M[nom] : +p.time_s;
+    if (!Number.isFinite(cible) || (p.moment && !nom && (p.time_s == null || p.time_s === ''))) { dire(`Moment inconnu : ${p.moment}.`, 'bad'); emettre(); return; }
+    o.reprise && o.reprise();
+    if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+    S.jusqua = clamp(cible, .01, TL.M.fin); S.motif = nom ? (o.motifs[nom] || nom) : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+    noter('play_until', { moment: nom, time_s: S.jusqua }); emettre();
+  }
+  function setParameters(p) {
+    p = p || {};
+    const r = o.appliquer(p, M) || {};
+    if (r.vue && o.vues.includes(r.vue) && r.vue !== S.vue) { S.vue = r.vue; r.change = true; r.vueChange = true; }
+    if (r.change) { calculer(); if (r.vueChange) scene.reecrire(); }
+    noter('set_parameters', o.params(M));
+    if (r.apres) r.apres();
+    else if (r.change && !r.garder) start();
+    else { scene.sale = true; emettre(); }
+  }
+  Object.assign(M, { noter, calculer, dire, start, pause, resume, setTime, playUntil, setParameters, emettre, etiquette });
+  $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+  window.Tableau.explication(o.explications);
+  const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+  M.lancer = () => {
+    calculer();
+    const listeMoments = o.vues.map(v => `${o.vues.length > 1 ? v + ' : ' : ''}${o.etapes(v).map(e => e.nom).concat('fin').join(' | ')}`).join(' ; ');
+    const config = { id: o.id, version: '1.0', title: o.titre, variants: o.vues.length > 1 ? o.vues.map(id => ({ id, label: o.titres[id] })) : [], commands: commandes,
+      command_schema: { set_parameters: o.schema, set_time: { time_s: '0..fin (arrêt sur cet instant de la scène, en s ; voir moments)' },
+        play_until: { moment: listeMoments, time_s: 'ou un instant en s' } } };
+    pont = protocole({ id: o.id, commandes, config, texte: o.texte,
+      etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle',
+        ce_qui_se_voit: o.voir(M) + (S.dit ? ` La bulle dit : « ${S.dit} »` : ''), current_variant: S.vue, time_s: +S.t.toFixed(2),
+        parameters: o.params(M), moments: Object.fromEntries(Object.entries(TL.M).map(([k, v]) => [k, +v.toFixed(2)])) }),
+      progression: () => (S.fait ? 1 : 0),
+      executer: (cmd, p) => ({ start, reset: start, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+    dire(o.depart(M));
+    setTimeout(() => { if (!S.running && S.t === 0 && !S.pause && !S.fait) start(); }, 900);
+  };
+  return M;
+}
+
+/* ── Appareils peints (règle 7 : ils ressemblent aux vrais ; le peint ne change jamais la physique) ── */
+const Peint = {
+  /** Sphère ombrée (électron : bleu). */
+  sphere(ctx, x, y, r, [clair, milieu, sombre] = ['#e3f3ff', '#3b9cff', '#0a3a8c'], a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r); g.addColorStop(0, clair); g.addColorStop(.45, milieu); g.addColorStop(1, sombre);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  },
+  /** Boîtier d’un générateur (vu de face) : coffret gris, afficheur, deux bornes (rouge +, noire −). */
+  generateur(ctx, x, y, w, h, affiche, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(x + 3, y + 4, w, h, 7); ctx.fill();
+    const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#5b6670'); g.addColorStop(.5, '#3b444c'); g.addColorStop(1, '#262c32');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 7); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1; ctx.stroke();
+    const ex = x + w * .14, ey = y + h * .3, ew = w * .72, eh = h * .26;
+    ctx.fillStyle = '#0d1a10'; ctx.beginPath(); ctx.roundRect(ex, ey, ew, eh, 3); ctx.fill();
+    ctx.fillStyle = '#7dfc8a'; ctx.font = `600 ${Math.round(eh * .72)}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(affiche, ex + ew / 2, ey + eh / 2 + 1);
+    ctx.restore();
+  },
+  /** Borne ronde (rouge ou noire). */
+  borne(ctx, x, y, rouge, a = 1) { Peint.sphere(ctx, x, y, 5, rouge ? ['#ffd0d0', '#e0393e', '#6d0f12'] : ['#9aa0a6', '#2b2f33', '#050607'], a); },
+  /** Appareil à cadran (ampèremètre ou voltmètre) : boîtier, cadran crème, graduations, aiguille (f de 0 à 1). */
+  cadran(ctx, cx, cy, r, f, lettre, graduations = null, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(cx - r - 4 + 3, cy - r - 4 + 4, 2 * r + 8, 2 * r + 8, 9); ctx.fill();
+    const g = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r); g.addColorStop(0, '#3a3f45'); g.addColorStop(1, '#1b1e22');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(cx - r - 4, cy - r - 4, 2 * r + 8, 2 * r + 8, 9); ctx.fill();
+    const f2 = ctx.createRadialGradient(cx - r * .3, cy - r * .4, r * .1, cx, cy, r); f2.addColorStop(0, '#fffaf0'); f2.addColorStop(1, '#e4dcc8');
+    ctx.fillStyle = f2; ctx.beginPath(); ctx.roundRect(cx - r, cy - r, 2 * r, 2 * r * .92, 6); ctx.fill();
+    const px = cx, py = cy + r * .55, R = r * 1.05, a0 = -Math.PI * .78, a1 = -Math.PI * .22;
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(px, py, R * .82, a0, a1); ctx.stroke();
+    const n = graduations ? graduations.length - 1 : 10;
+    for (let i = 0; i <= n * 2; i++) {
+      const an = a0 + (a1 - a0) * i / (n * 2), l = i % 2 ? .07 : .13;
+      ctx.beginPath(); ctx.moveTo(px + Math.cos(an) * R * .82, py + Math.sin(an) * R * .82); ctx.lineTo(px + Math.cos(an) * R * (.82 + l), py + Math.sin(an) * R * (.82 + l)); ctx.stroke();
+    }
+    ctx.fillStyle = '#c0392b'; ctx.beginPath(); ctx.arc(px + Math.cos(a1) * R * .86, py + Math.sin(a1) * R * .86, 1.6, 0, 7); ctx.fill();
+    if (graduations) {
+      ctx.fillStyle = '#333'; ctx.font = `${Math.round(r * .2)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      graduations.forEach((s, i) => { const an = a0 + (a1 - a0) * i / n; ctx.fillText(s, px + Math.cos(an) * R * 1.08, py + Math.sin(an) * R * 1.08 + 1); });
+    }
+    ctx.fillStyle = '#222'; ctx.font = `700 ${Math.round(r * .42)}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(lettre, cx, cy + r * .38);
+    const an = a0 + (a1 - a0) * clamp(f, -.02, 1.03);
+    ctx.strokeStyle = '#111'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px + Math.cos(an) * R * .9, py + Math.sin(an) * R * .9); ctx.stroke();
+    ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(px, py, 2.6, 0, 7); ctx.fill();
+    // Verre : un reflet léger (pour l’œil seulement).
+    ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.beginPath(); ctx.ellipse(cx - r * .35, cy - r * .55, r * .5, r * .16, -.3, 0, 7); ctx.fill();
+    ctx.restore();
+  },
+  /** Résistor : corps beige en cylindre, bandes de couleur lues sur la valeur (Ω). */
+  resistor(ctx, x, y, w, h, ohm, a = 1) {
+    const COUL = ['#111', '#7b4a1e', '#d32f2f', '#f57c00', '#fbc02d', '#2e7d32', '#1565c0', '#7b1fa2', '#9e9e9e', '#fafafa'];
+    const e = Math.floor(Math.log10(ohm) + 1e-9) - 1, m = Math.round(ohm / 10 ** e), d1 = Math.floor(m / 10) % 10, d2 = m % 10;
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#f3e1bf'); g.addColorStop(.45, '#d9bf8f'); g.addColorStop(1, '#9c8358');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, h / 2.2); ctx.fill();
+    [[.24, d1], [.38, d2], [.52, clamp(e, 0, 9)], [.78, -1]].forEach(([f, k]) => {
+      ctx.fillStyle = k < 0 ? '#c9a227' : COUL[k]; ctx.fillRect(x + w * f, y + 1, w * .07, h - 2);
+    });
+    ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(x + h * .3, y + h * .18, w - h * .6, h * .12);
+    ctx.restore();
+  },
+  /** Interrupteur : socle sombre, plots laiton, levier métallique (pivot → bout). */
+  levier(ctx, px, py, bx, by, a = 1) {
+    ctx.save(); ctx.globalAlpha = a; ctx.lineCap = 'round';
+    ctx.strokeStyle = '#4a4f55'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(bx, by); ctx.stroke();
+    ctx.strokeStyle = '#c8ccd2'; ctx.lineWidth = 3.4; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(bx, by); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(px, py - 1); ctx.lineTo(bx, by - 1); ctx.stroke();
+    Peint.sphere(ctx, bx, by, 4.2, ['#ffe9c2', '#c98a2a', '#5a3a08']);
+    ctx.restore();
+  },
+  plot(ctx, x, y, a = 1) { Peint.sphere(ctx, x, y, 4.6, ['#fff1c9', '#cfa046', '#5e4210'], a); },
+};
+/* ── Appareils du dipôle RL (peints : bobine, noyau de fer, lampe, oscilloscope, ohmmètre, GBF) ── */
+Object.assign(Peint, {
+  /**
+   * Bobine couchée : mandrin clair (deux joues) et fil de cuivre enroulé en spires orangées.
+   * Renvoie les deux bornes (bout des fils de sortie, sous les joues). Le noyau se peint AVANT (il passe dans le mandrin).
+   */
+  bobine(ctx, x, y, w, h, a = 1) {
+    const j = Math.max(6, h * .2), n = Math.max(7, Math.round((w - 2 * j) / 6.5));
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(x + w / 2 + 3, y + h + 9, w / 2, 4.5, 0, 0, 7); ctx.fill();
+    // Fils de sortie (cuivre nu) : de chaque joue vers le bas.
+    ctx.strokeStyle = '#d98a3d'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(x + j + 3, y + h - 3); ctx.quadraticCurveTo(x + j - 2, y + h + 8, x + j * .5, y + h + 14);
+    ctx.moveTo(x + w - j - 3, y + h - 3); ctx.quadraticCurveTo(x + w - j + 2, y + h + 8, x + w - j * .5, y + h + 14); ctx.stroke();
+    // Enroulement : cylindre de cuivre (clair au milieu, sombre aux bords).
+    const g = ctx.createLinearGradient(0, y + 3, 0, y + h - 3);
+    g.addColorStop(0, '#4a2207'); g.addColorStop(.22, '#b8621f'); g.addColorStop(.45, '#ffbe7a'); g.addColorStop(.62, '#d9802f'); g.addColorStop(1, '#3d1b05');
+    ctx.fillStyle = g; ctx.fillRect(x + j, y + 3, w - 2 * j, h - 6);
+    // Les spires : un trait sombre légèrement penché, puis un reflet.
+    const pas = (w - 2 * j) / n;
+    for (let k = 0; k <= n; k++) {
+      const sx = x + j + k * pas;
+      ctx.strokeStyle = 'rgba(60,25,5,.75)'; ctx.lineWidth = 1.1; ctx.beginPath(); ctx.moveTo(sx, y + 3); ctx.lineTo(sx + pas * .35, y + h - 3); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,225,180,.35)'; ctx.lineWidth = .8; ctx.beginPath(); ctx.moveTo(sx + pas * .45, y + h * .3); ctx.lineTo(sx + pas * .55, y + h * .55); ctx.stroke();
+    }
+    // Joues du mandrin (plastique clair), avec le trou du mandrin au milieu.
+    for (const jx of [x, x + w - j]) {
+      const gj = ctx.createLinearGradient(jx, 0, jx + j, 0); gj.addColorStop(0, '#9c9378'); gj.addColorStop(.5, '#e8dfc4'); gj.addColorStop(1, '#a89e82');
+      ctx.fillStyle = gj; ctx.beginPath(); ctx.roundRect(jx, y - 4, j, h + 8, 3); ctx.fill();
+    }
+    ctx.fillStyle = 'rgba(20,20,20,.55)'; ctx.beginPath(); ctx.ellipse(x + w - j / 2, y + h / 2, j * .32, h * .22, 0, 0, 7); ctx.fill();
+    ctx.restore();
+    return [[x + j * .5, y + h + 14], [x + w - j * .5, y + h + 14]];
+  },
+  /** Noyau de fer doux : barre grise (dégradé métallique). */
+  noyau(ctx, x, y, w, h, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(x + 3, y + 4, w, h);
+    const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#5d646b'); g.addColorStop(.35, '#c9cfd4'); g.addColorStop(.6, '#8b9298'); g.addColorStop(1, '#3a3f44');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x + 3, y + h * .3); ctx.lineTo(x + w - 3, y + h * .3); ctx.stroke();
+    ctx.restore();
+  },
+  /**
+   * Lampe à incandescence sur son support : socle sombre, deux bornes (à gauche et à droite, à la hauteur `yf` du fil),
+   * culot, ampoule de verre ; `eclat` de 0 à 1 (∝ i²) : filament qui rougit puis blanchit, halo.
+   */
+  lampe(ctx, cx, yf, eclat = 0, a = 1) {
+    const e = clamp(eclat, 0, 1), gy = yf - 30, R = 14;
+    ctx.save(); ctx.globalAlpha = a;
+    if (e > .01) {
+      const h = ctx.createRadialGradient(cx, gy, 2, cx, gy, R + 50 * Math.sqrt(e));
+      h.addColorStop(0, `rgba(255,236,160,${.75 * e})`); h.addColorStop(.35, `rgba(255,214,110,${.32 * e})`); h.addColorStop(1, 'rgba(255,200,90,0)');
+      ctx.fillStyle = h; ctx.beginPath(); ctx.arc(cx, gy, R + 50 * Math.sqrt(e), 0, 7); ctx.fill();
+    }
+    // Socle et bornes.
+    const gs = ctx.createLinearGradient(0, yf - 9, 0, yf + 9); gs.addColorStop(0, '#4a5058'); gs.addColorStop(1, '#1d2125');
+    ctx.fillStyle = gs; ctx.beginPath(); ctx.roundRect(cx - 21, yf - 8, 42, 16, 4); ctx.fill();
+    Peint.plot(ctx, cx - 21, yf, a); Peint.plot(ctx, cx + 21, yf, a);
+    // Culot vissé.
+    const gc = ctx.createLinearGradient(cx - 7, 0, cx + 7, 0); gc.addColorStop(0, '#7d7a6e'); gc.addColorStop(.5, '#e4e0d0'); gc.addColorStop(1, '#6c695e');
+    ctx.fillStyle = gc; ctx.fillRect(cx - 7, yf - 19, 14, 11);
+    ctx.strokeStyle = 'rgba(40,40,40,.5)'; ctx.lineWidth = 1; for (let k = 0; k < 3; k++) { ctx.beginPath(); ctx.moveTo(cx - 7, yf - 17 + k * 3.5); ctx.lineTo(cx + 7, yf - 15.5 + k * 3.5); ctx.stroke(); }
+    // Ampoule de verre (plus chaude quand elle brille).
+    const gv = ctx.createRadialGradient(cx - 4, gy - 5, 1, cx, gy, R);
+    gv.addColorStop(0, `rgba(255,255,255,${.55 + .4 * e})`); gv.addColorStop(.6, `rgba(${200 + 55 * e},${215 + 30 * e},${230 - 70 * e},${.18 + .55 * e})`); gv.addColorStop(1, `rgba(190,205,220,${.28 + .4 * e})`);
+    ctx.fillStyle = gv; ctx.beginPath(); ctx.arc(cx, gy, R, 0, 7); ctx.fill();
+    ctx.strokeStyle = 'rgba(230,240,255,.55)'; ctx.lineWidth = 1; ctx.stroke();
+    // Filament : sombre éteint, rouge puis blanc-jaune.
+    const f = e < .3 ? [120 + 400 * e, 70 + 100 * e, 60] : [255, 150 + 105 * Math.min(1, (e - .3) / .7), 60 + 150 * Math.min(1, (e - .3) / .7)];
+    ctx.strokeStyle = `rgb(${f.map(Math.round).join(',')})`; ctx.lineWidth = 1.3 + e;
+    if (e > .05) { ctx.shadowColor = 'rgba(255,230,150,.9)'; ctx.shadowBlur = 10 * e; }
+    ctx.beginPath(); ctx.moveTo(cx - 5, yf - 19); ctx.lineTo(cx - 5, gy + 2);
+    for (let k = 0; k <= 6; k++) ctx.lineTo(cx - 5 + k * 10 / 6, gy + (k % 2 ? -3 : 2));
+    ctx.lineTo(cx + 5, yf - 19); ctx.stroke(); ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.beginPath(); ctx.ellipse(cx - 5, gy - 7, 3.5, 2, -.6, 0, 7); ctx.fill();
+    ctx.restore();
+  },
+  /** Oscilloscope : coffret, écran vert sombre quadrillé (rect `e`), boutons ; prises voie 1, voie 2 et masse (liste de points). */
+  oscillo(ctx, x, y, w, h, e, prises, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.roundRect(x + 4, y + 5, w, h, 12); ctx.fill();
+    const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#59636d'); g.addColorStop(.5, '#3a424a'); g.addColorStop(1, '#23292f');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 12); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.16)'; ctx.lineWidth = 1; ctx.stroke();
+    const ge = ctx.createRadialGradient(e.x + e.w / 2, e.y + e.h / 2, 10, e.x + e.w / 2, e.y + e.h / 2, e.w * .7);
+    ge.addColorStop(0, '#0d3a22'); ge.addColorStop(1, '#03160c');
+    ctx.fillStyle = ge; ctx.beginPath(); ctx.roundRect(e.x, e.y, e.w, e.h, 6); ctx.fill();
+    ctx.strokeStyle = '#1b2228'; ctx.lineWidth = 3; ctx.stroke();
+    ctx.strokeStyle = 'rgba(120,255,170,.09)'; ctx.lineWidth = 1;   // quadrillage de l’écran (pour l’œil)
+    for (let k = 1; k < 10; k++) { const gx = e.x + k * e.w / 10; ctx.beginPath(); ctx.moveTo(gx, e.y + 3); ctx.lineTo(gx, e.y + e.h - 3); ctx.stroke(); }
+    for (let k = 1; k < 8; k++) { const gy = e.y + k * e.h / 8; ctx.beginPath(); ctx.moveTo(e.x + 3, gy); ctx.lineTo(e.x + e.w - 3, gy); ctx.stroke(); }
+    for (const [px, py, noire] of prises) {
+      Peint.sphere(ctx, px, py, 6.5, noire ? ['#9aa0a6', '#2b2f33', '#050607'] : ['#fff3c4', '#d8a92e', '#5b4108']);
+      ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(px, py, 2.2, 0, 7); ctx.fill();
+    }
+    ctx.restore();
+  },
+  /** Ohmmètre numérique : coque jaune, afficheur à cristaux liquides, sélecteur, prises Ω (rouge) et COM (noire). */
+  ohmmetre(ctx, x, y, w, h, affiche, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(x + 4, y + 5, w, h, 12); ctx.fill();
+    const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#f6c84a'); g.addColorStop(1, '#b8861a');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 12); ctx.fill();
+    ctx.fillStyle = '#2a2d31'; ctx.beginPath(); ctx.roundRect(x + 7, y + 7, w - 14, h - 14, 8); ctx.fill();
+    const lx = x + 14, ly = y + 15, lw = w - 28, lh = h * .26;
+    const gl = ctx.createLinearGradient(0, ly, 0, ly + lh); gl.addColorStop(0, '#c9d3c0'); gl.addColorStop(1, '#a9b49e');
+    ctx.fillStyle = gl; ctx.beginPath(); ctx.roundRect(lx, ly, lw, lh, 3); ctx.fill();
+    ctx.fillStyle = '#1b1f1a'; ctx.font = `600 ${Math.round(lh * .62)}px monospace`; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillText(affiche, lx + lw - 8, ly + lh / 2 + 1);
+    // Sélecteur rotatif (sur Ω).
+    const sx = x + w / 2, sy = y + h * .6, sr = w * .17;
+    Peint.sphere(ctx, sx, sy, sr, ['#9aa0a6', '#3a3f45', '#0d0f11']);
+    ctx.strokeStyle = '#e8e8e8'; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + sr * .8 * Math.cos(-2.2), sy + sr * .8 * Math.sin(-2.2)); ctx.stroke();
+    ctx.fillStyle = '#e8e8e8'; ctx.font = `700 ${Math.round(w * .12)}px serif`; ctx.textAlign = 'center';
+    ctx.fillText('Ω', sx + sr * 1.55 * Math.cos(-2.2), sy + sr * 1.55 * Math.sin(-2.2));
+    // Prises.
+    const py = y + h - 20;
+    Peint.sphere(ctx, x + w * .3, py, 6, ['#9aa0a6', '#2b2f33', '#050607']); Peint.sphere(ctx, x + w * .7, py, 6, ['#ffd0d0', '#e0393e', '#6d0f12']);
+    ctx.restore();
+    return [[x + w * .3, py], [x + w * .7, py]];
+  },
+  /** Cordon souple peint (rouge ou noir) entre deux points, qui pend un peu. */
+  cordon(ctx, x1, y1, x2, y2, rouge, pend = 30, a = 1) {
+    ctx.save(); ctx.globalAlpha = a; ctx.lineCap = 'round';
+    const mx = (x1 + x2) / 2, my = Math.max(y1, y2) + pend;
+    ctx.strokeStyle = rouge ? '#7a1418' : '#050607'; ctx.lineWidth = 4.2; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.quadraticCurveTo(mx, my, x2, y2); ctx.stroke();
+    ctx.strokeStyle = rouge ? '#e0393e' : '#3b4045'; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.quadraticCurveTo(mx, my, x2, y2); ctx.stroke();
+    ctx.restore();
+  },
+  /** GBF : coffret, petit écran où défile un signal triangulaire, deux boutons, bornes de sortie. */
+  gbf(ctx, x, y, w, h, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(x + 3, y + 4, w, h, 7); ctx.fill();
+    const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#4f6a86'); g.addColorStop(.5, '#34495f'); g.addColorStop(1, '#202e3c');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 7); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1; ctx.stroke();
+    const ex = x + 8, ey = y + 8, ew = w * .55, eh = h * .42;
+    ctx.fillStyle = '#0d1a10'; ctx.beginPath(); ctx.roundRect(ex, ey, ew, eh, 3); ctx.fill();
+    ctx.strokeStyle = '#7dfc8a'; ctx.lineWidth = 1.4; ctx.beginPath();
+    for (let k = 0; k <= 4; k++) { const px = ex + 4 + k * (ew - 8) / 4, py = k % 2 ? ey + 5 : ey + eh - 5; if (k) ctx.lineTo(px, py); else ctx.moveTo(px, py); }
+    ctx.stroke();
+    Peint.sphere(ctx, x + w * .82, y + h * .25, Math.min(9, w * .09), ['#cfd4d9', '#59616a', '#14181c']);
+    Peint.sphere(ctx, x + w * .82, y + h * .58, Math.min(7, w * .07), ['#cfd4d9', '#59616a', '#14181c']);
+    ctx.restore();
+  },
+});
+/** Symbole de la bobine à la craie, couché entre (x1, y) et (x2, y) : fils, puis créneaux arrondis (boucles). */
+function symboleBobine(c, x1, y, x2, o = {}) {
+  const n = o.n ?? 4, larg = o.largeur ?? 80, xa = (x1 + x2) / 2 - larg / 2, xb = xa + larg, h = o.h ?? 16, coul = o.couleur ?? 'blanc';
+  c.ligne(x1, y, xa, y, { largeur: 2, couleur: o.fil ?? 'blanc' });
+  c.courbe(u => { const k = u * n, f = k - Math.floor(k), xx = xa + u * larg; return [xx, y - Math.sin(Math.min(1, f) * Math.PI) * h]; }, n * 14, { couleur: coul, largeur: 2.4 });
+  c.ligne(xb, y, x2, y, { largeur: 2, couleur: o.fil ?? 'blanc' });
+  return [xa, xb];
+}
+/** Le même symbole, debout entre (x, y1) en haut et (x, y2) en bas (boucles vers la droite). */
+function symboleBobineV(c, x, y1, y2, o = {}) {
+  const n = o.n ?? 4, haut = o.hauteur ?? 76, ya = (y1 + y2) / 2 - haut / 2, yb = ya + haut, h = o.h ?? 15, coul = o.couleur ?? 'blanc';
+  c.ligne(x, y1, x, ya, { largeur: 2 });
+  c.courbe(u => { const k = u * n, f = k - Math.floor(k); return [x + Math.sin(Math.min(1, f) * Math.PI) * h, ya + u * haut]; }, n * 14, { couleur: coul, largeur: 2.4 });
+  c.ligne(x, yb, x, y2, { largeur: 2 });
+  return [ya, yb];
+}
+
+const q0 = new URLSearchParams(location.search);
+const S2 = { L: 20 };
+{ const l = +q0.get('L_mH'); if (l >= 10 && l <= 40) S2.L = Math.round(l / 5) * 5; }
+const IMAX = 0.2, DEMI = 10, PENTE = IMAX / (DEMI / 1000);   // 0,2 A en 10 ms → 20 A/s
+const palier = () => S2.L / 1000 * PENTE;                      // V
+const ETAPES = [
+  { nom: 'courant', anim: 3.0, motif: 'i(t) : dents de scie, de 0 à 0,2 A en 10 ms puis retour', bulle: () => 'Le GBF impose le courant i…' },
+  { nom: 'pente_montee', anim: 0, motif: 'la pente de la montée : 20 A/s', bulle: () => 'Quelle est la pente de la montée ?' },
+  { nom: 'palier_haut', anim: 1.2, motif: 'pendant la montée, u_b reste constante', bulle: () => 'Et u_b pendant la montée ?' },
+  { nom: 'pente_descente', anim: 0, motif: 'la pente de la descente : −20 A/s', bulle: () => 'Et à la descente ?' },
+  { nom: 'palier_bas', anim: 1.2, motif: 'pendant la descente, u_b reste constante et négative', bulle: () => 'u_b pendant la descente…' },
+  { nom: 'rapport', anim: 0, motif: 'u_b/(di/dt) = L', bulle: () => 'Divisons le palier par la pente…' },
+];
+const MOTIFS = { fin: 'fin' }; for (const e of ETAPES) MOTIFS[e.nom] = e.motif;
+
+/* ── Géométrie (cadre 760 × 420) ─────────────────────────────────────── */
+const X0 = 300, KX = 11, Y0I = 180, KI = 520, Y0U = 314, KU = 78, TMAX = 40;
+const X = t => X0 + t * KX, YI = i => Y0I - i * KI, YU = u => Y0U - u * KU;
+const GBF = { x: 20, y: 52, w: 110, h: 70 }, BOB = { x: 34, y: 150, w: 120, h: 30 }, XS = 226;
+const REG = { x0: 40, x1: 220, y: 268 };
+let MO = null;
+/** i(t) en A (t en ms). */
+const iDe = t => { const f = ((t % 20) + 20) % 20; return f <= DEMI ? IMAX * f / DEMI : IMAX * (20 - f) / DEMI; };
+const monte = t => (((t % 20) + 20) % 20) < DEMI;
+const fA = v => fx(v, 2);
+
+/* ── Dessin ──────────────────────────────────────────────────────────── */
+function montage(c) {
+  c.direct(() => {
+    const ctx = c.ctx;
+    Peint.gbf(ctx, GBF.x, GBF.y, GBF.w, GBF.h);
+    Peint.borne(ctx, GBF.x + GBF.w, GBF.y + 20, true); Peint.borne(ctx, GBF.x + GBF.w, GBF.y + 50, false);
+    Peint.bobine(ctx, BOB.x, BOB.y, BOB.w, BOB.h);
+  });
+  c.texte('GBF', GBF.x + GBF.w / 2, GBF.y + GBF.h + 18, { taille: 15, align: 'center' });
+  c.trait([[GBF.x + GBF.w + 5, GBF.y + 20], [XS, GBF.y + 20], [XS, 90]], { largeur: 2 });
+  symboleBobineV(c, XS, 90, 200, { hauteur: 64, h: 13 });
+  c.trait([[XS, 200], [170, 200], [170, GBF.y + 50], [GBF.x + GBF.w + 5, GBF.y + 50]], { largeur: 2 });
+  c.texte(`L = ${S2.L} mH`, 30, 228, { taille: 16 });
+  c.texte('r ≈ 0', 140, 228, { taille: 16 });
+  // Petite règle de la poignée L.
+  c.ligne(REG.x0, REG.y, REG.x1, REG.y, { couleur: 'faible', largeur: 1.6 });
+  c.texte('10', REG.x0, REG.y + 18, { couleur: 'faible', taille: 12, align: 'center' });
+  c.texte('40 mH', REG.x1, REG.y + 18, { couleur: 'faible', taille: 12, align: 'center' });
+  c.direct(() => { const px = REG.x0 + (S2.L - 10) / 30 * (REG.x1 - REG.x0); c.point(px, REG.y, 6.5, 'cyan'); c.texte('L', px, REG.y - 10, { couleur: 'cyan', taille: 14, align: 'center' }); });
+}
+function axes(c) {
+  // Graphe de i.
+  c.axe(X0, Y0I, X0 + TMAX * KX + 12, Y0I, [10, 20, 30, 40].map(t => [t / (TMAX + 12 / KX), null]));
+  c.axe(X0, Y0I, X0, YI(.25) - 12, [[.1 / (.25 + 12 / KI), '0,1'], [.2 / (.25 + 12 / KI), '0,2']], { vertical: true, taille: 13 });
+  c.texte('i (A)', X0 + 8, YI(.25) - 4, { taille: 15 });
+  // Graphe de u_b.
+  c.axe(X0, Y0U, X0 + TMAX * KX + 12, Y0U, [10, 20, 30, 40].map(t => [t / (TMAX + 12 / KX), null]));
+  c.fleche(X0, YU(-1) + 4, X0, YU(1) - 10, { couleur: 'faible', largeur: 1.6 });
+  for (const u of [-.8, -.4, .4, .8]) { c.ligne(X0 - 5, YU(u), X0 + 5, YU(u), { couleur: 'faible', largeur: 1.4, duree: .04 }); c.texte(fx(u, 1).replace('-', '−'), X0 - 10, YU(u) + 5, { couleur: 'faible', taille: 13, align: 'right', duree: .1 }); }
+  c.texte('u_b (V)', X0 + 8, YU(1) - 2, { taille: 15 });
+  c.texte('0', X0 - 10, Y0U + 5, { couleur: 'faible', taille: 13, align: 'right' });
+  // Le même axe du temps : verticales communes, graduations en bas.
+  for (const t of [10, 20, 30, 40]) c.ligne(X(t), YI(.22), X(t), YU(-1), { couleur: 'tresfaible', largeur: 1, pointille: [3, 6], duree: .1 });
+  for (const t of [0, 10, 20, 30, 40]) c.texte(String(t), X(t), 410, { couleur: 'faible', taille: 13, align: 'center' });
+  c.texte('t (ms)', 752, Y0U - 8, { couleur: 'blanc', taille: 14, align: 'right' });
+}
+function dessiner(c, M) {
+  MO = M; M.scene.cadre(53);
+  c.texte('Un courant triangulaire dans une bobine', 14, 28, { couleur: 'cyan', taille: 20 });
+  montage(c); axes(c);
+  const P = palier();
+  c.direct(() => {
+    // i(t) se trace (orange).
+    const ti = TMAX * M.p('courant');
+    if (ti > 0) c.courbe(u => { const t = u * ti; return [X(t), YI(iDe(t))]; }, Math.max(8, Math.round(ti * 4)), { couleur: 'orange', largeur: 2.6, tremble: .2 });
+    // u_b(t) : paliers des montées (palier_haut), puis des descentes avec les sauts (palier_bas).
+    const th = TMAX * M.p('palier_haut'), tb = TMAX * M.p('palier_bas');
+    for (const d of [0, 20]) { const f = Math.min(th, d + DEMI); if (f > d) c.ligne(X(d), YU(P), X(f), YU(P), { couleur: 'rose', largeur: 2.6, tremble: .3 }); }
+    for (const d of [10, 30]) {
+      const f = Math.min(tb, d + DEMI); if (tb <= d) continue;
+      c.ligne(X(d), YU(P), X(d), YU(-P), { couleur: 'rose', largeur: 1.4, pointille: [4, 4] });
+      if (f > d) c.ligne(X(d), YU(-P), X(f), YU(-P), { couleur: 'rose', largeur: 2.6, tremble: .3 });
+      if (d === 10 && tb >= 20) c.ligne(X(20), YU(-P), X(20), YU(P), { couleur: 'rose', largeur: 1.4, pointille: [4, 4] });
+    }
+    if (ti > 0) c.texte(`i = ${fA(iDe(ti))} A`, 752, YI(.25) - 4, { couleur: 'orange', taille: 15, align: 'right' });
+  });
+  const L = 14, col = 250;
+  M.etape(c, 'pente_montee', () => {
+    c.ligne(X(DEMI), Y0I, X(DEMI), YI(IMAX), { couleur: 'blanc', largeur: 1.4, pointille: [5, 4] });
+    c.cote(X(0), Y0I + 12, X(DEMI), Y0I + 12, 'Δt = 10 ms', { couleur: 'blanc', largeur: 1.2, dessous: true, taille: 13 });
+    c.texte('Δi = 0,2 A', X(DEMI) - 4, YI(.06), { couleur: 'blanc', taille: 13, align: 'right' });
+    c.texte('montée : di/dt = 0,2/0,01 = 20 A/s', L, 300, { couleur: 'orange', taille: 15, max: col });
+  });
+  M.etape(c, 'palier_haut', () => {
+    c.texte(`+${fx(P, 2)} V`, X(5), YU(P) - 8, { couleur: 'rose', taille: 14, align: 'center' });
+    c.texte(`montée : u_b = ${fx(P, 2)} V (constante)`, L, 324, { couleur: 'rose', taille: 15, max: col });
+  });
+  M.etape(c, 'pente_descente', () => {
+    c.cote(X(DEMI), Y0I + 12, X(20), Y0I + 12, 'Δt = 10 ms', { couleur: 'blanc', largeur: 1.2, dessous: true, taille: 13 });
+    c.texte('Δi = −0,2 A', X(DEMI) + 4, YI(.06), { couleur: 'blanc', taille: 13 });
+    c.texte('descente : di/dt = −20 A/s', L, 348, { couleur: 'orange', taille: 15, max: col });
+  });
+  M.etape(c, 'palier_bas', () => {
+    c.texte(`−${fx(P, 2)} V`, X(15), YU(-P) + 20, { couleur: 'rose', taille: 14, align: 'center' });
+    c.texte(`descente : u_b = −${fx(P, 2)} V`, L, 372, { couleur: 'rose', taille: 15, max: col });
+  });
+  M.etape(c, 'rapport', () => {
+    const s = `u_b/(di/dt) = ${fx(P, 2)}/20 = ${fx(S2.L / 1000, 3)} H = L`;
+    c.texte(s, L, 403, { couleur: 'blanc', taille: 16, max: col - 4 });
+    c.rect(L - 6, 382, col + 8, 30, { couleur: 'jaune', largeur: 1.8 });
+  });
+  reperes(c);
+  return c.fin();
+}
+function reperes(c) {
+  const P = palier();
+  c.repere('gbf', GBF.x - 4, GBF.y - 4, GBF.w + 16, GBF.h + 28, 'le GBF : il impose un courant triangulaire');
+  c.repere('bobine', BOB.x - 6, 84, XS + 24 - BOB.x, 156, `la bobine : L = ${S2.L} mH, r négligeable (poignée : la règle L)`);
+  c.repere('graphe_i', X0 - 30, YI(.25) - 20, TMAX * KX + 50, Y0I - YI(.25) + 24, 'le graphe de i(t) : dents de scie');
+  c.repere('graphe_u', X0 - 40, YU(1) - 18, TMAX * KX + 60, YU(-1) - YU(1) + 24, 'le graphe de u_b(t) : créneaux');
+  c.repere('pente', X(0), YI(IMAX) - 4, X(DEMI) - X(0) + 4, Y0I - YI(IMAX) + 40, 'la pente de la montée : di/dt = 0,2/0,01 = 20 A/s');
+  c.repere('palier', X(0), YU(P) - 26, X(DEMI) - X(0), 34, `le palier : u_b = ${fx(P, 2)} V pendant la montée`);
+  c.repere('rapport', 8, 380, 262, 34, `le rapport : u_b/(di/dt) = ${fx(S2.L / 1000, 3)} H = L`);
+}
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
+function voir(M) {
+  const P = palier(), ti = TMAX * M.p('courant');
+  const m = [`Courant triangulaire, ${M.etat()}. À gauche : un GBF (boîtier) relié à une bobine de résistance négligeable (bobine peinte et son symbole à la craie), « L = ${S2.L} mH », « r ≈ 0 », une petite règle L (10 à 40 mH) avec un point cyan (poignée). À droite, deux graphes l’un sous l’autre, même axe du temps (0 à 40 ms) : i (A, 0 à 0,25) en haut, u_b (V, −1 à 1) en bas.`];
+  if (ti > 0) m.push(`Courbe orange i(t) tracée jusqu’à t = ${fx(ti, 1)} ms (i = ${fA(iDe(ti))} A, ${monte(ti) ? 'en montée' : 'en descente'}) : de 0 à 0,2 A en 10 ms, puis retour à 0 en 10 ms ; période 20 ms.`);
+  if (M.commence('palier_haut')) m.push(`u_b(t) (rose) : +${fx(P, 2)} V pendant les montées (0–10 ms, 20–30 ms)${M.commence('palier_bas') ? `, −${fx(P, 2)} V pendant les descentes (10–20 ms, 30–40 ms) : des créneaux` : ''}.`);
+  const e = [];
+  if (M.vu('pente_montee')) e.push('triangle de pente sur la première montée : « Δt = 10 ms », « Δi = 0,2 A », « montée : di/dt = 0,2/0,01 = 20 A/s »');
+  if (M.vu('palier_haut')) e.push(`« +${fx(P, 2)} V », « montée : u_b = ${fx(P, 2)} V (constante) »`);
+  if (M.vu('pente_descente')) e.push('« Δt = 10 ms », « Δi = −0,2 A », « descente : di/dt = −20 A/s »');
+  if (M.vu('palier_bas')) e.push(`« −${fx(P, 2)} V », « descente : u_b = −${fx(P, 2)} V »`);
+  if (M.vu('rapport')) e.push(`encadré en jaune : « u_b/(di/dt) = ${fx(P, 2)}/20 = ${fx(S2.L / 1000, 3)} H = L »`);
+  if (e.length) m.push(`Écrit à la craie : ${e.join(' ; ')}.`);
+  return m.join(' ');
+}
+const params = M => ({ L_mH: S2.L, pente_A_par_s: PENTE, palier_V: +palier().toFixed(3), rapport_H: +(palier() / PENTE).toFixed(4), t_trace_ms: +(TMAX * M.p('courant')).toFixed(2) });
+const MOT = Moteur({
+  id: 'dipole_rl_triangle', titre: 'Courant triangulaire dans une bobine : u_b = L·di/dt', vues: ['triangle'], titres: { triangle: 'courant triangulaire' },
+  etapes: () => ETAPES, motifs: MOTIFS, dessiner, voir, params,
+  depart: () => `Une bobine de résistance négligeable (L = ${S2.L} mH) parcourue par un courant triangulaire.`,
+  messageFin: () => `Pente 20 A/s, palier ${fx(palier(), 2)} V : u_b = L·di/dt, donc L = ${fx(palier(), 2)}/20 = ${fx(S2.L / 1000, 3)} H.`,
+  appliquer: p => {
+    const v = p.L_mH ?? p.L;
+    if (v == null || v === '') return {};
+    let l = +String(v).replace(',', '.'); if (!Number.isFinite(l)) return {};
+    if (l < 1) l *= 1000;                                       // accepte aussi L en henry (0,02)
+    l = clamp(Math.round(l / 5) * 5, 10, 40);
+    if (l === S2.L) return {};
+    S2.L = l; return { change: true };
+  },
+  schema: { L_mH: '10..40 (mH, pas 5 ; palier u_b = L × 20 ; relance)' },
+  texte: 'Un GBF impose dans une bobine de résistance négligeable (L = 20 mH) un courant triangulaire : i monte de 0 à 0,2 A en 10 ms (pente 20 A/s), puis redescend en 10 ms (pente −20 A/s) ; période 20 ms. Sous le graphe de i, u_b(t) est en créneaux : +0,4 V pendant la montée, −0,4 V pendant la descente. Comme u_b = L·di/dt (r négligeable), le rapport palier/pente donne L : 0,4/20 = 0,02 H.',
+  explications: {
+    triangle: [
+      { repere: 'gbf', texte: 'Le GBF impose dans la bobine un courant triangulaire.' },
+      { repere: 'graphe_i', texte: 'i monte de 0 à 0,2 A en 10 ms, puis redescend.' },
+      { repere: 'pente', texte: 'La pente de la montée : di/dt = 20 A/s.' },
+      { repere: 'palier', texte: 'Pendant la montée, u_b reste constante : 0,4 V.' },
+      { repere: 'graphe_u', texte: 'À la descente, la pente change de signe : u_b aussi. Des créneaux.' },
+      { repere: 'rapport', texte: 'Palier divisé par la pente : 0,4/20 = 0,02 H, c’est L.' },
+    ],
+  },
+});
+MOT.lancer();
+window.Tableau.glisser(MOT.scene.craie.canvas, {
+  toucher: (px, py) => { const [x, y] = MOT.scene.local(px, py); return x > REG.x0 - 12 && x < REG.x1 + 12 && y > REG.y - 16 && y < REG.y + 12 ? 'L' : null; },
+  bouger: (id, px) => { const [x] = MOT.scene.local(px, 0); const l = clamp(Math.round((10 + (x - REG.x0) / (REG.x1 - REG.x0) * 30) / 5) * 5, 10, 40); if (l !== S2.L) { S2.L = l; MOT.scene.sale = true; } },
+  lacher: () => { MOT.calculer(); MOT.noter('set_parameters', { L_mH: S2.L }); MOT.start(); },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

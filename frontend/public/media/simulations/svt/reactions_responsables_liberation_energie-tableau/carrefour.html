@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le carrefour de l’acide pyruvique — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="svt.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Une cellule peinte : dans le hyaloplasme, la glycolyse coupe le glucose en deux acides pyruviques, au carrefour ; un interrupteur O2 décide : avec dioxygène, l'acide pyruvique entre dans la mitochondrie (respiration cellulaire : acétyl-CoA et cycle de Krebs dans la matrice, chaîne respiratoire sur la membrane interne) ; sans dioxygène, il reste dans le hyaloplasme (fermentation) ; en bas, les bilans des deux voies"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="peinture.js"></script>
+<script>
+/*
+ * Le carrefour de l’acide pyruvique (cours SVT « Libération de l’énergie »), 10 novembre 2026.
+ * Vues (?vue=) : plan (cases vides « ? » pour les produits et les ATP) et complet (les bilans se remplissent).
+ * Ce qui se voit (t en s de la scène) :
+ *   glycolyse_faite (3)       : glucose → 2 acides pyruviques, dans le hyaloplasme ;
+ *   question_o2 (5)           : « avec ou sans dioxygène ? » (l’interrupteur O2 attend) ;
+ *   avec_o2_vers_matrice (9)  : O2 présent : l’acide pyruvique entre dans la mitochondrie : respiration cellulaire
+ *                               (matrice : acétyl-CoA, cycle de Krebs ; membrane interne : chaîne respiratoire) ;
+ *   sans_o2_sur_place (13)    : O2 absent : il reste dans le hyaloplasme : fermentation ;
+ *   complet seulement : bilan_38 (16) : 6 CO2 + 6 H2O, 38 ATP, dégradation complète ;
+ *                       bilan_2 (19)  : acide lactique, ou éthanol + CO2 ; 2 ATP ; dégradation incomplète.
+ * Poignée : l’interrupteur O2 (glisser vers « présent » ou « absent ») = set_parameters {o2: true | false} ;
+ * il rejoue jusqu’au moment de la voie choisie. C’est l’acide pyruvique qui entre dans la mitochondrie, pas le glucose.
+ */
+const { bulle, protocole } = window.Tableau;
+const { Scene, Chrono, Apparitions, doux, mix, fr } = window.SVTTableau;
+const P = window.SVTPeinture;
+const $ = id => document.getElementById(id);
+
+const VUES = ['plan', 'complet'];
+const demande = new URLSearchParams(location.search).get('vue');
+const vue = VUES.includes(demande) ? demande : 'complet';
+const COMPLET = vue === 'complet';
+const M = { glycolyse_faite: 3, question_o2: 5, avec_o2_vers_matrice: 9, sans_o2_sur_place: 13, ...(COMPLET ? { bilan_38: 16, bilan_2: 19 } : {}) };
+const FIN = COMPLET ? 21 : 14.5;
+const MOTIFS = {
+  glycolyse_faite: 'la glycolyse a donné deux acides pyruviques',
+  question_o2: 'au carrefour : avec ou sans dioxygène ?',
+  avec_o2_vers_matrice: 'avec O2 : l’acide pyruvique entre dans la mitochondrie',
+  sans_o2_sur_place: 'sans O2 : il reste dans le hyaloplasme, c’est la fermentation',
+  bilan_38: 'le bilan de la respiration : 38 ATP',
+  bilan_2: 'le bilan de la fermentation : 2 ATP',
+};
+/* Les périodes de la ligne de temps où l’interrupteur est sur « présent » / « absent ». */
+const AVEC = COMPLET ? [[6, 10], [14, 17]] : [[6, 10]], SANS = COMPLET ? [[10, 14], [17, 99]] : [[10, 99]];
+const dans = (L, t) => L.find(([a, b]) => t >= a && t < b);
+const o2At = (t) => (dans(AVEC, t) ? true : dans(SANS, t) ? false : null);
+
+const CEL = { x: 300, y: 198, rx: 292, ry: 148 }, MITO = { x: 440, y: 190, rx: 115, ry: 55 };
+const GLU = { x: 110, y: 131 }, CAR = { x: 235, y: 210 }, RAIL = { x0: 640, x1: 724, y: 112 };
+const CARBONE = [250, 204, 21];
+let poigneeX = null;   // position de l’interrupteur pendant qu’on le glisse
+
+const canvas = $('canvas');
+const scene = Scene(canvas, (c) => { scene.cadre(COMPLET ? 71 : 73); dessiner(c); return c.fin(); });
+const ecrit = Apparitions(scene);
+const chrono = Chrono({ fin: () => FIN, moments: () => M, motifs: MOTIFS, bouton: $('run'), bulle: $('feedback'), pont: () => pont,
+  depart: 'Le glucose arrive dans le hyaloplasme…', reinit: () => ecrit.oublier(),
+  fini: () => COMPLET ? 'Avec O2 : respiration, 38 ATP. Sans O2 : fermentation, 2 ATP.' : 'Avec O2 : la mitochondrie. Sans O2 : le hyaloplasme. Et les bilans ?' });
+scene.avancer = chrono.avancer;
+
+/* Les 6 carbones : glucose (deux rangées de 3), puis deux acides pyruviques au carrefour. */
+function carbone(i, t) {
+  const u = doux(chrono.part(1.6, 2.9, t));
+  const x0 = GLU.x + (i % 3 - 1) * 18, y0 = GLU.y + (i < 3 ? -9 : 9);
+  const x1 = CAR.x + (i % 3 - 1) * 18, y1 = CAR.y + (i < 3 ? -14 : 14);
+  return [mix(x0, x1, u), mix(y0, y1, u)];
+}
+/* Les copies qui entrent dans la mitochondrie, pendant chaque période « présent ». */
+function entree(t) { const p = dans(AVEC, t); return p ? doux(chrono.part(p[0] + .4, p[0] + 2.4, t)) : 0; }
+
+function boite(c, x, y, w, titre, lignes, couleur) {
+  c.rect(x, y, w, 66, { couleur, largeur: 1.6 });
+  c.texte(titre, x + 10, y + 18, { couleur, taille: 14 });
+  lignes.forEach((s, i) => c.texte(s, x + 10, y + 39 + i * 21, { couleur: s.includes('?') ? 'faible' : 'blanc', taille: 13, max: w - 20 }));
+}
+
+function dessiner(c) {
+  const t = chrono.t, o2 = poigneeX != null ? poigneeX > (RAIL.x0 + RAIL.x1) / 2 : o2At(t), e = entree(t);
+  c.direct(() => {
+    const ctx = c.ctx;
+    P.cellule(ctx, CEL.x, CEL.y, CEL.rx, CEL.ry, { grains: 130, graine: 31 });
+    ctx.save(); if (o2 === false) ctx.globalAlpha = .5;
+    P.mitochondrie(ctx, MITO.x, MITO.y, MITO.rx, MITO.ry, { cretes: 6, graine: 9 }); ctx.restore();
+    const a = doux(chrono.part(.3, 1.3, t));
+    for (let i = 0; i < 6; i++) { const [x, y] = carbone(i, t); P.bille(ctx, x, y, 8, CARBONE, { alpha: a }); }
+    // les acides pyruviques qui entrent dans la matrice (copies, pour montrer le chemin)
+    if (e > 0) for (let g = 0; g < 2; g++) for (let i = 0; i < 3; i++) {
+      const x = mix(CAR.x + (i - 1) * 18, MITO.x - 30 + (i - 1) * 16, e), y = mix(CAR.y + (g ? 14 : -14), MITO.y + (g ? 12 : -12), e);
+      P.bille(ctx, x, y, 7, CARBONE, { alpha: .9 });
+    }
+    // l’interrupteur O2 (peint : un rail et un bouton)
+    const kx = poigneeX ?? (o2 === true ? RAIL.x1 : o2 === false ? RAIL.x0 : (RAIL.x0 + RAIL.x1) / 2);
+    ctx.save(); ctx.fillStyle = o2 === true ? 'rgba(74,222,128,.28)' : o2 === false ? 'rgba(248,113,113,.22)' : 'rgba(226,232,240,.12)';
+    ctx.beginPath(); ctx.roundRect(RAIL.x0 - 14, RAIL.y - 12, RAIL.x1 - RAIL.x0 + 28, 24, 12); ctx.fill(); ctx.restore();
+    P.bille(ctx, kx, RAIL.y, 11, o2 === true ? [74, 222, 128] : o2 === false ? [248, 113, 113] : [200, 200, 200]);
+  });
+  // ── craie fixe ──
+  c.texte('Le carrefour de l’acide pyruvique', 18, 30, { couleur: 'cyan', taille: 20 });
+  c.texte(COMPLET ? 'vue complète' : 'vue d’ensemble : à compléter', 742, 30, { couleur: 'faible', taille: 13, align: 'right' });
+  c.texte('hyaloplasme', 40, 210, { couleur: 'vert', taille: 14 });
+  c.texte('mitochondrie', MITO.x + 40, MITO.y - MITO.ry - 6, { couleur: 'orange', taille: 14, align: 'center' });
+  c.texte('O_{2} : présent / absent', 672, 78, { couleur: 'cyan', taille: 14, align: 'center' });
+  c.rect(RAIL.x0 - 14, RAIL.y - 12, RAIL.x1 - RAIL.x0 + 28, 24, { couleur: 'faible', largeur: 1.4, arrondi: 12 });
+  c.texte('absent', RAIL.x0, 142, { couleur: 'rouge', taille: 13, align: 'center' });
+  c.texte('présent', RAIL.x1, 142, { couleur: 'vert', taille: 13, align: 'center' });
+  c.repere('o2', RAIL.x0 - 30, 60, RAIL.x1 - RAIL.x0 + 60, 90, 'l’interrupteur O2 : présent ou absent');
+  c.repere('mitochondrie', MITO.x - MITO.rx, MITO.y - MITO.ry - 24, 2 * MITO.rx, 2 * MITO.ry + 24, 'la mitochondrie');
+
+  if (t >= .6) ecrit.ecrire(c, 'glucose', () => c.texte('glucose', GLU.x, GLU.y - 22, { couleur: 'jaune', taille: 14, align: 'center' }));
+  if (t >= 1.4) ecrit.ecrire(c, 'glycolyse', () => {
+    c.fleche(GLU.x + 34, GLU.y + 18, CAR.x - 40, CAR.y - 22, { couleur: 'blanc', largeur: 1.6 });
+    c.texte('glycolyse', 92, 186, { couleur: 'blanc', taille: 14, align: 'center' });
+  });
+  c.repere('glycolyse', GLU.x - 50, GLU.y - 40, 140, 90, 'la glycolyse, dans le hyaloplasme');
+  if (t >= 2.9) {
+    ecrit.ecrire(c, 'pyruviques', () => c.texte('2 acides pyruviques', CAR.x + 15, CAR.y + 56, { couleur: 'jaune', taille: 14, align: 'center' }));
+    c.repere('carrefour', CAR.x - 52, CAR.y - 46, 104, 100, 'le carrefour : deux acides pyruviques');
+  }
+  if (t >= 4.3) ecrit.ecrire(c, 'question', () => {
+    c.cercle(CAR.x, CAR.y, 40, { couleur: 'jaune', largeur: 1.6 });
+    c.texte('carrefour', CAR.x, CAR.y - 48, { couleur: 'jaune', taille: 14, align: 'center' });
+    c.texte('avec ou sans', 682, 176, { couleur: 'jaune', taille: 15, align: 'center' });
+    c.texte('dioxygène ?', 682, 196, { couleur: 'jaune', taille: 15, align: 'center' });
+  });
+  if (o2 === null && t >= 4.3) c.direct(() => c.texte('?', (RAIL.x0 + RAIL.x1) / 2, RAIL.y + 6, { couleur: 'blanc', taille: 16, align: 'center' }));
+  // avec O2 : vers la mitochondrie
+  if (t >= 7.4) {
+    ecrit.ecrire(c, 'avec', () => {
+      c.fleche(CAR.x + 44, CAR.y - 6, MITO.x - MITO.rx + 26, MITO.y - 4, { couleur: 'vert', largeur: 1.8 });
+      c.texte('avec O_{2}', 304, 178, { couleur: 'vert', taille: 13, align: 'center' });
+      c.texte('respiration cellulaire : mitochondrie', MITO.x, 104, { couleur: 'vert', taille: 14, align: 'center' });
+      c.texte('matrice : acétyl-CoA → cycle de Krebs', MITO.x - 10, 268, { couleur: 'bleu', taille: 13, align: 'center' });
+      c.texte('membrane interne : chaîne respiratoire', MITO.x - 10, 288, { couleur: 'orange', taille: 13, align: 'center' });
+    });
+    c.repere('respiration', MITO.x - MITO.rx - 10, 100, 2 * MITO.rx + 20, 194, 'la respiration cellulaire, dans la mitochondrie');
+    ecrit.ecrire(c, 'boiteR', () => boite(c, 385, 350, 365, 'respiration (avec O_{2})', COMPLET && t >= 14.6 ? [] : ['produits : ?', 'ATP : ?'], 'vert'));
+  }
+  // sans O2 : sur place, dans le hyaloplasme
+  if (t >= 11.2) {
+    ecrit.ecrire(c, 'sans', () => {
+      c.courbe((u) => [CAR.x - 72 + 20 * Math.cos(Math.PI * (.2 + 1.65 * u)), CAR.y + 46 + 14 * Math.sin(Math.PI * (.2 + 1.65 * u))], 22, { couleur: 'rouge', largeur: 1.8 });
+      c.texte('sans O_{2} : il reste sur place', CAR.x - 20, 296, { couleur: 'rouge', taille: 13, align: 'center' });
+      c.texte('fermentation : hyaloplasme', CAR.x - 20, 316, { couleur: 'rouge', taille: 14, align: 'center' });
+    });
+    c.repere('fermentation', CAR.x - 120, 236, 220, 88, 'la fermentation, dans le hyaloplasme');
+    ecrit.ecrire(c, 'boiteF', () => boite(c, 10, 350, 365, 'fermentation (sans O_{2})', COMPLET && t >= 17.6 ? [] : ['produits : ?', 'ATP : ?'], 'rouge'));
+  }
+  if (t >= 7.4) c.repere('bilan_respiration', 385, 350, 365, 66, 'le bilan de la respiration');
+  if (t >= 11.2) c.repere('bilan_fermentation', 10, 350, 365, 66, 'le bilan de la fermentation');
+  // les bilans (vue complète)
+  if (COMPLET && t >= 14.6) ecrit.ecrire(c, 'bilanR', () => {
+    c.texte('produits : 6 CO_{2} + 6 H_{2}O', 395, 389, { couleur: 'blanc', taille: 13 });
+    c.texte('38 ATP, dégradation complète', 395, 410, { couleur: 'jaune', taille: 13 });
+  });
+  if (COMPLET && t >= 17.6) ecrit.ecrire(c, 'bilanF', () => {
+    c.texte('produits : acide lactique, ou éthanol + CO_{2}', 20, 389, { couleur: 'blanc', taille: 13 });
+    c.texte('2 ATP ; dégradation incomplète', 20, 410, { couleur: 'jaune', taille: 13 });
+  });
+}
+
+function phase(t) {
+  if (t < 1.6) return 'Une cellule peinte : hyaloplasme et une mitochondrie ; un glucose (6 billes de carbone) dans le hyaloplasme.';
+  if (t < 4.3) return 'Glycolyse, dans le hyaloplasme : le glucose est coupé en 2 acides pyruviques, au carrefour.';
+  if (t < 6) return 'Au carrefour : « avec ou sans dioxygène ? » ; l’interrupteur O2 attend (au milieu, « ? »).';
+  if (t < 10) return 'O2 présent : les acides pyruviques entrent dans la mitochondrie : respiration cellulaire (matrice : acétyl-CoA, cycle de Krebs ; membrane interne : chaîne respiratoire).' + (COMPLET ? '' : ' Case « respiration » : produits ?, ATP ?');
+  if (t < 14 || !COMPLET) return 'O2 absent : la mitochondrie est grisée ; les acides pyruviques restent dans le hyaloplasme : fermentation.' + (COMPLET ? '' : ' Cases vides : produits ?, ATP ?');
+  if (t < 17) return 'O2 présent : bilan de la respiration : 6 CO2 + 6 H2O, 38 ATP, dégradation complète.';
+  return 'O2 absent : bilan de la fermentation : acide lactique, ou éthanol + CO2 ; 2 ATP ; dégradation incomplète. Les deux bilans sont écrits en bas.';
+}
+function ceQuiSeVoit() {
+  const t = chrono.t, o2 = o2At(t);
+  return `Vue ${vue}. t = ${fr(t, 1)} s${chrono.running ? ' (ça avance)' : chrono.fait ? ' (fin)' : ' (arrêté)'}. ${phase(t)} Interrupteur O2 : ${o2 === true ? 'présent' : o2 === false ? 'absent' : 'pas encore choisi'}.`;
+}
+
+/* ── Réglage : l’interrupteur O2 ── */
+const bool = v => !(v === false || v === 'false' || v === 0 || v === '0' || v === 'non' || v === 'absent');
+function setParameters(p) {
+  if (!p || !('o2' in p)) return;
+  const avec = bool(p.o2);
+  const moment = avec ? (COMPLET ? 'bilan_38' : 'avec_o2_vers_matrice') : (COMPLET ? 'bilan_2' : 'sans_o2_sur_place');
+  bulle($('feedback'), avec ? 'O2 présent : vers la mitochondrie…' : 'O2 absent : sur place, dans le hyaloplasme…');
+  pont.noter('set_parameters', { o2: avec });
+  chrono.playUntil({ moment });
+}
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => { const [x, y] = scene.local(px, py); return x > RAIL.x0 - 20 && x < RAIL.x1 + 20 && Math.abs(y - RAIL.y) < 18 ? 'o2' : null; },
+  bouger: (id, px, py) => { const [x] = scene.local(px, py); poigneeX = Math.min(RAIL.x1, Math.max(RAIL.x0, x)); scene.sale = true; },
+  lacher: () => { const avec = (poigneeX ?? RAIL.x1) > (RAIL.x0 + RAIL.x1) / 2; poigneeX = null; setParameters({ o2: avec }); },
+});
+
+$('run').onclick = chrono.clic;
+const EXPL = [
+  { repere: 'glycolyse', texte: 'Le glucose est d’abord coupé par la glycolyse, dans le hyaloplasme.' },
+  { repere: 'carrefour', texte: 'On obtient deux acides pyruviques : c’est le carrefour.' },
+  { repere: 'o2', texte: 'Tout dépend du dioxygène.' },
+  { repere: 'respiration', texte: 'Avec O2, l’acide pyruvique entre dans la mitochondrie : c’est la respiration cellulaire.' },
+  { repere: 'fermentation', texte: 'Sans O2, il reste dans le hyaloplasme : c’est la fermentation.' } ];
+window.Tableau.explication({ [vue]: COMPLET ? EXPL.concat([
+  { repere: 'bilan_respiration', texte: 'Respiration : 6 CO2 et 6 H2O, 38 ATP, dégradation complète.' },
+  { repere: 'bilan_fermentation', texte: 'Fermentation : acide lactique, ou éthanol et CO2 ; 2 ATP ; dégradation incomplète.' } ]) : EXPL.concat([
+  { repere: 'bilan_respiration', texte: 'Quels produits, et combien d’ATP, avec dioxygène ?' },
+  { repere: 'bilan_fermentation', texte: 'Et sans dioxygène ?' } ]) });
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'svt_energie_carrefour', version: '1.0', title: 'Le carrefour de l’acide pyruvique — ' + vue, variants: [{ id: vue, label: vue }], commands: commandes,
+  command_schema: {
+    set_time: { time_s: `0..${FIN} (arrêt sur cet instant)` },
+    set_parameters: { o2: `true | false (dioxygène présent ou absent ; rejoue jusqu’à ${COMPLET ? 'bilan_38 ou bilan_2' : 'avec_o2_vers_matrice ou sans_o2_sur_place'})` },
+    play_until: { moment: Object.keys(M).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Le carrefour de l’acide pyruvique. La glycolyse, dans le hyaloplasme, coupe le glucose en deux acides pyruviques. Avec dioxygène, l’acide pyruvique entre dans la mitochondrie : respiration cellulaire (acétyl-CoA et cycle de Krebs dans la matrice, chaîne respiratoire sur la membrane interne) ; bilan : 6 CO2 + 6 H2O, 38 ATP, dégradation complète. Sans dioxygène, il reste dans le hyaloplasme : fermentation ; bilan : acide lactique, ou éthanol + CO2 ; 2 ATP ; dégradation incomplète.' + (COMPLET ? '' : ' Vue d’ensemble : les produits et les ATP sont à compléter (« ? »).'),
+  etat: () => ({ simulation_status: chrono.statut(), ce_qui_se_voit: ceQuiSeVoit(), current_variant: vue, time_s: +chrono.t.toFixed(2), parameters: { o2: o2At(chrono.t) }, moments: M }),
+  progression: () => chrono.t / FIN,
+  executer: (cmd, p) => ({ start: chrono.start, reset: chrono.start, pause: chrono.pause, resume: chrono.resume, set_time: () => chrono.setTime(p), set_parameters: () => setParameters(p), play_until: () => chrono.playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Une cellule : un glucose va être dégradé…');
+setTimeout(() => { if (!chrono.running && chrono.t === 0) chrono.start(); }, 1600);
+window.__sim = { chrono, scene, M };
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

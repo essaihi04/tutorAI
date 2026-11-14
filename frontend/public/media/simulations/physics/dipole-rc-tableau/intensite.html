@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>L’intensité, pente de q(t) — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="rc.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="La courbe q(t) de la charge d’un condensateur, à la craie rouge (axes t en s et q en µC) ; une droite q = I₀·t en pointillé ; une corde entre t et t + Δt qui devient la tangente (i = dq/dt) ; la tangente horizontale au palier (i = 0) ; à droite une courbe de décharge bleue et sa tangente qui descend (i < 0)"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * i est la pente de q(t) (cours « Dipôle RC », 2e Bac PC BIOF, novembre 2026).
+ * Charge : q(t) = Q(1 − e^{−t/τ}) avec E = 12 V, R = 1 kΩ, C = 220 µF : Q = C·E = 2640 µC, τ = 0,22 s, i(0) = E/R = 12 mA.
+ * i(t) = dq/dt = (Q/τ)·e^{−t/τ} ; 1 µC/s = 10⁻³ mA. Axe des temps 0 → 1,2 s (graduations 0,2 s : aucune ne tombe sur τ).
+ * Moments : courant_constant (droite q = I₀·t en pointillé, I₀ = 1,5 mA), corde (Δt = 0,3 s), tangente (Δt → 0),
+ * pente_nulle (le point glisse au palier, t = 1,1 s : i ≈ 0,08 mA ≈ 0), decharge_negative (q = Q·e^{−t/τ} en bleu, tangente à 0,2 s).
+ * Poignée : le point de tangence (t_s de 0 à 1,2 s) ; la corde ou la tangente le suivent, sans relancer.
+ */
+/* ── Moteur du déroulé (commun aux pages « appareils » de ce dossier, recopié dans chaque page) ──────────────
+ * Une page déclare des étapes par vue : { nom, anim (s), ecritDes (s, défaut = anim), motif, bulle() }.
+ * Chaque étape : d’abord son animation (aiguille, électrons, courbe qui s’enregistre…), puis la craie écrit ce
+ * qu’il faut dire ; le moment `nom` est la fin de cette écriture (l’animation est finie, le texte est écrit).
+ * Les durées d’écriture sont mesurées au dessin (calculer), donc les moments suivent les paramètres.
+ * Les parties fixes (titres, axes, montage déjà dessiné) s’écrivent à l’horloge de la scène, ECRITURE fois plus vite.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lisse = p => p * p * (3 - 2 * p);
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');   // 1,50 → 1,5 ; 2,00 → 2
+const ECRITURE = 2.5;
+function Moteur(o) {
+  const q = new URLSearchParams(location.search);
+  const S = { vue: o.vues.includes(q.get('vue')) ? q.get('vue') : o.vues[0], t: 0, running: false, pause: false, fait: false,
+    jusqua: null, motif: '', emis: 0, dit: '', mesure: false };
+  const V = o.vitesse ?? 1.7, T0 = o.T0 ?? .8, HOLD = {};
+  let TL = null;
+  function construire() {
+    let s = T0; const ev = [];
+    for (const e of o.etapes(S.vue)) {
+      const anim = e.anim || 0, d = { ...e, anim, debut: s, ecrit: s + (e.ecritDes ?? anim) };
+      d.fin = Math.max(s + anim, d.ecrit + (HOLD[e.nom] ?? 1.5)) + .35;
+      s = d.fin; ev.push(d);
+    }
+    const mom = {}; for (const e of ev) mom[e.nom] = e.fin; mom.fin = s + (o.queue ?? .6);
+    TL = { ev, M: mom };
+  }
+  const ev = nom => TL.ev.find(e => e.nom === nom);
+  const M = {
+    S, ev, Moments: () => TL.M,
+    /** Avancement (0 → 1) de l’animation de l’étape `nom`. */
+    p(nom) { const e = ev(nom); if (!e) return 0; return e.anim > 0 ? clamp((S.t - e.debut) / e.anim, 0, 1) : (S.t >= e.debut - 1e-6 ? 1 : 0); },
+    commence(nom) { const e = ev(nom); return !!e && S.t > e.debut + 1e-6; },
+    vu(nom) { if (nom === 'fin') return S.t >= TL.M.fin - 1e-6; const e = ev(nom); return !!e && S.t >= e.fin - 1e-6; },
+    /** Ce qui s’écrit à l’étape `nom` : la craie écrit à partir de la fin de son animation. */
+    etape(c, nom, fn) {
+      const e = ev(nom); if (!e) return;
+      const t = c.t, cur = c.cur, comp = c.complet, w0 = e.ecrit;
+      c.t = S.t > 1e5 ? 1e9 : w0 + (S.t - w0) * V; c.cur = w0;
+      try { fn(); } finally { if (S.mesure) HOLD[nom] = (c.cur - w0) / V; c.t = t; c.cur = cur; if (!S.running) c.complet = comp; }
+    },
+    etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
+  };
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const cadreBase = scene.cadre;
+  scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
+  M.scene = scene; M.craie = scene.craie;
+  function calculer() {
+    construire();
+    const t = S.t, r = S.running; S.t = 1e6; S.running = false; S.mesure = true;
+    try { o.dessiner(scene.craie, M); } finally { S.t = t; S.running = r; S.mesure = false; }
+    construire(); scene.sale = true;
+  }
+  // La bulle est du texte simple : jamais de « _ » visible (u_C → uC, I_0 → I₀).
+  const sansSouligne = s => String(s).replace(/([A-Za-zΔτ])_\{?([A-Za-z0-9]+)\}?/g, (m, a, i) => a + (/^\d+$/.test(i) ? [...i].map(d => '₀₁₂₃₄₅₆₇₈₉'[d]).join('') : i));
+  const dire = (texte, kind = '') => { texte = sansSouligne(texte); S.dit = texte; bulle($('feedback'), texte, kind); };
+  const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+  let pont = null;
+  const emettre = () => pont && pont.emettre();
+  const noter = (a, d) => pont && pont.noter(a, d);
+  scene.avancer = dt => {
+    if (!S.running) return !!(o.anime && o.anime());
+    const avant = S.t; S.t += dt;
+    for (const e of TL.ev) if (avant < e.debut && S.t >= e.debut && e.bulle) dire(e.bulle());
+    if (S.jusqua != null && S.t >= S.jusqua) {
+      S.t = S.jusqua; S.jusqua = null; S.running = false;
+      if (S.t >= TL.M.fin - 1e-6) { finir(); return true; }
+      S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fx(S.t, 1)} s`) + '.');
+      noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); return true;
+    }
+    if (S.t >= TL.M.fin) { S.t = TL.M.fin; finir(); return true; }
+    if (performance.now() - S.emis > 500) { S.emis = performance.now(); emettre(); }
+    return true;
+  };
+  function finir() { S.running = false; S.fait = true; S.pause = false; S.jusqua = null; etiquette(); dire(o.messageFin(M), 'good'); noter('measurement', o.params(M)); emettre(); }
+  function start() { o.reprise && o.reprise(); S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire(o.depart(M)); noter('start', o.params(M)); emettre(); }
+  function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); }
+  function resume() { if (S.running) return; o.reprise && o.reprise(); if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('Ça repart…'); noter('resume'); emettre(); }
+  function setTime(p) {
+    const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+    o.reprise && o.reprise(); S.running = false; S.jusqua = null; S.t = clamp(t, 0, TL.M.fin); S.fait = S.t >= TL.M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+    etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fx(S.t, 1)} s.`); noter('set_time', { time_s: S.t }); emettre();
+  }
+  function playUntil(p) {
+    const noms = o.etapes(S.vue).map(e => e.nom).concat('fin');
+    const nom = noms.includes(p.moment) ? p.moment : null, cible = nom ? TL.M[nom] : +p.time_s;
+    if (!Number.isFinite(cible) || (p.moment && !nom && (p.time_s == null || p.time_s === ''))) { dire(`Moment inconnu : ${p.moment}.`, 'bad'); emettre(); return; }
+    o.reprise && o.reprise();
+    if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+    S.jusqua = clamp(cible, .01, TL.M.fin); S.motif = nom ? (o.motifs[nom] || nom) : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+    noter('play_until', { moment: nom, time_s: S.jusqua }); emettre();
+  }
+  function setParameters(p) {
+    p = p || {};
+    const r = o.appliquer(p, M) || {};
+    if (r.vue && o.vues.includes(r.vue) && r.vue !== S.vue) { S.vue = r.vue; r.change = true; r.vueChange = true; }
+    if (r.change) { calculer(); if (r.vueChange) scene.reecrire(); }
+    noter('set_parameters', o.params(M));
+    if (r.apres) r.apres();
+    else if (r.change && !r.garder) start();
+    else { scene.sale = true; emettre(); }
+  }
+  Object.assign(M, { noter, calculer, dire, start, pause, resume, setTime, playUntil, setParameters, emettre, etiquette });
+  $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+  window.Tableau.explication(o.explications);
+  const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+  M.lancer = () => {
+    calculer();
+    const listeMoments = o.vues.map(v => `${o.vues.length > 1 ? v + ' : ' : ''}${o.etapes(v).map(e => e.nom).concat('fin').join(' | ')}`).join(' ; ');
+    const config = { id: o.id, version: '1.0', title: o.titre, variants: o.vues.length > 1 ? o.vues.map(id => ({ id, label: o.titres[id] })) : [], commands: commandes,
+      command_schema: { set_parameters: o.schema, set_time: { time_s: '0..fin (arrêt sur cet instant de la scène, en s ; voir moments)' },
+        play_until: { moment: listeMoments, time_s: 'ou un instant en s' } } };
+    pont = protocole({ id: o.id, commandes, config, texte: o.texte,
+      etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle',
+        ce_qui_se_voit: o.voir(M) + (S.dit ? ` La bulle dit : « ${S.dit} »` : ''), current_variant: S.vue, time_s: +S.t.toFixed(2),
+        parameters: o.params(M), moments: Object.fromEntries(Object.entries(TL.M).map(([k, v]) => [k, +v.toFixed(2)])) }),
+      progression: () => (S.fait ? 1 : 0),
+      executer: (cmd, p) => ({ start, reset: start, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+    dire(o.depart(M));
+    setTimeout(() => { if (!S.running && S.t === 0 && !S.pause && !S.fait) start(); }, 900);
+  };
+  return M;
+}
+
+/* ── Appareils peints (règle 7 : ils ressemblent aux vrais ; le peint ne change jamais la physique) ── */
+const Peint = {
+  /** Sphère ombrée (électron : bleu). */
+  sphere(ctx, x, y, r, [clair, milieu, sombre] = ['#e3f3ff', '#3b9cff', '#0a3a8c'], a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r); g.addColorStop(0, clair); g.addColorStop(.45, milieu); g.addColorStop(1, sombre);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  },
+  /** Boîtier d’un générateur (vu de face) : coffret gris, afficheur, deux bornes (rouge +, noire −). */
+  generateur(ctx, x, y, w, h, affiche, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(x + 3, y + 4, w, h, 7); ctx.fill();
+    const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#5b6670'); g.addColorStop(.5, '#3b444c'); g.addColorStop(1, '#262c32');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 7); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1; ctx.stroke();
+    const ex = x + w * .14, ey = y + h * .3, ew = w * .72, eh = h * .26;
+    ctx.fillStyle = '#0d1a10'; ctx.beginPath(); ctx.roundRect(ex, ey, ew, eh, 3); ctx.fill();
+    ctx.fillStyle = '#7dfc8a'; ctx.font = `600 ${Math.round(eh * .72)}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(affiche, ex + ew / 2, ey + eh / 2 + 1);
+    ctx.restore();
+  },
+  /** Borne ronde (rouge ou noire). */
+  borne(ctx, x, y, rouge, a = 1) { Peint.sphere(ctx, x, y, 5, rouge ? ['#ffd0d0', '#e0393e', '#6d0f12'] : ['#9aa0a6', '#2b2f33', '#050607'], a); },
+  /** Appareil à cadran (ampèremètre ou voltmètre) : boîtier, cadran crème, graduations, aiguille (f de 0 à 1). */
+  cadran(ctx, cx, cy, r, f, lettre, graduations = null, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(cx - r - 4 + 3, cy - r - 4 + 4, 2 * r + 8, 2 * r + 8, 9); ctx.fill();
+    const g = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r); g.addColorStop(0, '#3a3f45'); g.addColorStop(1, '#1b1e22');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(cx - r - 4, cy - r - 4, 2 * r + 8, 2 * r + 8, 9); ctx.fill();
+    const f2 = ctx.createRadialGradient(cx - r * .3, cy - r * .4, r * .1, cx, cy, r); f2.addColorStop(0, '#fffaf0'); f2.addColorStop(1, '#e4dcc8');
+    ctx.fillStyle = f2; ctx.beginPath(); ctx.roundRect(cx - r, cy - r, 2 * r, 2 * r * .92, 6); ctx.fill();
+    const px = cx, py = cy + r * .55, R = r * 1.05, a0 = -Math.PI * .78, a1 = -Math.PI * .22;
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(px, py, R * .82, a0, a1); ctx.stroke();
+    const n = graduations ? graduations.length - 1 : 10;
+    for (let i = 0; i <= n * 2; i++) {
+      const an = a0 + (a1 - a0) * i / (n * 2), l = i % 2 ? .07 : .13;
+      ctx.beginPath(); ctx.moveTo(px + Math.cos(an) * R * .82, py + Math.sin(an) * R * .82); ctx.lineTo(px + Math.cos(an) * R * (.82 + l), py + Math.sin(an) * R * (.82 + l)); ctx.stroke();
+    }
+    ctx.fillStyle = '#c0392b'; ctx.beginPath(); ctx.arc(px + Math.cos(a1) * R * .86, py + Math.sin(a1) * R * .86, 1.6, 0, 7); ctx.fill();
+    if (graduations) {
+      ctx.fillStyle = '#333'; ctx.font = `${Math.round(r * .2)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      graduations.forEach((s, i) => { const an = a0 + (a1 - a0) * i / n; ctx.fillText(s, px + Math.cos(an) * R * 1.08, py + Math.sin(an) * R * 1.08 + 1); });
+    }
+    ctx.fillStyle = '#222'; ctx.font = `700 ${Math.round(r * .42)}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(lettre, cx, cy + r * .38);
+    const an = a0 + (a1 - a0) * clamp(f, -.02, 1.03);
+    ctx.strokeStyle = '#111'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px + Math.cos(an) * R * .9, py + Math.sin(an) * R * .9); ctx.stroke();
+    ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(px, py, 2.6, 0, 7); ctx.fill();
+    // Verre : un reflet léger (pour l’œil seulement).
+    ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.beginPath(); ctx.ellipse(cx - r * .35, cy - r * .55, r * .5, r * .16, -.3, 0, 7); ctx.fill();
+    ctx.restore();
+  },
+  /** Condensateur chimique bleu (vu de côté, debout) avec ses deux pattes ; bande claire « − ». */
+  chimique(ctx, x, y, w, h, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.strokeStyle = '#b8bec6'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x + w * .32, y + h); ctx.lineTo(x + w * .32, y + h + 14); ctx.moveTo(x + w * .68, y + h); ctx.lineTo(x + w * .68, y + h + 18); ctx.stroke();
+    const g = ctx.createLinearGradient(x, 0, x + w, 0); g.addColorStop(0, '#0b2a6b'); g.addColorStop(.35, '#2f6fe0'); g.addColorStop(.6, '#1d4fb8'); g.addColorStop(1, '#091f52');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, [w * .25, w * .25, 4, 4]); ctx.fill();
+    ctx.fillStyle = 'rgba(210,225,255,.75)'; ctx.fillRect(x + w * .7, y + 4, w * .16, h - 8);
+    ctx.fillStyle = '#0b2a6b'; for (let k = 0; k < 3; k++) ctx.fillRect(x + w * .74, y + 10 + k * (h - 20) / 3, w * .08, 2.4);
+    ctx.fillStyle = '#9aa3ad'; ctx.beginPath(); ctx.ellipse(x + w / 2, y + 3, w / 2 - 1, 3.2, 0, 0, 7); ctx.fill();
+    ctx.restore();
+  },
+  /** Résistor : corps beige en cylindre, bandes de couleur lues sur la valeur (Ω). */
+  resistor(ctx, x, y, w, h, ohm, a = 1) {
+    const COUL = ['#111', '#7b4a1e', '#d32f2f', '#f57c00', '#fbc02d', '#2e7d32', '#1565c0', '#7b1fa2', '#9e9e9e', '#fafafa'];
+    const e = Math.floor(Math.log10(ohm) + 1e-9) - 1, m = Math.round(ohm / 10 ** e), d1 = Math.floor(m / 10) % 10, d2 = m % 10;
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#f3e1bf'); g.addColorStop(.45, '#d9bf8f'); g.addColorStop(1, '#9c8358');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, h / 2.2); ctx.fill();
+    [[.24, d1], [.38, d2], [.52, clamp(e, 0, 9)], [.78, -1]].forEach(([f, k]) => {
+      ctx.fillStyle = k < 0 ? '#c9a227' : COUL[k]; ctx.fillRect(x + w * f, y + 1, w * .07, h - 2);
+    });
+    ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(x + h * .3, y + h * .18, w - h * .6, h * .12);
+    ctx.restore();
+  },
+  /** Interrupteur : socle sombre, plots laiton, levier métallique (pivot → bout). */
+  levier(ctx, px, py, bx, by, a = 1) {
+    ctx.save(); ctx.globalAlpha = a; ctx.lineCap = 'round';
+    ctx.strokeStyle = '#4a4f55'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(bx, by); ctx.stroke();
+    ctx.strokeStyle = '#c8ccd2'; ctx.lineWidth = 3.4; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(bx, by); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(px, py - 1); ctx.lineTo(bx, by - 1); ctx.stroke();
+    Peint.sphere(ctx, bx, by, 4.2, ['#ffe9c2', '#c98a2a', '#5a3a08']);
+    ctx.restore();
+  },
+  plot(ctx, x, y, a = 1) { Peint.sphere(ctx, x, y, 4.6, ['#fff1c9', '#cfa046', '#5e4210'], a); },
+};
+const Q = 2640, TAU = .22, TMAX = 1.2, QMAX = 3000, I0D = 1.5, DT0 = .3, TP = 1.1, TDEC = .2;
+const qc = t => Q * (1 - Math.exp(-t / TAU)), qd = t => Q * Math.exp(-t / TAU);
+const iC = t => Q / TAU * Math.exp(-t / TAU) / 1000;   // mA
+const O = { x: 70, y: 340, w: 380, h: 270 }, O2 = { x: 530, y: 385, w: 200, h: 150 };
+const PX = t => O.x + t * O.w / TMAX, PY = q => O.y - q * O.h / QMAX;
+const PX2 = t => O2.x + t * O2.w / TMAX, PY2 = q => O2.y - q * O2.h / QMAX;
+const S2 = { ts: .2, libre: false };
+{ const v = +new URLSearchParams(location.search).get('t_s'); if (v > 0 && v <= TMAX) S2.ts = Math.round(v * 100) / 100; }
+const ETAPES = [
+  { nom: 'courant_constant', anim: 1.2, motif: 'si I₀ est constant : I₀ = q/t', bulle: () => 'D’abord un cas simple : un courant constant I₀.' },
+  { nom: 'corde', anim: 1.0, motif: 'la corde entre t et t + Δt : Δq/Δt', bulle: () => 'Sur la vraie courbe, la pente change : on prend une corde entre t et t + Δt.' },
+  { nom: 'tangente', anim: 2.6, motif: 'Δt → 0 : la corde devient la tangente, i = dq/dt', bulle: () => 'On rapetisse Δt…' },
+  { nom: 'pente_nulle', anim: 1.8, motif: 'au palier, tangente horizontale : i = 0', bulle: () => 'Le point monte jusqu’au palier…' },
+  { nom: 'decharge_negative', anim: 1.6, motif: 'décharge : q diminue, i < 0', bulle: () => 'Et pendant une décharge ?' },
+];
+const MOTIFS = { fin: 'fin' }; for (const e of ETAPES) MOTIFS[e.nom] = e.motif;
+let MO = null;
+/** Instant du point de tangence (le point glisse au palier pendant « pente_nulle »). */
+function tPoint() {
+  if (S2.libre || !MO.commence('pente_nulle') || S2.ts >= TP) return S2.ts;
+  return S2.ts + (TP - S2.ts) * lisse(MO.p('pente_nulle'));
+}
+const dtCorde = () => (!MO.commence('tangente') ? DT0 : DT0 * (1 - lisse(MO.p('tangente'))));
+/** La droite passant par (t1, q1) de pente k (µC/s), tracée sur ±demi s et coupée au cadre du graphe. */
+function droite(c, t1, q1, k, demi, o) {
+  let ta = Math.max(0, t1 - demi), tb = Math.min(TMAX, t1 + demi);
+  const q = t => q1 + k * (t - t1);
+  if (k > 0) { ta = Math.max(ta, t1 - q1 / k); tb = Math.min(tb, t1 + (QMAX - q1) / k); }
+  if (k < 0) { tb = Math.min(tb, t1 - q1 / k); }
+  c.ligne(PX(ta), PY(q(ta)), PX(tb), PY(q(tb)), o);
+}
+function dessiner(c, M) {
+  MO = M; M.scene.cadre(13);
+  c.texte('i est la pente de q(t)', 14, 28, { couleur: 'cyan', taille: 20 });
+  // Axes et la courbe de charge (rouge), écrits d’abord.
+  const tg = []; for (let k = 1; k <= 6; k++) tg.push([k * .2 * O.w / TMAX / (O.w + 16), fr(k * .2, 1)]);
+  c.axe(O.x, O.y, O.x + O.w + 16, O.y, tg, { taille: 13 });
+  const qg = []; for (let v = 500; v <= QMAX; v += 500) qg.push([v * O.h / QMAX / (O.h + 14), String(v)]);
+  c.axe(O.x, O.y, O.x, O.y - O.h - 14, qg, { taille: 13, vertical: true });
+  c.texte('0', O.x - 8, O.y + 18, { couleur: 'faible', taille: 13, align: 'right' });
+  c.texte('q (µC)', O.x + 10, O.y - O.h - 6, { couleur: 'blanc', taille: 16 });
+  c.texte('t (s)', O.x + O.w + 14, O.y - 10, { couleur: 'blanc', taille: 16, align: 'right' });
+  c.courbe(u => [PX(u * TMAX), PY(qc(u * TMAX))], 80, { couleur: 'rouge', largeur: 2.6 });
+  c.texte('charge', PX(.62), PY(qc(.62)) - 12, { couleur: 'rouge', taille: 15 });
+  // 1. Un courant constant : la droite q = I₀·t.
+  const p1 = M.p('courant_constant');
+  if (p1 > 0) c.direct(() => c.ligne(PX(0), PY(0), PX(TMAX * p1), PY(I0D * 1000 * TMAX * p1), { couleur: 'blanc', largeur: 1.8, pointille: [7, 6] }));
+  M.etape(c, 'courant_constant', () => {
+    c.texte('q = I_0·t', PX(.62) + 8, PY(I0D * 1000 * .62) + 22, { couleur: 'blanc', taille: 15 });
+    c.texte('si I_0 est constant :', 494, 64, { couleur: 'blanc', taille: 17 });
+    c.texte('q = I_0·t  donc  I_0 = q/t', 494, 88, { couleur: 'blanc', taille: 17 });
+  });
+  // 2-3. La corde, qui devient la tangente.
+  const tp = tPoint(), qp = qc(tp);
+  if (M.commence('corde')) c.direct(() => {
+    const dt = dtCorde(), dir = tp + DT0 > TMAX ? -1 : 1, tb = tp + dir * Math.max(dt, 1e-4), qb = qc(tb);
+    const pc = M.p('corde'), k = dt > 1e-3 ? (qb - qp) / (tb - tp) : iC(tp) * 1000;
+    if (!M.commence('tangente')) {
+      c.ligne(PX(tp), PY(qp), PX(tp + (tb - tp) * pc), PY(qp + (qb - qp) * pc), { couleur: 'vert', largeur: 2.2 });
+      if (pc >= 1) { c.ligne(PX(tp), PY(qp), PX(tb), PY(qp), { couleur: 'faible', largeur: 1.3, pointille: [4, 4] }); c.ligne(PX(tb), PY(qp), PX(tb), PY(qb), { couleur: 'faible', largeur: 1.3, pointille: [4, 4] }); }
+      if (pc >= 1) { c.texte('Δt', (PX(tp) + PX(tb)) / 2, PY(qp) + 18, { couleur: 'vert', taille: 15, align: 'center' }); c.texte('Δq', PX(tb) + 6, (PY(qp) + PY(qb)) / 2 + 5, { couleur: 'vert', taille: 15 }); }
+      c.point(PX(tb), PY(qb), 3.6, 'vert');
+    } else {
+      droite(c, tp, qp, k, .26, { couleur: dt < 1e-3 ? 'jaune' : 'vert', largeur: 2.2 });
+      if (dt > .06) {
+        c.ligne(PX(tp), PY(qp), PX(tb), PY(qp), { couleur: 'faible', largeur: 1.3, pointille: [4, 4] }); c.ligne(PX(tb), PY(qp), PX(tb), PY(qb), { couleur: 'faible', largeur: 1.3, pointille: [4, 4] });
+        c.point(PX(tb), PY(qb), 3.6, 'vert');
+      }
+    }
+  });
+  // Le point de tangence (poignée).
+  c.direct(() => { c.point(PX(tp), PY(qp), 5.5, 'jaune'); c.ctx.strokeStyle = 'rgba(250,204,21,.6)'; c.ctx.lineWidth = 1.2; c.ctx.beginPath(); c.ctx.arc(PX(tp), PY(qp), 9, 0, 7); c.ctx.stroke(); });
+  M.etape(c, 'corde', () => {
+    c.texte('corde : pente = Δq/Δt', 494, 122, { couleur: 'vert', taille: 17 });
+  });
+  const valeur = () => `à t = ${fr(tp, 2)} s : i ≈ ${fr(iC(tp), 1)} mA`;
+  M.etape(c, 'tangente', () => {
+    c.texte('Δt → 0 : la corde devient la tangente', 494, 150, { couleur: 'jaune', taille: 16, max: 256 });
+    c.texte('i = dq/dt', 520, 182, { couleur: 'jaune', taille: 23 });
+    c.rect(508, 160, 110, 32, { couleur: 'jaune', largeur: 1.4, arrondi: 6 });
+    if (!M.vu('tangente') || M.S.mesure) c.texte(valeur(), 494, 214, { couleur: 'blanc', taille: 16, max: 256 });
+  });
+  if (M.vu('tangente') && !M.S.mesure) c.direct(() => c.texte(valeur(), 494, 214, { couleur: 'blanc', taille: 16, max: 256 }));
+  // 4. Au palier : pente nulle.
+  M.etape(c, 'pente_nulle', () => {
+    c.texte('pente nulle : i = 0', PX(1.2), PY(qc(1.1)) - 16, { couleur: 'jaune', taille: 17, align: 'right' });
+  });
+  // 5. La décharge : q diminue, i < 0.
+  const pd = M.p('decharge_negative');
+  if (pd > 0) {
+    c.direct(() => {
+      c.axe(O2.x, O2.y, O2.x + O2.w + 12, O2.y, [[.4 * O2.w / TMAX / (O2.w + 12), '0,4'], [.8 * O2.w / TMAX / (O2.w + 12), '0,8']], { taille: 12 });
+      c.axe(O2.x, O2.y, O2.x, O2.y - O2.h - 12, [[2000 * O2.h / QMAX / (O2.h + 12), '2000']], { taille: 12, vertical: true });
+      c.texte('q (µC)', O2.x + 8, O2.y - O2.h - 4, { couleur: 'blanc', taille: 14 });
+      c.texte('t (s)', O2.x + O2.w + 12, O2.y - 8, { couleur: 'blanc', taille: 14, align: 'right' });
+      c.courbe(u => [PX2(u * TMAX * pd), PY2(qd(u * TMAX * pd))], 50, { couleur: 'bleu', largeur: 2.4 });
+    });
+  }
+  M.etape(c, 'decharge_negative', () => {
+    const k = -iC(TDEC) * 1000, q1 = qd(TDEC), ta = Math.max(0, TDEC - .14), tb = TDEC + .16;
+    c.ligne(PX2(ta), PY2(q1 + k * (ta - TDEC)), PX2(tb), PY2(q1 + k * (tb - TDEC)), { couleur: 'jaune', largeur: 2 });
+    c.point(PX2(TDEC), PY2(q1), 4, 'jaune');
+    c.texte('décharge', PX2(.5), PY2(qd(.5)) - 34, { couleur: 'bleu', taille: 15 });
+    c.texte('q diminue : i < 0', 604, 270, { couleur: 'jaune', taille: 17 });
+    c.texte(`à t = ${fr(TDEC, 1)} s : i ≈ −${fr(iC(TDEC), 1)} mA`, 604, 292, { couleur: 'blanc', taille: 14, max: 150 });
+  });
+  reperes(c, M, tp, qp);
+  return c.fin();
+}
+function reperes(c, M, tp, qp) {
+  c.repere('axe_t', O.x, O.y - 12, O.w + 20, 36, 'l’axe des temps : t (s)');
+  c.repere('axe_q', O.x - 46, O.y - O.h - 22, 60, O.h + 28, 'l’axe des charges : q (µC)');
+  c.repere('courbe', O.x, O.y - O.h, O.w, O.h, 'la courbe q(t) de la charge (rouge)');
+  c.repere('droite_I0', O.x, PY(I0D * 1000 * TMAX), O.w, O.y - PY(I0D * 1000 * TMAX), 'la droite q = I₀·t (courant constant), en pointillé');
+  const dir = tp + DT0 > TMAX ? -1 : 1, tb = tp + dir * DT0;
+  c.repere('corde', Math.min(PX(tp), PX(tb)) - 6, Math.min(PY(qp), PY(qc(tb))) - 6, Math.abs(PX(tb) - PX(tp)) + 12, Math.abs(PY(qc(tb)) - PY(qp)) + 24, 'la corde entre t et t + Δt : pente Δq/Δt');
+  c.repere('tangente', PX(Math.max(0, tp - .26)), Math.max(O.y - O.h, PY(qp) - 70), PX(Math.min(TMAX, tp + .26)) - PX(Math.max(0, tp - .26)), 140, 'la tangente au point : sa pente est i = dq/dt');
+  c.repere('point', PX(tp) - 12, PY(qp) - 12, 24, 24, `le point de tangence, t = ${fr(tp, 2)} s (poignée : glisser le long de la courbe)`);
+  c.repere('pente_nulle', PX(.9), PY(Q) - 36, PX(1.2) - PX(.9), 48, 'au palier : tangente horizontale, i = 0');
+  c.repere('courbe_decharge', O2.x, O2.y - O2.h, O2.w, O2.h, 'la courbe de décharge q(t), en bleu');
+  c.repere('signe_i', 598, 250, 152, 50, '« q diminue : i < 0 »');
+}
+function voir(M) {
+  const tp = tPoint(), m = [`${M.etat()[0].toUpperCase() + M.etat().slice(1)}. Courbe q(t) de la charge à la craie rouge (E = 12 V, R = 1 kΩ, C = 220 µF : Q = 2640 µC), axes t (s, 0 à 1,2) et q (µC, 0 à 3000).`];
+  if (M.commence('courant_constant')) m.push('Droite q = I₀·t en pointillé blanc (I₀ = 1,5 mA, courant constant).');
+  if (M.commence('corde')) {
+    const dt = dtCorde();
+    if (dt > 1e-3) { const dir = tp + DT0 > TMAX ? -1 : 1, tb = tp + dir * dt; m.push(`Corde verte entre t = ${fr(Math.min(tp, tb), 2)} s et t = ${fr(Math.max(tp, tb), 2)} s (Δt = ${fr(dt, 2)} s) : pente Δq/Δt = ${fr((qc(tb) - qc(tp)) / (tb - tp) / 1000, 2)} mA.`); }
+    else m.push(`Tangente jaune au point t = ${fr(tp, 2)} s (q = ${Math.round(qc(tp))} µC) : pente i = dq/dt = ${fr(iC(tp), 2)} mA.`);
+  }
+  m.push(`Point de tangence (poignée) : t = ${fr(tp, 2)} s, q = ${Math.round(qc(tp))} µC, i(t) = ${fr(iC(tp), 2)} mA.`);
+  if (M.commence('decharge_negative')) m.push(`À droite, courbe de décharge q = Q·e^{−t/τ} en bleu${M.vu('decharge_negative') ? ` ; tangente qui descend à t = 0,2 s : i ≈ −${fr(iC(TDEC), 1)} mA` : ''}.`);
+  const e = [];
+  if (M.vu('courant_constant')) e.push('« si I₀ est constant : q = I₀·t donc I₀ = q/t »');
+  if (M.vu('corde')) e.push('« corde : pente = Δq/Δt » (Δt et Δq marqués)');
+  if (M.vu('tangente')) e.push(`« Δt → 0 : la corde devient la tangente », « i = dq/dt » encadré, « à t = ${fr(tp, 2)} s : i ≈ ${fr(iC(tp), 1)} mA »`);
+  if (M.vu('pente_nulle')) e.push('« pente nulle : i = 0 » au palier');
+  if (M.vu('decharge_negative')) e.push('« q diminue : i < 0 »');
+  if (e.length) m.push(`Écrit à la craie : ${e.join(' ; ')}.`);
+  return m.join(' ');
+}
+const params = () => { const tp = tPoint(); return { t_s: +tp.toFixed(2), q_uC: Math.round(qc(tp)), i_mA: +iC(tp).toFixed(2), Q_uC: Q, tau_s: TAU, I0_droite_mA: I0D }; };
+const MOT = Moteur({
+  id: 'dipole_rc_intensite', titre: 'L’intensité est la pente de q(t)', vues: ['principale'], titres: { principale: 'i = dq/dt' },
+  etapes: () => ETAPES, motifs: MOTIFS, dessiner, voir, params,
+  depart: () => 'Une courbe q(t) de charge. Où lire l’intensité i ?',
+  messageFin: () => 'L’intensité est la pente de q(t) : i = dq/dt. Pente nulle : i = 0 ; q diminue : i < 0.',
+  appliquer: (p, M) => {
+    if (p.t_s !== undefined && p.t_s !== null && p.t_s !== '' && Number.isFinite(+p.t_s)) {
+      S2.ts = Math.round(clamp(+p.t_s, 0, TMAX) * 100) / 100; S2.libre = M.commence('pente_nulle');
+      M.dire(`Point de tangence à t = ${fr(S2.ts, 2)} s : i ≈ ${fr(iC(S2.ts), 1)} mA.`);
+    }
+    return { garder: true };
+  },
+  reprise: () => { S2.libre = false; },
+  schema: { t_s: '0..1.2 (s, pas 0,01 : le point de tangence ; poignée sur le point ; ne relance pas)' },
+  texte: 'L’intensité est la pente de q(t). Si I₀ est constant : q = I₀·t, I₀ = q/t. Sinon, une corde entre t et t + Δt a pour pente Δq/Δt ; quand Δt rapetisse, la corde devient la tangente : i = dq/dt. Au palier, la tangente est horizontale : i = 0. Pendant une décharge, q diminue : la tangente descend, i < 0. Valeurs : E = 12 V, R = 1 kΩ, C = 220 µF, Q = 2640 µC, i(0) = 12 mA.',
+  explications: { principale: [
+    { repere: 'courbe', texte: 'Voici la courbe q(t) : la charge du condensateur.' },
+    { repere: 'droite_I0', texte: 'Si le courant était constant, q serait une droite : q = I₀·t, donc I₀ = q/t.' },
+    { repere: 'corde', texte: 'Ici la courbe n’est pas droite : on prend une corde, sa pente est Δq/Δt.' },
+    { repere: 'tangente', texte: 'Quand Δt devient très petit, la corde devient la tangente : i = dq/dt.' },
+    { repere: 'pente_nulle', texte: 'Au palier, la tangente est horizontale : la pente est nulle, i = 0.' },
+    { repere: 'courbe_decharge', texte: 'Pendant la décharge, q diminue.' },
+    { repere: 'signe_i', texte: 'La tangente descend : la pente est négative, donc i < 0.' },
+    { repere: 'point', texte: 'Tu peux glisser ce point le long de la courbe : la tangente le suit.' },
+  ] },
+});
+MOT.lancer();
+window.Tableau.glisser(MOT.scene.craie.canvas, {
+  toucher: (px, py) => { const [x, y] = MOT.scene.local(px, py), tp = tPoint(); return Math.hypot(x - PX(tp), y - PY(qc(tp))) < 16 ? 'point' : null; },
+  bouger: (id, px, py) => {
+    const [x] = MOT.scene.local(px, py), t = Math.round(clamp((x - O.x) * TMAX / O.w, 0, TMAX) * 100) / 100;
+    S2.libre = MOT.commence('pente_nulle'); if (t !== S2.ts) { S2.ts = t; MOT.scene.sale = true; }
+  },
+  lacher: () => { MOT.noter('set_parameters', params()); MOT.dire(`Point à t = ${fr(S2.ts, 2)} s : i ≈ ${fr(iC(S2.ts), 1)} mA.`); MOT.emettre(); },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

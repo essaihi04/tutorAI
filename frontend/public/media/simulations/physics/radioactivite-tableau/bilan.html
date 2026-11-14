@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ce qu'il faut retenir — décroissance radioactive</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="radio.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Fiche de révision écrite à la craie sur une page : pour chaque partie du cours sur la décroissance radioactive, la définition à apprendre, les formules encadrées et le piège ; deuxième page : ce que l'élève doit retravailler"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="suiv" data-professor-control="next previous start reset play_until">Ma page →</button>
+    <button class="craie-btn secondaire" id="imprimer" title="Imprimer ou enregistrer en PDF">🖨️ Imprimer / PDF</button>
+    <span class="lecture" id="page"></span>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script src="noyaux.js"></script>
+<script src="/media/simulations/shared/tableau/imprimer.js"></script>
+<script>
+/*
+ * « Ce qu’il faut retenir » du cours « Décroissance radioactive » (phys_ch4_radioactivite), même forme que
+ * ondes-lumineuses-tableau/bilan.html et ondes-periodiques-tableau/bilan.html. TOUTE la fiche tient sur UNE page :
+ * neuf blocs en trois colonnes (un par compétence C1 à C9), chacun avec la définition à savoir par cœur (mot pour mot),
+ * les formules encadrées (indices et exposants rendus : « N_0 » s’écrit N₀, « e^{−λt} » par exposants.js ; les noyaux
+ * « [14,6]C » par noyaux.js, A en haut et Z en bas à gauche) et le piège en orange (⚠). La voix la parcourt bloc par
+ * bloc : play_until {moment: <bloc>} écrit ce bloc à cet instant et le met en lumière ; les blocs déjà dits (ou
+ * sautés) sont écrits d’un coup ; ceux pas encore dits attendent leur moment (« fiche » ou « fin » : tout d’un coup).
+ * La hauteur de chaque bloc est mesurée, puis les blocs d’une colonne se répartissent la hauteur du cadre.
+ * La deuxième page est celle de l’élève (set_parameters {lacunes, acquis, acquis_ids}).
+ */
+const { bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+
+const BLOCS = [
+  { id: 'noyau', titre: '1 · Le noyau', comps: ['C1'], formules: ['[A,Z]X : Z protons, A nucléons', 'N = A − Z'],
+    def: 'Des isotopes sont des noyaux qui ont le même nombre de protons Z et des nombres de nucléons A différents : [12,6]C, [14,6]C.',
+    attention: 'Z = nombre de protons, pas de neutrons.' },
+  { id: 'stabilite', titre: '2 · Stabilité : diagramme (N, Z)', comps: ['C2'], formules: ['au-dessus → β⁻', 'au-dessous → β^{+}'],
+    def: 'Les noyaux stables forment la vallée de stabilité. Au-dessus : excès de neutrons ; au-dessous : excès de protons ; noyaux lourds (A > 200) : α.',
+    attention: 'Isotopes : une ligne perpendiculaire à l’axe des Z.' },
+  { id: 'radioactivite', titre: '3 · Radioactivité · lois de Soddy', comps: ['C3'], formules: ['A = A_1 + A_2', 'Z = Z_1 + Z_2'],
+    def: 'La radioactivité est une transformation nucléaire naturelle, spontanée et aléatoire, au cours de laquelle un noyau instable se transforme en un noyau plus stable avec émission d’une particule.',
+    attention: 'Soddy : on conserve A et Z, pas le nombre de protons.' },
+  { id: 'desintegrations', titre: '4 · α, β⁻, β^{+}, γ', comps: ['C4'], formules: ['α : [4,2]He', 'β⁻ : [0,-1]e', 'β^{+} : [0,1]e', 'Y* → Y + γ'],
+    def: 'β⁻ : [1,0]n → [1,1]p + [0,-1]e. β^{+} : [1,1]p → [1,0]n + [0,1]e. γ : le noyau fils excité Y* se désexcite.',
+    attention: 'γ ne change ni A ni Z.' },
+  { id: 'famille', titre: '5 · Famille : x α et y β⁻', comps: ['C5'], formules: ['[238,92]U → [206,82]Pb + x [0,-1]e + y [4,2]He'],
+    def: 'Système en x et y : conservation de A, puis de Z. 238 = 206 + 4y ; 92 = 82 − x + 2y : 8 α et 6 β⁻.',
+    attention: 'β ne change pas A : y d’abord.' },
+  { id: 'loi', titre: '6 · Loi de décroissance', comps: ['C6'], formules: ['N(t) = N_0·e^{−λt}', 'τ = 1/λ'],
+    def: 'λ : constante radioactive, en s⁻¹ (ou jour⁻¹, an⁻¹). τ : la tangente à l’origine coupe l’axe des temps en t = τ.',
+    attention: 'N(t) = noyaux restants (pas désintégrés).' },
+  { id: 'demi_vie', titre: '7 · Demi-vie t½', comps: ['C7'], formules: ['t½ = ln2/λ', 'N(n·t½) = N_0/2^{n}'],
+    def: 'La demi-vie t½ est la durée au bout de laquelle la moitié des noyaux initialement présents se sont désintégrés.',
+    attention: 'À 2t½ il reste 25 %, 75 % sont désintégrés.' },
+  { id: 'activite', titre: '8 · Activité a', comps: ['C8'], formules: ['a = λ·N', 'a(t) = a_0·e^{−λt}', 'N = (m/M)·N_A'],
+    def: 'L’activité a est le nombre de désintégrations par seconde ; elle s’exprime en becquerel (Bq).',
+    attention: 'λ en s⁻¹ pour a en Bq.' },
+  { id: 'datation', titre: '9 · Datation', comps: ['C9'], formules: ['t = (1/λ)·ln(a_0/a)'],
+    def: 'Carbone 14 : t½ = 5730 ans. On mesure a, on compare à a_0.',
+    attention: 'a_0 : même masse d’un échantillon vivant (récent).' },
+];
+const STATUTS = { non_acquis: ['à reprendre', 'rouge'], partiel: ['à revoir', 'orange'], acquis: ['acquis', 'vert'] };
+const AVANT = -1e9;   // instant d'un bloc déjà dit : il est écrit d'un coup
+// apparu[i] : null = pas encore dit (pas écrit) ; un nombre = l'instant (s de la scène) où il commence à s'écrire.
+const S = { page: 1, focus: null, lacunes: null, acquis: null, acquis_ids: null, apparu: [] };
+window.__debordeBlocs = [];   // vérification : un bloc dont le texte dépasse son cadre ou une colonne trop pleine
+
+/* ---- Noyaux et indices ------------------------------------------------------------------------------------------
+ * « [14,6]C » (et « [A,Z]X » pour la notation générale) s’écrit avec noyaux.js (craie.nucleide : A en haut à gauche,
+ * Z en bas à gauche) ; le reste avec Craie.texte (indices « N_0 », exposants « e^{−λt} » par exposants.js). */
+const RE_NOYAU = /\[([-−]?[0-9A-Z]+),([-−]?[0-9A-Z]+)\]([A-Za-z]+\*?)/g;
+function morceaux(s) {
+  const out = []; let i = 0, m; s = String(s); RE_NOYAU.lastIndex = 0;
+  while ((m = RE_NOYAU.exec(s))) { if (m.index > i) out.push({ t: s.slice(i, m.index) }); out.push({ A: m[1], Z: m[2], X: m[3] }); i = RE_NOYAU.lastIndex; }
+  if (i < s.length) out.push({ t: s.slice(i) });
+  return out;
+}
+const EXP = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+/** Largeur d'un texte de craie (indices et exposants plus petits, comme le kit les écrit). */
+function largeurTexte(c, t, taille) {
+  t = String(t).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => EXP[ch]).join('') + '}');
+  return window.Tableau.Craie.segments(t).reduce((w, g) => w + c.largeurTexte(g.t, g.sub || g.sup ? taille * .62 : taille), 0);
+}
+function largeur(c, s, taille) {
+  return morceaux(s).reduce((w, m) => w + (m.t != null ? largeurTexte(c, m.t, taille) : c.largeurNucleide(m.X, m.A, m.Z, taille)), 0);
+}
+/** Écrit une ligne (texte, indices, exposants, noyaux) ; o : taille, couleur, align, max, alpha, duree. */
+function ecrire(c, s, x, y, o = {}) {
+  const ms = morceaux(s);
+  if (!ms.some(m => m.t == null)) return c.texte(s, x, y, o);
+  let taille = o.taille ?? 18, w = largeur(c, s, taille);
+  if (o.max && w > o.max) { taille *= o.max / w; w = o.max; }
+  let px = o.align === 'center' ? x - w / 2 : o.align === 'right' ? x - w : x;
+  const oo = { ...o, taille, align: 'left', max: 0 };
+  for (const m of ms) {
+    if (m.t != null) { if (m.t.trim()) c.texte(m.t, px, y, oo); px += largeurTexte(c, m.t, taille); }
+    else px = c.nucleide(m.X, m.A, m.Z, px, y, oo);
+  }
+  return c;
+}
+/* Texte pour la bulle et ce_qui_se_voit (HTML) : jamais de « _ » ni de « [A,Z] » visibles. */
+const HAUT_U = { 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹', '-': '⁻', '−': '⁻', '+': '⁺', n: 'ⁿ', A: 'ᴬ' };
+const BAS_U = { 0: '₀', 1: '₁', 2: '₂', 3: '₃', 4: '₄', 5: '₅', 6: '₆', 7: '₇', 8: '₈', 9: '₉', '-': '₋', '−': '₋', A: 'ₐ' };
+const enHaut = s => [...s].every(ch => ch in HAUT_U) ? [...s].map(ch => HAUT_U[ch]).join('') : '^(' + s + ')';
+const enBas = s => [...s].every(ch => ch in BAS_U) ? [...s].map(ch => BAS_U[ch]).join('') : '_' + s;
+const lisible = s => String(s)
+  .replace(RE_NOYAU, (m, A, Z, X) => (A === 'A' ? `${X} (A nucléons, Z protons)` : enHaut(A) + enBas(Z) + X))
+  .replace(/\^\{([^}]+)\}/g, (m, e) => enHaut(e))
+  .replace(/([A-Za-zλ])_([0-9A])/g, (m, l, d) => l + BAS_U[d]);
+
+/* Coupe un texte en lignes qui tiennent dans `max` px (mesure avec les indices et les noyaux). */
+function lignes(c, texte, taille, max) {
+  const out = []; let ligne = '';
+  // une formule dans la phrase ne se coupe pas : « ¹₀n → ¹₁p + ⁰₋₁e » reste sur une ligne
+  const t = String(texte).replace(/ ([=\/·→<>≥≤≈≠−+]) /g, ' $1 ');
+  for (const mot of t.split(/[ \t\n]+/)) {
+    const essai = ligne ? ligne + ' ' + mot : mot;
+    if (largeur(c, essai, taille) > max && ligne) { out.push(ligne); ligne = mot; } else ligne = essai;
+  }
+  if (ligne) out.push(ligne);
+  return out;
+}
+function paragraphe(c, texte, x, y, taille, max, o, dessiner) {
+  for (const l of lignes(c, texte, taille, max)) { if (dessiner) ecrire(c, l, x, y, { taille, ...o }); y += taille * 1.2; }
+  return y;
+}
+
+// Trois colonnes de trois blocs, dans le cadre 760 × 420 ; hauteurs mesurées, réparties dans la colonne.
+const COL = [{ x: 18, w: 228 }, { x: 266, w: 228 }, { x: 514, w: 228 }], HAUT = 50, BAS = 414;
+const POS = [];   // position calculée de chaque bloc : { x, w, y0, h }
+const TF = 12.5;  // taille des formules
+const TD = 11.5;  // taille des définitions
+
+/* Écrit (ou mesure seulement) le contenu d'un bloc ; rend l'ordonnée de fin. */
+function contenu(c, b, x, y0, w, st, dessiner) {
+  let y = y0 + 12;
+  if (dessiner) c.texte(b.titre, x, y, { couleur: 'jaune', taille: 14, max: st ? w - 62 : w });
+  y += 18;
+  if (b.formules) {
+    // formules encadrées, à la ligne quand la suivante ne tient plus
+    let fx = x;
+    for (const f of b.formules) {
+      const l = Math.min(w, largeur(c, f, TF) + 14);
+      if (fx > x && fx + l > x + w) { fx = x; y += 22; }
+      if (dessiner) {
+        c.rect(fx, y - 13, l, 19, { couleur: 'faible', arrondi: 6, largeur: 1.2, duree: .25 });
+        ecrire(c, f, fx + 7, y + 1, { couleur: 'jaune', taille: TF, max: l - 10 });
+      }
+      fx += l + 7;
+    }
+    y += 21;
+  }
+  y = paragraphe(c, b.def, x, y, TD, w, { couleur: 'blanc' }, dessiner);
+  if (dessiner) c.texte('⚠', x, y, { couleur: 'orange', taille: 11 });
+  y = paragraphe(c, b.attention, x + 14, y, 11, w - 14, { couleur: 'orange', alpha: .92 }, dessiner);
+  return y - 8;   // la dernière ligne descend d'environ 0,3 taille sous sa base
+}
+function placer(c) {
+  for (let k = 0; k < 3; k++) {
+    const { x, w } = COL[k], ids = [3 * k, 3 * k + 1, 3 * k + 2];
+    const h = ids.map(i => contenu(c, BLOCS[i], x, 0, w, true, false) + 6);
+    const libre = BAS - HAUT - h.reduce((s, v) => s + v, 0), g = Math.max(0, libre / 3);
+    if (libre < 0) ids.forEach(i => { if (!window.__debordeBlocs.includes(BLOCS[i].id)) window.__debordeBlocs.push(BLOCS[i].id); });
+    let y = HAUT;
+    ids.forEach((i, j) => { POS[i] = { x, w, y0: y, h: h[j] + g * .7 }; y += h[j] + g; });
+  }
+}
+function bloc(c, b, i) {
+  const { x, w, y0, h } = POS[i], enLumiere = S.focus === b.id, st = statut(b);
+  const cx = x - 6, cy = y0 - 6, cw = w + 12, ch = h + 4;
+  // Le cadre de lumière et l'état de l'élève apparaissent d'un coup : ils ne décalent pas l'écriture du bloc.
+  c.direct(() => {
+    if (enLumiere) c.rect(cx, cy, cw, ch, { couleur: 'jaune', arrondi: 10, largeur: 1.6, alpha: .7 });
+    else if (st && STATUTS[st] && st !== 'acquis') c.rect(cx, cy, cw, ch, { couleur: STATUTS[st][1], arrondi: 10, largeur: 1.4, pointille: [5, 6], alpha: .8 });
+    if (st === 'acquis') c.texte('✓', x + w - 10, y0 + 12, { couleur: 'vert', taille: 15 });
+    else if (st && STATUTS[st]) c.texte(STATUTS[st][0], x + w, y0 + 12, { couleur: STATUTS[st][1], taille: 11, align: 'right' });
+  });
+  const fin = contenu(c, b, x, y0, w, st, true);
+  if (fin > cy + ch && !window.__debordeBlocs.includes(b.id)) window.__debordeBlocs.push(b.id);
+  c.repere(b.id, cx, cy, cw, ch, lisible(b.titre.replace(/^\d+ · /, '')));
+}
+
+function dessinerFiche(c) {
+  placer(c);
+  if (S.apparu.some(a => a === AVANT)) c.cur = AVANT;   // la voix est déjà passée : le titre est écrit d'un coup
+  c.texte('Ce qu’il faut retenir · la radioactivité', 18, 30, { couleur: 'jaune', taille: 22 });
+  c.texte('définition · formule · ⚠ piège', 742, 28, { couleur: 'faible', taille: 12, align: 'right' });
+  c.ligne(18, 38, 742, 38, { couleur: 'tresfaible', largeur: 1.4 });
+  const debut = c.cur;
+  let fin = c.cur;
+  BLOCS.forEach((b, i) => {
+    if (S.apparu[i] == null) return;   // pas encore dit : il attend son moment
+    // déjà dit : écrit d'un coup ; dit maintenant : s'écrit dès cet instant (le premier attend la fin du titre)
+    c.cur = S.apparu[i] === AVANT ? AVANT : Math.max(debut, S.apparu[i]); bloc(c, b, i); fin = Math.max(fin, c.cur);
+  });
+  c.cur = fin;
+}
+
+function dessinerLacunes(c) {
+  c.texte('Ta page : ce qu’il te reste à retravailler', 22, 30, { couleur: 'jaune', taille: 22 });
+  c.ligne(22, 38, 740, 38, { couleur: 'tresfaible', largeur: 1.4 });
+  let y = 70;
+  const lac = S.lacunes, acq = S.acquis || [];
+  if (!lac) {
+    c.texte('Pas encore de réponses notées.', 22, y, { couleur: 'faible', taille: 18 }); y += 28;
+    paragraphe(c, 'Réponds aux questions du cours : ton bilan par compétence s’écrira ici, et le professeur y reviendra en mode libre.', 22, y, 16, 700, { couleur: 'faible' }, true);
+    return;
+  }
+  if (!lac.length) {
+    c.texte('✓ Toutes les compétences évaluées sont acquises. Bravo !', 22, y, { couleur: 'vert', taille: 20 }); y += 30;
+  } else {
+    c.texte('À reprendre en mode libre, avec le professeur :', 22, y, { couleur: 'orange', taille: 15 }); y += 24;
+    const y0 = y - 18;
+    for (const l of lac.slice(0, 5)) {
+      const [etiq, coul] = STATUTS[l.statut] || STATUTS.non_acquis;
+      c.texte(l.statut === 'partiel' ? '⟳' : '✗', 22, y, { couleur: coul, taille: 17 });
+      y = paragraphe(c, `${l.label} — ${etiq}`, 42, y, 16, 690, { couleur: 'blanc' }, true);
+      if (l.reprendre_avec && l.reprendre_avec.length) y = paragraphe(c, 'reprendre avec ' + l.reprendre_avec.join(', puis '), 42, y, 13, 690, { couleur: coul, alpha: .85 }, true);
+      y += 4;
+    }
+    if (lac.length > 5) { c.texte(`… et ${lac.length - 5} autre(s)`, 42, y, { couleur: 'faible', taille: 13 }); y += 18; }
+    c.repere('lacunes', 18, y0, 720, y - y0, 'ce qu’il reste à retravailler');
+  }
+  if (acq.length) {
+    y += 6; c.texte('✓ Acquis', 22, y, { couleur: 'vert', taille: 15 }); y += 20;
+    paragraphe(c, acq.join(' · '), 22, y, 14, 700, { couleur: 'vert', alpha: .85 }, true);
+  }
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(61 + S.page); if (S.page === 1) dessinerFiche(c); else dessinerLacunes(c); return c.fin(); });
+const maintenant = () => (performance.now() - scene.ouvert) / 1000;
+
+/* Page n ; `focus` = le bloc que la voix dit maintenant ; `tout` = toute la fiche d'un coup. */
+function aller(n, par, focus, tout) {
+  n = n === 2 ? 2 : 1;
+  if (par === 'start' || par === 'reset') { scene.reecrire(); S.apparu = []; }   // rejouer : la fiche se réécrit depuis le début
+  else if (n !== S.page) {
+    // changement de page : on repart d'une page vierge, mais les blocs déjà dits restent écrits (d'un coup)
+    scene.reecrire(); S.apparu = S.apparu.map(a => (a == null ? null : AVANT));
+  }
+  if (n === 1) {
+    const k = focus ? BLOCS.findIndex(b => b.id === focus) : -1;
+    if (tout) BLOCS.forEach((b, i) => { if (S.apparu[i] == null) S.apparu[i] = AVANT; });
+    if (k >= 0) {
+      for (let i = 0; i < k; i++) if (S.apparu[i] == null) S.apparu[i] = AVANT;   // sautés : écrits d'un coup
+      if (S.apparu[k] == null) S.apparu[k] = par === 'start' || par === 'reset' ? 0 : maintenant();
+    }
+  }
+  S.page = n; S.focus = n === 1 ? (focus || null) : null; scene.sale = true;
+  $('page').textContent = `${n} / 2`; $('suiv').textContent = n === 1 ? 'Ma page →' : '← La fiche';
+  bulle($('feedback'), n === 2 ? 'Ta page à toi.' : focus ? lisible(BLOCS.find(b => b.id === focus).titre.replace(/^\d+ · /, '')) : 'La fiche du chapitre.');
+  pont.noter(par || 'page', { page: n, moment: focus || (n === 2 ? 'lacunes' : 'fiche') }); pont.emettre();
+}
+function statut(b) {
+  if (!S.lacunes) return null;
+  const lac = S.lacunes.filter(l => b.comps.includes(l.id));
+  if (lac.some(l => l.statut === 'non_acquis')) return 'non_acquis';
+  if (lac.length) return 'partiel';
+  return (S.acquis_ids || []).some(a => b.comps.includes(a)) ? 'acquis' : null;
+}
+// Les moments sont des pages (1 = la fiche, 2 = la page de l'élève) ; « fin » = la fiche entière écrite.
+function moments() { const m = { fiche: 1 }; BLOCS.forEach(b => { m[b.id] = 1; }); m.lacunes = 2; m.fin = 1; return m; }
+function playUntil(p) {
+  const nom = p.moment in moments() ? p.moment : null;
+  if (!nom && !Number.isFinite(+p.time_s)) return;
+  if (nom === 'lacunes' || (!nom && +p.time_s === 2)) aller(2, 'play_until');
+  else if (nom === 'fiche' || nom === 'fin' || !nom) aller(1, 'play_until', null, true);
+  else aller(1, 'play_until', nom);
+}
+function setParameters(p) {
+  if (Array.isArray(p.lacunes)) S.lacunes = p.lacunes.map(l => ({ id: String(l.id || ''), label: String(l.label || l.id || ''), statut: String(l.statut || 'non_acquis'), reprendre_avec: Array.isArray(l.reprendre_avec) ? l.reprendre_avec.map(String) : [] }));
+  if (Array.isArray(p.acquis)) S.acquis = p.acquis.map(String);
+  if (Array.isArray(p.acquis_ids)) S.acquis_ids = p.acquis_ids.map(String);
+  scene.sale = true; pont.noter('set_parameters', { lacunes: (S.lacunes || []).length, acquis: (S.acquis || []).length }); pont.emettre();
+}
+function ceQuiSeVoit() {
+  if (S.page === 2) return `Page 2/2, la page de l'élève : ${!S.lacunes ? 'pas encore de bilan' : S.lacunes.length ? 'à retravailler : ' + S.lacunes.map(l => l.label).join(' ; ') : 'toutes les compétences évaluées sont acquises'}.`;
+  const f = S.focus && BLOCS.find(b => b.id === S.focus);
+  const ecrits = BLOCS.filter((b, i) => S.apparu[i] != null).length;
+  return lisible(`Page 1/2, la fiche du chapitre « Décroissance radioactive » : ${ecrits}/9 blocs écrits (définition, formule encadrée, piège)${f ? ` ; en lumière « ${f.titre} » : ${f.def}${f.formules ? ' Formules : ' + f.formules.join(' ; ') + '.' : ''} Piège : ${f.attention}` : '.'}${S.lacunes ? ` Blocs à reprendre : ${BLOCS.filter(b => statut(b) && statut(b) !== 'acquis').map(b => b.titre).join(', ') || 'aucun'}.` : ''}`);
+}
+$('suiv').onclick = () => (S.page === 1 ? aller(2, 'next') : aller(1, 'previous', null, true));
+// Imprimer / PDF : la fiche entière et la page de l'élève, sur fond blanc (shared/tableau/imprimer.js).
+$('imprimer').onclick = () => {
+  const avant = { page: S.page, focus: S.focus, apparu: S.apparu.slice() };
+  window.Tableau.imprimer({ titre: 'Ce qu’il faut retenir — décroissance radioactive', scene,
+    pages: [{ nom: 'la fiche', preparer: () => { S.page = 1; S.focus = null; S.apparu = BLOCS.map(() => AVANT); } },
+            { nom: 'ta page : à retravailler', preparer: () => { S.page = 2; S.focus = null; } }],
+    restaurer: () => { Object.assign(S, avant); } });
+  pont.noter('imprimer', { pages: 2 }); pont.emettre();
+};
+canvas.addEventListener('pointerdown', e => {
+  if (S.page !== 1) return;
+  const r = canvas.getBoundingClientRect(), [x, y] = scene.local(e.clientX - r.left, e.clientY - r.top);
+  const i = BLOCS.findIndex((b, k) => { const p = POS[k]; return p && S.apparu[k] != null && x >= p.x - 6 && x <= p.x + p.w + 6 && y >= p.y0 - 6 && y <= p.y0 + p.h; });
+  if (i < 0) return;
+  S.focus = BLOCS[i].id; scene.sale = true; bulle($('feedback'), lisible(BLOCS[i].def));
+  pont.noter('touche', { moment: BLOCS[i].id }); pont.emettre();
+});
+
+window.Tableau.explication({ bilan: BLOCS.map(b => ({ repere: b.id, texte: lisible(b.def) })) });
+const commandes = ['start', 'reset', 'play_until', 'set_parameters', 'next', 'previous'];
+const config = { id: 'radioactivite_bilan', version: '1.0', title: 'Ce qu’il faut retenir — décroissance radioactive', variants: [{ id: 'bilan', label: 'fiche' }], commands: commandes,
+  command_schema: { play_until: { moment: Object.keys(moments()).join(' | ') + ' (écrit ce bloc de la fiche et le met en lumière ; fiche ou fin = toute la fiche ; lacunes = la page de l’élève)' },
+    set_parameters: { lacunes: '[{id: C1..C9, label, statut: non_acquis|partiel, reprendre_avec: [..]}] (bilan de l’élève)', acquis: '[labels acquis]', acquis_ids: '[C1, ..]' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Fiche « Ce qu’il faut retenir » du chapitre « Décroissance radioactive », sur une page (neuf blocs : le noyau, la stabilité et le diagramme (N, Z), la radioactivité et les lois de Soddy, les désintégrations α, β⁻, β⁺ et γ, la famille radioactive, la loi de décroissance, la demi-vie, l’activité, la datation ; chacun avec définition, formule encadrée, piège), puis la page de l’élève (ce qu’il lui reste à retravailler).',
+  etat: () => ({ simulation_status: 'paused', ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'bilan', time_s: S.page, parameters: { page: S.page, focus: S.focus, lacunes: S.lacunes ? S.lacunes.length : null }, moments: moments() }),
+  progression: () => S.page / 2,
+  executer: (cmd, p) => ({ start: () => aller(1, 'start', 'noyau'), reset: () => aller(1, 'reset', 'noyau'), play_until: () => playUntil(p), set_parameters: () => setParameters(p),
+    next: () => aller(2, 'next'), previous: () => aller(1, 'previous', null, true) })[cmd]?.() });
+aller(1, 'start', 'noyau');   // la voix commence par le noyau : le premier bloc s'écrit et est en lumière
+window.__bilan = { S, scene, BLOCS, POS, lisible };   // pour les vérifications automatiques
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

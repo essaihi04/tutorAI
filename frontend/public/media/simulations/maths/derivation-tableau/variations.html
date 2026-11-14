@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Signe de f′ et variations — tableau de variations</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Repère à la craie : la courbe de f(x) = x³ − 3x, un point P glisse dessus avec sa tangente ; en dessous, aligné sur les abscisses, le tableau de variations se remplit au passage de P"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Dérivation et étude des fonctions » (math_ch2_derivation_etude_fonctions) : signe de f′ et sens de variation.
+ * Vue : ?vue=glisse.
+ * f(x) = x³ − 3x ; f′(x) = 3x² − 3 = 3(x − 1)(x + 1) : f′ > 0 sur ]−∞ ; −1[ et ]1 ; +∞[, f′ < 0 sur ]−1 ; 1[ ;
+ * maximum f(−1) = 2, minimum f(1) = −2 ; lim f = −∞ en −∞, +∞ en +∞.
+ * En haut la courbe ; en bas le tableau de variations, ses colonnes ALIGNÉES sur les abscisses de la courbe (−1 et 1 sous
+ * le sommet et le creux). Le point P glisse sur la courbe avec sa tangente : les signes et les flèches s'écrivent au
+ * moment où P passe au-dessus de leur colonne (la pointe de la flèche suit l'abscisse de P).
+ * Repère y ∈ [−3,2 ; 3,2] : P reste dans le cadre de x = −2,1 (f = −2,96) à x = 2,1 (f = 2,96).
+ * Moments : repere_pose, courbe_tracee, monte, sommet, descend, creux, remonte, tableau_complet ; `fin` = P en x_p.
+ */
+const f = x => x * x * x - 3 * x;
+const fp = x => 3 * x * x - 3;
+const OPT = { x0: 110, y0: 40, w: 400, h: 190, xmin: -2.4, xmax: 2.4, ymin: -3.2, ymax: 3.2,
+  gx: [[-2, '−2'], [-1, ''], [1, ''], [2, '2']], gy: [[2, '2'], [-2, '−2']] };
+const XA = -2.1, XB = 2.1;                         // P parcourt la courbe de XA à XB
+// Le tableau de variations, sous la courbe (rien sous y = 356).
+const TB = { g: 20, lab: 100, d: 520, haut: 246, l1: 272, l2: 298, bas: 356, yx: 266, yfp: 292, yh: 318, yb: 350 };
+
+function tableauVide(c) {
+  const o = { couleur: 'faible', largeur: 1.4 };
+  c.ligne(TB.g, TB.haut, TB.d, TB.haut, o); c.ligne(TB.g, TB.l1, TB.d, TB.l1, o); c.ligne(TB.g, TB.l2, TB.d, TB.l2, o);
+  c.ligne(TB.g, TB.bas, TB.d, TB.bas, o); c.ligne(TB.lab, TB.haut, TB.lab, TB.bas, o);
+  c.texte('x', 60, TB.yx, { couleur: 'blanc', taille: 17, align: 'center' });
+  c.texte('f′(x)', 60, TB.yfp, { couleur: 'blanc', taille: 17, align: 'center' });
+  c.texte('f(x)', 60, (TB.yh + TB.yb) / 2 + 4, { couleur: 'blanc', taille: 17, align: 'center' });
+}
+/* Ce qui s'écrit au passage de P (direct) : signes de f′ et flèches de f, jusqu'à l'abscisse atteinte xr. */
+function auPassage(c, G, xr) {
+  const px = G.X(xr);
+  const signes = [[(TB.lab + G.X(-1)) / 2, '+', 'vert'], [G.X(0), '−', 'rouge'], [(G.X(1) + TB.d) / 2, '+', 'vert']];
+  for (const [x, s, coul] of signes) if (px >= x) c.texte(s, x, TB.yfp, { couleur: coul, taille: 20, align: 'center' });
+  const fl = [[140, TB.yb - 8, G.X(-1) - 16, TB.yh - 4, 'vert'], [G.X(-1) + 16, TB.yh - 4, G.X(1) - 18, TB.yb - 8, 'rouge'],
+    [G.X(1) + 18, TB.yb - 8, 480, TB.yh - 4, 'vert']];
+  for (const [x1, y1, x2, y2, coul] of fl) {
+    const xt = Math.min(x2, px); if (xt <= x1 + 3) continue;
+    const q = (xt - x1) / (x2 - x1);
+    c.fleche(x1, y1, xt, y1 + (y2 - y1) * q, { couleur: coul, largeur: 2, tete: 9 });
+  }
+}
+/* P et sa tangente (segment court centré sur P, gardé au-dessus du tableau). */
+function pointP(c, G, x) {
+  const X = G.X(x), Y = G.Y(f(x));
+  const sx = G.w / (G.xmax - G.xmin), sy = G.h / (G.ymax - G.ymin);
+  let dx = 1, dy = -fp(x) * sy / sx; const n = Math.hypot(dx, dy); dx /= n; dy /= n;
+  let s1 = -42, s2 = 42;
+  const lim = (s) => { const y = Y + dy * s; return y >= 8 && y <= 238; };
+  while (s1 < 0 && !lim(s1)) s1 += 1; while (s2 > 0 && !lim(s2)) s2 -= 1;
+  c.ligne(X + dx * s1, Y + dy * s1, X + dx * s2, Y + dy * s2, { couleur: 'orange', largeur: 2.4 });
+  c.point(X, Y, 6, 'jaune');
+  // « P » de l'autre côté de la tangente que la courbe (au-dessus pour x < 0, en dessous pour x > 0)
+  let nx = dy, ny = -dx; if ((x < 0 && ny > 0) || (x >= 0 && ny < 0)) { nx = -nx; ny = -ny; }
+  c.texte('P', X + nx * 18, Y + ny * 18 + 6, { couleur: 'jaune', taille: 17, align: 'center' });
+  c.repere('point_p', X - 14, Y - 14, 28, 28, 'le point P sur la courbe');
+  c.repere('tangente', Math.min(X + dx * s1, X + dx * s2) - 4, Math.min(Y + dy * s1, Y + dy * s2) - 4,
+    Math.abs(dx * (s2 - s1)) + 8, Math.abs(dy * (s2 - s1)) + 8, 'la tangente en P');
+}
+/* Lecture en direct, à droite : x de P, f′(x), sens de variation. */
+function lectureP(c, x) {
+  const d = fp(x), z = Math.abs(d) < 0.005;
+  const coul = z ? 'jaune' : d > 0 ? 'vert' : 'rouge';
+  c.texte('en P : x = ' + MathsTableau.fr(x, 2), 535, 95, { couleur: 'jaune', taille: 17 });
+  c.texte('f′(x) = ' + MathsTableau.fr(z ? 0 : d, 2) + (z ? '' : d > 0 ? ' > 0' : ' < 0'), 535, 121, { couleur: coul, taille: 17 });
+  c.texte(z ? 'tangente horizontale' : d > 0 ? 'f croissante' : 'f décroissante', 535, 147, { couleur: coul, taille: 17 });
+}
+/* La police de la craie (Patrick Hand) dessine « ′ » (U+2032) vide : au tableau, f′ s'écrit f' et f″ s'écrit f''. */
+function primes(c) {
+  if (c.__primes) return; c.__primes = true;
+  const texte = c.texte;
+  c.texte = function (s, ...r) { return texte.call(this, String(s).replace(/″/g, "''").replace(/′/g, "'"), ...r); };
+}
+const sens = x => {
+  const d = fp(x);
+  if (Math.abs(d) < 0.005) return x < 0 ? 'f′ nulle : tangente horizontale, maximum f(−1) = 2' : 'f′ nulle : tangente horizontale, minimum f(1) = −2';
+  if (d > 0) return 'f′ positive : f croissante sur ' + (x < 0 ? ']−∞ ; −1]' : '[1 ; +∞[');
+  return 'f′ négative : f décroissante sur [−1 ; 1]';
+};
+
+MathsTableau.page({
+  id: 'de_variations', titre: 'Signe de f′ et variations',
+  texte: 'Construction à la craie du cours Dérivation et étude des fonctions : la courbe de f(x) = x³ − 3x ; un point P glisse dessus avec sa tangente ; le tableau de variations, aligné sous la courbe, se remplit au passage de P : f′ > 0 la courbe monte, f′ = 0 tangente horizontale (sommet, creux), f′ < 0 elle descend',
+  vues: {
+    glisse: {
+      titre: 'Le signe de f′ donne le sens de variation',
+      params: { x_p: { min: -2.1, max: 2.1, pas: 0.01, defaut: 1.8, sens: 'abscisse du point P sur la courbe' } },
+      dessiner(c, K) {
+        primes(c);
+        K.titre('Signe de f′ et variations');
+        const G = K.axes(OPT);
+        c.repere('repere', G.x0, G.y0, G.w, G.h, 'le repère');
+        tableauVide(c);
+        c.repere('tableau', TB.g, TB.haut, TB.d - TB.g, TB.bas - TB.haut, 'le tableau de variations');
+        c.repere('ligne_signe', TB.g, TB.l1, TB.d - TB.g, TB.l2 - TB.l1, 'la ligne du signe de f′(x)');
+        c.repere('ligne_fleches', TB.g, TB.l2, TB.d - TB.g, TB.bas - TB.l2, 'la ligne des variations de f');
+        K.marque('repere_pose');
+        K.anime(2.2, p => K.courbePart(G, f, XA, XB, p, { couleur: 'cyan' }));
+        c.texte('f(x) = x³ − 3x', 535, 60, { couleur: 'cyan', taille: 18 });
+        c.repere('courbe', G.X(XA), G.Y(3), G.X(XB) - G.X(XA), G.Y(-3) - G.Y(3), 'la courbe de f');
+        K.marque('courbe_tracee');
+        let xr = null;                                     // abscisse atteinte par P pendant la construction
+        const glisse = (de, a, duree) => { const p = K.anime(duree, () => {}); if (p > 0) xr = de + (a - de) * p; };
+        // 1. P monte : f′ > 0
+        c.pause(.2); glisse(XA, -1.6, 1.4);
+        K.marque('monte');
+        // 2. Sommet : f′(−1) = 0
+        glisse(-1.6, -1, 1.4);
+        c.ligne(G.X(-1), G.Y(2), G.X(-1), TB.haut, { couleur: 'tresfaible', largeur: 1.2, pointille: [4, 6] });
+        c.texte('−1', G.X(-1), TB.yx, { couleur: 'blanc', taille: 17, align: 'center' });
+        c.texte('0', G.X(-1), TB.yfp, { couleur: 'jaune', taille: 18, align: 'center' });
+        c.texte('2', G.X(-1), TB.yh, { couleur: 'jaune', taille: 18, align: 'center' });
+        c.texte('f′(−1) = 0', G.X(-1) - 24, G.Y(2) - 16, { couleur: 'jaune', taille: 16, align: 'right' });
+        c.repere('sommet', G.X(-1) - 20, G.Y(2) - 20, 40, 40, 'le sommet : maximum f(−1) = 2');
+        K.marque('sommet');
+        // 3. P descend : f′ < 0
+        glisse(-1, 0.4, 2.2);
+        K.marque('descend');
+        // 4. Creux : f′(1) = 0
+        glisse(0.4, 1, 1.2);
+        c.ligne(G.X(1), G.Y(-2), G.X(1), TB.haut, { couleur: 'tresfaible', largeur: 1.2, pointille: [4, 6] });
+        c.texte('1', G.X(1), TB.yx, { couleur: 'blanc', taille: 17, align: 'center' });
+        c.texte('0', G.X(1), TB.yfp, { couleur: 'jaune', taille: 18, align: 'center' });
+        c.texte('−2', G.X(1), TB.yb, { couleur: 'jaune', taille: 18, align: 'center' });
+        c.texte('f′(1) = 0', G.X(1) + 24, G.Y(-2) + 26, { couleur: 'jaune', taille: 16 });
+        c.repere('creux', G.X(1) - 20, G.Y(-2) - 20, 40, 40, 'le creux : minimum f(1) = −2');
+        K.marque('creux');
+        // 5. P remonte : f′ > 0
+        glisse(1, XB, 1.8);
+        K.marque('remonte');
+        // 6. Les bouts du tableau et f′ factorisée
+        c.pause(.2);
+        c.texte('−∞', 124, TB.yx, { couleur: 'blanc', taille: 17, align: 'center' });
+        c.texte('+∞', 496, TB.yx, { couleur: 'blanc', taille: 17, align: 'center' });
+        c.texte('−∞', 124, TB.yb, { couleur: 'blanc', taille: 17, align: 'center' });
+        c.texte('+∞', 496, TB.yh, { couleur: 'blanc', taille: 17, align: 'center' });
+        c.pause(.2);
+        c.texte('f′(x) = 3x² − 3', 535, 292, { couleur: 'cyan', taille: 18 });
+        c.texte('= 3(x − 1)(x + 1)', 555, 322, { couleur: 'cyan', taille: 18 });
+        c.repere('derivee', 530, 272, 215, 58, 'f′(x) = 3(x − 1)(x + 1)');
+        K.marque('tableau_complet');
+        // Après la construction : P va à x_p (la poignée de l'élève).
+        glisse(XB, K.P.x_p, 0.8);
+        if (xr !== null) c.direct(() => { auPassage(c, G, K.vu('remonte') ? XB : Math.min(xr, XB)); pointP(c, G, xr); lectureP(c, xr); });
+      },
+      poignees(K) { const G = K.grille(OPT); const x = K.P.x_p;
+        return [{ id: 'x_p', x: G.X(x), y: G.Y(f(x)), bouger: (px) => ({ x_p: G.inv(px, 0)[0] }) }]; },
+      lecture: K => { const x = K.P.x_p, d = fp(x); return `P en x = ${K.fr(x, 2)}, pente de la tangente f′(x) = ${K.fr(Math.abs(d) < 0.005 ? 0 : d, 2)}, ${sens(x)}.`; },
+      decrire: {
+        repere_pose: 'Un repère en haut ; en dessous, aligné sur ses abscisses, un tableau vide à trois lignes : x, f′(x), f(x).',
+        courbe_tracee: 'La courbe de f(x) = x³ − 3x (cyan) est tracée : elle monte, redescend, puis remonte.',
+        monte: 'Le point P (jaune) glisse de x = −2,1 à x = −1,6 : sa tangente (orange) penche vers le haut, f′(x) > 0 ; sous cette partie, « + » dans la ligne f′(x) et une flèche montante dans la ligne f(x).',
+        sommet: 'P arrive en x = −1, au sommet : la tangente est horizontale, f′(−1) = 0 ; dans le tableau, −1 dans la ligne x, 0 dans la ligne f′(x), et la valeur 2 (le maximum) en haut de la ligne f(x).',
+        descend: 'P glisse de −1 à 0,4 : la tangente penche vers le bas, f′(x) < 0 ; « − » dans la ligne f′(x) et une flèche descendante de 2 vers le bas.',
+        creux: 'P arrive en x = 1, au creux : tangente horizontale, f′(1) = 0 ; 1 dans la ligne x, 0 dans la ligne f′(x), et la valeur −2 (le minimum) en bas de la ligne f(x).',
+        remonte: 'P glisse de 1 à 2,1 : la tangente penche vers le haut, f′(x) > 0 ; « + » et une flèche montante à partir de −2.',
+        tableau_complet: 'Le tableau est complet : x : −∞, −1, 1, +∞ ; f′(x) : + 0 − 0 + ; f(x) monte de −∞ à 2, descend de 2 à −2, remonte de −2 à +∞. À droite : f′(x) = 3x² − 3 = 3(x − 1)(x + 1).',
+      },
+      motifs: { courbe_tracee: 'la courbe tracée', monte: 'P monte, f′ > 0', sommet: 'le sommet, f′(−1) = 0', descend: 'P descend, f′ < 0', creux: 'le creux, f′(1) = 0', remonte: 'P remonte, f′ > 0', tableau_complet: 'le tableau complet' },
+      explication: [
+        { repere: 'point_p', texte: 'P glisse sur la courbe ; la pente de sa tangente est f′(x).' },
+        { repere: 'ligne_signe', texte: 'Là où f′(x) > 0, la courbe monte ; là où f′(x) < 0, elle descend.' },
+        { repere: 'sommet', texte: 'En x = −1, f′ s’annule en changeant de signe : maximum f(−1) = 2.' },
+        { repere: 'creux', texte: 'En x = 1, f′ s’annule en changeant de signe : minimum f(1) = −2.' },
+        { repere: 'tableau', texte: 'Le tableau se lit sous la courbe : chaque flèche suit la courbe au-dessus d’elle.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

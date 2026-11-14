@@ -1,0 +1,843 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La vitesse de réaction — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="cin.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Courbe x(t) de l’exemple A à la craie : petit triangle Δx en Δt, définition de la vitesse volumique, tangente et sa pente, calcul de v(0), vitesse qui diminue, concentration du réactif, fin de la transformation, effet de la température"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * vitesse.html : vues pente | definition | tangente | calcul | diminue | concentration | fin | temperature (contrat cinetique_contrat_simulations.md § 6).
+ * Cours phys_ch10_cinetique « Suivi temporel d’une transformation, vitesse de réaction » (2e Bac PC BIOF, novembre 2026).
+ * Exemple A : H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O, V = 100 mL, n₀(H₂O₂) = 2,0 mmol (limitant), x_max = 2,0 mmol.
+ * Modèle POUR LE CALCUL seulement (jamais écrit à l’écran) : x(t) = 2,0·(1 − e^(−t/8)) mmol (20 °C), 2,0·(1 − e^(−3t/8)) (40 °C).
+ */
+/* ── Formules chimiques à la craie : indices ₂ et charges ⁺ ⁻ ²⁻ rendus (sans modifier exposants.js ni le kit) ──────────
+ * « MnO₄⁻ » devient « MnO_{4}^{−} » ; le découpage « _{…} » accepte tout caractère avant (« [I⁻]₀ »). */
+(function () {
+  const C = window.Tableau.Craie, P = C.prototype, texteAvant = P.texte, segAvant = C.segments;
+  const SUP = { '⁺': '+', '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+  const SUB = { '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9' };
+  const chim = s => String(s).replace(/[⁺⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUP[ch]).join('') + '}')
+    .replace(/[₀₁₂₃₄₅₆₇₈₉]+/g, g => '_{' + [...g].map(ch => SUB[ch]).join('') + '}');
+  C.segments = function (s) {
+    const out = [], re = /_\{([^}]+)\}/g; let i = 0, m;
+    while ((m = re.exec(s))) { if (m.index > i) out.push(...segAvant(s.slice(i, m.index))); out.push({ t: m[1], sub: true }); i = re.lastIndex; }
+    if (i < s.length) out.push(...segAvant(s.slice(i)));
+    return out;
+  };
+  P.texte = function (s, x, y, o) { return texteAvant.call(this, chim(s), x, y, o); };
+  window.chim = chim;
+})();
+
+/* ── Moteur du déroulé (copie de chimie/transformations-lentes-rapides-tableau/courbes.html, + M.finir) ─────────────────────────────────── */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lisse = p => p * p * (3 - 2 * p);
+const lerp = (a, b, f) => a + (b - a) * f;
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');
+const ECRITURE = 2.5;
+function Moteur(o) {
+  const q = new URLSearchParams(location.search);
+  const S = { vue: o.vues.includes(q.get('vue')) ? q.get('vue') : o.vues[0], t: 0, running: false, pause: false, fait: false,
+    jusqua: null, motif: '', emis: 0, dit: '', mesure: false };
+  const V = o.vitesse ?? 1.7, T0 = o.T0 ?? .8, HOLD = {};
+  let TL = null;
+  function construire() {
+    let s = T0; const ev = [];
+    for (const e of o.etapes(S.vue)) {
+      const anim = e.anim || 0, d = { ...e, anim, debut: s, ecrit: s + (e.ecritDes ?? anim) };
+      d.fin = Math.max(s + anim, d.ecrit + (HOLD[e.nom] ?? 1.5)) + .35;
+      s = d.fin; ev.push(d);
+    }
+    const mom = {}; for (const e of ev) mom[e.nom] = e.fin; mom.fin = s + (o.queue ?? .6);
+    TL = { ev, M: mom };
+  }
+  const ev = nom => TL.ev.find(e => e.nom === nom);
+  const M = {
+    S, ev, evs: () => TL.ev, Moments: () => TL.M,
+    p(nom) { const e = ev(nom); if (!e) return 0; return e.anim > 0 ? clamp((S.t - e.debut) / e.anim, 0, 1) : (S.t >= e.debut - 1e-6 ? 1 : 0); },
+    commence(nom) { const e = ev(nom); return !!e && S.t > e.debut + 1e-6; },
+    vu(nom) { if (nom === 'fin') return S.t >= TL.M.fin - 1e-6; const e = ev(nom); return !!e && S.t >= e.fin - 1e-6; },
+    etape(c, nom, fn) {
+      const e = ev(nom); if (!e) return;
+      const t = c.t, cur = c.cur, comp = c.complet, w0 = e.ecrit;
+      c.t = S.t > 1e5 ? 1e9 : w0 + (S.t - w0) * V; c.cur = w0;
+      try { fn(); } finally { if (S.mesure) HOLD[nom] = Math.max(HOLD[nom] || 0, (c.cur - w0) / V); c.t = t; c.cur = cur; if (!S.running) c.complet = comp; }
+    },
+    etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
+  };
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const cadreBase = scene.cadre;
+  scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
+  M.scene = scene; M.craie = scene.craie;
+  function calculer() {
+    construire();
+    const t = S.t, r = S.running; S.t = 1e6; S.running = false; S.mesure = true;
+    for (const k of Object.keys(HOLD)) delete HOLD[k];   // une étape dessinée en plusieurs morceaux garde le plus long (max ci-dessus)
+    try { o.dessiner(scene.craie, M); } finally { S.t = t; S.running = r; S.mesure = false; }
+    construire(); scene.sale = true;
+  }
+  const sansSouligne = s => String(s).replace(/([A-Za-zΔτθ])_\{?([A-Za-z0-9]+)\}?/g, (m, a, i) => a + (/^\d+$/.test(i) ? [...i].map(d => '₀₁₂₃₄₅₆₇₈₉'[d]).join('') : i));
+  const dire = (texte, kind = '') => { texte = sansSouligne(texte); S.dit = texte; bulle($('feedback'), texte, kind); };
+  const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+  let pont = null;
+  const emettre = () => pont && pont.emettre();
+  const noter = (a, d) => pont && pont.noter(a, d);
+  scene.avancer = dt => {
+    if (!S.running) return !!(o.anime && o.anime());
+    const avant = S.t; S.t += dt;
+    for (const e of TL.ev) if (avant < e.debut && S.t >= e.debut && e.bulle) dire(e.bulle());
+    if (S.jusqua != null && S.t >= S.jusqua) {
+      S.t = S.jusqua; S.jusqua = null; S.running = false;
+      if (S.t >= TL.M.fin - 1e-6) { finir(); return true; }
+      S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fx(S.t, 1)} s`) + '.');
+      noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); return true;
+    }
+    if (S.t >= TL.M.fin) { S.t = TL.M.fin; finir(); return true; }
+    if (performance.now() - S.emis > 500) { S.emis = performance.now(); emettre(); }
+    return true;
+  };
+  function finir() { S.running = false; S.fait = true; S.pause = false; S.jusqua = null; etiquette(); dire(o.messageFin(M), 'good'); noter('measurement', o.params(M)); emettre(); }
+  function start() { o.reprise && o.reprise(); S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire(o.depart(M)); noter('start', o.params(M)); emettre(); }
+  function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); }
+  function resume() { if (S.running) return; o.reprise && o.reprise(); if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('Ça repart…'); noter('resume'); emettre(); }
+  function setTime(p) {
+    const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+    o.reprise && o.reprise(); S.running = false; S.jusqua = null; S.t = clamp(t, 0, TL.M.fin); S.fait = S.t >= TL.M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+    etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fx(S.t, 1)} s.`); noter('set_time', { time_s: S.t }); emettre();
+  }
+  function playUntil(p) {
+    const noms = o.etapes(S.vue).map(e => e.nom).concat('fin');
+    const nom = noms.includes(p.moment) ? p.moment : null, cible = nom ? TL.M[nom] : +p.time_s;
+    if (!Number.isFinite(cible) || (p.moment && !nom && (p.time_s == null || p.time_s === ''))) { dire(`Moment inconnu : ${p.moment}.`, 'bad'); emettre(); return; }
+    o.reprise && o.reprise();
+    if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+    S.jusqua = clamp(cible, .01, TL.M.fin); S.motif = nom ? (o.motifs[nom] || nom) : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+    noter('play_until', { moment: nom, time_s: S.jusqua }); emettre();
+  }
+  function setParameters(p) {
+    p = p || {};
+    const r = o.appliquer(p, M) || {};
+    if (r.vue && o.vues.includes(r.vue) && r.vue !== S.vue) { S.vue = r.vue; r.change = true; r.vueChange = true; }
+    if (r.change) { calculer(); if (r.vueChange) scene.reecrire(); }
+    noter('set_parameters', o.params(M));
+    if (r.apres) r.apres();
+    else if (r.change && !r.garder) start();
+    else { scene.sale = true; emettre(); }
+  }
+  Object.assign(M, { noter, calculer, dire, start, pause, resume, setTime, playUntil, setParameters, emettre, etiquette, finir });
+  $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+  window.Tableau.explication(o.explications);
+  const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+  M.lancer = () => {
+    calculer();
+    const listeMoments = o.vues.map(v => `${o.vues.length > 1 ? v + ' : ' : ''}${o.etapes(v).map(e => e.nom).concat('fin').join(' | ')}`).join(' ; ');
+    const config = { id: o.id, version: '1.0', title: o.titre, variants: o.vues.length > 1 ? o.vues.map(id => ({ id, label: o.titres[id] })) : [], commands: commandes,
+      command_schema: { set_parameters: o.schema, set_time: { time_s: '0..fin (arrêt sur cet instant de la scène, en s ; voir moments)' },
+        play_until: { moment: listeMoments, time_s: 'ou un instant en s' } } };
+    pont = protocole({ id: o.id, commandes, config, texte: o.texte,
+      etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle',
+        ce_qui_se_voit: o.voir(M) + (S.dit ? ` La bulle dit : « ${S.dit} »` : ''), current_variant: S.vue, time_s: +S.t.toFixed(2),
+        parameters: o.params(M), moments: Object.fromEntries(Object.entries(TL.M).map(([k, v]) => [k, +v.toFixed(2)])) }),
+      progression: () => (S.fait ? 1 : 0),
+      executer: (cmd, p) => ({ start, reset: start, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+    dire(o.depart(M));
+    setTimeout(() => { if (!S.running && S.t === 0 && !S.pause && !S.fait) start(); }, 900);
+  };
+  return M;
+}
+/** Zone d’écriture du bas : le professeur efface les plus vieilles lignes (copie du modèle). */
+function zoneEcriture(c, M, liste, ys, o = {}) {
+  const S = M.S, x = o.x ?? 14, max = o.max ?? 730, taille = o.taille ?? 17, n = ys.length, vues = [];
+  if (S.mesure) {
+    for (const e of liste) M.etape(c, e.nom, () => { for (const [t, col] of e.lignes) c.texte(t, x, ys[0], { couleur: col, taille, max }); e.plus && e.plus(c); });
+    return vues;
+  }
+  let k = -1;
+  liste.forEach((e, j) => { const ev = M.ev(e.nom); if (ev && S.t > ev.ecrit + .05) k = j; });
+  const garde = new Set(); let nb = 0;
+  for (let j = k; j >= 0; j--) { const l = liste[j].lignes.length; if (nb + l > n) break; garde.add(j); nb += l; }
+  let y = 0;
+  liste.forEach((e, j) => {
+    if (j > k) return;
+    M.etape(c, e.nom, () => {
+      if (garde.has(j)) for (const [t, col] of e.lignes) { c.texte(t, x, ys[y++], { couleur: col, taille, max }); vues.push(t); }
+      e.plus && e.plus(c);
+    });
+  });
+  return vues;
+}
+/** Largeur (cadre) d’une formule écrite à la craie, indices et charges compris. */
+function larg(c, s, taille = 17) {
+  const T = window.Tableau, ctx = c.ctx; if (c.echelle && c.tailleMin) taille = Math.max(taille, c.tailleMin / c.echelle);
+  return T.Craie.segments(window.chim(s)).reduce((w, g) => { ctx.font = `${(g.sub || g.sup) ? taille * .62 : taille}px ${T.POLICE}`; return w + ctx.measureText(g.t).width; }, 0);
+}
+/** Équation « gauche → droite » : la flèche est DESSINÉE (la police n’a pas toutes les flèches). Renvoie { x, w }. */
+function eqn(c, x, y, gauche, droite, o = {}) {
+  const t = o.taille ?? 17, w1 = larg(c, gauche, t), w2 = larg(c, droite, t), fl = 30, tot = w1 + fl + 16 + w2;
+  const x0 = o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x, col = o.couleur ?? 'blanc';
+  c.texte(gauche, x0, y, { couleur: col, taille: t });
+  c.fleche(x0 + w1 + 8, y - t * .3, x0 + w1 + 8 + fl, y - t * .3, { couleur: col, largeur: 1.8, tete: 7 });
+  c.texte(droite, x0 + w1 + 16 + fl, y, { couleur: col, taille: t });
+  return { x: x0, w: tot };
+}
+/** Petit triangle « attention » à la craie (orange), le « ! » dedans. */
+function attention(c, x, y, o = {}) {
+  const col = o.couleur ?? 'orange', h = o.h ?? 16;
+  c.trait([[x, y], [x + h * .58, y - h], [x + h * 1.16, y]], { couleur: col, largeur: 1.8, ferme: true });
+  c.texte('!', x + h * .58, y - 3, { couleur: col, taille: h * .8, align: 'center' });
+}
+
+
+/* Indice après une parenthèse (« (dx/dt)₀ ») : le kit ne le découpe que derrière une lettre ; on passe alors par l’écriture
+ * à indices d’exposants.js (qui utilise le découpage « _{…} » ci-dessus). */
+(function () {
+  const P = window.Tableau.Craie.prototype, avant = P.texte;
+  P.texte = function (s, x, y, o = {}) {
+    const t = window.chim(s);
+    if (!/[^A-Za-zτθΔλωφ_]_\{/.test(t)) return avant.call(this, s, x, y, o);
+    let taille = o.taille ?? 18;
+    this.ctx.font = `${o.gras ? '700 ' : ''}${taille}px ${window.Tableau.POLICE}`;
+    this._verifierCadre(t.replace(/[_^{}]/g, ''), x, y, taille, o.align);
+    if (this.echelle && this.tailleMin) taille = Math.max(taille, this.tailleMin / this.echelle);
+    return this._texteIndices(t, x, y, o, taille);
+  };
+})();
+
+/* ── Le graphe x(t) de l’exemple A (modèle POUR LE CALCUL : x(t) = 2,0·(1 − e^(−t/8)) mmol, jamais écrit à l’écran) ──── */
+const G = { x0: 70, y0: 300, w: 400, h: 230 };
+const GA = { tmax: 40, dt: 5, ymax: 2.5, dy: .5, nom: 'x (mmol)', dec: 1 };
+let GC = GA;                                        // graphe courant (la vue « concentration » de vitesse.html en change)
+const X = t => G.x0 + t / GC.tmax * G.w, Y = n => G.y0 - n / GC.ymax * G.h;
+const xA = t => 2 * (1 - Math.exp(-t / 8));         // avancement (mmol), 20 °C
+const x40 = t => 2 * (1 - Math.exp(-3 * t / 8));    // avancement (mmol), 40 °C
+const pA = t => .25 * Math.exp(-t / 8);             // pente dx/dt (mmol/min), 20 °C
+const PX = 500;                                     // panneau de droite
+const ZY = [352, 376, 400];                         // lignes écrites en bas
+const deux = v => fr(v, 2);                         // virgule décimale, deux décimales
+const un = v => fr(v, 1);
+/** Date (min) écrite sans décimale inutile : 8 → « 8 », 5,5 → « 5,5 ». */
+const dmin = t => fx(t, 1);
+function axes(c) {
+  const g = GC;
+  c.fleche(G.x0, G.y0, G.x0 + G.w + 16, G.y0, { largeur: 1.8 });
+  c.fleche(G.x0, G.y0, G.x0, G.y0 - G.h - 14, { largeur: 1.8 });
+  for (let t = g.dt; t <= g.tmax + 1e-9; t += g.dt) { c.ligne(X(t), G.y0 - 4, X(t), G.y0 + 4, { largeur: 1.4, duree: .03 }); c.texte(String(t), X(t), G.y0 + 21, { couleur: 'faible', taille: 15, align: 'center', duree: .1 }); }
+  c.texte('0', G.x0 - 8, G.y0 + 18, { couleur: 'faible', taille: 15, align: 'right', duree: .05 });
+  for (let n = g.dy; n <= g.ymax - g.dy / 2; n += g.dy) { c.ligne(G.x0 - 4, Y(n), G.x0 + 4, Y(n), { largeur: 1.4, duree: .03 }); c.texte(fr(n, g.dec), G.x0 - 9, Y(n) + 5, { couleur: 'faible', taille: 15, align: 'right', duree: .1 }); }
+  c.texte('t (min)', G.x0 + G.w + 18, G.y0 + 5, { couleur: 'blanc', taille: 16 });
+  c.texte(g.nom, G.x0 + 10, G.y0 - G.h - 6, { couleur: 'blanc', taille: 16 });
+}
+function quadrillage(c, a) {
+  const g = GC, ctx = c.ctx;
+  ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = 'rgba(226,232,240,.09)'; ctx.lineWidth = 1;
+  for (let t = g.dt / 2; t <= g.tmax + 1e-9; t += g.dt / 2) { ctx.beginPath(); ctx.moveTo(X(t), G.y0); ctx.lineTo(X(t), G.y0 - G.h); ctx.stroke(); }
+  for (let n = g.dy / 2; n <= g.ymax + 1e-9; n += g.dy / 2) { ctx.beginPath(); ctx.moveTo(G.x0, Y(n)); ctx.lineTo(G.x0 + G.w, Y(n)); ctx.stroke(); }
+  ctx.restore();
+}
+/** Trace f(t) de 0 à p·tmax (p de 0 à 1). */
+function trace(c, f, p, couleur = 'bleu', o = {}) {
+  if (p <= 0) return;
+  const tm = (o.tmax ?? GC.tmax) * p;
+  c.courbe(u => [X(u * tm), Y(f(u * tm))], Math.max(12, Math.round(100 * p)), { couleur, largeur: 2.6, ...o });
+}
+/** Segment de la tangente à f en t (pente s), de u1 à u2 (min), gardé dans le graphe. */
+function tangente(c, t, xt, s, u1, u2, o = {}) {
+  const lo = Math.max(0, u1, s > 0 ? t - xt / s : -1e9), hi = Math.min(GC.tmax + 2, u2, s > 0 ? t + (GC.ymax - .1 - xt) / s : 1e9);
+  c.ligne(X(lo), Y(xt + s * (lo - t)), X(hi), Y(xt + s * (hi - t)), { couleur: o.couleur ?? 'vert', largeur: o.largeur ?? 2.4, pointille: o.pointille });
+}
+/** Poignée jaune posée sur l’axe des temps (glisser à gauche ou à droite). */
+function poignee(ctx, x, y) {
+  ctx.save(); ctx.strokeStyle = '#facc15'; ctx.fillStyle = 'rgba(250,204,21,.18)'; ctx.lineWidth = 2.2; ctx.globalAlpha = .95;
+  ctx.beginPath(); ctx.arc(x, y, 8, 0, 7); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x - 13, y - 4); ctx.lineTo(x - 18, y); ctx.lineTo(x - 13, y + 4); ctx.moveTo(x + 13, y - 4); ctx.lineTo(x + 18, y); ctx.lineTo(x + 13, y + 4); ctx.stroke();
+  ctx.restore();
+}
+/** Pointillé à la craie, tracé jusqu’à la part p. */
+function pointille(c, x1, y1, x2, y2, p, col = 'jaune') {
+  if (p <= 0) return;
+  c.ligne(x1, y1, x1 + (x2 - x1) * p, y1 + (y2 - y1) * p, { couleur: col, largeur: 1.8, pointille: [5, 5] });
+}
+/** Fraction écrite à la craie : numérateur, trait, dénominateur ; renvoie la largeur. */
+function frac(c, x, yb, num, den, t, col = 'blanc') {
+  const w = Math.max(larg(c, num, t), larg(c, den, t)) + 10;
+  c.texte(num, x + w / 2, yb - t * .22, { couleur: col, taille: t, align: 'center' });
+  c.ligne(x, yb, x + w, yb, { couleur: col, largeur: 2 });
+  c.texte(den, x + w / 2, yb + t * .9, { couleur: col, taille: t, align: 'center' });
+  return w;
+}
+const quand = (M, nom) => (M.vu(nom) ? '' : ` (au moment « ${nom} »)`);
+const etapeEnCours = M => { let n = 'avant le début'; for (const e of M.evs()) if (M.commence(e.nom)) n = e.nom; return n; };
+
+
+/* ── vitesse.html : vues pente | definition | tangente | calcul | diminue | concentration | fin | temperature ────────── */
+const q0 = new URLSearchParams(location.search);
+const VUES = ['pente', 'definition', 'tangente', 'calcul', 'diminue', 'concentration', 'fin', 'temperature'];
+const TITRES = { pente: 'la pente de la courbe', definition: 'la définition de la vitesse', tangente: 'la tangente et sa pente', calcul: 'le calcul de v(0)',
+  diminue: 'la vitesse diminue', concentration: 'les réactifs s’épuisent', fin: 'la fin de la transformation', temperature: 'l’effet de la température' };
+const TITRE_TABLEAU = { pente: 'La pente de la courbe x(t)', definition: 'La vitesse volumique de réaction', tangente: 'La tangente et sa pente', calcul: 'Calculer v(0)',
+  diminue: 'La vitesse diminue', concentration: 'Pourquoi la vitesse diminue', fin: 'La fin de la transformation', temperature: 'Effet de la température' };
+/** Graphe de la vue concentration : [H₂O₂] = (2,0 − x)/V = 20·e^(−t/8) mmol/L (modèle pour le calcul). */
+const GK = { tmax: 40, dt: 5, ymax: 25, dy: 5, nom: '[H₂O₂] (mmol/L)', dec: 0 };
+const cH = t => 20 * Math.exp(-t / 8);
+/** Poignées : date du triangle (pente, 0 à 40 min, défaut 2) et date de la tangente (tangente, 0 à 30 min, défaut 0) ; pas 0,5 min. */
+const BORNES = { pente: [0, 40, 2], tangente: [0, 30, 0] };
+const PAR = { pente: 2, tangente: 0 };
+const vueUrl = VUES.includes(q0.get('vue')) ? q0.get('vue') : VUES[0];
+if (BORNES[vueUrl] && q0.get('t') !== null && Number.isFinite(+q0.get('t'))) PAR[vueUrl] = clamp(Math.round(+q0.get('t') * 2) / 2, BORNES[vueUrl][0], BORNES[vueUrl][1]);
+let DRAG = null;
+const DT = 4;                                        // Δt du petit triangle (min)
+const lu = t => (t === 0 ? '0' : deux(xA(t)));
+const fp = v => (v >= .095 ? deux(v) : fr(v, 3));   // pente (mmol/min)
+const vit = t => 10 * pA(t);                        // v(t) = (1/0,100 L)·dx/dt, en mmol·L⁻¹·min⁻¹
+const UV = 'mmol·L⁻¹·min⁻¹';
+const dxTri = a => xA(a + DT) - xA(a);
+const TOUR = [2, 16, 34];                            // le triangle du déroulé : début, milieu, fin
+
+const ETAPES = {
+  pente: [
+    { nom: 'courbe', anim: 2.6, motif: 'la courbe x(t) de l’exemple A', bulle: () => 'La courbe x(t) : de combien x monte-t-il en 4 minutes ?' },
+    { nom: 'debut_raide', anim: .8, motif: `au début (2 à 6 min) : Δx ≈ ${deux(dxTri(2))} mmol, la courbe est raide`, bulle: () => 'Au début…' },
+    { nom: 'milieu', anim: 1.6, motif: `au milieu (16 à 20 min) : Δx ≈ ${deux(dxTri(16))} mmol`, bulle: () => 'Plus tard…' },
+    { nom: 'fin_plate', anim: 1.6, motif: `à la fin (34 à 38 min) : Δx ≈ ${deux(dxTri(34))} mmol, la courbe est presque plate`, bulle: () => 'Et à la fin ?' },
+    { nom: 'phrase', anim: 1, motif: '« au début : x monte vite ; à la fin : presque plus »', bulle: () => 'À retenir.' },
+  ],
+  definition: [
+    { nom: 'formule', anim: .3, motif: 'la formule v(t) = (1/V)·dx/dt', bulle: () => 'La vitesse volumique de réaction.' },
+    { nom: 'volume', anim: .5, motif: '1/V : par litre de mélange', bulle: () => 'Le premier morceau : 1/V.' },
+    { nom: 'derivee', anim: .5, motif: 'dx/dt : la pente de la tangente à la courbe x(t) à la date t', bulle: () => 'Le second morceau : dx/dt.' },
+    { nom: 'unite', anim: .3, motif: 'l’unité : mol·L⁻¹·min⁻¹ (ou mmol·L⁻¹·min⁻¹)', bulle: () => 'Et l’unité ?' },
+  ],
+  tangente: [
+    { nom: 'courbe', anim: 2.6, motif: 'la courbe x(t) de l’exemple A', bulle: () => 'La courbe x(t) de l’exemple A.' },
+    { nom: 'point', anim: .4, motif: 'le point de la courbe à la date choisie', bulle: () => `On se place à la date t = ${dmin(PAR.tangente)} min.` },
+    { nom: 'tangente', anim: 1.2, motif: 'la tangente verte en ce point', bulle: () => 'On trace la tangente en ce point.' },
+    { nom: 'deux_points', anim: .6, motif: 'deux points A et B de la tangente', bulle: () => 'On choisit deux points de la tangente, bien écartés.' },
+    { nom: 'pente', anim: .3, motif: 'la pente = Δx/Δt', bulle: () => 'On calcule sa pente.' },
+  ],
+  calcul: [
+    { nom: 'relation', anim: .2, motif: 'la relation v(t) = (1/V)·dx/dt', bulle: () => 'Au barème : d’abord la relation.' },
+    { nom: 'pente', anim: .2, motif: '(dx/dt)₀ = 0,25 mmol/min, la pente de la tangente à t = 0', bulle: () => 'La pente de la tangente à t = 0.' },
+    { nom: 'application', anim: .2, motif: 'l’application numérique : (1/0,100) × 0,25', bulle: () => 'L’application numérique.' },
+    { nom: 'resultat', anim: .3, motif: 'v(0) = 2,5 mmol·L⁻¹·min⁻¹', bulle: () => 'Le résultat, avec son unité.' },
+    { nom: 'piege', anim: .3, motif: '⚠ V en litres : 100 mL = 0,100 L', bulle: () => 'Attention au piège !' },
+  ],
+  diminue: [
+    { nom: 'courbe', anim: 2.6, motif: 'la courbe x(t) de l’exemple A', bulle: () => 'Traçons la tangente à trois dates.' },
+    { nom: 'tangente_0', anim: .8, motif: 'la tangente à t = 0 : v(0) = 2,5 mmol·L⁻¹·min⁻¹', bulle: () => 'À t = 0…' },
+    { nom: 'tangente_8', anim: .8, motif: 'la tangente à t = 8 min : v(8) ≈ 0,92 mmol·L⁻¹·min⁻¹', bulle: () => 'À t = 8 min…' },
+    { nom: 'tangente_20', anim: .8, motif: 'la tangente à t = 20 min : v(20) ≈ 0,21 mmol·L⁻¹·min⁻¹', bulle: () => 'À t = 20 min…' },
+    { nom: 'conclusion', anim: .3, motif: '« la vitesse diminue au cours du temps »', bulle: () => 'Que remarques-tu ?' },
+  ],
+  concentration: [
+    { nom: 'courbe_reactif', anim: 2.6, motif: 'la courbe [H₂O₂] qui baisse de 20 à 0 mmol/L', bulle: () => 'Pendant ce temps, le réactif H₂O₂ disparaît.' },
+    { nom: 'debut', anim: .5, motif: 'au début : [H₂O₂] = 20 mmol/L', bulle: () => 'Au début…' },
+    { nom: 'plus_tard', anim: .5, motif: 'à t = 16 min : [H₂O₂] ≈ 2,7 mmol/L', bulle: () => 'Plus tard…' },
+    { nom: 'loupe', anim: 1.6, motif: 'la loupe : de moins en moins d’entités de réactif', bulle: () => 'Regardons à la loupe.' },
+    { nom: 'conclusion', anim: .3, motif: '« les réactifs s’épuisent, v diminue »', bulle: () => 'Pourquoi la vitesse diminue-t-elle ?' },
+  ],
+  fin: [
+    { nom: 'courbe', anim: 2.6, motif: 'la courbe x(t) jusqu’à 40 min', bulle: () => 'La courbe jusqu’au palier.' },
+    { nom: 'palier', anim: .6, motif: 'le palier x_f = 2,0 mmol', bulle: () => 'À la fin, le palier.' },
+    { nom: 'tangente_horizontale', anim: .8, motif: 'la tangente horizontale à t = 40 min', bulle: () => 'La tangente à t = 40 min ?' },
+    { nom: 'vitesse_nulle', anim: .3, motif: '« pente nulle, v = 0 : la transformation est finie »', bulle: () => 'Sa pente est nulle.' },
+    { nom: 'maximale_debut', anim: .8, motif: '« v est maximale à t = 0 »', bulle: () => 'Et quand la vitesse est-elle la plus grande ?' },
+  ],
+  temperature: [
+    { nom: 'axes', anim: .3, motif: 'les axes : x (mmol), t (min)', bulle: () => 'Même mélange à 20 °C et à 40 °C.' },
+    { nom: 'courbe_20', anim: 2.6, motif: 'la courbe à 20 °C', bulle: () => 'À 20 °C…' },
+    { nom: 'courbe_40', anim: 2.2, motif: 'la courbe à 40 °C', bulle: () => 'À 40 °C…' },
+    { nom: 'tangentes', anim: 1, motif: 'les tangentes à l’origine : pentes 0,25 et 0,75 mmol/min', bulle: () => 'Les tangentes à l’origine.' },
+    { nom: 'comparer', anim: .3, motif: 'à 40 °C, v(0) = 7,5 mmol·L⁻¹·min⁻¹, trois fois plus', bulle: () => 'Comparons les vitesses initiales.' },
+    { nom: 'meme_final', anim: .6, motif: 'même palier 2,0 mmol : même état final', bulle: () => 'Et les paliers ?' },
+  ],
+};
+const MOTIFS = new Proxy({}, { get: (_, nom) => (nom === 'fin' ? 'fin' : (ETAPES[MO ? MO.S.vue : VUES[0]].find(e => e.nom === nom) || {}).motif) });
+let MO = null;
+
+/* ── Positions qui bougent ───────────────────────────────────────────── */
+/** Début du petit triangle (vue pente) : le déroulé le promène (2 → 16 → 34 min), puis il revient à la poignée. */
+function tri(M) {
+  if (DRAG != null) return DRAG;
+  if (!M.commence('milieu')) return M.S.fait || M.S.t > 1e5 ? PAR.pente : TOUR[0];
+  if (!M.commence('fin_plate')) return lerp(TOUR[0], TOUR[1], lisse(M.p('milieu')));
+  if (!M.commence('phrase')) return lerp(TOUR[1], TOUR[2], lisse(M.p('fin_plate')));
+  return lerp(TOUR[2], PAR.pente, lisse(M.p('phrase')));
+}
+const triA = t => Math.min(t, 40 - DT);
+const tTan = () => DRAG ?? PAR.tangente;
+
+/* ── Dessin ──────────────────────────────────────────────────────────── */
+function cadreTangente(t, lo, hi) { const s = pA(t), xt = xA(t); return [X(lo), Y(xt + s * (hi - t)), X(hi) - X(lo), Y(xt + s * (lo - t)) - Y(xt + s * (hi - t))]; }
+function bornesTan(t, u1, u2) { const s = pA(t), xt = xA(t); return [Math.max(0, u1, t - xt / s), Math.min(GC.tmax + 2, u2, t + (GC.ymax - .1 - xt) / s)]; }
+function dessiner(c, M) {
+  MO = M; M.scene.cadre(67);
+  const v = M.S.vue;
+  GC = v === 'concentration' ? GK : GA;
+  c.texte(TITRE_TABLEAU[v], 14, 26, { couleur: 'cyan', taille: 20 });
+  eqn(c, 724, 26, 'H₂O₂ + 2I⁻ + 2H⁺', 'I₂ + 2H₂O', { align: 'right', taille: 16 });
+  const avecGraphe = !['definition', 'calcul'].includes(v), premier = ETAPES[v][0].nom;
+  if (avecGraphe && M.commence(premier)) c.direct(() => quadrillage(c, lisse(clamp(M.p(premier) * 4, 0, 1))));
+  const P = { taille: 17, max: 248 };
+  let vues = [];
+  if (v === 'pente') {
+    const pos = tri(M), a = triA(pos), b = a + DT;
+    c.direct(() => {
+      if (M.commence('courbe')) trace(c, xA, M.p('courbe'), 'bleu');
+      if (M.commence('debut_raide') || DRAG != null) {
+        const xa = xA(a), xb = xA(b), k = DRAG != null ? 1 : M.commence('milieu') ? 1 : M.p('debut_raide');
+        c.trait([[X(a), Y(xa)], [X(b), Y(xa)], [X(b), Y(xa + (xb - xa) * k)]], { couleur: 'vert', largeur: 2.2 });
+        c.point(X(a), Y(xa), 4, 'vert');
+        c.texte('Δt', (X(a) + X(b)) / 2, Y(xa) + 17, { couleur: 'vert', taille: 15, align: 'center' });
+        c.texte('Δx', X(b) + 5, (Y(xa) + Y(xb)) / 2 + 5, { couleur: 'vert', taille: 15 });
+        poignee(c.ctx, X(pos), G.y0);
+      }
+    });
+    vues = zoneEcriture(c, M, [
+      { nom: 'courbe', lignes: [['exemple A : de combien x augmente-t-il pendant Δt = 4 min ?', 'blanc']], plus: () => {
+        axes(c); c.texte('Δx gagné en Δt = 4 min :', PX, 84, { couleur: 'blanc', ...P }); } },
+      { nom: 'debut_raide', lignes: [[`au début (de 2 à 6 min) : Δx ≈ ${deux(dxTri(2))} mmol : la courbe est raide`, 'vert']], plus: () =>
+        c.texte(`début, 2 à 6 min : ${deux(dxTri(2))} mmol`, PX, 112, { couleur: 'vert', ...P }) },
+      { nom: 'milieu', lignes: [[`au milieu (de 16 à 20 min) : Δx ≈ ${deux(dxTri(16))} mmol seulement`, 'vert']], plus: () =>
+        c.texte(`milieu, 16 à 20 min : ${deux(dxTri(16))} mmol`, PX, 138, { couleur: 'vert', ...P }) },
+      { nom: 'fin_plate', lignes: [[`à la fin (de 34 à 38 min) : Δx ≈ ${deux(dxTri(34))} mmol, presque rien : la courbe est presque plate`, 'vert']], plus: () =>
+        c.texte(`fin, 34 à 38 min : ${deux(dxTri(34))} mmol`, PX, 164, { couleur: 'vert', ...P }) },
+      { nom: 'phrase', lignes: [['au début : x monte vite ; à la fin : presque plus', 'jaune']], plus: () => {
+        c.rect(PX - 6, 180, 252, 56, { couleur: 'jaune', largeur: 2, arrondi: 8 });
+        c.texte('au début : x monte vite ;', PX + 2, 203, { couleur: 'jaune', ...P });
+        c.texte('à la fin : presque plus', PX + 2, 227, { couleur: 'jaune', ...P });
+        c.direct(() => { const a2 = triA(tri(M)); c.texte(`triangle : de ${dmin(a2)} à ${dmin(a2 + DT)} min,`, PX, 262, { couleur: 'blanc', ...P });
+          c.texte(`Δx ≈ ${deux(dxTri(a2))} mmol (poignée jaune)`, PX, 284, { couleur: 'blanc', ...P }); });
+      } },
+    ], ZY);
+  } else if (v === 'definition') {
+    const t = 46, yb = 128, w1 = larg(c, 'v(t) = ', t), wf1 = Math.max(larg(c, '1', t), larg(c, 'V', t)) + 10, wp = larg(c, ' · ', t), wf2 = Math.max(larg(c, 'dx', t), larg(c, 'dt', t)) + 10;
+    const x0 = 380 - (w1 + wf1 + wp + wf2) / 2, xf1 = x0 + w1, xf2 = xf1 + wf1 + wp;
+    DEF = { x0, xf1, wf1, xf2, wf2, yb, t };
+    vues = zoneEcriture(c, M, [
+      { nom: 'formule', lignes: [['vitesse volumique de réaction à la date t (V : volume du mélange)', 'blanc']], plus: () => {
+        c.texte('v(t) =', x0, yb + t * .3, { couleur: 'blanc', taille: t });
+        frac(c, xf1, yb, '1', 'V', t); c.texte('·', xf1 + wf1 + wp / 2, yb + t * .3, { couleur: 'blanc', taille: t, align: 'center' }); frac(c, xf2, yb, 'dx', 'dt', t);
+      } },
+      { nom: 'volume', lignes: [['1/V : on divise par le volume V du mélange (en L) : vitesse « par litre »', 'jaune']], plus: () => {
+        c.fleche(xf1 + wf1 / 2, yb + 52, 250, 214, { couleur: 'jaune', largeur: 1.8, tete: 8 });
+        c.texte('1/V : par litre de mélange', 330, 240, { couleur: 'jaune', taille: 19, align: 'right' });
+        c.texte('(V : volume du mélange, en L)', 330, 266, { couleur: 'faible', taille: 17, align: 'right' });
+      } },
+      { nom: 'derivee', lignes: [['dx/dt : la dérivée de x par rapport au temps, lue comme une pente', 'vert']], plus: () => {
+        c.fleche(xf2 + wf2 / 2, yb + 52, 520, 214, { couleur: 'vert', largeur: 1.8, tete: 8 });
+        c.texte('dx/dt : la pente de la tangente', 400, 240, { couleur: 'vert', taille: 19 });
+        c.texte('à la courbe x(t) à la date t', 400, 266, { couleur: 'vert', taille: 19 });
+      } },
+      { nom: 'unite', lignes: [['x en mol, V en L, t en min : v en mol·L⁻¹·min⁻¹', 'blanc']], plus: () => {
+        c.rect(150, 290, 460, 40, { couleur: 'jaune', largeur: 1.8, arrondi: 8 });
+        c.texte('unité : mol·L⁻¹·min⁻¹ (ou mmol·L⁻¹·min⁻¹)', 380, 318, { couleur: 'jaune', taille: 20, align: 'center' });
+      } },
+    ], [362, 386, 410]);
+  } else if (v === 'tangente') {
+    const t = tTan(), xt = xA(t), s = pA(t), [lo, hi] = bornesTan(t, t - 6, t + 14);
+    const tA = t, tB = t + 8, yLabA = Math.min(Y(xt) + 18, G.y0 - 6);
+    c.direct(() => {
+      if (M.commence('courbe')) trace(c, xA, M.p('courbe'), 'bleu');
+      if (M.commence('tangente')) { const k = DRAG != null ? 1 : M.p('tangente'); tangente(c, t, xt, s, lo, lo + (hi - lo) * k); }
+      if (M.commence('point') || DRAG != null) { c.point(X(t), Y(xt), 5, 'jaune'); poignee(c.ctx, X(t), G.y0); }
+      if (M.commence('deux_points')) {
+        c.point(X(tB), Y(2), 5, 'vert');
+        c.texte(`A (${dmin(tA)} ; ${lu(tA)})`, X(t) + 26, yLabA, { couleur: 'vert', taille: 16 });
+        c.texte(`B (${dmin(tB)} ; 2,0)`, X(tB) - 8, Y(2) - 12, { couleur: 'vert', taille: 16, align: 'right' });
+      }
+      if (M.commence('pente')) {
+        c.texte(`= (2,0 − ${lu(tA)}) / (${dmin(tB)} − ${dmin(tA)})`, PX, 150, { couleur: 'blanc', ...P });
+        c.texte(`${t === 0 ? '=' : '≈'} ${fp(s)} mmol/min`, PX, 186, { couleur: 'jaune', taille: 24, max: 248 });
+      }
+    });
+    vues = zoneEcriture(c, M, [
+      { nom: 'courbe', lignes: [['exemple A : la courbe x(t) ; la poignée jaune choisit la date t', 'blanc']], plus: () => axes(c) },
+      { nom: 'point', lignes: [[`le point de la courbe à t = ${dmin(PAR.tangente)} min : x = ${lu(PAR.tangente)} mmol`, 'jaune']] },
+      { nom: 'tangente', lignes: [['la tangente (verte) touche la courbe en ce point et a la même direction', 'vert']] },
+      { nom: 'deux_points', lignes: [[`deux points de la tangente, bien écartés : A (${dmin(PAR.tangente)} ; ${lu(PAR.tangente)}) et B (${dmin(PAR.tangente + 8)} ; 2,0)`, 'vert']] },
+      { nom: 'pente', lignes: [[`pente = Δx/Δt = (x_B − x_A)/(t_B − t_A) ${PAR.tangente === 0 ? '=' : '≈'} ${fp(pA(PAR.tangente))} mmol/min`, 'jaune']], plus: () => {
+        c.texte('pente de la tangente :', PX, 84, { couleur: 'blanc', ...P });
+        c.texte('pente = Δx/Δt', PX, 116, { couleur: 'blanc', taille: 19 });
+      } },
+    ], ZY);
+  } else if (v === 'calcul') {
+    const L = 30, F = 170, T = 23;
+    vues = zoneEcriture(c, M, [
+      { nom: 'relation', lignes: [], plus: () => {
+        c.texte('1) relation', L, 84, { couleur: 'faible', taille: 18 });
+        c.texte('v(t) = (1/V)·dx/dt', F, 84, { couleur: 'blanc', taille: T });
+      } },
+      { nom: 'pente', lignes: [], plus: () => {
+        c.texte('2) pente', L, 136, { couleur: 'faible', taille: 18 });
+        c.texte('(dx/dt)₀ = 0,25 mmol/min', F, 136, { couleur: 'vert', taille: T });
+        c.texte('pente de la tangente à t = 0 : (2,0 − 0)/(8 − 0)', F, 160, { couleur: 'vert', taille: 17 });
+      } },
+      { nom: 'application', lignes: [], plus: () => {
+        c.texte('3) application', L, 210, { couleur: 'faible', taille: 18 });
+        c.texte('v(0) = (1/V)·(dx/dt)₀ = (1/0,100) × 0,25', F, 210, { couleur: 'blanc', taille: T });
+      } },
+      { nom: 'resultat', lignes: [], plus: () => {
+        c.texte('4) résultat', L, 264, { couleur: 'faible', taille: 18 });
+        c.rect(F - 10, 236, 360, 42, { couleur: 'jaune', largeur: 2, arrondi: 8 });
+        c.texte(`v(0) = 2,5 ${UV}`, F, 265, { couleur: 'jaune', taille: 25 });
+      } },
+      { nom: 'piege', lignes: [], plus: () => {
+        attention(c, L, 324, { h: 20 });
+        c.texte('V en litres : V = 100 mL = 0,100 L', F, 322, { couleur: 'orange', taille: 21 });
+        c.texte('(avec « 100 », on trouverait 0,0025 : faux)', F, 348, { couleur: 'orange', taille: 17 });
+      } },
+    ], ZY);
+  } else if (v === 'diminue') {
+    const DATES = [0, 8, 20], noms = ['tangente_0', 'tangente_8', 'tangente_20'];
+    c.direct(() => {
+      if (M.commence('courbe')) trace(c, xA, M.p('courbe'), 'bleu');
+      DATES.forEach((t, i) => {
+        if (!M.commence(noms[i])) return;
+        const [lo, hi] = bornesTan(t, t - 4, t + 8), k = M.p(noms[i]);
+        tangente(c, t, xA(t), pA(t), lo, lo + (hi - lo) * k);
+        c.point(X(t), Y(xA(t)), 4.5, 'jaune');
+        if (k >= 1) c.texte(`v(${t})`, X(t + 8), Y(2) - 10, { couleur: 'vert', taille: 16, align: 'center' });
+      });
+    });
+    vues = zoneEcriture(c, M, [
+      { nom: 'courbe', lignes: [['exemple A : on trace la tangente à t = 0, 8 et 20 min', 'blanc']], plus: () => {
+        axes(c); c.texte(`v en ${UV} :`, PX, 84, { couleur: 'blanc', ...P }); } },
+      { nom: 'tangente_0', lignes: [[`à t = 0 : pente 0,25 mmol/min, v(0) = 2,5 ${UV}`, 'vert']], plus: () => c.texte('v(0) = 2,5', PX + 10, 118, { couleur: 'vert', taille: 21 }) },
+      { nom: 'tangente_8', lignes: [[`à t = 8 min : tangente moins raide, v(8) ≈ 0,92 ${UV}`, 'vert']], plus: () => c.texte('v(8 min) ≈ 0,92', PX + 10, 148, { couleur: 'vert', taille: 21 }) },
+      { nom: 'tangente_20', lignes: [[`à t = 20 min : presque horizontale, v(20) ≈ 0,21 ${UV}`, 'vert']], plus: () => c.texte('v(20 min) ≈ 0,21', PX + 10, 178, { couleur: 'vert', taille: 21 }) },
+      { nom: 'conclusion', lignes: [['les tangentes sont de plus en plus plates : la vitesse diminue au cours du temps', 'jaune']], plus: () => {
+        c.rect(PX - 6, 204, 252, 58, { couleur: 'jaune', largeur: 2, arrondi: 8 });
+        c.texte('la vitesse diminue', PX + 4, 228, { couleur: 'jaune', taille: 19 });
+        c.texte('au cours du temps', PX + 4, 252, { couleur: 'jaune', taille: 19 });
+      } },
+    ], ZY);
+  } else if (v === 'concentration') {
+    c.direct(() => {
+      if (M.commence('courbe_reactif')) trace(c, cH, M.p('courbe_reactif'), 'bleu');
+      if (M.commence('debut')) c.point(X(0), Y(20), 5, 'jaune');
+      if (M.commence('plus_tard')) c.point(X(16), Y(cH(16)), 5, 'jaune');
+      if (M.commence('loupe')) loupes(c, M);
+    });
+    vues = zoneEcriture(c, M, [
+      { nom: 'courbe_reactif', lignes: [['[H₂O₂] = n(H₂O₂)/V = (2,0 − x)/V : elle baisse de 20 mmol/L à 0', 'blanc']], plus: () => axes(c) },
+      { nom: 'debut', lignes: [['au début : [H₂O₂] = 20 mmol/L, beaucoup de réactif', 'jaune']], plus: () =>
+        c.texte('au début : 20 mmol/L', G.x0 + 14, Y(20) - 9, { couleur: 'jaune', taille: 16 }) },
+      { nom: 'plus_tard', lignes: [['à t = 16 min : [H₂O₂] ≈ 2,7 mmol/L, il en reste peu', 'jaune']], plus: () => {
+        c.texte('à 16 min : 2,7 mmol/L', X(16), Y(8), { couleur: 'jaune', taille: 16, align: 'center' });
+        c.ligne(X(16), Y(8) + 6, X(16), Y(cH(16)) - 8, { couleur: 'jaune', largeur: 1.4, pointille: [3, 4] });
+      } },
+      { nom: 'loupe', lignes: [['à la loupe : de moins en moins d’entités de réactif ; elles se rencontrent moins souvent', 'blanc']], plus: () => {
+        c.cercle(LP[0].x, LP[0].y, LP.r, { couleur: 'blanc', largeur: 2 }); c.cercle(LP[1].x, LP[1].y, LP.r, { couleur: 'blanc', largeur: 2 });
+        c.texte('au début', LP[0].x, LP[0].y - LP.r - 8, { couleur: 'blanc', taille: 16, align: 'center' });
+        c.texte('à t = 16 min', LP[1].x, LP[1].y - LP.r - 8, { couleur: 'blanc', taille: 16, align: 'center' });
+        c.texte('H₂O₂', PX + 34, 200, { couleur: 'rouge', taille: 16 }); c.texte('I⁻', PX + 148, 200, { couleur: 'violet', taille: 16 });
+        c.texte('moins d’entités de réactif :', PX, 228, { couleur: 'blanc', ...P });
+        c.texte('elles se rencontrent moins souvent', PX, 250, { couleur: 'blanc', ...P });
+      } },
+      { nom: 'conclusion', lignes: [['les réactifs s’épuisent : la vitesse de réaction diminue', 'jaune']], plus: () => {
+        c.texte('les réactifs s’épuisent', PX, 274, { couleur: 'jaune', taille: 18 });
+        eqn(c, PX + 40, 296, '', 'v diminue', { couleur: 'jaune', taille: 18 });
+      } },
+    ], ZY);
+  } else if (v === 'fin') {
+    c.direct(() => {
+      if (M.commence('courbe')) trace(c, xA, M.p('courbe'), 'bleu');
+      if (M.commence('tangente_horizontale')) { const k = M.p('tangente_horizontale'); tangente(c, 40, xA(40), pA(40), 40 - 12 * k, 40 + 1.2 * k); c.point(X(40), Y(xA(40)), 4.5, 'jaune'); }
+      if (M.commence('maximale_debut')) { const k = M.p('maximale_debut'); tangente(c, 0, 0, pA(0), 0, 8 * k); }
+    });
+    vues = zoneEcriture(c, M, [
+      { nom: 'courbe', lignes: [['exemple A : la courbe x(t) jusqu’à 40 min', 'blanc']], plus: () => axes(c) },
+      { nom: 'palier', lignes: [['à la fin, la courbe atteint son palier : x_f = 2,0 mmol', 'jaune']], plus: () => {
+        c.ligne(G.x0, Y(2), X(26), Y(2), { couleur: 'jaune', largeur: 1.8, pointille: [6, 6] });
+        c.texte('palier : x_f = 2,0 mmol', G.x0 + 8, Y(2) - 10, { couleur: 'jaune', taille: 16 });
+      } },
+      { nom: 'tangente_horizontale', lignes: [['à t = 40 min, la tangente est horizontale : sa pente est nulle', 'vert']], plus: () =>
+        c.texte('tangente horizontale', X(40) + 12, Y(2) - 10, { couleur: 'vert', taille: 16, align: 'right' }) },
+      { nom: 'vitesse_nulle', lignes: [['pente nulle, donc v = 0 : la transformation est finie', 'vert']], plus: () => {
+        eqn(c, PX, 90, 'pente nulle', 'v = 0', { couleur: 'vert', taille: 19 });
+        c.texte('la transformation est finie', PX, 116, { couleur: 'vert', taille: 18, max: 248 });
+      } },
+      { nom: 'maximale_debut', lignes: [['la tangente la plus raide est à t = 0 : v est maximale au début', 'jaune']], plus: () => {
+        c.rect(PX - 6, 144, 252, 60, { couleur: 'jaune', largeur: 2, arrondi: 8 });
+        c.texte('v est maximale à t = 0', PX + 4, 168, { couleur: 'jaune', taille: 19 });
+        c.texte(`v(0) = 2,5 ${UV}`, PX + 4, 194, { couleur: 'jaune', taille: 17, max: 238 });
+      } },
+    ], ZY);
+  } else {
+    c.direct(() => {
+      if (M.commence('courbe_20')) trace(c, xA, M.p('courbe_20'), 'bleu');
+      if (M.commence('courbe_40')) trace(c, x40, M.p('courbe_40'), 'rouge');
+      if (M.commence('tangentes')) { const k = M.p('tangentes'); tangente(c, 0, 0, .25, 0, 8 * k); tangente(c, 0, 0, .75, 0, 8 / 3 * k);
+        if (k >= 1) { c.texte('0,25', X(8), Y(2) - 10, { couleur: 'vert', taille: 16, align: 'center' }); c.texte('0,75', X(8 / 3), Y(2) - 10, { couleur: 'vert', taille: 16, align: 'center' }); } }
+    });
+    vues = zoneEcriture(c, M, [
+      { nom: 'axes', lignes: [['même mélange (exemple A), à 20 °C et à 40 °C', 'blanc']], plus: () => axes(c) },
+      { nom: 'courbe_20', lignes: [['à 20 °C : la courbe de l’exemple A', 'bleu']], plus: () => c.texte('20 °C', X(18.4) + 7, Y(1.8) + 14, { couleur: 'bleu', taille: 16 }) },
+      { nom: 'courbe_40', lignes: [['à 40 °C : la courbe monte bien plus vite', 'rouge']], plus: () => c.texte('40 °C', X(11), Y(1.74), { couleur: 'rouge', taille: 16 }) },
+      { nom: 'tangentes', lignes: [['tangentes à l’origine : pentes 0,25 mmol/min (20 °C) et 0,75 mmol/min (40 °C)', 'vert']], plus: () => {
+        c.texte('tangentes à l’origine :', PX, 84, { couleur: 'vert', ...P });
+        c.texte('20 °C : pente 0,25 mmol/min', PX, 108, { couleur: 'bleu', ...P });
+        c.texte('40 °C : pente 0,75 mmol/min', PX, 132, { couleur: 'rouge', ...P });
+      } },
+      { nom: 'comparer', lignes: [[`à 40 °C, v(0) = 7,5 ${UV} : trois fois plus qu’à 20 °C (2,5)`, 'jaune']], plus: () => {
+        c.texte(`20 °C : v(0) = 2,5 ${UV}`, PX, 164, { couleur: 'bleu', ...P });
+        c.texte(`à 40 °C, v(0) = 7,5 ${UV},`, PX, 190, { couleur: 'jaune', ...P });
+        c.texte('trois fois plus', PX, 214, { couleur: 'jaune', taille: 19 });
+      } },
+      { nom: 'meme_final', lignes: [['même palier 2,0 mmol : même état final', 'jaune']], plus: () => {
+        c.ligne(G.x0, Y(2), X(40) + 6, Y(2), { couleur: 'jaune', largeur: 1.8, pointille: [6, 6] });
+        c.texte('même palier : 2,0 mmol', X(40) + 6, Y(2) - 10, { couleur: 'jaune', taille: 16, align: 'right' });
+        c.rect(PX - 6, 232, 252, 34, { couleur: 'jaune', largeur: 2, arrondi: 8 });
+        c.texte('même état final', PX + 4, 256, { couleur: 'jaune', taille: 19 });
+      } },
+    ], ZY);
+  }
+  reperes(c, M);
+  M.vues = vues;
+  return c.fin();
+}
+let DEF = null;
+/* ── Loupes (vue concentration) : entités peintes, positions pour l’œil (mouvement brownien imité, figé à l’arrêt) ──── */
+const LP = [{ x: 563, y: 122 }, { x: 688, y: 122 }]; LP.r = 52;
+const NB = [{ h: 8, i: 10 }, { h: 1, i: 7 }];          // H₂O₂ : 2,0 mmol → 8 ; 0,27 mmol → 1 ; I⁻ : 10,0 → 10 ; 6,5 → 7
+function entite(ctx, x, y, h2o2) {
+  const g = (cx, cy, r, c1, c2) => { const d = ctx.createRadialGradient(cx - r * .35, cy - r * .35, r * .1, cx, cy, r); d.addColorStop(0, c1); d.addColorStop(1, c2); ctx.fillStyle = d; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill(); };
+  if (h2o2) { g(x - 3.2, y, 4.6, '#fecaca', '#dc2626'); g(x + 3.2, y, 4.6, '#fecaca', '#dc2626'); g(x - 7, y - 4, 2.4, '#ffffff', '#cbd5e1'); g(x + 7, y + 4, 2.4, '#ffffff', '#cbd5e1'); }
+  else g(x, y, 5.2, '#ede9fe', '#7c3aed');
+}
+function loupes(c, M) {
+  const ctx = c.ctx, a = clamp(M.p('loupe') * 2, 0, 1), tt = M.S.t;
+  LP.forEach((L, j) => {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.beginPath(); ctx.arc(L.x, L.y, LP.r - 1, 0, 7); ctx.clip();
+    const fond = ctx.createRadialGradient(L.x - 18, L.y - 22, 6, L.x, L.y, LP.r); fond.addColorStop(0, 'rgba(186,230,253,.22)'); fond.addColorStop(1, 'rgba(148,163,184,.10)');
+    ctx.fillStyle = fond; ctx.fillRect(L.x - LP.r, L.y - LP.r, 2 * LP.r, 2 * LP.r);
+    const n = NB[j]; let k = 0;
+    for (const [nb, h] of [[n.h, true], [n.i, false]]) for (let i = 0; i < nb; i++, k++) {
+      const f1 = .5 + .37 * ((k * 7 + 3) % 11) / 11, f2 = .45 + .41 * ((k * 5 + 1) % 13) / 13, p1 = k * 2.1 + j, p2 = k * 1.3 + 2 * j;
+      entite(ctx, L.x + LP.r * .66 * Math.sin(f1 * tt + p1), L.y + LP.r * .66 * Math.sin(f2 * tt + p2), h);
+    }
+    // reflet léger du verre (pour l’œil)
+    ctx.globalAlpha = a * .25; ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.ellipse(L.x - 22, L.y - 28, 14, 6, -.6, 0, 7); ctx.fill();
+    ctx.restore();
+  });
+  ctx.save(); ctx.globalAlpha = a; entite(ctx, PX + 22, 195, true); entite(ctx, PX + 138, 195, false); ctx.restore();
+}
+
+/* ── Repères (tous déclarés dès le début ; le libellé dit à quel moment ils apparaissent) ─────────────── */
+function reperes(c, M) {
+  const v = M.S.vue, R = (id, x, y, w, h, l) => c.repere(id, x, y, w, h, l), q = nom => quand(M, nom);
+  const rCourbe = (id, f, l) => R(id, G.x0, Y(2.05), G.w + 6, G.y0 - Y(2.05), l);
+  if (v === 'pente') {
+    rCourbe('courbe', xA, `la courbe x(t) de l’exemple A, bleue${q('courbe')}`);
+    const pos = tri(M), a = triA(pos), xa = xA(a), xb = xA(a + DT);
+    R('triangle', X(a) - 6, Y(xb) - 6, X(a + DT) - X(a) + 32, Y(xa) - Y(xb) + 26, `le petit triangle vert : Δx ≈ ${deux(xb - xa)} mmol pendant Δt = 4 min, de ${dmin(a)} à ${dmin(a + DT)} min${q('debut_raide')}`);
+    R('poignee_t', X(pos) - 20, G.y0 - 12, 40, 24, `la poignée jaune : la date t = ${dmin(pos)} min du triangle (glisser de 0 à 40 min)${q('debut_raide')}`);
+    R('phrase', PX - 6, 180, 252, 56, `« au début : x monte vite ; à la fin : presque plus »${q('phrase')}`);
+  } else if (v === 'definition') {
+    const d = DEF;
+    R('formule', d.x0 - 8, d.yb - d.t, d.xf2 + d.wf2 - d.x0 + 16, d.t * 2.1, 'la formule v(t) = (1/V)·dx/dt');
+    R('morceau_V', 110, d.yb - d.t, Math.max(230, d.xf1 + d.wf1 - 100), 280 - (d.yb - d.t), `le morceau 1/V : « par litre de mélange »${q('volume')}`);
+    R('morceau_dx', d.xf2 - 6, d.yb - d.t, 670 - d.xf2, 280 - (d.yb - d.t), `le morceau dx/dt : « la pente de la tangente à la courbe x(t) à la date t »${q('derivee')}`);
+    R('unite', 150, 290, 460, 40, `l’unité : mol·L⁻¹·min⁻¹ (ou mmol·L⁻¹·min⁻¹)${q('unite')}`);
+  } else if (v === 'tangente') {
+    const t = tTan(), xt = xA(t), [lo, hi] = bornesTan(t, t - 6, t + 14), [rx, ry, rw, rh] = cadreTangente(t, lo, hi);
+    rCourbe('courbe', xA, `la courbe x(t) de l’exemple A, bleue${q('courbe')}`);
+    R('point_contact', X(t) - 12, Y(xt) - 12, 24, 24, `le point de contact, à t = ${dmin(t)} min (x = ${lu(t)} mmol)${q('point')}`);
+    R('tangente', rx - 4, ry - 4, rw + 8, Math.max(16, rh + 8), `la tangente verte à t = ${dmin(t)} min${q('tangente')}`);
+    R('point_A', X(t) - 10, Y(xt) - 10, 120, Math.min(Y(xt) + 18, G.y0 - 6) - Y(xt) + 16, `le point A (${dmin(t)} ; ${lu(t)})${q('deux_points')}`);
+    R('point_B', X(t + 8) - 90, Y(2) - 30, 100, 40, `le point B (${dmin(t + 8)} ; 2,0)${q('deux_points')}`);
+    R('pente', PX - 6, 64, 252, 132, `la pente = Δx/Δt ≈ ${fp(pA(t))} mmol/min${q('pente')}`);
+  } else if (v === 'calcul') {
+    R('relation', 24, 60, 420, 32, 'la relation v(t) = (1/V)·dx/dt');
+    R('pente', 24, 112, 560, 56, `la pente (dx/dt)₀ = 0,25 mmol/min${q('pente')}`);
+    R('application', 24, 186, 600, 32, `l’application : (1/0,100) × 0,25${q('application')}`);
+    R('resultat', 160, 236, 360, 42, `le résultat v(0) = 2,5 ${UV}${q('resultat')}`);
+    R('piege', 24, 298, 520, 58, `le piège : V en litres, 100 mL = 0,100 L${q('piege')}`);
+  } else if (v === 'diminue') {
+    rCourbe('courbe', xA, `la courbe x(t) de l’exemple A, bleue${q('courbe')}`);
+    [0, 8, 20].forEach(t => { const [lo, hi] = bornesTan(t, t - 4, t + 8), [rx, ry, rw, rh] = cadreTangente(t, lo, hi);
+      R(`tangente_${t}`, rx - 4, ry - 24, rw + 8, rh + 28, `la tangente à t = ${t} min : v(${t}) ${t ? '≈' : '='} ${t ? deux(vit(t)) : '2,5'} ${UV}${q('tangente_' + t)}`); });
+    R('colonne', PX - 6, 64, 252, 124, `la colonne : v(0) = 2,5 ; v(8) ≈ 0,92 ; v(20) ≈ 0,21 ${UV}${q('tangente_20')}`);
+    R('conclusion', PX - 6, 204, 252, 58, `« la vitesse diminue au cours du temps »${q('conclusion')}`);
+  } else if (v === 'concentration') {
+    R('courbe_reactif', G.x0, Y(21), G.w + 6, G.y0 - Y(21), `la courbe [H₂O₂] (mmol/L), de 20 à 0${q('courbe_reactif')}`);
+    R('loupe', PX, 52, 250, 156, `les deux loupes : au début et à t = 16 min${q('loupe')}`);
+    R('entites', LP[1].x - LP.r, LP[1].y - LP.r, 2 * LP.r, 2 * LP.r, `les entités : H₂O₂ (rouges) et I⁻ (violettes) ; 8 H₂O₂ au début, 1 à 16 min${q('loupe')}`);
+    R('conclusion', PX - 4, 258, 252, 44, `« les réactifs s’épuisent → v diminue »${q('conclusion')}`);
+  } else if (v === 'fin') {
+    rCourbe('courbe', xA, `la courbe x(t) de l’exemple A, bleue${q('courbe')}`);
+    R('palier', G.x0, Y(2) - 28, X(26) - G.x0 + 4, 36, `le palier x_f = 2,0 mmol${q('palier')}`);
+    R('tangente_horizontale', X(28), Y(2) - 28, X(41.2) - X(28) + 4, 40, `la tangente horizontale à t = 40 min${q('tangente_horizontale')}`);
+    R('phrase_nulle', PX - 6, 70, 252, 54, `« pente nulle → v = 0 : la transformation est finie »${q('vitesse_nulle')}`);
+    R('phrase_max', PX - 6, 144, 252, 60, `« v est maximale à t = 0 »${q('maximale_debut')}`);
+  } else {
+    R('courbe_20', G.x0, Y(2.05), G.w + 6, G.y0 - Y(2.05), `la courbe bleue à 20 °C${q('courbe_20')}`);
+    R('courbe_40', G.x0, Y(2.05), X(14) - G.x0, G.y0 - Y(2.05), `la courbe rouge à 40 °C${q('courbe_40')}`);
+    R('tangente_20', G.x0 - 4, Y(2) - 26, X(8) - G.x0 + 26, G.y0 - Y(2) + 30, `la tangente à l’origine à 20 °C, pente 0,25 mmol/min${q('tangentes')}`);
+    R('tangente_40', G.x0 - 4, Y(2) - 26, X(8 / 3) - G.x0 + 22, G.y0 - Y(2) + 30, `la tangente à l’origine à 40 °C, pente 0,75 mmol/min${q('tangentes')}`);
+    R('palier', G.x0, Y(2) - 28, G.w + 10, 36, `le même palier : 2,0 mmol${q('meme_final')}`);
+    R('phrase', PX - 6, 148, 252, 120, `« à 40 °C, v(0) = 7,5 ${UV}, trois fois plus » ; « même état final »${q('comparer')}`);
+  }
+}
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
+function voir(M) {
+  const v = M.S.vue, m = [`Vue « ${v} » (${TITRES[v]}), ${M.etat()}. Étape en cours : ${etapeEnCours(M)}.`];
+  const graphe = 'Graphe à la craie : x (mmol) en ordonnée de 0 à 2,5, t (min) en abscisse de 0 à 40, quadrillage léger ; exemple A, V = 100 mL.';
+  const courbe = nom => (M.commence(nom) ? ` Courbe bleue x(t) tracée jusqu’à t = ${dmin(40 * M.p(nom))} min.` : '');
+  if (v === 'pente') {
+    const pos = tri(M), a = triA(pos);
+    m.push(graphe + courbe('courbe'));
+    if (M.commence('debut_raide')) m.push(`Petit triangle vert de ${dmin(a)} à ${dmin(a + DT)} min : Δt = 4 min, Δx ≈ ${deux(dxTri(a))} mmol ; poignée jaune à t = ${dmin(pos)} min.`);
+    const l = []; if (M.commence('debut_raide')) l.push(`début (2 à 6 min) : ${deux(dxTri(2))} mmol`); if (M.commence('milieu')) l.push(`milieu (16 à 20 min) : ${deux(dxTri(16))} mmol`); if (M.commence('fin_plate')) l.push(`fin (34 à 38 min) : ${deux(dxTri(34))} mmol`);
+    if (l.length) m.push(`Panneau « Δx gagné en Δt = 4 min » : ${l.join(' ; ')}.`);
+    if (M.commence('phrase')) m.push('Cadre jaune : « au début : x monte vite ; à la fin : presque plus ».');
+  } else if (v === 'definition') {
+    m.push('Écrit en grand : v(t) = (1/V)·(dx/dt), avec de vraies fractions.');
+    if (M.commence('volume')) m.push('Sous 1/V, flèche jaune : « 1/V : par litre de mélange » (V : volume du mélange, en L).');
+    if (M.commence('derivee')) m.push('Sous dx/dt, flèche verte : « dx/dt : la pente de la tangente à la courbe x(t) à la date t ».');
+    if (M.commence('unite')) m.push('Cadre : « unité : mol·L⁻¹·min⁻¹ (ou mmol·L⁻¹·min⁻¹) ».');
+  } else if (v === 'tangente') {
+    const t = PAR.tangente;
+    m.push(graphe + courbe('courbe'));
+    if (M.commence('point')) m.push(`Point jaune sur la courbe à t = ${dmin(t)} min (x = ${lu(t)} mmol) ; poignée jaune sur l’axe des temps (0 à 30 min).`);
+    if (M.commence('tangente')) m.push(`Tangente verte en ce point.`);
+    if (M.commence('deux_points')) m.push(`Deux points marqués : A (${dmin(t)} ; ${lu(t)}) et B (${dmin(t + 8)} ; 2,0).`);
+    if (M.commence('pente')) m.push(`Panneau : « pente = Δx/Δt = (2,0 − ${lu(t)})/(${dmin(t + 8)} − ${dmin(t)}) ${t === 0 ? '=' : '≈'} ${fp(pA(t))} mmol/min » ; donc v(${dmin(t)}) ≈ ${t === 0 ? '2,5' : fp(vit(t))} ${UV}.`);
+  } else if (v === 'calcul') {
+    const l = ['1) relation : v(t) = (1/V)·dx/dt'];
+    if (M.commence('pente')) l.push('2) pente : (dx/dt)₀ = 0,25 mmol/min, pente de la tangente à t = 0 : (2,0 − 0)/(8 − 0)');
+    if (M.commence('application')) l.push('3) application : v(0) = (1/V)·(dx/dt)₀ = (1/0,100) × 0,25');
+    if (M.commence('resultat')) l.push(`4) résultat encadré : v(0) = 2,5 ${UV}`);
+    if (M.commence('piege')) l.push('⚠ orange : « V en litres : V = 100 mL = 0,100 L » (avec « 100 », on trouverait 0,0025 : faux)');
+    m.push(`Écrit au tableau : ${l.join(' ; ')}.`);
+  } else if (v === 'diminue') {
+    m.push(graphe + courbe('courbe'));
+    const l = []; if (M.commence('tangente_0')) l.push('t = 0 (v(0) = 2,5)'); if (M.commence('tangente_8')) l.push('t = 8 min (v(8) ≈ 0,92)'); if (M.commence('tangente_20')) l.push('t = 20 min (v(20) ≈ 0,21)');
+    if (l.length) m.push(`Tangentes vertes, de plus en plus plates, à ${l.join(', ')} ${UV} ; la colonne à droite reprend ces valeurs.`);
+    if (M.commence('conclusion')) m.push('Cadre jaune : « la vitesse diminue au cours du temps ».');
+  } else if (v === 'concentration') {
+    m.push('Graphe à la craie : [H₂O₂] (mmol/L) en ordonnée de 0 à 25, t (min) de 0 à 40.' + (M.commence('courbe_reactif') ? ` Courbe bleue décroissante de 20 mmol/L vers 0, tracée jusqu’à t = ${dmin(40 * M.p('courbe_reactif'))} min.` : ''));
+    if (M.commence('debut')) m.push('Point jaune : « au début : 20 mmol/L ».');
+    if (M.commence('plus_tard')) m.push('Point jaune : « à 16 min : 2,7 mmol/L ».');
+    if (M.commence('loupe')) m.push('Deux loupes : au début 8 entités H₂O₂ (rouges) et 10 I⁻ (violettes) qui s’agitent ; à t = 16 min, 1 seule H₂O₂ et 7 I⁻ ; « moins d’entités de réactif : elles se rencontrent moins souvent ».');
+    if (M.commence('conclusion')) m.push('En jaune : « les réactifs s’épuisent → v diminue ».');
+  } else if (v === 'fin') {
+    m.push(graphe + courbe('courbe'));
+    if (M.commence('palier')) m.push('Palier en pointillé jaune : x_f = 2,0 mmol.');
+    if (M.commence('tangente_horizontale')) m.push('Tangente verte horizontale à t = 40 min (pente ≈ 0).');
+    if (M.commence('vitesse_nulle')) m.push('« pente nulle → v = 0 : la transformation est finie ».');
+    if (M.commence('maximale_debut')) m.push(`Tangente verte à l’origine (la plus raide) ; cadre jaune « v est maximale à t = 0 », v(0) = 2,5 ${UV}.`);
+  } else {
+    m.push(graphe + (M.commence('courbe_20') ? ` Courbe bleue à 20 °C tracée jusqu’à t = ${dmin(40 * M.p('courbe_20'))} min.` : '') + (M.commence('courbe_40') ? ` Courbe rouge à 40 °C tracée jusqu’à t = ${dmin(40 * M.p('courbe_40'))} min, elle monte bien plus vite.` : ''));
+    if (M.commence('tangentes')) m.push('Tangentes vertes à l’origine : pente 0,25 mmol/min (20 °C, passe par (8 ; 2,0)) et 0,75 mmol/min (40 °C).');
+    if (M.commence('comparer')) m.push(`Panneau : 20 °C : v(0) = 2,5 ${UV} ; à 40 °C, v(0) = 7,5 ${UV}, trois fois plus.`);
+    if (M.commence('meme_final')) m.push('Palier commun en pointillé jaune : 2,0 mmol ; « même état final ».');
+  }
+  if (M.vues && M.vues.length) m.push(`Lignes écrites en bas : ${M.vues.map(s => `« ${s} »`).join(' ; ')}.`);
+  return m.join(' ');
+}
+const params = M => {
+  const v = M.S.vue, p = { vue: v };
+  if (v === 'pente') Object.assign(p, { t: PAR.pente, dt_min: DT, dx_mmol: +dxTri(triA(PAR.pente)).toFixed(3) });
+  if (v === 'tangente') Object.assign(p, { t: PAR.tangente, x_mmol: +xA(PAR.tangente).toFixed(2), pente_mmol_min: +pA(PAR.tangente).toFixed(4), v_mmol_L_min: +vit(PAR.tangente).toFixed(3) });
+  if (v === 'calcul') Object.assign(p, { V_L: .1, pente_mmol_min: .25, v0_mmol_L_min: 2.5 });
+  if (v === 'diminue') Object.assign(p, { v0: 2.5, v8: .92, v20: .21, unite: 'mmol/(L·min)' });
+  if (v === 'temperature') Object.assign(p, { pente_20: .25, pente_40: .75, v0_20: 2.5, v0_40: 7.5, palier_mmol: 2 });
+  return p;
+};
+const MOT = Moteur({
+  id: 'cin_vitesse', titre: 'La vitesse volumique de réaction : pente, définition, tangente, calcul, évolution, température', vues: VUES, titres: TITRES,
+  etapes: v => ETAPES[v], motifs: MOTIFS, dessiner, voir, params,
+  depart: M => ({ pente: 'De combien x augmente-t-il en 4 minutes ?', definition: 'Comment mesurer la vitesse d’une réaction ?', tangente: `La tangente à la courbe à t = ${dmin(PAR.tangente)} min.`,
+    calcul: 'Le calcul de v(0), comme au barème.', diminue: 'La vitesse change-t-elle au cours du temps ?', concentration: 'Pourquoi la vitesse diminue-t-elle ?',
+    fin: 'Que vaut la vitesse à la fin ?', temperature: 'Même mélange, deux températures.' })[M.S.vue],
+  messageFin: M => ({ pente: 'Au début, x monte vite ; à la fin, presque plus. Glisse la poignée pour déplacer le triangle.',
+    definition: 'v(t) = (1/V)·dx/dt : la pente de la tangente, par litre de mélange.',
+    tangente: `Pente de la tangente à t = ${dmin(PAR.tangente)} min : ${PAR.tangente === 0 ? '' : '≈ '}${fp(pA(PAR.tangente))} mmol/min. Glisse la poignée pour changer la date.`,
+    calcul: `v(0) = 2,5 ${UV} ; V en litres !`, diminue: 'La vitesse diminue au cours du temps.', concentration: 'Les réactifs s’épuisent : la vitesse diminue.',
+    fin: 'À la fin, v = 0 ; v est maximale à t = 0.', temperature: `À 40 °C, v(0) = 7,5 ${UV} : trois fois plus ; même état final.` })[M.S.vue],
+  appliquer: (p, M) => {
+    const r = {};
+    if (VUES.includes(p.vue)) r.vue = p.vue;
+    const cible = r.vue || M.S.vue;
+    if (p.t != null && p.t !== '' && Number.isFinite(+p.t) && BORNES[cible]) {
+      const [a, b] = BORNES[cible]; PAR[cible] = clamp(Math.round(+p.t * 2) / 2, a, b); DRAG = null; r.change = true;
+      if (cible === M.S.vue) { r.garder = true; r.apres = () => { if (!M.S.running) { M.S.t = M.Moments().fin; M.finir(); } else M.emettre(); }; }
+    } else r.change = !!(r.vue && r.vue !== M.S.vue);
+    return r;
+  },
+  schema: { vue: VUES.join(' | ') + ' (change la vue et relance)', t: 'vue pente : 0..40 (min, date du triangle, défaut 2) ; vue tangente : 0..30 (min, date de la tangente, défaut 0) ; pas 0,5 ; montre aussitôt le résultat' },
+  texte: 'La vitesse volumique de réaction, exemple A (H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O, V = 100 mL = 0,100 L, x_max = 2,0 mmol). Pente : un petit triangle Δx en Δt = 4 min : au début (2 à 6 min) Δx ≈ 0,61 mmol, au milieu (16 à 20 min) 0,11, à la fin (34 à 38 min) 0,01 : au début x monte vite, à la fin presque plus. Définition : v(t) = (1/V)·dx/dt ; 1/V : par litre de mélange ; dx/dt : la pente de la tangente à la courbe x(t) à la date t ; unité mol·L⁻¹·min⁻¹ (ou mmol·L⁻¹·min⁻¹). Tangente : à t = 0, la tangente passe par (0 ; 0) et (8 ; 2,0) : pente = (2,0 − 0)/(8 − 0) = 0,25 mmol/min. Calcul : v(0) = (1/0,100) × 0,25 = 2,5 mmol·L⁻¹·min⁻¹ ; V en litres. Diminue : v(0) = 2,5 ; v(8) ≈ 0,92 ; v(20) ≈ 0,21 mmol·L⁻¹·min⁻¹ : la vitesse diminue au cours du temps. Concentration : [H₂O₂] baisse de 20 à 0 mmol/L ; de moins en moins d’entités de réactif, elles se rencontrent moins souvent : les réactifs s’épuisent, v diminue. Fin : palier, tangente horizontale à 40 min : pente nulle, v = 0, la transformation est finie ; v est maximale à t = 0. Température : à 40 °C la tangente à l’origine a une pente de 0,75 mmol/min (0,25 à 20 °C) : v(0) = 7,5 mmol·L⁻¹·min⁻¹, trois fois plus ; même palier 2,0 mmol, même état final.',
+  explications: {
+    pente: [
+      { repere: 'triangle', texte: 'En 4 minutes, au début, x monte beaucoup.' },
+      { repere: 'courbe', texte: 'Plus tard, le même triangle est presque plat.' },
+      { repere: 'phrase', texte: 'Au début x monte vite, à la fin presque plus.' },
+      { repere: 'poignee_t', texte: 'Glisse la poignée pour déplacer le triangle.' },
+    ],
+    definition: [
+      { repere: 'formule', texte: 'La vitesse volumique de réaction.' },
+      { repere: 'morceau_V', texte: '1 sur V : par litre de mélange.' },
+      { repere: 'morceau_dx', texte: 'dx sur dt : la pente de la tangente.' },
+      { repere: 'unite', texte: 'En mole par litre et par minute.' },
+    ],
+    tangente: [
+      { repere: 'point_contact', texte: 'On se place sur la courbe à la date choisie.' },
+      { repere: 'tangente', texte: 'La tangente touche la courbe en ce point.' },
+      { repere: 'point_B', texte: 'On prend deux points de la tangente, bien écartés.' },
+      { repere: 'pente', texte: 'Sa pente : Δx sur Δt.' },
+    ],
+    calcul: [
+      { repere: 'relation', texte: 'D’abord la relation.' },
+      { repere: 'application', texte: 'Puis les nombres, V en litres.' },
+      { repere: 'resultat', texte: 'Le résultat, avec son unité.' },
+      { repere: 'piege', texte: 'Attention : 100 mL, c’est 0,100 L.' },
+    ],
+    diminue: [
+      { repere: 'tangente_0', texte: 'À t = 0, la tangente est très raide.' },
+      { repere: 'tangente_20', texte: 'À 20 minutes, presque plate.' },
+      { repere: 'conclusion', texte: 'La vitesse diminue au cours du temps.' },
+    ],
+    concentration: [
+      { repere: 'courbe_reactif', texte: 'La concentration du réactif baisse.' },
+      { repere: 'entites', texte: 'Moins d’entités : elles se rencontrent moins souvent.' },
+      { repere: 'conclusion', texte: 'Les réactifs s’épuisent : la vitesse diminue.' },
+    ],
+    fin: [
+      { repere: 'tangente_horizontale', texte: 'À la fin, la tangente est horizontale.' },
+      { repere: 'phrase_nulle', texte: 'Pente nulle : la vitesse est nulle, c’est fini.' },
+      { repere: 'phrase_max', texte: 'La vitesse est maximale au début.' },
+    ],
+    temperature: [
+      { repere: 'courbe_40', texte: 'À 40 °C, la courbe monte plus vite.' },
+      { repere: 'tangente_40', texte: 'Sa tangente à l’origine est trois fois plus raide.' },
+      { repere: 'palier', texte: 'Même palier : même état final.' },
+    ],
+  },
+});
+MOT.lancer();
+window.Tableau.glisser(MOT.scene.craie.canvas, {
+  toucher: (px, py) => {
+    const v = MOT.S.vue; if (!BORNES[v] || !MOT.commence(v === 'pente' ? 'debut_raide' : 'point')) return null;
+    const [x, y] = MOT.scene.local(px, py), t = v === 'pente' ? tri(MOT) : tTan();
+    return Math.abs(x - X(t)) < 22 && Math.abs(y - G.y0) < 22 ? 't' : null;
+  },
+  bouger: (id, px) => { const v = MOT.S.vue, [a, b] = BORNES[v], [x] = MOT.scene.local(px, 0); DRAG = clamp(Math.round((x - G.x0) / G.w * 40 * 2) / 2, a, b); MOT.scene.sale = true; },
+  lacher: () => { if (DRAG != null) { const t = DRAG; MOT.setParameters({ t }); } },
+});
+
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

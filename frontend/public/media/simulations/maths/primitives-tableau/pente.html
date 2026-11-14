@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La courbe de f est la pente de F</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Deux repères à la craie, l’un au-dessus de l’autre : en haut la courbe de F, en bas celle de f = F’ ; au même x, la valeur de f est la pente de F"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Fonctions primitives » (math_ch4_primitives) : lire F sur la courbe de f.
+ * f(x) = x² − 1 ; F(x) = x³/3 − x. En haut F (cyan), en bas f (jaune), même échelle en x.
+ * Vue : ?vue=pente (param x : abscisse du trait vertical). Moments : deux_courbes, curseur, signes, extremums.
+ * Repères : courbe_F, courbe_f, tangente, signes, extremums.
+ */
+const fr = MathsTableau.fr;
+const f = x => x * x - 1;
+const F = x => x * x * x / 3 - x;
+const OPT1 = { x0: 60, y0: 52, w: 400, h: 128, xmin: -2.6, xmax: 2.6, ymin: -2.4, ymax: 2.4, gx: [[-1, ''], [1, '']], gy: [[1, '1'], [-1, '−1']], origine: false };
+const OPT2 = { x0: 60, y0: 214, w: 400, h: 136, xmin: -2.6, xmax: 2.6, ymin: -1.6, ymax: 4.4, gx: [[-2, '−2'], [-1, '−1'], [1, '1'], [2, '2']], gy: [[2, '2'], [4, '4']], origine: false };
+const XR = 492, A = 2.4;
+/* Segment de tangente à F en x, de demi-longueur 46 px, gardé dans le repère du haut. */
+function tangente(c, G, x, couleur = 'blanc') {
+  const px = G.X(x), py = G.Y(F(x)), s = f(x);
+  let dx = G.w / (G.xmax - G.xmin), dy = -s * G.h / (G.ymax - G.ymin);
+  const n = Math.hypot(dx, dy); dx /= n; dy /= n;
+  let L = 46;
+  if (Math.abs(dy) > 1e-6) L = Math.min(L, (py - (G.y0 - 2)) / Math.abs(dy), (G.y0 + G.h + 2 - py) / Math.abs(dy));
+  L = Math.max(10, L);
+  c.ligne(px - dx * L, py - dy * L, px + dx * L, py + dy * L, { couleur, largeur: 2.2 });
+}
+/* Une courbe en morceaux colorés selon le signe de f. */
+function enSignes(K, G, g, larg) {
+  K.courbe(G, g, -A, -1, { couleur: 'vert', largeur: larg, n: 60 });
+  K.courbe(G, g, -1, 1, { couleur: 'orange', largeur: larg, n: 60 });
+  K.courbe(G, g, 1, A, { couleur: 'vert', largeur: larg, n: 60 });
+}
+
+MathsTableau.page({
+  id: 'pr_pente', titre: 'Fonctions primitives',
+  texte: 'Construction à la craie du cours Fonctions primitives : f(x) = x² − 1 et sa primitive F(x) = x³/3 − x ; au même x, f(x) est la pente de la courbe de F ; f > 0 : F monte ; f < 0 : F descend ; f s’annule : extremum de F',
+  vues: {
+    pente: {
+      titre: 'La courbe de f est la pente de F',
+      params: { x: { min: -2.4, max: 2.4, pas: 0.1, defaut: 1.5, sens: 'abscisse du trait vertical commun aux deux repères' } },
+      dessiner(c, K) {
+        K.titre('La courbe de f est la pente de F');
+        const x = K.P.x;
+        const G1 = K.axes(OPT1);
+        K.anime(1.6, p => K.courbePart(G1, F, -A, A, p, { couleur: 'cyan' }));
+        c.texte('F', G1.X(A) + 10, G1.Y(F(A)) + 10, { couleur: 'cyan', taille: 22 });
+        c.repere('courbe_F', G1.x0, G1.y0, G1.w, G1.h, 'la courbe de F');
+        c.pause(.2);
+        const G2 = K.axes(OPT2);
+        K.anime(1.6, p => K.courbePart(G2, f, -A, A, p, { couleur: 'jaune' }));
+        c.texte('f = F’', G2.X(2.1) + 12, G2.Y(f(2.1)) + 8, { couleur: 'jaune', taille: 20 });
+        c.repere('courbe_f', G2.x0, G2.y0, G2.w, G2.h, 'la courbe de f = F’');
+        K.marque('deux_courbes');
+        // Le curseur : un trait vertical commun glisse de −2 jusqu'à x ; la tangente à F suit.
+        c.pause(.4);
+        K.anime(2.4, p => {
+          const xx = -2 + (x + 2) * p;
+          c.ligne(G1.X(xx), G1.y0 - 4, G1.X(xx), G2.y0 + G2.h, { couleur: 'faible', largeur: 1.4, pointille: [6, 5] });
+          tangente(c, G1, xx);
+          c.point(G1.X(xx), G1.Y(F(xx)), 4.5, 'cyan');
+          const y2 = Math.max(-1.6, Math.min(4.4, f(xx)));
+          c.ligne(G2.X(xx), G2.Y(0), G2.X(xx), G2.Y(y2), { couleur: 'jaune', largeur: 3 });
+          c.point(G2.X(xx), G2.Y(y2), 4.5, 'jaune');
+        });
+        c.texte('en x = ' + fr(x, 1) + ' :', XR, 76, { couleur: 'blanc', taille: 19 });
+        c.texte('pente de F = f(x) = ' + fr(f(x), 2), XR, 104, { couleur: 'jaune', taille: 19, max: 760 - XR - 8 });
+        c.repere('tangente', G1.X(x) - 46, G1.y0, 92, G1.h, 'la tangente à F');
+        K.marque('curseur');
+        // Les signes : f > 0 en vert, f < 0 en orange ; F repassée des mêmes couleurs.
+        c.pause(.4);
+        enSignes(K, G2, f, 3.4);
+        c.pause(.2);
+        enSignes(K, G1, F, 3.4);
+        c.texte('f > 0 : F monte', XR, 150, { couleur: 'vert', taille: 20 });
+        c.texte('f < 0 : F descend', XR, 178, { couleur: 'orange', taille: 20 });
+        c.repere('signes', XR - 6, 128, 220, 60, 'f > 0 : F monte ; f < 0 : F descend');
+        K.marque('signes');
+        // Les extremums : f s'annule en −1 et 1, F a un max et un min, tangentes horizontales.
+        c.pause(.4);
+        for (const a of [-1, 1]) {
+          c.ligne(G1.X(a), G1.Y(F(a)), G1.X(a), G2.Y(0), { couleur: 'tresfaible', largeur: 1.2, pointille: [3, 5] });
+          K.rond(G2, a, 0, true, 'blanc');
+        }
+        c.pause(.2);
+        c.ligne(G1.X(-1.45), G1.Y(F(-1)), G1.X(-0.55), G1.Y(F(-1)), { couleur: 'blanc', largeur: 2.2 });
+        K.rond(G1, -1, F(-1), true, 'cyan');
+        c.texte('max', G1.X(-1), G1.Y(F(-1)) - 10, { couleur: 'cyan', taille: 17, align: 'center' });
+        c.ligne(G1.X(0.55), G1.Y(F(1)), G1.X(1.45), G1.Y(F(1)), { couleur: 'blanc', largeur: 2.2 });
+        K.rond(G1, 1, F(1), true, 'cyan');
+        c.texte('min', G1.X(1), G1.Y(F(1)) + 24, { couleur: 'cyan', taille: 17, align: 'center' });
+        c.pause(.2);
+        K.lignes(XR, 232, [
+          { t: 'f(−1) = 0 et f(1) = 0', couleur: 'blanc', taille: 19 },
+          { t: 'tangentes horizontales :', couleur: 'blanc', taille: 19 },
+          { t: 'F max en −1, min en 1', couleur: 'cyan', taille: 19 },
+        ], 30);
+        c.repere('extremums', G1.X(-1.5), G1.y0, G1.X(1.5) - G1.X(-1.5), G2.Y(0) - G1.y0 + 12, 'les extremums de F');
+        K.marque('extremums');
+      },
+      poignees(K) { const G = K.grille(OPT2); return [{ id: 'x', x: G.X(K.P.x), y: G.Y(0), bouger: (px) => ({ x: G.inv(px, 0)[0] }) }]; },
+      lecture: K => {
+        const x = K.P.x, v = f(x);
+        return `En x = ${fr(x, 1)} : f(x) = ${fr(v, 2)}, c’est la pente de F ; ` + (Math.abs(v) < 1e-9 ? 'pente nulle, tangente horizontale : F a un extremum.' : v > 0 ? 'positive, F monte.' : 'négative, F descend.');
+      },
+      decrire: K => ({
+        deux_courbes: 'Deux repères l’un au-dessus de l’autre, même échelle en x : en haut la courbe de F(x) = x³/3 − x (cyan, « F »), en bas celle de f(x) = x² − 1 (jaune, « f = F’ »).',
+        curseur: `Un trait vertical pointillé traverse les deux repères et glisse de x = −2 jusqu’à x = ${fr(K.P.x, 1)} ; la tangente à F s’y dessine ; en bas, la valeur de f est un trait jaune ; à droite : pente de F = f(x) = ${fr(f(K.P.x), 2)}.`,
+        signes: 'Les morceaux de f au-dessus de l’axe sont repassés en vert, ceux en dessous en orange ; la courbe de F est repassée des mêmes couleurs ; à droite : « f > 0 : F monte », « f < 0 : F descend ».',
+        extremums: 'En x = −1 et x = 1, f s’annule (points blancs) ; en haut, sommet de F en −1 « max », creux en 1 « min », avec des tangentes horizontales.',
+      }),
+      motifs: { deux_courbes: 'F et f', curseur: 'la pente de F au point', signes: 'signe de f, sens de F', extremums: 'les extremums de F' },
+      explication: [
+        { repere: 'courbe_F', texte: 'En haut, la primitive F.' },
+        { repere: 'courbe_f', texte: 'En bas, f = F’ : chaque valeur de f est une pente de F.' },
+        { repere: 'tangente', texte: 'La pente de la tangente à F vaut f(x), au même x.' },
+        { repere: 'signes', texte: 'f positive : F monte ; f négative : F descend.' },
+        { repere: 'extremums', texte: 'f s’annule en changeant de signe : F a un maximum puis un minimum.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

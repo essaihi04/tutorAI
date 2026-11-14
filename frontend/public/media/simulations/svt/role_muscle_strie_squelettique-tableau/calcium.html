@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le Ca²⁺ ouvre l’accès — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="muscle.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Filament fin très agrandi (perles d’actine, tropomyosine, troponine) en face des têtes de myosine ; au-dessus, le réticulum sarcoplasmique rempli d’ions calcium : excité, il libère le Ca²⁺ qui se fixe sur la troponine, la tropomyosine se déplace et les sites de fixation de l’actine sont libérés"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="molecules.js"></script>
+<script>
+/*
+ * Le Ca²⁺ ouvre l’accès (cours « Rôle du muscle strié squelettique », 10 novembre 2026).
+ * Vues (?vue=) :
+ *  - acces (défaut) : au repos la tropomyosine cache les sites de fixation de l’actine ; l’excitation arrive sur le
+ *    réticulum sarcoplasmique, qui libère les ions Ca²⁺ ; ils se fixent sur la troponine, la tropomyosine se déplace,
+ *    les sites sont libérés ; à la fin de l’excitation, les Ca²⁺ rentrent dans le réticulum et les sites sont recachés.
+ *    La tête de myosine NE s’accroche PAS ici (c’est cycle.html). Le Ca²⁺ autorise ; il ne fournit pas l’énergie.
+ *  - molecules : schéma fixe légendé (filament fin = actine + troponine + tropomyosine ; filament épais = myosine ;
+ *    tête de myosine et ses deux sites).
+ * Le temps est celui de la scène (en secondes), énormément ralenti par rapport à la cellule (quelques millisecondes).
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const P = window.MoleculesPeintes;
+const $ = id => document.getElementById(id);
+const VUES = ['acces', 'molecules'];
+const demande = new URLSearchParams(location.search).get('vue');
+const vue = VUES.includes(demande) ? demande : 'acces';
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const rampe = (t, a, b) => clamp((t - a) / (b - a));
+const doux = f => f * f * (3 - 2 * f);
+
+/* ── Instants de la vue « acces » (s de la scène) ─────────────────────────── */
+const TA = { exc0: 1.0, exc1: 1.6, lib0: 1.9, lib1: 3.74, ouv0: 3.85, ouv1: 4.6, finExc: 5.8, rep0: 6.1, rep1: 7.42, ferm0: 6.6, ferm1: 7.8, fin: 8.3 };
+const MOMENTS_ACCES = { repos_sites_caches: 0.5, excitation: 1.65, ca_libere: 2.7, ca_sur_troponine: 3.78, sites_liberes: 4.7, fin_excitation: 5.85, ca_repris: 7.5, sites_recaches: 7.9 };
+const TM = { fin_paint: [0.2, 1.2], epais_paint: [4.2, 4.9], tete_paint: [7.6, 8.4], sites_paint: [10.8, 11.4], fin: 14 };
+const MOMENTS_MOL = { filament_fin: 1.3, filament_epais: 5.0, tete: 8.5, deux_sites: 11.5 };
+const FIN = vue === 'acces' ? TA.fin : TM.fin;
+const MOTIFS = {
+  repos_sites_caches: 'au repos, la tropomyosine cache les sites de fixation de l’actine',
+  excitation: 'l’excitation arrive sur le réticulum sarcoplasmique',
+  ca_libere: 'le réticulum libère les ions Ca²⁺',
+  ca_sur_troponine: 'les Ca²⁺ se fixent sur la troponine',
+  sites_liberes: 'la tropomyosine s’est déplacée : les sites de fixation de l’actine sont libérés',
+  fin_excitation: 'fin de l’excitation',
+  ca_repris: 'les Ca²⁺ quittent la troponine et rentrent dans le réticulum',
+  sites_recaches: 'la tropomyosine est revenue : les sites sont de nouveau cachés',
+  filament_fin: 'filament fin = actine + troponine + tropomyosine',
+  filament_epais: 'filament épais = molécules de myosine',
+  tete: 'la tête de myosine, agrandie',
+  deux_sites: 'les deux sites de la tête : site de fixation de l’ATP et site de fixation de l’actine',
+};
+const S = { t: 0, running: false, jusqua: null, nom: null, fait: false, emis: 0, excitation: true, legendes: true };
+
+/* Écriture « au moment dit » : un élément apparu à un instant s’écrit à la craie depuis cet instant (horloge de la page). */
+const vus = {};
+function quand(c, cle, visible, fn) {
+  if (!visible) { delete vus[cle]; return; }
+  if (!(cle in vus)) vus[cle] = Math.max(0, (performance.now() - scene.ouvert) / 1000);
+  // Chaque élément s’écrit depuis SON instant d’apparition (après les parties fixes), sans attendre les autres.
+  c.cur = Math.max(c._fixe ?? 0, vus[cle]); fn();
+}
+
+/* ── Vue « acces » : géométrie ───────────────────────────────────────────── */
+const RS = { x: 130, y: 38, w: 470, h: 78 };
+const FINE = { X0: 90, x0: 90, x1: 600, y: 205 };
+const Y_EPAIS = 343, TETES = [240, 390, 530];
+const ANG_ATTENTE = -110 * Math.PI / 180;
+const STOCK = Array.from({ length: 18 }, (_, i) => ({ x: 252 + (i % 6) * 62 + ((i * 37) % 22), y: 55 + Math.floor(i / 6) * 19 + ((i * 13) % 8) }));
+const NTN = P.geoFin({ ...FINE }).troponines.length;
+const ouverture = t => (S.excitation ? doux(rampe(t, TA.ouv0, TA.ouv1)) * (1 - doux(rampe(t, TA.ferm0, TA.ferm1))) : 0);
+const caFixe = t => S.excitation && t >= TA.lib1 && t < TA.rep0;
+function libres(t, g) {
+  // Les 8 Ca²⁺ libérés (deux par troponine) : départ au fond du réticulum, arrivée sur la troponine, puis retour.
+  const places = g.troponines.flatMap(P.placesCa), out = [];
+  places.forEach((cible, i) => {
+    const dep = { x: 250 + i * 44, y: 98 - (i % 2) * 10 };
+    let f = 0;
+    if (S.excitation) {
+      if (t < TA.rep0) f = doux(rampe(t, TA.lib0 + 0.12 * i, TA.lib0 + 0.12 * i + 1.0));
+      else f = 1 - doux(rampe(t, TA.rep0 + 0.06 * i, TA.rep0 + 0.06 * i + 0.9));
+    }
+    const ctrl = { x: dep.x, y: 158 }, u = 1 - f;
+    out.push({ x: u * u * dep.x + 2 * u * f * ctrl.x + f * f * cible.x, y: u * u * dep.y + 2 * u * f * ctrl.y + f * f * cible.y, f });
+  });
+  return out;
+}
+
+function peindreAcces(ctx, t) {
+  const exc = S.excitation ? rampe(t, TA.exc1 - 0.1, TA.exc1) * (1 - rampe(t, TA.finExc, TA.finExc + 0.3)) : 0;
+  P.reticulum(ctx, RS.x, RS.y, RS.w, RS.h, { excite: exc });
+  for (const [i, s] of STOCK.entries()) P.ca(ctx, s.x, s.y + 1.4 * Math.sin(2.1 * t + i), 4);
+  P.filamentEpais(ctx, 80, 610, Y_EPAIS);
+  for (const bx of TETES) P.tete(ctx, { x: bx, y: Y_EPAIS - 6 }, { x: bx - 18, y: 252 }, ANG_ATTENTE, { L: 56, ry: 14, cou: 8 });
+  const g = P.filamentFin(ctx, { ...FINE, dx: 0, ouverture: ouverture(t), caFixe: 0 });
+  const L = libres(t, g);
+  for (const b of L) P.ca(ctx, b.x, b.y, 4);
+  return { g, L };
+}
+
+function dessinerAcces(c) {
+  const t = S.t, M = MOMENTS_ACCES; let geo;
+  c.direct(() => { geo = peindreAcces(c.ctx, t); });
+  const { g, L } = geo;
+  // Parties fixes, écrites à l’ouverture.
+  c.texte('Le Ca²⁺ et les sites de fixation de l’actine (molécules très agrandies)', 12, 24, { couleur: 'cyan', taille: 16 }); c._fixe = c.cur;   // les éléments « au moment dit » n’attendent pas la fin des légendes fixes
+  c.texte('réticulum', 612, 66, { couleur: 'blanc', taille: 15 }).texte('sarcoplasmique', 612, 86, { couleur: 'blanc', taille: 15 });
+  c.texte('Ca²⁺ stockés', 146, 66, { couleur: 'jaune', taille: 14 });
+  c.texte('troponine', 612, 182, { couleur: 'violet', taille: 15 }); c.ligne(608, 178, 566, 205, { couleur: 'faible', largeur: 1.2 });
+  c.texte('actine', 612, 208, { couleur: 'orange', taille: 15 });
+  c.texte('tropomyosine', 612, 234, { couleur: 'blanc', taille: 15 }); c.ligne(608, 229, 592, 212, { couleur: 'faible', largeur: 1.2 });
+  c.texte('sites de fixation', 8, 250, { couleur: 'cyan', taille: 15 }); c.fleche(56, 236, 115, 216, { couleur: 'faible', largeur: 1.2, tete: 7 });
+  c.texte('têtes de myosine', 612, 290, { couleur: 'bleu', taille: 15 }); c.ligne(608, 285, 546, 280, { couleur: 'faible', largeur: 1.2 });
+  c.texte('filament épais', 612, 340, { couleur: 'bleu', taille: 15 }).texte('(myosine)', 612, 358, { couleur: 'bleu', taille: 15 });
+  // Ce qui bouge : le trait d’excitation, l’interrupteur.
+  c.direct(() => {
+    if (S.excitation && t >= TA.exc0 && t < TA.finExc + 0.3) {
+      const f = rampe(t, TA.exc0, TA.exc1), a = 1 - rampe(t, TA.finExc, TA.finExc + 0.3);
+      if (a > 0.05) c.fleche(12, 82, 12 + 114 * f, 82, { couleur: 'jaune', largeur: 3, alpha: .92 * a, tete: 10 });
+    }
+    interrupteur(c);
+    c.repere('reticulum', RS.x, RS.y, RS.w, RS.h, 'le réticulum sarcoplasmique');
+    const xs = L.filter(b => b.f > 0.02).map(b => b.x), ys = L.filter(b => b.f > 0.02).map(b => b.y);
+    if (xs.length) c.repere('ca', Math.min(...xs) - 8, Math.min(...ys) - 8, Math.max(...xs) - Math.min(...xs) + 16, Math.max(...ys) - Math.min(...ys) + 16, 'les ions Ca²⁺ libérés');
+    else c.repere('ca', 240, 44, 350, 66, 'les ions Ca²⁺ stockés dans le réticulum');
+    const tn = g.troponines; c.repere('troponine', tn[0].x - 12, tn[0].y - 14, tn[tn.length - 1].x - tn[0].x + 24, 26, 'la troponine');
+    c.repere('tropomyosine', FINE.x0, g.yTropo - 6, FINE.x1 - FINE.x0, 12, 'la tropomyosine');
+    c.repere('site_actine', g.sites[1].x - 9, g.sites[1].y - 7, 18, 16, 'un site de fixation de l’actine');
+    c.repere('actine', FINE.x0, FINE.y - 13, FINE.x1 - FINE.x0, 26, 'le filament d’actine');
+    c.repere('tete_myosine', TETES[1] - 36, 246, 56, 64, 'une tête de myosine');
+    if (S.excitation && t >= TA.exc0) c.repere('excitation', 8, 60, 120, 30, 'l’excitation');
+  });
+  // Écrit au moment dit.
+  const ouv = ouverture(t);
+  quand(c, 'mot_exc', S.excitation && t >= TA.exc0 && t < TA.finExc, () => c.texte('excitation', 14, 70, { couleur: 'jaune', taille: 15 }));
+  quand(c, 'mot_fin_exc', S.excitation && t >= TA.finExc, () => c.texte('fin de l’excitation', 12, 70, { couleur: 'faible', taille: 14 }));
+  quand(c, 'ca_lib', S.excitation && t >= TA.lib0 && t < TA.rep0, () => c.texte('Ca²⁺ libérés', 8, 140, { couleur: 'jaune', taille: 15 }));
+  quand(c, 'ca_tn', S.excitation && t >= M.ca_sur_troponine && t < TA.rep0, () => { c.texte('Ca²⁺ fixés sur', 8, 166, { couleur: 'jaune', taille: 15 }); c.texte('la troponine', 8, 184, { couleur: 'jaune', taille: 15 }); });
+  quand(c, 'ca_rep', S.excitation && t >= TA.rep0, () => { c.texte('Ca²⁺ repris par', 8, 140, { couleur: 'jaune', taille: 15 }); c.texte('le réticulum', 8, 158, { couleur: 'jaune', taille: 15 }); });
+  quand(c, 'sites_caches', ouv < 0.5, () => c.texte('cachés', 8, 268, { couleur: 'faible', taille: 15 }));
+  quand(c, 'sites_libres', ouv >= 0.5, () => c.texte('libérés', 8, 268, { couleur: 'vert', taille: 15 }));
+  quand(c, 'tropo_part', S.excitation && t >= TA.ouv0 && t < TA.ferm0, () => c.texte('la tropomyosine se déplace : les sites sont libérés', 345, 376, { couleur: 'vert', taille: 15, align: 'center' }));
+  quand(c, 'tropo_revient', S.excitation && t >= TA.ferm0, () => c.texte('la tropomyosine revient sur les sites', 345, 376, { couleur: 'faible', taille: 15, align: 'center' }));
+  quand(c, 'autorise', S.excitation && t >= M.sites_liberes, () => c.texte('le Ca²⁺ autorise ; il ne fournit pas l’énergie', 345, 404, { couleur: 'vert', taille: 18, align: 'center' }));
+  quand(c, 'sans_exc', !S.excitation, () => c.texte('sans excitation : pas de Ca²⁺ libéré, les sites restent cachés', 345, 404, { couleur: 'faible', taille: 16, align: 'center' }));
+}
+/* L’interrupteur « excitation : oui / non », sous le trait d’excitation (poignée). */
+const INTER = { x: 14, y: 96, w: 38, h: 18 };
+function interrupteur(c) {
+  const ctx = c.ctx, on = S.excitation;
+  ctx.save(); ctx.globalAlpha = .9; ctx.fillStyle = on ? 'rgba(250,204,21,.25)' : 'rgba(226,232,240,.08)';
+  ctx.beginPath(); ctx.roundRect(INTER.x, INTER.y, INTER.w, INTER.h, 9); ctx.fill(); ctx.restore();
+  c.rect(INTER.x, INTER.y, INTER.w, INTER.h, { couleur: on ? 'jaune' : 'faible', arrondi: 9, largeur: 1.6 });
+  c.cercle(on ? INTER.x + INTER.w - 9 : INTER.x + 9, INTER.y + 9, 6, { couleur: on ? 'jaune' : 'faible', fond: on ? 'jaune' : 'faible', fondAlpha: .7, largeur: 1.4 });
+  c.texte(on ? 'oui' : 'non', INTER.x + INTER.w + 7, INTER.y + 14, { couleur: on ? 'jaune' : 'faible', taille: 14 });
+  c.repere('interrupteur_excitation', INTER.x - 4, INTER.y - 4, INTER.w + 40, INTER.h + 8, `l’interrupteur de l’excitation : ${on ? 'oui' : 'non'}`);
+}
+
+/* ── Vue « molecules » : schéma fixe légendé ──────────────────────────────── */
+const MF = { X0: 40, x0: 40, x1: 470, y: 88 };
+const YE = 238, LOUPE = { x: 630, y: 215, r: 100 };
+const BIG = (() => { const a = -60 * Math.PI / 180, Pt = { x: 668, y: 150 }; return { a, Pt, B: { x: 600, y: 300 } }; })();
+function teteGrande(ctx, alpha) {
+  ctx.save(); ctx.beginPath(); ctx.arc(LOUPE.x, LOUPE.y, LOUPE.r, 0, Math.PI * 2); ctx.clip();
+  ctx.globalAlpha = alpha;
+  const g = ctx.createRadialGradient(LOUPE.x, LOUPE.y, 10, LOUPE.x, LOUPE.y, LOUPE.r);
+  g.addColorStop(0, 'rgba(226,240,255,.10)'); g.addColorStop(1, 'rgba(226,240,255,.03)');
+  ctx.fillStyle = g; ctx.fillRect(LOUPE.x - LOUPE.r, LOUPE.y - LOUPE.r, 2 * LOUPE.r, 2 * LOUPE.r);
+  P.filamentEpais(ctx, 520, 740, 312, { h: 26 });
+  const T = P.tete(ctx, BIG.B, BIG.Pt, BIG.a, { L: 110, ry: 26, cou: 16 });
+  ctx.restore();
+  return T;
+}
+function peindreMolecules(ctx, t) {
+  const aA = rampe(t, 0.2, 0.7), aT = rampe(t, 0.5, 0.9), aN = rampe(t, 0.8, 1.2);
+  const g = P.geoFin({ ...MF, dx: 0, ouverture: 0 });
+  if (aA > 0) P.actine(ctx, { ...MF, dx: 0, alpha: aA }, g);
+  if (aT > 0) P.tropomyosine(ctx, { ...MF, dx: 0, alpha: aT }, g);
+  if (aN > 0) P.troponine(ctx, { ...MF, dx: 0, alpha: aN }, g);
+  const aE = rampe(t, ...TM.epais_paint);
+  if (aE > 0) {
+    P.filamentEpais(ctx, 60, 450, YE, { alpha: aE });
+    for (let i = 0; i < 6; i++) {
+      const gauche = i < 3, bx = gauche ? 90 + i * 50 : 300 + (i - 3) * 50, s = gauche ? -1 : 1;
+      for (const haut of [true, false]) {
+        const vy = haut ? -1 : 1, ang = Math.atan2(vy * 0.94, s * 0.34), tip = { x: bx + s * 26, y: YE + vy * 34 };
+        P.tete(ctx, { x: bx, y: YE + vy * 6 }, tip, ang, { L: 22, ry: 6.5, cou: 4, alpha: aE });
+      }
+    }
+  }
+  const aZ = rampe(t, ...TM.tete_paint); let T = null;
+  if (aZ > 0) T = teteGrande(ctx, aZ);
+  const aS = rampe(t, ...TM.sites_paint);
+  if (T && aS > 0) { P.sitesTete(ctx, T, { alpha: aS, r: 7 }); P.pastille(ctx, T.siteAtp.x + 20, T.siteAtp.y + 14, 'ATP', { alpha: aS * 0.95, r: 12 }); }
+  return { g, T };
+}
+const TETE_CHOISIE = { x: 350 + 26, y: YE - 34 + 8 };   // la tête montrée à la loupe (moitié droite, en haut)
+function dessinerMolecules(c) {
+  const t = S.t, M = MOMENTS_MOL; let geo;
+  c.direct(() => { geo = peindreMolecules(c.ctx, t); });
+  c.texte('Les molécules des filaments (très agrandies)', 12, 24, { couleur: 'cyan', taille: 16 }); c._fixe = c.cur;   // les éléments « au moment dit » n’attendent pas la fin des légendes fixes
+  const { g } = geo, tn = g.troponines;
+  c.direct(() => {
+    if (t >= TM.fin_paint[0]) {
+      c.repere('actine', MF.x0, MF.y - 13, MF.x1 - MF.x0, 22, 'l’actine (perles)');
+      c.repere('tropomyosine', MF.x0, g.yTropo - 5, MF.x1 - MF.x0, 10, 'la tropomyosine');
+      c.repere('troponine', tn[0].x - 10, tn[0].y - 8, tn[tn.length - 1].x - tn[0].x + 20, 18, 'la troponine');
+    }
+    if (t >= TM.epais_paint[0]) c.repere('myosine', 60, YE - 42, 390, 84, 'le filament épais : des molécules de myosine');
+    if (t >= TM.tete_paint[0]) c.repere('tete_myosine', LOUPE.x - LOUPE.r, LOUPE.y - LOUPE.r, 2 * LOUPE.r, 2 * LOUPE.r, 'la tête de myosine, agrandie');
+    if (t >= TM.sites_paint[0]) {
+      c.repere('site_atp', 650, 200, 52, 40, 'le site de fixation de l’ATP');
+      c.repere('site_actine', BIG.Pt.x - 12, BIG.Pt.y - 12, 24, 24, 'le site de fixation de l’actine');
+    }
+  });
+  const L = S.legendes;
+  quand(c, 'mf', L && t >= M.filament_fin, () => {
+    c.texte('actine', 44, 64, { couleur: 'orange', taille: 15 });
+    c.ligne(tn[1].x, tn[1].y + 8, tn[1].x, 112, { couleur: 'faible', largeur: 1.2 }); c.texte('troponine', tn[1].x, 128, { couleur: 'violet', taille: 15, align: 'center' });
+    c.ligne(440, 97, 440, 112, { couleur: 'faible', largeur: 1.2 }); c.texte('tropomyosine', 440, 128, { couleur: 'blanc', taille: 15, align: 'center' });
+    c.texte('filament fin = actine + troponine + tropomyosine', 40, 160, { couleur: 'vert', taille: 17 });
+  });
+  quand(c, 'me', L && t >= M.filament_epais, () => {
+    c.texte('myosine', 455, YE + 5, { couleur: 'bleu', taille: 15 });
+    c.texte('filament épais = molécules de myosine', 40, 304, { couleur: 'vert', taille: 17 });
+  });
+  quand(c, 'mt', L && t >= M.tete, () => {
+    c.cercle(TETE_CHOISIE.x - 6, TETE_CHOISIE.y - 4, 18, { couleur: 'jaune', largeur: 1.6 });
+    c.ligne(TETE_CHOISIE.x + 12, TETE_CHOISIE.y - 6, LOUPE.x - LOUPE.r, LOUPE.y - 10, { couleur: 'jaune', largeur: 1.2, pointille: [5, 5] });
+    c.cercle(LOUPE.x, LOUPE.y, LOUPE.r, { couleur: 'jaune', largeur: 1.6 });
+    c.texte('tête de myosine (agrandie)', LOUPE.x, 104, { couleur: 'bleu', taille: 16, align: 'center' });
+  });
+  quand(c, 'ms', L && t >= M.deux_sites, () => {
+    c.ligne(640, 330, 658, 222, { couleur: 'vert', largeur: 1.3 });
+    c.texte('site de fixation de l’ATP', 630, 344, { couleur: 'vert', taille: 15, align: 'center' });
+    c.ligne(722, 360, 676, 158, { couleur: 'cyan', largeur: 1.3 });
+    c.texte('site de fixation de l’actine', 630, 370, { couleur: 'cyan', taille: 15, align: 'center' });
+  });
+}
+
+/* ── Boucle, moments, commandes ──────────────────────────────────────────── */
+const canvas = $('canvas');
+const scene = window.MuscleTableau.Scene(canvas, (c) => { scene.cadre(41); (vue === 'acces' ? dessinerAcces : dessinerMolecules)(c); return c.fin(); });
+const LENT_TEXTE = vue === 'acces' ? ' (ralenti : dans la fibre, tout dure quelques millisecondes)' : '';
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(FIN, S.t + dt);
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.nom ? MOTIFS[S.nom] : S.t >= FIN - 1e-6 ? 'fin de la scène' : `t = ${fr(S.t, 1)} s`) + '.');
+    pont.noter('pause', { time_s: +S.t.toFixed(2), moment: S.nom }); pont.emettre();
+    return true;
+  }
+  if (S.t >= FIN) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), message(), 'good'); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function moments() { const m = { ...(vue === 'acces' ? MOMENTS_ACCES : MOMENTS_MOL), fin: FIN }; return m; }
+function message() {
+  if (vue === 'molecules') return 'Filament fin = actine + troponine + tropomyosine ; filament épais = myosine ; la tête porte un site pour l’ATP et un site pour l’actine.';
+  return S.excitation ? 'Le Ca²⁺ libéré se fixe sur la troponine : la tropomyosine se déplace et libère les sites de l’actine. Le Ca²⁺ autorise ; il ne fournit pas l’énergie.' : 'Sans excitation, le réticulum garde le Ca²⁺ : les sites de l’actine restent cachés.';
+}
+function playUntil(p) {
+  const M = moments(), nom = p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (nom && vue === 'acces' && nom !== 'repos_sites_caches' && nom !== 'fin' && !S.excitation) S.excitation = true;   // ces instants n’existent qu’avec l’excitation
+  if (S.fait || S.t >= cible - 1e-4) S.t = 0;
+  S.jusqua = Math.min(FIN, Math.max(0.001, cible)); S.nom = nom && nom !== 'fin' ? nom : null;
+  S.running = true; S.fait = false; $('run').textContent = 'Pause'; scene.sale = true;
+  bulle($('feedback'), 'Observe…' + LENT_TEXTE);
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+function ceQuiSeVoit() {
+  const t = S.t, m = [`Vue « ${vue} ». Temps de la scène ${fr(t, 1)} s${S.running ? ' (la scène défile)' : S.fait ? ' (fin de la scène)' : t > 0 ? ' (arrêt sur image)' : ' (pas encore lancée)'}.`];
+  if (vue === 'acces') {
+    const ouv = ouverture(t);
+    m.push(`Dessin peint, très agrandi : en haut le réticulum sarcoplasmique (sac translucide) rempli de billes jaunes de Ca²⁺ ; au milieu le filament fin (perles d’actine rouge-orangé, fil de tropomyosine, ${NTN} blocs violets de troponine) ; en bas le filament épais bleu et trois têtes de myosine qui restent détachées.`);
+    if (!S.excitation) m.push('Interrupteur « excitation » sur non : aucun trait d’excitation, aucun Ca²⁺ ne sort, la tropomyosine reste sur les sites (écrit : « sites de fixation cachés »).');
+    else {
+      if (t < TA.exc0) m.push('Repos : la tropomyosine recouvre les sites de fixation de l’actine (écrit « sites de fixation cachés ») ; les Ca²⁺ sont stockés dans le réticulum.');
+      else if (t < TA.lib0) m.push('Le trait jaune « excitation » arrive sur le réticulum, dont la membrane s’éclaire ; les sites sont encore cachés.');
+      else if (t < TA.lib1) m.push(`Le réticulum libère ${2 * NTN} ions Ca²⁺ (écrit « Ca²⁺ libérés ») : ils descendent vers la troponine ; les sites sont encore cachés.`);
+      else if (t < TA.ouv0) m.push(`Les ${2 * NTN} Ca²⁺ sont fixés sur la troponine, deux par bloc (écrit « Ca²⁺ fixés sur la troponine »).`);
+      else if (t < TA.finExc) m.push(`Ca²⁺ fixés sur la troponine ; la tropomyosine ${ouv < 1 ? 'se déplace' : 's’est déplacée'} : ${ouv >= 0.5 ? 'les sites de fixation de l’actine sont libérés (pastilles cyan visibles, écrit « libérés »)' : 'les sites commencent à apparaître'}. Les têtes de myosine ne s’accrochent pas dans cette scène.`);
+      else if (t < TA.rep0) m.push('Fin de l’excitation (écrit) : le trait d’excitation s’efface ; les Ca²⁺ sont encore sur la troponine, les sites encore libérés.');
+      else if (t < TA.rep1) m.push(`Les Ca²⁺ quittent la troponine et rentrent dans le réticulum (écrit « Ca²⁺ repris par le réticulum ») ; la tropomyosine revient sur les sites (${ouv >= 0.5 ? 'encore en partie libérés' : 'presque recachés'}).`);
+      else m.push(`Tous les Ca²⁺ sont rentrés dans le réticulum ; ${ouv > 0.02 ? 'la tropomyosine finit de revenir' : 'la tropomyosine recouvre de nouveau les sites (écrit « cachés »)'}.`);
+      if (t >= MOMENTS_ACCES.sites_liberes) m.push('Écrit en vert : « le Ca²⁺ autorise ; il ne fournit pas l’énergie ».');
+    }
+  } else {
+    const M = MOMENTS_MOL;
+    m.push(t < TM.fin_paint[0] ? 'Rien n’est encore peint.' : `En haut, le filament fin peint : deux chaînes de perles d’actine torsadées, le fil de tropomyosine, ${P.geoFin({ ...MF }).troponines.length} blocs violets de troponine.`);
+    if (S.legendes && t >= M.filament_fin) m.push('Légendes : actine, troponine, tropomyosine ; écrit « filament fin = actine + troponine + tropomyosine ».');
+    if (t >= TM.epais_paint[0]) m.push('Au milieu, le filament épais bleu hérissé de têtes de myosine (orientées vers la gauche à gauche, vers la droite à droite).');
+    if (S.legendes && t >= M.filament_epais) m.push('Écrit « filament épais = molécules de myosine ».');
+    if (t >= TM.tete_paint[0]) m.push('À droite, dans une loupe, une tête de myosine agrandie (renflée, au bout de son cou).');
+    if (t >= TM.sites_paint[0]) m.push('Sur la tête : une poche verte où se fixe une pastille ATP, et la pointe cyan qui se fixe sur l’actine.');
+    if (S.legendes && t >= M.deux_sites) m.push('Légendes : « site de fixation de l’ATP » et « site de fixation de l’actine ».');
+  }
+  return m.join(' ');
+}
+
+function start() { S.jusqua = null; S.nom = null; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; scene.sale = true; bulle($('feedback'), (vue === 'acces' ? (S.excitation ? 'Au repos… puis l’excitation arrive.' : 'Sans excitation…') : 'Le schéma se construit…') + LENT_TEXTE); pont.noter('start', parametres()); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait || S.t >= FIN) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  const t = +p.time_s; if (!Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = clamp(t, 0, FIN); S.fait = S.t >= FIN;
+  $('run').textContent = S.fait ? 'Rejouer' : 'Reprendre'; scene.sale = true;
+  bulle($('feedback'), `Arrêt sur image : t = ${fr(S.t, 1)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+const bool = v => (typeof v === 'string' ? !/^(false|0|non|no|off|absent)$/i.test(v.trim()) : !!v);
+const parametres = () => (vue === 'acces' ? { excitation: S.excitation } : { legendes: S.legendes });
+function setParameters(p) {
+  if (vue === 'acces' && 'excitation' in p) S.excitation = bool(p.excitation);
+  if (vue === 'molecules' && 'legendes' in p) S.legendes = bool(p.legendes);
+  scene.sale = true;
+  bulle($('feedback'), vue === 'acces' ? `Excitation : ${S.excitation ? 'oui' : 'non'}.` : `Légendes : ${S.legendes ? 'oui' : 'non'}.`);
+  pont.noter('set_parameters', parametres()); pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : (S.t > 0 && S.t < FIN && !S.fait ? resume() : start()));
+
+/* Poignée : l’interrupteur de l’excitation (vue acces) ; un clic le bascule et relance la scène. */
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => { if (vue !== 'acces') return null; const [x, y] = scene.local(px, py); return x > INTER.x - 6 && x < INTER.x + INTER.w + 36 && y > INTER.y - 8 && y < INTER.y + INTER.h + 8 ? 'excitation' : null; },
+  bouger: () => {},
+  lacher: () => { S.excitation = !S.excitation; scene.sale = true; pont.noter('set_parameters', parametres()); start(); },
+});
+
+const EXPLICATIONS = {
+  acces: [
+    { repere: 'tropomyosine', texte: 'Au repos, la tropomyosine recouvre les sites de fixation de l’actine.' },
+    { repere: 'reticulum', texte: 'L’excitation arrive sur le réticulum sarcoplasmique, qui libère les ions Ca²⁺.' },
+    { repere: 'troponine', texte: 'Les ions Ca²⁺ se fixent sur la troponine.' },
+    { repere: 'site_actine', texte: 'La tropomyosine se déplace : les sites de fixation de l’actine sont libérés.' },
+    { repere: 'tete_myosine', texte: 'Les têtes de myosine peuvent maintenant s’y fixer ; le Ca²⁺ autorise, il ne fournit pas l’énergie.' },
+    { repere: 'ca', texte: 'À la fin de l’excitation, les Ca²⁺ rentrent dans le réticulum et les sites sont de nouveau cachés.' },
+  ],
+  molecules: [
+    { repere: 'actine', texte: 'Le filament fin : l’actine, en perles.' },
+    { repere: 'tropomyosine', texte: 'Le long de l’actine, le fil de tropomyosine, et sur lui la troponine.' },
+    { repere: 'myosine', texte: 'Le filament épais est fait de molécules de myosine.' },
+    { repere: 'tete_myosine', texte: 'Chaque molécule de myosine porte une tête renflée.' },
+    { repere: 'site_atp', texte: 'La tête a un site de fixation de l’ATP…' },
+    { repere: 'site_actine', texte: '…et un site de fixation de l’actine.' },
+  ],
+};
+window.Tableau.explication({ [vue]: EXPLICATIONS[vue] });
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'muscle_calcium', version: '1.0', title: 'Le Ca²⁺ ouvre l’accès — ' + vue, variants: VUES.map(v => ({ id: v, label: v })), commands: commandes,
+  command_schema: {
+    set_parameters: vue === 'acces' ? { excitation: 'true | false (le réticulum reçoit-il l’excitation ? false : pas de Ca²⁺ libéré)' } : { legendes: 'true | false (écrire les légendes)' },
+    set_time: { time_s: `0..${fr(FIN, 1)} (arrêt sur cet instant, en s de la scène)` },
+    play_until: { moment: Object.keys(moments()).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s de la scène' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: vue === 'acces'
+    ? 'Filament fin très agrandi (actine, tropomyosine, troponine) en face des têtes de myosine, sous le réticulum sarcoplasmique rempli de Ca²⁺. Au repos, la tropomyosine cache les sites de fixation de l’actine. L’excitation fait libérer le Ca²⁺ par le réticulum ; il se fixe sur la troponine ; la tropomyosine se déplace et les sites sont libérés. À la fin de l’excitation, le Ca²⁺ est repris par le réticulum et les sites sont recachés. Le Ca²⁺ autorise ; il ne fournit pas l’énergie (c’est l’ATP). Les têtes ne s’accrochent pas dans cette scène.'
+    : 'Schéma légendé : filament fin = actine + troponine + tropomyosine ; filament épais = molécules de myosine ; tête de myosine avec un site de fixation de l’ATP et un site de fixation de l’actine.',
+  etat: () => ({ simulation_status: S.running ? 'running' : (S.fait ? 'finished' : (S.t > 0 ? 'paused' : 'idle')), ce_qui_se_voit: ceQuiSeVoit(), current_variant: vue,
+    time_s: +S.t.toFixed(2), parameters: parametres(), moments: moments() }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), vue === 'acces' ? 'Une fibre au repos, très agrandie…' : 'Les molécules des filaments…');
+setTimeout(() => { if (!S.running && S.t === 0) start(); }, 1600);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

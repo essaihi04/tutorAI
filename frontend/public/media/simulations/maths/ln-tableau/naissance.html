@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La naissance de ln — fonctions logarithmiques</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Construction à la craie : la règle des puissances bute sur 1/x ; 1/x a pourtant des primitives ; celle qui s’annule en 1 s’appelle ln"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Fonctions logarithmiques » (math_ch5_fonctions_ln) : d’où vient ln.
+ * Vues : ?vue=tableau | famille (param k) | choix (param k) | pente (param x).
+ * tableau : regle, x2, x1, inv2, inv1, question ; repères regle, inv2, zero, question.
+ * famille : inverse, existe, famille, glisse ; repères inverse, existe, famille.
+ * choix : famille, point, glisse, trouve, definition ; repères point, ln, definition.
+ * pente : courbe, ln1, tangentes, derivee, curseur ; repères ln1, tangentes, derivee.
+ */
+const fr = MathsTableau.fr;
+const ln = Math.log;
+const SUPS = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+/** Largeur réelle d’un texte à la craie, exposants et indices compris. */
+function L(c, s, t = 18) {
+  s = String(s).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUPS[ch]).join('') + '}');
+  let w = 0;
+  for (const seg of Tableau.Craie.segments(s)) { c.ctx.font = `${seg.sub || seg.sup ? t * .62 : t}px ${Tableau.POLICE}`; w += c.ctx.measureText(seg.t).width; }
+  return w;
+}
+/** Texte encadré ; renvoie le rectangle [x, y, w, h]. */
+function encadre(c, s, x, y, taille, couleur, coulTexte) {
+  const w = L(c, s, taille) + 18;
+  c.texte(s, x, y, { couleur: coulTexte || couleur, taille });
+  c.rect(x - 9, y - taille - 4, w, taille + 14, { couleur, arrondi: 8, largeur: 1.6 });
+  return [x - 9, y - taille - 4, w, taille + 14];
+}
+/** Plusieurs lignes dans un même cadre ; renvoie le rectangle. */
+function bloc(c, lignes, x, y, taille, couleur, inter = 26) {
+  const w = Math.max(...lignes.map(l => L(c, l.t || l, taille))) + 20, h = (lignes.length - 1) * inter + taille + 16;
+  lignes.forEach((l, i) => c.texte(l.t || l, x, y + i * inter, { couleur: l.c || 'blanc', taille }));
+  c.rect(x - 10, y - taille - 5, w, h, { couleur, arrondi: 9, largeur: 1.7 });
+  return [x - 10, y - taille - 5, w, h];
+}
+function ovale(c, cx, cy, rx, ry, coul = 'orange') { c.courbe(u => { const a = -2.4 + u * Math.PI * 2.12; return [cx + rx * Math.cos(a), cy + ry * Math.sin(a)]; }, 44, { couleur: coul, largeur: 2.3 }); }
+/** Courbe y = f(x) sur [a ; b] jusqu’à la fraction p, échantillonnée finement près de 0 (ln y plonge). */
+function courbeF(c, G, f, a, b, p = 1, o = {}) {
+  if (p <= 0) return;
+  const xs = [], n = o.n || 220;
+  for (let i = 0; i <= n; i++) xs.push(a + (b - a) * i / n);
+  if (a > 0) for (let i = 0; i <= 90; i++) xs.push(a * Math.pow(b / a, i / 90));
+  xs.sort((u, v) => u - v);
+  const fin = a + (b - a) * Math.min(1, p), m = (G.ymax - G.ymin) * .03, lo = G.ymin - m, hi = G.ymax + m;
+  const morceaux = [[]]; let prec = null;
+  const cl = y => Math.min(hi, Math.max(lo, y));
+  for (const x of xs.filter(x => x <= fin).concat(p < 1 ? [fin] : [])) {
+    const y = f(x), ok = Number.isFinite(y) && y >= lo && y <= hi;
+    const cur = morceaux[morceaux.length - 1];
+    if (ok) { if (!cur.length && prec && Number.isFinite(prec[1])) cur.push([G.X(prec[0]), G.Y(cl(prec[1]))]); cur.push([G.X(x), G.Y(y)]); }
+    else if (cur.length) { if (Number.isFinite(y)) cur.push([G.X(x), G.Y(cl(y))]); morceaux.push([]); }
+    prec = [x, y];
+  }
+  for (const pts of morceaux) if (pts.length > 1) c.trait(pts, { tremble: .35, couleur: o.couleur || 'rouge', largeur: o.largeur ?? 2.6, pointille: o.pointille, alpha: o.alpha, duree: o.duree });
+}
+/** Segment de tangente à y = ln x en a, demi-longueur `L` px, gardé dans le repère. */
+function tangente(c, G, a, couleur = 'blanc', Lpx = 52, largeur = 2.2) {
+  const px = G.X(a), py = G.Y(ln(a)), s = 1 / a;
+  let dx = G.w / (G.xmax - G.xmin), dy = -s * G.h / (G.ymax - G.ymin);
+  const n = Math.hypot(dx, dy); dx /= n; dy /= n;
+  let l1 = Lpx, l2 = Lpx;
+  if (dy < 0) { l1 = Math.min(l1, (G.y0 + G.h - py) / -dy); l2 = Math.min(l2, (py - G.y0) / -dy); }
+  l1 = Math.min(l1, (px - G.x0) / dx);
+  c.ligne(px - dx * Math.max(4, l1), py - dy * Math.max(4, l1), px + dx * Math.max(4, l2), py + dy * Math.max(4, l2), { couleur, largeur });
+}
+
+/* Repères des vues famille / choix / pente. */
+const HAUT = { x0: 60, y0: 60, w: 360, h: 108, xmin: -0.3, xmax: 5.4, ymin: -0.4, ymax: 4.3, gx: [[1, ''], [2, ''], [3, ''], [4, ''], [5, '']], gy: [[1, '1'], [3, '3']], origine: false };
+const BAS = { x0: 60, y0: 196, w: 360, h: 152, xmin: -0.3, xmax: 5.4, ymin: -3.6, ymax: 3.8, gx: [1, 2, 3, 4, 5], gy: [[2, '2'], [-2, '−2']], origine: false };
+const CHOIX = { x0: 60, y0: 55, w: 370, h: 293, xmin: -0.3, xmax: 5.4, ymin: -3.6, ymax: 3.8, gx: [1, 2, 3, 4, 5], gy: [[1, '1'], [2, '2'], [3, '3'], [-1, '−1'], [-2, '−2'], [-3, '−3']], origine: false };
+const PENTE = { x0: 50, y0: 55, w: 410, h: 292, xmin: -0.3, xmax: 5.4, ymin: -1.7, ymax: 2.1, gx: [1, 2, 3, 4, 5], gy: [[1, '1'], [-1, '−1']], origine: false };
+const XR = 455;
+const Fk = k => x => ln(x) + k;
+
+MathsTableau.page({
+  id: 'ln_naissance', titre: 'Fonctions logarithmiques',
+  texte: 'Construction à la craie du cours Fonctions logarithmiques : la règle des puissances ne donne pas de primitive de 1/x ; 1/x est continue sur ]0 ; +∞[ donc elle a des primitives ; celle qui s’annule en 1 s’appelle ln ; ln 1 = 0 et (ln x)’ = 1/x',
+  vues: {
+    tableau: {
+      titre: 'La règle des puissances bute sur 1/x',
+      dessiner(c, K) {
+        K.titre('La règle des puissances bute sur 1/x');
+        const X0 = 60;
+        const r = encadre(c, 'x^{n} → x^{n+1}/(n + 1)', X0, 96, 26, 'jaune', 'jaune');
+        c.texte('la règle des puissances', r[0] + r[2] + 18, 92, { couleur: 'faible', taille: 17 });
+        c.repere('regle', ...r, 'la règle xⁿ → xⁿ⁺¹/(n + 1)');
+        K.marque('regle');
+        c.pause(.4);
+        c.texte('x² → x³/3', X0, 150, { couleur: 'blanc', taille: 24 });
+        K.marque('x2');
+        c.pause(.3);
+        c.texte('x → x²/2', X0, 198, { couleur: 'blanc', taille: 24 });
+        K.marque('x1');
+        c.pause(.4);
+        const s2 = '1/x² = x⁻² → x⁻¹/(−1) = −1/x';
+        c.texte(s2, X0, 250, { couleur: 'blanc', taille: 24 });
+        c.repere('inv2', X0 - 6, 224, L(c, s2, 24) + 12, 36, '1/x² = x⁻² → −1/x');
+        K.marque('inv2');
+        c.pause(.5);
+        const s1 = '1/x = x⁻¹ → x⁰/', y1 = 312, w1 = L(c, s1, 26);
+        c.texte(s1, X0, y1, { couleur: 'blanc', taille: 26 });
+        c.texte('0', X0 + w1, y1, { couleur: 'blanc', taille: 26 });
+        const w0 = L(c, '0', 26), cx0 = X0 + w1 + w0 / 2;
+        c.pause(.3);
+        ovale(c, cx0, y1 - 9, w0 / 2 + 9, 17, 'rouge');
+        c.repere('zero', cx0 - 18, y1 - 30, 36, 40, 'le 0 du dénominateur');
+        c.pause(.2);
+        c.ligne(X0 - 6, y1 - 8, X0 + w1 + w0 + 14, y1 - 8, { couleur: 'rouge', largeur: 3 });
+        c.texte('division par zéro !', X0 + w1 + w0 + 34, y1 - 2, { couleur: 'rouge', taille: 22 });
+        K.marque('inv1');
+        c.pause(.5);
+        const q = encadre(c, '1/x → ?', 540, 196, 36, 'jaune', 'jaune');
+        c.repere('question', ...q, '1/x → ?');
+        K.marque('question');
+      },
+      decrire: {
+        regle: 'En haut, encadré en jaune : « xⁿ → xⁿ⁺¹/(n + 1) », la règle des puissances.',
+        x2: 'Dessous : « x² → x³/3 ».',
+        x1: 'Puis : « x → x²/2 ».',
+        inv2: 'Puis : « 1/x² = x⁻² → x⁻¹/(−1) = −1/x » : la règle marche encore.',
+        inv1: 'Puis : « 1/x = x⁻¹ → x⁰/0 » : le 0 du bas est entouré en rouge, la ligne est barrée en rouge, « division par zéro ! ».',
+        question: 'À droite, encadré en jaune : « 1/x → ? » : aucune formule ne donne de primitive de 1/x.',
+      },
+      motifs: { regle: 'la règle des puissances', x2: 'x² → x³/3', x1: 'x → x²/2', inv2: '1/x² marche encore', inv1: 'division par zéro', question: '1/x → ?' },
+      explication: [
+        { repere: 'regle', texte: 'On monte l’exposant de 1 et on divise par le nouvel exposant.' },
+        { repere: 'inv2', texte: 'Pour 1/x², l’exposant −2 monte à −1 : ça marche encore.' },
+        { repere: 'zero', texte: 'Pour 1/x, l’exposant −1 monte à 0 : on devrait diviser par 0, impossible.' },
+        { repere: 'question', texte: 'Alors, quelle primitive pour 1/x ?' },
+      ],
+    },
+    famille: {
+      titre: '1/x a quand même des primitives',
+      params: { k: { min: -2, max: 2, pas: 0.25, defaut: 1, sens: 'hauteur de la courbe F + k' } },
+      dessiner(c, K) {
+        K.titre('1/x a quand même des primitives');
+        const k = K.P.k;
+        const G1 = K.axes(HAUT);
+        K.anime(1.8, p => courbeF(c, G1, x => 1 / x, 0.23, 5.3, p, { couleur: 'jaune' }));
+        c.texte('1/x', G1.X(0.42) + 10, G1.Y(1 / 0.42) - 4, { couleur: 'jaune', taille: 19 });
+        c.texte('continue sur ]0 ; +∞[', G1.X(1.6), G1.Y(1.7), { couleur: 'jaune', taille: 16 });
+        c.repere('inverse', G1.x0, G1.y0, G1.w, G1.h, 'la courbe de 1/x');
+        K.marque('inverse');
+        c.pause(.4);
+        c.texte('continue sur un intervalle', XR, 82, { couleur: 'vert', taille: 18 });
+        c.texte('⇒ des primitives existent', XR, 108, { couleur: 'vert', taille: 18 });
+        c.pause(.2);
+        c.texte('mais aucune formule connue', XR, 142, { couleur: 'orange', taille: 18 });
+        c.repere('existe', XR - 6, 62, 290, 90, 'des primitives existent, sans formule');
+        K.marque('existe');
+        c.pause(.4);
+        const G2 = K.axes(BAS);
+        K.anime(1.8, p => { for (let kk = -2; kk <= 2; kk++) courbeF(c, G2, Fk(kk), 0.03, 5.3, p, { couleur: 'faible', largeur: 1.2 }); });
+        c.texte('F + k', G2.X(5.3) + 4, G2.Y(ln(5.3) + 2) + 4, { couleur: 'faible', taille: 16 });
+        c.repere('famille', G2.x0, G2.y0, G2.w, G2.h, 'les courbes F + k');
+        K.marque('famille');
+        c.pause(.4);
+        const k0 = k >= 0 ? -2 : 2;
+        K.anime(2, p => {
+          const kk = k0 + (k - k0) * p;
+          courbeF(c, G2, Fk(kk), 0.03, 5.3, 1, { couleur: 'cyan', largeur: 3.6 });
+          c.point(G2.X(1), G2.Y(kk), 5, 'cyan');
+        });
+        c.texte('courbe épaisse : F + k', XR, 240, { couleur: 'cyan', taille: 18 });
+        c.texte('ici k = ' + fr(k), XR, 266, { couleur: 'cyan', taille: 18 });
+        c.texte('même forme, décalée en hauteur', XR, 300, { couleur: 'faible', taille: 16 });
+        c.repere('courbe_k', G2.x0, G2.Y(Math.min(3.8, k + 1.7)), G2.w, Math.max(30, G2.Y(Math.max(-3.6, k - 2)) - G2.Y(Math.min(3.8, k + 1.7))), 'la courbe F + k');
+        K.marque('glisse');
+      },
+      poignees(K) { const G = K.grille(BAS); return [{ id: 'k', x: G.X(1), y: G.Y(K.P.k), bouger: (x, y) => ({ k: G.inv(x, y)[1] }) }]; },
+      lecture: K => `La courbe épaisse est F + k avec k = ${fr(K.P.k)} : même forme que les autres, décalée de ${fr(K.P.k)} en hauteur ; sa dérivée est toujours 1/x.`,
+      decrire: K => ({
+        inverse: 'En haut, la courbe de 1/x pour x > 0 est tracée en jaune sans lever la craie : « continue sur ]0 ; +∞[ ».',
+        existe: 'À droite, en vert : « continue sur un intervalle ⇒ des primitives existent » ; dessous en orange : « mais aucune formule connue ».',
+        famille: 'En bas, même échelle en x : cinq courbes F + k (k de −2 à 2) en traits fins, étiquetées « F + k ».',
+        glisse: `Une courbe épaisse cyan F + k glisse verticalement jusqu’à k = ${fr(K.P.k)} ; à droite : « courbe épaisse : F + k, ici k = ${fr(K.P.k)} ».`,
+      }),
+      motifs: { inverse: 'la courbe de 1/x', existe: 'des primitives existent', famille: 'la famille F + k', glisse: 'la courbe glisse' },
+      explication: [
+        { repere: 'inverse', texte: '1/x est continue sur ]0 ; +∞[ : on la trace sans lever la craie.' },
+        { repere: 'existe', texte: 'Continue sur un intervalle, donc elle a des primitives ; mais aucune formule connue ne les donne.' },
+        { repere: 'famille', texte: 'Ses primitives forment une famille F + k : la même courbe, décalée en hauteur.' },
+      ],
+    },
+    choix: {
+      titre: 'La primitive qui passe par (1 ; 0) s’appelle ln',
+      params: { k: { min: -2, max: 2, pas: 0.25, defaut: 1, sens: 'hauteur de départ de la courbe épaisse F + k' } },
+      dessiner(c, K) {
+        K.titre('La primitive qui passe par (1 ; 0) s’appelle ln');
+        const k = K.P.k, G = K.axes(CHOIX);
+        K.anime(1.6, p => { for (let kk = -2; kk <= 2; kk++) courbeF(c, G, Fk(kk), 0.03, 5.3, p, { couleur: 'tresfaible', largeur: 1.2 }); });
+        c.texte('F + k', G.X(5.3) + 4, G.Y(ln(5.3) + 2) + 4, { couleur: 'faible', taille: 16 });
+        K.marque('famille');
+        c.pause(.3);
+        K.rond(G, 1, 0, true, 'jaune');
+        c.texte('(1 ; 0)', G.X(1) + 10, G.Y(0) + 22, { couleur: 'jaune', taille: 18 });
+        c.repere('point', G.X(1) - 14, G.Y(0) - 14, 80, 44, 'le point (1 ; 0)');
+        K.marque('point');
+        c.pause(.3);
+        const passe = Math.abs(k) < 1e-9, ce = passe ? 'vert' : 'orange';
+        courbeF(c, G, Fk(k), 0.03, 5.3, 1, { couleur: ce, largeur: 1.4, pointille: [6, 5] });
+        c.point(G.X(1), G.Y(k), 4.5, ce);
+        c.texte('essai k = ' + fr(k), G.X(1) - 12, G.Y(k) - 10, { couleur: ce, taille: 15, align: 'right' });
+        K.anime(2.2, p => {
+          const kk = k + (0 - k) * p;
+          courbeF(c, G, Fk(kk), 0.03, 5.3, 1, { couleur: 'cyan', largeur: 3.4 });
+          c.texte('k = ' + fr(Math.round(kk * 100) / 100), XR, 92, { couleur: 'cyan', taille: 22 });
+        });
+        K.marque('glisse');
+        c.pause(.3);
+        courbeF(c, G, ln, 0.03, 5.3, 1, { couleur: 'rouge', largeur: 4.2, duree: .8 });
+        c.cercle(G.X(1), G.Y(0), 13, { couleur: 'jaune', largeur: 1.8 });
+        c.texte('ln', G.X(5.1), G.Y(ln(5.1)) - 14, { couleur: 'rouge', taille: 24, align: 'center' });
+        c.texte('k = 0 : elle passe par (1 ; 0)', XR, 126, { couleur: 'rouge', taille: 18 });
+        c.repere('ln', G.X(0.15), G.Y(1.8), G.X(5.3) - G.X(0.15), G.Y(-3.4) - G.Y(1.8), 'la courbe de ln');
+        K.marque('trouve');
+        c.pause(.5);
+        const b = bloc(c, [{ t: 'ln : la primitive', c: 'jaune' }, { t: 'de x ↦ 1/x sur ]0 ; +∞[', c: 'jaune' }, { t: 'qui s’annule en 1', c: 'jaune' }], XR + 10, 254, 19, 'jaune', 28);
+        c.repere('definition', ...b, 'la définition de ln');
+        K.marque('definition');
+      },
+      poignees(K) { const G = K.grille(CHOIX); return [{ id: 'k', x: G.X(1), y: G.Y(K.P.k), bouger: (x, y) => ({ k: G.inv(x, y)[1] }) }]; },
+      lecture: K => (Math.abs(K.P.k) < 1e-9
+        ? 'Essai k = 0 : la courbe passe par (1 ; 0) : c’est la courbe de ln.'
+        : `Essai k = ${fr(K.P.k)} : la courbe passe par (1 ; ${fr(K.P.k)}), pas par (1 ; 0) ; il faut k = 0.`),
+      decrire: K => ({
+        famille: 'Un repère ; les courbes F + k, k de −2 à 2, en traits fins.',
+        point: 'Le point (1 ; 0) est placé en jaune et nommé.',
+        glisse: `Un essai pointillé à k = ${fr(K.P.k)} ; une courbe épaisse cyan part de là et descend jusqu’à k = 0 ; la valeur de k s’affiche à droite.`,
+        trouve: 'Elle passe par (1 ; 0), entouré : elle est repassée en rouge et nommée « ln » ; à droite : « k = 0 : elle passe par (1 ; 0) ».',
+        definition: 'À droite, encadré en jaune : « ln : la primitive de x ↦ 1/x sur ]0 ; +∞[ qui s’annule en 1 ».',
+      }),
+      motifs: { famille: 'la famille F + k', point: 'le point (1 ; 0)', glisse: 'la courbe descend', trouve: 'elle passe par (1 ; 0)', definition: 'la définition de ln' },
+      explication: [
+        { repere: 'point', texte: 'On impose une condition : passer par le point (1 ; 0).' },
+        { repere: 'ln', texte: 'Une seule courbe de la famille y passe : on l’appelle ln.' },
+        { repere: 'definition', texte: 'ln est la primitive de 1/x sur ]0 ; +∞[ qui s’annule en 1.' },
+      ],
+    },
+    pente: {
+      titre: 'Deux faits : ln 1 = 0 et (ln x)’ = 1/x',
+      params: { x: { min: 0.3, max: 5, pas: 0.1, defaut: 2, sens: 'abscisse du point mobile sur la courbe de ln' } },
+      dessiner(c, K) {
+        K.titre('Deux faits : ln 1 = 0 et (ln x)’ = 1/x');
+        const x = K.P.x, G = K.axes(PENTE);
+        K.anime(1.8, p => courbeF(c, G, ln, 0.17, 5.3, p, { couleur: 'rouge' }));
+        c.texte('ln', G.X(5.1), G.Y(ln(5.1)) - 14, { couleur: 'rouge', taille: 22, align: 'center' });
+        K.rond(G, 1, 0, true, 'jaune');
+        K.marque('courbe');
+        c.pause(.3);
+        c.texte('ln 1 = 0', G.X(1) + 8, G.Y(0) + 48, { couleur: 'jaune', taille: 20 });
+        c.repere('ln1', G.X(1) - 10, G.Y(0) - 10, 96, 66, 'ln 1 = 0');
+        K.marque('ln1');
+        c.pause(.4);
+        [[1, '1'], [2, '0,5'], [4, '0,25']].forEach(([a, s]) => {
+          c.pause(.2);
+          tangente(c, G, a, 'blanc', 56);
+          K.rond(G, a, ln(a), true, 'rouge');
+          c.texte('pente ' + s, G.X(a) - 10, G.Y(ln(a)) - 14, { couleur: 'jaune', taille: 16, align: 'right' });
+        });
+        c.repere('tangentes', G.X(0.4), G.Y(2), G.X(5) - G.X(0.4), G.Y(-0.8) - G.Y(2), 'les tangentes en 1, 2 et 4');
+        K.marque('tangentes');
+        c.pause(.4);
+        const b = encadre(c, '(ln x)’ = 1/x sur ]0 ; +∞[', XR + 34, 96, 19, 'jaune', 'jaune');
+        c.repere('derivee', ...b, '(ln x)’ = 1/x');
+        K.marque('derivee');
+        c.pause(.4);
+        K.anime(2.2, p => {
+          const xx = 0.5 + (x - 0.5) * p;
+          tangente(c, G, xx, 'cyan', 60, 2.4);
+          c.point(G.X(xx), G.Y(ln(xx)), 5.5, 'cyan');
+        });
+        c.texte('en x = ' + fr(x, 1) + ' :', XR + 34, 158, { couleur: 'cyan', taille: 19 });
+        c.texte('pente = 1/x = ' + fr(1 / x, 2), XR + 34, 186, { couleur: 'cyan', taille: 19 });
+        c.repere('point_mobile', G.X(x) - 20, G.Y(ln(x)) - 20, 40, 40, 'le point mobile et sa tangente');
+        K.marque('curseur');
+      },
+      poignees(K) { const G = K.grille(PENTE); return [{ id: 'x', x: G.X(K.P.x), y: G.Y(ln(K.P.x)), bouger: (px) => ({ x: G.inv(px, 0)[0] }) }]; },
+      lecture: K => `En x = ${fr(K.P.x, 1)}, la tangente à la courbe de ln a pour pente 1/x = ${fr(1 / K.P.x, 2)}` + (K.P.x < 1 ? ' : plus raide que en 1.' : K.P.x > 1 ? ' : moins raide que en 1.' : ' : pente 1.'),
+      decrire: K => ({
+        courbe: 'Un repère ; la courbe de ln est tracée en rouge et nommée ; le point (1 ; 0) en jaune.',
+        ln1: 'Près du point, écrit en jaune : « ln 1 = 0 ».',
+        tangentes: 'Trois tangentes en x = 1, 2 et 4, avec leurs pentes écrites : « pente 1 », « pente 0,5 », « pente 0,25 » : la pente vaut 1/x.',
+        derivee: 'À droite, encadré : « (ln x)’ = 1/x sur ]0 ; +∞[ ».',
+        curseur: `Un point cyan glisse sur la courbe jusqu’à x = ${fr(K.P.x, 1)} avec sa tangente ; à droite : « pente = 1/x = ${fr(1 / K.P.x, 2)} ».`,
+      }),
+      motifs: { courbe: 'la courbe de ln', ln1: 'ln 1 = 0', tangentes: 'trois tangentes', derivee: '(ln x)’ = 1/x', curseur: 'le point mobile' },
+      explication: [
+        { repere: 'ln1', texte: 'ln s’annule en 1 : ln 1 = 0.' },
+        { repere: 'tangentes', texte: 'En 1 la pente vaut 1, en 2 elle vaut 0,5, en 4 elle vaut 0,25 : c’est 1/x.' },
+        { repere: 'derivee', texte: 'ln est une primitive de 1/x : sa dérivée est 1/x.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

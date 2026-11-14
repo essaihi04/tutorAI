@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Lire une courbe de décroissance — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="radio.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="À gauche, une courbe de décroissance radioactive tracée à la craie (axes avec noms et unités, lectures en pointillé : N₀, N₀/2, t½, tangente à l’origine et τ, paliers, droite ln N) ; à droite, la colonne « Lecture » qui s’écrit"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script src="noyaux.js"></script>
+<script>
+/*
+ * Lire une courbe de décroissance (cours « Décroissance radioactive », 2e Bac PC BIOF, 11 novembre 2026).
+ * Vue « La courbe » (gauche : axes avec noms ET unités, courbe à la craie, lectures en pointillé) et colonne « Lecture »
+ * (droite) qui s’écrit au fur et à mesure. Courbes (?courbe= ou set_parameters {courbe}) :
+ *  - N (défaut) : N(t) = N₀·e^{−λt}, N₀ = 8,0·10²⁰ noyaux, t½ = 8 jours, t de 0 à 40 jours ; N₀, N₀/2 → t½ = 8 jours ;
+ *    tangente à l’origine : N = N₀(1 − t/τ), elle coupe l’axe des temps en τ = t½/ln2 = 11,5 jours (τ = 1/λ).
+ *  - paliers : même courbe ; N₀ → N₀/2 → N₀/4 → N₀/8 à t½, 2t½, 3t½ (escalier en pointillé) ; N = N₀/2ⁿ.
+ *  - ln : national 2021 R : droite ln N = 33 − 0,0485·t (t en jours) : ln N = 33 à t = 0, 23,3 à t = 200 jours ;
+ *    pente k = (23,3 − 33)/(200 − 0) = −0,0485 jour⁻¹ ; ln N = ln N₀ − λ·t donc λ = −k = 0,0485 jour⁻¹.
+ *  - activite_2021 : national 2021 N : a₀ = 1,0·10¹¹ Bq, t½ = 88 ans, t de 0 à 300 ans, axe « a (10¹⁰ Bq) ».
+ *  - activite_2022 : national 2022 N : a₀ = 4·10⁶ Bq, t½ = 8 jours, t de 0 à 40 jours, axe « a (10⁶ Bq) ».
+ * L’écriture suit l’horloge de la scène ; chaque moment = fin de l’écriture de sa phase (play_until s’y fige).
+ * Un seul bouton ; poignée : le point de lecture rose, glissé le long de la courbe (coordonnées avec les unités).
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');   // 2,50 → 2,5 ; 8,00 → 8
+const LN2 = Math.LN2;
+const EXPO = (o) => ({ ...o, expo: true, f: t => o.y0 * 2 ** (-t / o.T) });
+const D_ = {
+  N: EXPO({ titre: 'N(t) = N_0·e^{−λt}', y0: 8, T: 8, tmax: 40, tAxe: 44, xpas: 4, xlabPas: 8, ymax: 9, ypas: 1, ylabPas: 1,
+    ylab: 'N (10²⁰ noyaux)', xlab: 't (jours)', lettre: 'N', axeY: 'axe_N', uT: 'jours', fy: v => `${fx(v, 2)}·10²⁰ noyaux`,
+    y0txt: 'N_0 = 8,0·10²⁰ noyaux', moitieTxt: 'N_0/2 = 4,0·10²⁰ noyaux', Ttxt: 't½ = 8 jours',
+    moments: ['axes', 'courbe', 'N0', 'moitie', 't_demi', 'tangente', 'tau', 'fin'], lu: { t: 12, min: 0, max: 38, pas: 1 } }),
+  paliers: EXPO({ titre: 'N(t) : les paliers', y0: 8, T: 8, tmax: 40, tAxe: 44, xpas: 4, xlabPas: 8, ymax: 9, ypas: 1, ylabPas: 1,
+    ylab: 'N (10²⁰ noyaux)', xlab: 't (jours)', lettre: 'N', axeY: 'axe_N', uT: 'jours', fy: v => `${fx(v, 2)}·10²⁰ noyaux`,
+    y0txt: 'N_0 = 8,0·10²⁰ noyaux', moitieTxt: 'N_0/2 = 4,0·10²⁰ noyaux', Ttxt: 't½ = 8 jours',
+    moments: ['axes', 'courbe', 'palier_1', 'palier_2', 'palier_3', 'formule', 'fin'], lu: { t: 12, min: 0, max: 38, pas: 1 } }),
+  ln: { titre: 'ln N = f(t)', expo: false, y0: 33, k: -0.0485, tmax: 210, tAxe: 230, xpas: 25, xlabPas: 50, ymax: 36, ypas: 5, ylabPas: 5,
+    f: t => 33 - 0.0485 * t, ylab: 'ln N', xlab: 't (jours)', lettre: 'ln N', axeY: 'axe_ln', uT: 'jours', fy: v => fx(v, 2),
+    moments: ['axes', 'droite', 'ordonnee', 'pente', 'identification', 'fin'], lu: { t: 100, min: 0, max: 210, pas: 5 } },
+  activite_2021: EXPO({ titre: 'a(t) — national 2021 N', y0: 10, T: 88, tmax: 300, tAxe: 330, xpas: 25, xlabPas: 50, ymax: 11, ypas: 1, ylabPas: 2,
+    ylab: 'a (10¹⁰ Bq)', xlab: 't (ans)', lettre: 'a', axeY: 'axe_a', uT: 'ans', fy: v => `${fx(v, 2)}·10¹⁰ Bq`,
+    y0txt: 'a_0 = 10·10¹⁰ Bq = 1,0·10¹¹ Bq', moitieTxt: 'a_0/2 = 5·10¹⁰ Bq', Ttxt: 't½ = 88 ans',
+    moments: ['axes', 'courbe', 'a0', 'moitie', 't_demi', 'fin'], lu: { t: 150, min: 0, max: 290, pas: 5 } }),
+  activite_2022: EXPO({ titre: 'a(t) — national 2022 N', y0: 4, T: 8, tmax: 40, tAxe: 44, xpas: 4, xlabPas: 8, ymax: 4.5, ypas: .5, ylabPas: 1,
+    ylab: 'a (10⁶ Bq)', xlab: 't (jours)', lettre: 'a', axeY: 'axe_a', uT: 'jours', fy: v => `${fx(v, 2)}·10⁶ Bq`,
+    y0txt: 'a_0 = 4·10⁶ Bq', moitieTxt: 'a_0/2 = 2·10⁶ Bq', Ttxt: 't½ = 8 jours',
+    moments: ['axes', 'courbe', 'a0', 'moitie', 't_demi', 'fin'], lu: { t: 12, min: 0, max: 38, pas: 1 } }),
+};
+const COURBES = Object.keys(D_);
+const demande = new URLSearchParams(location.search).get('courbe');
+const S = { courbe: COURBES.includes(demande) ? demande : 'N', t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0, tlu: null, dit: '' };
+const C = () => D_[S.courbe];
+S.tlu = C().lu.t;
+let M = {}, MM = {};
+const VITESSE = 1.5;                               // horloge de l’écriture (s de scène par s réelle)
+
+/* ── Géométrie (cadre 760 × 420) ─────────────────────────────────────── */
+const RC = { x: 8, y: 42, w: 506, h: 370 }, RL = { x: 522, y: 42, w: 230, h: 370 };
+const O = { x: 64, y: 360 }, AXL = 410, AYL = 280;
+const PX = t => O.x + t * AXL / C().tAxe, PY = y => O.y - y * AYL / C().ymax;
+const LX = RL.x + 8, LW = RL.w - 16;              // colonne Lecture
+const tau = () => C().T / LN2;
+
+/* ── Dessin : l’écriture suit l’horloge de la scène ; chaque moment = fin de l’écriture de sa phase ── */
+const marque = (c, nom) => { MM[nom] = c.cur; };
+const lire = (c, y, s, o = {}) => c.texte(s, LX, y, { couleur: 'blanc', taille: 16, max: LW, ...o });
+function dessiner(c) {
+  scene.cadre(43); MM = {};
+  const K = C();
+  c.texte(`La courbe : ${K.titre}`, RC.x + 6, 32, { couleur: 'cyan', taille: 17 });
+  c.rect(RC.x, RC.y, RC.w, RC.h, { couleur: 'tresfaible', arrondi: 10, duree: .6 });
+  c.texte('Lecture', RL.x + 6, 32, { couleur: 'cyan', taille: 17 });
+  c.rect(RL.x, RL.y, RL.w, RL.h, { couleur: 'tresfaible', arrondi: 10, duree: .5 });
+  // Axes : noms ET unités.
+  const tg = []; for (let v = K.xpas; v <= K.tmax + 1e-9; v += K.xpas) tg.push([v * AXL / K.tAxe / (AXL + 14), Math.abs(v / K.xlabPas - Math.round(v / K.xlabPas)) < 1e-9 ? fx(v, 0) : null]);
+  c.axe(O.x, O.y, O.x + AXL + 14, O.y, tg, { taille: 13 });
+  const yg = []; for (let v = K.ypas; v <= K.ymax - K.ypas / 2 + 1e-9; v += K.ypas) yg.push([v * AYL / K.ymax / (AYL + 14), Math.abs(v / K.ylabPas - Math.round(v / K.ylabPas)) < 1e-9 ? fx(v, 1) : null]);
+  c.axe(O.x, O.y, O.x, O.y - AYL - 14, yg, { taille: 13, vertical: true });
+  c.texte('0', O.x - 8, O.y + 18, { couleur: 'faible', taille: 13, align: 'right' });
+  c.texte(K.ylab, O.x + 10, 64, { couleur: 'blanc', taille: 16 });
+  c.texte(K.xlab, RC.x + RC.w - 8, O.y - 9, { couleur: 'blanc', taille: 16, align: 'right' });
+  marque(c, 'axes');
+  c.pause(.3);
+  if (K.expo) {
+    c.courbe(u => { const t = u * K.tmax; return [PX(t), PY(K.f(t))]; }, 70, { couleur: 'jaune', largeur: 2.5 });
+    marque(c, 'courbe');
+    if (S.courbe === 'paliers') dessinerPaliers(c, K); else dessinerLectures(c, K);
+  } else dessinerLn(c, K);
+  c.pause(.8); marque(c, 'fin');
+  // Le point de lecture (poignée) : sur la courbe, une fois tracée.
+  const luVisible = c.t >= (K.expo ? MM.courbe : MM.droite), lu = pointLu();
+  if (luVisible) c.direct(() => {
+    const x = PX(lu.t), y = PY(lu.y);
+    c.ligne(x, O.y, x, y, { couleur: 'rose', largeur: 1.3, pointille: [3, 4] }); c.ligne(O.x, y, x, y, { couleur: 'rose', largeur: 1.3, pointille: [3, 4] });
+    c.cercle(x, y, 7, { couleur: 'rose', largeur: 2 });
+    const [l1, l2] = lignesLu(lu);
+    c.texte('point lu (glisse-le) :', LX, 352, { couleur: 'rose', taille: 14 });
+    c.texte(l1, LX, 376, { couleur: 'rose', taille: 15, max: LW });
+    c.texte(l2, LX, 400, { couleur: 'rose', taille: 15, max: LW });
+  });
+  declarerReperes(c, K, lu);
+  const fini = c.fin();
+  M = MM;
+  return fini || !S.running;
+}
+/** Courbes N et a : N₀ (a₀), la moitié, t½ ; pour N, la tangente à l’origine et τ. */
+function dessinerLectures(c, K) {
+  const x0 = PX(0), y0 = PY(K.y0), xT = PX(K.T), yM = PY(K.y0 / 2), l = K.lettre;
+  c.pause(.4);
+  c.cercle(x0, y0, 7, { couleur: 'vert', largeur: 2 });
+  c.texte(`${l}_0`, x0 + 10, y0 - 9, { couleur: 'vert', taille: 17 });
+  lire(c, 72, 'à t = 0, on lit :', { couleur: 'faible', taille: 15 });
+  lire(c, 96, K.y0txt, { couleur: 'vert' });
+  marque(c, l === 'N' ? 'N0' : 'a0');
+  c.pause(.4);
+  c.ligne(x0, yM, xT, yM, { couleur: 'cyan', largeur: 1.6, pointille: [6, 5] });
+  c.texte(`${l}_0/2`, x0 + 8, yM - 7, { couleur: 'cyan', taille: 16 });
+  c.ligne(xT, yM, xT, O.y, { couleur: 'cyan', largeur: 1.6, pointille: [6, 5] });
+  lire(c, 126, K.moitieTxt, { couleur: 'cyan' });
+  marque(c, 'moitie');
+  c.pause(.3);
+  c.texte('t½', xT + 4, O.y - 7, { couleur: 'jaune', taille: 16 });
+  lire(c, 158, K.Ttxt, { couleur: 'jaune', taille: 19 });
+  c.rect(LX - 4, 138, 120, 28, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  marque(c, 't_demi');
+  if (l !== 'N') return;
+  // Tangente à l’origine : N = N₀(1 − t/τ), elle coupe l’axe des temps en τ.
+  c.pause(.4);
+  c.ligne(x0, y0, PX(tau()), O.y, { couleur: 'orange', largeur: 2 });
+  lire(c, 194, 'la tangente à l’origine', { couleur: 'orange' });
+  lire(c, 216, 'coupe l’axe des t en τ', { couleur: 'orange' });
+  marque(c, 'tangente');
+  c.pause(.3);
+  c.cercle(PX(tau()), O.y, 6, { couleur: 'orange', largeur: 2 });
+  c.texte('τ', PX(tau()), O.y + 38, { couleur: 'orange', taille: 19, align: 'center' });
+  lire(c, 250, 'τ = 1/λ = t½/ln2', { couleur: 'blanc' });
+  lire(c, 278, 'τ = 8/0,693 = 11,5 jours', { couleur: 'orange', taille: 17 });
+  c.rect(LX - 4, 259, 200, 28, { couleur: 'orange', largeur: 1.5, arrondi: 6 });
+  marque(c, 'tau');
+}
+/** Paliers : N₀ → N₀/2 → N₀/4 → N₀/8 aux dates t½, 2t½, 3t½. */
+function dessinerPaliers(c, K) {
+  c.texte('N_0', PX(0) + 10, PY(K.y0) - 9, { couleur: 'vert', taille: 17 });
+  for (let k = 1; k <= 3; k++) {
+    c.pause(.4);
+    const t = k * K.T, v = K.y0 / 2 ** k, x = PX(t), y = PY(v), xa = PX((k - 1) * K.T);
+    c.ligne(xa, y, x, y, { couleur: 'cyan', largeur: 1.6, pointille: [6, 5] });        // escalier : depuis la date précédente
+    c.ligne(x, PY(K.y0 / 2 ** (k - 1)), x, O.y, { couleur: 'cyan', largeur: 1.4, pointille: [3, 5] });
+    c.cercle(x, y, 6, { couleur: 'cyan', largeur: 1.8 });
+    c.texte(`N_0/${2 ** k}`, x + 9, y - 8, { couleur: 'cyan', taille: 16 });
+    c.texte(k === 1 ? 't½' : `${k}t½`, x + 4, O.y - 7, { couleur: 'jaune', taille: 15 });
+    lire(c, 50 + 34 * k, `${k === 1 ? '' : k}t½ = ${t} jours :`, { couleur: 'faible', taille: 15 });
+    lire(c, 68 + 34 * k, `N = N_0/${2 ** k} = ${fr(v, 1)}·10²⁰`, { couleur: 'cyan', taille: 16 });
+    marque(c, 'palier_' + k);
+  }
+  c.pause(.5);
+  lire(c, 214, 't = n·t½ :', { couleur: 'blanc', taille: 17 });
+  lire(c, 244, 'N = N_0/2^{n}', { couleur: 'jaune', taille: 21 });
+  c.rect(LX - 4, 220, 140, 34, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  marque(c, 'formule');
+}
+/** Droite ln N = f(t) (national 2021 R) : ordonnée à l’origine, pente, identification. */
+function dessinerLn(c, K) {
+  c.ligne(PX(0), PY(K.f(0)), PX(K.tmax), PY(K.f(K.tmax)), { couleur: 'jaune', largeur: 2.5 });
+  c.point(PX(200), PY(23.3), 4, 'jaune');
+  c.texte('(200 ; 23,3)', PX(200), PY(23.3) + 24, { couleur: 'jaune', taille: 14, align: 'center' });
+  lire(c, 72, 'une droite qui descend :', { couleur: 'faible', taille: 15 });
+  lire(c, 96, 'ln N = k·t + ln N_0', { couleur: 'jaune' });
+  marque(c, 'droite');
+  c.pause(.4);
+  c.cercle(PX(0), PY(33), 7, { couleur: 'vert', largeur: 2 });
+  c.texte('ln N_0 = 33', PX(0) + 12, PY(33) - 12, { couleur: 'vert', taille: 16 });
+  lire(c, 128, 'ordonnée à l’origine :', { couleur: 'faible', taille: 15 });
+  lire(c, 152, 'ln N_0 = 33', { couleur: 'vert' });
+  marque(c, 'ordonnee');
+  c.pause(.4);
+  const xa = PX(0), xb = PX(200), ya = PY(33), yb = PY(23.3);
+  c.ligne(xa, ya, xb, ya, { couleur: 'orange', largeur: 2, pointille: [6, 5] });
+  c.ligne(xb, ya, xb, yb, { couleur: 'orange', largeur: 2, pointille: [6, 5] });
+  c.texte('Δt = 200 jours', (xa + xb) / 2 + 40, ya - 8, { couleur: 'orange', taille: 15, align: 'center' });
+  c.texte('Δ(ln N) = −9,7', xb - 6, (ya + yb) / 2 - 4, { couleur: 'orange', taille: 15, align: 'right' });
+  lire(c, 186, 'pente :', { couleur: 'faible', taille: 15 });
+  lire(c, 210, 'k = (23,3 − 33)/(200 − 0)', { couleur: 'orange' });
+  lire(c, 236, 'k = −0,0485 jour⁻¹', { couleur: 'orange', taille: 17 });
+  marque(c, 'pente');
+  c.pause(.5);
+  lire(c, 270, 'ln N = ln N_0 − λ·t', { couleur: 'blanc' });
+  lire(c, 294, 'donc λ = −k', { couleur: 'blanc' });
+  lire(c, 322, 'λ = 0,0485 jour⁻¹', { couleur: 'jaune', taille: 19 });
+  c.rect(LX - 4, 302, 172, 30, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  marque(c, 'identification');
+}
+function lignesLu(lu) {
+  const K = C();
+  return [`t = ${fx(lu.t, 0)} ${K.uT}`, K.expo ? `${K.lettre} = ${K.fy(lu.y)}` : `ln N = ${K.fy(lu.y)}`];
+}
+const texteLu = lu => lignesLu(lu).join(' ; ');
+function declarerReperes(c, K, lu) {
+  const ici = (ok) => (ok ? '' : ' (pas tracé sur cette courbe)'), N = S.courbe === 'N', expo = K.expo;
+  const Tt = expo ? K.T : LN2 / 0.0485, y0 = K.y0, l = K.lettre;
+  c.repere('vue_courbe', RC.x, RC.y, RC.w, RC.h, `la courbe : ${K.titre.replace(/_0/g, '₀').replace('^{−λt}', '^(−λt)')}`);
+  c.repere('lecture', RL.x, RL.y, RL.w, RL.h, 'la colonne Lecture');
+  c.repere('axe_t', O.x, O.y - 12, AXL + 16, 32, `l’axe du temps : ${K.xlab}`);
+  const axeY = [O.x - 44, 52, 70, O.y - 46];
+  c.repere(K.axeY, ...axeY, `l’axe des ordonnées : ${K.ylab}`);
+  if (K.axeY !== 'axe_N') c.repere('axe_N', ...axeY, `l’axe des ordonnées : ${K.ylab}`);
+  c.repere('courbe', O.x, PY(K.y0), PX(K.tmax) - O.x, O.y - PY(K.y0), expo ? `la courbe ${l}(t), décroissance exponentielle` : 'la droite ln N = f(t)');
+  c.repere('droite', O.x, PY(K.f(0)) - 6, PX(K.tmax) - O.x, PY(K.f(K.tmax)) - PY(K.f(0)) + 12, expo ? 'la courbe (pas une droite : exponentielle)' : 'la droite ln N = −0,0485·t + 33');
+  c.repere('N0', O.x - 12, PY(y0) - 22, 60, 34, expo ? (l === 'N' ? 'N₀ = 8,0·10²⁰ noyaux' : `${l}₀ (ici l’activité initiale)`) : 'ln N₀ = 33');
+  c.repere('a0', O.x - 12, PY(y0) - 22, 60, 34, l === 'a' ? K.y0txt.replace('_0', '₀') : `l’ordonnée à l’origine${ici(false)}`);
+  c.repere('ordonnee', O.x - 12, PY(y0) - 22, 120, 34, expo ? `l’ordonnée à l’origine : ${l}₀${ici(false)}` : 'l’ordonnée à l’origine : ln N₀ = 33');
+  c.repere('moitie', O.x, PY(y0 / 2) - 12, Math.max(30, PX(Tt) - O.x + 8), 24, expo ? `${l}₀/2, lu en pointillé jusqu’à la courbe` : `la moitié${ici(false)}`);
+  c.repere('t_demi', PX(Tt) - 16, O.y - 30, 40, 44, expo ? `t½ = ${K.T} ${K.uT}` : `t½ = ln2/λ ≈ 14,3 jours${ici(false)}`);
+  const xt = PX(expo ? tau() : 20);
+  c.repere('tangente', O.x, PY(y0), Math.max(24, xt - O.x), O.y - PY(y0), `la tangente à l’origine${ici(N)}`);
+  c.repere('tau', xt - 14, O.y - 12, 28, 54, expo ? `τ = 1/λ = ${fx(tau(), 1)} ${K.uT}${ici(N)}` : `τ${ici(false)}`);
+  for (let k = 1; k <= 3; k++) {
+    const t = k * Tt, v = expo ? y0 / 2 ** k : K.f(t);
+    c.repere('palier_' + k, PX(t) - 12, PY(v) - 12, 24, 24, `palier ${k} : t = ${k === 1 ? '' : k}t½, ${l} = ${l}₀/${2 ** k}${ici(S.courbe === 'paliers')}`);
+  }
+  c.repere('pente', PX(0), PY(33) - 14, PX(200) - PX(0), PY(23.3) - PY(33) + 28, S.courbe === 'ln' ? 'le triangle de pente : k = −0,0485 jour⁻¹' : `la pente${ici(false)}`);
+  c.repere('identification', RL.x + 2, S.courbe === 'ln' ? 254 : 200, RL.w - 4, S.courbe === 'ln' ? 84 : 60,
+    S.courbe === 'ln' ? 'ln N = ln N₀ − λ·t donc λ = −k = 0,0485 jour⁻¹' : S.courbe === 'paliers' ? 'la formule N = N₀/2ⁿ' : `l’identification${ici(false)}`);
+  c.repere('point_lu', PX(lu.t) - 12, PY(lu.y) - 12, 24, 24, `le point lu : ${texteLu(lu)}`);
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+const craie = scene.craie;
+scene.cadre = function (graine) {
+  const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  craie.debut(graine, S.t);
+  const s = Math.min(W / VW, H / VH) || 1;
+  scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
+  craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
+  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+  return craie;
+};
+function calculer() { const t = S.t, r = S.running; S.t = 1e6; S.running = false; try { dessiner(craie); dessiner(craie); } finally { S.t = t; S.running = r; } scene.sale = true; }
+function moments() { if (M.fin === undefined) calculer(); const out = {}; for (const k of C().moments) out[k] = +M[k].toFixed(2); return out; }
+function pointLu() { const K = C(), t = clamp(S.tlu, K.lu.min, K.lu.max); return { t, y: K.f(t) }; }
+const vu = n => M[n] !== undefined && S.t >= M[n] - 1e-6;
+
+const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+const dire = (texte, kind = '') => { S.dit = texte; bulle($('feedback'), texte, kind); };
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t += dt * VITESSE;   // la craie écrit un peu plus vite que le kit
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.jusqua = null; S.running = false;
+    if (S.t >= M.fin - 1e-6) { finir(); return true; }
+    S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 1)} s`) + '.');
+    pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); return true;
+  }
+  if (M.fin !== undefined && S.t >= M.fin) { S.t = M.fin; finir(); return true; }
+  if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+const CONCLUSIONS = {
+  N: 'N₀ = 8,0·10²⁰ noyaux ; N₀/2 est atteint à t½ = 8 jours ; la tangente à l’origine coupe l’axe des temps en τ = 1/λ = 11,5 jours.',
+  paliers: 'Toutes les t½ (8 jours), N est divisé par 2 : à t = n·t½, N = N₀/2ⁿ.',
+  ln: 'Droite de pente k = −0,0485 jour⁻¹ et d’ordonnée à l’origine ln N₀ = 33 : ln N = ln N₀ − λ·t donc λ = 0,0485 jour⁻¹.',
+  activite_2021: 'a₀ = 1,0·10¹¹ Bq ; a₀/2 = 5·10¹⁰ Bq est atteint à t½ = 88 ans.',
+  activite_2022: 'a₀ = 4·10⁶ Bq ; a₀/2 = 2·10⁶ Bq est atteint à t½ = 8 jours.',
+};
+function finir() { S.running = false; S.fait = true; S.pause = false; etiquette(); dire(CONCLUSIONS[S.courbe], 'good'); pont.noter('measurement', { courbe: S.courbe }); pont.emettre(); }
+const MOTIFS = {
+  axes: 'les axes, avec noms et unités', courbe: 'la courbe est tracée', N0: 'N₀ lu sur l’axe', a0: 'a₀ lu sur l’axe', moitie: 'la moitié, en pointillé jusqu’à la courbe',
+  t_demi: 't½ lu sur l’axe des temps', tangente: 'la tangente à l’origine', tau: 'τ = 1/λ = 11,5 jours', palier_1: 'premier palier : N₀/2 à t½',
+  palier_2: 'deuxième palier : N₀/4 à 2t½', palier_3: 'troisième palier : N₀/8 à 3t½', formule: 'N = N₀/2ⁿ', droite: 'la droite ln N = f(t)',
+  ordonnee: 'l’ordonnée à l’origine : ln N₀ = 33', pente: 'le triangle de pente : k = −0,0485 jour⁻¹', identification: 'λ = −k = 0,0485 jour⁻¹', fin: 'tout est écrit',
+};
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
+function ceQuiSeVoit() {
+  if (M.fin === undefined) calculer();
+  const K = C(), lu = pointLu(), l = K.lettre;
+  const m = [`Courbe « ${S.courbe} » (${K.titre.replace(/_0/g, '₀').replace('^{−λt}', '^(−λt)')})${S.running ? ', la craie écrit' : S.fait ? ', fin : tout est écrit' : S.pause ? ', arrêt sur image' : ', pas encore lancée'}.`,
+    `Axes : abscisses ${K.xlab} (0 à ${K.tmax}), ordonnées ${K.ylab}.`];
+  const L = [];
+  if (K.expo && vu('courbe')) L.push(`courbe jaune décroissante (exponentielle) de ${l}₀ à t = 0`);
+  if (S.courbe === 'N' || S.courbe.startsWith('activite')) {
+    if (vu(l === 'N' ? 'N0' : 'a0')) L.push(`${K.y0txt.replace('_0', '₀')} (entouré sur l’axe)`);
+    if (vu('moitie')) L.push(`${K.moitieTxt.replace('_0', '₀')}, pointillé horizontal jusqu’à la courbe puis vertical vers l’axe des temps`);
+    if (vu('t_demi')) L.push(`${K.Ttxt} (encadré)`);
+    if (vu('tangente')) L.push('tangente orange à l’origine, elle coupe l’axe des temps');
+    if (vu('tau')) L.push('τ = 1/λ = t½/ln2 = 8/0,693 = 11,5 jours (encadré)');
+  }
+  if (S.courbe === 'paliers') for (let k = 1; k <= 3; k++) if (vu('palier_' + k)) L.push(`palier ${k} : t = ${k * 8} jours, N = N₀/${2 ** k} = ${fr(8 / 2 ** k, 1)}·10²⁰ (escalier en pointillé)`);
+  if (S.courbe === 'paliers' && vu('formule')) L.push('t = n·t½ : N = N₀/2ⁿ (encadré)');
+  if (S.courbe === 'ln') {
+    if (vu('droite')) L.push('droite jaune qui descend, point (200 ; 23,3) marqué');
+    if (vu('ordonnee')) L.push('ordonnée à l’origine ln N₀ = 33 (entourée)');
+    if (vu('pente')) L.push('triangle de pente orange : Δt = 200 jours, Δ(ln N) = −9,7 ; k = (23,3 − 33)/(200 − 0) = −0,0485 jour⁻¹');
+    if (vu('identification')) L.push('ln N = ln N₀ − λ·t donc λ = −k = 0,0485 jour⁻¹ (encadré)');
+  }
+  m.push(L.length ? `Lectures faites : ${L.join(' ; ')}.` : 'Aucune lecture encore.');
+  if (vu(K.expo ? 'courbe' : 'droite')) m.push(`Point lu (rose, se glisse sur la courbe) : ${texteLu(lu)}.`);
+  if (S.fait) m.push(`Conclusion : ${CONCLUSIONS[S.courbe]}`);
+  return m.join(' ');
+}
+
+/* ── Commandes ────────────────────────────────────────────────────────── */
+function start() { S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire('On trace les axes, la courbe, puis on lit…'); pont.noter('start', { courbe: S.courbe }); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
+function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('La craie continue…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  calculer(); const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = clamp(t, 0, M.fin); S.fait = S.t >= M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+  etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fr(S.t, 1)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function playUntil(p) {
+  calculer();
+  const nom = C().moments.includes(p.moment) ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+  S.jusqua = clamp(cible, .01, M.fin); S.motif = nom ? MOTIFS[nom] : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+const auPas = (v, K) => +clamp(Math.round(v / K.lu.pas) * K.lu.pas, K.lu.min, K.lu.max).toFixed(2);
+function setParameters(p) {
+  p = p || {}; let change = false;
+  if (p.courbe && COURBES.includes(p.courbe) && p.courbe !== S.courbe) { S.courbe = p.courbe; S.tlu = C().lu.t; M = {}; calculer(); change = true; }
+  if (p.t_lu !== undefined && p.t_lu !== null && p.t_lu !== '' && Number.isFinite(+p.t_lu)) { S.tlu = auPas(+p.t_lu, C()); scene.sale = true; }
+  const lu = pointLu();
+  pont.noter('set_parameters', { courbe: S.courbe, t_lu: lu.t });
+  if (change) { start(); return; }
+  dire(`Point lu : ${texteLu(lu)}.`); pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+
+/* Poignée : le point de lecture, glissé le long de la courbe. */
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => {
+    const K = C(); if (M.fin === undefined || S.t < (K.expo ? M.courbe : M.droite)) return null;
+    const [x, y] = scene.local(px, py), lu = pointLu(); return Math.hypot(x - PX(lu.t), y - PY(lu.y)) < 16 ? 'lu' : null;
+  },
+  bouger: (id, px, py) => { const K = C(), [x] = scene.local(px, py), v = auPas((x - O.x) * K.tAxe / AXL, K); if (v !== S.tlu) { S.tlu = v; scene.sale = true; } },
+  lacher: () => { const lu = pointLu(); dire(`Point lu : ${texteLu(lu)}.`); pont.noter('set_parameters', { t_lu: lu.t }); pont.emettre(); },
+});
+
+const EXPLICATIONS = {
+  N: [
+    { repere: 'axe_t', texte: 'En abscisse, le temps t en jours ; en ordonnée, le nombre de noyaux N, en 10²⁰ noyaux.' },
+    { repere: 'N0', texte: 'À t = 0, on lit N₀ = 8,0·10²⁰ noyaux.' },
+    { repere: 'moitie', texte: 'On cherche N₀/2 = 4,0·10²⁰ sur l’axe, on va jusqu’à la courbe, puis on descend sur l’axe des temps.' },
+    { repere: 't_demi', texte: 'On lit t½ = 8 jours.' },
+    { repere: 'tangente', texte: 'La tangente à l’origine coupe l’axe des temps en τ.' },
+    { repere: 'tau', texte: 'τ = 1/λ = t½/ln2 = 11,5 jours.' },
+    { repere: 'point_lu', texte: 'Glisse le point rose : tu lis t et N avec leurs unités.' },
+  ],
+  paliers: [
+    { repere: 'palier_1', texte: 'À t½ = 8 jours, N = N₀/2.' },
+    { repere: 'palier_2', texte: 'À 2t½ = 16 jours, N = N₀/4.' },
+    { repere: 'palier_3', texte: 'À 3t½ = 24 jours, N = N₀/8.' },
+    { repere: 'identification', texte: 'À t = n·t½, N = N₀/2ⁿ.' },
+  ],
+  ln: [
+    { repere: 'axe_ln', texte: 'En ordonnée, ln N (sans unité) ; en abscisse, t en jours.' },
+    { repere: 'droite', texte: 'ln N en fonction de t donne une droite qui descend.' },
+    { repere: 'ordonnee', texte: 'L’ordonnée à l’origine : ln N₀ = 33.' },
+    { repere: 'pente', texte: 'La pente : k = (23,3 − 33)/(200 − 0) = −0,0485 jour⁻¹.' },
+    { repere: 'identification', texte: 'ln N = ln N₀ − λ·t, donc λ = −k = 0,0485 jour⁻¹.' },
+  ],
+  activite_2021: [
+    { repere: 'axe_a', texte: 'Attention à l’axe : a en 10¹⁰ Bq ; t en ans.' },
+    { repere: 'a0', texte: 'À t = 0, a₀ = 10·10¹⁰ Bq = 1,0·10¹¹ Bq.' },
+    { repere: 'moitie', texte: 'a₀/2 = 5·10¹⁰ Bq : on va jusqu’à la courbe, puis on descend.' },
+    { repere: 't_demi', texte: 't½ = 88 ans.' },
+  ],
+  activite_2022: [
+    { repere: 'axe_a', texte: 'a en 10⁶ Bq ; t en jours.' },
+    { repere: 'a0', texte: 'À t = 0, a₀ = 4·10⁶ Bq.' },
+    { repere: 'moitie', texte: 'a₀/2 = 2·10⁶ Bq, lu sur la courbe.' },
+    { repere: 't_demi', texte: 't½ = 8 jours.' },
+  ],
+};
+window.Tableau.explication(EXPLICATIONS);
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+calculer();
+const config = { id: 'radioactivite_courbe', version: '1.0', title: 'Lire une courbe de décroissance', variants: COURBES.map(id => ({ id, label: id })), commands: commandes,
+  command_schema: {
+    set_parameters: { courbe: COURBES.join(' | ') + ' (change la courbe et la retrace depuis le début)', t_lu: 'abscisse du point lu, dans l’unité de l’axe t (N, paliers, activite_2022 : 0..38 jours pas 1 ; activite_2021 : 0..290 ans pas 5 ; ln : 0..210 jours pas 5)' },
+    set_time: { time_s: '0..fin (arrêt sur cet instant de l’écriture, en s ; voir moments)' },
+    play_until: { moment: 'N : axes | courbe | N0 | moitie | t_demi | tangente | tau | fin ; paliers : axes | courbe | palier_1 | palier_2 | palier_3 | formule | fin ; ln : axes | droite | ordonnee | pente | identification | fin ; activite_2021, activite_2022 : axes | courbe | a0 | moitie | t_demi | fin', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Lire une courbe de décroissance : N(t) = N₀·e^(−λt) ; lire N₀ (ou a₀) à t = 0 ; chercher N₀/2 (ou a₀/2), aller jusqu’à la courbe, descendre sur l’axe des temps : t½ ; la tangente à l’origine coupe l’axe des temps en τ = 1/λ ; à t = n·t½, N = N₀/2ⁿ ; la droite ln N = ln N₀ − λ·t a pour pente −λ. Lire les unités des axes (10²⁰ noyaux, 10¹⁰ Bq, 10⁶ Bq).',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle', ce_qui_se_voit: ceQuiSeVoit(), current_variant: S.courbe,
+    time_s: +S.t.toFixed(2), parameters: { courbe: S.courbe, t_lu: pointLu().t, y_lu: +pointLu().y.toFixed(4), axe_t: C().xlab, axe_y: C().ylab }, moments: moments() }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+dire('La courbe va s’écrire…');
+setTimeout(() => { if (!S.running && S.t === 0 && !S.pause) start(); }, 900);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Du muscle au sarcomère — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="muscle.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Du muscle au sarcomère : le muscle attaché à l’os par le tendon, une coupe qui montre les faisceaux, un faisceau ouvert en fibres, une fibre striée à plusieurs noyaux, une myofibrille, un sarcomère entre deux stries Z, avec l’échelle de chaque niveau"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="filaments.js"></script>
+<script>
+/*
+ * Du muscle au sarcomère (cours « Rôle du muscle strié squelettique », 2 Bac PC BIOF, 10 novembre 2026).
+ * Un seul dessin qui s’allonge vers la droite, niveau par niveau (zoom), chaque niveau relié au suivant par une loupe
+ * (cadre + deux traits de rappel) : muscle attaché à l’os par le tendon (quelques cm) → coupe : les faisceaux
+ * (Ø ≈ 1 mm) → un faisceau ouvert en fibres → une fibre, cellule longue striée à plusieurs noyaux sur les bords
+ * (Ø 10 à 100 µm) → une myofibrille au motif répété (Ø 1 à 2 µm) → un sarcomère entre deux stries Z (≈ 2,5 µm).
+ * Le vivant est PEINT (règle 7) ; la craie écrit les noms, l’échelle, les loupes. Moments : muscle_et_tendon, faisceaux,
+ * fibre, noyaux, myofibrille, sarcomere. Paramètre : niveau 1..6 (rejoue jusqu’à ce niveau).
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const F = window.Filaments;
+const $ = id => document.getElementById(id);
+const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0, vu: {} };
+const lisse = x => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
+const rampe = (t, a, d) => lisse((t - a) / d);
+let scene = null;
+const horloge = () => (performance.now() - scene.ouvert) / 1000;
+function ecrit(c, nom, tEv) { if (S.t < tEv - 1e-6) return false; if (!(nom in S.vu)) S.vu[nom] = horloge(); c.depuis(S.vu[nom]); return true; }
+const duree = s => Math.min(1.1, Math.max(.3, String(s).length / 30));
+const T = (c, s, x, y, o = {}) => c.texte(s, x, y, { duree: duree(s), ...o });
+
+/* Instants (s de la scène) : début de chaque niveau, et les moments du cours. */
+const E = { muscle: .2, coupe: 2.6, ouvert: 5.0, fibre: 6.4, noyaux: 8.4, myofibrille: 10.0, sarcomere: 12.0 };
+const MOMENTS = { muscle_et_tendon: 2.2, faisceaux: 4.6, fibre: 8.0, noyaux: 9.6, myofibrille: 11.6, sarcomere: 13.8 };
+const FIN = 14.2;
+const NIVEAUX = Object.keys(MOMENTS);
+const MOTIFS = {
+  muscle_et_tendon: 'le muscle, attaché à l’os par le tendon (quelques cm)', faisceaux: 'la coupe du muscle montre des faisceaux (Ø ≈ 1 mm)',
+  fibre: 'une fibre musculaire : une cellule longue et striée (Ø 10 à 100 µm)', noyaux: 'la fibre a plusieurs noyaux, sur ses bords',
+  myofibrille: 'une myofibrille : le même motif de bandes se répète (Ø 1 à 2 µm)', sarcomere: 'un sarcomère, entre deux stries Z (≈ 2,5 µm)',
+};
+const YN = 338, YE = 358;           // ligne des noms, ligne des échelles
+
+/* ── Peinture (règle 7) ─────────────────────────────────────────────── */
+const MX = 65, demiMuscle = y => 6 + 30 * Math.sin(Math.PI * Math.min(1, Math.max(0, (y - 100) / 168)));
+function os(x, y0, y1, haut) {
+  const g = x.createLinearGradient(0, y0, 0, y1);
+  g.addColorStop(0, '#fffaf0'); g.addColorStop(.55, '#eadfc4'); g.addColorStop(1, '#c4b38a');
+  x.fillStyle = g; x.beginPath();
+  // une extrémité d’os : un fût et une tête un peu renflée côté tendon
+  x.moveTo(16, haut ? y0 + 6 : y0 + 4); x.quadraticCurveTo(16, y0, 24, y0); x.lineTo(106, y0); x.quadraticCurveTo(114, y0, 114, y0 + 8);
+  x.lineTo(114, y1 - 8); x.quadraticCurveTo(114, y1, 106, y1); x.lineTo(24, y1); x.quadraticCurveTo(16, y1, 16, y1 - 6); x.closePath(); x.fill();
+  x.strokeStyle = 'rgba(120,100,60,.5)'; x.lineWidth = 1; x.stroke();
+  x.strokeStyle = 'rgba(255,255,255,.6)'; x.beginPath(); x.moveTo(26, y0 + 4); x.lineTo(100, y0 + 4); x.stroke();
+}
+function tendon(x, y0, y1, l0, l1) {
+  const g = x.createLinearGradient(MX - 9, 0, MX + 9, 0);
+  g.addColorStop(0, '#aeb9c4'); g.addColorStop(.35, '#f4f7fa'); g.addColorStop(.55, '#ffffff'); g.addColorStop(1, '#a3afbb');
+  x.fillStyle = g; x.beginPath(); x.moveTo(MX - l0, y0); x.lineTo(MX + l0, y0); x.lineTo(MX + l1, y1); x.lineTo(MX - l1, y1); x.closePath(); x.fill();
+  x.strokeStyle = 'rgba(255,255,255,.7)'; x.lineWidth = .8; x.beginPath(); x.moveTo(MX - 1, y0); x.lineTo(MX - 1, y1); x.stroke();   // reflet nacré
+}
+function peindreMuscle(x, a) {
+  x.save(); x.globalAlpha = a;
+  os(x, 56, 80, true); os(x, 292, 316, false);
+  tendon(x, 78, 106, 7, 5); tendon(x, 262, 294, 5, 7);
+  const g = x.createLinearGradient(MX - 36, 0, MX + 36, 0);
+  g.addColorStop(0, '#5a1010'); g.addColorStop(.25, '#a8302a'); g.addColorStop(.45, '#e0605a'); g.addColorStop(.7, '#b33a30'); g.addColorStop(1, '#561010');
+  x.fillStyle = g; x.beginPath();
+  for (let y = 100; y <= 268; y += 4) x.lineTo(MX - demiMuscle(y), y);
+  for (let y = 268; y >= 100; y -= 4) x.lineTo(MX + demiMuscle(y), y);
+  x.closePath(); x.fill(); x.save(); x.clip();     // fibres et reflet restent dans le fuseau
+  // fibres fines : des traits qui suivent le fuseau
+  x.lineWidth = .6;
+  for (let i = -7; i <= 7; i++) {
+    const f = i / 7.6; x.strokeStyle = i % 2 ? 'rgba(255,190,185,.28)' : 'rgba(70,8,8,.35)'; x.beginPath();
+    for (let y = 102; y <= 266; y += 6) x.lineTo(MX + f * demiMuscle(y), y);
+    x.stroke();
+  }
+  const h = x.createRadialGradient(MX - 12, 150, 2, MX - 12, 150, 40); h.addColorStop(0, 'rgba(255,255,255,.18)'); h.addColorStop(1, 'rgba(255,255,255,0)');
+  x.fillStyle = h; x.fillRect(MX - 36, 100, 72, 168);
+  x.restore(); x.restore();
+}
+const C2 = { x: 192, y: 185, r: 52 }, FAI = [[0, 0], ...[0, 1, 2, 3, 4, 5].map(i => [34 * Math.cos(i * Math.PI / 3), 34 * Math.sin(i * Math.PI / 3)])];
+function peindreCoupe(x, a) {
+  x.save(); x.globalAlpha = a;
+  const g = x.createRadialGradient(C2.x - 10, C2.y - 12, 6, C2.x, C2.y, C2.r);
+  g.addColorStop(0, '#9a3434'); g.addColorStop(1, '#561414');
+  x.fillStyle = g; x.beginPath(); x.arc(C2.x, C2.y, C2.r, 0, Math.PI * 2); x.fill();
+  x.strokeStyle = 'rgba(246,220,220,.85)'; x.lineWidth = 2.4; x.stroke();
+  for (const [dx, dy] of FAI) {
+    const cx = C2.x + dx, cy = C2.y + dy, gf = x.createRadialGradient(cx - 5, cy - 5, 1, cx, cy, 17);
+    gf.addColorStop(0, '#ec7a72'); gf.addColorStop(1, '#a3302c');
+    x.fillStyle = gf; x.beginPath(); x.arc(cx, cy, 16.5, 0, Math.PI * 2); x.fill();
+    x.strokeStyle = 'rgba(250,224,224,.75)'; x.lineWidth = 1.3; x.stroke();
+    x.fillStyle = 'rgba(255,170,165,.55)'; x.strokeStyle = 'rgba(110,25,25,.55)'; x.lineWidth = .5; x.beginPath();
+    const pts = [[0, 0], ...[0, 1, 2, 3, 4, 5].map(i => [6.4 * Math.cos(i * 1.047 + .5), 6.4 * Math.sin(i * 1.047 + .5)]), ...[...Array(10).keys()].map(i => [12.2 * Math.cos(i * .628), 12.2 * Math.sin(i * .628)])];
+    for (const [px, py] of pts) { x.moveTo(cx + px + 2.5, cy + py); x.arc(cx + px, cy + py, 2.5, 0, Math.PI * 2); }
+    x.fill(); x.stroke();
+  }
+  x.restore();
+}
+const P3 = { x0: 290, pas: 12, n: 6, y0: 70, y1: 310, yo: 172 };
+const xFibre3 = (i, y) => P3.x0 + i * P3.pas + (i - 2.5) * 7 * lisse((y - P3.yo) / (P3.y1 - P3.yo));
+function peindreFaisceau(x, a) {
+  x.save(); x.globalAlpha = a;
+  x.fillStyle = 'rgba(246,218,218,.22)'; x.beginPath(); x.roundRect(P3.x0 - 9, P3.y0 - 4, P3.pas * (P3.n - 1) + 18, P3.yo - P3.y0 + 14, 8); x.fill();
+  for (let i = 0; i < P3.n; i++) {
+    const L = [], R = [];
+    for (let y = P3.y0; y <= P3.y1; y += 8) { const c = xFibre3(i, y); L.push([c - 5, y]); R.push([c + 5, y]); }
+    const xm = xFibre3(i, P3.y1 / 2 + P3.y0 / 2), g = x.createLinearGradient(xm - 7, 0, xm + 7, 0);
+    g.addColorStop(0, '#a8455c'); g.addColorStop(.45, '#f2a6b3'); g.addColorStop(1, '#9c3c53');
+    x.fillStyle = g; x.beginPath(); L.forEach(([px, py], k) => (k ? x.lineTo(px, py) : x.moveTo(px, py))); R.reverse().forEach(([px, py]) => x.lineTo(px, py)); x.closePath(); x.fill();
+    x.strokeStyle = 'rgba(110,30,50,.32)'; x.lineWidth = .8; x.beginPath();
+    for (let y = P3.y0 + 2; y < P3.y1; y += 4) { const c = xFibre3(i, y); x.moveTo(c - 4.6, y); x.lineTo(c + 4.6, y); }
+    x.stroke();
+  }
+  x.restore();
+}
+const P4 = { x: 398, w: 48, y0: 66, y1: 314 }, NOYAUX = [[0, 92], [1, 106], [0, 170], [1, 214], [0, 262], [1, 290]];
+function peindreFibre(x, a) {
+  x.save(); x.globalAlpha = a;
+  const g = x.createLinearGradient(P4.x, 0, P4.x + P4.w, 0);
+  g.addColorStop(0, '#a3445a'); g.addColorStop(.18, '#d97f92'); g.addColorStop(.5, '#f6b4c0'); g.addColorStop(.82, '#d47a8d'); g.addColorStop(1, '#983a50');
+  x.fillStyle = g; x.beginPath(); x.roundRect(P4.x, P4.y0, P4.w, P4.y1 - P4.y0, 6); x.fill();
+  x.save(); x.clip();
+  x.fillStyle = 'rgba(105,25,48,.30)'; x.beginPath();
+  for (let y = P4.y0 + 2; y < P4.y1; y += 7) x.rect(P4.x, y, P4.w, 3.2);      // stries : bandes sombres et claires
+  x.fill();
+  x.strokeStyle = 'rgba(255,230,235,.16)'; x.lineWidth = .8; x.beginPath();
+  for (let k = 1; k < 7; k++) { const xx = P4.x + k * P4.w / 7; x.moveTo(xx, P4.y0); x.lineTo(xx, P4.y1); }
+  x.stroke();
+  for (const [cote, y] of NOYAUX) {
+    const xx = cote ? P4.x + P4.w - 4 : P4.x + 4, gn = x.createRadialGradient(xx - 1, y - 3, .5, xx, y, 9);
+    gn.addColorStop(0, '#c4b5fd'); gn.addColorStop(.5, '#7c3aed'); gn.addColorStop(1, '#4c1d95');
+    x.fillStyle = gn; x.beginPath(); x.ellipse(xx, y, 3.4, 9, 0, 0, Math.PI * 2); x.fill();
+  }
+  x.restore(); x.restore();
+}
+const P5 = { x: 505, w: 14, yc: 190, demi: 124, k: 10 }, P6 = { x: 600, w: 64, yc: 190, demi: 120, k: 76 };
+/** Électronographie peinte à la verticale (la myofibrille et le sarcomère sont dessinés debout). */
+function electroDebout(x, P, G, a, strie) {
+  x.save(); x.globalAlpha = a; x.translate(P.x + P.w / 2, P.yc); x.rotate(Math.PI / 2);
+  F.electro(x, -P.demi, P.demi, -P.w / 2, P.w, G, u => u * P.k);
+  if (strie) for (const z of G.z) F.strieZ(x, z * P.k, -P.w / 2 - 4, P.w / 2 + 4);
+  x.restore();
+  x.save(); x.globalAlpha = a * .7; x.strokeStyle = 'rgba(230,230,230,.5)'; x.lineWidth = 1; x.strokeRect(P.x, P.yc - P.demi, P.w, 2 * P.demi); x.restore();
+}
+
+/* ── Le dessin ─────────────────────────────────────────────────────── */
+function loupe(c, cadre, cible) {   // cadre de la loupe sur un niveau, deux traits de rappel vers le niveau suivant
+  const [x, y, w, h] = cadre, [cx, cy1, cy2] = cible;
+  c.rect(x, y, w, h, { couleur: 'jaune', largeur: 1.6, arrondi: 4 });
+  c.ligne(x + w, y, cx, cy1, { couleur: 'tresfaible', largeur: 1.3, pointille: [4, 5] });
+  c.ligne(x + w, y + h, cx, cy2, { couleur: 'tresfaible', largeur: 1.3, pointille: [4, 5] });
+}
+function dessiner(c) {
+  const t = S.t;
+  c.direct(() => {
+    const x = c.ctx;
+    if (t >= E.muscle) peindreMuscle(x, rampe(t, E.muscle, .6));
+    if (t >= E.coupe + .2) peindreCoupe(x, rampe(t, E.coupe + .2, .6));
+    if (t >= E.ouvert + .2) peindreFaisceau(x, rampe(t, E.ouvert + .2, .6));
+    if (t >= E.fibre + .2) peindreFibre(x, rampe(t, E.fibre + .2, .6));
+    if (t >= E.myofibrille + .2) electroDebout(x, P5, F.geoPeriodique(2.5, 5), rampe(t, E.myofibrille + .2, .6), false);
+    if (t >= E.sarcomere + .2) electroDebout(x, P6, F.geo(2.5), rampe(t, E.sarcomere + .2, .6), true);
+  });
+  c.texte('Du muscle au sarcomère', 12, 24, { couleur: 'cyan', taille: 18 });
+  c.texte('chaque niveau agrandi à droite', 748, 24, { couleur: 'faible', taille: 14, align: 'right' });
+  if (t >= E.muscle) { c.repere('muscle', MX - 36, 100, 72, 168, 'le muscle'); c.repere('tendon', MX - 9, 76, 18, 30, 'le tendon'); }
+  if (t >= E.coupe) c.repere('faisceau', C2.x - C2.r, C2.y - C2.r, 2 * C2.r, 2 * C2.r, 'les faisceaux (coupe)');
+  if (t >= E.fibre) c.repere('fibre', P4.x, P4.y0, P4.w, P4.y1 - P4.y0, 'une fibre musculaire');
+  if (t >= E.noyaux) c.repere('noyaux', P4.x - 4, 80, P4.w + 8, 40, 'les noyaux, sur les bords de la fibre');
+  if (t >= E.myofibrille) c.repere('myofibrille', P5.x - 4, P5.yc - P5.demi, P5.w + 8, 2 * P5.demi, 'une myofibrille');
+  if (t >= E.sarcomere) { c.repere('sarcomere', P6.x - 6, P6.yc - 95, P6.w + 12, 190, 'un sarcomère'); c.repere('strie_z', P6.x - 6, P6.yc - 103, P6.w + 60, 16, 'une strie Z'); }
+  if (t >= E.muscle) c.repere('echelle', 20, YE - 16, 720, 40, 'l’échelle de chaque niveau');
+  // Niveau 1 : le muscle et le tendon.
+  if (ecrit(c, 'muscle', E.muscle + .5)) {
+    T(c, 'os', 117, 73, { couleur: 'faible', taille: 14 });
+    c.ligne(74, 92, 80, 92, { couleur: 'blanc', largeur: 1.3 }); T(c, 'tendon', 82, 97, { couleur: 'blanc', taille: 14 });
+    T(c, 'muscle', MX, YN, { couleur: 'blanc', taille: 16, align: 'center' });
+    T(c, 'quelques cm', MX, YE, { couleur: 'jaune', taille: 14, align: 'center' });
+  }
+  // Niveau 2 : une coupe montre les faisceaux.
+  if (ecrit(c, 'coupe', E.coupe)) {
+    c.trait([...Array(25).keys()].map(i => { const a = i / 24 * Math.PI * 2; return [MX + 38 * Math.cos(a), 190 + 7 * Math.sin(a)]; }), { couleur: 'jaune', largeur: 1.6, pointille: [5, 4], duree: .4 });
+    c.ligne(MX + 38, 183, C2.x - 8, C2.y - C2.r + 1, { couleur: 'tresfaible', largeur: 1.3, pointille: [4, 5] });
+    c.ligne(MX + 38, 197, C2.x - 8, C2.y + C2.r - 1, { couleur: 'tresfaible', largeur: 1.3, pointille: [4, 5] });
+    T(c, 'coupe : faisceaux', C2.x - 6, YN, { couleur: 'blanc', taille: 16, align: 'center' });
+    c.ligne(C2.x + 34, C2.y - 18, C2.x + 34, 124, { couleur: 'blanc', largeur: 1.3 });
+    T(c, 'un faisceau', C2.x + 34, 118, { couleur: 'blanc', taille: 14, align: 'center' });
+  }
+  // Niveau 3 : un faisceau ouvert en fibres (même échelle : le faisceau).
+  if (ecrit(c, 'ouvert', E.ouvert)) {
+    loupe(c, [C2.x + 34 - 19, C2.y - 19, 38, 38], [P3.x0 - 10, P3.y0, P3.y1]);
+    T(c, 'faisceau ouvert', 326, YN, { couleur: 'blanc', taille: 16, align: 'center' });
+    T(c, 'faisceau : Ø ≈ 1 mm', 256, YE, { couleur: 'jaune', taille: 14, align: 'center' });
+  }
+  // Niveau 4 : une fibre.
+  if (ecrit(c, 'fibre', E.fibre)) {
+    loupe(c, [xFibre3(5, 262) - 8, 244, 16, 50], [P4.x - 2, P4.y0, P4.y1]);
+    T(c, 'fibre', P4.x + P4.w / 2, YN, { couleur: 'blanc', taille: 16, align: 'center' });
+    T(c, 'Ø 10 à 100 µm', P4.x + P4.w / 2 - 4, YE, { couleur: 'jaune', taille: 14, align: 'center' });
+  }
+  // Les noyaux, sur les bords.
+  if (ecrit(c, 'noyaux', E.noyaux)) {
+    T(c, 'noyaux', P4.x + P4.w / 2, 52, { couleur: 'violet', taille: 15, align: 'center' });
+    c.fleche(P4.x + 12, 56, P4.x + 5, 82, { couleur: 'violet', largeur: 1.6, tete: 7 });
+    c.fleche(P4.x + P4.w - 12, 56, P4.x + P4.w - 5, 96, { couleur: 'violet', largeur: 1.6, tete: 7 });
+  }
+  // Niveau 5 : une myofibrille.
+  if (ecrit(c, 'myofibrille', E.myofibrille)) {
+    loupe(c, [P4.x + 20, 150, 8, 48], [P5.x - 2, P5.yc - P5.demi, P5.yc + P5.demi]);
+    T(c, 'myofibrille', P5.x + P5.w / 2, YN, { couleur: 'blanc', taille: 16, align: 'center' });
+    T(c, 'Ø 1 à 2 µm', P5.x + P5.w / 2 + 6, YE + 18, { couleur: 'jaune', taille: 14, align: 'center' });
+  }
+  // Niveau 6 : un sarcomère entre deux stries Z.
+  if (ecrit(c, 'sarcomere', E.sarcomere)) {
+    loupe(c, [P5.x - 3, P5.yc - 12.5, P5.w + 6, 25], [P6.x - 8, P6.yc - 95, P6.yc + 95]);
+    c.rect(P6.x - 6, P6.yc - 95, P6.w + 12, 190, { couleur: 'vert', largeur: 2, arrondi: 3 });
+    for (const s of [-1, 1]) { const y = P6.yc + s * 95; c.ligne(P6.x + P6.w + 8, y, P6.x + P6.w + 18, y, { couleur: 'blanc', largeur: 1.3 }); T(c, 'strie Z', P6.x + P6.w + 21, y + 5, { couleur: 'blanc', taille: 14 }); }
+    c.cote(742, P6.yc - 95, 742, P6.yc + 95, '', { couleur: 'vert' });
+    T(c, 'sarcomère', P6.x + P6.w / 2, YN, { couleur: 'vert', taille: 16, align: 'center' });
+    T(c, 'longueur ≈ 2,5 µm', P6.x + P6.w / 2, YE, { couleur: 'jaune', taille: 14, align: 'center' });
+  }
+}
+
+function ceQuiSeVoit() {
+  const t = S.t, m = [`t = ${fr(t, 1)} s${S.running ? ' (le dessin avance)' : S.fait ? ' (fin)' : t > 0 ? ' (arrêt sur image)' : ' (pas encore lancé)'}. Un dessin de gauche à droite, du muscle au sarcomère, chaque niveau agrandi à sa droite (loupe jaune et traits de rappel).`];
+  if (t < E.muscle) m.push('Rien n’est encore dessiné.');
+  if (t >= E.muscle) m.push('Niveau 1 : le muscle peint (rouge, fuseau à fibres fines) attaché en haut et en bas à l’os (ivoire) par le tendon (blanc nacré) ; écrit « os », « tendon », « muscle », échelle « quelques cm ».');
+  if (t >= E.coupe) m.push('Niveau 2 : une coupe du muscle (ellipse pointillée sur le muscle, rappel vers un disque) : 7 faisceaux arrondis entourés d’une enveloppe claire, chacun rempli de petites sections de fibres ; écrit « coupe : faisceaux », « un faisceau ».');
+  if (t >= E.ouvert) m.push('Niveau 3 : un faisceau (encadré dans la coupe) ouvert : 6 fibres roses striées serrées en haut, qui s’écartent en bas ; écrit « faisceau ouvert », échelle « faisceau : Ø ≈ 1 mm ».');
+  if (t >= E.fibre) m.push('Niveau 4 : une fibre (encadrée dans le faisceau) agrandie : cellule longue, rose, striée en travers (bandes sombres et claires), avec plusieurs noyaux violets allongés sur ses bords ; écrit « fibre », échelle « Ø 10 à 100 µm ».');
+  if (t >= E.noyaux) m.push('Les noyaux sont pointés par deux flèches violettes « noyaux » : ils sont sur les bords de la fibre, sous sa membrane.');
+  if (t >= E.myofibrille) m.push('Niveau 5 : une myofibrille (fin cylindre encadré dans la fibre) agrandie en électronographie : le même motif se répète, bandes sombres et claires et traits des stries Z ; écrit « myofibrille », échelle « Ø 1 à 2 µm ».');
+  if (t >= E.sarcomere) m.push('Niveau 6 : un motif de la myofibrille encadré et agrandi : un sarcomère encadré en vert entre deux stries Z (zigzags sombres, écrites « strie Z »), bande sombre au milieu, demi-bandes claires aux bouts ; écrit « sarcomère », échelle « longueur ≈ 2,5 µm ».');
+  return m.join(' ');
+}
+
+const canvas = $('canvas');
+scene = window.MuscleTableau.Scene(canvas, (c) => { scene.cadre(23); dessiner(c); return c.fin(); });
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(FIN, S.t + dt);
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 1)} s`) + '.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre();
+    return true;
+  }
+  if (S.t >= FIN) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), 'Muscle → faisceaux → fibres → myofibrilles → sarcomères : le sarcomère est l’unité qui se répète.', 'good'); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+const niveau = () => NIVEAUX.filter(k => S.t >= MOMENTS[k] - 1e-6).length;
+function start() { S.jusqua = null; S.vu = {}; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; scene.sale = true; bulle($('feedback'), 'Du muscle au sarcomère : on agrandit niveau par niveau…'); pont.noter('start'); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait || S.t >= FIN) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
+function playUntil(p) {
+  const nom = p.moment, ok = nom in MOMENTS, cible = ok ? MOMENTS[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  const rejoue = S.fait || S.t >= cible - 1e-4;
+  if (rejoue) { S.vu = {}; S.t = 0; }
+  S.jusqua = Math.min(FIN, Math.max(.001, cible)); S.motif = ok ? MOTIFS[nom] : '';
+  S.running = true; S.fait = false; $('run').textContent = 'Pause'; scene.sale = true;
+  bulle($('feedback'), rejoue ? 'On reprend depuis le muscle… observe.' : 'Observe…');
+  pont.noter('play_until', { moment: ok ? nom : null, time_s: S.jusqua }); pont.emettre();
+}
+function setTime(p) {
+  const t = +p.time_s; if (!Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.vu = {}; S.t = Math.min(FIN, Math.max(0, t)); S.fait = S.t >= FIN;
+  $('run').textContent = S.fait ? 'Rejouer' : 'Reprendre'; scene.sale = true;
+  bulle($('feedback'), `Arrêt sur image : t = ${fr(S.t, 1)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function setParameters(p) {
+  if (!Number.isFinite(+p.niveau)) return;
+  const k = Math.min(6, Math.max(1, Math.round(+p.niveau)));
+  pont.noter('set_parameters', { niveau: k }); playUntil({ moment: NIVEAUX[k - 1] });
+}
+$('run').onclick = () => (S.running ? pause() : (S.t > 0 && S.t < FIN && !S.fait ? resume() : start()));
+
+window.Tableau.explication({ structure: [
+  { repere: 'muscle', texte: 'Le muscle est attaché à l’os par le tendon.' },
+  { repere: 'faisceau', texte: 'Une coupe du muscle montre des faisceaux, d’environ un millimètre.' },
+  { repere: 'fibre', texte: 'Chaque faisceau est fait de fibres : une fibre est une cellule longue et striée.' },
+  { repere: 'noyaux', texte: 'La fibre a plusieurs noyaux, placés sur ses bords.' },
+  { repere: 'myofibrille', texte: 'La fibre est remplie de myofibrilles : le même motif de bandes se répète.' },
+  { repere: 'sarcomere', texte: 'Ce motif, entre deux stries Z, c’est le sarcomère : environ 2,5 micromètres.' },
+  { repere: 'echelle', texte: 'À chaque niveau l’échelle change : du centimètre au micromètre.' }] });
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'muscle_structure', version: '1.0', title: 'Du muscle au sarcomère', variants: [{ id: 'structure', label: 'structure' }], commands: commandes,
+  command_schema: {
+    set_parameters: { niveau: `1..6 (rejoue jusqu’au niveau : ${NIVEAUX.join(', ')})` },
+    set_time: { time_s: `0..${fr(FIN, 1)} (arrêt sur cet instant, en s de la scène)` },
+    play_until: { moment: NIVEAUX.join(' | ') + ' (rejoue et se fige à cet instant)', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Du muscle au sarcomère : muscle attaché à l’os par le tendon (quelques cm) → faisceaux (Ø ≈ 1 mm) → fibres, cellules longues striées à plusieurs noyaux sur les bords (Ø 10 à 100 µm) → myofibrilles (Ø 1 à 2 µm) au motif répété → sarcomère entre deux stries Z (≈ 2,5 µm).',
+  etat: () => ({ simulation_status: S.running ? 'running' : (S.fait ? 'finished' : (S.t > 0 ? 'paused' : 'idle')), ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'structure',
+    time_s: +S.t.toFixed(2), parameters: { niveau: niveau() }, moments: { ...MOMENTS } }),
+  progression: () => (S.fait ? 1 : Math.min(1, S.t / FIN)),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Du muscle au sarcomère…');
+setTimeout(() => { if (!S.running && S.t === 0) start(); }, 1600);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

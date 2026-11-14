@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le cycle cellulaire — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="genetique.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Le cycle cellulaire : un cercle G1, S, G2, M parcouru par un point, la cellule qui grandit, copie son ADN et se divise ; la courbe de la quantité d’ADN q, 2q, q tracée en même temps, avec l’aspect des chromosomes de chaque phase"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="etapes.js"></script>
+<script>
+/*
+ * Le cycle cellulaire et la quantité d’ADN (cours « Notion de l’information génétique », 2 Bac PC BIOF, 11 novembre 2026).
+ * Capacités NIG3, NIG5, NIG10. Cycle de 20 h : G1 0–9 h, S 9–15 h, G2 15–19 h, M (mitose) 19–20 h ; q = 3 UA, 2q = 6 UA.
+ * Le temps de la scène n’est pas proportionnel aux heures (la mitose, 1 h, est jouée plus lentement pour être vue) ;
+ * la courbe, elle, est tracée en heures exactes.
+ * Vue cycle : cercle des phases, point qui tourne (poignée, paramètre t_h), cellule au centre, rangée de cellules q / q → 2q / 2q / 2q / q + q.
+ * Vue courbe : petit cercle + courbe « quantité d’ADN (UA) en fonction du temps (h) », chromosome de chaque phase au-dessus.
+ */
+const { lisse, rampe, entre, Peint } = window.Etapes;
+const TAU = Math.PI * 2;
+/* Correspondance temps de la scène (s) → heure du cycle (h). */
+const SEG = [[0, .5, 0, 0], [.5, 5.5, 0, 9], [5.5, 11.5, 9, 15], [11.5, 15.5, 15, 19], [15.5, 20.5, 19, 20], [20.5, 99, 20, 20]];
+function heure(t) { for (const [a, b, h0, h1] of SEG) if (t < b) return entre(h0, h1, Math.max(0, (t - a) / (b - a))); return 20; }
+function tDe(h) { for (const [a, b, h0, h1] of SEG) if (h <= h1 && h1 > h0) return a + (b - a) * (h - h0) / (h1 - h0); return 20.5; }
+const phase = h => (h < 9 ? 'G1' : h < 15 ? 'S' : h < 19 ? 'G2' : h < 20 ? 'M' : 'fin');
+const ADN = h => (h < 9 ? 3 : h < 15 ? 3 + 3 * (h - 9) / 6 : h < 19.9 ? 6 : h < 20 ? 6 - 3 * (h - 19.9) / .1 : 3);   // UA
+const COUL = { G1: 'rgba(74,222,128,', S: 'rgba(251,146,60,', G2: 'rgba(96,165,250,', M: 'rgba(192,132,252,' };
+const BORNES = { G1: [0, 9], S: [9, 15], G2: [15, 19], M: [19, 20] };
+const ang = h => -Math.PI / 2 + h / 20 * TAU;
+
+/* ── Le cercle du cycle ──────────────────────────────────────────── */
+function cercle(x, cx, cy, R, h, a = 1) {
+  x.save(); x.globalAlpha = a;
+  for (const [p, [h0, h1]] of Object.entries(BORNES)) {
+    const actif = phase(h) === p;
+    x.fillStyle = COUL[p] + (actif ? '.42)' : '.18)'); x.beginPath(); x.moveTo(cx, cy); x.arc(cx, cy, R, ang(h0), ang(h1)); x.closePath(); x.fill();
+    x.strokeStyle = 'rgba(226,232,240,.35)'; x.lineWidth = 1; x.stroke();
+  }
+  x.fillStyle = 'rgba(15,23,42,.0)';
+  x.restore();
+}
+function pointCycle(x, cx, cy, R, h) {
+  const a = ang(Math.min(20, h)), px = cx + R * Math.cos(a), py = cy + R * Math.sin(a);
+  Peint.halo(x, px, py, 14, 'rgba(250,204,21,.6)');
+  x.save(); x.fillStyle = '#facc15'; x.beginPath(); x.arc(px, py, 6, 0, TAU); x.fill(); x.restore();
+  return [px, py];
+}
+/** La cellule du centre, selon l’heure : grandit en G1, ADN doublé en S, se divise en M. */
+function celluleCycle(x, cx, cy, h, s = 1) {
+  if (h < 19) {
+    const r = s * (h < 9 ? entre(30, 38, h / 9) : h < 15 ? entre(38, 42, (h - 9) / 6) : 42);
+    Peint.cellule(x, cx, cy, r * 1.15, r);
+    Peint.noyau(x, cx, cy, r * .48, 1, { nucleole: true });
+    if (h >= 9) { x.save(); x.strokeStyle = 'rgba(251,146,60,.85)'; x.lineWidth = 1.4; const n = h >= 15 ? 4 : Math.floor(1 + 3 * (h - 9) / 6); for (let i = 0; i < n; i++) { x.beginPath(); x.moveTo(cx - r * .3, cy - r * .25 + i * r * .17); x.quadraticCurveTo(cx, cy - r * .15 + i * r * .17, cx + r * .3, cy - r * .25 + i * r * .17); x.stroke(); } x.restore(); }
+  } else {
+    const u = Math.min(1, (h - 19) / 1), d = s * 26 * lisse(u), r = s * entre(42, 30, lisse(u));
+    if (u < .55) { Peint.cellule(x, cx, cy, s * 48 * (1 + .1 * u), s * 42 * (1 - .25 * u)); for (const sg of [-1, 1]) for (const k of [0, 1]) Peint.chromosome(x, cx + sg * 22 * lisse(u * 1.8), cy - 8 + k * 16, 16, 0, k ? Peint.BLEU : Peint.VIOLET, { epaisseur: 4, deux: u < .2 }); }
+    else { Peint.cellule(x, cx - d, cy, r, r * .9); Peint.cellule(x, cx + d, cy, r, r * .9); Peint.noyau(x, cx - d, cy, r * .45); Peint.noyau(x, cx + d, cy, r * .45); }
+  }
+}
+
+/* ── Vue cycle ──────────────────────────────────────────────────────── */
+const CY = { cx: 175, cy: 190, R: 104 };
+const RANG = [{ x: 70, h: 4.5, lib: 'q', ph: 'G1' }, { x: 190, h: 12, lib: 'q → 2q', ph: 'S' }, { x: 310, h: 17, lib: '2q', ph: 'G2' }, { x: 430, h: 19.2, lib: '2q', ph: 'M' }, { x: 580, h: 20, lib: 'q + q', ph: 'filles' }];
+const MC = { g1: tDe(4.5), s: tDe(12), g2: tDe(17), interphase: tDe(19) + .25, mitose: tDe(19.5), deux_filles: 21.0 };
+const LEG = [['G1', 'G1 : croissance', 112], ['S', 'S : synthèse (réplication de l’ADN)', 146], ['G2', 'G2 : croissance', 180], ['M', 'M : mitose', 214]];
+function dessinerCycle(c, k) {
+  const t = k.t, h = heure(t);
+  c.direct(() => {
+    const x = c.ctx;
+    cercle(x, CY.cx, CY.cy, CY.R, h);
+    celluleCycle(x, CY.cx, CY.cy, h);
+    pointCycle(x, CY.cx, CY.cy, CY.R, h);
+    for (const r of RANG) if (h >= r.h - 1e-6) {
+      if (r.ph === 'filles') { Peint.cellule(x, r.x - 26, 352, 20, 17); Peint.cellule(x, r.x + 26, 352, 20, 17); Peint.noyau(x, r.x - 26, 352, 8); Peint.noyau(x, r.x + 26, 352, 8); }
+      else if (r.ph === 'M') { Peint.cellule(x, r.x, 352, 30, 22); for (const kk of [0, 1]) Peint.chromosome(x, r.x, 346 + kk * 12, 16, 0, kk ? Peint.BLEU : Peint.VIOLET, { epaisseur: 4, deux: true, ecart: 2.5 }); }
+      else { const rr = r.ph === 'G1' ? 22 : 26; Peint.cellule(x, r.x, 352, rr * 1.15, rr); Peint.noyau(x, r.x, 352, rr * .45); }
+    }
+  });
+  c.texte('Le cycle cellulaire (20 h)', 14, 26, { couleur: 'cyan', taille: 19 });
+  c.repere('cercle', CY.cx - CY.R, CY.cy - CY.R, 2 * CY.R, 2 * CY.R, 'le cycle cellulaire');
+  for (const [p, [h0, h1]] of Object.entries(BORNES)) { const am = ang((h0 + h1) / 2); c.repere(p.toLowerCase(), CY.cx + CY.R * .7 * Math.cos(am) - 16, CY.cy + CY.R * .7 * Math.sin(am) - 16, 32, 32, p === 'M' ? 'la mitose' : 'la phase ' + p); }
+  const [px, py] = [CY.cx + CY.R * Math.cos(ang(h)), CY.cy + CY.R * Math.sin(ang(h))];
+  c.repere('point', px - 10, py - 10, 20, 20, 'le point du cycle (poignée)'); c.repere('cellule', CY.cx - 45, CY.cy - 42, 90, 84, 'la cellule');
+  if (k.ecrit(c, 'leg', .3)) {
+    for (const [p, lib, y] of LEG) {
+      const [h0, h1] = BORNES[p], am = ang((h0 + h1) / 2), coul = p === 'G1' ? 'vert' : p === 'S' ? 'orange' : p === 'G2' ? 'bleu' : 'violet';
+      const rr = p === 'M' ? CY.R + 22 : CY.R * .72;
+      k.T(c, p, CY.cx + rr * Math.cos(am), CY.cy + rr * Math.sin(am) + 6, { couleur: coul, taille: p === 'M' ? 16 : 20, align: 'center', gras: true });
+      k.T(c, lib, 324, y, { couleur: coul, taille: 15 });
+    }
+    k.T(c, '0 h', CY.cx + 8, CY.cy - CY.R + 20, { couleur: 'faible', taille: 13 });
+  }
+  if (k.ecrit(c, 'inter', MC.interphase - .2)) {
+    c.trait([...Array(41).keys()].map(i => { const a = ang(19 * i / 40); return [CY.cx + (CY.R + 12) * Math.cos(a), CY.cy + (CY.R + 12) * Math.sin(a)]; }), { couleur: 'jaune', largeur: 1.6, duree: .8 });
+    k.T(c, 'interphase = G1 + S + G2', 324, 254, { couleur: 'jaune', taille: 16 });
+    k.T(c, '19 h sur 20 h : la plus longue', 324, 274, { couleur: 'jaune', taille: 14 });
+    c.repere('interphase', 318, 236, 250, 44, 'l’interphase');
+  }
+  for (const r of RANG) if (h >= r.h - 1e-6 && k.ecrit(c, 'r' + r.x, MC[r.ph === 'G1' ? 'g1' : r.ph === 'S' ? 's' : r.ph === 'G2' ? 'g2' : r.ph === 'M' ? 'mitose' : 'deux_filles'] - .4)) {
+    k.T(c, r.lib, r.x, 400, { couleur: r.ph === 'S' ? 'orange' : 'blanc', taille: 15, align: 'center' });
+  }
+  if (h >= 4.5) c.repere('rangee', 40, 325, 590, 85, 'la quantité d’ADN de la cellule, phase par phase');
+  if (k.ecrit(c, 'filles', MC.deux_filles - .3)) {
+    k.T(c, 'chaque cellule fille', 754, 340, { couleur: 'vert', taille: 14, align: 'right' });
+    k.T(c, 'reçoit q', 754, 360, { couleur: 'vert', taille: 14, align: 'right' });
+    c.repere('filles', 530, 330, 100, 45, 'les deux cellules filles');
+  }
+}
+function voitCycle(k) {
+  const h = heure(k.t), p = phase(h);
+  const m = [`Cercle du cycle cellulaire de 20 h découpé en secteurs : G1 (0 à 9 h, croissance), S (9 à 15 h, synthèse : réplication de l’ADN), G2 (15 à 19 h, croissance), M (19 à 20 h, mitose). Le point jaune est à ${k.fr(h, 1)} h, ${p === 'fin' ? 'à la fin du cycle' : 'en ' + (p === 'M' ? 'mitose' : 'phase ' + p)}.`];
+  m.push(h < 9 ? 'Au centre, la cellule grandit.' : h < 15 ? 'Au centre, le noyau montre des filaments doublés (en orange) : l’ADN se copie.' : h < 19 ? 'Au centre, la cellule a son ADN doublé, elle grandit encore.' : 'Au centre, la cellule se divise en deux cellules filles.');
+  const vus = RANG.filter(r => h >= r.h - 1e-6).map(r => `${r.ph === 'filles' ? 'deux cellules filles' : r.ph} : ${r.lib}`);
+  if (vus.length) m.push('Rangée du bas, quantité d’ADN : ' + vus.join(' ; ') + '.');
+  if (k.t >= MC.interphase - .2) m.push('Accolade jaune « interphase = G1 + S + G2 », « 19 h sur 20 h : la plus longue ».');
+  if (k.t >= MC.deux_filles - .3) m.push('Écrit « chaque cellule fille reçoit q ».');
+  return m;
+}
+
+/* ── Vue courbe ─────────────────────────────────────────────────────── */
+const G = { x0: 200, x1: 680, y0: 370, yh: 31.4 }, gx = h => G.x0 + h * (G.x1 - G.x0) / 20, gy = q => G.y0 - q * G.yh;
+const PC = { cx: 78, cy: 156, R: 54 };
+const MK = { g1_q: tDe(4.5), debut_s: tDe(9) + .05, yeux_replication: tDe(12), fin_s_2q: tDe(15) + .05, g2: tDe(16.5), deux_chromatides: tDe(18), condense: tDe(19.25), separation: tDe(19.6), retour_q: 20.5, deux_filles: 21.6 };
+/** Chromosome de la phase, peint (au-dessus de la courbe). */
+function chromosomePhase(x, cx, cy, quoi, a = 1) {
+  x.save(); x.globalAlpha = a;
+  const fil = (dy, couleur, bulles) => {
+    x.strokeStyle = couleur; x.lineWidth = 2.6; x.lineCap = 'round'; x.beginPath();
+    for (let i = 0; i <= 30; i++) { const u = i / 30, px = cx - 34 + 68 * u; let py = cy + dy + Math.sin(u * 14) * 2.2; x[i ? 'lineTo' : 'moveTo'](px, py); }
+    x.stroke();
+    if (bulles) for (const bx of [-18, 2, 20]) { x.strokeStyle = 'rgba(251,146,60,.95)'; x.lineWidth = 2.2; x.beginPath(); x.ellipse(cx + bx, cy + dy, 6, 4, 0, 0, TAU); x.stroke(); }
+  };
+  if (quoi === 'G1') fil(0, '#a855f7', false);
+  if (quoi === 'S') fil(0, '#a855f7', true);
+  if (quoi === 'G2') { fil(-4, '#a855f7', false); fil(4, '#a855f7', false); x.fillStyle = '#3b0764'; x.beginPath(); x.arc(cx - 6, cy, 3.2, 0, TAU); x.fill(); }
+  if (quoi === 'X') Peint.chromosome(x, cx, cy, 34, Math.PI / 2, Peint.VIOLET, { epaisseur: 7, deux: true, ecart: 5 });
+  if (quoi === 'lots') { Peint.chromosome(x, cx, cy - 13, 18, Math.PI / 2, Peint.VIOLET, { epaisseur: 6 }); Peint.chromosome(x, cx, cy + 15, 18, Math.PI / 2, Peint.VIOLET, { epaisseur: 6 }); }
+  x.restore();
+}
+const ICONES = [{ quoi: 'G1', x: 308, h: 1, lib: 'un fil' }, { quoi: 'S', x: 488, h: 10.5, lib: 'des yeux' }, { quoi: 'G2', x: 600, h: 16, lib: 'deux fils' }, { quoi: 'X', x: 676, h: 19.15, lib: '' }, { quoi: 'lots', x: 732, h: 19.55, lib: '' }];
+function dessinerCourbe(c, k) {
+  const t = k.t, h = heure(t);
+  c.direct(() => {
+    const x = c.ctx;
+    cercle(x, PC.cx, PC.cy, PC.R, h); pointCycle(x, PC.cx, PC.cy, PC.R, h);
+    for (const ic of ICONES) if (h >= ic.h) chromosomePhase(x, ic.x, 84, ic.quoi, rampe(h, ic.h, .3));
+    if (t >= MK.deux_filles - .6) { const a = rampe(t, MK.deux_filles - .6, .5); x.save(); x.globalAlpha = a; Peint.cellule(x, 712, 300, 16, 13); Peint.cellule(x, 744, 300, 14, 12); Peint.noyau(x, 712, 300, 6); Peint.noyau(x, 744, 300, 5.5); x.restore(); }
+  });
+  c.texte('La quantité d’ADN au cours du cycle', 14, 26, { couleur: 'cyan', taille: 19 });
+  // petit cercle légendé
+  c.texte('G1', PC.cx + 30, PC.cy + 6, { couleur: 'vert', taille: 13, duree: .1 }); c.texte('S', PC.cx - 34, PC.cy + 34, { couleur: 'orange', taille: 13, duree: .1 });
+  c.texte('G2', PC.cx - 40, PC.cy - 18, { couleur: 'bleu', taille: 13, duree: .1 }); c.texte('M', PC.cx - 14, PC.cy - 38, { couleur: 'violet', taille: 13, duree: .1 });
+  c.repere('cercle', PC.cx - PC.R, PC.cy - PC.R, 2 * PC.R, 2 * PC.R, 'le cycle'); const ap = ang(h); c.repere('point', PC.cx + PC.R * Math.cos(ap) - 9, PC.cy + PC.R * Math.sin(ap) - 9, 18, 18, 'le point du cycle');
+  // axes
+  c.axe(G.x0, G.y0, G.x1 + 30, G.y0, [0, 5, 10, 15, 20].map(v => [v * (G.x1 - G.x0) / 20 / (G.x1 + 30 - G.x0), String(v)]));
+  c.axe(G.x0, G.y0, G.x0, gy(7.4), [1, 2, 3, 4, 5, 6, 7].map(v => [v * G.yh / (G.y0 - gy(7.4)), String(v)]), { vertical: true, taille: 12 });
+  c.texte('quantité d’ADN (UA)', G.x0 + 8, gy(7.4) + 6, { couleur: 'faible', taille: 14, duree: .4 });
+  c.texte('temps (h)', G.x1 + 30, G.y0 + 38, { couleur: 'faible', taille: 14, align: 'right', duree: .3 });
+  c.repere('axe_temps', G.x0, G.y0 - 6, G.x1 - G.x0 + 30, 30, 'l’axe du temps (h)'); c.repere('axe_adn', G.x0 - 34, gy(7.4), 40, G.y0 - gy(7.4), 'l’axe de la quantité d’ADN (UA)');
+  for (const [q, lib] of [[3, 'q'], [6, '2q']]) { c.ligne(G.x0, gy(q), G.x1 + 20, gy(q), { couleur: 'tresfaible', largeur: 1, pointille: [3, 6], duree: .2 }); c.texte(lib, G.x0 - 36, gy(q) + 5, { couleur: 'jaune', taille: 15, align: 'right', duree: .1 }); }
+  for (const hb of [9, 15, 19]) c.ligne(gx(hb), G.y0, gx(hb), gy(7), { couleur: 'tresfaible', largeur: 1, pointille: [2, 5], duree: .15 });
+  for (const [p, [h0, h1]] of Object.entries(BORNES)) if (h >= h0) c.texte(p, gx((h0 + h1) / 2), 356, { couleur: p === 'G1' ? 'vert' : p === 'S' ? 'orange' : p === 'G2' ? 'bleu' : 'violet', taille: 15, align: 'center', duree: .15 });
+  // la courbe, tracée jusqu’à l’heure courante
+  c.direct(() => {
+    const x = c.ctx, n = Math.max(2, Math.ceil(h * 12));
+    x.save(); x.strokeStyle = '#f8fafc'; x.lineWidth = 3; x.lineJoin = 'round'; x.beginPath();
+    for (let i = 0; i <= n; i++) { const hh = h * i / n; x[i ? 'lineTo' : 'moveTo'](gx(hh), gy(ADN(hh))); }
+    x.stroke(); x.restore();
+    Peint.halo(x, gx(h), gy(ADN(h)), 10, 'rgba(250,204,21,.7)');
+  });
+  c.repere('courbe', G.x0, gy(6.4), gx(h) - G.x0 + 4, G.y0 - gy(6.4), 'la courbe');
+  c.repere('palier_q', G.x0, gy(3) - 8, gx(9) - G.x0, 16, 'le palier à q (G1)');
+  if (h >= 9) c.repere('montee', gx(9), gy(6) - 4, gx(15) - gx(9), gy(3) - gy(6) + 8, 'la montée de q à 2q (phase S)');
+  if (h >= 15) c.repere('palier_2q', gx(15), gy(6) - 8, gx(19.9) - gx(15), 16, 'le palier à 2q (G2)');
+  if (h >= 19.9) c.repere('chute', gx(19.8), gy(6) - 4, 16, gy(3) - gy(6) + 8, 'la chute de 2q à q');
+  c.repere('phases', G.x0, 340, G.x1 - G.x0, 24, 'les phases');
+  c.repere('chromosome', 270, 58, 480, 54, 'l’aspect du chromosome de chaque phase');
+  if (h >= 10.5) c.repere('yeux', 460, 72, 56, 24, 'les yeux de réplication');
+  for (const ic of ICONES) if (ic.lib && h >= ic.h && k.ecrit(c, 'ic' + ic.quoi, tDe(ic.h) + .2)) k.T(c, ic.lib, ic.x, 116, { couleur: 'faible', taille: 13, align: 'center' });
+  if (k.ecrit(c, 'g1', MK.g1_q - .6)) k.T(c, 'G1 : q constante', gx(4.5), gy(3) - 12, { couleur: 'vert', taille: 14, align: 'center' });
+  if (k.ecrit(c, 'fs', MK.fin_s_2q - .1)) { k.T(c, 'q → 2q :', 222, 222, { couleur: 'orange', taille: 15 }); k.T(c, 'réplication', 222, 242, { couleur: 'orange', taille: 15 }); }
+  if (k.ecrit(c, 'dc', MK.deux_chromatides - .2)) { k.T(c, 'chromosome à deux chromatides', 600, 176, { couleur: 'bleu', taille: 13, align: 'center' }); }
+  if (k.ecrit(c, 'cd', MK.condense - .2)) k.T(c, 'condensé', 676, 52, { couleur: 'violet', taille: 13, align: 'center' });
+  if (k.ecrit(c, 'sep', MK.separation - .2)) k.T(c, 'séparés', 735, 52, { couleur: 'violet', taille: 13, align: 'center' });
+  if (k.ecrit(c, 'rq', MK.retour_q - .2)) { k.T(c, '2q → q : répartition entre', 420, 312, { couleur: 'violet', taille: 15 }); k.T(c, 'deux cellules filles', 420, 332, { couleur: 'violet', taille: 15 }); }
+  if (k.ecrit(c, 'df', MK.deux_filles - .4)) { k.T(c, 'q', 712, 280, { couleur: 'vert', taille: 14, align: 'center' }); k.T(c, 'q', 744, 280, { couleur: 'vert', taille: 14, align: 'center' }); }
+}
+function voitCourbe(k) {
+  const h = heure(k.t), q = ADN(h), m = [`À gauche le petit cercle du cycle, point à ${k.fr(h, 1)} h (${phase(h) === 'fin' ? 'fin du cycle' : phase(h) === 'M' ? 'mitose' : 'phase ' + phase(h)}). À droite la courbe « quantité d’ADN (UA) en fonction du temps (h) » se trace jusqu’à ${k.fr(h, 1)} h ; valeur actuelle ${k.fr(q, 1)} UA (q = 3 UA, 2q = 6 UA en pointillés ; frontières des phases à 9, 15 et 19 h).`];
+  if (h >= 9) m.push('De 0 à 9 h (G1) la courbe est un palier à q.');
+  if (h >= 9 && h < 15) m.push('En S la courbe monte ; au-dessus, le chromosome est un fil avec des yeux de réplication (bulles orange).');
+  if (h >= 15) m.push('De 9 à 15 h (S) elle est montée de q à 2q (écrit « q → 2q : réplication »).');
+  if (h >= 16) m.push('En G2 palier à 2q ; le chromosome dessiné est fait de deux fils reliés en un point' + (k.t >= MK.deux_chromatides - .2 ? ' (écrit « chromosome à deux chromatides »).' : '.'));
+  if (h >= 19.15) m.push('En mitose, le chromosome est condensé en X (écrit « condensé »)' + (h >= 19.55 ? ', puis ses chromatides séparées en deux lots (écrit « séparés »).' : '.'));
+  if (h >= 19.95) m.push('À 20 h la courbe chute de 2q à q (écrit « 2q → q : répartition entre deux cellules filles »).');
+  if (k.t >= MK.deux_filles - .6) m.push('Deux petites cellules filles à droite, chacune marquée q.');
+  return m;
+}
+
+window.Etapes.lancer({
+  id: 'genetique_cycle', titre: 'Le cycle cellulaire et la quantité d’ADN', graine: 19,
+  parametres: { t_h: { defaut: null, schema: '0..20 (heure du cycle : le point va à cette heure, vue cycle)', lire: v => Math.min(20, Math.max(0, +v)) } },
+  poignees: {
+    toucher: (x, y, k) => { if (k.vue !== 'cycle') return null; const h = heure(k.t), a = ang(h), px = CY.cx + CY.R * Math.cos(a), py = CY.cy + CY.R * Math.sin(a); return Math.hypot(x - px, y - py) < 18 ? 'point' : null; },
+    bouger: (id, x, y, k, api) => { let a = Math.atan2(y - CY.cy, x - CY.cx) + Math.PI / 2; if (a < 0) a += TAU; const h = Math.min(20, a / TAU * 20); api.poser({ t_h: h }); api.setTime({ time_s: tDe(h) }); },
+  },
+  vues: {
+    cycle: { titre: 'Le cycle cellulaire', fin: 22, moments: MC, dessiner: dessinerCycle, voit: voitCycle,
+      motifs: { g1: 'la phase G1 : la cellule grandit', s: 'la phase S : l’ADN se copie (réplication)', g2: 'la phase G2 : la cellule grandit encore', interphase: 'l’interphase = G1 + S + G2 : 19 h sur 20 h', mitose: 'la mitose : la cellule se divise', deux_filles: 'deux cellules filles, chacune avec q' },
+      conclusion: 'Interphase (G1, S, G2) puis mitose : chaque cellule fille reçoit q.',
+      surReglage: (k, cles, api) => { if (cles.includes('t_h')) api.setTime({ time_s: tDe(k.P.t_h) }); },
+      texte: 'Cycle cellulaire de 20 h : G1 0–9 h (croissance), S 9–15 h (réplication de l’ADN), G2 15–19 h (croissance), M 19–20 h (mitose). Interphase = G1 + S + G2. Quantité d’ADN : q, q → 2q, 2q, 2q, q + q.',
+      explication: [{ repere: 'g1', texte: 'G1 : la cellule grandit, quantité d’ADN q.' }, { repere: 's', texte: 'S : l’ADN se copie, de q à 2q.' }, { repere: 'g2', texte: 'G2 : la cellule grandit encore, 2q.' }, { repere: 'm', texte: 'M : la mitose, deux cellules filles avec q chacune.' }, { repere: 'interphase', texte: 'L’interphase, G1 + S + G2, est la plus longue.' }] },
+    courbe: { titre: 'La quantité d’ADN au cours du cycle', fin: 22.2, moments: MK, dessiner: dessinerCourbe, voit: voitCourbe,
+      motifs: { g1_q: 'en G1, la quantité d’ADN reste à q', debut_s: 'début de la phase S (9 h)', yeux_replication: 'en S, des yeux de réplication : la quantité monte', fin_s_2q: 'fin de la phase S (15 h) : 2q', g2: 'en G2, la quantité reste à 2q', deux_chromatides: 'en G2, chromosome à deux chromatides', condense: 'en mitose, le chromosome est condensé', separation: 'les chromatides se séparent', retour_q: '20 h : la quantité revient à q', deux_filles: 'deux cellules filles, chacune q' },
+      conclusion: 'q → 2q en phase S (réplication), 2q → q à la fin de la mitose (répartition).',
+      texte: 'Courbe de la quantité d’ADN (UA) en fonction du temps (h) : q = 3 UA en G1 (0–9 h), montée à 2q = 6 UA en S (9–15 h), 2q en G2 (15–19 h), retour à q à la fin de la mitose (20 h). Au-dessus : un fil, des yeux, deux fils, un X condensé, deux lots.',
+      explication: [{ repere: 'palier_q', texte: 'En G1, la quantité reste à q.' }, { repere: 'montee', texte: 'En S, elle double : c’est la réplication.' }, { repere: 'palier_2q', texte: 'En G2, elle reste à 2q : deux chromatides.' }, { repere: 'chute', texte: 'À la fin de la mitose, chaque cellule fille reçoit q.' }] },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le cycle d’une tête de myosine — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="muscle.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Une tête de myosine très agrandie, sur un filament épais fixe, en face d’un filament d’actine aux sites libérés : elle se fixe (complexe actomyosine), l’ATP est hydrolysé, la tête tourne et fait glisser l’actine d’un cran vers le centre du sarcomère, puis un nouvel ATP se fixe et la tête se détache"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="molecules.js"></script>
+<script>
+/*
+ * Le cycle d’une tête de myosine (cours « Rôle du muscle strié squelettique », 10 novembre 2026).
+ * Ordre du cadre de référence et de l’examen 2018 (session normale) : (Ca²⁺ fixé sur la troponine, sites libérés) →
+ * complexe actomyosine → hydrolyse de l’ATP (ATP → ADP + Pi) → rotation de la tête → glissement de l’actine d’un cran
+ * vers le centre du sarcomère → fixation d’un nouvel ATP et détachement → la tête revient et se fixe plus loin.
+ * Sans ATP, la tête reste fixée à l’actine : pas de détachement. Le filament épais (myosine) ne bouge pas : un repère
+ * fixe est dessiné sous l’actine, et une perle claire de l’actine montre son glissement.
+ * Vues (?vue=) : cycle (défaut), sans_atp, etapes (avec la liste numérotée et la libération du Ca²⁺ au début).
+ * Paramètre atp (true/false) : interrupteur dessiné ; false = comme sans_atp. Temps de la scène en secondes (très ralenti).
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const P = window.MoleculesPeintes;
+const $ = id => document.getElementById(id);
+const VUES = ['cycle', 'sans_atp', 'etapes'];
+const demande = new URLSearchParams(location.search).get('vue');
+const vue = VUES.includes(demande) ? demande : 'cycle';
+const ETAPES = vue === 'etapes';
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const rampe = (t, a, b) => clamp((t - a) / (b - a));
+const doux = f => f * f * (3 - 2 * f);
+const lerp = P.lerp;
+
+/* ── Géométrie (cadre 760 × 420 ; dessin à gauche x 20–500, texte à droite x 525–750) ─────────── */
+const FINE = { X0: 20, x0: 20, x1: 500, y: 120 };
+const Y_EPAIS = 250, BASE = { x: 190, y: 243 }, CRAN = 36;                 // un cran = l’écart entre deux sites
+const X_PRE = 164, X_POST = X_PRE + CRAN, Y_FIXE = 132, Y_LIBRE = 160;
+const A_PRE = -110 * Math.PI / 180, A_POST = -55 * Math.PI / 180;
+const X_REPERE = 416, K_MARQUE = 33;                                         // la perle claire part en face du repère fixe
+const TETE = { L: 56, ry: 14, cou: 8 };
+const OFF = ETAPES ? 1.6 : 0;                                                // vue etapes : la libération du Ca²⁺ d’abord
+const C2 = 6.0;                                                              // le second tour est décalé de 6 s
+/* Instants d’un tour (temps local u du tour). */
+const U = { approche: 1.2, fixe: 2.0, hyd0: 2.3, hyd1: 2.9, rot0: 3.1, rot1: 4.3, rel0: 4.5, rel1: 5.0, natp1: 5.6, det0: 5.8, det1: 6.3, rec0: 0.5, rec1: 1.2 };
+const S = { t: 0, running: false, jusqua: null, nom: null, fait: false, emis: 0, atp: vue !== 'sans_atp' };
+const FIN = () => OFF + (S.atp ? 12.8 : 6.6);
+
+/* L’état de la tête au temps de base tb (tb = t − OFF). */
+function etat(tb) {
+  const cyc = S.atp && tb >= C2 + U.rec0 ? 1 : 0, u = tb - cyc * C2;
+  let phase, tip, ang, attache = false;
+  const fRot = doux(rampe(u, U.rot0, U.rot1));
+  if (tb < 0) { phase = 'ca'; tip = { x: X_PRE, y: Y_LIBRE }; ang = A_PRE; }
+  else if (cyc === 1 && u < U.rec1) { phase = 'retour'; const f = doux(rampe(u, U.rec0, U.rec1)); tip = { x: lerp(X_POST, X_PRE, f), y: Y_LIBRE }; ang = lerp(A_POST, A_PRE, f); }
+  else if (u < U.approche) { phase = 'attente'; tip = { x: X_PRE, y: Y_LIBRE }; ang = A_PRE; }
+  else if (u < U.fixe) { phase = 'approche'; const f = doux(rampe(u, U.approche + (cyc ? 0.1 : 0), U.fixe)); tip = { x: X_PRE, y: lerp(Y_LIBRE, Y_FIXE, f) }; ang = A_PRE; attache = f >= 1; }
+  else if (u < U.hyd0) { phase = 'complexe'; tip = { x: X_PRE, y: Y_FIXE }; ang = A_PRE; attache = true; }
+  else if (u < U.rot0) { phase = 'hydrolyse'; tip = { x: X_PRE, y: Y_FIXE }; ang = A_PRE; attache = true; }
+  else if (u < U.rot1) { phase = 'rotation'; tip = { x: lerp(X_PRE, X_POST, fRot), y: Y_FIXE }; ang = lerp(A_PRE, A_POST, fRot); attache = true; }
+  else if (u < U.rel1 || !S.atp) { phase = !S.atp && u >= U.rel1 ? 'bloquee' : 'glisse'; tip = { x: X_POST, y: Y_FIXE }; ang = A_POST; attache = true; }
+  else if (u < U.det0) { phase = 'nouvel_atp'; tip = { x: X_POST, y: Y_FIXE }; ang = A_POST; attache = true; }
+  else if (u < U.det1) { phase = 'detachement'; const f = doux(rampe(u, U.det0, U.det1)); tip = { x: X_POST, y: lerp(Y_FIXE, Y_LIBRE, f) }; ang = A_POST; }
+  else { phase = cyc === 1 ? 'fin' : 'detache'; tip = { x: X_POST, y: Y_LIBRE }; ang = A_POST; }
+  const crans = tb < 0 ? 0 : cyc + (u >= U.rot1 ? 1 : 0);
+  const dx = tb < 0 ? 0 : CRAN * (cyc + fRot);
+  return { cyc, u, phase, tip, ang, attache, crans, dx };
+}
+/* Pastilles sur la tête : ATP, puis ADP + Pi, puis un nouvel ATP (ou rien, sans ATP). */
+function pastilles(E, T) {
+  const out = [], u = E.u, s = { x: T.siteAtp.x + 13, y: T.siteAtp.y + 4 };
+  if (E.phase === 'ca' || u < U.hyd0) { out.push({ txt: 'ATP', x: s.x, y: s.y, a: 1 }); return out; }
+  if (u < U.hyd1) { const f = rampe(u, U.hyd0, U.hyd1); out.push({ txt: 'ATP', x: s.x, y: s.y, a: 1 - f }); out.push({ txt: 'ADP', x: s.x + 2, y: s.y - 9, a: f }, { txt: 'Pi', x: s.x + 8, y: s.y + 12, a: f, r: 8 }); return out; }
+  if (u < U.rel0) { out.push({ txt: 'ADP', x: s.x + 2, y: s.y - 9, a: 1 }, { txt: 'Pi', x: s.x + 8, y: s.y + 12, a: 1, r: 8 }); return out; }
+  if (u < U.rel1) { const f = rampe(u, U.rel0, U.rel1); out.push({ txt: 'ADP', x: s.x + 2 + 60 * f, y: s.y - 9 + 22 * f, a: 1 - f }, { txt: 'Pi', x: s.x + 8 + 76 * f, y: s.y + 12 + 26 * f, a: 1 - f, r: 8 }); }
+  if (!S.atp) return out;
+  if (u >= U.rel1) {
+    const f = doux(rampe(u, U.rel1, U.natp1)), d = { x: 330, y: 214 };
+    out.push({ txt: 'ATP', x: lerp(d.x, s.x, f), y: lerp(d.y, s.y, f), a: Math.min(1, rampe(u, U.rel1, U.rel1 + 0.2) + (f >= 1 ? 1 : 0)), nouvel: f < 1 });
+  }
+  return out;
+}
+/* Vue etapes : les Ca²⁺ arrivent sur la troponine, puis la tropomyosine libère les sites. */
+const caArrivee = t => (ETAPES ? doux(rampe(t, 0.2, 1.1)) : 1);
+const ouvertureSites = t => (ETAPES ? doux(rampe(t, 0.95, 1.4)) : 1);
+
+const MOTIFS = {
+  liberation_ca: 'le Ca²⁺ libéré se pose sur la troponine ; la tropomyosine libère les sites',
+  tete_en_attente: 'la tête de myosine porte un ATP, en face d’un site libéré de l’actine',
+  attachement: 'la tête se fixe sur l’actine : complexe actomyosine',
+  hydrolyse_atp: 'hydrolyse de l’ATP : ATP → ADP + Pi, l’énergie est libérée',
+  rotation: 'la tête tourne et tire l’actine',
+  glissement: 'l’actine a glissé d’un cran vers le centre du sarcomère',
+  nouvel_atp: 'un nouvel ATP se fixe sur la tête',
+  detachement: 'la tête se détache de l’actine',
+  tour_suivant: 'la tête revient et se fixe plus loin : deuxième complexe actomyosine',
+  sans_atp_tete_bloquee: 'sans ATP : la tête reste fixée à l’actine, pas de détachement',
+};
+const LEGENDE = {
+  ca: ['Le Ca²⁺ se fixe sur', 'la troponine : les sites', 'de l’actine sont libérés.'],
+  attente: ['La tête de myosine', 'porte un ATP, en face', 'd’un site libéré.'],
+  approche: ['La tête s’approche', 'd’un site de l’actine…'],
+  complexe: ['La tête se fixe sur', 'l’actine : complexe', 'actomyosine.'],
+  hydrolyse: ['L’ATP est hydrolysé :', 'ATP → ADP + Pi ;', 'l’énergie libérée…'],
+  rotation: ['… fait tourner la tête :', 'elle tire l’actine d’un', 'cran vers le centre.'],
+  glisse: ['L’actine a glissé', 'd’un cran ; la myosine', 'n’a pas bougé.'],
+  nouvel_atp: ['Un nouvel ATP se fixe', 'sur la tête…'],
+  detachement: ['… et la tête se détache', 'de l’actine.'],
+  detache: ['La tête est détachée ;', 'elle va revenir.'],
+  retour: ['La tête revient, prête', 'à se fixer plus loin.'],
+  bloquee: ['Sans ATP : la tête reste', 'fixée à l’actine, pas', 'de détachement.'],
+  fin: ['Deux tours : l’actine', 'a glissé de deux crans', 'vers le centre.'],
+};
+
+/* Écriture « au moment dit » (horloge de la page). */
+const vus = {};
+function quand(c, cle, visible, fn) {
+  if (!visible) { delete vus[cle]; return; }
+  if (!(cle in vus)) vus[cle] = Math.max(0, (performance.now() - scene.ouvert) / 1000);
+  // Chaque élément s’écrit depuis SON instant d’apparition (après les parties fixes), sans attendre les autres.
+  c.cur = Math.max(c._fixe ?? 0, vus[cle]); fn();
+}
+
+function peindre(ctx, t, E) {
+  P.filamentEpais(ctx, 20, 500, Y_EPAIS);
+  const ouv = ouvertureSites(t), caF = caArrivee(t);
+  const g = P.filamentFin(ctx, { ...FINE, dx: E.dx, ouverture: ouv, marque: K_MARQUE, caFixe: caF >= 1 ? 1 : 0 });
+  if (caF < 1) {                                                   // les Ca²⁺ descendent sur la troponine (vue etapes)
+    g.troponines.flatMap(P.placesCa).forEach((p, i) => { const f = doux(rampe(t, 0.2 + 0.06 * i, 0.8 + 0.06 * i)); P.ca(ctx, p.x + (1 - f) * 14, lerp(44, p.y, f), 4.6, Math.min(1, t / 0.2)); });
+  }
+  const T = P.tete(ctx, BASE, E.tip, E.ang, TETE);
+  if (E.phase === 'hydrolyse') P.eclat(ctx, T.C.x + 6, T.C.y, rampe(E.u, U.hyd0, U.hyd1 + 0.15));
+  const ps = pastilles(E, T);
+  for (const p of ps) if (p.a > 0.01) P.pastille(ctx, p.x, p.y, p.txt, { alpha: p.a, r: p.r ?? 11 });
+  return { g, T, ps };
+}
+
+function dessiner(c) {
+  const t = S.t, tb = t - OFF, E = etat(tb); let geo;
+  c.direct(() => { geo = peindre(c.ctx, t, E); });
+  const { g, T, ps } = geo;
+  // Parties fixes.
+  c.texte('Une tête de myosine tire l’actine (molécules très agrandies)', 12, 24, { couleur: 'cyan', taille: 16 }); c._fixe = c.cur;   // les éléments « au moment dit » n’attendent pas la fin des légendes fixes
+  c.texte('actine', 24, 162, { couleur: 'orange', taille: 15 });
+  c.texte('tête de myosine', 40, 214, { couleur: 'bleu', taille: 15 });
+  c.texte('myosine (filament épais, fixe)', 24, 280, { couleur: 'bleu', taille: 15 });
+  c.ligne(X_REPERE, Y_EPAIS - 8, X_REPERE, 142, { couleur: 'faible', largeur: 1.3, pointille: [4, 5] });
+  c.trait([[X_REPERE - 7, Y_EPAIS + 16], [X_REPERE, Y_EPAIS + 7], [X_REPERE + 7, Y_EPAIS + 16]], { couleur: 'blanc', largeur: 1.8, ferme: true });
+  c.texte('repère fixe', X_REPERE, 280, { couleur: 'faible', taille: 14, align: 'center' });
+  c.texte('crans de glissement :', 24, 372, { couleur: 'jaune', taille: 17 });
+  if (!ETAPES) c.texte('Ce qui se passe', 525, 56, { couleur: 'faible', taille: 15 });
+  else c.texte('Les étapes', 525, 50, { couleur: 'cyan', taille: 16 });
+  // Ce qui bouge.
+  c.direct(() => {
+    c.texte(String(E.crans), 186, 374, { couleur: 'jaune', taille: 26 });
+    interrupteur(c);
+    const tn = g.troponines.find(x => x.x > 70);
+    if (tn && (!ETAPES || t >= MOMENTS().liberation_ca)) c.ligne(70, 76, tn.x - 6, tn.y - 16, { couleur: 'faible', largeur: 1.1 });
+    if (E.phase === 'rotation' || (E.phase === 'glisse' && E.u < U.rot1 + 0.4)) {
+      const cx = T.H.x, cy = T.H.y, R = 64, a0 = -122 * Math.PI / 180, a1 = -62 * Math.PI / 180;
+      c.courbe(f => [cx + R * Math.cos(lerp(a0, a1, f)), cy + R * Math.sin(lerp(a0, a1, f))], 14, { couleur: 'blanc', largeur: 1.8 });
+      const xe = cx + R * Math.cos(a1), ye = cy + R * Math.sin(a1);
+      c.fleche(cx + R * Math.cos(a1 - 0.12), cy + R * Math.sin(a1 - 0.12), xe, ye, { couleur: 'blanc', largeur: 1.8, tete: 8 });
+    }
+    // Repères pointables.
+    c.repere('actine', FINE.x0, FINE.y - 14, FINE.x1 - FINE.x0, 30, 'le filament d’actine');
+    c.repere('myosine', 20, Y_EPAIS - 8, 480, 16, 'le filament épais (myosine), fixe');
+    const xs = [BASE.x, T.H.x, E.tip.x, T.C.x], ys = [BASE.y, T.H.y, E.tip.y];
+    c.repere('tete_myosine', Math.min(...xs) - 16, Math.min(...ys) - 6, Math.max(...xs) - Math.min(...xs) + 32, Math.max(...ys) - Math.min(...ys) + 8, 'la tête de myosine');
+    const atp = ps.find(p => p.txt === 'ATP' && p.a > 0.5), adp = ps.find(p => p.txt === 'ADP' && p.a > 0.5);
+    if (atp) c.repere('atp', atp.x - 12, atp.y - 12, 24, 24, atp.nouvel ? 'un nouvel ATP' : 'l’ATP fixé sur la tête');
+    if (adp) c.repere('adp_pi', adp.x - 12, adp.y - 12, 30, 40, 'ADP + Pi');
+    c.repere('compteur', 20, 350, 190, 32, `le compteur : ${E.crans} cran(s)`);
+    if (tb >= U.rot0) c.repere('sens_glissement', 300, 56, 180, 32, 'vers le centre du sarcomère');
+    if (ETAPES) c.repere('liste', 520, 34, 236, 310, 'la liste des étapes');
+    // La liste : un trait jaune devant l’étape en cours.
+    if (ETAPES) { const n = etapeCourante(E); if (n) c.fleche(512, LISTE_Y[n - 1] - 5, 522, LISTE_Y[n - 1] - 5, { couleur: 'jaune', largeur: 2.4, tete: 6 }); }
+  });
+  // Écrit au moment dit.
+  const M = MOMENTS();
+  quand(c, 'ca', !ETAPES || t >= M.liberation_ca, () => c.texte('Ca²⁺ fixé sur la troponine', 24, 70, { couleur: 'jaune', taille: 14 }));
+  const fixe = ['complexe', 'hydrolyse', 'rotation', 'glisse', 'nouvel_atp', 'bloquee'].includes(E.phase) || (E.phase === 'approche' && E.attache);
+  quand(c, 'cx' + E.cyc, fixe, () => c.texte('complexe actomyosine', 250, 160, { couleur: 'vert', taille: 15 }));
+  quand(c, 'rot' + E.cyc, ['rotation', 'glisse', 'nouvel_atp', 'bloquee'].includes(E.phase), () => c.texte('rotation de la tête', 250, 186, { couleur: 'blanc', taille: 15 }));
+  quand(c, 'na' + (E.phase === 'retour' ? 0 : E.cyc), ['nouvel_atp', 'detachement', 'detache', 'retour', 'fin'].includes(E.phase), () => c.texte('nouvel ATP → détachement', 250, 212, { couleur: 'vert', taille: 15 }));
+  quand(c, 'bloq', E.phase === 'bloquee', () => c.texte('pas d’ATP : tête bloquée', 250, 212, { couleur: 'rouge', taille: 15 }));
+  quand(c, 'eq', tb >= U.hyd0, () => c.texte('ATP → ADP + Pi + énergie', 260, 312, { couleur: 'jaune', taille: 17, align: 'center' }));
+  quand(c, 'sens', tb >= U.rot0, () => { c.fleche(304, 80, 474, 80, { couleur: 'vert', largeur: 2.2 }); c.texte('vers le centre du sarcomère', 389, 68, { couleur: 'vert', taille: 14, align: 'center' }); });
+  if (!ETAPES) {
+    const L = LEGENDE[E.phase] || [];
+    quand(c, 'leg_' + E.phase + E.cyc, L.length > 0, () => L.forEach((l, i) => c.texte(l, 528, 88 + i * 23, { couleur: E.phase === 'bloquee' ? 'rouge' : 'blanc', taille: 16 })));
+  } else {
+    ITEMS().forEach((it, i) => quand(c, 'it' + i + it[2], t >= it[3], () => { c.texte(it[0], 528, LISTE_Y[i], { couleur: it[2], taille: 15 }); if (it[1]) c.texte(it[1], 546, LISTE_Y[i] + 19, { couleur: it[2], taille: 14 }); }));
+  }
+}
+const LISTE_Y = [80, 126, 172, 218, 264, 310];
+function ITEMS() {
+  const M = MOMENTS();
+  return [
+    ['1  libération du Ca²⁺', '(fixé sur la troponine)', 'blanc', M.liberation_ca],
+    ['2  complexe actomyosine', '', 'blanc', M.attachement],
+    ['3  hydrolyse de l’ATP', '(ATP → ADP + Pi)', 'blanc', M.hydrolyse_atp],
+    ['4  rotation des têtes', '', 'blanc', M.rotation],
+    ['5  glissement de l’actine', 'vers le centre du sarcomère', 'blanc', M.glissement],
+    S.atp ? ['6  fixation d’un nouvel ATP', 'et détachement', 'blanc', M.detachement] : ['6  sans ATP : tête fixée,', 'pas de détachement', 'rouge', M.sans_atp_tete_bloquee],
+  ];
+}
+function etapeCourante(E) {
+  return { ca: 1, attente: 0, approche: 2, complexe: 2, hydrolyse: 3, rotation: 4, glisse: 5, nouvel_atp: 6, detachement: 6, detache: 6, retour: 0, bloquee: 6, fin: 0 }[E.phase] || 0;
+}
+
+/* L’interrupteur « ATP disponible / ATP épuisé » (poignée). */
+const INTER = { x: 300, y: 357, w: 44, h: 22 };
+function interrupteur(c) {
+  const ctx = c.ctx, on = S.atp;
+  ctx.save(); ctx.fillStyle = on ? 'rgba(74,222,128,.25)' : 'rgba(248,113,113,.15)'; ctx.beginPath(); ctx.roundRect(INTER.x, INTER.y, INTER.w, INTER.h, 11); ctx.fill(); ctx.restore();
+  c.rect(INTER.x, INTER.y, INTER.w, INTER.h, { couleur: on ? 'vert' : 'rouge', arrondi: 11, largeur: 1.6 });
+  c.cercle(on ? INTER.x + INTER.w - 11 : INTER.x + 11, INTER.y + 11, 7, { couleur: on ? 'vert' : 'rouge', fond: on ? 'vert' : 'rouge', fondAlpha: .7, largeur: 1.4 });
+  c.texte(on ? 'ATP disponible' : 'ATP épuisé', INTER.x + INTER.w + 9, INTER.y + 16, { couleur: on ? 'vert' : 'rouge', taille: 16 });
+  c.repere('interrupteur_atp', INTER.x - 4, INTER.y - 4, INTER.w + 130, INTER.h + 8, `l’interrupteur ATP : ${on ? 'disponible' : 'épuisé'}`);
+}
+
+/* ── Boucle, moments, commandes ──────────────────────────────────────────── */
+const canvas = $('canvas');
+const scene = window.MuscleTableau.Scene(canvas, (c) => { scene.cadre(53); dessiner(c); return c.fin(); });
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(FIN(), S.t + dt);
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.nom ? MOTIFS[S.nom] : S.t >= FIN() - 1e-6 ? 'fin de la scène' : `t = ${fr(S.t, 1)} s`) + '.');
+    pont.noter('pause', { time_s: +S.t.toFixed(2), moment: S.nom }); pont.emettre();
+    return true;
+  }
+  if (S.t >= FIN()) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), message(), 'good'); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+const AVEC_ATP = ['tete_en_attente', 'attachement', 'hydrolyse_atp', 'rotation', 'glissement', 'nouvel_atp', 'detachement', 'tour_suivant'];
+const SANS_ATP = ['tete_en_attente', 'attachement', 'hydrolyse_atp', 'rotation', 'glissement', 'sans_atp_tete_bloquee'];
+const BASE_M = { tete_en_attente: 0.8, attachement: 2.1, hydrolyse_atp: 2.95, rotation: 3.7, glissement: 4.4, nouvel_atp: 5.7, detachement: 6.4, tour_suivant: 8.1, sans_atp_tete_bloquee: 6.0 };
+function MOMENTS() {
+  const m = {}; if (ETAPES) m.liberation_ca = 1.4;
+  for (const k of (S.atp ? AVEC_ATP : SANS_ATP)) m[k] = +(BASE_M[k] + OFF).toFixed(2);
+  m.fin = +FIN().toFixed(2);
+  return m;
+}
+function message() {
+  return S.atp ? 'Deux tours de la tête : à chaque tour, complexe actomyosine, hydrolyse de l’ATP, rotation, glissement d’un cran vers le centre, nouvel ATP et détachement.'
+    : 'Sans ATP, la tête reste fixée à l’actine : pas de détachement, le cycle s’arrête.';
+}
+function playUntil(p) {
+  let nom = typeof p.moment === 'string' ? p.moment : null;
+  if (nom && !(nom in MOMENTS())) {
+    if (['nouvel_atp', 'detachement', 'tour_suivant'].includes(nom)) S.atp = true;
+    else if (nom === 'sans_atp_tete_bloquee') S.atp = false;
+  }
+  const M = MOMENTS(); if (nom && !(nom in M)) nom = null;
+  const cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-4) S.t = 0;
+  S.jusqua = Math.min(FIN(), Math.max(0.001, cible)); S.nom = nom && nom !== 'fin' ? nom : null;
+  S.running = true; S.fait = false; $('run').textContent = 'Pause'; scene.sale = true;
+  bulle($('feedback'), 'Observe… (très ralenti)');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+function ceQuiSeVoit() {
+  const t = S.t, tb = t - OFF, E = etat(tb), M = MOMENTS();
+  const m = [`Vue « ${vue} ». Temps de la scène ${fr(t, 1)} s${S.running ? ' (la scène défile)' : S.fait ? ' (fin de la scène)' : t > 0 ? ' (arrêt sur image)' : ' (pas encore lancée)'}. Interrupteur : ${S.atp ? 'ATP disponible' : 'ATP épuisé'}.`];
+  m.push('Dessin peint, très agrandi : en haut le filament d’actine (perles rouge-orangé, une perle claire comme repère mobile), sa tropomyosine et sa troponine ; en bas le filament épais bleu (myosine), immobile, avec un repère fixe en pointillé ; entre les deux une tête de myosine.');
+  const ph = {
+    ca: `Les ions Ca²⁺ descendent et se posent sur la troponine ; ${ouvertureSites(t) > 0.5 ? 'la tropomyosine s’est déplacée, les sites de l’actine sont libérés' : 'les sites sont encore cachés'} ; la tête porte un ATP, détachée.`,
+    attente: 'Ca²⁺ fixé sur la troponine, sites libérés ; la tête de myosine, détachée, porte une pastille ATP verte, en face d’un site.',
+    approche: 'La tête s’approche du site de l’actine (elle porte un ATP).',
+    complexe: 'La tête est fixée sur l’actine : écrit « complexe actomyosine » ; elle porte toujours son ATP.',
+    hydrolyse: 'Éclat d’énergie sur la tête : la pastille ATP devient ADP + Pi ; écrit « ATP → ADP + Pi + énergie ».',
+    rotation: `La tête tourne (flèche courbe) en restant fixée : elle tire l’actine vers la droite, vers le centre du sarcomère ; la perle claire s’éloigne du repère fixe ; écrit « rotation de la tête ».`,
+    glisse: 'Rotation terminée : l’actine a glissé d’un cran vers le centre du sarcomère, la myosine n’a pas bougé ; ADP et Pi quittent la tête.',
+    nouvel_atp: 'Un nouvel ATP arrive et se fixe sur la tête, encore fixée à l’actine.',
+    detachement: 'La tête, avec son nouvel ATP, se détache de l’actine (écrit « nouvel ATP → détachement »).',
+    detache: 'La tête est détachée ; elle porte un ATP.',
+    retour: 'La tête détachée revient en arrière, en face du site suivant de l’actine (celui qui a glissé jusqu’à elle).',
+    bloquee: 'ADP et Pi sont partis et aucun ATP n’arrive : la tête reste fixée à l’actine, inclinée ; écrit « pas d’ATP : tête bloquée » et « sans ATP : la tête reste fixée à l’actine, pas de détachement ».',
+    fin: 'Fin des deux tours : la tête est détachée, avec un ATP ; l’actine a glissé de deux crans.',
+  }[E.phase];
+  m.push(ph);
+  if (E.cyc === 1 && ['approche', 'complexe', 'hydrolyse', 'rotation', 'glisse', 'nouvel_atp', 'detachement'].includes(E.phase)) m.push('Deuxième tour : la tête s’est fixée plus loin sur l’actine.');
+  m.push(`Compteur « crans de glissement » : ${E.crans}. Décalage de l’actine par rapport au repère fixe : ${fr(E.dx / CRAN, 2)} cran(s).`);
+  if (tb >= U.rot0) m.push('Flèche verte « vers le centre du sarcomère » écrite en haut.');
+  if (ETAPES) {
+    const faits = ITEMS().filter(it => t >= it[3]).map(it => it[0].replace(/^\d\s+/, ''));
+    m.push(`Liste à droite : ${faits.length ? faits.length + ' étape(s) écrite(s) (' + faits.join(' ; ') + ')' : 'rien d’écrit encore'}${etapeCourante(E) ? ', le trait jaune devant l’étape ' + etapeCourante(E) : ''}.`);
+  }
+  return m.join(' ');
+}
+
+function start() { S.jusqua = null; S.nom = null; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; scene.sale = true; bulle($('feedback'), (S.atp ? 'Une tête de myosine en face de l’actine…' : 'Une tête de myosine… et le dernier ATP.') + ' (très ralenti)'); pont.noter('start', { atp: S.atp }); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait || S.t >= FIN()) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  const t = +p.time_s; if (!Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = clamp(t, 0, FIN()); S.fait = S.t >= FIN();
+  $('run').textContent = S.fait ? 'Rejouer' : 'Reprendre'; scene.sale = true;
+  bulle($('feedback'), `Arrêt sur image : t = ${fr(S.t, 1)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+const bool = v => (typeof v === 'string' ? !/^(false|0|non|no|off|absent|epuise|épuisé)$/i.test(v.trim()) : !!v);
+function setParameters(p) {
+  if (!('atp' in p)) return;
+  S.atp = bool(p.atp); S.t = Math.min(S.t, FIN()); scene.sale = true;
+  bulle($('feedback'), S.atp ? 'ATP disponible.' : 'ATP épuisé : plus aucun nouvel ATP n’arrivera.');
+  pont.noter('set_parameters', { atp: S.atp }); pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : (S.t > 0 && S.t < FIN() && !S.fait ? resume() : start()));
+
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => { const [x, y] = scene.local(px, py); return x > INTER.x - 8 && x < INTER.x + INTER.w + 120 && y > INTER.y - 10 && y < INTER.y + INTER.h + 10 ? 'atp' : null; },
+  bouger: () => {},
+  lacher: () => { S.atp = !S.atp; scene.sale = true; pont.noter('set_parameters', { atp: S.atp }); start(); },
+});
+
+const EXPL_CYCLE = [
+  { repere: 'tete_myosine', texte: 'La tête de myosine porte un ATP ; le Ca²⁺ fixé sur la troponine a libéré les sites de l’actine.' },
+  { repere: 'actine', texte: 'La tête se fixe sur l’actine : c’est le complexe actomyosine.' },
+  { repere: 'adp_pi', texte: 'L’ATP est hydrolysé en ADP + Pi : l’énergie libérée fait tourner la tête.' },
+  { repere: 'sens_glissement', texte: 'La tête tire l’actine d’un cran vers le centre du sarcomère ; la myosine ne bouge pas.' },
+  { repere: 'atp', texte: 'Un nouvel ATP se fixe sur la tête, qui se détache, revient et se fixe plus loin.' },
+  { repere: 'compteur', texte: 'À chaque tour, un cran de plus.' },
+];
+const EXPLICATIONS = {
+  cycle: EXPL_CYCLE,
+  sans_atp: [EXPL_CYCLE[0], EXPL_CYCLE[1], EXPL_CYCLE[2], EXPL_CYCLE[3], { repere: 'tete_myosine', texte: 'Sans ATP, aucun nouvel ATP ne se fixe : la tête reste accrochée à l’actine, pas de détachement.' }, { repere: 'interrupteur_atp', texte: 'L’ATP est indispensable au détachement des têtes.' }],
+  etapes: [{ repere: 'liste', texte: 'Les étapes, dans l’ordre : libération du Ca²⁺, complexe actomyosine, hydrolyse de l’ATP, rotation des têtes, glissement, nouvel ATP et détachement.' }, ...EXPL_CYCLE],
+};
+window.Tableau.explication({ [vue]: EXPLICATIONS[vue] });
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'muscle_cycle_myosine', version: '1.0', title: 'Le cycle d’une tête de myosine — ' + vue, variants: VUES.map(v => ({ id: v, label: v })), commands: commandes,
+  command_schema: {
+    set_parameters: { atp: 'true | false (interrupteur ATP : false = plus d’ATP, la tête reste fixée)' },
+    set_time: { time_s: `0..${fr(FIN(), 1)} (arrêt sur cet instant, en s de la scène)` },
+    play_until: { moment: [...new Set([...(ETAPES ? ['liberation_ca'] : []), ...AVEC_ATP, 'sans_atp_tete_bloquee', 'fin'])].join(' | ') + ' (rejoue et se fige à cet instant clé ; nouvel_atp, detachement, tour_suivant remettent l’ATP ; sans_atp_tete_bloquee l’enlève)', time_s: 'ou un instant en s de la scène' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Une tête de myosine (sur le filament épais, fixe) en face d’un filament d’actine aux sites libérés (Ca²⁺ fixé sur la troponine). Ordre : complexe actomyosine → hydrolyse de l’ATP (ATP → ADP + Pi, énergie) → rotation de la tête → glissement de l’actine d’un cran vers le centre du sarcomère → fixation d’un nouvel ATP et détachement ; la tête revient et se fixe plus loin. Sans ATP, la tête reste fixée à l’actine : pas de détachement.' + (ETAPES ? ' La liste numérotée des six étapes s’écrit à droite.' : ''),
+  etat: () => ({ simulation_status: S.running ? 'running' : (S.fait ? 'finished' : (S.t > 0 ? 'paused' : 'idle')), ce_qui_se_voit: ceQuiSeVoit(), current_variant: vue,
+    time_s: +S.t.toFixed(2), parameters: { atp: S.atp, crans: etat(S.t - OFF).crans, phase: etat(S.t - OFF).phase }, moments: MOMENTS() }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Une tête de myosine en face d’un filament d’actine…');
+setTimeout(() => { if (!S.running && S.t === 0) start(); }, 1600);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

@@ -29,6 +29,7 @@ import type { LearningSubject } from '../stores/learningContextStore';
 import MoalimShell from '../components/MoalimShell';
 import StudentNavigation from '../components/StudentNavigation';
 import MobileBottomNav from '../components/MobileBottomNav';
+import BanniereRappels from '../components/course/memoire/BanniereRappels';
 
 type StudySession = {
   id?: string;
@@ -203,6 +204,9 @@ export default function Dashboard() {
             </div>
           )}
         </section>
+
+        {/* Les rappels espacés dus pour CET élève (badge, bannière à son heure) : un geste ouvre le rappel. */}
+        <BanniereRappels />
 
         <section className="relative overflow-hidden rounded-[28px] border border-indigo-400/20 bg-gradient-to-br from-indigo-600/30 via-violet-600/20 to-cyan-500/10 p-5 shadow-2xl shadow-indigo-950/30 sm:p-8">
           <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-cyan-400/20 blur-3xl" />

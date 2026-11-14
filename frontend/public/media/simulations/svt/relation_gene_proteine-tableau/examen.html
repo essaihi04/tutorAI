@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Préparer l’examen — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="genetique.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Préparer l’examen : documents des sujets nationaux redessinés à la craie (hypercholestérolémie familiale, adrénoleucodystrophie, amélogénèse imparfaite), lignes du barème, phrase de l’origine génétique et définitions à savoir"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="etapes.js"></script>
+<script src="molecules.js"></script>
+<script>
+/*
+ * Préparer l’examen (cours « Expression de l’information génétique », 2 Bac PC BIOF, 11 novembre 2026). Capacités RGP2, RGP10.
+ * Documents des sujets nationaux redessinés à la craie et rédaction comme le barème (valeurs des corrigés officiels) :
+ *   document_ldl  (2023 N, HCF) : cellules saine / malade, récepteurs LDL, puis la relation protéine – caractère maillon par maillon ;
+ *   reperages     (2025 N, ALD) : quatre repérages avant d’écrire (maladie, protéine, brin donné, type de mutation) ;
+ *   lignes        (paramètre sujet 2025N | 2024N | 2023N) : les lignes alignées du barème, ce qui diffère encadré en rouge ;
+ *   phrase        (paramètre type) : la phrase de l’origine génétique, puis les versions à trous ;
+ *   restitution   : six cartes de définitions, mot pour mot ;
+ *   amelogenine   (2024 N) : le document 1 redessiné et les trois questions résolues l’une après l’autre.
+ * Le vivant est peint (cellules, récepteurs, LDL, améloblastes, dents) ; la craie écrit les textes et les flèches.
+ */
+const { rampe, entre } = window.Etapes;
+const M = window.Molecules;
+const TAU = Math.PI * 2;
+
+/* ── Outils d’écriture : taille effective, coupure des lignes, maillons fléchés ── */
+const eff = (c, t) => Math.max(t, c.tailleMin && c.echelle ? c.tailleMin / c.echelle : 0);
+const larg = (c, s, t) => c.largeurTexte(s, eff(c, t));
+/** Coupe `s` en lignes de largeur ≤ max (taille t). */
+function couper(c, s, max, t) {
+  const mots = String(s).split(' '), out = []; let cur = '';
+  for (const m of mots) { const e = cur ? cur + ' ' + m : m; if (cur && larg(c, e, t) > max) { out.push(cur); cur = m; } else cur = e; }
+  if (cur) out.push(cur);
+  return out;
+}
+/** Dispose des maillons à la suite, reliés par des flèches, en revenant à la ligne quand il le faut. */
+function flux(c, items, x0, y0, xmax, t, dy, retrait = 14) {
+  const out = []; let x = x0, y = y0;
+  items.forEach((it, i) => {
+    const w = larg(c, it.s, t); let f = null;
+    if (i > 0 && !it.sans) { if (x + 26 + w > xmax) { y += dy; x = x0 + retrait; } f = [x + 4, x + 21]; x += 26; }
+    else if (i > 0) { x += 7; if (x + w > xmax) { y += dy; x = x0 + retrait; } }
+    out.push({ ...it, x, y, w, f }); x += w;
+  });
+  return out;
+}
+function boite(L, t) {
+  const x0 = Math.min(...L.map(o => (o.f ? o.f[0] : o.x))), x1 = Math.max(...L.map(o => o.x + o.w));
+  const y0 = Math.min(...L.map(o => o.y)) - t, y1 = Math.max(...L.map(o => o.y)) + t * .4;
+  return [x0 - 4, y0 - 2, x1 - x0 + 8, y1 - y0 + 4];
+}
+function ecrireItem(c, k, it, t, duree) {
+  if (it.f) c.fleche(it.f[0], it.y - t * .32, it.f[1], it.y - t * .32, { couleur: it.fleche || 'faible', largeur: 1.5, tete: 6, duree: .12 });
+  k.T(c, it.s, it.x, it.y, { couleur: it.couleur || 'blanc', taille: t, ...(duree ? { duree } : {}) });
+}
+/** Un texte en morceaux de couleurs différentes : [[texte, couleur], …], écrit à la suite à partir de x. */
+function morceaux(c, k, parts, x, y, t, duree = .12) {
+  let px = x;
+  for (const [s, coul] of parts) { k.T(c, s, px, y, { couleur: coul, taille: t, duree }); px += larg(c, s, t); }
+}
+const largMorceaux = (c, parts, t) => parts.reduce((w, [s]) => w + larg(c, s, t), 0);
+const bord = (c, x, y, w, h, couleur, largeur = 2) => c.direct(() => c.rect(x, y, w, h, { couleur, largeur, arrondi: 6 }));
+
+/* ── Peintures propres à cette page ── */
+/** Plasma sanguin : rectangle arrondi rose pâle. */
+function sang(x, x0, y0, w, h, a = 1) {
+  x.save(); x.globalAlpha *= a;
+  const g = x.createLinearGradient(0, y0, 0, y0 + h); g.addColorStop(0, 'rgba(254,202,202,.16)'); g.addColorStop(1, 'rgba(248,113,113,.22)');
+  x.fillStyle = g; x.beginPath(); x.roundRect(x0, y0, w, h, 12); x.fill(); x.restore();
+}
+/** Récepteur LDL (protéine membranaire) posé en (px, py), tourné selon `ang` ; normal = coupe en U, anormal = site déformé. */
+function recepteur(x, px, py, ang, normal, a = 1) {
+  x.save(); x.globalAlpha *= a; x.translate(px, py); x.rotate(ang);
+  const col = normal ? ['#cffafe', '#0e7490'] : ['#fed7aa', '#b45309'];
+  const g = x.createLinearGradient(-9, 0, 9, 0); g.addColorStop(0, col[1]); g.addColorStop(.45, col[0]); g.addColorStop(1, col[1]);
+  x.fillStyle = g; x.beginPath(); x.roundRect(-3, -12, 6, 22, 2); x.fill();
+  x.strokeStyle = g; x.lineWidth = 4.5; x.lineCap = 'round'; x.beginPath();
+  if (normal) { x.moveTo(-9, -25); x.quadraticCurveTo(-9, -12, 0, -12); x.quadraticCurveTo(9, -12, 9, -25); }
+  else { x.moveTo(-3, -17); x.quadraticCurveTo(-6, -12, 0, -12); x.quadraticCurveTo(10, -11, 14, -15); }
+  x.stroke(); x.restore();
+}
+const ldl = (x, px, py, a = 1, r = 6) => M.sphere(x, px, py, r, '#facc15', a);
+/** Améloblastes : n cellules allongées côte à côte (cytoplasme rosé, noyau bleuté), et l’amélogénine sécrétée dessous. */
+function ameloblastes(x, x0, y0, n, h, normale, a = 1) {
+  x.save(); x.globalAlpha *= a;
+  for (let i = 0; i < n; i++) {
+    const cx = x0 + i * 18 + 9;
+    const g = x.createLinearGradient(cx - 8, 0, cx + 8, 0); g.addColorStop(0, 'rgba(219,112,160,.55)'); g.addColorStop(.45, 'rgba(255,228,236,.6)'); g.addColorStop(1, 'rgba(219,112,160,.6)');
+    x.fillStyle = g; x.beginPath(); x.roundRect(cx - 8, y0, 16, h, 6); x.fill();
+    x.strokeStyle = 'rgba(190,70,120,.85)'; x.lineWidth = 1.2; x.stroke();
+    const gn = x.createRadialGradient(cx - 2, y0 + 12, 1, cx, y0 + 14, 7); gn.addColorStop(0, 'rgba(219,234,254,.95)'); gn.addColorStop(1, 'rgba(59,130,246,.85)');
+    x.fillStyle = gn; x.beginPath(); x.ellipse(cx, y0 + 14, 5, 8, 0, 0, TAU); x.fill();
+  }
+  for (let j = 0; j < 14; j++) {
+    const px = x0 + 4 + (j * 37) % (n * 18 - 8), py = y0 + h + 5 + (j % 3) * 4;
+    if (normale) M.sphere(x, px, py, 2.6, '#4ade80');
+    else { x.fillStyle = j % 2 ? '#c2410c' : '#f97316'; x.beginPath(); x.ellipse(px, py, 3.2, 1.8, j, 0, TAU); x.fill(); }
+  }
+  x.restore();
+}
+/** Une dent (couronne + deux racines) ; `atteinte` : émail mince, jaune-brun, piqueté. */
+function dent(x, cx, top, atteinte, a = 1) {
+  x.save(); x.globalAlpha *= a;
+  const p = new Path2D();
+  p.moveTo(cx - 24, top + 38);
+  p.bezierCurveTo(cx - 28, top + 18, cx - 24, top + 2, cx - 12, top + 2);
+  p.quadraticCurveTo(cx, top + 10, cx + 12, top + 2);
+  p.bezierCurveTo(cx + 24, top + 2, cx + 28, top + 18, cx + 24, top + 38);
+  p.bezierCurveTo(cx + 22, top + 56, cx + 16, top + 70, cx + 11, top + 74);
+  p.quadraticCurveTo(cx + 6, top + 60, cx, top + 50);
+  p.quadraticCurveTo(cx - 6, top + 60, cx - 11, top + 74);
+  p.bezierCurveTo(cx - 16, top + 70, cx - 22, top + 56, cx - 24, top + 38);
+  p.closePath();
+  const gd = x.createLinearGradient(cx - 26, 0, cx + 26, 0); gd.addColorStop(0, '#c9b894'); gd.addColorStop(.45, '#f3ead6'); gd.addColorStop(1, '#b8a47c');
+  x.fillStyle = gd; x.fill(p);
+  x.save(); x.clip(p);
+  const ge = x.createLinearGradient(cx - 26, top, cx + 26, top + 34);
+  if (!atteinte) { ge.addColorStop(0, '#ffffff'); ge.addColorStop(.5, '#e0f2fe'); ge.addColorStop(1, '#bfd3e6'); x.fillStyle = ge; x.fillRect(cx - 30, top - 2, 60, 36); x.fillStyle = 'rgba(255,255,255,.75)'; x.beginPath(); x.ellipse(cx - 11, top + 14, 4, 9, -.3, 0, TAU); x.fill(); }
+  else {
+    ge.addColorStop(0, '#e9c46a'); ge.addColorStop(1, '#a16207'); x.fillStyle = ge; x.beginPath(); x.moveTo(cx - 30, top - 2); x.lineTo(cx + 30, top - 2); x.lineTo(cx + 30, top + 18);
+    for (let i = 0; i <= 10; i++) x.lineTo(cx + 30 - i * 6, top + 20 + (i % 2 ? 5 : -1)); x.closePath(); x.fill();
+    x.fillStyle = 'rgba(92,52,10,.75)'; for (const [dx, dy, r] of [[-12, 8, 2.4], [4, 12, 2], [13, 6, 2.6], [-4, 18, 1.8], [16, 18, 1.6]]) { x.beginPath(); x.ellipse(cx + dx, top + dy, r, r * .8, 0, 0, TAU); x.fill(); }
+  }
+  x.restore();
+  x.strokeStyle = 'rgba(120,100,70,.8)'; x.lineWidth = 1.2; x.stroke(p);
+  x.restore();
+}
+
+/* ════════ Vue document_ldl (2023 N, HCF) ════════ */
+const LDL_PANNEAUX = [{ cx: 195, normal: true }, { cx: 565, normal: false }];
+const CEL = { cy: 202, rx: 155, ry: 50 };
+const DX_REC = [-110, -66, -22, 22, 66, 110];
+function surMembrane(cx, dx) {
+  const dy = -CEL.ry * Math.sqrt(Math.max(0, 1 - (dx / CEL.rx) ** 2)), nx = dx / CEL.rx ** 2, ny = dy / CEL.ry ** 2, n = Math.hypot(nx, ny);
+  const ang = Math.atan2(nx / n, -ny / n);
+  return { px: cx + dx, py: CEL.cy + dy, ang, lx: cx + dx + Math.sin(ang) * 21, ly: CEL.cy + dy - Math.cos(ang) * 21 };
+}
+const MD = { deux_cellules: 3.6, ligne_saine: 7.2, ligne_malade: 10.8, relation: 12.8 };
+const CHAINE_SAINE = [
+  { s: 'saine :', couleur: 'vert', t0: 4.0 }, { s: 'récepteur LDL normal', t0: 4.4, sans: true }, { s: 'entrée des LDL dans la cellule', t0: 5.1 },
+  { s: 'taux normal de cholestérol sanguin', t0: 5.8 }, { s: 'phénotype normal', couleur: 'vert', t0: 6.5 }];
+const CHAINE_MALADE = [
+  { s: 'malade :', couleur: 'rouge', t0: 7.6 }, { s: 'récepteur LDL anormal', t0: 8.0, sans: true }, { s: 'pas d’entrée des LDL', t0: 8.7 },
+  { s: 'accumulation des LDL dans le sang', t0: 9.4 }, { s: 'hypercholestérolémie (phénotype malade)', couleur: 'rouge', t0: 10.1 }];
+const RELATION_LDL = 'Tout changement de la protéine (récepteur LDL) change le caractère : d’où la relation protéine – caractère.';
+function posLDL(P, i, t) {
+  const cx = P.cx, r = surMembrane(cx, DX_REC[i]);
+  const s = [cx - 90 + i * 46 + (i % 2) * 8, 112 + (i % 3) * 11];
+  const u = rampe(t, .9 + .22 * i, .9);
+  let px = entre(s[0], r.lx, u), py = entre(s[1], r.ly, u), dedans = 0;
+  if (P.normal) {
+    const v = rampe(t, 2.3 + .15 * i, .8), dest = [[cx - 95, 200], [cx - 72, 216], [cx - 48, 204], [cx + 48, 204], [cx + 72, 216], [cx + 95, 200]][i];
+    px = entre(px, dest[0], v); py = entre(py, dest[1], v); dedans = v;
+  } else {
+    const v = rampe(t, 1.8 + .22 * i, .6); px = entre(px, s[0] + 6, v); py = entre(py, 128 + (i % 2) * 8, v);
+  }
+  return { px, py, dedans };
+}
+function dessinerLDL(c, k) {
+  const t = k.t, a = rampe(t, .2, .6), T = 14, dy = 19;
+  c.direct(() => {
+    const x = c.ctx;
+    for (const P of LDL_PANNEAUX) {
+      sang(x, P.cx - 172, 56, 344, 150, a);
+      M.cytoplasme(x, P.cx, CEL.cy, CEL.rx, CEL.ry, { alpha: a });
+      DX_REC.forEach(dx => { const r = surMembrane(P.cx, dx); recepteur(x, r.px, r.py, r.ang, P.normal, a); });
+      ldl(x, P.cx + 152, 71, a);                                   // légende
+      for (let i = 0; i < 6; i++) {
+        if (t < .6) continue;
+        const q = posLDL(P, i, t), al = rampe(t, .6, .4);
+        if (q.dedans > .5) { x.save(); x.globalAlpha = al * .8; x.strokeStyle = 'rgba(250,204,21,.7)'; x.lineWidth = 1.2; x.beginPath(); x.arc(q.px, q.py, 9, 0, TAU); x.stroke(); x.restore(); }
+        ldl(x, q.px, q.py, al);
+      }
+      if (!P.normal) for (let i = 0; i < 7; i++) {                // d’autres LDL arrivent et s’accumulent dehors
+        const al = rampe(t, 2.0 + .2 * i, .4); if (al <= 0) continue;
+        ldl(x, P.cx - 120 + ((i * 53) % 250), 118 + ((i * 17) % 26), al);
+      }
+    }
+  });
+  c.texte('Document (2023 N) : l’hypercholestérolémie familiale (HCF)', 380, 24, { couleur: 'cyan', taille: 19, align: 'center' });
+  if (t >= .2) {
+    const [S, Ma] = LDL_PANNEAUX;
+    c.repere('cellule_saine', S.cx - 155, 150, 310, 102, 'la cellule de la personne saine');
+    c.repere('cellule_malade', Ma.cx - 155, 150, 310, 102, 'la cellule de la personne malade');
+    const r0 = surMembrane(S.cx, DX_REC[0]), r1 = surMembrane(Ma.cx, DX_REC[0]);
+    c.repere('recepteur_normal', r0.px - 16, r0.py - 32, 32, 44, 'un récepteur LDL normal');
+    c.repere('recepteur_anormal', r1.px - 16, r1.py - 32, 32, 44, 'un récepteur LDL anormal');
+    c.repere('ldl', Ma.cx - 128, 104, 270, 40, 'les particules LDL accumulées dans le sang');
+    c.repere('ldl_legende', S.cx + 120, 60, 44, 22, 'une particule LDL');
+  }
+  if (k.ecrit(c, 'pan', .5)) for (const P of LDL_PANNEAUX) {
+    k.T(c, P.normal ? 'personne saine' : 'personne malade (HCF)', P.cx, 48, { couleur: P.normal ? 'vert' : 'rouge', taille: 15, align: 'center', duree: .4 });
+    k.T(c, 'sang', P.cx - 162, 74, { couleur: 'faible', taille: 13, duree: .2 });
+    k.T(c, 'LDL', P.cx + 140, 76, { couleur: 'jaune', taille: 13, align: 'right', duree: .2 });
+    k.T(c, P.normal ? 'récepteur LDL normal' : 'récepteur LDL anormal', P.cx - 162, 95, { couleur: P.normal ? 'vert' : 'rouge', taille: 13, duree: .4 });
+    c.fleche(P.cx - 140, 100, P.cx - 113, 132, { couleur: 'faible', largeur: 1.3, tete: 6, duree: .12 });
+    k.T(c, 'cellule', P.cx, 209, { couleur: 'faible', taille: 13, align: 'center', duree: .2 });
+  }
+  if (k.ecrit(c, 'res', 2.9)) {
+    k.T(c, 'les LDL se fixent et entrent', LDL_PANNEAUX[0].cx, 238, { couleur: 'vert', taille: 13, align: 'center', duree: .4 });
+    k.T(c, 'les LDL restent dehors', LDL_PANNEAUX[1].cx, 238, { couleur: 'rouge', taille: 13, align: 'center', duree: .4 });
+  }
+  const yS = 290, LS = flux(c, CHAINE_SAINE, 18, yS, 744, T, dy);
+  const yM = Math.max(...LS.map(o => o.y)) + 44, LM = flux(c, CHAINE_MALADE, 18, yM, 744, T, dy);
+  LS.forEach((it, i) => { if (k.ecrit(c, 's' + i, it.t0)) ecrireItem(c, k, it, T, .55); });
+  if (t >= CHAINE_SAINE[0].t0) c.repere('ligne_saine', ...boite(LS, T), 'la ligne de la personne saine');
+  LM.forEach((it, i) => { if (k.ecrit(c, 'm' + i, it.t0)) ecrireItem(c, k, it, T, .55); });
+  if (t >= CHAINE_MALADE[0].t0) c.repere('ligne_malade', ...boite(LM, T), 'la ligne de la personne malade');
+  const yR = Math.min(410, Math.max(...LM.map(o => o.y)) + 30), LR = couper(c, RELATION_LDL, 724, 15);
+  const y0R = yR - (LR.length - 1) * 19;
+  if (k.ecrit(c, 'rel', 11.2)) LR.forEach((l, i) => k.T(c, l, 18, y0R + i * 19, { couleur: 'jaune', taille: 15, duree: .7 }));
+  if (t >= 11.2) c.repere('relation', 14, y0R - 17, Math.max(...LR.map(l => larg(c, l, 15))) + 10, 19 * LR.length + 4, 'la relation protéine – caractère');
+}
+function voitLDL(k) {
+  const t = k.t, m = [];
+  if (t >= .2) m.push('Deux cellules peintes côte à côte : à gauche celle d’une personne saine, à droite celle d’une personne malade (HCF) ; au-dessus, le sang avec des particules LDL (petites sphères jaunes) ; sur la membrane, six récepteurs LDL (protéines).');
+  if (t >= .9) m.push(t < 2.3 ? 'Les LDL descendent vers les récepteurs.' : 'À gauche, les LDL se sont fixées sur les récepteurs normaux (coupes bleu clair) et entrent dans la cellule. À droite, les récepteurs anormaux (orange, déformés) ne fixent pas les LDL : elles restent dehors et s’accumulent dans le sang.');
+  if (t >= 2.9) m.push('Écrit sous les cellules : « les LDL se fixent et entrent » (vert, à gauche), « les LDL restent dehors » (rouge, à droite).');
+  const ecr = L => L.filter(o => t >= o.t0).map(o => o.s);
+  const s = ecr(CHAINE_SAINE), ma = ecr(CHAINE_MALADE);
+  if (s.length) m.push(`Ligne écrite en bas : « ${s[0]} ${s.slice(1).join(' → ')} ».`);
+  if (ma.length) m.push(`Ligne écrite dessous : « ${ma[0]} ${ma.slice(1).join(' → ')} ».`);
+  if (t >= 11.2) m.push(`Écrit en jaune : « ${RELATION_LDL} »`);
+  return m;
+}
+
+/* ════════ Vue reperages (2025 N, ALD) ════════ */
+const ENONCE = [
+  { s: 'Sujet national 2025 (session normale), exercice 2 :', couleur: 'cyan' },
+  { s: 'L’adrénoleucodystrophie (ALD) est une maladie héréditaire du système nerveux.' },
+  { s: 'La protéine ALDP assure le transport des acides gras à longue chaîne (AGLC) dans le peroxysome, où ils sont dégradés.' },
+  { s: 'Chez les malades, les AGLC s’accumulent dans le cytoplasme.' },
+  { s: 'Document 2 : fragment du brin non transcrit du gène ABCD1 (triplets 147 à 152) :' },
+  { s: 'allèle normal : … GTC AAC AGT GCC ATC CGT …', couleur: 'jaune' },
+  { s: 'allèle muté : … GTC AAC AGA GCC ATC CGT …', couleur: 'jaune' },
+];
+const MR = { maladie: 4.6, proteine: 6.6, brin: 8.6, type_mutation: 10.8 };
+const CASES = [
+  { id: 'case_maladie', titre: '1. La maladie', t0: 3.4, l: [[['ALD (adrénoleucodystrophie),', 'blanc']], [['maladie héréditaire', 'faible']]] },
+  { id: 'case_proteine', titre: '2. La protéine', t0: 5.2, l: [[['ALDP : transport des AGLC', 'blanc']], [['dans le peroxysome', 'blanc']]] },
+  { id: 'case_brin', titre: '3. Le brin donné', t0: 7.2, l: [[['brin ', 'blanc'], ['NON', 'rouge'], [' transcrit', 'blanc']], [['→ ARNm : on le recopie, T devient U', 'faible']]] },
+  { id: 'case_mutation', titre: '4. Le type de mutation', t0: 9.2, l: [[['substitution (triplet 149 : AGT → AGA)', 'blanc']], [['un nucléotide remplacé, pas de décalage', 'faible']]] },
+];
+const CX0 = 388, CW = 354, CH = 78, CY = [44, 132, 220, 308];
+function disposerEnonce(c) {
+  const out = []; let y = 64;
+  ENONCE.forEach((p, ip) => { couper(c, p.s, 334, 14).forEach(l => { out.push({ s: l, x: 26, y, p: ip, couleur: p.couleur || 'blanc' }); y += 19; }); y += 5; });
+  return out;
+}
+/** Position d’un passage dans l’énoncé disposé : [x, y, largeur]. */
+function chercher(c, L, p, mot, re) {
+  for (const l of L) { if (l.p !== p) continue; const i = re ? l.s.search(re) : l.s.indexOf(mot); if (i >= 0) return [l.x + larg(c, l.s.slice(0, i), 14), l.y, larg(c, mot, 14)]; }
+  return null;
+}
+function dessinerReperages(c, k) {
+  const t = k.t, L = disposerEnonce(c), yb = L[L.length - 1].y + 14;
+  c.texte('Avant d’écrire : quatre repérages', 380, 24, { couleur: 'cyan', taille: 19, align: 'center' });
+  c.repere('enonce', 16, 42, 358, yb - 42, 'l’énoncé résumé (2025 N)');
+  if (k.ecrit(c, 'enonce', .2)) { c.rect(16, 42, 358, yb - 42, { couleur: 'faible', largeur: 1.6, duree: .25 }); L.forEach(l => k.T(c, l.s, l.x, l.y, { couleur: l.couleur, taille: 14, duree: .17 })); }
+  if (k.ecrit(c, 'cases', .3)) CASES.forEach((C, i) => { c.rect(CX0, CY[i], CW, CH, { couleur: 'faible', largeur: 1.6, duree: .15 }); k.T(c, C.titre, CX0 + 10, CY[i] + 21, { couleur: 'jaune', taille: 15, duree: .2 }); });
+  CASES.forEach((C, i) => { if (t >= .3) c.repere(C.id, CX0, CY[i], CW, CH, 'la case « ' + C.titre.slice(3) + ' »'); });
+  const souligne = (pos, coul) => { if (pos) c.ligne(pos[0], pos[1] + 4, pos[0] + pos[2], pos[1] + 4, { couleur: coul, largeur: 2, duree: .2 }); };
+  CASES.forEach((C, i) => {
+    if (!k.ecrit(c, C.id, C.t0)) return;
+    if (i === 0) { souligne(chercher(c, L, 1, 'adrénoleucodystrophie (ALD)'), 'vert'); }
+    if (i === 1) { souligne(chercher(c, L, 2, 'ALDP'), 'vert'); }
+    if (i === 3) { souligne(chercher(c, L, 5, 'AGT'), 'rouge'); souligne(chercher(c, L, 6, 'AGA'), 'rouge'); }
+    if (i === 2) { const p = chercher(c, L, 4, 'non', /\bnon\b/); if (p) c.cercle(p[0] + p[2] / 2, p[1] - 5, p[2] / 2 + 7, { couleur: 'rouge', largeur: 2.2, duree: .25 }); }
+    c.fleche(374, CY[i] + CH / 2, CX0 - 3, CY[i] + CH / 2, { couleur: 'faible', largeur: 1.3, tete: 6, duree: .1 });
+    C.l.forEach((parts, j) => morceaux(c, k, parts, CX0 + 14, CY[i] + 44 + j * 21, 14, .3));
+  });
+  if (t >= CASES[2].t0) { const p = chercher(c, L, 4, 'non', /\bnon\b/); if (p) c.repere('mot_non', p[0] - 8, p[1] - 20, p[2] + 16, 26, 'le mot « non » : brin NON transcrit'); }
+}
+function voitReperages(k) {
+  const t = k.t, m = ['À gauche, l’énoncé résumé du sujet 2025 N écrit à la craie : l’ALD (adrénoleucodystrophie), maladie héréditaire ; la protéine ALDP transporte les AGLC dans le peroxysome où ils sont dégradés ; chez les malades les AGLC s’accumulent dans le cytoplasme ; document 2 : brin non transcrit du gène ABCD1, triplets 147 à 152, allèle normal GTC AAC AGT GCC ATC CGT, allèle muté GTC AAC AGA GCC ATC CGT.'];
+  m.push('À droite, quatre cases numérotées : 1. La maladie, 2. La protéine, 3. Le brin donné, 4. Le type de mutation.');
+  const rempli = CASES.filter(C => t >= C.t0);
+  rempli.forEach(C => m.push(`Case « ${C.titre} » remplie : « ${C.l.map(p => p.map(q => q[0]).join('')).join(' ; ')} ».`));
+  if (t >= CASES[2].t0) m.push('Dans l’énoncé, le mot « non » de « brin non transcrit » est entouré en rouge.');
+  if (t >= CASES[3].t0) m.push('AGT (normal) et AGA (muté) soulignés en rouge dans l’énoncé.');
+  return m;
+}
+
+/* ════════ Vue lignes (barème, trois sujets) ════════ */
+const SUJETS = {
+  '2025N': { nom: '2025 N : ALD (gène ABCD1)', n0: 147, normal: 'GTC AAC AGT GCC ATC CGT', mute: 'GTC AAC AGA GCC ATC CGT', dit: 'triplet 149 : T → A (3e nucléotide) ; codon AGU → AGA ; Ser → Arg' },
+  '2024N': { nom: '2024 N : amélogénèse imparfaite (gène AMELX)', n0: 1, normal: 'AAT CAT CCC CGT GCT', mute: 'AAT CAT CTC CGT GCT', dit: 'triplet 3 : C → T (2e nucléotide) ; codon CCC → CUC ; Pro → Leu' },
+  '2023N': { nom: '2023 N : HCF (gène LDLR)', n0: 29, normal: 'AGA AAC GAG TTC CAG TGC CAA', mute: 'AGA AAC GAG TTC TAG TGC CAA', dit: 'triplet 33 : C → T (1er nucléotide) ; codon CAG → UAG = codon stop : protéine raccourcie' },
+};
+const ORDRE_SUJETS = ['2025N', '2024N', '2023N'];
+function analyser(code) {
+  const S = SUJETS[code], tn = S.normal.split(' '), tm = S.mute.split(' ');
+  const arn = a => a.map(s => s.replace(/T/g, 'U'));
+  const aa = a => { const out = []; for (const cd of arn(a)) { const x = M.traduire(cd); if (x === 'Stop') { out.push('Stop'); break; } out.push(x); } return out; };
+  const j = tn.findIndex((s, i) => s !== tm[i]), b = [...tn[j]].findIndex((L, i) => L !== tm[j][i]);
+  return { S, tn, tm, an: arn(tn), am: arn(tm), pn: aa(tn), pm: aa(tm), j, b };
+}
+const ML = { triplets: 1.6, brin_normal: 3.6, arnm_normal: 6.0, aa_normal: 8.5, allele_mute: 12.0, difference: 14.2 };
+const LX = 214, LXMAX = 740, RY = { tri: 72, nb: 120, na: 144, np: 168, mb: 222, ma: 246, mp: 270 };
+function dessinerLignes(c, k) {
+  const t = k.t, A = analyser(k.P.sujet), n = A.tn.length, cw = (LXMAX - LX) / n, cx = i => LX + (i + .5) * cw, T = 15;
+  c.texte('Les lignes du barème', 380, 24, { couleur: 'cyan', taille: 19, align: 'center' });
+  c.texte('sujet ' + A.S.nom + '  (toucher pour changer)', 380, 46, { couleur: 'faible', taille: 13, align: 'center' });
+  c.repere('sujet', 200, 32, 360, 20, 'le sujet (toucher pour changer)');
+  const titre = (s, y, coul = 'faible') => k.T(c, s, 18, y, { couleur: coul, taille: 14, duree: .3 });
+  const ligneTri = (y, arr, coul, rouge) => arr.forEach((s, i) => {
+    if (rouge != null && i === rouge && A.b >= 0 && coul === 'blanc') morceaux(c, k, [[s.slice(0, A.b), 'blanc'], [s[A.b], 'rouge'], [s.slice(A.b + 1), 'blanc']], cx(i) - larg(c, s, T) / 2, y, T, .05);
+    else if (rouge != null && i === rouge && coul === 'orange') morceaux(c, k, [[s.slice(0, A.b), 'orange'], [s[A.b], 'rouge'], [s.slice(A.b + 1), 'orange']], cx(i) - larg(c, s, T) / 2, y, T, .05);
+    else k.T(c, s, cx(i), y, { couleur: coul, taille: T, align: 'center', duree: .14 });
+  });
+  const ligneAA = (y, arr, j) => { for (let i = 0; i < n; i++) {
+    const s = arr[i]; if (s == null) break;
+    if (s === 'Stop') { k.T(c, 'stop', cx(i), y, { couleur: 'rouge', taille: T, align: 'center', duree: .14 }); break; }
+    if (i > 0) k.T(c, '–', LX + i * cw, y, { couleur: 'faible', taille: T, align: 'center', duree: .05 });
+    k.T(c, s, cx(i), y, { couleur: j === i ? 'rouge' : 'vert', taille: T, align: 'center', duree: .14 });
+  } };
+  if (k.ecrit(c, 'tri', .3)) { titre('N° des triplets', RY.tri); A.tn.forEach((s, i) => k.T(c, String(A.S.n0 + i), cx(i), RY.tri, { couleur: 'cyan', taille: 14, align: 'center', duree: .1 })); c.ligne(18, RY.tri + 10, LXMAX, RY.tri + 10, { couleur: 'tresfaible', largeur: 1.2, duree: .2 }); }
+  if (t >= .3) c.repere('ligne_triplets', 14, RY.tri - 16, LXMAX - 10, 22, 'la ligne des numéros de triplets');
+  if (k.ecrit(c, 'bn', 2.0)) { k.T(c, 'Allèle normal', 18, RY.nb - 24, { couleur: 'vert', taille: 15, duree: .3 }); titre('brin non transcrit', RY.nb); ligneTri(RY.nb, A.tn, 'blanc'); }
+  if (k.ecrit(c, 'an', 4.5)) { titre('ARNm', RY.na); ligneTri(RY.na, A.an, 'orange'); }
+  if (k.ecrit(c, 'pn', 7.0)) { titre('séquence d’acides aminés', RY.np, 'faible'); ligneAA(RY.np, A.pn, -1); }
+  if (k.ecrit(c, 'bm', 9.3)) { k.T(c, 'Allèle muté', 18, RY.mb - 24, { couleur: 'rouge', taille: 15, duree: .3 }); titre('brin non transcrit', RY.mb); ligneTri(RY.mb, A.tm, 'blanc', A.j); }
+  if (k.ecrit(c, 'am', 10.2)) { titre('ARNm', RY.ma); ligneTri(RY.ma, A.am, 'orange', A.j); }
+  if (k.ecrit(c, 'pm', 11.0)) { titre('séquence d’acides aminés', RY.mp, 'faible'); ligneAA(RY.mp, A.pm, A.j); }
+  if (t >= 2.0) { c.repere('ligne_brin', 14, RY.nb - 16, LXMAX - 10, 22, 'la ligne du brin non transcrit'); c.repere('allele_normal', 14, RY.nb - 40, LXMAX - 10, RY.np - RY.nb + 48, 'l’allèle normal'); }
+  if (t >= 4.5) c.repere('ligne_arnm', 14, RY.na - 16, LXMAX - 10, 22, 'la ligne de l’ARNm');
+  if (t >= 7.0) c.repere('ligne_aa', 14, RY.np - 16, LXMAX - 10, 22, 'la ligne des acides aminés');
+  if (t >= 9.3) c.repere('allele_mute', 14, RY.mb - 40, LXMAX - 10, RY.mp - RY.mb + 48, 'l’allèle muté');
+  const xd = LX + A.j * cw + 3, wd = cw - 6;
+  if (k.ecrit(c, 'diff', 12.5)) {
+    c.rect(xd, RY.mb - 18, wd, RY.mp - RY.mb + 26, { couleur: 'rouge', largeur: 2.2, duree: .35 });
+    if (A.pm.length < n) c.rect(LX + A.j * cw + 3, RY.mp - 18, (n - A.j) * cw - 6, 25, { couleur: 'rouge', largeur: 1.6, duree: .25, pointille: [5, 4] });
+    k.T(c, 'Ce qui diffère (encadré en rouge) :', 18, 314, { couleur: 'rouge', taille: 15, duree: .4 });
+    couper(c, A.S.dit, 720, 15).forEach((l, i) => k.T(c, l, 18, 336 + i * 20, { couleur: 'blanc', taille: 15, duree: .5 }));
+    k.T(c, 'Pour chaque allèle : N° des triplets, brin, ARNm, acides aminés, alignés.', 18, 392, { couleur: 'faible', taille: 14, duree: .5 });
+  }
+  if (t >= 12.5) c.repere('difference', xd, RY.mb - 18, wd, RY.mp - RY.mb + 26, 'ce qui diffère');
+}
+function voitLignes(k) {
+  const t = k.t, A = analyser(k.P.sujet), m = [`Sujet ${A.S.nom}, écrit sous le titre.`], tr = A.tn.map((s, i) => A.S.n0 + i);
+  if (t >= .3) m.push(`Ligne « N° des triplets » : ${tr.join(', ')}.`);
+  if (t >= 2.0) m.push(`Allèle normal, brin non transcrit : ${A.tn.join(' ')}.`);
+  if (t >= 4.5) m.push(`ARNm normal : ${A.an.join(' ')}.`);
+  if (t >= 7.0) m.push(`Acides aminés (normal) : ${A.pn.join(' – ')}.`);
+  if (t >= 9.3) m.push(`Allèle muté, brin non transcrit : ${A.tm.join(' ')} (la base changée en rouge, triplet ${A.S.n0 + A.j}).`);
+  if (t >= 10.2) m.push(`ARNm muté : ${A.am.join(' ')}.`);
+  if (t >= 11.0) m.push(`Acides aminés (muté) : ${A.pm.filter(x => x !== 'Stop').join(' – ')}${A.pm.includes('Stop') ? ', puis « stop » en rouge : la traduction s’arrête' : ''}.`);
+  if (t >= 12.5) m.push(`Colonne du triplet ${A.S.n0 + A.j} encadrée en rouge sur l’allèle muté ; écrit : « ${A.S.dit} ».`);
+  return m;
+}
+
+/* ════════ Vue phrase (origine génétique, 2025 N) ════════ */
+const PHRASE = [
+  { id: 'maillon_mutation', t0: .5, s: 'Mutation par substitution du 3e nucléotide T par A au niveau du triplet 149 du brin non transcrit du gène ABCD1' },
+  { id: 'maillon_codon', t0: 4.0, s: 'codon AGU devient AGA' },
+  { id: 'maillon_acide_amine', t0: 6.0, s: 'l’acide aminé Ser est remplacé par Arg' },
+  { id: 'maillon_proteine', t0: 8.2, s: 'synthèse d’une protéine ALDP non fonctionnelle' },
+  { id: 'maillon_maladie', t0: 10.4, s: 'les AGLC n’entrent plus dans le peroxysome et s’accumulent', fin: 'ALD (maladie)' },
+];
+const VERSIONS = [
+  { id: 'version_deletion', type: 'deletion', t0: 13.2, titre: 'délétion :', s: 'délétion du nucléotide n° … du triplet … du brin non transcrit → décalage du cadre de lecture → séquence d’acides aminés modifiée à partir du codon … → protéine non fonctionnelle → maladie' },
+  { id: 'version_non_sens', type: 'non_sens', t0: 14.9, titre: 'non-sens :', s: 'substitution du nucléotide … par … au niveau du triplet … du brin non transcrit → codon stop prématuré UAG → protéine incomplète (raccourcie), non fonctionnelle → maladie' },
+];
+const MP = { maillon_mutation: 3.4, maillon_codon: 5.2, maillon_acide_amine: 7.4, maillon_proteine: 9.6, maillon_maladie: 12.4, versions: 16.6 };
+let PH_ZONES = { phrase: [44, 200], versions: [] };
+function disposerPhrase(c) {
+  const T = 16, dy = 22, xs = 50, out = []; let y = 66;
+  PHRASE.forEach((P, i) => {
+    const lignes = couper(c, P.s, 690, T), bloc = { ...P, lignes: lignes.map((l, j) => ({ s: l, y: y + j * dy })), fleche: i > 0 };
+    if (P.fin) { const yl = y + (lignes.length - 1) * dy, xl = xs + larg(c, lignes[lignes.length - 1], T); bloc.finPos = { f: [xl + 6, xl + 24], x: xl + 30, y: yl }; }
+    out.push(bloc); y += lignes.length * dy + 6;
+  });
+  return out;
+}
+function disposerVersions(c, y0) {
+  let y = y0; return VERSIONS.map(V => { const l = couper(c, V.titre + ' ' + V.s, 700, 15), b = { ...V, lignes: l, y, h: l.length * 20 + 10 }; y += b.h + 12; return b; });
+}
+function dessinerPhrase(c, k) {
+  const t = k.t, T = 16, B = disposerPhrase(c), yFin = B[B.length - 1].lignes.slice(-1)[0].y + 14;
+  c.texte('La phrase de l’origine génétique (2025 N)', 380, 24, { couleur: 'cyan', taille: 19, align: 'center' });
+  B.forEach(P => {
+    const x1 = Math.max(...P.lignes.map(l => 50 + larg(c, l.s, T)), P.finPos ? P.finPos.x + larg(c, P.fin, T) : 0);
+    if (t >= P.t0) c.repere(P.id, 22, P.lignes[0].y - 17, x1 - 18, P.lignes.length * 22 + 2, 'le maillon « ' + P.s.slice(0, 32) + '… »');
+    if (!k.ecrit(c, P.id, P.t0)) return;
+    if (P.fleche) c.fleche(24, P.lignes[0].y - 5, 42, P.lignes[0].y - 5, { couleur: 'jaune', largeur: 1.8, tete: 6, duree: .12 });
+    P.lignes.forEach(l => k.T(c, l.s, 50, l.y, { couleur: 'blanc', taille: T, duree: Math.min(1.1, l.s.length / 50) }));
+    if (P.finPos) { c.fleche(P.finPos.f[0], P.finPos.y - 5, P.finPos.f[1], P.finPos.y - 5, { couleur: 'jaune', largeur: 1.8, tete: 6, duree: .12 }); k.T(c, P.fin, P.finPos.x, P.finPos.y, { couleur: 'rouge', taille: T, duree: .4 }); }
+  });
+  if (t >= .5) c.repere('phrase', 16, 44, 728, yFin - 40, 'la phrase complète (substitution)');
+  if (k.P.type === 'substitution' && t >= MP.maillon_maladie) bord(c, 16, 44, 728, yFin - 40, 'jaune', 1.8);
+  const V = disposerVersions(c, yFin + 48);
+  PH_ZONES = { phrase: [44, yFin + 4], versions: V.map(v => [v.type, v.y - 4, v.y - 4 + v.h]) };
+  if (k.ecrit(c, 'vtitre', VERSIONS[0].t0)) k.T(c, 'Les autres phrases types, à compléter :', 18, yFin + 30, { couleur: 'jaune', taille: 15, duree: .4 });
+  V.forEach(v => {
+    const choisi = k.P.type === v.type;
+    if (t >= v.t0) c.repere(v.id, 16, v.y - 4, 728, v.h, 'la version « ' + v.titre.replace(' :', '') + ' »');
+    if (!k.ecrit(c, v.id, v.t0)) return;
+    v.lignes.forEach((l, i) => {
+      const y = v.y + 16 + i * 20;
+      if (i === 0) { k.T(c, v.titre, 26, y, { couleur: choisi ? 'jaune' : 'faible', taille: 15, duree: .2 }); k.T(c, l.slice(v.titre.length), 26 + larg(c, v.titre, 15), y, { couleur: choisi ? 'blanc' : 'faible', taille: 15, duree: .55 }); }
+      else k.T(c, l, 26, y, { couleur: choisi ? 'blanc' : 'faible', taille: 15, duree: .55 });
+    });
+    if (choisi) bord(c, 16, v.y - 4, 728, v.h, 'jaune', 1.8);
+  });
+}
+function voitPhrase(k) {
+  const t = k.t, m = [], fait = PHRASE.filter(P => t >= P.t0);
+  if (fait.length) m.push(`Écrit, maillon par maillon, avec des flèches : « ${fait.map(P => P.s + (P.fin ? ' → ' + P.fin : '')).join(' → ')} ».`);
+  if (t >= MP.maillon_maladie && k.P.type === 'substitution') m.push('La phrase est encadrée en jaune (type substitution).');
+  VERSIONS.forEach(v => { if (t >= v.t0) m.push(`Version à trous « ${v.titre} » ${v.s}${k.P.type === v.type ? ' (mise en lumière, encadrée en jaune)' : ' (craie faible)'}.`); });
+  return m;
+}
+
+/* ════════ Vue restitution (six définitions) ════════ */
+const DEFS = [
+  { id: 'carte_gene', m: 'def_gene', mot: 'Gène :', s: 'portion d’ADN, située à un endroit précis (locus) d’un chromosome, qui détermine un caractère héréditaire.' },
+  { id: 'carte_allele', m: 'def_allele', mot: 'Allèle :', s: 'une des formes d’un même gène, située au même locus.' },
+  { id: 'carte_mutation', m: 'def_mutation', mot: 'Mutation :', s: 'modification de la séquence des nucléotides d’un gène ; rare, spontanée ou provoquée, héréditaire.' },
+  { id: 'carte_codon', m: 'def_codon', mot: 'Codon :', s: 'succession de trois nucléotides de l’ARNm qui code un acide aminé (ou l’arrêt).' },
+  { id: 'carte_transcription', m: 'def_transcription', mot: 'Transcription :', s: 'synthèse, dans le noyau, d’un ARNm complémentaire du brin transcrit d’un gène, par l’ARN polymérase.' },
+  { id: 'carte_traduction', m: 'def_traduction', mot: 'Traduction :', s: 'synthèse, dans le cytoplasme, d’une protéine à partir de l’ARNm, au niveau des ribosomes, selon le code génétique.' },
+];
+const t0Def = i => .4 + i * 2.2;
+const MDEF = Object.fromEntries(DEFS.map((D, i) => [D.m, +(t0Def(i) + 2.0).toFixed(1)]));
+function dessinerRestitution(c, k) {
+  const t = k.t;
+  c.texte('Les définitions à savoir mot pour mot', 380, 24, { couleur: 'cyan', taille: 19, align: 'center' });
+  DEFS.forEach((D, i) => {
+    const x = 18 + (i % 2) * 372, y = 42 + Math.floor(i / 2) * 124, w = 352, h = 114;
+    if (t >= t0Def(i)) c.repere(D.id, x, y, w, h, 'la carte « ' + D.mot.replace(' :', '') + ' »');
+    if (!k.ecrit(c, D.id, t0Def(i))) return;
+    c.rect(x, y, w, h, { couleur: 'faible', largeur: 1.6, duree: .25 });
+    k.T(c, D.mot, x + 12, y + 25, { couleur: 'jaune', taille: 17, duree: .3 });
+    couper(c, D.s, w - 26, 15).forEach((l, j) => k.T(c, l, x + 14, y + 48 + j * 21, { couleur: 'blanc', taille: 15, duree: .34 }));
+  });
+}
+function voitRestitution(k) {
+  const t = k.t, d = DEFS.filter((D, i) => t >= t0Def(i));
+  return d.length ? [`Cartes écrites (deux colonnes, dans l’ordre) : ${d.map(D => '« ' + D.mot + ' ' + D.s + ' »').join(' ')}`] : [];
+}
+
+/* ════════ Vue amelogenine (2024 N) ════════ */
+const MA = { document: 4.0, relation: 7.6, sequences: 11.4, origine: 14.8 };
+const RANGS = [{ y: 66, normale: true, titre: 'personne saine', prot: 'amélogénine normale', min: ['minéralisation', 'normale'], email: 'émail normal' },
+  { y: 206, normale: false, titre: 'personne malade', prot: 'amélogénine anormale', min: ['minéralisation', 'faible'], email: 'émail atteint' }];
+const REL_A = [
+  [{ s: 'saine :', couleur: 'vert' }, { s: 'amélogénine normale', sans: true }, { s: 'minéralisation normale' }, { s: 'émail normal', couleur: 'vert' }],
+  [{ s: 'malade :', couleur: 'rouge' }, { s: 'amélogénine anormale', sans: true }, { s: 'minéralisation faible' }, { s: 'émail atteint (amélogénèse imparfaite)', couleur: 'rouge' }]];
+const SEQ_A = { normal: 'AAT CAT CCC CGT GCT', mute: 'AAT CAT CTC CGT GCT' };
+const ORIGINE_A = 'Substitution du 2e nucléotide C par T au triplet 3 du brin non transcrit du gène AMELX → codon CCC devient CUC → Pro remplacé par Leu → amélogénine anormale → minéralisation faible → amélogénèse imparfaite (maladie)';
+const XQ = 350, XQM = 746;
+function dessinerAmelogenine(c, k) {
+  const t = k.t, a = rampe(t, .2, .7);
+  c.direct(() => { const x = c.ctx; RANGS.forEach(R => { ameloblastes(x, 24, R.y + 34, 5, 48, R.normale, a); dent(x, 296, R.y + 24, !R.normale, a); }); });
+  c.texte('Sujet 2024 N : l’amélogénèse imparfaite', 380, 24, { couleur: 'cyan', taille: 19, align: 'center' });
+  if (t >= .2) {
+    c.repere('document', 10, 36, 328, 314, 'le document 1 redessiné');
+    c.repere('dent_saine', 266, RANGS[0].y + 20, 60, 82, 'la dent saine'); c.repere('dent_atteinte', 266, RANGS[1].y + 20, 60, 82, 'la dent atteinte');
+  }
+  if (k.ecrit(c, 'doc', .3)) {
+    c.rect(10, 36, 328, 314, { couleur: 'faible', largeur: 1.5, duree: .25 });
+    k.T(c, 'Document 1', 174, 54, { couleur: 'jaune', taille: 14, align: 'center', duree: .25 });
+    RANGS.forEach(R => {
+      k.T(c, R.titre, 20, R.y + 10, { couleur: R.normale ? 'vert' : 'rouge', taille: 14, duree: .3 });
+      k.T(c, 'améloblastes', 69, R.y + 28, { couleur: 'faible', taille: 13, align: 'center', duree: .25 });
+      k.T(c, R.prot, 72, R.y + 118, { couleur: 'blanc', taille: 13, align: 'center', duree: .35 });
+      c.fleche(124, R.y + 62, 148, R.y + 62, { couleur: 'faible', largeur: 1.4, tete: 6, duree: .1 });
+      k.T(c, R.min[0], 202, R.y + 58, { couleur: 'blanc', taille: 13, align: 'center', duree: .25 });
+      k.T(c, R.min[1], 202, R.y + 75, { couleur: R.normale ? 'vert' : 'rouge', taille: 13, align: 'center', duree: .2 });
+      c.fleche(250, R.y + 62, 268, R.y + 62, { couleur: 'faible', largeur: 1.4, tete: 6, duree: .1 });
+      k.T(c, R.email, 296, R.y + 118, { couleur: R.normale ? 'vert' : 'rouge', taille: 13, align: 'center', duree: .25 });
+    });
+  }
+  // Question 1 : relation protéine – caractère
+  const T = 13;
+  const L1 = flux(c, REL_A[0], XQ + 4, 72, XQM, T, 17), y2 = Math.max(...L1.map(o => o.y)) + 20, L2 = flux(c, REL_A[1], XQ + 4, y2, XQM, T, 17);
+  const yRel = Math.max(...L2.map(o => o.y)) + 19;
+  if (k.ecrit(c, 'q1', 4.4)) {
+    k.T(c, '1. Relation protéine – caractère :', XQ, 52, { couleur: 'jaune', taille: 14, duree: .4 });
+    [...L1, ...L2].forEach(it => ecrireItem(c, k, it, T, .3));
+    k.T(c, 'd’où la relation protéine – caractère.', XQ + 4, yRel, { couleur: 'vert', taille: T, duree: .4 });
+  }
+  if (t >= 4.4) c.repere('relation', XQ - 4, 36, XQM - XQ + 2, yRel - 30, 'la relation protéine – caractère');
+  // Question 2 : séquences
+  const yQ2 = yRel + 26, lx = XQ + 70, cw = (XQM - lx) / 5, cx = i => lx + (i + .5) * cw;
+  const tn = SEQ_A.normal.split(' '), tm = SEQ_A.mute.split(' '), an = tn.map(s => s.replace(/T/g, 'U')), am = tm.map(s => s.replace(/T/g, 'U'));
+  const pn = an.map(M.traduire), pm = am.map(M.traduire);
+  const blocSeq = (y0, tri, arn, aa, nom, coul) => {
+    k.T(c, nom, XQ + 4, y0, { couleur: coul, taille: T, duree: .2 });
+    tri.forEach((s, i) => k.T(c, s, cx(i), y0, { couleur: i === 2 && nom === 'muté :' ? 'rouge' : 'blanc', taille: T, align: 'center', duree: .08 }));
+    arn.forEach((s, i) => k.T(c, s, cx(i), y0 + 17, { couleur: i === 2 && nom === 'muté :' ? 'rouge' : 'orange', taille: T, align: 'center', duree: .08 }));
+    aa.forEach((s, i) => { if (i) k.T(c, '–', lx + i * cw, y0 + 34, { couleur: 'faible', taille: T, align: 'center', duree: .04 }); k.T(c, s, cx(i), y0 + 34, { couleur: i === 2 && nom === 'muté :' ? 'rouge' : 'vert', taille: T, align: 'center', duree: .08 }); });
+  };
+  if (k.ecrit(c, 'q2', 8.0)) {
+    k.T(c, '2. Séquences (triplets 1 à 5) :', XQ, yQ2, { couleur: 'jaune', taille: 14, duree: .4 });
+    k.T(c, 'brin / ARNm / acides aminés', XQM, yQ2, { couleur: 'faible', taille: 12, align: 'right', duree: .3 });
+    blocSeq(yQ2 + 20, tn, an, pn, 'normal :', 'vert');
+    blocSeq(yQ2 + 76, tm, am, pm, 'muté :', 'rouge');
+    c.rect(cx(2) - cw / 2 + 2, yQ2 + 64, cw - 4, 54, { couleur: 'rouge', largeur: 1.8, duree: .25 });
+  }
+  if (t >= 8.0) c.repere('sequences', XQ - 4, yQ2 - 16, XQM - XQ + 2, 136, 'les séquences normale et mutée');
+  // Question 3 : origine génétique
+  const yQ3 = yQ2 + 144, LO = couper(c, ORIGINE_A, XQM - XQ - 8, T);
+  if (k.ecrit(c, 'q3', 11.8)) {
+    k.T(c, '3. Origine génétique :', XQ, yQ3, { couleur: 'jaune', taille: 14, duree: .3 });
+    LO.forEach((l, i) => k.T(c, l, XQ + 4, yQ3 + 19 + i * 17, { couleur: 'blanc', taille: T, duree: .6 }));
+  }
+  if (t >= 11.8) c.repere('origine', XQ - 4, yQ3 - 16, XQM - XQ + 2, 24 + LO.length * 17, 'l’origine génétique');
+}
+function voitAmelogenine(k) {
+  const t = k.t, m = [];
+  if (t >= .2) m.push('À gauche, le document 1 redessiné : en haut, personne saine : des améloblastes (cellules peintes) sécrètent l’amélogénine normale (grains verts) → minéralisation normale → dent à l’émail blanc brillant, « émail normal » ; en bas, personne malade : amélogénine anormale (grains orange) → minéralisation faible → dent à l’émail jaune-brun piqueté, « émail atteint ».');
+  if (t >= 4.4) m.push('À droite, « 1. Relation protéine – caractère » : « saine : amélogénine normale → minéralisation normale → émail normal » ; « malade : amélogénine anormale → minéralisation faible → émail atteint (amélogénèse imparfaite) » ; « d’où la relation protéine – caractère ».');
+  if (t >= 8.0) m.push('« 2. Séquences (triplets 1 à 5) » : normal AAT CAT CCC CGT GCT → ARNm AAU CAU CCC CGU GCU → Asn – His – Pro – Arg – Ala ; muté AAT CAT CTC CGT GCT → AAU CAU CUC CGU GCU → Asn – His – Leu – Arg – Ala ; le triplet 3 encadré en rouge.');
+  if (t >= 11.8) m.push(`« 3. Origine génétique » : « ${ORIGINE_A} ».`);
+  return m;
+}
+
+/* ════════ Lancement ════════ */
+window.Etapes.lancer({
+  id: 'genetique_examen', titre: 'Préparer l’examen : expression de l’information génétique', graine: 59,
+  parametres: {
+    sujet: { defaut: '2025N', schema: "'2025N' | '2024N' | '2023N' (vue lignes : le sujet dont on écrit les lignes du barème)", lire: v => { const s = String(v || '').toUpperCase().replace(/\s/g, ''); return SUJETS[s] ? s : undefined; } },
+    type: { defaut: 'substitution', schema: "'substitution' | 'deletion' | 'non_sens' (vue phrase : la version mise en lumière)", lire: v => { const s = String(v || '').toLowerCase().replace(/é/g, 'e').replace(/[- ]/g, '_'); return ['substitution', 'deletion', 'non_sens'].includes(s) ? s : undefined; } },
+  },
+  poignees: {
+    toucher: (x, y, k) => {
+      if (k.vue === 'lignes' && y > 30 && y < 54 && x > 160 && x < 600) return 'sujet';
+      if (k.vue === 'phrase') {
+        if (y > PH_ZONES.phrase[0] && y < PH_ZONES.phrase[1] && k.t >= PHRASE[0].t0) return 'type:substitution';
+        const v = PH_ZONES.versions.find(([, y0, y1]) => y > y0 && y < y1); if (v && k.t >= VERSIONS[0].t0) return 'type:' + v[0];
+      }
+      return null;
+    },
+    bouger: () => {},
+    lacher: (id, k, api) => {
+      if (id === 'sujet') { const i = ORDRE_SUJETS.indexOf(k.P.sujet); api.poser({ sujet: ORDRE_SUJETS[(i + 1) % 3] }); api.start(); }
+      else if (id.startsWith('type:')) api.poser({ type: id.slice(5) });
+    },
+  },
+  vues: {
+    document_ldl: { titre: 'Document 2023 N : récepteurs LDL et HCF', fin: 14, moments: MD, dessiner: dessinerLDL, voit: voitLDL,
+      motifs: { deux_cellules: 'cellule saine : les LDL entrent ; cellule malade : récepteur anormal, les LDL restent dehors', ligne_saine: 'la ligne de la personne saine, maillon par maillon', ligne_malade: 'la ligne de la personne malade, jusqu’à l’hypercholestérolémie', relation: 'd’où la relation protéine – caractère' },
+      conclusion: 'Récepteur normal → LDL qui entrent → cholestérol normal ; récepteur anormal → hypercholestérolémie : relation protéine – caractère.',
+      texte: 'HCF (2023 N) : chez la personne saine, récepteur LDL normal → entrée des LDL dans la cellule → taux normal de cholestérol sanguin → phénotype normal ; chez la malade, récepteur LDL anormal → pas d’entrée des LDL → accumulation des LDL dans le sang → hypercholestérolémie ; d’où la relation protéine – caractère.',
+      explication: [{ repere: 'recepteur_normal', texte: 'Un récepteur normal : la LDL s’y fixe, puis entre.' }, { repere: 'recepteur_anormal', texte: 'Un récepteur anormal : la LDL ne s’y fixe pas.' }, { repere: 'ldl', texte: 'Les LDL s’accumulent dans le sang.' }, { repere: 'ligne_saine', texte: 'La ligne de la personne saine.' }, { repere: 'ligne_malade', texte: 'La ligne de la personne malade.' }, { repere: 'relation', texte: 'D’où la relation protéine – caractère.' }] },
+    reperages: { titre: 'Avant d’écrire : quatre repérages', fin: 12.2, moments: MR, dessiner: dessinerReperages, voit: voitReperages,
+      motifs: { maladie: 'la maladie : ALD (adrénoleucodystrophie)', proteine: 'la protéine : ALDP, transport des AGLC dans le peroxysome', brin: 'le brin donné est le brin NON transcrit', type_mutation: 'substitution au triplet 149 : AGT devient AGA' },
+      conclusion: 'Maladie, protéine, brin donné, type de mutation : repérés avant d’écrire.',
+      texte: 'Quatre repérages sur l’énoncé 2025 N : maladie = ALD ; protéine = ALDP (transport des AGLC dans le peroxysome) ; brin donné = brin NON transcrit ; type de mutation = substitution (triplet 149).',
+      explication: [{ repere: 'enonce', texte: 'L’énoncé, résumé.' }, { repere: 'case_maladie', texte: 'La maladie.' }, { repere: 'case_proteine', texte: 'La protéine en cause.' }, { repere: 'mot_non', texte: 'Le mot « non » : on te donne le brin NON transcrit.' }, { repere: 'case_mutation', texte: 'Le type de mutation : une substitution.' }] },
+    lignes: { titre: 'Les lignes du barème', fin: 16, moments: ML, dessiner: dessinerLignes, voit: voitLignes,
+      motifs: { triplets: 'la ligne des numéros de triplets', brin_normal: 'le brin non transcrit de l’allèle normal', arnm_normal: 'l’ARNm normal : on recopie, T devient U', aa_normal: 'la séquence d’acides aminés normale', allele_mute: 'les trois lignes de l’allèle muté', difference: 'ce qui diffère, encadré en rouge' },
+      conclusion: 'Les lignes alignées pour les deux allèles : la différence saute aux yeux.',
+      texte: 'Lignes du barème (N° des triplets, brin non transcrit, ARNm, séquence d’acides aminés) pour l’allèle normal et l’allèle muté ; sujets 2025N (ALD, triplet 149 AGT → AGA, Ser → Arg), 2024N (AMELX, triplet 3 CCC → CTC, Pro → Leu), 2023N (LDLR, triplet 33 CAG → TAG, codon stop).',
+      explication: [{ repere: 'ligne_triplets', texte: 'Les numéros des triplets.' }, { repere: 'ligne_brin', texte: 'Le brin non transcrit, recopié.' }, { repere: 'ligne_arnm', texte: 'L’ARNm : le même brin, T devient U.' }, { repere: 'ligne_aa', texte: 'Les acides aminés lus dans le tableau du code génétique.' }, { repere: 'difference', texte: 'Ce qui diffère entre les deux allèles.' }] },
+    phrase: { titre: 'La phrase de l’origine génétique', fin: 18, moments: MP, dessiner: dessinerPhrase, voit: voitPhrase,
+      surReglage: () => {},
+      motifs: { maillon_mutation: 'la mutation : substitution du 3e nucléotide T par A, triplet 149', maillon_codon: 'le codon AGU devient AGA', maillon_acide_amine: 'Ser est remplacé par Arg', maillon_proteine: 'une protéine ALDP non fonctionnelle', maillon_maladie: 'les AGLC s’accumulent : ALD', versions: 'les autres phrases types, à compléter' },
+      conclusion: 'Mutation → codon → acide aminé → protéine → caractère : la phrase complète.',
+      texte: 'Mutation par substitution du 3e nucléotide T par A au niveau du triplet 149 du brin non transcrit du gène ABCD1 → codon AGU devient AGA → l’acide aminé Ser est remplacé par Arg → synthèse d’une protéine ALDP non fonctionnelle → les AGLC n’entrent plus dans le peroxysome et s’accumulent → ALD (maladie). Versions à trous : délétion (décalage du cadre de lecture), non-sens (codon stop prématuré UAG).',
+      explication: [{ repere: 'maillon_mutation', texte: 'D’abord la mutation, précise : type, nucléotide, triplet, brin, gène.' }, { repere: 'maillon_codon', texte: 'Puis le codon qui change.' }, { repere: 'maillon_acide_amine', texte: 'Puis l’acide aminé.' }, { repere: 'maillon_proteine', texte: 'Puis la protéine.' }, { repere: 'maillon_maladie', texte: 'Enfin le caractère : la maladie.' }, { repere: 'version_deletion', texte: 'Pour une délétion : le décalage du cadre de lecture.' }, { repere: 'version_non_sens', texte: 'Pour un non-sens : le codon stop prématuré.' }] },
+    restitution: { titre: 'Les définitions à savoir', fin: 14, moments: MDEF, dessiner: dessinerRestitution, voit: voitRestitution,
+      motifs: { def_gene: 'la définition du gène', def_allele: 'la définition de l’allèle', def_mutation: 'la définition de la mutation', def_codon: 'la définition du codon', def_transcription: 'la définition de la transcription', def_traduction: 'la définition de la traduction' },
+      conclusion: 'Six définitions à savoir mot pour mot.',
+      texte: DEFS.map(D => D.mot + ' ' + D.s).join(' '),
+      explication: DEFS.map(D => ({ repere: D.id, texte: D.mot + ' ' + D.s })) },
+    amelogenine: { titre: 'Sujet 2024 N : l’amélogénèse imparfaite', fin: 16.2, moments: MA, dessiner: dessinerAmelogenine, voit: voitAmelogenine,
+      motifs: { document: 'le document 1 : améloblastes, amélogénine, émail', relation: 'question 1 : la relation protéine – caractère', sequences: 'question 2 : les séquences, le triplet 3 change', origine: 'question 3 : l’origine génétique' },
+      conclusion: 'Le sujet 2024 N résolu : relation protéine – caractère, séquences, origine génétique.',
+      texte: 'Amélogénèse imparfaite (2024 N) : amélogénine normale → minéralisation normale → émail normal ; amélogénine anormale → minéralisation faible → émail atteint. Allèle normal AAT CAT CCC CGT GCT → Asn – His – Pro – Arg – Ala ; muté AAT CAT CTC CGT GCT → Asn – His – Leu – Arg – Ala. Origine : substitution C → T au triplet 3 (gène AMELX).',
+      explication: [{ repere: 'document', texte: 'Le document 1, redessiné.' }, { repere: 'dent_saine', texte: 'La dent saine : émail normal.' }, { repere: 'dent_atteinte', texte: 'La dent atteinte : émail mal minéralisé.' }, { repere: 'relation', texte: 'Question 1 : la relation protéine – caractère.' }, { repere: 'sequences', texte: 'Question 2 : les séquences.' }, { repere: 'origine', texte: 'Question 3 : l’origine génétique.' }] },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

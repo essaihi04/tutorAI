@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Axe et centre de symétrie d’une courbe</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Repère à la craie : une parabole et son axe de symétrie x = 2, deux points symétriques à la même hauteur ; ou une hyperbole, son centre de symétrie Ω(2 ; 1) milieu de deux points M et M′ de la courbe"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Dérivation et étude des fonctions » (math_ch2_derivation_etude_fonctions) : axe et centre de symétrie.
+ * Vues : ?vue=axe | centre.
+ * axe : f(x) = x² − 4x + 5 = (x − 2)² + 1, axe x = 2 (a = 2) : f(4 − x) = (2 − x)² + 1 = f(x) ; f(1) = f(3) = 2.
+ *   Repère y ∈ [−0,5 ; 8] (le contrat dit 7) : avec x jusqu'à 4,6, f(4,6) = 7,76 reste dans le cadre.
+ * centre : f(x) = (x + 1)/(x − 2) = 1 + 3/(x − 2), Ω(2 ; 1) : f(4 − x) = 1 − 3/(x − 2), donc f(4 − x) + f(x) = 2 = 2 × 1 ;
+ *   x = 3 : M(3 ; 4), M′(1 ; −2). Poignée x de 2,6 à 6,5 (le contrat dit 2,3) : pour x < 2,6, f(x) > 6 et f(4 − x) < −4,
+ *   M et M′ sortiraient du repère y ∈ [−4 ; 6].
+ * Au tableau, le prime s'écrit M' et f' (la police de la craie dessine « ′ » vide).
+ * Moments : voir chaque vue ; `fin` = construction complète.
+ */
+const fr = MathsTableau.fr;
+const exact = v => Math.abs(+v.toFixed(2) - v) < 1e-9;
+const val = v => (exact(v) ? '' : '≈ ') + fr(v, 2);
+
+/* ---------- vue axe ---------- */
+const fa = x => x * x - 4 * x + 5;
+const OA = { x0: 60, y0: 40, w: 400, h: 280, xmin: -0.8, xmax: 4.8, ymin: -0.5, ymax: 8,
+  gx: [[1, '1'], [2, '2'], [3, '3'], [4, '4']], gy: [[1, '1'], [2, '2'], [6, '6']] };
+const XA = 490;                                    // colonne des écritures
+
+/* ---------- vue centre ---------- */
+const fc = x => (x + 1) / (x - 2);
+const OC = { x0: 40, y0: 40, w: 420, h: 300, xmin: -3, xmax: 7, ymin: -4, ymax: 6,
+  gx: [[-2, '−2'], [2, ''], [4, '4'], [6, '6']], gy: [[4, '4'], [-2, '−2']] };
+const XC = 482;
+
+/* Accolade « { » de y1 à y2, à l'abscisse x. */
+function accolade(c, x, y1, y2) {
+  const m = (y1 + y2) / 2;
+  c.trait([[x + 9, y1], [x + 4, y1 + 3], [x + 3, y1 + 10], [x + 3, m - 7], [x + 1, m - 2], [x - 4, m], [x + 1, m + 2], [x + 3, m + 7], [x + 3, y2 - 10], [x + 4, y2 - 3], [x + 9, y2]], { couleur: 'blanc', largeur: 2, tremble: .3 });
+}
+
+MathsTableau.page({
+  id: 'de_symetrie', titre: 'Axe et centre de symétrie',
+  texte: 'Construction à la craie du cours Dérivation et étude des fonctions : la droite x = a est axe de symétrie de (Cf) si (2a − x) ∈ Df et f(2a − x) = f(x) ; le point Ω(a ; b) est centre de symétrie de (Cf) si (2a − x) ∈ Df et f(2a − x) + f(x) = 2b',
+  vues: {
+    axe: {
+      titre: 'La droite x = 2, axe de symétrie de (Cf)',
+      params: { x: { min: 2.1, max: 4.6, pas: 0.1, defaut: 3, sens: 'abscisse x du point M ; son symétrique est 4 − x' } },
+      dessiner(c, K) {
+        K.titre('Un axe de symétrie : x = a');
+        const G = K.axes(OA);
+        c.repere('repere', G.x0, G.y0, G.w, G.h, 'le repère');
+        K.marque('repere_pose');
+        const r7 = Math.sqrt(7.5);                  // f = 8,5 aux bornes : la courbe s'arrête au bord du cadre
+        K.anime(2.2, p => K.courbePart(G, fa, 2 - r7 + 0.12, 2 + r7 - 0.12, p, { couleur: 'cyan' }));
+        c.texte('f(x) = x² − 4x + 5', XA, 66, { couleur: 'cyan', taille: 18 });
+        c.repere('courbe', G.X(-0.6), G.y0, G.X(4.6) - G.X(-0.6), G.Y(1) - G.y0 + 8, 'la courbe (Cf)');
+        K.marque('courbe_tracee');
+        // L'axe x = 2
+        c.pause(.2);
+        c.ligne(G.X(2), G.Y(8), G.X(2), G.Y(-0.4), { couleur: 'violet', largeur: 2, pointille: [7, 6] });
+        c.texte('x = 2', G.X(2) + 8, G.y0 - 4, { couleur: 'violet', taille: 18 });   // en haut : jamais sous le pointillé M′M
+        c.repere('axe', G.X(2) - 10, G.y0 - 22, 70, G.Y(-0.4) - G.y0 + 22, 'l’axe de symétrie x = 2');
+        K.marque('axe_trace');
+        // x et son symétrique 4 − x sur l'axe des abscisses
+        const x = K.P.x, xs = 4 - x, y0 = G.Y(0), yf = y0 - 12;
+        c.pause(.3);
+        K.rond(G, x, 0, true, 'jaune');
+        c.fleche(G.X(2), yf, G.X(x), yf, { couleur: 'jaune', largeur: 2, tete: 8 });
+        c.texte('x', G.X(x) - 3, y0 + 41, { couleur: 'jaune', taille: 18 });
+        c.repere('point_x', G.X(x) - 12, y0 - 24, 30, 70, 'le point d’abscisse x');
+        K.rond(G, xs, 0, true, 'rose');
+        c.fleche(G.X(2), yf, G.X(xs), yf, { couleur: 'rose', largeur: 2, tete: 8 });
+        c.texte('4 − x', G.X(xs) + 3, y0 + 41, { couleur: 'rose', taille: 18, align: 'right' });
+        c.repere('point_sym', G.X(xs) - 50, y0 - 24, 62, 70, 'son symétrique 4 − x');
+        c.texte('a = 2 : 2a − x = 4 − x', XA, 110, { couleur: 'blanc', taille: 18 });
+        c.texte(`x = ${fr(x, 2)} ; 4 − x = ${fr(xs, 2)}`, XA, 138, { couleur: 'jaune', taille: 18 });
+        K.marque('symetrique_place');
+        // M et M' à la même hauteur
+        c.pause(.3);
+        const y = fa(x);
+        K.proj(G, x, y, { versY: false, couleur: 'jaune' });
+        K.proj(G, xs, y, { versY: false, couleur: 'rose' });
+        c.ligne(G.X(xs), G.Y(y), G.X(x), G.Y(y), { couleur: 'vert', largeur: 2, pointille: [6, 5] });
+        K.rond(G, x, y, true, 'jaune'); K.rond(G, xs, y, true, 'rose');
+        c.texte('M', G.X(x) + 10, G.Y(y) + 16, { couleur: 'jaune', taille: 18 });
+        c.texte('M\'', G.X(xs) - 10, G.Y(y) + 16, { couleur: 'rose', taille: 18, align: 'right' });
+        c.texte(`f(${fr(xs, 2)}) = f(${fr(x, 2)}) = ${fr(y, 2)}`, XA, 178, { couleur: 'vert', taille: 18 });
+        c.repere('meme_hauteur', G.X(xs) - 30, G.Y(y) - 12, G.X(x) - G.X(xs) + 60, 34, 'M et M’ à la même hauteur');
+        K.marque('meme_hauteur');
+        // La relation
+        c.pause(.3);
+        K.lignes(XA, 220, [
+          { t: 'pour tout x réel :', couleur: 'blanc', taille: 18 },
+          { t: 'f(2a − x) = f(x)', couleur: 'blanc', taille: 20, cadre: 'violet' },
+          { t: 'ici f(4 − x) = f(x)', couleur: 'jaune', taille: 18, inter: 0 },
+        ], 30);
+        c.repere('relation', XA - 10, 198, 750 - XA + 4, 86, 'f(2a − x) = f(x), ici f(4 − x) = f(x)');
+        K.marque('relation_axe');
+      },
+      poignees(K) { const G = K.grille(OA);
+        return [{ id: 'x', x: G.X(K.P.x), y: G.Y(0), bouger: (px) => ({ x: G.inv(px, 0)[0] }) }]; },
+      lecture: K => { const x = K.P.x, xs = 4 - x;
+        return `x = ${K.fr(x, 2)}, 4 − x = ${K.fr(xs, 2)} : f(x) = f(${K.fr(x, 2)}) = ${K.fr(fa(x), 2)} et f(4 − x) = f(${K.fr(xs, 2)}) = ${K.fr(fa(xs), 2)}, M et M′ à la même hauteur.`; },
+      decrire: K => { const x = K.P.x, xs = 4 - x, y = fa(x);
+        return {
+          repere_pose: 'Un repère (x de −0,8 à 4,8, y de −0,5 à 8).',
+          courbe_tracee: 'La courbe (Cf) de f(x) = x² − 4x + 5 (cyan), une parabole tournée vers le haut, de sommet (2 ; 1).',
+          axe_trace: 'La droite x = 2 est tracée en pointillé violet, écrit « x = 2 » : la courbe paraît se replier sur elle.',
+          symetrique_place: `Sur l’axe des abscisses, x = ${K.fr(x, 2)} (jaune) et son symétrique 4 − x = ${K.fr(xs, 2)} (rose) ; deux flèches de même longueur partent de 2 ; écrit : a = 2 : 2a − x = 4 − x.`,
+          meme_hauteur: `Les points M(${K.fr(x, 2)} ; ${K.fr(y, 2)}) et M′(${K.fr(xs, 2)} ; ${K.fr(y, 2)}) de la courbe, reliés par un segment horizontal pointillé vert ; écrit : f(${K.fr(xs, 2)}) = f(${K.fr(x, 2)}) = ${K.fr(y, 2)}.`,
+          relation_axe: 'Écrit : pour tout x réel, f(2a − x) = f(x) (encadré) ; ici f(4 − x) = f(x).',
+        }; },
+      motifs: { courbe_tracee: 'la courbe tracée', axe_trace: 'l’axe x = 2', symetrique_place: 'x et son symétrique 4 − x', meme_hauteur: 'M et M′ à la même hauteur', relation_axe: 'la relation f(2a − x) = f(x)' },
+      explication: [
+        { repere: 'axe', texte: 'La droite x = 2 : la courbe se replie sur elle-même autour de cette droite.' },
+        { repere: 'point_x', texte: 'Un nombre x d’un côté de 2…' },
+        { repere: 'point_sym', texte: '…et son symétrique 4 − x de l’autre côté, à la même distance de 2.' },
+        { repere: 'meme_hauteur', texte: 'Les deux points de la courbe ont la même ordonnée : f(4 − x) = f(x).' },
+        { repere: 'relation', texte: 'Axe x = a : f(2a − x) = f(x) ; ici a = 2.' },
+      ],
+    },
+    centre: {
+      titre: 'Le point Ω(2 ; 1), centre de symétrie de (Cf)',
+      params: { x: { min: 2.6, max: 6.5, pas: 0.1, defaut: 3, sens: 'abscisse x du point M ; M′ a pour abscisse 4 − x' } },
+      dessiner(c, K) {
+        K.titre('Un centre de symétrie : Ω(a ; b)');
+        const G = K.axes(OC);
+        c.ligne(G.X(2), G.Y(5.9), G.X(2), G.Y(-3.9), { couleur: 'faible', largeur: 1.3, pointille: [5, 6] });
+        c.ligne(G.X(-2.9), G.Y(1), G.X(6.9), G.Y(1), { couleur: 'faible', largeur: 1.3, pointille: [5, 6] });
+        c.texte('x = 2', G.X(2) - 6, G.Y(5.3), { couleur: 'faible', taille: 15, align: 'right' });
+        c.texte('y = 1', G.X(6.9), G.Y(1) + 18, { couleur: 'faible', taille: 15, align: 'right' });
+        c.repere('repere', G.x0, G.y0, G.w, G.h, 'le repère et les asymptotes x = 2 et y = 1');
+        K.marque('repere_pose');
+        K.anime(1.4, p => K.courbePart(G, fc, -3, 1.4, p, { couleur: 'cyan' }));
+        K.anime(1.4, p => K.courbePart(G, fc, 2.6, 7, p, { couleur: 'cyan' }));
+        c.texte('f(x) = (x + 1)/(x − 2)', XC, 66, { couleur: 'cyan', taille: 18 });
+        c.repere('courbe', G.x0, G.y0, G.w, G.h, 'la courbe (Cf)');
+        K.marque('courbe_tracee');
+        // Ω
+        c.pause(.2);
+        K.rond(G, 2, 1, true, 'violet');
+        c.texte('Ω(2 ; 1)', G.X(2) - 9, G.Y(1) - 10, { couleur: 'violet', taille: 18, align: 'right' });
+        c.texte('Ω(2 ; 1) : a = 2, b = 1', XC, 96, { couleur: 'violet', taille: 18 });
+        c.repere('omega', G.X(2) - 80, G.Y(1) - 30, 92, 42, 'le point Ω(2 ; 1)');
+        K.marque('omega_place');
+        // M et M'
+        const x = K.P.x, xs = 4 - x, y = fc(x), ys = fc(xs);
+        c.pause(.3);
+        K.rond(G, x, y, true, 'jaune');
+        c.texte('M', G.X(x) + 10, G.Y(y) - 6, { couleur: 'jaune', taille: 18 });
+        c.repere('point_m', G.X(x) - 12, G.Y(y) - 24, 40, 36, 'le point M(x ; f(x))');
+        K.rond(G, xs, ys, true, 'rose');
+        // M' à gauche du point ; au-dessus quand la branche est presque plate (4 − x ≤ 0,2), pour ne pas couvrir la courbe
+        if (xs > 0.2) c.texte('M\'', G.X(xs) - 10, G.Y(ys) + 6, { couleur: 'rose', taille: 18, align: 'right' });
+        else c.texte('M\'', G.X(xs), G.Y(ys) - 12, { couleur: 'rose', taille: 18, align: 'center' });
+        c.repere('point_m2', G.X(xs) - 34, G.Y(ys) - 30, 46, 46, 'le point M’(4 − x ; f(4 − x))');
+        c.texte(`x = ${fr(x, 2)} : M(${fr(x, 2)} ; ${val(y)})`, XC, 132, { couleur: 'jaune', taille: 18, max: 750 - XC });
+        c.texte(`4 − x = ${fr(xs, 2)} : M'(${fr(xs, 2)} ; ${val(ys)})`, XC, 160, { couleur: 'rose', taille: 18, max: 750 - XC });
+        K.marque('deux_points');
+        // Le milieu de [MM'] est Ω
+        c.pause(.3);
+        c.ligne(G.X(xs), G.Y(ys), G.X(x), G.Y(y), { couleur: 'vert', largeur: 2 });
+        c.cercle(G.X(2), G.Y(1), 13, { couleur: 'vert', largeur: 2 });
+        c.texte('f(4 − x) + f(x) = 2 = 2 × 1', XC, 196, { couleur: 'vert', taille: 18, max: 750 - XC });
+        c.texte(exact(y) ? `f(${fr(xs, 2)}) + f(${fr(x, 2)}) = ${fr(ys, 2)} + ${fr(y, 2)} = 2` : `f(${fr(xs, 2)}) + f(${fr(x, 2)}) = 2`, XC, 222, { couleur: 'vert', taille: 16, max: 750 - XC });
+        c.repere('milieu', G.X(2) - 16, G.Y(1) - 16, 32, 32, 'le milieu de [MM’] : Ω');
+        K.marque('milieu_sur_omega');
+        // La relation
+        c.pause(.3);
+        c.texte('Ω(a ; b) centre de symétrie', XC, 256, { couleur: 'blanc', taille: 17, max: 750 - XC });
+        c.texte('si, pour tout x de D_f :', XC, 280, { couleur: 'blanc', taille: 17 });
+        accolade(c, XC + 2, 290, 344);
+        c.texte('(2a − x) ∈ D_f', XC + 20, 312, { couleur: 'jaune', taille: 18 });
+        c.texte('f(2a − x) + f(x) = 2b', XC + 20, 338, { couleur: 'jaune', taille: 18 });
+        c.repere('relation', XC - 6, 238, 750 - XC + 4, 108, 'les deux conditions : (2a − x) ∈ Df et f(2a − x) + f(x) = 2b');
+        K.marque('relation_ecrite');
+      },
+      poignees(K) { const G = K.grille(OC); const x = K.P.x;
+        return [{ id: 'x', x: G.X(x), y: G.Y(fc(x)), bouger: (px) => ({ x: G.inv(px, 0)[0] }) }]; },
+      lecture: K => { const x = K.P.x, xs = 4 - x, y = fc(x), ys = fc(xs);
+        return `x = ${K.fr(x, 2)} : M(${K.fr(x, 2)} ; ${val(y)}), M′(${K.fr(xs, 2)} ; ${val(ys)}) ; f(4 − x) + f(x) = 2 = 2 × 1 : le milieu de [MM′] est Ω(2 ; 1).`; },
+      decrire: K => { const x = K.P.x, xs = 4 - x, y = fc(x), ys = fc(xs);
+        return {
+          repere_pose: 'Un repère (x de −3 à 7, y de −4 à 6) avec les asymptotes x = 2 et y = 1 en pointillé faible.',
+          courbe_tracee: 'La courbe (Cf) de f(x) = (x + 1)/(x − 2) (cyan), en deux branches : en haut à droite et en bas à gauche des asymptotes.',
+          omega_place: 'Le point Ω(2 ; 1) (violet), à la rencontre des deux asymptotes, est nommé ; écrit : a = 2, b = 1.',
+          deux_points: `Les points M(${K.fr(x, 2)} ; ${val(y)}) (jaune) et M′(${K.fr(xs, 2)} ; ${val(ys)}) (rose), d’abscisses x et 4 − x, sur les deux branches.`,
+          milieu_sur_omega: 'Le segment [MM′] (vert) est tracé ; son milieu tombe sur Ω, entouré ; écrit : f(4 − x) + f(x) = 2 = 2 × 1.',
+          relation_ecrite: 'Écrit : Ω(a ; b) centre de symétrie de (Cf) si, pour tout x de Df, avec une accolade : (2a − x) ∈ Df et f(2a − x) + f(x) = 2b.',
+        }; },
+      motifs: { courbe_tracee: 'la courbe tracée', omega_place: 'le point Ω(2 ; 1)', deux_points: 'M et M′', milieu_sur_omega: 'le milieu de [MM′] est Ω', relation_ecrite: 'les deux conditions' },
+      explication: [
+        { repere: 'omega', texte: 'Ω(2 ; 1), à la rencontre des asymptotes.' },
+        { repere: 'point_m', texte: 'M(x ; f(x)) sur une branche…' },
+        { repere: 'point_m2', texte: '…et M′(4 − x ; f(4 − x)) sur l’autre.' },
+        { repere: 'milieu', texte: 'Le milieu de [MM′] est Ω : f(4 − x) + f(x) = 2 = 2 × 1.' },
+        { repere: 'relation', texte: 'Centre Ω(a ; b) : (2a − x) ∈ Df et f(2a − x) + f(x) = 2b.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

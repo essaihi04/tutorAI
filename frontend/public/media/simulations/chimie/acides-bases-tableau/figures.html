@@ -1,0 +1,975 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Figures des nationaux — acide-base</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ab.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Figures des examens nationaux à la craie : diagrammes de distribution et courbes de dosage pH-métrique, avec la construction, la lecture et le calcul"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * figures.html (?fig=fig_2025R | fig_2016N | fig_2022R | fig_2022N | fig_2024R) — cours phys_ch13_acides_bases
+ * « Transformations liées aux réactions acide-base » (2e Bac PC BIOF, novembre 2026).
+ * Contrat : outils/cours/notes/cours/acides_bases_contrat_simulations.md § 8 ; points relevés : acides_bases_build/nationaux.md § 5.
+ * Chaque figure : moments axes · courbe · construction · lecture · calcul · fin ;
+ * repères axe_x · axe_y · courbe · construction · point · valeur · calcul (tous déclarés dès le début).
+ * Les courbes de dosage passent par les points lus sur le sujet ; les distributions sont tracées avec le pKa du sujet
+ * (le modèle de calcul n’est jamais écrit à l’écran). Fractions à barre DESSINÉE, flèche → dessinée.
+ * Moteur et aides : copies de chimie/etat-equilibre-tableau/ (gardées dans la page, le kit n’est pas modifié).
+ */
+/* ── Formules chimiques à la craie : indices ₂ et charges ⁺ ⁻ ²⁻ rendus (sans modifier exposants.js ni le kit) ──────────
+ * « MnO₄⁻ » devient « MnO_{4}^{−} » ; le découpage « _{…} » accepte tout caractère avant (« [I⁻]₀ »). */
+(function () {
+  const C = window.Tableau.Craie, P = C.prototype, texteAvant = P.texte, segAvant = C.segments;
+  const SUP = { '⁺': '+', '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+  const SUB = { '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9' };
+  const chim = s => String(s).replace(/[⁺⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUP[ch]).join('') + '}')
+    .replace(/[₀₁₂₃₄₅₆₇₈₉]+/g, g => '_{' + [...g].map(ch => SUB[ch]).join('') + '}');
+  C.segments = function (s) {
+    const out = [], re = /_\{([^}]+)\}/g; let i = 0, m;
+    while ((m = re.exec(s))) { if (m.index > i) out.push(...segAvant(s.slice(i, m.index))); out.push({ t: m[1], sub: true }); i = re.lastIndex; }
+    if (i < s.length) out.push(...segAvant(s.slice(i)));
+    return out;
+  };
+  P.texte = function (s, x, y, o) { return texteAvant.call(this, chim(s), x, y, o); };
+  window.chim = chim;
+})();
+
+/* ── Moteur du déroulé (copie de chimie/etat-equilibre-tableau/rappel.html : HOLD = Math.max ; paramètre d’URL `vue` ou `fig`) ─────────────────────────────────── */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lisse = p => p * p * (3 - 2 * p);
+const lerp = (a, b, f) => a + (b - a) * f;
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');
+const ECRITURE = 2.5;
+function Moteur(o) {
+  const q = new URLSearchParams(location.search);
+  const PARAM = o.param ?? 'vue';
+  const S = { vue: o.vues.includes(q.get(PARAM)) ? q.get(PARAM) : o.vues[0], t: 0, running: false, pause: false, fait: false,
+    jusqua: null, motif: '', emis: 0, dit: '', mesure: false };
+  const V = o.vitesse ?? 1.7, T0 = o.T0 ?? .8, HOLD = {};
+  let TL = null;
+  function construire() {
+    let s = T0; const ev = [];
+    for (const e of o.etapes(S.vue)) {
+      const anim = e.anim || 0, d = { ...e, anim, debut: s, ecrit: s + (e.ecritDes ?? anim) };
+      d.fin = Math.max(s + anim, d.ecrit + (HOLD[e.nom] ?? 1.5)) + .35;
+      s = d.fin; ev.push(d);
+    }
+    const mom = {}; for (const e of ev) mom[e.nom] = e.fin; mom.fin = s + (o.queue ?? .6);
+    TL = { ev, M: mom };
+  }
+  const ev = nom => TL.ev.find(e => e.nom === nom);
+  const M = {
+    S, ev, evs: () => TL.ev, Moments: () => TL.M,
+    p(nom) { const e = ev(nom); if (!e) return 0; return e.anim > 0 ? clamp((S.t - e.debut) / e.anim, 0, 1) : (S.t >= e.debut - 1e-6 ? 1 : 0); },
+    commence(nom) { const e = ev(nom); return !!e && S.t > e.debut + 1e-6; },
+    vu(nom) { if (nom === 'fin') return S.t >= TL.M.fin - 1e-6; const e = ev(nom); return !!e && S.t >= e.fin - 1e-6; },
+    etape(c, nom, fn) {
+      const e = ev(nom); if (!e) return;
+      const t = c.t, cur = c.cur, comp = c.complet, w0 = e.ecrit;
+      c.t = S.t > 1e5 ? 1e9 : w0 + (S.t - w0) * V; c.cur = w0;
+      try { fn(); } finally { if (S.mesure) HOLD[nom] = Math.max(HOLD[nom] || 0, (c.cur - w0) / V); c.t = t; c.cur = cur; if (!S.running) c.complet = comp; }
+    },
+    etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
+  };
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const cadreBase = scene.cadre;
+  scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
+  M.scene = scene; M.craie = scene.craie;
+  function calculer() {
+    construire();
+    const t = S.t, r = S.running; S.t = 1e6; S.running = false; S.mesure = true;
+    for (const k of Object.keys(HOLD)) delete HOLD[k];   // une étape dessinée en plusieurs morceaux garde le plus long (max ci-dessus)
+    try { o.dessiner(scene.craie, M); } finally { S.t = t; S.running = r; S.mesure = false; }
+    construire(); scene.sale = true;
+  }
+  const sansSouligne = s => String(s).replace(/([A-Za-zΔτθ])_\{?([A-Za-z0-9]+)\}?/g, (m, a, i) => a + (/^\d+$/.test(i) ? [...i].map(d => '₀₁₂₃₄₅₆₇₈₉'[d]).join('') : i));
+  const dire = (texte, kind = '') => { texte = sansSouligne(texte); S.dit = texte; bulle($('feedback'), texte, kind); };
+  const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+  let pont = null;
+  const emettre = () => pont && pont.emettre();
+  const noter = (a, d) => pont && pont.noter(a, d);
+  scene.avancer = dt => {
+    if (!S.running) return !!(o.anime && o.anime());
+    const avant = S.t; S.t += dt;
+    for (const e of TL.ev) if (avant < e.debut && S.t >= e.debut && e.bulle) dire(e.bulle());
+    if (S.jusqua != null && S.t >= S.jusqua) {
+      S.t = S.jusqua; S.jusqua = null; S.running = false;
+      if (S.t >= TL.M.fin - 1e-6) { finir(); return true; }
+      S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fx(S.t, 1)} s`) + '.');
+      noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); return true;
+    }
+    if (S.t >= TL.M.fin) { S.t = TL.M.fin; finir(); return true; }
+    if (performance.now() - S.emis > 500) { S.emis = performance.now(); emettre(); }
+    return true;
+  };
+  function finir() { S.running = false; S.fait = true; S.pause = false; S.jusqua = null; etiquette(); dire(o.messageFin(M), 'good'); noter('measurement', o.params(M)); emettre(); }
+  function start() { o.reprise && o.reprise(); S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire(o.depart(M)); noter('start', o.params(M)); emettre(); }
+  function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); }
+  function resume() { if (S.running) return; o.reprise && o.reprise(); if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('Ça repart…'); noter('resume'); emettre(); }
+  function setTime(p) {
+    const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+    o.reprise && o.reprise(); S.running = false; S.jusqua = null; S.t = clamp(t, 0, TL.M.fin); S.fait = S.t >= TL.M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+    etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fx(S.t, 1)} s.`); noter('set_time', { time_s: S.t }); emettre();
+  }
+  function playUntil(p) {
+    const noms = o.etapes(S.vue).map(e => e.nom).concat('fin');
+    const nom = noms.includes(p.moment) ? p.moment : null, cible = nom ? TL.M[nom] : +p.time_s;
+    if (!Number.isFinite(cible) || (p.moment && !nom && (p.time_s == null || p.time_s === ''))) { dire(`Moment inconnu : ${p.moment}.`, 'bad'); emettre(); return; }
+    o.reprise && o.reprise();
+    if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+    S.jusqua = clamp(cible, .01, TL.M.fin); S.motif = nom ? (o.motifs[nom] || nom) : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+    noter('play_until', { moment: nom, time_s: S.jusqua }); emettre();
+  }
+  function setParameters(p) {
+    p = p || {};
+    const r = o.appliquer(p, M) || {};
+    if (r.vue && o.vues.includes(r.vue) && r.vue !== S.vue) { S.vue = r.vue; r.change = true; r.vueChange = true; }
+    if (r.change) { calculer(); if (r.vueChange) scene.reecrire(); }
+    noter('set_parameters', o.params(M));
+    if (r.apres) r.apres();
+    else if (r.change && !r.garder) start();
+    else { scene.sale = true; emettre(); }
+  }
+  Object.assign(M, { noter, calculer, dire, start, pause, resume, setTime, playUntil, setParameters, emettre, etiquette, finir });
+  $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+  window.Tableau.explication(o.explications);
+  const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+  M.lancer = () => {
+    calculer();
+    const listeMoments = o.vues.map(v => `${o.vues.length > 1 ? v + ' : ' : ''}${o.etapes(v).map(e => e.nom).concat('fin').join(' | ')}`).join(' ; ');
+    const config = { id: o.id, version: '1.0', title: o.titre, variants: o.vues.length > 1 ? o.vues.map(id => ({ id, label: o.titres[id] })) : [], commands: commandes,
+      command_schema: { set_parameters: o.schema, set_time: { time_s: '0..fin (arrêt sur cet instant de la scène, en s ; voir moments)' },
+        play_until: { moment: listeMoments, time_s: 'ou un instant en s' } } };
+    pont = protocole({ id: o.id, commandes, config, texte: o.texte,
+      etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle',
+        ce_qui_se_voit: o.voir(M) + (S.dit ? ` La bulle dit : « ${S.dit} »` : ''), current_variant: S.vue, time_s: +S.t.toFixed(2),
+        parameters: o.params(M), moments: Object.fromEntries(Object.entries(TL.M).map(([k, v]) => [k, +v.toFixed(2)])) }),
+      progression: () => (S.fait ? 1 : 0),
+      executer: (cmd, p) => ({ start, reset: start, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+    dire(o.depart(M));
+    setTimeout(() => { if (!S.running && S.t === 0 && !S.pause && !S.fait) start(); }, 900);
+  };
+  return M;
+}
+/** Zone d’écriture du bas : le professeur efface les plus vieilles lignes (copie du modèle). */
+function zoneEcriture(c, M, liste, ys, o = {}) {
+  const S = M.S, x = o.x ?? 14, max = o.max ?? 730, taille = o.taille ?? 17, n = ys.length, vues = [];
+  if (S.mesure) {
+    for (const e of liste) M.etape(c, e.nom, () => { for (const [t, col] of e.lignes) c.texte(t, x, ys[0], { couleur: col, taille, max }); e.plus && e.plus(c); });
+    return vues;
+  }
+  let k = -1;
+  liste.forEach((e, j) => { const ev = M.ev(e.nom); if (ev && S.t > ev.ecrit + .05) k = j; });
+  const garde = new Set(); let nb = 0;
+  for (let j = k; j >= 0; j--) { const l = liste[j].lignes.length; if (nb + l > n) break; garde.add(j); nb += l; }
+  let y = 0;
+  liste.forEach((e, j) => {
+    if (j > k) return;
+    M.etape(c, e.nom, () => {
+      if (garde.has(j)) for (const [t, col] of e.lignes) { c.texte(t, x, ys[y++], { couleur: col, taille, max }); vues.push(t); }
+      e.plus && e.plus(c);
+    });
+  });
+  return vues;
+}
+/** Largeur (cadre) d’une formule écrite à la craie, indices et charges compris. */
+function larg(c, s, taille = 17) {
+  const T = window.Tableau, ctx = c.ctx; if (c.echelle && c.tailleMin) taille = Math.max(taille, c.tailleMin / c.echelle);
+  return T.Craie.segments(window.chim(s)).reduce((w, g) => { ctx.font = `${(g.sub || g.sup) ? taille * .62 : taille}px ${T.POLICE}`; return w + ctx.measureText(g.t).width; }, 0);
+}
+/** Équation « gauche → droite » : la flèche est DESSINÉE (la police n’a pas toutes les flèches). Renvoie { x, w }. */
+function eqn(c, x, y, gauche, droite, o = {}) {
+  const t = o.taille ?? 17, w1 = larg(c, gauche, t), w2 = larg(c, droite, t), fl = 30, tot = w1 + fl + 16 + w2;
+  const x0 = o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x, col = o.couleur ?? 'blanc';
+  c.texte(gauche, x0, y, { couleur: col, taille: t });
+  c.fleche(x0 + w1 + 8, y - t * .3, x0 + w1 + 8 + fl, y - t * .3, { couleur: col, largeur: 1.8, tete: 7 });
+  c.texte(droite, x0 + w1 + 16 + fl, y, { couleur: col, taille: t });
+  return { x: x0, w: tot };
+}
+/** Petit triangle « attention » à la craie (orange), le « ! » dedans. */
+function attention(c, x, y, o = {}) {
+  const col = o.couleur ?? 'orange', h = o.h ?? 16;
+  c.trait([[x, y], [x + h * .58, y - h], [x + h * 1.16, y]], { couleur: col, largeur: 1.8, ferme: true });
+  c.texte('!', x + h * .58, y - 3, { couleur: col, taille: h * .8, align: 'center' });
+}
+
+
+/* Indice après une parenthèse (« (dx/dt)₀ ») : le kit ne le découpe que derrière une lettre ; on passe alors par l’écriture
+ * à indices d’exposants.js (qui utilise le découpage « _{…} » ci-dessus). */
+(function () {
+  const P = window.Tableau.Craie.prototype, avant = P.texte;
+  P.texte = function (s, x, y, o = {}) {
+    const t = window.chim(s);
+    if (!/[^A-Za-zτθΔλωφ_]_\{/.test(t)) return avant.call(this, s, x, y, o);
+    let taille = o.taille ?? 18;
+    this.ctx.font = `${o.gras ? '700 ' : ''}${taille}px ${window.Tableau.POLICE}`;
+    this._verifierCadre(t.replace(/[_^{}]/g, ''), x, y, taille, o.align);
+    if (this.echelle && this.tailleMin) taille = Math.max(taille, this.tailleMin / this.echelle);
+    return this._texteIndices(t, x, y, o, taille);
+  };
+})();
+
+/* ── Flèches DESSINÉES (la police n’a pas toutes les flèches) : → sens 1, ← sens 2, ⇌ les deux sens ─────────────────── */
+/** Flèche entre xa et xb à la hauteur y : '→', '←' ou '⇌' (demi-flèche haute c1 vers la droite, demi-flèche basse c2 vers la gauche). */
+function flecheType(c, xa, xb, y, type, o = {}) {
+  const col = o.couleur ?? 'blanc', l = o.largeur ?? 1.8;
+  if (type === '→') c.fleche(xa, y, xb, y, { couleur: col, largeur: l, tete: 7 });
+  else if (type === '←') c.fleche(xb, y, xa, y, { couleur: col, largeur: l, tete: 7 });
+  else {
+    const c1 = o.c1 ?? col, c2 = o.c2 ?? col, d = 3.4;
+    c.trait([[xa, y - d], [xb, y - d], [xb - 8, y - d - 6]], { couleur: c1, largeur: l });
+    c.trait([[xb, y + d], [xa, y + d], [xa + 8, y + d + 6]], { couleur: c2, largeur: l });
+  }
+}
+/** Équation « gauche (flèche) droite » ; renvoie { x, w, xa, xb, ya } (position de la flèche). */
+function eqf(c, x, y, gauche, droite, o = {}) {
+  let t = o.taille ?? 17;
+  const mesure = tt => larg(c, gauche, tt) + (o.fl ?? 34) + 20 + larg(c, droite, tt);
+  if (o.max && mesure(t) > o.max) t = t * o.max / mesure(t);
+  const w1 = larg(c, gauche, t), fl = o.fl ?? 34, tot = mesure(t);
+  const x0 = o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x, col = o.couleur ?? 'blanc';
+  if (!o.sansTexte) c.texte(gauche, x0, y, { couleur: col, taille: t });
+  const xa = x0 + w1 + 10, xb = xa + fl, ya = y - t * .3;
+  if (!o.sansFleche) flecheType(c, xa, xb, ya, o.type ?? '→', { couleur: o.couleurFleche ?? col, c1: o.c1, c2: o.c2 });
+  if (!o.sansTexte) c.texte(droite, xb + 10, y, { couleur: col, taille: t });
+  return { x: x0, w: tot, xa, xb, ya };
+}
+
+
+/* ── Peint (copie de facteurs.html) ── */
+const rgba = ([r, g, b, a], k = 1) => `rgba(${Math.round(r)},${Math.round(g)},${Math.round(b)},${(a * k).toFixed(3)})`;
+const melange = (c1, c2, f) => c1.map((v, i) => lerp(v, c2[i], clamp(f, 0, 1)));
+const eclair = (c, k) => [lerp(c[0], 255, k), lerp(c[1], 255, k), lerp(c[2], 255, k), c[3]];
+const sombre = (c, k) => [c[0] * (1 - k), c[1] * (1 - k), c[2] * (1 - k), Math.min(1, c[3] * (1 + k * .4))];
+const EAU = [222, 234, 244, .12];
+const Peint = {
+  sphere(ctx, x, y, r, [clair, milieu, foncé], a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r); g.addColorStop(0, clair); g.addColorStop(.45, milieu); g.addColorStop(1, foncé);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  },
+  /** Bécher vu de face : verre, solution (dégradé, ménisque, reflet), bec, graduations. niveau 0 → 1. */
+  becher(ctx, B, niveau, col, a = 1) {
+    const { x, y, w, h } = B, ep = 3, fond = y + h, yS = fond - ep - niveau * (h - 16);
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.beginPath(); ctx.ellipse(x + w / 2 + 3, fond + 4, w / 2, 4.5, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(210,230,250,.06)'; ctx.beginPath(); ctx.roundRect(x, y, w, h, [2, 2, 10, 10]); ctx.fill();
+    if (niveau > .004) {
+      ctx.save(); ctx.beginPath(); ctx.roundRect(x + ep, y, w - 2 * ep, h - ep, [0, 0, 8, 8]); ctx.clip();
+      const g = ctx.createLinearGradient(0, yS, 0, fond); g.addColorStop(0, rgba(eclair(col, .18))); g.addColorStop(1, rgba(sombre(col, .22)));
+      ctx.fillStyle = g; ctx.fillRect(x, yS, w, fond - yS);
+      ctx.fillStyle = 'rgba(255,255,255,.07)'; ctx.fillRect(x + w * .64, yS + 5, w * .09, Math.max(0, fond - yS - 10));
+      ctx.restore();
+      ctx.fillStyle = rgba(eclair(col, .35), 1.1); ctx.beginPath(); ctx.ellipse(x + w / 2, yS, w / 2 - ep, 3, 0, 0, 7); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,.32)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x + ep + 2, yS); ctx.lineTo(x + w - ep - 2, yS); ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(225,238,250,.78)'; ctx.lineWidth = 2.2; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(x - 6, y - 4); ctx.quadraticCurveTo(x - 1, y - 2, x, y + 5); ctx.lineTo(x, fond - 10); ctx.quadraticCurveTo(x, fond, x + 10, fond);
+    ctx.lineTo(x + w - 10, fond); ctx.quadraticCurveTo(x + w, fond, x + w, fond - 10); ctx.lineTo(x + w, y); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.14)'; ctx.fillRect(x + w * .11, y + 12, w * .05, h - 28);
+    ctx.strokeStyle = 'rgba(225,238,250,.35)'; ctx.lineWidth = 1;
+    for (let k = 1; k <= 4; k++) { const gy = fond - 8 - k * (h - 24) / 5; ctx.beginPath(); ctx.moveTo(x + w - 14, gy); ctx.lineTo(x + w - 4, gy); ctx.stroke(); }
+    ctx.restore();
+    return yS;
+  },
+  /** Eau d’un bain (cristallisoir) peinte PAR-DESSUS le bécher : il paraît plongé dedans. */
+  bain(ctx, B, ySurf, col, a = 1) {
+    const { x, y, w, h } = B, fond = y + h;
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createLinearGradient(0, ySurf, 0, fond); g.addColorStop(0, rgba(eclair(col, .2))); g.addColorStop(1, rgba(sombre(col, .3)));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x + 3, ySurf, w - 6, fond - ySurf - 3, [0, 0, 12, 12]); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(x + 5, ySurf); ctx.lineTo(x + w - 5, ySurf); ctx.stroke();
+    ctx.strokeStyle = 'rgba(225,238,250,.7)'; ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, fond - 14); ctx.quadraticCurveTo(x, fond, x + 14, fond); ctx.lineTo(x + w - 14, fond); ctx.quadraticCurveTo(x + w, fond, x + w, fond - 14); ctx.lineTo(x + w, y); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.1)'; ctx.fillRect(x + 7, y + 8, 4, h - 22);
+    ctx.restore();
+  },
+  goutte(ctx, x, y, col, a = 1) {
+    ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = rgba(col, 1.5);
+    ctx.beginPath(); ctx.moveTo(x, y - 6); ctx.quadraticCurveTo(x + 4, y, x, y + 3.5); ctx.quadraticCurveTo(x - 4, y, x, y - 6); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.fillRect(x - 1.2, y - 1, 1.2, 1.6); ctx.restore();
+  },
+  /** Filet de liquide qui coule (versement). */
+  filet(ctx, x, y1, y2, col, a = 1) { ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = rgba(col, 2.2); ctx.fillRect(x - 1.6, y1, 3.2, y2 - y1); ctx.restore(); },
+};
+
+let MO = null;
+/** Ions qui s’agitent dans une zone (liste [{ col, r, v, hl }]) ; le temps est celui de la scène : tout se fige à l’arrêt. */
+function ions(ctx, Z, liste, t, a = 1) {
+  const tri = u => { const m = ((u % 2) + 2) % 2; return m < 1 ? m : 2 - m; };
+  ctx.save(); ctx.globalAlpha = a;
+  liste.forEach((o, i) => {
+    const h1 = ((i * 7919 + 3) % 97) / 97, h2 = ((i * 104729 + 13) % 89) / 89, h3 = ((i * 31337 + 7) % 83) / 83;
+    const vx = o.v * (.55 + .9 * h3) / (Z.x1 - Z.x0), vy = o.v * (.5 + .9 * h1) / (Z.y1 - Z.y0);
+    const x = Z.x0 + tri(h1 * 2 + vx * t * (h2 > .5 ? 1 : -1)) * (Z.x1 - Z.x0), y = Z.y0 + tri(h2 * 2 + vy * t) * (Z.y1 - Z.y0);
+    Peint.sphere(ctx, x, y, o.r ?? 5, o.col);
+    if (o.hl) { ctx.strokeStyle = '#facc15'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, (o.r ?? 5) + 5, 0, 7); ctx.stroke(); }
+    o.pos = [x, y];
+  });
+  ctx.restore();
+}
+/** Étape en cours (la dernière commencée). */
+function etapeEnCours(M) { let n = 'avant le début'; for (const e of M.evs()) if (M.commence(e.nom)) n = e.nom; return n; }
+/** Le moteur commun, avec les moments, motifs et repères de la page. */
+const MOTIFS_DE = ETAPES => new Proxy({}, { get: (_, nom) => (nom === 'fin' ? 'fin' : ((ETAPES(MO ? MO.S.vue : '') || []).find(e => e.nom === nom) || {}).motif) });
+
+/* ── Pièces peintes : ⇌ dessinée, pH-mètre, sonde (copie de etat-equilibre-tableau/rappel.html) ── */
+/** Équation « gauche ⇌ droite » : la double flèche est DESSINÉE (deux demi-flèches). Renvoie { x, w }. */
+function eqn2(c, x, y, gauche, droite, o = {}) {
+  const t = o.taille ?? 17, w1 = larg(c, gauche, t), w2 = larg(c, droite, t), fl = 32, tot = w1 + fl + 16 + w2;
+  const x0 = o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x, col = o.couleur ?? 'blanc';
+  const a = x0 + w1 + 8, b = a + fl, ym = y - t * .3;
+  c.texte(gauche, x0, y, { couleur: col, taille: t });
+  c.ligne(a, ym - 3, b, ym - 3, { couleur: o.c1 ?? col, largeur: 1.7 }); c.ligne(b - 7, ym - 8, b, ym - 3, { couleur: o.c1 ?? col, largeur: 1.7, duree: .05 });
+  c.ligne(b, ym + 3, a, ym + 3, { couleur: o.c2 ?? col, largeur: 1.7 }); c.ligne(a + 7, ym + 8, a, ym + 3, { couleur: o.c2 ?? col, largeur: 1.7, duree: .05 });
+  c.texte(droite, b + 8, y, { couleur: col, taille: t });
+  return { x: x0, w: tot };
+}
+const ACIDE = [222, 234, 244, .16];                      // solutions acides : incolores, comme en vrai
+const H3O = ['#ffe1c7', '#f97316', '#7c2d12'], MOL = ['#eef1f4', '#9aa3ab', '#4b535b'];
+/** pH-mètre peint : boîtier gris, afficheur vert (pH à 0,1 près). */
+function phmetre(c, A, texte) {
+  c.direct(() => {
+    const ctx = c.ctx, { x, y, w, h } = A; ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.roundRect(x + 4, y + 5, w, h, 9); ctx.fill();
+    const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#a9b1b8'); g.addColorStop(1, '#6b737b');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 9); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1.2; ctx.stroke();
+    const e = { x: x + 10, y: y + 9, w: w - 20, h: 34 }, ge = ctx.createLinearGradient(0, e.y, 0, e.y + e.h); ge.addColorStop(0, '#b9f0a0'); ge.addColorStop(1, '#79c36a');
+    ctx.fillStyle = ge; ctx.beginPath(); ctx.roundRect(e.x, e.y, e.w, e.h, 4); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.fillRect(e.x + 3, e.y + 3, e.w - 6, 3);
+    ctx.fillStyle = '#12300c'; ctx.font = '700 21px "Courier New", monospace'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillText(texte, e.x + e.w - 7, e.y + e.h / 2 + 1);
+    ctx.fillStyle = '#2b3036'; ctx.font = '700 12px Arial, sans-serif'; ctx.textAlign = 'left'; ctx.fillText('pH-mètre', x + 10, y + h - 10);
+    Peint.sphere(ctx, x + w - 16, y + h - 12, 5.5, ['#e5e9ec', '#9aa3ab', '#4a5158']);
+    ctx.restore();
+  });
+}
+const ecranPH = A => ({ x: A.x + 10, y: A.y + 9, w: A.w - 20, h: 34 });
+/** Sonde de pH en verre : tête sombre en haut (yH), tube de verre, boule de verre en bas (yB). */
+function sonde(ctx, x, yH, yB) {
+  ctx.save();
+  ctx.fillStyle = '#2f353b'; ctx.beginPath(); ctx.roundRect(x - 6, yH, 12, 22, 3); ctx.fill();
+  const g = ctx.createLinearGradient(x - 5, 0, x + 5, 0); g.addColorStop(0, 'rgba(210,230,250,.35)'); g.addColorStop(.5, 'rgba(240,248,255,.12)'); g.addColorStop(1, 'rgba(210,230,250,.4)');
+  ctx.fillStyle = g; ctx.fillRect(x - 5, yH + 22, 10, yB - yH - 28);
+  ctx.strokeStyle = 'rgba(225,238,250,.8)'; ctx.lineWidth = 1.2; ctx.strokeRect(x - 5, yH + 22, 10, yB - yH - 28);
+  const gb = ctx.createRadialGradient(x - 2, yB - 4, 1, x, yB - 2, 7); gb.addColorStop(0, 'rgba(255,255,255,.75)'); gb.addColorStop(1, 'rgba(190,215,240,.35)');
+  ctx.fillStyle = gb; ctx.beginPath(); ctx.arc(x, yB - 3, 6.5, 0, 7); ctx.fill(); ctx.strokeStyle = 'rgba(225,238,250,.85)'; ctx.stroke();
+  ctx.fillStyle = 'rgba(160,170,180,.7)'; ctx.fillRect(x - 1, yH + 26, 2, yB - yH - 34);
+  ctx.restore();
+}
+/** Barre peinte (quantité, τ) de hauteur h (cadre) posée en (x, yBas). */
+function barre(ctx, x, yBas, w, h, couleur) {
+  if (h <= 0) return;
+  ctx.save(); const g = ctx.createLinearGradient(x, 0, x + w, 0); g.addColorStop(0, couleur[0]); g.addColorStop(.5, couleur[1]); g.addColorStop(1, couleur[2]);
+  ctx.fillStyle = g; ctx.globalAlpha = .9; ctx.fillRect(x, yBas - h, w, h); ctx.globalAlpha = 1;
+  ctx.strokeStyle = 'rgba(255,255,255,.4)'; ctx.lineWidth = 1; ctx.strokeRect(x, yBas - h, w, h); ctx.restore();
+}
+const BLEU_B = ['#3b82f6', '#93c5fd', '#2563eb'], VERT_B = ['#16a34a', '#86efac', '#15803d'];
+
+/* ── Lignes à morceaux (copie de transformations-deux-sens-tableau/avancement.html) : texte, « → », « ⇌ » ou { frac: [haut, bas] } (barre de fraction DESSINÉE) ── */
+const FL = 34;
+/** Flèche simple → (milieu à la hauteur y). */
+function flecheSimple(c, x, y, w, col = 'blanc') { c.fleche(x + 2, y, x + w - 2, y, { couleur: col, largeur: 1.9, tete: 8 }); }
+/** Double flèche ⇌ (deux demi-flèches), milieu à la hauteur y. */
+function flecheDouble(c, x, y, w, col = 'blanc') {
+  c.trait([[x + 2, y - 3.5], [x + w - 2, y - 3.5], [x + w - 10, y - 10]], { couleur: col, largeur: 1.9 });
+  c.trait([[x + w - 2, y + 3.5], [x + 2, y + 3.5], [x + 10, y + 10]], { couleur: col, largeur: 1.9, duree: .12 });
+}
+/** Morceau : texte, '→', '⇌', ou { frac: [numérateur, dénominateur] }. */
+function largeurMorceau(c, p, t) {
+  if (p === '→' || p === '⇌') return FL;
+  if (p && p.frac) return Math.max(larg(c, p.frac[0], t), larg(c, p.frac[1], t)) + 14;
+  return larg(c, p, t);
+}
+/** Positions x de chaque morceau d’une ligne (gap entre deux) : elles ne dépendent pas du temps, chaque étape écrit les siens. */
+function placer(c, x, morceaux, t, o = {}) {
+  const gap = o.gap ?? 8, ws = morceaux.map(p => largeurMorceau(c, p, t)), tot = ws.reduce((a, b) => a + b, 0) + gap * (morceaux.length - 1);
+  let px = o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x;
+  const xs = ws.map(w => { const r = px; px += w + gap; return r; });
+  return { xs, ws, x0: xs[0], tot };
+}
+function morceau(c, p, x, y, t, col = 'blanc') {
+  if (p === '→') return flecheSimple(c, x, y - t * .32, FL, col);
+  if (p === '⇌') return flecheDouble(c, x, y - t * .32, FL, col);
+  if (p && p.frac) {
+    const w = largeurMorceau(c, p, t), yb = y - t * .32;
+    const bas = /_\{|[₀-₉]/.test(p.frac[0]) ? t * .26 : 0;   // un indice au numérateur ne touche pas la barre
+    c.texte(p.frac[0], x + w / 2, yb - 7 - bas, { taille: t, align: 'center', couleur: col });
+    c.ligne(x, yb, x + w, yb, { couleur: col, largeur: 1.8, duree: .1 });
+    c.texte(p.frac[1], x + w / 2, yb + t * .98, { taille: t, align: 'center', couleur: col });
+    return;
+  }
+  c.texte(p, x, y, { taille: t, couleur: col });
+}
+/** Écrit une ligne entière ; `cols[i]` colore le morceau i. Renvoie les positions. */
+function ligneM(c, x, y, morceaux, o = {}) {
+  const t = o.taille ?? 20, P = placer(c, x, morceaux, t, o);
+  morceaux.forEach((p, i) => morceau(c, p, P.xs[i], y, t, (o.cols && o.cols[i]) || o.couleur || 'blanc'));
+  return P;
+}
+/** Encadré à la craie autour d’un texte (ligne de base y, taille t). */
+function encadre(c, x, y, w, t, col = 'jaune') { c.rect(x - 8, y - t - 4, w + 16, t + 14, { couleur: col, largeur: 2, arrondi: 8 }); }
+
+/* ── Indices après n’importe quel caractère (« [H₃O⁺]_{éq} », « [AH]_{éq} », « Q_{r,éq} ») : on passe toujours par
+ * l’écriture à indices et exposants d’exposants.js quand la chaîne contient « _{ » ou « ^ » (copie de etat-equilibre-tableau/figures.html). */
+(function () {
+  const T = window.Tableau, P = T.Craie.prototype, avant = P.texte;
+  P.texte = function (s, x, y, o = {}) {
+    const t = window.chim ? window.chim(String(s)) : String(s);
+    if (!/_\{|\^/.test(t)) return avant.call(this, s, x, y, o);
+    let taille = o.taille ?? 18;
+    this.ctx.font = `${o.gras ? '700 ' : ''}${taille}px ${T.POLICE}`;
+    this._verifierCadre(t.replace(/[_^{}]/g, ''), x, y, taille, o.align);
+    if (this.echelle && this.tailleMin) taille = Math.max(taille, this.tailleMin / this.echelle);
+    return this._texteIndices(t, x, y, o, taille);
+  };
+})();
+
+/* ── Graphe à la craie : axes gradués, quadrillage léger, courbe lissée qui passe par les points du contrat ──────────── */
+/** Courbe lisse qui passe par des points (Hermite monotone : pas de bosse entre deux points). */
+function lissee(pts) {
+  const n = pts.length, t = pts.map(p => p[0]), y = pts.map(p => p[1]), d = [], m = [];
+  for (let i = 0; i < n - 1; i++) d.push((y[i + 1] - y[i]) / (t[i + 1] - t[i]));
+  m[0] = d[0]; m[n - 1] = d[n - 2];
+  for (let i = 1; i < n - 1; i++) m[i] = d[i - 1] * d[i] <= 0 ? 0 : 2 / (1 / d[i - 1] + 1 / d[i]);
+  return u => {
+    if (u <= t[0]) return y[0];
+    if (u >= t[n - 1]) return y[n - 1];
+    let i = 0; while (u > t[i + 1]) i++;
+    const h = t[i + 1] - t[i], s = (u - t[i]) / h, s2 = s * s, s3 = s2 * s;
+    return (2 * s3 - 3 * s2 + 1) * y[i] + (s3 - 2 * s2 + s) * h * m[i] + (-2 * s3 + 3 * s2) * y[i + 1] + (s3 - s2) * h * m[i + 1];
+  };
+}
+/** Un graphe : g = { x0, y0, w, h, xmin, xmax, ymin, ymax, dx, dy, xLab:[…], yLab:[…], gx, gy, xNom, yNom, dec }. */
+function Graphe(g) {
+  g.X = v => g.x0 + (v - g.xmin) / (g.xmax - g.xmin) * g.w;
+  g.Y = v => g.y0 - (v - g.ymin) / (g.ymax - g.ymin) * g.h;
+  return g;
+}
+const nbr = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');
+const proche = (v, l) => l.some(u => Math.abs(u - v) < 1e-6);
+/** Quadrillage léger peint (alpha a), dans le cadre du graphe. */
+function quadrillage(c, g, a) {
+  if (a <= 0) return;
+  c.direct(() => {
+    const ctx = c.ctx; ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = 'rgba(226,232,240,.09)'; ctx.lineWidth = 1;
+    if (g.gx) for (let v = g.xmin + g.gx; v <= g.xmax + 1e-9; v += g.gx) { ctx.beginPath(); ctx.moveTo(g.X(v), g.y0); ctx.lineTo(g.X(v), g.Y(g.ymax)); ctx.stroke(); }
+    if (g.gy) for (let v = g.ymin + g.gy; v <= g.ymax + 1e-9; v += g.gy) { ctx.beginPath(); ctx.moveTo(g.x0, g.Y(v)); ctx.lineTo(g.X(g.xmax), g.Y(v)); ctx.stroke(); }
+    ctx.restore();
+  });
+}
+/** Axes, graduations et noms (à la craie). */
+function axesGraphe(c, g, o = {}) {
+  const t = o.taille ?? 14;
+  c.fleche(g.x0, g.y0, g.x0 + g.w + 14, g.y0, { largeur: 1.8 });
+  c.fleche(g.x0, g.y0, g.x0, g.y0 - g.h - 12, { largeur: 1.8 });
+  for (let v = g.xmin + g.dx; v <= g.xmax + 1e-9; v += g.dx) {
+    c.ligne(g.X(v), g.y0 - 4, g.X(v), g.y0 + 4, { largeur: 1.3, duree: .02 });
+    if (proche(v, g.xLab)) c.texte(nbr(v, 1), g.X(v), g.y0 + 18, { couleur: 'faible', taille: t, align: 'center', duree: .08 });
+  }
+  c.texte(nbr(g.xmin, 1), g.x0 - 3, g.y0 + 18, { couleur: 'faible', taille: t, align: 'right', duree: .05 });
+  for (let v = g.ymin + g.dy; v <= g.ymax + 1e-9; v += g.dy) {
+    c.ligne(g.x0 - 4, g.Y(v), g.x0 + 4, g.Y(v), { largeur: 1.3, duree: .02 });
+    if (proche(v, g.yLab)) c.texte(nbr(v, g.dec ?? 1), g.x0 - 7, g.Y(v) + 5, { couleur: 'faible', taille: t, align: 'right', duree: .08 });
+  }
+  if (g.ymin !== 0) c.texte(nbr(g.ymin, 1), g.x0 - 7, g.y0 + 2, { couleur: 'faible', taille: t, align: 'right', duree: .05 });
+  c.texte(g.xNom, g.xNomAt ? g.xNomAt[0] : g.x0 + g.w + 2, g.xNomAt ? g.xNomAt[1] : g.y0 + 34, { couleur: 'blanc', taille: 15, align: g.xNomAlign ?? 'right' });
+  c.texte(g.yNom, g.x0 + 10, g.y0 - g.h - 2, { couleur: 'blanc', taille: 15 });
+}
+/** Trace f de a à a + (b − a)·p (craie, en direct). */
+function tracer(c, g, f, a, b, p, col, o = {}) {
+  if (p <= 0) return;
+  const fin = a + (b - a) * p;
+  c.courbe(u => [g.X(a + (fin - a) * u), g.Y(clamp(f(a + (fin - a) * u), g.ymin, g.ymax))], Math.max(16, Math.round((o.n ?? 220) * p)), { couleur: col, largeur: o.largeur ?? 2.6, pointille: o.pointille });
+}
+const pointille = (c, x1, y1, x2, y2, p, col = 'jaune') => { if (p > 0) c.ligne(x1, y1, x1 + (x2 - x1) * p, y1 + (y2 - y1) * p, { couleur: col, largeur: 1.7, pointille: [5, 5] }); };
+
+/* ── Pièces peintes du dosage : burette graduée, agitateur magnétique, conductimètre, cellule ────────────────────────── */
+Object.assign(Peint, {
+  /** Burette graduée (0 en haut → vmax en bas) sur sa potence : solution `col` ; `vv` mL déjà versés ; robinet ; pointe en yp. */
+  burette(ctx, x, yH, yR, vv, vmax, col, a = 1, o = {}) {
+    ctx.save(); ctx.globalAlpha = a;
+    const tige = o.tige ?? -34, bas = o.bas ?? yR + 140;   // la tige de la potence passe à côté du bécher
+    ctx.fillStyle = '#5c6670'; ctx.fillRect(x + tige, yH - 12, 5, bas - yH + 12); ctx.fillRect(x + tige + 2, yH + 26, -tige - 6, 5);   // potence et pince
+    ctx.fillRect(x + tige - 8, bas - 4, 22, 5);   // pied
+    const y0 = yH + 8, yl = lerp(y0, yR - 6, clamp(vv / vmax, 0, 1));
+    const g = ctx.createLinearGradient(x - 5, 0, x + 5, 0); g.addColorStop(0, rgba(sombre(col, .1), 1.6)); g.addColorStop(.5, rgba(eclair(col, .3), 1.6)); g.addColorStop(1, rgba(sombre(col, .15), 1.6));
+    ctx.fillStyle = g; ctx.fillRect(x - 4.5, yl, 9, yR - yl);
+    ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x - 4.5, yl); ctx.lineTo(x + 4.5, yl); ctx.stroke();
+    ctx.strokeStyle = 'rgba(225,238,250,.85)'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.roundRect(x - 6, yH, 12, yR - yH, 2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(225,238,250,.45)'; ctx.lineWidth = 1;
+    for (let k = 0; k <= 10; k++) { const gy = lerp(y0, yR - 6, k / 10); ctx.beginPath(); ctx.moveTo(x + 6, gy); ctx.lineTo(x + (k % 5 ? 2 : -2), gy); ctx.stroke(); }
+    ctx.fillStyle = 'rgba(255,255,255,.16)'; ctx.fillRect(x - 3.5, yH + 4, 1.6, yR - yH - 8);
+    ctx.fillStyle = '#3b4148'; ctx.fillRect(x - 3, yR, 6, 9); ctx.fillStyle = '#c7ccd2'; ctx.fillRect(x - 11, yR + 2, 22, 4);   // robinet
+    ctx.strokeStyle = 'rgba(225,238,250,.85)'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(x - 1.6, yR + 9); ctx.lineTo(x - .6, yR + 20); ctx.moveTo(x + 1.6, yR + 9); ctx.lineTo(x + .6, yR + 20); ctx.stroke();
+    ctx.restore();
+    return yR + 20;   // la pointe
+  },
+  /** Agitateur magnétique (boîtier) et barreau aimanté qui tourne (angle `ang`, vu de côté : il s’allonge et se raccourcit). */
+  agitateur(ctx, x, y, w, ang, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createLinearGradient(0, y, 0, y + 20); g.addColorStop(0, '#d9dde1'); g.addColorStop(1, '#8a939b');
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.roundRect(x + 3, y + 4, w, 20, 5); ctx.fill();
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, 20, 5); ctx.fill();
+    ctx.fillStyle = '#2f353b'; ctx.beginPath(); ctx.arc(x + w - 14, y + 10, 4.5, 0, 7); ctx.fill();
+    ctx.restore();
+  },
+  barreau(ctx, cx, y, ang, a = 1) {
+    const l = 12 * Math.abs(Math.cos(ang)) + 4;
+    ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = '#f2f4f6'; ctx.beginPath(); ctx.roundRect(cx - l, y - 3, 2 * l, 6, 3); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 1; ctx.stroke(); ctx.restore();
+  },
+});
+/** Conductimètre peint : boîtier sombre, écran vert pâle, valeur affichée. */
+function appareil(c, A, texte, o = {}) {
+  c.direct(() => {
+    const ctx = c.ctx, { x, y, w, h } = A; ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.roundRect(x + 4, y + 5, w, h, 9); ctx.fill();
+    const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#4d565f'); g.addColorStop(1, '#22272d');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 9); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 1.2; ctx.stroke();
+    const e = ecranApp(A), ge = ctx.createLinearGradient(0, e.y, 0, e.y + e.h); ge.addColorStop(0, '#c2e0ae'); ge.addColorStop(1, '#8fb47c');
+    ctx.fillStyle = ge; ctx.beginPath(); ctx.roundRect(e.x, e.y, e.w, e.h, 4); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.fillRect(e.x + 3, e.y + 3, e.w - 6, 3);
+    ctx.fillStyle = '#16260f'; ctx.font = `700 ${o.taille ?? 19}px "Courier New", monospace`; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillText(texte, e.x + e.w - 6, e.y + e.h / 2 + 1);
+    ctx.fillStyle = '#c9d1d8'; ctx.font = '700 11px Arial, sans-serif'; ctx.textAlign = 'left'; ctx.fillText(o.nom ?? 'conductimètre', x + 10, y + h - 9);
+    ctx.restore();
+  });
+}
+const ecranApp = A => ({ x: A.x + 8, y: A.y + 8, w: A.w - 16, h: 30 });
+/** Cellule de conductimétrie : corps de (cx, yH) à yP, deux plaques en bas. */
+function cellule(ctx, cx, yH, yP, L = 22, hp = 30) {
+  ctx.save();
+  const g = ctx.createLinearGradient(cx - 9, 0, cx + 9, 0); g.addColorStop(0, '#2c3238'); g.addColorStop(.4, '#6b747d'); g.addColorStop(1, '#22272c');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(cx - 8, yH, 16, yP - yH, 3); ctx.fill();
+  for (const s of [-1, 1]) {
+    const px = cx + s * L / 2 - (s < 0 ? 4 : 0), gp = ctx.createLinearGradient(px, 0, px + 4, 0);
+    gp.addColorStop(0, '#8e979f'); gp.addColorStop(.5, '#eef2f5'); gp.addColorStop(1, '#7b848c');
+    ctx.fillStyle = gp; ctx.fillRect(px, yP, 4, hp);
+    ctx.fillStyle = '#3a4046'; ctx.fillRect(Math.min(cx + s * 5, px + 2) - 1, yP, Math.abs(px + 2 - (cx + s * 5)) + 2, 3);
+  }
+  ctx.restore();
+}
+/** Câble peint entre deux points. */
+function fil(ctx, x1, y1, x2, y2, creux = 40) {
+  ctx.save(); ctx.strokeStyle = '#2b2f35'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.bezierCurveTo(x1, y1 - creux, x2 - creux, y2, x2, y2); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1; ctx.stroke(); ctx.restore();
+}
+/** pH-mètre peint, écran adapté à une petite boîte (pH au centième). */
+function phmetreP(c, A, texte) {
+  c.direct(() => {
+    const ctx = c.ctx, { x, y, w, h } = A; ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.roundRect(x + 4, y + 5, w, h, 8); ctx.fill();
+    const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#a9b1b8'); g.addColorStop(1, '#6b737b');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 8); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1.2; ctx.stroke();
+    const e = ecranApp(A), ge = ctx.createLinearGradient(0, e.y, 0, e.y + e.h); ge.addColorStop(0, '#b9f0a0'); ge.addColorStop(1, '#79c36a');
+    ctx.fillStyle = ge; ctx.beginPath(); ctx.roundRect(e.x, e.y, e.w, e.h, 4); ctx.fill();
+    ctx.fillStyle = '#12300c'; ctx.font = '700 20px "Courier New", monospace'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillText(texte, e.x + e.w - 6, e.y + e.h / 2 + 1);
+    ctx.fillStyle = '#2b3036'; ctx.font = '700 11px Arial, sans-serif'; ctx.textAlign = 'left'; ctx.fillText('pH-mètre', x + 9, y + h - 8);
+    ctx.restore();
+  });
+}
+/* Couleurs vraies des solutions et des indicateurs (RGBA, alpha de la solution peinte). */
+const INCOLORE = [222, 234, 244, .16];
+const COUL = { jaune: [250, 214, 40, .55], orange: [249, 140, 30, .55], rouge: [220, 38, 38, .55], vert: [46, 170, 80, .55], bleu: [40, 100, 225, .55] };
+/** Indicateurs de l’exemple I : zone de virage, teinte acide, teinte sensible, teinte basique (couleurs CSS de la bande peinte). */
+const INDICS = [
+  { id: 'helianthine', nom: 'hélianthine', a: 3.1, b: 4.4, cols: ['#dc2626', '#f97316', '#facc15'] },
+  { id: 'rouge_methyle', nom: 'rouge de méthyle', a: 4.2, b: 6.2, cols: ['#dc2626', '#f97316', '#facc15'] },
+  { id: 'bbt', nom: 'BBT', a: 6.0, b: 7.6, cols: ['#facc15', '#22a447', '#2563eb'] },
+  { id: 'rouge_cresol', nom: 'rouge de crésol', a: 7.2, b: 8.8, cols: ['#facc15', '#f97316', '#dc2626'] },
+];
+/** Bande peinte d’un indicateur, verticale (du pH a en bas au pH b en haut) : teinte acide → teinte sensible → teinte basique. */
+function bandeV(ctx, x, yA, yB, w, cols, a = 1) {
+  if (a <= 0) return;
+  ctx.save(); ctx.globalAlpha = a * .9;
+  const g = ctx.createLinearGradient(0, yA, 0, yB); g.addColorStop(0, cols[0]); g.addColorStop(.5, cols[1]); g.addColorStop(1, cols[2]);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, yB, w, yA - yB, 3); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = 1; ctx.stroke(); ctx.restore();
+}
+const ION = { h3o: ['#ffe1c7', '#f97316', '#7c2d12'], na: ['#f3e8ff', '#a855f7', '#581c87'], cl: ['#dcfce7', '#22c55e', '#14532d'], ho: ['#dbeafe', '#3b82f6', '#1e3a8a'] };
+
+
+
+
+/* ── Le graphe (à gauche), le panneau (à droite), les lignes du bas ────────────────────────────────────────────────── */
+const GX = { x0: 66, y0: 300, w: 380, h: 236 };
+const PX = 516, PW = 234;
+const ZY = [356, 380, 404];
+let F = null;
+const pctA = pKa => ph => 100 / (1 + Math.pow(10, ph - pKa));   // % de la forme acide (tracé seulement)
+const pctB = pKa => ph => 100 / (1 + Math.pow(10, pKa - ph));   // % de la forme basique
+
+/** Tangentes parallèles de pente s, de part et d’autre du saut ; leur parallèle équidistante coupe la courbe en E. */
+function tangentes(f, s, br1, br2, saut) {
+  const der = v => (f(v + 1e-3) - f(v - 1e-3)) / 2e-3;
+  const toucher = ([a, b]) => { let best = a, e = 1e9; for (let v = a; v <= b; v += (b - a) / 800) { const d = Math.abs(der(v) - s); if (d < e) { e = d; best = v; } } return best; };
+  const v1 = toucher(br1), v2 = toucher(br2), b1 = f(v1) - s * v1, b2 = f(v2) - s * v2, bm = (b1 + b2) / 2;
+  let vE = saut[0];
+  for (let v = saut[0]; v <= saut[1]; v += (saut[1] - saut[0]) / 2000) { const a = f(v) - (s * v + bm), b = f(v + (saut[1] - saut[0]) / 2000) - (s * (v + (saut[1] - saut[0]) / 2000) + bm); if (a * b <= 0) { vE = v; break; } }
+  return { s, v1, v2, b1, b2, bm, vE, pE: f(vE) };
+}
+/** Choisit la pente qui donne le point E du sujet (tracé seulement). */
+function meilleuresTangentes(f, pentes, br1, br2, saut, E) {
+  let best = null;
+  for (const s of pentes) { const T = tangentes(f, s, br1, br2, saut); const e = Math.hypot(T.vE - E[0], (T.pE - E[1]) / 3); if (!best || e < best.e) best = { ...T, e }; }
+  return best;
+}
+const plage = (a, b, n) => Array.from({ length: n + 1 }, (_, i) => a + (b - a) * i / n);
+
+/* ── Les cinq figures (nationaux.md § 5) ─────────────────────────────────────────────────────────────────────────────── */
+const FIGS = {
+  fig_2025R: {
+    session: '2025 R', diapo: 'p4', titre: 'National 2025 R : distribution de l’acide éthanoïque', type: 'distribution',
+    g: { xmin: 0, xmax: 14, ymin: 0, ymax: 100, dx: 1, dy: 10, xLab: [2, 4, 6, 8, 10, 12, 14], yLab: [20, 40, 60, 80, 100], gx: .5, gy: 5, xNom: 'pH', yNom: '%', dec: 0 },
+    pKa: 4.8,
+    courbes: [{ f: pctA(4.8), a: 0, b: 14, col: 'rose', nom: 'courbe 1', lab: [.4, 88] }, { f: pctB(4.8), a: 0, b: 14, col: 'vert', nom: 'courbe 2', lab: [.4, 8] }],
+    point: { x: 4.8, y: 50, lab: 'pKa = 4,8', dit: 'le croisement des deux courbes : 50 % chacune, pH = pKa = 4,8' },
+    calc: { de: 'x', x: 4.2, y: pctB(4.8)(4.2), courbe: 1, dit: 'pH₁ = 4,2 sur la courbe 2 : 20 % de CH₃COO⁻' },
+    panneau: {
+      axes: [['acide éthanoïque, pKa = 4,8', 'blanc'], ['% de chaque forme du couple', 'faible']],
+      courbe: [['courbe 1 : décroît', 'rose'], ['courbe 2 : croît', 'vert']],
+      construction: [['trait à 50 %', 'jaune']],
+      lecture: [['croisement : pH = pKa = 4,8', 'jaune'], ['courbe 1 > 50 % pour pH < pKa :', 'blanc'], ['courbe 1 = forme acide CH₃COOH', 'rose']],
+      calcul: [['pH₁ = 4,2 : 20 % de CH₃COO⁻', 'blanc'], [{ m: ['τ₁ =', { frac: ['[CH₃COO⁻]_{éq}', 'C'] }, '= 0,20'], txt: 'τ₁ = [CH₃COO⁻]éq divisé par C = 0,20' }, 'jaune', 48]],
+    },
+    bas: {
+      axes: '% de CH₃COOH et de CH₃COO⁻ en fonction du pH (sujet 2025 R, figure 1)',
+      courbe: 'courbe 1 : de 100 % à 0 % ; courbe 2 : de 0 % à 100 %',
+      construction: 'on trace le trait horizontal à 50 % : les deux formes sont alors en même quantité',
+      lecture: 'croisement : pH = pKa = 4,8 ; pour pH < pKa, la courbe 1 est au-dessus de 50 % : c’est la forme acide',
+      calcul: 'pH₁ = 4,2 : la courbe 2 donne 20 % de CH₃COO⁻, donc τ₁ = 0,20',
+    },
+    valeur: 'au croisement, pH = pKa = 4,8 ; la courbe 1 dépasse 50 % pour pH < pKa : c’est la forme acide CH₃COOH',
+    calcTxt: 'pH₁ = 4,2 : 20 % de CH₃COO⁻, donc τ₁ = [CH₃COO⁻]éq divisé par C = 0,20',
+    resume: 'la courbe 1 (rose) descend de 100 % à 0 %, la courbe 2 (verte) monte de 0 % à 100 % ; elles se croisent à 50 % pour pH = 4,8.',
+    params: { pKa: 4.8, pH1: 4.2, pourcent_base: 20, tau1: .2 },
+  },
+  fig_2016N: {
+    session: '2016 N', diapo: 'n1', titre: 'National 2016 N : dosage de l’acide propanoïque', type: 'dosage',
+    g: { xmin: 0, xmax: 12, ymin: 3, ymax: 13, dx: 1, dy: 1, xLab: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], yLab: [4, 6, 8, 10, 12], gx: .5, gy: .5, xNom: 'V_B (mL)', yNom: 'pH', dec: 0 },
+    pts: [[0, 3.0], [.5, 3.8], [1, 4.2], [2, 4.6], [3, 4.9], [4, 5.2], [5, 5.6], [5.5, 6.0], [5.8, 6.6], [6, 8.7], [6.2, 10.6], [6.5, 11.0], [7, 11.6], [9, 12.0], [12, 12.2]],
+    tang: { pentes: plage(.7, 2.2, 60), br1: [3.5, 5.75], br2: [6.3, 9], saut: [5.6, 6.4], E: [6, 8.7], l: 1.6 },
+    E: { x: 6, y: 8.7, lab: 'E', dit: 'le point d’équivalence E (6 mL ; 8,7)' },
+    bande: { ...{ nom: 'bleu de thymol', a: 8, b: 9.6, cols: ['#facc15', '#7cb342', '#2563eb'] } },
+    panneau: {
+      axes: [['V_A = 5 mL d’acide propanoïque', 'blanc'], ['soude C_B = 5·10⁻² mol/L', 'blanc']],
+      courbe: [['pH = f(V_B) : un saut de pH', 'bleu']],
+      construction: [['deux tangentes parallèles', 'jaune'], ['et leur parallèle équidistante', 'jaune']],
+      lecture: [['E (6 mL ; 8,7)', 'jaune'], ['V_BE = 6 mL ; pH_E = 8,7', 'blanc']],
+      calcul: [[{ m: ['C_A =', { frac: ['C_B·V_BE', 'V_A'] }, '=', { frac: ['5·10⁻² × 6', '5'] }], txt: 'C_A = C_B·V_BE divisé par V_A = 5·10⁻² × 6 divisé par 5' }, 'blanc', 48],
+        ['= 6·10⁻² mol/L', 'jaune'], ['bleu de thymol (8 – 9,6) : contient 8,7', 'blanc']],
+    },
+    bas: {
+      axes: 'pH en fonction du volume V_B de soude versé (sujet 2016 N, figure 1)',
+      courbe: 'le pH monte doucement, puis saute vers 6 mL, puis reste presque constant',
+      construction: 'méthode des tangentes : deux tangentes parallèles, puis la parallèle à égale distance des deux',
+      lecture: 'la parallèle équidistante coupe la courbe en E : V_BE = 6 mL et pH_E = 8,7',
+      calcul: 'C_A = 6·10⁻² mol/L ; la zone de virage du bleu de thymol (8 – 9,6) contient pH_E = 8,7',
+    },
+    valeur: 'E (6 mL ; 8,7) : V_BE = 6 mL et pH_E = 8,7',
+    calcTxt: 'C_A = C_B·V_BE divisé par V_A = 5·10⁻² × 6 divisé par 5 = 6·10⁻² mol/L ; indicateur : bleu de thymol (8 – 9,6), sa zone contient 8,7',
+    resume: 'la courbe part de pH 3,0, monte doucement (5,6 à 5 mL), saute entre 5,8 et 6,2 mL (de 6,6 à 10,6), puis tend vers 12,2.',
+    params: { V_BE_mL: 6, pH_E: 8.7, C_A_mol_L: .06, indicateur: 'bleu de thymol' },
+  },
+  fig_2022R: {
+    session: '2022 R', diapo: 'n2', titre: 'National 2022 R : dosage de la méthylamine', type: 'dosage',
+    g: { xmin: 0, xmax: 24, ymin: 0, ymax: 14, dx: 3, dy: 2, xLab: [3, 6, 9, 12, 15, 18, 21, 24], yLab: [2, 4, 6, 8, 10, 12, 14], gx: 1.5, gy: 1, xNom: 'V_a (mL)', yNom: 'pH', dec: 0 },
+    pts: [[0, 11.3], [3, 11.0], [6, 10.7], [9, 10.4], [12, 10.0], [13.5, 9.6], [14.5, 8.8], [15, 6.6], [15.3, 4.3], [16, 3.6], [18, 3.0], [20.4, 2.8], [24, 2.6]],
+    tang: { pentes: plage(-.15, -1.2, 70), br1: [10, 14.4], br2: [15.4, 20], saut: [14.6, 15.4], E: [15, 6.6], l: 3 },
+    E: { x: 15, y: 6.6, lab: 'E', dit: 'le point d’équivalence E (15 mL ; 6,6)' },
+    bande: { nom: 'BBT', a: 6.0, b: 7.6, cols: ['#facc15', '#22a447', '#2563eb'] },
+    panneau: {
+      axes: [['V_b = 15 mL de méthylamine', 'blanc'], ['acide chlorhydrique C_a = 10⁻² mol/L', 'blanc']],
+      courbe: [['pH = f(V_a) : le pH descend', 'bleu']],
+      construction: [['deux tangentes parallèles', 'jaune'], ['et leur parallèle équidistante', 'jaune']],
+      lecture: [['E (15 mL ; 6,6)', 'jaune'], ['V_aE = 15 mL ; pH_E = 6,6', 'blanc']],
+      calcul: [[{ m: ['C_b =', { frac: ['C_a·V_aE', 'V_b'] }, '=', { frac: ['10⁻² × 15', '15'] }], txt: 'C_b = C_a·V_aE divisé par V_b = 10⁻² × 15 divisé par 15' }, 'blanc', 48],
+        ['= 10⁻² mol/L', 'jaune'], ['BBT (6,0 – 7,6) : contient 6,6', 'blanc']],
+    },
+    bas: {
+      axes: 'pH en fonction du volume V_a d’acide chlorhydrique versé (sujet 2022 R)',
+      courbe: 'le pH descend doucement, chute vers 15 mL, puis reste presque constant',
+      construction: 'méthode des tangentes : deux tangentes parallèles, puis la parallèle à égale distance des deux',
+      lecture: 'la parallèle équidistante coupe la courbe en E : V_aE = 15 mL et pH_E = 6,6',
+      calcul: 'C_b = 10⁻² mol/L ; la zone de virage du BBT (6,0 – 7,6) contient pH_E = 6,6',
+    },
+    valeur: 'E (15 mL ; 6,6) : V_aE = 15 mL et pH_E = 6,6',
+    calcTxt: 'C_b = C_a·V_aE divisé par V_b = 10⁻² × 15 divisé par 15 = 10⁻² mol/L ; indicateur : BBT (6,0 – 7,6), sa zone contient 6,6',
+    resume: 'la courbe part de pH 11,3, descend doucement (10,0 à 12 mL), chute entre 14,5 et 15,3 mL (de 8,8 à 4,3), puis tend vers 2,6.',
+    params: { V_aE_mL: 15, pH_E: 6.6, C_b_mol_L: .01, indicateur: 'BBT' },
+  },
+  fig_2022N: {
+    session: '2022 N', diapo: 'n3', titre: 'National 2022 N : dosage de l’acide propanoïque', type: 'derivee',
+    g: { xmin: 0, xmax: 30, ymin: 0, ymax: 14, dx: 5, dy: 2, xLab: [5, 10, 15, 20, 25, 30], yLab: [2, 4, 6, 8, 10, 12, 14], gx: 1, gy: 1, xNom: 'V_b (mL)', yNom: 'pH', dec: 0 },
+    pts: [[0, 3.1], [2, 4.0], [5, 4.4], [10, 4.9], [15, 5.4], [18, 5.9], [19.5, 6.7], [20, 8.8], [20.5, 10.5], [22, 11.2], [25, 11.6], [30, 11.9]],
+    E: { x: 20, y: 8.8, lab: 'pic', dit: 'le maximum de la courbe dpH/dV_b : V_bE = 20 mL' },
+    lire: { x: 5, y: 4.4 },
+    panneau: {
+      axes: [['acide propanoïque (pKa = 4,9)', 'blanc'], ['soude C_b = 5·10⁻² mol/L', 'blanc']],
+      courbe: [['pH = f(V_b)', 'bleu']],
+      construction: [[{ m: [{ frac: ['dpH', 'dV_b'] }, ': un pic fin'], txt: 'dpH/dV_b : un pic fin' }, 'orange', 48]],
+      lecture: [['V_bE = 20 mL (abscisse du pic)', 'jaune'], ['V_b = 5 mL : pH = 4,4', 'jaune']],
+      calcul: [[{ m: [{ frac: ['[A⁻]', '[AH]'] }, '= 10^{4,4 − 4,9} = 0,316'], txt: '[A⁻]/[AH] = 10^(4,4 − 4,9) = 0,316' }, 'blanc', 48],
+        [{ m: ['% AH =', { frac: ['1', '1 + 0,316'] }, '= 76 %'], txt: '% AH = 1 divisé par (1 + 0,316) = 76 %' }, 'jaune', 48]],
+    },
+    bas: {
+      axes: 'pH et dérivée dpH/dV_b en fonction du volume V_b de soude versé (sujet 2022 N, figure 2)',
+      courbe: 'le pH monte doucement, saute vers 20 mL, puis reste presque constant',
+      construction: 'la courbe dpH/dV_b est presque nulle, sauf un pic fin pendant le saut de pH',
+      lecture: 'l’abscisse du pic donne V_bE = 20 mL ; à V_b = 5 mL on lit pH = 4,4',
+      calcul: 'à V_b = 5 mL, la forme acide AH représente 76 % (pH < pKa : AH prédomine)',
+    },
+    valeur: 'V_bE = 20 mL (abscisse du maximum de dpH/dV_b) ; à V_b = 5 mL, pH = 4,4',
+    calcTxt: '[A⁻]/[AH] = 10^(4,4 − 4,9) = 0,316 ; % de forme acide = 1 divisé par (1 + 0,316) = 76 %',
+    resume: 'la courbe du pH part de 3,1, monte doucement (4,4 à 5 mL, 4,9 à 10 mL), saute entre 19,5 et 20,5 mL (de 6,7 à 10,5), puis tend vers 11,9.',
+    params: { V_bE_mL: 20, pH_a_5mL: 4.4, rapport_base_acide: .316, pourcent_acide: 76 },
+  },
+  fig_2024R: {
+    session: '2024 R', diapo: 'n4', titre: 'National 2024 R : distribution R–NH₃⁺ / R–NH₂', type: 'distribution',
+    g: { xmin: 0, xmax: 14, ymin: 0, ymax: 100, dx: 1, dy: 10, xLab: [2, 4, 6, 8, 10, 12, 14], yLab: [20, 40, 60, 80, 100], gx: .5, gy: 5, xNom: 'pH', yNom: '%', dec: 0 },
+    pKa: 10.8,
+    courbes: [{ f: pctA(10.8), a: 0, b: 14, col: 'rose', nom: 'forme acide', lab: [.4, 88] }, { f: pctB(10.8), a: 0, b: 14, col: 'vert', nom: 'forme basique', lab: [.4, 8], pointille: [6, 5] }],
+    point: { x: 10.8, y: 50, labX: 10.1, labY: 54, lab: 'pKa = 10,8', dit: 'le croisement des deux courbes : 50 % chacune, pH = pKa = 10,8' },
+    marque: { x: 11.88, dit: 'pH = 11,88 (la solution du sujet)' },
+    calc: { de: 'y', x: 10.2, y: 80, courbe: 0, dit: '80 % de forme acide : pH = 10,2' },
+    panneau: {
+      axes: [['amine R–NH₂, C_B = 9,0·10⁻² mol/L', 'blanc'], ['pH de la solution : 11,88', 'blanc']],
+      courbe: [['forme acide R–NH₃⁺ : trait plein', 'rose'], ['forme basique R–NH₂ : pointillés', 'vert']],
+      construction: [['trait à 50 %', 'jaune']],
+      lecture: [['croisement : pKa = 10,8', 'jaune'], ['pH = 11,88 > pKa :', 'blanc'], ['R–NH₂ prédomine', 'vert']],
+      calcul: [[{ m: ['80 % d’acide :', { frac: ['[R–NH₂]', '[R–NH₃⁺]'] }, '= 0,25'], txt: '80 % d’acide : [R–NH₂]/[R–NH₃⁺] = 0,25' }, 'blanc', 48],
+        ['pH = 10,8 + log 0,25 = 10,2', 'jaune']],
+    },
+    bas: {
+      axes: '% de R–NH₃⁺ et de R–NH₂ en fonction du pH (sujet 2024 R, figure 1)',
+      courbe: 'forme acide : de 100 % à 0 % ; forme basique : de 0 % à 100 %',
+      construction: 'on trace le trait horizontal à 50 % : les deux formes sont alors en même quantité',
+      lecture: 'croisement : pKa = 10,8 ; la solution (pH = 11,88) est à droite du croisement : la base R–NH₂ prédomine',
+      calcul: '80 % d’acide et 20 % de base : le rapport base/acide vaut 0,25, d’où pH = 10,2 (lu aussi sur la courbe)',
+    },
+    valeur: 'au croisement, pKa = 10,8 ; pH = 11,88 > pKa : R–NH₂ prédomine',
+    calcTxt: '80 % d’acide : [R–NH₂]/[R–NH₃⁺] = 20/80 = 0,25 ; pH = 10,8 + log 0,25 = 10,2',
+    resume: 'la forme acide (rose, trait plein) descend de 100 % à 0 % ; la forme basique (verte, pointillés) monte de 0 % à 100 % ; elles se croisent à 50 % pour pH = 10,8.',
+    params: { pKa: 10.8, pH_solution: 11.88, pH_80_acide: 10.2 },
+  },
+};
+const CLES = Object.keys(FIGS);
+/* Préparation : graphe, courbe lissée, tangentes, dérivée (pour le tracé seulement). */
+for (const k of CLES) {
+  const f = FIGS[k]; f.G = Graphe({ ...GX, ...f.g });
+  if (f.pts) {
+    f.f = lissee(f.pts);
+    f.courbes = [{ f: f.f, a: f.pts[0][0], b: f.pts[f.pts.length - 1][0], col: 'bleu', nom: 'pH' }];
+    if (f.tang) f.T = meilleuresTangentes(f.f, f.tang.pentes, f.tang.br1, f.tang.br2, f.tang.saut, f.tang.E);
+    if (f.type === 'derivee') {   // dérivée : différences centrées aux points du sujet, lissées ; échelle libre (sans graduation)
+      const P = f.pts, d = P.map((p, i) => [p[0], i === 0 ? (P[1][1] - P[0][1]) / (P[1][0] - P[0][0]) : i === P.length - 1 ? (P[i][1] - P[i - 1][1]) / (P[i][0] - P[i - 1][0]) : (P[i + 1][1] - P[i - 1][1]) / (P[i + 1][0] - P[i - 1][0])]);
+      const dmax = Math.max(...d.map(p => p[1])), fd = lissee(d.map(([v, y]) => [v, y / dmax * 12]));
+      f.derivee = fd;
+    }
+  }
+}
+
+/* ── Déroulé : axes, courbe, construction, lecture, calcul ─────────────────────────────────────────────────────────── */
+const etapesDe = cle => {
+  const f = FIGS[cle];
+  return [
+    { nom: 'axes', anim: .4, motif: `les axes : ${f.g.yNom} en ordonnée, ${f.g.xNom.replace(/_/g, '')} en abscisse`, bulle: () => `Figure du national ${f.session}.` },
+    { nom: 'courbe', anim: 2.8, motif: f.courbes.length > 1 ? `les deux courbes : ${f.courbes.map(c => c.nom).join(' et ')}` : 'la courbe du sujet', bulle: () => 'On trace comme sur le sujet.' },
+    { nom: 'construction', anim: 2.4, motif: `la construction : ${f.bas.construction}`, bulle: () => 'La construction.' },
+    { nom: 'lecture', anim: 2, motif: `la lecture : ${f.valeur}`, bulle: () => 'On lit sur la figure.' },
+    { nom: 'calcul', anim: 1.6, motif: `le calcul : ${f.calcTxt}`, bulle: () => 'Le calcul.' },
+  ];
+};
+const MOTIFS = MOTIFS_DE(etapesDe);
+const quand = (M, nom) => (M.vu(nom) ? '' : ` (au moment « ${nom} »)`);
+
+/* Construction, lecture et calcul dessinés sur le graphe (en direct, fraction p de l’étape). */
+function construction(c, M, p) {
+  const f = F, g = f.G;
+  if (f.type === 'distribution') { pointille(c, g.x0, g.Y(50), g.X(14), g.Y(50), lisse(p)); return; }
+  if (f.type === 'dosage') {
+    const T = f.T, l = f.tang.l, ln = (v, b, q) => { const a = v - l, z = v + l; if (q > 0) c.ligne(g.X(a), g.Y(T.s * a + b), g.X(a + (z - a) * q), g.Y(T.s * (a + (z - a) * q) + b), { couleur: 'jaune', largeur: 1.7, pointille: [6, 5] }); };
+    ln(T.v1, T.b1, seg(p, 0, .3)); ln(T.v2, T.b2, seg(p, .3, .6));
+    const q = seg(p, .6, 1); if (q > 0) { const a = T.vE - l * 1.2, z = T.vE + l * 1.2; c.ligne(g.X(a), g.Y(T.s * a + T.bm), g.X(a + (z - a) * q), g.Y(T.s * (a + (z - a) * q) + T.bm), { couleur: 'jaune', largeur: 2 }); }
+    if (p >= .3) c.point(g.X(T.v1), g.Y(f.f(T.v1)), 3, 'jaune');
+    if (p >= .6) c.point(g.X(T.v2), g.Y(f.f(T.v2)), 3, 'jaune');
+    return;
+  }
+  // dérivée : la courbe dpH/dV_b (orange clair), puis le trait vertical du pic au saut
+  tracer(c, g, f.derivee, 0, 30, seg(p, 0, .75), 'orange', { largeur: 2.2, n: 300 });
+  pointille(c, g.X(20), g.Y(f.derivee(20)), g.X(20), g.Y(f.f(20)), seg(p, .75, 1), 'orange');
+}
+function lecture(c, M, p) {
+  const f = F, g = f.G;
+  if (f.type === 'distribution') {
+    const P = f.point; pointille(c, g.X(P.x), g.Y(50), g.X(P.x), g.y0, seg(p, 0, .5));
+    if (p > 0) c.point(g.X(P.x), g.Y(50), 4.5, 'jaune');
+    if (f.marque) { const q = seg(p, .5, 1); if (q > 0) c.ligne(g.X(f.marque.x), g.y0, g.X(f.marque.x), g.y0 - (g.h - 6) * q, { couleur: 'violet', largeur: 1.8, pointille: [3, 5] }); }
+    return;
+  }
+  const E = f.E;
+  if (f.type === 'dosage') {
+    if (p > 0) c.point(g.X(E.x), g.Y(E.y), 4.5, 'jaune');
+    pointille(c, g.X(E.x), g.Y(E.y), g.X(E.x), g.y0, seg(p, 0, .5));
+    pointille(c, g.X(E.x), g.Y(E.y), g.x0, g.Y(E.y), seg(p, .5, 1));
+    return;
+  }
+  // dérivée : V_bE = 20 mL au pied du trait, puis la lecture à 5 mL
+  pointille(c, g.X(20), g.Y(f.derivee(20)), g.X(20), g.y0, seg(p, 0, .3), 'jaune');
+  if (p >= .3) c.point(g.X(20), g.y0, 4, 'jaune');
+  const L = f.lire; pointille(c, g.X(L.x), g.y0, g.X(L.x), g.Y(L.y), seg(p, .35, .65)); if (p >= .65) c.point(g.X(L.x), g.Y(L.y), 4, 'jaune');
+  pointille(c, g.X(L.x), g.Y(L.y), g.x0, g.Y(L.y), seg(p, .65, 1)); if (p >= 1) c.point(g.x0, g.Y(L.y), 3.5, 'jaune');
+}
+function calculGraphe(c, M, p) {
+  const f = F, g = f.G;
+  if (f.type === 'distribution') {
+    const K = f.calc;
+    if (K.de === 'x') {   // pH₁ → courbe → %
+      pointille(c, g.X(K.x), g.y0, g.X(K.x), g.Y(K.y), seg(p, 0, .5), 'violet');
+      if (p >= .5) c.point(g.X(K.x), g.Y(K.y), 4.5, 'violet');
+      pointille(c, g.X(K.x), g.Y(K.y), g.x0, g.Y(K.y), seg(p, .5, 1), 'violet');
+    } else {              // % → courbe → pH
+      pointille(c, g.x0, g.Y(K.y), g.X(K.x), g.Y(K.y), seg(p, 0, .5), 'violet');
+      if (p >= .5) c.point(g.X(K.x), g.Y(K.y), 4.5, 'violet');
+      pointille(c, g.X(K.x), g.Y(K.y), g.X(K.x), g.y0, seg(p, .5, 1), 'violet');
+    }
+    return;
+  }
+  if (f.bande) c.direct(() => bandeV(c.ctx, g.X(g.xmax) + 14, g.Y(f.bande.a), g.Y(f.bande.b), 12, f.bande.cols, lisse(p)));
+}
+/* Étiquettes écrites à la craie sur le graphe (une fois l’étape commencée). */
+function etiquettes(c, M, nom) {
+  const f = F, g = f.G;
+  if (nom === 'courbe' && f.type === 'distribution') f.courbes.forEach(k => c.texte(k.nom, g.X(k.lab[0]), g.Y(k.lab[1]), { couleur: k.col, taille: 15 }));
+  if (nom === 'construction' && f.type === 'distribution') c.texte('50 %', g.X(14) + 4, g.Y(50) + 5, { couleur: 'jaune', taille: 14 });
+  if (nom === 'construction' && f.type === 'derivee') {
+    ligneM(c, g.X(23.2), g.Y(5.6), [{ frac: ['dpH', 'dV_b'] }], { taille: 15, couleur: 'orange' });
+    c.fleche(g.X(23.6), g.Y(3.6), g.X(21.4), g.Y(f.derivee(21.4)) - 4, { couleur: 'orange', largeur: 1.5, tete: 7 });
+  }
+  if (nom === 'lecture') {
+    if (f.type === 'distribution') c.texte(f.point.lab, g.X(f.point.labX ?? f.point.x) - 10, g.Y(f.point.labY ?? 50) - 8, { couleur: 'jaune', taille: 15, align: 'right' });
+    if (f.type === 'distribution' && f.marque) c.texte('11,88', g.X(f.marque.x) + 4, g.Y(64), { couleur: 'violet', taille: 14 });
+    if (f.type === 'dosage') c.texte('E', g.X(f.E.x) + (f.T.s > 0 ? -16 : 10), g.Y(f.E.y) + (f.T.s > 0 ? -2 : -6), { couleur: 'jaune', taille: 17 });
+    if (f.type === 'derivee') { c.texte('20', g.X(20), g.y0 + 34, { couleur: 'jaune', taille: 14, align: 'center' }); c.texte('4,4', g.x0 + 4, g.Y(4.4) - 6, { couleur: 'jaune', taille: 14 }); }
+  }
+  if (nom === 'calcul') {
+    if (f.type === 'distribution' && f.calc.de === 'x') c.texte('20 %', g.x0 + 4, g.Y(f.calc.y) - 6, { couleur: 'violet', taille: 14 });
+    if (f.type === 'distribution' && f.calc.de === 'y') c.texte('10,2', g.X(f.calc.x) - 4, g.Y(30), { couleur: 'violet', taille: 14, align: 'right' });
+    if (f.bande) c.texte(f.bande.nom, g.X(g.xmax) + 20, g.Y(f.bande.b) - 8, { couleur: 'blanc', taille: 13, align: 'center' });
+  }
+}
+
+const ORDRE = ['axes', 'courbe', 'construction', 'lecture', 'calcul'];
+function dessiner(c, M) {
+  MO = M; F = FIGS[M.S.vue]; const f = F, g = f.G; M.scene.cadre(73);
+  c.texte(f.titre, 14, 26, { couleur: 'cyan', taille: 20, max: 560 });
+  c.texte(`diapositive ${f.diapo}`, 746, 26, { couleur: 'faible', taille: 15, align: 'right' });
+  if (M.commence('axes')) quadrillage(c, g, lisse(M.p('axes')));
+  c.direct(() => {
+    if (M.commence('courbe')) f.courbes.forEach(k => tracer(c, g, k.f, k.a, k.b, M.p('courbe'), k.col, { pointille: k.pointille }));
+    if (M.commence('construction')) construction(c, M, M.p('construction'));
+    if (M.commence('lecture')) lecture(c, M, M.p('lecture'));
+    if (M.commence('calcul')) calculGraphe(c, M, M.p('calcul'));
+  });
+  // Panneau à droite : les lignes de chaque étape, les unes sous les autres.
+  let y = 64; const ecrites = [], panneau = {};
+  for (const nom of ORDRE) {
+    const lignes = f.panneau[nom]; if (!lignes) continue;
+    const ys = []; let yb = y;
+    for (const l of lignes) { const h = l[2] ?? 22; ys.push(yb + h - 22 - (h > 22 ? 6 : 0)); yb += h; }
+    y = yb + 7;
+    panneau[nom] = () => lignes.forEach(([t, col], i) => {
+      if (t && t.m) ligneM(c, PX, ys[i], t.m, { taille: 15, couleur: col, gap: 6 });
+      else c.texte(t, PX, ys[i], { couleur: col, taille: 15, max: PW });
+    });
+    if (M.commence(nom)) ecrites.push(...lignes.map(l => (l[0] && l[0].txt) || l[0]));
+  }
+  M.panneau = ecrites;
+  M.vues = zoneEcriture(c, M, etapesDe(M.S.vue).map(e => ({ nom: e.nom, lignes: [[f.bas[e.nom], e.nom === 'calcul' ? 'jaune' : 'blanc']],
+    plus: () => { if (e.nom === 'axes') axesGraphe(c, g); etiquettes(c, M, e.nom); panneau[e.nom] && panneau[e.nom](); } })), ZY, { taille: 16 });
+  reperes(c, M);
+  return c.fin();
+}
+const seg = (p, a, b) => clamp((p - a) / (b - a), 0, 1);
+
+/* ── Repères (tous déclarés dès le début ; le libellé dit à quel moment ils apparaissent) ─────────────────────────── */
+function panneauY(nom) {
+  let y = 64;
+  for (const n of ORDRE) {
+    const l = F.panneau[n]; if (!l) continue;
+    const h = l.reduce((s, x) => s + (x[2] ?? 22), 0);
+    if (n === nom) return [y - 18, h + 2];
+    y += h + 7;
+  }
+  return [y - 18, 30];
+}
+function reperes(c, M) {
+  const f = F, g = f.G, R = (id, x, y, w, h, l) => c.repere(id, x, y, w, h, l), q = nom => quand(M, nom);
+  R('axe_x', g.x0, g.y0 - 10, g.w + 20, 50, `l’axe des abscisses : ${f.g.xNom.replace(/_/g, '')}, de ${nbr(g.xmin)} à ${nbr(g.xmax)}`);
+  R('axe_y', g.x0 - 50, g.y0 - g.h - 20, 60, g.h + 30, `l’axe des ordonnées : ${f.g.yNom}, de ${nbr(g.ymin)} à ${nbr(g.ymax === 13 ? 12 : g.ymax)}`);
+  R('courbe', g.x0, g.Y(g.ymax) - 4, g.w + 4, g.h + 4, `${f.courbes.length > 1 ? 'les deux courbes : ' + f.courbes.map(k => k.nom).join(' et ') : 'la courbe pH = f(' + f.g.xNom.split(' ')[0].replace(/_/g, '') + ')'}${q('courbe')}`);
+  let cons;
+  if (f.type === 'distribution') cons = [g.x0, g.Y(50) - 12, g.w + 40, 24, 'le trait horizontal à 50 %'];
+  else if (f.type === 'dosage') { const T = f.T, xs = [T.v1 - f.tang.l, T.v2 + f.tang.l].map(g.X), ys = [T.s * (T.v1 - f.tang.l) + T.b1, T.s * (T.v2 + f.tang.l) + T.b2, T.s * (T.v1 + f.tang.l) + T.b1, T.s * (T.v2 - f.tang.l) + T.b2].map(v => g.Y(clamp(v, g.ymin, g.ymax)));
+    cons = [Math.min(...xs) - 6, Math.min(...ys) - 6, Math.abs(xs[1] - xs[0]) + 12, Math.max(...ys) - Math.min(...ys) + 12, 'les deux tangentes parallèles (pointillés jaunes) et leur parallèle équidistante (trait jaune plein)']; }
+  else cons = [g.X(17), g.Y(12.4), g.X(26) - g.X(17), g.y0 - g.Y(12.4), 'la courbe dpH/dV_b (orange) et son pic à 20 mL, relié au saut de pH'];
+  R('construction', cons[0], cons[1], cons[2], cons[3], cons[4] + q('construction'));
+  const P = f.type === 'distribution' ? { x: f.point.x, y: 50, dit: f.point.dit } : f.type === 'derivee' ? { x: 20, y: 8.8, dit: f.E.dit } : f.E;
+  R('point', g.X(P.x) - 14, g.Y(P.y) - 14, 28, 28, `${P.dit}${q('lecture')}`);
+  const [yv, hv] = panneauY('lecture');
+  R('valeur', PX - 6, yv, PW + 10, hv, `les valeurs lues : ${f.valeur}${q('lecture')}`);
+  const [yc, hc] = panneauY('calcul');
+  R('calcul', PX - 6, yc, PW + 10, hc, `le calcul : ${f.calcTxt}${q('calcul')}`);
+}
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────────────────────────────────────────────────── */
+function voir(M) {
+  const f = FIGS[M.S.vue], m = [`Figure ${M.S.vue} (national ${f.session}, diapositive ${f.diapo}), ${M.etat()}. Étape en cours : ${etapeEnCours(M)}.`];
+  m.push(`Graphe à la craie : ${f.g.yNom} en ordonnée de ${nbr(f.g.ymin)} à ${nbr(f.g.ymax === 13 ? 12 : f.g.ymax)}, ${f.g.xNom.replace(/_/g, '')} en abscisse de ${nbr(f.g.xmin)} à ${nbr(f.g.xmax)}.`);
+  if (M.commence('courbe')) m.push(`Courbe${f.courbes.length > 1 ? 's' : ''} tracée${f.courbes.length > 1 ? 's' : ''} (${M.vu('courbe') ? 'en entier' : 'en cours'}) : ${f.resume}`);
+  if (M.commence('construction')) m.push(`Construction : ${f.bas.construction}.`);
+  if (M.commence('lecture')) m.push(`Lecture : ${f.valeur}.`);
+  if (M.commence('calcul')) m.push(`Calcul écrit : ${f.calcTxt}.`);
+  if (M.panneau && M.panneau.length) m.push(`Écrit à droite : ${M.panneau.map(s => `« ${s} »`).join(' ; ')}.`);
+  if (M.vues && M.vues.length) m.push(`Lignes écrites en bas : ${M.vues.map(s => `« ${s} »`).join(' ; ')}.`);
+  return m.join(' ').replace(/_\{([^}]+)\}/g, '$1').replace(/([A-Za-z])_([A-Za-z]+)/g, '$1$2');
+}
+const params = M => ({ fig: M.S.vue, session: FIGS[M.S.vue].session, diapositive: FIGS[M.S.vue].diapo, ...FIGS[M.S.vue].params });
+const MOT = Moteur({
+  id: 'ab_figures', param: 'fig', titre: 'Figures des examens nationaux : acide-base (distribution, dosage pH-métrique)', vues: CLES,
+  titres: Object.fromEntries(CLES.map(k => [k, `national ${FIGS[k].session}`])),
+  etapes: etapesDe, motifs: MOTIFS, dessiner, voir, params,
+  depart: M => `Figure du national ${FIGS[M.S.vue].session}.`,
+  messageFin: M => `National ${FIGS[M.S.vue].session} : ${FIGS[M.S.vue].calcTxt}.`,
+  appliquer: (p, M) => { const r = {}; if (CLES.includes(p.fig)) r.vue = p.fig; else if (CLES.includes(p.vue)) r.vue = p.vue; r.change = !!(r.vue && r.vue !== M.S.vue); return r; },
+  schema: { fig: CLES.join(' | ') + ' (change de figure et relance)' },
+  texte: 'Figures des examens nationaux du chapitre acide-base, dessinées comme les sujets : ' + CLES.map(k => `${k} (${FIGS[k].session}) : ${FIGS[k].resume} Construction : ${FIGS[k].bas.construction}. Lecture : ${FIGS[k].valeur}. Calcul : ${FIGS[k].calcTxt}.`).join(' '),
+  explications: Object.fromEntries(CLES.map(k => [k, [
+    { repere: 'axe_y', texte: `En ordonnée : ${FIGS[k].g.yNom}.` },
+    { repere: 'axe_x', texte: `En abscisse : ${FIGS[k].g.xNom.replace(/_/g, '')}.` },
+    { repere: 'courbe', texte: FIGS[k].bas.courbe },
+    { repere: 'construction', texte: FIGS[k].bas.construction },
+    { repere: 'point', texte: (FIGS[k].point || FIGS[k].E).dit },
+    { repere: 'valeur', texte: FIGS[k].valeur },
+    { repere: 'calcul', texte: FIGS[k].calcTxt },
+  ]])),
+});
+MOT.lancer();
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

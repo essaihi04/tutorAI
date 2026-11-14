@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Les dominos — le principe de récurrence</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Rangée de dominos à la craie : le premier tombe, chacun fait tomber le suivant, tous tombent ; avec un trou, la chaîne s’arrête"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/suites-tableau/su-outils.js"></script>
+<script>
+/*
+ * Cours « Suites numériques » (math_ch3_suites_numeriques), diapositive r1 : le principe de récurrence.
+ * Vues : ?vue=principe (paramètre trou = 0 ou 1 : un grand écart entre les dominos 5 et 6) | trou (la rangée avec le trou).
+ * Les dominos sont dessinés en direct : leur angle suit l’horloge de la scène (K.anime réserve le temps de chaque chute).
+ */
+const N = 8, BAS = 268, H = 92, L = 22;
+const X = (i, trou) => 64 + i * 78 + (trou && i >= 6 ? 34 : 0);
+/* Un domino debout (angle 0) ou penché autour de son coin bas-droit (angle en radians, sens horaire). */
+function domino(c, i, ang, trou, coul) {
+  const x = X(i, trou), px = x + L, py = BAS;
+  const coins = [[x, BAS], [x, BAS - H], [x + L, BAS - H], [x + L, BAS]].map(([a, b]) => {
+    const dx = a - px, dy = b - py; return [px + dx * Math.cos(ang) - dy * Math.sin(ang), py + dx * Math.sin(ang) + dy * Math.cos(ang)];
+  });
+  const ctx = c.ctx; ctx.globalAlpha = .13; ctx.fillStyle = c.couleur(coul); ctx.beginPath(); coins.forEach(([a, b], k) => (k ? ctx.lineTo(a, b) : ctx.moveTo(a, b))); ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1;
+  c.trait(coins, { ferme: true, couleur: coul, largeur: 2.2, tremble: .3 });
+  const [mx, my] = [(coins[0][0] + coins[2][0]) / 2, (coins[0][1] + coins[2][1]) / 2];
+  c.point(mx, my - 14 * Math.cos(ang), 2.6, coul); c.point(mx, my + 14 * Math.cos(ang), 2.6, coul);
+}
+/* Angle final : penché sur le suivant s’il est assez près, à plat sinon (le dernier, ou avant le trou). */
+function angleFinal(i, trou) {
+  if (i === N - 1) return 1.45;
+  const ecart = X(i + 1, trou) - X(i, trou) - L;
+  return ecart < H ? Math.asin(Math.min(1, (ecart + 2) / H)) : 1.5;
+}
+function dessiner(c, K, trou, noms) {
+  K.titre(trou ? 'Et s’il manque un passage ?' : 'Les dominos : le principe de récurrence');
+  const apparu = K.anime(1.4, () => {});
+  c.ligne(40, BAS + 2, 724, BAS + 2, { couleur: 'faible', largeur: 1.6 });
+  for (let i = 0; i < N; i++) c.texte(String(i), X(i, trou) + L / 2, BAS + 26, { couleur: 'jaune', taille: 17, align: 'center', duree: .06 });
+  c.repere('premier', X(0, trou) - 8, BAS - H - 8, L + 16, H + 40, 'le premier domino, numéro 0');
+  K.marque('rangee');
+  c.pause(.3);
+  const chute = Array(N).fill(0);
+  chute[0] = K.anime(.7, () => {});
+  c.texte('Initialisation : le premier tombe', 40, 80, { couleur: 'vert', taille: 20 });
+  K.marque('premier_tombe');
+  c.pause(.4);
+  if (!noms.chute) {
+    const k = 3, xk = X(k, trou);
+    c.cercle(xk + L / 2, BAS - H / 2, 58, { couleur: 'cyan', largeur: 1.8 });
+    c.fleche(xk + L + 6, BAS - H - 12, X(k + 1, trou) + 4, BAS - H - 12, { couleur: 'cyan', largeur: 2 });
+    c.texte('n', xk + L / 2, BAS + 50, { couleur: 'cyan', taille: 18, align: 'center' });
+    c.texte('n + 1', X(k + 1, trou) + L / 2, BAS + 50, { couleur: 'cyan', taille: 18, align: 'center' });
+    c.texte('Hérédité : si le domino n tombe, le n + 1 tombe', 40, 116, { couleur: 'cyan', taille: 20 });
+    c.repere('passage', xk - 40, BAS - H - 66, 140, 140, 'le passage d’un domino au suivant');
+    K.marque('passage');
+    c.pause(.4);
+  }
+  const fin = trou ? 6 : N;
+  for (let i = 1; i < fin; i++) chute[i] = K.anime(.45, () => {});
+  if (noms.chute) { K.marque('chute'); c.pause(.4); }
+  if (trou) {
+    c.texte('le passage de 5 à 6 manque : la chaîne s’arrête', 40, noms.chute ? 116 : 152, { couleur: 'orange', taille: 20 });
+    c.repere('trou', X(5, true) + L, BAS - 40, X(6, true) - X(5, true) - L, 50, 'le trou entre 5 et 6');
+    c.repere('debout', X(6, true) - 8, BAS - H - 8, X(7, true) - X(6, true) + L + 16, H + 16, 'les dominos 6 et 7 restent debout');
+    K.marque(noms.chute ? 'arret' : 'tous');
+  } else {
+    c.texte('…', 742, BAS - 10, { couleur: 'faible', taille: 22, align: 'right' });
+    c.texte('Conclusion : tous tombent', 40, 152, { couleur: 'jaune', taille: 20 });
+    c.repere('tous', 40, BAS - H - 10, 700, H + 20, 'toute la rangée tombe');
+    K.marque('tous');
+  }
+  c.direct(() => {
+    if (apparu <= 0) return;
+    for (let i = 0; i < Math.ceil(apparu * N); i++) {
+      const p = chute[i], e = p * p * (3 - 2 * p);
+      domino(c, i, e * angleFinal(i, trou), trou, i === 0 && p > 0 ? 'vert' : (trou && i >= 6 ? 'orange' : 'blanc'));
+    }
+  });
+}
+const DECRIT = {
+  rangee: 'Une rangée de huit dominos debout, numérotés de 0 à 7.',
+  premier_tombe: 'Le domino 0 bascule (en vert) ; écrit : « Initialisation : le premier tombe ».',
+  passage: 'Un domino quelconque n est entouré, une flèche va vers le n + 1 ; écrit : « Hérédité : si le domino n tombe, le n + 1 tombe ».',
+};
+MathsTableau.page({
+  id: 'su_dominos', titre: 'Le principe de récurrence',
+  texte: 'Construction à la craie : une rangée de dominos ; le premier tombe (initialisation), chaque domino fait tomber le suivant (hérédité), donc tous tombent (conclusion) ; avec un trou, la chaîne s’arrête',
+  vues: {
+    principe: {
+      titre: 'Le premier tombe, chacun fait tomber le suivant : tous tombent',
+      params: { trou: { min: 0, max: 1, pas: 1, defaut: 0, sens: '1 = un grand écart entre les dominos 5 et 6' } },
+      dessiner(c, K) { dessiner(c, K, K.P.trou === 1, {}); },
+      lecture: K => (K.P.trou === 1 ? 'Avec un trou entre 5 et 6 : les dominos 0 à 5 tombent, 6 et 7 restent debout.' : 'Sans trou : les huit dominos tombent l’un après l’autre.'),
+      decrire: K => ({ ...DECRIT, tous: K.P.trou === 1 ? 'Les dominos 0 à 5 tombent, 6 et 7 restent debout (orange) ; écrit : « le passage de 5 à 6 manque : la chaîne s’arrête ».' : 'Les dominos tombent l’un après l’autre jusqu’au 7, puis « … » ; écrit : « Conclusion : tous tombent ».' }),
+      motifs: { premier_tombe: 'le premier tombe', passage: 'le passage de n à n + 1', tous: 'tous tombent' },
+      explication: [{ repere: 'premier', texte: 'Initialisation : on vérifie le premier.' }, { repere: 'passage', texte: 'Hérédité : chaque domino fait tomber le suivant.' }, { repere: 'tous', texte: 'Conclusion : tous tombent.' }],
+    },
+    trou: {
+      titre: 'Un trou entre 5 et 6 : la chaîne s’arrête',
+      dessiner(c, K) { dessiner(c, K, true, { chute: true }); },
+      decrire: {
+        rangee: 'Une rangée de huit dominos, avec un grand écart entre le 5 et le 6.',
+        premier_tombe: 'Le domino 0 bascule ; écrit : « Initialisation : le premier tombe ».',
+        chute: 'Les dominos 0 à 5 tombent l’un après l’autre ; le 5 tombe à plat dans le trou.',
+        arret: 'Les dominos 6 et 7 restent debout (orange) ; écrit : « le passage de 5 à 6 manque : la chaîne s’arrête ».',
+      },
+      explication: [{ repere: 'trou', texte: 'Le 5 ne touche pas le 6 : le passage manque.' }, { repere: 'debout', texte: 'Sans hérédité, les suivants restent debout.' }],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

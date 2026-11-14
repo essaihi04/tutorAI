@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La traduction — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="genetique.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="La traduction dans le cytoplasme : la petite sous-unité du ribosome se fixe sur l’ARNm au codon AUG, l’ARNt-Met s’y apparie, la grande sous-unité se pose, les ARNt arrivent un à un, les acides aminés se lient par des liaisons peptidiques, le ribosome avance codon par codon jusqu’au codon stop, la chaîne Met – Arg – Ser – Gln est libérée et les sous-unités se séparent"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="etapes.js"></script>
+<script src="molecules.js"></script>
+<script>
+/*
+ * La traduction (cours « Expression de l’information génétique », 2 Bac PC BIOF, 11 novembre 2026). Capacité RGP7.
+ * ARNm 5′ AUG CGC AGU CAG UAG 3′ (le même que la transcription) → Met – Arg – Ser – Gln ; anticodons UAC, GCG, UCA, GUC.
+ * Trois vues : `traduction` (initiation, élongation, terminaison), `polysome`, `trois_schemas` (comme le national 2018 R).
+ * Règles : le vivant PEINT (Molecules), la craie pour les légendes ; jamais plus de deux ARNt à l’écran ; ni sites A / P / E,
+ * ni trèfle. Les ARNt restent fixés à leur codon ; c’est le ribosome qui avance de 5′ vers 3′, d’un codon à la fois.
+ */
+const { lisse, rampe, entre } = window.Etapes;
+const M = window.Molecules;
+const fr1 = v => v.toFixed(1).replace('.', ',');
+
+/* ══════════ Vue 1 : traduction ══════════ */
+const Y = 300, PAS = 30, X0 = 95, LET = '  AUGCGCAGUCAGUAG  ', XF = X0 + LET.length * PAS;   // ARNm de 95 à 665
+const CODONS = ['AUG', 'CGC', 'AGU', 'CAG', 'UAG'], ANTI = ['UAC', 'GCG', 'UCA', 'GUC'], AAS = ['Met', 'Arg', 'Ser', 'Gln'];
+const NOMS_AA = { Met: 'méthionine', Arg: 'arginine', Ser: 'sérine', Gln: 'glutamine' };
+const cx = j => X0 + (3 * j + 3.5) * PAS;            // centre du codon j : 200, 290, 380, 470, 560
+const SR = 1.7, YG = Y - 82, YP = Y + 27;            // échelle du ribosome, centres des sous-unités posées sur l’ARNm
+const YB = Y - 20, HAA = 82, RP = 14;                // bas des anticodons (= haut des bases du codon), hauteur de l’acide aminé, rayon des perles
+const MT = { acteurs: 5.2, petite_sous_unite: 7.4, arnt_met: 9.6, grande_sous_unite: 11.9, arnt_2_arrive: 14.0, liaison_peptidique: 16.0,
+  avance_codon: 18.0, arnt_libre: 19.8, arnt_3_arrive: 22.3, codon_stop: 28.4, chaine_liberee: 30.6, dissociation: 33.0 };
+
+/** Images clés [t, x, y, alpha] interpolées (lissé) ; null avant la première. */
+function kf(K, t) {
+  if (t < K[0][0]) return null;
+  for (let i = 1; i < K.length; i++) if (t < K[i][0]) {
+    const [t0, x0, y0, a0] = K[i - 1], [t1, x1, y1, a1] = K[i], u = lisse((t - t0) / (t1 - t0));
+    return { x: entre(x0, x1, u), y: entre(y0, y1, u), a: entre(a0, a1, u) };
+  }
+  const l = K[K.length - 1]; return { x: l[1], y: l[2], a: l[3] };
+}
+/* Les quatre ARNt : y = bas de l’anticodon. pose = apparié ; part = début du départ (vide). Jamais trois à la fois. */
+const ARNT = [
+  { ac: 'UAC', aa: 'Met', codon: 0, vient: 7.6, pose: 9.4, part: 18.2, K: [[2.6, 470, 215, 0], [3.1, 470, 215, 1], [7.6, 470, 215, 1], [9.4, cx(0), YB, 1], [18.2, cx(0), YB, 1], [19.8, 150, 185, 1], [20.6, 140, 160, 0]] },
+  { ac: 'GCG', aa: 'Arg', codon: 1, vient: 12.2, pose: 13.8, part: 23.6, K: [[12.2, cx(1), 150, 0], [12.6, cx(1), 175, 1], [13.8, cx(1), YB, 1], [23.6, cx(1), YB, 1], [24.3, cx(1) - 20, 200, 0]] },
+  { ac: 'UCA', aa: 'Ser', codon: 2, vient: 20.7, pose: 22.1, part: 26.4, K: [[20.7, cx(2), 150, 0], [21.1, cx(2), 175, 1], [22.1, cx(2), YB, 1], [26.4, cx(2), YB, 1], [27.1, cx(2) - 20, 200, 0]] },
+  { ac: 'GUC', aa: 'Gln', codon: 3, vient: 24.4, pose: 25.2, part: 30.9, K: [[24.4, cx(3), 160, 0], [24.7, cx(3), 185, 1], [25.2, cx(3), YB, 1], [30.9, cx(3), YB, 1], [31.8, cx(3) - 20, 190, 0]] },
+];
+const TR = [[14.3, 15.3], [22.4, 22.9], [25.2, 25.7]];   // la chaîne passe de l’ARNt n à l’ARNt n + 1 (liaison peptidique)
+const LIB = 28.8;                                        // libération de la chaîne
+const rpos = t => rampe(t, 16.4, 1.5) + rampe(t, 22.9, .7) + rampe(t, 25.7, .7);   // le ribosome : de codon en codon
+function sousUnites(t) {
+  const rc = cx(0) + 45 + 90 * rpos(t), dis = rampe(t, 30.9, 1.7), up = rampe(t, 5.6, 1.6), ug = rampe(t, 9.8, 1.6);
+  return { rc, a: rampe(t, 1.4, .6), dis,
+    petite: { x: entre(120, rc, up) + 30 * dis, y: entre(200, YP, up) + 30 * dis },
+    grande: { x: entre(120, rc, ug) + 30 * dis, y: entre(100, YG, ug) - 60 * dis } };
+}
+function haut(i, t) { const p = kf(ARNT[i].K, t); return p ? { x: p.x, y: p.y - HAA, a: p.a } : null; }
+const DX = -32, DY = -14;
+/** Les acides aminés : groupes de perles reliées (la chaîne) ou seules (sur leur ARNt). */
+function perles(t) {
+  let k = 0; for (const [a] of TR) if (t >= a) k++;
+  const r = { groupes: [], k, u: 0, chaine: null, noms: null };
+  const seule = i => { const h = haut(i, t); if (h && h.a > .01) r.groupes.push({ noms: [AAS[i]], pts: [[h.x, h.y]], a: h.a }); };
+  if (k === 0) { for (let i = 0; i < 4; i++) seule(i); return r; }
+  const [a, b] = TR[k - 1], u = lisse((t - a) / (b - a)), A = haut(k - 1, t), B = haut(k, t);
+  r.u = u;
+  const pts = [];
+  for (let m = 0; m < k; m++) { const io = k - 1 - m, inw = k - m; pts.push([entre(A.x + io * DX, B.x + inw * DX, u), entre(A.y + io * DY, B.y + inw * DY, u)]); }
+  pts.push([B.x, B.y]);
+  if (t >= LIB) { const v = rampe(t, LIB, 1.4); pts.forEach((p, j) => { p[0] = entre(p[0], 284 + 34 * j, v); p[1] = entre(p[1], 118, v); }); }
+  const noms = AAS.slice(0, k + 1);
+  if (u > .85) r.groupes.push({ noms, pts, a: 1 });
+  else { r.groupes.push({ noms: noms.slice(0, k), pts: pts.slice(0, k), a: 1 }); r.groupes.push({ noms: [noms[k]], pts: [pts[k]], a: B.a }); }
+  for (let i = k + 1; i < 4; i++) seule(i);
+  r.chaine = pts; r.noms = noms;
+  return r;
+}
+/** L’ARNt « courant » (celui dont on montre l’anticodon et l’acide aminé). */
+const courant = t => (t < 12.2 ? 0 : t < 20.7 ? 1 : t < 24.4 ? 2 : 3);
+function grande(x, X, Yc, a) { if (a > 0) M.ribosome(x, X, Yc + 30 * SR, SR, { petite: 0, grande: a }); }
+function petite(x, X, Yc, a) { if (a > 0) M.ribosome(x, X, Yc - 16 * SR, SR, { petite: a, grande: 0 }); }
+
+function dessinerTraduction(c, k) {
+  const t = k.t, su = sousUnites(t), P = perles(t);
+  const aLibres = rampe(t, 3.8, .5) * (1 - rampe(t, 7.0, .6));
+  c.direct(() => {
+    const x = c.ctx;
+    M.milieu(x, 8, 38, 744, 374, 'cytoplasme');
+    if (aLibres > 0) [['Arg', 650, 75], ['Ser', 690, 100], ['Gln', 728, 72]].forEach(([n, px, py]) => M.perle(x, px, py, RP, n, { alpha: aLibres }));
+    petite(x, su.petite.x, su.petite.y, su.a);
+    M.brin(x, X0, Y, PAS, LET, 'arn', -1, { lb: 20, alpha: rampe(t, .3, .6) });
+    grande(x, su.grande.x, su.grande.y, su.a * .92);
+    ARNT.forEach(r => { const p = kf(r.K, t); if (p && p.a > .01) M.arnt(x, p.x, p.y, r.ac, null, { alpha: p.a, pas: 28 }); });
+    for (const g of P.groupes) {
+      if (g.pts.length > 1) M.chaine(x, g.pts, g.noms, RP, { alpha: g.a });
+      else M.perle(x, g.pts[0][0], g.pts[0][1], RP, g.noms[0], { alpha: g.a });
+    }
+    // la liaison peptidique Met – Arg : un trait jaune qui clignote
+    if (P.k >= 1 && P.u > .85 && t >= 15.0 && t < 17.2) {
+      const [p0, p1] = P.chaine, d = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]), ux = (p1[0] - p0[0]) / d, uy = (p1[1] - p0[1]) / d;
+      x.save(); x.globalAlpha = .55 + .45 * Math.cos((t - 16) * 9); x.strokeStyle = '#fde047'; x.lineWidth = 5; x.lineCap = 'round';
+      x.shadowColor = '#fde047'; x.shadowBlur = 8; x.beginPath(); x.moveTo(p0[0] + ux * RP, p0[1] + uy * RP); x.lineTo(p1[0] - ux * RP, p1[1] - uy * RP); x.stroke(); x.restore();
+    }
+  });
+  // ── craie ──
+  c.texte('La traduction : de l’ARNm à la protéine', 20, 28, { couleur: 'cyan', taille: 19 });
+  if (t >= .3) {
+    c.repere('arnm', X0, Y - 24, XF - X0, 32, 'l’ARNm');
+    c.repere('codon_initiation', cx(0) - 45, Y - 24, 90, 32, 'le codon d’initiation AUG');
+    c.repere('codon_stop', cx(4) - 45, Y - 24, 90, 32, 'le codon stop UAG');
+  }
+  if (k.ecrit(c, 'arnm', .4)) {
+    k.T(c, '5′', X0 - 12, Y + 6, { couleur: 'vert', taille: 16, align: 'center' }); k.T(c, '3′', XF + 12, Y + 6, { couleur: 'vert', taille: 16, align: 'center' });
+    k.T(c, 'ARNm', 20, 342, { couleur: 'orange', taille: 17 });
+  }
+  if (t >= 1.4) {
+    const g = su.grande, p = su.petite;
+    c.repere('grande_sous_unite', g.x - 85, g.y - 61, 170, 122, 'la grande sous-unité du ribosome');
+    c.repere('petite_sous_unite', p.x - 78, p.y - 31, 156, 62, 'la petite sous-unité du ribosome');
+    const x1 = Math.min(g.x, p.x) - 85, y1 = g.y - 61, x2 = Math.max(g.x, p.x) + 85, y2 = p.y + 31;
+    c.repere('ribosome', x1, y1, x2 - x1, y2 - y1, 'le ribosome (deux sous-unités)');
+  }
+  if (t < 9.8 && k.ecrit(c, 'ribo', 1.6)) {
+    k.T(c, 'grande sous-unité', 215, 95, { couleur: 'blanc', taille: 15 });
+    if (t < 5.6) { k.T(c, 'ribosome : 2 sous-unités', 215, 152, { couleur: 'cyan', taille: 15 }); k.T(c, 'petite sous-unité', 210, 210, { couleur: 'blanc', taille: 15 }); }
+  }
+  if (t >= 2.6) {
+    const im = Math.min(1, t < 18.2 ? 0 : 1), h0 = kf(ARNT[0].K, Math.min(t, 20.5)) || { x: 470, y: 215 };
+    c.repere('arnt_met', h0.x - 46, h0.y - 95, 92, 95, im ? 'l’ARNt-Met (parti)' : 'l’ARNt-Met');
+    const i = courant(t), pc = kf(ARNT[i].K, t) || kf(ARNT[i].K, ARNT[i].K[0][0]);
+    c.repere('anticodon', pc.x - 42, pc.y - 18, 84, 18, `l’anticodon ${ARNT[i].ac}`);
+    c.repere('acide_amine', pc.x - 16, pc.y - HAA - 16, 32, 32, `l’acide aminé ${AAS[i]}`);
+  }
+  if (t < 7.6 && k.ecrit(c, 'arnt', 2.8)) {
+    k.T(c, 'acide aminé', 490, 138, { couleur: 'blanc', taille: 15 });
+    k.T(c, 'ARNt', 525, 178, { couleur: 'vert', taille: 16 });
+    k.T(c, 'anticodon UAC', 525, 210, { couleur: 'blanc', taille: 15 });
+  }
+  if (t < 7.6 && k.ecrit(c, 'aal', 3.9)) k.T(c, 'acides aminés libres', 690, 132, { couleur: 'faible', taille: 14, align: 'center' });
+  if (t >= 7.0 && t < 16.4 && k.ecrit(c, 'pet', 7.0)) k.T(c, 'petite sous-unité', 335, 350, { couleur: 'blanc', taille: 15 });
+  if (t >= 9.0 && k.ecrit(c, 'met', 9.0)) {
+    if (t < 12.2) {
+      k.T(c, 'ARNt-Met', 20, 226, { couleur: 'vert', taille: 15 }); c.ligne(88, 222, 152, 228, { couleur: 'faible', largeur: 1.2 });
+      k.T(c, 'anticodon UAC', 20, 262, { couleur: 'blanc', taille: 15 }); c.ligne(122, 258, 162, 268, { couleur: 'faible', largeur: 1.2 });
+    }
+    k.T(c, 'AUG : codon d’initiation', cx(0), 386, { couleur: 'jaune', taille: 15, align: 'center' });
+  }
+  if (t >= 11.0) c.repere('etape', 595, 40, 160, 74, 'l’étape : initiation, élongation, terminaison');
+  if (t >= 11.0 && k.ecrit(c, 'gra', 11.0)) {
+    if (t < 16.4) k.T(c, 'grande sous-unité', 345, 228, { couleur: 'blanc', taille: 15 });
+    k.T(c, '1. initiation', 600, 58, { couleur: 'jaune', taille: 18 });
+  }
+  if (t >= 12.2) { const p = kf(ARNT[1].K, Math.min(t, 24.2)); c.repere('arnt_2', p.x - 46, p.y - 95, 92, 95, 'l’ARNt-Arg (anticodon GCG)'); }
+  if (t >= 13.6 && t < 16.4 && k.ecrit(c, 'arg', 13.6)) k.T(c, 'ARNt-Arg : anticodon GCG', 345, 258, { couleur: 'vert', taille: 15 });
+  if (P.k >= 1 && P.u > .85) {
+    const [p0, p1] = P.chaine, mx = (p0[0] + p1[0]) / 2, my = (p0[1] + p1[1]) / 2;
+    c.repere('liaison_peptidique', mx - 15, my - 12, 30, 24, 'la liaison peptidique Met – Arg');
+    const xs = P.chaine.map(p => p[0]), ys = P.chaine.map(p => p[1]);
+    c.repere('chaine', Math.min(...xs) - RP, Math.min(...ys) - RP, Math.max(...xs) - Math.min(...xs) + 2 * RP, Math.max(...ys) - Math.min(...ys) + 2 * RP, 'la chaîne d’acides aminés ' + P.noms.join(' – '));
+  }
+  if (t >= 15.2 && t < 18.2 && k.ecrit(c, 'lia', 15.2)) {
+    k.T(c, 'liaison peptidique', 130, 140, { couleur: 'jaune', taille: 16 });
+    const [p0, p1] = P.chaine; c.ligne(238, 146, (p0[0] + p1[0]) / 2 - 4, (p0[1] + p1[1]) / 2 - 6, { couleur: 'jaune', largeur: 1.3 });
+  }
+  if (t >= 17.0) c.repere('sens_deplacement', 106, 388, 420, 24, 'le sens de déplacement du ribosome (5′ → 3′)');
+  if (t >= 17.0 && k.ecrit(c, 'sens', 17.0)) {
+    c.fleche(110, 402, 200, 402, { couleur: 'jaune', largeur: 2 });
+    k.T(c, 'le ribosome avance de 5′ vers 3′, codon par codon', 210, 407, { couleur: 'jaune', taille: 14 });
+  }
+  if (t >= 18.2) {
+    const i = t < 23.6 ? 0 : t < 26.4 ? 1 : t < 30.9 ? 2 : 3, p = kf(ARNT[i].K, Math.min(t, ARNT[i].K[ARNT[i].K.length - 1][0] - .2));
+    c.repere('arnt_libre', p.x - 46, p.y - 95, 92, 95, `l’ARNt-${AAS[i]} libéré, sans acide aminé`);
+  }
+  if (t >= 19.0 && k.ecrit(c, 'elong', 19.0)) {
+    if (t < 20.6) k.T(c, 'ARNt libéré (sans acide aminé)', 210, 140, { couleur: 'vert', taille: 15 });
+    k.T(c, '2. élongation', 600, 82, { couleur: 'jaune', taille: 18 });
+  }
+  if (t >= 27.3 && k.ecrit(c, 'stop', 27.3)) {
+    c.rect(cx(4) - 46, Y - 25, 92, 32, { couleur: 'rouge', largeur: 2 });
+    k.T(c, 'codon stop :', 612, 240, { couleur: 'rouge', taille: 16 }); k.T(c, 'aucun ARNt', 612, 260, { couleur: 'rouge', taille: 16 });
+  }
+  if (t >= 30.0 && k.ecrit(c, 'lib', 30.0)) k.T(c, 'chaîne libérée : Met – Arg – Ser – Gln', 335, 92, { couleur: 'vert', taille: 16, align: 'center' });
+  if (t >= 32.0 && k.ecrit(c, 'term', 32.0)) k.T(c, '3. terminaison', 600, 106, { couleur: 'jaune', taille: 18 });
+}
+
+function etatArnt(i, t) {
+  const r = ARNT[i], p = kf(r.K, t); if (!p || p.a <= .01) return null;
+  const nom = `ARNt-${r.aa}`, cod = CODONS[r.codon];
+  if (t < r.vient) return `un ${nom} libre au milieu en haut (vert pâle) : l’acide aminé ${r.aa} (perle) en haut, l’anticodon ${r.ac} en bas`;
+  if (t < r.pose) return `l’${nom} (anticodon ${r.ac}) descend vers le codon ${cod}`;
+  if (t < r.part) return `l’${nom} est apparié au codon ${cod} par son anticodon ${r.ac}`;
+  return `l’${nom}, vide (sans acide aminé), quitte l’ARNm et s’éloigne vers le haut à gauche`;
+}
+function voitTraduction(k) {
+  const t = k.t, su = sousUnites(t), P = perles(t), m = [];
+  m.push('Fond : cytoplasme rosé. En bas, l’ARNm horizontal (squelette orange, bases vers le haut), 5′ à gauche, 3′ à droite : AUG CGC AGU CAG UAG.');
+  if (t >= 1.4) {
+    if (t < 5.6) m.push('En haut à gauche, le ribosome en deux sous-unités turquoise séparées : la grande au-dessus, la petite au-dessous (écrit « grande sous-unité », « petite sous-unité », « ribosome : 2 sous-unités »).');
+    else if (t < 7.2) m.push('La petite sous-unité descend se fixer sous l’ARNm, côté 5′ ; la grande attend en haut à gauche.');
+    else if (t < 9.8) m.push('La petite sous-unité est fixée sous l’ARNm, côté 5′, sous les codons AUG et CGC ; la grande sous-unité attend en haut à gauche.');
+    else if (t < 11.4) m.push('La grande sous-unité descend se poser au-dessus de l’ARNm, sur la petite.');
+    else if (su.dis > 0) m.push('Les deux sous-unités se séparent : la grande monte, la petite descend ; l’ARNm est libre.');
+    else {
+      const rp = rpos(t), j = Math.round(rp);
+      if (Math.abs(rp - j) < .02) m.push(`Le ribosome complet (grande sous-unité au-dessus de l’ARNm, petite au-dessous) recouvre les codons ${CODONS[j]} et ${CODONS[j + 1]}.`);
+      else m.push(`Le ribosome avance d’un codon vers 3′ : il quitte ${CODONS[Math.floor(rp)]} et recouvre bientôt ${CODONS[Math.floor(rp) + 1]} et ${CODONS[Math.floor(rp) + 2]}.`);
+    }
+  }
+  const tr = [0, 1, 2, 3].map(i => etatArnt(i, t)).filter(Boolean);
+  if (tr.length) m.push(`ARNt à l’écran : ${tr.length} — ${tr.join(' ; ')}.`);
+  else if (t >= 26.8) m.push('Aucun ARNt sur le codon stop UAG.');
+  if (t >= 3.8 && t < 7.6) m.push('En haut à droite, des acides aminés libres : Arg, Ser, Gln (écrit « acides aminés libres »).');
+  if (P.k >= 1) {
+    if (P.u <= .85) m.push(`La chaîne ${P.noms.slice(0, P.k).join(' – ')} quitte l’ARNt-${AAS[P.k - 1]} et se lie à ${AAS[P.k]}, porté par l’ARNt-${AAS[P.k]}.`);
+    else if (t < LIB) m.push(`Chaîne d’acides aminés : ${P.noms.join(' – ')}, accrochée à l’ARNt-${AAS[P.k]}.`);
+    else if (t < 30.2) m.push('La chaîne Met – Arg – Ser – Gln se détache de l’ARNt-Gln et monte.');
+    else m.push('La chaîne Met – Arg – Ser – Gln est libérée, en haut au milieu (écrit « chaîne libérée : Met – Arg – Ser – Gln »).');
+  }
+  if (P.k >= 1 && P.u > .85 && t >= 15.0 && t < 17.2) m.push('Un trait jaune clignote entre Met et Arg : la liaison peptidique' + (t >= 15.2 ? ' (écrit « liaison peptidique »).' : '.'));
+  const ecrits = [];
+  if (t >= 9.0) ecrits.push('« AUG : codon d’initiation » sous l’ARNm');
+  if (t >= 11.0) ecrits.push('« 1. initiation »' + (t >= 19.0 ? ', « 2. élongation »' : '') + (t >= 32.0 ? ', « 3. terminaison »' : '') + ' en haut à droite');
+  if (t >= 17.0) ecrits.push('« le ribosome avance de 5′ vers 3′, codon par codon » avec une flèche, en bas');
+  if (t >= 19.0 && t < 20.6) ecrits.push('« ARNt libéré (sans acide aminé) »');
+  if (t >= 27.3) ecrits.push('le codon UAG entouré en rouge et « codon stop : aucun ARNt » à droite');
+  if (ecrits.length) m.push('Écrit à la craie : ' + ecrits.join(' ; ') + '.');
+  return m;
+}
+
+/* ══════════ Vue 2 : polysome ══════════ */
+const YM = 250, XA = 30, PSP = 10, NBP = 70, SEQP = Array.from({ length: NBP }, (_, i) => 'AUGC'[(i * 7 + (i >> 2)) % 4]).join('');
+const TE = [0.4, 2.5, 4.6, 6.7], VP = 52, TSTOP = 10.4, SP = .75, RPP = 6;
+const PROT = ['Met', 'Arg', 'Ser', 'Gln', 'Glu', 'Val', 'Leu', 'Trp', 'Phe', 'Pro', 'Gly', 'His', 'Asn', 'Ala'];
+const MP = { premier_ribosome: 2.2, polysome: 10.8 };
+function riboP(i, t) {
+  const te = TE[i]; if (t < te) return null;
+  const x = 80 + VP * Math.max(0, Math.min(t, TSTOP) - te - .8);
+  return { x, ap: rampe(t, te, .4), ag: rampe(t, te + .3, .5), n: t >= te + .8 ? Math.floor((x - 80) / 38) + 1 : 0 };
+}
+/** Points de la chaîne d’un ribosome : j = 0 au ribosome (le dernier acide aminé), la méthionine au bout libre. */
+function chaineP(r) { const pts = []; for (let j = 0; j < r.n; j++) pts.push([r.x - 6 - 3 * j + 5 * Math.sin(j * 1.1), 194 - 11.5 * j]); return pts; }
+function dessinerPolysome(c, k) {
+  const t = k.t, R = [0, 1, 2, 3].map(i => riboP(i, t));
+  c.direct(() => {
+    const x = c.ctx;
+    M.milieu(x, 8, 38, 744, 374, 'cytoplasme');
+    M.brin(x, XA, YM, PSP, SEQP, 'arn', -1, { lb: 10, lettres: false, alpha: rampe(t, .1, .4) });
+    R.forEach(r => {
+      if (!r) return;
+      M.ribosome(x, r.x, YM, SP, { petite: r.ap, grande: r.ag, dyp: 6 * (1 - r.ap), dyg: -14 * (1 - r.ag) });
+      const pts = chaineP(r); if (!pts.length) return;
+      const noms = pts.map((_, j) => PROT[(r.n - 1 - j) % PROT.length]);
+      M.chaine(x, pts, noms, RPP);
+    });
+  });
+  c.texte('Le polysome', 20, 28, { couleur: 'cyan', taille: 19 });
+  if (t >= .1) c.repere('arnm', XA, YM - 14, NBP * PSP, 22, 'l’ARNm');
+  if (k.ecrit(c, 'arnm', .3)) { k.T(c, '5′', XA - 13, YM + 6, { couleur: 'vert', taille: 16, align: 'center' }); k.T(c, '3′', XA + NBP * PSP + 13, YM + 6, { couleur: 'vert', taille: 16, align: 'center' }); k.T(c, 'ARNm', 30, 300, { couleur: 'orange', taille: 17 }); }
+  const box = (r, id, label) => c.repere(id, r.x - 40, YM - 52, 80, 82, label);
+  const boxCh = (r, id, label) => { const pts = chaineP(r); if (!pts.length) return; const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]); c.repere(id, Math.min(...xs) - 8, Math.min(...ys) - 8, Math.max(...xs) - Math.min(...xs) + 16, Math.max(...ys) - Math.min(...ys) + 16, label); };
+  if (R[0]) { box(R[0], 'ribosome_1', 'le ribosome n° 1 (entré le premier)'); boxCh(R[0], 'chaine_longue', 'la chaîne la plus longue (ribosome n° 1)'); }
+  if (R[3]) { box(R[3], 'ribosome_4', 'le ribosome n° 4 (entré le dernier)'); boxCh(R[3], 'chaine_courte', 'la chaîne la plus courte (ribosome n° 4)'); }
+  if (k.ecrit(c, 'un', 1.0)) k.T(c, 'un premier ribosome se fixe côté 5′ et avance vers 3′', 40, 110, { couleur: 'blanc', taille: 15 });
+  if (t >= 10.0 && k.ecrit(c, 'poly', 10.0)) {
+    R.forEach((r, i) => k.T(c, String(i + 1), r.x, 300, { couleur: 'blanc', taille: 16, align: 'center' }));
+    k.T(c, 'chaîne longue', R[0].x + 16, 72, { couleur: 'faible', taille: 14 });
+    k.T(c, 'chaîne courte', R[3].x - 18, 150, { couleur: 'faible', taille: 14, align: 'right' });
+    k.T(c, 'polysome : plusieurs ribosomes sur un même ARNm', 380, 336, { couleur: 'vert', taille: 17, align: 'center' });
+    k.T(c, '→ plusieurs protéines identiques', 380, 360, { couleur: 'vert', taille: 17, align: 'center' });
+  }
+}
+function voitPolysome(k) {
+  const t = k.t, R = [0, 1, 2, 3].map(i => riboP(i, t)).filter(Boolean), m = [];
+  m.push('Fond : cytoplasme rosé. Un long ARNm horizontal (squelette orange), 5′ à gauche, 3′ à droite.');
+  if (!R.length) return m;
+  m.push(`${R.length === 1 ? 'Un seul ribosome sur l’ARNm, entré côté 5′' : R.length + ' ribosomes à la file sur l’ARNm, entrés l’un après l’autre côté 5′'} : ` +
+    R.map((r, i) => `n° ${i + 1} à ${Math.round((r.x - XA) / (NBP * PSP) * 100)} % de la longueur, chaîne de ${r.n} acide${r.n > 1 ? 's' : ''} aminé${r.n > 1 ? 's' : ''}`).join(' ; ') + '.');
+  if (R.length > 1) m.push('Plus un ribosome est près de 3′, plus sa chaîne est longue ; les chaînes ont la même suite de perles (même protéine), Met au bout libre.');
+  if (t >= 1.0) m.push('Écrit en haut : « un premier ribosome se fixe côté 5′ et avance vers 3′ ».');
+  if (t >= 10.0) m.push('Numéros 1 à 4 sous les ribosomes (1 près de 3′) ; écrit « chaîne longue » (n° 1), « chaîne courte » (n° 4) et, en vert : « polysome : plusieurs ribosomes sur un même ARNm → plusieurs protéines identiques ».');
+  return m;
+}
+
+/* ══════════ Vue 3 : trois schémas (national 2018 R) ══════════ */
+const PAN = [135, 380, 625], YS = 270, PS3 = 18, S3 = .9;
+const MS = { schema_1: 2.2, schema_2: 4.8, schema_3: 7.4, noms_ecrits: 10.6 };
+const T3 = [.4, 3.0, 5.6];
+function rib3(x, X, a, o = {}) { M.ribosome(x, X, YS, S3, { petite: a, grande: a, dyg: -27 + (o.dyg || 0), dyp: o.dyp || 0 }); }
+function dessinerTrois(c, k) {
+  const t = k.t, a = T3.map(t0 => rampe(t, t0, 1));
+  c.direct(() => {
+    const x = c.ctx;
+    M.milieu(x, 8, 38, 744, 374, 'cytoplasme');
+    // 1 : petite + ARNt-Met sur AUG + grande
+    if (a[0] > 0) {
+      const x0 = PAN[0] - 90; x.save(); x.globalAlpha = a[0];
+      rib3(x, x0 + 54, 1); M.brin(x, x0, YS, PS3, 'AUGCGCAGUC', 'arn', -1, { lb: 20 });
+      M.arnt(x, x0 + 27, YS - 20, 'UAC', null, { pas: 16 }); M.perle(x, x0 + 27, YS - 20 - HAA, 12, 'Met'); x.restore();
+    }
+    // 2 : deux ARNt, une chaîne courte, ribosome au milieu de l’ARNm
+    if (a[1] > 0) {
+      const x0 = PAN[1] - 108; x.save(); x.globalAlpha = a[1];
+      rib3(x, x0 + 108, 1); M.brin(x, x0, YS, PS3, 'AUGCGCAGUCAG', 'arn', -1, { lb: 20 });
+      M.arnt(x, x0 + 81, YS - 20, 'GCG', null, { pas: 16 }); M.arnt(x, x0 + 135, YS - 20, 'UCA', null, { pas: 16 });
+      M.chaine(x, [[x0 + 59, YS - 20 - HAA - 10], [x0 + 81, YS - 20 - HAA]], ['Met', 'Arg'], 12); M.perle(x, x0 + 135, YS - 20 - HAA, 12, 'Ser'); x.restore();
+    }
+    // 3 : ribosome sur le codon stop, sous-unités séparées, chaîne qui part
+    if (a[2] > 0) {
+      const x0 = PAN[2] - 99; x.save(); x.globalAlpha = a[2];
+      M.ribosome(x, x0 + 130, YS, S3, { petite: 0, grande: 1, dyg: -27 - 36 }); M.ribosome(x, x0 + 108 + 8, YS, S3, { petite: 1, grande: 0, dyp: 16 });
+      M.brin(x, x0, YS, PS3, 'AGUCAGUAGCA', 'arn', -1, { lb: 20 });
+      M.chaine(x, [[x0 + 14, 168], [x0 + 38, 156], [x0 + 62, 146], [x0 + 86, 138]], ['Met', 'Arg', 'Ser', 'Gln'], 12); x.restore();
+    }
+  });
+  c.texte('Trois schémas : que se passe-t-il ?', 20, 28, { couleur: 'cyan', taille: 19 });
+  for (let i = 0; i < 3; i++) {
+    if (t >= T3[i]) c.repere('schema_' + (i + 1), PAN[i] - 112, 98, 224, 228, 'le schéma ' + (i + 1));
+    if (k.ecrit(c, 's' + i, T3[i] + .2)) { c.rect(PAN[i] - 112, 98, 224, 228, { couleur: 'faible', largeur: 1.4 }); k.T(c, String(i + 1), PAN[i], 92, { couleur: 'blanc', taille: 18, align: 'center' }); }
+  }
+  if (t >= 9.0) c.repere('titre_phenomene', 300, 46, 160, 24, 'le phénomène : la traduction');
+  if (t >= 9.0 && k.ecrit(c, 'noms', 9.0)) {
+    ['initiation', 'élongation', 'terminaison'].forEach((n, i) => k.T(c, n, PAN[i], 352, { couleur: 'jaune', taille: 18, align: 'center' }));
+    k.T(c, 'la traduction', 380, 64, { couleur: 'vert', taille: 19, align: 'center' });
+  }
+}
+function voitTrois(k) {
+  const t = k.t, m = ['Fond : cytoplasme rosé. Trois cadres numérotés 1, 2, 3 côte à côte, sans nom.'];
+  if (t >= T3[0]) m.push('Schéma 1 : un ARNm (AUG CGC AGU C…) ; la petite sous-unité dessous, un ARNt-Met (anticodon UAC, perle Met) apparié à AUG, la grande sous-unité posée dessus.');
+  if (t >= T3[1]) m.push('Schéma 2 : le ribosome au milieu de l’ARNm, deux ARNt appariés (GCG sur CGC portant la chaîne courte Met – Arg, UCA sur AGU portant Ser).');
+  if (t >= T3[2]) m.push('Schéma 3 : le ribosome sur le codon stop UAG, aucun ARNt ; la grande sous-unité s’écarte vers le haut, la petite vers le bas ; la chaîne Met – Arg – Ser – Gln part, libre.');
+  if (t >= 9.0) m.push('Écrit sous chaque schéma : « initiation » (1), « élongation » (2), « terminaison » (3) ; au-dessus, en vert : « la traduction ».');
+  return m;
+}
+
+window.Etapes.lancer({
+  id: 'svt_traduction', titre: 'La traduction', graine: 53,
+  vues: {
+    traduction: { titre: 'La traduction', fin: 34, moments: MT, dessiner: dessinerTraduction, voit: voitTraduction,
+      motifs: { acteurs: 'les acteurs : ARNm, ribosome en deux sous-unités, ARNt, acides aminés', petite_sous_unite: 'la petite sous-unité se fixe sur l’ARNm, côté 5′',
+        arnt_met: 'l’ARNt-Met (anticodon UAC) s’apparie au codon AUG', grande_sous_unite: 'la grande sous-unité se pose : c’est l’initiation',
+        arnt_2_arrive: 'l’ARNt-Arg (GCG) s’apparie au codon CGC', liaison_peptidique: 'une liaison peptidique unit Met et Arg',
+        avance_codon: 'le ribosome avance d’un codon vers 3′', arnt_libre: 'l’ARNt-Met, vide, quitte le ribosome : c’est l’élongation',
+        arnt_3_arrive: 'l’ARNt-Ser arrive sur AGU', codon_stop: 'le codon stop UAG : aucun ARNt ne vient',
+        chaine_liberee: 'la chaîne Met – Arg – Ser – Gln est libérée', dissociation: 'les deux sous-unités se séparent : c’est la terminaison' },
+      conclusion: 'L’ARNm AUG CGC AGU CAG UAG est traduit en Met – Arg – Ser – Gln : initiation, élongation, terminaison.',
+      texte: 'Traduction dans le cytoplasme de l’ARNm 5′ AUG CGC AGU CAG UAG 3′ : initiation (petite sous-unité côté 5′, ARNt-Met UAC sur AUG, grande sous-unité), élongation (ARNt-Arg GCG, liaison peptidique, le ribosome avance d’un codon de 5′ vers 3′, l’ARNt vide part, ARNt-Ser UCA, ARNt-Gln GUC), terminaison (codon stop UAG : aucun ARNt, chaîne Met – Arg – Ser – Gln libérée, sous-unités séparées).',
+      explication: [{ repere: 'petite_sous_unite', texte: 'La petite sous-unité se fixe sur l’ARNm, côté 5′.' }, { repere: 'anticodon', texte: 'L’anticodon de l’ARNt est complémentaire du codon.' },
+        { repere: 'liaison_peptidique', texte: 'Une liaison peptidique unit deux acides aminés.' }, { repere: 'sens_deplacement', texte: 'Le ribosome avance de 5′ vers 3′, codon par codon.' },
+        { repere: 'codon_stop', texte: 'Sur le codon stop, aucun ARNt : la chaîne est libérée.' }, { repere: 'etape', texte: 'Initiation, élongation, terminaison.' }] },
+    polysome: { titre: 'Le polysome', fin: 12, moments: MP, dessiner: dessinerPolysome, voit: voitPolysome,
+      motifs: { premier_ribosome: 'un premier ribosome se fixe côté 5′ et avance', polysome: 'un polysome : plusieurs ribosomes sur un même ARNm' },
+      conclusion: 'Plusieurs ribosomes traduisent le même ARNm en même temps : plusieurs protéines identiques.',
+      texte: 'Polysome : quatre ribosomes entrés l’un après l’autre côté 5′ d’un même ARNm ; chaînes de plus en plus longues vers 3′ ; plusieurs protéines identiques.',
+      explication: [{ repere: 'ribosome_1', texte: 'Le premier ribosome entré est le plus avancé : sa chaîne est la plus longue.' }, { repere: 'ribosome_4', texte: 'Le dernier entré a la chaîne la plus courte.' }, { repere: 'arnm', texte: 'Tous lisent le même ARNm : les protéines sont identiques.' }] },
+    trois_schemas: { titre: 'Trois schémas à nommer', fin: 12, moments: MS, dessiner: dessinerTrois, voit: voitTrois,
+      motifs: { schema_1: 'schéma 1 : petite sous-unité, ARNt-Met sur AUG, grande sous-unité', schema_2: 'schéma 2 : deux ARNt et une chaîne courte', schema_3: 'schéma 3 : codon stop, chaîne libérée, sous-unités séparées', noms_ecrits: 'initiation, élongation, terminaison : la traduction' },
+      conclusion: 'Schéma 1 : initiation ; schéma 2 : élongation ; schéma 3 : terminaison. Le phénomène : la traduction.',
+      texte: 'Trois schémas comme au national 2018 R : 1 = initiation (petite sous-unité, ARNt-Met sur AUG, grande sous-unité), 2 = élongation (deux ARNt, chaîne courte), 3 = terminaison (codon stop, chaîne libérée, sous-unités séparées).',
+      explication: [{ repere: 'schema_1', texte: 'Le ribosome s’assemble sur AUG : initiation.' }, { repere: 'schema_2', texte: 'La chaîne s’allonge : élongation.' }, { repere: 'schema_3', texte: 'Codon stop, chaîne libérée : terminaison.' }, { repere: 'titre_phenomene', texte: 'Le phénomène : la traduction.' }] },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

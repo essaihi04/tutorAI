@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Formule de Moivre — nombres complexes</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Plan complexe à la craie : les puissances de z avancent d’un même angle sur le cercle unité ; celles de 1 + i s’écartent en spirale ; la formule de Moivre ; puissances réelles ; b²⁴ réel (national 2024)"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Nombres complexes (première partie) » (math_ch6_nombres_complexes) : la formule de Moivre.
+ * Vues : ?vue=spirale (param n) | reel | national.
+ * spirale : cercle, spirale, formule, puissance (en plus).   reel : cercle, reel, imaginaire.   national : angle, tour, reel.
+ * Chaque moment est aussi un repère du même nom.
+ */
+const fr = MathsTableau.fr;
+const PI = Math.PI, R2 = Math.SQRT2, R3 = Math.sqrt(3);
+const SUPS = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+/** Largeur réelle d’un texte à la craie (exposants et indices compris, sans le signe ¯ de la barre). */
+function L(c, s, t = 18) {
+  s = String(s).replace(/¯/g, '').replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUPS[ch]).join('') + '}');
+  let w = 0;
+  for (const seg of Tableau.Craie.segments(s)) { c.ctx.font = `${seg.sub || seg.sup ? t * .62 : t}px ${Tableau.POLICE}`; w += c.ctx.measureText(seg.t).width; }
+  return w;
+}
+/** La barre du conjugué, dessinée au trait au-dessus de la lettre. */
+function barre(c, x, y, w, couleur) { c.ligne(x + 1, y, x + w - 1, y, { couleur: couleur || 'blanc', largeur: 1.7, tremble: .2, duree: .08 }); }
+/** Texte à la craie ; « z¯ » s’écrit z surmonté d’une barre dessinée. Renvoie la largeur. */
+function ecrire(c, s, x, y, o = {}) {
+  const t = o.taille ?? 18, total = L(c, s, t);
+  let px = o.align === 'center' ? x - total / 2 : o.align === 'right' ? x - total : x;
+  const morceaux = String(s).split('¯');
+  morceaux.forEach((m, i) => {
+    if (m) c.texte(m, px, y, { ...o, align: 'left' });
+    const w = L(c, m, t);
+    if (i < morceaux.length - 1 && m) { const lw = L(c, m.slice(-1), t); barre(c, px + w - lw, y - t * .66, lw, o.couleur); }
+    px += w;
+  });
+  return total;
+}
+/** Texte encadré ; renvoie le rectangle [x, y, w, h]. */
+function encadre(c, s, x, y, taille, couleur, coulTexte) {
+  const w = L(c, s, taille) + 18;
+  ecrire(c, s, x, y, { couleur: coulTexte || couleur, taille });
+  c.rect(x - 9, y - taille - 4, w, taille + 14, { couleur, arrondi: 8, largeur: 1.6 });
+  return [x - 9, y - taille - 4, w, taille + 14];
+}
+/** Plusieurs lignes dans un même cadre ; renvoie le rectangle. */
+function bloc(c, lignes, x, y, taille, couleur, inter = 30) {
+  const w = Math.max(...lignes.map(l => L(c, l.t, taille))) + 20, h = (lignes.length - 1) * inter + taille + 16;
+  lignes.forEach((l, i) => ecrire(c, l.t, x, y + i * inter, { couleur: l.c || 'blanc', taille }));
+  c.rect(x - 10, y - taille - 5, w, h, { couleur, arrondi: 9, largeur: 1.7 });
+  return [x - 10, y - taille - 5, w, h];
+}
+function pgcd(a, b) { a = Math.abs(a); b = Math.abs(b); while (b) [a, b] = [b, a % b]; return a || 1; }
+/** n·π/d écrit au tableau : π/4, −π/3, 5π/12, 0… */
+function piSur(n, d = 12) {
+  if (n === 0) return '0';
+  const g = pgcd(n, d); n /= g; d /= g;
+  const a = Math.abs(n);
+  return (n < 0 ? '−' : '') + (a === 1 ? '' : a) + 'π' + (d === 1 ? '' : '/' + d);
+}
+const angleDeg = deg => piSur(Math.round(deg / 15), 12);
+/** Petit nom de vecteur (u, v) avec sa flèche au-dessus. */
+function nomVec(c, l, x, y, t = 14) {
+  c.texte(l, x, y, { couleur: 'blanc', taille: t, align: 'center', duree: .1 });
+  c.fleche(x - 4, y - t * .8, x + 5, y - t * .8, { couleur: 'blanc', largeur: 1.1, tete: 3.5, duree: .06 });
+}
+/** Plan complexe orthonormé : o = {ox, oy (origine en px), u (px par unité), xmin, xmax, ymin, ymax}. */
+function plan(c, o, dessin = true) {
+  const G = { ...o, X: x => o.ox + x * o.u, Y: y => o.oy - y * o.u, inv: (px, py) => [(px - o.ox) / o.u, (o.oy - py) / o.u] };
+  if (!dessin) return G;
+  if (o.grad) {
+    for (let k = Math.ceil(o.xmin); k <= o.xmax - .3; k++) if (k) c.ligne(G.X(k), o.oy - 3, G.X(k), o.oy + 3, { couleur: 'faible', largeur: 1.1, duree: .02 });
+    for (let k = Math.ceil(o.ymin); k <= o.ymax - .3; k++) if (k) c.ligne(o.ox - 3, G.Y(k), o.ox + 3, G.Y(k), { couleur: 'faible', largeur: 1.1, duree: .02 });
+  }
+  c.fleche(G.X(o.xmin), o.oy, G.X(o.xmax), o.oy, { couleur: 'faible', largeur: 1.5 });
+  c.fleche(o.ox, G.Y(o.ymin), o.ox, G.Y(o.ymax), { couleur: 'faible', largeur: 1.5 });
+  c.texte('axe réel', G.X(o.xmax), o.oy + (o.reelDessus ? -8 : 18), { couleur: 'faible', taille: o.taille || 13, align: 'right' });
+  if (o.imGauche) c.texte('axe imaginaire', o.ox - 8, G.Y(o.ymax) + 8, { couleur: 'faible', taille: o.taille || 13, align: 'right' });
+  else c.texte('axe imaginaire', o.ox + 8, G.Y(o.ymax) + 8, { couleur: 'faible', taille: o.taille || 13 });
+  c.texte('O', o.ox - 14, o.oy + 16, { couleur: 'faible', taille: 14 });
+  c.fleche(o.ox, o.oy, G.X(1), o.oy, { couleur: 'blanc', largeur: 2, tete: 7 });
+  c.fleche(o.ox, o.oy, o.ox, G.Y(1), { couleur: 'blanc', largeur: 2, tete: 7 });
+  nomVec(c, 'u', G.X(.5), o.oy + 17); nomVec(c, 'v', o.ox - 12, G.Y(.5) + 5);
+  return G;
+}
+/** Arc d’angle orienté (angles en radians, sens direct vers le haut), avec sa pointe de flèche au bout. */
+function arc(c, cx, cy, r, a0, a1, o = {}) {
+  const couleur = o.couleur || 'jaune', largeur = o.largeur ?? 1.8;
+  const n = Math.max(6, Math.ceil(Math.abs(a1 - a0) * r / 6)), pts = [];
+  for (let i = 0; i <= n; i++) { const a = a0 + (a1 - a0) * i / n; pts.push([cx + r * Math.cos(a), cy - r * Math.sin(a)]); }
+  c.trait(pts, { tremble: .3, couleur, largeur, duree: o.duree, pointille: o.pointille });
+  if (o.tete === 0 || Math.abs(a1 - a0) * r < 5) return;
+  const s = Math.sign(a1 - a0), ex = cx + r * Math.cos(a1), ey = cy - r * Math.sin(a1);
+  const ang = Math.atan2(-s * Math.cos(a1), -s * Math.sin(a1)), t = o.tete ?? 8;
+  c.trait([[ex - t * Math.cos(ang - .5), ey - t * Math.sin(ang - .5)], [ex, ey], [ex - t * Math.cos(ang + .5), ey - t * Math.sin(ang + .5)]], { couleur, largeur, duree: .08, tremble: .2 });
+}
+/** Texte placé à l’angle a (radians) et à la distance r du centre. */
+function auBout(c, s, G, a, r, o = {}) {
+  const x = G.ox + r * Math.cos(a), y = G.oy - r * Math.sin(a) + (o.taille || 16) * .35;
+  ecrire(c, s, x, y, { align: 'center', taille: 16, ...o });
+}
+function pt(c, G, x, y, couleur = 'cyan', r = 4.5) { c.point(G.X(x), G.Y(y), r, couleur); }
+
+
+const EXP = ['', '', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸'];
+const puiss = (n, base = 'z') => base + EXP[n];
+const ZN = ['', '√2/2 + i√2/2', 'i', '−√2/2 + i√2/2', '−1', '−√2/2 − i√2/2', '−i', '√2/2 − i√2/2', '1'];
+const PN = ['', '1 + i', '2i', '−2 + 2i', '−4', '−4 − 4i', '−8i', '8 − 8i', '16'];
+const LONG = ['', '√2', '2', '2√2', '4', '4√2', '8', '8√2', '16'];
+
+/** Le cercle unité et les puissances de z = cos π/4 + i sin π/4, pas à pas (arc orienté de π/4 à chaque pas). */
+function cercleUnite(c, G, R, o = {}) {
+  c.cercle(G.ox, G.oy, R, { couleur: 'faible', largeur: 1.3 });
+  c.pause(.1);
+  for (let k = 1; k <= 8; k++) {
+    arc(c, G.ox, G.oy, R, (k - 1) * PI / 4, k * PI / 4, { couleur: 'jaune', largeur: 1.8, tete: 7 });
+    c.point(G.ox + R * Math.cos(k * PI / 4), G.oy - R * Math.sin(k * PI / 4), 4.5, 'cyan');
+    auBout(c, puiss(k), G, k * PI / 4 + (k % 2 ? 0 : (o.dec ?? .22)), R + (o.ecart ?? 19), { couleur: 'cyan', taille: o.taille || 16 });
+    if (k === 1) auBout(c, '+ π/4', G, PI / 8, R - 22, { couleur: 'jaune', taille: 14 });
+  }
+}
+
+/* --- vue spirale --- */
+const PS1 = { ox: 150, oy: 205, u: 85, xmin: -1.35, xmax: 1.45, ymin: -1.35, ymax: 1.4 };
+const PS2 = { ox: 450, oy: 172, u: 11, xmin: -5.2, xmax: 17.6, ymin: -8.9, ymax: 3.1 };
+/* --- vue reel --- */
+const PRL = { ox: 170, oy: 210, u: 110, xmin: -1.4, xmax: 1.45, ymin: -1.3, ymax: 1.38 };
+/* --- vue national --- */
+const PN_ = { ox: 150, oy: 215, u: 30, xmin: -4.2, xmax: 4.6, ymin: -4.2, ymax: 4.4 };
+const MB = Math.sqrt(6) + Math.SQRT2;
+
+MathsTableau.page({
+  id: 'nc_moivre', titre: 'Nombres complexes : la formule de Moivre',
+  texte: 'Construction à la craie dans le plan complexe : les puissances de z = cos π/4 + i sin π/4 avancent de π/4 sur le cercle unité ; celles de 1 + i s’écartent en spirale ((1 + i)⁸ = 16) ; formule de Moivre ; puissances réelles et imaginaires pures ; sujet national 2024 : b²⁴ est un réel',
+  vues: {
+    spirale: {
+      titre: 'Moivre : la puissance multiplie l’angle',
+      params: { n: { min: 1, max: 8, pas: 1, defaut: 8, sens: 'la puissance n' } },
+      dessiner(c, K) {
+        K.titre('Moivre : la puissance multiplie l’angle');
+        const n = Math.round(K.P.n);
+        c.texte('z = cos π/4 + i sin π/4', 20, 66, { couleur: 'cyan', taille: 17 });
+        const G = plan(c, PS1);
+        cercleUnite(c, G, PS1.u);
+        c.texte('8 × π/4 = 2π : z⁸ = 1', 20, 350, { couleur: 'jaune', taille: 16 });
+        c.repere('cercle', 20, 50, 280, 305, 'les puissances de z avancent de π/4 sur le cercle');
+        K.marque('cercle');
+        c.pause(.4);
+        c.texte('z = 1 + i : longueur √2, angle π/4', 380, 66, { couleur: 'cyan', taille: 17 });
+        const H = plan(c, { ...PS2, taille: 12 });
+        const sp = t => [Math.pow(2, t / 2) * Math.cos(t * PI / 4), Math.pow(2, t / 2) * Math.sin(t * PI / 4)];
+        K.anime(2.2, p => {
+          const pts = [];
+          for (let i = 0; i <= 160 * p; i++) { const [x, y] = sp(8 * i / 160); pts.push([H.X(x), H.Y(y)]); }
+          c.trait(pts, { couleur: 'faible', largeur: 1.3, pointille: [4, 4] });
+          for (let k = 1; k <= 8 * p + 1e-9; k++) { const [x, y] = sp(k); c.point(H.X(x), H.Y(y), 3.5, k === 8 ? 'jaune' : 'cyan'); }
+        });
+        c.texte('−4', H.X(-4), H.Y(0) - 8, { couleur: 'cyan', taille: 14, align: 'center' });
+        c.texte('−4 − 4i', H.X(-4) - 7, H.Y(-4) + 5, { couleur: 'cyan', taille: 14, align: 'right' });
+        c.texte('−8i', H.X(0) + 8, H.Y(-8) + 5, { couleur: 'cyan', taille: 14 });
+        c.texte('8 − 8i', H.X(8) + 8, H.Y(-8) + 5, { couleur: 'cyan', taille: 14 });
+        c.texte('16', H.X(16), H.Y(0) - 10, { couleur: 'jaune', taille: 17, align: 'center' });
+        c.texte('longueurs √2, 2, 2√2, 4, 4√2, 8, 8√2, 16', 380, 94, { couleur: 'cyan', taille: 16 });
+        c.texte('(1 + i)⁸ = 16(cos 2π + i sin 2π) = 16', 380, 120, { couleur: 'jaune', taille: 16 });
+        c.repere('spirale', 380, 50, 370, 230, 'les puissances de 1 + i s’écartent en spirale : (1 + i)⁸ = 16');
+        K.marque('spirale');
+        c.pause(.4);
+        const b = encadre(c, '[r(cos θ + i sin θ)]^{n} = r^{n}(cos nθ + i sin nθ)', 309, 338, 19, 'jaune');
+        c.repere('formule', b[0], b[1], b[2], b[3], 'la formule de Moivre');
+        K.marque('formule');
+        c.pause(.3);
+        const a = n * PI / 4, [px, py] = sp(n);
+        c.cercle(G.ox + PS1.u * Math.cos(a), G.oy - PS1.u * Math.sin(a), 11, { couleur: 'jaune', largeur: 2 });
+        c.cercle(H.X(px), H.Y(py), 9, { couleur: 'jaune', largeur: 2 });
+        c.texte(`n = ${n} : ${puiss(n)} = ${ZN[n]} ; ${puiss(n, '(1 + i)')} = ${PN[n]}`, 300, 298, { couleur: 'jaune', taille: 16, max: 450 });
+        c.repere('puissance', 296, 280, 456, 26, 'la puissance n choisie');
+        K.marque('puissance');
+      },
+      poignees(K) {
+        const G = plan(null, PS1, false), n = Math.round(K.P.n), a = n * PI / 4;
+        return [{ id: 'n', x: G.ox + PS1.u * Math.cos(a), y: G.oy - PS1.u * Math.sin(a), bouger: (px, py) => {
+          const k = ((Math.round(Math.atan2(G.oy - py, px - G.ox) / (PI / 4)) % 8) + 8) % 8; return { n: k || 8 }; } }];
+      },
+      lecture: K => { const n = Math.round(K.P.n); return `n = ${n} : ${puiss(n)} = ${ZN[n]} (angle ${piSur(n, 4)}) et (1 + i)^${n} = ${PN[n]} (longueur ${LONG[n]}, angle ${piSur(n, 4)}).`; },
+      decrire: K => ({
+        cercle: 'À gauche, un plan complexe avec le cercle unité : z = cos π/4 + i sin π/4 puis z², z³, … z⁸ placés l’un après l’autre, un arc orienté de π/4 à chaque pas (« + π/4 ») ; z⁸ revient sur 1 ; en bas « 8 × π/4 = 2π : z⁸ = 1 ».',
+        spirale: 'À droite, un second plan : les puissances de 1 + i sur une spirale en pointillé, longueurs √2, 2, 2√2, 4… les points s’écartent (−4, −4 − 4i, −8i, 8 − 8i) jusqu’à 16 sur l’axe réel ; « (1 + i)⁸ = 16(cos 2π + i sin 2π) = 16 ».',
+        formule: 'En bas, l’encadré jaune « [r(cos θ + i sin θ)]ⁿ = rⁿ(cos nθ + i sin nθ) ».',
+        puissance: `Le point n = ${Math.round(K.P.n)} est entouré en jaune sur le cercle et sur la spirale : ${puiss(Math.round(K.P.n))} = ${ZN[Math.round(K.P.n)]} et (1 + i)^${Math.round(K.P.n)} = ${PN[Math.round(K.P.n)]}.`,
+      }),
+      motifs: { cercle: 'les puissances sur le cercle', spirale: 'la spirale de 1 + i', formule: 'la formule de Moivre', puissance: 'la puissance choisie' },
+      explication: [
+        { repere: 'cercle', texte: 'Sur le cercle unité, chaque multiplication par z ajoute π/4 : après 8 pas, un tour complet, z⁸ = 1.' },
+        { repere: 'spirale', texte: 'Avec 1 + i, l’angle avance aussi de π/4 mais la longueur est multipliée par √2 à chaque pas : (1 + i)⁸ = 16.' },
+        { repere: 'formule', texte: 'La formule de Moivre : la longueur est élevée à la puissance n, l’angle est multiplié par n.' },
+        { repere: 'puissance', texte: 'Le point choisi : zⁿ sur le cercle et (1 + i)ⁿ sur la spirale.' },
+      ],
+    },
+
+    reel: {
+      titre: 'Une puissance réelle',
+      dessiner(c, K) {
+        K.titre('Une puissance réelle');
+        const G = plan(c, PRL), R = PRL.u, XR = 380;
+        cercleUnite(c, G, R, { dec: .2, ecart: 20, taille: 17 });
+        K.lignes(XR, 80, [
+          { t: 'z = cos π/4 + i sin π/4', couleur: 'cyan', taille: 18 },
+          { t: 'z^{n} = cos(nπ/4) + i sin(nπ/4)', couleur: 'cyan', taille: 18 },
+        ], 28);
+        c.repere('cercle', G.ox - R - 30, G.oy - R - 25, 2 * R + 60, 2 * R + 50, 'les puissances de z sur le cercle unité');
+        K.marque('cercle');
+        c.pause(.4);
+        c.cercle(G.ox - R, G.oy, 11, { couleur: 'vert', largeur: 2.4 });
+        c.cercle(G.ox + R, G.oy, 11, { couleur: 'vert', largeur: 2.4 });
+        c.ligne(G.ox - R, G.oy, G.ox + R, G.oy, { couleur: 'vert', largeur: 2.6 });
+        K.lignes(XR, 146, [
+          { t: '4 × π/4 = π : z⁴ = −1', couleur: 'vert', taille: 17 },
+          { t: '8 × π/4 = 2π : z⁸ = 1', couleur: 'vert', taille: 17 },
+        ], 26);
+        const b1 = encadre(c, 'nθ multiple de π ⇒ z^{n} réel', XR + 9, 212, 18, 'vert');
+        c.repere('reel', b1[0], 126, Math.max(b1[2], 200), b1[1] + b1[3] - 126, 'nθ multiple de π : zⁿ réel');
+        K.marque('reel');
+        c.pause(.4);
+        c.cercle(G.ox, G.oy - R, 11, { couleur: 'orange', largeur: 2.4 });
+        c.cercle(G.ox, G.oy + R, 11, { couleur: 'orange', largeur: 2.4 });
+        c.ligne(G.ox, G.oy - R, G.ox, G.oy + R, { couleur: 'orange', largeur: 2.6 });
+        K.lignes(XR, 256, [
+          { t: '2 × π/4 = π/2 : z² = i', couleur: 'orange', taille: 17 },
+          { t: '6 × π/4 = 3π/2 : z⁶ = −i', couleur: 'orange', taille: 17 },
+        ], 26);
+        const b2 = encadre(c, 'nθ ≡ π/2 [π] ⇒ z^{n} imaginaire pur', XR + 9, 322, 18, 'orange');
+        c.repere('imaginaire', b2[0], 236, b2[2], b2[1] + b2[3] - 236, 'nθ ≡ π/2 [π] : zⁿ imaginaire pur');
+        K.marque('imaginaire');
+      },
+      decrire: {
+        cercle: 'Un plan complexe avec le cercle unité : z = cos π/4 + i sin π/4 et ses puissances z², …, z⁸, un arc orienté de π/4 à chaque pas. À droite : « zⁿ = cos(nπ/4) + i sin(nπ/4) ».',
+        reel: 'z⁴ = −1 et z⁸ = 1 s’allument en vert sur l’axe réel ; à droite « 4 × π/4 = π : z⁴ = −1 », « 8 × π/4 = 2π : z⁸ = 1 » et l’encadré vert « nθ multiple de π ⇒ zⁿ réel ».',
+        imaginaire: 'z² = i et z⁶ = −i s’allument en orange sur l’axe imaginaire ; à droite « 2 × π/4 = π/2 », « 6 × π/4 = 3π/2 » et l’encadré orange « nθ ≡ π/2 [π] ⇒ zⁿ imaginaire pur ».',
+      },
+      motifs: { cercle: 'les puissances de z', reel: 'les puissances réelles', imaginaire: 'les puissances imaginaires pures' },
+      explication: [
+        { repere: 'cercle', texte: 'Chaque puissance de z ajoute π/4 à l’angle.' },
+        { repere: 'reel', texte: 'Quand nθ est un multiple de π, le point est sur l’axe réel : zⁿ est réel.' },
+        { repere: 'imaginaire', texte: 'Quand nθ ≡ π/2 [π], le point est sur l’axe imaginaire : zⁿ est imaginaire pur.' },
+      ],
+    },
+
+    national: {
+      titre: '2024 N : b²⁴',
+      dessiner(c, K) {
+        K.titre('2024 N : b²⁴');
+        const XR = 340;
+        c.texte('b = (√6 + √2)(cos π/12 + i sin π/12)', 20, 66, { couleur: 'cyan', taille: 18 });
+        const G = plan(c, PN_), a = PI / 12, rb = MB * PN_.u;
+        c.fleche(G.ox, G.oy, G.ox + rb * Math.cos(a), G.oy - rb * Math.sin(a), { couleur: 'cyan', largeur: 2.4 });
+        c.point(G.ox + rb * Math.cos(a), G.oy - rb * Math.sin(a), 4.5, 'cyan');
+        c.texte('b', G.ox + rb * Math.cos(a) + 6, G.oy - rb * Math.sin(a) - 5, { couleur: 'cyan', taille: 18 });
+        arc(c, G.ox, G.oy, 90, 0, a, { couleur: 'jaune', tete: 7 });
+        c.texte('π/12', G.ox + 96, G.oy - 4, { couleur: 'jaune', taille: 15 });
+        K.lignes(XR, 104, [
+          { t: '|b| = √6 + √2 > 0', couleur: 'cyan', taille: 18 },
+          { t: 'arg b ≡ π/12 [2π]', couleur: 'jaune', taille: 18 },
+        ], 28);
+        c.repere('angle', G.ox - 4, G.oy - 40, 120, 46, 'l’angle π/12');
+        K.marque('angle');
+        c.pause(.4);
+        for (let k = 0; k < 24; k++) { const t = k * PI / 12; c.ligne(G.ox + 70 * Math.cos(t), G.oy - 70 * Math.sin(t), G.ox + 78 * Math.cos(t), G.oy - 78 * Math.sin(t), { couleur: 'faible', largeur: 1.2, duree: .03 }); }
+        K.anime(2.6, p => {
+          const pts = [], fin = 2 * PI * p;
+          for (let i = 0; i <= 120 * p; i++) { const t = 2 * PI * i / 120; pts.push([G.ox + (48 + t * 2.4) * Math.cos(t), G.oy - (48 + t * 2.4) * Math.sin(t)]); }
+          if (pts.length > 1) c.trait(pts, { couleur: 'jaune', largeur: 2 });
+          c.ligne(G.ox, G.oy, G.ox + 84 * Math.cos(fin), G.oy - 84 * Math.sin(fin), { couleur: 'faible', largeur: 1.4, pointille: [4, 4] });
+          if (p >= 1) { const r = 48 + 2 * PI * 2.4, ex = G.ox + r, ey = G.oy; c.trait([[ex - 6, ey + 7], [ex, ey], [ex + 6, ey + 7]], { couleur: 'jaune', largeur: 2 }); }
+        });
+        c.texte('24 pas de π/12', 20, 350, { couleur: 'jaune', taille: 16 });
+        K.lignes(XR, 176, [
+          { t: 'Moivre : arg(b²⁴) ≡ 24 × π/12 [2π]', couleur: 'blanc', taille: 17 },
+          { t: '24 × π/12 = 2π : un tour complet', couleur: 'jaune', taille: 17 },
+        ], 28);
+        c.repere('tour', G.ox - 84, G.oy - 84, 168, 168, '24 × π/12 = 2π : un tour complet');
+        K.marque('tour');
+        c.pause(.4);
+        c.fleche(G.ox, G.oy, G.X(4.4), G.oy, { couleur: 'jaune', largeur: 3.2 });
+        c.texte('b²⁴ est sur l’axe réel', G.X(4.4), G.oy + 100, { couleur: 'jaune', taille: 15, align: 'right' });
+        K.lignes(XR, 248, [
+          { t: 'b²⁴ = (√6 + √2)²⁴(cos 2π + i sin 2π)', couleur: 'blanc', taille: 17 },
+          { t: 'cos 2π = 1 ; sin 2π = 0', couleur: 'blanc', taille: 17 },
+        ], 26);
+        const bx = encadre(c, 'b²⁴ = (√6 + √2)²⁴ : un réel', XR + 9, 326, 20, 'jaune');
+        c.repere('reel', bx[0], bx[1], bx[2], bx[3], 'b²⁴ = (√6 + √2)²⁴ : un réel');
+        K.marque('reel');
+      },
+      decrire: {
+        angle: 'En haut « b = (√6 + √2)(cos π/12 + i sin π/12) » ; dans le plan complexe, le vecteur cyan b et l’arc orienté π/12 depuis l’axe réel. À droite : « |b| = √6 + √2 > 0 », « arg b ≡ π/12 [2π] ».',
+        tour: 'Autour de O, 24 petits traits espacés de π/12 ; un arc jaune fait un tour complet avec sa flèche, un rayon tourne avec lui. À droite : « arg(b²⁴) ≡ 24 × π/12 » et « 24 × π/12 = 2π : un tour complet ».',
+        reel: 'Une flèche jaune sur l’axe réel « b²⁴ est sur l’axe réel » ; à droite « b²⁴ = (√6 + √2)²⁴(cos 2π + i sin 2π) », « cos 2π = 1 ; sin 2π = 0 » et l’encadré jaune « b²⁴ = (√6 + √2)²⁴ : un réel ».',
+      },
+      motifs: { angle: 'l’angle π/12', tour: 'un tour complet', reel: 'b²⁴ réel' },
+      explication: [
+        { repere: 'angle', texte: 'b a pour module √6 + √2 et pour argument π/12.' },
+        { repere: 'tour', texte: 'Par Moivre, b²⁴ a pour argument 24 × π/12 = 2π : un tour complet.' },
+        { repere: 'reel', texte: 'Un argument 2π, c’est l’axe réel positif : b²⁴ = (√6 + √2)²⁴ est un réel.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

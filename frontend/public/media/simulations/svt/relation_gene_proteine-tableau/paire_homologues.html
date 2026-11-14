@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Gène, locus, allèles — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="genetique.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Une cellule et sa paire de chromosomes n° 9 agrandie : le gène du groupe sanguin (système ABO) occupe le même locus sur le chromosome d’origine paternelle et sur le chromosome d’origine maternelle ; chaque chromosome porte un allèle (A, B ou O) ; le caractère groupe sanguin s’écrit. Puis une mutation : des bactéries résistantes à la streptomycine et un nucléotide changé dans un fragment de gène, un nouvel allèle"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="etapes.js"></script>
+<script src="molecules.js"></script>
+<script>
+/*
+ * Gène, locus, allèles — et une mutation crée un nouvel allèle (cours « Expression de l’information génétique »,
+ * 2 Bac PC BIOF, diapositives 2 à 4, capacité RGP1, 11 novembre 2026).
+ * Vue paire : une cellule peinte ; sa paire de chromosomes n° 9 agrandie (un violet d’origine paternelle, un bleu d’origine
+ * maternelle, une chromatide chacun) ; le gène ABO (groupe sanguin, bras long, près du bout) s’allume au MÊME endroit sur les
+ * deux : le locus ; l’allèle de chacun s’écrit dans sa bande (A, B ou O) ; le caractère s’écrit : AA ou AO → [A], BB ou BO → [B],
+ * AB → [AB], OO → [O] (A et B dominent O ; A et B codominants). Toucher une bande fait tourner son allèle A → B → O.
+ * Vue mutation : deux boîtes de Pétri peintes (sans / avec streptomycine) : seules 2 colonies résistantes poussent, déjà présentes
+ * avant ; puis un fragment du gène (… CTG GAG …) dont un nucléotide change (G → T) : un nouvel allèle.
+ * Le vivant est peint (règle 7), la craie écrit les légendes.
+ */
+const { lisse, rampe, entre, Peint } = window.Etapes;
+const M = window.Molecules;
+const TAU = Math.PI * 2;
+const ALLELES = ['A', 'B', 'O'];
+/** Le caractère (phénotype) écrit entre crochets : A et B dominent O ; A et B codominants. */
+function phenotype(a, b) { const s = new Set([a, b]); if (s.has('A') && s.has('B')) return 'AB'; if (s.has('A')) return 'A'; if (s.has('B')) return 'B'; return 'O'; }
+
+/* ── Vue paire ──────────────────────────────────────────────────────── */
+const CE = { cx: 140, cy: 222, rx: 112, ry: 100, nr: 58 };            // la cellule et son noyau
+const CH = { xp: 405, xm: 495, y0: 84, y1: 334, w: 32, cen: .32, loc: .85, hb: 20 };   // la paire n° 9 agrandie
+const yLoc = CH.y0 + (CH.y1 - CH.y0) * CH.loc;                         // 9q34 : bras long, près du bout
+const MP = { paire: 2.6, locus: 5.0, allele_pere: 7.4, allele_mere: 9.8, deux_alleles_identiques: 12.4, deux_alleles_differents: 14.6 };
+const VIOLET = ['#f3e8ff', '#a855f7', '#581c87'], BLEU = ['#e0e7ff', '#6366f1', '#1e3a8a'];
+/** Chromosome à une chromatide, en bâtonnet, avec ses bandes sombres ; `lueur` 0..1 allume la bande du locus. */
+function chromosome9(x, cx, coul, a, lueur) {
+  if (a <= 0) return;
+  const { y0, y1, w } = CH, yc = y0 + (y1 - y0) * CH.cen;
+  // contour d’un seul tenant : bouts arrondis, étranglement au centromère
+  const demi = py => w / 2 * (1 - .32 * Math.exp(-(((py - yc) / 7) ** 2)));
+  const forme = () => {
+    x.beginPath(); const r = w / 2;
+    x.arc(cx, y0 + r, r, Math.PI, 0);
+    for (let py = y0 + r; py <= y1 - r; py += 2) x.lineTo(cx + demi(py), py);
+    x.arc(cx, y1 - r, r, 0, Math.PI);
+    for (let py = y1 - r; py >= y0 + r; py -= 2) x.lineTo(cx - demi(py), py);
+    x.closePath();
+  };
+  x.save(); x.globalAlpha = a;
+  // ombre portée
+  x.save(); x.translate(4, 5); forme(); x.fillStyle = 'rgba(0,0,0,.28)'; x.fill(); x.restore();
+  const g = x.createLinearGradient(cx - w / 2, 0, cx + w / 2, 0);
+  g.addColorStop(0, coul[2]); g.addColorStop(.35, coul[0]); g.addColorStop(.6, coul[1]); g.addColorStop(1, coul[2]);
+  forme(); x.fillStyle = g; x.fill();
+  // bandes transversales (coloration), sombres ; la bande du locus à part
+  x.save(); forme(); x.clip();
+  x.fillStyle = 'rgba(30,10,50,.38)';
+  for (const [f, h] of [[.07, 8], [.16, 10], [.25, 7], [.42, 12], [.52, 9], [.62, 14], [.72, 8], [.94, 7]]) x.fillRect(cx - w, y0 + (y1 - y0) * f - h / 2, 2 * w, h);
+  if (lueur > 0) {
+    x.globalAlpha = a * lueur;
+    const gb = x.createLinearGradient(cx - w / 2, 0, cx + w / 2, 0); gb.addColorStop(0, '#854d0e'); gb.addColorStop(.45, '#ca8a04'); gb.addColorStop(1, '#713f12');
+    x.fillStyle = gb; x.fillRect(cx - w, yLoc - CH.hb / 2, 2 * w, CH.hb);
+  }
+  x.restore();
+  forme(); x.strokeStyle = 'rgba(15,5,30,.65)'; x.lineWidth = 1.3; x.stroke();
+  x.strokeStyle = 'rgba(255,255,255,.35)'; x.lineWidth = 2; x.beginPath(); x.moveTo(cx - w / 2 + 7, y0 + 12); x.lineTo(cx - w / 2 + 7, yc - 10); x.moveTo(cx - w / 2 + 7, yc + 12); x.lineTo(cx - w / 2 + 7, y1 - 14); x.stroke();
+  if (lueur > 0) { // la bande du locus brille
+    x.globalAlpha = a * lueur; x.strokeStyle = '#fde047'; x.lineWidth = 2.4; x.shadowColor = '#facc15'; x.shadowBlur = 10;
+    x.strokeRect(cx - w / 2 - 3, yLoc - CH.hb / 2, w + 6, CH.hb); x.shadowBlur = 0;
+  }
+  x.restore();
+}
+/** Petits chromosomes dans le noyau de la cellule (la paire n° 9 en violet + bleu). */
+const PETITS = [[105, 200, .3, '#c084fc'], [114, 204, .5, '#818cf8'], [128, 246, 1.9, '#f472b6'], [138, 250, 1.7, '#fb7185'], [96, 236, -.6, '#34d399'], [104, 244, -.4, '#2dd4bf'], [140, 186, 1.2, '#fbbf24'], [150, 190, 1.0, '#f59e0b']];
+function dessinerPaire(c, k) {
+  const t = k.t, P = k.P;
+  const aCell = rampe(t, 0, .8), aPaire = rampe(t, .8, 1.0), lueur = rampe(t, 3.4, .8);
+  const flashP = t >= 6.2 ? Math.max(0, 1 - Math.abs(t - 6.8) / .6) : 0, flashM = t >= 8.6 ? Math.max(0, 1 - Math.abs(t - 9.2) / .6) : 0;
+  c.direct(() => {
+    const x = c.ctx;
+    x.save(); x.globalAlpha = aCell;
+    M.cytoplasme(x, CE.cx, CE.cy, CE.rx, CE.ry);
+    M.noyau(x, CE.cx, CE.cy, CE.nr, CE.nr, { pores: 8 });
+    for (const [px, py, ang, col] of PETITS) Peint.chromosome(x, px, py, 22, ang, [ '#ffffff', col ], { epaisseur: 5, centromere: .4 });
+    Peint.chromosome(x, 160, 236, 26, Math.PI / 2, Peint.VIOLET, { epaisseur: 5.5, centromere: .32 });
+    Peint.chromosome(x, 171, 236, 26, Math.PI / 2, Peint.BLEU, { epaisseur: 5.5, centromere: .32 });
+    x.restore();
+    chromosome9(x, CH.xp, VIOLET, aPaire, lueur);
+    chromosome9(x, CH.xm, BLEU, aPaire, lueur);
+    for (const [cx, f] of [[CH.xp, flashP], [CH.xm, flashM]]) if (f > 0) Peint.halo(x, cx, yLoc, 34, 'rgba(253,224,71,.7)', f);
+  });
+  c.texte('Gène, locus, allèles', 14, 26, { couleur: 'cyan', taille: 19 });
+  c.repere('cellule', CE.cx - CE.rx, CE.cy - CE.ry, 2 * CE.rx, 2 * CE.ry, 'la cellule (cytoplasme, noyau)');
+  if (k.ecrit(c, 'cell', .3)) {
+    k.T(c, 'une cellule', CE.cx, 106, { couleur: 'blanc', taille: 15, align: 'center' });
+    k.T(c, 'noyau', CE.cx, 156, { couleur: 'bleu', taille: 14, align: 'center' });
+    k.T(c, 'cytoplasme', CE.cx, 344, { couleur: 'rose', taille: 14, align: 'center' });
+  }
+  if (t >= .8) {
+    c.repere('chromosome_pere', CH.xp - CH.w / 2 - 4, CH.y0 - 4, CH.w + 8, CH.y1 - CH.y0 + 8, 'le chromosome n° 9 d’origine paternelle');
+    c.repere('chromosome_mere', CH.xm - CH.w / 2 - 4, CH.y0 - 4, CH.w + 8, CH.y1 - CH.y0 + 8, 'le chromosome n° 9 d’origine maternelle');
+  }
+  if (k.ecrit(c, 'paire', 1.0)) {
+    c.cercle(165, 236, 17, { couleur: 'jaune', largeur: 1.6 });
+    c.fleche(184, 232, 372, 214, { couleur: 'jaune', largeur: 1.6 });
+    k.T(c, 'paire n° 9 agrandie', 290, 204, { couleur: 'jaune', taille: 14, align: 'center' });
+    k.T(c, 'paire de chromosomes n° 9', (CH.xp + CH.xm) / 2, 66, { couleur: 'blanc', taille: 16, align: 'center' });
+    k.T(c, 'chromosome d’origine', CH.xp - 26, 120, { couleur: 'violet', taille: 14, align: 'right' });
+    k.T(c, 'paternelle', CH.xp - 26, 138, { couleur: 'violet', taille: 14, align: 'right' });
+    k.T(c, 'chromosome d’origine', CH.xm + 26, 120, { couleur: 'bleu', taille: 14 });
+    k.T(c, 'maternelle', CH.xm + 26, 138, { couleur: 'bleu', taille: 14 });
+  }
+  if (t >= 3.4) c.repere('locus', CH.xp - CH.w / 2 - 4, yLoc - CH.hb / 2 - 4, CH.xm - CH.xp + CH.w + 8, CH.hb + 8, 'le locus : la même place sur les deux chromosomes');
+  if (k.ecrit(c, 'locus', 3.6)) {
+    c.ligne(CH.xp + CH.w / 2 + 4, yLoc, CH.xm - CH.w / 2 - 4, yLoc, { couleur: 'jaune', largeur: 1.4, pointille: [4, 4] });
+    k.T(c, 'locus', (CH.xp + CH.xm) / 2, yLoc - 8, { couleur: 'jaune', taille: 15, align: 'center' });
+    c.ligne(CH.xm + CH.w / 2 + 6, yLoc - 8, CH.xm + 44, 252, { couleur: 'jaune', largeur: 1.2 });
+    k.T(c, 'gène du groupe sanguin', CH.xm + 48, 240, { couleur: 'jaune', taille: 14 });
+    k.T(c, '(système ABO)', CH.xm + 48, 258, { couleur: 'jaune', taille: 14 });
+  }
+  if (t >= 6.2) c.repere('allele_pere', CH.xp - 120, yLoc - CH.hb / 2 - 4, 120 + CH.w / 2 + 4, CH.hb + 8, 'l’allèle porté par le chromosome paternel');
+  if (k.ecrit(c, 'ap' + P.allele_pere, 6.4)) {
+    k.T(c, P.allele_pere, CH.xp, yLoc + 6, { couleur: 'blanc', taille: 18, align: 'center', gras: true });
+    k.T(c, 'allèle ' + P.allele_pere, CH.xp - 26, yLoc + 6, { couleur: 'violet', taille: 15, align: 'right' });
+  }
+  if (t >= 8.6) c.repere('allele_mere', CH.xm - CH.w / 2 - 4, yLoc - CH.hb / 2 - 4, 120, CH.hb + 8, 'l’allèle porté par le chromosome maternel');
+  if (k.ecrit(c, 'am' + P.allele_mere, 8.8)) {
+    k.T(c, P.allele_mere, CH.xm, yLoc + 6, { couleur: 'blanc', taille: 18, align: 'center', gras: true });
+    k.T(c, 'allèle ' + P.allele_mere, CH.xm + 26, yLoc + 6, { couleur: 'bleu', taille: 15 });
+  }
+  const ph = phenotype(P.allele_pere, P.allele_mere), meme = P.allele_pere === P.allele_mere;
+  if (t >= 10.4) c.repere('caractere', 300, 376, 300, 24, 'le caractère : le groupe sanguin');
+  if (k.ecrit(c, 'car' + ph, 10.4)) k.T(c, `caractère : groupe sanguin [${ph}]`, 450, 394, { couleur: 'jaune', taille: 17, align: 'center' });
+  if (k.ecrit(c, 'cmp' + (meme ? 'i' : 'd'), 11.0)) k.T(c, meme ? 'deux allèles identiques du même gène' : 'deux allèles différents du même gène', 450, 364, { couleur: 'blanc', taille: 15, align: 'center' });
+  if (k.ecrit(c, 'dom', 13.2)) {
+    k.T(c, 'A et B dominent O ;', CH.xm + 48, 170, { couleur: 'faible', taille: 14 });
+    k.T(c, 'A et B sont codominants', CH.xm + 48, 188, { couleur: 'faible', taille: 14 });
+  }
+}
+function voitPaire(k) {
+  const t = k.t, P = k.P, ph = phenotype(P.allele_pere, P.allele_mere), m = [];
+  m.push('À gauche, une cellule peinte (écrit « une cellule », « noyau », « cytoplasme » : cytoplasme rosé, noyau bleuté) ; dans le noyau, de petits chromosomes, la paire n° 9 (un violet, un bleu) entourée en jaune.');
+  if (t >= .8) m.push('À droite, la paire n° 9 agrandie (flèche « paire n° 9 agrandie ») : deux chromosomes en bâtonnet à une chromatide, à bandes sombres ; à gauche le violet, « chromosome d’origine paternelle », à droite le bleu, « chromosome d’origine maternelle ».');
+  if (t >= 3.4) m.push('La même bande, près du bout du bras long, est allumée en jaune-or sur les deux chromosomes, à la même hauteur : écrit « locus » entre elles et « gène du groupe sanguin (système ABO) ».');
+  if (t >= 6.4) m.push(`Dans la bande du chromosome paternel est écrit ${P.allele_pere} (« allèle ${P.allele_pere} »).`);
+  if (t >= 8.8) m.push(`Dans la bande du chromosome maternel est écrit ${P.allele_mere} (« allèle ${P.allele_mere} »).`);
+  if (t >= 10.4) m.push(`En bas : « caractère : groupe sanguin [${ph}] ».`);
+  if (t >= 11.0) m.push(P.allele_pere === P.allele_mere ? `Écrit : « deux allèles identiques du même gène » (${P.allele_pere} et ${P.allele_mere}).` : `Écrit : « deux allèles différents du même gène » (${P.allele_pere} et ${P.allele_mere}).`);
+  if (t >= 13.2) m.push('À droite, en petit : « A et B dominent O ; A et B sont codominants ».');
+  return m;
+}
+
+/* ── Vue mutation ───────────────────────────────────────────────────── */
+const B1 = { cx: 150, cy: 142, r: 76 }, B2 = { cx: 420, cy: 142, r: 76 };
+const MM = { colonies: 2.6, antibiotique: 5.0, resistantes: 7.6, nucleotide_change: 10.4, nouvel_allele: 12.4 };
+/** Les colonies de la boîte 1 (positions relatives, déterministes) ; les deux premières sont les résistantes. */
+const RES = [[-26, -30, 4.2], [34, 22, 4.0]];
+const COLONIES = (() => { let s = 99; const r = () => { s = (Math.imul(s, 1103515245) + 12345) >>> 0; return s / 4294967296; }; const out = RES.slice();
+  while (out.length < 230) { const a = r() * TAU, d = Math.sqrt(r()) * .86 * B1.r, px = Math.cos(a) * d, py = Math.sin(a) * d; if (RES.some(([qx, qy]) => Math.hypot(px - qx, py - qy) < 9)) continue; out.push([px, py, 1.6 + r() * 2.2]); } return out; })();
+function boite(x, b, antibio, a = 1) {
+  if (a <= 0) return;
+  x.save(); x.globalAlpha = a;
+  x.fillStyle = 'rgba(0,0,0,.3)'; x.beginPath(); x.ellipse(b.cx + 5, b.cy + 7, b.r + 6, b.r + 6, 0, 0, TAU); x.fill();
+  // verre
+  x.fillStyle = 'rgba(220,235,245,.22)'; x.beginPath(); x.arc(b.cx, b.cy, b.r + 6, 0, TAU); x.fill();
+  // gélose
+  const g = x.createRadialGradient(b.cx - b.r * .3, b.cy - b.r * .35, 4, b.cx, b.cy, b.r);
+  if (antibio) { g.addColorStop(0, 'rgba(240,236,190,.92)'); g.addColorStop(1, 'rgba(196,186,120,.9)'); }
+  else { g.addColorStop(0, 'rgba(250,228,180,.92)'); g.addColorStop(1, 'rgba(214,170,100,.9)'); }
+  x.fillStyle = g; x.beginPath(); x.arc(b.cx, b.cy, b.r, 0, TAU); x.fill();
+  x.strokeStyle = 'rgba(230,240,250,.85)'; x.lineWidth = 2; x.beginPath(); x.arc(b.cx, b.cy, b.r + 6, 0, TAU); x.stroke();
+  x.strokeStyle = 'rgba(160,130,80,.6)'; x.lineWidth = 1.2; x.beginPath(); x.arc(b.cx, b.cy, b.r, 0, TAU); x.stroke();
+  x.strokeStyle = 'rgba(255,255,255,.55)'; x.lineWidth = 3; x.beginPath(); x.arc(b.cx, b.cy, b.r + 2, -2.6, -1.6); x.stroke();
+  x.restore();
+}
+function colonie(x, px, py, r) {
+  if (r <= .2) return;
+  const g = x.createRadialGradient(px - r * .35, py - r * .4, .3, px, py, r);
+  g.addColorStop(0, '#ffffff'); g.addColorStop(.6, '#f5f5ef'); g.addColorStop(1, '#c9c2ad');
+  x.fillStyle = g; x.beginPath(); x.arc(px, py, r, 0, TAU); x.fill();
+}
+const SEQ_N = 'CTGGAG', SEQ_M = 'CTGGAT', IMUT = 5;      // G → T : le 3e nucléotide du 2e triplet
+const BR = { x0: 170, pas: 34, gap: 12, yN: 292, yM: 350, lb: 24 };
+function brinTriplets(x, y, seq, o = {}) {
+  M.brin(x, BR.x0, y, BR.pas, seq.slice(0, 3), 'adn', 1, { lb: BR.lb, alpha: o.alpha });
+  M.brin(x, BR.x0 + 3 * BR.pas + BR.gap, y, BR.pas, seq.slice(3), 'adn', 1, { lb: BR.lb, alpha: o.alpha, rouge: o.rouge });
+}
+const xBase = i => BR.x0 + (i + .5) * BR.pas + (i >= 3 ? BR.gap : 0);
+const XFIN = BR.x0 + 6 * BR.pas + BR.gap;
+function dessinerMutation(c, k) {
+  const t = k.t;
+  const a1 = rampe(t, 0, .5), pousse1 = rampe(t, .4, 1.8), a2 = rampe(t, 3.2, .6), pousse2 = rampe(t, 5.3, 1.7);
+  const aN = rampe(t, 7.9, .5), aM = rampe(t, 8.6, .5), change = rampe(t, 9.4, .5);
+  c.direct(() => {
+    const x = c.ctx;
+    boite(x, B1, false, a1);
+    if (a1 > 0) { x.save(); x.globalAlpha = a1; for (const [px, py, r] of COLONIES) colonie(x, B1.cx + px, B1.cy + py, r * pousse1); x.restore(); }
+    boite(x, B2, true, a2);
+    if (a2 > 0 && pousse2 > 0) for (const [px, py, r] of RES) colonie(x, B2.cx + px, B2.cy + py, r * 1.5 * pousse2);   // seules sur la boîte, elles s’étalent
+    // un fragment du gène
+    if (aN > 0) brinTriplets(x, BR.yN, SEQ_N, { alpha: aN });
+    if (aM > 0) {
+      const lettres = change > .5 ? SEQ_M : SEQ_N;
+      brinTriplets(x, BR.yM, lettres, { alpha: aM, rouge: change > .5 ? new Set([IMUT - 3]) : null });
+      if (change > 0 && change < 1) Peint.halo(x, xBase(IMUT), BR.yM + 12, 30, 'rgba(255,45,45,.75)', Math.sin(Math.PI * change));
+    }
+  });
+  c.texte('Une mutation crée un nouvel allèle', 14, 26, { couleur: 'cyan', taille: 19 });
+  c.repere('boite_sans', B1.cx - B1.r - 6, B1.cy - B1.r - 6, 2 * B1.r + 12, 2 * B1.r + 12, 'la boîte 1, sans antibiotique');
+  if (k.ecrit(c, 'b1', 1.0)) {
+    k.T(c, 'boîte 1 : sans antibiotique', B1.cx, 246, { couleur: 'blanc', taille: 15, align: 'center' });
+    k.T(c, 'des centaines de colonies', B1.cx, 52, { couleur: 'faible', taille: 13, align: 'center' });
+  }
+  if (k.ecrit(c, 'rep', 2.9)) { c.fleche(B1.cx + B1.r + 12, B1.cy, B2.cx - B2.r - 12, B2.cy, { couleur: 'blanc', largeur: 1.8 }); k.T(c, 'repiquage', (B1.cx + B2.cx) / 2, B1.cy - 10, { couleur: 'blanc', taille: 14, align: 'center' }); }
+  if (t >= 3.2) c.repere('boite_avec', B2.cx - B2.r - 6, B2.cy - B2.r - 6, 2 * B2.r + 12, 2 * B2.r + 12, 'la boîte 2, avec streptomycine');
+  if (k.ecrit(c, 'b2', 3.6)) k.T(c, 'boîte 2 : avec streptomycine', B2.cx, 246, { couleur: 'orange', taille: 15, align: 'center' });
+  if (t >= 5.3) c.repere('colonie_resistante', B2.cx - 40, B2.cy - 44, 88, 78, 'les 2 colonies résistantes');
+  if (k.ecrit(c, 'res', 6.4)) {
+    for (const [px, py] of RES) { c.cercle(B2.cx + px, B2.cy + py, 11, { couleur: 'rouge', largeur: 1.6 }); c.cercle(B1.cx + px, B1.cy + py, 10, { couleur: 'rouge', largeur: 1.4 }); }
+    k.T(c, 'seules 2 colonies poussent :', 520, 104, { couleur: 'blanc', taille: 15 });
+    k.T(c, 'bactéries résistantes, rares,', 520, 124, { couleur: 'rouge', taille: 15 });
+    k.T(c, 'déjà présentes avant', 520, 144, { couleur: 'rouge', taille: 15 });
+    k.T(c, 'l’antibiotique (boîte 1)', 520, 164, { couleur: 'rouge', taille: 15 });
+  }
+  if (k.ecrit(c, 'frag', 7.7)) {
+    k.T(c, 'un fragment du gène', 14, 276, { couleur: 'faible', taille: 13 });
+    k.T(c, 'allèle normal', 18, BR.yN + 18, { couleur: 'blanc', taille: 15 });
+    k.T(c, '…', BR.x0 - 16, BR.yN + 16, { couleur: 'blanc', taille: 16, align: 'center' }); k.T(c, '…', XFIN + 14, BR.yN + 16, { couleur: 'blanc', taille: 16, align: 'center' });
+  }
+  if (t >= 7.9) c.repere('allele_normal', BR.x0 - 4, BR.yN - 6, XFIN - BR.x0 + 8, BR.lb + 10, 'l’allèle normal : … CTG GAG …');
+  if (t >= 8.6) c.repere('allele_mute', BR.x0 - 4, BR.yM - 6, XFIN - BR.x0 + 8, BR.lb + 10, 'l’allèle muté : … CTG GAT …');
+  if (k.ecrit(c, 'mut', 8.6)) {
+    k.T(c, 'allèle muté', 18, BR.yM + 18, { couleur: 'blanc', taille: 15 });
+    k.T(c, '…', BR.x0 - 16, BR.yM + 16, { couleur: 'blanc', taille: 16, align: 'center' }); k.T(c, '…', XFIN + 14, BR.yM + 16, { couleur: 'blanc', taille: 16, align: 'center' });
+  }
+  if (t >= 9.4) c.repere('nucleotide_mute', xBase(IMUT) - BR.pas / 2 - 2, BR.yM - 6, BR.pas + 4, BR.lb + 12, 'le nucléotide changé : G → T');
+  if (k.ecrit(c, 'chg', 9.6)) {
+    c.fleche(xBase(IMUT), BR.yN + BR.lb + 4, xBase(IMUT), BR.yM - 4, { couleur: 'rouge', largeur: 1.6, tete: 8 });
+    k.T(c, 'G → T : un nucléotide changé', XFIN + 34, BR.yM + 4, { couleur: 'rouge', taille: 15 });
+  }
+  if (k.ecrit(c, 'nouv', 11.2)) k.T(c, 'allèle muté = nouvel allèle', XFIN + 34, BR.yM + 28, { couleur: 'jaune', taille: 16 });
+  if (k.ecrit(c, 'def', 12.8)) k.T(c, 'Mutation : modification de la séquence des nucléotides d’un gène', 380, 406, { couleur: 'vert', taille: 16, align: 'center' });
+}
+function voitMutation(k) {
+  const t = k.t, m = ['En haut à gauche, la boîte de Pétri 1 peinte (gélose dorée, « sans antibiotique ») couverte de centaines de petites colonies blanches de bactéries.'];
+  if (t >= 2.9) m.push('Une flèche « repiquage » va vers la boîte 2 (« avec streptomycine », gélose plus pâle)' + (t < 5.3 ? ', encore vide.' : '.'));
+  if (t >= 5.3) m.push(t < 6.4 ? 'Dans la boîte 2, deux colonies seulement commencent à pousser.' : 'Dans la boîte 2, seules 2 colonies ont poussé (entourées en rouge) ; les deux mêmes colonies sont entourées dans la boîte 1 ; écrit « seules 2 colonies poussent : bactéries résistantes, rares, déjà présentes avant l’antibiotique (boîte 1) ».');
+  if (t >= 7.9) m.push('En bas, un fragment du gène : « allèle normal » … C T G  G A G … (brin d’ADN peint, bases colorées avec leurs lettres).');
+  if (t >= 8.6) m.push(t < 9.65 ? 'Dessous, « allèle muté » : la même suite, recopiée.' : 'Dessous, « allèle muté » … C T G  G A T … : le dernier G est devenu T, entouré en rouge vif (flèche rouge, « G → T : un nucléotide changé »).');
+  if (t >= 11.2) m.push('Écrit en jaune : « allèle muté = nouvel allèle ».');
+  if (t >= 12.8) m.push('Écrit en vert en bas : « Mutation : modification de la séquence des nucléotides d’un gène ».');
+  return m;
+}
+
+/* ── Poignée : toucher la bande d’un chromosome fait tourner son allèle A → B → O ── */
+function toucherBande(px, py, k) {
+  if (k.vue !== 'paire' || k.t < 3.4 || Math.abs(py - yLoc) > 16) return null;
+  if (Math.abs(px - CH.xp) < 24) return 'allele_pere';
+  if (Math.abs(px - CH.xm) < 24) return 'allele_mere';
+  return null;
+}
+
+window.Etapes.lancer({
+  id: 'expression_paire_homologues', titre: 'Gène, locus, allèles ; mutation', graine: 23,
+  parametres: {
+    allele_pere: { defaut: 'A', schema: '\'A\' | \'B\' | \'O\' (l’allèle du gène ABO sur le chromosome paternel, vue paire)', lire: v => { const s = String(v || '').trim().toUpperCase(); return ALLELES.includes(s) ? s : undefined; } },
+    allele_mere: { defaut: 'O', schema: '\'A\' | \'B\' | \'O\' (l’allèle du gène ABO sur le chromosome maternel, vue paire)', lire: v => { const s = String(v || '').trim().toUpperCase(); return ALLELES.includes(s) ? s : undefined; } },
+  },
+  poignees: {
+    toucher: (x, y, k) => toucherBande(x, y, k),
+    bouger: () => {},
+    lacher: (id, k, api) => { const n = ALLELES[(ALLELES.indexOf(k.P[id]) + 1) % 3]; api.poser({ [id]: n }); },
+  },
+  vues: {
+    paire: { titre: 'Gène, locus, allèles', fin: 16, moments: MP, dessiner: dessinerPaire, voit: voitPaire,
+      reglages: { deux_alleles_identiques: { allele_pere: 'A', allele_mere: 'A' }, deux_alleles_differents: { allele_pere: 'A', allele_mere: 'O' } },
+      motifs: { paire: 'la paire de chromosomes n° 9 : un chromosome d’origine paternelle, un d’origine maternelle', locus: 'le gène du groupe sanguin est au même endroit sur les deux chromosomes : le locus', allele_pere: 'sur le chromosome paternel, l’allèle s’écrit dans la bande', allele_mere: 'sur le chromosome maternel, l’allèle s’écrit dans la bande', deux_alleles_identiques: 'deux allèles identiques A et A : groupe [A]', deux_alleles_differents: 'deux allèles différents du même gène, A et O : groupe [A]' },
+      conclusion: 'Un gène occupe un locus ; ses formes sont les allèles (A, B, O) ; les deux allèles d’une paire déterminent le caractère.',
+      // un nouvel allèle choisi : la lettre se réécrit à sa place, la scène ne repart pas de zéro
+      surReglage: () => {},
+      texte: 'Paire de chromosomes n° 9 : le gène du groupe sanguin (système ABO) est au même locus sur le chromosome paternel et le maternel ; allèles A, B, O ; A et B dominent O, A et B codominants ; AA ou AO → [A], BB ou BO → [B], AB → [AB], OO → [O].',
+      explication: [{ repere: 'chromosome_pere', texte: 'Un chromosome vient du père, l’autre de la mère : une paire.' }, { repere: 'locus', texte: 'Le gène est au même endroit sur les deux : son locus.' }, { repere: 'allele_pere', texte: 'Chaque chromosome porte une forme du gène : un allèle.' }, { repere: 'caractere', texte: 'Les deux allèles déterminent le caractère : le groupe sanguin.' }] },
+    mutation: { titre: 'Une mutation crée un nouvel allèle', fin: 14, moments: MM, dessiner: dessinerMutation, voit: voitMutation,
+      motifs: { colonies: 'sans antibiotique, des centaines de colonies', antibiotique: 'repiquage sur une boîte avec streptomycine', resistantes: 'seules 2 colonies poussent : des bactéries résistantes, rares, déjà présentes avant', nucleotide_change: 'un nucléotide du gène change : G devient T', nouvel_allele: 'l’allèle muté est un nouvel allèle' },
+      conclusion: 'Mutation : modification de la séquence des nucléotides d’un gène ; elle crée un nouvel allèle.',
+      texte: 'Bactéries sur boîte sans antibiotique : des centaines de colonies ; repiquées sur streptomycine : 2 colonies résistantes, rares, déjà présentes avant. Un nucléotide du gène change (… CTG GAG … → … CTG GAT …) : allèle muté = nouvel allèle.',
+      explication: [{ repere: 'boite_sans', texte: 'Sans antibiotique, toutes les bactéries poussent.' }, { repere: 'colonie_resistante', texte: 'Avec streptomycine, seules les rares bactéries résistantes poussent.' }, { repere: 'nucleotide_mute', texte: 'Un nucléotide a changé : G devient T.' }, { repere: 'allele_mute', texte: 'L’allèle muté est un nouvel allèle du gène.' }] },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

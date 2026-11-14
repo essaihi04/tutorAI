@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>De la cellule au chromosome — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="genetique.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="De la cellule au chromosome : la cellule, son noyau en interphase (enveloppe à pores, nucléoplasme, nucléole, chromatine), l’ADN enroulé autour des histones ; puis la chromatine qui se condense en chromosome à une chromatide, et le chromosome à deux chromatides reliées par le centromère"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="etapes.js"></script>
+<script>
+/*
+ * De la cellule au chromosome (cours « Notion de l’information génétique », 2 Bac PC BIOF, 11 novembre 2026). Capacités NIG2, NIG8.
+ * Vue zoom : cellule → noyau en interphase (enveloppe double à pores, nucléoplasme, nucléole, chromatine) → un fil de chromatine
+ * agrandi : l’ADN enroulé autour des histones (nucléosome). Aucune échelle en nm (hors programme).
+ * Vue chromosome : la chromatine se condense en chromosome à une chromatide ; après la phase S, chromosome à deux chromatides
+ * reliées par le centromère. Le vivant est peint (règle 7) ; la craie écrit les légendes.
+ */
+const { lisse, rampe, entre, Peint } = window.Etapes;
+const TAU = Math.PI * 2;
+
+/* ── Vue zoom ──────────────────────────────────────────────────────── */
+const Z1 = { cx: 112, cy: 222, rx: 88, ry: 70, nx: 126, ny: 214, nr: 24 };
+const Z2 = { cx: 340, cy: 222, r: 88 };
+const Z3 = { x0: 484, x1: 744, y: 222, perles: [522, 584, 646, 708], r: 17 };
+const ZM = { cellule: 2.2, noyau: 4.2, enveloppe_pores: 6.0, nucleole: 7.8, chromatine: 9.6, adn_histones: 12.8 };
+/** Fil de nucléosomes : l’ADN (double hélice fine, bleu) enroulé autour de boules d’histones (beige). */
+function nucleosomes(x, a) {
+  x.save(); x.globalAlpha = a;
+  const P = Z3.perles, y = Z3.y;
+  const brin = (phase, couleur) => {
+    x.strokeStyle = couleur; x.lineWidth = 2.2; x.beginPath();
+    let premier = true;
+    for (let px = Z3.x0; px <= Z3.x1; px += 2) {
+      const pr = P.find(p => Math.abs(px - p) < Z3.r + 3);
+      let py;
+      if (pr !== undefined) { const u = (px - pr) / (Z3.r + 3); py = y + Math.sin(u * Math.PI * 1.7 + phase) * (Z3.r + 2) * Math.cos(u * Math.PI / 2.2); }
+      else py = y + Math.sin(px * .32 + phase) * 4;
+      premier ? x.moveTo(px, py) : x.lineTo(px, py); premier = false;
+    }
+    x.stroke();
+  };
+  brin(0, 'rgba(96,165,250,.95)');
+  for (const p of P) {
+    const g = x.createRadialGradient(p - 6, y - 7, 2, p, y, Z3.r + 2);
+    g.addColorStop(0, '#fff7e6'); g.addColorStop(.6, '#e8cf9f'); g.addColorStop(1, '#a8885a');
+    x.fillStyle = g; x.beginPath(); x.arc(p, y, Z3.r, 0, TAU); x.fill();
+  }
+  brin(Math.PI, 'rgba(147,197,253,.95)');
+  x.restore();
+}
+function dessinerZoom(c, k) {
+  const t = k.t;
+  c.direct(() => {
+    const x = c.ctx;
+    if (t >= .2) { Peint.cellule(x, Z1.cx, Z1.cy, Z1.rx, Z1.ry, rampe(t, .2, .6)); Peint.noyau(x, Z1.nx, Z1.ny, Z1.nr, rampe(t, .2, .6), { double: false }); }
+    if (t >= 2.6) Peint.noyau(x, Z2.cx, Z2.cy, Z2.r, rampe(t, 2.6, .8), { double: true });
+    if (t >= 10.0) nucleosomes(x, rampe(t, 10.0, 1.0));
+    if (t >= 9.6 && t < 13.4) { // un fil de chromatine mis en lumière
+      x.save(); x.globalAlpha = .6 * rampe(t, 8.6, .8); x.strokeStyle = '#facc15'; x.lineWidth = 2.4; x.beginPath();
+      for (let i = 0; i <= 20; i++) { const px = Z2.cx + 20 + i * 2.6, py = Z2.cy + 40 + Math.sin(i * .9) * 6; i ? x.lineTo(px, py) : x.moveTo(px, py); }
+      x.stroke(); x.restore();
+    }
+  });
+  c.texte('De la cellule à l’ADN', 14, 26, { couleur: 'cyan', taille: 19 });
+  if (t >= .2) { c.repere('cellule', Z1.cx - Z1.rx, Z1.cy - Z1.ry, 2 * Z1.rx, 2 * Z1.ry, 'la cellule'); c.repere('membrane', Z1.cx - Z1.rx - 4, Z1.cy - 20, 14, 40, 'la membrane plasmique'); c.repere('cytoplasme', Z1.cx - 70, Z1.cy + 10, 60, 40, 'le cytoplasme'); c.repere('noyau', Z1.nx - Z1.nr, Z1.ny - Z1.nr, 2 * Z1.nr, 2 * Z1.nr, 'le noyau'); }
+  if (k.ecrit(c, 'cel', ZM.cellule - 1.2)) {
+    c.ligne(46, 168, 40, 132, { couleur: 'blanc', largeur: 1.2 }); k.T(c, 'membrane plasmique', 14, 124, { couleur: 'blanc', taille: 14 });
+    c.ligne(70, 262, 56, 318, { couleur: 'blanc', largeur: 1.2 }); k.T(c, 'cytoplasme', 20, 334, { couleur: 'blanc', taille: 14 });
+    c.ligne(132, 236, 150, 318, { couleur: 'violet', largeur: 1.2 }); k.T(c, 'noyau', 140, 334, { couleur: 'violet', taille: 14 });
+  }
+  if (k.ecrit(c, 'noy', 2.6)) {
+    c.rect(Z1.nx - Z1.nr - 3, Z1.ny - Z1.nr - 3, 2 * Z1.nr + 6, 2 * Z1.nr + 6, { couleur: 'jaune', largeur: 1.4, arrondi: 4 });
+    c.ligne(Z1.nx + Z1.nr + 3, Z1.ny - Z1.nr - 3, Z2.cx - 40, Z2.cy - Z2.r + 8, { couleur: 'tresfaible', largeur: 1.2, pointille: [4, 5] });
+    c.ligne(Z1.nx + Z1.nr + 3, Z1.ny + Z1.nr + 3, Z2.cx - 40, Z2.cy + Z2.r - 8, { couleur: 'tresfaible', largeur: 1.2, pointille: [4, 5] });
+  }
+  if (t >= 2.6) c.repere('noyau', Z2.cx - Z2.r, Z2.cy - Z2.r, 2 * Z2.r, 2 * Z2.r, 'le noyau en interphase');
+  if (k.ecrit(c, 'noy2', ZM.noyau - .9)) k.T(c, 'noyau en interphase', Z2.cx, 72, { couleur: 'violet', taille: 16, align: 'center' });
+  if (t >= ZM.enveloppe_pores - 1) { c.repere('enveloppe', Z2.cx - 70, Z2.cy - Z2.r - 6, 70, 18, 'l’enveloppe nucléaire (double)'); c.repere('pores', 398, 132, 26, 26, 'un pore nucléaire'); }
+  if (k.ecrit(c, 'env', ZM.enveloppe_pores - 1)) {
+    c.ligne(300, 140, 270, 104, { couleur: 'blanc', largeur: 1.2 }); k.T(c, 'enveloppe nucléaire', 196, 98, { couleur: 'blanc', taille: 14 });
+    c.ligne(412, 146, 432, 112, { couleur: 'blanc', largeur: 1.2 }); k.T(c, 'pore nucléaire', 412, 104, { couleur: 'blanc', taille: 14 });
+  }
+  if (t >= ZM.nucleole - 1) { c.repere('nucleole', Z2.cx + 4, Z2.cy - 22, 36, 36, 'le nucléole'); c.repere('nucleoplasme', Z2.cx - 70, Z2.cy + 10, 50, 40, 'le nucléoplasme'); }
+  if (k.ecrit(c, 'nuc', ZM.nucleole - 1)) {
+    c.ligne(370, 232, 392, 318, { couleur: 'blanc', largeur: 1.2 }); k.T(c, 'nucléole', 376, 334, { couleur: 'blanc', taille: 14 });
+    c.ligne(292, 250, 270, 318, { couleur: 'blanc', largeur: 1.2 }); k.T(c, 'nucléoplasme', 214, 334, { couleur: 'blanc', taille: 14 });
+  }
+  if (t >= ZM.chromatine - 1) c.repere('chromatine', Z2.cx + 14, Z2.cy + 28, 62, 26, 'la chromatine');
+  if (k.ecrit(c, 'chr', ZM.chromatine - 1)) {
+    k.T(c, 'chromatine : ADN déroulé,', 210, 362, { couleur: 'jaune', taille: 15 });
+    k.T(c, 'en fins filaments', 210, 380, { couleur: 'jaune', taille: 15 });
+  }
+  if (k.ecrit(c, 'fil', 10.0)) {
+    c.ligne(Z2.cx + 70, Z2.cy + 34, Z3.x0 - 4, Z3.y - 34, { couleur: 'tresfaible', largeur: 1.2, pointille: [4, 5] });
+    c.ligne(Z2.cx + 70, Z2.cy + 48, Z3.x0 - 4, Z3.y + 34, { couleur: 'tresfaible', largeur: 1.2, pointille: [4, 5] });
+    k.T(c, 'un fil de chromatine agrandi', 614, 150, { couleur: 'faible', taille: 14, align: 'center' });
+  }
+  if (t >= 10.0) { c.repere('adn', Z3.x0, Z3.y - 8, 30, 16, 'l’ADN'); c.repere('histones', Z3.perles[1] - Z3.r, Z3.y - Z3.r, 2 * Z3.r, 2 * Z3.r, 'des histones (protéines)'); c.repere('nucleosome', Z3.perles[2] - Z3.r - 6, Z3.y - Z3.r - 6, 2 * Z3.r + 12, 2 * Z3.r + 12, 'un nucléosome'); }
+  if (k.ecrit(c, 'his', ZM.adn_histones - 1.6)) {
+    c.ligne(Z3.x0 + 10, Z3.y + 6, Z3.x0 + 4, 270, { couleur: 'bleu', largeur: 1.2 }); k.T(c, 'ADN', Z3.x0 - 6, 286, { couleur: 'bleu', taille: 15 });
+    c.ligne(Z3.perles[1], Z3.y + Z3.r, Z3.perles[1] + 10, 270, { couleur: 'blanc', largeur: 1.2 }); k.T(c, 'histones (protéines)', Z3.perles[1] - 6, 286, { couleur: 'blanc', taille: 14 });
+    c.rect(Z3.perles[2] - Z3.r - 7, Z3.y - Z3.r - 7, 2 * Z3.r + 14, 2 * Z3.r + 14, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+    k.T(c, 'nucléosome = ADN + histones', 614, 318, { couleur: 'jaune', taille: 16, align: 'center' });
+  }
+}
+function voitZoom(k) {
+  const t = k.t, m = ['Un dessin de gauche à droite, chaque niveau agrandi à sa droite.'];
+  if (t >= .2) m.push('Niveau 1 : une cellule animale peinte (cytoplasme rosé, membrane, noyau violet).');
+  if (t >= ZM.cellule - 1.2) m.push('Écrit : « membrane plasmique », « cytoplasme », « noyau ».');
+  if (t >= 2.6) m.push('Niveau 2 : le noyau agrandi, écrit « noyau en interphase » : pas de chromosomes visibles, une pelote de fins filaments.');
+  if (t >= ZM.enveloppe_pores - 1) m.push('L’enveloppe nucléaire est double (deux traits) et percée de pores (points clairs) ; écrit « enveloppe nucléaire », « pore nucléaire ».');
+  if (t >= ZM.nucleole - 1) m.push('Le nucléole (boule sombre) et le nucléoplasme (fond clair) sont écrits.');
+  if (t >= ZM.chromatine - 1) m.push('Un filament est éclairé en jaune ; écrit « chromatine : ADN déroulé, en fins filaments ».');
+  if (t >= 10) m.push('Niveau 3 : un fil de chromatine agrandi : l’ADN (fil bleu) s’enroule autour de boules beiges, les histones' + (t >= ZM.adn_histones - 1.6 ? ' ; écrit « ADN », « histones (protéines) », un nucléosome encadré et « nucléosome = ADN + histones ».' : '.'));
+  return m;
+}
+
+/* ── Vue chromosome ────────────────────────────────────────────────── */
+const C1 = { cx: 190, cy: 222 }, C2 = { cx: 520, cy: 222 };
+const CM = { chromatine: 2.0, condensation: 4.2, chromosome: 6.8, une_chromatide: 8.4, deux_chromatides: 11.4, centromere: 13.4 };
+const N = 90;
+const PELOTE = [...Array(N + 1).keys()].map(i => { const u = i / N, a = u * 31 + Math.sin(u * 47) * 1.3, r = 18 + 52 * Math.abs(Math.sin(u * 13.1 + .4)); return [C1.cx + r * Math.cos(a), C1.cy + r * .85 * Math.sin(a * 1.07)]; });
+const BATON = [...Array(N + 1).keys()].map(i => { const u = i / N; return [C1.cx + Math.sin(u * 60) * 5, C1.cy - 70 + 140 * u]; });
+function filChromatine(x, u, a) {
+  const pts = PELOTE.map((p, i) => [entre(p[0], BATON[i][0], u), entre(p[1], BATON[i][1], u)]);
+  if (u < .97) {
+    x.save(); x.globalAlpha = a; x.lineCap = 'round'; x.lineJoin = 'round';
+    x.strokeStyle = 'rgba(126,34,206,.9)'; x.lineWidth = entre(1.4, 9, u * u); x.beginPath(); pts.forEach(([px, py], i) => (i ? x.lineTo(px, py) : x.moveTo(px, py))); x.stroke();
+    x.strokeStyle = 'rgba(233,200,255,.6)'; x.lineWidth = entre(.5, 3, u * u); x.stroke();
+    x.restore();
+  } else Peint.chromosome(x, C1.cx, C1.cy, 140, Math.PI / 2, Peint.VIOLET, { epaisseur: 13, centromere: .4, alpha: a });
+}
+function dessinerChromosome(c, k) {
+  const t = k.t, u = rampe(t, 2.6, 2.6), dbl = rampe(t, 9.0, 2.2);
+  c.direct(() => {
+    const x = c.ctx;
+    // le fond du noyau en interphase, qui s’efface quand le chromosome se forme
+    x.save(); x.globalAlpha = .35 * (1 - u); const g = x.createRadialGradient(C1.cx, C1.cy, 4, C1.cx, C1.cy, 92); g.addColorStop(0, 'rgba(226,200,240,.9)'); g.addColorStop(1, 'rgba(160,110,200,.5)'); x.fillStyle = g; x.beginPath(); x.arc(C1.cx, C1.cy, 90, 0, TAU); x.fill(); x.restore();
+    filChromatine(x, u, rampe(t, .2, .6));
+    if (dbl > 0) {
+      // le chromosome à deux chromatides apparaît à droite (copie identique, collée au centromère)
+      Peint.chromosome(x, C2.cx, C2.cy, 140, Math.PI / 2, Peint.VIOLET, { epaisseur: 13, centromere: .4, deux: true, ecart: entre(0, 10, dbl), alpha: Math.min(1, dbl * 3) });
+    }
+  });
+  c.texte('La chromatine se condense en chromosome', 14, 26, { couleur: 'cyan', taille: 19 });
+  c.repere('chromatine', C1.cx - 80, C1.cy - 75, 160, 150, u < .9 ? 'la chromatine' : 'le chromosome à une chromatide');
+  if (k.ecrit(c, 'chr', CM.chromatine - 1)) k.T(c, 'chromatine (interphase)', C1.cx, 112, { couleur: 'violet', taille: 15, align: 'center' });
+  if (k.ecrit(c, 'cond', CM.condensation - 1.4)) {
+    c.fleche(296, 96, 296, 146, { couleur: 'jaune', largeur: 1.6 }); k.T(c, 'condensation', 306, 118, { couleur: 'jaune', taille: 15 });
+    k.T(c, 'le fil s’enroule et s’épaissit', 306, 138, { couleur: 'faible', taille: 13 });
+  }
+  if (t >= CM.chromosome - .4) c.repere('chromosome_1', C1.cx - 16, C1.cy - 74, 32, 148, 'le chromosome à une chromatide');
+  if (k.ecrit(c, 'baton', CM.chromosome - .4)) k.T(c, 'chromosome', C1.cx, 318, { couleur: 'blanc', taille: 16, align: 'center' });
+  if (k.ecrit(c, 'une', CM.une_chromatide - .8)) {
+    k.T(c, 'à une chromatide', C1.cx, 338, { couleur: 'blanc', taille: 16, align: 'center' });
+    c.ligne(C1.cx - 10, C1.cy + 40, C1.cx - 60, C1.cy + 54, { couleur: 'blanc', largeur: 1.2 }); k.T(c, 'chromatide', C1.cx - 64, C1.cy + 60, { couleur: 'blanc', taille: 14, align: 'right' });
+    c.repere('chromatide', C1.cx - 12, C1.cy + 10, 24, 60, 'une chromatide');
+  }
+  if (k.ecrit(c, 'deux', CM.deux_chromatides - 2.2)) {
+    c.fleche(C1.cx + 50, C1.cy, C2.cx - 60, C2.cy, { couleur: 'orange', largeur: 2 });
+    k.T(c, 'phase S : réplication', (C1.cx + C2.cx) / 2 - 5, C1.cy - 12, { couleur: 'orange', taille: 15, align: 'center' });
+  }
+  if (t >= 9.0) c.repere('chromosome_2', C2.cx - 26, C2.cy - 74, 52, 148, 'le chromosome à deux chromatides');
+  if (k.ecrit(c, 'deux2', CM.deux_chromatides - .3)) {
+    k.T(c, 'chromosome', C2.cx, 318, { couleur: 'blanc', taille: 16, align: 'center' });
+    k.T(c, 'à deux chromatides', C2.cx, 338, { couleur: 'blanc', taille: 16, align: 'center' });
+  }
+  if (t >= CM.centromere - 1.2) { c.repere('centromere', C2.cx - 14, C2.cy - 26, 28, 24, 'le centromère'); c.repere('bras', C2.cx - 20, C2.cy + 10, 40, 60, 'un bras'); c.repere('encadre', 560, 368, 190, 36, '1 chromatide = 1 molécule d’ADN'); }
+  if (k.ecrit(c, 'cent', CM.centromere - 1.2)) {
+    c.ligne(C2.cx + 10, C2.cy - 14, C2.cx + 70, C2.cy - 40, { couleur: 'jaune', largeur: 1.2 }); k.T(c, 'centromère', C2.cx + 74, C2.cy - 42, { couleur: 'jaune', taille: 15 });
+    c.ligne(C2.cx + 12, C2.cy + 50, C2.cx + 70, C2.cy + 40, { couleur: 'blanc', largeur: 1.2 }); k.T(c, 'chromatide', C2.cx + 74, C2.cy + 44, { couleur: 'blanc', taille: 14 });
+    c.ligne(C2.cx - 14, C2.cy + 40, C2.cx - 60, C2.cy + 60, { couleur: 'blanc', largeur: 1.2 }); k.T(c, 'bras', C2.cx - 64, C2.cy + 66, { couleur: 'blanc', taille: 14, align: 'right' });
+    c.rect(560, 368, 190, 36, { couleur: 'vert', largeur: 1.5, arrondi: 6 }); k.T(c, '1 chromatide = 1 molécule d’ADN', 655, 392, { couleur: 'vert', taille: 14, align: 'center' });
+  }
+}
+function voitChromosome(k) {
+  const t = k.t, u = rampe(t, 2.6, 2.6), m = [];
+  if (u < .05) m.push('À gauche, dans un noyau en interphase, une pelote de fins filaments violets : la chromatine (écrit « chromatine (interphase) »).');
+  else if (u < .97) m.push('La chromatine se condense : le fil s’enroule, se raccourcit et s’épaissit (flèche « condensation »).');
+  else m.push('À gauche, le fil condensé est devenu un bâtonnet violet : un chromosome à une chromatide' + (t >= CM.une_chromatide - .8 ? ' (écrit « chromosome à une chromatide », « chromatide »).' : '.'));
+  if (t >= 9.0) m.push('Flèche orange « phase S : réplication » ; à droite le chromosome à deux chromatides identiques, collées au centromère (forme en X).');
+  if (t >= CM.centromere - 1.2) m.push('Écrit « centromère », « chromatide », « bras », et l’encadré vert « 1 chromatide = 1 molécule d’ADN ».');
+  return m;
+}
+
+window.Etapes.lancer({
+  id: 'genetique_zoom', titre: 'De la cellule au chromosome', graine: 13,
+  vues: {
+    zoom: { titre: 'De la cellule à l’ADN', fin: 13.6, moments: ZM, dessiner: dessinerZoom, voit: voitZoom,
+      motifs: { cellule: 'la cellule : membrane plasmique, cytoplasme, noyau', noyau: 'le noyau agrandi, en interphase', enveloppe_pores: 'l’enveloppe nucléaire, double, percée de pores', nucleole: 'le nucléole et le nucléoplasme', chromatine: 'la chromatine : l’ADN déroulé en fins filaments', adn_histones: 'l’ADN enroulé autour des histones : le nucléosome' },
+      conclusion: 'Dans le noyau en interphase, l’ADN est sous forme de chromatine, enroulé autour des histones.',
+      texte: 'Cellule → noyau en interphase (enveloppe nucléaire double à pores, nucléoplasme, nucléole, chromatine) → fil de chromatine : ADN enroulé autour des histones, nucléosome = ADN + histones.',
+      explication: [{ repere: 'noyau', texte: 'Le noyau en interphase : pas de chromosomes visibles.' }, { repere: 'enveloppe', texte: 'Une enveloppe double, percée de pores.' }, { repere: 'chromatine', texte: 'La chromatine : l’ADN déroulé en fins filaments.' }, { repere: 'nucleosome', texte: 'L’ADN s’enroule autour des histones : le nucléosome.' }] },
+    chromosome: { titre: 'La chromatine se condense en chromosome', fin: 14.2, moments: CM, dessiner: dessinerChromosome, voit: voitChromosome,
+      motifs: { chromatine: 'la chromatine, en fins filaments dans le noyau en interphase', condensation: 'la chromatine se condense : le fil s’enroule et s’épaissit', chromosome: 'un chromosome en bâtonnet', une_chromatide: 'un chromosome à une chromatide', deux_chromatides: 'après la phase S : un chromosome à deux chromatides', centromere: 'les deux chromatides reliées par le centromère' },
+      conclusion: 'Chromatine et chromosome : le même ADN, déroulé ou condensé ; après la phase S, deux chromatides reliées par le centromère.',
+      texte: 'La chromatine se condense en chromosome à une chromatide ; après la phase S (réplication), le chromosome a deux chromatides identiques reliées par le centromère ; 1 chromatide = 1 molécule d’ADN.',
+      explication: [{ repere: 'chromatine', texte: 'La chromatine se condense en chromosome.' }, { repere: 'chromosome_1', texte: 'Un chromosome à une chromatide : une molécule d’ADN.' }, { repere: 'chromosome_2', texte: 'Après la phase S, deux chromatides identiques.' }, { repere: 'centromere', texte: 'Elles sont reliées par le centromère.' }] },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

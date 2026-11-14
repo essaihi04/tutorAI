@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Courbe point par point — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="lumiere.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="À gauche, l’expérience : un laser, une fente, la tache sur l’écran qui change de largeur, et le tableau des mesures ; à droite, la courbe tracée point par point, la droite, le triangle de pente et l’identification"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * La courbe point par point (cours « Propagation d’une onde lumineuse », 10 novembre 2026).
+ * Vue « L’expérience » : petit montage vu de dessus (laser, fente, écran) et l’écran vu de face (tache peinte dont la
+ * largeur change), puis le tableau des mesures. Vue « La courbe » : axes (noms et unités), points à la craie, droite par
+ * l’origine, triangle de pente, identification.
+ * Courbes (?courbe= ou set_parameters {courbe}) :
+ *  - L_inverse_a (défaut) : D = 2,0 m, λ = 650 nm ; a = 0,40 ; 0,20 ; 0,10 ; 0,05 mm → L = 2λD/a = 6,5 ; 13 ; 26 ; 52 mm ;
+ *    k = 2λD = 2,6·10⁻⁶ m² = 2,6 mm² ; λ = k/(2D) = 6,5·10⁻⁷ m.
+ *  - L_a : mêmes mesures, L en fonction de a : pas une droite.
+ *  - theta_inverse_a : θ = λ/a = λ·(1/a) ; 1/a en m⁻¹ (×10³), θ en rad (×10⁻³) ; k = λ = 6,5·10⁻⁷ m.
+ *  - L_D (national 2021 N) : a = 0,06 mm, λ = 600 nm ; D = 0,5 ; 1,0 ; 1,5 ; 2,0 m → L = 1 ; 2 ; 3 ; 4 cm ; k = 2λ/a = 2·10⁻².
+ * La tache est peinte (intensité en (sin u / u)², affichée en racine pour l’œil) ; sa largeur est exacte à l’échelle
+ * de l’écran vu de face (2,2 px par mm). Dans le petit montage vu de dessus, l’éventail est exagéré pour l’œil.
+ * Un seul bouton ; un point de lecture se glisse sur la droite (coordonnées avec les unités des axes).
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');   // 2,50 → 2,5 ; 13,0 → 13
+const D_ = {
+  L_inverse_a: {
+    titre: 'L en fonction de 1/a', reglage: 'a', D: 2, lam: 650, vals: [.40, .20, .10, .05],
+    X: a => 1 / a, Y: a => 2.6 / a, Lmm: a => 2.6 / a, xmax: 22, ymax: 60, xt: [5, 10, 15, 20], yt: [10, 20, 30, 40, 50], xd: 0, yd: 0,
+    xlab: '1/a (mm⁻¹)', ylab: 'L (mm)', lineaire: true, f: x => 2.6 * x, xp: 10,
+    colonnes: ['a (mm)', '1/a (mm⁻¹)', 'L (mm)'], ligne: a => [fr(a, 2), fx(1 / a, 1), fx(2.6 / a, 1)],
+    tDroite: ['droite qui passe par l’origine :', 'fonction linéaire : L = k·(1/a)'],
+    penteX: '10 mm⁻¹', penteY: '26 mm', tPente: 'k = 26 mm / 10 mm⁻¹ = 2,6 mm² = 2,6·10⁻⁶ m²',
+    tIdent: ['L = 2λD·(1/a) donc k = 2λD', 'λ = k/(2D) = 6,5·10⁻⁷ m = 650 nm'],
+    k: 'k = 2,6 mm² = 2,6·10⁻⁶ m²', conclusion: 'L = 2λD·(1/a) donc k = 2λD ; λ = k/(2D) = 6,5·10⁻⁷ m = 650 nm',
+    lu: { x: 12.5, min: 1, max: 21, pas: .5, pos: [742, 72], texte: (x, y) => `lu : (${fx(x, 1)} mm⁻¹ ; ${fx(y, 1)} mm)`, phrase: (x, y) => `1/a = ${fx(x, 1)} mm⁻¹ et L = ${fx(y, 1)} mm` },
+    note: 'a diminue → L augmente',
+  },
+  L_a: {
+    titre: 'L en fonction de a', reglage: 'a', D: 2, lam: 650, vals: [.40, .20, .10, .05],
+    X: a => a, Y: a => 2.6 / a, Lmm: a => 2.6 / a, xmax: .45, ymax: 60, xt: [.1, .2, .3, .4], yt: [10, 20, 30, 40, 50], xd: 1, yd: 0,
+    xlab: 'a (mm)', ylab: 'L (mm)', lineaire: false, f: x => 2.6 / x,
+    colonnes: ['a (mm)', 'L (mm)'], ligne: a => [fr(a, 2), fx(2.6 / a, 1)],
+    tCourbe: ['ce n’est pas une droite :', 'L n’est pas proportionnelle à a.', 'On trace plutôt L en fonction de 1/a.'],
+    conclusion: 'ce n’est pas une droite : L n’est pas proportionnelle à a ; on trace L en fonction de 1/a',
+    lu: { x: .30, min: .06, max: .43, pas: .01, pos: [742, 172], texte: (x, y) => `lu : (${fr(x, 2)} mm ; ${fx(y, 1)} mm)`, phrase: (x, y) => `a = ${fr(x, 2)} mm et L = ${fx(y, 1)} mm` },
+    note: 'a diminue → L augmente',
+  },
+  theta_inverse_a: {
+    titre: 'θ en fonction de 1/a', reglage: 'a', D: 2, lam: 650, vals: [.40, .20, .10, .05],
+    X: a => 1 / a, Y: a => .65 / a, Lmm: a => 2.6 / a, xmax: 22, ymax: 15, xt: [5, 10, 15, 20], yt: [2, 4, 6, 8, 10, 12, 14], xd: 0, yd: 0,
+    xlab: '1/a (m⁻¹)', xmul: '×10³', ylab: 'θ (rad)', ymul: '×10⁻³', lineaire: true, f: x => .65 * x, xp: 10,
+    colonnes: ['a (mm)', '1/a (m⁻¹)', 'θ (rad)'], ligne: a => [fr(a, 2), `${fx(1 / a, 1)}·10³`, `${fx(.65 / a, 3)}·10⁻³`],
+    tDroite: ['droite qui passe par l’origine :', 'fonction linéaire : θ = k·(1/a)'],
+    penteX: '10·10³ m⁻¹', penteY: '6,5·10⁻³ rad', tPente: 'k = 6,5·10⁻³ rad / 10·10³ m⁻¹ = 6,5·10⁻⁷ m',
+    tIdent: ['θ = λ·(1/a) donc k = λ', 'λ = k = 6,5·10⁻⁷ m = 650 nm'],
+    k: 'k = 6,5·10⁻⁷ m', conclusion: 'θ = λ·(1/a) donc k = λ ; λ = 6,5·10⁻⁷ m = 650 nm',
+    lu: { x: 12.5, min: 1, max: 21, pas: .5, pos: [742, 72], texte: (x, y) => `lu : (${fx(x, 1)}·10³ m⁻¹ ; ${fx(y, 3)}·10⁻³ rad)`, phrase: (x, y) => `1/a = ${fx(x, 1)}·10³ m⁻¹ et θ = ${fx(y, 3)}·10⁻³ rad` },
+    note: 'a diminue → θ augmente',
+  },
+  L_D: {
+    titre: 'L en fonction de D', reglage: 'D', a: .06, lam: 600, vals: [.5, 1.0, 1.5, 2.0],
+    X: D => D, Y: D => 2 * D, Lmm: D => 20 * D, xmax: 2.4, ymax: 5, xt: [.5, 1, 1.5, 2], yt: [1, 2, 3, 4], xd: 1, yd: 0,
+    xlab: 'D (m)', ylab: 'L (cm)', lineaire: true, f: x => 2 * x, xp: 2,
+    colonnes: ['D (m)', 'L (cm)'], ligne: D => [fr(D, 1), fx(2 * D, 1)],
+    tDroite: ['droite qui passe par l’origine :', 'fonction linéaire : L = k·D'],
+    penteX: '2 m', penteY: '4·10⁻² m', tPente: 'k = 4·10⁻² m / 2 m = 2·10⁻² (sans unité)',
+    tIdent: ['L = (2λ/a)·D donc k = 2λ/a', 'λ = a·k/2 = 6·10⁻⁷ m = 600 nm'],
+    k: 'k = 2·10⁻² (sans unité)', conclusion: 'L = (2λ/a)·D donc k = 2λ/a ; λ = a·k/2 = 6·10⁻⁷ m = 600 nm',
+    lu: { x: 1.25, min: .1, max: 2.3, pas: .05, pos: [742, 72], texte: (x, y) => `lu : (${fx(x, 2)} m ; ${fx(y, 2)} cm)`, phrase: (x, y) => `D = ${fx(x, 2)} m et L = ${fx(y, 2)} cm` },
+    note: 'D augmente → L augmente',
+  },
+};
+const COURBES = Object.keys(D_);
+const demande = new URLSearchParams(location.search).get('courbe');
+const S = { courbe: COURBES.includes(demande) ? demande : 'L_inverse_a', t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0, xlu: null };
+const C = () => D_[S.courbe];
+S.xlu = C().lu.x;
+let M = {}, MM = {};
+const VITESSE = 1.5;                               // horloge de l’écriture (s de scène par s réelle)
+
+/* ── Géométrie ───────────────────────────────────────────────────────── */
+const RX = { x: 8, y: 44, w: 254, h: 368 }, RC = { x: 270, y: 44, w: 482, h: 368 };
+const O = { x: 322, y: 366 }, AXL = 400, AYL = 290;
+const PX = x => O.x + x * AXL / C().xmax, PY = y => O.y - y * AYL / C().ymax;
+const MV = { yc: 100, yh: 74, yb: 126, xs: 74 };             // petit montage vu de dessus
+const BANDE = { x: 18, w: 234, yc: 186, h: 18 }, PXMM = 2.2;  // écran vu de face : 2,2 px par mm (largeur exacte à cette échelle)
+
+/* ── Couleur de la radiation et peinture de la lumière ───────────────── */
+function couleurDe(nm) {
+  const l = clamp(nm, 380, 780); let r = 0, g = 0, b = 0;
+  if (l < 440) { r = (440 - l) / 60; b = 1; } else if (l < 490) { g = (l - 440) / 50; b = 1; } else if (l < 510) { g = 1; b = (510 - l) / 20; }
+  else if (l < 580) { r = (l - 510) / 70; g = 1; } else if (l < 645) { r = 1; g = (645 - l) / 65; } else r = 1;
+  const f = l < 420 ? .45 + .55 * (l - 380) / 40 : l > 700 ? .45 + .55 * (780 - l) / 80 : 1;
+  return [r, g, b].map(v => Math.round(255 * Math.pow(v * f, .8)));
+}
+const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+const sinc2 = u => (Math.abs(u) < 1e-6 ? 1 : (Math.sin(Math.PI * u) / (Math.PI * u)) ** 2);
+function cheminRond(ctx, R, r = 10) {
+  ctx.beginPath(); ctx.moveTo(R.x + r, R.y); ctx.arcTo(R.x + R.w, R.y, R.x + R.w, R.y + R.h, r); ctx.arcTo(R.x + R.w, R.y + R.h, R.x, R.y + R.h, r);
+  ctx.arcTo(R.x, R.y + R.h, R.x, R.y, r); ctx.arcTo(R.x, R.y, R.x + R.w, R.y, r); ctx.closePath();
+}
+function faisceau(ctx, x1, y1, x2, y2, col) {
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  for (const [w, a] of [[11, .05], [6, .13], [3, .35], [1.6, .8]]) { ctx.strokeStyle = rgba(col, a); ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); }
+  ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = .6; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.restore();
+}
+function plaque(ctx, x, y1, y2, w, bordEnBas) {
+  const g = ctx.createLinearGradient(x, 0, x + w, 0); g.addColorStop(0, '#3c4249'); g.addColorStop(.45, '#7b838c'); g.addColorStop(1, '#2b3036');
+  ctx.fillStyle = g; ctx.fillRect(x, y1, w, y2 - y1);
+  ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 1; const yb = bordEnBas ? y2 - .5 : y1 + .5; ctx.beginPath(); ctx.moveTo(x, yb); ctx.lineTo(x + w, yb); ctx.stroke();
+}
+/* Réglage affiché à l’instant t : la fente (ou l’écran) change pendant l’animation de chaque point. */
+function reglageA(t) {
+  const v = C().vals; let val = v[0];
+  for (let k = 2; k <= 4; k++) {
+    const t0 = M['anim_' + k], t1 = t0 + .9;
+    if (t0 === undefined || t < t0) break;
+    const e = clamp((t - t0) / (t1 - t0)); val = v[k - 2] + (v[k - 1] - v[k - 2]) * e * e * (3 - 2 * e);
+  }
+  return val;
+}
+function peindreExperience(ctx, val) {
+  const c = C(), col = couleurDe(c.lam), Lmm = c.Lmm(val), a = c.reglage === 'a' ? val : c.a, D = c.reglage === 'D' ? val : c.D;
+  ctx.save(); cheminRond(ctx, RX); ctx.clip();
+  const g = ctx.createRadialGradient(RX.x + 130, 150, 10, RX.x + 130, 150, 260); g.addColorStop(0, 'rgba(24,28,36,.93)'); g.addColorStop(1, 'rgba(6,8,12,.96)');
+  ctx.fillStyle = g; ctx.fillRect(RX.x, RX.y, RX.w, 202);
+  // Petit montage vu de dessus.
+  const XE = MV.xs + D * 76, h = Math.min(Lmm / 2 * 1.1, MV.yc - MV.yh - 2), gap = 1.5 + a * 10;      // éventail exagéré pour l’œil
+  const lg0 = ctx.createLinearGradient(0, MV.yc - 8, 0, MV.yc + 8); lg0.addColorStop(0, '#a7afb8'); lg0.addColorStop(.4, '#5d656e'); lg0.addColorStop(1, '#262a30');
+  ctx.fillStyle = lg0; ctx.beginPath(); ctx.roundRect(16, MV.yc - 8, 28, 16, 3); ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(XE + 5, MV.yh + 2, 2, MV.yb - MV.yh);
+  const ge = ctx.createLinearGradient(XE, 0, XE + 5, 0); ge.addColorStop(0, '#d8d5cb'); ge.addColorStop(1, '#8f8c83');
+  ctx.globalAlpha = .8; ctx.fillStyle = ge; ctx.fillRect(XE, MV.yh, 5, MV.yb - MV.yh); ctx.globalAlpha = 1;
+  faisceau(ctx, 46, MV.yc, MV.xs, MV.yc, col);
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const lf = ctx.createLinearGradient(MV.xs, 0, XE, 0); lf.addColorStop(0, rgba(col, .42)); lf.addColorStop(1, rgba(col, .16));
+  ctx.fillStyle = lf; ctx.beginPath(); ctx.moveTo(MV.xs + 3, MV.yc - gap); ctx.lineTo(XE, MV.yc - h); ctx.lineTo(XE, MV.yc + h); ctx.lineTo(MV.xs + 3, MV.yc + gap); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = rgba(col, .9); ctx.fillRect(XE - 1, MV.yc - h, 3, 2 * h);
+  ctx.restore();
+  plaque(ctx, MV.xs - 3, MV.yh, MV.yc - gap, 6, true); plaque(ctx, MV.xs - 3, MV.yc + gap, MV.yb, 6, false);
+  // L’écran vu de face : une bande mate, la tache peinte (intensité exacte en fonction de la position).
+  const B = BANDE, xc = B.x + B.w / 2, hw = Math.max(1.5, Lmm / 2 * PXMM);
+  const gb = ctx.createLinearGradient(0, B.yc - 17, 0, B.yc + 17); gb.addColorStop(0, '#2a2d31'); gb.addColorStop(1, '#17191c');
+  ctx.fillStyle = gb; ctx.fillRect(B.x, B.yc - 17, B.w, 34);
+  ctx.save(); ctx.beginPath(); ctx.rect(B.x, B.yc - 17, B.w, 34); ctx.clip(); ctx.globalCompositeOperation = 'lighter';
+  const N = 64, bandeau = (alpha) => { const lg = ctx.createLinearGradient(B.x, 0, B.x + B.w, 0); for (let i = 0; i <= N; i++) { const x = B.x + B.w * i / N; lg.addColorStop(i / N, rgba(col, alpha * Math.sqrt(sinc2((x - xc) / hw)))); } return lg; };
+  for (let j = -4; j <= 4; j++) { const f = Math.exp(-((j / 2.6) ** 2)); ctx.fillStyle = bandeau(f); ctx.fillRect(B.x, B.yc + j * 2.4 - 1.2, B.w, 2.4); }
+  ctx.fillStyle = bandeau(.25); ctx.fillRect(B.x, B.yc - 15, B.w, 30);                         // halo
+  ctx.fillStyle = 'rgba(255,255,255,.45)'; ctx.beginPath(); ctx.ellipse(xc, B.yc, hw * .32, 3.2, 0, 0, 7); ctx.fill();
+  ctx.restore(); ctx.restore();
+  return { XE, xc, hw, Lmm, a, D };
+}
+
+/* ── Dessin : l’écriture suit l’horloge de la scène ; chaque moment = fin de l’écriture de sa phase ── */
+const marque = (c, nom) => { MM[nom] = c.cur; };
+function dessiner(c) {
+  scene.cadre(41); MM = {};
+  const K = C(), val = reglageA(c.t), E = peindreLaVue(c, val);
+  c.texte('L’expérience', RX.x + 6, 32, { couleur: 'cyan', taille: 17 });
+  c.rect(RX.x, RX.y, RX.w, RX.h, { couleur: 'tresfaible', arrondi: 10 });
+  c.texte(`La courbe : ${K.titre}`, RC.x + 6, 32, { couleur: 'cyan', taille: 17 });
+  c.rect(RC.x, RC.y, RC.w, RC.h, { couleur: 'tresfaible', arrondi: 10 });
+  c.texte('écran vu de face', 14, 160, { couleur: 'faible', taille: 13 });
+  // Axes : noms ET unités.
+  c.axe(O.x, O.y, O.x + AXL + 20, O.y, K.xt.map(x => [x * AXL / K.xmax / (AXL + 20), fr(x, K.xd)]), { taille: 13 });
+  c.axe(O.x, O.y, O.x, O.y - AYL - 14, K.yt.map(y => [y * AYL / K.ymax / (AYL + 14), fr(y, K.yd)]), { taille: 13, vertical: true });
+  c.texte('0', O.x - 8, O.y + 18, { couleur: 'faible', taille: 13, align: 'right' });
+  c.texte(K.ylab, O.x + 10, 70, { couleur: 'blanc', taille: 16 });
+  if (K.ymul) c.texte(K.ymul, O.x + 72, 70, { couleur: 'faible', taille: 14 });
+  c.texte(K.xlab, 742, O.y - 10, { couleur: 'blanc', taille: 16, align: 'right' });
+  if (K.xmul) c.texte(K.xmul, 742, O.y + 20, { couleur: 'faible', taille: 14, align: 'right' });
+  // Tableau des mesures : l’en-tête.
+  const cols = K.colonnes.length === 3 ? [50, 135, 216] : [72, 190];
+  c.texte('Mesures', 14, 266, { couleur: 'cyan', taille: 15 });
+  K.colonnes.forEach((t, i) => c.texte(t, cols[i], 288, { couleur: 'blanc', taille: 13, align: 'center', max: 80 }));
+  c.ligne(16, 295, 254, 295, { couleur: 'tresfaible', largeur: 1.4 });
+  marque(c, 'trace');
+  // Les quatre points, un par mesure.
+  for (let k = 1; k <= 4; k++) {
+    c.pause(.3);
+    if (k > 1) { marque(c, 'anim_' + k); c.pause(1.0); }
+    const v = K.vals[k - 1], x = PX(K.X(v)), y = PY(K.Y(v)), yRow = 290 + 23 * k;
+    K.ligne(v).forEach((t, i) => c.texte(t, cols[i], yRow, { couleur: 'jaune', taille: 15, align: 'center', max: 80, duree: .35 }));
+    // Lignes de rappel des points : effacées quand la droite (ou la courbe) arrive, pour laisser lire les écritures.
+    // (même durée dans les deux cas : les instants des moments ne bougent pas)
+    const efface = M.debut_courbe !== undefined && c.t >= M.debut_courbe;
+    if (efface) c.pause(.5);
+    else { c.ligne(x, O.y, x, y, { couleur: 'tresfaible', largeur: 1.3, pointille: [4, 5], duree: .25 }); c.ligne(O.x, y, x, y, { couleur: 'tresfaible', largeur: 1.3, pointille: [4, 5], duree: .25 }); }
+    c.point(x, y, 4.8, 'jaune');
+    c.trait([[x - 6, y - 6], [x + 6, y + 6]], { couleur: 'jaune', largeur: 1.6, duree: .06 }); c.trait([[x - 6, y + 6], [x + 6, y - 6]], { couleur: 'jaune', largeur: 1.6, duree: .06 });
+    marque(c, 'point_' + k);
+  }
+  c.pause(.3); c.texte(K.note, 14, 404, { couleur: 'vert', taille: 15 });
+  if (K.lineaire) {
+    // La droite par l’origine.
+    c.pause(.4); marque(c, 'debut_courbe');
+    const x2 = .96 * K.xmax;
+    c.ligne(O.x, O.y, PX(x2), PY(K.f(x2)), { couleur: 'vert', largeur: 2.4 });
+    c.texte(K.tDroite[0], 338, 92, { couleur: 'vert', taille: 16, max: 330 });
+    c.texte(K.tDroite[1], 338, 114, { couleur: 'vert', taille: 17, max: 330 });
+    marque(c, 'droite');
+    // Le triangle de pente, depuis l’origine jusqu’au point de mesure.
+    c.pause(.4);
+    const xp = PX(K.xp), yp = PY(K.f(K.xp));
+    c.ligne(O.x, O.y - 1, xp, O.y - 1, { couleur: 'orange', largeur: 3 });
+    c.ligne(xp, O.y, xp, yp, { couleur: 'orange', largeur: 2.2, pointille: [6, 5] });
+    c.texte(K.penteX, (O.x + xp) / 2 + 16, O.y - 8, { couleur: 'orange', taille: 14, align: 'center' });
+    c.texte(K.penteY, xp + 8, (O.y + yp) / 2 + 5, { couleur: 'orange', taille: 14 });
+    c.texte(K.tPente, 338, 142, { couleur: 'orange', taille: 16, max: 295 });
+    marque(c, 'pente');
+    // L’identification avec la formule du cours.
+    c.pause(.5);
+    c.texte(K.tIdent[0], 338, 172, { couleur: 'blanc', taille: 16, max: 215 });
+    c.texte(K.tIdent[1], 338, 196, { couleur: 'jaune', taille: 16, max: 215 });
+    c.rect(332, 179, 226, 24, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+    marque(c, 'identification');
+  } else {
+    c.pause(.4); marque(c, 'debut_courbe');
+    c.courbe(u => { const x = .05 + (.43 - .05) * u; return [PX(x), PY(K.f(x))]; }, 40, { couleur: 'vert', largeur: 2.4 });
+    K.tCourbe.forEach((t, i) => c.texte(t, 440, 92 + 22 * i, { couleur: i ? 'blanc' : 'vert', taille: 16, max: 300 }));
+    marque(c, 'courbe');
+  }
+  c.pause(.8); marque(c, 'fin');
+  // Le point de lecture (poignée) : sur la droite, une fois tracée.
+  const luVisible = c.t >= (K.lineaire ? MM.droite : MM.courbe), lu = pointLu();
+  if (luVisible) c.direct(() => {
+    const x = PX(lu.x), y = PY(lu.y);
+    c.ligne(x, O.y, x, y, { couleur: 'rose', largeur: 1.3, pointille: [3, 4] }); c.ligne(O.x, y, x, y, { couleur: 'rose', largeur: 1.3, pointille: [3, 4] });
+    c.cercle(x, y, 7, { couleur: 'rose', largeur: 2 });
+    c.texte(K.lu.texte(lu.x, lu.y), K.lu.pos[0], K.lu.pos[1], { couleur: 'rose', taille: 15, align: 'right' });
+  });
+  // Repères (toujours déclarés).
+  c.repere('vue_experience', RX.x, RX.y, RX.w, RX.h, 'l’expérience et ses mesures');
+  c.repere('vue_courbe', RC.x, RC.y, RC.w, RC.h, `la courbe : ${K.titre}`);
+  c.repere('axe_x', O.x, O.y - 22, AXL + 22, 44, `axe des abscisses : ${K.xlab}${K.xmul ? ' ' + K.xmul : ''}`);
+  c.repere('axe_y', O.x - 40, O.y - AYL - 40, 120, AYL + 40, `axe des ordonnées : ${K.ylab}${K.ymul ? ' ' + K.ymul : ''}`);
+  c.repere('origine', O.x - 14, O.y - 14, 28, 28, 'l’origine');
+  for (let k = 1; k <= 4; k++) { const v = K.vals[k - 1]; c.repere('point_' + k, PX(K.X(v)) - 10, PY(K.Y(v)) - 10, 20, 20, `point ${k}`); }
+  if (K.lineaire) {
+    c.repere('droite', O.x, PY(K.f(.96 * K.xmax)), PX(.96 * K.xmax) - O.x, O.y - PY(K.f(.96 * K.xmax)), 'la droite qui passe par l’origine');
+    c.repere('pente', O.x, PY(K.f(K.xp)) - 4, PX(K.xp) - O.x + 90, O.y - PY(K.f(K.xp)) + 8, K.k);
+    c.repere('identification', 332, 154, 300, 52, K.conclusion);
+  } else {
+    c.repere('droite', PX(.05), PY(K.f(.05)), PX(.43) - PX(.05), PY(K.f(.43)) - PY(K.f(.05)), 'la courbe (pas une droite)');
+    c.repere('courbe', PX(.05), PY(K.f(.05)), PX(.43) - PX(.05), PY(K.f(.43)) - PY(K.f(.05)), 'la courbe (pas une droite)');
+    c.repere('identification', 434, 74, 310, 74, K.conclusion);
+  }
+  c.repere('point_lu', PX(lu.x) - 12, PY(lu.y) - 12, 24, 24, `le point lu : ${K.lu.phrase(lu.x, lu.y)}`);
+  c.repere('ecran_face', BANDE.x, BANDE.yc - 17, BANDE.w, 34, `la tache : L = ${fx(E.Lmm, 1)} mm`);
+  c.repere('fente', MV.xs - 10, MV.yh, 20, MV.yb - MV.yh, `la fente : a = ${fr(E.a, 2)} mm`);
+  c.repere('tableau_mesures', 10, 250, 250, 140, 'le tableau des mesures');
+  const fini = c.fin();
+  M = MM;
+  return fini || !S.running;
+}
+/* La vue de l’expérience : peinte, puis la craie (valeurs, cote L). */
+function peindreLaVue(c, val) {
+  let E; c.direct(() => { E = peindreExperience(c.ctx, val); });
+  const K = C();
+  c.direct(() => {
+    c.texte(K.reglage === 'a' ? `a = ${fr(E.a, 2)} mm` : `D = ${fr(E.D, 2)} m`, 14, 64, { couleur: 'jaune', taille: 15 });
+    c.texte(K.reglage === 'a' ? `D = ${fr(K.D, 1)} m ; λ = ${K.lam} nm` : `a = ${fr(K.a, 2)} mm ; λ = ${K.lam} nm`, 256, 64, { couleur: 'faible', taille: 13, align: 'right' });
+    c.texte('fente', MV.xs, MV.yb + 15, { couleur: 'faible', taille: 12, align: 'center' });
+    c.texte('écran', E.XE + 2, MV.yb + 15, { couleur: 'faible', taille: 12, align: 'center' });
+    c.cote(E.xc - E.hw, 214, E.xc + E.hw, 214, '', { couleur: 'rose' });
+    const unite = K.reglage === 'D' ? `L = ${fx(E.Lmm / 10, 2)} cm` : `L = ${fx(E.Lmm, 1)} mm`;
+    c.texte(unite, BANDE.x + BANDE.w / 2, 236, { couleur: 'rose', taille: 15, align: 'center' });
+  });
+  return E;
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+const craie = scene.craie;
+scene.cadre = function (graine) {
+  const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  craie.debut(graine, S.t);
+  const s = Math.min(W / VW, H / VH) || 1;
+  scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
+  craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
+  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+  return craie;
+};
+function calculer() { const t = S.t, r = S.running; S.t = 1e6; S.running = false; dessiner(craie); dessiner(craie); S.t = t; S.running = r; scene.sale = true; }
+const momentsListe = () => (C().lineaire ? ['point_1', 'point_2', 'point_3', 'point_4', 'droite', 'pente', 'identification', 'fin'] : ['point_1', 'point_2', 'point_3', 'point_4', 'courbe', 'fin']);
+function moments() { if (M.fin === undefined) calculer(); const out = { trace: +M.trace.toFixed(2) }; for (const k of momentsListe()) out[k] = +M[k].toFixed(2); return out; }
+function pointLu() { const K = C(); const x = clamp(S.xlu, K.lu.min, K.lu.max); return { x, y: K.f(x) }; }
+
+const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t += dt * VITESSE;   // la craie écrit un peu plus vite que le kit
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.jusqua = null; S.running = false;
+    if (S.t >= M.fin - 1e-6) { finir(); return true; }
+    S.pause = true; etiquette(); bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 1)} s`) + '.');
+    pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); return true;
+  }
+  if (M.fin !== undefined && S.t >= M.fin) { S.t = M.fin; finir(); return true; }
+  if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function finir() { S.running = false; S.fait = true; S.pause = false; etiquette(); bulle($('feedback'), C().lineaire ? `Droite par l’origine : ${C().k} ; ${C().tIdent[1]}.` : 'Ce n’est pas une droite : on trace L en fonction de 1/a.', 'good'); pont.noter('measurement', { courbe: S.courbe }); pont.emettre(); }
+const MOTIFS = {
+  trace: 'les axes et le tableau sont tracés', point_1: 'le premier point', point_2: 'le deuxième point', point_3: 'le troisième point', point_4: 'le quatrième point',
+  droite: 'la droite passe par l’origine : fonction linéaire', pente: 'le triangle de pente et k', identification: 'l’identification avec la formule du cours',
+  courbe: 'ce n’est pas une droite', fin: 'tout est écrit',
+};
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
+function ceQuiSeVoit() {
+  if (M.fin === undefined) calculer();
+  const K = C(), t = S.t, ok = n => M[n] !== undefined && t >= M[n] - 1e-6, val = reglageA(t), lu = pointLu();
+  const m = [`Courbe « ${S.courbe} » (${K.titre})${S.running ? ', la scène s’écrit' : S.fait ? ', fin : tout est écrit' : S.pause ? ', arrêt sur image' : ', pas encore lancée'}.`,
+    `Axes : abscisses ${K.xlab}${K.xmul ? ' ' + K.xmul : ''}, ordonnées ${K.ylab}${K.ymul ? ' ' + K.ymul : ''}.`,
+    K.reglage === 'a' ? `Expérience : D = ${fr(K.D, 1)} m, λ = ${K.lam} nm ; la fente affichée a = ${fr(val, 2)} mm, la tache mesure L = ${fx(K.Lmm(val), 1)} mm.`
+      : `Expérience : a = ${fr(K.a, 2)} mm, λ = ${K.lam} nm ; l’écran est à D = ${fr(val, 2)} m, la tache mesure L = ${fx(K.Lmm(val) / 10, 2)} cm.`];
+  const pts = [];
+  for (let k = 1; k <= 4; k++) if (ok('point_' + k)) pts.push(`point ${k} : (${K.ligne(K.vals[k - 1]).slice(K.colonnes.length === 3 ? 1 : 0).join(' ; ')})`);
+  m.push(pts.length ? `Points tracés à la craie (${K.colonnes.slice(K.colonnes.length === 3 ? 1 : 0).join(' ; ')}) : ${pts.join(' ; ')}.` : 'Aucun point tracé encore.');
+  if (K.lineaire) {
+    if (ok('droite')) m.push(`Droite verte qui passe par l’origine ; écrit : « ${K.tDroite[1]} ».`);
+    if (ok('pente')) m.push(`Triangle de pente orange depuis l’origine : ${K.penteX} et ${K.penteY} ; écrit : ${K.tPente}.`);
+    if (ok('identification')) m.push(`Identification écrite : ${K.conclusion}.`);
+  } else if (ok('courbe')) m.push(`Courbe verte qui descend ; écrit : ${K.conclusion}.`);
+  if (ok(K.lineaire ? 'droite' : 'courbe')) m.push(`Point de lecture (rose, se glisse sur la ${K.lineaire ? 'droite' : 'courbe'}) : ${K.lu.phrase(lu.x, lu.y)}.`);
+  return m.join(' ');
+}
+
+/* ── Commandes ────────────────────────────────────────────────────────── */
+function start() { S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); bulle($('feedback'), 'On mesure L pour chaque réglage, puis on trace…'); pont.noter('start', { courbe: S.courbe }); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
+function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); bulle($('feedback'), 'La craie continue…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  calculer(); const t = +p.time_s; if (!Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = clamp(t, 0, M.fin); S.fait = S.t >= M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+  etiquette(); scene.sale = true; bulle($('feedback'), `Arrêt sur image : t = ${fr(S.t, 1)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function playUntil(p) {
+  calculer();
+  const nom = (p.moment === 'trace' || momentsListe().includes(p.moment)) ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+  S.jusqua = clamp(cible, .01, M.fin); S.motif = nom ? MOTIFS[nom] : ''; S.running = true; S.pause = false; etiquette(); bulle($('feedback'), 'Observe…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+const auPas = (v, K) => +clamp(Math.round(v / K.lu.pas) * K.lu.pas, K.lu.min, K.lu.max).toFixed(2);
+function setParameters(p) {
+  let change = false;
+  if (p.courbe && COURBES.includes(p.courbe) && p.courbe !== S.courbe) { S.courbe = p.courbe; S.xlu = C().lu.x; M = {}; calculer(); change = true; }
+  if (p.x_lu !== undefined && p.x_lu !== null && p.x_lu !== '' && Number.isFinite(+p.x_lu)) { S.xlu = auPas(+p.x_lu, C()); scene.sale = true; }
+  const lu = pointLu();
+  pont.noter('set_parameters', { courbe: S.courbe, x_lu: lu.x });
+  if (change) { start(); return; }
+  bulle($('feedback'), `Point lu : ${C().lu.phrase(lu.x, lu.y)}.`); pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+
+/* Poignée : le point de lecture, glissé le long de la droite (ou de la courbe). */
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => {
+    const K = C(); if (M.fin === undefined || S.t < (K.lineaire ? M.droite : M.courbe)) return null;
+    const [x, y] = scene.local(px, py), lu = pointLu(); return Math.hypot(x - PX(lu.x), y - PY(lu.y)) < 16 ? 'lu' : null;
+  },
+  bouger: (id, px, py) => { const K = C(), [x] = scene.local(px, py), v = auPas((x - O.x) * K.xmax / AXL, K); if (v !== S.xlu) { S.xlu = v; scene.sale = true; } },
+  lacher: () => { const lu = pointLu(); bulle($('feedback'), `Point lu : ${C().lu.phrase(lu.x, lu.y)}.`); pont.noter('set_parameters', { x_lu: lu.x }); pont.emettre(); },
+});
+
+const EXPLICATIONS = {
+  L_inverse_a: [
+    { repere: 'vue_experience', texte: 'On change la fente : a = 0,40 ; 0,20 ; 0,10 ; 0,05 mm, et on mesure L chaque fois.' },
+    { repere: 'axe_x', texte: 'En abscisse, 1/a en mm⁻¹ ; en ordonnée, L en mm.' },
+    { repere: 'droite', texte: 'Les points sont alignés avec l’origine : fonction linéaire, L = k·(1/a).' },
+    { repere: 'pente', texte: 'k = 26 mm / 10 mm⁻¹ = 2,6 mm² = 2,6·10⁻⁶ m².' },
+    { repere: 'identification', texte: 'L = 2λD·(1/a), donc k = 2λD et λ = k/(2D) = 6,5·10⁻⁷ m = 650 nm.' },
+  ],
+  L_a: [
+    { repere: 'axe_x', texte: 'En abscisse, a en mm ; en ordonnée, L en mm.' },
+    { repere: 'courbe', texte: 'Ce n’est pas une droite : L n’est pas proportionnelle à a.' },
+    { repere: 'identification', texte: 'On trace plutôt L en fonction de 1/a.' },
+  ],
+  theta_inverse_a: [
+    { repere: 'axe_x', texte: 'En abscisse, 1/a en m⁻¹ (×10³) ; en ordonnée, θ en rad (×10⁻³).' },
+    { repere: 'droite', texte: 'Droite par l’origine : θ = k·(1/a).' },
+    { repere: 'pente', texte: 'k = 6,5·10⁻³ rad / 10·10³ m⁻¹ = 6,5·10⁻⁷ m.' },
+    { repere: 'identification', texte: 'θ = λ·(1/a), donc k = λ = 650 nm.' },
+  ],
+  L_D: [
+    { repere: 'vue_experience', texte: 'Même fente a = 0,06 mm, λ = 600 nm ; on recule l’écran : D = 0,5 ; 1 ; 1,5 ; 2 m.' },
+    { repere: 'droite', texte: 'Droite par l’origine : L = k·D.' },
+    { repere: 'pente', texte: 'k = 4·10⁻² m / 2 m = 2·10⁻², sans unité.' },
+    { repere: 'identification', texte: 'L = (2λ/a)·D, donc k = 2λ/a et λ = a·k/2 = 6·10⁻⁷ m = 600 nm.' },
+  ],
+};
+window.Tableau.explication(EXPLICATIONS);
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+calculer();
+const config = { id: 'ondes_lumineuses_courbe', version: '1.0', title: 'La courbe point par point', variants: COURBES.map(id => ({ id, label: D_[id].titre })), commands: commandes,
+  command_schema: {
+    set_parameters: { courbe: COURBES.join(' | ') + ' (change la courbe et la retrace depuis le début)', x_lu: 'abscisse du point lu, dans l’unité de l’axe x (L_inverse_a, theta_inverse_a : 1..21 pas 0.5 ; L_D : 0.1..2.3 pas 0.05 ; L_a : 0.06..0.43 pas 0.01)' },
+    set_time: { time_s: '0..fin (arrêt sur cet instant de l’écriture, en s ; voir moments)' },
+    play_until: { moment: 'trace | point_1 | point_2 | point_3 | point_4 | droite | pente | identification | fin (L_a : courbe au lieu de droite, pente, identification)', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'La courbe point par point : on change la fente (ou la distance D), on mesure L, on place les points, on trace la droite par l’origine (fonction linéaire), on calcule la pente k avec un triangle, puis on identifie avec L = 2λD/a. L = f(1/a) : k = 2λD ; θ = f(1/a) : k = λ ; L = f(D) : k = 2λ/a. Convertir les unités des axes.',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle', ce_qui_se_voit: ceQuiSeVoit(), current_variant: S.courbe,
+    time_s: +S.t.toFixed(2), parameters: { courbe: S.courbe, x_lu: pointLu().x, y_lu: +pointLu().y.toFixed(4), axe_x: C().xlab + (C().xmul ? ' ' + C().xmul : ''), axe_y: C().ylab + (C().ymul ? ' ' + C().ymul : '') },
+    moments: moments() }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'L’expérience va commencer…');
+setTimeout(() => { if (!S.running && S.t === 0 && !S.pause) start(); }, 900);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

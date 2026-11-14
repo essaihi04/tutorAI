@@ -1,0 +1,1104 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dosage pH-métrique — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ab.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Dosage de l’acide éthanoïque par la soude à la craie : montage peint, réaction de dosage à la loupe, équivalence, courbe pH = f(V_B) avec poignée V_B, tangentes parallèles, courbe dérivée"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * dosage.html (contrat acides_bases § 6) — cours « Transformations liées aux réactions acide-base » (phys_ch13_acides_bases, 2e Bac PC BIOF, novembre 2026).
+ * Vues (?vue=) : montage (défaut) | reaction | equivalence | courbe | tangentes | derivee. Poignée V_B (vue courbe).
+ * Contrat : outils/cours/notes/cours/acides_bases_contrat_simulations.md. Kit (commun.js, exposants.js, ab.css) non modifié :
+ * les aides (formules, flèches dessinées, moteur, peinture) sont copiées dans la page.
+ */
+/* ── Formules chimiques à la craie : indices ₂ et charges ⁺ ⁻ ²⁻ rendus (sans modifier exposants.js ni le kit) ──────────
+ * « MnO₄⁻ » devient « MnO_{4}^{−} » ; le découpage « _{…} » accepte tout caractère avant (« [I⁻]₀ »). */
+(function () {
+  const C = window.Tableau.Craie, P = C.prototype, texteAvant = P.texte, segAvant = C.segments;
+  const SUP = { '⁺': '+', '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+  const SUB = { '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9' };
+  const chim = s => String(s).replace(/[⁺⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUP[ch]).join('') + '}')
+    .replace(/[₀₁₂₃₄₅₆₇₈₉]+/g, g => '_{' + [...g].map(ch => SUB[ch]).join('') + '}');
+  C.segments = function (s) {
+    const out = [], re = /_\{([^}]+)\}/g; let i = 0, m;
+    while ((m = re.exec(s))) { if (m.index > i) out.push(...segAvant(s.slice(i, m.index))); out.push({ t: m[1], sub: true }); i = re.lastIndex; }
+    if (i < s.length) out.push(...segAvant(s.slice(i)));
+    return out;
+  };
+  P.texte = function (s, x, y, o) { return texteAvant.call(this, chim(s), x, y, o); };
+  window.chim = chim;
+})();
+
+/* ── Moteur du déroulé (copie de chimie/etat-equilibre-tableau/facteurs.html : HOLD = Math.max) ─────────────────────────────────── */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lisse = p => p * p * (3 - 2 * p);
+const lerp = (a, b, f) => a + (b - a) * f;
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');
+const ECRITURE = 2.5;
+function Moteur(o) {
+  const q = new URLSearchParams(location.search);
+  const S = { vue: o.vues.includes(q.get('vue')) ? q.get('vue') : o.vues[0], t: 0, running: false, pause: false, fait: false,
+    jusqua: null, motif: '', emis: 0, dit: '', mesure: false };
+  const V = o.vitesse ?? 1.7, T0 = o.T0 ?? .8, HOLD = {};
+  let TL = null;
+  function construire() {
+    let s = T0; const ev = [];
+    for (const e of o.etapes(S.vue)) {
+      const anim = e.anim || 0, d = { ...e, anim, debut: s, ecrit: s + (e.ecritDes ?? anim) };
+      d.fin = Math.max(s + anim, d.ecrit + (HOLD[e.nom] ?? 1.5)) + .35;
+      s = d.fin; ev.push(d);
+    }
+    const mom = {}; for (const e of ev) mom[e.nom] = e.fin; mom.fin = s + (o.queue ?? .6);
+    TL = { ev, M: mom };
+  }
+  const ev = nom => TL.ev.find(e => e.nom === nom);
+  const M = {
+    S, ev, evs: () => TL.ev, Moments: () => TL.M,
+    p(nom) { const e = ev(nom); if (!e) return 0; return e.anim > 0 ? clamp((S.t - e.debut) / e.anim, 0, 1) : (S.t >= e.debut - 1e-6 ? 1 : 0); },
+    commence(nom) { const e = ev(nom); return !!e && S.t > e.debut + 1e-6; },
+    vu(nom) { if (nom === 'fin') return S.t >= TL.M.fin - 1e-6; const e = ev(nom); return !!e && S.t >= e.fin - 1e-6; },
+    etape(c, nom, fn) {
+      const e = ev(nom); if (!e) return;
+      const t = c.t, cur = c.cur, comp = c.complet, w0 = e.ecrit;
+      c.t = S.t > 1e5 ? 1e9 : w0 + (S.t - w0) * V; c.cur = w0;
+      try { fn(); } finally { if (S.mesure) HOLD[nom] = Math.max(HOLD[nom] || 0, (c.cur - w0) / V); c.t = t; c.cur = cur; if (!S.running) c.complet = comp; }
+    },
+    etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
+  };
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const cadreBase = scene.cadre;
+  scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
+  M.scene = scene; M.craie = scene.craie;
+  function calculer() {
+    construire();
+    const t = S.t, r = S.running; S.t = 1e6; S.running = false; S.mesure = true;
+    for (const k of Object.keys(HOLD)) delete HOLD[k];   // une étape dessinée en plusieurs morceaux garde le plus long (max ci-dessus)
+    try { o.dessiner(scene.craie, M); } finally { S.t = t; S.running = r; S.mesure = false; }
+    construire(); scene.sale = true;
+  }
+  const sansSouligne = s => String(s).replace(/([A-Za-zΔτθ])_\{?([A-Za-z0-9]+)\}?/g, (m, a, i) => a + (/^\d+$/.test(i) ? [...i].map(d => '₀₁₂₃₄₅₆₇₈₉'[d]).join('') : i));
+  const dire = (texte, kind = '') => { texte = sansSouligne(texte); S.dit = texte; bulle($('feedback'), texte, kind); };
+  const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+  let pont = null;
+  const emettre = () => pont && pont.emettre();
+  const noter = (a, d) => pont && pont.noter(a, d);
+  scene.avancer = dt => {
+    if (!S.running) return !!(o.anime && o.anime());
+    const avant = S.t; S.t += dt;
+    for (const e of TL.ev) if (avant < e.debut && S.t >= e.debut && e.bulle) dire(e.bulle());
+    if (S.jusqua != null && S.t >= S.jusqua) {
+      S.t = S.jusqua; S.jusqua = null; S.running = false;
+      if (S.t >= TL.M.fin - 1e-6) { finir(); return true; }
+      S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fx(S.t, 1)} s`) + '.');
+      noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); return true;
+    }
+    if (S.t >= TL.M.fin) { S.t = TL.M.fin; finir(); return true; }
+    if (performance.now() - S.emis > 500) { S.emis = performance.now(); emettre(); }
+    return true;
+  };
+  function finir() { S.running = false; S.fait = true; S.pause = false; S.jusqua = null; etiquette(); dire(o.messageFin(M), 'good'); noter('measurement', o.params(M)); emettre(); }
+  function start() { o.reprise && o.reprise(); S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire(o.depart(M)); noter('start', o.params(M)); emettre(); }
+  function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); }
+  function resume() { if (S.running) return; o.reprise && o.reprise(); if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('Ça repart…'); noter('resume'); emettre(); }
+  function setTime(p) {
+    const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+    o.reprise && o.reprise(); S.running = false; S.jusqua = null; S.t = clamp(t, 0, TL.M.fin); S.fait = S.t >= TL.M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+    etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fx(S.t, 1)} s.`); noter('set_time', { time_s: S.t }); emettre();
+  }
+  function playUntil(p) {
+    const noms = o.etapes(S.vue).map(e => e.nom).concat('fin');
+    const nom = noms.includes(p.moment) ? p.moment : null, cible = nom ? TL.M[nom] : +p.time_s;
+    if (!Number.isFinite(cible) || (p.moment && !nom && (p.time_s == null || p.time_s === ''))) { dire(`Moment inconnu : ${p.moment}.`, 'bad'); emettre(); return; }
+    o.reprise && o.reprise();
+    if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+    S.jusqua = clamp(cible, .01, TL.M.fin); S.motif = nom ? (o.motifs[nom] || nom) : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+    noter('play_until', { moment: nom, time_s: S.jusqua }); emettre();
+  }
+  function setParameters(p) {
+    p = p || {};
+    const r = o.appliquer(p, M) || {};
+    if (r.vue && o.vues.includes(r.vue) && r.vue !== S.vue) { S.vue = r.vue; r.change = true; r.vueChange = true; }
+    if (r.change) { calculer(); if (r.vueChange) scene.reecrire(); }
+    noter('set_parameters', o.params(M));
+    if (r.apres) r.apres();
+    else if (r.change && !r.garder) start();
+    else { scene.sale = true; emettre(); }
+  }
+  Object.assign(M, { noter, calculer, dire, start, pause, resume, setTime, playUntil, setParameters, emettre, etiquette });
+  $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+  window.Tableau.explication(o.explications);
+  const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+  M.lancer = () => {
+    calculer();
+    const listeMoments = o.vues.map(v => `${o.vues.length > 1 ? v + ' : ' : ''}${o.etapes(v).map(e => e.nom).concat('fin').join(' | ')}`).join(' ; ');
+    const config = { id: o.id, version: '1.0', title: o.titre, variants: o.vues.length > 1 ? o.vues.map(id => ({ id, label: o.titres[id] })) : [], commands: commandes,
+      command_schema: { set_parameters: o.schema, set_time: { time_s: '0..fin (arrêt sur cet instant de la scène, en s ; voir moments)' },
+        play_until: { moment: listeMoments, time_s: 'ou un instant en s' } } };
+    pont = protocole({ id: o.id, commandes, config, texte: o.texte,
+      etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle',
+        ce_qui_se_voit: o.voir(M) + (S.dit ? ` La bulle dit : « ${S.dit} »` : ''), current_variant: S.vue, time_s: +S.t.toFixed(2),
+        parameters: o.params(M), moments: Object.fromEntries(Object.entries(TL.M).map(([k, v]) => [k, +v.toFixed(2)])) }),
+      progression: () => (S.fait ? 1 : 0),
+      executer: (cmd, p) => ({ start, reset: start, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+    dire(o.depart(M));
+    setTimeout(() => { if (!S.running && S.t === 0 && !S.pause && !S.fait) start(); }, 900);
+  };
+  return M;
+}
+/** Zone d’écriture du bas : le professeur efface les plus vieilles lignes (copie du modèle). */
+function zoneEcriture(c, M, liste, ys, o = {}) {
+  const S = M.S, x = o.x ?? 14, max = o.max ?? 730, taille = o.taille ?? 17, n = ys.length, vues = [];
+  if (S.mesure) {
+    for (const e of liste) M.etape(c, e.nom, () => { for (const [t, col] of e.lignes) c.texte(t, x, ys[0], { couleur: col, taille, max }); e.plus && e.plus(c); });
+    return vues;
+  }
+  let k = -1;
+  liste.forEach((e, j) => { const ev = M.ev(e.nom); if (ev && S.t > ev.ecrit + .05) k = j; });
+  const garde = new Set(); let nb = 0;
+  for (let j = k; j >= 0; j--) { const l = liste[j].lignes.length; if (nb + l > n) break; garde.add(j); nb += l; }
+  let y = 0;
+  liste.forEach((e, j) => {
+    if (j > k) return;
+    M.etape(c, e.nom, () => {
+      if (garde.has(j)) for (const [t, col] of e.lignes) { c.texte(t, x, ys[y++], { couleur: col, taille, max }); vues.push(t); }
+      e.plus && e.plus(c);
+    });
+  });
+  return vues;
+}
+/** Largeur (cadre) d’une formule écrite à la craie, indices et charges compris. */
+function larg(c, s, taille = 17) {
+  const T = window.Tableau, ctx = c.ctx; if (c.echelle && c.tailleMin) taille = Math.max(taille, c.tailleMin / c.echelle);
+  return T.Craie.segments(window.chim(s)).reduce((w, g) => { ctx.font = `${(g.sub || g.sup) ? taille * .62 : taille}px ${T.POLICE}`; return w + ctx.measureText(g.t).width; }, 0);
+}
+/** Équation « gauche → droite » : la flèche est DESSINÉE (la police n’a pas toutes les flèches). Renvoie { x, w }. */
+function eqn(c, x, y, gauche, droite, o = {}) {
+  const t = o.taille ?? 17, w1 = larg(c, gauche, t), w2 = larg(c, droite, t), fl = 30, tot = w1 + fl + 16 + w2;
+  const x0 = o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x, col = o.couleur ?? 'blanc';
+  c.texte(gauche, x0, y, { couleur: col, taille: t });
+  c.fleche(x0 + w1 + 8, y - t * .3, x0 + w1 + 8 + fl, y - t * .3, { couleur: col, largeur: 1.8, tete: 7 });
+  c.texte(droite, x0 + w1 + 16 + fl, y, { couleur: col, taille: t });
+  return { x: x0, w: tot };
+}
+/** Petit triangle « attention » à la craie (orange), le « ! » dedans. */
+function attention(c, x, y, o = {}) {
+  const col = o.couleur ?? 'orange', h = o.h ?? 16;
+  c.trait([[x, y], [x + h * .58, y - h], [x + h * 1.16, y]], { couleur: col, largeur: 1.8, ferme: true });
+  c.texte('!', x + h * .58, y - 3, { couleur: col, taille: h * .8, align: 'center' });
+}
+
+
+/* Indice après une parenthèse (« (dx/dt)₀ ») : le kit ne le découpe que derrière une lettre ; on passe alors par l’écriture
+ * à indices d’exposants.js (qui utilise le découpage « _{…} » ci-dessus). */
+(function () {
+  const P = window.Tableau.Craie.prototype, avant = P.texte;
+  P.texte = function (s, x, y, o = {}) {
+    const t = window.chim(s);
+    if (!/[^A-Za-zτθΔλωφ_]_\{/.test(t)) return avant.call(this, s, x, y, o);
+    let taille = o.taille ?? 18;
+    this.ctx.font = `${o.gras ? '700 ' : ''}${taille}px ${window.Tableau.POLICE}`;
+    this._verifierCadre(t.replace(/[_^{}]/g, ''), x, y, taille, o.align);
+    if (this.echelle && this.tailleMin) taille = Math.max(taille, this.tailleMin / this.echelle);
+    return this._texteIndices(t, x, y, o, taille);
+  };
+})();
+
+/* ── Flèches DESSINÉES (la police n’a pas toutes les flèches) : → sens 1, ← sens 2, ⇌ les deux sens ─────────────────── */
+/** Flèche entre xa et xb à la hauteur y : '→', '←' ou '⇌' (demi-flèche haute c1 vers la droite, demi-flèche basse c2 vers la gauche). */
+function flecheType(c, xa, xb, y, type, o = {}) {
+  const col = o.couleur ?? 'blanc', l = o.largeur ?? 1.8;
+  if (type === '→') c.fleche(xa, y, xb, y, { couleur: col, largeur: l, tete: 7 });
+  else if (type === '←') c.fleche(xb, y, xa, y, { couleur: col, largeur: l, tete: 7 });
+  else {
+    const c1 = o.c1 ?? col, c2 = o.c2 ?? col, d = 3.4;
+    c.trait([[xa, y - d], [xb, y - d], [xb - 8, y - d - 6]], { couleur: c1, largeur: l });
+    c.trait([[xb, y + d], [xa, y + d], [xa + 8, y + d + 6]], { couleur: c2, largeur: l });
+  }
+}
+/** Équation « gauche (flèche) droite » ; renvoie { x, w, xa, xb, ya } (position de la flèche). */
+function eqf(c, x, y, gauche, droite, o = {}) {
+  let t = o.taille ?? 17;
+  const mesure = tt => larg(c, gauche, tt) + (o.fl ?? 34) + 20 + larg(c, droite, tt);
+  if (o.max && mesure(t) > o.max) t = t * o.max / mesure(t);
+  const w1 = larg(c, gauche, t), fl = o.fl ?? 34, tot = mesure(t);
+  const x0 = o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x, col = o.couleur ?? 'blanc';
+  if (!o.sansTexte) c.texte(gauche, x0, y, { couleur: col, taille: t });
+  const xa = x0 + w1 + 10, xb = xa + fl, ya = y - t * .3;
+  if (!o.sansFleche) flecheType(c, xa, xb, ya, o.type ?? '→', { couleur: o.couleurFleche ?? col, c1: o.c1, c2: o.c2 });
+  if (!o.sansTexte) c.texte(droite, xb + 10, y, { couleur: col, taille: t });
+  return { x: x0, w: tot, xa, xb, ya };
+}
+
+
+/* ── Peint (copie de chimie/etat-equilibre-tableau/facteurs.html) ── */
+const rgba = ([r, g, b, a], k = 1) => `rgba(${Math.round(r)},${Math.round(g)},${Math.round(b)},${(a * k).toFixed(3)})`;
+const melange = (c1, c2, f) => c1.map((v, i) => lerp(v, c2[i], clamp(f, 0, 1)));
+const eclair = (c, k) => [lerp(c[0], 255, k), lerp(c[1], 255, k), lerp(c[2], 255, k), c[3]];
+const sombre = (c, k) => [c[0] * (1 - k), c[1] * (1 - k), c[2] * (1 - k), Math.min(1, c[3] * (1 + k * .4))];
+const EAU = [222, 234, 244, .12];
+const Peint = {
+  sphere(ctx, x, y, r, [clair, milieu, foncé], a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r); g.addColorStop(0, clair); g.addColorStop(.45, milieu); g.addColorStop(1, foncé);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  },
+  /** Bécher vu de face : verre, solution (dégradé, ménisque, reflet), bec, graduations. niveau 0 → 1. */
+  becher(ctx, B, niveau, col, a = 1) {
+    const { x, y, w, h } = B, ep = 3, fond = y + h, yS = fond - ep - niveau * (h - 16);
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.beginPath(); ctx.ellipse(x + w / 2 + 3, fond + 4, w / 2, 4.5, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(210,230,250,.06)'; ctx.beginPath(); ctx.roundRect(x, y, w, h, [2, 2, 10, 10]); ctx.fill();
+    if (niveau > .004) {
+      ctx.save(); ctx.beginPath(); ctx.roundRect(x + ep, y, w - 2 * ep, h - ep, [0, 0, 8, 8]); ctx.clip();
+      const g = ctx.createLinearGradient(0, yS, 0, fond); g.addColorStop(0, rgba(eclair(col, .18))); g.addColorStop(1, rgba(sombre(col, .22)));
+      ctx.fillStyle = g; ctx.fillRect(x, yS, w, fond - yS);
+      ctx.fillStyle = 'rgba(255,255,255,.07)'; ctx.fillRect(x + w * .64, yS + 5, w * .09, Math.max(0, fond - yS - 10));
+      ctx.restore();
+      ctx.fillStyle = rgba(eclair(col, .35), 1.1); ctx.beginPath(); ctx.ellipse(x + w / 2, yS, w / 2 - ep, 3, 0, 0, 7); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,.32)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x + ep + 2, yS); ctx.lineTo(x + w - ep - 2, yS); ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(225,238,250,.78)'; ctx.lineWidth = 2.2; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(x - 6, y - 4); ctx.quadraticCurveTo(x - 1, y - 2, x, y + 5); ctx.lineTo(x, fond - 10); ctx.quadraticCurveTo(x, fond, x + 10, fond);
+    ctx.lineTo(x + w - 10, fond); ctx.quadraticCurveTo(x + w, fond, x + w, fond - 10); ctx.lineTo(x + w, y); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.14)'; ctx.fillRect(x + w * .11, y + 12, w * .05, h - 28);
+    ctx.strokeStyle = 'rgba(225,238,250,.35)'; ctx.lineWidth = 1;
+    for (let k = 1; k <= 4; k++) { const gy = fond - 8 - k * (h - 24) / 5; ctx.beginPath(); ctx.moveTo(x + w - 14, gy); ctx.lineTo(x + w - 4, gy); ctx.stroke(); }
+    ctx.restore();
+    return yS;
+  },
+  /** Eau d’un bain (cristallisoir) peinte PAR-DESSUS le bécher : il paraît plongé dedans. */
+  bain(ctx, B, ySurf, col, a = 1) {
+    const { x, y, w, h } = B, fond = y + h;
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createLinearGradient(0, ySurf, 0, fond); g.addColorStop(0, rgba(eclair(col, .2))); g.addColorStop(1, rgba(sombre(col, .3)));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x + 3, ySurf, w - 6, fond - ySurf - 3, [0, 0, 12, 12]); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(x + 5, ySurf); ctx.lineTo(x + w - 5, ySurf); ctx.stroke();
+    ctx.strokeStyle = 'rgba(225,238,250,.7)'; ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, fond - 14); ctx.quadraticCurveTo(x, fond, x + 14, fond); ctx.lineTo(x + w - 14, fond); ctx.quadraticCurveTo(x + w, fond, x + w, fond - 14); ctx.lineTo(x + w, y); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.1)'; ctx.fillRect(x + 7, y + 8, 4, h - 22);
+    ctx.restore();
+  },
+  goutte(ctx, x, y, col, a = 1) {
+    ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = rgba(col, 1.5);
+    ctx.beginPath(); ctx.moveTo(x, y - 6); ctx.quadraticCurveTo(x + 4, y, x, y + 3.5); ctx.quadraticCurveTo(x - 4, y, x, y - 6); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.fillRect(x - 1.2, y - 1, 1.2, 1.6); ctx.restore();
+  },
+  /** Filet de liquide qui coule (versement). */
+  filet(ctx, x, y1, y2, col, a = 1) { ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = rgba(col, 2.2); ctx.fillRect(x - 1.6, y1, 3.2, y2 - y1); ctx.restore(); },
+};
+
+let MO = null;
+/** Ions qui s’agitent dans une zone (liste [{ col, r, v, hl }]) ; le temps est celui de la scène : tout se fige à l’arrêt. */
+function ions(ctx, Z, liste, t, a = 1) {
+  const tri = u => { const m = ((u % 2) + 2) % 2; return m < 1 ? m : 2 - m; };
+  ctx.save(); ctx.globalAlpha = a;
+  liste.forEach((o, i) => {
+    const h1 = ((i * 7919 + 3) % 97) / 97, h2 = ((i * 104729 + 13) % 89) / 89, h3 = ((i * 31337 + 7) % 83) / 83;
+    const vx = o.v * (.55 + .9 * h3) / (Z.x1 - Z.x0), vy = o.v * (.5 + .9 * h1) / (Z.y1 - Z.y0);
+    const x = Z.x0 + tri(h1 * 2 + vx * t * (h2 > .5 ? 1 : -1)) * (Z.x1 - Z.x0), y = Z.y0 + tri(h2 * 2 + vy * t) * (Z.y1 - Z.y0);
+    Peint.sphere(ctx, x, y, o.r ?? 5, o.col);
+    if (o.hl) { ctx.strokeStyle = '#facc15'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, (o.r ?? 5) + 5, 0, 7); ctx.stroke(); }
+    o.pos = [x, y];
+  });
+  ctx.restore();
+}
+/** Étape en cours (la dernière commencée). */
+function etapeEnCours(M) { let n = 'avant le début'; for (const e of M.evs()) if (M.commence(e.nom)) n = e.nom; return n; }
+/** Le moteur commun, avec les moments, motifs et repères de la page. */
+const MOTIFS_DE = ETAPES => new Proxy({}, { get: (_, nom) => (nom === 'fin' ? 'fin' : ((ETAPES(MO ? MO.S.vue : '') || []).find(e => e.nom === nom) || {}).motif) });
+
+/* ── Pièces propres au chapitre « transformations dans les deux sens » : ⇌ dessinée, pH-mètre, sonde, fiole, pipette ── */
+/** Équation « gauche ⇌ droite » : la double flèche est DESSINÉE (deux demi-flèches). Renvoie { x, w }. */
+function eqn2(c, x, y, gauche, droite, o = {}) {
+  const t = o.taille ?? 17, w1 = larg(c, gauche, t), w2 = larg(c, droite, t), fl = 32, tot = w1 + fl + 16 + w2;
+  const x0 = o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x, col = o.couleur ?? 'blanc';
+  const a = x0 + w1 + 8, b = a + fl, ym = y - t * .3;
+  c.texte(gauche, x0, y, { couleur: col, taille: t });
+  c.ligne(a, ym - 3, b, ym - 3, { couleur: o.c1 ?? col, largeur: 1.7 }); c.ligne(b - 7, ym - 8, b, ym - 3, { couleur: o.c1 ?? col, largeur: 1.7, duree: .05 });
+  c.ligne(b, ym + 3, a, ym + 3, { couleur: o.c2 ?? col, largeur: 1.7 }); c.ligne(a + 7, ym + 8, a, ym + 3, { couleur: o.c2 ?? col, largeur: 1.7, duree: .05 });
+  c.texte(droite, b + 8, y, { couleur: col, taille: t });
+  return { x: x0, w: tot };
+}
+const ACIDE = [222, 234, 244, .16];                      // solutions acides : incolores, comme en vrai
+const H3O = ['#ffe1c7', '#f97316', '#7c2d12'], MOL = ['#eef1f4', '#9aa3ab', '#4b535b'];
+/** pH-mètre peint : boîtier gris, afficheur vert (pH à 0,1 près). */
+function phmetre(c, A, texte) {
+  c.direct(() => {
+    const ctx = c.ctx, { x, y, w, h } = A; ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.roundRect(x + 4, y + 5, w, h, 9); ctx.fill();
+    const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#a9b1b8'); g.addColorStop(1, '#6b737b');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 9); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1.2; ctx.stroke();
+    const e = { x: x + 10, y: y + 9, w: w - 20, h: 34 }, ge = ctx.createLinearGradient(0, e.y, 0, e.y + e.h); ge.addColorStop(0, '#b9f0a0'); ge.addColorStop(1, '#79c36a');
+    ctx.fillStyle = ge; ctx.beginPath(); ctx.roundRect(e.x, e.y, e.w, e.h, 4); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.fillRect(e.x + 3, e.y + 3, e.w - 6, 3);
+    ctx.fillStyle = '#12300c'; ctx.font = '700 21px "Courier New", monospace'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillText(texte, e.x + e.w - 7, e.y + e.h / 2 + 1);
+    ctx.fillStyle = '#2b3036'; ctx.font = '700 12px Arial, sans-serif'; ctx.textAlign = 'left'; ctx.fillText('pH-mètre', x + 10, y + h - 10);
+    Peint.sphere(ctx, x + w - 16, y + h - 12, 5.5, ['#e5e9ec', '#9aa3ab', '#4a5158']);
+    ctx.restore();
+  });
+}
+const ecranPH = A => ({ x: A.x + 10, y: A.y + 9, w: A.w - 20, h: 34 });
+/** Sonde de pH en verre : tête sombre en haut (yH), tube de verre, boule de verre en bas (yB). */
+function sonde(ctx, x, yH, yB) {
+  ctx.save();
+  ctx.fillStyle = '#2f353b'; ctx.beginPath(); ctx.roundRect(x - 6, yH, 12, 22, 3); ctx.fill();
+  const g = ctx.createLinearGradient(x - 5, 0, x + 5, 0); g.addColorStop(0, 'rgba(210,230,250,.35)'); g.addColorStop(.5, 'rgba(240,248,255,.12)'); g.addColorStop(1, 'rgba(210,230,250,.4)');
+  ctx.fillStyle = g; ctx.fillRect(x - 5, yH + 22, 10, yB - yH - 28);
+  ctx.strokeStyle = 'rgba(225,238,250,.8)'; ctx.lineWidth = 1.2; ctx.strokeRect(x - 5, yH + 22, 10, yB - yH - 28);
+  const gb = ctx.createRadialGradient(x - 2, yB - 4, 1, x, yB - 2, 7); gb.addColorStop(0, 'rgba(255,255,255,.75)'); gb.addColorStop(1, 'rgba(190,215,240,.35)');
+  ctx.fillStyle = gb; ctx.beginPath(); ctx.arc(x, yB - 3, 6.5, 0, 7); ctx.fill(); ctx.strokeStyle = 'rgba(225,238,250,.85)'; ctx.stroke();
+  ctx.fillStyle = 'rgba(160,170,180,.7)'; ctx.fillRect(x - 1, yH + 26, 2, yB - yH - 34);
+  ctx.restore();
+}
+/** Barre peinte (quantité, τ) de hauteur h (cadre) posée en (x, yBas). */
+function barre(ctx, x, yBas, w, h, couleur) {
+  if (h <= 0) return;
+  ctx.save(); const g = ctx.createLinearGradient(x, 0, x + w, 0); g.addColorStop(0, couleur[0]); g.addColorStop(.5, couleur[1]); g.addColorStop(1, couleur[2]);
+  ctx.fillStyle = g; ctx.globalAlpha = .9; ctx.fillRect(x, yBas - h, w, h); ctx.globalAlpha = 1;
+  ctx.strokeStyle = 'rgba(255,255,255,.4)'; ctx.lineWidth = 1; ctx.strokeRect(x, yBas - h, w, h); ctx.restore();
+}
+const BLEU_B = ['#3b82f6', '#93c5fd', '#2563eb'], VERT_B = ['#16a34a', '#86efac', '#15803d'];
+
+/* ── Lignes à morceaux (copie de transformations-deux-sens-tableau/avancement.html) : texte, « → », « ⇌ » ou { frac: [haut, bas] } (barre de fraction DESSINÉE) ── */
+const FL = 34;
+/** Flèche simple → (milieu à la hauteur y). */
+function flecheSimple(c, x, y, w, col = 'blanc') { c.fleche(x + 2, y, x + w - 2, y, { couleur: col, largeur: 1.9, tete: 8 }); }
+/** Double flèche ⇌ (deux demi-flèches), milieu à la hauteur y. */
+function flecheDouble(c, x, y, w, col = 'blanc') {
+  c.trait([[x + 2, y - 3.5], [x + w - 2, y - 3.5], [x + w - 10, y - 10]], { couleur: col, largeur: 1.9 });
+  c.trait([[x + w - 2, y + 3.5], [x + 2, y + 3.5], [x + 10, y + 10]], { couleur: col, largeur: 1.9, duree: .12 });
+}
+/** Morceau : texte, '→', '⇌', ou { frac: [numérateur, dénominateur] }. */
+function largeurMorceau(c, p, t) {
+  if (p === '→' || p === '⇌') return FL;
+  if (p && p.frac) return Math.max(larg(c, p.frac[0], t), larg(c, p.frac[1], t)) + 14;
+  return larg(c, p, t);
+}
+/** Positions x de chaque morceau d’une ligne (gap entre deux) : elles ne dépendent pas du temps, chaque étape écrit les siens. */
+function placer(c, x, morceaux, t, o = {}) {
+  const gap = o.gap ?? 8, ws = morceaux.map(p => largeurMorceau(c, p, t)), tot = ws.reduce((a, b) => a + b, 0) + gap * (morceaux.length - 1);
+  let px = o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x;
+  const xs = ws.map(w => { const r = px; px += w + gap; return r; });
+  return { xs, ws, x0: xs[0], tot };
+}
+function morceau(c, p, x, y, t, col = 'blanc') {
+  if (p === '→') return flecheSimple(c, x, y - t * .32, FL, col);
+  if (p === '⇌') return flecheDouble(c, x, y - t * .32, FL, col);
+  if (p && p.frac) {
+    const w = largeurMorceau(c, p, t), yb = y - t * .32;
+    c.texte(p.frac[0], x + w / 2, yb - 7, { taille: t, align: 'center', couleur: col });
+    c.ligne(x, yb, x + w, yb, { couleur: col, largeur: 1.8, duree: .1 });
+    c.texte(p.frac[1], x + w / 2, yb + t * .98, { taille: t, align: 'center', couleur: col });
+    return;
+  }
+  c.texte(p, x, y, { taille: t, couleur: col });
+}
+/** Écrit une ligne entière ; `cols[i]` colore le morceau i. Renvoie les positions. */
+function ligneM(c, x, y, morceaux, o = {}) {
+  const t = o.taille ?? 20, P = placer(c, x, morceaux, t, o);
+  morceaux.forEach((p, i) => morceau(c, p, P.xs[i], y, t, (o.cols && o.cols[i]) || o.couleur || 'blanc'));
+  return P;
+}
+/** Encadré à la craie autour d’un texte (ligne de base y, taille t). */
+function encadre(c, x, y, w, t, col = 'jaune') { c.rect(x - 8, y - t - 4, w + 16, t + 14, { couleur: col, largeur: 2, arrondi: 8 }); }
+
+
+
+/* ── dosage.html : vues montage | reaction | equivalence | courbe | tangentes | derivee (contrat acides_bases § 6, exemple J) ── */
+const VUES = ['montage', 'reaction', 'equivalence', 'courbe', 'tangentes', 'derivee'];
+const TITRES = { montage: 'montage du dosage pH-métrique', reaction: 'la réaction de dosage (loupe)', equivalence: 'l’équivalence : tableau d’avancement et C_A·V_A = C_B·V_BE',
+  courbe: 'courbe pH = f(V_B) (poignée V_B)', tangentes: 'méthode des tangentes parallèles', derivee: 'courbe dérivée dpH/dV_B' };
+const TITRE_TABLEAU = { montage: 'Dosage de l’acide éthanoïque par la soude', reaction: 'La réaction de dosage', equivalence: 'L’équivalence',
+  courbe: 'Courbe pH = f(V_B) (exemple J)', tangentes: 'Point d’équivalence : méthode des tangentes', derivee: 'Point d’équivalence : courbe dérivée' };
+const quand = (M, nom) => (M.vu(nom) ? '' : ` (au moment « ${nom} »)`);
+const seg = (p, a, b) => clamp((p - a) / (b - a), 0, 1);
+const VIOLET = '#c084fc', ORANGE_C = '#fdba74';
+
+/* Exemple J. Courbe calculée POUR LE TRACÉ seulement (le modèle n’est jamais écrit à l’écran) : elle redonne exactement les
+ * points du contrat au centième (vérifié : 0 → 3,41 ; 10 → 4,80 ; 20 → 8,25 ; 40 → 11,52 ; pic de la dérivée 11,5 mL⁻¹). */
+const KA = Math.pow(10, -4.8), KE = 1e-14, CA = 1e-2, VA = 20, CB = 1e-2;
+function phJ(V) {
+  const na = CB * V / (VA + V), ca = CA * VA / (VA + V); let lo = 0, hi = 14;
+  for (let i = 0; i < 60; i++) { const p = (lo + hi) / 2, h = Math.pow(10, -p); if (na + h - ca * KA / (KA + h) - KE / h > 0) lo = p; else hi = p; }
+  return (lo + hi) / 2;
+}
+const TAB = Array.from({ length: 801 }, (_, i) => phJ(i * .05));
+const pHde = V => { const u = clamp(V, 0, 40) / .05, i = Math.min(799, Math.floor(u)); return lerp(TAB[i], TAB[i + 1], u - i); };
+const dJ = V => (phJ(V + .1) - phJ(V - .1)) / .2;
+const PTS_J = [[0, '3,41'], [2, '3,91'], [5, '4,34'], [10, '4,80'], [15, '5,28'], [18, '5,76'], [19, '6,08'], [19.5, '6,39'], [20, '8,25'], [20.5, '10,09'], [21, '10,39'], [22, '10,68'], [25, '11,05'], [30, '11,30'], [40, '11,52']];
+/* Tangentes parallèles (pente 0,2 par mL) : points de contact de part et d’autre du saut, et leur parallèle équidistante. */
+const PENTE = .2;
+const derivee = V => (phJ(V + 1e-3) - phJ(V - 1e-3)) / 2e-3;
+function contact(a, b, montant) { for (let i = 0; i < 60; i++) { const m = (a + b) / 2; if ((derivee(m) < PENTE) === montant) a = m; else b = m; } return (a + b) / 2; }
+const V1 = contact(14, 19.95, true), V2 = contact(20.05, 30, false);
+const B1 = phJ(V1) - PENTE * V1, B2 = phJ(V2) - PENTE * V2, BM = (B1 + B2) / 2;
+const PH_E = phJ(20);
+const vTxt = V => fr(V, 1);
+
+/* ── Pièces peintes : burette graduée sur potence, agitateur magnétique, barreau, câble de la sonde ── */
+const SOUDE = [226, 236, 246, .2], ACIDE_S = [222, 234, 244, .16];
+const Mat = {
+  /** Burette graduée 0 → 50 mL (graduation 0 en haut) ; V = volume déjà versé ; robinet ; pointe en (x, yp). */
+  burette(ctx, Bu, V, a = 1) {
+    const { x, yH, yR, yp } = Bu, k = (yR - yH) / 50;
+    ctx.save(); ctx.globalAlpha = a;
+    const yl = yH + clamp(V, 0, 50) * k;
+    const g = ctx.createLinearGradient(x - 5, 0, x + 5, 0); g.addColorStop(0, rgba(sombre(SOUDE, .1), 1.6)); g.addColorStop(.5, rgba(eclair(SOUDE, .4), 1.2)); g.addColorStop(1, rgba(SOUDE, 1.8));
+    ctx.fillStyle = g; ctx.fillRect(x - 5, yl, 10, yR - yl);
+    ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x - 5, yl); ctx.lineTo(x + 5, yl); ctx.stroke();
+    ctx.strokeStyle = 'rgba(225,238,250,.85)'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.roundRect(x - 6.5, yH - 6, 13, yR - yH + 6, 2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(225,238,250,.5)'; ctx.lineWidth = 1; ctx.fillStyle = 'rgba(225,238,250,.7)'; ctx.font = '10px Arial, sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (let v = 0; v <= 50; v += 5) {
+      const gy = yH + v * k; ctx.beginPath(); ctx.moveTo(x - 6, gy); ctx.lineTo(x - (v % 10 ? 2 : 0), gy); ctx.stroke();
+      if (v % 10 === 0) ctx.fillText(String(v), x - 9, gy);
+    }
+    ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(x + 2, yH, 2, yR - yH);
+    ctx.fillStyle = '#3b4148'; ctx.fillRect(x - 3.5, yR, 7, 9); ctx.fillStyle = '#c7ccd2'; ctx.fillRect(x - 12, yR + 2.5, 24, 4);
+    ctx.strokeStyle = 'rgba(225,238,250,.85)'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(x - 2, yR + 9); ctx.lineTo(x - .7, yp); ctx.moveTo(x + 2, yR + 9); ctx.lineTo(x + .7, yp); ctx.stroke();
+    ctx.restore();
+  },
+  /** Potence : tige verticale, pied, pince qui tient la burette. */
+  potence(ctx, xT, yT, yB, xPince, yPince, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createLinearGradient(xT - 3, 0, xT + 3, 0); g.addColorStop(0, '#8a939b'); g.addColorStop(.5, '#d5dadf'); g.addColorStop(1, '#6b737b');
+    ctx.fillStyle = g; ctx.fillRect(xT - 3, yT, 6, yB - yT);
+    ctx.fillStyle = '#4a5158'; ctx.beginPath(); ctx.roundRect(xT - 30, yB, 64, 7, 2); ctx.fill();
+    ctx.fillStyle = '#5c6670'; ctx.fillRect(Math.min(xT, xPince), yPince - 2.5, Math.abs(xT - xPince), 5);
+    ctx.fillStyle = '#2f353b'; ctx.fillRect(xPince - 8, yPince - 7, 16, 14);
+    ctx.restore();
+  },
+  /** Agitateur magnétique : boîtier, plaque, bouton, voyant. */
+  agitateur(ctx, A, a = 1) {
+    const { x, y, w, h } = A;
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.roundRect(x + 3, y + 4, w, h, 6); ctx.fill();
+    const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#d9dde1'); g.addColorStop(.18, '#9aa3ab'); g.addColorStop(1, '#5d656d');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 6); ctx.fill();
+    Peint.sphere(ctx, x + w - 18, y + h * .6, Math.min(7, h * .3), ['#f1f3f5', '#9aa3ab', '#3a4148']);
+    ctx.fillStyle = '#6ee7b7'; ctx.beginPath(); ctx.arc(x + 14, y + h * .6, 3, 0, 7); ctx.fill();
+    ctx.restore();
+  },
+  /** Barreau aimanté qui tourne (vu de face : sa longueur apparente varie avec l’angle). */
+  barreau(ctx, cx, y, angle, a = 1) {
+    const L = 13 + 15 * Math.abs(Math.cos(angle));
+    ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = '#f4f6f8'; ctx.strokeStyle = 'rgba(60,70,80,.6)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.roundRect(cx - L / 2, y - 3.5, L, 7, 3.5); ctx.fill(); ctx.stroke(); ctx.restore();
+  },
+  cable(ctx, pts, a = 1) {
+    ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = '#2b2f35'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(...pts[0]); ctx.bezierCurveTo(...pts[1], ...pts[2], ...pts[3]); if (pts[4]) ctx.lineTo(...pts[4]); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1; ctx.stroke(); ctx.restore();
+  },
+};
+/** Gouttes qui tombent de la pointe (temps de la scène : tout se fige à l’arrêt). */
+function gouttes(ctx, x, y0, y1, t) { for (let k = 0; k < 2; k++) { const u = ((t * 3.2 + k * .5) % 1); Peint.goutte(ctx, x, lerp(y0 + 4, y1, u * u), SOUDE, 1); } }
+
+function ETAPES(v) {
+  return ({
+    montage: [
+      { nom: 'burette', anim: 1, motif: 'burette graduée sur sa potence : soude C_B = 1,0·10⁻² mol/L', bulle: () => 'Dans la burette : la soude.' },
+      { nom: 'becher', anim: 1.2, motif: 'bécher : V_A = 20,0 mL d’acide éthanoïque', bulle: () => 'Dans le bécher : l’acide éthanoïque.' },
+      { nom: 'agitateur', anim: 1.2, motif: 'agitateur magnétique : le barreau aimanté tourne', bulle: () => 'On agite en continu.' },
+      { nom: 'ph_metre', anim: 2, motif: 'sonde du pH-mètre dans le bécher ; afficheur 3,41', bulle: () => 'On mesure le pH.' },
+      { nom: 'noms', anim: .3, motif: 'étiquettes : burette, solution titrante, solution titrée, agitateur magnétique, pH-mètre', bulle: () => 'Les noms du montage.' },
+      { nom: 'but', anim: .3, motif: '« but : trouver C_A »', bulle: () => 'À quoi sert ce dosage ?' },
+    ],
+    reaction: [
+      { nom: 'loupe', anim: 6, ecritDes: 0, motif: 'loupe : chaque HO⁻ qui tombe arrache un H⁺ à une molécule CH₃COOH (3 fois)', bulle: () => 'Regardons à la loupe ce qui se passe à chaque goutte…' },
+      { nom: 'equation', anim: .3, motif: 'réaction de dosage : CH₃COOH + HO⁻ → CH₃COO⁻ + H₂O (flèche simple)', bulle: () => 'L’équation de la réaction de dosage.' },
+      { nom: 'constante', anim: .3, motif: 'K = 1,6·10⁹ (très grande)', bulle: () => 'Sa constante d’équilibre est énorme.' },
+      { nom: 'rapide', anim: .3, motif: 'case cochée : rapide', bulle: () => 'Première condition…' },
+      { nom: 'totale', anim: .3, motif: 'case cochée : totale', bulle: () => 'Deuxième condition…' },
+      { nom: 'unique', anim: .3, motif: 'case cochée : unique', bulle: () => 'Troisième condition.' },
+    ],
+    equivalence: [
+      { nom: 'tableau', anim: .3, motif: 'tableau d’avancement : CH₃COOH + HO⁻ → CH₃COO⁻ + H₂O ; initial C_A·V_A et C_B·V_B', bulle: () => 'Le tableau d’avancement de la réaction de dosage.' },
+      { nom: 'avant', anim: .3, motif: 'avant l’équivalence (V_B < V_BE) : HO⁻ limitant, il reste du CH₃COOH', bulle: () => 'Avant l’équivalence…' },
+      { nom: 'a_equivalence', anim: .3, motif: 'à l’équivalence : CH₃COOH et HO⁻ tous deux épuisés', bulle: () => 'À l’équivalence…' },
+      { nom: 'apres', anim: .3, motif: 'après l’équivalence (V_B > V_BE) : HO⁻ en excès', bulle: () => 'Après l’équivalence…' },
+      { nom: 'definition', anim: .3, motif: '« équivalence : réactifs dans les proportions stœchiométriques »', bulle: () => 'La définition de l’équivalence.' },
+      { nom: 'relation', anim: .3, motif: 'n(CH₃COOH)_initial = n(HO⁻)_versé, soit C_A·V_A = C_B·V_BE (encadré)', bulle: () => 'On en tire la relation à l’équivalence.' },
+      { nom: 'application', anim: .3, motif: 'V_BE = 1,0·10⁻² × 20,0/1,0·10⁻² = 20,0 mL', bulle: () => 'Application numérique.' },
+    ],
+    courbe: [
+      { nom: 'axes', anim: .3, motif: 'axes : pH de 0 à 14 ; V_B de 0 à 40 mL', bulle: () => 'On trace pH en fonction de V_B.' },
+      { nom: 'debut', anim: .8, motif: 'V_B = 0 : pH = 3,41 (premier point)', bulle: () => 'Avant d’ouvrir la burette : pH = 3,41.' },
+      { nom: 'zone_1', anim: 4, motif: 'V_B de 0 à 18 mL : le pH monte doucement (3,41 → 5,76)', bulle: () => 'On verse la soude, mL par mL…' },
+      { nom: 'saut', anim: 3, motif: 'V_B de 18 à 22 mL : saut de pH (5,76 → 10,68 ; 6,39 à 19,5 mL, 10,09 à 20,5 mL)', bulle: () => 'Près de 20 mL, attention…' },
+      { nom: 'zone_3', anim: 3, motif: 'V_B de 22 à 40 mL : pH presque constant (10,68 → 11,52)', bulle: () => 'Et après le saut ?' },
+      { nom: 'phrase', anim: .3, motif: '« entre 19,5 et 20,5 mL, le pH passe de 6,4 à 10,1 : c’est le saut »', bulle: () => 'Ce qu’il faut voir sur cette courbe.' },
+    ],
+    tangentes: [
+      { nom: 'courbe', anim: 1.6, motif: 'la courbe pH = f(V_B) de l’exemple J', bulle: () => 'La courbe du dosage.' },
+      { nom: 'tangente_1', anim: .8, motif: 'première tangente (pointillés jaunes) avant le saut', bulle: () => 'Une tangente avant le saut…' },
+      { nom: 'tangente_2', anim: .8, motif: 'deuxième tangente, parallèle à la première, après le saut', bulle: () => '…et une tangente parallèle après le saut.' },
+      { nom: 'mediane', anim: .8, motif: 'parallèle équidistante (trait jaune plein), à égale distance d des deux tangentes', bulle: () => 'La parallèle à égale distance des deux.' },
+      { nom: 'point_e', anim: .5, motif: 'elle coupe la courbe au point E', bulle: () => 'Elle coupe la courbe en E.' },
+      { nom: 'lecture', anim: .3, motif: 'lecture : V_BE = 20,0 mL ; pH_E = 8,3', bulle: () => 'On lit les coordonnées de E.' },
+    ],
+    derivee: [
+      { nom: 'courbe', anim: 1.6, motif: 'en haut : la courbe pH = f(V_B)', bulle: () => 'La courbe du dosage.' },
+      { nom: 'derivee', anim: 2, motif: 'en bas : la courbe dérivée dpH/dV_B (orange clair) : presque nulle, puis un pic fin', bulle: () => 'Sous elle, la courbe dérivée.' },
+      { nom: 'pic', anim: .6, motif: 'pic à 20,0 mL (dpH/dV_B ≈ 11,5 mL⁻¹) relié au saut par un trait vertical', bulle: () => 'Le pic tombe juste sous le saut.' },
+      { nom: 'lecture', anim: .3, motif: '« V_BE = abscisse du maximum de dpH/dV_B = 20,0 mL »', bulle: () => 'On lit V_BE au maximum.' },
+      { nom: 'national', anim: .3, motif: 'nationaux 2022 N et 2024 N : V_BE lu au pic de la dérivée', bulle: () => 'C’est ce que demandent les nationaux.' },
+    ],
+  })[v] || [];
+}
+const MOTIFS = MOTIFS_DE(ETAPES);
+
+/* ── Vue montage ────────────────────────────────────────────────────────────────────────────────────────────────────── */
+const BU1 = { x: 300, yH: 50, yR: 214, yp: 240 };
+const BE1 = { x: 250, y: 262, w: 100, h: 96 };
+const AG1 = { x: 226, y: 360, w: 148, h: 30 };
+const PM1 = { x: 520, y: 150, w: 160, h: 72 };
+const SO1 = { x: 334, yH: 214, yB: 346 };
+const XL = 236;
+function vueMontage(c, M) {
+  const aB = M.commence('burette') ? lisse(clamp(M.p('burette') * 1.4, 0, 1)) : 0;
+  const pBe = M.commence('becher') ? M.p('becher') : 0, aBe = lisse(clamp(pBe * 2, 0, 1)), niv = .55 * lisse(seg(pBe, .2, 1));
+  const aAg = M.commence('agitateur') ? lisse(clamp(M.p('agitateur') * 1.6, 0, 1)) : 0;
+  const pPh = M.commence('ph_metre') ? M.p('ph_metre') : 0, aPh = lisse(clamp(pPh * 2, 0, 1));
+  const yB = lerp(SO1.yB - 70, SO1.yB, lisse(seg(pPh, .3, .6)));
+  const aff = !M.commence('ph_metre') ? '' : pPh < .6 ? '- - -' : pPh < .85 ? fr(lerp(6.5, 3.41, seg(pPh, .6, .85)), 2) : '3,41';
+  c.direct(() => {
+    const ctx = c.ctx;
+    if (aB > 0) { Mat.potence(ctx, 420, 36, 392, BU1.x, 96, aB); Mat.burette(ctx, BU1, 0, aB); }
+    if (aAg > 0) Mat.agitateur(ctx, AG1, aAg);
+    if (aBe > 0) {
+      Peint.becher(ctx, BE1, niv, ACIDE_S, aBe);
+      if (aAg > 0) Mat.barreau(ctx, BE1.x + BE1.w / 2, BE1.y + BE1.h - 9, M.S.t * 7, aAg * aBe);
+    }
+    if (aPh > 0) {
+      ctx.save(); ctx.globalAlpha = aPh; sonde(ctx, SO1.x, yB - (SO1.yB - SO1.yH), yB); ctx.restore();
+      Mat.cable(ctx, [[SO1.x, yB - (SO1.yB - SO1.yH)], [SO1.x, yB - (SO1.yB - SO1.yH) - 40], [PM1.x - 60, PM1.y + 36], [PM1.x, PM1.y + 36]], aPh);
+    }
+  });
+  if (aPh > 0) phmetre(c, PM1, aff);
+  M.etape(c, 'burette', () => {
+    c.texte('soude (Na⁺ + HO⁻)', XL, 134, { couleur: 'blanc', taille: 16, align: 'right' });
+    c.texte('C_B = 1,0·10⁻² mol/L', XL, 156, { couleur: 'blanc', taille: 16, align: 'right' });
+  });
+  M.etape(c, 'becher', () => {
+    c.texte('acide éthanoïque', XL, 304, { couleur: 'blanc', taille: 16, align: 'right' });
+    c.texte('V_A = 20,0 mL', XL, 326, { couleur: 'blanc', taille: 16, align: 'right' });
+  });
+  M.etape(c, 'ph_metre', () => c.texte('pH = 3,41', PM1.x + PM1.w / 2, PM1.y + PM1.h + 30, { couleur: 'jaune', taille: 19, align: 'center' }));
+  M.etape(c, 'noms', () => {
+    c.texte('burette', XL, 74, { couleur: 'cyan', taille: 19, align: 'right' }); c.fleche(XL + 6, 68, BU1.x - 30, 68, { couleur: 'cyan', largeur: 1.6, tete: 8 });
+    c.texte('solution titrante :', XL, 112, { couleur: 'cyan', taille: 17, align: 'right' }); c.fleche(XL + 6, 116, BU1.x - 30, 124, { couleur: 'cyan', largeur: 1.6, tete: 8 });
+    c.texte('solution titrée :', XL, 282, { couleur: 'cyan', taille: 17, align: 'right' }); c.fleche(XL + 6, 288, BE1.x + 14, 320, { couleur: 'cyan', largeur: 1.6, tete: 8 });
+    c.texte('agitateur magnétique', XL - 30, 384, { couleur: 'cyan', taille: 17, align: 'right' }); c.fleche(XL - 24, 378, AG1.x - 2, 378, { couleur: 'cyan', largeur: 1.6, tete: 8 });
+    c.texte('pH-mètre', PM1.x + PM1.w / 2, PM1.y - 14, { couleur: 'cyan', taille: 19, align: 'center' });
+    c.texte('sonde', SO1.x + 14, 250, { couleur: 'cyan', taille: 16 });
+  });
+  M.etape(c, 'but', () => {
+    c.rect(500, 330, 200, 46, { couleur: 'jaune', largeur: 2.2, arrondi: 10 });
+    c.texte('but : trouver C_A', 600, 360, { couleur: 'jaune', taille: 22, align: 'center' });
+  });
+  M.mon = { aff };
+  const vues = [];
+  if (M.commence('burette')) vues.push('burette graduée (0 → 50 mL) sur sa potence : soude (Na⁺ + HO⁻), C_B = 1,0·10⁻² mol/L');
+  if (M.commence('becher')) vues.push('bécher : acide éthanoïque, V_A = 20,0 mL (incolore)');
+  if (M.commence('agitateur')) vues.push('agitateur magnétique sous le bécher, le barreau aimanté tourne');
+  if (M.commence('ph_metre')) vues.push(`sonde du pH-mètre dans le bécher ; afficheur : ${aff}`);
+  if (M.commence('noms')) vues.push('étiquettes : burette ; solution titrante (soude) ; solution titrée (acide éthanoïque) ; agitateur magnétique ; pH-mètre ; sonde');
+  if (M.commence('but')) vues.push('encadré jaune : but : trouver C_A');
+  return vues;
+}
+
+/* ── Vue reaction : loupe ───────────────────────────────────────────────────────────────────────────────────────────── */
+const LP = { x: 190, y: 214, r: 116 };
+const AC_POS = [[-58, 40], [6, 66], [60, 8], [-36, -34], [40, -58]];
+const EAU_POS = [[-80, -10], [-10, -76], [82, -26], [-62, 78], [70, 64], [20, 10], [-88, 40], [-20, 100], [94, 30], [-40, -80]];
+const COLS = { AH: ['#fde2ef', '#f472b6', '#9d174d'], A: ['#dcfce7', '#4ade80', '#166534'], HO: ['#dbeafe', '#60a5fa', '#1e40af'], EAU: ['#eef1f4', '#9aa3ab', '#4b535b'], H: ['#fff7c2', '#facc15', '#9a7a05'] };
+function vueReaction(c, M) {
+  const p = M.commence('loupe') ? M.p('loupe') : 0, a = M.commence('loupe') ? lisse(clamp(p * 6, 0, 1)) : 0, t = M.S.t;
+  const fait = [0, 0, 0];
+  if (a > 0) {
+    c.direct(() => {
+      const ctx = c.ctx; ctx.save(); ctx.beginPath(); ctx.arc(LP.x, LP.y, LP.r - 2, 0, 7); ctx.clip();
+      ctx.fillStyle = 'rgba(220,236,250,.08)'; ctx.fillRect(LP.x - LP.r, LP.y - LP.r, 2 * LP.r, 2 * LP.r);
+      ctx.globalAlpha = a;
+      const jig = (i, k) => Math.sin(t * (1.7 + i * .31) + i * 2.1 + k) * 2.2;
+      EAU_POS.forEach(([dx, dy], i) => Peint.sphere(ctx, LP.x + dx + jig(i, 0), LP.y + dy + jig(i, 1), 6.5, COLS.EAU, .55));
+      AC_POS.forEach(([dx, dy], i) => {
+        const x = LP.x + dx + jig(i + 3, 0), y = LP.y + dy + jig(i + 3, 1);
+        if (i > 2) { Peint.sphere(ctx, x, y, 12, COLS.AH); Peint.sphere(ctx, x + 12, y - 9, 5, COLS.H); return; }
+        const u = seg(p, i / 3 + .02, (i + 1) / 3 - .02);
+        const xo = x + 30, yo = y - 6, yDep = LP.y - LP.r - 10;
+        // 1) HO⁻ tombe ; 2) le H⁺ passe de CH₃COOH à HO⁻ ; 3) il reste CH₃COO⁻ et H₂O.
+        const hx = u < .5 ? null : u < .78 ? lerp(x + 12, xo - 10, lisse(seg(u, .5, .78))) : xo - 10;
+        const hy = u < .5 ? null : u < .78 ? lerp(y - 9, yo - 8, lisse(seg(u, .5, .78))) - Math.sin(Math.PI * seg(u, .5, .78)) * 14 : yo - 8;
+        Peint.sphere(ctx, x, y, 12, u >= .78 ? COLS.A : COLS.AH);
+        if (u < .5) Peint.sphere(ctx, x + 12, y - 9, 5, COLS.H);
+        if (u > 0) {
+          const yh = u < .5 ? lerp(yDep, yo, lisse(u / .5)) : yo;
+          Peint.sphere(ctx, xo, yh, 10, u >= .78 ? COLS.EAU : COLS.HO);
+        }
+        if (hx != null) Peint.sphere(ctx, hx, hy, 5, COLS.H);
+        if (u >= .78) fait[i] = 1;
+      });
+      ctx.restore();
+    });
+    // Flèche jaune du transfert de H⁺ (pendant le passage).
+    AC_POS.slice(0, 3).forEach(([dx, dy], i) => {
+      const u = seg(p, i / 3 + .02, (i + 1) / 3 - .02);
+      if (u > .45 && u < .9) c.direct(() => c.fleche(LP.x + dx + 10, LP.y + dy - 20, LP.x + dx + 22, LP.y + dy - 26, { couleur: 'jaune', largeur: 2, tete: 6 }));
+    });
+    c.direct(() => { c.cercle(LP.x, LP.y, LP.r, { largeur: 2.6 }); c.ligne(LP.x - LP.r * .72, LP.y + LP.r * .72, LP.x - LP.r * .72 - 18, LP.y + LP.r * .72 + 18, { largeur: 6 }); });
+  }
+  M.etape(c, 'loupe', () => {
+    c.texte('loupe : dans le bécher, à chaque goutte de soude', LP.x, LP.y - LP.r - 12, { couleur: 'faible', taille: 15, align: 'center' });
+    const L = [['CH₃COOH', COLS.AH, 'rose', 30], ['H⁺', COLS.H, 'jaune', 140], ['HO⁻', COLS.HO, 'bleu', 202], ['CH₃COO⁻', COLS.A, 'vert', 272], ['H₂O', COLS.EAU, 'faible', 382]];
+    L.forEach(([nom, col, craie, x]) => { c.direct(() => Peint.sphere(c.ctx, x + 6, 376, nom === 'H⁺' ? 5 : 8, col)); c.texte(nom, x + 20, 382, { couleur: craie, taille: 17 }); });
+  });
+  const XR = 372;
+  M.etape(c, 'equation', () => {
+    c.texte('réaction de dosage :', XR, 82, { couleur: 'cyan', taille: 19 });
+    ligneM(c, XR, 124, ['CH₃COOH + HO⁻', '→', 'CH₃COO⁻ + H₂O'], { taille: 22 });
+  });
+  M.etape(c, 'constante', () => {
+    c.texte('K = 1,6·10⁹', XR + 10, 178, { couleur: 'jaune', taille: 23 });
+    c.rect(XR, 154, 140, 36, { couleur: 'jaune', largeur: 2, arrondi: 8 });
+    c.texte('très grande', XR + 156, 177, { couleur: 'faible', taille: 16 });
+  });
+  const CASES = [['rapide', 'chaque goutte réagit aussitôt', 236], ['totale', 'le réactif limitant disparaît', 276], ['unique', 'aucune autre réaction', 316]];
+  CASES.forEach(([nom, expl, y]) => M.etape(c, nom, () => {
+    c.rect(XR, y - 17, 20, 20, { couleur: 'blanc', largeur: 1.8, arrondi: 3 });
+    c.trait([[XR + 3, y - 8], [XR + 9, y - 1], [XR + 24, y - 22]], { couleur: 'vert', largeur: 2.6 });
+    c.texte(nom, XR + 34, y, { couleur: 'blanc', taille: 20 });
+    c.texte(expl, XR + 110, y, { couleur: 'faible', taille: 16, max: 260 });
+  }));
+  M.rea = { n: fait.reduce((s, v) => s + v, 0), p };
+  const vues = [];
+  if (M.commence('loupe')) vues.push('loupe : des molécules CH₃COOH (rose, avec un H⁺ jaune) et des HO⁻ (bleus) qui tombent ; légende CH₃COOH, H⁺, HO⁻, CH₃COO⁻, H₂O');
+  if (M.commence('equation')) vues.push('réaction de dosage : CH₃COOH + HO⁻ → CH₃COO⁻ + H₂O (flèche simple)');
+  if (M.commence('constante')) vues.push('K = 1,6·10⁹ (encadré jaune), très grande');
+  CASES.forEach(([nom, expl]) => { if (M.commence(nom)) vues.push(`case cochée : ${nom} (${expl})`); });
+  return vues;
+}
+
+/* ── Vue equivalence : tableau d’avancement de la réaction de dosage ───────────────────────────────────────────────── */
+const TE = { x: 20, y: 38, cw: [160, 190, 180, 120, 70], h: 42 };
+TE.xs = TE.cw.reduce((l, w) => (l.push(l[l.length - 1] + w), l), [TE.x]);
+const LIG = [
+  { nom: 'tableau', l1: 'état initial', l2: '', v: ['C_A·V_A', 'C_B·V_B', '0', 'excès'], cols: [] },
+  { nom: 'avant', l1: 'avant : V_B < V_BE', l2: 'HO⁻ limitant', v: ['C_A·V_A − C_B·V_B', '0', 'C_B·V_B', 'excès'], cols: ['blanc', 'orange'] },
+  { nom: 'a_equivalence', l1: 'à l’équivalence', l2: 'les deux épuisés', v: ['0', '0', 'C_A·V_A', 'excès'], cols: ['jaune', 'jaune'] },
+  { nom: 'apres', l1: 'après : V_B > V_BE', l2: 'HO⁻ en excès', v: ['0', 'C_B·V_B − C_A·V_A', 'C_A·V_A', 'excès'], cols: ['orange', 'blanc'] },
+];
+const yLig = i => TE.y + (i + 1) * TE.h;
+function vueEquivalence(c, M) {
+  const T = TE, W = T.xs[5] - T.x, cx = k => (T.xs[k] + T.xs[k + 1]) / 2;
+  M.etape(c, 'tableau', () => {
+    c.rect(T.x, T.y, W, 5 * T.h, { couleur: 'faible', largeur: 1.4, arrondi: 4 });
+    for (let i = 0; i < 4; i++) c.ligne(T.x, yLig(i), T.x + W, yLig(i), { couleur: 'faible', largeur: 1.1, duree: .08 });
+    c.ligne(T.xs[1], T.y, T.xs[1], T.y + 5 * T.h, { couleur: 'faible', largeur: 1.1, duree: .08 });
+    for (let k = 2; k < 5; k++) c.ligne(T.xs[k], yLig(0), T.xs[k], T.y + 5 * T.h, { couleur: 'faible', largeur: 1.1, duree: .08 });
+    c.texte('équation', cx(0), T.y + 28, { couleur: 'faible', taille: 17, align: 'center' });
+    ['CH₃COOH', 'HO⁻', 'CH₃COO⁻', 'H₂O'].forEach((s, k) => c.texte(s, cx(k + 1), T.y + 28, { couleur: k === 0 ? 'rose' : k === 1 ? 'bleu' : k === 2 ? 'vert' : 'blanc', taille: 19, align: 'center' }));
+    c.texte('+', T.xs[2], T.y + 28, { taille: 19, align: 'center' }); c.texte('+', T.xs[4], T.y + 28, { taille: 19, align: 'center' });
+    flecheSimple(c, T.xs[3] - FL / 2, T.y + 22, FL);
+  });
+  LIG.forEach((L, i) => M.etape(c, L.nom, () => {
+    const y = yLig(i);
+    if (L.l2) { c.texte(L.l1, cx(0), y + 18, { couleur: 'blanc', taille: 15, align: 'center', max: T.cw[0] - 8 }); c.texte(L.l2, cx(0), y + 36, { couleur: i === 2 ? 'jaune' : 'orange', taille: 14, align: 'center' }); }
+    else c.texte(L.l1, cx(0), y + 27, { couleur: 'blanc', taille: 16, align: 'center' });
+    L.v.forEach((s, k) => c.texte(s, cx(k + 1), y + 28, { couleur: L.cols[k] || 'blanc', taille: 17, align: 'center', max: T.cw[k + 1] - 10 }));
+  }));
+  M.etape(c, 'definition', () => ligneM(c, 20, 278, ['équivalence :', 'réactifs dans les proportions stœchiométriques'], { taille: 19, cols: ['jaune', 'blanc'] }));
+  M.etape(c, 'relation', () => {
+    const P = ligneM(c, 20, 326, ['n(CH₃COOH)_{initial} = n(HO⁻)_{versé}', 'soit', 'C_A·V_A = C_B·V_BE'], { taille: 20, gap: 14, cols: ['blanc', 'faible', 'jaune'] });
+    c.rect(P.xs[2] - 10, 326 - 26, P.ws[2] + 20, 38, { couleur: 'jaune', largeur: 2.2, arrondi: 8 });
+  });
+  M.etape(c, 'application', () => ligneM(c, 20, 388, ['V_BE =', { frac: ['C_A·V_A', 'C_B'] }, '=', { frac: ['1,0·10⁻² × 20,0', '1,0·10⁻²'] }, '= 20,0 mL'], { taille: 19, cols: ['blanc', 'blanc', 'blanc', 'blanc', 'jaune'] }));
+  const vues = [];
+  if (M.commence('tableau')) vues.push('tableau : CH₃COOH + HO⁻ → CH₃COO⁻ + H₂O ; état initial : C_A·V_A | C_B·V_B | 0 | excès');
+  if (M.commence('avant')) vues.push('avant (V_B < V_BE), HO⁻ limitant : C_A·V_A − C_B·V_B | 0 | C_B·V_B | excès');
+  if (M.commence('a_equivalence')) vues.push('à l’équivalence, les deux épuisés : 0 | 0 | C_A·V_A | excès');
+  if (M.commence('apres')) vues.push('après (V_B > V_BE), HO⁻ en excès : 0 | C_B·V_B − C_A·V_A | C_A·V_A | excès');
+  if (M.commence('definition')) vues.push('équivalence : réactifs dans les proportions stœchiométriques');
+  if (M.commence('relation')) vues.push('n(CH₃COOH)_initial = n(HO⁻)_versé, soit C_A·V_A = C_B·V_BE (encadré jaune)');
+  if (M.commence('application')) vues.push('V_BE = C_A·V_A/C_B = 1,0·10⁻² × 20,0/1,0·10⁻² = 20,0 mL');
+  return vues;
+}
+
+/* ── Graphe pH = f(V_B) commun aux vues courbe, tangentes, derivee ──────────────────────────────────────────────────── */
+function grapheJ(c, G, o = {}) {
+  const X = V => G.x0 + V / 40 * G.w, Y = p => G.y0 - p / 14 * G.h;
+  c.fleche(G.x0, G.y0, G.x0 + G.w + 16, G.y0, { largeur: 1.8 }); c.fleche(G.x0, G.y0, G.x0, G.y0 - G.h - 16, { largeur: 1.8 });
+  for (let V = 5; V <= 40; V += 5) {
+    c.ligne(X(V), G.y0 - 4, X(V), G.y0 + 4, { largeur: 1.3, duree: .03 });
+    if (!(o.sauf || []).includes(V) && (V % 10 === 0 || !o.dix)) c.texte(String(V), X(V), G.y0 + (o.dy ?? 20), { couleur: 'faible', taille: o.taille ?? 14, align: 'center', duree: .05 });
+  }
+  for (let p = 1; p <= 14; p++) {
+    c.ligne(G.x0 - 4, Y(p), G.x0 + 4, Y(p), { largeur: 1.2, duree: .02 });
+    if (p % (o.pasPH ?? 2) === 0) c.texte(String(p), G.x0 - 8, Y(p) + 5, { couleur: 'faible', taille: o.taille ?? 14, align: 'right', duree: .05 });
+  }
+  c.texte('0', G.x0 - 8, G.y0 + 5, { couleur: 'faible', taille: o.taille ?? 14, align: 'right', duree: .05 });
+  c.texte('pH', G.x0 + 10, G.y0 - G.h - 4, { taille: 18 });
+  if (o.vBas) c.texte('V_B (mL)', G.x0 + G.w + 12, G.y0 + 40, { taille: 16, align: 'right' });
+  else c.texte('V_B (mL)', G.x0 + G.w + 22, G.y0 + 6, { taille: 16 });
+}
+function quadrillage(c, G, M, nom) {
+  c.direct(() => {
+    if (!M.commence(nom)) return; const ctx = c.ctx; ctx.save(); ctx.strokeStyle = 'rgba(226,232,240,.07)'; ctx.lineWidth = 1;
+    for (let V = 5; V <= 40; V += 5) { const x = G.x0 + V / 40 * G.w; ctx.beginPath(); ctx.moveTo(x, G.y0); ctx.lineTo(x, G.y0 - G.h); ctx.stroke(); }
+    for (let p = 2; p <= 14; p += 2) { const y = G.y0 - p / 14 * G.h; ctx.beginPath(); ctx.moveTo(G.x0, y); ctx.lineTo(G.x0 + G.w, y); ctx.stroke(); }
+    ctx.restore();
+  });
+}
+/** Courbe de l’exemple J tracée de 0 à Vmax (bleu clair), avec les points du contrat déjà atteints. */
+function courbeJ(c, G, Vmax, o = {}) {
+  if (Vmax <= 0 && !o.premier) return;
+  const X = V => G.x0 + V / 40 * G.w, Y = p => G.y0 - p / 14 * G.h;
+  if (Vmax > 0) {
+    const n = Math.max(2, Math.ceil(Vmax / .05)), pts = [];
+    for (let i = 0; i <= n; i++) { const V = Vmax * i / n; pts.push([X(V), Y(pHde(V))]); }
+    c.trait(pts, { couleur: 'bleu', largeur: o.largeur ?? 2.4, tremble: .3 });
+  }
+  PTS_J.forEach(([V]) => { if (V <= Vmax + 1e-9) c.point(X(V), Y(phJ(V)), o.r ?? 3.6, 'bleu'); });
+}
+
+/* ── Vue courbe (exemple J) : poignée V_B ───────────────────────────────────────────────────────────────────────────── */
+const G1 = { x0: 64, y0: 330, w: 440, h: 252 };
+const X1 = V => G1.x0 + V / 40 * G1.w, Y1 = p => G1.y0 - p / 14 * G1.h;
+const BU2 = { x: 640, yH: 44, yR: 168, yp: 192 };
+const BE2 = { x: 596, y: 206, w: 88, h: 72 };
+const AG2 = { x: 588, y: 280, w: 112, h: 20 };
+const PM2 = { x: 570, y: 308, w: 150, h: 62 };
+const SO2 = { x: 670, yH: 150, yB: 270 };
+const q1 = new URLSearchParams(location.search);
+const lireV = v => { const s = String(v ?? '').trim().replace(',', '.'); const x = +s; return s !== '' && Number.isFinite(x) ? Math.round(clamp(x, 0, 40) * 10) / 10 : null; };
+const PAR = { V: lireV(q1.get('V_B')) };   // null : la burette suit le déroulé ; sinon volume choisi avec la poignée
+let DRAG = null;
+/** Volume versé selon le déroulé (null avant « debut »). */
+function vAnim(M) {
+  if (!M.commence('debut')) return null;
+  if (!M.commence('zone_1')) return 0;
+  if (!M.commence('saut')) return 18 * M.p('zone_1');
+  if (!M.commence('zone_3')) return 18 + 4 * M.p('saut');
+  return 22 + 18 * M.p('zone_3');
+}
+const verse = M => M.S.running && M.commence('zone_1') && !M.vu('zone_3');
+function vCourbe(M) {
+  const va = vAnim(M);
+  if (DRAG != null) return DRAG;
+  if (PAR.V != null && M.vu('zone_3')) return PAR.V;
+  return va;
+}
+function vueCourbe(c, M) {
+  const va = vAnim(M), V = vCourbe(M), tracé = M.vu('zone_3') ? 40 : (va ?? 0);
+  M.etape(c, 'axes', () => grapheJ(c, G1, { vBas: true }));
+  quadrillage(c, G1, M, 'axes');
+  if (va != null) c.direct(() => courbeJ(c, G1, tracé, { premier: true }));
+  // Montage à droite : burette qui verse, bécher, agitateur, sonde et pH-mètre.
+  const Vb = V ?? 0, aff = V == null ? '' : fr(phJ(V), 2);
+  c.direct(() => {
+    const ctx = c.ctx;
+    Mat.potence(ctx, 566, 34, 300, BU2.x, 81);
+    Mat.burette(ctx, BU2, Vb);
+    Mat.agitateur(ctx, AG2);
+    Peint.becher(ctx, BE2, .32 + .5 * Vb / 40, ACIDE_S);
+    Mat.barreau(ctx, BE2.x + BE2.w / 2, BE2.y + BE2.h - 9, M.S.t * 7);
+    sonde(ctx, SO2.x, SO2.yH, SO2.yB);
+    Mat.cable(ctx, [[SO2.x, SO2.yH], [SO2.x, SO2.yH - 30], [744, 130], [744, 240], [PM2.x + PM2.w, PM2.y + 31]]);
+    if (verse(M)) gouttes(ctx, BU2.x, BU2.yp, BE2.y + BE2.h - 3 - (.32 + .5 * Vb / 40) * (BE2.h - 16), M.S.t);
+  });
+  phmetre(c, PM2, aff);
+  if (V != null) c.texte(`V_B = ${vTxt(V)} mL`, PM2.x + 4, 398, { couleur: VIOLET, taille: 19 });
+  // Point qui suit la courbe, et la poignée (anneau violet) sur l’axe V_B.
+  if (V != null) c.direct(() => {
+    const x = X1(V), y = Y1(phJ(V));
+    c.ligne(x, G1.y0, x, y, { couleur: VIOLET, largeur: 1.2, pointille: [4, 5], alpha: .7 });
+    c.ligne(G1.x0, y, x, y, { couleur: VIOLET, largeur: 1.2, pointille: [4, 5], alpha: .7 });
+    c.point(x, y, 6.5, VIOLET);
+    anneau(c.ctx, x, G1.y0);
+  });
+  M.etape(c, 'debut', () => c.texte('V_B = 0 : pH = 3,41', X1(0) + 12, Y1(3.41) + 26, { couleur: 'faible', taille: 15 }));
+  M.etape(c, 'zone_1', () => c.texte('pH monte doucement', X1(1), Y1(6.3), { couleur: 'blanc', taille: 17 }));
+  M.etape(c, 'saut', () => {
+    c.cote(X1(20) + 8, Y1(6.39), X1(20) + 8, Y1(10.09), '', { couleur: 'jaune', largeur: 1.8 });
+    c.texte('saut de pH', X1(20) + 18, Y1(8.2) + 6, { couleur: 'jaune', taille: 18 });
+  });
+  M.etape(c, 'zone_3', () => c.texte('pH presque constant', X1(23), Y1(12.6), { couleur: 'blanc', taille: 17 }));
+  M.etape(c, 'phrase', () => {
+    c.rect(16, 380, 534, 34, { couleur: 'jaune', largeur: 2, arrondi: 10 });
+    c.texte('de 19,5 à 20,5 mL, le pH passe de 6,4 à 10,1 : c’est le saut', 283, 403, { couleur: 'jaune', taille: 17, align: 'center', max: 510 });
+  });
+  M.cou = { V, aff };
+  const vues = [];
+  if (M.commence('axes')) vues.push('axes : pH de 0 à 14 ; V_B de 0 à 40 mL ; à droite : burette de soude, bécher, agitateur, pH-mètre');
+  if (va != null) vues.push(`points de l’exemple J tracés (bleu clair) jusqu’à V_B = ${vTxt(tracé)} mL`);
+  if (M.commence('debut')) vues.push('V_B = 0 : pH = 3,41');
+  if (M.commence('zone_1')) vues.push('« pH monte doucement » (de 0 à 18 mL : 3,41 → 5,76)');
+  if (M.commence('saut')) vues.push('« saut de pH » (près de 20 mL : 6,39 à 19,5 mL → 8,25 à 20 mL → 10,09 à 20,5 mL)');
+  if (M.commence('zone_3')) vues.push('« pH presque constant » (de 22 à 40 mL : 10,68 → 11,52)');
+  if (M.commence('phrase')) vues.push('« de 19,5 à 20,5 mL, le pH passe de 6,4 à 10,1 : c’est le saut »');
+  return vues;
+}
+function anneau(ctx, x, y) {
+  ctx.save(); ctx.strokeStyle = VIOLET; ctx.lineWidth = 3; ctx.fillStyle = 'rgba(192,132,252,.22)';
+  ctx.beginPath(); ctx.arc(x, y, 9, 0, 7); ctx.fill(); ctx.stroke(); ctx.restore();
+}
+
+/* ── Vue tangentes ──────────────────────────────────────────────────────────────────────────────────────────────────── */
+const G2 = { x0: 64, y0: 340, w: 450, h: 266 };
+const X2 = V => G2.x0 + V / 40 * G2.w, Y2 = p => G2.y0 - p / 14 * G2.h;
+const PX = 550;
+/** Droite pH = b + PENTE·V entre va et vb (coupée au cadre du graphe). */
+function droite(c, b, va, vb, o) {
+  const lim = V => clamp(V, 0, 40), V0 = lim(Math.max(va, (0 - b) / PENTE)), V1b = lim(Math.min(vb, (14 - b) / PENTE));
+  c.ligne(X2(V0), Y2(b + PENTE * V0), X2(V1b), Y2(b + PENTE * V1b), o);
+}
+function vueTangentes(c, M) {
+  const pc = M.commence('courbe') ? M.p('courbe') : 0;
+  M.etape(c, 'courbe', () => grapheJ(c, G2));
+  quadrillage(c, G2, M, 'courbe');
+  if (pc > 0) c.direct(() => courbeJ(c, G2, 40 * pc, { premier: true }));
+  M.etape(c, 'tangente_1', () => {
+    c.texte('méthode des tangentes', PX, 96, { couleur: 'cyan', taille: 19, max: 200 });
+    c.texte('parallèles', PX, 120, { couleur: 'cyan', taille: 19 });
+    droite(c, B1, V1 - 11, V1 + 11, { couleur: 'jaune', largeur: 2, pointille: [7, 6] });
+    c.point(X2(V1), Y2(phJ(V1)), 4, 'jaune');
+  });
+  M.etape(c, 'tangente_2', () => {
+    droite(c, B2, V2 - 11, V2 + 11, { couleur: 'jaune', largeur: 2, pointille: [7, 6] });
+    c.point(X2(V2), Y2(phJ(V2)), 4, 'jaune');
+    c.ligne(PX, 160, PX + 28, 160, { couleur: 'jaune', largeur: 2, pointille: [6, 5] });
+    c.texte('deux tangentes parallèles', PX + 36, 166, { couleur: 'faible', taille: 15, max: 162 });
+  });
+  M.etape(c, 'mediane', () => {
+    droite(c, BM, 2, 36, { couleur: 'jaune', largeur: 2.4 });
+    const V = 12;
+    c.cote(X2(V), Y2(B1 + PENTE * V), X2(V), Y2(BM + PENTE * V), '', { couleur: 'faible', largeur: 1.4 });
+    c.cote(X2(V), Y2(BM + PENTE * V), X2(V), Y2(B2 + PENTE * V), '', { couleur: 'faible', largeur: 1.4 });
+    c.texte('d', X2(V) + 8, (Y2(B1 + PENTE * V) + Y2(BM + PENTE * V)) / 2 + 6, { couleur: 'faible', taille: 16 });
+    c.texte('d', X2(V) + 8, (Y2(BM + PENTE * V) + Y2(B2 + PENTE * V)) / 2 + 9, { couleur: 'faible', taille: 16 });
+    c.ligne(PX, 190, PX + 28, 190, { couleur: 'jaune', largeur: 2.4 });
+    c.texte('parallèle équidistante', PX + 36, 196, { couleur: 'faible', taille: 15, max: 162 });
+  });
+  M.etape(c, 'point_e', () => {
+    const x = X2(20), y = Y2(PH_E);
+    c.ligne(G2.x0, y, x, y, { couleur: 'jaune', largeur: 1.3, pointille: [4, 5] });
+    c.ligne(x, y, x, G2.y0, { couleur: 'jaune', largeur: 1.3, pointille: [4, 5] });
+    c.point(x, y, 6.5, 'jaune');
+    c.texte('E', x + 12, y + 18, { couleur: 'jaune', taille: 21 });
+    c.point(PX + 14, 220, 5, 'jaune');
+    c.texte('E : point d’équivalence', PX + 36, 226, { couleur: 'faible', taille: 15, max: 162 });
+  });
+  M.etape(c, 'lecture', () => {
+    c.texte('V_BE = 20,0 mL', PX, 282, { couleur: 'jaune', taille: 22 });
+    c.texte('pH_E = 8,3', PX, 316, { couleur: 'jaune', taille: 22 });
+    c.rect(PX - 10, 254, 190, 74, { couleur: 'jaune', largeur: 2, arrondi: 10 });
+  });
+  const vues = [];
+  if (M.commence('courbe')) vues.push('courbe pH = f(V_B) de l’exemple J (bleu clair), V_B de 0 à 40 mL');
+  if (M.commence('tangente_1')) vues.push(`« méthode des tangentes parallèles » ; tangente en pointillés jaunes avant le saut (contact vers ${fr(V1, 1)} mL)`);
+  if (M.commence('tangente_2')) vues.push(`tangente parallèle après le saut (contact vers ${fr(V2, 1)} mL)`);
+  if (M.commence('mediane')) vues.push('parallèle équidistante (trait jaune plein), à la distance d de chaque tangente');
+  if (M.commence('point_e')) vues.push('elle coupe la courbe au point E (20,0 mL ; 8,3)');
+  if (M.commence('lecture')) vues.push('lecture : V_BE = 20,0 mL ; pH_E = 8,3');
+  return vues;
+}
+
+/* ── Vue derivee ────────────────────────────────────────────────────────────────────────────────────────────────────── */
+const GA = { x0: 64, y0: 186, w: 440, h: 132 };
+const GB = { x0: 64, y0: 372, w: 440, h: 126, max: 12 };
+const XA = V => GA.x0 + V / 40 * GA.w, YA = p => GA.y0 - p / 14 * GA.h;
+const YB = d => GB.y0 - d / GB.max * GB.h;
+const VD = (() => { const l = []; for (let V = .1; V < 18.5; V += .25) l.push(V); for (let V = 18.5; V < 21.5; V += .02) l.push(+V.toFixed(2)); for (let V = 21.5; V <= 39.9 + 1e-9; V += .25) l.push(V); l.push(20); return l.sort((a, b) => a - b); })();
+const DD = VD.map(V => [V, dJ(V)]);
+const D20 = dJ(20);
+function fracD(c, x, y, t, col) { morceau(c, { frac: ['dpH', 'dV_B'] }, x, y, t, col); return largeurMorceau(c, { frac: ['dpH', 'dV_B'] }, t); }
+function vueDerivee(c, M) {
+  const pc = M.commence('courbe') ? M.p('courbe') : 0, pd = M.commence('derivee') ? M.p('derivee') : 0;
+  M.etape(c, 'courbe', () => {
+    grapheJ(c, GA, { taille: 13, sauf: [20], dx: 0, dy: 18, pasPH: 7 });
+    c.ligne(PX, 80, PX + 28, 80, { couleur: 'bleu', largeur: 2.6 });
+    c.texte('pH = f(V_B)', PX + 36, 86, { couleur: 'bleu', taille: 17 });
+  });
+  if (pc > 0) c.direct(() => courbeJ(c, GA, 40 * pc, { premier: true, r: 2.8, largeur: 2.2 }));
+  M.etape(c, 'derivee', () => {
+    const X = XA;
+    c.fleche(GB.x0, GB.y0, GB.x0 + GB.w + 16, GB.y0, { largeur: 1.8 }); c.fleche(GB.x0, GB.y0, GB.x0, GB.y0 - GB.h - 14, { largeur: 1.8 });
+    for (let V = 5; V <= 40; V += 5) { c.ligne(X(V), GB.y0 - 4, X(V), GB.y0 + 4, { largeur: 1.3, duree: .03 }); c.texte(String(V), X(V), GB.y0 + 18, { couleur: 'faible', taille: 13, align: 'center', duree: .05 }); }
+    for (let d = 4; d <= 12; d += 4) { c.ligne(GB.x0 - 4, YB(d), GB.x0 + 4, YB(d), { largeur: 1.2, duree: .02 }); c.texte(String(d), GB.x0 - 8, YB(d) + 5, { couleur: 'faible', taille: 13, align: 'right', duree: .05 }); }
+    c.texte('0', GB.x0 - 8, GB.y0 + 5, { couleur: 'faible', taille: 13, align: 'right', duree: .05 });
+    const w = fracD(c, GB.x0 + 12, GB.y0 - GB.h + 14, 15, ORANGE_C);
+    c.texte('(mL⁻¹)', GB.x0 + 18 + w, GB.y0 - GB.h + 14, { couleur: ORANGE_C, taille: 14 });
+    c.texte('V_B (mL)', GB.x0 + GB.w + 22, GB.y0 + 6, { taille: 16 });
+    c.ligne(PX, 116, PX + 28, 116, { couleur: ORANGE_C, largeur: 2.6 });
+    fracD(c, PX + 36, 122, 17, ORANGE_C);
+  });
+  if (pd > 0) c.direct(() => {
+    const Vm = 40 * pd, pts = DD.filter(([V]) => V <= Vm).map(([V, d]) => [XA(V), YB(d)]);
+    if (pts.length > 1) c.trait(pts, { couleur: ORANGE_C, largeur: 2.4, tremble: .25 });
+  });
+  M.etape(c, 'pic', () => {
+    c.ligne(XA(20), YB(D20), XA(20), YA(PH_E), { couleur: 'jaune', largeur: 1.8, pointille: [5, 5] });
+    c.point(XA(20), YB(D20), 5.5, 'jaune'); c.point(XA(20), YA(PH_E), 5, 'jaune');
+    c.texte('pic : 11,5 mL⁻¹', XA(20) + 12, YB(D20) + 12, { couleur: 'jaune', taille: 16 });
+  });
+  M.etape(c, 'lecture', () => {
+    c.texte('V_BE = abscisse du maximum', PX, 250, { couleur: 'blanc', taille: 17, max: 205 });
+    const P = ligneM(c, PX, 292, ['de', { frac: ['dpH', 'dV_B'] }], { taille: 17 });
+    c.texte('= 20,0 mL', P.x0 + P.tot + 8, 292, { couleur: 'jaune', taille: 21 });
+  });
+  M.etape(c, 'national', () => {
+    c.texte('nationaux 2022 N et 2024 N :', PX, 328, { couleur: 'faible', taille: 15, max: 205 });
+    c.texte('V_BE lu au pic de la dérivée', PX, 350, { couleur: 'faible', taille: 15, max: 205 });
+  });
+  const vues = [];
+  if (M.commence('courbe')) vues.push('en haut : courbe pH = f(V_B) de l’exemple J (bleu clair)');
+  if (M.commence('derivee')) vues.push('en bas : courbe dérivée dpH/dV_B (orange clair, en mL⁻¹) : presque nulle, puis un pic fin');
+  if (M.commence('pic')) vues.push('pic à 20,0 mL (dpH/dV_B ≈ 11,5 mL⁻¹) relié au saut par un trait vertical jaune');
+  if (M.commence('lecture')) vues.push('« V_BE = abscisse du maximum de dpH/dV_B = 20,0 mL »');
+  if (M.commence('national')) vues.push('« nationaux 2022 N et 2024 N : V_BE lu au pic de la dérivée »');
+  return vues;
+}
+
+/* ── Dessin ──────────────────────────────────────────────────────────── */
+function dessiner(c, M) {
+  MO = M; M.scene.cadre(89);
+  const v = M.S.vue;
+  c.texte(TITRE_TABLEAU[v], 14, 26, { couleur: 'cyan', taille: 20, max: 560 });
+  M.vues = ({ montage: vueMontage, reaction: vueReaction, equivalence: vueEquivalence, courbe: vueCourbe, tangentes: vueTangentes, derivee: vueDerivee })[v](c, M) || [];
+  reperes(c, M);
+  return c.fin();
+}
+
+/* ── Repères ─────────────────────────────────────────────────────────── */
+function reperes(c, M) {
+  const v = M.S.vue, R = (id, x, y, w, h, l) => c.repere(id, x, y, w, h, l), q = nom => quand(M, nom);
+  if (v === 'montage') {
+    R('burette', BU1.x - 30, BU1.yH - 10, 60, BU1.yp - BU1.yH + 14, `la burette graduée : soude, C_B = 1,0·10⁻² mol/L (solution titrante)${q('burette')}`);
+    R('becher', BE1.x - 6, BE1.y - 6, BE1.w + 12, BE1.h + 10, `le bécher : V_A = 20,0 mL d’acide éthanoïque (solution titrée)${q('becher')}`);
+    R('agitateur', AG1.x, AG1.y, AG1.w, AG1.h, `l’agitateur magnétique (le barreau aimanté tourne dans le bécher)${q('agitateur')}`);
+    R('sonde', SO1.x - 10, SO1.yH, 20, SO1.yB - SO1.yH, `la sonde du pH-mètre, plongée dans le bécher${q('ph_metre')}`);
+    R('afficheur', PM1.x, PM1.y, PM1.w, PM1.h, `l’afficheur du pH-mètre : 3,41${q('ph_metre')}`);
+    R('noms', 10, 50, 230, 340, `les noms : burette, solution titrante, solution titrée, agitateur magnétique (et pH-mètre)${q('noms')}`);
+    R('but', 500, 330, 200, 46, `« but : trouver C_A »${q('but')}`);
+  } else if (v === 'reaction') {
+    R('loupe', LP.x - LP.r - 6, LP.y - LP.r - 6, 2 * LP.r + 12, 2 * LP.r + 30, `la loupe : chaque HO⁻ arrache un H⁺ à CH₃COOH${q('loupe')}`);
+    R('equation', 366, 62, 380, 76, `« CH₃COOH + HO⁻ → CH₃COO⁻ + H₂O » (réaction de dosage, flèche simple)${q('equation')}`);
+    R('constante', 366, 150, 260, 44, `« K = 1,6·10⁹ »${q('constante')}`);
+    R('conditions', 366, 212, 380, 112, `les trois cases cochées : rapide, totale, unique${q('unique')}`);
+  } else if (v === 'equivalence') {
+    const T = TE, W = T.xs[5] - T.x;
+    R('tableau', T.x, T.y, W, 2 * T.h, `le tableau d’avancement : équation et état initial (C_A·V_A ; C_B·V_B)${q('tableau')}`);
+    R('avant', T.x, yLig(1), W, T.h, `la ligne « avant » : HO⁻ limitant${q('avant')}`);
+    R('a_equivalence', T.x, yLig(2), W, T.h, `la ligne « à l’équivalence » : les deux réactifs épuisés${q('a_equivalence')}`);
+    R('apres', T.x, yLig(3), W, T.h, `la ligne « après » : HO⁻ en excès${q('apres')}`);
+    R('definition', 14, 258, 600, 28, `« équivalence : réactifs dans les proportions stœchiométriques »${q('definition')}`);
+    R('relation', 14, 298, 700, 40, `« n(CH₃COOH)_initial = n(HO⁻)_versé » et l’encadré « C_A·V_A = C_B·V_BE »${q('relation')}`);
+    R('application', 14, 352, 520, 56, `« V_BE = 1,0·10⁻² × 20,0/1,0·10⁻² = 20,0 mL »${q('application')}`);
+  } else if (v === 'courbe') {
+    const V = vCourbe(M) ?? 0;
+    R('axe_ph', G1.x0 - 40, G1.y0 - G1.h - 22, 52, G1.h + 30, `l’axe des pH, de 0 à 14${q('axes')}`);
+    R('axe_v', G1.x0, G1.y0 - 6, G1.w + 70, 34, `l’axe V_B, de 0 à 40 mL${q('axes')}`);
+    R('courbe', G1.x0, Y1(12), G1.w, Y1(3) - Y1(12), `la courbe pH = f(V_B) (points de l’exemple J, bleu clair)${q('zone_3')}`);
+    R('saut', X1(18), Y1(11), X1(30) - X1(18), Y1(5.5) - Y1(11), `le saut de pH, près de 20 mL${q('saut')}`);
+    R('afficheur', PM2.x, PM2.y, PM2.w, PM2.h, `l’afficheur du pH-mètre (pH au centième)${q('debut')}`);
+    R('poignee_vb', X1(V) - 16, G1.y0 - 16, 32, 32, `la poignée : l’anneau violet sur l’axe V_B (V_B = ${vTxt(V)} mL, pH = ${fr(phJ(V), 2)} ; de 0 à 40 mL)${q('debut')}`);
+    R('phrase', 16, 380, 534, 34, `« de 19,5 à 20,5 mL, le pH passe de 6,4 à 10,1 : c’est le saut »${q('phrase')}`);
+  } else if (v === 'tangentes') {
+    R('courbe', G2.x0, Y2(12), G2.w, Y2(3) - Y2(12), `la courbe pH = f(V_B)${q('courbe')}`);
+    R('tangente_1', X2(V1 - 11), Y2(B1 + PENTE * (V1 + 11)) - 6, X2(V1 + 11) - X2(V1 - 11), Y2(B1 + PENTE * (V1 - 11)) - Y2(B1 + PENTE * (V1 + 11)) + 12, `la première tangente (pointillés jaunes), avant le saut${q('tangente_1')}`);
+    R('tangente_2', X2(V2 - 11), Y2(B2 + PENTE * (V2 + 11)) - 6, X2(V2 + 11) - X2(V2 - 11), Y2(B2 + PENTE * (V2 - 11)) - Y2(B2 + PENTE * (V2 + 11)) + 12, `la deuxième tangente, parallèle, après le saut${q('tangente_2')}`);
+    R('mediane', X2(2), Y2(BM + PENTE * 36) - 6, X2(36) - X2(2), Y2(BM + PENTE * 2) - Y2(BM + PENTE * 36) + 12, `la parallèle équidistante (trait jaune plein)${q('mediane')}`);
+    R('point_e', X2(20) - 16, Y2(PH_E) - 16, 32, 32, `le point E (20,0 mL ; 8,3)${q('point_e')}`);
+    R('lecture', PX - 10, 254, 190, 74, `« V_BE = 20,0 mL ; pH_E = 8,3 »${q('lecture')}`);
+  } else {
+    R('courbe', GA.x0, GA.y0 - GA.h, GA.w, GA.h, `en haut : la courbe pH = f(V_B)${q('courbe')}`);
+    R('derivee', GB.x0, GB.y0 - GB.h, GB.w, GB.h, `en bas : la courbe dérivée dpH/dV_B (orange clair)${q('derivee')}`);
+    R('pic', XA(20) - 14, YB(D20) - 14, 140, 34, `le pic de la dérivée à 20,0 mL (≈ 11,5 mL⁻¹)${q('pic')}`);
+    R('lecture', PX - 6, 230, 210, 76, `« V_BE = abscisse du maximum de dpH/dV_B = 20,0 mL »${q('lecture')}`);
+    R('national', PX - 6, 312, 210, 44, `« nationaux 2022 N et 2024 N »${q('national')}`);
+  }
+}
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────── */
+function voir(M) {
+  const v = M.S.vue, m = [`Vue « ${v} » (${TITRES[v]}), ${M.etat()}. Étape en cours : ${etapeEnCours(M)}.`];
+  if (v === 'montage' && M.mon && M.commence('ph_metre')) m.push(`Afficheur du pH-mètre : ${M.mon.aff}.`);
+  if (v === 'reaction' && M.rea && M.commence('loupe')) m.push(`Dans la loupe : ${M.rea.n} HO⁻ sur 3 ont déjà pris un H⁺ (devenus H₂O, et CH₃COOH devenu CH₃COO⁻ vert).`);
+  if (v === 'courbe' && M.cou) m.push(M.cou.V == null ? 'Burette fermée (pas encore de point).' : `V_B = ${vTxt(M.cou.V)} mL versés ; afficheur pH = ${M.cou.aff} ; point violet sur la courbe et anneau violet (poignée) sur l’axe V_B${verse(M) ? ' ; la burette coule' : ''}.`);
+  if (M.vues && M.vues.length) m.push(`Écrit : ${M.vues.map(s => `« ${s} »`).join(' ; ')}.`);
+  return m.join(' ');
+}
+const params = M => {
+  const p = { vue: M.S.vue };
+  if (M.S.vue === 'courbe') { const V = vCourbe(M) ?? 0; Object.assign(p, { V_B: +V.toFixed(1), pH: +phJ(V).toFixed(2) }); }
+  return p;
+};
+const MOT = Moteur({
+  id: 'ab_dosage', titre: 'Dosage pH-métrique de l’acide éthanoïque par la soude : montage, réaction de dosage, équivalence, courbe pH = f(V_B) (poignée V_B), tangentes, dérivée', vues: VUES, titres: TITRES,
+  etapes: ETAPES, motifs: MOTIFS, dessiner, voir, params,
+  reprise: () => { if (MO && MO.S.vue === 'courbe') { PAR.V = null; DRAG = null; } },
+  depart: M => ({ montage: 'Comment trouver la concentration d’un acide ?', reaction: 'Que se passe-t-il quand la soude tombe dans l’acide ?', equivalence: 'Quand y a-t-il équivalence ?',
+    courbe: 'On verse la soude et on suit le pH.', tangentes: 'Comment trouver le point d’équivalence sur la courbe ?', derivee: 'Une autre méthode : la courbe dérivée.' })[M.S.vue],
+  messageFin: M => ({ montage: 'Burette de soude (titrante), bécher d’acide éthanoïque (titrée), agitateur, pH-mètre : 3,41.', reaction: 'CH₃COOH + HO⁻ → CH₃COO⁻ + H₂O : rapide, totale (K = 1,6·10⁹), unique.',
+    equivalence: 'À l’équivalence : C_A·V_A = C_B·V_BE, donc V_BE = 20,0 mL.', courbe: (() => { const V = vCourbe(M) ?? 40; return `V_B = ${vTxt(V)} mL : pH = ${fr(phJ(V), 2)}. Saut de pH près de 20 mL.`; })(),
+    tangentes: 'Méthode des tangentes : E (20,0 mL ; 8,3).', derivee: 'Le maximum de dpH/dV_B est à 20,0 mL : V_BE = 20,0 mL.' })[M.S.vue],
+  appliquer: (p, M) => {
+    const r = {};
+    if (VUES.includes(p.vue)) r.vue = p.vue;
+    const V = lireV(p.V_B), cible = r.vue || M.S.vue;
+    if (V != null && cible === 'courbe') {
+      DRAG = null;
+      if (r.vue && r.vue !== M.S.vue) { r.change = true; r.apres = () => { M.setTime({ time_s: M.Moments().fin }); PAR.V = V; M.scene.sale = true; M.dire(`V_B = ${vTxt(V)} mL : pH = ${fr(phJ(V), 2)}.`, 'good'); M.emettre(); }; }
+      else {
+        r.garder = true;
+        r.apres = () => {
+          if (!M.vu('zone_3')) M.setTime({ time_s: M.Moments().fin });
+          PAR.V = V; M.scene.sale = true; M.dire(`V_B = ${vTxt(V)} mL : pH = ${fr(phJ(V), 2)}.`, 'good'); M.emettre();
+        };
+      }
+    } else r.change = !!(r.vue && r.vue !== M.S.vue);
+    return r;
+  },
+  schema: { vue: VUES.join(' | ') + ' (change la vue et relance)', V_B: '0..40 mL (vue courbe ; au dixième ; défaut 0) : le point et l’afficheur suivent la courbe' },
+  texte: 'Dosage de l’acide éthanoïque par la soude (exemple J). Montage : burette graduée de soude C_B = 1,0·10⁻² mol/L (solution titrante) ; bécher de V_A = 20,0 mL d’acide éthanoïque (solution titrée) ; agitateur magnétique ; pH-mètre (3,41) ; but : trouver C_A. Réaction de dosage : CH₃COOH + HO⁻ → CH₃COO⁻ + H₂O, K = 1,6·10⁹ ; rapide, totale, unique. Équivalence : réactifs dans les proportions stœchiométriques ; n(CH₃COOH)_initial = n(HO⁻)_versé ; C_A·V_A = C_B·V_BE ; V_BE = 1,0·10⁻² × 20,0/1,0·10⁻² = 20,0 mL ; avant : HO⁻ limitant ; après : HO⁻ en excès. Courbe pH = f(V_B) : 0 → 3,41 ; 2 → 3,91 ; 5 → 4,34 ; 10 → 4,80 ; 15 → 5,28 ; 18 → 5,76 ; 19 → 6,08 ; 19,5 → 6,39 ; 20 → 8,25 ; 20,5 → 10,09 ; 21 → 10,39 ; 22 → 10,68 ; 25 → 11,05 ; 30 → 11,30 ; 40 → 11,52 ; pH monte doucement, saut de pH, pH presque constant ; poignée V_B (0 à 40 mL). Méthode des tangentes parallèles : deux tangentes parallèles de part et d’autre du saut, leur parallèle équidistante coupe la courbe en E : V_BE = 20,0 mL, pH_E = 8,3. Courbe dérivée dpH/dV_B : presque nulle, pic fin à 20,0 mL (≈ 11,5 mL⁻¹) ; V_BE = abscisse du maximum de dpH/dV_B = 20,0 mL (nationaux 2022 N, 2024 N).',
+  explications: {
+    montage: [{ repere: 'burette', texte: 'La burette contient la soude, la solution titrante.' }, { repere: 'becher', texte: 'Le bécher contient l’acide à doser, la solution titrée.' }, { repere: 'agitateur', texte: 'L’agitateur mélange en continu.' },
+      { repere: 'sonde', texte: 'La sonde plonge dans la solution.' }, { repere: 'afficheur', texte: 'Le pH-mètre affiche 3,41.' }, { repere: 'but', texte: 'Le but : trouver la concentration de l’acide.' }],
+    reaction: [{ repere: 'loupe', texte: 'Chaque ion hydroxyde arrache un proton à l’acide.' }, { repere: 'equation', texte: 'La réaction de dosage, avec une flèche simple.' }, { repere: 'constante', texte: 'Sa constante est énorme.' },
+      { repere: 'conditions', texte: 'Elle est rapide, totale et unique.' }],
+    equivalence: [{ repere: 'tableau', texte: 'Le tableau d’avancement de la réaction de dosage.' }, { repere: 'avant', texte: 'Avant l’équivalence, HO⁻ est limitant.' }, { repere: 'a_equivalence', texte: 'À l’équivalence, les deux réactifs sont épuisés.' },
+      { repere: 'apres', texte: 'Après, HO⁻ est en excès.' }, { repere: 'definition', texte: 'Les réactifs sont dans les proportions stœchiométriques.' }, { repere: 'relation', texte: 'D’où C_A V_A = C_B V_BE.' }, { repere: 'application', texte: 'Ici, V_BE = 20,0 mL.' }],
+    courbe: [{ repere: 'axe_v', texte: 'Le volume de soude versé.' }, { repere: 'axe_ph', texte: 'Le pH mesuré.' }, { repere: 'afficheur', texte: 'Le pH-mètre suit chaque ajout.' }, { repere: 'courbe', texte: 'Le pH monte doucement, puis saute, puis se stabilise.' },
+      { repere: 'saut', texte: 'Le saut de pH, près de 20 mL.' }, { repere: 'poignee_vb', texte: 'Glisse l’anneau pour lire le pH à un volume donné.' }, { repere: 'phrase', texte: 'Quelques gouttes font sauter le pH.' }],
+    tangentes: [{ repere: 'courbe', texte: 'La courbe du dosage.' }, { repere: 'tangente_1', texte: 'Une tangente avant le saut.' }, { repere: 'tangente_2', texte: 'Une tangente parallèle après le saut.' },
+      { repere: 'mediane', texte: 'La parallèle à égale distance des deux.' }, { repere: 'point_e', texte: 'Elle coupe la courbe en E.' }, { repere: 'lecture', texte: 'On lit V_BE = 20,0 mL et pH_E = 8,3.' }],
+    derivee: [{ repere: 'courbe', texte: 'La courbe du dosage.' }, { repere: 'derivee', texte: 'Sa dérivée est presque nulle, sauf au saut.' }, { repere: 'pic', texte: 'Le pic de la dérivée est sous le saut.' },
+      { repere: 'lecture', texte: 'V_BE est l’abscisse du maximum : 20,0 mL.' }, { repere: 'national', texte: 'C’est la méthode des nationaux.' }],
+  },
+});
+MOT.lancer();
+window.Tableau.glisser(MOT.scene.craie.canvas, {
+  toucher: (px, py) => {
+    if (MOT.S.vue !== 'courbe' || !MOT.commence('debut') || MOT.S.running) return null;
+    const [x, y] = MOT.scene.local(px, py);
+    return x > G1.x0 - 20 && x < G1.x0 + G1.w + 20 && Math.abs(y - G1.y0) < 24 ? 'V_B' : null;
+  },
+  bouger: (id, px) => { const [x] = MOT.scene.local(px, 0); DRAG = Math.round(clamp((x - G1.x0) / G1.w, 0, 1) * 400) / 10; MOT.scene.sale = true; },
+  lacher: () => { if (DRAG != null) { const V_B = DRAG; MOT.setParameters({ V_B }); } },
+});
+
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

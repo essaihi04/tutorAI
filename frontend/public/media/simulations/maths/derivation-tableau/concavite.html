@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Concavité — la tangente roule</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Repère à la craie : une tangente roule le long de la courbe ; la courbe est sous ses tangentes (concave) puis au-dessus (convexe), la tangente traverse la courbe au point d’inflexion"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Dérivation et étude des fonctions » (math_ch2_derivation_etude_fonctions) : concavité, point d’inflexion.
+ * Vues : ?vue=roule | x4.
+ *   roule : f(x) = x³ − 3x ; tangente en T(t ; f(t)) : y = f′(t)(x − t) + f(t), f′(t) = 3t² − 3, f″(x) = 6x.
+ *           f(x) − [tangente] = (x − t)²(x + 2t) : la courbe est sous sa tangente tant que x < −2t, au-dessus après.
+ *           Près du contact : sous la tangente si t < 0 (concave), au-dessus si t > 0 (convexe) ; en t = 0, y = −3x la traverse.
+ *   x4    : f(x) = x⁴ ; f(x) − [tangente en t] = (x − t)²(x² + 2tx + 3t²) ≥ 0 : la courbe reste au-dessus de toutes ses
+ *           tangentes ; f″(x) = 12x² s’annule en 0 sans changer de signe : O n’est pas un point d’inflexion.
+ * La zone entre la courbe et la tangente près du contact est coloriée (alpha .12) d’après le signe EXACT de f − tangente :
+ * bleu où la courbe est sous la tangente, vert où elle est au-dessus.
+ * Au tableau, f′ s’écrit f' et f″ s’écrit f'' (la police de la craie dessine « ′ » vide).
+ */
+const g = x => x * x * x - 3 * x, gp = x => 3 * x * x - 3;
+const q = x => x * x * x * x, qp = x => 4 * x * x * x;
+const OPT_R = { x0: 40, y0: 60, w: 385, h: 290, xmin: -2.4, xmax: 2.4, ymin: -3.2, ymax: 3.2,
+  gx: [[-2, '−2'], [-1, '−1'], [1, '1'], [2, '2']], gy: [[2, '2'], [-2, '−2']], origine: false };
+const OPT_4 = { x0: 60, y0: 60, w: 360, h: 290, xmin: -1.6, xmax: 1.6, ymin: -0.5, ymax: 4,
+  gx: [[-1, '−1'], [1, '1']], gy: [[1, '1'], [2, '2'], [3, '3']] };
+const PX = 470;                                    // colonne des textes, à droite du repère
+
+function primes(c) {
+  if (c.__primes) return; c.__primes = true;
+  const texte = c.texte;
+  c.texte = function (s, ...r) { return texte.call(this, String(s).replace(/″/g, "''").replace(/′/g, "'"), ...r); };
+}
+/* Les abscisses où la tangente en t (longueur ±demi) reste dans le cadre du repère. */
+function bornesTangente(G, f, fp, t, demi) {
+  const m = fp(t), y0 = f(t);
+  let a = Math.max(G.xmin, t - demi), b = Math.min(G.xmax, t + demi);
+  if (Math.abs(m) > 1e-9) { const u = t + (G.ymin - y0) / m, v = t + (G.ymax - y0) / m; a = Math.max(a, Math.min(u, v)); b = Math.min(b, Math.max(u, v)); }
+  return [a, b];
+}
+/* Tangente en t, longue, coupée au cadre du repère. */
+function tangente(c, G, f, fp, t, demi) {
+  const m = fp(t), y0 = f(t), [a, b] = bornesTangente(G, f, fp, t, demi);
+  if (b <= a) return null;
+  const T = x => m * (x - t) + y0;
+  c.ligne(G.X(a), G.Y(T(a)), G.X(b), G.Y(T(b)), { couleur: 'orange', largeur: 2.4 });
+  return [a, b, T];
+}
+/* La zone entre la courbe et la tangente, sur [t − d ; t + d] : bleu où f < tangente, vert où f > tangente (signe exact). */
+function zone(c, G, f, fp, t, d) {
+  const m = fp(t), y0 = f(t), T = x => m * (x - t) + y0, [ta, tb] = bornesTangente(G, f, fp, t, d);
+  const a = ta, b = tb, N = 90, ctx = c.ctx;
+  if (b <= a) return;
+  ctx.save(); ctx.beginPath(); ctx.rect(G.x0, G.y0, G.w, G.h); ctx.clip();
+  let i = 0;
+  while (i < N) {
+    const signe = k => Math.sign(f(a + (b - a) * (k + .5) / N) - T(a + (b - a) * (k + .5) / N));
+    const s = signe(i); let j = i; while (j + 1 < N && signe(j + 1) === s) j++;
+    if (s !== 0) {
+      const x1 = a + (b - a) * i / N, x2 = a + (b - a) * (j + 1) / N, n = Math.max(2, (j - i + 1) * 2);
+      ctx.beginPath();
+      for (let k = 0; k <= n; k++) { const x = x1 + (x2 - x1) * k / n; ctx[k ? 'lineTo' : 'moveTo'](G.X(x), G.Y(f(x))); }
+      for (let k = n; k >= 0; k--) { const x = x1 + (x2 - x1) * k / n; ctx.lineTo(G.X(x), G.Y(T(x))); }
+      ctx.closePath(); ctx.globalAlpha = .12; ctx.fillStyle = c.couleur(s < 0 ? 'bleu' : 'vert'); ctx.fill();
+    }
+    i = j + 1;
+  }
+  ctx.restore(); ctx.globalAlpha = 1;
+}
+/* Mini-tableau de signes à droite : lignes [{lab, cases:[[x, texte, couleur]]}]. */
+function miniTableau(c, y, lignes, repere) {
+  const g0 = PX, lab = 540, d = 745, h = 26, o = { couleur: 'faible', largeur: 1.3 };
+  c.ligne(g0, y, d, y, o);
+  lignes.forEach((l, i) => {
+    c.texte(l.lab, (g0 + lab) / 2, y + h * i + 19, { couleur: 'blanc', taille: 16, align: 'center' });
+    for (const [x, s, coul] of l.cases) c.texte(s, x, y + h * i + 19, { couleur: coul || 'blanc', taille: 17, align: 'center' });
+    c.ligne(g0, y + h * (i + 1), d, y + h * (i + 1), o);
+  });
+  c.ligne(lab, y, lab, y + h * lignes.length, o);
+  if (repere) c.repere(repere, g0 - 4, y - 28, d - g0 + 8, h * lignes.length + 30, 'f″ et son signe');
+}
+function contact(c, G, f, x, nom) {
+  c.point(G.X(x), G.Y(f(x)), 6, 'jaune');
+  c.repere('point_contact', G.X(x) - 14, G.Y(f(x)) - 14, 28, 28, 'le point de contact');
+  if (nom) c.texte(nom, G.X(x) + 10, G.Y(f(x)) + (x > 0 ? 22 : -12), { couleur: 'jaune', taille: 17 });
+}
+
+MathsTableau.page({
+  id: 'de_concavite', titre: 'Concavité et point d’inflexion',
+  texte: 'Construction à la craie du cours Dérivation et étude des fonctions : une tangente roule le long de la courbe ; là où la courbe est sous ses tangentes elle est concave, au-dessus elle est convexe ; au point d’inflexion la tangente traverse la courbe et f″ s’annule en changeant de signe',
+  vues: {
+    roule: {
+      titre: 'La tangente roule : concave, point d’inflexion, convexe',
+      params: { x_t: { min: -2, max: 2, pas: 0.01, defaut: 1.3, sens: 'abscisse du point de contact de la tangente' } },
+      dessiner(c, K) {
+        primes(c);
+        K.titre('La tangente roule sur la courbe');
+        const G = K.axes(OPT_R);
+        c.repere('repere', G.x0, G.y0, G.w, G.h, 'le repère');
+        K.marque('repere_pose');
+        K.anime(2.2, p => K.courbePart(G, g, -2.13, 2.13, p, { couleur: 'cyan' }));
+        c.texte('f(x) = x³ − 3x', PX, 80, { couleur: 'cyan', taille: 19 });
+        c.repere('arc_concave', G.X(-2.13), G.Y(2.2), G.X(0) - G.X(-2.13), G.Y(-3.2) - G.Y(2.2), 'l’arc concave (x < 0)');
+        c.repere('arc_convexe', G.X(0), G.Y(3.2), G.X(2.13) - G.X(0), G.Y(-2.2) - G.Y(3.2), 'l’arc convexe (x > 0)');
+        K.marque('courbe_tracee');
+        let t = null;
+        const roule = (de, a, duree) => { const p = K.anime(duree, () => {}); if (p > 0) t = de + (a - de) * p; };
+        // 1. Contact de −2 à −1,2 : la courbe sous sa tangente
+        c.pause(.2); roule(-2, -1.2, 1.8);
+        c.texte('∩ concave : la courbe est', PX, 110, { couleur: 'bleu', taille: 17 });
+        c.texte('sous ses tangentes', PX + 22, 131, { couleur: 'bleu', taille: 17 });
+        K.marque('courbe_sous_tangente');
+        // 2. Contact en 0 : y = −3x traverse la courbe en I
+        roule(-1.2, 0, 1.6);
+        c.cercle(G.X(0), G.Y(0), 13, { couleur: 'jaune', largeur: 1.8 });
+        c.texte('I', G.X(0) - 26, G.Y(0) + 26, { couleur: 'jaune', taille: 18 });
+        c.repere('point_i', G.X(0) - 16, G.Y(0) - 16, 32, 32, 'I(0 ; 0), point d’inflexion');
+        c.texte('I(0 ; 0) point d’inflexion', PX, 164, { couleur: 'jaune', taille: 17 });
+        c.texte('la tangente traverse la courbe', PX + 22, 185, { couleur: 'jaune', taille: 15 });
+        K.marque('tangente_traverse');
+        // 3. Contact de 0 à 1,3 : la courbe au-dessus
+        roule(0, 1.3, 1.8);
+        c.texte('∪ convexe : la courbe est', PX, 218, { couleur: 'vert', taille: 17 });
+        c.texte('au-dessus de ses tangentes', PX + 22, 239, { couleur: 'vert', taille: 17 });
+        K.marque('courbe_au_dessus');
+        // 4. f″ et son signe
+        c.pause(.2);
+        c.texte('f″(x) = 6x', PX, 266, { couleur: 'cyan', taille: 18 });
+        miniTableau(c, 274, [
+          { lab: 'x', cases: [[560, '−∞'], [640, '0'], [727, '+∞']] },
+          { lab: 'f″(x)', cases: [[598, '−', 'bleu'], [640, '0', 'jaune'], [684, '+', 'vert']] },
+          { lab: '(Cf)', cases: [[598, '∩', 'bleu'], [640, 'I', 'jaune'], [684, '∪', 'vert']] },
+        ], 'ligne_f_seconde');
+        K.marque('ligne_f_seconde');
+        // Après la construction : le contact va en x_t (la poignée de l'élève).
+        roule(1.3, K.P.x_t, 0.8);
+        if (t !== null) c.direct(() => {
+          zone(c, G, g, gp, t, 0.65);
+          const r = tangente(c, G, g, gp, t, 1.6);
+          if (r) c.repere('tangente', G.X(r[0]), Math.min(G.Y(r[2](r[0])), G.Y(r[2](r[1]))), G.X(r[1]) - G.X(r[0]), Math.abs(G.Y(r[2](r[1])) - G.Y(r[2](r[0]))) + 2, 'la tangente');
+          if (Math.abs(t) < 0.005) c.texte('y = −3x', G.X(-0.75) - 8, G.Y(2.25) - 4, { couleur: 'orange', taille: 16, align: 'right' });
+          contact(c, G, g, t, Math.abs(t) < 0.005 ? '' : 'T');
+        });
+      },
+      poignees(K) { const G = K.grille(OPT_R); const x = K.P.x_t;
+        return [{ id: 'x_t', x: G.X(x), y: G.Y(g(x)), bouger: (px) => ({ x_t: G.inv(px, 0)[0] }) }]; },
+      lecture: K => { const x = K.P.x_t, s = 6 * x;
+        if (Math.abs(x) < 0.005) return 'Contact en x = 0 : f″(0) = 0 et f″ change de signe ; la tangente y = −3x traverse la courbe en I(0 ; 0), point d’inflexion.';
+        return `Contact en x = ${K.fr(x, 2)}, f″(x) = 6x = ${K.fr(s, 2)} ${s > 0 ? '> 0' : '< 0'} : la courbe est ${s > 0 ? 'au-dessus de sa tangente (convexe)' : 'sous sa tangente (concave)'}.`; },
+      decrire: {
+        repere_pose: 'Un repère vide.',
+        courbe_tracee: 'La courbe de f(x) = x³ − 3x (cyan) est tracée ; à droite, écrit f(x) = x³ − 3x.',
+        courbe_sous_tangente: 'La tangente (orange) roule, son point de contact T va de x = −2 à x = −1,2 : la courbe reste sous sa tangente, la zone entre elles est coloriée en bleu ; écrit « ∩ concave : la courbe est sous ses tangentes ».',
+        tangente_traverse: 'Le contact arrive en x = 0 : la tangente y = −3x traverse la courbe, bleu à gauche (courbe dessous), vert à droite (courbe dessus) ; I(0 ; 0) est entouré, écrit « I(0 ; 0) point d’inflexion ».',
+        courbe_au_dessus: 'Le contact va de 0 à 1,3 : la courbe est au-dessus de sa tangente, zone coloriée en vert ; écrit « ∪ convexe : la courbe est au-dessus de ses tangentes ».',
+        ligne_f_seconde: 'En bas à droite : f″(x) = 6x et un mini-tableau : x : −∞, 0, +∞ ; f″(x) : − 0 + ; (Cf) : ∩ I ∪.',
+      },
+      motifs: { courbe_tracee: 'la courbe tracée', courbe_sous_tangente: 'courbe sous la tangente : concave', tangente_traverse: 'la tangente traverse en I', courbe_au_dessus: 'courbe au-dessus : convexe', ligne_f_seconde: 'le signe de f″' },
+      explication: [
+        { repere: 'arc_concave', texte: 'Pour x < 0, la courbe est sous ses tangentes : elle est concave, f″(x) = 6x < 0.' },
+        { repere: 'point_i', texte: 'En I(0 ; 0), la tangente traverse la courbe : f″ s’annule en changeant de signe, I est un point d’inflexion.' },
+        { repere: 'arc_convexe', texte: 'Pour x > 0, la courbe est au-dessus de ses tangentes : elle est convexe, f″(x) > 0.' },
+        { repere: 'ligne_f_seconde', texte: 'Le signe de f″ donne la concavité.' },
+      ],
+    },
+    x4: {
+      titre: 'f(x) = x⁴ : f″(0) = 0 sans point d’inflexion',
+      dessiner(c, K) {
+        primes(c);
+        K.titre('x⁴ : un contre-exemple');
+        const G = K.axes(OPT_4);
+        c.repere('repere', G.x0, G.y0, G.w, G.h, 'le repère');
+        K.marque('repere_pose');
+        K.anime(2, p => K.courbePart(G, q, -1.42, 1.42, p, { couleur: 'cyan' }));
+        c.texte('f(x) = x⁴', PX, 88, { couleur: 'cyan', taille: 19 });
+        K.marque('courbe_tracee');
+        let t = null;
+        const roule = (de, a, duree) => { const p = K.anime(duree, () => {}); if (p > 0) t = de + (a - de) * p; };
+        roule(0, 0, 0.6);
+        c.texte('tangente en O : y = 0', PX, 124, { couleur: 'orange', taille: 17 });
+        c.repere('point_o', G.X(0) - 14, G.Y(0) - 14, 28, 28, 'le point O');
+        K.marque('tangente_en_o');
+        roule(0, -1, 1.0); roule(-1, 1, 2.4);
+        c.texte('la courbe reste au-dessus de ses', PX, 158, { couleur: 'vert', taille: 17 });
+        c.texte('tangentes, des deux côtés de O', PX + 22, 180, { couleur: 'vert', taille: 17 });
+        K.marque('reste_au_dessus');
+        c.pause(.2);
+        c.texte('f″(x) = 12x²', PX, 214, { couleur: 'cyan', taille: 18 });
+        miniTableau(c, 222, [
+          { lab: 'x', cases: [[560, '−∞'], [640, '0'], [727, '+∞']] },
+          { lab: 'f″(x)', cases: [[598, '+', 'vert'], [640, '0', 'jaune'], [684, '+', 'vert']] },
+        ], 'ligne_f_seconde');
+        K.marque('ligne_f_seconde');
+        roule(1, 0, 1.0);
+        c.texte('f″(0) = 0 mais f″ ne change pas', PX, 304, { couleur: 'jaune', taille: 16 });
+        c.texte('de signe : O n’est pas un point', PX, 324, { couleur: 'jaune', taille: 16 });
+        c.texte('d’inflexion', PX, 344, { couleur: 'jaune', taille: 16 });
+        c.repere('conclusion', PX - 4, 286, 280, 64, 'O n’est pas un point d’inflexion');
+        K.marque('contre_exemple_x4');
+        if (t !== null) c.direct(() => {
+          zone(c, G, q, qp, t, 0.6);
+          const r = tangente(c, G, q, qp, t, 1.4);
+          if (r) c.repere('tangente', G.X(r[0]), Math.min(G.Y(r[2](r[0])), G.Y(r[2](r[1]))) - 4, G.X(r[1]) - G.X(r[0]), Math.abs(G.Y(r[2](r[1])) - G.Y(r[2](r[0]))) + 8, 'la tangente');
+          contact(c, G, q, t, Math.abs(t) < 1e-6 ? '' : 'T');
+        });
+      },
+      decrire: {
+        repere_pose: 'Un repère vide.',
+        courbe_tracee: 'La courbe de f(x) = x⁴ (cyan), en forme de cuvette aplatie au fond, posée sur O.',
+        tangente_en_o: 'La tangente en O est l’axe des abscisses : y = 0 (orange).',
+        reste_au_dessus: 'La tangente roule, son contact va de x = −1 à x = 1 en passant par 0 : la courbe reste toujours au-dessus (zone verte), des deux côtés de O.',
+        ligne_f_seconde: 'À droite : f″(x) = 12x² et un mini-tableau : x : −∞, 0, +∞ ; f″(x) : + 0 +.',
+        contre_exemple_x4: 'La tangente revient en O (y = 0) ; écrit : f″(0) = 0 mais f″ ne change pas de signe : O n’est pas un point d’inflexion.',
+      },
+      motifs: { courbe_tracee: 'la courbe de x⁴', tangente_en_o: 'tangente en O : y = 0', reste_au_dessus: 'la courbe reste au-dessus', ligne_f_seconde: 'f″(x) = 12x²', contre_exemple_x4: 'O n’est pas un point d’inflexion' },
+      explication: [
+        { repere: 'point_o', texte: 'En O, la tangente est y = 0 et la courbe reste au-dessus d’elle des deux côtés.' },
+        { repere: 'ligne_f_seconde', texte: 'f″(0) = 0, mais f″ est positive des deux côtés de 0 : pas de changement de signe.' },
+        { repere: 'conclusion', texte: 'f″ qui s’annule ne suffit pas : il faut qu’elle change de signe.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Les courbes des facteurs cinétiques — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="tlr.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Courbes à la craie : quantité de diiode formé n(I₂) ou avancement x en fonction du temps, pour deux températures, deux concentrations, avec et sans catalyseur, et trois courbes (a), (b), (c) d’un sujet national"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Les courbes des facteurs cinétiques (cours « Transformations lentes et transformations rapides », 2e Bac PC BIOF, novembre 2026).
+ * Contrat : outils/cours/notes/cours/transformations_lentes_rapides_contrat_simulations.md § 6.
+ * Vues (?vue=) : temperature (défaut) | concentration | catalyseur | lecture.
+ * Modèle POUR L’ŒIL : n(t) = n_f·(1 − e^(−t/τ)) ; τ = 6 min (20 °C, 0,1 mol/L), 2 min (40 °C), 3 min (0,2 mol/L) ; catalyseur : C₁ τ = 2 min,
+ * C₂ τ = 8 min, x_f = 0,3 mol ; lecture : (a) 2, (b) 5, (c) 10 min. Jamais de formule écrite, ni « exponentielle », ni τ à l’écran.
+ * Pas de poignée : rien à régler (set_parameters ne change que la vue).
+ */
+/* ── Formules chimiques à la craie : indices ₂ et charges ⁺ ⁻ ²⁻ rendus (sans modifier exposants.js ni le kit) ──────────
+ * « MnO₄⁻ » devient « MnO_{4}^{−} » ; le découpage « _{…} » accepte tout caractère avant (« [I⁻]₀ »). */
+(function () {
+  const C = window.Tableau.Craie, P = C.prototype, texteAvant = P.texte, segAvant = C.segments;
+  const SUP = { '⁺': '+', '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+  const SUB = { '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9' };
+  const chim = s => String(s).replace(/[⁺⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUP[ch]).join('') + '}')
+    .replace(/[₀₁₂₃₄₅₆₇₈₉]+/g, g => '_{' + [...g].map(ch => SUB[ch]).join('') + '}');
+  C.segments = function (s) {
+    const out = [], re = /_\{([^}]+)\}/g; let i = 0, m;
+    while ((m = re.exec(s))) { if (m.index > i) out.push(...segAvant(s.slice(i, m.index))); out.push({ t: m[1], sub: true }); i = re.lastIndex; }
+    if (i < s.length) out.push(...segAvant(s.slice(i)));
+    return out;
+  };
+  P.texte = function (s, x, y, o) { return texteAvant.call(this, chim(s), x, y, o); };
+  window.chim = chim;
+})();
+
+/* ── Moteur du déroulé (copie de physics/circuit-rlc-tableau/circuit-lc.html, + M.evs) ─────────────────────────────────── */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lisse = p => p * p * (3 - 2 * p);
+const lerp = (a, b, f) => a + (b - a) * f;
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');
+const ECRITURE = 2.5;
+function Moteur(o) {
+  const q = new URLSearchParams(location.search);
+  const S = { vue: o.vues.includes(q.get('vue')) ? q.get('vue') : o.vues[0], t: 0, running: false, pause: false, fait: false,
+    jusqua: null, motif: '', emis: 0, dit: '', mesure: false };
+  const V = o.vitesse ?? 1.7, T0 = o.T0 ?? .8, HOLD = {};
+  let TL = null;
+  function construire() {
+    let s = T0; const ev = [];
+    for (const e of o.etapes(S.vue)) {
+      const anim = e.anim || 0, d = { ...e, anim, debut: s, ecrit: s + (e.ecritDes ?? anim) };
+      d.fin = Math.max(s + anim, d.ecrit + (HOLD[e.nom] ?? 1.5)) + .35;
+      s = d.fin; ev.push(d);
+    }
+    const mom = {}; for (const e of ev) mom[e.nom] = e.fin; mom.fin = s + (o.queue ?? .6);
+    TL = { ev, M: mom };
+  }
+  const ev = nom => TL.ev.find(e => e.nom === nom);
+  const M = {
+    S, ev, evs: () => TL.ev, Moments: () => TL.M,
+    p(nom) { const e = ev(nom); if (!e) return 0; return e.anim > 0 ? clamp((S.t - e.debut) / e.anim, 0, 1) : (S.t >= e.debut - 1e-6 ? 1 : 0); },
+    commence(nom) { const e = ev(nom); return !!e && S.t > e.debut + 1e-6; },
+    vu(nom) { if (nom === 'fin') return S.t >= TL.M.fin - 1e-6; const e = ev(nom); return !!e && S.t >= e.fin - 1e-6; },
+    etape(c, nom, fn) {
+      const e = ev(nom); if (!e) return;
+      const t = c.t, cur = c.cur, comp = c.complet, w0 = e.ecrit;
+      c.t = S.t > 1e5 ? 1e9 : w0 + (S.t - w0) * V; c.cur = w0;
+      try { fn(); } finally { if (S.mesure) HOLD[nom] = (c.cur - w0) / V; c.t = t; c.cur = cur; if (!S.running) c.complet = comp; }
+    },
+    etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
+  };
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const cadreBase = scene.cadre;
+  scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
+  M.scene = scene; M.craie = scene.craie;
+  function calculer() {
+    construire();
+    const t = S.t, r = S.running; S.t = 1e6; S.running = false; S.mesure = true;
+    try { o.dessiner(scene.craie, M); } finally { S.t = t; S.running = r; S.mesure = false; }
+    construire(); scene.sale = true;
+  }
+  const sansSouligne = s => String(s).replace(/([A-Za-zΔτθ])_\{?([A-Za-z0-9]+)\}?/g, (m, a, i) => a + (/^\d+$/.test(i) ? [...i].map(d => '₀₁₂₃₄₅₆₇₈₉'[d]).join('') : i));
+  const dire = (texte, kind = '') => { texte = sansSouligne(texte); S.dit = texte; bulle($('feedback'), texte, kind); };
+  const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+  let pont = null;
+  const emettre = () => pont && pont.emettre();
+  const noter = (a, d) => pont && pont.noter(a, d);
+  scene.avancer = dt => {
+    if (!S.running) return !!(o.anime && o.anime());
+    const avant = S.t; S.t += dt;
+    for (const e of TL.ev) if (avant < e.debut && S.t >= e.debut && e.bulle) dire(e.bulle());
+    if (S.jusqua != null && S.t >= S.jusqua) {
+      S.t = S.jusqua; S.jusqua = null; S.running = false;
+      if (S.t >= TL.M.fin - 1e-6) { finir(); return true; }
+      S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fx(S.t, 1)} s`) + '.');
+      noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); return true;
+    }
+    if (S.t >= TL.M.fin) { S.t = TL.M.fin; finir(); return true; }
+    if (performance.now() - S.emis > 500) { S.emis = performance.now(); emettre(); }
+    return true;
+  };
+  function finir() { S.running = false; S.fait = true; S.pause = false; S.jusqua = null; etiquette(); dire(o.messageFin(M), 'good'); noter('measurement', o.params(M)); emettre(); }
+  function start() { o.reprise && o.reprise(); S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire(o.depart(M)); noter('start', o.params(M)); emettre(); }
+  function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); }
+  function resume() { if (S.running) return; o.reprise && o.reprise(); if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('Ça repart…'); noter('resume'); emettre(); }
+  function setTime(p) {
+    const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+    o.reprise && o.reprise(); S.running = false; S.jusqua = null; S.t = clamp(t, 0, TL.M.fin); S.fait = S.t >= TL.M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+    etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fx(S.t, 1)} s.`); noter('set_time', { time_s: S.t }); emettre();
+  }
+  function playUntil(p) {
+    const noms = o.etapes(S.vue).map(e => e.nom).concat('fin');
+    const nom = noms.includes(p.moment) ? p.moment : null, cible = nom ? TL.M[nom] : +p.time_s;
+    if (!Number.isFinite(cible) || (p.moment && !nom && (p.time_s == null || p.time_s === ''))) { dire(`Moment inconnu : ${p.moment}.`, 'bad'); emettre(); return; }
+    o.reprise && o.reprise();
+    if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+    S.jusqua = clamp(cible, .01, TL.M.fin); S.motif = nom ? (o.motifs[nom] || nom) : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+    noter('play_until', { moment: nom, time_s: S.jusqua }); emettre();
+  }
+  function setParameters(p) {
+    p = p || {};
+    const r = o.appliquer(p, M) || {};
+    if (r.vue && o.vues.includes(r.vue) && r.vue !== S.vue) { S.vue = r.vue; r.change = true; r.vueChange = true; }
+    if (r.change) { calculer(); if (r.vueChange) scene.reecrire(); }
+    noter('set_parameters', o.params(M));
+    if (r.apres) r.apres();
+    else if (r.change && !r.garder) start();
+    else { scene.sale = true; emettre(); }
+  }
+  Object.assign(M, { noter, calculer, dire, start, pause, resume, setTime, playUntil, setParameters, emettre, etiquette });
+  $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+  window.Tableau.explication(o.explications);
+  const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+  M.lancer = () => {
+    calculer();
+    const listeMoments = o.vues.map(v => `${o.vues.length > 1 ? v + ' : ' : ''}${o.etapes(v).map(e => e.nom).concat('fin').join(' | ')}`).join(' ; ');
+    const config = { id: o.id, version: '1.0', title: o.titre, variants: o.vues.length > 1 ? o.vues.map(id => ({ id, label: o.titres[id] })) : [], commands: commandes,
+      command_schema: { set_parameters: o.schema, set_time: { time_s: '0..fin (arrêt sur cet instant de la scène, en s ; voir moments)' },
+        play_until: { moment: listeMoments, time_s: 'ou un instant en s' } } };
+    pont = protocole({ id: o.id, commandes, config, texte: o.texte,
+      etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle',
+        ce_qui_se_voit: o.voir(M) + (S.dit ? ` La bulle dit : « ${S.dit} »` : ''), current_variant: S.vue, time_s: +S.t.toFixed(2),
+        parameters: o.params(M), moments: Object.fromEntries(Object.entries(TL.M).map(([k, v]) => [k, +v.toFixed(2)])) }),
+      progression: () => (S.fait ? 1 : 0),
+      executer: (cmd, p) => ({ start, reset: start, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+    dire(o.depart(M));
+    setTimeout(() => { if (!S.running && S.t === 0 && !S.pause && !S.fait) start(); }, 900);
+  };
+  return M;
+}
+/** Zone d’écriture du bas : le professeur efface les plus vieilles lignes (copie du modèle). */
+function zoneEcriture(c, M, liste, ys, o = {}) {
+  const S = M.S, x = o.x ?? 14, max = o.max ?? 730, taille = o.taille ?? 17, n = ys.length, vues = [];
+  if (S.mesure) {
+    for (const e of liste) M.etape(c, e.nom, () => { for (const [t, col] of e.lignes) c.texte(t, x, ys[0], { couleur: col, taille, max }); e.plus && e.plus(c); });
+    return vues;
+  }
+  let k = -1;
+  liste.forEach((e, j) => { const ev = M.ev(e.nom); if (ev && S.t > ev.ecrit + .05) k = j; });
+  const garde = new Set(); let nb = 0;
+  for (let j = k; j >= 0; j--) { const l = liste[j].lignes.length; if (nb + l > n) break; garde.add(j); nb += l; }
+  let y = 0;
+  liste.forEach((e, j) => {
+    if (j > k) return;
+    M.etape(c, e.nom, () => {
+      if (garde.has(j)) for (const [t, col] of e.lignes) { c.texte(t, x, ys[y++], { couleur: col, taille, max }); vues.push(t); }
+      e.plus && e.plus(c);
+    });
+  });
+  return vues;
+}
+/** Largeur (cadre) d’une formule écrite à la craie, indices et charges compris. */
+function larg(c, s, taille = 17) {
+  const T = window.Tableau, ctx = c.ctx; if (c.echelle && c.tailleMin) taille = Math.max(taille, c.tailleMin / c.echelle);
+  return T.Craie.segments(window.chim(s)).reduce((w, g) => { ctx.font = `${(g.sub || g.sup) ? taille * .62 : taille}px ${T.POLICE}`; return w + ctx.measureText(g.t).width; }, 0);
+}
+/** Équation « gauche → droite » : la flèche est DESSINÉE (la police n’a pas toutes les flèches). Renvoie { x, w }. */
+function eqn(c, x, y, gauche, droite, o = {}) {
+  const t = o.taille ?? 17, w1 = larg(c, gauche, t), w2 = larg(c, droite, t), fl = 30, tot = w1 + fl + 16 + w2;
+  const x0 = o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x, col = o.couleur ?? 'blanc';
+  c.texte(gauche, x0, y, { couleur: col, taille: t });
+  c.fleche(x0 + w1 + 8, y - t * .3, x0 + w1 + 8 + fl, y - t * .3, { couleur: col, largeur: 1.8, tete: 7 });
+  c.texte(droite, x0 + w1 + 16 + fl, y, { couleur: col, taille: t });
+  return { x: x0, w: tot };
+}
+/** Petit triangle « attention » à la craie (orange), le « ! » dedans. */
+function attention(c, x, y, o = {}) {
+  const col = o.couleur ?? 'orange', h = o.h ?? 16;
+  c.trait([[x, y], [x + h * .58, y - h], [x + h * 1.16, y]], { couleur: col, largeur: 1.8, ferme: true });
+  c.texte('!', x + h * .58, y - 3, { couleur: col, taille: h * .8, align: 'center' });
+}
+
+/* ── Les courbes n(I₂) = f(t) ou x = f(t) (modèle pour l’œil, jamais écrit) ─────────────────────────────────────────── */
+const q0 = new URLSearchParams(location.search);
+const VUES = ['temperature', 'concentration', 'catalyseur', 'lecture'];
+const TITRES = { temperature: 'effet de la température', concentration: 'effet de la concentration', catalyseur: 'effet du catalyseur (national 2023 N)', lecture: 'lire trois courbes (national 2025 N)' };
+const G = { x0: 70, y0: 300, w: 400, h: 230 };
+/** Réglages de chaque graphe : durée affichée, ordonnée, graduations, et les courbes { id, tau (min), nf, couleur, tag }. */
+const GR = {
+  temperature: { tmax: 30, dt: 5, ymax: 2.5, dy: .5, nom: 'n(I₂) (mmol)', unite: 'mmol', nf: 2, dec: 1,
+    courbes: { courbe_froid: { tau: 6, nf: 2, couleur: 'bleu', tag: '20 °C' }, courbe_chaud: { tau: 2, nf: 2, couleur: 'rouge', tag: '40 °C' } } },
+  concentration: { tmax: 30, dt: 5, ymax: 4.5, dy: 1, nom: 'n(I₂) (mmol)', unite: 'mmol', nf: 2, dec: 0,
+    courbes: { courbe_dilue: { tau: 6, nf: 2, couleur: 'bleu', tag: '0,1 mol/L' }, courbe_concentre: { tau: 3, nf: 2, couleur: 'violet', tag: '0,2 mol/L', tagDessus: true },
+      courbe_piege: { tau: 4, nf: 4, couleur: 'orange', tag: null, pointille: [7, 6] } } },
+  catalyseur: { tmax: 40, dt: 10, ymax: .4, dy: .1, nom: 'x (mol)', unite: 'mol', nf: .3, dec: 1,
+    courbes: { courbe_C2: { tau: 8, nf: .3, couleur: 'bleu', tag: '(C₂)' }, courbe_C1: { tau: 2, nf: .3, couleur: 'vert', tag: '(C₁)' } } },
+  lecture: { tmax: 50, dt: 10, ymax: 1.3, dy: 0, nom: 'x (mol)', unite: '', nf: 1, dec: 0,
+    courbes: { courbe_a: { tau: 2, nf: 1, couleur: 'rose', tag: '(a)' }, courbe_b: { tau: 5, nf: 1, couleur: 'cyan', tag: '(b)' }, courbe_c: { tau: 10, nf: 1, couleur: 'bleu', tag: '(c)' } } },
+};
+const gr = () => GR[MO.S.vue];
+const X = t => G.x0 + t / gr().tmax * G.w, Y = n => G.y0 - n / gr().ymax * G.h;
+const nDe = (k, t) => k.nf * (1 - Math.exp(-t / k.tau));
+const ETAPES = {
+  temperature: [
+    { nom: 'axes', anim: .2, motif: 'les axes : n(I₂) en mmol, t en min', bulle: () => 'On suit la quantité de diiode formé au cours du temps.' },
+    { nom: 'courbe_froid', anim: 3, motif: 'la courbe à 20 °C', bulle: () => 'À 20 °C…' },
+    { nom: 'courbe_chaud', anim: 2.2, motif: 'la courbe à 40 °C', bulle: () => 'Même mélange, à 40 °C…' },
+    { nom: 'meme_palier', anim: .8, motif: 'même palier : n_f = 2 mmol', bulle: () => 'Regarde où finissent les deux courbes.' },
+    { nom: 'plus_raide', anim: .6, motif: 'au début, la courbe à 40 °C est plus raide', bulle: () => 'Et au début ?' },
+  ],
+  concentration: [
+    { nom: 'axes', anim: .2, motif: 'les axes : n(I₂) en mmol, t en min', bulle: () => 'On suit la quantité de diiode formé.' },
+    { nom: 'courbe_dilue', anim: 3, motif: 'la courbe à [I⁻]₀ = 0,1 mol/L', bulle: () => '[I⁻]₀ = 0,1 mol/L…' },
+    { nom: 'courbe_concentre', anim: 2.4, motif: 'la courbe à [I⁻]₀ = 0,2 mol/L', bulle: () => '[I⁻]₀ = 0,2 mol/L, même quantité de H₂O₂…' },
+    { nom: 'meme_palier', anim: .8, motif: 'même palier : H₂O₂ est le réactif limitant', bulle: () => 'Les paliers ?' },
+    { nom: 'piege', anim: 2.4, motif: 'piège : si on double le réactif limitant H₂O₂, le palier double (4 mmol)', bulle: () => 'Attention : et si on doublait H₂O₂ ?' },
+  ],
+  catalyseur: [
+    { nom: 'axes', anim: .2, motif: 'les axes : x en mol, t en min', bulle: () => 'Même mélange, même température : avec et sans catalyseur.' },
+    { nom: 'courbe_C2', anim: 3, motif: 'la courbe (C₂) : sans catalyseur', bulle: () => 'Sans catalyseur…' },
+    { nom: 'courbe_C1', anim: 2.2, motif: 'la courbe (C₁) : avec catalyseur', bulle: () => 'Avec catalyseur…' },
+    { nom: 'meme_palier', anim: .8, motif: 'même palier : x_f = 0,3 mol', bulle: () => 'Les paliers ?' },
+    { nom: 'plus_tot', anim: .8, motif: '(C₁) atteint le palier bien plus tôt', bulle: () => 'Quand chaque courbe atteint-elle le palier ?' },
+    { nom: 'piege', anim: .2, motif: 'piège : ne pas choisir le palier le plus haut, ici c’est le même', bulle: () => 'Le piège classique…' },
+  ],
+  lecture: [
+    { nom: 'enonce', anim: .2, motif: 'l’énoncé : trois expériences', bulle: () => 'Trois expériences, même mélange initial.' },
+    { nom: 'courbes', anim: 3.4, motif: 'les trois courbes (a), (b), (c)', bulle: () => 'Les trois courbes x = f(t)…' },
+    { nom: 'debut', anim: .6, motif: 'au début : (a) la plus raide, puis (b), puis (c)', bulle: () => 'Regarde le début des courbes.' },
+    { nom: 'associer', anim: .2, motif: 'les associations : (a) ↔ 3, (b) ↔ 2, (c) ↔ 1', bulle: () => 'Associons chaque courbe à son expérience.' },
+    { nom: 'conclusion', anim: .2, motif: '« x_f est le même » : vrai', bulle: () => 'Et l’affirmation sur x_f ?' },
+  ],
+};
+const MOTIFS = new Proxy({}, { get: (_, nom) => (nom === 'fin' ? 'fin' : (ETAPES[MO ? MO.S.vue : VUES[0]].find(e => e.nom === nom) || {}).motif) });
+let MO = null;
+const ZY = [352, 376, 400];
+const PX = 500;   // panneau de droite
+
+/* ── Dessin ──────────────────────────────────────────────────────────── */
+const fv = (v, d) => fx(v, d);
+function axes(c) {
+  const g = gr();
+  c.fleche(G.x0, G.y0, G.x0 + G.w + 16, G.y0, { largeur: 1.8 });
+  c.fleche(G.x0, G.y0, G.x0, G.y0 - G.h - 14, { largeur: 1.8 });
+  for (let t = g.dt; t <= g.tmax + 1e-9; t += g.dt) { c.ligne(X(t), G.y0 - 4, X(t), G.y0 + 4, { largeur: 1.4, duree: .03 }); c.texte(fv(t, 0), X(t), G.y0 + 21, { couleur: 'faible', taille: 15, align: 'center', duree: .1 }); }
+  c.texte('0', G.x0 - 8, G.y0 + 18, { couleur: 'faible', taille: 15, align: 'right', duree: .05 });
+  if (g.dy) for (let n = g.dy; n <= g.ymax - g.dy / 2; n += g.dy) { c.ligne(G.x0 - 4, Y(n), G.x0 + 4, Y(n), { largeur: 1.4, duree: .03 }); c.texte(fv(n, g.dec), G.x0 - 9, Y(n) + 5, { couleur: 'faible', taille: 15, align: 'right', duree: .1 }); }
+  c.texte('t (min)', G.x0 + G.w + 18, G.y0 + 5, { couleur: 'blanc', taille: 16 });
+  c.texte(g.nom, G.x0 + 10, G.y0 - G.h - 6, { couleur: 'blanc', taille: 16 });
+}
+function quadrillage(c, a) {
+  const g = gr(), ctx = c.ctx;
+  ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = 'rgba(226,232,240,.09)'; ctx.lineWidth = 1;
+  for (let t = g.dt; t <= g.tmax + 1e-9; t += g.dt / 2) { ctx.beginPath(); ctx.moveTo(X(t), G.y0); ctx.lineTo(X(t), G.y0 - G.h); ctx.stroke(); }
+  const pas = g.dy ? g.dy / 2 : .1;
+  for (let n = pas; n <= g.ymax + 1e-9; n += pas) { ctx.beginPath(); ctx.moveTo(G.x0, Y(n)); ctx.lineTo(G.x0 + G.w, Y(n)); ctx.stroke(); }
+  ctx.restore();
+}
+/** Trace la courbe `id` jusqu’à la part p (0 → 1) de la durée affichée. */
+function trace(c, id, p) {
+  const k = gr().courbes[id]; if (p <= 0) return;
+  c.courbe(u => [X(u * p * gr().tmax), Y(nDe(k, u * p * gr().tmax))], Math.max(12, Math.round(90 * p)), { couleur: k.couleur, largeur: 2.6, pointille: k.pointille });
+}
+/** Étiquette d’une courbe : juste à droite du point où elle atteint 90 % de son palier (là, les courbes sont bien séparées). */
+function tagXY(id) {
+  const k = gr().courbes[id], t9 = k.tau * Math.LN10;
+  if (k.tagDessus) return [X(2 * k.tau), Y(k.nf) - 8];   // courbes trop proches en dessous : l’étiquette passe au-dessus du palier
+  return [X(t9) + 7, Y(.9 * k.nf) + (MO.S.vue === 'lecture' ? 7 : 12)];
+}
+function tag(c, id) { const k = gr().courbes[id], [x, y] = tagXY(id); c.texte(k.tag, x, y, { couleur: k.couleur, taille: 16 }); }
+/** Palier : trait pointillé et sa valeur. */
+function palier(c, nf, texte, col = 'jaune') {
+  c.ligne(G.x0, Y(nf), G.x0 + G.w, Y(nf), { couleur: col, largeur: 1.8, pointille: [6, 6] });
+  if (texte) c.texte(texte, G.x0 + G.w - 2, Y(nf) - 8, { couleur: col, taille: 16, align: 'right' });
+}
+/** Petits segments jaunes au départ des courbes (« plus raide ») : direction de la courbe en t = 0. */
+function debuts(c, ids, L = 46) {
+  for (const id of ids) {
+    const k = gr().courbes[id], dx = 1 / gr().tmax * G.w, dy = k.nf / k.tau / gr().ymax * G.h, n = Math.hypot(dx, dy);
+    c.ligne(G.x0, G.y0, G.x0 + dx / n * L, G.y0 - dy / n * L, { couleur: 'jaune', largeur: 2.4 });
+  }
+  c.cercle(G.x0 + 14, G.y0 - 16, 24, { couleur: 'jaune', largeur: 1.6 });
+}
+function dessiner(c, M) {
+  MO = M; M.scene.cadre(53);
+  const v = M.S.vue, g = gr();
+  c.texte(`Les courbes : ${TITRES[v]}`, 14, 26, { couleur: 'cyan', taille: 20 });
+  if (M.commence(v === 'lecture' ? 'enonce' : 'axes')) c.direct(() => quadrillage(c, lisse(M.p(v === 'lecture' ? 'enonce' : 'axes'))));
+  // Les courbes se tracent pendant l’animation de leur étape ; dans la vue lecture, les trois ensemble.
+  c.direct(() => {
+    for (const id of Object.keys(g.courbes)) {
+      const nom = v === 'lecture' ? 'courbes' : v === 'concentration' && id === 'courbe_piege' ? 'piege' : id;
+      if (M.commence(nom)) trace(c, id, M.p(nom));
+    }
+  });
+  let vues = [];
+  if (v === 'temperature') vues = zoneEcriture(c, M, [
+    { nom: 'axes', lignes: [['même mélange H₂O₂ + I⁻ (milieu acide) ; on suit n(I₂), la quantité de diiode formé', 'blanc']], plus: () => axes(c) },
+    { nom: 'courbe_froid', lignes: [['à 20 °C : n(I₂) augmente, de moins en moins vite, puis atteint un palier', 'bleu']], plus: () => tag(c, 'courbe_froid') },
+    { nom: 'courbe_chaud', lignes: [['à 40 °C : le palier est atteint bien plus tôt (vers 10 min au lieu de 30)', 'rouge']], plus: () => tag(c, 'courbe_chaud') },
+    { nom: 'meme_palier', lignes: [['même palier n_f = 2 mmol : même état final (H₂O₂ limitant)', 'jaune']], plus: () => palier(c, 2, 'palier : n_f = 2 mmol') },
+    { nom: 'plus_raide', lignes: [['au début, la courbe à 40 °C est plus raide : la transformation est plus rapide', 'jaune']],
+      plus: () => { debuts(c, ['courbe_froid', 'courbe_chaud']); encadre(c, ['Plus la température', 'est élevée, plus la', 'transformation est rapide.', 'Même état final.']); } },
+  ], ZY);
+  else if (v === 'concentration') vues = zoneEcriture(c, M, [
+    { nom: 'axes', lignes: [['à 20 °C, même quantité de H₂O₂ (réactif limitant) ; on suit n(I₂)', 'blanc']], plus: () => axes(c) },
+    { nom: 'courbe_dilue', lignes: [['[I⁻]₀ = 0,1 mol/L : palier atteint vers 30 min', 'bleu']], plus: () => tag(c, 'courbe_dilue') },
+    { nom: 'courbe_concentre', lignes: [['[I⁻]₀ = 0,2 mol/L : la courbe monte plus vite, palier vers 15 min', 'violet']], plus: () => tag(c, 'courbe_concentre') },
+    { nom: 'meme_palier', lignes: [['même palier n_f = 2 mmol : I⁻ en excès, la quantité finale dépend de H₂O₂', 'jaune']], plus: () => palier(c, 2, 'n_f = 2 mmol') },
+    { nom: 'piege', lignes: [['si on double le réactif LIMITANT H₂O₂ : le palier double (4 mmol)', 'orange']],
+      plus: () => { palier(c, 4, 'palier double : 4 mmol', 'orange'); attention(c, PX, 112, { h: 18 });
+        c.texte('piège : doubler le réactif', PX + 26, 112, { couleur: 'orange', taille: 17 }); c.texte('limitant change le palier ;', PX, 136, { couleur: 'orange', taille: 17 });
+        c.texte('doubler I⁻ (en excès) ne', PX, 160, { couleur: 'orange', taille: 17 }); c.texte('change que la durée.', PX, 184, { couleur: 'orange', taille: 17 }); } },
+  ], ZY);
+  else if (v === 'catalyseur') vues = zoneEcriture(c, M, [
+    { nom: 'axes', lignes: [['même mélange, même température ; on suit l’avancement x', 'blanc']], plus: () => axes(c) },
+    { nom: 'courbe_C2', lignes: [['(C₂) : sans catalyseur', 'bleu']], plus: () => { tag(c, 'courbe_C2'); c.texte('(C₂) : sans catalyseur', PX, 96, { couleur: 'bleu', taille: 17 }); } },
+    { nom: 'courbe_C1', lignes: [['(C₁) : avec catalyseur, elle monte beaucoup plus vite', 'vert']], plus: () => { tag(c, 'courbe_C1'); c.texte('(C₁) : avec catalyseur', PX, 122, { couleur: 'vert', taille: 17 }); } },
+    { nom: 'meme_palier', lignes: [['même palier x_f = 0,3 mol : le catalyseur ne change pas l’état final', 'jaune']], plus: () => palier(c, .3, 'x_f = 0,3 mol') },
+    { nom: 'plus_tot', lignes: [['(C₁) atteint le palier vers 10 min, (C₂) vers 40 min : le catalyseur accélère', 'vert']],
+      plus: () => { for (const [t, col] of [[10, 'vert'], [40, 'bleu']]) { c.ligne(X(t), Y(.3), X(t), G.y0, { couleur: col, largeur: 1.4, pointille: [4, 5] }); c.point(X(t), Y(.3), 4.5, col); } debuts(c, ['courbe_C1', 'courbe_C2']); } },
+    { nom: 'piege', lignes: [['⚠ ne pas choisir « le palier le plus haut » : ici, c’est le même palier', 'orange']],
+      plus: () => { attention(c, PX, 186, { h: 18 }); c.texte('ne pas choisir le palier', PX + 26, 186, { couleur: 'orange', taille: 17 });
+        c.texte('le plus haut : ici, même', PX, 210, { couleur: 'orange', taille: 17 }); c.texte('palier pour (C₁) et (C₂)', PX, 234, { couleur: 'orange', taille: 17 }); } },
+  ], ZY);
+  else vues = zoneEcriture(c, M, [
+    { nom: 'enonce', lignes: [['même mélange initial ; trois expériences ; on suit l’avancement x', 'blanc']], plus: () => {
+      axes(c);
+      c.rect(PX - 6, 66, 254, 112, { couleur: 'faible', largeur: 1.6, arrondi: 8 });
+      c.texte('exp. 1 : θ₁', PX + 4, 90, { taille: 17 }); c.texte('exp. 2 : θ₂ > θ₁', PX + 4, 114, { taille: 17 });
+      c.texte('exp. 3 : θ₂ + quelques gouttes', PX + 4, 138, { taille: 17 }); c.texte('d’acide sulfurique (catalyseur)', PX + 4, 160, { taille: 17, max: 238 });
+    } },
+    { nom: 'courbes', lignes: [['trois courbes, un seul palier commun x_f', 'blanc']], plus: () => { for (const id of ['courbe_a', 'courbe_b', 'courbe_c']) tag(c, id); palier(c, 1, null, 'faible'); c.texte('x_f', G.x0 - 8, Y(1) + 5, { couleur: 'jaune', taille: 16, align: 'right' }); } },
+    { nom: 'debut', lignes: [['au début : (a) est la plus raide, puis (b), puis (c)', 'jaune']], plus: () => debuts(c, ['courbe_a', 'courbe_b', 'courbe_c'], 40) },
+    { nom: 'associer', lignes: [['(a) : la plus rapide, deux facteurs (θ₂ et catalyseur) ; (b) : θ₂ ; (c) : θ₁, la plus lente', 'blanc']], plus: () => {
+      [['(a)', 'rose', 'exp. 3 (deux facteurs)'], ['(b)', 'cyan', 'exp. 2'], ['(c)', 'bleu', 'exp. 1']].forEach(([a, col, b], i) => {
+        const y = 206 + i * 26; c.texte(a, PX, y, { couleur: col, taille: 17 }); c.cote(PX + 30, y - 5, PX + 62, y - 5, '', { couleur: col, largeur: 1.6 }); c.texte(b, PX + 70, y, { couleur: col, taille: 17 });
+      });
+    } },
+    { nom: 'conclusion', lignes: [['« x_f est le même pour les trois expériences » : VRAI (même mélange initial)', 'jaune']],
+      plus: () => c.texte('« x_f est le même » : vrai', PX, 284, { couleur: 'jaune', taille: 19 }) },
+  ], ZY);
+  reperes(c, M);
+  M.vues = vues;
+  return c.fin();
+}
+/** Cadre jaune du panneau de droite : la phrase à retenir. */
+function encadre(c, lignes) {
+  c.rect(PX - 8, 70, 254, 24 + lignes.length * 24, { couleur: 'jaune', largeur: 2, arrondi: 8 });
+  lignes.forEach((l, i) => c.texte(l, PX + 4, 96 + i * 24, { couleur: 'jaune', taille: 18 }));
+}
+
+/* ── Repères ─────────────────────────────────────────────────────────── */
+function reperes(c, M) {
+  const v = M.S.vue, g = gr(), quand = nom => (M.vu(nom) ? '' : ` (au moment « ${nom} »)`);
+  const R = (id, x, y, w, h, l) => c.repere(id, x, y, w, h, l);
+  R('axe_t', G.x0, G.y0 - 10, G.w + 60, 40, `l’axe des temps t (min), de 0 à ${g.tmax} min`);
+  R(v === 'catalyseur' ? 'axe_x' : 'axe_n', G.x0 - 50, G.y0 - G.h - 26, 60, G.h + 36, `l’axe des ordonnées : ${g.nom}`);
+  const cadreCourbe = (id, l) => {
+    const k = g.courbes[id], x9 = X(Math.min(g.tmax, k.tau * Math.LN10));
+    R(id, G.x0, Y(k.nf) - 6, Math.max(30, x9 - G.x0 + 40), G.y0 - Y(k.nf) + 6, l);
+  };
+  const etapeCourbe = id => (v === 'lecture' ? 'courbes' : v === 'concentration' && id === 'courbe_piege' ? 'piege' : id);
+  const NOMS = { courbe_froid: 'la courbe à 20 °C', courbe_chaud: 'la courbe à 40 °C', courbe_dilue: 'la courbe à [I⁻]₀ = 0,1 mol/L', courbe_concentre: 'la courbe à [I⁻]₀ = 0,2 mol/L',
+    courbe_piege: 'la courbe orange en pointillé : H₂O₂ doublé, palier 4 mmol', courbe_C1: 'la courbe (C₁), avec catalyseur', courbe_C2: 'la courbe (C₂), sans catalyseur',
+    courbe_a: 'la courbe (a), la plus rapide', courbe_b: 'la courbe (b)', courbe_c: 'la courbe (c), la plus lente' };
+  for (const id of Object.keys(g.courbes)) cadreCourbe(id, NOMS[id] + quand(etapeCourbe(id)));
+  const pal = v === 'catalyseur' ? 'meme_palier' : v === 'lecture' ? 'courbes' : 'meme_palier';
+  R('palier', G.x0, Y(g.nf) - 26, G.w, 34, `le palier commun : ${v === 'lecture' ? 'x_f' : v === 'catalyseur' ? 'x_f = 0,3 mol' : 'n_f = 2 mmol'}${quand(pal)}`);
+  if (v === 'temperature') {
+    R('debut', G.x0 - 24, G.y0 - 50, 66, 64, `le début des courbes : celle à 40 °C est plus raide${quand('plus_raide')}`);
+    for (const id of ['courbe_froid', 'courbe_chaud']) { const [x, y] = tagXY(id); R(id === 'courbe_froid' ? 'etiquette_froid' : 'etiquette_chaud', x - 4, y - 18, 52, 24, `l’étiquette « ${g.courbes[id].tag} »${quand(id)}`); }
+  }
+  if (v === 'catalyseur') {
+    R('debut', G.x0 - 24, G.y0 - 50, 66, 64, `le début des courbes : (C₁) est plus raide${quand('plus_tot')}`);
+    R('piege', PX - 6, 166, 254, 76, `« ne pas choisir le palier le plus haut : ici même palier »${quand('piege')}`);
+  }
+  if (v === 'lecture') {
+    R('tableau', PX - 6, 66, 254, 112, 'le tableau des trois expériences (θ₁ ; θ₂ > θ₁ ; θ₂ + catalyseur)');
+    R('conclusion', PX - 6, 264, 254, 28, `« x_f est le même » : vrai${quand('conclusion')}`);
+  }
+}
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
+function voir(M) {
+  const v = M.S.vue, g = gr(), m = [`Vue « ${v} » (${TITRES[v]}), ${M.etat()}.`];
+  const etape = (() => { let n = 'avant le début'; for (const e of M.evs()) if (M.commence(e.nom)) n = e.nom; return n; })();
+  m.push(`Étape en cours : ${etape}. Graphe à la craie : ${g.nom} en ordonnée (0 à ${fx(g.ymax, 1)}${g.unite ? ' ' + g.unite : ' x_f'}), t en min en abscisse (0 à ${g.tmax} min), quadrillage léger.`);
+  const desc = { courbe_froid: 'bleue (20 °C), palier vers 30 min', courbe_chaud: 'rouge (40 °C), palier vers 10 min, plus raide au début', courbe_dilue: 'bleue (0,1 mol/L), palier vers 30 min',
+    courbe_concentre: 'violette (0,2 mol/L), palier vers 15 min', courbe_piege: 'orange en pointillé (H₂O₂ doublé), palier à 4 mmol', courbe_C2: 'bleue (C₂), sans catalyseur, palier vers 40 min',
+    courbe_C1: 'verte (C₁), avec catalyseur, palier vers 10 min', courbe_a: 'rose (a), palier vers 10 min', courbe_b: 'cyan (b), palier vers 25 min', courbe_c: 'bleue (c), palier vers 50 min' };
+  const tracees = Object.keys(g.courbes).filter(id => M.commence(v === 'lecture' ? 'courbes' : v === 'concentration' && id === 'courbe_piege' ? 'piege' : id));
+  m.push(tracees.length ? `Courbes tracées : ${tracees.map(id => desc[id]).join(' ; ')}.` : 'Pas encore de courbe.');
+  if (M.commence('meme_palier') || (v === 'lecture' && M.commence('courbes'))) m.push(`Palier commun en pointillé : ${v === 'lecture' ? 'x_f' : v === 'catalyseur' ? 'x_f = 0,3 mol' : 'n_f = 2 mmol'}.`);
+  if (v === 'lecture') m.push('Panneau de droite : exp. 1 : θ₁ ; exp. 2 : θ₂ > θ₁ ; exp. 3 : θ₂ + quelques gouttes d’acide sulfurique (catalyseur).' + (M.commence('associer') ? ' Associations écrites : (a) ↔ exp. 3 (deux facteurs), (b) ↔ exp. 2, (c) ↔ exp. 1.' : '') + (M.commence('conclusion') ? ' « x_f est le même » : vrai.' : ''));
+  if (M.commence('plus_raide') || M.commence('plus_tot') || (v === 'lecture' && M.commence('debut'))) m.push('Petits segments jaunes au départ des courbes : la plus rapide est la plus raide.');
+  if (v === 'concentration' && M.commence('piege')) m.push('Panneau orange ⚠ : doubler le réactif limitant change le palier ; doubler I⁻ (en excès) ne change que la durée.');
+  if (v === 'catalyseur' && M.commence('piege')) m.push('Panneau orange ⚠ : « ne pas choisir le palier le plus haut : ici, même palier pour (C₁) et (C₂) ».');
+  if (M.vues && M.vues.length) m.push(`Lignes écrites en bas : ${M.vues.map(s => `« ${s} »`).join(' ; ')}.`);
+  return m.join(' ');
+}
+const params = M => {
+  const g = GR[M.S.vue];
+  return { vue: M.S.vue, t_max_min: g.tmax, ordonnee: g.nom, palier: M.S.vue === 'lecture' ? 'x_f' : `${fx(g.nf, 1)} ${g.unite}`,
+    courbes: Object.fromEntries(Object.entries(g.courbes).map(([id, k]) => [id, { palier: k.nf, palier_atteint_vers_min: +(5 * k.tau).toFixed(0) }])) };
+};
+const MOT = Moteur({
+  id: 'tlr_courbes', titre: 'Les courbes n(I₂) = f(t) et x = f(t) : température, concentration, catalyseur, lecture d’un sujet national', vues: VUES, titres: TITRES,
+  etapes: v => ETAPES[v], motifs: MOTIFS, dessiner, voir, params,
+  depart: M => ({ temperature: 'Même mélange à 20 °C et à 40 °C : traçons n(I₂) au cours du temps.', concentration: 'Deux concentrations en ions iodure : traçons n(I₂).',
+    catalyseur: 'Comme au national 2023 : avec et sans catalyseur.', lecture: 'Comme au national 2025 : trois courbes à associer.' })[M.S.vue],
+  messageFin: M => ({ temperature: 'Plus chaud : la courbe monte plus vite et atteint plus tôt le MÊME palier.',
+    concentration: 'Plus concentré en I⁻ : plus rapide, même palier ; seul le réactif limitant fixe le palier.',
+    catalyseur: '(C₁), avec catalyseur, atteint plus tôt le même palier x_f = 0,3 mol.', lecture: '(a) ↔ 3, (b) ↔ 2, (c) ↔ 1 ; x_f est le même : vrai.' })[M.S.vue],
+  appliquer: (p, M) => { const r = {}; if (VUES.includes(p.vue)) r.vue = p.vue; r.change = !!(r.vue && r.vue !== M.S.vue); return r; },
+  schema: { vue: VUES.join(' | ') + ' (change la vue et relance)' },
+  texte: 'Les courbes de la quantité de diiode formé n(I₂) (ou de l’avancement x) au cours du temps. Température : même mélange H₂O₂ + I⁻ acidifié à 20 °C et 40 °C ; à 40 °C la courbe est plus raide au début et atteint plus tôt le même palier n_f = 2 mmol (H₂O₂ limitant). Concentration : [I⁻]₀ = 0,1 et 0,2 mol/L, même palier ; piège : doubler le réactif limitant H₂O₂ double le palier (4 mmol). Catalyseur (national 2023 N) : (C₁) avec catalyseur, (C₂) sans, même palier x_f = 0,3 mol ; ne pas choisir le palier le plus haut. Lecture (national 2025 N) : trois courbes (a), (b), (c) et trois expériences (θ₁ ; θ₂ > θ₁ ; θ₂ + acide sulfurique, catalyseur) : (a) ↔ 3, (b) ↔ 2, (c) ↔ 1 ; x_f est le même : vrai.',
+  explications: {
+    temperature: [
+      { repere: 'courbe_froid', texte: 'À 20 °C, la courbe monte lentement vers son palier.' },
+      { repere: 'courbe_chaud', texte: 'À 40 °C, elle monte plus vite.' },
+      { repere: 'palier', texte: 'Même palier : même état final.' },
+      { repere: 'debut', texte: 'Au début, la courbe à 40 °C est plus raide.' },
+    ],
+    concentration: [
+      { repere: 'courbe_concentre', texte: 'Plus d’ions iodure : la courbe monte plus vite.' },
+      { repere: 'palier', texte: 'Même palier : c’est H₂O₂, le réactif limitant, qui le fixe.' },
+      { repere: 'courbe_piege', texte: 'Si on doublait H₂O₂, le palier doublerait.' },
+    ],
+    catalyseur: [
+      { repere: 'courbe_C1', texte: '(C₁), avec catalyseur, monte beaucoup plus vite.' },
+      { repere: 'palier', texte: 'Les deux courbes ont le même palier : 0,3 mol.' },
+      { repere: 'piege', texte: 'Ne choisis pas le palier le plus haut : ici, c’est le même.' },
+    ],
+    lecture: [
+      { repere: 'tableau', texte: 'Trois expériences : θ₁, θ₂ plus grand, θ₂ avec un catalyseur.' },
+      { repere: 'courbe_a', texte: '(a), la plus rapide : deux facteurs, l’expérience 3.' },
+      { repere: 'courbe_c', texte: '(c), la plus lente : l’expérience 1.' },
+      { repere: 'conclusion', texte: 'x_f est le même : vrai.' },
+    ],
+  },
+});
+MOT.lancer();
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

@@ -4,9 +4,14 @@ import { observeAvatarMedia } from '../../services/avatarAudio';
 import { audioUnlock } from '../../services/audioUnlock';
 import type { ProfessorEmotionKind } from '../../services/professorEmotion';
 import { focusProfessor } from '../../services/professorFocus';
-import type { CourseSlide, Demonstration, ReactionPreparee, SlideConcentration } from './types';
+import type { CourseSlide, Demonstration, EnonceLu, ReactionPreparee, SlideConcentration } from './types';
 import ClavierScientifique, { BoutonSymboles } from './ClavierScientifique';
+import { clavier, hauteurClavierTelephone, largeurClavier, useChampClavier, useClavier } from './ClavierFlottant';
+import { Formule } from './Formule';
+import DemonstrationPleine, { type LectureDemo } from './DemonstrationPleine';
+import type { EnteteCahier } from './cahier';
 import ChampReponse, { BoutonPhoto, type ContexteOcr } from './SaisieReponse';
+import SansDefilement from './SansDefilement';
 
 /**
  * Le mode CONCENTRATION d'une diapositive (8 novembre 2026, demande de l'utilisateur).
@@ -40,28 +45,27 @@ interface Props {
   tuteur3D?: boolean;
   /** Le cours, pour le suivi des acquis. */
   deckId?: string;
-  /** Passer à la diapositive suivante (quand toutes les questions sont justes, ou à la fin du cycle de reprise). */
+  /** Passer à la diapositive suivante : seulement quand l'élève appuie sur « Suite → » (11 novembre 2026). */
   onSuivant?: () => void;
+  /** Le texte du bouton principal (« Suite → », « Terminer ✓ » sur la dernière diapositive). */
+  libelleSuite?: string;
+  /**
+   * Mémoire longue (11 novembre 2026) : cette diapositive termine un bloc pas encore bouclé. « Suite → » ouvre alors la
+   * fin du bloc (cahier → retrouver → exercice, `memoire/useMemoireDuCours` dans `CoursePlayer`) au lieu de changer
+   * de diapositive : `onFermerBloc`.
+   */
+  finDeBloc?: boolean;
+  onFermerBloc?: () => void;
+  /** Chaque réponse jugée (prédictions exclues) : pour détecter la saturation (deux fausses de suite). */
+  onReponseJugee?: (r: { correct: boolean | null }) => void;
+  /** Le cahier organisé (12 novembre 2026) : titre du cours au premier écran, partie numérotée en y entrant, diapositive numérotée. */
+  entete?: EnteteCahier;
 }
 
 const premier = <T,>(champ: Record<string, T> | undefined, langue: Langue): T | undefined =>
   champ ? champ[langue] ?? champ.mixed ?? champ.fr ?? Object.values(champ)[0] : undefined;
 
 const CRAIE = "'Patrick Hand', 'Caveat', cursive";
-
-/** « y_M(t) = y_S(t − τ) » s'affiche avec M et S en indice : jamais de « _ » devant l'élève. */
-function Formule({ t }: { t: string }) {
-  const parts: ReactNode[] = [];
-  const re = /([A-Za-zτθΔλωφ])_(\{[^}]+\}|[A-Za-z0-9]+)/g;
-  let i = 0, m: RegExpExecArray | null, k = 0;
-  while ((m = re.exec(t))) {
-    if (m.index > i) parts.push(t.slice(i, m.index));
-    parts.push(m[1], <sub key={k++} className="text-[0.7em]">{m[2].replace(/[{}]/g, '')}</sub>);
-    i = re.lastIndex;
-  }
-  if (i < t.length) parts.push(t.slice(i));
-  return <>{parts}</>;
-}
 
 /** Le deuxième tableau descend du haut ; chaque question s'y écrit l'une après l'autre. */
 const ANIMATIONS = `
@@ -80,6 +84,8 @@ const ANIMATIONS = `
 .brosse { position: absolute; width: 112px; height: 50px; animation: brosse-trajet ${3.4}s linear both; z-index: 3 }
 .brosse > div { animation: brosse-frotte .26s ease-in-out infinite }
 @keyframes poussiere { from { opacity: .55 } to { opacity: 0 } }
+@keyframes reflexion-remplit { from { width: 0 } to { width: 100% } }
+.reflexion-barre { animation-name: reflexion-remplit; animation-timing-function: linear; animation-fill-mode: both }
 `;
 
 /** Les phrases préenregistrées des questions libres (voix du cours) : elles partent sans attente ni GPU. */
@@ -172,8 +178,6 @@ type Reaction =
       nParole: number; nTotal: number; debut: number; pris?: number; vf?: Record<number, boolean>; retoursVf?: Record<number, Retour>;
       verdict?: { correct: boolean; ecrit: string } }
   | { phase: 'erreur'; message: string };
-/** La lecture d'une démonstration : où en est la voix (en caractères de `parole`), sa fin, et l'arrêt (« Suivant → »). */
-type LectureDemo = { position: () => number; fin: Promise<void>; arreter: () => void };
 /** La voix d'une démonstration sans piste, calculée d'avance (pendant que la réaction est dite) : ses morceaux. */
 type VoixDemo = { textes: string[]; urls: Promise<string | null>[] };
 /** L'écrit d'une interprétation, coupé en phrases : elles apparaissent au fil de la voix. */
@@ -189,6 +193,31 @@ type Reprise = {
 };
 type Cycle = { n: number; phase: 'attente' | 'explique' | 'question' | 'final'; data?: Reprise; depuis: QuestionDiapo };
 const MAX_CYCLES = 3;
+
+// ── Le rythme appartient à l'élève (11 novembre 2026, skill cours-concentration « Memory and rhythm ») ──
+/** Temps de réflexion avant que les choix d'une question s'affichent (« 🤔 Réfléchis d'abord… »). */
+const REFLEXION_MS = 10_000;
+/** Un vrai/faux se lit plus vite : ses deux choix arrivent plus tôt. */
+const REFLEXION_VRAI_FAUX_MS = 6_000;
+/** Silence (sans action de l'élève) au bout duquel le tuteur relance doucement, une seule fois, quand « Suite → » attend. */
+const RELANCE_APRES_MS = 45_000;
+/** La phrase de relance préenregistrée (voix du cours). Absente du dossier : le bouton « Suite → » clignote seulement. */
+const CLIP_RELANCE = '/media/audio/reactions/relance-suite.mp3';
+/**
+ * Ce que fait « Suite → » à cet instant — le SEUL bouton qui fait avancer le cours (plus rien ne passe tout seul) :
+ * `voix` (après la prédiction, la voix d'explication part), `ouvrir` (rouvrir le tableau des questions),
+ * `question` (la question suivante non répondue), `jumelle` (couper la reprise, la question jumelle), `reprise`
+ * (lancer le cycle de reprise suivant), `diapo` (la diapositive suivante), `rien` (le tuteur prépare : on attend).
+ * `pret` : l'étape en cours est terminée, le bouton est mis en avant et la relance peut venir.
+ */
+type EtapeSuite = { quoi: 'voix' | 'ouvrir' | 'question' | 'jumelle' | 'reprise' | 'diapo' | 'bloc' | 'rien'; pret: boolean };
+/** Une phrase préenregistrée existe-t-elle vraiment ? (le serveur de dev renvoie la page HTML pour un fichier absent) */
+async function clipExiste(url: string): Promise<boolean> {
+  try {
+    const r = await fetch(url, { method: 'HEAD' });
+    return r.ok && (r.headers.get('content-type') || '').startsWith('audio');
+  } catch { return false; }
+}
 
 const jeton = () => { try { return localStorage.getItem('token') || ''; } catch { return ''; } };
 /** Le bilan des acquis de l'élève sur ce cours (GET /course-player/acquis/{deck}), tel que le serveur le rend. */
@@ -220,7 +249,7 @@ async function appelerApi<T>(chemin: string, corps: unknown): Promise<T> {
   return r.json() as Promise<T>;
 }
 
-export default function CourseFocusStage({ slide, language, deckControls, tuteur3D = false, deckId, onSuivant }: Props) {
+export default function CourseFocusStage({ slide, language, deckControls, tuteur3D = false, deckId, onSuivant, libelleSuite = 'Suite →', finDeBloc = false, onFermerBloc, onReponseJugee, entete }: Props) {
   const parole = (premier(slide.speech_text, language) || '').trim();
   const piste = premier(slide.audio, language);
   const conc = slide.concentration || {};
@@ -287,6 +316,14 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     return () => window.removeEventListener('resize', suivre);
   }, []);
   const [clavierQuestion, setClavierQuestion] = useState(false);
+  // Le clavier flottant (12 novembre 2026) : à droite ; le tableau des questions lui laisse sa place.
+  const clavierEtat = useClavier();
+  const placeClavier = largeurClavier(clavierEtat.ouvert);
+  /** sur téléphone le clavier est en bas : le tableau des questions remonte au-dessus de lui (la barre du bas est dessous) */
+  const piedRef = useRef<HTMLElement>(null);
+  const basClavier = Math.max(0, hauteurClavierTelephone(clavierEtat.ouvert) - (piedRef.current?.offsetHeight || 0));
+  const toucherQuestion = useChampClavier(champQuestion, libre.texte, v => setLibre(l => ({ ...l, texte: v })),
+    { actif: clavierEtat.hotes > 0 && panneau === 'question_eleve' && libre.phase === 'saisie' });
   // La réponse ne s'écrit pas en texte : le tuteur l'explique au tableau (9 novembre 2026).
   const [tableauProf, setTableauProf] = useState<TableauProf | null>(null);
   const tableauRef = useRef<TableauProf | null>(null);
@@ -309,7 +346,8 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   const [cycle, setCycle] = useState<Cycle | null>(null);
   const cycleRef = useRef<Cycle | null>(null);
   cycleRef.current = cycle;
-  const finies = useRef<Record<string, boolean>>({});
+  /** Les questions closes : juste (true), fausse (false) ou passée par l'élève ('passee' : ni erreur ni reprise). */
+  const finies = useRef<Record<string, boolean | 'passee'>>({});
   const fausses = useRef<Record<string, string[]>>({});
   const reperesRef = useRef<Record<string, string>>({});
   // ── La diapositive du bilan : le lecteur va chercher les acquis de l'élève et les donne à la simulation ──
@@ -338,7 +376,32 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     [conc.centre, instant],
   );
 
-  const questions = useMemo(() => questionsDeLaDiapo(slide), [slide]);
+  // ── Prévoir d'abord (11 novembre 2026) : la question `prediction` est posée AVANT la voix, puis la voix montre ──
+  const prediction = useMemo(() => questionDePrediction(slide), [slide]);
+  /** La mémoire des réponses de cette diapositive (même clé que chaque question : `reponse:<deck>:<diapo>:<cle>`). */
+  const memoireDiapo = `${deckId || ''}:${slide.id}`;
+  /** Déjà prédite (réponse retrouvée) : la voix part tout de suite, comme une diapositive ordinaire. */
+  const predictionDejaFaite = useMemo(
+    () => !!prediction && estTerminee(prediction.type, lireEtatQuestion(`reponse:${memoireDiapo}:${prediction.cle}`), 2),
+    [prediction, memoireDiapo],
+  );
+  /** La diapositive dont la prédiction est close (l'élève a appuyé sur « Suite → ») : sa voix peut partir. */
+  const [predictionClose, setPredictionClose] = useState<string | null>(null);
+  /** La diapositive dont la question de prédiction vient d'être répondue (réaction dite) : « Suite → » est prêt. */
+  const [predictionRepondue, setPredictionRepondue] = useState<string | null>(null);
+  const predictionEnCours = !!prediction && !predictionDejaFaite && predictionClose !== slide.id;
+  /** Les questions APRÈS la voix : celles de la diapositive, sans la prédiction (elle n'est pas reposée). */
+  const questions = useMemo(
+    () => questionsDeLaDiapo(slide).filter(q => !(estPrediction(slide) && q.cle === 'q')),
+    [slide],
+  );
+  /** La question montrée par le carrousel du tableau (elle ne change que par l'élève : « Suite → », points, flèches). */
+  const [indexQuestion, setIndexQuestion] = useState(0);
+  /** Les questions finies changent : l'écran recalcule ce que fait « Suite → ». */
+  const [, setVersionFinies] = useState(0);
+  /** « Suite → » clignote : la relance douce après un long silence (une fois par diapositive). */
+  const [relance, setRelance] = useState(false);
+  const relanceFaite = useRef(false);
   /** Ce que le tableau des questions affiche : les questions de la diapositive, ou la question jumelle du cycle. */
   const jumelles = useMemo<{ questions: QuestionDiapo[]; preparees: SlideConcentration['reponses'] }>(() => {
     const q = cycle?.data?.question;
@@ -358,10 +421,14 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     return { questions: liste, preparees: prep };
   }, [cycle]);
   const enReprise = !!cycle && cycle.phase === 'question';
+  const jumellesRef = useRef(jumelles.questions);
+  jumellesRef.current = jumelles.questions;
 
   // Nouvelle diapositive : tout repart de zéro.
   useEffect(() => {
-    setTemps(0); setEnLecture(false); setFinie(!piste?.url); setPanneau(null); setSimPrete(false);
+    // Une prédiction à faire : le tableau des questions est là d'emblée, la voix attend.
+    setTemps(0); setEnLecture(false); setFinie(!piste?.url); setPanneau(predictionEnCours ? 'questions' : null); setSimPrete(false);
+    setIndexQuestion(0); setRelance(false); relanceFaite.current = false;
     setDuree((piste?.duration_ms || 0) / 1000);
     dejaFaits.current = new Set(); demarree.current = false;
     setReaction(null); dernierEtat.current = null; dernierResultat.current = null; historique.current = [];
@@ -370,6 +437,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     setCycle(null); finies.current = {}; fausses.current = {}; voixLancee.current = false;
     setLibre({ phase: 'saisie', texte: '', enregistre: false });
     setTableauProf(null); setAnnonce(null); tourQuestion.current += 1;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `predictionEnCours` est lu au changement de diapositive seulement
   }, [slide.id, piste?.url, piste?.duration_ms]);
 
   // L'élève passe lui-même à une autre diapositive au milieu d'une reprise : la compétence reste NON ACQUISE,
@@ -613,6 +681,42 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     voix.src = url;
     try { await voix.play(); return true; } catch { voixExplication.current = false; fileVoix.current = []; finMorceaux.current = null; return false; }
   }, []);
+  /**
+   * Le tuteur LIT l'énoncé quand une question s'ouvre (12 novembre 2026), pendant le temps de réflexion : la piste
+   * préparée (`enonce_audio`, voix du cours), sinon `enonce_dit` ou l'énoncé écrit, dit par la voix en direct par morceaux
+   * (le serveur le normalise comme toute voix en direct : symboles, nombres, unités). Les options ne sont pas lues : elles
+   * arrivent après le temps de réflexion. La lecture s'arrête dès que l'élève répond ou passe.
+   */
+  const tourEnonce = useRef(0);
+  const sonsEnonce = useRef<Set<string>>(new Set());
+  const lireEnonce = useCallback((q: QuestionDiapo) => {
+    const voix = voixRef.current;
+    if (!voix) return;
+    const tour = ++tourEnonce.current;
+    const sons = new Set<string>();
+    sonsEnonce.current = sons;
+    if (q.lu?.enonce_audio) {
+      voixExplication.current = false; fileVoix.current = [];
+      sons.add(new URL(q.lu.enonce_audio, location.href).href);
+      voix.src = q.lu.enonce_audio; void voix.play().catch(() => {});
+      return;
+    }
+    const texte = (q.lu?.enonce_dit || q.enonce || '').trim();
+    if (!texte) return;
+    const urls = preparerTextes(decouperParole(texte)).map(u => u.then(x => { if (x) sons.add(x); return x; }));
+    void direMorceaux(urls, () => tour === tourEnonce.current, () => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- direMorceaux est stable
+  }, [preparerTextes]);
+  /** L'élève répond ou passe : la lecture de l'énoncé s'arrête (et seulement elle : une réaction qui parle continue). */
+  const arreterEnonce = useCallback(() => {
+    tourEnonce.current += 1;
+    const voix = voixRef.current;
+    if (voix && sonsEnonce.current.has(voix.src)) {
+      voixExplication.current = false; fileVoix.current = [];
+      voix.pause();
+    }
+    sonsEnonce.current = new Set();
+  }, []);
   /** Où en est la voix dite par morceaux : morceaux finis + fraction du morceau en cours (null : elle ne parle pas). */
   const progressionMorceaux = (): number | null => {
     const v = voixRef.current;
@@ -639,16 +743,19 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     finMorceaux.current = null;
     if (suite?.encore()) suite.fin();
   }, []);
-  /** Après une réponse de conversation : le cours reprend ; s'il était fini, les questions ou la diapositive suivante. */
+  /**
+   * Après une réponse de conversation : le cours reprend ; s'il était fini, les questions reviennent. Jamais la
+   * diapositive suivante toute seule : c'est l'élève qui appuie sur « Suite → » (11 novembre 2026).
+   */
   const avancerLeCours = useCallback(() => {
     setLibre({ phase: 'saisie', texte: '', enregistre: false });
     setPanneau(null); setTableauProf(null); setAnnonce(null);
+    if (predictionEnCours) { setPanneau('questions'); return; }   // la prédiction attend encore sa réponse
     const audio = audioRef.current;
     if (coursEnPause.current) { coursEnPause.current = false; void audio?.play(); if (demarree.current) envoyerASim('resume'); return; }
     if (audio && !audio.ended && audio.currentTime > 0 && piste?.url) return;   // la voix du cours joue encore
     if (questions.some(q => !(q.cle in finies.current))) setPanneau('questions');
-    else onSuivant?.();
-  }, [envoyerASim, piste?.url, questions, onSuivant]);
+  }, [envoyerASim, piste?.url, questions, predictionEnCours]);
   /** L'élève a répondu à l'exercice : le tuteur réagit à la voix, la réponse compte pour les acquis. */
   const exerciceFini = useCallback((ex: Exercice, correct: boolean, reponse: string) => {
     ressentir(correct ? 'celebrate' : 'encourage');
@@ -813,20 +920,23 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     }
   }, [horloge, tableauProf, voixParle, tuteur3D]);
 
-  /** Toutes les questions justes : le tableau se ferme après la voix du bravo et le cours passe à la diapositive suivante. */
-  const terminerEtPasser = useCallback(() => {
-    const attendreVoix = () => {
-      const v = voixRef.current;
-      if (v && !v.paused && !v.ended) { window.setTimeout(attendreVoix, 400); return; }
-      setPanneau(null); setCycle(null);
-      window.setTimeout(() => onSuivant?.(), 700);
-    };
-    window.setTimeout(attendreVoix, 1200);
+  /**
+   * La diapositive suivante, quand l'élève appuie sur « Suite → ». `resolue` : la diapositive est finie pour de bon
+   * (questions justes, ou reprise close) ; sinon c'est un passage à la main, et une reprise en cours est notée
+   * abandonnée (effet de démontage plus haut).
+   */
+  const passerALaDiapoSuivante = useCallback((resolue: boolean) => {
+    voixExplication.current = false; fileVoix.current = [];
+    voixRef.current?.pause();
+    setPanneau(null);
+    if (resolue) setCycle(null);
+    onSuivant?.();
   }, [onSuivant]);
 
   /** Faux : le tuteur réexplique AUTREMENT (DeepSeek, avec tout le contexte), montre dans la simulation, puis question jumelle. */
   const lancerCycle = useCallback(async (n: number, depuis: QuestionDiapo) => {
     setCycle({ n, phase: 'attente', depuis });
+    setIndexQuestion(0);
     setPanneau(null);                                   // la scène redevient visible : le tuteur va y montrer
     ressentir('think');
     const essayees = ['explication du cours', visuel?.kind === 'simulation' ? 'simulation' : visuel?.kind || 'aucun visuel', ...Array.from({ length: n - 1 }, (_, i) => `reprise ${i + 1}`)];
@@ -864,42 +974,106 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     setCycle({ ...c, phase: 'question' }); setPanneau('questions');
   }, [voixParle]);
 
-  const surFinie = useCallback((cle: string, correct: boolean, fraiche: boolean) => {
+  /**
+   * Le passage seul après une réponse (user rule, 12 novembre 2026) : l'élève a répondu (ou passé), la réaction du
+   * tuteur est dite (et la démonstration, son tableau fermé) → ~1,5 s plus tard le cours passe à la question suivante
+   * s'il en reste, sinon à la diapositive suivante (ou, pour une prédiction, à la voix qui montre la réponse). Pas de
+   * passage si l'élève a touché l'écran entre-temps (il lit, il a ouvert le cahier…). Le reste reste au bouton
+   * « Suite → » : fin de la voix d'une diapositive, cycle de reprise, fin de bloc.
+   */
+  const [tourSuiteSeule, setTourSuiteSeule] = useState(0);
+  const suiteSeule = useRef(0);
+  const programmerSuite = useCallback((sansReaction = false) => {
+    const tour = ++suiteSeule.current;
+    let touche = false;
+    const marquer = () => { touche = true; };
+    const ecouter = window.setTimeout(() => {
+      window.addEventListener('pointerdown', marquer, true); window.addEventListener('keydown', marquer, true);
+    }, 0);
+    const finir = () => { window.clearTimeout(ecouter); window.removeEventListener('pointerdown', marquer, true); window.removeEventListener('keydown', marquer, true); };
+    const parle = () => { const v = voixRef.current; return !!v && !v.paused && !v.ended; };
+    const debut = Date.now();
+    // la voix de la réaction démarre (une voix en direct met quelques secondes : 4 s au plus), puis elle finit
+    let partie = false;
+    const attendreLaReaction = () => new Promise<void>(ok => {
+      const tic = () => {
+        if (tour === suiteSeule.current && Date.now() - debut < 60_000) {
+          if (parle()) partie = true;
+          if (parle() || (!partie && !sansReaction && Date.now() - debut < 4000)) { window.setTimeout(tic, 250); return; }
+        }
+        ok();
+      };
+      window.setTimeout(tic, 250);
+    });
+    void attendreLaReaction().then(() => attendre(1500)).then(() => {
+      finir();
+      if (touche || tour !== suiteSeule.current || parle()) return;
+      setTourSuiteSeule(t => t + 1);
+    });
+  }, []);
+
+  /**
+   * Une question est finie (réaction dite, démonstration écrite et son tableau fermé) : le cours passe seul à la suite
+   * (`programmerSuite`) ; une reprise reste au bouton « Suite → ». Exception : la dernière jumelle fausse du dernier
+   * cycle montre la réponse (c'est la réaction finale, pas un passage).
+   */
+  const surFinie = useCallback((cle: string, correct: boolean, fraiche: boolean, apresDemo = false) => {
     finies.current[cle] = correct;
+    setVersionFinies(v => v + 1);
+    // après la démonstration (son tableau fermé), la réaction est dite depuis longtemps : rien à attendre
+    if (fraiche && !cle.startsWith('cycle')) programmerSuite(apresDemo);
     const c = cycleRef.current;
-    if (c && cle.startsWith('cycle')) {
-      // Question jumelle : juste → on passe ; faux → cycle suivant, ou la réponse au 3e.
-      if (correct) { ressentir('celebrate'); terminerEtPasser(); return; }
-      if (c.n < MAX_CYCLES) { void lancerCycle(c.n + 1, c.depuis); return; }
-      const d = c.data;
-      setCycle({ ...c, phase: 'final' });
-      if (d?.reponse_finale) void dire(d.reponse_finale);
-      return;
-    }
-    if (!fraiche) return;
-    const toutes = questions.every(q => q.cle in finies.current);
-    if (!toutes) return;
-    const ratee = questions.find(q => finies.current[q.cle] === false);
-    if (!ratee) { terminerEtPasser(); return; }
-    void lancerCycle(1, ratee);
-  }, [questions, terminerEtPasser, lancerCycle, dire, ressentir]);
+    if (!c || !cle.startsWith('cycle') || !fraiche || c.n < MAX_CYCLES) return;
+    const liste = jumellesRef.current;
+    if (!liste.every(q => q.cle in finies.current) || liste.every(q => finies.current[q.cle])) return;
+    setCycle({ ...c, phase: 'final' });
+    if (c.data?.reponse_finale) void dire(c.data.reponse_finale);
+  }, [dire, programmerSuite]);
+
+  /** L'élève passe une question (12 novembre 2026) : elle compte comme close pour « Suite → », sans erreur ni reprise ;
+   *  il peut y revenir avec les petites flèches et y répondre (sa réponse remplace alors le passage). */
+  const surPassee = useCallback((cle: string, fraiche = false) => {
+    if (finies.current[cle] === true || finies.current[cle] === false) return;
+    finies.current[cle] = 'passee';
+    setVersionFinies(v => v + 1);
+    if (fraiche) programmerSuite(true);   // passée : pas de réaction à attendre
+  }, [programmerSuite]);
+  /** La question de prédiction est finie (réaction dite) : la voix qui montre la réponse part seule ensuite. */
+  const surPredictionFinie = useCallback((_cle?: string, correct?: boolean | null, fraiche?: boolean) => {
+    setPredictionRepondue(slide.id);
+    if (fraiche) programmerSuite(correct === null);
+  }, [slide.id, programmerSuite]);
 
   /** Chaque réponse part au suivi des acquis, avec la manière dont la notion a été expliquée sur cette diapositive. */
   const enregistrerReponse = useCallback((r: ReponseNotee) => {
-    if (r.correct === false) (fausses.current[r.cle] ||= []).push(r.reponse);
+    const predite = r.type === 'prediction';
+    if (r.correct === false && !predite) (fausses.current[r.cle] ||= []).push(r.reponse);
+    if (!predite && r.correct !== null) onReponseJugee?.({ correct: r.correct });
+    if (r.passee) {
+      void appelerApi('/course-player/acquis', {
+        slide_id: slide.id, slide_title: slide.title, deck_id: deckId, cle: r.cle, type: r.type, enonce: r.enonce, reponse: '',
+        tentative: r.tentative, correct: null, passee: true, reaction_preparee: false,
+        methodes: { visuel: predite ? 'prediction' : visuel?.kind || (table ? 'table' : 'aucun'), prediction: predite, exercice: r.cle.startsWith('e') },
+      }).catch(() => { /* le suivi ne doit jamais gêner l'élève */ });
+      return;
+    }
     // juste du premier coup : il exulte ; juste après l'indice : il encourage ; faux : il secoue la tête et tend
     // une idée ; faux une deuxième fois : il encourage quand même ; réponse qu'il ne peut pas juger : il réfléchit.
-    ressentir(r.correct === true ? (r.tentative <= 1 ? 'celebrate' : 'encourage') : r.correct === false ? (r.tentative <= 1 ? 'wrong' : 'encourage') : 'think');
+    // Une prédiction fausse n'est pas une erreur : il encourage (« on va voir »).
+    ressentir(r.correct === true ? (r.tentative <= 1 ? 'celebrate' : 'encourage') : r.correct === false ? (r.tentative <= 1 && !predite ? 'wrong' : 'encourage') : 'think');
     void appelerApi('/course-player/acquis', {
       slide_id: slide.id, slide_title: slide.title, deck_id: deckId, cle: r.cle, type: r.type, enonce: r.enonce, reponse: r.reponse,
       tentative: r.tentative, correct: r.correct, reaction_preparee: r.preparee,
-      methodes: {
+      // Une prédiction vient AVANT l'explication : aucune méthode n'a encore été employée (hors score côté serveur).
+      methodes: predite ? { visuel: 'prediction', prediction: true, exercice: false } : {
         visuel: visuel?.kind || (table ? 'table' : 'aucun'), formules_au_centre: centre.length,
         tuteur_a_montre: pointage.length, eleve_a_manipule: eleveATouche.current, variante_du_tuteur: varianteFaite.current,
         exercice: r.cle.startsWith('e'), reexplication: cycleRef.current?.n || 0,
       },
     }).catch(() => { /* le suivi ne doit jamais gêner l'élève */ });
-  }, [slide.id, slide.title, deckId, visuel?.kind, table, centre.length, pointage.length, ressentir]);
+  }, [slide.id, slide.title, deckId, visuel?.kind, table, centre.length, pointage.length, ressentir, onReponseJugee]);
+  /** La réponse à la prédiction : notée `prediction` (une prédiction fausse n'est pas une erreur de compétence). */
+  const enregistrerPrediction = useCallback((r: ReponseNotee) => enregistrerReponse({ ...r, type: 'prediction' }), [enregistrerReponse]);
 
   /** Une piste déjà prête (réaction préparée) : elle part tout de suite. */
   const jouer = useCallback((url: string) => {
@@ -1167,22 +1341,128 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   // Pause de la voix = pause de la simulation : l'élève ne rate rien.
   const basculer = useCallback(() => {
     const audio = audioRef.current;
+    if (predictionEnCours) { setPanneau('questions'); return; }   // la voix attend la prédiction
     if (!audio) return;
     if (audio.paused) { void audio.play(); if (demarree.current) envoyerASim('resume'); }
     else { audio.pause(); if (demarree.current) envoyerASim('pause'); }
-  }, [envoyerASim]);
+  }, [envoyerASim, predictionEnCours]);
 
   const reecouter = useCallback(() => {
     const audio = audioRef.current;
+    if (predictionEnCours) { setPanneau('questions'); return; }
     if (!audio) return;
     dejaFaits.current = new Set(); demarree.current = false; setFinie(false);
     if (conc.demarrer) envoyerASim('reset');
     audio.currentTime = 0; void audio.play();
-  }, [conc.demarrer, envoyerASim]);
+  }, [conc.demarrer, envoyerASim, predictionEnCours]);
+
+  // ── « Suite → » : l'élève décide quand avancer (11 novembre 2026) ──
+  /** La prédiction est faite : le tableau se ferme, la voix et la simulation montrent la réponse. */
+  const lancerVoixApresPrediction = useCallback(() => {
+    voixExplication.current = false; fileVoix.current = [];
+    voixRef.current?.pause();
+    setPredictionClose(slide.id); setIndexQuestion(0); setPanneau(null);
+    const audio = audioRef.current;
+    if (audio && piste?.url) { audio.currentTime = 0; void audio.play(); }
+    else if (questions.length) setPanneau('questions');      // sans piste : les exercices de la diapositive
+  }, [slide.id, piste?.url, questions.length]);
+  const toutVisible = finie || !piste?.url;
+  const listeAuTableau = enReprise ? jumelles.questions : questions;
+  /** Ce que fait « Suite → » maintenant (recalculé à chaque rendu : questions finies, cycle, voix, tableau). */
+  const etapeSuite = ((): EtapeSuite => {
+    const e = etapeSuiteDeLaDiapo();
+    // la diapositive termine un bloc : « Suite → » ouvre le cahier du bloc (le cahier n'est plus facultatif)
+    return e.quoi === 'diapo' && finDeBloc && onFermerBloc ? { quoi: 'bloc', pret: e.pret } : e;
+  })();
+  function etapeSuiteDeLaDiapo(): EtapeSuite {
+    const occupe = !!reaction || !!tableauProf || panneau === 'question_eleve';
+    const pret = (e: EtapeSuite): EtapeSuite => ({ ...e, pret: e.pret && !occupe });
+    if (predictionEnCours) return pret({ quoi: 'voix', pret: predictionRepondue === slide.id });
+    if (cycle?.phase === 'attente') return { quoi: 'rien', pret: false };
+    if (cycle?.phase === 'explique') return { quoi: 'jumelle', pret: false };
+    if (cycle?.phase === 'final') return pret({ quoi: 'diapo', pret: true });
+    if (!toutVisible) return { quoi: 'diapo', pret: false };          // la voix parle encore : passer à la main
+    const restantes = listeAuTableau.filter(q => !(q.cle in finies.current));
+    if (restantes.length) {
+      if (panneau !== 'questions') return { quoi: 'ouvrir', pret: false };
+      const courante = listeAuTableau[Math.min(indexQuestion, listeAuTableau.length - 1)];
+      if (courante && courante.cle in finies.current) return pret({ quoi: 'question', pret: true });
+      return { quoi: restantes.length > 1 ? 'question' : 'diapo', pret: false };
+    }
+    if (enReprise) {
+      const justes = listeAuTableau.every(q => finies.current[q.cle]);
+      return pret({ quoi: justes || (cycle?.n ?? MAX_CYCLES) >= MAX_CYCLES ? 'diapo' : 'reprise', pret: true });
+    }
+    if (questions.some(q => finies.current[q.cle] === false)) return pret({ quoi: 'reprise', pret: true });
+    return pret({ quoi: 'diapo', pret: true });
+  }
+  const faireSuite = () => {
+    setRelance(false);
+    switch (etapeSuite.quoi) {
+      case 'voix': lancerVoixApresPrediction(); return;
+      case 'ouvrir': setPanneau('questions'); return;
+      case 'question': {
+        // la question suivante non répondue (après la courante, sinon la première)
+        const i = Math.min(indexQuestion, listeAuTableau.length - 1);
+        const libre = (j: number) => j !== i && !(listeAuTableau[j].cle in finies.current);
+        const k = listeAuTableau.findIndex((_, j) => j > i && libre(j));
+        setIndexQuestion(k >= 0 ? k : Math.max(0, listeAuTableau.findIndex((_, j) => libre(j))));
+        return;
+      }
+      case 'jumelle':
+        voixRef.current?.pause();
+        setCycle(c => c && c.phase === 'explique' ? { ...c, phase: 'question' } : c); setIndexQuestion(0); setPanneau('questions');
+        return;
+      case 'reprise': {
+        if (cycle && enReprise) { void lancerCycle(cycle.n + 1, cycle.depuis); return; }
+        const ratee = questions.find(q => finies.current[q.cle] === false);
+        if (ratee) void lancerCycle(1, ratee);
+        return;
+      }
+      case 'diapo': passerALaDiapoSuivante(etapeSuite.pret); return;
+      case 'bloc':
+        // comme un changement de diapositive (voix arrêtée, tableau fermé), puis la fin du bloc par-dessus
+        voixExplication.current = false; fileVoix.current = [];
+        voixRef.current?.pause(); audioRef.current?.pause();
+        setPanneau(null);
+        if (etapeSuite.pret) setCycle(null);
+        onFermerBloc?.();
+        return;
+      default: return;
+    }
+  };
+  // Le passage seul (après une réponse, sa réaction et sa démonstration) : seulement vers la question suivante, la
+  // diapositive suivante ou la voix après une prédiction — jamais une reprise ni une fin de bloc.
+  useEffect(() => {
+    if (!tourSuiteSeule || panneau !== 'questions' || enReprise || cycle) return;
+    if (etapeSuite.pret && (etapeSuite.quoi === 'question' || etapeSuite.quoi === 'diapo' || etapeSuite.quoi === 'voix')) faireSuite();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- un passage par signal
+  }, [tourSuiteSeule]);
+  // Changer de diapositive annule un passage en attente.
+  useEffect(() => { suiteSeule.current += 1; }, [slide.id]);
+  // Un long silence alors que « Suite → » attend : le tuteur relance doucement, une seule fois par diapositive —
+  // sa phrase préenregistrée si elle existe, sinon le bouton clignote. Toute action de l'élève remet le compte à zéro.
+  useEffect(() => {
+    if (!etapeSuite.pret || relanceFaite.current) return;
+    let id = 0, actif = true;
+    const parle = () => { const v = voixRef.current, a = audioRef.current; return (!!v && !v.paused && !v.ended) || (!!a && !a.paused && !a.ended); };
+    const relancer = async () => {
+      if (!actif) return;
+      if (parle()) { armer(); return; }          // le tuteur parle encore : on attend la fin
+      relanceFaite.current = true;
+      if (await clipExiste(CLIP_RELANCE)) { if (actif && !parle()) { ressentir('encourage'); jouer(CLIP_RELANCE); } }
+      else if (actif) setRelance(true);
+    };
+    const armer = () => { window.clearTimeout(id); id = window.setTimeout(() => void relancer(), RELANCE_APRES_MS); };
+    armer();
+    window.addEventListener('pointerdown', armer); window.addEventListener('keydown', armer);
+    return () => { actif = false; window.clearTimeout(id); window.removeEventListener('pointerdown', armer); window.removeEventListener('keydown', armer); };
+  }, [etapeSuite.pret, etapeSuite.quoi, slide.id, ressentir, jouer]);
 
   /** Ce que l'OCR d'une photo doit savoir : la diapositive et le cours (symboles, unités, notation du chapitre). */
   const contexteOcr: ContexteOcr = { deck_id: deckId, title: slide.title, lead: contenu.lead || '' };
-  const toutVisible = finie || !piste?.url;
+  /** La voix de l'énoncé et la diapositive (suggestions du clavier), pour chaque tableau de questions. */
+  const outilsEnonce = { lireEnonce, arreterEnonce, slideId: slide.id };
   /** Le panneau « Ton résultat » : ce qui est déjà dit (donc écrit), au fil de la voix. */
   const vuDuResultat = (() => {
     const r = reaction;
@@ -1210,7 +1490,8 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
           key={piste.url}
           ref={audioRef}
           src={piste.url}
-          autoPlay
+          // une prédiction à faire : la voix attend que l'élève ait répondu et appuyé sur « Suite → »
+          autoPlay={!predictionEnCours}
           preload="auto"
           // La bouche du tuteur suit le SON de la piste (analyseur partagé), pas seulement l'état « il parle ».
           onPlay={event => { setEnLecture(true); void audioUnlock.ensureRunning(); observeAvatarMedia(event.currentTarget); }}
@@ -1227,23 +1508,24 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
         }} />
 
       {/* ── Le titre et le sous-titre, seulement ── */}
-      <header className="shrink-0 px-6 pt-4 pb-2 text-center">
-        <h1 className="text-2xl md:text-3xl" style={{ fontFamily: CRAIE, color: '#fef3c7' }}>{slide.title}</h1>
+      <header className="shrink-0 px-6 pt-2 pb-1 text-center" style={tuteur3D ? { paddingRight: COLONNE_TUTEUR } : undefined}>
+        <h1 className="text-xl leading-tight md:text-[26px]" style={{ fontFamily: CRAIE, color: '#fef3c7' }}>{slide.title}</h1>
         {contenu.lead && (
-          <p className="mt-1 text-base md:text-lg text-white/70" style={{ fontFamily: CRAIE }}>{contenu.lead}</p>
+          <p className="text-sm leading-snug md:text-base text-white/70" style={{ fontFamily: CRAIE }}>{contenu.lead}</p>
         )}
       </header>
 
       {/* ── Au centre : ce qu'on regarde ── */}
-      <main className="relative flex-1 min-h-0 flex flex-col items-center justify-center gap-3 px-4 pb-2"
+      <main className="relative flex-1 min-h-0 flex flex-col items-center justify-center gap-2 px-3 pb-1"
         style={tuteur3D ? { paddingRight: COLONNE_TUTEUR } : undefined}>   {/* la colonne de droite est au tuteur 3D */}
         {/* ── Le deuxième tableau : les questions descendent du haut et couvrent la scène, tout tient sans défiler ── */}
         {panneau === 'questions' && (
           <section className="tableau-questions absolute inset-y-0 left-3 z-30 flex flex-col overflow-hidden rounded-2xl border-2 border-amber-200/40 bg-[#0f2219] shadow-2xl"
-            style={{ right: tuteur3D ? COLONNE_TUTEUR + 4 : 12 }}>
+            // sur téléphone, le tableau prend toute la largeur (la colonne du tuteur lui laissait 150 px)
+            style={{ right: (tuteur3D && !etroit ? COLONNE_TUTEUR + 4 : 12) + placeClavier, bottom: basClavier, transition: 'right .25s ease, bottom .25s ease' }}>
             <div className="flex shrink-0 items-center justify-between border-b border-amber-200/20 px-4 py-2">
               <div className="text-base font-semibold text-emerald-200" style={{ fontFamily: CRAIE }}>
-                {cycle?.phase === 'final' ? `📓 La réponse · reprise ${cycle.n}/${MAX_CYCLES}` : enReprise ? `↻ Reprise ${cycle!.n}/${MAX_CYCLES} · ${jumelles.questions.length > 1 ? 'vrai ou faux' : 'nouvelle question'}` : `✏️ À toi · ${questions.length} question${questions.length > 1 ? 's' : ''}`}
+                {predictionEnCours ? '🔮 Avant d’expliquer : que prévois-tu ?' : cycle?.phase === 'final' ? `📓 La réponse · reprise ${cycle.n}/${MAX_CYCLES}` : enReprise ? `↻ Reprise ${cycle!.n}/${MAX_CYCLES} · ${jumelles.questions.length > 1 ? 'vrai ou faux' : 'nouvelle question'}` : `✏️ À toi · ${questions.length} question${questions.length > 1 ? 's' : ''}`}
               </div>
               <div className="flex items-center gap-3">
                 {/* le tableau des questions couvre la scène : le bouton du résultat clignote dans son en-tête */}
@@ -1256,14 +1538,17 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
                 <p className="text-lg text-white/85"><Formule t={cycle.data?.ecrit || ''} /></p>
                 {cycle.data?.cahier && <p className="rounded-xl border border-amber-200/40 px-4 py-3 text-xl text-amber-100">📓 À écrire dans le cahier : <Formule t={cycle.data.cahier} /></p>}
                 <p className="text-sm text-white/55">Cette notion est notée « à reprendre » : le professeur y reviendra autrement, en mode libre et au prochain cours.</p>
-                <button onClick={() => { voixRef.current?.pause(); setCycle(null); setPanneau(null); onSuivant?.(); }} className="self-start rounded-full bg-emerald-500/30 px-5 py-2 text-base hover:bg-emerald-500/40">Suivant →</button>
               </div>
+            ) : predictionEnCours && prediction ? (
+              // La prédiction : sa réaction préparée, pas de démonstration (la voix qui suit montre la réponse).
+              <QuestionsDeLaDiapo key={`${slide.id}:prediction`} questions={[prediction]} index={0} onIndex={() => {}} diapo={{ title: slide.title, speech: parole, memoire: memoireDiapo }} dire={dire} jouer={jouer} reponses={conc.reponses} onReponse={enregistrerPrediction} onFinie={surPredictionFinie}
+                onPasser={(c, f) => surPredictionFinie(c, null, f)} contexte={contexteOcr} {...outilsEnonce} />
             ) : enReprise ? (
-              <QuestionsDeLaDiapo key={`cycle${cycle!.n}`} questions={jumelles.questions} diapo={{ title: slide.title, speech: parole, memoire: `${deckId || ''}:${slide.id}` }} dire={dire} jouer={jouer} reponses={jumelles.preparees} onReponse={enregistrerReponse} onFinie={surFinie} essaisMax={1}
-                contexte={contexteOcr} />
+              <QuestionsDeLaDiapo key={`cycle${cycle!.n}`} questions={jumelles.questions} index={indexQuestion} onIndex={setIndexQuestion} diapo={{ title: slide.title, speech: parole, memoire: memoireDiapo }} dire={dire} jouer={jouer} reponses={jumelles.preparees} onReponse={enregistrerReponse} onFinie={surFinie} essaisMax={1}
+                contexte={contexteOcr} {...outilsEnonce} />
             ) : (
-              <QuestionsDeLaDiapo key={slide.id} questions={questions} diapo={{ title: slide.title, speech: parole, memoire: `${deckId || ''}:${slide.id}` }} dire={dire} jouer={jouer} reponses={conc.reponses} onReponse={enregistrerReponse} onFinie={surFinie}
-                contexte={contexteOcr} lireDemo={lireDemonstration} preparerDemo={preparerDemo} attendreVoix={attendreVoix} />
+              <QuestionsDeLaDiapo key={slide.id} questions={questions} index={indexQuestion} onIndex={setIndexQuestion} diapo={{ title: slide.title, speech: parole, memoire: memoireDiapo }} dire={dire} jouer={jouer} reponses={conc.reponses} onReponse={enregistrerReponse} onFinie={surFinie} onPasser={surPassee}
+                contexte={contexteOcr} lireDemo={lireDemonstration} preparerDemo={preparerDemo} attendreVoix={attendreVoix} {...outilsEnonce} />
             )}
           </section>
         )}
@@ -1271,7 +1556,8 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
           <div
             ref={visuelRef}
             className="relative w-full flex-1 min-h-0 flex items-center justify-center"
-            style={{ maxWidth: surSim ? 1100 : 900 }}
+            // la simulation prend toute la place (12 novembre 2026) ; une image garde sa largeur de lecture
+            style={{ maxWidth: surSim ? undefined : 900 }}
           >
             {surSim && visuel.url && (
               <iframe
@@ -1283,7 +1569,9 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
                 src={visuel.url}
                 scrolling="no"
                 className="h-full w-full border-0 bg-transparent"
-                style={{ aspectRatio: '760 / 470', maxHeight: '100%' }}
+                // les tableaux à la craie se redessinent à la taille du cadre : ils remplissent la zone ; les autres
+                // simulations (dessinées pour 760 × 470) gardent leur format
+                style={/-tableau\//.test(visuel.url) ? undefined : { aspectRatio: '760 / 470', maxHeight: '100%' }}
                 onLoad={() => window.setTimeout(() => setSimPrete(true), 700)}
               />
             )}
@@ -1294,11 +1582,8 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
         )}
 
         {/* ── La question de l'élève expliquée au tableau ── */}
-        {tableauProf?.mode === 'diapo' && tableauProf.etape !== 'exercice' && (
-          <TableauDuProf t={tableauProf} lignesRef={lignesProfRef} onTexte={() => setTableauProf(t => t && { ...t, texte: !t.texte })}
-            onAutre={autreQuestion} onContinuer={reprendreApresQuestion} />
-        )}
-        {(tableauProf?.mode === 'efface' || tableauProf?.etape === 'exercice') && (
+        {/* Grand tableau devant la diapositive, toujours (user rule, 12 novembre 2026) : plus de petit cadre sous la figure. */}
+        {tableauProf && (
           <div className="absolute inset-y-0 left-3 z-30 flex flex-col pb-2" style={{ right: tuteur3D ? COLONNE_TUTEUR + 4 : 12 }}>
             <TableauDuProf t={tableauProf!} lignesRef={lignesProfRef} plein onFini={exerciceFini} onTexte={() => setTableauProf(t => t && { ...t, texte: !t.texte })}
               onAutre={autreQuestion} onContinuer={reprendreApresQuestion} />
@@ -1341,8 +1626,12 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
           </table>
         )}
 
+        {/* Avec une figure, les formules du centre vont dans une bande SOUS la figure, jamais par-dessus (user rule,
+            13 novembre 2026 : « ces équations masquent les simulations ») ; la place est gardée dès le début, la figure
+            ne saute pas quand une formule apparaît. */}
         {centre.length > 0 && (
-          <div className={`flex ${visuel || table ? 'flex-row flex-wrap justify-center gap-3' : 'flex-col items-center gap-4'}`}>
+          <div className={`flex ${visuel ? 'pointer-events-none w-full shrink-0 flex-row flex-wrap justify-center gap-2' : table ? 'flex-row flex-wrap justify-center gap-3' : 'flex-col items-center gap-4'}`}
+            style={visuel && tuteur3D ? { paddingRight: COLONNE_TUTEUR } : undefined}>
             {centre.map((c, i) => {
               const vu = toutVisible || temps >= c.t;
               return (
@@ -1352,9 +1641,10 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
                   className="rounded-xl px-4 py-2 transition-all duration-700"
                   style={{
                     fontFamily: CRAIE,
-                    fontSize: visuel || table ? 22 : 30,
+                    fontSize: visuel ? 20 : table ? 22 : 30,
                     color: '#fef9c3',
                     border: '1px dashed rgba(254,249,195,0.35)',
+                    background: visuel ? 'rgba(15,34,25,0.92)' : undefined,
                     opacity: vu ? 1 : 0,
                     transform: vu ? 'none' : 'translateY(8px)',
                   }}
@@ -1379,15 +1669,23 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
 
       {/* ── Les bulles : l'écrit, fermé par défaut ── */}
       {panneau && panneau !== 'questions' && (
-        <div style={tuteur3D && !etroit ? { right: COLONNE_TUTEUR } : undefined} className="absolute left-4 right-4 bottom-[76px] z-30 mx-auto max-w-3xl max-h-[55%] overflow-y-auto rounded-2xl border border-white/15 bg-[#0d1c15]/95 p-5 shadow-2xl backdrop-blur">
+        <div style={tuteur3D && !etroit ? { right: COLONNE_TUTEUR + placeClavier } : placeClavier ? { right: placeClavier } : undefined} className="absolute left-4 right-4 bottom-[76px] z-30 mx-auto max-w-3xl max-h-[55%] overflow-y-auto rounded-2xl border border-white/15 bg-[#0d1c15]/95 p-5 shadow-2xl backdrop-blur">
           <button onClick={() => setPanneau(null)} className="absolute right-3 top-2 text-white/50 hover:text-white text-xl" aria-label="Fermer">×</button>
           {panneau === 'cahier' && (
             <>
               <div className="text-sm font-semibold text-amber-200">📓 À écrire dans le cahier</div>
-              {/* Ce qui s'écrit au cahier commence comme au tableau : le titre, puis le sous-titre s'il y en a un. */}
-              <h3 className="mt-2 text-xl underline decoration-amber-200/40 underline-offset-4" style={{ fontFamily: CRAIE, color: '#fef3c7' }}>{slide.title}</h3>
-              {contenu.lead && <p className="mt-1 text-base italic" style={{ fontFamily: CRAIE, color: '#e7e5c9' }}>{contenu.lead}</p>}
-              {cahier && cahier !== contenu.lead && <p className="mt-2 text-lg leading-relaxed" style={{ fontFamily: CRAIE, color: '#fef3c7' }}><Formule t={cahier} /></p>}
+              {/* Le cahier s'organise comme un cours préparé : le titre du cours (premier écran), la partie numérotée quand on
+                  y entre, puis le titre de la diapositive numéroté, puis les lignes (12 novembre 2026). */}
+              {entete?.cours && (
+                <div className="mt-2 text-center">
+                  <h2 className="text-3xl underline decoration-amber-200/50 decoration-2 underline-offset-8" style={{ fontFamily: CRAIE, color: '#fde68a' }}>{entete.cours.titre}</h2>
+                  {entete.cours.sousTitre && <p className="mt-2 text-lg italic" style={{ fontFamily: CRAIE, color: '#e7e5c9' }}>{entete.cours.sousTitre}</p>}
+                </div>
+              )}
+              {entete?.partie && <h3 className="mt-3 text-2xl" style={{ fontFamily: CRAIE, color: '#fca5a5' }}>{entete.partie}</h3>}
+              <h4 className={`mt-2 text-xl underline decoration-amber-200/40 underline-offset-4 ${entete ? 'pl-4' : ''}`} style={{ fontFamily: CRAIE, color: '#fef3c7' }}>{entete?.diapo || slide.title}</h4>
+              {contenu.lead && <p className={`mt-1 text-base italic ${entete ? 'pl-4' : ''}`} style={{ fontFamily: CRAIE, color: '#e7e5c9' }}>{contenu.lead}</p>}
+              {cahier && cahier !== contenu.lead && <p className={`mt-2 text-lg leading-relaxed ${entete ? 'pl-4' : ''}`} style={{ fontFamily: CRAIE, color: '#fef3c7' }}><Formule t={cahier} /></p>}
               {centre.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-2">
                   {centre.filter(c => /=/.test(c.texte)).map((c, i) => (
@@ -1395,7 +1693,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
                   ))}
                 </div>
               )}
-              <button onClick={() => { void navigator.clipboard?.writeText([slide.title, contenu.lead, cahier !== contenu.lead ? cahier : ''].filter(Boolean).join('\n')); }} className="mt-3 text-xs text-white/50 hover:text-white">Copier</button>
+              <button onClick={() => { void navigator.clipboard?.writeText([entete?.cours?.titre, entete?.cours?.sousTitre, entete?.partie, entete?.diapo || slide.title, contenu.lead, cahier !== contenu.lead ? cahier : ''].filter(Boolean).join('\n')); }} className="mt-3 text-xs text-white/50 hover:text-white">Copier</button>
             </>
           )}
           {panneau === 'explication' && (
@@ -1427,7 +1725,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
               {libre.phase !== 'reponse' && (
                 <>
                   <div className="relative mt-2">
-                    <textarea ref={champQuestion} value={libre.texte} onChange={e => setLibre(l => ({ ...l, texte: e.target.value }))} disabled={libre.phase === 'envoi' || libre.transcrit} rows={2}
+                    <textarea ref={champQuestion} value={libre.texte} onChange={e => setLibre(l => ({ ...l, texte: e.target.value }))} onFocus={toucherQuestion} disabled={libre.phase === 'envoi' || libre.transcrit} rows={2}
                       placeholder={libre.transcrit ? 'Transcription de ce que tu as dit…' : 'Écris ta question… (en darija ou en français)'} dir="auto"
                       className="w-full resize-none rounded-lg border border-white/20 bg-black/30 px-3 py-2 pr-24 text-lg outline-none focus:border-sky-300" />
                     {/* Transcription fausse : on efface tout d'un geste et on recommence (au micro ou au clavier). */}
@@ -1456,7 +1754,9 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
                     <BoutonPhoto contexte={contexteOcr} disabled={libre.phase === 'envoi' || libre.transcrit}
                       onTexte={t => setLibre(l => ({ ...l, texte: [l.texte.trim(), t].filter(Boolean).join('\n'), aVerifier: true, erreur: undefined }))}
                       onErreur={m => setLibre(l => ({ ...l, erreur: m }))} />
-                    <BoutonSymboles ouvert={clavierQuestion} onClick={() => setClavierQuestion(c => !c)} />
+                    {clavierEtat.hotes > 0
+                      ? <BoutonSymboles ouvert={clavierEtat.ouvert} onClick={() => { toucherQuestion(); clavier.basculer(); }} />
+                      : <BoutonSymboles ouvert={clavierQuestion} onClick={() => setClavierQuestion(c => !c)} />}
                     {/* 🖼️ Image : un schéma, un exercice joint tel quel à la question (lu au serveur avec la question). */}
                     <label className="cursor-pointer rounded-full bg-white/10 px-4 py-2 text-sm hover:bg-white/20" title="Joindre une image (schéma, exercice) à ta question">
                       🖼️ {libre.image ? libre.image.nom.slice(0, 18) : 'Image'}
@@ -1469,7 +1769,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
                       {libre.phase === 'envoi' ? 'Le professeur réfléchit…' : 'Envoyer'}
                     </button>
                   </div>
-                  {clavierQuestion && libre.phase === 'saisie' && (
+                  {clavierQuestion && clavierEtat.hotes === 0 && libre.phase === 'saisie' && (
                     <ClavierScientifique cible={champQuestion} valeur={libre.texte} onChange={v => setLibre(l => ({ ...l, texte: v }))} onFermer={() => setClavierQuestion(false)} />
                   )}
                   {libre.aVerifier && !libre.transcrit && libre.phase === 'saisie' && (
@@ -1514,33 +1814,49 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
       )}
 
       {/* ── La barre du bas, hors de la scène ── */}
-      <footer className="shrink-0 z-20 flex flex-wrap items-center gap-2 px-3 py-2 border-t border-white/10 bg-black/25">
+      {/* une seule ligne fine (12 novembre 2026) : boutons en icônes (le texte apparaît sur grand écran et au survol) */}
+      <footer ref={piedRef} data-pied-cours className="shrink-0 z-20 flex flex-nowrap items-center gap-1.5 px-2 py-1.5 border-t border-white/10 bg-black/25">
         {piste?.url && (
           <>
-            <button onClick={basculer} className="h-10 w-10 rounded-full bg-white/10 hover:bg-white/20" title={enLecture ? 'Pause' : 'Écouter'}>
+            <button onClick={basculer} className="h-9 w-9 shrink-0 rounded-full bg-white/10 hover:bg-white/20" title={enLecture ? 'Pause' : 'Écouter'}>
               {enLecture ? '❚❚' : '▶'}
             </button>
-            <button onClick={reecouter} className="h-10 w-10 rounded-full bg-white/10 hover:bg-white/20" title="Réécouter depuis le début">⟲</button>
-            <div className="hidden sm:block w-40 h-1.5 rounded-full bg-white/10 overflow-hidden">
+            <button onClick={reecouter} className="h-9 w-9 shrink-0 rounded-full bg-white/10 hover:bg-white/20" title="Réécouter depuis le début">⟲</button>
+            <div className="hidden sm:block min-w-[48px] max-w-[160px] flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
               <div className="h-full bg-emerald-400/80" style={{ width: `${duree ? Math.min(100, (temps / duree) * 100) : 0}%` }} />
             </div>
           </>
         )}
         <Bulle actif={panneau === 'cahier'} pulse={toutVisible && panneau !== 'cahier' && !!cahier} onClick={() => setPanneau(p => p === 'cahier' ? null : 'cahier')} disabled={!cahier}>
-          📓 À écrire dans le cahier
+          <Libelle icone="📓" texte="À écrire dans le cahier" />
         </Bulle>
         <Bulle actif={panneau === 'explication'} onClick={() => setPanneau(p => p === 'explication' ? null : 'explication')}>
-          📖 Explication écrite
+          <Libelle icone="📖" texte="Explication écrite" />
         </Bulle>
         <Bulle actif={panneau === 'question_eleve'} onClick={leverLaMain}>
-          🙋 Question
+          <Libelle icone="🙋" texte="Question" />
         </Bulle>
-        {questions.length > 0 && (
-          <Bulle actif={panneau === 'questions'} pulse={toutVisible && panneau !== 'questions'} onClick={() => setPanneau(p => p === 'questions' ? null : 'questions')}>
-            ✏️ À toi ({questions.length})
+        {clavierEtat.hotes > 0 && (
+          <Bulle actif={clavierEtat.ouvert} onClick={clavier.basculer}>
+            <Libelle icone="⌨" texte="Clavier" />
           </Bulle>
         )}
-        <div className="ml-auto flex items-center gap-2">{deckControls}</div>
+        {(questions.length > 0 || predictionEnCours) && (
+          <Bulle actif={panneau === 'questions'} pulse={(toutVisible || predictionEnCours) && panneau !== 'questions'} onClick={() => setPanneau(p => p === 'questions' ? null : 'questions')}>
+            {predictionEnCours ? '🔮 Prévois' : `✏️ À toi (${questions.length})`}
+          </Bulle>
+        )}
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          {deckControls}
+          {/* Le seul bouton qui fait avancer le cours : mis en avant quand l'étape est finie ; il clignote à la relance. */}
+          <button onClick={faireSuite} disabled={etapeSuite.quoi === 'rien'} data-suite={etapeSuite.quoi}
+            title={etapeSuite.pret ? undefined : 'Passer à la suite'}
+            className={`h-10 whitespace-nowrap rounded-full px-5 text-base font-semibold transition-colors disabled:opacity-40 ${etapeSuite.pret
+              ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-900/40 hover:bg-emerald-400'
+              : 'bg-white/10 text-white/60 hover:bg-white/20'} ${relance ? 'animate-pulse ring-2 ring-emerald-200' : ''}`}>
+            {etapeSuite.quoi === 'bloc' ? '✍️ Au cahier →' : etapeSuite.quoi === 'diapo' && etapeSuite.pret ? libelleSuite : 'Suite →'}
+          </button>
+        </div>
       </footer>
 
       {tuteur3D && <AIAvatar isSpeaking={enLecture || voixParle} isProcessing={reaction?.phase === 'reflechit' || cycle?.phase === 'attente'} labControl={labControl} emotion={emotion} discret />}
@@ -1551,23 +1867,52 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
 /** Une question de la diapositive, telle que l'élève y répond (la clé `bonne` n'existe que pour les exercices). */
 type QuestionDiapo = { cle: string; type: 'qcm' | 'vrai_faux' | 'directe'; enonce: string; choix?: string[]; bonne?: number; explication?: string;
   /** La démonstration manuscrite, écrite après la réaction (pour un vrai/faux : portée par sa dernière affirmation). */
-  demonstration?: Demonstration };
+  demonstration?: Demonstration;
+  /** L'énoncé lu par le tuteur (`enonce_audio`, `enonce_dit`) et les suggestions du clavier (`clavier`). */
+  lu?: EnonceLu };
+const luDe = (x?: EnonceLu): EnonceLu | undefined => (x && (x.enonce_audio || x.enonce_dit || x.clavier) ? { enonce_audio: x.enonce_audio, enonce_dit: x.enonce_dit, clavier: x.clavier } : undefined);
 
 function questionsDeLaDiapo(slide: CourseSlide): QuestionDiapo[] {
   const out: QuestionDiapo[] = [];
   const q = slide.question;
   if (q?.prompt) {
-    if ((q.options || []).length >= 2) out.push({ cle: 'q', type: 'qcm', enonce: q.prompt, choix: q.options, bonne: q.correct, demonstration: q.demonstration });
-    else out.push({ cle: 'q', type: 'directe', enonce: q.prompt, demonstration: q.demonstration });
+    if ((q.options || []).length >= 2) out.push({ cle: 'q', type: 'qcm', enonce: q.prompt, choix: q.options, bonne: q.correct, demonstration: q.demonstration, lu: luDe(q) });
+    else out.push({ cle: 'q', type: 'directe', enonce: q.prompt, demonstration: q.demonstration, lu: luDe(q) });
   }
   (slide.exercises || []).forEach((ex, i) => {
-    if (ex.type === 'qcm' && (ex.choices || []).length >= 2) out.push({ cle: `e${i}`, type: 'qcm', enonce: ex.prompt, choix: ex.choices, bonne: ex.correct ?? 0, explication: ex.explanation, demonstration: ex.demonstration });
+    if (ex.type === 'qcm' && (ex.choices || []).length >= 2) out.push({ cle: `e${i}`, type: 'qcm', enonce: ex.prompt, choix: ex.choices, bonne: ex.correct ?? 0, explication: ex.explanation, demonstration: ex.demonstration, lu: luDe(ex) });
     if (ex.type === 'vrai_faux') (ex.statements || []).forEach((st, j, tout) => {
       out.push({ cle: `e${i}s${j}`, type: 'vrai_faux', enonce: st.text, choix: ['Vrai', 'Faux'], bonne: st.correct ? 0 : 1, explication: st.explanation,
-        demonstration: j === tout.length - 1 ? ex.demonstration : undefined });
+        demonstration: j === tout.length - 1 ? ex.demonstration : undefined, lu: luDe(st) });
     });
   });
   return out;
+}
+
+/**
+ * Plus aucune question AVANT l'explication (user rule, 13 novembre 2026 : « annuler cette étape de prévoir dans tous
+ * les cours ») : le bandeau « 🔮 Avant d'expliquer : que prévois-tu ? » ne s'ouvre plus. Une question encore marquée
+ * `prediction` est posée comme les autres, après la voix. Remettre `true` pour rétablir l'étape.
+ */
+const PREDICTIONS_AVANT_LA_VOIX = false;
+const estPrediction = (slide: CourseSlide) => PREDICTIONS_AVANT_LA_VOIX && !!slide.question?.prediction;
+
+/** La question de prédiction de la diapositive (`question.prediction`), sans démonstration : la voix montre la réponse. */
+function questionDePrediction(slide: CourseSlide): QuestionDiapo | null {
+  if (!estPrediction(slide)) return null;
+  const q = questionsDeLaDiapo(slide).find(x => x.cle === 'q');
+  return q ? { ...q, demonstration: undefined } : null;
+}
+
+/** L'état d'une question gardé pour l'élève (`localStorage`, clé `reponse:<deck>:<diapo>:<cle>`). */
+type EtatQuestion = Partial<{ tentative: number; exclus: number[]; pris: number | null; retour: { correct: boolean | null; ecrit: string } | null; passee: boolean }>;
+function lireEtatQuestion(memoire: string): EtatQuestion {
+  try { return JSON.parse(localStorage.getItem(memoire) || '{}') as EtatQuestion; } catch { return {}; }
+}
+/** Une question est close : juste, fausse après tous ses essais, ou réponse libre jugée. */
+function estTerminee(type: QuestionDiapo['type'], e: EtatQuestion, essaisMax: number): boolean {
+  const r = e.retour, t = e.tentative ?? 1;
+  return r?.correct === true || (r?.correct === false && t > essaisMax) || (type === 'directe' && !!r && r.correct !== null);
 }
 
 /**
@@ -1578,69 +1923,83 @@ function questionsDeLaDiapo(slide: CourseSlide): QuestionDiapo[] {
  * par `/course-player/answer-reaction` (DeepSeek) et la voix en direct.
  */
 /** Ce que l'écran note à chaque réponse (suivi des acquis, skill `suivi-des-acquis`). */
-export type ReponseNotee = { cle: string; type: QuestionDiapo['type']; enonce: string; reponse: string; tentative: number; correct: boolean | null; preparee: boolean };
+export type ReponseNotee = { cle: string; type: QuestionDiapo['type'] | 'prediction'; enonce: string; reponse: string; tentative: number; correct: boolean | null; preparee: boolean;
+  /** l'élève a passé la question : ni juste ni erreur (12 novembre 2026) */
+  passee?: boolean };
 
 /** Ce que le tableau des questions reçoit pour écrire les démonstrations et lire une photo. */
 type OutilsQuestions = {
   contexte?: ContexteOcr; attendreVoix?: () => Promise<void>;
   lireDemo?: (d: Demonstration, prete?: VoixDemo | null) => LectureDemo; preparerDemo?: (d: Demonstration) => VoixDemo | null;
+  /** le tuteur lit l'énoncé ; la lecture s'arrête quand l'élève répond ou passe */
+  lireEnonce?: (q: QuestionDiapo) => void; arreterEnonce?: () => void;
+  /** la diapositive (les suggestions du clavier sont cherchées par diapositive et question) */
+  slideId?: string;
 };
 
-function QuestionsDeLaDiapo({ questions, diapo, dire, jouer, reponses, onReponse, onFinie, essaisMax, contexte, lireDemo, preparerDemo, attendreVoix }: {
-  questions: QuestionDiapo[]; diapo: { title: string; speech: string; memoire?: string }; dire: (texte: string) => Promise<boolean>;
+function QuestionsDeLaDiapo({ questions, index, onIndex, diapo, dire, jouer, reponses, onReponse, onFinie, onPasser, essaisMax, ...outils }: {
+  questions: QuestionDiapo[];
+  /** La question montrée : tenue par le tableau, elle ne change que par l'élève (« Suite → », points, flèches). */
+  index: number; onIndex: (i: number) => void;
+  diapo: { title: string; speech: string; memoire?: string }; dire: (texte: string) => Promise<boolean>;
   jouer: (url: string) => void; reponses?: SlideConcentration['reponses']; onReponse?: (r: ReponseNotee) => void;
-  onFinie?: (cle: string, correct: boolean, fraiche: boolean) => void; essaisMax?: number;
+  onFinie?: (cle: string, correct: boolean, fraiche: boolean, apresDemo?: boolean) => void; essaisMax?: number;
+  /** l'élève passe la question (absent : pas de bouton « Passer », ex. la question jumelle d'une reprise) ; `fraiche` :
+   *  à l'instant (false : passage retrouvé en mémoire) */
+  onPasser?: (cle: string, fraiche?: boolean) => void;
 } & OutilsQuestions) {
-  // Une question à la fois, en carrousel (user rule, 8 novembre 2026) : l'élève répond, lit ou écoute
-  // l'explication, puis passe à la suivante avec « Suivant → » (ou la question passe seule après l'explication).
+  // Une question à la fois, en carrousel (user rule, 8 novembre 2026) : l'élève répond, écoute la réaction, puis
+  // passe à la suivante avec « Suite → » — jamais toute seule (11 novembre 2026, le rythme est celui de l'élève).
   // Toutes les questions restent montées : leur état ne se perd pas en changeant de page.
-  const [index, setIndex] = useState(0);
   const [finiesIci, setFiniesIci] = useState<Record<string, boolean>>({});
-  const surFinieLocale = useCallback((cle: string, correct: boolean, fraiche: boolean, apresDemo = false) => {
+  const [passeesIci, setPasseesIci] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(questions.map(q => [q.cle, !!lireEtatQuestion(`reponse:${diapo.memoire || ''}:${q.cle}`).passee])));
+  const surFinieLocale = useCallback((cle: string, correct: boolean, fraiche: boolean, apresDemo?: boolean) => {
     setFiniesIci(f => ({ ...f, [cle]: true }));
-    onFinie?.(cle, correct, fraiche);
-    // Question finie à l'instant : on laisse le temps d'entendre la réaction (après une démonstration, elle est déjà
-    // dite), puis on passe à la suivante non répondue — seulement si l'élève est resté sur cette question.
-    if (fraiche) window.setTimeout(() => setIndex(i => {
-      if (questions[i]?.cle !== cle) return i;
-      const k = questions.findIndex((q, j) => j > i && !finiesIciRef.current[q.cle]);
-      return k >= 0 ? k : i;
-    }), apresDemo ? 1200 : 4500);
-  }, [onFinie, questions]);
-  const finiesIciRef = useRef(finiesIci);
-  finiesIciRef.current = finiesIci;
+    setPasseesIci(f => ({ ...f, [cle]: false }));
+    onFinie?.(cle, correct, fraiche, apresDemo);
+  }, [onFinie]);
+  // une question passée retrouvée (page rechargée) compte comme passée pour « Suite → »
+  useEffect(() => { Object.entries(passeesIci).forEach(([cle, p]) => { if (p) onPasser?.(cle, false); }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const surPasseeLocale = useCallback((cle: string) => {
+    setPasseesIci(f => ({ ...f, [cle]: true }));
+    onPasser?.(cle, true);
+  }, [onPasser]);
   const n = questions.length;
   const courante = Math.min(index, Math.max(0, n - 1));
+
   return (
     <div className="flex min-h-0 flex-1 flex-col p-3" style={{ fontFamily: CRAIE }}>
       <div className="min-h-0 flex-1">
         {questions.map((q, i) => (
           <div key={q.cle} className={`question-apparait h-full min-h-0 ${i === courante ? '' : 'hidden'}`}>
             <UneQuestion q={q} diapo={diapo} dire={dire} jouer={jouer} preparees={reponses?.[q.cle]} onReponse={onReponse} onFinie={surFinieLocale} essaisMax={essaisMax}
-              actif={i === courante} contexte={contexte} lireDemo={lireDemo} preparerDemo={preparerDemo} attendreVoix={attendreVoix} />
+              actif={i === courante} onPasser={onPasser ? surPasseeLocale : undefined} {...outils} />
           </div>
         ))}
       </div>
       {n > 1 && (
         <div className="mt-3 flex shrink-0 items-center justify-between">
-          <button onClick={() => setIndex(i => Math.max(0, i - 1))} disabled={courante === 0}
-            className="rounded-full bg-white/10 px-4 py-2 text-sm hover:bg-white/20 disabled:opacity-30">← Précédent</button>
+          <button onClick={() => onIndex(Math.max(0, courante - 1))} disabled={courante === 0} aria-label="Question précédente"
+            className="rounded-full bg-white/10 px-4 py-2 text-sm hover:bg-white/20 disabled:opacity-30">←</button>
           <div className="flex items-center gap-2">
             {questions.map((q, i) => (
-              <button key={q.cle} onClick={() => setIndex(i)} aria-label={`Question ${i + 1}`}
-                className={`h-3 w-3 rounded-full transition-colors ${i === courante ? 'bg-amber-200' : finiesIci[q.cle] ? 'bg-emerald-400/70' : 'bg-white/25 hover:bg-white/50'}`} />
+              <button key={q.cle} onClick={() => onIndex(i)} aria-label={`Question ${i + 1}`}
+                title={passeesIci[q.cle] && !finiesIci[q.cle] ? 'Question passée : tu peux y revenir' : undefined}
+                className={`h-3 w-3 rounded-full transition-colors ${i === courante ? 'bg-amber-200' : finiesIci[q.cle] ? 'bg-emerald-400/70' : passeesIci[q.cle] ? 'border border-white/60 bg-transparent hover:bg-white/30' : 'bg-white/25 hover:bg-white/50'}`} />
             ))}
             <span className="ml-2 text-sm text-white/60">{courante + 1} / {n}</span>
           </div>
-          <button onClick={() => setIndex(i => Math.min(n - 1, i + 1))} disabled={courante === n - 1}
-            className="rounded-full bg-white/10 px-4 py-2 text-sm hover:bg-white/20 disabled:opacity-30">Suivant →</button>
+          <button onClick={() => onIndex(Math.min(n - 1, courante + 1))} disabled={courante === n - 1} aria-label="Question suivante"
+            className="rounded-full bg-white/10 px-4 py-2 text-sm hover:bg-white/20 disabled:opacity-30">→</button>
         </div>
       )}
     </div>
   );
 }
 
-function UneQuestion({ q, diapo, dire, jouer, preparees, compact = false, onReponse, onFinie, essaisMax = 2, actif = true, contexte, lireDemo, preparerDemo, attendreVoix }: {
+function UneQuestion({ q, diapo, dire, jouer, preparees, compact = false, onReponse, onFinie, essaisMax = 2, actif = true, contexte, lireDemo, preparerDemo, attendreVoix,
+  lireEnonce, arreterEnonce, slideId, onPasser }: {
   q: QuestionDiapo; diapo: { title: string; speech: string; memoire?: string }; dire: (texte: string) => Promise<boolean>;
   jouer: (url: string) => void; preparees?: Record<string, Partial<Record<'juste' | '1' | '2', ReactionPreparee>>>;
   compact?: boolean; onReponse?: (r: ReponseNotee) => void;
@@ -1651,26 +2010,57 @@ function UneQuestion({ q, diapo, dire, jouer, preparees, compact = false, onRepo
   essaisMax?: number;
   /** La question est celle que le carrousel montre : la quitter pendant la démonstration la passe. */
   actif?: boolean;
+  /** « Passer » (discret) : la question est notée passée ; l'élève peut y revenir. */
+  onPasser?: (cle: string) => void;
 } & OutilsQuestions) {
   const grand = compact ? 'text-sm' : 'text-lg', titre = compact ? 'text-base' : 'text-xl';
   // Une réponse donnée reste donnée : l'état de la question est gardé (par élève, cours, diapositive et question),
   // et retrouvé si l'élève ferme le tableau, revient sur la diapositive ou recharge la page. Il ne peut pas
   // recommencer pour « effacer » sa réponse : c'est elle qui compte pour le suivi des acquis.
   const memoire = `reponse:${diapo.memoire || ''}:${q.cle}`;
-  const sauve = useMemo<Partial<{ tentative: number; exclus: number[]; pris: number | null; retour: { correct: boolean | null; ecrit: string } | null }>>(() => {
-    try { return JSON.parse(localStorage.getItem(memoire) || '{}'); } catch { return {}; }
-  }, [memoire]);
+  const sauve = useMemo(() => lireEtatQuestion(memoire), [memoire]);
   const [tentative, setTentative] = useState(sauve.tentative ?? 1);
   const [exclus, setExclus] = useState<number[]>(sauve.exclus ?? []);
   const [pris, setPris] = useState<number | null>(sauve.pris ?? null);
   const [attente, setAttente] = useState(false);
   const [retour, setRetour] = useState<{ correct: boolean | null; ecrit: string } | null>(sauve.retour ?? null);
-  const finie = retour?.correct === true || (retour?.correct === false && tentative > essaisMax) || (q.type === 'directe' && retour?.correct !== null && retour !== null);
+  const [passee, setPassee] = useState(!!sauve.passee && !sauve.retour);
+  const finie = estTerminee(q.type, { retour, tentative }, essaisMax);
+  // Le tuteur lit l'énoncé quand la question s'ouvre (une fois ; « 🔊 » pour réécouter) ; il se tait si elle se ferme.
+  const enonceLu = useRef(false);
+  useEffect(() => {
+    if (!actif || !lireEnonce || enonceLu.current || finie || passee || sauve.retour || (sauve.exclus?.length ?? 0) > 0) return;
+    // marqué lu au départ de la voix (le double montage du mode strict annule le premier délai)
+    const id = window.setTimeout(() => { enonceLu.current = true; lireEnonce(q); }, 350);   // le tableau finit de descendre
+    return () => window.clearTimeout(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- une lecture à l'ouverture de la question
+  }, [actif]);
+  useEffect(() => { if (!actif) arreterEnonce?.(); }, [actif, arreterEnonce]);
+  useEffect(() => () => arreterEnonce?.(), [arreterEnonce]);
+  const passer = () => {
+    if (attente || finie) return;
+    arreterEnonce?.();
+    setPassee(true);
+    try { localStorage.setItem(memoire, JSON.stringify({ ...lireEtatQuestion(memoire), tentative, exclus, pris, passee: true })); } catch { /* sans mémoire locale */ }
+    onReponse?.({ cle: q.cle, type: q.type, enonce: q.enonce, reponse: '', tentative, correct: null, preparee: false, passee: true });
+    onPasser?.(q.cle);
+  };
+  // Le temps de réflexion (11 novembre 2026) : l'énoncé seul d'abord, les choix après 10 s (6 s pour un vrai/faux),
+  // ou tout de suite sur « Je suis prêt ». Pas pour une question déjà commencée (état retrouvé).
+  const dureeReflexion = q.type === 'vrai_faux' ? REFLEXION_VRAI_FAUX_MS : REFLEXION_MS;
+  const [choixVisibles, setChoixVisibles] = useState(() => !q.choix || !!sauve.retour || (sauve.exclus?.length ?? 0) > 0);
+  useEffect(() => {
+    if (choixVisibles || !actif) return;   // le compte ne court que sur la question montrée
+    const id = window.setTimeout(() => setChoixVisibles(true), dureeReflexion);
+    return () => window.clearTimeout(id);
+  }, [choixVisibles, actif, dureeReflexion]);
   const vientDeFinir = useRef(false);
   const finieSignalee = useRef(false);
   // La démonstration manuscrite (10 novembre 2026) : après la réaction dite, juste ou faux, puis la suite du carrousel.
   const avecDemo = !!q.demonstration?.lignes?.length && !!lireDemo;
-  const [demo, setDemo] = useState<'aucune' | 'attente' | 'ecrit' | 'finie'>('aucune');
+  // 'dite' : la voix a fini, le tableau de la démonstration reste ouvert jusqu'à ce que l'élève le ferme (12 novembre 2026)
+  const [demo, setDemo] = useState<'aucune' | 'attente' | 'ecrit' | 'dite' | 'finie'>('aucune');
+  const [revoir, setRevoir] = useState(false);
   const lecture = useRef<LectureDemo | null>(null);
   const [lectureVue, setLectureVue] = useState<LectureDemo | null>(null);
   /** La voix de la réaction : la démonstration attend qu'elle soit partie, puis dite jusqu'au bout. */
@@ -1686,7 +2076,7 @@ function UneQuestion({ q, diapo, dire, jouer, preparees, compact = false, onRepo
     const l = lireDemo!(q.demonstration!, prete);
     lecture.current = l; setLectureVue(l); setDemo('ecrit');
     await l.fin;
-    if (lecture.current === l) { lecture.current = null; setDemo('finie'); }
+    if (lecture.current === l) { lecture.current = null; setDemo(x => (x === 'ecrit' ? 'dite' : x)); }
   }, [attendreVoix, lireDemo, preparerDemo, q.demonstration]);
   const passerDemo = useCallback(() => {
     demoAnnulee.current = true;
@@ -1700,24 +2090,28 @@ function UneQuestion({ q, diapo, dire, jouer, preparees, compact = false, onRepo
     onFinie?.(q.cle, retour?.correct === true, vientDeFinir.current, avecDemo && vientDeFinir.current);
   }, [finie, attente, onFinie, q.cle, retour, avecDemo, demo, lancerDemo]);
   // L'élève passe à une autre question pendant la démonstration (« Suivant → », un point) : elle est passée.
-  useEffect(() => { if (!actif && (demo === 'attente' || demo === 'ecrit')) passerDemo(); }, [actif, demo, passerDemo]);
+  useEffect(() => { if (!actif && (demo === 'attente' || demo === 'ecrit' || demo === 'dite')) passerDemo(); }, [actif, demo, passerDemo]);
+  /** Le tableau de la démonstration fermé (à la main ou après son délai) : la question est finie, le cours passe à la suite. */
+  const fermerDemo = useCallback(() => { passerDemo(); }, [passerDemo]);
   // Le tableau se ferme pendant la démonstration : la voix s'arrête, la question compte comme finie.
   const finRef = useRef({ onFinie, cle: q.cle, correct: retour?.correct === true });
   finRef.current = { onFinie, cle: q.cle, correct: retour?.correct === true };
   const demoRef = useRef(demo);
   demoRef.current = demo;
   useEffect(() => () => {
-    if (demoRef.current !== 'attente' && demoRef.current !== 'ecrit') return;
+    if (demoRef.current !== 'attente' && demoRef.current !== 'ecrit' && demoRef.current !== 'dite') return;
     lecture.current?.arreter(); lecture.current = null; demoAnnulee.current = true;
     if (!finieSignalee.current && vientDeFinir.current) { finieSignalee.current = true; finRef.current.onFinie?.(finRef.current.cle, finRef.current.correct, true, true); }
   }, []);
   useEffect(() => {
     if (!retour || attente) return;
-    try { localStorage.setItem(memoire, JSON.stringify({ tentative, exclus, pris, retour })); } catch { /* sans mémoire locale, la réponse reste au moins sur le serveur */ }
+    try { localStorage.setItem(memoire, JSON.stringify({ tentative, exclus, pris, retour, passee: false })); } catch { /* sans mémoire locale, la réponse reste au moins sur le serveur */ }
   }, [memoire, tentative, exclus, pris, retour, attente]);
 
   const envoyer = async (reponse: string, indice: number | null) => {
     if (attente || finie) return;
+    arreterEnonce?.();
+    setPassee(false);
     vientDeFinir.current = true;
     const verdict = indice !== null && q.bonne !== undefined ? indice === q.bonne : null;
     // La réaction préparée pour cette réponse : tout de suite, avec sa voix.
@@ -1753,9 +2147,26 @@ function UneQuestion({ q, diapo, dire, jouer, preparees, compact = false, onRepo
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto rounded-xl border border-white/15 p-4">
-      <p className={`${titre} text-amber-100`}><Formule t={q.enonce} /></p>
-      {q.choix && (
-        <div className={q.type === 'vrai_faux' ? 'mt-2 flex gap-2' : `mt-2 ${compact ? 'space-y-1' : 'space-y-2'}`}>
+      <div className="flex items-start gap-2">
+        <p className={`${titre} min-w-0 flex-1 text-amber-100`}><Formule t={q.enonce} /></p>
+        {lireEnonce && !finie && (
+          <button type="button" onClick={() => lireEnonce(q)} title="Réécouter l’énoncé" aria-label="Réécouter l’énoncé"
+            className="shrink-0 rounded-full bg-white/10 px-2.5 py-1 text-sm text-white/70 hover:bg-white/20" style={{ fontFamily: 'system-ui, sans-serif' }}>🔊</button>
+        )}
+      </div>
+      {passee && !finie && <p className="mt-1 text-sm text-white/50" style={{ fontFamily: 'system-ui, sans-serif' }}>⏭ Passée — tu peux y répondre quand tu veux.</p>}
+      {q.choix && !choixVisibles && (
+        <div className="mt-5 flex flex-col items-start gap-3">
+          <p className={`${grand} text-white/75`}>🤔 Réfléchis d’abord…</p>
+          <div className="h-1.5 w-56 overflow-hidden rounded-full bg-white/10">
+            <div key={actif ? 'court' : 'attend'} className="reflexion-barre h-full rounded-full bg-amber-200/70"
+              style={{ animationDuration: `${dureeReflexion}ms`, animationPlayState: actif ? 'running' : 'paused' }} />
+          </div>
+          <button onClick={() => setChoixVisibles(true)} className="text-sm text-white/45 underline-offset-4 hover:text-white hover:underline">Je suis prêt</button>
+        </div>
+      )}
+      {q.choix && choixVisibles && (
+        <div className={`question-apparait ${q.type === 'vrai_faux' ? 'mt-2 flex gap-2' : `mt-2 ${compact ? 'space-y-1' : 'space-y-2'}`}`}>
           {q.choix.map((c, i) => {
             const bonneMontree = finie && (q.bonne === i || (retour?.correct && pris === i));
             const fausse = exclus.includes(i);
@@ -1771,7 +2182,8 @@ function UneQuestion({ q, diapo, dire, jouer, preparees, compact = false, onRepo
       )}
       {q.type === 'directe' && (
         // Réponse libre : écrite, dite au micro ou photographiée, avec le clavier scientifique ; relue avant l'envoi.
-        <ChampReponse onEnvoyer={t => void envoyer(t, null)} disabled={attente || finie} contexte={{ ...contexte, enonce: q.enonce }} />
+        <ChampReponse onEnvoyer={t => void envoyer(t, null)} disabled={attente || finie} contexte={{ ...contexte, enonce: q.enonce }}
+          clavierAuto actif={actif} suggestions={{ deck_id: contexte?.deck_id, slide_id: slideId, cle: q.cle, enonce: q.enonce, clavier: q.lu?.clavier }} />
       )}
       {attente && <p className="mt-2 text-sm text-white/60 animate-pulse">Le professeur regarde ta réponse…</p>}
       {retour && !attente && retour.ecrit && (
@@ -1779,58 +2191,22 @@ function UneQuestion({ q, diapo, dire, jouer, preparees, compact = false, onRepo
           {retour.correct === true ? '✔ ' : retour.correct === false ? (finie ? '✘ ' : '↻ ') : '? '}<Formule t={retour.ecrit} />
         </p>
       )}
-      {q.demonstration?.lignes?.length && finie ? (
-        demo === 'ecrit' || demo === 'attente' ? (
-          <TableauDemonstration d={q.demonstration} lecture={demo === 'ecrit' ? lectureVue : null} onPasser={passerDemo} />
-        ) : (demo === 'finie' || !vientDeFinir.current) ? (
-          <TableauDemonstration d={q.demonstration} lecture={null} complet />
-        ) : null
+      {onPasser && !finie && !attente && !passee && (
+        // discret : on peut ne pas répondre ; la question est notée passée, sans marque rouge, et on peut y revenir
+        <button type="button" onClick={passer} className="mt-3 self-start text-sm text-white/40 underline-offset-4 hover:text-white/80 hover:underline"
+          style={{ fontFamily: 'system-ui, sans-serif' }}>Passer ⏭</button>
+      )}
+      {q.demonstration?.lignes?.length && finie && (demo === 'finie' || !vientDeFinir.current) && !revoir ? (
+        <button type="button" onClick={() => setRevoir(true)} className="mt-3 self-start rounded-full bg-white/10 px-4 py-1.5 text-sm hover:bg-white/20"
+          style={{ fontFamily: 'system-ui, sans-serif' }}>✍️ Revoir la démonstration</button>
       ) : null}
-    </div>
-  );
-}
-
-/**
- * La démonstration écrite à la main (10 novembre 2026) : chaque ligne s'écrit à la craie quand la voix atteint son
- * `mot` ; `complet` : déjà dite (question retrouvée, ou démonstration finie), toutes les lignes sont là.
- */
-function TableauDemonstration({ d, lecture, complet = false, onPasser }: { d: Demonstration; lecture: LectureDemo | null; complet?: boolean; onPasser?: () => void }) {
-  const positions = useMemo(() => {
-    const n = Math.max(1, d.parole.length);
-    return d.lignes.map((l, i) => {
-      const k = l.mot ? d.parole.indexOf(l.mot) : -1;
-      return k >= 0 ? k : (i / Math.max(1, d.lignes.length)) * n;   // un mot introuvable : lignes réparties sur la voix
-    });
-  }, [d]);
-  const [vuesLues, setVues] = useState(0);
-  const vues = complet ? d.lignes.length : lecture ? vuesLues : 0;
-  useEffect(() => {
-    if (complet || !lecture) return;
-    let frame = 0;
-    const suivre = () => {
-      const pos = lecture.position();
-      setVues(positions.filter(x => pos >= x - 2).length);
-      frame = requestAnimationFrame(suivre);
-    };
-    frame = requestAnimationFrame(suivre);
-    return () => cancelAnimationFrame(frame);
-  }, [lecture, positions, complet]);
-  return (
-    <div className="question-apparait mt-3 rounded-xl border border-amber-200/25 bg-black/20 px-4 py-3" style={{ fontFamily: CRAIE }}>
-      <div className="flex items-center justify-between gap-2">
-        <div className="text-sm text-emerald-200/90">✍️ La démonstration</div>
-        {!complet && onPasser && (
-          <button onClick={onPasser} className="rounded-full bg-white/10 px-4 py-1.5 text-sm hover:bg-white/20" style={{ fontFamily: 'system-ui, sans-serif' }}>Suivant →</button>
-        )}
-      </div>
-      {!complet && !lecture && <p className="mt-1 text-sm text-white/45 animate-pulse">Le professeur prend la craie…</p>}
-      <div className="mt-1 flex flex-col gap-1">
-        {d.lignes.slice(0, vues).map((l, i) => (
-          <p key={i} className={complet ? '' : 'craie-ecrit'} dir="auto" style={{ fontSize: 24, lineHeight: 1.35, color: /[=→⇒]/.test(l.texte) ? '#fef9c3' : '#f1f5e9' }}>
-            <Formule t={l.texte} />
-          </p>
-        ))}
-      </div>
+      {/* La démonstration sur un tableau à part, par-dessus le tableau de la question (12 novembre 2026). */}
+      {q.demonstration?.lignes?.length && finie && (demo === 'attente' || demo === 'ecrit' || demo === 'dite') ? (
+        <DemonstrationPleine d={q.demonstration} lecture={demo === 'attente' ? null : lectureVue} complet={false} enonce={q.enonce} onFermer={fermerDemo} />
+      ) : null}
+      {q.demonstration?.lignes?.length && revoir ? (
+        <DemonstrationPleine d={q.demonstration} lecture={null} complet enonce={q.enonce} onFermer={() => setRevoir(false)} />
+      ) : null}
     </div>
   );
 }
@@ -1848,7 +2224,7 @@ function TableauDuProf({ t, plein = false, lignesRef, onTexte, onAutre, onContin
   const brosse = t.etape === 'brosse';
   const fond = '#0f2219';
   return (
-    <section className={`relative flex flex-col overflow-hidden rounded-2xl ${plein ? 'flex-1' : 'tableau-questions w-full max-w-4xl shrink-0'} ${brosse ? '' : 'border-2 border-amber-200/40 shadow-2xl'}`}
+    <section className={`relative flex flex-col overflow-hidden rounded-2xl ${plein ? (brosse ? 'flex-1' : 'tableau-questions flex-1') : 'tableau-questions w-full max-w-4xl shrink-0'} ${brosse ? '' : 'border-2 border-amber-200/40 shadow-2xl'}`}
       style={{ fontFamily: CRAIE, background: brosse ? 'transparent' : fond, maxHeight: plein ? undefined : '42%', minHeight: plein ? undefined : 120 }}>
       {brosse && (
         <>
@@ -1880,11 +2256,14 @@ function TableauDuProf({ t, plein = false, lignesRef, onTexte, onAutre, onContin
               <button onClick={onContinuer} className="rounded-full bg-emerald-500/30 px-3 py-1 hover:bg-emerald-500/40">Continuer le cours</button>
             </div>
           </div>
-          <div className={`flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-6 py-4 ${plein && !enExercice ? 'justify-center' : ''}`}>
+          {/* Tout le tableau dans l'écran, sans défiler (user rule, 12 novembre 2026) : l'écriture prend la taille qui
+              tient avec TOUTES ses lignes (les lignes pas encore écrites gardent leur place, invisibles : rien ne saute). */}
+          <SansDefilement className="px-6 py-4" centrer={plein && !enExercice} agrandirMax={enExercice ? 1 : 1.6}>
+           <div className="flex flex-col gap-2">
             {t.etape === 'prepare' && <p className="animate-pulse text-xl text-white/60">Le professeur prépare le tableau…</p>}
-            {t.lignes.slice(0, t.vues).map((l, i) => (
-              <p key={i} ref={el => { lignesRef.current[i] = el; }} className="craie-ecrit" dir="auto"
-                style={{ fontSize: enExercice ? 18 : plein ? 30 : 24, color: /[=→]/.test(l) ? '#fef9c3' : '#f1f5e9', lineHeight: 1.35, opacity: enExercice ? .7 : 1 }}>
+            {t.lignes.map((l, i) => (
+              <p key={i} ref={el => { lignesRef.current[i] = el; }} className={i < t.vues ? 'craie-ecrit' : ''} dir="auto" aria-hidden={i >= t.vues || undefined}
+                style={{ fontSize: enExercice ? 18 : 26, color: /[=→]/.test(l) ? '#fef9c3' : '#f1f5e9', lineHeight: 1.35, opacity: enExercice ? .7 : 1, visibility: i < t.vues ? 'visible' : 'hidden' }}>
                 <Formule t={l} />
               </p>
             ))}
@@ -1897,7 +2276,8 @@ function TableauDuProf({ t, plein = false, lignesRef, onTexte, onAutre, onContin
                 {t.parole && <p dir="auto" className="mt-2 whitespace-pre-wrap text-white/60">{t.parole}</p>}
               </div>
             )}
-          </div>
+           </div>
+          </SansDefilement>
         </>
       )}
     </section>
@@ -2076,7 +2456,8 @@ function QuestionSurResultat({ reaction, vu, onRepondre, contexte }: {
             );
           })}
           {q.type === 'directe' && (
-            <ChampReponse onEnvoyer={t => onRepondre({ directe: t })} disabled={!pret || !!verdict} contexte={{ ...contexte, enonce: q.enonce }} />
+            <ChampReponse onEnvoyer={t => onRepondre({ directe: t })} disabled={!pret || !!verdict} contexte={{ ...contexte, enonce: q.enonce }} clavierAuto
+              suggestions={{ deck_id: contexte?.deck_id, enonce: q.enonce }} />
           )}
           {verdict && q.type !== 'qcm' && verdict.ecrit && (
             <p className={`text-base ${verdict.correct ? 'text-emerald-200' : 'text-rose-200'}`}>{verdict.ecrit === '…' ? <span className="animate-pulse">Le professeur regarde ta réponse…</span> : <>{verdict.correct ? '✔ ' : '✘ '}<Formule t={verdict.ecrit} /></>}</p>
@@ -2099,12 +2480,17 @@ function BoutonResultat({ onClick, className = '' }: { onClick: () => void; clas
   );
 }
 
+/** Le texte d'un bouton de la barre : l'icône toujours, le mot sur grand écran (et au survol, `title`). */
+function Libelle({ icone, texte }: { icone: string; texte: string }) {
+  return <span title={texte} aria-label={texte}>{icone}<span className="hidden 2xl:inline"> {texte}</span></span>;
+}
+
 function Bulle({ children, actif, pulse, disabled, onClick }: { children: ReactNode; actif?: boolean; pulse?: boolean; disabled?: boolean; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`h-10 rounded-full px-4 text-sm transition-colors disabled:opacity-30 ${actif ? 'bg-amber-200 text-black' : 'bg-white/10 hover:bg-white/20'} ${pulse ? 'animate-pulse ring-2 ring-amber-200/60' : ''}`}
+      className={`h-9 shrink-0 whitespace-nowrap rounded-full px-3 text-sm transition-colors disabled:opacity-30 ${actif ? 'bg-amber-200 text-black' : 'bg-white/10 hover:bg-white/20'} ${pulse ? 'animate-pulse ring-2 ring-amber-200/60' : ''}`}
     >
       {children}
     </button>

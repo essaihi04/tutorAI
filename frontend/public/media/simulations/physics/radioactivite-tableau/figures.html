@@ -1,0 +1,856 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Figures à la craie — décroissance radioactive</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="radio.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Une figure du cours sur la décroissance radioactive, écrite à la craie pas à pas"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script src="noyaux.js"></script>
+<script>
+/*
+ * Figures fixes du cours « Décroissance radioactive » (phys_ch4_radioactivite, 11 novembre 2026), écrites à la craie pas à pas,
+ * comme un professeur au tableau : ?fig=fig_soddy_systeme | fig_rappel_exp_ln | fig_equation_diff | fig_demo_t_demi | fig_unites |
+ * fig_masse_N | fig_activite_demo | fig_datation_demo | fig_pourcentages | fig_rapport_fils_pere | fig_cas_types | fig_enonce_2021 |
+ * fig_enonce_2025 | fig_enonce_2022. Même architecture que ondes-lumineuses-tableau/figures.html.
+ * Chaque figure : des étapes nommées (les moments), puis `fin`. Le tuteur fige l’écriture sur une étape (`play_until {moment}`)
+ * et montre chaque élément (`highlight {target}`) : le repère `figure`, et un repère par étape (même nom que l’étape).
+ * Les noyaux s’écrivent avec noyaux.js (A en haut, Z en bas). Ce qui est réel (noyaux, particules, γ, fiole, bois, pile) est peint
+ * (règle 7) ; une grappe peinte est stylisée (moins de sphères que de nucléons) : la physique est dans la craie, jamais dans le peint.
+ * Les énoncés d’examen sont des paraphrases courtes, données exactes (nationaux 2012 N, 2020 R, 2021 N, 2022 N, 2023 N, 2025 N).
+ */
+const { bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const P = new URLSearchParams(location.search);
+const FIGS = {
+  fig_soddy_systeme: { titre: 'Combien de désintégrations α et β⁻ ? (national 2012 N)', etapes: ['equation', 'systeme', 'y', 'x', 'conclusion', 'fin'] },
+  fig_rappel_exp_ln: { titre: 'Rappel de maths : e et ln', etapes: ['exp', 'decroit', 'ln', 'ln_demi', 'valeur', 'fin'] },
+  fig_equation_diff: { titre: 'L’équation différentielle de la décroissance', etapes: ['pendant', 'relation', 'equation', 'solution', 'verification', 'fin'] },
+  fig_demo_t_demi: { titre: 'Démontrer t½ = ln2/λ', etapes: ['loi', 'condition', 'egalite', 'ln', 'resultat', 'fin'] },
+  fig_unites: { titre: 'λ et t½ : la même unité de temps', etapes: ['trace', 'conversion', 'bq', 'fin'] },
+  fig_masse_N: { titre: 'De la masse au nombre de noyaux', etapes: ['quantite', 'nombre', 'exemple', 'piege', 'fin'] },
+  fig_activite_demo: { titre: 'L’activité : a = λ·N', etapes: ['definition', 'derivee', 'resultat', 'fin'] },
+  fig_datation_demo: { titre: 'Dater : t = (1/λ)·ln(a₀/a)', etapes: ['loi', 'rapport', 'ln', 'resultat', 'fin'] },
+  fig_pourcentages: { titre: '« restants » ↔ « désintégrés »', etapes: ['trace', 'trente', 'quatre_vingt_dix', 'deux_t_demi', 'fin'] },
+  fig_rapport_fils_pere: { titre: 'Le rapport fils / père (national 2020 R)', etapes: ['pere', 'fils', 'rapport', 'fin'] },
+  fig_cas_types: { titre: 'Le mot de la question → la méthode', etapes: ['trace', 'composition', 'equation', 'type', 'famille', 't_demi', 'lambda', 'nombre', 'date', 'pourcentage', 'fin'] },
+  fig_enonce_2021: { titre: 'Énoncé type national 2021 N : la pile au plutonium 238', etapes: ['trace', 'donnees', 'fin'] },
+  fig_enonce_2025: { titre: 'Énoncé type national 2025 N : le cadmium 107', etapes: ['trace', 'donnees', 'fin'] },
+  fig_enonce_2022: { titre: 'Énoncé type national 2022 N : l’iode 131', etapes: ['trace', 'donnees', 'fin'] },
+};
+let fig = FIGS[P.get('fig')] ? P.get('fig') : 'fig_soddy_systeme';
+const VITESSE = 1.6;                              // l’écriture va un peu plus vite que la craie du kit
+const S = { tw: 0, running: true, pause: false, fait: false, jusqua: null, motif: '', emis: 0 };
+let M = {};                                       // étape → instant d’écriture (s), relevé pendant le dessin
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+const craie = scene.craie;
+/* Même cadre que commun.js, mais l’écriture suit l’horloge de la figure (S.tw) : le tuteur peut la figer sur une étape. */
+scene.cadre = function (graine) {
+  const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  craie.debut(graine, S.tw);
+  const s = Math.min(W / VW, H / VH);
+  scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
+  craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
+  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+  return craie;
+};
+let MM = {};
+const marque = (c, nom) => { MM[nom] = c.cur; };
+/* Une partie peinte (noyau, particule, fiole, bois) apparaît quand l’écriture arrive à elle, d’un coup. */
+const peindre = (c, fn) => { if (c.t >= c.cur) c.direct(() => { c.ctx.save(); try { fn(c.ctx); } finally { c.ctx.restore(); } }); };
+const vu = nom => M[nom] !== undefined && S.tw >= M[nom] - 1e-6;
+
+// ───────────────────────── Le rendu « réel » (peint, pour l’œil ; la physique reste à la craie) ─────────────────────────
+const rgba = (k, a) => `rgba(${k[0]},${k[1]},${k[2]},${a})`;
+const PROTON = [228, 96, 54], NEUTRON = [172, 194, 216], ELECTRON = [59, 130, 246], POSITON = [246, 162, 44], FILS = [86, 186, 166];
+/** Petite sphère ombrée : dégradé radial, reflet en haut à gauche, bord sombre. */
+function sphere(ctx, x, y, r, k) {
+  const g = ctx.createRadialGradient(x - r * .38, y - r * .42, r * .08, x, y, r);
+  g.addColorStop(0, 'rgba(255,255,255,.95)'); g.addColorStop(.3, rgba(k, 1)); g.addColorStop(1, rgba(k.map(v => Math.round(v * .3)), 1));
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
+}
+/** Noyau : grappe de nP protons et nN neutrons (spirale serrée, le centre peint en dernier, comme en relief). */
+function grappe(ctx, cx, cy, nP, nN, r, kP = PROTON, kN = NEUTRON) {
+  const n = nP + nN, pts = [];
+  for (let i = 0; i < n; i++) {
+    const rr = r * .95 * Math.sqrt(i + .4), a = i * 2.39996;
+    pts.push({ x: cx + rr * Math.cos(a), y: cy + rr * Math.sin(a), p: Math.floor((i + 1) * nP / n) > Math.floor(i * nP / n), d: rr });
+  }
+  ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.beginPath(); ctx.ellipse(cx + 2, cy + r * Math.sqrt(n) + 3, r * Math.sqrt(n), r * .9, 0, 0, 7); ctx.fill();
+  pts.sort((u, v) => v.d - u.d).forEach(q => sphere(ctx, q.x, q.y, r, q.p ? kP : kN));
+}
+const alpha = (ctx, x, y, r = 4.5) => grappe(ctx, x, y, 2, 2, r);
+/** Onde γ peinte : sinusoïde violette brillante avec son halo. */
+function ondeGamma(ctx, x1, y1, x2, y2, amp = 6, lam = 14) {
+  const L = Math.hypot(x2 - x1, y2 - y1), ux = (x2 - x1) / L, uy = (y2 - y1) / L;
+  const chemin = () => { ctx.beginPath(); for (let s = 0; s <= L; s += 2) { const w = amp * Math.sin(2 * Math.PI * s / lam), x = x1 + ux * s - uy * w, y = y1 + uy * s + ux * w; s ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } };
+  ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  for (const [lw, a] of [[9, .1], [4.5, .26], [2, .95]]) { ctx.strokeStyle = `rgba(186,116,255,${a})`; ctx.lineWidth = lw; chemin(); ctx.stroke(); }
+  ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = .8; chemin(); ctx.stroke();
+  ctx.globalCompositeOperation = 'source-over';
+}
+/** Petit éclair bref (un noyau qui se désintègre). */
+function eclair(ctx, x, y, r) {
+  ctx.globalCompositeOperation = 'lighter';
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, 'rgba(255,255,240,.95)'); g.addColorStop(.3, 'rgba(253,224,71,.6)'); g.addColorStop(1, 'rgba(253,224,71,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,250,210,.7)'; ctx.lineWidth = 1.2; ctx.beginPath();
+  for (let i = 0; i < 4; i++) { const a = i * Math.PI / 4; ctx.moveTo(x - r * Math.cos(a), y - r * Math.sin(a)); ctx.lineTo(x + r * Math.cos(a), y + r * Math.sin(a)); }
+  ctx.stroke(); ctx.globalCompositeOperation = 'source-over';
+}
+function arrondi(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+/** Fiole de verre (col, corps arrondi) avec un liquide teinté dans le bas. */
+function fiole(ctx, x, y, w, h, k) {
+  const col = w * .36, yc = y + h * .28;
+  const forme = () => { ctx.beginPath(); ctx.moveTo(x + (w - col) / 2, y); ctx.lineTo(x + (w - col) / 2, yc); ctx.lineTo(x, yc + h * .14); ctx.lineTo(x, y + h - 8);
+    ctx.quadraticCurveTo(x, y + h, x + 8, y + h); ctx.lineTo(x + w - 8, y + h); ctx.quadraticCurveTo(x + w, y + h, x + w, y + h - 8); ctx.lineTo(x + w, yc + h * .14);
+    ctx.lineTo(x + (w + col) / 2, yc); ctx.lineTo(x + (w + col) / 2, y); ctx.closePath(); };
+  ctx.save(); forme(); ctx.clip();
+  let g = ctx.createLinearGradient(0, y + h * .5, 0, y + h); g.addColorStop(0, rgba(k, .55)); g.addColorStop(1, rgba(k.map(v => Math.round(v * .5)), .75));
+  ctx.fillStyle = g; ctx.fillRect(x, y + h * .52, w, h * .5);
+  ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(x, y + h * .52); ctx.lineTo(x + w, y + h * .52); ctx.stroke();
+  ctx.restore();
+  forme(); g = ctx.createLinearGradient(x, 0, x + w, 0); g.addColorStop(0, 'rgba(200,230,250,.18)'); g.addColorStop(.5, 'rgba(200,230,250,.05)'); g.addColorStop(1, 'rgba(200,230,250,.14)');
+  ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = 'rgba(225,242,255,.6)'; ctx.lineWidth = 1.6; ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x + 6, yc + h * .2); ctx.lineTo(x + 6, y + h - 12); ctx.stroke();
+  ctx.fillStyle = '#9ca3af'; arrondi(ctx, x + (w - col) / 2 - 3, y - 7, col + 6, 9, 2); ctx.fill();
+}
+/** Bout de bois vu en coupe : écorce, cernes. */
+function bois(ctx, cx, cy, rx, ry) {
+  let g = ctx.createLinearGradient(cx - rx - 70, 0, cx, 0); g.addColorStop(0, '#3b2414'); g.addColorStop(1, '#6b4426');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(cx, cy - ry); ctx.lineTo(cx - 80, cy - ry + 4); ctx.ellipse(cx - 80, cy + 2, rx * .9, ry - 2, 0, -Math.PI / 2, Math.PI / 2, true); ctx.lineTo(cx, cy + ry); ctx.closePath(); ctx.fill();
+  g = ctx.createRadialGradient(cx - rx * .2, cy - ry * .2, 2, cx, cy, rx); g.addColorStop(0, '#e8c58f'); g.addColorStop(1, '#a87a46');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, 7); ctx.fill();
+  ctx.strokeStyle = 'rgba(110,70,35,.55)'; ctx.lineWidth = 1.2;
+  for (let k = 1; k <= 5; k++) { ctx.beginPath(); ctx.ellipse(cx + k * .6, cy, rx * k / 6, ry * k / 6, 0, 0, 7); ctx.stroke(); }
+  ctx.strokeStyle = '#3b2414'; ctx.lineWidth = 4; ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, 7); ctx.stroke();
+}
+/** Stimulateur cardiaque : boîtier de titane arrondi, la pile visible par transparence, son fil. */
+function stimulateur(ctx, x, y, w, h) {
+  ctx.strokeStyle = 'rgba(203,213,225,.7)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x + w * .3, y + 4); ctx.bezierCurveTo(x + w * .2, y - 26, x - 14, y - 22, x - 10, y + 12); ctx.stroke();
+  arrondi(ctx, x, y, w, h, h * .38);
+  let g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#e5e7eb'); g.addColorStop(.45, '#9ca3af'); g.addColorStop(1, '#374151');
+  ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1.2; ctx.stroke();
+  g = ctx.createRadialGradient(x + w * .5, y + h * .55, 2, x + w * .5, y + h * .55, h * .4); g.addColorStop(0, 'rgba(253,224,71,.85)'); g.addColorStop(1, 'rgba(234,88,12,.35)');
+  ctx.fillStyle = g; arrondi(ctx, x + w * .25, y + h * .3, w * .5, h * .5, 5); ctx.fill();
+}
+/** Quadrillage léger d’un graphe (bleu pâle, comme du papier millimétré). */
+function quadrillage(ctx, X, Y, xmax, ymax, dx, dy) {
+  ctx.strokeStyle = 'rgba(96,165,250,.16)'; ctx.lineWidth = 1; ctx.beginPath();
+  for (let v = 0; v <= xmax + 1e-9; v += dx) { ctx.moveTo(X(v), Y(0)); ctx.lineTo(X(v), Y(ymax)); }
+  for (let v = 0; v <= ymax + 1e-9; v += dy) { ctx.moveTo(X(0), Y(v)); ctx.lineTo(X(xmax), Y(v)); }
+  ctx.stroke();
+}
+
+// ───────────────────────── Morceaux de craie ─────────────────────────
+const net = s => String(s).replace(/[_^{}]/g, '');
+const W = (c, s, t = 20) => c.largeurTexte(net(s), t);
+/** Une fraction écrite à la craie : numérateur, barre, dénominateur ; renvoie les positions (pour barrer). */
+function fraction(c, x, y, num, den, o = {}) {
+  const t = o.taille ?? 26, col = o.couleur ?? 'blanc';
+  const w = Math.max(W(c, num, t), W(c, den, t)) + 12;
+  c.texte(num, x, y - 7, { couleur: col, taille: t, align: 'center' });
+  c.ligne(x - w / 2, y, x + w / 2, y, { couleur: col, largeur: 2, duree: .12 });
+  c.texte(den, x, y + t * .9 + 2, { couleur: col, taille: t, align: 'center' });
+  return { w, wn: W(c, num, t), wd: W(c, den, t) };
+}
+/** Texte centré entouré d’un cadre de craie (le résultat à retenir). */
+function encadre(c, s, x, y, o = {}) {
+  const t = o.taille ?? 26, w = W(c, s, t) + 26;
+  c.texte(s, x, y, { couleur: o.couleur ?? 'vert', taille: t, align: 'center' });
+  c.rect(x - w / 2, y - t * .95, w, t * 1.42, { couleur: o.cadre ?? 'jaune', arrondi: 8, largeur: 2 });
+  return { x: x - w / 2, y: y - t * .95, w, h: t * 1.42 };
+}
+/** Axes d’un graphe, graduations, noms et unités. Renvoie les fonctions de passage X(v), Y(v). */
+function graphe(c, g) {
+  const X = v => g.ox + v / g.xmax * g.w, Y = v => g.oy - v / g.ymax * g.h;
+  peindre(c, ctx => quadrillage(ctx, X, Y, g.xmax, g.ymax, g.dx, g.dy));
+  c.fleche(g.ox, g.oy, g.ox + g.w + 16, g.oy, { couleur: 'blanc', largeur: 2 }).fleche(g.ox, g.oy, g.ox, g.oy - g.h - 16, { couleur: 'blanc', largeur: 2 });
+  for (const v of g.xt) { c.ligne(X(v), g.oy - 4, X(v), g.oy + 4, { couleur: 'blanc', largeur: 1.4, duree: .04 }); c.texte(String(v), X(v), g.oy + 18, { couleur: 'blanc', align: 'center', taille: 13, duree: .1 }); }
+  for (const v of g.yt) { c.ligne(g.ox - 4, Y(v), g.ox + 4, Y(v), { couleur: 'blanc', largeur: 1.4, duree: .04 }); c.texte(String(v).replace('.', ','), g.ox - 7, Y(v) + 5, { couleur: 'blanc', align: 'right', taille: 13, duree: .1 }); }
+  c.texte('0', g.ox - 7, g.oy + 15, { couleur: 'blanc', align: 'right', taille: 13 });
+  c.texte(g.yl, g.ox + 8, g.oy - g.h - 8, { couleur: 'jaune', taille: 15 });
+  c.texte(g.xl, g.ox + g.w + 16, g.oy - 30, { couleur: 'jaune', align: 'right', taille: 15 });
+  return { X, Y };
+}
+/** Le tableau des symboles d’un énoncé : une ligne Z, une ligne symbole. */
+function tableauZ(c, x, y, cases, o = {}) {
+  const cw = o.cw ?? 66, h = 28, n = cases.length;
+  c.rect(x, y, 70 + cw * n, 2 * h, { couleur: 'faible', arrondi: 4 });
+  c.ligne(x, y + h, x + 70 + cw * n, y + h, { couleur: 'faible', largeur: 1.4, duree: .1 });
+  for (let i = 0; i <= n - 1; i++) c.ligne(x + 70 + cw * i, y, x + 70 + cw * i, y + 2 * h, { couleur: 'faible', largeur: 1.2, duree: .06 });
+  c.texte('Z', x + 35, y + 20, { couleur: 'cyan', align: 'center', taille: 17 }).texte('symbole', x + 35, y + h + 20, { couleur: 'cyan', align: 'center', taille: 15 });
+  cases.forEach(([z, s], i) => { c.texte(String(z), x + 70 + cw * (i + .5), y + 20, { couleur: 'blanc', align: 'center', taille: 17 }); c.texte(s, x + 70 + cw * (i + .5), y + h + 20, { couleur: 'blanc', align: 'center', taille: 17 }); });
+  return { w: 70 + cw * n, h: 2 * h };
+}
+
+// ───────────────────────── Les figures ─────────────────────────
+const DESSINS = {
+  fig_soddy_systeme(c) {
+    c.texte('Combien de désintégrations α et β⁻ ? (national 2012 N)', 40, 30, { couleur: 'cyan', taille: 20, max: 690 });
+    c.repere('figure', 16, 40, 728, 376, 'la famille de l’uranium 238 : le système en x et y');
+    c.noyaux('[238,92]U → [206,82]Pb + x [0,-1]e + y [4,2]He', 380, 86, { taille: 30, align: 'center' });
+    c.texte('x et y : les nombres de désintégrations β⁻ et α', 380, 120, { couleur: 'faible', taille: 16, align: 'center' });
+    c.repere('equation', 110, 50, 540, 78, 'l’équation : x électrons et y noyaux d’hélium');
+    marque(c, 'equation');
+    c.pause(.4);
+    c.texte('Lois de Soddy :', 40, 166, { couleur: 'cyan', taille: 19 });
+    c.texte('A : 238 = 206 + 0·x + 4y', 56, 204, { couleur: 'blanc', taille: 23, max: 330 });
+    c.texte('Z : 92 = 82 − x + 2y', 56, 244, { couleur: 'blanc', taille: 23, max: 330 });
+    c.trait([[46, 184], [40, 190], [40, 214], [34, 220], [40, 226], [40, 248], [46, 254]], { couleur: 'rose', largeur: 2 });
+    c.repere('systeme', 28, 144, 360, 116, 'le système : 238 = 206 + 0·x + 4y ; 92 = 82 − x + 2y');
+    marque(c, 'systeme');
+    c.pause(.4);
+    c.texte('y = (238 − 206)/4 = 8', 420, 186, { couleur: 'vert', taille: 24, max: 320 });
+    c.texte('(A d’abord : β ne change pas A)', 420, 212, { couleur: 'orange', taille: 15, max: 320 });
+    c.repere('y', 412, 160, 330, 60, 'y = (238 − 206)/4 = 8');
+    marque(c, 'y');
+    c.pause(.4);
+    c.texte('x = 82 + 2y − 92', 420, 252, { couleur: 'vert', taille: 24, max: 320 });
+    c.texte('x = 82 + 16 − 92 = 6', 420, 282, { couleur: 'vert', taille: 24, max: 320 });
+    c.repere('x', 412, 228, 330, 64, 'x = 82 + 2y − 92 = 6');
+    marque(c, 'x');
+    c.pause(.4);
+    encadre(c, '8 désintégrations α et 6 désintégrations β⁻', 380, 330, { taille: 23, couleur: 'jaune', cadre: 'vert' });
+    peindre(c, ctx => {
+      for (let i = 0; i < 8; i++) alpha(ctx, 110 + 26 * i, 372, 4.2);
+      for (let i = 0; i < 6; i++) sphere(ctx, 470 + 26 * i, 372, 5.5, ELECTRON);
+    });
+    c.texte('8 α', 52, 378, { couleur: 'blanc', taille: 17 }).texte('6 e⁻', 410, 378, { couleur: 'blanc', taille: 17 });
+    c.repere('conclusion', 90, 300, 580, 108, '8 désintégrations α et 6 désintégrations β⁻');
+    marque(c, 'conclusion');
+    c.pause(.3);
+    c.texte('Bilan :', 230, 410, { couleur: 'vert', taille: 18 });
+    c.noyaux('[238,92]U → [206,82]Pb + 6 [0,-1]e + 8 [4,2]He', 300, 410, { taille: 20, couleur: 'vert' });
+    c.repere('fin', 220, 388, 420, 30, 'l’équation bilan');
+    marque(c, 'fin');
+  },
+
+  fig_rappel_exp_ln(c) {
+    c.texte('Rappel de maths : e et ln', 40, 30, { couleur: 'cyan', taille: 20 });
+    c.repere('figure', 16, 40, 728, 376, 'les quatre règles sur e et ln');
+    c.texte('e⁰ = 1', 40, 86, { couleur: 'blanc', taille: 28 });
+    c.texte('(à t = 0 : N = N_0·e⁰ = N_0)', 150, 86, { couleur: 'faible', taille: 17, max: 260 });
+    c.repere('exp', 32, 56, 400, 42, 'e⁰ = 1');
+    marque(c, 'exp');
+    c.pause(.4);
+    const g = graphe(c, { ox: 500, oy: 210, w: 210, h: 130, xmax: 4, ymax: 1, dx: .5, dy: .25, xt: [1, 2, 3, 4], yt: [1], xl: 'x', yl: 'e^{−x}' });
+    c.courbe(u => [g.X(4 * u), g.Y(Math.exp(-4 * u))], 50, { couleur: 'cyan', largeur: 2.4 });
+    c.texte('e^{−x} décroît : de 1 (x = 0) vers 0', 40, 146, { couleur: 'blanc', taille: 22, max: 400 });
+    c.repere('decroit', 32, 118, 700, 112, 'e^(−x) décroît de 1 vers 0');
+    marque(c, 'decroit');
+    c.pause(.4);
+    c.texte('ln(e^{x}) = x', 40, 206, { couleur: 'blanc', taille: 28 });
+    c.texte('« ln enlève e »', 220, 206, { couleur: 'rose', taille: 21 });
+    c.repere('ln', 32, 176, 400, 42, 'ln(e^x) = x : « ln enlève e »');
+    marque(c, 'ln');
+    c.pause(.4);
+    c.texte('ln(1/2) = −ln2', 40, 274, { couleur: 'blanc', taille: 28 });
+    c.texte('car ln(1/x) = −ln x', 270, 274, { couleur: 'faible', taille: 18, max: 200 });
+    c.repere('ln_demi', 32, 244, 450, 42, 'ln(1/2) = −ln2');
+    marque(c, 'ln_demi');
+    c.pause(.4);
+    encadre(c, 'ln2 ≈ 0,693', 140, 340, { taille: 28 });
+    c.repere('valeur', 40, 306, 200, 46, 'ln2 ≈ 0,693');
+    marque(c, 'valeur');
+    c.pause(.3);
+    c.texte('On s’en sert pour : t½ = ln2/λ  et  t = (1/λ)·ln(a_0/a)', 40, 400, { couleur: 'vert', taille: 20, max: 690 });
+    c.repere('fin', 32, 376, 700, 32, 'à quoi ça sert : t½ et la datation');
+    marque(c, 'fin');
+  },
+
+  fig_equation_diff(c) {
+    c.texte('L’équation différentielle de la décroissance', 40, 30, { couleur: 'cyan', taille: 20 });
+    c.repere('figure', 16, 40, 728, 376, 'de dN = −λ·N·dt à N(t) = N₀·e^(−λt)');
+    peindre(c, ctx => {
+      const pos = [[612, 70], [638, 66], [664, 72], [690, 68], [624, 94], [650, 92], [676, 96], [702, 92]];
+      pos.forEach(([x, y], i) => (i === 2 || i === 5 ? sphere(ctx, x, y, 7, FILS) : grappe(ctx, x, y, 2, 2, 3.6)));
+      eclair(ctx, 664, 72, 13); eclair(ctx, 650, 92, 11);
+    });
+    c.texte('pendant dt : dN noyaux désintégrés,', 40, 78, { couleur: 'blanc', taille: 22, max: 540 });
+    c.texte('proportionnels à N et à dt', 40, 108, { couleur: 'blanc', taille: 22, max: 540 });
+    c.repere('pendant', 32, 50, 700, 66, 'pendant dt, des noyaux se désintègrent : proportionnels à N et à dt');
+    marque(c, 'pendant');
+    c.pause(.4);
+    encadre(c, 'dN = −λ·N·dt', 160, 170, { taille: 28 });
+    c.texte('λ : constante radioactive (s⁻¹)', 320, 158, { couleur: 'blanc', taille: 18, max: 410 });
+    c.texte('le signe − : N diminue (dN < 0)', 320, 186, { couleur: 'rose', taille: 18, max: 410 });
+    c.repere('relation', 32, 136, 700, 58, 'dN = −λ·N·dt ; le signe moins : N diminue');
+    marque(c, 'relation');
+    c.pause(.4);
+    c.texte('on divise par dt :', 40, 240, { couleur: 'faible', taille: 18 });
+    c.texte('dN/dt + λ·N = 0', 200, 242, { couleur: 'jaune', taille: 28 });
+    c.repere('equation', 32, 212, 460, 40, 'dN/dt + λ·N = 0');
+    marque(c, 'equation');
+    c.pause(.4);
+    encadre(c, 'N(t) = N_0·e^{−λt}', 170, 304, { taille: 28 });
+    c.texte('N_0 : nombre de noyaux à t = 0', 340, 300, { couleur: 'blanc', taille: 18, max: 390 });
+    c.repere('solution', 32, 270, 700, 48, 'la solution : N(t) = N₀·e^(−λt)');
+    marque(c, 'solution');
+    c.pause(.4);
+    c.texte('vérification : dN/dt = −λ·N_0·e^{−λt} = −λ·N', 40, 358, { couleur: 'blanc', taille: 21, max: 470 });
+    c.texte('donc dN/dt + λ·N = 0', 530, 358, { couleur: 'vert', taille: 21, max: 210 });
+    c.repere('verification', 32, 332, 710, 36, 'vérification : dN/dt = −λ·N₀·e^(−λt) = −λ·N');
+    marque(c, 'verification');
+    c.pause(.3);
+    c.texte('N(t) : le nombre de noyaux restants à la date t', 40, 402, { couleur: 'vert', taille: 20, max: 690 });
+    c.repere('fin', 32, 380, 700, 30, 'N(t) : les noyaux restants');
+    marque(c, 'fin');
+  },
+
+  fig_demo_t_demi(c) {
+    c.texte('Démontrer t½ = ln2/λ', 40, 30, { couleur: 'cyan', taille: 20 });
+    c.repere('figure', 16, 40, 728, 376, 'la démonstration de t½ = ln2/λ');
+    c.texte('N(t) = N_0·e^{−λt}', 40, 82, { couleur: 'blanc', taille: 26 });
+    c.repere('loi', 32, 54, 300, 40, 'la loi N(t) = N₀·e^(−λt)');
+    marque(c, 'loi');
+    c.pause(.4);
+    c.texte('à t = t½ :', 40, 134, { couleur: 'cyan', taille: 22 });
+    c.texte('N(t½) = N_0/2', 150, 134, { couleur: 'jaune', taille: 26 });
+    c.repere('condition', 32, 106, 400, 40, 'à t = t½ : N(t½) = N₀/2');
+    marque(c, 'condition');
+    c.pause(.4);
+    const y = 200, t = 28, x0 = 40, wN = W(c, 'N_0', t) * .86;
+    c.texte('N_0', x0, y, { couleur: 'blanc', taille: t });
+    c.texte('·e^{−λt½}', x0 + wN, y, { couleur: 'blanc', taille: t });
+    const x2 = x0 + wN + W(c, '·e', t) + W(c, '−λt½', t * .62) + 4;
+    c.texte('=', x2, y, { couleur: 'blanc', taille: t });
+    const xf = x2 + 44; fraction(c, xf, y - 6, 'N_0', '2', { taille: t });
+    c.ligne(x0 - 3, y + 5, x0 + wN + 3, y - 24, { couleur: 'rose', largeur: 2.4 });
+    c.ligne(xf - wN / 2 - 3, y - 8, xf + wN / 2 + 3, y - 37, { couleur: 'rose', largeur: 2.4 });
+    c.texte('⇒', xf + 50, y, { couleur: 'blanc', taille: t });
+    c.texte('e^{−λt½} = 1/2', xf + 92, y, { couleur: 'vert', taille: t });
+    c.texte('on barre N_0', 40, 246, { couleur: 'rose', taille: 16 });
+    c.repere('egalite', 32, 156, 520, 98, 'N₀·e^(−λt½) = N₀/2 : on barre N₀, e^(−λt½) = 1/2');
+    marque(c, 'egalite');
+    c.pause(.4);
+    c.texte('on prend ln :  −λ·t½ = ln(1/2) = −ln2', 40, 294, { couleur: 'blanc', taille: 24, max: 690 });
+    c.repere('ln', 32, 266, 600, 40, '−λ·t½ = ln(1/2) = −ln2');
+    marque(c, 'ln');
+    c.pause(.4);
+    encadre(c, 't½ = ln2/λ', 140, 352, { taille: 30 });
+    c.texte('et τ = 1/λ  ⇒  t½ = τ·ln2', 290, 352, { couleur: 'blanc', taille: 24, max: 440 });
+    c.repere('resultat', 32, 318, 700, 50, 't½ = ln2/λ ; t½ = τ·ln2');
+    marque(c, 'resultat');
+    c.pause(.3);
+    c.texte('t½ ne dépend pas de N_0 : elle ne dépend que du noyau', 40, 404, { couleur: 'vert', taille: 20, max: 690 });
+    c.repere('fin', 32, 382, 700, 30, 't½ ne dépend pas de N₀');
+    marque(c, 'fin');
+  },
+
+  fig_unites(c) {
+    c.texte('λ et t½ : la même unité de temps', 40, 30, { couleur: 'cyan', taille: 20 });
+    c.repere('figure', 16, 40, 728, 376, 'les unités de temps, la conversion en secondes');
+    c.texte('s, min, h, jour, an', 40, 70, { couleur: 'jaune', taille: 20 });
+    [['1 min = 60 s', 104], ['1 h = 3600 s', 134], ['1 jour = 24 h = 86 400 s', 164], ['1 an = 3,16·10⁷ s', 194]]
+      .forEach(([s, yy]) => c.texte(s, 40, yy, { couleur: 'blanc', taille: 20, max: 330 }));
+    c.ligne(390, 54, 390, 206, { couleur: 'tresfaible', largeur: 1.4 });
+    [['t½ en s', 'λ en s⁻¹', 92], ['t½ en jours', 'λ en jour⁻¹', 132], ['t½ en ans', 'λ en an⁻¹', 172]].forEach(([g, d, yy]) => {
+      c.texte(g, 414, yy, { couleur: 'blanc', taille: 20 });
+      c.fleche(536, yy - 6, 576, yy - 6, { couleur: 'rose', largeur: 1.8 });
+      c.texte(d, 590, yy, { couleur: 'vert', taille: 20 });
+    });
+    c.texte('λ = ln2/t½ : l’unité suit celle de t½', 414, 204, { couleur: 'faible', taille: 15, max: 320 });
+    c.repere('trace', 32, 50, 710, 164, 'les unités : s, min, h, jour, an ; λ en s⁻¹, jour⁻¹, an⁻¹');
+    marque(c, 'trace');
+    c.pause(.4);
+    c.texte('Polonium', 40, 252, { couleur: 'cyan', taille: 20 });
+    let x = 40 + W(c, 'Polonium ', 20);
+    x = c.nucleide('Po', 210, 84, x, 252, { taille: 20, couleur: 'cyan' });
+    c.texte(' : t½ = 138 jours', x, 252, { couleur: 'cyan', taille: 20 });
+    c.texte('t½ = 138 × 24 × 3600 s = 1,19·10⁷ s', 40, 290, { couleur: 'vert', taille: 24, max: 690 });
+    c.repere('conversion', 32, 228, 700, 72, '138 jours = 138 × 24 × 3600 s = 1,19·10⁷ s');
+    marque(c, 'conversion');
+    c.pause(.4);
+    c.texte('a en Bq (désintégrations par seconde) : λ en s⁻¹', 40, 336, { couleur: 'jaune', taille: 21, max: 690 });
+    c.texte('λ = ln2/t½ = 0,693 / 1,19·10⁷ s = 5,8·10⁻⁸ s⁻¹', 40, 368, { couleur: 'blanc', taille: 21, max: 690 });
+    c.repere('bq', 32, 312, 700, 66, 'a en Bq : λ en s⁻¹ ; λ = 5,8·10⁻⁸ s⁻¹');
+    marque(c, 'bq');
+    c.pause(.3);
+    c.texte('⚠ Dans a = λ·N : λ en s⁻¹, jamais en jour⁻¹', 40, 404, { couleur: 'orange', taille: 19, max: 690 });
+    c.repere('fin', 32, 382, 700, 30, 'dans a = λ·N, λ en s⁻¹');
+    marque(c, 'fin');
+  },
+
+  fig_masse_N(c) {
+    c.texte('De la masse au nombre de noyaux', 40, 30, { couleur: 'cyan', taille: 20 });
+    c.repere('figure', 16, 40, 728, 376, 'de la masse m au nombre N de noyaux');
+    c.texte('quantité de matière :  n = m/M', 40, 80, { couleur: 'blanc', taille: 24 });
+    c.texte('(n en mol, m en g, M en g/mol)', 40, 106, { couleur: 'faible', taille: 16 });
+    c.repere('quantite', 32, 54, 440, 60, 'n = m/M');
+    marque(c, 'quantite');
+    c.pause(.4);
+    c.texte('nombre de noyaux :', 40, 152, { couleur: 'blanc', taille: 22 });
+    encadre(c, 'N = n·N_A = (m/M)·N_A', 360, 154, { taille: 26 });
+    c.texte('N_A = 6,02·10²³ mol⁻¹', 230, 192, { couleur: 'faible', taille: 17 });
+    c.repere('nombre', 32, 124, 520, 76, 'N = n·N_A = (m/M)·N_A');
+    marque(c, 'nombre');
+    c.pause(.4);
+    peindre(c, ctx => {
+      fiole(ctx, 640, 210, 56, 92, [125, 211, 252]);
+      for (const [x, y] of [[655, 272], [672, 284], [686, 270], [664, 292]]) grappe(ctx, x, y, 1, 2, 2.6);
+    });
+    c.texte('tritium', 668, 324, { couleur: 'blanc', taille: 15, align: 'center' });
+    let x = 40 + W(c, 'National 2023 N : le tritium ', 20);
+    c.texte('National 2023 N : le tritium', 40, 232, { couleur: 'cyan', taille: 20 });
+    c.nucleide('H', 3, 1, x, 232, { taille: 22, couleur: 'cyan' });
+    c.texte('m_0 = 2 µg = 2·10⁻⁶ g ;  M = 3 g/mol', 40, 266, { couleur: 'blanc', taille: 21, max: 560 });
+    c.texte('N_0 = (2·10⁻⁶ / 3) × 6,02·10²³ = 4,0·10¹⁷ noyaux', 40, 302, { couleur: 'vert', taille: 22, max: 580 });
+    c.repere('exemple', 32, 206, 710, 108, 'tritium : m₀ = 2 µg, M = 3 g/mol, N₀ = 4,0·10¹⁷');
+    marque(c, 'exemple');
+    c.pause(.4);
+    c.texte('⚠ m en g, comme M en g/mol  (µg → g : × 10⁻⁶)', 40, 350, { couleur: 'orange', taille: 21, max: 580 });
+    c.repere('piege', 32, 326, 590, 34, 'le piège : m en g');
+    marque(c, 'piege');
+    c.pause(.3);
+    c.texte('Autre chemin, si on connaît a_0 : N_0 = a_0/λ (λ en s⁻¹)', 40, 400, { couleur: 'vert', taille: 20, max: 690 });
+    c.repere('fin', 32, 378, 700, 30, 'N₀ = a₀/λ');
+    marque(c, 'fin');
+  },
+
+  fig_activite_demo(c) {
+    c.texte('L’activité : a = λ·N', 40, 30, { couleur: 'cyan', taille: 20 });
+    c.repere('figure', 16, 40, 728, 376, 'de a = −dN/dt à a(t) = a₀·e^(−λt)');
+    encadre(c, 'a = −dN/dt', 120, 90, { taille: 28 });
+    c.texte('a : nombre de désintégrations par seconde (Bq)', 236, 82, { couleur: 'blanc', taille: 18, max: 500 });
+    c.texte('le signe − : N diminue, donc a > 0', 236, 108, { couleur: 'rose', taille: 18, max: 500 });
+    c.repere('definition', 32, 56, 710, 62, 'a = −dN/dt');
+    marque(c, 'definition');
+    c.pause(.4);
+    c.texte('a = −d(N_0·e^{−λt})/dt', 40, 168, { couleur: 'blanc', taille: 25, max: 690 });
+    c.texte('= −N_0 × (−λ)·e^{−λt} = λ·N_0·e^{−λt}', 64, 208, { couleur: 'blanc', taille: 25, max: 670 });
+    c.repere('derivee', 32, 138, 710, 82, 'on dérive : a = λ·N₀·e^(−λt)');
+    marque(c, 'derivee');
+    c.pause(.4);
+    encadre(c, 'a = λ·N', 120, 280, { taille: 28 });
+    encadre(c, 'a_0 = λ·N_0', 340, 280, { taille: 28 });
+    encadre(c, 'a(t) = a_0·e^{−λt}', 590, 280, { taille: 28 });
+    c.texte('car N = N_0·e^{−λt} et, à t = 0 : a_0 = λ·N_0', 40, 330, { couleur: 'faible', taille: 17, max: 690 });
+    c.repere('resultat', 32, 248, 710, 92, 'a = λ·N ; a₀ = λ·N₀ ; a(t) = a₀·e^(−λt)');
+    marque(c, 'resultat');
+    c.pause(.3);
+    c.texte('1 Bq = 1 désintégration par seconde ; a et N ont la même t½', 40, 390, { couleur: 'vert', taille: 20, max: 690 });
+    c.repere('fin', 32, 366, 700, 32, '1 Bq = 1 désintégration par seconde');
+    marque(c, 'fin');
+  },
+
+  fig_datation_demo(c) {
+    c.texte('Dater : t = (1/λ)·ln(a_0/a)', 40, 30, { couleur: 'cyan', taille: 20 });
+    c.repere('figure', 16, 40, 728, 376, 'de a = a₀·e^(−λt) à t = (1/λ)·ln(a₀/a)');
+    peindre(c, ctx => bois(ctx, 660, 112, 44, 40));
+    c.texte('bois ancien : a', 646, 178, { couleur: 'blanc', taille: 15, align: 'center' });
+    c.texte('bois récent, même masse : a_0', 740, 200, { couleur: 'faible', taille: 14, align: 'right' });
+    c.texte('a(t) = a_0·e^{−λt}', 40, 86, { couleur: 'blanc', taille: 28 });
+    c.repere('loi', 32, 56, 710, 152, 'a = a₀·e^(−λt) ; a mesurée sur le bois ancien, a₀ sur un bois récent');
+    marque(c, 'loi');
+    c.pause(.4);
+    c.texte('on divise par a_0 :', 40, 146, { couleur: 'faible', taille: 18 });
+    c.texte('a/a_0 = e^{−λt}', 200, 148, { couleur: 'blanc', taille: 28 });
+    c.repere('rapport', 32, 118, 420, 42, 'a/a₀ = e^(−λt)');
+    marque(c, 'rapport');
+    c.pause(.4);
+    c.texte('on prend ln :', 40, 222, { couleur: 'faible', taille: 18 });
+    c.texte('ln(a/a_0) = −λ·t', 170, 224, { couleur: 'blanc', taille: 26 });
+    c.texte('donc  ln(a_0/a) = λ·t', 170, 264, { couleur: 'blanc', taille: 26 });
+    c.repere('ln', 32, 194, 480, 82, 'ln(a₀/a) = λ·t');
+    marque(c, 'ln');
+    c.pause(.4);
+    encadre(c, 't = (1/λ)·ln(a_0/a)', 200, 330, { taille: 30 });
+    c.repere('resultat', 32, 296, 360, 50, 't = (1/λ)·ln(a₀/a)');
+    marque(c, 'resultat');
+    c.pause(.3);
+    c.texte('avec λ = ln2/t½ :  t = (t½/ln2)·ln(a_0/a)', 40, 398, { couleur: 'vert', taille: 22, max: 690 });
+    c.repere('fin', 32, 372, 700, 34, 't = (t½/ln2)·ln(a₀/a)');
+    marque(c, 'fin');
+  },
+
+  fig_pourcentages(c) {
+    c.texte('« restants » ↔ « désintégrés »', 40, 30, { couleur: 'cyan', taille: 20 });
+    c.repere('figure', 16, 40, 728, 376, 'passer des désintégrés aux restants');
+    const barre = (y, nD, n = 20) => peindre(c, ctx => { for (let i = 0; i < n; i++) sphere(ctx, 478 + 13 * i, y, 5.6, i < n - nD ? PROTON : [110, 116, 128]); });
+    c.texte('x % désintégrés  ⇔  N = (1 − x)·N_0 restants', 40, 82, { couleur: 'jaune', taille: 23, max: 690 });
+    c.texte('l’énoncé', 40, 118, { couleur: 'faible', taille: 16 }).texte('les restants', 250, 118, { couleur: 'faible', taille: 16 });
+    peindre(c, ctx => { sphere(ctx, 484, 112, 5.6, PROTON); sphere(ctx, 604, 112, 5.6, [110, 116, 128]); });
+    c.texte('restant', 494, 118, { couleur: 'faible', taille: 14 }).texte('désintégré', 614, 118, { couleur: 'faible', taille: 14 });
+    c.ligne(32, 130, 740, 130, { couleur: 'tresfaible', largeur: 1.2 });
+    c.repere('trace', 32, 54, 710, 80, 'x % désintégrés ⇔ N = (1 − x)·N₀');
+    marque(c, 'trace');
+    c.pause(.4);
+    c.texte('30 % désintégrés', 40, 178, { couleur: 'blanc', taille: 22 });
+    c.fleche(206, 172, 240, 172, { couleur: 'rose', largeur: 1.8 });
+    c.texte('N = 0,70·N_0', 250, 180, { couleur: 'vert', taille: 25 });
+    barre(172, 6);
+    c.repere('trente', 32, 150, 710, 42, '30 % désintégrés : N = 0,70·N₀');
+    marque(c, 'trente');
+    c.pause(.4);
+    c.texte('90 % désintégrés', 40, 238, { couleur: 'blanc', taille: 22 });
+    c.fleche(206, 232, 240, 232, { couleur: 'rose', largeur: 1.8 });
+    c.texte('N = 0,10·N_0', 250, 240, { couleur: 'vert', taille: 25 });
+    barre(232, 18);
+    c.repere('quatre_vingt_dix', 32, 210, 710, 42, '90 % désintégrés : N = 0,10·N₀');
+    marque(c, 'quatre_vingt_dix');
+    c.pause(.4);
+    c.texte('t = 2t½ :  N = N_0/4', 40, 298, { couleur: 'blanc', taille: 22 });
+    c.fleche(234, 292, 262, 292, { couleur: 'rose', largeur: 1.8 });
+    c.texte('75 % désintégrés', 270, 300, { couleur: 'vert', taille: 23, max: 190 });
+    barre(292, 15);
+    c.texte('(et 25 % restants)', 270, 326, { couleur: 'faible', taille: 15 });
+    c.repere('deux_t_demi', 32, 270, 710, 64, 't = 2t½ : N = N₀/4, 75 % désintégrés');
+    marque(c, 'deux_t_demi');
+    c.pause(.3);
+    c.texte('N(t) : restants ;  N_d = N_0 − N(t) : désintégrés', 40, 388, { couleur: 'vert', taille: 22, max: 690 });
+    c.repere('fin', 32, 362, 700, 36, 'N(t) restants ; N_d = N₀ − N(t) désintégrés');
+    marque(c, 'fin');
+  },
+
+  fig_rapport_fils_pere(c) {
+    c.texte('Le rapport fils / père (national 2020 R)', 40, 30, { couleur: 'cyan', taille: 20 });
+    c.repere('figure', 16, 40, 728, 376, 'N(U), N(Th) et le rapport r = e^(λt) − 1');
+    const POS = [[60, 74], [92, 70], [124, 76], [156, 72], [76, 104], [108, 100], [140, 106], [60, 134], [92, 132], [124, 138], [156, 132]];
+    peindre(c, ctx => POS.forEach(([x, y]) => grappe(ctx, x, y, 3, 4, 3.4)));
+    c.texte('père U', 108, 166, { couleur: 'blanc', taille: 15, align: 'center' });
+    c.texte('N(U) = N_0·e^{−λt}', 220, 92, { couleur: 'blanc', taille: 26 });
+    c.texte('au départ : N_0 noyaux U, aucun Th', 220, 124, { couleur: 'faible', taille: 17, max: 510 });
+    c.repere('pere', 32, 52, 710, 122, 'les noyaux père U : N(U) = N₀·e^(−λt)');
+    marque(c, 'pere');
+    c.pause(.4);
+    peindre(c, ctx => { [1, 4, 6, 9].forEach(i => { const [x, y] = POS[i]; sphere(ctx, x, y, 9, FILS); }); eclair(ctx, POS[6][0], POS[6][1], 14); });
+    c.texte('fils Th', 108, 186, { couleur: 'vert', taille: 15, align: 'center' });
+    c.texte('chaque U désintégré donne un Th :', 220, 170, { couleur: 'faible', taille: 17, max: 510 });
+    c.texte('N(Th) = N_0 − N(U) = N_0(1 − e^{−λt})', 220, 204, { couleur: 'blanc', taille: 25, max: 520 });
+    c.repere('fils', 32, 148, 710, 66, 'les noyaux fils Th : N(Th) = N₀(1 − e^(−λt))');
+    marque(c, 'fils');
+    c.pause(.4);
+    c.texte('r = N(Th)/N(U) = N_0(1 − e^{−λt}) / (N_0·e^{−λt})', 40, 266, { couleur: 'blanc', taille: 24, max: 690 });
+    encadre(c, 'r = e^{λt} − 1', 170, 330, { taille: 30 });
+    c.texte('(N_0 se simplifie ; 1/e^{−λt} = e^{λt})', 330, 330, { couleur: 'faible', taille: 17, max: 400 });
+    c.repere('rapport', 32, 238, 710, 108, 'r = N(Th)/N(U) = e^(λt) − 1');
+    marque(c, 'rapport');
+    c.pause(.3);
+    c.texte('À t = 0 : r = 0 ; plus l’échantillon est vieux, plus r est grand', 40, 398, { couleur: 'vert', taille: 20, max: 690 });
+    c.repere('fin', 32, 374, 700, 32, 'r augmente avec l’âge');
+    marque(c, 'fin');
+  },
+
+  fig_cas_types(c) {
+    c.texte('Le mot de la question → la méthode', 40, 26, { couleur: 'cyan', taille: 20 });
+    c.repere('figure', 12, 34, 736, 380, 'le tableau des cas types');
+    const X0 = 14, XM = 318, X1 = 746, Y0 = 36, H0 = 32, RH = 36, N = 9, Yr = i => Y0 + H0 + RH * i;
+    c.rect(X0, Y0, X1 - X0, H0 + RH * N, { couleur: 'faible', arrondi: 6 });
+    c.ligne(XM, Y0, XM, Yr(N), { couleur: 'faible', largeur: 1.6, duree: .2 });
+    c.ligne(X0, Yr(0), X1, Yr(0), { couleur: 'faible', largeur: 1.6, duree: .2 });
+    for (let i = 1; i < N; i++) c.ligne(X0, Yr(i), X1, Yr(i), { couleur: 'tresfaible', largeur: 1.1, duree: .08 });
+    c.texte('le mot de la question', (X0 + XM) / 2, Y0 + 23, { couleur: 'cyan', align: 'center', taille: 17 });
+    c.texte('la méthode', (XM + X1) / 2, Y0 + 23, { couleur: 'cyan', align: 'center', taille: 17 });
+    c.repere('trace', X0, Y0, X1 - X0, H0 + RH * N, 'le tableau : le mot de la question, la méthode');
+    marque(c, 'trace');
+    const R = [['composition', '« composition du noyau »', 'Z protons ; N = A − Z neutrons'],
+      ['equation', '« écrire l’équation, identifier X »', 'Soddy : A puis Z ; le tableau des Z'],
+      ['type', '« type de désintégration »', null],
+      ['famille', '« nombre de α et de β⁻ »', 'système en x et y : A donne y, puis Z donne x'],
+      ['t_demi', '« demi-vie graphiquement »', 't à N_0/2 (ou à a_0/2) sur la courbe'],
+      ['lambda', '« constante radioactive »', 'λ = ln2/t½ ; unité : s⁻¹, jour⁻¹, an⁻¹'],
+      ['nombre', '« nombre de noyaux »', 'N = (m/M)·N_A  ou  N_0 = a_0/λ (λ en s⁻¹)'],
+      ['date', '« à quelle date », « âge »', 't = (1/λ)·ln(a_0/a)'],
+      ['pourcentage', '« x % désintégrés »', 'N = (1 − x)·N_0']];
+    R.forEach(([id, q, m], i) => {
+      c.pause(.35);
+      const yy = Yr(i) + 25;
+      c.texte(q, X0 + 8, yy, { couleur: 'jaune', taille: 16, max: XM - X0 - 22 });
+      c.fleche(XM - 4, yy - 6, XM + 14, yy - 6, { couleur: 'rose', largeur: 1.8 });
+      if (m) c.texte(m, XM + 22, yy, { couleur: 'vert', taille: 18, max: X1 - XM - 32 });
+      else c.noyaux('[4,2]He : α ;  [0,-1]e : β⁻ ;  [0,1]e : β⁺', XM + 22, yy, { couleur: 'vert', taille: 18 });
+      c.repere(id, X0, Yr(i), X1 - X0, RH, `${q} → ${m ? net(m) : 'la particule : ⁴₂He α ; ⁰₋₁e β⁻ ; ⁰₁e β⁺'}`);
+      marque(c, id);
+    });
+    c.pause(.3);
+    c.texte('Lire la question, trouver le mot, appliquer la méthode.', 380, 410, { couleur: 'faible', taille: 16, align: 'center' });
+    c.repere('fin', 12, 394, 736, 22, 'lire la question, trouver le mot, appliquer la méthode');
+    marque(c, 'fin');
+  },
+
+  fig_enonce_2021(c) {
+    // Redessinée d’après le national 2021 N : pile au plutonium 238 d’un stimulateur cardiaque, désintégration α, courbe a(t).
+    c.texte('Énoncé type national 2021 N : la pile au plutonium 238', 40, 26, { couleur: 'cyan', taille: 19, max: 690 });
+    c.repere('figure', 12, 34, 736, 380, 'l’énoncé du national 2021 N : la pile, l’équation, le tableau, la courbe');
+    peindre(c, ctx => stimulateur(ctx, 30, 62, 96, 70));
+    c.texte('stimulateur cardiaque', 78, 154, { couleur: 'faible', taille: 13, align: 'center' });
+    c.texte('Sa pile contient du plutonium 238,', 150, 70, { couleur: 'blanc', taille: 16, max: 270 });
+    c.texte('émetteur α.', 150, 92, { couleur: 'blanc', taille: 16, max: 270 });
+    let x = c.noyaux('[238,94]Pu → ', 150, 132, { taille: 22 });
+    x = c.nucleide('X', 'A', 'Z', x + 2, 132, { taille: 22, couleur: 'rose' });
+    c.noyaux(' + [4,2]He', x, 132, { taille: 22 });
+    tableauZ(c, 30, 176, [[91, 'Pa'], [92, 'U'], [93, 'Np'], [94, 'Pu']], { cw: 64 });
+    const g = graphe(c, { ox: 478, oy: 270, w: 236, h: 200, xmax: 300, ymax: 10, dx: 25, dy: 1, xt: [100, 200, 300], yt: [2, 4, 6, 8, 10], xl: 't (ans)', yl: 'a (10¹⁰ Bq)' });
+    c.courbe(u => [g.X(300 * u), g.Y(10 * Math.pow(2, -300 * u / 88))], 60, { couleur: 'cyan', largeur: 2.4 });
+    c.texte('a(t)', g.X(40), g.Y(8.2), { couleur: 'cyan', taille: 16 });
+    c.texte('On suit l’activité a(t) de la pile (courbe).', 30, 266, { couleur: 'blanc', taille: 16, max: 400 });
+    c.repere('trace', 20, 50, 720, 236, 'la pile au plutonium 238, l’équation à compléter, le tableau des Z, la courbe a(t)');
+    marque(c, 'trace');
+    c.pause(.4);
+    c.rect(20, 290, 720, 64, { couleur: 'faible', arrondi: 8 });
+    c.texte('a_0 = 1,0·10¹¹ Bq ;  t½ = 88 ans ;  1 an = 3,16·10⁷ s', 34, 316, { couleur: 'jaune', taille: 19, max: 690 });
+    c.texte('On change la pile quand 30 % des noyaux de plutonium se sont désintégrés.', 34, 344, { couleur: 'blanc', taille: 17, max: 690 });
+    c.repere('donnees', 20, 290, 720, 64, 'les données : a₀ = 1,0·10¹¹ Bq, t½ = 88 ans ; 30 % désintégrés');
+    marque(c, 'donnees');
+    c.pause(.4);
+    c.texte('On cherche : A, Z et X ;  t½ sur la courbe ;  λ ;  la durée d’utilisation de la pile.', 30, 392, { couleur: 'vert', taille: 17, max: 700 });
+    c.repere('fin', 20, 370, 720, 32, 'ce qu’on cherche : X, t½, λ, la durée');
+    marque(c, 'fin');
+  },
+
+  fig_enonce_2025(c) {
+    // Redessinée d’après le national 2025 N : cadmium 107, émetteur β⁺ et γ ; t½ = 6,93 h ; a₀ = 1,25·10¹² Bq ; t₁ = 2t½, t₂ = 3t½.
+    c.texte('Énoncé type national 2025 N : le cadmium 107', 40, 26, { couleur: 'cyan', taille: 19, max: 690 });
+    c.repere('figure', 12, 34, 736, 380, 'l’énoncé du national 2025 N : le cadmium 107');
+    peindre(c, ctx => {
+      grappe(ctx, 110, 128, 14, 17, 4.6);
+      eclair(ctx, 150, 112, 16);
+      sphere(ctx, 252, 76, 7, POSITON);
+      ondeGamma(ctx, 150, 140, 300, 176, 6, 15);
+    });
+    c.texte('Cd', 110, 196, { couleur: 'blanc', taille: 16, align: 'center' });
+    c.texte('particule ?', 268, 70, { couleur: 'jaune', taille: 15 });
+    c.fleche(170, 108, 236, 82, { couleur: 'faible', largeur: 1.4 });
+    c.texte('γ', 312, 186, { couleur: 'violet', taille: 20 });
+    let x = c.noyaux('[107,48]Cd → [107,47]Ag + ', 30, 250, { taille: 26 });
+    x = c.nucleide('e', 'A', 'Z', x + 2, 250, { taille: 26, couleur: 'rose' });
+    c.texte(' + γ', x, 250, { taille: 26 });
+    c.texte('Un échantillon de cadmium 107 se désintègre en argent 107.', 30, 292, { couleur: 'blanc', taille: 16, max: 420 });
+    c.repere('trace', 20, 44, 440, 258, 'le noyau de cadmium émet une particule et un rayonnement γ ; l’équation à compléter');
+    marque(c, 'trace');
+    c.pause(.4);
+    c.rect(480, 50, 260, 200, { couleur: 'faible', arrondi: 8 });
+    c.texte('Données', 494, 78, { couleur: 'cyan', taille: 19 });
+    [['t½ = 6,93 heures', 'blanc'], ['a_0 = 1,25·10¹² Bq', 'blanc'], ['t_1 = 2t½', 'blanc'], ['t_2 = 3t½', 'blanc'], ['ln2 ≈ 0,693', 'faible']]
+      .forEach(([t, col], i) => c.texte(t, 494, 112 + 30 * i, { couleur: col, taille: 19, max: 236 }));
+    c.repere('donnees', 480, 50, 260, 200, 'les données : t½ = 6,93 h ; a₀ = 1,25·10¹² Bq ; t₁ = 2t½ ; t₂ = 3t½');
+    marque(c, 'donnees');
+    c.pause(.4);
+    c.texte('On cherche :', 30, 340, { couleur: 'cyan', taille: 18 });
+    c.texte('• A et Z de la particule, le type de désintégration', 30, 366, { couleur: 'vert', taille: 17, max: 700 });
+    c.texte('• λ en s⁻¹ ;  l’activité aux dates t_1 et t_2', 30, 392, { couleur: 'vert', taille: 17, max: 700 });
+    c.repere('fin', 20, 318, 720, 84, 'ce qu’on cherche : A, Z, le type ; λ ; a(t₁) et a(t₂)');
+    marque(c, 'fin');
+  },
+
+  fig_enonce_2022(c) {
+    // Redessinée d’après le national 2022 N : iode 131, émetteur β⁻ ; tableau Te, Xe, Cs ; courbe a(t), a₀ = 4·10⁶ Bq, t½ = 8 jours ; 95 %.
+    c.texte('Énoncé type national 2022 N : l’iode 131', 40, 26, { couleur: 'cyan', taille: 19, max: 690 });
+    c.repere('figure', 12, 34, 736, 380, 'l’énoncé du national 2022 N : l’iode 131');
+    peindre(c, ctx => fiole(ctx, 34, 64, 60, 100, [250, 204, 21]));
+    c.texte('iode 131', 64, 186, { couleur: 'faible', taille: 14, align: 'center' });
+    c.texte('L’iode 131 est émetteur β⁻.', 130, 74, { couleur: 'blanc', taille: 17, max: 300 });
+    let x = c.noyaux('[131,53]I → ', 130, 120, { taille: 24 });
+    x = c.nucleide('X', 'A', 'Z', x + 2, 120, { taille: 24, couleur: 'rose' });
+    c.noyaux(' + [0,-1]e', x, 120, { taille: 24 });
+    tableauZ(c, 130, 150, [[52, 'Te'], [54, 'Xe'], [55, 'Cs']], { cw: 64 });
+    const g = graphe(c, { ox: 478, oy: 270, w: 236, h: 200, xmax: 40, ymax: 4, dx: 4, dy: .5, xt: [8, 16, 24, 32, 40], yt: [1, 2, 3, 4], xl: 't (jours)', yl: 'a (10⁶ Bq)' });
+    c.courbe(u => [g.X(40 * u), g.Y(4 * Math.pow(2, -40 * u / 8))], 60, { couleur: 'cyan', largeur: 2.4 });
+    c.texte('a(t)', g.X(5), g.Y(3.3), { couleur: 'cyan', taille: 16 });
+    c.texte('On mesure l’activité a(t) de l’échantillon (courbe).', 30, 252, { couleur: 'blanc', taille: 16, max: 420 });
+    c.repere('trace', 20, 44, 720, 236, 'l’iode 131 émetteur β⁻, l’équation à compléter, le tableau Te, Xe, Cs, la courbe a(t)');
+    marque(c, 'trace');
+    c.pause(.4);
+    c.rect(20, 290, 720, 64, { couleur: 'faible', arrondi: 8 });
+    c.texte('a_0 = 4·10⁶ Bq ;  t½ = 8 jours ;  ln2 ≈ 0,693', 34, 316, { couleur: 'jaune', taille: 19, max: 690 });
+    c.texte('On attend que 95 % des noyaux d’iode 131 soient désintégrés.', 34, 344, { couleur: 'blanc', taille: 17, max: 690 });
+    c.repere('donnees', 20, 290, 720, 64, 'les données : a₀ = 4·10⁶ Bq ; t½ = 8 jours ; 95 % désintégrés');
+    marque(c, 'donnees');
+    c.pause(.4);
+    c.texte('On cherche : A, Z et X ;  t½ sur la courbe ;  λ ;  N_0 ;  la durée pour 95 % désintégrés.', 30, 392, { couleur: 'vert', taille: 17, max: 700 });
+    c.repere('fin', 20, 370, 720, 32, 'ce qu’on cherche : X, t½, λ, N₀, la durée');
+    marque(c, 'fin');
+  },
+};
+
+function dessiner(c) {
+  scene.cadre(31);
+  MM = {};
+  DESSINS[fig](c);
+  M = MM;
+  return c.fin() || !S.running;   // figée sur une étape : l’image ne change plus, on cesse de la redessiner
+}
+
+// ───────────────────────── Ce que le tuteur voit et peut faire ─────────────────────────
+const MOTIFS = {
+  fig_soddy_systeme: { equation: 'l’équation avec x et y', systeme: 'le système de Soddy', y: 'y = 8', x: 'x = 6', conclusion: '8 α et 6 β⁻', fin: 'figure complète' },
+  fig_rappel_exp_ln: { exp: 'e⁰ = 1', decroit: 'e^(−x) décroît', ln: 'ln(e^x) = x', ln_demi: 'ln(1/2) = −ln2', valeur: 'ln2 ≈ 0,693', fin: 'figure complète' },
+  fig_equation_diff: { pendant: 'pendant dt', relation: 'dN = −λ·N·dt', equation: 'dN/dt + λ·N = 0', solution: 'N(t) = N₀·e^(−λt)', verification: 'la vérification', fin: 'figure complète' },
+  fig_demo_t_demi: { loi: 'la loi N(t)', condition: 'N(t½) = N₀/2', egalite: 'N₀ barrés', ln: '−λ·t½ = −ln2', resultat: 't½ = ln2/λ', fin: 'figure complète' },
+  fig_unites: { trace: 'les unités de temps', conversion: '138 jours en secondes', bq: 'a en Bq : λ en s⁻¹', fin: 'figure complète' },
+  fig_masse_N: { quantite: 'n = m/M', nombre: 'N = (m/M)·N_A', exemple: 'l’exemple du tritium', piege: 'le piège : m en g', fin: 'figure complète' },
+  fig_activite_demo: { definition: 'a = −dN/dt', derivee: 'la dérivée', resultat: 'a = λ·N', fin: 'figure complète' },
+  fig_datation_demo: { loi: 'a = a₀·e^(−λt)', rapport: 'a/a₀ = e^(−λt)', ln: 'ln(a₀/a) = λ·t', resultat: 't = (1/λ)·ln(a₀/a)', fin: 'figure complète' },
+  fig_pourcentages: { trace: 'x % désintégrés ⇔ N = (1 − x)·N₀', trente: '30 % désintégrés', quatre_vingt_dix: '90 % désintégrés', deux_t_demi: 't = 2t½', fin: 'figure complète' },
+  fig_rapport_fils_pere: { pere: 'le père N(U)', fils: 'le fils N(Th)', rapport: 'r = e^(λt) − 1', fin: 'figure complète' },
+  fig_cas_types: { trace: 'le tableau des cas types', composition: 'la composition', equation: 'l’équation', type: 'le type', famille: 'la famille', t_demi: 'la demi-vie', lambda: 'λ', nombre: 'le nombre de noyaux', date: 'la date', pourcentage: 'le pourcentage', fin: 'figure complète' },
+  fig_enonce_2021: { trace: 'la figure de l’énoncé', donnees: 'les données', fin: 'ce qu’on cherche' },
+  fig_enonce_2025: { trace: 'la figure de l’énoncé', donnees: 'les données', fin: 'ce qu’on cherche' },
+  fig_enonce_2022: { trace: 'la figure de l’énoncé', donnees: 'les données', fin: 'ce qu’on cherche' },
+};
+const DESCRIPTIONS = {
+  fig_soddy_systeme: {
+    equation: 'Équation écrite : ²³⁸₉₂U → ²⁰⁶₈₂Pb + x ⁰₋₁e + y ⁴₂He ; x et y : les nombres de désintégrations β⁻ et α.',
+    systeme: 'Lois de Soddy, en système : A : 238 = 206 + 0·x + 4y ; Z : 92 = 82 − x + 2y.',
+    y: 'y = (238 − 206)/4 = 8 (A d’abord : β ne change pas A).',
+    x: 'x = 82 + 2y − 92 = 82 + 16 − 92 = 6.',
+    conclusion: 'Encadré : « 8 désintégrations α et 6 désintégrations β⁻ » ; dessous, 8 petites grappes α et 6 électrons bleus peints.',
+    fin: 'Équation bilan : ²³⁸₉₂U → ²⁰⁶₈₂Pb + 6 ⁰₋₁e + 8 ⁴₂He.' },
+  fig_rappel_exp_ln: {
+    exp: 'e⁰ = 1 (à t = 0 : N = N₀·e⁰ = N₀).',
+    decroit: 'e^(−x) décroît de 1 (x = 0) vers 0 ; le petit graphe de e^(−x) à droite.',
+    ln: 'ln(e^x) = x : « ln enlève e ».',
+    ln_demi: 'ln(1/2) = −ln2, car ln(1/x) = −ln x.',
+    valeur: 'Encadré : ln2 ≈ 0,693.',
+    fin: 'On s’en sert pour t½ = ln2/λ et t = (1/λ)·ln(a₀/a).' },
+  fig_equation_diff: {
+    pendant: 'Pendant dt : dN noyaux désintégrés, proportionnels à N et à dt (à droite, quelques noyaux peints, deux se désintègrent avec un éclair).',
+    relation: 'Encadré : dN = −λ·N·dt ; λ : constante radioactive (s⁻¹) ; le signe − : N diminue (dN < 0).',
+    equation: 'On divise par dt : dN/dt + λ·N = 0.',
+    solution: 'Encadré : N(t) = N₀·e^(−λt) ; N₀ : nombre de noyaux à t = 0.',
+    verification: 'Vérification : dN/dt = −λ·N₀·e^(−λt) = −λ·N, donc dN/dt + λ·N = 0.',
+    fin: 'N(t) : le nombre de noyaux restants à la date t.' },
+  fig_demo_t_demi: {
+    loi: 'N(t) = N₀·e^(−λt).',
+    condition: 'À t = t½ : N(t½) = N₀/2.',
+    egalite: 'N₀·e^(−λt½) = N₀/2, les deux N₀ barrés en rose, donc e^(−λt½) = 1/2.',
+    ln: 'On prend ln : −λ·t½ = ln(1/2) = −ln2.',
+    resultat: 'Encadré : t½ = ln2/λ ; et τ = 1/λ ⇒ t½ = τ·ln2.',
+    fin: 't½ ne dépend pas de N₀ : elle ne dépend que du noyau.' },
+  fig_unites: {
+    trace: 'Unités : s, min, h, jour, an ; 1 min = 60 s ; 1 h = 3600 s ; 1 jour = 24 h = 86 400 s ; 1 an = 3,16·10⁷ s. À droite : t½ en s → λ en s⁻¹ ; t½ en jours → λ en jour⁻¹ ; t½ en ans → λ en an⁻¹.',
+    conversion: 'Polonium ²¹⁰₈₄Po : t½ = 138 jours ; t½ = 138 × 24 × 3600 s = 1,19·10⁷ s.',
+    bq: 'a en Bq (désintégrations par seconde) : λ en s⁻¹ ; λ = ln2/t½ = 0,693 / 1,19·10⁷ s = 5,8·10⁻⁸ s⁻¹.',
+    fin: 'En orange : dans a = λ·N, λ en s⁻¹, jamais en jour⁻¹.' },
+  fig_masse_N: {
+    quantite: 'Quantité de matière : n = m/M (n en mol, m en g, M en g/mol).',
+    nombre: 'Encadré : N = n·N_A = (m/M)·N_A ; N_A = 6,02·10²³ mol⁻¹.',
+    exemple: 'National 2023 N, le tritium ³₁H (fiole peinte à droite) : m₀ = 2 µg = 2·10⁻⁶ g ; M = 3 g/mol ; N₀ = (2·10⁻⁶ / 3) × 6,02·10²³ = 4,0·10¹⁷ noyaux.',
+    piege: 'En orange : m en g, comme M en g/mol (µg → g : × 10⁻⁶).',
+    fin: 'Autre chemin, si on connaît a₀ : N₀ = a₀/λ (λ en s⁻¹).' },
+  fig_activite_demo: {
+    definition: 'Encadré : a = −dN/dt ; a : nombre de désintégrations par seconde (Bq) ; le signe − : N diminue, donc a > 0.',
+    derivee: 'a = −d(N₀·e^(−λt))/dt = −N₀ × (−λ)·e^(−λt) = λ·N₀·e^(−λt).',
+    resultat: 'Trois encadrés : a = λ·N ; a₀ = λ·N₀ ; a(t) = a₀·e^(−λt).',
+    fin: '1 Bq = 1 désintégration par seconde ; a et N ont la même t½.' },
+  fig_datation_demo: {
+    loi: 'a(t) = a₀·e^(−λt) ; à droite, un bout de bois peint : bois ancien, activité a ; bois récent de même masse : a₀.',
+    rapport: 'On divise par a₀ : a/a₀ = e^(−λt).',
+    ln: 'On prend ln : ln(a/a₀) = −λ·t, donc ln(a₀/a) = λ·t.',
+    resultat: 'Encadré : t = (1/λ)·ln(a₀/a).',
+    fin: 'Avec λ = ln2/t½ : t = (t½/ln2)·ln(a₀/a).' },
+  fig_pourcentages: {
+    trace: 'x % désintégrés ⇔ N = (1 − x)·N₀ restants ; à droite, une rangée de 20 noyaux peints par ligne : orange = restant, gris = désintégré.',
+    trente: '30 % désintégrés → N = 0,70·N₀ (6 noyaux gris sur 20).',
+    quatre_vingt_dix: '90 % désintégrés → N = 0,10·N₀ (18 gris sur 20).',
+    deux_t_demi: 't = 2t½ : N = N₀/4 → 75 % désintégrés, 25 % restants (15 gris sur 20).',
+    fin: 'N(t) : restants ; N_d = N₀ − N(t) : désintégrés.' },
+  fig_rapport_fils_pere: {
+    pere: 'Échantillon peint de noyaux père U ; N(U) = N₀·e^(−λt) ; au départ : N₀ noyaux U, aucun Th.',
+    fils: 'Quatre noyaux sont devenus fils Th (vert) ; chaque U désintégré donne un Th : N(Th) = N₀ − N(U) = N₀(1 − e^(−λt)).',
+    rapport: 'r = N(Th)/N(U) = N₀(1 − e^(−λt)) / (N₀·e^(−λt)) ; encadré : r = e^(λt) − 1 (N₀ se simplifie).',
+    fin: 'À t = 0 : r = 0 ; plus l’échantillon est vieux, plus r est grand.' },
+  fig_cas_types: {
+    trace: 'Tableau à deux colonnes : « le mot de la question » | « la méthode ».',
+    composition: '« composition du noyau » → Z protons ; N = A − Z neutrons.',
+    equation: '« écrire l’équation, identifier X » → Soddy : A puis Z ; le tableau des Z.',
+    type: '« type de désintégration » → la particule : ⁴₂He : α ; ⁰₋₁e : β⁻ ; ⁰₁e : β⁺.',
+    famille: '« nombre de α et de β⁻ » → système en x et y : A donne y, puis Z donne x.',
+    t_demi: '« demi-vie graphiquement » → t à N₀/2 (ou à a₀/2) sur la courbe.',
+    lambda: '« constante radioactive » → λ = ln2/t½ ; unité : s⁻¹, jour⁻¹, an⁻¹.',
+    nombre: '« nombre de noyaux » → N = (m/M)·N_A ou N₀ = a₀/λ (λ en s⁻¹).',
+    date: '« à quelle date », « âge » → t = (1/λ)·ln(a₀/a).',
+    pourcentage: '« x % désintégrés » → N = (1 − x)·N₀.',
+    fin: 'Lire la question, trouver le mot, appliquer la méthode.' },
+  fig_enonce_2021: {
+    trace: 'Énoncé national 2021 N : un stimulateur cardiaque peint ; sa pile contient du plutonium 238, émetteur α ; équation ²³⁸₉₄Pu → ᴬ_Z X + ⁴₂He ; tableau Z / symbole : 91 Pa, 92 U, 93 Np, 94 Pu ; courbe a(t) : axe t (ans) de 0 à 300, axe a (10¹⁰ Bq) de 0 à 10, a part de 10 et vaut 5 à 88 ans.',
+    donnees: 'Données : a₀ = 1,0·10¹¹ Bq ; t½ = 88 ans ; 1 an = 3,16·10⁷ s ; on change la pile quand 30 % des noyaux de plutonium se sont désintégrés.',
+    fin: 'On cherche : A, Z et X ; t½ sur la courbe ; λ ; la durée d’utilisation de la pile.' },
+  fig_enonce_2025: {
+    trace: 'Énoncé national 2025 N : un noyau de cadmium peint émet une particule (sphère jaune-orangé, « particule ? ») et un rayonnement γ (onde violette) ; équation ¹⁰⁷₄₈Cd → ¹⁰⁷₄₇Ag + ᴬ_Z e + γ.',
+    donnees: 'Données : t½ = 6,93 heures ; a₀ = 1,25·10¹² Bq ; t₁ = 2t½ ; t₂ = 3t½ ; ln2 ≈ 0,693.',
+    fin: 'On cherche : A et Z de la particule, le type de désintégration ; λ en s⁻¹ ; l’activité aux dates t₁ et t₂.' },
+  fig_enonce_2022: {
+    trace: 'Énoncé national 2022 N : une fiole d’iode 131 peinte ; l’iode 131 est émetteur β⁻ ; équation ¹³¹₅₃I → ᴬ_Z X + ⁰₋₁e ; tableau Z / symbole : 52 Te, 54 Xe, 55 Cs ; courbe a(t) : axe t (jours) de 0 à 40, axe a (10⁶ Bq) de 0 à 4, a part de 4 et vaut 2 à 8 jours.',
+    donnees: 'Données : a₀ = 4·10⁶ Bq ; t½ = 8 jours ; ln2 ≈ 0,693 ; on attend que 95 % des noyaux d’iode 131 soient désintégrés.',
+    fin: 'On cherche : A, Z et X ; t½ sur la courbe ; λ ; N₀ ; la durée pour 95 % désintégrés.' },
+};
+
+const etapes = () => FIGS[fig].etapes;
+const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : 'Rejouer'; };
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.tw += dt * VITESSE;
+  if (S.jusqua != null && S.tw >= S.jusqua) {
+    S.tw = S.jusqua; S.jusqua = null; S.running = false;
+    if (M.fin !== undefined && S.tw >= M.fin - 1e-6) { S.pause = false; S.fait = true; etiquette(); bulle($('feedback'), 'Arrêt sur image : figure complète.'); pont.noter('measurement', { figure: fig }); pont.emettre(); return true; }
+    S.pause = true; etiquette();
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || 'instant choisi') + '.'); pont.noter('pause', { moment: S.motif }); pont.emettre();
+    return true;
+  }
+  if (M.fin !== undefined && S.tw >= M.fin + 0.05) {
+    S.running = false; S.pause = false; S.fait = true; etiquette(); pont.noter('measurement', { figure: fig }); pont.emettre();
+  } else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function calculer() { if (M.fin === undefined) { const t = S.tw; S.tw = 1e6; dessiner(craie); S.tw = t; scene.sale = true; } }
+function start() { S.tw = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; scene.sale = true; etiquette(); bulle($('feedback'), ''); pont.noter('start', { figure: fig }); pont.emettre(); }
+function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); bulle($('feedback'), 'Pause.'); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); bulle($('feedback'), ''); pont.noter('resume'); pont.emettre(); }
+function playUntil(p) {
+  calculer();
+  const nom = p.moment in M && etapes().includes(p.moment) ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || !(S.running || S.pause) || S.tw >= cible - 1e-3) { S.tw = 0; S.fait = false; }
+  S.jusqua = cible; S.motif = nom ? MOTIFS[fig][nom] : `t = ${cible.toFixed(1).replace('.', ',')} s d’écriture`; S.running = true; S.pause = false; etiquette(); bulle($('feedback'), '');
+  pont.noter('play_until', { moment: nom, time_s: +cible.toFixed(2) }); pont.emettre();
+}
+function setTime(p) {
+  calculer(); const t = Math.max(0, Math.min(+p.time_s, M.fin ?? 0)); if (!Number.isFinite(t)) return;
+  S.tw = t; S.jusqua = null; S.running = false; S.fait = t >= (M.fin ?? 0) - 1e-6; S.pause = !S.fait; scene.sale = true; etiquette();
+  bulle($('feedback'), 'Arrêt sur image : ' + (S.fait ? 'figure complète' : `t = ${t.toFixed(1).replace('.', ',')} s d’écriture`) + '.'); pont.noter('set_time', { time_s: t }); pont.emettre();
+}
+function setParameters(p) {
+  const f = p.fig || p.figure || p.variant;
+  if (!f || !FIGS[f] || f === fig) return;
+  fig = f; M = {}; config.title = 'Figure — ' + FIGS[fig].titre; config.variants = [{ id: fig, label: FIGS[fig].titre }];
+  config.command_schema.play_until.moment = FIGS[fig].etapes.join(' | ') + ' (réécrit la figure et s’arrête après cette étape)';
+  start(); setTimeout(() => pont.manifeste(), 400);
+}
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+
+function ceQuiSeVoit() {
+  const D = DESCRIPTIONS[fig], faites = etapes().filter(n => vu(n));
+  const m = [`Figure « ${fig} » : ${FIGS[fig].titre}.`];
+  if (!faites.length) m.push(S.running ? 'La figure est en train de s’écrire à la craie (première étape pas encore finie).' : 'Rien d’écrit encore.');
+  faites.forEach(n => { if (D[n]) m.push(D[n]); });
+  m.push(S.running ? 'La craie écrit encore.' : S.pause ? `Écriture arrêtée après l’étape « ${faites.length ? faites[faites.length - 1] : 'aucune'} ».` : 'Figure complète.');
+  return m.join(' ');
+}
+window.Tableau.explication(Object.fromEntries(Object.keys(FIGS).map(f => [f,
+  FIGS[f].etapes.filter(e => DESCRIPTIONS[f][e]).map(e => ({ repere: e, texte: DESCRIPTIONS[f][e] }))])));
+const commandes = ['start', 'reset', 'pause', 'resume', 'play_until', 'set_time', 'set_parameters'];
+const config = { id: 'radioactivite_figures', version: '1.0', title: 'Figure — ' + FIGS[fig].titre, variants: [{ id: fig, label: FIGS[fig].titre }], commands: commandes,
+  command_schema: { play_until: { moment: FIGS[fig].etapes.join(' | ') + ' (réécrit la figure et s’arrête après cette étape)', time_s: 'instant d’écriture (s)' },
+    set_time: { time_s: 'instant d’écriture (s), figé' }, set_parameters: { fig: Object.keys(FIGS).join(' | ') } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: `Figure du cours « Décroissance radioactive » : ${FIGS[fig].titre}. Étapes d’écriture : ${FIGS[fig].etapes.join(', ')}.`,
+  etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : 'finished', ce_qui_se_voit: ceQuiSeVoit(), current_variant: fig,
+    time_s: +S.tw.toFixed(2), parameters: { fig },
+    moments: Object.fromEntries(etapes().filter(n => M[n] !== undefined).map(n => [n, +M[n].toFixed(2)])), etapes_ecrites: etapes().filter(n => vu(n)) }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset: start, pause, resume, play_until: () => playUntil(p), set_time: () => setTime(p), set_parameters: () => setParameters(p) })[cmd]?.() });
+etiquette();
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Carte du chapitre — décroissance radioactive</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="radio.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Carte conceptuelle dessinée à la craie : « La décroissance radioactive » au centre (un noyau instable se désintègre au hasard ; un grand nombre suit une loi), huit branches autour (le noyau, la stabilité, les désintégrations, la famille, la loi de décroissance, la demi-vie, l'activité, la datation)"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset play_until">Redessiner</button>
+    <button class="craie-btn secondaire" id="imprimer" title="Imprimer ou enregistrer en PDF">🖨️ Imprimer / PDF</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script src="noyaux.js"></script>
+<script src="/media/simulations/shared/tableau/imprimer.js"></script>
+<script>
+/*
+ * La carte conceptuelle du cours « Décroissance radioactive » (phys_ch4_radioactivite), même forme que
+ * ondes-lumineuses-tableau/carte.html et ondes-periodiques-tableau/carte.html. Au centre « La décroissance
+ * radioactive » ; sa phrase (« un noyau instable se désintègre au hasard ; un grand nombre suit une loi ») s’écrit sous
+ * le titre au moment `definition`. Puis huit branches dessinées l’une après l’autre au rythme de la voix
+ * (play_until {moment: <branche>}) : noyau, stabilite, desintegrations, famille, loi, demi_vie, activite, datation.
+ * Une branche sautée (la voix est déjà plus loin) s’écrit d’un coup ; celle qu’on dit s’écrit à cet instant. Chaque
+ * branche porte sa notion et sa formule (indices « N_0 », exposants « e^{−λt} », noyaux « [4,2]He » par noyaux.js).
+ * L’élève touche une branche : sa phrase s’écrit dans la bulle. Le lecteur donne le bilan de l’élève
+ * (set_parameters {lacunes, acquis_ids}) : branches à reprendre entourées en rouge (à revoir : orange), acquises cochées.
+ */
+const { bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+
+const CENTRE = { x: 380, y: 212, w: 226, h: 118, comps: [],
+  phrase: 'La décroissance radioactive : un noyau instable se désintègre au hasard ; un grand nombre de noyaux suit une loi, N(t) = N_0·e^{−λt}.' };
+const NOEUDS = [
+  { id: 'noyau', x: 136, y: 66, w: 228, h: 66, couleur: 'cyan', comps: ['C1'], titre: 'Le noyau',
+    lignes: ['[A,Z]X : Z protons, N = A − Z', 'isotopes : même Z, A différents'],
+    phrase: 'Le noyau [A,Z]X : Z protons, N = A − Z neutrons, A nucléons. Des isotopes ont le même Z et des A différents : [12,6]C et [14,6]C.' },
+  { id: 'stabilite', x: 380, y: 58, w: 214, h: 66, couleur: 'cyan', comps: ['C2'], titre: 'Stabilité',
+    lignes: ['diagramme (N, Z) : la vallée', 'excès de n → β⁻ · de p → β^{+}'],
+    phrase: 'Dans le diagramme (N, Z), les noyaux stables forment la vallée de stabilité ; au-dessus (excès de neutrons) β⁻, au-dessous (excès de protons) β^{+}, les noyaux lourds α.' },
+  { id: 'desintegrations', x: 624, y: 74, w: 232, h: 84, couleur: 'jaune', comps: ['C3', 'C4'], titre: 'Désintégrations',
+    lignes: ['α : [4,2]He · β⁻ : [0,-1]e', 'β^{+} : [0,1]e · γ : Y* → Y + γ', 'Soddy : A et Z conservés'],
+    phrase: 'α : émission de [4,2]He ; β⁻ : de [0,-1]e ; β^{+} : de [0,1]e ; γ : Y* → Y + γ. Lois de Soddy : conservation de A et de Z.' },
+  { id: 'famille', x: 640, y: 212, w: 220, h: 66, couleur: 'jaune', comps: ['C5'], titre: 'Famille radioactive',
+    lignes: ['x α et y β⁻ : un système', 'A d’abord (y), puis Z (x)'],
+    phrase: '[238,92]U → [206,82]Pb : on écrit la conservation de A (y d’abord), puis celle de Z : 8 α et 6 β⁻.' },
+  { id: 'loi', x: 624, y: 356, w: 232, h: 66, couleur: 'orange', comps: ['C6'], titre: 'Loi de décroissance',
+    lignes: ['N(t) = N_0·e^{−λt}', 'τ = 1/λ (tangente à l’origine)'],
+    phrase: 'N(t) = N_0·e^{−λt} : les noyaux restants ; λ en s⁻¹ ; τ = 1/λ, lu avec la tangente à l’origine.' },
+  { id: 'demi_vie', x: 380, y: 366, w: 214, h: 66, couleur: 'orange', comps: ['C7'], titre: 'Demi-vie t½',
+    lignes: ['t½ = ln2/λ', 'N(n·t½) = N_0/2^{n}'],
+    phrase: 'La demi-vie t½ est la durée au bout de laquelle la moitié des noyaux initialement présents se sont désintégrés : t½ = ln2/λ.' },
+  { id: 'activite', x: 136, y: 356, w: 228, h: 66, couleur: 'vert', comps: ['C8'], titre: 'Activité a',
+    lignes: ['a = λ·N, en Bq', 'N = (m/M)·N_A'],
+    phrase: 'L’activité a est le nombre de désintégrations par seconde, en becquerel (Bq) : a = λ·N, a(t) = a_0·e^{−λt} ; N = (m/M)·N_A.' },
+  { id: 'datation', x: 124, y: 212, w: 212, h: 66, couleur: 'violet', comps: ['C9'], titre: 'Datation',
+    lignes: ['t = (1/λ)·ln(a_0/a)', 'carbone 14 : t½ = 5730 ans'],
+    phrase: 'Dater : t = (1/λ)·ln(a_0/a), avec a_0 l’activité d’un échantillon vivant (récent) de même masse ; carbone 14 : t½ = 5730 ans.' },
+];
+const ANNEAUX = { non_acquis: ['rouge', 'à reprendre'], partiel: ['orange', 'à revoir'] };
+const AVANT = -1e9;   // instant d'un élément déjà dit : écrit d'un coup
+
+// def : instant où la phrase du centre s'écrit (null = pas encore dite) ; n branches dessinées ; apparu[i] leur instant.
+const S = { def: null, n: 0, cible: 0, running: false, lacunes: null, acquis: null, apparu: [], choisi: null };
+const DUREE_BRANCHE = 2.6;   // s par branche quand la carte se dessine seule
+
+/* ---- Noyaux et indices (comme bilan.html) ---------------------------------------------------------------------- */
+const RE_NOYAU = /\[([-−]?[0-9A-Z]+),([-−]?[0-9A-Z]+)\]([A-Za-z]+\*?)/g;
+function morceaux(s) {
+  const out = []; let i = 0, m; s = String(s); RE_NOYAU.lastIndex = 0;
+  while ((m = RE_NOYAU.exec(s))) { if (m.index > i) out.push({ t: s.slice(i, m.index) }); out.push({ A: m[1], Z: m[2], X: m[3] }); i = RE_NOYAU.lastIndex; }
+  if (i < s.length) out.push({ t: s.slice(i) });
+  return out;
+}
+const EXP = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+function largeurTexte(c, t, taille) {
+  t = String(t).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => EXP[ch]).join('') + '}');
+  return window.Tableau.Craie.segments(t).reduce((w, g) => w + c.largeurTexte(g.t, g.sub || g.sup ? taille * .62 : taille), 0);
+}
+function largeur(c, s, taille) {
+  return morceaux(s).reduce((w, m) => w + (m.t != null ? largeurTexte(c, m.t, taille) : c.largeurNucleide(m.X, m.A, m.Z, taille)), 0);
+}
+function ecrire(c, s, x, y, o = {}) {
+  const ms = morceaux(s);
+  if (!ms.some(m => m.t == null)) return c.texte(s, x, y, o);
+  let taille = o.taille ?? 18, w = largeur(c, s, taille);
+  if (o.max && w > o.max) { taille *= o.max / w; w = o.max; }
+  let px = o.align === 'center' ? x - w / 2 : o.align === 'right' ? x - w : x;
+  const oo = { ...o, taille, align: 'left', max: 0 };
+  for (const m of ms) {
+    if (m.t != null) { if (m.t.trim()) c.texte(m.t, px, y, oo); px += largeurTexte(c, m.t, taille); }
+    else px = c.nucleide(m.X, m.A, m.Z, px, y, oo);
+  }
+  return c;
+}
+const HAUT_U = { 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹', '-': '⁻', '−': '⁻', '+': '⁺', n: 'ⁿ' };
+const BAS_U = { 0: '₀', 1: '₁', 2: '₂', 3: '₃', 4: '₄', 5: '₅', 6: '₆', 7: '₇', 8: '₈', 9: '₉', '-': '₋', '−': '₋', A: 'ₐ' };
+const enHaut = s => [...s].every(ch => ch in HAUT_U) ? [...s].map(ch => HAUT_U[ch]).join('') : '^(' + s + ')';
+const enBas = s => [...s].every(ch => ch in BAS_U) ? [...s].map(ch => BAS_U[ch]).join('') : '_' + s;
+/* Texte pour la bulle, l'explication et ce_qui_se_voit (HTML) : jamais de « _ » ni de « [A,Z] » visibles. */
+const lisible = s => String(s)
+  .replace(RE_NOYAU, (m, A, Z, X) => (A === 'A' ? `${X} (A nucléons, Z protons)` : enHaut(A) + enBas(Z) + X))
+  .replace(/\^\{([^}]+)\}/g, (m, e) => enHaut(e))
+  .replace(/([A-Za-zλ])_([0-9A])/g, (m, l, d) => l + BAS_U[d]);
+
+function statut(comps) {
+  if (!S.lacunes || !comps.length) return null;
+  const lac = S.lacunes.filter(l => comps.includes(l.id));
+  if (lac.some(l => l.statut === 'non_acquis')) return 'non_acquis';
+  if (lac.length) return 'partiel';
+  return (S.acquis || []).some(a => comps.includes(a)) ? 'acquis' : null;
+}
+/* Anneau rouge/orange ou coche verte autour d'un cadre (état de l'élève). */
+function etat(c, comps, x, y, w, h) {
+  const st = statut(comps);
+  c.direct(() => {
+    if (st && ANNEAUX[st]) {
+      const [coul, etiq] = ANNEAUX[st];
+      c.rect(x - 6, y - 6, w + 12, h + 12, { couleur: coul, arrondi: 16, largeur: 2, pointille: [6, 6] });
+      c.texte(etiq, x + w - 4, y - 9, { couleur: coul, taille: 12, align: 'right' });
+    } else if (st === 'acquis') c.texte('✓', x + w - 14, y + 14, { couleur: 'vert', taille: 18 });
+  });
+}
+
+function branche(c, n) {
+  const dx = n.x - CENTRE.x, dy = n.y - CENTRE.y, L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L;
+  // du bord du centre au bord de la branche, avec une légère courbure
+  const d0 = Math.min(CENTRE.w / 2 / Math.max(.2, Math.abs(ux)), CENTRE.h / 2 / Math.max(.2, Math.abs(uy)));
+  const d1 = Math.min(n.w / 2 / Math.max(.2, Math.abs(ux)), n.h / 2 / Math.max(.2, Math.abs(uy)));
+  const a = [CENTRE.x + ux * d0, CENTRE.y + uy * d0], b = [n.x - ux * d1, n.y - uy * d1];
+  const m = [(a[0] + b[0]) / 2 - uy * 12, (a[1] + b[1]) / 2 + ux * 12];
+  c.courbe(u => [(1 - u) * (1 - u) * a[0] + 2 * (1 - u) * u * m[0] + u * u * b[0], (1 - u) * (1 - u) * a[1] + 2 * (1 - u) * u * m[1] + u * u * b[1]], 24, { couleur: 'faible', largeur: 2 });
+  const x = n.x - n.w / 2, y = n.y - n.h / 2;
+  c.rect(x, y, n.w, n.h, { couleur: n.couleur, arrondi: 14, largeur: 2.4 });
+  c.texte(n.titre, n.x, y + 20, { couleur: n.couleur, taille: 16, align: 'center', max: n.w - 16, duree: .8 });
+  n.lignes.forEach((l, k) => ecrire(c, l, n.x, y + 40 + k * 17, { couleur: 'blanc', taille: 13, align: 'center', max: n.w - 14, alpha: .92, duree: 1 }));
+  c.repere(n.id, x - 6, y - 6, n.w + 12, n.h + 12, n.titre);
+  etat(c, n.comps, x, y, n.w, n.h);
+  if (S.choisi === n.id) c.direct(() => c.rect(x - 3, y - 3, n.w + 6, n.h + 6, { couleur: 'blanc', arrondi: 15, largeur: 1.2, alpha: .6 }));
+}
+
+function dessiner(c) {
+  const x = CENTRE.x - CENTRE.w / 2, y = CENTRE.y - CENTRE.h / 2;
+  if (S.def === AVANT) c.cur = AVANT;   // déjà dit (saut ou retour en arrière) : le centre est écrit d'un coup
+  c.rect(x, y, CENTRE.w, CENTRE.h, { couleur: 'jaune', arrondi: 18, largeur: 3 });
+  c.texte('La décroissance', CENTRE.x, y + 26, { couleur: 'jaune', taille: 20, align: 'center', gras: true });
+  c.texte('radioactive', CENTRE.x, y + 49, { couleur: 'jaune', taille: 20, align: 'center', gras: true });
+  c.repere('centre', x, y, CENTRE.w, CENTRE.h, 'le centre : la décroissance radioactive');
+  c.repere('definition', x, y, CENTRE.w, CENTRE.h, 'un noyau instable se désintègre au hasard ; un grand nombre suit une loi');
+  const apres = c.cur;   // fin du titre du centre
+  if (S.def != null) {
+    c.depuis(S.def);
+    ['un noyau instable se désintègre', 'au hasard ; un grand nombre', 'suit une loi'].forEach((l, k) =>
+      c.texte(l, CENTRE.x, y + 71 + k * 16, { couleur: 'blanc', taille: 13, align: 'center', max: CENTRE.w - 16, alpha: .92, duree: 1.1 }));
+    etat(c, CENTRE.comps, x, y, CENTRE.w, CENTRE.h);
+    if (S.choisi === 'centre') c.direct(() => c.rect(x - 3, y - 3, CENTRE.w + 6, CENTRE.h + 6, { couleur: 'blanc', arrondi: 19, largeur: 1.2, alpha: .6 }));
+  }
+  // chaque branche a sa ligne de temps : elle s'écrit dès que la voix la dit, sans attendre la précédente
+  for (let i = 0; i < S.n; i++) { c.cur = S.apparu[i] === AVANT ? AVANT : Math.max(apres, S.apparu[i]); branche(c, NOEUDS[i]); }
+  if (S.lacunes) c.direct(() => c.texte('✓ acquis · ⟳ à revoir · ✗ à reprendre', 24, 412, { couleur: 'faible', taille: 12 }));
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(71); dessiner(c); return c.fin(); });
+const maintenant = () => (performance.now() - scene.ouvert) / 1000;
+let horloge = 0;
+scene.avancer = dt => {
+  if (!S.running) return false;
+  horloge += dt;
+  if (S.n < S.cible && horloge >= 0) {
+    // la branche suivante apparaît quand la précédente a fini de s'écrire
+    S.n += 1; S.apparu[S.n - 1] = maintenant(); horloge = -DUREE_BRANCHE;
+    bulle($('feedback'), NOEUDS[S.n - 1].titre + (S.n >= NOEUDS.length ? ' — la carte est complète.' : ''));
+    pont.noter('branche', { n: S.n, moment: NOEUDS[S.n - 1].id }); pont.emettre();
+    if (S.n >= S.cible) S.running = false;
+  }
+  return true;
+};
+function moments() { const m = { definition: 0 }; NOEUDS.forEach((n, i) => { m[n.id] = i + 1; }); m.fin = NOEUDS.length; m.complet = NOEUDS.length; return m; }
+/* Dessine la carte jusqu'à la branche `cible` (0 = la phrase du centre). `pasAPas` : la carte se dessine seule,
+ * une branche après l'autre (bouton) ; sinon (la voix) les branches sautées s'écrivent d'un coup et la dernière à cet instant. */
+function montrer(cible, par, pasAPas) {
+  cible = Math.max(0, Math.min(NOEUDS.length, cible));
+  if (cible < S.n) { S.n = 0; S.apparu = []; S.def = null; scene.reecrire(); }   // retour en arrière : on redessine jusque-là
+  if (S.def == null) S.def = pasAPas || cible === 0 ? maintenant() : AVANT;
+  if (!pasAPas && cible > S.n) {
+    for (let i = S.n; i < cible - 1; i++) S.apparu[i] = AVANT;
+    S.apparu[cible - 1] = maintenant(); S.n = cible;
+    bulle($('feedback'), NOEUDS[cible - 1].titre + (cible >= NOEUDS.length ? ' — la carte est complète.' : ''));
+  } else if (cible === 0) bulle($('feedback'), 'Au centre : la décroissance radioactive.');
+  S.cible = cible; S.running = S.n < cible; horloge = pasAPas ? -1.5 : 0; scene.sale = true;
+  pont.noter(par || 'play_until', { moment: NOEUDS[cible - 1]?.id || 'definition' }); pont.emettre();
+}
+function playUntil(p) { const M = moments(); const n = p.moment in M ? M[p.moment] : +p.time_s; if (Number.isFinite(n)) montrer(n, 'play_until'); }
+function start() { S.n = 0; S.apparu = []; S.def = null; S.choisi = null; scene.reecrire(); montrer(NOEUDS.length, 'start', true); bulle($('feedback'), 'La carte se dessine…'); }
+function setParameters(p) {
+  if (Array.isArray(p.lacunes)) S.lacunes = p.lacunes.map(l => ({ id: String(l.id || ''), label: String(l.label || ''), statut: String(l.statut || 'non_acquis') }));
+  if (Array.isArray(p.acquis_ids)) S.acquis = p.acquis_ids.map(String);
+  scene.sale = true; pont.noter('set_parameters', { lacunes: (S.lacunes || []).length }); pont.emettre();
+}
+function ceQuiSeVoit() {
+  const vues = NOEUDS.slice(0, S.n).map(n => n.titre);
+  const aReprendre = NOEUDS.slice(0, S.n).filter(n => statut(n.comps) && statut(n.comps) !== 'acquis').map(n => n.titre);
+  const etatEleve = S.lacunes ? ` Branches à reprendre : ${aReprendre.join(', ') || 'aucune'}.` : '';
+  return `Carte conceptuelle : « La décroissance radioactive » au centre${S.def != null ? ' avec sa phrase (un noyau instable se désintègre au hasard ; un grand nombre suit une loi)' : ''}, ${S.n}/${NOEUDS.length} branche(s) dessinée(s)${vues.length ? ' (' + vues.join(', ') + ')' : ''}${S.running ? ', la carte se dessine' : ''}.${etatEleve}${S.choisi ? ` L'élève a touché « ${S.choisi === 'centre' ? 'le centre' : NOEUDS.find(n => n.id === S.choisi).titre} ».` : ''}`;
+}
+$('run').onclick = start;
+// Imprimer / PDF : la carte complète, sur fond blanc (shared/tableau/imprimer.js).
+$('imprimer').onclick = () => {
+  const avant = { n: S.n, cible: S.cible, running: S.running, apparu: S.apparu.slice(), def: S.def, choisi: S.choisi };
+  window.Tableau.imprimer({ titre: 'Carte du chapitre — décroissance radioactive', scene,
+    pages: [{ nom: 'la carte complète', preparer: () => { S.n = NOEUDS.length; S.running = false; S.def = AVANT; S.apparu = NOEUDS.map(() => AVANT); S.choisi = null; } }],
+    restaurer: () => { Object.assign(S, avant); } });
+  pont.noter('imprimer', { pages: 1 }); pont.emettre();
+};
+canvas.addEventListener('pointerdown', e => {
+  const r = canvas.getBoundingClientRect(), [x, y] = scene.local(e.clientX - r.left, e.clientY - r.top);
+  const n = NOEUDS.slice(0, S.n).find(n => Math.abs(x - n.x) <= n.w / 2 + 6 && Math.abs(y - n.y) <= n.h / 2 + 6);
+  if (n) { S.choisi = n.id; bulle($('feedback'), lisible(n.phrase)); }
+  else if (S.def != null && Math.abs(x - CENTRE.x) <= CENTRE.w / 2 && Math.abs(y - CENTRE.y) <= CENTRE.h / 2) { S.choisi = 'centre'; bulle($('feedback'), lisible(CENTRE.phrase)); }
+  else return;
+  scene.sale = true; pont.noter('touche', { moment: S.choisi === 'centre' ? 'definition' : S.choisi }); pont.emettre();
+});
+
+window.Tableau.explication({ carte: [{ repere: 'centre', texte: lisible(CENTRE.phrase) }, ...NOEUDS.map(n => ({ repere: n.id, texte: lisible(n.phrase) }))] });
+const commandes = ['start', 'reset', 'play_until', 'set_parameters'];
+const config = { id: 'radioactivite_carte', version: '1.0', title: 'Carte du chapitre — décroissance radioactive', variants: [{ id: 'carte', label: 'carte' }], commands: commandes,
+  command_schema: { play_until: { moment: Object.keys(moments()).join(' | ') + ' (definition = la phrase du centre ; sinon dessine la carte jusqu’à cette branche ; fin = la carte complète)' },
+    set_parameters: { lacunes: '[{id: C1..C9, statut: non_acquis|partiel}] (bilan de l’élève)', acquis_ids: '[C1, ..] compétences acquises' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Carte conceptuelle du chapitre « Décroissance radioactive » : « La décroissance radioactive » au centre (un noyau instable se désintègre au hasard ; un grand nombre suit une loi), huit branches autour (le noyau, la stabilité, les désintégrations, la famille radioactive, la loi de décroissance, la demi-vie, l’activité, la datation).',
+  etat: () => ({ simulation_status: S.running ? 'running' : 'paused', ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'carte', time_s: S.n, parameters: { definition: S.def != null, branches: S.n, lacunes: S.lacunes ? S.lacunes.length : null }, moments: moments() }),
+  progression: () => S.n / NOEUDS.length,
+  executer: (cmd, p) => ({ start, reset: start, play_until: () => playUntil(p), set_parameters: () => setParameters(p) })[cmd]?.() });
+bulle($('feedback'), 'Le professeur va dessiner la carte du chapitre.');
+window.__carte = { S, scene, NOEUDS, CENTRE, lisible };   // pour les vérifications automatiques
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

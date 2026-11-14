@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Défaire la puissance — racine n-ième</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Repère à la craie : la courbe de x puissance n ; la racine n-ième fait le chemin retour ; l’équation x puissance n égale a lue avec une droite horizontale"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/limites-continuite-tableau/lc-outils.js"></script>
+<script>
+/*
+ * Cours « Limites et continuité » (math_ch1_limites_continuite), bloc racine n-ième (n1, n2, n6).
+ * Vues : ?vue=defaire | reflet_racine (param n = 2, 3, 4) | equation. `fin` = construction complète.
+ * Au programme, ⁿ√ n’est définie que sur [0 ; +∞[ : rien de négatif sous la racine (on écrit −∛27).
+ */
+const fr = MathsTableau.fr;
+const EXP = { 2: '²', 3: '³', 4: '⁴' };
+const OPT_RR = { x0: 60, y0: 60, w: 280, h: 280, xmin: -0.2, xmax: 2.6, ymin: -0.2, ymax: 2.6, gx: [[1, '1'], [2, '2']], gy: [[1, '1'], [2, '2']] };
+const NX = n => 560 + (n - 2) * 60, NY = 300;
+
+MathsTableau.page({
+  id: 'lc_racine', titre: 'Défaire la puissance',
+  texte: 'Construction à la craie du cours Limites et continuité : la racine n-ième, réciproque de x ↦ xⁿ sur [0 ; +∞[',
+  vues: {
+    defaire: {
+      titre: 'x ↦ x³ : de 2 à 8, puis de 8 à 2',
+      dessiner(c, K) {
+        K.titre('La racine cubique défait le cube');
+        const G = K.axes({ x0: 60, y0: 60, w: 330, h: 285, xmin: -0.2, xmax: 2.4, ymin: -0.6, ymax: 10, gx: [[1, '1'], [2, '2']], gy: [[1, '1'], [8, '8']] });
+        const f = x => x * x * x;
+        c.texte('x ↦ x³ sur [0 ; +∞[', 440, 84, { couleur: 'cyan', taille: 20 });
+        K.anime(1.6, p => K.courbePart(G, f, 0, 2.15, p, { couleur: 'cyan' }));
+        K.marque('courbe_puissance');
+        c.pause(.3);
+        c.fleche(G.X(2), G.Y(0) - 3, G.X(2), G.Y(8) + 8, { couleur: 'cyan', largeur: 2 });
+        c.fleche(G.X(2) - 6, G.Y(8), G.X(0) + 6, G.Y(8), { couleur: 'cyan', largeur: 2 });
+        c.texte('2³ = 8', 440, 140, { couleur: 'cyan', taille: 22 });
+        K.marque('aller');
+        c.pause(.4);
+        c.cercle(G.X(0), G.Y(8), 13, { couleur: 'orange', largeur: 1.8 });
+        c.texte('on part de 8', 440, 182, { couleur: 'orange', taille: 20 });
+        c.repere('depart_8', G.X(0) - 16, G.Y(8) - 16, 32, 32, 'on part de 8');
+        K.marque('depart_8');
+        c.pause(.4);
+        c.fleche(G.X(0) + 6, G.Y(8) - 8, G.X(2) - 4, G.Y(8) - 8, { couleur: 'orange', largeur: 2, pointille: [6, 4] });
+        c.fleche(G.X(2) + 8, G.Y(8) + 4, G.X(2) + 8, G.Y(0) - 4, { couleur: 'orange', largeur: 2, pointille: [6, 4] });
+        c.cercle(G.X(2), G.Y(0), 13, { couleur: 'orange', largeur: 1.8 });
+        K.lignes(440, 236, [{ t: '∛8 = 2', couleur: 'jaune', taille: 26, cadre: 'jaune' }, { t: 'car 2³ = 8', couleur: 'jaune' }], 40);
+        c.repere('retour_2', G.X(2) - 16, G.Y(0) - 16, 32, 32, 'on revient à 2');
+        K.marque('retour_2');
+      },
+      decrire: {
+        courbe_puissance: 'La courbe de x ↦ x³ pour x ≥ 0.',
+        aller: 'Flèches cyan : de 2 sur l’axe des abscisses à la courbe, puis à 8 sur l’axe des ordonnées ; écrit : 2³ = 8.',
+        depart_8: 'Le nombre 8 est entouré en orange sur l’axe des ordonnées : on part de 8.',
+        retour_2: 'Flèches orange pointillées : de 8 à la courbe, puis on descend à 2 ; écrit : ∛8 = 2 car 2³ = 8.',
+      },
+      motifs: { aller: '2 au cube : 8', depart_8: 'on part de 8', retour_2: 'on revient à 2' },
+      explication: [{ repere: 'depart_8', texte: 'On part de 8.' }, { repere: 'retour_2', texte: 'Le chemin retour mène à 2 : la racine cubique de 8.' }],
+    },
+    reflet_racine: {
+      titre: 'xⁿ et sa réciproque ⁿ√ : le reflet par rapport à y = x',
+      params: { n: { min: 2, max: 4, pas: 1, defaut: 3, sens: 'l’indice n' } },
+      dessiner(c, K) {
+        const n = Math.round(K.P.n), e = EXP[n];
+        K.titre('ⁿ√ : la réciproque de xⁿ');
+        const G = K.axes(OPT_RR);
+        c.texte(`x ↦ x${e} sur [0 ; +∞[`, 400, 84, { couleur: 'cyan', taille: 20 });
+        K.anime(1.4, p => K.courbePart(G, x => Math.pow(x, n), 0, Math.pow(2.55, 1 / n), p, { couleur: 'cyan' }));
+        K.marque('courbe_puissance');
+        c.pause(.3);
+        c.ligne(G.X(-0.2), G.Y(-0.2), G.X(2.6), G.Y(2.6), { couleur: 'faible', largeur: 1.5, pointille: [8, 6] });
+        c.texte('y = x', G.X(2.2) + 8, G.Y(2.2) + 18, { couleur: 'faible', taille: 15 });
+        K.marque('droite_y_x');
+        c.pause(.3);
+        K.anime(1.6, p => K.courbePart(G, x => Math.pow(x, 1 / n), 0, 2.55, p, { couleur: 'vert' }));
+        K.lignes(400, 130, [
+          { t: `x ↦ ${e}√x : sa réciproque`, couleur: 'vert' },
+          { t: `${e}√x = y  ⇔  x = y${e}`, couleur: 'jaune', cadre: 'jaune' },
+          { t: 'pour x ≥ 0 et y ≥ 0', couleur: 'faible' },
+        ], 36);
+        c.repere('courbe_racine', G.X(0.3), G.Y(1.65), G.X(2.55) - G.X(0.3), G.Y(0.3) - G.Y(1.65), 'la courbe de la racine');
+        K.marque('reflet_racine');
+        c.pause(.3);
+        c.cercle(G.X(0), G.Y(0), 11, { couleur: 'orange', largeur: 1.8 });
+        c.cercle(G.X(1), G.Y(1), 11, { couleur: 'orange', largeur: 1.8 });
+        c.texte('(1 ; 1)', G.X(1) + 14, G.Y(1) - 10, { couleur: 'orange', taille: 15 });
+        c.texte('toutes passent par (0 ; 0) et (1 ; 1)', 400, 250, { couleur: 'orange', taille: 17, max: 340 });
+        c.repere('points_communs', G.X(0) - 14, G.Y(1) - 14, G.X(1) - G.X(0) + 28, G.Y(0) - G.Y(1) + 28, '(0 ; 0) et (1 ; 1)');
+        K.marque('points_communs');
+        c.direct(() => {
+          c.texte('n :', 520, NY + 6, { couleur: 'faible', taille: 16 });
+          c.ligne(NX(2), NY, NX(4), NY, { couleur: 'faible', largeur: 1.4 });
+          [2, 3, 4].forEach(k => c.texte(String(k), NX(k), NY + 24, { couleur: k === n ? 'jaune' : 'faible', taille: 15, align: 'center' }));
+          c.point(NX(n), NY, 7, 'jaune');
+        });
+      },
+      poignees: K => [{ id: 'n', x: NX(Math.round(K.P.n)), y: NY, bouger: (px) => ({ n: Math.round((px - 560) / 60) + 2 }) }],
+      lecture: K => `n = ${Math.round(K.P.n)} : la courbe de x puissance ${Math.round(K.P.n)} et celle de sa racine, symétriques par rapport à y = x ; elles passent par (0 ; 0) et (1 ; 1).`,
+      decrire: K => ({
+        courbe_puissance: `La courbe de x ↦ x${EXP[Math.round(K.P.n)]} pour x ≥ 0, en cyan.`,
+        droite_y_x: 'La droite y = x en pointillés.',
+        reflet_racine: `Le reflet en vert : la courbe de la racine d’indice ${Math.round(K.P.n)} ; écrit : ⁿ√x = y ⇔ x = yⁿ pour x ≥ 0 et y ≥ 0.`,
+        points_communs: '(0 ; 0) et (1 ; 1) sont entourés : toutes ces courbes y passent.',
+      }),
+      motifs: { droite_y_x: 'la droite y = x', reflet_racine: 'la courbe de la racine', points_communs: '(0 ; 0) et (1 ; 1)' },
+      explication: [{ repere: 'courbe_racine', texte: 'La racine n-ième est la réciproque de x puissance n.' }, { repere: 'points_communs', texte: 'Elles passent toutes par (0 ; 0) et (1 ; 1).' }],
+    },
+    equation: {
+      titre: 'L’équation xⁿ = a : parité de n, puis signe de a',
+      dessiner(c, K) {
+        K.titre('xⁿ = a : combien de solutions ?');
+        c.texte('n pair : x⁴', 40, 64, { couleur: 'cyan', taille: 17 });
+        c.texte('n impair : x³', 420, 64, { couleur: 'cyan', taille: 17 });
+        const A = K.axes({ x0: 40, y0: 70, w: 300, h: 156, xmin: -2.6, xmax: 2.6, ymin: -20, ymax: 20, gx: [[-2, '−2'], [2, '2']], gy: [] });
+        K.anime(1.2, p => K.courbePart(A, x => x * x * x * x, -2.15, 2.15, p, { couleur: 'cyan' }));
+        const B = K.axes({ x0: 420, y0: 70, w: 300, h: 156, xmin: -3.6, xmax: 3.6, ymin: -30, ymax: 30, gx: [[-3, '−3'], [2, '2']], gy: [] });
+        K.anime(1.2, p => K.courbePart(B, x => x * x * x, -3.15, 3.15, p, { couleur: 'cyan' }));
+        c.repere('pair', 34, 60, 312, 172, 'n pair : x⁴');
+        c.repere('impair', 414, 60, 312, 172, 'n impair : x³');
+        c.pause(.3);
+        c.ligne(A.X(-2.6), A.Y(16), A.X(2.6), A.Y(16), { couleur: 'vert', largeur: 1.5, pointille: [6, 5] });
+        K.rond(A, -2, 16, true, 'vert'); K.rond(A, 2, 16, true, 'vert');
+        c.texte('x⁴ = 16 : x = −2 ou x = 2', 40, 250, { couleur: 'vert', taille: 15 });
+        K.marque('a_positif_pair');
+        c.pause(.3);
+        c.ligne(A.X(-2.6), A.Y(-16), A.X(2.6), A.Y(-16), { couleur: 'rouge', largeur: 1.5, pointille: [6, 5] });
+        c.texte('x⁴ = −16 : aucune solution', 40, 272, { couleur: 'rouge', taille: 15 });
+        K.marque('a_negatif_pair');
+        c.pause(.3);
+        c.ligne(B.X(-3.6), B.Y(8), B.X(3.6), B.Y(8), { couleur: 'vert', largeur: 1.5, pointille: [6, 5] });
+        K.rond(B, 2, 8, true, 'vert');
+        c.texte('x³ = 8 : x = 2', 420, 250, { couleur: 'vert', taille: 15 });
+        K.marque('a_positif_impair');
+        c.pause(.3);
+        c.ligne(B.X(-3.6), B.Y(-27), B.X(3.6), B.Y(-27), { couleur: 'orange', largeur: 1.5, pointille: [6, 5] });
+        K.rond(B, -3, -27, true, 'orange');
+        c.texte('x³ = −27 : x = −∛27 = −3', 420, 272, { couleur: 'orange', taille: 15 });
+        K.marque('a_negatif_impair');
+        c.pause(.3);
+        const tx = 40, ty = 284, W = [130, 275, 275], H = 23;
+        c.rect(tx, ty, 680, 24 + 2 * H, { couleur: 'faible', arrondi: 4, largeur: 1.2, duree: .3 });
+        c.ligne(tx, ty + 24, tx + 680, ty + 24, { couleur: 'faible', largeur: 1, duree: .1 });
+        c.ligne(tx, ty + 24 + H, tx + 680, ty + 24 + H, { couleur: 'tresfaible', largeur: 1, duree: .1 });
+        c.ligne(tx + W[0], ty, tx + W[0], ty + 24 + 2 * H, { couleur: 'faible', largeur: 1, duree: .1 });
+        c.ligne(tx + W[0] + W[1], ty, tx + W[0] + W[1], ty + 24 + 2 * H, { couleur: 'faible', largeur: 1, duree: .1 });
+        const cx = [tx + W[0] / 2, tx + W[0] + W[1] / 2, tx + W[0] + W[1] + W[2] / 2];
+        c.texte('a > 0', cx[1], ty + 17, { couleur: 'faible', taille: 14, align: 'center' });
+        c.texte('a < 0', cx[2], ty + 17, { couleur: 'faible', taille: 14, align: 'center' });
+        c.texte('n pair', cx[0], ty + 41, { couleur: 'faible', taille: 14, align: 'center' });
+        c.texte('n impair', cx[0], ty + 41 + H, { couleur: 'faible', taille: 14, align: 'center' });
+        c.texte('x = ⁿ√a  ou  x = −ⁿ√a', cx[1], ty + 41, { couleur: 'vert', taille: 14, align: 'center' });
+        c.texte('aucune solution', cx[2], ty + 41, { couleur: 'rouge', taille: 14, align: 'center' });
+        c.texte('x = ⁿ√a', cx[1], ty + 41 + H, { couleur: 'vert', taille: 14, align: 'center' });
+        c.texte('x = −ⁿ√(−a)', cx[2], ty + 41 + H, { couleur: 'orange', taille: 14, align: 'center' });
+        c.repere('tableau', tx - 4, ty - 4, 688, 24 + 2 * H + 8, 'le tableau parité et signe');
+        K.marque('tableau_rempli');
+      },
+      decrire: {
+        a_positif_pair: 'À gauche, la droite y = 16 coupe la courbe de x⁴ en deux points : x = −2 ou x = 2.',
+        a_negatif_pair: 'La droite y = −16 ne coupe pas la courbe de x⁴ : aucune solution.',
+        a_positif_impair: 'À droite, la droite y = 8 coupe la courbe de x³ une fois : x = 2.',
+        a_negatif_impair: 'La droite y = −27 coupe la courbe de x³ une fois : x = −∛27 = −3.',
+        tableau_rempli: 'En bas, le tableau : n pair et a > 0, x = ⁿ√a ou −ⁿ√a ; n pair et a < 0, aucune solution ; n impair et a > 0, x = ⁿ√a ; n impair et a < 0, x = −ⁿ√(−a).',
+      },
+      motifs: { a_positif_pair: 'x⁴ = 16', a_negatif_pair: 'x⁴ = −16', a_positif_impair: 'x³ = 8', a_negatif_impair: 'x³ = −27', tableau_rempli: 'le tableau' },
+      explication: [{ repere: 'pair', texte: 'n pair : deux solutions ou aucune.' }, { repere: 'impair', texte: 'n impair : toujours une seule solution.' }, { repere: 'tableau', texte: 'Parité de n d’abord, signe de a ensuite.' }],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

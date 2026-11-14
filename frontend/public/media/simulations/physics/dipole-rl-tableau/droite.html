@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La droite di/dt = f(i) — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="rl.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Graphe à la craie de di/dt en fonction de i (2024 N) : des points mesurés, puis une droite décroissante ; ordonnée à l’origine E/L, pente −1/τ, abscisse à l’origine I₀ ; à droite, la colonne « Lecture »"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * La droite di/dt = f(i) (cours « Dipôle RL », 2e Bac PC BIOF, exercice national 2024 N, 12 novembre 2026).
+ * di/dt + (1/τ)·i = E/L, donc di/dt = E/L − (1/τ)·i : une droite décroissante.
+ * Lecture : ordonnée à l’origine E/L = 3·10³ A/s (E = 6 V → L = 6/3000 = 2·10⁻³ H = 2 mH) ;
+ * pente −5·10⁵ s⁻¹ = −1/τ (τ = 2·10⁻⁶ s = 2 µs) ; abscisse à l’origine I₀ = 6 mA (régime permanent : di/dt = 0).
+ * Axes : i en mA (0 à 7), di/dt en 10³ A/s (0 à 3,5). Pas de vue.
+ * Moments : points (les points mesurés apparaissent), droite, ordonnee, pente (triangle Δi = 2 mA, Δ(di/dt) = −1·10³ A/s),
+ * abscisse, fin. Chaque moment = fin de l’écriture de sa phase (play_until s’y fige).
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const MOMENTS = ['points', 'droite', 'ordonnee', 'pente', 'abscisse', 'fin'];
+const S = { t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0, dit: '' };
+let M = {}, MM = {};
+const VITESSE = 2;
+
+/* ── Physique (2024 N) ─────────────────────────────────────────────────── */
+const E = 6, L = 2e-3, I0 = 6e-3, TAU = 2e-6;           // V, H, A, s
+const didt = i_mA => E / L / 1000 - (i_mA / 1000) / TAU / 1000;   // en 10³ A/s, i en mA : 3 − 0,5·i
+const MESURES = [[.5, .03], [1.5, -.04], [2.5, .03], [3.5, -.03], [4.5, .04], [5.5, -.02]].map(([i, d]) => [i, didt(i) + d]);
+
+/* ── Géométrie (cadre 760 × 420) ───────────────────────────────────────── */
+const RG = { x: 8, y: 40, w: 500, h: 372 }, RL = { x: 516, y: 40, w: 236, h: 372 };
+const O = { x: 74, y: 350 }, AXL = 392, AYL = 266, IMAX = 7, DMAX = 3.5;
+const PX = i => O.x + i * AXL / IMAX, PY = d => O.y - d * AYL / DMAX;
+const LX = RL.x + 8, LW = RL.w - 16;
+const marque = (c, nom) => { MM[nom] = c.cur; };
+const lire = (c, y, s, o = {}) => c.texte(s, LX, y, { couleur: 'blanc', taille: 16, max: LW, ...o });
+
+function dessiner(c) {
+  scene.cadre(71); MM = {};
+  c.texte('2024 N : la droite di/dt = f(i)', RG.x + 6, 30, { couleur: 'cyan', taille: 17, max: RG.w - 10, duree: .9 });
+  c.rect(RG.x, RG.y, RG.w, RG.h, { couleur: 'tresfaible', arrondi: 10, duree: .5 });
+  c.texte('Lecture', RL.x + 6, 30, { couleur: 'cyan', taille: 17, duree: .3 });
+  c.rect(RL.x, RL.y, RL.w, RL.h, { couleur: 'tresfaible', arrondi: 10, duree: .4 });
+  const LT = AXL + 16, ig = [], LY = AYL + 16, dg = [];
+  for (let k = 1; k <= IMAX; k++) ig.push([(PX(k) - O.x) / LT, String(k)]);
+  c.axe(O.x, O.y, O.x + LT, O.y, ig, { taille: 13 });
+  for (let k = 1; k <= 7; k++) dg.push([(O.y - PY(k / 2)) / LY, k % 2 === 0 ? String(k / 2) : null]);
+  c.axe(O.x, O.y, O.x, O.y - LY, dg, { taille: 13, vertical: true });
+  c.texte('0', O.x - 8, O.y + 18, { couleur: 'faible', taille: 13, align: 'right' });
+  c.texte('di/dt (10³ A/s)', O.x + 10, 64, { couleur: 'blanc', taille: 16 });
+  c.texte('i (mA)', RG.x + RG.w - 8, O.y + 42, { couleur: 'blanc', taille: 16, align: 'right' });
+  lire(c, 64, 'E = 6 V ; bobine (L, r) et R_1', { couleur: 'faible', taille: 14, duree: .6 });
+  lire(c, 92, 'di/dt + (1/τ)·i = E/L', { couleur: 'blanc', taille: 17 });
+  c.pause(.3);
+  // points : les mesures apparaissent une à une.
+  for (const [i, d] of MESURES) { c.cercle(PX(i), PY(d), 4.5, { couleur: 'vert', largeur: 2, duree: .18 }); c.pause(.12); }
+  lire(c, 124, 'les points mesurés sont alignés', { couleur: 'vert', taille: 15 });
+  marque(c, 'points');
+  c.pause(.4);
+  // droite : de (0 ; 3·10³ A/s) à (6 mA ; 0).
+  c.ligne(PX(0), PY(3), PX(6), PY(0), { couleur: 'vert', largeur: 2.6, duree: .9 });
+  lire(c, 150, 'une droite qui descend :', { couleur: 'faible', taille: 14 });
+  lire(c, 172, 'di/dt = E/L − (1/τ)·i', { couleur: 'vert', taille: 17 });
+  marque(c, 'droite');
+  c.pause(.4);
+  // ordonnee : E/L = 3·10³ A/s → L = 2 mH.
+  c.cercle(PX(0), PY(3), 7, { couleur: 'cyan', largeur: 2 });
+  c.texte('E/L = 3·10³ A/s', PX(0) + 14, PY(3) - 12, { couleur: 'cyan', taille: 16 });
+  lire(c, 206, 'i = 0 : di/dt = E/L = 3·10³ A/s', { couleur: 'cyan', taille: 15 });
+  lire(c, 230, 'L = 6/(3·10³) = 2·10⁻³ H', { couleur: 'cyan', taille: 15 });
+  lire(c, 256, 'L = 2 mH', { couleur: 'blanc', taille: 19 });
+  c.rect(LX - 4, 236, 92, 28, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  marque(c, 'ordonnee');
+  c.pause(.4);
+  // pente : triangle Δi = 2 mA, Δ(di/dt) = −1·10³ A/s.
+  c.ligne(PX(2), PY(2), PX(4), PY(2), { couleur: 'cyan', largeur: 1.6, pointille: [5, 4] });
+  c.ligne(PX(4), PY(2), PX(4), PY(1), { couleur: 'cyan', largeur: 1.6, pointille: [5, 4] });
+  c.texte('Δi = 2 mA', PX(3), PY(2) - 10, { couleur: 'cyan', taille: 14, align: 'center' });
+  c.texte('−1·10³ A/s', PX(4) + 8, PY(1.5) + 5, { couleur: 'cyan', taille: 14 });
+  lire(c, 290, 'pente = −1·10³/(2·10⁻³)', { couleur: 'cyan', taille: 15 });
+  lire(c, 312, 'pente = −5·10⁵ s⁻¹ = −1/τ', { couleur: 'cyan', taille: 15 });
+  lire(c, 336, 'τ = 2·10⁻⁶ s = 2 µs', { couleur: 'blanc', taille: 18 });
+  c.rect(LX - 4, 316, 162, 28, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  marque(c, 'pente');
+  c.pause(.4);
+  // abscisse : di/dt = 0 → i = I₀ = 6 mA.
+  c.cercle(PX(6), PY(0), 7, { couleur: 'cyan', largeur: 2 });
+  c.texte('I_0', PX(6), O.y + 40, { couleur: 'cyan', taille: 18, align: 'center' });
+  lire(c, 368, 'di/dt = 0 : régime permanent', { couleur: 'faible', taille: 14 });
+  lire(c, 392, 'i = I_0 = 6 mA', { couleur: 'cyan', taille: 18 });
+  marque(c, 'abscisse');
+  c.pause(.8); marque(c, 'fin');
+  declarerReperes(c);
+  const fini = c.fin();
+  M = MM;
+  return fini || !S.running;
+}
+function declarerReperes(c) {
+  c.repere('axe_i', O.x - 6, O.y - 10, AXL + 22, 40, 'l’axe des courants : i (mA), de 0 à 7');
+  c.repere('axe_didt', O.x - 44, 48, 76, O.y - 48, 'l’axe di/dt (10³ A/s), de 0 à 3,5');
+  c.repere('points', PX(.3), PY(2.9), PX(5.7) - PX(.3), PY(.1) - PY(2.9), 'les points mesurés (alignés)');
+  c.repere('droite', PX(0), PY(3), PX(6) - PX(0), PY(0) - PY(3), 'la droite di/dt = E/L − (1/τ)·i');
+  c.repere('ordonnee', PX(0) - 14, PY(3) - 30, 160, 44, 'l’ordonnée à l’origine : E/L = 3·10³ A/s, donc L = 2 mH');
+  c.repere('pente', PX(2) - 6, PY(2) - 26, PX(4) - PX(2) + 90, PY(1) - PY(2) + 30, 'la pente : −1·10³/(2·10⁻³) = −5·10⁵ s⁻¹ = −1/τ, τ = 2 µs');
+  c.repere('abscisse', PX(6) - 16, O.y - 14, 32, 60, 'l’abscisse à l’origine : I₀ = 6 mA');
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+const craie = scene.craie;
+scene.cadre = function (graine) {
+  const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  craie.debut(graine, S.t);
+  const s = Math.min(W / VW, H / VH) || 1;
+  scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
+  craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
+  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+  return craie;
+};
+function calculer() { const t = S.t, rn = S.running; S.t = 1e6; S.running = false; try { dessiner(craie); dessiner(craie); } finally { S.t = t; S.running = rn; } scene.sale = true; }
+function moments() { if (M.fin === undefined) calculer(); const out = {}; for (const k of MOMENTS) out[k] = +M[k].toFixed(2); return out; }
+const vu = n => M[n] !== undefined && S.t >= M[n] - 1e-6;
+
+const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+const INDICES = { 0: '₀', 1: '₁', 2: '₂', e: 'ₑ', m: 'ₘ', a: 'ₐ', o: 'ₒ', x: 'ₓ' };
+const lisible = s => String(s).replace(/_\{?([A-Za-z0-9]+)\}?/g, (_, x) => [...x].map(ch => INDICES[ch] || ch).join(''));
+const dire = (texte, kind = '') => { S.dit = texte; bulle($('feedback'), lisible(texte), kind); };
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t += dt * VITESSE;
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.jusqua = null; S.running = false;
+    if (S.t >= M.fin - 1e-6) { finir(); return true; }
+    S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 1)} s`) + '.');
+    pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); return true;
+  }
+  if (M.fin !== undefined && S.t >= M.fin) { S.t = M.fin; finir(); return true; }
+  if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+const CONCLUSION = 'di/dt = E/L − (1/τ)·i : ordonnée à l’origine E/L = 3·10³ A/s, donc L = 2 mH ; pente −5·10⁵ s⁻¹ = −1/τ, donc τ = 2 µs ; abscisse à l’origine I₀ = 6 mA.';
+function finir() { S.running = false; S.fait = true; S.pause = false; etiquette(); dire(CONCLUSION, 'good'); pont.noter('measurement', {}); pont.emettre(); }
+const MOTIFS = {
+  points: 'les points mesurés', droite: 'la droite di/dt = f(i)', ordonnee: 'E/L = 3·10³ A/s : L = 2 mH',
+  pente: 'pente −5·10⁵ s⁻¹ = −1/τ : τ = 2 µs', abscisse: 'di/dt = 0 : I₀ = 6 mA', fin: 'tout est écrit',
+};
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
+function ceQuiSeVoit() {
+  if (M.fin === undefined) calculer();
+  const m = [`Graphe 2024 N di/dt = f(i)${S.running ? ', la craie écrit' : S.fait ? ', fin : tout est écrit' : S.pause ? ', arrêt sur image' : ', pas encore lancé'}.`,
+    'Axes : i (mA) de 0 à 7, di/dt (10³ A/s) de 0 à 3,5. Écrit : « di/dt + (1/τ)·i = E/L », E = 6 V.'];
+  const Lg = [];
+  if (vu('points')) Lg.push('six points mesurés verts, alignés, de (0,5 mA ; 2,75·10³ A/s) à (5,5 mA ; 0,25·10³ A/s)');
+  if (vu('droite')) Lg.push('droite verte de (0 ; 3·10³ A/s) à (6 mA ; 0) : di/dt = E/L − (1/τ)·i');
+  if (vu('ordonnee')) Lg.push('ordonnée à l’origine entourée : E/L = 3·10³ A/s ; « L = 6/(3·10³) = 2·10⁻³ H = 2 mH » (encadré)');
+  if (vu('pente')) Lg.push('triangle de pente : Δi = 2 mA, Δ(di/dt) = −1·10³ A/s ; « pente = −5·10⁵ s⁻¹ = −1/τ », « τ = 2·10⁻⁶ s = 2 µs » (encadré)');
+  if (vu('abscisse')) Lg.push('abscisse à l’origine entourée : di/dt = 0 (régime permanent), i = I₀ = 6 mA');
+  m.push(Lg.length ? `Au tableau : ${Lg.join(' ; ')}.` : 'Seuls les axes sont tracés.');
+  if (S.fait) m.push(`Conclusion : ${CONCLUSION}`);
+  return m.join(' ');
+}
+
+/* ── Commandes ─────────────────────────────────────────────────────────── */
+function start() { S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire('La craie trace les axes, puis les points mesurés…'); pont.noter('start'); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
+function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('La craie continue…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  calculer(); const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = clamp(t, 0, M.fin); S.fait = S.t >= M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+  etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fr(S.t, 1)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function playUntil(p) {
+  calculer();
+  const nom = MOMENTS.includes(p.moment) ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+  S.jusqua = clamp(cible, .01, M.fin); S.motif = nom ? MOTIFS[nom] : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+
+window.Tableau.explication([
+  { repere: 'points', texte: 'Les points mesurés sont alignés : di/dt est une fonction affine de i.' },
+  { repere: 'droite', texte: 'di/dt + (1/τ)·i = E/L, donc di/dt = E/L − (1/τ)·i : une droite qui descend.' },
+  { repere: 'ordonnee', texte: 'Pour i = 0, di/dt = E/L = 3·10³ A/s. Avec E = 6 V : L = 6/3000 = 2 mH.' },
+  { repere: 'pente', texte: 'La pente vaut −5·10⁵ s⁻¹ ; c’est −1/τ, donc τ = 2 µs.' },
+  { repere: 'abscisse', texte: 'Pour di/dt = 0, c’est le régime permanent : i = I₀ = 6 mA.' },
+]);
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'play_until'];
+calculer();
+const config = { id: 'dipole_rl_droite', version: '1.0', title: 'La droite di/dt = f(i) (2024 N)', variants: [], commands: commandes,
+  command_schema: {
+    set_time: { time_s: '0..fin (arrêt sur cet instant de l’écriture, en s ; voir moments)' },
+    play_until: { moment: 'points | droite | ordonnee | pente | abscisse | fin', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Exercice 2024 N : la courbe di/dt = f(i) est une droite, car di/dt + (1/τ)·i = E/L. Ordonnée à l’origine E/L = 3·10³ A/s ; avec E = 6 V, L = 2 mH. Pente −5·10⁵ s⁻¹ = −1/τ, τ = 2 µs. Abscisse à l’origine : I₀ = 6 mA.',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle', ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'droite',
+    time_s: +S.t.toFixed(2), parameters: { E_V: E, E_sur_L_A_par_s: E / L, L_mH: L * 1000, pente_par_s: -1 / TAU, tau_us: TAU * 1e6, I0_mA: I0 * 1000 }, moments: moments() }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), play_until: () => playUntil(p) })[cmd]?.() });
+dire('La droite di/dt = f(i)…');
+setTimeout(() => { if (!S.running && S.t === 0 && !S.pause) start(); }, 900);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

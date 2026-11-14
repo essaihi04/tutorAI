@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>L’activité au compteur Geiger — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="radio.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Une fiole d’iode 131 devant le tube d’un compteur Geiger : chaque désintégration détectée fait un petit éclat, l’afficheur compte les désintégrations en 1 s ; un calendrier qu’on fait glisser avance les jours ; à droite le graphe a(t) reçoit un point par mesure"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script src="noyaux.js"></script>
+<script>
+/*
+ * L’activité : le compteur Geiger (cours « Décroissance radioactive », 2e Bac PC BIOF, novembre 2026).
+ * Vue « L’échantillon et le compteur » (gauche, peinte) : une fiole d’iode 131 (t½ = 8 jours) devant le tube d’un compteur
+ * Geiger ; chaque désintégration détectée fait un petit éclat (dans la fiole, à la fenêtre du tube, sur le voyant) ; l’afficheur
+ * compte les désintégrations pendant 1 s. Un calendrier glisse sur l’axe des jours (poignée : la date t_j).
+ * Vue « a(t) » (droite, craie) : un point par mesure.
+ * Physique : a(t) = a₀·2^{−t/t½} = a₀·e^{−λt}, a₀ = 400 Bq, t½ = 8 jours ; a = λ·N : N et a diminuent dans le même rapport.
+ * Le comptage de 1 s est montré au ralenti (3 s de scène) ; le nombre affiché à la fin du comptage est exactement a(t),
+ * arrondi à l’unité (le tirage au hasard n’est pas le sujet ici). Les éclats sont pour l’œil : leur nombre suit a.
+ * Les petits points de la fiole représentent les noyaux : la part d’iode restante (colorée) suit 2^{−t/8}, les autres
+ * deviennent du xénon (gris).
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const lisse = u => { u = clamp(u); return u * u * (3 - 2 * u); };
+const A0 = 400, TD = 8, LAMBDA = Math.LN2 / TD;
+const activite = tj => A0 * Math.pow(2, -tj / TD);
+const P = { t_j: 8 };
+const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0, libre: false, mesures: [] };
+
+/* ── Instants clés (s de la scène) ───────────────────────────────────────────────────────────── */
+const C1 = [3.2, 6.2], CAL = [9.6, 11.2], C2 = [11.4, 14.4];      // comptage 1, le calendrier avance, comptage 2
+function suite() {
+  const a = Math.round(activite(P.t_j));
+  return [['echantillon', 1.2, 'la fiole d’iode 131 : N₀ noyaux'], ['compteur', 2.8, 'le compteur Geiger : chaque éclat est une désintégration détectée'],
+    ['une_seconde', 7.2, 'on a compté pendant 1 s : 400 désintégrations, a = 400 Bq'],
+    ['definition', 9.4, 'activité : nombre de désintégrations par seconde ; 1 Bq = 1 désintégration par seconde'],
+    ['plus_tard', 15.4, `${P.t_j} jours plus tard : a = ${a} Bq`],
+    ['proportionnelle', 17.6, P.t_j === 8 ? 'a = λ·N : moitié des noyaux, moitié de l’activité' : 'a = λ·N : N et a diminuent dans le même rapport'], ['fin', 18.8, 'fin']];
+}
+let SUITE = suite(), M = {}, FIN = 0;
+function calculer() { SUITE = suite(); M = {}; for (const [n, t] of SUITE) M[n] = t; FIN = M.fin; }
+calculer();
+
+/* État à l’instant t de la scène (tout se déduit de t et de P : une image figée se redessine à l’identique). */
+const cal = (t = S.t) => (S.libre ? P.t_j : t < CAL[0] ? 0 : P.t_j * lisse((t - CAL[0]) / (CAL[1] - CAL[0])));
+function compte(t = S.t) {                                          // ce que montre l’afficheur
+  if (S.libre) return { n: Math.round(activite(P.t_j)), chrono: 1, actif: false };
+  // Comptage 1 (jour 0), remise à zéro quand le calendrier avance, comptage 2 (jour t_j).
+  const [w, tj] = t >= C2[0] ? [C2, P.t_j] : t >= C1[0] && t < CAL[0] ? [C1, 0] : [null, 0];
+  if (!w) return { n: 0, chrono: 0, actif: false };
+  const u = clamp((t - w[0]) / (w[1] - w[0]));
+  return { n: Math.round(activite(tj) * u), chrono: u, actif: u < 1 };
+}
+const visible = (t = S.t) => ({ fiole: S.libre ? 1 : clamp((t - .1) / .6), geiger: S.libre ? 1 : clamp((t - 1.4) / .6) });
+
+/* ── Géométrie ─────────────────────────────────────────────────────────────────────────────────── */
+const R1 = { x: 8, y: 34, w: 420, h: 272 }, R2 = { x: 440, y: 34, w: 312, h: 272 };
+const FIOLE = { x: 44, y: 78, w: 64, h: 150 };
+const TUBE = { x: 132, y: 152, w: 118, r: 13 };
+const BOITE = { x: 272, y: 52, w: 140, h: 118 }, LCD = { x: 284, y: 66, w: 116, h: 42 };
+const PISTE = { x0: 40, x1: 360, y: 288 }, kj = (PISTE.x1 - PISTE.x0) / 40;
+const G = { ox: 486, oy: 262, kt: 6.4, ka: .44 };                   // graphe : 6,4 px par jour, 0,44 px par Bq
+const gx = t => G.ox + t * G.kt, gy = a => G.oy - a * G.ka;
+const NB = 64;                                                       // noyaux dessinés dans la fiole
+const ORDRE = (() => { const r = window.Tableau.graine(131), o = [...Array(NB).keys()]; for (let i = NB - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [o[i], o[j]] = [o[j], o[i]]; } return o; })();
+const PTS = (() => { const r = window.Tableau.graine(53), p = []; for (let i = 0; i < NB; i++) p.push([FIOLE.x + 10 + r() * (FIOLE.w - 20), FIOLE.y + 62 + r() * (FIOLE.h - 74)]); return p; })();
+
+/* ── Peinture ─────────────────────────────────────────────────────────────────────────────────── */
+function chemin(ctx, R, r = 8) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(R.x, R.y, R.w, R.h, r) : ctx.rect(R.x, R.y, R.w, R.h); }
+const hasard = (k) => { const x = Math.sin(k * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+function peindreFiole(ctx, al) {
+  if (al <= 0) return;
+  ctx.save(); ctx.globalAlpha = al;
+  const { x, y, w, h } = FIOLE;
+  // Ombre, verre, liquide, col, bouchon.
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(x + w / 2 + 6, y + h + 4, w * .62, 6, 0, 0, Math.PI * 2); ctx.fill();
+  const liq = ctx.createLinearGradient(x, 0, x + w, 0);
+  liq.addColorStop(0, 'rgba(120,64,140,.55)'); liq.addColorStop(.5, 'rgba(176,112,196,.42)'); liq.addColorStop(1, 'rgba(90,40,110,.6)');
+  ctx.fillStyle = liq; ctx.beginPath(); ctx.roundRect(x + 3, y + 54, w - 6, h - 57, [4, 4, 12, 12]); ctx.fill();
+  ctx.fillStyle = 'rgba(230,200,255,.35)'; ctx.fillRect(x + 4, y + 54, w - 8, 2);                          // surface
+  ctx.strokeStyle = 'rgba(210,235,255,.7)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(x + 18, y); ctx.lineTo(x + 18, y + 26); ctx.quadraticCurveTo(x, y + 30, x, y + 46); ctx.lineTo(x, y + h - 12);
+  ctx.quadraticCurveTo(x, y + h, x + 12, y + h); ctx.lineTo(x + w - 12, y + h); ctx.quadraticCurveTo(x + w, y + h, x + w, y + h - 12);
+  ctx.lineTo(x + w, y + 46); ctx.quadraticCurveTo(x + w, y + 30, x + w - 18, y + 26); ctx.lineTo(x + w - 18, y); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.14)'; ctx.fillRect(x + 6, y + 50, 6, h - 64);                         // reflet
+  const bo = ctx.createLinearGradient(x + 14, 0, x + w - 14, 0); bo.addColorStop(0, '#78350f'); bo.addColorStop(.5, '#b45309'); bo.addColorStop(1, '#451a03');
+  ctx.fillStyle = bo; ctx.beginPath(); ctx.roundRect(x + 14, y - 12, w - 28, 16, 3); ctx.fill();
+  // Les noyaux : iode (violet clair) ou xénon formé (gris).
+  const restants = Math.round(NB * Math.pow(2, -cal() / TD));
+  for (let k = 0; k < NB; k++) {
+    const [px, py] = PTS[k], iode = ORDRE.indexOf(k) < restants;
+    const g = ctx.createRadialGradient(px - 1, py - 1, .3, px, py, 3.2);
+    g.addColorStop(0, iode ? '#fdf4ff' : '#e5e7eb'); g.addColorStop(.5, iode ? '#e879f9' : '#9ca3af'); g.addColorStop(1, iode ? '#86198f' : '#4b5563');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(px, py, 3.2, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+function eclat(ctx, x, y, r, a) {
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, `rgba(255,255,240,${a})`); g.addColorStop(.35, `rgba(253,230,138,${a * .6})`); g.addColorStop(1, 'rgba(253,230,138,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+}
+/** Les éclats : désintégrations détectées (pour l’œil : leur nombre suit l’activité affichée). */
+function peindreEclats(ctx, t) {
+  const c = compte(t); if (!c.actif && !(S.libre && S.running)) return 0;
+  const a = S.libre ? activite(P.t_j) : (t >= C2[0] ? activite(P.t_j) : A0);
+  const k = Math.floor(t / .07), n = Math.max(1, Math.round(5 * a / A0));
+  const restants = Math.round(NB * Math.pow(2, -cal(t) / TD));
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < n; i++) {
+    const j = ORDRE[Math.floor(hasard(k * 13 + i) * Math.max(1, restants))], [px, py] = PTS[j], age = hasard(k * 7 + i * 3);
+    eclat(ctx, px, py, 5 + 7 * age, .9 * (1 - age));
+  }
+  ctx.restore();
+  return n;
+}
+function peindreCompteur(ctx, al, t) {
+  if (al <= 0) return;
+  ctx.save(); ctx.globalAlpha = al;
+  const { x, y, w, r } = TUBE;
+  // Le câble du tube au boîtier.
+  ctx.strokeStyle = '#111827'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(x + w, y); ctx.bezierCurveTo(x + w + 14, y, BOITE.x - 14, BOITE.y + BOITE.h - 20, BOITE.x, BOITE.y + BOITE.h - 20); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.lineWidth = 1; ctx.stroke();
+  // Le tube (cylindre métallique), sa fenêtre tournée vers la fiole.
+  const gt = ctx.createLinearGradient(0, y - r, 0, y + r);
+  gt.addColorStop(0, '#d1d5db'); gt.addColorStop(.3, '#9ca3af'); gt.addColorStop(.7, '#4b5563'); gt.addColorStop(1, '#1f2937');
+  ctx.fillStyle = gt; ctx.beginPath(); ctx.roundRect(x, y - r, w, 2 * r, 4); ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; for (const dx of [28, 70]) ctx.fillRect(x + dx, y - r, 3, 2 * r);
+  const gf = ctx.createRadialGradient(x - 1, y - 3, 1, x, y, r);
+  gf.addColorStop(0, '#fef3c7'); gf.addColorStop(.6, '#a16207'); gf.addColorStop(1, '#422006');
+  ctx.fillStyle = gf; ctx.beginPath(); ctx.ellipse(x, y, 4, r - 1, 0, 0, Math.PI * 2); ctx.fill();
+  // Le boîtier.
+  const gb = ctx.createLinearGradient(0, BOITE.y, 0, BOITE.y + BOITE.h);
+  gb.addColorStop(0, '#4b5563'); gb.addColorStop(.2, '#374151'); gb.addColorStop(1, '#111827');
+  ctx.fillStyle = gb; ctx.beginPath(); ctx.roundRect(BOITE.x, BOITE.y, BOITE.w, BOITE.h, 8); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fillRect(BOITE.x + 6, BOITE.y + 3, BOITE.w - 12, 2);
+  // L’afficheur.
+  const gl = ctx.createLinearGradient(0, LCD.y, 0, LCD.y + LCD.h); gl.addColorStop(0, '#0b1f14'); gl.addColorStop(1, '#05140c');
+  ctx.fillStyle = gl; ctx.beginPath(); ctx.roundRect(LCD.x, LCD.y, LCD.w, LCD.h, 4); ctx.fill();
+  const c = compte(t);
+  ctx.font = '600 30px Consolas, "Courier New", monospace'; ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = 'rgba(134,239,172,.12)'; ctx.fillText('888', LCD.x + LCD.w - 8, LCD.y + 33);
+  ctx.fillStyle = '#86efac'; ctx.shadowColor = '#22c55e'; ctx.shadowBlur = 8; ctx.fillText(String(c.n), LCD.x + LCD.w - 8, LCD.y + 33); ctx.shadowBlur = 0;
+  ctx.font = '12px Consolas, "Courier New", monospace'; ctx.textAlign = 'left'; ctx.fillStyle = 'rgba(134,239,172,.7)';
+  ctx.fillText(`${fr(c.chrono, 2)} s`, LCD.x + 6, LCD.y + 14);
+  // Le voyant : il s’allume à chaque désintégration détectée (le « clic » visuel).
+  const on = (c.actif || (S.libre && S.running)) && hasard(Math.floor(t / .07)) < .8;
+  const vx = BOITE.x + BOITE.w - 16, vy = BOITE.y + BOITE.h - 16;
+  const gv = ctx.createRadialGradient(vx - 1, vy - 1, .5, vx, vy, 6);
+  gv.addColorStop(0, on ? '#fff' : '#7f1d1d'); gv.addColorStop(.5, on ? '#f87171' : '#450a0a'); gv.addColorStop(1, on ? '#991b1b' : '#1c0505');
+  ctx.fillStyle = gv; ctx.beginPath(); ctx.arc(vx, vy, 6, 0, Math.PI * 2); ctx.fill();
+  if (on) { ctx.globalCompositeOperation = 'lighter'; eclat(ctx, vx, vy, 14, .6); eclat(ctx, x + 2, y, 16, .7); ctx.globalCompositeOperation = 'source-over'; }
+  ctx.restore();
+}
+function peindreCalendrier(ctx) {
+  const x = PISTE.x0 + cal() * kj, w = 44, h = 40, y = PISTE.y - 50;
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(x - w / 2 + 3, y + 3, w, h);
+  ctx.fillStyle = '#f8fafc'; ctx.beginPath(); ctx.roundRect(x - w / 2, y, w, h, 3); ctx.fill();
+  ctx.fillStyle = '#dc2626'; ctx.beginPath(); ctx.roundRect(x - w / 2, y, w, 11, [3, 3, 0, 0]); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.font = '8px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('JOUR', x, y + 9);
+  ctx.fillStyle = '#111827'; ctx.font = '700 20px Consolas, "Courier New", monospace'; ctx.fillText(String(Math.round(cal())), x, y + 33);
+  ctx.fillStyle = '#475569'; for (const dx of [-12, 12]) { ctx.beginPath(); ctx.arc(x + dx, y + 1, 2, 0, Math.PI * 2); ctx.fill(); }
+  ctx.restore();
+}
+function peindre(ctx) {
+  const v = visible(), t = S.t;
+  ctx.save(); chemin(ctx, R1); ctx.clip();
+  const g = ctx.createRadialGradient(200, 160, 30, 200, 160, 320); g.addColorStop(0, 'rgba(20,26,36,.85)'); g.addColorStop(1, 'rgba(7,10,15,.85)');
+  ctx.fillStyle = g; ctx.fillRect(R1.x, R1.y, R1.w, R1.h);
+  ctx.fillStyle = 'rgba(80,60,40,.35)'; ctx.fillRect(R1.x, FIOLE.y + FIOLE.h + 6, 250, 4);               // la paillasse
+  peindreFiole(ctx, v.fiole); peindreCompteur(ctx, v.geiger, t); peindreEclats(ctx, t); peindreCalendrier(ctx);
+  ctx.restore();
+}
+
+/* ── Craie ─────────────────────────────────────────────────────────────────────────────────────── */
+function ecrit(c, t0, fn) {
+  const t = c.t, cur = c.cur, comp = c.complet;
+  c.t = S.fait ? Infinity : S.t; c.cur = t0;
+  try { fn(); } finally { c.t = t; c.cur = cur; c.complet = comp; }
+}
+function quand(c, nom, dur, fn) { if (nom in M && (S.fait || S.t >= M[nom] - dur)) ecrit(c, M[nom] - dur, fn); }
+const vu = nom => nom in M && (S.fait || S.t >= M[nom] - 1e-6);
+const sousN = tj => ({ 0: 'N = N_0', 8: 'N = N_0/2', 16: 'N = N_0/4', 24: 'N = N_0/8', 32: 'N = N_0/16', 40: 'N = N_0/32' }[tj] || `N = ${fr(Math.pow(2, -tj / TD), 2)}·N_0`);
+
+function dessinerCompteur(c) {
+  const t = S.t, v = visible(), cc = compte();
+  c.texte('L’échantillon et le compteur', 14, 26, { couleur: 'cyan', taille: 17 });
+  c.rect(R1.x, R1.y, R1.w, R1.h, { couleur: 'tresfaible', arrondi: 8, duree: .5 });
+  c.repere('vue_compteur', R1.x, R1.y, R1.w, R1.h, 'l’échantillon et le compteur Geiger');
+  // La piste du calendrier : l’axe des jours.
+  c.axe(PISTE.x0, PISTE.y, PISTE.x1 + 18, PISTE.y, [0, 8, 16, 24, 32, 40].map(j => [j * kj / (PISTE.x1 + 18 - PISTE.x0), null]), { couleur: 'faible' });
+  c.direct(() => {
+    for (const j of [0, 8, 16, 24, 32, 40]) c.texte(String(j), PISTE.x0 + j * kj, PISTE.y + 16, { couleur: 'faible', taille: 12, align: 'center' });
+    c.texte('jours', PISTE.x1 + 34, PISTE.y + 16, { couleur: 'faible', taille: 13, align: 'center' });
+    const x = PISTE.x0 + cal() * kj;
+    c.repere('calendrier', x - 26, PISTE.y - 54, 52, 48, `le calendrier (poignée) : jour ${Math.round(cal())}`);
+    c.texte('⇔', x + 26, PISTE.y - 24, { couleur: 'jaune', taille: 14 });
+  });
+  c.repere('echantillon', FIOLE.x - 8, FIOLE.y - 16, FIOLE.w + 16, FIOLE.h + 22, `la fiole d’iode 131 (${Math.round(NB * Math.pow(2, -cal() / TD))} noyaux d’iode sur ${NB} dessinés)`);
+  c.repere('compteur', TUBE.x - 6, BOITE.y - 4, BOITE.x + BOITE.w - TUBE.x + 10, TUBE.y + TUBE.r + 8 - BOITE.y + 4, 'le compteur Geiger : le tube et le boîtier');
+  c.repere('affichage', LCD.x - 4, LCD.y - 4, LCD.w + 8, LCD.h + 8, `l’afficheur : ${cc.n} désintégrations en ${fr(cc.chrono, 2)} s`);
+  quand(c, 'echantillon', 1.0, () => {
+    c.texte('iode 131 :', 16, 58, { taille: 16, couleur: 'violet', duree: .4 });
+    c.nucleide('I', 131, 53, 88, 58, { taille: 18, couleur: 'violet', duree: .3 });
+    c.texte('N_0 noyaux', FIOLE.x + FIOLE.w + 10, 208, { taille: 15, couleur: 'faible', duree: .3 });
+  });
+  quand(c, 'compteur', 1.2, () => {
+    c.texte('tube du compteur Geiger', TUBE.x + 4, TUBE.y + TUBE.r + 22, { taille: 14, couleur: 'faible', duree: .7 });
+    c.texte('désintégrations en 1 s', BOITE.x + BOITE.w / 2, BOITE.y + 72 + 26, { taille: 14, align: 'center', duree: .5 });
+  });
+  if (v.geiger > 0 && (cc.actif || cc.chrono > 0)) c.direct(() => c.texte('(ralenti : 1 s de mesure)', BOITE.x + BOITE.w / 2, BOITE.y + 120, { taille: 12, align: 'center', couleur: 'tresfaible' }));
+  if (vu('plus_tard') || S.libre) {
+    const tj = P.t_j;
+    ecrit(c, vu('plus_tard') ? M.plus_tard - 1.2 : -99, () => c.texte(sousN(tj), FIOLE.x + FIOLE.w + 10, 229, { taille: 15, couleur: 'jaune', duree: .5 }));
+  }
+}
+
+function dessinerGraphe(c) {
+  c.texte('a(t)', R2.x + 6, 26, { couleur: 'cyan', taille: 17 });
+  c.rect(R2.x, R2.y, R2.w, R2.h, { couleur: 'tresfaible', arrondi: 8, duree: .5 });
+  c.repere('vue_graphe', R2.x, R2.y, R2.w, R2.h, 'le graphe de l’activité a en fonction du temps');
+  const L = 40 * G.kt + 14, H = 450 * G.ka + 6;
+  c.axe(G.ox, G.oy, G.ox + L, G.oy, [8, 16, 24, 32, 40].map(j => [j * G.kt / L, String(j)]), { couleur: 'faible', taille: 12 });
+  c.axe(G.ox, G.oy, G.ox, G.oy - H, [100, 200, 300, 400].map(a => [a * G.ka / H, String(a)]), { couleur: 'faible', taille: 12, vertical: true });
+  c.texte('t (jours)', R2.x + R2.w - 8, G.oy + 34, { couleur: 'faible', taille: 13, align: 'right' });
+  c.texte('a (Bq)', G.ox + 8, G.oy - H + 8, { couleur: 'faible', taille: 13 });
+  c.texte('0', G.ox - 6, G.oy + 16, { couleur: 'faible', taille: 12, align: 'right' });
+  c.repere('graphe_a', G.ox - 30, G.oy - H - 4, L + 34, H + 26, 'le graphe a(t) : un point par mesure');
+  // Les points mesurés.
+  const pts = [];
+  if (vu('une_seconde')) pts.push([0, A0, M.une_seconde - .3]);
+  if (vu('plus_tard')) pts.push([P.t_j, activite(P.t_j), M.plus_tard - .3]);
+  for (const [tj, a] of S.mesures) if (!pts.some(q => q[0] === tj)) pts.push([tj, a, -99]);
+  for (const [tj, a, t0] of pts) ecrit(c, t0, () => {
+    c.point(gx(tj), gy(a), 4.5, 'jaune');
+    c.texte(`${Math.round(a)} Bq`, gx(tj) + (tj > 30 ? -8 : 8), gy(a) - (tj > 30 ? 16 : 6), { taille: 13, couleur: 'jaune', duree: .3, align: tj > 30 ? 'right' : 'left' });
+  });
+  const der = pts[pts.length - 1];
+  if (der) c.repere('point_a', gx(der[0]) - 10, gy(der[1]) - 10, 20, 20, `le point mesuré : t = ${der[0]} jours, a = ${Math.round(der[1])} Bq`);
+  else c.repere('point_a', G.ox - 10, gy(A0) - 10, 20, 20, 'le premier point (pas encore mesuré)');
+  if (vu('plus_tard') && P.t_j === 8) ecrit(c, M.plus_tard - .9, () => {
+    c.ligne(gx(8), gy(200), gx(8), G.oy, { couleur: 'jaune', largeur: 1.1, pointille: [4, 4], alpha: .7, duree: .2 });
+    c.ligne(gx(8), gy(200), G.ox, gy(200), { couleur: 'jaune', largeur: 1.1, pointille: [4, 4], alpha: .7, duree: .2 });
+    c.texte('t½', gx(8), G.oy - 8, { taille: 14, couleur: 'jaune', align: 'center', duree: .1 });
+    c.texte('a_0/2', G.ox + 4, gy(200) + 16, { taille: 13, couleur: 'jaune', duree: .1 });
+  });
+  if (vu('proportionnelle')) ecrit(c, M.proportionnelle - 1.6, () => {
+    c.courbe(u => [gx(40 * u), gy(activite(40 * u))], 60, { couleur: 'vert', largeur: 1.4, pointille: [5, 5], duree: .8 });
+    c.texte('a(t) = a_0·e^{−λt}', gx(17), gy(330), { taille: 16, couleur: 'vert', duree: .6 });
+  });
+}
+
+function dessinerTexte(c) {
+  const X = 14;
+  c.repere('definition', X - 4, 336, 560, 46, 'la définition de l’activité et du becquerel');
+  quand(c, 'une_seconde', .9, () => c.texte('en 1 s : 400 désintégrations → a = 400 Bq', X, 328, { taille: 17, couleur: 'jaune', duree: .8 }));
+  quand(c, 'definition', 2.0, () => {
+    c.texte('activité a : nombre de désintégrations par seconde', X, 354, { taille: 18, duree: 1.1 });
+    c.texte('1 Bq = 1 désintégration par seconde', X, 378, { taille: 18, couleur: 'vert', duree: .8 });
+  });
+  quand(c, 'plus_tard', 1.0, () => c.texte(`${P.t_j} jours plus tard : a = 400·2^{−${P.t_j}/8} = ${Math.round(activite(P.t_j))} Bq`, 446, 328, { taille: 16, couleur: 'jaune', duree: .8 }));
+  quand(c, 'proportionnelle', 1.8, () => {
+    const f = Math.pow(2, -P.t_j / TD);
+    c.texte(P.t_j === 8 ? 'a = λ·N : moitié des noyaux, moitié de l’activité' : `a = λ·N : N et a sont multipliés par le même nombre (${fr(f, 2)})`, X, 406, { taille: 18, couleur: 'orange', duree: 1.2 });
+  });
+}
+
+function dessiner(c) {
+  c.direct(() => peindre(c.ctx));
+  dessinerCompteur(c); dessinerGraphe(c); dessinerTexte(c);
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(53); dessiner(c); return c.fin(); });
+scene.avancer = dt => {
+  if (!S.running) return false;
+  if (S.libre) { S.libre = false; }
+  S.t = Math.min(FIN, S.t + dt);
+  if (S.jusqua != null && S.t >= S.jusqua && S.jusqua < FIN) {
+    S.t = S.jusqua; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 2)} s`) + '.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre();
+    return true;
+  }
+  if (S.t >= FIN) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), (P.t_j === 8 ? 'a = λ·N : moitié des noyaux, moitié de l’activité.' : 'a = λ·N : N et a diminuent dans le même rapport.') + ' Fais glisser le calendrier.', 'good'); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+
+/* ── Ce que voit le tuteur ────────────────────────────────────────────────────────────────────── */
+function phase() {
+  if (S.libre) return `mesure à la main : calendrier au jour ${P.t_j}, a = ${Math.round(activite(P.t_j))} Bq`;
+  let dernier = null; for (const [n, t, m] of SUITE) if (S.t >= t - 1e-6) dernier = [n, m];
+  const c = compte();
+  if (S.t <= 0) return 'rien n’est encore lancé';
+  if (c.actif) return `comptage en cours (ralenti) : ${c.n} désintégrations après ${fr(c.chrono, 2)} s`;
+  if (S.t >= CAL[0] && S.t < CAL[1]) return `le calendrier avance : jour ${Math.round(cal())}`;
+  return dernier ? (dernier[0] === 'fin' ? 'fin, tout est écrit' : dernier[1]) : 'la fiole apparaît';
+}
+function ceQuiSeVoit() {
+  const c = compte(), tj = cal(), etat = S.running ? 'la scène se déroule' : S.fait ? 'fin de la scène' : S.libre ? 'mesure à la main' : S.t > 0 ? 'scène arrêtée' : 'scène pas encore lancée';
+  const m = [`t (scène) = ${fr(S.t, 2)} s (${etat}). Iode 131, t½ = 8 jours, λ = ln2/t½ = ${fr(LAMBDA, 4)} jour⁻¹, a₀ = 400 Bq.`];
+  const v = visible();
+  m.push(`Vue « L’échantillon et le compteur » : ${v.fiole > 0 ? 'la fiole d’iode 131' : 'vide'}${v.geiger > 0 ? ' devant le tube du compteur Geiger' : ''} ; calendrier au jour ${fr(tj, 0)} ; noyaux d’iode restants : ${fr(100 * Math.pow(2, -tj / TD), 0)} % de N₀ (les autres sont devenus du xénon, en gris).`);
+  if (v.geiger > 0) m.push(`Afficheur : ${c.n} désintégrations en ${fr(c.chrono, 2)} s${c.actif ? ' (comptage au ralenti, des éclats à chaque désintégration détectée)' : ''}.`);
+  const pts = [];
+  if (vu('une_seconde')) pts.push('(0 jour ; 400 Bq)');
+  if (vu('plus_tard')) pts.push(`(${P.t_j} jours ; ${Math.round(activite(P.t_j))} Bq)`);
+  for (const [t, a] of S.mesures) if (!(t === 0 && vu('une_seconde')) && !(t === P.t_j && vu('plus_tard'))) pts.push(`(${t} jours ; ${Math.round(a)} Bq)`);
+  m.push(`Vue « a(t) » : axes « t (jours) » et « a (Bq) » ; ${pts.length ? 'points : ' + pts.join(', ') : 'aucun point encore'}${vu('proportionnelle') ? ' ; courbe a(t) = a₀·e^{−λt} en pointillé' : ''}.`);
+  const e = [];
+  if (vu('une_seconde')) e.push('« en 1 s : 400 désintégrations → a = 400 Bq »');
+  if (vu('definition')) e.push('« activité a : nombre de désintégrations par seconde » et « 1 Bq = 1 désintégration par seconde »');
+  if (vu('plus_tard')) e.push(`« ${P.t_j} jours plus tard : a = ${Math.round(activite(P.t_j))} Bq » et « ${sousN(P.t_j).replace('N_0', 'N₀')} » sous la fiole`);
+  if (vu('proportionnelle')) e.push(P.t_j === 8 ? '« a = λ·N : moitié des noyaux, moitié de l’activité »' : '« a = λ·N : N et a sont multipliés par le même nombre »');
+  if (e.length) m.push('Écrit à la craie : ' + e.join(' ; ') + '.');
+  m.push(`Phase : ${phase()}.`);
+  return m.join(' ');
+}
+
+/* ── Commandes ───────────────────────────────────────────────────────────────────────────────── */
+function playUntil(p) {
+  const nom = p && p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  S.libre = false; S.mesures = [];
+  if (S.fait || S.t >= cible - 1e-4) S.t = 0;
+  S.jusqua = Math.min(FIN, Math.max(0.001, cible));
+  S.motif = nom ? SUITE.find(s => s[0] === nom)[2] : '';
+  S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+function start() { S.libre = false; S.mesures = []; S.jusqua = null; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Une fiole d’iode 131…'); pont.noter('start', params()); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait || S.t >= FIN || S.libre) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  const t = +p.time_s; if (!Number.isFinite(t)) return;
+  S.libre = false; S.mesures = []; S.running = false; S.jusqua = null; S.t = clamp(t, 0, FIN); S.fait = S.t >= FIN;
+  $('run').textContent = S.fait ? 'Rejouer' : 'Reprendre'; scene.sale = true;
+  bulle($('feedback'), `Arrêt sur image : t = ${fr(S.t, 2)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+/** Une mesure à la main : le calendrier est à t_j, l’afficheur donne a, le graphe reçoit le point. */
+function mesurer() {
+  const a = activite(P.t_j);
+  S.libre = true; S.running = false; S.jusqua = null; S.fait = false; $('run').textContent = 'Rejouer';
+  if (!S.mesures.some(([t]) => t === P.t_j)) S.mesures.push([P.t_j, a]);
+  if (S.mesures.length > 8) S.mesures.shift();
+  calculer(); scene.sale = true;
+  bulle($('feedback'), `Jour ${P.t_j} : a = 400·2^(−${P.t_j}/8) = ${Math.round(a)} Bq${P.t_j % 8 === 0 && P.t_j ? ` (${P.t_j / 8} t½ : a₀/${2 ** (P.t_j / 8)})` : ''}.`);
+}
+function setParameters(p) {
+  p = p || {};
+  if (p.t_j !== undefined && p.t_j !== null && p.t_j !== '' && Number.isFinite(+p.t_j)) { P.t_j = Math.round(clamp(+p.t_j, 0, 40)); mesurer(); }
+  pont.noter('set_parameters', params()); pont.emettre();
+}
+function params() { return { t_j: P.t_j, a_Bq: +activite(P.t_j).toFixed(1), N_sur_N0: +Math.pow(2, -P.t_j / TD).toFixed(4), a0_Bq: A0, t_demi_jours: TD, lambda_par_jour: +LAMBDA.toFixed(5) }; }
+$('run').onclick = () => (S.running ? pause() : (S.t > 0 && S.t < FIN && !S.fait && !S.libre ? resume() : start()));
+
+/* Poignée : le calendrier, glissé le long de l’axe des jours. */
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => { const [x, y] = scene.local(px, py), xc = PISTE.x0 + cal() * kj; return Math.abs(x - xc) < 28 && y > PISTE.y - 60 && y < PISTE.y + 12 ? 'cal' : null; },
+  bouger: (id, px, py) => { const [x] = scene.local(px, py), tj = Math.round(clamp((x - PISTE.x0) / kj, 0, 40)); if (tj !== P.t_j || !S.libre) { P.t_j = tj; mesurer(); } },
+  lacher: () => { pont.noter('set_parameters', params()); pont.emettre(); },
+});
+
+window.Tableau.explication({ activite: [
+  { repere: 'echantillon', texte: 'Une fiole d’iode 131 : N₀ noyaux radioactifs.' },
+  { repere: 'compteur', texte: 'Le compteur Geiger : chaque éclat est une désintégration détectée.' },
+  { repere: 'affichage', texte: 'On compte pendant 1 seconde : 400 désintégrations.' },
+  { repere: 'definition', texte: 'L’activité a est le nombre de désintégrations par seconde : a = 400 Bq.' },
+  { repere: 'calendrier', texte: 'Huit jours plus tard, une demi-vie…' },
+  { repere: 'point_a', texte: '… il reste la moitié des noyaux, et l’activité est 200 Bq : a = λ·N.' },
+  { repere: 'graphe_a', texte: 'L’activité décroît comme N : a(t) = a₀·e^{−λt}.' },
+] });
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'radioactivite_activite', version: '1.0', title: 'L’activité : le compteur Geiger', variants: [{ id: 'activite', label: 'activité' }], commands: commandes,
+  command_schema: {
+    set_parameters: { t_j: '0..40 (date en jours sur le calendrier, pas 1 : l’afficheur donne a = 400·2^(−t/8) Bq et le graphe reçoit le point)' },
+    set_time: { time_s: `0..${fr(FIN, 1)} (arrêt sur cet instant, s)` },
+    play_until: { moment: Object.keys(M).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'L’activité : une fiole d’iode 131 (t½ = 8 jours) devant un compteur Geiger. En 1 s, 400 désintégrations : a = 400 Bq. Activité a : nombre de désintégrations par seconde ; 1 Bq = 1 désintégration par seconde. 8 jours plus tard : a = 200 Bq ; a = λ·N : moitié des noyaux, moitié de l’activité. Le calendrier se glisse (t de 0 à 40 jours, a = 400·2^(−t/8)) ; le graphe a(t) reçoit un point par mesure.',
+  etat: () => ({ simulation_status: S.running ? 'running' : (S.fait ? 'finished' : S.libre ? 'paused' : (S.t > 0 ? 'paused' : 'idle')), ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'activite',
+    time_s: +S.t.toFixed(3), parameters: params(), moments: { ...M } }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Une fiole d’iode 131 et un compteur Geiger…');
+setTimeout(() => { if (!S.running && S.t === 0 && !S.libre) start(); }, 1600);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

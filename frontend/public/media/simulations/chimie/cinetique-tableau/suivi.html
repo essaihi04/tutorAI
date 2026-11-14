@@ -1,0 +1,798 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Suivre une transformation — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="cin.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Suivi d’une transformation lente : trois méthodes (titrage, conductimétrie, pression), un bécher qui brunit et le tableau des mesures, le prélèvement et la trempe dans l’eau glacée, le titrage du diiode par le thiosulfate"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Suivi temporel d’une transformation (cours « Suivi temporel d’une transformation, vitesse de réaction », 2e Bac PC BIOF, novembre 2026).
+ * Contrat : outils/cours/notes/cours/cinetique_contrat_simulations.md § 1.
+ * Vues (?vue=) : methodes (défaut) | mesures | prelevement | titrage. Pas de poignée.
+ * Modèle (exemple A, pour le calcul seulement, jamais écrit) : x(t) = 2,0·(1 − e^(−t/8)) mmol.
+ */
+/* ── Formules chimiques à la craie : indices ₂ et charges ⁺ ⁻ ²⁻ rendus (sans modifier exposants.js ni le kit) ──────────
+ * « MnO₄⁻ » devient « MnO_{4}^{−} » ; le découpage « _{…} » accepte tout caractère avant (« [I⁻]₀ »). */
+(function () {
+  const C = window.Tableau.Craie, P = C.prototype, texteAvant = P.texte, segAvant = C.segments;
+  const SUP = { '⁺': '+', '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+  const SUB = { '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9' };
+  const chim = s => String(s).replace(/[⁺⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUP[ch]).join('') + '}')
+    .replace(/[₀₁₂₃₄₅₆₇₈₉]+/g, g => '_{' + [...g].map(ch => SUB[ch]).join('') + '}');
+  C.segments = function (s) {
+    const out = [], re = /_\{([^}]+)\}/g; let i = 0, m;
+    while ((m = re.exec(s))) { if (m.index > i) out.push(...segAvant(s.slice(i, m.index))); out.push({ t: m[1], sub: true }); i = re.lastIndex; }
+    if (i < s.length) out.push(...segAvant(s.slice(i)));
+    return out;
+  };
+  P.texte = function (s, x, y, o) { return texteAvant.call(this, chim(s), x, y, o); };
+  window.chim = chim;
+})();
+
+/* ── Moteur du déroulé (copie de physics/circuit-rlc-tableau/circuit-lc.html, + M.evs) ─────────────────────────────────── */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lisse = p => p * p * (3 - 2 * p);
+const lerp = (a, b, f) => a + (b - a) * f;
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');
+const ECRITURE = 2.5;
+function Moteur(o) {
+  const q = new URLSearchParams(location.search);
+  const S = { vue: o.vues.includes(q.get('vue')) ? q.get('vue') : o.vues[0], t: 0, running: false, pause: false, fait: false,
+    jusqua: null, motif: '', emis: 0, dit: '', mesure: false };
+  const V = o.vitesse ?? 1.7, T0 = o.T0 ?? .8, HOLD = {};
+  let TL = null;
+  function construire() {
+    let s = T0; const ev = [];
+    for (const e of o.etapes(S.vue)) {
+      const anim = e.anim || 0, d = { ...e, anim, debut: s, ecrit: s + (e.ecritDes ?? anim) };
+      d.fin = Math.max(s + anim, d.ecrit + (HOLD[e.nom] ?? 1.5)) + .35;
+      s = d.fin; ev.push(d);
+    }
+    const mom = {}; for (const e of ev) mom[e.nom] = e.fin; mom.fin = s + (o.queue ?? .6);
+    TL = { ev, M: mom };
+  }
+  const ev = nom => TL.ev.find(e => e.nom === nom);
+  const M = {
+    S, ev, evs: () => TL.ev, Moments: () => TL.M,
+    p(nom) { const e = ev(nom); if (!e) return 0; return e.anim > 0 ? clamp((S.t - e.debut) / e.anim, 0, 1) : (S.t >= e.debut - 1e-6 ? 1 : 0); },
+    commence(nom) { const e = ev(nom); return !!e && S.t > e.debut + 1e-6; },
+    vu(nom) { if (nom === 'fin') return S.t >= TL.M.fin - 1e-6; const e = ev(nom); return !!e && S.t >= e.fin - 1e-6; },
+    etape(c, nom, fn) {
+      const e = ev(nom); if (!e) return;
+      const t = c.t, cur = c.cur, comp = c.complet, w0 = e.ecrit;
+      c.t = S.t > 1e5 ? 1e9 : w0 + (S.t - w0) * V; c.cur = w0;
+      try { fn(); } finally { if (S.mesure) HOLD[nom] = Math.max(HOLD[nom] || 0, (c.cur - w0) / V); c.t = t; c.cur = cur; if (!S.running) c.complet = comp; }
+    },
+    etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
+  };
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const cadreBase = scene.cadre;
+  scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
+  M.scene = scene; M.craie = scene.craie;
+  function calculer() {
+    construire();
+    const t = S.t, r = S.running; S.t = 1e6; S.running = false; S.mesure = true;
+    for (const k of Object.keys(HOLD)) delete HOLD[k];   // une étape dessinée en plusieurs morceaux garde le plus long (max ci-dessus)
+    try { o.dessiner(scene.craie, M); } finally { S.t = t; S.running = r; S.mesure = false; }
+    construire(); scene.sale = true;
+  }
+  const sansSouligne = s => String(s).replace(/([A-Za-zΔτθ])_\{?([A-Za-z0-9]+)\}?/g, (m, a, i) => a + (/^\d+$/.test(i) ? [...i].map(d => '₀₁₂₃₄₅₆₇₈₉'[d]).join('') : i));
+  const dire = (texte, kind = '') => { texte = sansSouligne(texte); S.dit = texte; bulle($('feedback'), texte, kind); };
+  const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+  let pont = null;
+  const emettre = () => pont && pont.emettre();
+  const noter = (a, d) => pont && pont.noter(a, d);
+  scene.avancer = dt => {
+    if (!S.running) return !!(o.anime && o.anime());
+    const avant = S.t; S.t += dt;
+    for (const e of TL.ev) if (avant < e.debut && S.t >= e.debut && e.bulle) dire(e.bulle());
+    if (S.jusqua != null && S.t >= S.jusqua) {
+      S.t = S.jusqua; S.jusqua = null; S.running = false;
+      if (S.t >= TL.M.fin - 1e-6) { finir(); return true; }
+      S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fx(S.t, 1)} s`) + '.');
+      noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); return true;
+    }
+    if (S.t >= TL.M.fin) { S.t = TL.M.fin; finir(); return true; }
+    if (performance.now() - S.emis > 500) { S.emis = performance.now(); emettre(); }
+    return true;
+  };
+  function finir() { S.running = false; S.fait = true; S.pause = false; S.jusqua = null; etiquette(); dire(o.messageFin(M), 'good'); noter('measurement', o.params(M)); emettre(); }
+  function start() { o.reprise && o.reprise(); S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire(o.depart(M)); noter('start', o.params(M)); emettre(); }
+  function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); }
+  function resume() { if (S.running) return; o.reprise && o.reprise(); if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('Ça repart…'); noter('resume'); emettre(); }
+  function setTime(p) {
+    const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+    o.reprise && o.reprise(); S.running = false; S.jusqua = null; S.t = clamp(t, 0, TL.M.fin); S.fait = S.t >= TL.M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+    etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fx(S.t, 1)} s.`); noter('set_time', { time_s: S.t }); emettre();
+  }
+  function playUntil(p) {
+    const noms = o.etapes(S.vue).map(e => e.nom).concat('fin');
+    const nom = noms.includes(p.moment) ? p.moment : null, cible = nom ? TL.M[nom] : +p.time_s;
+    if (!Number.isFinite(cible) || (p.moment && !nom && (p.time_s == null || p.time_s === ''))) { dire(`Moment inconnu : ${p.moment}.`, 'bad'); emettre(); return; }
+    o.reprise && o.reprise();
+    if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+    S.jusqua = clamp(cible, .01, TL.M.fin); S.motif = nom ? (o.motifs[nom] || nom) : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+    noter('play_until', { moment: nom, time_s: S.jusqua }); emettre();
+  }
+  function setParameters(p) {
+    p = p || {};
+    const r = o.appliquer(p, M) || {};
+    if (r.vue && o.vues.includes(r.vue) && r.vue !== S.vue) { S.vue = r.vue; r.change = true; r.vueChange = true; }
+    if (r.change) { calculer(); if (r.vueChange) scene.reecrire(); }
+    noter('set_parameters', o.params(M));
+    if (r.apres) r.apres();
+    else if (r.change && !r.garder) start();
+    else { scene.sale = true; emettre(); }
+  }
+  Object.assign(M, { noter, calculer, dire, start, pause, resume, setTime, playUntil, setParameters, emettre, etiquette });
+  $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+  window.Tableau.explication(o.explications);
+  const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+  M.lancer = () => {
+    calculer();
+    const listeMoments = o.vues.map(v => `${o.vues.length > 1 ? v + ' : ' : ''}${o.etapes(v).map(e => e.nom).concat('fin').join(' | ')}`).join(' ; ');
+    const config = { id: o.id, version: '1.0', title: o.titre, variants: o.vues.length > 1 ? o.vues.map(id => ({ id, label: o.titres[id] })) : [], commands: commandes,
+      command_schema: { set_parameters: o.schema, set_time: { time_s: '0..fin (arrêt sur cet instant de la scène, en s ; voir moments)' },
+        play_until: { moment: listeMoments, time_s: 'ou un instant en s' } } };
+    pont = protocole({ id: o.id, commandes, config, texte: o.texte,
+      etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle',
+        ce_qui_se_voit: o.voir(M) + (S.dit ? ` La bulle dit : « ${S.dit} »` : ''), current_variant: S.vue, time_s: +S.t.toFixed(2),
+        parameters: o.params(M), moments: Object.fromEntries(Object.entries(TL.M).map(([k, v]) => [k, +v.toFixed(2)])) }),
+      progression: () => (S.fait ? 1 : 0),
+      executer: (cmd, p) => ({ start, reset: start, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+    dire(o.depart(M));
+    setTimeout(() => { if (!S.running && S.t === 0 && !S.pause && !S.fait) start(); }, 900);
+  };
+  return M;
+}
+/** Zone d’écriture du bas : le professeur efface les plus vieilles lignes (copie du modèle). */
+function zoneEcriture(c, M, liste, ys, o = {}) {
+  const S = M.S, x = o.x ?? 14, max = o.max ?? 730, taille = o.taille ?? 17, n = ys.length, vues = [];
+  if (S.mesure) {
+    for (const e of liste) M.etape(c, e.nom, () => { for (const [t, col] of e.lignes) c.texte(t, x, ys[0], { couleur: col, taille, max }); e.plus && e.plus(c); });
+    return vues;
+  }
+  let k = -1;
+  liste.forEach((e, j) => { const ev = M.ev(e.nom); if (ev && S.t > ev.ecrit + .05) k = j; });
+  const garde = new Set(); let nb = 0;
+  for (let j = k; j >= 0; j--) { const l = liste[j].lignes.length; if (nb + l > n) break; garde.add(j); nb += l; }
+  let y = 0;
+  liste.forEach((e, j) => {
+    if (j > k) return;
+    M.etape(c, e.nom, () => {
+      if (garde.has(j)) for (const [t, col] of e.lignes) { c.texte(t, x, ys[y++], { couleur: col, taille, max }); vues.push(t); }
+      e.plus && e.plus(c);
+    });
+  });
+  return vues;
+}
+/** Largeur (cadre) d’une formule écrite à la craie, indices et charges compris. */
+function larg(c, s, taille = 17) {
+  const T = window.Tableau, ctx = c.ctx; if (c.echelle && c.tailleMin) taille = Math.max(taille, c.tailleMin / c.echelle);
+  return T.Craie.segments(window.chim(s)).reduce((w, g) => { ctx.font = `${(g.sub || g.sup) ? taille * .62 : taille}px ${T.POLICE}`; return w + ctx.measureText(g.t).width; }, 0);
+}
+/** Équation « gauche → droite » : la flèche est DESSINÉE (la police n’a pas toutes les flèches). Renvoie { x, w }. */
+function eqn(c, x, y, gauche, droite, o = {}) {
+  const t = o.taille ?? 17, w1 = larg(c, gauche, t), w2 = larg(c, droite, t), fl = 30, tot = w1 + fl + 16 + w2;
+  const x0 = o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x, col = o.couleur ?? 'blanc';
+  c.texte(gauche, x0, y, { couleur: col, taille: t });
+  c.fleche(x0 + w1 + 8, y - t * .3, x0 + w1 + 8 + fl, y - t * .3, { couleur: col, largeur: 1.8, tete: 7 });
+  c.texte(droite, x0 + w1 + 16 + fl, y, { couleur: col, taille: t });
+  return { x: x0, w: tot };
+}
+/** Petit triangle « attention » à la craie (orange), le « ! » dedans. */
+function attention(c, x, y, o = {}) {
+  const col = o.couleur ?? 'orange', h = o.h ?? 16;
+  c.trait([[x, y], [x + h * .58, y - h], [x + h * 1.16, y]], { couleur: col, largeur: 1.8, ferme: true });
+  c.texte('!', x + h * .58, y - 3, { couleur: col, taille: h * .8, align: 'center' });
+}
+
+const rgba = ([r, g, b, a], k = 1) => `rgba(${Math.round(r)},${Math.round(g)},${Math.round(b)},${(a * k).toFixed(3)})`;
+const melange = (c1, c2, f) => c1.map((v, i) => lerp(v, c2[i], clamp(f, 0, 1)));
+const eclair = (c, k) => [lerp(c[0], 255, k), lerp(c[1], 255, k), lerp(c[2], 255, k), c[3]];
+const sombre = (c, k) => [c[0] * (1 - k), c[1] * (1 - k), c[2] * (1 - k), Math.min(1, c[3] * (1 + k * .4))];
+const EAU = [222, 234, 244, .12];
+/** Teinte du diiode : incolore → jaune → brun (#8a4b12 au maximum), selon la part f (0 → 1) de la teinte finale. */
+const TEINTE = [[0, EAU], [.2, [246, 226, 120, .40]], [.5, [226, 160, 48, .64]], [.8, [168, 96, 26, .80]], [1, [138, 75, 18, .90]]];
+function teinte(f) {
+  f = clamp(f, 0, 1);
+  for (let i = 1; i < TEINTE.length; i++) if (f <= TEINTE[i][0]) { const [a, ca] = TEINTE[i - 1], [b, cb] = TEINTE[i]; return melange(ca, cb, (f - a) / (b - a)); }
+  return TEINTE[TEINTE.length - 1][1];
+}
+const nomTeinte = f => (f < .04 ? 'incolore' : f < .25 ? 'jaune pâle' : f < .55 ? 'jaune' : f < .85 ? 'orangé, qui brunit' : f < .999 ? 'brune' : 'brune (teinte finale)');
+/** Part de la teinte finale à t (min) pour τ (min) : 1 − e^(−t/τ), ramenée à 1 à t = 5τ (pour l’œil). */
+const avance = (t, tau) => clamp((1 - Math.exp(-t / tau)) / (1 - Math.exp(-5)), 0, 1);
+const Peint = {
+  sphere(ctx, x, y, r, [clair, milieu, foncé], a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r); g.addColorStop(0, clair); g.addColorStop(.45, milieu); g.addColorStop(1, foncé);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  },
+  /** Bécher vu de face : verre, solution (dégradé, ménisque, reflet), bec, graduations. niveau 0 → 1. */
+  becher(ctx, B, niveau, col, a = 1) {
+    const { x, y, w, h } = B, ep = 3, fond = y + h, yS = fond - ep - niveau * (h - 16);
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.beginPath(); ctx.ellipse(x + w / 2 + 3, fond + 4, w / 2, 4.5, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(210,230,250,.06)'; ctx.beginPath(); ctx.roundRect(x, y, w, h, [2, 2, 10, 10]); ctx.fill();
+    if (niveau > .004) {
+      ctx.save(); ctx.beginPath(); ctx.roundRect(x + ep, y, w - 2 * ep, h - ep, [0, 0, 8, 8]); ctx.clip();
+      const g = ctx.createLinearGradient(0, yS, 0, fond); g.addColorStop(0, rgba(eclair(col, .18))); g.addColorStop(1, rgba(sombre(col, .22)));
+      ctx.fillStyle = g; ctx.fillRect(x, yS, w, fond - yS);
+      ctx.fillStyle = 'rgba(255,255,255,.07)'; ctx.fillRect(x + w * .64, yS + 5, w * .09, Math.max(0, fond - yS - 10));
+      ctx.restore();
+      ctx.fillStyle = rgba(eclair(col, .35), 1.1); ctx.beginPath(); ctx.ellipse(x + w / 2, yS, w / 2 - ep, 3, 0, 0, 7); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,.32)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x + ep + 2, yS); ctx.lineTo(x + w - ep - 2, yS); ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(225,238,250,.78)'; ctx.lineWidth = 2.2; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(x - 6, y - 4); ctx.quadraticCurveTo(x - 1, y - 2, x, y + 5); ctx.lineTo(x, fond - 10); ctx.quadraticCurveTo(x, fond, x + 10, fond);
+    ctx.lineTo(x + w - 10, fond); ctx.quadraticCurveTo(x + w, fond, x + w, fond - 10); ctx.lineTo(x + w, y); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.14)'; ctx.fillRect(x + w * .11, y + 12, w * .05, h - 28);
+    ctx.strokeStyle = 'rgba(225,238,250,.35)'; ctx.lineWidth = 1;
+    for (let k = 1; k <= 4; k++) { const gy = fond - 8 - k * (h - 24) / 5; ctx.beginPath(); ctx.moveTo(x + w - 14, gy); ctx.lineTo(x + w - 4, gy); ctx.stroke(); }
+    ctx.restore();
+    return yS;
+  },
+  /** Eau d’un bain (cristallisoir) peinte PAR-DESSUS le bécher : il paraît plongé dedans. */
+  bain(ctx, B, ySurf, col, a = 1) {
+    const { x, y, w, h } = B, fond = y + h;
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createLinearGradient(0, ySurf, 0, fond); g.addColorStop(0, rgba(eclair(col, .2))); g.addColorStop(1, rgba(sombre(col, .3)));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x + 3, ySurf, w - 6, fond - ySurf - 3, [0, 0, 12, 12]); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(x + 5, ySurf); ctx.lineTo(x + w - 5, ySurf); ctx.stroke();
+    ctx.strokeStyle = 'rgba(225,238,250,.7)'; ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, fond - 14); ctx.quadraticCurveTo(x, fond, x + 14, fond); ctx.lineTo(x + w - 14, fond); ctx.quadraticCurveTo(x + w, fond, x + w, fond - 14); ctx.lineTo(x + w, y); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.1)'; ctx.fillRect(x + 7, y + 8, 4, h - 22);
+    ctx.restore();
+  },
+  glacon(ctx, x, y, s, ang, a = 1) {
+    ctx.save(); ctx.globalAlpha = a; ctx.translate(x, y); ctx.rotate(ang);
+    const g = ctx.createLinearGradient(-s / 2, -s / 2, s / 2, s / 2); g.addColorStop(0, 'rgba(245,252,255,.85)'); g.addColorStop(1, 'rgba(170,215,240,.55)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(-s / 2, -s / 2, s, s * .85, 4); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.fillRect(-s / 2 + 3, -s / 2 + 3, s * .3, 2);
+    ctx.restore();
+  },
+  /** Pipette jaugée (pointe en (x, yp)), poire rouge en haut ; `rempli` 0 → 1 de solution `col`. */
+  pipette(ctx, x, yp, rempli, col, a = 1) {
+    if (a <= 0) return;
+    const L = 92, yH = yp - L;
+    ctx.save(); ctx.globalAlpha = a;
+    if (rempli > 0) { ctx.fillStyle = rgba(col, 1.2); ctx.fillRect(x - 2.4, yp - 4 - rempli * (L - 26), 4.8, rempli * (L - 26)); }
+    ctx.strokeStyle = 'rgba(225,238,250,.85)'; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(x - 1.2, yp); ctx.lineTo(x - 3.5, yp - 10); ctx.lineTo(x - 3.5, yH + 18); ctx.moveTo(x + 1.2, yp); ctx.lineTo(x + 3.5, yp - 10); ctx.lineTo(x + 3.5, yH + 18); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.beginPath(); ctx.moveTo(x - 5, yp - 58); ctx.lineTo(x + 5, yp - 58); ctx.stroke();   // trait de jauge
+    const g = ctx.createRadialGradient(x - 3, yH + 4, 1, x, yH + 8, 11); g.addColorStop(0, '#ff9a8a'); g.addColorStop(.5, '#d33a2c'); g.addColorStop(1, '#6e1209');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x, yH + 8, 8, 11, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#8e1d12'; ctx.fillRect(x - 4, yH + 17, 8, 4);
+    ctx.restore();
+  },
+  /** Burette graduée sur son support : solution `col` jusqu’à `niveau` (0 → 1), robinet, pointe en (x, yp). */
+  burette(ctx, x, yH, yp, niveau, col, a = 1, pied = 120) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = '#5c6670'; ctx.fillRect(x + 46, yH - 10, 5, yp + pied - yH); ctx.fillRect(x + 6, yH + 30, 44, 5);
+    const yR = yp - 16;
+    ctx.fillStyle = rgba(col, 1.3); const yl = lerp(yR - 4, yH + 6, niveau); ctx.fillRect(x - 4, yl, 8, yR - yl);
+    ctx.strokeStyle = 'rgba(225,238,250,.85)'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.roundRect(x - 5.5, yH, 11, yR - yH, 2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(225,238,250,.4)'; ctx.lineWidth = 1;
+    for (let k = 1; k < 10; k++) { const gy = yH + k * (yR - yH) / 10; ctx.beginPath(); ctx.moveTo(x - 5, gy); ctx.lineTo(x, gy); ctx.stroke(); }
+    ctx.fillStyle = '#3b4148'; ctx.fillRect(x - 3, yR, 6, 8); ctx.fillStyle = '#c7ccd2'; ctx.fillRect(x - 11, yR + 2, 22, 4);
+    ctx.strokeStyle = 'rgba(225,238,250,.85)'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(x - 1.5, yR + 8); ctx.lineTo(x - .6, yp); ctx.moveTo(x + 1.5, yR + 8); ctx.lineTo(x + .6, yp); ctx.stroke();
+    ctx.restore();
+  },
+  /** Compte-gouttes (pointe en (x, yp)), poire noire. */
+  compteGouttes(ctx, x, yp, col, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = rgba(col, 1.4); ctx.fillRect(x - 2.5, yp - 30, 5, 26);
+    ctx.strokeStyle = 'rgba(225,238,250,.85)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x - 1, yp); ctx.lineTo(x - 4, yp - 14); ctx.lineTo(x - 4, yp - 46); ctx.moveTo(x + 1, yp); ctx.lineTo(x + 4, yp - 14); ctx.lineTo(x + 4, yp - 46); ctx.stroke();
+    const g = ctx.createRadialGradient(x - 3, yp - 58, 1, x, yp - 54, 11); g.addColorStop(0, '#6b6b6b'); g.addColorStop(.5, '#2a2a2a'); g.addColorStop(1, '#050505');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x, yp - 56, 7.5, 11, 0, 0, 7); ctx.fill();
+    ctx.restore();
+  },
+  goutte(ctx, x, y, col, a = 1) {
+    ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = rgba(col, 1.5);
+    ctx.beginPath(); ctx.moveTo(x, y - 6); ctx.quadraticCurveTo(x + 4, y, x, y + 3.5); ctx.quadraticCurveTo(x - 4, y, x, y - 6); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.fillRect(x - 1.2, y - 1, 1.2, 1.6); ctx.restore();
+  },
+  /** Filet de liquide qui coule (versement). */
+  filet(ctx, x, y1, y2, col, a = 1) { ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = rgba(col, 2.2); ctx.fillRect(x - 1.6, y1, 3.2, y2 - y1); ctx.restore(); },
+};
+
+
+/* ── Pièces peintes propres au suivi : conductimètre, cellule, ballon, manomètre, ruban de magnésium ──────────────────── */
+Object.assign(Peint, {
+  /** Afficheur numérique (boîtier sombre, écran vert pâle) ; le texte est peint (c’est l’appareil qui l’affiche, pas la craie). */
+  afficheur(ctx, x, y, w, h, txt, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#3a4148'); g.addColorStop(1, '#1d2226');
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(x + 3, y + 4, w, h, 6); ctx.fill();
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 6); ctx.fill();
+    ctx.fillStyle = '#b9e4b0'; ctx.beginPath(); ctx.roundRect(x + 7, y + 7, w - 14, h * .52, 3); ctx.fill();
+    ctx.fillStyle = '#17331a'; ctx.font = `600 ${Math.round(h * .3)}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(txt, x + w / 2, y + 7 + h * .26 + 1);
+    ctx.fillStyle = '#6b747c'; for (let k = 0; k < 3; k++) { ctx.beginPath(); ctx.arc(x + w * (.28 + k * .22), y + h * .8, 3.2, 0, 7); ctx.fill(); }
+    ctx.restore();
+  },
+  /** Cellule de conductimétrie : tige sombre et deux petites plaques parallèles (en bas, dans la solution). */
+  cellule(ctx, x, yH, yB, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createLinearGradient(x - 5, 0, x + 5, 0); g.addColorStop(0, '#2b2f33'); g.addColorStop(.4, '#6c757d'); g.addColorStop(1, '#202326');
+    ctx.fillStyle = g; ctx.fillRect(x - 5, yH, 10, yB - yH - 22);
+    ctx.strokeStyle = 'rgba(225,238,250,.7)'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.roundRect(x - 13, yB - 26, 26, 26, 3); ctx.stroke();
+    ctx.fillStyle = '#9aa3ab'; ctx.fillRect(x - 10, yB - 22, 3, 18); ctx.fillRect(x + 7, yB - 22, 3, 18);
+    ctx.restore();
+  },
+  /** Fil électrique (courbe de Bézier). */
+  fil(ctx, pts, col = '#1f2a33', a = 1) {
+    ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(...pts[0]); ctx.bezierCurveTo(...pts[1], ...pts[2], ...pts[3]); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1; ctx.stroke(); ctx.restore();
+  },
+  /** Ballon à fond rond (centre (x, y), rayon r), col, bouchon ; liquide jusqu’à la part `niv` de la panse. */
+  ballon(ctx, x, y, r, niv, col, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    const col0 = 10, yCol = y - r * .92, hCol = 34;
+    ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.beginPath(); ctx.ellipse(x + 3, y + r + 5, r * .7, 4, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(210,230,250,.06)'; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
+    ctx.save(); ctx.beginPath(); ctx.arc(x, y, r - 2.5, 0, 7); ctx.clip();
+    const yS = y + r - niv * 2 * r, gl = ctx.createLinearGradient(0, yS, 0, y + r); gl.addColorStop(0, rgba(eclair(col, .2))); gl.addColorStop(1, rgba(sombre(col, .25)));
+    ctx.fillStyle = gl; ctx.fillRect(x - r, yS, 2 * r, y + r - yS);
+    ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x - r, yS); ctx.lineTo(x + r, yS); ctx.stroke();
+    ctx.restore();
+    ctx.strokeStyle = 'rgba(225,238,250,.78)'; ctx.lineWidth = 2.2;
+    const a0 = Math.asin(col0 / r);
+    ctx.beginPath(); ctx.moveTo(x - col0, yCol - hCol); ctx.lineTo(x - col0, y - r * Math.cos(a0)); ctx.arc(x, y, r, -Math.PI / 2 - a0 + Math.PI * 2, -Math.PI / 2 + a0, true);
+    ctx.lineTo(x + col0, yCol - hCol); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.13)'; ctx.beginPath(); ctx.ellipse(x - r * .45, y - r * .3, r * .1, r * .35, .5, 0, 7); ctx.fill();
+    const gb = ctx.createLinearGradient(x - 12, 0, x + 12, 0); gb.addColorStop(0, '#5a2e1c'); gb.addColorStop(.4, '#a2583a'); gb.addColorStop(1, '#4a2416');
+    ctx.fillStyle = gb; ctx.beginPath(); ctx.moveTo(x - 13, yCol - hCol - 12); ctx.lineTo(x + 13, yCol - hCol - 12); ctx.lineTo(x + 10, yCol - hCol + 10); ctx.lineTo(x - 10, yCol - hCol + 10); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    return { yS, yBouchon: yCol - hCol - 12 };
+  },
+  /** Ruban de magnésium (gris métal), un peu tordu. */
+  ruban(ctx, x, y, L, a = 1) {
+    if (L <= 0) return;
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createLinearGradient(0, y - 3, 0, y + 3); g.addColorStop(0, '#eef1f4'); g.addColorStop(.5, '#9aa2aa'); g.addColorStop(1, '#5f666d');
+    ctx.strokeStyle = g; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.bezierCurveTo(x + L * .3, y - 6, x + L * .6, y + 5, x + L, y - 2); ctx.stroke(); ctx.restore();
+  },
+  /** Bulles de dihydrogène qui montent depuis (x0..x1, yB) jusqu’à ySurf ; `k` : abondance 0 → 1 ; t : temps de la scène. */
+  bulles(ctx, x0, x1, yB, ySurf, t, k, n = 9) {
+    if (k <= 0) return;
+    ctx.save();
+    for (let i = 0; i < n; i++) {
+      if (i / n > k) break;
+      const ph = ((t * .7 + i * .379) % 1 + 1) % 1, x = x0 + ((i * .618) % 1) * (x1 - x0) + Math.sin(t * 4 + i) * 2, y = yB - ph * (yB - ySurf), r = 1.6 + (i % 3) * .7;
+      ctx.strokeStyle = 'rgba(240,250,255,.8)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.arc(x - r * .3, y - r * .3, r * .35, 0, 7); ctx.fill();
+    }
+    ctx.restore();
+  },
+  /** Manomètre à cadran (centre (x, y), rayon r) : boîtier métal, cadran blanc, aiguille rouge (part 0 → 1). */
+  manometre(ctx, x, y, r, part, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createRadialGradient(x - r * .3, y - r * .3, r * .2, x, y, r); g.addColorStop(0, '#f1f4f6'); g.addColorStop(.7, '#a7b0b8'); g.addColorStop(1, '#5d666e');
+    ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.arc(x + 3, y + 4, r, 0, 7); ctx.fill();
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
+    ctx.fillStyle = '#fbfbf6'; ctx.beginPath(); ctx.arc(x, y, r * .8, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#2a2f34'; ctx.lineWidth = 1.2;
+    for (let k = 0; k <= 10; k++) { const an = Math.PI * (.75 + 1.5 * k / 10); ctx.beginPath(); ctx.moveTo(x + Math.cos(an) * r * .62, y + Math.sin(an) * r * .62); ctx.lineTo(x + Math.cos(an) * r * .74, y + Math.sin(an) * r * .74); ctx.stroke(); }
+    const an = Math.PI * (.75 + 1.5 * clamp(part, 0, 1));
+    ctx.strokeStyle = '#c62828'; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + Math.cos(an) * r * .66, y + Math.sin(an) * r * .66); ctx.stroke();
+    ctx.fillStyle = '#2a2f34'; ctx.beginPath(); ctx.arc(x, y, 3, 0, 7); ctx.fill();
+    ctx.restore();
+  },
+});
+
+/* ── Exemple A (contrat) : x(t) = 2,0·(1 − e^(−t/8)) mmol, POUR LE CALCUL SEULEMENT (jamais écrit) ─────────────────── */
+const xA = t => 2 * (1 - Math.exp(-t / 8));
+const MESURES = [[0, '0'], [2, '0,44'], [4, '0,79'], [6, '1,06'], [8, '1,26'], [10, '1,43'], [15, '1,69'], [20, '1,84'], [30, '1,95'], [40, '1,99']];
+const TP = 8;                     // date du prélèvement (min)
+const RT = .2;                    // temps accéléré : 1 min simulée dure 0,2 s
+const VE = 12.6;                  // volume équivalent (mL)
+const THIO = [235, 240, 248, .14];
+const min = v => `${fx(v, 1)} min`;
+/** Part de la teinte brune finale : x/x_max (le brun suit la quantité de diiode formé). */
+const fT = t => clamp(xA(t) / 2, 0, 1);
+
+const VUES = ['methodes', 'mesures', 'prelevement', 'titrage'];
+const TITRES = { methodes: 'trois méthodes de suivi', mesures: 'une série de mesures', prelevement: 'le prélèvement et la trempe', titrage: 'le titrage du prélèvement' };
+const TITRE_TABLEAU = { methodes: 'Suivre l’avancement x au cours du temps', mesures: 'Mesurer x à des dates successives', prelevement: 'Prélever et bloquer la réaction (trempe)', titrage: 'Titrer le diiode du prélèvement' };
+function ETAPES(v) {
+  return ({
+    methodes: [
+      { nom: 'titre', anim: .3, motif: 'on veut connaître l’avancement x à chaque date t', bulle: () => 'Comment suivre une transformation lente ?' },
+      { nom: 'titrage', anim: 1, motif: 'méthode 1 : titrage d’un prélèvement', bulle: () => 'Première méthode : le titrage.' },
+      { nom: 'conductimetrie', anim: 1, motif: 'méthode 2 : conductimétrie (afficheur du conductimètre)', bulle: () => 'Deuxième méthode : la conductimétrie.' },
+      { nom: 'pression', anim: 1.4, motif: 'méthode 3 : pression d’un gaz dans un ballon fermé (manomètre)', bulle: () => 'Troisième méthode : la pression d’un gaz.' },
+      { nom: 'point_commun', anim: .3, motif: 'point commun : on mesure une grandeur à des dates, on en déduit x(t)', bulle: () => 'Qu’ont-elles en commun ?' },
+    ],
+    mesures: [
+      { nom: 'melange', anim: 1.6, motif: 'on mélange H₂O₂, I⁻ et H⁺ (100 mL) : incolore au départ', bulle: () => 'On prépare le mélange de l’exemple A.' },
+      { nom: 'premiere_mesure', anim: .4, sim: [0, 0], ecritDes: 0, motif: 't = 0 min : première ligne, x = 0 mmol', bulle: () => 'Top chrono ! (temps accéléré : 1 min dure 0,2 s)' },
+      { nom: 'mesures', anim: RT * 40, sim: [0, 40], ecritDes: 0, motif: 't = 40 min : dix mesures écrites, le mélange est brun', bulle: () => 'À chaque date, on mesure x…' },
+      { nom: 'tableau_fini', anim: .3, motif: 'le tableau des mesures est complet : x(t) de 0 à 40 min', bulle: () => 'Le tableau est complet.' },
+    ],
+    prelevement: [
+      { nom: 'reaction', anim: RT * TP * 1.25, sim: [0, TP], motif: `t = ${TP} min : le grand bécher brunit`, bulle: () => 'Le mélange réagit dans le grand bécher (temps accéléré)…' },
+      { nom: 'prelevement', anim: 2.2, sim: [TP, TP + .5], motif: 'la pipette prélève 10,0 mL du mélange', bulle: () => 'On prélève 10,0 mL à la pipette.' },
+      { nom: 'eau_glacee', anim: 2.2, sim: [TP + .5, TP + 1], motif: 'le prélèvement est versé dans l’eau glacée', bulle: () => 'On le verse dans de l’eau glacée.' },
+      { nom: 'fige', anim: .5, motif: 'la teinte du prélèvement ne bouge plus', bulle: () => 'Regarde la teinte du prélèvement…' },
+      { nom: 'continue', anim: RT * (30 - TP - 1), sim: [TP + 1, 30], motif: 't = 30 min : le grand bécher a continué de foncer, le prélèvement non', bulle: () => 'Pendant ce temps, le grand bécher…' },
+      { nom: 'phrase', anim: .3, motif: '« trempe : on bloque la réaction pour mesurer x à cette date »', bulle: () => 'Pourquoi l’eau glacée ?' },
+    ],
+    titrage: [
+      { nom: 'burette', anim: 1, motif: 'la burette de thiosulfate (C = 0,020 mol/L) au-dessus du prélèvement brun', bulle: () => 'Le prélèvement de t = 8 min, sous la burette de thiosulfate.' },
+      { nom: 'verser', anim: 4.2, motif: 'on verse : le brun pâlit, jaune pâle', bulle: () => 'On verse le thiosulfate goutte à goutte…' },
+      { nom: 'equivalence', anim: 1.2, motif: 'équivalence : la solution devient incolore, V_E = 12,6 mL', bulle: () => 'La dernière goutte…' },
+      { nom: 'equation', anim: .3, motif: 'l’équation du titrage : I₂ + 2S₂O₃²⁻ → 2I⁻ + S₄O₆²⁻', bulle: () => 'L’équation du titrage.' },
+      { nom: 'relation', anim: .3, motif: 'à l’équivalence : n(I₂) = C·V_E/2 ; dans le mélange : × 10', bulle: () => 'La relation à l’équivalence.' },
+      { nom: 'resultat', anim: .3, motif: 'x = n(I₂) = 1,26 mmol à t = 8 min', bulle: () => 'Le résultat.' },
+    ],
+  })[v];
+}
+const MOTIFS = new Proxy({}, { get: (_, nom) => (nom === 'fin' ? 'fin' : (ETAPES(MO ? MO.S.vue : VUES[0]).find(e => e.nom === nom) || {}).motif) });
+let MO = null;
+/** Temps simulé (min) : il avance pendant l’animation des étapes qui ont `sim: [début, fin]`. */
+function tSim(M = MO) {
+  let t = 0;
+  for (const e of M.evs()) {
+    if (!e.sim) continue; if (!M.commence(e.nom)) break;
+    t = e.sim[0] + (e.sim[1] - e.sim[0]) * (e.anim > 0 ? clamp((M.S.t - e.debut) / e.anim, 0, 1) : 1);
+  }
+  return t;
+}
+const ZY = [352, 376, 400];
+
+/* ── Pièces communes ─────────────────────────────────────────────────── */
+function chrono(c, CHR, t) {
+  c.cercle(CHR.x, CHR.y, CHR.r, { largeur: 2 }); c.ligne(CHR.x, CHR.y - CHR.r, CHR.x, CHR.y - CHR.r - 6, { largeur: 3 });
+  for (let k = 0; k < 12; k++) { const a = k / 12 * Math.PI * 2; c.ligne(CHR.x + Math.sin(a) * (CHR.r - 5), CHR.y - Math.cos(a) * (CHR.r - 5), CHR.x + Math.sin(a) * (CHR.r - 1), CHR.y - Math.cos(a) * (CHR.r - 1), { largeur: 1.2, couleur: 'faible', duree: .02 }); }
+  c.direct(() => {
+    const a = t / 60 * Math.PI * 2;
+    c.ligne(CHR.x, CHR.y, CHR.x + Math.sin(a) * (CHR.r - 7), CHR.y - Math.cos(a) * (CHR.r - 7), { couleur: 'jaune', largeur: 2.2 });
+    c.texte(`t = ${min(t)}`, CHR.x + CHR.r + 10, CHR.y + 7, { couleur: 'jaune', taille: 19 });
+  });
+}
+/** « mesure → avancement x », la flèche dessinée. */
+function versX(c, cx, y, gauche = 'mesure', droite = 'avancement x', col = 'jaune') { eqn(c, cx, y, gauche, droite, { align: 'center', taille: 16, couleur: col }); }
+
+/* ── Dessin ──────────────────────────────────────────────────────────── */
+function dessiner(c, M) {
+  MO = M; M.scene.cadre(61);
+  const v = M.S.vue;
+  c.texte(TITRE_TABLEAU[v], 14, 26, { couleur: 'cyan', taille: 20 });
+  M.vues = ({ methodes: vueMethodes, mesures: vueMesures, prelevement: vuePrelevement, titrage: vueTitrage })[v](c, M) || [];
+  reperes(c, M);
+  return c.fin();
+}
+
+/* Vue methodes : trois vignettes. */
+const VG = [0, 1, 2].map(i => ({ x: 16 + i * 248, y: 40, w: 232, h: 254, cx: 16 + i * 248 + 116 }));
+const MB1 = { x: 82, y: 160, w: 92, h: 80 }, MB2 = { x: 282, y: 160, w: 104, h: 80 }, AFF = { x: 398, y: 74, w: 92, h: 62 };
+const MAN = { x: 686, y: 106, r: 30 }, BAL = { x: 598, y: 194, r: 44 };
+function vueMethodes(c, M) {
+  const t = M.S.t;
+  const vign = (i, nom, titre) => {
+    const g = VG[i];
+    M.etape(c, nom, () => {
+      c.rect(g.x, g.y, g.w, g.h, { couleur: 'faible', largeur: 1.6, arrondi: 10 });
+      c.texte(titre, g.cx, g.y + g.h - 32, { couleur: 'blanc', taille: 17, align: 'center' });
+      versX(c, g.cx, g.y + g.h - 10);
+    });
+  };
+  if (M.commence('titrage')) c.direct(() => {
+    const ctx = c.ctx, a = lisse(clamp(M.p('titrage') * 2, 0, 1));
+    Peint.becher(ctx, MB1, .6, teinte(.6), a);
+    Peint.burette(ctx, 128, 62, 156, .72, THIO, a, 94);
+    Peint.pipette(ctx, 62, 232, .7, teinte(.6), a);
+  });
+  if (M.commence('conductimetrie')) c.direct(() => {
+    const ctx = c.ctx, a = lisse(clamp(M.p('conductimetrie') * 2, 0, 1));
+    Peint.becher(ctx, MB2, .62, [200, 225, 240, .16], a);
+    Peint.cellule(ctx, 322, 96, 232, a);
+    Peint.fil(ctx, [[322, 98], [322, 66], [380, 60], [AFF.x, AFF.y + 30]], '#1f2a33', a);
+    Peint.afficheur(ctx, AFF.x, AFF.y, AFF.w, AFF.h, '0,170', a);
+  });
+  if (M.commence('pression')) c.direct(() => {
+    const ctx = c.ctx, a = lisse(clamp(M.p('pression') * 2, 0, 1)), k = clamp(M.p('pression') * 1.4, 0, 1);
+    const b = Peint.ballon(ctx, BAL.x, BAL.y, BAL.r, .42, [205, 225, 240, .16], a);
+    Peint.ruban(ctx, BAL.x - 18, BAL.y + BAL.r - 10, 30, a * (1 - .3 * k));
+    Peint.bulles(ctx, BAL.x - 16, BAL.x + 12, BAL.y + BAL.r - 12, b.yS + 2, t, k * a);
+    ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = 'rgba(225,238,250,.8)'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(BAL.x, b.yBouchon); ctx.lineTo(BAL.x, 82); ctx.quadraticCurveTo(BAL.x, 72, BAL.x + 12, 72); ctx.lineTo(MAN.x - MAN.r - 2, 72); ctx.quadraticCurveTo(MAN.x - MAN.r + 6, 72, MAN.x - MAN.r + 4, MAN.y - 6); ctx.stroke(); ctx.restore();
+    Peint.manometre(ctx, MAN.x, MAN.y, MAN.r, .3 + .4 * k, a);
+  });
+  vign(0, 'titrage', 'titrage d’un prélèvement');
+  M.etape(c, 'titrage', () => { c.texte('S₂O₃²⁻', 118, 80, { couleur: 'faible', taille: 14, align: 'right' }); });
+  vign(1, 'conductimetrie', 'conductimétrie');
+  M.etape(c, 'conductimetrie', () => { c.texte('σ (S/m)', AFF.x + AFF.w / 2, AFF.y + AFF.h + 20, { couleur: 'faible', taille: 15, align: 'center' }); c.texte('cellule', 312, 140, { couleur: 'faible', taille: 14, align: 'right' }); });
+  vign(2, 'pression', 'pression d’un gaz');
+  M.etape(c, 'pression', () => { c.texte('manomètre', MAN.x, MAN.y + MAN.r + 18, { couleur: 'faible', taille: 14, align: 'center' }); c.texte('Mg', BAL.x - 66, BAL.y + BAL.r - 4, { couleur: 'faible', taille: 14 }); c.texte('H₂', BAL.x + 52, BAL.y + 10, { couleur: 'faible', taille: 14 }); });
+  M.etape(c, 'point_commun', () => {
+    c.rect(40, 302, 680, 32, { couleur: 'jaune', largeur: 1.8, arrondi: 8 });
+    c.texte('on mesure une grandeur à des dates, on en déduit x(t)', 380, 325, { couleur: 'jaune', taille: 19, align: 'center' });
+  });
+  return zoneEcriture(c, M, [
+    { nom: 'titre', lignes: [['on veut connaître l’avancement x de la réaction à chaque date t', 'blanc']] },
+    { nom: 'titrage', lignes: [['1) titrage : on dose une espèce dans un prélèvement refroidi → x', 'blanc']] },
+    { nom: 'conductimetrie', lignes: [['2) conductimétrie : σ change quand des ions sont consommés ou formés', 'blanc']] },
+    { nom: 'pression', lignes: [['3) pression : un gaz se forme dans un ballon fermé, P augmente', 'blanc']] },
+    { nom: 'point_commun', lignes: [['la grandeur mesurée (V_E, σ ou P) donne x à chaque date', 'jaune']] },
+  ], [356, 380, 404]);
+}
+
+/* Vue mesures : le bécher qui brunit et le tableau qui se remplit. */
+const BM = { x: 56, y: 118, w: 150, h: 176 }, CHM = { x: 262, y: 104, r: 26 }, TBM = { x: 410, y: 46, w: 320, h: 270 };
+const yLigne = k => TBM.y + 52 + k * 22;
+function vueMesures(c, M) {
+  const t = tSim(), niv = .62 * lisse(M.p('melange'));
+  eqn(c, 724, 26, 'H₂O₂ + 2I⁻ + 2H⁺', 'I₂ + 2H₂O', { align: 'right', taille: 15 });
+  c.direct(() => {
+    const ctx = c.ctx;
+    Peint.becher(ctx, BM, niv, teinte(fT(t)));
+    if (M.commence('melange') && M.p('melange') < 1) Peint.filet(ctx, BM.x + BM.w * .4, 64, BM.y + BM.h - 3 - niv * (BM.h - 16), EAU);
+  });
+  c.ligne(30, 300, 380, 300, { couleur: 'faible', largeur: 1.6 });
+  c.texte('100 mL de mélange', BM.x + BM.w / 2, 322, { couleur: 'blanc', taille: 16, align: 'center' });
+  chrono(c, CHM, t);
+  c.rect(TBM.x, TBM.y, TBM.w, TBM.h, { couleur: 'faible', largeur: 1.6, arrondi: 8 });
+  c.texte('mesures (exemple A)', TBM.x + TBM.w / 2, TBM.y + 26, { couleur: 'cyan', taille: 17, align: 'center' });
+  const ligne = (k) => c.texte(`t = ${MESURES[k][0]} min : x = ${MESURES[k][1]} mmol`, TBM.x + 40, yLigne(k), { couleur: k === 9 ? 'jaune' : 'blanc', taille: 17 });
+  const vues = zoneEcriture(c, M, [
+    { nom: 'melange', lignes: [['t = 0 : H₂O₂ (2,0 mmol) + I⁻ (10,0 mmol) + H⁺ en excès, 100 mL, incolore', 'blanc']] },
+    { nom: 'premiere_mesure', lignes: [['à t = 0 : pas encore de diiode, x = 0 mmol', 'blanc']] },
+    { nom: 'mesures', lignes: [['à chaque date, on mesure x (par titrage d’un prélèvement)', 'blanc']] },
+    { nom: 'tableau_fini', lignes: [['x augmente vite au début, puis de moins en moins : x ≈ 2,0 mmol à la fin', 'jaune']],
+      plus: () => c.rect(TBM.x + 6, TBM.y + 34, TBM.w - 12, TBM.h - 40, { couleur: 'jaune', largeur: 2, arrondi: 8 }) },
+  ], ZY);
+  M.etape(c, 'premiere_mesure', () => ligne(0));
+  M.etape(c, 'mesures', () => {
+    const w0 = c.cur, V = 1.7;
+    for (let k = 1; k < MESURES.length; k++) { c.depuis(w0 + RT * MESURES[k][0] * V); ligne(k); }
+  });
+  return vues;
+}
+
+/* Vue prelevement : trempe. */
+const GB = { x: 40, y: 150, w: 160, h: 150 }, BG = { x: 300, y: 200, w: 120, h: 100 }, CHP = { x: 548, y: 84, r: 26 };
+function pipetteEtat(M) {
+  const R = [245, 252], A = [120, 150], dansGB = [120, 262], B = [360, 150], dansBG = [360, 258];
+  const P = (p, a, b) => [lerp(a[0], b[0], lisse(p)), lerp(a[1], b[1], lisse(p))];
+  if (!M.commence('prelevement')) return { pos: R, rempli: 0, a: 1 };
+  if (!M.commence('eau_glacee')) {
+    const p = M.p('prelevement');
+    if (p < .3) return { pos: P(p / .3, R, A), rempli: 0, a: 1 };
+    if (p < .5) return { pos: P((p - .3) / .2, A, dansGB), rempli: 0, a: 1 };
+    if (p < .7) return { pos: dansGB, rempli: (p - .5) / .2, a: 1 };
+    return { pos: P((p - .7) / .3, dansGB, A), rempli: 1, a: 1 };
+  }
+  if (!M.commence('fige')) {
+    const p = M.p('eau_glacee');
+    if (p < .35) return { pos: P(p / .35, A, B), rempli: 1, a: 1 };
+    if (p < .55) return { pos: P((p - .35) / .2, B, dansBG), rempli: 1, a: 1 };
+    if (p < .9) return { pos: dansBG, rempli: 1 - (p - .55) / .35, a: 1 };
+    return { pos: dansBG, rempli: 0, a: 1 };
+  }
+  const p = M.p('fige');
+  return { pos: P(p, dansBG, B), rempli: 0, a: 1 - p };
+}
+const EAU_FROIDE = [200, 228, 245, .16];
+function couleurGlace(M) {
+  const verse = M.commence('fige') ? 1 : M.commence('eau_glacee') ? clamp((M.p('eau_glacee') - .55) / .35, 0, 1) : 0;
+  return melange(EAU_FROIDE, teinte(fT(TP) * .9), verse);
+}
+function vuePrelevement(c, M) {
+  const t = tSim(), pip = pipetteEtat(M);
+  c.ligne(20, 302, 470, 302, { couleur: 'faible', largeur: 1.6 });
+  c.direct(() => {
+    const ctx = c.ctx;
+    Peint.becher(ctx, GB, .66, teinte(fT(t)));
+    const yS = Peint.becher(ctx, BG, .5, couleurGlace(M));
+    [[322, -.2], [346, .25], [392, -.1], [372, .4]].forEach(([gx, ang], i) => Peint.glacon(ctx, gx, yS - 1 + (i % 2) * 3, 17 - (i % 2) * 3, ang));
+    Peint.pipette(ctx, pip.pos[0], pip.pos[1], pip.rempli, teinte(fT(TP)), pip.a);
+  });
+  c.texte('grand bécher (100 mL)', GB.x + GB.w / 2, 326, { couleur: 'blanc', taille: 16, align: 'center' });
+  c.texte('eau glacée', BG.x + BG.w / 2, 326, { couleur: 'bleu', taille: 17, align: 'center' });
+  chrono(c, CHP, t);
+  const pastille = (x, col, l1, l2, coul) => {
+    c.direct(() => { const ctx = c.ctx; ctx.save(); const g = ctx.createLinearGradient(0, 150, 0, 196); g.addColorStop(0, rgba(eclair(col, .15))); g.addColorStop(1, rgba(sombre(col, .2))); ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, 150, 92, 46, 8); ctx.fill(); ctx.restore(); });
+    c.rect(x, 150, 92, 46, { arrondi: 8, largeur: 1.6, couleur: 'faible' });
+    c.texte(l1, x + 46, 218, { couleur: coul, taille: 15, align: 'center' }); c.texte(l2, x + 46, 236, { couleur: coul, taille: 15, align: 'center' });
+  };
+  return zoneEcriture(c, M, [
+    { nom: 'reaction', lignes: [['le mélange H₂O₂ + I⁻ (milieu acide) brunit : du diiode I₂ se forme', 'blanc']] },
+    { nom: 'prelevement', lignes: [[`à t = ${TP} min, la pipette prélève V_p = 10,0 mL du mélange`, 'blanc']] },
+    { nom: 'eau_glacee', lignes: [['on le verse dans de l’eau glacée : refroidi et dilué d’un coup', 'bleu']] },
+    { nom: 'fige', lignes: [['sa teinte ne bouge plus : la réaction y est bloquée', 'jaune']],
+      plus: () => pastille(500, teinte(fT(TP) * .9), 'prélèvement', 'figé', 'bleu') },
+    { nom: 'continue', lignes: [['pendant ce temps, le grand bécher continue de foncer', 'blanc']],
+      plus: () => c.direct(() => pastille(620, teinte(fT(tSim())), 'grand bécher', 'continue', 'blanc')) },
+    { nom: 'phrase', lignes: [['on titrera ensuite le diiode du prélèvement : on aura x à t = 8 min', 'blanc']],
+      plus: () => { c.rect(492, 248, 254, 76, { couleur: 'jaune', largeur: 1.8, arrondi: 8 });
+        c.texte('trempe : on bloque la', 502, 272, { couleur: 'jaune', taille: 17 }); c.texte('réaction pour mesurer x', 502, 294, { couleur: 'jaune', taille: 17 }); c.texte('à cette date', 502, 316, { couleur: 'jaune', taille: 17 }); } },
+  ], ZY);
+}
+
+/* Vue titrage. */
+const BUR = { x: 170, yH: 50, yp: 192 }, BT = { x: 100, y: 206, w: 110, h: 96 }, PX = 300;
+/** Teinte pendant le titrage : brun → jaune pâle → incolore à l’équivalence (racine : pour l’œil, le jaune pâle reste visible jusqu’au bout). */
+const fTitre = Vv => fT(TP) * Math.sqrt(clamp(1 - Vv / VE, 0, 1));
+/** Volume versé (mL) selon l’étape. */
+function vVerse(M) {
+  if (!M.commence('verser')) return 0;
+  if (!M.commence('equivalence')) return 12.2 * lisse(M.p('verser'));
+  return 12.2 + .4 * M.p('equivalence');
+}
+function vueTitrage(c, M) {
+  const Vv = vVerse(M), f = fTitre(Vv);
+  const a = lisse(M.p('burette'));
+  c.ligne(60, 304, 280, 304, { couleur: 'faible', largeur: 1.6 });
+  c.direct(() => {
+    const ctx = c.ctx;
+    const yS = Peint.becher(ctx, BT, .45, teinte(f));
+    if (M.commence('burette')) Peint.burette(ctx, BUR.x, BUR.yH, BUR.yp, 1 - Vv / 25, THIO, a);
+    const enCours = M.commence('verser') && (!M.commence('equivalence') || M.p('equivalence') < .9);
+    if (enCours) for (let k = 0; k < 2; k++) { const ph = ((M.S.t * 2.2 + k * .5) % 1); Peint.goutte(ctx, BUR.x, BUR.yp + 4 + ph * (yS - BUR.yp - 6), [235, 240, 248, .3]); }
+  });
+  M.etape(c, 'burette', () => {
+    c.texte('S₂O₃²⁻', BUR.x - 16, 70, { couleur: 'blanc', taille: 16, align: 'right' });
+    c.texte('C = 0,020 mol/L', BUR.x - 16, 92, { couleur: 'blanc', taille: 15, align: 'right' });
+    c.texte('prélèvement (t = 8 min)', BT.x + BT.w / 2, 326, { couleur: 'blanc', taille: 15, align: 'center' });
+  });
+  if (M.commence('verser')) c.direct(() => c.texte(`V = ${fr(Vv, 1)} mL`, BUR.x - 16, 132, { couleur: M.commence('equivalence') && M.p('equivalence') >= 1 ? 'jaune' : 'blanc', taille: 17, align: 'right' }));
+  M.etape(c, 'equivalence', () => { c.texte('V_E = 12,6 mL', BUR.x - 16, 158, { couleur: 'jaune', taille: 18, align: 'right' }); c.texte('incolore', BT.x + BT.w + 18, 262, { couleur: 'jaune', taille: 15 }); });
+  M.etape(c, 'equation', () => { c.texte('équation du titrage :', PX, 74, { couleur: 'cyan', taille: 17 }); eqn(c, PX + 10, 102, 'I₂ + 2S₂O₃²⁻', '2I⁻ + S₄O₆²⁻', { taille: 18 }); });
+  M.etape(c, 'relation', () => {
+    c.texte('à l’équivalence : n(I₂) = C·V_E/2', PX, 140, { couleur: 'blanc', taille: 18 });
+    c.texte('= 0,020 × 12,6·10⁻³ / 2 = 1,26·10⁻⁴ mol (prélèvement)', PX + 20, 166, { couleur: 'faible', taille: 16 });
+    c.texte('dans le mélange : × 10', PX, 200, { couleur: 'blanc', taille: 18 });
+    c.texte('(10,0 mL prélevés sur 100 mL)', PX + 196, 200, { couleur: 'faible', taille: 15 });
+  });
+  M.etape(c, 'resultat', () => {
+    c.rect(PX - 8, 220, 300, 40, { couleur: 'jaune', largeur: 2, arrondi: 8 });
+    c.texte('x = n(I₂) = 1,26 mmol', PX + 6, 248, { couleur: 'jaune', taille: 20 });
+    c.texte('à t = 8 min', PX + 214, 248, { couleur: 'jaune', taille: 15 });
+  });
+  return zoneEcriture(c, M, [
+    { nom: 'burette', lignes: [['le prélèvement de t = 8 min (10,0 mL, refroidi) contient du diiode I₂ : il est brun', 'blanc']] },
+    { nom: 'verser', lignes: [['le thiosulfate consomme le diiode : le brun pâlit, jaune pâle', 'blanc']] },
+    { nom: 'equivalence', lignes: [['équivalence : tout le diiode est consommé, la solution devient incolore', 'jaune']] },
+    { nom: 'equation', lignes: [['réaction de titrage : rapide et totale', 'blanc']] },
+    { nom: 'relation', lignes: [['n(I₂) = C·V_E/2 car il faut 2 S₂O₃²⁻ pour 1 I₂', 'blanc']] },
+    { nom: 'resultat', lignes: [['n(I₂) formé = x (tableau d’avancement) : x(8 min) = 1,26 mmol', 'jaune']] },
+  ], ZY);
+}
+
+/* ── Repères ─────────────────────────────────────────────────────────── */
+function reperes(c, M) {
+  const v = M.S.vue, quand = nom => (M.vu(nom) ? '' : ` (au moment « ${nom} »)`);
+  const R = (id, x, y, w, h, l) => c.repere(id, x, y, w, h, l);
+  if (v === 'methodes') {
+    R('vignette_titrage', VG[0].x, VG[0].y, VG[0].w, VG[0].h, `la vignette 1 : titrage d’un prélèvement (bécher, pipette, burette)${quand('titrage')}`);
+    R('vignette_conductimetrie', VG[1].x, VG[1].y, VG[1].w, VG[1].h, `la vignette 2 : conductimétrie (bécher, cellule, conductimètre)${quand('conductimetrie')}`);
+    R('vignette_pression', VG[2].x, VG[2].y, VG[2].w, VG[2].h, `la vignette 3 : pression d’un gaz (ballon fermé, manomètre)${quand('pression')}`);
+    R('afficheur', AFF.x - 4, AFF.y - 4, AFF.w + 8, AFF.h + 30, `l’afficheur du conductimètre : σ = 0,170 S/m${quand('conductimetrie')}`);
+    R('manometre', MAN.x - MAN.r - 6, MAN.y - MAN.r - 6, 2 * MAN.r + 12, 2 * MAN.r + 30, `le manomètre : la pression P du gaz dans le ballon${quand('pression')}`);
+    R('phrase', 40, 300, 680, 36, `« on mesure une grandeur à des dates, on en déduit x(t) »${quand('point_commun')}`);
+  } else if (v === 'mesures') {
+    const t = tSim();
+    R('becher', BM.x - 8, BM.y - 6, BM.w + 16, BM.h + 12, `le bécher de l’exemple A (100 mL) : teinte ${nomTeinte(fT(t))}`);
+    R('chrono', CHM.x - CHM.r - 4, CHM.y - CHM.r - 10, 130, 2 * CHM.r + 16, `le chronomètre : t = ${min(t)} (temps accéléré)`);
+    R('tableau', TBM.x, TBM.y, TBM.w, TBM.h, 'le tableau des mesures t (min) → x (mmol)');
+    R('ligne_premiere', TBM.x + 30, yLigne(0) - 18, 280, 24, `la première ligne : « t = 0 min : x = 0 mmol »${quand('premiere_mesure')}`);
+    R('ligne_derniere', TBM.x + 30, yLigne(9) - 18, 280, 24, `la dernière ligne : « t = 40 min : x = 1,99 mmol »${quand('mesures')}`);
+  } else if (v === 'prelevement') {
+    const t = tSim(), pip = pipetteEtat(M);
+    R('grand_becher', GB.x - 8, GB.y - 6, GB.w + 16, GB.h + 12, `le grand bécher : teinte ${nomTeinte(fT(t))}`);
+    R('pipette', pip.pos[0] - 14, pip.pos[1] - 106, 28, 110, `la pipette de 10,0 mL${pip.a > .5 ? '' : ' (déjà vidée dans l’eau glacée)'}`);
+    R('becher_glace', BG.x - 8, BG.y - 6, BG.w + 16, BG.h + 12, 'le bécher d’eau glacée');
+    R('glacons', BG.x + 6, BG.y + BG.h - 3 - .5 * (BG.h - 16) - 14, BG.w - 12, 26, 'les glaçons');
+    R('teinte_figee', 494, 144, 104, 98, `la teinte figée du prélèvement (celle de t = ${TP} min)${quand('fige')}`);
+    R('teinte_continue', 614, 144, 104, 98, `la teinte du grand bécher, qui continue de foncer${quand('continue')}`);
+    R('phrase', 492, 248, 254, 76, `« trempe : on bloque la réaction pour mesurer x à cette date »${quand('phrase')}`);
+  } else {
+    R('burette', BUR.x - 120, BUR.yH - 6, 186, BUR.yp - BUR.yH + 12, `la burette de thiosulfate S₂O₃²⁻, C = 0,020 mol/L${quand('burette')}`);
+    R('becher', BT.x - 8, BT.y - 6, BT.w + 16, BT.h + 12, `le prélèvement : ${nomTeinte(fTitre(vVerse(M)))}`);
+    R('lecture_VE', BUR.x - 130, 116, 128, 50, `la lecture à la burette : V_E = 12,6 mL${quand('equivalence')}`);
+    R('equation', PX - 4, 56, 400, 54, `I₂ + 2S₂O₃²⁻ → 2I⁻ + S₄O₆²⁻${quand('equation')}`);
+    R('relation', PX - 4, 122, 446, 86, `« à l’équivalence : n(I₂) = C·V_E/2 » ; « dans le mélange : × 10 »${quand('relation')}`);
+    R('resultat', PX - 8, 220, 300, 40, `« x = n(I₂) = 1,26 mmol »${quand('resultat')}`);
+  }
+}
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
+function voir(M) {
+  const v = M.S.vue, m = [`Vue « ${v} » (${TITRES[v]}), ${M.etat()}.`];
+  const etape = (() => { let n = 'avant le début'; for (const e of M.evs()) if (M.commence(e.nom)) n = e.nom; return n; })();
+  m.push(`Étape en cours : ${etape}.`);
+  if (v === 'methodes') {
+    const vus = [];
+    if (M.commence('titrage')) vus.push('1) titrage d’un prélèvement : bécher brun, pipette, burette de thiosulfate');
+    if (M.commence('conductimetrie')) vus.push('2) conductimétrie : bécher, cellule à deux plaques, conductimètre dont l’afficheur indique 0,170 (σ en S/m)');
+    if (M.commence('pression')) vus.push('3) pression d’un gaz : ballon fermé par un bouchon, ruban de magnésium dans l’acide, bulles de H₂, manomètre à aiguille');
+    m.push(vus.length ? `Vignettes dessinées : ${vus.join(' ; ')}. Sous chacune : « mesure → avancement x ».` : 'Pas encore de vignette.');
+    if (M.commence('point_commun')) m.push('Cadre jaune : « on mesure une grandeur à des dates, on en déduit x(t) ».');
+  } else if (v === 'mesures') {
+    const t = tSim(), n = M.commence('premiere_mesure') ? MESURES.filter(([d]) => d <= t + 1e-6).length : 0;
+    m.push(`Bécher de l’exemple A (100 mL, H₂O₂ 2,0 mmol + I⁻ 10,0 mmol, milieu acide), teinte ${nomTeinte(fT(t))} ; chronomètre t = ${min(t)} (temps simulé, accéléré).`);
+    m.push(n ? `Lignes du tableau écrites (${n}) : ${MESURES.slice(0, n).map(([d, x]) => `t = ${d} min : x = ${x} mmol`).join(' ; ')}.` : 'Tableau des mesures encore vide.');
+  } else if (v === 'prelevement') {
+    const t = tSim();
+    m.push(`Temps simulé t = ${min(t)}. Grand bécher : teinte ${nomTeinte(fT(t))}. Bécher d’eau glacée avec des glaçons${M.commence('fige') ? `, qui contient le prélèvement de t = ${TP} min (10,0 mL), teinte figée ${nomTeinte(fT(TP) * .9)}` : ''}.`);
+    if (M.commence('prelevement') && !M.vu('fige')) m.push('La pipette de 10,0 mL est en mouvement (prélèvement puis versement dans l’eau glacée).');
+    if (M.commence('continue')) m.push('Deux pastilles : « prélèvement figé » et « grand bécher continue » (plus foncé).');
+    if (M.commence('phrase')) m.push('Cadre jaune : « trempe : on bloque la réaction pour mesurer x à cette date ».');
+  } else {
+    const Vv = vVerse(M);
+    m.push(`Burette de thiosulfate (C = 0,020 mol/L) au-dessus du prélèvement de t = 8 min ; volume versé V = ${fx(Vv, 1)} mL ; teinte du prélèvement : ${nomTeinte(fTitre(Vv))}.`);
+    if (M.commence('equivalence')) m.push('Lecture : V_E = 12,6 mL (équivalence : incolore).');
+    if (M.commence('equation')) m.push('Écrit : I₂ + 2S₂O₃²⁻ → 2I⁻ + S₄O₆²⁻.');
+    if (M.commence('relation')) m.push('Écrit : « à l’équivalence : n(I₂) = C·V_E/2 = 0,020 × 12,6·10⁻³ / 2 = 1,26·10⁻⁴ mol » ; « dans le mélange : × 10 ».');
+    if (M.commence('resultat')) m.push('Cadre jaune : « x = n(I₂) = 1,26 mmol » à t = 8 min.');
+  }
+  if (M.vues && M.vues.length) m.push(`Lignes écrites en bas : ${M.vues.map(s => `« ${s} »`).join(' ; ')}.`);
+  return m.join(' ');
+}
+const params = M => {
+  const v = M.S.vue, p = { vue: v };
+  if (v === 'mesures' || v === 'prelevement') p.t_min = +tSim(M).toFixed(2);
+  if (v === 'prelevement') Object.assign(p, { t_prelevement_min: TP, V_prelevement_mL: 10 });
+  if (v === 'titrage') Object.assign(p, { C_mol_L: .02, V_E_mL: VE, n_I2_prelevement_mmol: .126, x_mmol: 1.26 });
+  return p;
+};
+const MOT = Moteur({
+  id: 'cin_suivi', titre: 'Suivre une transformation : trois méthodes, une série de mesures, le prélèvement et la trempe, le titrage', vues: VUES, titres: TITRES,
+  etapes: ETAPES, motifs: MOTIFS, dessiner, voir, params,
+  depart: M => ({ methodes: 'Trois façons de suivre l’avancement x au cours du temps.', mesures: 'L’exemple A : mesurons x à des dates successives.',
+    prelevement: 'Comment mesurer x à une date précise ?', titrage: 'On titre le diiode du prélèvement de t = 8 min.' })[M.S.vue],
+  messageFin: M => ({ methodes: 'Titrage, conductimétrie, pression : on mesure une grandeur à des dates, on en déduit x(t).',
+    mesures: 'Dix mesures, de t = 0 à 40 min : x passe de 0 à 1,99 mmol.',
+    prelevement: 'Trempe : le prélèvement refroidi et dilué ne réagit plus ; on peut mesurer x à cette date.',
+    titrage: 'V_E = 12,6 mL → n(I₂) = 1,26 mmol dans le mélange : x(8 min) = 1,26 mmol.' })[M.S.vue],
+  appliquer: (p, M) => { const r = {}; if (VUES.includes(p.vue)) r.vue = p.vue; r.change = !!(r.vue && r.vue !== M.S.vue); return r; },
+  schema: { vue: VUES.join(' | ') + ' (change la vue et relance)' },
+  texte: 'Suivi temporel d’une transformation (exemple A : H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O, 100 mL, n₀(H₂O₂) = 2,0 mmol, n₀(I⁻) = 10,0 mmol). Méthodes : titrage d’un prélèvement, conductimétrie (afficheur σ), pression d’un gaz (manomètre) ; point commun : on mesure une grandeur à des dates, on en déduit x(t). Mesures : t (min) 0, 2, 4, 6, 8, 10, 15, 20, 30, 40 ↔ x (mmol) 0 ; 0,44 ; 0,79 ; 1,06 ; 1,26 ; 1,43 ; 1,69 ; 1,84 ; 1,95 ; 1,99. Prélèvement de 10,0 mL à t = 8 min versé dans l’eau glacée (trempe) : sa teinte se fige, le grand bécher continue de foncer. Titrage par le thiosulfate C = 0,020 mol/L : I₂ + 2S₂O₃²⁻ → 2I⁻ + S₄O₆²⁻ ; V_E = 12,6 mL ; n(I₂) = C·V_E/2 ; × 10 dans le mélange ; x = n(I₂) = 1,26 mmol. Temps accéléré : 1 min dure 0,2 s.',
+  explications: {
+    methodes: [
+      { repere: 'vignette_titrage', texte: 'Le titrage : on dose le diiode d’un prélèvement.' },
+      { repere: 'afficheur', texte: 'La conductimétrie : on lit la conductivité σ.' },
+      { repere: 'manometre', texte: 'La pression : un gaz se forme dans le ballon fermé.' },
+      { repere: 'phrase', texte: 'Dans les trois cas, on mesure une grandeur à des dates et on en déduit x(t).' },
+    ],
+    mesures: [
+      { repere: 'becher', texte: 'Le mélange brunit : du diiode se forme.' },
+      { repere: 'chrono', texte: 'On note la date de chaque mesure.' },
+      { repere: 'tableau', texte: 'À chaque date, une valeur de x.' },
+      { repere: 'ligne_derniere', texte: 'À 40 min, x vaut presque 2,0 mmol.' },
+    ],
+    prelevement: [
+      { repere: 'pipette', texte: 'On prélève 10,0 mL du mélange.' },
+      { repere: 'glacons', texte: 'Dans l’eau glacée, la réaction est bloquée.' },
+      { repere: 'teinte_figee', texte: 'Sa teinte ne bouge plus…' },
+      { repere: 'teinte_continue', texte: '… alors que le grand bécher continue de foncer.' },
+      { repere: 'phrase', texte: 'C’est la trempe : on mesure x à cette date.' },
+    ],
+    titrage: [
+      { repere: 'burette', texte: 'La burette contient le thiosulfate.' },
+      { repere: 'lecture_VE', texte: 'À l’équivalence, on lit V_E = 12,6 mL.' },
+      { repere: 'relation', texte: 'n(I₂) = C·V_E/2, puis on multiplie par 10.' },
+      { repere: 'resultat', texte: 'x = 1,26 mmol à t = 8 min.' },
+    ],
+  },
+});
+MOT.lancer();
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

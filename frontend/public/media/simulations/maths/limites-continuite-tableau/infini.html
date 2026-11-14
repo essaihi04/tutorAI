@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>À l’infini — limites</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Repère à la craie : quand x devient très grand, l’écart entre deux courbes se rapproche d’un nombre, ou une courbe longe une droite horizontale"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/limites-continuite-tableau/lc-outils.js"></script>
+<script>
+/*
+ * Cours « Limites et continuité » (math_ch1_limites_continuite), diapositives l8 et l11.
+ * Vues : ?vue=ecart | horizontale. Moments nommés : voir chaque vue ; `fin` = construction complète.
+ * ecart : y = √(x² + x) et y = x ; l’écart √(x² + x) − x vaut 0,488 en x = 10, 0,499 en x = 100, et tend vers 1/2.
+ * horizontale : f(x) = (2x + 1)/(x + 1) tend vers 2 en +∞ : y = 2 asymptote horizontale.
+ */
+const fr = MathsTableau.fr;
+const r = x => Math.sqrt(x * x + x), d = x => r(x) - x;
+
+MathsTableau.page({
+  id: 'lc_infini', titre: 'À l’infini',
+  texte: 'Construction à la craie du cours Limites et continuité : ce que devient une expression quand x devient très grand',
+  vues: {
+    ecart: {
+      titre: 'L’écart entre √(x² + x) et x quand x grandit',
+      dessiner(c, K) {
+        K.titre('Racine à l’infini : l’écart se stabilise');
+        const G = K.axes({ x0: 40, y0: 66, w: 290, h: 220, xmin: 0, xmax: 12, ymin: 0, ymax: 12, gx: [[5, '5'], [10, '10']], gy: [[5, '5'], [10, '10']], origine: false });
+        K.anime(1.6, p => { K.courbePart(G, x => x, 0, 11.6, p, { couleur: 'faible', largeur: 2 }); K.courbePart(G, r, 0, 11.4, p, { couleur: 'cyan' }); });
+        c.texte('y = x', G.X(7) + 8, G.Y(6.2) + 6, { couleur: 'faible', taille: 15 });
+        c.texte('y = √(x² + x)', G.X(5) - 6, G.Y(9.2), { couleur: 'cyan', taille: 15, align: 'right' });
+        K.marque('deux_courbes');
+        c.pause(.3);
+        c.ligne(G.X(10), G.Y(10), G.X(10), G.Y(r(10)), { couleur: 'jaune', largeur: 3 });
+        c.cercle(G.X(10), (G.Y(10) + G.Y(r(10))) / 2, 13, { couleur: 'jaune', largeur: 1.4 });
+        c.texte('x = 10 : écart ≈ ' + fr(d(10), 3), G.X(10) - 12, G.Y(r(10)) - 26, { couleur: 'jaune', taille: 16, align: 'right' });
+        c.repere('ecart', G.X(10) - 16, G.Y(r(10)) - 16, 32, 36, 'l’écart entre les deux courbes');
+        K.marque('ecart_x10');
+        c.pause(.4);
+        const H = K.axes({ x0: 420, y0: 76, w: 300, h: 200, xmin: 0, xmax: 120, ymin: 0, ymax: 0.6, gx: [[10, '10'], [50, '50'], [100, '100']], gy: [[0.5, '1/2']], nomy: 'écart', origine: false });
+        c.texte('l’écart √(x² + x) − x', 470, 62, { couleur: 'cyan', taille: 16 });
+        K.anime(2, p => K.courbePart(H, d, 0.3, 100, p, { couleur: 'cyan' }));
+        K.rond(H, 10, d(10), true, 'jaune');
+        K.rond(H, 100, d(100), true, 'jaune');
+        c.texte('x = 100 : ≈ ' + fr(d(100), 3), H.X(100) - 6, H.Y(d(100)) + 30, { couleur: 'jaune', taille: 16, align: 'right' });
+        K.marque('ecart_x100');
+        c.pause(.4);
+        c.ligne(H.X(0), H.Y(0.5), H.X(120), H.Y(0.5), { couleur: 'orange', largeur: 1.5, pointille: [6, 5] });
+        LC.limite(c, 240, 334, 'x → +∞', '(√(x² + x) − x) = 1/2', { couleur: 'jaune', taille: 21 });
+        c.repere('limite', 232, 312, 330, 44, 'la limite : 1/2');
+        K.marque('ecart_lu');
+      },
+      decrire: {
+        deux_courbes: 'À gauche, la droite y = x (pâle) et la courbe de √(x² + x) (cyan), presque parallèles.',
+        ecart_x10: 'En x = 10, l’écart vertical entre les deux courbes est un segment jaune : écart ≈ 0,488.',
+        ecart_x100: 'À droite, la courbe de l’écart √(x² + x) − x pour x de 0 à 100 : en x = 100, l’écart vaut environ 0,499.',
+        ecart_lu: 'La droite pointillée orange à la hauteur 1/2 ; écrit : lim (√(x² + x) − x) = 1/2 quand x → +∞.',
+      },
+      motifs: { deux_courbes: 'les deux courbes', ecart_x10: 'l’écart en x = 10', ecart_x100: 'l’écart en x = 100', ecart_lu: 'la limite 1/2' },
+      explication: [{ repere: 'ecart', texte: 'L’écart entre √(x² + x) et x ne grandit pas : il s’approche de 1/2.' }, { repere: 'limite', texte: 'Forme +∞ − ∞ levée : la limite est 1/2.' }],
+    },
+    horizontale: {
+      titre: 'f(x) = (2x + 1)/(x + 1) longe la droite y = 2',
+      dessiner(c, K) {
+        K.titre('Limite finie à l’infini : une droite horizontale');
+        const f = x => (2 * x + 1) / (x + 1);
+        const G = K.axes({ x0: 46, y0: 70, w: 410, h: 250, xmin: -1, xmax: 21, ymin: -0.4, ymax: 3, gx: [[5, '5'], [10, '10'], [20, '20']], gy: [[1, '1'], [2, '2']] });
+        c.texte('f(x) = (2x + 1)/(x + 1)', 500, 80, { couleur: 'cyan', taille: 19 });
+        K.anime(2.2, p => K.courbePart(G, f, 0, 20.5, p, { couleur: 'cyan' }));
+        c.repere('courbe', G.X(0), G.Y(2.2), G.X(20.5) - G.X(0), G.Y(1) - G.Y(2.2), 'la courbe de f');
+        K.marque('courbe_tracee');
+        c.pause(.3);
+        c.ligne(G.X(-0.5), G.Y(2), G.X(21), G.Y(2), { couleur: 'orange', largeur: 1.6, pointille: [7, 6] });
+        c.texte('y = 2', G.X(17), G.Y(2) - 12, { couleur: 'orange', taille: 17 });
+        c.repere('droite_y2', G.X(0), G.Y(2) - 12, G.w, 24, 'la droite y = 2');
+        K.marque('droite_horizontale');
+        c.pause(.3);
+        LC.limite(c, 500, 134, 'x → +∞', 'f(x) = 2', { couleur: 'jaune', taille: 21 });
+        K.lignes(500, 196, [
+          { t: 'la droite d’équation y = 2', couleur: 'blanc' },
+          { t: 'est une asymptote', couleur: 'blanc' },
+          { t: 'horizontale à (C_f)', couleur: 'jaune' },
+          { t: 'en +∞.', couleur: 'blanc' },
+        ], 30);
+        c.repere('interpretation', 494, 112, 250, 210, 'l’interprétation géométrique');
+        K.marque('interpretation');
+      },
+      decrire: {
+        courbe_tracee: 'La courbe de f(x) = (2x + 1)/(x + 1) part de 1 en x = 0 et monte en s’aplatissant.',
+        droite_horizontale: 'La droite y = 2 est tracée en pointillés orange : la courbe la longe sans l’atteindre.',
+        interpretation: 'Écrit : lim f(x) = 2 quand x → +∞ ; la droite d’équation y = 2 est une asymptote horizontale à (C_f) en +∞.',
+      },
+      motifs: { courbe_tracee: 'la courbe', droite_horizontale: 'la droite y = 2', interpretation: 'l’interprétation' },
+      explication: [{ repere: 'droite_y2', texte: 'Quand x devient très grand, la courbe longe la droite y = 2.' }, { repere: 'interpretation', texte: 'Une limite finie en +∞ : une asymptote horizontale.' }],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

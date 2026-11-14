@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ce qu’il faut retenir — acide-base</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ab.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Fiche de révision écrite à la craie : pour chaque partie du cours sur les réactions acide-base et le dosage, la définition, la formule encadrée et le piège ; deuxième page : ce que l’élève doit retravailler"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="suiv" data-professor-control="next previous start reset play_until">Ma page →</button>
+    <button class="craie-btn secondaire" id="imprimer" title="Imprimer ou enregistrer en PDF">🖨️ Imprimer / PDF</button>
+    <span class="lecture" id="page"></span>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script src="/media/simulations/shared/tableau/imprimer.js"></script>
+<script>
+/*
+ * « Ce qu’il faut retenir » du cours « Transformations liées aux réactions acide-base » (phys_ch13_acides_bases, 2e Bac PC BIOF),
+ * même forme et même protocole que chimie/etat-equilibre-tableau/bilan.html (contrat acides_bases_contrat_simulations.md, § 9).
+ * TOUTE la fiche tient sur UNE page : neuf blocs en trois colonnes (3, 3, 3) ; chacun avec la définition, la formule encadrée
+ * (indices, exposants et charges rendus, flèches → et ⇌ dessinées, fractions à barre DESSINÉE « ⟦numérateur|dénominateur⟧ »)
+ * et le piège en orange (⚠). Compétences : C1 eau, C2 base, C3 acidite, C4 comparer, C5 reaction, C6 predominance, C7 dosage,
+ * C8 exploiter, C9 redaction. La voix la parcourt bloc par bloc : play_until {moment: <bloc>} écrit ce bloc à cet instant et le met
+ * en lumière ; les blocs déjà dits (ou sautés) sont écrits d’un coup ; « fiche » ou « fin » : tout d’un coup.
+ * La deuxième page est celle de l’élève (set_parameters {lacunes, acquis, acquis_ids}), moment « lacunes ».
+ * Couleurs : jaune = cadres (surlignage) seulement, orange = piège, rouge/orange/vert = état de l’élève.
+ */
+/* Indices après une lettre grecque (« σ_{0} ») : le découpage « _{…} » accepte tout caractère avant (copie de courbes.html). */
+(function () {
+  const C = window.Tableau.Craie, segAvant = C.segments;
+  C.segments = function (s) {
+    const out = [], re = /_\{([^}]+)\}/g; let i = 0, m;
+    while ((m = re.exec(s))) { if (m.index > i) out.push(...segAvant(s.slice(i, m.index))); out.push({ t: m[1], sub: true }); i = re.lastIndex; }
+    if (i < s.length) out.push(...segAvant(s.slice(i)));
+    return out;
+  };
+})();
+/* ── Indices après n’importe quel caractère (« [H₃O⁺]_{éq} », « [AH]_{éq} », « Q_{r,éq} ») : on passe toujours par
+ * l’écriture à indices et exposants d’exposants.js quand la chaîne contient « _{ » ou « ^ » (le kit n’est pas modifié). */
+(function () {
+  const T = window.Tableau, P = T.Craie.prototype, avant = P.texte;
+  P.texte = function (s, x, y, o = {}) {
+    const t = window.chim ? window.chim(String(s)) : String(s);
+    if (!/_\{|\^/.test(t)) return avant.call(this, s, x, y, o);
+    let taille = o.taille ?? 18;
+    this.ctx.font = `${o.gras ? '700 ' : ''}${taille}px ${T.POLICE}`;
+    this._verifierCadre(t.replace(/[_^{}]/g, ''), x, y, taille, o.align);
+    if (this.echelle && this.tailleMin) taille = Math.max(taille, this.tailleMin / this.echelle);
+    return this._texteIndices(t, x, y, o, taille);
+  };
+})();
+const { bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+
+const BLOCS = [
+  { id: 'eau', titre: '1 · L’eau : Ke et pH', comps: ['C1'], formules: ['2H₂O ⇌ H₃O⁺ + HO⁻', 'Ke = [H₃O⁺]·[HO⁻]'],
+    def: 'À 25 °C : Ke = 1,0·10⁻¹⁴ (sans unité) et pKe = 14, dans toute solution aqueuse. Acide : [H₃O⁺] > [HO⁻], pH < 7 ; neutre : pH = 7 ; basique : pH > 7.',
+    attention: '[HO⁻] = Ke/[H₃O⁺], pas 10^{−pH}.' },
+  { id: 'base', titre: '2 · Une base dans l’eau', comps: ['C2'], formules: ['NH₃ + H₂O ⇌ NH₄⁺ + HO⁻', 'τ = ⟦[HO⁻]_{éq}|C⟧'],
+    def: '[HO⁻] = 10^{pH − 14}. Ammoniac 1,0·10⁻² mol/L, pH = 10,60 : [HO⁻] = 3,98·10⁻⁴ mol/L, τ = 0,040 < 1.',
+    attention: 'pour une base, τ passe par [HO⁻], donc par Ke.' },
+  { id: 'acidite', titre: '3 · Ka et pKa', comps: ['C3'], formules: ['Ka = ⟦[A⁻]_{éq}·[H₃O⁺]_{éq}|[AH]_{éq}⟧', 'pKa = −log Ka'],
+    def: 'K de AH + H₂O ⇌ A⁻ + H₃O⁺ ; sans unité, ne dépend que de la température. Base : Ka = Ke/Q_{r,éq}. pKa(H₃O⁺/H₂O) = 0 ; pKa(H₂O/HO⁻) = 14.',
+    attention: 'Ka plus grand, pKa plus petit.' },
+  { id: 'comparer', titre: '4 · Comparer à même C', comps: ['C4'], formules: ['acide fort : Ka grand', 'base forte : pKa grand'],
+    def: 'L’acide le plus fort a le plus grand τ et le plus petit pH (HCOOH, pKa 3,75). La base la plus forte : τ et pH plus grands (CH₃NH₂, pKa 10,7).',
+    attention: 'base forte : le pKa de son couple est GRAND.' },
+  { id: 'reaction', titre: '5 · Constante K d’une réaction', comps: ['C5'], formules: ['AH₁ + A₂⁻ ⇌ A₁⁻ + AH₂', 'K = ⟦Ka₁|Ka₂⟧ = 10^{pKa2 − pKa1}'],
+    def: 'Avec HO⁻ : K = Ka/Ke. CH₃COOH + HO⁻ : K = 1,6·10⁹ ; K > 10⁴ : réaction pratiquement totale.',
+    attention: 'Ka₁ : couple de l’acide qui réagit.' },
+  { id: 'predominance', titre: '6 · Prédominance, indicateur', comps: ['C6'], formules: ['pH = pKa + log ⟦[A⁻]_{éq}|[AH]_{éq}⟧'],
+    def: 'pH < pKa : AH prédomine ; pH > pKa : A⁻ ; pH = pKa : [AH] = [A⁻]. Indicateur HInd/Ind⁻ : la zone de virage encadre son pKa (BBT 6,0 – 7,6).',
+    attention: 'la forme acide prédomine aux petits pH.' },
+  { id: 'dosage', titre: '7 · Le dosage', comps: ['C7'], formules: ['AH + HO⁻ → A⁻ + H₂O', 'C_A·V_A = C_B·V_BE'],
+    def: 'Réaction rapide, totale, unique. Équivalence : réactifs dans les proportions stœchiométriques. V_BE : tangentes parallèles ou maximum de dpH/dV_B.',
+    attention: 'réaction de dosage : flèche →, pas ⇌.' },
+  { id: 'exploiter', titre: '8 · Exploiter la courbe', comps: ['C8'], formules: ['pH = pKa à V_B = ⟦V_BE|2⟧'],
+    def: 'pH_E = 7 (acide fort + base forte) ; pH_E > 7 (acide faible) ; pH_E < 7 (base faible + acide fort). Indicateur : sa zone de virage contient pH_E.',
+    attention: 'pH_E = 8,3 : rouge de crésol, pas le BBT.' },
+  { id: 'redaction', titre: '9 · Rédiger', comps: ['C9'], formules: ['équation (→)', 'relation littérale', 'application numérique', 'unité'],
+    def: 'Puis la lecture graphique justifiée : méthode nommée, valeur lue. Dilution F fois : C₀ = F·C ; C_m = C·M.',
+    attention: 'Ke, Ka, pKa, K, pH et τ : sans unité.' },
+];
+const STATUTS = { non_acquis: ['à reprendre', 'rouge'], partiel: ['à revoir', 'orange'], acquis: ['acquis', 'vert'] };
+const AVANT = -1e9;   // instant d'un bloc déjà dit : il est écrit d'un coup
+// apparu[i] : null = pas encore dit (pas écrit) ; un nombre = l'instant (s de la scène) où il commence à s'écrire.
+const S = { page: 1, focus: null, lacunes: null, acquis: null, acquis_ids: null, apparu: [] };
+window.__debordeBlocs = [];   // vérification : un bloc dont le texte dépasse son cadre ou une colonne trop pleine
+
+/* Formules chimiques à la craie : indices (₄) et charges (²⁺, ⁻) en notation du kit (« O_{4} », « ^{2+} », écrits plus petits
+ * par le kit et exposants.js : la police du tableau n’a ni « ₄ » ni « ⁺ ») ; les flèches « → » et « ⇌ » sont DESSINÉES au trait. */
+const IND = { '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9' };
+const EXPO = { '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9', '⁺': '+', '⁻': '−' };
+const chimie = s => String(s).replace(/t₁\/₂/g, 't_{1/2}').replace(/σ₀/g, 'σ_{0}').replace(/σ_f/g, 'σ_{f}')
+  .replace(/([A-Za-z])([₀-₉]+)/g, (m, l, g) => l + '_{' + [...g].map(ch => IND[ch]).join('') + '}')
+  .replace(/[₀-₉]+/g, g => [...g].map(ch => IND[ch]).join(''))
+  .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻]+/g, g => '^{' + [...g].map(ch => EXPO[ch]).join('') + '}');
+const FLECHE = /(⟦[^⟧]*⟧|⇌|→)/;   // une fraction « ⟦num|dén⟧ » ou une flèche : dessinées au trait
+const longFleche = taille => taille * 1.5, marge = taille => taille * .32;
+/** Largeur d'un morceau de texte (indices et charges plus petits, comme le kit les écrit). */
+function largeurMorceau(c, t, taille) {
+  return window.Tableau.Craie.segments(chimie(t)).reduce((w, g) => w + c.largeurTexte(g.t, g.sub || g.sup ? taille * .62 : taille), 0);
+}
+/** Largeur d'une ligne qui peut contenir des flèches dessinées. */
+function largeur(c, s, taille) {
+  return String(s).split(FLECHE).reduce((w, p, i) => w + (i % 2 ? (p[0] === '⟦' ? largeurFrac(c, p, taille) + 2 * marge(taille) : longFleche(taille) + 2 * marge(taille)) : p.trim() ? largeurMorceau(c, p.trim(), taille) : 0), 0);
+}
+const partsFrac = p => p.slice(1, -1).split('|');
+const largeurFrac = (c, p, taille) => Math.max(...partsFrac(p).map(t => largeurMorceau(c, t, taille))) + taille * .5;
+/** Fraction à barre dessinée : numérateur au-dessus, dénominateur au-dessous, barre à mi-hauteur de la ligne. */
+function fracDessinee(c, x0, y, taille, p, o) {
+  const [n, d] = partsFrac(p), w = largeurFrac(c, p, taille), yb = y - taille * .3, st = { couleur: o.couleur, taille, alpha: o.alpha, duree: o.duree };
+  const bas = /_\{|[₀-₉]/.test(n) ? taille * .22 : 0;   // un indice au numérateur ne touche pas la barre
+  c.texte(chimie(n), x0 + (w - largeurMorceau(c, n, taille)) / 2, yb - taille * .25 - bas, st);
+  c.trait([[x0, yb], [x0 + w, yb]], { couleur: o.couleur || 'blanc', largeur: Math.max(1.1, taille * .09), alpha: o.alpha, duree: .12 });
+  c.texte(chimie(d), x0 + (w - largeurMorceau(c, d, taille)) / 2, yb + taille * .9, st);
+}
+/** Flèche de réaction (→) ou double flèche des demi-équations (⇌ : deux demi-flèches), au trait. */
+function flecheDessinee(c, x0, y, taille, type, o) {
+  const x1 = x0 + longFleche(taille), yc = y - taille * .3, t = Math.max(4, taille * .32), st = { couleur: o.couleur || 'blanc', largeur: Math.max(1.1, taille * .1), alpha: o.alpha, duree: .18 };
+  if (type === '→') {
+    c.trait([[x0, yc], [x1, yc]], st);
+    c.trait([[x1 - t, yc - t * .6], [x1, yc], [x1 - t, yc + t * .6]], { ...st, duree: .08 });
+  } else {
+    const e = taille * .14;
+    c.trait([[x0, yc - e], [x1, yc - e], [x1 - t, yc - e - t * .6]], st);
+    c.trait([[x1, yc + e], [x0, yc + e], [x0 + t, yc + e + t * .6]], st);
+  }
+}
+/** Écrit une ligne (formule ou phrase) : morceaux de craie et flèches dessinées. o : couleur, taille, align, max, alpha, duree. */
+function ecrire(c, s, x, y, o = {}) {
+  let taille = o.taille ?? 18;
+  const total = largeur(c, s, taille);
+  if (o.max && total > o.max) taille = Math.max(9, taille * o.max / total);
+  if (c.echelle && c.tailleMin) taille = Math.max(taille, c.tailleMin / c.echelle);   // même plancher que le kit : morceaux et flèches restent alignés
+  const L = largeur(c, s, taille);
+  let px = o.align === 'center' ? x - L / 2 : o.align === 'right' ? x - L : x;
+  String(s).split(FLECHE).forEach((p, i) => {
+    if (i % 2 && p[0] === '⟦') { px += marge(taille); fracDessinee(c, px, y, taille, p, o); px += largeurFrac(c, p, taille) + marge(taille); return; }
+    if (i % 2) { px += marge(taille); flecheDessinee(c, px, y, taille, p, o); px += longFleche(taille) + marge(taille); return; }
+    const t = p.trim(); if (!t) return;
+    c.texte(chimie(t), px, y, { couleur: o.couleur, taille, alpha: o.alpha, gras: o.gras, duree: o.duree });
+    px += largeurMorceau(c, t, taille);
+  });
+  return L;
+}
+
+/* Coupe un texte en lignes qui tiennent dans `max` px. */
+function lignes(c, texte, taille, max) {
+  const out = []; let ligne = '';
+  const t = String(texte).replace(/ ([=\/·→⇌<>≥≤≈≠−+×]) /g, ' $1 ');   // une formule dans la phrase ne se coupe pas
+  for (const mot of t.split(/[ \t\n]+/)) {
+    const essai = ligne ? ligne + ' ' + mot : mot;
+    if (largeur(c, essai, taille) > max && ligne) { out.push(ligne); ligne = mot; } else ligne = essai;
+  }
+  if (ligne) out.push(ligne);
+  return out;
+}
+function paragraphe(c, texte, x, y, taille, max, o, dessiner) {
+  for (const l of lignes(c, texte, taille, max)) { if (dessiner) ecrire(c, l.replace(/ /g, ' '), x, y, { taille, ...o }); y += taille * 1.2; }
+  return y;
+}
+
+// Trois colonnes de trois blocs dans le cadre 760 × 420 ; hauteurs mesurées, réparties dans la colonne.
+const COL = [{ x: 16, w: 228 }, { x: 266, w: 228 }, { x: 516, w: 228 }], HAUT = 50, BAS = 410, PAR_COL = [3, 3, 3];
+const POS = [];   // position calculée de chaque bloc : { x, w, y0, h }
+const TF = 12;  // taille des formules
+const TD = 11;  // taille du texte
+const HL = 16;    // interligne dans un cadre de formule sur deux lignes
+
+/* Écrit (ou mesure seulement) le contenu d'un bloc ; rend l'ordonnée de fin. */
+function contenu(c, b, x, y0, w, st, dessiner) {
+  let y = y0 + 12;
+  if (dessiner) c.texte(b.titre, x, y, { couleur: 'cyan', taille: 14, max: st ? w - 62 : w });
+  y += 19;
+  // formules encadrées, à la ligne quand la suivante ne tient plus ; une formule en tableau = un cadre sur plusieurs lignes
+  let fx = x, hMax = 0;
+  for (const f of b.formules) {
+    const ls = Array.isArray(f) ? f : [f];
+    const fr = ls.some(s => s.includes('⟦')), l = Math.min(w, Math.max(...ls.map(s => largeur(c, s, TF))) + 14), h = (fr ? 38 : 19) + HL * (ls.length - 1);
+    if (fx > x && fx + l > x + w) { fx = x; y += hMax + 3; hMax = 0; }
+    if (dessiner) {
+      c.rect(fx, y - 13, l, h, { couleur: 'jaune', arrondi: 6, largeur: 1.2, alpha: .7, duree: .25 });
+      ls.forEach((s, k) => ecrire(c, s, fx + 7, y + 1 + (fr ? 10 : 0) + k * HL, { couleur: 'blanc', taille: TF, max: l - 12 }));
+    }
+    fx += l + 7; hMax = Math.max(hMax, h);
+  }
+  y += hMax + 3;
+  y = paragraphe(c, b.def, x, y, TD, w, { couleur: 'blanc', alpha: .9 }, dessiner);
+  if (dessiner) c.texte('⚠', x, y, { couleur: 'orange', taille: 11 });
+  y = paragraphe(c, b.attention, x + 14, y, 11, w - 14, { couleur: 'orange', alpha: .92 }, dessiner);
+  return y - 8;   // la dernière ligne descend d'environ 0,3 taille sous sa base
+}
+function placer(c) {
+  for (let k = 0; k < COL.length; k++) {
+    const debut = PAR_COL.slice(0, k).reduce((a, b) => a + b, 0);
+    const { x, w } = COL[k], ids = Array.from({ length: PAR_COL[k] }, (_, j) => debut + j).filter(i => BLOCS[i]);
+    const h = ids.map(i => contenu(c, BLOCS[i], x, 0, w, true, false) + 6);
+    const libre = BAS - HAUT - h.reduce((s, v) => s + v, 0), g = Math.max(0, libre / ids.length);
+    if (libre < 0) ids.forEach(i => { if (!window.__debordeBlocs.includes(BLOCS[i].id)) window.__debordeBlocs.push(BLOCS[i].id); });
+    let y = HAUT;
+    ids.forEach((i, j) => { POS[i] = { x, w, y0: y, h: h[j] + g * .6 }; y += h[j] + g; });
+  }
+}
+function bloc(c, b, i) {
+  const { x, w, y0, h } = POS[i], enLumiere = S.focus === b.id, st = statut(b);
+  const cx = x - 6, cy = y0 - 6, cw = w + 12, ch = h + 4;
+  // Le cadre de lumière et l'état de l'élève apparaissent d'un coup : ils ne décalent pas l'écriture du bloc.
+  c.direct(() => {
+    if (enLumiere) c.rect(cx, cy, cw, ch, { couleur: 'jaune', arrondi: 10, largeur: 1.6, alpha: .7 });
+    else if (st && STATUTS[st] && st !== 'acquis') c.rect(cx, cy, cw, ch, { couleur: STATUTS[st][1], arrondi: 10, largeur: 1.4, pointille: [5, 6], alpha: .8 });
+    if (st === 'acquis') c.texte('✓', x + w - 10, y0 + 12, { couleur: 'vert', taille: 15 });
+    else if (st && STATUTS[st]) c.texte(STATUTS[st][0], x + w, y0 + 12, { couleur: STATUTS[st][1], taille: 11, align: 'right' });
+  });
+  const fin = contenu(c, b, x, y0, w, st, true);
+  if (fin > cy + ch && !window.__debordeBlocs.includes(b.id)) window.__debordeBlocs.push(b.id);
+  c.repere(b.id, cx, cy, cw, ch, b.titre.replace(/^\d+ · /, ''));
+}
+
+function dessinerFiche(c) {
+  placer(c);
+  if (S.apparu.some(a => a === AVANT)) c.cur = AVANT;   // la voix est déjà passée : le titre est écrit d'un coup
+  c.texte('Ce qu’il faut retenir · réactions acide-base et dosage', 16, 30, { couleur: 'cyan', taille: 21, max: 540 });
+  c.texte('à savoir · formule · ⚠ piège', 744, 28, { couleur: 'faible', taille: 12, align: 'right' });
+  c.ligne(16, 38, 744, 38, { couleur: 'tresfaible', largeur: 1.4 });
+  c.repere('fiche', 10, 10, 740, BAS - 4, 'la fiche du chapitre');
+  const debut = c.cur;
+  let fin = c.cur;
+  BLOCS.forEach((b, i) => {
+    if (S.apparu[i] == null) return;   // pas encore dit : il attend son moment
+    c.cur = S.apparu[i] === AVANT ? AVANT : Math.max(debut, S.apparu[i]); bloc(c, b, i); fin = Math.max(fin, c.cur);
+  });
+  c.cur = fin;
+}
+
+function dessinerLacunes(c) {
+  c.texte('Ta page : ce qu’il te reste à retravailler', 22, 30, { couleur: 'cyan', taille: 22 });
+  c.ligne(22, 38, 740, 38, { couleur: 'tresfaible', largeur: 1.4 });
+  let y = 70;
+  const lac = S.lacunes, acq = S.acquis || [];
+  if (!lac) {
+    c.texte('Pas encore de réponses notées.', 22, y, { couleur: 'faible', taille: 18 }); y += 28;
+    y = paragraphe(c, 'Réponds aux questions du cours : ton bilan par compétence s’écrira ici, et le professeur y reviendra en mode libre.', 22, y, 16, 700, { couleur: 'faible' }, true);
+    c.repere('lacunes', 18, 50, 720, y - 50, 'ta page : pas encore de bilan');
+    return;
+  }
+  const y0 = y - 18;
+  if (!lac.length) {
+    c.texte('✓ Toutes les compétences évaluées sont acquises. Bravo !', 22, y, { couleur: 'vert', taille: 20 }); y += 30;
+  } else {
+    c.texte('À reprendre en mode libre, avec le professeur :', 22, y, { couleur: 'orange', taille: 15 }); y += 24;
+    for (const l of lac.slice(0, 5)) {
+      const [etiq, coul] = STATUTS[l.statut] || STATUTS.non_acquis;
+      c.texte(l.statut === 'partiel' ? '⟳' : '✗', 22, y, { couleur: coul, taille: 17 });
+      y = paragraphe(c, `${l.label} — ${etiq}`, 42, y, 16, 690, { couleur: 'blanc' }, true);
+      if (l.reprendre_avec && l.reprendre_avec.length) y = paragraphe(c, 'reprendre avec ' + l.reprendre_avec.join(', puis '), 42, y, 13, 690, { couleur: coul, alpha: .85 }, true);
+      y += 4;
+    }
+    if (lac.length > 5) { c.texte(`… et ${lac.length - 5} autre(s)`, 42, y, { couleur: 'faible', taille: 13 }); y += 18; }
+  }
+  if (acq.length) {
+    y += 6; c.texte('✓ Acquis', 22, y, { couleur: 'vert', taille: 15 }); y += 20;
+    y = paragraphe(c, acq.join(' · '), 22, y, 14, 700, { couleur: 'vert', alpha: .85 }, true);
+  }
+  c.repere('lacunes', 18, y0, 720, Math.max(30, y - y0), 'ce qu’il reste à retravailler');
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(91 + S.page); if (S.page === 1) dessinerFiche(c); else dessinerLacunes(c); return c.fin(); });
+const maintenant = () => (performance.now() - scene.ouvert) / 1000;
+const nomBloc = b => b.titre.replace(/^\d+ · /, '');
+
+/* Page n ; `focus` = le bloc que la voix dit maintenant ; `tout` = toute la fiche d'un coup. */
+function aller(n, par, focus, tout) {
+  n = n === 2 ? 2 : 1;
+  if (par === 'start' || par === 'reset') { scene.reecrire(); S.apparu = []; }   // rejouer : la fiche se réécrit depuis le début
+  else if (n !== S.page) {
+    // changement de page : on repart d'une page vierge, mais les blocs déjà dits restent écrits (d'un coup)
+    scene.reecrire(); S.apparu = S.apparu.map(a => (a == null ? null : AVANT));
+  }
+  if (n === 1) {
+    const k = focus ? BLOCS.findIndex(b => b.id === focus) : -1;
+    if (tout) BLOCS.forEach((b, i) => { if (S.apparu[i] == null) S.apparu[i] = AVANT; });
+    if (k >= 0) {
+      for (let i = 0; i < k; i++) if (S.apparu[i] == null) S.apparu[i] = AVANT;   // sautés : écrits d'un coup
+      if (S.apparu[k] == null) S.apparu[k] = par === 'start' || par === 'reset' ? 0 : maintenant();
+    }
+  }
+  S.page = n; S.focus = n === 1 ? (focus || null) : null; scene.sale = true;
+  $('page').textContent = `${n} / 2`; $('suiv').textContent = n === 1 ? 'Ma page →' : '← La fiche';
+  bulle($('feedback'), n === 2 ? 'Ta page à toi.' : focus ? nomBloc(BLOCS.find(b => b.id === focus)) : 'La fiche du chapitre.');
+  pont.noter(par || 'page', { page: n, moment: focus || (n === 2 ? 'lacunes' : 'fiche') }); pont.emettre();
+}
+function statut(b) {
+  if (!S.lacunes) return null;
+  const lac = S.lacunes.filter(l => b.comps.includes(l.id));
+  if (lac.some(l => l.statut === 'non_acquis')) return 'non_acquis';
+  if (lac.length) return 'partiel';
+  return (S.acquis_ids || []).some(a => b.comps.includes(a)) ? 'acquis' : null;
+}
+// Les moments sont des pages (1 = la fiche, 2 = la page de l'élève) ; « fin » = la fiche entière écrite.
+function moments() { const m = { fiche: 1 }; BLOCS.forEach(b => { m[b.id] = 1; }); m.lacunes = 2; m.fin = 1; return m; }
+function playUntil(p) {
+  const nom = p.moment in moments() ? p.moment : null;
+  if (!nom && !Number.isFinite(+p.time_s)) return;
+  if (nom === 'lacunes' || (!nom && +p.time_s === 2)) aller(2, 'play_until');
+  else if (nom === 'fiche' || nom === 'fin' || !nom) aller(1, 'play_until', null, true);
+  else aller(1, 'play_until', nom);
+}
+function setParameters(p) {
+  if (Array.isArray(p.lacunes)) S.lacunes = p.lacunes.map(l => ({ id: String(l.id || ''), label: String(l.label || l.id || ''), statut: String(l.statut || 'non_acquis'), reprendre_avec: Array.isArray(l.reprendre_avec) ? l.reprendre_avec.map(String) : [] }));
+  if (Array.isArray(p.acquis)) S.acquis = p.acquis.map(String);
+  if (Array.isArray(p.acquis_ids)) S.acquis_ids = p.acquis_ids.map(String);
+  scene.sale = true; pont.noter('set_parameters', { lacunes: (S.lacunes || []).length, acquis: (S.acquis || []).length }); pont.emettre();
+}
+const formulesTexte = b => b.formules.map(f => (Array.isArray(f) ? f.join(' ') : f)).join(' ; ');
+function ceQuiSeVoit() {
+  if (S.page === 2) return `Page 2/2, la page de l'élève : ${!S.lacunes ? 'pas encore de bilan' : S.lacunes.length ? 'à retravailler : ' + S.lacunes.map(l => l.label).join(' ; ') : 'toutes les compétences évaluées sont acquises'}.`;
+  const f = S.focus && BLOCS.find(b => b.id === S.focus);
+  const ecrits = BLOCS.filter((b, i) => S.apparu[i] != null).length;
+  return `Page 1/2, la fiche du chapitre « Transformations liées aux réactions acide-base » : ${ecrits}/${BLOCS.length} blocs écrits (définition, formule encadrée en jaune, piège en orange)${f ? ` ; en lumière « ${nomBloc(f)} » : ${f.def} Encadré : ${formulesTexte(f)}. Piège : ${f.attention}` : '.'}${S.lacunes ? ` Blocs à reprendre : ${BLOCS.filter(b => statut(b) && statut(b) !== 'acquis').map(nomBloc).join(', ') || 'aucun'}.` : ''}`;
+}
+$('suiv').onclick = () => (S.page === 1 ? aller(2, 'next') : aller(1, 'previous', null, true));
+// Imprimer / PDF : la fiche entière et la page de l'élève, sur fond blanc (shared/tableau/imprimer.js).
+$('imprimer').onclick = () => {
+  const avant = { page: S.page, focus: S.focus, apparu: S.apparu.slice() };
+  window.Tableau.imprimer({ titre: 'Ce qu’il faut retenir — acide-base', scene,
+    pages: [{ nom: 'la fiche', preparer: () => { S.page = 1; S.focus = null; S.apparu = BLOCS.map(() => AVANT); } },
+            { nom: 'ta page : à retravailler', preparer: () => { S.page = 2; S.focus = null; } }],
+    restaurer: () => { Object.assign(S, avant); } });
+  pont.noter('imprimer', { pages: 2 }); pont.emettre();
+};
+canvas.addEventListener('pointerdown', e => {
+  if (S.page !== 1) return;
+  const r = canvas.getBoundingClientRect(), [x, y] = scene.local(e.clientX - r.left, e.clientY - r.top);
+  const i = BLOCS.findIndex((b, k) => { const p = POS[k]; return p && S.apparu[k] != null && x >= p.x - 6 && x <= p.x + p.w + 6 && y >= p.y0 - 6 && y <= p.y0 + p.h; });
+  if (i < 0) return;
+  S.focus = BLOCS[i].id; scene.sale = true; bulle($('feedback'), BLOCS[i].def);
+  pont.noter('touche', { moment: BLOCS[i].id }); pont.emettre();
+});
+
+window.Tableau.explication({ bilan: BLOCS.map(b => ({ repere: b.id, texte: b.def + ' Encadré : ' + formulesTexte(b) + '. Piège : ' + b.attention })) });
+const commandes = ['start', 'reset', 'play_until', 'set_parameters', 'next', 'previous'];
+const config = { id: 'acides_bases_bilan', version: '1.0', title: 'Ce qu’il faut retenir — acide-base', variants: [{ id: 'bilan', label: 'fiche' }], commands: commandes,
+  command_schema: { play_until: { moment: Object.keys(moments()).join(' | ') + ' (écrit ce bloc de la fiche et le met en lumière ; fiche ou fin = toute la fiche ; lacunes = la page de l’élève)' },
+    set_parameters: { lacunes: '[{id: C1..C9, label, statut: non_acquis|partiel, reprendre_avec: [..]}] (bilan de l’élève ; C1 eau, C2 base, C3 acidite, C4 comparer, C5 reaction, C6 predominance, C7 dosage, C8 exploiter, C9 redaction)', acquis: '[labels acquis]', acquis_ids: '[C1, ..]' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Fiche « Ce qu’il faut retenir » du chapitre « Transformations liées aux réactions acide-base », sur une page (neuf blocs : l’eau (2H₂O ⇌ H₃O⁺ + HO⁻ ; Ke = [H₃O⁺]·[HO⁻] = 1,0·10⁻¹⁴ à 25 °C, sans unité ; pKe = 14 ; acide [H₃O⁺] > [HO⁻] pH < 7, neutre pH = 7, basique pH > 7 ; ⚠ [HO⁻] = Ke/[H₃O⁺], pas 10^(−pH)) ; une base dans l’eau (NH₃ + H₂O ⇌ NH₄⁺ + HO⁻ ; [HO⁻] = 10^(pH − 14) ; τ = [HO⁻]éq divisé par C ; ammoniac τ = 0,040) ; Ka et pKa (Ka = [A⁻]éq·[H₃O⁺]éq divisé par [AH]éq ; pKa = −log Ka ; base : Ka = Ke/Qr,éq ; pKa 0 et 14 pour les couples de l’eau) ; comparer à même C (acide fort : Ka grand, τ grand, pH petit ; base forte : pKa du couple grand) ; constante K d’une réaction (K = Ka₁ divisé par Ka₂ = 10^(pKa₂ − pKa₁) ; avec HO⁻ K = Ka/Ke ; K > 10⁴ : pratiquement totale) ; prédominance et indicateur (pH = pKa + log([A⁻]éq divisé par [AH]éq) ; pH < pKa : AH ; pH > pKa : A⁻ ; zone de virage autour du pKa de l’indicateur) ; le dosage (AH + HO⁻ → A⁻ + H₂O ; rapide, totale, unique ; C_A·V_A = C_B·V_BE ; tangentes, dérivée) ; exploiter la courbe (pH = pKa à V_B = V_BE/2 ; pH_E = 7, > 7, < 7 ; indicateur dont la zone contient pH_E) ; rédiger (équation →, relation littérale, application numérique, unité, lecture graphique justifiée)), puis la page de l’élève (ce qu’il lui reste à retravailler).',
+  etat: () => ({ simulation_status: 'paused', ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'bilan', time_s: S.page, parameters: { page: S.page, focus: S.focus, lacunes: S.lacunes ? S.lacunes.length : null }, moments: moments() }),
+  progression: () => S.page / 2,
+  executer: (cmd, p) => ({ start: () => aller(1, 'start', 'eau'), reset: () => aller(1, 'reset', 'eau'), play_until: () => playUntil(p), set_parameters: () => setParameters(p),
+    next: () => aller(2, 'next'), previous: () => aller(1, 'previous', null, true) })[cmd]?.() });
+aller(1, 'start', 'eau');   // la voix commence par l’eau : le premier bloc s'écrit et est en lumière
+window.__bilan = { S, scene, BLOCS, POS };   // pour les vérifications automatiques
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

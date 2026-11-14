@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Influence de L et de R — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="rl.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Deux courbes i(t) d’établissement du courant tracées à la craie verte : la courbe de référence (L = 0,12 H, R = 50 Ω) et une deuxième courbe en pointillé avec L ou R changé ; à droite, la colonne « Lecture »"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Influence de L et de R sur l’établissement du courant (cours « Dipôle RL », 2e Bac PC BIOF, 12 novembre 2026).
+ * Référence : E = 6 V, R = 50 Ω, r = 10 Ω, L = 0,12 H → I₀ = E/(R + r) = 100 mA, τ = L/(R + r) = 2 ms.
+ * Vues (?vue= ou set_parameters {vue}) :
+ *  - L (défaut) : courbe (référence, palier 100 mA, τ = 2 ms), L_double (courbe_L : L’ = 0,24 H → même palier, τ’ = 4 ms), fin.
+ *  - R : courbe (référence), R_double (courbe_R : R’ = 110 Ω, R’ + r = 120 Ω → I₀’ = 50 mA, τ’ = 1 ms),
+ *        comparer (les deux paliers et les deux τ marqués), fin.
+ * Paramètres : L (0,06..0,48 H, valeur de la deuxième courbe de la vue L), R (20..200 Ω, deuxième courbe de la vue R).
+ * Poignées : vue L, l’anneau rose au point (τ’ ; 0,63·I₀) se glisse sur l’horizontale (τ’ → L’ = τ’·(R + r)) ;
+ *            vue R, l’anneau rose sur le palier de la deuxième courbe se glisse en hauteur (I₀’ → R’ = E/I₀’ − r).
+ * Axe des temps : graduations rondes (1, 2 ou 5 ms), nombres tous les 5 ou 10 ms (jamais sur τ par défaut).
+ * Couleurs : vert = établissement du courant (référence en trait plein, deuxième courbe en pointillé) ; jaune = surlignage.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');
+const VUES = { L: ['courbe', 'L_double', 'fin'], R: ['courbe', 'R_double', 'comparer', 'fin'] };
+const TITRES = { L: 'influence de L', R: 'influence de R' };
+const q = new URLSearchParams(location.search);
+const S = { vue: VUES[q.get('vue')] ? q.get('vue') : 'L', L2: .24, R2: 110, t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0, dit: '', fige: null, poignee: false };
+let M = {}, MM = {};
+const VITESSE = 2;
+
+/* ── Physique ──────────────────────────────────────────────────────────── */
+const E = 6, r = 10, L1 = .12, R1 = 50;
+const tauDe = (L, R) => L / (R + r) * 1000;          // ms
+const I0De = R => E / (R + r) * 1000;                 // mA
+const iDe = (p, t) => I0De(p.R) * (1 - Math.exp(-t / tauDe(p.L, p.R)));
+const REF = { L: L1, R: R1 };
+const DEUX = () => (S.vue === 'L' ? { L: S.L2, R: R1 } : { L: L1, R: S.R2 });
+const fms = v => `${fx(v, 2)} ms`, fmA = v => `${fx(v, 1)} mA`, fH = v => `${fx(v, 2)} H`;
+/** Échelles : t (ms) jusqu’à ≈ 6 fois le plus grand τ ; i (mA) au-dessus du plus grand palier. Figées pendant un glissé. */
+function echelles() {
+  if (S.fige) return S.fige;
+  const d = DEUX(), span = 6 * Math.max(tauDe(L1, R1), tauDe(d.L, d.R));
+  let pas = 1; for (const p of [1, 2, 5, 10]) { pas = p; if (span / p <= 15) break; }
+  const tmax = Math.ceil(span / pas - 1e-9) * pas, lab = pas === 1 ? 5 : 10;
+  const im = Math.max(I0De(R1), I0De(d.R)), ipas = im > 105 ? 20 : 10, imax = Math.ceil(im * 1.15 / (2 * ipas) - 1e-9) * 2 * ipas;
+  return { pas, tmax, lab, ipas, imax };
+}
+
+/* ── Géométrie (cadre 760 × 420) ───────────────────────────────────────── */
+const RG = { x: 8, y: 40, w: 500, h: 372 }, RL = { x: 516, y: 40, w: 236, h: 372 };
+const O = { x: 66, y: 352 }, AXL = 396, AYL = 268;
+const PX = t => O.x + t * AXL / echelles().tmax;
+const PY = i => O.y - i * AYL / echelles().imax;
+const LX = RL.x + 8, LW = RL.w - 16;
+const marque = (c, nom) => { MM[nom] = c.cur; };
+const lire = (c, y, s, o = {}) => c.texte(s, LX, y, { couleur: 'blanc', taille: 16, max: LW, ...o });
+const leg = (c, y, s, o = {}) => c.texte(s, LX + 34, y, { taille: 16, max: LW - 34, couleur: 'vert', ...o });
+const courbeDe = (c, p, o = {}) => c.courbe(u => { const t = u * echelles().tmax; return [PX(t), PY(iDe(p, t))]; }, 90, { couleur: 'vert', largeur: 2.6, duree: 1.6, ...o });
+const POINTILLE = { pointille: [10, 6], alpha: .85 };
+
+function dessiner(c) {
+  scene.cadre(41); MM = {};
+  const e = echelles();
+  c.texte(`Établissement : i(t) — ${TITRES[S.vue]}`, RG.x + 6, 30, { couleur: 'cyan', taille: 17, max: RG.w - 10, duree: .9 });
+  c.rect(RG.x, RG.y, RG.w, RG.h, { couleur: 'tresfaible', arrondi: 10, duree: .5 });
+  c.texte('Lecture', RL.x + 6, 30, { couleur: 'cyan', taille: 17, duree: .3 });
+  c.rect(RL.x, RL.y, RL.w, RL.h, { couleur: 'tresfaible', arrondi: 10, duree: .4 });
+  const LT = AXL + 16, tg = [];
+  for (let k = 1; k * e.pas <= e.tmax + 1e-9; k++) { const v = k * e.pas; tg.push([(PX(v) - O.x) / LT, v % e.lab === 0 ? String(v) : null]); }
+  c.axe(O.x, O.y, O.x + LT, O.y, tg, { taille: 13 });
+  const LY = AYL + 14, yg = [];
+  for (let k = 1; k * e.ipas <= e.imax + 1e-9; k++) { const v = k * e.ipas; yg.push([(O.y - PY(v)) / LY, k % 2 === 0 ? String(v) : null]); }
+  c.axe(O.x, O.y, O.x, O.y - LY, yg, { taille: 13, vertical: true });
+  c.texte('0', O.x - 8, O.y + 18, { couleur: 'faible', taille: 13, align: 'right' });
+  c.texte('i (mA)', O.x + 10, 66, { couleur: 'blanc', taille: 16 });
+  c.texte('t (ms)', RG.x + RG.w - 8, O.y + 40, { couleur: 'blanc', taille: 16, align: 'right' });
+  lire(c, 64, S.vue === 'L' ? 'E = 6 V ; R = 50 Ω ; r = 10 Ω' : 'E = 6 V ; r = 10 Ω ; L = 0,12 H', { couleur: 'faible', taille: 14, duree: .6 });
+  c.pause(.3);
+  (S.vue === 'L' ? vueL : vueR)(c);
+  c.pause(.8); marque(c, 'fin');
+  // La poignée (anneau rose) se voit dès que la deuxième courbe est tracée.
+  const apparue = MM[S.vue === 'L' ? 'L_double' : 'R_double'];
+  S.poignee = c.t >= apparue - 1e-6;
+  if (S.poignee) c.direct(() => { const [x, y] = poigneeXY(); c.cercle(x, y, 8, { couleur: 'rose', largeur: 2.2 }); });
+  declarerReperes(c);
+  const fini = c.fin();
+  M = MM;
+  return fini || !S.running;
+}
+function poigneeXY() {
+  const d = DEUX();
+  return S.vue === 'L' ? [PX(tauDe(d.L, d.R)), PY(.63 * I0De(d.R))] : [PX(echelles().tmax * .86), PY(I0De(d.R))];
+}
+/** Marque τ d’une courbe : point (τ ; 0,63·I₀), verticale en pointillé, nom sous l’axe. */
+function marquerTau(c, p, nom, bas = 40) {
+  const T = tauDe(p.L, p.R), x = PX(T), y = PY(.63 * I0De(p.R));
+  c.cercle(x, y, 5, { couleur: 'cyan', largeur: 1.8 });
+  c.ligne(x, y, x, O.y, { couleur: 'cyan', largeur: 1.5, pointille: [4, 5] });
+  c.texte(nom, x, O.y + bas, { couleur: 'cyan', taille: 17, align: 'center' });
+}
+function palier(c, p, nom, dessous = false) {
+  const y = PY(I0De(p.R));
+  c.ligne(O.x, y, PX(echelles().tmax), y, { couleur: 'blanc', largeur: 1.4, pointille: [8, 6] });
+  c.texte(`${nom} = ${fmA(I0De(p.R))}`, PX(echelles().tmax * .74), y + (dessous ? 20 : -9), { couleur: 'blanc', taille: 15, align: 'right' });
+}
+const facteur = k => (Math.abs(k - 2) < 1e-6 ? 'double' : Math.abs(k - .5) < 1e-6 ? 'divisé par 2' : `× ${fx(k, 2)}`);
+function vueL(c) {
+  const d = DEUX(), T1 = tauDe(L1, R1), T2 = tauDe(d.L, d.R);
+  courbeDe(c, REF);
+  palier(c, REF, 'I_0');
+  marquerTau(c, REF, 'τ');
+  c.ligne(LX, 95, LX + 26, 95, { couleur: 'vert', largeur: 2.6, duree: .1 });
+  leg(c, 100, 'L = 0,12 H');
+  lire(c, 124, 'τ = L/(R + r) = 2 ms', { taille: 15 });
+  marque(c, 'courbe');
+  c.pause(.5);
+  courbeDe(c, d, POINTILLE);
+  marquerTau(c, d, 'τ’', Math.abs(PX(T2) - PX(T1)) < 34 ? 58 : 40);
+  c.ligne(LX, 157, LX + 26, 157, { couleur: 'vert', largeur: 2.6, duree: .1, ...POINTILLE });
+  leg(c, 162, `L’ = ${fH(d.L)}`);
+  lire(c, 186, `τ’ = L’/(R + r) = ${fx(d.L, 2)}/60`, { taille: 15 });
+  lire(c, 208, `τ’ = ${fms(T2)}`, { taille: 15 });
+  lire(c, 244, `L ${facteur(d.L / L1)} → τ ${facteur(T2 / T1)}`, { couleur: 'cyan', taille: 17 });
+  lire(c, 272, `même palier : I_0 = 100 mA`, { couleur: 'cyan', taille: 15 });
+  lire(c, 294, 'I_0 = E/(R + r) ne dépend pas de L', { couleur: 'faible', taille: 14 });
+  lire(c, 330, T2 > T1 ? 'le courant s’établit' : T2 < T1 ? 'le courant s’établit' : 'même courbe', { couleur: 'blanc', taille: 16 });
+  if (T2 !== T1) lire(c, 352, T2 > T1 ? 'plus lentement' : 'plus vite', { couleur: 'blanc', taille: 16 });
+  marque(c, 'L_double');
+}
+function vueR(c) {
+  const d = DEUX(), T1 = tauDe(L1, R1), T2 = tauDe(d.L, d.R), I1 = I0De(R1), I2 = I0De(d.R);
+  courbeDe(c, REF);
+  c.ligne(LX, 95, LX + 26, 95, { couleur: 'vert', largeur: 2.6, duree: .1 });
+  leg(c, 100, 'R = 50 Ω : R + r = 60 Ω');
+  lire(c, 124, 'I_0 = 6/60 = 100 mA ; τ = 2 ms', { taille: 15 });
+  marque(c, 'courbe');
+  c.pause(.5);
+  courbeDe(c, d, POINTILLE);
+  c.ligne(LX, 157, LX + 26, 157, { couleur: 'vert', largeur: 2.6, duree: .1, ...POINTILLE });
+  leg(c, 162, `R’ = ${fx(d.R, 0)} Ω : R’ + r = ${fx(d.R + r, 0)} Ω`);
+  lire(c, 186, `I_0’ = 6/${fx(d.R + r, 0)} = ${fmA(I2)}`, { taille: 15 });
+  lire(c, 208, `τ’ = 0,12/${fx(d.R + r, 0)} = ${fms(T2)}`, { taille: 15 });
+  marque(c, 'R_double');
+  c.pause(.5);
+  palier(c, REF, 'I_0');
+  palier(c, d, 'I_0’', Math.abs(PY(I2) - PY(I1)) < 26);
+  marquerTau(c, REF, 'τ');
+  marquerTau(c, d, 'τ’', Math.abs(PX(T2) - PX(T1)) < 34 ? 58 : 40);
+  lire(c, 246, `R + r ${facteur((d.R + r) / (R1 + r))} :`, { couleur: 'cyan', taille: 17 });
+  lire(c, 272, `palier ${facteur(I2 / I1)}, τ ${facteur(T2 / T1)}`, { couleur: 'cyan', taille: 16 });
+  lire(c, 304, 'I_0 = E/(R + r)', { taille: 16 });
+  lire(c, 328, 'τ = L/(R + r)', { taille: 16 });
+  lire(c, 362, 'les deux changent avec R', { couleur: 'faible', taille: 15 });
+  marque(c, 'comparer');
+}
+function declarerReperes(c) {
+  const e = echelles(), d = DEUX(), xm = PX(e.tmax), ici = v => (S.vue === v ? '' : ` (vue « ${v} »)`);
+  const top = i => PY(i);
+  c.repere('axe_t', O.x, O.y - 10, AXL + 18, 58, `l’axe des temps : t (ms), de 0 à ${e.tmax} ms, graduations de ${e.pas} ms`);
+  c.repere('axe_i', O.x - 44, 50, 76, O.y - 50, `l’axe des courants : i (mA), de 0 à ${e.imax} mA`);
+  c.repere('courbe', O.x, top(100), xm - O.x, O.y - top(100), 'la courbe de référence : L = 0,12 H, R = 50 Ω, I₀ = 100 mA, τ = 2 ms');
+  const pL = { L: S.L2, R: R1 };
+  c.repere('courbe_L', PX(tauDe(pL.L, R1) * .5), top(100), Math.max(30, xm - PX(tauDe(pL.L, R1) * .5)), O.y - top(100) - 30,
+    `la courbe en pointillé : L’ = ${fH(S.L2)}, même palier 100 mA, τ’ = ${fms(tauDe(S.L2, R1))}${ici('L')}`);
+  c.repere('courbe_R', O.x, top(I0De(S.R2)), xm - O.x, O.y - top(I0De(S.R2)),
+    `la courbe en pointillé : R’ = ${fx(S.R2, 0)} Ω, I₀’ = ${fmA(I0De(S.R2))}, τ’ = ${fms(tauDe(L1, S.R2))}${ici('R')}`);
+  c.repere('palier', O.x, top(100) - 14, xm - O.x, 26, S.vue === 'R' ? `les paliers : I₀ = 100 mA et I₀’ = ${fmA(I0De(d.R))}` : 'le palier I₀ = E/(R + r) = 100 mA, le même pour les deux courbes');
+  c.repere('tau', PX(2) - 20, O.y - 10, 40, 58, `τ = 2 ms et τ’ = ${fms(tauDe(d.L, d.R))}`);
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+const craie = scene.craie;
+scene.cadre = function (graine) {
+  const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  craie.debut(graine, S.t);
+  const s = Math.min(W / VW, H / VH) || 1;
+  scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
+  craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
+  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+  return craie;
+};
+function calculer() { const t = S.t, rn = S.running; S.t = 1e6; S.running = false; try { dessiner(craie); dessiner(craie); } finally { S.t = t; S.running = rn; } scene.sale = true; }
+function moments() { if (M.fin === undefined) calculer(); const out = {}; for (const k of VUES[S.vue]) out[k] = +M[k].toFixed(2); return out; }
+const vu = n => M[n] !== undefined && S.t >= M[n] - 1e-6;
+
+const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+const INDICES = { 0: '₀', 1: '₁', 2: '₂', e: 'ₑ', m: 'ₘ', a: 'ₐ', o: 'ₒ', x: 'ₓ' };
+const lisible = s => String(s).replace(/_\{?([A-Za-z0-9]+)\}?/g, (_, x) => [...x].map(ch => INDICES[ch] || ch).join(''));
+const dire = (texte, kind = '') => { S.dit = texte; bulle($('feedback'), lisible(texte), kind); };
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t += dt * VITESSE;
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.jusqua = null; S.running = false;
+    if (S.t >= M.fin - 1e-6) { finir(); return true; }
+    S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 1)} s`) + '.');
+    pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); return true;
+  }
+  if (M.fin !== undefined && S.t >= M.fin) { S.t = M.fin; finir(); return true; }
+  if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function conclusion() {
+  const d = DEUX(), T2 = tauDe(d.L, d.R);
+  return S.vue === 'L'
+    ? `L = 0,12 H → τ = 2 ms ; L’ = ${fH(d.L)} → τ’ = ${fms(T2)}. Même palier I₀ = E/(R + r) = 100 mA : L ne change que la durée du régime transitoire.`
+    : `R’ = ${fx(d.R, 0)} Ω (R’ + r = ${fx(d.R + r, 0)} Ω) : I₀’ = ${fmA(I0De(d.R))} et τ’ = ${fms(T2)}, contre 100 mA et 2 ms. R change le palier ET τ.`;
+}
+function finir() { S.running = false; S.fait = true; S.pause = false; etiquette(); dire(conclusion(), 'good'); pont.noter('measurement', { vue: S.vue }); pont.emettre(); }
+const MOTIFS = {
+  courbe: 'la courbe de référence (L = 0,12 H, R = 50 Ω)', L_double: 'la deuxième courbe : même palier, τ plus grand',
+  R_double: 'la deuxième courbe : R’ + r = 120 Ω', comparer: 'les deux paliers et les deux τ', fin: 'tout est écrit',
+};
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
+function ceQuiSeVoit() {
+  if (M.fin === undefined) calculer();
+  const e = echelles(), d = DEUX(), T2 = tauDe(d.L, d.R), I2 = I0De(d.R);
+  const m = [`Vue « ${S.vue} » (${TITRES[S.vue]})${S.running ? ', la craie écrit' : S.fait ? ', fin : tout est écrit' : S.pause ? ', arrêt sur image' : ', pas encore lancée'}.`,
+    `Axes : t (ms) de 0 à ${e.tmax}, graduations de ${e.pas} ms ; i (mA) de 0 à ${e.imax}.`];
+  const Lg = [];
+  if (vu('courbe')) Lg.push(`courbe verte de référence (E = 6 V, R = 50 Ω, r = 10 Ω, L = 0,12 H) : palier I₀ = 100 mA, τ = 2 ms${S.vue === 'L' ? ' (palier et τ marqués)' : ''}`);
+  if (S.vue === 'L' && vu('L_double')) Lg.push(`deuxième courbe verte en pointillé : L’ = ${fH(d.L)}, τ’ = L’/(R + r) = ${fms(T2)} marqué sur l’axe, même palier 100 mA ; « L ${facteur(d.L / L1)} → τ ${facteur(T2 / 2)} »`);
+  if (S.vue === 'R' && vu('R_double')) Lg.push(`deuxième courbe verte en pointillé : R’ = ${fx(d.R, 0)} Ω, R’ + r = ${fx(d.R + r, 0)} Ω, I₀’ = ${fmA(I2)}, τ’ = ${fms(T2)}`);
+  if (S.vue === 'R' && vu('comparer')) Lg.push(`les deux paliers en pointillé (100 mA et ${fmA(I2)}) et les deux τ marqués sur l’axe (2 ms et ${fms(T2)}) ; « palier ${facteur(I2 / 100)}, τ ${facteur(T2 / 2)} »`);
+  m.push(Lg.length ? `Au tableau : ${Lg.join(' ; ')}.` : 'Seuls les axes sont tracés.');
+  m.push(S.vue === 'L' ? `Poignée : l’anneau rose au point (τ’ ; 0,63·I₀) se glisse à gauche ou à droite (L’ de 0,06 à 0,48 H).` : `Poignée : l’anneau rose sur le palier de la deuxième courbe se glisse en hauteur (R’ de 20 à 200 Ω).`);
+  if (S.fait) m.push(`Conclusion : ${conclusion()}`);
+  return m.join(' ');
+}
+
+/* ── Commandes ─────────────────────────────────────────────────────────── */
+function start() { S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire('La craie trace la courbe de référence…'); pont.noter('start', { vue: S.vue }); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
+function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('La craie continue…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  calculer(); const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = clamp(t, 0, M.fin); S.fait = S.t >= M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+  etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fr(S.t, 1)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function playUntil(p) {
+  calculer();
+  const nom = VUES[S.vue].includes(p.moment) ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+  S.jusqua = clamp(cible, .01, M.fin); S.motif = nom ? MOTIFS[nom] : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+const auPasL = v => Math.round(clamp(v, .06, .48) * 100) / 100;
+const auPasR = v => Math.round(clamp(v, 20, 200) / 10) * 10;
+function setParameters(p) {
+  p = p || {}; let vue = false, phys = false;
+  if (p.vue && VUES[p.vue] && p.vue !== S.vue) { S.vue = p.vue; vue = true; }
+  const ok = v => v !== undefined && v !== null && v !== '' && Number.isFinite(+v);
+  const L = p.L ?? p.L_H, R = p.R ?? p.R_ohm;
+  if (ok(L)) { const v = auPasL(+L); if (v !== S.L2) { S.L2 = v; phys = true; } }
+  if (ok(R)) { const v = auPasR(+R); if (v !== S.R2) { S.R2 = v; phys = true; } }
+  M = {}; calculer();
+  pont.noter('set_parameters', { vue: S.vue, L: S.L2, R: S.R2 });
+  if (vue) { start(); return; }
+  if (phys) { S.running = false; S.jusqua = null; S.t = M.fin; S.fait = true; S.pause = false; etiquette(); scene.sale = true; dire(annonce()); }
+  pont.emettre();
+}
+const annonce = () => (S.vue === 'L' ? `L’ = ${fH(S.L2)} : τ’ = L’/(R + r) = ${fms(tauDe(S.L2, R1))}, même palier 100 mA.` : `R’ = ${fx(S.R2, 0)} Ω : I₀’ = ${fmA(I0De(S.R2))}, τ’ = ${fms(tauDe(L1, S.R2))}.`);
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+
+/* Poignées : τ’ (vue L) se glisse à l’horizontale, le palier I₀’ (vue R) se glisse en hauteur. Échelles figées pendant le glissé. */
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => { if (!S.poignee || S.running) return null; const [x, y] = scene.local(px, py), [hx, hy] = poigneeXY(); return Math.hypot(x - hx, y - hy) < 18 ? 'p' : null; },
+  bouger: (id, px, py) => {
+    S.fige = S.fige || echelles();
+    const [x, y] = scene.local(px, py);
+    if (S.vue === 'L') { const T = Math.max(.1, (x - O.x) * S.fige.tmax / AXL), v = auPasL(T * (R1 + r) / 1000); if (v !== S.L2) { S.L2 = v; scene.sale = true; } }
+    else { const I = Math.max(1, (O.y - y) * S.fige.imax / AYL), v = auPasR(E * 1000 / I - r); if (v !== S.R2) { S.R2 = v; scene.sale = true; } }
+  },
+  lacher: () => { S.fige = null; M = {}; calculer(); S.t = M.fin; S.fait = true; S.pause = false; S.running = false; etiquette(); pont.noter('set_parameters', { L: S.L2, R: S.R2 }); dire(annonce()); pont.emettre(); },
+});
+
+window.Tableau.explication({
+  L: [
+    { repere: 'courbe', texte: 'La courbe de référence : L = 0,12 H, palier I₀ = 100 mA, τ = 2 ms.' },
+    { repere: 'courbe_L', texte: 'L double : τ = L/(R + r) double, 4 ms. Le courant s’établit plus lentement.' },
+    { repere: 'palier', texte: 'Même palier : I₀ = E/(R + r) ne dépend pas de L.' },
+  ],
+  R: [
+    { repere: 'courbe', texte: 'La courbe de référence : R + r = 60 Ω, I₀ = 100 mA, τ = 2 ms.' },
+    { repere: 'courbe_R', texte: 'R = 110 Ω : R + r = 120 Ω, le double. I₀ = 6/120 = 50 mA et τ = 0,12/120 = 1 ms.' },
+    { repere: 'palier', texte: 'Le palier est divisé par 2.' },
+    { repere: 'tau', texte: 'Et τ aussi : R change le palier et la durée du régime transitoire.' },
+  ],
+});
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+calculer();
+const config = { id: 'dipole_rl_influence', version: '1.0', title: 'Influence de L et de R', variants: Object.keys(VUES).map(id => ({ id, label: TITRES[id] })), commands: commandes,
+  command_schema: {
+    set_parameters: { vue: 'L | R (change la vue et la retrace depuis le début)', L: '0.06..0.48 pas 0.01 (H) : L’ de la deuxième courbe (vue L)', R: '20..200 pas 10 (Ω) : R’ de la deuxième courbe (vue R)' },
+    set_time: { time_s: '0..fin (arrêt sur cet instant de l’écriture, en s ; voir moments)' },
+    play_until: { moment: 'L : courbe | L_double | fin ; R : courbe | R_double | comparer | fin', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Influence de L et de R sur i(t) : I₀ = E/(R + r) et τ = L/(R + r). Référence : E = 6 V, R = 50 Ω, r = 10 Ω, L = 0,12 H → I₀ = 100 mA, τ = 2 ms. L double (0,24 H) : même palier 100 mA, τ = 4 ms. R = 110 Ω (R + r = 120 Ω) : I₀ = 50 mA, τ = 1 ms.',
+  etat: () => {
+    const d = DEUX();
+    return { simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle', ce_qui_se_voit: ceQuiSeVoit(), current_variant: S.vue,
+      time_s: +S.t.toFixed(2), parameters: { vue: S.vue, L: S.L2, R: S.R2, ref_I0_mA: 100, ref_tau_ms: 2, I0_2_mA: +I0De(d.R).toFixed(3), tau_2_ms: +tauDe(d.L, d.R).toFixed(3) }, moments: moments() };
+  },
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+dire('Deux courbes i(t) à comparer…');
+setTimeout(() => { if (!S.running && S.t === 0 && !S.pause) start(); }, 900);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

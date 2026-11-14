@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La courbe de ln — fonctions logarithmiques</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Repère à la craie : la courbe de ln en rouge, toujours croissante, négative avant 1, positive après ; le nombre e ; la tangente en 1"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Fonctions logarithmiques » (math_ch5_fonctions_ln) : la courbe de ln.
+ * Vues : ?vue=monte (param x) | signe | e | compare | tangente | puissances_e.
+ * monte : points, trace, glisse, croissante ; repères points, point_mobile, croissante.
+ * signe : courbe, negatif, zero, positif, tableau, exemple ; repères negatif, positif, tableau.
+ * e : courbe, hauteur1, lecture, encadrement ; repères droite, e, encadrement.
+ * compare : courbe, deux_points, ordre, egal, exemple ; repères deux_points, ordre, exemple.
+ * tangente : courbe, point, tangente, equation, dessous ; repères tangente, equation, dessous.
+ * puissances_e : courbe, e, e2, inv_e, racine_e, regle ; repères e2, inv_e, regle.
+ */
+const fr = MathsTableau.fr;
+const ln = Math.log, E = Math.E;
+const SUPS = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+/** Largeur réelle d’un texte à la craie, exposants et indices compris. */
+function L(c, s, t = 18) {
+  s = String(s).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUPS[ch]).join('') + '}');
+  let w = 0;
+  for (const seg of Tableau.Craie.segments(s)) { c.ctx.font = `${seg.sub || seg.sup ? t * .62 : t}px ${Tableau.POLICE}`; w += c.ctx.measureText(seg.t).width; }
+  return w;
+}
+/** Texte encadré ; renvoie le rectangle [x, y, w, h]. */
+function encadre(c, s, x, y, taille, couleur, coulTexte) {
+  const w = L(c, s, taille) + 18;
+  c.texte(s, x, y, { couleur: coulTexte || couleur, taille });
+  c.rect(x - 9, y - taille - 4, w, taille + 14, { couleur, arrondi: 8, largeur: 1.6 });
+  return [x - 9, y - taille - 4, w, taille + 14];
+}
+/** Plusieurs lignes dans un même cadre ; renvoie le rectangle. */
+function bloc(c, lignes, x, y, taille, couleur, inter = 26) {
+  const w = Math.max(...lignes.map(l => L(c, l.t || l, taille))) + 20, h = (lignes.length - 1) * inter + taille + 16;
+  lignes.forEach((l, i) => c.texte(l.t || l, x, y + i * inter, { couleur: l.c || 'blanc', taille }));
+  c.rect(x - 10, y - taille - 5, w, h, { couleur, arrondi: 9, largeur: 1.7 });
+  return [x - 10, y - taille - 5, w, h];
+}
+/** Courbe y = f(x) sur [a ; b] jusqu’à la fraction p, échantillonnée finement près de 0 (ln y plonge). */
+function courbeF(c, G, f, a, b, p = 1, o = {}) {
+  if (p <= 0) return;
+  const xs = [], n = o.n || 220;
+  for (let i = 0; i <= n; i++) xs.push(a + (b - a) * i / n);
+  if (a > 0) for (let i = 0; i <= 90; i++) xs.push(a * Math.pow(b / a, i / 90));
+  xs.sort((u, v) => u - v);
+  const fin = a + (b - a) * Math.min(1, p), m = (G.ymax - G.ymin) * .03, lo = G.ymin - m, hi = G.ymax + m;
+  const morceaux = [[]]; let prec = null;
+  const cl = y => Math.min(hi, Math.max(lo, y));
+  for (const x of xs.filter(x => x <= fin).concat(p < 1 ? [fin] : [])) {
+    const y = f(x), ok = Number.isFinite(y) && y >= lo && y <= hi;
+    const cur = morceaux[morceaux.length - 1];
+    if (ok) { if (!cur.length && prec && Number.isFinite(prec[1])) cur.push([G.X(prec[0]), G.Y(cl(prec[1]))]); cur.push([G.X(x), G.Y(y)]); }
+    else if (cur.length) { if (Number.isFinite(y)) cur.push([G.X(x), G.Y(cl(y))]); morceaux.push([]); }
+    prec = [x, y];
+  }
+  for (const pts of morceaux) if (pts.length > 1) c.trait(pts, { tremble: .35, couleur: o.couleur || 'rouge', largeur: o.largeur ?? 2.6, pointille: o.pointille, alpha: o.alpha, duree: o.duree });
+}
+/** La courbe de ln dans G (tracée jusqu’à la fraction p), nommée « ln » au bout. */
+function courbeLn(c, G, p = 1, o = {}) {
+  const a = Math.exp(G.ymin - .05), b = G.xmax - .2;
+  courbeF(c, G, ln, a, b, p, { couleur: 'rouge', ...o });
+  if (p >= 1 && !o.sansNom) c.texte('ln', G.X(b - .25), G.Y(ln(b - .25)) - 14, { couleur: 'rouge', taille: 22, align: 'center' });
+}
+/** Petit segment de tangente à ln en a (demi-longueur Lpx px). */
+function tangente(c, G, a, couleur = 'cyan', Lpx = 40, largeur = 2.2) {
+  const px = G.X(a), py = G.Y(ln(a)), s = 1 / a;
+  let dx = G.w / (G.xmax - G.xmin), dy = -s * G.h / (G.ymax - G.ymin);
+  const n = Math.hypot(dx, dy); dx /= n; dy /= n;
+  c.ligne(px - dx * Lpx, py - dy * Lpx, px + dx * Lpx, py + dy * Lpx, { couleur, largeur });
+}
+
+const BASE = { x0: 50, y0: 52, w: 430, h: 296, xmin: -0.4, xmax: 8.3, ymin: -3.2, ymax: 2.6, gx: [1, 2, 3, 4, 5, 6, 7, 8], gy: [[1, '1'], [2, '2'], [-1, '−1'], [-2, '−2'], [-3, '−3']] };
+const OE = { x0: 50, y0: 52, w: 430, h: 296, xmin: -0.3, xmax: 5.2, ymin: -2.2, ymax: 2.2, gx: [1, 2, 3, 4, 5], gy: [[1, '1'], [2, '2'], [-1, '−1'], [-2, '−2']] };
+const OC = { x0: 50, y0: 52, w: 430, h: 296, xmin: -0.3, xmax: 6.5, ymin: -2.2, ymax: 2.4, gx: [[1, '1'], [3, '3'], [4, '4'], [6, '6']], gy: [[1, '1'], [-1, '−1'], [-2, '−2']] };
+const OT = { x0: 50, y0: 52, w: 430, h: 296, xmin: -0.4, xmax: 5.3, ymin: -3.2, ymax: 3.6, gx: [1, 2, 3, 4, 5], gy: [[1, '1'], [2, '2'], [3, '3'], [-1, '−1'], [-2, '−2'], [-3, '−3']] };
+const OP = { ...BASE, gx: [[1, '1'], [2, ''], [3, ''], [4, '4'], [5, ''], [6, '6'], [7, ''], [8, '']] };
+const XR = 505;
+
+MathsTableau.page({
+  id: 'ln_courbe', titre: 'Fonctions logarithmiques',
+  texte: 'Construction à la craie du cours Fonctions logarithmiques : la courbe de ln (rouge) ; strictement croissante car (ln x)’ = 1/x > 0 ; négative sur ]0 ; 1[, nulle en 1, positive après ; le nombre e où ln vaut 1 ; ln compare comme x ; la tangente en 1 y = x − 1 ; ln(eʳ) = r',
+  vues: {
+    monte: {
+      titre: 'ln monte toujours',
+      params: { x: { min: 0.2, max: 6, pas: 0.1, defaut: 4, sens: 'abscisse du point mobile sur la courbe' } },
+      dessiner(c, K) {
+        K.titre('ln monte toujours');
+        const x = K.P.x, G = K.axes(BASE);
+        const pts = [[0.5, '(0,5 ; −0,69)', 'bd'], [1, '(1 ; 0)', 'hg'], [2, '(2 ; 0,69)', 'bd'], [4, '(4 ; 1,39)', 'bd']];
+        for (const [a, s, pos] of pts) {
+          c.pause(.2);
+          K.rond(G, a, ln(a), true, 'jaune');
+          if (pos === 'bd') c.texte(s, G.X(a) + 8, G.Y(ln(a)) + 22, { couleur: 'jaune', taille: 15 });
+          else c.texte(s, G.X(a) - 8, G.Y(ln(a)) - 10, { couleur: 'jaune', taille: 15, align: 'right' });
+        }
+        c.repere('points', G.X(0.4), G.Y(1.6), G.X(5.3) - G.X(0.4), G.Y(-1.2) - G.Y(1.6), 'quatre points de la courbe');
+        K.marque('points');
+        c.pause(.4);
+        K.anime(2.2, p => courbeLn(c, G, p));
+        K.marque('trace');
+        c.pause(.4);
+        K.anime(2.6, p => {
+          const xx = 0.3 + (x - 0.3) * p;
+          c.ligne(G.X(xx), G.Y(0), G.X(xx), G.Y(ln(xx)), { couleur: 'jaune', largeur: 2.4 });
+          tangente(c, G, xx, 'cyan', 34, 2.2);
+          c.point(G.X(xx), G.Y(ln(xx)), 5.5, 'cyan');
+        });
+        c.texte('x = ' + fr(x, 1), XR, 90, { couleur: 'cyan', taille: 20 });
+        c.texte('hauteur : ln x ≈ ' + fr(ln(x), 2), XR, 120, { couleur: 'jaune', taille: 20 });
+        c.texte('la tangente monte', XR, 150, { couleur: 'cyan', taille: 18 });
+        c.repere('point_mobile', G.X(x) - 22, G.Y(ln(x)) - 22, 44, 44, 'le point mobile');
+        K.marque('glisse');
+        c.pause(.4);
+        const b = bloc(c, [{ t: '1/x > 0 sur ]0 ; +∞[ :', c: 'vert' }, { t: 'ln est strictement croissante', c: 'vert' }], XR + 2, 252, 17, 'vert', 28);
+        c.repere('croissante', ...b, 'ln est strictement croissante');
+        K.marque('croissante');
+      },
+      poignees(K) { const G = K.grille(BASE); return [{ id: 'x', x: G.X(K.P.x), y: G.Y(ln(K.P.x)), bouger: (px) => ({ x: G.inv(px, 0)[0] }) }]; },
+      lecture: K => `En x = ${fr(K.P.x, 1)}, la hauteur du point est ln x ≈ ${fr(ln(K.P.x), 2)} ; la pente de la tangente vaut 1/x = ${fr(1 / K.P.x, 2)} > 0 : la courbe monte.`,
+      decrire: K => ({
+        points: 'Un repère ; quatre points jaunes placés avec leurs valeurs : (0,5 ; −0,69), (1 ; 0), (2 ; 0,69), (4 ; 1,39).',
+        trace: 'La courbe de ln se dessine en rouge d’un seul trait à travers ces points ; elle est nommée « ln ».',
+        glisse: `Un point cyan glisse sur la courbe de x = 0,3 jusqu’à x = ${fr(K.P.x, 1)}, avec sa hauteur (trait jaune) et sa petite tangente qui monte ; à droite : « hauteur : ln x ≈ ${fr(ln(K.P.x), 2)} ».`,
+        croissante: 'À droite, encadré en vert : « 1/x > 0 sur ]0 ; +∞[ : ln est strictement croissante ».',
+      }),
+      motifs: { points: 'quatre points', trace: 'la courbe tracée', glisse: 'le point qui glisse', croissante: 'ln strictement croissante' },
+      explication: [
+        { repere: 'points', texte: 'Quelques valeurs : ln 0,5 ≈ −0,69, ln 1 = 0, ln 2 ≈ 0,69, ln 4 ≈ 1,39.' },
+        { repere: 'point_mobile', texte: 'Le point avance : sa hauteur augmente toujours, sa tangente monte.' },
+        { repere: 'croissante', texte: 'La dérivée 1/x est positive : ln est strictement croissante.' },
+      ],
+    },
+    signe: {
+      titre: 'Négatif avant 1, positif après 1',
+      dessiner(c, K) {
+        K.titre('Négatif avant 1, positif après 1');
+        const G = K.axes(BASE);
+        K.anime(2, p => courbeLn(c, G, p));
+        K.marque('courbe');
+        c.pause(.4);
+        courbeF(c, G, ln, Math.exp(-3.25), 1, 1, { couleur: 'orange', largeur: 4.4 });
+        c.texte('ln x < 0', G.X(0.45), G.Y(-2.2), { couleur: 'orange', taille: 20 });
+        c.repere('negatif', G.X(0), G.Y(0), G.X(1) - G.X(0), G.Y(-3.2) - G.Y(0), 'sur ]0 ; 1[ : ln x < 0');
+        K.marque('negatif');
+        c.pause(.3);
+        K.rond(G, 1, 0, true, 'jaune');
+        c.texte('ln 1 = 0', G.X(1) - 8, G.Y(0) - 12, { couleur: 'jaune', taille: 18, align: 'right' });
+        K.marque('zero');
+        c.pause(.3);
+        courbeF(c, G, ln, 1, 8.1, 1, { couleur: 'vert', largeur: 4.4 });
+        c.texte('ln x > 0', G.X(4.2), G.Y(0.55), { couleur: 'vert', taille: 20 });
+        c.repere('positif', G.X(1), G.Y(2.3), G.X(8.1) - G.X(1), G.Y(0) - G.Y(2.3), 'pour x > 1 : ln x > 0');
+        K.marque('positif');
+        c.pause(.4);
+        // Le tableau de signe : x | 0 ‖ 1 +∞ ; ln x | − 0 +.
+        const x0 = XR, y0 = 70, w = 240, g = 52, h = 32, P = [x0 + g + 16, x0 + g + 98, x0 + w - 18];
+        const o = { couleur: 'faible', largeur: 1.3 };
+        c.rect(x0, y0, w, 2 * h, { couleur: 'faible', arrondi: 3, largeur: 1.4 });
+        c.ligne(x0, y0 + h, x0 + w, y0 + h, o); c.ligne(x0 + g, y0, x0 + g, y0 + 2 * h, o);
+        c.texte('x', x0 + g / 2, y0 + 22, { couleur: 'faible', taille: 17, align: 'center' });
+        c.texte('ln x', x0 + g / 2, y0 + h + 22, { couleur: 'faible', taille: 17, align: 'center' });
+        ['0', '1', '+∞'].forEach((s, i) => c.texte(s, P[i], y0 + 22, { couleur: 'blanc', taille: 17, align: 'center' }));
+        c.ligne(P[0] - 2, y0 + h, P[0] - 2, y0 + 2 * h, { couleur: 'blanc', largeur: 1.6 });
+        c.ligne(P[0] + 3, y0 + h, P[0] + 3, y0 + 2 * h, { couleur: 'blanc', largeur: 1.6 });
+        c.ligne(P[1], y0 + h, P[1], y0 + 2 * h, { couleur: 'tresfaible', largeur: 1.2, pointille: [3, 4] });
+        c.texte('−', (P[0] + P[1]) / 2, y0 + h + 23, { couleur: 'orange', taille: 21, align: 'center' });
+        c.texte('0', P[1], y0 + h + 22, { couleur: 'jaune', taille: 18, align: 'center' });
+        c.texte('+', (P[1] + P[2]) / 2, y0 + h + 23, { couleur: 'vert', taille: 21, align: 'center' });
+        c.repere('tableau', x0 - 4, y0 - 4, w + 8, 2 * h + 8, 'le tableau de signe de ln x');
+        K.marque('tableau');
+        c.pause(.4);
+        K.rond(G, 0.75, ln(0.75), true, 'orange');
+        c.texte('3/4', G.X(0.75) + 8, G.Y(ln(0.75)) + 18, { couleur: 'orange', taille: 15 });
+        c.texte('ln(3/4) < 0 car 3/4 < 1', XR, 170, { couleur: 'orange', taille: 20 });
+        K.marque('exemple');
+      },
+      decrire: {
+        courbe: 'Un repère ; la courbe de ln en rouge, nommée.',
+        negatif: 'Le morceau de la courbe sur ]0 ; 1[ est repassé en orange : il est sous l’axe ; écrit « ln x < 0 ».',
+        zero: 'Le point (1 ; 0) en jaune : « ln 1 = 0 ».',
+        positif: 'Le morceau pour x > 1 est repassé en vert : il est au-dessus de l’axe ; écrit « ln x > 0 ».',
+        tableau: 'À droite, un petit tableau de signe : x : 0, 1, +∞ ; ln x : − (orange), 0 sous 1, + (vert) ; double barre sous 0.',
+        exemple: 'Le point d’abscisse 3/4 en orange sous l’axe ; à droite : « ln(3/4) < 0 car 3/4 < 1 ».',
+      },
+      motifs: { courbe: 'la courbe de ln', negatif: 'négatif avant 1', zero: 'ln 1 = 0', positif: 'positif après 1', tableau: 'le tableau de signe', exemple: 'l’exemple ln(3/4)' },
+      explication: [
+        { repere: 'negatif', texte: 'Entre 0 et 1, la courbe est sous l’axe : ln x est négatif.' },
+        { repere: 'positif', texte: 'Après 1, elle est au-dessus : ln x est positif.' },
+        { repere: 'tableau', texte: 'Le tableau de signe le résume ; la double barre rappelle que ln n’existe pas en 0.' },
+      ],
+    },
+    e: {
+      titre: 'Le nombre e : là où ln vaut 1',
+      dessiner(c, K) {
+        K.titre('Le nombre e : là où ln vaut 1');
+        const G = K.axes(OE);
+        K.anime(2, p => courbeLn(c, G, p));
+        K.marque('courbe');
+        c.pause(.4);
+        c.ligne(G.X(0), G.Y(1), G.X(5.1), G.Y(1), { couleur: 'jaune', largeur: 1.8, pointille: [7, 6] });
+        c.texte('y = 1', G.X(5.1) - 2, G.Y(1) + 22, { couleur: 'jaune', taille: 17, align: 'right' });
+        c.repere('droite', G.X(0), G.Y(1) - 12, G.X(5.1) - G.X(0), 24, 'la droite y = 1');
+        K.marque('hauteur1');
+        c.pause(.4);
+        K.rond(G, E, 1, true, 'jaune');
+        c.cercle(G.X(E), G.Y(1), 12, { couleur: 'jaune', largeur: 1.6 });
+        c.ligne(G.X(E), G.Y(1), G.X(E), G.Y(0), { couleur: 'jaune', largeur: 1.5, pointille: [5, 5] });
+        c.texte('e ≈ 2,718', G.X(E), G.Y(0) + 46, { couleur: 'jaune', taille: 20, align: 'center' });
+        c.repere('e', G.X(E) - 40, G.Y(1) - 16, 80, G.Y(0) - G.Y(1) + 70, 'e ≈ 2,718');
+        K.marque('lecture');
+        c.pause(.4);
+        K.rond(G, 2, ln(2), true, 'cyan'); K.proj(G, 2, ln(2), { versY: false, couleur: 'cyan' });
+        K.rond(G, 3, ln(3), true, 'cyan'); K.proj(G, 3, ln(3), { versY: false, couleur: 'cyan' });
+        c.ligne(G.X(2), G.Y(0), G.X(3), G.Y(0), { couleur: 'jaune', largeur: 6, alpha: .6 });
+        K.lignes(XR, 100, [
+          { t: 'ln 2 ≈ 0,69 < 1', couleur: 'cyan', taille: 20 },
+          { t: 'ln 3 ≈ 1,10 > 1', couleur: 'cyan', taille: 20 },
+        ], 34);
+        const b = encadre(c, 'donc 2 < e < 3', XR + 9, 196, 24, 'jaune', 'jaune');
+        c.repere('encadrement', XR - 6, 76, 240, b[1] + b[3] - 70, 'l’encadrement 2 < e < 3');
+        K.marque('encadrement');
+      },
+      decrire: {
+        courbe: 'Un repère ; la courbe de ln en rouge, nommée.',
+        hauteur1: 'Une droite horizontale y = 1 en pointillés jaunes.',
+        lecture: 'Le point de la courbe à la hauteur 1 est entouré ; un pointillé vertical descend jusqu’à l’axe : « e ≈ 2,718 ».',
+        encadrement: 'Les points d’abscisses 2 et 3 sur la courbe (cyan) ; à droite : « ln 2 ≈ 0,69 < 1 », « ln 3 ≈ 1,10 > 1 », et encadré « donc 2 < e < 3 » ; le segment [2 ; 3] est surligné sur l’axe.',
+      },
+      motifs: { courbe: 'la courbe de ln', hauteur1: 'la hauteur 1', lecture: 'le nombre e', encadrement: '2 < e < 3' },
+      explication: [
+        { repere: 'droite', texte: 'On cherche où la courbe atteint la hauteur 1.' },
+        { repere: 'e', texte: 'Ce x s’appelle e : ln e = 1, e ≈ 2,718.' },
+        { repere: 'encadrement', texte: 'ln 2 < 1 < ln 3 et ln croissante : donc 2 < e < 3.' },
+      ],
+    },
+    compare: {
+      titre: 'ln compare comme x compare',
+      dessiner(c, K) {
+        K.titre('ln compare comme x compare');
+        const G = K.axes(OC);
+        K.anime(2, p => courbeLn(c, G, p));
+        K.marque('courbe');
+        c.pause(.4);
+        for (const [v, nom] of [[2, 'a = 2'], [5, 'b = 5']]) {
+          K.rond(G, v, 0, true, 'jaune');
+          c.texte(nom, G.X(v), G.Y(0) + 24, { couleur: 'jaune', taille: 17, align: 'center' });
+          c.ligne(G.X(v), G.Y(0), G.X(v), G.Y(ln(v)), { couleur: 'cyan', largeur: 1.4, pointille: [5, 5] });
+          K.rond(G, v, ln(v), true, 'cyan');
+          c.ligne(G.X(v), G.Y(ln(v)), G.X(0), G.Y(ln(v)), { couleur: 'cyan', largeur: 1.4, pointille: [5, 5] });
+          c.texte('ln ' + v, G.X(0) + 6, G.Y(ln(v)) - 6, { couleur: 'cyan', taille: 15 });
+        }
+        c.repere('deux_points', G.X(1.6), G.Y(1.9), G.X(5.4) - G.X(1.6), G.Y(-0.5) - G.Y(1.9), 'a = 2, b = 5 et leurs hauteurs');
+        K.marque('deux_points');
+        c.pause(.4);
+        c.fleche(G.X(2) + 8, G.Y(0) + 36, G.X(5) - 8, G.Y(0) + 36, { couleur: 'vert', largeur: 2, tete: 9 });
+        c.fleche(G.X(0) - 30, G.Y(ln(2)), G.X(0) - 30, G.Y(ln(5)), { couleur: 'vert', largeur: 2, tete: 9 });
+        const r = encadre(c, 'a < b ⇔ ln a < ln b', XR + 9, 100, 21, 'vert', 'vert');
+        c.repere('ordre', ...r, 'a < b ⇔ ln a < ln b');
+        K.marque('ordre');
+        c.pause(.4);
+        c.texte('ln a = ln b ⇔ a = b', XR, 156, { couleur: 'blanc', taille: 21 });
+        c.texte('une seule hauteur, un seul x', XR, 182, { couleur: 'faible', taille: 16 });
+        K.marque('egal');
+        c.pause(.4);
+        c.ligne(G.X(0) + 6, G.Y(0), G.X(5) - 6, G.Y(0), { couleur: 'vert', largeur: 7, alpha: .55 });
+        K.rond(G, 0, 0, false, 'vert'); K.rond(G, 5, 0, false, 'vert');
+        c.texte('ln x < ln 5', XR, 236, { couleur: 'jaune', taille: 21 });
+        c.texte('⇔ 0 < x < 5', XR, 266, { couleur: 'jaune', taille: 21 });
+        c.repere('exemple', XR - 6, 214, 200, 62, 'ln x < ln 5 ⇔ 0 < x < 5');
+        K.marque('exemple');
+      },
+      decrire: {
+        courbe: 'Un repère ; la courbe de ln en rouge, nommée.',
+        deux_points: 'Sur l’axe, a = 2 et b = 5 en jaune ; leurs hauteurs ln 2 et ln 5 en pointillés cyan jusqu’à l’axe des ordonnées.',
+        ordre: 'Deux flèches vertes dans le même sens, l’une sous l’axe des abscisses de a vers b, l’autre le long de l’axe des ordonnées de ln a vers ln b ; à droite, encadré : « a < b ⇔ ln a < ln b ».',
+        egal: 'Écrit : « ln a = ln b ⇔ a = b » : une seule hauteur, un seul x.',
+        exemple: 'Le segment ]0 ; 5[ est colorié en vert sur l’axe, 0 et 5 en ronds vides ; écrit « ln x < ln 5 ⇔ 0 < x < 5 ».',
+      },
+      motifs: { courbe: 'la courbe de ln', deux_points: 'a et b, ln a et ln b', ordre: 'le même ordre', egal: 'l’égalité', exemple: 'ln x < ln 5' },
+      explication: [
+        { repere: 'deux_points', texte: '2 < 5, et sur la courbe, ln 2 < ln 5.' },
+        { repere: 'ordre', texte: 'ln est strictement croissante : elle garde l’ordre, dans les deux sens.' },
+        { repere: 'exemple', texte: 'On enlève les ln sans changer le sens, en gardant x > 0.' },
+      ],
+    },
+    tangente: {
+      titre: 'La tangente en 1 : y = x − 1',
+      dessiner(c, K) {
+        K.titre('La tangente en 1 : y = x − 1');
+        const G = K.axes(OT);
+        K.anime(2, p => courbeLn(c, G, p));
+        K.marque('courbe');
+        c.pause(.3);
+        K.rond(G, 1, 0, true, 'jaune');
+        c.texte('(1 ; 0)', G.X(1) + 10, G.Y(0) + 24, { couleur: 'jaune', taille: 16 });
+        K.marque('point');
+        c.pause(.4);
+        K.anime(1.4, p => c.ligne(G.X(-0.2), G.Y(-1.2), G.X(-0.2 + 4.7 * p), G.Y(-1.2 + 4.7 * p), { couleur: 'jaune', largeur: 2.6 }));
+        c.texte('(T)', G.X(4.5) - 8, G.Y(3.5) + 4, { couleur: 'jaune', taille: 19, align: 'right' });
+        c.texte('pente ln’(1) = 1', XR, 96, { couleur: 'jaune', taille: 20 });
+        c.repere('tangente', G.X(-0.2), G.Y(3.5), G.X(4.5) - G.X(-0.2), G.Y(-1.2) - G.Y(3.5), 'la tangente en 1');
+        K.marque('tangente');
+        c.pause(.4);
+        const b = encadre(c, '(T) : y = x − 1', XR + 9, 150, 24, 'jaune', 'jaune');
+        c.repere('equation', ...b, '(T) : y = x − 1');
+        K.marque('equation');
+        c.pause(.4);
+        for (let x = 0.2; x <= 4.45; x += 0.13) {
+          if (Math.abs(x - 1) < 0.07) continue;
+          const yb = Math.max(-3.15, ln(x));
+          c.ligne(G.X(x), G.Y(x - 1), G.X(x), G.Y(yb), { couleur: 'tresfaible', largeur: 1, duree: .03 });
+        }
+        c.texte('la courbe reste', XR, 262, { couleur: 'blanc', taille: 20 });
+        c.texte('sous (T)', XR, 290, { couleur: 'blanc', taille: 20 });
+        c.texte('ln x ≤ x − 1', XR, 326, { couleur: 'faible', taille: 18 });
+        c.repere('dessous', G.X(0.2), G.Y(3.4), G.X(4.45) - G.X(0.2), G.Y(-3.1) - G.Y(3.4), 'l’écart entre (T) et la courbe');
+        K.marque('dessous');
+      },
+      decrire: {
+        courbe: 'Un repère ; la courbe de ln en rouge, nommée.',
+        point: 'Le point (1 ; 0) en jaune.',
+        tangente: 'La droite y = x − 1 est tracée en jaune, nommée (T), touchant la courbe en (1 ; 0) ; à droite : « pente ln’(1) = 1 ».',
+        equation: 'Encadré : « (T) : y = x − 1 ».',
+        dessous: 'L’écart entre (T) et la courbe est hachuré en traits très fins ; écrit : « la courbe reste sous (T) » (ln x ≤ x − 1).',
+      },
+      motifs: { courbe: 'la courbe de ln', point: 'le point (1 ; 0)', tangente: 'la tangente en 1', equation: 'son équation', dessous: 'la courbe sous (T)' },
+      explication: [
+        { repere: 'tangente', texte: 'En 1, la pente vaut ln’(1) = 1/1 = 1.' },
+        { repere: 'equation', texte: 'y = ln’(1)(x − 1) + ln 1 = x − 1.' },
+        { repere: 'dessous', texte: 'La courbe reste toujours sous sa tangente en 1.' },
+      ],
+    },
+    puissances_e: {
+      titre: 'ln(eʳ) = r',
+      dessiner(c, K) {
+        K.titre('ln(e^{r}) = r');
+        const G = K.axes(OP);
+        K.anime(2, p => courbeLn(c, G, p));
+        K.marque('courbe');
+        const P = (x, y, lx, s, dx, dy, id, label, moment) => {
+          c.pause(.35);
+          K.rond(G, x, y, true, 'jaune');
+          K.proj(G, x, y, { lx, couleur: 'faible', couleurTexte: 'jaune', taille: 15 });
+          c.texte(s, G.X(x) + dx, G.Y(y) + dy, { couleur: 'jaune', taille: 17, align: dx < 0 ? 'right' : 'left' });
+          if (id) c.repere(id, G.X(x) - 16, G.Y(y) - 16, 32, 32, label);
+          K.marque(moment);
+        };
+        P(E, 1, 'e', 'ln e = 1', 10, 22, 'e', 'le point (e ; 1)', 'e');
+        P(E * E, 2, 'e²', 'ln(e²) = 2', -10, 30, 'e2', 'le point (e² ; 2)', 'e2');
+        P(1 / E, -1, '1/e', 'ln(1/e) = −1', 12, 18, 'inv_e', 'le point (1/e ; −1)', 'inv_e');
+        P(Math.sqrt(E), 0.5, '√e', 'ln √e = ½', -12, -12, 'racine_e', 'le point (√e ; ½)', 'racine_e');
+        c.pause(.5);
+        const b = encadre(c, 'ln(e^{r}) = r', 300, 300, 26, 'jaune', 'jaune');
+        c.texte('e^{r} : le nombre dont le ln vaut r', 291, 340, { couleur: 'blanc', taille: 18 });
+        c.repere('regle', b[0], b[1], Math.max(b[2], L(c, 'e^{r} : le nombre dont le ln vaut r', 18) + 10), 76, 'ln(eʳ) = r');
+        K.marque('regle');
+      },
+      decrire: {
+        courbe: 'Un repère jusqu’à x = 8 ; la courbe de ln en rouge, nommée.',
+        e: 'Le point (e ; 1) en jaune, pointillés vers l’axe : « ln e = 1 ».',
+        e2: 'Le point (e² ≈ 7,4 ; 2) : « ln(e²) = 2 ».',
+        inv_e: 'Le point (1/e ≈ 0,37 ; −1) : « ln(1/e) = −1 ».',
+        racine_e: 'Le point (√e ≈ 1,6 ; 0,5) : « ln √e = ½ ».',
+        regle: 'En bas, encadré : « ln(eʳ) = r » ; dessous : « eʳ : le nombre dont le ln vaut r ».',
+      },
+      motifs: { courbe: 'la courbe de ln', e: 'ln e = 1', e2: 'ln(e²) = 2', inv_e: 'ln(1/e) = −1', racine_e: 'ln √e = ½', regle: 'ln(eʳ) = r' },
+      explication: [
+        { repere: 'e2', texte: 'À la hauteur 2, l’abscisse est e², environ 7,4.' },
+        { repere: 'inv_e', texte: 'À la hauteur −1, l’abscisse est 1/e, environ 0,37.' },
+        { repere: 'regle', texte: 'eʳ est le nombre dont le ln vaut r : ln(eʳ) = r.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

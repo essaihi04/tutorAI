@@ -1,0 +1,627 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Figures des nationaux — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="cin.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Figures des examens nationaux à la craie : courbes x(t), n(t), σ(t) ou G(t), tangente donnée par le sujet, lecture de t₁/₂ et de la vitesse"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * figures.html : les figures des nationaux (?fig=fig_2016R | fig_2024N | fig_2019R | fig_2025R | fig_2017N | fig_2023N | fig_2025N |
+ * fig_2021N | fig_2018R | fig_2017R), contrat cinetique_contrat_simulations.md § 8, données de cinetique_build/nationaux.md § 5.
+ * Cours phys_ch10_cinetique « Suivi temporel d’une transformation, vitesse de réaction » (2e Bac PC BIOF, novembre 2026).
+ * Chaque figure : moments axes · courbe · tangente (si le sujet en donne une) · lecture · fin ;
+ * repères axe_t · axe_y · courbe · tangente (si tangente) · point · valeur.
+ * fig_2017R : le cadre de la figure du sujet (sujet_p3) s’arrête à 0,5 mol et coupe le début de la courbe ; on dessine selon le TEXTE
+ * du sujet (0,6 mol d’acide au départ), axe jusqu’à 0,6 mol, et les points lus sur la figure à partir de 2 h.
+ */
+/* ── Formules chimiques à la craie : indices ₂ et charges ⁺ ⁻ ²⁻ rendus (sans modifier exposants.js ni le kit) ──────────
+ * « MnO₄⁻ » devient « MnO_{4}^{−} » ; le découpage « _{…} » accepte tout caractère avant (« [I⁻]₀ »). */
+(function () {
+  const C = window.Tableau.Craie, P = C.prototype, texteAvant = P.texte, segAvant = C.segments;
+  const SUP = { '⁺': '+', '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+  const SUB = { '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9' };
+  const chim = s => String(s).replace(/[⁺⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUP[ch]).join('') + '}')
+    .replace(/[₀₁₂₃₄₅₆₇₈₉]+/g, g => '_{' + [...g].map(ch => SUB[ch]).join('') + '}');
+  C.segments = function (s) {
+    const out = [], re = /_\{([^}]+)\}/g; let i = 0, m;
+    while ((m = re.exec(s))) { if (m.index > i) out.push(...segAvant(s.slice(i, m.index))); out.push({ t: m[1], sub: true }); i = re.lastIndex; }
+    if (i < s.length) out.push(...segAvant(s.slice(i)));
+    return out;
+  };
+  P.texte = function (s, x, y, o) { return texteAvant.call(this, chim(s), x, y, o); };
+  window.chim = chim;
+})();
+
+/* ── Moteur du déroulé (copie de chimie/transformations-lentes-rapides-tableau/courbes.html, + M.finir) ─────────────────────────────────── */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lisse = p => p * p * (3 - 2 * p);
+const lerp = (a, b, f) => a + (b - a) * f;
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');
+const ECRITURE = 2.5;
+function Moteur(o) {
+  const q = new URLSearchParams(location.search);
+  const S = { vue: o.vues.includes(q.get('fig')) ? q.get('fig') : o.vues[0], t: 0, running: false, pause: false, fait: false,
+    jusqua: null, motif: '', emis: 0, dit: '', mesure: false };
+  const V = o.vitesse ?? 1.7, T0 = o.T0 ?? .8, HOLD = {};
+  let TL = null;
+  function construire() {
+    let s = T0; const ev = [];
+    for (const e of o.etapes(S.vue)) {
+      const anim = e.anim || 0, d = { ...e, anim, debut: s, ecrit: s + (e.ecritDes ?? anim) };
+      d.fin = Math.max(s + anim, d.ecrit + (HOLD[e.nom] ?? 1.5)) + .35;
+      s = d.fin; ev.push(d);
+    }
+    const mom = {}; for (const e of ev) mom[e.nom] = e.fin; mom.fin = s + (o.queue ?? .6);
+    TL = { ev, M: mom };
+  }
+  const ev = nom => TL.ev.find(e => e.nom === nom);
+  const M = {
+    S, ev, evs: () => TL.ev, Moments: () => TL.M,
+    p(nom) { const e = ev(nom); if (!e) return 0; return e.anim > 0 ? clamp((S.t - e.debut) / e.anim, 0, 1) : (S.t >= e.debut - 1e-6 ? 1 : 0); },
+    commence(nom) { const e = ev(nom); return !!e && S.t > e.debut + 1e-6; },
+    vu(nom) { if (nom === 'fin') return S.t >= TL.M.fin - 1e-6; const e = ev(nom); return !!e && S.t >= e.fin - 1e-6; },
+    etape(c, nom, fn) {
+      const e = ev(nom); if (!e) return;
+      const t = c.t, cur = c.cur, comp = c.complet, w0 = e.ecrit;
+      c.t = S.t > 1e5 ? 1e9 : w0 + (S.t - w0) * V; c.cur = w0;
+      try { fn(); } finally { if (S.mesure) HOLD[nom] = Math.max(HOLD[nom] || 0, (c.cur - w0) / V); c.t = t; c.cur = cur; if (!S.running) c.complet = comp; }
+    },
+    etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
+  };
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const cadreBase = scene.cadre;
+  scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
+  M.scene = scene; M.craie = scene.craie;
+  function calculer() {
+    construire();
+    const t = S.t, r = S.running; S.t = 1e6; S.running = false; S.mesure = true;
+    for (const k of Object.keys(HOLD)) delete HOLD[k];   // une étape dessinée en plusieurs morceaux garde le plus long (max ci-dessus)
+    try { o.dessiner(scene.craie, M); } finally { S.t = t; S.running = r; S.mesure = false; }
+    construire(); scene.sale = true;
+  }
+  const sansSouligne = s => String(s).replace(/([A-Za-zΔτθ])_\{?([A-Za-z0-9]+)\}?/g, (m, a, i) => a + (/^\d+$/.test(i) ? [...i].map(d => '₀₁₂₃₄₅₆₇₈₉'[d]).join('') : i));
+  const dire = (texte, kind = '') => { texte = sansSouligne(texte); S.dit = texte; bulle($('feedback'), texte, kind); };
+  const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+  let pont = null;
+  const emettre = () => pont && pont.emettre();
+  const noter = (a, d) => pont && pont.noter(a, d);
+  scene.avancer = dt => {
+    if (!S.running) return !!(o.anime && o.anime());
+    const avant = S.t; S.t += dt;
+    for (const e of TL.ev) if (avant < e.debut && S.t >= e.debut && e.bulle) dire(e.bulle());
+    if (S.jusqua != null && S.t >= S.jusqua) {
+      S.t = S.jusqua; S.jusqua = null; S.running = false;
+      if (S.t >= TL.M.fin - 1e-6) { finir(); return true; }
+      S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fx(S.t, 1)} s`) + '.');
+      noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); return true;
+    }
+    if (S.t >= TL.M.fin) { S.t = TL.M.fin; finir(); return true; }
+    if (performance.now() - S.emis > 500) { S.emis = performance.now(); emettre(); }
+    return true;
+  };
+  function finir() { S.running = false; S.fait = true; S.pause = false; S.jusqua = null; etiquette(); dire(o.messageFin(M), 'good'); noter('measurement', o.params(M)); emettre(); }
+  function start() { o.reprise && o.reprise(); S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire(o.depart(M)); noter('start', o.params(M)); emettre(); }
+  function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); }
+  function resume() { if (S.running) return; o.reprise && o.reprise(); if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('Ça repart…'); noter('resume'); emettre(); }
+  function setTime(p) {
+    const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+    o.reprise && o.reprise(); S.running = false; S.jusqua = null; S.t = clamp(t, 0, TL.M.fin); S.fait = S.t >= TL.M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+    etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fx(S.t, 1)} s.`); noter('set_time', { time_s: S.t }); emettre();
+  }
+  function playUntil(p) {
+    const noms = o.etapes(S.vue).map(e => e.nom).concat('fin');
+    const nom = noms.includes(p.moment) ? p.moment : null, cible = nom ? TL.M[nom] : +p.time_s;
+    if (!Number.isFinite(cible) || (p.moment && !nom && (p.time_s == null || p.time_s === ''))) { dire(`Moment inconnu : ${p.moment}.`, 'bad'); emettre(); return; }
+    o.reprise && o.reprise();
+    if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+    S.jusqua = clamp(cible, .01, TL.M.fin); S.motif = nom ? (o.motifs[nom] || nom) : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+    noter('play_until', { moment: nom, time_s: S.jusqua }); emettre();
+  }
+  function setParameters(p) {
+    p = p || {};
+    const r = o.appliquer(p, M) || {};
+    if (r.vue && o.vues.includes(r.vue) && r.vue !== S.vue) { S.vue = r.vue; r.change = true; r.vueChange = true; }
+    if (r.change) { calculer(); if (r.vueChange) scene.reecrire(); }
+    noter('set_parameters', o.params(M));
+    if (r.apres) r.apres();
+    else if (r.change && !r.garder) start();
+    else { scene.sale = true; emettre(); }
+  }
+  Object.assign(M, { noter, calculer, dire, start, pause, resume, setTime, playUntil, setParameters, emettre, etiquette, finir });
+  $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+  window.Tableau.explication(o.explications);
+  const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+  M.lancer = () => {
+    calculer();
+    const listeMoments = o.vues.map(v => `${o.vues.length > 1 ? v + ' : ' : ''}${o.etapes(v).map(e => e.nom).concat('fin').join(' | ')}`).join(' ; ');
+    const config = { id: o.id, version: '1.0', title: o.titre, variants: o.vues.length > 1 ? o.vues.map(id => ({ id, label: o.titres[id] })) : [], commands: commandes,
+      command_schema: { set_parameters: o.schema, set_time: { time_s: '0..fin (arrêt sur cet instant de la scène, en s ; voir moments)' },
+        play_until: { moment: listeMoments, time_s: 'ou un instant en s' } } };
+    pont = protocole({ id: o.id, commandes, config, texte: o.texte,
+      etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle',
+        ce_qui_se_voit: o.voir(M) + (S.dit ? ` La bulle dit : « ${S.dit} »` : ''), current_variant: S.vue, time_s: +S.t.toFixed(2),
+        parameters: o.params(M), moments: Object.fromEntries(Object.entries(TL.M).map(([k, v]) => [k, +v.toFixed(2)])) }),
+      progression: () => (S.fait ? 1 : 0),
+      executer: (cmd, p) => ({ start, reset: start, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+    dire(o.depart(M));
+    setTimeout(() => { if (!S.running && S.t === 0 && !S.pause && !S.fait) start(); }, 900);
+  };
+  return M;
+}
+/** Zone d’écriture du bas : le professeur efface les plus vieilles lignes (copie du modèle). */
+function zoneEcriture(c, M, liste, ys, o = {}) {
+  const S = M.S, x = o.x ?? 14, max = o.max ?? 730, taille = o.taille ?? 17, n = ys.length, vues = [];
+  if (S.mesure) {
+    for (const e of liste) M.etape(c, e.nom, () => { for (const [t, col] of e.lignes) c.texte(t, x, ys[0], { couleur: col, taille, max }); e.plus && e.plus(c); });
+    return vues;
+  }
+  let k = -1;
+  liste.forEach((e, j) => { const ev = M.ev(e.nom); if (ev && S.t > ev.ecrit + .05) k = j; });
+  const garde = new Set(); let nb = 0;
+  for (let j = k; j >= 0; j--) { const l = liste[j].lignes.length; if (nb + l > n) break; garde.add(j); nb += l; }
+  let y = 0;
+  liste.forEach((e, j) => {
+    if (j > k) return;
+    M.etape(c, e.nom, () => {
+      if (garde.has(j)) for (const [t, col] of e.lignes) { c.texte(t, x, ys[y++], { couleur: col, taille, max }); vues.push(t); }
+      e.plus && e.plus(c);
+    });
+  });
+  return vues;
+}
+/** Largeur (cadre) d’une formule écrite à la craie, indices et charges compris. */
+function larg(c, s, taille = 17) {
+  const T = window.Tableau, ctx = c.ctx; if (c.echelle && c.tailleMin) taille = Math.max(taille, c.tailleMin / c.echelle);
+  return T.Craie.segments(window.chim(s)).reduce((w, g) => { ctx.font = `${(g.sub || g.sup) ? taille * .62 : taille}px ${T.POLICE}`; return w + ctx.measureText(g.t).width; }, 0);
+}
+/** Équation « gauche → droite » : la flèche est DESSINÉE (la police n’a pas toutes les flèches). Renvoie { x, w }. */
+function eqn(c, x, y, gauche, droite, o = {}) {
+  const t = o.taille ?? 17, w1 = larg(c, gauche, t), w2 = larg(c, droite, t), fl = 30, tot = w1 + fl + 16 + w2;
+  const x0 = o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x, col = o.couleur ?? 'blanc';
+  c.texte(gauche, x0, y, { couleur: col, taille: t });
+  c.fleche(x0 + w1 + 8, y - t * .3, x0 + w1 + 8 + fl, y - t * .3, { couleur: col, largeur: 1.8, tete: 7 });
+  c.texte(droite, x0 + w1 + 16 + fl, y, { couleur: col, taille: t });
+  return { x: x0, w: tot };
+}
+/** Petit triangle « attention » à la craie (orange), le « ! » dedans. */
+function attention(c, x, y, o = {}) {
+  const col = o.couleur ?? 'orange', h = o.h ?? 16;
+  c.trait([[x, y], [x + h * .58, y - h], [x + h * 1.16, y]], { couleur: col, largeur: 1.8, ferme: true });
+  c.texte('!', x + h * .58, y - 3, { couleur: col, taille: h * .8, align: 'center' });
+}
+
+/* ── Outils du graphe ────────────────────────────────────────────────────────────────────────────── */
+const G = { x0: 66, y0: 300, w: 380, h: 236 };     // le graphe, à gauche
+const PX = 520, PW = 230;                           // panneau d’écriture, à droite
+const ZY = [352, 376, 400];                         // lignes écrites en bas
+let F = null;                                       // figure courante
+const X = t => G.x0 + t / F.tmax * G.w, Y = v => G.y0 - v / F.ymax * G.h;
+const pointille = (c, x1, y1, x2, y2, p, col = 'jaune') => { if (p > 0) c.ligne(x1, y1, x1 + (x2 - x1) * p, y1 + (y2 - y1) * p, { couleur: col, largeur: 1.8, pointille: [5, 5] }); };
+const quand = (M, nom) => (M.vu(nom) ? '' : ` (au moment « ${nom} »)`);
+const etapeEnCours = M => { let n = 'avant le début'; for (const e of M.evs()) if (M.commence(e.nom)) n = e.nom; return n; };
+const nb = v => fr(v, 3).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');   // 0,250 → « 0,25 », 15 → « 15 »
+/** Courbe lisse qui passe par des points lus (Hermite monotone ; `pentes` impose la pente en certains points, ex. la tangente donnée). */
+function lissee(pts, pentes = {}) {
+  const n = pts.length, t = pts.map(p => p[0]), y = pts.map(p => p[1]), d = [], m = [];
+  for (let i = 0; i < n - 1; i++) d.push((y[i + 1] - y[i]) / (t[i + 1] - t[i]));
+  m[0] = d[0]; m[n - 1] = d[n - 2];
+  for (let i = 1; i < n - 1; i++) m[i] = d[i - 1] * d[i] <= 0 ? 0 : 2 / (1 / d[i - 1] + 1 / d[i]);
+  for (const [k, s] of Object.entries(pentes)) { const i = t.indexOf(+k); if (i >= 0) m[i] = s; }
+  return u => {
+    if (u <= t[0]) return y[0] + m[0] * (u - t[0]);
+    if (u >= t[n - 1]) return y[n - 1];
+    let i = 0; while (u > t[i + 1]) i++;
+    const h = t[i + 1] - t[i], s = (u - t[i]) / h, s2 = s * s, s3 = s2 * s;
+    return (2 * s3 - 3 * s2 + 1) * y[i] + (s3 - 2 * s2 + s) * h * m[i] + (-2 * s3 + 3 * s2) * y[i + 1] + (s3 - s2) * h * m[i + 1];
+  };
+}
+/** La date où la courbe f atteint la valeur v (recherche par dichotomie entre a et b). */
+function atteint(f, v, a, b) {
+  const s = Math.sign(f(b) - f(a));
+  for (let k = 0; k < 60; k++) { const m = (a + b) / 2; if ((f(m) - v) * s < 0) a = m; else b = m; }
+  return (a + b) / 2;
+}
+
+/* ── Les dix figures (nationaux.md § 5). Les modèles servent seulement au calcul du tracé : jamais écrits à l’écran. ── */
+const L2 = Math.LN2;
+const FIGS = {
+  fig_2016R: {
+    session: '2016 R', diapo: 'p4', titre: 'National 2016 R : suivi par conductimétrie',
+    yNom: 'σ (mS·m⁻¹)', ymax: 275, yTop: 250, dy: 50, gy: 25, tNom: 't (min)', tmax: 65, tTop: 65, dt: 15, gt: 7.5, tLab: [15, 30],
+    courbes: [{ f: lissee([[0, 250], [5, 209], [10, 190], [15, 174], [20, 163], [30, 144], [45, 112], [60, 94], [63, 91]], { 0: -150 / 18 }), fin: 63, col: 'bleu', nom: 'σ(t)' }],
+    tangente: { A: [0, 250], B: [18, 100], contact: [0, 250], de: 0, a: 20, lab: [20.5, 84], dit: 'à l’origine, par (0 ; 250) et (18 ; 100) mS·m⁻¹' },
+    lectures: [{ k: 'h', y: 170, courbe: 0, tLab: 't₁/₂ ≈ 17 min', yLab: '170', yLabAt: [21, 178] }],
+    point: { t: 17, y: 170, dit: 'le point de la courbe où σ = 170 mS·m⁻¹, à t₁/₂ ≈ 17 min' },
+    panneau: {
+      axes: [['Données (sujet) :', 'blanc'], ['x = −6,3·10⁻³·σ + 1,57·10⁻³', 'blanc'], ['(σ en S·m⁻¹, x en mol)', 'faible'], ['x_max = 10⁻³ mol ; V = 10⁻⁴ m³', 'blanc']],
+      tangente: [['(T) : (0 ; 250) et (18 ; 100)', 'vert'], ['pente ≈ −8,33 mS·m⁻¹·min⁻¹', 'vert']],
+      lecture: [['σ₁/₂ = (1,57·10⁻³ − 5·10⁻⁴)/6,3·10⁻³', 'jaune', 14.5], ['σ₁/₂ = 0,170 S·m⁻¹ = 170 mS·m⁻¹', 'jaune'], ['on lit t₁/₂ ≈ 17 min', 'jaune'], ['v(0) = 6,3·10⁻³ × 8,33·10⁻³/10⁻⁴', 'blanc'], ['v(0) ≈ 0,525 mol·m⁻³·min⁻¹', 'jaune']],
+    },
+    bas: {
+      axes: 'σ en mS·m⁻¹ sur la figure (à passer en S·m⁻¹ dans la relation), t en min',
+      courbe: 'σ baisse de 250 mS·m⁻¹ vers 90 mS·m⁻¹ : les ions HO⁻ sont remplacés par des ions moins conducteurs',
+      tangente: 'tangente (T) à l’origine : la pente est négative, mais v(0) est positive',
+      lecture: 'à x_max/2, σ₁/₂ = 170 mS·m⁻¹ : t₁/₂ ≈ 17 min ; v(0) ≈ 0,525 mol·m⁻³·min⁻¹ (V en m³)',
+    },
+    valeur: 'σ₁/₂ = 170 mS·m⁻¹ ; t₁/₂ ≈ 17 min ; v(0) ≈ 0,525 mol·m⁻³·min⁻¹',
+    resume: 'σ(t) d’une saponification (conductimétrie) : σ part de 250 mS·m⁻¹ et baisse vers 90 mS·m⁻¹ en 65 min.',
+  },
+  fig_2024N: {
+    session: '2024 N', diapo: 'p6', titre: 'National 2024 N : vitamine C, suivi par dosage',
+    yNom: 'x (mmol)', ymax: .58, yTop: .5, dy: .1, gy: .05, dec: 1, tNom: 't (h)', tmax: 230, tTop: 200, dt: 40, gt: 20,
+    courbes: [{ f: t => .5 * (1 - Math.exp(-(L2 / Math.pow(24, .919)) * Math.pow(Math.max(t, 0), .919))), fin: 220, col: 'bleu', nom: 'x(t)' }],
+    tangente: { A: [0, .25], B: [60, .40], contact: [60, .40], de: 0, a: 112, lab: [114, .53], dit: 'à t₁ = 60 h, par (0 ; 0,25) et (60 ; 0,40) mmol' },
+    lectures: [{ k: 'palier', y: .5, lab: 'x_f ≈ 0,5 mmol', labAt: [150, .52] }, { k: 'h', y: .25, courbe: 0, tLab: 't₁/₂ = 24 h', yLab: '0,25', yLabAt: [26, .19] }],
+    point: { t: 24, y: .25, dit: 'le point de la courbe où x = x_f/2 = 0,25 mmol, à t₁/₂ = 24 h' },
+    panneau: {
+      axes: [['Données (sujet) :', 'blanc'], ['V = 200 mL ; t₁ = 60 h', 'blanc'], ['x lu par dosage, t en heures', 'faible']],
+      tangente: [['(T) : (0 ; 0,25) et (60 ; 0,40)', 'vert'], ['pente = (0,40 − 0,25)/60', 'vert'], ['pente = 2,5·10⁻³ mmol·h⁻¹', 'vert']],
+      lecture: [['x_f ≈ 0,5 mmol ; x_f/2 = 0,25 mmol', 'jaune'], ['on lit t₁/₂ = 24 h', 'jaune'], ['v(t₁) = 2,5·10⁻³/0,200', 'blanc'], ['v(t₁) = 1,25·10⁻² mmol·L⁻¹·h⁻¹', 'jaune']],
+    },
+    bas: {
+      axes: 'x en mmol, t en HEURES : la vitamine C d’un jus d’orange est oxydée par O₂',
+      courbe: 'x monte vite au début, puis de moins en moins, vers 0,5 mmol',
+      tangente: 'tangente (T) au point × de date t₁ = 60 h',
+      lecture: 'x_f/2 = 0,25 mmol : t₁/₂ = 24 h ; v(t₁) = 1,25·10⁻² mmol·L⁻¹·h⁻¹ (V = 0,200 L)',
+    },
+    valeur: 'x_f/2 = 0,25 mmol ; t₁/₂ = 24 h ; v(t₁) = 1,25·10⁻² mmol·L⁻¹·h⁻¹',
+    resume: 'x(t) de l’oxydation de la vitamine C : x monte de 0 vers 0,5 mmol en 200 h.',
+  },
+  fig_2019R: {
+    session: '2019 R', diapo: 'n1', titre: 'National 2019 R : aspirine + ions HCO₃⁻',
+    yNom: 'x (mmol)', ymax: 3.25, yTop: 3, dy: 1, gy: .5, tNom: 't (s)', tmax: 540, tTop: 500, dt: 100, gt: 50,
+    courbes: [{ f: t => 2.8 * (1 - Math.pow(2, -t / 70)), fin: 520, col: 'bleu', nom: 'x(t)' }],
+    tangente: { A: [0, .75], B: [75, 1.5], contact: [100, 2.8 * (1 - Math.pow(2, -100 / 70))], de: 0, a: 220, lab: [222, 2.95], dit: 'à t = 100 s, par (0 ; 0,75) et (75 ; 1,5) mmol' },
+    lectures: [{ k: 'palier', y: 2.8, lab: 'x_max = 2,8 mmol', labAt: [370, 2.92] }, { k: 'h', y: 1.4, courbe: 0, tLab: 't₁/₂ = 70 s', yLab: '1,4', yLabGauche: true }],
+    point: { t: 70, y: 1.4, dit: 'le point de la courbe où x = x_max/2 = 1,4 mmol, à t₁/₂ = 70 s' },
+    panneau: {
+      axes: [['Données (sujet) :', 'blanc'], ['n₀(aspirine) = 2,8 mmol', 'blanc'], ['n₀(HCO₃⁻) = 5 mmol ; V = 10 mL', 'blanc'], ['x_max = 2,8 mmol', 'blanc']],
+      tangente: [['(T) : (0 ; 0,75) et (75 ; 1,5)', 'vert'], ['pente = (1,5 − 0,75)/75', 'vert'], ['pente = 0,010 mmol·s⁻¹', 'vert']],
+      lecture: [['v = 0,010·10⁻³/(10·10⁻³)', 'blanc'], ['v = 1,0·10⁻³ mol·L⁻¹·s⁻¹', 'jaune'], ['x_max/2 = 1,4 mmol', 'jaune'], ['on lit t₁/₂ = 70 s', 'jaune']],
+    },
+    bas: {
+      axes: 'x en mmol, t en SECONDES ; aspirine limitante : x_max = 2,8 mmol',
+      courbe: 'x monte vite, puis s’approche de 2,8 mmol',
+      tangente: 'tangente (T) à la courbe à la date t = 100 s',
+      lecture: 'v(100 s) = 1,0·10⁻³ mol·L⁻¹·s⁻¹ (mmol → mol, V = 10·10⁻³ L) ; t₁/₂ = 70 s',
+    },
+    valeur: 'v(100 s) = 1,0·10⁻³ mol·L⁻¹·s⁻¹ ; x_max/2 = 1,4 mmol ; t₁/₂ = 70 s',
+    resume: 'x(t) de la réaction de l’aspirine avec HCO₃⁻ : x monte de 0 vers 2,8 mmol en 500 s.',
+  },
+  fig_2025R: {
+    session: '2025 R', diapo: 'n2', titre: 'National 2025 R : saponification, x(t)',
+    yNom: 'x (mmol)', ymax: .65, yTop: .6, dy: .1, gy: .05, yLab: [.1, .2], yFmt: v => fr(v, 2), tNom: 't (min)', tmax: 8.6, tTop: 8, dt: 1, gt: .5,
+    courbes: [{ f: t => .8 * (1 - Math.pow(2, -t / 4)), fin: 8, col: 'bleu', nom: 'x(t)' }],
+    tangente: { A: [0, .08], B: [1, .16], contact: [3, .8 * (1 - Math.pow(2, -3 / 4))], de: 0, a: 6.2, lab: [6.3, .6], dit: 'au point × de date 3 min, par (0 ; 0,08) et (1 ; 0,16) mmol' },
+    lectures: [{ k: 'h', y: .4, courbe: 0, tLab: 't₁/₂ = 4 min', yLab: '0,4', yLabAt: [.15, .42] }],
+    point: { t: 4, y: .4, dit: 'le point de la courbe où x = x_f/2 = 0,4 mmol, à t₁/₂ = 4 min' },
+    panneau: {
+      axes: [['Données (sujet) :', 'blanc'], ['V = 50 mL', 'blanc'], ['x_f = x_max = 0,8 mmol (texte)', 'blanc'], ['la figure s’arrête avant le palier', 'faible']],
+      tangente: [['(T) : (0 ; 0,08) et (1 ; 0,16)', 'vert'], ['pente = 0,08 mmol·min⁻¹', 'vert']],
+      lecture: [['v(3 min) = 0,08/0,050', 'blanc'], ['v(3 min) = 1,6 mmol·L⁻¹·min⁻¹', 'jaune'], ['x_f/2 = 0,4 mmol', 'jaune'], ['on lit t₁/₂ = 4 min', 'jaune'], ['la pente diminue : v diminue', 'blanc']],
+    },
+    bas: {
+      axes: 'x en mmol (de 0 à 0,6), t en min (de 0 à 8)',
+      courbe: 'la courbe monte de moins en moins vite : la pente de la tangente diminue',
+      tangente: 'tangente (T) au point × de date t = 3 min',
+      lecture: 'v(3 min) = 1,6 mmol·L⁻¹·min⁻¹ (V = 0,050 L) ; x_f/2 = 0,4 mmol : t₁/₂ = 4 min',
+    },
+    valeur: 'v(3 min) = 1,6 mmol·L⁻¹·min⁻¹ ; x_f/2 = 0,4 mmol ; t₁/₂ = 4 min',
+    resume: 'x(t) d’une saponification : x monte de 0 à 0,6 mmol en 8 min (le palier 0,8 mmol n’est pas sur la figure).',
+  },
+  fig_2017N: {
+    session: '2017 N', diapo: 'n3', titre: 'National 2017 N : deux estérifications',
+    yNom: 'x (mol)', ymax: .35, yTop: .3, dy: .1, gy: .05, dec: 1, tNom: 't (min)', tmax: 75, tTop: 60, dt: 20, gt: 10,
+    courbes: [
+      { f: t => .2 * (1 - Math.pow(2, -t / 8)), fin: 70, col: 'bleu', nom: '(1)', lab: [71, .2, 'left'] },
+      { f: t => .3 * (1 - Math.pow(2, -t / 2)), fin: 70, col: 'violet', nom: '(2)', lab: [71, .3, 'left'] },
+    ],
+    lectures: [
+      { k: 'h', y: .1, courbe: 0, tLab: '8', tLabSous: true },
+      { k: 'h', y: .15, courbe: 1, tLab: '2', tLabSous: true, yLab: '0,15', yLabGauche: true },
+    ],
+    point: { t: 8, y: .1, dit: 'les deux points lus : (8 min ; 0,1 mol) sur (1) et (2 min ; 0,15 mol) sur (2)' },
+    panneau: {
+      axes: [['(1) acide butanoïque + éthanol', 'bleu'], ['(2) anhydride butanoïque + éthanol', 'violet'], ['x_max = 0,3 mol', 'blanc']],
+      lecture: [['(1) : x_f = 0,2 mol ; x_f/2 = 0,1 mol', 'bleu'], ['t₁/₂(1) = 8 min', 'jaune'], ['(2) : x_f = 0,3 mol ; x_f/2 = 0,15 mol', 'violet'], ['t₁/₂(2) = 2 min', 'jaune'], ['(2) est la plus rapide', 'jaune'], ['⚠ x_f/2 de CHAQUE courbe', 'orange']],
+    },
+    bas: {
+      axes: 'x en mol (de 0 à 0,3), t en min ; deux expériences',
+      courbe: 'la courbe (1) monte vers 0,2 mol, la courbe (2) vers 0,3 mol, bien plus vite',
+      lecture: 't₁/₂(1) = 8 min et t₁/₂(2) = 2 min : l’expérience (2) est la plus rapide',
+    },
+    valeur: 't₁/₂(1) = 8 min ; t₁/₂(2) = 2 min ; (2) plus rapide',
+    resume: 'deux courbes x(t) : (1) palier 0,2 mol, (2) palier 0,3 mol atteint plus tôt.',
+  },
+  fig_2023N: {
+    session: '2023 N', diapo: 'n4', titre: 'National 2023 N : avec et sans catalyseur',
+    yNom: 'n_A (mol)', ymax: 1.0, yTop: 1, dy: .2, gy: .1, yLab: [.2, .4], dec: 1, tNom: 't (h)', tmax: 35, tTop: 35, dt: 5, gt: 2.5,
+    courbes: [
+      { f: t => .3 + .6 * Math.pow(2, -t / 1.7), fin: 33, col: 'bleu', nom: 'C₁', lab: [1.1, .37, 'left'] },
+      { f: t => .3 + .6 * Math.pow(2, -t / 3.5), fin: 33, col: 'violet', nom: 'C₂', lab: [8.8, .5, 'left'] },
+    ],
+    lectures: [
+      { k: 'palier', y: .3, lab: 'palier : n_A = 0,3 mol', labAt: [17, .22] },
+      { k: 'h', y: .6, courbe: 1, tLab: 't₁/₂ ≈ 3,5 h', yLab: '0,6', yLabGauche: true },
+    ],
+    point: { t: 3.5, y: .6, dit: 'le point de C₂ où n_A = 0,6 mol, à t₁/₂ ≈ 3,5 h' },
+    panneau: {
+      axes: [['acide éthanoïque + méthanol', 'blanc'], ['n₀ = 0,9 mol de chacun', 'blanc'], ['n_A : acide restant (un RÉACTIF)', 'faible']],
+      courbe: [['C₁ : avec catalyseur', 'bleu'], ['(même palier, atteint plus tôt)', 'faible']],
+      lecture: [['palier : x_f = 0,9 − 0,3 = 0,6 mol', 'jaune'], ['t₁/₂ : n_A = 0,9 − 0,6/2 = 0,6 mol', 'jaune'], ['sur C₂ : t₁/₂ ≈ 3,5 h', 'jaune'], ['⚠ pas 0,45 mol (moitié de n₀)', 'orange']],
+    },
+    bas: {
+      axes: 'n_A en mol (quantité d’acide restant), t en heures',
+      courbe: 'les deux courbes descendent de 0,9 mol vers le même palier 0,3 mol ; C₁ l’atteint plus tôt',
+      lecture: 'x_f = 0,6 mol ; à t₁/₂, n_A = 0,6 mol : sur C₂, t₁/₂ ≈ 3,5 h',
+    },
+    valeur: 'x_f = 0,6 mol ; n_A = 0,6 mol à t₁/₂ ; t₁/₂(C₂) ≈ 3,5 h',
+    resume: 'deux courbes n_A(t) (acide restant) : de 0,9 mol vers 0,3 mol ; C₁ plus rapide.',
+  },
+  fig_2025N: {
+    session: '2025 N', diapo: 'n5', titre: 'National 2025 N : trois estérifications',
+    yNom: 'x (mmol)', ymax: 150, yTop: 140, dy: 26.6, gy: 13.3, yLab: [26.6, 53.2], yFmt: v => fr(v, 1), tNom: 't (min)', tmax: 440, tTop: 430, dt: 30, gt: 15, tTaille: 13,
+    courbes: [
+      { f: t => 133 * (1 - Math.pow(2, -Math.pow(t / 40, .8))), fin: 425, col: 'bleu', nom: '(a)', lab: [300, 136, 'center'] },
+      { f: t => 133 * t / (t + 90), fin: 425, col: 'violet', nom: '(b)', lab: [380, 99, 'center'] },
+      { f: t => 133 * t / (t + 190), fin: 425, col: 'rose', nom: '(c)', lab: [380, 74, 'center'] },
+    ],
+    lectures: [
+      { k: 'palier', y: 133, lab: 'x_f = 133 mmol', labAt: [150, 138] },
+      { k: 'h', y: 66.5, courbe: 1, tLab: 't₁/₂ = 90 min', yLab: '66,5', yLabAt: [3, 71] },
+    ],
+    point: { t: 90, y: 66.5, dit: 'le point de la courbe (b) où x = x_f/2 = 66,5 mmol, à t₁/₂ = 90 min' },
+    panneau: {
+      axes: [['acide éthanoïque : 0,200 mol', 'blanc'], ['propan-1-ol : 0,200 mol', 'blanc'], ['exp. 1 : θ₁ ; exp. 2 : θ₂ > θ₁', 'blanc'], ['exp. 3 : θ₂ + H₂SO₄', 'blanc']],
+      courbe: [['(a) exp. 3, (b) exp. 2, (c) exp. 1', 'blanc']],
+      lecture: [['x_f = 133 mmol pour les trois', 'jaune'], ['(26,6 = x_f/5)', 'faible'], ['x_f/2 = 66,5 mmol', 'jaune'], ['sur (b) : t₁/₂ = 90 min', 'jaune']],
+    },
+    bas: {
+      axes: 'x en mmol (graduations 26,6 et 53,2), t en min',
+      courbe: '(a) la plus rapide (θ₂ et catalyseur), puis (b), puis (c) : même état final',
+      lecture: 'x_f = 133 mmol ; x_f/2 = 66,5 mmol : t₁/₂ de l’expérience 2 (courbe (b)) = 90 min',
+    },
+    valeur: 'x_f = 133 mmol ; x_f/2 = 66,5 mmol ; t₁/₂(b) = 90 min',
+    resume: 'trois courbes x(t) (a), (b), (c) qui montent vers le même x_f = 133 mmol ; (a) la plus rapide.',
+  },
+  fig_2021N: {
+    session: '2021 N', diapo: 'n6', titre: 'National 2021 N : suivi par conductimétrie',
+    yNom: 'σ (S·m⁻¹)', ymax: .275, yTop: .25, dy: .05, gy: .025, yFmt: v => fr(v, 2), tNom: 't (min)', tmax: 26, tTop: 24, dt: 4, gt: 2,
+    courbes: [{ f: lissee([[0, .25], [2, .2], [4, .17], [8, .13], [12, .11], [16, .1], [20, .095], [24, .093]], { 4: -.0125 }), fin: 24, col: 'bleu', nom: 'σ(t)' }],
+    tangente: { A: [0, .22], B: [4, .17], contact: [4, .17], de: 0, a: 15, lab: [15.2, .045], dit: 'à t₁ = 4 min, par (0 ; 0,22) et (4 ; 0,17) S·m⁻¹' },
+    lectures: [{ k: 'h', y: .17, courbe: 0, tLab: 't₁/₂ = 4 min', yLab: '0,17', yLabAt: [.3, .155], tLabAt: [4.4, .01] }],
+    point: { t: 4, y: .17, dit: 'le point de la courbe où σ = 0,17 S·m⁻¹, à t₁/₂ = 4 min (c’est aussi le point de contact de (T))' },
+    panneau: {
+      axes: [['Données (sujet) :', 'blanc'], ['σ = 0,25 − 160·x', 'blanc'], ['(σ en S·m⁻¹, x en mol)', 'faible'], ['x_max = 10⁻³ mol ; V₀ = 10⁻⁴ m³', 'blanc']],
+      tangente: [['(T) : (0 ; 0,22) et (4 ; 0,17)', 'vert'], ['pente = −0,0125 S·m⁻¹·min⁻¹', 'vert']],
+      lecture: [['σ₁/₂ = 0,25 − 160 × 5·10⁻⁴ = 0,17', 'jaune'], ['on lit t₁/₂ = 4 min', 'jaune'], ['v₁ = 0,0125/(160 × 10⁻⁴)', 'blanc'], ['v₁ ≈ 0,78 mol·m⁻³·min⁻¹', 'jaune']],
+    },
+    bas: {
+      axes: 'σ en S·m⁻¹, t en min ; relation donnée : σ = 0,25 − 160·x',
+      courbe: 'σ baisse de 0,25 S·m⁻¹ vers 0,09 S·m⁻¹',
+      tangente: 'tangente (T) à t₁ = 4 min : dσ/dt < 0 mais v > 0',
+      lecture: 'σ₁/₂ = 0,17 S·m⁻¹ : t₁/₂ = 4 min ; v₁ ≈ 0,78 mol·m⁻³·min⁻¹ (V₀ en m³)',
+    },
+    valeur: 'σ₁/₂ = 0,17 S·m⁻¹ ; t₁/₂ = 4 min ; v₁ ≈ 0,78 mol·m⁻³·min⁻¹',
+    resume: 'σ(t) d’une saponification : σ part de 0,25 S·m⁻¹ et baisse vers 0,09 S·m⁻¹ en 24 min.',
+  },
+  fig_2018R: {
+    session: '2018 R', diapo: 'n7', titre: 'National 2018 R : suivi par conductance',
+    yNom: 'G (mS)', ymax: 29, yTop: 25, dy: 5, gy: 2.5, tNom: 't (min)', tmax: 66, tTop: 65, dt: 15, gt: 7.5, tLab: [15, 30],
+    courbes: [{ f: lissee([[0, 25], [5, 21.7], [10, 19.3], [15, 17.5], [20, 16.3], [30, 14.2], [45, 11.5], [60, 9.5], [64, 9.2]]), fin: 64, col: 'bleu', nom: 'G(t)' }],
+    lectures: [{ k: 'h', y: 17, courbe: 0, tLab: 't₁/₂ ≈ 17 min', yLab: '17 mS', yLabAt: [.6, 15.4] }],
+    point: { t: 17, y: 17, dit: 'le point de la courbe où G = 17 mS, à t₁/₂ ≈ 17 min' },
+    panneau: {
+      axes: [['Données (sujet) :', 'blanc'], ['x = −6,3·10⁻²·G + 1,57·10⁻³', 'blanc'], ['(G en S, x en mol)', 'faible'], ['C₀ = 10⁻² mol·L⁻¹ ; V₀ = 0,1 L', 'blanc']],
+      lecture: [['x_max = C₀·V₀ = 10⁻³ mol', 'blanc'], ['G₁/₂ = (1,57·10⁻³ − 5·10⁻⁴)/6,3·10⁻²', 'jaune', 14.5], ['G₁/₂ ≈ 0,017 S = 17 mS', 'jaune'], ['on lit t₁/₂ ≈ 17 min', 'jaune'], ['⚠ G lue en mS, relation en S', 'orange']],
+    },
+    bas: {
+      axes: 'G en mS sur la figure, t en min',
+      courbe: 'G baisse de 25 mS vers 9 mS',
+      lecture: 'à x_max/2 : G₁/₂ = 17 mS ; on lit t₁/₂ ≈ 17 min',
+    },
+    valeur: 'G₁/₂ = 0,017 S = 17 mS ; t₁/₂ ≈ 17 min',
+    resume: 'G(t) d’une saponification : G part de 25 mS et baisse vers 9 mS en 65 min.',
+  },
+  fig_2017R: {
+    session: '2017 R', diapo: 'n8', titre: 'National 2017 R : acide dosé après trempe',
+    yNom: 'n (mol)', ymax: .66, yTop: .6, dy: .2, gy: .1, dec: 1, tNom: 't (h)', tmax: 215, tTop: 200, dt: 40, gt: 20,
+    // Départ à 0,6 mol (texte du sujet) ; au-delà de 2 h, les points lus sur la figure du sujet (sujet_p3), dont le cadre s’arrête à 0,5 mol.
+    courbes: [{ f: t => .2 + .12 * Math.exp(-t / 1.75) + .28 * Math.exp(-t / 33), fin: 200, col: 'bleu', nom: 'n(t)' }],
+    lectures: [{ k: 'palier', y: .2, lab: 'palier : n_f = 0,2 mol', labAt: [110, .14] }],
+    point: { t: 180, y: .2, dit: 'un point du palier : n_f = 0,2 mol' },
+    panneau: {
+      axes: [['0,6 mol d’acide + 0,6 mol d’éthanol', 'blanc'], ['tubes à 100 °C ; eau glacée,', 'blanc'], ['puis dosage de l’acide restant', 'blanc']],
+      courbe: [['courbe d’un RÉACTIF : elle descend', 'orange']],
+      lecture: [['palier : n_f = 0,2 mol', 'jaune'], ['x_f = 0,6 − 0,2 = 0,4 mol', 'jaune'], ['acide 0,2 mol ; alcool 0,2 mol', 'blanc'], ['ester 0,4 mol ; eau 0,4 mol', 'blanc']],
+    },
+    bas: {
+      axes: 'n : quantité d’acide restant (mol), t en heures ; eau glacée = trempe avant le dosage',
+      courbe: 'n descend de 0,6 mol vers un palier : x = 0,6 − n',
+      lecture: 'n_f = 0,2 mol, donc x_f = 0,4 mol : 0,2 mol d’acide et d’alcool, 0,4 mol d’ester et d’eau',
+    },
+    valeur: 'n_f = 0,2 mol ; x_f = 0,4 mol',
+    resume: 'n(acide)(t) : n descend de 0,6 mol vers le palier 0,2 mol en 200 h.',
+  },
+};
+const CLES = Object.keys(FIGS);
+for (const k of CLES) {                                          // date lue (pour les lectures « h ») et point lu
+  const f = FIGS[k];
+  for (const l of f.lectures) if (l.k === 'h') { const c = f.courbes[l.courbe]; l.t = atteint(c.f, l.y, 0, c.fin); }
+}
+
+/* ── Déroulé : axes, courbe, tangente (si le sujet en donne une), lecture, fin ─────────────────────────────── */
+const etapesDe = cle => {
+  const f = FIGS[cle], e = [
+    { nom: 'axes', anim: .4, motif: `les axes : ${f.yNom} en ordonnée, ${f.tNom} en abscisse`, bulle: () => `Figure du national ${f.session}.` },
+    { nom: 'courbe', anim: 2.8, motif: f.courbes.length > 1 ? `les ${f.courbes.length} courbes ${f.courbes.map(c => c.nom).join(', ')}` : 'la courbe du sujet', bulle: () => 'On trace la courbe comme sur le sujet.' },
+  ];
+  if (f.tangente) e.push({ nom: 'tangente', anim: 1.2, motif: `la tangente (T) ${f.tangente.dit}`, bulle: () => 'La tangente (T) donnée par le sujet.' });
+  e.push({ nom: 'lecture', anim: 2.6, motif: `la lecture : ${f.valeur}`, bulle: () => 'On lit sur la figure.' });
+  return e;
+};
+const MOTIFS = new Proxy({}, { get: (_, nom) => (nom === 'fin' ? 'fin' : (etapesDe(MO ? MO.S.vue : CLES[0]).find(e => e.nom === nom) || {}).motif) });
+let MO = null;
+
+function quadrillage(c, a) {
+  const ctx = c.ctx;
+  ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = 'rgba(226,232,240,.09)'; ctx.lineWidth = 1;
+  for (let t = F.gt; t <= F.tTop + 1e-9; t += F.gt) { ctx.beginPath(); ctx.moveTo(X(t), G.y0); ctx.lineTo(X(t), Y(F.yTop)); ctx.stroke(); }
+  for (let v = F.gy; v <= F.yTop + 1e-9; v += F.gy) { ctx.beginPath(); ctx.moveTo(G.x0, Y(v)); ctx.lineTo(X(F.tTop), Y(v)); ctx.stroke(); }
+  ctx.restore();
+}
+const proche = (v, l) => l.some(u => Math.abs(u - v) < 1e-6);
+function axes(c) {
+  c.fleche(G.x0, G.y0, G.x0 + G.w + 14, G.y0, { largeur: 1.8 });
+  c.fleche(G.x0, G.y0, G.x0, G.y0 - G.h - 12, { largeur: 1.8 });
+  const tt = F.tTaille ?? 15;
+  for (let k = 1; k * F.dt <= F.tTop + 1e-9; k++) {
+    const t = k * F.dt; c.ligne(X(t), G.y0 - 4, X(t), G.y0 + 4, { largeur: 1.4, duree: .03 });
+    if (!F.tLab || proche(t, F.tLab)) c.texte(nb(t), X(t), G.y0 + 20, { couleur: 'faible', taille: tt, align: 'center', duree: .1 });
+  }
+  c.texte('0', G.x0 - 8, G.y0 + 18, { couleur: 'faible', taille: 15, align: 'right', duree: .05 });
+  for (let k = 1; k * F.dy <= F.yTop + 1e-9; k++) {
+    const v = k * F.dy; c.ligne(G.x0 - 4, Y(v), G.x0 + 4, Y(v), { largeur: 1.4, duree: .03 });
+    if (!F.yLab || proche(v, F.yLab)) c.texte(F.yFmt ? F.yFmt(v) : F.dec ? fr(v, F.dec) : nb(v), G.x0 - 8, Y(v) + 5, { couleur: 'faible', taille: 15, align: 'right', duree: .1 });
+  }
+  c.texte(F.tNom, G.x0 + G.w + 4, G.y0 + 26, { couleur: 'blanc', taille: 16 });
+  c.texte(F.yNom, G.x0 + 10, G.y0 - G.h - 2, { couleur: 'blanc', taille: 16 });
+}
+function trace(c, f, fin, p, col) {
+  if (p <= 0) return;
+  const tm = fin * p;
+  c.courbe(u => [X(u * tm), Y(f(u * tm))], Math.max(16, Math.round(160 * p)), { couleur: col, largeur: 2.6 });
+}
+const penteT = T => (T.B[1] - T.A[1]) / (T.B[0] - T.A[0]);
+const surT = (T, t) => T.A[1] + penteT(T) * (t - T.A[0]);
+/** Marque « × » à la craie (point du sujet). */
+function croix(c, x, y, col = 'blanc') { c.ligne(x - 5, y - 5, x + 5, y + 5, { couleur: col, largeur: 2 }); c.ligne(x - 5, y + 5, x + 5, y - 5, { couleur: col, largeur: 2 }); }
+
+function dessiner(c, M) {
+  MO = M; F = FIGS[M.S.vue]; M.scene.cadre(73);
+  c.texte(F.titre, 14, 26, { couleur: 'cyan', taille: 20, max: 470 });
+  c.texte(`diapositive ${F.diapo}`, 746, 26, { couleur: 'faible', taille: 15, align: 'right' });
+  if (M.commence('axes')) c.direct(() => quadrillage(c, lisse(M.p('axes'))));
+  c.direct(() => {
+    if (M.commence('courbe')) F.courbes.forEach(k => trace(c, k.f, k.fin, M.p('courbe'), k.col));
+    if (F.tangente && M.commence('tangente')) {
+      const T = F.tangente, p = M.p('tangente'), a = T.de + (T.a - T.de) * p;
+      c.ligne(X(T.de), Y(surT(T, T.de)), X(a), Y(surT(T, a)), { couleur: 'vert', largeur: 2.2, pointille: [8, 5] });
+      if (p >= 1) {
+        croix(c, X(T.contact[0]), Y(T.contact[1]), 'blanc');
+        c.point(X(T.A[0]), Y(T.A[1]), 4, 'vert'); c.point(X(T.B[0]), Y(T.B[1]), 4, 'vert');
+      }
+    }
+    if (M.commence('lecture')) {
+      const n = F.lectures.length, p = M.p('lecture');
+      F.lectures.forEach((l, i) => {
+        const q = clamp(p * n - i, 0, 1); if (q <= 0) return;
+        if (l.k === 'palier') pointille(c, G.x0, Y(l.y), X(F.tTop), Y(l.y), q, 'jaune');
+        else {
+          pointille(c, G.x0, Y(l.y), X(l.t), Y(l.y), clamp(q * 2, 0, 1));
+          if (q >= .5) { pointille(c, X(l.t), Y(l.y), X(l.t), G.y0, clamp(q * 2 - 1, 0, 1)); c.point(X(l.t), Y(l.y), 4.5, 'jaune'); }
+          if (q >= 1) c.point(X(l.t), G.y0, 4, 'jaune');
+        }
+      });
+    }
+  });
+  // Étiquettes du graphe et panneau de droite : écrits dans l’étape elle-même (une seule écriture par étape, après la ligne du bas)
+  const etiquettes = {
+    courbe: () => F.courbes.forEach(k => { if (k.lab) c.texte(k.nom, X(k.lab[0]), Y(k.lab[1]), { couleur: k.col, taille: 17, align: k.lab[2] || 'left' }); }),
+    tangente: () => F.tangente && c.texte('(T)', X(F.tangente.lab[0]), Y(F.tangente.lab[1]), { couleur: 'vert', taille: 17 }),
+    lecture: () => F.lectures.forEach(l => {
+      if (l.k === 'palier') c.texte(l.lab, X(l.labAt[0]), Y(l.labAt[1]), { couleur: 'jaune', taille: 16 });
+      else {
+        if (l.yLab && l.yLabGauche) c.texte(l.yLab, G.x0 - 8, Y(l.y) + 5, { couleur: 'jaune', taille: 15, align: 'right' });
+        else if (l.yLab) c.texte(l.yLab, X(l.yLabAt[0]), Y(l.yLabAt[1]), { couleur: 'jaune', taille: 15 });
+        if (l.tLabSous) c.texte(l.tLab, X(l.t), G.y0 + 38, { couleur: 'jaune', taille: 15, align: 'center' });
+        else { const at = l.tLabAt || [l.t, 0]; c.texte(l.tLab, X(at[0]) + 6, Y(at[1]) - 8, { couleur: 'jaune', taille: 16 }); }
+      }
+    }),
+  };
+  let y = 66; const ecrites = [], panneau = {};
+  for (const nom of ['axes', 'courbe', 'tangente', 'lecture']) {
+    const lignes = F.panneau[nom]; if (!lignes || !M.ev(nom)) continue;
+    const y0 = y; y += lignes.length * 23 + 8;
+    panneau[nom] = () => lignes.forEach(([t, col, tl], i) => c.texte(t, PX, y0 + i * 23, { couleur: col, taille: tl ?? 16, max: PW }));
+    if (M.commence(nom)) ecrites.push(...lignes.map(l => l[0]));
+  }
+  M.panneau = ecrites;
+  M.vues = zoneEcriture(c, M, etapesDe(M.S.vue).map(e => ({ nom: e.nom, lignes: [[F.bas[e.nom], e.nom === 'lecture' ? 'jaune' : e.nom === 'tangente' ? 'vert' : 'blanc']],
+    plus: () => { if (e.nom === 'axes') axes(c); etiquettes[e.nom] && etiquettes[e.nom](); panneau[e.nom] && panneau[e.nom](); } })), ZY);
+  reperes(c, M);
+  return c.fin();
+}
+
+/* ── Repères (tous déclarés dès le début ; le libellé dit à quel moment ils apparaissent) ─────────────── */
+function panneauY(nom) {                            // haut et hauteur du bloc écrit à droite pour l’étape nom
+  let y = 66;
+  for (const n of ['axes', 'courbe', 'tangente', 'lecture']) {
+    const l = F.panneau[n]; if (!l || !(n !== 'tangente' || F.tangente)) continue;
+    if (n === nom) return [y - 18, l.length * 23 + 4];
+    y += l.length * 23 + 8;
+  }
+  return [y - 18, 30];
+}
+function reperes(c, M) {
+  const R = (id, x, y, w, h, l) => c.repere(id, x, y, w, h, l), q = nom => quand(M, nom);
+  R('axe_t', G.x0, G.y0 - 10, G.w + 60, 40, `l’axe des temps : ${F.tNom}, de 0 à ${nb(F.tTop)}`);
+  R('axe_y', G.x0 - 50, G.y0 - G.h - 20, 60, G.h + 30, `l’axe des ordonnées : ${F.yNom}, de 0 à ${F.yFmt ? F.yFmt(F.yTop) : nb(F.yTop)}`);
+  R('courbe', G.x0, Y(F.yTop) - 4, X(F.tTop) - G.x0 + 8, G.y0 - Y(F.yTop) + 4, `${F.courbes.length > 1 ? 'les courbes ' + F.courbes.map(k => k.nom).join(', ') : 'la courbe du sujet'}${q('courbe')}`);
+  if (F.tangente) {
+    const T = F.tangente, y1 = Y(surT(T, T.de)), y2 = Y(surT(T, T.a));
+    R('tangente', X(T.de) - 6, Math.min(y1, y2) - 6, X(T.a) - X(T.de) + 12, Math.abs(y2 - y1) + 12, `la tangente (T) verte, ${T.dit}${q('tangente')}`);
+  }
+  const P = F.point; R('point', X(P.t) - 14, Y(P.y) - 14, 28, 28, `${P.dit}${q('lecture')}`);
+  const [yv, hv] = panneauY('lecture');
+  R('valeur', PX - 6, yv, PW + 10, hv, `les valeurs lues et calculées : ${F.valeur}${q('lecture')}`);
+}
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
+function voir(M) {
+  const f = FIGS[M.S.vue], m = [`Figure ${M.S.vue} (national ${f.session}, diapositive ${f.diapo}), ${M.etat()}. Étape en cours : ${etapeEnCours(M)}.`];
+  m.push(`Graphe à la craie : ${f.yNom} en ordonnée de 0 à ${f.yFmt ? f.yFmt(f.yTop) : nb(f.yTop)}, ${f.tNom} en abscisse de 0 à ${nb(f.tTop)}.`);
+  if (M.commence('courbe')) m.push(`Courbe${f.courbes.length > 1 ? 's' : ''} tracée${f.courbes.length > 1 ? 's' : ''} (${M.vu('courbe') ? 'en entier' : 'en cours'}) : ${f.resume}`);
+  if (f.tangente && M.commence('tangente')) m.push(`Tangente (T) verte en pointillés ${f.tangente.dit} ; point de contact marqué ×.`);
+  if (M.commence('lecture')) m.push(`Lecture (pointillés jaunes) : ${f.lectures.map(l => l.k === 'palier' ? `trait horizontal « ${l.lab} »` : `de ${nb(l.y)} sur l’axe des ordonnées jusqu’à la courbe ${f.courbes[l.courbe].nom}, puis jusqu’à l’axe des temps : ${l.tLab.length < 4 ? 't = ' + l.tLab + ' ' + f.tNom.replace(/^t \(|\)$/g, '') : l.tLab}`).join(' ; ')}. Valeurs : ${f.valeur}.`);
+  if (M.panneau && M.panneau.length) m.push(`Écrit à droite : ${M.panneau.map(s => `« ${s} »`).join(' ; ')}.`);
+  if (M.vues && M.vues.length) m.push(`Lignes écrites en bas : ${M.vues.map(s => `« ${s} »`).join(' ; ')}.`);
+  return m.join(' ');
+}
+const params = M => {
+  const f = FIGS[M.S.vue];
+  return { fig: M.S.vue, session: f.session, diapositive: f.diapo, tangente: !!f.tangente, valeurs: f.valeur,
+    lectures: f.lectures.map(l => l.k === 'palier' ? { palier: l.y } : { y: l.y, t: +l.t.toFixed(2) }) };
+};
+const MOT = Moteur({
+  id: 'cin_figures', titre: 'Figures des examens nationaux : suivi temporel, tangente, t₁/₂', vues: CLES,
+  titres: Object.fromEntries(CLES.map(k => [k, `national ${FIGS[k].session}`])),
+  etapes: etapesDe, motifs: MOTIFS, dessiner, voir, params,
+  depart: M => `Figure du national ${FIGS[M.S.vue].session}.`,
+  messageFin: M => `Figure du national ${FIGS[M.S.vue].session} lue : les valeurs sont écrites à droite.`,
+  appliquer: (p, M) => { const r = {}; if (CLES.includes(p.fig)) r.vue = p.fig; else if (CLES.includes(p.vue)) r.vue = p.vue; r.change = !!(r.vue && r.vue !== M.S.vue); return r; },
+  schema: { fig: CLES.join(' | ') + ' (change de figure et relance)' },
+  texte: 'Figures des examens nationaux (2016-2025) du suivi temporel, dessinées comme les sujets : ' + CLES.map(k => `${k} (${FIGS[k].session}) : ${FIGS[k].resume} Lecture : ${FIGS[k].valeur}.`).join(' '),
+  explications: Object.fromEntries(CLES.map(k => [k, [
+    { repere: 'axe_y', texte: `En ordonnée : ${FIGS[k].yNom}.` },
+    { repere: 'axe_t', texte: `En abscisse : ${FIGS[k].tNom}.` },
+    { repere: 'courbe', texte: FIGS[k].bas.courbe },
+    ...(FIGS[k].tangente ? [{ repere: 'tangente', texte: `La tangente (T) ${FIGS[k].tangente.dit}.` }] : []),
+    { repere: 'point', texte: FIGS[k].point.dit },
+    { repere: 'valeur', texte: FIGS[k].valeur },
+  ]])),
+});
+MOT.lancer();
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

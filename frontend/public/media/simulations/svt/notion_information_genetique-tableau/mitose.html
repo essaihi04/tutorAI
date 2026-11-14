@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Les phases de la mitose — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="genetique.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="La mitose d’une cellule 2n = 4 : prophase, métaphase, anaphase, télophase, dans une cellule animale et dans une cellule végétale, et une microphotographie d’apex de racine d’oignon avec cinq cellules numérotées"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="etapes.js"></script>
+<script>
+/*
+ * Les phases de la mitose (cours « Notion de l’information génétique », 2 Bac PC BIOF, 11 novembre 2026). Capacité NIG4.
+ * 2n = 4 : une paire longue (violette) et une paire courte (bleue) ; au début chaque chromosome a deux chromatides.
+ * Vue animale : prophase, métaphase, anaphase (chromatides sœurs vers les pôles OPPOSÉS, 4 à chaque pôle), télophase ;
+ *   le nom de la phase et ses critères s’écrivent à droite ; moment schema_anaphase = le schéma légendé de l’élève.
+ * Vue vegetale : mêmes moments, calottes polaires au lieu d’asters, nouvelle paroi au lieu d’étranglement ; moment comparaison.
+ * Vue photo : microphotographie PEINTE (document reconstitué) d’apex de racine d’oignon, cinq cellules numérotées.
+ * Le vivant est peint (règle 7) ; la craie écrit les noms, les critères et les légendes. Pas de kinétochore ni de centriole.
+ */
+const { lisse, rampe, entre, Peint } = window.Etapes;
+const TAU = Math.PI * 2;
+const CX = 230, CY = 215;
+const M = { debut: 1.6, condensation: 5.0, enveloppe_disparait: 7.6, asters_fuseau: 10.2, plaque_equatoriale: 13.2, clivage_centromere: 15.0,
+  migration: 16.9, etranglement: 21.2, deux_noyaux: 23.6, fin: 25.6, schema_anaphase: 17.0 };
+const MV = { ...M }; delete MV.schema_anaphase; MV.comparaison = 27.4;
+const CHR = [ // 2n = 4 : deux paires (longue violette, courte bleue)
+  { L: 60, c: Peint.VIOLET, pro: [CX - 26, CY - 18, .6], me: CX - 111 },
+  { L: 40, c: Peint.BLEU, pro: [CX + 22, CY - 26, 1.9], me: CX - 37 },
+  { L: 60, c: Peint.VIOLET, pro: [CX + 20, CY + 18, -.4], me: CX + 37 },
+  { L: 40, c: Peint.BLEU, pro: [CX - 20, CY + 26, 2.6], me: CX + 111 },
+];
+const POLE = 122;   // distance du centre aux pôles
+
+/** État géométrique de la mitose à l’instant t (commun aux vues animale et végétale). */
+function etat(t) {
+  return {
+    chromatine: 1 - rampe(t, 2.0, 2.4), cond: rampe(t, 2.0, 3.0), env: 1 - rampe(t, 5.6, 2.0), fuseau: rampe(t, 7.8, 2.2),
+    plaque: rampe(t, 10.6, 2.4), clivage: rampe(t, 13.6, 1.3), migr: rampe(t, 15.2, 3.0), etr: rampe(t, 18.6, 2.6),
+    noyaux: rampe(t, 21.4, 2.2), sep: rampe(t, 23.8, 1.8),
+  };
+}
+/** Chromatide seule en V : centromère vers le pôle, bras qui traînent derrière. */
+function chromatideV(x, cx, cy, L, versHaut, couleur, b, a = 1) {
+  const tr = versHaut ? 1 : -1, pts = [];
+  for (let i = 0; i <= 10; i++) { const s = i / 10 - .5, d = Math.abs(s) * L; pts.push([cx + Math.sign(s) * d * Math.cos(b), cy + tr * d * Math.sin(b)]); }
+  Peint.chromatide(x, pts, couleur, 9, a);
+  x.save(); x.globalAlpha = a; x.fillStyle = 'rgba(40,10,60,.85)'; x.beginPath(); x.arc(cx, cy, 3, 0, TAU); x.fill(); x.restore();
+}
+function aster(x, px, py, a) {
+  x.save(); x.globalAlpha = a; x.strokeStyle = 'rgba(203,213,225,.7)'; x.lineWidth = 1.1;
+  for (let i = 0; i < 18; i++) { const an = i * TAU / 18; x.beginPath(); x.moveTo(px + 4 * Math.cos(an), py + 4 * Math.sin(an)); x.lineTo(px + 22 * Math.cos(an), py + 22 * Math.sin(an)); x.stroke(); }
+  x.fillStyle = 'rgba(241,245,249,.9)'; x.beginPath(); x.arc(px, py, 3.2, 0, TAU); x.fill(); x.restore();
+}
+function calotte(x, px, py, haut, a) {
+  x.save(); x.globalAlpha = a; const g = x.createRadialGradient(px, py, 2, px, py, 46); g.addColorStop(0, 'rgba(255,255,240,.55)'); g.addColorStop(1, 'rgba(255,255,240,0)');
+  x.fillStyle = g; x.beginPath(); x.ellipse(px, py + (haut ? 8 : -8), 46, 22, 0, 0, TAU); x.fill(); x.restore();
+}
+/** Positions des chromatides (ou chromosomes) à l’instant t. */
+function positions(t, E) {
+  const out = [];
+  CHR.forEach((ch, i) => {
+    const [px, py, pa] = ch.pro;
+    const xm = entre(px, ch.me, E.plaque), ym = entre(py, CY, E.plaque), am = entre(pa, 0, E.plaque);
+    if (E.clivage <= 0) out.push({ ch, x: xm, y: ym, a: am, deux: true });
+    else {
+      const ec = entre(4, 10, E.clivage);
+      for (const haut of [true, false]) {
+        const yy = haut ? entre(CY - ec, CY - POLE + 34, E.migr) : entre(CY + ec, CY + POLE - 34, E.migr);
+        out.push({ ch, x: entre(ch.me, CX + (ch.me - CX) * .72, E.migr), y: yy, haut, b: entre(0, 1.0, E.migr) });
+      }
+    }
+  });
+  return out;
+}
+function fuseau(x, E, pos, vegetal) {
+  if (E.fuseau <= 0 || E.noyaux >= 1) return;
+  const a = E.fuseau * (1 - E.noyaux), pH = [CX, CY - POLE], pB = [CX, CY + POLE];
+  x.save(); x.globalAlpha = a * .55; x.strokeStyle = 'rgba(203,213,225,.75)'; x.lineWidth = 1;
+  for (const d of [-60, -30, 30, 60]) { x.beginPath(); x.moveTo(pH[0], pH[1]); x.quadraticCurveTo(CX + d * 1.6, CY, pB[0], pB[1]); x.stroke(); }   // fibres polaires
+  for (const p of pos) { // fibres vers les centromères
+    if (E.plaque <= 0) continue;
+    const vers = p.deux ? [pH, pB] : [p.haut ? pH : pB];
+    for (const q of vers) { x.beginPath(); x.moveTo(q[0], q[1]); x.lineTo(p.x, p.y); x.stroke(); }
+  }
+  x.restore();
+  if (vegetal) { calotte(x, pH[0], pH[1], true, a); calotte(x, pB[0], pB[1], false, a); } else { aster(x, pH[0], pH[1], a); aster(x, pB[0], pB[1], a); }
+}
+/** Cellule animale qui s’étrangle (division dans le plan horizontal y = CY). */
+function celluleAnimale(x, E) {
+  const rx = 168, ry = 142;
+  if (E.sep <= 0) {
+    const w = entre(1, .12, E.etr), pts = [];
+    for (let i = 0; i < 90; i++) { const th = i / 90 * TAU, f = 1 - (1 - w) * Math.exp(-(Math.sin(th) ** 2) * 10); pts.push([CX + rx * Math.cos(th) * f, CY + ry * (1 + .08 * E.etr) * Math.sin(th)]); }
+    peindreForme(x, pts);
+  } else {
+    const d = entre(0, 14, E.sep);
+    for (const s of [-1, 1]) { const pts = []; for (let i = 0; i < 60; i++) { const th = i / 60 * TAU; pts.push([CX + entre(118, 112, E.sep) * Math.cos(th), CY + s * (78 + d) + entre(76, 70, E.sep) * Math.sin(th)]); } peindreForme(x, pts); }
+  }
+}
+function peindreForme(x, pts, vegetal) {
+  x.save();
+  const g = x.createRadialGradient(CX - 50, CY - 60, 10, CX, CY, 200);
+  if (vegetal) { g.addColorStop(0, 'rgba(220,240,200,.5)'); g.addColorStop(1, 'rgba(150,190,120,.45)'); } else { g.addColorStop(0, 'rgba(255,214,222,.55)'); g.addColorStop(.7, 'rgba(244,170,190,.45)'); g.addColorStop(1, 'rgba(214,120,150,.5)'); }
+  x.fillStyle = g; x.beginPath(); pts.forEach(([px, py], i) => (i ? x.lineTo(px, py) : x.moveTo(px, py))); x.closePath(); x.fill();
+  x.strokeStyle = vegetal ? 'rgba(150,170,90,.9)' : 'rgba(150,60,95,.85)'; x.lineWidth = vegetal ? 1 : 1.8; x.stroke();
+  x.restore();
+}
+function celluleVegetale(x, E) {
+  const x0 = 62, x1 = 398, y0 = 70, y1 = 360;
+  const paroi = (a0, b0, a1, b1) => { x.save(); const g = x.createLinearGradient(a0, b0, a0 + 8, b0 + 8); g.addColorStop(0, '#d8cf9f'); g.addColorStop(1, '#9fae6a'); x.strokeStyle = g; x.lineWidth = 9; x.lineJoin = 'round'; x.strokeRect(a0, b0, a1 - a0, b1 - b0); x.restore(); };
+  if (E.sep <= 0) {
+    peindreForme(x, [[x0, y0], [x1, y0], [x1, y1], [x0, y1]], true); paroi(x0, y0, x1, y1);
+    if (E.etr > 0) { // la nouvelle paroi se construit du centre vers les bords
+      const l = (x1 - x0) / 2 * E.etr; x.save(); x.strokeStyle = 'rgba(216,207,159,.95)'; x.lineWidth = 6; x.lineCap = 'round'; x.beginPath(); x.moveTo(CX - l, CY); x.lineTo(CX + l, CY); x.stroke(); x.restore();
+    }
+  } else {
+    const d = 6 * E.sep;
+    for (const [a, b] of [[y0 - d, CY - 2 - d], [CY + 2 + d, y1 + d]]) { peindreForme(x, [[x0, a], [x1, a], [x1, b], [x0, b]], true); paroi(x0, a, x1, b); }
+  }
+}
+function dessinerMitose(c, k, vegetal) {
+  const t = k.t, E = etat(t), pos = positions(t, E), leg = k.P.legendes && !vegetal;
+  c.direct(() => {
+    const x = c.ctx;
+    if (vegetal) celluleVegetale(x, E); else celluleAnimale(x, E);
+    if (E.env > 0) Peint.noyau(x, CX, CY, 62, E.env, { double: false, chromatine: E.chromatine > .05, nucleole: true });
+    fuseau(x, E, pos, vegetal);
+    const ac = rampe(t, 2.3, 1.2) * (1 - E.noyaux);
+    for (const p of pos) {
+      const L = entre(p.ch.L * 1.6, p.ch.L, E.cond);
+      if (p.deux) Peint.chromosome(x, p.x, p.y, L, p.a, p.ch.c, { epaisseur: entre(3, 10, E.cond), deux: true, ecart: entre(2, 6, E.cond), alpha: ac });
+      else chromatideV(x, p.x, p.y, p.ch.L, p.haut, p.ch.c, p.b, ac);
+    }
+    if (E.noyaux > 0 && E.sep <= .99) for (const s of [-1, 1]) Peint.noyau(x, CX, CY + s * (POLE - 34) + (vegetal ? 0 : s * 4), 34, E.noyaux * (1 - (E.sep > 0 ? 0 : 0)), { double: false, nucleole: E.noyaux > .7 });
+    if (E.sep > 0) for (const s of [-1, 1]) Peint.noyau(x, CX, CY + s * (vegetal ? 74 + 6 * E.sep : 78 + 14 * E.sep), 34, 1, { double: false });
+  });
+  c.texte(vegetal ? 'La mitose d’une cellule végétale (2n = 4)' : 'La mitose d’une cellule animale (2n = 4)', 14, 26, { couleur: 'cyan', taille: 19 });
+  // frise des phases
+  const PH = [['interphase', 0, 2], ['prophase', 2, 10.6], ['métaphase', 10.6, 13.6], ['anaphase', 13.6, 18.6], ['télophase', 18.6, 99]];
+  let xx = 430; for (const [nom, a, b] of PH) { const actif = t >= a && t < b && t > 0; c.texte(nom, xx, 50, { couleur: actif ? 'jaune' : 'tresfaible', taille: 13, duree: .1 }); xx += c.largeurTexte(nom, 13) + 12; }
+  // repères
+  c.repere('cellule', CX - 168, CY - 142, 336, 284, 'la cellule');
+  if (E.env > .2) { c.repere('noyau', CX - 62, CY - 62, 124, 124, 'le noyau'); c.repere('enveloppe', CX - 62, CY - 70, 124, 16, 'l’enveloppe nucléaire'); c.repere('nucleole', CX + 4, CY - 20, 32, 30, 'le nucléole'); }
+  if (t >= 2.4) c.repere('chromosomes', CX - 120, CY - 60, 240, 120, 'les chromosomes');
+  if (E.fuseau > .3 && E.noyaux < .8) { c.repere('fuseau', CX - 70, CY - 100, 140, 200, 'le fuseau achromatique'); if (vegetal) c.repere('calottes', CX - 46, CY - POLE - 16, 92, 40, 'une calotte polaire'); else c.repere('asters', CX - 24, CY - POLE - 24, 48, 48, 'un aster'); c.repere('pole_haut', CX - 30, CY - POLE - 30, 60, 40, 'le pôle du haut'); c.repere('pole_bas', CX - 30, CY + POLE - 10, 60, 40, 'le pôle du bas'); }
+  if (E.plaque > .8 && E.clivage < 1) { c.repere('plaque', CX - 130, CY - 14, 260, 28, 'la plaque équatoriale'); c.repere('centromere', CHR[0].me - 8, CY - 8, 16, 16, 'un centromère'); }
+  if (E.clivage > 0 && E.noyaux < .5) c.repere('chromatides', CX - 80, CY - POLE + 10, 160, 2 * POLE - 20, 'les chromatides qui migrent');
+  if (E.etr > .3 && !vegetal) c.repere('etranglement', CX + 60, CY - 20, 110, 40, 'l’étranglement équatorial');
+  if (E.etr > .3 && vegetal) c.repere('nouvelle_paroi', CX - 160, CY - 10, 320, 20, 'la nouvelle paroi');
+  if (vegetal) c.repere('paroi', 58, 66, 344, 12, 'la paroi');
+  if (E.noyaux > .5) c.repere('noyaux_fils', CX - 40, CY - POLE - 4, 80, 2 * POLE + 8, 'les deux noyaux fils');
+  // critères de la phase en cours, écrits à droite
+  const X0 = 440;
+  if (leg) { legendesSchema(c, k); return; }
+  if (t < 2) { if (k.ecrit(c, 'b_inter', .8)) { k.T(c, 'Interphase (fin de G2)', X0, 96, { couleur: 'jaune', taille: 17 }); k.T(c, 'chromatine dans le noyau ;', X0, 122, { couleur: 'blanc', taille: 14 }); k.T(c, 'ADN déjà répliqué (2q)', X0, 142, { couleur: 'blanc', taille: 14 }); } }
+  else if (t < 10.6) {
+    if (k.ecrit(c, 'b_pro', 2.0)) k.T(c, 'Prophase', X0, 96, { couleur: 'jaune', taille: 18 });
+    if (k.ecrit(c, 'p1', M.condensation - .8)) { k.T(c, '• la chromatine se condense :', X0, 126, { couleur: 'blanc', taille: 14 }); k.T(c, 'chromosomes à deux chromatides', X0 + 12, 146, { couleur: 'blanc', taille: 14 }); }
+    if (k.ecrit(c, 'p2', M.enveloppe_disparait - .8)) { k.T(c, '• l’enveloppe nucléaire et le', X0, 176, { couleur: 'blanc', taille: 14 }); k.T(c, 'nucléole disparaissent', X0 + 12, 196, { couleur: 'blanc', taille: 14 }); }
+    if (k.ecrit(c, 'p3', M.asters_fuseau - .8)) { k.T(c, '• le fuseau achromatique se forme', X0, 226, { couleur: 'blanc', taille: 14 }); k.T(c, vegetal ? 'entre deux calottes polaires' : 'entre deux asters', X0 + 12, 246, { couleur: 'blanc', taille: 14 }); }
+  } else if (t < 13.6) {
+    if (k.ecrit(c, 'b_meta', 10.6)) k.T(c, 'Métaphase', X0, 96, { couleur: 'jaune', taille: 18 });
+    if (k.ecrit(c, 'm1', M.plaque_equatoriale - .8)) { k.T(c, '• chromosomes très condensés,', X0, 126, { couleur: 'blanc', taille: 14 }); k.T(c, 'à deux chromatides', X0 + 12, 146, { couleur: 'blanc', taille: 14 }); k.T(c, '• alignés par leur centromère', X0, 176, { couleur: 'blanc', taille: 14 }); k.T(c, 'sur la plaque équatoriale', X0 + 12, 196, { couleur: 'blanc', taille: 14 }); }
+  } else if (t < 18.6) {
+    if (k.ecrit(c, 'b_ana', 13.6)) k.T(c, 'Anaphase', X0, 96, { couleur: 'jaune', taille: 18 });
+    if (k.ecrit(c, 'a1', M.clivage_centromere - .8)) k.T(c, '• clivage du centromère', X0, 126, { couleur: 'blanc', taille: 14 });
+    if (k.ecrit(c, 'a2', M.migration - .6)) { k.T(c, '• migration des chromatides', X0, 156, { couleur: 'blanc', taille: 14 }); k.T(c, 'vers les pôles opposés', X0 + 12, 176, { couleur: 'blanc', taille: 14 }); k.T(c, '• 4 chromatides à chaque pôle', X0, 206, { couleur: 'orange', taille: 14 }); }
+  } else {
+    if (k.ecrit(c, 'b_telo', 18.6)) k.T(c, 'Télophase', X0, 96, { couleur: 'jaune', taille: 18 });
+    if (k.ecrit(c, 't1', M.etranglement - .8)) { if (vegetal) { k.T(c, '• une nouvelle paroi se forme', X0, 126, { couleur: 'blanc', taille: 14 }); k.T(c, 'au milieu de la cellule', X0 + 12, 146, { couleur: 'blanc', taille: 14 }); } else { k.T(c, '• étranglement équatorial', X0, 126, { couleur: 'blanc', taille: 14 }); k.T(c, 'de la cellule', X0 + 12, 146, { couleur: 'blanc', taille: 14 }); } }
+    if (k.ecrit(c, 't2', M.deux_noyaux - .8)) { k.T(c, '• les chromosomes se décondensent,', X0, 176, { couleur: 'blanc', taille: 14 }); k.T(c, 'deux noyaux se reforment', X0 + 12, 196, { couleur: 'blanc', taille: 14 }); }
+    if (k.ecrit(c, 'fin', M.fin - .6)) { k.T(c, 'Deux cellules filles', X0, 240, { couleur: 'vert', taille: 16 }); k.T(c, 'génétiquement identiques', X0, 262, { couleur: 'vert', taille: 16 }); k.T(c, '(2n = 4 chacune)', X0, 284, { couleur: 'vert', taille: 15 }); }
+    if (vegetal && k.ecrit(c, 'comp', MV.comparaison - 1.2)) comparaison(c, k);
+  }
+  if (t >= 13.6 && t < 18.6) c.repere('criteres', X0 - 6, 80, 300, 140, 'les critères de la phase');
+  else c.repere('criteres', X0 - 6, 80, 300, 120, 'les critères de la phase');
+}
+function comparaison(c, k) {
+  const y = 350, xa = 440, xb = 590;
+  c.ligne(xa - 4, y - 18, 750, y - 18, { couleur: 'faible', largeur: 1.2 }); c.ligne(xb - 8, y - 36, xb - 8, y + 50, { couleur: 'faible', largeur: 1.2 });
+  k.T(c, 'cellule animale', xa, y - 24, { couleur: 'rose', taille: 14 }); k.T(c, 'cellule végétale', xb, y - 24, { couleur: 'vert', taille: 14 });
+  k.T(c, 'asters', xa, y, { couleur: 'blanc', taille: 14 }); k.T(c, 'calottes polaires', xb, y, { couleur: 'blanc', taille: 14 });
+  k.T(c, 'étranglement', xa, y + 22, { couleur: 'blanc', taille: 14 }); k.T(c, 'nouvelle paroi au milieu', xb, y + 22, { couleur: 'blanc', taille: 14 });
+  c.repere('tableau', xa - 6, y - 40, 316, 70, 'cellule animale / cellule végétale');
+}
+/** Le schéma de l’élève : anaphase d’une cellule animale (2n = 4), légendes reliées par des traits. */
+function legendesSchema(c, k) {
+  if (!k.ecrit(c, 'schema', M.schema_anaphase - .2)) return;
+  const L = (x1, y1, x2, y2, s, coul = 'blanc') => { c.ligne(x1, y1, x2 - 4, y2 - 5, { couleur: 'faible', largeur: 1.1 }); k.T(c, s, x2, y2, { couleur: coul, taille: 14 }); };
+  k.T(c, 'Anaphase d’une cellule animale (2n = 4)', 440, 86, { couleur: 'jaune', taille: 15 });
+  L(CX + 18, CY - POLE, 440, 120, 'aster');
+  L(CX + 13, CY - POLE + 28, 440, 156, 'fibres du fuseau');
+  L(CX + 88, CY - POLE + 52, 440, 192, 'chromatide (chromosome à une chromatide)');
+  L(CX + 6, CY - POLE - 8, 440, 228, 'pôle');
+  L(CX + 150, CY + 60, 440, 264, 'membrane plasmique');
+  L(CX + 110, CY + 20, 440, 300, 'cytoplasme');
+  k.T(c, '4 chromatides à chaque pôle', 440, 340, { couleur: 'orange', taille: 15 });
+}
+function voitMitose(k, vegetal) {
+  const t = k.t, E = etat(t), m = [vegetal ? 'Une cellule végétale peinte (paroi épaisse beige-vert, rectangulaire).' : 'Une cellule animale ronde peinte (cytoplasme rosé).', '2n = 4 : une paire de chromosomes longs (violets) et une paire de courts (bleus).'];
+  const ph = t < 2 ? 'interphase' : t < 10.6 ? 'prophase' : t < 13.6 ? 'métaphase' : t < 18.6 ? 'anaphase' : 'télophase';
+  m.push(`Phase en cours : ${ph} (surlignée en jaune dans la frise en haut à droite).`);
+  if (t < 2) m.push('Noyau en interphase : chromatine en fins filaments, nucléole ; écrit « Interphase (fin de G2) : ADN déjà répliqué (2q) ».');
+  if (t >= 2 && E.cond < 1) m.push('La chromatine se condense en quatre chromosomes à deux chromatides.');
+  if (E.cond >= 1 && E.plaque <= 0) m.push('Quatre chromosomes condensés à deux chromatides, dispersés.');
+  if (E.env < 1 && E.env > 0) m.push('L’enveloppe nucléaire et le nucléole s’effacent.');
+  if (E.env <= 0) m.push('Plus d’enveloppe nucléaire ni de nucléole.');
+  if (E.fuseau > 0 && E.noyaux < 1) m.push(vegetal ? 'Un fuseau achromatique (fibres grises) entre deux calottes polaires (zones claires) en haut et en bas.' : 'Un fuseau achromatique (fibres grises) entre deux asters (étoiles) en haut et en bas.');
+  if (E.plaque > 0 && E.clivage <= 0) m.push(E.plaque < 1 ? 'Les chromosomes rejoignent le milieu de la cellule.' : 'Métaphase : les quatre chromosomes, très condensés, sont alignés par leur centromère sur la plaque équatoriale (ligne horizontale au milieu).');
+  if (E.clivage > 0 && E.migr <= 0) m.push('Les centromères se coupent : les deux chromatides de chaque chromosome se séparent.');
+  if (E.migr > 0) m.push(E.migr < 1 ? 'Anaphase : les chromatides sœurs migrent vers les pôles OPPOSÉS, en V, centromère en avant : quatre chromatides vont vers chaque pôle.' : 'Quatre chromatides (chromosomes à une chromatide) sont arrivées à chaque pôle.');
+  if (E.etr > 0 && E.sep <= 0) m.push(vegetal ? 'Une nouvelle paroi se construit au milieu de la cellule.' : 'La cellule s’étrangle à l’équateur.');
+  if (E.noyaux > 0) m.push('Les chromosomes se décondensent et deux noyaux se reforment.');
+  if (E.sep > 0) m.push('Deux cellules filles séparées, chacune avec 2n = 4 chromosomes à une chromatide ; écrit « Deux cellules filles génétiquement identiques ».');
+  if (k.P.legendes && !vegetal && t >= M.schema_anaphase - .2) m.push('Schéma légendé : titre « Anaphase d’une cellule animale (2n = 4) », légendes aster, fibres du fuseau, chromatide (chromosome à une chromatide), pôle, membrane plasmique, cytoplasme, « 4 chromatides à chaque pôle ».');
+  if (vegetal && t >= MV.comparaison - 1.2) m.push('Tableau écrit : cellule animale / cellule végétale ; asters / calottes polaires ; étranglement / nouvelle paroi au milieu.');
+  return m;
+}
+
+/* ── Vue photo : apex de racine d’oignon (document reconstitué) ─────── */
+const PH = { cx: 268, cy: 226, r: 178, w: 46, h: 58 };
+const SPEC = { '3,2': 1, '5,1': 2, '4,3': 3, '2,4': 4, '6,4': 5 };   // (colonne, rangée) → numéro
+const NOMS = ['', '1 : interphase, car noyau rond', '2 : prophase, car chromosomes', '3 : métaphase, car chromosomes', '4 : anaphase, car deux lots de', '5 : télophase, car deux noyaux'];
+const SUITE = ['', 'avec un nucléole', 'condensés dans le noyau', 'alignés sur la plaque équatoriale', 'chromosomes vers les pôles opposés', 'et une paroi au milieu'];
+const MP = { champ: 1.6, cellule_1: 3.6, cellule_2: 5.6, cellule_3: 7.6, cellule_4: 9.6, cellule_5: 11.6, reponses: 13.6 };
+function celluleOignon(x, x0, y0, w, h, n) {
+  const cx = x0 + w / 2, cy = y0 + h / 2, tache = (px, py, rx, ry, a = .9) => { const g = x.createRadialGradient(px, py, 1, px, py, Math.max(rx, ry)); g.addColorStop(0, `rgba(110,20,80,${a})`); g.addColorStop(1, 'rgba(150,40,100,0)'); x.fillStyle = g; x.beginPath(); x.ellipse(px, py, rx, ry, 0, 0, TAU); x.fill(); };
+  const baton = (px, py, ang, L) => { x.save(); x.strokeStyle = 'rgba(105,15,75,.95)'; x.lineWidth = 2.4; x.lineCap = 'round'; x.beginPath(); x.moveTo(px - Math.cos(ang) * L / 2, py - Math.sin(ang) * L / 2); x.lineTo(px + Math.cos(ang) * L / 2, py + Math.sin(ang) * L / 2); x.stroke(); x.restore(); };
+  if (!n) { tache(cx, cy, 11, 12, .75); return; }
+  if (n === 1) { tache(cx, cy, 14, 15, .7); x.fillStyle = 'rgba(70,5,50,.95)'; x.beginPath(); x.arc(cx + 3, cy - 2, 3.6, 0, TAU); x.fill(); }
+  if (n === 2) { tache(cx, cy, 16, 17, .45); x.save(); x.strokeStyle = 'rgba(120,30,90,.5)'; x.lineWidth = 1; x.beginPath(); x.arc(cx, cy, 15, 0, TAU); x.stroke(); x.restore(); for (let i = 0; i < 8; i++) baton(cx + Math.cos(i * 2.1) * 7, cy + Math.sin(i * 1.7) * 8, i * .9, 10); }
+  if (n === 3) { for (let i = -3; i <= 3; i++) baton(cx + i * 4.5, cy + (i % 2) * 2, Math.PI / 2 + (i % 3) * .2, 10); }
+  if (n === 4) { for (const s of [-1, 1]) for (let i = -2; i <= 2; i++) baton(cx + i * 5, cy + s * (16 + Math.abs(i) * 1.5), Math.PI / 2 + i * .25 * s, 8); }
+  if (n === 5) { tache(cx, cy - 16, 11, 8, .8); tache(cx, cy + 16, 11, 8, .8); x.save(); x.strokeStyle = 'rgba(190,120,150,.8)'; x.lineWidth = 1.4; x.beginPath(); x.moveTo(x0 + 3, cy); x.lineTo(x0 + w - 3, cy); x.stroke(); x.restore(); }
+}
+function champOignon(x, a) {
+  x.save(); x.globalAlpha = a;
+  x.beginPath(); x.arc(PH.cx, PH.cy, PH.r, 0, TAU); x.save(); x.clip();
+  const g = x.createRadialGradient(PH.cx - 40, PH.cy - 50, 20, PH.cx, PH.cy, PH.r); g.addColorStop(0, '#fbe4ec'); g.addColorStop(1, '#e9b9c9');
+  x.fillStyle = g; x.fillRect(PH.cx - PH.r, PH.cy - PH.r, 2 * PH.r, 2 * PH.r);
+  x.filter = 'blur(.5px)';
+  for (let col = 0; col < 9; col++) for (let row = 0; row < 7; row++) {
+    const x0 = PH.cx - 4.5 * PH.w + col * PH.w + (row % 2) * 6, y0 = PH.cy - 3.5 * PH.h + row * PH.h;
+    x.strokeStyle = 'rgba(170,95,125,.75)'; x.lineWidth = 1.6; x.strokeRect(x0, y0, PH.w, PH.h);
+    celluleOignon(x, x0, y0, PH.w, PH.h, SPEC[`${col},${row}`]);
+  }
+  x.filter = 'none'; x.restore();
+  const v = x.createRadialGradient(PH.cx, PH.cy, PH.r * .7, PH.cx, PH.cy, PH.r); v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(20,10,20,.55)');
+  x.fillStyle = v; x.beginPath(); x.arc(PH.cx, PH.cy, PH.r, 0, TAU); x.fill();
+  x.strokeStyle = 'rgba(30,20,30,.9)'; x.lineWidth = 3; x.stroke();
+  x.restore();
+}
+function rectCellule(n) { for (const [k2, v] of Object.entries(SPEC)) if (v === n) { const [col, row] = k2.split(',').map(Number); return [PH.cx - 4.5 * PH.w + col * PH.w + (row % 2) * 6, PH.cy - 3.5 * PH.h + row * PH.h]; } }
+function dessinerPhoto(c, k) {
+  const t = k.t;
+  c.direct(() => champOignon(c.ctx, rampe(t, .2, .8)));
+  c.texte('Apex de racine d’oignon, ×600 (document reconstitué)', 14, 26, { couleur: 'cyan', taille: 17 });
+  c.repere('champ', PH.cx - PH.r, PH.cy - PH.r, 2 * PH.r, 2 * PH.r, 'le champ du microscope');
+  for (let n = 1; n <= 5; n++) {
+    const [x0, y0] = rectCellule(n);
+    c.repere('c' + n, x0, y0, PH.w, PH.h, 'la cellule ' + n);
+    if (k.ecrit(c, 'num' + n, .9)) { c.texte(String(n), x0 + PH.w + 4, y0 + 16, { couleur: 'jaune', taille: 16, gras: true, duree: .2 }); }
+    const tm = MP['cellule_' + n];
+    if (t >= tm - .6 && t < tm + 1.4) c.direct(() => { const x = c.ctx; x.save(); x.strokeStyle = 'rgba(250,204,21,.95)'; x.lineWidth = 3; x.beginPath(); x.ellipse(x0 + PH.w / 2, y0 + PH.h / 2, PH.w * .8, PH.h * .7, 0, 0, TAU); x.stroke(); x.restore(); });
+    if (k.P.reponses && k.ecrit(c, 'rep' + n, tm - .4)) {
+      const y = 70 + (n - 1) * 62;
+      k.T(c, NOMS[n], 470, y, { couleur: n === 3 ? 'jaune' : 'blanc', taille: 14 }); k.T(c, SUITE[n], 486, y + 20, { couleur: 'faible', taille: 13 });
+    }
+  }
+  if (k.P.reponses) c.repere('reponses', 464, 52, 290, 310, 'les réponses');
+}
+function voitPhoto(k) {
+  const t = k.t, m = ['Microphotographie peinte d’un apex de racine d’oignon (×600, document reconstitué) : cellules rectangulaires roses serrées, noyaux colorés en magenta, vignettage rond du microscope. Cinq cellules sont numérotées en jaune de 1 à 5.'];
+  for (let n = 1; n <= 5; n++) { const tm = MP['cellule_' + n]; if (t >= tm - .6 && t < tm + 1.4) m.push(`La cellule ${n} est entourée en jaune.`); }
+  m.push('Aspect : 1 noyau rond avec un nucléole ; 2 filaments condensés dans un noyau encore visible ; 3 une bande de chromosomes au milieu ; 4 deux groupes de chromosomes vers les pôles ; 5 deux noyaux et une paroi au milieu.');
+  if (k.P.reponses) { const n = [1, 2, 3, 4, 5].filter(i => t >= MP['cellule_' + i] - .4).length; if (n) m.push(`Réponses écrites à droite (${n} sur 5) : 1 interphase, 2 prophase, 3 métaphase, 4 anaphase, 5 télophase, chacune avec son « car ».`); }
+  else m.push('Les réponses ne sont pas encore écrites.');
+  return m;
+}
+
+const sansLeg = {}; for (const n of Object.keys(M)) if (n !== 'schema_anaphase') sansLeg[n] = { legendes: false };
+window.Etapes.lancer({
+  id: 'genetique_mitose', titre: 'Les phases de la mitose', graine: 29,
+  parametres: {
+    legendes: { defaut: false, schema: 'true | false (vue animale : légendes du schéma de l’anaphase)', lire: v => v === true || v === 'true' },
+    reponses: { defaut: false, schema: 'true | false (vue photo : écrire le nom et le critère de chaque cellule)', lire: v => v === true || v === 'true' },
+    type: { defaut: null, schema: '\'animale\' | \'vegetale\' (change de vue)', lire: v => (v === 'animale' || v === 'vegetale' ? v : undefined) },
+  },
+  apresReglage: (k, cles) => { if (k.P.type) { if (k.S.vue !== k.P.type && k.S.vue !== 'photo') { k.S.vue = k.P.type; k.S.vu = {}; k.S.t = 0; } k.P.type = null; } },
+  vues: {
+    animale: { titre: 'La mitose d’une cellule animale', fin: 26.2, moments: M, reglages: { ...sansLeg, schema_anaphase: { legendes: true } }, dessiner: (c, k) => dessinerMitose(c, k, false), voit: k => voitMitose(k, false),
+      motifs: { debut: 'interphase, fin de G2 : le noyau et sa chromatine', condensation: 'prophase : la chromatine se condense en chromosomes à deux chromatides', enveloppe_disparait: 'prophase : l’enveloppe nucléaire et le nucléole disparaissent', asters_fuseau: 'prophase : le fuseau achromatique se forme entre deux asters', plaque_equatoriale: 'métaphase : chromosomes alignés sur la plaque équatoriale', clivage_centromere: 'anaphase : clivage du centromère', migration: 'anaphase : les chromatides migrent vers les pôles opposés', etranglement: 'télophase : étranglement équatorial', deux_noyaux: 'télophase : deux noyaux se reforment', fin: 'deux cellules filles génétiquement identiques', schema_anaphase: 'le schéma de l’anaphase (2n = 4), légendé' },
+      conclusion: 'Une cellule mère, deux cellules filles génétiquement identiques (2n = 4).',
+      texte: 'Mitose d’une cellule animale 2n = 4 : prophase (condensation, disparition de l’enveloppe et du nucléole, fuseau entre deux asters), métaphase (plaque équatoriale), anaphase (clivage du centromère, chromatides vers les pôles opposés, 4 à chaque pôle), télophase (étranglement, deux noyaux).',
+      explication: [{ repere: 'chromosomes', texte: 'En prophase, la chromatine se condense en chromosomes à deux chromatides.' }, { repere: 'plaque', texte: 'En métaphase, ils s’alignent sur la plaque équatoriale.' }, { repere: 'chromatides', texte: 'En anaphase, les chromatides sœurs partent vers les pôles opposés.' }, { repere: 'etranglement', texte: 'En télophase, la cellule s’étrangle : deux cellules filles.' }] },
+    vegetale: { titre: 'La mitose d’une cellule végétale', fin: 28, moments: MV, dessiner: (c, k) => dessinerMitose(c, k, true), voit: k => voitMitose(k, true),
+      motifs: { debut: 'interphase, fin de G2', condensation: 'prophase : condensation', enveloppe_disparait: 'prophase : l’enveloppe et le nucléole disparaissent', asters_fuseau: 'prophase : fuseau entre deux calottes polaires, sans asters', plaque_equatoriale: 'métaphase : plaque équatoriale', clivage_centromere: 'anaphase : clivage du centromère', migration: 'anaphase : migration vers les pôles opposés', etranglement: 'télophase : une nouvelle paroi se forme au milieu', deux_noyaux: 'télophase : deux noyaux', fin: 'deux cellules filles', comparaison: 'cellule animale / cellule végétale' },
+      conclusion: 'Cellule végétale : calottes polaires au lieu d’asters, nouvelle paroi au lieu d’étranglement.',
+      texte: 'Mitose d’une cellule végétale : mêmes phases ; pas d’asters mais des calottes polaires ; pas d’étranglement mais une nouvelle paroi au milieu.',
+      explication: [{ repere: 'calottes', texte: 'Pas d’asters : des calottes polaires.' }, { repere: 'nouvelle_paroi', texte: 'Pas d’étranglement : une nouvelle paroi se construit au milieu.' }, { repere: 'tableau', texte: 'La comparaison des deux cellules.' }] },
+    photo: { titre: 'Reconnaître les phases sur une photo', fin: 14.4, moments: MP, reglages: { champ: { reponses: false }, reponses: { reponses: true } }, dessiner: dessinerPhoto, voit: voitPhoto,
+      motifs: { champ: 'le champ du microscope : apex de racine d’oignon', cellule_1: 'la cellule 1', cellule_2: 'la cellule 2', cellule_3: 'la cellule 3', cellule_4: 'la cellule 4', cellule_5: 'la cellule 5', reponses: 'les cinq réponses écrites, chacune avec son « car »' },
+      conclusion: 'Nom de la phase, « car », puis le critère vu sur la photo.',
+      surReglage: (k, cles, api) => { if (cles.includes('reponses')) api.playUntil({ moment: 'reponses' }); },
+      texte: 'Microphotographie (document reconstitué) d’apex de racine d’oignon, cinq cellules : 1 interphase, 2 prophase, 3 métaphase, 4 anaphase, 5 télophase.',
+      explication: [{ repere: 'c3', texte: 'Cellule 3 : chromosomes alignés au milieu, c’est la métaphase.' }, { repere: 'c4', texte: 'Cellule 4 : deux lots vers les pôles, c’est l’anaphase.' }, { repere: 'c5', texte: 'Cellule 5 : deux noyaux et une paroi, c’est la télophase.' }] },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

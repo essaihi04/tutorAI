@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Carte du chapitre — transformations lentes et rapides</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="tlr.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Carte du chapitre dessinée à la craie : « Transformations lentes et rapides » au centre, les branches autour (couple oxydant/réducteur, demi-équation, équation bilan, transformation rapide, transformation lente, température, concentration, catalyseur, trempe), un encadré sur les sujets du national et la suite du programme"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset play_until">Redessiner</button>
+    <button class="craie-btn secondaire" id="imprimer" title="Imprimer ou enregistrer en PDF">🖨️ Imprimer / PDF</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script src="/media/simulations/shared/tableau/imprimer.js"></script>
+<script>
+/*
+ * La carte du chapitre « Transformations lentes et transformations rapides » (phys_ch9_transformations_lentes_rapides), ouverture
+ * et fin du cours ; même forme et même protocole que physics/circuit-rlc-tableau/carte.html (contrat
+ * transformations_lentes_rapides_contrat_simulations.md, § 7). Au centre « Transformations lentes et rapides » (moment `centre` :
+ * deux petits béchers peints, l’un violet qui se décolore aussitôt, l’autre qui brunit lentement), puis les branches dessinées l’une
+ * après l’autre au rythme de la voix (play_until {moment: <branche>}) : couple, demi_equation, equation, rapide, lente, temperature,
+ * concentration, catalyseur, trempe, national, suite ; puis `complete` : toutes les branches entourées une à une (jaune = surlignage) ;
+ * `fin` = la carte complète. Une branche sautée s’écrit d’un coup ; celle qu’on dit s’écrit à cet instant.
+ * Indices et charges rendus (MnO₄⁻, H₂O₂ : notation du kit + exposants.js), flèches → et ⇌ dessinées au trait.
+ * L’élève touche une branche : sa phrase s’écrit dans la bulle. Le lecteur donne le bilan de l’élève
+ * (set_parameters {lacunes, acquis_ids}, compétences C1 à C7) : branches à reprendre entourées en rouge (à revoir : orange),
+ * acquises cochées.
+ */
+const { bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+
+/* Formules chimiques à la craie : indices (₄) et charges (²⁺, ⁻) en notation du kit (« O_{4} », « ^{2+} », écrits plus petits
+ * par le kit et exposants.js : la police du tableau n’a ni « ₄ » ni « ⁺ ») ; les flèches « → » et « ⇌ » sont DESSINÉES au trait. */
+const IND = { '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9' };
+const EXPO = { '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9', '⁺': '+', '⁻': '−' };
+const chimie = s => String(s)
+  .replace(/([A-Za-z])([₀-₉]+)/g, (m, l, g) => l + '_{' + [...g].map(ch => IND[ch]).join('') + '}')
+  .replace(/[₀-₉]+/g, g => [...g].map(ch => IND[ch]).join(''))
+  .replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻]+/g, g => '^{' + [...g].map(ch => EXPO[ch]).join('') + '}');
+const FLECHE = /(⇌|→)/;
+const longFleche = taille => taille * 1.5, marge = taille => taille * .32;
+/** Largeur d'un morceau de texte (indices et charges plus petits, comme le kit les écrit). */
+function largeurMorceau(c, t, taille) {
+  return window.Tableau.Craie.segments(chimie(t)).reduce((w, g) => w + c.largeurTexte(g.t, g.sub || g.sup ? taille * .62 : taille), 0);
+}
+/** Largeur d'une ligne qui peut contenir des flèches dessinées. */
+function largeur(c, s, taille) {
+  return String(s).split(FLECHE).reduce((w, p, i) => w + (i % 2 ? longFleche(taille) + 2 * marge(taille) : p.trim() ? largeurMorceau(c, p.trim(), taille) : 0), 0);
+}
+/** Flèche de réaction (→) ou double flèche des demi-équations (⇌ : deux demi-flèches), au trait. */
+function flecheDessinee(c, x0, y, taille, type, o) {
+  const x1 = x0 + longFleche(taille), yc = y - taille * .3, t = Math.max(4, taille * .32), st = { couleur: o.couleur || 'blanc', largeur: Math.max(1.1, taille * .1), alpha: o.alpha, duree: .18 };
+  if (type === '→') {
+    c.trait([[x0, yc], [x1, yc]], st);
+    c.trait([[x1 - t, yc - t * .6], [x1, yc], [x1 - t, yc + t * .6]], { ...st, duree: .08 });
+  } else {
+    const e = taille * .14;
+    c.trait([[x0, yc - e], [x1, yc - e], [x1 - t, yc - e - t * .6]], st);
+    c.trait([[x1, yc + e], [x0, yc + e], [x0 + t, yc + e + t * .6]], st);
+  }
+}
+/** Écrit une ligne (formule ou phrase) : morceaux de craie et flèches dessinées. o : couleur, taille, align, max, alpha, duree. */
+function ecrire(c, s, x, y, o = {}) {
+  let taille = o.taille ?? 18;
+  const total = largeur(c, s, taille);
+  if (o.max && total > o.max) taille = Math.max(9, taille * o.max / total);
+  if (c.echelle && c.tailleMin) taille = Math.max(taille, c.tailleMin / c.echelle);   // même plancher que le kit : morceaux et flèches restent alignés
+  const L = largeur(c, s, taille);
+  let px = o.align === 'center' ? x - L / 2 : o.align === 'right' ? x - L : x;
+  String(s).split(FLECHE).forEach((p, i) => {
+    if (i % 2) { px += marge(taille); flecheDessinee(c, px, y, taille, p, o); px += longFleche(taille) + marge(taille); return; }
+    const t = p.trim(); if (!t) return;
+    c.texte(chimie(t), px, y, { couleur: o.couleur, taille, alpha: o.alpha, gras: o.gras, duree: o.duree });
+    px += largeurMorceau(c, t, taille);
+  });
+  return L;
+}
+
+const CENTRE = { x: 380, y: 210, w: 236, h: 100, comps: [],
+  phrase: 'Transformations lentes et rapides : une transformation d’oxydoréduction (un oxydant capte des électrons, un réducteur en cède) peut être rapide ou lente ; la température, la concentration et un catalyseur changent sa vitesse.' };
+// Cinq en haut, une à droite, quatre en bas, une à gauche (le cadre 760 × 420) : la carte se lit dans le sens des aiguilles d’une montre.
+const HAUT_Y = 60, BAS_Y = 352, W = 140, H = 66;
+const NOEUDS = [
+  { id: 'couple', x: 78, y: HAUT_Y, w: W, h: H, couleur: 'rouge', comps: ['C1'], titre: 'Couple Ox/Red',
+    lignes: ['Ox + n e⁻ ⇌ Red', 'Ox capte, Red cède'],
+    phrase: 'Le couple oxydant/réducteur : Ox + n e⁻ ⇌ Red ; l’oxydant capte des électrons (réduction), le réducteur en cède (oxydation).' },
+  { id: 'demi_equation', x: 229, y: HAUT_Y, w: W, h: H, couleur: 'violet', comps: ['C2'], titre: 'Demi-équation',
+    lignes: ['éléments, O, H, charges', 'avec H₂O, H⁺, e⁻'],
+    phrase: 'La demi-équation en quatre gestes : les éléments, O avec H₂O, H avec H⁺, les charges avec e⁻ ; par exemple MnO₄⁻ + 8H⁺ + 5e⁻ ⇌ Mn²⁺ + 4H₂O.' },
+  { id: 'equation', x: 380, y: HAUT_Y, w: W, h: H, couleur: 'violet', comps: ['C3'], titre: 'Équation bilan',
+    lignes: ['même nombre d’e⁻,', 'on additionne'],
+    phrase: 'L’équation bilan : même nombre d’électrons dans les deux demi-équations, on les additionne ; aucun électron dans le bilan.' },
+  { id: 'rapide', x: 531, y: HAUT_Y, w: W, h: H, couleur: 'cyan', comps: ['C4'], titre: 'Rapide',
+    lignes: ['achevée aussitôt', 'MnO₄⁻ + Fe²⁺'],
+    phrase: 'Une transformation rapide est achevée dès que les réactifs se rencontrent : on ne peut pas suivre son évolution (MnO₄⁻ avec Fe²⁺).' },
+  { id: 'lente', x: 682, y: HAUT_Y, w: W, h: H, couleur: 'cyan', comps: ['C4'], titre: 'Lente',
+    lignes: ['secondes → heures', 'H₂O₂ + I⁻ brunit'],
+    phrase: 'Une transformation lente dure de quelques secondes à plusieurs minutes ou heures (H₂O₂ avec I⁻ : le mélange brunit peu à peu) ; le classement dépend des moyens d’observation.' },
+  { id: 'temperature', x: 682, y: 210, w: W, h: H, couleur: 'rose', comps: ['C5'], titre: 'Température',
+    lignes: ['plus chaud :', 'plus rapide'],
+    phrase: 'La température est un facteur cinétique : plus elle est élevée, plus la transformation est rapide ; l’état final ne change pas.' },
+  { id: 'concentration', x: 682, y: BAS_Y, w: W, h: H, couleur: 'bleu', comps: ['C6'], titre: 'Concentration',
+    lignes: ['plus concentré :', 'plus rapide'],
+    phrase: 'La concentration initiale des réactifs : plus elle est grande, plus la transformation est rapide ; si on change le réactif limitant, l’état final change.' },
+  { id: 'catalyseur', x: 531, y: BAS_Y, w: W, h: H, couleur: 'vert', comps: ['C7'], titre: 'Catalyseur',
+    lignes: ['accélère, absent de', 'l’équation ; même final'],
+    phrase: 'Un catalyseur accélère la transformation sans figurer dans l’équation et sans changer l’état final.' },
+  { id: 'trempe', x: 380, y: BAS_Y, w: W, h: H, couleur: 'bleu', comps: ['C7'], titre: 'Trempe',
+    lignes: ['eau glacée + dilution', 'bloque avant le dosage'],
+    phrase: 'La trempe : refroidir brusquement (eau glacée) et diluer pour bloquer la transformation avant un dosage.' },
+  { id: 'national', x: 229, y: BAS_Y, w: W, h: H, couleur: 'blanc', comps: [], titre: 'Au national', encadre: true,
+    lignes: ['facteurs : 10 sessions', 'sur 20 ; catalyseur 5 fois'],
+    phrase: 'Au national : les facteurs cinétiques tombent dans 10 sessions sur 20, le catalyseur 5 fois ; on choisit la courbe la plus rapide, pas le palier le plus haut.' },
+  { id: 'suite', x: 78, y: 210, w: W, h: H, couleur: 'faible', comps: [], titre: 'La suite', encadre: true,
+    lignes: ['chapitre suivant :', 'suivre l’avancement x(t)'],
+    phrase: 'Chapitre suivant : suivre l’avancement x(t) d’une transformation au cours du temps.' },
+];
+const ANNEAUX = { non_acquis: ['rouge', 'à reprendre'], partiel: ['orange', 'à revoir'] };
+const AVANT = -1e9;   // instant d'un élément déjà dit : écrit d'un coup
+
+// def : instant où le centre se peint (null = pas encore dit) ; n branches dessinées ; apparu[i] leur instant.
+// entoure : instant où les branches commencent à être entourées une à une (moment `complete`), null sinon.
+const S = { def: null, n: 0, cible: 0, running: false, lacunes: null, acquis: null, apparu: [], choisi: null, entoure: null };
+const DUREE_BRANCHE = 2.6;   // s par branche quand la carte se dessine seule
+
+function statut(comps) {
+  if (!S.lacunes || !comps.length) return null;
+  const lac = S.lacunes.filter(l => comps.includes(l.id));
+  if (lac.some(l => l.statut === 'non_acquis')) return 'non_acquis';
+  if (lac.length) return 'partiel';
+  return (S.acquis || []).some(a => comps.includes(a)) ? 'acquis' : null;
+}
+/* Anneau rouge/orange ou coche verte autour d'un cadre (état de l'élève). */
+function etat(c, comps, x, y, w, h) {
+  const st = statut(comps);
+  c.direct(() => {
+    if (st && ANNEAUX[st]) {
+      const [coul, etiq] = ANNEAUX[st];
+      c.rect(x - 5, y - 5, w + 10, h + 10, { couleur: coul, arrondi: 16, largeur: 2, pointille: [6, 6] });
+      c.texte(etiq, x + w - 4, y - 8, { couleur: coul, taille: 12, align: 'right' });
+    } else if (st === 'acquis') c.texte('✓', x + w - 14, y + 16, { couleur: 'vert', taille: 18 });
+  });
+}
+
+function branche(c, n) {
+  const x = n.x - n.w / 2, y = n.y - n.h / 2;
+  const dx = n.x - CENTRE.x, dy = n.y - CENTRE.y, L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L;
+  // du bord du centre au bord de la branche, avec une légère courbure
+  const d0 = Math.min(CENTRE.w / 2 / Math.max(.2, Math.abs(ux)), CENTRE.h / 2 / Math.max(.2, Math.abs(uy)));
+  const d1 = Math.min(n.w / 2 / Math.max(.2, Math.abs(ux)), n.h / 2 / Math.max(.2, Math.abs(uy)));
+  const a = [CENTRE.x + ux * d0, CENTRE.y + uy * d0], b = [n.x - ux * d1, n.y - uy * d1];
+  const m = [(a[0] + b[0]) / 2 - uy * 12, (a[1] + b[1]) / 2 + ux * 12];
+  c.courbe(u => [(1 - u) * (1 - u) * a[0] + 2 * (1 - u) * u * m[0] + u * u * b[0], (1 - u) * (1 - u) * a[1] + 2 * (1 - u) * u * m[1] + u * u * b[1]], 24, { couleur: 'faible', largeur: 2, pointille: n.encadre ? [6, 6] : undefined });
+  c.rect(x, y, n.w, n.h, { couleur: n.couleur, arrondi: n.encadre ? 4 : 14, largeur: n.encadre ? 1.6 : 2.4, pointille: n.encadre ? [6, 5] : undefined });
+  c.texte(n.titre, n.x, y + 21, { couleur: n.couleur, taille: 17, align: 'center', max: n.w - 16, duree: .8 });
+  n.lignes.forEach((l, k) => ecrire(c, l, n.x, y + 42 + k * 18, { couleur: 'blanc', taille: 14, align: 'center', max: n.w - 14, alpha: .92, duree: .6 }));
+  c.repere(n.id, x - 5, y - 5, n.w + 10, n.h + 10, n.titre);
+  etat(c, n.comps, x, y, n.w, n.h);
+  if (S.choisi === n.id) c.direct(() => c.rect(x - 3, y - 3, n.w + 6, n.h + 6, { couleur: 'blanc', arrondi: 15, largeur: 1.2, alpha: .6 }));
+}
+
+function dessiner(c) {
+  const x = CENTRE.x - CENTRE.w / 2, y = CENTRE.y - CENTRE.h / 2;
+  if (S.def === AVANT) c.cur = AVANT;   // déjà dit (saut ou retour en arrière) : le centre est écrit d'un coup
+  c.rect(x, y, CENTRE.w, CENTRE.h, { couleur: 'blanc', arrondi: 18, largeur: 3 });
+  c.texte('Transformations', CENTRE.x, y + 28, { couleur: 'blanc', taille: 24, align: 'center', gras: true });
+  c.texte('lentes et rapides', CENTRE.x, y + 50, { couleur: 'cyan', taille: 19, align: 'center' });
+  c.repere('centre', x, y, CENTRE.w, CENTRE.h, 'le centre : transformations lentes et rapides');
+  const apres = c.cur;   // fin du titre du centre
+  if (S.def != null) {
+    c.depuis(S.def);
+    // deux petits béchers peints : à gauche le permanganate violet décoloré aussitôt (rapide), à droite le diiode qui brunit (lente)
+    peindre(c, ctx => { becherPeint(ctx, x + 22, y + 60, 22, 30, 'rgba(214,170,232,.34)', 'rgba(170,110,200,.26)'); becherPeint(ctx, x + CENTRE.w - 44, y + 60, 22, 30, '#c7862a', '#8a4b12'); });
+    c.texte('rapide', x + 52, y + 84, { couleur: 'faible', taille: 13, duree: .5 });
+    c.texte('lente', x + CENTRE.w - 52, y + 84, { couleur: 'faible', taille: 13, align: 'right', duree: .5 });
+    if (S.choisi === 'centre') c.direct(() => c.rect(x - 3, y - 3, CENTRE.w + 6, CENTRE.h + 6, { couleur: 'blanc', arrondi: 19, largeur: 1.2, alpha: .6 }));
+  }
+  // chaque branche a sa ligne de temps : elle s'écrit dès que la voix la dit, sans attendre la précédente
+  for (let i = 0; i < S.n; i++) { c.cur = S.apparu[i] === AVANT ? AVANT : Math.max(apres, S.apparu[i]); branche(c, NOEUDS[i]); }
+  // complete : toutes les branches entourées une à une (jaune = surlignage)
+  if (S.entoure != null) {
+    c.cur = S.entoure === AVANT ? AVANT : Math.max(apres, S.entoure);
+    for (const n of NOEUDS) c.rect(n.x - n.w / 2 - 7, n.y - n.h / 2 - 7, n.w + 14, n.h + 14, { couleur: 'jaune', arrondi: 17, largeur: 1.8, alpha: .8, duree: .35 });
+  }
+  if (S.lacunes) c.direct(() => c.texte('✓ acquis · ⟳ à revoir · ✗ à reprendre', 744, 140, { couleur: 'faible', taille: 12, align: 'right' }));
+}
+/* Le peint (béchers) apparaît quand l’écriture arrive à lui. */
+const peindre = (c, fn) => { if (c.t >= c.cur) c.direct(() => { c.ctx.save(); try { fn(c.ctx); } finally { c.ctx.restore(); } }); };
+/** Petit bécher de verre peint avec sa solution (dégradé haut → bas, ménisque, reflet). (x, y) = haut gauche. */
+function becherPeint(ctx, x, y, w, h, haut, bas) {
+  const n = y + h * .35;   // niveau du liquide
+  const g = ctx.createLinearGradient(0, n, 0, y + h);
+  g.addColorStop(0, haut); g.addColorStop(1, bas);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(x + 1.5, n); ctx.quadraticCurveTo(x + w / 2, n + 2.2, x + w - 1.5, n); ctx.lineTo(x + w - 1.5, y + h - 3); ctx.quadraticCurveTo(x + w - 1.5, y + h - 1, x + w - 4, y + h - 1); ctx.lineTo(x + 4, y + h - 1); ctx.quadraticCurveTo(x + 1.5, y + h - 1, x + 1.5, y + h - 3); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(226,240,255,.75)'; ctx.lineWidth = 1.4; ctx.beginPath();
+  ctx.moveTo(x - 2, y); ctx.lineTo(x, y + 1.5); ctx.lineTo(x, y + h - 3); ctx.quadraticCurveTo(x, y + h, x + 3, y + h); ctx.lineTo(x + w - 3, y + h); ctx.quadraticCurveTo(x + w, y + h, x + w, y + h - 3); ctx.lineTo(x + w, y); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.22)'; ctx.fillRect(x + 3, y + 4, 2, h - 9);   // reflet du verre
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(73); dessiner(c); return c.fin(); });
+const maintenant = () => (performance.now() - scene.ouvert) / 1000;
+let horloge = 0;
+scene.avancer = dt => {
+  if (!S.running) return false;
+  horloge += dt;
+  if (S.n < S.cible && horloge >= 0) {
+    // la branche suivante apparaît quand la précédente a fini de s'écrire
+    S.n += 1; S.apparu[S.n - 1] = maintenant(); horloge = -DUREE_BRANCHE;
+    bulle($('feedback'), NOEUDS[S.n - 1].titre + (S.n >= NOEUDS.length ? ' — la carte est complète.' : ''));
+    pont.noter('branche', { n: S.n, moment: NOEUDS[S.n - 1].id }); pont.emettre();
+    if (S.n >= S.cible) S.running = false;
+  }
+  return true;
+};
+function moments() { const m = { centre: 0 }; NOEUDS.forEach((n, i) => { m[n.id] = i + 1; }); m.complete = NOEUDS.length + 1; m.fin = NOEUDS.length + 2; return m; }
+/* Dessine la carte jusqu'à la branche `cible` (0 = le centre). `pasAPas` : la carte se dessine seule,
+ * une branche après l'autre (bouton) ; sinon (la voix) les branches sautées s'écrivent d'un coup et la dernière à cet instant. */
+function montrer(cible, par, pasAPas) {
+  const entourer = cible > NOEUDS.length ? cible : 0;   // complete (NOEUDS.length + 1) ou fin (+ 2)
+  cible = Math.max(0, Math.min(NOEUDS.length, cible));
+  if (cible < S.n || (!entourer && S.entoure != null)) { S.n = 0; S.apparu = []; S.def = null; S.entoure = null; scene.reecrire(); }   // retour en arrière : on redessine jusque-là
+  if (S.def == null) S.def = pasAPas || cible === 0 ? maintenant() : AVANT;
+  if (!pasAPas && cible > S.n) {
+    for (let i = S.n; i < cible - 1; i++) S.apparu[i] = AVANT;
+    S.apparu[cible - 1] = maintenant(); S.n = cible;
+    bulle($('feedback'), NOEUDS[cible - 1].titre + (cible >= NOEUDS.length ? ' — la carte est complète.' : ''));
+  } else if (cible === 0) bulle($('feedback'), 'Au centre : les transformations lentes et rapides.');
+  if (entourer) {
+    // complete : les branches s'entourent une à une maintenant ; fin : tout d'un coup
+    if (S.entoure == null || entourer === NOEUDS.length + 2) S.entoure = entourer === NOEUDS.length + 2 ? AVANT : maintenant();
+    bulle($('feedback'), 'La carte est complète : toutes les branches du chapitre.');
+  }
+  S.cible = cible; S.running = S.n < cible; horloge = pasAPas ? -1.5 : 0; scene.sale = true;
+  pont.noter(par || 'play_until', { moment: entourer ? (entourer === NOEUDS.length + 1 ? 'complete' : 'fin') : NOEUDS[cible - 1]?.id || 'centre' }); pont.emettre();
+}
+function playUntil(p) { const M = moments(); const n = p.moment in M ? M[p.moment] : +p.time_s; if (Number.isFinite(n)) montrer(n, 'play_until'); }
+function start() { S.n = 0; S.apparu = []; S.def = null; S.choisi = null; S.entoure = null; scene.reecrire(); montrer(NOEUDS.length, 'start', true); bulle($('feedback'), 'La carte se dessine…'); }
+function setParameters(p) {
+  if (Array.isArray(p.lacunes)) S.lacunes = p.lacunes.map(l => ({ id: String(l.id || ''), label: String(l.label || ''), statut: String(l.statut || 'non_acquis') }));
+  if (Array.isArray(p.acquis_ids)) S.acquis = p.acquis_ids.map(String);
+  scene.sale = true; pont.noter('set_parameters', { lacunes: (S.lacunes || []).length }); pont.emettre();
+}
+function ceQuiSeVoit() {
+  const vues = NOEUDS.slice(0, S.n).map(n => n.titre);
+  const aReprendre = NOEUDS.slice(0, S.n).filter(n => statut(n.comps) && statut(n.comps) !== 'acquis').map(n => n.titre);
+  const etatEleve = S.lacunes ? ` Branches à reprendre : ${aReprendre.join(', ') || 'aucune'}.` : '';
+  const detail = NOEUDS.slice(0, S.n).map(n => n.phrase).join(' ');
+  return `Carte du chapitre : « Transformations lentes et rapides » au centre${S.def != null ? ' (deux petits béchers : un violet décoloré aussitôt, « rapide », un brun, « lente »)' : ''}, ${S.n}/${NOEUDS.length} élément(s) dessiné(s)${vues.length ? ' (' + vues.join(', ') + ')' : ''}${S.running ? ', la carte se dessine' : ''}${S.entoure != null ? ' ; carte complète : toutes les branches entourées une à une en jaune' : ''}.${detail ? ' ' + detail : ''}${etatEleve}${S.choisi ? ` L'élève a touché « ${S.choisi === 'centre' ? 'le centre' : NOEUDS.find(n => n.id === S.choisi).titre} ».` : ''}`;
+}
+$('run').onclick = start;
+// Imprimer / PDF : la carte complète, sur fond blanc (shared/tableau/imprimer.js).
+$('imprimer').onclick = () => {
+  const avant = { n: S.n, cible: S.cible, running: S.running, apparu: S.apparu.slice(), def: S.def, choisi: S.choisi, entoure: S.entoure };
+  window.Tableau.imprimer({ titre: 'Carte du chapitre — transformations lentes et rapides', scene,
+    pages: [{ nom: 'la carte complète', preparer: () => { S.n = NOEUDS.length; S.running = false; S.def = AVANT; S.apparu = NOEUDS.map(() => AVANT); S.choisi = null; S.entoure = null; } }],
+    restaurer: () => { Object.assign(S, avant); } });
+  pont.noter('imprimer', { pages: 1 }); pont.emettre();
+};
+canvas.addEventListener('pointerdown', e => {
+  const r = canvas.getBoundingClientRect(), [x, y] = scene.local(e.clientX - r.left, e.clientY - r.top);
+  const n = NOEUDS.slice(0, S.n).find(n => Math.abs(x - n.x) <= n.w / 2 + 6 && Math.abs(y - n.y) <= n.h / 2 + 6);
+  if (n) { S.choisi = n.id; bulle($('feedback'), n.phrase); }
+  else if (Math.abs(x - CENTRE.x) <= CENTRE.w / 2 && Math.abs(y - CENTRE.y) <= CENTRE.h / 2) { S.choisi = 'centre'; bulle($('feedback'), CENTRE.phrase); }
+  else return;
+  scene.sale = true; pont.noter('touche', { moment: S.choisi }); pont.emettre();
+});
+
+window.Tableau.explication({ carte: [{ repere: 'centre', texte: CENTRE.phrase }, ...NOEUDS.map(n => ({ repere: n.id, texte: n.phrase }))] });
+const commandes = ['start', 'reset', 'play_until', 'set_parameters'];
+const config = { id: 'transformations_lentes_rapides_carte', version: '1.0', title: 'Carte du chapitre — transformations lentes et rapides', variants: [{ id: 'carte', label: 'carte' }], commands: commandes,
+  command_schema: { play_until: { moment: Object.keys(moments()).join(' | ') + ' (centre = le centre ; sinon dessine la carte jusqu’à cet élément ; complete = toutes les branches, entourées une à une ; fin = la carte complète d’un coup)' },
+    set_parameters: { lacunes: '[{id: C1..C7, statut: non_acquis|partiel}] (bilan de l’élève)', acquis_ids: '[C1, ..] compétences acquises' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Carte du chapitre « Transformations lentes et transformations rapides » : au centre « Transformations lentes et rapides », puis les branches : le couple Ox/Red (Ox + n e⁻ ⇌ Red) ; la demi-équation (éléments, O avec H₂O, H avec H⁺, charges avec e⁻) ; l’équation bilan (même nombre d’électrons, on additionne) ; rapide (achevée aussitôt) ; lente (secondes → heures) ; température ; concentration ; catalyseur ; trempe ; au national : facteurs 10 sessions sur 20, catalyseur 5 fois ; la suite : chapitre suivant, suivre l’avancement x(t).',
+  etat: () => ({ simulation_status: S.running ? 'running' : 'paused', ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'carte', time_s: S.n, parameters: { centre: S.def != null, branches: S.n, complete: S.entoure != null, lacunes: S.lacunes ? S.lacunes.length : null }, moments: moments() }),
+  progression: () => (S.entoure != null ? 1 : S.n / NOEUDS.length),
+  executer: (cmd, p) => ({ start, reset: start, play_until: () => playUntil(p), set_parameters: () => setParameters(p) })[cmd]?.() });
+bulle($('feedback'), 'Le professeur va dessiner la carte du chapitre.');
+window.__carte = { S, scene, NOEUDS, CENTRE };   // pour les vérifications automatiques
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

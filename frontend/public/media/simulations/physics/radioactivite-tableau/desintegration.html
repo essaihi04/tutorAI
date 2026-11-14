@@ -1,0 +1,625 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Désintégration d’un noyau — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="radio.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un noyau se désintègre : à gauche le noyau père peint (protons et neutrons) tremble puis éclate en noyau fils et particule ; à droite l’équation de désintégration s’écrit à la craie avec les lois de Soddy (conservation de A et de Z)"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script src="noyaux.js"></script>
+<script>
+/*
+ * Désintégration d’un noyau : α, β⁻, β⁺, γ et les lois de Soddy (cours « Décroissance radioactive », 2e Bac PC BIOF, novembre 2026).
+ * Vue « Le noyau » (gauche, peinte) : le noyau père, une grappe de sphères ombrées (protons rouge-orangé, neutrons gris-bleu),
+ * tremble puis éclate : le noyau fils recule un peu, la particule part vite (α : grappe 2 + 2 ; β⁻ : sphère bleue « e⁻ » ;
+ * β⁺ : sphère jaune-orangé « e⁺ » ; γ : onde violette). Tous les nucléons sont dessinés (210 pour le polonium).
+ * Vue « L’équation » (droite, craie) : l’équation s’écrit avec noyaux.js, puis les deux lignes de Soddy cochées.
+ * Types (?type= ou set_parameters {type} ; la pastille touchée = type suivant) : alpha (défaut), beta_moins, beta_plus, gamma,
+ * soddy, inconnu (national 2021 R : ³²₁₅P → ᴬ_Z X + ⁰₋₁e).
+ * Le peint ne change pas la physique : A, Z, la particule émise et les équations sont exacts ; le tremblement, l’éclair et
+ * la vitesse de la particule sont pour l’œil.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const lisse = u => { u = clamp(u); return u * u * (3 - 2 * u); };
+const TYPES = ['alpha', 'beta_moins', 'beta_plus', 'gamma', 'soddy', 'inconnu'];
+const demande = new URLSearchParams(location.search).get('type');
+let type = TYPES.includes(demande) ? demande : 'alpha';
+
+/* ── Les six types : noyaux, particule, instants (s de la scène), textes ─────────────────────────── */
+const DONNEES = {
+  alpha: {
+    titre: 'désintégration α', pere: ['Po', 210, 84], fils: ['Pb', 206, 82], particule: 'alpha', te: 2.6,
+    eq: ['[210,84]Po → [206,82]Pb + [4,2]He'], soddyA: 'A : 210 = 206 + 4', soddyZ: 'Z : 84 = 82 + 2',
+    conclusion: 'désintégration α : émission d’un noyau d’hélium [4,2]He',
+    sortie: 'une particule α, noyau d’hélium ⁴₂He (2 protons + 2 neutrons), qui part très vite',
+    suite: [['noyau_pere', 1.2, 'le noyau père ²¹⁰₈₄Po tremble'], ['emission', 2.95, 'la particule α (2 protons + 2 neutrons) part très vite'],
+      ['noyau_fils', 4.6, 'il reste le noyau fils ²⁰⁶₈₂Pb'], ['equation', 6.4, 'l’équation est écrite'],
+      ['soddy_A', 8.2, 'A se conserve : 210 = 206 + 4'], ['soddy_Z', 10.0, 'Z se conserve : 84 = 82 + 2'],
+      ['conclusion', 12.0, 'désintégration α : émission d’un noyau d’hélium ⁴₂He'], ['fin', 13.2, 'fin']],
+  },
+  beta_moins: {
+    titre: 'désintégration β⁻', pere: ['C', 14, 6], fils: ['N', 14, 7], particule: 'electron', te: 3.4,
+    eq: ['[14,6]C → [14,7]N + [0,-1]e'], soddyA: 'A : 14 = 14 + 0', soddyZ: 'Z : 6 = 7 + (−1)',
+    interne: 'dans le noyau : [1,0]n → [1,1]p + [0,-1]e', change: ['n', 'p'],
+    conclusion: 'désintégration β⁻ : un neutron devient un proton, un électron [0,-1]e est émis',
+    sortie: 'un électron ⁰₋₁e (petite sphère bleue « e⁻ ») qui part très vite',
+    suite: [['noyau_pere', 1.2, 'le noyau père ¹⁴₆C tremble'], ['transformation', 3.35, 'dans le noyau, un neutron devient un proton et un électron sort'],
+      ['emission', 3.75, 'l’électron ⁰₋₁e part très vite'], ['noyau_fils', 5.2, 'il reste le noyau fils ¹⁴₇N'], ['equation', 7.0, 'l’équation est écrite'],
+      ['soddy_A', 8.8, 'A se conserve : 14 = 14 + 0'], ['soddy_Z', 10.6, 'Z se conserve : 6 = 7 + (−1)'],
+      ['conclusion', 12.8, 'désintégration β⁻ : un neutron devient un proton, un électron est émis'], ['fin', 14.0, 'fin']],
+  },
+  beta_plus: {
+    titre: 'désintégration β⁺', pere: ['P', 30, 15], fils: ['Si', 30, 14], particule: 'positon', te: 3.4,
+    eq: ['[30,15]P → [30,14]Si + [0,1]e'], soddyA: 'A : 30 = 30 + 0', soddyZ: 'Z : 15 = 14 + 1',
+    interne: 'dans le noyau : [1,1]p → [1,0]n + [0,1]e', change: ['p', 'n'],
+    conclusion: 'désintégration β⁺ : un proton devient un neutron, un positon [0,1]e est émis',
+    sortie: 'un positon ⁰₁e (petite sphère jaune-orangé « e⁺ ») qui part très vite',
+    suite: [['noyau_pere', 1.2, 'le noyau père ³⁰₁₅P tremble'], ['transformation', 3.35, 'dans le noyau, un proton devient un neutron et un positon sort'],
+      ['emission', 3.75, 'le positon ⁰₁e part très vite'], ['noyau_fils', 5.2, 'il reste le noyau fils ³⁰₁₄Si'], ['equation', 7.0, 'l’équation est écrite'],
+      ['soddy_A', 8.8, 'A se conserve : 30 = 30 + 0'], ['soddy_Z', 10.6, 'Z se conserve : 15 = 14 + 1'],
+      ['conclusion', 12.8, 'désintégration β⁺ : un proton devient un neutron, un positon est émis'], ['fin', 14.0, 'fin']],
+  },
+  gamma: {
+    titre: 'désintégration β⁻ puis rayonnement γ', pere: ['Co', 60, 27], fils: ['Ni', 60, 28], particule: 'electron', te: 2.4, tg: 5.2, change: ['n', 'p'],
+    eq: ['[60,27]Co → [60,28]Ni* + [0,-1]e', '[60,28]Ni* → [60,28]Ni + γ'], soddyA: 'γ :  A : 60 = 60 + 0', soddyZ: 'γ :  Z : 28 = 28 + 0',
+    conclusion: 'γ : A et Z ne changent pas',
+    sortie: 'd’abord un électron ⁰₋₁e, puis le rayonnement γ (onde violette) émis par le noyau fils excité',
+    suite: [['noyau_pere', 1.0, 'le noyau père ⁶⁰₂₇Co tremble'], ['emission', 2.75, 'l’électron ⁰₋₁e part'],
+      ['noyau_excite', 4.2, 'le noyau fils ⁶⁰₂₈Ni* est excité : il brille'], ['emission_gamma', 5.5, 'le noyau excité émet le rayonnement γ et se calme'],
+      ['equation', 8.4, 'les deux équations sont écrites'], ['soddy_A', 10.0, 'γ : A ne change pas (60 = 60 + 0)'],
+      ['soddy_Z', 11.6, 'γ : Z ne change pas (28 = 28 + 0)'], ['conclusion', 13.2, 'γ : A et Z ne changent pas'], ['fin', 14.4, 'fin']],
+  },
+  soddy: {
+    titre: 'les lois de Soddy', pere: ['X', 'A', 'Z'], fils: ['Y', 'A_1', 'Z_1'], particule: 'x', te: 2.2, generique: [24, 11],
+    sortie: 'une particule x (A₂ nucléons, nombre de charge Z₂)',
+    suite: [['pere', 1.4, 'le noyau père ᴬ_Z X'], ['fils', 3.2, 'le noyau fils Y (A₁ nucléons, Z₁)'], ['particule', 4.8, 'la particule x (A₂, Z₂)'],
+      ['loi_A', 6.8, 'A = A₁ + A₂ : conservation du nombre de nucléons'], ['loi_Z', 8.8, 'Z = Z₁ + Z₂ : conservation du nombre de charge'], ['fin', 10.0, 'fin']],
+  },
+  inconnu: {
+    titre: 'exercice : identifier le noyau fils', pere: ['P', 32, 15], fils: ['S', 32, 16], particule: 'electron', te: 1.6, change: ['n', 'p'],
+    sortie: 'un électron ⁰₋₁e (désintégration β⁻)',
+    suite: [['noyau_pere', 0.9, 'le noyau ³²₁₅P tremble'], ['emission', 1.95, 'un électron ⁰₋₁e part'], ['equation', 3.4, '³²₁₅P → ᴬ_Z X + ⁰₋₁e est écrite'],
+      ['ligne_A', 5.2, 'conservation de A : 32 = A + 0, donc A = 32'], ['ligne_Z', 7.0, 'conservation de Z : 15 = Z − 1, donc Z = 16'],
+      ['tableau', 9.2, 'le tableau des symboles : Z = 13 Al, 14 Si, 15 P, 16 S'], ['fils', 10.8, 'Z = 16 : X est le soufre ³²₁₆S'], ['fin', 12.0, 'fin']],
+  },
+};
+const D = () => DONNEES[type];
+let M = {}, FIN = 0;
+function calculer() { M = {}; for (const [n, t] of D().suite) M[n] = t; FIN = M.fin; }
+calculer();
+const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0 };
+
+/* ── Géométrie ─────────────────────────────────────────────────────────────────────────────────── */
+const R1 = { x: 8, y: 34, w: 364, h: 300 }, R2 = { x: 384, y: 34, w: 368, h: 300 };
+const FX = 160, FY = 176, CXE = R2.x + R2.w / 2;
+const DIR = (() => { const l = Math.hypot(.86, -.5); return [.86 / l, -.5 / l]; })();         // la particule part vers le haut à droite
+const DIRG = (() => { const l = Math.hypot(.94, .34); return [.94 / l, .34 / l]; })();        // l’onde γ part vers le bas à droite
+const PAST = { x: 344, y: 296, r: 14 };
+const SYMB = { alpha: 'α', beta_moins: 'β⁻', beta_plus: 'β⁺', gamma: 'γ', soddy: 'loi', inconnu: '?' };
+
+/* ── La grappe de nucléons (disposition en tournesol, tirage fixe des protons) ─────────────────── */
+let G = null;
+function construire() {
+  const d = D(), n = d.generique ? d.generique[0] : d.pere[1], Z = d.generique ? d.generique[1] : d.pere[2];
+  const r = window.Tableau.graine(n * 7 + Z), s = Array.from({ length: n }, (_, i) => (i < Z ? 'p' : 'n'));
+  for (let i = n - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [s[i], s[j]] = [s[j], s[i]]; }
+  const pos = []; for (let i = 0; i < n; i++) { const q = Math.sqrt((i + .5) / n), a = i * 2.399963; pos.push([q * Math.cos(a), q * Math.sin(a)]); }
+  if (d.change && s[0] !== d.change[0]) { const j = s.indexOf(d.change[0], 1); [s[0], s[j]] = [s[j], s[0]]; }   // le nucléon qui change est devant, au centre
+  const rn = Math.min(10, 58 / (Math.sqrt(n) * .95)), R = rn * Math.sqrt(n) * .95;
+  // α (2 p + 2 n) ou x (1 p + 1 n) : les nucléons du bord tourné vers la sortie quittent le noyau.
+  const part = new Set();
+  if (d.particule === 'alpha' || d.particule === 'x') {
+    const besoin = d.particule === 'alpha' ? { p: 2, n: 2 } : { p: 1, n: 1 };
+    const ordre = pos.map((p, i) => [p[0] * DIR[0] + p[1] * DIR[1], i]).sort((a, b) => b[0] - a[0]);
+    for (const [, i] of ordre) if (besoin[s[i]] > 0) { besoin[s[i]]--; part.add(i); }
+  }
+  let mx = 0, my = 0; for (const i of part) { mx += pos[i][0]; my += pos[i][1]; }
+  const k = part.size || 1;
+  G = { n, Z, s, pos, rn, R, part, depart: [FX + mx / k * R, FY + my / k * R] };
+}
+construire();
+
+/* ── Peinture ─────────────────────────────────────────────────────────────────────────────────── */
+const TEINTES = {
+  p: ['#ffe0c8', '#f26b3a', '#7c1d06'], n: ['#f4f8fc', '#a7bdd2', '#455a6e'],
+  e: ['#e0f2fe', '#3b82f6', '#1e3a8a'], pos: ['#fff7cc', '#fbbf24', '#a8520a'],
+};
+function sphere(ctx, x, y, r, t, alpha = 1) {
+  ctx.globalAlpha = alpha;
+  const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .08, x, y, r);
+  g.addColorStop(0, t[0]); g.addColorStop(.5, t[1]); g.addColorStop(1, t[2]);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  if (r > 3) { ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.ellipse(x - r * .38, y - r * .42, r * .26, r * .16, -.6, 0, Math.PI * 2); ctx.fill(); }
+  ctx.globalAlpha = 1;
+}
+function chemin(ctx, R, r = 8) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(R.x, R.y, R.w, R.h, r) : ctx.rect(R.x, R.y, R.w, R.h); }
+/** Le fond de la vue du noyau : un vide sombre (le tableau reste visible autour). */
+function vide(ctx) {
+  const g = ctx.createRadialGradient(FX, FY, 20, FX, FY, 330);
+  g.addColorStop(0, 'rgba(18,22,34,.92)'); g.addColorStop(1, 'rgba(5,7,12,.92)');
+  ctx.fillStyle = g; chemin(ctx, R1); ctx.fill();
+}
+/** Petit éclair bref (pour l’œil) : un noyau qui se désintègre. */
+function eclair(ctx, x, y, age, taille = 46) {
+  if (age < 0 || age > .4) return;
+  const k = age / .4, r = 6 + taille * k;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, `rgba(255,255,235,${.95 * (1 - k)})`); g.addColorStop(.4, `rgba(255,220,140,${.5 * (1 - k)})`); g.addColorStop(1, 'rgba(255,200,120,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+}
+/** L’onde γ : une sinusoïde violette brillante avec un halo, qui file depuis le noyau. */
+function ondeGamma(ctx, x0, y0, tete, long = 84) {
+  const debut = Math.max(0, tete - long), [dx, dy] = DIRG, nx = -dy, ny = dx, pts = [];
+  for (let s = debut; s <= tete; s += 1.5) {
+    const env = Math.sin(Math.PI * clamp((s - debut) / Math.max(1, tete - debut))), w = 7 * env * Math.sin((s - tete) / 5.5);
+    pts.push([x0 + dx * s + nx * w, y0 + dy * s + ny * w]);
+  }
+  if (pts.length < 2) return;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (const [w, col, flou] of [[9, 'rgba(168,85,247,.22)', 14], [4, 'rgba(192,132,252,.55)', 8], [1.6, 'rgba(245,232,255,.95)', 0]]) {
+    ctx.strokeStyle = col; ctx.lineWidth = w; ctx.shadowColor = '#a855f7'; ctx.shadowBlur = flou;
+    ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/* État visuel à l’instant t (tout se déduit de t : une scène figée se redessine à l’identique). */
+function visuel(t = S.t) {
+  const d = D(), te = d.te, apres = t >= te;
+  const apparait = clamp((t - .15) / .45);
+  const tremble = apres ? (d.tg && t < d.tg ? 1.2 : 0) : (.5 + 2.6 * clamp((t - (te - 1.4)) / 1.4)) * apparait;
+  const recul = apres ? lisse((t - te) / .5) * (d.particule === 'alpha' ? 9 : d.particule === 'x' ? 6 : 3) : 0;
+  const ox = -DIR[0] * recul + tremble * Math.sin(t * 53), oy = -DIR[1] * recul + tremble * Math.cos(t * 41);
+  const f = d.change ? lisse((t - (te - .9)) / .6) : 0;                       // le nucléon du centre change de couleur
+  return { te, apres, apparait, ox, oy, f, cx: FX + ox, cy: FY + oy };
+}
+/** Position de la particule (null si pas encore partie ou sortie de la vue). */
+function particule(t = S.t) {
+  const d = D(), te = d.te, v = visuel(t);
+  if (d.particule === 'alpha' || d.particule === 'x') {
+    if (t < te) return null;
+    const [sx, sy] = G.depart;
+    if (d.particule === 'x') { const u = lisse((t - te) / .9); return { x: sx + DIR[0] * 150 * u, y: sy + DIR[1] * 150 * u, dedans: true }; }
+    const s = 300 * (t - te), x = sx + DIR[0] * s, y = sy + DIR[1] * s;
+    return { x, y, dedans: x < R1.x + R1.w + 10 && y > R1.y - 10 };
+  }
+  // électron ou positon : apparaît au centre, monte à la surface, puis file.
+  if (t < te - .3) return null;
+  const s = t < te ? G.R * lisse((t - (te - .3)) / .3) : G.R + 360 * (t - te);
+  const x = v.cx + DIR[0] * s, y = v.cy + DIR[1] * s;
+  return { x, y, dedans: x < R1.x + R1.w + 10 && y > R1.y - 10 };
+}
+const tetteGamma = (t = S.t) => (D().tg && t >= D().tg ? 320 * (t - D().tg) : -1);
+const lueur = (t = S.t) => { const d = D(); if (!d.tg) return 0; if (t < d.te + .2) return 0; if (t < d.tg) return lisse((t - d.te - .2) / .6) * (.75 + .25 * Math.sin(t * 11)); return 1 - lisse((t - d.tg) / .7); };
+
+function peindreNoyau(ctx) {
+  const d = D(), t = S.t, v = visuel(), p = particule();
+  ctx.save(); vide(ctx); chemin(ctx, R1); ctx.clip();
+  if (v.apparait > 0) {
+    const L = lueur();
+    if (L > 0) {                                                              // le noyau fils excité brille
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      const g = ctx.createRadialGradient(v.cx, v.cy, G.R * .5, v.cx, v.cy, G.R * 1.9);
+      g.addColorStop(0, `rgba(253,224,71,${.45 * L})`); g.addColorStop(1, 'rgba(253,224,71,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(v.cx, v.cy, G.R * 1.9, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    }
+    // Les nucléons, du bord vers le centre (ceux du centre sont devant).
+    for (let i = G.n - 1; i >= 0; i--) {
+      if (v.apres && G.part.has(i)) continue;
+      const x = v.cx + G.pos[i][0] * G.R, y = v.cy + G.pos[i][1] * G.R;
+      if (i === 0 && d.change && v.f > 0) {
+        sphere(ctx, x, y, G.rn, TEINTES[d.change[0]], v.apparait * (1 - v.f)); sphere(ctx, x, y, G.rn, TEINTES[d.change[1]], v.apparait * v.f);
+      } else sphere(ctx, x, y, G.rn, TEINTES[G.s[i]], v.apparait);
+    }
+    if (d.change && v.f > 0 && v.f < 1) {                                     // le nucléon qui change : un petit halo
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = .5 * Math.sin(Math.PI * v.f);
+      const x = v.cx + G.pos[0][0] * G.R, y = v.cy + G.pos[0][1] * G.R, g = ctx.createRadialGradient(x, y, 0, x, y, G.rn * 2.4);
+      g.addColorStop(0, '#fff'); g.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, G.rn * 2.4, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    }
+    if (L > 0) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = .18 * L; ctx.fillStyle = '#fde047'; ctx.beginPath(); ctx.arc(v.cx, v.cy, G.R, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+  }
+  // La particule.
+  if (p) {
+    if (d.particule === 'alpha' || d.particule === 'x') {
+      const r = Math.max(G.rn, 5.5), off = d.particule === 'alpha' ? [[-.55, -.55, 'p'], [.55, -.55, 'n'], [-.55, .55, 'n'], [.55, .55, 'p']] : [[-.5, 0, 'p'], [.5, 0, 'n']];
+      for (const [a, b, s] of off) sphere(ctx, p.x + a * r * 1.5, p.y + b * r * 1.5, r, TEINTES[s]);
+    } else sphere(ctx, p.x, p.y, 6, d.particule === 'positon' ? TEINTES.pos : TEINTES.e);
+  }
+  // L’éclair au départ de la particule (et au départ de γ).
+  const bord = [FX + DIR[0] * G.R, FY + DIR[1] * G.R];
+  eclair(ctx, bord[0], bord[1], t - d.te);
+  if (d.tg) eclair(ctx, FX + DIRG[0] * G.R, FY + DIRG[1] * G.R, t - d.tg, 36);
+  const tg = tetteGamma();
+  if (tg >= 0) ondeGamma(ctx, FX + DIRG[0] * G.R, FY + DIRG[1] * G.R, tg);
+  ctx.restore();
+}
+
+/* ── Craie ─────────────────────────────────────────────────────────────────────────────────────── */
+/** Écrit `fn` au rythme de la scène à partir de t0 (s) ; à la fin tout est écrit. */
+function ecrit(c, t0, fn) {
+  const t = c.t, cur = c.cur, comp = c.complet;
+  c.t = S.fait ? Infinity : S.t; c.cur = t0;
+  try { fn(); } finally { c.t = t; c.cur = cur; c.complet = comp; }
+}
+/** L’annotation du moment `nom` s’écrit pendant les `dur` s qui le précèdent. */
+function quand(c, nom, dur, fn) { if (nom in M && (S.fait || S.t >= M[nom] - dur)) ecrit(c, M[nom] - dur, fn); }
+const vu = nom => nom in M && (S.fait || S.t >= M[nom] - 1e-6);
+/* Texte avec noyaux : « [A,Z]X » (A et Z quelconques : 210, A_1…) écrit avec craie.nucleide (noyaux.js). */
+const RE_N = /\[([^,\]]+),([^\]]+)\]([A-Za-zαβγ]+)/g;
+function morceaux(s) {
+  const out = []; let i = 0, m; RE_N.lastIndex = 0;
+  while ((m = RE_N.exec(s))) { if (m.index > i) out.push({ t: s.slice(i, m.index) }); out.push({ A: m[1], Z: m[2], X: m[3] }); i = RE_N.lastIndex; }
+  if (i < s.length) out.push({ t: s.slice(i) });
+  return out;
+}
+const largeurF = (c, s, taille = 18) => morceaux(s).reduce((w, m) => w + (m.t != null ? c.largeurTexte(m.t, taille) : c.largeurNucleide(m.X, m.A, m.Z, taille)), 0);
+function formule(c, s, x, y, o = {}) {
+  const taille = o.taille ?? 18, ms = morceaux(s), long = ms.reduce((n, m) => n + (m.t != null ? m.t.length : 3), 0);
+  let px = o.align === 'center' ? x - largeurF(c, s, taille) / 2 : x;
+  for (const m of ms) {
+    const duree = o.duree != null ? o.duree * (m.t != null ? m.t.length : 3) / long : undefined;
+    if (m.t != null) { c.texte(m.t, px, y, { ...o, align: 'left', duree }); px += c.largeurTexte(m.t, taille); }
+    else px = c.nucleide(m.X, m.A, m.Z, px, y, { ...o, duree });
+  }
+  return px;
+}
+
+function dessinerNoyau(c) {
+  const d = D(), t = S.t, v = visuel(), p = particule();
+  c.texte('Le noyau', 14, 26, { couleur: 'cyan', taille: 17 });
+  c.rect(R1.x, R1.y, R1.w, R1.h, { couleur: 'tresfaible', arrondi: 8, duree: .5 });
+  c.repere('vue_noyau', R1.x, R1.y, R1.w, R1.h, 'la vue du noyau (peinte)');
+  // Légende peinte + craie.
+  c.direct(() => {
+    sphere(c.ctx, 24, 318, 6, TEINTES.p); c.texte('proton', 35, 323, { couleur: 'faible', taille: 14 });
+    sphere(c.ctx, 104, 318, 6, TEINTES.n); c.texte('neutron', 115, 323, { couleur: 'faible', taille: 14 });
+    // La pastille du type (touchée : type suivant).
+    const g = c.ctx.createRadialGradient(PAST.x - 4, PAST.y - 5, 1, PAST.x, PAST.y, PAST.r);
+    g.addColorStop(0, '#fef9c3'); g.addColorStop(.5, '#ca8a04'); g.addColorStop(1, '#713f12');
+    c.ctx.fillStyle = g; c.ctx.beginPath(); c.ctx.arc(PAST.x, PAST.y, PAST.r, 0, Math.PI * 2); c.ctx.fill();
+    c.texte(SYMB[type], PAST.x, PAST.y + 6, { couleur: '#1c1917', taille: type === 'soddy' ? 13 : 17, align: 'center', gras: true });
+    c.cercle(PAST.x, PAST.y, PAST.r + 3, { couleur: 'faible', largeur: 1.3 });
+    c.texte('type', PAST.x - PAST.r - 6, PAST.y + 5, { couleur: 'faible', taille: 13, align: 'right' });
+    c.repere('pastille_type', PAST.x - 20, PAST.y - 20, 40, 40, 'la pastille du type (touchée : type suivant)');
+  });
+  const R = G.R, yLab = FY - R - 18, yCap = FY + R + 26;
+  const [Xp, Ap, Zp] = d.pere, [Xf, Af, Zf] = d.fils;
+  const nomPere = `[${Ap},${Zp}]${Xp}`;
+  let nomFils = `[${Af},${Zf}]${Xf}`;
+  if (type === 'inconnu' && !vu('fils')) nomFils = '[A,Z]X';
+  // Repères des noyaux et de la particule (toujours pointables).
+  c.repere('noyau_pere', FX - R - 6, yLab - 26, 2 * R + 12, FY + R + 6 - (yLab - 26), `le noyau père ${Ap === 'A' ? 'X' : Xp + ' (A = ' + Ap + ', Z = ' + Zp + ')'}${v.apres ? ', désintégré' : ''}`);
+  c.repere('noyau_fils', FX - R - 6, yLab - 26, 2 * R + 12, FY + R + 6 - (yLab - 26), v.apres ? `le noyau fils ${Af === 'A_1' ? 'Y' : Xf + (d.tg && S.t < d.tg + .7 ? '* (excité)' : '') + ' (A = ' + Af + ', Z = ' + Zf + ')'}` : 'le noyau fils (pas encore formé)');
+  const pRep = p || (() => { const s = G.R + 110; return { x: FX + DIR[0] * s, y: FY + DIR[1] * s }; })();
+  const px = clamp(pRep.x, R1.x + 16, R1.x + R1.w - 16), py = clamp(pRep.y, R1.y + 16, R1.y + R1.h - 16);
+  const nomPart = { alpha: 'la particule α (⁴₂He)', electron: 'l’électron ⁰₋₁e', positon: 'le positon ⁰₁e', x: 'la particule x' }[d.particule];
+  c.repere('particule', px - 16, py - 16, 32, 32, p ? nomPart : `${nomPart} (${S.t < d.te ? 'pas encore partie' : 'sortie de la vue'})`);
+  const tg = tetteGamma();
+  if (d.tg) {
+    const s = tg > 0 ? clamp(tg - 30, 20, 160) : 110, gx = FX + DIRG[0] * (G.R + s), gy = FY + DIRG[1] * (G.R + s);
+    c.repere('gamma', gx - 34, gy - 20, 68, 40, tg >= 0 ? 'le rayonnement γ (onde)' : 'le rayonnement γ (pas encore émis)');
+  } else c.repere('gamma', px - 16, py - 16, 32, 32, 'ici pas de rayonnement γ : seule la particule sort');
+  const x0 = FX + G.pos[0][0] * R, y0 = FY + G.pos[0][1] * R;
+  if (d.interne) c.repere('transformation', 16, 278, 300, 24, d.change[0] === 'n' ? 'un neutron devient un proton : ¹₀n → ¹₁p + ⁰₋₁e' : 'un proton devient un neutron : ¹₁p → ¹₀n + ⁰₁e');
+  else c.repere('transformation', x0 - 14, y0 - 14, 28, 28, d.change ? 'au centre, un neutron devient un proton (β⁻)' : 'dans le noyau : ici aucun neutron ne devient proton');
+
+  // Étiquettes à la craie, au rythme de la scène.
+  const avantFils = d.particule === 'x' ? 'fils' : (d.tg ? 'noyau_excite' : (type === 'inconnu' ? 'equation' : 'noyau_fils'));
+  const nomPereDebut = M.noyau_pere ?? M.pere;
+  const finPere = avantFils in M ? Math.max(d.te, M[avantFils] - 1.2) : FIN;
+  if (S.t >= .2 && (S.fait ? false : S.t < finPere)) {
+    ecrit(c, Math.max(.2, nomPereDebut - 1), () => {
+      formule(c, nomPere, FX, yLab, { taille: 24, couleurAZ: 'jaune', duree: .7, align: 'center' });
+      c.texte('noyau père', FX, yCap, { couleur: 'faible', taille: 15, align: 'center', duree: .3 });
+    });
+  }
+  if (avantFils in M && (S.fait || S.t >= finPere)) {
+    ecrit(c, finPere, () => {
+      const calme = d.tg && S.t >= d.tg + .5;
+      const nf = d.tg && !calme ? '[60,28]Ni*' : nomFils;
+      formule(c, nf, FX, yLab, { taille: 24, couleurAZ: 'jaune', duree: .7, align: 'center' });
+      c.texte(d.tg ? (calme ? 'noyau fils (calmé)' : 'noyau fils excité') : 'noyau fils', FX, yCap, { couleur: 'faible', taille: 15, align: 'center', duree: .4 });
+    });
+  }
+  // Étiquette de la particule, qui la suit.
+  c.direct(() => {
+    if (p && p.dedans && p.x < R1.x + R1.w - 34 && p.y > R1.y + 14) {
+      const lab = { alpha: 'α', electron: 'e⁻', positon: 'e⁺', x: 'x' }[d.particule];
+      if (d.particule === 'x') formule(c, '[A_2,Z_2]x', p.x - 12, p.y - 18, { taille: 20, couleurAZ: 'jaune' });
+      else c.texte(lab, p.x + 12, p.y - 10, { couleur: d.particule === 'positon' ? 'orange' : d.particule === 'alpha' ? 'jaune' : 'bleu', taille: 18 });
+    }
+    const gx = FX + DIRG[0] * (G.R + tg - 30), gy = FY + DIRG[1] * (G.R + tg - 30);
+    if (tg > 20 && gx < R1.x + R1.w - 24) c.texte('γ', gx - 4, gy + 24, { couleur: 'violet', taille: 20 });
+  });
+  // β : la transformation dans le noyau.
+  if (d.interne) quand(c, 'transformation', 1.4, () => {
+    formule(c, d.interne, 18, 296, { taille: 17, couleur: 'vert', duree: 1.2 });
+  });
+  if (d.change && !d.interne && v.f > 0 && S.t < d.te + .6 && !S.fait) c.direct(() => c.texte(d.change[0] === 'n' ? 'n → p' : 'p → n', x0 + 14, y0 - 10, { couleur: 'vert', taille: 14 }));
+}
+
+/* La vue de l’équation, type par type. */
+function dessinerEquation(c) {
+  const d = D();
+  c.texte('L’équation', R2.x + 6, 26, { couleur: 'cyan', taille: 17 });
+  c.rect(R2.x, R2.y, R2.w, R2.h, { couleur: 'tresfaible', arrondi: 8, duree: .5 });
+  c.repere('vue_equation', R2.x, R2.y, R2.w, R2.h, 'la vue de l’équation (craie)');
+  const coche = (x, y) => c.texte('✓', x + 10, y, { couleur: 'vert', taille: 22, duree: .15 });
+  const Y_EQ = 96, X0 = R2.x + 30;
+  const repA = (y, lab) => c.repere('soddy_A', X0 - 6, y - 24, 320, 34, lab), repZ = (y, lab) => c.repere('soddy_Z', X0 - 6, y - 24, 320, 34, lab);
+  if (type === 'soddy') {
+    const s1 = '[A,Z]X', s2 = ' → [A_1,Z_1]Y', s3 = ' + [A_2,Z_2]x', T = 28;
+    const w1 = largeurF(c, s1, T), w2 = largeurF(c, s2, T), w3 = largeurF(c, s3, T), x1 = CXE - (w1 + w2 + w3) / 2;
+    c.repere('equation', x1 - 8, Y_EQ - 36, w1 + w2 + w3 + 16, 52, 'l’équation générale ᴬ_Z X → ᴬ¹_Z¹ Y + ᴬ²_Z² x');
+    quand(c, 'pere', .9, () => { formule(c, s1, x1, Y_EQ, { taille: T, couleurAZ: 'jaune', duree: .5 }); c.texte('père', x1 + w1 / 2, Y_EQ + 34, { couleur: 'faible', taille: 14, align: 'center', duree: .3 }); });
+    quand(c, 'fils', .9, () => { formule(c, s2, x1 + w1, Y_EQ, { taille: T, couleurAZ: 'jaune', duree: .6 }); c.texte('fils', x1 + w1 + w2 * .62, Y_EQ + 34, { couleur: 'faible', taille: 14, align: 'center', duree: .3 }); });
+    quand(c, 'particule', .9, () => { formule(c, s3, x1 + w1 + w2, Y_EQ, { taille: T, couleurAZ: 'jaune', duree: .6 }); c.texte('particule', x1 + w1 + w2 + w3 * .6, Y_EQ + 34, { couleur: 'faible', taille: 14, align: 'center', duree: .3 }); });
+    repA(186, 'A = A₁ + A₂ : conservation du nombre de nucléons'); repZ(256, 'Z = Z₁ + Z₂ : conservation du nombre de charge');
+    quand(c, 'loi_A', 1.8, () => { c.texte('A = A_1 + A_2', X0, 186, { taille: 26, couleur: 'jaune', duree: .8 }); c.texte('conservation du nombre de nucléons', X0, 212, { taille: 16, couleur: 'vert', duree: .9 }); });
+    quand(c, 'loi_Z', 1.8, () => { c.texte('Z = Z_1 + Z_2', X0, 256, { taille: 26, couleur: 'jaune', duree: .8 }); c.texte('conservation du nombre de charge', X0, 282, { taille: 16, couleur: 'vert', duree: .9 }); });
+    c.repere('tableau_Z', R2.x + 10, 300, R2.w - 20, 30, 'pas de tableau des symboles ici (voir le type « inconnu »)');
+    return;
+  }
+  if (type === 'inconnu') {
+    const s = '[32,15]P → [A,Z]X + [0,-1]e', T = 26, w = largeurF(c, s, T);
+    c.repere('equation', CXE - w / 2 - 8, Y_EQ - 34, w + 16, 46, 'l’équation ³²₁₅P → ᴬ_Z X + ⁰₋₁e');
+    quand(c, 'equation', 1.4, () => formule(c, s, CXE, Y_EQ, { taille: T, couleurAZ: 'jaune', duree: 1.3, align: 'center' }));
+    repA(144, 'conservation de A : 32 = A + 0, donc A = 32'); repZ(180, 'conservation de Z : 15 = Z − 1, donc Z = 16');
+    quand(c, 'ligne_A', 1.5, () => { c.texte('A : 32 = A + 0  ⇒  A = 32', X0, 144, { taille: 21, duree: 1.3 }); coche(X0 + c.largeurTexte('A : 32 = A + 0  ⇒  A = 32', 21), 144); });
+    quand(c, 'ligne_Z', 1.5, () => { c.texte('Z : 15 = Z − 1  ⇒  Z = 16', X0, 180, { taille: 21, duree: 1.3 }); coche(X0 + c.largeurTexte('Z : 15 = Z − 1  ⇒  Z = 16', 21), 180); });
+    // Le tableau des symboles.
+    const TX = R2.x + 30, TY = 196, C0 = 82, CW = 58, H = 30, cols = [[13, 'Al'], [14, 'Si'], [15, 'P'], [16, 'S']];
+    c.repere('tableau_Z', TX - 4, TY - 4, C0 + 4 * CW + 8, 2 * H + 8, 'le tableau des symboles : Z = 13 Al, 14 Si, 15 P, 16 S');
+    quand(c, 'tableau', 1.9, () => {
+      c.rect(TX, TY, C0 + 4 * CW, 2 * H, { couleur: 'faible', arrondi: 3, largeur: 1.5, duree: .3 });
+      c.ligne(TX, TY + H, TX + C0 + 4 * CW, TY + H, { couleur: 'faible', largeur: 1.3, duree: .1 });
+      for (let k = 0; k < 4; k++) c.ligne(TX + C0 + k * CW, TY, TX + C0 + k * CW, TY + 2 * H, { couleur: 'faible', largeur: 1.3, duree: .05 });
+      c.texte('Z', TX + C0 / 2, TY + 21, { taille: 17, align: 'center', duree: .05 });
+      c.texte('symbole', TX + C0 / 2, TY + H + 21, { taille: 16, align: 'center', duree: .25 });
+      cols.forEach(([z, X], k) => { c.texte(String(z), TX + C0 + (k + .5) * CW, TY + 21, { taille: 17, align: 'center', duree: .12 }); c.texte(X, TX + C0 + (k + .5) * CW, TY + H + 21, { taille: 17, align: 'center', duree: .12 }); });
+    });
+    quand(c, 'fils', 1.4, () => {
+      const xs = TX + C0 + 3.5 * CW;
+      c.cercle(xs, TY + H, 26, { couleur: 'jaune', largeur: 2, duree: .3 });
+      const x1 = c.texte('X = ', X0, 296, { taille: 24, couleur: 'jaune', duree: .2 }) && X0 + c.largeurTexte('X = ', 24);
+      const x2 = formule(c, '[32,16]S', x1, 296, { taille: 24, couleur: 'jaune', duree: .4 });
+      c.texte(' : le soufre', x2, 296, { taille: 20, couleur: 'jaune', duree: .4 });
+      formule(c, '[32,15]P → [32,16]S + [0,-1]e : désintégration β⁻', 380, 380, { taille: 19, couleur: 'vert', duree: .01, align: 'center' });
+    });
+    return;
+  }
+  // α, β⁻, β⁺, γ.
+  const T = d.eq.length > 1 ? 24 : 27, ys = d.eq.length > 1 ? [88, 134] : [Y_EQ];
+  const wMax = Math.max(...d.eq.map(s => largeurF(c, s, T)));
+  c.repere('equation', CXE - wMax / 2 - 8, ys[0] - 32, wMax + 16, ys[ys.length - 1] - ys[0] + 46, d.eq.length > 1 ? 'les deux équations (β⁻ puis γ)' : 'l’équation de la désintégration');
+  quand(c, 'equation', d.eq.length > 1 ? 2.6 : 1.4, () => {
+    d.eq.forEach((s, i) => formule(c, s, CXE, ys[i], { taille: T, couleurAZ: 'jaune', duree: 1.2, align: 'center' }));
+    if (!d.tg) {                                                                  // sous l’équation : qui est qui
+      const parts = s => morceaux(s), w = largeurF(c, d.eq[0], T); let x = CXE - w / 2;
+      const noms = ['père', 'fils', 'particule']; let k = 0;
+      for (const m of parts(d.eq[0])) {
+        if (m.t != null) { x += c.largeurTexte(m.t, T); continue; }
+        const l = c.largeurNucleide(m.X, m.A, m.Z, T); c.texte(noms[k++], x + l / 2, ys[0] + 32, { couleur: 'faible', taille: 14, align: 'center', duree: .05 }); x += l;
+      }
+    }
+  });
+  const yA = d.tg ? 192 : 180, yZ = d.tg ? 254 : 244;
+  repA(yA, d.tg ? 'pour γ : A ne change pas (60 = 60 + 0)' : `A se conserve : ${d.soddyA.replace('A : ', '')}`);
+  repZ(yZ, d.tg ? 'pour γ : Z ne change pas (28 = 28 + 0)' : `Z se conserve : ${d.soddyZ.replace('Z : ', '')}`);
+  quand(c, 'soddy_A', 1.6, () => {
+    c.texte(d.soddyA, X0, yA, { taille: 24, duree: 1.0 }); coche(X0 + c.largeurTexte(d.soddyA, 24), yA);
+    c.texte('conservation du nombre de nucléons', X0 + 4, yA + 22, { taille: 14, couleur: 'faible', duree: .4 });
+  });
+  quand(c, 'soddy_Z', 1.6, () => {
+    c.texte(d.soddyZ, X0, yZ, { taille: 24, duree: 1.0 }); coche(X0 + c.largeurTexte(d.soddyZ, 24), yZ);
+    c.texte('conservation du nombre de charge', X0 + 4, yZ + 22, { taille: 14, couleur: 'faible', duree: .4 });
+  });
+  c.repere('tableau_Z', R2.x + 10, 296, R2.w - 20, 32, 'pas de tableau des symboles ici (voir le type « inconnu »)');
+  c.repere('conclusion', 20, 356, 720, 34, 'la conclusion');
+  quand(c, 'conclusion', 1.6, () => formule(c, d.conclusion, 380, 380, { taille: 20, couleur: 'vert', duree: 1.4, align: 'center' }));
+}
+
+function dessiner(c) {
+  c.direct(() => peindreNoyau(c.ctx));
+  dessinerNoyau(c); dessinerEquation(c);
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(41); dessiner(c); return c.fin(); });
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(FIN, S.t + dt);
+  if (S.jusqua != null && S.t >= S.jusqua && S.jusqua < FIN) {
+    S.t = S.jusqua; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 2)} s`) + '.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre();
+    return true;
+  }
+  if (S.t >= FIN) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), message(), 'good'); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+
+/* ── Ce que voit le tuteur ────────────────────────────────────────────────────────────────────── */
+const SUP = { '-': '⁻', '−': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' };
+const SUB = { '-': '₋', '−': '₋', 0: '₀', 1: '₁', 2: '₂', 3: '₃', 4: '₄', 5: '₅', 6: '₆', 7: '₇', 8: '₈', 9: '₉' };
+const uni = ([X, A, Z]) => (/^-?\d+$/.test(String(A)) ? String(A).split('').map(ch => SUP[ch]).join('') + String(Z).split('').map(ch => SUB[ch]).join('') + X : `${X} (${String(A).replace('_', '')}, ${String(Z).replace('_', '')})`);
+const compo = ([, A, Z]) => (typeof A === 'number' ? `A = ${A}, Z = ${Z} : ${Z} protons et ${A - Z} neutrons` : 'nombres A et Z quelconques');
+function phase() {
+  let dernier = null; for (const [n, t, m] of D().suite) if (S.t >= t - 1e-6) dernier = [n, m];
+  if (S.t <= 0) return 'rien n’est encore lancé';
+  return dernier ? (dernier[0] === 'fin' ? 'fin, tout est écrit' : dernier[1]) : 'le noyau père apparaît et commence à trembler';
+}
+function ecritsEquation() {
+  const d = D(), e = [];
+  const u = s => s.replace(/\[([^,\]]+),([^\]]+)\]([A-Za-zαβγ]+\*?)/g, (_, A, Z, X) => (/^\d+$/.test(A) ? uni([X, A, Z]) : `${X}(A=${A.replace('_', '')}, Z=${Z.replace('_', '')})`));
+  if (type === 'soddy') {
+    if (vu('pere')) e.push('« ᴬ_Z X »' + (vu('fils') ? ' → « ᴬ¹_Z¹ Y »' : '') + (vu('particule') ? ' + « ᴬ²_Z² x »' : ''));
+    if (vu('loi_A')) e.push('« A = A₁ + A₂ » (conservation du nombre de nucléons)');
+    if (vu('loi_Z')) e.push('« Z = Z₁ + Z₂ » (conservation du nombre de charge)');
+    return e;
+  }
+  if (type === 'inconnu') {
+    if (vu('equation')) e.push('« ³²₁₅P → ᴬ_Z X + ⁰₋₁e »');
+    if (vu('ligne_A')) e.push('« A : 32 = A + 0 ⇒ A = 32 » coché');
+    if (vu('ligne_Z')) e.push('« Z : 15 = Z − 1 ⇒ Z = 16 » coché');
+    if (vu('tableau')) e.push('le tableau des symboles (Z = 13 Al, 14 Si, 15 P, 16 S)');
+    if (vu('fils')) e.push('S entouré dans le tableau, « X = ³²₁₆S : le soufre » et « ³²₁₅P → ³²₁₆S + ⁰₋₁e : désintégration β⁻ »');
+    return e;
+  }
+  if (vu('equation')) e.push(d.eq.map(s => `« ${u(s)} »`).join(' puis '));
+  if (vu('soddy_A')) e.push(`« ${d.soddyA} » coché`);
+  if (vu('soddy_Z')) e.push(`« ${d.soddyZ} » coché`);
+  if (vu('conclusion')) e.push(`la conclusion « ${u(d.conclusion)} »`);
+  return e;
+}
+function gauche() {
+  const d = D(), t = S.t, v = visuel(), p = particule();
+  if (t < .15) return 'vide pour l’instant';
+  const pere = `${uni(d.pere)} (${compo(d.pere)})`, fils = `${type === 'inconnu' && !vu('fils') ? 'ᴬ_Z X (encore inconnu)' : uni(d.fils) + (d.tg && t < d.tg + .5 ? '*' : '')} (${compo(d.fils)})`;
+  const m = [];
+  if (!v.apres) {
+    m.push(`le noyau père ${pere}${t > d.te - 1.4 ? ' tremble de plus en plus' : ' tremble'}`);
+    if (d.change && v.f > 0) m.push(v.f < 1 ? `au centre, un ${d.change[0] === 'n' ? 'neutron devient proton' : 'proton devient neutron'} (il change de couleur)` : `au centre, ${d.change[0] === 'n' ? 'un neutron est devenu proton' : 'un proton est devenu neutron'}`);
+    if (p) m.push(`${d.particule === 'positon' ? 'un positon' : 'un électron'} sort du noyau`);
+  } else {
+    m.push(`le noyau père s’est désintégré ; il reste le noyau fils ${fils}${d.tg ? (t < d.tg ? ', excité (marqué *) : il brille' : t < d.tg + .7 ? ', il émet le rayonnement γ et se calme' : ', calmé') : ''}`);
+    if (p && p.dedans) m.push(d.particule === 'x' ? 'la particule x s’est écartée' : `${d.particule === 'alpha' ? 'la particule α (2 protons + 2 neutrons)' : d.particule === 'positon' ? 'le positon e⁺' : 'l’électron e⁻'} part très vite vers le haut à droite`);
+    else if (d.particule !== 'x') m.push('la particule est sortie de la vue');
+    const tg = tetteGamma(); if (tg >= 0 && tg < 330) m.push('l’onde γ (violette) file vers le bas à droite');
+  }
+  if (d.interne && vu('transformation')) m.push(`écrit sous le noyau : « ${d.interne.replace('dans le noyau : ', '').replace(/\[([^,\]]+),([^\]]+)\]([A-Za-z]+)/g, (_, A, Z, X) => uni([X, A, Z]))} »`);
+  return m.join(' ; ');
+}
+function ceQuiSeVoit() {
+  const d = D(), etat = S.running ? 'la scène se déroule' : S.fait ? 'fin de la scène' : S.t > 0 ? 'scène arrêtée' : 'scène pas encore lancée';
+  const m = [`Type « ${type} » : ${d.titre}. t = ${fr(S.t, 2)} s (${etat}).`];
+  m.push(`Vue « Le noyau » (à gauche, peinte : protons rouge-orangé, neutrons gris-bleu) : ${gauche()}.`);
+  const e = ecritsEquation();
+  m.push(`Vue « L’équation » (à droite, à la craie) : ${e.length ? 'écrit ' + e.join(' ; ') : 'rien n’est encore écrit'}.`);
+  if (typeof d.pere[1] === 'number') m.push(`Côté gauche : A = ${d.pere[1]}, Z = ${d.pere[2]} ; côté droit : A = ${d.fils[1]} + ${partA()} = ${d.pere[1]}, Z = ${d.fils[2]} + ${partZ()} = ${d.pere[2]}.`);
+  else m.push('Côté gauche : A et Z ; côté droit : A₁ + A₂ et Z₁ + Z₂.');
+  if (visuel().apres) m.push(`Ce qui sort : ${d.sortie}.`);
+  m.push(`Phase : ${phase()}.`);
+  return m.join(' ');
+}
+const partA = () => (D().particule === 'alpha' ? 4 : 0);
+const partZ = () => ({ alpha: '2', electron: '(−1)', positon: '1' }[D().particule] ?? '0');
+function message() {
+  return { alpha: 'α : A diminue de 4, Z de 2.', beta_moins: 'β⁻ : A ne change pas, Z augmente de 1.', beta_plus: 'β⁺ : A ne change pas, Z diminue de 1.',
+    gamma: 'γ : A et Z ne changent pas.', soddy: 'Lois de Soddy : A = A₁ + A₂ et Z = Z₁ + Z₂.', inconnu: 'X = ³²₁₆S, le soufre.' }[type];
+}
+
+/* ── Commandes ───────────────────────────────────────────────────────────────────────────────── */
+function playUntil(p) {
+  const nom = p && p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-4) S.t = 0;
+  S.jusqua = Math.min(FIN, Math.max(0.001, cible));
+  S.motif = nom ? D().suite.find(s => s[0] === nom)[2] : '';
+  S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+function start() { S.jusqua = null; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), `${D().titre[0].toUpperCase() + D().titre.slice(1)} : observe le noyau…`); pont.noter('start', params()); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait || S.t >= FIN) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  const t = +p.time_s; if (!Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = clamp(t, 0, FIN); S.fait = S.t >= FIN;
+  $('run').textContent = S.fait ? 'Rejouer' : 'Reprendre'; scene.sale = true;
+  bulle($('feedback'), `Arrêt sur image : t = ${fr(S.t, 2)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function changerType(t) {
+  if (!TYPES.includes(t)) return false;
+  type = t; calculer(); construire(); scene.reecrire(); return true;
+}
+function setParameters(p) {
+  p = p || {};
+  if (p.type && changerType(String(p.type))) { pont.noter('set_parameters', params()); start(); return; }
+  bulle($('feedback'), `Type : ${D().titre}.`); pont.noter('set_parameters', params()); pont.emettre();
+}
+function params() {
+  const d = D();
+  return { type, pere: d.pere.join(' '), fils: d.fils.join(' '), particule: { alpha: 'alpha (⁴₂He)', electron: 'electron (⁰₋₁e)', positon: 'positon (⁰₁e)', x: 'x (A₂, Z₂)' }[d.particule], gamma: !!d.tg };
+}
+$('run').onclick = () => (S.running ? pause() : (S.t > 0 && S.t < FIN && !S.fait ? resume() : start()));
+
+/* La pastille : touchée, elle passe au type suivant et relance. */
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => { const [x, y] = scene.local(px, py); return Math.hypot(x - PAST.x, y - PAST.y) < PAST.r + 8 ? 'type' : null; },
+  bouger: () => {},
+  lacher: () => { changerType(TYPES[(TYPES.indexOf(type) + 1) % TYPES.length]); pont.noter('set_parameters', params()); start(); },
+});
+
+window.Tableau.explication({
+  alpha: [
+    { repere: 'noyau_pere', texte: 'Le polonium 210 : 84 protons et 126 neutrons. Il est instable, il tremble.' },
+    { repere: 'particule', texte: 'Il éjecte une particule α : un noyau d’hélium, 2 protons et 2 neutrons.' },
+    { repere: 'noyau_fils', texte: 'Il reste le noyau fils : le plomb 206.' },
+    { repere: 'equation', texte: 'L’équation : polonium 210 donne plomb 206 plus hélium 4.' },
+    { repere: 'soddy_A', texte: 'Le nombre de nucléons se conserve : 210 = 206 + 4.' },
+    { repere: 'soddy_Z', texte: 'Le nombre de charge se conserve : 84 = 82 + 2.' },
+  ],
+  beta_moins: [
+    { repere: 'noyau_pere', texte: 'Le carbone 14 : 6 protons et 8 neutrons, trop de neutrons.' },
+    { repere: 'transformation', texte: 'Dans le noyau, un neutron devient un proton et un électron est créé.' },
+    { repere: 'particule', texte: 'L’électron sort du noyau très vite : c’est la particule β⁻.' },
+    { repere: 'noyau_fils', texte: 'Il reste l’azote 14 : un proton de plus, même nombre de nucléons.' },
+    { repere: 'soddy_A', texte: 'A se conserve : 14 = 14 + 0.' },
+    { repere: 'soddy_Z', texte: 'Z se conserve : 6 = 7 + (−1).' },
+  ],
+  beta_plus: [
+    { repere: 'noyau_pere', texte: 'Le phosphore 30 : trop de protons.' },
+    { repere: 'transformation', texte: 'Dans le noyau, un proton devient un neutron et un positon est créé.' },
+    { repere: 'particule', texte: 'Le positon sort : c’est la particule β⁺, de charge +1.' },
+    { repere: 'noyau_fils', texte: 'Il reste le silicium 30 : un proton de moins.' },
+    { repere: 'soddy_A', texte: 'A : 30 = 30 + 0.' },
+    { repere: 'soddy_Z', texte: 'Z : 15 = 14 + 1.' },
+  ],
+  gamma: [
+    { repere: 'noyau_pere', texte: 'Le cobalt 60 subit d’abord une désintégration β⁻.' },
+    { repere: 'noyau_fils', texte: 'Le nickel 60 formé est excité : on le marque d’une étoile.' },
+    { repere: 'gamma', texte: 'Il se calme en émettant un rayonnement γ, une onde lumineuse invisible.' },
+    { repere: 'equation', texte: 'Ni* donne Ni plus γ.' },
+    { repere: 'soddy_A', texte: 'Pour γ, A ne change pas…' },
+    { repere: 'soddy_Z', texte: '… et Z ne change pas non plus.' },
+  ],
+  soddy: [
+    { repere: 'equation', texte: 'Un noyau père X donne un noyau fils Y et une particule x.' },
+    { repere: 'soddy_A', texte: 'A = A₁ + A₂ : le nombre de nucléons se conserve.' },
+    { repere: 'soddy_Z', texte: 'Z = Z₁ + Z₂ : le nombre de charge se conserve.' },
+  ],
+  inconnu: [
+    { repere: 'equation', texte: 'Le phosphore 32 donne un noyau X inconnu et un électron.' },
+    { repere: 'soddy_A', texte: 'Conservation de A : 32 = A + 0, donc A = 32.' },
+    { repere: 'soddy_Z', texte: 'Conservation de Z : 15 = Z − 1, donc Z = 16.' },
+    { repere: 'tableau_Z', texte: 'Dans le tableau, Z = 16 : c’est le soufre S.' },
+  ],
+});
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+const momentsDe = t => DONNEES[t].suite.map(s => s[0]).join(' | ');
+const config = { id: 'radioactivite_desintegration', version: '1.0', title: 'Désintégration d’un noyau : α, β⁻, β⁺, γ et lois de Soddy', variants: TYPES.map(t => ({ id: t, label: DONNEES[t].titre })), commands: commandes,
+  command_schema: {
+    set_parameters: { type: TYPES.join(' | ') + ' (change le type et relance depuis le début)' },
+    set_time: { time_s: '0..fin (arrêt sur cet instant, s ; la fin dépend du type)' },
+    play_until: { moment: `instant clé du type courant (alpha : ${momentsDe('alpha')} ; beta_moins et beta_plus : ${momentsDe('beta_moins')} ; gamma : ${momentsDe('gamma')} ; soddy : ${momentsDe('soddy')} ; inconnu : ${momentsDe('inconnu')})`, time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Désintégration d’un noyau : le noyau père (grappe de protons et de neutrons) tremble puis éclate en noyau fils + particule. α : ²¹⁰₈₄Po → ²⁰⁶₈₂Pb + ⁴₂He ; β⁻ : ¹⁴₆C → ¹⁴₇N + ⁰₋₁e (¹₀n → ¹₁p + ⁰₋₁e) ; β⁺ : ³⁰₁₅P → ³⁰₁₄Si + ⁰₁e (¹₁p → ¹₀n + ⁰₁e) ; γ : ⁶⁰₂₇Co → ⁶⁰₂₈Ni* + ⁰₋₁e puis ⁶⁰₂₈Ni* → ⁶⁰₂₈Ni + γ ; lois de Soddy : A = A₁ + A₂, Z = Z₁ + Z₂ ; exercice : ³²₁₅P → ᴬ_Z X + ⁰₋₁e, X = ³²₁₆S.',
+  etat: () => ({ simulation_status: S.running ? 'running' : (S.fait ? 'finished' : (S.t > 0 ? 'paused' : 'idle')), ce_qui_se_voit: ceQuiSeVoit(), current_variant: type,
+    time_s: +S.t.toFixed(3), parameters: params(), moments: { ...M } }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), `${D().titre[0].toUpperCase() + D().titre.slice(1)} : le noyau va apparaître…`);
+setTimeout(() => { if (!S.running && S.t === 0) start(); }, 1600);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

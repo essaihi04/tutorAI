@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ln(ab) = ln a + ln b</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un repère à la craie : la courbe de ln x et celle de ln(ax), montée de ln a ; des flèches de même longueur entre les deux"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Fonctions logarithmiques » (math_ch5_fonctions_ln) : ln(ab) = ln a + ln b vu sur la courbe.
+ * Vue : ?vue=translation (param a). Moments : deux_courbes, fleches, empile, parametre, formule.
+ * Repères : fleches, empile, formule.
+ */
+const fr = MathsTableau.fr;
+const OPT = { x0: 56, y0: 48, w: 430, h: 300, xmin: 0, xmax: 5.4, ymin: -2.2, ymax: 2.8,
+  gx: [[1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5']], gy: [[-2, '−2'], [-1, '−1'], [1, '1'], [2, '2']], nomx: 'x', nomy: 'y' };
+const XR = 506;
+
+MathsTableau.page({
+  id: 'ln_produit', titre: 'Fonctions logarithmiques',
+  texte: 'Construction à la craie : la courbe de ln(ax) est celle de ln x montée de ln a (descendue si a < 1) ; en x = b la hauteur ln(ab) est faite de ln b et de ln a empilés ; d’où ln(ab) = ln a + ln b pour a > 0, b > 0',
+  vues: {
+    translation: {
+      titre: 'Multiplier x par a, c’est monter la courbe de ln a',
+      params: { a: { min: 0.5, max: 4, pas: 0.5, defaut: 2, sens: 'le facteur a de la courbe ln(ax)' } },
+      dessiner(c, K) {
+        K.titre('Multiplier x par a, c’est monter la courbe de ln a');
+        const G = K.axes(OPT);
+        const L2 = Math.log(2);
+        K.anime(1.4, p => K.courbePart(G, Math.log, 0.12, 5.3, p, { couleur: 'rouge' }));
+        c.texte('ln x', G.X(5.0), G.Y(Math.log(5)) + 22, { couleur: 'rouge', taille: 19 });
+        c.pause(.2);
+        K.anime(1.4, p => K.courbePart(G, x => Math.log(2 * x), 0.06, 5.3, p, { couleur: 'cyan' }));
+        c.texte('ln(2x)', G.X(4.3), G.Y(Math.log(8.6)) - 10, { couleur: 'cyan', taille: 19 });
+        K.marque('deux_courbes');
+        c.pause(.3);
+        for (const x of [1, 2, 4]) {
+          const y1 = Math.log(x), y2 = Math.log(2 * x);
+          c.fleche(G.X(x), G.Y(y1), G.X(x), G.Y(y2) + 3, { couleur: 'jaune', largeur: 2 });
+          c.pause(.15);
+        }
+        c.texte('+ ln 2 partout', XR, 74, { couleur: 'jaune', taille: 20 });
+        c.repere('fleches', G.X(0.8), G.Y(2.2), G.X(4.2) - G.X(0.8), G.Y(-0.1) - G.Y(2.2), 'des flèches de même longueur : + ln 2');
+        K.marque('fleches');
+        c.pause(.3);
+        const xb = G.X(2) + 24;
+        c.ligne(xb, G.Y(0), xb, G.Y(L2), { couleur: 'rouge', largeur: 4 });
+        c.pause(.15);
+        c.ligne(xb, G.Y(L2), xb, G.Y(2 * L2), { couleur: 'jaune', largeur: 4 });
+        c.texte('ln 2', xb + 6, G.Y(L2 / 2) + 6, { couleur: 'rouge', taille: 16 });
+        c.texte('ln 2', xb + 6, G.Y(1.5 * L2) + 6, { couleur: 'jaune', taille: 16 });
+        K.lignes(XR, 112, [
+          { t: 'en x = 2 :', couleur: 'blanc', taille: 19 },
+          { t: 'ln 4 = ln 2 + ln 2', couleur: 'jaune', taille: 19 },
+        ], 28);
+        c.repere('empile', xb - 6, G.Y(2 * L2) - 4, 60, G.Y(0) - G.Y(2 * L2) + 8, 'ln 4 = ln 2 + ln 2');
+        K.marque('empile');
+        c.pause(.3);
+        const a = K.P.a;
+        K.anime(1.6, p => {
+          const aa = 2 + (a - 2) * p;
+          K.courbe(G, x => Math.log(aa * x), Math.max(0.05, 0.12 / aa), 5.3, { couleur: 'vert', largeur: 3 });
+        });
+        c.texte('ln(' + fr(a, 1) + 'x) = ln x + ln ' + fr(a, 1), XR, 186, { couleur: 'vert', taille: 19, max: 760 - XR - 6 });
+        c.texte(a < 1 ? 'a < 1 : ln a < 0, elle descend' : a > 1 ? 'a > 1 : ln a > 0, elle monte' : 'a = 1 : ln 1 = 0', XR, 214, { couleur: a < 1 ? 'orange' : 'vert', taille: 17, max: 760 - XR - 6 });
+        K.marque('parametre');
+        c.pause(.3);
+        c.rect(XR - 8, 252, 250, 74, { couleur: 'jaune', arrondi: 8, largeur: 1.7 });
+        K.lignes(XR, 282, [
+          { t: 'ln(ab) = ln a + ln b', couleur: 'jaune', taille: 21 },
+          { t: 'a > 0, b > 0', couleur: 'blanc', taille: 18 },
+        ], 30);
+        c.repere('formule', XR - 8, 252, 250, 74, 'ln(ab) = ln a + ln b');
+        K.marque('formule');
+      },
+      poignees(K) { const G = K.grille(OPT); return [{ id: 'a', x: G.X(1), y: G.Y(Math.log(K.P.a)), bouger: (px, py) => ({ a: Math.exp(G.inv(px, py)[1]) }) }]; },
+      lecture: K => `a = ${fr(K.P.a, 1)} : la courbe de ln(ax) est celle de ln x décalée de ln a ≈ ${fr(Math.log(K.P.a), 2)}.`,
+      decrire: K => ({
+        deux_courbes: 'Un repère : la courbe de ln x en rouge (« ln x ») et celle de ln(2x) en cyan (« ln(2x) »), au-dessus.',
+        fleches: 'En x = 1, 2 et 4, des flèches jaunes de même longueur vont de la courbe rouge à la cyan ; à droite : « + ln 2 partout ».',
+        empile: 'En x = 2, une barre verticale faite de deux segments égaux, ln 2 en rouge puis ln 2 en jaune ; à droite : « ln 4 = ln 2 + ln 2 ».',
+        parametre: `Une courbe verte ln(ax) glisse jusqu’à a = ${fr(K.P.a, 1)} ; à droite « ln(${fr(K.P.a, 1)}x) = ln x + ln ${fr(K.P.a, 1)} » ; pour a < 1 elle passe sous la rouge.`,
+        formule: 'À droite, un encadré jaune : « ln(ab) = ln a + ln b », dessous « a > 0, b > 0 ».',
+      }),
+      motifs: { deux_courbes: 'ln x et ln(2x)', fleches: 'le même écart ln 2', empile: 'ln 4 = ln 2 + ln 2', parametre: 'le facteur a', formule: 'la règle du produit' },
+      explication: [
+        { repere: 'fleches', texte: 'Entre les deux courbes, l’écart est toujours ln 2 : ln(2x) = ln x + ln 2.' },
+        { repere: 'empile', texte: 'En x = 2, la hauteur ln 4 est faite de deux hauteurs ln 2.' },
+        { repere: 'formule', texte: 'Pour a > 0 et b > 0 : ln(ab) = ln a + ln b.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

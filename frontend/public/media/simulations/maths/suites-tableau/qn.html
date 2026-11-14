@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Les points (n ; qⁿ)</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Repère à la craie : les points (n ; qⁿ) pour plusieurs valeurs de q ; ils tombent vers 0, restent à 1, partent vers l’infini ou sautent de part et d’autre de l’axe"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/suites-tableau/su-outils.js"></script>
+<script>
+/*
+ * Cours « Suites numériques » (math_ch3_suites_numeriques) : la limite de qⁿ selon q (l3, l4, l4b).
+ * Vues : ?vue=positif | negatif | libre (paramètre q de −2 à 2, poignée sur la règle de q).
+ */
+const { fr } = MathsTableau;
+const NS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+const serie = (c, G, q, coul, o = {}) => SU.points(c, G, NS.map(n => [n, Math.pow(q, n)]), { couleur: coul, pas: .1, ...o });
+const cas = q => (q <= -1 ? 'q ≤ −1 : (q^{n}) n’a pas de limite' : q < 1 ? '−1 < q < 1 : lim q^{n} = 0' : q === 1 ? 'q = 1 : lim q^{n} = 1' : 'q > 1 : lim q^{n} = +∞');
+const casDit = q => (q <= -1 ? 'q ≤ −1 : (qⁿ) n’a pas de limite' : q < 1 ? '−1 < q < 1 : lim qⁿ = 0' : q === 1 ? 'q = 1 : lim qⁿ = 1' : 'q > 1 : lim qⁿ = +∞');
+/* Règle de q (en haut à droite) : −2 … 2, la zone −1 < q < 1 en jaune. */
+const RQ = { x0: 470, x1: 730, y: 78 }, XQ = q => RQ.x0 + (q + 2) / 4 * (RQ.x1 - RQ.x0);
+
+MathsTableau.page({
+  id: 'su_qn', titre: 'La limite de qⁿ',
+  texte: 'Constructions à la craie : les points isolés (n ; qⁿ) pour q = 1/2, 2, 1, puis q = −1/2, −1, −2 ; le tableau des quatre cas ; q glissé sur une règle',
+  vues: {
+    positif: {
+      titre: 'q entre 0 et 1, q plus grand que 1, q = 1',
+      dessiner(c, K) {
+        K.titre('Que devient q^{n} ?');
+        const G = K.axes({ x0: 70, y0: 58, w: 400, h: 272, xmin: -0.4, xmax: 10.6, ymin: -0.2, ymax: 4.4, nomx: 'n', nomy: 'q^{n}', gx: [[0, '0'], [1, '1'], [5, '5'], [10, '10']], gy: [[1, '1'], [2, '2'], [4, '4']] });
+        K.marque('repere');
+        serie(c, G, 0.5, 'cyan');
+        c.texte('q = 1/2', G.X(6), G.Y(0.3) - 6, { couleur: 'cyan', taille: 17 });
+        c.repere('q_demi', G.X(0) - 8, G.Y(1) - 10, G.X(10) - G.X(0) + 16, G.Y(0) - G.Y(1) + 18, 'q = 1/2 : vers 0');
+        K.lignes(510, 112, [{ t: 'q = 1/2 → 0', couleur: 'cyan', moment: 'q_demi' }], 34);
+        c.pause(.3);
+        serie(c, G, 2, 'orange', { horsTexte: '+∞' });
+        c.texte('q = 2', G.X(2) + 10, G.Y(4) + 6, { couleur: 'orange', taille: 17 });
+        c.repere('q_deux', G.X(0) - 8, G.Y(4.4), G.X(3) - G.X(0) + 30, G.Y(0.8) - G.Y(4.4), 'q = 2 : vers +∞');
+        K.lignes(510, 146, [{ t: 'q = 2 → +∞', couleur: 'orange', moment: 'q_deux' }], 34);
+        c.pause(.3);
+        serie(c, G, 1, 'vert', { r: 3.5 });
+        c.texte('q = 1', G.X(9), G.Y(1) - 12, { couleur: 'vert', taille: 17 });
+        c.repere('q_un', G.X(0) - 8, G.Y(1) - 12, G.X(10) - G.X(0) + 16, 24, 'q = 1 : toujours 1');
+        K.lignes(510, 180, [{ t: 'q = 1 → 1', couleur: 'vert', moment: 'q_un' }], 34);
+        c.pause(.4);
+        K.lignes(500, 240, [{ t: '0 < q < 1 : lim q^{n} = 0', couleur: 'jaune', taille: 18 }, { t: 'q > 1 : lim q^{n} = +∞', couleur: 'jaune', taille: 18 }, { t: 'q = 1 : lim q^{n} = 1', couleur: 'jaune', taille: 18, moment: 'bilan' }], 32);
+      },
+      decrire: {
+        repere: 'Un repère : n de 0 à 10 en abscisse, qⁿ en ordonnée (de 0 à 4).',
+        q_demi: 'q = 1/2 (cyan) : 1 ; 0,5 ; 0,25 ; 0,125… les points tombent vers 0.',
+        q_deux: 'q = 2 (orange) : 1 ; 2 ; 4 ; puis 8 sort du tableau par le haut (flèche « +∞ »).',
+        q_un: 'q = 1 (vert) : tous les points à 1.',
+        bilan: 'Écrit : 0 < q < 1 : lim qⁿ = 0 ; q > 1 : lim qⁿ = +∞ ; q = 1 : lim qⁿ = 1.',
+      },
+      explication: [{ repere: 'q_demi', texte: 'Multiplier par un demi encore et encore : vers 0.' }, { repere: 'q_deux', texte: 'Multiplier par 2 : ça grossit sans fin.' }],
+    },
+    negatif: {
+      titre: 'q négatif, et les quatre cas',
+      dessiner(c, K) {
+        K.titre('Et si q est négatif ?');
+        const G = K.axes({ x0: 70, y0: 50, w: 360, h: 222, xmin: -0.4, xmax: 10.6, ymin: -4.3, ymax: 4.3, nomx: 'n', nomy: 'q^{n}', gx: [[1, '1'], [5, '5'], [10, '10']], gy: [[1, '1'], [-1, '−1'], [4, '4'], [-4, '−4']] });
+        K.marque('repere');
+        serie(c, G, -0.5, 'cyan');
+        c.repere('q_moins_demi', G.X(0) - 8, G.Y(1) - 10, G.X(10) - G.X(0) + 16, G.Y(-0.5) - G.Y(1) + 20, 'q = −1/2 : sauts qui se rapprochent de 0');
+        K.lignes(470, 92, [{ t: 'q = −1/2 : sauts → 0', couleur: 'cyan', moment: 'q_moins_demi' }], 32);
+        c.pause(.3);
+        serie(c, G, -1, 'vert', { r: 3.5 });
+        c.repere('q_moins_un', G.X(0) - 8, G.Y(1) - 10, G.X(10) - G.X(0) + 16, G.Y(-1) - G.Y(1) + 20, 'q = −1 : 1, −1, 1, −1…');
+        K.lignes(470, 126, [{ t: 'q = −1 : 1, −1, 1, −1…', couleur: 'vert', moment: 'q_moins_un' }], 32);
+        c.pause(.3);
+        SU.points(c, G, NS.slice(0, 4).map(n => [n, Math.pow(-2, n)]), { couleur: 'orange', pas: .15 });
+        c.fleche(G.X(3), G.Y(-3.4), G.X(3), G.Y(-4.3) + 2, { couleur: 'orange', largeur: 1.8, tete: 8 });
+        c.fleche(G.X(4), G.Y(3.4), G.X(4), G.Y(4.3) - 2, { couleur: 'orange', largeur: 1.8, tete: 8 });
+        c.repere('q_moins_deux', G.X(0) - 8, G.Y(4.3), G.X(4) - G.X(0) + 24, G.Y(-4.3) - G.Y(4.3), 'q = −2 : sauts de plus en plus grands');
+        K.lignes(470, 160, [{ t: 'q = −2 : sauts qui grandissent', couleur: 'orange', moment: 'q_moins_deux' }], 32);
+        c.pause(.4);
+        const T = [['q ≤ −1', 'pas de limite', 'orange'], ['−1 < q < 1', 'lim q^{n} = 0', 'cyan'], ['q = 1', 'lim q^{n} = 1', 'vert'], ['q > 1', 'lim q^{n} = +∞', 'orange']];
+        const x0 = 30, w = 175, y0 = 288;
+        c.rect(x0, y0, 4 * w, 66, { couleur: 'jaune', arrondi: 6, largeur: 1.6 });
+        for (let i = 1; i < 4; i++) c.ligne(x0 + i * w, y0, x0 + i * w, y0 + 66, { couleur: 'jaune', largeur: 1.3 });
+        c.ligne(x0, y0 + 30, x0 + 4 * w, y0 + 30, { couleur: 'jaune', largeur: 1.3 });
+        T.forEach(([a, b, coul], i) => { c.texte(a, x0 + i * w + w / 2, y0 + 22, { couleur: 'blanc', taille: 17, align: 'center' }); c.texte(b, x0 + i * w + w / 2, y0 + 54, { couleur: coul, taille: 17, align: 'center' }); });
+        c.repere('tableau', x0 - 4, y0 - 4, 4 * w + 8, 74, 'le tableau des quatre cas');
+        K.marque('tableau_quatre_cas');
+      },
+      decrire: {
+        repere: 'Un repère : n de 0 à 10, qⁿ de −4 à 4 (axe au milieu).',
+        q_moins_demi: 'q = −1/2 (cyan) : 1 ; −0,5 ; 0,25 ; −0,125… les points sautent de part et d’autre de l’axe et se rapprochent de 0.',
+        q_moins_un: 'q = −1 (vert) : 1, −1, 1, −1… toujours les deux mêmes valeurs : pas de limite.',
+        q_moins_deux: 'q = −2 (orange) : 1, −2, 4, −8… des sauts de plus en plus grands qui sortent du tableau.',
+        tableau_quatre_cas: 'En bas, un tableau de quatre colonnes : q ≤ −1 : pas de limite | −1 < q < 1 : lim qⁿ = 0 | q = 1 : lim qⁿ = 1 | q > 1 : lim qⁿ = +∞.',
+      },
+      explication: [{ repere: 'q_moins_demi', texte: 'Entre −1 et 0, les sauts rapetissent : vers 0.' }, { repere: 'q_moins_un', texte: 'À −1, ça saute toujours entre 1 et −1.' }, { repere: 'tableau', texte: 'La condition qui compte : −1 < q < 1.' }],
+    },
+    libre: {
+      titre: 'Glisse q : le bon cas en un coup d’œil',
+      params: { q: { min: -2, max: 2, pas: 0.1, defaut: 0.5, sens: 'la raison q (glisser sur la règle en haut à droite)' } },
+      dessiner(c, K) {
+        const q = K.P.q;
+        K.titre('Glisse q');
+        c.ligne(RQ.x0, RQ.y, RQ.x1, RQ.y, { couleur: 'faible', largeur: 1.8 });
+        c.ligne(XQ(-1), RQ.y, XQ(1), RQ.y, { couleur: 'jaune', largeur: 5, alpha: .6 });
+        [-2, -1, 0, 1, 2].forEach(v => { c.ligne(XQ(v), RQ.y - 6, XQ(v), RQ.y + 6, { couleur: 'faible', largeur: 1.3, duree: .03 }); c.texte(fr(v), XQ(v), RQ.y + 24, { couleur: 'faible', taille: 14, align: 'center' }); });
+        c.texte('q', RQ.x0 - 20, RQ.y + 6, { couleur: 'blanc', taille: 18 });
+        c.texte('−1 < q < 1', XQ(0), RQ.y - 14, { couleur: 'jaune', taille: 14, align: 'center' });
+        c.direct(() => { c.cercle(XQ(q), RQ.y, 9, { couleur: 'cyan', largeur: 2.2, fond: 'cyan', fondAlpha: .35 }); });
+        c.repere('regle_q', RQ.x0 - 10, RQ.y - 30, RQ.x1 - RQ.x0 + 20, 60, 'la règle de q');
+        K.marque('regle_q');
+        c.pause(.3);
+        const G = K.axes({ x0: 60, y0: 78, w: 360, h: 260, xmin: -0.4, xmax: 10.6, ymin: -4.3, ymax: 4.3, nomx: 'n', nomy: 'q^{n}', gx: [[1, '1'], [5, '5'], [10, '10']], gy: [[1, '1'], [-1, '−1'], [4, '4'], [-4, '−4']] });
+        const coul = q <= -1 ? 'orange' : q < 1 ? 'cyan' : q === 1 ? 'vert' : 'orange';
+        SU.points(c, G, NS.map(n => [n, Math.pow(q, n)]), { couleur: coul, pas: .12, sansFleche: false });
+        c.texte('q = ' + fr(q, 1), G.X(7), G.Y(3.6), { couleur: coul, taille: 18 });
+        c.repere('points', G.x0, G.y0, G.w, G.h, 'les points (n ; qⁿ)');
+        K.marque('points');
+        c.pause(.4);
+        c.rect(462, 170, 280, 54, { couleur: coul, arrondi: 8, largeur: 1.8 });
+        c.texte(cas(q), 602, 204, { couleur: coul, taille: 18, align: 'center', max: 266 });
+        c.repere('verdict', 458, 166, 288, 62, 'le cas de q');
+        K.marque('verdict');
+      },
+      poignees(K) { return [{ id: 'q', x: XQ(K.P.q), y: RQ.y, bouger: (x) => ({ q: -2 + (x - RQ.x0) / (RQ.x1 - RQ.x0) * 4 }) }]; },
+      lecture: K => `q = ${fr(K.P.q, 1)} : ${casDit(K.P.q)}.`,
+      decrire: K => ({
+        regle_q: `En haut à droite, une règle de q de −2 à 2, la zone −1 < q < 1 en jaune ; le rond cyan est sur q = ${fr(K.P.q, 1)}.`,
+        points: `Les points (n ; qⁿ) pour q = ${fr(K.P.q, 1)} : ${NS.slice(0, 4).map(n => fr(Math.pow(K.P.q, n), 3)).join(' ; ')}…`,
+        verdict: `Encadré : ${casDit(K.P.q)}.`,
+      }),
+      explication: [{ repere: 'regle_q', texte: 'Glisse q : dans la zone jaune, les points vont vers 0.' }, { repere: 'verdict', texte: 'Le cas se lit sur la règle.' }],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

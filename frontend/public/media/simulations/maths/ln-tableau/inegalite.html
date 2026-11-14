@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prouver ln x ≤ x − 1</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="La courbe de ln sous sa tangente y = x − 1, l’écart g(x) = x − 1 − ln x et le tableau de variations de g"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Fonctions logarithmiques » (math_ch5_fonctions_ln) : prouver ln x ≤ x − 1 par une fonction auxiliaire.
+ * Vue : ?vue=ecart (param x). Moments : courbe, tangente, ecart, tableau, minimum. Repères : ecart, tableau, minimum.
+ */
+const fr = MathsTableau.fr;
+const g = x => x - 1 - Math.log(x);
+const OPT = { x0: 50, y0: 50, w: 380, h: 296, xmin: 0, xmax: 5.2, ymin: -2.4, ymax: 4.2,
+  gx: [[1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5']], gy: [[-2, '−2'], [-1, '−1'], [1, '1'], [2, '2'], [3, '3'], [4, '4']], nomx: 'x', nomy: 'y' };
+const XR = 452;
+
+MathsTableau.page({
+  id: 'ln_inegalite', titre: 'Fonctions logarithmiques',
+  texte: 'Construction à la craie : la courbe de ln reste sous sa tangente y = x − 1 en (1 ; 0) ; l’écart g(x) = x − 1 − ln x a pour dérivée g’(x) = (x − 1)/x, un minimum g(1) = 0, donc g(x) ≥ 0 et ln x ≤ x − 1 pour tout x > 0',
+  vues: {
+    ecart: {
+      titre: 'Prouver ln x ≤ x − 1',
+      params: { x: { min: 0.2, max: 5, pas: 0.1, defaut: 3, sens: 'abscisse de l’écart mesuré' } },
+      dessiner(c, K) {
+        K.titre('Prouver ln x ≤ x − 1');
+        const G = K.axes(OPT);
+        K.anime(1.3, p => K.courbePart(G, Math.log, 0.1, 5.1, p, { couleur: 'rouge' }));
+        c.texte('ln', G.X(4.8), G.Y(Math.log(4.8)) + 24, { couleur: 'rouge', taille: 19 });
+        K.marque('courbe');
+        c.pause(.3);
+        K.anime(1.1, p => K.courbePart(G, x => x - 1, 0, 5.1, p, { couleur: 'jaune' }));
+        c.texte('y = x − 1', G.X(3.6), G.Y(3.4) - 6, { couleur: 'jaune', taille: 18 });
+        K.rond(G, 1, 0, true, 'blanc');
+        K.marque('tangente');
+        c.pause(.3);
+        const x = K.P.x;
+        c.ligne(G.X(x), G.Y(Math.log(x)), G.X(x), G.Y(x - 1), { couleur: 'vert', largeur: 4 });
+        c.texte('g(x)', G.X(x) + 6, G.Y((x - 1 + Math.log(x)) / 2) + 6, { couleur: 'vert', taille: 17 });
+        K.lignes(XR, 70, [
+          { t: 'g(x) = x − 1 − ln x', couleur: 'vert', taille: 19 },
+          { t: 'g(' + fr(x, 1) + ') ≈ ' + fr(g(x), 2) + ' ≥ 0', couleur: 'vert', taille: 18 },
+        ], 28);
+        c.repere('ecart', G.X(x) - 10, G.Y(Math.max(x - 1, 0.2)) - 6, 70, Math.abs(G.Y(Math.log(x)) - G.Y(x - 1)) + 12, 'l’écart g(x) entre la droite et la courbe');
+        K.marque('ecart');
+        c.pause(.3);
+        // Tableau de variations de g
+        const tx = XR, ty = 140, tw = 290;
+        c.ligne(tx, ty + 28, tx + tw, ty + 28, { couleur: 'blanc', largeur: 1.4 });
+        c.ligne(tx, ty + 58, tx + tw, ty + 58, { couleur: 'blanc', largeur: 1.4 });
+        c.ligne(tx + 62, ty, tx + 62, ty + 128, { couleur: 'blanc', largeur: 1.4 });
+        c.texte('x', tx + 22, ty + 20, { couleur: 'blanc', taille: 18 });
+        c.texte('0', tx + 76, ty + 20, { couleur: 'blanc', taille: 17 });
+        c.texte('1', tx + 166, ty + 20, { couleur: 'blanc', taille: 17 });
+        c.texte('+∞', tx + 250, ty + 20, { couleur: 'blanc', taille: 17 });
+        c.ligne(tx + 70, ty + 28, tx + 70, ty + 128, { couleur: 'blanc', largeur: 1.2 });
+        c.ligne(tx + 74, ty + 28, tx + 74, ty + 128, { couleur: 'blanc', largeur: 1.2 });
+        c.pause(.15);
+        c.texte('g’(x)', tx + 6, ty + 50, { couleur: 'blanc', taille: 17 });
+        c.texte('−', tx + 118, ty + 50, { couleur: 'orange', taille: 20 });
+        c.texte('0', tx + 166, ty + 50, { couleur: 'blanc', taille: 17 });
+        c.texte('+', tx + 220, ty + 50, { couleur: 'vert', taille: 20 });
+        c.pause(.15);
+        c.texte('g', tx + 22, ty + 100, { couleur: 'blanc', taille: 18 });
+        c.fleche(tx + 90, ty + 70, tx + 156, ty + 112, { couleur: 'orange', largeur: 2 });
+        c.texte('0', tx + 164, ty + 124, { couleur: 'jaune', taille: 18 });
+        c.fleche(tx + 184, ty + 112, tx + 250, ty + 70, { couleur: 'vert', largeur: 2 });
+        c.texte('g’(x) = (x − 1)/x', tx, ty + 156, { couleur: 'blanc', taille: 17 });
+        c.repere('tableau', tx - 4, ty - 4, tw + 8, 170, 'le tableau de variations de g');
+        K.marque('tableau');
+        c.pause(.3);
+        c.rect(XR - 8, 318, 300, 40, { couleur: 'jaune', arrondi: 8, largeur: 1.7 });
+        c.texte('g(1) = 0 minimum ⇒ g(x) ≥ 0 ⇒ ln x ≤ x − 1', XR, 344, { couleur: 'jaune', taille: 15, max: 288 });
+        c.repere('minimum', XR - 8, 318, 300, 40, 'g(1) = 0 est le minimum, donc ln x ≤ x − 1');
+        K.marque('minimum');
+      },
+      poignees(K) { const G = K.grille(OPT); return [{ id: 'x', x: G.X(K.P.x), y: G.Y(0), bouger: (px) => ({ x: G.inv(px, 0)[0] }) }]; },
+      lecture: K => `En x = ${fr(K.P.x, 1)} : x − 1 = ${fr(K.P.x - 1, 2)}, ln x ≈ ${fr(Math.log(K.P.x), 2)}, l’écart g(x) ≈ ${fr(g(K.P.x), 2)} ≥ 0.`,
+      decrire: K => ({
+        courbe: 'Un repère : la courbe de ln en rouge.',
+        tangente: 'La droite y = x − 1 en jaune, tangente à la courbe au point (1 ; 0) ; la courbe reste dessous.',
+        ecart: `En x = ${fr(K.P.x, 1)}, un segment vert vertical entre la droite et la courbe, « g(x) » ; à droite « g(x) = x − 1 − ln x » et « g(${fr(K.P.x, 1)}) ≈ ${fr(g(K.P.x), 2)} ≥ 0 ».`,
+        tableau: 'À droite, le tableau de variations de g : x de 0 (double barre) à +∞ ; g’(x) : − puis 0 en 1 puis + ; g descend jusqu’à 0 en 1 puis monte ; dessous « g’(x) = (x − 1)/x ».',
+        minimum: 'En bas à droite, un encadré jaune : « g(1) = 0 minimum ⇒ g(x) ≥ 0 ⇒ ln x ≤ x − 1 ».',
+      }),
+      motifs: { courbe: 'la courbe de ln', tangente: 'la tangente en 1', ecart: 'l’écart g(x)', tableau: 'les variations de g', minimum: 'la conclusion' },
+      explication: [
+        { repere: 'ecart', texte: 'L’écart entre la droite et la courbe est g(x) = x − 1 − ln x.' },
+        { repere: 'tableau', texte: 'g’(x) = (x − 1)/x : g descend puis monte, minimum en 1.' },
+        { repere: 'minimum', texte: 'Le minimum g(1) = 0, donc g(x) ≥ 0 : ln x ≤ x − 1 pour tout x > 0.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

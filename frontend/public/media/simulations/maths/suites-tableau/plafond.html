@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Monter avec un plafond — convergence</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Repère à la craie : les points d’une suite croissante montent sous un plafond et se tassent sous leur limite ; le bon couple monotonie et borne"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/suites-tableau/su-outils.js"></script>
+<script>
+/*
+ * Cours « Suites numériques » (math_ch3_suites_numeriques) : suite monotone et bornée (c1, c2, c3).
+ * Vues : ?vue=monte | couple | sous_plafond (paramètre M de 4 à 8 : hauteur du plafond, poignée au bout du plafond).
+ * Suite : uₙ = 4 − 3 × 0,6ⁿ (1 ; 2,2 ; 2,92 …), croissante, limite 4.
+ */
+const { fr } = MathsTableau;
+const NS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+const u = n => 4 - 3 * Math.pow(0.6, n);
+const OPT = { x0: 70, y0: 56, w: 400, h: 274, xmin: -0.4, xmax: 10.6, ymin: -0.3, ymax: 8.6, nomx: 'n', nomy: 'u_n', gx: [[0, '0'], [1, '1'], [5, '5'], [10, '10']] };
+
+MathsTableau.page({
+  id: 'su_plafond', titre: 'Monotone et bornée : convergente',
+  texte: 'Constructions à la craie : une suite croissante qui monte sous un plafond et se tasse sous sa limite ; le bon couple (croissante et majorée, décroissante et minorée) ; le plafond n’est pas forcément la limite',
+  vues: {
+    monte: {
+      titre: 'Monter avec un plafond, c’est converger',
+      dessiner(c, K) {
+        K.titre('Une suite qui monte sous un plafond');
+        const G = K.axes({ ...OPT, ymax: 6.4, gy: [[1, '1'], [4, '4'], [5, '5']] });
+        K.marque('repere');
+        SU.points(c, G, NS.map(n => [n, u(n)]), { couleur: 'cyan', pas: .14 });
+        K.marque('monte');
+        c.pause(.4);
+        SU.hligne(c, G, 5, { couleur: 'orange', x0: -0.3, x1: 10.5 });
+        c.repere('plafond', G.X(-0.3), G.Y(5) - 10, G.X(10.5) - G.X(-0.3), 20, 'le plafond y = 5');
+        K.lignes(510, 100, [{ t: 'plafond y = 5 :', couleur: 'orange' }, { t: 'majorée par 5', couleur: 'orange', moment: 'plafond' }], 32);
+        c.pause(.4);
+        SU.hligne(c, G, 4, { couleur: 'jaune', x0: 3, x1: 10.5, pointille: [4, 5] });
+        c.texte('ℓ', G.X(10.5) + 6, G.Y(4) + 6, { couleur: 'jaune', taille: 20 });
+        c.repere('tasse', G.X(3), G.Y(4) - 16, G.X(10.5) - G.X(3), 30, 'les points se tassent sous ℓ');
+        K.lignes(510, 180, [{ t: 'elle se tasse sous ℓ :', couleur: 'jaune' }, { t: 'elle converge', couleur: 'jaune', moment: 'tasse' }], 32);
+        c.pause(.4);
+        SU.points(c, G, [0, 1, 2, 3].map(n => [n + 0.15, n * n]), { couleur: 'faible', pas: .15, horsTexte: '+∞' });
+        c.repere('sans_plafond', G.X(0), G.Y(6.4), G.X(3) - G.X(0) + 30, G.Y(0) - G.Y(6.4), 'sans plafond : n²');
+        K.lignes(510, 262, [{ t: 'sans plafond (n²),', couleur: 'faible' }, { t: 'elle peut partir vers +∞', couleur: 'faible', moment: 'sans_plafond' }], 32);
+      },
+      decrire: {
+        repere: 'Un repère : n de 0 à 10, uₙ de 0 à 6.',
+        monte: 'Les points de uₙ = 4 − 3 × 0,6ⁿ montent : 1 ; 2,2 ; 2,92 ; 3,35 ; 3,61 …',
+        plafond: 'Une droite orange y = 5 au-dessus de tous les points : plafond, la suite est majorée par 5.',
+        tasse: 'Des pointillés jaunes en y = 4, marqués ℓ : les points se tassent dessous ; elle converge.',
+        sans_plafond: 'Une autre suite en gris, n² : 0, 1, 4, puis elle sort par le haut (flèche « +∞ ») : sans plafond, elle peut partir vers +∞.',
+      },
+      explication: [{ repere: 'plafond', texte: 'Elle monte mais ne peut pas traverser le plafond.' }, { repere: 'tasse', texte: 'Alors elle se tasse sous un nombre ℓ : elle converge.' }],
+    },
+    couple: {
+      titre: 'Le bon couple',
+      dessiner(c, K) {
+        K.titre('Monte + plafond, descend + plancher');
+        const GA = K.axes({ x0: 50, y0: 66, w: 270, h: 160, xmin: -0.4, xmax: 10.6, ymin: -0.3, ymax: 5.6, nomx: 'n', nomy: '', gx: [], gy: [] });
+        SU.points(c, GA, NS.map(n => [n, u(n)]), { couleur: 'cyan', pas: .06, r: 3.8 });
+        SU.hligne(c, GA, 5, { couleur: 'orange', x0: -0.3, x1: 10.5 });
+        c.texte('croissante + plafond', 185, 252, { couleur: 'orange', taille: 18, align: 'center' });
+        c.repere('gauche', 40, 56, 300, 205, 'croissante et majorée');
+        K.marque('croissante_majoree');
+        c.pause(.4);
+        const GB = K.axes({ x0: 430, y0: 66, w: 270, h: 160, xmin: -0.4, xmax: 10.6, ymin: -0.3, ymax: 5.6, nomx: 'n', nomy: '', gx: [], gy: [] });
+        SU.points(c, GB, NS.map(n => [n, 1.5 + 3.5 * Math.pow(0.6, n)]), { couleur: 'cyan', pas: .06, r: 3.8 });
+        SU.hligne(c, GB, 1, { couleur: 'vert', x0: -0.3, x1: 10.5 });
+        c.texte('décroissante + plancher', 565, 252, { couleur: 'vert', taille: 18, align: 'center' });
+        c.repere('droite', 420, 56, 300, 205, 'décroissante et minorée');
+        K.marque('miroir_decroissante');
+        c.pause(.4);
+        c.texte('croissante et minorée : on ne peut rien conclure (ex. n²)', 380, 296, { couleur: 'rouge', taille: 18, align: 'center' });
+        c.repere('mauvais', 60, 276, 640, 28, 'le mauvais couple');
+        K.marque('mauvais_couple');
+        c.pause(.4);
+        c.rect(30, 314, 700, 42, { couleur: 'jaune', arrondi: 8, largeur: 1.6 });
+        c.texte('croissante et majorée ⇒ (u_n) converge ;  décroissante et minorée ⇒ (u_n) converge', 380, 342, { couleur: 'jaune', taille: 18, align: 'center', max: 680 });
+        c.repere('regle', 26, 310, 708, 50, 'les deux bons couples');
+        K.marque('regle');
+      },
+      decrire: {
+        croissante_majoree: 'À gauche : des points qui montent sous un plafond orange : croissante + plafond.',
+        miroir_decroissante: 'À droite, en miroir : des points qui descendent au-dessus d’un plancher vert : décroissante + plancher.',
+        mauvais_couple: 'En rouge : croissante et minorée : on ne peut rien conclure (ex. n²).',
+        regle: 'Encadré : croissante et majorée ⇒ convergente ; décroissante et minorée ⇒ convergente.',
+      },
+      explication: [{ repere: 'gauche', texte: 'Le plafond freine celle qui monte.' }, { repere: 'droite', texte: 'Le plancher freine celle qui descend.' }, { repere: 'mauvais', texte: 'Un plancher sous une suite qui monte ne la freine pas.' }],
+    },
+    sous_plafond: {
+      titre: 'Le plafond n’est pas forcément la limite',
+      params: { M: { min: 4, max: 8, pas: 0.5, defaut: 6, sens: 'hauteur du plafond (glisser son bout droit)' } },
+      dessiner(c, K) {
+        const M = K.P.M;
+        K.titre('Majorée par M, limite ℓ = 4');
+        const G = K.axes({ ...OPT, gy: [[1, '1'], [4, '4'], [8, '8']] });
+        K.marque('repere');
+        SU.points(c, G, NS.map(n => [n, u(n)]), { couleur: 'cyan', pas: .12 });
+        K.marque('points');
+        c.pause(.4);
+        SU.hligne(c, G, M, { couleur: 'orange', x0: -0.3, x1: 10.3, label: 'M = ' + fr(M, 1), lx: G.X(10.3) - 20 });
+        c.direct(() => c.cercle(G.X(10.3), G.Y(M), 8, { couleur: 'orange', largeur: 2, fond: 'orange', fondAlpha: .3 }));
+        c.repere('plafond', G.X(-0.3), G.Y(M) - 12, G.X(10.5) - G.X(-0.3), 24, 'le plafond y = M');
+        K.marque('plafond');
+        c.pause(.4);
+        SU.hligne(c, G, 4, { couleur: 'jaune', x0: -0.3, x1: 10.5, pointille: [4, 5] });
+        c.repere('limite', G.X(-0.3), G.Y(4) - 10, G.X(10.5) - G.X(-0.3), 20, 'la limite ℓ = 4');
+        K.lignes(500, 120, M === 4
+          ? [{ t: 'M = 4 : ici le plafond', couleur: 'jaune' }, { t: 'est aussi la limite,', couleur: 'jaune' }, { t: 'mais c’est un hasard :', couleur: 'blanc' }, { t: 'majorée par 5 ou 6 aussi', couleur: 'blanc', moment: 'limite_sous_plafond' }]
+          : [{ t: 'majorée par ' + fr(M, 1) + ',', couleur: 'orange' }, { t: 'mais ℓ = 4', couleur: 'jaune', taille: 22 }, { t: 'le plafond n’est pas', couleur: 'blanc' }, { t: 'forcément la limite', couleur: 'blanc', moment: 'limite_sous_plafond' }], 34);
+      },
+      poignees(K) { const G = K.grille(OPT); return [{ id: 'M', x: G.X(10.3), y: G.Y(K.P.M), bouger: (x, y) => ({ M: G.inv(x, y)[1] }) }]; },
+      lecture: K => (K.P.M === 4 ? 'M = 4 : le plafond touche la limite ℓ = 4 ; un plafond plus haut marche aussi.' : `Plafond M = ${fr(K.P.M, 1)} : la suite est majorée par ${fr(K.P.M, 1)}, mais sa limite est 4.`),
+      decrire: K => ({
+        repere: 'Un repère : n de 0 à 10, uₙ de 0 à 8.',
+        points: 'Les points de la suite croissante uₙ = 4 − 3 × 0,6ⁿ : 1 ; 2,2 ; 2,92 … ils se tassent sous 4.',
+        plafond: `Une droite orange y = M = ${fr(K.P.M, 1)} au-dessus des points : la suite est majorée par ${fr(K.P.M, 1)}.`,
+        limite_sous_plafond: K.P.M === 4 ? 'Pointillés jaunes en y = 4 : ici M = 4 est aussi la limite, mais c’est un hasard.' : `Pointillés jaunes en y = 4 : majorée par ${fr(K.P.M, 1)}, mais ℓ = 4 ; le plafond n’est pas forcément la limite.`,
+      }),
+      explication: [{ repere: 'plafond', texte: 'Glisse le plafond : la suite reste dessous.' }, { repere: 'limite', texte: 'Mais elle se tasse toujours sous 4.' }],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

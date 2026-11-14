@@ -1,0 +1,563 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Une population de noyaux — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="radio.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="À gauche, l’échantillon : une grille de noyaux d’iode 131 peints qui se désintègrent un à un au hasard (petit éclair, ils deviennent des noyaux de xénon 131) et le compteur N ; à droite, la courbe N(t) tracée en direct, les paliers N₀/2, N₀/4, N₀/8 et la loi N₀·e^(−λt)"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script src="noyaux.js"></script>
+<script>
+/*
+ * Beaucoup de noyaux : le hasard, la loi, la demi-vie (cours « Décroissance radioactive », 2e Bac PC BIOF, 11 novembre 2026).
+ * Iode 131 → xénon 131 + électron (β⁻), t½ = 8 jours. Horloge : 1 jour simulé = 0,25 s réelles (4 jours par seconde).
+ * Vue « L’échantillon » (gauche) : une grille de N₀ noyaux peints (sphères ombrées ; 12 grosses grappes en vue « hasard »),
+ * un noyau qui se désintègre fait un petit éclair et devient un noyau fils d’une autre couleur ; compteur N.
+ * Vue « La courbe » (droite) : axes t (jours) et N (noyaux), la courbe N(t) se trace en direct (marches + points).
+ * Vues (?vue=) : hasard (12 noyaux), grand_nombre, proportion, restants (400 noyaux).
+ *
+ * Le tirage est aléatoire mais reproductible (graine fixée par vue, set_parameters {graine} pour un autre ordre).
+ *  - hasard : chaque noyau a un instant de désintégration tiré au hasard (loi exponentielle de constante λ = ln2/t½).
+ *  - 400 noyaux : le tirage est GUIDÉ pour coller à la loi aux dates de contrôle t = t½, 2t½ … 6t½ (et aux jours 1, 2, 3
+ *    en vue « proportion ») : le nombre restant y vaut exactement round(N₀·2^(−t/t½)), soit 200, 100, 50 aux paliers ;
+ *    entre deux dates, chaque noyau part à un instant au hasard (loi exponentielle tronquée à l’intervalle). La courbe
+ *    garde donc l’allure aléatoire, mais les nombres affichés aux paliers sont ceux du cours.
+ * Aux instants clés, l’horloge des jours s’arrête le temps que la craie écrive (comme un professeur qui marque une pause) :
+ * le moment est la fin de cette écriture, t (jours) y vaut exactement la date annoncée.
+ * Poignée : le repère t½ sous l’axe du temps (2 à 20 jours) ; au lâcher, tout se recalcule et la scène repart.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const fx = (v, d = 1) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');   // 8,0 → 8 ; 9,30 → 9,3
+const jourS = v => (Math.abs(v) < 2 ? 'jour' : 'jours');
+const VUES = ['hasard', 'grand_nombre', 'proportion', 'restants'];
+const GRAINES = { hasard: 44, grand_nombre: 11, proportion: 13, restants: 17 };
+const TITRES = { hasard: 'le hasard (12 noyaux)', grand_nombre: 'un grand nombre : la loi', proportion: 'la même proportion chaque jour', restants: 'restants et désintégrés' };
+const MOMENTS = {
+  hasard: ['depart', 'premier', 'deuxieme', 'plusieurs', 'fin'],
+  grand_nombre: ['depart', 'un_t_demi', 'deux_t_demi', 'trois_t_demi', 'loi', 'fin'],
+  proportion: ['depart', 'ligne_1', 'ligne_2', 'ligne_3', 'conclusion', 'fin'],
+  restants: ['depart', 'croisement', 'deux_t_demi', 'formule', 'fin'],
+};
+const q = new URLSearchParams(location.search);
+const S = { vue: VUES.includes(q.get('vue')) ? q.get('vue') : 'hasard', tdemi: 8, graine: null, t: 0, running: false, pause: false, fait: false,
+  jusqua: null, motif: '', emis: 0, dit: '', glisse: false, axe: { max: 48, pas: 8 } };
+{ const v = Math.round(+q.get('t_demi_j')); if (v >= 2 && v <= 20) S.tdemi = v; const g = q.get('graine'); if (g !== null && g !== '' && Number.isFinite(+g)) S.graine = Math.round(+g); }
+const VJ = 4;          // jours simulés par seconde réelle (1 jour = 0,25 s)
+const T0 = 1.0;        // on montre d’abord les N₀ noyaux intacts ; l’horloge part à T0 (moment « depart »)
+const ECRITURE = 2.5;  // les parties fixes (titres, axes) s’écrivent 2,5 fois plus vite que le kit
+const N0 = () => (S.vue === 'hasard' ? 12 : 400);
+const graine = () => S.graine ?? GRAINES[S.vue];
+const lambda = () => Math.LN2 / S.tdemi;
+
+/* ── Géométrie (cadre 760 × 420) ─────────────────────────────────────── */
+const RE = { x: 8, y: 42, w: 300, h: 370 }, RC = { x: 316, y: 42, w: 436, h: 370 };
+const geo = () => (S.vue === 'proportion' ? { ox: 372, oy: 184, axl: 340, ayl: 104 } : { ox: 372, oy: 344, axl: 340, ayl: 252 });
+let G = geo();
+const PX = t => G.ox + t * G.axl / S.axe.max, PY = N => G.oy - N * G.ayl / N0();
+function posNoyau(i) {
+  if (N0() === 12) return [56 + (i % 4) * 68, 118 + Math.floor(i / 4) * 68];
+  return [59.2 + (i % 20) * 10.4, 94 + Math.floor(i / 20) * 10.4];
+}
+
+/* ── Tirage des instants de désintégration (jours) ───────────────────── */
+let TD = [], TRI = [], ORDRE = [];
+function tirer() {
+  const n = N0(), T = S.tdemi, lam = lambda(), r = window.Tableau.graine((Math.imul(graine(), 2654435761) ^ 12345) >>> 0);
+  const u = () => clamp(r(), 1e-9, 1 - 1e-9);
+  TD = new Array(n).fill(0);
+  if (S.vue === 'hasard') { for (let i = 0; i < n; i++) TD[i] = -Math.log(u()) / lam; }
+  else {
+    // Tirage guidé (voir l’en-tête) : dates de contrôle, nombre restant exact à chacune, instants au hasard entre deux.
+    const ordre = [...Array(n).keys()];
+    for (let i = n - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [ordre[i], ordre[j]] = [ordre[j], ordre[i]]; }
+    const dates = [...new Set([1, 2, 3, 4, 5, 6].map(k => k * T).concat(S.vue === 'proportion' ? [1, 2, 3, 4] : []))].sort((a, b) => a - b);
+    let i = 0, avant = 0, reste = n;
+    for (const d of dates) {
+      const vise = Math.round(n * 2 ** (-d / T)), L = d - avant, qq = 1 - Math.exp(-lam * L);
+      for (; reste > vise; reste--) TD[ordre[i++]] = avant + Math.min(L * (1 - 1e-9), -Math.log(1 - u() * qq) / lam);
+      avant = d;
+    }
+    while (i < n) TD[ordre[i++]] = avant - Math.log(u()) / lam;
+  }
+  ORDRE = [...Array(n).keys()].sort((a, b) => TD[a] - TD[b]);
+  TRI = ORDRE.map(i => TD[i]);
+}
+/** Nombre de noyaux restants à la date tj (jours) : ceux qui ne se sont pas encore désintégrés. */
+function restants(tj) { let lo = 0, hi = TRI.length; while (lo < hi) { const m = (lo + hi) >> 1; if (TRI[m] <= tj) lo = m + 1; else hi = m; } return TRI.length - lo; }
+const vise = k => Math.round(N0() * 2 ** (-k));            // N₀/2ᵏ (exact aux paliers grâce au tirage guidé)
+const avantJour = k => Math.round(400 * 2 ** (-k / S.tdemi)); // vue proportion : N au début du jour k + 1
+
+/* ── Déroulé : instants clés (jours), arrêts de l’horloge pendant l’écriture ── */
+function evenements() {
+  const T = S.tdemi;
+  if (S.vue === 'hasard') {
+    const d = TRI, apres = k => d[k] + Math.min(1, .5 * ((d[k + 1] ?? d[k] + 2) - d[k]));
+    return { ev: [{ nom: 'premier', tj: apres(0) }, { nom: 'deuxieme', tj: apres(1) }, { nom: 'plusieurs', tj: apres(5) }], finJ: Math.max(5 * T, apres(5) + 2) };
+  }
+  if (S.vue === 'grand_nombre') return { ev: [{ nom: 'un_t_demi', tj: T }, { nom: 'deux_t_demi', tj: 2 * T }, { nom: 'trois_t_demi', tj: 3 * T }, { nom: 'loi', tj: 3 * T }], finJ: 5 * T };
+  if (S.vue === 'proportion') return { ev: [{ nom: 'ligne_1', tj: 1 }, { nom: 'ligne_2', tj: 2 }, { nom: 'ligne_3', tj: 3 }, { nom: 'conclusion', tj: 3 }], finJ: 4 };
+  return { ev: [{ nom: 'croisement', tj: T }, { nom: 'deux_t_demi', tj: 2 * T }, { nom: 'formule', tj: 2 * T }], finJ: 5 * T };
+}
+function axeT(finJ) {
+  for (const g of [.5, 1, 2, 4, 5, 8, 10, 16, 20, 25, 40]) { const n = Math.ceil(finJ * 1.15 / g - 1e-9); if (n <= 6) return { max: n * g, pas: g }; }
+  return { max: finJ * 1.2, pas: finJ / 5 };
+}
+const HOLD = {};       // durée d’écriture de chaque instant clé (s), mesurée au dessin
+let TL = null;
+function construire() {
+  const { ev, finJ } = evenements(); let s = T0, tj = 0; const pts = [[0, 0], [T0, 0]], M = { depart: T0 };
+  for (const e of ev) {
+    s += (e.tj - tj) / VJ; tj = e.tj; e.debut = s; pts.push([s, tj]);
+    s += (HOLD[e.nom] ?? 2) + .35; e.fin = s; pts.push([s, tj]); M[e.nom] = s;
+  }
+  s += (finJ - tj) / VJ; pts.push([s, finJ]); M.fin = s;
+  TL = { pts, ev, M, finJ };
+  if (!S.glisse) S.axe = axeT(finJ);
+}
+/** Date (jours) affichée à l’instant s de la scène. */
+function jours(s) {
+  const p = TL.pts; if (s <= p[0][0]) return 0;
+  for (let i = 1; i < p.length; i++) if (s <= p[i][0]) { const [s0, j0] = p[i - 1], [s1, j1] = p[i]; return s1 > s0 ? j0 + (j1 - j0) * (s - s0) / (s1 - s0) : j1; }
+  return p[p.length - 1][1];
+}
+const ev = nom => TL.ev.find(e => e.nom === nom);
+const vu = nom => (nom === 'depart' ? S.t >= T0 - 1e-6 : !!ev(nom) && S.t >= ev(nom).fin - 1e-6);   // écriture de l’instant terminée
+const commence = nom => !!ev(nom) && S.t >= ev(nom).debut - 1e-6;
+
+/* ── Peinture : noyaux (sphères ombrées, grappes), éclairs, électrons ── */
+const COUL = { pere: ['#f5ebff', '#b06cf0', '#43186f'], fils: ['#f1f4f8', '#97a6b8', '#38434f'], proton: ['#ffd9bd', '#f06a3a', '#8a2508'],
+  neutron: ['#f0f7ff', '#a8c0d8', '#4b6480'], electron: ['#e3f3ff', '#3b9cff', '#0a3a8c'] };
+function sphere(ctx, x, y, r, [clair, milieu, sombre]) {
+  const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r); g.addColorStop(0, clair); g.addColorStop(.45, milieu); g.addColorStop(1, sombre);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.ellipse(x - r * .36, y - r * .42, r * .24, r * .15, -.6, 0, Math.PI * 2); ctx.fill();
+}
+function toile(R, peindre) { const k = 4, cv = document.createElement('canvas'); cv.width = cv.height = Math.ceil(2 * R * k); const x = cv.getContext('2d'); x.scale(k, k); peindre(x); return { cv, r: R }; }
+function grappe(fils) {
+  return toile(31, (x) => {
+    const R = 31, a = x.createRadialGradient(R, R, 6, R, R, R);
+    a.addColorStop(0, fils ? 'rgba(151,166,184,.30)' : 'rgba(186,120,255,.55)'); a.addColorStop(1, 'rgba(0,0,0,0)');
+    x.fillStyle = a; x.beginPath(); x.arc(R, R, R, 0, Math.PI * 2); x.fill();
+    const pts = [[0, 0]];
+    for (let j = 0; j < 6; j++) pts.push([9.4 * Math.cos(j * Math.PI / 3 + .2), 9.4 * Math.sin(j * Math.PI / 3 + .2)]);
+    for (let j = 0; j < 12; j++) { const rr = j % 2 ? 16.4 : 18.6, t = j * Math.PI / 6 + .2; pts.push([rr * Math.cos(t), rr * Math.sin(t)]); }
+    const protons = new Set(fils ? [0, 2, 4, 6, 8, 11, 13, 15, 17, 3] : [0, 2, 4, 6, 8, 11, 13, 15, 17]);   // fils : un neutron devenu proton
+    pts.map((p, i) => [p, i]).sort((A, B) => Math.hypot(...B[0]) - Math.hypot(...A[0]) || A[0][1] - B[0][1])
+      .forEach(([[px, py], i]) => sphere(x, R + px, R + py, 5.8, protons.has(i) ? COUL.proton : COUL.neutron));
+    if (fils) { x.globalCompositeOperation = 'source-atop'; x.fillStyle = 'rgba(60,72,88,.42)'; x.fillRect(0, 0, 2 * R, 2 * R); }
+  });
+}
+let SP = null;
+const sprites = () => SP || (SP = { pere: toile(6.6, x => sphere(x, 6.6, 6.6, 4.6, COUL.pere)), fils: toile(6.6, x => sphere(x, 6.6, 6.6, 4.6, COUL.fils)), grappePere: grappe(false), grappeFils: grappe(true) });
+function eclair(ctx, x, y, r, a) {
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, `rgba(255,255,240,${.95 * a})`); g.addColorStop(.35, `rgba(255,228,120,${.6 * a})`); g.addColorStop(1, 'rgba(255,200,80,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = `rgba(255,250,210,${.8 * a})`; ctx.lineWidth = 1.2; ctx.beginPath();
+  for (let j = 0; j < 4; j++) { const t = j * Math.PI / 2 + .4; ctx.moveTo(x + Math.cos(t) * r * .35, y + Math.sin(t) * r * .35); ctx.lineTo(x + Math.cos(t) * r * 1.1, y + Math.sin(t) * r * 1.1); }
+  ctx.stroke(); ctx.restore();
+}
+/** L’échantillon peint à la date tj ; renvoie les électrons en vol (pour leur étiquette à la craie). */
+function peindreEchantillon(ctx, tj) {
+  const n = N0(), gros = n === 12, sp = sprites(), volants = [];
+  ctx.save(); ctx.beginPath(); ctx.rect(RE.x + 2, RE.y + 2, RE.w - 4, RE.h - 4); ctx.clip();
+  // Ombre douce sous l’échantillon (le petit tas posé sur la paillasse).
+  const [xa, ya] = posNoyau(0), [xb, yb] = posNoyau(n - 1), cx = (xa + xb) / 2, cy = (ya + yb) / 2;
+  const g = ctx.createRadialGradient(cx, cy, 10, cx, cy, 150); g.addColorStop(0, 'rgba(0,0,0,.28)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.fillRect(RE.x, RE.y, RE.w, RE.h);
+  // Vue proportion : les noyaux partis pendant le jour qu’on est en train de compter sont cerclés.
+  let jour = 0;
+  if (S.vue === 'proportion') for (let k = 1; k <= 3; k++) { const e = ev('ligne_' + k); if (e && S.t >= e.debut - 1e-6 && S.t < (ev(k < 3 ? 'ligne_' + (k + 1) : 'conclusion').debut - 1e-6)) jour = k; }
+  for (let i = 0; i < n; i++) {
+    const [x, y] = posNoyau(i), parti = TD[i] <= tj, s = gros ? (parti ? sp.grappeFils : sp.grappePere) : (parti ? sp.fils : sp.pere);
+    ctx.drawImage(s.cv, x - s.r, y - s.r, 2 * s.r, 2 * s.r);
+    if (jour && TD[i] > jour - 1 && TD[i] <= jour) { ctx.strokeStyle = 'rgba(250,204,21,.9)'; ctx.lineWidth = 1.3; ctx.beginPath(); ctx.arc(x, y, 6.2, 0, Math.PI * 2); ctx.stroke(); }
+  }
+  const duree = gros ? 1.2 : .8;
+  for (let i = 0; i < n; i++) {
+    const age = tj - TD[i]; if (age < 0) continue;
+    const [x, y] = posNoyau(i);
+    if (age < duree) eclair(ctx, x, y, gros ? 30 : 10, 1 - age / duree);
+    if (gros && age < 2.5) {                        // l’électron (β⁻) part vite, puis s’efface
+      const a = i * 2.39996 + graine(), f = age / 2.5, ex = x + Math.cos(a) * (14 + 70 * f), ey = y + Math.sin(a) * (14 + 70 * f);
+      ctx.globalAlpha = f > .7 ? (1 - f) / .3 : 1; sphere(ctx, ex, ey, 3.8, COUL.electron); ctx.globalAlpha = 1;
+      volants.push([ex, ey, f > .7 ? (1 - f) / .3 : 1]);
+    }
+  }
+  ctx.restore();
+  return volants;
+}
+
+/* ── Écriture à un instant de la scène : un texte qui apparaît à un instant clé s’écrit pendant l’arrêt de l’horloge ── */
+function ecritA(c, nom, fn) {
+  const e = ev(nom); if (!e) return;
+  const t = c.t, cur = c.cur, comp = c.complet;
+  c.t = S.t; c.cur = e.debut;
+  try { fn(); } finally { HOLD[nom] = c.cur - e.debut; c.t = t; c.cur = cur; if (!S.running) c.complet = comp; }
+}
+
+/* ── Dessin ──────────────────────────────────────────────────────────── */
+function dessiner(c) {
+  scene.cadre(23);
+  const n0 = N0(), T = S.tdemi, tj = jours(S.t), N = restants(tj), AX = S.axe;
+  // L’échantillon peint (avant la craie).
+  let volants = [];
+  c.direct(() => { volants = peindreEchantillon(c.ctx, tj); });
+  // Parties fixes, écrites à la craie.
+  c.texte('L’échantillon', RE.x + 6, 32, { couleur: 'cyan', taille: 17 });
+  c.texte(`N_0 = ${n0} noyaux`, RE.x + RE.w - 4, 32, { couleur: 'faible', taille: 15, align: 'right' });
+  c.rect(RE.x, RE.y, RE.w, RE.h, { couleur: 'tresfaible', arrondi: 10 });
+  c.texte(`La courbe : ${TITRES[S.vue]}`, RC.x + 6, 32, { couleur: 'cyan', taille: 17 });
+  c.rect(RC.x, RC.y, RC.w, RC.h, { couleur: 'tresfaible', arrondi: 10 });
+  c.noyaux('[131,53]I → [131,54]Xe + [0,-1]e', RE.x + RE.w / 2, 70, { align: 'center', taille: 18 });
+  if (n0 === 12) for (let i = 0; i < 12; i++) { const [x, y] = posNoyau(i); c.texte(String(i + 1), x, y - 31, { couleur: 'faible', taille: 12, align: 'center', duree: .05 }); }
+  // Légende : père, fils.
+  c.direct(() => { const sp = sprites(); c.ctx.drawImage(sp.pere.cv, 26 - 6.6, 316 - 6.6, 13.2, 13.2); c.ctx.drawImage(sp.fils.cv, 168 - 6.6, 316 - 6.6, 13.2, 13.2); });
+  c.nucleide('I', 131, 53, 38, 322, { taille: 16, couleur: 'violet' }); c.texte(': père', 72, 322, { couleur: 'faible', taille: 15 });
+  c.nucleide('Xe', 131, 54, 180, 322, { taille: 16 }); c.texte(': fils', 222, 322, { couleur: 'faible', taille: 15 });
+  // Axes : noms ET graduations.
+  const tg = []; for (let v = AX.pas; v <= AX.max + 1e-9; v += AX.pas) tg.push([v * G.axl / AX.max / (G.axl + 18), fx(v, 1)]);
+  c.axe(G.ox, G.oy, G.ox + G.axl + 18, G.oy, tg, { taille: 13 });
+  const pasN = n0 === 12 ? 2 : 100, ng = []; for (let v = pasN; v <= n0; v += pasN) ng.push([v * G.ayl / n0 / (G.ayl + 14), String(v)]);
+  c.axe(G.ox, G.oy, G.ox, G.oy - G.ayl - 14, ng, { taille: 13, vertical: true });
+  c.texte('0', G.ox - 8, G.oy + 18, { couleur: 'faible', taille: 13, align: 'right' });
+  c.texte('N (noyaux)', G.ox + 10, G.oy - G.ayl - 2, { couleur: 'blanc', taille: 16 });
+  c.texte('N_0', G.ox - 10, PY(n0) - 13, { couleur: 'jaune', taille: 15, align: 'right' });
+  c.texte('t (jours)', 746, G.oy - 9, { couleur: 'blanc', taille: 16, align: 'right' });
+  if (S.vue === 'restants') {
+    c.texte('— N : restants', 400, G.oy - G.ayl + 14, { couleur: 'jaune', taille: 15 });
+    c.texte('— N_d : désintégrés', 400, G.oy - G.ayl + 34, { couleur: 'orange', taille: 15 });
+  }
+  if (S.vue === 'proportion') {
+    c.texte('Δt = 1 jour', 330, 260, { couleur: 'cyan', taille: 16 });
+    [['N avant', 466], ['désintégrés', 572], ['proportion', 682]].forEach(([s, x]) => c.texte(s, x, 260, { couleur: 'blanc', taille: 15, align: 'center' }));
+    c.ligne(330, 268, 740, 268, { couleur: 'tresfaible', largeur: 1.4 });
+  }
+  // La courbe en direct (marches + points), le compteur, la poignée t½.
+  c.direct(() => {
+    if (S.t >= T0 - 1e-6) {
+      if (S.vue === 'restants') tracer(c, tj, v => n0 - v, 'orange');
+      tracer(c, tj, v => v, 'jaune');
+    } else c.point(PX(0), PY(n0), 4.6, 'jaune');
+    for (const [x, y, a] of volants) if (x > RE.x + 6 && x < RE.x + RE.w - 26 && y > RE.y + 24 && y < RE.y + RE.h - 6) c.texte('e⁻', x + 6, y - 6, { couleur: 'bleu', taille: 14, alpha: .95 * a });
+    c.texte(`N = ${N} noyau${N > 1 ? 'x' : ''} restant${N > 1 ? 's' : ''}`, 16, 352, { couleur: 'jaune', taille: 19 });
+    c.texte(`désintégrés : N_d = ${n0 - N}`, 16, 376, { couleur: 'orange', taille: 16 });
+    c.texte(`t = ${fx(tj, 1)} ${jourS(tj)}`, 16, 402, { couleur: 'blanc', taille: 18 });
+    c.texte(`t½ = ${T} jours`, RE.x + RE.w - 8, 402, { couleur: 'rose', taille: 16, align: 'right' });
+    if (T <= AX.max) {
+      const x = PX(T), y = G.oy + 26;
+      c.ctx.fillStyle = 'rgba(244,114,182,.9)'; c.ctx.beginPath(); c.ctx.moveTo(x, y); c.ctx.lineTo(x - 7, y + 11); c.ctx.lineTo(x + 7, y + 11); c.ctx.closePath(); c.ctx.fill();
+      c.texte(`t½ = ${T} j`, clamp(x, G.ox + 10, 700), y + 28, { couleur: 'rose', taille: 15, align: 'center' });
+    }
+  });
+  // Ce qui s’écrit aux instants clés.
+  if (S.vue === 'hasard') {
+    const marque = (k, nom, txt, y) => ecritA(c, nom, () => {
+      const [x, yy] = posNoyau(ORDRE[k]); c.cercle(x, yy, 27, { couleur: 'rose', largeur: 2 });
+      c.texte(txt, 494, y, { couleur: 'rose', taille: 16 });
+    });
+    marque(0, 'premier', `le premier : le n° ${ORDRE[0] + 1}`, 104);
+    marque(1, 'deuxieme', `puis le n° ${ORDRE[1] + 1}`, 128);
+    ecritA(c, 'plusieurs', () => {
+      c.texte(`6 sur 12 partis à t = ${fx(TRI[5], 1)} ${jourS(TRI[5])}`, 494, 160, { couleur: 'jaune', taille: 16, max: 250 });
+      c.texte('un noyau : au hasard ;', 494, 184, { couleur: 'blanc', taille: 15 });
+      c.texte('beaucoup de noyaux : une loi', 494, 206, { couleur: 'blanc', taille: 15 });
+    });
+  }
+  if (S.vue === 'grand_nombre') {
+    for (let k = 1; k <= 3; k++) ecritA(c, ['un_t_demi', 'deux_t_demi', 'trois_t_demi'][k - 1], () => palier(c, k, true));
+    ecritA(c, 'loi', () => {
+      c.courbe(u => { const t = u * AX.max * .98; return [PX(t), PY(n0 * 2 ** (-t / T))]; }, 70, { couleur: 'cyan', largeur: 1.8, pointille: [6, 6], tremble: .2 });
+      c.texte('N(t) = N_0·e^{−λt}', 520, 118, { couleur: 'cyan', taille: 21 });
+      c.rect(510, 94, 170, 34, { couleur: 'cyan', largeur: 1.4, arrondi: 6 });
+      c.texte('la loi (pointillé) : λ = ln2/t½', 510, 150, { couleur: 'faible', taille: 14 });
+    });
+  }
+  if (S.vue === 'proportion') {
+    for (let k = 1; k <= 3; k++) ecritA(c, 'ligne_' + k, () => {
+      const av = avantJour(k - 1), d = av - avantJour(k), y = 268 + 24 * k;
+      c.texte(`jour ${k}`, 334, y, { couleur: 'faible', taille: 14 });
+      c.texte(String(av), 466, y, { couleur: 'jaune', taille: 16, align: 'center' });
+      c.texte(String(d), 572, y, { couleur: 'orange', taille: 16, align: 'center' });
+      c.texte(`${d}/${av} ≈ ${fr(d / av, 3)}`, 682, y, { couleur: 'blanc', taille: 16, align: 'center' });
+      c.ligne(PX(k), G.oy, PX(k), PY(av - d), { couleur: 'rose', largeur: 1.2, pointille: [4, 4] });
+    });
+    ecritA(c, 'conclusion', () => {
+      c.texte('la même proportion par unité de temps : λ', 334, 372, { couleur: 'vert', taille: 16, max: 400 });
+      c.texte(`proportion ≈ λ·Δt ; λ = ln2/t½ = ${fr(lambda(), 3)} jour⁻¹`, 334, 398, { couleur: 'vert', taille: 15, max: 400 });
+    });
+  }
+  if (S.vue === 'restants') {
+    ecritA(c, 'croisement', () => {
+      const x = PX(T), y = PY(n0 / 2);
+      c.ligne(x, y, x, G.oy, { couleur: 'rose', largeur: 1.3, pointille: [5, 5] });
+      c.cercle(x, y, 9, { couleur: 'rose', largeur: 2 });
+      c.texte('t½', x + 3, G.oy - 6, { couleur: 'rose', taille: 13 });
+      c.texte(`t = t½ : ${vise(1)} restants`, x + 26, y - 6, { couleur: 'rose', taille: 15 });
+      c.texte(`et ${n0 - vise(1)} désintégrés`, x + 26, y + 14, { couleur: 'rose', taille: 15 });
+    });
+    ecritA(c, 'deux_t_demi', () => {
+      const x = PX(2 * T), y1 = PY(vise(2)), y2 = PY(n0 - vise(2));
+      c.ligne(x, y2, x, G.oy, { couleur: 'rose', largeur: 1.3, pointille: [5, 5] });
+      c.cercle(x, y1, 7, { couleur: 'jaune', largeur: 1.8 }); c.cercle(x, y2, 7, { couleur: 'orange', largeur: 1.8 });
+      c.texte('2t½', x + 3, G.oy - 6, { couleur: 'rose', taille: 13 });
+      c.texte(`${vise(2)} restants, ${n0 - vise(2)} désintégrés`, x + 12, PY(n0 / 2) + 44, { couleur: 'blanc', taille: 15 });
+      c.texte('75 % désintégrés', x + 12, PY(n0 / 2) + 64, { couleur: 'orange', taille: 16 });
+    });
+    ecritA(c, 'formule', () => {
+      c.texte('N_d = N_0 − N(t)', 604, 182, { couleur: 'vert', taille: 19 });
+      c.rect(594, 160, 140, 32, { couleur: 'vert', largeur: 1.4, arrondi: 6 });
+    });
+  }
+  reperes(c, tj);
+  const fini = c.fin();
+  return fini;
+}
+/** La courbe tracée en direct : les marches (un noyau = une marche) et un point à la craie tous les demi-pas de l’axe. */
+function tracer(c, tj, f, couleur) {
+  const n0 = N0(), pts = [[PX(0), PY(f(n0))]]; let n = n0;
+  for (const td of TRI) { if (td > tj) break; const x = PX(td); pts.push([x, PY(f(n))]); n--; pts.push([x, PY(f(n))]); }
+  pts.push([PX(tj), PY(f(n))]);
+  if (tj > 0) c.trait(pts, { couleur, largeur: 1.7, tremble: .15, alpha: .75 });
+  const pas = S.axe.pas / 2;
+  for (let t = 0; t <= tj + 1e-9; t += pas) c.point(PX(t), PY(f(restants(t))), 2.8, couleur);
+  c.point(PX(tj), PY(f(n)), 4.6, couleur);
+}
+/** Palier k (vue grand_nombre) : pointillés jusqu’au point (k·t½ ; N₀/2ᵏ), cote. */
+function palier(c, k) {
+  const t = k * S.tdemi, Nk = vise(k), x = PX(t), y = PY(Nk);
+  c.ligne(G.ox, y, x, y, { couleur: 'rose', largeur: 1.4, pointille: [5, 5] });
+  c.ligne(x, y, x, G.oy, { couleur: 'rose', largeur: 1.4, pointille: [5, 5] });
+  c.cercle(x, y, 7, { couleur: 'rose', largeur: 1.8 });
+  c.texte(`N_0/${2 ** k} = ${Nk}`, x + 10, y - 8, { couleur: 'rose', taille: 16 });
+  c.texte(k === 1 ? 't½' : `${k}t½`, x + 3, G.oy - 6, { couleur: 'rose', taille: 13 });
+}
+function reperes(c, tj) {
+  const n0 = N0(), T = S.tdemi, [xa, ya] = posNoyau(0), [xb, yb] = posNoyau(n0 - 1), m = n0 === 12 ? 30 : 7;
+  const parti = ORDRE.filter(i => TD[i] <= tj), dernier = parti.length ? parti[parti.length - 1] : ORDRE[0], [xd, yd] = posNoyau(dernier);
+  const ici = (v) => (S.vue === v ? '' : ` (vue « ${v} »)`);
+  c.repere('vue_echantillon', RE.x, RE.y, RE.w, RE.h, `l’échantillon : ${n0} noyaux d’iode 131`);
+  c.repere('vue_courbe', RC.x, RC.y, RC.w, RC.h, 'la courbe N(t)');
+  c.repere('echantillon', xa - m, ya - m, xb - xa + 2 * m, yb - ya + 2 * m, `la grille de ${n0} noyaux`);
+  c.repere('noyau_desintegre', xd - m, yd - m, 2 * m, 2 * m, `${parti.length ? 'un noyau désintégré' : 'le premier noyau qui va se désintégrer'} (n° ${dernier + 1})`);
+  c.repere('compteur', 12, 334, 292, 74, `le compteur : N = ${restants(tj)} noyau(x) restant(s)`);
+  c.repere('courbe', G.ox, G.oy - G.ayl, G.axl, G.ayl, 'la courbe N(t), tracée en direct');
+  c.repere('axe_t', G.ox, G.oy - 12, G.axl + 22, 32, 'l’axe du temps : t (jours)');
+  c.repere('axe_N', G.ox - 44, G.oy - G.ayl - 16, 56, G.ayl + 22, 'l’axe N (noyaux)');
+  const QX = t => Math.min(PX(t), RC.x + RC.w - 14);   // un repère hors de l’axe (vue « proportion ») reste dans le cadre
+  for (let k = 1; k <= 3; k++) c.repere('palier_' + k, QX(k * T) - 12, PY(vise(k)) - 12, 24, 24, `palier ${k} : t = ${k === 1 ? '' : k}t½ = ${k * T} jours, N = N₀/${2 ** k} = ${vise(k)}${ici('grand_nombre')}`);
+  c.repere('N0', G.ox - 40, PY(n0) - 26, 48, 34, `N₀ = ${n0} noyaux à t = 0`);
+  c.repere('N0_sur_2', G.ox, PY(n0 / 2) - 10, Math.min(QX(T) - G.ox + 100, G.axl), 20, `N₀/2 = ${vise(1)} noyaux`);
+  c.repere('t_demi', PX(Math.min(T, S.axe.max)) - 26, G.oy + 18, 52, 44, `t½ = ${T} jours (poignée : glisser pour changer t½)`);
+  c.repere('loi', 506, 90, 180, 66, `la loi N(t) = N₀·e^(−λt), en pointillé${ici('grand_nombre')}`);
+  c.repere('tableau', 326, 244, 420, 164, `le tableau : Δt = 1 jour, N avant, désintégrés, proportion${ici('proportion')}`);
+  c.repere('courbe_restants', G.ox, G.oy - G.ayl, G.axl, G.ayl, 'la courbe des noyaux restants N(t)');
+  c.repere('courbe_desintegres', G.ox, G.oy - G.ayl, G.axl, G.ayl, `la courbe des noyaux désintégrés N_d(t)${ici('restants')}`);
+  c.repere('croisement', QX(T) - 13, PY(n0 / 2) - 13, 26, 26, `le croisement à t = t½ : ${vise(1)} restants et ${n0 - vise(1)} désintégrés${ici('restants')}`);
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+const craie = scene.craie;
+const cadreBase = scene.cadre;
+scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };   // titres et axes écrits plus vite
+function calculer() {
+  tirer(); construire();
+  const t = S.t, r = S.running; S.t = 1e6; S.running = false;
+  try { dessiner(craie); } finally { S.t = t; S.running = r; }
+  construire(); scene.sale = true;
+}
+
+/* ── Ce que dit la bulle aux instants clés ─────────────────────────────── */
+function message(nom) {
+  const T = S.tdemi, n0 = N0();
+  const M = {
+    premier: `Le premier qui se désintègre : le n° ${ORDRE[0] + 1}, à t = ${fx(TRI[0], 1)} ${jourS(TRI[0])} — pas forcément celui qu’on attendait : c’est le hasard.`,
+    deuxieme: `Puis le n° ${ORDRE[1] + 1}, à t = ${fx(TRI[1], 1)} ${jourS(TRI[1])}. Impossible de prévoir lequel part, ni quand.`,
+    plusieurs: `6 noyaux sur 12 sont partis à t = ${fx(TRI[5], 1)} jours (t½ = ${T} jours). Un noyau : le hasard ; beaucoup de noyaux : une loi.`,
+    un_t_demi: `t = t½ = ${T} jours : il reste N₀/2 = ${vise(1)} noyaux.`,
+    deux_t_demi: S.vue === 'restants' ? `t = 2t½ = ${2 * T} jours : ${vise(2)} restants, ${n0 - vise(2)} désintégrés : 75 % désintégrés.` : `t = 2t½ = ${2 * T} jours : il reste N₀/4 = ${vise(2)} noyaux.`,
+    trois_t_demi: `t = 3t½ = ${3 * T} jours : il reste N₀/8 = ${vise(3)} noyaux.`,
+    loi: 'Les points suivent la loi de décroissance N(t) = N₀·e^(−λt) (pointillé).',
+    ligne_1: ligne(1), ligne_2: ligne(2), ligne_3: ligne(3),
+    conclusion: `Chaque jour, la même proportion des noyaux restants se désintègre : ≈ λ·Δt, avec λ = ln2/t½ = ${fr(lambda(), 3)} jour⁻¹.`,
+    croisement: `t = t½ = ${T} jours : ${vise(1)} restants et ${n0 - vise(1)} désintégrés, les deux courbes se croisent.`,
+    formule: 'Nd = N₀ − N(t) : désintégrés = noyaux initiaux − noyaux restants.',
+  };
+  return M[nom] || '';
+}
+function ligne(k) { const av = avantJour(k - 1), d = av - avantJour(k); return `Jour ${k} : ${av} noyaux au début, ${d} désintégrés : proportion ${d}/${av} ≈ ${fr(d / av, 3)}.`; }
+const MOTIFS = {
+  depart: 'les N₀ noyaux, t = 0', premier: 'le premier noyau se désintègre', deuxieme: 'le deuxième noyau se désintègre', plusieurs: 'la moitié des 12 noyaux est partie',
+  un_t_demi: 't = t½ : N = N₀/2', deux_t_demi: 't = 2t½', trois_t_demi: 't = 3t½ : N = N₀/8', loi: 'la loi N₀·e^(−λt) en pointillé',
+  ligne_1: 'jour 1', ligne_2: 'jour 2', ligne_3: 'jour 3', conclusion: 'la même proportion chaque jour : λ', croisement: 'les courbes se croisent à t½',
+  formule: 'Nd = N₀ − N(t)', fin: 'fin',
+};
+function messageFin() {
+  const tj = TL.finJ, N = restants(tj), n0 = N0();
+  if (S.vue === 'hasard') return `t = ${fx(tj, 1)} jours : il reste ${N} noyau${N > 1 ? 'x' : ''} sur 12. Un noyau se désintègre au hasard ; on ne peut pas savoir lequel.`;
+  if (S.vue === 'proportion') return `t = 4 jours : N = ${N}. Chaque jour, environ la même proportion se désintègre : λ·Δt.`;
+  if (S.vue === 'restants') return `t = ${fx(tj, 1)} jours : ${N} restants, ${n0 - N} désintégrés ; N + Nd = N₀ = 400.`;
+  return `t = ${fx(tj, 1)} jours : N = ${N} noyaux. Toutes les t½, N est divisé par 2 : N = N₀/2ⁿ.`;
+}
+const dire = (texte, kind = '') => { S.dit = texte; bulle($('feedback'), texte, kind); };
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
+function ceQuiSeVoit() {
+  const n0 = N0(), T = S.tdemi, tj = jours(S.t), N = restants(tj);
+  const etat = S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée';
+  const m = [`Vue « ${S.vue} » (${TITRES[S.vue]}), ${etat}. Iode 131 → xénon 131 + électron, t½ = ${T} jours, 1 jour simulé = 0,25 s.`,
+    `Vue « L’échantillon » : ${n0 === 12 ? '12 grosses grappes numérotées 1 à 12' : 'une grille de 400 petites sphères'} (violet = iode 131, père ; gris = xénon 131, fils ; petit éclair à chaque désintégration${n0 === 12 ? ', un électron e⁻ part' : ''}).`,
+    `t = ${fx(tj, 1)} ${jourS(tj)} ; N = ${N} noyau${N > 1 ? 'x' : ''} restant${N > 1 ? 's' : ''} ; ${n0 - N} désintégré${n0 - N > 1 ? 's' : ''} (N₀ = ${n0}).`,
+    `Vue « La courbe » : axes t (jours, 0 à ${fx(S.axe.max, 1)}) et N (noyaux, 0 à ${n0}) ; ${S.vue === 'restants' ? 'deux courbes tracées en direct : N(t) restants (jaune, décroît) et N_d(t) désintégrés (orange, croît)' : 'la courbe N(t) se trace en direct (marches et points)'}${T <= S.axe.max ? ` ; repère t½ = ${T} jours sous l’axe du temps (poignée)` : ` ; t½ = ${T} jours (hors de l’axe : 0 à ${fx(S.axe.max, 1)} jours)`}.`];
+  const ecrits = [];
+  if (S.vue === 'hasard') {
+    if (vu('premier')) ecrits.push(`le premier désintégré est le n° ${ORDRE[0] + 1} (t = ${fx(TRI[0], 1)} j), entouré`);
+    if (vu('deuxieme')) ecrits.push(`puis le n° ${ORDRE[1] + 1} (t = ${fx(TRI[1], 1)} j), entouré`);
+    if (vu('plusieurs')) ecrits.push(`« 6 sur 12 partis à t = ${fx(TRI[5], 1)} jours ; un noyau : au hasard ; beaucoup de noyaux : une loi »`);
+  }
+  if (S.vue === 'grand_nombre') {
+    let k = 0; ['un_t_demi', 'deux_t_demi', 'trois_t_demi'].forEach((nom, i) => { if (vu(nom)) { k = i + 1; ecrits.push(`palier ${i + 1} : t = ${i + 1 === 1 ? '' : i + 1}t½ = ${(i + 1) * T} jours, N = N₀/${2 ** (i + 1)} = ${vise(i + 1)} (pointillés roses)`); } });
+    m.push(k ? `Palier atteint : ${k}.` : 'Aucun palier encore.');
+    if (vu('loi')) ecrits.push('la loi N(t) = N₀·e^(−λt) en pointillé cyan, encadrée');
+  }
+  if (S.vue === 'proportion') {
+    for (let k = 1; k <= 3; k++) if (vu('ligne_' + k)) { const av = avantJour(k - 1), d = av - avantJour(k); ecrits.push(`ligne ${k} du tableau : N avant ${av}, désintégrés ${d}, proportion ${fr(d / av, 3)}`); }
+    if (vu('conclusion')) ecrits.push(`« la même proportion par unité de temps : λ » ; λ = ln2/t½ = ${fr(lambda(), 3)} jour⁻¹`);
+  }
+  if (S.vue === 'restants') {
+    if (vu('croisement')) ecrits.push(`croisement entouré à t = t½ = ${T} jours : ${vise(1)} restants et ${n0 - vise(1)} désintégrés`);
+    if (vu('deux_t_demi')) ecrits.push(`à t = 2t½ = ${2 * T} jours : ${vise(2)} restants, ${n0 - vise(2)} désintégrés, « 75 % désintégrés »`);
+    if (vu('formule')) ecrits.push('N_d = N₀ − N(t), encadré');
+  }
+  if (ecrits.length) m.push(`Écrit à la craie : ${ecrits.join(' ; ')}.`);
+  if (S.dit) m.push(`La bulle dit : « ${S.dit} »`);
+  return m.join(' ');
+}
+function params() {
+  const tj = jours(S.t), N = restants(tj);
+  return { vue: S.vue, t_demi_j: S.tdemi, graine: graine(), N0: N0(), t_jours: +tj.toFixed(2), N_restants: N, N_desintegres: N0() - N };
+}
+const momentsEtat = () => { const out = {}; for (const k of MOMENTS[S.vue]) out[k] = +TL.M[k].toFixed(2); return out; };
+
+/* ── Commandes ────────────────────────────────────────────────────────── */
+const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+scene.avancer = dt => {
+  if (!S.running) return false;
+  const avant = S.t; S.t += dt;
+  for (const e of TL.ev) if (avant < e.debut && S.t >= e.debut) dire(message(e.nom));
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.jusqua = null; S.running = false;
+    if (S.t >= TL.M.fin - 1e-6) { finir(); return true; }
+    S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fx(jours(S.t), 1)} jours`) + '.');
+    pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); return true;
+  }
+  if (S.t >= TL.M.fin) { S.t = TL.M.fin; finir(); return true; }
+  if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function finir() { S.running = false; S.fait = true; S.pause = false; etiquette(); dire(messageFin(), 'good'); pont.noter('measurement', params()); pont.emettre(); }
+const DEPARTS = {
+  hasard: 'Douze noyaux d’iode 131, tous pareils : lequel va se désintégrer le premier ?',
+  grand_nombre: '400 noyaux d’iode 131 : on compte ceux qui restent…',
+  proportion: 'Chaque jour, on compte les noyaux désintégrés…',
+  restants: 'On suit les noyaux restants et les noyaux désintégrés…',
+};
+function start() { S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire(DEPARTS[S.vue]); pont.noter('start', params()); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
+function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('Le temps repart…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = clamp(t, 0, TL.M.fin); S.fait = S.t >= TL.M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+  etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fx(jours(S.t), 1)} jours.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function playUntil(p) {
+  const nom = MOMENTS[S.vue].includes(p.moment) ? p.moment : null, cible = nom ? TL.M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+  S.jusqua = clamp(cible, .01, TL.M.fin); S.motif = nom ? MOTIFS[nom] : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+function setParameters(p) {
+  p = p || {}; let change = false, vue = false;
+  if (VUES.includes(p.vue) && p.vue !== S.vue) { S.vue = p.vue; S.graine = null; change = vue = true; }
+  if (p.t_demi_j != null && p.t_demi_j !== '' && Number.isFinite(+p.t_demi_j)) { const v = clamp(Math.round(+p.t_demi_j), 2, 20); if (v !== S.tdemi) { S.tdemi = v; change = true; } }
+  if (p.graine != null && p.graine !== '' && Number.isFinite(+p.graine)) { const g = Math.round(+p.graine); if (g !== graine()) { S.graine = g; change = true; } }
+  if (change) { G = geo(); calculer(); if (vue) scene.reecrire(); }
+  pont.noter('set_parameters', params());
+  if (change) start(); else pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+
+/* Poignée : le repère t½ sous l’axe du temps (2 à 20 jours, pas 1). */
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => {
+    const [x, y] = scene.local(px, py); if (S.tdemi > S.axe.max) return null;
+    return Math.abs(x - PX(S.tdemi)) < 16 && y > G.oy + 14 && y < G.oy + 62 ? 't_demi' : null;
+  },
+  bouger: (id, px, py) => {
+    const [x] = scene.local(px, py), v = clamp(Math.round((x - G.ox) * S.axe.max / G.axl), 2, 20);
+    S.glisse = true; if (v !== S.tdemi) { S.tdemi = v; calculer(); scene.sale = true; }
+  },
+  lacher: () => { S.glisse = false; calculer(); pont.noter('set_parameters', params()); start(); },
+});
+
+const EXPLICATIONS = {
+  hasard: [
+    { repere: 'vue_echantillon', texte: 'Douze noyaux d’iode 131, tous pareils, numérotés de 1 à 12.' },
+    { repere: 'noyau_desintegre', texte: 'Un noyau se désintègre : petit éclair, un électron part, il devient un noyau de xénon 131. Lequel ? On ne peut pas le prévoir.' },
+    { repere: 'compteur', texte: 'Le compteur donne N, le nombre de noyaux restants.' },
+    { repere: 'courbe', texte: 'Avec peu de noyaux, la courbe fait des marches irrégulières : c’est le hasard.' },
+    { repere: 't_demi', texte: 't½ = 8 jours pour l’iode 131.' },
+  ],
+  grand_nombre: [
+    { repere: 'vue_echantillon', texte: '400 noyaux d’iode 131 : chacun se désintègre au hasard.' },
+    { repere: 'courbe', texte: 'Mais avec beaucoup de noyaux, les points suivent une courbe régulière.' },
+    { repere: 'palier_1', texte: 'À t = t½ = 8 jours, il reste N₀/2 = 200 noyaux.' },
+    { repere: 'palier_2', texte: 'À 2t½ = 16 jours, N₀/4 = 100.' },
+    { repere: 'palier_3', texte: 'À 3t½ = 24 jours, N₀/8 = 50 : toutes les t½, N est divisé par 2.' },
+    { repere: 'loi', texte: 'C’est la loi de décroissance : N(t) = N₀·e^(−λt).' },
+    { repere: 't_demi', texte: 'On glisse t½ : les paliers se déplacent avec lui.' },
+  ],
+  proportion: [
+    { repere: 'tableau', texte: 'Chaque jour, on compte les noyaux au début et ceux qui se sont désintégrés.' },
+    { repere: 'echantillon', texte: 'Les noyaux partis pendant le jour sont cerclés.' },
+    { repere: 'tableau', texte: 'La proportion reste la même, environ 0,083 par jour : c’est λ·Δt.' },
+    { repere: 'compteur', texte: 'Moins de noyaux, moins de désintégrations : leur nombre est proportionnel à N.' },
+  ],
+  restants: [
+    { repere: 'courbe_restants', texte: 'En jaune, N(t) : les noyaux restants, la courbe descend.' },
+    { repere: 'courbe_desintegres', texte: 'En orange, N_d(t) : les noyaux désintégrés, la courbe monte.' },
+    { repere: 'croisement', texte: 'Elles se croisent à t½ : 200 restants et 200 désintégrés.' },
+    { repere: 'courbe', texte: 'À 2t½ : 100 restants et 300 désintégrés, donc 75 % désintégrés.' },
+    { repere: 'compteur', texte: 'N_d = N₀ − N(t).' },
+  ],
+};
+window.Tableau.explication(EXPLICATIONS);
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+calculer();
+const config = { id: 'radioactivite_population', version: '1.0', title: 'Beaucoup de noyaux : le hasard, la loi, la demi-vie', variants: VUES.map(id => ({ id, label: TITRES[id] })), commands: commandes,
+  command_schema: {
+    set_parameters: { vue: VUES.join(' | ') + ' (change la vue et relance)', t_demi_j: '2..20 (demi-vie en jours, pas 1 ; relance)', graine: 'entier (autre tirage au hasard, reproductible ; relance)' },
+    set_time: { time_s: '0..fin (arrêt sur cet instant de la scène, en s ; voir moments)' },
+    play_until: { moment: 'hasard : depart | premier | deuxieme | plusieurs | fin ; grand_nombre : depart | un_t_demi | deux_t_demi | trois_t_demi | loi | fin ; proportion : depart | ligne_1 | ligne_2 | ligne_3 | conclusion | fin ; restants : depart | croisement | deux_t_demi | formule | fin', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Une population de noyaux d’iode 131 (t½ = 8 jours) : un noyau se désintègre au hasard (on ne sait ni lequel ni quand), mais un grand nombre de noyaux suit la loi de décroissance N(t) = N₀·e^(−λt) ; à t½, 2t½, 3t½ il reste N₀/2, N₀/4, N₀/8 ; chaque jour, la même proportion λ·Δt des noyaux restants se désintègre ; les désintégrés N_d = N₀ − N(t) croisent les restants à t½.',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle', ce_qui_se_voit: ceQuiSeVoit(), current_variant: S.vue,
+    time_s: +S.t.toFixed(2), parameters: params(), moments: momentsEtat() }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+dire(DEPARTS[S.vue]);
+setTimeout(() => { if (!S.running && S.t === 0 && !S.pause) start(); }, 900);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

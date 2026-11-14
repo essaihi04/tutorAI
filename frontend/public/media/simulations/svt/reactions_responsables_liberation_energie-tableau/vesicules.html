@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Vésicules de membrane interne — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="svt.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Une vésicule de membrane interne retournée, sphères pédonculées tournées vers l'extérieur, dans une solution d'ADP et de Pi ; deux échelles de pH à glisser, à l'intérieur et à l'extérieur ; de l'ATP se forme seulement si l'intérieur est plus acide que l'extérieur et que les sphères sont là"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="peinture.js"></script>
+<script>
+/*
+ * Vésicules de membrane interne (cours SVT « Libération de l'énergie », 10 novembre 2026).
+ * Des fragments de crêtes obtenus par ultrasons se referment en vésicules retournées : les sphères pédonculées sont
+ * tournées vers l'EXTÉRIEUR. La solution contient ADP + Pi. Deux poignées : pH intérieur et pH extérieur (4 à 9).
+ * Règle exacte : de l'ATP se forme SEULEMENT si pH intérieur < pH extérieur (l'intérieur plus riche en H+) ET si les
+ * sphères sont présentes. Alors des H+ sortent par les sphères vers l'extérieur, de l'ATP apparaît près des têtes et
+ * le gradient s'efface peu à peu : pH_int(t) = pH_ext − (pH_ext − pH_int)·e^(−(t − 1,2)/3,5) ;
+ * ATP formés = ⌊N·(1 − e^(−(t − 1,2)/3,5))⌋ avec N = 3·(pH_ext − pH_int) arrondi (pour l'œil : un nombre d'ATP qui
+ * grandit avec le gradient). Sinon : « pas d'ATP » et une ligne d'explication.
+ * Moments-états : play_until règle les paramètres puis rejoue (ph_egaux_pas_d_atp, interieur_acide_atp,
+ * sans_spheres_pas_d_atp). t en s de la scène.
+ */
+const { fr: frK, bulle, protocole } = window.Tableau;
+const { Scene, Chrono, Apparitions, doux, mix } = window.SVTTableau;
+const P = window.SVTPeinture, TAU = Math.PI * 2, rgba = P.rgba;
+const $ = id => document.getElementById(id);
+const fr = (v, d = 1) => frK(v, d);
+
+const S = { pi: 4, pe: 8, spheres: true };
+const T0 = 1.2, TAUG = 3.5, FIN = 12;
+const VC = { x: 262, y: 222 }, R = 104, EP = 16, NS = 7;
+const ECH = { yBas: 282, pas: 24 };              // pH 4 en bas (y 282), pH 9 en haut (y 162)
+const XI = 262, XE = 486;                        // échelle intérieure (au centre de la vésicule), échelle extérieure
+const yPH = ph => ECH.yBas - (ph - 4) * ECH.pas;
+const phY = y => Math.min(9, Math.max(4, Math.round(((ECH.yBas - y) / ECH.pas + 4) * 2) / 2));
+const marche = () => S.spheres && S.pi < S.pe;
+const Ntot = () => Math.max(1, Math.round(3 * (S.pe - S.pi)));
+const avance = t => (t <= T0 ? 0 : 1 - Math.exp(-(t - T0) / TAUG));
+const phInt = t => (marche() ? S.pe - (S.pe - S.pi) * (1 - avance(t)) : S.pi);
+const nATP = t => (marche() ? Math.floor(Ntot() * avance(t) + 1e-9) : 0);
+const tPourATP = (n, pi, pe) => { const N = Math.max(1, Math.round(3 * (pe - pi))); return T0 - TAUG * Math.log(1 - Math.min(.99, n / N)); };
+
+const ETATS = {
+  ph_egaux_pas_d_atp: { pi: 7.5, pe: 7.5, spheres: true, t: 3 },
+  interieur_acide_atp: { pi: 4, pe: 8, spheres: true, t: +(tPourATP(5, 4, 8) + .15).toFixed(2) },
+  sans_spheres_pas_d_atp: { pi: 4, pe: 8, spheres: false, t: 3 },
+};
+const M = Object.fromEntries(Object.entries(ETATS).map(([k, v]) => [k, v.t]));
+const MOTIFS = {
+  ph_egaux_pas_d_atp: 'pH égaux (7,5 / 7,5) : pas de gradient, pas d’ATP',
+  interieur_acide_atp: 'intérieur acide (pH 4 / 8) : des ATP se forment près des têtes',
+  sans_spheres_pas_d_atp: 'sans sphères pédonculées : pas d’ATP malgré le gradient',
+};
+
+const canvas = $('canvas');
+const scene = Scene(canvas, (c) => { scene.cadre(37); dessiner(c); return c.fin(); });
+const ecrit = Apparitions(scene);
+const chrono = Chrono({ fin: () => FIN, moments: () => M, motifs: MOTIFS, bouton: $('run'), bulle: $('feedback'), pont: () => pont,
+  depart: 'Observe la vésicule…', reinit: () => ecrit.oublier(),
+  fini: () => (marche() ? 'Des H+ sont sortis par les sphères : de l’ATP s’est formé, le gradient s’est effacé.' : 'Pas d’ATP : ' + raison() + '.') });
+scene.avancer = chrono.avancer;
+
+function raison() {
+  if (!S.spheres) return 'sans sphères pédonculées, pas de porte de retour pour les H+';
+  if (S.pi === S.pe) return 'pH égaux, pas de gradient de protons';
+  return 'l’intérieur est moins riche en H+ que l’extérieur, les H+ ne sortent pas par les sphères';
+}
+
+/* ── Peinture ────────────────────────────────────────────────────────────────────────────────── */
+const SOL = { x: 12, y: 44, w: 540, h: 350 };
+const angleSphere = k => -Math.PI / 2 + .22 + k * TAU / NS;
+const PIED = EP * .9 + 10, RT = 13, RTETE = R + PIED + RT - 2;
+const acide = ph => .045 * (9 - ph);              // teinte rouge d'un milieu riche en H+ (pour l'œil)
+function solution(ctx) {
+  ctx.save();
+  const g = ctx.createLinearGradient(0, SOL.y, 0, SOL.y + SOL.h);
+  g.addColorStop(0, 'rgba(90,160,180,.22)'); g.addColorStop(1, 'rgba(60,120,150,.32)');
+  ctx.fillStyle = g; ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(SOL.x, SOL.y, SOL.w, SOL.h, 14); else ctx.rect(SOL.x, SOL.y, SOL.w, SOL.h); ctx.fill();
+  ctx.clip(); ctx.fillStyle = `rgba(240,90,90,${acide(S.pe)})`; ctx.fillRect(SOL.x, SOL.y, SOL.w, SOL.h);
+  ctx.restore();
+}
+/** L'anneau de double membrane (bicouche) de la vésicule : deux rangées de têtes, leurs queues. */
+function anneau(ctx, t) {
+  ctx.save();
+  // intérieur de la vésicule
+  ctx.beginPath(); ctx.arc(VC.x, VC.y, R - EP / 2, 0, TAU);
+  const gi = ctx.createRadialGradient(VC.x - 30, VC.y - 30, 10, VC.x, VC.y, R);
+  gi.addColorStop(0, 'rgba(130,190,210,.25)'); gi.addColorStop(1, 'rgba(100,160,190,.3)');
+  ctx.fillStyle = gi; ctx.fill(); ctx.fillStyle = `rgba(240,90,90,${acide(phInt(t))})`; ctx.fill();
+  ctx.lineWidth = EP; ctx.strokeStyle = rgba(P.T.membrane, .14); ctx.beginPath(); ctx.arc(VC.x, VC.y, R, 0, TAU); ctx.stroke();
+  const rt = 3.1, n = Math.round(TAU * R / 7.5);
+  ctx.strokeStyle = rgba(P.T.membrane, .38); ctx.lineWidth = 1;
+  for (let i = 0; i < n; i++) {
+    const a = i / n * TAU, c = Math.cos(a), s = Math.sin(a);
+    for (const [r1, r2] of [[R + EP / 2 - rt, R + 1], [R - EP / 2 + rt, R - 1]]) { ctx.beginPath(); ctx.moveTo(VC.x + c * r1, VC.y + s * r1); ctx.lineTo(VC.x + c * r2, VC.y + s * r2); ctx.stroke(); }
+  }
+  for (const rr of [R + EP / 2 - rt, R - EP / 2 + rt]) {
+    for (let i = 0; i < n; i++) {
+      const a = (i + .5) / n * TAU, x = VC.x + Math.cos(a) * rr, y = VC.y + Math.sin(a) * rr;
+      const g = ctx.createRadialGradient(x - 1, y - 1, .4, x, y, rt); g.addColorStop(0, rgba([250, 230, 180], .9)); g.addColorStop(1, rgba(P.T.membrane, .6));
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, rt, 0, TAU); ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+function sphereRadiale(ctx, a) {
+  const x = VC.x + Math.cos(a) * R, y = VC.y + Math.sin(a) * R;
+  ctx.save(); ctx.translate(x, y); ctx.rotate(a - Math.PI / 2); P.spherePedonculee(ctx, 0, 0, EP, 1, { r: RT }); ctx.restore();
+}
+const H = [240, 80, 80], ATPc = [250, 204, 21], ADPc = [170, 175, 185], PIc = [200, 160, 230];
+/* Positions fixes (générateur déterministe) des H+ et des ADP + Pi : la scène ne scintille pas. */
+const POS_IN = (() => { const r = P.graine(91), out = []; while (out.length < 30) { const a = r() * TAU, d = 12 + Math.sqrt(r()) * 70, x = VC.x + Math.cos(a) * d, y = VC.y + Math.sin(a) * d; if (Math.abs(x - XI) < 46 && y > 150 && y < 296) continue; out.push([x, y]); } return out; })();
+const dansSolution = (x, y) => x > SOL.x + 10 && x < SOL.x + SOL.w - 10 && y > SOL.y + 30 && y < SOL.y + SOL.h - 10 && Math.hypot(x - VC.x, y - VC.y) > RTETE + 34 && !(x > XE - 30 && x < XE + 66 && y > 140 && y < 300);
+const POS_OUT = (() => { const r = P.graine(23), out = []; while (out.length < 24) { const x = SOL.x + r() * SOL.w, y = SOL.y + r() * SOL.h; if (dansSolution(x, y)) out.push([x, y]); } return out; })();
+const POS_ADP = (() => { const r = P.graine(57), out = []; while (out.length < 14) { const x = SOL.x + r() * SOL.w, y = SOL.y + r() * SOL.h; if (dansSolution(x, y)) out.push([x, y]); } return out; })();
+const posATP = k => { const s = k % NS, rang = Math.floor(k / NS), a = angleSphere(s) + (rang ? .13 : -.1), d = RTETE + 22 + 13 * rang; return [VC.x + Math.cos(a) * d, VC.y + Math.sin(a) * d]; };
+
+function peindre(c) {
+  const t = chrono.t, ctx = c.ctx;
+  solution(ctx);
+  anneau(ctx, t);
+  if (S.spheres) for (let k = 0; k < NS; k++) sphereRadiale(ctx, angleSphere(k));
+  // H+ à l'intérieur : plus nombreux si l'intérieur est plus acide ; à l'extérieur selon le pH extérieur
+  const nIn = Math.max(2, Math.min(30, Math.round(2 + (9 - phInt(t)) * 5.5))), nOut = Math.max(2, Math.min(24, Math.round(2 + (9 - S.pe) * 4.4)));
+  for (let k = 0; k < nIn; k++) P.bille(ctx, POS_IN[k][0], POS_IN[k][1], 4, H);
+  for (let k = 0; k < nOut; k++) P.bille(ctx, POS_OUT[k][0], POS_OUT[k][1], 4, H);
+  // ADP + Pi (une paire disparaît pour chaque ATP formé)
+  const n = nATP(t);
+  for (let k = 0; k < POS_ADP.length - n; k++) { const [x, y] = POS_ADP[k]; P.bille(ctx, x, y, 5, ADPc); P.bille(ctx, x + 9, y + 2, 3.2, PIc); }
+  // les H+ qui sortent par les sphères (leur position suit le temps de la scène : une scène figée les montre)
+  if (marche() && t > T0) {
+    const force = Math.max(0, 1 - avance(t));
+    for (let s = 0; s < NS; s++) {
+      const a = angleSphere(s);
+      for (let j = 0; j < 2; j++) {
+        const u = ((t - T0) * .9 + j * .5 + s * .13) % 1, d = mix(R - 22, RTETE + 18, u);
+        P.bille(ctx, VC.x + Math.cos(a) * d, VC.y + Math.sin(a) * d, 4, H, { alpha: Math.min(1, force * 1.6) * (u > .85 ? (1 - u) / .15 : 1) });
+      }
+    }
+  }
+  // les ATP formés, près des têtes
+  for (let k = 0; k < n; k++) { const [x, y] = posATP(k), tk = tPourATP(k + 1, S.pi, S.pe), a = Math.min(1, (t - tk) / .4 + .2); P.bille(ctx, x, y, 6.5, ATPc, { alpha: a }); P.eclat(ctx, x, y, 12, Math.max(0, 1 - (t - tk) / .6)); }
+}
+
+/* ── Craie ───────────────────────────────────────────────────────────────────────────────────── */
+function echelle(c, x, ph, cote, nom, couleur) {
+  c.ligne(x, yPH(4) + 6, x, yPH(9) - 6, { couleur: 'faible', largeur: 1.6 });
+  for (let v = 4; v <= 9; v += .5) {
+    const y = yPH(v), entier = v % 1 === 0;
+    c.ligne(x - (entier ? 6 : 3), y, x + (entier ? 6 : 3), y, { couleur: 'faible', largeur: 1.2, duree: .03 });
+    if (entier) c.texte(String(v), x - 10, y + 5, { couleur: 'faible', taille: 12, align: 'right', duree: .05 });
+  }
+  c.texte(nom, x, yPH(9) - 14, { couleur, taille: 14, align: 'center' });
+  c.direct(() => {
+    const y = yPH(ph);
+    c.cercle(x, y, 7, { couleur: 'jaune', largeur: 2.2, fond: 'jaune', fondAlpha: .25 });
+    c.texte(`pH ${fr(ph, 1)}`, x + 12, y + 5, { couleur: 'jaune', taille: 14 });
+  });
+}
+
+function dessiner(c) {
+  const t = chrono.t, n = nATP(t), ok = marche();
+  c.direct(() => peindre(c));
+  c.texte('Vésicules de membrane interne retournées', 12, 26, { couleur: 'cyan', taille: 18 });
+  c.texte('solution : ADP + Pi', 26, 68, { couleur: 'faible', taille: 14 });
+  c.texte('vésicule (membrane interne)', 26, 384, { couleur: 'orange', taille: 14 });
+  c.fleche(92, 370, VC.x + Math.cos(2.45) * (R + 10), VC.y + Math.sin(2.45) * (R + 10), { couleur: 'orange', largeur: 1.5, tete: 8 });
+  if (S.spheres) {
+    const a = angleSphere(1), x = VC.x + Math.cos(a) * (RTETE + 6), y = VC.y + Math.sin(a) * (RTETE + 6);
+    c.texte('sphères pédonculées', 352, 64, { couleur: 'jaune', taille: 14 });
+    c.fleche(404, 92, x + 6, y - 8, { couleur: 'jaune', largeur: 1.5, tete: 8 });
+    c.texte('(têtes vers l’extérieur)', 352, 84, { couleur: 'faible', taille: 13 });
+  } else c.texte('sphères pédonculées retirées', 352, 64, { couleur: 'rouge', taille: 14 });
+  echelle(c, XI, ok ? phInt(t) : S.pi, -1, 'intérieur', 'cyan');
+  echelle(c, XE, S.pe, 1, 'extérieur', 'cyan');
+  c.repere('vesicule', VC.x - RTETE - 14, VC.y - RTETE - 14, 2 * RTETE + 28, 2 * RTETE + 28, 'la vésicule de membrane interne retournée');
+  if (S.spheres) c.repere('spheres', 340, 48, 160, 40, 'les sphères pédonculées, têtes vers l’extérieur');
+  c.repere('interieur', XI - 50, yPH(9) - 30, 110, yPH(4) - yPH(9) + 42, `l’intérieur de la vésicule : pH ${fr(ok ? phInt(t) : S.pi, 1)}`);
+  c.repere('exterieur', XE - 40, yPH(9) - 30, 100, yPH(4) - yPH(9) + 42, `l’extérieur : pH ${fr(S.pe, 1)}`);
+
+  // panneau de droite : légende, compteur, ce qui se passe
+  c.texte('ATP formés', 656, 64, { couleur: 'jaune', taille: 16, align: 'center' });
+  c.direct(() => c.texte(String(n), 656, 104, { couleur: n ? 'jaune' : 'faible', taille: 34, align: 'center' }));
+  c.repere('atp', 580, 44, 152, 72, `le compteur d’ATP : ${n}`);
+  c.direct(() => { P.bille(c.ctx, 578, 300, 4, H); P.bille(c.ctx, 578, 324, 6, ATPc); P.bille(c.ctx, 574, 348, 5, ADPc); P.bille(c.ctx, 583, 350, 3.2, PIc); });
+  c.texte('H+', 592, 305, { couleur: 'rouge', taille: 14 });
+  c.texte('ATP', 592, 329, { couleur: 'jaune', taille: 14 });
+  c.texte('ADP + Pi', 592, 353, { couleur: 'faible', taille: 14 });
+  c.direct(() => c.texte(`t = ${fr(t, 1)} s`, 752, 26, { couleur: 'faible', taille: 14, align: 'right' }));
+  if (ok) {
+    if (t > T0 + .3) ecrit.ecrire(c, 'flux', () => {
+      c.texte('les H+ sortent', 572, 150, { couleur: 'rouge', taille: 15 });
+      c.texte('par les sphères', 572, 170, { couleur: 'rouge', taille: 15 });
+      c.texte('→ ATP dehors', 572, 190, { couleur: 'jaune', taille: 15 });
+    });
+    if (t > T0 + 2.5) ecrit.ecrire(c, 'efface', () => { c.texte('le gradient', 572, 222, { couleur: 'faible', taille: 14 }); c.texte('s’efface peu à peu', 572, 240, { couleur: 'faible', taille: 14 }); });
+    if (n >= 4) ecrit.ecrire(c, 'conclusion', () => c.texte('La synthèse d’ATP nécessite les sphères pédonculées et un gradient de protons.', 380, 414, { couleur: 'vert', taille: 16, align: 'center', max: 740 }));
+    if (n >= 4) c.repere('conclusion', 20, 398, 720, 22, 'la conclusion');
+  } else if (t > T0 + 1) {
+    ecrit.ecrire(c, 'pas_' + raison(), () => {
+      c.texte('pas d’ATP', 572, 160, { couleur: 'rouge', taille: 22 });
+      c.texte(S.spheres ? (S.pi === S.pe ? 'pH égaux : pas de gradient de protons' : 'l’intérieur est moins riche en H+ : les H+ ne sortent pas par les sphères')
+        : 'sans sphères pédonculées : pas de porte de retour pour les H+', 380, 414, { couleur: 'rouge', taille: 16, align: 'center', max: 740 });
+    });
+  }
+}
+
+/* ── Ce que voit le tuteur ───────────────────────────────────────────────────────────────────── */
+function ceQuiSeVoit() {
+  const t = chrono.t, n = nATP(t), ok = marche();
+  const m = [`t = ${fr(t, 1)} s${chrono.running ? ' (ça avance)' : chrono.fait ? ' (fin)' : ' (arrêté)'}. Une vésicule de membrane interne retournée (sphères pédonculées têtes vers l’extérieur) dans une solution d’ADP + Pi.`,
+    `Réglages : pH intérieur ${fr(S.pi, 1)}, pH extérieur ${fr(S.pe, 1)}, sphères pédonculées ${S.spheres ? 'présentes' : 'retirées'}.`];
+  if (t <= T0) m.push('Rien ne s’est encore passé.');
+  else if (ok) {
+    m.push(`L’intérieur est plus riche en H+ : des H+ sortent par les sphères vers l’extérieur ; pH intérieur actuel ${fr(phInt(t), 1)} (le gradient s’efface peu à peu). ATP formés près des têtes, à l’extérieur : ${n}.`);
+    if (n >= 4) m.push('Conclusion écrite : La synthèse d’ATP nécessite les sphères pédonculées et un gradient de protons.');
+  } else m.push(`Pas d’ATP formé (0 au compteur)${t > T0 + 1 ? ', écrit au tableau : « pas d’ATP » — ' + raison() : ''}.`);
+  return m.join(' ');
+}
+
+/* ── Réglages ────────────────────────────────────────────────────────────────────────────────── */
+const bool = v => (v === true || v === 'true' || v === 1 || v === '1');
+const clampPH = v => Math.min(9, Math.max(4, Math.round(+v * 2) / 2));
+function arreter() { chrono.running = false; chrono.jusqua = null; chrono.t = 0; chrono.fait = false; ecrit.oublier(); $('run').textContent = 'Lancer'; scene.sale = true; }
+function dire() { return `pH intérieur ${fr(S.pi, 1)}, pH extérieur ${fr(S.pe, 1)}, sphères ${S.spheres ? 'présentes' : 'retirées'}.`; }
+function setParameters(p) {
+  let ok = false;
+  if (Number.isFinite(+p.ph_interieur) && p.ph_interieur !== null && p.ph_interieur !== '') { S.pi = clampPH(p.ph_interieur); ok = true; }
+  if (Number.isFinite(+p.ph_exterieur) && p.ph_exterieur !== null && p.ph_exterieur !== '') { S.pe = clampPH(p.ph_exterieur); ok = true; }
+  if ('spheres' in p) { S.spheres = bool(p.spheres); ok = true; }
+  if (!ok) return;
+  arreter(); bulle($('feedback'), 'Réglé : ' + dire());
+  pont.noter('set_parameters', { ph_interieur: S.pi, ph_exterieur: S.pe, spheres: S.spheres }); pont.emettre();
+}
+function playUntil(p) {
+  const e = p && ETATS[p.moment];
+  if (e) { S.pi = e.pi; S.pe = e.pe; S.spheres = e.spheres; arreter(); }
+  chrono.playUntil(p);
+}
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => {
+    const [x, y] = scene.local(px, py);
+    if (y < yPH(9) - 12 || y > yPH(4) + 12) return null;
+    if (Math.abs(x - XI) < 18) return 'int'; if (Math.abs(x - XE) < 18) return 'ext'; return null;
+  },
+  bouger: (id, px, py) => {
+    const [, y] = scene.local(px, py), v = phY(y);
+    if (id === 'int' && v !== S.pi) { S.pi = v; arreter(); }
+    if (id === 'ext' && v !== S.pe) { S.pe = v; arreter(); }
+  },
+  lacher: () => { bulle($('feedback'), 'Réglé : ' + dire()); pont.noter('set_parameters', { ph_interieur: S.pi, ph_exterieur: S.pe, spheres: S.spheres }); chrono.start(); },
+});
+
+$('run').onclick = chrono.clic;
+window.Tableau.explication({ vesicules: [
+  { repere: 'vesicule', texte: 'Une vésicule faite de membrane interne, refermée à l’envers.' },
+  { repere: 'spheres', texte: 'Ses sphères pédonculées sont tournées vers l’extérieur.' },
+  { repere: 'interieur', texte: 'On rend l’intérieur plus acide : plus riche en H+.' },
+  { repere: 'exterieur', texte: 'L’extérieur est moins acide.' },
+  { repere: 'atp', texte: 'Les H+ sortent par les sphères et de l’ATP se forme dehors.' } ] });
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'svt_energie_vesicules', version: '1.0', title: 'Vésicules de membrane interne retournées', variants: [{ id: 'vesicules', label: 'vésicules' }], commands: commandes,
+  command_schema: {
+    set_parameters: { ph_interieur: '4..9 (pas de 0,5)', ph_exterieur: '4..9 (pas de 0,5)', spheres: 'true | false (sphères pédonculées présentes)' },
+    set_time: { time_s: `0..${FIN} (arrêt sur cet instant)` },
+    play_until: { moment: Object.keys(M).join(' | ') + ' (règle les paramètres de ce cas, rejoue et se fige)', time_s: 'ou un instant en s (garde les réglages)' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Vésicules de membrane interne obtenues par ultrasons, retournées : les sphères pédonculées sont tournées vers l’extérieur ; solution d’ADP + Pi. De l’ATP se forme seulement si le pH intérieur est plus petit que le pH extérieur (intérieur plus riche en H+) et si les sphères sont présentes : les H+ sortent par les sphères et le gradient s’efface peu à peu. pH égaux : pas de gradient, pas d’ATP ; sans sphères : pas de porte de retour, pas d’ATP. Conclusion : la synthèse d’ATP nécessite les sphères pédonculées et un gradient de protons.',
+  etat: () => ({ simulation_status: chrono.statut(), ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'vesicules', time_s: +chrono.t.toFixed(2),
+    parameters: { ph_interieur: S.pi, ph_exterieur: S.pe, spheres: S.spheres }, moments: M,
+    valeurs: { ph_interieur_actuel: +phInt(chrono.t).toFixed(2), atp_formes: nATP(chrono.t), atp_possible: marche() } }),
+  progression: () => chrono.t / FIN,
+  executer: (cmd, p) => ({ start: chrono.start, reset: chrono.start, pause: chrono.pause, resume: chrono.resume, set_time: () => { chrono.setTime(p); scene.sale = true; },
+    set_parameters: () => setParameters(p || {}), play_until: () => playUntil(p || {}) })[cmd]?.() });
+bulle($('feedback'), 'Une vésicule retournée : intérieur à pH 4, extérieur à pH 8…');
+setTimeout(() => { if (!chrono.running && chrono.t === 0) chrono.start(); }, 1600);
+window.__sim = { chrono, scene, M, S, ETATS };
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

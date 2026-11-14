@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Les termes de uₙ₊₁ = f(uₙ) sur la courbe</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Repère à la craie : la courbe de f et la droite y = x ; depuis u₀ on monte à la courbe, on rejoint la droite, on redescend sur l’axe : u₁, u₂… en escalier vers le point où la courbe coupe la droite"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/suites-tableau/su-outils.js"></script>
+<script>
+/*
+ * Cours « Suites numériques » (math_ch3_suites_numeriques) : la suite uₙ₊₁ = f(uₙ) (f1 à f7).
+ * f(x) = 2x/(x + 1) : f(1) = 1, f(2) = 4/3 ; la courbe coupe y = x en (0 ; 0) et (1 ; 1).
+ * Vues : ?vue=escalier (paramètre u0 de 0,2 à 4, poignée sur l’axe des abscisses) | boite | zone | point | national
+ * (g(x) = (4x + 3)/(x + 2), u₀ = 1, I = [1 ; 3], limite 3). Représentation des termes : une construction qui aide à voir.
+ */
+const { fr } = MathsTableau;
+const f = x => 2 * x / (x + 1), g = x => (4 * x + 3) / (x + 2);
+const OPT = { x0: 60, y0: 52, w: 420, h: 286, xmin: -0.15, xmax: 4.3, ymin: -0.12, ymax: 2.4, gx: [[1, '1'], [2, '2'], [3, '3'], [4, '4']], gy: [[1, '1'], [2, '2']] };
+const OPTN = { x0: 60, y0: 52, w: 420, h: 286, xmin: -0.15, xmax: 4.3, ymin: -0.15, ymax: 4.3, gx: [[1, '1'], [2, '2'], [3, '3'], [4, '4']], gy: [[1, '1'], [2, '2'], [3, '3'], [4, '4']] };
+const texte = (K, y, liste) => K.lignes(510, y, liste, 32);
+
+/* Courbe de h et droite y = x, libellées. */
+function courbeEtDroite(c, K, G, h, nom) {
+  K.anime(1.2, p => K.courbePart(G, h, 0, 4.2, p, { couleur: 'cyan' }));
+  c.texte('C_f : y = ' + nom, G.X(3.2), G.Y(h(3.2)) - 12, { couleur: 'cyan', taille: 16 });
+  c.repere('courbe', G.X(0), G.Y(h(4.2)) - 10, G.X(4.2) - G.X(0), G.Y(0) - G.Y(h(4.2)) + 10, 'la courbe de f');
+  const top = Math.min(4.2, G.ymax - 0.05);
+  K.anime(.8, p => c.ligne(G.X(0), G.Y(0), G.X(top * p), G.Y(top * p), { couleur: 'blanc', largeur: 1.8 }));
+  c.texte('y = x', G.X(top) - 52, G.Y(top) + 4, { couleur: 'blanc', taille: 16 });
+  c.repere('droite', G.X(0), G.Y(top), G.X(top) - G.X(0), G.Y(0) - G.Y(top), 'la droite y = x');
+}
+/* L’escalier depuis u0 : n marches ; libellés des premiers termes sous l’axe. Renvoie les termes. */
+function escalier(c, K, G, h, u0, n, o = {}) {
+  const U = SU.suite(u0, h, n), coul = o.couleur || 'jaune', lab = o.labels ?? 3;
+  const sous = (x, t, i) => { const dy = i % 2 ? 40 : 22; c.texte(t, G.X(x), G.Y(0) + dy, { couleur: coul, taille: 15, align: 'center' }); };
+  for (let i = 0; i < n; i++) {
+    const a = U[i], b = U[i + 1];
+    if (i === 0) {
+      c.ligne(G.X(a), G.Y(0), G.X(a), G.Y(b), { couleur: coul, largeur: 2 });
+      if (o.etapes) K.marque('monter_courbe');
+      c.point(G.X(a), G.Y(b), 3.5, coul);
+      c.ligne(G.X(a), G.Y(b), G.X(b), G.Y(b), { couleur: coul, largeur: 2 });
+      if (o.etapes) K.marque('aller_droite');
+      c.ligne(G.X(b), G.Y(b), G.X(b), G.Y(0), { couleur: 'faible', largeur: 1.3, pointille: [5, 5] });
+      if (lab > 1) sous(b, 'u_1', 1);
+      if (o.etapes) { K.marque('descendre_u1'); c.pause(.3); }
+    } else {
+      c.pause(.1);
+      c.ligne(G.X(a), G.Y(a), G.X(a), G.Y(b), { couleur: coul, largeur: 2 });
+      c.ligne(G.X(a), G.Y(b), G.X(b), G.Y(b), { couleur: coul, largeur: 2 });
+      if (i + 1 < lab) { c.ligne(G.X(b), G.Y(b), G.X(b), G.Y(0), { couleur: 'faible', largeur: 1.3, pointille: [5, 5] }); sous(b, 'u_' + (i + 1), i + 1); }
+    }
+  }
+  return U;
+}
+function placerU0(c, G, u0) {
+  c.point(G.X(u0), G.Y(0), 6, 'orange');
+  c.texte('u_0', G.X(u0), G.Y(0) + 22, { couleur: 'orange', taille: 16, align: 'center' });
+}
+const sens = u0 => (u0 > 1 + 1e-9 ? 'descendent' : u0 < 1 - 1e-9 ? 'montent' : 'restent');
+
+MathsTableau.page({
+  id: 'su_escalier', titre: 'Les termes de uₙ₊₁ = f(uₙ)',
+  texte: 'Constructions à la craie : la courbe de f(x) = 2x/(x + 1) et la droite y = x ; les termes u₀, u₁, u₂… se construisent en escalier et se tassent vers le point (1 ; 1) ; intervalle [1 ; 2] envoyé dans [1 ; 4/3] ; courbe sous la droite : la suite descend ; conditions avant ℓ = f(ℓ)',
+  vues: {
+    escalier: {
+      titre: 'Voir les termes sur la courbe',
+      params: { u0: { min: 0.2, max: 4, pas: 0.1, defaut: 2, sens: 'premier terme u₀ (glisser sur l’axe des abscisses)' } },
+      dessiner(c, K) {
+        const u0 = K.P.u0;
+        K.titre('u_{n+1} = f(u_n), f(x) = 2x / (x + 1)');
+        const G = K.axes(OPT);
+        courbeEtDroite(c, K, G, f, '2x/(x + 1)');
+        K.marque('courbe_et_droite');
+        c.pause(.3);
+        placerU0(c, G, u0);
+        c.repere('u0', G.X(u0) - 14, G.Y(0) - 14, 28, 44, 'u₀ : glisse-le sur l’axe');
+        K.marque('placer_u0');
+        c.pause(.3);
+        const U = escalier(c, K, G, f, u0, 6, { etapes: true });
+        c.repere('u1', G.X(U[1]) - 14, G.Y(0) - 6, 28, 50, 'u₁ = f(u₀)');
+        texte(K, 112, [{ t: 'monter à la courbe : f(u_0)', couleur: 'jaune', taille: 17 }, { t: 'aller à y = x', couleur: 'jaune', taille: 17 }, { t: 'redescendre : u_1 = f(u_0)', couleur: 'jaune', taille: 17 }]);
+        K.marque('repeter');
+        c.pause(.4);
+        c.cercle(G.X(1), G.Y(1), 13, { couleur: 'vert', largeur: 2 });
+        c.repere('intersection', G.X(1) - 16, G.Y(1) - 16, 32, 32, 'le point (1 ; 1)');
+        texte(K, 230, u0 === 1 ? [{ t: 'u_0 = 1 : tous les termes', couleur: 'vert' }, { t: 'valent 1', couleur: 'vert', moment: 'conjecture' }]
+          : [{ t: 'les termes ' + sens(u0) + ' vers 1', couleur: 'vert', taille: 17 }, { t: 'le point (1 ; 1)', couleur: 'vert', moment: 'conjecture' }]);
+      },
+      poignees(K) { const G = K.grille(OPT); return [{ id: 'u0', x: G.X(K.P.u0), y: G.Y(0), bouger: (x) => ({ u0: G.inv(x, 0)[0] }) }]; },
+      lecture: K => { const U = SU.suite(K.P.u0, f, 3); return K.P.u0 === 1 ? 'u₀ = 1 : f(1) = 1, tous les termes valent 1.' : `u₀ = ${fr(K.P.u0, 1)} : u₁ = ${fr(U[1], 3)}, u₂ = ${fr(U[2], 3)}, u₃ = ${fr(U[3], 3)} : les termes ${sens(K.P.u0)} vers 1.`; },
+      decrire: K => {
+        const U = SU.suite(K.P.u0, f, 2);
+        return {
+          courbe_et_droite: 'Un repère ; la courbe de f(x) = 2x/(x + 1) en cyan et la droite y = x en blanc.',
+          placer_u0: `u₀ = ${fr(K.P.u0, 1)} marqué en orange sur l’axe des abscisses.`,
+          monter_courbe: `Un trait jaune vertical de u₀ jusqu’à la courbe : le point (u₀ ; f(u₀)), f(u₀) = ${fr(U[1], 3)}.`,
+          aller_droite: 'Un trait jaune horizontal de la courbe jusqu’à la droite y = x.',
+          descendre_u1: `Un pointillé vertical de la droite jusqu’à l’axe : u₁ = f(u₀) = ${fr(U[1], 3)}.`,
+          repeter: `L’escalier continue : u₂ = ${fr(U[2], 3)}, u₃, u₄… les marches se tassent.`,
+          conjecture: K.P.u0 === 1 ? 'u₀ = 1 : tous les termes valent 1 ; le point (1 ; 1) est entouré en vert.' : `Écrit : les termes ${sens(K.P.u0)} vers 1 ; le point (1 ; 1), où la courbe coupe la droite, est entouré en vert.`,
+        };
+      },
+      motifs: { monter_courbe: 'monter à la courbe', aller_droite: 'aller à la droite y = x', descendre_u1: 'redescendre : u₁', repeter: 'l’escalier continue', conjecture: 'la conjecture' },
+      explication: [{ repere: 'droite', texte: 'La droite y = x reporte f(u₀) sur l’axe des abscisses.' }, { repere: 'u0', texte: 'Glisse u₀ : l’escalier change.' }, { repere: 'intersection', texte: 'Les marches se tassent vers le point (1 ; 1).' }],
+    },
+    boite: {
+      titre: 'f croissante envoie [1 ; 2] dans [1 ; 4/3]',
+      dessiner(c, K) {
+        K.titre('f croissante garde l’ordre');
+        const G = K.axes(OPT);
+        K.anime(1.2, p => K.courbePart(G, f, 0, 4.2, p, { couleur: 'cyan' }));
+        c.texte('C_f : y = 2x/(x + 1)', G.X(3.0), G.Y(f(3.2)) - 12, { couleur: 'cyan', taille: 16 });
+        K.marque('courbe');
+        c.pause(.3);
+        c.ligne(G.X(1), G.Y(0), G.X(2), G.Y(0), { couleur: 'vert', largeur: 6, alpha: .7 });
+        c.texte('[1 ; 2]', G.X(1.5), G.Y(0) + 40, { couleur: 'vert', taille: 17, align: 'center' });
+        c.repere('boite_x', G.X(1) - 6, G.Y(0) - 10, G.X(2) - G.X(1) + 12, 54, 'l’intervalle [1 ; 2]');
+        K.marque('boite_x');
+        c.pause(.3);
+        K.rond(G, 1, 1, true, 'jaune'); K.proj(G, 1, 1, { couleur: 'jaune', versX: true });
+        K.rond(G, 2, 4 / 3, true, 'jaune'); K.proj(G, 2, 4 / 3, { couleur: 'jaune' });
+        c.texte('f(1) = 1', G.X(1) - 4, G.Y(1) - 14, { couleur: 'jaune', taille: 15, align: 'right' });
+        c.texte('f(2) = 4/3', G.X(2) + 8, G.Y(4 / 3) - 12, { couleur: 'jaune', taille: 15 });
+        K.marque('images');
+        c.pause(.3);
+        c.ligne(G.X(0), G.Y(1), G.X(0), G.Y(4 / 3), { couleur: 'orange', largeur: 6, alpha: .7 });
+        c.texte('4/3', G.X(0) - 10, G.Y(4 / 3) + 4, { couleur: 'orange', taille: 15, align: 'right' });
+        c.repere('boite_y', G.X(0) - 40, G.Y(4 / 3) - 8, 52, G.Y(1) - G.Y(4 / 3) + 16, 'les images : [1 ; 4/3]');
+        texte(K, 120, [{ t: 'x dans [1 ; 2]', couleur: 'vert' }, { t: '⇒ f(x) dans [1 ; 4/3]', couleur: 'orange' }, { t: '[1 ; 4/3] ⊂ [1 ; 2]', couleur: 'jaune', taille: 21 }, { t: '', inter: 10 }, { t: 'f croissante', couleur: 'blanc' }, { t: 'garde l’ordre', couleur: 'blanc', moment: 'boite_y' }]);
+      },
+      decrire: {
+        courbe: 'La courbe de f(x) = 2x/(x + 1) sur [0 ; 4], croissante.',
+        boite_x: 'L’intervalle [1 ; 2] en vert sur l’axe des abscisses.',
+        images: 'Les points (1 ; 1) et (2 ; 4/3) sur la courbe, avec leurs pointillés : f(1) = 1, f(2) = 4/3.',
+        boite_y: 'Sur l’axe des ordonnées, [1 ; 4/3] en orange ; écrit : x dans [1 ; 2] ⇒ f(x) dans [1 ; 4/3], [1 ; 4/3] ⊂ [1 ; 2] ; f croissante garde l’ordre.',
+      },
+      explication: [{ repere: 'boite_x', texte: 'On part de [1 ; 2].' }, { repere: 'boite_y', texte: 'Les images restent dans [1 ; 4/3], donc dans [1 ; 2].' }],
+    },
+    zone: {
+      titre: 'Courbe sous la droite : la suite descend',
+      dessiner(c, K) {
+        K.titre('Le sens de variation vient de f(x) − x');
+        const G = K.axes(OPT);
+        courbeEtDroite(c, K, G, f, '2x/(x + 1)');
+        K.marque('courbe_et_droite');
+        c.pause(.3);
+        K.anime(.6, p => {
+          const ctx = c.ctx; ctx.globalAlpha = .28 * p; ctx.fillStyle = c.couleur('orange'); ctx.beginPath();
+          for (let i = 0; i <= 20; i++) { const x = 1 + i / 20; ctx[i ? 'lineTo' : 'moveTo'](G.X(x), G.Y(x)); }
+          for (let i = 20; i >= 0; i--) { const x = 1 + i / 20; ctx.lineTo(G.X(x), G.Y(f(x))); }
+          ctx.closePath(); ctx.fill(); ctx.globalAlpha = 1;
+        });
+        c.ligne(G.X(1), G.Y(0) + 2, G.X(2), G.Y(0) + 2, { couleur: 'orange', largeur: 5, alpha: .6 });
+        c.repere('zone', G.X(1), G.Y(2), G.X(2) - G.X(1), G.Y(1) - G.Y(2), 'sur [1 ; 2], la courbe est sous la droite');
+        texte(K, 100, [{ t: 'sur [1 ; 2] : courbe', couleur: 'orange' }, { t: 'sous la droite', couleur: 'orange' }, { t: 'f(x) ≤ x', couleur: 'orange', taille: 22, moment: 'zone_sous_droite' }]);
+        c.pause(.4);
+        placerU0(c, G, 2);
+        escalier(c, K, G, f, 2, 5, { labels: 3 });
+        c.repere('escalier', G.X(1), G.Y(4 / 3) - 6, G.X(2) - G.X(1) + 6, G.Y(0) - G.Y(4 / 3) + 6, 'l’escalier qui descend depuis u₀ = 2');
+        K.marque('escalier');
+        c.pause(.4);
+        texte(K, 220, [{ t: 'f(x) − x ≤ 0 sur [1 ; 2]', couleur: 'jaune', taille: 18 }, { t: 'et u_n ∈ [1 ; 2]', couleur: 'jaune', taille: 18 }, { t: '⇒ u_{n+1} ≤ u_n', couleur: 'jaune', taille: 21, moment: 'conclusion' }]);
+      },
+      decrire: {
+        courbe_et_droite: 'La courbe de f (cyan) et la droite y = x (blanc).',
+        zone_sous_droite: 'Au-dessus de [1 ; 2], la bande entre la droite et la courbe est coloriée en orange : la courbe est sous la droite, f(x) ≤ x.',
+        escalier: 'L’escalier part de u₀ = 2 et descend marche après marche : u₁ = 4/3, u₂ = 8/7…',
+        conclusion: 'Écrit : f(x) − x ≤ 0 sur [1 ; 2] et uₙ ∈ [1 ; 2] ⇒ uₙ₊₁ ≤ uₙ.',
+      },
+      explication: [{ repere: 'zone', texte: 'Courbe sous la droite : f(x) ≤ x.' }, { repere: 'escalier', texte: 'Alors chaque marche descend : uₙ₊₁ ≤ uₙ.' }],
+    },
+    point: {
+      titre: 'Les points où la courbe coupe y = x',
+      dessiner(c, K) {
+        K.titre('Quelle solution de f(x) = x ?');
+        const G = K.axes(OPT);
+        courbeEtDroite(c, K, G, f, '2x/(x + 1)');
+        K.marque('courbe_et_droite');
+        c.pause(.3);
+        placerU0(c, G, 2);
+        escalier(c, K, G, f, 2, 5, { labels: 1 });
+        K.marque('escalier');
+        c.pause(.3);
+        c.cercle(G.X(0), G.Y(0), 13, { couleur: 'rouge', largeur: 2 });
+        c.cercle(G.X(1), G.Y(1), 13, { couleur: 'vert', largeur: 2 });
+        c.texte('(0 ; 0)', G.X(0) + 14, G.Y(0) - 16, { couleur: 'rouge', taille: 15 });
+        c.texte('(1 ; 1)', G.X(1) - 16, G.Y(1) - 18, { couleur: 'vert', taille: 15, align: 'right' });
+        c.repere('point_zero', G.X(0) - 16, G.Y(0) - 16, 32, 32, 'le point (0 ; 0)');
+        c.repere('point_un', G.X(1) - 16, G.Y(1) - 16, 32, 32, 'le point (1 ; 1)');
+        texte(K, 100, [{ t: 'f(x) = x : x = 0 ou x = 1', couleur: 'blanc', moment: 'point_intersection' }]);
+        c.pause(.4);
+        c.ligne(G.X(1), G.Y(0) + 3, G.X(2), G.Y(0) + 3, { couleur: 'vert', largeur: 6, alpha: .7 });
+        c.texte('I = [1 ; 2]', G.X(1.5), G.Y(0) + 44, { couleur: 'vert', taille: 16, align: 'center' });
+        c.repere('intervalle', G.X(1) - 6, G.Y(0) - 8, G.X(2) - G.X(1) + 12, 56, 'I = [1 ; 2]');
+        texte(K, 150, [{ t: 'les u_n dans I = [1 ; 2]', couleur: 'vert', moment: 'intervalle' }]);
+        c.pause(.4);
+        SU.barre(c, 516, 214, 28, { couleur: 'rouge' });
+        texte(K, 210, [{ t: '0 ∉ [1 ; 2]', couleur: 'rouge' }, { t: 'ℓ = 1', couleur: 'jaune', taille: 24, moment: 'choix' }]);
+      },
+      decrire: {
+        courbe_et_droite: 'La courbe de f (cyan) et la droite y = x (blanc).',
+        escalier: 'L’escalier depuis u₀ = 2 descend vers le point (1 ; 1).',
+        point_intersection: 'Deux points où la courbe coupe la droite sont entourés : (0 ; 0) en rouge, (1 ; 1) en vert ; écrit : f(x) = x : x = 0 ou x = 1.',
+        intervalle: 'L’intervalle I = [1 ; 2] en vert sur l’axe des abscisses : tous les uₙ y sont.',
+        choix: 'Le 0 est barré : 0 ∉ [1 ; 2] ; écrit en jaune : ℓ = 1.',
+      },
+      explication: [{ repere: 'point_zero', texte: '0 est une solution, mais pas dans [1 ; 2].' }, { repere: 'point_un', texte: 'La limite est 1, la solution qui est dans I.' }],
+    },
+    national: {
+      titre: 'Une suite du national : g(x) = (4x + 3)/(x + 2)',
+      dessiner(c, K) {
+        K.titre('u_0 = 1, u_{n+1} = g(u_n), I = [1 ; 3]');
+        const G = K.axes(OPTN);
+        courbeEtDroite(c, K, G, g, '(4x + 3)/(x + 2)');
+        K.marque('courbe_et_droite');
+        c.pause(.3);
+        placerU0(c, G, 1);
+        escalier(c, K, G, g, 1, 6, { labels: 3 });
+        c.repere('escalier', G.X(1), G.Y(3), G.X(3) - G.X(1), G.Y(0) - G.Y(3), 'l’escalier qui monte de 1 vers 3');
+        K.marque('escalier');
+        c.pause(.3);
+        c.cercle(G.X(3), G.Y(3), 13, { couleur: 'vert', largeur: 2 });
+        c.texte('(3 ; 3)', G.X(3) + 16, G.Y(3) + 22, { couleur: 'vert', taille: 15 });
+        c.repere('point_trois', G.X(3) - 16, G.Y(3) - 16, 32, 32, 'le point (3 ; 3)');
+        texte(K, 120, [{ t: 'la courbe coupe y = x', couleur: 'vert' }, { t: 'en (3 ; 3)', couleur: 'vert', moment: 'point_intersection' }]);
+        c.pause(.4);
+        texte(K, 210, [{ t: 'conjecture :', couleur: 'jaune' }, { t: 'croissante, vers 3', couleur: 'jaune', taille: 22, moment: 'conjecture' }]);
+      },
+      decrire: {
+        courbe_et_droite: 'La courbe de g(x) = (4x + 3)/(x + 2) (cyan) et la droite y = x (blanc), repère de 0 à 4.',
+        escalier: 'L’escalier part de u₀ = 1 et monte : u₁ = 7/3 ≈ 2,33, u₂ ≈ 2,85, u₃ ≈ 2,96…',
+        point_intersection: 'Le point (3 ; 3), où la courbe coupe la droite, est entouré en vert.',
+        conjecture: 'Écrit : conjecture : croissante, vers 3.',
+      },
+      explication: [{ repere: 'escalier', texte: 'Les marches montent : la suite est croissante.' }, { repere: 'point_trois', texte: 'Elles se tassent vers le point (3 ; 3).' }],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

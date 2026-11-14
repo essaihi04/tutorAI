@@ -16,6 +16,7 @@ User rule, 8 November 2026: every course is cut into **competences**, each quest
 ## 2. What is recorded, at every answer (`CourseFocusStage.enregistrerReponse`)
 
 `{deck_id, slide_id, cle, type (qcm | vrai_faux | directe), enonce, reponse, tentative, correct, reaction_preparee, methodes}` where `methodes` says how the notion had just been explained: `visuel` (simulation | image | table | schema | aucun), `formules_au_centre`, `tuteur_a_montre`, `eleve_a_manipule`, `variante_du_tuteur`, `exercice`. A free answer judged by DeepSeek is recorded with its verdict; an unjudgeable one with `correct: null`.
+- **A skipped question** (« Passer » button, 12 November 2026) is recorded with `passee: true` and `correct: null` (`/acquis`, and `/memoire/evenement` for retrouver / exercice_bloc / rappel): not a success and not an error — status `passee` in the bilan, outside the score and the methods, never acquired, no reprise; each competence counts its `passees`. A skipped recall comes back soon (back to J+1 like a failed one, its history says `passe`); a skipped block step counts as done for the progression.
 
 Storage today: one JSONL per student in `backend/data/suivi_acquis/` (no table before the user validates; `enregistrer` is the single place to switch to Supabase later, next to `student_answer_history`).
 
@@ -42,6 +43,8 @@ Storage today: one JSONL per student in `backend/data/suivi_acquis/` (no table b
 ## 7. Traceability
 
 Every event is recorded with its date and kept (JSONL per student today, the same place as the answers, `suivi_acquis.enregistrer`): course answers (as now), notebook written (block, time spent), retrieval of a block, exercise, recall (competence, step of the ladder, days since the last time, answer, verdict, time to answer), saturation detected (cause) and what the tutor did, session start/end and duration, notification sent / opened. From it, per student and per competence: the history (« trajet »), the next due date, the retention rate at J+7 / J+30. The admin dashboard shows the retention per course and per competence (what actually stays), and per student.
+
+Code (11 November 2026): `backend/app/services/memoire_longue.py` (ladder, same-subject recalls, progression in the blocks, home-screen notification, retention), routes `backend/app/api/v1/endpoints/memoire.py` (`/course-player/memoire/seance/{deck}`, `/rappels/{matière}`, `/evenement`, `/accueil`, `/preferences`; the free link serves `seance` and `evenement` under `/public/cours-ondes/memoire/…`), admin `GET /admin/retention` (tab « Rétention », `AdminRetention.tsx`), tests `app/tests/test_memoire_longue.py`. These events carry `evenement` and `cours_id`, never `deck_id`, so a course's bilan only sees its answers. Player side: `frontend/src/components/course/memoire/` (`useMemoireDuCours` is wired in `CoursePlayer`; `CourseFocusStage` turns « Suite → » into « ✍️ Au cahier → » on the last slide of an unfinished block). Prepared reactions: `competences[].rappels[].reponses`, `seances[].blocs[].exercice.reponses` (vrai/faux: `statements[j].reponses`), each `{option: {juste|1|2: {parole, ecrit, audio}}}`; an exercise with `reprend: "<slide>/e<i>"` reads the slide's `concentration.reponses`.
 
 ## 8. Notifications, per student
 

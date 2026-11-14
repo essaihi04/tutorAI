@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rétrécir l’intervalle — dichotomie</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Repère à la craie : l’intervalle où se trouve α est coupé en deux au milieu ; le signe de l’image du milieu dit quelle moitié garder ; un tableau se remplit"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/limites-continuite-tableau/lc-outils.js"></script>
+<script>
+/*
+ * Cours « Limites et continuité » (math_ch1_limites_continuite), bloc dichotomie (d1 à d4, pour les devoirs) et problème e1.
+ * Vues : ?vue=etapes (x³ + 2x − 1 sur [0 ; 1], trois étapes) | probleme (x³ + x − 1 sur [1/2 ; 1], une étape).
+ * Moments : intervalle_depart, puis pour chaque étape k : milieu_k, image_milieu_k, moitie_gardee_k ; `fin`.
+ * Valeurs : f(1/2) = 1/8 ; f(1/4) = −31/64 ; f(3/8) = −101/512 (x³ + 2x − 1) ; f(1/2) = −3/8 ; f(3/4) = 11/64 (x³ + x − 1).
+ */
+const CFG = {
+  etapes: {
+    f: x => x * x * x + 2 * x - 1, nom: 'f(x) = x³ + 2x − 1', a: 0, b: 1, haut: 'f(0) = −1 < 0  et  f(1) = 2 > 0',
+    G: { xmin: -0.12, xmax: 1.12, ymin: -1.3, ymax: 2.2, gx: [[1, '1']], gy: [[1, '1'], [-1, '−1']] },
+    etapes: [
+      { a: 0, b: 1, m: 0.5, ml: '1/2', fm: '1/8 > 0', s: '+', na: 0, nb: 0.5, enc: '0 < α < 1/2', amp: '0,5', ia: '[0 ; 1]' },
+      { a: 0, b: 0.5, m: 0.25, ml: '1/4', fm: '−31/64 < 0', s: '−', na: 0.25, nb: 0.5, enc: '1/4 < α < 1/2', amp: '0,25', ia: '[0 ; 1/2]' },
+      { a: 0.25, b: 0.5, m: 0.375, ml: '3/8', fm: '−101/512 < 0', s: '−', na: 0.375, nb: 0.5, enc: '3/8 < α < 1/2', amp: '0,125', ia: '[1/4 ; 1/2]' },
+    ],
+  },
+  probleme: {
+    f: x => x * x * x + x - 1, nom: 'f(x) = x³ + x − 1', a: 0.5, b: 1, haut: 'f(1/2) = −3/8 < 0  et  f(1) = 1 > 0',
+    G: { xmin: -0.12, xmax: 1.12, ymin: -1.3, ymax: 1.4, gx: [[0.5, '1/2'], [1, '1']], gy: [[1, '1'], [-1, '−1']] },
+    etapes: [{ a: 0.5, b: 1, m: 0.75, ml: '3/4', fm: '11/64 > 0', s: '+', na: 0.5, nb: 0.75, enc: '1/2 < α < 3/4', amp: '0,25', ia: '[1/2 ; 1]' }],
+  },
+};
+const COLS = [372, 456, 500, 600, 700, 748];   // intervalle | m | f(m) | encadrement de α | amplitude
+
+function vue(nomVue, titre, titreTableau) {
+  const C = CFG[nomVue];
+  return {
+    titre,
+    dessiner(c, K) {
+      K.titre(titreTableau);
+      const G = K.axes({ x0: 46, y0: 70, w: 300, h: 270, ...C.G });
+      const t = LC.temps(c), y0 = G.Y(0);
+      c.texte(C.nom, 372, 72, { couleur: 'cyan', taille: 18 });
+      K.anime(1.6, p => K.courbePart(G, C.f, -0.05, 1.08, p, { couleur: 'cyan' }));
+      K.rond(G, C.a, C.f(C.a), true, 'rouge'); K.rond(G, C.b, C.f(C.b), true, 'vert');
+      c.texte(C.haut, 372, 98, { couleur: 'blanc', taille: 16, max: 376 });
+      const tDepart = c.cur;
+      K.marque('intervalle_depart');
+      // le tableau
+      c.pause(.2);
+      const ty = 112, th = 26, rh = 32, n = C.etapes.length;
+      c.rect(COLS[0], ty, COLS[5] - COLS[0], th + rh * n, { couleur: 'faible', arrondi: 4, largeur: 1.2, duree: .3 });
+      c.ligne(COLS[0], ty + th, COLS[5], ty + th, { couleur: 'faible', largeur: 1, duree: .1 });
+      for (let i = 1; i < 5; i++) c.ligne(COLS[i], ty, COLS[i], ty + th + rh * n, { couleur: 'tresfaible', largeur: 1, duree: .05 });
+      ['intervalle', 'm', 'f(m)', 'encadrement', 'amplitude'].forEach((h, i) => c.texte(h, (COLS[i] + COLS[i + 1]) / 2, ty + 18, { couleur: 'faible', taille: 13, align: 'center', max: COLS[i + 1] - COLS[i] - 4, duree: .15 }));
+      c.repere('tableau', COLS[0] - 4, ty - 4, COLS[5] - COLS[0] + 8, th + rh * n + 8, 'le tableau des étapes');
+      const garde = [];
+      C.etapes.forEach((e, k) => {
+        const ry = ty + th + rh * k + 22, i = k + 1;
+        c.pause(.4);
+        c.ligne(G.X(e.m), y0 - 8, G.X(e.m), y0 + 8, { couleur: 'jaune', largeur: 2.4 });
+        c.texte(e.ml, G.X(e.m), y0 + 24 + 17 * (k % 2), { couleur: 'jaune', taille: 15, align: 'center' });
+        c.texte(e.ia, (COLS[0] + COLS[1]) / 2, ry, { couleur: 'blanc', taille: 14, align: 'center', max: 82 });
+        c.texte(e.ml, (COLS[1] + COLS[2]) / 2, ry, { couleur: 'jaune', taille: 15, align: 'center' });
+        c.repere('milieu', G.X(e.m) - 10, y0 - 12, 20, 44, 'le milieu ' + e.ml);
+        K.marque('milieu_' + i);
+        c.pause(.4);
+        const fm = C.f(e.m), coul = e.s === '+' ? 'vert' : 'rouge';
+        c.ligne(G.X(e.m), y0, G.X(e.m), G.Y(fm), { couleur: coul, largeur: 1.3, pointille: [4, 4] });
+        K.rond(G, e.m, fm, true, coul);
+        c.texte(e.s, G.X(e.m) + 9, G.Y(fm) + (e.s === '+' ? -8 : 20), { couleur: coul, taille: 22 });
+        c.texte(e.fm, (COLS[2] + COLS[3]) / 2, ry, { couleur: coul, taille: 14, align: 'center', max: 96 });
+        c.repere('signe', G.X(e.m) - 14, G.Y(fm) - 16, 36, 32, 'le signe de f(' + e.ml + ')');
+        K.marque('image_milieu_' + i);
+        c.pause(.4);
+        garde.push(c.cur);
+        c.texte(e.enc, (COLS[3] + COLS[4]) / 2, ry, { couleur: 'vert', taille: 14, align: 'center', max: 96 });
+        c.texte(e.amp, (COLS[4] + COLS[5]) / 2, ry, { couleur: 'jaune', taille: 14, align: 'center' });
+        K.marque('moitie_gardee_' + i);
+      });
+      // l’intervalle courant (trait épais) : il rétrécit à chaque moitié gardée ; la moitié rejetée pâlit
+      let ia = null;
+      if (t >= tDepart) { ia = [C.a, C.b]; C.etapes.forEach((e, k) => { if (t >= garde[k]) ia = [e.na, e.nb]; }); }
+      const derniere = C.etapes.filter((e, k) => t >= garde[k]).pop();
+      c.direct(() => {
+        if (!ia) return;
+        c.ligne(G.X(C.a), y0, G.X(C.b), y0, { couleur: 'tresfaible', largeur: 6 });
+        c.ligne(G.X(ia[0]), y0, G.X(ia[1]), y0, { couleur: 'jaune', largeur: 7, alpha: .85 });
+        c.repere('intervalle', G.X(ia[0]) - 4, y0 - 8, G.X(ia[1]) - G.X(ia[0]) + 8, 16, 'l’intervalle où est α');
+        if (derniere) {
+          c.rect(372, 290, 376, 40, { couleur: 'vert', arrondi: 8, largeur: 1.6 });
+          c.texte(`${derniere.enc}   ·   amplitude ${derniere.amp}`, 560, 317, { couleur: 'vert', taille: 19, align: 'center', max: 360 });
+          c.repere('amplitude', 368, 286, 384, 48, 'l’encadrement et son amplitude');
+        }
+      });
+    },
+    decrire: K => {
+      const D = { intervalle_depart: `La courbe de ${C.nom} ; ${C.haut} : α est dans ]${C.etapes[0].ia.slice(1, -1)}[, trait jaune épais sur l’axe.` };
+      C.etapes.forEach((e, k) => {
+        const i = k + 1;
+        D['milieu_' + i] = `Le milieu de ${e.ia} est marqué sur l’axe : m = ${e.ml}.`;
+        D['image_milieu_' + i] = `Le point de la courbe au-dessus de ${e.ml} s’allume : f(${e.ml}) = ${e.fm}, signe ${e.s === '+' ? 'plus' : 'moins'}.`;
+        D['moitie_gardee_' + i] = `On garde la moitié dont les bornes ont des images de signes contraires : ${e.enc}, amplitude ${e.amp} ; l’autre moitié pâlit.`;
+      });
+      return D;
+    },
+    motifs: Object.fromEntries(C.etapes.flatMap((e, k) => [['milieu_' + (k + 1), 'le milieu ' + e.ml], ['image_milieu_' + (k + 1), 'f(' + e.ml + ') : ' + e.s], ['moitie_gardee_' + (k + 1), e.enc]])),
+    explication: [{ repere: 'milieu', texte: 'On coupe l’intervalle en deux au milieu.' }, { repere: 'signe', texte: 'On calcule l’image du milieu et on lit son signe.' }, { repere: 'amplitude', texte: 'On garde la moitié où les signes sont contraires : l’amplitude est divisée par deux.' }],
+  };
+}
+
+MathsTableau.page({
+  id: 'lc_dichotomie', titre: 'Rétrécir l’intervalle',
+  texte: 'Construction à la craie du cours Limites et continuité : encadrer la solution α en coupant l’intervalle en deux et en regardant le signe de l’image du milieu (dichotomie)',
+  vues: {
+    etapes: vue('etapes', 'Encadrer α, solution de x³ + 2x − 1 = 0, par dichotomie', 'Couper en deux, garder la bonne moitié'),
+    probleme: vue('probleme', 'Une étape de dichotomie pour x³ + x − 1 = 0', 'Une étape : de [1/2 ; 1] à [1/2 ; 3/4]'),
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

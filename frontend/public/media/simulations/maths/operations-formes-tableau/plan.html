@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le plan complexe — nombres complexes</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Le plan complexe à la craie : axe réel, axe imaginaire, le point M d’affixe z = a + ib"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Nombres complexes, première partie » (math_ch6_nombres_complexes) : un complexe, un point du plan.
+ * Vues : ?vue=placer (params a, b) | affixe | purs.
+ * placer : axes, placer, poignees (repères du même nom).
+ * affixe : axes, point_a, origine, numero (repères du même nom).
+ * purs : axes, reels, imaginaires, zero (repères du même nom).
+ */
+const fr = MathsTableau.fr;
+const SUPS = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+const BARRE = '̄';
+/** Taille réellement écrite par le kit (petit écran : taille minimale). */
+const tv = (c, t) => (c.echelle && c.tailleMin ? Math.max(t, c.tailleMin / c.echelle) : t);
+/** Largeur réelle d’un texte à la craie, exposants et indices compris. */
+function L(c, s, t = 18) {
+  s = String(s).split(BARRE).join('').replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUPS[ch]).join('') + '}');
+  let w = 0;
+  for (const seg of Tableau.Craie.segments(s)) { c.ctx.font = `${seg.sub || seg.sup ? t * .62 : t}px ${Tableau.POLICE}`; w += c.ctx.measureText(seg.t).width; }
+  return w;
+}
+/** Écrit s ; une lettre suivie de U+0304 (z̄) reçoit une barre DESSINÉE au trait au-dessus. Renvoie la largeur. */
+function ecrire(c, s, x, y, o = {}) {
+  const t = tv(c, o.taille ?? 18), barres = []; let net = '';
+  for (const ch of String(s)) { if (ch === BARRE) { if (net) barres.push(net.length - 1); } else net += ch; }
+  const w = L(c, net, t), x0 = o.align === 'center' ? x - w / 2 : o.align === 'right' ? x - w : x;
+  c.texte(net, x, y, o);
+  for (const i of barres) barre(c, x0 + L(c, net.slice(0, i), t), y - t * .66, L(c, net[i], t), o.couleur);
+  return w;
+}
+/** La barre du conjugué, tracée au trait au-dessus de la lettre. */
+function barre(c, x, y, largeur, couleur) { c.ligne(x + largeur * .05, y, x + largeur * .95, y, { couleur: couleur || 'blanc', largeur: 1.8, duree: .08, tremble: .3 }); }
+/** Morceaux de couleurs différentes sur une ligne : [[texte, couleur], …]. */
+function morceaux(c, parts, x, y, o = {}) {
+  const t = tv(c, o.taille ?? 18);
+  let w = parts.reduce((s, [p]) => s + L(c, p, t), 0), px = o.align === 'center' ? x - w / 2 : o.align === 'right' ? x - w : x;
+  for (const [p, col] of parts) px += ecrire(c, p, px, y, { ...o, align: 'left', couleur: col });
+  return w;
+}
+/** Texte encadré ; renvoie le rectangle [x, y, w, h]. */
+function encadre(c, s, x, y, taille, couleur, coulTexte) {
+  const w = L(c, s, tv(c, taille)) + 18;
+  ecrire(c, s, x, y, { couleur: coulTexte || couleur, taille });
+  c.rect(x - 9, y - taille - 4, w, taille + 14, { couleur, arrondi: 8, largeur: 1.6 });
+  return [x - 9, y - taille - 4, w, taille + 14];
+}
+/** Petite flèche au-dessus d’une lettre (vecteur u, v). */
+function vecL(c, xc, y, w, couleur = 'blanc') {
+  c.ligne(xc - w / 2, y, xc + w / 2, y, { couleur, largeur: 1.3, duree: .05 });
+  c.trait([[xc + w / 2 - 4, y - 3], [xc + w / 2, y], [xc + w / 2 - 4, y + 3]], { couleur, largeur: 1.3, duree: .05 });
+}
+/** z = a + ib écrit à la française. */
+function zs(a, b) {
+  if (b === 0) return fr(a);
+  const B = Math.abs(b) === 1 ? '' : fr(Math.abs(b));
+  if (a === 0) return (b < 0 ? '−' : '') + B + 'i';
+  return fr(a) + (b < 0 ? ' − ' : ' + ') + B + 'i';
+}
+/** Un repère orthonormé : O en (ox ; oy) px, u px par unité. */
+function rep(o) {
+  return MathsTableau.grille({ x0: o.ox + o.xmin * o.u, y0: o.oy - o.ymax * o.u, w: (o.xmax - o.xmin) * o.u, h: (o.ymax - o.ymin) * o.u, xmin: o.xmin, xmax: o.xmax, ymin: o.ymin, ymax: o.ymax });
+}
+/** Le plan complexe : axe réel, axe imaginaire, O, u, v, graduations. */
+function plan(c, o) {
+  const G = rep(o), X = G.X, Y = G.Y, f = { couleur: 'faible', largeur: 1.6 };
+  if (o.quadrillage) {
+    for (let k = Math.ceil(o.xmin); k <= o.xmax - .3; k++) if (k) c.ligne(X(k), Y(o.ymin), X(k), Y(o.ymax), { couleur: 'tresfaible', largeur: .8, duree: .02 });
+    for (let k = Math.ceil(o.ymin); k <= o.ymax - .3; k++) if (k) c.ligne(X(o.xmin), Y(k), X(o.xmax), Y(k), { couleur: 'tresfaible', largeur: .8, duree: .02 });
+  }
+  c.fleche(X(o.xmin), Y(0), X(o.xmax), Y(0), f);
+  c.fleche(X(0), Y(o.ymin), X(0), Y(o.ymax), f);
+  const pas = o.pas || 1;
+  for (let k = Math.ceil(o.xmin); k <= o.xmax - .3; k++) if (k) {
+    c.ligne(X(k), Y(0) - 4, X(k), Y(0) + 4, { couleur: 'faible', largeur: 1.2, duree: .02 });
+    if (k % pas === 0) c.texte(fr(k), X(k), Y(0) + 19, { couleur: 'faible', taille: 13, align: 'center', duree: .04 });
+  }
+  for (let k = Math.ceil(o.ymin); k <= o.ymax - .3; k++) if (k) {
+    c.ligne(X(0) - 4, Y(k), X(0) + 4, Y(k), { couleur: 'faible', largeur: 1.2, duree: .02 });
+    if (k % pas === 0) c.texte(fr(k), X(0) - 8, Y(k) + 5, { couleur: 'faible', taille: 13, align: 'right', duree: .04 });
+  }
+  c.texte('O', X(0) - 13, Y(0) + 18, { couleur: 'faible', taille: 14 });
+  c.texte('axe réel', X(o.xmax) - 2, Y(0) - 9, { couleur: 'faible', taille: 14, align: 'right' });
+  c.texte('axe imaginaire', X(0) + 9, Y(o.ymax) + 10, { couleur: 'faible', taille: 14 });
+  c.fleche(X(0), Y(0), X(1), Y(0), { couleur: 'blanc', largeur: 2.6, tete: 8 });
+  c.fleche(X(0), Y(0), X(0), Y(1), { couleur: 'blanc', largeur: 2.6, tete: 8 });
+  c.texte('u', X(.5), Y(0) - 8, { couleur: 'blanc', taille: 15, align: 'center' }); vecL(c, X(.5), Y(0) - 21, 9);
+  c.texte('v', X(0) - 11, Y(.5) + 5, { couleur: 'blanc', taille: 15, align: 'center' }); vecL(c, X(0) - 11, Y(.5) - 8, 9);
+  return G;
+}
+/** Nom d’un point : au-dessus s’il est en haut, dessous s’il est un peu bas, à côté s’il est tout en bas (rien sous y = 360). */
+function etiq(c, G, x, y, s, couleur, taille) {
+  const px = G.X(x), py = G.Y(y);
+  if (y >= 0 || y >= -2) c.texte(s, Math.min(425, Math.max(50, px)), y >= 0 ? py - 13 : py + 26, { couleur, taille, align: 'center' });
+  else c.texte(s, px < 330 ? px + 13 : px - 13, py + 6, { couleur, taille, align: px < 330 ? 'left' : 'right' });
+}
+/** Le cadre d’un repère entier (pour c.repere). */
+const cadreRep = (G) => [G.x0, G.y0, G.w, G.h];
+
+const PL = { ox: 230, oy: 205, u: 45, xmin: -4.4, xmax: 4.6, ymin: -3.3, ymax: 3.3, quadrillage: true };
+const XR = 470;
+
+MathsTableau.page({
+  id: 'nc_plan', titre: 'Nombres complexes',
+  texte: 'Construction à la craie : le plan complexe (axe réel, axe imaginaire, repère orthonormé (O, u, v)) ; le complexe z = a + ib est le point M(a ; b) : avancer de a sur l’axe réel, monter de b ; l’affixe d’un point ; les réels sur l’axe réel, les imaginaires purs sur l’axe imaginaire',
+  vues: {
+    placer: {
+      titre: 'Un complexe, un point',
+      params: { a: { min: -4, max: 4, pas: 0.5, defaut: 3, sens: 'partie réelle de z, abscisse de M' }, b: { min: -3, max: 3, pas: 0.5, defaut: 2, sens: 'partie imaginaire de z, ordonnée de M' } },
+      dessiner(c, K) {
+        K.titre('Un complexe, un point');
+        const G = plan(c, PL), { a, b } = K.P;
+        c.repere('axes', ...cadreRep(G), 'le plan : axe réel, axe imaginaire, O, u, v');
+        K.marque('axes');
+        c.pause(.4);
+        if (a !== 0) {
+          K.anime(1, p => c.fleche(G.X(0), G.Y(0), G.X(a * p), G.Y(0), { couleur: 'vert', largeur: 3.4, tete: 10 }));
+          c.texte((a > 0 ? 'avancer de ' : 'reculer de ') + fr(Math.abs(a)), G.X(a / 2), G.Y(0) + (b < 0 ? -30 : 42), { couleur: 'vert', taille: 16, align: 'center' });
+        }
+        c.pause(.2);
+        if (b !== 0) {
+          K.anime(1, p => c.fleche(G.X(a), G.Y(0), G.X(a), G.Y(b * p), { couleur: 'orange', largeur: 3.4, tete: 10 }));
+          c.texte((b > 0 ? 'monter de ' : 'descendre de ') + fr(Math.abs(b)), G.X(a) + (G.X(a) < 330 ? 10 : -10), G.Y(b / 2) + 5, { couleur: 'orange', taille: 16, align: G.X(a) < 330 ? 'left' : 'right' });
+        }
+        c.pause(.2);
+        c.point(G.X(a), G.Y(b), 6, 'cyan');
+        etiq(c, G, a, b, `M(${fr(a)} ; ${fr(b)})`, 'cyan', 17);
+        c.pause(.2);
+        const parts = [['z = ', 'blanc']];
+        if (b === 0) parts.push([fr(a), 'vert']);
+        else {
+          if (a !== 0) parts.push([fr(a), 'vert'], [b < 0 ? ' − ' : ' + ', 'blanc']);
+          else if (b < 0) parts.push(['−', 'orange']);
+          if (Math.abs(b) !== 1) parts.push([fr(Math.abs(b)), 'orange'], ['i', 'blanc']); else parts.push(['i', 'orange']);
+        }
+        morceaux(c, parts, XR, 100, { taille: 28 });
+        c.texte(`${fr(a)} : partie réelle`, XR, 140, { couleur: 'vert', taille: 18 });
+        c.texte(`${fr(b)} : partie imaginaire`, XR, 168, { couleur: 'orange', taille: 18 });
+        c.repere('placer', G.X(Math.min(0, a)) - 10, G.Y(Math.max(0, b)) - 30, Math.abs(G.X(a) - G.X(0)) + 20, Math.abs(G.Y(b) - G.Y(0)) + 60, `M(${fr(a)} ; ${fr(b)}) : z = ${zs(a, b)}`);
+        K.marque('placer');
+        c.pause(.4);
+        c.cercle(G.X(a), G.Y(b), 14, { couleur: 'cyan', largeur: 1.4, pointille: [4, 4] });
+        const r = [XR - 10, 212, 270, 78];
+        c.texte('le point M(a ; b)', XR, 240, { couleur: 'jaune', taille: 20 });
+        c.texte('a pour affixe z = a + ib', XR, 272, { couleur: 'jaune', taille: 20 });
+        c.rect(...r, { couleur: 'jaune', arrondi: 9, largeur: 1.7 });
+        c.texte('glisse M : l’affixe se réécrit', XR, 322, { couleur: 'faible', taille: 16 });
+        c.repere('poignees', G.X(a) - 20, G.Y(b) - 20, 40, 40, 'le point M à glisser');
+        K.marque('poignees');
+      },
+      poignees(K) { const G = rep(PL); return [{ id: 'M', x: G.X(K.P.a), y: G.Y(K.P.b), bouger: (px, py) => { const [a, b] = G.inv(px, py); return { a, b }; } }]; },
+      lecture: K => `M(${fr(K.P.a)} ; ${fr(K.P.b)}) a pour affixe z = ${zs(K.P.a, K.P.b)} : partie réelle ${fr(K.P.a)}, partie imaginaire ${fr(K.P.b)}.`,
+      decrire: K => ({
+        axes: 'Le plan complexe à la craie : l’axe réel horizontal, l’axe imaginaire vertical, l’origine O et les petits vecteurs u et v (même unité sur les deux axes), un quadrillage léger.',
+        placer: `Une flèche verte « ${K.P.a >= 0 ? 'avancer' : 'reculer'} de ${fr(Math.abs(K.P.a))} » sur l’axe réel, puis une flèche orange « ${K.P.b >= 0 ? 'monter' : 'descendre'} de ${fr(Math.abs(K.P.b))} » ; le point M se pose : « M(${fr(K.P.a)} ; ${fr(K.P.b)}) » ; à droite « z = ${zs(K.P.a, K.P.b)} », ${fr(K.P.a)} en vert (partie réelle), ${fr(K.P.b)} en orange (partie imaginaire).`,
+        poignees: 'M est entouré d’un cercle pointillé (on peut le glisser) ; encadré jaune : « le point M(a ; b) a pour affixe z = a + ib » ; dessous : « glisse M : l’affixe se réécrit ».',
+      }),
+      motifs: { axes: 'le plan complexe', placer: 'placer z', poignees: 'M à glisser' },
+      explication: [
+        { repere: 'axes', texte: 'Le plan complexe : l’axe réel à l’horizontale, l’axe imaginaire à la verticale, la même unité.' },
+        { repere: 'placer', texte: 'Pour placer 3 + 2i : on avance de 3 sur l’axe réel, puis on monte de 2.' },
+        { repere: 'poignees', texte: 'Glisse M : son affixe a + ib se réécrit, a est l’abscisse, b l’ordonnée.' },
+      ],
+    },
+    affixe: {
+      titre: 'L’affixe d’un point',
+      dessiner(c, K) {
+        K.titre('L’affixe d’un point');
+        const G = plan(c, PL);
+        c.repere('axes', ...cadreRep(G), 'le plan complexe');
+        K.marque('axes');
+        c.pause(.4);
+        c.ligne(G.X(-2), G.Y(1), G.X(-2), G.Y(0), { couleur: 'orange', largeur: 1.4, pointille: [5, 5] });
+        c.ligne(G.X(-2), G.Y(1), G.X(0), G.Y(1), { couleur: 'orange', largeur: 1.4, pointille: [5, 5] });
+        c.point(G.X(-2), G.Y(1), 6, 'cyan');
+        c.texte('A', G.X(-2) - 10, G.Y(1) - 10, { couleur: 'cyan', taille: 19, align: 'right' });
+        c.texte('A(−2 ; 1)', XR, 100, { couleur: 'cyan', taille: 22 });
+        c.texte('z_{A} = −2 + i', XR, 136, { couleur: 'jaune', taille: 26 });
+        c.texte('z_{A} = −2 + i', G.X(-2) - 6, G.Y(1) - 34, { couleur: 'jaune', taille: 17, align: 'center' });
+        c.repere('point_a', G.X(-2) - 60, G.Y(1) - 54, 120, 66, 'A(−2 ; 1) d’affixe −2 + i');
+        K.marque('point_a');
+        c.pause(.4);
+        c.cercle(G.X(0), G.Y(0), 11, { couleur: 'jaune', largeur: 1.8 });
+        c.texte('z_{O} = 0', XR, 180, { couleur: 'jaune', taille: 26 });
+        c.repere('origine', G.X(0) - 16, G.Y(0) - 16, 32, 32, 'O d’affixe 0');
+        K.marque('origine');
+        c.pause(.4);
+        const r = encadre(c, 'l’affixe : le numéro du point', XR + 9, 248, 21, 'jaune', 'jaune');
+        c.texte('un point ↔ un complexe', XR, 300, { couleur: 'blanc', taille: 18 });
+        c.repere('numero', r[0], r[1], r[2], 300 - r[1] + 8, 'l’affixe : le numéro du point');
+        K.marque('numero');
+      },
+      decrire: {
+        axes: 'Le plan complexe : axe réel, axe imaginaire, O, u et v, quadrillage léger.',
+        point_a: 'Le point A(−2 ; 1) en cyan, avec ses pointillés orange vers les axes ; au-dessus, en jaune « z_A = −2 + i » ; à droite « A(−2 ; 1) » et « z_A = −2 + i ».',
+        origine: 'L’origine O entourée en jaune ; à droite : « z_O = 0 ».',
+        numero: 'À droite, encadré jaune : « l’affixe : le numéro du point » ; dessous « un point ↔ un complexe ».',
+      },
+      motifs: { axes: 'le plan complexe', point_a: 'le point A', origine: 'l’origine O', numero: 'le numéro du point' },
+      explication: [
+        { repere: 'point_a', texte: 'A a pour coordonnées (−2 ; 1) : son affixe est z_A = −2 + i.' },
+        { repere: 'origine', texte: 'L’origine O a pour affixe 0.' },
+        { repere: 'numero', texte: 'L’affixe, c’est le numéro du point : à chaque point son complexe.' },
+      ],
+    },
+    purs: {
+      titre: 'Réels et imaginaires purs',
+      dessiner(c, K) {
+        K.titre('Réels et imaginaires purs');
+        const G = plan(c, PL);
+        c.repere('axes', ...cadreRep(G), 'le plan complexe');
+        K.marque('axes');
+        c.pause(.4);
+        c.texte('z = a + ib', XR, 96, { couleur: 'blanc', taille: 24 });
+        c.pause(.2);
+        K.anime(1.4, p => {
+          c.cercle(G.X(3), G.Y(2), 5, { couleur: 'faible', largeur: 1.2 });
+          c.point(G.X(3), G.Y(2 * (1 - p)), 6, 'cyan');
+          if (p > .02) c.ligne(G.X(3), G.Y(2), G.X(3), G.Y(2 * (1 - p)) - 7, { couleur: 'faible', largeur: 1.2, pointille: [4, 5] });
+        });
+        c.ligne(G.X(-4.3), G.Y(0), G.X(4.4), G.Y(0), { couleur: 'vert', largeur: 5, alpha: .55 });
+        c.texte('réel', G.X(-3.3), G.Y(0) - 10, { couleur: 'vert', taille: 19, align: 'center' });
+        c.texte('3', G.X(3) + 10, G.Y(0) - 10, { couleur: 'cyan', taille: 17 });
+        c.texte('b = 0 : z = a réel', XR, 136, { couleur: 'vert', taille: 21 });
+        c.repere('reels', G.X(-4.4), G.Y(0) - 26, G.X(4.6) - G.X(-4.4), 40, 'l’axe réel : b = 0');
+        K.marque('reels');
+        c.pause(.4);
+        K.anime(1.4, p => {
+          c.cercle(G.X(-3), G.Y(2), 5, { couleur: 'faible', largeur: 1.2 });
+          c.point(G.X(-3 * (1 - p)), G.Y(2), 6, 'cyan');
+          if (p > .02) c.ligne(G.X(-3), G.Y(2), G.X(-3 * (1 - p)) - 7, G.Y(2), { couleur: 'faible', largeur: 1.2, pointille: [4, 5] });
+        });
+        c.ligne(G.X(0), G.Y(-3.2), G.X(0), G.Y(3.1), { couleur: 'orange', largeur: 5, alpha: .55 });
+        c.texte('imaginaire pur', G.X(0) + 10, G.Y(-2.5) + 5, { couleur: 'orange', taille: 19 });
+        c.texte('2i', G.X(0) + 10, G.Y(2) - 8, { couleur: 'cyan', taille: 17 });
+        c.texte('a = 0 : z = ib', XR, 176, { couleur: 'orange', taille: 21 });
+        c.texte('imaginaire pur', XR + 20, 204, { couleur: 'orange', taille: 21 });
+        c.repere('imaginaires', G.X(0) - 20, G.Y(3.3), 150, G.Y(-3.3) - G.Y(3.3), 'l’axe imaginaire : a = 0');
+        K.marque('imaginaires');
+        c.pause(.4);
+        c.cercle(G.X(0), G.Y(0), 13, { couleur: 'jaune', largeur: 2 });
+        const r = encadre(c, '0 est les deux', XR + 9, 262, 22, 'jaune', 'jaune');
+        c.texte('réel et imaginaire pur', XR, 300, { couleur: 'jaune', taille: 18 });
+        c.repere('zero', G.X(0) - 18, G.Y(0) - 18, 36, 36, '0 : réel et imaginaire pur');
+        K.marque('zero');
+        void r;
+      },
+      decrire: {
+        axes: 'Le plan complexe : axe réel, axe imaginaire, O, u et v, quadrillage léger.',
+        reels: 'À droite « z = a + ib ». Un point part de 3 + 2i et descend sur l’axe réel jusqu’à 3 ; l’axe réel est repassé en vert, écrit « réel » ; à droite en vert : « b = 0 : z = a réel ».',
+        imaginaires: 'Un point part de −3 + 2i et glisse horizontalement jusqu’à l’axe imaginaire, en 2i ; l’axe imaginaire est repassé en orange, écrit « imaginaire pur » ; à droite en orange : « a = 0 : z = ib imaginaire pur ».',
+        zero: 'L’origine O entourée en jaune ; à droite, encadré : « 0 est les deux », dessous « réel et imaginaire pur ».',
+      },
+      motifs: { axes: 'le plan complexe', reels: 'les réels', imaginaires: 'les imaginaires purs', zero: '0 est les deux' },
+      explication: [
+        { repere: 'reels', texte: 'Partie imaginaire nulle, b = 0 : le point est sur l’axe réel, z est réel.' },
+        { repere: 'imaginaires', texte: 'Partie réelle nulle, a = 0 : le point est sur l’axe imaginaire, z est imaginaire pur.' },
+        { repere: 'zero', texte: '0 est à la fois réel et imaginaire pur : il est sur les deux axes.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tableaux de signe et de variations — fonctions logarithmiques</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Tableaux de signe et de variations écrits à la craie case par case : la double barre où ln n’existe pas, les flèches de variation, les limites aux bornes"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Fonctions logarithmiques » (math_ch5_fonctions_ln) : tableaux de signe et de variations, case par case.
+ * Vues : ?vue=quotient | derivee | auxiliaire | variations.
+ * quotient : condition, racines, tableau, zone, resultat ; repères tableau, double_barre, resultat.
+ * derivee : denominateur, resoudre, tableau, double_barre, variations ; repères resoudre, tableau, double_barre.
+ * auxiliaire : g, quotient, fprime, variations ; repères g, fprime, variations.
+ * variations : tableau_vide, fleches, limite_0, asymptote, limite_inf ; repères limite_0, minimum, limite_inf.
+ */
+const SUPS = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+/** Largeur réelle d’un texte à la craie, exposants et indices compris. */
+function L(c, s, t = 18) {
+  s = String(s).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUPS[ch]).join('') + '}');
+  let w = 0;
+  for (const seg of Tableau.Craie.segments(s)) { c.ctx.font = `${seg.sub || seg.sup ? t * .62 : t}px ${Tableau.POLICE}`; w += c.ctx.measureText(seg.t).width; }
+  return w;
+}
+/** Texte encadré ; renvoie le rectangle [x, y, w, h]. */
+function encadre(c, s, x, y, taille, couleur, coulTexte) {
+  const w = L(c, s, taille) + 18;
+  c.texte(s, x, y, { couleur: coulTexte || couleur, taille });
+  c.rect(x - 9, y - taille - 4, w, taille + 14, { couleur, arrondi: 8, largeur: 1.6 });
+  return [x - 9, y - taille - 4, w, taille + 14];
+}
+/** « lim » avec, dessous en petit, « x → a » ; puis la suite. Renvoie [x, y, w, h] (o.cadre : encadré). */
+function lim(c, x, y, sous, suite, o = {}) {
+  const t = o.taille || 21, ts = Math.max(13, Math.round(t * .66)), coul = o.couleur || 'blanc';
+  const wl = L(c, 'lim', t), ws = L(c, sous, ts), bw = Math.max(wl, ws), x2 = x + bw + 8;
+  const w = x2 - x + L(c, suite, t) + 18, h = t * 1.8 + 12, R = [x - 9, y - t - 5, w, h];
+  c.texte('lim', x + (bw - wl) / 2, y, { couleur: coul, taille: t });
+  c.texte(sous, x + bw / 2, y + t * .8, { couleur: coul, taille: ts, align: 'center', duree: .2 });
+  c.texte(suite, x2, y, { couleur: coul, taille: t });
+  if (o.cadre) c.rect(...R, { couleur: o.cadre, arrondi: 9, largeur: 1.7 });
+  return R;
+}
+function ovale(c, cx, cy, rx, ry, coul = 'orange') { c.courbe(u => { const a = -2.4 + u * Math.PI * 2.12; return [cx + rx * Math.cos(a), cy + ry * Math.sin(a)]; }, 44, { couleur: coul, largeur: 2.3 }); }
+
+/**
+ * Tableau à la craie. o = {x, y, w, g (colonne des noms), xs: ['0', '1', '+∞'], hx (hauteur de la ligne des x), barre: position de la double barre}.
+ * T.P(i) : abscisse de la position i (un demi-entier = entre deux valeurs) ; T.ligne(nom, cellules, o) ajoute une ligne de signes ;
+ * T.var(nom, points, o) ajoute une ligne de variations. Chaque ligne renvoie {y, h, haut, bas}.
+ */
+function tableau(c, o) {
+  const n = o.xs.length, pad = o.pad ?? 24, f = { couleur: 'faible', largeur: 1.3 }, t = o.taille || 18;
+  const T = { ...o, bas: o.y + o.hx, lignes: [] };
+  T.P = i => o.x + o.g + pad + i * (o.w - o.g - 2 * pad) / (n - 1);
+  c.ligne(o.x, o.y, o.x + o.w, o.y, f);
+  c.ligne(o.x, o.y, o.x, T.bas, f); c.ligne(o.x + o.w, o.y, o.x + o.w, T.bas, f); c.ligne(o.x + o.g, o.y, o.x + o.g, T.bas, f);
+  c.ligne(o.x, T.bas, o.x + o.w, T.bas, { couleur: 'blanc', largeur: 1.6 });
+  c.texte('x', o.x + o.g / 2, o.y + o.hx / 2 + 7, { couleur: 'faible', taille: t, align: 'center' });
+  o.xs.forEach((s, i) => c.texte(s, T.P(i), o.y + o.hx / 2 + 7, { couleur: 'blanc', taille: t, align: 'center' }));
+  const cadreLigne = (nom, h) => {
+    const y = T.bas;
+    c.ligne(o.x, y, o.x, y + h, f); c.ligne(o.x + o.w, y, o.x + o.w, y + h, f); c.ligne(o.x + o.g, y, o.x + o.g, y + h, f);
+    c.ligne(o.x, y + h, o.x + o.w, y + h, f);
+    c.texte(nom, o.x + o.g / 2, y + h / 2 + 7, { couleur: 'faible', taille: o.tailleNom || 17, align: 'center', max: o.g - 8 });
+    T.bas = y + h;
+    return y;
+  };
+  T.double = (i, y, h, coul = 'blanc') => { c.ligne(T.P(i) - 2.5, y, T.P(i) - 2.5, y + h, { couleur: coul, largeur: 1.7 }); c.ligne(T.P(i) + 2.5, y, T.P(i) + 2.5, y + h, { couleur: coul, largeur: 1.7 }); };
+  /** Ligne de signes : cellules [[position, texte, couleur]] ; '‖' : double barre ; les valeurs intérieures ont leur pointillé. */
+  T.ligne = (nom, cellules, lo = {}) => {
+    const h = lo.h || 34, y = cadreLigne(nom, h);
+    const barres = cellules.filter(([, s]) => s === '‖').map(([p]) => p);
+    if (o.barre !== undefined) barres.push(o.barre);
+    for (let i = 1; i < n - 1; i++) if (!barres.includes(i)) c.ligne(T.P(i), y, T.P(i), y + h, { couleur: 'tresfaible', largeur: 1.1, pointille: [3, 4], duree: .04 });
+    for (const b of barres) T.double(b, y, h);
+    for (const [p, s, coul] of cellules) {
+      if (s === '‖') continue;
+      c.pause(.12);
+      const signe = s === '+' || s === '−';
+      c.texte(s, T.P(p), y + h / 2 + (signe ? 8 : 7), { couleur: coul || (s === '+' ? 'vert' : s === '−' ? 'orange' : 'jaune'), taille: signe ? 22 : t, align: 'center' });
+    }
+    return { y, h };
+  };
+  /** Ligne de variations (cadre seul) ; T.fleche(L, de, a) trace une flèche ; T.val(L, p, 'h'|'b', texte) écrit une valeur. */
+  T.var = (nom, lo = {}) => {
+    const h = lo.h || 70, y = cadreLigne(nom, h);
+    if (o.barre !== undefined) T.double(o.barre, y, h);
+    return { y, h, haut: y + 22, bas: y + h - 10 };
+  };
+  T.val = (V, p, ou, s, coul = 'cyan') => c.texte(s, T.P(p) + (p === 0 ? 14 : p === n - 1 ? -10 : 0), ou === 'h' ? V.haut : V.bas, { couleur: coul, taille: t, align: p === 0 ? 'left' : p === n - 1 ? 'right' : 'center' });
+  T.fleche = (V, [p1, o1], [p2, o2], coul = 'cyan') => {
+    const yy = q => (q === 'h' ? V.y + 16 : V.y + V.h - 22);
+    c.fleche(T.P(p1) + (p1 === 0 ? 46 : 26), yy(o1), T.P(p2) - (p2 === n - 1 ? 46 : 26), yy(o2), { couleur: coul, largeur: 2, tete: 9 });
+  };
+  return T;
+}
+
+MathsTableau.page({
+  id: 'ln_signe', titre: 'Fonctions logarithmiques',
+  texte: 'Construction à la craie du cours Fonctions logarithmiques : tableaux de signe (domaine d’un ln de quotient, signe de f’ qui vient de 1 − ln x ou de g) et tableau de variations avec les limites aux bornes ; la double barre en 0 rappelle que x > 0',
+  vues: {
+    quotient: {
+      titre: 'Un quotient dans ln : tableau de signe',
+      dessiner(c, K) {
+        K.titre('Un quotient dans ln : tableau de signe');
+        c.texte('f(x) = ln(5x/(3 − x))', 40, 78, { couleur: 'blanc', taille: 26 });
+        c.pause(.3);
+        c.texte('x ∈ D_f ⇔ 5x/(3 − x) > 0 et 3 − x ≠ 0', 40, 118, { couleur: 'cyan', taille: 21 });
+        K.marque('condition');
+        c.pause(.4);
+        c.texte('5x = 0 ⇔ x = 0 ; 3 − x = 0 ⇔ x = 3', 40, 152, { couleur: 'blanc', taille: 21 });
+        K.marque('racines');
+        c.pause(.4);
+        const T = tableau(c, { x: 40, y: 172, w: 450, g: 112, hx: 32, xs: ['−∞', '0', '3', '+∞'] });
+        T.ligne('5x', [[0.5, '−'], [1, '0'], [1.5, '+'], [2.5, '+']]);
+        T.ligne('3 − x', [[0.5, '+'], [1.5, '+'], [2, '0'], [2.5, '−']]);
+        const R = T.ligne('5x/(3 − x)', [[0.5, '−'], [1, '0'], [1.5, '+'], [2, '‖'], [2.5, '−']]);
+        c.repere('double_barre', T.P(2) - 12, R.y - 4, 24, R.h + 8, 'la double barre sous 3');
+        c.repere('tableau', T.x - 4, T.y - 4, T.w + 8, T.bas - T.y + 8, 'le tableau de signe');
+        K.marque('tableau');
+        c.pause(.4);
+        c.rect(T.P(1) + 14, T.y + 2, T.P(2) - T.P(1) - 28, T.bas - T.y - 4, { couleur: 'vert', arrondi: 6, largeur: 1.8, fond: 'vert', fondAlpha: .14 });
+        c.texte('> 0', (T.P(1) + T.P(2)) / 2, T.bas + 24, { couleur: 'vert', taille: 19, align: 'center' });
+        K.marque('zone');
+        c.pause(.4);
+        const b = encadre(c, 'D_f = ]0 ; 3[', 545, 250, 28, 'jaune', 'jaune');
+        c.repere('resultat', ...b, 'D_f = ]0 ; 3[');
+        K.marque('resultat');
+      },
+      decrire: {
+        condition: 'En haut : f(x) = ln(5x/(3 − x)) ; écrit : « x ∈ D_f ⇔ 5x/(3 − x) > 0 et 3 − x ≠ 0 ».',
+        racines: 'Écrit : « 5x = 0 ⇔ x = 0 ; 3 − x = 0 ⇔ x = 3 ».',
+        tableau: 'Un tableau de signe, case par case : x : −∞, 0, 3, +∞ ; 5x : −, 0, +, + ; 3 − x : +, +, 0, − ; 5x/(3 − x) : −, 0, +, double barre sous 3, −.',
+        zone: 'La colonne entre 0 et 3 est surlignée en vert : le quotient y est > 0.',
+        resultat: 'Encadré en jaune : « D_f = ]0 ; 3[ ».',
+      },
+      motifs: { condition: 'la condition', racines: 'les valeurs qui annulent', tableau: 'le tableau de signe', zone: 'la zone positive', resultat: 'le domaine' },
+      explication: [
+        { repere: 'tableau', texte: 'On étudie le signe du haut et du bas, puis celui du quotient.' },
+        { repere: 'double_barre', texte: 'En 3, le dénominateur s’annule : double barre, le quotient n’existe pas.' },
+        { repere: 'resultat', texte: 'Le quotient est strictement positif entre 0 et 3 : D_f = ]0 ; 3[.' },
+      ],
+    },
+    derivee: {
+      titre: 'Le signe de f’ : celui de 1 − ln x',
+      dessiner(c, K) {
+        K.titre('Le signe de f’ : celui de 1 − ln x');
+        c.texte('f’(x) = (1 − ln x)/x²', 40, 78, { couleur: 'blanc', taille: 26 });
+        c.pause(.3);
+        c.texte('x² > 0 : f’(x) a le signe de 1 − ln x', 40, 118, { couleur: 'cyan', taille: 21 });
+        K.marque('denominateur');
+        c.pause(.4);
+        const s = '1 − ln x > 0 ⇔ ln x < 1 ⇔ 0 < x < e';
+        c.texte(s, 40, 152, { couleur: 'blanc', taille: 21 });
+        c.repere('resoudre', 34, 130, L(c, s, 21) + 12, 30, '1 − ln x > 0 ⇔ 0 < x < e');
+        K.marque('resoudre');
+        c.pause(.4);
+        const T = tableau(c, { x: 40, y: 172, w: 430, g: 112, hx: 32, xs: ['0', 'e', '+∞'], barre: 0 });
+        T.ligne('1 − ln x', [[0.5, '+'], [1, '0'], [1.5, '−']]);
+        T.ligne('f’(x)', [[0.5, '+'], [1, '0'], [1.5, '−']]);
+        c.repere('tableau', T.x - 4, T.y - 4, T.w + 8, T.bas - T.y + 8, 'le tableau de signe de f’');
+        K.marque('tableau');
+        c.pause(.4);
+        ovale(c, T.P(0), (T.y + T.hx + T.bas) / 2, 15, (T.bas - T.y - T.hx) / 2 + 12, 'orange');
+        c.texte('x > 0 : le tableau', 510, 226, { couleur: 'orange', taille: 20 });
+        c.texte('commence à 0', 510, 252, { couleur: 'orange', taille: 20 });
+        c.repere('double_barre', T.P(0) - 18, T.y + T.hx - 14, 36, T.bas - T.y - T.hx + 28, 'la double barre sous 0');
+        K.marque('double_barre');
+        c.pause(.4);
+        const V = T.var('f', { h: 66 });
+        T.fleche(V, [0, 'b'], [1, 'h']);
+        T.val(V, 1, 'h', 'f(e)');
+        T.fleche(V, [1, 'h'], [2, 'b']);
+        K.marque('variations');
+      },
+      decrire: {
+        denominateur: 'En haut : f’(x) = (1 − ln x)/x² ; écrit : « x² > 0 : f’(x) a le signe de 1 − ln x ».',
+        resoudre: 'Écrit : « 1 − ln x > 0 ⇔ ln x < 1 ⇔ 0 < x < e ».',
+        tableau: 'Un tableau : x : 0, e, +∞ (double barre sous 0) ; 1 − ln x : +, 0, − ; f’(x) : +, 0, −.',
+        double_barre: 'La double barre sous 0 est entourée en orange : « x > 0 : le tableau commence à 0 ».',
+        variations: 'Ligne f : une flèche qui monte jusqu’à f(e), puis une flèche qui descend.',
+      },
+      motifs: { denominateur: 'le dénominateur positif', resoudre: 'résoudre 1 − ln x > 0', tableau: 'le tableau de signe', double_barre: 'la double barre en 0', variations: 'les variations' },
+      explication: [
+        { repere: 'resoudre', texte: 'On enlève le ln en gardant le sens : 0 < x < e.' },
+        { repere: 'tableau', texte: 'f’ a le signe de 1 − ln x : positif avant e, négatif après.' },
+        { repere: 'double_barre', texte: 'ln n’existe que pour x > 0 : le tableau commence à 0, avec une double barre.' },
+      ],
+    },
+    auxiliaire: {
+      titre: 'La partie I donne le signe de f’',
+      dessiner(c, K) {
+        K.titre('La partie I donne le signe de f’');
+        const T1 = tableau(c, { x: 40, y: 50, w: 330, g: 80, hx: 30, xs: ['0', '1', '+∞'], barre: 0 });
+        T1.ligne('g(x)', [[0.5, '−'], [1, '0'], [1.5, '+']], { h: 32 });
+        c.texte('Partie I : le signe de g', 400, 84, { couleur: 'faible', taille: 18 });
+        c.repere('g', T1.x - 4, T1.y - 4, T1.w + 8, T1.bas - T1.y + 8, 'le tableau de signe de g');
+        K.marque('g');
+        c.pause(.4);
+        c.texte('f’(x) = g(x)/x² et x² > 0 : f’(x) a le signe de g(x)', 40, 154, { couleur: 'cyan', taille: 21 });
+        K.marque('quotient');
+        c.pause(.4);
+        const T = tableau(c, { x: 40, y: 176, w: 430, g: 80, hx: 30, xs: ['0', '1', '+∞'], barre: 0 });
+        const R = T.ligne('f’(x)', [[0.5, '−'], [1, '0'], [1.5, '+']], { h: 32 });
+        c.repere('fprime', T.x - 4, R.y - 2, T.w + 8, R.h + 4, 'la ligne f’(x)');
+        K.marque('fprime');
+        c.pause(.4);
+        const V = T.var('f', { h: 70 });
+        T.fleche(V, [0, 'h'], [1, 'b']);
+        T.fleche(V, [1, 'b'], [2, 'h']);
+        c.repere('variations', T.x - 4, V.y - 2, T.w + 8, V.h + 4, 'la ligne des variations de f');
+        K.marque('variations');
+      },
+      decrire: {
+        g: 'En haut, le tableau de signe de g donné par la partie I : x : 0, 1, +∞ (double barre sous 0) ; g(x) : −, 0, +.',
+        quotient: 'Écrit : « f’(x) = g(x)/x² et x² > 0 : f’(x) a le signe de g(x) ».',
+        fprime: 'Un second tableau : x : 0, 1, +∞ ; ligne f’(x) : −, 0, +.',
+        variations: 'Ligne f : une flèche qui descend jusqu’en 1, puis une flèche qui monte.',
+      },
+      motifs: { g: 'le signe de g', quotient: 'f’ a le signe de g', fprime: 'la ligne f’', variations: 'les variations de f' },
+      explication: [
+        { repere: 'g', texte: 'La partie I a donné le signe de g : on le recopie.' },
+        { repere: 'fprime', texte: 'x² est positif : f’ a exactement le signe de g.' },
+        { repere: 'variations', texte: 'f’ négative puis positive : f descend puis monte.' },
+      ],
+    },
+    variations: {
+      titre: 'Limites aux bornes et tableau',
+      dessiner(c, K) {
+        K.titre('Limites aux bornes et tableau');
+        c.texte('f(x) = x + ½ − ln x + ½(ln x)²', 40, 76, { couleur: 'blanc', taille: 24 });
+        c.pause(.3);
+        const T = tableau(c, { x: 40, y: 98, w: 420, g: 80, hx: 32, xs: ['0', '1', '+∞'], barre: 0 });
+        T.ligne('f’(x)', [[0.5, '−'], [1, '0'], [1.5, '+']]);
+        const V = T.var('f', { h: 96 });
+        K.marque('tableau_vide');
+        c.pause(.4);
+        T.fleche(V, [0, 'h'], [1, 'b']);
+        T.val(V, 1, 'b', '3/2', 'jaune');
+        T.fleche(V, [1, 'b'], [2, 'h']);
+        c.texte('f(1) = 3/2', 40, 300, { couleur: 'jaune', taille: 22 });
+        c.repere('minimum', T.P(1) - 26, V.bas - 24, 52, 32, 'le minimum f(1) = 3/2');
+        K.marque('fleches');
+        c.pause(.4);
+        T.val(V, 0, 'h', '+∞');
+        const r0 = lim(c, 500, 128, 'x → 0^{+}', 'f(x) = +∞', { taille: 22, couleur: 'cyan', cadre: 'cyan' });
+        c.repere('limite_0', ...r0, 'la limite en 0 à droite');
+        K.marque('limite_0');
+        c.pause(.4);
+        c.texte('x = 0 : asymptote verticale', 494, 198, { couleur: 'orange', taille: 19 });
+        K.marque('asymptote');
+        c.pause(.4);
+        T.val(V, 2, 'h', '+∞');
+        const r1 = lim(c, 500, 262, 'x → +∞', 'f(x) = +∞', { taille: 22, couleur: 'cyan', cadre: 'cyan' });
+        c.repere('limite_inf', ...r1, 'la limite en +∞');
+        K.marque('limite_inf');
+      },
+      decrire: {
+        tableau_vide: 'En haut : f(x) = x + ½ − ln x + ½(ln x)² ; un tableau : x : 0, 1, +∞ (double barre sous 0) ; f’(x) : −, 0, + ; la ligne f encore vide.',
+        fleches: 'Ligne f : une flèche descend jusqu’à 3/2 en 1, puis une flèche monte ; écrit dessous « f(1) = 3/2 ».',
+        limite_0: '+∞ écrit en haut à gauche de la ligne f ; à droite, encadré : « lim f(x) = +∞ quand x → 0⁺ ».',
+        asymptote: 'Écrit en orange : « x = 0 : asymptote verticale ».',
+        limite_inf: '+∞ écrit en haut à droite de la ligne f ; à droite, encadré : « lim f(x) = +∞ quand x → +∞ ».',
+      },
+      motifs: { tableau_vide: 'le tableau à remplir', fleches: 'les flèches et le minimum', limite_0: 'la limite en 0', asymptote: 'l’asymptote x = 0', limite_inf: 'la limite en +∞' },
+      explication: [
+        { repere: 'limite_0', texte: 'En 0 à droite, −ln x et ½(ln x)² tendent vers +∞ : f(x) tend vers +∞.' },
+        { repere: 'minimum', texte: 'f descend puis monte : minimum f(1) = 1 + ½ = 3/2.' },
+        { repere: 'limite_inf', texte: 'En +∞, f(x) tend aussi vers +∞.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

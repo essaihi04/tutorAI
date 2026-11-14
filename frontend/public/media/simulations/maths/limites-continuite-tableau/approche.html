@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>S’approcher d’un point — limites</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Repère à la craie : un point glisse sur une courbe vers l’abscisse 1, de chaque côté ; sa valeur s’écrit à côté et se rapproche d’un nombre"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/limites-continuite-tableau/lc-outils.js"></script>
+<script>
+/*
+ * Cours « Limites et continuité » (math_ch1_limites_continuite), bloc « rappel des limites » (l1, l3, l9, l10, l11).
+ * Vues : ?vue=trou | trois_trous | deux_cotes. Moments nommés : voir chaque vue ; `fin` = construction complète.
+ * trou : f(x) = (x² − 1)/(x − 1) = x + 1 pour x ≠ 1 : la droite trouée en (1 ; 2), la limite en 1 vaut 2.
+ * deux_cotes : f(x) = 1/(x − 1) : +∞ à droite de 1, −∞ à gauche ; x = 1 asymptote verticale.
+ */
+const fr = MathsTableau.fr;
+// distance à 1 qui se resserre : 0,5 → 0,01 (on lit 0,9 puis 0,99)
+const resserre = (p, d0 = 0.5, d1 = 0.01) => d0 * Math.pow(d1 / d0, p);
+const COL = 466;
+
+MathsTableau.page({
+  id: 'lc_approche', titre: 'S’approcher d’un point',
+  texte: 'Construction à la craie du cours Limites et continuité : un point glisse sur la courbe vers l’abscisse a, de chaque côté, et sa valeur s’écrit',
+  vues: {
+    trou: {
+      titre: 'La droite trouée de (x² − 1)/(x − 1) en 1',
+      dessiner(c, K) {
+        K.titre('Où mène le chemin ?');
+        const G = K.axes({ x0: 56, y0: 62, w: 370, h: 278, xmin: -0.4, xmax: 2.4, ymin: -0.5, ymax: 3.6, gx: [[1, '1'], [2, '2']], gy: [[1, '1'], [2, '2'], [3, '3']] });
+        const t = LC.temps(c), f = x => (Math.abs(x - 1) < 0.02 ? NaN : x + 1);
+        c.texte('f(x) = (x² − 1)/(x − 1)', COL, 82, { couleur: 'cyan', taille: 19 });
+        K.anime(2, p => K.courbePart(G, f, -0.3, 2.3, p, { couleur: 'cyan' }));
+        K.rond(G, 1, 2, false, 'cyan');
+        c.repere('trou', G.X(1) - 14, G.Y(2) - 14, 28, 28, 'le trou en (1 ; 2)');
+        K.marque('courbe_tracee');
+        // à gauche : M part de 0,5 puis glisse vers 1
+        c.pause(.3); const g0 = c.cur;
+        c.texte('à gauche de 1 :', COL, 122, { couleur: 'faible', taille: 16 });
+        K.marque('depart_gauche');
+        c.pause(.6); const g1 = c.cur; K.anime(2.4, () => {}); K.marque('proche_gauche');
+        // à droite : M′ part de 1,5 puis glisse vers 1
+        c.pause(.4); const d0 = c.cur;
+        c.texte('à droite de 1 :', COL, 190, { couleur: 'faible', taille: 16 });
+        K.marque('depart_droite');
+        c.pause(.6); const d1 = c.cur; K.anime(2.4, () => {}); K.marque('proche_droite');
+        const pg = LC.piste(t, [[g0, 0, 0, 0], [g1, 2.4, 0, 1]]), pd = LC.piste(t, [[d0, 0, 0, 0], [d1, 2.4, 0, 1]]);
+        c.direct(() => {
+          if (pg !== null) {
+            const x = 1 - resserre(pg);
+            K.proj(G, x, x + 1, { couleur: 'jaune' }); K.rond(G, x, x + 1, true, 'jaune');
+            c.texte('M', G.X(x) - 22, G.Y(x + 1) - 8, { couleur: 'jaune', taille: 17 });
+            c.texte(`x = ${fr(x, 2)}  →  f(x) = ${fr(x + 1, 2)}`, COL, 150, { couleur: 'jaune', taille: 18 });
+            c.repere('M', G.X(x) - 12, G.Y(x + 1) - 12, 24, 24, 'le point M');
+          }
+          if (pd !== null) {
+            const x = 1 + resserre(pd);
+            K.proj(G, x, x + 1, { couleur: 'vert', versY: false }); K.rond(G, x, x + 1, true, 'vert');
+            c.texte('M′', G.X(x) + 9, G.Y(x + 1) + 20, { couleur: 'vert', taille: 17 });
+            c.texte(`x = ${fr(x, 2)}  →  f(x) = ${fr(x + 1, 2)}`, COL, 218, { couleur: 'vert', taille: 18 });
+          }
+        });
+        c.pause(.4);
+        c.cercle(G.X(1), G.Y(2), 15, { couleur: 'orange', largeur: 1.8 });
+        c.texte('f(1) n’existe pas : « 0/0 »', COL, 262, { couleur: 'orange', taille: 18 });
+        K.marque('trou_vide');
+        c.pause(.4);
+        c.fleche(G.X(1) - 18, G.Y(2), G.X(0) + 6, G.Y(2), { couleur: 'jaune', largeur: 1.8, pointille: [6, 5] });
+        c.rect(G.X(0) - 30, G.Y(2) - 13, 40, 26, { couleur: 'jaune', arrondi: 8, largeur: 1.6 });
+        c.repere('valeur_lue', G.X(0) - 32, G.Y(2) - 15, 44, 30, 'la valeur lue : 2');
+        LC.limite(c, COL, 308, 'x → 1', 'f(x) = 2', { couleur: 'jaune', taille: 22 });
+        c.repere('limite', COL - 6, 286, 200, 46, 'la limite en 1');
+        K.marque('limite_lue');
+      },
+      decrire: {
+        courbe_tracee: 'La courbe de f(x) = (x² − 1)/(x − 1) est la droite y = x + 1, avec un trou (rond vide) au point (1 ; 2).',
+        depart_gauche: 'Un point M jaune est posé sur la courbe à gauche de 1, en x = 0,5 : f(x) = 1,5.',
+        proche_gauche: 'M a glissé vers 1 par la gauche : x = 0,99 donne f(x) = 1,99.',
+        depart_droite: 'Un point M′ vert est posé à droite de 1, en x = 1,5 : f(x) = 2,5.',
+        proche_droite: 'M′ a glissé vers 1 par la droite : x = 1,01 donne f(x) = 2,01.',
+        trou_vide: 'Le trou est entouré en orange : f(1) n’existe pas, en remplaçant on obtient « 0/0 ».',
+        limite_lue: 'Une flèche mène du trou à la valeur 2 sur l’axe des ordonnées ; écrit : lim f(x) = 2 quand x → 1.',
+      },
+      motifs: { courbe_tracee: 'la droite trouée', depart_gauche: 'M à gauche', proche_gauche: 'M tout près de 1 à gauche', depart_droite: 'M′ à droite', proche_droite: 'M′ tout près de 1 à droite', trou_vide: 'le trou reste vide', limite_lue: 'la limite lue : 2' },
+      explication: [{ repere: 'M', texte: 'M s’approche de 1 : f(x) s’approche de 2.' }, { repere: 'trou', texte: 'Le trou reste vide : f(1) n’existe pas.' }, { repere: 'limite', texte: 'La limite est là où mène le chemin : 2.' }],
+    },
+    trois_trous: {
+      titre: 'Trois fois « 0/0 », trois limites différentes',
+      dessiner(c, K) {
+        K.titre('« 0/0 » n’est pas une réponse');
+        const CAS = [
+          { x0: 40, f: x => x + 1, a: 1, l: 2, ecr: '(x² − 1)/(x − 1)', sous: 'x → 1', res: '= 2', xmin: -0.5, xmax: 2.5, ymin: -0.5, ymax: 3.5, gx: [[1, '1']], gy: [[2, '2']], de: -0.4, au: 2.4 },
+          { x0: 292, f: x => x + 2, a: 2, l: 4, ecr: '(x² − 4)/(x − 2)', sous: 'x → 2', res: '= 4', xmin: -0.5, xmax: 3.5, ymin: -0.5, ymax: 5.5, gx: [[2, '2']], gy: [[4, '4']], de: -0.4, au: 3.4 },
+          { x0: 544, f: x => 1 / (Math.sqrt(x + 3) + 2), a: 1, l: 0.25, ecr: '(√(x + 3) − 2)/(x − 1)', sous: 'x → 1', res: '= 1/4', xmin: -3.4, xmax: 6, ymin: -0.08, ymax: 0.6, gx: [[1, '1']], gy: [[0.25, '1/4']], de: -3, au: 5.8 },
+        ];
+        CAS.forEach((k, i) => {
+          c.texte(k.ecr, k.x0, 76, { couleur: 'cyan', taille: 17, max: 200 });
+          c.texte('en remplaçant : « 0/0 »', k.x0, 100, { couleur: 'orange', taille: 14 });
+          const G = K.axes({ x0: k.x0, y0: 122, w: 176, h: 160, xmin: k.xmin, xmax: k.xmax, ymin: k.ymin, ymax: k.ymax, gx: k.gx, gy: k.gy, origine: false });
+          const g = x => (Math.abs(x - k.a) < (k.xmax - k.xmin) * 0.012 ? NaN : k.f(x));
+          K.anime(1.2, p => K.courbePart(G, g, k.de, k.au, p, { couleur: 'cyan', largeur: 2.2 }));
+          K.rond(G, k.a, k.l, false, 'jaune');
+          K.proj(G, k.a, k.l, { couleur: 'jaune' });
+          LC.limite(c, k.x0 + 6, 318, k.sous, k.res, { couleur: 'jaune', taille: 18 });
+          c.repere('cas' + (i + 1), k.x0 - 6, 60, 210, 268, 'cas ' + (i + 1));
+          K.marque('trou_' + (i + 1));
+          c.pause(.4);
+        });
+        c.texte('« 0/0 » donne 2, 4 ou 1/4 : trois limites différentes. On transforme l’écriture.', 380, 354, { couleur: 'jaune', taille: 17, align: 'center', max: 730 });
+        c.repere('conclusion', 20, 336, 720, 24, 'la conclusion');
+        K.marque('trois_limites');
+      },
+      decrire: {
+        trou_1: 'Premier repère : (x² − 1)/(x − 1), « 0/0 » en remplaçant ; la courbe trouée en 1 ; limite 2.',
+        trou_2: 'Deuxième repère : (x² − 4)/(x − 2), « 0/0 » ; trouée en 2 ; limite 4.',
+        trou_3: 'Troisième repère : (√(x + 3) − 2)/(x − 1), « 0/0 » ; trouée en 1 ; limite 1/4.',
+        trois_limites: 'Écrit en bas : « 0/0 » donne 2, 4 ou 1/4 : trois limites différentes, on transforme l’écriture.',
+      },
+      motifs: { trou_1: 'premier « 0/0 » : 2', trou_2: 'deuxième « 0/0 » : 4', trou_3: 'troisième « 0/0 » : 1/4', trois_limites: 'trois limites différentes' },
+      explication: [{ repere: 'cas1', texte: '« 0/0 » et la limite est 2.' }, { repere: 'cas2', texte: '« 0/0 » encore, et la limite est 4.' }, { repere: 'cas3', texte: '« 0/0 », et la limite est 1/4.' }],
+    },
+    deux_cotes: {
+      titre: 'f(x) = 1/(x − 1) : par la droite, par la gauche',
+      dessiner(c, K) {
+        K.titre('Deux côtés, deux chemins');
+        const G = K.axes({ x0: 46, y0: 56, w: 360, h: 286, xmin: -1, xmax: 3, ymin: -12, ymax: 12, gx: [[1, '1'], [2, '2']], gy: [[10, '10'], [-10, '−10']] });
+        const t = LC.temps(c), f = x => 1 / (x - 1);
+        c.texte('f(x) = 1/(x − 1)', COL - 20, 84, { couleur: 'cyan', taille: 20 });
+        K.marque('repere_pose');
+        // à droite : la branche se trace de 3 vers 1, le point glisse de 2 vers 1,01
+        c.pause(.3); const d0 = c.cur;
+        K.anime(2.6, p => K.courbePart(G, f, 3, 1.083, p, { couleur: 'cyan' }));
+        c.repere('branche_droite', G.X(1.04), G.y0, G.X(3) - G.X(1.04), G.Y(0) - G.y0, 'la branche à droite de 1');
+        K.marque('monte_a_droite');
+        c.pause(.4); const g0 = c.cur;
+        K.anime(2.6, p => K.courbePart(G, f, -1, 0.917, p, { couleur: 'cyan' }));
+        c.repere('branche_gauche', G.X(-1), G.Y(0), G.X(0.96) - G.X(-1), G.y0 + G.h - G.Y(0), 'la branche à gauche de 1');
+        K.marque('plonge_a_gauche');
+        const pd = LC.piste(t, [[d0, 2.6, 0, 1]]), pg = LC.piste(t, [[g0, 2.6, 0, 1]]);
+        c.direct(() => {
+          const point = (x, coul, yt, cote) => {
+            const y = f(x), yc = Math.max(-11.6, Math.min(11.6, y));
+            K.rond(G, x, yc, true, coul);
+            if (Math.abs(y) > 11.6) c.fleche(G.X(x), G.Y(yc) + (y > 0 ? 14 : -14), G.X(x), G.Y(yc) + (y > 0 ? -4 : 4), { couleur: coul, largeur: 1.6, tete: 7 });
+            c.texte(`${cote} : x = ${fr(x, 2)}  →  f(x) = ${fr(y, 0)}`, COL - 20, yt, { couleur: coul, taille: 17 });
+          };
+          if (pd !== null) point(1 + resserre(pd, 1, 0.01), 'vert', 118, 'à droite');
+          if (pg !== null) point(1 - resserre(pg, 1, 0.01), 'rouge', 146, 'à gauche');
+        });
+        c.pause(.4);
+        const tx = 446, ty = 166;
+        c.rect(tx, ty, 294, 60, { couleur: 'faible', arrondi: 4, largeur: 1.3 });
+        c.ligne(tx, ty + 28, tx + 294, ty + 28, { couleur: 'faible', largeur: 1.1 });
+        c.ligne(tx + 70, ty, tx + 70, ty + 60, { couleur: 'faible', largeur: 1.1 });
+        c.texte('x', tx + 35, ty + 20, { couleur: 'faible', taille: 16, align: 'center' });
+        c.texte('x − 1', tx + 35, ty + 50, { couleur: 'faible', taille: 16, align: 'center' });
+        c.texte('−∞', tx + 96, ty + 20, { couleur: 'blanc', taille: 16, align: 'center' });
+        c.texte('1', tx + 182, ty + 20, { couleur: 'blanc', taille: 16, align: 'center' });
+        c.texte('+∞', tx + 270, ty + 20, { couleur: 'blanc', taille: 16, align: 'center' });
+        c.texte('−', tx + 136, ty + 51, { couleur: 'rouge', taille: 20, align: 'center' });
+        c.texte('0', tx + 182, ty + 50, { couleur: 'blanc', taille: 16, align: 'center' });
+        c.texte('+', tx + 228, ty + 51, { couleur: 'vert', taille: 20, align: 'center' });
+        c.texte('→ 0⁻', tx + 150, ty + 82, { couleur: 'rouge', taille: 16, align: 'center' });
+        c.texte('→ 0⁺', tx + 220, ty + 82, { couleur: 'vert', taille: 16, align: 'center' });
+        c.repere('tableau_signe', tx - 4, ty - 4, 302, 96, 'le signe de x − 1');
+        K.marque('tableau_signe');
+        c.pause(.3);
+        LC.limite(c, tx, 286, 'x → 1⁺', '1/(x − 1) = +∞', { couleur: 'vert', taille: 19 });
+        LC.limite(c, tx, 326, 'x → 1⁻', '1/(x − 1) = −∞', { couleur: 'rouge', taille: 19 });
+        K.marque('limites_ecrites');
+        c.pause(.3);
+        c.ligne(G.X(1), G.y0 - 4, G.X(1), G.y0 + G.h, { couleur: 'orange', largeur: 1.6, pointille: [7, 6] });
+        c.texte('x = 1 : asymptote verticale', G.X(1) + 8, G.y0 + 12, { couleur: 'orange', taille: 16 });
+        c.repere('asymptote', G.X(1) - 10, G.y0, 20, G.h, 'la droite x = 1');
+        K.marque('asymptote_tracee');
+      },
+      decrire: {
+        repere_pose: 'Un repère ; écrit : f(x) = 1/(x − 1).',
+        monte_a_droite: 'Par la droite de 1, un point vert glisse de x = 2 vers x = 1,01 : f(x) vaut 10 puis 100, la branche monte vers le haut.',
+        plonge_a_gauche: 'Par la gauche de 1, un point rouge glisse vers x = 0,99 : f(x) vaut −10 puis −100, la branche plonge vers le bas.',
+        tableau_signe: 'Le tableau de signe de x − 1 : négatif avant 1, positif après ; x − 1 tend vers 0⁻ à gauche et vers 0⁺ à droite.',
+        limites_ecrites: 'Écrit : lim 1/(x − 1) = +∞ quand x → 1⁺, et = −∞ quand x → 1⁻.',
+        asymptote_tracee: 'La droite x = 1 est tracée en pointillés orange : asymptote verticale.',
+      },
+      motifs: { monte_a_droite: 'à droite, la courbe monte', plonge_a_gauche: 'à gauche, elle plonge', tableau_signe: 'le signe de x − 1', limites_ecrites: 'les deux limites', asymptote_tracee: 'l’asymptote x = 1' },
+      explication: [{ repere: 'branche_droite', texte: 'À droite de 1, x − 1 est un petit nombre positif : f(x) devient très grand.' }, { repere: 'branche_gauche', texte: 'À gauche, x − 1 est un petit nombre négatif : f(x) part vers −∞.' }, { repere: 'asymptote', texte: 'La droite x = 1 est une asymptote verticale.' }],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La courbe d’Aston — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="nucleaire.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="La courbe d’Aston tracée à la craie : en abscisse A (nombre de nucléons) de 0 à 240, en ordonnée −E_ℓ/A en MeV par nucléon de 0 en haut à −9 en bas ; les points des noyaux, la courbe avec le pic de l’hélium 4 et le creux vers le fer 56 ; les zones fusion, noyaux stables et fission ; ou deux points de lecture à comparer"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * La courbe d’Aston −E_ℓ/A = f(A) (cours « Noyaux, masse et énergie », phys_ch5_energie_nucleaire, 11 novembre 2026).
+ * Vues (?vue= ou set_parameters {vue}) :
+ *  - courbe (défaut) : axes, points des noyaux (petites sphères ombrées), courbe lisse (interpolation monotone : elle passe
+ *    exactement par chaque point, sans dépasser), le fer entouré, « plus stable » vers le bas, les zones fusion / noyaux
+ *    stables / fission (bornes approchées : environ 20 et environ 190, écrit au tableau), les flèches vers le creux.
+ *  - comparer : la courbe, puis deux points de lecture (poignées élève) qui se posent sur les noyaux de la liste ;
+ *    coordonnées exactes affichées ; le plus stable = la plus grande E_ℓ/A = le point le plus bas.
+ * Valeurs E_ℓ/A : celles du contrat du cours (aucune autre).
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const SUPS = { 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' };
+const sup = n => String(n).replace(/\d/g, d => SUPS[d]);
+const VITESSE = 1.5;                                   // horloge de l’écriture (s de scène par s réelle)
+
+/* ── Les noyaux de la courbe : A et E_ℓ/A (MeV/nucléon) ─────────────────── */
+const NOYAUX = [
+  ['H2', 2, 1.11, 'H', 'deutérium'], ['H3', 3, 2.83, 'H', 'tritium'], ['He4', 4, 7.07, 'He', 'hélium 4'], ['Li6', 6, 5.33, 'Li', 'lithium 6'],
+  ['Li7', 7, 5.61, 'Li', 'lithium 7'], ['Be9', 9, 6.46, 'Be', 'béryllium 9'], ['C12', 12, 7.68, 'C', 'carbone 12'], ['C14', 14, 7.52, 'C', 'carbone 14'],
+  ['O16', 16, 7.98, 'O', 'oxygène 16'], ['Ne20', 20, 8.03, 'Ne', 'néon 20'], ['Ca40', 40, 8.55, 'Ca', 'calcium 40'], ['Fe56', 56, 8.79, 'Fe', 'fer 56'],
+  ['Ni60', 60, 8.78, 'Ni', 'nickel 60'], ['Zr90', 90, 8.71, 'Zr', 'zirconium 90'], ['Sr94', 94, 8.59, 'Sr', 'strontium 94'], ['Sn120', 120, 8.50, 'Sn', 'étain 120'],
+  ['Xe140', 140, 8.29, 'Xe', 'xénon 140'], ['Ho165', 165, 8.15, 'Ho', 'holmium 165'], ['Pb208', 208, 7.87, 'Pb', 'plomb 208'], ['U235', 235, 7.59, 'U', 'uranium 235'],
+  ['U238', 238, 7.57, 'U', 'uranium 238'],
+].map(([id, A, ea, X, nom]) => ({ id, A, ea, X, nom, sym: sup(A) + X }));
+const PAR_ID = Object.fromEntries(NOYAUX.map(n => [n.id.toLowerCase(), n]));
+const NOMS = { deuterium: 'h2', tritium: 'h3', helium: 'he4', carbone12: 'c12', carbone14: 'c14', fer: 'fe56', fer56: 'fe56', nickel: 'ni60', nickel60: 'ni60', uranium: 'u235', uranium235: 'u235', uranium238: 'u238', strontium: 'sr94', xenon: 'xe140', plomb: 'pb208' };
+const CHIFFRE = { '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+function trouverNoyau(v) {
+  let s = String(v ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]/g, ch => CHIFFRE[ch]).replace(/[\s_\-]/g, '').toLowerCase();
+  if (NOMS[s]) s = NOMS[s];
+  const m = s.match(/^(\d+)([a-z]+)$/); if (m) s = m[2] + m[1];
+  return PAR_ID[s] || null;
+}
+const ETIQUETES = ['H2', 'He4', 'C12', 'Fe56', 'U235'];
+
+/* Courbe lisse : interpolation cubique monotone (Fritsch-Carlson) — passe par chaque point, aucun dépassement. */
+const XS = NOYAUX.map(n => n.A), YS = NOYAUX.map(n => n.ea);
+const PENTES = (() => {
+  const n = XS.length, d = [], m = new Array(n);
+  for (let i = 0; i < n - 1; i++) d.push((YS[i + 1] - YS[i]) / (XS[i + 1] - XS[i]));
+  m[0] = d[0]; m[n - 1] = d[n - 2];
+  for (let i = 1; i < n - 1; i++) m[i] = d[i - 1] * d[i] <= 0 ? 0 : (d[i - 1] + d[i]) / 2;
+  for (let i = 0; i < n - 1; i++) {
+    if (d[i] === 0) { m[i] = m[i + 1] = 0; continue; }
+    const a = m[i] / d[i], b = m[i + 1] / d[i], h = a * a + b * b;
+    if (h > 9) { const t = 3 / Math.sqrt(h); m[i] = t * a * d[i]; m[i + 1] = t * b * d[i]; }
+  }
+  return m;
+})();
+function eaDe(A) {
+  if (A <= XS[0]) return YS[0]; if (A >= XS[XS.length - 1]) return YS[YS.length - 1];
+  let i = 0; while (A > XS[i + 1]) i++;
+  const h = XS[i + 1] - XS[i], t = (A - XS[i]) / h, t2 = t * t, t3 = t2 * t;
+  return (2 * t3 - 3 * t2 + 1) * YS[i] + (t3 - 2 * t2 + t) * h * PENTES[i] + (-2 * t3 + 3 * t2) * YS[i + 1] + (t3 - t2) * h * PENTES[i + 1];
+}
+
+/* ── État ────────────────────────────────────────────────────────────── */
+const VUES = ['courbe', 'comparer'];
+const LISTES = {
+  courbe: ['axes', 'points', 'courbe_tracee', 'fer', 'plus_stable', 'zone_fusion', 'zone_fission', 'zone_stable', 'fleches', 'fin'],
+  comparer: ['axes', 'courbe_tracee', 'noyau1', 'noyau2', 'comparaison', 'fin'],
+};
+const demande = new URLSearchParams(location.search);
+const S = { vue: VUES.includes(demande.get('vue')) ? demande.get('vue') : 'courbe', t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0,
+  n1: trouverNoyau(demande.get('noyau1')) || PAR_ID.h2, n2: trouverNoyau(demande.get('noyau2')) || PAR_ID.h3 };
+let M = {}, MM = {};
+
+/* ── Géométrie : axe x vers la droite, axe y vers le BAS (−E_ℓ/A de 0 à −9) ── */
+const O = { x: 84, y: 82 }, KX = 2.5, KY = 30;
+const PX = A => O.x + A * KX, PY = ea => O.y + ea * KY;
+const XF = O.x + 240 * KX + 18, YF = O.y + 9 * KY + 16;      // bouts des flèches des axes
+const BAS = O.y + 9 * KY + 8;                                  // bas des zones peintes
+const ZONES = { fusion: [0, 20], stable: [20, 190], fission: [190, 240] };
+const FL_FUSION = [[170, 168], [203, 322]], FL_FISSION = [[632, 262], [338, 316]];
+
+/* ── Peinture : petites sphères ombrées et zones légèrement teintées ── */
+function sphere(ctx, x, y, r, rgb) {
+  const [R, G, B] = rgb, m = (k, a = 1) => `rgba(${Math.round(R + (255 - R) * k)},${Math.round(G + (255 - G) * k)},${Math.round(B + (255 - B) * k)},${a})`;
+  const f = k => `rgb(${Math.round(R * k)},${Math.round(G * k)},${Math.round(B * k)})`;
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(x + r * .3, y + r * .8, r * .95, r * .4, 0, 0, Math.PI * 2); ctx.fill();
+  const g = ctx.createRadialGradient(x - r * .38, y - r * .42, r * .08, x, y, r);
+  g.addColorStop(0, m(.7)); g.addColorStop(.45, f(1)); g.addColorStop(1, f(.42));
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.65)'; ctx.beginPath(); ctx.ellipse(x - r * .36, y - r * .4, r * .26, r * .16, -.6, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+const OR = [242, 193, 78];
+const TEINTES = { fusion: [251, 146, 60], stable: [74, 222, 128], fission: [192, 132, 252] };
+function zonePeinte(ctx, nom, a) {
+  if (a <= 0) return;
+  const [A0, A1] = ZONES[nom], x0 = PX(A0) + (A0 ? 0 : 1), x1 = PX(A1), [R, G, B] = TEINTES[nom];
+  const g = ctx.createLinearGradient(0, O.y, 0, BAS);
+  g.addColorStop(0, `rgba(${R},${G},${B},${.05 * a})`); g.addColorStop(1, `rgba(${R},${G},${B},${.16 * a})`);
+  ctx.save(); ctx.fillStyle = g; ctx.fillRect(x0, O.y + 2, x1 - x0, BAS - O.y - 2); ctx.restore();
+}
+
+/* ── Dessin : l’écriture suit l’horloge de la scène ; chaque moment = fin de l’écriture de sa phase ── */
+const marque = (c, nom) => { MM[nom] = c.cur; };
+const vu = (c, t0) => !Number.isFinite(c.t) || c.t >= t0;
+function dessiner(c) {
+  scene.cadre(53); MM = {};
+  const CMP = S.vue === 'comparer';
+  // Les zones sont peintes AVANT la craie (la craie reste au-dessus, lisible) ; elles apparaissent à leur moment.
+  if (!CMP) c.direct(() => {
+    for (const z of ['fusion', 'fission', 'stable']) {
+      const t0 = M['z_' + z] !== undefined ? M['z_' + z] : Infinity;
+      zonePeinte(c.ctx, z, Number.isFinite(c.t) ? clamp((S.t - t0) / .6) : 1);
+    }
+  });
+  c.texte(CMP ? 'La courbe d’Aston : comparer deux noyaux' : 'La courbe d’Aston : −E_{ℓ}/A = f(A)', 10, 26, { couleur: 'cyan', taille: 17, duree: 1 });
+  // Axes : noms ET unités ; l’axe y descend (0 en haut, −9 en bas).
+  c.axe(O.x, O.y, XF, O.y, [50, 100, 150, 200].map(A => [A * KX / (XF - O.x), null]), { taille: 13 });
+  [50, 100, 150, 200].forEach(A => c.texte(String(A), PX(A), O.y - 9, { couleur: 'faible', taille: 13, align: 'center', duree: .1 }));
+  c.texte('A (nombre de nucléons)', 752, O.y - 28, { couleur: 'blanc', taille: 15, align: 'right', duree: .8 });
+  c.axe(O.x, O.y, O.x, YF, [1, 2, 3, 4, 5, 6, 7, 8, 9].map(k => [k * KY / (YF - O.y), '−' + k]), { taille: 13, vertical: true });
+  c.texte('0', O.x - 8, O.y - 6, { couleur: 'faible', taille: 13, align: 'right' });
+  c.texte('−E_{ℓ}/A (MeV/nucléon)', O.x + 8, YF + 16, { couleur: 'blanc', taille: 15, duree: .8 });
+  marque(c, 'axes');
+
+  // Les points des noyaux (sphères peintes, apparues une à une), puis les noms des cinq noyaux repères.
+  const apparu = [];
+  c.pause(.3);
+  for (const n of NOYAUX) { apparu.push(c.cur); c.pause(CMP ? .03 : .09); }
+  c.direct(() => NOYAUX.forEach((n, i) => { if (vu(c, apparu[i])) sphere(c.ctx, PX(n.A), PY(n.ea), 3.6, OR); }));
+  if (!CMP) {
+    c.texte('²H', PX(2) + 8, PY(1.11) + 5, { couleur: 'jaune', taille: 15 });
+    c.ligne(PX(4) + 4, PY(7.07) - 3, 137, 264, { couleur: 'faible', largeur: 1.1, duree: .1 });
+    c.texte('⁴He', 139, 268, { couleur: 'jaune', taille: 15 });
+    c.ligne(PX(12) + 4, PY(7.68) - 2, 137, 300, { couleur: 'faible', largeur: 1.1, duree: .1 });
+    c.texte('¹²C', 139, 302, { couleur: 'jaune', taille: 15 });
+    c.texte('⁵⁶Fe', PX(56), PY(8.79) - 16, { couleur: 'jaune', taille: 15, align: 'center' });
+    c.texte('²³⁵U', PX(235) - 4, PY(7.59) - 13, { couleur: 'jaune', taille: 15, align: 'center' });
+    marque(c, 'points');
+  }
+  // La courbe lisse par les points.
+  c.pause(.3);
+  c.courbe(u => { const A = 2 + 236 * u; return [PX(A), PY(eaDe(A))]; }, 236, { couleur: 'vert', largeur: 2.2, tremble: .25 });
+  marque(c, 'courbe_tracee');
+
+  if (!CMP) {
+    // Le fer : le creux de la courbe.
+    c.pause(.4);
+    c.cercle(PX(56), PY(8.79), 11, { couleur: 'orange', largeur: 2 });
+    c.texte('les plus stables : −E_{ℓ}/A le plus bas', 268, 404, { couleur: 'orange', taille: 15 });
+    c.ligne(266, 398, PX(56) + 9, PY(8.79) + 9, { couleur: 'orange', largeur: 1.2, duree: .15 });
+    marque(c, 'fer');
+    // « plus stable » vers le bas de l’axe y.
+    c.pause(.3);
+    c.texte('plus', 27, 186, { couleur: 'rose', taille: 14, align: 'center' });
+    c.texte('stable', 27, 202, { couleur: 'rose', taille: 14, align: 'center' });
+    c.fleche(27, 212, 27, 330, { couleur: 'rose', largeur: 2.2 });
+    marque(c, 'plus_stable');
+    // Les zones (peintes à leur moment), bornes approchées écrites « environ ».
+    marque(c, 'z_fusion'); c.pause(.7);
+    c.ligne(PX(20), O.y + 4, PX(20), BAS, { couleur: 'tresfaible', largeur: 1.3, pointille: [5, 5] });
+    c.texte('environ 20', PX(20) + 5, O.y + 18, { couleur: 'faible', taille: 13 });
+    c.texte('fusion', (PX(0) + PX(20)) / 2 + 1, 206, { couleur: 'orange', taille: 15, align: 'center' });
+    marque(c, 'zone_fusion');
+    marque(c, 'z_fission'); c.pause(.7);
+    c.ligne(PX(190), O.y + 4, PX(190), BAS, { couleur: 'tresfaible', largeur: 1.3, pointille: [5, 5] });
+    c.texte('environ 190', PX(190) + 5, O.y + 18, { couleur: 'faible', taille: 13 });
+    c.texte('fission', (PX(190) + PX(240)) / 2, 206, { couleur: 'violet', taille: 15, align: 'center' });
+    marque(c, 'zone_fission');
+    marque(c, 'z_stable'); c.pause(.7);
+    c.texte('noyaux stables', (PX(20) + PX(190)) / 2, 206, { couleur: 'vert', taille: 15, align: 'center' });
+    marque(c, 'zone_stable');
+    // Les deux flèches vers le creux.
+    c.pause(.4);
+    c.texte('fusion', FL_FUSION[0][0], FL_FUSION[0][1] - 8, { couleur: 'orange', taille: 15, align: 'center' });
+    c.fleche(...FL_FUSION[0], ...FL_FUSION[1], { couleur: 'orange', largeur: 2.2 });
+    c.texte('fission', FL_FISSION[0][0] - 4, FL_FISSION[0][1] - 8, { couleur: 'violet', taille: 15, align: 'center' });
+    c.fleche(...FL_FISSION[0], ...FL_FISSION[1], { couleur: 'violet', largeur: 2.2 });
+    marque(c, 'fleches');
+  } else {
+    // Deux points de lecture : les poignées de l’élève.
+    for (const [k, n, coul, yRow] of [[1, S.n1, 'rose', 384], [2, S.n2, 'cyan', 406]]) {
+      c.pause(.4);
+      const x = PX(n.A), y = PY(n.ea);
+      c.ligne(x, O.y, x, y, { couleur: coul, largeur: 1.2, pointille: [3, 4], duree: .25 });
+      c.ligne(O.x, y, x, y, { couleur: coul, largeur: 1.2, pointille: [3, 4], duree: .25 });
+      c.cercle(x, y, 8, { couleur: coul, largeur: 2, duree: .2 });
+      c.texte(n.sym, x + (k === 1 ? 12 : -12), y + (k === 1 ? -10 : 20), { couleur: coul, taille: 15, align: k === 1 ? 'left' : 'right', duree: .2 });
+      c.texte(`point ${k} (${n.sym}) : A = ${n.A} ; −E_{ℓ}/A = −${fr(n.ea, 2)} MeV/nucléon`, 286, yRow, { couleur: coul, taille: 15, duree: 1.4 });
+      marque(c, 'noyau' + k);
+    }
+    c.pause(.5);
+    const p = plusStable();
+    c.texte(p ? `le plus stable : ${p.sym} (E_{ℓ}/A = ${fr(p.ea, 2)} MeV/nucléon)` : 'les deux points sont le même noyau', 300, 132, { couleur: 'jaune', taille: 16, duree: 1 });
+    c.texte('le plus stable : celui qui a la plus grande E_{ℓ}/A,', 300, 158, { couleur: 'blanc', taille: 15, duree: 1.2 });
+    c.texte('donc le point le plus bas', 300, 178, { couleur: 'blanc', taille: 15, duree: .7 });
+    marque(c, 'comparaison');
+  }
+  c.pause(.8); marque(c, 'fin');
+
+  // Repères (toujours déclarés, dans les deux vues).
+  c.repere('vue_courbe', 4, 36, 752, 380, 'la courbe d’Aston');
+  c.repere('axe_x', O.x, O.y - 34, XF - O.x + 4, 46, 'axe des abscisses : A (nombre de nucléons), de 0 à 240');
+  c.repere('axe_y', O.x - 34, O.y, 50, YF - O.y + 20, 'axe des ordonnées : −E_ℓ/A en MeV/nucléon, de 0 (en haut) à −9 (en bas)');
+  c.repere('courbe', PX(2), O.y + 20, PX(238) - PX(2), 9 * KY - 6, 'la courbe d’Aston −E_ℓ/A = f(A)');
+  c.repere('fer', PX(56) - 16, PY(8.79) - 32, 32, 46, 'le fer 56 : le creux, −E_ℓ/A = −8,79 MeV/nucléon');
+  c.repere('helium', PX(4) - 9, PY(7.07) - 9, 18, 18, 'l’hélium 4 : le pic, −E_ℓ/A = −7,07 MeV/nucléon');
+  c.repere('uranium', PX(235) - 12, PY(7.59) - 28, 26, 38, 'l’uranium 235 : −E_ℓ/A = −7,59 MeV/nucléon');
+  for (const z of ['fusion', 'stable', 'fission']) c.repere('zone_' + z, PX(ZONES[z][0]), O.y + 2, PX(ZONES[z][1]) - PX(ZONES[z][0]), BAS - O.y - 2,
+    { fusion: 'zone de la fusion : noyaux légers (A < 20 environ)', stable: 'zone des noyaux stables (20 < A < 190 environ)', fission: 'zone de la fission : noyaux lourds (A > 190 environ)' }[z]);
+  const boite = (a, b, m = 10) => [Math.min(a[0], b[0]) - m, Math.min(a[1], b[1]) - m - 14, Math.abs(a[0] - b[0]) + 2 * m, Math.abs(a[1] - b[1]) + 2 * m + 14];
+  c.repere('fleche_fusion', ...boite(...FL_FUSION), 'la flèche « fusion » : des noyaux légers vers le creux');
+  c.repere('fleche_fission', ...boite(...FL_FISSION), 'la flèche « fission » : des noyaux lourds vers le creux');
+  for (const [k, n] of [[1, S.n1], [2, S.n2]]) {
+    c.repere('point_' + k, PX(n.A) - 9, PY(n.ea) - 9, 18, 18, `point ${k} : ${n.sym}, A = ${n.A} ; −E_ℓ/A = −${fr(n.ea, 2)} MeV/nucléon`);
+    c.repere('poignee_' + k, PX(n.A) - 16, PY(n.ea) - 16, 32, 32, `poignée ${k} : glisse-la sur la courbe (${n.sym})`);
+  }
+  const fini = c.fin();
+  M = MM;
+  return fini || !S.running;
+}
+function plusStable() { return S.n1 === S.n2 ? null : (S.n1.ea > S.n2.ea ? S.n1 : S.n2); }
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+const craie = scene.craie;
+scene.cadre = function (graine) {
+  const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  craie.debut(graine, S.t);
+  const s = Math.min(W / VW, H / VH) || 1;
+  scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
+  craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
+  craie.echelle = s; craie.tailleMin = 11;
+  // Garde-fou « hors cadre » seulement une fois la police du tableau chargée (la police de secours est plus large).
+  craie.cadre = !document.fonts || document.fonts.status === 'loaded' ? { w: VW, h: VH, haut: 0 } : null;
+  return craie;
+};
+function calculer() { const t = S.t, r = S.running; S.t = 1e6; S.running = false; dessiner(craie); dessiner(craie); S.t = t; S.running = r; scene.sale = true; }
+const liste = () => LISTES[S.vue];
+function moments() { if (M.fin === undefined) calculer(); const out = {}; for (const k of liste()) out[k] = +M[k].toFixed(2); return out; }
+
+const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t += dt * VITESSE;
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.jusqua = null; S.running = false;
+    if (S.t >= M.fin - 1e-6) { finir(); return true; }
+    S.pause = true; etiquette(); bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 1)} s`) + '.');
+    pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); return true;
+  }
+  if (M.fin !== undefined && S.t >= M.fin) { S.t = M.fin; finir(); return true; }
+  if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+const phraseComparaison = () => { const p = plusStable(); return p ? `Le plus stable : ${p.sym} (E_ℓ/A = ${fr(p.ea, 2)} MeV/nucléon, le point le plus bas).` : 'Les deux points sont sur le même noyau.'; };
+const enBulle = s => s.replace(/E_ℓ/g, 'Eℓ');   // la bulle est du texte HTML : pas de « _ » visible
+function finir() {
+  S.running = false; S.fait = true; S.pause = false; etiquette();
+  bulle($('feedback'), S.vue === 'comparer' ? enBulle(phraseComparaison()) + ' Glisse un point sur la courbe.' : 'Le creux est vers le fer (A ≈ 56) : ce sont les noyaux les plus stables.', 'good');
+  pont.noter('measurement', { vue: S.vue }); pont.emettre();
+}
+const MOTIFS = {
+  axes: 'les axes : A en abscisse, −E_ℓ/A en ordonnée', points: 'les points des noyaux', courbe_tracee: 'la courbe d’Aston est tracée',
+  fer: 'le fer : les plus stables, −E_ℓ/A le plus bas', plus_stable: 'plus stable vers le bas', zone_fusion: 'la zone de la fusion (noyaux légers)',
+  zone_fission: 'la zone de la fission (noyaux lourds)', zone_stable: 'la zone des noyaux stables', fleches: 'fusion et fission vont vers le creux',
+  noyau1: 'le premier point de lecture', noyau2: 'le deuxième point de lecture', comparaison: 'le plus stable : le point le plus bas', fin: 'tout est écrit',
+};
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
+function phase() { let p = 'rien encore'; for (const k of liste()) if (M[k] !== undefined && S.t >= M[k] - 1e-6) p = k; return p; }
+function ceQuiSeVoit() {
+  if (M.fin === undefined) calculer();
+  const t = S.t, ok = n => M[n] !== undefined && t >= M[n] - 1e-6, CMP = S.vue === 'comparer';
+  const etat = S.running ? 'la craie écrit' : S.fait ? 'fin : tout est écrit' : S.pause ? 'arrêt sur image' : 'pas encore lancée';
+  const m = [`Vue « ${S.vue} » (${CMP ? 'comparer deux noyaux sur la courbe d’Aston' : 'la courbe d’Aston −E_ℓ/A = f(A)'}), ${etat} ; phase : ${phase()}.`];
+  if (ok('axes')) m.push('Axes : abscisses A (nombre de nucléons) de 0 à 240 (graduations 50, 100, 150, 200) ; ordonnées −E_ℓ/A en MeV/nucléon, de 0 en haut à −9 en bas (graduations −1 … −9).');
+  else m.push('Les axes ne sont pas encore tracés.');
+  if (!CMP && ok('points')) m.push(`Points des ${NOYAUX.length} noyaux (petites sphères) : ${NOYAUX.map(n => `${n.id} (A = ${n.A} ; −${fr(n.ea, 2)})`).join(', ')} ; noms écrits : ²H, ⁴He, ¹²C, ⁵⁶Fe, ²³⁵U.`);
+  if (ok('courbe_tracee')) m.push('Courbe verte lisse par les points : elle descend très vite des noyaux légers (²H à −1,11), avec un pic vers le bas à l’hélium 4 (−7,07), atteint son creux vers A ≈ 56–60 (fer 56 : −8,79 ; nickel 60 : −8,78), puis remonte lentement jusqu’à l’uranium (²³⁵U : −7,59 ; ²³⁸U : −7,57).');
+  if (!CMP) {
+    if (ok('fer')) m.push('Le point du fer 56 est entouré ; écrit : « les plus stables : −E_ℓ/A le plus bas ».');
+    if (ok('plus_stable')) m.push('Flèche « plus stable » vers le bas, le long de l’axe des ordonnées.');
+    const z = [];
+    if (ok('zone_fusion')) z.push('« fusion » (A < 20 environ, noyaux légers)');
+    if (ok('zone_fission')) z.push('« fission » (A > 190 environ, noyaux lourds)');
+    if (ok('zone_stable')) z.push('« noyaux stables » (20 < A < 190 environ)');
+    if (z.length) m.push(`Zones peintes légèrement : ${z.join(', ')} ; bornes approchées écrites « environ 20 » et « environ 190 ».`);
+    if (ok('fleches')) m.push('Deux flèches vers le creux : « fusion » depuis les noyaux légers, « fission » depuis les noyaux lourds.');
+  } else {
+    for (const [k, n] of [[1, S.n1], [2, S.n2]]) if (ok('noyau' + k)) m.push(`Point de lecture ${k} (poignée ${k === 1 ? 'rose' : 'cyan'}) sur ${n.sym} (${n.nom}) : A = ${n.A} ; −E_ℓ/A = −${fr(n.ea, 2)} MeV/nucléon.`);
+    if (ok('comparaison')) m.push(`Écrit : ${phraseComparaison()} « le plus stable : celui qui a la plus grande E_ℓ/A, donc le point le plus bas ».`);
+  }
+  return m.join(' ');
+}
+
+/* ── Commandes ────────────────────────────────────────────────────────── */
+function start() { S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); bulle($('feedback'), S.vue === 'comparer' ? 'On place deux noyaux sur la courbe…' : 'On trace −E_ℓ/A en fonction de A…'); pont.noter('start', { vue: S.vue }); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
+function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); bulle($('feedback'), 'La craie continue…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  calculer(); const t = +p.time_s; if (!Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = clamp(t, 0, M.fin); S.fait = S.t >= M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+  etiquette(); scene.sale = true; bulle($('feedback'), `Arrêt sur image : t = ${fr(S.t, 1)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function changerVue(v) { if (!VUES.includes(v) || v === S.vue) return false; S.vue = v; M = {}; S.t = 0; S.fait = false; S.pause = false; calculer(); return true; }
+function playUntil(p) {
+  if (p.vue) changerVue(p.vue);
+  else if (p.moment && !liste().includes(p.moment)) { const autre = VUES.find(v => LISTES[v].includes(p.moment)); if (autre) changerVue(autre); }
+  calculer();
+  const nom = liste().includes(p.moment) ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+  S.jusqua = clamp(cible, .01, M.fin); S.motif = nom ? MOTIFS[nom] : ''; S.running = true; S.pause = false; etiquette(); bulle($('feedback'), 'Observe…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+function setParameters(p) {
+  let vue = false, noyau = false;
+  if (p.vue) vue = changerVue(p.vue);
+  for (const k of [1, 2]) {
+    const v = p['noyau' + k]; if (v === undefined || v === null || v === '') continue;
+    const n = trouverNoyau(v); if (n && n !== S['n' + k]) { S['n' + k] = n; noyau = true; }
+  }
+  if (noyau && S.vue !== 'comparer') vue = changerVue('comparer') || vue;
+  pont.noter('set_parameters', { vue: S.vue, noyau1: S.n1.id, noyau2: S.n2.id });
+  if (vue) { start(); return; }
+  if (noyau) { calculer(); scene.sale = true; bulle($('feedback'), `Point 1 : ${S.n1.sym} ; point 2 : ${S.n2.sym}. ${enBulle(phraseComparaison())}`); }
+  pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+
+/* Poignées (vue comparer) : chaque point de lecture se glisse sur la courbe et se pose sur le noyau le plus proche. */
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => {
+    if (S.vue !== 'comparer' || M.fin === undefined) return null;
+    const [x, y] = scene.local(px, py);
+    for (const k of [2, 1]) { if (S.t < M['noyau' + k]) continue; const n = S['n' + k]; if (Math.hypot(x - PX(n.A), y - PY(n.ea)) < 16) return k; }
+    return null;
+  },
+  bouger: (k, px, py) => {
+    const [x, y] = scene.local(px, py);
+    let best = null, d = Infinity;
+    for (const n of NOYAUX) { const e = Math.hypot(x - PX(n.A), (y - PY(n.ea)) * .6); if (e < d) { d = e; best = n; } }
+    if (best && best !== S['n' + k]) { S['n' + k] = best; scene.sale = true; }
+  },
+  lacher: () => { bulle($('feedback'), `Point 1 : ${S.n1.sym} ; point 2 : ${S.n2.sym}. ${enBulle(phraseComparaison())}`); pont.noter('set_parameters', { noyau1: S.n1.id, noyau2: S.n2.id }); pont.emettre(); },
+});
+
+window.Tableau.explication({
+  courbe: [
+    { repere: 'axe_x', texte: 'En abscisse, A, le nombre de nucléons, de 0 à 240.' },
+    { repere: 'axe_y', texte: 'En ordonnée, −E_ℓ/A en MeV par nucléon : 0 en haut, −9 en bas.' },
+    { repere: 'courbe', texte: 'Chaque point est un noyau ; la courbe passe par tous les points.' },
+    { repere: 'helium', texte: 'L’hélium 4 fait un pic vers le bas : il est très stable pour un noyau léger.' },
+    { repere: 'fer', texte: 'Le creux est vers le fer 56 : −E_ℓ/A le plus bas, donc les noyaux les plus stables.' },
+    { repere: 'zone_fusion', texte: 'Les noyaux légers, A inférieur à 20 environ, peuvent fusionner.' },
+    { repere: 'zone_fission', texte: 'Les noyaux lourds, A supérieur à 190 environ, peuvent subir la fission.' },
+    { repere: 'zone_stable', texte: 'Entre les deux, les noyaux stables.' },
+    { repere: 'fleche_fusion', texte: 'La fusion et la fission vont toutes les deux vers le creux : vers des noyaux plus stables.' },
+  ],
+  comparer: [
+    { repere: 'point_1', texte: 'Le premier point : on lit A et −E_ℓ/A.' },
+    { repere: 'point_2', texte: 'Le deuxième point : on lit A et −E_ℓ/A.' },
+    { repere: 'courbe', texte: 'Le plus stable a la plus grande E_ℓ/A : c’est le point le plus bas.' },
+  ],
+});
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+calculer();
+const config = { id: 'energie_nucleaire_aston', version: '1.0', title: 'La courbe d’Aston', variants: VUES.map(id => ({ id, label: id === 'courbe' ? 'La courbe' : 'Comparer deux noyaux' })), commands: commandes,
+  command_schema: {
+    set_parameters: { vue: 'courbe | comparer (change la vue et la retrace depuis le début)', noyau1: NOYAUX.map(n => n.id).join(' | ') + ' (point de lecture 1, vue comparer)', noyau2: 'même liste (point de lecture 2, vue comparer)' },
+    set_time: { time_s: '0..fin (arrêt sur cet instant de l’écriture, en s ; voir moments)' },
+    play_until: { moment: 'courbe : ' + LISTES.courbe.join(' | ') + ' ; comparer : ' + LISTES.comparer.join(' | '), time_s: 'ou un instant en s', vue: 'facultatif : courbe | comparer' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'La courbe d’Aston −E_ℓ/A = f(A) : A (nombre de nucléons) en abscisse, −E_ℓ/A (MeV/nucléon) en ordonnée, de 0 en haut à −9 en bas. Un noyau est d’autant plus stable que E_ℓ/A est grande, donc que son point est bas. Creux vers le fer 56 (−8,79). Noyaux légers (A < 20 environ) : fusion ; noyaux lourds (A > 190 environ) : fission ; les deux vont vers le creux. Comparer la stabilité : comparer E_ℓ/A, jamais E_ℓ.',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle', ce_qui_se_voit: ceQuiSeVoit(), current_variant: S.vue,
+    time_s: +S.t.toFixed(2), parameters: { vue: S.vue, noyau1: S.n1.id, noyau2: S.n2.id, axe_x: 'A (nombre de nucléons), 0 à 240', axe_y: '−E_ℓ/A (MeV/nucléon), 0 à −9' },
+    moments: moments() }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'La courbe d’Aston va s’écrire…');
+setTimeout(() => { if (!S.running && S.t === 0 && !S.pause) start(); }, 900);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

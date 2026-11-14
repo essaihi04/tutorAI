@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Par quoi commencer ? — fonctions primitives</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Organigramme à la craie : quatre branches pour choisir la méthode de primitive devant une fonction f"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Fonctions primitives » (math_ch4_primitives) : l’organigramme (vue organigramme).
+ * Moments et repères : voir le contrat du cours (les noms sont cités par le cours, ne pas les renommer).
+ */
+/* ——— Aides de craie de la page ——— */
+const SUPS = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+/** Largeur réelle d’un texte à la craie, exposants compris. */
+function L(c, s, t = 21) {
+  s = String(s).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUPS[ch]).join('') + '}');
+  let w = 0;
+  for (const seg of Tableau.Craie.segments(s)) { c.ctx.font = `${seg.sub || seg.sup ? t * .62 : t}px ${Tableau.POLICE}`; w += c.ctx.measureText(seg.t).width; }
+  return w;
+}
+const largeurs = (c, ms, t) => ms.map(m => (m && m.fl ? (m.w || (m.mot ? Math.max(56, L(c, m.mot, 13) + 18) : 44)) : L(c, typeof m === 'string' ? m : m.t, t)));
+/** Écrit des morceaux à la suite : 'texte', {t, c} (couleur), {fl: couleur, mot, w} (flèche de craie). */
+function rang(c, x, y, ms, o = {}) {
+  let t = o.taille || 21, ws = largeurs(c, ms, t), tot = ws.reduce((a, b) => a + b, 0);
+  if (o.max && tot > o.max) { t = t * o.max / tot; ws = largeurs(c, ms, t); tot = ws.reduce((a, b) => a + b, 0); }
+  if (o.centre) x -= tot / 2;
+  const x0 = x, p = [];
+  ms.forEach((m, i) => {
+    const w = ws[i];
+    if (m && m.fl) {
+      const ya = y - t * .3;
+      c.fleche(x + 6, ya, x + w - 6, ya, { couleur: m.fl, largeur: 2.2, tete: 9 });
+      if (m.mot) c.texte(m.mot, x + w / 2, ya - 8, { couleur: m.fl, taille: 13, align: 'center' });
+    } else c.texte(typeof m === 'string' ? m : m.t, x, y, { couleur: (m && m.c) || o.couleur || 'blanc', taille: t });
+    p.push({ x, w, m: x + w / 2 }); x += w;
+  });
+  return { p, x0, x1: x, t, y };
+}
+const bout = (R, i, j = i) => [R.p[i].x, R.p[j].x + R.p[j].w];
+function cadre(c, R, coul = 'jaune', m = 9) { c.rect(R.x0 - m, R.y - R.t - 5, R.x1 - R.x0 + 2 * m, R.t + 16, { couleur: coul, arrondi: 7, largeur: 1.7 }); }
+function souligne(c, R, i, coul = 'rouge', j = i) { const [a, b] = bout(R, i, j); c.ligne(a + 2, R.y + 7, b - 2, R.y + 7, { couleur: coul, largeur: 2.4 }); }
+function barre(c, R, i, coul = 'rouge', j = i) { const [a, b] = bout(R, i, j); c.ligne(a - 2, R.y - R.t * .3 + 9, b + 2, R.y - R.t * .3 - 9, { couleur: coul, largeur: 2.6 }); }
+function ovale(c, cx, cy, rx, ry, coul = 'orange') { c.courbe(u => { const a = -2.4 + u * Math.PI * 2.12; return [cx + rx * Math.cos(a), cy + ry * Math.sin(a)]; }, 44, { couleur: coul, largeur: 2.2 }); }
+function entoure(c, R, i, coul = 'orange', j = i) { const [a, b] = bout(R, i, j); ovale(c, (a + b) / 2, R.y - R.t * .32, (b - a) / 2 + 10, R.t * .75, coul); }
+function entoureExp(c, R, i, coul = 'orange') { const [a, b] = bout(R, i); ovale(c, (a + b) / 2, R.y - R.t * .66, (b - a) / 2 + 7, R.t * .4, coul); }
+function coche(c, x, y) { c.trait([[x, y - 9], [x + 6, y - 1], [x + 19, y - 19]], { couleur: 'vert', largeur: 3, tremble: .4 }); }
+function zone(c, id, R, label, pad = 7) { c.repere(id, R.x0 - pad, R.y - R.t - pad, R.x1 - R.x0 + 2 * pad, R.t + 2 * pad + 6, label); }
+
+
+const XT = 44;          // le tronc vertical
+const YB = [112, 164, 216, 268];   // une branche par ordonnée (question), la réponse 22 px plus bas
+
+/* Une branche : flèche depuis le tronc, la question (cyan), puis la réponse (verte) en retrait. */
+function branche(c, y, question, reponse, num) {
+  c.fleche(XT, y - 7, XT + 22, y - 7, { couleur: 'faible', largeur: 1.6, tete: 7 });
+  const Q = rang(c, XT + 28, y, [{ t: num + ' ', c: 'jaune' }, { t: question, c: 'cyan' }], { taille: 18, max: 700 - XT });
+  c.pause(.15);
+  const R = rang(c, XT + 56, y + 22, [{ fl: 'vert', w: 34 }, { t: reponse, c: 'vert' }], { taille: 17, max: 690 - XT });
+  return { x0: Q.x0, x1: Math.max(Q.x1, R.x1), y0: y - 22, y1: y + 30 };
+}
+
+MathsTableau.page({
+  id: 'pr_organigramme', titre: 'Fonctions primitives',
+  texte: 'Construction à la craie du cours Fonctions primitives : l’organigramme pour choisir la méthode devant une fonction f (somme du tableau, forme composée avec u’, dérivée d’un produit ou d’un quotient, sinon transformer l’écriture)',
+  vues: {
+    organigramme: {
+      titre: 'Par quoi commencer ?',
+      dessiner(c, K) {
+        K.titre('Par quoi commencer ?');
+        c.rect(XT - 24, 56, 176, 32, { couleur: 'jaune', arrondi: 10, largeur: 1.8 });
+        c.texte('je regarde f', XT - 8, 79, { couleur: 'jaune', taille: 20 });
+        c.ligne(XT, 88, XT, YB[3] - 7, { couleur: 'faible', largeur: 1.6 });
+        c.pause(.3);
+        const def = [
+          ['somme', 'une somme de fonctions du tableau ?', 'chaque terme sa primitive, une seule constante k', '①', 'somme', 'une somme : chaque terme sa primitive'],
+          ['formes', 'u’uⁿ, u’/u², u’/√u, u’cos u, u’sin u ? (u’ à un nombre près)', 'la forme', '②', 'formes_composees', 'une forme composée avec u’'],
+          ['produit', 'u’v + uv’ ?  → uv ;   (u’v − uv’)/v² ?', 'u/v', '③', 'produit', 'la dérivée d’un produit ou d’un quotient'],
+          ['transformer', 'sinon : je transforme l’écriture', 'développer, séparer, puissance', '④', 'transformer', 'transformer l’écriture'],
+        ];
+        const zones = {};
+        def.forEach(([rep, q, r, num, moment, lab], i) => {
+          if (i) c.pause(.4);
+          const Z = branche(c, YB[i], q, r, num);
+          zones[rep] = Z;
+          c.repere(rep, Z.x0 - 6, Z.y0, Z.x1 - Z.x0 + 12, Z.y1 - Z.y0, lab);
+          K.marque(moment);
+        });
+        c.pause(.4);
+        const E = rang(c, XT + 28, 334, [{ t: '3(3x + 1)⁴ = ', c: 'blanc' }, { t: '(3x + 1)’', c: 'cyan' }, '(3x + 1)⁴', { fl: 'vert', w: 40 }, { t: '(3x + 1)⁵/5', c: 'jaune' }], { taille: 20, max: 520 });
+        const Zf = zones.formes;
+        const P0 = [E.x1 + 14, 326], P2 = [Zf.x1 + 12, Zf.y0 + 16], P1 = [Math.max(P0[0], P2[0]) + 70, (P0[1] + P2[1]) / 2];
+        const bez = u => [0, 1].map(k => (1 - u) * (1 - u) * P0[k] + 2 * u * (1 - u) * P1[k] + u * u * P2[k]);
+        c.courbe(u => bez(u * .9), 24, { couleur: 'orange', largeur: 1.8 });
+        c.fleche(...bez(.9), ...P2, { couleur: 'orange', largeur: 1.8, tete: 9 });
+        c.texte('branche ②', P1[0] - 50, P1[1] + 40, { couleur: 'orange', taille: 16 });
+        c.repere('exemple', E.x0 - 6, 308, E.x1 - E.x0 + 12, 36, '3(3x + 1)⁴ : branche ②, forme u’uⁿ');
+        K.marque('exemple');
+      },
+      decrire: {
+        somme: 'En haut « je regarde f » ; première branche : « une somme de fonctions du tableau ? » → « chaque terme sa primitive, une seule constante k ».',
+        formes_composees: 'Deuxième branche : « u’uⁿ, u’/u², u’/√u, u’cos u, u’sin u ? (u’ à un nombre près) » → « la forme ».',
+        produit: 'Troisième branche : « u’v + uv’ ? → uv ; (u’v − uv’)/v² ? » → « u/v ».',
+        transformer: 'Quatrième branche : « sinon : je transforme l’écriture » → « développer, séparer, puissance ».',
+        exemple: 'En bas : « 3(3x + 1)⁴ = (3x + 1)’(3x + 1)⁴ → (3x + 1)⁵/5 », avec une flèche orange vers la branche ②.',
+      },
+      motifs: { somme: 'la somme', formes_composees: 'les formes composées', produit: 'produit et quotient', transformer: 'transformer', exemple: 'un exemple' },
+      explication: [
+        { repere: 'somme', texte: 'Une somme de fonctions du tableau : chaque terme sa primitive, une seule constante k à la fin.' },
+        { repere: 'formes', texte: 'On cherche u et sa dérivée u’, à un nombre près.' },
+        { repere: 'produit', texte: 'u’v + uv’ vient de uv ; (u’v − uv’)/v² vient de u/v.' },
+        { repere: 'transformer', texte: 'Sinon on change l’écriture : développer, séparer une fraction, écrire une racine en puissance.' },
+        { repere: 'exemple', texte: '3 est la dérivée de 3x + 1 : c’est la forme u’uⁿ.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

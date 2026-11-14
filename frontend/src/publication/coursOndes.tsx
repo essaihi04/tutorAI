@@ -30,6 +30,51 @@ const SOURCES = import.meta.glob([
 const COURS_DISPONIBLES = Object.keys(SOURCES).map(f => f.split('/').pop()!.replace(/\.json$/, '')).sort();
 const source = (id: string) => SOURCES[Object.keys(SOURCES).find(f => f.endsWith(`/${id}.json`)) || ''];
 
+// Titres des cours (seul le champ `title` est embarqué, pas le cours entier) : la liste déroulante du haut.
+const TITRES_BRUTS = import.meta.glob([
+  '../../../backend/data/courses/*_ch*_*.json',
+  '!../../../backend/data/courses/*_course_v1.json',
+  '!../../../backend/data/courses/*_script_*.json',
+], { import: 'title', eager: true }) as Record<string, string>;
+const TITRES: Record<string, string> = Object.fromEntries(
+  Object.entries(TITRES_BRUTS).map(([f, t]) => [f.split('/').pop()!.replace(/\.json$/, ''), t]));
+
+/** Les matières : un lien par matière pour les profs (`?matiere=physique|svt|maths`). */
+const MATIERES = [
+  { cle: 'physique', nom: 'Physique-chimie', prefixes: ['phys_', 'chem_'] },
+  { cle: 'svt', nom: 'SVT', prefixes: ['svt_'] },
+  { cle: 'maths', nom: 'Mathématiques', prefixes: ['math_'] },
+];
+const numero = (id: string) => Number(/_ch(\d+)_/.exec(id)?.[1] || 0);
+const matiereDe = (id: string) => MATIERES.find(m => m.prefixes.some(p => id.startsWith(p)));
+const coursDe = (cle: string | null) => COURS_DISPONIBLES
+  .filter(id => !cle || matiereDe(id)?.cle === cle)
+  .sort((a, b) => MATIERES.findIndex(m => m === matiereDe(a)) - MATIERES.findIndex(m => m === matiereDe(b))
+    || (a.startsWith('chem_') ? 1 : 0) - (b.startsWith('chem_') ? 1 : 0) || numero(a) - numero(b));
+const lienCours = (id: string, matiere: string | null) => `?${matiere ? `matiere=${matiere}&` : ''}cours=${id}`;
+
+/** La barre du haut : la matière et la liste déroulante des cours (de cette matière si le lien en donne une). */
+function Navigation({ id, matiere }: { id: string; matiere: string | null }) {
+  const liste = coursDe(matiere);
+  const m = matiereDe(id);
+  return (
+    <div className="flex h-10 items-center gap-2 px-2 text-sm">
+      <a href={matiere ? `?matiere=${matiere}&cours=liste` : '?cours=liste'} className="shrink-0 rounded-lg px-2 py-1 text-white/70 hover:bg-white/10" title="Tous les cours">☰</a>
+      <span className="hidden shrink-0 text-white/50 sm:inline">{m?.nom || ''}</span>
+      <select value={id} onChange={e => { window.location.search = lienCours(e.target.value, matiere); }}
+        className="min-w-0 flex-1 truncate rounded-lg border border-white/15 bg-[#121a33] px-2 py-1 text-white sm:max-w-xl">
+        {MATIERES.filter(x => !matiere || x.cle === matiere).map(x => (
+          <optgroup key={x.cle} label={x.nom}>
+            {liste.filter(c => matiereDe(c) === x).map(c => (
+              <option key={c} value={c}>{`Ch. ${numero(c)} — ${TITRES[c] || c}`}</option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 const lire = (k: string) => { try { return localStorage.getItem(k) || ''; } catch { return ''; } };
 const garder = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* navigation privée */ } };
 
@@ -44,7 +89,7 @@ const VISITEUR = (() => {
 })();
 const PUBLIC = '/api/v1/public/cours-ondes';
 /** Les routes publiques qui existent ; les autres appels du lecteur (progression d'un compte…) n'ont pas lieu ici. */
-const ROUTES = ['question-eleve', 'transcrire', 'ocr-reponse', 'reexplication', 'answer-reaction', 'sim-reaction', 'acquis'];
+const ROUTES = ['question-eleve', 'transcrire', 'ocr-reponse', 'reexplication', 'answer-reaction', 'sim-reaction', 'acquis', 'memoire', 'clavier-suggestions'];
 
 // Le lecteur parle au serveur comme pour un élève connecté (/course-player/…, /tts/speak) : ici, les mêmes demandes
 // partent vers les routes publiques (plafonnées), avec l'identifiant du visiteur à la place du jeton.
@@ -124,10 +169,11 @@ function Relecture({ deckId, diapo: vue, ordre }: { deckId: string; diapo: Diapo
   if (!diapo) return null;
   const mien = avis[diapo.id];
   const notees = Object.keys(avis).length;
-  // Replié : une petite barre en bas à gauche, au-dessus des commandes du lecteur — un clic pour voter, 💬 pour écrire.
+  // Replié : une petite barre dans la barre du HAUT, à droite de la liste des cours (12 novembre 2026 : posée en bas
+  // à gauche, elle recouvrait la dernière ligne des tableaux) — un clic pour voter, 💬 pour écrire.
   if (!ouvert) {
     return (
-      <div className="fixed bottom-[7rem] left-2 z-[300] flex items-center gap-1 rounded-full bg-[#14142a]/90 border border-amber-400/60 shadow-lg px-1.5 py-1 text-xs text-white">
+      <div className="flex shrink-0 items-center gap-1 rounded-full bg-[#14142a]/90 border border-amber-400/60 shadow-lg px-1.5 py-1 text-xs text-white">
         <span className="px-1.5 text-amber-300 font-semibold" title="Diapositives notées">📝 {notees}/{diapo.total}</span>
         <button onClick={() => void envoyer('bon', mien?.commentaire || '')} title="Diapositive bonne"
           className={`rounded-full px-2 py-0.5 ${mien?.vote === 'bon' ? 'bg-green-500 text-black' : 'hover:bg-green-500/25'}`}>👍</button>
@@ -141,7 +187,7 @@ function Relecture({ deckId, diapo: vue, ordre }: { deckId: string; diapo: Diapo
     );
   }
   return (
-    <div className="fixed bottom-[7rem] left-2 z-[300] w-[min(20rem,calc(100vw-1rem))] rounded-xl bg-[#14142a]/95 border border-amber-400/60 shadow-2xl p-3 text-white text-sm space-y-2">
+    <div className="fixed top-12 right-2 z-[300] w-[min(20rem,calc(100vw-1rem))] rounded-xl bg-[#14142a]/95 border border-amber-400/60 shadow-2xl p-3 text-white text-sm space-y-2">
       <div className="flex items-start gap-2">
         <div className="flex-1 min-w-0">
           <div className="text-[11px] text-amber-300">Relecture · diapositive {diapo.position}/{diapo.total} · {notees} notée(s)</div>
@@ -169,20 +215,29 @@ function Relecture({ deckId, diapo: vue, ordre }: { deckId: string; diapo: Diapo
   );
 }
 
-function Liste() {
+function Liste({ matiere }: { matiere: string | null }) {
   return (
     <div className="min-h-[100dvh] bg-[#0a0a18] text-white p-6">
-      <h1 className="text-xl font-semibold mb-4">Cours à relire</h1>
-      <ul className="space-y-2">
-        {COURS_DISPONIBLES.map(id => <li key={id}><a className="text-amber-300 underline" href={`?cours=${id}`}>{id}</a></li>)}
-      </ul>
+      <h1 className="text-xl font-semibold mb-1">Cours à relire</h1>
+      <p className="mb-5 text-sm text-white/60">Sur chaque diapositive : 👍 / 👎 et un commentaire (barre en haut à droite).</p>
+      {MATIERES.filter(m => !matiere || m.cle === matiere).map(m => (
+        <section key={m.cle} className="mb-6">
+          <h2 className="mb-2 font-semibold text-amber-200">{m.nom}</h2>
+          <ul className="space-y-1.5">
+            {coursDe(m.cle).map(id => (
+              <li key={id}><a className="text-amber-300 underline" href={lienCours(id, matiere)}>{`Ch. ${numero(id)} — ${TITRES[id] || id}`}</a></li>
+            ))}
+          </ul>
+        </section>
+      ))}
     </div>
   );
 }
 
 function CoursOndes() {
   const params = new URLSearchParams(window.location.search);
-  const id = params.get('cours') || DEFAUT;
+  const matiere = MATIERES.some(m => m.cle === params.get('matiere')) ? params.get('matiere') : null;
+  const id = params.get('cours') || (matiere ? coursDe(matiere)[0] : DEFAUT);
   const [cours, setCours] = useState<CourseDeck | null>(null);
   const [ordre, setOrdre] = useState<string[]>([]);
   const [introuvable, setIntrouvable] = useState(false);
@@ -192,14 +247,18 @@ function CoursOndes() {
     if (!charger) { setIntrouvable(true); return; }
     void charger().then(d => { setOrdre(d.activities.flatMap(a => a.slides.map(sl => sl.id))); setCours(aPartirDe(d, params.get('diapo'))); }).catch(() => setIntrouvable(true));
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (id === 'liste' || introuvable) return <Liste />;
+  if (id === 'liste' || introuvable) return <Liste matiere={matiere} />;
   if (!cours) return <div className="h-[100dvh] grid place-items-center bg-[#0a0a18] text-white/70">Chargement du cours…</div>;
   return (
-    <div className="h-[100dvh] w-screen bg-[#0a0a18] text-white p-1 sm:p-2">
-      <div className="h-full w-full overflow-hidden rounded-2xl border border-white/10">
+    <div className="flex h-[100dvh] w-screen flex-col bg-[#0a0a18] text-white p-1 sm:p-2">
+      {/* la barre du haut porte aussi la relecture : elle ne recouvre jamais le contenu des tableaux */}
+      <div className="flex min-w-0 shrink-0 items-center gap-2 pr-1">
+        <div className="min-w-0 flex-1"><Navigation id={id} matiere={matiere} /></div>
+        <Relecture deckId={cours.id} diapo={diapo} ordre={ordre} />
+      </div>
+      <div className="min-h-0 w-full flex-1 overflow-hidden rounded-2xl border border-white/10">
         <CoursePlayer deck={cours} language="mixed" mode="concentration" tuteur3D onSlideChange={setDiapo} />
       </div>
-      <Relecture deckId={cours.id} diapo={diapo} ordre={ordre} />
     </div>
   );
 }

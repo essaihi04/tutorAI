@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le condensateur — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="rc.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Vue « plaques » : deux armatures métalliques peintes face à face, un isolant entre elles, puis le symbole du condensateur à la craie. Vue « charge » : un générateur de 6 V, un interrupteur K, un ampèremètre et un voltmètre à cadran, le condensateur ; quand K se ferme, des électrons bleus quittent l’armature A, font le tour par le générateur et s’entassent sur l’armature B"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Le condensateur : deux plaques, un isolant ; la charge vue sur les appareils (cours « Dipôle RC », 2e Bac PC BIOF, novembre 2026).
+ * Vues (?vue=) :
+ *  - plaques (défaut) : deux armatures métalliques peintes face à face, l’isolant entre elles, puis le symbole à la craie.
+ *  - charge : générateur E = 6 V, interrupteur K, ampèremètre à cadran, condensateur (armatures A et B), voltmètre à cadran.
+ *    K se ferme : l’aiguille de l’ampèremètre saute puis redescend, celle du voltmètre monte jusqu’à 6 V.
+ *    Le temps physique est compté en τ (constante de temps du circuit) : il n’avance que pendant les animations,
+ *    l’horloge s’arrête pendant que la craie écrit. i = i(0)·e^{−θ}, u_C = E(1 − e^{−θ}), q ∝ u_C (θ = t/τ).
+ *    Électrons (sphères bleues) : 12 électrons de l’armature A ; l’électron k part quand q/Q atteint 0,6·k/11, avance
+ *    proportionnellement à la charge passée et arrive sur B à q/Q + 0,35 : aucun ne traverse l’isolant
+ *    (dessin pour l’œil, la physique reste u_C, i).
+ * Poignée : l’interrupteur K (un clic ou un glissé le bascule).
+ */
+/* ── Moteur du déroulé (commun aux pages « appareils » de ce dossier, recopié dans chaque page) ──────────────
+ * Une page déclare des étapes par vue : { nom, anim (s), ecritDes (s, défaut = anim), motif, bulle() }.
+ * Chaque étape : d’abord son animation (aiguille, électrons, courbe qui s’enregistre…), puis la craie écrit ce
+ * qu’il faut dire ; le moment `nom` est la fin de cette écriture (l’animation est finie, le texte est écrit).
+ * Les durées d’écriture sont mesurées au dessin (calculer), donc les moments suivent les paramètres.
+ * Les parties fixes (titres, axes, montage déjà dessiné) s’écrivent à l’horloge de la scène, ECRITURE fois plus vite.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lisse = p => p * p * (3 - 2 * p);
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');   // 1,50 → 1,5 ; 2,00 → 2
+const ECRITURE = 2.5;
+function Moteur(o) {
+  const q = new URLSearchParams(location.search);
+  const S = { vue: o.vues.includes(q.get('vue')) ? q.get('vue') : o.vues[0], t: 0, running: false, pause: false, fait: false,
+    jusqua: null, motif: '', emis: 0, dit: '', mesure: false };
+  const V = o.vitesse ?? 1.7, T0 = o.T0 ?? .8, HOLD = {};
+  let TL = null;
+  function construire() {
+    let s = T0; const ev = [];
+    for (const e of o.etapes(S.vue)) {
+      const anim = e.anim || 0, d = { ...e, anim, debut: s, ecrit: s + (e.ecritDes ?? anim) };
+      d.fin = Math.max(s + anim, d.ecrit + (HOLD[e.nom] ?? 1.5)) + .35;
+      s = d.fin; ev.push(d);
+    }
+    const mom = {}; for (const e of ev) mom[e.nom] = e.fin; mom.fin = s + (o.queue ?? .6);
+    TL = { ev, M: mom };
+  }
+  const ev = nom => TL.ev.find(e => e.nom === nom);
+  const M = {
+    S, ev, Moments: () => TL.M,
+    /** Avancement (0 → 1) de l’animation de l’étape `nom`. */
+    p(nom) { const e = ev(nom); if (!e) return 0; return e.anim > 0 ? clamp((S.t - e.debut) / e.anim, 0, 1) : (S.t >= e.debut - 1e-6 ? 1 : 0); },
+    commence(nom) { const e = ev(nom); return !!e && S.t > e.debut + 1e-6; },
+    vu(nom) { if (nom === 'fin') return S.t >= TL.M.fin - 1e-6; const e = ev(nom); return !!e && S.t >= e.fin - 1e-6; },
+    /** Ce qui s’écrit à l’étape `nom` : la craie écrit à partir de la fin de son animation. */
+    etape(c, nom, fn) {
+      const e = ev(nom); if (!e) return;
+      const t = c.t, cur = c.cur, comp = c.complet, w0 = e.ecrit;
+      c.t = S.t > 1e5 ? 1e9 : w0 + (S.t - w0) * V; c.cur = w0;
+      try { fn(); } finally { if (S.mesure) HOLD[nom] = (c.cur - w0) / V; c.t = t; c.cur = cur; if (!S.running) c.complet = comp; }
+    },
+    etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
+  };
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const cadreBase = scene.cadre;
+  scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
+  M.scene = scene; M.craie = scene.craie;
+  function calculer() {
+    construire();
+    const t = S.t, r = S.running; S.t = 1e6; S.running = false; S.mesure = true;
+    try { o.dessiner(scene.craie, M); } finally { S.t = t; S.running = r; S.mesure = false; }
+    construire(); scene.sale = true;
+  }
+  // La bulle est du texte simple : jamais de « _ » visible (u_C → uC, I_0 → I₀).
+  const sansSouligne = s => String(s).replace(/([A-Za-zΔτ])_\{?([A-Za-z0-9]+)\}?/g, (m, a, i) => a + (/^\d+$/.test(i) ? [...i].map(d => '₀₁₂₃₄₅₆₇₈₉'[d]).join('') : i));
+  const dire = (texte, kind = '') => { texte = sansSouligne(texte); S.dit = texte; bulle($('feedback'), texte, kind); };
+  const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+  let pont = null;
+  const emettre = () => pont && pont.emettre();
+  const noter = (a, d) => pont && pont.noter(a, d);
+  scene.avancer = dt => {
+    if (!S.running) return !!(o.anime && o.anime());
+    const avant = S.t; S.t += dt;
+    for (const e of TL.ev) if (avant < e.debut && S.t >= e.debut && e.bulle) dire(e.bulle());
+    if (S.jusqua != null && S.t >= S.jusqua) {
+      S.t = S.jusqua; S.jusqua = null; S.running = false;
+      if (S.t >= TL.M.fin - 1e-6) { finir(); return true; }
+      S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fx(S.t, 1)} s`) + '.');
+      noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); return true;
+    }
+    if (S.t >= TL.M.fin) { S.t = TL.M.fin; finir(); return true; }
+    if (performance.now() - S.emis > 500) { S.emis = performance.now(); emettre(); }
+    return true;
+  };
+  function finir() { S.running = false; S.fait = true; S.pause = false; S.jusqua = null; etiquette(); dire(o.messageFin(M), 'good'); noter('measurement', o.params(M)); emettre(); }
+  function start() { o.reprise && o.reprise(); S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire(o.depart(M)); noter('start', o.params(M)); emettre(); }
+  function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); }
+  function resume() { if (S.running) return; o.reprise && o.reprise(); if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('Ça repart…'); noter('resume'); emettre(); }
+  function setTime(p) {
+    const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+    o.reprise && o.reprise(); S.running = false; S.jusqua = null; S.t = clamp(t, 0, TL.M.fin); S.fait = S.t >= TL.M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+    etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fx(S.t, 1)} s.`); noter('set_time', { time_s: S.t }); emettre();
+  }
+  function playUntil(p) {
+    const noms = o.etapes(S.vue).map(e => e.nom).concat('fin');
+    const nom = noms.includes(p.moment) ? p.moment : null, cible = nom ? TL.M[nom] : +p.time_s;
+    if (!Number.isFinite(cible) || (p.moment && !nom && (p.time_s == null || p.time_s === ''))) { dire(`Moment inconnu : ${p.moment}.`, 'bad'); emettre(); return; }
+    o.reprise && o.reprise();
+    if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+    S.jusqua = clamp(cible, .01, TL.M.fin); S.motif = nom ? (o.motifs[nom] || nom) : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+    noter('play_until', { moment: nom, time_s: S.jusqua }); emettre();
+  }
+  function setParameters(p) {
+    p = p || {};
+    const r = o.appliquer(p, M) || {};
+    if (r.vue && o.vues.includes(r.vue) && r.vue !== S.vue) { S.vue = r.vue; r.change = true; r.vueChange = true; }
+    if (r.change) { calculer(); if (r.vueChange) scene.reecrire(); }
+    noter('set_parameters', o.params(M));
+    if (r.apres) r.apres();
+    else if (r.change && !r.garder) start();
+    else { scene.sale = true; emettre(); }
+  }
+  Object.assign(M, { noter, calculer, dire, start, pause, resume, setTime, playUntil, setParameters, emettre, etiquette });
+  $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+  window.Tableau.explication(o.explications);
+  const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+  M.lancer = () => {
+    calculer();
+    const listeMoments = o.vues.map(v => `${o.vues.length > 1 ? v + ' : ' : ''}${o.etapes(v).map(e => e.nom).concat('fin').join(' | ')}`).join(' ; ');
+    const config = { id: o.id, version: '1.0', title: o.titre, variants: o.vues.length > 1 ? o.vues.map(id => ({ id, label: o.titres[id] })) : [], commands: commandes,
+      command_schema: { set_parameters: o.schema, set_time: { time_s: '0..fin (arrêt sur cet instant de la scène, en s ; voir moments)' },
+        play_until: { moment: listeMoments, time_s: 'ou un instant en s' } } };
+    pont = protocole({ id: o.id, commandes, config, texte: o.texte,
+      etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle',
+        ce_qui_se_voit: o.voir(M) + (S.dit ? ` La bulle dit : « ${S.dit} »` : ''), current_variant: S.vue, time_s: +S.t.toFixed(2),
+        parameters: o.params(M), moments: Object.fromEntries(Object.entries(TL.M).map(([k, v]) => [k, +v.toFixed(2)])) }),
+      progression: () => (S.fait ? 1 : 0),
+      executer: (cmd, p) => ({ start, reset: start, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+    dire(o.depart(M));
+    setTimeout(() => { if (!S.running && S.t === 0 && !S.pause && !S.fait) start(); }, 900);
+  };
+  return M;
+}
+
+/* ── Appareils peints (règle 7 : ils ressemblent aux vrais ; le peint ne change jamais la physique) ── */
+const Peint = {
+  /** Sphère ombrée (électron : bleu). */
+  sphere(ctx, x, y, r, [clair, milieu, sombre] = ['#e3f3ff', '#3b9cff', '#0a3a8c'], a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r); g.addColorStop(0, clair); g.addColorStop(.45, milieu); g.addColorStop(1, sombre);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  },
+  /** Boîtier d’un générateur (vu de face) : coffret gris, afficheur, deux bornes (rouge +, noire −). */
+  generateur(ctx, x, y, w, h, affiche, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(x + 3, y + 4, w, h, 7); ctx.fill();
+    const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#5b6670'); g.addColorStop(.5, '#3b444c'); g.addColorStop(1, '#262c32');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 7); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1; ctx.stroke();
+    const ex = x + w * .14, ey = y + h * .3, ew = w * .72, eh = h * .26;
+    ctx.fillStyle = '#0d1a10'; ctx.beginPath(); ctx.roundRect(ex, ey, ew, eh, 3); ctx.fill();
+    ctx.fillStyle = '#7dfc8a'; ctx.font = `600 ${Math.round(eh * .72)}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(affiche, ex + ew / 2, ey + eh / 2 + 1);
+    ctx.restore();
+  },
+  /** Borne ronde (rouge ou noire). */
+  borne(ctx, x, y, rouge, a = 1) { Peint.sphere(ctx, x, y, 5, rouge ? ['#ffd0d0', '#e0393e', '#6d0f12'] : ['#9aa0a6', '#2b2f33', '#050607'], a); },
+  /** Appareil à cadran (ampèremètre ou voltmètre) : boîtier, cadran crème, graduations, aiguille (f de 0 à 1). */
+  cadran(ctx, cx, cy, r, f, lettre, graduations = null, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(cx - r - 4 + 3, cy - r - 4 + 4, 2 * r + 8, 2 * r + 8, 9); ctx.fill();
+    const g = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r); g.addColorStop(0, '#3a3f45'); g.addColorStop(1, '#1b1e22');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(cx - r - 4, cy - r - 4, 2 * r + 8, 2 * r + 8, 9); ctx.fill();
+    const f2 = ctx.createRadialGradient(cx - r * .3, cy - r * .4, r * .1, cx, cy, r); f2.addColorStop(0, '#fffaf0'); f2.addColorStop(1, '#e4dcc8');
+    ctx.fillStyle = f2; ctx.beginPath(); ctx.roundRect(cx - r, cy - r, 2 * r, 2 * r * .92, 6); ctx.fill();
+    const px = cx, py = cy + r * .55, R = r * 1.05, a0 = -Math.PI * .78, a1 = -Math.PI * .22;
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(px, py, R * .82, a0, a1); ctx.stroke();
+    const n = graduations ? graduations.length - 1 : 10;
+    for (let i = 0; i <= n * 2; i++) {
+      const an = a0 + (a1 - a0) * i / (n * 2), l = i % 2 ? .07 : .13;
+      ctx.beginPath(); ctx.moveTo(px + Math.cos(an) * R * .82, py + Math.sin(an) * R * .82); ctx.lineTo(px + Math.cos(an) * R * (.82 + l), py + Math.sin(an) * R * (.82 + l)); ctx.stroke();
+    }
+    ctx.fillStyle = '#c0392b'; ctx.beginPath(); ctx.arc(px + Math.cos(a1) * R * .86, py + Math.sin(a1) * R * .86, 1.6, 0, 7); ctx.fill();
+    if (graduations) {
+      ctx.fillStyle = '#333'; ctx.font = `${Math.round(r * .2)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      graduations.forEach((s, i) => { const an = a0 + (a1 - a0) * i / n; ctx.fillText(s, px + Math.cos(an) * R * 1.08, py + Math.sin(an) * R * 1.08 + 1); });
+    }
+    ctx.fillStyle = '#222'; ctx.font = `700 ${Math.round(r * .42)}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(lettre, cx, cy + r * .38);
+    const an = a0 + (a1 - a0) * clamp(f, -.02, 1.03);
+    ctx.strokeStyle = '#111'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px + Math.cos(an) * R * .9, py + Math.sin(an) * R * .9); ctx.stroke();
+    ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(px, py, 2.6, 0, 7); ctx.fill();
+    // Verre : un reflet léger (pour l’œil seulement).
+    ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.beginPath(); ctx.ellipse(cx - r * .35, cy - r * .55, r * .5, r * .16, -.3, 0, 7); ctx.fill();
+    ctx.restore();
+  },
+  /** Condensateur chimique bleu (vu de côté, debout) avec ses deux pattes ; bande claire « − ». */
+  chimique(ctx, x, y, w, h, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.strokeStyle = '#b8bec6'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x + w * .32, y + h); ctx.lineTo(x + w * .32, y + h + 14); ctx.moveTo(x + w * .68, y + h); ctx.lineTo(x + w * .68, y + h + 18); ctx.stroke();
+    const g = ctx.createLinearGradient(x, 0, x + w, 0); g.addColorStop(0, '#0b2a6b'); g.addColorStop(.35, '#2f6fe0'); g.addColorStop(.6, '#1d4fb8'); g.addColorStop(1, '#091f52');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, [w * .25, w * .25, 4, 4]); ctx.fill();
+    ctx.fillStyle = 'rgba(210,225,255,.75)'; ctx.fillRect(x + w * .7, y + 4, w * .16, h - 8);
+    ctx.fillStyle = '#0b2a6b'; for (let k = 0; k < 3; k++) ctx.fillRect(x + w * .74, y + 10 + k * (h - 20) / 3, w * .08, 2.4);
+    ctx.fillStyle = '#9aa3ad'; ctx.beginPath(); ctx.ellipse(x + w / 2, y + 3, w / 2 - 1, 3.2, 0, 0, 7); ctx.fill();
+    ctx.restore();
+  },
+  /** Résistor : corps beige en cylindre, bandes de couleur lues sur la valeur (Ω). */
+  resistor(ctx, x, y, w, h, ohm, a = 1) {
+    const COUL = ['#111', '#7b4a1e', '#d32f2f', '#f57c00', '#fbc02d', '#2e7d32', '#1565c0', '#7b1fa2', '#9e9e9e', '#fafafa'];
+    const e = Math.floor(Math.log10(ohm) + 1e-9) - 1, m = Math.round(ohm / 10 ** e), d1 = Math.floor(m / 10) % 10, d2 = m % 10;
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#f3e1bf'); g.addColorStop(.45, '#d9bf8f'); g.addColorStop(1, '#9c8358');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, h / 2.2); ctx.fill();
+    [[.24, d1], [.38, d2], [.52, clamp(e, 0, 9)], [.78, -1]].forEach(([f, k]) => {
+      ctx.fillStyle = k < 0 ? '#c9a227' : COUL[k]; ctx.fillRect(x + w * f, y + 1, w * .07, h - 2);
+    });
+    ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(x + h * .3, y + h * .18, w - h * .6, h * .12);
+    ctx.restore();
+  },
+  /** Interrupteur : socle sombre, plots laiton, levier métallique (pivot → bout). */
+  levier(ctx, px, py, bx, by, a = 1) {
+    ctx.save(); ctx.globalAlpha = a; ctx.lineCap = 'round';
+    ctx.strokeStyle = '#4a4f55'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(bx, by); ctx.stroke();
+    ctx.strokeStyle = '#c8ccd2'; ctx.lineWidth = 3.4; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(bx, by); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(px, py - 1); ctx.lineTo(bx, by - 1); ctx.stroke();
+    Peint.sphere(ctx, bx, by, 4.2, ['#ffe9c2', '#c98a2a', '#5a3a08']);
+    ctx.restore();
+  },
+  plot(ctx, x, y, a = 1) { Peint.sphere(ctx, x, y, 4.6, ['#fff1c9', '#cfa046', '#5e4210'], a); },
+};
+const E = 6;
+const VUES = ['plaques', 'charge'];
+const TITRES = { plaques: 'deux plaques, un isolant', charge: 'la charge vue sur les appareils' };
+const ETAPES = {
+  plaques: [
+    { nom: 'plaques', anim: 1.3, motif: 'les deux armatures métalliques', bulle: () => 'Deux plaques de métal, face à face : les armatures A et B.' },
+    { nom: 'isolant', anim: 1.0, motif: 'l’isolant entre les armatures', bulle: () => 'Entre elles, un isolant : rien ne passe à travers.' },
+    { nom: 'symbole', anim: .8, motif: 'le symbole du condensateur', bulle: () => 'Au tableau, on le dessine avec deux traits parallèles.' },
+  ],
+  charge: [
+    { nom: 'k_ouvert', anim: .4, motif: 'K ouvert : les aiguilles sont à 0', bulle: () => 'K est ouvert : rien ne bouge, les deux aiguilles sont à 0.' },
+    { nom: 'k_ferme', anim: 2.6, motif: 'K fermé : l’ampèremètre saute puis redescend, le voltmètre monte', bulle: () => 'On ferme K…' },
+    { nom: 'electrons', anim: 3.0, motif: 'des électrons quittent A et s’entassent sur B', bulle: () => 'Regarde les électrons : ils partent de A, font le tour par le générateur, arrivent sur B.' },
+    { nom: 'signes_armatures', anim: 2.0, motif: '« + » sur A, « − » sur B : q_A = q ; q_B = −q', bulle: () => 'A a perdu des électrons, B en a gagné autant.' },
+    { nom: 'saturation', anim: 2.4, motif: 'i = 0 ; u_C = E : le condensateur est chargé', bulle: () => 'Le courant s’arrête peu à peu…' },
+  ],
+};
+const MOTIFS = { fin: 'fin' };
+for (const v of VUES) for (const e of ETAPES[v]) MOTIFS[e.nom] = e.motif;
+const S2 = { kForce: null, uFige: 0 };   // kForce = 0 : K rouvert à la main (le condensateur garde sa charge)
+
+/* ── Géométrie (cadre 760 × 420) ─────────────────────────────────────── */
+// Vue plaques
+const PA = { x: 150, y: 96, w: 16, h: 196 }, PB = { x: 236, y: 96, w: 16, h: 196 }, PI = { x: 166, y: 100, w: 70, h: 188 };
+const SYM = { xa: 560, xb: 580, y0: 150, y1: 230, ym: 190 };
+// Vue charge
+const XG = 80, YH = 70, YB = 300, XC = 440, XV = 600;
+const GEN = { x: 40, y: 150, w: 80, h: 90 }, KP = [160, 70], KB = [210, 70], AMP = { cx: 300, cy: 70, r: 32 }, VOLT = { cx: XV, cy: 185, r: 32 };
+const CA = { x: 390, y: 148, w: 100, h: 12 }, CB = { x: 390, y: 210, w: 100, h: 12 }, CI = { x: 396, y: 160, w: 88, h: 50 };
+const CHEMIN = [[XC, CA.y], [XC, YH], [XG, YH], [XG, YB], [XC, YB], [XC, CB.y + CB.h]];
+const L = CHEMIN.slice(1).reduce((s, p, i) => s + Math.hypot(p[0] - CHEMIN[i][0], p[1] - CHEMIN[i][1]), 0);
+const NE = 12, FEN = .35, QK = [...Array(NE).keys()].map(k => .6 * k / (NE - 1));   // électron k : part quand q/Q atteint QK[k], arrive sur B à QK[k] + FEN
+const SLOTS = [...Array(NE).keys()].map(k => 396 + k * 8).sort((a, b) => Math.abs(a - XC) - Math.abs(b - XC));
+function surChemin(s) {
+  for (let i = 0; i < CHEMIN.length - 1; i++) {
+    const [x1, y1] = CHEMIN[i], [x2, y2] = CHEMIN[i + 1], l = Math.hypot(x2 - x1, y2 - y1);
+    if (s <= l) return [x1 + (x2 - x1) * s / l, y1 + (y2 - y1) * s / l]; s -= l;
+  }
+  return CHEMIN[CHEMIN.length - 1];
+}
+
+/* ── Physique de la charge (θ = t/τ, temps physique en constantes de temps) ── */
+let MO = null;
+function theta() {
+  if (MO.S.vue !== 'charge' || !MO.commence('k_ferme')) return 0;
+  const e = MO.ev('k_ferme'), pK = clamp((MO.S.t - e.debut - .5) / (e.anim - .5), 0, 1);
+  let th = .7 * pK;
+  if (MO.commence('electrons')) th = .7 + 1.1 * MO.p('electrons');
+  if (MO.commence('signes_armatures')) th = 1.8 + 1.4 * MO.p('signes_armatures');
+  if (MO.commence('saturation')) th = 3.2 + 4.8 * MO.p('saturation');
+  return th;
+}
+const levierFerme = () => (S2.kForce === 0 || MO.S.vue !== 'charge' || !MO.commence('k_ferme') ? 0 : clamp((MO.S.t - MO.ev('k_ferme').debut) / .5, 0, 1));
+const kFerme = () => levierFerme() >= 1;
+function grandeurs() {
+  const th = theta(), qf = S2.kForce === 0 ? S2.uFige / E : 1 - Math.exp(-th);
+  return { th, i: kFerme() ? Math.exp(-th) : 0, u: E * qf, qf };
+}
+
+/* ── Peinture ────────────────────────────────────────────────────────── */
+function plaque(ctx, r, a, dx = 0) {
+  ctx.save(); ctx.globalAlpha = a;
+  const x = r.x + dx;
+  ctx.fillStyle = '#8f99a3'; ctx.beginPath(); ctx.moveTo(x, r.y); ctx.lineTo(x + 18, r.y - 12); ctx.lineTo(x + r.w + 18, r.y - 12); ctx.lineTo(x + r.w, r.y); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#5c656e'; ctx.beginPath(); ctx.moveTo(x + r.w, r.y); ctx.lineTo(x + r.w + 18, r.y - 12); ctx.lineTo(x + r.w + 18, r.y + r.h - 12); ctx.lineTo(x + r.w, r.y + r.h); ctx.closePath(); ctx.fill();
+  const g = ctx.createLinearGradient(x, 0, x + r.w, 0); g.addColorStop(0, '#d9dee3'); g.addColorStop(.5, '#a9b2bb'); g.addColorStop(1, '#7c8690');
+  ctx.fillStyle = g; ctx.fillRect(x, r.y, r.w, r.h);
+  ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(x + 2, r.y + 4, 2, r.h - 8);
+  ctx.restore();
+}
+function isolant(ctx, r, a) {
+  ctx.save(); ctx.globalAlpha = a * .85;
+  ctx.fillStyle = 'rgba(214,180,110,.55)'; ctx.beginPath(); ctx.moveTo(r.x, r.y); ctx.lineTo(r.x + 18, r.y - 12); ctx.lineTo(r.x + r.w + 18, r.y - 12); ctx.lineTo(r.x + r.w, r.y); ctx.closePath(); ctx.fill();
+  const g = ctx.createLinearGradient(r.x, 0, r.x + r.w, 0); g.addColorStop(0, 'rgba(240,210,140,.55)'); g.addColorStop(1, 'rgba(190,150,80,.45)');
+  ctx.fillStyle = g; ctx.fillRect(r.x, r.y, r.w, r.h);
+  ctx.strokeStyle = 'rgba(255,240,200,.25)'; ctx.lineWidth = 1;
+  for (let y = r.y + 10; y < r.y + r.h; y += 14) { ctx.beginPath(); ctx.moveTo(r.x + 4, y); ctx.lineTo(r.x + r.w - 4, y + 3); ctx.stroke(); }
+  ctx.restore();
+}
+function plaqueCouchee(ctx, r) {
+  ctx.save();
+  ctx.fillStyle = '#7c8690'; ctx.beginPath(); ctx.moveTo(r.x, r.y); ctx.lineTo(r.x + 10, r.y - 6); ctx.lineTo(r.x + r.w + 10, r.y - 6); ctx.lineTo(r.x + r.w, r.y); ctx.closePath(); ctx.fill();
+  const g = ctx.createLinearGradient(0, r.y, 0, r.y + r.h); g.addColorStop(0, '#dfe4e8'); g.addColorStop(1, '#7f8994');
+  ctx.fillStyle = g; ctx.fillRect(r.x, r.y, r.w, r.h); ctx.restore();
+}
+
+/* ── Dessin ──────────────────────────────────────────────────────────── */
+function dessiner(c, M) {
+  MO = M; M.scene.cadre(11);
+  if (M.S.vue === 'plaques') vuePlaques(c, M); else vueCharge(c, M);
+  reperes(c, M);
+  return c.fin();
+}
+function vuePlaques(c, M) {
+  const pa = M.p('plaques'), pi = M.p('isolant'), ps = M.p('symbole');
+  c.texte('Le condensateur : deux plaques, un isolant', 14, 28, { couleur: 'cyan', taille: 20 });
+  c.direct(() => {
+    const ctx = c.ctx;
+    if (pi > 0) isolant(ctx, PI, lisse(pi));
+    if (pa > 0) { plaque(ctx, PA, lisse(pa), -60 * (1 - lisse(pa))); plaque(ctx, PB, lisse(pa), 60 * (1 - lisse(pa))); }
+    if (ps > 0) Peint.chimique(ctx, 452, 286, 40, 58, lisse(ps));
+  });
+  M.etape(c, 'plaques', () => {
+    c.ligne(PA.x, 194, 70, 194, { largeur: 2 }); c.point(70, 194, 4);
+    c.ligne(PB.x + PB.w, 194, 330, 194, { largeur: 2 }); c.point(330, 194, 4);
+    c.fleche(70, 318, PA.x + 4, 286, { couleur: 'faible', largeur: 1.4 });
+    c.texte('armature A', 24, 336, { couleur: 'blanc', taille: 18 });
+    c.fleche(318, 318, PB.x + 12, 286, { couleur: 'faible', largeur: 1.4 });
+    c.texte('armature B', 268, 336, { couleur: 'blanc', taille: 18 });
+    c.texte('deux armatures métalliques, face à face', 24, 372, { couleur: 'faible', taille: 16 });
+  });
+  M.etape(c, 'isolant', () => {
+    c.texte('isolant', 210, 62, { couleur: 'jaune', taille: 18, align: 'center' });
+    c.fleche(210, 68, 206, 92, { couleur: 'jaune', largeur: 1.4 });
+    c.texte('séparées par un isolant (diélectrique)', 24, 396, { couleur: 'faible', taille: 16 });
+  });
+  M.etape(c, 'symbole', () => {
+    c.texte('le symbole', 430, 84, { couleur: 'cyan', taille: 19 });
+    c.ligne(450, SYM.ym, SYM.xa, SYM.ym, { largeur: 2 }); c.ligne(SYM.xb, SYM.ym, 690, SYM.ym, { largeur: 2 });
+    c.ligne(SYM.xa, SYM.y0, SYM.xa, SYM.y1, { largeur: 3.2 }); c.ligne(SYM.xb, SYM.y0, SYM.xb, SYM.y1, { largeur: 3.2 });
+    c.texte('deux traits parallèles', 430, 108, { couleur: 'faible', taille: 15 });
+    c.texte('armature A', SYM.xa - 6, 140, { couleur: 'blanc', taille: 16, align: 'right' });
+    c.texte('armature B', SYM.xb + 6, 140, { couleur: 'blanc', taille: 16 });
+    c.fleche(570, 262, 570, 236, { couleur: 'jaune', largeur: 1.4 });
+    c.texte('isolant', 570, 280, { couleur: 'jaune', taille: 16, align: 'center' });
+    c.texte('condensateur chimique', 506, 322, { couleur: 'faible', taille: 15 });
+  });
+}
+function vueCharge(c, M) {
+  const g = grandeurs(), lf = levierFerme();
+  c.texte('Charger un condensateur', 14, 28, { couleur: 'cyan', taille: 20 });
+  // Les fils à la craie (le montage est déjà dessiné dans cette vue).
+  c.trait([[KP[0], YH], [XG, YH], [XG, GEN.y]], { largeur: 2 });
+  c.ligne(KB[0], YH, AMP.cx - AMP.r - 4, YH, { largeur: 2 });
+  c.ligne(AMP.cx + AMP.r + 4, YH, XV, YH, { largeur: 2 });
+  c.ligne(XC, YH, XC, CA.y, { largeur: 2 });
+  c.ligne(XV, YH, XV, VOLT.cy - VOLT.r - 4, { largeur: 2 });
+  c.trait([[XG, GEN.y + GEN.h], [XG, YB], [XV, YB], [XV, VOLT.cy + VOLT.r + 4]], { largeur: 2 });
+  c.ligne(XC, CB.y + CB.h, XC, YB, { largeur: 2 });
+  c.point(XC, YH, 3.5); c.point(XC, YB, 3.5);
+  c.texte('K', 185, 46, { couleur: 'blanc', taille: 18, align: 'center' });
+  c.texte('+', GEN.x + GEN.w + 6, GEN.y + 12, { couleur: 'rouge', taille: 18 });
+  c.texte('E = 6 V', GEN.x + GEN.w + 8, GEN.y + 54, { couleur: 'blanc', taille: 17 });
+  c.texte('A', CA.x + CA.w + 18, CA.y + 12, { couleur: 'blanc', taille: 18 });
+  c.texte('B', CB.x + CB.w + 18, CB.y + 12, { couleur: 'blanc', taille: 18 });
+  c.texte('isolant', CB.x + CB.w + 16, 192, { couleur: 'jaune', taille: 14 });
+  // Les appareils peints, puis les électrons.
+  c.direct(() => {
+    const ctx = c.ctx;
+    Peint.generateur(ctx, GEN.x, GEN.y, GEN.w, GEN.h, '6.0V');
+    Peint.borne(ctx, XG, GEN.y, true); Peint.borne(ctx, XG, GEN.y + GEN.h, false);
+    Peint.plot(ctx, KP[0], KP[1]); Peint.plot(ctx, KB[0], KB[1]);
+    const an = -.62 * (1 - lisse(lf)), lg = KB[0] - KP[0];
+    Peint.levier(ctx, KP[0], KP[1], KP[0] + lg * Math.cos(an), KP[1] + lg * Math.sin(an));
+    Peint.cadran(ctx, AMP.cx, AMP.cy, AMP.r, g.i * .82, 'A');
+    Peint.cadran(ctx, VOLT.cx, VOLT.cy, VOLT.r, g.u / 10, 'V', ['0', '2', '4', '6', '8', '10']);
+    isolant(ctx, CI, 1); plaqueCouchee(ctx, CA); plaqueCouchee(ctx, CB);
+    // Électrons : sur A au départ ; en route (distance ∝ charge passée) ; puis entassés sur B.
+    for (let k = 0; k < NE; k++) {
+      const s = L * (g.qf - QK[k]) / FEN;
+      if (s <= 0) Peint.sphere(ctx, SLOTS[k], CA.y + 6, 3.6);
+      else if (s < L) { const [x, y] = surChemin(s); Peint.sphere(ctx, x, y, 4.4); }
+      else Peint.sphere(ctx, SLOTS[k], CB.y + 6, 3.6);
+    }
+  });
+  // Lectures des appareils, à la craie.
+  c.direct(() => {
+    c.texte(`u_C = ${fr(g.u, 1)} V`, VOLT.cx + VOLT.r + 10, VOLT.cy + 6, { couleur: 'jaune', taille: 17 });
+    c.texte(kFerme() ? (g.i < .005 ? 'i = 0' : 'i ≠ 0') : 'i = 0', AMP.cx + AMP.r + 10, AMP.cy - 18, { couleur: 'jaune', taille: 16 });
+    if (M.commence('signes_armatures') || S2.kForce === 0) {
+      const n = M.commence('saturation') ? 6 : Math.round(6 * g.qf * (S2.kForce === 0 ? 1 : M.p('signes_armatures')));
+      for (let k = 0; k < n; k++) {
+        const x = CA.x + 10 + k * 16;
+        c.texte('+', x, CA.y - 8, { couleur: 'rose', taille: 17, align: 'center' });
+        c.texte('−', x, CB.y + CB.h + 16, { couleur: 'cyan', taille: 19, align: 'center' });
+      }
+    }
+  });
+  // Ce qui s’écrit aux instants clés.
+  const ligne1 = M.commence('k_ferme') ? null : 'k_ouvert';
+  if (ligne1) M.etape(c, 'k_ouvert', () => c.texte('K ouvert : les deux aiguilles sont à 0', 20, 340, { couleur: 'blanc', taille: 17 }));
+  M.etape(c, 'k_ferme', () => {
+    c.texte('K fermé : l’aiguille de l’ampèremètre saute puis redescend ; u_C monte', 20, 340, { couleur: 'blanc', taille: 17, max: 720 });
+  });
+  M.etape(c, 'electrons', () => {
+    c.texte('des électrons quittent A, font le tour par le générateur et s’entassent sur B :', 20, 366, { couleur: 'bleu', taille: 16, max: 720 });
+    c.texte('aucun électron ne traverse l’isolant', 20, 390, { couleur: 'jaune', taille: 18 });
+  });
+  M.etape(c, 'signes_armatures', () => {
+    c.texte('q_A = q', 372, 160, { couleur: 'rose', taille: 18, align: 'right' });
+    c.texte('q_B = −q', 372, 222, { couleur: 'cyan', taille: 18, align: 'right' });
+  });
+  M.etape(c, 'saturation', () => {
+    c.texte('i = 0 ; u_C = E : le condensateur est chargé', 320, 390, { couleur: 'vert', taille: 18, max: 430 });
+  });
+}
+function reperes(c, M) {
+  const pl = M.S.vue === 'plaques', ici = v => (M.S.vue === v ? '' : ` (vue « ${v} »)`);
+  c.repere('vue_plaques', 10, 40, 740, 370, 'vue « plaques » : deux armatures métalliques et un isolant');
+  c.repere('vue_charge', 10, 40, 740, 370, 'vue « charge » : générateur, K, ampèremètre, condensateur, voltmètre');
+  if (pl) {
+    c.repere('armature_A', PA.x - 4, PA.y - 16, PA.w + 26, PA.h + 20, 'l’armature A (plaque de métal)');
+    c.repere('armature_B', PB.x - 4, PB.y - 16, PB.w + 26, PB.h + 20, 'l’armature B (plaque de métal)');
+    c.repere('isolant', PI.x, PI.y - 14, PI.w + 14, PI.h + 14, 'l’isolant (diélectrique) entre les armatures');
+    c.repere('symbole', 446, 120, 248, 124, 'le symbole : deux traits parallèles');
+  } else {
+    c.repere('armature_A', CA.x - 4, CA.y - 10, CA.w + 18, CA.h + 14, 'l’armature A (reliée au + du générateur)');
+    c.repere('armature_B', CB.x - 4, CB.y - 6, CB.w + 18, CB.h + 14, 'l’armature B (reliée au − du générateur)');
+    c.repere('isolant', CI.x, CI.y, CI.w, CI.h, 'l’isolant entre A et B : aucun électron ne le traverse');
+    c.repere('symbole', CA.x - 6, CA.y - 10, CA.w + 30, CB.y + CB.h - CA.y + 20, 'le condensateur');
+  }
+  c.repere('generateur', GEN.x - 4, GEN.y - 6, GEN.w + 70, GEN.h + 12, `le générateur : E = 6 V${ici('charge')}`);
+  c.repere('interrupteur', KP[0] - 10, 30, KB[0] - KP[0] + 22, 50, `l’interrupteur K (poignée : clic pour l’ouvrir ou le fermer)${ici('charge')}`);
+  c.repere('amperemetre', AMP.cx - AMP.r - 6, AMP.cy - AMP.r - 6, 2 * AMP.r + 12, 2 * AMP.r + 12, `l’ampèremètre (mesure i)${ici('charge')}`);
+  c.repere('voltmetre', VOLT.cx - VOLT.r - 6, VOLT.cy - VOLT.r - 6, 2 * VOLT.r + 12, 2 * VOLT.r + 12, `le voltmètre aux bornes du condensateur (mesure u_C)${ici('charge')}`);
+  c.repere('aiguille_A', AMP.cx - AMP.r + 2, AMP.cy - AMP.r + 2, 2 * AMP.r - 4, AMP.r + 14, `l’aiguille de l’ampèremètre${ici('charge')}`);
+  c.repere('aiguille_V', VOLT.cx - VOLT.r + 2, VOLT.cy - VOLT.r + 2, 2 * VOLT.r - 4, VOLT.r + 14, `l’aiguille du voltmètre${ici('charge')}`);
+  c.repere('electrons', XG - 10, YH - 10, XC - XG + 20, YB - YH + 20, `les électrons (sphères bleues) : de A vers B par le générateur${ici('charge')}`);
+  c.repere('charge_A', CA.x - 76, CA.y - 30, CA.w + 82, 40, `la charge de A : q_A = q (des « + »)${ici('charge')}`);
+  c.repere('charge_B', CB.x - 76, CB.y, CB.w + 82, 40, `la charge de B : q_B = −q (des « − »)${ici('charge')}`);
+}
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
+function voir(M) {
+  const S = M.S, m = [`Vue « ${S.vue} » (${TITRES[S.vue]}), ${M.etat()}.`];
+  if (S.vue === 'plaques') {
+    m.push(M.commence('plaques') ? 'Deux armatures métalliques peintes (A à gauche, B à droite), face à face.' : 'Rien encore.');
+    if (M.commence('isolant')) m.push('Un isolant (diélectrique, couleur ambre) est entre les deux armatures.');
+    const e = [];
+    if (M.vu('plaques')) e.push('« armature A », « armature B », « deux armatures métalliques, face à face »');
+    if (M.vu('isolant')) e.push('« isolant » (flèche), « séparées par un isolant (diélectrique) »');
+    if (M.vu('symbole')) e.push('le symbole : deux traits parallèles avec « armature A », « armature B », « isolant » ; un condensateur chimique bleu peint à côté');
+    if (e.length) m.push(`Écrit à la craie : ${e.join(' ; ')}.`);
+    return m.join(' ');
+  }
+  const g = grandeurs(), arrives = QK.filter(q => g.qf >= q + FEN).length, partis = QK.filter(q => g.qf > q).length;
+  m.push('Circuit : générateur E = 6 V (borne + reliée à l’armature A), interrupteur K, ampèremètre à cadran, condensateur (A en haut, B en bas, isolant entre), voltmètre à cadran aux bornes du condensateur.');
+  m.push(`K ${kFerme() ? 'fermé' : S2.kForce === 0 ? 'rouvert à la main' : 'ouvert'} ; ampèremètre : ${g.i > .005 ? `aiguille à ${Math.round(100 * g.i)} % de son saut du départ (i diminue)` : 'aiguille à 0 (i = 0)'} ; voltmètre : u_C = ${fr(g.u, 1)} V (E = 6 V).`);
+  m.push(`Électrons : ${partis} sur 12 ont quitté A, ${arrives} sont arrivés sur B ; aucun ne traverse l’isolant.`);
+  if (S2.kForce === 0) m.push('K a été rouvert : i = 0 et le condensateur garde sa charge (u_C ne change plus).');
+  const e = [];
+  if (M.vu('k_ouvert') && !M.commence('k_ferme')) e.push('« K ouvert : les deux aiguilles sont à 0 »');
+  if (M.vu('k_ferme')) e.push('« K fermé : l’aiguille de l’ampèremètre saute puis redescend ; u_C monte »');
+  if (M.vu('electrons')) e.push('« aucun électron ne traverse l’isolant »');
+  if (M.commence('signes_armatures')) e.push('des « + » sur A et des « − » sur B');
+  if (M.vu('signes_armatures')) e.push('« q_A = q ; q_B = −q »');
+  if (M.vu('saturation')) e.push('« i = 0 ; u_C = E : le condensateur est chargé »');
+  if (e.length) m.push(`Écrit à la craie : ${e.join(' ; ')}.`);
+  return m.join(' ');
+}
+function params(M) {
+  const g = grandeurs();
+  return { vue: M.S.vue, K: M.S.vue === 'charge' && kFerme() ? 1 : 0, E_V: E, u_C_V: +g.u.toFixed(2), i_sur_i0: +g.i.toFixed(3), t_sur_tau: +g.th.toFixed(2) };
+}
+function basculerK(k, M) {
+  const S = M.S;
+  if (k === 1) {
+    if (S2.kForce === 0) { S2.kForce = null; S.pause = true; M.resume(); M.dire('On referme K : la charge reprend là où elle s’était arrêtée.'); return; }
+    if (kFerme() && !S.fait) { if (!S.running) M.resume(); return; }
+    M.playUntil({ moment: 'fin' });
+  } else {
+    if (!kFerme()) { M.setTime({ time_s: M.Moments().k_ouvert }); return; }
+    S2.uFige = grandeurs().u; S2.kForce = 0; S.running = false; S.jusqua = null; S.pause = true; S.fait = false;
+    M.etiquette(); M.scene.sale = true; M.dire(`K rouvert : i = 0, et u_C reste à ${fr(S2.uFige, 1)} V : le condensateur garde sa charge.`); M.emettre();
+  }
+}
+const MOT = Moteur({
+  id: 'dipole_rc_condensateur', titre: 'Le condensateur : deux plaques, un isolant ; la charge vue sur les appareils', vues: VUES, titres: TITRES,
+  etapes: v => ETAPES[v], motifs: MOTIFS, dessiner,
+  voir, params,
+  reprise: () => { if (S2.kForce === 0) { S2.kForce = null; } },
+  depart: M => (M.S.vue === 'plaques' ? 'Qu’y a-t-il dans un condensateur ?' : 'Un condensateur, un générateur, deux appareils de mesure : que se passe-t-il quand on ferme K ?'),
+  messageFin: M => (M.S.vue === 'plaques' ? 'Un condensateur : deux armatures conductrices séparées par un isolant.' : 'Chargé : i = 0 et u_C = E = 6 V. A porte q_A = q, B porte q_B = −q.'),
+  appliquer: (p, M) => {
+    const r = {};
+    if (VUES.includes(p.vue) && p.vue !== M.S.vue) { r.vue = p.vue; S2.kForce = null; }
+    if (p.K !== undefined && p.K !== null && p.K !== '' && [0, 1].includes(+p.K)) {
+      const k = +p.K, changerVue = M.S.vue !== 'charge' || r.vue === 'plaques';
+      delete r.vue;
+      if (changerVue) { M.S.vue = 'charge'; S2.kForce = null; }
+      r.apres = () => { if (changerVue) { M.calculer(); M.scene.reecrire(); M.S.t = 0; M.S.fait = false; M.S.pause = false; } basculerK(k, M); };
+    }
+    if (r.vue && !r.apres) S2.kForce = null;
+    return r;
+  },
+  schema: { vue: VUES.join(' | ') + ' (change la vue et relance)', K: '0 | 1 (vue charge ; 1 : on ferme K, la charge se fait ; 0 : K ouvert — au départ, ou rouvert : le condensateur garde sa charge)' },
+  texte: 'Un condensateur : deux armatures métalliques (A et B) face à face, séparées par un isolant ; symbole : deux traits parallèles. Charge sous E = 6 V : quand on ferme K, l’aiguille de l’ampèremètre saute puis redescend, celle du voltmètre monte jusqu’à E ; des électrons quittent A, font le tour par le générateur et s’entassent sur B, aucun ne traverse l’isolant ; A porte q_A = q, B porte q_B = −q ; à la fin i = 0 et u_C = E : le condensateur est chargé.',
+  explications: {
+    plaques: [
+      { repere: 'armature_A', texte: 'Un condensateur, c’est d’abord deux plaques de métal : l’armature A…' },
+      { repere: 'armature_B', texte: '… et l’armature B, face à face.' },
+      { repere: 'isolant', texte: 'Entre les deux, un isolant : le courant ne peut pas le traverser.' },
+      { repere: 'symbole', texte: 'Le symbole : deux traits parallèles, comme les deux armatures.' },
+    ],
+    charge: [
+      { repere: 'generateur', texte: 'Un générateur de 6 V, relié au condensateur par l’interrupteur K.' },
+      { repere: 'interrupteur', texte: 'K est ouvert : rien ne se passe.' },
+      { repere: 'aiguille_A', texte: 'On ferme K : l’aiguille de l’ampèremètre saute, puis redescend.' },
+      { repere: 'aiguille_V', texte: 'L’aiguille du voltmètre monte : u_C augmente.' },
+      { repere: 'electrons', texte: 'Des électrons quittent A, font le tour par le générateur et s’entassent sur B.' },
+      { repere: 'isolant', texte: 'Aucun électron ne traverse l’isolant.' },
+      { repere: 'charge_A', texte: 'A a perdu des électrons : q_A = q, positive.' },
+      { repere: 'charge_B', texte: 'B en a gagné autant : q_B = −q.' },
+      { repere: 'voltmetre', texte: 'À la fin, i = 0 et u_C = E = 6 V : le condensateur est chargé.' },
+    ],
+  },
+});
+MOT.lancer();
+window.Tableau.glisser(MOT.scene.craie.canvas, {
+  toucher: (px, py) => { if (MOT.S.vue !== 'charge') return null; const [x, y] = MOT.scene.local(px, py); return x > KP[0] - 12 && x < KB[0] + 14 && y > 28 && y < 90 ? 'K' : null; },
+  bouger: () => {},
+  lacher: () => { basculerK(kFerme() ? 0 : 1, MOT); MOT.noter('set_parameters', params(MOT)); MOT.emettre(); },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

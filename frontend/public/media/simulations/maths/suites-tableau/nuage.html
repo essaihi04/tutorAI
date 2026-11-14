@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le nuage de points (n ; uₙ)</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Repère à la craie : les points isolés (n ; uₙ) d’une suite, avec un plancher, un plafond, une limite"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/suites-tableau/su-outils.js"></script>
+<script>
+/*
+ * Cours « Suites numériques » (math_ch3_suites_numeriques) : nuage de points (n ; uₙ), points ISOLÉS jamais reliés.
+ * Vues : ?vue=plancher (b1) | bornee (b2) | monotonie (m1) | reference (l2) | fraction (l6).
+ */
+const { fr } = MathsTableau;
+const NS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+const repere = (K, o) => K.axes({ x0: 70, y0: 58, w: 420, h: 272, xmin: -0.4, xmax: 10.6, nomx: 'n', nomy: 'u_n', gx: [[0, '0'], [1, '1'], [2, '2'], [5, '5'], [10, '10']], ...o });
+const droite = (c, K, liste) => K.lignes(530, 104, liste, 34);
+const nuage = (c, G, f, coul, o = {}) => SU.points(c, G, NS.filter(n => n >= (o.depuis || 0)).map(n => [n, f(n)]), { couleur: coul, pas: o.pas ?? .12, ...o });
+
+MathsTableau.page({
+  id: 'su_nuage', titre: 'Le nuage de points (n ; uₙ)',
+  texte: 'Constructions à la craie : les points isolés (n ; uₙ) d’une suite dans un repère ; plancher (minorée), plafond (majorée), bornée, croissante pour tout n, suites de référence, limite d’une fraction',
+  vues: {
+    plancher: {
+      titre: 'Minorée, majorée : un plancher, un plafond',
+      dessiner(c, K) {
+        K.titre('u_n = 16 + (¼)^{n} : plancher et plafond');
+        const G = repere(K, { ymin: 15.6, ymax: 17.4, gy: [[16, '16'], [17, '17']] });
+        K.marque('repere');
+        nuage(c, G, n => 16 + Math.pow(0.25, n), 'cyan');
+        c.repere('points', G.X(0) - 8, G.Y(17) - 10, G.X(10) - G.X(0) + 16, G.Y(16) - G.Y(17) + 20, 'les points (n ; uₙ)');
+        K.marque('points');
+        c.pause(.4);
+        SU.hligne(c, G, 16, { couleur: 'vert', x0: -0.3, x1: 10.5 });
+        c.repere('plancher', G.X(-0.3), G.Y(16) - 10, G.X(10.5) - G.X(-0.3), 20, 'le plancher y = 16');
+        droite(c, K, [{ t: 'plancher : u_n ≥ 16', couleur: 'vert' }, { t: 'minorée par 16', couleur: 'vert', moment: 'plancher' }]);
+        c.pause(.4);
+        SU.hligne(c, G, 17, { couleur: 'orange', x0: -0.3, x1: 10.5 });
+        c.repere('plafond', G.X(-0.3), G.Y(17) - 10, G.X(10.5) - G.X(-0.3), 20, 'le plafond y = 17');
+        K.lignes(530, 190, [{ t: 'plafond : u_n ≤ 17', couleur: 'orange' }, { t: 'majorée par 17', couleur: 'orange', moment: 'plafond' }], 34);
+        c.pause(.4);
+        K.lignes(530, 290, [{ t: 'minorée et majorée :', couleur: 'jaune' }, { t: 'bornée', couleur: 'jaune', taille: 22, moment: 'bornee' }], 34);
+      },
+      decrire: {
+        repere: 'Un repère : n en abscisse (0 à 10), uₙ en ordonnée (de 15,6 à 17,4).',
+        points: 'Les points isolés (n ; uₙ) de uₙ = 16 + (¼)ⁿ : 17 ; 16,25 ; 16,06… ils descendent vers 16.',
+        plancher: 'Une droite verte pointillée y = 16 sous tous les points : plancher, uₙ ≥ 16, la suite est minorée par 16.',
+        plafond: 'Une droite orange y = 17 au-dessus de tous les points : plafond, uₙ ≤ 17, majorée par 17.',
+        bornee: 'Écrit : minorée et majorée : bornée.',
+      },
+      explication: [{ repere: 'plancher', texte: 'Aucun point sous 16 : minorée par 16.' }, { repere: 'plafond', texte: 'Aucun point au-dessus de 17 : majorée par 17.' }],
+    },
+    bornee: {
+      titre: 'Bornée : coincée entre deux',
+      dessiner(c, K) {
+        K.titre('u_n = 5n² / (n² + 2)');
+        const G = repere(K, { ymin: -0.6, ymax: 5.9, gy: [[1, '1'], [5, '5']] });
+        K.marque('repere');
+        nuage(c, G, n => 5 * n * n / (n * n + 2), 'cyan');
+        K.marque('points');
+        c.pause(.4);
+        SU.hligne(c, G, 5, { couleur: 'orange', x0: -0.3, x1: 10.5 });
+        c.repere('plafond', G.X(-0.3), G.Y(5) - 10, G.X(10.5) - G.X(-0.3), 20, 'le plafond y = 5');
+        droite(c, K, [{ t: 'y = 5 : jamais atteint', couleur: 'orange' }, { t: 'u_n < 5', couleur: 'orange', moment: 'plafond' }]);
+        c.pause(.4);
+        SU.hligne(c, G, 0, { couleur: 'vert', x0: -0.3, x1: 10.5 });
+        c.repere('plancher', G.X(-0.3), G.Y(0) - 10, G.X(10.5) - G.X(-0.3), 20, 'le plancher y = 0');
+        K.lignes(530, 200, [{ t: 'y = 0 : u_n ≥ 0', couleur: 'vert', moment: 'plancher' }], 34);
+        c.pause(.4);
+        K.lignes(530, 270, [{ t: '0 ≤ u_n < 5 :', couleur: 'jaune' }, { t: '(u_n) est bornée', couleur: 'jaune', moment: 'bornee' }], 34);
+      },
+      decrire: {
+        repere: 'Un repère : n de 0 à 10, uₙ de 0 à 5.',
+        points: 'Les points de uₙ = 5n²/(n² + 2) : 0 ; 1,67 ; 3,33 ; 4,09 ; 4,44… ils montent vers 5 sans l’atteindre.',
+        plafond: 'Une droite orange y = 5, jamais atteinte : uₙ < 5.',
+        plancher: 'Une droite verte y = 0 sous les points : uₙ ≥ 0.',
+        bornee: 'Écrit : 0 ≤ uₙ < 5 : (uₙ) est bornée.',
+      },
+      explication: [{ repere: 'plafond', texte: 'Les points s’approchent de 5 sans le toucher.' }, { repere: 'plancher', texte: 'Ils ne descendent jamais sous 0.' }],
+    },
+    monotonie: {
+      titre: 'Deux termes ne suffisent pas',
+      dessiner(c, K) {
+        K.titre('Croissante : pour tout n');
+        const V = [2, 3, 2.5, 2, 1.5, 1, 0.5, 0.2, 0.1, 0.05, 0];
+        const G = repere(K, { ymin: -0.4, ymax: 3.6, gy: [[1, '1'], [2, '2'], [3, '3']] });
+        K.marque('repere');
+        SU.points(c, G, [[0, 2], [1, 3]], { couleur: 'cyan', pas: .3, etiq: i => 'u_' + i, dy: -12 });
+        c.repere('deux_points', G.X(0) - 10, G.Y(3) - 26, G.X(1) - G.X(0) + 40, G.Y(2) - G.Y(3) + 40, 'u₀ = 2 et u₁ = 3');
+        K.marque('deux_points');
+        c.pause(.3);
+        c.fleche(G.X(0) + 8, G.Y(2) - 6, G.X(1) - 8, G.Y(3) + 8, { couleur: 'jaune', largeur: 2 });
+        c.texte('?', G.X(0.5) - 18, G.Y(2.6), { couleur: 'jaune', taille: 24 });
+        K.marque('fleche');
+        c.pause(.4);
+        SU.points(c, G, V.slice(2).map((v, i) => [i + 2, v]), { couleur: 'cyan', pas: .15 });
+        c.repere('suite', G.X(2) - 10, G.Y(2.5) - 10, G.X(10) - G.X(2) + 20, G.Y(0) - G.Y(2.5) + 20, 'les points suivants redescendent');
+        K.marque('suite');
+        c.pause(.4);
+        K.lignes(520, 110, [{ t: 'u_1 > u_0, et pourtant', couleur: 'orange', taille: 17 }, { t: 'la suite n’est pas croissante', couleur: 'orange', taille: 17 }], 30);
+        K.lignes(520, 210, [{ t: 'croissante :', couleur: 'jaune' }, { t: 'u_{n+1} ≥ u_n', couleur: 'jaune', taille: 22 }, { t: 'POUR TOUT n', couleur: 'jaune', taille: 22, moment: 'contre_exemple' }], 34);
+        c.repere('regle', 514, 186, 230, 110, 'croissante : pour tout n');
+      },
+      decrire: {
+        repere: 'Un repère : n de 0 à 10, uₙ de 0 à 3.',
+        deux_points: 'Seulement deux points : u₀ = 2 et u₁ = 3.',
+        fleche: 'Une flèche jaune monte de u₀ à u₁, avec un « ? » : la suite monte-t-elle toujours ?',
+        suite: 'Les points suivants : 2,5 ; 2 ; 1,5 ; 1 ; 0,5 … ils redescendent.',
+        contre_exemple: 'Écrit : u₁ > u₀, et pourtant la suite n’est pas croissante ; croissante : uₙ₊₁ ≥ uₙ POUR TOUT n.',
+      },
+      explication: [{ repere: 'deux_points', texte: 'Deux termes ne disent rien de la suite entière.' }, { repere: 'regle', texte: 'Croissante : pour tout n, pas seulement au début.' }],
+    },
+    reference: {
+      titre: 'Les suites de référence : n², √n, 1/n',
+      dessiner(c, K) {
+        K.titre('Vers quoi vont n², √n et 1/n ?');
+        const G = repere(K, { ymin: -0.3, ymax: 4.6, gy: [[1, '1'], [2, '2'], [3, '3'], [4, '4']] });
+        K.marque('repere');
+        nuage(c, G, n => n * n, 'cyan', { horsTexte: '+∞' });
+        c.repere('carre', G.X(0) - 8, G.Y(4.6) - 6, G.X(3) - G.X(0) + 30, G.Y(0) - G.Y(4.6) + 14, 'n² : sort vite par le haut');
+        c.texte('n²', G.X(2) - 26, G.Y(4) + 4, { couleur: 'cyan', taille: 18 });
+        K.marque('carre');
+        c.pause(.3);
+        nuage(c, G, n => Math.sqrt(n), 'vert');
+        c.texte('√n → +∞', G.X(10) - 30, G.Y(Math.sqrt(10)) - 14, { couleur: 'vert', taille: 17 });
+        c.repere('racine', G.X(0) - 8, G.Y(3.3) - 8, G.X(10) - G.X(0) + 16, G.Y(0) - G.Y(3.3) + 16, '√n : monte lentement');
+        K.marque('racine');
+        c.pause(.3);
+        nuage(c, G, n => 1 / n, 'orange', { depuis: 1 });
+        c.texte('1/n → 0', G.X(9) - 8, G.Y(0.1) - 12, { couleur: 'orange', taille: 17 });
+        c.repere('inverse', G.X(1) - 8, G.Y(1) - 10, G.X(10) - G.X(1) + 16, G.Y(0) - G.Y(1) + 20, '1/n : tombe vers 0');
+        K.marque('inverse');
+        c.pause(.4);
+        K.lignes(520, 120, [{ t: 'lim n^{α} = +∞', couleur: 'jaune', taille: 21 }, { t: 'si α > 0', couleur: 'jaune' }, { t: '', inter: 14 }, { t: 'lim n^{α} = 0', couleur: 'jaune', taille: 21 }, { t: 'si α < 0', couleur: 'jaune', moment: 'regle' }], 32);
+        c.repere('regle', 514, 96, 230, 160, 'la règle des puissances de n');
+      },
+      decrire: {
+        repere: 'Un repère : n de 0 à 10, ordonnées de 0 à 4,5.',
+        carre: 'Les points de n² (cyan) : 0, 1, 4… puis ils sortent par le haut (flèche « +∞ »).',
+        racine: 'Les points de √n (vert) montent lentement : 1 ; 1,41 ; 1,73 … 3,16 pour n = 10 ; « √n → +∞ ».',
+        inverse: 'Les points de 1/n (orange), pour n ≥ 1 : 1 ; 0,5 ; 0,33 … ils tombent vers 0 ; « 1/n → 0 ».',
+        regle: 'Écrit à droite : lim nᵅ = +∞ si α > 0 ; lim nᵅ = 0 si α < 0.',
+      },
+      explication: [{ repere: 'carre', texte: 'n² part très vite vers +∞.' }, { repere: 'racine', texte: '√n monte lentement, mais vers +∞ aussi.' }, { repere: 'inverse', texte: '1/n s’écrase vers 0.' }],
+    },
+    fraction: {
+      titre: 'Limite d’une fraction en n',
+      dessiner(c, K) {
+        K.titre('u_n = (n + 1) / (n + 3)');
+        const G = repere(K, { ymin: -0.1, ymax: 1.25, gy: [[0.5, '0,5'], [1, '1']] });
+        K.marque('repere');
+        nuage(c, G, n => (n + 1) / (n + 3), 'cyan');
+        c.repere('points', G.X(0) - 8, G.Y(0.85) - 8, G.X(10) - G.X(0) + 16, G.Y(0.33) - G.Y(0.85) + 16, 'les points de (n + 1)/(n + 3)');
+        K.marque('points');
+        c.pause(.4);
+        SU.hligne(c, G, 1, { couleur: 'jaune', x0: -0.3, x1: 10.5, label: 'y = 1', ly: -10 });
+        c.repere('un', G.X(-0.3), G.Y(1) - 12, G.X(10.5) - G.X(-0.3), 24, 'la droite y = 1');
+        K.marque('asymptote');
+        c.pause(.4);
+        K.lignes(520, 150, [{ t: 'les points se serrent', couleur: 'blanc' }, { t: 'sous la droite y = 1', couleur: 'blanc' }, { t: '', inter: 16 }, { t: 'lim (n + 1)/(n + 3) = 1', couleur: 'jaune', taille: 18, moment: 'limite' }], 32);
+      },
+      decrire: {
+        repere: 'Un repère : n de 0 à 10, uₙ de 0 à 1,2.',
+        points: 'Les points de uₙ = (n + 1)/(n + 3) : 0,33 ; 0,5 ; 0,6 ; 0,67 ; 0,71 … 0,85 pour n = 10 : ils montent.',
+        asymptote: 'Une droite jaune pointillée y = 1 au-dessus des points.',
+        limite: 'Écrit : les points se serrent sous la droite y = 1 ; lim (n + 1)/(n + 3) = 1.',
+      },
+      explication: [{ repere: 'points', texte: 'Les points montent de moins en moins.' }, { repere: 'un', texte: 'Ils se serrent sous y = 1 : la limite est 1.' }],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Voir u et sa dérivée — fonctions primitives</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Calcul à la craie : u souligné, sa dérivée dans une bulle, f réécrite sous une forme du tableau, puis la primitive"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Fonctions primitives » (math_ch4_primitives) : la bulle u’ (vues bulle, facteur, trois).
+ * Moments et repères : voir le contrat du cours (les noms sont cités par le cours, ne pas les renommer).
+ */
+/* ——— Aides de craie de la page ——— */
+const SUPS = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+/** Largeur réelle d’un texte à la craie, exposants compris. */
+function L(c, s, t = 21) {
+  s = String(s).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUPS[ch]).join('') + '}');
+  let w = 0;
+  for (const seg of Tableau.Craie.segments(s)) { c.ctx.font = `${seg.sub || seg.sup ? t * .62 : t}px ${Tableau.POLICE}`; w += c.ctx.measureText(seg.t).width; }
+  return w;
+}
+const largeurs = (c, ms, t) => ms.map(m => (m && m.fl ? (m.w || (m.mot ? Math.max(56, L(c, m.mot, 13) + 18) : 44)) : L(c, typeof m === 'string' ? m : m.t, t)));
+/** Écrit des morceaux à la suite : 'texte', {t, c} (couleur), {fl: couleur, mot, w} (flèche de craie). */
+function rang(c, x, y, ms, o = {}) {
+  let t = o.taille || 21, ws = largeurs(c, ms, t), tot = ws.reduce((a, b) => a + b, 0);
+  if (o.max && tot > o.max) { t = t * o.max / tot; ws = largeurs(c, ms, t); tot = ws.reduce((a, b) => a + b, 0); }
+  if (o.centre) x -= tot / 2;
+  const x0 = x, p = [];
+  ms.forEach((m, i) => {
+    const w = ws[i];
+    if (m && m.fl) {
+      const ya = y - t * .3;
+      c.fleche(x + 6, ya, x + w - 6, ya, { couleur: m.fl, largeur: 2.2, tete: 9 });
+      if (m.mot) c.texte(m.mot, x + w / 2, ya - 8, { couleur: m.fl, taille: 13, align: 'center' });
+    } else c.texte(typeof m === 'string' ? m : m.t, x, y, { couleur: (m && m.c) || o.couleur || 'blanc', taille: t });
+    p.push({ x, w, m: x + w / 2 }); x += w;
+  });
+  return { p, x0, x1: x, t, y };
+}
+const bout = (R, i, j = i) => [R.p[i].x, R.p[j].x + R.p[j].w];
+function cadre(c, R, coul = 'jaune', m = 9) { c.rect(R.x0 - m, R.y - R.t - 5, R.x1 - R.x0 + 2 * m, R.t + 16, { couleur: coul, arrondi: 7, largeur: 1.7 }); }
+function souligne(c, R, i, coul = 'rouge', j = i) { const [a, b] = bout(R, i, j); c.ligne(a + 2, R.y + 7, b - 2, R.y + 7, { couleur: coul, largeur: 2.4 }); }
+function barre(c, R, i, coul = 'rouge', j = i) { const [a, b] = bout(R, i, j); c.ligne(a - 2, R.y - R.t * .3 + 9, b + 2, R.y - R.t * .3 - 9, { couleur: coul, largeur: 2.6 }); }
+function ovale(c, cx, cy, rx, ry, coul = 'orange') { c.courbe(u => { const a = -2.4 + u * Math.PI * 2.12; return [cx + rx * Math.cos(a), cy + ry * Math.sin(a)]; }, 44, { couleur: coul, largeur: 2.2 }); }
+function entoure(c, R, i, coul = 'orange', j = i) { const [a, b] = bout(R, i, j); ovale(c, (a + b) / 2, R.y - R.t * .32, (b - a) / 2 + 10, R.t * .75, coul); }
+function entoureExp(c, R, i, coul = 'orange') { const [a, b] = bout(R, i); ovale(c, (a + b) / 2, R.y - R.t * .66, (b - a) / 2 + 7, R.t * .4, coul); }
+function coche(c, x, y) { c.trait([[x, y - 9], [x + 6, y - 1], [x + 19, y - 19]], { couleur: 'vert', largeur: 3, tremble: .4 }); }
+function zone(c, id, R, label, pad = 7) { c.repere(id, R.x0 - pad, R.y - R.t - pad, R.x1 - R.x0 + 2 * pad, R.t + 2 * pad + 6, label); }
+
+
+/* Une bulle (cadre arrondi cyan) avec son texte ; renvoie {x, y, w, h}. */
+function bulle(c, x, y, texte, t = 20, coul = 'cyan') {
+  const w = L(c, texte, t) + 28, h = t + 20;
+  c.rect(x, y, w, h, { couleur: coul, arrondi: 14, largeur: 1.8 });
+  c.texte(texte, x + 14, y + h / 2 + t * .35, { couleur: coul, taille: t });
+  return { x, y, w, h };
+}
+/* Flèche de la bulle vers le milieu d’un morceau écrit (au-dessous de lui). */
+function versMorceau(c, B, R, i, coul = 'cyan') {
+  const cible = R.p[i].m;
+  c.fleche(Math.min(Math.max(cible, B.x + 20), B.x + B.w - 20), B.y, cible, R.y + 10, { couleur: coul, largeur: 1.8, tete: 9 });
+}
+const XC = [135, 380, 625];
+
+MathsTableau.page({
+  id: 'pr_bulle', titre: 'Fonctions primitives',
+  texte: 'Construction à la craie du cours Fonctions primitives : on souligne u, on écrit sa dérivée dans une bulle, on réécrit f sous une forme du tableau (u’uⁿ, u’/u², u’/√u) et on écrit la primitive',
+  vues: {
+    bulle: {
+      titre: 'Voir u et sa dérivée',
+      dessiner(c, K) {
+        K.titre('Voir u et sa dérivée');
+        const R = rang(c, 60, 100, ['f(x) = ', { t: '(2x + 1)', c: 'blanc' }, { t: '(x² + x − 4)', c: 'blanc' }, '³'], { taille: 30 });
+        c.pause(.3);
+        souligne(c, R, 2, 'rouge');
+        c.texte('u', R.p[2].m, R.y + 32, { couleur: 'rouge', taille: 20, align: 'center' });
+        c.repere('u', R.p[2].x - 6, R.y - 36, R.p[2].w + 12, 72, 'u = x² + x − 4');
+        K.marque('souligner');
+        c.pause(.4);
+        const B = bulle(c, 380, 128, '(x² + x − 4)’ = 2x + 1', 21);
+        c.fleche(B.x + 10, B.y + B.h / 2, R.p[1].m + 10, R.y + 12, { couleur: 'cyan', largeur: 1.8, tete: 9 });
+        c.repere('bulle', B.x - 4, B.y - 4, B.w + 8, B.h + 8, 'la bulle : la dérivée de u');
+        K.marque('bulle');
+        c.pause(.4);
+        const W = rang(c, 60, 222, ['f(x) = ', { t: '(x² + x − 4)’', c: 'cyan' }, '(x² + x − 4)³'], { taille: 24 });
+        const Fm = rang(c, W.x1 + 26, 222, [{ t: 'forme u’uⁿ, n = 3', c: 'vert' }], { taille: 21, max: 740 - W.x1 - 30 });
+        c.repere('forme', Fm.x0 - 8, Fm.y - Fm.t - 8, Fm.x1 - Fm.x0 + 16, Fm.t + 22, 'forme u’uⁿ avec n = 3');
+        K.marque('reecrire');
+        c.pause(.4);
+        const P = rang(c, 60, 300, [{ t: 'F(x) = (x² + x − 4)⁴/4 + k', c: 'jaune' }], { taille: 28 });
+        cadre(c, P, 'jaune');
+        c.texte('k ∈ ℝ', P.x1 + 26, 298, { couleur: 'faible', taille: 18 });
+        zone(c, 'primitive', P, 'F(x) = (x² + x − 4)⁴/4 + k', 12);
+        K.marque('primitive');
+      },
+      decrire: {
+        souligner: 'Écrit : « f(x) = (2x + 1)(x² + x − 4)³ » ; x² + x − 4 est souligné en rouge et nommé « u ».',
+        bulle: 'Une bulle cyan « (x² + x − 4)’ = 2x + 1 » est reliée par une flèche au facteur 2x + 1.',
+        reecrire: 'Réécrit : « f(x) = (x² + x − 4)’(x² + x − 4)³ » ; en face, en vert : « forme u’uⁿ, n = 3 ».',
+        primitive: 'En bas, encadré en jaune : « F(x) = (x² + x − 4)⁴/4 + k ».',
+      },
+      motifs: { souligner: 'u souligné', bulle: 'la bulle u’', reecrire: 'la forme u’uⁿ', primitive: 'la primitive' },
+      explication: [
+        { repere: 'u', texte: 'u est ce qui est sous la puissance.' },
+        { repere: 'bulle', texte: 'On calcule u’ à part : on retrouve l’autre facteur.' },
+        { repere: 'forme', texte: 'f s’écrit u’uⁿ avec n = 3.' },
+        { repere: 'primitive', texte: 'Une primitive de u’uⁿ est uⁿ⁺¹/(n + 1).' },
+      ],
+    },
+    facteur: {
+      titre: 'Il manque un nombre',
+      dessiner(c, K) {
+        K.titre('Il manque un nombre');
+        const R = rang(c, 60, 96, ['f(x) = ', { t: '(x + 1)', c: 'blanc' }, { t: '(x² + 2x − 6)', c: 'blanc' }, '²'], { taille: 28 });
+        c.pause(.3);
+        souligne(c, R, 2, 'rouge');
+        c.texte('u', R.p[2].m, R.y + 30, { couleur: 'rouge', taille: 19, align: 'center' });
+        K.marque('souligner');
+        c.pause(.4);
+        const B = bulle(c, 300, 112, '(x² + 2x − 6)’ = 2x + 2 = 2(x + 1)', 19);
+        c.fleche(B.x + 10, B.y + B.h / 2, R.p[1].m + 8, R.y + 12, { couleur: 'cyan', largeur: 1.8, tete: 9 });
+        c.repere('bulle', B.x - 4, B.y - 4, B.w + 8, B.h + 8, 'la bulle : u’ = 2(x + 1)');
+        K.marque('bulle');
+        c.pause(.4);
+        const Fa = rang(c, 60, 196, [{ t: '× 2/2', c: 'vert' }, ' : le 2 va avec (x + 1), ', { t: '½', c: 'vert' }, ' reste devant'], { taille: 19, max: 440 });
+        c.repere('facteur', Fa.x0 - 8, Fa.y - 26, Fa.x1 - Fa.x0 + 16, 38, 'multiplier et diviser par 2');
+        K.marque('facteur');
+        c.pause(.4);
+        rang(c, 60, 244, ['f(x) = ', { t: '½', c: 'vert' }, { t: '(x² + 2x − 6)’', c: 'cyan' }, '(x² + 2x − 6)²'], { taille: 22, max: 440 });
+        K.marque('reecrire');
+        c.pause(.4);
+        const P = rang(c, 60, 306, [{ t: 'F(x) = ½ × (x² + 2x − 6)³/3 = (1/6)(x² + 2x − 6)³', c: 'jaune' }], { taille: 22, max: 640 });
+        cadre(c, P, 'jaune');
+        zone(c, 'primitive', P, 'F(x) = (1/6)(x² + 2x − 6)³', 12);
+        K.marque('primitive');
+        c.pause(.4);
+        const bx = 520, by = 168;
+        c.rect(bx, by, 228, 96, { couleur: 'orange', arrondi: 8, largeur: 1.5 });
+        c.texte('(x² + 1)³ : il manque 2x,', bx + 10, by + 26, { couleur: 'blanc', taille: 16 });
+        c.texte('pas un nombre', bx + 10, by + 50, { couleur: 'blanc', taille: 16 });
+        c.ligne(bx + 150, by + 32, bx + 176, by + 56, { couleur: 'rouge', largeur: 2.6 }); c.ligne(bx + 176, by + 32, bx + 150, by + 56, { couleur: 'rouge', largeur: 2.6 });
+        c.texte('on ne prête qu’un nombre', bx + 10, by + 80, { couleur: 'orange', taille: 16 });
+        c.repere('manque_x', bx - 4, by - 4, 236, 104, 'on ne prête qu’un nombre, jamais x');
+        K.marque('manque_x');
+      },
+      decrire: {
+        souligner: 'Écrit : « f(x) = (x + 1)(x² + 2x − 6)² » ; x² + 2x − 6 est souligné en rouge et nommé « u ».',
+        bulle: 'Une bulle cyan « (x² + 2x − 6)’ = 2x + 2 = 2(x + 1) », reliée au facteur x + 1.',
+        facteur: 'En vert : « × 2/2 » ; le 2 va avec (x + 1), le ½ reste devant.',
+        reecrire: 'Réécrit : « f(x) = ½(x² + 2x − 6)’(x² + 2x − 6)² ».',
+        primitive: 'Encadré en jaune : « F(x) = ½ × (x² + 2x − 6)³/3 = (1/6)(x² + 2x − 6)³ ».',
+        manque_x: 'À droite, un petit encadré orange : « (x² + 1)³ : il manque 2x, pas un nombre », une croix rouge, « on ne prête qu’un nombre ».',
+      },
+      motifs: { souligner: 'u souligné', bulle: 'la bulle u’', facteur: 'le facteur 2/2', reecrire: 'f réécrite', primitive: 'la primitive', manque_x: 'il manque x' },
+      explication: [
+        { repere: 'bulle', texte: 'u’ = 2(x + 1) : il manque seulement le nombre 2.' },
+        { repere: 'facteur', texte: 'On multiplie et on divise par 2 : le ½ reste devant.' },
+        { repere: 'primitive', texte: 'Une primitive : (1/6)(x² + 2x − 6)³.' },
+        { repere: 'manque_x', texte: 'On ne peut prêter qu’un nombre, jamais un x.' },
+      ],
+    },
+    trois: {
+      titre: 'Même numérateur, trois dénominateurs',
+      dessiner(c, K) {
+        K.titre('Même numérateur, trois dénominateurs');
+        const fr3 = ['(2x + 3)/(x² + 3x − 4)²', '(2x + 3)/√(x² + 3x − 4)', '(2x + 3)/(x² + 3x − 4)'];
+        const Fr = fr3.map((t, i) => { c.pause(.2); return rang(c, XC[i], 140, [t], { taille: 18, centre: true, max: 228 }); });
+        K.marque('trois_fractions');
+        c.pause(.4);
+        const tb = '(x² + 3x − 4)’ = 2x + 3', wb = L(c, tb, 19) + 28;
+        const B = bulle(c, 380 - wb / 2, 160, tb, 19);
+        for (const R of Fr) c.fleche(380, B.y, (R.x0 + R.x1) / 2, R.y + 8, { couleur: 'tresfaible', largeur: 1.3, tete: 7 });
+        K.marque('bulle');
+        c.pause(.4);
+        const formes = [['u’/u²', 'vert'], ['u’/√u', 'vert'], ['u’/u', 'orange']];
+        formes.forEach(([t, col], i) => { c.pause(.15); c.texte(t, XC[i], 100, { couleur: col, taille: 22, align: 'center' }); });
+        K.marque('formes');
+        c.pause(.4);
+        c.texte('→ −1/(x² + 3x − 4)', XC[0], 240, { couleur: 'jaune', taille: 18, align: 'center' });
+        c.pause(.2);
+        c.texte('→ 2√(x² + 3x − 4)', XC[1], 240, { couleur: 'jaune', taille: 18, align: 'center' });
+        c.pause(.2);
+        c.rect(XC[2] - 104, 214, 208, 38, { couleur: 'orange', arrondi: 6, largeur: 1.5, fond: 'orange', fondAlpha: .12 });
+        c.texte('plus tard : chapitre ln', XC[2], 240, { couleur: 'orange', taille: 17, align: 'center' });
+        c.repere('carre', XC[0] - 118, 76, 236, 184, 'u’/u² → −1/u');
+        c.repere('racine', XC[1] - 118, 76, 236, 184, 'u’/√u → 2√u');
+        c.repere('rien', XC[2] - 118, 76, 236, 184, 'u’/u : plus tard, chapitre ln');
+        K.marque('resultats');
+        c.pause(.4);
+        const ax0 = 90, ax1 = 420, ya = 292, X = v => ax0 + (v + 6) / 9 * (ax1 - ax0);
+        c.fleche(ax0, ya, ax1 + 10, ya, { couleur: 'faible', largeur: 1.5 });
+        for (const v of [-4, 1]) { c.ligne(X(v), ya - 7, X(v), ya + 7, { couleur: 'blanc', largeur: 2 }); c.texte(v < 0 ? '−4' : '1', X(v), ya + 26, { couleur: 'blanc', taille: 17, align: 'center' }); }
+        c.ligne(X(1) + 3, ya, ax1 + 4, ya, { couleur: 'vert', largeur: 5 });
+        c.texte(']1 ; +∞[', X(2.4), ya - 12, { couleur: 'vert', taille: 17, align: 'center' });
+        c.texte('x² + 3x − 4 > 0 sur ]1 ; +∞[', ax1 + 34, ya + 6, { couleur: 'vert', taille: 18 });
+        c.repere('intervalle', ax0 - 6, ya - 34, 740 - ax0, 66, 'x² + 3x − 4 > 0 sur ]1 ; +∞[');
+        K.marque('intervalle');
+      },
+      decrire: {
+        trois_fractions: 'Trois colonnes : (2x + 3)/(x² + 3x − 4)², (2x + 3)/√(x² + 3x − 4), (2x + 3)/(x² + 3x − 4).',
+        bulle: 'Une seule bulle cyan au milieu : « (x² + 3x − 4)’ = 2x + 3 », reliée aux trois fractions.',
+        formes: 'Au-dessus des colonnes : « u’/u² », « u’/√u » (vert) et « u’/u » (orange).',
+        resultats: 'Dessous : « −1/(x² + 3x − 4) », « 2√(x² + 3x − 4) », et sur la troisième un rideau orange « plus tard : chapitre ln ».',
+        intervalle: 'Un petit axe : −4 et 1 marqués, ]1 ; +∞[ surligné en vert, « x² + 3x − 4 > 0 sur ]1 ; +∞[ ».',
+      },
+      motifs: { trois_fractions: 'trois fractions', bulle: 'une seule bulle', formes: 'les trois formes', resultats: 'les primitives', intervalle: 'l’intervalle' },
+      explication: [
+        { repere: 'carre', texte: 'Un carré en bas : u’/u², une primitive est −1/u.' },
+        { repere: 'racine', texte: 'Une racine en bas : u’/√u, une primitive est 2√u.' },
+        { repere: 'rien', texte: 'Rien en bas : u’/u, ce sera au chapitre ln.' },
+        { repere: 'intervalle', texte: 'On travaille sur ]1 ; +∞[, où x² + 3x − 4 > 0.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

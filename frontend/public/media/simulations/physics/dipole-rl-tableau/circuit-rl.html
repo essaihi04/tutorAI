@@ -1,0 +1,692 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le circuit RL — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="rl.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Le montage RL : un générateur E, un interrupteur K à deux positions (1 : le générateur est dans la maille ; 2 : R et la bobine seuls), un résistor R et une bobine (L, r) ; les flèches i, u_R et u_b ; à droite un oscilloscope, voie 1 aux bornes de R, voie 2 aux bornes de la bobine, masse au point commun ; u_R(t), image de i, monte en vert à l’établissement et descend en bleu à la rupture"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Le montage RL, l’oscilloscope, l’établissement et la rupture du courant (cours « Dipôle RL », 2e Bac PC BIOF, novembre 2026).
+ * Valeurs : E = 6 V, R = 50 Ω, bobine L = 0,12 H et r = 10 Ω → I₀ = E/(R + r) = 0,1 A = 100 mA ; τ = L/(R + r) = 2 ms ;
+ * U_R = R·I₀ = 5 V ; u_R(τ) = 0,63 × 5 = 3,15 V.
+ * Vues (?vue=) :
+ *  - montage (défaut) : le circuit (positions 1 et 2), les flèches i, u_R, u_b (convention récepteur), l’oscilloscope
+ *    (voie 1 aux bornes de R : u_R = R·i, image de i ; voie 2 aux bornes de la bobine ; masse au point commun).
+ *  - etablissement : K passe en 1 ; u_R(t) = U_R(1 − e^{−t/τ}) s’enregistre en vert ; régime transitoire puis permanent.
+ *  - rupture : régime permanent ; K passe en 2 ; u_R(t) = U_R·e^{−t/τ} descend en bleu (i garde son sens).
+ * Masse au point commun de R et de la bobine : la voie 1 lit +u_R ; la voie 2 lit −u_b (on l’inverse pour lire u_b) —
+ * seule u_R est tracée ici. Axe des temps en valeurs rondes (2,5 ms) qui ne tombent pas sur τ. La courbe s’enregistre en
+ * 4 s réelles (ralenti). Paramètres : vue ; K (1 | 2) ; R_ohm (20 → 200) ; L_H (0,02 → 0,5) ; E (1 → 12 V). r = 10 Ω fixe.
+ * Couleurs fixes : vert = établissement, bleu = rupture (jaune réservé au surlignage).
+ * Poignée : l’interrupteur K (un clic le bascule : 1 → établissement, 2 → rupture).
+ */
+/* ── Moteur du déroulé (commun aux pages « appareils » des dossiers dipole-rc-tableau et dipole-rl-tableau, recopié dans chaque page) ──────────────
+ * Une page déclare des étapes par vue : { nom, anim (s), ecritDes (s, défaut = anim), motif, bulle() }.
+ * Chaque étape : d’abord son animation (aiguille, électrons, courbe qui s’enregistre…), puis la craie écrit ce
+ * qu’il faut dire ; le moment `nom` est la fin de cette écriture (l’animation est finie, le texte est écrit).
+ * Les durées d’écriture sont mesurées au dessin (calculer), donc les moments suivent les paramètres.
+ * Les parties fixes (titres, axes, montage déjà dessiné) s’écrivent à l’horloge de la scène, ECRITURE fois plus vite.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lisse = p => p * p * (3 - 2 * p);
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');   // 1,50 → 1,5 ; 2,00 → 2
+const ECRITURE = 2.5;
+function Moteur(o) {
+  const q = new URLSearchParams(location.search);
+  const S = { vue: o.vues.includes(q.get('vue')) ? q.get('vue') : o.vues[0], t: 0, running: false, pause: false, fait: false,
+    jusqua: null, motif: '', emis: 0, dit: '', mesure: false };
+  const V = o.vitesse ?? 1.7, T0 = o.T0 ?? .8, HOLD = {};
+  let TL = null;
+  function construire() {
+    let s = T0; const ev = [];
+    for (const e of o.etapes(S.vue)) {
+      const anim = e.anim || 0, d = { ...e, anim, debut: s, ecrit: s + (e.ecritDes ?? anim) };
+      d.fin = Math.max(s + anim, d.ecrit + (HOLD[e.nom] ?? 1.5)) + .35;
+      s = d.fin; ev.push(d);
+    }
+    const mom = {}; for (const e of ev) mom[e.nom] = e.fin; mom.fin = s + (o.queue ?? .6);
+    TL = { ev, M: mom };
+  }
+  const ev = nom => TL.ev.find(e => e.nom === nom);
+  const M = {
+    S, ev, Moments: () => TL.M,
+    /** Avancement (0 → 1) de l’animation de l’étape `nom`. */
+    p(nom) { const e = ev(nom); if (!e) return 0; return e.anim > 0 ? clamp((S.t - e.debut) / e.anim, 0, 1) : (S.t >= e.debut - 1e-6 ? 1 : 0); },
+    commence(nom) { const e = ev(nom); return !!e && S.t > e.debut + 1e-6; },
+    vu(nom) { if (nom === 'fin') return S.t >= TL.M.fin - 1e-6; const e = ev(nom); return !!e && S.t >= e.fin - 1e-6; },
+    /** Ce qui s’écrit à l’étape `nom` : la craie écrit à partir de la fin de son animation. */
+    etape(c, nom, fn) {
+      const e = ev(nom); if (!e) return;
+      const t = c.t, cur = c.cur, comp = c.complet, w0 = e.ecrit;
+      c.t = S.t > 1e5 ? 1e9 : w0 + (S.t - w0) * V; c.cur = w0;
+      try { fn(); } finally { if (S.mesure) HOLD[nom] = (c.cur - w0) / V; c.t = t; c.cur = cur; if (!S.running) c.complet = comp; }
+    },
+    etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
+  };
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const cadreBase = scene.cadre;
+  scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
+  M.scene = scene; M.craie = scene.craie;
+  function calculer() {
+    construire();
+    const t = S.t, r = S.running; S.t = 1e6; S.running = false; S.mesure = true;
+    try { o.dessiner(scene.craie, M); } finally { S.t = t; S.running = r; S.mesure = false; }
+    construire(); scene.sale = true;
+  }
+  // La bulle est du texte simple : jamais de « _ » visible (u_C → uC, I_0 → I₀).
+  const sansSouligne = s => String(s).replace(/([A-Za-zΔτ])_\{?([A-Za-z0-9]+)\}?/g, (m, a, i) => a + (/^\d+$/.test(i) ? [...i].map(d => '₀₁₂₃₄₅₆₇₈₉'[d]).join('') : i));
+  const dire = (texte, kind = '') => { texte = sansSouligne(texte); S.dit = texte; bulle($('feedback'), texte, kind); };
+  const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+  let pont = null;
+  const emettre = () => pont && pont.emettre();
+  const noter = (a, d) => pont && pont.noter(a, d);
+  scene.avancer = dt => {
+    if (!S.running) return !!(o.anime && o.anime());
+    const avant = S.t; S.t += dt;
+    for (const e of TL.ev) if (avant < e.debut && S.t >= e.debut && e.bulle) dire(e.bulle());
+    if (S.jusqua != null && S.t >= S.jusqua) {
+      S.t = S.jusqua; S.jusqua = null; S.running = false;
+      if (S.t >= TL.M.fin - 1e-6) { finir(); return true; }
+      S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fx(S.t, 1)} s`) + '.');
+      noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); return true;
+    }
+    if (S.t >= TL.M.fin) { S.t = TL.M.fin; finir(); return true; }
+    if (performance.now() - S.emis > 500) { S.emis = performance.now(); emettre(); }
+    return true;
+  };
+  function finir() { S.running = false; S.fait = true; S.pause = false; S.jusqua = null; etiquette(); dire(o.messageFin(M), 'good'); noter('measurement', o.params(M)); emettre(); }
+  function start() { o.reprise && o.reprise(); S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire(o.depart(M)); noter('start', o.params(M)); emettre(); }
+  function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); }
+  function resume() { if (S.running) return; o.reprise && o.reprise(); if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('Ça repart…'); noter('resume'); emettre(); }
+  function setTime(p) {
+    const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+    o.reprise && o.reprise(); S.running = false; S.jusqua = null; S.t = clamp(t, 0, TL.M.fin); S.fait = S.t >= TL.M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+    etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fx(S.t, 1)} s.`); noter('set_time', { time_s: S.t }); emettre();
+  }
+  function playUntil(p) {
+    const noms = o.etapes(S.vue).map(e => e.nom).concat('fin');
+    const nom = noms.includes(p.moment) ? p.moment : null, cible = nom ? TL.M[nom] : +p.time_s;
+    if (!Number.isFinite(cible) || (p.moment && !nom && (p.time_s == null || p.time_s === ''))) { dire(`Moment inconnu : ${p.moment}.`, 'bad'); emettre(); return; }
+    o.reprise && o.reprise();
+    if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+    S.jusqua = clamp(cible, .01, TL.M.fin); S.motif = nom ? (o.motifs[nom] || nom) : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+    noter('play_until', { moment: nom, time_s: S.jusqua }); emettre();
+  }
+  function setParameters(p) {
+    p = p || {};
+    const r = o.appliquer(p, M) || {};
+    if (r.vue && o.vues.includes(r.vue) && r.vue !== S.vue) { S.vue = r.vue; r.change = true; r.vueChange = true; }
+    if (r.change) { calculer(); if (r.vueChange) scene.reecrire(); }
+    noter('set_parameters', o.params(M));
+    if (r.apres) r.apres();
+    else if (r.change && !r.garder) start();
+    else { scene.sale = true; emettre(); }
+  }
+  Object.assign(M, { noter, calculer, dire, start, pause, resume, setTime, playUntil, setParameters, emettre, etiquette });
+  $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+  window.Tableau.explication(o.explications);
+  const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+  M.lancer = () => {
+    calculer();
+    const listeMoments = o.vues.map(v => `${o.vues.length > 1 ? v + ' : ' : ''}${o.etapes(v).map(e => e.nom).concat('fin').join(' | ')}`).join(' ; ');
+    const config = { id: o.id, version: '1.0', title: o.titre, variants: o.vues.length > 1 ? o.vues.map(id => ({ id, label: o.titres[id] })) : [], commands: commandes,
+      command_schema: { set_parameters: o.schema, set_time: { time_s: '0..fin (arrêt sur cet instant de la scène, en s ; voir moments)' },
+        play_until: { moment: listeMoments, time_s: 'ou un instant en s' } } };
+    pont = protocole({ id: o.id, commandes, config, texte: o.texte,
+      etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle',
+        ce_qui_se_voit: o.voir(M) + (S.dit ? ` La bulle dit : « ${S.dit} »` : ''), current_variant: S.vue, time_s: +S.t.toFixed(2),
+        parameters: o.params(M), moments: Object.fromEntries(Object.entries(TL.M).map(([k, v]) => [k, +v.toFixed(2)])) }),
+      progression: () => (S.fait ? 1 : 0),
+      executer: (cmd, p) => ({ start, reset: start, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+    dire(o.depart(M));
+    setTimeout(() => { if (!S.running && S.t === 0 && !S.pause && !S.fait) start(); }, 900);
+  };
+  return M;
+}
+
+/* ── Appareils peints (règle 7 : ils ressemblent aux vrais ; le peint ne change jamais la physique) ── */
+const Peint = {
+  /** Sphère ombrée (électron : bleu). */
+  sphere(ctx, x, y, r, [clair, milieu, sombre] = ['#e3f3ff', '#3b9cff', '#0a3a8c'], a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r); g.addColorStop(0, clair); g.addColorStop(.45, milieu); g.addColorStop(1, sombre);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  },
+  /** Boîtier d’un générateur (vu de face) : coffret gris, afficheur, deux bornes (rouge +, noire −). */
+  generateur(ctx, x, y, w, h, affiche, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(x + 3, y + 4, w, h, 7); ctx.fill();
+    const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#5b6670'); g.addColorStop(.5, '#3b444c'); g.addColorStop(1, '#262c32');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 7); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1; ctx.stroke();
+    const ex = x + w * .14, ey = y + h * .3, ew = w * .72, eh = h * .26;
+    ctx.fillStyle = '#0d1a10'; ctx.beginPath(); ctx.roundRect(ex, ey, ew, eh, 3); ctx.fill();
+    ctx.fillStyle = '#7dfc8a'; ctx.font = `600 ${Math.round(eh * .72)}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(affiche, ex + ew / 2, ey + eh / 2 + 1);
+    ctx.restore();
+  },
+  /** Borne ronde (rouge ou noire). */
+  borne(ctx, x, y, rouge, a = 1) { Peint.sphere(ctx, x, y, 5, rouge ? ['#ffd0d0', '#e0393e', '#6d0f12'] : ['#9aa0a6', '#2b2f33', '#050607'], a); },
+  /** Appareil à cadran (ampèremètre ou voltmètre) : boîtier, cadran crème, graduations, aiguille (f de 0 à 1). */
+  cadran(ctx, cx, cy, r, f, lettre, graduations = null, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(cx - r - 4 + 3, cy - r - 4 + 4, 2 * r + 8, 2 * r + 8, 9); ctx.fill();
+    const g = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r); g.addColorStop(0, '#3a3f45'); g.addColorStop(1, '#1b1e22');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(cx - r - 4, cy - r - 4, 2 * r + 8, 2 * r + 8, 9); ctx.fill();
+    const f2 = ctx.createRadialGradient(cx - r * .3, cy - r * .4, r * .1, cx, cy, r); f2.addColorStop(0, '#fffaf0'); f2.addColorStop(1, '#e4dcc8');
+    ctx.fillStyle = f2; ctx.beginPath(); ctx.roundRect(cx - r, cy - r, 2 * r, 2 * r * .92, 6); ctx.fill();
+    const px = cx, py = cy + r * .55, R = r * 1.05, a0 = -Math.PI * .78, a1 = -Math.PI * .22;
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(px, py, R * .82, a0, a1); ctx.stroke();
+    const n = graduations ? graduations.length - 1 : 10;
+    for (let i = 0; i <= n * 2; i++) {
+      const an = a0 + (a1 - a0) * i / (n * 2), l = i % 2 ? .07 : .13;
+      ctx.beginPath(); ctx.moveTo(px + Math.cos(an) * R * .82, py + Math.sin(an) * R * .82); ctx.lineTo(px + Math.cos(an) * R * (.82 + l), py + Math.sin(an) * R * (.82 + l)); ctx.stroke();
+    }
+    ctx.fillStyle = '#c0392b'; ctx.beginPath(); ctx.arc(px + Math.cos(a1) * R * .86, py + Math.sin(a1) * R * .86, 1.6, 0, 7); ctx.fill();
+    if (graduations) {
+      ctx.fillStyle = '#333'; ctx.font = `${Math.round(r * .2)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      graduations.forEach((s, i) => { const an = a0 + (a1 - a0) * i / n; ctx.fillText(s, px + Math.cos(an) * R * 1.08, py + Math.sin(an) * R * 1.08 + 1); });
+    }
+    ctx.fillStyle = '#222'; ctx.font = `700 ${Math.round(r * .42)}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(lettre, cx, cy + r * .38);
+    const an = a0 + (a1 - a0) * clamp(f, -.02, 1.03);
+    ctx.strokeStyle = '#111'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px + Math.cos(an) * R * .9, py + Math.sin(an) * R * .9); ctx.stroke();
+    ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(px, py, 2.6, 0, 7); ctx.fill();
+    // Verre : un reflet léger (pour l’œil seulement).
+    ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.beginPath(); ctx.ellipse(cx - r * .35, cy - r * .55, r * .5, r * .16, -.3, 0, 7); ctx.fill();
+    ctx.restore();
+  },
+  /** Résistor : corps beige en cylindre, bandes de couleur lues sur la valeur (Ω). */
+  resistor(ctx, x, y, w, h, ohm, a = 1) {
+    const COUL = ['#111', '#7b4a1e', '#d32f2f', '#f57c00', '#fbc02d', '#2e7d32', '#1565c0', '#7b1fa2', '#9e9e9e', '#fafafa'];
+    const e = Math.floor(Math.log10(ohm) + 1e-9) - 1, m = Math.round(ohm / 10 ** e), d1 = Math.floor(m / 10) % 10, d2 = m % 10;
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#f3e1bf'); g.addColorStop(.45, '#d9bf8f'); g.addColorStop(1, '#9c8358');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, h / 2.2); ctx.fill();
+    [[.24, d1], [.38, d2], [.52, clamp(e, 0, 9)], [.78, -1]].forEach(([f, k]) => {
+      ctx.fillStyle = k < 0 ? '#c9a227' : COUL[k]; ctx.fillRect(x + w * f, y + 1, w * .07, h - 2);
+    });
+    ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(x + h * .3, y + h * .18, w - h * .6, h * .12);
+    ctx.restore();
+  },
+  /** Interrupteur : socle sombre, plots laiton, levier métallique (pivot → bout). */
+  levier(ctx, px, py, bx, by, a = 1) {
+    ctx.save(); ctx.globalAlpha = a; ctx.lineCap = 'round';
+    ctx.strokeStyle = '#4a4f55'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(bx, by); ctx.stroke();
+    ctx.strokeStyle = '#c8ccd2'; ctx.lineWidth = 3.4; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(bx, by); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(px, py - 1); ctx.lineTo(bx, by - 1); ctx.stroke();
+    Peint.sphere(ctx, bx, by, 4.2, ['#ffe9c2', '#c98a2a', '#5a3a08']);
+    ctx.restore();
+  },
+  plot(ctx, x, y, a = 1) { Peint.sphere(ctx, x, y, 4.6, ['#fff1c9', '#cfa046', '#5e4210'], a); },
+};
+/* ── Appareils du dipôle RL (peints : bobine, noyau de fer, lampe, oscilloscope, ohmmètre, GBF) ── */
+Object.assign(Peint, {
+  /**
+   * Bobine couchée : mandrin clair (deux joues) et fil de cuivre enroulé en spires orangées.
+   * Renvoie les deux bornes (bout des fils de sortie, sous les joues). Le noyau se peint AVANT (il passe dans le mandrin).
+   */
+  bobine(ctx, x, y, w, h, a = 1) {
+    const j = Math.max(6, h * .2), n = Math.max(7, Math.round((w - 2 * j) / 6.5));
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(x + w / 2 + 3, y + h + 9, w / 2, 4.5, 0, 0, 7); ctx.fill();
+    // Fils de sortie (cuivre nu) : de chaque joue vers le bas.
+    ctx.strokeStyle = '#d98a3d'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(x + j + 3, y + h - 3); ctx.quadraticCurveTo(x + j - 2, y + h + 8, x + j * .5, y + h + 14);
+    ctx.moveTo(x + w - j - 3, y + h - 3); ctx.quadraticCurveTo(x + w - j + 2, y + h + 8, x + w - j * .5, y + h + 14); ctx.stroke();
+    // Enroulement : cylindre de cuivre (clair au milieu, sombre aux bords).
+    const g = ctx.createLinearGradient(0, y + 3, 0, y + h - 3);
+    g.addColorStop(0, '#4a2207'); g.addColorStop(.22, '#b8621f'); g.addColorStop(.45, '#ffbe7a'); g.addColorStop(.62, '#d9802f'); g.addColorStop(1, '#3d1b05');
+    ctx.fillStyle = g; ctx.fillRect(x + j, y + 3, w - 2 * j, h - 6);
+    // Les spires : un trait sombre légèrement penché, puis un reflet.
+    const pas = (w - 2 * j) / n;
+    for (let k = 0; k <= n; k++) {
+      const sx = x + j + k * pas;
+      ctx.strokeStyle = 'rgba(60,25,5,.75)'; ctx.lineWidth = 1.1; ctx.beginPath(); ctx.moveTo(sx, y + 3); ctx.lineTo(sx + pas * .35, y + h - 3); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,225,180,.35)'; ctx.lineWidth = .8; ctx.beginPath(); ctx.moveTo(sx + pas * .45, y + h * .3); ctx.lineTo(sx + pas * .55, y + h * .55); ctx.stroke();
+    }
+    // Joues du mandrin (plastique clair), avec le trou du mandrin au milieu.
+    for (const jx of [x, x + w - j]) {
+      const gj = ctx.createLinearGradient(jx, 0, jx + j, 0); gj.addColorStop(0, '#9c9378'); gj.addColorStop(.5, '#e8dfc4'); gj.addColorStop(1, '#a89e82');
+      ctx.fillStyle = gj; ctx.beginPath(); ctx.roundRect(jx, y - 4, j, h + 8, 3); ctx.fill();
+    }
+    ctx.fillStyle = 'rgba(20,20,20,.55)'; ctx.beginPath(); ctx.ellipse(x + w - j / 2, y + h / 2, j * .32, h * .22, 0, 0, 7); ctx.fill();
+    ctx.restore();
+    return [[x + j * .5, y + h + 14], [x + w - j * .5, y + h + 14]];
+  },
+  /** Noyau de fer doux : barre grise (dégradé métallique). */
+  noyau(ctx, x, y, w, h, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(x + 3, y + 4, w, h);
+    const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#5d646b'); g.addColorStop(.35, '#c9cfd4'); g.addColorStop(.6, '#8b9298'); g.addColorStop(1, '#3a3f44');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x + 3, y + h * .3); ctx.lineTo(x + w - 3, y + h * .3); ctx.stroke();
+    ctx.restore();
+  },
+  /**
+   * Lampe à incandescence sur son support : socle sombre, deux bornes (à gauche et à droite, à la hauteur `yf` du fil),
+   * culot, ampoule de verre ; `eclat` de 0 à 1 (∝ i²) : filament qui rougit puis blanchit, halo.
+   */
+  lampe(ctx, cx, yf, eclat = 0, a = 1) {
+    const e = clamp(eclat, 0, 1), gy = yf - 30, R = 14;
+    ctx.save(); ctx.globalAlpha = a;
+    if (e > .01) {
+      const h = ctx.createRadialGradient(cx, gy, 2, cx, gy, R + 50 * Math.sqrt(e));
+      h.addColorStop(0, `rgba(255,236,160,${.75 * e})`); h.addColorStop(.35, `rgba(255,214,110,${.32 * e})`); h.addColorStop(1, 'rgba(255,200,90,0)');
+      ctx.fillStyle = h; ctx.beginPath(); ctx.arc(cx, gy, R + 50 * Math.sqrt(e), 0, 7); ctx.fill();
+    }
+    // Socle et bornes.
+    const gs = ctx.createLinearGradient(0, yf - 9, 0, yf + 9); gs.addColorStop(0, '#4a5058'); gs.addColorStop(1, '#1d2125');
+    ctx.fillStyle = gs; ctx.beginPath(); ctx.roundRect(cx - 21, yf - 8, 42, 16, 4); ctx.fill();
+    Peint.plot(ctx, cx - 21, yf, a); Peint.plot(ctx, cx + 21, yf, a);
+    // Culot vissé.
+    const gc = ctx.createLinearGradient(cx - 7, 0, cx + 7, 0); gc.addColorStop(0, '#7d7a6e'); gc.addColorStop(.5, '#e4e0d0'); gc.addColorStop(1, '#6c695e');
+    ctx.fillStyle = gc; ctx.fillRect(cx - 7, yf - 19, 14, 11);
+    ctx.strokeStyle = 'rgba(40,40,40,.5)'; ctx.lineWidth = 1; for (let k = 0; k < 3; k++) { ctx.beginPath(); ctx.moveTo(cx - 7, yf - 17 + k * 3.5); ctx.lineTo(cx + 7, yf - 15.5 + k * 3.5); ctx.stroke(); }
+    // Ampoule de verre (plus chaude quand elle brille).
+    const gv = ctx.createRadialGradient(cx - 4, gy - 5, 1, cx, gy, R);
+    gv.addColorStop(0, `rgba(255,255,255,${.55 + .4 * e})`); gv.addColorStop(.6, `rgba(${200 + 55 * e},${215 + 30 * e},${230 - 70 * e},${.18 + .55 * e})`); gv.addColorStop(1, `rgba(190,205,220,${.28 + .4 * e})`);
+    ctx.fillStyle = gv; ctx.beginPath(); ctx.arc(cx, gy, R, 0, 7); ctx.fill();
+    ctx.strokeStyle = 'rgba(230,240,255,.55)'; ctx.lineWidth = 1; ctx.stroke();
+    // Filament : sombre éteint, rouge puis blanc-jaune.
+    const f = e < .3 ? [120 + 400 * e, 70 + 100 * e, 60] : [255, 150 + 105 * Math.min(1, (e - .3) / .7), 60 + 150 * Math.min(1, (e - .3) / .7)];
+    ctx.strokeStyle = `rgb(${f.map(Math.round).join(',')})`; ctx.lineWidth = 1.3 + e;
+    if (e > .05) { ctx.shadowColor = 'rgba(255,230,150,.9)'; ctx.shadowBlur = 10 * e; }
+    ctx.beginPath(); ctx.moveTo(cx - 5, yf - 19); ctx.lineTo(cx - 5, gy + 2);
+    for (let k = 0; k <= 6; k++) ctx.lineTo(cx - 5 + k * 10 / 6, gy + (k % 2 ? -3 : 2));
+    ctx.lineTo(cx + 5, yf - 19); ctx.stroke(); ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.beginPath(); ctx.ellipse(cx - 5, gy - 7, 3.5, 2, -.6, 0, 7); ctx.fill();
+    ctx.restore();
+  },
+  /** Oscilloscope : coffret, écran vert sombre quadrillé (rect `e`), boutons ; prises voie 1, voie 2 et masse (liste de points). */
+  oscillo(ctx, x, y, w, h, e, prises, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.roundRect(x + 4, y + 5, w, h, 12); ctx.fill();
+    const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#59636d'); g.addColorStop(.5, '#3a424a'); g.addColorStop(1, '#23292f');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 12); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.16)'; ctx.lineWidth = 1; ctx.stroke();
+    const ge = ctx.createRadialGradient(e.x + e.w / 2, e.y + e.h / 2, 10, e.x + e.w / 2, e.y + e.h / 2, e.w * .7);
+    ge.addColorStop(0, '#0d3a22'); ge.addColorStop(1, '#03160c');
+    ctx.fillStyle = ge; ctx.beginPath(); ctx.roundRect(e.x, e.y, e.w, e.h, 6); ctx.fill();
+    ctx.strokeStyle = '#1b2228'; ctx.lineWidth = 3; ctx.stroke();
+    ctx.strokeStyle = 'rgba(120,255,170,.09)'; ctx.lineWidth = 1;   // quadrillage de l’écran (pour l’œil)
+    for (let k = 1; k < 10; k++) { const gx = e.x + k * e.w / 10; ctx.beginPath(); ctx.moveTo(gx, e.y + 3); ctx.lineTo(gx, e.y + e.h - 3); ctx.stroke(); }
+    for (let k = 1; k < 8; k++) { const gy = e.y + k * e.h / 8; ctx.beginPath(); ctx.moveTo(e.x + 3, gy); ctx.lineTo(e.x + e.w - 3, gy); ctx.stroke(); }
+    for (const [px, py, noire] of prises) {
+      Peint.sphere(ctx, px, py, 6.5, noire ? ['#9aa0a6', '#2b2f33', '#050607'] : ['#fff3c4', '#d8a92e', '#5b4108']);
+      ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(px, py, 2.2, 0, 7); ctx.fill();
+    }
+    ctx.restore();
+  },
+  /** Ohmmètre numérique : coque jaune, afficheur à cristaux liquides, sélecteur, prises Ω (rouge) et COM (noire). */
+  ohmmetre(ctx, x, y, w, h, affiche, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(x + 4, y + 5, w, h, 12); ctx.fill();
+    const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#f6c84a'); g.addColorStop(1, '#b8861a');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 12); ctx.fill();
+    ctx.fillStyle = '#2a2d31'; ctx.beginPath(); ctx.roundRect(x + 7, y + 7, w - 14, h - 14, 8); ctx.fill();
+    const lx = x + 14, ly = y + 15, lw = w - 28, lh = h * .26;
+    const gl = ctx.createLinearGradient(0, ly, 0, ly + lh); gl.addColorStop(0, '#c9d3c0'); gl.addColorStop(1, '#a9b49e');
+    ctx.fillStyle = gl; ctx.beginPath(); ctx.roundRect(lx, ly, lw, lh, 3); ctx.fill();
+    ctx.fillStyle = '#1b1f1a'; ctx.font = `600 ${Math.round(lh * .62)}px monospace`; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillText(affiche, lx + lw - 8, ly + lh / 2 + 1);
+    // Sélecteur rotatif (sur Ω).
+    const sx = x + w / 2, sy = y + h * .6, sr = w * .17;
+    Peint.sphere(ctx, sx, sy, sr, ['#9aa0a6', '#3a3f45', '#0d0f11']);
+    ctx.strokeStyle = '#e8e8e8'; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + sr * .8 * Math.cos(-2.2), sy + sr * .8 * Math.sin(-2.2)); ctx.stroke();
+    ctx.fillStyle = '#e8e8e8'; ctx.font = `700 ${Math.round(w * .12)}px serif`; ctx.textAlign = 'center';
+    ctx.fillText('Ω', sx + sr * 1.55 * Math.cos(-2.2), sy + sr * 1.55 * Math.sin(-2.2));
+    // Prises.
+    const py = y + h - 20;
+    Peint.sphere(ctx, x + w * .3, py, 6, ['#9aa0a6', '#2b2f33', '#050607']); Peint.sphere(ctx, x + w * .7, py, 6, ['#ffd0d0', '#e0393e', '#6d0f12']);
+    ctx.restore();
+    return [[x + w * .3, py], [x + w * .7, py]];
+  },
+  /** Cordon souple peint (rouge ou noir) entre deux points, qui pend un peu. */
+  cordon(ctx, x1, y1, x2, y2, rouge, pend = 30, a = 1) {
+    ctx.save(); ctx.globalAlpha = a; ctx.lineCap = 'round';
+    const mx = (x1 + x2) / 2, my = Math.max(y1, y2) + pend;
+    ctx.strokeStyle = rouge ? '#7a1418' : '#050607'; ctx.lineWidth = 4.2; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.quadraticCurveTo(mx, my, x2, y2); ctx.stroke();
+    ctx.strokeStyle = rouge ? '#e0393e' : '#3b4045'; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.quadraticCurveTo(mx, my, x2, y2); ctx.stroke();
+    ctx.restore();
+  },
+  /** GBF : coffret, petit écran où défile un signal triangulaire, deux boutons, bornes de sortie. */
+  gbf(ctx, x, y, w, h, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(x + 3, y + 4, w, h, 7); ctx.fill();
+    const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#4f6a86'); g.addColorStop(.5, '#34495f'); g.addColorStop(1, '#202e3c');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 7); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1; ctx.stroke();
+    const ex = x + 8, ey = y + 8, ew = w * .55, eh = h * .42;
+    ctx.fillStyle = '#0d1a10'; ctx.beginPath(); ctx.roundRect(ex, ey, ew, eh, 3); ctx.fill();
+    ctx.strokeStyle = '#7dfc8a'; ctx.lineWidth = 1.4; ctx.beginPath();
+    for (let k = 0; k <= 4; k++) { const px = ex + 4 + k * (ew - 8) / 4, py = k % 2 ? ey + 5 : ey + eh - 5; if (k) ctx.lineTo(px, py); else ctx.moveTo(px, py); }
+    ctx.stroke();
+    Peint.sphere(ctx, x + w * .82, y + h * .25, Math.min(9, w * .09), ['#cfd4d9', '#59616a', '#14181c']);
+    Peint.sphere(ctx, x + w * .82, y + h * .58, Math.min(7, w * .07), ['#cfd4d9', '#59616a', '#14181c']);
+    ctx.restore();
+  },
+});
+/** Symbole de la bobine à la craie, couché entre (x1, y) et (x2, y) : fils, puis créneaux arrondis (boucles). */
+function symboleBobine(c, x1, y, x2, o = {}) {
+  const n = o.n ?? 4, larg = o.largeur ?? 80, xa = (x1 + x2) / 2 - larg / 2, xb = xa + larg, h = o.h ?? 16, coul = o.couleur ?? 'blanc';
+  c.ligne(x1, y, xa, y, { largeur: 2, couleur: o.fil ?? 'blanc' });
+  c.courbe(u => { const k = u * n, f = k - Math.floor(k), xx = xa + u * larg; return [xx, y - Math.sin(Math.min(1, f) * Math.PI) * h]; }, n * 14, { couleur: coul, largeur: 2.4 });
+  c.ligne(xb, y, x2, y, { largeur: 2, couleur: o.fil ?? 'blanc' });
+  return [xa, xb];
+}
+/** Le même symbole, debout entre (x, y1) en haut et (x, y2) en bas (boucles vers la droite). */
+function symboleBobineV(c, x, y1, y2, o = {}) {
+  const n = o.n ?? 4, haut = o.hauteur ?? 76, ya = (y1 + y2) / 2 - haut / 2, yb = ya + haut, h = o.h ?? 15, coul = o.couleur ?? 'blanc';
+  c.ligne(x, y1, x, ya, { largeur: 2 });
+  c.courbe(u => { const k = u * n, f = k - Math.floor(k); return [x + Math.sin(Math.min(1, f) * Math.PI) * h, ya + u * haut]; }, n * 14, { couleur: coul, largeur: 2.4 });
+  c.ligne(x, yb, x, y2, { largeur: 2 });
+  return [ya, yb];
+}
+
+const q0 = new URLSearchParams(location.search);
+const VUES = ['montage', 'etablissement', 'rupture'];
+const TITRES = { montage: 'le montage', etablissement: 'l’établissement du courant', rupture: 'la rupture du courant' };
+const S2 = { R: 50, L: 0.12, E: 6 }, RB = 10;
+{ const r = +q0.get('R_ohm'), l = +q0.get('L_H'), e = +q0.get('E'); if (r >= 20 && r <= 200) S2.R = Math.round(r); if (l >= .02 && l <= .5) S2.L = Math.round(l * 100) / 100; if (e >= 1 && e <= 12) S2.E = Math.round(e * 10) / 10; }
+const tau = () => S2.L / (S2.R + RB);
+const I0 = () => S2.E / (S2.R + RB);
+const UR = () => S2.R * I0();
+/** Axe des temps : graduations rondes, ≤ 8, aucune ne tombe sur τ. */
+function axeT() {
+  const v = 6.4 * tau();
+  for (const e of [-4, -3, -2, -1, 0, 1]) for (const m of [1, 2, 2.5, 5]) {
+    const s = m * 10 ** e, n = Math.ceil(v / s - 1e-9), r = tau() / s;
+    if (n <= 8 && Math.abs(r - Math.round(r)) > 1e-6) return { max: n * s, pas: s, n };
+  }
+  return { max: v, pas: v / 5, n: 5 };
+}
+function axeU() { const m = Math.max(UR(), 1e-6), p = m > 6 ? 2 : m > 3 ? 1 : .5; return { max: (Math.floor(m / p + 1e-9) + 1) * p, pas: p }; }
+const ms = s => fx(s * 1000, 2);
+const ETAPES = {
+  montage: [
+    { nom: 'montage', anim: .6, motif: 'le montage : positions 1 et 2', bulle: () => 'Le montage : un générateur, un interrupteur à deux positions, R et la bobine.' },
+    { nom: 'fleches', anim: 0, motif: 'i, u_R, u_b en convention récepteur', bulle: () => 'On oriente : le courant i, puis les tensions.' },
+    { nom: 'oscillo', anim: 0, motif: 'voie 1 aux bornes de R, voie 2 aux bornes de la bobine, masse au point commun', bulle: () => 'On branche l’oscilloscope : u_R = R·i est l’image de i.' },
+  ],
+  etablissement: [
+    { nom: 'fermeture', anim: .7, motif: 'K en position 1 : le courant s’établit', bulle: () => 'K passe en position 1 !' },
+    { nom: 'courbe_i', anim: 4.0, motif: 'u_R(t), image de i, monte de 0 vers U_R', bulle: () => 'u_R(t) s’enregistre…' },
+    { nom: 'permanent', anim: 0, motif: 'régime permanent : i = I_0', bulle: () => 'Au bout d’un moment, u_R ne bouge plus.' },
+  ],
+  rupture: [
+    { nom: 'bascule', anim: .7, motif: 'K en position 2 : R et la bobine seuls', bulle: () => 'Le courant est établi ; K passe en position 2 !' },
+    { nom: 'courbe_rupture', anim: 4.0, motif: 'u_R(t) descend de U_R vers 0', bulle: () => 'u_R(t) s’enregistre…' },
+  ],
+};
+const MOTIFS = { fin: 'fin' }; for (const v of VUES) for (const e of ETAPES[v]) MOTIFS[e.nom] = e.motif;
+
+/* ── Géométrie (cadre 760 × 420) ─────────────────────────────────────── */
+const XG = 50, YH = 72, YB = 300, C1 = [140, 72], C2 = [140, 128], PV = [205, 100], LG = 66;
+const GEN = { x: 22, y: 150, w: 56, h: 80 }, RES = { x: 230, y: 91, w: 70, h: 18 }, XC = 360, YM = 130, YV2 = 270;
+const BOB = { x: 228, y: 186, w: 76, h: 24 };
+const CAS = { x: 432, y: 38, w: 320, h: 300 }, ECR = { x: 466, y: 48, w: 278, h: 226 }, O = { x: 498, y: 246, w: 222, h: 166 };
+const V1 = [446, 80], MS = [446, YM], V2 = [446, YV2], NV1 = 218;
+let MO = null;
+const PX = t => O.x + t * O.w / axeT().max, PY = u => O.y - u * O.h / axeU().max;
+function levier() {
+  const S = MO.S;
+  if (S.vue === 'montage') return 0;
+  if (S.vue === 'etablissement') return lisse(MO.p('fermeture'));
+  return 1 - lisse(MO.p('bascule'));
+}
+const positionK = () => (levier() > .5 ? 1 : 2);
+/** Temps de l’écran (s), u_R affichée et i. */
+function tEcran() {
+  const S = MO.S, ax = axeT();
+  if (S.vue === 'etablissement') return MO.commence('courbe_i') ? ax.max * MO.p('courbe_i') : 0;
+  if (S.vue === 'rupture') return MO.commence('courbe_rupture') ? ax.max * MO.p('courbe_rupture') : 0;
+  return 0;
+}
+function uR() {
+  const S = MO.S, t = tEcran();
+  if (S.vue === 'etablissement') return MO.commence('courbe_i') ? UR() * (1 - Math.exp(-t / tau())) : 0;
+  if (S.vue === 'rupture') return MO.commence('courbe_rupture') ? UR() * Math.exp(-t / tau()) : UR();
+  return 0;
+}
+const iA = () => uR() / S2.R;
+const fR = r => `${r} Ω`;
+
+/* ── Peinture ────────────────────────────────────────────────────────── */
+function appareils(c, a) {
+  c.direct(() => {
+    const ctx = c.ctx;
+    Peint.oscillo(ctx, CAS.x, CAS.y, CAS.w, CAS.h, ECR, [[V1[0], V1[1]], [MS[0], MS[1], true], [V2[0], V2[1]]], a);
+    Peint.generateur(ctx, GEN.x, GEN.y, GEN.w, GEN.h, `${fx(S2.E, 1)}V`, a);
+    Peint.borne(ctx, XG, GEN.y, true, a); Peint.borne(ctx, XG, GEN.y + GEN.h, false, a);
+    Peint.resistor(ctx, RES.x, RES.y, RES.w, RES.h, S2.R, a);
+    Peint.bobine(ctx, BOB.x, BOB.y, BOB.w, BOB.h, a);
+    Peint.plot(ctx, C1[0], C1[1], a); Peint.plot(ctx, C2[0], C2[1], a);
+    const a1 = Math.atan2(C1[1] - PV[1], C1[0] - PV[0]), a2 = Math.atan2(C2[1] - PV[1], C2[0] - PV[0]), an = a2 + (a1 - a2) * levier();
+    if (a > .05) Peint.levier(ctx, PV[0], PV[1], PV[0] + LG * Math.cos(an), PV[1] + LG * Math.sin(an), a);
+  });
+}
+
+/* ── La craie ────────────────────────────────────────────────────────── */
+function fils(c) {
+  c.trait([[XG, GEN.y], [XG, YH], [C1[0], YH]], { largeur: 2 });
+  c.ligne(XG, GEN.y + GEN.h, XG, YB, { largeur: 2 });
+  c.ligne(C2[0], C2[1], C2[0], YB, { largeur: 2 });
+  c.ligne(XG, YB, XC, YB, { largeur: 2 });
+  c.ligne(PV[0], PV[1], RES.x, PV[1], { largeur: 2 });
+  c.trait([[RES.x + RES.w, PV[1]], [XC, PV[1]], [XC, 150]], { largeur: 2 });
+  symboleBobineV(c, XC, 150, YB, { hauteur: 76 });
+  c.point(C2[0], YB, 3.4);
+  c.texte('1', C1[0] - 10, C1[1] - 6, { couleur: 'vert', taille: 18, align: 'right' });
+  c.texte('2', C2[0] - 10, C2[1] + 16, { couleur: 'bleu', taille: 18, align: 'right' });
+  c.texte('K', PV[0] + 4, PV[1] + 26, { couleur: 'blanc', taille: 18 });
+  c.texte(`E = ${fx(S2.E, 1)} V`, 84, 196, { couleur: 'blanc', taille: 15, max: 52 });
+  c.texte(`R = ${fR(S2.R)}`, RES.x + RES.w / 2, 132, { couleur: 'blanc', taille: 15, align: 'center' });
+  c.texte('(L, r)', 352, 214, { couleur: 'blanc', taille: 15, align: 'right' });
+  c.texte(`L = ${fx(S2.L, 2)} H ; r = ${RB} Ω`, BOB.x + BOB.w / 2, 252, { couleur: 'blanc', taille: 14, align: 'center', max: 150 });
+}
+function fleches(c, sansI) {
+  if (!sansI) { c.fleche(310, PV[1], 344, PV[1], { couleur: 'blanc', largeur: 2, tete: 9 }); c.texte('i', 326, PV[1] - 8, { couleur: 'blanc', taille: 17, align: 'center' }); }
+  c.fleche(RES.x + RES.w, 78, RES.x, 78, { couleur: 'orange', largeur: 1.8, tete: 9 }); c.texte('u_R', RES.x + RES.w / 2, 70, { couleur: 'orange', taille: 17, align: 'center' });
+  c.fleche(398, 236, 398, 164, { couleur: 'violet', largeur: 1.8, tete: 9 }); c.texte('u_b', 404, 206, { couleur: 'violet', taille: 17 });
+}
+function filsOscillo(c) {
+  c.trait([[NV1, PV[1]], [NV1, 46], [428, 46], [428, V1[1]], [V1[0] - 7, V1[1]]], { largeur: 1.8 }); c.point(NV1, PV[1], 3.4);
+  c.ligne(XC, YM, MS[0] - 7, MS[1], { largeur: 1.8 }); c.point(XC, YM, 3.4);
+  c.ligne(XC, YV2, V2[0] - 7, V2[1], { largeur: 1.8 }); c.point(XC, YV2, 3.4);
+  c.texte('voie 1', 404, 72, { couleur: 'blanc', taille: 14, align: 'center' });
+  c.texte('masse', 404, YM - 7, { couleur: 'blanc', taille: 14, align: 'center' });
+  c.texte('voie 2', 404, YV2 - 7, { couleur: 'blanc', taille: 14, align: 'center' });
+}
+function axesEcran(c) {
+  const ax = axeT(), au = axeU(), tg = [], ug = [];
+  for (let k = 1; k <= ax.n; k++) { const v = k * ax.pas; tg.push([v / ax.max * O.w / (O.w + 12), k % 2 && ax.n > 6 ? null : ms(v)]); }
+  for (let v = au.pas; v <= au.max + 1e-9; v += au.pas) ug.push([v / au.max * O.h / (O.h + 12), fx(v, 1)]);
+  c.axe(O.x, O.y, O.x + O.w + 12, O.y, tg, { taille: 12 });
+  c.axe(O.x, O.y, O.x, O.y - O.h - 12, ug, { taille: 12, vertical: true });
+  c.texte('0', O.x - 6, O.y + 16, { couleur: 'faible', taille: 12, align: 'right' });
+  c.texte('u_R (V)', O.x + 8, O.y - O.h - 2, { couleur: 'blanc', taille: 15 });
+  c.texte('t (ms)', ECR.x + ECR.w - 6, O.y - 8, { couleur: 'blanc', taille: 14, align: 'right' });
+  c.texte('oscilloscope', CAS.x + CAS.w - 12, CAS.y + CAS.h - 12, { couleur: 'faible', taille: 13, align: 'right' });
+}
+
+/* ── Dessin ──────────────────────────────────────────────────────────── */
+function dessiner(c, M) {
+  MO = M; M.scene.cadre(23);
+  const v = M.S.vue;
+  c.texte(`Le circuit RL : ${TITRES[v]}`, 14, 28, { couleur: 'cyan', taille: 20 });
+  const a = v === 'montage' ? lisse(M.p('montage')) : 1;
+  appareils(c, a);
+  if (v === 'montage') {
+    M.etape(c, 'montage', () => {
+      fils(c); axesEcran(c);
+      c.texte('position 1 : le générateur est dans la maille (établissement)', 14, 330, { couleur: 'vert', taille: 15, max: 400 });
+      c.texte('position 2 : R et la bobine seuls (rupture)', 14, 352, { couleur: 'bleu', taille: 15, max: 400 });
+    });
+    M.etape(c, 'fleches', () => { fleches(c); c.texte('convention récepteur : u_R et u_b opposées à i', 14, 376, { couleur: 'blanc', taille: 15, max: 400 }); });
+    M.etape(c, 'oscillo', () => {
+      filsOscillo(c);
+      c.texte('voie 1 : u_R = R·i, image de i ; masse au point commun', 14, 400, { couleur: 'orange', taille: 15, max: 400 });
+      c.texte('voie 1 : u_R = R·i', CAS.x + 14, CAS.y + CAS.h - 36, { couleur: 'orange', taille: 14 });
+      c.texte('image de i', CAS.x + 14, CAS.y + CAS.h - 16, { couleur: 'orange', taille: 14 });
+    });
+  } else {
+    fils(c); fleches(c, true); filsOscillo(c); axesEcran(c);
+    c.texte('voie 1 : u_R = R·i', CAS.x + 14, CAS.y + CAS.h - 36, { couleur: 'orange', taille: 14 });
+    c.texte('image de i', CAS.x + 14, CAS.y + CAS.h - 16, { couleur: 'orange', taille: 14 });
+    // La flèche i : verte quand le courant s’établit (K en 1), bleue pendant la rupture (même sens).
+    c.direct(() => {
+      const passe = v === 'etablissement' ? M.commence('fermeture') && positionK() === 1 : true;
+      const col = !passe ? 'faible' : v === 'etablissement' ? 'vert' : (M.commence('bascule') ? 'bleu' : 'vert');
+      c.fleche(310, PV[1], 344, PV[1], { couleur: col, largeur: col === 'faible' ? 2 : 2.8, tete: 9 }); c.texte('i', 326, PV[1] - 8, { couleur: col, taille: 17, align: 'center' });
+      const t = tEcran(), U = UR(), T = tau();
+      if (v === 'etablissement' && M.commence('courbe_i')) c.courbe(u => [PX(u * t), PY(U * (1 - Math.exp(-u * t / T)))], 90, { couleur: 'vert', largeur: 2.6 });
+      if (v === 'rupture') {
+        if (M.commence('courbe_rupture')) c.courbe(u => [PX(u * t), PY(U * Math.exp(-u * t / T))], 90, { couleur: 'bleu', largeur: 2.6 });
+        else c.point(PX(0), PY(U), 4.5, 'bleu');
+      }
+      c.texte(`u_R = ${fr(uR(), 2)} V`, ECR.x + ECR.w - 10, ECR.y + 22, { couleur: 'blanc', taille: 15, align: 'right' });
+    });
+    if (v === 'etablissement') {
+      M.etape(c, 'fermeture', () => c.texte('K en position 1 : le courant s’établit', 14, 338, { couleur: 'vert', taille: 16, max: 400 }));
+      M.etape(c, 'courbe_i', () => c.texte(`u_R = R·i monte de 0 vers ${fx(UR(), 2)} V, comme i`, 14, 364, { couleur: 'vert', taille: 16, max: 400 }));
+      M.etape(c, 'permanent', () => {
+        const ax = axeT(), x5 = PX(Math.min(5 * tau(), ax.max));
+        c.ligne(O.x, PY(UR()), O.x + O.w, PY(UR()), { couleur: 'blanc', largeur: 1.4, pointille: [6, 5] });
+        c.texte(`U_R = ${fx(UR(), 2)} V`, O.x + 6, PY(UR()) - 6, { couleur: 'blanc', taille: 14 });
+        c.cote(O.x, O.y - 30, x5, O.y - 30, '', { couleur: 'orange', largeur: 1.4 });
+        c.texte('régime transitoire', (O.x + x5) / 2 + 16, O.y - 38, { couleur: 'orange', taille: 14, align: 'center' });
+        c.texte('régime permanent', ECR.x + ECR.w - 10, PY(UR()) + 22, { couleur: 'vert', taille: 14, align: 'right' });
+        c.texte(`régime permanent : I_0 = E/(R + r) = ${fx(I0() * 1000, 1)} mA`, 14, 390, { couleur: 'vert', taille: 16, max: 400 });
+        c.texte('avant : régime transitoire (i varie)', 14, 412, { couleur: 'orange', taille: 15, max: 400 });
+      });
+    } else {
+      c.texte(`au départ : u_R = ${fx(UR(), 2)} V, i = I_0 = ${fx(I0() * 1000, 1)} mA`, 14, 330, { couleur: 'blanc', taille: 15, max: 400 });
+      M.etape(c, 'bascule', () => c.texte('K en position 2 : R et la bobine seuls, sans générateur', 14, 356, { couleur: 'bleu', taille: 16, max: 400 }));
+      M.etape(c, 'courbe_rupture', () => {
+        c.texte(`u_R descend de ${fx(UR(), 2)} V vers 0 : i ne s’annule pas d’un coup`, 14, 382, { couleur: 'bleu', taille: 16, max: 400 });
+        c.texte('i garde son sens : la bobine fait durer le courant', 14, 406, { couleur: 'bleu', taille: 15, max: 400 });
+      });
+    }
+  }
+  reperes(c, M);
+  return c.fin();
+}
+function reperes(c, M) {
+  const v = M.S.vue, ici = w => (v === w ? '' : ` (vue « ${w} »)`), ax = axeT(), x5 = PX(Math.min(5 * tau(), ax.max));
+  c.repere('generateur', GEN.x - 4, GEN.y - 6, 120, GEN.h + 12, `le générateur : E = ${fx(S2.E, 1)} V`);
+  c.repere('interrupteur', C1[0] - 22, 56, PV[0] - C1[0] + 50, 96, `l’interrupteur K, en position ${positionK()} (poignée : clic pour basculer)`);
+  c.repere('position_1', C1[0] - 24, C1[1] - 24, 34, 32, 'position 1 : le générateur est dans la maille (établissement)');
+  c.repere('position_2', C2[0] - 24, C2[1] - 8, 34, 32, 'position 2 : R et la bobine seuls (rupture)');
+  c.repere('resistance', RES.x - 4, RES.y - 4, RES.w + 8, 46, `le résistor : R = ${fR(S2.R)}`);
+  c.repere('bobine', BOB.x - 6, 150, XC + 70 - BOB.x, 110, `la bobine (L = ${fx(S2.L, 2)} H ; r = ${RB} Ω) : la vraie et son symbole`);
+  c.repere('fleche_i', 306, PV[1] - 26, 42, 34, 'la flèche du courant i');
+  c.repere('fleche_uR', RES.x - 6, 56, RES.w + 12, 30, 'la flèche u_R, opposée à i (convention récepteur)');
+  c.repere('fleche_ub', 388, 158, 40, 84, 'la flèche u_b, opposée à i (convention récepteur)');
+  c.repere('voie_1', 380, 56, 76, 34, 'la voie 1, aux bornes de R : u_R = R·i, image de i');
+  c.repere('voie_2', 380, YV2 - 24, 76, 34, 'la voie 2, aux bornes de la bobine');
+  c.repere('masse', 380, YM - 24, 76, 34, 'la masse, au point commun de R et de la bobine');
+  c.repere('ecran', ECR.x, ECR.y, ECR.w, ECR.h, 'l’écran de l’oscilloscope : u_R(t)');
+  c.repere('courbe', O.x, O.y - O.h, O.w, O.h, v === 'rupture' ? 'la courbe u_R(t) de la rupture (bleue)' : `la courbe u_R(t) de l’établissement (verte)${ici('etablissement')}`);
+  c.repere('regime_transitoire', O.x, PY(UR()), x5 - O.x, O.y - PY(UR()), `le régime transitoire : i varie${ici('etablissement')}`);
+  c.repere('regime_permanent', x5, PY(UR()) - 22, O.x + O.w - x5, 56, `le régime permanent : i = I₀ = ${fx(I0() * 1000, 1)} mA${ici('etablissement')}`);
+}
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
+function voir(M) {
+  const v = M.S.vue, T = tau(), ax = axeT(), au = axeU();
+  const m = [`Vue « ${v} » (${TITRES[v]}), ${M.etat()}. E = ${fx(S2.E, 1)} V, R = ${fR(S2.R)}, bobine L = ${fx(S2.L, 2)} H et r = ${RB} Ω (I₀ = E/(R + r) = ${fx(I0() * 1000, 1)} mA ; U_R = R·I₀ = ${fx(UR(), 2)} V ; τ = L/(R + r) = ${ms(T)} ms, non écrit au tableau).`];
+  m.push(`Montage : générateur (boîtier peint) ; interrupteur K en position ${positionK()} (1 : le générateur est dans la maille ; 2 : R et la bobine seuls) ; résistor peint (bandes de couleur) ; bobine peinte (spires de cuivre) à côté de son symbole à la craie ; à droite l’oscilloscope, axes t (ms, 0 à ${ms(ax.max)}, pas ${ms(ax.pas)}) et u_R (V, 0 à ${fx(au.max, 1)}).`);
+  const e = [];
+  if (v === 'montage') {
+    if (M.vu('montage')) e.push('le circuit, « 1 » et « 2 » aux deux positions de K, « position 1 : le générateur est dans la maille (établissement) », « position 2 : R et la bobine seuls (rupture) »');
+    if (M.vu('fleches')) e.push('les flèches i (vers la bobine), u_R et u_b opposées à i, « convention récepteur : u_R et u_b opposées à i »');
+    if (M.vu('oscillo')) e.push('les fils de l’oscilloscope : voie 1 à la borne de R côté K, masse au point commun de R et de la bobine, voie 2 à l’autre borne de la bobine (avec cette masse, la voie 2 donne −u_b) ; « voie 1 : u_R = R·i, image de i ; masse au point commun »');
+  } else {
+    const t = tEcran();
+    m.push(`Écran : t = ${ms(t)} ms ; u_R = ${fr(uR(), 2)} V ; i = u_R/R = ${fr(iA() * 1000, 1)} mA. Flèche i ${v === 'etablissement' ? (M.commence('fermeture') && positionK() === 1 ? 'allumée en vert' : 'éteinte') : (M.commence('bascule') ? 'en bleu, même sens qu’avant' : 'en vert (courant établi)')}.`);
+    if (v === 'etablissement') {
+      if (M.commence('courbe_i')) m.push(`Courbe verte u_R(t) = U_R(1 − e^{−t/τ}) tracée jusqu’à t = ${ms(t)} ms.`);
+      if (M.vu('fermeture')) e.push('« K en position 1 : le courant s’établit »');
+      if (M.vu('courbe_i')) e.push(`« u_R = R·i monte de 0 vers ${fx(UR(), 2)} V, comme i »`);
+      if (M.vu('permanent')) e.push(`palier U_R = ${fx(UR(), 2)} V en pointillé, « régime transitoire » (de 0 à 5τ = ${ms(5 * T)} ms), « régime permanent », « régime permanent : I₀ = E/(R + r) = ${fx(I0() * 1000, 1)} mA », « avant : régime transitoire (i varie) »`);
+    } else {
+      e.push(`« au départ : u_R = ${fx(UR(), 2)} V, i = I₀ = ${fx(I0() * 1000, 1)} mA »`);
+      if (M.commence('courbe_rupture')) m.push(`Courbe bleue u_R(t) = U_R·e^{−t/τ} tracée jusqu’à t = ${ms(t)} ms.`);
+      else m.push(`Point bleu à u_R = ${fx(UR(), 2)} V au début de l’écran.`);
+      if (M.vu('bascule')) e.push('« K en position 2 : R et la bobine seuls, sans générateur »');
+      if (M.vu('courbe_rupture')) e.push(`« u_R descend de ${fx(UR(), 2)} V vers 0 : i ne s’annule pas d’un coup », « i garde son sens : la bobine fait durer le courant »`);
+    }
+  }
+  if (e.length) m.push(`Écrit à la craie : ${e.join(' ; ')}.`);
+  return m.join(' ');
+}
+const params = M => ({ vue: M.S.vue, K: positionK(), R_ohm: S2.R, L_H: S2.L, r_ohm: RB, E: S2.E, I0_mA: +(I0() * 1000).toFixed(2), tau_ms: +(tau() * 1000).toFixed(3), t_ecran_ms: +(tEcran() * 1000).toFixed(3), u_R_V: +uR().toFixed(3), i_mA: +(iA() * 1000).toFixed(2) });
+const MOT = Moteur({
+  id: 'dipole_rl_circuit', titre: 'Le circuit RL : montage, oscilloscope, établissement et rupture du courant', vues: VUES, titres: TITRES,
+  etapes: v => ETAPES[v], motifs: MOTIFS, dessiner, voir, params,
+  depart: M => ({ montage: 'Construisons le montage RL.', etablissement: 'Aucun courant, K est en position 2. On bascule en 1…', rupture: `Le courant est établi (i = I₀ = ${fx(I0() * 1000, 1)} mA). On bascule en 2…` })[M.S.vue],
+  messageFin: M => ({ montage: 'Le montage : K en 1, le courant s’établit ; en 2, il est rompu. La voie 1 montre u_R = R·i, image de i.',
+    etablissement: `Établissement : u_R monte de 0 à ${fx(UR(), 2)} V, donc i monte de 0 à I₀ = ${fx(I0() * 1000, 1)} mA ; régime transitoire, puis régime permanent.`,
+    rupture: 'Rupture : u_R descend vers 0 ; i ne s’annule pas d’un coup et garde son sens.' })[M.S.vue],
+  appliquer: (p, M) => {
+    const r = {}; let change = false;
+    if (VUES.includes(p.vue)) r.vue = p.vue;
+    const nb = x => (x != null && x !== '' && Number.isFinite(+String(x).replace(',', '.')) ? +String(x).replace(',', '.') : null);
+    const R = nb(p.R_ohm), L = nb(p.L_H), E = nb(p.E), K = nb(p.K);
+    if (R !== null) { const v = clamp(Math.round(R), 20, 200); if (v !== S2.R) { S2.R = v; change = true; } }
+    if (L !== null) { const v = clamp(Math.round(L * 100) / 100, .02, .5); if (v !== S2.L) { S2.L = v; change = true; } }
+    if (E !== null) { const v = clamp(Math.round(E * 10) / 10, 1, 12); if (v !== S2.E) { S2.E = v; change = true; } }
+    if (K === 1 || K === 2) { r.vue = K === 1 ? 'etablissement' : 'rupture'; change = true; }
+    r.change = change || (r.vue && r.vue !== M.S.vue);
+    return r;
+  },
+  schema: { vue: VUES.join(' | ') + ' (change la vue et relance)', K: '1 | 2 (1 : vue etablissement, K bascule en 1 ; 2 : vue rupture, K bascule en 2 ; relance)', R_ohm: '20..200 (Ω, pas 1 ; relance)', L_H: '0.02..0.5 (H, pas 0,01 ; relance)', E: '1..12 (V, pas 0,1 ; relance)' },
+  texte: 'Le montage RL : générateur E, interrupteur K à deux positions (1 : le générateur est dans la maille ; 2 : R et la bobine seuls), résistor R, bobine (L, r) ; i, puis u_R et u_b en convention récepteur (flèches opposées à i). Oscilloscope : voie 1 aux bornes de R (u_R = R·i, image de i), voie 2 aux bornes de la bobine, masse au point commun. Établissement (K en 1) : u_R monte de 0 vers U_R = R·E/(R + r) = 5 V, donc i monte de 0 vers I₀ = E/(R + r) = 100 mA ; régime transitoire puis régime permanent. Rupture (K en 2) : u_R descend de 5 V vers 0, i ne s’annule pas d’un coup et garde son sens. Valeurs : E = 6 V, R = 50 Ω, L = 0,12 H, r = 10 Ω.',
+  explications: {
+    montage: [
+      { repere: 'generateur', texte: 'Le générateur de tension E.' },
+      { repere: 'position_1', texte: 'Position 1 : le générateur est dans la maille, le courant s’établit.' },
+      { repere: 'position_2', texte: 'Position 2 : R et la bobine seuls, le courant est rompu.' },
+      { repere: 'bobine', texte: 'La bobine, avec son inductance L et sa résistance r.' },
+      { repere: 'fleche_i', texte: 'On oriente le courant i.' },
+      { repere: 'fleche_uR', texte: 'u_R en convention récepteur : la flèche est opposée à i.' },
+      { repere: 'fleche_ub', texte: 'Pareil pour u_b.' },
+      { repere: 'voie_1', texte: 'La voie 1 aux bornes de R : u_R = R·i, c’est l’image de i.' },
+      { repere: 'masse', texte: 'La masse au point commun de R et de la bobine.' },
+      { repere: 'voie_2', texte: 'La voie 2 aux bornes de la bobine.' },
+    ],
+    etablissement: [
+      { repere: 'interrupteur', texte: 'K passe en position 1.' },
+      { repere: 'courbe', texte: 'u_R monte vite au début, puis de plus en plus lentement : i fait pareil.' },
+      { repere: 'regime_transitoire', texte: 'Tant que i varie, c’est le régime transitoire.' },
+      { repere: 'regime_permanent', texte: 'Puis i reste égal à I₀ : c’est le régime permanent.' },
+    ],
+    rupture: [
+      { repere: 'ecran', texte: 'Au départ le courant est établi : u_R = 5 V.' },
+      { repere: 'interrupteur', texte: 'K passe en position 2 : R et la bobine seuls.' },
+      { repere: 'courbe', texte: 'u_R descend de 5 V vers 0 : le courant ne s’annule pas d’un coup.' },
+      { repere: 'fleche_i', texte: 'Et il garde son sens.' },
+    ],
+  },
+});
+MOT.lancer();
+window.Tableau.glisser(MOT.scene.craie.canvas, {
+  toucher: (px, py) => { const [x, y] = MOT.scene.local(px, py); return x > C1[0] - 14 && x < PV[0] + 12 && y > 56 && y < 146 ? 'K' : null; },
+  bouger: () => {},
+  lacher: () => { MOT.setParameters({ K: positionK() === 1 ? 2 : 1 }); },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

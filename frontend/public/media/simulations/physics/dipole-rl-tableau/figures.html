@@ -1,0 +1,860 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Figures à la craie — dipôle RL</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="rl.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Une figure du cours sur le dipôle RL, écrite à la craie pas à pas"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Figures fixes du cours « Dipôle RL » (phys_ch7_dipole_RL, 12 novembre 2026), écrites à la craie pas à pas, comme un
+ * professeur au tableau : ?fig=<nom> (liste dans FIGS, noms exacts du contrat dipole_RL_contrat_simulations.md).
+ * Même architecture que dipole-rc-tableau/figures.html. Chaque figure : des étapes nommées (les moments), puis `fin`.
+ * Le tuteur fige l’écriture sur une étape (`play_until {moment}`) et montre chaque élément (`highlight {target}`) :
+ * le repère `figure`, et un repère par étape (même nom que l’étape).
+ * Écriture : indices par le kit (« u_b » → u avec b en indice), exposants par exposants.js (« e^{−t/τ} », « 10⁻³ »).
+ * Couleurs : vert = établissement du courant, bleu = rupture, jaune = surlignage (cadres des résultats) seulement.
+ * Ce qui est réel (générateur, résistor, bobine de cuivre, diode) est peint (règle 7) ; la physique reste à la craie.
+ * Rien n’est écrit sous y = 360 dans le cadre 760 × 420 : le bas reste libre pour la barre du lecteur.
+ * Valeurs vérifiées en Python (nationaux : outils/cours/notes/cours/dipole_RL_build/nationaux.md).
+ */
+const { bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const P = new URLSearchParams(location.search);
+
+/* Chaque figure : titre ; étapes dans l’ordre : [nom, motif (bulle « Arrêt sur image : … »), ce qui se voit (pour le tuteur)]. */
+const FIGS = {
+  fig_prerequis: { titre: 'Les outils du chapitre', etapes: [
+    ['ohm', 'la loi d’Ohm', 'Loi d’Ohm : u_R = R·i, en convention récepteur (à droite, un résistor peint, la flèche de i et la flèche de u_R en sens opposé).'],
+    ['additivite', 'l’additivité des tensions', 'Additivité des tensions dans le circuit série (R et bobine) : u_R + u_b = E.'],
+    ['derivee', 'la dérivée de e^(−t/τ)', 'Dérivée : (e^(−t/τ))’ = −(1/τ)·e^(−t/τ) ; utile pour vérifier la solution.'],
+    ['fin', 'figure complète', 'Conclusion : tout le chapitre s’appuie sur ces trois outils.']] },
+  fig_segments: { titre: 'Calculer u_b sur une courbe en segments', etapes: [
+    ['courbe', 'la courbe en deux segments', 'Graphe : axe t (ms) de 0 à 20, axe i (A) de 0 à 0,25 ; courbe verte i(t) en deux segments : de 0 à 0,2 A en 10 ms, puis palier à 0,2 A de 10 à 20 ms.'],
+    ['pente_1', 'la pente du 1er segment', 'Pente du premier segment (Δi = 0,2 A et Δt = 10 ms cotés) : di/dt = 0,2/0,01 = 20 A/s.'],
+    ['calcul_1', 'u_b = 2 V', 'Avec L = 0,1 H et r = 0 : u_b = L·di/dt = 0,1 × 20 = 2 V (encadré).'],
+    ['pente_2', 'la pente du palier', 'Sur le palier (de 10 à 20 ms) i = 0,2 A reste constant : di/dt = 0 (pente nulle).'],
+    ['calcul_2', 'u_b = 0', 'Sur le palier : u_b = L·di/dt = 0 (encadré).'],
+    ['fin', 'figure complète', 'Pour une bobine réelle, sur un palier : u_b = r·i.']] },
+  fig_2020N: { titre: 'La bobine en régime permanent (national 2020 N)', etapes: [
+    ['enonce', 'l’énoncé', 'Énoncé : R = 90 Ω, bobine (L, r) ; on enregistre i(t) et u_L(t).'],
+    ['courbes', 'les deux courbes', 'Deux graphes : à gauche i(t) en mA (t de 0 à 60 ms), courbe verte qui monte vers 100 mA (asymptote en pointillé) ; à droite u_L(t) en V, courbe verte qui part de 10 V et descend vers 1 V (asymptote en pointillé).'],
+    ['lecture', 'la lecture en régime permanent', 'Lecture en régime permanent : u_L = 1 V et I₀ = 100 mA = 0,1 A.'],
+    ['calcul', 'r = 10 Ω', 'i constant donc di/dt = 0 : u_L = r·I₀ ; encadré : r = u_L/I₀ = 1/0,1 = 10 Ω.'],
+    ['fin', 'figure complète', 'Puis, avec τ = 10 ms : L = τ·(R + r) = 0,01 × 100 = 1 H.']] },
+  fig_ed: { titre: 'L’équation différentielle de l’établissement', etapes: [
+    ['circuit', 'le circuit', 'Circuit à gauche : générateur E (peint), interrupteur K en position 1, résistor R (peint), bobine (L, r) (symbole et bobine de cuivre peinte) ; flèche verte de i ; flèches u_R et u_b en convention récepteur, E en convention générateur.'],
+    ['additivite', 'u_R + u_b = E', 'Additivité des tensions : u_R + u_b = E.'],
+    ['remplacer', 'on remplace', 'Avec u_R = R·i et u_b = L·di/dt + r·i : R·i + L·di/dt + r·i = E.'],
+    ['regrouper', 'on regroupe', 'On regroupe les termes en i : R·i + r·i = (R + r)·i.'],
+    ['resultat', 'l’équation encadrée', 'Encadré : L·di/dt + (R + r)·i = E, l’équation différentielle en i.'],
+    ['fin', 'figure complète', 'L’inconnue est la fonction i(t).']] },
+  fig_ed_formes: { titre: 'Deux écritures de la même équation', etapes: [
+    ['depart', 'L·di/dt + (R + r)·i = E', 'Départ, en haut : L·di/dt + (R + r)·i = E.'],
+    ['diviser_L', '÷ L', 'Flèche à gauche, on divise par L : di/dt + ((R + r)/L)·i = E/L.'],
+    ['diviser_R', '÷ (R + r)', 'Flèche à droite, on divise par (R + r) : (L/(R + r))·di/dt + i = E/(R + r).'],
+    ['lecture', 'τ et I₀', 'Dans la forme de droite, deux résultats encadrés : devant di/dt, τ = L/(R + r) ; à droite, I₀ = E/(R + r).'],
+    ['fin', 'figure complète', 'Dans la forme de gauche, le coefficient de i vaut (R + r)/L = 1/τ.']] },
+  fig_ed_uR: { titre: 'L’équation différentielle en u_R', etapes: [
+    ['relations', 'i = u_R/R', 'Relations : i = u_R/R ; di/dt = (1/R)·du_R/dt.'],
+    ['remplacer', 'on remplace', 'Dans L·di/dt + (R + r)·i = E : (L/R)·du_R/dt + ((R + r)/R)·u_R = E.'],
+    ['multiplier', '× R/L', 'Flèche vers le bas : on multiplie tout par R/L.'],
+    ['resultat', 'du_R/dt + ((R + r)/L)·u_R = R·E/L', 'Encadré : du_R/dt + ((R + r)/L)·u_R = R·E/L.'],
+    ['fin', 'figure complète', 'En orange : à droite c’est R·E/L, pas E/L.']] },
+  fig_2021R: { titre: 'Établir l’équation (national 2021 R)', etapes: [
+    ['enonce', 'l’énoncé', 'Énoncé : E = 6 V ; R₂ = 95 Ω ; bobine (L, r) (bobine de cuivre peinte) ; montrer que di/dt + (1/τ)·i = E/L et exprimer τ.'],
+    ['additivite', 'u_R2 + u_b = E', '1. Additivité : u_R2 + u_b = E.'],
+    ['remplacer', 'on remplace', '2. On remplace : R₂·i + L·di/dt + r·i = E, donc L·di/dt + (R₂ + r)·i = E.'],
+    ['resultat', 'di/dt + (1/τ)·i = E/L', '3. On divise par L : di/dt + ((R₂ + r)/L)·i = E/L ; encadré : di/dt + (1/τ)·i = E/L.'],
+    ['tau', 'τ = L/(R₂ + r)', 'Encadré : τ = L/(R₂ + r).'],
+    ['fin', 'figure complète', 'Avec τ = 5,1 ms : L = τ·(R₂ + r) = 5,1·10⁻³ × 100 = 0,51 H.']] },
+  fig_2019R: { titre: 'Quelle courbe est u_R ? (national 2019 R)', etapes: [
+    ['enonce', 'l’énoncé', 'Énoncé : E = 10 V ; R = 40 Ω ; bobine (L, r).'],
+    ['courbes', 'les deux courbes', 'Graphe : axe t (ms) de 0 à 60, axe u (V) de 0 à 12 ; courbe (1) orange qui part de 10 V et descend vers 2 V ; courbe (2) verte qui part de 0 et monte vers 8 V.'],
+    ['origine', 'u_R(0) = 0', 'i(0) = 0 donc u_R(0) = R·i(0) = 0 : la courbe (2), qui part de l’origine, est u_R (point marqué à l’origine).'],
+    ['permanent', 'U_R = 8 V', 'Régime permanent : U_R = 8 V (pointillé à 8 V sur le graphe).'],
+    ['r', 'r = 10 Ω', 'U_R = R·E/(R + r), donc r = R·(E/U_R − 1) = 40 × (10/8 − 1) ; encadré : r = 10 Ω.'],
+    ['fin', 'figure complète', 'La courbe (1) est u_b : elle part de E = 10 V et finit à r·I₀ = 2 V.']] },
+  fig_derivee_exp: { titre: 'La dérivée de l’exponentielle', etapes: [
+    ['regle', '(e^(at))’ = a·e^(at)', 'Règle encadrée : (e^(at))’ = a·e^(at).'],
+    ['exemple', '(e^(−t/τ))’', 'Exemple avec a = −1/τ : (e^(−t/τ))’ = −(1/τ)·e^(−t/τ).'],
+    ['e_zero', 'e⁰ = 1', 'e⁰ = 1 (à t = 0).'],
+    ['limite', 'e^(−t/τ) → 0', 'e^(−t/τ) → 0 sans jamais s’annuler ; à droite, la courbe de e^(−t/τ) qui part de 1 et descend vers 0.'],
+    ['fin', 'figure complète', 'Au bout de 5τ : e⁻⁵ ≈ 0,007, donc i ≈ 0,99·I₀.']] },
+  fig_resolution: { titre: 'Résoudre l’équation de l’établissement', etapes: [
+    ['forme', 'i = A(1 − e^(−t/τ))', 'Équation à résoudre (rappel en haut à droite) : L·di/dt + (R + r)·i = E ; on cherche i = A(1 − e^(−t/τ)).'],
+    ['deriver', 'la dérivée', 'di/dt = (A/τ)·e^(−t/τ).'],
+    ['remplacer', 'on remplace', 'L·(A/τ)·e^(−t/τ) + (R + r)·A(1 − e^(−t/τ)) = E.'],
+    ['factoriser', 'on factorise', 'A·e^(−t/τ)(L/τ − (R + r)) + (R + r)·A = E.'],
+    ['accolade', 'les deux conditions', 'Vrai pour tout t : accolade L/τ − (R + r) = 0 et (R + r)·A = E.'],
+    ['resultat', 'τ = L/(R + r) ; A = I₀', 'Encadré : τ = L/(R + r) ; A = E/(R + r) = I₀.'],
+    ['fin', 'figure complète', 'Donc i(t) = I₀(1 − e^(−t/τ)).']] },
+  fig_dimension: { titre: 'τ = L/(R + r) est un temps', etapes: [
+    ['L', '[L] = [U]·[T]/[I]', 'De u_b = L·di/dt : [L] = [U]·[T]/[I].'],
+    ['R', '[R] = [U]/[I]', 'De u_R = R·i : [R] = [U]/[I].'],
+    ['quotient', '[τ] = [T]', '[L]/[R] = ([U]·[T]/[I])·([I]/[U]) ; encadré : [τ] = [L]/[R] = [T] : τ est un temps.'],
+    ['fin', 'figure complète', 'En secondes : L = 0,12 H et R + r = 60 Ω donnent τ = 0,12/60 = 2·10⁻³ s = 2 ms.']] },
+  fig_ed_rupture: { titre: 'L’équation différentielle de la rupture', etapes: [
+    ['circuit', 'K en position 2', 'Circuit à gauche : interrupteur K en position 2, le générateur E n’est plus dans la maille ; maille R + bobine (L, r) ; flèches bleues de i, u_R et u_b (convention récepteur).'],
+    ['additivite', 'u_R + u_b = 0', 'Additivité : u_R + u_b = 0 (plus de générateur).'],
+    ['resultat', 'L·di/dt + (R + r)·i = 0', 'R·i + L·di/dt + r·i = 0 ; encadré en bleu : L·di/dt + (R + r)·i = 0.'],
+    ['fin', 'figure complète', 'Même équation, avec 0 à droite : i tend vers 0 ; i(t) = I₀·e^(−t/τ).']] },
+  fig_2025R: { titre: 'La surtension à l’ouverture (national 2025 R)', etapes: [
+    ['enonce', 'l’énoncé', 'Énoncé : E = 10 V ; R = 100 Ω ; bobine idéale (r = 0) ; diode et R₁ = 1 kΩ en parallèle sur la bobine. Schéma à gauche : K ouvert, bobine (symbole et bobine peinte), diode (symbole et diode noire à bague peinte) et R₁ (peint), flèches bleues de i, u_b et u_R1.'],
+    ['continuite', 'i(0⁺) = I₀ = 0,1 A', 'Le courant de la bobine est continu : i(0⁺) = I₀ = E/R = 10/100 = 0,1 A.'],
+    ['uR1', 'u_R1 = 100 V', 'u_R1 = R₁·i = 1000 × 0,1 = 100 V.'],
+    ['maille', 'u_b + u_R1 = 0', 'Maille bobine–diode–R₁ (diode passante) : u_b + u_R1 = 0.'],
+    ['resultat', 'u_b = −100 V', 'Encadré en bleu : u_b = −100 V.'],
+    ['fin', 'figure complète', 'En orange : surtension, 10 fois E ; la diode protège l’interrupteur.']] },
+  fig_r_L: { titre: 'Trouver r et L à partir des courbes', etapes: [
+    ['donnees', 'les données', 'Données encadrées : E = 6 V ; R = 50 Ω ; U_R max = 5 V ; τ = 2 ms (à droite, une bobine de cuivre peinte : L ? r ?).'],
+    ['I0', 'I₀ = 0,1 A', 'En régime permanent U_R = R·I₀ : I₀ = U_R/R = 5/50 = 0,1 A.'],
+    ['r', 'r = 10 Ω', 'Avec I₀ = E/(R + r) : r = E/I₀ − R = 6/0,1 − 50 = 10 Ω.'],
+    ['L', 'L = 0,12 H', 'τ = L/(R + r), encadré : L = τ·(R + r) = 2·10⁻³ × 60 = 0,12 H.'],
+    ['fin', 'figure complète', 'En orange : convertir ms → s et mA → A avant de calculer.']] },
+  fig_2022R: { titre: 'Sujet national 2022 R', etapes: [
+    ['enonce', 'l’énoncé', 'Énoncé : E = 10 V ; R = 490 Ω ; bobine (L₀, r).'],
+    ['courbe', 'la courbe u_R(t)', 'Graphe : axe t (ms) de 0 à 6, axe u_R (V) de 0 à 12 ; courbe verte qui monte vers U₀ = 9,8 V (asymptote en pointillé) ; tangente à l’origine qui coupe l’asymptote à t = τ = 1 ms.'],
+    ['I0', 'I₀ = 0,02 A', 'I₀ = U₀/R = 9,8/490 = 0,02 A.'],
+    ['r', 'r = 10 Ω', 'r = (E − U₀)/I₀ = 0,2/0,02 = 10 Ω.'],
+    ['L', 'L₀ = 0,5 H', 'Encadré : L₀ = τ·(R + r) = 10⁻³ × 500 = 0,5 H.'],
+    ['courbes', 'quelle courbe pour L₁ = 2L₀ ?', 'Quatre courbes C₁ à C₄ sur le graphe : C₁ (la mesure, τ = 1 ms), C₂ (même palier 9,8 V, τ = 2 ms, en vert), C₃ (même palier, plus rapide), C₄ (autre palier). Pour L₁ = 2L₀ : même palier et τ = 2 ms, donc C₂.'],
+    ['fin', 'figure complète', 'U₀ = R·E/(R + r) ne dépend pas de L : on élimine C₄ ; τ double : on garde C₂.']] },
+  fig_2024N: { titre: 'La droite di/dt = f(i) (national 2024 N)', etapes: [
+    ['enonce', 'l’énoncé', 'Énoncé : E = 6 V ; R₁ ; bobine (L, r) : di/dt = −((R₁ + r)/L)·i + E/L.'],
+    ['droite', 'la droite di/dt = f(i)', 'Graphe : axe i (mA) de 0 à 7, axe di/dt (10³ A/s) de 0 à 3,5 ; droite verte de (0 ; 3·10³ A/s) à (6 mA ; 0).'],
+    ['ordonnee', 'E/L = 3·10³ A/s', 'Ordonnée à l’origine (point marqué) : E/L = 3·10³ A/s.'],
+    ['L', 'L = 2 mH', 'Encadré : L = E/(3·10³) = 6/(3·10³) = 2·10⁻³ H = 2 mH.'],
+    ['pente', 'pente = −5·10⁵ s⁻¹', 'Pente = (0 − 3·10³)/(6·10⁻³) = −5·10⁵ s⁻¹ (i en mA : 6 mA = 6·10⁻³ A).'],
+    ['tau', 'τ = 2 µs', 'Pente = −1/τ ; encadré : τ = 1/(5·10⁵) = 2·10⁻⁶ s = 2 µs.'],
+    ['fin', 'figure complète', 'Abscisse à l’origine : I₀ = 6 mA = E/(R₁ + r).']] },
+};
+let fig = FIGS[P.get('fig')] ? P.get('fig') : 'fig_prerequis';
+const VITESSE = 1.6;                              // l’écriture va un peu plus vite que la craie du kit
+const S = { tw: 0, running: true, pause: false, fait: false, jusqua: null, motif: '', emis: 0 };
+let M = {};                                       // étape → instant d’écriture (s), relevé pendant le dessin
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+const craie = scene.craie;
+/* Même cadre que commun.js, mais l’écriture suit l’horloge de la figure (S.tw) : le tuteur peut la figer sur une étape. */
+scene.cadre = function (graine) {
+  const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  craie.debut(graine, S.tw);
+  const s = Math.min(W / VW, H / VH);
+  scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
+  craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
+  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+  return craie;
+};
+let MM = {};
+const marque = (c, nom) => { MM[nom] = c.cur; };
+/* Une partie peinte apparaît quand l’écriture arrive à elle, d’un coup. */
+const peindre = (c, fn) => { if (c.t >= c.cur) c.direct(() => { c.ctx.save(); try { fn(c.ctx); } finally { c.ctx.restore(); } }); };
+const vu = nom => M[nom] !== undefined && S.tw >= M[nom] - 1e-6;
+
+// ───────────────────────── Le rendu « réel » (peint, pour l’œil ; la physique reste à la craie) ─────────────────────────
+function arrondi(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+/** Bobine : fil de cuivre enroulé en spires orangées sur un mandrin (deux flasques), deux pattes ; `noyau` = barreau de fer gris. (x, y) = haut gauche. */
+function bobinePeinte(ctx, x, y, w = 56, h = 22, noyau = false) {
+  if (noyau) {
+    const g = ctx.createLinearGradient(0, y + h * .3, 0, y + h * .7); g.addColorStop(0, '#e5e7eb'); g.addColorStop(.5, '#9ca3af'); g.addColorStop(1, '#4b5563');
+    ctx.fillStyle = g; ctx.fillRect(x - 12, y + h * .32, w + 24, h * .36);
+  }
+  ctx.strokeStyle = 'rgba(234,88,12,.9)'; ctx.lineWidth = 1.5; ctx.beginPath();
+  ctx.moveTo(x + 7, y + h); ctx.lineTo(x + 5, y + h + 9); ctx.moveTo(x + w - 7, y + h); ctx.lineTo(x + w - 5, y + h + 9); ctx.stroke();
+  const g = ctx.createLinearGradient(0, y, 0, y + h);
+  g.addColorStop(0, '#7c2d12'); g.addColorStop(.22, '#ea8a1a'); g.addColorStop(.42, '#fcd34d'); g.addColorStop(.68, '#c2410c'); g.addColorStop(1, '#6b2410');
+  ctx.fillStyle = g; ctx.fillRect(x + 5, y, w - 10, h);
+  ctx.strokeStyle = 'rgba(67,20,7,.55)'; ctx.lineWidth = 1; ctx.beginPath();
+  for (let sx = x + 7; sx < x + w - 6; sx += 3) { ctx.moveTo(sx, y + .5); ctx.lineTo(sx + 1.3, y + h - .5); }
+  ctx.stroke();
+  for (const fx of [x, x + w - 5]) {
+    const f = ctx.createLinearGradient(fx, 0, fx + 5, 0); f.addColorStop(0, '#efe0bd'); f.addColorStop(1, '#a8895a');
+    ctx.fillStyle = f; arrondi(ctx, fx, y - 4, 5, h + 8, 1.5); ctx.fill();
+  }
+}
+/** Résistor : corps beige arrondi, quatre bandes de couleur. Centre (cx, cy). */
+function resistorPeint(ctx, cx, cy, L = 44, e = 13, vertical = false) {
+  ctx.save(); ctx.translate(cx, cy); if (vertical) ctx.rotate(Math.PI / 2);
+  const g = ctx.createLinearGradient(0, -e / 2, 0, e / 2);
+  g.addColorStop(0, '#f5deb3'); g.addColorStop(.45, '#d6b98c'); g.addColorStop(1, '#8b6f47');
+  arrondi(ctx, -L / 2, -e / 2, L, e, e / 2.2); ctx.fillStyle = g; ctx.fill();
+  [['#16a34a', -.28], ['#111827', -.12], ['#111827', .04], ['#d4a017', .3]].forEach(([k, f]) => { ctx.fillStyle = k; ctx.fillRect(f * L - 2, -e / 2 + 1, 4, e - 2); });
+  ctx.restore();
+}
+/** Générateur : boîtier sombre, petit écran, bornes rouge (+) et noire (−). (x, y) = haut gauche. */
+function generateurPeint(ctx, x, y, w = 46, h = 62) {
+  const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#4b5563'); g.addColorStop(1, '#1f2937');
+  arrondi(ctx, x, y, w, h, 6); ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.fillStyle = '#0f2a1f'; arrondi(ctx, x + 7, y + 8, w - 14, 13, 2); ctx.fill();
+  ctx.fillStyle = 'rgba(74,222,128,.75)'; ctx.fillRect(x + 10, y + 13, w - 20, 3);
+  const borne = (bx, by, k) => { const r = ctx.createRadialGradient(bx - 1.5, by - 1.5, .5, bx, by, 5); r.addColorStop(0, '#fff'); r.addColorStop(.35, k); r.addColorStop(1, '#000'); ctx.fillStyle = r; ctx.beginPath(); ctx.arc(bx, by, 4.6, 0, 7); ctx.fill(); };
+  borne(x + w * .3, y + h - 14, '#dc2626'); borne(x + w * .7, y + h - 14, '#111827');
+}
+/** Diode : petit cylindre noir à bague claire (côté cathode), deux pattes. `haut` : la bague (cathode) vers le haut. */
+function diodePeinte(ctx, cx, cy, haut = true) {
+  ctx.save(); ctx.translate(cx, cy); ctx.rotate(haut ? -Math.PI / 2 : Math.PI / 2);
+  ctx.strokeStyle = 'rgba(203,213,225,.8)'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(-20, 0); ctx.lineTo(-9, 0); ctx.moveTo(9, 0); ctx.lineTo(20, 0); ctx.stroke();
+  const g = ctx.createLinearGradient(0, -5, 0, 5); g.addColorStop(0, '#4b5563'); g.addColorStop(.4, '#111827'); g.addColorStop(1, '#030712');
+  arrondi(ctx, -10, -5, 20, 10, 3); ctx.fillStyle = g; ctx.fill();
+  ctx.fillStyle = '#d1d5db'; ctx.fillRect(4, -5, 3, 10);
+  ctx.restore();
+}
+/** Quadrillage léger d’un graphe (comme du papier millimétré). */
+function quadrillage(ctx, X, Y, xmax, ymax, dx, dy) {
+  ctx.strokeStyle = 'rgba(96,165,250,.15)'; ctx.lineWidth = 1; ctx.beginPath();
+  for (let v = 0; v <= xmax + 1e-9; v += dx) { ctx.moveTo(X(v), Y(0)); ctx.lineTo(X(v), Y(ymax)); }
+  for (let v = 0; v <= ymax + 1e-9; v += dy) { ctx.moveTo(X(0), Y(v)); ctx.lineTo(X(xmax), Y(v)); }
+  ctx.stroke();
+}
+
+// ───────────────────────── Morceaux de craie ─────────────────────────
+const EXP = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+/** Largeur d’un texte de craie (indices et exposants plus petits, comme le kit et exposants.js les écrivent). */
+function L(c, s, t = 24) {
+  s = String(s).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => EXP[ch]).join('') + '}');
+  return window.Tableau.Craie.segments(s).reduce((w, g) => w + c.largeurTexte(g.t, g.sub || g.sup ? t * .62 : t), 0);
+}
+/** Texte centré entouré d’un cadre (le résultat à retenir ; le cadre jaune = surlignage). Renvoie le rectangle. */
+function encadre(c, s, x, y, o = {}) {
+  const t = o.taille ?? 26, w = L(c, s, t) + 26, x0 = o.align === 'left' ? x : x - w / 2, cx = x0 + w / 2;
+  c.texte(s, cx, y, { couleur: o.couleur ?? 'vert', taille: t, align: 'center' });
+  c.rect(x0, y - t * .95, w, t * 1.42, { couleur: o.cadre ?? 'jaune', arrondi: 8, largeur: 2 });
+  return { x: x0, y: y - t * .95, w, h: t * 1.42 };
+}
+/** Titre de la figure, et le repère `figure` (tout le dessin, jusqu’à y = 356). */
+function titre(c, s, label) {
+  c.texte(s, 40, 32, { couleur: 'cyan', taille: 21, max: 680 });
+  c.ligne(40, 42, 40 + Math.min(680, L(c, s, 21)), 42, { couleur: 'tresfaible', largeur: 1.2, duree: .2 });
+  c.repere('figure', 16, 12, 728, 344, label);
+}
+/** Symbole de la bobine à la craie : quatre créneaux arrondis le long du fil, de (x, y1) à (x, y2) (vertical) ou de (y1, x) à (y2, x). */
+function symboleL(c, x, y1, y2, o = {}) {
+  const n = 4, r = (y2 - y1) / (2 * n), s = o.cote ?? 1, pts = [];
+  for (let k = 0; k < n; k++) for (let j = 0; j <= 8; j++) {
+    const a = -Math.PI / 2 + j / 8 * Math.PI, cy = y1 + r * (2 * k + 1);
+    const u = cy + r * Math.sin(a), v = x + s * r * 1.1 * Math.cos(a);
+    pts.push(o.horizontal ? [u, v] : [v, u]);
+  }
+  c.trait(pts, { couleur: o.couleur ?? 'blanc', largeur: 2.4, tremble: .3 });
+}
+/** Symbole de la diode à la craie, verticale, passante vers le haut (triangle pointé vers le haut, barre en haut). */
+function symboleD(c, x, y, couleur = 'blanc') {
+  c.trait([[x - 10, y + 8], [x + 10, y + 8], [x, y - 8]], { couleur, largeur: 2.2, ferme: true });
+  c.ligne(x - 11, y - 8, x + 11, y - 8, { couleur, largeur: 2.6 });
+}
+/** Flèche de tension à côté d’un dipôle, tête à l’arrivée. */
+function flecheTension(c, x1, y1, x2, y2, couleur, lib, dx = 0, dy = -14) {
+  c.fleche(x1, y1, x2, y2, { couleur, largeur: 2, tete: 9 });
+  if (lib) c.texte(lib, (x1 + x2) / 2 + dx, (y1 + y2) / 2 + dy, { couleur, taille: 18, align: 'center' });
+}
+/** Axes d’un graphe, graduations, noms et unités. Renvoie les fonctions de passage X(v), Y(v). */
+function graphe(c, g) {
+  const X = v => g.ox + v / g.xmax * g.w, Y = v => g.oy - v / g.ymax * g.h;
+  peindre(c, ctx => quadrillage(ctx, X, Y, g.xmax, g.ymax, g.dx, g.dy));
+  c.fleche(g.ox, g.oy, g.ox + g.w + 16, g.oy, { couleur: 'blanc', largeur: 2 }).fleche(g.ox, g.oy, g.ox, g.oy - g.h - 16, { couleur: 'blanc', largeur: 2 });
+  for (const v of g.xt) { c.ligne(X(v), g.oy - 4, X(v), g.oy + 4, { couleur: 'blanc', largeur: 1.4, duree: .04 }); c.texte(String(v).replace('.', ','), X(v), g.oy + 18, { couleur: 'blanc', align: 'center', taille: 13, duree: .1 }); }
+  for (const v of g.yt) { c.ligne(g.ox - 4, Y(v), g.ox + 4, Y(v), { couleur: 'blanc', largeur: 1.4, duree: .04 }); c.texte(String(v).replace('.', ','), g.ox - 7, Y(v) + 5, { couleur: 'blanc', align: 'right', taille: 13, duree: .1 }); }
+  c.texte('0', g.ox - 7, g.oy + 15, { couleur: 'blanc', align: 'right', taille: 13 });
+  c.texte(g.yl, g.ox + 8, g.oy - g.h - 8, { couleur: 'cyan', taille: 15 });
+  c.texte(g.xl, g.ox + g.w + 16, g.oy - 10, { couleur: 'cyan', align: 'right', taille: 15 });
+  return { X, Y };
+}
+/** Accolade à la craie, ouverte vers la droite, de y1 à y2 à l’abscisse x. */
+function accolade(c, x, y1, y2, couleur = 'rose') {
+  const m = (y1 + y2) / 2;
+  c.trait([[x + 8, y1], [x + 2, y1 + 4], [x + 2, m - 6], [x - 5, m], [x + 2, m + 6], [x + 2, y2 - 4], [x + 8, y2]], { couleur, largeur: 2 });
+}
+/**
+ * Le montage RL à la craie : générateur E à gauche, interrupteur K à deux positions (1 : générateur dans la maille ;
+ * 2 : maille R + bobine sans générateur), résistor R en haut, bobine (L, r) à droite. `k` = 1 ou 2.
+ */
+function circuitRL(c, { k, couleur }) {
+  const x0 = 70, x1 = 300, y0 = 110, y1 = 290, yc = 200, xr = 228;
+  const c1 = [110, y0], c2 = [124, y0 + 36], piv = [158, y0];
+  c.trait([[x0, yc - 31], [x0, y0], [c1[0] - 3, y0]], { couleur: 'blanc', largeur: 2 });
+  c.trait([[piv[0], y0], [xr - 26, y0]], { couleur: 'blanc', largeur: 2 });
+  c.trait([[xr + 26, y0], [x1, y0], [x1, yc - 32]], { couleur: 'blanc', largeur: 2 });
+  symboleL(c, x1, yc - 32, yc + 32);
+  c.trait([[x1, yc + 32], [x1, y1], [x0, y1], [x0, yc + 31]], { couleur: 'blanc', largeur: 2 });
+  c.ligne(c2[0], c2[1] + 3, c2[0], y1, { couleur: 'blanc', largeur: 2 });
+  c.point(c2[0], y1, 3.5);
+  // l’interrupteur : deux plots, le couteau part du pivot
+  c.cercle(c1[0], c1[1], 3.5, { couleur: 'blanc', largeur: 1.6 }).cercle(c2[0], c2[1], 3.5, { couleur: 'blanc', largeur: 1.6 });
+  c.point(piv[0], piv[1], 3.5);
+  const vise = k === 2 ? c2 : c1;
+  c.ligne(piv[0], piv[1], vise[0] + (k === 2 ? 3 : 4), vise[1] - (k === 2 ? 3 : 0), { couleur: 'blanc', largeur: 2.6 });
+  c.texte('K', 140, y0 - 16, { couleur: 'blanc', taille: 18, align: 'center' });
+  c.texte('1', c1[0] - 2, y0 - 9, { couleur: 'faible', taille: 14, align: 'center' });
+  c.texte('2', c2[0] - 10, c2[1] + 5, { couleur: 'faible', taille: 14, align: 'right' });
+  peindre(c, ctx => { resistorPeint(ctx, xr, y0); bobinePeinte(ctx, x1 + 20, yc - 11); generateurPeint(ctx, x0 - 23, yc - 31); });
+  c.texte('R', xr, y0 + 30, { couleur: 'blanc', taille: 19, align: 'center' });
+  c.texte('(L, r)', x1 + 48, yc + 42, { couleur: 'blanc', taille: 17, align: 'center' });
+  c.texte('+', x0 - 32, yc - 34, { couleur: 'rouge', taille: 16, align: 'center' });
+  c.texte('E', x0 - 46, yc + 52, { couleur: 'blanc', taille: 19, align: 'center' });
+  c.fleche(x0 - 46, yc + 26, x0 - 46, yc - 26, { couleur: 'blanc', largeur: 2, tete: 9 });
+  // i dans le fil du haut, vers la droite ; u_R opposée à i ; u_b opposée à i (i descend dans la bobine) : convention récepteur
+  c.fleche(256, y0, 288, y0, { couleur, largeur: 2.4, tete: 10 });
+  c.texte('i', 272, y0 - 9, { couleur, taille: 19, align: 'center' });
+  flecheTension(c, xr + 26, y0 - 22, xr - 26, y0 - 22, couleur, 'u_R', 0, -8);
+  c.fleche(x1 - 22, yc + 30, x1 - 22, yc - 30, { couleur, largeur: 2, tete: 9 });
+  c.texte('u_b', x1 - 30, yc + 6, { couleur, taille: 18, align: 'right' });
+}
+
+// ───────────────────────── Les figures ─────────────────────────
+const G = 24;   // taille des formules
+const DESSINS = {
+  fig_prerequis(c) {
+    titre(c, 'Les outils du chapitre', 'les trois outils : loi d’Ohm, additivité, dérivée de l’exponentielle');
+    c.ligne(500, 96, 556, 96, { couleur: 'blanc', largeur: 2 }).ligne(604, 96, 660, 96, { couleur: 'blanc', largeur: 2 });
+    peindre(c, ctx => resistorPeint(ctx, 580, 96));
+    c.fleche(508, 96, 540, 96, { couleur: 'vert', largeur: 2.4, tete: 10 }); c.texte('i', 522, 88, { couleur: 'vert', taille: 18, align: 'center' });
+    flecheTension(c, 606, 72, 554, 72, 'vert', 'u_R', 0, -8);
+    c.texte('R', 580, 124, { couleur: 'blanc', taille: 18, align: 'center' });
+    c.texte('u_R = R·i', 40, 104, { couleur: 'blanc', taille: 26 });
+    c.texte(': convention récepteur', 160, 104, { couleur: 'faible', taille: 19 });
+    c.repere('ohm', 32, 52, 650, 82, 'u_R = R·i : convention récepteur');
+    marque(c, 'ohm'); c.pause(.4);
+    c.texte('u_R + u_b = E', 40, 186, { couleur: 'blanc', taille: 26 });
+    c.texte('additivité des tensions (R et bobine en série)', 220, 186, { couleur: 'faible', taille: 19, max: 500 });
+    c.repere('additivite', 32, 156, 700, 42, 'u_R + u_b = E');
+    marque(c, 'additivite'); c.pause(.4);
+    c.texte('(e^{−t/τ})’ = −(1/τ)·e^{−t/τ}', 40, 268, { couleur: 'blanc', taille: 26 });
+    c.texte(': pour vérifier la solution', 360, 268, { couleur: 'orange', taille: 19 });
+    c.repere('derivee', 32, 236, 600, 46, '(e^(−t/τ))’ = −(1/τ)·e^(−t/τ)');
+    marque(c, 'derivee'); c.pause(.3);
+    c.texte('Tout le chapitre s’appuie sur ces trois outils.', 40, 340, { couleur: 'vert', taille: 20, max: 680 });
+    c.repere('fin', 32, 318, 600, 32, 'tout le chapitre s’appuie sur ces outils');
+    marque(c, 'fin');
+  },
+
+  fig_segments(c) {
+    titre(c, 'Calculer u_b sur une courbe en segments', 'u_b = L·di/dt lu segment par segment');
+    // axe des temps gradué de 5 en 5 ms ; le courant monte de 0 à 0,2 A en 10 ms, puis reste à 0,2 A
+    const g = graphe(c, { ox: 70, oy: 316, w: 290, h: 210, xmax: 20, ymax: .25, dx: 2.5, dy: .05, xt: [5, 10, 15, 20], yt: [.1, .2], xl: 't (ms)', yl: 'i (A)' });
+    c.trait([[g.X(0), g.Y(0)], [g.X(10), g.Y(.2)], [g.X(20), g.Y(.2)]], { couleur: 'vert', largeur: 2.8, tremble: .3 });
+    c.repere('courbe', 30, 76, 352, 260, 'i(t) : deux segments');
+    marque(c, 'courbe'); c.pause(.4);
+    c.ligne(g.X(0), g.Y(0), g.X(10), g.Y(0), { couleur: 'faible', largeur: 1.2, pointille: [4, 5] });
+    c.ligne(g.X(10), g.Y(0), g.X(10), g.Y(.2), { couleur: 'faible', largeur: 1.4, pointille: [5, 5] });
+    c.texte('Δt = 10 ms', g.X(5), g.Y(0) - 8, { couleur: 'jaune', taille: 14, align: 'center' });
+    c.texte('Δi = 0,2 A', g.X(10) + 6, g.Y(.1), { couleur: 'jaune', taille: 14 });
+    c.texte('di/dt = Δi/Δt = 0,2/0,01 = 20 A/s', 400, 100, { couleur: 'blanc', taille: 21, max: 340 });
+    c.repere('pente_1', 392, 76, 350, 36, 'di/dt = 20 A/s');
+    marque(c, 'pente_1'); c.pause(.4);
+    c.texte('avec L = 0,1 H et r = 0 :', 400, 146, { couleur: 'faible', taille: 17 });
+    encadre(c, 'u_b = L·di/dt = 0,1 × 20 = 2 V', 400, 186, { taille: 21, align: 'left' });
+    c.repere('calcul_1', 392, 126, 350, 76, 'u_b = 0,1 × 20 = 2 V');
+    marque(c, 'calcul_1'); c.pause(.4);
+    c.texte('pente nulle', g.X(15), g.Y(.2) - 10, { couleur: 'jaune', taille: 14, align: 'center' });
+    c.texte('de 10 à 20 ms : i = 0,2 A constant, donc di/dt = 0', 400, 244, { couleur: 'blanc', taille: 18, max: 340 });
+    c.repere('pente_2', 392, 222, 350, 32, 'di/dt = 0 sur le palier');
+    marque(c, 'pente_2'); c.pause(.4);
+    encadre(c, 'u_b = L·di/dt = 0', 400, 292, { taille: 22, align: 'left' });
+    c.repere('calcul_2', 392, 266, 230, 38, 'u_b = 0 sur le palier');
+    marque(c, 'calcul_2'); c.pause(.3);
+    c.texte('Bobine réelle : sur un palier, u_b = r·i.', 400, 342, { couleur: 'cyan', taille: 18, max: 340 });
+    c.repere('fin', 392, 322, 350, 28, 'bobine réelle : u_b = r·i');
+    marque(c, 'fin');
+  },
+
+  fig_2020N(c) {
+    titre(c, 'La bobine en régime permanent (national 2020 N)', 'national 2020 N : r par le régime permanent');
+    c.texte('R = 90 Ω ; bobine (L, r) ; on enregistre i(t) et u_L(t)', 40, 76, { couleur: 'blanc', taille: 20, max: 680 });
+    peindre(c, ctx => bobinePeinte(ctx, 660, 58, 56, 20));
+    c.repere('enonce', 32, 54, 700, 32, 'R = 90 Ω ; bobine (L, r)');
+    marque(c, 'enonce'); c.pause(.4);
+    // τ = 10 ms : axe des temps gradué de 20 en 20 ms
+    const a = graphe(c, { ox: 76, oy: 248, w: 230, h: 130, xmax: 60, ymax: 120, dx: 5, dy: 10, xt: [20, 40, 60], yt: [50, 100], xl: 't (ms)', yl: 'i (mA)' });
+    c.ligne(a.X(0), a.Y(100), a.X(60), a.Y(100), { couleur: 'faible', largeur: 1.4, pointille: [7, 6] });
+    c.courbe(u => [a.X(60 * u), a.Y(100 * (1 - Math.exp(-6 * u)))], 60, { couleur: 'vert', largeur: 2.6 });
+    const b = graphe(c, { ox: 436, oy: 248, w: 230, h: 130, xmax: 60, ymax: 12, dx: 5, dy: 1, xt: [20, 40, 60], yt: [1, 5, 10], xl: 't (ms)', yl: 'u_L (V)' });
+    c.ligne(b.X(0), b.Y(1), b.X(60), b.Y(1), { couleur: 'faible', largeur: 1.4, pointille: [7, 6] });
+    c.courbe(u => [b.X(60 * u), b.Y(1 + 9 * Math.exp(-6 * u))], 60, { couleur: 'vert', largeur: 2.6 });
+    c.repere('courbes', 30, 90, 700, 180, 'i(t) vers 100 mA ; u_L(t) de 10 V à 1 V');
+    marque(c, 'courbes'); c.pause(.4);
+    c.point(a.X(50), a.Y(100), 4.5, 'jaune').point(b.X(50), b.Y(1), 4.5, 'jaune');
+    c.texte('régime permanent :  u_L = 1 V  et  I_0 = 100 mA = 0,1 A', 40, 300, { couleur: 'blanc', taille: 20, max: 680 });
+    c.repere('lecture', 32, 280, 600, 30, 'u_L = 1 V ; I₀ = 0,1 A');
+    marque(c, 'lecture'); c.pause(.4);
+    encadre(c, 'r = u_L/I_0 = 1/0,1 = 10 Ω', 40, 342, { taille: 22, align: 'left' });
+    c.repere('calcul', 32, 316, 300, 38, 'r = u_L/I₀ = 10 Ω');
+    marque(c, 'calcul'); c.pause(.3);
+    c.texte('puis L = τ·(R + r) = 0,01 × 100 = 1 H', 360, 342, { couleur: 'cyan', taille: 18, max: 380 });
+    c.repere('fin', 352, 322, 390, 28, 'L = τ·(R + r) = 1 H');
+    marque(c, 'fin');
+  },
+
+  fig_ed(c) {
+    titre(c, 'L’équation différentielle de l’établissement', 'de l’additivité à l’équation en i');
+    circuitRL(c, { k: 1, couleur: 'vert' });
+    c.repere('circuit', 14, 60, 376, 248, 'le circuit : E, K en 1, R, bobine (L, r) ; i, u_R et u_b');
+    marque(c, 'circuit'); c.pause(.4);
+    const x = 410;
+    c.texte('u_R + u_b = E', x, 96, { couleur: 'blanc', taille: G });
+    c.texte('additivité', 600, 96, { couleur: 'faible', taille: 16 });
+    c.repere('additivite', x - 8, 70, 340, 36, 'u_R + u_b = E');
+    marque(c, 'additivite'); c.pause(.35);
+    c.texte('u_R = R·i  ;  u_b = L·di/dt + r·i', x, 132, { couleur: 'faible', taille: 16 });
+    c.texte('R·i + L·di/dt + r·i = E', x, 166, { couleur: 'blanc', taille: G });
+    c.repere('remplacer', x - 8, 114, 340, 62, 'R·i + L·di/dt + r·i = E');
+    marque(c, 'remplacer'); c.pause(.35);
+    c.fleche(440, 180, 440, 206, { couleur: 'faible', largeur: 1.6, tete: 8 });
+    c.texte('R·i + r·i = (R + r)·i', 456, 204, { couleur: 'faible', taille: 18 });
+    c.repere('regrouper', x - 8, 182, 340, 32, 'R·i + r·i = (R + r)·i');
+    marque(c, 'regrouper'); c.pause(.4);
+    const r = encadre(c, 'L·di/dt + (R + r)·i = E', x, 256, { taille: 25, align: 'left' });
+    c.texte('l’équation différentielle en i', x, 292, { couleur: 'jaune', taille: 16 });
+    c.repere('resultat', r.x - 6, r.y - 6, Math.max(r.w, 230) + 12, 76, 'L·di/dt + (R + r)·i = E');
+    marque(c, 'resultat'); c.pause(.3);
+    c.texte('L’inconnue est la fonction i(t).', x, 340, { couleur: 'cyan', taille: 20 });
+    c.repere('fin', x - 8, 318, 320, 30, 'l’inconnue : i(t)');
+    marque(c, 'fin');
+  },
+
+  fig_ed_formes(c) {
+    titre(c, 'Deux écritures de la même équation', 'les deux formes de l’équation en i');
+    const t = 28, s = 'L·di/dt + (R + r)·i = E', w = L(c, s, t), x0 = 380 - w / 2;
+    c.texte(s, 380, 96, { couleur: 'blanc', taille: t, align: 'center' });
+    c.repere('depart', x0 - 10, 66, w + 20, 42, s);
+    marque(c, 'depart'); c.pause(.4);
+    c.fleche(320, 112, 210, 158, { couleur: 'faible', largeur: 1.8, tete: 9 });
+    c.texte('÷ L', 246, 126, { couleur: 'orange', taille: 20, align: 'right' });
+    c.texte('di/dt + ((R + r)/L)·i = E/L', 200, 196, { couleur: 'blanc', taille: 23, align: 'center' });
+    c.repere('diviser_L', 40, 110, 320, 100, 'di/dt + ((R + r)/L)·i = E/L');
+    marque(c, 'diviser_L'); c.pause(.4);
+    c.fleche(440, 112, 550, 158, { couleur: 'faible', largeur: 1.8, tete: 9 });
+    c.texte('÷ (R + r)', 516, 126, { couleur: 'orange', taille: 20 });
+    const d = '(L/(R + r))·di/dt + i = E/(R + r)', wd = L(c, d, 22), xd = 570 - wd / 2;
+    c.texte(d, 570, 196, { couleur: 'blanc', taille: 22, align: 'center' });
+    c.repere('diviser_R', 400, 110, 344, 100, '(L/(R + r))·di/dt + i = E/(R + r)');
+    marque(c, 'diviser_R'); c.pause(.4);
+    const wa = L(c, '(L/(R + r))', 22), wb = L(c, 'E/(R + r)', 22);
+    c.ligne(xd, 204, xd + wa, 204, { couleur: 'jaune', largeur: 2 });
+    c.ligne(xd + wd - wb, 204, xd + wd, 204, { couleur: 'jaune', largeur: 2 });
+    const r1 = encadre(c, 'τ = L/(R + r)', 470, 262, { taille: 24 });
+    const r2 = encadre(c, 'I_0 = E/(R + r)', 650, 262, { taille: 24 });
+    c.texte('devant di/dt', 470, 300, { couleur: 'faible', taille: 15, align: 'center' });
+    c.texte('à droite', 650, 300, { couleur: 'faible', taille: 15, align: 'center' });
+    c.repere('lecture', r1.x - 6, r1.y - 6, r2.x + r2.w - r1.x + 12, 84, 'τ = L/(R + r) et I₀ = E/(R + r)');
+    marque(c, 'lecture'); c.pause(.3);
+    c.texte('Dans la forme de gauche : (R + r)/L = 1/τ.', 380, 344, { couleur: 'cyan', taille: 20, align: 'center', max: 680 });
+    c.repere('fin', 170, 322, 420, 30, '(R + r)/L = 1/τ');
+    marque(c, 'fin');
+  },
+
+  fig_ed_uR(c) {
+    titre(c, 'L’équation différentielle en u_R', 'de l’équation en i à l’équation en u_R');
+    c.texte('i = u_R/R   ;   di/dt = (1/R)·du_R/dt', 40, 94, { couleur: 'blanc', taille: G });
+    c.repere('relations', 32, 68, 440, 38, 'i = u_R/R ; di/dt = (1/R)·du_R/dt');
+    marque(c, 'relations'); c.pause(.4);
+    c.texte('dans L·di/dt + (R + r)·i = E :', 40, 140, { couleur: 'faible', taille: 17 });
+    c.texte('(L/R)·du_R/dt + ((R + r)/R)·u_R = E', 40, 178, { couleur: 'blanc', taille: G });
+    c.repere('remplacer', 32, 120, 480, 72, '(L/R)·du_R/dt + ((R + r)/R)·u_R = E');
+    marque(c, 'remplacer'); c.pause(.4);
+    c.fleche(70, 194, 70, 232, { couleur: 'faible', largeur: 1.8, tete: 9 });
+    c.texte('× R/L', 90, 222, { couleur: 'orange', taille: 22 });
+    c.texte('on multiplie tout par R/L', 170, 222, { couleur: 'faible', taille: 17 });
+    c.repere('multiplier', 32, 196, 400, 36, '× R/L');
+    marque(c, 'multiplier'); c.pause(.4);
+    const r = encadre(c, 'du_R/dt + ((R + r)/L)·u_R = R·E/L', 40, 282, { taille: 26, align: 'left' });
+    c.repere('resultat', r.x - 6, r.y - 6, r.w + 12, r.h + 12, 'du_R/dt + ((R + r)/L)·u_R = R·E/L');
+    marque(c, 'resultat'); c.pause(.3);
+    c.texte('⚠ à droite : R·E/L, pas E/L', 40, 342, { couleur: 'orange', taille: 21 });
+    c.repere('fin', 32, 320, 330, 30, 'à droite : R·E/L');
+    marque(c, 'fin');
+  },
+
+  fig_2021R(c) {
+    titre(c, 'Établir l’équation (national 2021 R)', 'national 2021 R : établir l’équation en i');
+    encadre(c, 'E = 6 V  ;  R_2 = 95 Ω  ;  bobine (L, r)', 40, 86, { taille: 22, align: 'left', couleur: 'blanc', cadre: 'faible' });
+    peindre(c, ctx => bobinePeinte(ctx, 640, 66, 64, 24));
+    c.texte('Montrer que di/dt + (1/τ)·i = E/L et exprimer τ.', 40, 128, { couleur: 'faible', taille: 18, max: 680 });
+    c.repere('enonce', 32, 58, 700, 80, 'E = 6 V ; R₂ = 95 Ω ; bobine (L, r)');
+    marque(c, 'enonce'); c.pause(.4);
+    c.texte('1. additivité :', 40, 172, { couleur: 'faible', taille: 17 });
+    c.texte('u_R2 + u_b = E', 180, 174, { couleur: 'blanc', taille: G });
+    c.repere('additivite', 32, 150, 360, 34, 'u_R2 + u_b = E');
+    marque(c, 'additivite'); c.pause(.4);
+    c.texte('2. on remplace :', 40, 216, { couleur: 'faible', taille: 17 });
+    c.texte('R_2·i + L·di/dt + r·i = E', 180, 218, { couleur: 'blanc', taille: G });
+    c.texte('donc L·di/dt + (R_2 + r)·i = E', 470, 218, { couleur: 'faible', taille: 17, max: 270 });
+    c.repere('remplacer', 32, 194, 712, 34, 'R₂·i + L·di/dt + r·i = E');
+    marque(c, 'remplacer'); c.pause(.4);
+    c.texte('3. ÷ L :', 40, 260, { couleur: 'faible', taille: 17 });
+    c.texte('di/dt + ((R_2 + r)/L)·i = E/L', 180, 262, { couleur: 'blanc', taille: G });
+    const r = encadre(c, 'di/dt + (1/τ)·i = E/L', 180, 310, { taille: G, align: 'left' });
+    c.repere('resultat', 32, 238, r.x + r.w - 26, r.y + r.h - 232, 'di/dt + (1/τ)·i = E/L');
+    marque(c, 'resultat'); c.pause(.4);
+    const t = encadre(c, 'τ = L/(R_2 + r)', 480, 310, { taille: G, align: 'left' });
+    c.repere('tau', t.x - 6, t.y - 6, t.w + 12, t.h + 12, 'τ = L/(R₂ + r)');
+    marque(c, 'tau'); c.pause(.3);
+    c.texte('avec τ = 5,1 ms : L = τ·(R_2 + r) = 5,1·10⁻³ × 100 = 0,51 H', 40, 350, { couleur: 'cyan', taille: 18, max: 680 });
+    c.repere('fin', 32, 330, 640, 26, 'L = 0,51 H');
+    marque(c, 'fin');
+  },
+
+  fig_2019R(c) {
+    titre(c, 'Quelle courbe est u_R ? (national 2019 R)', 'national 2019 R : reconnaître u_R et trouver r');
+    c.texte('E = 10 V ; R = 40 Ω ; bobine (L, r)', 40, 76, { couleur: 'blanc', taille: 20 });
+    c.repere('enonce', 32, 54, 360, 32, 'E = 10 V ; R = 40 Ω');
+    marque(c, 'enonce'); c.pause(.4);
+    // τ = L/(R + r) = 10 ms : axe des temps gradué de 20 en 20 ms
+    const g = graphe(c, { ox: 70, oy: 320, w: 280, h: 196, xmax: 60, ymax: 12, dx: 5, dy: 1, xt: [20, 40, 60], yt: [2, 4, 6, 8, 10], xl: 't (ms)', yl: 'u (V)' });
+    c.courbe(u => [g.X(60 * u), g.Y(2 + 8 * Math.exp(-6 * u))], 60, { couleur: 'orange', largeur: 2.6 });
+    c.texte('(1)', g.X(6), g.Y(9.6), { couleur: 'orange', taille: 16 });
+    c.courbe(u => [g.X(60 * u), g.Y(8 * (1 - Math.exp(-6 * u)))], 60, { couleur: 'vert', largeur: 2.6 });
+    c.texte('(2)', g.X(14), g.Y(5.4), { couleur: 'vert', taille: 16 });
+    c.repere('courbes', 26, 96, 360, 246, 'les courbes (1) et (2)');
+    marque(c, 'courbes'); c.pause(.4);
+    c.point(g.X(0), g.Y(0), 5, 'jaune');
+    c.texte('i(0) = 0 donc u_R(0) = R·i(0) = 0', 400, 120, { couleur: 'blanc', taille: 20, max: 340 });
+    c.texte('→ la courbe (2) est u_R', 400, 152, { couleur: 'vert', taille: 20 });
+    c.repere('origine', 392, 98, 350, 64, 'u_R(0) = 0 : courbe (2)');
+    marque(c, 'origine'); c.pause(.4);
+    c.ligne(g.X(0), g.Y(8), g.X(60), g.Y(8), { couleur: 'jaune', largeur: 1.4, pointille: [6, 6] });
+    c.texte('régime permanent : U_R = 8 V', 400, 200, { couleur: 'blanc', taille: 22, max: 340 });
+    c.repere('permanent', 392, 178, 350, 32, 'U_R = 8 V');
+    marque(c, 'permanent'); c.pause(.4);
+    c.texte('U_R = R·E/(R + r), donc', 400, 240, { couleur: 'faible', taille: 17 });
+    c.texte('r = R·(E/U_R − 1) = 40 × (10/8 − 1)', 400, 272, { couleur: 'blanc', taille: 19, max: 340 });
+    encadre(c, 'r = 10 Ω', 400, 312, { taille: 24, align: 'left' });
+    c.repere('r', 392, 222, 350, 102, 'r = 10 Ω');
+    marque(c, 'r'); c.pause(.3);
+    c.texte('(1) est u_b : de E = 10 V à r·I_0 = 2 V', 400, 350, { couleur: 'cyan', taille: 17, max: 340 });
+    c.repere('fin', 392, 332, 350, 24, 'la courbe (1) est u_b');
+    marque(c, 'fin');
+  },
+
+  fig_derivee_exp(c) {
+    titre(c, 'La dérivée de l’exponentielle', 'la dérivée de e^(at) et la limite de e^(−t/τ)');
+    encadre(c, '(e^{at})’ = a·e^{at}', 40, 98, { taille: 30, align: 'left' });
+    c.repere('regle', 32, 62, 280, 52, '(e^(at))’ = a·e^(at)');
+    marque(c, 'regle'); c.pause(.4);
+    c.texte('avec a = −1/τ :', 40, 156, { couleur: 'faible', taille: 18 });
+    c.texte('(e^{−t/τ})’ = −(1/τ)·e^{−t/τ}', 40, 192, { couleur: 'blanc', taille: 28 });
+    c.repere('exemple', 32, 136, 400, 68, '(e^(−t/τ))’ = −(1/τ)·e^(−t/τ)');
+    marque(c, 'exemple'); c.pause(.4);
+    c.texte('e⁰ = 1', 40, 250, { couleur: 'blanc', taille: 30 });
+    c.texte('(à t = 0)', 140, 250, { couleur: 'faible', taille: 18 });
+    c.repere('e_zero', 32, 220, 220, 42, 'e⁰ = 1');
+    marque(c, 'e_zero'); c.pause(.4);
+    const g = { ox: 510, oy: 300, w: 200, h: 160 };
+    c.fleche(g.ox, g.oy, g.ox + g.w + 14, g.oy, { couleur: 'blanc', largeur: 2 }).fleche(g.ox, g.oy, g.ox, g.oy - g.h - 14, { couleur: 'blanc', largeur: 2 });
+    c.texte('t', g.ox + g.w + 14, g.oy + 20, { couleur: 'cyan', taille: 16, align: 'right' });
+    c.texte('1', g.ox - 8, g.oy - 140 + 5, { couleur: 'blanc', taille: 14, align: 'right' }).texte('0', g.ox - 8, g.oy + 15, { couleur: 'blanc', taille: 14, align: 'right' });
+    c.courbe(u => [g.ox + u * g.w, g.oy - 140 * Math.exp(-5 * u)], 50, { couleur: 'cyan', largeur: 2.4 });
+    c.texte('e^{−t/τ}', g.ox + 40, g.oy - 110, { couleur: 'cyan', taille: 18 });
+    c.texte('e^{−t/τ} → 0 sans jamais s’annuler', 40, 304, { couleur: 'blanc', taille: 24, max: 430 });
+    c.repere('limite', 32, 120, 712, 196, 'e^(−t/τ) → 0 sans jamais s’annuler');
+    marque(c, 'limite'); c.pause(.3);
+    c.texte('Au bout de 5τ : e⁻⁵ ≈ 0,007, donc i ≈ 0,99·I_0', 40, 346, { couleur: 'vert', taille: 21, max: 680 });
+    c.repere('fin', 32, 324, 480, 30, 'à 5τ : i ≈ 0,99·I₀');
+    marque(c, 'fin');
+  },
+
+  fig_resolution(c) {
+    titre(c, 'Résoudre l’équation de l’établissement', 'la résolution de L·di/dt + (R + r)·i = E');
+    c.texte('L·di/dt + (R + r)·i = E', 740, 30, { couleur: 'vert', taille: 17, align: 'right' });
+    const x = 40, t = 22;
+    c.texte('on cherche :', x, 80, { couleur: 'faible', taille: 17 });
+    c.texte('i = A(1 − e^{−t/τ})', x + 110, 82, { couleur: 'blanc', taille: t });
+    c.repere('forme', x - 8, 60, 400, 32, 'i = A(1 − e^(−t/τ))');
+    marque(c, 'forme'); c.pause(.4);
+    c.texte('di/dt = (A/τ)·e^{−t/τ}', x + 110, 124, { couleur: 'blanc', taille: t });
+    c.repere('deriver', x + 100, 102, 320, 32, 'di/dt = (A/τ)·e^(−t/τ)');
+    marque(c, 'deriver'); c.pause(.4);
+    c.texte('L·(A/τ)·e^{−t/τ} + (R + r)·A(1 − e^{−t/τ}) = E', x + 110, 166, { couleur: 'blanc', taille: t, max: 560 });
+    c.repere('remplacer', x + 100, 144, 580, 32, 'L·(A/τ)·e^(−t/τ) + (R + r)·A(1 − e^(−t/τ)) = E');
+    marque(c, 'remplacer'); c.pause(.4);
+    c.texte('A·e^{−t/τ}(L/τ − (R + r)) + (R + r)·A = E', x + 110, 208, { couleur: 'blanc', taille: t, max: 560 });
+    c.repere('factoriser', x + 100, 186, 500, 32, 'A·e^(−t/τ)(L/τ − (R + r)) + (R + r)·A = E');
+    marque(c, 'factoriser'); c.pause(.4);
+    c.texte('pour tout t :', x, 260, { couleur: 'faible', taille: 17 });
+    accolade(c, x + 108, 230, 292);
+    c.texte('L/τ − (R + r) = 0', x + 124, 252, { couleur: 'blanc', taille: t });
+    c.texte('(R + r)·A = E', x + 124, 284, { couleur: 'blanc', taille: t });
+    c.repere('accolade', x - 8, 226, 320, 70, 'L/τ − (R + r) = 0 et (R + r)·A = E');
+    marque(c, 'accolade'); c.pause(.4);
+    const r = encadre(c, 'τ = L/(R + r)  ;  A = E/(R + r) = I_0', x + 110, 336, { taille: 23, align: 'left' });
+    c.repere('resultat', r.x - 6, r.y - 6, r.w + 12, r.h + 10, 'τ = L/(R + r) ; A = I₀');
+    marque(c, 'resultat'); c.pause(.3);
+    c.texte('donc  i(t) = I_0(1 − e^{−t/τ})', 420, 270, { couleur: 'cyan', taille: 21, max: 320 });
+    c.repere('fin', 412, 248, 330, 32, 'i(t) = I₀(1 − e^(−t/τ))');
+    marque(c, 'fin');
+  },
+
+  fig_dimension(c) {
+    titre(c, 'τ = L/(R + r) est un temps', 'l’analyse dimensionnelle de τ = L/(R + r)');
+    c.texte('u_b = L·di/dt  →', 40, 100, { couleur: 'faible', taille: 20 });
+    c.texte('[L] = [U]·[T]/[I]', 220, 100, { couleur: 'blanc', taille: 28 });
+    c.repere('L', 32, 70, 440, 42, '[L] = [U]·[T]/[I]');
+    marque(c, 'L'); c.pause(.4);
+    c.texte('u_R = R·i  →', 40, 164, { couleur: 'faible', taille: 20 });
+    c.texte('[R] = [U]/[I]', 220, 164, { couleur: 'blanc', taille: 28 });
+    c.repere('R', 32, 134, 400, 42, '[R] = [U]/[I]');
+    marque(c, 'R'); c.pause(.4);
+    c.texte('[L]/[R] = ([U]·[T]/[I])·([I]/[U])', 220, 222, { couleur: 'faible', taille: 22 });
+    encadre(c, '[τ] = [L]/[R] = [T] : τ est un temps', 220, 282, { taille: 26, align: 'left' });
+    c.repere('quotient', 212, 198, 500, 102, '[τ] = [L]/[R] = [T]');
+    marque(c, 'quotient'); c.pause(.3);
+    c.texte('En secondes : L = 0,12 H, R + r = 60 Ω → τ = 0,12/60 = 2·10⁻³ s = 2 ms', 40, 342, { couleur: 'cyan', taille: 20, max: 680 });
+    c.repere('fin', 32, 320, 690, 30, 'τ = 0,12/60 = 2 ms');
+    marque(c, 'fin');
+  },
+
+  fig_ed_rupture(c) {
+    titre(c, 'L’équation différentielle de la rupture', 'K en 2 : l’équation de la rupture');
+    circuitRL(c, { k: 2, couleur: 'bleu' });
+    c.texte('K en 2 : plus de générateur dans la maille', 40, 334, { couleur: 'bleu', taille: 16, max: 340 });
+    c.repere('circuit', 14, 60, 376, 284, 'K en 2 : maille R + bobine, sans générateur');
+    marque(c, 'circuit'); c.pause(.4);
+    const x = 410;
+    c.texte('u_R + u_b = 0', x, 108, { couleur: 'blanc', taille: 26 });
+    c.texte('plus de générateur : 0 à droite', x, 138, { couleur: 'faible', taille: 16 });
+    c.repere('additivite', x - 8, 80, 330, 66, 'u_R + u_b = 0');
+    marque(c, 'additivite'); c.pause(.4);
+    c.texte('R·i + L·di/dt + r·i = 0', x, 188, { couleur: 'faible', taille: 21 });
+    const r = encadre(c, 'L·di/dt + (R + r)·i = 0', x, 244, { taille: 25, align: 'left', couleur: 'bleu' });
+    c.repere('resultat', x - 8, 166, Math.max(r.w, 240) + 16, 98, 'L·di/dt + (R + r)·i = 0');
+    marque(c, 'resultat'); c.pause(.3);
+    c.texte('Même équation, avec 0 à droite :', x, 300, { couleur: 'cyan', taille: 19, max: 330 });
+    c.texte('i tend vers 0 ; i(t) = I_0·e^{−t/τ}', x, 334, { couleur: 'bleu', taille: 20, max: 330 });
+    c.repere('fin', x - 8, 280, 340, 64, 'i(t) = I₀·e^(−t/τ)');
+    marque(c, 'fin');
+  },
+
+  fig_2025R(c) {
+    titre(c, 'La surtension à l’ouverture (national 2025 R)', 'national 2025 R : diode et R₁ sur la bobine');
+    c.texte('E = 10 V ; R = 100 Ω ; bobine idéale (r = 0) ; diode + R_1 = 1 kΩ en parallèle sur la bobine', 40, 74, { couleur: 'blanc', taille: 18, max: 690 });
+    // le schéma juste après l’ouverture : la bobine (à gauche) se referme par la diode et R₁ (à droite)
+    const xb = 110, xd = 290, yh = 118, yb = 316, yc = 214;
+    c.trait([[xb, yc - 30], [xb, yh], [xd, yh], [xd, 172 - 8]], { couleur: 'blanc', largeur: 2 });
+    symboleL(c, xb, yc - 30, yc + 30, { cote: -1 });
+    symboleD(c, xd, 172);
+    c.trait([[xd, 172 + 8], [xd, 254 - 22]], { couleur: 'blanc', largeur: 2 });
+    c.trait([[xd, 254 + 22], [xd, yb], [xb, yb], [xb, yc + 30]], { couleur: 'blanc', largeur: 2 });
+    peindre(c, ctx => { bobinePeinte(ctx, 138, yc - 11, 56, 22); resistorPeint(ctx, xd, 254, 44, 13, true); diodePeinte(ctx, 340, 168, true); });
+    c.point(xb, yh, 3.5).point(xb, yb, 3.5);
+    c.ligne(xb, yh, 70, yh, { couleur: 'blanc', largeur: 2 }).ligne(xb, yb, 46, yb, { couleur: 'blanc', largeur: 2 });
+    c.cercle(66, yh, 3.5, { couleur: 'blanc', largeur: 1.6 }).point(42, yh, 3.5);
+    c.ligne(42, yh, 62, yh - 18, { couleur: 'blanc', largeur: 2.6 });
+    c.texte('K ouvert', 52, yh - 26, { couleur: 'faible', taille: 15, align: 'center' });
+    c.texte('D', xd + 16, 178, { couleur: 'blanc', taille: 17 });
+    c.texte('R_1', xd - 14, 260, { couleur: 'blanc', taille: 17, align: 'right' });
+    c.texte('L', 166, yc + 40, { couleur: 'blanc', taille: 17, align: 'center' });
+    // i continue de descendre dans la bobine ; il remonte par R₁ et la diode
+    c.fleche(170, yb, 214, yb, { couleur: 'bleu', largeur: 2.4, tete: 10 }); c.texte('i', 192, yb - 9, { couleur: 'bleu', taille: 19, align: 'center' });
+    c.fleche(240, yh, 200, yh, { couleur: 'bleu', largeur: 2.4, tete: 10 }); c.texte('i', 220, yh - 9, { couleur: 'bleu', taille: 19, align: 'center' });
+    c.fleche(xb - 24, yc + 28, xb - 24, yc - 28, { couleur: 'bleu', largeur: 2, tete: 9 }); c.texte('u_b', xb - 32, yc + 6, { couleur: 'bleu', taille: 18, align: 'right' });
+    c.fleche(xd + 20, 234, xd + 20, 274, { couleur: 'bleu', largeur: 2, tete: 9 }); c.texte('u_R1', xd + 28, 260, { couleur: 'bleu', taille: 18 });
+    c.repere('enonce', 20, 54, 720, 276, 'E = 10 V ; R = 100 Ω ; bobine idéale ; diode + R₁ = 1 kΩ');
+    marque(c, 'enonce'); c.pause(.4);
+    const x = 410;
+    c.texte('le courant de la bobine est continu :', x, 116, { couleur: 'faible', taille: 16 });
+    c.texte('i(0^{+}) = I_0 = E/R = 10/100 = 0,1 A', x, 146, { couleur: 'blanc', taille: 20, max: 330 });
+    c.repere('continuite', x - 8, 96, 340, 60, 'i(0⁺) = I₀ = 0,1 A');
+    marque(c, 'continuite'); c.pause(.4);
+    c.texte('u_R1 = R_1·i = 1000 × 0,1 = 100 V', x, 194, { couleur: 'blanc', taille: 20, max: 330 });
+    c.repere('uR1', x - 8, 172, 340, 32, 'u_R1 = 100 V');
+    marque(c, 'uR1'); c.pause(.4);
+    c.texte('maille bobine–diode–R_1 :', x, 236, { couleur: 'faible', taille: 16 });
+    c.texte('u_b + u_R1 = 0', x, 266, { couleur: 'blanc', taille: 22 });
+    c.repere('maille', x - 8, 218, 340, 58, 'u_b + u_R1 = 0');
+    marque(c, 'maille'); c.pause(.4);
+    const r = encadre(c, 'u_b = −100 V', x, 312, { taille: 26, align: 'left', couleur: 'bleu' });
+    c.repere('resultat', r.x - 6, r.y - 6, r.w + 12, r.h + 10, 'u_b = −100 V');
+    marque(c, 'resultat'); c.pause(.3);
+    c.texte('⚠ surtension : 10 fois E', 590, 300, { couleur: 'orange', taille: 17, max: 160 });
+    c.texte('la diode protège K', 590, 324, { couleur: 'orange', taille: 16, max: 160 });
+    c.repere('fin', 582, 282, 162, 50, 'surtension : 10 fois E');
+    marque(c, 'fin');
+  },
+
+  fig_r_L(c) {
+    titre(c, 'Trouver r et L à partir des courbes', 'trouver I₀, r et L');
+    encadre(c, 'E = 6 V  ;  R = 50 Ω  ;  U_R max = 5 V  ;  τ = 2 ms', 380, 90, { taille: 22, couleur: 'blanc', cadre: 'faible' });
+    peindre(c, ctx => bobinePeinte(ctx, 600, 168, 90, 34, true));
+    c.texte('L ?   r ?', 645, 236, { couleur: 'faible', taille: 18, align: 'center' });
+    c.repere('donnees', 100, 58, 560, 46, 'E = 6 V ; R = 50 Ω ; U_R max = 5 V ; τ = 2 ms');
+    marque(c, 'donnees'); c.pause(.4);
+    c.texte('régime permanent : U_R = R·I_0', 40, 146, { couleur: 'faible', taille: 17 });
+    c.texte('I_0 = U_R/R = 5/50 = 0,1 A', 40, 180, { couleur: 'blanc', taille: G });
+    c.repere('I0', 32, 126, 400, 66, 'I₀ = 0,1 A');
+    marque(c, 'I0'); c.pause(.4);
+    c.texte('I_0 = E/(R + r), donc', 40, 222, { couleur: 'faible', taille: 17 });
+    c.texte('r = E/I_0 − R = 6/0,1 − 50 = 10 Ω', 40, 256, { couleur: 'blanc', taille: G });
+    c.repere('r', 32, 202, 420, 66, 'r = 10 Ω');
+    marque(c, 'r'); c.pause(.4);
+    c.texte('τ = L/(R + r), donc', 40, 296, { couleur: 'faible', taille: 17 });
+    const r = encadre(c, 'L = τ·(R + r) = 2·10⁻³ × 60 = 0,12 H', 40, 334, { taille: 23, align: 'left' });
+    c.repere('L', 32, 276, r.w + 16, 74, 'L = 0,12 H');
+    marque(c, 'L'); c.pause(.3);
+    c.texte('⚠ convertir ms → s', 500, 290, { couleur: 'orange', taille: 19 });
+    c.texte('et mA → A avant de calculer', 500, 316, { couleur: 'orange', taille: 17, max: 240 });
+    c.repere('fin', 492, 270, 252, 56, 'convertir avant de calculer');
+    marque(c, 'fin');
+  },
+
+  fig_2022R(c) {
+    titre(c, 'Sujet national 2022 R', 'national 2022 R : U₀, r, L₀ et la courbe pour 2L₀');
+    c.texte('E = 10 V ; R = 490 Ω ; bobine (L_0, r)', 40, 76, { couleur: 'blanc', taille: 20 });
+    c.repere('enonce', 32, 54, 380, 32, 'E = 10 V ; R = 490 Ω');
+    marque(c, 'enonce'); c.pause(.4);
+    // axe des temps gradué de 2 en 2 ms (quadrillage tous les 0,5 ms) : la graduation ne tombe pas sur τ = 1 ms
+    const g = graphe(c, { ox: 70, oy: 318, w: 280, h: 196, xmax: 6, ymax: 12, dx: .5, dy: 1, xt: [2, 4, 6], yt: [2, 4, 6, 8, 10], xl: 't (ms)', yl: 'u_R (V)' });
+    const f = (tau, U) => u => [g.X(6 * u), g.Y(U * (1 - Math.exp(-6 * u / tau)))];
+    c.ligne(g.X(0), g.Y(9.8), g.X(6), g.Y(9.8), { couleur: 'faible', largeur: 1.4, pointille: [7, 6] });
+    c.courbe(f(1, 9.8), 70, { couleur: 'vert', largeur: 2.6 });
+    c.ligne(g.X(0), g.Y(0), g.X(1.12), g.Y(9.8 * 1.12), { couleur: 'blanc', largeur: 1.6, pointille: [6, 5] });
+    c.ligne(g.X(1), g.Y(9.8), g.X(1), g.Y(0), { couleur: 'faible', largeur: 1.2, pointille: [3, 5] });
+    c.point(g.X(1), g.Y(9.8), 4.5, 'blanc');
+    c.texte('U_0 = 9,8 V  ;  τ = 1 ms (tangente)', 400, 112, { couleur: 'blanc', taille: 20, max: 340 });
+    c.repere('courbe', 26, 92, 716, 248, 'u_R(t) vers 9,8 V ; tangente ; τ = 1 ms');
+    marque(c, 'courbe'); c.pause(.4);
+    c.texte('I_0 = U_0/R = 9,8/490 = 0,02 A', 400, 154, { couleur: 'blanc', taille: 20, max: 340 });
+    c.repere('I0', 392, 134, 350, 30, 'I₀ = 0,02 A');
+    marque(c, 'I0'); c.pause(.4);
+    c.texte('r = (E − U_0)/I_0 = 0,2/0,02 = 10 Ω', 400, 192, { couleur: 'blanc', taille: 20, max: 340 });
+    c.repere('r', 392, 172, 350, 30, 'r = 10 Ω');
+    marque(c, 'r'); c.pause(.4);
+    const r = encadre(c, 'L_0 = τ·(R + r) = 10⁻³ × 500 = 0,5 H', 400, 236, { taille: 19, align: 'left' });
+    c.repere('L', r.x - 6, r.y - 6, r.w + 12, r.h + 10, 'L₀ = 0,5 H');
+    marque(c, 'L'); c.pause(.4);
+    c.courbe(f(2, 9.8), 70, { couleur: 'vert', largeur: 2.2, pointille: [8, 4] });
+    c.courbe(f(.5, 9.8), 70, { couleur: 'faible', largeur: 1.8 });
+    c.courbe(f(1, 11), 70, { couleur: 'faible', largeur: 1.8 });
+    c.texte('C_1', g.X(3), g.Y(8.5), { couleur: 'vert', taille: 14 });
+    c.texte('C_2', g.X(2.2), g.Y(5.2), { couleur: 'vert', taille: 14 });
+    c.texte('C_3', g.X(1.35), g.Y(10.25), { couleur: 'faible', taille: 14 });
+    c.texte('C_4', g.X(4.6), g.Y(11) - 6, { couleur: 'faible', taille: 14 });
+    c.texte('L_1 = 2L_0 : même palier, τ = 2 ms → C_2', 400, 286, { couleur: 'vert', taille: 19, max: 340 });
+    c.texte('C_4 : autre palier ; C_3 : plus rapide', 400, 312, { couleur: 'faible', taille: 16, max: 340 });
+    c.repere('courbes', 392, 266, 350, 54, 'pour L₁ = 2L₀ : la courbe C₂');
+    marque(c, 'courbes'); c.pause(.3);
+    c.texte('U_0 = R·E/(R + r) ne dépend pas de L', 400, 348, { couleur: 'cyan', taille: 17, max: 340 });
+    c.repere('fin', 392, 328, 350, 26, 'U₀ ne dépend pas de L');
+    marque(c, 'fin');
+  },
+
+  fig_2024N(c) {
+    titre(c, 'La droite di/dt = f(i) (national 2024 N)', 'national 2024 N : la droite di/dt = f(i)');
+    c.texte('E = 6 V ; R_1 ; bobine (L, r) :   di/dt = −((R_1 + r)/L)·i + E/L', 40, 76, { couleur: 'blanc', taille: 19, max: 690 });
+    c.repere('enonce', 32, 54, 640, 32, 'di/dt = −((R₁ + r)/L)·i + E/L');
+    marque(c, 'enonce'); c.pause(.4);
+    const g = graphe(c, { ox: 80, oy: 318, w: 280, h: 196, xmax: 7, ymax: 3.5, dx: .5, dy: .25, xt: [1, 2, 3, 4, 5, 6, 7], yt: [1, 2, 3], xl: 'i (mA)', yl: 'di/dt (10³ A/s)' });
+    c.ligne(g.X(0), g.Y(3), g.X(6), g.Y(0), { couleur: 'vert', largeur: 2.8 });
+    [[1, 2.5], [2, 2], [3, 1.5], [4, 1], [5, .5]].forEach(([i, d]) => c.point(g.X(i), g.Y(d), 3.5, 'blanc'));
+    c.repere('droite', 30, 92, 352, 248, 'la droite de (0 ; 3·10³ A/s) à (6 mA ; 0)');
+    marque(c, 'droite'); c.pause(.4);
+    c.point(g.X(0), g.Y(3), 5.5, 'jaune');
+    c.texte('ordonnée à l’origine : E/L = 3·10³ A/s', 400, 134, { couleur: 'blanc', taille: 19, max: 340 });
+    c.repere('ordonnee', 392, 114, 350, 30, 'E/L = 3·10³ A/s');
+    marque(c, 'ordonnee'); c.pause(.4);
+    const r = encadre(c, 'L = 6/(3·10³) = 2·10⁻³ H = 2 mH', 400, 178, { taille: 19, align: 'left' });
+    c.repere('L', r.x - 6, r.y - 6, r.w + 12, r.h + 10, 'L = 2 mH');
+    marque(c, 'L'); c.pause(.4);
+    c.texte('pente = (0 − 3·10³)/(6·10⁻³) = −5·10⁵ s⁻¹', 400, 230, { couleur: 'blanc', taille: 19, max: 340 });
+    c.texte('⚠ i en mA : 6 mA = 6·10⁻³ A', 400, 256, { couleur: 'orange', taille: 15 });
+    c.repere('pente', 392, 210, 350, 54, 'pente = −5·10⁵ s⁻¹');
+    marque(c, 'pente'); c.pause(.4);
+    c.texte('pente = −1/τ, donc', 400, 290, { couleur: 'faible', taille: 16 });
+    const t = encadre(c, 'τ = 1/(5·10⁵) = 2·10⁻⁶ s = 2 µs', 400, 328, { taille: 19, align: 'left' });
+    c.repere('tau', t.x - 6, 272, t.w + 12, t.y + t.h - 268, 'τ = 2 µs');
+    marque(c, 'tau'); c.pause(.3);
+    c.point(g.X(6), g.Y(0), 5.5, 'jaune');
+    c.texte('abscisse : I_0 = 6 mA = E/(R_1 + r)', 400, 104, { couleur: 'cyan', taille: 16, max: 340 });
+    c.repere('fin', 392, 88, 350, 24, 'I₀ = 6 mA');
+    marque(c, 'fin');
+  },
+};
+
+function dessiner(c) {
+  scene.cadre(41);
+  MM = {};
+  DESSINS[fig](c);
+  M = MM;
+  return c.fin() || !S.running;   // figée sur une étape : l’image ne change plus, on cesse de la redessiner
+}
+
+// ───────────────────────── Ce que le tuteur voit et peut faire ─────────────────────────
+/* Texte pour la bulle (lu par l’élève) : jamais de « _ » ni d’accolades visibles. */
+const BAS = { 0: '₀', 1: '₁', 2: '₂', 3: '₃', 4: '₄', 5: '₅', 6: '₆', 7: '₇', 8: '₈', 9: '₉', a: 'ₐ', e: 'ₑ', m: 'ₘ', x: 'ₓ' };
+const lisible = s => String(s).replace(/\^\{([^}]+)\}/g, '^($1)').replace(/_\{?([A-Za-z0-9]+)\}?/g, (m, g) => ([...g].every(ch => ch in BAS) ? [...g].map(ch => BAS[ch]).join('') : g));
+const etapes = () => FIGS[fig].etapes.map(e => e[0]);
+const info = nom => FIGS[fig].etapes.find(e => e[0] === nom) || [nom, nom, ''];
+const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : 'Rejouer'; };
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.tw += dt * VITESSE;
+  if (S.jusqua != null && S.tw >= S.jusqua) {
+    S.tw = S.jusqua; S.jusqua = null; S.running = false;
+    if (M.fin !== undefined && S.tw >= M.fin - 1e-6) { S.pause = false; S.fait = true; etiquette(); bulle($('feedback'), 'Arrêt sur image : figure complète.'); pont.noter('measurement', { figure: fig }); pont.emettre(); return true; }
+    S.pause = true; etiquette();
+    bulle($('feedback'), 'Arrêt sur image : ' + lisible(S.motif || 'instant choisi') + '.'); pont.noter('pause', { moment: S.motif }); pont.emettre();
+    return true;
+  }
+  if (M.fin !== undefined && S.tw >= M.fin + 0.05) {
+    S.running = false; S.pause = false; S.fait = true; etiquette(); pont.noter('measurement', { figure: fig }); pont.emettre();
+  } else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function calculer() { if (M.fin === undefined) { const t = S.tw; S.tw = 1e6; dessiner(craie); S.tw = t; scene.sale = true; } }
+function start() { S.tw = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; scene.sale = true; etiquette(); bulle($('feedback'), ''); pont.noter('start', { figure: fig }); pont.emettre(); }
+function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); bulle($('feedback'), 'Pause.'); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); bulle($('feedback'), ''); pont.noter('resume'); pont.emettre(); }
+function playUntil(p) {
+  calculer();
+  const nom = p.moment in M && etapes().includes(p.moment) ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || !(S.running || S.pause) || S.tw >= cible - 1e-3) { S.tw = 0; S.fait = false; }
+  S.jusqua = cible; S.motif = nom ? info(nom)[1] : `t = ${cible.toFixed(1).replace('.', ',')} s d’écriture`; S.running = true; S.pause = false; etiquette(); bulle($('feedback'), '');
+  pont.noter('play_until', { moment: nom, time_s: +cible.toFixed(2) }); pont.emettre();
+}
+function setTime(p) {
+  calculer(); const t = Math.max(0, Math.min(+p.time_s, M.fin ?? 0)); if (!Number.isFinite(t)) return;
+  S.tw = t; S.jusqua = null; S.running = false; S.fait = t >= (M.fin ?? 0) - 1e-6; S.pause = !S.fait; scene.sale = true; etiquette();
+  bulle($('feedback'), 'Arrêt sur image : ' + (S.fait ? 'figure complète' : `t = ${t.toFixed(1).replace('.', ',')} s d’écriture`) + '.'); pont.noter('set_time', { time_s: t }); pont.emettre();
+}
+function setParameters(p) {
+  const f = p.fig || p.figure || p.variant;
+  if (!f || !FIGS[f] || f === fig) return;
+  fig = f; M = {}; config.title = 'Figure — ' + lisible(FIGS[fig].titre); config.variants = [{ id: fig, label: lisible(FIGS[fig].titre) }];
+  config.command_schema.play_until.moment = etapes().join(' | ') + ' (réécrit la figure et s’arrête après cette étape)';
+  start(); setTimeout(() => pont.manifeste(), 400);
+}
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+
+function ceQuiSeVoit() {
+  const faites = etapes().filter(n => vu(n));
+  const m = [`Figure « ${fig} » : ${lisible(FIGS[fig].titre)}.`];
+  if (!faites.length) m.push(S.running ? 'La figure est en train de s’écrire à la craie (première étape pas encore finie).' : 'Rien d’écrit encore.');
+  faites.forEach(n => { const d = info(n)[2]; if (d) m.push(lisible(d)); });
+  m.push(S.running ? 'La craie écrit encore.' : S.pause ? `Écriture arrêtée après l’étape « ${faites.length ? faites[faites.length - 1] : 'aucune'} ».` : 'Figure complète.');
+  return m.join(' ');
+}
+window.Tableau.explication(Object.fromEntries(Object.keys(FIGS).map(f => [f, FIGS[f].etapes.map(([e, , d]) => ({ repere: e, texte: d }))])));
+const commandes = ['start', 'reset', 'pause', 'resume', 'play_until', 'set_time', 'set_parameters'];
+const config = { id: 'dipole_rl_figures', version: '1.0', title: 'Figure — ' + lisible(FIGS[fig].titre), variants: [{ id: fig, label: lisible(FIGS[fig].titre) }], commands: commandes,
+  command_schema: { play_until: { moment: etapes().join(' | ') + ' (réécrit la figure et s’arrête après cette étape)', time_s: 'instant d’écriture (s)' },
+    set_time: { time_s: 'instant d’écriture (s), figé' }, set_parameters: { fig: Object.keys(FIGS).join(' | ') } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: `Figure du cours « Dipôle RL » : ${lisible(FIGS[fig].titre)}. Étapes d’écriture : ${etapes().join(', ')}.`,
+  etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : 'finished', ce_qui_se_voit: ceQuiSeVoit(), current_variant: fig,
+    time_s: +S.tw.toFixed(2), parameters: { fig },
+    moments: Object.fromEntries(etapes().filter(n => M[n] !== undefined).map(n => [n, +M[n].toFixed(2)])), etapes_ecrites: etapes().filter(n => vu(n)) }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset: start, pause, resume, play_until: () => playUntil(p), set_time: () => setTime(p), set_parameters: () => setParameters(p) })[cmd]?.() });
+etiquette();
+window.__figures = { FIGS, S, scene };   // pour les vérifications automatiques
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

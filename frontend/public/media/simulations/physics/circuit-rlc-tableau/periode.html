@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La période propre T₀ = 2π√(LC) — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="rlc.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="La courbe u_C(t) d’un circuit LC idéal tracée à la craie rouge (t en ms de 0 à 16, u_C en V de −14 à 14), avec la période propre T₀ cotée entre deux sommets ; une seconde courbe en pointillés rouges pour E, L ou C changé ; à droite, la colonne « Lecture »"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * La période propre T₀ = 2π√(LC) et ce dont elle dépend (cours « Oscillations libres d’un circuit RLC série », 2e Bac PC BIOF, 12 novembre 2026).
+ * Circuit LC idéal (R + r = 0) : E = 6 V, C = 4 µF, L = 0,1 H → T₀ = 2π√(LC) ≈ 3,97 ms ≈ 4 ms (π² = 10 : 4 ms exactement).
+ * u_C(t) = E·cos(2πt/T₀) (départ au sommet, i(0) = 0). E = 12 V : U_m = 12 V, mêmes instants des sommets.
+ * C × 4 (16 µF) ou L × 4 (0,4 H) : T₀ ≈ 7,95 ms ≈ 8 ms (T₀ × 2).
+ * Graphe : t en ms (0 à 16, graduations de 1 ms) ; u_C en V (−14 à 14, graduations de 2 V). Tracé AU RALENTI : 1 ms = 0,5 s de simulation.
+ * Vues (?vue= ou set_parameters {vue}) :
+ *  - T0 (défaut) : lecture_T0, calcul_T0, unites, E_change (seconde courbe sous E’ = 12 V), fin.
+ *  - influence_L : courbe (référence), L_fois_4 (L’ = 0,4 H en pointillés), fin.
+ *  - influence_C : courbe (référence), C_fois_4 (C’ = 16 µF en pointillés), fin.
+ * Paramètres (valeurs de la courbe en pointillés) : L (0,025 → 0,4 H), C (1 → 16 µF), E (2 → 12 V).
+ * Poignées : vue T0, l’anneau rose au départ de la courbe en pointillés se glisse en hauteur (E’) ; vues influence, l’anneau rose
+ *            sur le sommet t = T₀’ de la courbe en pointillés se glisse à l’horizontale (T₀’ → L’ ou C’).
+ * Couleurs : ROUGE = u_C (référence en trait plein, seconde courbe en pointillés) ; jaune = surlignage seulement.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '').replace('-', '−');
+const VUES = { T0: ['lecture_T0', 'calcul_T0', 'unites', 'E_change', 'fin'], influence_L: ['courbe', 'L_fois_4', 'fin'], influence_C: ['courbe', 'C_fois_4', 'fin'] };
+const TITRES = { T0: 'la période propre T_0', influence_L: 'influence de L', influence_C: 'influence de C' };
+const q = new URLSearchParams(location.search);
+const S = { vue: VUES[q.get('vue')] ? q.get('vue') : 'T0', L2: .4, C2: 16, E2: 12, t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0, dit: '', plume: null, fige: false };
+let M = {}, MM = {};
+const VITESSE = 2;
+const RALENTI = .5;
+
+/* ── Physique (LC idéal) ───────────────────────────────────────────────── */
+const E = 6, C1 = 4, L1 = .1;                                       // V, µF, H
+const T0De = (L, Cmu) => 2 * Math.PI * Math.sqrt(L * Cmu * 1e-6) * 1000;    // ms
+const T0 = T0De(L1, C1);                                             // 3,97 ms
+const uDe = (Um, T) => t => Um * Math.cos(2 * Math.PI * t / T);
+const DEUX = () => (S.vue === 'T0' ? { E: S.E2, L: L1, C: C1 } : S.vue === 'influence_L' ? { E, L: S.L2, C: C1 } : { E, L: L1, C: S.C2 });
+const fms = v => (Math.abs(v - Math.round(v)) < .1 ? fx(Math.round(v), 0) : fr(v, 1));
+const facteur = k => fx(k, 2);
+
+/* ── Géométrie (cadre 760 × 420) ───────────────────────────────────────── */
+const GR = { x: 8, y: 40, w: 470, h: 376 }, RL = { x: 486, y: 40, w: 266, h: 376 };
+const LX = RL.x + 8, LW = RL.w - 16;
+const O = { x: 50, y: 226 }, AXL = 400, TMAX = 16, KU = 11;
+const PX = t => O.x + t * AXL / TMAX;
+const PU = u => O.y - u * KU;
+const marque = (c, nom) => { MM[nom] = c.cur; };
+const lire = (c, y, s, o = {}) => c.texte(s, LX + (o.dx || 0), y, { couleur: 'blanc', taille: 15, max: LW, duree: Math.max(.3, s.length / 28), ...o });
+const POINTILLE = { pointille: [8, 6], alpha: .9 };
+
+/** Courbe tracée au ralenti, uniformément dans le temps (morceaux de 0,5 ms) ; S.plume = instant en cours de tracé. */
+function courbeT(c, f, o = {}) {
+  const N = Math.ceil(TMAX / .5), D = TMAX * RALENTI;
+  for (let k = 0; k < N; k++) {
+    const a = k * TMAX / N, b = (k + 1) * TMAX / N, t0 = c.cur;
+    c.courbe(u => { const t = a + (b - a) * u; return [PX(t), PU(f(t))]; }, 8, { couleur: 'rouge', largeur: 2.5, ...o, duree: D / N });
+    if (Number.isFinite(c.t) && c.t > t0 && c.t < c.cur) S.plume = a + (b - a) * (c.t - t0) / (c.cur - t0);
+  }
+}
+
+function dessiner(c) {
+  scene.cadre(47); MM = {}; S.plume = null;
+  c.texte(`Période propre : ${TITRES[S.vue]}`, GR.x + 6, 30, { couleur: 'cyan', taille: 18, max: GR.w - 10, duree: .8 });
+  c.rect(GR.x, GR.y, GR.w, GR.h, { couleur: 'tresfaible', arrondi: 10, duree: .4 });
+  c.texte('Lecture', RL.x + 6, 30, { couleur: 'cyan', taille: 17, duree: .3 });
+  c.rect(RL.x, RL.y, RL.w, RL.h, { couleur: 'tresfaible', arrondi: 10, duree: .4 });
+  axes(c);
+  lire(c, 62, 'LC idéal : E = 6 V ; C = 4 µF ; L = 0,1 H', { couleur: 'faible', taille: 14, duree: .6 });
+  c.pause(.3);
+  (S.vue === 'T0' ? vueT0 : vueInfluence)(c);
+  c.pause(.8); marque(c, 'fin');
+  poignee(c);
+  declarerReperes(c);
+  const fini = c.fin();
+  M = MM;
+  return fini || !S.running;
+}
+function axes(c) {
+  const LT = AXL + 14, tg = [];
+  for (let k = 1; k <= TMAX; k++) tg.push([(PX(k) - O.x) / LT, k % 2 === 0 ? String(k) : null]);
+  c.axe(O.x, O.y, O.x + LT, O.y, tg, { taille: 12 });
+  const H = 14 * KU + 14, ug = [];
+  for (let v = 2; v <= 14; v += 2) ug.push([v * KU / H, v % 4 === 0 ? String(v) : null]);
+  c.axe(O.x, O.y + 14 * KU + 4, O.x, O.y - H, [], { vertical: true });
+  c.axe(O.x, O.y, O.x, O.y - H, ug, { taille: 12, vertical: true });
+  for (let v = 2; v <= 14; v += 2) {
+    const y = PU(-v); c.ligne(O.x - 5, y, O.x + 5, y, { couleur: 'faible', largeur: 1.4, duree: .04 });
+    if (v % 4 === 0) c.texte('−' + v, O.x - 10, y + 5, { couleur: 'faible', taille: 12, align: 'right', duree: .1 });
+  }
+  c.texte('u_C (V)', O.x + 10, O.y - H + 12, { couleur: 'rouge', taille: 15 });
+  c.texte('t (ms)', O.x + LT + 2, O.y + 30, { couleur: 'blanc', taille: 14, align: 'right' });
+}
+/** Cote entre deux sommets successifs (t1 → t2) au-dessus du niveau u. */
+function coteSommets(c, t1, t2, u, texte, o = {}) {
+  const y = PU(u) - (o.haut ?? 18);
+  c.ligne(PX(t1), PU(u) - 5, PX(t1), y - 4, { couleur: 'faible', largeur: 1.2, pointille: [3, 4], duree: .1 });
+  c.ligne(PX(t2), PU(u) - 5, PX(t2), y - 4, { couleur: 'faible', largeur: 1.2, pointille: [3, 4], duree: .1 });
+  c.cote(PX(t1), y, PX(t2), y, texte, { couleur: 'jaune', largeur: 1.6, taille: 14, ...o });
+}
+
+/* ── Vue « T0 » ────────────────────────────────────────────────────────── */
+function vueT0(c) {
+  const d = DEUX();
+  courbeT(c, uDe(E, T0));
+  coteSommets(c, T0, 2 * T0, E, 'T_0 ≈ 4 ms');
+  lire(c, 90, 'T_0 ≈ 4 ms (lue entre deux sommets)', { couleur: 'rouge', taille: 15 });
+  marque(c, 'lecture_T0');
+  c.pause(.4);
+  lire(c, 122, 'T_0 = 2π√(LC)', { taille: 17 });
+  lire(c, 146, '= 2π√(0,1 × 4·10⁻⁶)', { taille: 15 });
+  lire(c, 170, '≈ 4·10⁻³ s = 4 ms', { taille: 17 });
+  c.rect(LX - 5, 152, 150, 26, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  marque(c, 'calcul_T0');
+  c.pause(.4);
+  lire(c, 202, '[L] = [U]·[T]/[I] (u = L·di/dt)', { taille: 14 });
+  lire(c, 224, '[C] = [I]·[T]/[U] (i = C·du/dt)', { taille: 14 });
+  lire(c, 248, '[L]·[C] = [T]²', { taille: 16 });
+  lire(c, 272, '√(LC) est un temps ; 2π sans unité', { couleur: 'faible', taille: 14 });
+  marque(c, 'unites');
+  c.pause(.4);
+  courbeT(c, uDe(d.E, T0), POINTILLE);
+  for (let n = 0; n * T0 <= TMAX; n++) c.ligne(PX(n * T0), PU(Math.max(d.E, E)) - 4, PX(n * T0), O.y, { couleur: 'tresfaible', largeur: 1.2, pointille: [3, 5], duree: .06 });
+  c.texte(`E’ = ${fx(d.E, 1)} V`, PX(.3 * T0) + 4, PU(d.E) + (d.E > E ? -6 : 18), { couleur: 'rouge', taille: 14 });
+  lire(c, 306, `E’ = ${fx(d.E, 1)} V : U_m = ${fx(d.E, 1)} V (pointillés)`, { couleur: 'rouge', taille: 15 });
+  lire(c, 328, 'sommets aux mêmes instants', { taille: 15 });
+  lire(c, 356, 'T_0 ne dépend pas de E', { taille: 17 });
+  c.rect(LX - 5, 338, 186, 26, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  marque(c, 'E_change');
+}
+
+/* ── Vues « influence_L » et « influence_C » ───────────────────────────── */
+function vueInfluence(c) {
+  const d = DEUX(), T2 = T0De(d.L, d.C), estL = S.vue === 'influence_L';
+  courbeT(c, uDe(E, T0));
+  coteSommets(c, 0, T0, E, 'T_0 ≈ 4 ms');
+  c.ligne(LX, 86, LX + 26, 86, { couleur: 'rouge', largeur: 2.5, duree: .1 });
+  lire(c, 91, 'référence : L = 0,1 H ; C = 4 µF', { taille: 14, max: LW - 34, dx: 34 });
+  lire(c, 116, 'T_0 = 2π√(LC) ≈ 4 ms', { taille: 16 });
+  marque(c, 'courbe');
+  c.pause(.5);
+  courbeT(c, uDe(E, T2), POINTILLE);
+  // cote de T₀’ sous la courbe : du départ au sommet suivant
+  const yb = PU(-E) + 24;
+  c.ligne(PX(T2), PU(E) + 6, PX(T2), yb + 4, { couleur: 'faible', largeur: 1.2, pointille: [3, 4], duree: .1 });
+  c.ligne(PX(0), PU(-E) + 4, PX(0), yb + 4, { couleur: 'faible', largeur: 1.2, pointille: [3, 4], duree: .05 });
+  c.cote(PX(0), yb, PX(T2), yb, `T_0’ ≈ ${fms(T2)} ms`, { couleur: 'jaune', largeur: 1.6, taille: 14, dessous: true });
+  const k = estL ? d.L / L1 : d.C / C1;
+  c.ligne(LX, 152, LX + 26, 152, { couleur: 'rouge', largeur: 2.5, duree: .1, ...POINTILLE });
+  lire(c, 157, estL ? `L’ = ${fx(d.L, 3)} H (pointillés)` : `C’ = ${fx(d.C, 1)} µF (pointillés)`, { couleur: 'rouge', taille: 15, max: LW - 34, dx: 34 });
+  lire(c, 182, estL ? `T_0’ = 2π√(L’C) ≈ ${fms(T2)} ms` : `T_0’ = 2π√(LC’) ≈ ${fms(T2)} ms`, { taille: 15 });
+  lire(c, 218, `${estL ? 'L' : 'C'} × ${facteur(k)} → T_0 × ${facteur(Math.sqrt(k))}`, { taille: 18 });
+  c.rect(LX - 5, 198, Math.min(LW + 8, c.largeurTexte(`${estL ? 'L' : 'C'} × ${facteur(k)} → T0 × ${facteur(Math.sqrt(k))}`, 18) + 16), 28, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  lire(c, 250, `√${facteur(k)} = ${facteur(Math.sqrt(k))} : T_0 suit √(LC)`, { couleur: 'faible', taille: 14 });
+  lire(c, 276, T2 > T0 + .05 ? 'oscillations plus lentes' : T2 < T0 - .05 ? 'oscillations plus rapides' : 'même période', { taille: 15 });
+  lire(c, 300, 'même amplitude : U_m = E = 6 V', { couleur: 'faible', taille: 14 });
+  marque(c, estL ? 'L_fois_4' : 'C_fois_4');
+}
+
+/* ── Poignée (anneau rose) ─────────────────────────────────────────────── */
+function poigneeXY() {
+  const d = DEUX();
+  return S.vue === 'T0' ? [PX(0), PU(d.E)] : [PX(T0De(d.L, d.C)), PU(E)];
+}
+function poignee(c) {
+  const apres = MM[S.vue === 'T0' ? 'E_change' : S.vue === 'influence_L' ? 'L_fois_4' : 'C_fois_4'];
+  if (!(c.t >= apres - 1e-6)) return;
+  c.direct(() => { const [x, y] = poigneeXY(); c.cercle(x, y, 9, { couleur: 'rose', largeur: 2.2 }); });
+}
+
+function declarerReperes(c) {
+  const d = DEUX(), ici = (...v) => (v.includes(S.vue) ? '' : ` (vue « ${v[0]} »)`);
+  const T2L = T0De(S.L2, C1), T2C = T0De(L1, S.C2);
+  c.repere('axe_t', O.x, O.y - 10, AXL + 16, 30, 'l’axe des temps : t (ms), de 0 à 16 ms, graduations de 1 ms');
+  c.repere('axe_u', O.x - 36, PU(14) - 14, 60, 28 * KU + 22, 'l’axe des tensions : u_C (V), de −14 à 14 V');
+  c.repere('courbe', O.x, PU(E), AXL, 2 * E * KU, 'la courbe de référence (trait plein) : E = 6 V, L = 0,1 H, C = 4 µF, T₀ ≈ 4 ms');
+  if (S.vue === 'T0') c.repere('T0', PX(T0), PU(E) - 34, PX(2 * T0) - PX(T0), 30, 'T₀ ≈ 4 ms, lue entre deux sommets successifs');
+  else c.repere('T0', PX(0), PU(E) - 34, PX(T0) - PX(0), 30, 'T₀ ≈ 4 ms, la période de référence');
+  c.repere('calcul', LX - 6, 104, LW + 10, 76, `T₀ = 2π√(LC) = 2π√(0,1 × 4·10⁻⁶) ≈ 4·10⁻³ s = 4 ms${ici('T0')}`);
+  c.repere('unites', LX - 6, 186, LW + 10, 94, `[L]·[C] = [T]² : √(LC) est un temps${ici('T0')}`);
+  c.repere('courbe_E', O.x, PU(S.E2), AXL, 2 * S.E2 * KU, `la courbe en pointillés : E’ = ${fx(S.E2, 1)} V, U_m = ${fx(S.E2, 1)} V, mêmes sommets dans le temps${ici('T0')}`);
+  c.repere('courbe_L', O.x, PU(E), AXL, 2 * E * KU, `la courbe en pointillés : L’ = ${fx(S.L2, 3)} H, T₀’ ≈ ${fms(T2L)} ms${ici('influence_L')}`);
+  c.repere('courbe_C', O.x, PU(E), AXL, 2 * E * KU, `la courbe en pointillés : C’ = ${fx(S.C2, 1)} µF, T₀’ ≈ ${fms(T2C)} ms${ici('influence_C')}`);
+  const T2 = S.vue === 'T0' ? T2C : T0De(d.L, d.C);
+  c.repere('T0_double', PX(0), PU(-E) + 4, Math.max(30, PX(T2) - PX(0)), 44, S.vue === 'T0' ? 'la période T₀’ de la courbe en pointillés (vues « influence_L », « influence_C »)' : `T₀’ ≈ ${fms(T2)} ms (courbe en pointillés)`);
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+const craie = scene.craie;
+scene.cadre = function (graine) {
+  const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  craie.debut(graine, S.t);
+  const s = Math.min(W / VW, H / VH) || 1;
+  scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
+  craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
+  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+  return craie;
+};
+function calculer() { const t = S.t, rn = S.running; S.t = 1e6; S.running = false; try { dessiner(craie); } finally { S.t = t; S.running = rn; } dessiner(craie); scene.sale = true; }
+function moments() { if (M.fin === undefined) calculer(); const out = {}; for (const k of VUES[S.vue]) out[k] = +M[k].toFixed(2); return out; }
+const vu = n => M[n] !== undefined && S.t >= M[n] - 1e-6;
+
+const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+const INDICES = { 0: '₀', 1: '₁', 2: '₂', e: 'ₑ', m: 'ₘ', a: 'ₐ', o: 'ₒ', x: 'ₓ' };
+const lisible = s => String(s).replace(/_\{?([A-Za-z0-9]+)\}?/g, (_, x) => [...x].map(ch => INDICES[ch] || ch).join(''));
+const dire = (texte, kind = '') => { S.dit = texte; bulle($('feedback'), lisible(texte), kind); };
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t += dt * VITESSE;
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.jusqua = null; S.running = false;
+    if (S.t >= M.fin - 1e-6) { finir(); return true; }
+    S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 1)} s`) + '.');
+    pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); return true;
+  }
+  if (M.fin !== undefined && S.t >= M.fin) { S.t = M.fin; finir(); return true; }
+  if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function conclusion() {
+  const d = DEUX(), T2 = T0De(d.L, d.C);
+  if (S.vue === 'T0') return `T₀ ≈ 4 ms lue et calculée : T₀ = 2π√(LC) = 2π√(0,1 × 4·10⁻⁶) ≈ 4·10⁻³ s ; √(LC) est un temps. Sous E’ = ${fx(d.E, 1)} V, U_m = ${fx(d.E, 1)} V mais les sommets restent aux mêmes instants : T₀ ne dépend pas de E.`;
+  const estL = S.vue === 'influence_L', k = estL ? d.L / L1 : d.C / C1;
+  return `${estL ? `L’ = ${fx(d.L, 3)} H` : `C’ = ${fx(d.C, 1)} µF`} : T₀’ = 2π√(${estL ? 'L’C' : 'LC’'}) ≈ ${fms(T2)} ms au lieu de 4 ms ; ${estL ? 'L' : 'C'} × ${facteur(k)} → T₀ × ${facteur(Math.sqrt(k))}.`;
+}
+function finir() { S.running = false; S.fait = true; S.pause = false; etiquette(); dire(conclusion(), 'good'); pont.noter('measurement', { vue: S.vue }); pont.emettre(); }
+const MOTIFS = {
+  lecture_T0: 'T₀ ≈ 4 ms lue entre deux sommets', calcul_T0: 'T₀ = 2π√(LC) ≈ 4 ms', unites: '[L]·[C] = [T]² : √(LC) est un temps', E_change: 'E’ = 12 V : mêmes instants des sommets',
+  courbe: 'la courbe de référence, T₀ ≈ 4 ms', L_fois_4: 'L × 4 → T₀ × 2', C_fois_4: 'C × 4 → T₀ × 2', fin: 'tout est écrit',
+};
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
+function ceQuiSeVoit() {
+  if (M.fin === undefined) calculer();
+  const d = DEUX(), T2 = T0De(d.L, d.C);
+  const m = [`Vue « ${S.vue} » (${lisible(TITRES[S.vue])})${S.running ? ', la craie écrit, la courbe au ralenti' : S.fait ? ', fin : tout est écrit' : S.pause ? ', arrêt sur image' : ', pas encore lancée'}.`,
+    'Circuit LC idéal, référence E = 6 V, C = 4 µF, L = 0,1 H : u_C(t) = 6·cos(2πt/T₀), T₀ ≈ 3,97 ms ≈ 4 ms. Axes : t (ms) de 0 à 16, graduations de 1 ms ; u_C (V) de −14 à 14.'];
+  const Lg = [];
+  if (S.plume != null && S.running) Lg.push(`la craie trace une courbe : t ≈ ${fr(S.plume, 1)} ms`);
+  if (S.vue === 'T0') {
+    if (vu('lecture_T0')) Lg.push('courbe rouge de référence (sommets 6 V à 0, 4, 8, 12, 16 ms environ) ; cote jaune entre deux sommets : « T₀ ≈ 4 ms (lue) »');
+    if (vu('calcul_T0')) Lg.push('« T₀ = 2π√(LC) = 2π√(0,1 × 4·10⁻⁶) ≈ 4·10⁻³ s = 4 ms » (encadré)');
+    if (vu('unites')) Lg.push('« [L] = [U]·[T]/[I] ; [C] = [I]·[T]/[U] ; [L]·[C] = [T]² : √(LC) est un temps ; 2π sans unité »');
+    if (vu('E_change')) Lg.push(`seconde courbe rouge en pointillés sous E’ = ${fx(d.E, 1)} V : U_m = ${fx(d.E, 1)} V, sommets aux MÊMES instants (traits verticaux) ; « T₀ ne dépend pas de E » encadré`);
+  } else {
+    const estL = S.vue === 'influence_L', k = estL ? d.L / L1 : d.C / C1;
+    if (vu('courbe')) Lg.push('courbe rouge de référence (L = 0,1 H, C = 4 µF) : cote « T₀ ≈ 4 ms » entre les sommets à 0 et 4 ms');
+    if (vu(estL ? 'L_fois_4' : 'C_fois_4')) Lg.push(`courbe rouge en pointillés : ${estL ? `L’ = ${fx(d.L, 3)} H` : `C’ = ${fx(d.C, 1)} µF`}, même amplitude 6 V, cote « T₀’ ≈ ${fms(T2)} ms » ; « ${estL ? 'L' : 'C'} × ${facteur(k)} → T₀ × ${facteur(Math.sqrt(k))} » encadré`);
+  }
+  m.push(Lg.length ? `Au tableau : ${Lg.join(' ; ')}.` : 'Seuls les axes sont tracés.');
+  m.push(S.vue === 'T0' ? `Poignée : l’anneau rose au départ de la courbe en pointillés se glisse en hauteur (E’ de 2 à 12 V, maintenant ${fx(S.E2, 1)} V).`
+    : S.vue === 'influence_L' ? `Poignée : l’anneau rose sur le sommet t = T₀’ de la courbe en pointillés se glisse à gauche ou à droite (L’ de 0,025 à 0,4 H, maintenant ${fx(S.L2, 3)} H).`
+      : `Poignée : l’anneau rose sur le sommet t = T₀’ de la courbe en pointillés se glisse à gauche ou à droite (C’ de 1 à 16 µF, maintenant ${fx(S.C2, 1)} µF).`);
+  if (S.fait) m.push(`Conclusion : ${conclusion()}`);
+  return m.join(' ');
+}
+
+/* ── Commandes ─────────────────────────────────────────────────────────── */
+function start() { S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire('La craie trace u_C(t) au ralenti : une période de 4 ms dure ≈ 2 s ici…'); pont.noter('start', { vue: S.vue }); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
+function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('La craie continue…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  calculer(); const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = clamp(t, 0, M.fin); S.fait = S.t >= M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+  etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fr(S.t, 1)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function playUntil(p) {
+  calculer();
+  const nom = VUES[S.vue].includes(p.moment) ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+  S.jusqua = clamp(cible, .01, M.fin); S.motif = nom ? MOTIFS[nom] : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+const auPasL = v => Math.round(clamp(v, .025, .4) / .025) * .025;
+const auPasC = v => Math.round(clamp(v, 1, 16));
+const auPasE = v => Math.round(clamp(v, 2, 12));
+const annonce = () => { const d = DEUX(), T2 = T0De(d.L, d.C); return S.vue === 'T0' ? `E’ = ${fx(d.E, 1)} V : U_m = ${fx(d.E, 1)} V, T₀ reste ≈ 4 ms.` : `${S.vue === 'influence_L' ? `L’ = ${fx(d.L, 3)} H` : `C’ = ${fx(d.C, 1)} µF`} : T₀’ ≈ ${fms(T2)} ms.`; };
+function montrerReglage() { M = {}; calculer(); S.running = false; S.jusqua = null; S.t = M.fin; S.fait = true; S.pause = false; etiquette(); scene.sale = true; dire(annonce()); }
+function setParameters(p) {
+  p = p || {}; let vue = false, phys = false;
+  if (p.vue && VUES[p.vue] && p.vue !== S.vue) { S.vue = p.vue; vue = true; }
+  const ok = v => v !== undefined && v !== null && v !== '' && Number.isFinite(+v);
+  const L = p.L ?? p.L_H, Cp = p.C ?? p.C_uF, Ep = p.E ?? p.E_V;
+  if (ok(L)) { const v = auPasL(+L); if (Math.abs(v - S.L2) > 1e-9) { S.L2 = v; phys = true; } }
+  // C en µF (1..16) ; une valeur en farads (4e-6) est aussi comprise
+  if (ok(Cp)) { const v = auPasC(+Cp < .001 ? +Cp * 1e6 : +Cp); if (v !== S.C2) { S.C2 = v; phys = true; } }
+  if (ok(Ep)) { const v = auPasE(+Ep); if (v !== S.E2) { S.E2 = v; phys = true; } }
+  M = {}; calculer();
+  pont.noter('set_parameters', { vue: S.vue, L: S.L2, C: S.C2, E: S.E2 });
+  if (vue) { start(); return; }
+  if (phys) montrerReglage();
+  pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+
+/* Poignée : E’ (vue T0) en hauteur ; T₀’ (vues influence) à l’horizontale → L’ = T₀’²/(4π²·C) ou C’ = T₀’²/(4π²·L). */
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => {
+    const apres = M[S.vue === 'T0' ? 'E_change' : S.vue === 'influence_L' ? 'L_fois_4' : 'C_fois_4'];
+    if (!(S.t >= apres - 1e-6)) return null;
+    const [x, y] = scene.local(px, py), [hx, hy] = poigneeXY(); return Math.hypot(x - hx, y - hy) < 18 ? 'p' : null;
+  },
+  bouger: (id, px, py) => {
+    if (S.running) pause();
+    const [x, y] = scene.local(px, py);
+    if (S.vue === 'T0') { const v = auPasE((O.y - y) / KU); if (v !== S.E2) { S.E2 = v; montrerReglage(); } return; }
+    const T = clamp((x - O.x) * TMAX / AXL, .5, TMAX) / 1000, base = (T / (2 * Math.PI)) ** 2;
+    if (S.vue === 'influence_L') { const v = auPasL(base / (C1 * 1e-6)); if (Math.abs(v - S.L2) > 1e-9) { S.L2 = v; montrerReglage(); } }
+    else { const v = auPasC(base / L1 * 1e6); if (v !== S.C2) { S.C2 = v; montrerReglage(); } }
+  },
+  lacher: () => { montrerReglage(); pont.noter('set_parameters', { L: S.L2, C: S.C2, E: S.E2 }); pont.emettre(); },
+});
+
+window.Tableau.explication({
+  T0: [
+    { repere: 'courbe', texte: 'Sans résistance, u_C oscille : sommets à 6 V, tous égaux.' },
+    { repere: 'T0', texte: 'Entre deux sommets successifs, on lit T₀ ≈ 4 ms.' },
+    { repere: 'calcul', texte: 'Le calcul : T₀ = 2π√(LC) = 2π√(0,1 × 4·10⁻⁶) ≈ 4·10⁻³ s.' },
+    { repere: 'unites', texte: '[L]·[C] = [T]² : √(LC) est bien un temps, et 2π n’a pas d’unité.' },
+    { repere: 'courbe_E', texte: 'Chargé sous 12 V, U_m double, mais les sommets restent aux mêmes instants : T₀ ne dépend pas de E.' },
+  ],
+  influence_L: [
+    { repere: 'courbe', texte: 'La référence : L = 0,1 H, C = 4 µF, T₀ ≈ 4 ms.' },
+    { repere: 'courbe_L', texte: 'Avec L = 0,4 H, quatre fois plus : la période vaut environ 8 ms.' },
+    { repere: 'T0_double', texte: 'L × 4 → T₀ × 2, car √4 = 2.' },
+  ],
+  influence_C: [
+    { repere: 'courbe', texte: 'La référence : L = 0,1 H, C = 4 µF, T₀ ≈ 4 ms.' },
+    { repere: 'courbe_C', texte: 'Avec C = 16 µF, quatre fois plus : la période vaut environ 8 ms.' },
+    { repere: 'T0_double', texte: 'C × 4 → T₀ × 2, car √4 = 2.' },
+  ],
+});
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+calculer();
+const config = { id: 'circuit_rlc_periode', version: '1.0', title: 'La période propre T₀ = 2π√(LC)', variants: Object.keys(VUES).map(id => ({ id, label: lisible(TITRES[id]) })), commands: commandes,
+  command_schema: {
+    set_parameters: { vue: 'T0 | influence_L | influence_C (change la vue et la retrace)', L: '0.025..0.4 pas 0.025 (H) : L’ de la courbe en pointillés (vue influence_L)', C: '1..16 pas 1 (µF) : C’ de la courbe en pointillés (vue influence_C)', E: '2..12 pas 1 (V) : E’ de la courbe en pointillés (vue T0)' },
+    set_time: { time_s: '0..fin (arrêt sur cet instant de l’écriture, en s ; voir moments)' },
+    play_until: { moment: 'T0 : lecture_T0 | calcul_T0 | unites | E_change | fin ; influence_L : courbe | L_fois_4 | fin ; influence_C : courbe | C_fois_4 | fin', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Circuit LC idéal : E = 6 V, C = 4 µF, L = 0,1 H. u_C(t) = E·cos(2πt/T₀) ; T₀ ≈ 4 ms se lit entre deux sommets successifs ; T₀ = 2π√(LC) = 2π√(0,1 × 4·10⁻⁶) ≈ 4·10⁻³ s. Unités : [L] = [U]·[T]/[I], [C] = [I]·[T]/[U], [L]·[C] = [T]² : √(LC) est un temps. Chargé sous 12 V : U_m = 12 V, sommets aux mêmes instants : T₀ ne dépend pas de E. C × 4 (16 µF) ou L × 4 (0,4 H) : T₀ ≈ 8 ms (T₀ × 2).',
+  etat: () => {
+    dessiner(craie);
+    const d = DEUX();
+    return { simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle', ce_qui_se_voit: ceQuiSeVoit(), current_variant: S.vue,
+      time_s: +S.t.toFixed(2), parameters: { vue: S.vue, L: S.L2, C_uF: S.C2, E: S.E2, ref_T0_ms: +T0.toFixed(3), T0_2_ms: +T0De(d.L, d.C).toFixed(3), ralenti_s_par_ms: RALENTI }, moments: moments() };
+  },
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+dire('La courbe u_C(t) va s’écrire…');
+setTimeout(() => { if (!S.running && S.t === 0 && !S.pause) start(); }, 900);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

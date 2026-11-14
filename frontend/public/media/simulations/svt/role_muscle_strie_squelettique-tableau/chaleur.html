@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le muscle chauffe — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="muscle.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un muscle traversé par une pince thermoélectrique ; à droite, sur le même axe du temps, le myogramme d’une secousse et la chaleur dégagée : une chaleur initiale brève et haute pendant la secousse, puis une chaleur retardée basse et longue, qui disparaît sans dioxygène"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Le muscle chauffe (cours « Rôle du muscle strié squelettique », section 4 du contrat, novembre 2026).
+ * Un muscle peint, une pince thermoélectrique piquée dedans (fils vers un appareil de mesure). À droite, sur le
+ * même axe du temps : le myogramme d'une secousse (latence 0,01 s, contraction 0,04 s, relâchement 0,05 s) et la
+ * chaleur dégagée. Axe du temps coupé : 0 → 0,3 s dilaté, une coupure « // », puis 1 à 2 minutes.
+ *
+ * Modèle (allures, pour l'œil ; aucun nombre de chaleur n'est affiché) :
+ *  - chaleur initiale : bosse brève et haute, de 0,002 s à 0,105 s (pendant la secousse), sommet vers 0,054 s ;
+ *    elle ne dépend PAS du dioxygène (hydrolyse de l'ATP + phosphocréatine : rapide, sans O₂) ;
+ *  - chaleur retardée : bosse basse et longue après la secousse, sommet vers 35 s, presque finie à 2 min ;
+ *    elle n'existe qu'en présence de dioxygène (respiration : réactions aérobies).
+ * Temps de la scène : 0 → 0,3 s de l'expérience joués en 4,5 s (ralenti 15 fois), puis 0,3 s → 135 s en 6 s (accéléré).
+ * Un seul bouton ; l'interrupteur « dioxygène » se glisse (ou se touche) sur le dessin.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const vue = 'chaleur';
+
+/* ── Temps : expérience (t, s) ↔ scène (τ, s) ─────────────────────────── */
+const T0 = 0.3, D1 = 4.5, D2 = 6, TCUT = 0.3, TMAX = 135;
+const TAU_FIN_TRACE = T0 + D1 + D2, FIN = TAU_FIN_TRACE + 0.4;
+const tauDe = t => (t <= TCUT ? T0 + t / TCUT * D1 : T0 + D1 + (t - TCUT) / (TMAX - TCUT) * D2);
+const expDe = tau => (tau <= T0 ? 0 : tau <= T0 + D1 ? (tau - T0) / D1 * TCUT : Math.min(TMAX, TCUT + (tau - T0 - D1) / D2 * (TMAX - TCUT)));
+const RALENTI = Math.round(D1 / TCUT), ACCELERE = Math.round((TMAX - TCUT) / D2);
+
+/* ── Modèle ─────────────────────────────────────────────────────────── */
+const LAT = 0.01, TS = 0.05, TR = 0.10;
+function myo(t) {               // fraction de l'amplitude maximale (0..1) : montée rapide, descente plus lente
+  if (t <= LAT || t >= TR) return 0;
+  if (t <= TS) return (1 - Math.cos(Math.PI * (t - LAT) / (TS - LAT))) / 2;
+  return (1 + Math.cos(Math.PI * (t - TS) / (TR - TS))) / 2;
+}
+const HI0 = 0.002, HI1 = 0.105, T_HI_MAX = (HI0 + HI1) / 2;
+const chalInit = t => (t > HI0 && t < HI1 ? Math.sin(Math.PI * (t - HI0) / (HI1 - HI0)) ** 2 : 0);
+const TPR = 35;                 // sommet de la chaleur retardée (s)
+const chalRet = t => { const s = t - TR; if (s <= 0) return 0; const u = s / TPR; return u ** 3 * Math.exp(3 * (1 - u)); };
+const T_RET = 40;               // « milieu » de la bosse retardée (s de l'expérience)
+
+/* ── Géométrie (cadre 760 × 420) ────────────────────────────────────── */
+const XA = 292, XB = 502, XC = 526, XD = 736;
+const X = t => (t <= TCUT ? XA + t / TCUT * (XB - XA) : XC + (Math.min(t, TMAX) - TCUT) / (TMAX - TCUT) * (XD - XC));
+const YM = 165, AM = 70;        // myogramme : ligne de base, amplitude (px)
+const YC = 328, H1 = 105, H2 = 28;  // chaleur : ligne de base, hauteurs des deux bosses (px)
+const MX = 95;                  // axe du muscle
+const SW = { x1: 112, x2: 202, y: 374 };   // interrupteur dioxygène
+
+const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0, o2: true, origines: false };
+const APPARU = {};
+
+/* ── Peinture du vivant et du matériel (canvas brut, AVANT la craie) ─── */
+function formeMuscle(f) {
+  const y0 = 58, y1 = y0 + 28, Lb = 150 * (1 - 0.12 * f), W = 74 * (1 + 0.12 * f), y2 = y1 + Lb, y3 = y2 + 32;
+  return { y0, y1, y2, y3, Lb, W, py: y1 + Lb * 0.5 };
+}
+function tendon(ctx, x, ya, yb, wa, wb) {
+  const g = ctx.createLinearGradient(x - wa, 0, x + wa, 0);
+  g.addColorStop(0, '#bdb8ae'); g.addColorStop(.35, '#f6f3ec'); g.addColorStop(.55, '#ffffff'); g.addColorStop(1, '#cbc5ba');
+  ctx.fillStyle = g; ctx.beginPath();
+  ctx.moveTo(x - wa / 2, ya); ctx.lineTo(x + wa / 2, ya);
+  ctx.quadraticCurveTo(x + wb / 2, (ya + yb) / 2, x + wb / 2, yb); ctx.lineTo(x - wb / 2, yb);
+  ctx.quadraticCurveTo(x - wb / 2, (ya + yb) / 2, x - wa / 2, ya); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = .8; ctx.beginPath(); ctx.moveTo(x - 1, ya + 2); ctx.lineTo(x - 1, yb - 2); ctx.stroke();
+}
+function peindreMuscle(ctx, f) {
+  const m = formeMuscle(f), { y0, y1, y2, y3, W } = m;
+  // Support (potence) et pince de fixation.
+  let g = ctx.createLinearGradient(0, 46, 0, 58); g.addColorStop(0, '#9aa3ad'); g.addColorStop(.5, '#e3e7ec'); g.addColorStop(1, '#6b737c');
+  ctx.fillStyle = g; ctx.fillRect(40, 47, 112, 9);
+  ctx.fillStyle = '#59616a'; ctx.fillRect(MX - 9, 55, 18, 6);
+  // Tendons nacrés.
+  tendon(ctx, MX, y0 + 4, y1 + 6, 9, 22);
+  tendon(ctx, MX, y3, y2 - 6, 7, 22);
+  // Ventre du muscle : rouge-rosé, dégradé, fibres fines.
+  const chemin = () => {
+    ctx.beginPath(); ctx.moveTo(MX - 11, y1);
+    ctx.bezierCurveTo(MX - W * 0.62, y1 + m.Lb * 0.25, MX - W * 0.58, y1 + m.Lb * 0.7, MX - 10, y2);
+    ctx.lineTo(MX + 10, y2);
+    ctx.bezierCurveTo(MX + W * 0.58, y1 + m.Lb * 0.7, MX + W * 0.62, y1 + m.Lb * 0.25, MX + 11, y1); ctx.closePath();
+  };
+  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 8; ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 3;
+  g = ctx.createLinearGradient(MX - W / 2, 0, MX + W / 2, 0);
+  g.addColorStop(0, '#7a1626'); g.addColorStop(.3, '#c23a4a'); g.addColorStop(.45, '#e0707a'); g.addColorStop(.7, '#b83242'); g.addColorStop(1, '#6d1220');
+  chemin(); ctx.fillStyle = g; ctx.fill(); ctx.restore();
+  ctx.save(); chemin(); ctx.clip();
+  ctx.strokeStyle = 'rgba(255,190,195,.22)'; ctx.lineWidth = .7;
+  for (let i = -5; i <= 5; i++) {
+    const k = i / 5.6; ctx.beginPath(); ctx.moveTo(MX + k * 10, y1);
+    ctx.bezierCurveTo(MX + k * W * 0.6, y1 + m.Lb * 0.25, MX + k * W * 0.56, y1 + m.Lb * 0.7, MX + k * 9, y2); ctx.stroke();
+  }
+  ctx.strokeStyle = 'rgba(80,0,10,.25)';
+  for (let i = -4; i <= 4; i++) {
+    const k = (i + .5) / 5.2; ctx.beginPath(); ctx.moveTo(MX + k * 10, y1);
+    ctx.bezierCurveTo(MX + k * W * 0.6, y1 + m.Lb * 0.25, MX + k * W * 0.56, y1 + m.Lb * 0.7, MX + k * 9, y2); ctx.stroke();
+  }
+  ctx.restore();
+  // Fil vers le levier inscripteur.
+  ctx.strokeStyle = 'rgba(230,230,220,.7)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(MX, y3); ctx.lineTo(MX, 318); ctx.stroke();
+  ctx.beginPath(); ctx.arc(MX, y3 + 3, 3, 0, Math.PI * 2); ctx.stroke();
+  return m;
+}
+function peindrePince(ctx, m, chaleur) {
+  const py = m.py, bx = 150, bw = 28;
+  // Les deux aiguilles (soudures) piquées dans le muscle : la partie dans la chair est voilée.
+  for (const dy of [-4, 4]) {
+    const g = ctx.createLinearGradient(0, py + dy - 1.5, 0, py + dy + 1.5);
+    g.addColorStop(0, '#f2f4f7'); g.addColorStop(1, '#808890');
+    ctx.strokeStyle = g; ctx.lineWidth = 2.6; ctx.lineCap = 'round';
+    const bord = MX + m.W * 0.47;
+    ctx.globalAlpha = 1; ctx.beginPath(); ctx.moveTo(bx, py + dy); ctx.lineTo(bord, py + dy); ctx.stroke();
+    ctx.globalAlpha = .35; ctx.beginPath(); ctx.moveTo(bord, py + dy); ctx.lineTo(MX + 4, py + dy); ctx.stroke(); ctx.globalAlpha = 1;
+    ctx.fillStyle = 'rgba(70,0,10,.6)'; ctx.beginPath(); ctx.arc(bord, py + dy, 2, 0, Math.PI * 2); ctx.fill();
+  }
+  // Corps de la pince.
+  let g = ctx.createLinearGradient(0, py - 10, 0, py + 10); g.addColorStop(0, '#5d6670'); g.addColorStop(.4, '#9aa4ae'); g.addColorStop(1, '#353b42');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(bx, py - 10, bw, 20, 4); ctx.fill();
+  ctx.fillStyle = '#cfd5db'; ctx.beginPath(); ctx.arc(bx + 20, py, 3, 0, Math.PI * 2); ctx.fill();
+  // Fils (rouge et noir) vers l'appareil de mesure.
+  const A = { x: 176, y: 232, w: 74, h: 52 };
+  for (const [c, dy, dx] of [['#d64545', -3, 22], ['#1f2328', 3, 34]]) {
+    ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(bx + bw, py + dy);
+    ctx.bezierCurveTo(bx + bw + 30, py + dy + 10, A.x + dx - 6, A.y - 40, A.x + dx, A.y); ctx.stroke();
+  }
+  // L'appareil : un boîtier et un cadran dont l'aiguille dévie avec la chaleur dégagée à cet instant.
+  g = ctx.createLinearGradient(0, A.y, 0, A.y + A.h); g.addColorStop(0, '#4a525b'); g.addColorStop(1, '#22272c');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(A.x, A.y, A.w, A.h, 6); ctx.fill();
+  const cx = A.x + A.w / 2, cy = A.y + A.h - 8, r = 28;
+  g = ctx.createRadialGradient(cx, cy - 8, 4, cx, cy, r); g.addColorStop(0, '#fbf7ea'); g.addColorStop(1, '#d6d0bf');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(cx - r + 4, cy); ctx.arc(cx, cy, r - 4, Math.PI, 2 * Math.PI); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(40,40,40,.6)'; ctx.lineWidth = 1;
+  for (let i = 0; i <= 6; i++) { const a = Math.PI + i / 6 * Math.PI * .8 + .1 * Math.PI; ctx.beginPath(); ctx.moveTo(cx + (r - 6) * Math.cos(a), cy + (r - 6) * Math.sin(a)); ctx.lineTo(cx + (r - 10) * Math.cos(a), cy + (r - 10) * Math.sin(a)); ctx.stroke(); }
+  const a = Math.PI + .1 * Math.PI + Math.min(1, chaleur) * Math.PI * .8;
+  ctx.strokeStyle = '#b3261e'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + (r - 8) * Math.cos(a), cy + (r - 8) * Math.sin(a)); ctx.stroke();
+  ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(cx, cy, 2.5, 0, Math.PI * 2); ctx.fill();
+  return A;
+}
+
+/* ── Courbes ────────────────────────────────────────────────────────── */
+const yMyo = t => YM - AM * myo(t);
+const yChal = t => YC - H1 * chalInit(t) - (S.o2 ? H2 * chalRet(t) : 0);
+function courbe(c, fy, t1, couleur) {
+  if (t1 <= 0) return;
+  const a = Math.min(t1, TCUT);
+  c.courbe(u => [X(a * u), fy(a * u)], Math.max(4, Math.round(a / TCUT * 120)), { couleur, largeur: 2.4, tremble: .15 });
+  if (t1 > TCUT) c.courbe(u => { const t = TCUT + (t1 - TCUT) * u; return [X(t), fy(t)]; }, Math.max(4, Math.round((t1 - TCUT) / (TMAX - TCUT) * 90)), { couleur, largeur: 2.4, tremble: .15 });
+}
+function coupure(c, y) {
+  const xm = (XB + XC) / 2;
+  for (const dx of [-4, 4]) c.ligne(xm + dx - 4, y + 7, xm + dx + 4, y - 7, { couleur: 'blanc', largeur: 1.8, duree: .05 });
+}
+
+/* Un élément apparu en cours de route s'écrit à la craie à partir de son apparition, indépendamment des autres. */
+function plusTard(c, cle, visible, fn) {
+  if (!visible) { delete APPARU[cle]; return; }
+  if (!(cle in APPARU)) APPARU[cle] = (performance.now() - scene.ouvert) / 1000;
+  const base = c.cur; c.depuis(APPARU[cle]);
+  try { fn(); } finally { c.cur = base; }
+}
+
+function dessiner(c) {
+  const t = expDe(S.t), f = myo(t), anime = S.running || S.t > 0;
+  // 1. Le vivant et le matériel, peints.
+  let m;
+  c.direct(() => {
+    m = peindreMuscle(c.ctx, f);
+    const ch = chalInit(t) + (S.o2 ? 0.35 * chalRet(t) : 0);
+    peindrePince(c.ctx, m, ch);
+  });
+  // 2. La craie : titre, légendes du dispositif, les deux graphes.
+  c.texte('Le muscle dégage de la chaleur', 12, 28, { couleur: 'cyan', taille: 17 });
+  c.texte('muscle', 40, 172, { couleur: 'blanc', taille: 15, align: 'right' });
+  c.texte('tendon', 80, 78, { couleur: 'faible', taille: 13, align: 'right' });
+  c.texte('pince', 190, 110, { couleur: 'blanc', taille: 14, align: 'center' });
+  c.texte('thermoélectrique', 190, 126, { couleur: 'blanc', taille: 14, align: 'center' });
+  c.texte('appareil de mesure', 213, 302, { couleur: 'faible', taille: 13, align: 'center' });
+  // Myogramme (haut).
+  c.texte('myogramme (une secousse)', 300, 64, { couleur: 'cyan', taille: 15 });
+  c.fleche(XA, YM + 6, XA, 70, { couleur: 'faible', largeur: 1.6 });
+  c.ligne(XA, YM, XB, YM, { couleur: 'faible', largeur: 1.4 }); c.fleche(XC, YM, XD + 10, YM, { couleur: 'faible', largeur: 1.4 }); coupure(c, YM);
+  c.texte('S', XA - 6, YM + 16, { couleur: 'jaune', taille: 14, align: 'right' });
+  // Chaleur dégagée (bas).
+  c.texte('chaleur dégagée', 300, 198, { couleur: 'orange', taille: 15 });
+  c.fleche(XA, YC + 6, XA, 202, { couleur: 'faible', largeur: 1.6 });
+  c.ligne(XA, YC, XB, YC, { couleur: 'faible', largeur: 1.4 }); c.fleche(XC, YC, XD + 10, YC, { couleur: 'faible', largeur: 1.4 }); coupure(c, YC);
+  for (const [tt, lib] of [[0, '0'], [0.1, '0,1'], [0.2, '0,2'], [0.3, '0,3 s']]) { c.ligne(X(tt), YC - 4, X(tt), YC + 4, { couleur: 'faible', largeur: 1.3, duree: .04 }); c.texte(lib, X(tt), YC + 20, { couleur: 'faible', taille: 13, align: 'center', duree: .12 }); }
+  for (const [tt, lib] of [[60, '1 min'], [120, '2 min']]) { c.ligne(X(tt), YC - 4, X(tt), YC + 4, { couleur: 'faible', largeur: 1.3, duree: .04 }); c.texte(lib, X(tt), YC + 20, { couleur: 'faible', taille: 13, align: 'center', duree: .12 }); }
+  c.texte('t', 752, YC - 8, { couleur: 'faible', taille: 14, align: 'right' });
+  c.texte('0 → 0,3 s : temps dilaté', (XA + XB) / 2, 368, { couleur: 'faible', taille: 13, align: 'center' });
+  c.texte('1 à 2 minutes', (XC + XD) / 2, 368, { couleur: 'faible', taille: 13, align: 'center' });
+  // Interrupteur dioxygène.
+  c.texte('dioxygène :', 14, SW.y + 6, { couleur: 'bleu', taille: 15 });
+  c.ligne(SW.x1, SW.y, SW.x2, SW.y, { couleur: 'faible', largeur: 3 });
+  c.texte('présent', SW.x1, SW.y + 24, { couleur: S.o2 ? 'vert' : 'faible', taille: 13, align: 'center' });
+  c.texte('absent', SW.x2, SW.y + 24, { couleur: S.o2 ? 'faible' : 'rouge', taille: 13, align: 'center' });
+
+  // 3. Ce qui bouge : courbes, poignée, temps, éclair d'excitation.
+  c.direct(() => {
+    const xs = S.o2 ? SW.x1 : SW.x2;
+    c.cercle(xs, SW.y, 8, { couleur: S.o2 ? 'vert' : 'rouge', largeur: 2.2, fond: S.o2 ? 'vert' : 'rouge', fondAlpha: .35 });
+    c.repere('interrupteur_o2', 8, SW.y - 22, SW.x2 - 8 + 26, 52, `l’interrupteur du dioxygène : ${S.o2 ? 'présent' : 'absent'}`);
+    c.repere('muscle', MX - m.W * 0.62, m.y1, m.W * 1.24, m.y2 - m.y1, 'le muscle');
+    c.repere('pince', MX + 4, m.py - 26, 190 - MX, 44, 'la pince thermoélectrique piquée dans le muscle');
+    c.repere('myogramme', XA - 6, 50, XD + 14 - XA, YM + 24 - 50, 'le myogramme : une secousse');
+    c.repere('chaleur', XA - 6, 184, XD + 14 - XA, YC + 26 - 184, 'la chaleur dégagée');
+    c.repere('coupure', XB - 2, YM - 14, XC - XB + 4, YC + 28 - YM + 14, 'la coupure de l’axe du temps : 0 → 0,3 s dilaté, puis 1 à 2 minutes');
+    if (S.t > T0 - 0.05 && t < 0.012) {
+      c.trait([[34, 96], [24, 112], [34, 112], [22, 130]], { couleur: 'jaune', largeur: 2.4, duree: .05 });
+      c.texte('excitation', 10, 146, { couleur: 'jaune', taille: 13 });
+    }
+    if (anime) {
+      if (S.t < FIN - 1e-6) c.ligne(X(t), 72, X(t), YC, { couleur: 'tresfaible', largeur: 1, pointille: [3, 5] });
+      courbe(c, yMyo, t, 'blanc');
+      courbe(c, yChal, t, 'orange');
+    }
+    if (S.t >= FIN - 1e-6) c.texte('fin de l’enregistrement', 748, 28, { couleur: 'cyan', taille: 14, align: 'right' });
+    else if (t <= 0) c.texte('t = 0 s : avant l’excitation', 748, 28, { couleur: 'faible', taille: 14, align: 'right' });
+    else if (t <= TCUT) c.texte(`t = ${fr(t, 3)} s  (ralenti ×${RALENTI})`, 748, 28, { couleur: 'faible', taille: 14, align: 'right' });
+    else c.texte(`t ≈ ${t < 60 ? Math.round(t) + ' s' : fr(t / 60, 1) + ' min'}  (accéléré ×${ACCELERE})`, 748, 28, { couleur: 'faible', taille: 14, align: 'right' });
+  });
+
+  // 4. Ce qui s'écrit quand ça arrive.
+  plusTard(c, 'lab_init', t >= 0.06, () => {
+    c.fleche(372, 233, 346, 240, { couleur: 'orange', largeur: 1.6, tete: 7 });
+    c.texte('chaleur initiale', 376, 236, { couleur: 'orange', taille: 14 });
+    c.repere('chaleur_initiale', XA, YC - H1 - 8, 90, H1 + 8, 'la chaleur initiale : brève et haute, pendant la secousse');
+  });
+  plusTard(c, 'fin_sec', t >= TR, () => {
+    c.ligne(X(TR), 84, X(TR), YC, { couleur: 'faible', largeur: 1.3, pointille: [5, 5] });
+    c.texte('fin de la secousse', 368, 126, { couleur: 'faible', taille: 13 });
+  });
+  plusTard(c, 'identique', !S.o2 && t >= TR, () => c.texte('identique sans O₂', 376, 254, { couleur: 'rouge', taille: 13 }));
+  plusTard(c, 'orig_init', S.origines && t >= TR, () => {
+    c.texte('hydrolyse de l’ATP + phosphocréatine', XA, 392, { couleur: 'vert', taille: 14, max: 214 });
+    c.texte('(rapide, sans O₂)', XA, 410, { couleur: 'vert', taille: 14 });
+    c.repere('origine_initiale', XA - 4, 376, 220, 40, 'l’origine de la chaleur initiale : hydrolyse de l’ATP + phosphocréatine (rapide, sans O₂)');
+  });
+  plusTard(c, 'lab_ret', S.o2 && t >= 20, () => {
+    c.texte('chaleur retardée', 600, 290, { couleur: 'orange', taille: 14, align: 'center' });
+    c.repere('chaleur_retardee', XC, YC - H2 - 30, XD - XC, H2 + 34, 'la chaleur retardée : basse et longue, après la secousse');
+  });
+  plusTard(c, 'sans_o2', !S.o2 && t >= 20, () => {
+    c.texte('sans O₂ : pas de chaleur retardée', (XC + XD) / 2, 312, { couleur: 'rouge', taille: 14, align: 'center', max: 206 });
+    c.repere('chaleur_retardee', XC, YC - 34, XD - XC, 40, 'sans dioxygène : pas de chaleur retardée');
+  });
+  plusTard(c, 'orig_ret', S.origines && S.o2 && t >= T_RET, () => {
+    c.texte('respiration : réactions aérobies', (XC + XD) / 2, 392, { couleur: 'vert', taille: 14, align: 'center', max: 206 });
+    c.repere('origine_retardee', XC - 4, 376, XD - XC + 8, 22, 'l’origine de la chaleur retardée : respiration, réactions aérobies');
+  });
+  plusTard(c, 'orig_ret_abs', S.origines && !S.o2 && t >= T_RET, () => {
+    c.texte('sans O₂ : pas de respiration', (XC + XD) / 2, 392, { couleur: 'rouge', taille: 14, align: 'center', max: 206 });
+    c.repere('origine_retardee', XC - 4, 376, XD - XC + 8, 22, 'sans dioxygène, pas de respiration : pas de chaleur retardée');
+  });
+}
+
+const canvas = $('canvas');
+const scene = window.MuscleTableau.Scene(canvas, (c) => { scene.cadre(41); dessiner(c); return c.fin(); });
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(FIN, S.t + dt);
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.running = false; S.jusqua = null; S.fait = S.t >= FIN - 1e-6;
+    $('run').textContent = S.fait ? 'Rejouer' : 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(expDe(S.t), 3)} s`) + '.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre();
+    return true;
+  }
+  if (S.t >= FIN) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), message(), 'good'); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+
+/* ── Instants clés (en s de la scène) ───────────────────────────────── */
+function moments() {
+  const m = {
+    secousse: tauDe(0.003), chaleur_initiale: tauDe(T_HI_MAX), fin_secousse: tauDe(TR), chaleur_retardee: tauDe(T_RET), fin: FIN,
+    sans_dioxygene: FIN, avec_dioxygene: FIN, origines: FIN,
+  };
+  for (const k in m) m[k] = +m[k].toFixed(3);
+  return m;
+}
+const MOTIFS = {
+  secousse: 'l’excitation : la secousse commence',
+  chaleur_initiale: 'le sommet de la chaleur initiale, pendant la contraction',
+  fin_secousse: 'la secousse est finie (0,1 s) : la chaleur initiale aussi',
+  chaleur_retardee: 'la chaleur retardée, basse et longue, après la secousse',
+  fin: 'tout est tracé',
+  sans_dioxygene: 'sans dioxygène : même chaleur initiale, pas de chaleur retardée',
+  avec_dioxygene: 'avec dioxygène : chaleur initiale puis chaleur retardée',
+  origines: 'l’origine de chaque chaleur est écrite sous sa bosse',
+};
+const REGLAGES = { sans_dioxygene: { dioxygene: false }, avec_dioxygene: { dioxygene: true }, origines: { origines: true, dioxygene: true } };
+function playUntil(p) {
+  const M = moments(), nom = p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (nom && REGLAGES[nom]) { appliquer(REGLAGES[nom]); S.t = 0; }
+  if (S.fait || S.t >= cible - 1e-4) S.t = 0;
+  S.jusqua = Math.min(FIN, Math.max(0.001, cible)); S.motif = nom ? MOTIFS[nom] : '';
+  S.running = true; S.fait = false; $('run').textContent = 'Pause';
+  bulle($('feedback'), `Observe… (0 → 0,3 s ralenti ${RALENTI} fois, puis 2 minutes en accéléré)`);
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+
+function ceQuiSeVoit() {
+  const t = expDe(S.t), f = myo(t);
+  const temps = S.t >= FIN - 1e-6 ? 'Fin de l’enregistrement (2 min 15 s tracées).' : t <= 0 ? 'Avant l’excitation (t = 0 s).' : t <= TCUT ? `t = ${fr(t, 3)} s de l’expérience (partie dilatée de l’axe, ralenti ×${RALENTI}).` : `t ≈ ${Math.round(t)} s de l’expérience (après la coupure de l’axe, accéléré).`;
+  const m = [`${temps}${S.running ? ' La scène défile.' : S.t > 0 && !S.fait ? ' Scène arrêtée.' : ''} Dioxygène : ${S.o2 ? 'présent' : 'absent'} (interrupteur dessiné). À gauche : un muscle peint, une pince thermoélectrique piquée dedans, fils vers un appareil de mesure dont l’aiguille dévie avec la chaleur dégagée.`];
+  if (t > LAT && t < TR) m.push(`Le muscle ${t <= TS ? 'raccourcit et s’épaissit (contraction)' : 's’allonge (relâchement)'} : myogramme à ${Math.round(100 * f)} % de son amplitude maximale.`);
+  else if (t > 0 && t <= LAT) m.push('Temps de latence : le myogramme est encore plat (0,01 s).');
+  if (t > 0) {
+    m.push(`Myogramme : une secousse (latence 0,01 s, contraction 0,04 s, relâchement 0,05 s, finie à 0,1 s)${t < TR ? ', en cours de tracé' : ''}.`);
+    const ci = chalInit(t);
+    if (t < HI1) m.push(`Chaleur : la chaleur initiale est dégagée (bosse brève et haute, ${Math.round(100 * ci)} % de son sommet${t >= T_HI_MAX ? ', sommet passé' : ''}).`);
+    else m.push('Chaleur initiale : bosse brève et haute, de 0 à 0,1 s environ, pendant la secousse ; elle est finie.');
+    if (t >= TR) {
+      if (S.o2) m.push(t < 20 ? 'La chaleur retardée commence à monter, lentement.' : `Chaleur retardée : bosse basse et longue après la secousse (sommet vers 35 s), ${t >= TMAX ? 'presque finie à 2 min, tracée en entier' : `en cours, ${Math.round(100 * chalRet(t))} % de son sommet`}.`);
+      else m.push(`Sans dioxygène : la chaleur initiale est identique (écrit « identique sans O₂ »)${t >= 20 ? ' et il n’y a pas de chaleur retardée : la courbe reste à zéro (écrit « sans O₂ : pas de chaleur retardée »)' : ' ; la courbe reste à zéro après la secousse'}.`);
+    }
+    if (t >= TR) m.push('Écrit : « fin de la secousse » sur le trait pointillé à 0,1 s.');
+  }
+  if (S.origines) {
+    const o = [];
+    if (t >= TR) o.push('sous la chaleur initiale « hydrolyse de l’ATP + phosphocréatine (rapide, sans O₂) »');
+    if (t >= T_RET) o.push(S.o2 ? 'sous la chaleur retardée « respiration : réactions aérobies »' : 'à droite « sans O₂ : pas de respiration »');
+    m.push(o.length ? `Origines écrites : ${o.join(' ; ')}.` : 'Les origines s’écriront sous chaque bosse.');
+  }
+  m.push('Axe du temps coupé : 0 → 0,3 s dilaté, coupure « // », puis 1 à 2 minutes.');
+  return m.join(' ');
+}
+function message() {
+  return S.o2 ? 'Chaleur initiale pendant la secousse, puis chaleur retardée pendant 1 à 2 minutes.' : 'Sans dioxygène : même chaleur initiale, mais pas de chaleur retardée.';
+}
+
+function appliquer(p) {
+  let change = false;
+  if ('dioxygene' in p) { const v = p.dioxygene === true || p.dioxygene === 'true' || p.dioxygene === 1 || p.dioxygene === 'present' || p.dioxygene === 'présent'; if (v !== S.o2) { S.o2 = v; change = true; } }
+  if ('origines' in p) { const v = p.origines === true || p.origines === 'true' || p.origines === 1; if (v !== S.origines) { S.origines = v; change = true; } }
+  scene.sale = true; return change;
+}
+function start() { S.jusqua = null; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), `Excitation… (0 → 0,3 s ralenti ${RALENTI} fois, puis 2 minutes en accéléré)`); pont.noter('start', { dioxygene: S.o2 }); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait || S.t >= FIN) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  let tau = +p.time_s; if (Number.isFinite(+p.t_experience_s)) tau = tauDe(Math.min(TMAX, Math.max(0, +p.t_experience_s)));
+  if (!Number.isFinite(tau)) return;
+  S.running = false; S.jusqua = null; S.t = Math.min(FIN, Math.max(0, tau)); S.fait = S.t >= FIN - 1e-6;
+  $('run').textContent = S.fait ? 'Rejouer' : 'Reprendre'; scene.sale = true;
+  bulle($('feedback'), `Arrêt sur image : t = ${fr(expDe(S.t), 3)} s de l’expérience.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function setParameters(p) {
+  if (!('dioxygene' in p) && !('origines' in p)) return;
+  const avant = S.o2; appliquer(p);
+  bulle($('feedback'), `Dioxygène : ${S.o2 ? 'présent' : 'absent'}${S.origines ? ' ; origines écrites' : ''}.`);
+  pont.noter('set_parameters', { dioxygene: S.o2, origines: S.origines }); pont.emettre();
+  if (avant !== S.o2 && !S.running && (S.fait || S.t === 0)) start();
+}
+$('run').onclick = () => (S.running ? pause() : (S.t > 0 && S.t < FIN && !S.fait ? resume() : start()));
+
+/* Poignée : l'interrupteur du dioxygène (glissé, ou touché). */
+let glisse = null;
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => { const [x, y] = scene.local(px, py); return x > SW.x1 - 40 && x < SW.x2 + 20 && Math.abs(y - SW.y) < 22 ? 'o2' : null; },
+  bouger: (id, px, py) => { const [x] = scene.local(px, py); const v = x < (SW.x1 + SW.x2) / 2; glisse = 'glisse'; if (v !== S.o2) { S.o2 = v; scene.sale = true; } },
+  lacher: () => {
+    if (glisse == null) { S.o2 = !S.o2; scene.sale = true; }
+    glisse = null;
+    bulle($('feedback'), `Dioxygène : ${S.o2 ? 'présent' : 'absent'}.`); pont.noter('set_parameters', { dioxygene: S.o2 }); pont.emettre();
+    if (!S.running) start();
+  },
+});
+
+window.Tableau.explication({ [vue]: [
+  { repere: 'pince', texte: 'Une pince thermoélectrique piquée dans le muscle mesure la chaleur qu’il dégage.' },
+  { repere: 'myogramme', texte: 'En haut, le myogramme d’une seule secousse.' },
+  { repere: 'chaleur_initiale', texte: 'Pendant la secousse, une chaleur brève et forte : la chaleur initiale.' },
+  { repere: 'coupure', texte: 'L’axe du temps est coupé : après 0,3 s, on passe à l’échelle des minutes.' },
+  { repere: 'chaleur_retardee', texte: 'Après la secousse, une chaleur faible mais longue, 1 à 2 minutes : la chaleur retardée.' },
+  { repere: 'interrupteur_o2', texte: 'Sans dioxygène, la chaleur initiale est la même, mais la chaleur retardée disparaît.' },
+  { repere: 'origine_initiale', texte: 'La chaleur initiale vient de l’hydrolyse de l’ATP et de la phosphocréatine : rapide, sans O₂.' },
+  { repere: 'origine_retardee', texte: 'La chaleur retardée vient de la respiration : des réactions aérobies.' },
+] });
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'muscle_chaleur', version: '1.0', title: 'Le muscle dégage de la chaleur', variants: [{ id: vue, label: 'chaleur initiale et chaleur retardée' }], commands: commandes,
+  command_schema: {
+    set_parameters: { dioxygene: 'true | false (interrupteur « dioxygène : présent / absent »)', origines: 'true | false (écrit sous chaque bosse son origine)' },
+    set_time: { time_s: `0..${fr(FIN, 1)} (instant de la scène, en s ; arrêt sur image)`, t_experience_s: '0..135 (ou un instant de l’expérience, en s)' },
+    play_until: { moment: Object.keys(moments()).join(' | ') + ' (rejoue et se fige à cet instant clé ; sans_dioxygene, avec_dioxygene et origines (origines = true, dioxygène présent) posent le réglage puis rejouent jusqu’à la fin)', time_s: 'ou un instant de la scène en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Un muscle traversé par une pince thermoélectrique. Une excitation : le myogramme montre une secousse (0,1 s) ; la chaleur dégagée montre une chaleur initiale brève et haute pendant la secousse, puis une chaleur retardée basse et longue (1 à 2 minutes). Sans dioxygène, la chaleur initiale est identique et la chaleur retardée disparaît. Origines : chaleur initiale = hydrolyse de l’ATP + phosphocréatine (rapide, sans O₂) ; chaleur retardée = respiration (réactions aérobies). Axe du temps coupé : 0 → 0,3 s dilaté, puis 1 à 2 minutes.',
+  etat: () => ({ simulation_status: S.running ? 'running' : (S.fait ? 'finished' : (S.t > 0 ? 'paused' : 'idle')), ce_qui_se_voit: ceQuiSeVoit(), current_variant: vue,
+    time_s: +S.t.toFixed(3), parameters: { dioxygene: S.o2, origines: S.origines, t_experience_s: +expDe(S.t).toFixed(4) }, moments: moments() }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Le muscle va être excité…');
+setTimeout(() => { if (!S.running && S.t === 0) start(); }, 1600);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

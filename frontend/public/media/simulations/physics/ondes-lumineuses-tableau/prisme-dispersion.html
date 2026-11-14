@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prisme et lumière blanche — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="lumiere.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Vue de dessus : une source et une fente envoient un faisceau sur un prisme de verre ; la lumière blanche ressort en éventail de couleurs et donne un spectre continu sur l’écran, le violet le plus dévié ; un laser ne donne qu’un seul rayon et un seul point"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Dispersion de la lumière par un prisme (cours « Propagation d’une onde lumineuse », 10 novembre 2026).
+ * Deux vues : « Vue de dessus » (source + fente, faisceau, prisme de verre, éventail, écran) et « Écran » (vu de face).
+ * Source (?source= et set_parameters) : blanche (lampe + fente, défaut) | rouge (laser 650 nm) | verte (laser 532 nm).
+ *
+ * Physique (le dessin la suit) : prisme d’angle A = 60°, incidence i = 55° sur la face 1.
+ *  - Face 1 : sin i = n·sin r ; face 2 : sin i' = n·sin r' avec A = r + r' ; déviation D = i + i' − A.
+ *  - Indice d’un verre courant (flint) selon la longueur d’onde dans le vide : n = 1,66 à 400 nm (violet),
+ *    n = 1,61 à 700 nm (rouge), interpolé en 1/λ² entre les deux. Le violet est donc le plus dévié, le rouge le moins.
+ *  - Pour l’œil SEULEMENT, l’écart entre les couleurs est dessiné deux fois plus grand (indice dessiné
+ *    1,635 + 2·(n − 1,635)) : l’éventail serait sinon trop fin à cette échelle. C’est écrit au tableau
+ *    (« écart des couleurs agrandi pour l’œil ») ; les valeurs dites (n, D) sont les vraies.
+ * Le trajet de la lumière est montré pas à pas pour l’œil (la lumière, elle, va à 3,00·10⁸ m/s).
+ * Un seul bouton ; la poignée est la source : la toucher passe à la source suivante (blanche → rouge → verte).
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const SOURCES = ['blanche', 'rouge', 'verte'];
+const demande = new URLSearchParams(location.search).get('source');
+const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0, source: SOURCES.includes(demande) ? demande : 'blanche', vus: {} };
+const LAMBDA_LASER = { rouge: 650, verte: 532 };
+const estLaser = () => S.source !== 'blanche';
+
+/* ── Physique ─────────────────────────────────────────────────────────────── */
+const RAD = Math.PI / 180, A = 60, I = 55;
+const NB = 0.05 / (1 / 0.16 - 1 / 0.49), NA = 1.61 - NB / 0.49;          // n(400 nm) = 1,66 ; n(700 nm) = 1,61
+const nVrai = l => NA + NB / ((l / 1000) ** 2);
+const N0 = 1.635, nDessin = l => N0 + 2 * (nVrai(l) - N0);                // pour l’œil : écart entre couleurs ×2
+/** Les angles (en degrés) pour un indice n : réfraction réelle aux deux faces. */
+function angles(n) {
+  const r = Math.asin(Math.sin(I * RAD) / n) / RAD;                       // face 1 : sin i = n·sin r
+  const rp = A - r;                                                         // A = r + r'
+  const ip = Math.asin(Math.min(1, n * Math.sin(rp * RAD))) / RAD;         // face 2 : sin i' = n·sin r'
+  return { r, rp, ip, D: I + ip - A };
+}
+const vrai = l => angles(nVrai(l));
+
+/* ── Géométrie de la vue de dessus (cadre 760 × 420) ─────────────────────── */
+const R1 = { x: 8, y: 40, w: 552, h: 290 }, R2 = { x: 572, y: 40, w: 180, h: 290 };
+const dir = a => [Math.cos(a * RAD), Math.sin(a * RAD)];
+const add = (p, v, k = 1) => [p[0] + v[0] * k, p[1] + v[1] * k];
+const sub = (p, q) => [p[0] - q[0], p[1] - q[1]];
+const dot = (p, q) => p[0] * q[0] + p[1] * q[1];
+const ang = v => Math.atan2(v[1], v[0]) / RAD;
+/** Intersection des droites p + t·d et q + s·e : renvoie [t, s]. */
+function couper(p, d, q, e) {
+  const det = -d[0] * e[1] + e[0] * d[1], b = sub(q, p);
+  return [(-b[0] * e[1] + e[0] * b[1]) / det, (d[0] * b[1] - d[1] * b[0]) / det];
+}
+const P = [238, 88], LC = 152, F = 0.5;                                     // sommet, côté, point d’entrée (milieu de la face 1)
+const B1 = add(P, [-Math.sin(A / 2 * RAD), Math.cos(A / 2 * RAD)], LC), B2 = add(P, [Math.sin(A / 2 * RAD), Math.cos(A / 2 * RAD)], LC);
+const E = add(P, sub(B1, P), F);
+const D_IN = dir(A / 2 - I);                                                 // le faisceau incident (i mesuré depuis la normale)
+const D_LAMPE = 160, D_FENTE = 118, LAMPE = add(E, D_IN, -D_LAMPE), FENTE = add(E, D_IN, -D_FENTE);
+/** Trajet dans le dessin pour un indice dessiné n : point de sortie S, directions dans le verre et à la sortie. */
+function trajet(n) {
+  const a = angles(n), dV = dir(A / 2 - a.r);
+  const [t] = couper(E, dV, P, sub(B2, P));
+  return { ...a, S: add(E, dV, t), dV, dO: dir(-A / 2 + a.ip) };
+}
+// L’écran est posé perpendiculairement au faisceau jaune-vert (570 nm), à 205 px de la face de sortie.
+const MOY = trajet(nDessin(570));
+const ECRAN = { C: add(MOY.S, MOY.dO, 205), u: [-MOY.dO[1], MOY.dO[0]], demi: 72 };
+function rayon(l) {
+  const T = trajet(nDessin(l)), [th] = couper(T.S, T.dO, ECRAN.C, ECRAN.u);
+  const H = add(T.S, T.dO, th);
+  return { l, rgb: couleurDe(l), ...T, H, s: dot(sub(H, ECRAN.C), ECRAN.u) };
+}
+const LISTE_L = []; for (let l = 400; l <= 780; l += 4) LISTE_L.push(l);
+const RAYONS = LISTE_L.map(rayon);
+const ROUGE = rayon(700), VIOLET = rayon(400);
+const LASERS = { rouge: rayon(650), verte: rayon(532) };
+// Vue « Écran » (de face, depuis le prisme) : le violet, le plus dévié, est à droite ; écart ×2 comme dans la vue de dessus.
+const S_MIL = (RAYONS[0].s + RAYONS[RAYONS.length - 1].s) / 2, K_ECRAN = 140 / (RAYONS[0].s - RAYONS[RAYONS.length - 1].s);
+const xEcran = s => R2.x + R2.w / 2 + (s - S_MIL) * K_ECRAN;
+const Y_BANDE = 160, H_BANDE = 56;
+
+/* Couleur d’une radiation (λ dans le vide, nm) : approximation usuelle de la couleur vue, plus sombre aux deux bords du visible. */
+function couleurDe(l) {
+  let r = 0, g = 0, b = 0;
+  if (l < 440) { r = (440 - l) / 60; b = 1; }
+  else if (l < 490) { g = (l - 440) / 50; b = 1; }
+  else if (l < 510) { g = 1; b = (510 - l) / 20; }
+  else if (l < 580) { r = (l - 510) / 70; g = 1; }
+  else if (l < 645) { r = 1; g = (645 - l) / 65; }
+  else r = 1;
+  const f = l < 420 ? 0.45 + 0.55 * Math.max(0, l - 380) / 40 : l > 700 ? 0.45 + 0.55 * Math.max(0, 780 - l) / 80 : 1;
+  const k = v => Math.round(255 * Math.pow(Math.max(0, Math.min(1, v)) * f, 0.8));
+  return [k(r), k(g), k(b)];
+}
+const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+const clamp01 = v => Math.max(0, Math.min(1, v));
+
+/* ── Le temps de la scène : instants clés ────────────────────────────────── */
+const T_LAMPE = 0.3, T_E = 1.5, T_S = 2.5, T_H = 4.0;
+function moments() {
+  return estLaser()
+    ? { rayon_arrive: T_E, rayon_sort: 3.0, point_sur_ecran: T_H, fin: 5.5 }
+    : { blanc_arrive: T_E, entre_dans_verre: 2.1, couleurs_se_separent: 3.2, spectre_sur_ecran: T_H, rouge_moins_devie: 5.5, violet_plus_devie: 7.0, fin: 8.5 };
+}
+const finDe = () => moments().fin;
+const MOTIFS = {
+  blanc_arrive: 'la lumière blanche arrive sur la face 1 du prisme', entre_dans_verre: 'la lumière entre dans le verre',
+  couleurs_se_separent: 'à la sortie, les couleurs se séparent', spectre_sur_ecran: 'un spectre continu sur l’écran',
+  rouge_moins_devie: 'le rouge est le moins dévié', violet_plus_devie: 'le violet est le plus dévié', fin: 'fin',
+  rayon_arrive: 'le rayon laser arrive sur le prisme', rayon_sort: 'un seul rayon sort, d’une seule couleur', point_sur_ecran: 'un seul point sur l’écran',
+};
+// Avancée du front de lumière (pour l’œil) : jusqu’à la face 1, dans le verre, jusqu’à l’écran.
+const avance = t => ({ p1: clamp01((t - T_LAMPE) / (T_E - T_LAMPE)), p2: clamp01((t - T_E) / (T_S - T_E)), p3: clamp01((t - T_S) / (T_H - T_S)) });
+
+/* ── Peinture : salle sombre, verre, faisceaux lumineux ──────────────────── */
+function chemin(ctx, R) { ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(R.x, R.y, R.w, R.h, 8); else ctx.rect(R.x, R.y, R.w, R.h); }
+function salle(ctx, R) {
+  const g = ctx.createRadialGradient(R.x + R.w * .45, R.y + R.h * .45, 10, R.x + R.w / 2, R.y + R.h / 2, Math.max(R.w, R.h) * .75);
+  g.addColorStop(0, 'rgba(16,22,30,.94)'); g.addColorStop(1, 'rgba(4,6,10,.96)');
+  chemin(ctx, R); ctx.fillStyle = g; ctx.fill();
+}
+function triangle(ctx) { ctx.beginPath(); ctx.moveTo(...P); ctx.lineTo(...B1); ctx.lineTo(...B2); ctx.closePath(); }
+/** Le prisme de verre : ombre sur la table, teinte légère, reflet sur une face (arêtes éclairées dessinées après la lumière). */
+function verre(ctx) {
+  ctx.save(); ctx.translate(6, 7); triangle(ctx); ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fill(); ctx.restore();
+  triangle(ctx);
+  const g = ctx.createLinearGradient(P[0], P[1], P[0], B1[1]);
+  g.addColorStop(0, 'rgba(190,225,255,.20)'); g.addColorStop(1, 'rgba(110,160,210,.10)');
+  ctx.fillStyle = g; ctx.fill();
+  ctx.save(); triangle(ctx); ctx.clip();
+  const m = add(P, sub(B1, P), .5), k = ctx.createLinearGradient(m[0] - 8, m[1] - 4, m[0] + 34, m[1] + 20);
+  k.addColorStop(0, 'rgba(255,255,255,.16)'); k.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = k; ctx.fillRect(P[0] - 90, P[1], 180, LC);
+  ctx.restore();
+}
+function aretes(ctx) {
+  ctx.save(); ctx.lineJoin = 'round';
+  triangle(ctx); ctx.strokeStyle = 'rgba(215,235,255,.55)'; ctx.lineWidth = 1.6; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(...add(P, sub(B1, P), .06)); ctx.lineTo(...add(P, sub(B1, P), .45));
+  ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 2.2; ctx.stroke();
+  ctx.restore();
+}
+/** Un faisceau peint : halo, corps coloré, cœur presque blanc (lumière additive). */
+function faisceau(ctx, a, b, c, w = 3, k = 1) {
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  for (const [lw, al] of [[w * 6, .05], [w * 3, .12], [w * 1.5, .45], [w * .7, .85]]) {
+    ctx.strokeStyle = rgba(c, al * k); ctx.lineWidth = lw; ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.stroke();
+  }
+  ctx.strokeStyle = `rgba(255,255,255,${.45 * k})`; ctx.lineWidth = w * .3; ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.stroke();
+  ctx.restore();
+}
+function halo(ctx, p, c, r, k = 1) {
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const g = ctx.createRadialGradient(p[0], p[1], 0, p[0], p[1], r);
+  g.addColorStop(0, `rgba(255,255,255,${.9 * k})`); g.addColorStop(.25, rgba(c, .8 * k)); g.addColorStop(1, rgba(c, 0));
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p[0], p[1], r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+}
+/** La source : une lampe (boîtier ombré, ouverture lumineuse) ou un laser (corps long, sortie colorée), orientée sur le faisceau. */
+function peindreSource(ctx, allume) {
+  const laser = estLaser(), c = laser ? couleurDe(LAMBDA_LASER[S.source]) : [255, 250, 235];
+  ctx.save(); ctx.translate(...LAMPE); ctx.rotate(ang(D_IN) * RAD);
+  const L = laser ? 44 : 42, H = laser ? 18 : 30;
+  ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(-L + 4, -H / 2 + 5, L, H);
+  const g = ctx.createLinearGradient(0, -H / 2, 0, H / 2);
+  g.addColorStop(0, '#6b7280'); g.addColorStop(.45, '#374151'); g.addColorStop(1, '#111827');
+  ctx.fillStyle = g; ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(-L, -H / 2, L, H, 4); else ctx.rect(-L, -H / 2, L, H); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 1; ctx.stroke();
+  if (laser) { ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(-L + 8, -H / 2 + 3, L - 20, 2); }
+  ctx.fillStyle = allume ? rgba(c, .95) : '#1f2937'; ctx.fillRect(-3, -H / 2 + 4, 4, H - 8);
+  ctx.restore();
+  if (allume) halo(ctx, LAMPE, c, laser ? 12 : 24, laser ? .8 : .7);
+}
+function peindreFente(ctx) {
+  ctx.save(); ctx.translate(...FENTE); ctx.rotate(ang(D_IN) * RAD);
+  for (const [y0, y1] of [[-18, -2.2], [2.2, 18]]) {
+    const g = ctx.createLinearGradient(-3, 0, 3, 0); g.addColorStop(0, '#4b5563'); g.addColorStop(1, '#1f2937');
+    ctx.fillStyle = g; ctx.fillRect(-3, y0, 6, y1 - y0);
+    ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(-3, y0 < 0 ? y1 - 1 : y0, 6, 1);
+  }
+  ctx.restore();
+}
+/** L’écran vu de dessus : une plaque claire, à peine visible dans le noir. */
+function peindreEcranDessus(ctx) {
+  const { C, u, demi } = ECRAN, d = MOY.dO, a = add(C, u, -demi), b = add(C, u, demi);
+  ctx.save(); ctx.beginPath(); ctx.moveTo(...a); ctx.lineTo(...b); ctx.lineTo(...add(b, d, 7)); ctx.lineTo(...add(a, d, 7)); ctx.closePath();
+  const g = ctx.createLinearGradient(...C, ...add(C, d, 7)); g.addColorStop(0, 'rgba(170,176,186,.55)'); g.addColorStop(1, 'rgba(60,66,76,.6)');
+  ctx.fillStyle = g; ctx.fill(); ctx.restore();
+}
+/** Partie d’un segment [a, b] parcourue par la lumière (0 à 1). */
+const bout = (a, b, p) => add(a, sub(b, a), p);
+function peindreDessus(ctx, t) {
+  const { p1, p2, p3 } = avance(t), allume = t > 0, laser = estLaser();
+  salle(ctx, R1);
+  ctx.save(); chemin(ctx, R1); ctx.clip();
+  verre(ctx); peindreEcranDessus(ctx);
+  if (!laser) peindreFente(ctx);
+  peindreSource(ctx, allume);
+  if (laser) {
+    const R = LASERS[S.source], c = R.rgb;
+    // Faisceau : source → face 1 → face 2 → écran, un seul rayon, une seule couleur.
+    if (p1 > 0) faisceau(ctx, LAMPE, bout(LAMPE, E, p1), c, 2.6);
+    if (p2 > 0) faisceau(ctx, E, bout(E, R.S, p2), c, 2.6, .9);
+    if (p3 > 0) faisceau(ctx, R.S, bout(R.S, R.H, p3), c, 2.6);
+    if (p3 >= 1) halo(ctx, R.H, c, 11);
+  } else {
+    // Avant la fente : une lumière large et douce ; après : un faisceau fin de lumière blanche.
+    const lum = clamp01(t / T_LAMPE), pf = (D_LAMPE - D_FENTE) / D_LAMPE;
+    if (allume) faisceau(ctx, LAMPE, bout(LAMPE, FENTE, Math.min(1, p1 / pf)), [255, 248, 230], 5, .45 * lum);
+    if (p1 > pf) faisceau(ctx, FENTE, bout(FENTE, E, (p1 - pf) / (1 - pf)), [255, 252, 245], 2.6);
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    // Dans le verre puis à la sortie : un ruban continu de couleurs (chaque couleur suit sa propre réfraction).
+    for (let k = 0; k < RAYONS.length - 1; k++) {
+      const a = RAYONS[k], b = RAYONS[k + 1], c = a.rgb;
+      if (p2 > 0) {
+        ctx.fillStyle = rgba(c, .5); ctx.beginPath(); ctx.moveTo(...E); ctx.lineTo(...bout(E, a.S, p2)); ctx.lineTo(...bout(E, b.S, p2)); ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = rgba(c, .16); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(...E); ctx.lineTo(...bout(E, a.S, p2)); ctx.stroke();
+      }
+      if (p3 > 0) {
+        ctx.fillStyle = rgba(c, .55); ctx.beginPath(); ctx.moveTo(...a.S); ctx.lineTo(...bout(a.S, a.H, p3)); ctx.lineTo(...bout(b.S, b.H, p3)); ctx.lineTo(...b.S); ctx.closePath(); ctx.fill();
+        if (k % 3 === 0) { ctx.strokeStyle = rgba(c, .09); ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(...a.S); ctx.lineTo(...bout(a.S, a.H, p3)); ctx.stroke(); }
+        if (p3 >= 1) { ctx.strokeStyle = rgba(c, .9); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(...a.H); ctx.lineTo(...b.H); ctx.stroke(); }
+      }
+    }
+    ctx.restore();
+  }
+  aretes(ctx);
+  ctx.restore();
+}
+/** Le spectre peint une seule fois (il ne change pas) : dégradé continu, bords haut et bas adoucis par un masque. */
+let BANDE = null;
+function bande() {
+  if (BANDE) return BANDE;
+  const xr = xEcran(RAYONS[RAYONS.length - 1].s), xv = xEcran(RAYONS[0].s), w = xv - xr, cv = document.createElement('canvas');
+  cv.width = Math.ceil(w * 3); cv.height = H_BANDE * 3;
+  const o = cv.getContext('2d'); o.scale(3, 3);
+  const hg = o.createLinearGradient(0, 0, w, 0);
+  for (const a of RAYONS) hg.addColorStop(clamp01((xEcran(a.s) - xr) / w), rgba(a.rgb, 1));
+  o.fillStyle = hg; o.fillRect(0, 0, w, H_BANDE);
+  o.globalCompositeOperation = 'destination-in';
+  const vg = o.createLinearGradient(0, 0, 0, H_BANDE);
+  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(.2, 'rgba(0,0,0,1)'); vg.addColorStop(.8, 'rgba(0,0,0,1)'); vg.addColorStop(1, 'rgba(0,0,0,0)');
+  o.fillStyle = vg; o.fillRect(0, 0, w, H_BANDE);
+  BANDE = { cv, xr, w };
+  return BANDE;
+}
+/** L’écran vu de face : la feuille dans le noir, éclairée par le spectre (ou par un seul point). */
+function peindreEcran(ctx, t) {
+  salle(ctx, R2);
+  ctx.save(); chemin(ctx, R2); ctx.clip();
+  const X0 = R2.x + 12, X1 = R2.x + R2.w - 12, Y0 = 82, Y1 = 238;
+  const g = ctx.createLinearGradient(0, Y0, 0, Y1); g.addColorStop(0, '#2c3139'); g.addColorStop(1, '#1b1f25');
+  ctx.fillStyle = g; ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
+  ctx.strokeStyle = 'rgba(255,255,255,.12)'; ctx.lineWidth = 1; ctx.strokeRect(X0 + .5, Y0 + .5, X1 - X0 - 1, Y1 - Y0 - 1);
+  const k = clamp01((t - T_H) / 0.35);
+  if (k > 0) {
+    ctx.save(); ctx.beginPath(); ctx.rect(X0, Y0, X1 - X0, Y1 - Y0); ctx.clip(); ctx.globalCompositeOperation = 'lighter';
+    if (estLaser()) {
+      const R = LASERS[S.source];
+      halo(ctx, [xEcran(R.s), Y_BANDE], R.rgb, 26, .55 * k); halo(ctx, [xEcran(R.s), Y_BANDE], R.rgb, 9, k);
+    } else {
+      const lum = ctx.createRadialGradient(R2.x + R2.w / 2, Y_BANDE, 4, R2.x + R2.w / 2, Y_BANDE, 95);
+      lum.addColorStop(0, `rgba(255,255,255,${.09 * k})`); lum.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = lum; ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
+      // Le spectre : un dégradé continu (chaque couleur à l’endroit où son rayon frappe l’écran), bords haut et bas adoucis.
+      const B = bande();
+      ctx.globalAlpha = .92 * k; ctx.drawImage(B.cv, B.xr, Y_BANDE - H_BANDE / 2, B.w, H_BANDE); ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+/* ── Craie : ce que le professeur écrit, au moment où ça se passe ────────── */
+/** Un élément apparu à un instant de l’expérience s’écrit à partir de ce moment (lettre par lettre), pas d’un coup. */
+function vu(c, cle, ok) {
+  if (!ok) { delete S.vus[cle]; return false; }
+  if (!(cle in S.vus)) S.vus[cle] = performance.now();
+  c.depuis((S.vus[cle] - scene.ouvert) / 1000);
+  return true;
+}
+function arc(c, o, a0, a1, R, couleur) {
+  let d = a1 - a0; while (d > 180) d -= 360; while (d < -180) d += 360;
+  c.courbe(u => add(o, dir(a0 + d * u), R), Math.max(8, Math.ceil(Math.abs(d) / 4)), { couleur, largeur: 2 });
+  return a0 + d / 2;
+}
+function deviation(c, R, rayonArc, couleur) {
+  const [ti] = couper(E, D_IN, R.S, R.dO), J = add(E, D_IN, ti);
+  c.ligne(...R.S, ...R.H, { couleur, largeur: 3 });
+  c.ligne(...E, ...add(E, D_IN, ti + 150), { couleur: 'faible', pointille: [6, 6], largeur: 1.6 });
+  c.ligne(...R.S, ...J, { couleur, pointille: [5, 5], largeur: 1.6 });
+  const mil = arc(c, J, ang(D_IN), ang(R.dO), rayonArc, couleur);
+  c.texte('D', ...add(J, dir(mil), rayonArc + 9), { couleur, taille: 16, base: 'middle' });
+}
+function dessiner(c) {
+  const t = S.t, M = moments(), laser = estLaser(), Rl = laser ? LASERS[S.source] : null;
+  c.direct(() => { peindreDessus(c.ctx, t); peindreEcran(c.ctx, t); });
+  // Écrit dès l’ouverture : les deux vues et le montage.
+  c.texte('Vue de dessus', R1.x + 4, 30, { couleur: 'cyan', taille: 17 });
+  c.texte('Écran', R2.x + 4, 30, { couleur: 'cyan', taille: 17 });
+  c.rect(R1.x, R1.y, R1.w, R1.h, { couleur: 'tresfaible', duree: .5 });
+  c.rect(R2.x, R2.y, R2.w, R2.h, { couleur: 'tresfaible', duree: .4 });
+  c.texte(laser ? (S.source === 'rouge' ? 'laser rouge' : 'laser vert') : 'source', laser ? 14 : LAMPE[0], LAMPE[1] + 36, { couleur: laser ? (S.source === 'rouge' ? 'rouge' : 'vert') : 'blanc', taille: 15, align: laser ? 'left' : 'center' });
+  c.texte('(touche : changer)', 14, LAMPE[1] + 54, { couleur: 'faible', taille: 12 });
+  if (!laser) c.texte('fente', FENTE[0] - 6, FENTE[1] - 22, { couleur: 'faible', taille: 14, align: 'center' });
+  c.texte('prisme', P[0] - 12, P[1] - 4, { couleur: 'blanc', taille: 15, align: 'right' });
+  c.texte('écran', ECRAN.C[0] - ECRAN.u[0] * ECRAN.demi + 8, ECRAN.C[1] - ECRAN.u[1] * ECRAN.demi - 6, { couleur: 'blanc', taille: 15 });
+  if (!laser) c.texte('écart des couleurs agrandi pour l’œil', R1.x + R1.w - 8, R1.y + R1.h - 10, { couleur: 'faible', taille: 12, align: 'right' });
+  c.texte('(vu depuis le prisme)', R2.x + R2.w / 2, 68, { couleur: 'faible', taille: 12, align: 'center' });
+  c.cercle(LAMPE[0], LAMPE[1], 26, { couleur: 'jaune', largeur: 1.4, pointille: [4, 5] });
+
+  // Les phases, écrites quand elles arrivent.
+  const Y1 = 354, Y2 = 378, Y3 = 402;
+  if (laser) {
+    if (vu(c, 'rayon_arrive', t >= M.rayon_arrive)) c.texte(`une seule radiation : λ = ${LAMBDA_LASER[S.source]} nm`, 16, 118, { couleur: 'faible', taille: 14 });
+    if (vu(c, 'rayon_sort', t >= M.rayon_sort)) c.texte('un seul rayon sort, d’une seule couleur', 250, 300, { couleur: S.source === 'rouge' ? 'rouge' : 'vert', taille: 14 });
+    if (vu(c, 'point_sur_ecran', t >= M.point_sur_ecran)) {
+      c.fleche(xEcran(Rl.s), 268, xEcran(Rl.s), Y_BANDE + 16, { couleur: 'jaune', largeur: 1.6 });
+      c.texte('un seul point', R2.x + R2.w / 2, 290, { couleur: 'jaune', taille: 15, align: 'center' });
+      c.texte('Un seul rayon sort du prisme : pas d’éventail, un seul point sur l’écran.', 12, Y1, { couleur: 'vert', taille: 16, max: 740 });
+    }
+    if (vu(c, 'fin', t >= M.fin)) c.texte('Lumière monochromatique (une seule radiation) : le prisme la dévie sans la décomposer.', 12, Y2, { couleur: 'vert', taille: 16, max: 740 });
+  } else {
+    if (vu(c, 'blanc_arrive', t >= M.blanc_arrive)) c.texte('lumière blanche', 60, 140, { couleur: 'blanc', taille: 15 });
+    if (vu(c, 'couleurs_se_separent', t >= M.couleurs_se_separent)) c.texte('les couleurs se séparent', 250, 300, { couleur: 'jaune', taille: 15 });
+    if (vu(c, 'spectre_sur_ecran', t >= M.spectre_sur_ecran)) {
+      c.texte('rouge', ROUGE.H[0] + 14, ROUGE.H[1] + 2, { couleur: 'rouge', taille: 14 });
+      c.texte('violet', VIOLET.H[0] + 14, VIOLET.H[1] + 8, { couleur: 'violet', taille: 14 });
+      c.fleche(xEcran(ROUGE.s), 262, xEcran(ROUGE.s), Y_BANDE + H_BANDE / 2 + 4, { couleur: 'rouge', largeur: 1.6 });
+      c.texte('rouge', xEcran(ROUGE.s), 280, { couleur: 'rouge', taille: 14, align: 'center' });
+      c.fleche(xEcran(VIOLET.s), 262, xEcran(VIOLET.s), Y_BANDE + H_BANDE / 2 + 4, { couleur: 'violet', largeur: 1.6 });
+      c.texte('violet', xEcran(VIOLET.s) - 4, 280, { couleur: 'violet', taille: 14, align: 'center' });
+      c.texte('spectre continu', R2.x + R2.w / 2, 308, { couleur: 'jaune', taille: 15, align: 'center' });
+      c.texte('Sur l’écran : un spectre continu, du rouge au violet.', 12, Y1, { couleur: 'vert', taille: 16, max: 740 });
+    }
+    if (vu(c, 'rouge_moins_devie', t >= M.rouge_moins_devie)) deviation(c, ROUGE, 46, 'rouge');
+    if (vu(c, 'violet_plus_devie', t >= M.violet_plus_devie)) {
+      deviation(c, VIOLET, 74, 'violet');
+      c.texte('Le violet est le plus dévié, le rouge le moins dévié.', 12, Y2, { couleur: 'vert', taille: 16, max: 740 });
+    }
+    if (vu(c, 'fin', t >= M.fin)) c.texte('Le verre est dispersif : n dépend de la fréquence (n violet ≈ 1,66 > n rouge ≈ 1,61).', 12, Y3, { couleur: 'vert', taille: 16, max: 740 });
+  }
+
+  // Repères pointables.
+  c.repere('vue_dessus', R1.x, R1.y, R1.w, R1.h, 'la vue de dessus');
+  c.repere('vue_ecran', R2.x, R2.y, R2.w, R2.h, 'l’écran vu de face');
+  c.repere('source', LAMPE[0] - 30, LAMPE[1] - 26, 60, 52, laser ? 'le laser' : 'la source de lumière blanche');
+  c.repere('faisceau', Math.min(FENTE[0], E[0]) - 6, Math.min(FENTE[1], E[1]) - 10, Math.abs(E[0] - FENTE[0]) + 12, Math.abs(E[1] - FENTE[1]) + 20, laser ? 'le rayon laser' : 'le faisceau de lumière blanche');
+  c.repere('prisme', B1[0] - 6, P[1] - 6, B2[0] - B1[0] + 12, B1[1] - P[1] + 12, 'le prisme de verre');
+  { const a = add(ECRAN.C, ECRAN.u, -ECRAN.demi), b = add(ECRAN.C, ECRAN.u, ECRAN.demi); c.repere('ecran', Math.min(a[0], b[0]) - 8, Math.min(a[1], b[1]) - 6, Math.abs(b[0] - a[0]) + 20, Math.abs(b[1] - a[1]) + 12, 'l’écran'); }
+  if (laser) c.repere('point', xEcran(Rl.s) - 18, Y_BANDE - 18, 36, 36, 'le point sur l’écran');
+  else {
+    c.repere('spectre', xEcran(ROUGE.s) - 16, Y_BANDE - H_BANDE / 2 - 4, xEcran(VIOLET.s) - xEcran(ROUGE.s) + 32, H_BANDE + 8, 'le spectre continu');
+    c.repere('rouge', ROUGE.H[0] - 12, ROUGE.H[1] - 14, 66, 24, 'le rouge, le moins dévié');
+    c.repere('violet', VIOLET.H[0] - 12, VIOLET.H[1] - 10, 70, 26, 'le violet, le plus dévié');
+  }
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(41); dessiner(c); return c.fin(); });
+scene.avancer = dt => {
+  if (!S.running) return false;
+  const fin = finDe();
+  S.t = Math.min(fin, S.t + dt);
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.running = false; S.jusqua = null; $('run').textContent = S.t >= fin ? 'Rejouer' : 'Reprendre'; S.fait = S.t >= fin;
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 1)} s`) + '.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre();
+    return true;
+  }
+  if (S.t >= fin) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), message(), 'good'); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+
+const deg = v => fr(v, 1).replace('-', '−');
+function ceQuiSeVoit() {
+  const t = S.t, M = moments(), laser = estLaser(), m = [];
+  m.push(`Vues « Vue de dessus » (source, prisme de verre d’angle A = 60°, écran) et « Écran » (vu de face). Le trajet est montré pas à pas pour l’œil${S.running ? ' (la scène avance)' : S.fait ? ' (fin de la scène)' : t > 0 ? ' (scène arrêtée)' : ''}, t = ${fr(t, 1)} s.`);
+  if (laser) {
+    const l = LAMBDA_LASER[S.source], a = vrai(l), nom = S.source === 'rouge' ? 'rouge' : 'vert';
+    m.push(`Source : laser ${nom}, λ = ${l} nm, une seule radiation (n du verre ≈ ${fr(nVrai(l), 2)}).`);
+    if (t <= 0) m.push('Le laser est éteint.');
+    else if (t < M.rayon_arrive) m.push(`Le rayon laser ${nom} avance vers la face 1 du prisme.`);
+    else if (t < T_S) m.push(`Le rayon ${nom} est entré dans le verre : il se réfracte et va vers la face 2.`);
+    else if (t < M.point_sur_ecran) m.push(`Un seul rayon ${nom} sort du prisme, dévié vers la base (D ≈ ${deg(a.D)}°) : pas d’éventail, une seule couleur.`);
+    else m.push(`Sur l’écran : un seul point ${nom}. Ce qui sort du prisme : un seul rayon ${nom}, dévié (D ≈ ${deg(a.D)}°), non décomposé.`);
+    if (t >= M.fin) m.push('Écrit : lumière monochromatique (une seule radiation) : le prisme la dévie sans la décomposer.');
+  } else {
+    const ar = vrai(700), av = vrai(400);
+    m.push('Source : lumière blanche (lampe et fente fine), polychromatique.');
+    if (t <= 0) m.push('La lampe est éteinte.');
+    else if (t < M.blanc_arrive) m.push('Le faisceau fin de lumière blanche avance vers la face 1 du prisme.');
+    else if (t < T_S) m.push('La lumière blanche entre dans le verre et se réfracte ; chaque couleur prend déjà une direction un peu différente.');
+    else if (t < M.spectre_sur_ecran) m.push('À la sortie du prisme, les couleurs se séparent : un éventail continu, du rouge (en haut, le moins dévié) au violet (le plus dévié), avance vers l’écran.');
+    else m.push('Ce qui sort du prisme : un éventail continu de couleurs. Sur l’écran : un spectre continu, rouge, orange, jaune, vert, bleu, violet, sans trou.');
+    if (t >= M.rouge_moins_devie) m.push(`Le rayon rouge est souligné, avec l’arc de sa déviation D (≈ ${deg(ar.D)}° pour 700 nm, n ≈ 1,61).`);
+    if (t >= M.violet_plus_devie) m.push(`Le rayon violet est souligné : sa déviation D (≈ ${deg(av.D)}° pour 400 nm, n ≈ 1,66) est la plus grande. Écrit : le violet est le plus dévié, le rouge le moins dévié.`);
+    if (t >= M.fin) m.push('Écrit : le verre est dispersif, n dépend de la fréquence (n violet ≈ 1,66 > n rouge ≈ 1,61).');
+    m.push('Ordre des couleurs : le violet est le plus dévié, le rouge le moins. Écart entre les couleurs dessiné deux fois plus grand pour l’œil.');
+  }
+  return m.join(' ');
+}
+function message() {
+  return estLaser() ? 'Un seul rayon, un seul point : une lumière monochromatique n’est pas décomposée.' : 'Le prisme sépare les couleurs de la lumière blanche : le violet est le plus dévié.';
+}
+
+function start() { S.jusqua = null; S.t = 0; S.vus = {}; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), estLaser() ? 'Le laser s’allume…' : 'La lampe s’allume…'); pont.noter('start', { source: S.source }); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait || S.t >= finDe()) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  const t = +p.time_s; if (!Number.isFinite(t)) return;
+  const fin = finDe();
+  S.running = false; S.jusqua = null; S.t = Math.min(fin, Math.max(0, t)); S.fait = S.t >= fin;
+  $('run').textContent = S.fait ? 'Rejouer' : 'Reprendre'; scene.sale = true;
+  bulle($('feedback'), `Arrêt sur image : t = ${fr(S.t, 1)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function playUntil(p) {
+  const M = moments(), nom = p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-4) { S.t = 0; S.vus = {}; }
+  S.jusqua = Math.min(finDe(), Math.max(0.001, cible)); S.motif = nom ? MOTIFS[nom] : '';
+  S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+/** Changer de source : la scène revient au début (lampe ou laser éteint), prête à être lancée. */
+function changerSource(src) {
+  if (!SOURCES.includes(src)) return false;
+  S.source = src; S.running = false; S.jusqua = null; S.t = 0; S.vus = {}; S.fait = false; scene.sale = true;
+  $('run').textContent = 'Lancer';
+  return true;
+}
+function setParameters(p) {
+  const src = String(p.source ?? '').toLowerCase().replace('vert', 'verte').replace('vertee', 'verte');
+  if (!changerSource(src)) return;
+  bulle($('feedback'), `Source : ${src === 'blanche' ? 'lumière blanche' : src === 'rouge' ? 'laser rouge' : 'laser vert'}.`);
+  pont.noter('set_parameters', { source: S.source }); pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : (S.t > 0 && S.t < finDe() && !S.fait ? resume() : start()));
+
+/* Poignée : la source. La toucher passe à la suivante (blanche → rouge → verte) et relance. */
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => { const [x, y] = scene.local(px, py); return Math.hypot(x - LAMPE[0], y - LAMPE[1]) < 32 ? 'source' : null; },
+  bouger: () => {},
+  lacher: () => {
+    changerSource(SOURCES[(SOURCES.indexOf(S.source) + 1) % SOURCES.length]);
+    pont.noter('set_parameters', { source: S.source }); start();
+  },
+});
+
+window.Tableau.explication({
+  blanche: [
+    { repere: 'source', texte: 'Une source de lumière blanche et une fente fine : un faisceau étroit.' },
+    { repere: 'prisme', texte: 'Le faisceau traverse un prisme de verre : il se réfracte sur chaque face.' },
+    { repere: 'spectre', texte: 'Sur l’écran, un spectre continu : la lumière blanche contient toutes les couleurs.' },
+    { repere: 'rouge', texte: 'Le rouge est le moins dévié.' },
+    { repere: 'violet', texte: 'Le violet est le plus dévié : l’indice du verre dépend de la fréquence.' },
+  ],
+  rouge: [
+    { repere: 'source', texte: 'Un laser rouge : une seule radiation.' },
+    { repere: 'prisme', texte: 'Le rayon est dévié par le prisme…' },
+    { repere: 'point', texte: '…mais il ne se décompose pas : un seul point sur l’écran.' },
+  ],
+  verte: [
+    { repere: 'source', texte: 'Un laser vert : une seule radiation.' },
+    { repere: 'prisme', texte: 'Le rayon est dévié par le prisme…' },
+    { repere: 'point', texte: '…mais il ne se décompose pas : un seul point sur l’écran.' },
+  ],
+});
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+const MOMENTS_BLANCHE = 'blanc_arrive | entre_dans_verre | couleurs_se_separent | spectre_sur_ecran | rouge_moins_devie | violet_plus_devie | fin';
+const MOMENTS_LASER = 'rayon_arrive | rayon_sort | point_sur_ecran | fin';
+const config = { id: 'ondes_lumineuses_prisme_dispersion', version: '1.0', title: 'Prisme : lumière blanche ou laser', variants: SOURCES.map(v => ({ id: v, label: v })), commands: commandes,
+  command_schema: {
+    set_parameters: { source: 'blanche | rouge | verte (la scène revient au début)' },
+    set_time: { time_s: '0..8.5 (blanche) ou 0..5.5 (laser) : arrêt sur cet instant, en s' },
+    play_until: { moment: `${MOMENTS_BLANCHE} (source blanche) ; ${MOMENTS_LASER} (laser rouge ou vert) — rejoue et se fige à cet instant clé`, time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Prisme de verre (A = 60°, i = 55°) vu de dessus, et l’écran vu de face. Lumière blanche : elle se décompose en un spectre continu, le violet est le plus dévié (n ≈ 1,66), le rouge le moins (n ≈ 1,61) : le verre est dispersif. Laser rouge ou vert : un seul rayon, une seule couleur, un seul point. Réfraction aux deux faces : sin i = n·sin r, sin i\' = n·sin r\'.',
+  etat: () => ({ simulation_status: S.running ? 'running' : (S.fait ? 'finished' : (S.t > 0 ? 'paused' : 'idle')), ce_qui_se_voit: ceQuiSeVoit(), current_variant: S.source,
+    time_s: +S.t.toFixed(2), parameters: { source: S.source, A_deg: A, i_deg: I, lambda_nm: estLaser() ? LAMBDA_LASER[S.source] : '400..800', n_rouge: 1.61, n_violet: 1.66 }, moments: moments() }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), estLaser() ? 'Le laser va s’allumer…' : 'La lampe va s’allumer…');
+setTimeout(() => { if (!S.running && S.t === 0) start(); }, 1600);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
