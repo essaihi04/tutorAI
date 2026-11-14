@@ -274,7 +274,7 @@ function wrapLabel(r, h, parent, x, y, z, lines, bg) {
   return mesh(new THREE.CylinderGeometry(r, r, h, 32, 1, true, -1.2, 2.4), std(0xffffff, 0.7, 0, { map: t }), parent, x, y, z);
 }
 function knob(parent, x, y, z, r = 0.01, mat = M.black) { const k = cyl(r, r * 1.08, r * 1.2, mat, parent, x, y, z, 24); k.rotation.x = Math.PI / 2; box(r * 0.25, r * 0.9, 0.002, M.white, k, 0, r * 0.62, r * 0.55).rotation.x = -Math.PI / 2; return k; }
-function liquidMat(color, op = 0.42) { return new THREE.MeshPhysicalMaterial({ color, roughness: 0.06, transparent: true, opacity: op, clearcoat: 1, depthWrite: false, envMapIntensity: 1.2 }); }
+function liquidMat(color, op = 0.42) { /*liquide-mat*/ const m = new THREE.MeshPhysicalMaterial({ color, roughness: 0.6, reflectivity: 0.05, envMapIntensity: 0.15, transparent: true, opacity: op, clearcoat: 0, depthWrite: false }); (window.__LIQS || (window.__LIQS = [])).push(m); return m; }
 
 function initMats() {
   T3.epoxy = canvasTex(512, 512, (x, w, h) => { x.fillStyle = "#2a2d31"; x.fillRect(0, 0, w, h); grain(x, w, h, 22); for (let i = 0; i < 900; i++) { x.fillStyle = `rgba(255,255,255,${Math.random() * 0.08})`; x.fillRect(Math.random() * w, Math.random() * h, 1.5, 1.5); } }, [8, 1]);
@@ -653,7 +653,7 @@ function buildBench(g) {
 
 /* ------------------------------------------------------------ état */
 const ST = {};
-function resetState(keepAttempt) {
+function resetState(keepAttempt) { /*fini-reset*/ ST.fini = false;
   if (STEP) { STEP.skip.clear(); STEP.focus = null; }
   const att = keepAttempt ? ST.attempts + 1 : 1;
   Object.assign(ST, {
@@ -763,12 +763,21 @@ let camFocus = null, camBusy = false;
 const look = (k) => { camFocus = k; const c = CAMS[k]; focusCam(typeof c === "function" ? c() : c); };
 /* produit utilisé : la caméra montre d'abord son étiquette (nom lisible), puis le versement en entier (flacon + récipient) */
 const CAM_FIX = new Set(["@lbl", "@pour", "plate", "tank"]); // vues fixes : la caméra ne suit pas l'objet qui bouge
-function camLabel(obj, side = 0, up = 0.55) {
+function camLabel(obj, side = null, up = 0.55) { // side null : on essaie plusieurs côtés et on garde le premier d'où l'étiquette n'est pas cachée
   const b = new THREE.Box3().setFromObject(obj), c = b.getCenter(new THREE.Vector3()), sz = b.getSize(new THREE.Vector3()); L.g.worldToLocal(c);
-  const d = Math.max(sz.y, sz.x) * 1.5 + 0.11; c.y -= sz.y * 0.1; return { p: [c.x + Math.sin(side) * d * 0.9, c.y + d * up, c.z + Math.cos(side) * d * 0.9], t: [c.x, c.y, c.z] };
+  const d = Math.max(sz.y, sz.x) * 1.5 + 0.11; c.y -= sz.y * 0.1;
+  const at = (s) => ({ p: [c.x + Math.sin(s) * d * 0.9, c.y + d * up, c.z + Math.cos(s) * d * 0.9], t: [c.x, c.y, c.z] });
+  if (side != null) return at(side);
+  const mine = new Set(); obj.traverse((o) => mine.add(o)); const rc = new THREE.Raycaster(), W = (a) => L.g.localToWorld(new THREE.Vector3(a[0], a[1], a[2]));
+  for (const s of [0, 0.55, -0.55, 0.95, -0.95, 1.35, -1.35]) {
+    const k = at(s), p = W(k.p), t = W(k.t), dir = t.clone().sub(p), dist = dir.length(); rc.set(p, dir.normalize()); rc.far = dist - 0.01;
+    const hit = rc.intersectObjects(L.g.children, true).find((h) => { const o = h.object, m = o.material; if (mine.has(o) || !o.visible || !m || m.visible === false) return false; let q = o; while (q) { if (!q.visible) return false; q = q.parent; } return !(m.transparent && m.opacity < 0.5); });
+    if (!hit) return k;
+  }
+  return at(0);
 }
 const camPour = (N, k = 1) => ({ p: [N.x - 0.01, N.y + 0.12 - 0.07 * (k - 1), N.z + 0.44 * k], t: [N.x - 0.045, N.y - 0.03 - 0.07 * (k - 1), N.z] }); // k > 1 : recule pour voir aussi le bas (éprouvette)
-function showProduct(obj, after, trigger, side, up, wait = 0.9) { CAMS["@lbl"] = camLabel(obj, side, up); look("@lbl"); if (wait > 0) ST.q.push({ obj: new THREE.Object3D(), dur: wait, up: 0 }); ST.camNext = after ? { obj: trigger || obj, cam: after } : null; }
+function showProduct(obj, after, trigger, side, up, wait = 0.9) { CAMS["@lbl"] = camLabel(obj, side, up); look("@lbl"); if (wait > 0) ST.q.push({ obj: new THREE.Object3D(), to: [0, 0, 0], dur: wait, up: 0 }); ST.camNext = after ? { obj: trigger || obj, cam: after } : null; }
 function lookPour(N) { CAMS["@pour"] = camPour(N); look("@pour"); }
 
 /* ------------------------------------------------------------ étapes libres (passer, rétablir, suivre l'élève) */
@@ -812,6 +821,7 @@ function frameScreen(m, d = 0.3) {
 }
 function cadrages() { const m = X.lcdC || X.lcdPH; if (m) CAMS.scr = frameScreen(m); }
 function focusTool(name) {
+  /*resultat*/ if (ST.fini && typeof RESVIEW !== "undefined" && RESVIEW[name] && !ST.demo) { STEP.quiet = performance.now() + 4000; look(RESVIEW[name]); return; } // expérience finie : résultat légendé
   if (!name || ST.demo || !TOOLS[name]) return;
   STEP.quiet = performance.now() + 1500; const s = allSteps().slice(0, -1).find((g) => g.on === name && g.cam && CAMS[g.cam]); if (s) { look(s.cam); return; }
   CAMS.__obj = frameOf(TOOLS[name].obj); look("__obj");
@@ -944,7 +954,7 @@ function startOil() {
   const F0 = ST.oFlow; if (F0) { if (!F0.back) { F0.on = true; F0.short = null; F0.idle = 0; L.ctl.enabled = false; } else busyToast(); return; }
   if (isBusy()) return busyToast(); if (!ballonFree()) return toast("Le réfrigérant bouche le col : verse l'huile avant de monter le réfrigérant.");
   if (ST.heatMin > 0) return toast("Le mélange a déjà été chauffé : vide le ballon pour un nouvel essai.");
-  const j = X.oilB, nt = neckTop(); L.ctl.enabled = false; showProduct(j, camPour(nt), null, 0, 0.55, 0); toast("Le flacon s'ouvre et se penche : garde le bouton appuyé, l'huile coule dans le ballon.");
+  const j = X.oilB, nt = neckTop(); L.ctl.enabled = false; showProduct(j, camPour(nt), null, null, 0.55, 0); toast("Le flacon s'ouvre et se penche : garde le bouton appuyé, l'huile coule dans le ballon.");
   ST.oFlow = { on: true, ready: false, back: false, idle: 0, m0: ST.mOil };
   capOff(j.userData.cap, [j.position.x + 0.06, 0.009, j.position.z + 0.04]);
   const o = pose(nt.x - 0.004, nt.y + 0.035, -1.95, 0.136);
@@ -965,7 +975,7 @@ function noteOil() { if (ST.onBal === "ballon") { ST.mOilRead = +shown().toFixed
 function startEp(kind) {
   const F0 = ST.epFlow; if (F0) { if (F0.kind === kind && !F0.back) { F0.on = true; F0.short = null; F0.idle = 0; L.ctl.enabled = false; } else busyToast(); return; }
   if (isBusy()) return busyToast(); if (ST.ep.s + ST.ep.e >= 25) return toast("L'éprouvette est pleine (25 mL) : verse-la d'abord.");
-  const j = kind === "s" ? X.sodB : X.ethB, e = X.ep.position; L.ctl.enabled = false; showProduct(j, camPour(gpos(X.ep, [0, 0.212, 0]), 1.3), null, 0, 0.55, 0); toast("Le flacon s'ouvre et se penche : garde le bouton appuyé pour remplir l'éprouvette.");
+  const j = kind === "s" ? X.sodB : X.ethB, e = X.ep.position; L.ctl.enabled = false; showProduct(j, camPour(gpos(X.ep, [0, 0.212, 0]), 1.3), null, null, 0.55, 0); toast("Le flacon s'ouvre et se penche : garde le bouton appuyé pour remplir l'éprouvette.");
   ST.epFlow = { kind, on: true, ready: false, back: false, idle: 0, v0: ST.ep[kind] };
   capOff(j.userData.cap, [j.position.x + 0.055, 0.009, j.position.z + 0.045]);
   const o = pose(e.x - 0.003, 0.25, -1.85, 0.136);
@@ -1234,7 +1244,7 @@ function openMenu(name, x, y) {
   }
   m.hidden = false; const r = m.getBoundingClientRect(); m.style.left = clamp(x + 12, 8, window.innerWidth - r.width - 8) + "px"; m.style.top = clamp(y - 20, 8, window.innerHeight - r.height - 8) + "px";
 }
-function onClick(name, x, y) { if (!name) return; focusTool(name); openMenu(name, x || window.innerWidth / 2, y || window.innerHeight / 2); }
+function onClick(name, x, y) { /*resultat-clic*/ if (name && ST.fini && typeof RESVIEW !== "undefined" && RESVIEW[name] && camFocus !== RESVIEW[name]) { focusTool(name); return; } /* expérience finie : 1er clic = résultat légendé, 2e clic = menu */ if (!name) return; focusTool(name); openMenu(name, x || window.innerWidth / 2, y || window.innerHeight / 2); }
 
 /* ------------------------------------------------------------ tableau des mesures : mesures notées seules, calculs par l'élève */
 function rowData() {
@@ -1466,7 +1476,7 @@ function openPanel() {
   const rows = [["Huile dans le ballon (réelle)", ST.poured ? "versée (" + g2(ST.mOilUsed || 0) + " g)" : g2(ST.mOil) + " g"], ["Masse d'huile lue", ST.mOilRead == null ? "—" : g2(ST.mOilRead) + " g"], ["Soude / éthanol dans le ballon", g1(ST.Vs) + " mL / " + g1(ST.Ve) + " mL"], ["Pierre ponce", ST.ponce ? "oui" : "non"], ["Réfrigérant · eau", (ST.refr === "on" ? "ajusté" : "relevé") + " · " + (ST.hose ? "entrée en " + ST.hose : "non branché") + (ST.water ? ", eau ouverte" : ", eau fermée")], ["Température du mélange", Math.round(ST.T) + " °C"], ["Durée de reflux", Math.floor(ST.reflux) + " min"], ["Huile saponifiée (avancement)", pct(ST.poured ? ST.flags.pouredX || 0 : ST.x)], ["Éthanol perdu en vapeur", g1(ST.ethLost) + " mL"], ["Pertes par soubresauts", pct(ST.loss)], ["Relargage", ST.poured ? (ST.poured === "sale" ? "eau salée saturée" : "eau distillée") : "—"], ["Savon sur le verre de montre", ST.vm ? g2(ST.vm.soap) + " g de savon + " + g2(ST.vm.water) + " g d'eau + " + g2(ST.vm.imp + ST.vm.oil) + " g d'impuretés" : "—"], ["Masse de savon lue", ST.mSoapRead == null ? "—" : g2(ST.mSoapRead) + " g"], ["Essai nº", String(ST.attempts)]];
   $("#diag").innerHTML = rows.map((r) => `<span>${r[0]}</span><b>${r[1]}</b>`).join(""); if (!$("#toolHelp").firstChild) $("#toolHelp").innerHTML = TOOL_HELP.map((t) => `<details><summary>${t[0]}</summary><p>${t[1]}</p></details>`).join(""); $("#panel").hidden = false;
 }
-function evaluate() {
+function evaluate() { /*fini*/ ST.fini = true; setTimeout(() => toast("Expérience finie : clique sur un objet pour voir son résultat avec sa légende.", "good"), 1200);
   if (!ST.poured && ST.mSoapRead == null) { toast("Fais d'abord la synthèse jusqu'au relargage.", "bad"); return; }
   const mo = ST.mOilUsed || ST.mOil, mmaxR = soapMax(mo), real = ST.vm ? ST.vm.soap : 0, rReal = mmaxR > 0 ? real / mmaxR : 0;
   const mh = ST.mOilRead, ms = ST.mSoapRead, rMe = mh && ms != null ? ms / soapMax(mh) : null, pts = [];
@@ -1563,6 +1573,7 @@ $("#btnWhy").onclick = () => { if (!ST.cur) return; const w = WHY[ST.cur.why] ||
 function setGuide(on) { ST.guide = on; const demo = !!ST.demo; $("#instr").hidden = demo || !on; $("#demo").hidden = !demo || !on; $("#showGuide").hidden = on; $("#showGuide").textContent = demo ? "Afficher la démo ▸" : "Afficher le guide ▸"; }
 $("#btnGuide").onclick = () => setGuide(false); $("#dMin").onclick = () => setGuide(false); $("#showGuide").onclick = () => setGuide(true);
 init3d(); resetState(); stepButtons(); cadrages(); demoButtons();
+/*resultat-savon*/ const RESVIEW = { plaque: "plate", cuve: "plate", iode: "plate", capil: "plate" }; // expérience finie : clic → plaque de CCM légendée
 window.__lab = { placeLabels, ccmLegend, camKey: () => camFocus, onClick, ST, evaluate, TOOLS, X, suggest, L, look, menuFor, moveBallon, doTare, startOil, stopOil, oilDrops, startEp, stopEp, epAdd, epToBallon, addPonce, refrDown, refrUp, plugHose, setWater, setHeat, pourBallon, filterBeaker, washCake, vmToBal, vmHome, scrape, dry, emptyAll, rowData, checkAnswer, renderTable, runDemo, stopDemo, tick, runQueue, shown, soapNow, xMax, capH, CAMS, ccmDeposit, ccmElute, ccmOut, ccmReveal, ccmD, drawPlate, checkSpots };
 /* pas de mains gantées dans cette manip (demande de l'enseignant, nov. 2026) */
 

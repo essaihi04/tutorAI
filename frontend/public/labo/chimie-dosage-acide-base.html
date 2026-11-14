@@ -199,325 +199,6 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 </script><!--/labnav-->
 <script src="vendor/three-r128.min.js"></script>
 <script src="vendor/OrbitControls-r128.js"></script>
-<script id="labmains">
-/* Mains gantées du labo (nov. 2026, demande de l'enseignant) : deux mains en gants nitrile font
-   TOUS les gestes. Aucun objet ne bouge seul : la main vient le prendre, le tient pendant le geste (dévisser, verser,
-   presser la pissette, plonger la sonde…), le repose et se retire hors du champ.
-   Branchement générique sur la file de gestes du moteur (ST.q) :
-   - chaque étape de la file a un objet `obj` : une main libre vient le saisir avant que l'étape commence (étape
-     d'attente insérée en tête de file, 0,24 s), puis suit l'objet image par image (prise calculée sur sa forme) ;
-   - un bouchon qu'on dévisse ou revisse : la main droite le pince, la main gauche tient le flacon ;
-   - un objet laissé incliné (pissette qu'on presse, récipient qui finit de s'égoutter) reste tenu ;
-   - une action sans geste (tare, marche/arrêt, minuteur…) : l'index appuie sur l'appareil ;
-   - une action maintenue sans geste (robinet de burette) : la main tient l'objet tant qu'on maintient.
-   Installation dans la fonction principale de chaque manip, après `window.__lab = …` :
-     if (window.LabMains) { runQueue = LabMains.install({ ST, TOOLS, L, runQueue, startPour: …, stopPour: … }); menuFor = LabMains.wrapMenu(menuFor); }
-   Source unique : mains.js ; inject-mains.py la recopie dans les pages. */
-(function () {
-  if (window.LabMains) return;
-  const GLOVE = 0x5b7fe4, GLOVE_DARK = 0x4a6bd0; // gant nitrile bleu, manchette un ton plus foncé
-  const POKE_RE = /tar|marche|arr[êe]t|allum|[ée]tein|d[ée]marr|z[ée]ro|minut|chrono|lancer|mesur|[ée]talonn|r[ée]gl|bouton|appuy|agitat|g[ée]n[ée]rat|acqu|enregistr|jour/i;
-  let THREE, C, M = null;
-  const lin = (h) => new THREE.Color(h).convertSRGBToLinear();
-  const ease = (k) => k * k * (3 - 2 * k);
-
-  /* ---------------------------------------------------------------- modèle d'une main (repère : centre de la paume,
-     doigts vers +Y, paume tournée vers +Z, pouce du côté +X pour la droite (s = 1), −X pour la gauche (s = −1)) */
-  function makeHand(s, mats) {
-    const H = new THREE.Group(); H.name = s > 0 ? "main droite" : "main gauche";
-    const add = (par, geo, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; m.raycast = () => {}; par.add(m); return m; };
-    // paume : ellipsoïde aplati + dos de main + jointure des doigts
-    const palm = add(H, new THREE.SphereGeometry(1, 28, 18), mats.glove); palm.scale.set(0.041, 0.051, 0.0155);
-    const back = add(H, new THREE.SphereGeometry(1, 24, 14), mats.glove, 0, 0.004, -0.004); back.scale.set(0.038, 0.047, 0.013);
-    const kn = add(H, new THREE.CylinderGeometry(0.0118, 0.0118, 0.07, 16), mats.glove, 0, 0.041, 0.0); kn.rotation.z = Math.PI / 2;
-    // doigts : 3 phalanges chacun, articulées (rotation.x > 0 = le doigt se replie vers la paume)
-    const seg = (par, len, r, tip) => {
-      const j = new THREE.Group(); par.add(j);
-      add(j, new THREE.SphereGeometry(r, 14, 10), mats.glove);
-      add(j, new THREE.CylinderGeometry(r * 0.93, r, len, 14, 1, true), mats.glove, 0, len / 2, 0);
-      if (tip) add(j, new THREE.SphereGeometry(r * 0.93, 14, 10), mats.glove, 0, len, 0);
-      return j;
-    };
-    const finger = (x, y, lens, r, splay) => {
-      const base = new THREE.Group(); base.position.set(x, y, 0.001); base.rotation.z = splay; H.add(base);
-      const j1 = seg(base, lens[0], r, false), j2 = seg(j1, lens[1], r * 0.94, false); j2.position.y = lens[0];
-      const j3 = seg(j2, lens[2], r * 0.88, true); j3.position.y = lens[1];
-      return [j1, j2, j3];
-    };
-    const F = [
-      finger(s * 0.027, 0.044, [0.027, 0.022, 0.019], 0.0094, -s * 0.05), // index
-      finger(s * 0.009, 0.047, [0.029, 0.025, 0.021], 0.0097, 0), // majeur
-      finger(-s * 0.01, 0.045, [0.027, 0.023, 0.02], 0.0092, s * 0.04), // annulaire
-      finger(-s * 0.027, 0.039, [0.022, 0.018, 0.017], 0.0081, s * 0.1), // auriculaire
-    ];
-    // pouce : part du bas de la paume, en biais vers +X·s, s'oppose en se repliant vers la paume
-    const tb = new THREE.Group(); tb.position.set(s * 0.03, -0.022, 0.007); tb.rotation.set(0.45, s * 0.35, -s * 0.45); H.add(tb);
-    const t1 = seg(tb, 0.032, 0.0118, false), t2 = seg(t1, 0.026, 0.011, false); t2.position.y = 0.032;
-    const t3 = seg(t2, 0.022, 0.0102, true); t3.position.y = 0.026;
-    // poignet et revers du gant
-    const wr = add(H, new THREE.CylinderGeometry(0.025, 0.027, 0.05, 20), mats.glove, 0, -0.068, -0.002); wr.scale.set(1.3, 1, 0.78);
-    const cuff = add(H, new THREE.CylinderGeometry(0.029, 0.031, 0.03, 22, 1, false), mats.glove, 0, -0.098, -0.002); cuff.scale.set(1.2, 1, 0.82);
-    // manchette du gant qui s'estompe (sans bras ni manche : un avant-bras entier masquerait la paillasse dès que la caméra s'approche)
-    const gaunt = add(H, new THREE.CylinderGeometry(0.031, 0.034, 0.05, 24, 1, true), mats.fade, 0, -0.137, -0.002); gaunt.scale.set(1.2, 1, 0.84); gaunt.castShadow = false; gaunt.renderOrder = 3;
-    H.userData = { F, T: [t1, t2, t3], s, tip: null };
-    return H;
-  }
-  // poses : courbure de chaque phalange des 4 doigts (index à part) et du pouce
-  function setCurl(H, c) {
-    const u = H.userData;
-    u.F.forEach((f, i) => { const v = i === 0 && c.idx ? c.idx : c.f; f[0].rotation.x = v[0]; f[1].rotation.x = v[1]; f[2].rotation.x = v[2]; });
-    u.T[0].rotation.x = c.th[0]; u.T[1].rotation.x = c.th[1]; u.T[2].rotation.x = c.th[2];
-  }
-  const POSE = {
-    rest: { f: [0.35, 0.45, 0.3], th: [0.2, 0.25, 0.2] },
-    point: { f: [1.45, 1.5, 1.1], idx: [0.04, 0.05, 0.03], th: [0.7, 0.6, 0.4] },
-    pinch: { f: [1.0, 1.0, 0.7], th: [0.7, 0.55, 0.4] },
-  };
-  const wrapPose = (r) => { const a = Math.min(4.2, Math.max(0.7, 0.088 / (r + 0.006))); return { f: [a * 0.36, a * 0.36, a * 0.28], th: [0.55 + Math.min(0.4, a * 0.1), 0.55, 0.4] }; };
-  const lerpPose = (a, b, k) => { const L = (x, y) => x.map((v, i) => v + (y[i] - v) * k); return { f: L(a.f, b.f), idx: L(a.idx || a.f, b.idx || b.f), th: L(a.th, b.th) }; };
-
-  // dégradé d'opacité de la manchette (v = 1 côté main, v = 0 côté coude)
-  function fadeTex() {
-    const c = document.createElement("canvas"); c.width = 4; c.height = 64; const x = c.getContext("2d"), g = x.createLinearGradient(0, 0, 0, 64);
-    g.addColorStop(0, "#fff"); g.addColorStop(0.25, "#fff"); g.addColorStop(1, "#000"); x.fillStyle = g; x.fillRect(0, 0, 4, 64);
-    const t = new THREE.CanvasTexture(c); return t;
-  }
-
-  /* ---------------------------------------------------------------- forme d'un objet (repère local), mise en cache */
-  const SHAPES = new WeakMap();
-  function shapeOf(obj) {
-    let sh = SHAPES.get(obj); if (sh) return sh;
-    obj.updateMatrixWorld(true);
-    const inv = new THREE.Matrix4().copy(obj.matrixWorld).invert(), m = new THREE.Matrix4(), v = new THREE.Vector3(), pts = [];
-    obj.traverse((o) => {
-      if (!o.isMesh || !o.geometry || !o.geometry.attributes.position) return;
-      for (let p = o; p && p !== obj; p = p.parent) if (p.visible === false) return;
-      if (o.material && o.material.visible === false) return; // zones de clic invisibles
-      if (o.geometry.type === "TubeGeometry") return; // câbles, filets de liquide
-      const pos = o.geometry.attributes.position, step = Math.max(1, Math.floor(pos.count / 900));
-      m.multiplyMatrices(inv, o.matrixWorld);
-      for (let i = 0; i < pos.count; i += step) { v.fromBufferAttribute(pos, i).applyMatrix4(m); pts.push(v.x, v.y, v.z); }
-    });
-    const bb = new THREE.Box3(); for (let i = 0; i < pts.length; i += 3) bb.expandByPoint(v.set(pts[i], pts[i + 1], pts[i + 2]));
-    if (!pts.length) bb.set(new THREE.Vector3(-0.01, 0, -0.01), new THREE.Vector3(0.01, 0.02, 0.01));
-    sh = { pts, bb, size: bb.getSize(new THREE.Vector3()), c: bb.getCenter(new THREE.Vector3()) };
-    SHAPES.set(obj, sh); return sh;
-  }
-  // support : plus grande avancée de la forme dans la direction d (repère local), dans une tranche autour de la position t le long de l'axe a
-  function support(sh, a, t, d, c, band) {
-    let best = -1, n = 0; const P = sh.pts;
-    for (let i = 0; i < P.length; i += 3) {
-      const x = P[i] - c.x, y = P[i + 1] - c.y, z = P[i + 2] - c.z, along = x * a.x + y * a.y + z * a.z;
-      if (Math.abs(along - t) > band) continue; n++;
-      const sd = x * d.x + y * d.y + z * d.z; if (sd > best) best = sd;
-    }
-    return n ? best : null;
-  }
-
-  /* ---------------------------------------------------------------- prise d'un objet par une main */
-  let tmpQ, UP; // créés à l'installation (THREE peut se charger après ce script)
-  function camDirH(at) { const d = C.L.cam.position.clone().sub(at); d.y = 0; if (d.lengthSq() < 1e-6) d.set(0, 0, 1); return d.normalize(); }
-  function basisQuat(X, Y, Z) { return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(X, Y, Z)); }
-  // calcule, au moment de la saisie, où et comment la main tient l'objet (point et orientation dans le repère de l'objet)
-  function planGrip(obj, s) {
-    const sh = shapeOf(obj), sz = sh.size, maxD = Math.max(sz.x, sz.y, sz.z);
-    obj.updateMatrixWorld(true);
-    const wq = obj.getWorldQuaternion(new THREE.Quaternion()), iq = wq.clone().invert(), wp = obj.localToWorld(sh.c.clone());
-    const cd = camDirH(wp), cr = new THREE.Vector3().crossVectors(UP, cd).normalize(); // vers la caméra, à droite de l'élève
-    const toLocal = (w) => w.clone().applyQuaternion(iq).normalize();
-    const ws = obj.getWorldScale(new THREE.Vector3()), sc = (ws.x + ws.y + ws.z) / 3 || 1;
-    if (maxD < 0.045) { // petit objet (bouchon, clé de robinet) : pincé par le dessus
-      const top = new THREE.Vector3(sh.c.x, sh.bb.max.y, sh.c.z);
-      return { kind: "pinch", P: top, lift: 0.03, ref: cd.clone().negate().addScaledVector(cr, -s * 0.35).normalize(), pose: POSE.pinch };
-    }
-    const horiz = Math.max(sz.x, sz.z) > 1.6 * sz.y && Math.max(sz.x, sz.z) > 0.07;
-    let A, t, S, T;
-    if (horiz) { // spatule, cuillère : on tient le manche (le bout le plus fin), pouce vers l'outil
-      A = sz.x >= sz.z ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, 1);
-      const half = (sz.x >= sz.z ? sz.x : sz.z) / 2, side = new THREE.Vector3(A.z, 0, A.x), up = new THREE.Vector3(0, 1, 0);
-      const spread = (end) => { const a = support(sh, A, end * half * 0.85, up, sh.c, half * 0.15), b = support(sh, A, end * half * 0.85, side, sh.c, half * 0.15), b2 = support(sh, A, end * half * 0.85, side.clone().negate(), sh.c, half * 0.15); return (a || 0) + (b || 0) + (b2 || 0); };
-      const handleEnd = spread(1) < spread(-1) ? 1 : -1;
-      t = handleEnd * half * 0.62; T = A.clone().multiplyScalar(-handleEnd);
-      S = toLocal(new THREE.Vector3(0, 1, 0).addScaledVector(cd, 0.6)); S.addScaledVector(A, -S.dot(A)).normalize();
-    } else { // objet debout : tenu à pleine main sur le côté, pouce vers le haut
-      A = new THREE.Vector3(0, 1, 0); const thin = sz.y > 2.4 * Math.max(sz.x, sz.z);
-      t = (thin ? 0.24 : -0.06) * sz.y; T = A.clone();
-      const ang = 2.0; // paume sur le côté, un peu en arrière (≈ 115° de l'axe de la caméra) : le poignet revient vers l'élève, du côté de sa main
-      const wsd = cd.clone().multiplyScalar(Math.cos(ang)).addScaledVector(cr, s * Math.sin(ang));
-      S = toLocal(wsd); S.addScaledVector(A, -S.dot(A)).normalize();
-    }
-    let r = support(sh, A, t, S, sh.c, 0.012); if (r == null) r = Math.max(sz.x, sz.z) / 2;
-    const rw = r * sc, P = sh.c.clone().addScaledVector(A, t).addScaledVector(S, r);
-    // orientation de la main dans le repère de l'objet : X = pouce (s), Z = paume vers l'objet, Y = doigts
-    const X = T.clone().multiplyScalar(s), Z = S.clone().negate(), Y = new THREE.Vector3().crossVectors(Z, X);
-    return { kind: "wrap", P, off: 0.0165 / sc, S, q: basisQuat(X, Y, Z), pose: wrapPose(rw) };
-  }
-  // pose de la main (monde) pour une prise donnée, à cet instant
-  function gripPose(obj, gp, s, out) {
-    obj.updateMatrixWorld(true);
-    if (gp.kind === "pinch") { // la main suit la position du bouchon mais ne tourne pas avec lui (les doigts « vissent »)
-      const p = obj.localToWorld(gp.P.clone()), ax = UP.clone().applyQuaternion(obj.getWorldQuaternion(tmpQ)).normalize();
-      out.p.copy(p).addScaledVector(ax, gp.lift);
-      const ry = obj.rotation.y, wob = 0.32 * Math.sin(ry * 2);
-      // doigts vers le fond (l'avant-bras revient vers l'élève), paume vers le bas
-      const Y = gp.ref.clone().addScaledVector(ax, -gp.ref.dot(ax)).normalize().applyAxisAngle(ax, wob), Z = ax.clone().negate(), X = new THREE.Vector3().crossVectors(Y, Z);
-      out.p.addScaledVector(Y, -0.04); // paume en avant du bouchon : le bout des doigts se replie dessus
-      out.q.copy(basisQuat(X, Y, Z)); return out;
-    }
-    const p = obj.localToWorld(gp.P.clone().addScaledVector(gp.S, gp.off));
-    out.p.copy(p); out.q.copy(obj.getWorldQuaternion(tmpQ)).multiply(gp.q); return out;
-  }
-
-  /* ---------------------------------------------------------------- les deux mains */
-  function Mains(ctx) {
-    this.ctx = ctx; this.hands = null; this.holdN = 0; this.stats = { grab: 0, poke: 0, hold: 0 }; // stats : pour les tests
-  }
-  Mains.prototype.build = function () {
-    const sc = this.ctx.L.scene; if (!sc) return false;
-    const mats = {
-      glove: new THREE.MeshPhysicalMaterial({ color: lin(GLOVE), roughness: 0.48, metalness: 0, clearcoat: 0.35, clearcoatRoughness: 0.55 }),
-      fade: new THREE.MeshStandardMaterial({ color: lin(GLOVE_DARK), roughness: 0.5, metalness: 0, transparent: true, depthWrite: false, side: THREE.DoubleSide, alphaMap: fadeTex() }),
-    };
-    this.hands = [1, -1].map((s) => {
-      const H = makeHand(s, mats); H.visible = false; sc.add(H); setCurl(H, POSE.rest);
-      // bout de l'index en pose « pointer » (repère de la main) pour viser un bouton
-      setCurl(H, POSE.point); H.updateMatrixWorld(true); const tip = new THREE.Vector3(); H.userData.F[0][2].children[2].getWorldPosition(tip); H.userData.tip = H.worldToLocal(tip.clone()); setCurl(H, POSE.rest);
-      return { s, H, mode: "rest", obj: null, gp: null, b: 1, dur: 0.26, from: { p: new THREE.Vector3(), q: new THREE.Quaternion() }, cur: { p: new THREE.Vector3(), q: new THREE.Quaternion() }, pose: POSE.rest, curl: POSE.rest, idle: 0, keep: false, sec: null, t: 0 };
-    });
-    return true;
-  };
-  Mains.prototype.restPose = function (h, out) {
-    const cam = this.ctx.L.cam, f = new THREE.Vector3(), r = new THREE.Vector3(), u = new THREE.Vector3();
-    cam.updateMatrixWorld(); cam.matrixWorld.extractBasis(r, u, f); f.negate();
-    out.p.copy(cam.position).addScaledVector(f, 0.42).addScaledVector(r, h.s * 0.2).addScaledVector(u, -0.33);
-    const Y = f.clone().addScaledVector(u, -0.2).normalize(), Z = u.clone().negate().addScaledVector(Y, Y.dot(u)).normalize(), X = new THREE.Vector3().crossVectors(Y, Z);
-    out.q.copy(basisQuat(X, Y, Z)); return out;
-  };
-  Mains.prototype.retarget = function (h, mode) {
-    h.from.p.copy(h.cur.p); h.from.q.copy(h.cur.q);
-    if (!h.H.visible) this.restPose(h, h.from); // la main arrive d'en bas, hors du champ
-    h.mode = mode; h.b = 0; h.idle = 0; h.t = 0;
-  };
-  Mains.prototype.grab = function (h, obj, opt = {}) {
-    if (h.mode === "grip" && h.obj === obj) { h.sec = opt.sec || null; return 0; }
-    this.stats.grab++; h.obj = obj; h.gp = planGrip(obj, h.s); h.pose = h.gp.pose; h.sec = opt.sec || null; h.keep = !!opt.keep;
-    const was = h.H.visible; this.retarget(h, "grip");
-    const tgt = gripPose(obj, h.gp, h.s, { p: new THREE.Vector3(), q: new THREE.Quaternion() });
-    if (was && h.cur.p.distanceTo(tgt.p) < 0.02) { h.b = 1; return 0; }
-    return h.dur;
-  };
-  Mains.prototype.release = function (h) { h.auto = false; h.obj = null; h.gp = null; h.keep = false; h.sec = null; h.pose = POSE.rest; this.retarget(h, "rest"); };
-  Mains.prototype.poke = function (name) {
-    const T = this.ctx.TOOLS[name]; if (!T || !T.obj || !this.hands) return;
-    this.stats.poke++; const h = this.free(); const bb = new THREE.Box3().setFromObject(T.obj), c = bb.getCenter(new THREE.Vector3()), sz = bb.getSize(new THREE.Vector3());
-    const cd = camDirH(c), p = c.clone(); p.y = bb.min.y + sz.y * 0.55;
-    const tx = Math.abs(cd.x) > 1e-3 ? sz.x / 2 / Math.abs(cd.x) : 1e9, tz = Math.abs(cd.z) > 1e-3 ? sz.z / 2 / Math.abs(cd.z) : 1e9; p.addScaledVector(cd, Math.min(tx, tz, 0.3));
-    const Y = cd.clone().negate().addScaledVector(UP, -0.45).normalize(), Z = UP.clone().negate().addScaledVector(Y, Y.dot(UP)).normalize(), X = new THREE.Vector3().crossVectors(Y, Z);
-    h.obj = null; h.gp = null; h.keep = false; h.sec = null; h.pose = POSE.point; h.pk = { p, q: basisQuat(X, Y, Z), Y };
-    this.retarget(h, "poke");
-  };
-  // main à utiliser : une main libre (la droite d'abord), sinon celle qui ne tient rien d'important
-  Mains.prototype.free = function (not) {
-    const [R, G] = this.hands, ok = (h) => h !== not && h.mode !== "grip";
-    if (ok(R)) return R; if (ok(G)) return G;
-    const cand = [R, G].filter((h) => h !== not && !h.keep); const h = cand.find((x) => !x.sec) || cand[0] || (R !== not ? R : G);
-    return h;
-  };
-  const rootOf = (o, TOOLS) => { const set = new Set(Object.values(TOOLS).map((t) => t.obj)); for (let p = o; p; p = p.parent) if (set.has(p)) return p; return o; };
-  // une étape de la file commence : la main saisit l'objet ; renvoie le temps d'approche
-  Mains.prototype.onStep = function (a) {
-    const obj = a.obj; if (!obj || !obj.isObject3D || a.__mains) return 0; a.__mains = true;
-    let vis = true; for (let p = obj; p; p = p.parent) if (p.visible === false) vis = false; if (!vis) return 0;
-    const held = this.hands.find((h) => h.mode === "grip" && h.obj === obj);
-    let wait = 0;
-    const u = obj.userData || {}, isCap = "off" in u || shapeOf(obj).size.y < 0.045 && obj.parent && obj.parent !== this.ctx.L.g;
-    const primary = held || this.free();
-    wait = Math.max(wait, this.grab(primary, obj));
-    if (isCap) { // l'autre main tient le flacon pendant qu'on dévisse ou revisse
-      const par = u.par || (obj.parent !== this.ctx.L.g ? obj.parent : null);
-      if (par && par !== this.ctx.L.g) { const bottle = rootOf(par, this.ctx.TOOLS); const other = this.free(primary); if (other && other !== primary) wait = Math.max(wait, this.grab(other, bottle, { sec: obj })); }
-    }
-    return wait;
-  };
-  Mains.prototype.frame = function (dt) {
-    if (!this.hands && !this.build()) return;
-    const ST = this.ctx.ST, q = ST.q || [], fast = !!window.__fast;
-    // nouvelle étape en tête de file : la main vient d'abord saisir l'objet (étape d'attente insérée)
-    const a = q[0];
-    if (a && a.t === undefined && !a.__mains && !a.__wait) {
-      const w = this.onStep(a);
-      if (w > 0.02 && !fast) { const d = new THREE.Object3D(); a.obj.getWorldPosition(d.position); q.unshift({ obj: d, dur: w * 0.95, up: 0, __wait: true, __mains: true }); }
-    }
-    const flow = !!(ST.pouring || ST.sFlow);
-    // robinet de burette ouvert (élève ou démonstration) : une main tient la clé tant que la burette coule
-    const tap = this.ctx.TOOLS.tap && this.ctx.TOOLS.tap.obj;
-    if (tap && ST.pouring && !q.length && !this.hands.some((h) => h.mode === "grip" && h.obj === tap)) { const h = this.free(); if (h) { this.grab(h, tap, { keep: true }); h.auto = true; } }
-    for (const h of this.hands) {
-      // relâcher quand le geste est fini (sauf objet encore incliné, versement maintenu en cours)
-      if (h.mode === "grip") {
-        const inQ = q.some((st) => st.obj === h.obj || (h.sec && st.obj === h.sec));
-        if (inQ || (h.keep && this.holdN > 0) || (h.auto && ST.pouring)) h.idle = 0;
-        else {
-          h.idle += dt;
-          const up = UP.clone().applyQuaternion(h.obj.getWorldQuaternion(tmpQ)), tilted = up.y < 0.96 && !h.sec && h.gp.kind !== "pinch";
-          const lim = tilted ? (flow || this.holdN > 0 ? 1e9 : 2.2) : 0.12;
-          if (fast || h.idle > lim || !h.obj.parent) this.release(h);
-        }
-      }
-      if (h.mode === "poke") { h.t += dt; if (h.t > (fast ? 0 : 0.62)) this.release(h); }
-      // pose visée
-      const tgt = { p: new THREE.Vector3(), q: new THREE.Quaternion() };
-      if (h.mode === "grip") gripPose(h.obj, h.gp, h.s, tgt);
-      else if (h.mode === "poke") { const k = h.t < 0.26 ? -0.014 : h.t < 0.38 ? lerpN(-0.014, 0.002, (h.t - 0.26) / 0.12) : 0.002; tgt.q.copy(h.pk.q); tgt.p.copy(h.pk.p).addScaledVector(h.pk.Y, k).sub(h.H.userData.tip.clone().applyQuaternion(h.pk.q)); }
-      else this.restPose(h, tgt);
-      // transition douce vers la pose visée, puis main solidaire de l'objet
-      if (h.b < 1) {
-        h.b = fast ? 1 : Math.min(1, h.b + dt / h.dur); const e = ease(h.b);
-        h.cur.p.lerpVectors(h.from.p, tgt.p, e); if (h.mode !== "rest") h.cur.p.y += 0.035 * Math.sin(Math.PI * e);
-        h.cur.q.copy(h.from.q).slerp(tgt.q, e);
-      } else { h.cur.p.copy(tgt.p); h.cur.q.copy(tgt.q); }
-      const show = !(h.mode === "rest" && h.b >= 1);
-      if (h.H.visible !== show) h.H.visible = show;
-      if (!show) continue;
-      h.H.position.copy(h.cur.p); h.H.quaternion.copy(h.cur.q);
-      h.curl = lerpPose(h.curl, h.pose, fast ? 1 : Math.min(1, dt * 14)); setCurl(h.H, h.curl);
-    }
-  };
-  const lerpN = (a, b, k) => a + (b - a) * Math.min(1, Math.max(0, k));
-  Mains.prototype.holdTool = function (name) {
-    const T = this.ctx.TOOLS[name]; if (!T || !T.obj) return; const h = this.free(); if (!h) return; this.stats.hold++;
-    this.grab(h, T.obj, { keep: true });
-  };
-
-  window.LabMains = {
-    install(ctx) {
-      THREE = window.THREE; if (!THREE) return ctx.runQueue;
-      tmpQ = new THREE.Quaternion(); UP = new THREE.Vector3(0, 1, 0);
-      C = ctx; M = new Mains(ctx); LabMains.m = M;
-      const rq = ctx.runQueue;
-      return function runQueue(dt) { try { M.frame(dt); } catch (e) { if (!M.err) { M.err = e; console.warn("mains :", e); } } return rq(dt); };
-    },
-    // les actions du menu : appui de l'index sur un appareil, main qui tient l'objet pendant une action maintenue
-    wrapMenu(menuFor) {
-      return function (name) {
-        const items = menuFor.apply(this, arguments); if (!M || !Array.isArray(items)) return items;
-        const qn = () => (M.ctx.ST.q || []).length;
-        return items.map((it) => {
-          const w = Object.assign({}, it);
-          if (it.hold) {
-            const st = it.start || M.ctx.startPour, sp = it.stop || M.ctx.stopPour;
-            if (st) w.start = function () { const n0 = qn(); const r = st.apply(this, arguments); M.holdN++; if (qn() === n0) M.holdTool(name); return r; };
-            if (sp) w.stop = function () { const r = sp.apply(this, arguments); M.holdN = 0; if (M.hands) M.hands.forEach((h) => { if (h.keep) h.keep = false; }); return r; };
-          } else if (typeof it.run === "function") {
-            w.run = function () { const n0 = qn(); const r = it.run.apply(this, arguments); try { if (M.hands && qn() === n0 && POKE_RE.test(String(it.t || ""))) M.poke(name); } catch (e) {} return r; };
-          }
-          return w;
-        });
-      };
-    },
-  };
-})();
-</script>
 <script>
 /* secours : contrôle d'orbite minimal si aucun CDN n'a fourni OrbitControls */
 if (window.THREE && !THREE.OrbitControls) THREE.OrbitControls = class {
@@ -581,7 +262,7 @@ function wrapLabel(r, h, parent, x, y, z, lines, bg) {
   return mesh(new THREE.CylinderGeometry(r, r, h, 32, 1, true, -1.2, 2.4), std(0xffffff, 0.7, 0, { map: t }), parent, x, y, z);
 }
 function knob(parent, x, y, z, r = 0.01, mat = M.black) { const k = cyl(r, r * 1.08, r * 1.2, mat, parent, x, y, z, 24); k.rotation.x = Math.PI / 2; box(r * 0.25, r * 0.9, 0.002, M.white, k, 0, r * 0.62, r * 0.55).rotation.x = -Math.PI / 2; return k; }
-function liquidMat(color, op = 0.42) { return new THREE.MeshPhysicalMaterial({ color, roughness: 0.06, transparent: true, opacity: op, clearcoat: 1, depthWrite: false, envMapIntensity: 1.2 }); }
+function liquidMat(color, op = 0.42) { /*liquide-mat*/ const m = new THREE.MeshPhysicalMaterial({ color, roughness: 0.6, reflectivity: 0.05, envMapIntensity: 0.15, transparent: true, opacity: op, clearcoat: 0, depthWrite: false }); (window.__LIQS || (window.__LIQS = [])).push(m); return m; }
 
 function initMats() {
   T3.epoxy = canvasTex(512, 512, (x, w, h) => { x.fillStyle = "#2a2d31"; x.fillRect(0, 0, w, h); grain(x, w, h, 22); for (let i = 0; i < 900; i++) { x.fillStyle = `rgba(255,255,255,${Math.random() * 0.08})`; x.fillRect(Math.random() * w, Math.random() * h, 1.5, 1.5); } }, [8, 1]);
@@ -720,10 +401,11 @@ function buildBench(g) {
   const gr = mesh(new THREE.CylinderGeometry(0.0303, 0.0303, GH, 40, 1, true, -0.12, 256 / gS / 0.0303), new THREE.MeshStandardMaterial({ map: canvasTex(256, 512, (x, w, h) => { x.clearRect(0, 0, w, h); x.fillStyle = "#ffffff"; x.strokeStyle = "rgba(16,24,34,.8)"; x.lineWidth = 5; x.lineJoin = "round"; x.font = "bold 34px Arial"; for (let v = 25; v <= 150; v += 25) { const y = h - (0.004 + liqH(v) - G0) * gS, big = v % 50 === 0; x.strokeRect(40, y - 2, big ? 72 : 42, 4); x.fillRect(40, y - 2, big ? 72 : 42, 4); if (big) { x.strokeText(String(v), 124, y + 12); x.fillText(String(v), 124, y + 12); } } }), transparent: true, depthWrite: false, roughness: 0.4 }), bk, 0, G0 + GH / 2, 0); gr.castShadow = false; gr.renderOrder = 4;
   // plage d'écriture émaillée blanche (comme sur les béchers du commerce)
   mesh(new THREE.CylinderGeometry(0.0303, 0.0303, 0.022, 32, 1, true, -1.15, 0.8), new THREE.MeshStandardMaterial({ map: canvasTex(256, 256, (x, w, h) => { x.clearRect(0, 0, w, h); x.fillStyle = "rgba(255,255,255,.93)"; x.beginPath(); x.moveTo(24, 10); x.arcTo(246, 10, 246, 246, 18); x.arcTo(246, 246, 10, 246, 18); x.arcTo(10, 246, 10, 10, 18); x.arcTo(10, 10, 246, 10, 18); x.fill(); x.fillStyle = "#1b2633"; x.textAlign = "center"; x.font = "bold 64px Arial"; x.fillText("150 mL", w / 2, 112); x.font = "34px Arial"; x.fillText("≈ ± 5 %", w / 2, 170); x.font = "26px Arial"; x.fillText("verre borosilicaté 3.3", w / 2, 216); }), transparent: true, depthWrite: false, roughness: 0.5 }), bk, 0, 0.034, 0).renderOrder = 4;
-  X.liqMat = new THREE.MeshPhysicalMaterial({ color: 0xb9d4f3, roughness: 0.06, transparent: true, opacity: 0.6, clearcoat: 1, depthWrite: false });
+  X.liqMat = liquidMat(0x9fc4ea, 0.66);
   X.liqRing = mesh(new THREE.TorusGeometry(0.0284, 0.0012, 8, 48), std(0x6f98c8, 0.4, 0, { transparent: true, opacity: 0.85 }), bk, 0, 0.02, 0); X.liqRing.rotation.x = Math.PI / 2; X.liqRing.visible = false; X.liqRing.castShadow = false;
   mesh(new THREE.TorusGeometry(0.031, 0.0015, 8, 56), std(0xcfe0ee, 0.1, 0, { transparent: true, opacity: 0.95 }), bk, 0, 0.0792, 0).rotation.x = Math.PI / 2;
   X.liq = cyl(0.0283, 0.0283, 1, X.liqMat, bk, 0, 0, 0, 48); X.liq.castShadow = false; X.liq.renderOrder = 2; X.liq.visible = false;
+  X.tiltLiq = sph(1, X.liqMat, bk, -0.022, 0.066, 0); X.tiltLiq.castShadow = false; X.tiltLiq.visible = false; // liquide contre le bord quand on penche le bécher
   X.swirlMat = new THREE.MeshStandardMaterial({ color: 0xf2318f, emissive: 0xf2318f, emissiveIntensity: 0.25, roughness: 0.4, transparent: true, opacity: 0, depthWrite: false });
   X.swirl = new THREE.Group(); bk.add(X.swirl); for (let i = 0; i < 9; i++) { const a = (i / 9) * Math.PI * 2, r = 0.004 + Math.random() * 0.012; const s = sph(0.005 + Math.random() * 0.004, X.swirlMat, X.swirl, Math.cos(a) * r, -0.004 - Math.random() * 0.018, Math.sin(a) * r); s.scale.set(1.6, 0.5, 1); s.rotation.y = a; s.castShadow = false; s.renderOrder = 3; } X.swirl.visible = false;
   X.pipStream = cyl(0.0014, 0.0014, 1, liquidMat(0xf0e6c0, 0.8), g, 0, 0, 0, 8); X.pipStream.visible = false; X.pipStream.castShadow = false;
@@ -823,7 +505,7 @@ const ST = {};
 const rnd = (a, b, s) => +(a + s * Math.floor(Math.random() * (Math.round((b - a) / s) + 1))).toFixed(4);
 const pKa = 4.76, CB = 0.1, VPIP = 10; // pKa(CH₃COOH/CH₃COO⁻) = 4,76 à 25 °C (manuel : 4,8) ; Ke = 10⁻¹⁴
 const IND = { phph: { n: "phénolphtaléine", lo: 8.2, hi: 10, c1: [0.84, 0.91, 0.98], c2: [0.93, 0.08, 0.5] }, bbt: { n: "BBT", lo: 6.0, hi: 7.6, c1: [0.98, 0.84, 0.1], c2: [0.08, 0.32, 0.9], mid: [0.2, 0.72, 0.35] }, hel: { n: "hélianthine", lo: 3.1, hi: 4.4, c1: [0.9, 0.12, 0.1], c2: [0.98, 0.78, 0.15] } };
-function resetState() {
+function resetState() { /*fini-reset*/ ST.fini = false;
   if (STEP) { STEP.skip.clear(); STEP.focus = null; } // étapes libres
   Object.assign(ST, { CA: rnd(0.08, 0.12, 0.001), nA: 0, VA: 0, Vw: 0, VB: 0, Vread: 0, bur: 0, burVis: 0, filling: false, pipPour: 0, wPour: 0, VAtarget: 0, Vwtarget: 0, bubble: false, airOut: 0, ind: null, indDrops: 0, stir: false, probeIn: false, pipState: "water", pipFull: false, pouring: false, flow: 0, VEnoted: null, pts: [], q: [], busy: false, guide: true, started: performance.now(), attempts: 1, ev: [], flags: {}, swirl: 0, pH: 7, rdPH: NaN, lastDrop: 0 });
   for (const k in TOOLS) { const t = TOOLS[k]; if (!t || !t.home) continue; t.obj.position.copy(t.home); t.obj.rotation.copy(t.homeRot); }
@@ -892,6 +574,44 @@ const CAMS = {
 };
 let camFocus = null, camBusy = false; // dernière vue voulue (action ou guide), rétablie à la fin de chaque geste
 const look = (k) => { camFocus = k; const c = CAMS[k]; focusCam(typeof c === "function" ? c() : c); };
+/*legende*/ /* légende d'une vue d'observation : chaque objet ou résultat est nommé (étiquette + trait de rappel), sans donner la réponse attendue dans le tableau */
+const RESVIEW = {}; // expérience finie (bilan vu) : clic sur un objet → vue de son résultat, légendée (RESVIEW[outil] = clé de vue)
+const LEGS = {}; // LEGS[clé de vue] = [{ at: () => [x, y, z] (repère de la paillasse), t: "nom", m: "précision", c: "#couleur", on: () => vrai si affichée }]
+function legendTick() {
+  let el = document.getElementById("labLeg");
+  if (!el) {
+    el = document.createElement("div"); el.id = "labLeg"; el.innerHTML = '<svg></svg><div class="ttl">Légende</div><div class="tags"></div>'; document.body.appendChild(el);
+    const st = document.createElement("style"); st.textContent = '#labLeg{position:fixed;inset:0;pointer-events:none;z-index:4}#labLeg[hidden]{display:none}#labLeg svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}#labLeg .tag{position:absolute;transform:translateY(-50%);background:rgba(255,255,255,.96);color:#18202b;font:700 13px/1.25 "Atkinson Hyperlegible",Arial,sans-serif;padding:5px 9px;border-radius:7px;border-left:5px solid var(--c);box-shadow:0 2px 10px rgba(0,0,0,.28);max-width:min(280px,38vw)}#labLeg .tag small{display:block;font-weight:400;font-size:12px;color:#3c4652}#labLeg .tag.L{transform:translate(-100%,-50%);border-left:0;border-right:5px solid var(--c);text-align:right}#labLeg .ttl{position:absolute;left:50%;top:62px;transform:translateX(-50%);background:#1d2836;color:#fff;font:700 14px "Atkinson Hyperlegible",Arial,sans-serif;padding:6px 14px;border-radius:999px;box-shadow:0 2px 10px rgba(0,0,0,.3)}@media (max-width:640px){#labLeg .tag{font-size:11px;padding:3px 6px}#labLeg .tag small{font-size:10px}}';
+    document.head.appendChild(st);
+  }
+  const list = (LEGS[camFocus] || []).filter((i) => (!i.on || i.on()) && (!i.fin || ST.fini)), ov = document.getElementById("overlay"); // fin : résultat, montré seulement quand l'expérience est finie
+  const show = list.length > 0 && !L.tw && !ST.q.length && !(ov && ov.hidden === false);
+  el.hidden = !show; if (!show) return; el.querySelector(".ttl").textContent = list.some((i) => i.fin) ? "Résultat de l'expérience" : "Légende";
+  const W = window.innerWidth, H = window.innerHeight, P = (a) => { const v = L.g.localToWorld(new THREE.Vector3(a[0], a[1], a[2])).project(L.cam); return [((v.x + 1) / 2) * W, ((1 - v.y) / 2) * H, v.z]; };
+  const val = (v) => (typeof v === "function" ? v() : v), it = list.map((i) => { const a = P(i.at()); return { ...i, t: val(i.t), m: val(i.m), a, s: a[0] < W / 2 ? "L" : "R" }; }).filter((i) => i.a[2] < 1);
+  for (const side of ["L", "R"]) { const g = it.filter((i) => i.s === side).sort((a, b) => a.a[1] - b.a[1]); g.forEach((i, k) => { i.x = side === "L" ? Math.min(...g.map((j) => j.a[0])) - 60 : Math.max(...g.map((j) => j.a[0])) + 60; i.y = i.a[1]; if (k && i.y - g[k - 1].y < 46) i.y = g[k - 1].y + 46; }); }
+  const tags = el.querySelector(".tags"); tags.innerHTML = it.map((i) => `<div class="tag ${i.s}" style="--c:${i.c || "#5d6670"};left:${i.x}px;top:${i.y}px">${i.t}${i.m ? "<small>" + i.m + "</small>" : ""}</div>`).join("");
+  [...tags.children].forEach((t, k) => { const i = it[k], w = t.offsetWidth; if (i.s === "L" && i.x - w < 8) i.x = w + 8; if (i.s === "R" && i.x + w > W - 8) i.x = W - 8 - w; t.style.left = i.x + "px"; });
+  el.querySelector("svg").innerHTML = it.map((i) => `<line x1="${i.a[0]}" y1="${i.a[1]}" x2="${i.x}" y2="${i.y}" stroke="${i.c || "#5d6670"}" stroke-width="2"/><circle cx="${i.a[0]}" cy="${i.a[1]}" r="4" fill="none" stroke="${i.c || "#5d6670"}" stroke-width="2"/>`).join("");
+}
+/*camera-produit*/ /* produit utilisé : la caméra montre d'abord son étiquette (nom lisible), puis le geste en entier (flacon + récipient) */
+const CAM_FIX = new Set(["@lbl", "@pour", "@obs"]); // vues fixes : la caméra ne suit pas l'objet qui bouge
+function camLabel(obj, side = null, up = 0.55) { // side null : on essaie plusieurs côtés et on garde le premier d'où l'étiquette n'est pas cachée
+  const b = new THREE.Box3().setFromObject(obj), c = b.getCenter(new THREE.Vector3()), sz = b.getSize(new THREE.Vector3()); L.g.worldToLocal(c);
+  const d = Math.max(sz.y, sz.x) * 1.5 + 0.11; c.y -= sz.y * 0.1;
+  const at = (s) => ({ p: [c.x + Math.sin(s) * d * 0.9, c.y + d * up, c.z + Math.cos(s) * d * 0.9], t: [c.x, c.y, c.z] });
+  if (side != null) return at(side);
+  const mine = new Set(); obj.traverse((o) => mine.add(o)); const rc = new THREE.Raycaster(), W = (a) => L.g.localToWorld(new THREE.Vector3(a[0], a[1], a[2]));
+  for (const s of [0, 0.55, -0.55, 0.95, -0.95, 1.35, -1.35]) {
+    const k = at(s), p = W(k.p), t = W(k.t), dir = t.clone().sub(p), dist = dir.length(); rc.set(p, dir.normalize()); rc.far = dist - 0.01;
+    const hit = rc.intersectObjects(L.g.children, true).find((h) => { const o = h.object, m = o.material; if (mine.has(o) || !o.visible || !m || m.visible === false) return false; let q = o; while (q) { if (!q.visible) return false; q = q.parent; } return !(m.transparent && m.opacity < 0.5); });
+    if (!hit) return k;
+  }
+  return at(0);
+}
+const camPour = (N, k = 1) => ({ p: [N.x - 0.01, N.y + 0.12 - 0.07 * (k - 1), N.z + 0.44 * k], t: [N.x - 0.045, N.y - 0.03 - 0.07 * (k - 1), N.z] }); // N : point d'arrivée du liquide (bouche du récipient)
+function showProduct(obj, after, trigger, side, up, wait = 0.9) { CAMS["@lbl"] = camLabel(obj, side, up); look("@lbl"); if (wait > 0) ST.q.push({ obj: new THREE.Object3D(), to: [0, 0, 0], dur: wait, up: 0 }); ST.camNext = after ? { obj: trigger || obj, cam: after } : null; }
+function lookAt(key, cam) { CAMS[key] = cam; look(key); }
 /* ------------------------------------------------------------ étapes libres (demande de l'enseignant, nov. 2026)
    L'élève peut passer une étape ou changer l'ordre. Le guide d'origine (suggestAll) est parcouru dans l'ordre conseillé :
    la première étape qui n'est pas passée est proposée, les étapes passées sont franchies. « Passer l'étape » retire du
@@ -942,6 +662,7 @@ function frameScreen(m, d = 0.36) {
 }
 function cadrages() { const m = X.lcdC || X.lcdPH; if (m) CAMS.scr = frameScreen(m); }
 function focusTool(name) {
+  /*resultat*/ if (ST.fini && typeof RESVIEW !== "undefined" && RESVIEW[name] && !ST.demo) { STEP.quiet = performance.now() + 4000; look(RESVIEW[name]); return; } // expérience finie : résultat légendé
   if (typeof resolveName === "function") name = resolveName(name);
   if (!name || ST.demo || !TOOLS[name]) return;
   STEP.quiet = performance.now() + 1500; const s = allSteps().slice(0, -1).find((g) => g.on === name && g.cam && CAMS[g.cam]); if (s) { look(s.cam); return; }
@@ -969,7 +690,7 @@ function updGuide() {
   $("#btnEval").hidden = !(ST.VEnoted != null || ST.pts.length >= 8);
   const key = g.on + g.t.slice(0, 24); if (key === lastKey) return; lastKey = key;
   el.querySelector(".n").textContent = "Guide"; el.querySelector(".k").textContent = g.k; el.querySelector(".t").textContent = g.t; el.querySelector(".h").textContent = g.h || "";
-  if (g.cam && ST.guide && !ST.demo) look(g.cam);
+  /*guide-tient*/ if (g.cam && ST.guide && !ST.demo && !(CAM_FIX.has(camFocus) && (ST.busy || ST.q.length || ST.camNext || ST.pouring || ST.legend))) look(g.cam);
 }
 function go(obj, steps) { for (const s of steps) ST.q.push(Object.assign({ obj, dur: 0.5, up: 0.05 }, s)); }
 function runQueue(dt) {
@@ -1009,7 +730,7 @@ function arcPour(m, a, b, r = 0.0016, k = 0.3, dir = null) {
 
 /* actions */
 function doFill() {
-  if (ST.busy) return busyToast(); look("fill"); const was = ST.bur, nb = TOOLS.naoh.obj; ST.burVis = 0; X.funnel.visible = true;
+  if (ST.busy) return busyToast(); const was = ST.bur, nb = TOOLS.naoh.obj; showProduct(nb, CAMS.fill); ST.burVis = 0; X.funnel.visible = true;
   capOff(X.naohCap, [-0.2, 0.009, -0.03]);
   go(nb, [
     { to: [-0.115, 0.86, -0.155], rot: [0, 0, -1.25], dur: 1.1, up: 0.2, at: () => { ST.filling = true; ST.naohPour = true; ST.burVis = 0; ST.bur = 25; ST.VB = 0; ST.Vread = 0; ST.bubble = true; ST.airOut = 0; X.bubble.visible = true; } },
@@ -1036,8 +757,8 @@ function stopPour() { ST.pouring = false; X.tap.rotation.y = 0; X.drop.visible =
 function doDrop() { if (ST.bur <= 0) return toast("Remplis d'abord la burette."); look("bk"); deliver(0.05); X.drop.visible = true; ST.lastDrop = performance.now(); clearTimeout(doDrop._t); doDrop._t = setTimeout(() => (X.drop.visible = false), 330); }
 function doMl() { if (ST.bur <= 0) return toast("Remplis d'abord la burette."); look("bk"); deliver(1); }
 function doRinsePip() {
-  if (ST.busy) return busyToast(); look("fl"); const p = TOOLS.pip.obj;
-  const ac = TOOLS.acid.obj, ax = ac.position.x, az = ac.position.z;
+  if (ST.busy) return busyToast(); const p = TOOLS.pip.obj;
+  const ac = TOOLS.acid.obj, ax = ac.position.x, az = ac.position.z; showProduct(ac, CAMS.fl, p);
   capOff(X.acidCap, [-0.24, 0.009, 0.0]);
   go(p, [
     { to: [ax, 0.28, az], rot: [0, 0.2, 0], dur: 0.8, up: 0.08 },
@@ -1051,8 +772,8 @@ function doRinsePip() {
   capOn(X.acidCap);
 }
 function doPipette() {
-  if (ST.busy) return busyToast(); if (ST.pipFull) return toast("La pipette est déjà pleine : verse-la dans le bécher."); look("fl"); const p = TOOLS.pip.obj;
-  const ac = TOOLS.acid.obj, ax = ac.position.x, az = ac.position.z;
+  if (ST.busy) return busyToast(); if (ST.pipFull) return toast("La pipette est déjà pleine : verse-la dans le bécher."); const p = TOOLS.pip.obj;
+  const ac = TOOLS.acid.obj, ax = ac.position.x, az = ac.position.z; showProduct(ac, CAMS.fl, p);
   capOff(X.acidCap, [-0.24, 0.009, 0.0]);
   go(p, [
     { to: [ax, 0.28, az], rot: [0, 0.2, 0], dur: 0.8, up: 0.08 },
@@ -1073,7 +794,7 @@ function doPourPip() {
   ]);
 }
 function doWater(v) {
-  if (ST.busy) return busyToast(); look("bk"); const wb = TOOLS.wash.obj;
+  if (ST.busy) return busyToast(); const wb = TOOLS.wash.obj; showProduct(wb, CAMS.bk, wb, 0, 0.55, 0.6);
   go(wb, [
     { to: [0.13, 0.1, -0.11], rot: [0, 0, 0.45], dur: 0.8, up: 0.08, at: () => { ST.Vwtarget = ST.Vw + v; ST.wRate = v / 1.4; ST.wPour = 1.4; } },
     { to: [0.13, 0.1, -0.11], dur: 1.5, up: 0, at: () => { ST.Vw = ST.Vwtarget; ST.wPour = 0; ST.pH = pHof(ST.VB); } },
@@ -1081,7 +802,7 @@ function doWater(v) {
   ]);
 }
 function doInd(k) {
-  if (ST.busy) return busyToast(); look("bk"); const d = TOOLS[k].obj, dp = d.userData.dp, u = dp.userData;
+  if (ST.busy) return busyToast(); const d = TOOLS[k].obj, dp = d.userData.dp, u = dp.userData; showProduct(d, CAMS.bk, dp);
   const home = () => gpos(d).toArray(), up = (dy) => () => { const v = gpos(d); v.y += dy; return v.toArray(); };
   go(dp, [
     { pre: () => L.g.attach(dp), to: up(0.02), rot: () => [0, dp.rotation.y - 4 * Math.PI, 0], dur: 0.7, up: 0 },
@@ -1172,7 +893,7 @@ function openMenu(name, x, y) {
   }
   m.hidden = false; const r = m.getBoundingClientRect(); m.style.left = clamp(x + 12, 8, window.innerWidth - r.width - 8) + "px"; m.style.top = clamp(y - 20, 8, window.innerHeight - r.height - 8) + "px";
 }
-function onClick(name, x, y) { if (!name) return; focusTool(name); openMenu(name, x || window.innerWidth / 2, y || window.innerHeight / 2); }
+function onClick(name, x, y) { /*resultat-clic*/ if (name && ST.fini && typeof RESVIEW !== "undefined" && RESVIEW[name] && camFocus !== RESVIEW[name]) { focusTool(name); return; } /* expérience finie : 1er clic = résultat légendé, 2e clic = menu */ if (!name) return; focusTool(name); openMenu(name, x || window.innerWidth / 2, y || window.innerHeight / 2); }
 
 /* courbe pH = f(V_B) */
 function drawCurve(cv) {
@@ -1245,10 +966,14 @@ function init3d() {
 function focusCam(c) { if (!c) return; const p1 = new THREE.Vector3(c.p[0], BENCH + c.p[1], c.p[2]), q1 = new THREE.Vector3(c.t[0], BENCH + c.t[1], c.t[2]); if (L.cam.position.distanceTo(p1) < 0.03 && L.ctl.target.distanceTo(q1) < 0.03) return; L.tw = { t0: performance.now(), p0: L.cam.position.clone(), p1, q0: L.ctl.target.clone(), q1 }; }
 
 function tick(dt) {
+  /*maj-positions*/ L.g.updateMatrixWorld(); // positions à jour pour les filets, même sans nouvelle image
+  /*legende-tick*/ try { legendTick(); } catch (e) { console.error(e); }
+  /*liquide-vif*/ if (window.__LIQS) { for (const m of window.__LIQS) m.emissive.copy(m.color).multiplyScalar(0.45); if (!window.__liqRO) { window.__liqRO = 1; L.scene.traverse((o) => { if (o.material && window.__LIQS.includes(o.material) && o.renderOrder < 3.5) o.renderOrder = 3.5; }); } }
   if ($("#overlay").hidden === false) return;
   if (L.tw) { const k = Math.min(1, (performance.now() - L.tw.t0) / 1200), e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2; L.cam.position.lerpVectors(L.tw.p0, L.tw.p1, e); L.ctl.target.lerpVectors(L.tw.q0, L.tw.q1, e); if (k >= 1) L.tw = null; }
   runQueue(dt);
-  if (ST.q[0] && ST.q[0].obj && !L.tw) { const wp = new THREE.Vector3(); ST.q[0].obj.getWorldPosition(wp); wp.y -= 0.03; const d = wp.sub(L.ctl.target).multiplyScalar(Math.min(1, dt * 3)); L.ctl.target.add(d); L.cam.position.add(d); } if (ST.q.length) camBusy = true; else if (camBusy) { camBusy = false; if (camFocus) look(camFocus); } // fin du geste : la caméra revient sur la vue de l'action en cours
+  /*camera-suivi*/ if (ST.camNext && ST.q[0] && ST.q[0].obj === ST.camNext.obj) { CAMS["@pour"] = ST.camNext.cam; ST.camNext = null; look("@pour"); } else if (ST.camNext && !ST.q.length) ST.camNext = null;
+  if (ST.q[0] && ST.q[0].obj && !L.tw && !CAM_FIX.has(camFocus)) { const wp = new THREE.Vector3(); ST.q[0].obj.getWorldPosition(wp); wp.y -= 0.03; const d = wp.sub(L.ctl.target).multiplyScalar(Math.min(1, dt * 3)); L.ctl.target.add(d); L.cam.position.add(d); } if (ST.q.length) camBusy = true; else if (camBusy) { camBusy = false; if (camFocus) look(camFocus); } // fin du geste : la caméra revient sur la vue de l'action en cours
   if (ST.pouring) { deliver(0.6 * dt); if (ST.bur <= 0) stopPour(); }
   // burette : niveau et goutte
   ST.burVis = ST.burVis == null ? ST.bur : lerp(ST.burVis, ST.bur, 1 - Math.exp(-dt * (ST.filling ? 1.6 : 12)));
@@ -1277,8 +1002,9 @@ function tick(dt) {
   // vidage du bécher dans le bac : filet depuis le bord, le niveau baisse
   if (ST.binPour > 0) { ST.binPour -= dt; ST.bkFrac = Math.max(0, ST.binPour / 1.2); arcPour(X.arcBin, gpos(X.bk, [-0.033, 0.08, 0]), new THREE.Vector3(-0.5, 0.01, 0.1), 0.0028, 0.15); if (ST.binPour <= 0) X.arcBin.visible = false; } else X.arcBin.visible = false;
   // bécher : volume et couleur (indicateur, coloration fugace)
-  const V = Vtot() * (ST.bkFrac == null ? 1 : ST.bkFrac); if (V > 0) { const h = liqH(V); X.liq.visible = true; X.liq.scale.y = h; X.liq.position.y = 0.004 + h / 2; X.swirl.position.y = 0.004 + h - 0.012; X.liqRing.visible = Math.abs(X.bk.rotation.z) < 0.05; X.liqRing.position.y = 0.004 + h; X.liqRing.material.color.copy(X.liqMat.color).multiplyScalar(0.75); } else { X.liq.visible = false; X.liqRing.visible = false; }
-  const col = indColor(ST.pH); if (col) { X.liqMat.color.setRGB(col[0], col[1], col[2]); if (ST.ind === "phph" && ST.pH < IND.phph.lo) X.liqMat.color.set(0xb9d4f3); const I = IND[ST.ind], k = clamp((ST.pH - I.lo) / (I.hi - I.lo), 0, 1); X.liqMat.opacity = ST.ind === "phph" ? 0.6 + 0.38 * Math.min(1, k * 2.2) : 0.9; } else { X.liqMat.color.set(0xb9d4f3); X.liqMat.opacity = 0.6; }
+  const V = Vtot() * (ST.bkFrac == null ? 1 : ST.bkFrac), tiltB = Math.abs(X.bk.rotation.z) > 0.3; X.tiltLiq.visible = tiltB && V > 1; if (X.tiltLiq.visible) { const k = Math.min(1.3, 0.5 + V / 60); X.tiltLiq.scale.set(0.008 * k, 0.022 * k, 0.019 * k); }
+  if (V > 0 && !tiltB) { const h = liqH(V); X.liq.visible = true; X.liq.scale.y = h; X.liq.position.y = 0.004 + h / 2; X.swirl.position.y = 0.004 + h - 0.012; X.liqRing.visible = Math.abs(X.bk.rotation.z) < 0.05; X.liqRing.position.y = 0.004 + h; X.liqRing.material.color.copy(X.liqMat.color).multiplyScalar(0.75); } else { X.liq.visible = false; X.liqRing.visible = false; }
+  const col = indColor(ST.pH); if (col) { X.liqMat.color.setRGB(col[0], col[1], col[2]); if (ST.ind === "phph" && ST.pH < IND.phph.lo) X.liqMat.color.set(0x9fc4ea); const I = IND[ST.ind], k = clamp((ST.pH - I.lo) / (I.hi - I.lo), 0, 1); X.liqMat.opacity = ST.ind === "phph" ? 0.6 + 0.38 * Math.min(1, k * 2.2) : 0.9; } else { X.liqMat.color.set(0x9fc4ea); X.liqMat.opacity = 0.66; }
   if (ST.swirl > 0) { const I = IND[ST.ind]; if (I) { X.swirlMat.color.setRGB(I.c2[0], I.c2[1], I.c2[2]); X.swirlMat.emissive.setRGB(I.c2[0], I.c2[1], I.c2[2]); } X.swirl.visible = true; X.swirlMat.opacity = 0.6 * Math.min(1, ST.swirl * 1.3); const sc = 0.7 + (1 - ST.swirl) * 1.1; X.swirl.scale.set(sc, 1, sc); X.swirl.rotation.y += dt * (ST.stir ? 5 : 0.3); if (ST.stir) ST.swirl = Math.max(0, ST.swirl - dt * 0.7); else if (!ST.swirlStuck) ST.swirl = Math.max(0, ST.swirl - dt * 0.15); if (ST.swirl <= 0) X.swirl.visible = false; } else X.swirl.visible = false;
   if (ST.swirl > 0.3 && ST.stir && !ST.flags.fugace && ST.pH < (IND[ST.ind] || { lo: 99 }).lo) once("fugace", "info", "Coloration fugace : la couleur apparaît à la goutte puis disparaît sous agitation. On approche de l'équivalence.", "fugace");
   if (ST.stir) X.bar.rotation.y += dt * 18;
@@ -1303,7 +1029,7 @@ function openPanel() {
   const rows = [["Acide dans le bécher", fmt(ST.VA, 1) + " mL (n = " + fmt(ST.nA * 1000, 3) + " mmol)"], ["Eau ajoutée", Math.round(ST.Vw) + " mL"], ["Soude réellement versée", fmt(ST.VB, 2) + " mL"], ["Volume lu sur la burette", fmt(ST.Vread, 2) + " mL"], ["Bulle dans la pointe", ST.bubble ? "oui" : "non"], ["Indicateur", ST.ind ? IND[ST.ind].n + " (" + ST.indDrops + " gouttes)" : "aucun"], ["pH réel", fmt(ST.pH, 2)], ["Agitation", ST.stir ? "oui" : "non"], ["V_E noté au virage", ST.VEnoted == null ? "—" : fmt(ST.VEnoted, 1) + " mL"], ["Points pH notés", String(ST.pts.length)], ["Essai nº", String(ST.attempts)]];
   $("#diag").innerHTML = rows.map((r) => `<span>${r[0]}</span><b>${r[1]}</b>`).join(""); if (!$("#toolHelp").firstChild) $("#toolHelp").innerHTML = TOOL_HELP.map((t) => `<details><summary>${t[0]}</summary><p>${t[1]}</p></details>`).join(""); $("#panel").hidden = false;
 }
-function evaluate() {
+function evaluate() { /*fini*/ ST.fini = true; setTimeout(() => toast("Expérience finie : clique sur un objet pour voir son résultat avec sa légende.", "good"), 1200);
   const VE = VEtrue(), pts = [], vn = ST.VEnoted, vc = VEcurve();
   if (vn == null && vc == null) { toast("Note d'abord V_E au virage, ou au moins 8 points de pH.", "bad"); return; }
   const CAn = vn != null ? (CB * vn) / VPIP : null, err = vn != null ? Math.abs(vn - VE) : null, ok = err != null && err <= 0.2;
@@ -1376,7 +1102,16 @@ $("#btnWhy").onclick = () => { if (!ST.cur) return; const w = WHY[ST.cur.why] ||
 function setGuide(on) { ST.guide = on; const demo = !!ST.demo; $("#instr").hidden = demo || !on; $("#demo").hidden = !demo || !on; $("#showGuide").hidden = on; $("#showGuide").textContent = demo ? "Afficher la démo ▸" : "Afficher le guide ▸"; }
 $("#btnGuide").onclick = () => setGuide(false); $("#dMin").onclick = () => setGuide(false); $("#showGuide").onclick = () => setGuide(true);
 init3d(); resetState(); stepButtons(); cadrages(); demoButtons();
-window.__lab = { onClick, ST, evaluate, TOOLS, X, suggest, L, look, menuFor, startPour, stopPour, deliver, pHof, VEtrue, doVirage };
-if (window.LabMains) { runQueue = LabMains.install({ ST, TOOLS, L, runQueue, startPour: typeof startPour === "function" ? startPour : null, stopPour: typeof stopPour === "function" ? stopPour : null }); menuFor = LabMains.wrapMenu(menuFor); } /*labmains*/
+/*legendes-dosage*/ // légendes : bécher (acide + indicateur) et burette ; le résultat (V_E) une fois l'expérience finie
+const bkAt = (dy) => () => { const p = X.bk.position; return [p.x, p.y + dy, p.z]; };
+LEGS.bk = [
+  { at: bkAt(0.04), t: "Bécher : acide à doser", m: () => fmt(ST.VA, 1) + " mL d'acide" + (ST.Vw ? " + " + Math.round(ST.Vw) + " mL d'eau" : "") + (ST.ind ? " + " + IND[ST.ind].n : " (sans indicateur)"), c: "#2a70a8", on: () => ST.VA + ST.Vw > 0 },
+  { at: () => [0.0, 0.3, -0.155], t: "Soude de la burette", m: () => "C = 0,100 mol/L · versé : " + fmt(ST.Vread, 1) + " mL", c: "#5d6670", on: () => ST.bur > 0 },
+  { fin: true, at: bkAt(0.015), t: "Résultat", m: () => ST.VEnoted != null ? "V_E noté = " + fmt(ST.VEnoted, 1) + " mL" + (ST.ind ? " (virage de la " + IND[ST.ind].n + ")" : "") : "équivalence non notée", c: "#1f7a4d" },
+];
+LEGS.tap = LEGS.bk;
+Object.assign(RESVIEW, { beaker: "bk", burette: "bk", tap: "bk", naoh: "bk", acid: "bk", pip: "bk", phph: "bk", bbt: "bk", hel: "bk", probe: "bk", phm: "bk" });
+window.__lab = { /*lab-test*/ tick, CAMS, LEGS, RESVIEW, camKey: () => camFocus, onClick, ST, evaluate, TOOLS, X, suggest, L, look, menuFor, startPour, stopPour, deliver, pHof, VEtrue, doVirage };
+/* pas de mains gantées (demande de l'enseignant, nov. 2026) */
 })();
 </script>
