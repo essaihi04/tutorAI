@@ -120,6 +120,28 @@ kernel Kaggle s'éteigne : 2 sessions GPU au plus, sinon le push est refusé et 
   - la voix de `wx_o1_bouee` parle encore de prédiction ;
   - des réactions écrites à la main sont à faire relire par un professeur.
 
+## 3 quinquies. Point du 14 novembre 2026 (nuit) — 21 cours réécrits en ligne
+
+**En ligne** (déployé, lien libre reconstruit sur le serveur) : SVT ch3 (`cba669d8`), puis 20 cours (`04380ab6`) :
+maths ch1-6, physique-chimie ch2-6 et ch8-13, SVT ch1, ch2, ch4. Toutes leurs diapositives ont leur voix ; il manque
+encore des réactions (la voix en direct ou l'écrit prend le relais).
+
+**Encore dans `en_attente/`** :
+- `phys_ch7_dipole_RL` : sa dernière voix de diapositive (`rl_rp3_derivee`) vient d'être faite par le compte 2 →
+  `python -X utf8 scripts/voix/attente_poser.py 12 phys_ch7_dipole_RL`, puis mise en ligne comme les autres ;
+- `phys_ch1_waves_exemple` : diapositives complètes, mais c'est le cours servi aux élèves connectés → à vérifier en
+  dernier, avec le plus de soin (procédure du § 3 quater).
+
+**Quota Kaggle revenu sur les deux comptes** (14/11 au soir : ferdaous04 23 h 50, zouhairessaihi 14 h 52) : les
+deux lots tournent ensemble, depuis les deux bouts de la file, sans se gêner (une piste déjà écrite n'est pas refaite) :
+- compte 1 : `voix_compte1.log` (ordre normal) ;
+- compte 2 : `bash /srv/corpus_v4/voix_lot/lancer_compte2_inverse.sh` → `voix_compte2.log` (ordre inverse).
+Il restait ~2 650 réactions (≈ 20-50 s chacune). Au fil du lot : `attente_poser.py` ne sert plus que pour les cours
+encore en attente ; pour les réactions des cours en ligne, poser avec `rapatrier.sh` / `poser` (§ 3) puis republier.
+
+**Vérifier un lot de cours avant mise en ligne** : contenu identique à `origin` hors champs audio, chaque URL
+`/media/audio/...` présente sur `origin` ou sur le disque, page qui se charge et voix de la 1ʳᵉ diapo qui part.
+
 ## 4. Ce qui attend une décision
 - Déployer la correction des questions de reprise (formules écrites) — commit prêt, pas encore déployé.
 - Passer le nouveau lecteur sur `main` pour les élèves connectés, après la relecture des profs.
