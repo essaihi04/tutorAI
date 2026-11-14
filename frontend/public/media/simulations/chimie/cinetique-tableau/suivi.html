@@ -3,7 +3,7 @@
 <link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="cin.css"></head>
 <body>
 <div class="tableau">
-  <section class="scene"><canvas id="canvas" role="img" aria-label="Suivi d’une transformation lente : trois méthodes (titrage, conductimétrie, pression), un bécher qui brunit et le tableau des mesures, le prélèvement et la trempe dans l’eau glacée, le titrage du diiode par le thiosulfate"></canvas></section>
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Suivi d’une transformation lente : trois méthodes (titrage, conductimétrie, pression), un bécher qui brunit, des prélèvements dans l’eau glacée de plus en plus bruns et le tableau des mesures où t et x viennent se ranger, le prélèvement et la trempe dans l’eau glacée, le titrage du diiode par le thiosulfate"></canvas></section>
   <footer class="barre">
     <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
     <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
@@ -419,10 +419,14 @@ function ETAPES(v) {
       { nom: 'point_commun', anim: .3, motif: 'point commun : on mesure une grandeur à des dates, on en déduit x(t)', bulle: () => 'Qu’ont-elles en commun ?' },
     ],
     mesures: [
+      { nom: 'montage', anim: 4.0, ecritDes: 0, motif: 'le matériel : le bécher vide, dix tubes dans l’eau glacée, le chronomètre, le tableau t → x vide', bulle: () => 'Le bécher, les tubes dans l’eau glacée, le tableau.' },
       { nom: 'melange', anim: 1.6, motif: 'on mélange H₂O₂, I⁻ et H⁺ (100 mL) : incolore au départ', bulle: () => 'On prépare le mélange de l’exemple A.' },
-      { nom: 'premiere_mesure', anim: .4, sim: [0, 0], ecritDes: 0, motif: 't = 0 min : première ligne, x = 0 mmol', bulle: () => 'Top chrono ! (temps accéléré : 1 min dure 0,2 s)' },
-      { nom: 'mesures', anim: RT * 40, sim: [0, 40], ecritDes: 0, motif: 't = 40 min : dix mesures écrites, le mélange est brun', bulle: () => 'À chaque date, on mesure x…' },
-      { nom: 'tableau_fini', anim: .3, motif: 'le tableau des mesures est complet : x(t) de 0 à 40 min', bulle: () => 'Le tableau est complet.' },
+      planMesure({ nom: 'premiere_mesure', sim: [0, 0], run: 0, trip: 2.2, motif: 't = 0 min : premier prélèvement, incolore, x = 0 mmol ; première ligne du tableau', bulle: () => 'Top chrono ! Premier prélèvement.' }),
+      planMesure({ nom: 'mesure_2', sim: [0, 2], run: 6.4, trip: 2.0, motif: 't = 2 min : prélèvement jaune pâle, x = 0,44 mmol ; il vole dans le tableau', bulle: () => 'Le mélange jaunit… prélèvement à 2 min.' }),
+      planMesure({ nom: 'mesure_4', sim: [2, 4], run: 1.4, trip: 2.0, motif: 't = 4 min : prélèvement plus jaune, x = 0,79 mmol', bulle: () => 'Prélèvement à 4 min.' }),
+      planMesure({ nom: 'mesure_8', sim: [4, 8], run: 1.2, trip: 1.3, motif: 't = 6 et 8 min : prélèvements orangés, x = 1,06 puis 1,26 mmol', bulle: () => 'À 6 min, puis à 8 min.' }),
+      planMesure({ nom: 'mesures', sim: [8, 40], run: 1.5, trip: .7, motif: 't = 10 à 40 min : cinq prélèvements de plus en plus bruns, x = 1,43 … 1,99 mmol ; le tableau est rempli', bulle: () => 'Et ainsi de suite jusqu’à 40 min…' }),
+      { nom: 'tableau_fini', anim: .3, motif: 'le tableau des mesures est complet : x(t) de 0 à 40 min ; les tubes du plus clair au plus brun', bulle: () => 'Le tableau est complet.' },
     ],
     prelevement: [
       { nom: 'reaction', anim: RT * TP * 1.25, sim: [0, TP], motif: `t = ${TP} min : le grand bécher brunit`, bulle: () => 'Le mélange réagit dans le grand bécher (temps accéléré)…' },
@@ -449,9 +453,35 @@ function tSim(M = MO) {
   let t = 0;
   for (const e of M.evs()) {
     if (!e.sim) continue; if (!M.commence(e.nom)) break;
-    t = e.sim[0] + (e.sim[1] - e.sim[0]) * (e.anim > 0 ? clamp((M.S.t - e.debut) / e.anim, 0, 1) : 1);
+    t = e.mes ? phaseMesure(e, M.S.t - e.debut).t : e.sim[0] + (e.sim[1] - e.sim[0]) * (e.anim > 0 ? clamp((M.S.t - e.debut) / e.anim, 0, 1) : 1);
   }
   return t;
+}
+/* Vue mesures : une étape = le chronomètre avance (run, en s) jusqu’à chaque date de mesure, puis un prélèvement (trip, en s par mesure) :
+ * la pipette prend un peu du mélange, le verse dans un tube de l’eau glacée (trempe), x s’écrit sur le tube et vole dans le tableau.
+ * Pendant le prélèvement, le chronomètre est arrêté sur la date de la mesure. */
+function planMesure(e) {
+  const mes = MESURES.map((m, k) => k).filter(k => (e.sim[0] === e.sim[1] ? MESURES[k][0] === e.sim[0] : MESURES[k][0] > e.sim[0] && MESURES[k][0] <= e.sim[1]));
+  return { ...e, mes, anim: e.run + mes.length * e.trip, ecritDes: 0 };
+}
+/** Les prélèvements d’une étape : { k, d } (d = début du prélèvement, en s depuis le début de l’étape). */
+function tripsDe(e) {
+  const span = (e.sim[1] - e.sim[0]) || 1, out = []; let prev = e.sim[0], tau = 0;
+  for (const k of e.mes) { tau += (MESURES[k][0] - prev) / span * e.run; prev = MESURES[k][0]; out.push({ k, d: tau }); tau += e.trip; }
+  return out;
+}
+/** À u secondes du début de l’étape : la date simulée t, et le prélèvement en cours (k, p de 0 à 1) ou k = −1. */
+function phaseMesure(e, u) {
+  const span = (e.sim[1] - e.sim[0]) || 1; let prev = e.sim[0], tau = 0;
+  for (const k of e.mes) {
+    const dt = (MESURES[k][0] - prev) / span * e.run;
+    if (u < tau + dt) return { t: prev + (MESURES[k][0] - prev) * clamp((u - tau) / dt, 0, 1), k: -1 };
+    tau += dt; prev = MESURES[k][0];
+    if (u < tau + e.trip) return { t: prev, k, p: clamp((u - tau) / e.trip, 0, 1) };
+    tau += e.trip;
+  }
+  const dt = (e.sim[1] - prev) / span * e.run;
+  return { t: dt > 0 ? prev + (e.sim[1] - prev) * clamp((u - tau) / dt, 0, 1) : e.sim[1], k: -1 };
 }
 const ZY = [352, 376, 400];
 
@@ -533,35 +563,136 @@ function vueMethodes(c, M) {
   ], [356, 380, 404]);
 }
 
-/* Vue mesures : le bécher qui brunit et le tableau qui se remplit. */
-const BM = { x: 56, y: 118, w: 150, h: 176 }, CHM = { x: 262, y: 104, r: 26 }, TBM = { x: 410, y: 46, w: 320, h: 270 };
-const yLigne = k => TBM.y + 52 + k * 22;
+/* Vue mesures (règle 28 : la donnée tabulée est d’abord PRODUITE par la manip) : le bécher qui brunit, à chaque date un prélèvement
+ * versé dans un tube de l’eau glacée (trempe), x (titrage) écrit sur le tube, puis t et x volent dans les cases du tableau. */
+const BM = { x: 40, y: 118, w: 140, h: 176 }, CHM = { x: 590, y: 66, r: 20 };
+const TBM = { x: 560, y: 100, w: 180, h: 228, xs: 640, hT: 28, hL: 20 };          // tableau : colonne t | colonne x
+const BAIN = { x: 198, y: 228, w: 342, h: 70 }, Y_BAIN = 246;                     // cristallisoir d’eau glacée
+const TUBE = { w: 16, haut: 190, bas: 288, niv: .42 };                            // tubes à essais (prélèvements)
+const xTube = k => 220 + k * 33.3;
+const yLigne = k => TBM.y + TBM.hT + TBM.hL * k + 15;                            // ligne de base du texte de la ligne k
+const xColT = TBM.x + (TBM.xs - TBM.x) / 2, xColX = TBM.xs + (TBM.x + TBM.w - TBM.xs) / 2;
+const REPOS = [150, 104];                                                         // pointe de la pipette au repos, au-dessus du bécher
+const EAU_GLACE = [190, 225, 245, .2];
+/** Pipette jaugée peinte (plus courte que Peint.pipette) : pointe en (x, yp). */
+function pipetteCourte(ctx, x, yp, rempli, col, a = 1) {
+  const L = 66, yH = yp - L;
+  ctx.save(); ctx.globalAlpha = a;
+  if (rempli > 0) { ctx.fillStyle = rgba(col, 1.6); ctx.fillRect(x - 2.4, yp - 4 - rempli * (L - 24), 4.8, rempli * (L - 24)); }
+  ctx.strokeStyle = 'rgba(225,238,250,.85)'; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.moveTo(x - 1.2, yp); ctx.lineTo(x - 3.5, yp - 9); ctx.lineTo(x - 3.5, yH + 16); ctx.moveTo(x + 1.2, yp); ctx.lineTo(x + 3.5, yp - 9); ctx.lineTo(x + 3.5, yH + 16); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.beginPath(); ctx.moveTo(x - 5, yp - 40); ctx.lineTo(x + 5, yp - 40); ctx.stroke();
+  const g = ctx.createRadialGradient(x - 3, yH + 4, 1, x, yH + 8, 10); g.addColorStop(0, '#ff9a8a'); g.addColorStop(.5, '#d33a2c'); g.addColorStop(1, '#6e1209');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x, yH + 7, 7, 10, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = '#8e1d12'; ctx.fillRect(x - 4, yH + 15, 8, 4);
+  ctx.restore();
+}
+/** Tube à essais en verre : niveau 0 → 1 (part de TUBE.niv), solution `col`. */
+function tubeEssai(ctx, cx, niveau, col) {
+  const x = cx - TUBE.w / 2, w = TUBE.w, y = TUBE.haut, b = TUBE.bas, r = w / 2, yS = b - niveau * TUBE.niv * (b - y);
+  ctx.save();
+  ctx.fillStyle = 'rgba(210,230,250,.07)'; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, b - r); ctx.arc(cx, b - r, r, Math.PI, 0, true); ctx.lineTo(x + w, y); ctx.closePath(); ctx.fill();
+  if (niveau > .01) {
+    ctx.save(); ctx.beginPath(); ctx.moveTo(x + 2, yS); ctx.lineTo(x + 2, b - r); ctx.arc(cx, b - r, r - 2, Math.PI, 0, true); ctx.lineTo(x + w - 2, yS); ctx.closePath(); ctx.clip();
+    const g = ctx.createLinearGradient(x, 0, x + w, 0); g.addColorStop(0, rgba(sombre(col, .2), 1.6)); g.addColorStop(.45, rgba(eclair(col, .12), 1.6)); g.addColorStop(1, rgba(sombre(col, .3), 1.6));
+    ctx.fillStyle = g; ctx.fillRect(x, yS, w, b - yS + 2); ctx.restore();
+    ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x + 2, yS); ctx.lineTo(x + w - 2, yS); ctx.stroke();
+  }
+  ctx.strokeStyle = 'rgba(225,238,250,.75)'; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.moveTo(x - 2, y - 2); ctx.lineTo(x, y + 2); ctx.lineTo(x, b - r); ctx.arc(cx, b - r, r, Math.PI, 0, true); ctx.lineTo(x + w, y + 2); ctx.lineTo(x + w + 2, y - 2); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.16)'; ctx.fillRect(x + 3, y + 8, 2, b - y - 20);
+  ctx.restore();
+}
+/** L’état de la manip à l’instant : prélèvement en cours (k, p) et prélèvements déjà finis. */
+function etatMesures(M) {
+  let cours = { k: -1 }; const finis = new Set();
+  for (const e of M.evs()) {
+    if (!e.mes || !M.commence(e.nom)) continue;
+    const u = M.S.t - e.debut;
+    for (const { k, d } of tripsDe(e)) { if (u >= d + e.trip) finis.add(k); else if (u >= d) cours = { k, p: (u - d) / e.trip }; }
+  }
+  return { cours, finis };
+}
+/** Position de la pipette pendant un prélèvement (p de 0 à 1) vers le tube k. */
+function pipetteMesure(p, k, ySol) {
+  const P = (f, a, b) => [lerp(a[0], b[0], lisse(f)), lerp(a[1], b[1], lisse(f))];
+  const dans = [REPOS[0], ySol + 22], haut = [xTube(k), TUBE.haut - 18], tube = [xTube(k), TUBE.haut + 26];
+  if (p < .14) return { pos: P(p / .14, REPOS, dans), r: 0 };
+  if (p < .24) return { pos: dans, r: (p - .14) / .1 };
+  if (p < .32) return { pos: P((p - .24) / .08, dans, REPOS), r: 1 };
+  if (p < .46) return { pos: P((p - .32) / .14, REPOS, haut), r: 1 };
+  if (p < .52) return { pos: P((p - .46) / .06, haut, tube), r: 1 };
+  if (p < .64) return { pos: tube, r: 1 - (p - .52) / .12 };
+  if (p < .78) return { pos: P((p - .64) / .14, tube, REPOS), r: 0 };
+  return { pos: REPOS, r: 0 };
+}
 function vueMesures(c, M) {
-  const t = tSim(), niv = .62 * lisse(M.p('melange'));
+  const t = tSim(), niv = .62 * lisse(M.p('melange')), { cours, finis } = etatMesures(M);
+  const yLiq = BM.y + BM.h - 3 - .62 * (BM.h - 16);
   eqn(c, 724, 26, 'H₂O₂ + 2I⁻ + 2H⁺', 'I₂ + 2H₂O', { align: 'right', taille: 15 });
   c.direct(() => {
     const ctx = c.ctx;
     Peint.becher(ctx, BM, niv, teinte(fT(t)));
     if (M.commence('melange') && M.p('melange') < 1) Peint.filet(ctx, BM.x + BM.w * .4, 64, BM.y + BM.h - 3 - niv * (BM.h - 16), EAU);
+    for (let k = 0; k < MESURES.length; k++) {
+      const n = finis.has(k) ? 1 : cours.k === k ? clamp((cours.p - .52) / .12, 0, 1) : 0;
+      tubeEssai(ctx, xTube(k), n, teinte(fT(MESURES[k][0])));
+    }
+    Peint.bain(ctx, BAIN, Y_BAIN, EAU_GLACE);
+    [[214, -.2], [298, .3], [372, -.1], [452, .4], [522, .15]].forEach(([gx, ang], i) => Peint.glacon(ctx, gx, Y_BAIN + 2 + (i % 2) * 3, 13 - (i % 2) * 2, ang));
+    if (M.vu('melange') || M.commence('premiere_mesure')) {
+      const pip = cours.k >= 0 ? pipetteMesure(cours.p, cours.k, yLiq) : { pos: REPOS, r: 0 };
+      pipetteCourte(ctx, pip.pos[0], pip.pos[1], pip.r, teinte(fT(cours.k >= 0 ? MESURES[cours.k][0] : t)));
+    }
   });
-  c.ligne(30, 300, 380, 300, { couleur: 'faible', largeur: 1.6 });
+  c.ligne(26, 300, 548, 300, { couleur: 'faible', largeur: 1.6 });
   c.texte('100 mL de mélange', BM.x + BM.w / 2, 322, { couleur: 'blanc', taille: 16, align: 'center' });
+  c.texte('prélèvements dans l’eau glacée', BAIN.x + BAIN.w / 2, 156, { couleur: 'bleu', taille: 15, align: 'center' });
   chrono(c, CHM, t);
-  c.rect(TBM.x, TBM.y, TBM.w, TBM.h, { couleur: 'faible', largeur: 1.6, arrondi: 8 });
-  c.texte('mesures (exemple A)', TBM.x + TBM.w / 2, TBM.y + 26, { couleur: 'cyan', taille: 17, align: 'center' });
-  const ligne = (k) => c.texte(`t = ${MESURES[k][0]} min : x = ${MESURES[k][1]} mmol`, TBM.x + 40, yLigne(k), { couleur: k === 9 ? 'jaune' : 'blanc', taille: 17 });
+  // le tableau vide (craie), écrit pendant le montage
+  M.etape(c, 'montage', () => {
+    c.rect(TBM.x, TBM.y, TBM.w, TBM.h, { couleur: 'blanc', largeur: 1.6, arrondi: 4, duree: .25 });
+    c.ligne(TBM.x, TBM.y + TBM.hT, TBM.x + TBM.w, TBM.y + TBM.hT, { largeur: 1.4, duree: .1 });
+    c.ligne(TBM.xs, TBM.y, TBM.xs, TBM.y + TBM.h, { largeur: 1.4, duree: .1 });
+    c.texte('t (min)', xColT, TBM.y + 20, { couleur: 'cyan', taille: 15, align: 'center' });
+    c.texte('x (mmol)', xColX, TBM.y + 20, { couleur: 'cyan', taille: 15, align: 'center' });
+    for (let k = 0; k < MESURES.length; k++) c.texte(String(MESURES[k][0]), xTube(k), 318, { couleur: 'faible', taille: 13, align: 'center', duree: .05 });
+  });
+  // pendant chaque prélèvement : x apparaît sur le tube, puis t et x volent dans leurs cases
+  c.direct(() => {
+    for (let k = 0; k < MESURES.length; k++) {
+      const pk = finis.has(k) ? 1 : cours.k === k ? cours.p : -1;
+      if (pk >= .64) c.texte(MESURES[k][1], xTube(k), TUBE.haut - 8, { couleur: 'jaune', taille: 13, align: 'center', alpha: clamp((pk - .64) / .06, 0, 1) * .9 });
+      if (pk >= .7 && pk < 1) {
+        const f = lisse(clamp((pk - .74) / .26, 0, 1)), a = clamp((pk - .7) / .04, 0, 1);
+        c.texte(MESURES[k][1], lerp(xTube(k), xColX, f), lerp(TUBE.haut - 8, yLigne(k), f), { couleur: 'jaune', taille: lerp(13, 15, f), align: 'center', alpha: a });
+        c.texte(String(MESURES[k][0]), lerp(xTube(k), xColT, f), lerp(318, yLigne(k), f), { couleur: 'blanc', taille: lerp(13, 15, f), align: 'center', alpha: a });
+      }
+    }
+  });
   const vues = zoneEcriture(c, M, [
+    { nom: 'montage', lignes: [['le matériel : le bécher, dix tubes dans l’eau glacée, un chronomètre, le tableau t → x', 'blanc']] },
     { nom: 'melange', lignes: [['t = 0 : H₂O₂ (2,0 mmol) + I⁻ (10,0 mmol) + H⁺ en excès, 100 mL, incolore', 'blanc']] },
     { nom: 'premiere_mesure', lignes: [['à t = 0 : pas encore de diiode, x = 0 mmol', 'blanc']] },
-    { nom: 'mesures', lignes: [['à chaque date, on mesure x (par titrage d’un prélèvement)', 'blanc']] },
+    { nom: 'mesure_2', lignes: [['à chaque date : un prélèvement dans l’eau glacée (trempe), titré : on a x', 'blanc']] },
+    { nom: 'mesure_4', lignes: [] },
+    { nom: 'mesure_8', lignes: [['les tubes foncent : de plus en plus de diiode, x augmente', 'blanc']] },
+    { nom: 'mesures', lignes: [] },
     { nom: 'tableau_fini', lignes: [['x augmente vite au début, puis de moins en moins : x ≈ 2,0 mmol à la fin', 'jaune']],
-      plus: () => c.rect(TBM.x + 6, TBM.y + 34, TBM.w - 12, TBM.h - 40, { couleur: 'jaune', largeur: 2, arrondi: 8 }) },
+      plus: () => c.rect(TBM.xs + 4, TBM.y + TBM.hT + 3, TBM.x + TBM.w - TBM.xs - 8, TBM.h - TBM.hT - 6, { couleur: 'jaune', largeur: 2, arrondi: 6 }) },
   ], ZY);
-  M.etape(c, 'premiere_mesure', () => ligne(0));
-  M.etape(c, 'mesures', () => {
-    const w0 = c.cur, V = 1.7;
-    for (let k = 1; k < MESURES.length; k++) { c.depuis(w0 + RT * MESURES[k][0] * V); ligne(k); }
-  });
+  // la ligne k s’écrit à la craie quand les nombres arrivent dans les cases
+  for (const e of M.evs()) {
+    if (!e.mes) continue;
+    M.etape(c, e.nom, () => {
+      const w0 = c.cur, V = 1.7;
+      for (const { k, d } of tripsDe(e)) {
+        c.depuis(w0 + (d + e.trip) * V);
+        c.texte(String(MESURES[k][0]), xColT, yLigne(k), { couleur: 'blanc', taille: 15, align: 'center', duree: .05 });
+        c.texte(MESURES[k][1], xColX, yLigne(k), { couleur: k === 9 ? 'jaune' : 'blanc', taille: 15, align: 'center', duree: .08 });
+      }
+    });
+  }
   return vues;
 }
 
@@ -687,12 +818,20 @@ function reperes(c, M) {
     R('manometre', MAN.x - MAN.r - 6, MAN.y - MAN.r - 6, 2 * MAN.r + 12, 2 * MAN.r + 30, `le manomètre : la pression P du gaz dans le ballon${quand('pression')}`);
     R('phrase', 40, 300, 680, 36, `« on mesure une grandeur à des dates, on en déduit x(t) »${quand('point_commun')}`);
   } else if (v === 'mesures') {
-    const t = tSim();
+    const t = tSim(), ligneR = (id, k, l, mom) => R(id, TBM.x + 2, yLigne(k) - 15, TBM.w - 4, TBM.hL, `${l}${quand(mom)}`);
+    const tubeR = (id, k, mom) => R(id, xTube(k) - 14, TUBE.haut - 26, 28, TUBE.bas - TUBE.haut + 52, `le prélèvement de t = ${MESURES[k][0]} min : teinte ${nomTeinte(fT(MESURES[k][0]))}, x = ${MESURES[k][1]} mmol${quand(mom)}`);
     R('becher', BM.x - 8, BM.y - 6, BM.w + 16, BM.h + 12, `le bécher de l’exemple A (100 mL) : teinte ${nomTeinte(fT(t))}`);
-    R('chrono', CHM.x - CHM.r - 4, CHM.y - CHM.r - 10, 130, 2 * CHM.r + 16, `le chronomètre : t = ${min(t)} (temps accéléré)`);
+    R('chrono', CHM.x - CHM.r - 4, CHM.y - CHM.r - 10, 150, 2 * CHM.r + 16, `le chronomètre : t = ${min(t)} (temps accéléré)`);
+    R('tubes', BAIN.x - 4, TUBE.haut - 30, BAIN.w + 8, 336 - TUBE.haut, 'les dix prélèvements dans l’eau glacée, du plus clair (t = 0) au plus brun (t = 40 min), x écrit sur chacun');
+    R('pipette', REPOS[0] - 10, REPOS[1] - 70, 20, 74, 'la pipette qui prélève le mélange à chaque date');
+    tubeR('tube_0', 0, 'premiere_mesure'); tubeR('tube_2', 1, 'mesure_2'); tubeR('tube_4', 2, 'mesure_4'); tubeR('tube_8', 4, 'mesure_8'); tubeR('tube_40', 9, 'mesures');
     R('tableau', TBM.x, TBM.y, TBM.w, TBM.h, 'le tableau des mesures t (min) → x (mmol)');
-    R('ligne_premiere', TBM.x + 30, yLigne(0) - 18, 280, 24, `la première ligne : « t = 0 min : x = 0 mmol »${quand('premiere_mesure')}`);
-    R('ligne_derniere', TBM.x + 30, yLigne(9) - 18, 280, 24, `la dernière ligne : « t = 40 min : x = 1,99 mmol »${quand('mesures')}`);
+    R('colonne_x', TBM.xs, TBM.y, TBM.x + TBM.w - TBM.xs, TBM.h, `la colonne x (mmol) : 0 ; 0,44 ; 0,79 ; … ; 1,99${quand('mesures')}`);
+    ligneR('ligne_premiere', 0, 'la première ligne : « t = 0 min : x = 0 mmol »', 'premiere_mesure');
+    ligneR('ligne_2', 1, 'la ligne « t = 2 min : x = 0,44 mmol »', 'mesure_2');
+    ligneR('ligne_4', 2, 'la ligne « t = 4 min : x = 0,79 mmol »', 'mesure_4');
+    ligneR('ligne_8', 4, 'la ligne « t = 8 min : x = 1,26 mmol »', 'mesure_8');
+    ligneR('ligne_derniere', 9, 'la dernière ligne : « t = 40 min : x = 1,99 mmol »', 'mesures');
   } else if (v === 'prelevement') {
     const t = tSim(), pip = pipetteEtat(M);
     R('grand_becher', GB.x - 8, GB.y - 6, GB.w + 16, GB.h + 12, `le grand bécher : teinte ${nomTeinte(fT(t))}`);
@@ -725,9 +864,11 @@ function voir(M) {
     m.push(vus.length ? `Vignettes dessinées : ${vus.join(' ; ')}. Sous chacune : « mesure → avancement x ».` : 'Pas encore de vignette.');
     if (M.commence('point_commun')) m.push('Cadre jaune : « on mesure une grandeur à des dates, on en déduit x(t) ».');
   } else if (v === 'mesures') {
-    const t = tSim(), n = M.commence('premiere_mesure') ? MESURES.filter(([d]) => d <= t + 1e-6).length : 0;
-    m.push(`Bécher de l’exemple A (100 mL, H₂O₂ 2,0 mmol + I⁻ 10,0 mmol, milieu acide), teinte ${nomTeinte(fT(t))} ; chronomètre t = ${min(t)} (temps simulé, accéléré).`);
-    m.push(n ? `Lignes du tableau écrites (${n}) : ${MESURES.slice(0, n).map(([d, x]) => `t = ${d} min : x = ${x} mmol`).join(' ; ')}.` : 'Tableau des mesures encore vide.');
+    const t = tSim(), { cours, finis } = etatMesures(M), faits = [...finis].sort((a, b) => a - b);
+    m.push(`Bécher peint de l’exemple A (100 mL, H₂O₂ 2,0 mmol + I⁻ 10,0 mmol, milieu acide), teinte ${nomTeinte(fT(t))} ; chronomètre t = ${min(t)} (temps simulé, accéléré). Au milieu, un cristallisoir d’eau glacée avec des glaçons et dix tubes à essais (dates 0, 2, 4, 6, 8, 10, 15, 20, 30, 40 min écrites dessous). À droite, un tableau à deux colonnes t (min) | x (mmol).`);
+    if (cours.k >= 0) m.push(`Prélèvement en cours à t = ${MESURES[cours.k][0]} min : la pipette prend le mélange et le verse dans le tube ${MESURES[cours.k][0]} min ; puis x = ${MESURES[cours.k][1]} mmol s’écrit sur le tube et t et x volent dans la ligne du tableau.`);
+    m.push(faits.length ? `Tubes remplis (teinte figée par l’eau glacée, x écrit au-dessus) et lignes du tableau écrites (${faits.length}) : ${faits.map(k => `t = ${MESURES[k][0]} min : ${nomTeinte(fT(MESURES[k][0]))}, x = ${MESURES[k][1]} mmol`).join(' ; ')}.` : 'Aucun prélèvement encore : tubes vides, tableau vide.');
+    if (M.commence('tableau_fini')) m.push('Colonne x encadrée en jaune ; les tubes vont du plus clair au plus brun.');
   } else if (v === 'prelevement') {
     const t = tSim();
     m.push(`Temps simulé t = ${min(t)}. Grand bécher : teinte ${nomTeinte(fT(t))}. Bécher d’eau glacée avec des glaçons${M.commence('fige') ? `, qui contient le prélèvement de t = ${TP} min (10,0 mL), teinte figée ${nomTeinte(fT(TP) * .9)}` : ''}.`);
@@ -758,12 +899,12 @@ const MOT = Moteur({
   depart: M => ({ methodes: 'Trois façons de suivre l’avancement x au cours du temps.', mesures: 'L’exemple A : mesurons x à des dates successives.',
     prelevement: 'Comment mesurer x à une date précise ?', titrage: 'On titre le diiode du prélèvement de t = 8 min.' })[M.S.vue],
   messageFin: M => ({ methodes: 'Titrage, conductimétrie, pression : on mesure une grandeur à des dates, on en déduit x(t).',
-    mesures: 'Dix mesures, de t = 0 à 40 min : x passe de 0 à 1,99 mmol.',
+    mesures: 'Dix prélèvements, de t = 0 à 40 min : les tubes foncent et x passe de 0 à 1,99 mmol.',
     prelevement: 'Trempe : le prélèvement refroidi et dilué ne réagit plus ; on peut mesurer x à cette date.',
     titrage: 'V_E = 12,6 mL → n(I₂) = 1,26 mmol dans le mélange : x(8 min) = 1,26 mmol.' })[M.S.vue],
   appliquer: (p, M) => { const r = {}; if (VUES.includes(p.vue)) r.vue = p.vue; r.change = !!(r.vue && r.vue !== M.S.vue); return r; },
   schema: { vue: VUES.join(' | ') + ' (change la vue et relance)' },
-  texte: 'Suivi temporel d’une transformation (exemple A : H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O, 100 mL, n₀(H₂O₂) = 2,0 mmol, n₀(I⁻) = 10,0 mmol). Méthodes : titrage d’un prélèvement, conductimétrie (afficheur σ), pression d’un gaz (manomètre) ; point commun : on mesure une grandeur à des dates, on en déduit x(t). Mesures : t (min) 0, 2, 4, 6, 8, 10, 15, 20, 30, 40 ↔ x (mmol) 0 ; 0,44 ; 0,79 ; 1,06 ; 1,26 ; 1,43 ; 1,69 ; 1,84 ; 1,95 ; 1,99. Prélèvement de 10,0 mL à t = 8 min versé dans l’eau glacée (trempe) : sa teinte se fige, le grand bécher continue de foncer. Titrage par le thiosulfate C = 0,020 mol/L : I₂ + 2S₂O₃²⁻ → 2I⁻ + S₄O₆²⁻ ; V_E = 12,6 mL ; n(I₂) = C·V_E/2 ; × 10 dans le mélange ; x = n(I₂) = 1,26 mmol. Temps accéléré : 1 min dure 0,2 s.',
+  texte: 'Suivi temporel d’une transformation (exemple A : H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O, 100 mL, n₀(H₂O₂) = 2,0 mmol, n₀(I⁻) = 10,0 mmol). Méthodes : titrage d’un prélèvement, conductimétrie (afficheur σ), pression d’un gaz (manomètre) ; point commun : on mesure une grandeur à des dates, on en déduit x(t). Mesures : à chaque date un prélèvement versé dans un tube de l’eau glacée (trempe), titré ; t (min) 0, 2, 4, 6, 8, 10, 15, 20, 30, 40 ↔ x (mmol) 0 ; 0,44 ; 0,79 ; 1,06 ; 1,26 ; 1,43 ; 1,69 ; 1,84 ; 1,95 ; 1,99. Prélèvement de 10,0 mL à t = 8 min versé dans l’eau glacée (trempe) : sa teinte se fige, le grand bécher continue de foncer. Titrage par le thiosulfate C = 0,020 mol/L : I₂ + 2S₂O₃²⁻ → 2I⁻ + S₄O₆²⁻ ; V_E = 12,6 mL ; n(I₂) = C·V_E/2 ; × 10 dans le mélange ; x = n(I₂) = 1,26 mmol. Temps accéléré : 1 min dure 0,2 s.',
   explications: {
     methodes: [
       { repere: 'vignette_titrage', texte: 'Le titrage : on dose le diiode d’un prélèvement.' },
@@ -774,7 +915,8 @@ const MOT = Moteur({
     mesures: [
       { repere: 'becher', texte: 'Le mélange brunit : du diiode se forme.' },
       { repere: 'chrono', texte: 'On note la date de chaque mesure.' },
-      { repere: 'tableau', texte: 'À chaque date, une valeur de x.' },
+      { repere: 'tubes', texte: 'À chaque date, un prélèvement dans l’eau glacée : sa teinte se fige, on le titre, on a x.' },
+      { repere: 'tableau', texte: 'Puis t et x se rangent dans le tableau.' },
       { repere: 'ligne_derniere', texte: 'À 40 min, x vaut presque 2,0 mmol.' },
     ],
     prelevement: [

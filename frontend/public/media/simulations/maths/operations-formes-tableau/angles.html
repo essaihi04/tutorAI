@@ -15,8 +15,10 @@
 <script>
 /*
  * Cours « Nombres complexes (première partie) » (math_ch6_nombres_complexes) : les angles remarquables.
- * Vue : ?vue=tableau. Moments : cercle, valeurs, astuce, lecture.
- * Repères : cercle, valeurs, astuce, lecture, pi_6, pi_4, pi_3.
+ * Vue : ?vue=tableau. Moments : axes, cercle, angle_0, angle_pi_6, angle_pi_4, angle_pi_3, angle_pi_2, valeurs, astuce, lecture
+ * (un point parcourt le quart de cercle ; cos et sin s’écrivent aux pieds des pointillés, puis volent dans le tableau).
+ * Repères : cercle, point_0, point_pi_6, point_pi_4, point_pi_3, point_pi_2 (les points du cercle), valeurs, astuce, lecture,
+ * pi_6, pi_4, pi_3 (les colonnes du tableau).
  */
 const fr = MathsTableau.fr;
 const PI = Math.PI;
@@ -95,12 +97,25 @@ const O = [46, 326], R = 220;
 const GC = { X: (x) => O[0] + x * R, Y: (y) => O[1] - y * R };   // repère du cercle : unité = R
 const COLS = [400, 476, 552, 628, 704], HX = 312, CW = 76;
 const ANG = [
-  { a: 0, nom: '0', cos: '1', sin: '0' },
-  { a: PI / 6, nom: 'π/6', cos: '√3/2', sin: '1/2', rep: 'pi_6' },
-  { a: PI / 4, nom: 'π/4', cos: '√2/2', sin: '√2/2', rep: 'pi_4' },
-  { a: PI / 3, nom: 'π/3', cos: '1/2', sin: '√3/2', rep: 'pi_3' },
-  { a: PI / 2, nom: 'π/2', cos: '0', sin: '1' },
+  { a: 0, id: '0', nom: '0', cos: '1', sin: '0' },
+  { a: PI / 6, id: 'pi_6', nom: 'π/6', cos: '√3/2', sin: '1/2', rep: 'pi_6' },
+  { a: PI / 4, id: 'pi_4', nom: 'π/4', cos: '√2/2', sin: '√2/2', rep: 'pi_4' },
+  { a: PI / 3, id: 'pi_3', nom: 'π/3', cos: '1/2', sin: '√3/2', rep: 'pi_3' },
+  { a: PI / 2, id: 'pi_2', nom: 'π/2', cos: '0', sin: '1' },
 ];
+/* Le parcours du point (en s d’écriture depuis son départ) : de a à b il glisse jusqu’à l’angle, v : ses deux valeurs
+ * s’écrivent aux pieds des pointillés, f : elles volent dans la colonne de l’angle. Le tableau se trace avant le premier envol. */
+const PARC = (() => {
+  const VOL = .5, etapes = []; let t = 0;
+  ANG.forEach((q, i) => {
+    const a = t, b = a + (i ? .4 : .25), v = b + .2, f = v + .5 + (i ? 0 : .45);
+    etapes.push({ a, b, v, f }); t = f + VOL + .05;
+  });
+  return { VOL, etapes, grille: etapes[0].f - .4, fin: etapes[etapes.length - 1].f + VOL };
+})();
+const Q = { astuce: Infinity, lecture: Infinity };
+const rampe = (s, t0, d) => Math.min(1, Math.max(0, (s - t0) / d));
+const doux = p => (1 - Math.cos(Math.PI * p)) / 2;
 
 MathsTableau.page({
   id: 'nc_angles', titre: 'Nombres complexes : les angles remarquables',
@@ -116,32 +131,81 @@ MathsTableau.page({
         c.texte('cos', O[0] + R + 24, O[1] + 22, { couleur: 'vert', taille: 15, align: 'right' });
         c.texte('sin', O[0] - 8, O[1] - R - 12, { couleur: 'orange', taille: 15, align: 'right' });
         c.texte('O', O[0] - 14, O[1] + 18, { couleur: 'faible', taille: 14 });
+        K.marque('axes');
+        c.pause(.3);
         K.anime(1.2, p => arc(c, GC, 1, 0, PI / 2 * p, { couleur: 'blanc', largeur: 2.2, tete: 10 }));
         for (const q of ANG) {
           const [x, y] = pol(GC, 1, q.a);
           if (q.a > 0 && q.a < PI / 2) c.ligne(O[0], O[1], x, y, { couleur: 'tresfaible', largeur: 1.3, duree: .15 });
           c.point(x, y, 5, 'cyan');
+          c.repere('point_' + q.id, x - 14, y - 14, 28, 28, `le point ${q.nom} du cercle`);
           if (q.a === 0) c.texte('0', x + 8, y - 8, { couleur: 'cyan', taille: 17 });
           else if (q.a === PI / 2) c.texte('π/2', x + 12, y + 8, { couleur: 'cyan', taille: 17 });
           else { const [lx, ly] = pol(GC, 1.09, q.a); c.texte(q.nom, lx, ly + 6, { couleur: 'cyan', taille: 17, align: 'center' }); }
         }
-        // En-tête du tableau.
-        c.ligne(HX + 50, 68, HX + 50, 208, { couleur: 'faible', largeur: 1.4 });
-        c.ligne(HX - 6, 110, COLS[4] + CW / 2, 110, { couleur: 'faible', largeur: 1.4 });
-        c.ligne(HX - 6, 160, COLS[4] + CW / 2, 160, { couleur: 'faible', largeur: 1.4 });
-        c.texte('θ', HX, 96, { couleur: 'cyan', taille: 20 });
-        ANG.forEach((q, i) => c.texte(q.nom, COLS[i], 96, { couleur: 'cyan', taille: 20, align: 'center' }));
         c.repere('cercle', O[0] - 10, O[1] - R - 26, R + 50, R + 46, 'le premier quart du cercle : 0, π/6, π/4, π/3, π/2');
         K.marque('cercle');
         c.pause(.3);
-        c.texte('cos θ', HX - 4, 146, { couleur: 'vert', taille: 18 });
-        ANG.forEach((q, i) => c.texte(q.cos, COLS[i], 146, { couleur: 'vert', taille: 20, align: 'center' }));
-        c.texte('sin θ', HX - 4, 196, { couleur: 'orange', taille: 18 });
-        ANG.forEach((q, i) => c.texte(q.sin, COLS[i], 196, { couleur: 'orange', taille: 20, align: 'center' }));
+        /* 14 novembre 2026 (l’animation d’abord, le tableau ensuite) : un point parcourt le quart de cercle et s’arrête sur
+         * chaque angle ; ses pointillés tombent sur les deux axes, et le cosinus s’écrit au pied sur l’axe horizontal, le sinus
+         * au pied sur l’axe vertical, là où ils se lisent. Puis les deux nombres volent dans la colonne de l’angle ; le
+         * tableau (en-tête θ, lignes cos θ et sin θ) ne se trace qu’au premier envol. */
+        const T = Number.isFinite(c.t) ? c.t : Infinity, t0 = c.cur;
+        const fini = T >= Q.astuce;
+        K.anime(PARC.fin, p => {
+          const s = p * PARC.fin;
+          const ag = rampe(s, PARC.grille, .45);
+          if (ag > 0) {
+            const o = { couleur: 'faible', largeur: 1.4, alpha: .92 * ag };
+            c.ligne(HX + 50, 68, HX + 50, 208, o); c.ligne(HX - 6, 110, COLS[4] + CW / 2, 110, o); c.ligne(HX - 6, 160, COLS[4] + CW / 2, 160, o);
+            c.texte('θ', HX, 96, { couleur: 'cyan', taille: 20, alpha: ag });
+            ANG.forEach((q, i) => c.texte(q.nom, COLS[i], 96, { couleur: 'cyan', taille: 20, align: 'center', alpha: ag }));
+            c.texte('cos θ', HX - 4, 146, { couleur: 'vert', taille: 18, alpha: ag });
+            c.texte('sin θ', HX - 4, 196, { couleur: 'orange', taille: 18, alpha: ag });
+          }
+          // le point mobile : sur l’arc entre deux angles, ou arrêté sur un angle
+          const enCours = s < PARC.fin - 1e-6 && !fini;
+          let a = 0;
+          PARC.etapes.forEach((e, i) => { if (s >= e.a) a = ANG[i].a - (ANG[i].a - (i ? ANG[i - 1].a : 0)) * (1 - doux(rampe(s, e.a, e.b - e.a))); });
+          if (enCours) { const [x, y] = pol(GC, 1, a); c.point(x, y, 7, 'jaune'); }
+          PARC.etapes.forEach((e, i) => {
+            if (s < e.b) return;
+            const q = ANG[i], [x, y] = pol(GC, 1, q.a), ap = rampe(s, e.b, .2), vol = doux(rampe(s, e.f, PARC.VOL));
+            const ici = enCours && s < (PARC.etapes[i + 1] ? PARC.etapes[i + 1].a : Infinity);
+            if (ici && vol < 1) {   // les pointillés vers les deux axes
+              if (x - O[0] > 2) c.ligne(x, y, x, O[1], { couleur: 'vert', largeur: 1.6, pointille: [5, 5], alpha: ap });
+              if (O[1] - y > 2) c.ligne(x, y, O[0], y, { couleur: 'orange', largeur: 1.6, pointille: [5, 5], alpha: ap });
+            }
+            const ev = rampe(s, e.v, .4);
+            if (ev <= 0) return;
+            // les pieds : cos sous l’axe horizontal, sin à gauche de l’axe vertical
+            const pc = [x - c.largeurTexte(q.cos, 17) / 2, O[1] + 24], ps = [O[0] - 8 - c.largeurTexte(q.sin, 17), y + 6];
+            if (vol <= 0) {
+              const n = (t) => t.slice(0, Math.max(1, Math.ceil(ev * t.length)));
+              if (ici) {
+                c.texte(n(q.cos), pc[0], pc[1], { couleur: 'vert', taille: 17 });
+                c.texte(n(q.sin), ps[0], ps[1], { couleur: 'orange', taille: 17 });
+              }
+              return;
+            }
+            const voler = (txt, [x0, y0], cx, cy, couleur) => {
+              const xf = cx - c.largeurTexte(txt, 20) / 2;
+              c.texte(txt, x0 + (xf - x0) * vol, y0 + (cy - y0) * vol, { couleur, taille: 17 + 3 * vol });
+            };
+            voler(q.cos, pc, COLS[i], 146, 'vert');
+            voler(q.sin, ps, COLS[i], 196, 'orange');
+          });
+        });
+        if (Number.isFinite(c.t)) {   // un instant par angle : ses deux valeurs écrites aux pieds, juste avant leur envol
+          const fin = c.cur;
+          PARC.etapes.forEach((e, i) => { c.cur = t0 + e.f; K.marque('angle_' + ANG[i].id); });
+          c.cur = fin;
+        }
         c.repere('valeurs', HX - 8, 120, COLS[4] + CW / 2 - HX + 8, 86, 'cos et sin de 0, π/6, π/4, π/3, π/2');
         for (const [i, q] of ANG.entries()) if (q.rep) c.repere(q.rep, COLS[i] - CW / 2, 70, CW, 138, `la colonne ${q.nom} : cos = ${q.cos}, sin = ${q.sin}`);
         K.marque('valeurs');
         c.pause(.3);
+        if (Number.isFinite(c.t)) Q.astuce = c.cur;
         c.texte('sin θ', HX - 4, 250, { couleur: 'orange', taille: 17 });
         c.texte('monte', HX - 4, 270, { couleur: 'orange', taille: 14 });
         ANG.forEach((q, i) => c.texte(`√${i}/2`, COLS[i], 250, { couleur: 'orange', taille: 18, align: 'center' }));
@@ -154,7 +218,9 @@ MathsTableau.page({
         c.repere('astuce', HX - 8, 230, COLS[4] + CW / 2 - HX + 8, 122, 'l’astuce √0/2 … √4/2 : le sinus monte, le cosinus descend');
         K.marque('astuce');
         c.pause(.3);
-        c.rect(COLS[2] - CW / 2 + 2, 70, CW - 4, 138, { couleur: 'jaune', arrondi: 8, largeur: 2.2, fond: 'jaune', fondAlpha: .08 });
+        if (Number.isFinite(c.t)) Q.lecture = c.cur;
+        // le fond jaune de la colonne n'est peint qu'au moment où la craie l'entoure (le fond d'un cadre ne suit pas l'écriture)
+        c.rect(COLS[2] - CW / 2 + 2, 70, CW - 4, 138, { couleur: 'jaune', arrondi: 8, largeur: 2.2, ...(T >= Q.lecture ? { fond: 'jaune', fondAlpha: .08 } : {}) });
         const [x4, y4] = pol(GC, 1, PI / 4);
         c.point(x4, y4, 7, 'jaune');
         c.ligne(x4, y4, x4, O[1], { couleur: 'vert', largeur: 1.6, pointille: [5, 5] });
@@ -166,14 +232,21 @@ MathsTableau.page({
         K.marque('lecture');
       },
       decrire: {
-        cercle: 'À gauche, le premier quart du cercle trigonométrique, parcouru par un arc fléché de 0 à π/2, avec les points 0, π/6, π/4, π/3, π/2 ; l’axe horizontal est marqué « cos », le vertical « sin » ; à droite, la ligne « θ : 0, π/6, π/4, π/3, π/2 » d’un tableau.',
-        valeurs: 'Le tableau se remplit : ligne cos θ (vert) « 1, √3/2, √2/2, 1/2, 0 » ; ligne sin θ (orange) « 0, 1/2, √2/2, √3/2, 1 ».',
+        axes: 'Deux axes à la craie : l’horizontal marqué « cos », le vertical « sin », l’origine O.',
+        cercle: 'À gauche, le premier quart du cercle trigonométrique, parcouru par un arc fléché de 0 à π/2, avec les points 0, π/6, π/4, π/3, π/2.',
+        angle_0: 'Un point jaune en 0 sur le cercle : son pied sur l’axe horizontal donne cos 0 = 1 (vert), sur l’axe vertical sin 0 = 0 (orange) ; le tableau θ | cos θ | sin θ se trace à droite et les deux nombres volent dans la colonne 0.',
+        angle_pi_6: 'Le point glisse jusqu’à π/6 ; ses pointillés tombent sur les axes : cos π/6 = √3/2 sous l’axe horizontal, sin π/6 = 1/2 sur l’axe vertical ; ils volent dans la colonne π/6.',
+        angle_pi_4: 'Le point en π/4 : ses deux pieds à la même distance de O, cos π/4 = sin π/4 = √2/2 ; ils volent dans la colonne π/4.',
+        angle_pi_3: 'Le point en π/3 : cos π/3 = 1/2, sin π/3 = √3/2 (l’inverse de π/6) ; ils volent dans la colonne π/3.',
+        angle_pi_2: 'Le point en haut, en π/2 : cos π/2 = 0, sin π/2 = 1 ; ils volent dans la dernière colonne.',
+        valeurs: 'Le tableau est rempli : ligne cos θ (vert) « 1, √3/2, √2/2, 1/2, 0 » ; ligne sin θ (orange) « 0, 1/2, √2/2, √3/2, 1 » ; chaque nombre est venu du pied d’un pointillé.',
         astuce: 'Dessous, l’astuce : sin θ « √0/2, √1/2, √2/2, √3/2, √4/2 » avec une flèche vers la droite (« monte ») ; cos θ « √4/2, √3/2, √2/2, √1/2, √0/2 » avec une flèche vers la gauche (« descend ») ; « √0/2 = 0 ; √1/2 = 1/2 ; √4/2 = 1 ».',
         lecture: 'La colonne π/4 s’allume en jaune ; sur le cercle le point π/4 en jaune, ses pointillés vers les deux axes marqués « √2/2 » ; en haut « cos π/4 = sin π/4 = √2/2 ».',
       },
-      motifs: { cercle: 'le quart de cercle', valeurs: 'les valeurs de cos et sin', astuce: 'l’astuce √n/2', lecture: 'la colonne π/4' },
+      motifs: { axes: 'les axes cos et sin', cercle: 'le quart de cercle', angle_0: 'l’angle 0', angle_pi_6: 'l’angle π/6', angle_pi_4: 'l’angle π/4', angle_pi_3: 'l’angle π/3', angle_pi_2: 'l’angle π/2', valeurs: 'les valeurs de cos et sin', astuce: 'l’astuce √n/2', lecture: 'la colonne π/4' },
       explication: [
         { repere: 'cercle', texte: 'Les cinq angles à connaître, sur le premier quart du cercle : 0, π/6, π/4, π/3, π/2.' },
+        { repere: 'cercle', texte: 'Le point s’arrête sur chaque angle : son pied sur l’axe horizontal donne le cosinus, sur l’axe vertical le sinus.' },
         { repere: 'valeurs', texte: 'Sous chaque angle : son cosinus et son sinus.' },
         { repere: 'pi_6', texte: 'π/6 : cos = √3/2 et sin = 1/2.' },
         { repere: 'pi_4', texte: 'π/4 : cos = sin = √2/2.' },

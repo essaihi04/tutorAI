@@ -17,12 +17,23 @@
 /*
  * Cours « Suites numériques » (math_ch3_suites_numeriques) : les termes d’une suite.
  * Vues : ?vue=questions | cases | indices | machine | arith | geom | serrement | colonnes | image_f.
+ * colonnes : moments termes, colonne_u, ecarts, colonne_v, fois_quart, detour ; repères barres, colonne_u, ecarts, colonne_v, fois, detour
+ *   (les termes fabriqués en barres, puis rangés dans le tableau).
  * Fil rouge : u₀ = 17, uₙ₊₁ = ¼uₙ + 12 (national 2017 R) : uₙ = 16 + (¼)ⁿ, limite 16.
  */
 const { fr } = MathsTableau;
 const f17 = u => u / 4 + 12;
 const U17 = SU.suite(17, f17, 6);              // 17 ; 16,25 ; 16,0625 ; 16,015625 …
 const ecrire = (v) => fr(v, 4);
+/* Vue colonnes : un nombre vole de sa place (là où il est produit) vers sa case du tableau ; avancement v de 0 à 1. */
+const rampe = (s, t0, d) => Math.min(1, Math.max(0, (s - t0) / d));
+const doux = p => (1 - Math.cos(Math.PI * p)) / 2;
+const VOLS = { u: [0, .55, 1.1, 1.65], d: .8, finU: 2.45 };
+const Q = { cu: Infinity, cv: Infinity };
+function voler(c, txt, [x0, y0], t0, [x1, y1], t1, v, couleur) {
+  if (v <= 0) return;
+  c.texte(txt, x0 + (x1 - x0) * v, y0 + (y1 - y0) * v, { couleur, taille: t0 + (t1 - t0) * v, align: 'center' });
+}
 
 /* Une rangée de cases : renvoie le centre de chaque case. */
 function cases(c, x0, y, n, w, h, o = {}) {
@@ -300,38 +311,103 @@ MathsTableau.page({
 
     colonnes: {
       titre: 'La suite auxiliaire vₙ = uₙ − 16',
+      /* 14 novembre 2026 (l’animation d’abord, le tableau ensuite) : les termes ne sont plus écrits d’emblée en colonnes.
+       * ① La récurrence les FABRIQUE : une barre par terme, chacune née de la précédente par « × ¼ + 12 » (arcs sous les
+       *    barres), sa hauteur écrite au-dessus d’elle ; les barres se tassent vers 16 (axe coupé sous 16).
+       * ② Les valeurs de uₙ volent dans la colonne uₙ d’un tableau qui ne se trace qu’à ce moment.
+       * ③ La ligne 16 : ce qui dépasse de 16 s’allume en jaune, vₙ = uₙ − 16, sa valeur écrite à côté ; chaque morceau
+       *    jaune est le quart du précédent (1 ; 0,25 ; 0,0625…), cela se voit.  ④ Les vₙ volent dans la colonne vₙ ;
+       *    ⑤ les flèches vertes « × ¼ » ; ⑥ le détour vₙ géométrique → uₙ = 16 + (¼)ⁿ. */
       dessiner(c, K) {
         K.titre('Pourquoi une suite auxiliaire ?');
-        const XC = [110, 260, 470], Y = [130, 172, 214, 256];
-        c.texte('n', XC[0], 86, { couleur: 'faible', taille: 20, align: 'center' });
-        c.texte('u_n', XC[1], 86, { couleur: 'cyan', taille: 22, align: 'center' });
-        c.ligne(60, 100, 600, 100, { couleur: 'faible', largeur: 1.3 });
-        Y.forEach((y, i) => { c.texte(String(i), XC[0], y, { couleur: 'faible', taille: 19, align: 'center' }); c.texte(fr(U17[i], 6), XC[1], y, { couleur: 'cyan', taille: 20, align: 'center' }); });
+        const T = Number.isFinite(c.t) ? c.t : Infinity, fini = Number.isFinite(c.t);
+        const N = 4, XB = [85, 180, 275, 370], BW = 36, BASE = 330;
+        const Y = v => 240 - (v - 16) * 120;                          // 16 → 240, 17 → 120 ; l’axe est coupé sous 16
+        const uS = i => fr(U17[i], 6), vS = i => fr(U17[i] - 16, 6);
+        const posU = i => [XB[i], Y(U17[i]) - 10], posV = i => [XB[i] + BW / 2 + 5, Math.min(236, (Y(U17[i]) + 240) / 2 + 6)];
+        const XC = [470, 560, 655], YL = [130, 172, 214, 256];
+        // un texte à la craie qui, une fois parti voler, n’est plus redessiné à sa place (même durée d’écriture gardée)
+        const ecritTantQue = (txt, x, y, o, part) => { if (T >= part) c.pause(Math.max(.1, txt.length / 16)); else c.texte(txt, x, y, o); };
+        c.texte('u_{n+1} = ¼ u_n + 12', 40, 66, { couleur: 'blanc', taille: 19 });
+        // ① les barres, fabriquées par la récurrence
+        c.ligne(40, BASE, 40, 100, { couleur: 'faible', largeur: 1.5 });
+        c.ligne(34, 302, 46, 296, { couleur: 'faible', largeur: 1.4, duree: .05 }); c.ligne(34, 309, 46, 303, { couleur: 'faible', largeur: 1.4, duree: .05 });
+        c.ligne(36, Y(17), 44, Y(17), { couleur: 'faible', largeur: 1.3, duree: .03 }); c.texte('17', 30, Y(17) + 5, { couleur: 'faible', taille: 14, align: 'right' });
+        c.ligne(36, Y(16), 44, Y(16), { couleur: 'faible', largeur: 1.3, duree: .03 }); c.texte('16', 30, Y(16) + 5, { couleur: 'faible', taille: 14, align: 'right' });
+        c.ligne(30, BASE, 410, BASE, { couleur: 'faible', largeur: 1.5 });
+        for (let i = 0; i < N; i++) {
+          if (i) {
+            c.courbe(u => [XB[i - 1] + (XB[i] - XB[i - 1]) * u, BASE + 34 + Math.sin(Math.PI * u) * 22], 16, { couleur: 'vert', largeur: 1.6 });
+            c.fleche(XB[i] - 6, BASE + 42, XB[i], BASE + 34, { couleur: 'vert', largeur: 1.6, tete: 6 });
+            c.texte('× ¼ + 12', (XB[i - 1] + XB[i]) / 2, BASE + 76, { couleur: 'vert', taille: 13, align: 'center' });
+          }
+          const top = Y(U17[i]);
+          K.anime(.8, p => c.rect(XB[i] - BW / 2, BASE - (BASE - top) * p, BW, (BASE - top) * p, { couleur: 'cyan', arrondi: 2, largeur: 1.6, fond: 'cyan', fondAlpha: .14 }));
+          ecritTantQue(uS(i), ...posU(i), { couleur: 'cyan', taille: 16, align: 'center' }, Q.cu + VOLS.u[i]);
+          c.texte('u_' + i, XB[i], BASE + 22, { couleur: 'cyan', taille: 16, align: 'center', duree: .15 });
+          c.pause(.2);
+        }
+        c.repere('barres', 30, 96, 390, BASE - 96 + 56, 'les termes uₙ fabriqués par uₙ₊₁ = ¼ uₙ + 12');
+        K.marque('termes');
+        c.pause(.3);
+        // ② le tableau ne se trace qu’ici ; les uₙ y volent
+        c.texte('n', XC[0], 86, { couleur: 'faible', taille: 20, align: 'center', duree: .1 });
+        c.texte('u_n', XC[1], 86, { couleur: 'cyan', taille: 22, align: 'center', duree: .2 });
+        c.ligne(440, 100, 750, 100, { couleur: 'faible', largeur: 1.3, duree: .25 });
+        YL.forEach((y, i) => c.texte(String(i), XC[0], y, { couleur: 'faible', taille: 19, align: 'center', duree: .06 }));
+        if (fini) Q.cu = c.cur;
+        K.anime(VOLS.finU, p => {
+          const s = p * VOLS.finU;
+          for (let i = 0; i < N; i++) voler(c, uS(i), posU(i), 16, [XC[1], YL[i]], 20, doux(rampe(s, VOLS.u[i], VOLS.d)), 'cyan');
+        });
         c.repere('colonne_u', XC[1] - 70, 66, 140, 200, 'la colonne uₙ');
         K.marque('colonne_u');
         c.pause(.4);
+        // ③ ce qui dépasse de 16 : vₙ = uₙ − 16
+        c.ligne(40, Y(16), 410, Y(16), { couleur: 'jaune', largeur: 1.6, pointille: [6, 5] });
+        c.texte('v_n = u_n − 16 : ce qui dépasse 16', 70, 96, { couleur: 'jaune', taille: 17 });
+        for (let i = 0; i < N; i++) {
+          const top = Y(U17[i]);
+          K.anime(.45, p => c.rect(XB[i] - BW / 2, 240 - (240 - top) * p, BW, Math.max(1.2, (240 - top) * p), { couleur: 'jaune', arrondi: 1, largeur: 1.4, fond: 'jaune', fondAlpha: .45 }));
+          ecritTantQue(vS(i), ...posV(i), { couleur: 'jaune', taille: 14 }, Q.cv + VOLS.u[i]);
+        }
+        c.repere('ecarts', 30, 90, 390, 160, 'vₙ = uₙ − 16 : la partie de chaque barre au-dessus de 16');
+        K.marque('ecarts');
+        c.pause(.3);
+        // ④ les vₙ volent dans leur colonne
         c.texte('v_n = u_n − 16', XC[2], 86, { couleur: 'jaune', taille: 22, align: 'center' });
-        ['1', '0,25', '0,0625', '0,015625'].forEach((v, i) => { c.pause(.15); c.texte(v, XC[2], Y[i], { couleur: 'jaune', taille: 20, align: 'center' }); });
+        if (fini) Q.cv = c.cur;
+        K.anime(VOLS.finU, p => {
+          const s = p * VOLS.finU;
+          for (let i = 0; i < N; i++) { const [x, y] = posV(i); voler(c, vS(i), [x + c.largeurTexte(vS(i), 14) / 2, y], 14, [XC[2], YL[i]], 20, doux(rampe(s, VOLS.u[i], VOLS.d)), 'jaune'); }
+        });
         c.repere('colonne_v', XC[2] - 85, 66, 170, 200, 'la colonne vₙ = uₙ − 16');
         K.marque('colonne_v');
         c.pause(.3);
+        // ⑤ chaque vₙ est le quart du précédent
         for (let i = 0; i < 3; i++) {
-          c.courbe(u => [560 + Math.sin(Math.PI * u) * 22, Y[i] - 6 + u * 42], 12, { couleur: 'vert', largeur: 1.8 });
-          c.texte('× ¼', 590, Y[i] + 18, { couleur: 'vert', taille: 17 });
+          c.courbe(u => [700 + Math.sin(Math.PI * u) * 20, YL[i] - 6 + u * 42], 12, { couleur: 'vert', largeur: 1.8 });
+          c.texte('× ¼', 724, YL[i] + 18, { couleur: 'vert', taille: 17 });
         }
-        c.repere('fois', 550, 118, 90, 140, 'chaque vₙ : le quart du précédent');
+        c.repere('fois', 692, 118, 66, 140, 'chaque vₙ : le quart du précédent');
         K.marque('fois_quart');
         c.pause(.4);
-        c.texte('v_n géométrique  →  v_n = (¼)^{n}  →  u_n = 16 + (¼)^{n}', 60, 320, { couleur: 'blanc', taille: 21, max: 660 });
+        // ⑥ le détour
+        c.texte('v_n géométrique : v_n = (¼)^{n}', 445, 316, { couleur: 'blanc', taille: 19, max: 310 });
+        c.texte('donc u_n = 16 + (¼)^{n}', 445, 350, { couleur: 'vert', taille: 20, max: 310 });
+        c.repere('detour', 440, 292, 316, 70, 'vₙ géométrique, puis uₙ = 16 + (¼)ⁿ');
         K.marque('detour');
       },
       decrire: {
-        colonne_u: 'Une colonne uₙ : 17 ; 16,25 ; 16,0625 ; 16,015625 (pas de formule visible).',
-        colonne_v: 'À côté, la colonne vₙ = uₙ − 16 : 1 ; 0,25 ; 0,0625 ; 0,015625.',
+        termes: 'À gauche, sous « uₙ₊₁ = ¼ uₙ + 12 », quatre barres cyan u₀ à u₃ (axe coupé sous 16) : chacune naît de la précédente par « × ¼ + 12 » (arcs verts sous les barres) ; leurs hauteurs écrites au-dessus : 17 ; 16,25 ; 16,0625 ; 16,015625 — les barres se tassent vers 16.',
+        colonne_u: 'Le tableau se trace à droite (n, uₙ) et les quatre hauteurs volent dans la colonne uₙ : 17 ; 16,25 ; 16,0625 ; 16,015625 (pas de formule visible).',
+        ecarts: 'Une ligne pointillée jaune en 16 ; écrit « vₙ = uₙ − 16 : ce qui dépasse 16 » ; le haut de chaque barre, au-dessus de 16, s’allume en jaune, sa valeur à côté : 1 ; 0,25 ; 0,0625 ; 0,015625 — chaque morceau jaune est le quart du précédent.',
+        colonne_v: 'Les vₙ volent dans la colonne « vₙ = uₙ − 16 » du tableau : 1 ; 0,25 ; 0,0625 ; 0,015625.',
         fois_quart: 'Des flèches vertes « × ¼ » entre deux vₙ successifs : chaque vₙ est le quart du précédent.',
-        detour: 'Écrit : vₙ géométrique → vₙ = (¼)ⁿ → uₙ = 16 + (¼)ⁿ.',
+        detour: 'Écrit sous le tableau : « vₙ géométrique : vₙ = (¼)ⁿ », puis en vert « donc uₙ = 16 + (¼)ⁿ ».',
       },
-      explication: [{ repere: 'colonne_v', texte: 'vₙ fait le travail : elle est géométrique.' }, { repere: 'fois', texte: 'On multiplie toujours par un quart.' }],
+      motifs: { termes: 'les termes fabriqués un par un', colonne_u: 'la colonne uₙ', ecarts: 'ce qui dépasse 16', colonne_v: 'la colonne vₙ', fois_quart: 'le quart du précédent', detour: 'le détour' },
+      explication: [{ repere: 'barres', texte: 'La récurrence fabrique les termes un par un ; ils se tassent vers 16.' }, { repere: 'ecarts', texte: 'Ce qui dépasse 16 : vₙ = uₙ − 16, chaque fois quatre fois plus petit.' }, { repere: 'colonne_v', texte: 'vₙ fait le travail : elle est géométrique.' }, { repere: 'fois', texte: 'On multiplie toujours par un quart.' }],
     },
 
     image_f: {

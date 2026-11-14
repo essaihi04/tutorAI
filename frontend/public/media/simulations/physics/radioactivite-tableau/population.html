@@ -31,6 +31,14 @@
  * Aux instants clés, l’horloge des jours s’arrête le temps que la craie écrive (comme un professeur qui marque une pause) :
  * le moment est la fin de cette écriture, t (jours) y vaut exactement la date annoncée.
  * Poignée : le repère t½ sous l’axe du temps (2 à 20 jours) ; au lâcher, tout se recalcule et la scène repart.
+ *
+ * Vue « proportion » (14 novembre 2026, règle 28 : l’animation d’abord, le tableau ensuite) : 1 jour simulé = 1 s.
+ * Au début de chaque jour, une rangée peinte des noyaux présents (violet, 4 par colonne, longueur ∝ N avant) apparaît
+ * sous la courbe. Pendant le jour, chaque noyau qui se désintègre dans la grille (cerclé) envoie un jeton gris qui vole
+ * jusqu’au bout de la rangée du jour : la part grise grandit, le compteur orange monte (33, puis 31, puis 28).
+ * « rapport » : les trois rangées s’étirent à la même longueur (100 %) : les parts grises s’alignent sur un même trait,
+ * ≈ 8 % : la même proportion SE VOIT. « tableau » : les rangées s’effacent, les nombres (N avant, partis) volent dans
+ * le tableau Δt = 1 jour, la colonne « proportion » s’écrit (≈ 0,083). « conclusion » : λ·Δt.
  */
 const { fr, bulle, protocole } = window.Tableau;
 const $ = id => document.getElementById(id);
@@ -43,7 +51,7 @@ const TITRES = { hasard: 'le hasard (12 noyaux)', grand_nombre: 'un grand nombre
 const MOMENTS = {
   hasard: ['depart', 'premier', 'deuxieme', 'plusieurs', 'fin'],
   grand_nombre: ['depart', 'un_t_demi', 'deux_t_demi', 'trois_t_demi', 'loi', 'fin'],
-  proportion: ['depart', 'ligne_1', 'ligne_2', 'ligne_3', 'conclusion', 'fin'],
+  proportion: ['depart', 'ligne_1', 'ligne_2', 'ligne_3', 'rapport', 'tableau', 'conclusion', 'fin'],
   restants: ['depart', 'croisement', 'deux_t_demi', 'formule', 'fin'],
 };
 const q = new URLSearchParams(location.search);
@@ -52,7 +60,7 @@ const S = { vue: VUES.includes(q.get('vue')) ? q.get('vue') : 'hasard', tdemi: 8
   // conclusions : false pendant une question d'observation (14 novembre 2026) : le tableau se remplit, la phrase « même proportion » attend la réponse.
   conclusions: true };
 { const v = Math.round(+q.get('t_demi_j')); if (v >= 2 && v <= 20) S.tdemi = v; const g = q.get('graine'); if (g !== null && g !== '' && Number.isFinite(+g)) S.graine = Math.round(+g); }
-const VJ = 4;          // jours simulés par seconde réelle (1 jour = 0,25 s)
+const vj = () => (S.vue === 'proportion' ? 1 : 4);   // jours simulés par seconde réelle (1 jour = 0,25 s ; 1 s en vue « proportion », on compte)
 const T0 = 1.0;        // on montre d’abord les N₀ noyaux intacts ; l’horloge part à T0 (moment « depart »)
 const ECRITURE = 2.5;  // les parties fixes (titres, axes) s’écrivent 2,5 fois plus vite que le kit
 const N0 = () => (S.vue === 'hasard' ? 12 : 400);
@@ -105,7 +113,7 @@ function evenements() {
     return { ev: [{ nom: 'premier', tj: apres(0) }, { nom: 'deuxieme', tj: apres(1) }, { nom: 'plusieurs', tj: apres(5) }], finJ: Math.max(5 * T, apres(5) + 2) };
   }
   if (S.vue === 'grand_nombre') return { ev: [{ nom: 'un_t_demi', tj: T }, { nom: 'deux_t_demi', tj: 2 * T }, { nom: 'trois_t_demi', tj: 3 * T }, { nom: 'loi', tj: 3 * T }], finJ: 5 * T };
-  if (S.vue === 'proportion') return { ev: [{ nom: 'ligne_1', tj: 1 }, { nom: 'ligne_2', tj: 2 }, { nom: 'ligne_3', tj: 3 }, { nom: 'conclusion', tj: 3 }], finJ: 4 };
+  if (S.vue === 'proportion') return { ev: [{ nom: 'ligne_1', tj: 1 }, { nom: 'ligne_2', tj: 2 }, { nom: 'ligne_3', tj: 3 }, { nom: 'rapport', tj: 3 }, { nom: 'tableau', tj: 3 }, { nom: 'conclusion', tj: 3 }], finJ: 3 };
   return { ev: [{ nom: 'croisement', tj: T }, { nom: 'deux_t_demi', tj: 2 * T }, { nom: 'formule', tj: 2 * T }], finJ: 5 * T };
 }
 function axeT(finJ) {
@@ -117,10 +125,10 @@ let TL = null;
 function construire() {
   const { ev, finJ } = evenements(); let s = T0, tj = 0; const pts = [[0, 0], [T0, 0]], M = { depart: T0 };
   for (const e of ev) {
-    s += (e.tj - tj) / VJ; tj = e.tj; e.debut = s; pts.push([s, tj]);
+    s += (e.tj - tj) / vj(); tj = e.tj; e.debut = s; pts.push([s, tj]);
     s += (HOLD[e.nom] ?? 2) + .35; e.fin = s; pts.push([s, tj]); M[e.nom] = s;
   }
-  s += (finJ - tj) / VJ; pts.push([s, finJ]); M.fin = s;
+  s += (finJ - tj) / vj(); pts.push([s, finJ]); M.fin = s;
   TL = { pts, ev, M, finJ };
   if (!S.glisse) S.axe = axeT(finJ);
 }
@@ -133,6 +141,71 @@ function jours(s) {
 const ev = nom => TL.ev.find(e => e.nom === nom);
 const vu = nom => (nom === 'depart' ? S.t >= T0 - 1e-6 : !!ev(nom) && S.t >= ev(nom).fin - 1e-6);   // écriture de l’instant terminée
 const commence = nom => !!ev(nom) && S.t >= ev(nom).debut - 1e-6;
+/** Instant de la scène (s) où la date tj (jours) est atteinte : l’inverse de jours(). */
+function sceneDe(tj) {
+  const p = TL.pts;
+  for (let i = 1; i < p.length; i++) { const [s0, j0] = p[i - 1], [s1, j1] = p[i]; if (j1 > j0 && tj > j0 - 1e-9 && tj <= j1 + 1e-9) return s0 + (tj - j0) * (s1 - s0) / (j1 - j0); }
+  return p[p.length - 1][0];
+}
+
+/* ── Vue « proportion » : les rangées du jour, le comptage, puis le tableau ── */
+const PR = { bx: 400, col: 2.9, ys: [238, 274, 310], cpt: 722, nav: 394, vol: .45 };
+const lisseP = u => { u = clamp(u, 0, 1); return u * u * (3 - 2 * u); };
+const rampeP = (t, t0, d) => clamp((t - t0) / d, 0, 1);
+/** Début (scène, s) du jour k : la rangée apparaît, le comptage commence. */
+const debutJour = k => (k === 1 ? T0 : ev('ligne_' + (k - 1)).fin);
+/** Les noyaux désintégrés pendant le jour k, dans l’ordre, avec l’instant (scène) de leur désintégration. */
+function partisDuJour(k) {
+  const out = []; for (const i of ORDRE) if (TD[i] > k - 1 && TD[i] <= k) out.push({ i, s: sceneDe(TD[i]) });
+  return out;
+}
+/** Étirement des rangées (0 : longueur ∝ N avant ; 1 : même longueur, 100 %). */
+const etire = () => (ev('rapport') ? lisseP((S.t - ev('rapport').debut) / 1.1) : 0);
+const fonduRangees = () => (ev('tableau') ? 1 - rampeP(S.t, ev('tableau').debut, .3) : 1);
+function slotPR(k, j, av) {
+  const pas = PR.col * (1 + (400 / av - 1) * etire());
+  return [PR.bx + 2 + Math.floor(j / 4) * pas, PR.ys[k - 1] - 4.8 + (j % 4) * 3.2];
+}
+/** Peinture (sous la craie) : rangées de noyaux présents, jetons gris qui volent de la grille à la rangée du jour. */
+function peindreRangees(ctx) {
+  const fondu = fonduRangees(); if (fondu <= 0) return;
+  const sp = sprites(), t = S.t, r = 2.3;
+  ctx.save(); ctx.globalAlpha = fondu;
+  for (let k = 1; k <= 3; k++) {
+    const t0 = debutJour(k); if (t < t0) continue;
+    const a = rampeP(t, t0, .3), av = avantJour(k - 1), partis = partisDuJour(k);
+    const poses = partis.filter(p => t >= p.s + PR.vol).length;
+    ctx.globalAlpha = fondu * a;
+    // la gouttière de verre qui porte la rangée
+    const [xa] = slotPR(k, 0, av), [xb] = slotPR(k, av - 1, av), y = PR.ys[k - 1];
+    ctx.fillStyle = 'rgba(200,230,245,.07)'; ctx.strokeStyle = 'rgba(220,235,245,.35)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.roundRect(xa - 5, y - 9, xb - xa + 10, 18, 4); ctx.fill(); ctx.stroke();
+    for (let j = 0; j < av; j++) { const [x, yy] = slotPR(k, j, av), gris = j >= av - poses; ctx.drawImage((gris ? sp.fils : sp.pere).cv, x - r, yy - r, 2 * r, 2 * r); }
+    // les jetons en vol : du noyau qui vient de se désintégrer jusqu’au bout de la rangée
+    ctx.globalAlpha = fondu;
+    partis.forEach((p, m) => {
+      if (t < p.s || t >= p.s + PR.vol) return;
+      const u = lisseP((t - p.s) / PR.vol), [x0, y0] = posNoyau(p.i), [x1, y1] = slotPR(k, av - 1 - m, av);
+      const x = x0 + (x1 - x0) * u, yv = y0 + (y1 - y0) * u - Math.sin(Math.PI * u) * 40, rr = 4.2 - 1.9 * u;
+      ctx.drawImage(sp.fils.cv, x - rr, yv - rr, 2 * rr, 2 * rr);
+    });
+  }
+  ctx.restore();
+}
+/** La craie des rangées : jour, N avant, compteur des partis (il monte), légende. */
+function craieRangees(c) {
+  const fondu = fonduRangees(); if (fondu <= 0) return;
+  const t = S.t;
+  if (t >= T0) c.texte('violet : présents au début du jour · gris : partis dans la journée', 324, 220, { couleur: 'faible', taille: 13, alpha: .9 * fondu * rampeP(t, T0, .4), max: 420 });
+  for (let k = 1; k <= 3; k++) {
+    const t0 = debutJour(k); if (t < t0) continue;
+    const a = rampeP(t, t0, .3) * fondu, y = PR.ys[k - 1] + 5, av = avantJour(k - 1);
+    const n = partisDuJour(k).filter(p => t >= p.s + PR.vol).length;
+    c.texte(`jour ${k}`, 324, y, { couleur: 'faible', taille: 14, alpha: .95 * a });
+    c.texte(String(av), PR.nav, y, { couleur: 'violet', taille: 16, align: 'right', alpha: .96 * a });
+    c.texte(String(n), PR.cpt, y, { couleur: 'orange', taille: 18, align: 'center', alpha: .96 * a });
+  }
+}
 
 /* ── Peinture : noyaux (sphères ombrées, grappes), éclairs, électrons ── */
 const COUL = { pere: ['#f5ebff', '#b06cf0', '#43186f'], fils: ['#f1f4f8', '#97a6b8', '#38434f'], proton: ['#ffd9bd', '#f06a3a', '#8a2508'],
@@ -175,9 +248,9 @@ function peindreEchantillon(ctx, tj) {
   const [xa, ya] = posNoyau(0), [xb, yb] = posNoyau(n - 1), cx = (xa + xb) / 2, cy = (ya + yb) / 2;
   const g = ctx.createRadialGradient(cx, cy, 10, cx, cy, 150); g.addColorStop(0, 'rgba(0,0,0,.28)'); g.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = g; ctx.fillRect(RE.x, RE.y, RE.w, RE.h);
-  // Vue proportion : les noyaux partis pendant le jour qu’on est en train de compter sont cerclés.
+  // Vue proportion : les noyaux partis pendant le jour qu’on est en train de compter sont cerclés (jusqu’à la fin de son comptage).
   let jour = 0;
-  if (S.vue === 'proportion') for (let k = 1; k <= 3; k++) { const e = ev('ligne_' + k); if (e && S.t >= e.debut - 1e-6 && S.t < (ev(k < 3 ? 'ligne_' + (k + 1) : 'conclusion').debut - 1e-6)) jour = k; }
+  if (S.vue === 'proportion') for (let k = 1; k <= 3; k++) { const e = ev('ligne_' + k); if (e && S.t >= debutJour(k) - 1e-6 && S.t < e.fin - 1e-6) jour = k; }
   for (let i = 0; i < n; i++) {
     const [x, y] = posNoyau(i), parti = TD[i] <= tj, s = gros ? (parti ? sp.grappeFils : sp.grappePere) : (parti ? sp.fils : sp.pere);
     ctx.drawImage(s.cv, x - s.r, y - s.r, 2 * s.r, 2 * s.r);
@@ -238,11 +311,8 @@ function dessiner(c) {
     c.texte('— N : restants', 400, G.oy - G.ayl + 14, { couleur: 'jaune', taille: 15 });
     c.texte('— N_d : désintégrés', 400, G.oy - G.ayl + 34, { couleur: 'orange', taille: 15 });
   }
-  if (S.vue === 'proportion') {
-    c.texte('Δt = 1 jour', 330, 260, { couleur: 'cyan', taille: 16 });
-    [['N avant', 466], ['désintégrés', 572], ['proportion', 682]].forEach(([s, x]) => c.texte(s, x, 260, { couleur: 'blanc', taille: 15, align: 'center' }));
-    c.ligne(330, 268, 740, 268, { couleur: 'tresfaible', largeur: 1.4 });
-  }
+  // Vue proportion : les rangées du jour (peintes, sous la craie) et leur compteur ; le tableau ne vient qu’au moment « tableau ».
+  if (S.vue === 'proportion') { c.direct(() => { peindreRangees(c.ctx); craieRangees(c); }); }
   // La courbe en direct (marches + points), le compteur, la poignée t½.
   c.direct(() => {
     if (S.t >= T0 - 1e-6) {
@@ -284,17 +354,43 @@ function dessiner(c) {
     });
   }
   if (S.vue === 'proportion') {
+    const fondu = fonduRangees();
+    // Fin de chaque jour : le compteur est entouré, le point du jour est rappelé sur la courbe.
     for (let k = 1; k <= 3; k++) ecritA(c, 'ligne_' + k, () => {
-      const av = avantJour(k - 1), d = av - avantJour(k), y = 268 + 24 * k;
-      c.texte(`jour ${k}`, 334, y, { couleur: 'faible', taille: 14 });
-      c.texte(String(av), 466, y, { couleur: 'jaune', taille: 16, align: 'center' });
-      c.texte(String(d), 572, y, { couleur: 'orange', taille: 16, align: 'center' });
-      c.texte(`${d}/${av} ≈ ${fr(d / av, 3)}`, 682, y, { couleur: 'blanc', taille: 16, align: 'center' });
+      const av = avantJour(k - 1), d = av - avantJour(k);
       c.ligne(PX(k), G.oy, PX(k), PY(av - d), { couleur: 'rose', largeur: 1.2, pointille: [4, 4] });
+      // une fois les rangées effacées, une pause de même durée : l’horloge ne change pas
+      if (fondu > .02) c.cercle(PR.cpt, PR.ys[k - 1] - 1, 15, { couleur: 'orange', largeur: 1.8, alpha: .9 * fondu, duree: .2 }); else c.pause(.2);
+    });
+    // Le rapport : les rangées s’étirent à la même longueur, les parts grises s’alignent sur ≈ 8 %.
+    ecritA(c, 'rapport', () => {
+      c.pause(1.3);
+      const xf = PR.bx + 2 + 100 * PR.col * avantJour(1) / 400 - 2.5;   // le bord de la part grise, le même pour les trois rangées étirées
+      if (fondu > .02) c.ligne(xf, 226, xf, 322, { couleur: 'orange', largeur: 1.8, pointille: [5, 4], alpha: fondu, duree: .3 }); else c.pause(.3);
+      c.texte('partis ÷ présents : chaque jour ≈ 8 %', 324, 346, { couleur: 'orange', taille: 16, max: 420, alpha: .96 * fondu, duree: 1.0 });
+    });
+    // Le tableau : les rangées s’effacent, les nombres volent dans les cases, la proportion se calcule.
+    let tVol = Infinity;
+    ecritA(c, 'tableau', () => {
+      c.pause(.3);
+      c.texte('Δt = 1 jour', 330, 260, { couleur: 'cyan', taille: 16, duree: .15 });
+      [['N avant', 466], ['désintégrés', 572], ['proportion', 682]].forEach(([s, x]) => c.texte(s, x, 260, { couleur: 'blanc', taille: 15, align: 'center', duree: .15 }));
+      c.ligne(330, 268, 740, 268, { couleur: 'tresfaible', largeur: 1.4, duree: .2 });
+      for (let k = 1; k <= 3; k++) c.texte(`jour ${k}`, 334, 268 + 24 * k, { couleur: 'faible', taille: 14, duree: .1 });
+      tVol = c.cur; c.pause(.9);
+      for (let k = 1; k <= 3; k++) { const av = avantJour(k - 1), d = av - avantJour(k); c.texte(`${d}/${av} ≈ ${fr(d / av, 3)}`, 682, 268 + 24 * k, { couleur: 'blanc', taille: 16, align: 'center', duree: .45 }); }
+    });
+    if (Number.isFinite(tVol) && S.t >= tVol) c.direct(() => {
+      for (let k = 1; k <= 3; k++) {
+        const av = avantJour(k - 1), d = av - avantJour(k), yc = 268 + 24 * k, ya = PR.ys[k - 1] + 5, u = lisseP((S.t - tVol - .1 * (k - 1)) / .7);
+        if (S.t < tVol + .1 * (k - 1)) continue;
+        c.texte(String(av), PR.nav - 12 + (466 - PR.nav + 12) * u, ya + (yc - ya) * u, { couleur: u < 1 ? 'violet' : 'jaune', taille: 16, align: 'center' });
+        c.texte(String(d), PR.cpt + (572 - PR.cpt) * u, ya + (yc - ya) * u, { couleur: 'orange', taille: u < 1 ? 18 : 16, align: 'center' });
+      }
     });
     if (S.conclusions) ecritA(c, 'conclusion', () => {
-      c.texte('la même proportion par unité de temps : λ', 334, 372, { couleur: 'vert', taille: 16, max: 400 });
-      c.texte(`proportion ≈ λ·Δt ; λ = ln2/t½ = ${fr(lambda(), 3)} jour⁻¹`, 334, 398, { couleur: 'vert', taille: 15, max: 400 });
+      c.texte('la même proportion par unité de temps : λ', 334, 372, { couleur: 'vert', taille: 16, max: 400, duree: 1.6 });
+      c.texte(`proportion ≈ λ·Δt ; λ = ln2/t½ = ${fr(lambda(), 3)} jour⁻¹`, 334, 398, { couleur: 'vert', taille: 15, max: 400, duree: 1.6 });
     });
   }
   if (S.vue === 'restants') {
@@ -361,6 +457,9 @@ function reperes(c, tj) {
   c.repere('t_demi', PX(Math.min(T, S.axe.max)) - 26, G.oy + 18, 52, 44, `t½ = ${T} jours (poignée : glisser pour changer t½)`);
   c.repere('loi', 506, 90, 180, 66, `la loi N(t) = N₀·e^(−λt), en pointillé${ici('grand_nombre')}`);
   c.repere('tableau', 326, 244, 420, 164, `le tableau : Δt = 1 jour, N avant, désintégrés, proportion${ici('proportion')}`);
+  c.repere('rangees', 320, 224, 420, 100, `les rangées du jour : présents (violet) et partis (gris)${ici('proportion')}`);
+  c.repere('compteur_jour', PR.cpt - 22, 222, 44, 100, `les noyaux partis chaque jour : ${avantJour(0) - avantJour(1)}, ${avantJour(1) - avantJour(2)}, ${avantJour(2) - avantJour(3)}${ici('proportion')}`);
+  c.repere('ligne_8', PR.bx + 250, 222, 60, 136, `la même part grise chaque jour : ≈ 8 %${ici('proportion')}`);
   c.repere('courbe_restants', G.ox, G.oy - G.ayl, G.axl, G.ayl, 'la courbe des noyaux restants N(t)');
   c.repere('courbe_desintegres', G.ox, G.oy - G.ayl, G.axl, G.ayl, `la courbe des noyaux désintégrés N_d(t)${ici('restants')}`);
   c.repere('croisement', QX(T) - 13, PY(n0 / 2) - 13, 26, 26, `le croisement à t = t½ : ${vise(1)} restants et ${n0 - vise(1)} désintégrés${ici('restants')}`);
@@ -390,23 +489,25 @@ function message(nom) {
     trois_t_demi: `t = 3t½ = ${3 * T} jours : il reste N₀/8 = ${vise(3)} noyaux.`,
     loi: 'Les points suivent la loi de décroissance N(t) = N₀·e^(−λt) (pointillé).',
     ligne_1: ligne(1), ligne_2: ligne(2), ligne_3: ligne(3),
+    rapport: 'Même longueur pour les trois rangées : la part grise est la même, ≈ 8 % des noyaux présents chaque jour.',
+    tableau: 'Les nombres vont dans le tableau : partis ÷ présents ≈ 0,083 chaque jour.',
     conclusion: `Chaque jour, la même proportion des noyaux restants se désintègre : ≈ λ·Δt, avec λ = ln2/t½ = ${fr(lambda(), 3)} jour⁻¹.`,
     croisement: `t = t½ = ${T} jours : ${vise(1)} restants et ${n0 - vise(1)} désintégrés, les deux courbes se croisent.`,
     formule: 'Nd = N₀ − N(t) : désintégrés = noyaux initiaux − noyaux restants.',
   };
   return M[nom] || '';
 }
-function ligne(k) { const av = avantJour(k - 1), d = av - avantJour(k); return `Jour ${k} : ${av} noyaux au début, ${d} désintégrés : proportion ${d}/${av} ≈ ${fr(d / av, 3)}.`; }
+function ligne(k) { const av = avantJour(k - 1), d = av - avantJour(k); return `Jour ${k} : ${av} noyaux au début, ${d} sont partis.`; }
 const MOTIFS = {
   depart: 'les N₀ noyaux, t = 0', premier: 'le premier noyau se désintègre', deuxieme: 'le deuxième noyau se désintègre', plusieurs: 'la moitié des 12 noyaux est partie',
   un_t_demi: 't = t½ : N = N₀/2', deux_t_demi: 't = 2t½', trois_t_demi: 't = 3t½ : N = N₀/8', loi: 'la loi N₀·e^(−λt) en pointillé',
-  ligne_1: 'jour 1', ligne_2: 'jour 2', ligne_3: 'jour 3', conclusion: 'la même proportion chaque jour : λ', croisement: 'les courbes se croisent à t½',
+  ligne_1: 'jour 1 compté', ligne_2: 'jour 2 compté', ligne_3: 'jour 3 compté', rapport: 'les rangées à la même longueur : ≈ 8 % chaque jour', tableau: 'les nombres rangés dans le tableau', conclusion: 'la même proportion chaque jour : λ', croisement: 'les courbes se croisent à t½',
   formule: 'Nd = N₀ − N(t)', fin: 'fin',
 };
 function messageFin() {
   const tj = TL.finJ, N = restants(tj), n0 = N0();
   if (S.vue === 'hasard') return `t = ${fx(tj, 1)} jours : il reste ${N} noyau${N > 1 ? 'x' : ''} sur 12. Un noyau se désintègre au hasard ; on ne peut pas savoir lequel.`;
-  if (S.vue === 'proportion') return `t = 4 jours : N = ${N}. Chaque jour, environ la même proportion se désintègre : λ·Δt.`;
+  if (S.vue === 'proportion') return `t = 3 jours : N = ${N}. Chaque jour, environ la même proportion se désintègre : λ·Δt.`;
   if (S.vue === 'restants') return `t = ${fx(tj, 1)} jours : ${N} restants, ${n0 - N} désintégrés ; N + Nd = N₀ = 400.`;
   return `t = ${fx(tj, 1)} jours : N = ${N} noyaux. Toutes les t½, N est divisé par 2 : N = N₀/2ⁿ.`;
 }
@@ -416,7 +517,7 @@ const dire = (texte, kind = '') => { S.dit = texte; bulle($('feedback'), texte, 
 function ceQuiSeVoit() {
   const n0 = N0(), T = S.tdemi, tj = jours(S.t), N = restants(tj);
   const etat = S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée';
-  const m = [`Vue « ${S.vue} » (${TITRES[S.vue]}), ${etat}. Iode 131 → xénon 131 + électron, t½ = ${T} jours, 1 jour simulé = 0,25 s.`,
+  const m = [`Vue « ${S.vue} » (${TITRES[S.vue]}), ${etat}. Iode 131 → xénon 131 + électron, t½ = ${T} jours, 1 jour simulé = ${S.vue === 'proportion' ? '1 s' : '0,25 s'}.`,
     `Vue « L’échantillon » : ${n0 === 12 ? '12 grosses grappes numérotées 1 à 12' : 'une grille de 400 petites sphères'} (violet = iode 131, père ; gris = xénon 131, fils ; petit éclair à chaque désintégration${n0 === 12 ? ', un électron e⁻ part' : ''}).`,
     `t = ${fx(tj, 1)} ${jourS(tj)} ; N = ${N} noyau${N > 1 ? 'x' : ''} restant${N > 1 ? 's' : ''} ; ${n0 - N} désintégré${n0 - N > 1 ? 's' : ''} (N₀ = ${n0}).`,
     `Vue « La courbe » : axes t (jours, 0 à ${fx(S.axe.max, 1)}) et N (noyaux, 0 à ${n0}) ; ${S.vue === 'restants' ? 'deux courbes tracées en direct : N(t) restants (jaune, décroît) et N_d(t) désintégrés (orange, croît)' : 'la courbe N(t) se trace en direct (marches et points)'}${T <= S.axe.max ? ` ; repère t½ = ${T} jours sous l’axe du temps (poignée)` : ` ; t½ = ${T} jours (hors de l’axe : 0 à ${fx(S.axe.max, 1)} jours)`}.`];
@@ -432,7 +533,17 @@ function ceQuiSeVoit() {
     if (vu('loi')) ecrits.push('la loi N(t) = N₀·e^(−λt) en pointillé cyan, encadrée');
   }
   if (S.vue === 'proportion') {
-    for (let k = 1; k <= 3; k++) if (vu('ligne_' + k)) { const av = avantJour(k - 1), d = av - avantJour(k); ecrits.push(`ligne ${k} du tableau : N avant ${av}, désintégrés ${d}, proportion ${fr(d / av, 3)}`); }
+    const tab = commence('tableau');
+    if (!tab) {
+      const rg = [];
+      for (let k = 1; k <= 3; k++) if (S.t >= debutJour(k)) { const av = avantJour(k - 1), n = partisDuJour(k).filter(p => S.t >= p.s + PR.vol).length; rg.push(`jour ${k} : rangée de ${av} noyaux présents (violet), ${n} jetons gris arrivés au bout (compteur orange ${n})`); }
+      m.push(rg.length ? `Sous la courbe, une rangée peinte par jour (longueur ∝ N avant) ; chaque noyau qui se désintègre dans la grille (cerclé) envoie un jeton gris au bout de la rangée du jour. ${rg.join(' ; ')}.` : 'Les rangées du jour ne sont pas encore là.');
+      if (commence('rapport')) m.push(etire() < 1 ? 'Les trois rangées s’étirent à la même longueur (100 %).' : 'Les trois rangées ont la même longueur (100 %) : les parts grises s’alignent sur un même pointillé orange.');
+      if (vu('rapport')) ecrits.push('« partis ÷ présents : chaque jour ≈ 8 % »');
+    } else {
+      m.push('Les rangées se sont effacées ; les nombres ont volé dans le tableau Δt = 1 jour.');
+      for (let k = 1; k <= 3; k++) { const av = avantJour(k - 1), d = av - avantJour(k); ecrits.push(`tableau, jour ${k} : N avant ${av}, désintégrés ${d}${vu('tableau') ? `, proportion ${d}/${av} ≈ ${fr(d / av, 3)}` : ''}`); }
+    }
     if (vu('conclusion') && S.conclusions) ecrits.push(`« la même proportion par unité de temps : λ » ; λ = ln2/t½ = ${fr(lambda(), 3)} jour⁻¹`);
   }
   if (S.vue === 'restants') {
@@ -532,10 +643,11 @@ const EXPLICATIONS = {
     { repere: 't_demi', texte: 'On glisse t½ : les paliers se déplacent avec lui.' },
   ],
   proportion: [
-    { repere: 'tableau', texte: 'Chaque jour, on compte les noyaux au début et ceux qui se sont désintégrés.' },
-    { repere: 'echantillon', texte: 'Les noyaux partis pendant le jour sont cerclés.' },
-    { repere: 'tableau', texte: 'La proportion reste la même, environ 0,083 par jour : c’est λ·Δt.' },
-    { repere: 'compteur', texte: 'Moins de noyaux, moins de désintégrations : leur nombre est proportionnel à N.' },
+    { repere: 'echantillon', texte: 'Chaque jour, les noyaux qui se désintègrent sont cerclés.' },
+    { repere: 'rangees', texte: 'Chaque noyau parti va au bout de la rangée du jour : la part grise.' },
+    { repere: 'compteur_jour', texte: '33 le premier jour, puis 31, puis 28 : de moins en moins.' },
+    { repere: 'ligne_8', texte: 'Mais à la même longueur, la part grise est la même : environ 8 % chaque jour.' },
+    { repere: 'tableau', texte: 'Le tableau range ces nombres : la proportion vaut environ 0,083 par jour, c’est λ·Δt.' },
   ],
   restants: [
     { repere: 'courbe_restants', texte: 'En jaune, N(t) : les noyaux restants, la courbe descend.' },
@@ -552,7 +664,7 @@ const config = { id: 'radioactivite_population', version: '1.0', title: 'Beaucou
   command_schema: {
     set_parameters: { vue: VUES.join(' | ') + ' (change la vue et relance)', t_demi_j: '2..20 (demi-vie en jours, pas 1 ; relance)', graine: 'entier (autre tirage au hasard, reproductible ; relance)', conclusions: 'true | false (false : la phrase « la même proportion » n’est pas écrite, pour une question d’observation)' },
     set_time: { time_s: '0..fin (arrêt sur cet instant de la scène, en s ; voir moments)' },
-    play_until: { moment: 'hasard : depart | premier | deuxieme | plusieurs | fin ; grand_nombre : depart | un_t_demi | deux_t_demi | trois_t_demi | loi | fin ; proportion : depart | ligne_1 | ligne_2 | ligne_3 | conclusion | fin ; restants : depart | croisement | deux_t_demi | formule | fin', time_s: 'ou un instant en s' } } };
+    play_until: { moment: 'hasard : depart | premier | deuxieme | plusieurs | fin ; grand_nombre : depart | un_t_demi | deux_t_demi | trois_t_demi | loi | fin ; proportion : depart | ligne_1 | ligne_2 | ligne_3 | rapport | tableau | conclusion | fin ; restants : depart | croisement | deux_t_demi | formule | fin', time_s: 'ou un instant en s' } } };
 const pont = protocole({ id: config.id, commandes, config,
   texte: 'Une population de noyaux d’iode 131 (t½ = 8 jours) : un noyau se désintègre au hasard (on ne sait ni lequel ni quand), mais un grand nombre de noyaux suit la loi de décroissance N(t) = N₀·e^(−λt) ; à t½, 2t½, 3t½ il reste N₀/2, N₀/4, N₀/8 ; chaque jour, la même proportion λ·Δt des noyaux restants se désintègre ; les désintégrés N_d = N₀ − N(t) croisent les restants à t½.',
   etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle', ce_qui_se_voit: ceQuiSeVoit(), current_variant: S.vue,

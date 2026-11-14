@@ -3,7 +3,7 @@
 <link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="genetique.css"></head>
 <body>
 <div class="tableau">
-  <section class="scene"><canvas id="canvas" role="img" aria-label="Documents écrits à la craie : la question du chapitre (parents, enfant, cellule-œuf), une courbe d’examen de la quantité d’ADN décrite et expliquée ligne par ligne, le calcul de la durée du cycle et des phases, une question à choix multiple corrigée"></canvas></section>
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Documents écrits à la craie : la question du chapitre (parents, enfant, cellule-œuf), une courbe d’examen de la quantité d’ADN décrite et expliquée ligne par ligne, des cellules peintes qui se divisent dans une boîte de culture puis triées par phase au microscope, avant le calcul de la durée du cycle et des phases, une question à choix multiple corrigée"></canvas></section>
   <footer class="barre">
     <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Lancer</button>
     <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
@@ -17,7 +17,9 @@
  * Documents du chapitre « Notion de l’information génétique » (2 Bac PC BIOF, 11 novembre 2026), écrits à la craie au rythme du tuteur.
  * Vue ouverture : parents, enfant, cellule-œuf et les quatre questions du chapitre.
  * Vue courbe : document d’examen (quantité d’ADN, 0–30 h) puis la réponse rédigée comme le barème (décrire avec les valeurs, expliquer).
- * Vue durees : 2,5·10³ → 10·10³ cellules en 40 h = 2 doublements = 2 cycles → 20 h ; G1 = 45 % × 20 h = 9 h ; S = 20 − (9 + 4 + 1) = 6 h.
+ * Vue durees (14 novembre 2026, règle 28) : d’abord l’animation (boîte de culture, cellules qui se divisent, minuteur, compteur ;
+ *   puis 20 cellules au microscope triées par phase), ensuite le tableau et le calcul : 2 doublements = 2 cycles → 20 h ;
+ *   G1 = 45 % × 20 h = 9 h ; S = 20 − (9 + 4 + 1) = 6 h.
  * Vue restitution : un QCM corrigé leurre par leurre (phase G1).
  */
 const { lisse, rampe, entre, Peint } = window.Etapes;
@@ -109,42 +111,234 @@ function voitCourbe(k) {
   return m;
 }
 
-/* ── Vue durées ─────────────────────────────────────────────────── */
-const MD = { tableau: 2.0, doublements: 4.6, duree_cycle: 6.6, pourcentages: 8.6, duree_g1: 10.6, duree_s: 13.0 };
+/* ── Vue durées (14 novembre 2026 : l’animation d’abord, le tableau ensuite) ─────────────────
+ * ① Une boîte de culture peinte (milieu rose orangé, bord de verre) : dix cellules peintes, une cellule ≈ 250 cellules.
+ *    Le minuteur peint tourne de 0 à 40 h ; à 20 h chaque cellule s’étire, s’étrangle et donne deux cellules, puis encore
+ *    à 40 h. Le compteur monte : 2,5·10³ → 5·10³ → 10·10³ et chaque relevé s’écrit sous le minuteur (0 h, 20 h, 40 h).
+ * ② La boîte s’efface ; les relevés volent dans le tableau « temps / nombre de cellules » ; ×2, ×2 ; 2 doublements = 2 cycles ;
+ *    durée d’un cycle = 40 h / 2 = 20 h.
+ * ③ Une lame au microscope : 20 cellules peintes (1 cellule = 5 %) ; celles en G1, G2 et M sont triées dans leurs colonnes,
+ *    les compteurs montent (45 %, 20 %, 5 %) ; les cellules en S restent sur la lame (« ? ») ; les pourcentages volent dans
+ *    le tableau des phases. Puis les durées : G1 = 45 % × 20 h = 9 h ; G2 4 h ; M 1 h ; S = 20 − (9 + 4 + 1) = 6 h, et les
+ *    six cellules en S rejoignent enfin leur colonne (6 cellules = 30 % = 6 h).
+ */
+const MD = { depart: 3.7, quarante_heures: 7.4, doublements: 13.2, duree_cycle: 19.6, pourcentages: 24.6, duree_g1: 27.6, duree_s: 32.2 };
+const BOITE = { cx: 150, cy: 236, r: 116 }, MINU = { cx: 330, cy: 88, r: 32 };
+const NB = ['2,5·10³', '5·10³', '10·10³'], HEURES = [0, 20, 40];
+const tHeure = h => 4.0 + 3.0 * h / 40;                       // le minuteur : 0 h à 4,0 s, 40 h à 7,0 s
+const heure = t => 40 * Math.min(1, Math.max(0, (t - 4.0) / 3.0));
+const tReleve = [2.0, tHeure(20) + .1, tHeure(40) + .1];
+const LOGY = [196, 220, 244], ROWY = [134, 160, 186];
+const tVolLog = i => 7.9 + i * .3;
+const division = (h, k) => Math.min(1, Math.max(0, (h - (k === 1 ? 16.5 : 36.5)) / 3.5));
+/* Les cellules de la boîte : dix au départ, chacune donne 2 puis 4 cellules (positions fixes, tirées une fois). */
+const CELLS0 = (() => {
+  let s = 977; const rnd = () => { s = (Math.imul(s, 1103515245) + 12345) >>> 0; return s / 4294967296; };
+  const P = [];
+  while (P.length < 10) {
+    const a = rnd() * TAU, d = 18 + rnd() * 62, x = BOITE.cx + Math.cos(a) * d, y = BOITE.cy + Math.sin(a) * d;
+    if (P.every(p => Math.hypot(p.x - x, p.y - y) > 40)) P.push({ x, y, th: rnd() * Math.PI });
+  }
+  return P;
+})();
+const CR = 9;   // rayon d’une cellule peinte
+const TEINTE_BOITE = ['rgba(255,247,235,.92)', 'rgba(244,226,206,.85)', 'rgba(196,150,120,.9)'];
+function boite(x, cx, cy, r, a) {
+  x.save(); x.globalAlpha = a;
+  x.fillStyle = 'rgba(0,0,0,.28)'; x.beginPath(); x.ellipse(cx + 4, cy + 7, r, r * .98, 0, 0, TAU); x.fill();
+  const g = x.createRadialGradient(cx - r * .35, cy - r * .35, r * .1, cx, cy, r);    // milieu de culture (rouge de phénol)
+  g.addColorStop(0, 'rgba(244,140,120,.62)'); g.addColorStop(1, 'rgba(190,70,72,.62)');
+  x.fillStyle = g; x.beginPath(); x.arc(cx, cy, r * .95, 0, TAU); x.fill();
+  x.strokeStyle = 'rgba(225,240,250,.35)'; x.lineWidth = 7; x.beginPath(); x.arc(cx, cy, r * .97, 0, TAU); x.stroke();
+  x.strokeStyle = 'rgba(232,244,252,.9)'; x.lineWidth = 2.4; x.beginPath(); x.arc(cx, cy, r, 0, TAU); x.stroke();
+  x.strokeStyle = 'rgba(255,255,255,.55)'; x.lineWidth = 3; x.lineCap = 'round'; x.beginPath(); x.arc(cx, cy, r * .86, Math.PI * 1.08, Math.PI * 1.42); x.stroke();
+  x.restore();
+}
+function minuteur(x, cx, cy, r, h, a, cycles) {
+  x.save(); x.globalAlpha = a;
+  const gb = x.createRadialGradient(cx - r * .4, cy - r * .4, 2, cx, cy, r + 6); gb.addColorStop(0, '#e5e7eb'); gb.addColorStop(1, '#4b5563');
+  x.fillStyle = gb; x.beginPath(); x.arc(cx, cy, r + 6, 0, TAU); x.fill();
+  x.fillStyle = '#6b7280'; x.fillRect(cx - 5, cy - r - 13, 10, 7);                                    // le bouton du minuteur
+  const gf = x.createRadialGradient(cx - r * .3, cy - r * .3, 2, cx, cy, r); gf.addColorStop(0, '#fffdf5'); gf.addColorStop(1, '#e7dcc4');
+  x.fillStyle = gf; x.beginPath(); x.arc(cx, cy, r, 0, TAU); x.fill();
+  const ang = u => -Math.PI / 2 + u * TAU;
+  if (cycles > 0) {   // les deux cycles : 0–20 h en orange, 20–40 h en bleu
+    for (const [u0, u1, col] of [[0, .5, 'rgba(251,146,60,.55)'], [.5, 1, 'rgba(56,189,248,.5)']]) { x.fillStyle = col; x.globalAlpha = a * cycles; x.beginPath(); x.moveTo(cx, cy); x.arc(cx, cy, r * .9, ang(u0), ang(u1)); x.closePath(); x.fill(); }
+    x.globalAlpha = a;
+  } else if (h > 0) { x.fillStyle = 'rgba(250,204,21,.4)'; x.beginPath(); x.moveTo(cx, cy); x.arc(cx, cy, r * .9, ang(0), ang(h / 40)); x.closePath(); x.fill(); }
+  x.strokeStyle = '#374151';
+  for (let i = 0; i < 40; i += 2) { const an = ang(i / 40), l = i % 10 === 0 ? 7 : 3.5; x.lineWidth = i % 10 === 0 ? 1.8 : 1; x.beginPath(); x.moveTo(cx + Math.cos(an) * (r - 1), cy + Math.sin(an) * (r - 1)); x.lineTo(cx + Math.cos(an) * (r - 1 - l), cy + Math.sin(an) * (r - 1 - l)); x.stroke(); }
+  const an = ang(h / 40);
+  x.strokeStyle = '#b91c1c'; x.lineWidth = 2.4; x.lineCap = 'round'; x.beginPath(); x.moveTo(cx, cy); x.lineTo(cx + Math.cos(an) * r * .8, cy + Math.sin(an) * r * .8); x.stroke();
+  x.fillStyle = '#111827'; x.beginPath(); x.arc(cx, cy, 3, 0, TAU); x.fill();
+  x.restore();
+}
+/** Une cellule peinte dans une phase : G1 petit noyau, S noyau moyen, G2 gros noyau, M chromosomes condensés. */
+function cellulePhase(x, cx, cy, r, phase, a = 1, lueur = 0, teinte) {
+  if (lueur > 0) Peint.halo(x, cx, cy, r * 2.3, 'rgba(253,230,138,.6)', a * lueur);
+  Peint.cellule(x, cx, cy, r, r * .86, a, teinte);
+  if (phase === 'M') { for (let i = 0; i < 3; i++) Peint.chromosome(x, cx + (i - 1) * r * .32, cy, r * .78, Math.PI / 2 + (i - 1) * .3, Peint.VIOLET, { epaisseur: Math.max(1.6, r * .2), deux: true, ecart: r * .11, alpha: a }); }
+  else Peint.noyau(x, cx + r * .05, cy, r * (phase === 'G1' ? .34 : phase === 'S' ? .43 : .52), a, { chromatine: false });
+}
+/** Une cellule de la boîte qui se divise : u = 0 une cellule, 0 < u < 1 elle s’étire et s’étrangle, u = 1 deux cellules. */
+function celluleDivise(x, cx, cy, th, d, u, a) {
+  if (u <= 0) return cellulePhase(x, cx, cy, CR, 'G1', a, 0, TEINTE_BOITE);
+  const e = lisse(u), dx = Math.cos(th) * d * e, dy = Math.sin(th) * d * e, r = CR * (1 - .12 * Math.sin(Math.PI * e));
+  for (const s of [-1, 1]) cellulePhase(x, cx + s * dx, cy + s * dy, r, u < .55 ? 'M' : 'G1', a, 0, TEINTE_BOITE);
+}
+/* La lame au microscope : 20 cellules (1 cellule = 5 % des cellules = 1 h du cycle de 20 h). */
+const PHASES = ['G1', 'S', 'G2', 'M'], NPH = { G1: 9, S: 6, G2: 4, M: 1 }, PCT = { G1: 45, S: null, G2: 20, M: 5 }, DUREE = { G1: 9, S: 6, G2: 4, M: 1 };
+const COLX = { G1: 515, S: 585, G2: 655, M: 725 }, CRAIE_PH = { G1: 'vert', S: 'orange', G2: 'bleu', M: 'violet' };
+const LAME = { cx: 575, cy: 118, rx: 160, ry: 54 }, PIED = 296, TABY = { ph: 324, pct: 352, h: 380 };
+const LAMEC = (() => {
+  const ordre = ['G1', 'S', 'G2', 'G1', 'M', 'S', 'G1', 'G2', 'S', 'G1', 'G1', 'S', 'G2', 'G1', 'S', 'G1', 'G2', 'G1', 'S', 'G1'];
+  const vu = { G1: 0, S: 0, G2: 0, M: 0 };
+  return ordre.map((ph, i) => {
+    const col = i % 10, rang = Math.floor(i / 10), n = vu[ph]++;
+    return { ph, n, x: LAME.cx - 135 + col * 30 + (rang ? 14 : 0), y: LAME.cy - 16 + rang * 32 + ((i * 7) % 5 - 2) * 1.6 };
+  });
+})();
+const caseCol = (ph, n) => [COLX[ph] + (n % 2 ? 11 : -11), PIED - 9 - Math.floor(n / 2) * 18];
+const TRI = LAMEC.filter(c => c.ph !== 'S');
+const tTri = c => 20.4 + TRI.indexOf(c) * (2.1 / (TRI.length - 1));
+const tS = c => 29.8 + c.n * .16;
+const VOLC = .5;
+const tVolPct = j => 23.3 + j * .2;
+function compteur(ph, t) {   // cellules posées dans la colonne
+  return LAMEC.filter(c => c.ph === ph && t >= (ph === 'S' ? tS(c) : tTri(c)) + VOLC).length;
+}
+
 function dessinerDurees(c, k) {
-  const t = k.t;
+  const t = k.t, fondu1 = 1 - rampe(t, 7.6, .5), fondu2 = 1 - rampe(t, 23.2, .5), h = heure(t);
   c.texte('Calculer la durée du cycle et d’une phase', 14, 26, { couleur: 'cyan', taille: 19 });
-  c.repere('tableau', 30, 70, 290, 110, 'le tableau des cellules');
-  if (k.ecrit(c, 'tab', .4)) {
-    k.T(c, 'temps (h)', 50, 96, { couleur: 'faible', taille: 15 }); k.T(c, 'nombre de cellules', 160, 96, { couleur: 'faible', taille: 15 });
-    c.ligne(40, 106, 320, 106, { couleur: 'faible', largeur: 1.2 }); c.ligne(146, 76, 146, 176, { couleur: 'faible', largeur: 1.2 });
-    k.T(c, '0', 90, 136, { couleur: 'blanc', taille: 16, align: 'center' }); k.T(c, '2,5·10³', 230, 136, { couleur: 'blanc', taille: 16, align: 'center' });
-    k.T(c, '40', 90, 166, { couleur: 'blanc', taille: 16, align: 'center' }); k.T(c, '10·10³', 230, 166, { couleur: 'blanc', taille: 16, align: 'center' });
+  // ① peinture : la boîte de culture, le minuteur ; la lame et les cellules triées
+  c.direct(() => {
+    const x = c.ctx;
+    if (fondu1 > 0) {
+      const ab = rampe(t, .2, .6) * fondu1;
+      boite(x, BOITE.cx, BOITE.cy, BOITE.r, ab);
+      minuteur(x, MINU.cx, MINU.cy, MINU.r, h, rampe(t, .5, .5) * fondu1, 0);
+      const ac = rampe(t, .8, .6) * fondu1, u1 = division(h, 1), u2 = division(h, 2);
+      for (const p of CELLS0) {
+        if (u1 < 1) { celluleDivise(x, p.x, p.y, p.th, 12, u1, ac); continue; }
+        for (const s of [-1, 1]) celluleDivise(x, p.x + s * Math.cos(p.th) * 12, p.y + s * Math.sin(p.th) * 12, p.th + Math.PI / 2, 10, u2, ac);
+      }
+    }
+    if (t >= 19.9) {
+      const al = rampe(t, 19.9, .6);
+      // la lame : verre bleuté, lumière du microscope
+      x.save(); x.globalAlpha = al;
+      const g = x.createRadialGradient(LAME.cx, LAME.cy, 10, LAME.cx, LAME.cy, LAME.rx); g.addColorStop(0, 'rgba(255,251,235,.30)'); g.addColorStop(1, 'rgba(186,230,253,.10)');
+      x.fillStyle = g; x.beginPath(); x.ellipse(LAME.cx, LAME.cy, LAME.rx, LAME.ry, 0, 0, TAU); x.fill();
+      x.strokeStyle = 'rgba(226,240,250,.7)'; x.lineWidth = 2; x.stroke(); x.restore();
+      for (const cl of LAMEC) {
+        const t0 = cl.ph === 'S' ? tS(cl) : tTri(cl), [sx, sy] = caseCol(cl.ph, cl.n);
+        const u = t < t0 ? 0 : Math.min(1, (t - t0) / VOLC), e = lisse(u);
+        const px = entre(cl.x, sx, e), py = entre(cl.y, sy, e) - Math.sin(Math.PI * e) * 40;
+        const lueur = (cl.ph === 'G1' && t >= 24.8 && t < MD.duree_g1) || (cl.ph === 'S' && t >= 31.2) ? .8 : 0;
+        cellulePhase(x, px, py, u > 0 && u < 1 ? 10 : 9, cl.ph, al * Math.min(1, u >= 1 ? .55 + .45 * fondu2 + (lueur ? .45 : 0) : 1), lueur);
+      }
+    }
+  });
+  // ② la craie de la boîte : noms, compteur, relevés
+  const W = (nom, tEv, s, xx, yy, o, f) => { if (f >= 1) { if (k.ecrit(c, nom, tEv)) k.T(c, s, xx, yy, o); } else if (t >= tEv && f > 0) c.direct(() => c.texte(s, xx, yy, { ...o, alpha: .96 * f })); };
+  W('bt', .8, 'boîte de culture', BOITE.cx, 378, { couleur: 'faible', taille: 14, align: 'center' }, fondu1);
+  W('leg', 1.2, '1 cellule peinte ≈ 250 cellules', BOITE.cx, 400, { couleur: 'faible', taille: 13, align: 'center' }, fondu1);
+  c.repere('boite', BOITE.cx - BOITE.r, BOITE.cy - BOITE.r, 2 * BOITE.r, 2 * BOITE.r, 'la boîte de culture');
+  c.repere('horloge', MINU.cx - 40, MINU.cy - 46, 130, 86, 'le minuteur');
+  c.repere('compteur', 268, 140, 124, 116, 'le compteur de cellules');
+  if (t >= .9 && fondu1 > 0) c.direct(() => {
+    const n = h >= 40 && division(h, 2) >= 1 ? 2 : division(h, 1) >= 1 ? 1 : 0;
+    c.texte('t = ' + Math.round(h) + ' h', MINU.cx + 44, MINU.cy + 6, { couleur: 'jaune', taille: 16, alpha: .96 * fondu1 });
+    c.texte(NB[n] + ' cellules', MINU.cx, 162, { couleur: 'blanc', taille: 17, align: 'center', alpha: .96 * fondu1 });
+  });
+  // les relevés : écrits sous le compteur, puis ils volent dans le tableau
+  for (let i = 0; i < 3; i++) {
+    const tv = tVolLog(i);
+    if (t < tv) { if (k.ecrit(c, 'log' + i, tReleve[i])) { k.T(c, HEURES[i] + ' h :', 316, LOGY[i], { couleur: 'faible', taille: 15, align: 'right' }); k.T(c, NB[i], 324, LOGY[i], { couleur: 'jaune', taille: 15 }); } }
+    else c.direct(() => {
+      const v = lisse((t - tv) / .7);
+      c.texte(String(HEURES[i]), entre(300, 90, v), entre(LOGY[i], ROWY[i], v), { couleur: v >= 1 ? 'blanc' : 'jaune', taille: 16, align: 'center' });
+      c.texte(NB[i], entre(350, 232, v), entre(LOGY[i], ROWY[i], v), { couleur: v >= 1 ? 'blanc' : 'jaune', taille: 16, align: 'center' });
+    });
   }
-  if (t >= MD.doublements - 1.4) c.repere('chaine', 30, 196, 320, 60, 'les doublements');
-  if (k.ecrit(c, 'dbl', MD.doublements - 1.4)) {
-    k.T(c, '2,5·10³', 40, 236, { couleur: 'blanc', taille: 16 }); c.fleche(104, 230, 150, 230, { couleur: 'orange', largeur: 1.6 }); k.T(c, '×2', 127, 220, { couleur: 'orange', taille: 14, align: 'center' });
-    k.T(c, '5·10³', 156, 236, { couleur: 'blanc', taille: 16 }); c.fleche(204, 230, 250, 230, { couleur: 'orange', largeur: 1.6 }); k.T(c, '×2', 227, 220, { couleur: 'orange', taille: 14, align: 'center' });
-    k.T(c, '10·10³', 256, 236, { couleur: 'blanc', taille: 16 });
-    k.T(c, '2 doublements = 2 cycles', 40, 266, { couleur: 'orange', taille: 15 });
+  // ③ le tableau des cellules, les doublements, la durée d’un cycle
+  if (t >= 6.5) c.repere('tableau', 30, 76, 300, 122, 'le tableau des cellules');
+  if (k.ecrit(c, 'tab', 7.7)) {
+    k.T(c, 'temps (h)', 50, 100, { couleur: 'faible', taille: 15, duree: .3 }); k.T(c, 'nombre de cellules', 160, 100, { couleur: 'faible', taille: 15, duree: .4 });
+    c.ligne(40, 110, 320, 110, { couleur: 'faible', largeur: 1.2, duree: .2 }); c.ligne(146, 80, 146, 196, { couleur: 'faible', largeur: 1.2, duree: .2 });
   }
-  if (t >= MD.duree_cycle - 1.2) c.repere('cycle', 30, 280, 330, 34, 'la durée d’un cycle');
-  if (k.ecrit(c, 'cyc', MD.duree_cycle - 1.2)) k.T(c, 'durée d’un cycle = 40 h / 2 = 20 h', 40, 302, { couleur: 'jaune', taille: 17 });
-  if (k.ecrit(c, 'pct', MD.pourcentages - 1.4)) {
-    c.repere('phases', 400, 70, 340, 110, 'les pourcentages des phases');
-    ['G1', 'S', 'G2', 'M'].forEach((p, i) => { k.T(c, p, 450 + i * 80, 96, { couleur: ['vert', 'orange', 'bleu', 'violet'][i], taille: 16, align: 'center' }); k.T(c, ['45 %', '?', '20 %', '5 %'][i], 450 + i * 80, 136, { couleur: 'blanc', taille: 16, align: 'center' }); });
-    c.ligne(410, 106, 740, 106, { couleur: 'faible', largeur: 1.2 }); k.T(c, '(cycle de 20 h)', 575, 166, { couleur: 'faible', taille: 14, align: 'center' });
+  const arc = (y0, y1, nom, tEv) => {
+    if (!k.ecrit(c, nom, tEv)) return;
+    c.courbe(u => [270 + 26 * Math.sin(Math.PI * u), y0 + (y1 - y0) * u], 14, { couleur: 'orange', largeur: 1.6, duree: .35 });
+    c.fleche(276, y1 - 3, 270, y1, { couleur: 'orange', largeur: 1.6, tete: 7, duree: .05 });
+    k.T(c, '×2', 302, (y0 + y1) / 2 + 5, { couleur: 'orange', taille: 15 });
+  };
+  arc(ROWY[0] - 4, ROWY[1] - 8, 'x2a', 9.9);
+  arc(ROWY[1] - 4, ROWY[2] - 8, 'x2b', 11.7);
+  if (t >= 7.7) c.repere('chaine', 30, 120, 320, 132, 'les doublements');
+  if (k.ecrit(c, 'dbl', 12.7)) k.T(c, '2 doublements = 2 cycles en 40 h', 40, 232, { couleur: 'orange', taille: 15 });
+  if (t >= 13.0) c.repere('cycle', 30, 250, 340, 34, 'la durée d’un cycle');
+  const sCyc = 'durée d’un cycle = 40 h / 2';
+  if (k.ecrit(c, 'cyc', 16.0)) k.T(c, sCyc, 40, 270, { couleur: 'jaune', taille: 17 });
+  if (k.ecrit(c, 'cyc2', 18.9)) k.T(c, ' = 20 h', 40 + c.largeurTexte(sCyc, 17), 270, { couleur: 'jaune', taille: 17 });
+  // ④ la lame : légende, compteurs, puis le tableau des phases
+  if (t >= 19.0) { c.repere('lame', LAME.cx - LAME.rx, LAME.cy - LAME.ry, 2 * LAME.rx, 2 * LAME.ry, 'les cellules au microscope'); c.repere('colonnes', 480, 196, 270, 112, 'les cellules triées par phase'); }
+  if (k.ecrit(c, 'lame', 20.2)) k.T(c, 'au microscope : 20 cellules, 1 cellule = 5 %', LAME.cx, 54, { couleur: 'faible', taille: 13, align: 'center' });
+  c.direct(() => {
+    if (t < 20.4) return;
+    for (const ph of PHASES) {
+      const n = compteur(ph, t), j = PHASES.indexOf(ph), tv = tVolPct(j);
+      const s = ph === 'S' ? '?' : (n * 5) + ' %';
+      if (ph === 'S' ? t < 23.2 : n === 0) continue;
+      if (t < tv) c.texte(s, COLX[ph], 206, { couleur: CRAIE_PH[ph], taille: 16, align: 'center' });
+      else {
+        const v = lisse((t - tv) / .6), fin = v >= 1;
+        if (ph === 'S' && t >= 31.4) {
+          const r = rampe(t, 31.4, .5);
+          c.texte('?', COLX.S, TABY.pct, { couleur: 'orange', taille: 16, align: 'center', alpha: .96 * (1 - r) });
+          c.texte('30 %', COLX.S, TABY.pct, { couleur: 'orange', taille: 16, align: 'center', alpha: .96 * r });
+        } else c.texte(s, COLX[ph], entre(206, TABY.pct, v), { couleur: fin ? 'blanc' : CRAIE_PH[ph], taille: 16, align: 'center' });
+      }
+    }
+  });
+  if (k.ecrit(c, 'tabp', 23.1)) {
+    k.T(c, 'phase', 404, TABY.ph, { couleur: 'faible', taille: 13, duree: .15 }); k.T(c, '% des cellules', 404, TABY.pct, { couleur: 'faible', taille: 13, duree: .3 }); k.T(c, 'durée (h)', 404, TABY.h, { couleur: 'faible', taille: 13, duree: .2 });
+    PHASES.forEach(ph => k.T(c, ph, COLX[ph], TABY.ph, { couleur: CRAIE_PH[ph], taille: 16, align: 'center', duree: .1 }));
+    c.ligne(400, TABY.ph + 8, 752, TABY.ph + 8, { couleur: 'faible', largeur: 1.2, duree: .2 }); c.ligne(492, 304, 492, 392, { couleur: 'faible', largeur: 1.2, duree: .2 });
   }
-  if (k.ecrit(c, 'g1', MD.duree_g1 - 1.4)) { k.T(c, 'G1 = 45 % × 20 h = 9 h', 410, 220, { couleur: 'vert', taille: 17 }); k.T(c, 'G2 = 20 % × 20 h = 4 h ; M = 5 % × 20 h = 1 h', 410, 248, { couleur: 'blanc', taille: 15 }); }
-  if (k.ecrit(c, 's', MD.duree_s - 1.6)) { k.T(c, 'S = 20 − (9 + 4 + 1) = 6 h', 410, 284, { couleur: 'orange', taille: 17 }); c.repere('resultat', 404, 200, 340, 100, 'les durées des phases'); }
+  if (t >= 22.5) c.repere('phases', 398, 304, 356, 92, 'le tableau des phases');
+  // ⑤ les durées : à gauche le calcul, dans le tableau la ligne « durée (h) »
+  if (k.ecrit(c, 'g1', 24.8)) { k.T(c, 'G1 = 45 % × 20 h = 9 h', 40, 314, { couleur: 'vert', taille: 17 }); k.T(c, '1 cellule = 5 % = 1 h du cycle', LAME.cx, 196 - 2, { couleur: 'jaune', taille: 13, align: 'center' }); }
+  if (t >= 24.0) c.repere('g1', COLX.G1 - 26, 210, 52, 180, 'la phase G1');
+  if (k.ecrit(c, 'g2m', 25.9)) k.T(c, 'G2 = 20 % × 20 h = 4 h ; M = 5 % × 20 h = 1 h', 40, 342, { couleur: 'blanc', taille: 15 });
+  ['G1', 'G2', 'M'].forEach((ph, i) => { if (k.ecrit(c, 'h' + ph, 26.4 + i * .3)) k.T(c, String(DUREE[ph]), COLX[ph], TABY.h, { couleur: CRAIE_PH[ph], taille: 16, align: 'center', duree: .15 }); });
+  if (t >= 27.0) c.repere('resultat', 30, 296, 360, 90, 'les durées des phases');
+  if (k.ecrit(c, 's', 28.5)) k.T(c, 'S = 20 − (9 + 4 + 1) = 6 h', 40, 374, { couleur: 'orange', taille: 17 });
+  if (k.ecrit(c, 'hS', 31.4)) k.T(c, '6', COLX.S, TABY.h, { couleur: 'orange', taille: 16, align: 'center', duree: .15 });
+  if (t >= 29.8) c.repere('cellules_s', COLX.S - 26, 220, 52, 90, 'les six cellules en S');
 }
 function voitDurees(k) {
-  const t = k.t, m = ['Tableau : à 0 h, 2,5·10³ cellules ; à 40 h, 10·10³ cellules.'];
-  if (t >= MD.doublements - 1.4) m.push('Écrit : 2,5·10³ ×2 → 5·10³ ×2 → 10·10³ ; « 2 doublements = 2 cycles ».');
-  if (t >= MD.duree_cycle - 1.2) m.push('« durée d’un cycle = 40 h / 2 = 20 h ».');
-  if (t >= MD.pourcentages - 1.4) m.push('Second tableau : G1 45 %, S ?, G2 20 %, M 5 % (cycle de 20 h).');
-  if (t >= MD.duree_g1 - 1.4) m.push('« G1 = 45 % × 20 h = 9 h » ; « G2 = 20 % × 20 h = 4 h ; M = 5 % × 20 h = 1 h ».');
-  if (t >= MD.duree_s - 1.6) m.push('« S = 20 − (9 + 4 + 1) = 6 h ».');
+  const t = k.t, h = heure(t), m = [];
+  if (t < 7.6) {
+    const n = division(h, 2) >= 1 ? 2 : division(h, 1) >= 1 ? 1 : 0, div = (division(h, 1) > 0 && division(h, 1) < 1) || (division(h, 2) > 0 && division(h, 2) < 1);
+    m.push(`Une boîte de culture peinte (milieu rose orangé) : ${[10, 20, 40][n]} cellules peintes (1 cellule ≈ 250 cellules)${div ? ', chacune s’étire, s’étrangle et se divise en deux' : ''}. Minuteur peint : t = ${Math.round(h)} h. Compteur : ${NB[n]} cellules.`);
+    const rel = [0, 1, 2].filter(i => t >= tReleve[i]).map(i => `${HEURES[i]} h : ${NB[i]}`);
+    if (rel.length) m.push('Relevés écrits sous le compteur : ' + rel.join(' ; ') + '.');
+  } else {
+    m.push('La boîte s’efface ; les relevés volent dans le tableau « temps (h) / nombre de cellules » : 0 → 2,5·10³ ; 20 → 5·10³ ; 40 → 10·10³.');
+    if (t >= 9.9) m.push('Flèches orange « ×2 » entre les lignes' + (t >= 11.7 ? ' (deux fois)' : '') + '.');
+    if (t >= 12.7) m.push('Écrit : « 2 doublements = 2 cycles en 40 h ».');
+    if (t >= 16.0) m.push('« durée d’un cycle = 40 h / 2' + (t >= 18.9 ? ' = 20 h ».' : ' ».'));
+  }
+  if (t >= 19.9) {
+    const tri = PHASES.filter(p => p !== 'S').map(p => `${p} ${compteur(p, t)}`).join(', ');
+    m.push(`À droite, une lame au microscope : 20 cellules peintes (1 cellule = 5 %), noyau petit en G1, moyen en S, gros en G2, chromosomes en M. Triées dans leurs colonnes : ${tri}${t >= 29.8 ? `, S ${compteur('S', t)}` : ' ; les 6 cellules en S restent sur la lame (« ? »)'}.`);
+  }
+  if (t >= 23.1) m.push('Tableau des phases : G1 45 %, S ' + (t >= 31.4 ? '30 %' : '?') + ', G2 20 %, M 5 %' + (t >= 26.4 ? ' ; durée (h) : G1 9, G2 4, M 1' + (t >= 31.4 ? ', S 6' : '') : '') + '.');
+  if (t >= 24.8) m.push('Écrit : « G1 = 45 % × 20 h = 9 h », « 1 cellule = 5 % = 1 h du cycle » ; les cellules G1 brillent.');
+  if (t >= 25.9) m.push('« G2 = 20 % × 20 h = 4 h ; M = 5 % × 20 h = 1 h ».');
+  if (t >= 28.5) m.push('« S = 20 − (9 + 4 + 1) = 6 h »' + (t >= 29.8 ? ' ; les six cellules en S rejoignent leur colonne : 6 cellules = 30 % = 6 h.' : '.'));
   return m;
 }
 
@@ -184,10 +378,10 @@ window.Etapes.lancer({
       motifs: { document: 'le document : la quantité d’ADN en fonction du temps', lecture_axes: 'on lit les axes : q = 3 UA, 2q = 6 UA', decrire_g1: 'de 0 à 8 h : constante, 3 UA', decrire_s: 'de 8 à 14 h : de 3 à 6 UA, elle double', decrire_g2: 'de 14 à 19 h : constante, 6 UA', decrire_m: 'de 19 à 20 h : chute de 6 à 3 UA', expliquer: 'l’explication : réplication, puis répartition' },
       conclusion: 'Décrire avec les valeurs, puis expliquer chaque variation par sa cause.', texte: 'Courbe d’examen de la quantité d’ADN (0–30 h) et sa réponse rédigée : description avec les valeurs, puis explication (réplication en S, répartition à la mitose).',
       explication: [{ repere: 'axe_adn', texte: 'On lit d’abord les axes.' }, { repere: 'montee_s', texte: 'De 8 à 14 h, la quantité double : c’est la réplication.' }, { repere: 'chute_m', texte: 'De 19 à 20 h, elle revient à 3 UA : la mitose.' }, { repere: 'reponse', texte: 'La réponse : décrire avec les valeurs, puis expliquer.' }] },
-    durees: { titre: 'Durée du cycle et des phases', fin: 14.2, moments: MD, dessiner: dessinerDurees, voit: voitDurees,
-      motifs: { tableau: 'le tableau : 2,5·10³ cellules à 0 h, 10·10³ à 40 h', doublements: 'deux doublements : deux cycles', duree_cycle: 'un cycle dure 40 h / 2 = 20 h', pourcentages: 'les pourcentages de cellules dans chaque phase', duree_g1: 'G1 = 45 % × 20 h = 9 h', duree_s: 'S = 20 − (9 + 4 + 1) = 6 h' },
-      conclusion: 'Cycle de 20 h ; G1 9 h, S 6 h, G2 4 h, M 1 h.', texte: 'Calcul : 2,5·10³ → 10·10³ cellules en 40 h = 2 doublements = 2 cycles, donc un cycle = 20 h ; durée d’une phase = pourcentage × durée du cycle ; S = 20 − (9 + 4 + 1) = 6 h.',
-      explication: [{ repere: 'chaine', texte: 'Deux doublements : deux cycles.' }, { repere: 'cycle', texte: 'Un cycle dure 40 h divisé par 2, soit 20 h.' }, { repere: 'resultat', texte: 'La durée d’une phase : pourcentage × durée du cycle.' }] },
+    durees: { titre: 'Durée du cycle et des phases', fin: 32.8, moments: MD, dessiner: dessinerDurees, voit: voitDurees,
+      motifs: { depart: 'à 0 h : 2,5·10³ cellules dans la boîte', quarante_heures: 'à 40 h : 10·10³ cellules, chaque cellule s’est divisée deux fois', doublements: 'les relevés dans le tableau : ×2, ×2, deux doublements', duree_cycle: 'un cycle dure 40 h / 2 = 20 h', pourcentages: 'les cellules triées par phase : G1 45 %, G2 20 %, M 5 %, S ?', duree_g1: 'G1 = 45 % × 20 h = 9 h', duree_s: 'S = 20 − (9 + 4 + 1) = 6 h' },
+      conclusion: 'Cycle de 20 h ; G1 9 h, S 6 h, G2 4 h, M 1 h.', texte: 'Animation : une boîte de culture peinte, 2,5·10³ cellules à 0 h ; le minuteur tourne, chaque cellule se divise à 20 h puis à 40 h : 5·10³ puis 10·10³ ; les relevés se rangent dans le tableau, 2 doublements = 2 cycles, un cycle = 20 h. Puis 20 cellules au microscope (1 cellule = 5 %) triées par phase : G1 45 %, G2 20 %, M 5 %, S ? ; durée d’une phase = pourcentage × durée du cycle ; S = 20 − (9 + 4 + 1) = 6 h.',
+      explication: [{ repere: 'boite', texte: 'Les cellules se divisent dans la boîte de culture.' }, { repere: 'chaine', texte: 'Deux doublements : deux cycles.' }, { repere: 'cycle', texte: 'Un cycle dure 40 h divisé par 2, soit 20 h.' }, { repere: 'colonnes', texte: 'Les cellules triées par phase : une cellule = 5 %.' }, { repere: 'resultat', texte: 'La durée d’une phase : pourcentage × durée du cycle.' }] },
     restitution: { titre: 'Restitution : QCM', fin: 12, moments: MRS, dessiner: dessinerRestitution, voit: voitRestitution,
       motifs: { carte: 'la question : en G1, le chromosome est…', elimine_a: 'a est faux : condensé, c’est en mitose', elimine_c: 'c est faux : deux chromatides, c’est après la phase S', elimine_d: 'd est faux : prophase ou métaphase', reponse: 'la réponse : b, une chromatide et non condensé' },
       conclusion: 'G1 : chromosome à une chromatide, non condensé.', texte: 'QCM : en G1, chaque chromosome est à une chromatide et non condensé (b) ; a, c, d éliminés avec leur raison.',
