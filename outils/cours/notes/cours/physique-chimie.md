@@ -534,3 +534,9 @@ contrat : cours/acides_bases_contrat_simulations.md ; tout refaire : `sh outils/
   existe : statut à corriger par la session principale (non touché ici).
 - Reste pour tous : réactions (serveur), voix, validation, lecture dans /dev/course-player.
 
+
+## Passage routine cloud du 14 nov. (16 h 50 UTC)
+- Rien à construire : tous les cours de la liste de la routine sont « construits » (programme_semestre1 le confirme) et la branche
+  n'a reçu aucun commit depuis le contrôle d'ensemble du 12 nov. (contrôles non refaits : rien n'a changé).
+- Décision à prendre par l'utilisateur : arrêter la routine ou lui donner une nouvelle liste (ex. ondes_mecaniques_periodiques à mettre à jour
+  dans programme_semestre1, audits vidéo, relecture dans /dev/course-player).
