@@ -1852,7 +1852,9 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
 
       {/* ── La barre du bas, hors de la scène ── */}
       {/* une seule ligne fine (12 novembre 2026) : boutons en icônes (le texte apparaît sur grand écran et au survol) */}
-      <footer ref={piedRef} data-pied-cours className="shrink-0 z-20 flex flex-nowrap items-center gap-1.5 px-2 py-1.5 border-t border-white/10 bg-black/25">
+      {/* sur téléphone, la barre passe sur deux lignes (14 novembre 2026) : trop large, elle débordait et le lecteur défilait
+          vers « Suite → » quand on le touchait — la fenêtre du cahier de fin de bloc s'ouvrait alors hors de l'écran */}
+      <footer ref={piedRef} data-pied-cours className="shrink-0 z-20 flex flex-wrap sm:flex-nowrap items-center gap-1.5 px-2 py-1.5 border-t border-white/10 bg-black/25">
         {piste?.url && (
           <>
             <button onClick={basculer} className="h-9 w-9 shrink-0 rounded-full bg-white/10 hover:bg-white/20" title={enLecture ? 'Pause' : 'Écouter'}>

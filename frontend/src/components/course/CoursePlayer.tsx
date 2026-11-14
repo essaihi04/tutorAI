@@ -372,7 +372,9 @@ export default function CoursePlayer({
   ) : null;
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-[#07101f] text-white flex flex-col">
+    // overflow-clip, pas hidden : un conteneur « hidden » défile encore quand un bouton qui déborde prend le focus,
+    // et tout le lecteur glissait hors de l'écran sur téléphone (fenêtre du cahier de fin de bloc, 14 novembre 2026)
+    <div className="relative h-full w-full overflow-clip bg-[#07101f] text-white flex flex-col">
       {/* le clavier prend les touches de la matière du cours */}
       <MatiereDuClavier id={deck.stable_id || deck.id} subject={(deck as { subject?: string }).subject} />
       {/* Avancement dans le DECK : deux pixels, comme le fil du tableau. Le
