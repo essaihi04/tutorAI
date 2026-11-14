@@ -32,6 +32,7 @@ CIBLE = RACINE / "frontend" / "public" / "labo"
 PAGES = {
     "index.html": "solution-naoh.html",
     "chimie-dosage-acide-base.html": "chimie-dosage-acide-base.html",
+    "chimie-savon.html": "chimie-savon.html",
     "svt-exao-levures.html": "svt-exao-levures.html",
     "svt-sol-retention.html": "svt-sol-retention.html",
     "svt-sol-ph.html": "svt-sol-ph.html",
