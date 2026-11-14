@@ -34,7 +34,9 @@ SORTIE = Path(tempfile.gettempdir()) / "moalim-cours-ondes"
 PREFIXE = "/cours-ondes"
 DEST = "/var/www/moalim/cours-ondes"
 #: Dossiers copiés en entier : les pages s'y servent de chemins relatifs (ondes.css, commun.js…).
-DOSSIERS = ["media/simulations/physics/ondes-tableau", "media/simulations/shared/tableau"]
+#: `media/audio/reactions` entier (14 novembre 2026) : le lecteur compose certains noms (`cahier-${n}.mp3`), que la
+#: recherche des chemins cités ne peut pas trouver.
+DOSSIERS = ["media/simulations/physics/ondes-tableau", "media/simulations/shared/tableau", "media/audio/reactions"]
 FICHIERS = ["media/simulations/professor-locate.js", "media/avatar/moalim-professeur.glb", "media/avatar/moalim-professeur.png",
             "media/audio/reactions/manifest.json"]
 TEXTE = {".js", ".html", ".css", ".json", ".mjs"}
