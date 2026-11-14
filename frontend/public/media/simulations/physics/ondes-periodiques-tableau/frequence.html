@@ -33,6 +33,30 @@ const vu = nom => S.t >= T()[nom] - 1e-6;
 const yM = t => AMP * Math.sin(2 * Math.PI * t / P.T);
 const N = () => 1 / P.T;
 
+/* ── Peinture des objets réels (canvas brut, AVANT la craie ; règle 32) ─── */
+// Le point M : une perle rouge brillante (bille ombrée) accrochée au milieu qui vibre.
+function peindrePerle(ctx, x, y, r) {
+  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 5; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 3;
+  const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r);
+  g.addColorStop(0, '#ffd2cc'); g.addColorStop(.3, '#f0524a'); g.addColorStop(1, '#7a1410');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+}
+// Le chronomètre : boîtier d'acier, cadran blanc, aiguille rouge (un tour = 1 s).
+function peindreChrono(ctx, x, y, r, t) {
+  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 6; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 3;
+  let g = ctx.createLinearGradient(x - 4, y - r - 9, x + 4, y - r - 9); g.addColorStop(0, '#6b737c'); g.addColorStop(.5, '#e3e7ec'); g.addColorStop(1, '#59616a');
+  ctx.fillStyle = g; ctx.fillRect(x - 3.5, y - r - 8, 7, 7); ctx.fillRect(x - 6, y - r - 11, 12, 4);   // poussoir
+  g = ctx.createRadialGradient(x - r * .4, y - r * .4, r * .2, x, y, r + 4); g.addColorStop(0, '#f0f3f6'); g.addColorStop(.6, '#9aa4ae'); g.addColorStop(1, '#3d444b');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r + 4, 0, Math.PI * 2); ctx.fill(); ctx.shadowColor = 'transparent';
+  g = ctx.createRadialGradient(x, y - r * .3, 2, x, y, r); g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#dcd8cc');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
+  for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i / 10 * 2 * Math.PI, l = i % 5 ? 3 : 5; ctx.beginPath(); ctx.moveTo(x + (r - 1) * Math.cos(a), y + (r - 1) * Math.sin(a)); ctx.lineTo(x + (r - 1 - l) * Math.cos(a), y + (r - 1 - l) * Math.sin(a)); ctx.stroke(); }
+  const a = -Math.PI / 2 + Math.min(1, t) * 2 * Math.PI;
+  ctx.strokeStyle = '#c62828'; ctx.lineWidth = 1.8; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + (r - 4) * Math.cos(a), y + (r - 4) * Math.sin(a)); ctx.stroke();
+  ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(x, y, 2.2, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+}
+
 function dessiner(c) {
   scene.cadre(43);
   c.axe(OX, OY, OX + L1 + 40, OY, [[0, '0'], [0.5 * L1 / (L1 + 40), '0,5 s'], [L1 / (L1 + 40), '1 s']], { taille: 14 });
@@ -44,7 +68,8 @@ function dessiner(c) {
   c.direct(() => {
     const t = Math.min(S.t, 1), joue = S.running || S.pause || S.fait;
     // Le point M qui vibre, et son film qui se trace.
-    c.point(XM, OY - (joue ? yM(t) : 0), 8, 'rouge');
+    peindreChrono(c.ctx, 716, 82, 17, t);
+    peindrePerle(c.ctx, XM, OY - (joue ? yM(t) : 0), 9);
     c.texte('M', XM - 28, OY + 6, { couleur: 'rouge', taille: 17 });
     c.repere('M', XM - 30, OY - AMP - 16, 50, 2 * AMP + 32, 'le point M');
     if (joue && t > 0) c.courbe(u => [OX + u * t * L1, OY - yM(u * t)], Math.max(8, Math.ceil(t * 160)), { couleur: 'jaune', largeur: 2.4 });
@@ -104,7 +129,7 @@ function arreterSiInstantAtteint() {
   return true;
 }
 function ceQuiSeVoit() {
-  const t = Math.min(S.t, 1), m = [`À gauche le point M (rouge) qui monte et descend avec T = ${nb(P.T)} s ; à droite son film y(t), axe du temps de 0 à 1 s.`];
+  const t = Math.min(S.t, 1), m = [`À gauche le point M (perle rouge peinte) qui monte et descend avec T = ${nb(P.T)} s ; à droite son film y(t), axe du temps de 0 à 1 s.`];
   m.push(`Chrono : ${fr(t, 2)} s ; périodes finies : ${Math.floor(t / P.T + 1e-9)} (numérotées en cyan).`);
   if (vu('periode')) m.push(`Écrit sous la première période : T = ${nb(P.T)} s.`);
   if (vu('une_seconde')) m.push(`Écrit : « En 1 s : ${nb(N())} périodes → N = ${nb(N())} Hz ».`);

@@ -42,6 +42,33 @@ const couleurDe = p => VUE === 'temperature' ? (p.theta <= 25 ? 'cyan' : p.theta
 const nomDe = p => VUE === 'temperature' ? `${p.theta} °C` : (p.n !== 2 ? `${fx(p.c)} mol/L ; ${p.n} mmol H₂O₂` : `${fx(p.c)} mol/L`);
 const S = { t: 0, running: false, pause: false, fait: false, cur: null, fantomes: [], montre: {}, jusqua: null, motif: '', emis: 0 };
 
+/** Bécher en verre peint (règle 32 ; même dessin que Peinture.becher de cinetique-tableau/deroule.js) : bord à y, fond à y + h,
+ *  liquide [r, g, b, a] jusqu'à la surface ys, ménisque, reflets, graduations, bec verseur. */
+function peindreBecher(ctx, x, y, w, h, ys, liq) {
+  const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`, fonce = (c, k) => c.map(v => Math.round(v * k)), clair = (c, k) => c.map(v => Math.round(v + (255 - v) * k));
+  const chemin = (x, y, w, h, r) => { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + h - r); ctx.quadraticCurveTo(x, y + h, x + r, y + h); ctx.lineTo(x + w - r, y + h); ctx.quadraticCurveTo(x + w, y + h, x + w, y + h - r); ctx.lineTo(x + w, y); };
+  const c = liq.slice(0, 3), a = liq[3];
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(x + w / 2 + 3, y + h + 3, w * .56, 4.5, 0, 0, Math.PI * 2); ctx.fill();
+  chemin(x, y, w, h, 7); ctx.closePath(); ctx.fillStyle = 'rgba(190,220,240,.09)'; ctx.fill();
+  ctx.save(); chemin(x + 2, y, w - 4, h - 2, 6); ctx.closePath(); ctx.clip();
+  let g = ctx.createLinearGradient(x, 0, x + w, 0);
+  g.addColorStop(0, rgba(fonce(c, .72), Math.min(1, a + .12))); g.addColorStop(.35, rgba(c, a)); g.addColorStop(.6, rgba(clair(c, .18), a)); g.addColorStop(1, rgba(fonce(c, .68), Math.min(1, a + .15)));
+  ctx.fillStyle = g; ctx.fillRect(x, ys, w, y + h - ys); ctx.restore();
+  ctx.fillStyle = rgba(clair(c, .35), Math.min(1, a * .9 + .08)); ctx.beginPath(); ctx.ellipse(x + w / 2, ys, w / 2 - 2, 3.2, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = rgba(clair(c, .6), .55); ctx.lineWidth = 1; ctx.stroke();
+  ctx.fillStyle = 'rgba(220,238,250,.28)'; ctx.fillRect(x + 6, y + h - 3, w - 12, 3);
+  ctx.strokeStyle = 'rgba(225,240,252,.8)'; ctx.lineWidth = 1.8; chemin(x, y, w, h, 7); ctx.stroke();
+  g = ctx.createLinearGradient(x + 3, 0, x + 12, 0); g.addColorStop(0, 'rgba(255,255,255,.5)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g; ctx.fillRect(x + 3, y + 8, 9, h - 18);
+  ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(x + w - 5, y + 10); ctx.lineTo(x + w - 5, y + h - 14); ctx.stroke();
+  ctx.strokeStyle = 'rgba(235,245,255,.45)'; ctx.lineWidth = 1;
+  for (let k = 1; k <= 3; k++) { const yy = y + h - k * h / 4.2; ctx.beginPath(); ctx.moveTo(x + w - 18, yy); ctx.lineTo(x + w - 9, yy); ctx.stroke(); }
+  ctx.strokeStyle = 'rgba(240,248,255,.9)'; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.ellipse(x + w / 2, y, w / 2, 2.6, 0, Math.PI, 2 * Math.PI); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x - 6, y - 1, x - 7, y - 5); ctx.stroke();
+  ctx.restore();
+}
+
 function dessiner(c) {
   scene.cadre(17);
   c.texte('H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O', 300, 24, { couleur: 'blanc', taille: 17, align: 'center' });
@@ -54,11 +81,10 @@ function dessiner(c) {
   c.repere('axe_t', AX + 40, AY - 26, AX1 - AX - 40, 52, 'l’axe horizontal : le temps t, en min');
   // Le bécher (à droite) : sa teinte suit la quantité de diiode formé.
   const BX = 600, BY = 70, BW = 90, BH = 110;
-  c.ligne(BX, BY, BX, BY + BH); c.ligne(BX, BY + BH, BX + BW, BY + BH); c.ligne(BX + BW, BY + BH, BX + BW, BY);
   c.direct(() => {
     const p = S.cur ? S.cur.p : P, tt = Math.min(S.t, TMAX), n = S.cur ? nDe(tt, p) : 0, f = Math.min(1, n / 4);
-    const ctx = c.ctx; ctx.save(); ctx.globalAlpha = 0.08 + 0.75 * f; ctx.fillStyle = `rgb(${Math.round(250 - 112 * f)},${Math.round(220 - 145 * f)},${Math.round(120 - 102 * f)})`;
-    ctx.fillRect(BX + 3, BY + 22, BW - 6, BH - 25); ctx.restore();
+    // Peint (règle 32) : le bécher en verre ; le mélange incolore jaunit puis brunit avec le diiode formé.
+    peindreBecher(c.ctx, BX, BY, BW, BH, BY + 22, f < 0.01 ? [215, 230, 240, 0.22] : [Math.round(245 - 75 * f), Math.round(215 - 137 * f), Math.round(140 - 126 * f), 0.3 + 0.6 * f]);
     c.repere('becher', BX - 8, BY - 6, BW + 16, BH + 14, 'le bécher : il brunit quand le diiode se forme');
     c.texte(VUE === 'temperature' ? `θ = ${p.theta} °C` : `[I⁻]₀ = ${fx(p.c)} mol/L`, 645, 212, { couleur: couleurDe(p), taille: 16, align: 'center' });
     c.texte(VUE === 'temperature' ? `[I⁻]₀ = 0,1 mol/L` : `θ = 20 °C`, 645, 234, { couleur: 'faible', taille: 14, align: 'center' });

@@ -33,14 +33,30 @@ const MONTEE = 2.4;                                     // s d'image pour établ
 const S = { f: 0, running: false, pause: false, fait: false, donnees: false, calcul: false, cur: null, avant: null, motif: '', emis: 0 };
 const iDe = f => (S.cur ? S.cur.I : P.I) * Math.min(1, (1 - Math.exp(-4 * f)) / (1 - Math.exp(-4)));
 
+/* ── Peinture de l'objet réel (canvas brut, AVANT la craie ; règle 32) ─── */
+// La bobine : mandrin clair, spires de cuivre serrées avec reflet, deux fils de sortie en cuivre.
+function peindreBobine(ctx, x, y, w, h, n) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(x + w / 2 + 3, y + h + 5, w / 2 + 6, 4, 0, 0, Math.PI * 2); ctx.fill();
+  const m = ctx.createLinearGradient(0, y - 5, 0, y + h + 5); m.addColorStop(0, '#efe2c4'); m.addColorStop(.5, '#d2bd92'); m.addColorStop(1, '#8f7a55');
+  ctx.fillStyle = m; ctx.beginPath(); ctx.roundRect(x - 6, y - 5, 7, h + 10, 2); ctx.fill(); ctx.beginPath(); ctx.roundRect(x + w - 1, y - 5, 7, h + 10, 2); ctx.fill();
+  const sw = w / n;
+  for (let k = 0; k < n; k++) {
+    const sx = x + 1 + k * sw, g = ctx.createLinearGradient(0, y, 0, y + h);
+    g.addColorStop(0, '#7c2d12'); g.addColorStop(.22, '#ea7a35'); g.addColorStop(.42, '#ffd7a8'); g.addColorStop(.68, '#d4601e'); g.addColorStop(1, '#5e200c');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(sx, y, sw - .9, h, sw / 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
 function dessiner(c) {
   scene.cadre(29);
+  c.direct(() => peindreBobine(c.ctx, 52, 140, 116, 26, 14));
   c.texte('E_m = ½·L·I₀²', 380, 30, { couleur: 'jaune', taille: 22, align: 'center' });
   c.repere('formule', 290, 6, 180, 32, 'E_m = ½·L·I₀² : le courant est au carré');
-  // La bobine : des spires entre deux fils.
-  c.ligne(20, 160, 50, 160);
-  c.courbe(u => { const a = u * 5 * 2 * Math.PI; return [50 + u * 120 + 9 * Math.sin(a), 160 - 22 * Math.abs(Math.sin(a / 2))]; }, 120, { couleur: 'orange', largeur: 2.4 });
-  c.ligne(170, 160, 205, 160);
+  // La bobine (peinte ci-dessus : mandrin et spires de cuivre) entre deux fils.
+  c.ligne(20, 153, 46, 153);
+  c.ligne(174, 153, 205, 153);
   c.texte('L', 110, 196, { couleur: 'cyan', taille: 18, align: 'center' });
   c.repere('bobine', 14, 120, 200, 86, 'la bobine d’inductance L');
   // Le quadrillage des carreaux de 0,5 A × 0,5 A.
@@ -60,7 +76,7 @@ function dessiner(c) {
     c.texte(`L = ${fx(p.L, 2)} H`, 30, 248, { couleur: 'cyan', taille: 18 });
     c.texte(`I₀ = ${fx(p.I, 2)} A`, 30, 276, { couleur: 'rose', taille: 18 });
     c.repere('donnees', 22, 228, 180, 56, 'les données : L et I₀');
-    if (S.cur) { c.texte(`i = ${fx(i, 2)} A`, 30, 308, { couleur: 'faible', taille: 16 }); c.fleche(70, 136, 140, 136, { couleur: 'rose', largeur: 2, tete: 9 }); c.texte('i', 105, 128, { couleur: 'rose', taille: 15, align: 'center' }); }
+    if (S.cur) { c.texte(`i = ${fx(i, 2)} A`, 30, 308, { couleur: 'faible', taille: 16 }); c.fleche(70, 126, 140, 126, { couleur: 'rose', largeur: 2, tete: 9 }); c.texte('i', 105, 118, { couleur: 'rose', taille: 15, align: 'center' }); }
     // Le carré de côté i, puis celui d'avant en pointillés.
     if (S.avant) { const a = S.avant.I * KQ; c.rect(QX, QY - a, a, a, { arrondi: 1, couleur: 'faible', pointille: [5, 4], tremble: 0 }); }
     if (S.cur && i > 0) {
@@ -135,7 +151,7 @@ function playUntil(q) {
 }
 function ceQuiSeVoit() {
   const p = S.cur || P;
-  const m = [`Bobine L = ${fx(p.L, 2)} H, I₀ = ${fx(p.I, 2)} A écrits à gauche ; au milieu un quadrillage de carreaux de 0,5 A × 0,5 A ; à droite la barre E_m (0 à 0,2 J).`];
+  const m = [`Bobine peinte (spires de cuivre sur un mandrin) L = ${fx(p.L, 2)} H, I₀ = ${fx(p.I, 2)} A écrits à gauche ; au milieu un quadrillage de carreaux de 0,5 A × 0,5 A ; à droite la barre E_m (0 à 0,2 J).`];
   if (S.calcul || S.cur) m.push(`Écrit en haut : E_m = ½ × ${fx(p.L, 2)} × ${fx(p.I, 2)}².`);
   if (S.cur) m.push(`i = ${fx(iDe(S.f), 2)} A : le carré rose de côté i a l’aire de ${fx((iDe(S.f) / 0.5) ** 2, 2)} carreau(x) ; la barre verte vaut ${fx(Em(S.cur.L, iDe(S.f)))} J.`);
   if (S.cur && S.fait) m.push(`Résultat écrit : E_m = ${fx(Em(S.cur.L, S.cur.I))} J.`);

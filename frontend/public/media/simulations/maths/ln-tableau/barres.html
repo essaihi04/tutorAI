@@ -15,7 +15,7 @@
 <script>
 /*
  * Cours « Fonctions logarithmiques » (math_ch5_fonctions_ln), 14 novembre 2026 (professeur règle 28 : montrer au lieu
- * d'écrire). Des barres à la craie, une hauteur = un ln.
+ * d'écrire). Des barres, une hauteur = un ln ; les blocs sont peints en bois laqué (règle 32 : réalisme), la craie écrit les ln.
  * Vues : ?vue=produit (diapo ln_a1 ; curseurs a et b, entiers de 1 à 5) : ln a et ln b à la calculatrice, ln(ab),
  *          puis ln a et ln b empilées : la pile arrive exactement à la hauteur de ln(ab).
  *          Moments deux, trois, six, somme, produit, regle. Repères a, b, ab, somme, produit, regle.
@@ -24,15 +24,15 @@
  *          Moments carre, puissance, racine_produit, racine, generale, exemple, resultat.
  *          Repères carre, puissance, racine, generale, exemple, resultat.
  */
-const { fr } = MathsTableau;
+const { fr, peindre, bloc } = MathsTableau;
 const ln = Math.log;
 const BASE = 330, U = 56;            // ligne de base des barres, pixels par unité de ln
 const f2 = v => v.toFixed(2).replace('.', ',');   // toujours deux décimales : 1,10 comme à la calculatrice
 
-/** Une barre verticale de hauteur h (en unités de ln) posée sur y0 ; couleur ; renvoie le haut (px). */
+/** Une barre verticale de hauteur h (en unités de ln) posée sur y0 : un bloc de bois peint (règle 32) ; renvoie le haut (px). */
 function barre(c, x, y0, h, w, couleur, o = {}) {
   const H = Math.max(0, h * U);
-  if (H > 0.5) c.rect(x - w / 2, y0 - H, w, H, { couleur, fond: couleur, fondAlpha: .3, arrondi: 3, largeur: 1.6, duree: o.duree });
+  if (H > 0.5) peindre(c, o.duree ?? .35, () => bloc(c, x - w / 2, y0 - H, w, H, couleur));
   else c.ligne(x - w / 2, y0, x + w / 2, y0, { couleur, largeur: 2.4, duree: o.duree });
   return y0 - H;
 }
@@ -105,12 +105,12 @@ const produit = {
   ],
 };
 
-/** Une pile de blocs « ln a » (k peut se terminer par un demi-bloc) ; renvoie le haut (px). */
+/** Une pile de blocs « ln a », peints (k peut se terminer par un demi-bloc) ; renvoie le haut (px). */
 function pile(c, x, k, H, couleur, etiquette, o = {}) {
   let y = BASE;
   for (let i = 0; i < Math.ceil(k - 1e-9); i++) {
     const part = Math.min(1, k - i), h = part * H;
-    c.rect(x - 32, y - h, 64, h, { couleur, fond: couleur, fondAlpha: part < 1 ? .5 : .28, arrondi: 3, largeur: 1.5, duree: o.duree ?? .25 });
+    peindre(c, o.duree ?? .25, () => bloc(c, x - 32, y - h, 64, h, couleur, { clair: part < 1 }));
     if (h > 16) c.texte(part < 1 ? '½' : etiquette, x, y - h / 2 + 6, { couleur, taille: 15, align: 'center', duree: o.duree ?? .1 });
     y -= h;
   }
@@ -141,7 +141,7 @@ const puissance = {
     K.marque('puissance');
     c.pause(.3);
     // ln √a : un bloc coupé en deux moitiés.
-    c.rect(318, BASE - H, 64, H, { couleur: 'orange', fond: 'orange', fondAlpha: .2, arrondi: 3, largeur: 1.5 });
+    peindre(c, .3, () => bloc(c, 318, BASE - H, 64, H, 'orange'));
     c.texte(`ln ${a}`, 350, BASE - H - 10, { couleur: 'orange', taille: 16, align: 'center' });
     c.ligne(318, BASE - H / 2, 382, BASE - H / 2, { couleur: 'orange', largeur: 2, pointille: [5, 4] });
     c.texte(`√${a} × √${a} = ${a}`, 350, BASE + 26, { couleur: 'orange', taille: 17, align: 'center' });
@@ -169,7 +169,7 @@ const puissance = {
       for (const w of parts) {
         const part = Math.min(w, Math.max(0, reste)); if (part <= 0) break;
         const h = part * H;
-        c.rect(x - 32, yy - h, 64, h, { couleur: 'rose', fond: 'rose', fondAlpha: w < 1 ? .5 : .28, arrondi: 3, largeur: 1.5, duree: 0 });
+        bloc(c, x - 32, yy - h, 64, h, 'rose', { clair: w < 1 });
         if (h > 14) c.texte(w < 1 ? '½ ln 2' : 'ln 2', x, yy - h / 2 + 6, { couleur: 'rose', taille: 14, align: 'center', duree: 0 });
         yy -= h; reste -= w;
       }

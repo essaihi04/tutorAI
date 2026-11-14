@@ -41,6 +41,52 @@ const vu = nom => S.t >= T()[nom] - 1e-6;
 const sci = v => { const e = Math.floor(Math.log10(v)); return `${fr(v / 10 ** e, 2)}·10^{${e}}`; };
 const position = p => { const t = S.t - T0; if (t <= 0) return XL; const xv = XL + VPX * t; return xv <= XV ? xv : Math.min(XR, XV + (VPX / p.n()) * (S.t - tEntree)); };
 
+/* ── Peinture des objets réels (canvas brut, AVANT la craie ; règle 32) ─── */
+// Un bloc du milieu, en coupe : air (à peine teinté), eau dans une cuve de verre, verre ou diamant taillé.
+function peindreBloc(ctx, p) {
+  const x = XV + 2, w = XR - XV - 4, y = p.y - 26, h = 52, n = p.n();
+  ctx.save();
+  if (p.id === 'air') {
+    const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, 'rgba(180,220,255,.05)'); g.addColorStop(.5, 'rgba(180,220,255,.13)'); g.addColorStop(1, 'rgba(180,220,255,.05)');
+    ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = 'rgba(210,235,255,.3)';
+    for (let i = 0; i < 26; i++) { ctx.beginPath(); ctx.arc(x + ((i * .618) % 1) * w, y + 4 + ((i * .382 * 5) % 1) * (h - 8), 1, 0, Math.PI * 2); ctx.fill(); }
+  } else if (p.id === 'eau') {
+    // Cuve de verre : parois claires ; l'eau bleue translucide, surface claire en haut.
+    const ys = y + 6, g = ctx.createLinearGradient(0, ys, 0, y + h); g.addColorStop(0, 'rgba(110,190,245,.36)'); g.addColorStop(1, 'rgba(20,80,170,.48)');
+    ctx.fillStyle = g; ctx.fillRect(x, ys, w, y + h - ys);
+    ctx.strokeStyle = 'rgba(225,245,255,.85)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x, ys); ctx.lineTo(x + w, ys); ctx.stroke();
+    ctx.strokeStyle = 'rgba(200,230,240,.5)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, y - 2); ctx.lineTo(x, y + h); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w, y - 2); ctx.stroke();
+  } else if (n > 1.0001) {
+    // Verre (ou diamant) : bloc taillé, teinte verdâtre qui fonce avec n, chanfreins et reflets.
+    const k = clamp((n - 1) / 1.4), diamant = n >= 2.4;
+    ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 8; ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 4;
+    const g = ctx.createLinearGradient(x, y, x + w * .4, y + h);
+    if (diamant) { g.addColorStop(0, 'rgba(235,248,255,.55)'); g.addColorStop(.5, 'rgba(170,215,240,.32)'); g.addColorStop(1, 'rgba(225,240,255,.5)'); }
+    else { g.addColorStop(0, `rgba(200,240,235,${(.22 + .25 * k).toFixed(3)})`); g.addColorStop(.6, `rgba(110,185,180,${(.2 + .3 * k).toFixed(3)})`); g.addColorStop(1, `rgba(70,140,140,${(.28 + .3 * k).toFixed(3)})`); }
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 3); ctx.fill(); ctx.shadowColor = 'transparent';
+    ctx.strokeStyle = 'rgba(230,255,250,.7)'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(x + 2, y + h - 2); ctx.lineTo(x + 2, y + 2); ctx.lineTo(x + w - 2, y + 2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(30,70,70,.55)'; ctx.beginPath(); ctx.moveTo(x + w - 1, y + 2); ctx.lineTo(x + w - 1, y + h - 1); ctx.lineTo(x + 2, y + h - 1); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.beginPath(); ctx.moveTo(x + 20, y + 3); ctx.lineTo(x + 60, y + 3); ctx.lineTo(x + 34, y + h - 3); ctx.lineTo(x + 8, y + h - 3); ctx.closePath(); ctx.fill();
+    if (diamant) for (const [a, b] of [[.3, .3], [.62, .7], [.85, .25]]) {
+      const sx = x + a * w, sy = y + b * h; ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(sx - 5, sy); ctx.lineTo(sx + 5, sy); ctx.moveTo(sx, sy - 5); ctx.lineTo(sx, sy + 5); ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+// La source : une petite lampe-torche (corps sombre, lentille qui brille quand elle est allumée).
+function peindreLampe(ctx, y, allumee) {
+  const x = XL - 4;
+  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 4; ctx.shadowOffsetY = 2;
+  let g = ctx.createLinearGradient(0, y - 6, 0, y + 6); g.addColorStop(0, '#6b737c'); g.addColorStop(.4, '#c9d0d7'); g.addColorStop(1, '#3a4148');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x - 26, y - 5, 18, 10, 2); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(x - 9, y - 5); ctx.lineTo(x, y - 8); ctx.lineTo(x, y + 8); ctx.lineTo(x - 9, y + 5); ctx.closePath(); ctx.fill(); ctx.shadowColor = 'transparent';
+  g = ctx.createRadialGradient(x, y, 1, x, y, allumee ? 14 : 7); g.addColorStop(0, allumee ? '#fffbe6' : '#c8d2da'); g.addColorStop(1, allumee ? 'rgba(255,245,200,0)' : 'rgba(150,165,175,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, allumee ? 14 : 7, -Math.PI / 2, Math.PI / 2); ctx.fill();
+  ctx.restore();
+}
+
 function dessiner(c) {
   scene.cadre(23);
   // Deux colonnes : le vide à gauche, le milieu à droite.
@@ -51,9 +97,10 @@ function dessiner(c) {
   c.repere('milieu', XV, 10, XR - XV, 350, 'le milieu, à droite');
   for (const p of PISTES) {
     c.ligne(XL, p.y + 22, XR, p.y + 22, { couleur: 'tresfaible', largeur: 1, duree: .15 });
-    c.rect(XV, p.y - 26, XR - XV, 52, { couleur: 'tresfaible', largeur: 1.2, fond: p.couleur, fondAlpha: .06 + .05 * (PISTES.indexOf(p)), duree: .2 });
   }
   c.direct(() => {
+    // Les blocs (air, eau dans sa cuve, verre ou diamant) et les lampes sont peints, sous la craie.
+    for (const p of PISTES) { peindreBloc(c.ctx, p); peindreLampe(c.ctx, p.y, S.running || S.pause || S.fait); }
     c.texte('c = 3,00·10⁸ m/s', XL + 6, 62, { couleur: 'jaune', taille: 16 });
     for (const p of PISTES) {
       const n = p.n(), x = position(p), dans = x > XV, lam = dans ? 14 / n : 14, k = 2 * Math.PI / lam;
@@ -110,7 +157,7 @@ function arreterSiInstantAtteint() {
   return true;
 }
 function ceQuiSeVoit() {
-  const m = [`Deux colonnes : le vide à gauche, le milieu à droite. Trois pistes : air (n ≈ 1), eau (1,33), ${nomPiste(PISTES[2]).toLowerCase()} (n = ${fr(P.n, 2)}). Écrit en haut à gauche : c = 3,00·10⁸ m/s.`];
+  const m = [`Deux colonnes : le vide à gauche, le milieu à droite. Trois pistes : air (n ≈ 1), eau (1,33), ${nomPiste(PISTES[2]).toLowerCase()} (n = ${fr(P.n, 2)}) ; les milieux sont peints (air léger, eau bleue dans une cuve de verre, bloc de verre verdâtre), une lampe au départ de chaque piste. Écrit en haut à gauche : c = 3,00·10⁸ m/s.`];
   if (S.t <= T0) m.push('Les éclairs ne sont pas encore partis.');
   else if (S.t < tEntree) m.push('Les trois éclairs avancent ensemble dans le vide, à la même vitesse c.');
   else m.push('Dans le milieu, chaque éclair ralentit et son onde se resserre ; l’air est devant, le verre derrière.');

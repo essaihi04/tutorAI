@@ -37,11 +37,43 @@ const S = { etape: -1, f: 0, running: false, pause: false, fait: false, motif: '
 const Ceq = () => VUE === 'parallele' ? P.C1 + P.C2 : P.C1 * P.C2 / (P.C1 + P.C2);
 const voit = nom => S.etape >= ETAPES.indexOf(nom);
 
+/* ── Peinture des objets réels (règle 32) : armatures en aluminium, générateur en coffret ; la craie garde fils, charges, lettres. ── */
+function sphere(ctx, x, y, r, [clair, milieu, sombre]) {
+  const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r); g.addColorStop(0, clair); g.addColorStop(.45, milieu); g.addColorStop(1, sombre);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+}
+/** Une armature : plaque d'aluminium vue sur la tranche (reflet clair, bord sombre), liseré de la couleur du condensateur. */
+function armature(ctx, x0, x1, y, couleur) {
+  const e = 5;
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(x0 + 2, y - e / 2 + 3, x1 - x0, e);
+  const g = ctx.createLinearGradient(0, y - e / 2, 0, y + e / 2); g.addColorStop(0, '#f2f5f8'); g.addColorStop(.45, '#b9c2cb'); g.addColorStop(1, '#5d6670');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x0, y - e / 2, x1 - x0, e, 1.5); ctx.fill();
+  ctx.strokeStyle = couleur; ctx.globalAlpha = .8; ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.restore();
+}
+/** Générateur : coffret gris, afficheur « 6 V », borne rouge (+) en haut, noire (−) en bas. */
+function peindreGenerateur(ctx, x, y, w, h) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(x + 3, y + 4, w, h, 6); ctx.fill();
+  const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#5b6670'); g.addColorStop(.5, '#3b444c'); g.addColorStop(1, '#262c32');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 6); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1; ctx.stroke();
+  const ex = x + w * .12, ey = y + h * .34, ew = w * .76, eh = h * .3;
+  ctx.fillStyle = '#0d1a10'; ctx.beginPath(); ctx.roundRect(ex, ey, ew, eh, 3); ctx.fill();
+  ctx.fillStyle = '#7dfc8a'; ctx.font = `600 ${Math.round(eh * .72)}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('6V', ex + ew / 2, ey + eh / 2 + 1);
+  sphere(ctx, x + w / 2, y, 4.2, ['#ffd0d0', '#e0393e', '#6d0f12']);
+  sphere(ctx, x + w / 2, y + h, 4.2, ['#9aa0a6', '#2b2f33', '#050607']);
+  ctx.restore();
+}
+const COULEUR_PEINT = { cyan: '#22d3ee', vert: '#4ade80' };
+
 /** Un condensateur horizontal (armatures l'une au-dessus de l'autre) centré en (cx, cy), avec ses charges. */
 function condensateur(c, cx, cy, C, q, couleur, nom) {
   const w = Math.max(14, C * KW), g = 14;
-  c.ligne(cx - w / 2, cy - g / 2, cx + w / 2, cy - g / 2, { couleur, largeur: 3.6, tremble: 0 });
-  c.ligne(cx - w / 2, cy + g / 2, cx + w / 2, cy + g / 2, { couleur, largeur: 3.6, tremble: 0 });
+  armature(c.ctx, cx - w / 2, cx + w / 2, cy - g / 2, COULEUR_PEINT[couleur] || couleur);
+  armature(c.ctx, cx - w / 2, cx + w / 2, cy + g / 2, COULEUR_PEINT[couleur] || couleur);
   const n = Math.round(q / QPT);
   for (let k = 0; k < n; k++) {
     const x = cx - w / 2 + (k + 0.5) * w / n;
@@ -51,8 +83,9 @@ function condensateur(c, cx, cy, C, q, couleur, nom) {
 }
 function generateur(c, x, y1, y2) {
   const ym = (y1 + y2) / 2;
-  c.ligne(x, y1, x, ym - 18); c.ligne(x - 16, ym - 8, x + 16, ym - 8, { largeur: 3 }); c.ligne(x - 9, ym + 8, x + 9, ym + 8, { largeur: 5 }); c.ligne(x, ym + 8, x, y2);
-  c.texte('+', x + 22, ym - 10, { couleur: 'rouge', taille: 16 }); c.texte('u = 6 V', x - 14, ym + 5, { couleur: 'jaune', taille: 15, align: 'right' });
+  c.direct(() => peindreGenerateur(c.ctx, x - 18, ym - 26, 36, 52));
+  c.ligne(x, y1, x, ym - 30); c.ligne(x, ym + 30, x, y2);
+  c.texte('+', x + 24, ym - 18, { couleur: 'rouge', taille: 16 }); c.texte('u = 6 V', x - 24, ym + 5, { couleur: 'jaune', taille: 15, align: 'right' });
   c.repere('generateur', x - 70, ym - 30, 100, 60, 'le générateur : u = 6 V');
 }
 
@@ -161,6 +194,7 @@ function ceQuiSeVoit() {
   const ce = Ceq(), f = S.f;
   const m = [VUE === 'parallele' ? `Générateur 6 V et deux condensateurs en parallèle, C₁ = ${P.C1} µF, C₂ = ${P.C2} µF (largeur des armatures proportionnelle à C).`
     : `Générateur 6 V et deux condensateurs en série, C₁ = ${P.C1} µF en haut, C₂ = ${P.C2} µF en bas.`];
+  m.push('Le générateur est un coffret gris peint (afficheur 6 V) ; les armatures sont des plaques d’aluminium peintes.');
   if (f <= 0) m.push('Pas encore chargés.');
   else if (VUE === 'parallele') m.push(`Chargés à ${fx(100 * f, 0)} % : u₁ = u₂ = ${fx(U * f, 1)} V, q₁ = ${fx(P.C1 * U * f, 0)} µC, q₂ = ${fx(P.C2 * U * f, 0)} µC (points + rouges et − bleus).`);
   else m.push(`Chargés à ${fx(100 * f, 0)} % : même charge q = ${fx(ce * U * f, 0)} µC sur les deux, u₁ = ${fx(ce * U * f / P.C1, 1)} V, u₂ = ${fx(ce * U * f / P.C2, 1)} V.`);

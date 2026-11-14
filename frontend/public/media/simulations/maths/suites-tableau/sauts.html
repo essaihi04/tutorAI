@@ -17,20 +17,51 @@
  * Cours « Suites numériques » (math_ch3_suites_numeriques), diapos su_a5_terme_arith et su_a7_terme_geo
  * (14 novembre 2026, professeur règle 28). Une rangée de cases u₀ … u₈ ; pour aller de la case p à la case n,
  * on fait n − p sauts de « + r » (arithmétique) ou de « × q » (géométrique) : la formule du terme général est le
- * compte des sauts. Les sauts partent de la case p (général), puis de u₀, puis de u₁.
+ * compte des sauts. Peints (règle 32 : réalisme) : les cases en dalles de pierre et un caillou qui saute ; la craie écrit le reste. Les sauts partent de la case p (général), puis de u₀, puis de u₁.
  * Vues : ?vue=arith (curseurs n et r ; moments cases, formule, p_zero, p_un, exemple : u₀ = 2, r = 3, les valeurs
  *        s'écrivent dans les cases) | geo (curseur n ; moments cases, formule, p_zero, p_un, q_zero : n = 0, aucun saut,
  *        q⁰ = 1, on retrouve u₀).
  * Repères : cases, sauts, compte, formule, p_zero, p_un, exemple / q_zero.
  */
-const { fr } = MathsTableau;
+const { fr, peindre } = MathsTableau;
 const NB = 9, CX = i => 62 + i * 79, BY = 150, BW = 56, BH = 40;
 const DUREE_SAUT = .45;
 
-/** Les cases u₀ … u₈ ; la case de départ en cyan, celle d'arrivée en jaune (dessin direct, selon la phase). */
+/** Une dalle de pierre, peinte (règle 32) : ardoise grise, dégradé, grain, arête claire, ombre portée. */
+function dalle(ctx, x, y, w, h, i) {
+  const forme = () => { ctx.beginPath(); ctx.roundRect(x, y, w, h, 6); };
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,.55)'; ctx.shadowBlur = 8; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 4;
+  const g = ctx.createLinearGradient(x, y, x + w * .4, y + h);
+  g.addColorStop(0, '#7d8288'); g.addColorStop(.45, '#5c6167'); g.addColorStop(1, '#3d4146');
+  forme(); ctx.fillStyle = g; ctx.fill();
+  ctx.restore();
+  ctx.save(); forme(); ctx.clip();
+  // Grain de la pierre (fixe pour chaque dalle).
+  for (let k = 0; k < 26; k++) {
+    const a = Math.sin(i * 91.7 + k * 12.9898) * 43758.5453, b = Math.sin(i * 47.3 + k * 78.233) * 12345.678;
+    const px = x + (a - Math.floor(a)) * w, py = y + (b - Math.floor(b)) * h;
+    ctx.fillStyle = k % 3 ? 'rgba(0,0,0,.18)' : 'rgba(255,255,255,.14)';
+    ctx.beginPath(); ctx.arc(px, py, .6 + (k % 4) * .35, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.fillStyle = 'rgba(255,255,255,.2)'; ctx.fillRect(x, y, w, 2);
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(x, y + h - 3, w, 3);
+  ctx.restore();
+}
+/** Le caillou qui saute de case en case, peint : posé en (x, y) (le bas du caillou). */
+function caillou(ctx, x, y) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(x + 2, BY - 1, 7, 2, 0, 0, Math.PI * 2); ctx.fill();   // son ombre sur la dalle
+  const g = ctx.createRadialGradient(x - 2.5, y - 8, 1, x, y - 5.5, 8);
+  g.addColorStop(0, '#f1e3c8'); g.addColorStop(.5, '#b99a6e'); g.addColorStop(1, '#6b5435');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x, y - 5.5, 7.5, 5.5, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+/** Les cases u₀ … u₈, des dalles peintes ; la case de départ en cyan, celle d'arrivée en jaune (dessin direct, selon la phase). */
 function cases(c) {
   for (let i = 0; i < NB; i++) {
-    c.rect(CX(i) - BW / 2, BY, BW, BH, { couleur: 'faible', arrondi: 6, largeur: 1.5, duree: .05 });
+    peindre(c, .05, ctx => dalle(ctx, CX(i) - BW / 2, BY, BW, BH, i));
     c.texte(`u_${i}`, CX(i), BY + BH + 24, { couleur: 'faible', taille: 18, align: 'center', duree: .05 });
   }
   c.repere('cases', CX(0) - BW / 2 - 4, BY - 4, CX(NB - 1) - CX(0) + BW + 8, BH + 36, 'les cases u₀ … u₈');
@@ -48,6 +79,10 @@ function sauts(c, s, n, p, etiquette, couleur) {
       c.texte(etiquette(j), (x1 + x2) / 2, BY - 50, { couleur, taille: 16, align: 'center', duree: 0 });
     }
   }
+  // Le caillou : en vol sur l'arc du saut en cours, puis posé sur la case d'arrivée (à droite de la pointe de la flèche).
+  { const fj = Math.min(faits, k), j = Math.min(Math.floor(fj), Math.max(0, k - 1)), u = k > 0 ? fj - j : 1;
+    if (k === 0 || p >= 1) caillou(c.ctx, CX(n) + 15, BY);
+    else caillou(c.ctx, CX(s + j) + 79 * u, BY - 38 * Math.sin(Math.PI * u)); }
   c.rect(CX(s) - BW / 2 - 3, BY - 3, BW + 6, BH + 6, { couleur: 'cyan', arrondi: 8, largeur: 2.2, duree: 0 });
   if (p >= 1) c.rect(CX(n) - BW / 2 - 3, BY - 3, BW + 6, BH + 6, { couleur: 'jaune', arrondi: 8, largeur: 2.2, duree: 0 });
   c.repere('sauts', CX(s) - BW / 2, BY - 62, Math.max(BW, CX(n) - CX(s) + BW), BH + 62, `${k} saut${k > 1 ? 's' : ''}`);

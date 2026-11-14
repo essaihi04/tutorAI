@@ -355,6 +355,54 @@
     return { S, scene, pont };
   }
 
-  window.MathsTableau = { Scene, page, fr, grille, VW, VH };
+  /* Peinture (professeur règle 32, 14 novembre 2026 : « toujours chercher le réalisme ») : quand une construction prend
+   * un objet concret pour image (des blocs empilés, des morceaux posés bout à bout, des dalles de pierre…), cet objet est
+   * PEINT en couleur (dégradé, ombre, veinage) ; la craie garde ce que le professeur écrit : nombres, formules, axes,
+   * courbes, flèches. Les graphes et tableaux restent à la craie. */
+  const rvb = (s) => { const m = /^#([0-9a-f]{6})$/i.exec(s || ''); return m ? [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16)) : [200, 200, 200]; };
+  /** Une teinte : k > 0 éclaircit vers le blanc, k < 0 assombrit vers le noir. */
+  const nuance = (c, k, a = 1) => `rgba(${c.map((v) => Math.round(k >= 0 ? v + (255 - v) * k : v * (1 + k))).join(',')},${a})`;
+  /** Réserve `duree` s dans l'écriture (comme un trait de craie) et peint `fn(ctx, part)` d'un coup, en fondu. */
+  function peindre(c, duree, fn) {
+    let p = 1;
+    if (Number.isFinite(c.t)) { const debut = c.cur; c.cur += duree; p = c.t <= debut ? 0 : Math.min(1, (c.t - debut) / duree); if (p < 1) c.complet = false; }
+    if (p > 0) c.direct(() => { const ctx = c.ctx; ctx.save(); ctx.globalAlpha = p; try { fn(ctx, p); } finally { ctx.restore(); } });
+    return p;
+  }
+  /** Un bloc de bois laqué, teinté de la couleur de craie `couleur` (assez sombre pour qu'une écriture de cette couleur
+   *  s'y lise) : ombre portée, dégradé, veinage dans le sens de la longueur, arête claire en haut. Dessin direct. */
+  function bloc(c, x, y, w, h, couleur, o = {}) {
+    if (!(w > 0.3 && h > 0.3)) return;
+    const ctx = c.ctx, k = rvb(c.couleur(couleur)), r = Math.min(o.arrondi ?? 3, w / 2, h / 2), debout = h > w;
+    const forme = () => { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); };
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 7; ctx.shadowOffsetX = 2.5; ctx.shadowOffsetY = 3;
+    const g = debout ? ctx.createLinearGradient(x, 0, x + w, 0) : ctx.createLinearGradient(0, y, 0, y + h);
+    const base = o.clair ? -0.28 : -0.42;
+    g.addColorStop(0, nuance(k, base + 0.1)); g.addColorStop(0.28, nuance(k, base + 0.22)); g.addColorStop(0.6, nuance(k, base));
+    g.addColorStop(1, nuance(k, base - 0.25));
+    forme(); ctx.fillStyle = g; ctx.fill();
+    ctx.restore();
+    ctx.save(); forme(); ctx.clip();
+    // Veinage du bois, dans le sens de la longueur (fixe : il ne tremble pas d'une image à l'autre).
+    const L = debout ? h : w, E = debout ? w : h, n = Math.max(2, Math.round(E / 6));
+    for (let i = 0; i < n; i++) {
+      const e = (i + 0.5) / n * E, ond = 0.8 + ((i * 37) % 5) * 0.25;
+      ctx.strokeStyle = i % 2 ? 'rgba(0,0,0,.16)' : 'rgba(255,255,255,.08)'; ctx.lineWidth = 0.8; ctx.beginPath();
+      for (let s = 0; s <= L; s += 6) {
+        const d = e + Math.sin((s + i * 13) / (9 + i % 3 * 4)) * ond;
+        const [px, py] = debout ? [x + d, y + s] : [x + s, y + d];
+        s ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+      }
+      ctx.stroke();
+    }
+    // Arête éclairée en haut et à gauche, arête sombre en bas.
+    ctx.fillStyle = 'rgba(255,255,255,.22)'; ctx.fillRect(x, y, w, Math.min(2, h / 3)); ctx.fillRect(x, y, Math.min(1.5, w / 3), h);
+    ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.fillRect(x, y + h - Math.min(2, h / 3), w, Math.min(2, h / 3));
+    ctx.restore();
+    if (w > 3 && h > 3) { ctx.strokeStyle = nuance(k, -0.7, 0.8); ctx.lineWidth = 0.8; forme(); ctx.stroke(); }
+  }
+
+  window.MathsTableau = { Scene, page, fr, grille, VW, VH, peindre, bloc, nuance, rvb };
   window.OndesTableau = window.OndesTableau || { Scene, VW, VH };   // bilan.html / carte.html du kit des ondes s'y appuient
 })();

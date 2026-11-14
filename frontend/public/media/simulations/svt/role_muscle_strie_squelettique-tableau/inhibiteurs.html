@@ -54,8 +54,44 @@ function tension(L, t) {
 }
 const S = { t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0 };
 
+/* ── Un petit muscle peint par ligne (règle 32, même peinture que chaleur.html) : il se raccourcit et
+ *    s'épaissit à chaque secousse, et reste immobile quand sa contraction s'arrête. La craie garde le reste. ── */
+const PM = { x: 168, h: 76, w: 30 };
+function tendonPeint(ctx, x, ya, yb, wa, wb) {
+  const g = ctx.createLinearGradient(x - wb / 2, 0, x + wb / 2, 0);
+  g.addColorStop(0, '#bdb8ae'); g.addColorStop(.4, '#f6f3ec'); g.addColorStop(.55, '#ffffff'); g.addColorStop(1, '#cbc5ba');
+  ctx.fillStyle = g; ctx.beginPath();
+  ctx.moveTo(x - wa / 2, ya); ctx.lineTo(x + wa / 2, ya);
+  ctx.quadraticCurveTo(x + wb / 2, (ya + yb) / 2, x + wb / 2, yb); ctx.lineTo(x - wb / 2, yb);
+  ctx.quadraticCurveTo(x - wb / 2, (ya + yb) / 2, x - wa / 2, ya); ctx.closePath(); ctx.fill();
+}
+function peindrePetitMuscle(ctx, yc, f) {
+  const x = PM.x, H = PM.h, L = (H - 20) * (1 - 0.14 * f), W = PM.w * (1 + 0.16 * f);
+  const ya = yc - H / 2, y1 = yc - L / 2, y2 = yc + L / 2, yb = yc + H / 2;
+  tendonPeint(ctx, x, ya, y1 + 3, 3, 8);
+  tendonPeint(ctx, x, yb, y2 - 3, 3, 8);
+  const chemin = () => {
+    ctx.beginPath(); ctx.moveTo(x - 4, y1);
+    ctx.bezierCurveTo(x - W * 0.62, y1 + L * 0.25, x - W * 0.58, y1 + L * 0.7, x - 4, y2);
+    ctx.lineTo(x + 4, y2);
+    ctx.bezierCurveTo(x + W * 0.58, y1 + L * 0.7, x + W * 0.62, y1 + L * 0.25, x + 4, y1); ctx.closePath();
+  };
+  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 5; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 2;
+  const g = ctx.createLinearGradient(x - W / 2, 0, x + W / 2, 0);
+  g.addColorStop(0, '#7a1626'); g.addColorStop(.3, '#c23a4a'); g.addColorStop(.45, '#e0707a'); g.addColorStop(.7, '#b83242'); g.addColorStop(1, '#6d1220');
+  chemin(); ctx.fillStyle = g; ctx.fill(); ctx.restore();
+  ctx.save(); chemin(); ctx.clip(); ctx.lineWidth = .6;
+  for (let i = -3; i <= 3; i++) {
+    const k = i / 3.6; ctx.strokeStyle = i % 2 ? 'rgba(80,0,10,.28)' : 'rgba(255,190,195,.25)';
+    ctx.beginPath(); ctx.moveTo(x + k * 4, y1); ctx.bezierCurveTo(x + k * W * 0.6, y1 + L * 0.25, x + k * W * 0.56, y1 + L * 0.7, x + k * 4, y2); ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function dessiner(c) {
   scene.cadre(41);
+  // Les trois muscles, peints sous la craie ; chacun suit sa propre tension.
+  c.direct(() => LIGNES.forEach((L, i) => peindrePetitMuscle(c.ctx, Y[i] - 4, S.t > 0 ? Math.min(1, tension(L, S.t)) : 0)));
   c.direct(() => {
     c.texte('Trois muscles, la même série d’excitations', 12, 26, { couleur: 'blanc', taille: 17 });
     c.texte('myogramme', (MX0 + MX1) / 2, 56, { couleur: 'faible', taille: 14, align: 'center' });
@@ -64,7 +100,7 @@ function dessiner(c) {
   });
   LIGNES.forEach((L, i) => {
     const y = Y[i];
-    L.nom.forEach((s, k) => c.texte(s, 12, y - 8 * (L.nom.length - 1) + k * 17, { couleur: L.couleur, taille: 15, max: 176 }));
+    L.nom.forEach((s, k) => c.texte(s, 12, y - 8 * (L.nom.length - 1) + k * 17, { couleur: L.couleur, taille: 15, max: 138 }));
     c.ligne(MX0, y + 24, MX1, y + 24, { couleur: 'tresfaible', largeur: 1.2 });
     c.rect(GA - 14, y - GH / 2, 28, GH, { couleur: 'tresfaible', arrondi: 5 });
     c.rect(GP - 14, y - GH / 2, 28, GH, { couleur: 'tresfaible', arrondi: 5 });

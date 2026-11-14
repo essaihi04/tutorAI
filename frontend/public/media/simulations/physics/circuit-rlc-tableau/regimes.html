@@ -50,10 +50,28 @@ const RALENTI = 0.25;                                      // s d'image par ms d
 const P = { Rt: 20 };
 const S = { t: 0, running: false, pause: false, fait: false, cur: null, fantomes: [], ordre: false, motif: '', emis: 0 };
 
+/* ── Peinture de l'appareil réel (canvas brut, AVANT la craie ; règle 32) ─── */
+// L'écran de l'oscilloscope : cadre gris foncé, écran vert-noir légèrement lumineux au centre, reflet du verre.
+function peindreOscilloscope(ctx) {
+  const m = 9;
+  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 10; ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 4;
+  let g = ctx.createLinearGradient(0, EY - m, 0, EY + EH + m); g.addColorStop(0, '#4a525b'); g.addColorStop(.5, '#2d3338'); g.addColorStop(1, '#1b1f23');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(EX - m, EY - m, EW + 2 * m, EH + 2 * m, 12); ctx.fill(); ctx.shadowColor = 'transparent';
+  ctx.strokeStyle = 'rgba(255,255,255,.14)'; ctx.lineWidth = 1; ctx.stroke();
+  g = ctx.createRadialGradient(EX + EW / 2, EY + EH / 2, 20, EX + EW / 2, EY + EH / 2, EW * .65);
+  g.addColorStop(0, '#0f2a22'); g.addColorStop(1, '#050d0b');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(EX, EY, EW, EH, 6); ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 2; ctx.stroke();
+  // Reflet du verre, en haut à gauche.
+  g = ctx.createLinearGradient(EX, EY, EX + EW * .45, EY + EH * .5); g.addColorStop(0, 'rgba(255,255,255,.08)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(EX + 4, EY + 4); ctx.lineTo(EX + EW * .55, EY + 4); ctx.lineTo(EX + 4, EY + EH * .6); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
 function dessiner(c) {
   scene.cadre(23);
+  c.direct(() => peindreOscilloscope(c.ctx));
   c.texte('Le condensateur chargé (E = 6 V) se vide dans la bobine : u_C(t)', 290, 26, { couleur: 'blanc', taille: 16, align: 'center', max: 560 });
-  c.rect(EX, EY, EW, EH, { arrondi: 6, couleur: 'faible' });
   for (let k = 1; k < 10; k++) c.ligne(PX(2 * k), EY + 2, PX(2 * k), EY + EH - 2, { couleur: 'tresfaible', largeur: 1, duree: .02, tremble: 0 });
   for (let k = 1; k < 8; k++) c.ligne(EX + 2, EY + k * EH / 8, EX + EW - 2, EY + k * EH / 8, { couleur: k === 4 ? 'faible' : 'tresfaible', largeur: k === 4 ? 1.4 : 1, duree: .02, tremble: 0 });
   c.texte('2 ms / carreau ; 2 V / carreau', EX + EW, EY + EH + 20, { couleur: 'faible', taille: 13, align: 'right' });
@@ -144,7 +162,7 @@ function playUntil(q) {
   pont.noter('play_until', { moment: q.moment }); pont.emettre();
 }
 function ceQuiSeVoit() {
-  const m = ['Écran 20 ms × ±8 V : u_C(t) après la bascule, C = 4 µF, L = 0,1 H, u_C(0) = 6 V.'];
+  const m = ['Écran d’oscilloscope peint (cadre gris, écran vert-noir) 20 ms × ±8 V : u_C(t) après la bascule, C = 4 µF, L = 0,1 H, u_C(0) = 6 V.'];
   for (const g of S.fantomes) m.push(`En pointillés : R + r = ${g.Rt} Ω, ${NOM[regime(g.Rt)]}.`);
   if (S.cur) {
     const tt = Math.min(S.t, 20), som = sommets(S.cur.Rt).filter(s => s.t <= tt).map(s => fx(s.u, 1) + ' V');

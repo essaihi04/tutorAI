@@ -41,11 +41,29 @@ function verdict() {
   return { mot: 'ni en phase, ni en opposition', detail: `${nb(q)} : ni entier, ni entier et demi`, couleur: 'rouge' };
 }
 
+/* ── Peinture des objets réels (canvas brut, AVANT la craie ; règle 32) ─── */
+// Corde de chanvre torsadée : un cordon beige ombré, des torons en biais le long du tracé.
+function peindreCorde(ctx, f, x0, x1) {
+  const n = 220, pts = []; for (let i = 0; i <= n; i++) { const x = x0 + (x1 - x0) * i / n; pts.push([x, f(x)]); }
+  const tracer = (dy = 0) => { ctx.beginPath(); pts.forEach(([x, yy], i) => (i ? ctx.lineTo(x, yy + dy) : ctx.moveTo(x, yy + dy))); };
+  ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 5; ctx.shadowOffsetY = 3;
+  ctx.strokeStyle = '#7a5530'; ctx.lineWidth = 7; tracer(); ctx.stroke(); ctx.shadowColor = 'transparent';
+  ctx.strokeStyle = '#c9a06a'; ctx.lineWidth = 5; tracer(); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,235,200,.55)'; ctx.lineWidth = 1.4; tracer(-1.6); ctx.stroke();
+  ctx.strokeStyle = 'rgba(90,60,30,.75)'; ctx.lineWidth = 1.1;
+  for (let x = x0 + 3; x < x1 - 2; x += 4.5) {
+    const yy = f(x), d = (f(x + 1) - f(x - 1)) / 2, L = Math.hypot(1, d), tx = 1 / L, ty = d / L, nx = -ty, ny = tx;
+    ctx.beginPath(); ctx.moveTo(x - nx * 3 - tx * 1.8, yy - ny * 3 - ty * 1.8); ctx.lineTo(x + nx * 3 + tx * 1.8, yy + ny * 3 + ty * 1.8); ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function dessiner(c) {
   scene.cadre(19);
   c.texte('S', XS - 22, YC + 6, { couleur: 'faible', taille: 16 });
   c.direct(() => {
-    c.courbe(u => { const x = XS + u * (720 - XS); return [x, y(x)]; }, 220, { couleur: 'blanc', largeur: 2.4 });
+    peindreCorde(c.ctx, y, XS, 720);
     for (const [nom, x, coul] of [['M', XM, 'rouge'], ['P', XP(), 'orange']]) {
       const yy = y(x), s = vitesse(x);
       c.point(x, yy, 6, coul);
@@ -117,7 +135,7 @@ function arreterSiInstantAtteint() {
   return true;
 }
 function ceQuiSeVoit() {
-  const m = [`Une corde vibre (λ = 4 cm) ; M en rouge, P en orange à d = ${fr(P.d_cm, 1)} cm ; une flèche sur chaque point montre s’il monte ou descend.`];
+  const m = [`Une corde torsadée (peinte) vibre (λ = 4 cm) ; M en rouge, P en orange à d = ${fr(P.d_cm, 1)} cm ; une flèche sur chaque point montre s’il monte ou descend.`];
   const sm = vitesse(XM) > 0, sp = vitesse(XP()) > 0;
   m.push(`En ce moment, M ${sm ? 'monte' : 'descend'} et P ${sp ? 'monte' : 'descend'}.`);
   if (vu('lambda')) m.push('λ = 4 cm est posée au-dessus de la corde.');

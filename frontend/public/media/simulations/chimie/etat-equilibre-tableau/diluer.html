@@ -63,21 +63,19 @@ function dessiner(c, D) {
   c.repere('titre', 200, 8, 360, 30, 'quand on dilue');
   const Cn = Cmaintenant(D), mn = mesure(Cn), m0 = mesure(C0), m1 = mesure(P.C), dilue = D.commence('ligne_c') && D.p('ligne_c') < .6;
   // Le bécher, le pH-mètre et l'eau qu'on verse.
+  // Peints (règle 32) : le bécher en verre, la solution incolore dont le niveau monte quand on verse l'eau,
+  // le pH-mètre (boîtier, écran, câble) et son électrode de verre ; les gouttes d'eau distillée.
   c.direct(() => {
-    const ctx = c.ctx; ctx.globalAlpha = .1 + .06 * Math.max(0, 5 + Math.log10(Cn)); ctx.fillStyle = '#e2e8f0';
     const haut = BE.y + 60 - 30 * Math.min(1, Math.log10(C0 / Cn) / 3);
-    ctx.fillRect(BE.x + 3, haut, BE.w - 6, BE.y + BE.h - 3 - haut); ctx.globalAlpha = 1;
-    c.ligne(BE.x + 3, haut, BE.x + BE.w - 3, haut, { couleur: 'faible', largeur: 1.2 });
+    window.Peinture.becher(c.ctx, BE.x, BE.y, BE.w, BE.h, { surface: haut, liquide: [205, 225, 240, .16 + .06 * Math.max(0, 5 + Math.log10(Cn))] });
+    window.Peinture.phmetre(c.ctx, { x: BE.x + 8, y: 100, w: 96, h: 40 }, { x: BE.x + 40, yHaut: 152, yBas: BE.y + 100 });
     c.texte(`pH = ${fr(mn.pH, 2)}`, BE.x + 56, 128, { couleur: dilue ? 'faible' : 'vert', taille: 19, align: 'center' });
     c.texte(`C = ${sci(Cn, 1)} mol/L`, BE.x + 56, BE.y + BE.h + 26, { couleur: 'cyan', taille: 15, align: 'center' });
     if (dilue) {
       c.texte('+ eau distillée', BE.x + 56, BE.y + BE.h + 52, { couleur: 'bleu', taille: 15, align: 'center' });
-      for (let k = 0; k < 4; k++) c.point(BE.x + 84 + k % 2 * 4, BE.y - 6 + ((D.p('ligne_c') * 200 + k * 15) % 55), 2.4, 'bleu');
+      for (let k = 0; k < 4; k++) window.Peinture.goutte(c.ctx, BE.x + 84 + k % 2 * 4, BE.y - 6 + ((D.p('ligne_c') * 200 + k * 15) % 55), 2.6);
     }
   });
-  c.trait([[BE.x - 4, BE.y], [BE.x, BE.y + BE.h], [BE.x + BE.w, BE.y + BE.h], [BE.x + BE.w + 4, BE.y]], { couleur: 'blanc', largeur: 2 });
-  c.rect(BE.x + 8, 100, 96, 40, { couleur: 'blanc', largeur: 1.8 });
-  c.ligne(BE.x + 40, 140, BE.x + 40, BE.y + 100, { couleur: 'faible', largeur: 2 });
   c.repere('becher', BE.x - 8, 96, BE.w + 16, BE.h + 120, 'le bécher qu’on dilue et son pH-mètre');
   c.texte('avant → après', L.val + 120, 74, { couleur: 'faible', taille: 15, align: 'center' });
   // Les quatre lignes, chacune écrite quand la voix y arrive ; les valeurs « après » suivent le curseur.

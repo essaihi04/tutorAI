@@ -35,17 +35,80 @@ const tauDe = p => p.R * 1e3 * p.C * 1e-6;
 const uc = (t, tau) => E * (1 - Math.exp(-t / tau));
 const S = { t: 0, running: false, pause: false, fait: false, trace: null, fantome: null, jusqua: null, motif: '', emis: 0 };
 
+/* ── Appareils peints (règle 32 : ils ressemblent aux vrais, comme dans circuit-rc.html ; la craie garde fils et lettres) ── */
+const Peint = {
+  sphere(ctx, x, y, r, [clair, milieu, sombre]) {
+    const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r); g.addColorStop(0, clair); g.addColorStop(.45, milieu); g.addColorStop(1, sombre);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  },
+  /** Générateur : coffret gris, afficheur vert, borne rouge (+) en haut, noire (−) en bas. */
+  generateur(ctx, x, y, w, h, affiche) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(x + 3, y + 4, w, h, 6); ctx.fill();
+    const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#5b6670'); g.addColorStop(.5, '#3b444c'); g.addColorStop(1, '#262c32');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 6); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1; ctx.stroke();
+    const ex = x + w * .12, ey = y + h * .34, ew = w * .76, eh = h * .3;
+    ctx.fillStyle = '#0d1a10'; ctx.beginPath(); ctx.roundRect(ex, ey, ew, eh, 3); ctx.fill();
+    ctx.fillStyle = '#7dfc8a'; ctx.font = `600 ${Math.round(eh * .72)}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(affiche, ex + ew / 2, ey + eh / 2 + 1);
+    Peint.sphere(ctx, x + w / 2, y, 4.2, ['#ffd0d0', '#e0393e', '#6d0f12']);
+    Peint.sphere(ctx, x + w / 2, y + h, 4.2, ['#9aa0a6', '#2b2f33', '#050607']);
+    ctx.restore();
+  },
+  /** Résistor : corps beige en cylindre, bandes de couleur lues sur la valeur (Ω), bande or. */
+  resistor(ctx, x, y, w, h, ohm) {
+    const COUL = ['#111', '#7b4a1e', '#d32f2f', '#f57c00', '#fbc02d', '#2e7d32', '#1565c0', '#7b1fa2', '#9e9e9e', '#fafafa'];
+    const e = Math.floor(Math.log10(ohm) + 1e-9) - 1, m = Math.round(ohm / 10 ** e), d1 = Math.floor(m / 10) % 10, d2 = m % 10;
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.roundRect(x + 2, y + 3, w, h, h / 2.2); ctx.fill();
+    const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#f3e1bf'); g.addColorStop(.45, '#d9bf8f'); g.addColorStop(1, '#9c8358');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, h / 2.2); ctx.fill();
+    [[.24, d1], [.38, d2], [.52, Math.min(9, Math.max(0, e))], [.78, -1]].forEach(([f, k]) => { ctx.fillStyle = k < 0 ? '#c9a227' : COUL[k]; ctx.fillRect(x + w * f, y + 1, w * .07, h - 2); });
+    ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(x + h * .3, y + h * .18, w - h * .6, h * .12);
+    ctx.restore();
+  },
+  /** Condensateur chimique bleu (debout) avec ses deux pattes ; bande claire « − ». */
+  chimique(ctx, x, y, w, h) {
+    ctx.save();
+    ctx.strokeStyle = '#b8bec6'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x + w * .32, y + h); ctx.lineTo(x + w * .32, y + h + 10); ctx.moveTo(x + w * .68, y + h); ctx.lineTo(x + w * .68, y + h + 13); ctx.stroke();
+    const g = ctx.createLinearGradient(x, 0, x + w, 0); g.addColorStop(0, '#0b2a6b'); g.addColorStop(.35, '#2f6fe0'); g.addColorStop(.6, '#1d4fb8'); g.addColorStop(1, '#091f52');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, [w * .25, w * .25, 4, 4]); ctx.fill();
+    ctx.fillStyle = 'rgba(210,225,255,.75)'; ctx.fillRect(x + w * .7, y + 4, w * .16, h - 8);
+    ctx.fillStyle = '#9aa3ad'; ctx.beginPath(); ctx.ellipse(x + w / 2, y + 3, w / 2 - 1, 3, 0, 0, 7); ctx.fill();
+    ctx.restore();
+  },
+  /** Interrupteur : levier métallique (pivot → bout) sur deux plots en laiton. */
+  levier(ctx, px, py, bx, by, qx, qy) {
+    ctx.save(); ctx.lineCap = 'round';
+    Peint.sphere(ctx, qx, qy, 4.2, ['#fff1c9', '#cfa046', '#5e4210']);
+    ctx.strokeStyle = '#4a4f55'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(bx, by); ctx.stroke();
+    ctx.strokeStyle = '#c8ccd2'; ctx.lineWidth = 3.4; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(bx, by); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(px, py - 1); ctx.lineTo(bx, by - 1); ctx.stroke();
+    Peint.sphere(ctx, px, py, 4.4, ['#fff1c9', '#cfa046', '#5e4210']);
+    ctx.restore();
+  },
+};
+
 function dessiner(c) {
   scene.cadre(13);
+  c.direct(() => {
+    const ctx = c.ctx, ferme = S.t > 0 || S.running;
+    Peint.generateur(ctx, 42, 124, 36, 52, '12V');
+    Peint.levier(ctx, 82, 70, ferme ? 112 : 108, ferme ? 70 : 54, 112, 70);
+    Peint.resistor(ctx, 130, 63, 52, 14, Math.round(P.R * 1000));
+    Peint.chimique(ctx, 232, 92, 14, 24);
+  });
   c.texte('Charge du condensateur sous E = 12 V', 380, 24, { couleur: 'blanc', taille: 17, align: 'center' });
   // Le circuit : E à gauche, K et R en haut, C à droite.
-  c.ligne(60, 70, 60, 134); c.cercle(60, 150, 16); c.ligne(60, 166, 60, 230);
-  c.texte('E', 60, 157, { couleur: 'blanc', taille: 17, align: 'center' });
-  c.ligne(60, 70, 82, 70); c.ligne(112, 70, 130, 70); c.rect(130, 61, 52, 18, { arrondi: 2, couleur: 'orange' }); c.ligne(182, 70, 222, 70);
+  c.ligne(60, 70, 60, 120); c.ligne(60, 180, 60, 230);
+  c.texte('E', 92, 157, { couleur: 'blanc', taille: 17, align: 'center' });
+  c.ligne(60, 70, 78, 70); c.ligne(116, 70, 130, 70); c.ligne(182, 70, 222, 70);
   c.ligne(222, 70, 222, 141); c.ligne(202, 141, 242, 141, { largeur: 3.4, couleur: 'cyan' }); c.ligne(202, 153, 242, 153, { largeur: 3.4, couleur: 'cyan' });
   c.ligne(222, 153, 222, 230); c.ligne(60, 230, 222, 230);
   c.texte('R', 156, 52, { couleur: 'orange', taille: 17, align: 'center' }); c.texte('C', 196, 152, { couleur: 'cyan', taille: 17, align: 'right' });
-  c.texte('K', 97, 58, { couleur: 'faible', taille: 15, align: 'center' });
+  c.texte('K', 97, 92, { couleur: 'faible', taille: 15, align: 'center' });
   c.repere('circuit', 36, 44, 214, 196, 'le circuit : E, K, R et C en série');
   // Le graphe u_C(t).
   c.fleche(AX, AY, AX1, AY, { couleur: 'faible', largeur: 1.6 }); c.fleche(AX, AY, AX, 78, { couleur: 'faible', largeur: 1.6 });
@@ -59,7 +122,7 @@ function dessiner(c) {
   c.texte('τ = R·C', 130, 300, { couleur: 'jaune', taille: 20, align: 'center' });
   c.direct(() => {
     // K fermé dès que la charge a commencé.
-    if (S.t > 0 || S.running) c.ligne(82, 70, 112, 70, { largeur: 2.4 }); else c.ligne(82, 70, 108, 54, { largeur: 2.4 });
+    // (K est peint : levier fermé dès que la charge a commencé.)
     c.texte(`R = ${fx(P.R)} kΩ`, 30, 262, { couleur: 'orange', taille: 17 });
     c.texte(`C = ${P.C} µF`, 140, 262, { couleur: 'cyan', taille: 17 });
     c.repere('R', 124, 40, 64, 46, 'la résistance R'); c.repere('C', 180, 128, 72, 40, 'le condensateur C');
@@ -137,7 +200,7 @@ function playUntil(p) {
   pont.noter('play_until', { moment: p.moment }); pont.emettre();
 }
 function ceQuiSeVoit() {
-  const m = [`Circuit E = 12 V, R = ${fx(P.R)} kΩ, C = ${P.C} µF ; graphe u_C(t) de 0 à 2,5 s, asymptote E = 12 V.`];
+  const m = [`Circuit E = 12 V, R = ${fx(P.R)} kΩ, C = ${P.C} µF (générateur, interrupteur K et résistor à bandes peints ; symbole du condensateur à la craie avec un condensateur chimique bleu peint à côté) ; graphe u_C(t) de 0 à 2,5 s, asymptote E = 12 V.`];
   if (S.fantome) m.push(`En pointillés, la courbe d’avant (R = ${fx(S.fantome.R)} kΩ, C = ${S.fantome.C} µF, τ = ${fx(tauDe(S.fantome))} s).`);
   if (!S.trace || (S.t <= 0 && !S.running)) m.push('K ouvert : pas encore de charge.');
   else {

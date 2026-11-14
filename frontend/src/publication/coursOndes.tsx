@@ -78,15 +78,23 @@ function Navigation({ id, matiere }: { id: string; matiere: string | null }) {
 const lire = (k: string) => { try { return localStorage.getItem(k) || ''; } catch { return ''; } };
 const garder = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* navigation privée */ } };
 
-// ── Sans compte : le visiteur a un identifiant tiré au hasard, gardé dans son navigateur (son suivi des acquis). ──
-const VISITEUR = (() => {
-  try {
-    const k = 'cours-ondes:visiteur';
-    let v = localStorage.getItem(k);
-    if (!v) { v = (crypto.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`); localStorage.setItem(k, v); }
-    return v;
-  } catch { return `v-${Math.random().toString(36).slice(2, 14)}`; }
-})();
+// ── Lien libre : chaque ouverture repart de zéro, comme la première fois (règle utilisateur, 14 novembre 2026 — « ne pas
+// garder les réponses à chaque rafraîchissement… pas comme les vrais comptes » qui suivent l'élève et enregistrent ses
+// réponses). Les réponses (`reponse:…`) et la progression (`course-player:…`) restent en mémoire le temps de la visite,
+// jamais dans le navigateur : le stockage est partagé avec le site (même domaine), on n'efface donc rien de celui d'un
+// élève connecté, on ne lit et n'écrit simplement pas ces clés ici.
+const PASSAGERES = ['reponse:', 'course-player:'];
+const memoireDeVisite = new Map<string, string>();
+try {
+  const proto = Storage.prototype, lireS = proto.getItem, ecrireS = proto.setItem, oterS = proto.removeItem;
+  const passagere = (k: string) => PASSAGERES.some(p => String(k).startsWith(p));
+  proto.getItem = function (this: Storage, k: string) { return passagere(k) ? (memoireDeVisite.get(k) ?? null) : lireS.call(this, k); };
+  proto.setItem = function (this: Storage, k: string, v: string) { if (passagere(k)) memoireDeVisite.set(k, String(v)); else ecrireS.call(this, k, v); };
+  proto.removeItem = function (this: Storage, k: string) { if (passagere(k)) memoireDeVisite.delete(k); else oterS.call(this, k); };
+  localStorage.removeItem('cours-ondes:visiteur');   // l'ancien identifiant gardé d'une visite à l'autre
+} catch { /* navigation privée : rien n'est gardé de toute façon */ }
+// Le visiteur reçoit un identifiant neuf à chaque ouverture : le serveur ne lui retrouve ni acquis ni mémoire d'avant.
+const VISITEUR = crypto.randomUUID?.() || `v-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 const PUBLIC = '/api/v1/public/cours-ondes';
 /** Les routes publiques qui existent ; les autres appels du lecteur (progression d'un compte…) n'ont pas lieu ici. */
 const ROUTES = ['question-eleve', 'transcrire', 'ocr-reponse', 'reexplication', 'answer-reaction', 'sim-reaction', 'acquis', 'memoire', 'clavier-suggestions'];

@@ -36,11 +36,32 @@ const vu = nom => S.t >= T[nom] - 1e-6;
 const nbFusions = () => (S.t < F0 ? (S.t >= RC ? 1 : 0) : 1 + Math.floor((NF - 1) * clamp((S.t - F0) / (F1 - F0))));
 const energie = id => (id === 'fission' ? 185 * lisse((S.t - RC) / 0.8) : 17.6 * (S.t < F0 ? lisse((S.t - RC) / 0.8) : nbFusions()));
 
-function boule(ctx, x, y, r, teinte) {
-  const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r);
-  g.addColorStop(0, '#fff7ee'); g.addColorStop(.5, teinte); g.addColorStop(1, '#2a1b10');
+/*
+ * Noyau peint (règle 32) : un amas de nucléons serrés, protons rouges et neutrons gris-bleu, éclairé en haut à
+ * gauche, avec une ombre douce. Z protons sur A nucléons ; on en montre au plus `max` (proportion gardée).
+ */
+const PROTON = ['#ffd9d2', '#e2463a', '#6e1410'], NEUTRON = ['#eef4fa', '#8fa7bd', '#2d3d4d'];
+function bille(ctx, x, y, r, [clair, milieu, sombre]) {
+  const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .08, x, y, r);
+  g.addColorStop(0, clair); g.addColorStop(.5, milieu); g.addColorStop(1, sombre);
   ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
 }
+function noyau(ctx, x, y, r, Z, A, alpha = 1) {
+  const n = A <= 5 ? A : Math.min(A, Math.max(1, Math.round((r / 4.6) ** 2 * 1.1))), pos = [];
+  if (n === 1) pos.push([0, 0]);
+  else if (n <= 3) for (let i = 0; i < n; i++) { const a = -Math.PI / 2 + i * 2 * Math.PI / n + (n === 2 ? Math.PI / 2 : 0); pos.push([.42 * Math.cos(a), .42 * Math.sin(a)]); }
+  else for (let i = 0; i < n; i++) { const rr = .78 * Math.sqrt((i + .5) / n), a = i * 2.39996; pos.push([rr * Math.cos(a), rr * Math.sin(a)]); }
+  const rb = n === 1 ? r : r * (n <= 3 ? .58 : 1.18 / Math.sqrt(n));
+  ctx.save(); ctx.globalAlpha = alpha;
+  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(x + r * .12, y + r * .2, r * .92, r * .85, 0, 0, Math.PI * 2); ctx.fill();
+  // Protons mêlés aux neutrons : un tirage fixe (sans hasard) choisit les billes rouges, en gardant la proportion Z / A.
+  const cle = i => { const v = Math.sin(i * 12.9898 + 4.1) * 43758.5453; return v - Math.floor(v); }, nP = Math.round(n * Z / A), proton = new Set(pos.map((p, i) => i).sort((i, j) => cle(i) - cle(j)).slice(0, nP));
+  // Du bord vers le centre : les billes du centre passent devant (effet de volume).
+  const ordre = pos.map((p, i) => i).sort((i, j) => Math.hypot(...pos[j]) - Math.hypot(...pos[i]));
+  for (const i of ordre) bille(ctx, x + pos[i][0] * r, y + pos[i][1] * r, rb, proton.has(i) ? PROTON : NEUTRON);
+  ctx.restore();
+}
+const neutron = (ctx, x, y, r = 6) => noyau(ctx, x, y, r, 0, 1);
 function eclair(ctx, x, y, r, a) {
   if (a <= 0) return;
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
@@ -65,24 +86,24 @@ function dessiner(c) {
     /* ── Fission : un neutron frappe l'uranium, deux fragments et deux neutrons partent ── */
     const fx = 120, fy = 112;
     if (!joue || t < RC) {
-      boule(ctx, fx, fy, 30, '#e0803a');
-      if (joue && t > R0) { const u = lisse((t - R0) / (RC - R0)); boule(ctx, fx - 120 + 86 * u, fy, 6, '#9fb6cc'); }
+      noyau(ctx, fx, fy, 30, 92, 235);                                    // uranium 235
+      if (joue && t > R0) { const u = lisse((t - R0) / (RC - R0)); neutron(ctx, fx - 120 + 86 * u, fy); }
     } else {
       const u = lisse((t - RC) / (R1 - RC));
-      boule(ctx, fx - 30 * u - 6, fy - 26 * u, 21, '#e09a4a'); boule(ctx, fx + 34 * u + 6, fy + 22 * u, 24, '#d9733a');
-      for (const [dx, dy] of [[1, -0.6], [1, 0.7]]) boule(ctx, fx + 110 * u * dx, fy + 60 * u * dy, 6, '#9fb6cc');
+      noyau(ctx, fx - 30 * u - 6, fy - 26 * u, 21, 36, 92); noyau(ctx, fx + 34 * u + 6, fy + 22 * u, 24, 56, 142);   // les deux fragments
+      for (const [dx, dy] of [[1, -0.6], [1, 0.7]]) neutron(ctx, fx + 110 * u * dx, fy + 60 * u * dy);
       eclair(ctx, fx, fy, 70, 1 - (t - RC) / 0.6);
     }
     /* ── Fusion : ²H et ³H se rapprochent, fusionnent ; ou, à masse égale, 47 fusions en grille ── */
     const ux = 385 + 130, uy = 112;
     if (t < F0) {
-      if (!joue || t < RC) { const u = joue ? lisse((t - R0) / (RC - R0)) : 0; boule(ctx, ux - 60 + 48 * u, uy, 10, '#5fb8e8'); boule(ctx, ux + 60 - 46 * u, uy, 12, '#4a9bd8'); }
-      else { const u = lisse((t - RC) / (R1 - RC)); boule(ctx, ux - 8 * u, uy - 6 * u, 13, '#7ccff0'); boule(ctx, ux + 90 * u, uy + 30 * u, 6, '#9fb6cc'); eclair(ctx, ux, uy, 50, 1 - (t - RC) / 0.6); }
+      if (!joue || t < RC) { const u = joue ? lisse((t - R0) / (RC - R0)) : 0; noyau(ctx, ux - 60 + 48 * u, uy, 10, 1, 2); noyau(ctx, ux + 60 - 46 * u, uy, 12, 1, 3); }   // ²H, ³H
+      else { const u = lisse((t - RC) / (R1 - RC)); noyau(ctx, ux - 8 * u, uy - 6 * u, 13, 2, 4); neutron(ctx, ux + 90 * u, uy + 30 * u); eclair(ctx, ux, uy, 50, 1 - (t - RC) / 0.6); }   // ⁴He + n
     } else {
       const n = nbFusions();
       for (let i = 0; i < NF; i++) {
         const x = 385 + 30 + (i % 10) * 24, y = 64 + Math.floor(i / 10) * 25;
-        boule(ctx, x, y, 7, i < n ? '#7ccff0' : '#3d6f8e');
+        if (i < n) noyau(ctx, x, y, 8, 2, 4); else noyau(ctx, x, y, 8, 2, 5, .4);   // fusionnée (⁴He) ; pas encore (²H + ³H, voilée)
         if (i === n - 1) eclair(ctx, x, y, 22, 0.9);
       }
       c.texte(`${n} fusion${n > 1 ? 's' : ''}`, 385 + 12, 196, { couleur: 'cyan', taille: 16 });
@@ -148,7 +169,7 @@ function arreterSiInstantAtteint() {
   return true;
 }
 function ceQuiSeVoit() {
-  const m = ['Deux cases : à gauche la fission de l’uranium 235, à droite la fusion deutérium + tritium ; une jauge d’énergie (0 à 900 MeV) dans chaque case.'];
+  const m = ['Deux cases : à gauche la fission de l’uranium 235, à droite la fusion deutérium + tritium ; une jauge d’énergie (0 à 900 MeV) dans chaque case. Les noyaux sont peints en amas de nucléons : protons rouges, neutrons gris-bleu.'];
   if (S.t < RC) m.push(S.t > R0 ? 'Le neutron arrive sur l’uranium ; les deux petits noyaux se rapprochent.' : 'Rien n’a encore réagi.');
   else m.push(`Jauges : fission ${fr(energie('fission'), 0)} MeV, fusion ${fr(energie('fusion'), 1)} MeV.`);
   if (vu('par_reaction')) m.push('Écrit : « 1 réaction : 185 MeV » et « 1 réaction : 17,6 MeV ».');

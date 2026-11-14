@@ -11,6 +11,7 @@
 </div>
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
+<script src="molecules.js"></script>
 <script>
 /*
  * L'ADN et l'ARN côte à côte (14 novembre 2026, règle 28 du professeur) : remplace le tableau ADN / ARN de la diapo rg_a1_arn.
@@ -37,20 +38,49 @@ const MOTIFS = { brins: 'l’ADN a deux brins, l’ARN un seul', sucre: 'les suc
 const S = { t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0 };
 const part = (a, b) => Math.max(0, Math.min(1, (S.t - a) / (b - a)));
 
-function pentagone(c, x, y, r, couleur, fond) {
-  const pts = Array.from({ length: 6 }, (_, k) => { const a = -Math.PI / 2 + k * 2 * Math.PI / 5; return [x + r * Math.cos(a), y + r * Math.sin(a)]; });
-  if (fond) { const g = c.ctx; g.globalAlpha = .3; g.fillStyle = fond; g.beginPath(); pts.forEach(([px, py], k) => (k ? g.lineTo(px, py) : g.moveTo(px, py))); g.fill(); g.globalAlpha = 1; }
-  c.trait(pts, { couleur, largeur: 1.8, tremble: .3 });
+/* ── Peinture (règle 32) : les molécules sont peintes, la craie garde les lettres, les noms et la comparaison ── */
+const MOL = window.Molecules;
+// Teintes peintes du cours (molecules.js) : squelette ADN bleu-violet, ARN orange ; bases A rouge, T jaune, C bleu, G vert, U magenta.
+const TEINTE = { adn: ['#c7d2fe', '#6366f1', '#3730a3'], arn: ['#fed7aa', '#f97316', '#9a3412'] };
+const BASE_PEINTE = MOL.BASE;
+function chemin5(x, cx, cy, r) {
+  x.beginPath();
+  for (let k = 0; k < 5; k++) { const a = -Math.PI / 2 + k * 2 * Math.PI / 5; k ? x.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a)) : x.moveTo(cx + r * Math.cos(a), cy + r * Math.sin(a)); }
+  x.closePath();
 }
-// Un brin : sucre (pentagone) – phosphate (rond) – sucre…, dessiné jusqu'à la part u ; `dir` = 1 (bases vers le bas) ou -1.
-function brin(c, X, y, couleur, u, sucreAllume, nomSucre) {
-  const n = Math.ceil(6 * u - 1e-9);
-  c.ligne(X(0) - 20, y, X(0) - 20 + (X(5) - X(0) + 40) * u, y, { couleur, largeur: 3 });
+// Un brin peint : ruban sucre-phosphate, sucres (pentagones en relief), phosphates (petites sphères), jusqu'à la part u.
+function peindreBrin(x, X, y, type, u, sucreAllume) {
+  const [cl, cm, cf] = TEINTE[type], n = Math.ceil(6 * u - 1e-9), xa = X(0) - 20, xb = xa + (X(5) - X(0) + 40) * u;
+  x.save();
+  const gs = x.createLinearGradient(0, y - 5, 0, y + 5); gs.addColorStop(0, cl); gs.addColorStop(.5, cm); gs.addColorStop(1, cf);
+  x.strokeStyle = gs; x.lineWidth = 7; x.lineCap = 'round'; x.beginPath(); x.moveTo(xa, y); x.lineTo(xb, y); x.stroke();
+  x.strokeStyle = 'rgba(255,255,255,.4)'; x.lineWidth = 1.3; x.beginPath(); x.moveTo(xa + 2, y - 2); x.lineTo(xb - 2, y - 2); x.stroke();
   for (let i = 0; i < n; i++) {
-    pentagone(c, X(i), y, 10, couleur, sucreAllume ? couleur : null);
-    if (sucreAllume && i === 0) c.texte(nomSucre, X(i) - 14, y - 22, { couleur, taille: 13 });
-    if (i < 5) c.point(X(i) + 27, y, 4, couleur);
+    const px = X(i);
+    x.save();
+    x.shadowColor = sucreAllume ? cl : 'rgba(0,0,0,.4)'; x.shadowBlur = sucreAllume ? 12 : 4; x.shadowOffsetY = sucreAllume ? 0 : 2;
+    const g = x.createRadialGradient(px - 4, y - 5, 1, px, y, 12);
+    g.addColorStop(0, '#ffffff'); g.addColorStop(.35, sucreAllume ? cl : cm); g.addColorStop(1, cf);
+    chemin5(x, px, y, 11); x.fillStyle = g; x.fill();
+    x.restore();
+    x.strokeStyle = 'rgba(255,255,255,.55)'; x.lineWidth = 1; chemin5(x, px, y, 11); x.stroke();
+    if (i < 5) MOL.sphere(x, px + 27, y, 5.5, cm);
   }
+  x.restore();
+}
+// Une base peinte : un bâtonnet coloré en relief, du sucre (ya) vers l'intérieur (yb).
+function peindreBase(x, px, ya, yb, L) {
+  const coul = BASE_PEINTE[L], y0 = Math.min(ya, yb), h = Math.abs(yb - ya);
+  x.save(); x.shadowColor = 'rgba(0,0,0,.35)'; x.shadowBlur = 4; x.shadowOffsetX = 1.5; x.shadowOffsetY = 1.5;
+  const g = x.createLinearGradient(px - 11, 0, px + 11, 0);
+  g.addColorStop(0, MOL.ombre(coul, .6)); g.addColorStop(.4, coul); g.addColorStop(.55, coul); g.addColorStop(1, MOL.ombre(coul, .5));
+  x.fillStyle = g; x.beginPath(); x.roundRect(px - 11, y0, 22, h, 5); x.fill();
+  x.restore();
+  x.fillStyle = 'rgba(255,255,255,.28)'; x.beginPath(); x.roundRect(px - 7, y0 + 3, 4, h - 6, 2); x.fill();
+}
+// Le nom du sucre, à la craie, quand les sucres s'allument.
+function brin(c, X, y, couleur, u, sucreAllume, nomSucre) {
+  if (sucreAllume && u > 0 && nomSucre) c.texte(nomSucre, X(0) - 14, y - 22, { couleur, taille: 13 });
 }
 
 function dessiner(c) {
@@ -64,33 +94,39 @@ function dessiner(c) {
   c.repere('arn', 388, 40, 360, 240, 'l’ARN');
   c.direct(() => {
     if (S.t <= 0) return;
-    const sucre = S.t >= M.brins + 0.3;
+    const sucre = S.t >= M.brins + 0.3, x = c.ctx;
     // Les brins.
     const u = part(0.2, M.brins - 0.4);
+    // Les bases (bâtonnets peints) : apparaissent à partir de « sucre ».
+    const ub = part(M.sucre + 0.1, M.sucre + 1.6), nb = Math.ceil(6 * ub - 1e-9);
+    const vU = part(M.sucre + 1.8, M.bases - 0.6);
+    const lettreARN = i => (ARN[i] === 'U' && vU < 0.5 ? 'T' : ARN[i]);
+    for (let i = 0; i < Math.min(6, nb); i++) {
+      peindreBase(x, XA(i), YH + 8, YH + 51, HAUT[i]);
+      peindreBase(x, XA(i), YB - 8, YB - 51, BAS[i]);
+      peindreBase(x, XR(i), YH + 8, YH + 51, lettreARN(i));
+    }
+    peindreBrin(x, XA, YH, 'adn', u, sucre);
+    peindreBrin(x, XA, YB, 'adn', u, sucre);
+    peindreBrin(x, XR, YH, 'arn', u, sucre);
     brin(c, XA, YH, VIOLET, u, sucre, 'désoxyribose');
-    brin(c, XA, YB, VIOLET, u, sucre, '');
     brin(c, XR, YH, ORANGE, u, sucre, 'ribose');
-    // Les bases (barreaux) : apparaissent à partir de « sucre ».
-    const ub = part(M.sucre + 0.1, M.sucre + 1.6);
+    // La craie : les lettres des bases et les liaisons entre bases complémentaires.
     for (let i = 0; i < 6; i++) {
-      if (i >= Math.ceil(6 * ub - 1e-9)) break;
+      if (i >= nb) break;
       // ADN : deux bases face à face, reliées.
-      c.ligne(XA(i), YH + 10, XA(i), YH + 28, { couleur: VIOLET, largeur: 1.6 });
-      c.ligne(XA(i), YB - 10, XA(i), YB - 28, { couleur: VIOLET, largeur: 1.6 });
-      c.ligne(XA(i), YH + 50, XA(i), YB - 50, { couleur: 'faible', largeur: 1.2, pointille: [3, 4] });
-      c.texte(HAUT[i], XA(i), YH + 46, { couleur: BASE[HAUT[i]], taille: 20, align: 'center' });
-      c.texte(BAS[i], XA(i), YB - 32, { couleur: BASE[BAS[i]], taille: 20, align: 'center' });
+      c.ligne(XA(i), YH + 50, XA(i), YB - 50, { couleur: 'blanc', largeur: 1.2, pointille: [3, 4] });
+      c.texte(HAUT[i], XA(i), YH + 46, { couleur: 'blanc', taille: 20, align: 'center' });
+      c.texte(BAS[i], XA(i), YB - 32, { couleur: 'blanc', taille: 20, align: 'center' });
       // ARN : une base, sans partenaire.
-      c.ligne(XR(i), YH + 10, XR(i), YH + 28, { couleur: ORANGE, largeur: 1.6 });
       if (ARN[i] === 'U') {
-        const v = part(M.sucre + 1.8, M.bases - 0.6);
-        if (v < 0.5) c.texte('T', XR(i), YH + 46, { couleur: BASE.T, taille: 20, align: 'center', alpha: .9 });
+        if (vU < 0.5) c.texte('T', XR(i), YH + 46, { couleur: 'blanc', taille: 20, align: 'center', alpha: .9 });
         else {
-          c.texte('T', XR(i) + 19, YH + 44, { couleur: BASE.T, taille: 15, align: 'center', alpha: .5 });
+          c.texte('T', XR(i) + 20, YH + 44, { couleur: BASE.T, taille: 15, align: 'center', alpha: .85 });
           c.ligne(XR(i) + 12, YH + 46, XR(i) + 26, YH + 30, { couleur: 'rouge', largeur: 1.8 });
-          c.texte('U', XR(i), YH + 46, { couleur: BASE.U, taille: 22, align: 'center' });
+          c.texte('U', XR(i), YH + 46, { couleur: 'blanc', taille: 22, align: 'center' });
         }
-      } else c.texte(ARN[i], XR(i), YH + 46, { couleur: BASE[ARN[i]], taille: 20, align: 'center' });
+      } else c.texte(ARN[i], XR(i), YH + 46, { couleur: 'blanc', taille: 20, align: 'center' });
     }
     if (S.t >= M.bases - 0.6) c.repere('uracile', XR(1) - 16, YH + 22, 48, 32, 'U, l’uracile, à la place de T');
   });
@@ -100,17 +136,27 @@ function dessiner(c) {
   if (S.t >= M.sucre - 0.4) { ecrit.ecrire(c, 'sucre', () => ligne(358, 'sucre : désoxyribose', 'sucre : ribose', 'cyan')); c.repere('sucre_adn', 40, YH - 40, 160, 54, 'le désoxyribose'); c.repere('sucre_arn', 410, YH - 40, 160, 54, 'le ribose'); }
   if (S.t >= M.bases - 0.4) { ecrit.ecrire(c, 'bases', () => ligne(386, 'bases : A, T, C, G', 'bases : A, U, C, G', 'jaune')); c.repere('bases_adn', 40, YH + 22, 316, YB - YH - 44, 'les bases de l’ADN : A, T, C, G'); c.repere('bases_arn', 410, YH + 22, 330, 60, 'les bases de l’ARN : A, U, C, G'); }
   if (S.t >= M.sortes - 1.6) {
+    // Peints : ARNm (un brin orange et ses bases), ARNt (la forme du cours, qui porte un acide aminé),
+    // ARNr (dans le ribosome, ses deux sous-unités). Ils apparaissent en fondu, la craie écrit les noms.
+    c.direct(() => {
+      const x = c.ctx, a = part(M.sortes - 1.6, M.sortes - 1.0);
+      x.save(); x.globalAlpha = a;
+      MOL.brin(x, 420, 242, 80 / 6, 'AUGCUA', 'arn', 1, { lb: 13, lettres: false, epaisseur: 6 });
+      x.save(); x.translate(566, 258); x.scale(.62, .62); x.translate(-566, -258);
+      MOL.arnt(x, 566, 258, 'UAC', 'Met', { pas: 12 });
+      x.restore();
+      MOL.ribosome(x, 672, 246, .4);
+      x.strokeStyle = TEINTE.arn[1]; x.lineWidth = 2.4; x.lineCap = 'round'; x.beginPath();
+      for (let k = 0; k <= 24; k++) { const v = k / 24, px = 658 + 28 * v, py = 232 + 4 * Math.sin(v * 9); k ? x.lineTo(px, py) : x.moveTo(px, py); }
+      x.stroke();
+      x.restore();
+    });
     ecrit.ecrire(c, 'sortes', () => {
-      // ARNm : un brin ; ARNt : un trèfle qui porte un acide aminé ; ARNr : dans le ribosome.
-      c.ligne(420, 248, 500, 248, { couleur: ORANGE, largeur: 2.4 });
+      // ARNm : un brin ; ARNt : porte un acide aminé ; ARNr : dans le ribosome.
       c.texte('ARNm', 460, 276, { couleur: ORANGE, taille: 15, align: 'center' });
       c.texte('messager', 460, 293, { couleur: 'faible', taille: 12, align: 'center' });
-      for (const a of [-1, 0, 1]) c.cercle(566 + 15 * Math.sin(a), 236 - 12 + 12 * Math.abs(a) + (a === 0 ? -6 : 6), 8, { couleur: ORANGE, largeur: 1.6 });
-      c.ligne(566, 246, 566, 258, { couleur: ORANGE, largeur: 1.6 });
       c.texte('ARNt', 566, 276, { couleur: ORANGE, taille: 15, align: 'center' });
       c.texte('de transfert', 566, 293, { couleur: 'faible', taille: 12, align: 'center' });
-      c.cercle(672, 236, 18, { couleur: 'faible', largeur: 1.4 }); c.cercle(672, 252, 12, { couleur: 'faible', largeur: 1.4 });
-      c.courbe(u => [660 + 24 * u, 236 + 5 * Math.sin(u * 9)], 20, { couleur: ORANGE, largeur: 1.6 });
       c.texte('ARNr', 672, 276, { couleur: ORANGE, taille: 15, align: 'center' });
       c.texte('des ribosomes', 672, 293, { couleur: 'faible', taille: 12, align: 'center' });
     });

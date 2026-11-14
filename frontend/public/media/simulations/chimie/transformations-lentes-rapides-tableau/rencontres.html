@@ -3,7 +3,7 @@
 <link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="tlr.css"></head>
 <body>
 <div class="tableau">
-  <section class="scene"><canvas id="canvas" role="img" aria-label="Deux loupes à la craie sur deux béchers du même mélange : des ions iodure (verts) et des molécules d’eau oxygénée (rouges) qui bougent ; chaque rencontre fait une étoile jaune ; sous chaque loupe, le nombre de rencontres par seconde"></canvas></section>
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Deux loupes à la craie sur deux béchers du même mélange : des ions iodure (billes violettes) et des molécules d’eau oxygénée (deux O rouges, deux H blancs) qui bougent ; chaque rencontre fait une étoile jaune ; sous chaque loupe, le nombre de rencontres par seconde"></canvas></section>
   <footer class="barre">
     <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Agiter</button>
     <span id="reglage" data-professor-control="set_parameters"></span>
@@ -18,7 +18,7 @@
  * Les rencontres des entités, à la loupe (14 novembre 2026, règle 28 du professeur : changer la température ou la
  * concentration et voir le changement). Deux loupes côte à côte, le même mélange H₂O₂ + I⁻ acidifié ; celle de gauche est la
  * référence (20 °C, [I⁻]₀ = 0,1 mol/L), celle de droite se règle avec UN curseur.
- * Ions I⁻ en vert, molécules H₂O₂ en rouge ; une rencontre I⁻–H₂O₂ fait une étoile jaune ; sous chaque loupe s'écrit le nombre
+ * Ions I⁻ en billes violettes (iode, CPK), molécules H₂O₂ en O rouges et H blancs ; une rencontre I⁻–H₂O₂ fait une étoile jaune ; sous chaque loupe s'écrit le nombre
  * de rencontres par seconde (moyenne depuis le dernier réglage) : c'est le RÉSULTAT de ce qu'on voit.
  * Modèle POUR L'ŒIL (jamais écrit) : vitesse ∝ 1 + (θ − 20)/16 (comme facteurs.html) ; nombre d'ions I⁻ = 100 × [I⁻]₀, 6 molécules H₂O₂.
  * Vues (?vue=) :
@@ -65,19 +65,53 @@ function avancerLoupe(L, k, dt) {
 }
 const parSeconde = L => L.rencontres.length / Math.max(S.t - L.depuis, 0.5);   // moyenne depuis le dernier réglage
 const nomLoupe = k => VUE === 'temperature' ? `${S.loupes[k].p.theta} °C` : `${fx(S.loupes[k].p.c)} mol/L`;
+/* Peints (règle 32) : les entités en billes ombrées aux couleurs conventionnelles (CPK) — l'ion iodure violet (iode) marqué « − »,
+ * la molécule H₂O₂ : deux atomes d'oxygène rouges liés, chacun portant un hydrogène blanc ; la fenêtre de la loupe : la solution
+ * aqueuse vue de près (légèrement teintée selon la température) dans une monture chromée. */
+const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+function sphere(ctx, x, y, r, c) {
+  const g = ctx.createRadialGradient(x - r * .38, y - r * .4, r * .12, x, y, r);
+  g.addColorStop(0, rgba(c.map(v => Math.round(v + (255 - v) * .75)), 1)); g.addColorStop(.45, rgba(c, 1)); g.addColorStop(1, rgba(c.map(v => Math.round(v * .45)), 1));
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+}
+function ion(ctx, x, y, r) {
+  sphere(ctx, x, y, r, [124, 58, 237]);
+  ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(x - r * .4, y + .5); ctx.lineTo(x + r * .4, y + .5); ctx.stroke(); ctx.restore();
+}
+function h2o2(ctx, x, y, a, k) {
+  const c = Math.cos(a), s = Math.sin(a), d = 4.2 * k, ro = 5.2 * k, rh = 3.2 * k;
+  // H–O–O–H vu de biais : un H au-dessus d'un O, l'autre en dessous de l'autre O.
+  sphere(ctx, x - d * c + 5 * k * s, y - d * s - 5 * k * c, rh, [236, 236, 236]);
+  sphere(ctx, x - d * c, y - d * s, ro, [220, 38, 38]);
+  sphere(ctx, x + d * c, y + d * s, ro, [220, 38, 38]);
+  sphere(ctx, x + d * c - 5 * k * s, y + d * s + 5 * k * c, rh, [236, 236, 236]);
+}
+function fenetre(ctx, b, chaud) {
+  ctx.save();
+  const g = ctx.createLinearGradient(b.x, b.y, b.x + b.w, b.y + b.h);
+  g.addColorStop(0, chaud ? 'rgba(120,80,60,.22)' : 'rgba(80,130,170,.22)'); g.addColorStop(1, chaud ? 'rgba(90,50,40,.3)' : 'rgba(50,90,130,.3)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(b.x, b.y, b.w, b.h, 14); ctx.fill();
+  const m = ctx.createLinearGradient(b.x, b.y, b.x + b.w, b.y + b.h);
+  m.addColorStop(0, '#e9eef2'); m.addColorStop(.35, '#89939b'); m.addColorStop(.65, '#d2d8dd'); m.addColorStop(1, '#4f5860');
+  ctx.strokeStyle = m; ctx.lineWidth = 5; ctx.beginPath(); ctx.roundRect(b.x - 4, b.y - 4, b.w + 8, b.h + 8, 17); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,.16)'; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(b.x + 26, b.y + 18); ctx.lineTo(b.x + 90, b.y + 18); ctx.stroke();
+  ctx.restore();
+}
 const repereLoupe = k => VUE === 'temperature' ? (k === 0 ? 'becher_froid' : 'becher_chaud') : (k === 0 ? 'becher_dilue' : 'becher_concentre');
 
 function dessiner(c) {
   scene.cadre(41);
   c.texte('À la loupe : le même mélange H₂O₂ + I⁻, deux béchers', 380, 26, { couleur: 'blanc', taille: 17, align: 'center' });
-  c.point(250, 52, 6, 'vert'); c.texte('ion I⁻', 262, 57, { couleur: 'vert', taille: 15 });
-  c.point(370, 52, 7, 'rouge'); c.texte('molécule H₂O₂', 382, 57, { couleur: 'rouge', taille: 15 });
+  c.direct(() => { ion(c.ctx, 250, 52, 6.5); h2o2(c.ctx, 370, 52, 0.4, 0.8); });
+  c.texte('ion I⁻', 262, 57, { couleur: 'violet', taille: 15 });
+  c.texte('molécule H₂O₂', 386, 57, { couleur: 'rouge', taille: 15 });
   c.texte('✦ rencontre', 520, 57, { couleur: 'jaune', taille: 15 });
   c.direct(() => {
     S.loupes.forEach((L, k) => {
       const b = BOX[k], chaud = VUE === 'temperature' && L.p.theta > 25;
+      fenetre(c.ctx, b, chaud);
       c.rect(b.x, b.y, b.w, b.h, { arrondi: 14, couleur: chaud ? 'orange' : VUE === 'temperature' ? 'cyan' : 'faible', largeur: 2.2, tremble: 0 });
-      for (const q of L.parts) c.point(q.x, q.y, q.type === 'I' ? RI - 2 : RH - 2, q.type === 'I' ? 'vert' : 'rouge');
+      L.parts.forEach((q, i) => (q.type === 'I' ? ion(c.ctx, q.x, q.y, RI - 1.5) : h2o2(c.ctx, q.x, q.y, i * 1.7 + S.t * 1.3 * (i % 2 ? 1 : -1), 1)));
       for (const e of L.etoiles) { const a = 1 - (S.t - e.t) / 0.5; c.texte('✦', e.x, e.y + 7, { couleur: 'jaune', taille: 14 + 10 * a, align: 'center', alpha: Math.max(0.2, a) }); }
       const titre = VUE === 'temperature' ? `${L.p.theta} °C` : `[I⁻]₀ = ${fx(L.p.c)} mol/L`;
       c.texte(titre, b.x + b.w / 2, b.y - 8, { couleur: chaud ? 'orange' : VUE === 'temperature' ? 'cyan' : 'blanc', taille: 17, align: 'center' });
@@ -121,7 +155,7 @@ function playUntil(q) {
   S.motif = MOMENT; pont.noter('play_until', { moment: q.moment }); pont.emettre();
 }
 function ceQuiSeVoit() {
-  const m = S.loupes.map((L, k) => `Loupe ${k === 0 ? 'de gauche' : 'de droite'} (${VUE === 'temperature' ? L.p.theta + ' °C' : '[I⁻]₀ = ' + fx(L.p.c) + ' mol/L'}) : ${nI(L.p)} ions I⁻ verts et ${NH} molécules H₂O₂ rouges` + (S.t - L.depuis >= 2 ? `, ${fx(parSeconde(L), 1)} rencontres par seconde.` : '.'));
+  const m = S.loupes.map((L, k) => `Loupe ${k === 0 ? 'de gauche' : 'de droite'} (${VUE === 'temperature' ? L.p.theta + ' °C' : '[I⁻]₀ = ' + fx(L.p.c) + ' mol/L'}) : ${nI(L.p)} ions I⁻ (billes violettes) et ${NH} molécules H₂O₂ (deux O rouges, deux H blancs)` + (S.t - L.depuis >= 2 ? `, ${fx(parSeconde(L), 1)} rencontres par seconde.` : '.'));
   if (!S.lance) m.push('Les entités sont encore immobiles : on n’a pas agité.');
   else m.push(VUE === 'temperature' ? 'À droite, les entités bougent plus vite et se rencontrent plus souvent.' : 'À droite, plus d’ions dans le même volume : plus de rencontres.');
   return m.join(' ');

@@ -13,6 +13,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
 <script src="exposants.js"></script>
+<script src="eau.js"></script>
 <script>
 /*
  * Milieu dispersif (14 novembre 2026, règle 28 du professeur) : remplace le tableau « milieu / N / λ / v »
@@ -48,25 +49,45 @@ const vu = nom => S.t >= T[nom] - 1e-6;
 const front = r => clamp((S.t - T0[r.id]) * vVis(r) / (X1 - X0));       // 0 → 1 : l'onde remplit la rangée
 const mesure = r => S.t >= T0[r.id] + (X1 - X0) / vVis(r) + 0.1;         // la règle se pose quand l'onde a tout rempli
 
+/* ── Peinture des objets réels (canvas brut, AVANT la craie ; règle 32) ─── */
+const E = window.EauPeinte;
+// Le vibreur de la cuve : boîtier sombre, tige d'acier qui plonge dans l'eau.
+function peindreVibreur(ctx, r) { E.tige(ctx, X0 + 3, r.y - 16, r.y + 8, 4); E.boitier(ctx, X0 - 9, r.y - 33, 24, 17); }
+// Le haut-parleur : caisson noir, membrane conique grise, cache-noyau.
+function peindreHautParleur(ctx, x, y) {
+  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 5; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 3;
+  let g = ctx.createLinearGradient(x - 20, 0, x - 10, 0); g.addColorStop(0, '#1d2126'); g.addColorStop(.5, '#3b424a'); g.addColorStop(1, '#22272c');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x - 21, y - 10, 12, 20, 2); ctx.fill(); ctx.shadowColor = 'transparent';
+  g = ctx.createLinearGradient(0, y - 19, 0, y + 19); g.addColorStop(0, '#9aa1a8'); g.addColorStop(.5, '#50575e'); g.addColorStop(1, '#2b3035');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(x - 10, y - 8); ctx.lineTo(x, y - 19); ctx.lineTo(x + 1.5, y - 19); ctx.lineTo(x + 1.5, y + 19); ctx.lineTo(x, y + 19); ctx.lineTo(x - 10, y + 8); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(20,20,20,.85)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x + .5, y - 19); ctx.lineTo(x + .5, y + 19); ctx.stroke();
+  g = ctx.createLinearGradient(0, y - 5, 0, y + 5); g.addColorStop(0, '#d5dadf'); g.addColorStop(1, '#5f666d');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x - 5, y, 2, 4.5, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+}
+// L'air : une bande d'air léger, bleuté.
+function peindreAir(ctx, y) {
+  const g = ctx.createLinearGradient(0, y - 20, 0, y + 20); g.addColorStop(0, 'rgba(170,215,255,0)'); g.addColorStop(.5, 'rgba(170,215,255,.12)'); g.addColorStop(1, 'rgba(170,215,255,0)');
+  ctx.fillStyle = g; ctx.fillRect(X0, y - 20, X1 - X0, 40);
+}
+
 function dessiner(c) {
   scene.cadre(17);
   c.texte('Surface de l’eau (cuve à ondes)', 14, 34, { couleur: 'cyan', taille: 18 });
   c.texte('Air (le son)', 14, 232, { couleur: 'cyan', taille: 18 });
   c.ligne(10, 206, 750, 206, { couleur: 'tresfaible', largeur: 1.2, duree: .3 });
-  for (const r of RANGS) {
-    // La source : un vibreur sur l'eau, un haut-parleur dans l'air.
-    if (r.milieu === 'eau') { c.rect(X0 - 22, r.y - 26, 14, 16, { couleur: 'faible', duree: .15 }); c.ligne(X0 - 15, r.y - 10, X0 - 15, r.y + 2, { couleur: 'faible', duree: .1 }); }
-    else { c.rect(X0 - 30, r.y - 9, 10, 18, { couleur: 'faible', duree: .15 }); c.trait([[X0 - 20, r.y - 9], [X0 - 10, r.y - 18], [X0 - 10, r.y + 18], [X0 - 20, r.y + 9]], { couleur: 'faible', duree: .15 }); }
-  }
+  // La source (vibreur sur l'eau, haut-parleur dans l'air) est peinte avec son milieu, sous la craie, ci-dessous.
   c.direct(() => {
     for (const r of RANGS) {
       const N = r.N(), lp = lamPx(r), f = front(r), xf = X0 + f * (X1 - X0), ph = S.phase * vVis(r);
-      c.texte(`${r.prime ? 'N′' : 'N'} = ${N} Hz`, 14, r.y + 6, { couleur: r.prime ? 'orange' : 'jaune', taille: 17 });
-      if (f <= 0) { if (r.milieu === 'eau') c.ligne(X0, r.y, X1, r.y, { couleur: 'tresfaible', largeur: 1.4 }); continue; }
+      // Le milieu peint : l'eau de la cuve vue de côté (sa surface ondule jusqu'au front, plate au-delà), ou l'air.
       if (r.milieu === 'eau') {
-        // Vue de côté : la surface de l'eau ondule jusqu'au front, plate au-delà.
-        c.courbe(u => { const x = X0 + u * (X1 - X0); return [x, x <= xf ? r.y - 12 * Math.sin(2 * Math.PI * (x - X0 - ph) / lp) * Math.min(1, (xf - x) / 12) : r.y]; }, 160, { couleur: 'bleu', largeur: 2.2 });
-      } else {
+        const h = x => (f > 0 && x <= xf ? Math.sin(2 * Math.PI * (x - X0 - ph) / lp) * Math.min(1, (xf - x) / 12) : 0);
+        E.cote(c.ctx, { x0: X0, x1: X1, y: r.y, bas: r.y + 20, k: 12 }, h, 200);
+        peindreVibreur(c.ctx, r);
+      } else { peindreAir(c.ctx, r.y); peindreHautParleur(c.ctx, X0 - 10, r.y); }
+      c.texte(`${r.prime ? 'N′' : 'N'} = ${N} Hz`, 14, r.y + 6, { couleur: r.prime ? 'orange' : 'jaune', taille: 17 });
+      if (f <= 0) continue;
+      if (r.milieu !== 'eau') {
         // Les tranches d'air comprimé (trois traits serrés), une tous les λ.
         const d0 = ((ph % lp) + lp) % lp;
         for (let x = X0 + d0 - lp; x <= xf; x += lp) for (const e of [-3, 0, 3]) { const xx = x + e; if (xx >= X0 && xx <= xf) c.ligne(xx, r.y - 18, xx, r.y + 18, { couleur: 'bleu', largeur: 1.6, tremble: .2 }); }
@@ -138,7 +159,7 @@ function arreterSiInstantAtteint() {
   return true;
 }
 function ceQuiSeVoit() {
-  const m = ['En haut, l’eau d’une cuve (vibreur à gauche) ; en bas, l’air (haut-parleur à gauche). Deux rangées par milieu : la première fréquence, puis N′.'];
+  const m = ['En haut, l’eau d’une cuve peinte en coupe (vibreur à gauche, tige qui plonge) ; en bas, l’air (haut-parleur peint à gauche). Deux rangées par milieu : la première fréquence, puis N′.'];
   if (S.t <= 0) m.push('Rien n’est encore mesuré.');
   for (const r of RANGS) if (mesure(r) && S.t >= T[r.id] - 0.5) m.push(`${r.milieu === 'eau' ? 'Eau' : 'Air'} à ${r.N()} Hz : λ = ${fr(lamCm(r), 1)} cm, v = ${fr(v(r), r.milieu === 'eau' ? 2 : 0)} m/s écrits à droite.`);
   if (vu('eau_2')) m.push('Écrit sous l’eau : « v′ ≠ v : la célérité change avec N ».');

@@ -17,10 +17,11 @@
  * Cours « Suites numériques » (math_ch3_suites_numeriques), diapo su_p3_limite_somme (14 novembre 2026,
  * professeur règle 28). Sₙ = w₀ + … + wₙ, w₀ = 1, raison q : les morceaux 1, q, q², … se posent bout à bout sur une
  * règle ; Sₙ s'écrit sous le bout ; la somme avance de moins en moins et s'approche du mur 1/(1 − q) (2 pour q = 1/2).
+ * Peints (règle 32 : réalisme) : les morceaux en réglettes de bois, le mur en briques ; la règle et les nombres restent à la craie.
  * Curseur q (0,1 à 0,9) : le mur se déplace, la somme s'en approche toujours.
  * Moments : somme, formule, condition, limite. Repères : morceaux, somme, formule, condition, manque, mur, limite.
  */
-const { fr } = MathsTableau;
+const { fr, peindre, bloc } = MathsTableau;
 const X0 = 50, LARG = 600, RY = 150;
 const qtxt = q => (Math.abs(q - 0.5) < 1e-9 ? '1/2' : fr(q, 1));
 const S = (q, n) => (1 - Math.pow(q, n + 1)) / (1 - q);
@@ -30,19 +31,42 @@ const dec = (v, d) => v.toFixed(d).replace(/0+$/, '').replace(/\.$/, '').replace
 const tronque = (v, manque) => { manque = Math.max(manque, 1e-9); const d = Math.min(9, Math.max(2, 1 - Math.floor(Math.log10(manque)))), k = 10 ** d; return dec(Math.floor(v * k) / k, d); };
 const COUL = ['cyan', 'jaune', 'vert', 'orange', 'rose', 'bleu', 'violet'];
 
-/** Les morceaux w₀ … w_N posés bout à bout (N peut être fractionnaire : le dernier se pose en partie). */
+/** Les morceaux w₀ … w_N posés bout à bout, des réglettes de bois peintes (N peut être fractionnaire : le dernier se pose en partie). */
 function morceaux(c, q, N, U, etiquettes) {
   let x = 0;
   for (let k = 0; k <= Math.ceil(N); k++) {
     const part = Math.min(1, N - k + 1); if (part <= 0) break;
     const w = Math.pow(q, k), x1 = X0 + x * U, x2 = X0 + (x + w * part) * U;
     if (x2 - x1 > 0.4) {
-      c.rect(x1, RY - 13, Math.max(1, x2 - x1), 26, { couleur: COUL[k % COUL.length], fond: COUL[k % COUL.length], fondAlpha: .3, arrondi: 3, largeur: 1.3, duree: 0 });
+      bloc(c, x1, RY - 13, Math.max(1, x2 - x1), 26, COUL[k % COUL.length]);
       if (etiquettes && part >= 1 && k < 4 && w * U > 24) c.texte(k === 0 ? '1' : (Math.abs(q - .5) < 1e-9 ? `1/${2 ** k}` : fr(w, 3)), (x1 + x2) / 2, RY - 22, { couleur: COUL[k % COUL.length], taille: 16, align: 'center', duree: 0 });
     }
     x += w * part;
   }
   return x;
+}
+
+/** Le mur, peint (règle 32) : un pan de briques posé sur la règle, sa face gauche en x (là où la somme ne passe pas). */
+function mur(ctx, x, haut, bas) {
+  const w = 18, hb = 8, lb = 12;
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 8; ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 2;
+  ctx.fillStyle = '#6e3b2a'; ctx.fillRect(x, haut, w, bas - haut);   // le mortier
+  ctx.restore();
+  ctx.save(); ctx.beginPath(); ctx.rect(x, haut, w, bas - haut); ctx.clip();
+  for (let r = 0, y = haut; y < bas; r++, y += hb) {
+    for (let xb = x - (r % 2 ? lb / 2 : 0); xb < x + w; xb += lb) {
+      const v = ((r * 7 + Math.round(xb) * 3) % 5) / 5;
+      const g = ctx.createLinearGradient(0, y, 0, y + hb);
+      g.addColorStop(0, `rgb(${178 + v * 20},${84 + v * 12},${58 + v * 8})`); g.addColorStop(1, `rgb(${128 + v * 16},${56 + v * 8},${40 + v * 6})`);
+      ctx.fillStyle = g; ctx.fillRect(xb + 0.7, y + 0.7, lb - 1.4, hb - 1.4);
+      ctx.fillStyle = 'rgba(255,220,200,.18)'; ctx.fillRect(xb + 0.7, y + 0.7, lb - 1.4, 1);
+    }
+  }
+  // La face gauche, dans l'ombre (c'est elle que la somme approche).
+  const g = ctx.createLinearGradient(x, 0, x + 5, 0); g.addColorStop(0, 'rgba(0,0,0,.35)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.fillRect(x, haut, 5, bas - haut);
+  ctx.restore();
 }
 
 MathsTableau.page({
@@ -91,6 +115,7 @@ MathsTableau.page({
         });
         K.marque('condition');
         c.pause(.2);
+        peindre(c, .4, ctx => mur(ctx, X0 + L * U, RY - 18, RY + 22));
         c.ligne(X0 + L * U, RY - 34, X0 + L * U, RY + 30, { couleur: 'jaune', largeur: 3, pointille: [6, 5] });
         c.texte(`mur : ${fr(L, 3)}`, X0 + L * U + 8, RY - 26, { couleur: 'jaune', taille: 17 });
         c.repere('mur', X0 + L * U - 10, RY - 40, 110, 76, 'le mur : la limite');

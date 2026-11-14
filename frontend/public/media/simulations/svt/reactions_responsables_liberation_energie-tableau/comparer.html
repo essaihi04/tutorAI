@@ -12,6 +12,7 @@
 </div>
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
+<script src="peinture.js"></script>
 <script>
 /*
  * Avec ou sans dioxygène (14 novembre 2026, règle 28 du professeur) : le même glucose, deux sorts.
@@ -73,21 +74,72 @@ const MITO = { x: 320, y: 190, rx: 82, ry: 46 };
 const COL = { x: 446, lab: 452, c1: 583, c2: 695, w: 104 };
 const ROWS = { lieu: 120, degradation: 162, produits: 200, atp: 244, r: 282 };
 
+/* ── Peinture (règle 32 : le vivant et les molécules sont peints, la craie garde légendes et valeurs) ── */
+const P = window.SVTPeinture;
+const TEINTE = { blanc: [228, 226, 214], jaune: [250, 204, 21], orange: [240, 140, 50] };
+const OXYGENE = [214, 64, 58], HYDROGENE = [236, 236, 236], EAU = [70, 150, 210];
+
+/** La cellule en coupe : membrane plasmique (double trait), hyaloplasme granuleux, contour arrondi du cadre CELL. */
+function peindreCellule(ctx) {
+  const { x, y, w, h } = CELL, r = 26, rnd = P.graine(23), chemin = (d) => { ctx.beginPath(); ctx.roundRect(x + d, y + d, w - 2 * d, h - 2 * d, r - d); };
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 10; ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 3;
+  const g = ctx.createRadialGradient(x + w * .35, y + h * .35, 20, x + w / 2, y + h / 2, w * .62);
+  g.addColorStop(0, P.rgba(P.T.hyalo, .32)); g.addColorStop(.75, P.rgba(P.T.hyalo, .22)); g.addColorStop(1, P.rgba(P.T.hyalo, .12));
+  chemin(0); ctx.fillStyle = g; ctx.fill();
+  ctx.restore();
+  ctx.save(); chemin(0); ctx.clip();
+  ctx.fillStyle = P.rgba([200, 220, 180], .15);
+  for (let k = 0; k < 150; k++) { ctx.beginPath(); ctx.arc(x + rnd() * w, y + rnd() * h, .8 + rnd() * 1.6, 0, Math.PI * 2); ctx.fill(); }
+  ctx.restore();
+  ctx.save();
+  ctx.lineWidth = 2.4; ctx.strokeStyle = P.rgba(P.T.membrane, .8); chemin(0); ctx.stroke();
+  ctx.lineWidth = 1; ctx.strokeStyle = P.rgba(P.T.membrane, .42); chemin(4); ctx.stroke();
+  ctx.restore();
+}
+/** Le carbone : une bille ombrée (blanc = glucose, jaune = acide pyruvique, orange = acide lactique). */
 function carbone(c, x, y, couleur, halo) {
-  if (halo) { const g = c.ctx; g.globalAlpha = .22; g.fillStyle = c.couleur('orange'); g.beginPath(); g.arc(x, y, 11, 0, Math.PI * 2); g.fill(); g.globalAlpha = 1; }
-  c.point(x, y, 5.5, couleur);
+  const g = c.ctx;
+  if (halo) { g.globalAlpha = .22; g.fillStyle = c.couleur('orange'); g.beginPath(); g.arc(x, y, 11, 0, Math.PI * 2); g.fill(); g.globalAlpha = 1; }
+  P.bille(g, x, y, 6, TEINTE[couleur] || TEINTE.blanc);
+}
+/** Une liaison entre deux carbones voisins (bâtonnet clair, sous les billes). */
+function liaison(ctx, [x1, y1], [x2, y2]) {
+  ctx.save(); ctx.strokeStyle = 'rgba(225,225,210,.7)'; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.restore();
+}
+/** Une molécule de CO₂ (O = C = O) dans sa bulle de gaz. */
+function peindreCO2(ctx, x, y) {
+  P.bille(ctx, x - 7.5, y, 4.2, OXYGENE); P.bille(ctx, x + 7.5, y, 4.2, OXYGENE);
+  P.bille(ctx, x, y, 5, TEINTE.jaune);
+  P.bulleGaz(ctx, x, y, 12);
+}
+/** Une molécule d'eau : l'oxygène et ses deux hydrogènes en V. */
+function peindreH2O(ctx, x, y) {
+  P.bille(ctx, x - 4.5, y + 3.5, 2.6, HYDROGENE); P.bille(ctx, x + 4.5, y + 3.5, 2.6, HYDROGENE);
+  P.bille(ctx, x, y, 4.6, EAU);
+}
+/** Un ATP du compteur : une petite capsule dorée et brillante. */
+function peindreATP(ctx, x, y, w, h) {
+  const g = ctx.createLinearGradient(x, 0, x + w, 0);
+  g.addColorStop(0, '#a87d08'); g.addColorStop(.35, '#ffe680'); g.addColorStop(.6, '#f5c518'); g.addColorStop(1, '#8f6a05');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, w / 2); ctx.fill();
 }
 
 function dessiner(c) {
   const t = chrono.t, p = chrono.part, M = moments();
+  // La cellule et la mitochondrie, peintes (sous la craie) ; sans O₂ la mitochondrie est éteinte.
+  c.direct(() => {
+    const g = c.ctx;
+    peindreCellule(g);
+    g.save(); g.globalAlpha = S.o2 ? 1 : .38;
+    P.mitochondrie(g, MITO.x, MITO.y, MITO.rx, MITO.ry, { cretes: 6, graine: 5 });
+    g.restore();
+  });
   // Le cadre fixe s'affiche d'un coup : la voix peut lancer l'essai dès l'ouverture.
   c.direct(() => c.texte('Le même glucose : avec ou sans dioxygène ?', 14, 26, { couleur: 'blanc', taille: 17 }));
-  // La cellule et la mitochondrie.
-  c.rect(CELL.x, CELL.y, CELL.w, CELL.h, { couleur: 'faible', arrondi: 26 });
   c.texte('hyaloplasme', 28, 66, { couleur: 'faible', taille: 14 });
   c.repere('hyaloplasme', 20, 50, 110, 24, 'le hyaloplasme');
-  c.trait(Array.from({ length: 41 }, (_, i) => { const a = i / 40 * Math.PI * 2; return [MITO.x + MITO.rx * Math.cos(a), MITO.y + MITO.ry * Math.sin(a)]; }), { couleur: S.o2 ? 'cyan' : 'tresfaible', largeur: 2.2 });
-  c.courbe(u => [MITO.x - 64 + 128 * u, MITO.y + 22 * Math.sin(u * Math.PI * 7) * Math.sin(u * Math.PI)], 60, { couleur: S.o2 ? 'cyan' : 'tresfaible', largeur: 1.4 });
   c.texte(S.o2 ? 'mitochondrie' : 'mitochondrie à l’arrêt : pas de O₂', MITO.x, MITO.y + MITO.ry + 20, { couleur: S.o2 ? 'cyan' : 'rouge', taille: 14, align: 'center' });
   c.repere('mitochondrie', MITO.x - MITO.rx, MITO.y - MITO.ry, MITO.rx * 2, MITO.ry * 2 + 26, 'la mitochondrie');
   c.texte('ATP :', 24, 322, { couleur: 'jaune', taille: 16 });
@@ -107,6 +159,12 @@ function dessiner(c) {
     }
     // Avec O₂, le carbone i quitte la mitochondrie en CO₂ à M.mitochondrie + 0,42·i.
     const lactique = !S.o2 && t >= M.rendement + 0.4;
+    // Les liaisons de la chaîne carbonée : celle du milieu se rompt pendant la glycolyse.
+    groupes.flat().forEach((pt, i, tous) => {
+      if (i === 5 || (i === 2 && u > 0)) return;
+      if (S.o2 && t >= M.mitochondrie + i * 0.42) return;
+      liaison(c.ctx, pt, tous[i + 1]);
+    });
     groupes.flat().forEach(([x, y], i) => {
       if (S.o2 && t >= M.mitochondrie + i * 0.42) return;
       carbone(c, x, y, lactique ? 'orange' : u < 1 ? 'blanc' : 'jaune', lactique && t >= M.residu - 0.6);
@@ -116,7 +174,7 @@ function dessiner(c) {
     // Le compteur d'ATP : 2 par la glycolyse, puis jusqu'à 38 avec la mitochondrie.
     let nATP = Math.round(2 * p(1.4, 2.1));
     if (S.o2) nATP += Math.round(36 * p(M.mitochondrie, M.mineraux));
-    for (let i = 0; i < nATP; i++) { const g = c.ctx; g.globalAlpha = .9; g.fillStyle = c.couleur('jaune'); g.fillRect(84 + i * 8.2, 306, 6.6, 18); g.globalAlpha = 1; }
+    for (let i = 0; i < nATP; i++) peindreATP(c.ctx, 84 + i * 8.2, 306, 6.6, 18);
     if (nATP) c.texte(String(nATP), 84 + nATP * 8.2 + 4, 322, { couleur: 'jaune', taille: 16 });
     // Avec O₂ : les carbones sortent en CO₂, l'eau se forme.
     if (S.o2) {
@@ -124,8 +182,9 @@ function dessiner(c) {
         const t0 = M.mitochondrie + k * 0.42, v = doux(p(t0, t0 + 0.7));
         if (v <= 0) continue;
         const x = mix(262 + 15 * (k % 3) + (k > 2 ? 48 : 0), 196 + k * 26, v), y = mix(k > 2 ? 205 : 176, 92, v);
-        c.cercle(x, y, 10, { couleur: 'blanc', largeur: 1.4 }); c.texte('CO₂', x, y + 4, { couleur: 'blanc', taille: 11, align: 'center' });
-        if (v > 0.5) { const g = c.ctx; g.globalAlpha = .85; g.fillStyle = c.couleur('bleu'); g.beginPath(); g.arc(214 + k * 22, 270, 5, 0, Math.PI * 2); g.fill(); g.globalAlpha = 1; }
+        peindreCO2(c.ctx, x, y);
+        if (v < 1) c.texte('CO₂', x, y - 16, { couleur: 'blanc', taille: 11, align: 'center' });
+        if (v > 0.5) peindreH2O(c.ctx, 214 + k * 22, 270);
       }
     }
   });

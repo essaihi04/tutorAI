@@ -39,6 +39,7 @@ const fC = C => sci(C, 1);
 // Loupe : 25 places sur une grille 5 × 5 ; celles qui ont réagi sont prises dans cet ordre (mélangé, fixe).
 const ORDRE = [12, 3, 21, 8, 16, 0, 24, 6, 18, 10, 14, 2, 22, 5, 19, 9, 1, 23, 7, 15, 11, 4, 20, 13, 17];
 const LP = { x: 280, y: 200, r: 80, pas: 25 };
+const COUL = { acide: [236, 236, 230], base: [139, 92, 246], oxonium: [250, 204, 21] };   // blanc, violet, jaune de la légende
 const BE = { x: 40, y: 150, w: 110, h: 120 };
 const R = { x: 372, ligne0: 112, dy: 32, base: 336, ech: 150, bx: [420, 500, 580, 660], lb: 40 };
 
@@ -68,15 +69,13 @@ function dessiner(c, D) {
   D.scene.cadre(41);
   c.texte('Acide éthanoïque : on dilue, on mesure le pH, on calcule τ', 380, 26, { couleur: 'blanc', taille: 17, align: 'center' });
   const cu = courante(D), m = cu.m;
-  // Le bécher, sa solution (plus pâle quand elle est diluée) et la sonde du pH-mètre.
+  // Peints (règle 32) : le bécher en verre, sa solution incolore (un peu plus voilée quand elle est concentrée),
+  // le pH-mètre (boîtier, écran, câble) et son électrode de verre qui trempe dans la solution.
   c.direct(() => {
-    const ctx = c.ctx; ctx.globalAlpha = .1 + .05 * Math.max(0, 5 + Math.log10(m.C)); ctx.fillStyle = '#e2e8f0';
-    ctx.fillRect(BE.x + 3, BE.y + 30, BE.w - 6, BE.h - 33); ctx.globalAlpha = 1;
+    const P_ = window.Peinture;
+    P_.becher(c.ctx, BE.x, BE.y, BE.w, BE.h, { surface: BE.y + 30, liquide: [205, 225, 240, .16 + .05 * Math.max(0, 5 + Math.log10(m.C))] });
+    P_.phmetre(c.ctx, { x: BE.x + 6, y: 76, w: 98, h: 40 }, { x: BE.x + 55, yHaut: 128, yBas: BE.y + 90 });
   });
-  c.trait([[BE.x - 4, BE.y], [BE.x, BE.y + BE.h], [BE.x + BE.w, BE.y + BE.h], [BE.x + BE.w + 4, BE.y]], { couleur: 'blanc', largeur: 2 });
-  c.ligne(BE.x + 3, BE.y + 30, BE.x + BE.w - 3, BE.y + 30, { couleur: 'faible', largeur: 1.2 });
-  c.rect(BE.x + 6, 76, 98, 40, { couleur: 'blanc', largeur: 1.8 });
-  c.ligne(BE.x + 55, 116, BE.x + 55, BE.y + 90, { couleur: 'faible', largeur: 2 });
   c.repere('afficheur', BE.x + 2, 72, 106, 48, 'l’afficheur du pH-mètre');
   c.repere('becher', BE.x - 8, BE.y - 4, BE.w + 16, BE.h + 40, 'le bécher');
   c.direct(() => {
@@ -85,25 +84,28 @@ function dessiner(c, D) {
     c.texte(`C = ${fC(m.C)} mol/L`, BE.x + 55, BE.y + BE.h + 26, { couleur: cu.libre ? 'blanc' : 'cyan', taille: 15, align: 'center' });
     if (cu.dil < 1) {   // on verse l'eau distillée
       c.texte('+ eau distillée', BE.x + 55, BE.y + BE.h + 50, { couleur: 'bleu', taille: 15, align: 'center' });
-      for (let k = 0; k < 4; k++) { const yy = BE.y - 22 + ((cu.dil * 120 + k * 16) % 60); c.point(BE.x + 70 + k % 2 * 4, yy, 2.4, 'bleu'); }
+      for (let k = 0; k < 4; k++) { const yy = BE.y - 22 + ((cu.dil * 120 + k * 16) % 60); window.Peinture.goutte(c.ctx, BE.x + 70 + k % 2 * 4, yy, 2.6); }
     }
   });
   // La loupe sur 25 molécules d'acide versées : combien ont cédé leur proton à l'eau ?
-  c.cercle(LP.x, LP.y, LP.r, { couleur: 'blanc', largeur: 2 });
+  c.direct(() => window.Peinture.loupeFond(c.ctx, LP.x, LP.y, LP.r));
   c.ligne(BE.x + BE.w + 2, BE.y + 80, LP.x - LP.r * .92, LP.y + 30, { couleur: 'tresfaible', largeur: 1.2 });
   c.repere('loupe', LP.x - LP.r - 6, LP.y - LP.r - 6, 2 * LP.r + 12, 2 * LP.r + 12, 'la loupe : 25 molécules d’acide');
   const n = cu.mes > 0 ? Math.round(25 * m.tau * Math.min(1, cu.mes * 1.4)) : 0;
   c.direct(() => {
-    const reagi = new Set(ORDRE.slice(0, n));
+    // Les entités en billes ombrées, mêmes couleurs que la légende : acide blanc, ion éthanoate violet, ion oxonium jaune.
+    const reagi = new Set(ORDRE.slice(0, n)), sph = window.Peinture.sphere, ctx = c.ctx;
     for (let i = 0; i < 25; i++) {
       const gx = LP.x + (i % 5 - 2) * LP.pas, gy = LP.y + (Math.floor(i / 5) - 2) * LP.pas;
-      if (reagi.has(i)) { c.point(gx - 6, gy, 5, 'violet'); c.point(gx + 6, gy + 2, 4, 'jaune'); } else c.point(gx, gy, 5, 'blanc');
+      if (reagi.has(i)) { sph(ctx, gx - 6, gy, 5.5, COUL.base); sph(ctx, gx + 6, gy + 2, 4.5, COUL.oxonium); } else sph(ctx, gx, gy, 5.5, COUL.acide);
     }
+    window.Peinture.loupeCadre(ctx, LP.x, LP.y, LP.r);
     c.texte(`${n} sur 25 ont réagi`, LP.x, LP.y + LP.r + 22, { couleur: 'jaune', taille: 16, align: 'center' });
   });
-  c.point(LP.x - 92, LP.y + LP.r + 46, 4, 'blanc'); c.texte('CH₃COOH', LP.x - 84, LP.y + LP.r + 51, { couleur: 'faible', taille: 13 });
-  c.point(LP.x - 10, LP.y + LP.r + 46, 4, 'violet'); c.texte('CH₃COO⁻', LP.x - 2, LP.y + LP.r + 51, { couleur: 'faible', taille: 13 });
-  c.point(LP.x + 64, LP.y + LP.r + 46, 4, 'jaune'); c.texte('H₃O⁺', LP.x + 72, LP.y + LP.r + 51, { couleur: 'faible', taille: 13 });
+  c.direct(() => { const yl = LP.y + LP.r + 46; window.Peinture.sphere(c.ctx, LP.x - 92, yl, 4.5, COUL.acide); window.Peinture.sphere(c.ctx, LP.x - 10, yl, 4.5, COUL.base); window.Peinture.sphere(c.ctx, LP.x + 64, yl, 4.5, COUL.oxonium); });
+  c.texte('CH₃COOH', LP.x - 84, LP.y + LP.r + 51, { couleur: 'faible', taille: 13 });
+  c.texte('CH₃COO⁻', LP.x - 2, LP.y + LP.r + 51, { couleur: 'faible', taille: 13 });
+  c.texte('H₃O⁺', LP.x + 72, LP.y + LP.r + 51, { couleur: 'faible', taille: 13 });
   // À droite : la relation, une ligne par solution, les barres de τ.
   if (D.commence('relation')) {
     D.ecrire(c, 'relation');

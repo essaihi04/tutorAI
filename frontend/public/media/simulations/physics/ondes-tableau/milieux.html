@@ -38,23 +38,91 @@ const arrivee = p => D / vit(p);         // s
 const tfin = () => arrivee(PISTES[2]) + 0.15;
 const S = { t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0 };
 
+/* ── Peinture des objets réels (canvas brut, AVANT la craie ; règle 32) ─── */
+function lin(ctx, x0, y0, x1, y1, arrets) { const g = ctx.createLinearGradient(x0, y0, x1, y1); arrets.forEach(([o, c]) => g.addColorStop(o, c)); return g; }
+function ombre(ctx, flou = 6, dx = 2, dy = 3) { ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = flou; ctx.shadowOffsetX = dx; ctx.shadowOffsetY = dy; }
+// Barreau d'acier brossé : dégradé métallique, reflet, fines stries de brossage.
+function peindreAcier(ctx, x0, x1, y) {
+  const h = 16, yh = y - h / 2;
+  ctx.save(); ombre(ctx);
+  ctx.fillStyle = lin(ctx, 0, yh, 0, yh + h, [[0, '#59626c'], [.25, '#c9d0d7'], [.45, '#eef1f4'], [.7, '#8d969f'], [1, '#3f464e']]);
+  ctx.beginPath(); ctx.roundRect(x0, yh, x1 - x0, h, 2); ctx.fill(); ctx.restore();
+  ctx.save(); ctx.beginPath(); ctx.rect(x0, yh, x1 - x0, h); ctx.clip(); ctx.lineWidth = .6;
+  for (let i = 0; i < 14; i++) {
+    const yy = yh + 1.5 + i * (h - 3) / 13;
+    ctx.strokeStyle = i % 2 ? 'rgba(255,255,255,.10)' : 'rgba(30,35,40,.10)';
+    ctx.beginPath(); ctx.moveTo(x0, yy); ctx.lineTo(x1, yy + ((i * 37) % 5 - 2) * .2); ctx.stroke();
+  }
+  ctx.restore();
+}
+// Eau dans une auge de verre : bleu translucide, surface claire ondulée, fond plus sombre.
+function peindreEau(ctx, x0, x1, y) {
+  const yb = y + 13, surf = u => y - 9 + 1.6 * Math.sin(u * 46);
+  const surface = () => { for (let i = 0; i <= 90; i++) { const u = i / 90; i ? ctx.lineTo(x0 + u * (x1 - x0), surf(u)) : ctx.moveTo(x0, surf(0)); } };
+  ctx.beginPath(); surface(); ctx.lineTo(x1, yb); ctx.lineTo(x0, yb); ctx.closePath();
+  ctx.fillStyle = lin(ctx, 0, y - 10, 0, yb, [[0, 'rgba(120,200,255,.55)'], [.5, 'rgba(40,130,220,.55)'], [1, 'rgba(14,60,140,.7)']]); ctx.fill();
+  ctx.strokeStyle = 'rgba(220,245,255,.85)'; ctx.lineWidth = 1.4; ctx.beginPath(); surface(); ctx.stroke();
+  // Parois de l'auge (verre).
+  ctx.strokeStyle = 'rgba(200,230,240,.45)'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(x0 - 2, y - 14); ctx.lineTo(x0 - 2, yb + 2); ctx.lineTo(x1 + 2, yb + 2); ctx.lineTo(x1 + 2, y - 14); ctx.stroke();
+}
+// Air : une bande d'air léger, bleuté, avec quelques molécules éparses.
+function peindreAir(ctx, x0, x1, y, graine) {
+  ctx.fillStyle = lin(ctx, 0, y - 13, 0, y + 13, [[0, 'rgba(170,215,255,0)'], [.5, 'rgba(170,215,255,.14)'], [1, 'rgba(170,215,255,0)']]);
+  ctx.fillRect(x0, y - 13, x1 - x0, 26);
+  ctx.fillStyle = 'rgba(200,230,255,.35)';
+  for (let i = 0; i < 40; i++) {
+    const u = (i * 0.6180339 + graine) % 1, v = (i * 0.381966 * 7 + graine * 3) % 1;
+    ctx.beginPath(); ctx.arc(x0 + u * (x1 - x0), y - 10 + v * 20, 1.1, 0, Math.PI * 2); ctx.fill();
+  }
+}
+// Marteau : manche en bois veiné, tête en acier ; la face de frappe touche le bout du milieu.
+function peindreMarteau(ctx, xFace, y, k) {
+  const L = 24 * k, H = 11 * k, xh = xFace - L, cx = xh + L * 0.45;
+  const bx = cx - 16 * k, by = y - 30 * k, ang = Math.atan2(by - y, bx - cx), lg = Math.hypot(bx - cx, by - y), e = 3.2 * k;
+  ctx.save(); ctx.translate(cx, y); ctx.rotate(ang); ombre(ctx, 5, 2, 2);
+  ctx.fillStyle = lin(ctx, 0, -e, 0, e, [[0, '#6b3e1c'], [.4, '#c8894a'], [.6, '#b0733b'], [1, '#5a3216']]);
+  ctx.beginPath(); ctx.roundRect(0, -e, lg + 2 * k, 2 * e, e * .9); ctx.fill(); ctx.shadowColor = 'transparent';
+  ctx.strokeStyle = 'rgba(70,35,10,.35)'; ctx.lineWidth = .6;
+  for (const d of [-1.4, .3, 1.6]) { ctx.beginPath(); ctx.moveTo(4, d * k); ctx.quadraticCurveTo(lg / 2, d * k + 1, lg, d * k - .5); ctx.stroke(); }
+  ctx.restore();
+  ctx.save(); ombre(ctx, 6, 2, 3);
+  ctx.fillStyle = lin(ctx, 0, y - H / 2, 0, y + H / 2, [[0, '#7c858e'], [.3, '#e6eaee'], [.55, '#a9b1b9'], [1, '#3e454c']]);
+  ctx.beginPath(); ctx.roundRect(xh, y - H / 2, L, H, 2 * k); ctx.fill(); ctx.restore();
+  ctx.fillStyle = lin(ctx, xFace - 4 * k, 0, xFace, 0, [[0, 'rgba(0,0,0,0)'], [1, 'rgba(255,255,255,.35)']]); ctx.fillRect(xFace - 4 * k, y - H / 2, 4 * k, H);
+}
+// Oreille : pavillon couleur peau, ourlet et conque plus sombres ; tournée vers la gauche, d'où vient le son.
+function peindreOreille(ctx, x, y) {
+  ctx.save(); ombre(ctx, 5, 2, 2);
+  ctx.fillStyle = lin(ctx, x, 0, x + 20, 0, [[0, '#f1c7a3'], [.6, '#e0a982'], [1, '#b97c58']]);
+  ctx.beginPath(); ctx.moveTo(x + 2, y - 13);
+  ctx.bezierCurveTo(x + 12, y - 19, x + 22, y - 12, x + 19, y - 2);
+  ctx.bezierCurveTo(x + 17, y + 6, x + 11, y + 7, x + 11, y + 13);
+  ctx.bezierCurveTo(x + 10, y + 19, x + 2, y + 19, x + 1, y + 12);
+  ctx.bezierCurveTo(x + 4, y + 6, x - 1, y - 4, x + 2, y - 13); ctx.closePath(); ctx.fill(); ctx.restore();
+  ctx.strokeStyle = 'rgba(140,75,50,.75)'; ctx.lineWidth = 1.4; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x + 5, y - 10); ctx.bezierCurveTo(x + 13, y - 14, x + 18, y - 7, x + 15, y - 1); ctx.stroke();
+  ctx.fillStyle = 'rgba(120,60,40,.6)'; ctx.beginPath(); ctx.ellipse(x + 8, y + 2, 3.2, 4.6, 0, 0, Math.PI * 2); ctx.fill();
+}
+function peindrePistes(ctx) {
+  for (const p of PISTES) {
+    if (p.id === 'acier') peindreAcier(ctx, X0, X1, p.y);
+    else if (p.id === 'eau') peindreEau(ctx, X0, X1, p.y);
+    else peindreAir(ctx, X0, X1, p.y, p.fort ? .37 : .11);
+    peindreMarteau(ctx, X0 - 3, p.y, p.fort ? 1.5 : 1);
+    peindreOreille(ctx, X1 + 10, p.y);
+  }
+}
+
 function dessiner(c) {
   scene.cadre(11);
+  c.direct(() => peindrePistes(c.ctx));
   c.texte('Une seule frappe, au même instant, sur 1 km de chaque milieu', 380, 24, { couleur: 'blanc', taille: 17, align: 'center' });
   c.cote(X0, 66, X1, 66, 'd = 1 km', { couleur: 'faible' });
   for (const p of PISTES) {
     c.texte(p.nom, 20, p.y + (p.nom2 ? -2 : 6), { couleur: p.couleur, taille: 17 });
     if (p.nom2) c.texte(p.nom2, 20, p.y + 18, { couleur: p.couleur, taille: 17 });
-    // Le milieu : un barreau d'acier, de l'eau, de l'air.
-    if (p.id === 'acier') c.rect(X0, p.y - 9, X1 - X0, 18, { couleur: 'faible' });
-    else if (p.id === 'eau') c.courbe(u => [X0 + u * (X1 - X0), p.y + 10 + 2 * Math.sin(u * 40)], 80, { couleur: 'faible', largeur: 1.4 });
-    else c.ligne(X0, p.y + 12, X1, p.y + 12, { couleur: 'faible', largeur: 1.2, pointille: [4, 6] });
-    // La frappe à gauche, l'oreille à droite.
-    // Le marteau qui frappe le bout du milieu (plus gros pour la frappe forte).
-    const k = p.fort ? 1.5 : 1;
-    c.rect(X0 - 18 - 9 * k, p.y - 7 * k, 9 * k, 14 * k, { couleur: 'blanc' });
-    c.ligne(X0 - 18 - 4.5 * k, p.y - 7 * k, X0 - 40 - 4.5 * k, p.y - 26 * k, { couleur: 'blanc', largeur: 2 + k });
-    c.courbe(u => [X1 + 14 + 8 * Math.sin(Math.PI * u), p.y - 12 + 24 * u], 20, { couleur: 'blanc', largeur: 2 });
+    // Le milieu (barreau d'acier, eau, air), le marteau et l'oreille sont peints plus haut, sous la craie.
     c.repere(p.id, 14, p.y - 26, 720, 52, p.id === 'air_fort' ? 'l’air frappé plus fort' : 'piste ' + p.nom);
   }
   c.direct(() => {
@@ -114,7 +182,7 @@ function arreterSiInstantAtteint() {
   return true;
 }
 function ceQuiSeVoit() {
-  const m = [`Quatre pistes de 1 km : acier, eau, air, et air frappé plus fort. Air à ${fr(S0.theta, 0)} °C. Frappe à gauche, oreille à droite.`];
+  const m = [`Quatre pistes de 1 km : acier, eau, air, et air frappé plus fort. Air à ${fr(S0.theta, 0)} °C. Marteau peint (manche en bois, tête d’acier) à gauche, oreille à droite ; barreau d’acier brossé, eau bleue dans une auge, air léger.`];
   if (S.t <= 0) m.push('Pas encore frappé.');
   else {
     const arr = PISTES.filter(p => S.t >= arrivee(p)).map(p => p.nom + (p.nom2 ? ' ' + p.nom2 : ''));

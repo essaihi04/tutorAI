@@ -46,6 +46,68 @@ const vu = nom => S.t >= T[nom] - 1e-6;
 
 function bosse(x, xc, w) { return Math.exp(-(((x - xc) / w) ** 2)); }
 
+/* ── Peinture des objets réels (canvas brut, AVANT la craie ; règle 32) ─── */
+function lin(ctx, x0, y0, x1, y1, arrets) { const g = ctx.createLinearGradient(x0, y0, x1, y1); arrets.forEach(([o, c]) => g.addColorStop(o, c)); return g; }
+// Corde de chanvre torsadée : un cordon beige ombré, des torons en biais le long du tracé.
+function peindreCorde(ctx, f, x0, x1) {
+  const n = 120, pts = []; for (let i = 0; i <= n; i++) { const x = x0 + (x1 - x0) * i / n; pts.push([x, f(x)]); }
+  const tracer = () => { ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); };
+  ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 5; ctx.shadowOffsetY = 3;
+  ctx.strokeStyle = '#7a5530'; ctx.lineWidth = 7; tracer(); ctx.stroke(); ctx.shadowColor = 'transparent';
+  ctx.strokeStyle = '#c9a06a'; ctx.lineWidth = 5; tracer(); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,235,200,.55)'; ctx.lineWidth = 1.4; ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y - 1.6) : ctx.moveTo(x, y - 1.6))); ctx.stroke();
+  // Torons : petits traits obliques, perpendiculaires au tracé, inclinés.
+  ctx.strokeStyle = 'rgba(90,60,30,.75)'; ctx.lineWidth = 1.1;
+  for (let x = x0 + 3; x < x1 - 2; x += 4.5) {
+    const y = f(x), d = (f(x + 1) - f(x - 1)) / 2, L = Math.hypot(1, d), tx = 1 / L, ty = d / L, nx = -ty, ny = tx;
+    ctx.beginPath(); ctx.moveTo(x - nx * 3 - tx * 1.8, y - ny * 3 - ty * 1.8); ctx.lineTo(x + nx * 3 + tx * 1.8, y + ny * 3 + ty * 1.8); ctx.stroke();
+  }
+  ctx.restore();
+}
+// Ressort à boudin en acier : brins avant clairs et brillants, brins arrière plus sombres.
+function peindreRessort(ctx, pts) {
+  ctx.save(); ctx.lineCap = 'round';
+  const acier = (y0, y1, sombre) => lin(ctx, 0, y0, 0, y1, sombre
+    ? [[0, '#4b535b'], [1, '#2c3137']]
+    : [[0, '#8e98a2'], [.35, '#f3f6f8'], [.6, '#aeb7c0'], [1, '#59626b']]);
+  ctx.lineWidth = 3; ctx.strokeStyle = acier(96, 144, true);
+  for (let i = 1; i + 1 < pts.length; i += 2) { ctx.beginPath(); ctx.moveTo(...pts[i]); ctx.lineTo(...pts[i + 1]); ctx.stroke(); }   // brins arrière (bas → haut)
+  ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 4; ctx.shadowOffsetX = 1; ctx.shadowOffsetY = 2;
+  ctx.lineWidth = 3.6; ctx.strokeStyle = acier(96, 144, false);
+  for (let i = 0; i + 1 < pts.length; i += 2) {                       // brins avant (haut → bas), légèrement bombés
+    const [ax, ay] = pts[i], [bx, by] = pts[i + 1];
+    ctx.beginPath(); ctx.moveTo(ax, ay); ctx.quadraticCurveTo((ax + bx) / 2 + 3, (ay + by) / 2, bx, by); ctx.stroke();
+  }
+  ctx.restore();
+}
+// Haut-parleur : caisson noir, membrane conique grise, cache-noyau au centre.
+function peindreHautParleur(ctx, x, y) {
+  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 6; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 3;
+  ctx.fillStyle = lin(ctx, x - 34, 0, x - 12, 0, [[0, '#1d2126'], [.5, '#3b424a'], [1, '#22272c']]);
+  ctx.beginPath(); ctx.roundRect(x - 34, y - 18, 22, 36, 3); ctx.fill(); ctx.shadowColor = 'transparent';
+  ctx.fillStyle = lin(ctx, 0, y - 32, 0, y + 32, [[0, '#9aa1a8'], [.5, '#50575e'], [1, '#2b3035']]);
+  ctx.beginPath(); ctx.moveTo(x - 14, y - 12); ctx.lineTo(x, y - 32); ctx.lineTo(x + 2, y - 32); ctx.lineTo(x + 2, y + 32); ctx.lineTo(x, y + 32); ctx.lineTo(x - 14, y + 12); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(20,20,20,.8)'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(x + 1, y - 32); ctx.lineTo(x + 1, y + 32); ctx.stroke();   // suspension
+  ctx.fillStyle = lin(ctx, 0, y - 7, 0, y + 7, [[0, '#d5dadf'], [1, '#5f666d']]);
+  ctx.beginPath(); ctx.ellipse(x - 6, y, 3, 7, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+// Surface de l'eau vue de dessus : bassin bleu, reflets ; la goutte tombe au centre.
+const BASSIN = k => [k.x + 8, k.y + 34, k.w - 16, k.h - 68];
+function peindreBassin(ctx, k) {
+  const [x, y, w, h] = BASSIN(k);
+  const g = ctx.createRadialGradient(EX, EY, 6, EX, EY, w * 0.6);
+  g.addColorStop(0, 'rgba(70,160,220,.55)'); g.addColorStop(1, 'rgba(18,70,130,.6)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 10); ctx.fill();
+  ctx.strokeStyle = 'rgba(190,225,245,.35)'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.strokeStyle = 'rgba(230,248,255,.18)'; ctx.lineWidth = 1.2;
+  for (const [a, b, l] of [[.12, .2, 40], [.7, .15, 55], [.2, .8, 50], [.78, .78, 35]]) { ctx.beginPath(); ctx.moveTo(x + a * w, y + b * h); ctx.lineTo(x + a * w + l, y + b * h - 3); ctx.stroke(); }
+  // La goutte (vue de dessus) : perle d'eau claire.
+  const gg = ctx.createRadialGradient(EX - 1.5, EY - 1.5, .5, EX, EY, 5); gg.addColorStop(0, '#ffffff'); gg.addColorStop(1, 'rgba(120,200,255,.9)');
+  ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(EX, EY, 4.5, 0, Math.PI * 2); ctx.fill();
+}
+
 function dessiner(c) {
   scene.cadre(13);
   for (const [id, k] of Object.entries(CASES)) {
@@ -56,13 +118,14 @@ function dessiner(c) {
   // Décor fixe : la main en S, le haut-parleur, le point de chute de la goutte.
   c.texte('S', XA0 - 18, 126, { couleur: 'faible', taille: 15 });
   c.texte('S', XB0 - 18, 126, { couleur: 'faible', taille: 15 });
-  c.rect(SPX - 30, SPY - 14, 14, 28, { couleur: 'blanc', largeur: 2 });
-  c.trait([[SPX - 16, SPY - 14], [SPX - 2, SPY - 30], [SPX - 2, SPY + 30], [SPX - 16, SPY + 14]], { couleur: 'blanc', largeur: 2 });
+  // Le haut-parleur et le bassin d'eau sont peints (ci-dessous, sous la craie).
   c.direct(() => {
     const t = S.t, joue = S.running || S.pause || S.fait;
-    /* ── La corde ── */
+    peindreHautParleur(c.ctx, SPX - 2, SPY);
+    peindreBassin(c.ctx, CASES.eau);
+    /* ── La corde (peinte : une vraie corde torsadée) ── */
     const xa = XA0 + VA * (t - A0), ya = x => 120 - (joue && t > A0 ? 38 * bosse(x, xa, 22) : 0);
-    c.courbe(u => { const x = XA0 + u * (XA1 - XA0); return [x, ya(x)]; }, 90, { couleur: 'blanc', largeur: 2.6 });
+    peindreCorde(c.ctx, ya, XA0, XA1);
     c.point(XM, ya(XM), 6, 'rouge'); c.texte('M', XM - 6, 146, { couleur: 'rouge', taille: 15 });
     if (t >= T.corde - 0.35) {
       c.fleche(XA0 + 40, 64, XA1 - 30, 64, { couleur: 'cyan', largeur: 2 }); c.texte('propagation', 120, 56, { couleur: 'cyan', taille: 15 });
@@ -78,7 +141,7 @@ function dessiner(c) {
     const xb = XB0 + VB * (t - B0), dep = x0 => (joue && t > B0 ? 11 * bosse(x0, xb, 24) : 0);
     const pts = [];
     for (let i = 0; i <= NSP; i++) { const x0 = XB0 + i * PAS; pts.push([x0 + dep(x0), 100], [x0 + PAS / 2 + dep(x0 + PAS / 2), 140]); }
-    c.trait(pts, { couleur: 'blanc', largeur: 2, tremble: .3 });
+    peindreRessort(c.ctx, pts);
     const xm = XB0 + IM * PAS; c.point(xm + dep(xm), 100, 6, 'rouge'); c.texte('M', xm - 6, 92, { couleur: 'rouge', taille: 15 });
     if (t >= T.ressort - 0.35) {
       c.fleche(XB0 + 30, 64, 720, 64, { couleur: 'cyan', largeur: 2 }); c.texte('propagation', 470, 56, { couleur: 'cyan', taille: 15 });
@@ -114,8 +177,11 @@ function dessiner(c) {
     }
     /* ── L'eau, vue de dessus ── */
     const fd = VD * (t - D0);
-    c.point(EX, EY, 3, 'blanc');
-    if (joue && t > D0) for (let k = 0; k < 4; k++) { const r = fd - k * 24; if (r > 4 && r < 92) c.cercle(EX, EY, r, { couleur: 'bleu', largeur: 1.8, alpha: .85 - k * .15 }); }
+    if (joue && t > D0) {   // les rides restent sur l'eau du bassin
+      c.ctx.save(); c.ctx.beginPath(); c.ctx.roundRect(...BASSIN(CASES.eau), 10); c.ctx.clip();
+      for (let k = 0; k < 4; k++) { const r = fd - k * 24; if (r > 4 && r < 92) c.cercle(EX, EY, r, { couleur: '#bfe6ff', largeur: 1.8, alpha: .85 - k * .15 }); }
+      c.ctx.restore();
+    }
     if (t >= T.eau - 0.2) {
       for (const a of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) c.fleche(EX + 30 * Math.cos(a), EY + 30 * Math.sin(a), EX + 72 * Math.cos(a), EY + 72 * Math.sin(a), { couleur: 'cyan', largeur: 1.6, tete: 7 });
       c.texte('⊥ : transversale', 399, 400, { couleur: 'jaune', taille: 17 });
@@ -168,7 +234,7 @@ function arreterSiInstantAtteint() {
   return true;
 }
 function ceQuiSeVoit() {
-  const m = ['Quatre cases : une corde (en haut à gauche), un ressort (en haut à droite), le son dans l’air (en bas à gauche), l’eau vue de dessus (en bas à droite). Un point M rouge dans chaque onde.'];
+  const m = ['Quatre cases : une corde torsadée (en haut à gauche), un ressort d’acier (en haut à droite), le son dans l’air sortant d’un haut-parleur (en bas à gauche), un bassin d’eau vu de dessus (en bas à droite). Un point M rouge dans chaque onde.'];
   if (S.t <= 0) m.push('Rien n’a encore été secoué.');
   else {
     m.push(`t = ${S.t.toFixed(1)} s.`);
