@@ -18,8 +18,15 @@ Règles appliquées : **33** (une chose à la fois : le principe, une question d
 
 ## Pour passer en ligne
 
-1. Libérer un GPU Kaggle : compte `ferdaous04`, kernel `academy-tts-essai`, Versions → Stop session. Le compte 2 a épuisé son quota jusqu'au 21 novembre.
-2. Enregistrer les voix Bodi listées dans chaque audit : lot du VPS, puis `rapatrier.sh`.
+1. Libérer un GPU Kaggle : compte `ferdaous04`, kernel `academy-tts-essai`, Versions → Stop session. Le compte 2 a épuisé son quota jusqu'au 21 novembre. *Fait le 14 novembre à 17 h 14 UTC.*
+2. Enregistrer les voix Bodi. 891 pistes manquent, environ 228 000 caractères, soit 3 h de GPU environ. Elles sont dans les dossiers `/srv/corpus_v4/voix_lot/att_<deck>/` du VPS ; ces dossiers ne contiennent que les pistes sans voix.
+   - Le surveillant `relance_att.sh` (journal : `relance_att.log`) attend la fin des réactions SVT ch1–3 du cours en ligne.
+   - Il relance ensuite le lot du compte 1 avec `VOIX_D_ABORD=att_`, ce qui met les cours en attente en tête.
+   - Les dossiers de liste et de pose sont dans le dossier temporaire de la session : `attente/construire.py` et `attente/poser.py`.
+3. Poser les voix dans les copies en attente : `python -X utf8 poser.py 12 [deck…]`.
+   - Le script reprend le MP3 du cours en ligne quand le texte est identique, et ne convertit en MP3 (v12) que les voix neuves.
+   - Il cherche les WAV dans `att_<deck>/`, puis dans `<deck>/`, puis dans `_observations/`.
+   - Il dit pour chaque cours ce qui manque encore.
 3. Faire relire par un professeur les réactions écrites à la main et les mots darija rares signalés.
 4. Pour chaque cours : remplacer `backend/data/courses/<deck>.json` par sa copie en attente, avec ses pistes posées, puis le jouer dans le lecteur, commiter, déployer et reconstruire le lien libre.
 
