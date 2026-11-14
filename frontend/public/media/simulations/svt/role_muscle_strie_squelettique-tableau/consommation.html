@@ -3,7 +3,7 @@
 <link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="muscle.css"></head>
 <body>
 <div class="tableau">
-  <section class="scene"><canvas id="canvas" role="img" aria-label="Un muscle dessiné à la craie travaille ; six lignes (glycogène, dioxygène consommé, dioxyde de carbone rejeté, acide lactique, ATP, phosphocréatine) : chaque barre part de sa valeur au repos et va à sa valeur après l'activité, écrite au bout"></canvas></section>
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un muscle peint en couleur, entre deux os, travaille ; six lignes (glycogène, dioxygène consommé, dioxyde de carbone rejeté, acide lactique, ATP, phosphocréatine) : chaque barre part de sa valeur au repos et va à sa valeur après l'activité, écrite au bout"></canvas></section>
   <footer class="barre">
     <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Faire travailler</button>
     <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
@@ -45,11 +45,55 @@ const valeur = j => j.repos + (j.apres - j.repos) * part();
 const longueur = (j, v) => BL * v / (Math.max(j.repos, j.apres) * 1.08);
 const nombre = (v, d) => fr(v, d);
 
+/*
+ * Le muscle peint (14 novembre 2026, règle du réalisme des croquis) : deux os ivoire, tendons nacrés, ventre rouge-rosé
+ * en dégradé avec ses fibres ; pendant l'activité il raccourcit et s'épaissit en rythme (k de 0 à 1).
+ */
+function peindreMuscle(ctx, k) {
+  const cy = 225, cx = 84, L = 50 - 9 * k, E = 24 + 9 * k, XG = 24, XD = 144;
+  const os = (x) => {
+    const g = ctx.createLinearGradient(x - 8, 0, x + 8, 0);
+    g.addColorStop(0, '#b9b09a'); g.addColorStop(.45, '#f3ecd9'); g.addColorStop(1, '#a89f88');
+    ctx.fillStyle = g; ctx.beginPath();
+    ctx.moveTo(x - 6, 160); ctx.lineTo(x + 6, 160); ctx.lineTo(x + 6, 290); ctx.lineTo(x - 6, 290); ctx.closePath(); ctx.fill();
+    for (const y of [158, 292]) { ctx.beginPath(); ctx.ellipse(x, y, 11, 8, 0, 0, Math.PI * 2); ctx.fill(); }
+  };
+  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 6; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 2;
+  os(XG - 6); os(XD + 6);
+  ctx.restore();
+  const tendon = (xa, xb) => {
+    const g = ctx.createLinearGradient(0, cy - 6, 0, cy + 6);
+    g.addColorStop(0, '#cbc5ba'); g.addColorStop(.5, '#ffffff'); g.addColorStop(1, '#bdb8ae');
+    ctx.fillStyle = g; ctx.beginPath();
+    ctx.moveTo(xa, cy - 7); ctx.quadraticCurveTo((xa + xb) / 2, cy - 4, xb, cy - 3); ctx.lineTo(xb, cy + 3);
+    ctx.quadraticCurveTo((xa + xb) / 2, cy + 4, xa, cy + 7); ctx.closePath(); ctx.fill();
+  };
+  tendon(XG, cx - L + 4); tendon(XD, cx + L - 4);
+  const chemin = () => {
+    ctx.beginPath(); ctx.moveTo(cx - L, cy - 4);
+    ctx.bezierCurveTo(cx - L * 0.55, cy - E * 1.3, cx + L * 0.55, cy - E * 1.3, cx + L, cy - 4);
+    ctx.lineTo(cx + L, cy + 4);
+    ctx.bezierCurveTo(cx + L * 0.55, cy + E * 1.3, cx - L * 0.55, cy + E * 1.3, cx - L, cy + 4); ctx.closePath();
+  };
+  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 8; ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 3;
+  let g = ctx.createLinearGradient(0, cy - E, 0, cy + E);
+  g.addColorStop(0, '#7a1626'); g.addColorStop(.3, '#c23a4a'); g.addColorStop(.45, '#e0707a'); g.addColorStop(.7, '#b83242'); g.addColorStop(1, '#6d1220');
+  chemin(); ctx.fillStyle = g; ctx.fill(); ctx.restore();
+  ctx.save(); chemin(); ctx.clip();
+  for (const [couleur, decal] of [['rgba(255,190,195,.24)', 0], ['rgba(80,0,10,.25)', .5]]) {
+    ctx.strokeStyle = couleur; ctx.lineWidth = .7;
+    for (let i = -5; i <= 5; i++) {
+      const q = (i + decal) / 5.6; ctx.beginPath(); ctx.moveTo(cx - L, cy + q * 4);
+      ctx.bezierCurveTo(cx - L * 0.55, cy + q * E * 1.25, cx + L * 0.55, cy + q * E * 1.25, cx + L, cy + q * 4); ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
 function dessiner(c) {
   scene.cadre(31);
   c.direct(() => c.texte('Le muscle au repos, puis après une activité (ordres de grandeur)', 12, 26, { couleur: 'blanc', taille: 17 }));
-  // Le muscle entre deux os.
-  c.ligne(18, 150, 18, 300, { couleur: 'faible', largeur: 5 }); c.ligne(150, 150, 150, 300, { couleur: 'faible', largeur: 5 });
+  // Le muscle entre deux os : peint en couleur (peindreMuscle), réaliste, avant la craie.
   c.texte('muscle', 84, 326, { couleur: 'rose', taille: 16, align: 'center' });
   c.repere('muscle', 12, 120, 146, 214, 'le muscle');
   JAUGES.forEach((j, i) => {
@@ -62,10 +106,7 @@ function dessiner(c) {
   c.direct(() => {
     // Le muscle bat pendant l'activité : il raccourcit et gonfle en rythme.
     const actif = S.t > T_ACT[0] && S.t < T_ACT[1], k = actif ? 0.5 + 0.5 * Math.sin((S.t - T_ACT[0]) * Math.PI * 2 * 1.6) : 0;
-    const L = 54 - 10 * k, E = 26 + 9 * k, cx = 84, cy = 225;
-    c.courbe(u => [cx - L + 2 * L * u, cy - E * Math.sin(Math.PI * u)], 30, { couleur: 'rose', largeur: 2.4 });
-    c.courbe(u => [cx - L + 2 * L * u, cy + E * Math.sin(Math.PI * u)], 30, { couleur: 'rose', largeur: 2.4 });
-    c.ligne(18, cy, cx - L, cy, { couleur: 'blanc', largeur: 2 }); c.ligne(cx + L, cy, 150, cy, { couleur: 'blanc', largeur: 2 });
+    peindreMuscle(c.ctx, k);
     const etat = S.t <= 0 ? '' : S.t < T_ACT[0] ? 'au repos' : S.t < T_ACT[1] ? 'en activité…' : 'après l’activité';
     if (etat) c.texte(etat, 84, 136, { couleur: S.t < T_ACT[0] ? 'faible' : 'vert', taille: 16, align: 'center' });
     if (S.t <= 0) return;
