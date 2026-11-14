@@ -1,5 +1,6 @@
 import type { ScientificVisualSpec } from '../session/scientific/types';
 import type { QuestionMemoire, SeanceCours } from './memoire/api';
+import type { FigureCahierData } from './FigureCahier';
 
 export type CourseSlideType =
   | 'diagnostic'
@@ -181,6 +182,8 @@ export interface SlideConcentration {
   centre?: { texte: string; mot: string }[];
   /** La trace à recopier (bulle « À écrire dans le cahier »). */
   cahier?: string;
+  /** Les dessins du cahier (courbe, schéma, croquis légendés), sous le texte : `FigureCahier.tsx`. */
+  cahier_figures?: FigureCahierData[];
   /**
    * La comparaison que le tuteur fait LUI-MÊME après la voix, si l'élève n'a pas touché la simulation :
    * il change un réglage (M₂ plus loin, le fond plus bas…), rejoue et montre ce qui a changé.

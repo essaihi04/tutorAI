@@ -12,6 +12,7 @@ import DemonstrationPleine, { type LectureDemo } from './DemonstrationPleine';
 import type { EnteteCahier } from './cahier';
 import ChampReponse, { BoutonPhoto, type ContexteOcr } from './SaisieReponse';
 import SansDefilement from './SansDefilement';
+import FiguresCahier from './FigureCahier';
 import { inscrireVoix } from './voixUnique';
 import { taire as taireMemoire } from './memoire/voix';
 
@@ -1720,6 +1721,8 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
               <h4 className={`mt-2 text-xl underline decoration-amber-200/40 underline-offset-4 ${entete ? 'pl-4' : ''}`} style={{ fontFamily: CRAIE, color: '#fef3c7' }}>{entete?.diapo || slide.title}</h4>
               {contenu.lead && <p className={`mt-1 text-base italic ${entete ? 'pl-4' : ''}`} style={{ fontFamily: CRAIE, color: '#e7e5c9' }}>{contenu.lead}</p>}
               {cahier && cahier !== contenu.lead && <p className={`mt-2 text-lg leading-relaxed ${entete ? 'pl-4' : ''}`} style={{ fontFamily: CRAIE, color: '#fef3c7' }}><Formule t={cahier} /></p>}
+              {/* les dessins du cahier (courbe, schéma, croquis légendés), sous le texte */}
+              <FiguresCahier figures={conc.cahier_figures} compact className={`mt-3 ${entete ? 'pl-4' : ''}`} />
               {centre.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-2">
                   {centre.filter(c => /=/.test(c.texte)).map((c, i) => (

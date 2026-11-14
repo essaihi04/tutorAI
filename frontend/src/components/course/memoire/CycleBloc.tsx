@@ -5,6 +5,7 @@ import type { ReactionPreparee } from '../types';
 import type { EnteteCahier } from '../cahier';
 import { taire } from './voix';
 import SansDefilement from '../SansDefilement';
+import FiguresCahier from '../FigureCahier';
 import { DetecteurSaturation, PHRASES_SATURATION, tempsDeLectureMs, useInactivite, type CauseSaturation } from './saturation';
 
 /**
@@ -62,6 +63,7 @@ export function TableauCahier({ bloc, onEcrit, entetes }: { bloc: BlocCours; onE
   entetes?: (slideId: string) => EnteteCahier | undefined }) {
   const debut = useRef(Date.now());
   const lignes = bloc.cahier || [];
+  const figures = bloc.cahier_figures || [];
   // Une ligne par diapositive du bloc : chaque ligne sous le titre de sa diapositive (et de sa partie quand on y entre) ;
   // sinon les titres d'abord, puis les lignes. Un titre déjà copié dans le bloc ne se répète pas.
   const plan = entetes ? bloc.slide_ids.map(id => entetes(id)) : [];
@@ -74,6 +76,9 @@ export function TableauCahier({ bloc, onEcrit, entetes }: { bloc: BlocCours; onE
         {bloc.titre && <h3 className="mt-1 text-2xl underline decoration-amber-200/40 underline-offset-4" style={{ fontFamily: CRAIE, color: '#fef3c7' }}>{bloc.titre}</h3>}
       </div>
       <div className="rounded-2xl border border-amber-100/15 bg-[#1d2b22] p-5 shadow-inner" style={{ fontFamily: CRAIE }}>
+        {/* les dessins du bloc (courbe, schéma, croquis) : à droite du texte sur grand écran, dessous sur téléphone */}
+        <div className={figures.length ? 'flex flex-col gap-5 md:flex-row md:items-start' : ''}>
+        <div className="min-w-0 flex-1">
         {plan.length > 0 && (() => {
           const tete = plan.find(e => e?.cours)?.cours;
           return tete ? (
@@ -103,6 +108,9 @@ export function TableauCahier({ bloc, onEcrit, entetes }: { bloc: BlocCours; onE
             </ol>
           </>
         ) : <p className="text-lg text-white/60">Écris avec tes mots ce que tu viens de comprendre.</p>}
+        </div>
+        {figures.length > 0 && <FiguresCahier figures={figures} className="md:w-[44%] md:flex-none md:flex-col md:flex-nowrap" />}
+        </div>
       </div>
       <button type="button" onClick={() => onEcrit(Math.round((Date.now() - debut.current) / 1000))}
         className="self-end rounded-full bg-cyan-400/90 px-7 py-3 text-base font-bold text-slate-950 shadow-lg hover:bg-cyan-300"

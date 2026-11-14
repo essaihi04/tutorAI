@@ -7,6 +7,7 @@
  */
 
 import type { CourseDeck, EnonceLu, ReactionPreparee } from '../types';
+import type { FigureCahierData } from '../FigureCahier';
 
 /** Une question de rappel (`competences[].rappels`), d'exercice de bloc ou de « retrouver ». */
 export interface QuestionMemoire extends EnonceLu {
@@ -39,6 +40,8 @@ export interface BlocCours {
   titre?: string;
   slide_ids: string[];
   cahier?: { texte: string }[];
+  /** les dessins du cahier du bloc (1 ou 2), à droite du texte sur grand écran : `FigureCahier.tsx` */
+  cahier_figures?: FigureCahierData[];
   retrouver?: QuestionMemoire & { competence_id?: string };
   exercice?: QuestionMemoire;
 }
