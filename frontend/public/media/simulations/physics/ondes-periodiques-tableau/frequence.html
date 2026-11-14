@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>N = 1 / T — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ondes.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un point M monte et descend ; son film y(t) se trace pendant une seconde ; on compte les périodes faites en une seconde : c'est N, et N = 1 / T"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Chrono</button>
+    <span id="reglage" data-professor-control="set_parameters"></span>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * N = 1 / T (14 novembre 2026, règle 28 du professeur) : remplace l'écran sans visuel de la diapo op_t4_inverse.
+ * Un point M vibre avec la période T (curseur, 0,1 à 1 s ; 0,5 s au départ) ; son film y(t) se trace pendant une seconde
+ * (ralenti trois fois). Chaque période finie est numérotée ; à 1 s, le nombre de périodes faites s'écrit : c'est N.
+ * Puis 1 / T s'écrit à côté : le même nombre. Donc N = 1 / T.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const nb = x => fr(x, 2).replace(/0+$/, '').replace(/,$/, '');
+const RALENTI = 3, XM = 86, OX = 190, OY = 190, L1 = 480, AMP = 64;   // film : 1 s = 480 px
+const P = { T: 0.5 };
+const T = () => ({ periode: Math.min(P.T, 1), une_seconde: 1.0, calcul: 1.6 });
+const TFIN = 1.9;
+const S = { t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0 };
+const vu = nom => S.t >= T()[nom] - 1e-6;
+const yM = t => AMP * Math.sin(2 * Math.PI * t / P.T);
+const N = () => 1 / P.T;
+
+function dessiner(c) {
+  scene.cadre(43);
+  c.axe(OX, OY, OX + L1 + 40, OY, [[0, '0'], [0.5 * L1 / (L1 + 40), '0,5 s'], [L1 / (L1 + 40), '1 s']], { taille: 14 });
+  c.fleche(OX, OY + AMP + 16, OX, OY - AMP - 22, { couleur: 'faible', largeur: 1.4 });
+  c.texte('y', OX - 18, OY - AMP - 14, { couleur: 'faible', taille: 15 });
+  c.texte('t', OX + L1 + 46, OY + 20, { couleur: 'faible', taille: 15 });
+  c.texte('le film de M', OX + 8, 40, { couleur: 'faible', taille: 15 });
+  c.ligne(XM, OY - AMP - 14, XM, OY + AMP + 14, { couleur: 'tresfaible', largeur: 1.2, pointille: [4, 5] });
+  c.direct(() => {
+    const t = Math.min(S.t, 1), joue = S.running || S.pause || S.fait;
+    // Le point M qui vibre, et son film qui se trace.
+    c.point(XM, OY - (joue ? yM(t) : 0), 8, 'rouge');
+    c.texte('M', XM - 28, OY + 6, { couleur: 'rouge', taille: 17 });
+    c.repere('M', XM - 30, OY - AMP - 16, 50, 2 * AMP + 32, 'le point M');
+    if (joue && t > 0) c.courbe(u => [OX + u * t * L1, OY - yM(u * t)], Math.max(8, Math.ceil(t * 160)), { couleur: 'jaune', largeur: 2.4 });
+    // Chaque période finie : un trait et son numéro.
+    const faites = Math.floor(t / P.T + 1e-9);
+    for (let k = 1; k <= faites; k++) {
+      const x = OX + k * P.T * L1;
+      c.ligne(x, OY - AMP - 12, x, OY + AMP + 6, { couleur: 'cyan', largeur: 1.4, pointille: [3, 4] });
+      if (faites <= 12) c.texte(String(k), x - (P.T * L1) / 2, OY - AMP - 18, { couleur: 'cyan', taille: 15, align: 'center' });
+    }
+    if (vu('periode')) {
+      c.cote(OX, OY + AMP + 34, OX + P.T * L1, OY + AMP + 34, '', { couleur: 'vert', largeur: 1.6 });
+      c.texte(`T = ${nb(P.T)} s`, OX + P.T * L1 / 2, OY + AMP + 58, { couleur: 'vert', taille: 17, align: 'center' });
+      c.repere('T', OX, OY + AMP + 20, P.T * L1, 46, 'la période T');
+    }
+    c.texte(`chrono : ${fr(t, 2)} s`, 748, 40, { couleur: S.t >= 1 ? 'orange' : 'faible', taille: 16, align: 'right' });
+    if (vu('une_seconde')) {
+      c.texte(`En 1 s : ${nb(N())} période${N() >= 2 ? 's' : ''}  →  N = ${nb(N())} Hz`, 60, 352, { couleur: 'orange', taille: 19 });
+      c.repere('N', 54, 330, 460, 30, 'la fréquence N');
+    }
+    if (vu('calcul')) {
+      c.texte(`1 / T = 1 / ${nb(P.T)} = ${nb(N())}   donc   N = 1 / T`, 60, 392, { couleur: 'blanc', taille: 19 });
+      c.texte('T en s, N en Hz', 560, 392, { couleur: 'faible', taille: 15 });
+      c.repere('unites', 554, 372, 150, 28, 'les unités : T en seconde, N en hertz');
+      c.repere('calcul', 54, 370, 480, 30, '1 / T');
+    }
+  });
+  return c.fin();
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(TFIN, S.t + dt / RALENTI);
+  if (arreterSiInstantAtteint()) return true;
+  if (S.t >= TFIN) {
+    S.running = false; S.fait = true; $('run').textContent = 'Chrono';
+    bulle($('feedback'), `Le nombre de périodes en une seconde, c’est 1 / T : N = ${nb(N())} Hz.`, 'good');
+    pont.noter('finished'); pont.emettre();
+  } else if (performance.now() - S.emis > 400) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+const MOTIFS = { periode: 'M a fait une période : T', une_seconde: 'une seconde : on compte les périodes, c’est N', calcul: '1 / T donne le même nombre : N = 1 / T' };
+function playUntil(p) {
+  const M = T(), nom = p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.progress * TFIN;
+  if (!Number.isFinite(cible)) return;
+  if (!(S.running || S.pause) || S.t >= cible - 1e-3) start();
+  S.jusqua = cible; S.motif = nom ? MOTIFS[nom] : '';
+  if (S.pause) { S.running = true; S.pause = false; $('run').textContent = 'Pause'; }
+  pont.noter('play_until', { moment: nom }); pont.emettre();
+}
+function arreterSiInstantAtteint() {
+  if (S.jusqua == null || S.t < S.jusqua) return false;
+  S.t = S.jusqua; S.jusqua = null; S.running = false; S.pause = true; $('run').textContent = 'Reprendre';
+  bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || 'instant choisi') + '.'); pont.noter('pause'); pont.emettre();
+  return true;
+}
+function ceQuiSeVoit() {
+  const t = Math.min(S.t, 1), m = [`À gauche le point M (rouge) qui monte et descend avec T = ${nb(P.T)} s ; à droite son film y(t), axe du temps de 0 à 1 s.`];
+  m.push(`Chrono : ${fr(t, 2)} s ; périodes finies : ${Math.floor(t / P.T + 1e-9)} (numérotées en cyan).`);
+  if (vu('periode')) m.push(`Écrit sous la première période : T = ${nb(P.T)} s.`);
+  if (vu('une_seconde')) m.push(`Écrit : « En 1 s : ${nb(N())} périodes → N = ${nb(N())} Hz ».`);
+  if (vu('calcul')) m.push(`Écrit : « 1 / T = 1 / ${nb(P.T)} = ${nb(N())} donc N = 1 / T » et « T en s, N en Hz ».`);
+  return m.join(' ');
+}
+function start() { S.jusqua = null; S.t = 0; S.running = true; S.pause = false; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Chrono lancé : compte les périodes pendant une seconde…'); pont.noter('start'); pont.emettre(); }
+function pause() { if (!S.running) return; S.jusqua = null; S.running = false; S.pause = true; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running || !S.pause) return start(); S.running = true; S.pause = false; $('run').textContent = 'Pause'; pont.noter('resume'); pont.emettre(); }
+function reset() { S.t = 0; S.running = false; S.pause = false; S.fait = false; S.jusqua = null; scene.sale = true; $('run').textContent = 'Chrono'; bulle($('feedback'), 'Lance le chrono : combien de périodes en une seconde ?'); pont.emettre(); }
+function setParameters(p) {
+  if (!Number.isFinite(+p.periode_s)) return;
+  P.T = Math.min(1, Math.max(0.1, Math.round(+p.periode_s * 20) / 20)); regl.maj(P.T); reset();
+  bulle($('feedback'), `T = ${nb(P.T)} s : lance le chrono et compte les périodes.`);
+  pont.noter('set_parameters', { periode_s: P.T }); pont.emettre();
+}
+const regl = window.Tableau.curseur({ id: 'T', label: 'T =', min: 0.1, max: 1, step: 0.05, valeur: 0.5, unite: 's', commande: 'set_parameters', decimales: 2, onchange: v => setParameters({ periode_s: v }) });
+$('reglage').replaceChildren(regl);
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+window.Tableau.explication({ frequence: [
+  { repere: 'T', texte: 'Une période : zéro virgule cinq seconde.' },
+  { repere: 'N', texte: 'En une seconde, M fait deux périodes : N = 2 hertz.' },
+  { repere: 'calcul', texte: 'Un sur zéro virgule cinq donne deux : N = 1 / T.' },
+  { repere: 'unites', texte: 'T en seconde, N en hertz : convertir les millisecondes avant.' },
+] });
+const commandes = ['start', 'pause', 'resume', 'reset', 'set_parameters', 'play_until'];
+const config = { id: 'ondes_periodiques_frequence', version: '1.0', title: 'N = 1 / T', variants: [{ id: 'frequence', label: 'fréquence' }], commands: commandes,
+  command_schema: { set_parameters: { periode_s: '0.1..1 (pas de 0,05), période du point M en s' }, play_until: { moment: Object.keys(MOTIFS).join(' | ') + ' (rejoue et se fige à cet instant clé)' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Un point M vibre avec T = 0,5 s (réglable 0,1 à 1 s). Son film y(t) se trace pendant 1 s ; on numérote les périodes : 2 périodes en 1 s, donc N = 2 Hz ; 1 / T = 1 / 0,5 = 2 : N = 1 / T (T en s, N en Hz).',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : (S.fait ? 'finished' : 'idle'), ce_qui_se_voit: ceQuiSeVoit(), moments: T(), parameters: { periode_s: P.T }, frequence_hz: +N().toFixed(3), time_s: +S.t.toFixed(2) }),
+  progression: () => (S.fait ? 1 : clamp(S.t / TFIN)),
+  executer: (cmd, p) => ({ start, pause, resume, reset, set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Lance le chrono : combien de périodes en une seconde ?');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

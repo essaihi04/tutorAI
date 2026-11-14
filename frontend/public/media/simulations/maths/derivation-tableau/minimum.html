@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le minimum donne une inégalité — étude de fonctions</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="La courbe de x + 1/x sur ]0 ; +∞[ à la craie : un point descend jusqu’à (1 ; 2) puis remonte ; la droite y = 2 reste sous toute la courbe ; le tableau de variations à droite"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Dérivation et étude de fonctions » (math_ch2_derivation_etude_fonctions), diapo df_va6_extremum
+ * (14 novembre 2026, professeur règle 28). f(x) = x + 1/x sur ]0 ; +∞[ : le tableau de variations s'écrit à droite,
+ * puis un point descend le long de la courbe jusqu'à (1 ; 2) et remonte ; la droite y = 2 passe sous toute la courbe :
+ * pour tout x > 0, x + 1/x ≥ 2. Curseur x : un point d'essai, sa hauteur f(x) écrite, toujours ≥ 2.
+ * Moments : tableau, descend, monte, minimum, inegalite, conclusion, positive.
+ * Repères : tableau, courbe, minimum, essai, inegalite, conclusion, positive.
+ */
+const { fr } = MathsTableau;
+const f = x => x + 1 / x;
+const OPT = { x0: 52, y0: 52, w: 400, h: 318, xmin: -0.25, xmax: 5.3, ymin: -0.4, ymax: 6.2, gx: [[1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5']], gy: [[2, '2'], [4, '4'], [6, '6']] };
+
+MathsTableau.page({
+  id: 'df_minimum', titre: 'Étude de fonctions',
+  texte: 'Construction à la craie : f(x) = x + 1/x sur ]0 ; +∞[. Le tableau de variations (décroissante puis croissante, minimum 2 en 1), un point qui descend jusqu’à (1 ; 2) puis remonte, la droite y = 2 sous toute la courbe : pour tout x > 0, x + 1/x ≥ 2. Un curseur place un point d’essai',
+  vues: {
+    minimum: {
+      titre: 'Le minimum lu, l’inégalité gagnée',
+      params: { x: { min: 0.2, max: 5, pas: 0.1, defaut: 3, label: 'x =', sens: 'abscisse du point d’essai sur la courbe' } },
+      curseurs: ['x'],
+      dessiner(c, K) {
+        const X = K.P.x;
+        K.titre('f(x) = x + 1/x  sur ]0 ; +∞[');
+        // Le tableau de variations, à droite.
+        const tx = 480, tw = 262;
+        c.ligne(tx, 64, tx + tw, 64, { couleur: 'faible', largeur: 1.2 });
+        c.ligne(tx, 94, tx + tw, 94, { couleur: 'faible', largeur: 1.2 });
+        c.ligne(tx, 124, tx + tw, 124, { couleur: 'faible', largeur: 1.2 });
+        c.ligne(tx, 184, tx + tw, 184, { couleur: 'faible', largeur: 1.2 });
+        c.ligne(tx + 44, 64, tx + 44, 184, { couleur: 'faible', largeur: 1.2 });
+        c.texte('x', tx + 16, 86, { couleur: 'blanc', taille: 17 });
+        c.texte('0', tx + 56, 86, { couleur: 'blanc', taille: 17 });
+        c.texte('1', tx + 150, 86, { couleur: 'jaune', taille: 17, align: 'center' });
+        c.texte('+∞', tx + tw - 8, 86, { couleur: 'blanc', taille: 17, align: 'right' });
+        c.texte('f′', tx + 14, 116, { couleur: 'blanc', taille: 17 });
+        c.texte('−', tx + 100, 116, { couleur: 'rouge', taille: 19, align: 'center' });
+        c.texte('0', tx + 150, 116, { couleur: 'jaune', taille: 17, align: 'center' });
+        c.texte('+', tx + 205, 116, { couleur: 'vert', taille: 19, align: 'center' });
+        c.texte('f', tx + 16, 160, { couleur: 'blanc', taille: 17 });
+        c.texte('+∞', tx + 54, 146, { couleur: 'blanc', taille: 16 });
+        c.fleche(tx + 82, 142, tx + 136, 170, { couleur: 'rouge', largeur: 1.8 });
+        c.texte('2', tx + 150, 180, { couleur: 'jaune', taille: 19, align: 'center' });
+        c.fleche(tx + 164, 170, tx + 218, 142, { couleur: 'vert', largeur: 1.8 });
+        c.texte('+∞', tx + tw - 8, 146, { couleur: 'blanc', taille: 16, align: 'right' });
+        c.repere('tableau', tx - 4, 60, tw + 8, 128, 'le tableau de variations');
+        const G = K.axes(OPT);
+        K.courbe(G, f, 0.17, 5.25, { couleur: 'faible', largeur: 1.6 });
+        c.repere('courbe', G.X(0), G.Y(6.2), G.X(5.2) - G.X(0), G.Y(1.5) - G.Y(6.2), 'la courbe de f');
+        K.marque('tableau');
+        c.pause(.3);
+        // Un point descend le long de la courbe jusqu'à (1 ; 2)…
+        K.anime(2.4, p => {
+          const x = 0.2 + 0.8 * p;
+          K.courbe(G, f, 0.2, x, { couleur: 'rouge', largeur: 3, duree: 0 });
+          if (p < 1) { c.point(G.X(x), G.Y(f(x)), 6, 'rouge'); c.texte(`f(${fr(x, 2)}) = ${fr(f(x), 2)}`, G.X(x) + 12, G.Y(f(x)) - 4, { couleur: 'rouge', taille: 16 }); }
+        });
+        K.marque('descend');
+        // … puis remonte.
+        K.anime(2.4, p => {
+          const x = 1 + 4.1 * p;
+          K.courbe(G, f, 1, x, { couleur: 'vert', largeur: 3, duree: 0 });
+          if (p < 1) { c.point(G.X(x), G.Y(f(x)), 6, 'vert'); c.texte(`f(${fr(x, 2)}) = ${fr(f(x), 2)}`, G.X(x) - 12, G.Y(f(x)) - 12, { couleur: 'vert', taille: 16, align: 'right' }); }
+        });
+        K.marque('monte');
+        c.pause(.2);
+        // Le minimum : le point (1 ; 2) et la droite y = 2 sous toute la courbe.
+        c.ligne(G.X(0), G.Y(2), G.X(5.2), G.Y(2), { couleur: 'jaune', largeur: 1.6, pointille: [6, 6] });
+        c.point(G.X(1), G.Y(2), 6.5, 'jaune');
+        c.texte('minimum : f(1) = 2', G.X(1) + 10, G.Y(2) + 26, { couleur: 'jaune', taille: 18 });
+        c.repere('minimum', G.X(1) - 14, G.Y(2) - 14, 190, 46, 'le minimum 2, en 1');
+        K.marque('minimum');
+        c.pause(.3);
+        // Le point d'essai (curseur) : toujours au-dessus de la droite y = 2.
+        K.anime(.6, () => {
+          const y = f(X);
+          if (y <= OPT.ymax) {
+            K.proj(G, X, y, { couleur: 'cyan', versY: false, lx: fr(X, 1) });
+            c.ligne(G.X(X), G.Y(2), G.X(X), G.Y(y), { couleur: 'cyan', largeur: 3 });
+            c.point(G.X(X), G.Y(y), 6.5, 'cyan');
+          }
+          const ty = Math.max(G.Y(OPT.ymax) + 18, Math.min(G.Y(Math.min(y, OPT.ymax)) - 14, G.Y(2) - 40));
+          c.texte(`f(${fr(X, 1)}) = ${fr(y, 2)} ≥ 2`, Math.min(G.X(X) + 12, 300), ty, { couleur: 'cyan', taille: 18 });
+          c.repere('essai', G.X(X) - 12, ty - 22, 170, Math.max(30, G.Y(2) - ty + 22), 'le point d’essai, au-dessus de 2');
+        });
+        K.lignes(480, 236, [
+          { t: 'Pour tout x > 0 :  f(x) ≥ 2', couleur: 'blanc', taille: 20, repere: 'inegalite', label: 'pour tout x > 0, f(x) ≥ 2', moment: 'inegalite' },
+          { t: 'x + 1/x ≥ 2', couleur: 'jaune', taille: 24, cadre: 'jaune', repere: 'conclusion', label: 'l’inégalité x + 1/x ≥ 2', moment: 'conclusion', inter: 44 },
+          { t: 'minimum 2 > 0  ⇒  f(x) > 0', couleur: 'vert', taille: 18, repere: 'positive', label: 'un minimum positif', moment: 'positive' },
+        ], 42);
+      },
+      lecture: K => `x = ${fr(K.P.x, 1)} : f(x) = ${fr(f(K.P.x), 2)}, au-dessus de 2 (minimum atteint seulement en 1).`,
+      decrire: K => ({
+        tableau: 'À droite, le tableau de variations de f : décroissante sur ]0 ; 1], croissante sur [1 ; +∞[, minimum 2 en 1. À gauche, la courbe de x + 1/x en gris.',
+        descend: 'Un point rouge descend le long de la courbe, ses valeurs f(x) écrites, jusqu’à (1 ; 2).',
+        monte: 'Puis un point vert remonte la courbe de x = 1 à x = 5.',
+        minimum: 'La droite pointillée jaune y = 2 passe sous toute la courbe ; le point (1 ; 2) marqué « minimum : f(1) = 2 ».',
+        inegalite: `Un point d’essai cyan en x = ${fr(K.P.x, 1)} : f(x) = ${fr(f(K.P.x), 2)} ≥ 2. Écrit : « Pour tout x > 0 : f(x) ≥ 2 ».`,
+        conclusion: 'Encadré jaune : x + 1/x ≥ 2.',
+        positive: 'En vert : minimum 2 > 0 ⇒ f(x) > 0.',
+      }),
+      motifs: { tableau: 'le tableau de variations', descend: 'la fonction descend jusqu’à 2', monte: 'puis elle remonte', minimum: 'le minimum 2 en 1', inegalite: 'f(x) ≥ 2 pour tout x > 0', conclusion: 'x + 1/x ≥ 2', positive: 'minimum positif' },
+      finale: 'Glisse x : le point reste toujours au-dessus de la droite y = 2.',
+      explication: [
+        { repere: 'tableau', texte: 'Le tableau dit : f descend jusqu’à 2, puis remonte.' },
+        { repere: 'minimum', texte: 'Le plus bas, c’est 2, atteint en 1.' },
+        { repere: 'essai', texte: 'Où que tu prennes x, la courbe est au-dessus de 2.' },
+        { repere: 'conclusion', texte: 'D’où l’inégalité x + 1/x ≥ 2, sans calcul.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

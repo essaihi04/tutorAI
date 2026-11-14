@@ -12,6 +12,8 @@ import DemonstrationPleine, { type LectureDemo } from './DemonstrationPleine';
 import type { EnteteCahier } from './cahier';
 import ChampReponse, { BoutonPhoto, type ContexteOcr } from './SaisieReponse';
 import SansDefilement from './SansDefilement';
+import { inscrireVoix } from './voixUnique';
+import { taire as taireMemoire } from './memoire/voix';
 
 /**
  * Le mode CONCENTRATION d'une diapositive (8 novembre 2026, demande de l'utilisateur).
@@ -595,6 +597,38 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     voixExplication.current = false;
     voix.src = url; voix.play().catch(() => fin(false));
   }), []);
+
+  /*
+   * Une seule voix à la fois, celle de l'écran visible (règle utilisateur, 14 novembre 2026 ; skill
+   * cours-concentration « Une seule voix »). La piste de la diapo et la voix du tuteur s'inscrivent : quand la voix du
+   * tuteur part (énoncé d'une question, réaction, démonstration…), l'explication se met en pause et reprendra à la
+   * fermeture de l'écran ; quand l'explication repart, la voix du tuteur se tait.
+   */
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    return inscrireVoix(audio, () => { coursEnPause.current = true; if (demarree.current) envoyerASim('pause'); });
+  }, [piste?.url, envoyerASim]);
+  useEffect(() => {
+    const voix = voixRef.current;
+    if (!voix) return;
+    return inscrireVoix(voix, () => { voixExplication.current = false; fileVoix.current = []; finMorceaux.current = null; });
+  }, []);
+  /** Un écran fermé par l'élève se tait aussitôt, et l'explication de la diapo reprend là où elle s'était arrêtée. */
+  const fermerPanneau = useCallback(() => {
+    setPanneau(null);
+    ++tourEnonce.current;
+    voixExplication.current = false; fileVoix.current = []; finMorceaux.current = null;
+    voixRef.current?.pause();
+    taireMemoire();
+    if (coursEnPause.current) { coursEnPause.current = false; void audioRef.current?.play(); if (demarree.current) envoyerASim('resume'); }
+  }, [envoyerASim]);
+  /** Une bulle ouvre son écran (et fait taire celui d'avant) ou le referme. */
+  const basculerPanneau = useCallback((p: 'cahier' | 'explication' | 'questions') => {
+    if (panneau === p) { fermerPanneau(); return; }
+    if (panneau) { ++tourEnonce.current; voixExplication.current = false; fileVoix.current = []; voixRef.current?.pause(); taireMemoire(); }
+    setPanneau(p);
+  }, [panneau, fermerPanneau]);
 
   /** L'élève lève la main : le cours se met en pause et le panneau de la question s'ouvre. */
   const leverLaMain = useCallback(() => {
@@ -1530,7 +1564,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
               <div className="flex items-center gap-3">
                 {/* le tableau des questions couvre la scène : le bouton du résultat clignote dans son en-tête */}
                 {resultat && !reaction && <BoutonResultat onClick={() => void ouvrirResultat()} />}
-                <button onClick={() => setPanneau(null)} className="text-white/50 hover:text-white text-xl" aria-label="Revenir à la scène">×</button>
+                <button onClick={fermerPanneau} className="text-white/50 hover:text-white text-xl" aria-label="Revenir à la scène">×</button>
               </div>
             </div>
             {cycle?.phase === 'final' ? (
@@ -1670,7 +1704,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
       {/* ── Les bulles : l'écrit, fermé par défaut ── */}
       {panneau && panneau !== 'questions' && (
         <div style={tuteur3D && !etroit ? { right: COLONNE_TUTEUR + placeClavier } : placeClavier ? { right: placeClavier } : undefined} className="absolute left-4 right-4 bottom-[76px] z-30 mx-auto max-w-3xl max-h-[55%] overflow-y-auto rounded-2xl border border-white/15 bg-[#0d1c15]/95 p-5 shadow-2xl backdrop-blur">
-          <button onClick={() => setPanneau(null)} className="absolute right-3 top-2 text-white/50 hover:text-white text-xl" aria-label="Fermer">×</button>
+          <button onClick={fermerPanneau} className="absolute right-3 top-2 text-white/50 hover:text-white text-xl" aria-label="Fermer">×</button>
           {panneau === 'cahier' && (
             <>
               <div className="text-sm font-semibold text-amber-200">📓 À écrire dans le cahier</div>
@@ -1827,10 +1861,10 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
             </div>
           </>
         )}
-        <Bulle actif={panneau === 'cahier'} pulse={toutVisible && panneau !== 'cahier' && !!cahier} onClick={() => setPanneau(p => p === 'cahier' ? null : 'cahier')} disabled={!cahier}>
+        <Bulle actif={panneau === 'cahier'} pulse={toutVisible && panneau !== 'cahier' && !!cahier} onClick={() => basculerPanneau('cahier')} disabled={!cahier}>
           <Libelle icone="📓" texte="À écrire dans le cahier" />
         </Bulle>
-        <Bulle actif={panneau === 'explication'} onClick={() => setPanneau(p => p === 'explication' ? null : 'explication')}>
+        <Bulle actif={panneau === 'explication'} onClick={() => basculerPanneau('explication')}>
           <Libelle icone="📖" texte="Explication écrite" />
         </Bulle>
         <Bulle actif={panneau === 'question_eleve'} onClick={leverLaMain}>
@@ -1842,7 +1876,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
           </Bulle>
         )}
         {(questions.length > 0 || predictionEnCours) && (
-          <Bulle actif={panneau === 'questions'} pulse={(toutVisible || predictionEnCours) && panneau !== 'questions'} onClick={() => setPanneau(p => p === 'questions' ? null : 'questions')}>
+          <Bulle actif={panneau === 'questions'} pulse={(toutVisible || predictionEnCours) && panneau !== 'questions'} onClick={() => basculerPanneau('questions')}>
             {predictionEnCours ? '🔮 Prévois' : `✏️ À toi (${questions.length})`}
           </Bulle>
         )}

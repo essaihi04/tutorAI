@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Une somme qui ne dépasse pas un mur — limite d'une somme</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Des morceaux posés bout à bout sur une règle à la craie : 1, puis 1/2, puis 1/4… la somme avance de moins en moins et s’approche d’un mur en 2 sans le dépasser"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Suites numériques » (math_ch3_suites_numeriques), diapo su_p3_limite_somme (14 novembre 2026,
+ * professeur règle 28). Sₙ = w₀ + … + wₙ, w₀ = 1, raison q : les morceaux 1, q, q², … se posent bout à bout sur une
+ * règle ; Sₙ s'écrit sous le bout ; la somme avance de moins en moins et s'approche du mur 1/(1 − q) (2 pour q = 1/2).
+ * Curseur q (0,1 à 0,9) : le mur se déplace, la somme s'en approche toujours.
+ * Moments : somme, formule, condition, limite. Repères : morceaux, somme, formule, condition, manque, mur, limite.
+ */
+const { fr } = MathsTableau;
+const X0 = 50, LARG = 600, RY = 150;
+const qtxt = q => (Math.abs(q - 0.5) < 1e-9 ? '1/2' : fr(q, 1));
+const S = (q, n) => (1 - Math.pow(q, n + 1)) / (1 - q);
+/** Écriture décimale sans notation 1e-7 (MathsTableau.fr passe par toString). */
+const dec = (v, d) => v.toFixed(d).replace(/0+$/, '').replace(/\.$/, '').replace('.', ',');
+/** Sₙ tronquée (jamais arrondie jusqu'à la limite) : autant de décimales qu'il en faut pour voir le manque. */
+const tronque = (v, manque) => { manque = Math.max(manque, 1e-9); const d = Math.min(9, Math.max(2, 1 - Math.floor(Math.log10(manque)))), k = 10 ** d; return dec(Math.floor(v * k) / k, d); };
+const COUL = ['cyan', 'jaune', 'vert', 'orange', 'rose', 'bleu', 'violet'];
+
+/** Les morceaux w₀ … w_N posés bout à bout (N peut être fractionnaire : le dernier se pose en partie). */
+function morceaux(c, q, N, U, etiquettes) {
+  let x = 0;
+  for (let k = 0; k <= Math.ceil(N); k++) {
+    const part = Math.min(1, N - k + 1); if (part <= 0) break;
+    const w = Math.pow(q, k), x1 = X0 + x * U, x2 = X0 + (x + w * part) * U;
+    if (x2 - x1 > 0.4) {
+      c.rect(x1, RY - 13, Math.max(1, x2 - x1), 26, { couleur: COUL[k % COUL.length], fond: COUL[k % COUL.length], fondAlpha: .3, arrondi: 3, largeur: 1.3, duree: 0 });
+      if (etiquettes && part >= 1 && k < 4 && w * U > 24) c.texte(k === 0 ? '1' : (Math.abs(q - .5) < 1e-9 ? `1/${2 ** k}` : fr(w, 3)), (x1 + x2) / 2, RY - 22, { couleur: COUL[k % COUL.length], taille: 16, align: 'center', duree: 0 });
+    }
+    x += w * part;
+  }
+  return x;
+}
+
+MathsTableau.page({
+  id: 'su_somme', titre: 'La limite d’une somme',
+  texte: 'Construction à la craie : Sₙ = w₀ + … + wₙ avec w₀ = 1 et la raison q (1/2 par défaut). Les morceaux 1, 1/2, 1/4… se posent bout à bout sur une règle ; Sₙ s’écrit sous le bout ; la somme s’approche du mur 1/(1 − q) = 2 sans le dépasser ; la formule Sₙ = 1 × (1 − q^(n+1))/(1 − q) ; −1 < q < 1 donc q^(n+1) → 0',
+  vues: {
+    somme: {
+      titre: 'Une somme de plus en plus longue',
+      params: { q: { min: 0.1, max: 0.9, pas: 0.1, defaut: 0.5, label: 'q =', sens: 'raison de la suite géométrique (w₀ = 1)' } },
+      curseurs: ['q'],
+      dessiner(c, K) {
+        const q = K.P.q, L = 1 / (1 - q), U = LARG / (L * 1.04), qs = qtxt(q);
+        K.titre(`w_0 = 1,  raison q = ${qs} :  S_n = w_0 + w_1 + … + w_n`);
+        // La règle.
+        c.ligne(X0, RY + 22, X0 + LARG + 30, RY + 22, { couleur: 'faible', largeur: 1.4 });
+        for (let v = 0; v <= Math.floor(L * 1.04); v++) { c.ligne(X0 + v * U, RY + 17, X0 + v * U, RY + 27, { couleur: 'faible', largeur: 1.2, duree: .02 }); c.texte(String(v), X0 + v * U, RY + 46, { couleur: 'faible', taille: 15, align: 'center', duree: .04 }); }
+        K.marque('regle');
+        // Les morceaux arrivent un par un : n = 0, 1, 2, … 7 ; Sₙ écrit sous le bout.
+        const NMAX = 7;
+        K.anime(NMAX * .9 + .9, p => {
+          if (K.vu('suite')) return;      // la suite de la somme (n = 8 … 20) prend le relais
+          const N = p * (NMAX + 1) - 0.0001, n = Math.max(0, Math.floor(N));
+          const bout = morceaux(c, q, N, U, true);
+          c.trait([[X0 + bout * U, RY + 52], [X0 + bout * U, RY + 30]], { couleur: 'blanc', largeur: 1.6, duree: 0 });
+          c.texte(`S_${n} = ${fr(S(q, n), 4)}`, Math.min(X0 + bout * U, 600), RY + 76, { couleur: 'blanc', taille: 19, align: 'center', duree: 0 });
+          c.texte(`n + 1 = ${n + 1} termes`, Math.min(X0 + bout * U, 600), RY + 100, { couleur: 'faible', taille: 16, align: 'center', duree: 0 });
+        });
+        c.repere('morceaux', X0, RY - 40, LARG, 60, 'les morceaux 1, q, q², … bout à bout');
+        c.repere('somme', X0, RY + 54, LARG + 20, 56, 'Sₙ sous le bout');
+        K.marque('somme');
+        c.pause(.3);
+        K.lignes(30, 312, [{ t: `S_n = 1 × (1 − (${qs})^{n + 1}) / (1 − ${qs})`, couleur: 'jaune', taille: 21, repere: 'formule', label: 'la formule de la somme géométrique', moment: 'formule' }]);
+        c.pause(.3);
+        K.lignes(30, 356, [{ t: `−1 < ${qs} < 1   donc   (${qs})^{n + 1} → 0`, couleur: 'orange', taille: 20, repere: 'condition', label: 'la condition −1 < q < 1' }]);
+        // La somme continue : n = 8 … 20, les morceaux deviennent invisibles, le manque fond.
+        K.marque('suite');
+        K.anime(2.6, p => {
+          const n = Math.round(7 + 13 * p);
+          const bout = morceaux(c, q, n + .999, U, true);
+          c.trait([[X0 + bout * U, RY + 52], [X0 + bout * U, RY + 30]], { couleur: 'blanc', largeur: 1.6, duree: 0 });
+          c.texte(`S_${n} = ${tronque(S(q, n), L - S(q, n))}`, Math.min(X0 + bout * U, 600), RY + 76, { couleur: 'blanc', taille: 19, align: 'center', duree: 0 });
+          c.texte(`n + 1 = ${n + 1} termes`, Math.min(X0 + bout * U, 600), RY + 100, { couleur: 'faible', taille: 16, align: 'center', duree: 0 });
+          const manque = L - S(q, n);
+          c.texte(manque < 1e-9 ? 'il manque moins de 0,000000001' : `il manque ${dec(manque, Math.min(9, Math.max(2, 1 - Math.floor(Math.log10(manque)))))}`, X0 + LARG - 10, RY - 46, { couleur: 'orange', taille: 17, align: 'right', duree: 0 });
+          c.repere('manque', X0 + LARG - 200, RY - 66, 200, 28, 'ce qui manque pour atteindre le mur');
+        });
+        K.marque('condition');
+        c.pause(.2);
+        c.ligne(X0 + L * U, RY - 34, X0 + L * U, RY + 30, { couleur: 'jaune', largeur: 3, pointille: [6, 5] });
+        c.texte(`mur : ${fr(L, 3)}`, X0 + L * U + 8, RY - 26, { couleur: 'jaune', taille: 17 });
+        c.repere('mur', X0 + L * U - 10, RY - 40, 110, 76, 'le mur : la limite');
+        K.lignes(30, 402, [{ t: `lim S_n = 1 / (1 − ${qs}) = ${fr(L, 3)}`, couleur: 'vert', taille: 22, cadre: 'vert', repere: 'limite', label: 'la limite de Sₙ', moment: 'limite' }]);
+      },
+      lecture: K => { const q = K.P.q, L = 1 / (1 - q); return `Raison ${qtxt(q)} : S₇ = ${fr(S(q, 7), 3)}, S₂₀ = ${tronque(S(q, 20), L - S(q, 20))} ; la somme s’approche de 1/(1 − q) = ${fr(L, 3)} sans le dépasser.`; },
+      decrire: K => { const q = K.P.q, qs = qtxt(q), L = 1 / (1 - q); return {
+        regle: 'Une règle graduée 0, 1, 2…',
+        somme: `Les morceaux 1, ${qs}, ${fr(q * q, 3)}… se posent bout à bout ; sous le bout, S₀ = 1, S₁ = ${fr(S(q, 1), 3)}, S₂ = ${fr(S(q, 2), 3)} … S₇ = ${fr(S(q, 7), 4)} (n + 1 termes).`,
+        formule: `En jaune : Sₙ = 1 × (1 − (${qs})^(n+1)) / (1 − ${qs}).`,
+        condition: `En orange : −1 < ${qs} < 1 donc (${qs})^(n+1) → 0 ; la somme continue jusqu’à n = 20, les morceaux deviennent invisibles, « il manque » fond vers 0.`,
+        limite: `Un mur jaune pointillé en ${fr(L, 3)} ; encadré vert : lim Sₙ = 1/(1 − ${qs}) = ${fr(L, 3)}.`,
+      }; },
+      motifs: { suite: 'la somme continue', regle: 'la règle', somme: 'les morceaux bout à bout', formule: 'la formule', condition: 'la puissance tend vers 0', limite: 'la limite' },
+      finale: 'Glisse q : le mur bouge, la somme s’en approche toujours.',
+      explication: [
+        { repere: 'morceaux', texte: 'Chaque morceau est la moitié du précédent.' },
+        { repere: 'somme', texte: 'La somme avance de moins en moins.' },
+        { repere: 'mur', texte: 'Elle s’approche de 2 sans jamais le dépasser : sa limite est 2.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>En phase ou en opposition — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ondes.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Une corde parcourue par une onde sinusoïdale, deux points M et P séparés de d ; on compte les longueurs d'onde entre eux et on calcule d / λ"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Mesurer</button>
+    <span id="reglage" data-professor-control="set_parameters"></span>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * La méthode d / λ (14 novembre 2026, règle 28 du professeur) : remplace la liste en quatre étapes de la diapo
+ * op_p3_methode. Une corde vibre (λ = 4 cm) ; M est fixe, P est à la distance d (curseur, 1 à 14 cm).
+ * On voit les deux points bouger (flèche = sens du mouvement), on pose λ, puis d, on compte les λ entre M et P,
+ * d / λ s'écrit, et le verdict : entier → en phase ; entier et demi → opposition de phase ; sinon ni l'un ni l'autre.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const LAM = 4, PX = 40, XS = 40, XM = 100, YC = 160, AMP = 38, NVIS = 0.45;   // λ en cm, px par cm, fréquence de l'image (Hz)
+const P = { d_cm: 10 };
+const T = { lambda: 1.0, distance: 2.0, calcul: 3.2, verdict: 4.2 };
+const TFIN = 4.6;
+const S = { t: 0, phase: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0 };
+const vu = nom => S.t >= T[nom] - 1e-6;
+const XP = () => XM + P.d_cm * PX;
+const y = x => YC - AMP * Math.sin(2 * Math.PI * (NVIS * S.phase - (x - XS) / (LAM * PX)));
+const vitesse = x => -Math.cos(2 * Math.PI * (NVIS * S.phase - (x - XS) / (LAM * PX)));    // signe : > 0 vers le haut
+const rapport = () => P.d_cm / LAM;
+const nb = x => fr(x, 2).replace(/0+$/, '').replace(/,$/, '');                // 2,30 → 2,3 ; 3,00 → 3
+function verdict() {
+  const q = rapport(), k = Math.round(q), k2 = Math.round(q - 0.5);
+  if (Math.abs(q - k) < 1e-6) return { mot: 'en phase', detail: `${nb(q)} : un entier`, couleur: 'vert' };
+  if (Math.abs(q - k2 - 0.5) < 1e-6) return { mot: 'en opposition de phase', detail: `${nb(q)} = ${k2} + ½ : un entier et demi`, couleur: 'orange' };
+  return { mot: 'ni en phase, ni en opposition', detail: `${nb(q)} : ni entier, ni entier et demi`, couleur: 'rouge' };
+}
+
+function dessiner(c) {
+  scene.cadre(19);
+  c.texte('S', XS - 22, YC + 6, { couleur: 'faible', taille: 16 });
+  c.direct(() => {
+    c.courbe(u => { const x = XS + u * (720 - XS); return [x, y(x)]; }, 220, { couleur: 'blanc', largeur: 2.4 });
+    for (const [nom, x, coul] of [['M', XM, 'rouge'], ['P', XP(), 'orange']]) {
+      const yy = y(x), s = vitesse(x);
+      c.point(x, yy, 6, coul);
+      c.texte(nom, x - 5, YC + AMP + 30, { couleur: coul, taille: 17 });
+      c.ligne(x, YC + AMP + 10, x, YC + AMP + 14, { couleur: coul, largeur: 1.4 });
+      if (Math.abs(s) > 0.15) c.fleche(x + 13, yy, x + 13, yy - 26 * s, { couleur: coul, largeur: 2.2, tete: 8 });
+    }
+    c.repere('M', XM - 16, YC - AMP - 10, 32, 2 * AMP + 50, 'le point M');
+    c.repere('P', XP() - 16, YC - AMP - 10, 32, 2 * AMP + 50, 'le point P');
+    if (vu('lambda')) {
+      c.cote(XM, 72, XM + LAM * PX, 72, 'λ = 4 cm', { couleur: 'cyan', largeur: 1.8 });
+      c.repere('lambda', XM - 4, 46, LAM * PX + 8, 34, 'la longueur d’onde λ');
+    }
+    if (vu('distance')) {
+      c.cote(XM, 252, XP(), 252, '', { couleur: 'jaune', largeur: 1.8 });
+      c.texte(`d = ${nb(P.d_cm)} cm`, (XM + XP()) / 2, 244, { couleur: 'jaune', taille: 17, align: 'center' });
+      c.repere('d', XM - 4, 226, XP() - XM + 8, 34, 'la distance d entre M et P');
+    }
+    if (vu('calcul')) {
+      // On compte les λ entre M et P : une marque tous les λ.
+      for (let k = 1; XM + k * LAM * PX <= XP() + 1e-6; k++) {
+        const x = XM + k * LAM * PX;
+        c.ligne(x, 262, x, 282, { couleur: 'cyan', largeur: 1.8 });
+        c.texte(`${k} λ`, x, 300, { couleur: 'cyan', taille: 15, align: 'center' });
+      }
+      c.texte(`d / λ = ${nb(P.d_cm)} / 4 = ${nb(rapport())}`, 120, 346, { couleur: 'blanc', taille: 19 });
+      c.repere('calcul', 112, 322, 360, 32, 'le calcul de d / λ');
+    }
+    if (vu('verdict')) {
+      const v = verdict();
+      c.texte(v.detail, 120, 380, { couleur: v.couleur, taille: 17 });
+      c.texte(`→ M et P vibrent ${v.mot}`, 120, 408, { couleur: v.couleur, taille: 19 });
+      c.repere('verdict', 112, 360, 520, 56, 'la conclusion');
+    }
+    c.texte('Les flèches : le sens où va chaque point', 748, 30, { couleur: 'faible', taille: 14, align: 'right' });
+  });
+  return c.fin();
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+scene.avancer = dt => {
+  if (S.pause || !(S.running || S.fait)) return false;
+  S.phase += dt;
+  if (!S.running) return true;                         // fini : la corde continue de vibrer
+  S.t = Math.min(TFIN, S.t + dt);
+  if (arreterSiInstantAtteint()) return true;
+  if (S.t >= TFIN) {
+    S.running = false; S.fait = true; $('run').textContent = 'Mesurer';
+    bulle($('feedback'), 'Change d : un entier de λ → en phase ; un entier et demi → opposition.', 'good');
+    pont.noter('finished'); pont.emettre();
+  } else if (performance.now() - S.emis > 400) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+const MOTIFS = { lambda: 'λ = 4 cm posée sur la corde', distance: 'la distance d entre M et P', calcul: 'on compte les λ entre M et P : d / λ', verdict: 'la conclusion est écrite' };
+function playUntil(p) {
+  const nom = p.moment in T ? p.moment : null, cible = nom ? T[nom] : +p.progress * TFIN;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait && S.t >= cible - 1e-3 && nom) { scene.sale = true; pont.noter('play_until', { moment: nom }); pont.emettre(); return; }  // déjà écrit : on garde la corde qui vibre
+  if (!(S.running || S.pause) || S.t >= cible - 1e-3) start();
+  S.jusqua = cible; S.motif = nom ? MOTIFS[nom] : '';
+  if (S.pause) { S.running = true; S.pause = false; $('run').textContent = 'Pause'; }
+  pont.noter('play_until', { moment: nom }); pont.emettre();
+}
+function arreterSiInstantAtteint() {
+  if (S.jusqua == null || S.t < S.jusqua) return false;
+  S.t = S.jusqua; S.jusqua = null; S.running = false; S.pause = true; $('run').textContent = 'Reprendre';
+  bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || 'instant choisi') + '.'); pont.noter('pause'); pont.emettre();
+  return true;
+}
+function ceQuiSeVoit() {
+  const m = [`Une corde vibre (λ = 4 cm) ; M en rouge, P en orange à d = ${fr(P.d_cm, 1)} cm ; une flèche sur chaque point montre s’il monte ou descend.`];
+  const sm = vitesse(XM) > 0, sp = vitesse(XP()) > 0;
+  m.push(`En ce moment, M ${sm ? 'monte' : 'descend'} et P ${sp ? 'monte' : 'descend'}.`);
+  if (vu('lambda')) m.push('λ = 4 cm est posée au-dessus de la corde.');
+  if (vu('distance')) m.push(`d = ${fr(P.d_cm, 1)} cm est écrite sous la corde.`);
+  if (vu('calcul')) m.push(`Les λ sont comptées de M vers P ; écrit : d / λ = ${fr(rapport(), 2)}.`);
+  if (vu('verdict')) { const v = verdict(); m.push(`Écrit : « ${v.detail} → M et P vibrent ${v.mot} ».`); }
+  return m.join(' ');
+}
+function start() { S.jusqua = null; S.t = 0; S.running = true; S.pause = false; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Regarde M et P : montent-ils ensemble ?'); pont.noter('start'); pont.emettre(); }
+function pause() { if (!(S.running || S.fait)) return; S.jusqua = null; S.running = false; S.pause = true; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running || !S.pause) return start(); S.pause = false; if (S.t < TFIN) S.running = true; $('run').textContent = S.running ? 'Pause' : 'Mesurer'; pont.noter('resume'); pont.emettre(); }
+function reset() { S.t = 0; S.running = false; S.pause = false; S.fait = false; S.jusqua = null; scene.sale = true; $('run').textContent = 'Mesurer'; bulle($('feedback'), 'Mesure d et λ, puis calcule d / λ.'); pont.emettre(); }
+function setParameters(p) {
+  if (!Number.isFinite(+p.d_cm)) return;
+  P.d_cm = Math.min(14, Math.max(1, Math.round(+p.d_cm * 5) / 5)); regl.maj(P.d_cm); scene.sale = true;
+  if (!(S.running || S.pause || S.fait)) start();
+  const v = verdict();
+  bulle($('feedback'), `d = ${nb(P.d_cm)} cm : d / λ = ${nb(rapport())} → ${v.mot}.`, v.couleur === 'rouge' ? '' : 'good');
+  pont.noter('set_parameters', { d_cm: P.d_cm }); pont.emettre();
+}
+const regl = window.Tableau.curseur({ id: 'd', label: 'd =', min: 1, max: 14, step: 0.2, valeur: 10, unite: 'cm', commande: 'set_parameters', decimales: 1, onchange: x => setParameters({ d_cm: x }) });
+$('reglage').replaceChildren(regl);
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+window.Tableau.explication({ methode: [
+  { repere: 'lambda', texte: 'D’abord λ : ici quatre centimètres.' },
+  { repere: 'd', texte: 'Puis la distance d entre les deux points, dans la même unité.' },
+  { repere: 'calcul', texte: 'On calcule d sur λ.' },
+  { repere: 'verdict', texte: 'Un entier : en phase. Un entier et demi : opposition de phase. Sinon, ni l’un ni l’autre.' },
+] });
+const commandes = ['start', 'pause', 'resume', 'reset', 'set_parameters', 'play_until'];
+const config = { id: 'ondes_periodiques_methode_phase', version: '1.0', title: 'La méthode d / λ', variants: [{ id: 'methode', label: 'méthode' }], commands: commandes,
+  command_schema: { set_parameters: { d_cm: '1..14 (pas de 0,2), distance entre M et P en cm ; λ = 4 cm' }, play_until: { moment: Object.keys(MOTIFS).join(' | ') + ' (se fige à cet instant clé)' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Corde, λ = 4 cm ; M fixe, P à la distance d (curseur). On pose λ, puis d, on compte les λ, on écrit d / λ. d = 10 cm : 2,5 → opposition de phase ; d = 12 cm : 3 → en phase ; d = 9,2 cm : 2,3 → ni l’un ni l’autre.',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : (S.fait ? 'finished' : 'idle'), ce_qui_se_voit: ceQuiSeVoit(), moments: { ...T }, parameters: { ...P }, d_sur_lambda: +rapport().toFixed(3), conclusion: verdict().mot, time_s: +S.t.toFixed(2) }),
+  progression: () => (S.fait ? 1 : clamp(S.t / TFIN)),
+  executer: (cmd, p) => ({ start, pause, resume, reset, set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Mesure d et λ, puis calcule d / λ.');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

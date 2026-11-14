@@ -20,6 +20,7 @@
  *         decrire: { courbe_tracee: 'phrase de ce qui se voit après ce moment', … },   // ou (K) => ({…})
  *         poignees(K) { return [{ id: 'a', x, y, bouger: (x, y) => ({ a: … }) }]; },  // coordonnées du dessin
  *         lecture(K) { return 'f(a) = …' },                                // une phrase sur les valeurs actuelles (facultatif)
+ *         curseurs: ['a'],                                                   // au plus deux curseurs dans la barre (facultatif)
  *       },
  *     },
  *   });
@@ -270,7 +271,7 @@
     };
     function calculer() { const t = S.tw, r = S.running; S.tw = 1e6; dessiner(craie); S.tw = t; S.running = r; scene.sale = true; }
     function start() { S.tw = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); T.bulle($('feedback'), ''); pont.noter('start', { vue }); pont.emettre(); }
-    function reset() { S.P = { ...params0 }; start(); }
+    function reset() { S.P = { ...params0 }; majCurseurs(); start(); }
     function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); pont.noter('pause'); pont.emettre(); }
     function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); pont.noter('resume'); pont.emettre(); }
     function playUntil(p) {
@@ -294,7 +295,25 @@
       if (!change) return;
       calculer(); scene.remesurer();
       if (S.fait) S.tw = M.fin;     // construction finie : elle reste entière, avec les nouvelles valeurs
+      majCurseurs();
+      if (par === 'eleve' && V.lecture) T.bulle($('feedback'), V.lecture(aide(craie, S, M)));
       scene.sale = true; pont.noter('set_parameters', { ...S.P, par }); pont.emettre();
+    }
+    /* Curseurs (14 novembre 2026, professeur règle 28) : une vue peut déclarer `curseurs: ['k', …]` (au plus deux) ;
+     * chaque paramètre listé reçoit un curseur à la craie dans la barre, à côté du bouton. `params.k.label` (texte devant),
+     * `params.k.unite`, `params.k.affiche(v)` (texte de la valeur, ex. « 1000 » pour un indice). L'élève le glisse : la
+     * construction se réécrit aussitôt avec la nouvelle valeur ; le tuteur, lui, passe par set_parameters (le curseur suit). */
+    const curseurs = {};
+    function majCurseurs() {
+      for (const [k, el] of Object.entries(curseurs)) { el.maj(S.P[k]); const d = V.params[k]; if (d.affiche) el.querySelector('b').textContent = d.affiche(S.P[k]); }
+    }
+    for (const k of (V.curseurs || []).slice(0, 2)) {
+      const d = (V.params || {})[k]; if (!d) continue;
+      const el = T.curseur({ id: 'curseur_' + k, label: d.label || (k + ' ='), min: d.min, max: d.max, step: d.pas || 'any', valeur: S.P[k], unite: d.unite || '', decimales: d.decimales, commande: 'set_parameters' });
+      el.input.addEventListener('input', () => { setParameters({ [k]: Number(el.input.value) }, 'eleve'); });
+      curseurs[k] = el;
+      const apres = Object.values(curseurs).length > 1 ? Object.values(curseurs)[Object.values(curseurs).length - 2] : $('run');
+      apres.after(el);
     }
     $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
 
@@ -315,7 +334,7 @@
           for (const [k, v] of Object.entries(nv)) { const b = borne(k, v); if (b !== null) S.P[k] = b; }
           calculer(); S.tw = M.fin; scene.sale = true;
         },
-        lacher() { scene.remesurer(); pont.noter('set_parameters', { ...S.P }); T.bulle($('feedback'), V.lecture ? V.lecture(aide(craie, S, M)) : 'Nouveau réglage.'); pont.emettre(); },
+        lacher() { scene.remesurer(); majCurseurs(); pont.noter('set_parameters', { ...S.P }); T.bulle($('feedback'), V.lecture ? V.lecture(aide(craie, S, M)) : 'Nouveau réglage.'); pont.emettre(); },
       });
     }
 
@@ -331,7 +350,7 @@
         moments_atteints: etapes().filter((n) => S.tw >= M[n] - 1e-6) }),
       progression: () => (S.fait ? 1 : M.fin ? Math.min(1, S.tw / M.fin) : 0),
       executer: (cmd, p) => ({ start, reset, pause, resume, play_until: () => playUntil(p), set_time: () => setTime(p), set_parameters: () => setParameters(p, 'tuteur') })[cmd]?.() });
-    etiquette();
+    etiquette(); majCurseurs();
     window.__maths = { S, get M() { return M; }, scene, vue, def };
     return { S, scene, pont };
   }

@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La constante radioactive λ — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="radio.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Deux échantillons de 64 noyaux, iode 131 et carbone 14, avec leur constante radioactive λ et ses unités ; on laisse passer 40 jours : l'iode se vide, le carbone 14 ne bouge presque pas"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <span id="reglage" data-professor-control="set_parameters"></span>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * La constante radioactive λ (14 novembre 2026, règle 28 du professeur) : remplace la figure des unités de la diapo
+ * ra_l6_lambda. Deux échantillons de 64 noyaux : iode 131 (λ = 0,087 j⁻¹ = 1,0·10⁻⁶ s⁻¹) et carbone 14
+ * (λ = 1,21·10⁻⁴ an⁻¹ = 3,8·10⁻¹² s⁻¹). Chaque λ s'écrit dans l'inverse d'une unité de temps, puis λ·t sans unité,
+ * puis 40 jours passent : l'iode se vide, le carbone 14 ne bouge pas. Plus λ est grande, plus les noyaux partent vite.
+ * Curseur : λ du premier échantillon (0,02 à 0,35 j⁻¹) ; N = round(64·e^(−λt)).
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const N0 = 64, PAS = 24, JOURS = 40;
+const P = { lambda_j: 0.087 };
+const LC14 = 1.21e-4 / 365.25;                                           // j⁻¹
+const ECH = [
+  { id: 'iode', x: 40, nom: () => (Math.abs(P.lambda_j - 0.087) < 1e-6 ? 'Iode 131' : 'Noyau X'), lam: () => P.lambda_j, graine: 5 },
+  { id: 'carbone', x: 410, nom: () => 'Carbone 14', lam: () => LC14, graine: 9 },
+];
+const ordre = g => { const r = window.Tableau.graine(g), a = [...Array(N0).keys()]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } const rang = []; a.forEach((n, k) => { rang[n] = k; }); return rang; };
+ECH.forEach(e => { e.rang = ordre(e.graine); });
+const T = { trace: 1.2, conversion: 2.6, course: 8.4 };
+const C0 = 2.9, C1 = 7.9, TFIN = 8.6;                                    // les 40 jours passent de C0 à C1
+const S = { t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0 };
+const vu = nom => S.t >= T[nom] - 1e-6;
+const jours = () => JOURS * clamp((S.t - C0) / (C1 - C0));
+const restants = e => Math.round(N0 * Math.exp(-e.lam() * jours()));
+const sci = (v, d = 1) => { const e = Math.floor(Math.log10(v)); return `${fr(v / 10 ** e, d)}·10^{${e}}`; };
+
+function sphere(ctx, x, y, r, [clair, milieu, sombre]) {
+  const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r); g.addColorStop(0, clair); g.addColorStop(.45, milieu); g.addColorStop(1, sombre);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+}
+const PERE = ['#f5ebff', '#b06cf0', '#43186f'], FILS = ['#e8edf3', '#7d8a99', '#2f3842'];
+
+function dessiner(c) {
+  scene.cadre(37);
+  c.direct(() => {
+    const ctx = c.ctx;
+    for (const e of ECH) {
+      c.texte(e.nom(), e.x, 36, { couleur: 'violet', taille: 19 });
+      const n = restants(e);
+      for (let i = 0; i < N0; i++) sphere(ctx, e.x + 10 + (i % 8) * PAS, 60 + Math.floor(i / 8) * PAS, 8.5, e.rang[i] < N0 - n ? FILS : PERE);
+      c.texte(`N = ${n}`, e.x + 8 * PAS + 14, 150, { couleur: n < N0 ? 'orange' : 'blanc', taille: 19 });
+      c.repere(e.id, e.x - 4, 14, 8 * PAS + 90, 8 * PAS + 40, e.nom());
+      if (vu('trace')) {
+        const l = e.id === 'iode' ? `λ = ${fr(P.lambda_j, 3)} j^{-1}` : 'λ = 1,21·10^{-4} an^{-1}';
+        const ls = e.id === 'iode' ? `= ${sci(P.lambda_j / 86400)} s^{-1}` : `= ${sci(1.21e-4 / 3.156e7)} s^{-1}`;
+        c.texte(l, e.x, 270, { couleur: 'jaune', taille: 19 });
+        c.texte(ls, e.x + 18, 298, { couleur: 'jaune', taille: 17 });
+        c.repere('lambda_' + e.id, e.x - 4, 250, 300, 56, 'λ et son unité');
+      }
+    }
+    if (vu('conversion')) {
+      c.texte(`λ·t = ${fr(P.lambda_j, 3)} j^{-1} × 8 j = ${fr(P.lambda_j * 8, 2)}  : sans unité`, 40, 340, { couleur: 'vert', taille: 18 });
+      c.texte('(λ et t dans la même unité de temps)', 60, 366, { couleur: 'faible', taille: 15 });
+      c.repere('lambda_t', 34, 318, 560, 56, 'λ·t sans unité');
+    }
+    if (S.t > C0 - 0.2) c.texte(`t = ${fr(jours(), 0)} jours`, 748, 36, { couleur: 'cyan', taille: 18, align: 'right' });
+    if (vu('course')) {
+      c.texte(`λ grande : les noyaux partent vite`, 40, 404, { couleur: 'orange', taille: 18 });
+      c.repere('conclusion', 34, 384, 520, 28, 'plus λ est grande, plus la décroissance est rapide');
+    }
+  });
+  return c.fin();
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(TFIN, S.t + dt);
+  if (arreterSiInstantAtteint()) return true;
+  if (S.t >= TFIN) {
+    S.running = false; S.fait = true; $('run').textContent = 'Lancer';
+    bulle($('feedback'), `En 40 jours : ${ECH[0].nom()} ${restants(ECH[0])} noyaux sur 64, carbone 14 : 64. Plus λ est grande, plus ça va vite.`, 'good');
+    pont.noter('finished'); pont.emettre();
+  } else if (performance.now() - S.emis > 400) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+const MOTIFS = { trace: 'chaque λ dans l’inverse d’une unité de temps : par jour, par an, par seconde', conversion: 'λ·t n’a pas d’unité', course: '40 jours plus tard : l’iode s’est vidé, le carbone 14 n’a pas bougé' };
+function playUntil(p) {
+  const nom = p.moment in T ? p.moment : null, cible = nom ? T[nom] : +p.progress * TFIN;
+  if (!Number.isFinite(cible)) return;
+  if (!(S.running || S.pause) || S.t >= cible - 1e-3) start();
+  S.jusqua = cible; S.motif = nom ? MOTIFS[nom] : '';
+  if (S.pause) { S.running = true; S.pause = false; $('run').textContent = 'Pause'; }
+  pont.noter('play_until', { moment: nom }); pont.emettre();
+}
+function arreterSiInstantAtteint() {
+  if (S.jusqua == null || S.t < S.jusqua) return false;
+  S.t = S.jusqua; S.jusqua = null; S.running = false; S.pause = true; $('run').textContent = 'Reprendre';
+  bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || 'instant choisi') + '.'); pont.noter('pause'); pont.emettre();
+  return true;
+}
+function ceQuiSeVoit() {
+  const m = [`Deux échantillons de 64 noyaux (violet : restant, gris : désintégré) : ${ECH[0].nom()} à gauche, carbone 14 à droite.`];
+  if (vu('trace')) m.push(`Écrit sous chacun : λ = ${fr(P.lambda_j, 3)} j⁻¹ = ${fr(P.lambda_j / 0.0864, 2)}·10⁻⁶ s⁻¹ ; carbone 14 : λ = 1,21·10⁻⁴ an⁻¹ = 3,8·10⁻¹² s⁻¹.`);
+  if (vu('conversion')) m.push(`Écrit : « λ·t = ${fr(P.lambda_j, 3)} j⁻¹ × 8 j = ${fr(P.lambda_j * 8, 2)} : sans unité ».`);
+  if (S.t > C0) m.push(`t = ${fr(jours(), 0)} jours : ${ECH[0].nom()} N = ${restants(ECH[0])}, carbone 14 N = ${restants(ECH[1])}.`);
+  if (vu('course')) m.push('Écrit : « λ grande : les noyaux partent vite ».');
+  return m.join(' ');
+}
+function start() { S.jusqua = null; S.t = 0; S.running = true; S.pause = false; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Deux noyaux, deux λ…'); pont.noter('start'); pont.emettre(); }
+function pause() { if (!S.running) return; S.jusqua = null; S.running = false; S.pause = true; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running || !S.pause) return start(); S.running = true; S.pause = false; $('run').textContent = 'Pause'; pont.noter('resume'); pont.emettre(); }
+function reset() { S.t = 0; S.running = false; S.pause = false; S.fait = false; S.jusqua = null; scene.sale = true; $('run').textContent = 'Lancer'; bulle($('feedback'), 'Lance : lequel des deux échantillons se vide le plus vite ?'); pont.emettre(); }
+function setParameters(p) {
+  if (!Number.isFinite(+p.lambda_j)) return;
+  P.lambda_j = Math.min(0.35, Math.max(0.02, Math.round(+p.lambda_j * 1000) / 1000)); regl.maj(P.lambda_j); scene.sale = true;
+  if (!(S.running || S.pause || S.fait)) start();
+  bulle($('feedback'), `λ = ${fr(P.lambda_j, 3)} par jour : après 40 jours il en reste ${Math.round(N0 * Math.exp(-P.lambda_j * JOURS))} sur 64.`);
+  pont.noter('set_parameters', { lambda_j: P.lambda_j }); pont.emettre();
+}
+const regl = window.Tableau.curseur({ id: 'lambda', label: 'λ (gauche) =', min: 0.02, max: 0.35, step: 0.001, valeur: 0.087, unite: '/jour', commande: 'set_parameters', decimales: 3, onchange: v => setParameters({ lambda_j: v }) });
+$('reglage').replaceChildren(regl);
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+window.Tableau.explication({ lambda: [
+  { repere: 'iode', texte: 'L’iode 131 a sa propre constante λ.' },
+  { repere: 'carbone', texte: 'Le carbone 14 a une autre λ, beaucoup plus petite.' },
+  { repere: 'lambda_iode', texte: 'λ s’exprime dans l’inverse d’une unité de temps : jour puissance moins un, ou seconde puissance moins un.' },
+  { repere: 'lambda_t', texte: 'λ fois t n’a pas d’unité : λ et t dans la même unité de temps.' },
+  { repere: 'conclusion', texte: 'Plus λ est grande, plus les noyaux se désintègrent vite.' },
+] });
+const commandes = ['start', 'pause', 'resume', 'reset', 'set_parameters', 'play_until'];
+const config = { id: 'radioactivite_lambda', version: '1.0', title: 'La constante radioactive λ', variants: [{ id: 'lambda', label: 'lambda' }], commands: commandes,
+  command_schema: { set_parameters: { lambda_j: '0.02..0.35 (j⁻¹), λ de l’échantillon de gauche (iode 131 : 0,087)' }, play_until: { moment: Object.keys(MOTIFS).join(' | ') + ' (rejoue et se fige à cet instant clé)' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Iode 131 : λ = 0,087 j⁻¹ = 1,0·10⁻⁶ s⁻¹ ; carbone 14 : λ = 1,21·10⁻⁴ an⁻¹ = 3,8·10⁻¹² s⁻¹. λ·t sans unité (λ et t dans la même unité). En 40 jours, l’iode passe de 64 à 2 noyaux, le carbone 14 reste à 64 : plus λ est grande, plus la décroissance est rapide.',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : (S.fait ? 'finished' : 'idle'), ce_qui_se_voit: ceQuiSeVoit(), moments: { ...T }, parameters: { ...P },
+    jours: +jours().toFixed(1), restants: { gauche: restants(ECH[0]), carbone14: restants(ECH[1]) }, time_s: +S.t.toFixed(2) }),
+  progression: () => (S.fait ? 1 : clamp(S.t / TFIN)),
+  executer: (cmd, p) => ({ start, pause, resume, reset, set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Lance : lequel des deux échantillons se vide le plus vite ?');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

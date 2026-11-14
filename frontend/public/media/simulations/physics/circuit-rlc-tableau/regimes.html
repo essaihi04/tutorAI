@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Les trois régimes : régler R + r — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="rlc.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un écran quadrillé à la craie : u_C(t) se trace en rouge après la bascule ; à droite la résistance totale R + r, le nom du régime et les sommets lus ; les traces d’avant restent en pointillés pour ranger les régimes"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Basculer K</button>
+    <span id="reglage" data-professor-control="set_parameters"></span>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Les trois régimes avec UN curseur, R + r (14 novembre 2026, règle 28 du professeur : une manip au lieu de trois écrans fixes).
+ * Physique exacte (même solution que oscillogramme.html) : L·q'' + (R + r)·q' + q/C = 0, u_C(0) = E = 6 V, i(0) = 0,
+ * C = 4 µF, L = 0,1 H ; frontière 2√(L/C) ≈ 316 Ω (jamais écrite, comme au cours : « le régime critique est une frontière »).
+ * « Basculer K » trace u_C(t) sur 20 ms au ralenti (1 ms = 0,25 s) ; les sommets s'écrivent quand le spot les atteint ;
+ * le nom du régime s'écrit comme RÉSULTAT de ce qu'on voit. Les trois dernières traces restent en pointillés.
+ * Moments (play_until) : pseudo (R + r = 20 Ω), aperiodique (R + r = 1000 Ω), periodique (R + r = 0), ordre (les trois traces
+ * ensemble, rangées : plus R + r est grande, plus l'amortissement est fort). Diapo lc_r3_ordre.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '').replace('-', '−');
+const E = 6, C = 4e-6, L = .1;
+const W0 = 1 / Math.sqrt(L * C), FRONTIERE = 2 * Math.sqrt(L / C);
+function uC(tms, Rt) {
+  const t = tms / 1000, a = Rt / (2 * L), d = a * a - W0 * W0;
+  if (Math.abs(d) < 1e-6 * W0 * W0) return E * (1 + a * t) * Math.exp(-a * t);
+  if (d < 0) { const w = Math.sqrt(-d); return E * Math.exp(-a * t) * (Math.cos(w * t) + a / w * Math.sin(w * t)); }
+  const s = Math.sqrt(d), s1 = -a + s, s2 = -a - s;
+  return E * (s2 * Math.exp(s1 * t) - s1 * Math.exp(s2 * t)) / (s2 - s1);
+}
+function pseudoT(Rt) { const a = Rt / (2 * L), d = W0 * W0 - a * a; return d > 1e-6 * W0 * W0 ? 2 * Math.PI / Math.sqrt(d) * 1000 : null; }
+function regime(Rt) { if (Rt <= 0) return 'periodique'; if (Math.abs(Rt - FRONTIERE) <= 20) return 'critique'; return Rt < FRONTIERE ? 'pseudo' : 'aperiodique'; }
+const NOM = { periodique: 'régime périodique', pseudo: 'régime pseudo-périodique', critique: 'frontière : régime critique', aperiodique: 'régime apériodique' };
+const COUL = { periodique: 'cyan', pseudo: 'rouge', critique: 'violet', aperiodique: 'orange' };
+function sommets(Rt) {
+  const T = pseudoT(Rt); if (!T) return [{ t: 0, u: E }];
+  const out = []; for (let n = 0; n * T <= 20 + 1e-9; n++) { const u = uC(n * T, Rt); if (n === 0 || u >= .1) out.push({ t: n * T, u }); } return out;
+}
+// L'écran : 10 carreaux × 2 ms, 8 carreaux × 2 V.
+const EX = 40, EY = 74, EW = 500, EH = 296;
+const PX = t => EX + t / 20 * EW, PY = u => EY + EH / 2 - u / 8 * (EH / 2);
+const RALENTI = 0.25;                                      // s d'image par ms du vrai circuit
+const P = { Rt: 20 };
+const S = { t: 0, running: false, pause: false, fait: false, cur: null, fantomes: [], ordre: false, motif: '', emis: 0 };
+
+function dessiner(c) {
+  scene.cadre(23);
+  c.texte('Le condensateur chargé (E = 6 V) se vide dans la bobine : u_C(t)', 290, 26, { couleur: 'blanc', taille: 16, align: 'center', max: 560 });
+  c.rect(EX, EY, EW, EH, { arrondi: 6, couleur: 'faible' });
+  for (let k = 1; k < 10; k++) c.ligne(PX(2 * k), EY + 2, PX(2 * k), EY + EH - 2, { couleur: 'tresfaible', largeur: 1, duree: .02, tremble: 0 });
+  for (let k = 1; k < 8; k++) c.ligne(EX + 2, EY + k * EH / 8, EX + EW - 2, EY + k * EH / 8, { couleur: k === 4 ? 'faible' : 'tresfaible', largeur: k === 4 ? 1.4 : 1, duree: .02, tremble: 0 });
+  c.texte('2 ms / carreau ; 2 V / carreau', EX + EW, EY + EH + 20, { couleur: 'faible', taille: 13, align: 'right' });
+  c.texte('0', EX - 6, PY(0) + 5, { couleur: 'faible', taille: 13, align: 'right' });
+  c.texte('6 V', EX - 4, PY(6) + 5, { couleur: 'faible', taille: 12, align: 'right' });
+  c.repere('ecran', EX, EY, EW, EH, 'l’écran : u_C(t) après la bascule de K');
+  c.direct(() => {
+    const trace = (tr, tfin, pointille) => {
+      const Rt = tr.Rt, reg = regime(Rt), coul = pointille ? COUL[reg] : 'rouge';
+      if (tfin > 0) c.courbe(u => { const t = u * tfin; return [PX(t), Math.max(EY + 2, Math.min(EY + EH - 2, PY(uC(t, Rt))))]; }, Math.max(20, Math.round(tfin * 18)), { couleur: coul, largeur: pointille ? 2 : 2.6, pointille: pointille ? [6, 5] : null, alpha: pointille ? 0.8 : 0.95, tremble: 0 });
+      // Repère sur ce qui distingue la trace : le premier creux (pseudo), la descente sans creux (apériodique), les sommets égaux (périodique).
+      const T = pseudoT(Rt);
+      if (reg === 'pseudo') c.repere('courbe_pseudo', PX(T * 0.3), PY(E * 0.9), PX(T * 2.2) - PX(T * 0.3), PY(-E) - PY(E * 0.9), `la trace R + r = ${Rt} Ω : les sommets baissent`);
+      else if (reg === 'periodique') c.repere('courbe_periodique', PX(11), PY(E) - 6, PX(20) - PX(11), PY(-E) - PY(E) + 12, 'la trace R + r = 0 : sommets tous à la même hauteur');
+      else c.repere('courbe_' + reg, EX, PY(E) - 6, PX(8) - EX, PY(0) - PY(E) + 14, `la trace R + r = ${Rt} Ω : retour vers 0 sans osciller`);
+    };
+    for (const g of S.fantomes) trace(g, 20, true);
+    if (S.cur) {
+      const tt = Math.min(S.t, 20); trace(S.cur, tt, false);
+      if (S.running || S.pause) c.point(PX(tt), PY(uC(tt, S.cur.Rt)), 4, 'rose');
+      // Les sommets, écrits quand le spot les atteint.
+      for (const s of sommets(S.cur.Rt)) if (s.t <= tt && s.t < 19.5) { c.point(PX(s.t), PY(s.u), 3.5, 'jaune'); c.texte(`${fx(s.u, 1)} V`, PX(s.t) + (s.t ? 0 : 6), PY(s.u) - 9, { couleur: 'jaune', taille: 13, align: s.t ? 'center' : 'left' }); }
+    }
+    // Colonne de droite : R + r, le régime (résultat), les sommets.
+    const Rt = S.cur ? S.cur.Rt : P.Rt;
+    if (!S.ordre) { c.texte(`R + r = ${Rt} Ω`, 650, 96, { couleur: 'orange', taille: 20, align: 'center' }); c.repere('resistance', 575, 74, 150, 30, 'la résistance totale R + r'); }
+    if (S.cur && (S.fait || S.t >= 8)) {
+      const reg = regime(S.cur.Rt), T = pseudoT(S.cur.Rt), som = sommets(S.cur.Rt);
+      c.texte(NOM[reg], 650, 132, { couleur: COUL[reg], taille: 17, align: 'center', max: 175 });
+      c.repere('regime', 565, 112, 170, 30, 'le nom du régime');
+      if (reg === 'periodique') c.texte('sommets égaux', 650, 158, { couleur: 'faible', taille: 15, align: 'center' });
+      else if (reg === 'pseudo') c.texte('les sommets baissent', 650, 158, { couleur: 'faible', taille: 15, align: 'center' });
+      else c.texte('retour vers 0 sans osciller', 650, 158, { couleur: 'faible', taille: 15, align: 'center', max: 175 });
+      if (T && som.length > 1) c.texte(`T ≈ ${fx(T, 1)} ms`, 650, 184, { couleur: 'faible', taille: 15, align: 'center' });
+    }
+    // Légende des traces (couleur, R + r).
+    let k = 0;
+    for (const g of S.fantomes.concat(S.cur ? [S.cur] : [])) {
+      const y = 232 + 22 * k++, reg = regime(g.Rt), cur = g === S.cur;
+      c.ligne(580, y - 5, 606, y - 5, { couleur: cur ? 'rouge' : COUL[reg], largeur: cur ? 2.6 : 2, pointille: cur ? null : [5, 4], tremble: 0 });
+      c.texte(`${g.Rt} Ω : ${reg === 'pseudo' ? 'pseudo-pér.' : reg === 'periodique' ? 'périodique' : reg === 'critique' ? 'critique' : 'apériodique'}`, 612, y, { couleur: cur ? 'rouge' : COUL[reg], taille: 14, max: 140 });
+    }
+    if (S.ordre) {
+      c.texte('périodique → pseudo-périodique → apériodique', 290, 404, { couleur: 'jaune', taille: 15, align: 'center', max: 520 });
+      c.texte('R + r plus grande :', 650, 316, { couleur: 'jaune', taille: 15, align: 'center', max: 175 });
+      c.texte('amortissement plus fort', 650, 336, { couleur: 'jaune', taille: 15, align: 'center', max: 175 });
+      c.texte('L et C font osciller ; R + r amortit', 650, 364, { couleur: 'faible', taille: 14, align: 'center', max: 175 });
+      c.repere('ordre', 40, 384, 500, 28, 'l’ordre des régimes : l’amortissement augmente avec R + r');
+    }
+    c.texte(`t = ${fx(Math.min(S.t, 20), 1)} ms`, 740, 30, { couleur: 'vert', taille: 15, align: 'right' });
+    if (S.running || S.pause) c.texte('(ralenti)', 740, 48, { couleur: 'faible', taille: 13, align: 'right' });
+  });
+  return c.fin();
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(20, S.t + dt / RALENTI);
+  if (S.t >= 20) {
+    S.running = false; S.fait = true; $('run').textContent = 'Basculer K';
+    bulle($('feedback'), `R + r = ${S.cur.Rt} Ω : ${NOM[regime(S.cur.Rt)]}. Change R + r et compare.`, 'good');
+    pont.noter('finished'); pont.emettre();
+  } else if (performance.now() - S.emis > 400) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function lancer(motif) {
+  if (S.cur && S.t > 0 && S.cur.Rt !== P.Rt) { S.fantomes = S.fantomes.filter(g => g.Rt !== S.cur.Rt); S.fantomes.push({ Rt: S.cur.Rt }); if (S.fantomes.length > 3) S.fantomes.shift(); }
+  S.fantomes = S.fantomes.filter(g => g.Rt !== P.Rt);
+  S.cur = { Rt: P.Rt }; S.t = 0; S.running = true; S.pause = false; S.fait = false; S.ordre = false;
+  $('run').textContent = 'Pause'; bulle($('feedback'), motif || `K bascule : u_C(t) se trace au ralenti (R + r = ${P.Rt} Ω)…`);
+  pont.noter('start', { R_total_ohm: P.Rt }); pont.emettre();
+}
+const PRESETS = {
+  pseudo: { Rt: 20, fantomes: [], motif: 'R + r = 20 Ω : les sommets baissent, régime pseudo-périodique' },
+  aperiodique: { Rt: 1000, fantomes: [20], motif: 'R + r = 1000 Ω : u_C revient vers 0 sans osciller, régime apériodique' },
+  periodique: { Rt: 0, fantomes: [20, 1000], motif: 'R + r = 0 : sommets tous égaux, régime périodique' },
+  ordre: { fantomes: [20, 1000, 0], motif: 'les trois traces, rangées par R + r' },
+};
+function moments() { return { pseudo: 0, aperiodique: 1, periodique: 2, ordre: 3 }; }
+function playUntil(q) {
+  const pr = PRESETS[q.moment]; if (!pr) return;
+  S.fantomes = pr.fantomes.map(Rt => ({ Rt }));
+  if (pr.Rt !== undefined) { P.Rt = pr.Rt; rR.maj(P.Rt); S.cur = null; lancer('Je trace : ' + pr.motif + '…'); }
+  else { S.cur = null; S.t = 20; S.running = false; S.pause = false; S.fait = true; S.ordre = true; $('run').textContent = 'Basculer K'; bulle($('feedback'), 'Regarde : ' + pr.motif + '. Plus R + r est grande, plus l’amortissement est fort.'); }
+  S.motif = pr.motif; scene.sale = true;
+  pont.noter('play_until', { moment: q.moment }); pont.emettre();
+}
+function ceQuiSeVoit() {
+  const m = ['Écran 20 ms × ±8 V : u_C(t) après la bascule, C = 4 µF, L = 0,1 H, u_C(0) = 6 V.'];
+  for (const g of S.fantomes) m.push(`En pointillés : R + r = ${g.Rt} Ω, ${NOM[regime(g.Rt)]}.`);
+  if (S.cur) {
+    const tt = Math.min(S.t, 20), som = sommets(S.cur.Rt).filter(s => s.t <= tt).map(s => fx(s.u, 1) + ' V');
+    m.push(`Trace rouge R + r = ${S.cur.Rt} Ω jusqu’à t = ${fx(tt, 1)} ms ; sommets déjà écrits : ${som.join(' ; ') || 'aucun'}.`);
+    if (S.fait || S.t >= 8) m.push(`Écrit à droite : ${NOM[regime(S.cur.Rt)]}.`);
+  } else if (!S.fantomes.length) m.push('K pas encore basculé.');
+  if (S.ordre) m.push('Écrit en jaune : périodique → pseudo-périodique → apériodique ; plus R + r est grande, plus l’amortissement est fort ; L et C font osciller, R + r amortit.');
+  return m.join(' ');
+}
+function start() { lancer(); }
+function pause() { if (!S.running) return; S.running = false; S.pause = true; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running || !S.pause) return start(); S.running = true; S.pause = false; $('run').textContent = 'Pause'; pont.noter('resume'); pont.emettre(); }
+function reset() { S.t = 0; S.running = false; S.pause = false; S.fait = false; S.cur = null; S.fantomes = []; S.ordre = false; scene.sale = true; $('run').textContent = 'Basculer K'; bulle($('feedback'), accueil); pont.emettre(); }
+function setParameters(p) {
+  if (!Number.isFinite(+p.R_total_ohm)) return;
+  P.Rt = Math.min(1500, Math.max(0, Math.round(+p.R_total_ohm / 10) * 10)); rR.maj(P.Rt);
+  pont.noter('set_parameters', { R_total_ohm: P.Rt }); lancer();
+}
+const rR = window.Tableau.curseur({ id: 'Rt', label: 'R + r =', min: 0, max: 1500, step: 10, valeur: 20, unite: 'Ω', commande: 'set_parameters', onchange: v => setParameters({ R_total_ohm: v }) });
+$('reglage').replaceChildren(rR);
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+const accueil = 'Bascule K, puis change R + r : la trace d’avant reste en pointillés.';
+window.Tableau.explication({ regimes: [
+  { repere: 'courbe_pseudo', texte: 'Petite résistance : u_C oscille, mais chaque sommet est plus bas.' },
+  { repere: 'courbe_aperiodique', texte: 'Grande résistance : u_C revient vers zéro sans changer de signe.' },
+  { repere: 'courbe_periodique', texte: 'Sans résistance : les sommets restent à la même hauteur.' },
+  { repere: 'ordre', texte: 'Plus la résistance totale est grande, plus l’amortissement est fort.' },
+] });
+const commandes = ['start', 'pause', 'resume', 'reset', 'set_parameters', 'play_until'];
+const config = { id: 'rlc_tableau_regimes', version: '1.0', title: 'Les trois régimes : régler R + r', variants: [{ id: 'regimes', label: 'régimes' }], commands: commandes,
+  command_schema: { set_parameters: { R_total_ohm: '0..1500 (pas de 10 Ω), résistance totale R + r' }, play_until: { moment: Object.keys(PRESETS).join(' | ') + ' (règle R + r, garde les traces d’avant, trace)' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Décharge d’un condensateur chargé sous 6 V dans une bobine L = 0,1 H, C = 4 µF. Curseur R + r de 0 à 1500 Ω. R + r = 0 : régime périodique (sommets égaux) ; 20 Ω : pseudo-périodique (sommets 6 ; 4,0 ; 2,7 ; 1,8 V, T ≈ 4 ms) ; 1000 Ω : apériodique (retour vers 0 sans osciller). Plus R + r est grande, plus l’amortissement est fort.',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : (S.fait ? 'finished' : 'idle'), ce_qui_se_voit: ceQuiSeVoit(), moments: moments(),
+    parameters: { R_total_ohm: P.Rt }, regime: S.cur ? regime(S.cur.Rt) : null, traces_precedentes: S.fantomes.map(g => g.Rt), time_ms: +Math.min(S.t, 20).toFixed(2) }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, pause, resume, reset, set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), accueil);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

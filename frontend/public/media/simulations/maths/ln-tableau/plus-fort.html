@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>x l'emporte sur ln x — limites</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Deux barres à la craie : x et ln x grandissent toutes les deux, mais la barre de ln x devient minuscule à côté de celle de x ; (ln x)/x tend vers 0 et x − ln x vers +∞"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Fonctions logarithmiques » (math_ch5_fonctions_ln), diapo ln_l6 (14 novembre 2026, professeur règle 28).
+ * lim (x − ln x) en +∞ : x et ln x grandissent toutes les deux (« ∞ − ∞ ») ; deux barres à la même échelle montrent
+ * que ln x devient minuscule à côté de x ; on factorise par x, (ln x)/x → 0 (valeur écrite), la parenthèse → 1,
+ * x × (presque 1) → +∞. Curseur x = 10, 100, 1000, 10 000, 1 000 000 (paramètre i, indice 0 à 4).
+ * Moments : enonce, croissance, forme, factoriser, base, parenthese, produit, conclusion.
+ * Repères : enonce, barre_x, barre_ln, forme, factoriser, base, parenthese, produit, conclusion.
+ */
+const { fr } = MathsTableau;
+const XS = [10, 100, 1000, 10000, 1e6];
+const ln = Math.log;
+const grand = v => (v >= 1e4 ? Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ') : fr(v, v < 10 ? 2 : v < 100 ? 1 : 0));
+const dec = (v, d) => v.toFixed(d).replace('.', ',');
+const sig = v => dec(v, Math.max(2, 1 - Math.floor(Math.log10(v))));   // deux chiffres significatifs, sans « e-7 »
+const BX = 130, BW = 470;
+
+MathsTableau.page({
+  id: 'ln_plus_fort', titre: 'Fonctions logarithmiques',
+  texte: 'Construction à la craie : lim (x − ln x) quand x → +∞. Deux barres à la même échelle : x et ln x grandissent toutes les deux (forme ∞ − ∞), mais ln x devient minuscule à côté de x ; x − ln x = x(1 − (ln x)/x) ; (ln x)/x → 0, la parenthèse → 1, donc la limite est +∞',
+  vues: {
+    plus_fort: {
+      titre: 'Le terme le plus fort : x',
+      params: { i: { min: 0, max: 4, pas: 1, defaut: 2, label: 'x =', affiche: i => grand(XS[i]), sens: 'indice de x : 0 → 10, 1 → 100, 2 → 1000, 3 → 10 000, 4 → 1 000 000' } },
+      curseurs: ['i'],
+      dessiner(c, K) {
+        const X = XS[K.P.i], r = ln(X) / X;
+        K.titre('x → +∞ : x ou ln x, qui l’emporte ?');
+        c.texte('lim (x − ln x)  quand  x → +∞', 30, 74, { couleur: 'blanc', taille: 22 });
+        c.repere('enonce', 26, 52, 330, 30, 'la limite de x − ln x');
+        K.marque('enonce');
+        c.pause(.3);
+        c.texte('x', 30, 140, { couleur: 'cyan', taille: 22 });
+        c.texte('ln x', 30, 206, { couleur: 'orange', taille: 22 });
+        // x grandit de 2 à X : les deux nombres grandissent, la barre de ln x fond à côté de celle de x.
+        K.anime(3.4, p => {
+          const x = 2 * Math.pow(X / 2, p), w = Math.max(2, BW * ln(x) / x);
+          c.rect(BX, 118, BW, 28, { couleur: 'cyan', fond: 'cyan', fondAlpha: .3, arrondi: 4, largeur: 1.6, duree: 0 });
+          c.rect(BX, 184, w, 28, { couleur: 'orange', fond: 'orange', fondAlpha: .35, arrondi: 4, largeur: 1.6, duree: 0 });
+          c.texte(`= ${grand(x)}  → +∞`, BX + BW + 10, 140, { couleur: 'cyan', taille: 18, duree: 0 });
+          c.texte(`≈ ${fr(ln(x), 2)}  → +∞`, Math.max(BX + w + 10, BX + 60), 206, { couleur: 'orange', taille: 18, duree: 0 });
+        });
+        c.repere('barre_x', BX - 4, 112, BW + 8, 40, 'la barre de x');
+        c.repere('barre_ln', BX - 4, 178, 200, 40, 'la barre de ln x, minuscule');
+        K.marque('croissance');
+        c.pause(.2);
+        c.texte('« +∞ − ∞ » : forme indéterminée', 400, 74, { couleur: 'orange', taille: 19 });
+        c.repere('forme', 394, 52, 340, 30, 'la forme ∞ − ∞');
+        K.marque('forme');
+        c.pause(.3);
+        K.lignes(30, 268, [
+          { t: 'x − ln x = x (1 − (ln x)/x)', couleur: 'blanc', taille: 22, repere: 'factoriser', label: 'on factorise par x', moment: 'factoriser', inter: 40 },
+          { t: `(ln x)/x → 0     (en x = ${grand(X)} : ${sig(r)})`, couleur: 'orange', taille: 19, repere: 'base', label: '(ln x)/x tend vers 0', moment: 'base', inter: 36 },
+          { t: `la parenthèse → 1     (${dec(1 - r, Math.max(2, 1 - Math.floor(Math.log10(r))))})`, couleur: 'jaune', taille: 19, repere: 'parenthese', label: 'la parenthèse tend vers 1', moment: 'parenthese', inter: 46 },
+        ]);
+        c.texte(`x × (presque 1) = ${grand(X - ln(X))}  → +∞`, 330, 390, { couleur: 'vert', taille: 18 });
+        c.repere('produit', 326, 370, 400, 28, 'x fois presque 1');
+        K.marque('produit');
+        c.pause(.2);
+        K.lignes(30, 390, [{ t: 'lim (x − ln x) = +∞', couleur: 'vert', taille: 23, cadre: 'vert', repere: 'conclusion', label: 'la conclusion', moment: 'conclusion' }]);
+      },
+      lecture: K => { const X = XS[K.P.i]; return `x = ${grand(X)} : ln x ≈ ${fr(ln(X), 2)} seulement ; (ln x)/x ≈ ${sig(ln(X) / X)} ; x − ln x ≈ ${grand(X - ln(X))}.`; },
+      decrire: K => { const X = XS[K.P.i], r = ln(X) / X; return {
+        enonce: 'En haut : lim (x − ln x) quand x → +∞.',
+        croissance: `Deux barres à la même échelle : x (cyan) et ln x (orange). x grandit de 2 à ${grand(X)} : les deux nombres grandissent (→ +∞), mais la barre de ln x (≈ ${fr(ln(X), 2)}) devient minuscule à côté de celle de x.`,
+        forme: 'En orange : « +∞ − ∞ », forme indéterminée.',
+        factoriser: 'Écrit : x − ln x = x(1 − (ln x)/x).',
+        base: `En orange : (ln x)/x → 0 ; en x = ${grand(X)}, il vaut ${sig(r)}.`,
+        parenthese: `En jaune : la parenthèse → 1 (${dec(1 - r, 4)}).`,
+        produit: `En vert : x × (presque 1) = ${grand(X - ln(X))} → +∞.`,
+        conclusion: 'Encadré vert : lim (x − ln x) = +∞.',
+      }; },
+      motifs: { enonce: 'la limite', croissance: 'x et ln x grandissent', forme: 'la forme ∞ − ∞', factoriser: 'on factorise par x', base: '(ln x)/x → 0', parenthese: 'la parenthèse → 1', produit: 'x fois presque 1', conclusion: 'la limite +∞' },
+      finale: 'Glisse x : ln x grandit, mais il fond à côté de x.',
+      explication: [
+        { repere: 'barre_ln', texte: 'ln x grandit aussi, mais il devient minuscule à côté de x.' },
+        { repere: 'factoriser', texte: 'On factorise par le plus fort : x.' },
+        { repere: 'base', texte: '(ln x)/x tend vers 0 : la parenthèse tend vers 1.' },
+        { repere: 'conclusion', texte: 'x fois presque 1 : plus l’infini.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

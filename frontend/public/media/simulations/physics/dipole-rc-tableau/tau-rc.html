@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>τ = R·C : régler R et C — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="rc.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="À gauche, le circuit E, K, R, C dessiné à la craie avec les valeurs de R et de C ; à droite, la courbe de charge u_C(t) tracée en rouge, τ marqué à 63 % de E ; la courbe précédente reste en pointillés pour comparer"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Fermer K</button>
+    <span id="reglage" data-professor-control="set_parameters"></span>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * τ = R·C, à la main (14 novembre 2026, règle 28 du professeur : une manip au lieu d'une liste de valeurs).
+ * E = 12 V fixe. Deux curseurs : R (0,5 → 3 kΩ) et C (100 → 470 µF). « Fermer K » trace u_C(t) = E(1 − e^(−t/τ)) au ralenti ;
+ * la courbe précédente reste en pointillés : on voit tout de suite qu'une R ou une C plus grande donne une charge plus lente,
+ * vers le même E. τ s'écrit quand la courbe passe à 0,63·E (là où il se lit), 5τ quand elle est pratiquement à E.
+ * Moments (play_until) : courbe (référence R = 1 kΩ, C = 220 µF, τ = 0,22 s), R_double (R = 2 kΩ, la référence en pointillés,
+ * τ = 0,44 s), C_double (C = 440 µF, même τ = 0,44 s). Un curseur relâché relance la charge avec la nouvelle valeur.
+ * Remplace la liste « R = 1 kΩ : τ = 0,22 s ; R double : τ = 0,44 s » de la diapo rc_t2_influence.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');
+const E = 12, TMAX = 2.5, RALENTI = 2;
+const AX = 285, AX1 = 735, AY = 360, YE = 140;
+const X = t => AX + t / TMAX * (AX1 - 20 - AX);
+const Y = u => AY - u / E * (AY - YE);
+const P = { R: 1, C: 220 };                                   // kΩ, µF
+const tauDe = p => p.R * 1e3 * p.C * 1e-6;
+const uc = (t, tau) => E * (1 - Math.exp(-t / tau));
+const S = { t: 0, running: false, pause: false, fait: false, trace: null, fantome: null, jusqua: null, motif: '', emis: 0 };
+
+function dessiner(c) {
+  scene.cadre(13);
+  c.texte('Charge du condensateur sous E = 12 V', 380, 24, { couleur: 'blanc', taille: 17, align: 'center' });
+  // Le circuit : E à gauche, K et R en haut, C à droite.
+  c.ligne(60, 70, 60, 134); c.cercle(60, 150, 16); c.ligne(60, 166, 60, 230);
+  c.texte('E', 60, 157, { couleur: 'blanc', taille: 17, align: 'center' });
+  c.ligne(60, 70, 82, 70); c.ligne(112, 70, 130, 70); c.rect(130, 61, 52, 18, { arrondi: 2, couleur: 'orange' }); c.ligne(182, 70, 222, 70);
+  c.ligne(222, 70, 222, 141); c.ligne(202, 141, 242, 141, { largeur: 3.4, couleur: 'cyan' }); c.ligne(202, 153, 242, 153, { largeur: 3.4, couleur: 'cyan' });
+  c.ligne(222, 153, 222, 230); c.ligne(60, 230, 222, 230);
+  c.texte('R', 156, 52, { couleur: 'orange', taille: 17, align: 'center' }); c.texte('C', 196, 152, { couleur: 'cyan', taille: 17, align: 'right' });
+  c.texte('K', 97, 58, { couleur: 'faible', taille: 15, align: 'center' });
+  c.repere('circuit', 36, 44, 214, 196, 'le circuit : E, K, R et C en série');
+  // Le graphe u_C(t).
+  c.fleche(AX, AY, AX1, AY, { couleur: 'faible', largeur: 1.6 }); c.fleche(AX, AY, AX, 78, { couleur: 'faible', largeur: 1.6 });
+  for (let k = 1; k <= 5; k++) { const x = X(k / 2); c.ligne(x, AY - 4, x, AY + 4, { couleur: 'faible', largeur: 1.3, duree: .03 }); c.texte(fx(k / 2, 1), x, AY + 19, { couleur: 'faible', taille: 13, align: 'center', duree: .1 }); }
+  c.texte('t (s)', AX1, AY - 10, { couleur: 'faible', taille: 14, align: 'right' });
+  c.texte('u_C (V)', AX + 8, 86, { couleur: 'faible', taille: 14 });
+  for (const v of [6, 12]) { c.ligne(AX - 4, Y(v), AX + 4, Y(v), { couleur: 'faible', largeur: 1.3, duree: .03 }); c.texte(String(v), AX - 8, Y(v) + 5, { couleur: 'faible', taille: 13, align: 'right', duree: .1 }); }
+  c.ligne(AX, YE, AX1 - 10, YE, { couleur: 'faible', largeur: 1.2, pointille: [6, 6] });
+  c.texte('E = 12 V', AX1 - 12, YE - 8, { couleur: 'faible', taille: 14, align: 'right' });
+  c.repere('asymptote', AX, YE - 26, AX1 - AX, 36, 'l’asymptote u_C = E : la valeur finale');
+  c.texte('τ = R·C', 130, 300, { couleur: 'jaune', taille: 20, align: 'center' });
+  c.direct(() => {
+    // K fermé dès que la charge a commencé.
+    if (S.t > 0 || S.running) c.ligne(82, 70, 112, 70, { largeur: 2.4 }); else c.ligne(82, 70, 108, 54, { largeur: 2.4 });
+    c.texte(`R = ${fx(P.R)} kΩ`, 30, 262, { couleur: 'orange', taille: 17 });
+    c.texte(`C = ${P.C} µF`, 140, 262, { couleur: 'cyan', taille: 17 });
+    c.repere('R', 124, 40, 64, 46, 'la résistance R'); c.repere('C', 180, 128, 72, 40, 'le condensateur C');
+    c.repere('reglages', 24, 244, 220, 26, 'les valeurs de R et de C');
+    // La courbe précédente, en pointillés, avec son τ.
+    if (S.fantome) {
+      const tf = tauDe(S.fantome);
+      c.courbe(u => [X(u * TMAX), Y(uc(u * TMAX, tf))], 140, { couleur: 'faible', largeur: 2, pointille: [5, 5], tremble: 0 });
+      c.point(X(tf), Y(0.632 * E), 3.5, 'faible');
+      c.texte(`τ = ${fx(tf)} s`, X(tf) + 8, Y(0.632 * E) + 20, { couleur: 'faible', taille: 13 });
+      c.repere('courbe_1', AX, YE - 4, Math.max(60, X(Math.min(TMAX, 3 * tf)) - AX), AY - YE + 4, `la courbe d’avant : R = ${fx(S.fantome.R)} kΩ, C = ${S.fantome.C} µF`);
+    }
+    if (S.trace) {
+      const tau = tauDe(S.trace), tt = Math.min(S.t, TMAX);
+      if (tt > 0) c.courbe(u => [X(u * tt), Y(uc(u * tt, tau))], 160, { couleur: 'rouge', largeur: 2.8, tremble: 0 });
+      const zone = [AX, YE - 4, Math.max(60, X(Math.min(TMAX, 3 * tau)) - AX), AY - YE + 4];
+      c.repere(S.fantome ? 'courbe_2' : 'courbe', ...zone, `la courbe de charge : R = ${fx(S.trace.R)} kΩ, C = ${S.trace.C} µF`);
+      if (S.fantome) c.repere('courbe', ...zone, 'la courbe de charge');
+      if (S.t >= tau) {
+        const y63 = Y(0.632 * E);
+        c.ligne(AX, y63, X(tau), y63, { couleur: 'jaune', largeur: 1.4, pointille: [4, 5], tremble: 0 });
+        c.ligne(X(tau), y63, X(tau), AY, { couleur: 'jaune', largeur: 1.4, pointille: [4, 5], tremble: 0 });
+        c.point(X(tau), y63, 4.5, 'jaune');
+        c.texte('0,63·E', AX + 6, y63 - 6, { couleur: 'jaune', taille: 13 });
+        c.texte(`τ = ${fx(tau)} s`, X(tau), AY + 40, { couleur: 'jaune', taille: 16, align: 'center' });
+        c.repere('tau', X(tau) - 50, y63 - 10, 100, AY - y63 + 48, `τ = ${fx(tau)} s, lu à 63 % de E`);
+        c.texte(`τ = ${fx(S.trace.R * 1000, 0)} × ${S.trace.C}·10⁻⁶ = ${fx(tau)} s`, 130, 334, { couleur: 'blanc', taille: 16, align: 'center', max: 240 });
+        c.repere('formule', 20, 280, 230, 64, 'τ = R·C, calculée avec les valeurs');
+      }
+      if (S.t >= 5 * tau) c.texte(`5τ = ${fx(5 * tau)} s : chargé`, 130, 364, { couleur: 'vert', taille: 16, align: 'center', max: 240 });
+      else if (5 * tau > TMAX && S.t >= TMAX) c.texte(`5τ = ${fx(5 * tau)} s : pas encore chargé`, 130, 364, { couleur: 'orange', taille: 15, align: 'center', max: 240 });
+      if (S.fantome && S.fait) {
+        const tf = tauDe(S.fantome), k = tau / tf;
+        const msg = Math.abs(k - 1) < 0.02 ? 'même τ : la même charge' : k > 1 ? `τ × ${fx(k, 1)} : charge plus lente` : `τ ÷ ${fx(1 / k, 1)} : charge plus rapide`;
+        c.texte(msg, 130, 394, { couleur: k > 1.02 ? 'orange' : 'vert', taille: 16, align: 'center', max: 240 });
+      }
+    }
+    c.texte(`t = ${fx(Math.min(S.t, TMAX), 2)} s`, AX1, 26, { couleur: 'vert', taille: 16, align: 'right' });
+    if (S.running || S.pause) c.texte('(ralenti)', AX1, 46, { couleur: 'faible', taille: 13, align: 'right' });
+  });
+  return c.fin();
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(TMAX, S.t + dt / RALENTI);
+  if (S.jusqua != null && S.t >= S.jusqua) { S.t = S.jusqua; S.jusqua = null; S.running = false; S.pause = true; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || 'instant choisi') + '.'); pont.noter('pause'); pont.emettre(); return true; }
+  if (S.t >= TMAX) {
+    S.running = false; S.fait = true; $('run').textContent = 'Fermer K';
+    const tau = tauDe(S.trace);
+    bulle($('feedback'), `τ = R·C = ${fx(tau)} s. Change R ou C : la nouvelle charge se trace, l’ancienne reste en pointillés.`, 'good');
+    pont.noter('finished'); pont.emettre();
+  } else if (performance.now() - S.emis > 400) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+/* Le motif d'une charge : celle qui vient de finir passe en pointillés, la nouvelle part de t = 0. */
+function lancer(motif) {
+  if (S.trace && (S.fait || S.t > 0) && (S.trace.R !== P.R || S.trace.C !== P.C)) S.fantome = { ...S.trace };
+  S.trace = { ...P }; S.t = 0; S.running = true; S.pause = false; S.fait = false; S.jusqua = null;
+  $('run').textContent = 'Pause'; bulle($('feedback'), motif || 'K fermé : le condensateur se charge…'); pont.noter('start', { R_kohm: P.R, C_uF: P.C }); pont.emettre();
+}
+const PRESETS = {
+  courbe: { p: { R: 1, C: 220 }, fantome: null, motif: 'la courbe de référence : R = 1 kΩ, C = 220 µF, τ = 0,22 s' },
+  R_double: { p: { R: 2, C: 220 }, fantome: { R: 1, C: 220 }, motif: 'R doublée (2 kΩ) : τ = 0,44 s, la charge est deux fois plus lente' },
+  C_double: { p: { R: 1, C: 440 }, fantome: { R: 1, C: 220 }, motif: 'C doublée (440 µF) : τ = 0,44 s, la charge est deux fois plus lente' },
+};
+function moments() { const m = {}; for (const [k, v] of Object.entries(PRESETS)) m[k] = +(5 * tauDe(v.p)).toFixed(3); return m; }
+function playUntil(p) {
+  const pr = PRESETS[p.moment]; if (!pr) return;
+  P.R = pr.p.R; P.C = pr.p.C; rR.maj(P.R); rC.maj(P.C);
+  S.trace = null; S.fantome = pr.fantome ? { ...pr.fantome } : null;
+  lancer('Je trace ' + pr.motif + '…'); S.motif = pr.motif;
+  pont.noter('play_until', { moment: p.moment }); pont.emettre();
+}
+function ceQuiSeVoit() {
+  const m = [`Circuit E = 12 V, R = ${fx(P.R)} kΩ, C = ${P.C} µF ; graphe u_C(t) de 0 à 2,5 s, asymptote E = 12 V.`];
+  if (S.fantome) m.push(`En pointillés, la courbe d’avant (R = ${fx(S.fantome.R)} kΩ, C = ${S.fantome.C} µF, τ = ${fx(tauDe(S.fantome))} s).`);
+  if (!S.trace || (S.t <= 0 && !S.running)) m.push('K ouvert : pas encore de charge.');
+  else {
+    const tau = tauDe(S.trace);
+    m.push(`Courbe rouge tracée jusqu’à t = ${fx(Math.min(S.t, TMAX))} s, u_C = ${fx(uc(Math.min(S.t, TMAX), tau), 1)} V.`);
+    if (S.t >= tau) m.push(`τ = ${fx(tau)} s est marqué à 0,63·E et écrit : τ = R·C.`);
+    if (S.fait && S.fantome) m.push(tau > tauDe(S.fantome) + 1e-6 ? 'La nouvelle courbe monte plus lentement vers le même E.' : tau < tauDe(S.fantome) - 1e-6 ? 'La nouvelle courbe monte plus vite vers le même E.' : 'Les deux courbes se superposent : même τ.');
+  }
+  return m.join(' ');
+}
+function start() { lancer(); }
+function pause() { if (!S.running) return; S.jusqua = null; S.running = false; S.pause = true; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running || !S.pause) return start(); S.running = true; S.pause = false; $('run').textContent = 'Pause'; pont.noter('resume'); pont.emettre(); }
+function reset() { S.t = 0; S.running = false; S.pause = false; S.fait = false; S.trace = null; S.fantome = null; S.jusqua = null; scene.sale = true; $('run').textContent = 'Fermer K'; bulle($('feedback'), 'Ferme K, puis change R ou C et compare les deux charges.'); pont.emettre(); }
+function setParameters(p) {
+  let change = false;
+  if (Number.isFinite(+p.R_kohm)) { P.R = Math.min(3, Math.max(0.5, Math.round(+p.R_kohm * 2) / 2)); rR.maj(P.R); change = true; }
+  if (Number.isFinite(+p.C_uF)) { P.C = Math.min(470, Math.max(100, Math.round(+p.C_uF / 10) * 10)); rC.maj(P.C); change = true; }
+  if (!change) return;
+  pont.noter('set_parameters', { R_kohm: P.R, C_uF: P.C });
+  lancer(`R = ${fx(P.R)} kΩ, C = ${P.C} µF : nouvelle charge…`);
+}
+const rR = window.Tableau.curseur({ id: 'R', label: 'R =', min: 0.5, max: 3, step: 0.5, valeur: 1, unite: 'kΩ', decimales: 1, commande: 'set_parameters', onchange: v => setParameters({ R_kohm: v }) });
+const rC = window.Tableau.curseur({ id: 'C', label: 'C =', min: 100, max: 470, step: 10, valeur: 220, unite: 'µF', commande: 'set_parameters', onchange: v => setParameters({ C_uF: v }) });
+$('reglage').replaceChildren(rR, rC);
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+window.Tableau.explication({ tau_rc: [
+  { repere: 'courbe', texte: 'La courbe de charge monte vite, puis de plus en plus lentement vers E.' },
+  { repere: 'tau', texte: 'τ se lit là où la courbe atteint 63 % de E.' },
+  { repere: 'R', texte: 'Une résistance plus grande freine le courant : la charge est plus lente.' },
+  { repere: 'C', texte: 'Un condensateur de plus grande capacité met plus de temps à se remplir.' },
+  { repere: 'asymptote', texte: 'R et C changent la durée, pas la valeur finale E.' },
+] });
+const commandes = ['start', 'pause', 'resume', 'reset', 'set_parameters', 'play_until'];
+const config = { id: 'rc_tableau_tau_rc', version: '1.0', title: 'τ = R·C : régler R et C', variants: [{ id: 'tau_rc', label: 'τ = R·C' }], commands: commandes,
+  command_schema: { set_parameters: { R_kohm: '0,5..3 (pas de 0,5 kΩ)', C_uF: '100..470 (pas de 10 µF)' }, play_until: { moment: Object.keys(PRESETS).join(' | ') + ' (règle R et C, garde la référence en pointillés, trace la charge)' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Charge d’un condensateur sous E = 12 V. Curseurs R (0,5 à 3 kΩ) et C (100 à 470 µF). La courbe u_C(t) se trace au ralenti, τ = R·C est marqué à 0,63·E ; la courbe précédente reste en pointillés. Référence R = 1 kΩ, C = 220 µF : τ = 0,22 s ; R doublée : τ = 0,44 s. E change la valeur finale, pas τ.',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : (S.fait ? 'finished' : 'idle'), ce_qui_se_voit: ceQuiSeVoit(), moments: moments(),
+    parameters: { R_kohm: P.R, C_uF: P.C }, tau_s: +tauDe(P).toFixed(4), courbe_precedente: S.fantome ? { R_kohm: S.fantome.R, C_uF: S.fantome.C, tau_s: +tauDe(S.fantome).toFixed(4) } : null, time_s: +S.t.toFixed(3) }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, pause, resume, reset, set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Ferme K, puis change R ou C et compare les deux charges.');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

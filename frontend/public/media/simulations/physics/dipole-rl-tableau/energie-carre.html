@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>E_m = ½·L·I₀² : régler I₀ et L — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="rl.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Une bobine à la craie traversée par le courant ; au milieu le carré de côté i qui grandit (i²), découpé en carreaux de 0,5 A ; à droite la barre de l’énergie E_m qui se remplit, et le calcul écrit"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Établir le courant</button>
+    <span id="reglage" data-professor-control="set_parameters"></span>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * E_m = ½·L·I₀², à la main (14 novembre 2026, règle 28 du professeur : une manip au lieu d'une liste de calculs).
+ * Deux curseurs : I₀ (0,25 → 1 A) et L (0,1 → 0,4 H). « Établir le courant » : i monte jusqu'à I₀ ; le carré de côté i
+ * (son aire, c'est i²) grandit sur un quadrillage de carreaux de 0,5 A × 0,5 A ; la barre E_m = ½·L·i² se remplit.
+ * Le résultat s'écrit à la fin, et le rapport avec le résultat d'avant (× 4 si I₀ double, × 2 si L double).
+ * Moments (play_until) : donnees (L = 0,2 H, I₀ = 0,5 A écrits), calcul (la ligne de calcul), resultat (le courant s'établit :
+ * 0,025 J), I_double (I₀ = 1 A : quatre carreaux, 0,1 J, × 4), L_double (L = 0,4 H, I₀ = 0,5 A : 0,05 J, × 2). Diapo rl_l8_double.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const fx = (v, d = 3) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');
+const P = { I: 0.5, L: 0.2 };
+const Em = (L, i) => 0.5 * L * i * i;
+const QX = 250, QY = 372, KQ = 220;                     // carré : coin bas-gauche, px par ampère
+const BX = 590, BY = 372, KB = 1200;                    // barre : px par joule (0,2 J → 240 px)
+const MONTEE = 2.4;                                     // s d'image pour établir le courant
+const S = { f: 0, running: false, pause: false, fait: false, donnees: false, calcul: false, cur: null, avant: null, motif: '', emis: 0 };
+const iDe = f => (S.cur ? S.cur.I : P.I) * Math.min(1, (1 - Math.exp(-4 * f)) / (1 - Math.exp(-4)));
+
+function dessiner(c) {
+  scene.cadre(29);
+  c.texte('E_m = ½·L·I₀²', 380, 30, { couleur: 'jaune', taille: 22, align: 'center' });
+  c.repere('formule', 290, 6, 180, 32, 'E_m = ½·L·I₀² : le courant est au carré');
+  // La bobine : des spires entre deux fils.
+  c.ligne(20, 160, 50, 160);
+  c.courbe(u => { const a = u * 5 * 2 * Math.PI; return [50 + u * 120 + 9 * Math.sin(a), 160 - 22 * Math.abs(Math.sin(a / 2))]; }, 120, { couleur: 'orange', largeur: 2.4 });
+  c.ligne(170, 160, 205, 160);
+  c.texte('L', 110, 196, { couleur: 'cyan', taille: 18, align: 'center' });
+  c.repere('bobine', 14, 120, 200, 86, 'la bobine d’inductance L');
+  // Le quadrillage des carreaux de 0,5 A × 0,5 A.
+  for (let k = 0; k <= 2; k++) {
+    c.ligne(QX + k * KQ / 2, QY, QX + k * KQ / 2, QY - KQ, { couleur: 'tresfaible', largeur: 1.2, pointille: [3, 5], tremble: 0, duree: .1 });
+    c.ligne(QX, QY - k * KQ / 2, QX + KQ, QY - k * KQ / 2, { couleur: 'tresfaible', largeur: 1.2, pointille: [3, 5], tremble: 0, duree: .1 });
+  }
+  c.texte('0,5 A', QX + KQ / 2, QY + 18, { couleur: 'faible', taille: 13, align: 'center' }); c.texte('1 A', QX + KQ, QY + 18, { couleur: 'faible', taille: 13, align: 'center' });
+  c.texte('un carreau : (0,5 A)²', QX + KQ / 2, QY - KQ - 10, { couleur: 'faible', taille: 13, align: 'center' });
+  // La barre de l'énergie.
+  c.ligne(BX, BY, BX, BY - 250, { couleur: 'faible', largeur: 1.4 }); c.ligne(BX + 46, BY, BX + 46, BY - 250, { couleur: 'faible', largeur: 1.4 }); c.ligne(BX, BY, BX + 46, BY, { couleur: 'faible', largeur: 1.4 });
+  for (const e of [0.05, 0.1, 0.15, 0.2]) c.texte(`${fx(e, 2)} J`, BX + 52, BY - e * KB + 5, { couleur: 'faible', taille: 12, duree: .1 });
+  c.texte('E_m', BX + 23, BY + 22, { couleur: 'vert', taille: 16, align: 'center' });
+  c.direct(() => {
+    const p = S.cur || P, i = S.cur ? iDe(S.f) : 0;
+    // Données.
+    c.texte(`L = ${fx(p.L, 2)} H`, 30, 248, { couleur: 'cyan', taille: 18 });
+    c.texte(`I₀ = ${fx(p.I, 2)} A`, 30, 276, { couleur: 'rose', taille: 18 });
+    c.repere('donnees', 22, 228, 180, 56, 'les données : L et I₀');
+    if (S.cur) { c.texte(`i = ${fx(i, 2)} A`, 30, 308, { couleur: 'faible', taille: 16 }); c.fleche(70, 136, 140, 136, { couleur: 'rose', largeur: 2, tete: 9 }); c.texte('i', 105, 128, { couleur: 'rose', taille: 15, align: 'center' }); }
+    // Le carré de côté i, puis celui d'avant en pointillés.
+    if (S.avant) { const a = S.avant.I * KQ; c.rect(QX, QY - a, a, a, { arrondi: 1, couleur: 'faible', pointille: [5, 4], tremble: 0 }); }
+    if (S.cur && i > 0) {
+      const a = i * KQ; c.rect(QX, QY - a, a, a, { arrondi: 1, couleur: 'rose', fond: 'rose', fondAlpha: .18, largeur: 2.4, tremble: 0 });
+      if (a > 40) c.texte('i²', QX + a * (a > 150 ? .25 : .5), QY - a * (a > 150 ? .75 : .5) + 7, { couleur: 'rose', taille: 20, align: 'center' });
+      c.texte('i', QX + a / 2, QY + 34, { couleur: 'rose', taille: 15, align: 'center' });
+    }
+    c.repere('carre', QX - 6, QY - KQ - 26, KQ + 12, KQ + 48, 'le carré de côté i : son aire est i²');
+    if (S.cur && S.fait) {
+      const n = (S.cur.I / 0.5) ** 2;
+      c.texte(Math.abs(n - Math.round(n)) < 1e-6 ? `${Math.round(n)} carreau${n >= 2 ? 'x' : ''}` : `${fx(n, 2)} carreaux`, QX + KQ + 8, QY - S.cur.I * KQ + 4, { couleur: 'rose', taille: 15 });
+    }
+    // La barre.
+    if (S.avant) { const y = BY - Em(S.avant.L, S.avant.I) * KB; c.ligne(BX - 8, y, BX + 54, y, { couleur: 'faible', largeur: 1.6, pointille: [4, 4], tremble: 0 }); c.texte(`avant : ${fx(Em(S.avant.L, S.avant.I))} J`, BX - 10, y + 5, { couleur: 'faible', taille: 13, align: 'right' }); }
+    if (S.cur) { const h = Em(S.cur.L, i) * KB; if (h > 0.5) c.rect(BX + 3, BY - h, 40, h, { arrondi: 2, couleur: 'vert', fond: 'vert', fondAlpha: .45, largeur: 1.6, tremble: 0 }); }
+    c.repere('barre', BX - 8, BY - 256, 110, 280, 'la barre de l’énergie E_m');
+    // Le calcul, écrit sous la formule.
+    if (S.calcul || S.cur) c.texte(`E_m = ½ × ${fx(p.L, 2)} × ${fx(p.I, 2)}²`, 380, 64, { couleur: 'blanc', taille: 18, align: 'center' });
+    if (S.cur && S.fait) {
+      const e = Em(S.cur.L, S.cur.I);
+      c.texte(`E_m = ${fx(e)} J`, 380, 94, { couleur: 'vert', taille: 20, align: 'center' });
+      c.repere('resultat', 290, 72, 180, 30, `le résultat : ${fx(e)} J`);
+      if (S.avant) {
+        const k = e / Em(S.avant.L, S.avant.I), kt = Math.abs(k - Math.round(k)) < 1e-6 ? String(Math.round(k)) : fx(k, 2);
+        const y = BY - e * KB;
+        c.texte(k >= 1 ? `× ${kt}` : `÷ ${fx(1 / k, 2)}`, BX + 23, Math.max(70, y - 12), { couleur: 'jaune', taille: 24, align: 'center' });
+        c.repere('fois', BX - 14, Math.max(44, y - 40), 74, 36, 'le rapport avec l’énergie d’avant');
+        const pourquoi = S.cur.I !== S.avant.I && S.cur.L === S.avant.L ? `I₀ × ${fx(S.cur.I / S.avant.I, 2)} : E_m × ${kt} (le carré)` : S.cur.L !== S.avant.L && S.cur.I === S.avant.I ? `L × ${fx(S.cur.L / S.avant.L, 2)} : E_m × ${kt} seulement` : '';
+        if (pourquoi) c.texte(pourquoi, 380, 122, { couleur: 'jaune', taille: 16, align: 'center', max: 300 });
+      }
+    }
+  });
+  return c.fin();
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.f = Math.min(1, S.f + dt / MONTEE);
+  if (S.f >= 1) {
+    S.running = false; S.fait = true; $('run').textContent = 'Établir le courant';
+    const e = Em(S.cur.L, S.cur.I);
+    bulle($('feedback'), `E_m = ½ × ${fx(S.cur.L, 2)} × ${fx(S.cur.I, 2)}² = ${fx(e)} J.` + (S.avant ? ` Avant : ${fx(Em(S.avant.L, S.avant.I))} J.` : ' Change I₀ ou L et compare.'), 'good');
+    pont.noter('finished'); pont.emettre();
+  } else if (performance.now() - S.emis > 400) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function lancer(motif) {
+  if (S.cur && S.fait && (S.cur.I !== P.I || S.cur.L !== P.L)) S.avant = { ...S.cur };
+  if (S.avant && S.avant.I === P.I && S.avant.L === P.L) S.avant = null;
+  S.cur = { ...P }; S.f = 0; S.running = true; S.pause = false; S.fait = false; S.donnees = S.calcul = true;
+  $('run').textContent = 'Pause'; bulle($('feedback'), motif || `Le courant s’établit jusqu’à I₀ = ${fx(P.I, 2)} A : la bobine se remplit d’énergie…`);
+  pont.noter('start', { I0_A: P.I, L_H: P.L }); pont.emettre();
+}
+const PRESETS = {
+  donnees: { p: { I: 0.5, L: 0.2 }, motif: 'les données : L = 0,2 H et I₀ = 0,5 A' },
+  calcul: { p: { I: 0.5, L: 0.2 }, calcul: true, motif: 'le calcul : E_m = ½ × 0,2 × 0,5²' },
+  resultat: { p: { I: 0.5, L: 0.2 }, lance: true, motif: 'le résultat : 0,025 J' },
+  I_double: { p: { I: 1, L: 0.2 }, avant: { I: 0.5, L: 0.2 }, lance: true, motif: 'I₀ double (1 A) : quatre carreaux, 0,1 J, quatre fois plus' },
+  L_double: { p: { I: 0.5, L: 0.4 }, avant: { I: 0.5, L: 0.2 }, lance: true, motif: 'L double (0,4 H) : 0,05 J, deux fois plus seulement' },
+};
+function moments() { return { donnees: 0, calcul: 1, resultat: 2, I_double: 3, L_double: 4 }; }
+function regler(p) { P.I = p.I; P.L = p.L; rI.maj(P.I); rL.maj(P.L); }
+function playUntil(q) {
+  const pr = PRESETS[q.moment]; if (!pr) return;
+  regler(pr.p);
+  if (pr.lance) { S.cur = null; S.avant = pr.avant ? { ...pr.avant } : null; lancer('Je montre ' + pr.motif + '…'); }
+  else { S.cur = null; S.avant = null; S.f = 0; S.running = false; S.pause = false; S.fait = false; S.donnees = true; S.calcul = !!pr.calcul; $('run').textContent = 'Établir le courant'; bulle($('feedback'), 'Regarde : ' + pr.motif + '.'); }
+  S.motif = pr.motif; scene.sale = true;
+  pont.noter('play_until', { moment: q.moment }); pont.emettre();
+}
+function ceQuiSeVoit() {
+  const p = S.cur || P;
+  const m = [`Bobine L = ${fx(p.L, 2)} H, I₀ = ${fx(p.I, 2)} A écrits à gauche ; au milieu un quadrillage de carreaux de 0,5 A × 0,5 A ; à droite la barre E_m (0 à 0,2 J).`];
+  if (S.calcul || S.cur) m.push(`Écrit en haut : E_m = ½ × ${fx(p.L, 2)} × ${fx(p.I, 2)}².`);
+  if (S.cur) m.push(`i = ${fx(iDe(S.f), 2)} A : le carré rose de côté i a l’aire de ${fx((iDe(S.f) / 0.5) ** 2, 2)} carreau(x) ; la barre verte vaut ${fx(Em(S.cur.L, iDe(S.f)))} J.`);
+  if (S.cur && S.fait) m.push(`Résultat écrit : E_m = ${fx(Em(S.cur.L, S.cur.I))} J.`);
+  if (S.avant) m.push(`En pointillés, l’énergie d’avant : ${fx(Em(S.avant.L, S.avant.I))} J (L = ${fx(S.avant.L, 2)} H, I₀ = ${fx(S.avant.I, 2)} A)` + (S.cur && S.fait ? `, le rapport est écrit en jaune.` : '.'));
+  return m.join(' ');
+}
+function start() { lancer(); }
+function pause() { if (!S.running) return; S.running = false; S.pause = true; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running || !S.pause) return start(); S.running = true; S.pause = false; $('run').textContent = 'Pause'; pont.noter('resume'); pont.emettre(); }
+function reset() { S.f = 0; S.running = false; S.pause = false; S.fait = false; S.cur = null; S.avant = null; S.calcul = false; scene.sale = true; $('run').textContent = 'Établir le courant'; bulle($('feedback'), accueil); pont.emettre(); }
+function setParameters(p) {
+  let ok = false;
+  if (Number.isFinite(+p.I0_A)) { P.I = Math.min(1, Math.max(0.25, Math.round(+p.I0_A * 4) / 4)); rI.maj(P.I); ok = true; }
+  if (Number.isFinite(+p.L_H)) { P.L = Math.min(0.4, Math.max(0.1, Math.round(+p.L_H * 10) / 10)); rL.maj(P.L); ok = true; }
+  if (!ok) return;
+  pont.noter('set_parameters', { I0_A: P.I, L_H: P.L }); lancer();
+}
+const rI = window.Tableau.curseur({ id: 'I0', label: 'I₀ =', min: 0.25, max: 1, step: 0.25, valeur: 0.5, unite: 'A', commande: 'set_parameters', onchange: v => setParameters({ I0_A: v }) });
+const rL = window.Tableau.curseur({ id: 'L', label: 'L =', min: 0.1, max: 0.4, step: 0.1, valeur: 0.2, unite: 'H', commande: 'set_parameters', onchange: v => setParameters({ L_H: v }) });
+$('reglage').replaceChildren(rI, rL);
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+const accueil = 'Établis le courant, puis double I₀ (ou L) et compare l’énergie.';
+window.Tableau.explication({ energie: [
+  { repere: 'formule', texte: 'L’énergie de la bobine : un demi L I zéro au carré.' },
+  { repere: 'carre', texte: 'Le courant est au carré : si I₀ double, le carré contient quatre carreaux.' },
+  { repere: 'barre', texte: 'Si I₀ double, l’énergie est multipliée par quatre ; si L double, par deux seulement.' },
+] });
+const commandes = ['start', 'pause', 'resume', 'reset', 'set_parameters', 'play_until'];
+const config = { id: 'rl_tableau_energie_carre', version: '1.0', title: 'E_m = ½·L·I₀² : régler I₀ et L', variants: [{ id: 'energie', label: 'énergie' }], commands: commandes,
+  command_schema: { set_parameters: { I0_A: '0,25..1 (pas de 0,25 A)', L_H: '0,1..0,4 (pas de 0,1 H)' }, play_until: { moment: Object.keys(PRESETS).join(' | ') } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Énergie d’une bobine E_m = ½·L·I₀². Curseurs I₀ (0,25 à 1 A) et L (0,1 à 0,4 H). Le carré de côté i (aire i²) grandit sur des carreaux de 0,5 A × 0,5 A, la barre E_m se remplit. L = 0,2 H, I₀ = 0,5 A : 0,025 J ; I₀ = 1 A : 0,1 J (× 4) ; L = 0,4 H : 0,05 J (× 2).',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : (S.fait ? 'finished' : 'idle'), ce_qui_se_voit: ceQuiSeVoit(), moments: moments(),
+    parameters: { I0_A: P.I, L_H: P.L }, E_m_J: +Em(P.L, P.I).toFixed(4), avant: S.avant ? { I0_A: S.avant.I, L_H: S.avant.L, E_m_J: +Em(S.avant.L, S.avant.I).toFixed(4) } : null }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, pause, resume, reset, set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), accueil);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

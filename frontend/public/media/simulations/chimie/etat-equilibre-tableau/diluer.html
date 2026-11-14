@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Quand on dilue — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ee.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="On dilue l'acide éthanoïque : le pH-mètre monte, et quatre lignes s'écrivent avec leurs valeurs avant et après : C diminue, [H₃O⁺] diminue et le pH augmente, τ augmente, K ne change pas"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume reset play_until set_time">Diluer</button>
+    <span id="reglage" data-professor-control="set_parameters"></span>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script src="deroule.js"></script>
+<script>
+/*
+ * Quand on dilue : ce qui change, ce qui reste (14 novembre 2026, professeur règle 28), diapo ee_f4_bilan.
+ * On verse de l'eau distillée dans l'acide éthanoïque (C₀ = 1,0·10⁻² mol/L, pH 3,41) jusqu'à C (curseur, défaut 1,0·10⁻³) :
+ * le pH-mètre monte pendant qu'on dilue, puis les quatre lignes s'écrivent avec leurs valeurs AVANT → APRÈS :
+ * C diminue ; [H₃O⁺]éq diminue donc le pH augmente ; τ augmente ; K = 1,6·10⁻⁵ ne change pas (cadre jaune) ; puis le piège.
+ * Les valeurs viennent de la mesure : pH (au centième) → [H₃O⁺]éq = 10^(−pH) → τ = 10^(−pH)/C → K = 10^(−2pH)/(C − 10^(−pH)).
+ * Modèle POUR LE CALCUL seulement : [H₃O⁺]²/(C − [H₃O⁺]) = 1,6·10⁻⁵ (25 °C), pH arrondi au centième comme au cours.
+ */
+const { fr } = window.Tableau;
+const sci = window.Deroule.sci;
+const KA = 1.6e-5, C0 = 1e-2;
+const LISTE = [5e-3, 2e-3, 1e-3, 5e-4, 2e-4, 1e-4, 5e-5, 2e-5, 1e-5];
+const P = { C: 1e-3 };
+function mesure(C) {
+  const h0 = (-KA + Math.sqrt(KA * KA + 4 * KA * C)) / 2, pH = Math.round(-Math.log10(h0) * 100) / 100, h = 10 ** -pH;
+  return { C, pH, h, tau: h / C, K: h * h / (C - h) };
+}
+const ftau = t => fr(t, 3);
+const BE = { x: 36, y: 165, w: 112, h: 120 };
+const L = { nom: 196, val: 300, sens: 640, y: { c: 112, h: 166, ph: 194, tau: 254, k: 318, piege: 392 } };
+
+function etapes() {
+  return [
+    { nom: 'titre', duree: 1, motif: 'quand on dilue : avant, l’acide à 1,0·10⁻² mol/L' },
+    { nom: 'ligne_c', duree: 2.8, motif: 'on dilue : C diminue', bulle: () => 'On verse de l’eau distillée : regarde le pH-mètre…' },
+    { nom: 'ligne_ph', duree: 1.2, motif: '[H₃O⁺]éq diminue, donc le pH augmente' },
+    { nom: 'ligne_taux', duree: 1.2, motif: 'τ augmente' },
+    { nom: 'ligne_k', duree: 1.2, motif: 'K ne change pas' },
+    { nom: 'piege', duree: 1, motif: 'τ dépend de l’état initial, K non' },
+  ];
+}
+/** La concentration dans le bécher maintenant (pendant la dilution, elle glisse de C₀ à C). */
+function Cmaintenant(D) {
+  if (!D.commence('ligne_c')) return C0;
+  const p = Math.min(1, D.p('ligne_c') / .6);
+  return 10 ** (Math.log10(C0) + (Math.log10(P.C) - Math.log10(C0)) * p);
+}
+function sens(c, x, y, monte, col) {
+  // Une flèche dessinée : vers le haut (augmente) ou vers le bas (diminue).
+  if (monte) c.fleche(x, y + 4, x, y - 18, { couleur: col, largeur: 2.4, tete: 9 }); else c.fleche(x, y - 18, x, y + 4, { couleur: col, largeur: 2.4, tete: 9 });
+}
+
+function dessiner(c, D) {
+  D.scene.cadre(53);
+  c.texte('Quand on dilue l’acide éthanoïque (25 °C)', 380, 30, { couleur: 'blanc', taille: 19, align: 'center' });
+  c.repere('titre', 200, 8, 360, 30, 'quand on dilue');
+  const Cn = Cmaintenant(D), mn = mesure(Cn), m0 = mesure(C0), m1 = mesure(P.C), dilue = D.commence('ligne_c') && D.p('ligne_c') < .6;
+  // Le bécher, le pH-mètre et l'eau qu'on verse.
+  c.direct(() => {
+    const ctx = c.ctx; ctx.globalAlpha = .1 + .06 * Math.max(0, 5 + Math.log10(Cn)); ctx.fillStyle = '#e2e8f0';
+    const haut = BE.y + 60 - 30 * Math.min(1, Math.log10(C0 / Cn) / 3);
+    ctx.fillRect(BE.x + 3, haut, BE.w - 6, BE.y + BE.h - 3 - haut); ctx.globalAlpha = 1;
+    c.ligne(BE.x + 3, haut, BE.x + BE.w - 3, haut, { couleur: 'faible', largeur: 1.2 });
+    c.texte(`pH = ${fr(mn.pH, 2)}`, BE.x + 56, 128, { couleur: dilue ? 'faible' : 'vert', taille: 19, align: 'center' });
+    c.texte(`C = ${sci(Cn, 1)} mol/L`, BE.x + 56, BE.y + BE.h + 26, { couleur: 'cyan', taille: 15, align: 'center' });
+    if (dilue) {
+      c.texte('+ eau distillée', BE.x + 56, BE.y + BE.h + 52, { couleur: 'bleu', taille: 15, align: 'center' });
+      for (let k = 0; k < 4; k++) c.point(BE.x + 84 + k % 2 * 4, BE.y - 6 + ((D.p('ligne_c') * 200 + k * 15) % 55), 2.4, 'bleu');
+    }
+  });
+  c.trait([[BE.x - 4, BE.y], [BE.x, BE.y + BE.h], [BE.x + BE.w, BE.y + BE.h], [BE.x + BE.w + 4, BE.y]], { couleur: 'blanc', largeur: 2 });
+  c.rect(BE.x + 8, 100, 96, 40, { couleur: 'blanc', largeur: 1.8 });
+  c.ligne(BE.x + 40, 140, BE.x + 40, BE.y + 100, { couleur: 'faible', largeur: 2 });
+  c.repere('becher', BE.x - 8, 96, BE.w + 16, BE.h + 120, 'le bécher qu’on dilue et son pH-mètre');
+  c.texte('avant → après', L.val + 120, 74, { couleur: 'faible', taille: 15, align: 'center' });
+  // Les quatre lignes, chacune écrite quand la voix y arrive ; les valeurs « après » suivent le curseur.
+  const ap = D.vu('ligne_c');
+  if (ap) {
+    D.ecrire(c, 'ligne_c');
+    c.texte('C', L.nom, L.y.c, { couleur: 'cyan', taille: 19 });
+    c.direct(() => { c.texte(`${sci(C0, 1)} → ${sci(P.C, 1)} mol/L`, L.val, L.y.c, { couleur: 'cyan', taille: 17 }); sens(c, L.sens, L.y.c, false, 'cyan'); c.texte('diminue', L.sens + 16, L.y.c, { couleur: 'cyan', taille: 16 }); });
+    c.repere('ligne_c', L.nom - 6, L.y.c - 24, 560, 32, 'C diminue');
+  }
+  if (D.commence('ligne_ph')) {
+    D.ecrire(c, 'ligne_ph');
+    c.texte('[H₃O⁺]éq', L.nom, L.y.h, { couleur: 'violet', taille: 18 });
+    c.texte('pH', L.nom, L.y.ph, { couleur: 'vert', taille: 18 });
+    c.direct(() => {
+      c.texte(`${sci(m0.h, 2)} → ${sci(m1.h, 2)} mol/L`, L.val, L.y.h, { couleur: 'violet', taille: 17 }); sens(c, L.sens, L.y.h, false, 'violet'); c.texte('diminue', L.sens + 16, L.y.h, { couleur: 'violet', taille: 16 });
+      c.texte(`${fr(m0.pH, 2)} → ${fr(m1.pH, 2)}`, L.val, L.y.ph, { couleur: 'vert', taille: 17 }); sens(c, L.sens, L.y.ph + 2, true, 'vert'); c.texte('augmente', L.sens + 16, L.y.ph, { couleur: 'vert', taille: 16 });
+    });
+    c.repere('ligne_ph', L.nom - 6, L.y.h - 24, 560, 60, '[H₃O⁺] diminue, le pH augmente');
+  }
+  if (D.commence('ligne_taux')) {
+    D.ecrire(c, 'ligne_taux');
+    c.texte('τ', L.nom, L.y.tau, { couleur: 'orange', taille: 20 });
+    c.direct(() => {
+      c.texte(`${ftau(m0.tau)} → ${ftau(m1.tau)}`, L.val, L.y.tau, { couleur: 'orange', taille: 17 }); sens(c, L.sens, L.y.tau, true, 'orange'); c.texte('augmente', L.sens + 16, L.y.tau, { couleur: 'orange', taille: 16 });
+      // Deux barres : la part de l'acide qui a réagi, avant et après.
+      for (const [t, x] of [[m0.tau, 500], [m1.tau, 530]]) c.rect(x, L.y.tau + 6 - t * 80, 20, Math.max(2, t * 80), { couleur: 'orange', fond: 'orange', fondAlpha: .3, arrondi: 2, largeur: 1.5 });
+    });
+    c.repere('ligne_taux', L.nom - 6, L.y.tau - 26, 560, 34, 'τ augmente');
+  }
+  if (D.commence('ligne_k')) {
+    D.ecrire(c, 'ligne_k');
+    c.texte('K', L.nom, L.y.k, { couleur: 'jaune', taille: 20 });
+    c.direct(() => { c.texte(`${sci(m0.K, 1)} → ${sci(m1.K, 1)}`, L.val, L.y.k, { couleur: 'jaune', taille: 18 }); c.texte('=  ne change pas', L.sens - 8, L.y.k, { couleur: 'jaune', taille: 16 }); });
+    c.rect(L.nom - 12, L.y.k - 28, 562, 40, { couleur: 'jaune', largeur: 2.2 });
+    c.repere('ligne_k', L.nom - 12, L.y.k - 28, 562, 40, 'K ne change pas');
+  }
+  if (D.commence('piege')) {
+    D.ecrire(c, 'piege');
+    c.texte('⚠ τ dépend de l’état initial ; K ne dépend que de la température.', 470, L.y.piege, { couleur: 'orange', taille: 17, align: 'center', max: 560 });
+    c.repere('piege', 190, L.y.piege - 22, 560, 30, 'le piège : τ dépend de l’état initial, K non');
+  }
+  return c.fin();
+}
+
+function voir(D) {
+  const Cn = Cmaintenant(D), mn = mesure(Cn), m0 = mesure(C0), m1 = mesure(P.C);
+  const s = [`Bécher d’acide éthanoïque : C = ${sci(Cn, 1)} mol/L, pH-mètre ${fr(mn.pH, 2)} (avant : ${sci(C0, 1)} mol/L, pH ${fr(m0.pH, 2)} ; dilution jusqu’à ${sci(P.C, 1)} mol/L, curseur).`];
+  if (D.vu('ligne_c')) s.push(`Ligne C : ${sci(C0, 1)} → ${sci(P.C, 1)} mol/L, flèche vers le bas.`);
+  if (D.commence('ligne_ph')) s.push(`Ligne [H₃O⁺]éq : ${sci(m0.h, 2)} → ${sci(m1.h, 2)} mol/L (diminue) ; pH ${fr(m0.pH, 2)} → ${fr(m1.pH, 2)} (augmente).`);
+  if (D.commence('ligne_taux')) s.push(`Ligne τ : ${ftau(m0.tau)} → ${ftau(m1.tau)} (augmente), deux barres orange.`);
+  if (D.commence('ligne_k')) s.push(`Ligne K, dans un cadre jaune : ${sci(m0.K, 1)} → ${sci(m1.K, 1)}, ne change pas.`);
+  if (D.commence('piege')) s.push('Écrit en orange : τ dépend de l’état initial ; K ne dépend que de la température.');
+  return s.join(' ');
+}
+
+const regl = window.Tableau.curseur({ id: 'C', label: 'Diluer jusqu’à C =', min: 0, max: LISTE.length - 1, step: 1, valeur: 2, commande: 'set_parameters',
+  onchange: i => DER.setParameters({ concentration_mol_l: LISTE[i] }) });
+const lireC = () => { regl.querySelector('b').textContent = `${sci(LISTE[+regl.input.value], 1)} mol/L`; };
+regl.input.addEventListener('input', lireC); lireC();
+document.getElementById('reglage').replaceChildren(regl);
+
+const DER = window.Deroule({
+  id: 'etat_equilibre_diluer', titre: 'Quand on dilue', bouton: 'Diluer', etapes, dessiner, voir,
+  params: () => ({ concentration_mol_l: P.C }),
+  appliquer: p => {
+    const v = +p.concentration_mol_l; if (!(v > 0)) return false;
+    let i = 0; LISTE.forEach((c, j) => { if (Math.abs(Math.log10(c / v)) < Math.abs(Math.log10(LISTE[i] / v))) i = j; });
+    P.C = LISTE[i]; regl.input.value = String(i); lireC(); return true;
+  },
+  schema: { concentration_mol_l: '5e-3 .. 1e-5 mol/L (crans 5, 2, 1 × puissance de dix) : la concentration après dilution ; on part toujours de 1,0·10⁻² mol/L' },
+  depart: () => 'Avant : acide éthanoïque à 1,0·10⁻² mol/L, pH 3,41. On dilue…',
+  accueil: () => 'Appuie sur Diluer, puis choisis jusqu’où diluer avec le curseur.',
+  apresReglage: () => { const m = mesure(P.C); return `Dilué jusqu’à ${sci(P.C, 1)} mol/L : pH ${fr(m.pH, 2)}, τ = ${ftau(m.tau)}, et K reste ${sci(m.K, 1)}.`; },
+  messageFin: () => 'C, [H₃O⁺], pH et τ ont changé ; K est restée la même.',
+  texte: 'On dilue l’acide éthanoïque de 1,0·10⁻² à 1,0·10⁻³ mol/L (réglable jusqu’à 1,0·10⁻⁵) : C diminue ; [H₃O⁺]éq diminue (3,89·10⁻⁴ → 1,17·10⁻⁴ mol/L), donc le pH augmente (3,41 → 3,93) ; τ augmente (0,039 → 0,117) ; K = 1,6·10⁻⁵ ne change pas : elle ne dépend que de la température. Piège : τ dépend de l’état initial, K non.',
+  explication: [
+    { repere: 'becher', texte: 'On verse de l’eau distillée : le pH-mètre monte.' },
+    { repere: 'ligne_taux', texte: 'Le taux d’avancement final augmente quand on dilue.' },
+    { repere: 'ligne_k', texte: 'La constante d’équilibre reste la même : seule la température la change.' },
+  ],
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

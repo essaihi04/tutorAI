@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Quand une voie est bloquée — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="muscle.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Trois muscles excités en même temps, chacun avec son myogramme et deux jauges, ATP et phosphocréatine : le témoin, un muscle à glycolyse bloquée, un muscle à glycolyse et créatine kinase bloquées"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Exciter</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Quand une voie est bloquée (14 novembre 2026, règle 28 du professeur) : remplace le tableau de la diapo ms_r8_inhibiteurs
+ * (document reconstitué d'après l'examen 2020 R). Trois muscles reçoivent la même série d'excitations ; chacun a son
+ * myogramme (une secousse par excitation) et deux jauges, ATP et phosphocréatine (niveaux relatifs, allures du document) :
+ *   témoin                                 : ATP constant ; phosphocréatine qui baisse un peu ; contractions jusqu'au bout ;
+ *   glycolyse bloquée                      : ATP constant ; phosphocréatine qui baisse fortement ; les contractions
+ *                                            s'arrêtent plus tôt (vers 10 s), quand il n'y a plus de phosphocréatine ;
+ *   glycolyse et créatine kinase bloquées  : phosphocréatine constante ; l'ATP s'épuise en quelques secondes ;
+ *                                            les secousses faiblissent et s'arrêtent (vers 3,5 s).
+ * Les mots du résultat s'écrivent sous les jauges au moment où on le voit. Un seul bouton.
+ * Moments (s de la scène) : depart 0,8 ; atp_epuise 3,6 ; pc_basse 8 ; arret_glycolyse 10,5 ; fin 12.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const FIN = 12, PERIODE = 0.6, T_EXC = 0.5;
+const M = { depart: 0.8, atp_epuise: 3.6, pc_basse: 8, arret_glycolyse: 10.5, fin: FIN };
+const MOTIFS = { depart: 'les trois muscles se contractent ensemble', atp_epuise: 'troisième muscle : l’ATP est épuisé, il ne se contracte plus',
+  pc_basse: 'deuxième muscle : la phosphocréatine a fortement baissé, l’ATP est resté constant', arret_glycolyse: 'deuxième muscle : plus de phosphocréatine, il s’arrête plus tôt que le témoin',
+  fin: 'fin : le témoin se contracte toujours' };
+const lin = (t, a, b, va, vb) => (t <= a ? va : t >= b ? vb : va + (vb - va) * (t - a) / (b - a));
+const LIGNES = [
+  { id: 'temoin', nom: ['muscle témoin'], couleur: 'vert',
+    atp: () => 1, pc: t => lin(t, 0.5, FIN, 1, 0.82), amp: () => 1,
+    mots: { atp: 'constant', pc: '↓ un peu' }, quand: { atp: 4, pc: 6 } },
+  { id: 'glycolyse', nom: ['glycolyse', 'bloquée'], couleur: 'orange',
+    atp: () => 1, pc: t => lin(t, 0.5, 10, 1, 0.06), amp: t => lin(t, 10, 10.5, 1, 0),
+    mots: { atp: 'constant', pc: '↓ fortement' }, quand: { atp: 6, pc: 7 } },
+  { id: 'double', nom: ['glycolyse et', 'créatine kinase', 'bloquées'], couleur: 'rouge',
+    atp: t => lin(t, 0.5, 3.6, 1, 0), pc: () => 1, amp: t => Math.min(1, lin(t, 0.5, 3.6, 1, 0) * 1.4),
+    mots: { atp: 's’épuise', pc: 'constante' }, quand: { atp: 3.6, pc: 5 } },
+];
+const Y = [118, 226, 334], MX0 = 196, MX1 = 520, GA = 590, GP = 690, GH = 60;
+const tx = t => MX0 + (MX1 - MX0) * t / FIN;
+// Une secousse : fonction alpha qui culmine 0,08 s après l'excitation.
+const secousse = u => (u <= 0 ? 0 : (u / 0.08) * Math.exp(1 - u / 0.08));
+function tension(L, t) {
+  let y = 0;
+  for (let ts = T_EXC; ts <= t; ts += PERIODE) y += L.amp(ts) * secousse(t - ts);
+  return Math.min(1.1, y);
+}
+const S = { t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0 };
+
+function dessiner(c) {
+  scene.cadre(41);
+  c.direct(() => {
+    c.texte('Trois muscles, la même série d’excitations', 12, 26, { couleur: 'blanc', taille: 17 });
+    c.texte('myogramme', (MX0 + MX1) / 2, 56, { couleur: 'faible', taille: 14, align: 'center' });
+    c.texte('ATP', GA, 56, { couleur: 'jaune', taille: 15, align: 'center' });
+    c.texte('phosphocréatine', GP, 56, { couleur: 'rose', taille: 15, align: 'center' });
+  });
+  LIGNES.forEach((L, i) => {
+    const y = Y[i];
+    L.nom.forEach((s, k) => c.texte(s, 12, y - 8 * (L.nom.length - 1) + k * 17, { couleur: L.couleur, taille: 15, max: 176 }));
+    c.ligne(MX0, y + 24, MX1, y + 24, { couleur: 'tresfaible', largeur: 1.2 });
+    c.rect(GA - 14, y - GH / 2, 28, GH, { couleur: 'tresfaible', arrondi: 5 });
+    c.rect(GP - 14, y - GH / 2, 28, GH, { couleur: 'tresfaible', arrondi: 5 });
+    c.repere(L.id, 6, y - 46, 744, 96, L.nom.join(' '));
+    c.repere(L.id + '_atp', GA - 40, y - 40, 80, 84, 'l’ATP du ' + (i === 0 ? 'témoin' : i === 1 ? 'deuxième muscle' : 'troisième muscle'));
+    c.repere(L.id + '_pc', GP - 50, y - 40, 100, 84, 'la phosphocréatine du ' + (i === 0 ? 'témoin' : i === 1 ? 'deuxième muscle' : 'troisième muscle'));
+  });
+  c.direct(() => {
+    LIGNES.forEach((L, i) => {
+      const y = Y[i], base = y + 24, g = c.ctx;
+      if (S.t > 0) {
+        c.courbe(u => { const t = u * S.t; return [tx(t), base - 44 * tension(L, t)]; }, Math.max(8, Math.round(S.t * 90)), { couleur: L.couleur, largeur: 2, tremble: 0.2 });
+        for (let ts = T_EXC; ts <= S.t; ts += PERIODE) c.ligne(tx(ts), base + 4, tx(ts), base + 9, { couleur: 'faible', largeur: 1.2 });
+      }
+      const atp = S.t > 0 ? L.atp(S.t) : 1, pc = S.t > 0 ? L.pc(S.t) : 1;
+      g.globalAlpha = .6; g.fillStyle = c.couleur('jaune'); g.fillRect(GA - 10, y + GH / 2 - 4 - (GH - 8) * atp, 20, (GH - 8) * atp);
+      g.fillStyle = c.couleur('rose'); g.fillRect(GP - 10, y + GH / 2 - 4 - (GH - 8) * pc, 20, (GH - 8) * pc); g.globalAlpha = 1;
+      if (S.t >= L.quand.atp) c.texte(L.mots.atp, GA, y + GH / 2 + 16, { couleur: 'jaune', taille: 14, align: 'center' });
+      if (S.t >= L.quand.pc) c.texte(L.mots.pc, GP, y + GH / 2 + 16, { couleur: 'rose', taille: 14, align: 'center' });
+      const arret = i === 2 ? M.atp_epuise : i === 1 ? M.arret_glycolyse : Infinity;
+      if (S.t >= arret + 0.3) c.texte(i === 1 ? 'arrêt plus tôt' : 'arrêt : plus d’ATP', tx(arret) + 6, base - 10, { couleur: 'rouge', taille: 14, max: 568 - tx(arret) });
+    });
+    c.texte(`t = ${fr(S.t, 1)} s`, 748, 26, { couleur: 'vert', taille: 15, align: 'right' });
+  });
+  return c.fin();
+}
+
+const canvas = $('canvas');
+const scene = window.MuscleTableau.Scene(canvas, dessiner);
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(FIN, S.t + dt);
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.jusqua = null; S.running = false; S.pause = S.t < FIN; S.fait = S.t >= FIN; $('run').textContent = S.fait ? 'Exciter' : 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || 'instant choisi') + '.'); pont.noter('pause'); pont.emettre(); return true;
+  }
+  if (S.t >= FIN) {
+    S.running = false; S.fait = true; $('run').textContent = 'Exciter';
+    bulle($('feedback'), 'Compare chaque muscle au témoin, ligne par ligne.', 'good'); pont.noter('finished'); pont.emettre();
+  } else if (performance.now() - S.emis > 400) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function playUntil(p) {
+  const nom = p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-3) S.t = 0;
+  S.jusqua = Math.min(FIN, cible); S.motif = nom ? MOTIFS[nom] : ''; S.running = true; S.pause = false; S.fait = false;
+  $('run').textContent = 'Pause'; bulle($('feedback'), 'Les trois muscles reçoivent les mêmes excitations…'); pont.noter('play_until', { moment: nom }); pont.emettre();
+}
+function start() { S.jusqua = null; S.t = 0; S.running = true; S.pause = false; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Les trois muscles reçoivent les mêmes excitations…'); pont.noter('start'); pont.emettre(); }
+function pause() { if (!S.running) return; S.jusqua = null; S.running = false; S.pause = true; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running) return; if (!S.pause || S.fait) return start(); S.running = true; S.pause = false; $('run').textContent = 'Pause'; pont.noter('resume'); pont.emettre(); }
+function reset() { S.t = 0; S.running = false; S.pause = false; S.fait = false; S.jusqua = null; scene.sale = true; $('run').textContent = 'Exciter'; bulle($('feedback'), 'Excite les trois muscles en même temps.'); pont.emettre(); }
+function ceQuiSeVoit() {
+  const m = ['Trois lignes : muscle témoin, glycolyse bloquée, glycolyse et créatine kinase bloquées ; pour chacun un myogramme et deux jauges (ATP, phosphocréatine).'];
+  if (S.t <= 0) { m.push('Pas encore excités.'); return m.join(' '); }
+  m.push(`t = ${fr(S.t, 1)} s.`);
+  LIGNES.forEach((L, i) => {
+    const arret = i === 2 ? M.atp_epuise : i === 1 ? M.arret_glycolyse : Infinity;
+    m.push(`${L.nom.join(' ')} : ${S.t >= arret ? 'ne se contracte plus' : 'se contracte'}, ATP ${Math.round(L.atp(S.t) * 100)} %, phosphocréatine ${Math.round(L.pc(S.t) * 100)} % du départ.`);
+  });
+  return m.join(' ');
+}
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+window.Tableau.explication({ inhibiteurs: [
+  { repere: 'temoin', texte: 'Le témoin : l’ATP reste constant, la phosphocréatine baisse un peu.' },
+  { repere: 'glycolyse', texte: 'Glycolyse bloquée : la phosphocréatine baisse fortement, l’ATP reste constant.' },
+  { repere: 'double', texte: 'Les deux bloquées : l’ATP s’épuise et la contraction s’arrête en quelques secondes.' } ] });
+const commandes = ['start', 'pause', 'resume', 'reset', 'play_until'];
+const config = { id: 'muscle_tableau_inhibiteurs', version: '1.0', title: 'Quand une voie est bloquée', variants: [{ id: 'inhibiteurs', label: 'inhibiteurs' }], commands: commandes,
+  command_schema: { play_until: { moment: Object.keys(M).join(' | ') + ' (rejoue et se fige à cet instant clé)' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Document reconstitué d’après l’examen 2020 R. Trois muscles excités de la même façon. Témoin : ATP constant, phosphocréatine qui baisse un peu, contraction normale. Glycolyse bloquée : ATP constant, phosphocréatine qui baisse fortement, contraction normale puis arrêt plus tôt. Glycolyse et créatine kinase bloquées : phosphocréatine constante, ATP qui s’épuise, contraction arrêtée en quelques secondes.',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : (S.fait ? 'finished' : 'idle'), ce_qui_se_voit: ceQuiSeVoit(), moments: M, time_s: +S.t.toFixed(2) }),
+  progression: () => (S.fait ? 1 : S.t / FIN),
+  executer: (cmd, p) => ({ start, pause, resume, reset, play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Excite les trois muscles en même temps.');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

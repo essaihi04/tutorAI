@@ -1,4 +1,5 @@
 import { observeAvatarMedia } from '../../../services/avatarAudio';
+import { inscrireVoix } from '../voixUnique';
 import type { Demonstration, EnonceLu, ReactionPreparee } from '../types';
 import type { LectureDemo } from '../DemonstrationPleine';
 
@@ -9,16 +10,19 @@ import type { LectureDemo } from '../DemonstrationPleine';
  * son (skill cours-concentration).
  */
 let courant: HTMLAudioElement | null = null;
+/** Désinscrit la piste courante du registre « une seule voix » (voixUnique). */
+let desinscrire: (() => void) | null = null;
 /** Chaque nouvelle parole (ou `taire`) invalide celles qui se préparaient encore. */
 let tour = 0;
 const jeton = () => { try { return localStorage.getItem('token') || ''; } catch { return ''; } };
 
-export function taire() { tour += 1; courant?.pause(); courant = null; }
+export function taire() { tour += 1; courant?.pause(); courant = null; desinscrire?.(); desinscrire = null; }
 
 function lire(src: string): HTMLAudioElement {
   taire();
   const a = new Audio(src);
   courant = a;
+  desinscrire = inscrireVoix(a);   // elle coupe la piste de la diapo ou la voix du tuteur, et s'efface devant elles
   a.addEventListener('play', () => observeAvatarMedia(a), { once: true });
   void a.play().catch(() => { /* lecture refusée (pas encore de geste) : l'écrit reste */ });
   return a;

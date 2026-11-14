@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Deux condensateurs : régler C₁ et C₂ — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="rc.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Deux condensateurs branchés sur un générateur de 6 V, en parallèle ou en série, dessinés à la craie : les charges + et − s’accumulent sur les armatures, les tensions et les charges s’écrivent, puis la capacité équivalente"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Charger</button>
+    <span id="reglage" data-professor-control="set_parameters"></span>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Deux condensateurs, en parallèle ou en série (14 novembre 2026, règle 28 du professeur : une manip au lieu d'une liste).
+ * Générateur u = 6 V. Deux curseurs : C₁ et C₂ (1 → 10 µF). La largeur d'une armature est proportionnelle à sa capacité
+ * (« comme si on agrandissait la surface des armatures ») ; un point + ou − pour 3 µC.
+ * Vues (?vue=) :
+ *  - parallele (défaut) : même tension u sur les deux ; q₁ = C₁·u, q₂ = C₂·u ; q = q₁ + q₂ ; C_eq = q/u = C₁ + C₂.
+ *    Moments : circuit, charges, formule, interet. Diapo rc_a1_parallele.
+ *  - serie : même charge q ; u₁ = q/C₁, u₂ = q/C₂, u = u₁ + u₂ ; 1/C_eq = 1/C₁ + 1/C₂ ; C_eq = C₁·C₂/(C₁ + C₂).
+ *    Moments : circuit, tensions, formule, deux, interet. Diapo rc_a2_serie.
+ * Valeurs par défaut : C₁ = 3 µF, C₂ = 6 µF → parallèle 9 µF (q = 54 µC), série 2 µF (q = 12 µC, u₁ = 4 V, u₂ = 2 V).
+ * Les nombres s'écrivent quand les charges sont arrivées ; « interet » dessine le condensateur équivalent et le compare.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');
+const VUE = new URLSearchParams(location.search).get('vue') === 'serie' ? 'serie' : 'parallele';
+const U = 6, KW = 11, QPT = 3, CHARGE = 2.4;           // V ; px d'armature par µF ; µC par point ; s de charge
+const P = { C1: 3, C2: 6 };
+const ETAPES = VUE === 'parallele' ? ['circuit', 'charges', 'formule', 'interet'] : ['circuit', 'tensions', 'formule', 'deux', 'interet'];
+const S = { etape: -1, f: 0, running: false, pause: false, fait: false, motif: '', emis: 0 };
+const Ceq = () => VUE === 'parallele' ? P.C1 + P.C2 : P.C1 * P.C2 / (P.C1 + P.C2);
+const voit = nom => S.etape >= ETAPES.indexOf(nom);
+
+/** Un condensateur horizontal (armatures l'une au-dessus de l'autre) centré en (cx, cy), avec ses charges. */
+function condensateur(c, cx, cy, C, q, couleur, nom) {
+  const w = Math.max(14, C * KW), g = 14;
+  c.ligne(cx - w / 2, cy - g / 2, cx + w / 2, cy - g / 2, { couleur, largeur: 3.6, tremble: 0 });
+  c.ligne(cx - w / 2, cy + g / 2, cx + w / 2, cy + g / 2, { couleur, largeur: 3.6, tremble: 0 });
+  const n = Math.round(q / QPT);
+  for (let k = 0; k < n; k++) {
+    const x = cx - w / 2 + (k + 0.5) * w / n;
+    c.point(x, cy - g / 2 - 6, 2.3, 'rouge'); c.point(x, cy + g / 2 + 6, 2.3, 'bleu');
+  }
+  c.repere(nom, cx - w / 2 - 10, cy - 20, w + 20, 40, nom === 'C1' ? 'le condensateur C₁' : nom === 'C2' ? 'le condensateur C₂' : 'le condensateur équivalent');
+}
+function generateur(c, x, y1, y2) {
+  const ym = (y1 + y2) / 2;
+  c.ligne(x, y1, x, ym - 18); c.ligne(x - 16, ym - 8, x + 16, ym - 8, { largeur: 3 }); c.ligne(x - 9, ym + 8, x + 9, ym + 8, { largeur: 5 }); c.ligne(x, ym + 8, x, y2);
+  c.texte('+', x + 22, ym - 10, { couleur: 'rouge', taille: 16 }); c.texte('u = 6 V', x - 14, ym + 5, { couleur: 'jaune', taille: 15, align: 'right' });
+  c.repere('generateur', x - 70, ym - 30, 100, 60, 'le générateur : u = 6 V');
+}
+
+function dessiner(c) {
+  scene.cadre(31);
+  c.texte(VUE === 'parallele' ? 'Deux condensateurs en parallèle' : 'Deux condensateurs en série', 280, 26, { couleur: 'blanc', taille: 18, align: 'center' });
+  const f = S.f;
+  if (VUE === 'parallele') {
+    const T = 82, B = 320, X1 = 250, X2 = 420;
+    generateur(c, 90, T, B); c.ligne(90, T, X2 + 70, T); c.ligne(90, B, X2 + 70, B);
+    c.ligne(X1, T, X1, 192); c.ligne(X1, 206, X1, B); c.ligne(X2, T, X2, 192); c.ligne(X2, 206, X2, B);
+    c.direct(() => {
+      const q1 = P.C1 * U * f, q2 = P.C2 * U * f;
+      condensateur(c, X1, 199, P.C1, q1, 'cyan', 'C1'); condensateur(c, X2, 199, P.C2, q2, 'cyan', 'C2');
+      c.texte(`C₁ = ${P.C1} µF`, X1 + 12, 150, { couleur: 'cyan', taille: 15 }); c.texte(`C₂ = ${P.C2} µF`, X2 + 12, 150, { couleur: 'cyan', taille: 15 });
+      if (voit('circuit')) {
+        const ut = f > 0 ? `${fx(U * f, 1)} V` : 'u'; c.texte(`u₁ = ${ut}`, X1 + 12, 262, { couleur: 'jaune', taille: 15 }); c.texte(`u₂ = ${ut}`, X2 + 12, 262, { couleur: 'jaune', taille: 15 });
+        c.repere('tensions', X1 - 10, 246, X2 - X1 + 100, 24, 'la même tension u aux bornes des deux');
+        if (S.etape === 0 && f === 0) c.texte('les deux entre les mêmes points : même tension u', 280, 360, { couleur: 'jaune', taille: 15, align: 'center' });
+      }
+      if (voit('charges') && f > 0) {
+        c.texte(`q₁ = ${fx(q1, 0)} µC`, X1 + 12, 290, { couleur: 'rouge', taille: 15 }); c.texte(`q₂ = ${fx(q2, 0)} µC`, X2 + 12, 290, { couleur: 'rouge', taille: 15 });
+        c.repere('charges', X1 - 10, 274, X2 - X1 + 100, 24, 'les charges q₁ et q₂');
+        if (S.fait || f >= 1) { c.texte(`q = q₁ + q₂ = ${fx(q1 + q2, 0)} µC`, 280, 360, { couleur: 'rouge', taille: 17, align: 'center' }); c.repere('somme', 150, 342, 260, 26, 'les charges s’ajoutent'); }
+      }
+    });
+  } else {
+    const T = 70, B = 350, XR = 300;
+    generateur(c, 90, T, B); c.ligne(90, T, XR, T); c.ligne(90, B, XR, B);
+    c.ligne(XR, T, XR, 133); c.ligne(XR, 147, XR, 263); c.ligne(XR, 277, XR, B);
+    c.direct(() => {
+      const ce = P.C1 * P.C2 / (P.C1 + P.C2), q = ce * U * f;
+      condensateur(c, XR, 140, P.C1, q, 'cyan', 'C1'); condensateur(c, XR, 270, P.C2, q, 'cyan', 'C2');
+      c.texte(`C₁ = ${P.C1} µF`, XR - 70, 145, { couleur: 'cyan', taille: 15, align: 'right' }); c.texte(`C₂ = ${P.C2} µF`, XR - 70, 275, { couleur: 'cyan', taille: 15, align: 'right' });
+      if (voit('circuit') && f > 0) {
+        c.texte(`q = ${fx(q, 0)} µC`, XR + 72, 132, { couleur: 'rouge', taille: 15 }); c.texte(`q = ${fx(q, 0)} µC`, XR + 72, 262, { couleur: 'rouge', taille: 15 });
+        c.repere('charges', XR + 64, 114, 120, 160, 'la même charge q sur les deux');
+      }
+      if (voit('tensions') && f > 0) {
+        c.texte(`u₁ = ${fx(q / P.C1, 1)} V`, XR + 72, 156, { couleur: 'jaune', taille: 15 }); c.texte(`u₂ = ${fx(q / P.C2, 1)} V`, XR + 72, 286, { couleur: 'jaune', taille: 15 });
+        c.repere('tensions', XR + 64, 140, 120, 160, 'les tensions u₁ et u₂');
+        if (S.fait || f >= 1) { c.texte(`u₁ + u₂ = ${fx(q / P.C1, 1)} + ${fx(q / P.C2, 1)} = ${fx(q / P.C1 + q / P.C2, 1)} V = u`, 260, 396, { couleur: 'jaune', taille: 16, align: 'center', max: 470 }); c.repere('somme', 40, 378, 460, 26, 'les tensions s’ajoutent'); }
+      }
+    });
+  }
+  // Colonne de droite : C_eq, comme résultat.
+  c.direct(() => {
+    const X = 640, ce = Ceq();
+    if (voit('formule') && (S.fait || S.f >= 1)) {
+      if (VUE === 'parallele') {
+        c.texte('C_eq = q / u', X, 84, { couleur: 'blanc', taille: 17, align: 'center' });
+        c.texte(`= ${fx(P.C1 * U + P.C2 * U, 0)} / 6 = ${fx(ce)} µF`, X, 110, { couleur: 'blanc', taille: 16, align: 'center', max: 210 });
+        c.texte(`C₁ + C₂ = ${P.C1} + ${P.C2} = ${fx(ce)} µF`, X, 140, { couleur: 'vert', taille: 16, align: 'center', max: 210 });
+      } else {
+        c.texte(`1/C_eq = 1/${P.C1} + 1/${P.C2}`, X, 84, { couleur: 'blanc', taille: 17, align: 'center', max: 210 });
+        c.texte(`C_eq = q / u = ${fx(ce)} µF`, X, 110, { couleur: 'blanc', taille: 16, align: 'center', max: 210 });
+        if (voit('deux')) c.texte(`C₁·C₂/(C₁ + C₂) = ${P.C1 * P.C2}/${P.C1 + P.C2} = ${fx(ce)} µF`, X, 140, { couleur: 'vert', taille: 15, align: 'center', max: 215 });
+      }
+      c.repere('formule', X - 108, 64, 216, 86, 'la capacité équivalente, calculée');
+    }
+    if (voit('interet') && (S.fait || S.f >= 1)) {
+      c.texte('le condensateur équivalent', X, 190, { couleur: 'faible', taille: 14, align: 'center' });
+      c.ligne(X, 200, X, 230); c.ligne(X, 244, X, 270);
+      condensateur(c, X, 237, ce, ce * U, 'vert', 'equivalent');
+      c.texte(`C_eq = ${fx(ce)} µF`, X, 296, { couleur: 'vert', taille: 17, align: 'center' });
+      const plus = VUE === 'parallele';
+      c.texte(plus ? 'plus grande que C₁ et que C₂' : 'plus petite que C₁ et que C₂', X, 326, { couleur: 'orange', taille: 15, align: 'center', max: 215 });
+      c.texte(plus ? 'le parallèle augmente la capacité' : 'la série diminue la capacité', X, 352, { couleur: 'orange', taille: 16, align: 'center', max: 215 });
+      c.repere('interet', X - 108, 180, 216, 182, plus ? 'le parallèle augmente la capacité' : 'la série diminue la capacité');
+    }
+  });
+  return c.fin();
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.f = Math.min(1, S.f + dt / CHARGE);
+  if (S.f >= 1) {
+    S.running = false; S.fait = true; $('run').textContent = 'Charger';
+    bulle($('feedback'), `C_eq = ${fx(Ceq())} µF : ` + (VUE === 'parallele' ? 'plus grande que chacune, les charges s’ajoutent.' : 'plus petite que chacune, les tensions s’ajoutent.') + ' Change C₁ ou C₂.', 'good');
+    pont.noter('finished'); pont.emettre();
+  } else if (performance.now() - S.emis > 400) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function charger(etape, motif) {
+  S.etape = etape; S.f = 0; S.running = true; S.pause = false; S.fait = false;
+  $('run').textContent = 'Pause'; bulle($('feedback'), motif || 'Le générateur charge les deux condensateurs…'); pont.noter('start', { ...P }); pont.emettre();
+}
+const MOTIFS = VUE === 'parallele'
+  ? { circuit: 'les deux branchés entre les mêmes points : même tension u', charges: 'les charges s’ajoutent : q = q₁ + q₂', formule: 'C_eq = C₁ + C₂', interet: 'le parallèle augmente la capacité' }
+  : { circuit: 'l’un après l’autre : la même charge q', tensions: 'les tensions s’ajoutent : u = u₁ + u₂', formule: '1/C_eq = 1/C₁ + 1/C₂', deux: 'pour deux : C_eq = C₁·C₂/(C₁ + C₂)', interet: 'la série diminue la capacité' };
+function moments() { const m = {}; ETAPES.forEach((k, i) => { m[k] = i; }); return m; }
+function playUntil(q) {
+  const i = ETAPES.indexOf(q.moment); if (i < 0) return;
+  P.C1 = 3; P.C2 = 6; r1.maj(3); r2.maj(6);
+  // Le circuit de la vue parallèle se montre vide (même tension annoncée) ; tout le reste se montre chargé.
+  if (VUE === 'parallele' && i === 0) { S.etape = 0; S.f = 0; S.running = false; S.pause = false; S.fait = false; $('run').textContent = 'Charger'; bulle($('feedback'), 'Regarde : ' + MOTIFS[q.moment] + '.'); }
+  else if (S.f >= 1 && !S.running) { S.etape = i; S.fait = true; bulle($('feedback'), 'Regarde : ' + MOTIFS[q.moment] + '.'); }
+  else charger(i, 'Je charge : ' + MOTIFS[q.moment] + '…');
+  S.motif = MOTIFS[q.moment]; scene.sale = true;
+  pont.noter('play_until', { moment: q.moment }); pont.emettre();
+}
+function ceQuiSeVoit() {
+  const ce = Ceq(), f = S.f;
+  const m = [VUE === 'parallele' ? `Générateur 6 V et deux condensateurs en parallèle, C₁ = ${P.C1} µF, C₂ = ${P.C2} µF (largeur des armatures proportionnelle à C).`
+    : `Générateur 6 V et deux condensateurs en série, C₁ = ${P.C1} µF en haut, C₂ = ${P.C2} µF en bas.`];
+  if (f <= 0) m.push('Pas encore chargés.');
+  else if (VUE === 'parallele') m.push(`Chargés à ${fx(100 * f, 0)} % : u₁ = u₂ = ${fx(U * f, 1)} V, q₁ = ${fx(P.C1 * U * f, 0)} µC, q₂ = ${fx(P.C2 * U * f, 0)} µC (points + rouges et − bleus).`);
+  else m.push(`Chargés à ${fx(100 * f, 0)} % : même charge q = ${fx(ce * U * f, 0)} µC sur les deux, u₁ = ${fx(ce * U * f / P.C1, 1)} V, u₂ = ${fx(ce * U * f / P.C2, 1)} V.`);
+  if (f >= 1 && voit('formule')) m.push(`Écrit à droite : C_eq = ${fx(ce)} µF.`);
+  if (f >= 1 && voit('interet')) m.push(`Le condensateur équivalent est dessiné : ${VUE === 'parallele' ? 'plus grand' : 'plus petit'} que C₁ et C₂.`);
+  return m.join(' ');
+}
+function start() { charger(ETAPES.length - 1); }
+function pause() { if (!S.running) return; S.running = false; S.pause = true; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running || !S.pause) return start(); S.running = true; S.pause = false; $('run').textContent = 'Pause'; pont.noter('resume'); pont.emettre(); }
+function reset() { S.etape = -1; S.f = 0; S.running = false; S.pause = false; S.fait = false; scene.sale = true; $('run').textContent = 'Charger'; bulle($('feedback'), accueil); pont.emettre(); }
+function setParameters(p) {
+  let ok = false;
+  if (Number.isFinite(+p.C1_uF)) { P.C1 = Math.min(10, Math.max(1, Math.round(+p.C1_uF))); r1.maj(P.C1); ok = true; }
+  if (Number.isFinite(+p.C2_uF)) { P.C2 = Math.min(10, Math.max(1, Math.round(+p.C2_uF))); r2.maj(P.C2); ok = true; }
+  if (!ok) return;
+  pont.noter('set_parameters', { C1_uF: P.C1, C2_uF: P.C2 }); charger(ETAPES.length - 1, `C₁ = ${P.C1} µF, C₂ = ${P.C2} µF : on recharge…`);
+}
+const r1 = window.Tableau.curseur({ id: 'C1', label: 'C₁ =', min: 1, max: 10, step: 1, valeur: 3, unite: 'µF', commande: 'set_parameters', onchange: v => setParameters({ C1_uF: v }) });
+const r2 = window.Tableau.curseur({ id: 'C2', label: 'C₂ =', min: 1, max: 10, step: 1, valeur: 6, unite: 'µF', commande: 'set_parameters', onchange: v => setParameters({ C2_uF: v }) });
+$('reglage').replaceChildren(r1, r2);
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+const accueil = 'Charge, puis change C₁ ou C₂ et regarde C_eq.';
+window.Tableau.explication({ [VUE]: VUE === 'parallele' ? [
+  { repere: 'tensions', texte: 'Branchés entre les mêmes points : la même tension u.' },
+  { repere: 'charges', texte: 'Chaque condensateur prend sa charge ; elles s’ajoutent.' },
+  { repere: 'interet', texte: 'Le condensateur équivalent est plus grand : le parallèle augmente la capacité.' },
+] : [
+  { repere: 'charges', texte: 'L’un après l’autre : la même charge q sur les deux.' },
+  { repere: 'tensions', texte: 'Le plus petit condensateur prend la plus grande tension ; les tensions s’ajoutent.' },
+  { repere: 'interet', texte: 'Le condensateur équivalent est plus petit : la série diminue la capacité.' },
+] });
+const commandes = ['start', 'pause', 'resume', 'reset', 'set_parameters', 'play_until'];
+const config = { id: 'rc_tableau_associations_' + VUE, version: '1.0', title: 'Deux condensateurs : régler C₁ et C₂', variants: [{ id: VUE, label: VUE === 'parallele' ? 'parallèle' : 'série' }], commands: commandes,
+  command_schema: { set_parameters: { C1_uF: '1..10 µF', C2_uF: '1..10 µF' }, play_until: { moment: ETAPES.join(' | ') + ' (remet C₁ = 3 µF, C₂ = 6 µF)' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: VUE === 'parallele'
+    ? 'Deux condensateurs en parallèle sur un générateur de 6 V : même tension, les charges s’ajoutent (q = q₁ + q₂), C_eq = C₁ + C₂. Curseurs C₁ et C₂ de 1 à 10 µF ; par défaut 3 et 6 µF : q₁ = 18 µC, q₂ = 36 µC, q = 54 µC, C_eq = 9 µF. Le parallèle augmente la capacité.'
+    : 'Deux condensateurs en série sur un générateur de 6 V : même charge q, les tensions s’ajoutent (u = u₁ + u₂), 1/C_eq = 1/C₁ + 1/C₂, C_eq = C₁·C₂/(C₁ + C₂). Curseurs C₁ et C₂ de 1 à 10 µF ; par défaut 3 et 6 µF : q = 12 µC, u₁ = 4 V, u₂ = 2 V, C_eq = 2 µF. La série diminue la capacité.',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : (S.fait ? 'finished' : 'idle'), ce_qui_se_voit: ceQuiSeVoit(), moments: moments(), vue: VUE,
+    parameters: { C1_uF: P.C1, C2_uF: P.C2 }, C_eq_uF: +Ceq().toFixed(3), etape: ETAPES[S.etape] || null }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, pause, resume, reset, set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), accueil);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

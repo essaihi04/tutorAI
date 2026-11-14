@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le muscle consomme — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="muscle.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un muscle dessiné à la craie travaille ; six lignes (glycogène, dioxygène consommé, dioxyde de carbone rejeté, acide lactique, ATP, phosphocréatine) : chaque barre part de sa valeur au repos et va à sa valeur après l'activité, écrite au bout"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Faire travailler</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Le muscle consomme (14 novembre 2026, règle 28 du professeur) : remplace le tableau « au repos / après l'activité »
+ * de la diapo ms_t4_consomme (document reconstitué, ordres de grandeur).
+ * Un muscle travaille (il se contracte en rythme) ; une ligne par mesure (dans l'ordre du document) : la barre part de sa valeur
+ * au repos (trait pointillé + valeur) et va à sa valeur après l'activité (écrite au bout, flèche ↑ ↓ ou ≈) :
+ *   glycogène 1,08 → 0,80 g/100 g ; O₂ consommé 0,3 → 2,5 L/min ; CO₂ rejeté 0,25 → 2,2 L/min ;
+ *   acide lactique 1,1 → 12 mmol/L ; ATP 5,0 → 4,8 mmol/kg (presque rien) ; phosphocréatine 17 → 10 mmol/kg.
+ * L'ATP baisse à peine pendant que la phosphocréatine baisse : la question de la diapo (« qu'en déduis-tu ? ») reste à l'élève.
+ * Un seul bouton. Moments (s de la scène) : repos 0,8 ; activite 2,5 ; apres 6,6.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const JAUGES = [
+  { id: 'glycogene', nom: 'glycogène', unite: 'g/100 g', repos: 1.08, apres: 0.80, d: 2, couleur: 'vert' },
+  { id: 'o2', nom: 'dioxygène consommé', unite: 'L/min', repos: 0.3, apres: 2.5, d: 1, couleur: 'cyan' },
+  { id: 'co2', nom: 'CO₂ rejeté', unite: 'L/min', repos: 0.25, apres: 2.2, d: 2, da: 1, couleur: 'blanc' },
+  { id: 'lactique', nom: 'acide lactique', unite: 'mmol/L', repos: 1.1, apres: 12, d: 1, da: 0, couleur: 'orange' },
+  { id: 'atp', nom: 'ATP', unite: 'mmol/kg', repos: 5.0, apres: 4.8, d: 1, couleur: 'jaune' },
+  { id: 'pc', nom: 'phosphocréatine', unite: 'mmol/kg', repos: 17, apres: 10, d: 0, couleur: 'rose' },
+];
+// Une ligne par mesure : nom à gauche, barre horizontale (pointillé = repos), valeur après l'activité au bout.
+const Y0 = 104, PAS = 50, BX = 352, BL = 290, BH = 16;
+const M = { repos: 0.8, activite: 2.5, apres: 6.6 };
+const T_ACT = [1.2, 6.2], FIN = 7;
+const MOTIFS = { repos: 'le muscle au repos : chaque ligne à sa valeur de repos', activite: 'le muscle travaille : les barres bougent',
+  apres: 'après l’activité : la nouvelle valeur est écrite au bout de chaque ligne' };
+const S = { t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0 };
+const doux = u => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u));
+const part = () => doux((S.t - T_ACT[0]) / (T_ACT[1] - T_ACT[0]));
+const valeur = j => j.repos + (j.apres - j.repos) * part();
+const longueur = (j, v) => BL * v / (Math.max(j.repos, j.apres) * 1.08);
+const nombre = (v, d) => fr(v, d);
+
+function dessiner(c) {
+  scene.cadre(31);
+  c.direct(() => c.texte('Le muscle au repos, puis après une activité (ordres de grandeur)', 12, 26, { couleur: 'blanc', taille: 17 }));
+  // Le muscle entre deux os.
+  c.ligne(18, 150, 18, 300, { couleur: 'faible', largeur: 5 }); c.ligne(150, 150, 150, 300, { couleur: 'faible', largeur: 5 });
+  c.texte('muscle', 84, 326, { couleur: 'rose', taille: 16, align: 'center' });
+  c.repere('muscle', 12, 120, 146, 214, 'le muscle');
+  JAUGES.forEach((j, i) => {
+    const y = Y0 + i * PAS;
+    c.texte(j.nom, 172, y + 2, { couleur: j.couleur, taille: 15, max: 172 });
+    c.texte(j.unite, 172, y + 19, { couleur: 'faible', taille: 12 });
+    c.ligne(BX, y + BH / 2 + 2, BX + BL, y + BH / 2 + 2, { couleur: 'tresfaible', largeur: 1.2 });
+    c.repere(j.id, 166, y - 18, 588, PAS - 6, 'la ligne : ' + j.nom);
+  });
+  c.direct(() => {
+    // Le muscle bat pendant l'activité : il raccourcit et gonfle en rythme.
+    const actif = S.t > T_ACT[0] && S.t < T_ACT[1], k = actif ? 0.5 + 0.5 * Math.sin((S.t - T_ACT[0]) * Math.PI * 2 * 1.6) : 0;
+    const L = 54 - 10 * k, E = 26 + 9 * k, cx = 84, cy = 225;
+    c.courbe(u => [cx - L + 2 * L * u, cy - E * Math.sin(Math.PI * u)], 30, { couleur: 'rose', largeur: 2.4 });
+    c.courbe(u => [cx - L + 2 * L * u, cy + E * Math.sin(Math.PI * u)], 30, { couleur: 'rose', largeur: 2.4 });
+    c.ligne(18, cy, cx - L, cy, { couleur: 'blanc', largeur: 2 }); c.ligne(cx + L, cy, 150, cy, { couleur: 'blanc', largeur: 2 });
+    const etat = S.t <= 0 ? '' : S.t < T_ACT[0] ? 'au repos' : S.t < T_ACT[1] ? 'en activité…' : 'après l’activité';
+    if (etat) c.texte(etat, 84, 136, { couleur: S.t < T_ACT[0] ? 'faible' : 'vert', taille: 16, align: 'center' });
+    if (S.t <= 0) return;
+    JAUGES.forEach((j, i) => {
+      const y = Y0 + i * PAS - BH / 2 - 4, g = c.ctx, l = longueur(j, valeur(j)), lr = longueur(j, j.repos);
+      g.globalAlpha = .55; g.fillStyle = c.couleur(j.couleur); g.fillRect(BX, y, l, BH); g.globalAlpha = 1;
+      // Repos : trait pointillé vertical et sa valeur au-dessus.
+      c.ligne(BX + lr, y - 5, BX + lr, y + BH + 5, { couleur: 'blanc', largeur: 1.4, pointille: [3, 3] });
+      c.texte(nombre(j.repos, j.d), BX + lr, y - 7, { couleur: 'faible', taille: 12, align: 'center' });
+      if (S.t >= T_ACT[1]) {
+        const diff = (j.apres - j.repos) / j.repos, fl = Math.abs(diff) < 0.06 ? '≈' : diff > 0 ? '↑' : '↓';
+        c.texte(`${fl} ${nombre(j.apres, j.da ?? j.d)}`, BX + BL + 12, y + BH - 2, { couleur: j.couleur, taille: 17 });
+      }
+    });
+    if (S.t >= T_ACT[1]) c.texte('pointillé : au repos ; barre : après l’activité', 500, 404, { couleur: 'faible', taille: 13, align: 'center' });
+  });
+  return c.fin();
+}
+
+const canvas = $('canvas');
+const scene = window.MuscleTableau.Scene(canvas, dessiner);
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(FIN, S.t + dt);
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.jusqua = null; S.running = false; S.pause = true; $('run').textContent = 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || 'instant choisi') + '.'); pont.noter('pause'); pont.emettre(); return true;
+  }
+  if (S.t >= FIN) {
+    S.running = false; S.fait = true; $('run').textContent = 'Faire travailler';
+    bulle($('feedback'), 'Glycogène et phosphocréatine baissent, O₂, CO₂ et acide lactique montent… et l’ATP ?', 'good');
+    pont.noter('finished'); pont.emettre();
+  } else if (performance.now() - S.emis > 400) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function playUntil(p) {
+  const nom = p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-3) S.t = 0;
+  S.jusqua = Math.min(FIN, cible); S.motif = nom ? MOTIFS[nom] : ''; S.running = true; S.pause = false; S.fait = false;
+  $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe les barres…'); pont.noter('play_until', { moment: nom }); pont.emettre();
+}
+function start() { S.jusqua = null; S.t = 0; S.running = true; S.pause = false; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Au repos… puis le muscle travaille.'); pont.noter('start'); pont.emettre(); }
+function pause() { if (!S.running) return; S.jusqua = null; S.running = false; S.pause = true; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running) return; if (!S.pause || S.fait) return start(); S.running = true; S.pause = false; $('run').textContent = 'Pause'; pont.noter('resume'); pont.emettre(); }
+function reset() { S.t = 0; S.running = false; S.pause = false; S.fait = false; S.jusqua = null; scene.sale = true; $('run').textContent = 'Faire travailler'; bulle($('feedback'), 'Fais travailler le muscle et regarde les six lignes.'); pont.emettre(); }
+function ceQuiSeVoit() {
+  const m = ['Un muscle entre deux os ; six lignes : glycogène, O₂ consommé, CO₂ rejeté, acide lactique, ATP, phosphocréatine.'];
+  if (S.t <= 0) m.push('Rien encore.');
+  else if (S.t < T_ACT[0]) m.push('Muscle au repos ; chaque barre à sa valeur de repos (pointillé) : 1,08 ; 0,3 ; 0,25 ; 1,1 ; 5,0 ; 17.');
+  else if (S.t < T_ACT[1]) m.push(`Le muscle se contracte en rythme ; les barres bougent (${JAUGES.map(j => j.nom + ' ' + nombre(valeur(j), j.d)).join(', ')}).`);
+  else m.push('Après l’activité, valeurs écrites : glycogène ↓ 0,80 ; O₂ ↑ 2,5 ; CO₂ ↑ 2,2 ; acide lactique ↑ 12 ; ATP ≈ 4,8 (presque pas changé) ; phosphocréatine ↓ 10.');
+  return m.join(' ');
+}
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+window.Tableau.explication({ consommation: [
+  { repere: 'glycogene', texte: 'Le glycogène baisse : il est consommé.' },
+  { repere: 'o2', texte: 'Le dioxygène consommé monte de 0,3 à 2,5 litres par minute.' },
+  { repere: 'co2', texte: 'Le CO₂ rejeté monte aussi.' },
+  { repere: 'lactique', texte: 'L’acide lactique monte de 1,1 à 12.' },
+  { repere: 'atp', texte: 'L’ATP ne bouge presque pas : 5 puis 4,8.' },
+  { repere: 'pc', texte: 'La phosphocréatine baisse de 17 à 10.' } ] });
+const commandes = ['start', 'pause', 'resume', 'reset', 'play_until'];
+const config = { id: 'muscle_tableau_consommation', version: '1.0', title: 'Le muscle consomme', variants: [{ id: 'consommation', label: 'consommation' }], commands: commandes,
+  command_schema: { play_until: { moment: Object.keys(M).join(' | ') + ' (rejoue et se fige à cet instant clé)' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Document reconstitué (ordres de grandeur) : muscle au repos puis après une activité. Glycogène 1,08 → 0,80 g/100 g ; dioxygène consommé 0,3 → 2,5 L/min ; dioxyde de carbone rejeté 0,25 → 2,2 L/min ; acide lactique du sang 1,1 → 12 mmol/L ; ATP 5,0 → 4,8 mmol/kg (presque constant) ; phosphocréatine 17 → 10 mmol/kg.',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : (S.fait ? 'finished' : 'idle'), ce_qui_se_voit: ceQuiSeVoit(), moments: M, time_s: +S.t.toFixed(2),
+    valeurs: Object.fromEntries(JAUGES.map(j => [j.id, +valeur(j).toFixed(2)])) }),
+  progression: () => (S.fait ? 1 : S.t / FIN),
+  executer: (cmd, p) => ({ start, pause, resume, reset, play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Fais travailler le muscle et regarde les six lignes.');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

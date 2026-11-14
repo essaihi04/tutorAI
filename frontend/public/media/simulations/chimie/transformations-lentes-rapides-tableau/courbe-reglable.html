@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>n(I₂) en fonction du temps, à régler — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="tlr.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Graphe à la craie de la quantité de diiode n(I₂) en mmol en fonction du temps en min ; à droite un bécher qui brunit et les conditions de l’expérience ; la courbe précédente reste en pointillés pour comparer"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Mélanger</button>
+    <span id="reglage" data-professor-control="set_parameters"></span>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * La courbe n(I₂)(t) qu'on règle soi-même (14 novembre 2026, règle 28 du professeur : une manip au lieu d'une liste).
+ * H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O ; V = 100 mL ; H₂O₂ est toujours le réactif limitant ([I⁻]₀ ≥ 0,1 mol/L : 10 mmol d'I⁻ au moins,
+ * il en faut 2 × n(H₂O₂)₀ ≤ 8 mmol) : le palier vaut n(H₂O₂)₀.
+ * Modèle POUR L'ŒIL (jamais écrit) : n(t) = n_f·(1 − e^(−t/τ)), τ = 6 min · 3^((20 − θ)/20) · (0,1 / [I⁻]₀) ;
+ * 20 °C et 0,1 mol/L : palier vers 30 min ; 40 °C : vers 10 min ; 0,2 mol/L : vers 15 min. « Palier vers … » = 5τ.
+ * Vues (?vue=) :
+ *  - temperature (défaut) : un curseur θ (20 → 60 °C). Moments : axes, courbe_froid (20 °C), courbe_chaud (40 °C, la froide en
+ *    pointillés), meme_palier, plus_raide. Remplace la liste « 20 °C : palier vers 30 min ; 40 °C : vers 10 min » (tl_f4_courbes).
+ *  - concentration : curseurs [I⁻]₀ (0,1 → 0,3 mol/L) et n(H₂O₂)₀ (1 → 4 mmol). Moments : axes, courbe_dilue (0,1 mol/L),
+ *    courbe_concentre (0,2 mol/L), meme_palier, piege (n(H₂O₂)₀ = 4 mmol : palier 4 mmol). Diapo tl_f7_palier.
+ * Les courbes d'avant restent en pointillés (deux au plus). Temps accéléré : 1 min = 0,12 s (la bulle le dit).
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');
+const VUE = new URLSearchParams(location.search).get('vue') === 'concentration' ? 'concentration' : 'temperature';
+const TMAX = 40, VITESSE = 0.12;                       // min ; s d'image par minute
+const AX = 80, AX1 = 540, AY = 360, NMAX = 4.5, YH = 96;
+const X = t => AX + t / TMAX * (AX1 - 20 - AX);
+const Y = n => AY - n / NMAX * (AY - YH);
+const P = { theta: 20, c: 0.1, n: 2 };
+const tauDe = p => 6 * Math.pow(3, (20 - p.theta) / 20) * (0.1 / p.c);
+const nDe = (t, p) => p.n * (1 - Math.exp(-t / tauDe(p)));
+const couleurDe = p => VUE === 'temperature' ? (p.theta <= 25 ? 'cyan' : p.theta <= 45 ? 'orange' : 'rouge') : (p.n > 2 ? 'rose' : p.c < 0.15 ? 'bleu' : 'violet');
+const nomDe = p => VUE === 'temperature' ? `${p.theta} °C` : (p.n !== 2 ? `${fx(p.c)} mol/L ; ${p.n} mmol H₂O₂` : `${fx(p.c)} mol/L`);
+const S = { t: 0, running: false, pause: false, fait: false, cur: null, fantomes: [], montre: {}, jusqua: null, motif: '', emis: 0 };
+
+function dessiner(c) {
+  scene.cadre(17);
+  c.texte('H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O', 300, 24, { couleur: 'blanc', taille: 17, align: 'center' });
+  c.fleche(AX, AY, AX1, AY, { couleur: 'faible', largeur: 1.6 }); c.fleche(AX, AY, AX, 70, { couleur: 'faible', largeur: 1.6 });
+  for (let k = 1; k <= 4; k++) { const x = X(10 * k); c.ligne(x, AY - 4, x, AY + 4, { couleur: 'faible', largeur: 1.3, duree: .03 }); c.texte(String(10 * k), x, AY + 19, { couleur: 'faible', taille: 13, align: 'center', duree: .1 }); }
+  for (let n = 1; n <= 4; n++) { c.ligne(AX - 4, Y(n), AX + 4, Y(n), { couleur: 'faible', largeur: 1.3, duree: .03 }); c.texte(String(n), AX - 8, Y(n) + 5, { couleur: 'faible', taille: 13, align: 'right', duree: .1 }); }
+  c.texte('t (min)', AX1, AY - 10, { couleur: 'faible', taille: 14, align: 'right' });
+  c.texte('n(I₂) (mmol)', AX + 8, 78, { couleur: 'faible', taille: 14 });
+  c.repere('axe_n', AX - 34, 60, 150, AY - 60, 'l’axe vertical : la quantité de diiode n(I₂), en mmol');
+  c.repere('axe_t', AX + 40, AY - 26, AX1 - AX - 40, 52, 'l’axe horizontal : le temps t, en min');
+  // Le bécher (à droite) : sa teinte suit la quantité de diiode formé.
+  const BX = 600, BY = 70, BW = 90, BH = 110;
+  c.ligne(BX, BY, BX, BY + BH); c.ligne(BX, BY + BH, BX + BW, BY + BH); c.ligne(BX + BW, BY + BH, BX + BW, BY);
+  c.direct(() => {
+    const p = S.cur ? S.cur.p : P, tt = Math.min(S.t, TMAX), n = S.cur ? nDe(tt, p) : 0, f = Math.min(1, n / 4);
+    const ctx = c.ctx; ctx.save(); ctx.globalAlpha = 0.08 + 0.75 * f; ctx.fillStyle = `rgb(${Math.round(250 - 112 * f)},${Math.round(220 - 145 * f)},${Math.round(120 - 102 * f)})`;
+    ctx.fillRect(BX + 3, BY + 22, BW - 6, BH - 25); ctx.restore();
+    c.repere('becher', BX - 8, BY - 6, BW + 16, BH + 14, 'le bécher : il brunit quand le diiode se forme');
+    c.texte(VUE === 'temperature' ? `θ = ${p.theta} °C` : `[I⁻]₀ = ${fx(p.c)} mol/L`, 645, 212, { couleur: couleurDe(p), taille: 16, align: 'center' });
+    c.texte(VUE === 'temperature' ? `[I⁻]₀ = 0,1 mol/L` : `θ = 20 °C`, 645, 234, { couleur: 'faible', taille: 14, align: 'center' });
+    c.texte(`n(H₂O₂)₀ = ${p.n} mmol`, 645, 256, { couleur: VUE === 'concentration' ? 'rose' : 'faible', taille: 14, align: 'center' });
+    c.repere('conditions', 560, 194, 170, 70, 'les conditions de l’expérience');
+    c.texte(`t = ${fx(tt, 0)} min`, 645, 296, { couleur: 'vert', taille: 16, align: 'center' });
+    c.repere('chrono', 590, 278, 110, 26, 'le chronomètre');
+    if (S.cur) c.texte(`n(I₂) = ${fx(n, 1)} mmol`, 645, 320, { couleur: couleurDe(p), taille: 15, align: 'center' });
+    if (S.running || S.pause) c.texte('(temps accéléré)', 645, 342, { couleur: 'faible', taille: 13, align: 'center' });
+    // Les courbes d'avant, en pointillés, puis la courbe en cours.
+    let legende = 0;
+    const courbe = (tr, tfin, pointille) => {
+      const p = tr.p, tau = tauDe(p);
+      if (tfin > 0) c.courbe(u => [X(u * tfin), Y(nDe(u * tfin, p))], 150, { couleur: couleurDe(p), largeur: pointille ? 2 : 2.8, pointille: pointille ? [6, 5] : null, alpha: pointille ? 0.75 : 0.95, tremble: 0 });
+      const t5 = 5 * tau;
+      if (tfin >= Math.min(t5, TMAX) && t5 <= TMAX) {
+        c.ligne(X(t5), Y(p.n) + 6, X(t5), Y(p.n) - 6, { couleur: couleurDe(p), largeur: 2, tremble: 0 });
+        c.texte(`palier vers ${fx(t5, 0)} min`, Math.min(X(t5) + 6, AX1 - 120), Y(p.n) + 20 + 16 * legende, { couleur: couleurDe(p), taille: 13 });
+      }
+      // Légende, sous le bécher : un trait de la couleur de la courbe et ses conditions.
+      const yl = 372 + 20 * legende++;
+      c.ligne(568, yl - 5, 596, yl - 5, { couleur: couleurDe(p), largeur: pointille ? 2 : 2.8, pointille: pointille ? [5, 4] : null, tremble: 0 });
+      c.texte(nomDe(p), 602, yl, { couleur: couleurDe(p), taille: 14, max: 150 });
+      c.repere(tr.id, AX, Y(p.n) - 12, Math.max(80, X(Math.min(TMAX, 3 * tau)) - AX), AY - Y(p.n) + 12, `la courbe ${nomDe(p)}`);
+    };
+    for (const g of S.fantomes) courbe(g, TMAX, true);
+    if (S.cur) courbe(S.cur, Math.min(S.t, TMAX), false);
+    // Le palier : la valeur finale, écrite sur la ligne.
+    const tous = S.fantomes.concat(S.cur && S.t >= TMAX * 0.6 ? [S.cur] : []);
+    const paliers = [...new Set(tous.map(g => g.p.n))];
+    for (const n of paliers) {
+      c.ligne(AX, Y(n), AX1 - 20, Y(n), { couleur: S.montre.palier ? 'jaune' : 'tresfaible', largeur: S.montre.palier ? 1.8 : 1.2, pointille: [3, 6], tremble: 0 });
+      c.texte(`${n} mmol`, AX1 - 20, Y(n) - 7, { couleur: S.montre.palier ? 'jaune' : 'faible', taille: 14, align: 'right' });
+      c.repere(n === 2 || paliers.length === 1 ? 'palier' : 'palier_' + n, AX, Y(n) - 22, AX1 - AX, 30, `le palier : ${n} mmol de diiode`);
+    }
+    if (S.montre.palier && paliers.length === 1 && tous.length > 1) c.texte('même palier : même état final', 300, Y(paliers[0]) - 30, { couleur: 'jaune', taille: 16, align: 'center' });
+    if (S.montre.piege) c.texte('H₂O₂ limitant doublé : le palier double', 300, 52, { couleur: 'orange', taille: 15, align: 'center' });
+    if (S.montre.debut) {
+      // Les débuts des courbes : la plus raide atteint son palier le plus tôt.
+      for (const g of tous) { const p = g.p, pente = p.n / tauDe(p), t1 = Math.min(TMAX, 0.8 * p.n / pente); c.ligne(X(0), Y(0), X(t1), Y(pente * t1), { couleur: couleurDe(p), largeur: 1.4, pointille: [2, 4], tremble: 0 }); }
+      c.texte('la plus raide au début : la température la plus élevée', 300, 52, { couleur: 'jaune', taille: 15, align: 'center', max: 470 });
+      c.repere('debut', AX - 6, Y(2.2), 120, AY - Y(2.2) + 6, 'le début des courbes : la plus raide');
+    }
+  });
+  return c.fin();
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(TMAX, S.t + dt / VITESSE);
+  if (S.t >= TMAX) {
+    S.running = false; S.fait = true; $('run').textContent = 'Mélanger';
+    bulle($('feedback'), `${nomDe(S.cur.p)} : palier vers ${fx(Math.min(TMAX, 5 * tauDe(S.cur.p)), 0)} min, ${S.cur.p.n} mmol de diiode. Change un réglage pour comparer.`, 'good');
+    pont.noter('finished'); pont.emettre();
+  } else if (performance.now() - S.emis > 400) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+const memes = (a, b) => a.theta === b.theta && a.c === b.c && a.n === b.n;
+function lancer(id, motif) {
+  if (S.cur && S.t > 0) { S.fantomes = S.fantomes.filter(g => !memes(g.p, S.cur.p)); S.fantomes.push({ id: S.cur.id, p: { ...S.cur.p } }); if (S.fantomes.length > 2) S.fantomes.shift(); }
+  S.fantomes = S.fantomes.filter(g => !memes(g.p, P));
+  S.cur = { id: id || 'courbe', p: { ...P } }; S.t = 0; S.running = true; S.pause = false; S.fait = false; S.montre = {};
+  $('run').textContent = 'Pause'; bulle($('feedback'), motif || `On mélange (${nomDe(P)}) : le diiode se forme… (temps accéléré)`);
+  pont.noter('start', { ...P }); pont.emettre();
+}
+const REF = { theta: 20, c: 0.1, n: 2 };
+const PRESETS = VUE === 'temperature' ? {
+  axes: { motif: 'les axes : n(I₂) en mmol, t en min' },
+  courbe_froid: { p: { ...REF }, id: 'courbe_froid', motif: 'la courbe à 20 °C : palier vers 30 min' },
+  courbe_chaud: { p: { ...REF, theta: 40 }, id: 'courbe_chaud', fantomes: [{ id: 'courbe_froid', p: { ...REF } }], motif: 'la courbe à 40 °C : palier vers 10 min' },
+  meme_palier: { fantomes: [{ id: 'courbe_froid', p: { ...REF } }, { id: 'courbe_chaud', p: { ...REF, theta: 40 } }], montre: { palier: true }, motif: 'le même palier, 2 mmol' },
+  plus_raide: { fantomes: [{ id: 'courbe_froid', p: { ...REF } }, { id: 'courbe_chaud', p: { ...REF, theta: 40 } }], montre: { debut: true }, motif: 'au début, la courbe à 40 °C est la plus raide' },
+} : {
+  axes: { motif: 'les axes : n(I₂) en mmol, t en min' },
+  courbe_dilue: { p: { ...REF }, id: 'courbe_dilue', motif: 'la courbe à 0,1 mol/L : palier vers 30 min' },
+  courbe_concentre: { p: { ...REF, c: 0.2 }, id: 'courbe_concentre', fantomes: [{ id: 'courbe_dilue', p: { ...REF } }], motif: 'la courbe à 0,2 mol/L : palier vers 15 min' },
+  meme_palier: { fantomes: [{ id: 'courbe_dilue', p: { ...REF } }, { id: 'courbe_concentre', p: { ...REF, c: 0.2 } }], montre: { palier: true }, motif: 'le même palier, 2 mmol : H₂O₂ est limitant' },
+  piege: { p: { ...REF, c: 0.2, n: 4 }, id: 'courbe_piege', fantomes: [{ id: 'courbe_dilue', p: { ...REF } }, { id: 'courbe_concentre', p: { ...REF, c: 0.2 } }], montre: { piege: true }, motif: 'deux fois plus de H₂O₂ : le palier double, 4 mmol' },
+};
+function moments() { const m = {}; let i = 0; for (const k of Object.keys(PRESETS)) m[k] = i++; return m; }
+function regler(p) { Object.assign(P, p); if (rTheta) rTheta.maj(P.theta); if (rC) rC.maj(P.c); if (rN) rN.maj(P.n); }
+function playUntil(q) {
+  const pr = PRESETS[q.moment]; if (!pr) return;
+  S.fantomes = (pr.fantomes || []).map(g => ({ id: g.id, p: { ...g.p } }));
+  if (pr.p) { regler(pr.p); S.cur = null; lancer(pr.id, 'Je trace ' + pr.motif + '…'); S.montre = { ...(pr.montre || {}) }; }
+  else { if (S.fantomes.length) regler(S.fantomes[S.fantomes.length - 1].p); S.cur = null; S.t = 0; S.running = false; S.pause = false; S.fait = S.fantomes.length > 0; S.montre = { ...(pr.montre || {}) }; $('run').textContent = 'Mélanger'; bulle($('feedback'), 'Regarde : ' + pr.motif + '.'); }
+  S.motif = pr.motif; scene.sale = true;
+  pont.noter('play_until', { moment: q.moment }); pont.emettre();
+}
+function ceQuiSeVoit() {
+  const m = ['Graphe n(I₂) en mmol (0 à 4) en fonction de t en min (0 à 40) ; à droite un bécher qui brunit, les conditions et le chronomètre.'];
+  for (const g of S.fantomes) m.push(`En pointillés : ${nomDe(g.p)}, palier ${g.p.n} mmol vers ${fx(Math.min(TMAX, 5 * tauDe(g.p)), 0)} min.`);
+  if (S.cur) m.push(`Courbe en cours (${nomDe(S.cur.p)}) : t = ${fx(Math.min(S.t, TMAX), 0)} min, n(I₂) = ${fx(nDe(Math.min(S.t, TMAX), S.cur.p), 1)} mmol ; palier ${S.cur.p.n} mmol vers ${fx(Math.min(TMAX, 5 * tauDe(S.cur.p)), 0)} min.`);
+  else if (!S.fantomes.length) m.push('Aucune courbe encore : on n’a pas mélangé.');
+  if (S.montre.palier) m.push('Le palier est surligné : même état final.');
+  if (S.montre.debut) m.push('Les débuts des courbes sont soulignés : la plus raide est la plus chaude.');
+  if (S.montre.piege) m.push('Écrit : H₂O₂ limitant doublé, le palier double.');
+  return m.join(' ');
+}
+function start() { lancer(); }
+function pause() { if (!S.running) return; S.running = false; S.pause = true; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running || !S.pause) return start(); S.running = true; S.pause = false; $('run').textContent = 'Pause'; pont.noter('resume'); pont.emettre(); }
+function reset() { S.t = 0; S.running = false; S.pause = false; S.fait = false; S.cur = null; S.fantomes = []; S.montre = {}; scene.sale = true; $('run').textContent = 'Mélanger'; bulle($('feedback'), accueil); pont.emettre(); }
+function setParameters(p) {
+  const q = {};
+  if (Number.isFinite(+p.theta_c)) q.theta = Math.min(60, Math.max(20, Math.round(+p.theta_c / 5) * 5));
+  if (VUE === 'concentration' && Number.isFinite(+p.c_iodure)) q.c = Math.min(0.3, Math.max(0.1, Math.round(+p.c_iodure * 20) / 20));
+  if (VUE === 'concentration' && Number.isFinite(+p.n_h2o2_mmol)) q.n = Math.min(4, Math.max(1, Math.round(+p.n_h2o2_mmol)));
+  if (!Object.keys(q).length) return;
+  regler(q); pont.noter('set_parameters', { ...q }); lancer();
+}
+let rTheta = null, rC = null, rN = null;
+if (VUE === 'temperature') {
+  rTheta = window.Tableau.curseur({ id: 'theta', label: 'θ =', min: 20, max: 60, step: 5, valeur: 20, unite: '°C', commande: 'set_parameters', onchange: v => setParameters({ theta_c: v }) });
+  $('reglage').replaceChildren(rTheta);
+} else {
+  rC = window.Tableau.curseur({ id: 'c', label: '[I⁻]₀ =', min: 0.1, max: 0.3, step: 0.05, valeur: 0.1, unite: 'mol/L', commande: 'set_parameters', onchange: v => setParameters({ c_iodure: v }) });
+  rN = window.Tableau.curseur({ id: 'n', label: 'n(H₂O₂)₀ =', min: 1, max: 4, step: 1, valeur: 2, unite: 'mmol', commande: 'set_parameters', onchange: v => setParameters({ n_h2o2_mmol: v }) });
+  $('reglage').replaceChildren(rC, rN);
+}
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+const accueil = VUE === 'temperature' ? 'Mélange à 20 °C, puis réchauffe et compare les deux courbes.' : 'Mélange, puis change [I⁻]₀ ou la quantité de H₂O₂ et compare.';
+window.Tableau.explication({ [VUE]: VUE === 'temperature' ? [
+  { repere: 'courbe_froid', texte: 'À 20 °C, la courbe monte lentement : palier vers 30 minutes.' },
+  { repere: 'courbe_chaud', texte: 'À 40 °C, elle monte vite : palier vers 10 minutes.' },
+  { repere: 'palier', texte: 'Même palier : la température change la durée, pas l’état final.' },
+] : [
+  { repere: 'courbe_concentre', texte: 'Plus d’ions iodure : la courbe monte plus vite.' },
+  { repere: 'palier', texte: 'Même palier, 2 mmol : l’eau oxygénée est le réactif limitant.' },
+  { repere: 'courbe_piege', texte: 'Deux fois plus d’eau oxygénée : le palier double.' },
+] });
+const commandes = ['start', 'pause', 'resume', 'reset', 'set_parameters', 'play_until'];
+const config = { id: 'tlr_tableau_courbe_reglable', version: '1.0', title: 'n(I₂) en fonction du temps, à régler', variants: [{ id: VUE, label: VUE }], commands: commandes,
+  command_schema: { set_parameters: VUE === 'temperature' ? { theta_c: '20..60 (pas de 5 °C)' } : { c_iodure: '0,1..0,3 mol/L (pas de 0,05)', n_h2o2_mmol: '1..4 mmol' },
+    play_until: { moment: Object.keys(PRESETS).join(' | ') } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: VUE === 'temperature'
+    ? 'Courbe n(I₂)(t) de H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O, [I⁻]₀ = 0,1 mol/L, n(H₂O₂)₀ = 2 mmol. Curseur de température 20 à 60 °C. 20 °C : palier vers 30 min ; 40 °C : vers 10 min ; même palier 2 mmol. Les courbes d’avant restent en pointillés.'
+    : 'Courbe n(I₂)(t) de H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O à 20 °C. Curseurs [I⁻]₀ (0,1 à 0,3 mol/L) et n(H₂O₂)₀ (1 à 4 mmol). [I⁻]₀ plus grande : palier atteint plus tôt, même palier ; H₂O₂ est limitant : le palier vaut n(H₂O₂)₀.',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : (S.fait ? 'finished' : 'idle'), ce_qui_se_voit: ceQuiSeVoit(), moments: moments(),
+    parameters: VUE === 'temperature' ? { theta_c: P.theta } : { c_iodure: P.c, n_h2o2_mmol: P.n }, vue: VUE, time_min: +Math.min(S.t, TMAX).toFixed(1),
+    courbes_precedentes: S.fantomes.map(g => nomDe(g.p)) }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, pause, resume, reset, set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), accueil);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

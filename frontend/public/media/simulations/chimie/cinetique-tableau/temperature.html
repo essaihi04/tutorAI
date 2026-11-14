@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Plus chaud, plus vite — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="cin.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Le même mélange à 20 °C et à une température réglable : deux béchers qui brunissent, les deux courbes x(t), les tangentes à l'origine ou les temps de demi-réaction"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume reset play_until set_time">Lancer</button>
+    <span id="reglage" data-professor-control="set_parameters"></span>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script src="deroule.js"></script>
+<script>
+/*
+ * Plus chaud, plus vite (14 novembre 2026, professeur règle 28 : « changer la température et voir les changements »).
+ * Exemple A : H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O, V = 100 mL, x_max = 2,0 mmol. Le même mélange à 20 °C (témoin) et à θ (curseur,
+ * 10 à 60 °C, défaut 40 °C) : les deux béchers brunissent, chacun à sa vitesse, et sa courbe x(t) se trace en même temps.
+ * Vues (?vue=) : vitesse (défaut, diapo ci_v8_temperature : tangentes à l'origine, v(0), même palier)
+ *              | demi (diapo ci_h4_comparer : x_f/2 et les deux t₁/₂).
+ * Modèle POUR LE CALCUL seulement (jamais écrit) : x(t) = 2,0·(1 − e^(−k·t)), k(20 °C) = 1/8 min⁻¹, k(θ) = k(20)·3^((θ − 20)/20)
+ * (40 °C : 3 fois plus vite, comme la diapo : pentes 0,25 et 0,75 mmol/min ; t₁/₂ = 5,5 et 1,8 min).
+ * Remplace les puces « pentes 0,25 / 0,75 » et « t₁/₂ 5,5 / 1,8 » : les valeurs s'écrivent là où on les voit.
+ */
+const { fr } = window.Tableau;
+const XF = 2.0, V_L = 0.100, K20 = 1 / 8;
+const P = { theta: 40 };
+const k = th => K20 * 3 ** ((th - 20) / 20);
+const x = (kk, t) => XF * (1 - Math.exp(-kk * t));
+const tDemi = kk => Math.LN2 / kk;
+// Graphe : t de 0 à 40 min, x de 0 à 2,5 mmol.
+const G = { x0: 250, y0: 360, w: 470, h: 270, tmax: 40, xmax: 2.5 };
+const X = t => G.x0 + t / G.tmax * G.w, Y = v => G.y0 - v / G.xmax * G.h;
+const BECHERS = [{ id: 'becher_20', y: 105, couleur: 'cyan', th: () => 20, nomCourbe: 'courbe_20' }, { id: 'becher_theta', y: 268, couleur: 'orange', th: () => P.theta, nomCourbe: 'courbe_40' }];
+const LEG = { x: 400, y: 252, dy: 25 };
+
+function etapes(vue) {
+  if (vue === 'demi') return [
+    { nom: 'axes', duree: .8, motif: 'les axes : x (mmol) en fonction de t (min)' },
+    { nom: 'courbe_lente', duree: 3, motif: 'la courbe à 20 °C', bulle: () => 'À 20 °C, le mélange brunit lentement.' },
+    { nom: 'courbe_rapide', duree: 2.5, motif: `la courbe à ${P.theta} °C`, bulle: () => `À ${P.theta} °C, le même mélange brunit plus vite.` },
+    { nom: 'deux_t_demi', duree: 2.4, motif: 'x_f/2 = 1,0 mmol et les deux t₁/₂' },
+    { nom: 'conclusion', duree: 1, motif: 'plus t₁/₂ est petit, plus c’est rapide' },
+  ];
+  return [
+    { nom: 'axes', duree: .8, motif: 'les axes : x (mmol) en fonction de t (min)' },
+    { nom: 'courbe_20', duree: 3, motif: 'la courbe à 20 °C', bulle: () => 'À 20 °C, le mélange brunit lentement.' },
+    { nom: 'courbe_40', duree: 2.5, motif: `la courbe à ${P.theta} °C`, bulle: () => `À ${P.theta} °C, le même mélange brunit plus vite.` },
+    { nom: 'tangentes', duree: 1.6, motif: 'les tangentes à l’origine et leurs pentes' },
+    { nom: 'comparer', duree: 1, motif: `v(0) à ${P.theta} °C comparée à 20 °C` },
+    { nom: 'meme_final', duree: 1, motif: 'le même palier : le même état final' },
+  ];
+}
+
+function becher(c, b, part, kk) {
+  const t = part * G.tmax, xv = x(kk, t), x0 = 34, w = 84, y = b.y, h = 84;
+  // Le bécher (bord ouvert en haut) et le mélange qui brunit avec le diiode formé.
+  c.direct(() => {
+    const ctx = c.ctx; ctx.globalAlpha = .08 + .55 * xv / XF; ctx.fillStyle = '#b45309';
+    ctx.fillRect(x0 + 3, y + 22, w - 6, h - 25); ctx.globalAlpha = 1;
+  });
+  c.trait([[x0 - 4, y], [x0, y + h], [x0 + w, y + h], [x0 + w + 4, y]], { couleur: 'blanc', largeur: 2 });
+  c.ligne(x0 + 2, y + 22, x0 + w - 2, y + 22, { couleur: 'faible', largeur: 1.2 });
+  return { t, xv };
+}
+
+function dessiner(c, D) {
+  const S = D.S, vue = S.vue, nomL = vue === 'demi' ? 'courbe_lente' : 'courbe_20', nomR = vue === 'demi' ? 'courbe_rapide' : 'courbe_40';
+  D.scene.cadre(23);
+  c.texte('H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O : mêmes quantités, deux températures', 380, 24, { couleur: 'blanc', taille: 16, align: 'center' });
+  // Axes (toujours là) : graduations du temps tous les 10 min, de x tous les 0,5 mmol.
+  const L = G.w + 22, H = G.h + 22;
+  c.axe(G.x0, G.y0, G.x0 + L, G.y0, [0, 10, 20, 30, 40].map(t => [t / G.tmax * G.w / L, t ? String(t) : '0']), { taille: 13 });
+  c.axe(G.x0, G.y0, G.x0, G.y0 - H, [.5, 1, 1.5, 2].map(v => [v / G.xmax * G.h / H, fr(v, 1)]), { vertical: true, taille: 13 });
+  c.texte('t (min)', G.x0 + L - 4, G.y0 + 38, { couleur: 'faible', taille: 14, align: 'right' });
+  c.texte('x (mmol)', G.x0 + 8, G.y0 - H - 2, { couleur: 'faible', taille: 14 });
+  c.repere('axes', G.x0 - 40, G.y0 - H - 16, L + 50, H + 56, 'les axes x(t)');
+  c.ligne(G.x0, Y(XF), G.x0 + G.w, Y(XF), { couleur: 'tresfaible', largeur: 1.2, pointille: [5, 6] });
+  // Les deux béchers, à gauche, avec leur température.
+  c.texte('20 °C', 76, BECHERS[0].y - 10, { couleur: 'cyan', taille: 17, align: 'center' });
+  c.direct(() => c.texte(`θ = ${P.theta} °C`, 76, BECHERS[1].y - 10, { couleur: 'orange', taille: 17, align: 'center' }));
+  c.repere('thermometre', 20, BECHERS[1].y - 30, 120, 26, 'la température du second bécher');
+  const kL = k(20), kR = k(P.theta);
+  const traces = [[BECHERS[0], nomL, kL, 'cyan'], [BECHERS[1], nomR, kR, 'orange']];
+  for (const [b, nom, kk, col] of traces) {
+    const part = D.p(nom), r = becher(c, b, part, kk);
+    c.direct(() => {
+      if (part > 0) c.texte(`x = ${fr(r.xv, 2)} mmol`, 76, b.y + 108, { couleur: col, taille: 14, align: 'center' });
+      c.repere(b.id, 24, b.y - 4, 104, 120, b.id === 'becher_20' ? 'le bécher à 20 °C' : `le bécher à ${P.theta} °C`);
+      if (part <= 0) return;
+      // La courbe se trace avec le temps de la réaction ; un point la suit.
+      c.courbe(u => [X(u * r.t), Y(x(kk, u * r.t))], 90, { couleur: col, largeur: 2.6 });
+      if (part < 1) c.point(X(r.t), Y(r.xv), 5, col);
+      if (part >= 1) {
+        // L'étiquette sous sa courbe, à t = 14 min (la plus haute entre les deux courbes, la plus basse dessous).
+        const lab = col === 'cyan' ? '20 °C' : `${P.theta} °C`, autre = col === 'cyan' ? kR : kL, haute = kk > autre || (kk === autre && col === 'cyan');
+        c.texte(lab, X(haute ? 14 : 19), Y(x(kk, haute ? 14 : 19)) + (haute ? 17 : 24), { couleur: col, taille: 14 });
+      }
+    });
+    c.repere(nom, G.x0, Y(XF) - 10, G.w, G.y0 - Y(XF) + 10, col === 'cyan' ? 'la courbe à 20 °C' : `la courbe à ${P.theta} °C`);
+  }
+  if (vue === 'demi') dessinerDemi(c, D, kL, kR); else dessinerVitesse(c, D, kL, kR);
+  return c.fin();
+}
+
+function dessinerVitesse(c, D, kL, kR) {
+  if (D.commence('tangentes')) {
+    const p = D.p('tangentes');
+    for (const [kk, col, id] of [[kL, 'cyan', 'tangente_20'], [kR, 'orange', 'tangente_40']]) {
+      const pente = XF * kk, te = Math.min(G.tmax, 2.45 / pente) * p;
+      c.direct(() => c.ligne(G.x0, G.y0, X(te), Y(pente * te), { couleur: col, largeur: 1.8, pointille: [7, 5] }));
+      c.repere(id, G.x0, Y(Math.min(2.45, pente * G.tmax)), Math.max(30, X(Math.min(G.tmax, 2.45 / pente)) - G.x0), G.y0 - Y(Math.min(2.45, pente * G.tmax)), col === 'cyan' ? 'la tangente à 20 °C' : `la tangente à ${P.theta} °C`);
+    }
+    D.ecrire(c, 'tangentes');
+    c.texte(`20 °C : pente à l’origine ${fr(XF * kL, 2)} mmol/min`, LEG.x, LEG.y, { couleur: 'cyan', taille: 16 });
+    c.direct(() => c.texte(`${P.theta} °C : pente à l’origine ${fr(XF * kR, 2)} mmol/min`, LEG.x, LEG.y + LEG.dy, { couleur: 'orange', taille: 16 }));
+  }
+  if (D.commence('comparer')) {
+    D.ecrire(c, 'comparer');
+    c.direct(() => {
+      c.texte(`v(0) = (1/0,100) × ${fr(XF * kR, 2)} = ${fr(XF * kR / V_L, 1)} mmol·L⁻¹·min⁻¹`, LEG.x, LEG.y + 2 * LEG.dy, { couleur: 'orange', taille: 16, max: 340 });
+      const r = kR / kL;
+      c.texte(Math.abs(r - 1) < .01 ? 'autant qu’à 20 °C' : `soit ${fr(r > 1 ? r : 1 / r, 1)} fois ${r > 1 ? 'plus' : 'moins'} qu’à 20 °C`, LEG.x, LEG.y + 3 * LEG.dy, { couleur: 'jaune', taille: 16 });
+    });
+    c.repere('phrase', LEG.x - 6, LEG.y + 2 * LEG.dy - 20, 340, 50, 'v(0) comparée');
+  }
+  if (D.commence('meme_final')) {
+    D.ecrire(c, 'meme_final');
+    c.direct(() => c.ligne(G.x0, Y(XF), G.x0 + G.w, Y(XF), { couleur: 'jaune', largeur: 2, pointille: [6, 5] }));
+    c.texte('même palier x_f = 2,0 mmol : même état final', G.x0 + G.w, Y(XF) - 10, { couleur: 'jaune', taille: 16, align: 'right' });
+    c.repere('palier', G.x0 + 20, Y(XF) - 32, G.w - 20, 40, 'le palier x_f = 2,0 mmol');
+  }
+}
+
+function dessinerDemi(c, D, kL, kR) {
+  if (!D.commence('deux_t_demi')) return;
+  const p = D.p('deux_t_demi'), tL = tDemi(kL), tR = tDemi(kR), tMax = Math.max(tL, tR);
+  c.direct(() => {
+    const ph = Math.min(1, p * 2);   // d'abord l'horizontale à x_f/2, puis les deux verticales
+    c.ligne(G.x0, Y(XF / 2), X(Math.min(G.tmax, tMax) * ph), Y(XF / 2), { couleur: 'jaune', largeur: 1.6, pointille: [5, 5] });
+    if (p > .5) {
+      const pv = (p - .5) * 2;
+      for (const [t, col] of [[tL, 'cyan'], [tR, 'orange']]) if (t <= G.tmax) c.ligne(X(t), Y(XF / 2), X(t), Y(XF / 2) + (G.y0 - Y(XF / 2)) * pv, { couleur: col, largeur: 1.6, pointille: [5, 5] });
+    }
+  });
+  D.ecrire(c, 'deux_t_demi');
+  c.texte('x_f = 2,0 mmol, donc x_f/2 = 1,0 mmol', LEG.x, LEG.y, { couleur: 'jaune', taille: 16 });
+  c.texte(`20 °C : t₁/₂ ≈ ${fr(tL, 1)} min`, LEG.x, LEG.y + LEG.dy, { couleur: 'cyan', taille: 16 });
+  c.direct(() => c.texte(`${P.theta} °C : t₁/₂ ≈ ${fr(tR, 1)} min`, LEG.x, LEG.y + 2 * LEG.dy, { couleur: 'orange', taille: 16 }));
+  c.repere('t_demi_lente', LEG.x - 6, LEG.y + LEG.dy - 20, 300, 26, 't₁/₂ à 20 °C');
+  c.repere('t_demi_rapide', LEG.x - 6, LEG.y + 2 * LEG.dy - 20, 300, 26, `t₁/₂ à ${P.theta} °C`);
+  if (D.commence('conclusion')) {
+    D.ecrire(c, 'conclusion');
+    c.texte('plus t₁/₂ est petit, plus la transformation est rapide', LEG.x - 40, LEG.y + 3 * LEG.dy + 4, { couleur: 'jaune', taille: 16, max: 360 });
+    c.repere('conclusion', LEG.x - 46, LEG.y + 3 * LEG.dy - 18, 370, 30, 'la conclusion');
+  }
+}
+
+function voir(D) {
+  const S = D.S, kR = k(P.theta), m = [`Mêmes quantités initiales à 20 °C et à ${P.theta} °C (curseur θ) ; graphe x (mmol) en fonction de t (min), palier pointillé à 2,0 mmol.`];
+  const nomL = S.vue === 'demi' ? 'courbe_lente' : 'courbe_20', nomR = S.vue === 'demi' ? 'courbe_rapide' : 'courbe_40';
+  if (D.commence(nomL)) m.push('La courbe à 20 °C (bleu) est tracée' + (D.vu(nomL) ? '' : ' en ce moment') + '.');
+  if (D.commence(nomR)) m.push(`La courbe à ${P.theta} °C (orange) ${D.vu(nomR) ? 'est tracée' : 'se trace'} : elle monte ${kR > K20 ? 'plus vite' : kR < K20 ? 'moins vite' : 'pareil'}.`);
+  if (S.vue !== 'demi') {
+    if (D.commence('tangentes')) m.push(`Tangentes à l’origine : pente ${fr(XF * K20, 2)} mmol/min à 20 °C, ${fr(XF * kR, 2)} mmol/min à ${P.theta} °C.`);
+    if (D.commence('comparer')) m.push(`Écrit : v(0) = ${fr(XF * kR / V_L, 1)} mmol·L⁻¹·min⁻¹ à ${P.theta} °C, ${fr(kR / K20, 1)} fois la valeur à 20 °C.`);
+    if (D.commence('meme_final')) m.push('Le palier 2,0 mmol est le même : même état final.');
+  } else {
+    if (D.commence('deux_t_demi')) m.push(`x_f/2 = 1,0 mmol ; t₁/₂ ≈ ${fr(tDemi(K20), 1)} min à 20 °C et ${fr(tDemi(kR), 1)} min à ${P.theta} °C.`);
+    if (D.commence('conclusion')) m.push('Écrit : plus t₁/₂ est petit, plus la transformation est rapide.');
+  }
+  return m.join(' ');
+}
+
+const regl = window.Tableau.curseur({ id: 'theta', label: 'Bécher 2 : θ =', min: 10, max: 60, step: 5, valeur: P.theta, unite: '°C', commande: 'set_parameters',
+  onchange: v => DER.setParameters({ temperature_c: v }) });
+document.getElementById('reglage').replaceChildren(regl);
+
+const DER = window.Deroule({
+  id: 'cinetique_tableau_temperature', titre: 'Plus chaud, plus vite', vues: ['vitesse', 'demi'], etapes, dessiner, voir,
+  params: () => ({ temperature_c: P.theta }),
+  appliquer: p => {
+    const v = +p.temperature_c; if (!Number.isFinite(v)) return false;
+    P.theta = Math.min(60, Math.max(10, Math.round(v / 5) * 5)); regl.maj(P.theta); return true;
+  },
+  schema: { temperature_c: '10..60 (pas de 5 °C), température du second bécher ; le bécher témoin reste à 20 °C' },
+  depart: () => 'Les deux béchers démarrent ensemble : regarde lequel brunit le plus vite.',
+  accueil: () => 'Même mélange, deux températures. Lance, puis change θ avec le curseur.',
+  apresReglage: () => `Bécher 2 à ${P.theta} °C : pente à l’origine ${fr(XF * k(P.theta), 2)} mmol/min, t₁/₂ ≈ ${fr(tDemi(k(P.theta)), 1)} min, palier toujours 2,0 mmol.`,
+  messageFin: D => D.S.vue === 'demi' ? `t₁/₂ ≈ ${fr(tDemi(K20), 1)} min à 20 °C, ${fr(tDemi(k(P.theta)), 1)} min à ${P.theta} °C : même palier, durées différentes.`
+    : (r => `Même palier 2,0 mmol ; à ${P.theta} °C la tangente à l’origine est ${Math.abs(r - 1) < .01 ? 'aussi raide' : fr(r > 1 ? r : 1 / r, 1) + ' fois ' + (r > 1 ? 'plus' : 'moins') + ' raide'} qu’à 20 °C.`)(k(P.theta) / K20),
+  texte: 'Exemple A (H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O, V = 100 mL, x_max = 2,0 mmol) à 20 °C et à θ (10 à 60 °C) : deux béchers qui brunissent et leurs courbes x(t). À 40 °C : pente à l’origine 0,75 mmol/min contre 0,25 à 20 °C, v(0) = 7,5 mmol·L⁻¹·min⁻¹ (trois fois plus), t₁/₂ ≈ 1,8 min contre 5,5 min ; même palier x_f = 2,0 mmol. La température est un facteur cinétique : elle change la vitesse, pas l’état final.',
+  explication: [
+    { repere: 'becher_20', texte: 'Le bécher témoin, à vingt degrés : il brunit lentement.' },
+    { repere: 'becher_theta', texte: 'Le même mélange, plus chaud : il brunit plus vite.' },
+    { repere: 'palier', texte: 'Les deux courbes finissent au même palier : même état final.' },
+    { repere: 'thermometre', texte: 'Change la température du second bécher et regarde sa courbe.' },
+  ],
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

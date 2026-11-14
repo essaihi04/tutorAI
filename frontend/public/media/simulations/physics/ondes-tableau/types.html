@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Transversale ou longitudinale — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ondes.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Quatre ondes à la craie : une corde, un ressort, le son dans l'air et des rides sur l'eau ; on compare le mouvement d'un point à la direction de propagation"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Secouer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Transversale ou longitudinale ? (14 novembre 2026, règle 28 du professeur) : remplace le tableau
+ * « onde / perturbation-propagation / type / dimensions » de la diapo wx_i3_types.
+ * Quatre cases, jouées l'une après l'autre au rythme de la voix :
+ *   corde   : la bosse avance vers la droite, le point M monte et descend → perpendiculaires → transversale ;
+ *   ressort : la compression avance, la spire M avance et recule → même direction → longitudinale ;
+ *   son     : le haut-parleur pousse l'air, les grains d'air vont et viennent dans le sens de propagation → longitudinale ;
+ *   eau     : vue de dessus, les rides s'étalent dans le plan.
+ * À la fin, le nombre de dimensions s'écrit dans chaque case (1, 1, 3, 2). Un seul bouton.
+ */
+const { bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const CASES = {
+  corde: { x: 10, y: 8, w: 365, h: 200, titre: 'Une corde' },
+  ressort: { x: 385, y: 8, w: 365, h: 200, titre: 'Un ressort' },
+  son: { x: 10, y: 214, w: 365, h: 200, titre: 'Le son dans l’air' },
+  eau: { x: 385, y: 214, w: 365, h: 200, titre: 'L’eau (vue de dessus)' },
+};
+/* Calendrier (s) : chaque case joue à son tour. */
+const A0 = 0.2, VA = 150, XA0 = 40, XM = 200, XA1 = 355;           // corde
+const B0 = 2.9, VB = 150, XB0 = 405, NSP = 27, PAS = 12, IM = 13;    // ressort (spire M = n° 13)
+const C0 = 5.6, VC = 120, SPX = 52, SPY = 318, LC = 30;               // son (longueur entre deux compressions)
+const D0 = 8.3, VD = 60, EX = 567, EY = 320;                          // eau
+const T = {
+  corde: A0 + (XM - XA0) / VA, ressort: B0 + (XB0 + IM * PAS - XB0) / VB,
+  son: C0 + 2.0, eau: D0 + 1.4, fin: 10.6,
+};
+const TFIN = 11.0;
+const S = { t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0 };
+const vu = nom => S.t >= T[nom] - 1e-6;
+
+function bosse(x, xc, w) { return Math.exp(-(((x - xc) / w) ** 2)); }
+
+function dessiner(c) {
+  scene.cadre(13);
+  for (const [id, k] of Object.entries(CASES)) {
+    c.rect(k.x, k.y, k.w, k.h, { couleur: 'tresfaible', largeur: 1.4, duree: .35 });
+    c.texte(k.titre, k.x + 12, k.y + 24, { couleur: 'blanc', taille: 17 });
+    c.repere(id, k.x, k.y, k.w, k.h, { corde: 'la corde', ressort: 'le ressort', son: 'le son dans l’air', eau: 'les rides sur l’eau' }[id]);
+  }
+  // Décor fixe : la main en S, le haut-parleur, le point de chute de la goutte.
+  c.texte('S', XA0 - 18, 126, { couleur: 'faible', taille: 15 });
+  c.texte('S', XB0 - 18, 126, { couleur: 'faible', taille: 15 });
+  c.rect(SPX - 30, SPY - 14, 14, 28, { couleur: 'blanc', largeur: 2 });
+  c.trait([[SPX - 16, SPY - 14], [SPX - 2, SPY - 30], [SPX - 2, SPY + 30], [SPX - 16, SPY + 14]], { couleur: 'blanc', largeur: 2 });
+  c.direct(() => {
+    const t = S.t, joue = S.running || S.pause || S.fait;
+    /* ── La corde ── */
+    const xa = XA0 + VA * (t - A0), ya = x => 120 - (joue && t > A0 ? 38 * bosse(x, xa, 22) : 0);
+    c.courbe(u => { const x = XA0 + u * (XA1 - XA0); return [x, ya(x)]; }, 90, { couleur: 'blanc', largeur: 2.6 });
+    c.point(XM, ya(XM), 6, 'rouge'); c.texte('M', XM - 6, 146, { couleur: 'rouge', taille: 15 });
+    if (t >= T.corde - 0.35) {
+      c.fleche(XA0 + 40, 64, XA1 - 30, 64, { couleur: 'cyan', largeur: 2 }); c.texte('propagation', 120, 56, { couleur: 'cyan', taille: 15 });
+      c.fleche(XM + 18, 128, XM + 18, 78, { couleur: 'orange', largeur: 2.2, tete: 9 }); c.fleche(XM + 18, 78, XM + 18, 128, { couleur: 'orange', largeur: 2.2, tete: 9 });
+      c.texte('M monte, descend', XM + 28, 100, { couleur: 'orange', taille: 15 });
+      c.repere('fleches_corde', XA0 + 30, 44, XA1 - XA0 - 30, 90, 'le mouvement de M et la propagation');
+    }
+    if (t >= T.corde + 0.5) {
+      c.texte('⊥ : onde transversale', 24, 194, { couleur: 'jaune', taille: 17 });
+      c.repere('corde_type', 18, 174, 220, 28, 'perpendiculaires : transversale');
+    }
+    /* ── Le ressort ── */
+    const xb = XB0 + VB * (t - B0), dep = x0 => (joue && t > B0 ? 11 * bosse(x0, xb, 24) : 0);
+    const pts = [];
+    for (let i = 0; i <= NSP; i++) { const x0 = XB0 + i * PAS; pts.push([x0 + dep(x0), 100], [x0 + PAS / 2 + dep(x0 + PAS / 2), 140]); }
+    c.trait(pts, { couleur: 'blanc', largeur: 2, tremble: .3 });
+    const xm = XB0 + IM * PAS; c.point(xm + dep(xm), 100, 6, 'rouge'); c.texte('M', xm - 6, 92, { couleur: 'rouge', taille: 15 });
+    if (t >= T.ressort - 0.35) {
+      c.fleche(XB0 + 30, 64, 720, 64, { couleur: 'cyan', largeur: 2 }); c.texte('propagation', 470, 56, { couleur: 'cyan', taille: 15 });
+      c.fleche(xm - 22, 158, xm + 24, 158, { couleur: 'orange', largeur: 2.2, tete: 9 }); c.fleche(xm + 24, 158, xm - 22, 158, { couleur: 'orange', largeur: 2.2, tete: 9 });
+      c.texte('M avance, recule', xm + 34, 164, { couleur: 'orange', taille: 15 });
+      c.repere('fleches_ressort', XB0, 44, 340, 130, 'le mouvement de M et la propagation');
+    }
+    if (t >= T.ressort + 0.5) {
+      c.texte('∥ : onde longitudinale', 399, 194, { couleur: 'jaune', taille: 17 });
+      c.repere('ressort_type', 393, 174, 230, 28, 'même direction : longitudinale');
+    }
+    /* ── Le son ── */
+    const fc = VC * (t - C0);                       // rayon du front
+    if (joue && t > C0) {
+      for (let r = fc % LC; r <= Math.min(fc, 300); r += LC) {
+        if (r < 8) continue;
+        const k = CASES.son, dans = (x, y) => x > k.x + 4 && x < k.x + k.w - 4 && y > k.y + 34 && y < k.y + k.h - 30;
+        c.courbe(u => { const a = -1.3 + 2.6 * u, x = SPX + r * Math.cos(a), y = SPY + r * Math.sin(a); return dans(x, y) ? [x, y] : null; }, 40, { couleur: 'cyan', largeur: 1.6, alpha: .75 });
+      }
+    }
+    // Grains d'air : ils vont et viennent le long de la propagation (longitudinale), seulement là où le son est arrivé.
+    for (let i = 0; i < 9; i++) for (let j = -2; j <= 2; j++) {
+      const x0 = SPX + 40 + i * 30, y0 = SPY + j * 26, r = Math.hypot(x0 - SPX, y0 - SPY), a = Math.atan2(y0 - SPY, x0 - SPX);
+      const d = joue && t > C0 && r < fc ? 6 * Math.sin(2 * Math.PI * (r - fc) / LC) : 0;
+      const marque = i === 4 && j === 0;
+      c.point(x0 + d * Math.cos(a), y0 + d * Math.sin(a), marque ? 5 : 2.4, marque ? 'rouge' : 'faible');
+    }
+    if (t >= T.son - 0.4) {
+      c.fleche(SPX + 120 - 16, SPY + 22, SPX + 120 + 16, SPY + 22, { couleur: 'orange', largeur: 2, tete: 8 }); c.fleche(SPX + 120 + 16, SPY + 22, SPX + 120 - 16, SPY + 22, { couleur: 'orange', largeur: 2, tete: 8 });
+      c.texte('∥ : longitudinale', 24, 400, { couleur: 'jaune', taille: 17 });
+      c.texte('pas dans le vide', 200, 400, { couleur: 'faible', taille: 15 });
+      c.repere('son_type', 18, 380, 330, 28, 'le son : longitudinale, il lui faut un milieu matériel');
+    }
+    /* ── L'eau, vue de dessus ── */
+    const fd = VD * (t - D0);
+    c.point(EX, EY, 3, 'blanc');
+    if (joue && t > D0) for (let k = 0; k < 4; k++) { const r = fd - k * 24; if (r > 4 && r < 92) c.cercle(EX, EY, r, { couleur: 'bleu', largeur: 1.8, alpha: .85 - k * .15 }); }
+    if (t >= T.eau - 0.2) {
+      for (const a of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) c.fleche(EX + 30 * Math.cos(a), EY + 30 * Math.sin(a), EX + 72 * Math.cos(a), EY + 72 * Math.sin(a), { couleur: 'cyan', largeur: 1.6, tete: 7 });
+      c.texte('⊥ : transversale', 399, 400, { couleur: 'jaune', taille: 17 });
+      c.repere('eau_type', 393, 380, 200, 28, 'l’eau monte et descend : transversale');
+    }
+    /* ── Les dimensions, écrites à la fin ── */
+    if (vu('fin')) {
+      const dims = { corde: '1 dimension', ressort: '1 dimension', son: '3 dimensions', eau: '2 dimensions' };
+      for (const [id, k] of Object.entries(CASES)) {
+        c.texte(dims[id], k.x + k.w - 12, k.y + 24, { couleur: 'vert', taille: 17, align: 'right' });
+        c.repere('dim_' + id, k.x + k.w - 120, k.y + 6, 114, 26, dims[id]);
+      }
+    }
+  });
+  return c.fin();
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(TFIN, S.t + dt);
+  if (arreterSiInstantAtteint()) return true;
+  if (S.t >= TFIN) {
+    S.running = false; S.fait = true; $('run').textContent = 'Secouer';
+    bulle($('feedback'), 'Corde et eau : transversales. Ressort et son : longitudinales.', 'good');
+    pont.noter('finished'); pont.emettre();
+  } else if (performance.now() - S.emis > 400) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+const MOTIFS = {
+  corde: 'la bosse passe en M : M monte pendant que l’onde va vers la droite',
+  ressort: 'la compression passe en M : M avance dans le sens de la propagation',
+  son: 'le son avance dans l’air : les grains d’air vont et viennent dans le même sens',
+  eau: 'les rides s’étalent sur la surface de l’eau',
+  fin: 'les dimensions sont écrites : 1, 1, 3 et 2',
+};
+function playUntil(p) {
+  const nom = p.moment in T ? p.moment : null, cible = nom ? T[nom] : +p.progress * TFIN;
+  if (!Number.isFinite(cible)) return;
+  if (!(S.running || S.pause) || S.t >= cible - 1e-3) start();
+  S.jusqua = cible; S.motif = nom ? MOTIFS[nom] : '';
+  if (S.pause) { S.running = true; S.pause = false; $('run').textContent = 'Pause'; }
+  pont.noter('play_until', { moment: nom }); pont.emettre();
+}
+function arreterSiInstantAtteint() {
+  if (S.jusqua == null || S.t < S.jusqua) return false;
+  S.t = S.jusqua; S.jusqua = null; S.running = false; S.pause = true; $('run').textContent = 'Reprendre';
+  bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || 'instant choisi') + '.'); pont.noter('pause'); pont.emettre();
+  return true;
+}
+function ceQuiSeVoit() {
+  const m = ['Quatre cases : une corde (en haut à gauche), un ressort (en haut à droite), le son dans l’air (en bas à gauche), l’eau vue de dessus (en bas à droite). Un point M rouge dans chaque onde.'];
+  if (S.t <= 0) m.push('Rien n’a encore été secoué.');
+  else {
+    m.push(`t = ${S.t.toFixed(1)} s.`);
+    if (S.t < T.corde + 1.4 && S.t > A0) m.push('Une bosse avance sur la corde vers la droite ; M monte puis descend.');
+    if (vu('corde')) m.push('Corde : M bouge de haut en bas (flèche orange), la propagation va vers la droite (flèche cyan) : perpendiculaires, « ⊥ : onde transversale » écrit.');
+    if (vu('ressort')) m.push('Ressort : la spire M avance et recule dans le sens de la propagation : « ∥ : onde longitudinale » écrit.');
+    if (vu('son')) m.push('Son : des arcs de compression partent du haut-parleur ; les grains d’air vont et viennent dans le sens de propagation : « ∥ : longitudinale », « pas dans le vide ».');
+    if (vu('eau')) m.push('Eau : des cercles s’étalent autour du point de chute : « ⊥ : transversale ».');
+    if (vu('fin')) m.push('Écrit en vert : corde 1 dimension, ressort 1 dimension, son 3 dimensions, eau 2 dimensions.');
+  }
+  return m.join(' ');
+}
+function start() { S.jusqua = null; S.t = 0; S.running = true; S.pause = false; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Regarde le point M rouge et la direction où va l’onde…'); pont.noter('start'); pont.emettre(); }
+function pause() { if (!S.running) return; S.jusqua = null; S.running = false; S.pause = true; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running || !S.pause) return start(); S.running = true; S.pause = false; $('run').textContent = 'Pause'; pont.noter('resume'); pont.emettre(); }
+function reset() { S.t = 0; S.running = false; S.pause = false; S.fait = false; S.jusqua = null; scene.sale = true; $('run').textContent = 'Secouer'; bulle($('feedback'), 'Secoue, puis compare le mouvement de M et la direction de l’onde.'); pont.emettre(); }
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+window.Tableau.explication({ types: [
+  { repere: 'fleches_corde', texte: 'Sur la corde, M monte et descend pendant que l’onde va vers la droite : perpendiculaires.' },
+  { repere: 'corde_type', texte: 'Perturbation perpendiculaire à la propagation : onde transversale.' },
+  { repere: 'fleches_ressort', texte: 'Sur le ressort, M avance et recule dans le sens de l’onde.' },
+  { repere: 'ressort_type', texte: 'Même direction : onde longitudinale.' },
+  { repere: 'son_type', texte: 'Le son dans l’air est longitudinal, et il ne passe pas dans le vide.' },
+  { repere: 'dim_eau', texte: 'Sur l’eau, l’onde s’étale dans un plan : deux dimensions.' },
+] });
+const commandes = ['start', 'pause', 'resume', 'reset', 'play_until'];
+const config = { id: 'ondes_tableau_types', version: '1.0', title: 'Transversale ou longitudinale', variants: [{ id: 'types', label: 'types' }], commands: commandes,
+  command_schema: { play_until: { moment: Object.keys(MOTIFS).join(' | ') + ' (rejoue et se fige à cet instant clé)' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Quatre ondes : corde (M monte et descend, onde vers la droite : transversale, 1 dimension), ressort (M avance et recule : longitudinale, 1 dimension), son dans l’air (longitudinale, 3 dimensions, pas dans le vide), eau vue de dessus (transversale, 2 dimensions).',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : (S.fait ? 'finished' : 'idle'), ce_qui_se_voit: ceQuiSeVoit(), moments: { ...T }, time_s: +S.t.toFixed(2) }),
+  progression: () => (S.fait ? 1 : clamp(S.t / TFIN)),
+  executer: (cmd, p) => ({ start, pause, resume, reset, play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Secoue, puis compare le mouvement de M et la direction de l’onde.');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

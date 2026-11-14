@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>L'ADN et l'ARN — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="genetique.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="À gauche un morceau d'ADN à deux brins, à droite un morceau d'ARN à un seul brin orange ; leurs sucres puis leurs bases s'écrivent ; dans l'ARN, U prend la place de T ; puis les trois sortes d'ARN"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Comparer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * L'ADN et l'ARN côte à côte (14 novembre 2026, règle 28 du professeur) : remplace le tableau ADN / ARN de la diapo rg_a1_arn.
+ * Les différences apparaissent l'une après l'autre, sur les molécules elles-mêmes :
+ *   brins  : l'ADN se dessine avec deux brins (bleu-violet), l'ARN avec un seul (orange) → « 2 brins » / « 1 brin » ;
+ *   sucre  : les sucres s'allument → « désoxyribose » / « ribose » ;
+ *   bases  : les bases s'écrivent ; dans l'ARN, là où l'on attendrait T, un T barré puis U (uracile) → « A, T, C, G » / « A, U, C, G » ;
+ *   sortes : sous l'ARN, ses trois sortes : ARNm (messager), ARNt (de transfert), ARNr (des ribosomes).
+ * Pas de transcription ici (elle vient plus tard) : l'ARN n'est pas « copié », il est seulement montré à côté.
+ * Couleurs du cours : ADN bleu-violet, ARN orange ; A rouge, T jaune, C bleu, G vert, U magenta.
+ * Moments (s de la scène) : brins 2,6 ; sucre 4,6 ; bases 7,4 ; sortes 10.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const BASE = { A: '#f87171', T: '#facc15', C: '#60a5fa', G: '#4ade80', U: '#e879f9' };
+const VIOLET = '#a78bfa', ORANGE = '#fb923c';
+const HAUT = ['A', 'T', 'G', 'C', 'T', 'A'], BAS = ['T', 'A', 'C', 'G', 'A', 'T'];
+const ARN = ['A', 'U', 'G', 'C', 'U', 'A'];
+const XA = i => 66 + i * 54, XR = i => 436 + i * 54, YH = 132, YB = 244;
+const M = { brins: 2.6, sucre: 4.6, bases: 7.4, sortes: 10 };
+const FIN = 10.4;
+const MOTIFS = { brins: 'l’ADN a deux brins, l’ARN un seul', sucre: 'les sucres : désoxyribose dans l’ADN, ribose dans l’ARN',
+  bases: 'les bases : A, T, C, G dans l’ADN ; A, U, C, G dans l’ARN', sortes: 'les trois sortes d’ARN : ARNm, ARNt, ARNr' };
+const S = { t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0 };
+const part = (a, b) => Math.max(0, Math.min(1, (S.t - a) / (b - a)));
+
+function pentagone(c, x, y, r, couleur, fond) {
+  const pts = Array.from({ length: 6 }, (_, k) => { const a = -Math.PI / 2 + k * 2 * Math.PI / 5; return [x + r * Math.cos(a), y + r * Math.sin(a)]; });
+  if (fond) { const g = c.ctx; g.globalAlpha = .3; g.fillStyle = fond; g.beginPath(); pts.forEach(([px, py], k) => (k ? g.lineTo(px, py) : g.moveTo(px, py))); g.fill(); g.globalAlpha = 1; }
+  c.trait(pts, { couleur, largeur: 1.8, tremble: .3 });
+}
+// Un brin : sucre (pentagone) – phosphate (rond) – sucre…, dessiné jusqu'à la part u ; `dir` = 1 (bases vers le bas) ou -1.
+function brin(c, X, y, couleur, u, sucreAllume, nomSucre) {
+  const n = Math.ceil(6 * u - 1e-9);
+  c.ligne(X(0) - 20, y, X(0) - 20 + (X(5) - X(0) + 40) * u, y, { couleur, largeur: 3 });
+  for (let i = 0; i < n; i++) {
+    pentagone(c, X(i), y, 10, couleur, sucreAllume ? couleur : null);
+    if (sucreAllume && i === 0) c.texte(nomSucre, X(i) - 14, y - 22, { couleur, taille: 13 });
+    if (i < 5) c.point(X(i) + 27, y, 4, couleur);
+  }
+}
+
+function dessiner(c) {
+  scene.cadre(53);
+  c.direct(() => {
+    c.texte('ADN', 196, 64, { couleur: VIOLET, taille: 22, align: 'center' });
+    c.texte('ARN', 566, 64, { couleur: ORANGE, taille: 22, align: 'center' });
+  });
+  c.ligne(380, 50, 380, 380, { couleur: 'tresfaible', largeur: 1.2 });
+  c.repere('adn', 16, 40, 356, 240, 'l’ADN');
+  c.repere('arn', 388, 40, 360, 240, 'l’ARN');
+  c.direct(() => {
+    if (S.t <= 0) return;
+    const sucre = S.t >= M.brins + 0.3;
+    // Les brins.
+    const u = part(0.2, M.brins - 0.4);
+    brin(c, XA, YH, VIOLET, u, sucre, 'désoxyribose');
+    brin(c, XA, YB, VIOLET, u, sucre, '');
+    brin(c, XR, YH, ORANGE, u, sucre, 'ribose');
+    // Les bases (barreaux) : apparaissent à partir de « sucre ».
+    const ub = part(M.sucre + 0.1, M.sucre + 1.6);
+    for (let i = 0; i < 6; i++) {
+      if (i >= Math.ceil(6 * ub - 1e-9)) break;
+      // ADN : deux bases face à face, reliées.
+      c.ligne(XA(i), YH + 10, XA(i), YH + 28, { couleur: VIOLET, largeur: 1.6 });
+      c.ligne(XA(i), YB - 10, XA(i), YB - 28, { couleur: VIOLET, largeur: 1.6 });
+      c.ligne(XA(i), YH + 50, XA(i), YB - 50, { couleur: 'faible', largeur: 1.2, pointille: [3, 4] });
+      c.texte(HAUT[i], XA(i), YH + 46, { couleur: BASE[HAUT[i]], taille: 20, align: 'center' });
+      c.texte(BAS[i], XA(i), YB - 32, { couleur: BASE[BAS[i]], taille: 20, align: 'center' });
+      // ARN : une base, sans partenaire.
+      c.ligne(XR(i), YH + 10, XR(i), YH + 28, { couleur: ORANGE, largeur: 1.6 });
+      if (ARN[i] === 'U') {
+        const v = part(M.sucre + 1.8, M.bases - 0.6);
+        if (v < 0.5) c.texte('T', XR(i), YH + 46, { couleur: BASE.T, taille: 20, align: 'center', alpha: .9 });
+        else {
+          c.texte('T', XR(i) + 19, YH + 44, { couleur: BASE.T, taille: 15, align: 'center', alpha: .5 });
+          c.ligne(XR(i) + 12, YH + 46, XR(i) + 26, YH + 30, { couleur: 'rouge', largeur: 1.8 });
+          c.texte('U', XR(i), YH + 46, { couleur: BASE.U, taille: 22, align: 'center' });
+        }
+      } else c.texte(ARN[i], XR(i), YH + 46, { couleur: BASE[ARN[i]], taille: 20, align: 'center' });
+    }
+    if (S.t >= M.bases - 0.6) c.repere('uracile', XR(1) - 16, YH + 22, 48, 32, 'U, l’uracile, à la place de T');
+  });
+  // Ce qui s'écrit, au moment où on le voit : la comparaison, ligne par ligne.
+  const ligne = (y, gauche, droite, couleur) => { c.texte(gauche, 196, y, { couleur, taille: 16, align: 'center', max: 340 }); c.texte(droite, 566, y, { couleur, taille: 16, align: 'center', max: 340 }); };
+  if (S.t >= M.brins - 0.4) { ecrit.ecrire(c, 'brins', () => ligne(330, '2 brins', '1 seul brin', 'blanc')); c.repere('adn_brins', 40, YH - 16, 316, YB - YH + 32, 'les deux brins de l’ADN'); c.repere('arn_brin', 410, YH - 16, 330, 34, 'le brin unique de l’ARN (orange)'); }
+  if (S.t >= M.sucre - 0.4) { ecrit.ecrire(c, 'sucre', () => ligne(358, 'sucre : désoxyribose', 'sucre : ribose', 'cyan')); c.repere('sucre_adn', 40, YH - 40, 160, 54, 'le désoxyribose'); c.repere('sucre_arn', 410, YH - 40, 160, 54, 'le ribose'); }
+  if (S.t >= M.bases - 0.4) { ecrit.ecrire(c, 'bases', () => ligne(386, 'bases : A, T, C, G', 'bases : A, U, C, G', 'jaune')); c.repere('bases_adn', 40, YH + 22, 316, YB - YH - 44, 'les bases de l’ADN : A, T, C, G'); c.repere('bases_arn', 410, YH + 22, 330, 60, 'les bases de l’ARN : A, U, C, G'); }
+  if (S.t >= M.sortes - 1.6) {
+    ecrit.ecrire(c, 'sortes', () => {
+      // ARNm : un brin ; ARNt : un trèfle qui porte un acide aminé ; ARNr : dans le ribosome.
+      c.ligne(420, 248, 500, 248, { couleur: ORANGE, largeur: 2.4 });
+      c.texte('ARNm', 460, 276, { couleur: ORANGE, taille: 15, align: 'center' });
+      c.texte('messager', 460, 293, { couleur: 'faible', taille: 12, align: 'center' });
+      for (const a of [-1, 0, 1]) c.cercle(566 + 15 * Math.sin(a), 236 - 12 + 12 * Math.abs(a) + (a === 0 ? -6 : 6), 8, { couleur: ORANGE, largeur: 1.6 });
+      c.ligne(566, 246, 566, 258, { couleur: ORANGE, largeur: 1.6 });
+      c.texte('ARNt', 566, 276, { couleur: ORANGE, taille: 15, align: 'center' });
+      c.texte('de transfert', 566, 293, { couleur: 'faible', taille: 12, align: 'center' });
+      c.cercle(672, 236, 18, { couleur: 'faible', largeur: 1.4 }); c.cercle(672, 252, 12, { couleur: 'faible', largeur: 1.4 });
+      c.courbe(u => [660 + 24 * u, 236 + 5 * Math.sin(u * 9)], 20, { couleur: ORANGE, largeur: 1.6 });
+      c.texte('ARNr', 672, 276, { couleur: ORANGE, taille: 15, align: 'center' });
+      c.texte('des ribosomes', 672, 293, { couleur: 'faible', taille: 12, align: 'center' });
+    });
+    c.repere('sortes', 410, 212, 336, 88, 'les trois sortes d’ARN : ARNm, ARNt, ARNr');
+  }
+  if (S.t >= M.brins - 0.4) c.repere('comparaison', 16, 312, 732, 82, 'la comparaison ADN / ARN, ligne par ligne');
+  return c.fin();
+}
+
+const canvas = $('canvas');
+const scene = window.GenetiqueTableau.Scene(canvas, dessiner);
+// Ce qui apparaît pendant la scène s'écrit à la craie à partir de cet instant (comme le professeur qui l'écrit en le disant).
+const ecrit = (() => {
+  const APP = {};
+  return {
+    ecrire(c, cle, fn) { if (!(cle in APP)) APP[cle] = (performance.now() - scene.ouvert) / 1000; const cur = c.cur; c.depuis(APP[cle]); try { fn(); } finally { c.cur = cur; } },
+    oublier() { for (const k of Object.keys(APP)) delete APP[k]; scene.sale = true; },
+  };
+})();
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(FIN, S.t + dt);
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.jusqua = null; S.running = false; S.pause = true; $('run').textContent = 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || 'instant choisi') + '.'); pont.noter('pause'); pont.emettre(); return true;
+  }
+  if (S.t >= FIN) {
+    S.running = false; S.fait = true; $('run').textContent = 'Comparer';
+    bulle($('feedback'), 'ARN : un seul brin, du ribose, U à la place de T ; trois sortes.', 'good'); pont.noter('finished'); pont.emettre();
+  } else if (performance.now() - S.emis > 400) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function playUntil(p) {
+  const nom = p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-3) { S.t = 0; ecrit.oublier(); }
+  S.jusqua = Math.min(FIN, cible); S.motif = nom ? MOTIFS[nom] : ''; S.running = true; S.pause = false; S.fait = false;
+  $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('play_until', { moment: nom }); pont.emettre();
+}
+function start() { S.jusqua = null; S.t = 0; ecrit.oublier(); S.running = true; S.pause = false; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'L’ADN à gauche, l’ARN à droite…'); pont.noter('start'); pont.emettre(); }
+function pause() { if (!S.running) return; S.jusqua = null; S.running = false; S.pause = true; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running) return; if (!S.pause || S.fait) return start(); S.running = true; S.pause = false; $('run').textContent = 'Pause'; pont.noter('resume'); pont.emettre(); }
+function reset() { S.t = 0; S.running = false; S.pause = false; S.fait = false; S.jusqua = null; ecrit.oublier(); $('run').textContent = 'Comparer'; bulle($('feedback'), 'Compare l’ADN et l’ARN, différence après différence.'); pont.emettre(); }
+function ceQuiSeVoit() {
+  const m = ['À gauche l’ADN (bleu-violet), à droite l’ARN (orange).'];
+  if (S.t <= 0) m.push('Rien de dessiné encore.');
+  if (S.t > 0) m.push(S.t < M.brins ? 'Les brins se dessinent.' : 'ADN : 2 brins ; ARN : 1 seul brin.');
+  if (S.t >= M.sucre - 0.4) m.push('Sucres allumés : désoxyribose (ADN), ribose (ARN).');
+  if (S.t >= M.sucre + 0.1) m.push(S.t < M.bases - 0.6 ? 'Les bases s’écrivent.' : 'Bases : ADN A, T, C, G ; ARN A, U, C, G : le T attendu est barré, U (uracile) à sa place.');
+  if (S.t >= M.sortes - 1.6) m.push('Sous l’ARN : ARNm (messager), ARNt (de transfert), ARNr (des ribosomes).');
+  return m.join(' ');
+}
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+window.Tableau.explication({ adn_arn: [
+  { repere: 'adn_brins', texte: 'L’ADN a deux brins.' }, { repere: 'arn_brin', texte: 'L’ARN n’en a qu’un.' },
+  { repere: 'sucre_arn', texte: 'Son sucre est le ribose, celui de l’ADN le désoxyribose.' },
+  { repere: 'uracile', texte: 'Dans l’ARN, U, l’uracile, prend la place de T.' },
+  { repere: 'sortes', texte: 'Trois sortes : ARN messager, de transfert, des ribosomes.' } ] });
+const commandes = ['start', 'pause', 'resume', 'reset', 'play_until'];
+const config = { id: 'genetique_tableau_adn_arn', version: '1.0', title: 'L’ADN et l’ARN', variants: [{ id: 'adn_arn', label: 'adn_arn' }], commands: commandes,
+  command_schema: { play_until: { moment: Object.keys(M).join(' | ') + ' (rejoue et se fige à cet instant clé)' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'ADN et ARN comparés : l’ADN a deux brins, l’ARN un seul ; sucre : désoxyribose (ADN), ribose (ARN) ; bases : A, T, C, G (ADN), A, U, C, G (ARN) — l’uracile U remplace la thymine T ; trois sortes d’ARN : ARNm (messager), ARNt (de transfert), ARNr (des ribosomes).',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : (S.fait ? 'finished' : 'idle'), ce_qui_se_voit: ceQuiSeVoit(), moments: M, time_s: +S.t.toFixed(2) }),
+  progression: () => (S.fait ? 1 : S.t / FIN),
+  executer: (cmd, p) => ({ start, pause, resume, reset, play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Compare l’ADN et l’ARN, différence après différence.');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fission ou fusion — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="nucleaire.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Deux cases : une fission d'uranium 235 et une fusion deutérium-tritium ; une jauge d'énergie monte dans chaque case ; à masse égale, 47 fusions remplissent la jauge bien plus haut qu'une fission"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Fission ou fusion : laquelle libère le plus ? (14 novembre 2026, règle 28 du professeur) : remplace le tableau
+ * à deux colonnes de la diapo en_n2_comparaison.
+ *   1. Une réaction de chaque : la fission (²³⁵U + n) libère 185 MeV, la fusion (²H + ³H) 17,6 MeV : la jauge de la fission monte plus haut.
+ *   2. Par nucléon : 185 / 236 ≈ 0,78 MeV ; 17,6 / 5 ≈ 3,5 MeV.
+ *   3. À masse égale (≈ 236 nucléons) : une seule fission, mais 47 fusions (47 × 5 = 235 nucléons) : 47 × 17,6 ≈ 827 MeV.
+ * La jauge de chaque case est graduée de 0 à 900 MeV.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const lisse = u => { u = clamp(u); return u * u * (3 - 2 * u); };
+const CASES = { fission: { x: 10, titre: 'Fission : ²³⁵U + n' }, fusion: { x: 385, titre: 'Fusion : ²H + ³H' } };
+const W = 365, Y0 = 8, H = 404, JY0 = 372, JH = 290, EMAX = 900;      // jauge : 0 MeV en JY0, 900 MeV en JY0 − JH
+const T = { trace: 0.6, par_reaction: 3.0, par_nucleon: 4.6, conclusion: 8.4 };
+const R0 = 0.8, RC = 1.7, R1 = 2.6;              // une réaction : approche, contact, produits
+const F0 = 4.8, F1 = 7.8, NF = 47;               // les 47 fusions à masse égale
+const TFIN = 8.8;
+const S = { t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0 };
+const vu = nom => S.t >= T[nom] - 1e-6;
+const nbFusions = () => (S.t < F0 ? (S.t >= RC ? 1 : 0) : 1 + Math.floor((NF - 1) * clamp((S.t - F0) / (F1 - F0))));
+const energie = id => (id === 'fission' ? 185 * lisse((S.t - RC) / 0.8) : 17.6 * (S.t < F0 ? lisse((S.t - RC) / 0.8) : nbFusions()));
+
+function boule(ctx, x, y, r, teinte) {
+  const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r);
+  g.addColorStop(0, '#fff7ee'); g.addColorStop(.5, teinte); g.addColorStop(1, '#2a1b10');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+}
+function eclair(ctx, x, y, r, a) {
+  if (a <= 0) return;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, `rgba(255,255,240,${.95 * a})`); g.addColorStop(.4, `rgba(255,220,110,${.6 * a})`); g.addColorStop(1, 'rgba(255,190,80,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+}
+
+function dessiner(c) {
+  scene.cadre(41);
+  for (const [id, k] of Object.entries(CASES)) {
+    c.rect(k.x, Y0, W, H, { couleur: 'tresfaible', largeur: 1.4, duree: .3 });
+    c.texte(k.titre, k.x + 12, 34, { couleur: id === 'fission' ? 'orange' : 'cyan', taille: 18 });
+    // La jauge d'énergie, à droite de la case.
+    const jx = k.x + W - 46;
+    c.ligne(jx, JY0, jx, JY0 - JH, { couleur: 'faible', largeur: 1.4, duree: .2 });
+    for (const e of [0, 300, 600, 900]) { const yy = JY0 - JH * e / EMAX; c.ligne(jx - 4, yy, jx + 4, yy, { couleur: 'faible', largeur: 1.2, duree: .03 }); c.texte(String(e), jx + 8, yy + 5, { couleur: 'faible', taille: 12 }); }
+    c.texte('MeV', jx - 6, JY0 + 22, { couleur: 'faible', taille: 13 });
+    c.repere(id, k.x, Y0, W, H, id === 'fission' ? 'la fission de l’uranium 235' : 'la fusion deutérium-tritium');
+  }
+  c.direct(() => {
+    const ctx = c.ctx, t = S.t, joue = S.running || S.pause || S.fait;
+    /* ── Fission : un neutron frappe l'uranium, deux fragments et deux neutrons partent ── */
+    const fx = 120, fy = 112;
+    if (!joue || t < RC) {
+      boule(ctx, fx, fy, 30, '#e0803a');
+      if (joue && t > R0) { const u = lisse((t - R0) / (RC - R0)); boule(ctx, fx - 120 + 86 * u, fy, 6, '#9fb6cc'); }
+    } else {
+      const u = lisse((t - RC) / (R1 - RC));
+      boule(ctx, fx - 30 * u - 6, fy - 26 * u, 21, '#e09a4a'); boule(ctx, fx + 34 * u + 6, fy + 22 * u, 24, '#d9733a');
+      for (const [dx, dy] of [[1, -0.6], [1, 0.7]]) boule(ctx, fx + 110 * u * dx, fy + 60 * u * dy, 6, '#9fb6cc');
+      eclair(ctx, fx, fy, 70, 1 - (t - RC) / 0.6);
+    }
+    /* ── Fusion : ²H et ³H se rapprochent, fusionnent ; ou, à masse égale, 47 fusions en grille ── */
+    const ux = 385 + 130, uy = 112;
+    if (t < F0) {
+      if (!joue || t < RC) { const u = joue ? lisse((t - R0) / (RC - R0)) : 0; boule(ctx, ux - 60 + 48 * u, uy, 10, '#5fb8e8'); boule(ctx, ux + 60 - 46 * u, uy, 12, '#4a9bd8'); }
+      else { const u = lisse((t - RC) / (R1 - RC)); boule(ctx, ux - 8 * u, uy - 6 * u, 13, '#7ccff0'); boule(ctx, ux + 90 * u, uy + 30 * u, 6, '#9fb6cc'); eclair(ctx, ux, uy, 50, 1 - (t - RC) / 0.6); }
+    } else {
+      const n = nbFusions();
+      for (let i = 0; i < NF; i++) {
+        const x = 385 + 30 + (i % 10) * 24, y = 64 + Math.floor(i / 10) * 25;
+        boule(ctx, x, y, 7, i < n ? '#7ccff0' : '#3d6f8e');
+        if (i === n - 1) eclair(ctx, x, y, 22, 0.9);
+      }
+      c.texte(`${n} fusion${n > 1 ? 's' : ''}`, 385 + 12, 196, { couleur: 'cyan', taille: 16 });
+    }
+    /* ── Les jauges et ce qu'elles disent ── */
+    for (const [id, k] of Object.entries(CASES)) {
+      const E = joue && t >= RC ? energie(id) : 0, jx = k.x + W - 46, h = JH * E / EMAX;
+      if (h > 0.5) c.rect(jx - 9, JY0 - h, 18, h, { couleur: id === 'fission' ? 'orange' : 'cyan', largeur: 1.4, fond: id === 'fission' ? 'orange' : 'cyan', fondAlpha: .35, arrondi: 3 });
+      if (E > 0.5) c.texte(`${E < 100 ? fr(E, 1) : fr(E, 0)} MeV`, jx - 14, JY0 - h - 8, { couleur: id === 'fission' ? 'orange' : 'cyan', taille: 15, align: 'right' });
+      c.repere('jauge_' + id, jx - 20, JY0 - JH - 10, 60, JH + 30, 'l’énergie libérée');
+    }
+    if (vu('par_reaction')) {
+      c.texte('1 réaction : 185 MeV', 22, 230, { couleur: 'blanc', taille: 17 });
+      c.texte('1 réaction : 17,6 MeV', 397, 230, { couleur: 'blanc', taille: 17 });
+      c.repere('par_reaction', 16, 210, 730, 28, 'l’énergie d’une seule réaction');
+    }
+    if (vu('par_nucleon')) {
+      c.texte('236 nucléons : 185 / 236', 22, 266, { couleur: 'blanc', taille: 16 });
+      c.texte('≈ 0,78 MeV par nucléon', 32, 290, { couleur: 'orange', taille: 17 });
+      c.texte('5 nucléons : 17,6 / 5', 397, 266, { couleur: 'blanc', taille: 16 });
+      c.texte('≈ 3,5 MeV par nucléon', 407, 290, { couleur: 'cyan', taille: 17 });
+      c.repere('par_nucleon', 16, 246, 730, 52, 'l’énergie par nucléon');
+    }
+    if (t >= F0) {
+      c.texte('même masse : 1 fission', 22, 330, { couleur: 'faible', taille: 16 });
+      c.texte(`même masse : ${nbFusions()} × 17,6 MeV`, 397, 330, { couleur: 'faible', taille: 16 });
+    }
+    if (vu('conclusion')) {
+      c.texte('À masse égale, la fusion libère', 397, 362, { couleur: 'vert', taille: 17 });
+      c.texte('plus d’énergie que la fission.', 397, 386, { couleur: 'vert', taille: 17 });
+      c.repere('conclusion', 391, 340, 280, 54, 'à masse égale, la fusion libère plus');
+    }
+  });
+  return c.fin();
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(TFIN, S.t + dt);
+  if (arreterSiInstantAtteint()) return true;
+  if (S.t >= TFIN) {
+    S.running = false; S.fait = true; $('run').textContent = 'Lancer';
+    bulle($('feedback'), 'Une réaction : la fission gagne. Même masse : 47 fusions, environ 827 MeV contre 185.', 'good');
+    pont.noter('finished'); pont.emettre();
+  } else if (performance.now() - S.emis > 400) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+const MOTIFS = { trace: 'un noyau d’uranium d’un côté, deux petits noyaux de l’autre', par_reaction: 'une réaction de chaque : 185 MeV contre 17,6 MeV', par_nucleon: 'par nucléon : 0,78 MeV contre 3,5 MeV', conclusion: 'à masse égale : 47 fusions, la jauge de la fusion dépasse largement celle de la fission' };
+function playUntil(p) {
+  const nom = p.moment in T ? p.moment : null, cible = nom ? T[nom] : +p.progress * TFIN;
+  if (!Number.isFinite(cible)) return;
+  if (!(S.running || S.pause) || S.t >= cible - 1e-3) start();
+  S.jusqua = cible; S.motif = nom ? MOTIFS[nom] : '';
+  if (S.pause) { S.running = true; S.pause = false; $('run').textContent = 'Pause'; }
+  pont.noter('play_until', { moment: nom }); pont.emettre();
+}
+function arreterSiInstantAtteint() {
+  if (S.jusqua == null || S.t < S.jusqua) return false;
+  S.t = S.jusqua; S.jusqua = null; S.running = false; S.pause = true; $('run').textContent = 'Reprendre';
+  bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || 'instant choisi') + '.'); pont.noter('pause'); pont.emettre();
+  return true;
+}
+function ceQuiSeVoit() {
+  const m = ['Deux cases : à gauche la fission de l’uranium 235, à droite la fusion deutérium + tritium ; une jauge d’énergie (0 à 900 MeV) dans chaque case.'];
+  if (S.t < RC) m.push(S.t > R0 ? 'Le neutron arrive sur l’uranium ; les deux petits noyaux se rapprochent.' : 'Rien n’a encore réagi.');
+  else m.push(`Jauges : fission ${fr(energie('fission'), 0)} MeV, fusion ${fr(energie('fusion'), 1)} MeV.`);
+  if (vu('par_reaction')) m.push('Écrit : « 1 réaction : 185 MeV » et « 1 réaction : 17,6 MeV ».');
+  if (vu('par_nucleon')) m.push('Écrit : « 185 / 236 ≈ 0,78 MeV par nucléon » et « 17,6 / 5 ≈ 3,5 MeV par nucléon ».');
+  if (S.t >= F0) m.push(`À masse égale, ${nbFusions()} fusions sur 47 ont eu lieu (grille de petits noyaux).`);
+  if (vu('conclusion')) m.push('Écrit : « À masse égale, la fusion libère plus d’énergie que la fission. »');
+  return m.join(' ');
+}
+function start() { S.jusqua = null; S.t = 0; S.running = true; S.pause = false; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Une fission, une fusion…'); pont.noter('start'); pont.emettre(); }
+function pause() { if (!S.running) return; S.jusqua = null; S.running = false; S.pause = true; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running || !S.pause) return start(); S.running = true; S.pause = false; $('run').textContent = 'Pause'; pont.noter('resume'); pont.emettre(); }
+function reset() { S.t = 0; S.running = false; S.pause = false; S.fait = false; S.jusqua = null; scene.sale = true; $('run').textContent = 'Lancer'; bulle($('feedback'), 'Lance : quelle jauge monte le plus haut ?'); pont.emettre(); }
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+window.Tableau.explication({ comparaison: [
+  { repere: 'jauge_fission', texte: 'Une fission libère cent quatre-vingt-cinq mégaélectronvolts.' },
+  { repere: 'jauge_fusion', texte: 'Une fusion n’en libère que dix-sept virgule six.' },
+  { repere: 'par_nucleon', texte: 'Mais par nucléon, la fusion libère environ quatre fois plus.' },
+  { repere: 'conclusion', texte: 'À masse égale, la fusion libère plus d’énergie que la fission.' },
+] });
+const commandes = ['start', 'pause', 'resume', 'reset', 'play_until'];
+const config = { id: 'energie_nucleaire_comparaison', version: '1.0', title: 'Fission ou fusion', variants: [{ id: 'comparaison', label: 'comparaison' }], commands: commandes,
+  command_schema: { play_until: { moment: Object.keys(MOTIFS).join(' | ') + ' (rejoue et se fige à cet instant clé)' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Une fission d’²³⁵U : 185 MeV (236 nucléons, 0,78 MeV par nucléon). Une fusion ²H + ³H : 17,6 MeV (5 nucléons, 3,5 MeV par nucléon). À masse égale (≈ 236 nucléons) : 1 fission = 185 MeV, 47 fusions ≈ 827 MeV.',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : (S.fait ? 'finished' : 'idle'), ce_qui_se_voit: ceQuiSeVoit(), moments: { ...T },
+    energie_mev: { fission: +energie('fission').toFixed(1), fusion: +energie('fusion').toFixed(1) }, time_s: +S.t.toFixed(2) }),
+  progression: () => (S.fait ? 1 : clamp(S.t / TFIN)),
+  executer: (cmd, p) => ({ start, pause, resume, reset, play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Lance : quelle jauge monte le plus haut ?');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Milieu dispersif — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ondes.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Deux ondes à la craie : l'onde sur l'eau d'une cuve à 20 Hz puis à une autre fréquence, le son dans l'air à 1000 Hz puis à une autre fréquence ; λ mesurée et v = λ·N écrite pour chacune"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Mesurer</button>
+    <span id="reglage" data-professor-control="set_parameters"></span>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Milieu dispersif (14 novembre 2026, règle 28 du professeur) : remplace le tableau « milieu / N / λ / v »
+ * de la diapo op_s3_dispersif. Quatre rangées se remplissent l'une après l'autre :
+ *   eau à 20 Hz → λ = 1,5 cm, v = 0,30 m/s ; eau à N′ (30 Hz) → λ′ = 1,1 cm, v′ = 0,33 m/s : v change ;
+ *   air à 1000 Hz → λ = 34 cm, v = 340 m/s ; air à N′ (2000 Hz) → λ′ = 17 cm, v′ = 340 m/s : v ne change pas.
+ * Puis le verdict : l'eau est un milieu dispersif, l'air ne l'est pas pour le son.
+ * Deux curseurs : la deuxième fréquence de l'eau (22 à 40 Hz) et celle de l'air (1500 à 4000 Hz).
+ * Eau : v = 0,30·(N/20)^0,235 m/s (passe par les deux mesures du cours) ; air : v = 340 m/s.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const P = { eau_hz: 30, air_hz: 2000 };
+const vEau = N => 0.30 * Math.pow(N / 20, 0.235);           // m/s
+const X0 = 140, X1 = 470, K = 2.5;                           // zone des ondes ; accélération de l'image
+const RANGS = [
+  { id: 'eau_1', milieu: 'eau', y: 84, N: () => 20 },
+  { id: 'eau_2', milieu: 'eau', y: 156, N: () => P.eau_hz, prime: true },
+  { id: 'air_1', milieu: 'air', y: 282, N: () => 1000 },
+  { id: 'air_2', milieu: 'air', y: 354, N: () => P.air_hz, prime: true },
+];
+const v = r => (r.milieu === 'eau' ? vEau(r.N()) : 340);
+const lamCm = r => 100 * v(r) / r.N();
+const lamPx = r => (r.milieu === 'eau' ? 40 : 2) * lamCm(r);              // eau 40 px/cm, air 2 px/cm
+const vVis = r => K * lamPx(r) * r.N() / (r.milieu === 'eau' ? 20 : 1000);  // px/s
+/* Calendrier (s) */
+const T0 = { eau_1: 0.2, eau_2: 3.4, air_1: 6.6, air_2: 9.4 };
+const T = { eau_1: 3.4, eau_2: 6.4, air_1: 9.4, air_2: 12.2, verdict: 12.6 };
+const TFIN = 13.0;
+const S = { t: 0, phase: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0 };
+const vu = nom => S.t >= T[nom] - 1e-6;
+const front = r => clamp((S.t - T0[r.id]) * vVis(r) / (X1 - X0));       // 0 → 1 : l'onde remplit la rangée
+const mesure = r => S.t >= T0[r.id] + (X1 - X0) / vVis(r) + 0.1;         // la règle se pose quand l'onde a tout rempli
+
+function dessiner(c) {
+  scene.cadre(17);
+  c.texte('Surface de l’eau (cuve à ondes)', 14, 34, { couleur: 'cyan', taille: 18 });
+  c.texte('Air (le son)', 14, 232, { couleur: 'cyan', taille: 18 });
+  c.ligne(10, 206, 750, 206, { couleur: 'tresfaible', largeur: 1.2, duree: .3 });
+  for (const r of RANGS) {
+    // La source : un vibreur sur l'eau, un haut-parleur dans l'air.
+    if (r.milieu === 'eau') { c.rect(X0 - 22, r.y - 26, 14, 16, { couleur: 'faible', duree: .15 }); c.ligne(X0 - 15, r.y - 10, X0 - 15, r.y + 2, { couleur: 'faible', duree: .1 }); }
+    else { c.rect(X0 - 30, r.y - 9, 10, 18, { couleur: 'faible', duree: .15 }); c.trait([[X0 - 20, r.y - 9], [X0 - 10, r.y - 18], [X0 - 10, r.y + 18], [X0 - 20, r.y + 9]], { couleur: 'faible', duree: .15 }); }
+  }
+  c.direct(() => {
+    for (const r of RANGS) {
+      const N = r.N(), lp = lamPx(r), f = front(r), xf = X0 + f * (X1 - X0), ph = S.phase * vVis(r);
+      c.texte(`${r.prime ? 'N′' : 'N'} = ${N} Hz`, 14, r.y + 6, { couleur: r.prime ? 'orange' : 'jaune', taille: 17 });
+      if (f <= 0) { if (r.milieu === 'eau') c.ligne(X0, r.y, X1, r.y, { couleur: 'tresfaible', largeur: 1.4 }); continue; }
+      if (r.milieu === 'eau') {
+        // Vue de côté : la surface de l'eau ondule jusqu'au front, plate au-delà.
+        c.courbe(u => { const x = X0 + u * (X1 - X0); return [x, x <= xf ? r.y - 12 * Math.sin(2 * Math.PI * (x - X0 - ph) / lp) * Math.min(1, (xf - x) / 12) : r.y]; }, 160, { couleur: 'bleu', largeur: 2.2 });
+      } else {
+        // Les tranches d'air comprimé (trois traits serrés), une tous les λ.
+        const d0 = ((ph % lp) + lp) % lp;
+        for (let x = X0 + d0 - lp; x <= xf; x += lp) for (const e of [-3, 0, 3]) { const xx = x + e; if (xx >= X0 && xx <= xf) c.ligne(xx, r.y - 18, xx, r.y + 18, { couleur: 'bleu', largeur: 1.6, tremble: .2 }); }
+        c.ligne(X0, r.y + 22, X1, r.y + 22, { couleur: 'tresfaible', largeur: 1 });
+      }
+      c.repere(r.id, 8, r.y - 30, X1 - 4, 60, `l’onde ${r.milieu === 'eau' ? 'sur l’eau' : 'dans l’air'} à ${N} Hz`);
+      if (!mesure(r)) continue;
+      // La règle sous un motif, puis λ et v écrits à droite, là où se fait la mesure.
+      const xr = X1 - 24 - lp;
+      c.cote(xr, r.y + (r.milieu === 'eau' ? 26 : 34), xr + lp, r.y + (r.milieu === 'eau' ? 26 : 34), '', { couleur: 'vert', largeur: 1.8 });
+      const lam = lamCm(r), vt = v(r);
+      c.texte(`${r.prime ? 'λ′' : 'λ'} = ${fr(lam, lam < 10 ? 1 : 0)} cm`, 488, r.y - 4, { couleur: 'vert', taille: 17 });
+      if (S.t >= T[r.id] - 0.5) c.texte(`${r.prime ? 'v′' : 'v'} = λ·N = ${r.milieu === 'eau' ? fr(vt, 2) : fr(vt, 0)} m/s`, 488, r.y + 22, { couleur: 'blanc', taille: 17 });
+    }
+    // Ce que disent les deux mesures de chaque milieu.
+    if (vu('eau_2')) {
+      c.texte('v′ ≠ v : la célérité change avec N', 488, 196, { couleur: 'orange', taille: 16 });
+      c.repere('v_eau', 482, 60, 270, 144, 'les deux célérités dans l’eau');
+    }
+    if (vu('air_2')) {
+      c.texte('v′ = v : la célérité ne change pas', 488, 396, { couleur: 'vert', taille: 16 });
+      c.repere('v_air', 482, 258, 270, 146, 'les deux célérités dans l’air');
+    }
+    if (vu('verdict')) {
+      c.rect(250, 18, 230, 30, { couleur: 'orange', largeur: 1.6, fond: 'orange', fondAlpha: .08 });
+      c.texte('eau : milieu dispersif', 365, 39, { couleur: 'orange', taille: 17, align: 'center' });
+      c.repere('verdict_eau', 250, 18, 230, 30, 'l’eau : milieu dispersif');
+      c.rect(250, 214, 230, 30, { couleur: 'vert', largeur: 1.6, fond: 'vert', fondAlpha: .08 });
+      c.texte('air : non dispersif', 365, 235, { couleur: 'vert', taille: 17, align: 'center' });
+      c.repere('verdict_air', 250, 214, 230, 30, 'l’air : non dispersif pour le son');
+    }
+    if (S.running || S.pause) c.texte(`t = ${fr(S.t, 1)} s`, 748, 34, { couleur: 'faible', taille: 14, align: 'right' });
+  });
+  return c.fin();
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+scene.avancer = dt => {
+  if (S.pause || !(S.running || S.fait)) return false;
+  S.phase += dt;
+  if (!S.running) return true;                         // fini : les ondes continuent d'avancer
+  S.t = Math.min(TFIN, S.t + dt);
+  if (arreterSiInstantAtteint()) return true;
+  if (S.t >= TFIN) {
+    S.running = false; S.fait = true; $('run').textContent = 'Mesurer';
+    bulle($('feedback'), 'Eau : v dépend de N, milieu dispersif. Air : v = 340 m/s à toute fréquence.', 'good');
+    pont.noter('finished'); pont.emettre();
+  } else if (performance.now() - S.emis > 400) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+const MOTIFS = {
+  eau_1: 'eau à 20 Hz : λ = 1,5 cm, v = 0,30 m/s', eau_2: 'eau à la deuxième fréquence : λ remesurée, v a changé',
+  air_1: 'air à 1000 Hz : λ = 34 cm, v = 340 m/s', air_2: 'air à la deuxième fréquence : λ divisée, v toujours 340 m/s',
+  verdict: 'l’eau est dispersive, l’air ne l’est pas pour le son',
+};
+function playUntil(p) {
+  const nom = p.moment in T ? p.moment : null, cible = nom ? T[nom] : +p.progress * TFIN;
+  if (!Number.isFinite(cible)) return;
+  if (!(S.running || S.pause) || S.t >= cible - 1e-3) start();
+  S.jusqua = cible; S.motif = nom ? MOTIFS[nom] : '';
+  if (S.pause) { S.running = true; S.pause = false; $('run').textContent = 'Pause'; }
+  pont.noter('play_until', { moment: nom }); pont.emettre();
+}
+function arreterSiInstantAtteint() {
+  if (S.jusqua == null || S.t < S.jusqua) return false;
+  S.t = S.jusqua; S.jusqua = null; S.running = false; S.pause = true; $('run').textContent = 'Reprendre';
+  bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || 'instant choisi') + '.'); pont.noter('pause'); pont.emettre();
+  return true;
+}
+function ceQuiSeVoit() {
+  const m = ['En haut, l’eau d’une cuve (vibreur à gauche) ; en bas, l’air (haut-parleur à gauche). Deux rangées par milieu : la première fréquence, puis N′.'];
+  if (S.t <= 0) m.push('Rien n’est encore mesuré.');
+  for (const r of RANGS) if (mesure(r) && S.t >= T[r.id] - 0.5) m.push(`${r.milieu === 'eau' ? 'Eau' : 'Air'} à ${r.N()} Hz : λ = ${fr(lamCm(r), 1)} cm, v = ${fr(v(r), r.milieu === 'eau' ? 2 : 0)} m/s écrits à droite.`);
+  if (vu('eau_2')) m.push('Écrit sous l’eau : « v′ ≠ v : la célérité change avec N ».');
+  if (vu('air_2')) m.push('Écrit sous l’air : « v′ = v : la célérité ne change pas ».');
+  if (vu('verdict')) m.push('Encadrés : « eau : milieu dispersif » et « air : non dispersif ».');
+  return m.join(' ');
+}
+function start() { S.jusqua = null; S.t = 0; S.running = true; S.pause = false; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Le vibreur démarre : on mesure λ, puis on calcule v = λ·N…'); pont.noter('start'); pont.emettre(); }
+function pause() { if (!S.running) return; S.jusqua = null; S.running = false; S.pause = true; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running || !S.pause) return start(); S.running = true; S.pause = false; $('run').textContent = 'Pause'; pont.noter('resume'); pont.emettre(); }
+function reset() { S.t = 0; S.running = false; S.pause = false; S.fait = false; S.jusqua = null; scene.sale = true; $('run').textContent = 'Mesurer'; bulle($('feedback'), 'Mesure λ à deux fréquences, puis compare les deux célérités.'); pont.emettre(); }
+function setParameters(p) {
+  const fait = {};
+  if (Number.isFinite(+p.eau_hz)) { P.eau_hz = Math.min(40, Math.max(22, Math.round(+p.eau_hz / 2) * 2)); regEau.maj(P.eau_hz); fait.eau_hz = P.eau_hz; }
+  if (Number.isFinite(+p.air_hz)) { P.air_hz = Math.min(4000, Math.max(1500, Math.round(+p.air_hz / 500) * 500)); regAir.maj(P.air_hz); fait.air_hz = P.air_hz; }
+  if (!Object.keys(fait).length) return;
+  scene.sale = true;
+  const e = RANGS[1];
+  bulle($('feedback'), `Eau à ${P.eau_hz} Hz : v′ = ${fr(v(e), 2)} m/s ; air à ${P.air_hz} Hz : v′ = 340 m/s.`);
+  if (!(S.running || S.pause || S.fait)) start();
+  pont.noter('set_parameters', fait); pont.emettre();
+}
+const regEau = window.Tableau.curseur({ id: 'eau', label: 'Eau : N′ =', min: 22, max: 40, step: 2, valeur: 30, unite: 'Hz', commande: 'set_parameters', onchange: x => setParameters({ eau_hz: x }) });
+const regAir = window.Tableau.curseur({ id: 'air', label: 'Air : N′ =', min: 1500, max: 4000, step: 500, valeur: 2000, unite: 'Hz', commande: 'set_parameters', decimales: 0, onchange: x => setParameters({ air_hz: x }) });
+$('reglage').replaceChildren(regEau, regAir);
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+window.Tableau.explication({ dispersif: [
+  { repere: 'eau_1', texte: 'Sur l’eau à vingt hertz : λ = 1,5 cm, donc v = 0,30 m/s.' },
+  { repere: 'eau_2', texte: 'À trente hertz, les crêtes se rapprochent : λ′ = 1,1 cm, v′ = 0,33 m/s.' },
+  { repere: 'v_eau', texte: 'Dans l’eau, la célérité change avec la fréquence.' },
+  { repere: 'v_air', texte: 'Dans l’air, 340 m/s aux deux fréquences.' },
+  { repere: 'verdict_eau', texte: 'L’eau est un milieu dispersif.' },
+] });
+const commandes = ['start', 'pause', 'resume', 'reset', 'set_parameters', 'play_until'];
+const config = { id: 'ondes_periodiques_dispersif', version: '1.0', title: 'Milieu dispersif', variants: [{ id: 'dispersif', label: 'dispersif' }], commands: commandes,
+  command_schema: { set_parameters: { eau_hz: '22..40 (pas de 2), deuxième fréquence sur l’eau', air_hz: '1500..4000 (pas de 500), deuxième fréquence dans l’air' }, play_until: { moment: Object.keys(MOTIFS).join(' | ') + ' (rejoue et se fige à cet instant clé)' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Eau (cuve) : 20 Hz → λ = 1,5 cm, v = 0,30 m/s ; 30 Hz → λ′ = 1,1 cm, v′ = 0,33 m/s : v dépend de N, milieu dispersif. Air (son) : 1000 Hz → λ = 34 cm ; 2000 Hz → λ = 17 cm ; v = 340 m/s dans les deux cas : non dispersif. Curseurs : deuxième fréquence de l’eau (22–40 Hz) et de l’air (1500–4000 Hz).',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : (S.fait ? 'finished' : 'idle'), ce_qui_se_voit: ceQuiSeVoit(), moments: { ...T }, parameters: { ...P },
+    mesures: RANGS.map(r => ({ rangee: r.id, N_hz: r.N(), lambda_cm: +lamCm(r).toFixed(2), v_m_s: +v(r).toFixed(3) })), time_s: +S.t.toFixed(2) }),
+  progression: () => (S.fait ? 1 : clamp(S.t / TFIN)),
+  executer: (cmd, p) => ({ start, pause, resume, reset, set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Mesure λ à deux fréquences, puis compare les deux célérités.');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

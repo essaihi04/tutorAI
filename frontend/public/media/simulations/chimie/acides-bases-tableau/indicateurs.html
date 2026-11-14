@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Zones de virage — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ab.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Sur l'axe des pH, les bandes de couleur de quatre indicateurs colorés (hélianthine, rouge de méthyle, BBT, rouge de crésol) avec leur zone de virage ; un curseur pH donne la couleur de chaque indicateur"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume reset play_until set_time">Lancer</button>
+    <span id="reglage" data-professor-control="set_parameters"></span>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script src="deroule.js"></script>
+<script>
+/*
+ * La zone de virage (14 novembre 2026, professeur règle 28), diapo ab_i2_virage.
+ * L'axe des pH (0 à 14), puis la bande du BBT : jaune, vert dans sa zone de virage [6,0 ; 7,6], bleu ; son pKa ≈ 7,0 au milieu ;
+ * puis les bandes des trois autres indicateurs du cours (hélianthine 3,1 – 4,4 ; rouge de méthyle 4,2 – 6,2 ; rouge de crésol 7,2 – 8,8),
+ * en escalier. Le curseur pH (glissé sur l'axe ou en bas) : une pastille donne la couleur que prend chaque indicateur à ce pH.
+ * Remplace la liste « hélianthine 3,1 – 4,4 ; rouge de méthyle 4,2 – 6,2 ; BBT 6,0 – 7,6 ; rouge de crésol 7,2 – 8,8 ».
+ */
+const { fr } = window.Tableau;
+const P = { pH: 6.8 };
+const RGB = { rouge: [239, 68, 68], orange: [249, 115, 22], jaune: [250, 204, 21], vert: [34, 197, 94], bleu: [59, 130, 246], rougeC: [220, 38, 38] };
+const IND = [
+  { id: 'helianthine', nom: 'hélianthine', z: [3.1, 4.4], c: ['rouge', 'orange', 'jaune'], y: 136, noms: ['rouge', 'jaune'] },
+  { id: 'rouge_methyle', nom: 'rouge de méthyle', z: [4.2, 6.2], c: ['rouge', 'orange', 'jaune'], y: 186, noms: ['rouge', 'jaune'] },
+  { id: 'bbt', nom: 'BBT', z: [6.0, 7.6], c: ['jaune', 'vert', 'bleu'], y: 236, noms: ['jaune', 'bleu'] },
+  { id: 'rouge_cresol', nom: 'rouge de crésol', z: [7.2, 8.8], c: ['jaune', 'orange', 'rougeC'], y: 286, noms: ['jaune', 'rouge'] },
+];
+const BBT = IND[2], AUTRES = [IND[0], IND[1], IND[3]];
+const AX = { x0: 170, x1: 730, y: 340 }, PX = pH => AX.x0 + pH / 14 * (AX.x1 - AX.x0), BH = 24;
+const melange = (a, b, f) => a.map((v, i) => Math.round(v + (b[i] - v) * f));
+/** Couleur de l'indicateur à ce pH : forme acide, teinte sensible dans la zone (mélange), forme basique. */
+function couleur(ind, pH) {
+  const [a, m, b] = ind.c.map(k => RGB[k]), f = (pH - ind.z[0]) / (ind.z[1] - ind.z[0]);
+  if (f <= 0) return a; if (f >= 1) return b;
+  return f < .5 ? melange(a, m, f * 2) : melange(m, b, f * 2 - 1);
+}
+const nomCouleur = (ind, pH) => (pH < ind.z[0] ? ind.noms[0] : pH > ind.z[1] ? ind.noms[1] : 'teinte sensible (mélange des deux couleurs)');
+
+function etapes() {
+  return [
+    { nom: 'axe', duree: .8, motif: 'l’axe des pH, de 0 à 14' },
+    { nom: 'bande', duree: 1.8, motif: 'la bande du BBT : jaune, vert, bleu', bulle: () => 'Le BBT : jaune en milieu acide, bleu en milieu basique…' },
+    { nom: 'zone', duree: 1, motif: 'la zone de virage du BBT : 6,0 – 7,6' },
+    { nom: 'pka', duree: 1, motif: 'le pKa du BBT, au milieu de sa zone' },
+    { nom: 'tableau', duree: 2.6, motif: 'les zones de virage de quatre indicateurs', bulle: () => 'Chaque indicateur a sa propre zone de virage.' },
+  ];
+}
+
+function bande(c, ind, part) {
+  const pmax = 14 * part;
+  c.direct(() => {
+    const ctx = c.ctx;
+    for (let p = 0; p < pmax; p += .1) { const [r, g, b] = couleur(ind, p + .05); ctx.globalAlpha = .62; ctx.fillStyle = `rgb(${r},${g},${b})`; ctx.fillRect(PX(p), ind.y - BH / 2, PX(.1) - PX(0) + .6, BH); }
+    ctx.globalAlpha = 1;
+  });
+  c.texte(ind.nom, 14, ind.y + 6, { couleur: 'blanc', taille: 16 });
+  c.rect(AX.x0, ind.y - BH / 2, AX.x1 - AX.x0, BH, { couleur: 'faible', largeur: 1.3, arrondi: 3 });
+  c.texte(fr(ind.z[0], 1), PX(ind.z[0]) - 3, ind.y + BH / 2 + 15, { couleur: 'blanc', taille: 13, align: 'right' });
+  c.texte(fr(ind.z[1], 1), PX(ind.z[1]) + 3, ind.y + BH / 2 + 15, { couleur: 'blanc', taille: 13 });
+  c.repere(ind.id, 10, ind.y - BH / 2 - 4, AX.x1 - 6, BH + 24, 'la bande de ' + ind.nom);
+}
+function pastille(c, ind) {
+  c.direct(() => {
+    const [r, g, b] = couleur(ind, P.pH), ctx = c.ctx;
+    ctx.globalAlpha = .9; ctx.fillStyle = `rgb(${r},${g},${b})`; ctx.beginPath(); ctx.arc(150, ind.y, 9, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+    c.cercle(150, ind.y, 10, { couleur: 'blanc', largeur: 1.4 });
+  });
+}
+
+function dessiner(c, D) {
+  D.scene.cadre(61);
+  c.texte('Indicateurs colorés : la couleur dépend du pH', 380, 28, { couleur: 'blanc', taille: 19, align: 'center' });
+  if (D.commence('axe')) {
+    D.ecrire(c, 'axe');
+    const L = AX.x1 - AX.x0 + 18;
+    c.axe(AX.x0, AX.y, AX.x1 + 18, AX.y, Array.from({ length: 15 }, (_, i) => [(PX(i) - AX.x0) / L, String(i)]), { taille: 13 });
+    c.texte('pH', AX.x1 + 14, AX.y - 10, { couleur: 'faible', taille: 15, align: 'right' });
+    c.repere('axe', AX.x0 - 10, AX.y - 16, AX.x1 - AX.x0 + 40, 44, 'l’axe des pH');
+  }
+  if (D.commence('bande')) {
+    D.ecrire(c, 'bande');
+    bande(c, BBT, D.p('bande'));
+    c.repere('bande', 10, BBT.y - BH / 2 - 4, AX.x1 - 6, BH + 8, 'la bande du BBT');
+  }
+  if (D.commence('zone')) {
+    D.ecrire(c, 'zone');
+    c.rect(PX(BBT.z[0]), BBT.y - BH / 2 - 5, PX(BBT.z[1]) - PX(BBT.z[0]), BH + 10, { couleur: 'jaune', largeur: 2.4, arrondi: 4 });
+    c.texte('← zone de virage', PX(BBT.z[1]) + 36, BBT.y + BH / 2 + 15, { couleur: 'jaune', taille: 15 });
+    c.repere('zone', PX(BBT.z[0]) - 10, BBT.y - BH / 2 - 8, PX(BBT.z[1]) - PX(BBT.z[0]) + 160, BH + 30, 'la zone de virage du BBT');
+  }
+  if (D.commence('pka')) {
+    D.ecrire(c, 'pka');
+    c.ligne(PX(7), BBT.y - BH / 2 - 2, PX(7), BBT.y + BH / 2 + 2, { couleur: 'blanc', largeur: 2.4 });
+    c.texte('pKa ≈ 7,0', PX(7) + 72, BBT.y - BH / 2 - 11, { couleur: 'blanc', taille: 15 });
+    c.ligne(PX(7) + 70, BBT.y - BH / 2 - 15, PX(7) + 4, BBT.y - 4, { couleur: 'faible', largeur: 1.4 });
+    c.repere('pka', PX(7) - 10, BBT.y - BH / 2 - 30, 160, BH + 30, 'le pKa du BBT');
+  }
+  if (D.commence('tableau')) {
+    D.ecrire(c, 'tableau');
+    AUTRES.forEach((ind, i) => { const p = Math.min(1, Math.max(0, D.p('tableau') * 3 - i)); if (p > 0) bande(c, ind, p); });
+    c.repere('tableau', 10, IND[0].y - BH / 2 - 6, AX.x1 - 6, IND[3].y - IND[0].y + BH + 30, 'les zones de virage des quatre indicateurs');
+  }
+  // Le curseur pH et la couleur de chaque indicateur à ce pH.
+  if (D.vu('bande')) {
+    c.direct(() => {
+      c.ligne(PX(P.pH), 104, PX(P.pH), AX.y, { couleur: 'blanc', largeur: 1.6, pointille: [5, 5] });
+      c.texte(`pH = ${fr(P.pH, 1)}`, PX(P.pH), 98, { couleur: 'vert', taille: 16, align: 'center' });
+      c.point(PX(P.pH), AX.y, 7, 'vert');
+    });
+    c.repere('poignee_ph', PX(P.pH) - 30, 80, 60, AX.y - 66, 'le curseur pH');
+    pastille(c, BBT);
+    AUTRES.forEach((ind, i) => { if (D.p('tableau') * 3 - i >= .98) pastille(c, ind); });
+  }
+  return c.fin();
+}
+
+function voir(D) {
+  const s = ['Axe des pH de 0 à 14' + (D.commence('axe') ? '' : ' (pas encore dessiné)') + '.'];
+  if (D.commence('bande')) s.push('Bande du BBT : jaune jusqu’à 6,0, vert de 6,0 à 7,6, bleu après.');
+  if (D.commence('zone')) s.push('La zone verte 6,0 – 7,6 est encadrée en jaune : « zone de virage ».');
+  if (D.commence('pka')) s.push('Un trait au milieu : pKa ≈ 7,0.');
+  if (D.commence('tableau')) s.push('Bandes en escalier : hélianthine 3,1 – 4,4 ; rouge de méthyle 4,2 – 6,2 ; BBT 6,0 – 7,6 ; rouge de crésol 7,2 – 8,8.');
+  if (D.vu('bande')) s.push(`Curseur à pH = ${fr(P.pH, 1)} : ` + IND.filter(ind => ind === BBT || D.p('tableau') > 0).map(ind => `${ind.nom} ${nomCouleur(ind, P.pH)}`).join(', ') + '.');
+  return s.join(' ');
+}
+
+const regl = window.Tableau.curseur({ id: 'pH', label: 'pH =', min: 0, max: 14, step: .1, valeur: P.pH, commande: 'set_parameters',
+  onchange: v => DER.setParameters({ pH: v }) });
+document.getElementById('reglage').replaceChildren(regl);
+
+const DER = window.Deroule({
+  id: 'acides_bases_indicateurs', titre: 'Zones de virage', etapes, dessiner, voir,
+  params: () => ({ pH: P.pH }),
+  appliquer: p => {
+    const v = +p.pH; if (!Number.isFinite(v)) return false;
+    P.pH = Math.min(14, Math.max(0, Math.round(v * 10) / 10)); regl.maj(P.pH); return true;
+  },
+  schema: { pH: '0..14 (au dixième) : le curseur pH ; chaque pastille prend la couleur de son indicateur à ce pH' },
+  depart: () => 'L’axe des pH, puis la bande du BBT.',
+  accueil: () => 'Lance, puis fais glisser le pH : regarde la couleur de chaque indicateur.',
+  apresReglage: () => `pH = ${fr(P.pH, 1)} : BBT ${nomCouleur(BBT, P.pH)}.`,
+  messageFin: () => 'Chaque indicateur change de couleur dans sa zone de virage, autour de son pKa. Fais glisser le pH.',
+  texte: 'Zone de virage : domaine de pH où l’indicateur prend sa teinte sensible (mélange des deux couleurs). BBT : jaune pour pH < 6,0, vert de 6,0 à 7,6, bleu pour pH > 7,6 ; pKa(BBT) ≈ 7,0 au milieu de la zone. Hélianthine 3,1 – 4,4 (rouge → jaune) ; rouge de méthyle 4,2 – 6,2 (rouge → jaune) ; rouge de crésol 7,2 – 8,8 (jaune → rouge). Un curseur pH (0 à 14) donne la couleur de chaque indicateur.',
+  explication: [
+    { repere: 'bande', texte: 'La bande du BBT : jaune en milieu acide, bleu en milieu basique.' },
+    { repere: 'zone', texte: 'Entre six et sept virgule six, les deux formes se mélangent : c’est la zone de virage.' },
+    { repere: 'tableau', texte: 'Chaque indicateur a sa propre zone de virage.' },
+    { repere: 'poignee_ph', texte: 'Fais glisser le pH et regarde les pastilles changer de couleur.' },
+  ],
+});
+// Le curseur se glisse aussi directement sur l'axe des pH.
+window.Tableau.glisser(DER.scene.craie.canvas, {
+  toucher: (px, py) => { const [x, y] = DER.scene.local(px, py); return DER.vu('bande') && x > AX.x0 - 15 && x < AX.x1 + 15 && y > 80 && y < AX.y + 22 ? 'pH' : null; },
+  bouger: (id, px) => { const [x] = DER.scene.local(px, 0); P.pH = Math.round(Math.min(14, Math.max(0, (x - AX.x0) / (AX.x1 - AX.x0) * 14)) * 10) / 10; regl.maj(P.pH); DER.scene.sale = true; },
+  lacher: () => DER.setParameters({ pH: P.pH }),
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

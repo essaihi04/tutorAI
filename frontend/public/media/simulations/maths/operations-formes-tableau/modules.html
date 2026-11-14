@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le module d'un produit — nombres complexes</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Le plan complexe à la craie : a sur un cercle de rayon 2, 1 + i sur un cercle de rayon √2, leur produit sur un cercle de rayon 2√2 ; en bas le piège |1 + (−1)| = 0"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Nombres complexes » (math_ch6_nombres_complexes), diapo nc_m3 (14 novembre 2026, professeur règle 28).
+ * En haut, en vert, les règles |zz′| = |z|·|z′|, |z/z′| = |z|/|z′|, |zⁿ| = |z|ⁿ. Dans le plan : a = √3 + i sur le cercle
+ * de rayon 2, 1 + i sur le cercle de rayon √2, et le produit (1 + i)a qui se pose sur le cercle de rayon 2√2 : on multiplie
+ * les rayons, sans développer. En bas, en orange, le piège : 1 + (−1) = 0, de module 0, mais |1| + |−1| = 2 ; la phrase
+ * |z + z′| = |z| + |z′| barrée. Curseurs : l'angle de a (le produit tourne, son module reste |a|·√2) et le module de a.
+ * Moments : regle, quotient, puissance, donnees, module_a, module_1i, produit, sans_developper, piege, barre.
+ * Repères : regle, plan, a, cercle_a, cercle_b, produit, calcul_produit, piege, barre.
+ */
+const { fr } = MathsTableau;
+const OX = 178, OY = 236, UN = 40;
+const P = (x, y) => [OX + x * UN, OY - y * UN];
+const deg = Math.PI / 180;
+
+MathsTableau.page({
+  id: 'nc_modules', titre: 'Nombres complexes',
+  texte: 'Construction à la craie : le module d’un produit est le produit des modules (|zz′| = |z|·|z′|, de même quotient et puissance). Dans le plan : a = √3 + i (|a| = 2), 1 + i (|1 + i| = √2), le produit sur le cercle de rayon 2√2, sans développer. Le piège : |1 + (−1)| = 0 mais |1| + |−1| = 2',
+  vues: {
+    produit: {
+      titre: 'Le module d’un produit',
+      params: { theta: { min: 0, max: 345, pas: 15, defaut: 30, label: 'angle de a :', unite: '°', sens: 'argument de a en degrés (le produit tourne)' },
+        r: { min: 0.5, max: 2.5, pas: 0.25, defaut: 2, label: '|a| =', decimales: 2, sens: 'module de a' } },
+      curseurs: ['theta', 'r'],
+      dessiner(c, K) {
+        const th = K.P.theta * deg, r = K.P.r, a = [r * Math.cos(th), r * Math.sin(th)], b = [1, 1];
+        const ab = [a[0] * b[0] - a[1] * b[1], a[0] * b[1] + a[1] * b[0]], rab = r * Math.SQRT2;
+        // En haut, en vert : les trois règles.
+        c.texte('|z z′| = |z| × |z′|', 30, 40, { couleur: 'vert', taille: 21 });
+        c.repere('regle', 24, 18, 214, 30, 'le module d’un produit');
+        K.marque('regle');
+        c.texte('|z / z′| = |z| / |z′|', 270, 40, { couleur: 'vert', taille: 21 });
+        K.marque('quotient');
+        c.texte('|z^{n}| = |z|^{n}', 530, 40, { couleur: 'vert', taille: 21 });
+        c.rect(16, 14, 690, 38, { couleur: 'vert', arrondi: 8, largeur: 1.4 });
+        K.marque('puissance');
+        c.pause(.3);
+        // Le plan.
+        c.fleche(OX - 150, OY, OX + 160, OY, { couleur: 'faible', largeur: 1.4 });
+        c.fleche(OX, OY + 140, OX, OY - 150, { couleur: 'faible', largeur: 1.4 });
+        c.texte('O', OX - 16, OY + 18, { couleur: 'faible', taille: 15 });
+        c.ligne(...P(1, -0.1), ...P(1, 0.1), { couleur: 'faible', largeur: 1.2 }); c.texte('1', ...P(0.95, -0.45), { couleur: 'faible', taille: 14 });
+        c.repere('plan', OX - 150, OY - 150, 310, 290, 'le plan complexe');
+        K.lignes(370, 104, [{ t: '2017 N :  a = √3 + i', couleur: 'blanc', taille: 20, moment: 'donnees' }]);
+        // a et son cercle (rayon |a|).
+        c.cercle(OX, OY, r * UN, { couleur: 'cyan', largeur: 1.3, pointille: [4, 5] });
+        c.ligne(OX, OY, ...P(...a), { couleur: 'cyan', largeur: 2.2 });
+        c.point(...P(...a), 5.5, 'cyan'); c.texte('a', P(...a)[0] + 8, P(...a)[1] - 8, { couleur: 'cyan', taille: 19 });
+        c.repere('a', P(...a)[0] - 12, P(...a)[1] - 26, 36, 36, 'le point a');
+        c.repere('cercle_a', OX - r * UN, OY - r * UN, 2 * r * UN, 2 * r * UN, `le cercle de rayon ${fr(r, 2)}`);
+        K.lignes(370, 144, [{ t: '|a| = √(3 + 1) = 2', couleur: 'cyan', taille: 20, moment: 'module_a' }]);
+        // 1 + i et son cercle (rayon √2).
+        c.cercle(OX, OY, Math.SQRT2 * UN, { couleur: 'orange', largeur: 1.3, pointille: [4, 5] });
+        c.ligne(OX, OY, ...P(...b), { couleur: 'orange', largeur: 2.2 });
+        c.point(...P(...b), 5.5, 'orange'); c.texte('1 + i', P(...b)[0] + 8, P(...b)[1] - 6, { couleur: 'orange', taille: 17 });
+        c.repere('cercle_b', OX - Math.SQRT2 * UN, OY - Math.SQRT2 * UN, 2 * Math.SQRT2 * UN, 2 * Math.SQRT2 * UN, 'le cercle de rayon √2');
+        K.lignes(370, 184, [{ t: '|1 + i| = √2', couleur: 'orange', taille: 20, moment: 'module_1i' }]);
+        c.pause(.3);
+        // Le produit : il se pose sur le cercle de rayon |a| × √2.
+        c.cercle(OX, OY, rab * UN, { couleur: 'jaune', largeur: 1.6, pointille: [6, 5] });
+        c.ligne(OX, OY, ...P(...ab), { couleur: 'jaune', largeur: 2.8 });
+        c.point(...P(...ab), 6.5, 'jaune'); c.texte('(1 + i) a', P(...ab)[0] + 9, P(...ab)[1] - 8, { couleur: 'jaune', taille: 17 });
+        c.repere('produit', P(...ab)[0] - 14, P(...ab)[1] - 28, 100, 40, 'le produit (1 + i) a');
+        K.lignes(370, 230, [{ t: '|(1 + i) a| = √2 × 2 = 2√2', couleur: 'jaune', taille: 21, cadre: 'jaune', repere: 'calcul_produit', label: 'on multiplie les modules', moment: 'produit' }]);
+        K.lignes(370, 268, [{ t: 'sans développer !', couleur: 'jaune', taille: 18, moment: 'sans_developper' }]);
+        c.texte(`ici : |a| = ${fr(r, 2)}, |1 + i| ≈ 1,41  →  |(1 + i) a| ≈ ${fr(rab, 2)}`, 370, 300, { couleur: 'faible', taille: 16 });
+        c.pause(.4);
+        // En bas, en orange : le piège de la somme.
+        c.point(...P(1, 0), 5, 'rouge'); c.point(...P(-1, 0), 5, 'rouge');
+        c.texte('1', ...P(1.05, 0.25), { couleur: 'rouge', taille: 15 }); c.texte('−1', ...P(-1.45, 0.25), { couleur: 'rouge', taille: 15 });
+        c.cercle(OX, OY, 7, { couleur: 'rouge', largeur: 2 });
+        K.lignes(370, 346, [{ t: '|1 + (−1)| = 0   mais   |1| + |−1| = 2', couleur: 'orange', taille: 19, repere: 'piege', label: 'le piège de la somme', moment: 'piege' }]);
+        c.texte('|z + z′| = |z| + |z′|', 400, 390, { couleur: 'rouge', taille: 20 });
+        c.ligne(392, 394, 600, 372, { couleur: 'rouge', largeur: 2.6 });
+        c.repere('barre', 390, 366, 216, 32, 'la phrase barrée');
+        K.marque('barre');
+      },
+      lecture: K => { const r = K.P.r; return `|a| = ${fr(r, 2)}, angle ${K.P.theta}° : le produit (1 + i)a est sur le cercle de rayon ${fr(r, 2)} × √2 ≈ ${fr(r * Math.SQRT2, 2)}, quel que soit l’angle.`; },
+      decrire: K => { const r = K.P.r; return {
+        regle: 'En haut, en vert : |zz′| = |z| × |z′|.',
+        quotient: 'Puis |z/z′| = |z|/|z′|.',
+        puissance: 'Puis |zⁿ| = |z|ⁿ, le tout encadré en vert.',
+        donnees: 'Un plan complexe à gauche ; à droite : 2017 N : a = √3 + i.',
+        module_a: `Le point a (cyan, angle ${K.P.theta}°) sur un cercle pointillé de rayon ${fr(r, 2)} ; écrit |a| = √(3 + 1) = 2.`,
+        module_1i: 'Le point 1 + i (orange) sur un cercle de rayon √2 ; écrit |1 + i| = √2.',
+        produit: `Le produit (1 + i)a (jaune) se pose sur un grand cercle de rayon ${fr(r * Math.SQRT2, 2)} ; encadré jaune : |(1 + i)a| = √2 × 2 = 2√2.`,
+        sans_developper: 'Écrit : sans développer !',
+        piege: 'En bas, en orange : |1 + (−1)| = 0 mais |1| + |−1| = 2 ; dans le plan, les points 1 et −1 en rouge, leur somme en O.',
+        barre: 'En rouge, barrée : |z + z′| = |z| + |z′|.',
+      }; },
+      motifs: { regle: 'module d’un produit', quotient: 'module d’un quotient', puissance: 'module d’une puissance', donnees: 'les données', module_a: '|a| = 2', module_1i: '|1 + i| = √2', produit: 'on multiplie les modules', sans_developper: 'sans développer', piege: 'le piège de la somme', barre: 'la phrase barrée' },
+      finale: 'Tourne a : le produit tourne aussi, mais reste sur le même cercle.',
+      explication: [
+        { repere: 'cercle_a', texte: 'a est à la distance 2 de O.' },
+        { repere: 'cercle_b', texte: '1 + i est à la distance √2.' },
+        { repere: 'produit', texte: 'Leur produit est à la distance 2 × √2 : on multiplie les modules.' },
+        { repere: 'piege', texte: 'Pour une somme, ça ne marche pas : 1 et −1 donnent 0.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

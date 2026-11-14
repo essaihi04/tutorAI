@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Aller directement à la case n — terme général</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Une rangée de cases u₀ à u₈ à la craie ; des sauts de + r (ou de × q) vont de la case de départ à la case n ; on compte les sauts : n − p"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Suites numériques » (math_ch3_suites_numeriques), diapos su_a5_terme_arith et su_a7_terme_geo
+ * (14 novembre 2026, professeur règle 28). Une rangée de cases u₀ … u₈ ; pour aller de la case p à la case n,
+ * on fait n − p sauts de « + r » (arithmétique) ou de « × q » (géométrique) : la formule du terme général est le
+ * compte des sauts. Les sauts partent de la case p (général), puis de u₀, puis de u₁.
+ * Vues : ?vue=arith (curseurs n et r ; moments cases, formule, p_zero, p_un, exemple : u₀ = 2, r = 3, les valeurs
+ *        s'écrivent dans les cases) | geo (curseur n ; moments cases, formule, p_zero, p_un, q_zero : n = 0, aucun saut,
+ *        q⁰ = 1, on retrouve u₀).
+ * Repères : cases, sauts, compte, formule, p_zero, p_un, exemple / q_zero.
+ */
+const { fr } = MathsTableau;
+const NB = 9, CX = i => 62 + i * 79, BY = 150, BW = 56, BH = 40;
+const DUREE_SAUT = .45;
+
+/** Les cases u₀ … u₈ ; la case de départ en cyan, celle d'arrivée en jaune (dessin direct, selon la phase). */
+function cases(c) {
+  for (let i = 0; i < NB; i++) {
+    c.rect(CX(i) - BW / 2, BY, BW, BH, { couleur: 'faible', arrondi: 6, largeur: 1.5, duree: .05 });
+    c.texte(`u_${i}`, CX(i), BY + BH + 24, { couleur: 'faible', taille: 18, align: 'center', duree: .05 });
+  }
+  c.repere('cases', CX(0) - BW / 2 - 4, BY - 4, CX(NB - 1) - CX(0) + BW + 8, BH + 36, 'les cases u₀ … u₈');
+}
+/** Les sauts de la case s à la case n, jusqu'à la fraction p ; étiquette de chaque saut. */
+function sauts(c, s, n, p, etiquette, couleur) {
+  const k = n - s, faits = p * k;
+  for (let j = 0; j < k; j++) {
+    const q = Math.min(1, Math.max(0, faits - j)); if (q <= 0) break;
+    const x1 = CX(s + j), x2 = CX(s + j + 1);
+    const pts = []; for (let u = 0; u <= q + 1e-9; u += 0.05) pts.push([x1 + (x2 - x1) * u, BY - 6 - 38 * Math.sin(Math.PI * u)]);
+    c.trait(pts, { couleur, largeur: 2.4, duree: 0 });
+    if (q >= 1) {
+      c.trait([[x2 - 9, BY - 16], [x2, BY - 6], [x2 + 2, BY - 18]], { couleur, largeur: 2, duree: 0 });
+      c.texte(etiquette(j), (x1 + x2) / 2, BY - 50, { couleur, taille: 16, align: 'center', duree: 0 });
+    }
+  }
+  c.rect(CX(s) - BW / 2 - 3, BY - 3, BW + 6, BH + 6, { couleur: 'cyan', arrondi: 8, largeur: 2.2, duree: 0 });
+  if (p >= 1) c.rect(CX(n) - BW / 2 - 3, BY - 3, BW + 6, BH + 6, { couleur: 'jaune', arrondi: 8, largeur: 2.2, duree: 0 });
+  c.repere('sauts', CX(s) - BW / 2, BY - 62, Math.max(BW, CX(n) - CX(s) + BW), BH + 62, `${k} saut${k > 1 ? 's' : ''}`);
+}
+
+/**
+ * Construction commune aux deux vues. `phases` : [{ debut, nom, ligne }] ; chaque phase réserve le temps de ses sauts,
+ * puis écrit sa ligne. Les sauts d'une seule phase sont visibles à la fois : ceux de la phase en cours.
+ */
+function construire(c, K, def) {
+  const n = K.P.n, t = c.t;
+  K.titre(def.titre);
+  cases(c);
+  K.marque('cases');
+  c.pause(.3);
+  const P = [];
+  for (const ph of def.phases) {
+    const s = ph.depart, arrivee = ph.arrivee ?? n, debut = c.cur, duree = Math.max(.4, (arrivee - s) * DUREE_SAUT);
+    if (ph.avant) ph.avant(c);
+    const d0 = c.cur; c.pause(duree);
+    P.push({ ...ph, s, arrivee, debut, d0, duree });
+    K.lignes(ph.x, ph.y, ph.lignes, 40);
+  }
+  // Les sauts de la phase en cours (la dernière commencée), et le compte des sauts.
+  c.direct(() => {
+    const cour = [...P].reverse().find(ph => !(t < ph.debut)) || null;
+    if (!cour) return;
+    const p = Number.isFinite(t) ? Math.min(1, Math.max(0, (t - cour.d0) / cour.duree)) : 1;
+    sauts(c, cour.s, cour.arrivee, p, cour.etiquette, cour.couleur || 'vert');
+    const k = cour.arrivee - cour.s;
+    if (p < 1) return;             // le compte s'écrit quand le dernier saut est arrivé
+    const txt = k === 0 ? `de u_${cour.s} à u_${cour.arrivee} : aucun saut` : `de u_${cour.s} à u_${cour.arrivee} : ${cour.compte} = ${k} saut${k > 1 ? 's' : ''} de ${cour.de}`;
+    c.texte(txt, 380, 262, { couleur: 'blanc', taille: 19, align: 'center' });
+    c.repere('compte', 150, 242, 460, 28, 'le nombre de sauts');
+  });
+}
+
+const arith = {
+  titre: 'Aller directement à la case n',
+  params: { n: { min: 2, max: 8, pas: 1, defaut: 6, label: 'n =', sens: 'case d’arrivée' }, r: { min: -2, max: 5, pas: 1, defaut: 3, label: 'r =', sens: 'raison de l’exemple (u₀ = 2)' } },
+  curseurs: ['n', 'r'],
+  dessiner(c, K) {
+    const n = K.P.n, r = K.P.r, u = i => 2 + i * r, sr = r < 0 ? `− ${-r}` : `+ ${r}`;
+    construire(c, K, {
+      titre: 'Aller directement à la case n : des sauts de + r',
+      phases: [
+        { depart: 2, etiquette: () => '+ r', compte: 'n − p', de: '+ r', x: 30, y: 312,
+          lignes: [{ t: 'u_n = u_p + (n − p) r', couleur: 'jaune', taille: 22, cadre: 'jaune', repere: 'formule', label: 'la formule du terme général', moment: 'formule' }] },
+        { depart: 0, etiquette: () => '+ r', compte: 'n − 0', de: '+ r', x: 30, y: 356,
+          lignes: [{ t: 'p = 0 :  u_n = u_0 + n r', couleur: 'cyan', taille: 20, repere: 'p_zero', label: 'premier terme u₀', moment: 'p_zero' }] },
+        { depart: 1, etiquette: () => '+ r', compte: 'n − 1', de: '+ r', x: 30, y: 398,
+          lignes: [{ t: 'p = 1 :  u_n = u_1 + (n − 1) r', couleur: 'cyan', taille: 20, repere: 'p_un', label: 'premier terme u₁', moment: 'p_un' }] },
+        { depart: 0, etiquette: () => sr, compte: 'n', de: sr, couleur: 'orange', x: 410, y: 312,
+          avant: cc => { for (let i = 0; i < NB; i++) cc.texte(fr(u(i), 0), CX(i), BY + 27, { couleur: 'orange', taille: 19, align: 'center', duree: .12 }); },
+          lignes: [
+            { t: `u_0 = 2 ,  r = ${r}`, couleur: 'orange', taille: 20 },
+            { t: `u_n = 2 ${sr} n`, couleur: 'orange', taille: 22, cadre: 'orange' },
+            { t: `u_${n} = 2 ${r < 0 ? '−' : '+'} ${Math.abs(r)} × ${n} = ${fr(u(n), 0)}`, couleur: 'blanc', taille: 20, repere: 'exemple', label: 'l’exemple : u₀ = 2, r = 3', moment: 'exemple' },
+          ] },
+      ],
+    });
+  },
+  lecture: K => { const n = K.P.n, r = K.P.r; return `De u₀ à u${n} : ${n} sauts de ${r < 0 ? '−' : '+'} ${Math.abs(r)} ; u${n} = 2 ${r < 0 ? '−' : '+'} ${Math.abs(r)} × ${n} = ${2 + n * r}.`; },
+  decrire: K => { const n = K.P.n, r = K.P.r; return {
+    cases: 'Une rangée de neuf cases u₀ … u₈.',
+    formule: `Des sauts « + r » vont de la case u₂ (cadre cyan) à la case u${n} (cadre jaune) ; écrit : « de u₂ à u${n} : n − p = ${n - 2} sauts de + r », puis la formule encadrée u_n = u_p + (n − p) r.`,
+    p_zero: `Les sauts partent maintenant de u₀ : ${n} sauts ; écrit : p = 0 : u_n = u₀ + n r.`,
+    p_un: `Les sauts partent de u₁ : ${n - 1} sauts ; écrit : p = 1 : u_n = u₁ + (n − 1) r.`,
+    exemple: `Exemple en orange : les valeurs s’écrivent dans les cases (2, ${2 + r}, ${2 + 2 * r} …), u₀ = 2, r = ${r} ; u_n = 2 + ${r} n ; u${n} = ${2 + n * r}.`,
+  }; },
+  motifs: { cases: 'les cases', formule: 'la formule générale', p_zero: 'premier terme u₀', p_un: 'premier terme u₁', exemple: 'l’exemple' },
+  finale: 'Glisse n ou r : compte les sauts, la formule donne la case n directement.',
+  explication: [
+    { repere: 'sauts', texte: 'De la case p à la case n, on fait n − p sauts.' },
+    { repere: 'formule', texte: 'Chaque saut ajoute r : u_n = u_p + (n − p) r.' },
+    { repere: 'exemple', texte: 'Avec u₀ = 2 et r = 3, u_n = 2 + 3n.' },
+  ],
+};
+
+const geo = {
+  titre: 'Aller directement à la case n : sauts de × q',
+  params: { n: { min: 2, max: 8, pas: 1, defaut: 6, label: 'n =', sens: 'case d’arrivée' } },
+  curseurs: ['n'],
+  dessiner(c, K) {
+    construire(c, K, {
+      titre: 'Aller directement à la case n : des sauts de × q',
+      phases: [
+        { depart: 2, etiquette: () => '× q', compte: 'n − p', de: '× q', x: 30, y: 312,
+          lignes: [{ t: 'u_n = u_p × q^{n − p}', couleur: 'jaune', taille: 22, cadre: 'jaune', repere: 'formule', label: 'la formule du terme général', moment: 'formule' }] },
+        { depart: 0, etiquette: () => '× q', compte: 'n − 0', de: '× q', x: 30, y: 356,
+          lignes: [{ t: 'p = 0 :  u_n = u_0 × q^{n}', couleur: 'cyan', taille: 20, repere: 'p_zero', label: 'premier terme u₀', moment: 'p_zero' }] },
+        { depart: 1, etiquette: () => '× q', compte: 'n − 1', de: '× q', x: 30, y: 398,
+          lignes: [{ t: 'p = 1 :  u_n = u_1 × q^{n − 1}', couleur: 'cyan', taille: 20, repere: 'p_un', label: 'premier terme u₁', moment: 'p_un' }] },
+        { depart: 0, arrivee: 0, etiquette: () => '', compte: '', de: '', x: 420, y: 312,
+          lignes: [
+            { t: 'n = 0 : aucun saut', couleur: 'orange', taille: 20 },
+            { t: 'q⁰ = 1  (et pas 0)', couleur: 'orange', taille: 22, cadre: 'orange', repere: 'q_zero', label: 'q⁰ = 1' },
+            { t: 'u_0 × q⁰ = u_0 × 1 = u_0', couleur: 'blanc', taille: 20, moment: 'q_zero' },
+          ] },
+      ],
+    });
+  },
+  lecture: K => `De u₀ à u${K.P.n} : ${K.P.n} sauts de × q, donc u${K.P.n} = u₀ × q^${K.P.n}.`,
+  decrire: K => { const n = K.P.n; return {
+    cases: 'Une rangée de neuf cases u₀ … u₈.',
+    formule: `Des sauts « × q » vont de la case u₂ (cadre cyan) à la case u${n} (cadre jaune) : n − p = ${n - 2} sauts ; la formule encadrée u_n = u_p × q^(n − p).`,
+    p_zero: `Les sauts partent de u₀ : ${n} sauts ; écrit : p = 0 : u_n = u₀ × qⁿ.`,
+    p_un: `Les sauts partent de u₁ : ${n - 1} sauts ; écrit : p = 1 : u_n = u₁ × q^(n − 1).`,
+    q_zero: 'n = 0 : la case de départ est aussi celle d’arrivée, aucun saut ; encadré : q⁰ = 1 (et pas 0) ; u₀ × q⁰ = u₀.',
+  }; },
+  motifs: { cases: 'les cases', formule: 'la formule générale', p_zero: 'premier terme u₀', p_un: 'premier terme u₁', q_zero: 'n = 0 : q⁰ = 1' },
+  finale: 'Glisse n : autant de « × q » que de sauts.',
+  explication: [
+    { repere: 'sauts', texte: 'Chaque saut multiplie par q.' },
+    { repere: 'formule', texte: 'n − p sauts : q puissance n − p.' },
+    { repere: 'q_zero', texte: 'Aucun saut : on multiplie par q⁰ = 1, on reste sur u₀.' },
+  ],
+};
+
+MathsTableau.page({
+  id: 'su_sauts', titre: 'Le terme général',
+  texte: 'Construction à la craie : une rangée de cases u₀ … u₈ ; pour aller de la case p à la case n on fait n − p sauts de + r (suite arithmétique : u_n = u_p + (n − p) r) ou de × q (suite géométrique : u_n = u_p × q^(n − p)) ; départ en u₀ ou en u₁ ; exemple u₀ = 2, r = 3 ; q⁰ = 1',
+  vues: { arith, geo },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
