@@ -21,18 +21,19 @@ export default function SansDefilement({ children, agrandirMax = 1, className = 
         const cs = getComputedStyle(z);
         const H = z.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
         const W = z.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-        c.style.zoom = '1';
-        c.style.width = `${W}px`;
-        const h = c.scrollHeight, w = c.scrollWidth;
-        let s = Math.min(agrandirMax, h > 0 ? H / h : 1, w > 0 ? W / w : 1);
-        // agrandi, le texte revient à la ligne autrement : on vérifie, et on recule jusqu'à ce que tout tienne
-        for (let i = 0; i < 12; i++) {
+        // Le plus grand zoom qui tient, cherché par dichotomie (14 novembre 2026) : à chaque zoom le texte revient à la
+        // ligne autrement (plus étroit = plus haut), donc une seule estimation suivie de reculs restait bien trop petite
+        // quand des dessins partagent la largeur (zoom 0,47 pour un contenu qui n'occupait qu'un tiers de la hauteur).
+        const tient = (s: number) => {
           c.style.zoom = String(s);
           c.style.width = `${W / s}px`;
-          if (c.scrollHeight * s <= H + 1 && c.scrollWidth * s <= W + 1) break;
-          s *= 0.94;
-        }
-        derniere = s;
+          return c.scrollHeight * s <= H + 1 && c.scrollWidth * s <= W + 1;
+        };
+        let bas = 0.2, haut = agrandirMax;
+        if (tient(haut)) bas = haut;
+        else for (let i = 0; i < 9; i++) { const m = (bas + haut) / 2; if (tient(m)) bas = m; else haut = m; }
+        tient(bas);
+        derniere = bas;
       });
     };
     ajuster();

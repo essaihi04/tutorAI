@@ -421,7 +421,8 @@ export default function CoursePlayer({
           <div className={`absolute inset-0 z-[110] flex items-stretch justify-center bg-[#07101f]/92 p-3 backdrop-blur-sm sm:p-6 ${tuteur3D ? 'md:pr-[var(--colonne-tuteur)]' : ''}`}
             style={{ ['--colonne-tuteur' as string]: `${COLONNE_TUTEUR + placeClavier}px`, paddingRight: !tuteur3D && placeClavier ? placeClavier : undefined,
               paddingBottom: hauteurClavierTelephone(clavierOuvert) || undefined }}>
-            <div className="h-full w-full max-w-3xl">{memoire.ecran}</div>
+            {/* large (14 novembre 2026) : le cahier et ses dessins prennent la place de l'écran au lieu de rester petits */}
+            <div className="h-full w-full max-w-6xl">{memoire.ecran}</div>
           </div>
         )}
         {started && mode !== 'concentration' && (

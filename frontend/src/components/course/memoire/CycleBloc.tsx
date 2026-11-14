@@ -6,6 +6,7 @@ import type { EnteteCahier } from '../cahier';
 import { taire } from './voix';
 import SansDefilement from '../SansDefilement';
 import FiguresCahier from '../FigureCahier';
+import { invitationCahier } from './invitationsCahier';
 import { DetecteurSaturation, PHRASES_SATURATION, tempsDeLectureMs, useInactivite, type CauseSaturation } from './saturation';
 
 /**
@@ -156,6 +157,14 @@ export default function CycleBloc({ bloc, place, etapeInitiale = 'cahier', titre
   const base = { cours_id: place.coursId, seance_id: place.seanceId, bloc_id: bloc.id, bloc_index: place.bloc, seance_index: place.seance };
 
   useEffect(() => { if (etape === null) onFini(); }, [etape]); // eslint-disable-line react-hooks/exhaustive-deps
+  // le cours s'arrête pour le cahier : le tuteur invite à écrire, en darija, une phrase différente à chaque fois
+  // (invitationsCahier.ts, 14 novembre 2026) ; une seule fois par bloc
+  const invite = useRef('');
+  useEffect(() => {
+    if (etape !== 'cahier' || invite.current === bloc.id) return;
+    invite.current = bloc.id;
+    onJouer?.(invitationCahier());
+  }, [etape, bloc.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const saturer = (cause: CauseSaturation, action: 'exercice' | 'pause') => {
     void noter({ evenement: 'saturation', ...base, cause, action });
@@ -192,7 +201,7 @@ export default function CycleBloc({ bloc, place, etapeInitiale = 'cahier', titre
       {alerte && <p className="rounded-lg bg-sky-400/10 px-3 py-2 text-sm text-sky-100" style={{ fontFamily: 'system-ui, sans-serif' }}>{PHRASES_SATURATION[alerte]}</p>}
       {etape === 'cahier' && (
         // tout le cahier du bloc dans l'écran, sans défiler (user rule, 12 novembre 2026)
-        <SansDefilement agrandirMax={1.25}>
+        <SansDefilement agrandirMax={1.6}>
           <TableauCahier bloc={bloc} entetes={entetes} onEcrit={duree => { void noter({ evenement: 'cahier', ...base, duree_s: duree }); suivante(); }} />
         </SansDefilement>
       )}
