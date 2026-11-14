@@ -1,0 +1,479 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rappels de chimie — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="tlr.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Rappels peints et à la craie : l’atome et l’ion, la conservation des atomes et des charges, la mole, la concentration ; chaque notion montrée de deux façons"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <span id="reglage" data-professor-control="set_parameters"></span>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Rappels de chimie — au tableau (audit « rythme et départ de zéro », 14 novembre 2026 — règles 33 et 34 du professeur).
+ * Moteur du déroulé et appareils peints recopiés de dipole-rc-tableau/condensateur.html (même protocole, mêmes commandes).
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lisse = p => p * p * (3 - 2 * p);
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');   // 1,50 → 1,5 ; 2,00 → 2
+const ECRITURE = 2.5;
+function Moteur(o) {
+  const q = new URLSearchParams(location.search);
+  const S = { vue: o.vues.includes(q.get('vue')) ? q.get('vue') : o.vues[0], t: 0, running: false, pause: false, fait: false,
+    jusqua: null, motif: '', emis: 0, dit: '', mesure: false };
+  const V = o.vitesse ?? 1.7, T0 = o.T0 ?? .8, HOLD = {};
+  let TL = null;
+  function construire() {
+    let s = T0; const ev = [];
+    for (const e of o.etapes(S.vue)) {
+      const anim = e.anim || 0, d = { ...e, anim, debut: s, ecrit: s + (e.ecritDes ?? anim) };
+      d.fin = Math.max(s + anim, d.ecrit + (HOLD[e.nom] ?? 1.5)) + .35;
+      s = d.fin; ev.push(d);
+    }
+    const mom = {}; for (const e of ev) mom[e.nom] = e.fin; mom.fin = s + (o.queue ?? .6);
+    TL = { ev, M: mom };
+  }
+  const ev = nom => TL.ev.find(e => e.nom === nom);
+  const M = {
+    S, ev, Moments: () => TL.M,
+    /** Avancement (0 → 1) de l’animation de l’étape `nom`. */
+    p(nom) { const e = ev(nom); if (!e) return 0; return e.anim > 0 ? clamp((S.t - e.debut) / e.anim, 0, 1) : (S.t >= e.debut - 1e-6 ? 1 : 0); },
+    commence(nom) { const e = ev(nom); return !!e && S.t > e.debut + 1e-6; },
+    vu(nom) { if (nom === 'fin') return S.t >= TL.M.fin - 1e-6; const e = ev(nom); return !!e && S.t >= e.fin - 1e-6; },
+    /** Ce qui s’écrit à l’étape `nom` : la craie écrit à partir de la fin de son animation. */
+    etape(c, nom, fn) {
+      const e = ev(nom); if (!e) return;
+      const t = c.t, cur = c.cur, comp = c.complet, w0 = e.ecrit;
+      c.t = S.t > 1e5 ? 1e9 : w0 + (S.t - w0) * V; c.cur = w0;
+      try { fn(); } finally { if (S.mesure) HOLD[nom] = (c.cur - w0) / V; c.t = t; c.cur = cur; if (!S.running) c.complet = comp; }
+    },
+    etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
+  };
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const cadreBase = scene.cadre;
+  scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
+  M.scene = scene; M.craie = scene.craie;
+  function calculer() {
+    construire();
+    const t = S.t, r = S.running; S.t = 1e6; S.running = false; S.mesure = true;
+    try { o.dessiner(scene.craie, M); } finally { S.t = t; S.running = r; S.mesure = false; }
+    construire(); scene.sale = true;
+  }
+  // La bulle est du texte simple : jamais de « _ » visible (u_C → uC, I_0 → I₀).
+  const sansSouligne = s => String(s).replace(/([A-Za-zΔτ])_\{?([A-Za-z0-9]+)\}?/g, (m, a, i) => a + (/^\d+$/.test(i) ? [...i].map(d => '₀₁₂₃₄₅₆₇₈₉'[d]).join('') : i));
+  const dire = (texte, kind = '') => { texte = sansSouligne(texte); S.dit = texte; bulle($('feedback'), texte, kind); };
+  const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+  let pont = null;
+  const emettre = () => pont && pont.emettre();
+  const noter = (a, d) => pont && pont.noter(a, d);
+  scene.avancer = dt => {
+    if (!S.running) return !!(o.anime && o.anime());
+    const avant = S.t; S.t += dt;
+    for (const e of TL.ev) if (avant < e.debut && S.t >= e.debut && e.bulle) dire(e.bulle());
+    if (S.jusqua != null && S.t >= S.jusqua) {
+      S.t = S.jusqua; S.jusqua = null; S.running = false;
+      if (S.t >= TL.M.fin - 1e-6) { finir(); return true; }
+      S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fx(S.t, 1)} s`) + '.');
+      noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); return true;
+    }
+    if (S.t >= TL.M.fin) { S.t = TL.M.fin; finir(); return true; }
+    if (performance.now() - S.emis > 500) { S.emis = performance.now(); emettre(); }
+    return true;
+  };
+  function finir() { S.running = false; S.fait = true; S.pause = false; S.jusqua = null; etiquette(); dire(o.messageFin(M), 'good'); noter('measurement', o.params(M)); emettre(); }
+  function start() { o.reprise && o.reprise(); S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire(o.depart(M)); noter('start', o.params(M)); emettre(); }
+  function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); }
+  function resume() { if (S.running) return; o.reprise && o.reprise(); if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('Ça repart…'); noter('resume'); emettre(); }
+  function setTime(p) {
+    const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+    o.reprise && o.reprise(); S.running = false; S.jusqua = null; S.t = clamp(t, 0, TL.M.fin); S.fait = S.t >= TL.M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+    etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fx(S.t, 1)} s.`); noter('set_time', { time_s: S.t }); emettre();
+  }
+  function playUntil(p) {
+    const noms = o.etapes(S.vue).map(e => e.nom).concat('fin');
+    const nom = noms.includes(p.moment) ? p.moment : null, cible = nom ? TL.M[nom] : +p.time_s;
+    if (!Number.isFinite(cible) || (p.moment && !nom && (p.time_s == null || p.time_s === ''))) { dire(`Moment inconnu : ${p.moment}.`, 'bad'); emettre(); return; }
+    o.reprise && o.reprise();
+    if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+    S.jusqua = clamp(cible, .01, TL.M.fin); S.motif = nom ? (o.motifs[nom] || nom) : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+    noter('play_until', { moment: nom, time_s: S.jusqua }); emettre();
+  }
+  function setParameters(p) {
+    p = p || {};
+    const r = o.appliquer(p, M) || {};
+    if (r.vue && o.vues.includes(r.vue) && r.vue !== S.vue) { S.vue = r.vue; r.change = true; r.vueChange = true; }
+    if (r.change) { calculer(); if (r.vueChange) scene.reecrire(); }
+    noter('set_parameters', o.params(M));
+    if (r.apres) r.apres();
+    else if (r.change && !r.garder) start();
+    else { scene.sale = true; emettre(); }
+  }
+  Object.assign(M, { noter, calculer, dire, start, pause, resume, setTime, playUntil, setParameters, emettre, etiquette });
+  $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+  window.Tableau.explication(o.explications);
+  const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+  M.lancer = () => {
+    calculer();
+    const listeMoments = o.vues.map(v => `${o.vues.length > 1 ? v + ' : ' : ''}${o.etapes(v).map(e => e.nom).concat('fin').join(' | ')}`).join(' ; ');
+    const config = { id: o.id, version: '1.0', title: o.titre, variants: o.vues.length > 1 ? o.vues.map(id => ({ id, label: o.titres[id] })) : [], commands: commandes,
+      command_schema: { set_parameters: o.schema, set_time: { time_s: '0..fin (arrêt sur cet instant de la scène, en s ; voir moments)' },
+        play_until: { moment: listeMoments, time_s: 'ou un instant en s' } } };
+    pont = protocole({ id: o.id, commandes, config, texte: o.texte,
+      etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle',
+        ce_qui_se_voit: o.voir(M) + (S.dit ? ` La bulle dit : « ${S.dit} »` : ''), current_variant: S.vue, time_s: +S.t.toFixed(2),
+        parameters: o.params(M), moments: Object.fromEntries(Object.entries(TL.M).map(([k, v]) => [k, +v.toFixed(2)])) }),
+      progression: () => (S.fait ? 1 : 0),
+      executer: (cmd, p) => ({ start, reset: start, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+    dire(o.depart(M));
+    setTimeout(() => { if (!S.running && S.t === 0 && !S.pause && !S.fait) start(); }, 900);
+  };
+  return M;
+}
+
+/* ── Appareils peints (règle 7 : ils ressemblent aux vrais ; le peint ne change jamais la physique) ── */
+const Peint = {
+  /** Sphère ombrée (électron : bleu). */
+  sphere(ctx, x, y, r, [clair, milieu, sombre] = ['#e3f3ff', '#3b9cff', '#0a3a8c'], a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r); g.addColorStop(0, clair); g.addColorStop(.45, milieu); g.addColorStop(1, sombre);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  },
+  /** Boîtier d’un générateur (vu de face) : coffret gris, afficheur, deux bornes (rouge +, noire −). */
+  generateur(ctx, x, y, w, h, affiche, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(x + 3, y + 4, w, h, 7); ctx.fill();
+    const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#5b6670'); g.addColorStop(.5, '#3b444c'); g.addColorStop(1, '#262c32');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 7); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1; ctx.stroke();
+    const ex = x + w * .14, ey = y + h * .3, ew = w * .72, eh = h * .26;
+    ctx.fillStyle = '#0d1a10'; ctx.beginPath(); ctx.roundRect(ex, ey, ew, eh, 3); ctx.fill();
+    ctx.fillStyle = '#7dfc8a'; ctx.font = `600 ${Math.round(eh * .72)}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(affiche, ex + ew / 2, ey + eh / 2 + 1);
+    ctx.restore();
+  },
+  /** Borne ronde (rouge ou noire). */
+  borne(ctx, x, y, rouge, a = 1) { Peint.sphere(ctx, x, y, 5, rouge ? ['#ffd0d0', '#e0393e', '#6d0f12'] : ['#9aa0a6', '#2b2f33', '#050607'], a); },
+  /** Appareil à cadran (ampèremètre ou voltmètre) : boîtier, cadran crème, graduations, aiguille (f de 0 à 1). */
+  cadran(ctx, cx, cy, r, f, lettre, graduations = null, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(cx - r - 4 + 3, cy - r - 4 + 4, 2 * r + 8, 2 * r + 8, 9); ctx.fill();
+    const g = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r); g.addColorStop(0, '#3a3f45'); g.addColorStop(1, '#1b1e22');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(cx - r - 4, cy - r - 4, 2 * r + 8, 2 * r + 8, 9); ctx.fill();
+    const f2 = ctx.createRadialGradient(cx - r * .3, cy - r * .4, r * .1, cx, cy, r); f2.addColorStop(0, '#fffaf0'); f2.addColorStop(1, '#e4dcc8');
+    ctx.fillStyle = f2; ctx.beginPath(); ctx.roundRect(cx - r, cy - r, 2 * r, 2 * r * .92, 6); ctx.fill();
+    const px = cx, py = cy + r * .55, R = r * 1.05, a0 = -Math.PI * .78, a1 = -Math.PI * .22;
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(px, py, R * .82, a0, a1); ctx.stroke();
+    const n = graduations ? graduations.length - 1 : 10;
+    for (let i = 0; i <= n * 2; i++) {
+      const an = a0 + (a1 - a0) * i / (n * 2), l = i % 2 ? .07 : .13;
+      ctx.beginPath(); ctx.moveTo(px + Math.cos(an) * R * .82, py + Math.sin(an) * R * .82); ctx.lineTo(px + Math.cos(an) * R * (.82 + l), py + Math.sin(an) * R * (.82 + l)); ctx.stroke();
+    }
+    ctx.fillStyle = '#c0392b'; ctx.beginPath(); ctx.arc(px + Math.cos(a1) * R * .86, py + Math.sin(a1) * R * .86, 1.6, 0, 7); ctx.fill();
+    if (graduations) {
+      ctx.fillStyle = '#333'; ctx.font = `${Math.round(r * .2)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      graduations.forEach((s, i) => { const an = a0 + (a1 - a0) * i / n; ctx.fillText(s, px + Math.cos(an) * R * 1.08, py + Math.sin(an) * R * 1.08 + 1); });
+    }
+    ctx.fillStyle = '#222'; ctx.font = `700 ${Math.round(r * .42)}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(lettre, cx, cy + r * .38);
+    const an = a0 + (a1 - a0) * clamp(f, -.02, 1.03);
+    ctx.strokeStyle = '#111'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px + Math.cos(an) * R * .9, py + Math.sin(an) * R * .9); ctx.stroke();
+    ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(px, py, 2.6, 0, 7); ctx.fill();
+    // Verre : un reflet léger (pour l’œil seulement).
+    ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.beginPath(); ctx.ellipse(cx - r * .35, cy - r * .55, r * .5, r * .16, -.3, 0, 7); ctx.fill();
+    ctx.restore();
+  },
+  /** Condensateur chimique bleu (vu de côté, debout) avec ses deux pattes ; bande claire « − ». */
+  chimique(ctx, x, y, w, h, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.strokeStyle = '#b8bec6'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x + w * .32, y + h); ctx.lineTo(x + w * .32, y + h + 14); ctx.moveTo(x + w * .68, y + h); ctx.lineTo(x + w * .68, y + h + 18); ctx.stroke();
+    const g = ctx.createLinearGradient(x, 0, x + w, 0); g.addColorStop(0, '#0b2a6b'); g.addColorStop(.35, '#2f6fe0'); g.addColorStop(.6, '#1d4fb8'); g.addColorStop(1, '#091f52');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, [w * .25, w * .25, 4, 4]); ctx.fill();
+    ctx.fillStyle = 'rgba(210,225,255,.75)'; ctx.fillRect(x + w * .7, y + 4, w * .16, h - 8);
+    ctx.fillStyle = '#0b2a6b'; for (let k = 0; k < 3; k++) ctx.fillRect(x + w * .74, y + 10 + k * (h - 20) / 3, w * .08, 2.4);
+    ctx.fillStyle = '#9aa3ad'; ctx.beginPath(); ctx.ellipse(x + w / 2, y + 3, w / 2 - 1, 3.2, 0, 0, 7); ctx.fill();
+    ctx.restore();
+  },
+  /** Résistor : corps beige en cylindre, bandes de couleur lues sur la valeur (Ω). */
+  resistor(ctx, x, y, w, h, ohm, a = 1) {
+    const COUL = ['#111', '#7b4a1e', '#d32f2f', '#f57c00', '#fbc02d', '#2e7d32', '#1565c0', '#7b1fa2', '#9e9e9e', '#fafafa'];
+    const e = Math.floor(Math.log10(ohm) + 1e-9) - 1, m = Math.round(ohm / 10 ** e), d1 = Math.floor(m / 10) % 10, d2 = m % 10;
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#f3e1bf'); g.addColorStop(.45, '#d9bf8f'); g.addColorStop(1, '#9c8358');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, h / 2.2); ctx.fill();
+    [[.24, d1], [.38, d2], [.52, clamp(e, 0, 9)], [.78, -1]].forEach(([f, k]) => {
+      ctx.fillStyle = k < 0 ? '#c9a227' : COUL[k]; ctx.fillRect(x + w * f, y + 1, w * .07, h - 2);
+    });
+    ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(x + h * .3, y + h * .18, w - h * .6, h * .12);
+    ctx.restore();
+  },
+  /** Interrupteur : socle sombre, plots laiton, levier métallique (pivot → bout). */
+  levier(ctx, px, py, bx, by, a = 1) {
+    ctx.save(); ctx.globalAlpha = a; ctx.lineCap = 'round';
+    ctx.strokeStyle = '#4a4f55'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(bx, by); ctx.stroke();
+    ctx.strokeStyle = '#c8ccd2'; ctx.lineWidth = 3.4; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(bx, by); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(px, py - 1); ctx.lineTo(bx, by - 1); ctx.stroke();
+    Peint.sphere(ctx, bx, by, 4.2, ['#ffe9c2', '#c98a2a', '#5a3a08']);
+    ctx.restore();
+  },
+  plot(ctx, x, y, a = 1) { Peint.sphere(ctx, x, y, 4.6, ['#fff1c9', '#cfa046', '#5e4210'], a); },
+};
+/* ── Rappels de chimie des années précédentes (règle 34 : on part de zéro, chaque notion dite deux fois, de deux façons) ──
+ * Vues (?vue=) et moments (play_until) :
+ *  - ion           : atome, perd, gagne, jetons          (un atome est neutre ; il perd 2 électrons → Cu²⁺ ; l’iode en gagne 1 → I⁻ ; les jetons + et −)
+ *  - conservation  : equation, atomes, charges, balance  (Zn + Cu²⁺ → Zn²⁺ + Cu : mêmes atomes, même charge ; la balance à niveau)
+ *  - mole          : douzaine, mole, milli, exemple      (la douzaine d’œufs ; la mole, un paquet de 6,02·10²³ entités ; 1 mmol = 10⁻³ mol)
+ *  - concentration : becher, double_n, formule, dilution, sirop   (C = n/V ; le sirop dans un verre ; curseur V)
+ * set_parameters : vue ; V_mL (concentration, 50..200).
+ * Atomes, œufs, bécher et verres sont peints (règle 32) ; la craie garde les symboles, les nombres et les phrases.
+ */
+const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a ?? c[3]})`;
+function becher(ctx, x, y, w, h, niv, coul) {
+  const yb = y + h, r = Math.min(12, w * .1), yl = yb - h * niv;
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(x + w / 2 + 4, yb + 5, w / 2 + 6, 5, 0, 0, 7); ctx.fill();
+  if (niv > 0) {
+    const g = ctx.createLinearGradient(0, yl, 0, yb);
+    g.addColorStop(0, rgba(coul, coul[3] * .8)); g.addColorStop(1, rgba([coul[0] * .7, coul[1] * .7, coul[2] * .8, coul[3]]));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x + 2.5, yl, w - 5, yb - yl - 2.5, [0, 0, r - 2, r - 2]); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.beginPath(); ctx.ellipse(x + w / 2, yl, w / 2 - 2.5, 3.5, 0, 0, 7); ctx.fill();
+  }
+  ctx.strokeStyle = 'rgba(225,238,255,.8)'; ctx.lineWidth = 2.2;
+  ctx.beginPath(); ctx.moveTo(x - 6, y - 4); ctx.quadraticCurveTo(x - 1, y - 2, x, y + 6);
+  ctx.lineTo(x, yb - r); ctx.arcTo(x, yb, x + r, yb, r); ctx.lineTo(x + w - r, yb); ctx.arcTo(x + w, yb, x + w, yb - r, r); ctx.lineTo(x + w, y); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.14)'; ctx.fillRect(x + w * .1, y + 10, w * .08, h - 22);
+  ctx.restore();
+}
+/** Atome peint : noyau rouge-orangé, nuage d’électrons bleus sur une couche. */
+function atome(ctx, cx, cy, nE, sym, couleur = ['#ffe0c0', '#d9772b', '#5e2a06'], depart = 0, a = 1) {
+  ctx.save(); ctx.globalAlpha = a;
+  const g = ctx.createRadialGradient(cx, cy, 4, cx, cy, 46); g.addColorStop(0, 'rgba(120,170,255,.16)'); g.addColorStop(1, 'rgba(120,170,255,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, 46, 0, 7); ctx.fill();
+  ctx.strokeStyle = 'rgba(200,220,255,.25)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(cx, cy, 36, 0, 7); ctx.stroke();
+  Peint.sphere(ctx, cx, cy, 13, couleur);
+  ctx.fillStyle = '#fff'; ctx.font = '700 12px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(sym, cx, cy + 1);
+  for (let k = 0; k < nE; k++) { const an = depart + k / Math.max(nE, 1) * Math.PI * 2; Peint.sphere(ctx, cx + 36 * Math.cos(an), cy + 36 * Math.sin(an), 4.2); }
+  ctx.restore();
+}
+function oeuf(ctx, x, y) {
+  const g = ctx.createRadialGradient(x - 3, y - 4, 1, x, y, 11); g.addColorStop(0, '#fff8ec'); g.addColorStop(.6, '#efdcc0'); g.addColorStop(1, '#b89a72');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x, y, 9, 11, 0, 0, 7); ctx.fill();
+}
+const BLEU = [40, 120, 230];
+const VUES = ['ion', 'conservation', 'mole', 'concentration'];
+const TITRES = { ion: 'l’atome, l’électron et l’ion', conservation: 'une équation conserve les atomes et les charges', mole: 'la quantité de matière : la mole', concentration: 'la concentration molaire' };
+const P = { V: 100 };
+const ETAPES = {
+  ion: [
+    { nom: 'atome', anim: 1.2, motif: 'l’atome de cuivre : autant de charges + dans le noyau que d’électrons autour : neutre', bulle: () => 'Un atome de cuivre…' },
+    { nom: 'perd', anim: 2.4, motif: 'il perd deux électrons : l’ion cuivre II, Cu²⁺', bulle: () => 'Deux électrons s’en vont…' },
+    { nom: 'gagne', anim: 2.4, motif: 'l’atome d’iode gagne un électron : l’ion iodure, I⁻', bulle: () => 'Et l’iode ?' },
+    { nom: 'jetons', anim: 3, motif: 'les jetons : on retire deux jetons −, il reste deux + de trop', bulle: () => 'Une autre façon de le voir…' },
+  ],
+  conservation: [
+    { nom: 'equation', anim: .8, motif: 'l’équation Zn + Cu²⁺ → Zn²⁺ + Cu', bulle: () => 'Une équation…' },
+    { nom: 'atomes', anim: 1.6, motif: 'les atomes : un Zn et un Cu de chaque côté', bulle: () => 'On compte les atomes…' },
+    { nom: 'charges', anim: 1.6, motif: 'les charges : +2 à gauche, +2 à droite', bulle: () => 'On compte les charges…' },
+    { nom: 'balance', anim: 3, motif: 'la balance à niveau : rien ne se perd', bulle: () => 'Une autre façon de le voir…' },
+  ],
+  mole: [
+    { nom: 'douzaine', anim: 2, motif: 'une douzaine : un paquet de 12 œufs', bulle: () => 'Au marché, on compte par paquets…' },
+    { nom: 'mole', anim: 2.4, motif: 'une mole : un paquet de 6,02·10²³ entités', bulle: () => 'En chimie, le paquet est énorme…' },
+    { nom: 'milli', anim: 1.2, motif: '1 mmol = 10⁻³ mol', bulle: () => 'Un plus petit paquet…' },
+    { nom: 'exemple', anim: 1.2, motif: 'n(I₂) = 2 mmol = 2·10⁻³ mol', bulle: () => 'Un exemple…' },
+  ],
+  concentration: [
+    { nom: 'becher', anim: 1.6, motif: () => `0,01 mol de soluté dans ${P.V} mL : C = ${fx(.01 / (P.V / 1000), 3)} mol/L`, bulle: () => 'Un soluté dissous dans l’eau…' },
+    { nom: 'double_n', anim: 1.8, motif: 'deux fois plus de soluté dans le même volume : C double, la couleur fonce', bulle: () => 'On double la quantité…' },
+    { nom: 'formule', anim: .8, motif: 'C = n / V, en mol/L', bulle: () => 'La relation…' },
+    { nom: 'dilution', anim: 2, motif: 'la même quantité dans deux fois plus d’eau : C est divisée par deux', bulle: () => 'Et si on ajoute de l’eau ?' },
+    { nom: 'sirop', anim: 3, motif: 'le sirop : même cuillère, petit verre foncé, grand verre clair', bulle: () => 'Une autre façon de le voir…' },
+  ],
+};
+let MOT = null;
+const motifDe = nom => { const e = ETAPES[MOT.S.vue].find(x => x.nom === nom); return e ? (typeof e.motif === 'function' ? e.motif() : e.motif) : nom; };
+const MOTIFS_PROXY = new Proxy({}, { get: (o, k) => (k === 'fin' ? 'fin' : motifDe(k)) });
+
+function dessiner(c, M) {
+  M.scene.cadre(23);
+  c.texte('Rappel : ' + TITRES[M.S.vue], 14, 26, { couleur: 'cyan', taille: 20 });
+  ({ ion: vueIon, conservation: vueConservation, mole: vueMole, concentration: vueConcentration })[M.S.vue](c, M);
+  return c.fin();
+}
+function vueIon(c, M) {
+  const pp = M.p('perd'), pg = M.p('gagne');
+  c.direct(() => {
+    const ctx = c.ctx;
+    if (M.commence('atome')) atome(ctx, 150, 150, M.commence('perd') && pp > .3 ? 6 : 8, 'Cu', undefined, 0, lisse(M.p('atome')));
+    if (M.commence('perd')) for (let k = 0; k < 2; k++) { const d = lisse(clamp((pp - .3) / .7, 0, 1)); if (d > 0) Peint.sphere(ctx, 150 + 36 + 140 * d, 150 - 30 + k * 60 - 30 * d * (k ? -1 : 1), 4.2); }
+    if (M.commence('gagne')) {
+      atome(ctx, 500, 150, 7 + (pg > .7 ? 1 : 0), 'I', ['#e8d6ff', '#7d3fc4', '#2a0b52'], .3);
+      const d = lisse(clamp(pg / .7, 0, 1)); if (pg <= .7) Peint.sphere(ctx, 700 - 164 * d, 70 + 80 * d, 4.2);
+    }
+  });
+  M.etape(c, 'atome', () => {
+    c.texte('atome de cuivre Cu : 29 charges + dans le noyau,', 30, 232, { couleur: 'blanc', taille: 15 });
+    c.texte('29 électrons (−) autour → charge totale 0 : neutre', 30, 252, { couleur: 'blanc', taille: 15 });
+    c.repere('atome_cu', 100, 100, 100, 100, 'l’atome de cuivre');
+  });
+  M.etape(c, 'perd', () => {
+    c.texte('il perd 2 électrons → +29 − 27 = +2', 30, 282, { couleur: 'jaune', taille: 16 });
+    c.texte('l’ion cuivre II : Cu²⁺', 30, 306, { couleur: 'jaune', taille: 20 });
+    c.repere('ion_cu', 20, 266, 330, 50, 'l’ion cuivre II, Cu²⁺');
+  });
+  M.etape(c, 'gagne', () => {
+    c.texte('l’atome d’iode I gagne 1 électron', 400, 232, { couleur: 'violet', taille: 16 });
+    c.texte('→ l’ion iodure : I⁻ (charge −1)', 400, 256, { couleur: 'violet', taille: 18 });
+    c.repere('ion_i', 440, 96, 130, 170, 'l’atome d’iode qui devient l’ion iodure I⁻');
+  });
+  if (M.commence('jetons')) {
+    const p = M.p('jetons'), part = lisse(clamp((p - .3) / .5, 0, 1));
+    c.direct(() => {
+      const ctx = c.ctx;
+      for (let k = 0; k < 6; k++) {
+        Peint.sphere(ctx, 420 + k * 34, 320, 12, ['#ffd0d0', '#e0393e', '#6d0f12']);
+        if (k < 4 || part < 1) Peint.sphere(ctx, 420 + k * 34 + (k >= 4 ? 60 * part : 0), 356 + (k >= 4 ? 40 * part : 0), 12, ['#d6ecff', '#3b8cff', '#0a3a8c'], k >= 4 ? 1 - part : 1);
+      }
+      ctx.fillStyle = '#fff'; ctx.font = '700 15px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      for (let k = 0; k < 6; k++) { ctx.fillText('+', 420 + k * 34, 321); if (k < 4) ctx.fillText('−', 420 + k * 34, 357); }
+    });
+    c.texte('6 + et 6 − : charge 0 ;', 30, 346, { couleur: 'bleu', taille: 15 });
+    c.texte('on enlève 2 − : il reste 2 + de trop → +2', 30, 368, { couleur: 'bleu', taille: 15 });
+    c.repere('jetons', 400, 300, 230, 80, 'les jetons + et −');
+  }
+}
+function vueConservation(c, M) {
+  const Y = 110;
+  M.etape(c, 'equation', () => {
+    c.texte('Zn  +  Cu²⁺  →  Zn²⁺  +  Cu', 380, Y, { couleur: 'blanc', taille: 30, align: 'center' });
+    c.repere('equation', 160, Y - 34, 440, 46, 'l’équation');
+  });
+  M.etape(c, 'atomes', () => {
+    c.texte('atomes : Zn : 1 | 1   Cu : 1 | 1', 380, Y + 48, { couleur: 'vert', taille: 19, align: 'center' });
+    c.repere('atomes', 200, Y + 26, 360, 30, 'le compte des atomes');
+  });
+  M.etape(c, 'charges', () => {
+    c.texte('charges : 0 + 2 = +2  |  +2 + 0 = +2', 380, Y + 84, { couleur: 'jaune', taille: 19, align: 'center' });
+    c.repere('charges', 200, Y + 62, 360, 30, 'le compte des charges');
+  });
+  if (M.commence('balance')) {
+    const p = lisse(M.p('balance')), tilt = .25 * (1 - p), cx = 380, cy = 300;
+    c.direct(() => {
+      const ctx = c.ctx; ctx.save();
+      ctx.fillStyle = '#8a6a3a'; ctx.fillRect(cx - 6, cy - 6, 12, 90); ctx.fillRect(cx - 50, cy + 80, 100, 10);
+      ctx.translate(cx, cy); ctx.rotate(tilt);
+      const g = ctx.createLinearGradient(-150, 0, 150, 0); g.addColorStop(0, '#c9a227'); g.addColorStop(.5, '#f2d675'); g.addColorStop(1, '#a8841c');
+      ctx.fillStyle = g; ctx.fillRect(-150, -5, 300, 9);
+      for (const sx of [-140, 140]) {
+        ctx.strokeStyle = '#d8c7a0'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(sx, 0); ctx.lineTo(sx - 30, 40); ctx.moveTo(sx, 0); ctx.lineTo(sx + 30, 40); ctx.stroke();
+        const gp = ctx.createLinearGradient(0, 40, 0, 52); gp.addColorStop(0, '#e6c76a'); gp.addColorStop(1, '#8a6a1a');
+        ctx.fillStyle = gp; ctx.beginPath(); ctx.ellipse(sx, 44, 40, 9, 0, 0, 7); ctx.fill();
+      }
+      ctx.restore();
+    });
+    c.texte('réactifs', 240, 400, { couleur: 'faible', taille: 15, align: 'center' }); c.texte('produits', 520, 400, { couleur: 'faible', taille: 15, align: 'center' });
+    c.texte('la balance reste à niveau :', 640, 250, { couleur: 'bleu', taille: 15, align: 'center' });
+    c.texte('rien ne se perd, rien ne se crée', 640, 270, { couleur: 'bleu', taille: 15, align: 'center' });
+    c.repere('balance', 220, 280, 320, 130, 'la balance à niveau');
+  }
+}
+function vueMole(c, M) {
+  if (M.commence('douzaine')) {
+    const p = M.p('douzaine'), n = Math.round(12 * lisse(p));
+    c.direct(() => {
+      const ctx = c.ctx;
+      const g = ctx.createLinearGradient(0, 70, 0, 160); g.addColorStop(0, '#b9a183'); g.addColorStop(1, '#7d6648');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(40, 80, 240, 90, 8); ctx.fill();
+      for (let k = 0; k < n; k++) oeuf(ctx, 64 + (k % 6) * 38, 106 + Math.floor(k / 6) * 38);
+    });
+    c.texte('1 douzaine = 12 œufs', 160, 200, { couleur: 'blanc', taille: 18, align: 'center' });
+    c.repere('douzaine', 36, 74, 250, 140, 'une douzaine d’œufs');
+  }
+  if (M.commence('mole')) {
+    const p = M.p('mole');
+    c.direct(() => {
+      const ctx = c.ctx, n = Math.round(260 * lisse(p));
+      ctx.fillStyle = 'rgba(120,170,255,.08)'; ctx.beginPath(); ctx.roundRect(360, 70, 360, 120, 10); ctx.fill();
+      for (let k = 0; k < n; k++) { const x = 370 + ((k * 37) % 340), y = 80 + ((k * 53) % 100); ctx.fillStyle = 'rgba(150,200,255,.85)'; ctx.beginPath(); ctx.arc(x, y, 2, 0, 7); ctx.fill(); }
+    });
+    c.texte('1 mole = 6,02·10²³ entités', 540, 220, { couleur: 'jaune', taille: 20, align: 'center' });
+    c.texte('(atomes, ions ou molécules) : un paquet énorme', 540, 244, { couleur: 'jaune', taille: 15, align: 'center' });
+    c.texte('n : la quantité de matière, en mole (mol)', 540, 270, { couleur: 'jaune', taille: 16, align: 'center' });
+    c.repere('mole', 356, 66, 368, 210, 'une mole : un paquet de 6,02·10²³ entités');
+  }
+  M.etape(c, 'milli', () => { c.texte('1 millimole : 1 mmol = 10⁻³ mol', 40, 320, { couleur: 'vert', taille: 20 }); c.repere('milli', 30, 296, 400, 32, '1 mmol = 10⁻³ mol'); });
+  M.etape(c, 'exemple', () => { c.texte('exemple : n(I₂) = 2 mmol = 2·10⁻³ mol = 0,002 mol', 40, 362, { couleur: 'cyan', taille: 19 }); c.repere('exemple', 30, 338, 520, 32, 'n(I₂) = 2 mmol'); });
+}
+function vueConcentration(c, M) {
+  const V1 = P.V, n1 = .01, C = v => n1 / (v / 1000), teinte = Cv => [BLEU[0], BLEU[1], BLEU[2], clamp(.12 + 2.6 * Cv, .12, .95)];
+  const B1 = { x: 60, y: 120, w: 100, h: 150 }, B2 = { x: 230, y: 120, w: 100, h: 150 }, B3 = { x: 400, y: 120, w: 140, h: 150 };
+  if (M.commence('becher')) c.direct(() => becher(c.ctx, B1.x, B1.y, B1.w, B1.h, .55 * V1 / 100 * lisse(Math.min(1, M.p('becher') * 2)), teinte(C(V1))));
+  M.etape(c, 'becher', () => {
+    c.direct(() => { c.texte(`n = 0,01 mol ; V = ${V1} mL`, 110, 300, { couleur: 'blanc', taille: 14, align: 'center' }); c.texte(`C = ${fx(C(V1), 3)} mol/L`, 110, 322, { couleur: 'jaune', taille: 16, align: 'center' }); });
+    c.repere('becher_1', B1.x - 8, B1.y - 10, B1.w + 16, B1.h + 60, 'le premier bécher');
+  });
+  if (M.commence('double_n')) c.direct(() => becher(c.ctx, B2.x, B2.y, B2.w, B2.h, .55 * lisse(Math.min(1, M.p('double_n') * 2)), teinte(2 * C(100))));
+  M.etape(c, 'double_n', () => {
+    c.texte('n = 0,02 mol ; V = 100 mL', 280, 300, { couleur: 'blanc', taille: 14, align: 'center' }); c.texte('C = 0,2 mol/L', 280, 322, { couleur: 'jaune', taille: 16, align: 'center' });
+    c.texte('2 fois plus de soluté → 2 fois plus concentré', 280, 92, { couleur: 'vert', taille: 15, align: 'center' });
+    c.repere('becher_2', B2.x - 8, B2.y - 10, B2.w + 16, B2.h + 60, 'le deuxième bécher, deux fois plus concentré');
+  });
+  M.etape(c, 'formule', () => { c.texte('C = n / V', 650, 150, { couleur: 'jaune', taille: 30, align: 'center' }); c.texte('en mol/L', 650, 180, { couleur: 'jaune', taille: 16, align: 'center' }); c.repere('formule', 580, 116, 140, 74, 'C = n/V'); });
+  if (M.commence('dilution')) c.direct(() => becher(c.ctx, B3.x, B3.y, B3.w, B3.h, .3 + .3 * lisse(M.p('dilution')), teinte(C(100) / (1 + lisse(M.p('dilution'))))));
+  M.etape(c, 'dilution', () => {
+    c.texte('n = 0,01 mol ; V = 200 mL', 470, 300, { couleur: 'blanc', taille: 14, align: 'center' }); c.texte('C = 0,05 mol/L', 470, 322, { couleur: 'jaune', taille: 16, align: 'center' });
+    c.texte('plus d’eau → moins concentré (plus clair)', 500, 112, { couleur: 'vert', taille: 15, align: 'center' });
+    c.repere('becher_3', B3.x - 8, B3.y - 10, B3.w + 16, B3.h + 60, 'le bécher dilué');
+  });
+  if (M.commence('sirop')) {
+    const p = lisse(M.p('sirop'));
+    c.direct(() => {
+      const ctx = c.ctx, menthe = a => [40, 170, 90, a];
+      becher(ctx, 590, 300, 40, 60, .8, menthe(.2 + .7 * p)); becher(ctx, 660, 270, 70, 90, .85, menthe(.12 + .25 * p));
+    });
+    c.texte('une cuillère de sirop :', 662, 236, { couleur: 'bleu', taille: 14, align: 'center' });
+    c.texte('petit verre → foncé ; grand verre → clair', 560, 396, { couleur: 'bleu', taille: 15, align: 'center' });
+    c.repere('sirop', 580, 220, 170, 150, 'deux verres de sirop');
+  }
+}
+function voir(M) {
+  const v = M.S.vue, vus = ETAPES[v].filter(e => M.vu(e.nom)).map(e => (typeof e.motif === 'function' ? e.motif() : e.motif));
+  const m = [`Rappel « ${TITRES[v]} », ${M.etat()}.`];
+  m.push(vus.length ? `Déjà montré : ${vus.join(' ; ')}.` : 'Rien n’est encore montré.');
+  if (v === 'concentration') m.push(`Premier bécher : V = ${P.V} mL, C = ${fx(.01 / (P.V / 1000), 3)} mol/L.`);
+  return m.join(' ');
+}
+const params = M => ({ vue: M.S.vue, V_mL: P.V });
+MOT = Moteur({
+  id: 'rappels_chimie', titre: 'Rappels : l’ion, la conservation, la mole, la concentration', vues: VUES, titres: TITRES,
+  etapes: v => ETAPES[v], motifs: MOTIFS_PROXY, dessiner, voir, params,
+  depart: M => `Rappel : ${TITRES[M.S.vue]}.`,
+  messageFin: M => ({ ion: 'Un ion : un atome qui a perdu ou gagné des électrons.', conservation: 'Une équation conserve les atomes et les charges.', mole: '1 mol = 6,02·10²³ entités ; 1 mmol = 10⁻³ mol.', concentration: 'C = n/V, en mol/L.' })[M.S.vue],
+  appliquer: (p, M) => {
+    const r = {};
+    if (VUES.includes(p.vue) && p.vue !== M.S.vue) { r.vue = p.vue; r.change = true; }
+    if (p.V_mL !== undefined && p.V_mL !== null && p.V_mL !== '' && Number.isFinite(+p.V_mL)) { P.V = clamp(Math.round(+p.V_mL / 25) * 25, 50, 200); r.garder = true; }
+    return r;
+  },
+  schema: { vue: VUES.join(' | '), V_mL: '50..200 (vue concentration : volume du premier bécher, n = 0,01 mol)' },
+  texte: 'Rappels de chimie, chacun en deux façons : l’ion (un atome perd ou gagne des électrons ; les jetons + et −), la conservation (mêmes atomes, même charge ; la balance), la mole (la douzaine ; 6,02·10²³ entités ; 1 mmol = 10⁻³ mol), la concentration (C = n/V ; le sirop).',
+  explications: {
+    ion: [{ repere: 'atome_cu', texte: 'Un atome est neutre.' }, { repere: 'ion_cu', texte: 'Il perd deux électrons : Cu²⁺.' }, { repere: 'ion_i', texte: 'L’iode gagne un électron : I⁻.' }],
+    conservation: [{ repere: 'atomes', texte: 'Mêmes atomes des deux côtés.' }, { repere: 'charges', texte: 'Même charge des deux côtés.' }, { repere: 'balance', texte: 'La balance reste à niveau.' }],
+    mole: [{ repere: 'douzaine', texte: 'On compte les œufs par douzaines.' }, { repere: 'mole', texte: 'On compte les entités par moles.' }],
+    concentration: [{ repere: 'formule', texte: 'C = n/V.' }, { repere: 'sirop', texte: 'Même sirop, plus d’eau : plus clair.' }],
+  },
+});
+MOT.lancer();
+if (MOT.S.vue === 'concentration') $('reglage').replaceChildren(window.Tableau.curseur({ id: 'V', label: 'V =', min: 50, max: 200, step: 25, valeur: P.V, unite: 'mL', commande: 'set_parameters', onchange: v => MOT.setParameters({ V_mL: v }) }));
+
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

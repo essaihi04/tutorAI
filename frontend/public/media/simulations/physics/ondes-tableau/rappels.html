@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rappels — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ondes.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Rappels au tableau : une voiture qui roule sur une route (la vitesse, distance sur durée), ou un chronomètre dont la seconde est coupée en mille (la milliseconde)"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Rappels des années précédentes pour le cours des ondes, enseignés depuis zéro (règle 34, audit rythme du 14 novembre 2026).
+ * Deux vues (?vue=) :
+ *  - vitesse : une voiture peinte roule 100 m en Δt secondes (5 s par défaut) ; une marque à chaque seconde ;
+ *    puis v = d / Δt écrit, puis la deuxième façon de le dire : « chaque seconde, elle avance de v mètres »,
+ *    puis le lien avec le son (340 m en une seconde dans l'air).
+ *  - milli : un chronomètre ; une seconde coupée en mille → 1 ms = 10⁻³ s ; 2 ms = 2 × 10⁻³ s ; la virgule recule de trois rangs : 0,002 s.
+ * Un seul bouton ; le tuteur fige chaque étape avec `play_until {moment}` ; `set_parameters {duree_s: 4 | 5 | 10}` (vue vitesse).
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const VUES = ['vitesse', 'milli'];
+const demande = new URLSearchParams(location.search).get('vue');
+const vue = VUES.includes(demande) ? demande : 'vitesse';
+const VIT = vue === 'vitesse';
+const D = 100;                                            // m (vue vitesse)
+const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0, duree: 5 };
+const T0 = 0.4;                                           // départ de la voiture (s de scène)
+
+/* ── Les instants clés (s de scène), recalculés quand la durée du trajet change ── */
+function moments() {
+  if (!VIT) return { chrono: 1.2, mille: 3.6, une_ms: 5.0, deux_ms: 7.0, virgule: 9.4 };
+  const fin = T0 + S.duree;
+  return { depart: T0 + 0.05, une_seconde: T0 + 1, arrivee: fin, formule: fin + 2.2, par_seconde: fin + 4.4, son: fin + 6.4 };
+}
+const MOTIFS = VIT
+  ? { depart: 'la voiture part, le chronomètre démarre', une_seconde: 'au bout d’une seconde : la première marque', arrivee: 'la voiture a parcouru 100 m : on lit Δt',
+      formule: 'v = d / Δt écrit avec les valeurs', par_seconde: 'deuxième façon : la distance parcourue en UNE seconde', son: 'le son dans l’air : 340 m en une seconde' }
+  : { chrono: 'un chronomètre : une seconde', mille: 'la seconde coupée en mille parts égales', une_ms: 'une part : une milliseconde, 1 ms = 10⁻³ s',
+      deux_ms: 'deux parts : 2 ms = 2 × 10⁻³ s', virgule: '2 × 10⁻³ s = 0,002 s : la virgule recule de trois rangs' };
+const DUREE = () => VIT ? moments().son + 0.6 : 10.4;
+const vu = m => S.t >= moments()[m] - 1e-3;
+
+/* ── Peinture (règle 32) : objets réels peints avant la craie ── */
+function peindreRoute(ctx, x, y, w, h) {
+  ctx.save();
+  const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#4b5563'); g.addColorStop(.5, '#374151'); g.addColorStop(1, '#1f2937');
+  ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = '#9ca3af'; ctx.fillRect(x, y - 3, w, 3); ctx.fillRect(x, y + h, w, 3);            // bordures
+  ctx.strokeStyle = 'rgba(248,250,252,.8)'; ctx.lineWidth = 2.5; ctx.setLineDash([18, 14]);
+  ctx.beginPath(); ctx.moveTo(x, y + h / 2); ctx.lineTo(x + w, y + h / 2); ctx.stroke(); ctx.setLineDash([]);
+  ctx.restore();
+}
+function peindreVoiture(ctx, x, y) {                     // (x, y) : avant de la voiture, au sol
+  ctx.save();
+  const L = 64, H = 20;
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(x - L / 2, y + 2, L / 2 + 4, 4, 0, 0, Math.PI * 2); ctx.fill();   // ombre
+  const g = ctx.createLinearGradient(0, y - H - 16, 0, y - 4); g.addColorStop(0, '#fca5a5'); g.addColorStop(.45, '#dc2626'); g.addColorStop(1, '#7f1d1d');
+  ctx.fillStyle = g; ctx.beginPath();                    // carrosserie
+  ctx.moveTo(x - L, y - 8); ctx.lineTo(x - L, y - H); ctx.quadraticCurveTo(x - L + 4, y - H - 2, x - L + 14, y - H - 2);
+  ctx.lineTo(x - L + 20, y - H - 15); ctx.lineTo(x - 22, y - H - 15); ctx.lineTo(x - 12, y - H - 2); ctx.lineTo(x - 3, y - H + 1);
+  ctx.quadraticCurveTo(x + 1, y - 12, x, y - 8); ctx.closePath(); ctx.fill();
+  const gv = ctx.createLinearGradient(0, y - H - 13, 0, y - H - 2); gv.addColorStop(0, '#e0f2fe'); gv.addColorStop(1, '#38bdf8');   // vitres
+  ctx.fillStyle = gv; ctx.beginPath(); ctx.moveTo(x - L + 22, y - H - 12); ctx.lineTo(x - 42, y - H - 12); ctx.lineTo(x - 42, y - H - 3); ctx.lineTo(x - L + 17, y - H - 3); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(x - 38, y - H - 12); ctx.lineTo(x - 24, y - H - 12); ctx.lineTo(x - 16, y - H - 3); ctx.lineTo(x - 38, y - H - 3); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#fef08a'; ctx.beginPath(); ctx.arc(x - 3, y - 14, 2.6, 0, Math.PI * 2); ctx.fill();   // phare
+  for (const rx of [x - L + 13, x - 13]) {               // roues
+    const gr = ctx.createRadialGradient(rx - 2, y - 7, 1, rx, y - 5, 8); gr.addColorStop(0, '#9ca3af'); gr.addColorStop(.45, '#111827'); gr.addColorStop(1, '#030712');
+    ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(rx, y - 5, 7.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#d1d5db'; ctx.beginPath(); ctx.arc(rx, y - 5, 2.6, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+function peindreChrono(ctx, cx, cy, r, frac) {
+  ctx.save();
+  const g = ctx.createRadialGradient(cx - r * .3, cy - r * .35, r * .1, cx, cy, r); g.addColorStop(0, '#f1f5f9'); g.addColorStop(1, '#94a3b8');
+  ctx.fillStyle = '#334155'; ctx.fillRect(cx - 6, cy - r - 12, 12, 9);
+  ctx.fillStyle = g; ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 7; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
+  ctx.fillStyle = '#f8fafc'; ctx.beginPath(); ctx.arc(cx, cy, r * .82, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#0f172a'; ctx.lineWidth = 1.2;
+  for (let k = 0; k < 60; k++) { const a = k / 60 * Math.PI * 2, l = k % 5 ? 3 : 7; ctx.beginPath(); ctx.moveTo(cx + Math.sin(a) * r * .8, cy - Math.cos(a) * r * .8); ctx.lineTo(cx + Math.sin(a) * (r * .8 - l), cy - Math.cos(a) * (r * .8 - l)); ctx.stroke(); }
+  const a = frac * Math.PI * 2; ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 2.2;
+  ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.sin(a) * r * .7, cy - Math.cos(a) * r * .7); ctx.stroke();
+  ctx.fillStyle = '#0f172a'; ctx.beginPath(); ctx.arc(cx, cy, 3, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+/* ── Vue « vitesse » ── */
+const R = { x: 100, y: 150, w: 540, h: 40 };             // la route : 100 m sur 540 px
+const xDe = m => R.x + m / D * R.w;
+function dessinerVitesse(c) {
+  c.texte('La vitesse : une distance divisée par une durée', 14, 30, { couleur: 'cyan', taille: 18 });
+  c.direct(() => {
+    const M = moments(), v = D / S.duree;
+    peindreRoute(c.ctx, R.x, R.y, R.w, R.h);
+    c.texte('départ', R.x, R.y + R.h + 24, { couleur: 'faible', taille: 14, align: 'center' });
+    c.texte('arrivée', R.x + R.w, R.y + R.h + 24, { couleur: 'faible', taille: 14, align: 'center' });
+    c.ligne(R.x + R.w, R.y - 30, R.x + R.w, R.y + R.h + 4, { couleur: 'blanc', largeur: 2, duree: 0 });
+    const tc = Math.min(S.duree, Math.max(0, S.t - T0));             // temps écoulé du trajet
+    const xv = xDe(v * tc);
+    peindreVoiture(c.ctx, xv, R.y + R.h * 0.62);         // avant de la voiture = distance parcourue
+    c.repere('voiture', xv - 70, R.y - 30, 76, 46, 'la voiture');
+    // Le chronomètre.
+    peindreChrono(c.ctx, 700, 70, 34, (tc % 60) / 60 * 12);
+    c.texte(`${fr(tc, 1)} s`, 700, 128, { couleur: 'jaune', taille: 17, align: 'center' });
+    c.repere('chrono', 660, 26, 80, 110, 'le chronomètre : la durée Δt');
+    // Une marque à chaque seconde passée.
+    for (let k = 1; k <= Math.floor(tc + 1e-6); k++) {
+      const x = xDe(v * k);
+      c.ligne(x, R.y - 14, x, R.y + R.h + 6, { couleur: 'jaune', largeur: 1.6, duree: 0 });
+      c.texte(`${k} s`, x, R.y - 18, { couleur: 'jaune', taille: 14, align: 'center' });
+    }
+    if (vu('arrivee')) {
+      c.cote(R.x, R.y + R.h + 46, R.x + R.w, R.y + R.h + 46, `d = ${D} m`, { couleur: 'vert', taille: 17, dessous: true });
+      c.repere('distance', R.x, R.y + R.h + 30, R.w, 44, 'la distance d = 100 m');
+      c.texte(`Δt = ${fr(S.duree, 0)} s`, 700, 160, { couleur: 'jaune', taille: 18, align: 'center' });
+    }
+    if (vu('formule')) {
+      c.texte('v = d / Δt', 60, 300, { couleur: 'blanc', taille: 26 });
+      c.texte(`v = ${D} / ${fr(S.duree, 0)} = ${fr(v, 0)} m/s`, 230, 300, { couleur: 'vert', taille: 24 });
+      c.repere('formule', 50, 274, 520, 36, 'v = d / Δt, en mètre par seconde');
+    }
+    if (vu('par_seconde')) {
+      const x1 = xDe(v);
+      c.cote(R.x, R.y - 40, x1, R.y - 40, `${fr(v, 0)} m en 1 s`, { couleur: 'orange', taille: 15 });
+      c.texte(`autre façon : chaque seconde, elle avance de ${fr(v, 0)} m → v = ${fr(v, 0)} m/s`, 60, 342, { couleur: 'orange', taille: 18, max: 660 });
+      c.repere('par_seconde', 50, 320, 670, 32, 'la distance parcourue en une seconde');
+    }
+    if (vu('son')) {
+      c.texte('le son dans l’air : 340 m en 1 s → v ≈ 340 m/s', 60, 388, { couleur: 'cyan', taille: 19 });
+      c.repere('son', 50, 366, 520, 32, 'le son dans l’air : environ 340 m par seconde');
+    }
+  });
+}
+
+/* ── Vue « milli » ── */
+function dessinerMilli(c) {
+  c.texte('La milliseconde : une seconde coupée en mille', 14, 30, { couleur: 'cyan', taille: 18 });
+  c.direct(() => {
+    const p = S.t;
+    if (p > 0.05) {
+      peindreChrono(c.ctx, 90, 120, 56, (p * 0.25) % 1);
+      c.repere('chrono', 30, 52, 120, 126, 'un chronomètre');
+    }
+    const BX = 190, BY = 96, BW = 520;
+    if (vu('chrono')) {
+      c.rect(BX, BY, BW, 26, { couleur: 'cyan', largeur: 1.8, fond: 'cyan', fondAlpha: .12, duree: 0 });
+      c.texte('1 s', BX + BW / 2, BY - 10, { couleur: 'cyan', taille: 18, align: 'center' });
+      c.repere('barre', BX, BY - 28, BW, 56, 'une seconde');
+    }
+    if (vu('mille')) {
+      for (let k = 0; k <= 100; k++) c.ligne(BX + k * BW / 100, BY, BX + k * BW / 100, BY + (k % 10 ? 10 : 26), { couleur: 'cyan', largeur: k % 10 ? .8 : 1.3, duree: 0 });
+      c.texte('chaque petit trait se coupe encore en 10 : 1000 parts égales', BX, BY + 50, { couleur: 'faible', taille: 15, max: BW });
+      c.texte('1 s ÷ 1000 = 1 ms', BX, BY + 80, { couleur: 'blanc', taille: 20 });
+      c.repere('mille', BX, BY, BW, 60, 'la seconde coupée en mille parts égales');
+    }
+    if (vu('une_ms')) {
+      c.texte('1 ms = 1 / 1000 s = 10⁻³ s', 190, 236, { couleur: 'vert', taille: 24 });
+      c.repere('milliseconde', 180, 212, 420, 34, '1 ms = 10⁻³ s');
+    }
+    if (vu('deux_ms')) {
+      c.texte('2 ms = 2 × 10⁻³ s', 190, 290, { couleur: 'jaune', taille: 24 });
+      c.repere('deux_ms', 180, 266, 300, 34, '2 ms = 2 × 10⁻³ s');
+    }
+    if (vu('virgule')) {
+      c.texte('2 × 10⁻³ s = 0,002 s', 190, 344, { couleur: 'orange', taille: 24 });
+      c.texte('autre façon : 2 → 0,002 : la virgule recule de trois rangs', 190, 384, { couleur: 'orange', taille: 17, max: 540 });
+      c.repere('virgule', 180, 320, 560, 72, '0,002 : la virgule recule de trois rangs');
+    }
+  });
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(41); (VIT ? dessinerVitesse : dessinerMilli)(c); return c.fin(); });
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(DUREE(), S.t + dt);
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.jusqua = null; S.running = false; $('run').textContent = 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || 'instant choisi') + '.'); pont.noter('pause'); pont.emettre();
+    return true;
+  }
+  if (S.t >= DUREE()) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), VIT ? `v = d / Δt = ${D} / ${fr(S.duree, 0)} = ${fr(D / S.duree, 0)} m/s : la distance parcourue en une seconde.` : '1 ms = 10⁻³ s ; 2 ms = 2 × 10⁻³ s = 0,002 s.', 'good'); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+
+function playUntil(p) {
+  const M = moments(), nom = p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-3) S.t = 0;
+  S.jusqua = Math.min(DUREE(), Math.max(0.01, cible)); S.motif = nom ? MOTIFS[nom] : '';
+  S.running = true; S.fait = false; $('run').textContent = 'Pause'; scene.sale = true;
+  pont.noter('play_until', { moment: nom }); pont.emettre();
+}
+function start() { S.jusqua = null; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), VIT ? 'La voiture part…' : 'On coupe la seconde en mille…'); pont.noter('start'); pont.emettre(); }
+function pause() { if (!S.running) return; S.jusqua = null; S.running = false; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait) return start(); S.running = true; $('run').textContent = 'Pause'; pont.noter('resume'); pont.emettre(); }
+function reset() { S.t = 0; S.running = false; S.fait = false; S.jusqua = null; scene.sale = true; $('run').textContent = 'Lancer'; bulle($('feedback'), 'Prêt.'); pont.emettre(); }
+function setTime(p) { const t = +p.time_s; if (!Number.isFinite(t)) return; S.running = false; S.jusqua = null; S.t = Math.min(DUREE(), Math.max(0, t)); S.fait = S.t >= DUREE(); scene.sale = true; pont.emettre(); }
+function setParameters(p) {
+  if (VIT && [4, 5, 10].includes(+p.duree_s)) { S.duree = +p.duree_s; S.t = 0; S.fait = false; S.running = false; S.jusqua = null; $('run').textContent = 'Lancer'; bulle($('feedback'), `Trajet de ${D} m en ${S.duree} s : lance la voiture.`); }
+  scene.sale = true; pont.noter('set_parameters', { duree_s: S.duree }); pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : (S.t > 0 && !S.fait) ? resume() : start());
+
+function ceQuiSeVoit() {
+  if (VIT) {
+    const v = D / S.duree, tc = Math.min(S.duree, Math.max(0, S.t - T0));
+    const m = [`Une route peinte de ${D} m, une voiture rouge peinte et un chronomètre (${fr(tc, 1)} s).`];
+    if (S.t <= T0) m.push('La voiture est au départ.');
+    else if (!vu('arrivee')) m.push(`La voiture roule : elle a parcouru ${fr(v * tc, 0)} m ; une marque jaune à chaque seconde passée.`);
+    if (vu('arrivee')) m.push(`Arrivée : cote verte d = ${D} m, écrit Δt = ${fr(S.duree, 0)} s ; ${Math.floor(S.duree)} marques jaunes, une par seconde.`);
+    if (vu('formule')) m.push(`Écrit : v = d / Δt = ${D} / ${fr(S.duree, 0)} = ${fr(v, 0)} m/s.`);
+    if (vu('par_seconde')) m.push(`Cote orange « ${fr(v, 0)} m en 1 s » sur la première seconde ; écrit : chaque seconde, elle avance de ${fr(v, 0)} m.`);
+    if (vu('son')) m.push('Écrit : le son dans l’air, 340 m en 1 s, v ≈ 340 m/s.');
+    return m.join(' ');
+  }
+  const m = ['Tableau « La milliseconde ».'];
+  if (S.t > 0.05) m.push('Un chronomètre peint.');
+  if (vu('chrono')) m.push('Une barre cyan « 1 s ».');
+  if (vu('mille')) m.push('La barre coupée en 100 petits traits, chacun encore en 10 : 1000 parts ; écrit « 1 s ÷ 1000 = 1 ms ».');
+  if (vu('une_ms')) m.push('Écrit en vert : 1 ms = 1/1000 s = 10⁻³ s.');
+  if (vu('deux_ms')) m.push('Écrit en jaune : 2 ms = 2 × 10⁻³ s.');
+  if (vu('virgule')) m.push('Écrit en orange : 2 × 10⁻³ s = 0,002 s, la virgule recule de trois rangs.');
+  return m.join(' ');
+}
+window.Tableau.explication({ [vue]: VIT
+  ? [{ repere: 'distance', texte: 'La voiture parcourt une distance d.' }, { repere: 'chrono', texte: 'Le chronomètre donne la durée Δt.' }, { repere: 'formule', texte: 'v = d / Δt, en mètre par seconde.' }, { repere: 'par_seconde', texte: 'Autrement dit : la distance parcourue en une seconde.' }]
+  : [{ repere: 'mille', texte: 'Une seconde coupée en mille parts égales.' }, { repere: 'milliseconde', texte: 'Une part : une milliseconde, 10⁻³ s.' }, { repere: 'deux_ms', texte: 'Deux parts : 2 × 10⁻³ s.' }, { repere: 'virgule', texte: '0,002 s : la virgule recule de trois rangs.' }] });
+const commandes = ['start', 'pause', 'resume', 'reset', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'ondes_tableau_rappels', version: '1.0', title: 'Rappels — ' + vue, variants: VUES.map(v => ({ id: v, label: v })), commands: commandes,
+  command_schema: { play_until: { moment: Object.keys(MOTIFS).join(' | ') + ' (rejoue et se fige à cet instant clé)' }, set_parameters: { duree_s: '4 | 5 | 10 (vue vitesse : durée du trajet de 100 m)' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: VIT ? 'Rappel : la vitesse est la distance parcourue divisée par la durée, v = d / Δt (m/s) ; autrement dit, la distance parcourue en une seconde.' : 'Rappel : une milliseconde est une seconde coupée en mille, 1 ms = 10⁻³ s ; 2 ms = 2 × 10⁻³ s = 0,002 s.',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : (S.t > 0 ? 'paused' : 'idle'), ce_qui_se_voit: ceQuiSeVoit(), current_variant: vue, moments: moments(), parameters: VIT ? { duree_s: S.duree, d_m: D } : {}, time_s: +S.t.toFixed(2) }),
+  progression: () => S.t / DUREE(),
+  executer: (cmd, p) => ({ start, pause, resume, reset, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), VIT ? 'Lance la voiture et regarde le chronomètre.' : 'Lance : on coupe la seconde en mille.');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

@@ -30,7 +30,8 @@ const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
 const lisse = u => { u = clamp(u); return u * u * (3 - 2 * u); };
 const A0 = 418, TD = 5730, LN2 = 0.693;
 const P = { a: 318 };
-const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0 };
+// conclusions : false pendant une question d'observation (14 novembre 2026) : la jauge baisse, mais « a diminue » n'est pas écrit.
+const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0, conclusions: true };
 const age = (a = P.a) => TD / LN2 * Math.log(A0 / a);
 const SUP = { '-': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' };
 function ageTexte(t = age()) {
@@ -222,7 +223,7 @@ function dessinerTemps(c) {
     c.texte('plus d’échanges', PAN[1].x + PAN[1].w / 2, 136, { taille: 14, align: 'center', couleur: 'faible', duree: .3 });
     c.texte('mort : plus d’échanges,', 14, 372, { taille: 17, couleur: 'orange', duree: .5 });
   });
-  quand(c, 'desintegration', 1.2, () => {
+  if (S.conclusions) quand(c, 'desintegration', 1.2, () => {
     c.texte('a diminue', PAN[1].x + PAN[1].w / 2, 314, { taille: 14, align: 'center', couleur: 'jaune', duree: .3 });
     formule(c, ' le [14,6]C se désintègre', 14 + c.largeurTexte('mort : plus d’échanges,', 17), 372, { taille: 17, couleur: 'orange', duree: .6 });
   });
@@ -280,7 +281,7 @@ scene.avancer = dt => {
   S.t = Math.min(FIN, S.t + dt);
   if (S.jusqua != null && S.t >= S.jusqua && S.jusqua < FIN) {
     S.t = S.jusqua; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre';
-    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 2)} s`) + '.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre();
+    bulle($('feedback'), S.conclusions ? 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 2)} s`) + '.' : 'Arrêt sur image : observe la jauge du carbone 14.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre();
     return true;
   }
   if (S.t >= FIN) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), `Âge du bois : t ≈ ${ageTexte()}. Fais glisser a pour un autre bois.`, 'good'); pont.emettre(); }
@@ -304,7 +305,7 @@ function ceQuiSeVoit() {
   m.push(`Vue « Trois temps » : ${v.length ? v.join(' ; ') : 'vide'}.`);
   const e = [];
   if (vu('echanges')) e.push('« vivant : la proportion de ¹⁴C reste constante, a₀ »');
-  if (vu('mort')) e.push('« mort : plus d’échanges,' + (vu('desintegration') ? ' le ¹⁴C se désintègre »' : ' »'));
+  if (vu('mort')) e.push('« mort : plus d’échanges,' + (vu('desintegration') && S.conclusions ? ' le ¹⁴C se désintègre »' : ' »'));
   if (vu('mesure')) e.push(`« mesure : a = ${P.a} Bq ; bois récent de même masse : a₀ = 418 Bq »`);
   if (vu('formule')) e.push('dans « Calcul » : « a = a₀·e^{−λt} », « t = (1/λ)·ln(a₀/a) », « λ = ln2/t½ », « t = (t½/ln2)·ln(a₀/a) »');
   if (vu('application')) e.push(`« t = (5730/0,693)·ln(418/${P.a}) »`);
@@ -337,6 +338,7 @@ function setTime(p) {
 const reglage = () => `a = ${P.a} Bq : t = (5730/0,693)·ln(418/${P.a}) ≈ ${ageTexte()}.`;
 function setParameters(p) {
   p = p || {};
+  if ('conclusions' in p) { const v = p.conclusions === true || p.conclusions === 'true' || p.conclusions === 1; if (v !== S.conclusions) { S.conclusions = v; scene.sale = true; } }
   if (p.a_Bq !== undefined && p.a_Bq !== null && p.a_Bq !== '' && Number.isFinite(+p.a_Bq)) { P.a = Math.round(clamp(+p.a_Bq, 100, A0)); scene.sale = true; }
   bulle($('feedback'), reglage()); pont.noter('set_parameters', params()); pont.emettre();
 }
@@ -362,7 +364,7 @@ window.Tableau.explication({ datation: [
 const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
 const config = { id: 'radioactivite_datation', version: '1.0', title: 'Dater un objet au carbone 14', variants: [{ id: 'datation', label: 'datation' }], commands: commandes,
   command_schema: {
-    set_parameters: { a_Bq: '100..418 (activité mesurée du bois ancien, Bq, pas 1 ; l’âge est recalculé)' },
+    set_parameters: { a_Bq: '100..418 (activité mesurée du bois ancien, Bq, pas 1 ; l’âge est recalculé)', conclusions: 'true | false (false : « a diminue » et « le ¹⁴C se désintègre » ne sont pas écrits, pour une question d’observation)' },
     set_time: { time_s: `0..${fr(FIN, 1)} (arrêt sur cet instant, s)` },
     play_until: { moment: Object.keys(M).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' } } };
 const pont = protocole({ id: config.id, commandes, config,

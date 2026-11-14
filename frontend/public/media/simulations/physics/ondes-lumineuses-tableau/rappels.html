@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rappels — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="lumiere.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Rappels dessinés au tableau : l'angle en radian sur une pizza, la tangente sur une échelle posée contre un mur, la célérité de la lumière autour de la Terre"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Rappels des années précédentes, enseignés depuis zéro (audit « rythme et départ de zéro », 14 novembre 2026) :
+ *  ?vue=radian   (défaut) une pizza : θ = longueur de l'arc / rayon ; un radian, le demi-tour π, un tout petit angle ;
+ *  ?vue=tangente une échelle contre un mur : côté adjacent (collé à θ), côté opposé (en face), tan θ = opposé / adjacent ;
+ *  ?vue=terre    la lumière fait 7,5 fois le tour de la Terre en une seconde : c = 3,00·10⁸ m/s.
+ * Objets réels peints (règle 32), la craie écrit les noms, les cotes et les relations au fil des instants clés.
+ * Commandes : start, reset, pause, resume, set_time, play_until {moment}, set_parameters {theta_rad | adjacent_m}.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const VUES = ['radian', 'tangente', 'terre'];
+const demande = new URLSearchParams(location.search).get('vue');
+const vue = VUES.includes(demande) ? demande : 'radian';
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lisse = u => { u = clamp(u, 0, 1); return u * u * (3 - 2 * u); };
+
+const SUITES = {
+  radian: [['rayon', 1.6, 'le rayon R de la pizza est tracé'], ['arc_un_rayon', 4.2, 'on pose sur la croûte un arc aussi long que le rayon'],
+    ['un_radian', 5.8, 'l’angle de cette part vaut un radian (environ 57°)'], ['demi_tour', 8.8, 'la moitié de la pizza : θ = π rad = 180°'],
+    ['petit_angle', 11.4, 'une part très fine : θ très petit, en radian'], ['fin', 12.8, 'fin']],
+  tangente: [['triangle', 1.6, 'l’échelle, le mur et le sol forment un triangle rectangle'], ['angle', 3.0, 'l’angle θ au pied de l’échelle'],
+    ['adjacent', 4.6, 'le côté adjacent : collé à θ, au sol'], ['oppose', 6.2, 'le côté opposé : en face de θ, le long du mur'],
+    ['tangente', 7.8, 'tan θ = opposé / adjacent'], ['pente', 9.6, 'pour un mètre au sol, l’échelle monte de tan θ mètre'], ['fin', 11.0, 'fin']],
+  terre: [['depart', 1.0, 'un éclair de lumière part'], ['un_tour', 2.0, 'un tour de la Terre (40 000 km)'],
+    ['une_seconde', 8.6, 'en une seconde : 7,5 tours, 300 000 km'], ['soleil', 10.4, 'du Soleil à la Terre : environ 8 minutes'], ['fin', 11.6, 'fin']],
+};
+const SUITE = SUITES[vue];
+const M = {}; for (const [n, t] of SUITE) M[n] = t;
+const FIN = M.fin, AV = 3.0;            // une annotation s’écrit pendant les 3 s qui précèdent son instant
+const debutDe = nom => (nom in M ? M[nom] - AV : Infinity);
+const vu = nom => nom in M && (S.fait || S.t >= debutDe(nom));
+const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0, theta: null, adj: 4 };
+
+function ecrit(c, nom, fn) {
+  const t = c.t, cur = c.cur, comp = c.complet;
+  c.t = S.fait ? Infinity : S.t; c.cur = debutDe(nom);
+  try { fn(); } finally { c.t = t; c.cur = cur; c.complet = comp; }
+}
+
+/* ───────────────────────────── Vue radian : la pizza ───────────────────────────── */
+const PZ = { x: 215, y: 222, R: 150 };
+function angleRadian() {
+  if (S.theta != null) return S.theta;
+  const t = S.t;
+  if (t < 2.6) return 0;
+  if (t < 4.2) return lisse((t - 2.6) / 1.6);                          // 0 → 1 rad
+  if (t < 7.2) return 1;
+  if (t < 8.8) return 1 + (Math.PI - 1) * lisse((t - 7.2) / 1.6);       // 1 → π
+  if (t < 10.0) return Math.PI;
+  return Math.PI + (0.06 - Math.PI) * lisse((t - 10.0) / 1.4);           // → part très fine (dessin)
+}
+function peindrePizza(ctx) {
+  const { x, y, R } = PZ;
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 14; ctx.shadowOffsetY = 6;
+  let g = ctx.createRadialGradient(x - 30, y - 30, 20, x, y, R + 8);
+  g.addColorStop(0, '#e9b45c'); g.addColorStop(.85, '#c98a3a'); g.addColorStop(1, '#8a5520');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, R + 6, 0, Math.PI * 2); ctx.fill();          // la croûte
+  ctx.shadowColor = 'transparent';
+  g = ctx.createRadialGradient(x - 20, y - 25, 10, x, y, R - 8);
+  g.addColorStop(0, '#fbe7a1'); g.addColorStop(.7, '#f3c95f'); g.addColorStop(1, '#d9902f');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, R - 10, 0, Math.PI * 2); ctx.fill();         // le fromage
+  const garnis = [[-60, -50, 'tomate'], [40, -70, 'olive'], [55, 55, 'tomate'], [-30, 60, 'olive'], [20, 95, 'tomate'], [-95, 15, 'olive'], [95, -35, 'olive'], [-15, -10, 'tomate']];
+  for (const [dx, dy, k] of garnis) {
+    if (k === 'tomate') { g = ctx.createRadialGradient(x + dx - 4, y + dy - 4, 2, x + dx, y + dy, 15); g.addColorStop(0, '#f87171'); g.addColorStop(1, '#a3221c'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x + dx, y + dy, 14, 0, Math.PI * 2); ctx.fill(); }
+    else { ctx.fillStyle = '#1f2937'; ctx.beginPath(); ctx.arc(x + dx, y + dy, 7, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#d9902f'; ctx.beginPath(); ctx.arc(x + dx, y + dy, 2.6, 0, Math.PI * 2); ctx.fill(); }
+  }
+  // La part qui forme l'angle : un peu éclairée pour qu'on la voie.
+  const th = angleRadian();
+  if (th > 0.001) {
+    ctx.fillStyle = 'rgba(255,255,255,.16)'; ctx.beginPath(); ctx.moveTo(x, y); ctx.arc(x, y, R + 6, 0, -th, true); ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+}
+function dessinerRadian(c) {
+  const { x, y, R } = PZ, th = angleRadian();
+  c.direct(() => peindrePizza(c.ctx));
+  c.texte('Une pizza vue de dessus', 20, 34, { couleur: 'cyan', taille: 17 });
+  c.repere('pizza', x - R - 8, y - R - 8, 2 * R + 16, 2 * R + 16, 'la pizza');
+  if (vu('rayon')) ecrit(c, 'rayon', () => {
+    c.ligne(x, y, x + R, y, { couleur: 'blanc', largeur: 2.6 });
+    c.point(x, y, 4, 'blanc');
+    c.texte('R', x + R / 2, y + 22, { couleur: 'blanc', taille: 18, align: 'center' });
+  });
+  if (vu('rayon')) c.repere('rayon', x, y - 14, R, 28, 'le rayon R');
+  if (th > 0.001) c.direct(() => {
+    // le deuxième rayon et l'arc de croûte (craie jaune), l'angle θ au centre
+    c.ligne(x, y, x + R * Math.cos(th), y - R * Math.sin(th), { couleur: 'blanc', largeur: 2.6, tremble: .3 });
+    c.courbe(u => [x + (R + 10) * Math.cos(u * th), y - (R + 10) * Math.sin(u * th)], Math.max(8, Math.round(th * 30)), { couleur: 'jaune', largeur: 4 });
+    const ra = Math.min(40, R * .3);
+    c.courbe(u => [x + ra * Math.cos(u * th), y - ra * Math.sin(u * th)], 24, { couleur: 'rose', largeur: 2 });
+    const mid = th / 2;
+    c.texte('θ', x + (ra + 14) * Math.cos(mid) - 4, y - (ra + 14) * Math.sin(mid) + 6, { couleur: 'rose', taille: 18 });
+    c.texte('s', x + (R + 30) * Math.cos(mid), y - (R + 30) * Math.sin(mid) + 6, { couleur: 'jaune', taille: 18, align: 'center' });
+    const ex = x + (R + 10) * Math.cos(th), ey = y - (R + 10) * Math.sin(th);
+    c.point(ex, ey, 6, 'jaune');
+    c.repere('arc', Math.min(x + R + 10, ex) - 14, Math.min(y, ey) - 14, Math.abs(x + R + 10 - ex) + 28, Math.abs(y - ey) + 28, 'l’arc de croûte s');
+    c.repere('angle', x - 10, y - 50, 60, 54, 'l’angle θ au centre');
+  });
+  // Le tableau de droite : la règle du radian, écrite au fil des instants.
+  const X = 440;
+  c.texte('L’angle en radian', X, 34, { duree: .8, couleur: 'cyan', taille: 18 });
+  if (vu('arc_un_rayon')) ecrit(c, 'arc_un_rayon', () => c.texte('arc s = rayon R', X, 74, { duree: .8, couleur: 'jaune', taille: 18 }));
+  if (vu('un_radian')) ecrit(c, 'un_radian', () => {
+    c.texte('→ θ = 1 rad (≈ 57°)', X, 104, { duree: .8, couleur: 'rose', taille: 18 });
+    c.texte('θ = s / R', X, 150, { duree: .8, couleur: 'vert', taille: 26 });
+    c.rect(X - 8, 120, 140, 42, { couleur: 'vert', arrondi: 10, largeur: 1.6 });
+    c.texte('(s et R en mètre : θ sans unité, en rad)', X, 184, { duree: .8, couleur: 'faible', taille: 14, max: 300 });
+  });
+  if (vu('un_radian')) c.repere('formule', X - 8, 120, 300, 70, 'θ = s / R');
+  if (vu('demi_tour')) ecrit(c, 'demi_tour', () => {
+    c.texte('demi-tour : 180° = π rad ≈ 3,14 rad', X, 222, { duree: .8, couleur: 'blanc', taille: 17, max: 310 });
+    c.texte('tour complet : 360° = 2π rad', X, 248, { duree: .8, couleur: 'faible', taille: 16, max: 310 });
+  });
+  if (vu('demi_tour')) c.repere('demi_tour', X - 4, 204, 310, 50, '180° = π rad');
+  if (vu('petit_angle')) ecrit(c, 'petit_angle', () => {
+    c.texte('part très fine : θ très petit', X, 292, { duree: .8, couleur: 'orange', taille: 17, max: 310 });
+    c.texte('diffraction : θ ≈ 0,0065 rad', X, 318, { duree: .8, couleur: 'orange', taille: 17, max: 310 });
+    c.texte('(le dessin exagère l’angle)', X, 342, { duree: .8, couleur: 'faible', taille: 14 });
+  });
+  if (vu('petit_angle')) c.repere('petit_angle', X - 4, 274, 310, 74, 'un tout petit angle');
+  if (S.theta != null) c.direct(() => c.texte(`θ = s / R = ${fr(S.theta, 2)} rad ≈ ${fr(S.theta * 180 / Math.PI, 0)}°`, X, 388, { duree: .8, couleur: 'vert', taille: 17, max: 310 }));
+}
+
+/* ───────────────────────────── Vue tangente : l'échelle ───────────────────────────── */
+const SOL = 340, MUR = 340, HM = 3, KM = 62;         // sol (y), mur (x), hauteur touchée sur le mur (m), px par mètre
+const pied = () => MUR - S.adj * KM;
+function peindreEchelle(ctx) {
+  ctx.save();
+  // le sol (terre battue) et le mur (briques)
+  let g = ctx.createLinearGradient(0, SOL, 0, SOL + 26); g.addColorStop(0, '#8b6b43'); g.addColorStop(1, '#4a3820');
+  ctx.fillStyle = g; ctx.fillRect(20, SOL, MUR + 40 - 20, 24);
+  g = ctx.createLinearGradient(MUR, 0, MUR + 46, 0); g.addColorStop(0, '#b45a3c'); g.addColorStop(1, '#7c3424');
+  ctx.fillStyle = g; ctx.fillRect(MUR, 80, 46, SOL - 80);
+  ctx.strokeStyle = 'rgba(240,220,200,.35)'; ctx.lineWidth = 1;
+  for (let yy = 80; yy < SOL; yy += 18) { ctx.beginPath(); ctx.moveTo(MUR, yy); ctx.lineTo(MUR + 46, yy); ctx.stroke(); const dx = ((yy - 80) / 18) % 2 ? 12 : 30; ctx.beginPath(); ctx.moveTo(MUR + dx, yy); ctx.lineTo(MUR + dx, yy + 18); ctx.stroke(); }
+  // l'échelle en bois : deux montants et des barreaux
+  const x0 = pied(), y0 = SOL, x1 = MUR, y1 = SOL - HM * KM, L = Math.hypot(x1 - x0, y1 - y0), ux = (x1 - x0) / L, uy = (y1 - y0) / L, nx = -uy * 9, ny = ux * 9;
+  ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 4;
+  g = ctx.createLinearGradient(x0, y0, x1, y1); g.addColorStop(0, '#d9a066'); g.addColorStop(1, '#a86b32');
+  ctx.strokeStyle = g; ctx.lineCap = 'round';
+  ctx.lineWidth = 6; for (const s of [-1, 1]) { ctx.beginPath(); ctx.moveTo(x0 + s * nx, y0 + s * ny); ctx.lineTo(x1 + s * nx, y1 + s * ny); ctx.stroke(); }
+  ctx.shadowColor = 'transparent'; ctx.lineWidth = 4; ctx.strokeStyle = '#c48a4f';
+  for (let d = 22; d < L - 10; d += 26) { const px = x0 + ux * d, py = y0 + uy * d; ctx.beginPath(); ctx.moveTo(px - nx, py - ny); ctx.lineTo(px + nx, py + ny); ctx.stroke(); }
+  ctx.restore();
+}
+function dessinerTangente(c) {
+  const x0 = pied(), x1 = MUR, y1 = SOL - HM * KM, th = Math.atan2(HM, S.adj), t = HM / S.adj;
+  c.direct(() => peindreEchelle(c.ctx));
+  c.texte('Une échelle posée contre un mur', 20, 34, { couleur: 'cyan', taille: 17 });
+  c.repere('echelle', Math.min(x0, x1) - 10, y1 - 10, Math.abs(x1 - x0) + 20, SOL - y1 + 20, 'l’échelle');
+  c.direct(() => { c.point(x0, SOL, 6, 'jaune'); c.texte('⇠ glisse le pied ⇢', x0, SOL + 44, { couleur: 'faible', taille: 13, align: 'center' }); });
+  c.repere('pied', x0 - 16, SOL - 16, 32, 32, 'le pied de l’échelle (glisse-le)');
+  if (vu('triangle')) ecrit(c, 'triangle', () => {
+    c.trait([[x0, SOL], [x1, SOL], [x1, y1]], { couleur: 'blanc', largeur: 2 });
+    c.trait([[x1 - 16, SOL], [x1 - 16, SOL - 16], [x1, SOL - 16]], { couleur: 'blanc', largeur: 1.6 });
+    c.texte('angle droit', x1 + 4, SOL + 64, { couleur: 'faible', taille: 13, align: 'right' });
+  });
+  if (vu('angle')) ecrit(c, 'angle', () => {
+    c.courbe(u => [x0 + 46 * Math.cos(-u * th), SOL + 46 * Math.sin(-u * th)], 20, { couleur: 'rose', largeur: 2.2 });
+    c.texte('θ', x0 + 56 * Math.cos(th / 2), SOL - 56 * Math.sin(th / 2) + 8, { couleur: 'rose', taille: 20 });
+  });
+  if (vu('angle')) c.repere('angle', x0, SOL - 50, 60, 50, 'l’angle θ');
+  if (vu('adjacent')) ecrit(c, 'adjacent', () => {
+    c.ligne(x0, SOL + 2, x1, SOL + 2, { couleur: 'vert', largeur: 4 });
+    c.texte(`adjacent = ${fr(S.adj, 1)} m`, (x0 + x1) / 2, SOL + 24, { couleur: 'vert', taille: 16, align: 'center' });
+  });
+  if (vu('adjacent')) c.repere('adjacent', x0, SOL - 6, x1 - x0, 36, 'le côté adjacent : collé à θ');
+  if (vu('oppose')) ecrit(c, 'oppose', () => {
+    c.ligne(x1 - 2, SOL, x1 - 2, y1, { couleur: 'jaune', largeur: 4 });
+    c.texte('opposé', x1 + 52, (SOL + y1) / 2 - 4, { couleur: 'jaune', taille: 15 });
+    c.texte('3 m', x1 + 52, (SOL + y1) / 2 + 16, { couleur: 'jaune', taille: 15 });
+  });
+  if (vu('oppose')) c.repere('oppose', x1 - 6, y1, 100, SOL - y1, 'le côté opposé : en face de θ');
+  const X = 440;
+  c.texte('La tangente d’un angle', X, 34, { duree: .8, couleur: 'cyan', taille: 18 });
+  if (vu('adjacent')) ecrit(c, 'adjacent', () => c.texte('adjacent : le côté collé à θ', X, 78, { duree: .8, couleur: 'vert', taille: 17, max: 310 }));
+  if (vu('oppose')) ecrit(c, 'oppose', () => c.texte('opposé : le côté en face de θ', X, 108, { duree: .8, couleur: 'jaune', taille: 17, max: 310 }));
+  if (vu('tangente')) ecrit(c, 'tangente', () => {
+    c.texte('tan θ = opposé / adjacent', X, 158, { duree: .8, couleur: 'vert', taille: 22, max: 310 });
+    c.rect(X - 8, 130, 300, 40, { couleur: 'vert', arrondi: 10, largeur: 1.6 });
+  });
+  if (vu('tangente')) c.repere('formule', X - 8, 130, 300, 40, 'tan θ = opposé / adjacent');
+  if (vu('tangente')) c.direct(() => c.texte(`tan θ = 3 / ${fr(S.adj, 1)} = ${fr(t, 2)}`, X, 200, { duree: .8, couleur: 'blanc', taille: 18, max: 310 }));
+  if (vu('pente')) ecrit(c, 'pente', () => {
+    c.texte('Autrement dit : pour 1 m au sol,', X, 250, { duree: .8, couleur: 'orange', taille: 16, max: 310 });
+    c.texte('l’échelle monte de tan θ mètre.', X, 274, { duree: .8, couleur: 'orange', taille: 16, max: 310 });
+    c.texte('pied loin du mur : θ petit, tan θ petite', X, 314, { duree: .8, couleur: 'faible', taille: 15, max: 310 });
+  });
+  if (vu('pente')) c.repere('pente', X - 4, 232, 310, 90, 'tan θ : la montée pour un mètre au sol');
+}
+
+/* ───────────────────────────── Vue terre : 7,5 tours en une seconde ───────────────────────────── */
+const TE = { x: 210, y: 220, R: 92, orbite: 132 };
+const tempsPhys = () => clamp((S.t - 1.0) / 7.6, 0, 1);              // 0 → 1 s de « vraie » durée, très ralentie
+function peindreTerre(ctx) {
+  const { x, y, R } = TE;
+  ctx.save();
+  ctx.shadowColor = 'rgba(96,165,250,.5)'; ctx.shadowBlur = 22;
+  let g = ctx.createRadialGradient(x - 30, y - 34, 10, x, y, R);
+  g.addColorStop(0, '#7dd3fc'); g.addColorStop(.55, '#1d6fb8'); g.addColorStop(1, '#0b2d5c');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.fill();
+  ctx.shadowColor = 'transparent';
+  ctx.save(); ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.clip();
+  ctx.fillStyle = 'rgba(74,163,84,.9)';
+  const terres = [[[-50, -40], [-10, -55], [10, -30], [-5, 0], [-35, 5], [-60, -15]], [[20, 10], [55, 0], [70, 30], [40, 60], [15, 40]], [[-40, 35], [-15, 45], [-25, 75], [-55, 60]]];
+  for (const poly of terres) {
+    const n = poly.length, mi = i => [(poly[i][0] + poly[(i + 1) % n][0]) / 2, (poly[i][1] + poly[(i + 1) % n][1]) / 2];
+    ctx.beginPath(); ctx.moveTo(x + mi(0)[0], y + mi(0)[1]);
+    for (let i = 1; i <= n; i++) { const [cx, cy] = poly[i % n], [mx, my] = mi(i % n); ctx.quadraticCurveTo(x + cx, y + cy, x + mx, y + my); }
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.ellipse(x - 20, y - 70, 30, 7, -.2, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  ctx.restore();
+}
+function dessinerTerre(c) {
+  const { x, y, orbite } = TE, tp = tempsPhys(), tours = 7.5 * tp;
+  c.direct(() => peindreTerre(c.ctx));
+  c.texte('La lumière fait le tour de la Terre', 20, 34, { couleur: 'cyan', taille: 17 });
+  c.repere('terre', x - TE.R, y - TE.R, 2 * TE.R, 2 * TE.R, 'la Terre');
+  c.direct(() => {
+    c.cercle(x, y, orbite, { couleur: 'tresfaible', largeur: 1.4 });
+    if (S.t >= 1.0) {
+      const a = -Math.PI / 2 + tours * 2 * Math.PI;
+      for (let k = 0; k < 10; k++) { const b = a - k * .07; c.point(x + orbite * Math.cos(b), y + orbite * Math.sin(b), 6 - k * .5, k < 2 ? 'jaune' : 'orange'); }
+    }
+    c.texte(`chrono : ${fr(tp, 2)} s`, x, y + orbite + 38, { couleur: 'jaune', taille: 18, align: 'center' });
+    c.texte(`tours : ${fr(tours, 1)}`, x, y - orbite - 18, { couleur: 'jaune', taille: 18, align: 'center' });
+  });
+  c.repere('eclair', x - orbite - 10, y - orbite - 10, 2 * orbite + 20, 2 * orbite + 20, 'l’éclair de lumière qui tourne');
+  c.repere('chrono', x - 70, y + orbite + 18, 140, 28, 'le chronomètre');
+  const X = 440;
+  c.texte('La célérité de la lumière', X, 34, { duree: .8, couleur: 'cyan', taille: 18 });
+  if (vu('un_tour')) ecrit(c, 'un_tour', () => c.texte('un tour de la Terre : 40 000 km', X, 78, { duree: .8, couleur: 'blanc', taille: 17, max: 310 }));
+  if (vu('une_seconde')) ecrit(c, 'une_seconde', () => {
+    c.texte('en 1 s : 7,5 tours = 300 000 km', X, 112, { duree: .8, couleur: 'jaune', taille: 17, max: 310 });
+    c.texte('c = 3,00 × 10⁸ m/s', X, 162, { duree: .8, couleur: 'vert', taille: 26 });
+    c.rect(X - 8, 132, 250, 42, { couleur: 'vert', arrondi: 10, largeur: 1.6 });
+    c.texte('dans le vide (et presque pareil dans l’air)', X, 196, { duree: .8, couleur: 'faible', taille: 14, max: 310 });
+  });
+  if (vu('une_seconde')) c.repere('formule', X - 8, 132, 300, 70, 'c = 3,00 × 10⁸ m/s');
+  if (vu('soleil')) ecrit(c, 'soleil', () => {
+    c.texte('Soleil → Terre : 150 millions de km', X, 246, { duree: .8, couleur: 'orange', taille: 16, max: 310 });
+    c.texte('durée ≈ 500 s ≈ 8 minutes', X, 272, { duree: .8, couleur: 'orange', taille: 16, max: 310 });
+  });
+  if (vu('soleil')) c.repere('soleil', X - 4, 228, 310, 52, 'du Soleil à la Terre : 8 minutes');
+}
+
+/* ───────────────────────────── Boucle, commandes, état ───────────────────────────── */
+function dessiner(c) {
+  scene.cadre(11);
+  if (vue === 'radian') dessinerRadian(c); else if (vue === 'tangente') dessinerTangente(c); else dessinerTerre(c);
+  return c.fin();
+}
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(FIN, S.t + dt);
+  if (S.jusqua != null && S.t >= S.jusqua && S.jusqua < FIN) {
+    S.t = S.jusqua; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 1)} s`) + '.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre();
+    return true;
+  }
+  if (S.t >= FIN) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), message(), 'good'); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function message() {
+  if (vue === 'radian') return 'θ = s / R : un arc aussi long que le rayon fait un radian ; 180° = π rad.';
+  if (vue === 'tangente') return `tan θ = opposé / adjacent = 3 / ${fr(S.adj, 1)} = ${fr(HM / S.adj, 2)}.`;
+  return 'En une seconde, la lumière fait 7,5 fois le tour de la Terre : c = 3,00·10⁸ m/s.';
+}
+function phase() { let d = 'début'; for (const [, t, m] of SUITE) if (S.t >= t - 1e-6) d = m; return S.fait ? 'scène finie' : d; }
+function ceQuiSeVoit() {
+  const m = [];
+  if (vue === 'radian') {
+    const th = angleRadian();
+    m.push('Une pizza peinte vue de dessus (croûte, fromage, tomates, olives).');
+    if (vu('rayon')) m.push('Le rayon R est tracé à la craie, du centre au bord.');
+    if (th > 0.001) m.push(`Une part éclairée d’angle θ ≈ ${fr(th, 2)} rad (≈ ${fr(th * 180 / Math.PI, 0)}°), son arc de croûte s en jaune${S.theta == null && S.t >= 10 ? ' (angle exagéré sur le dessin)' : ''}.`);
+    const ecrits = [];
+    if (vu('arc_un_rayon')) ecrits.push('« arc s = rayon R »');
+    if (vu('un_radian')) ecrits.push('« θ = 1 rad (≈ 57°) » et la relation encadrée θ = s / R');
+    if (vu('demi_tour')) ecrits.push('« 180° = π rad ≈ 3,14 rad » et « 360° = 2π rad »');
+    if (vu('petit_angle')) ecrits.push('« diffraction : θ ≈ 0,0065 rad »');
+    if (ecrits.length) m.push('Écrit à droite : ' + ecrits.join(' ; ') + '.');
+  } else if (vue === 'tangente') {
+    m.push(`Une échelle en bois peinte contre un mur de briques ; le pied est à ${fr(S.adj, 1)} m du mur, l’échelle touche le mur à 3 m de haut.`);
+    if (vu('triangle')) m.push('Le triangle rectangle (sol, mur, échelle) est repassé à la craie, angle droit au pied du mur.');
+    if (vu('angle')) m.push('L’angle θ est marqué au pied de l’échelle.');
+    if (vu('adjacent')) m.push('Côté adjacent (sol, collé à θ) en vert.');
+    if (vu('oppose')) m.push('Côté opposé (mur, en face de θ) en jaune.');
+    if (vu('tangente')) m.push(`Écrit : tan θ = opposé / adjacent = 3 / ${fr(S.adj, 1)} = ${fr(HM / S.adj, 2)}.`);
+    if (vu('pente')) m.push('Écrit : pour 1 m au sol, l’échelle monte de tan θ mètre ; pied loin du mur : θ petit, tan θ petite.');
+  } else {
+    m.push(`La Terre peinte ; un éclair de lumière tourne autour (ralenti). Chrono ${fr(tempsPhys(), 2)} s, ${fr(7.5 * tempsPhys(), 1)} tours.`);
+    if (vu('un_tour')) m.push('Écrit : un tour de la Terre : 40 000 km.');
+    if (vu('une_seconde')) m.push('Écrit : en 1 s : 7,5 tours = 300 000 km ; c = 3,00 × 10⁸ m/s (encadré).');
+    if (vu('soleil')) m.push('Écrit : Soleil → Terre 150 millions de km, environ 500 s, 8 minutes.');
+  }
+  m.push(`Phase : ${phase()}.`);
+  return m.join(' ');
+}
+function playUntil(p) {
+  const nom = p && p.moment in M ? p.moment : null, cible = nom ? M[nom] : +(p && p.time_s);
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-4) S.t = 0;
+  S.fait = false; S.jusqua = Math.min(FIN, Math.max(0.001, cible));
+  S.motif = nom ? SUITE.find(s => s[0] === nom)[2] : '';
+  S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+function start() { S.jusqua = null; S.t = 0; S.fait = false; S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('start'); pont.emettre(); }
+function reset() { S.theta = null; S.adj = 4; start(); }
+function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait || S.t >= FIN) return start(); S.running = true; $('run').textContent = 'Pause'; pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  const t = +p.time_s; if (!Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = clamp(t, 0, FIN); S.fait = S.t >= FIN; scene.sale = true;
+  $('run').textContent = S.fait ? 'Rejouer' : 'Reprendre'; pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function setParameters(p) {
+  p = p || {};
+  if (p.theta_rad === null) S.theta = null;
+  else if (Number.isFinite(+p.theta_rad) && p.theta_rad !== '') S.theta = +clamp(+p.theta_rad, 0.02, 2 * Math.PI - 0.01).toFixed(2);
+  if (Number.isFinite(+p.adjacent_m) && p.adjacent_m !== null && p.adjacent_m !== '') S.adj = +clamp(+p.adjacent_m, 1, 5).toFixed(1);
+  scene.sale = true;
+  bulle($('feedback'), vue === 'tangente' ? `Pied à ${fr(S.adj, 1)} m : tan θ = 3 / ${fr(S.adj, 1)} = ${fr(HM / S.adj, 2)}.` : vue === 'radian' && S.theta != null ? `θ = s / R = ${fr(S.theta, 2)} rad.` : 'Réglage pris.');
+  pont.noter('set_parameters', params()); pont.emettre();
+}
+const params = () => ({ vue, theta_rad: vue === 'radian' ? +angleRadian().toFixed(3) : undefined, adjacent_m: vue === 'tangente' ? S.adj : undefined,
+  tan_theta: vue === 'tangente' ? +(HM / S.adj).toFixed(3) : undefined });
+$('run').onclick = () => (S.running ? pause() : (S.t > 0 && S.t < FIN && !S.fait ? resume() : start()));
+
+/* Poignées : l'extrémité de l'arc (radian), le pied de l'échelle (tangente). */
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => {
+    const [x, y] = scene.local(px, py);
+    if (vue === 'radian') { const r = Math.hypot(x - PZ.x, y - PZ.y); return Math.abs(r - PZ.R - 10) < 26 ? 'arc' : null; }
+    if (vue === 'tangente') return Math.abs(x - pied()) < 22 && Math.abs(y - SOL) < 26 ? 'pied' : null;
+    return null;
+  },
+  bouger: (id, px, py) => {
+    const [x, y] = scene.local(px, py);
+    if (id === 'arc') { let a = Math.atan2(PZ.y - y, x - PZ.x); if (a < 0) a += 2 * Math.PI; S.theta = +clamp(a, 0.02, 2 * Math.PI - 0.01).toFixed(2); scene.sale = true; }
+    if (id === 'pied') { S.adj = +clamp((MUR - x) / KM, 1, 5).toFixed(1); scene.sale = true; }
+  },
+  lacher: () => { bulle($('feedback'), message()); pont.noter('set_parameters', params()); pont.emettre(); },
+});
+
+const EXPLICATIONS = {
+  radian: [{ repere: 'rayon', texte: 'R : le rayon de la pizza.' }, { repere: 'arc', texte: 's : la longueur de croûte de la part.' },
+    { repere: 'formule', texte: 'θ en radian = s / R : un arc aussi long que le rayon donne un radian.' }, { repere: 'demi_tour', texte: 'La moitié de la pizza : π rad, 180°.' }],
+  tangente: [{ repere: 'adjacent', texte: 'Le côté adjacent est collé à l’angle θ.' }, { repere: 'oppose', texte: 'Le côté opposé est en face de θ.' },
+    { repere: 'formule', texte: 'tan θ = opposé / adjacent.' }, { repere: 'pente', texte: 'C’est la montée pour un mètre au sol.' }],
+  terre: [{ repere: 'eclair', texte: 'L’éclair tourne autour de la Terre.' }, { repere: 'chrono', texte: 'En une seconde : 7,5 tours.' }, { repere: 'formule', texte: 'c = 3,00 × 10⁸ m/s.' }],
+};
+window.Tableau.explication({ [vue]: EXPLICATIONS[vue] });
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'ondes_lumineuses_rappels', version: '1.0', title: 'Rappels — ' + vue, variants: [{ id: vue, label: vue }], commands: commandes,
+  command_schema: {
+    play_until: { moment: Object.keys(M).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' },
+    set_time: { time_s: `0..${FIN}` },
+    set_parameters: vue === 'radian' ? { theta_rad: '0.02..6.27 (angle de la part, rad) ; null = reprend l’animation' } : vue === 'tangente' ? { adjacent_m: '1..5 (distance du pied de l’échelle au mur, m)' } : {} } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: vue === 'radian' ? 'Une pizza : l’angle d’une part en radian est θ = s / R (longueur de l’arc de croûte sur le rayon) ; un arc égal au rayon donne 1 rad ≈ 57° ; 180° = π rad ; en diffraction θ ≈ 0,0065 rad.'
+    : vue === 'tangente' ? 'Une échelle contre un mur : triangle rectangle ; côté adjacent (collé à θ, au sol), côté opposé (en face de θ, le mur) ; tan θ = opposé / adjacent ; c’est la montée pour un mètre au sol.'
+      : 'La lumière fait 7,5 fois le tour de la Terre (40 000 km) en une seconde : 300 000 km/s, c = 3,00·10⁸ m/s ; du Soleil à la Terre environ 8 minutes.',
+  etat: () => ({ simulation_status: S.running ? 'running' : (S.fait ? 'finished' : (S.t > 0 ? 'paused' : 'idle')), ce_qui_se_voit: ceQuiSeVoit(), current_variant: vue,
+    time_s: +S.t.toFixed(2), parameters: params(), moments: { ...M } }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Appuie sur Lancer.');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

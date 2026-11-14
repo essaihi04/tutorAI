@@ -211,10 +211,13 @@ MathsTableau.page({
 
     pentes: {
       titre: 'La pente de la tangente reflétée : 1 / f′(a)',
-      params: { x_a: { min: 0.3, max: 2.5, pas: 0.05, defaut: 2, sens: 'abscisse du point A sur la courbe de f' } },
+      /* `conclusions` (14 novembre 2026, question d'observation de df_rec2_pente) : à 0, la pente en A′ n'est pas écrite
+       * (les côtés du triangle reflet restent : l'élève la lit lui-même). Par défaut 1 : comme avant. */
+      params: { x_a: { min: 0.3, max: 2.5, pas: 0.05, defaut: 2, sens: 'abscisse du point A sur la courbe de f' },
+        conclusions: { min: 0, max: 1, pas: 1, defaut: 1, sens: '0 : la pente en A′ est tue (question d’observation)' } },
       dessiner(c, K) {
         K.titre('Les pentes au miroir');
-        const a = K.P.x_a, fa = f(a), m = fp(a), sa = K.fr(a), sfa = fr4(fa), sm = K.fr(m);
+        const a = K.P.x_a, fa = f(a), m = fp(a), sa = K.fr(a), sfa = fr4(fa), sm = K.fr(m), cc = K.P.conclusions !== 0;
         const G = base(c, K, AX()); c.repere('repere', G.x0, G.y0, G.w, G.h, 'le repère orthonormé');
         const O = obstaclesCourbes(c, G, obstacles(c, G)); reserverNoms(c, G, O, false);
         const tA = clip(G, a - 1.35, fa - 1.35 * m, a + 0.45, fa + 0.45 * m), tR = reflet(tA);
@@ -252,11 +255,11 @@ MathsTableau.page({
         etiquette(c, O, G.X(fa), G.Y(a - .5), '1', 'vert', 17, [[-8, 6, 'right'], [8, 6, 'left']]);
         etiquette(c, O, G.X(fa - m / 2), G.Y(a - 1), sm, 'vert', 17, [[0, 20, 'center'], [-(G.X(fa) - G.X(fa - m)) / 2 - 7, 6, 'right'], [0, -8, 'center']]);
         c.repere('triangle_reflet', G.X(fa - m) - 6, G.Y(a) - 10, G.X(fa) - G.X(fa - m) + 34, G.Y(a - 1) - G.Y(a) + 34, 'le triangle reflet');
-        y = K.lignes(PX, y, [{ t: `triangle reflet : 1 / ${sm}`, couleur: 'vert', moment: 'triangle_reflet' }], 34);
+        y = K.lignes(PX, y, [{ t: cc ? `triangle reflet : 1 / ${sm}` : 'triangle reflet : ?', couleur: 'vert', moment: 'triangle_reflet' }], 34);
         c.pause(.4);
-        y = K.lignes(PX, y, [{ t: `pente en A′ = 1/${sm} = 1 / f′(${sa})`, couleur: 'jaune', moment: 'pentes_inverses', inter: 44 }], 34);
+        y = K.lignes(PX, y, [{ t: cc ? `pente en A′ = 1/${sm} = 1 / f′(${sa})` : '', couleur: 'jaune', moment: 'pentes_inverses', inter: 44 }], 34);
         c.pause(.3);
-        K.lignes(PX + 8, y, [{ t: `(f⁻¹)′(${sfa}) = 1 / f′(${sa}) = 1/${sm}`, couleur: 'blanc', cadre: 'jaune', taille: 20, repere: 'formule', label: '(f⁻¹)′(f(a)) = 1 / f′(a)', moment: 'formule' }], 34);
+        K.lignes(PX + 8, y, [{ t: cc ? `(f⁻¹)′(${sfa}) = 1 / f′(${sa}) = 1/${sm}` : '', couleur: 'blanc', cadre: cc ? 'jaune' : undefined, taille: 20, repere: 'formule', label: '(f⁻¹)′(f(a)) = 1 / f′(a)', moment: 'formule' }], 34);
       },
       poignees(K) { const G = K.grille(AX()); return [{ id: 'x_a', x: G.X(K.P.x_a), y: G.Y(f(K.P.x_a)), bouger: (x, y) => ({ x_a: proche(G, x, y, 0.3, 2.5) }) }]; },
       lecture: K => { const a = K.P.x_a, m = fp(a); return `A(${K.fr(a)} ; ${fr4(f(a))}) : pente f′(${K.fr(a)}) = ${K.fr(m)} ; A′(${fr4(f(a))} ; ${K.fr(a)}) : pente 1/${K.fr(m)} ≈ ${K.fr(1 / m, 3)} ; produit des deux pentes = ${K.fr(m)} × 1/${K.fr(m)} = 1.`; },

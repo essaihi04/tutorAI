@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rappels de 1re bac — dérivation</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Rappels à la craie avant le cours de dérivation : la pente d'une droite, l'équation d'une droite, dériver un polynôme, le signe d'un produit, un sur un tout petit nombre"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Dérivation et étude des fonctions » (math_ch2_derivation_etude_fonctions) : les rappels de 1re bac enseignés
+ * de zéro au début du cours (audit « rythme et départ de zéro », 14 novembre 2026, professeur règle 34).
+ * Vues : ?vue=pente | equation | derivee | signe | inverse. Chaque vue : une idée, une première explication, puis une
+ * deuxième manière de la voir (l'escalier, le test d'un point, la pente des droites, des nombres essayés, un bâton coupé).
+ * Moments : voir chaque vue ; `fin` = construction complète.
+ */
+const fr = MathsTableau.fr;
+const COL = 430;
+/* La police de la craie dessine « ′ » vide : au tableau, f′ s'écrit f'. */
+function primes(c) {
+  if (c.__primes) return; c.__primes = true;
+  const texte = c.texte;
+  c.texte = function (s, ...r) { return texte.call(this, String(s).replace(/″/g, "''").replace(/′/g, "'"), ...r); };
+}
+
+MathsTableau.page({
+  id: 'df_rappels', titre: 'Rappels de 1re bac',
+  texte: 'Construction à la craie du cours Dérivation et étude des fonctions : les notions des années passées, enseignées de zéro avant le cours',
+  vues: {
+    /* 1. La pente d'une droite : la montée sur l'avancée, puis l'escalier. */
+    pente: {
+      titre: 'La pente d’une droite',
+      dessiner(c, K) {
+        primes(c); K.titre('La pente d’une droite');
+        const G = K.axes({ x0: 50, y0: 60, w: 330, h: 300, xmin: -0.5, xmax: 4.5, ymin: -0.5, ymax: 7, gx: [[1, '1'], [3, '3']], gy: [[1, '1'], [5, '5']] });
+        K.anime(1.4, p => K.courbePart(G, x => 2 * x - 1, 0.1, 3.9, p, { couleur: 'cyan' }));
+        c.repere('droite', G.X(0.1), G.Y(6.8), G.X(3.9) - G.X(0.1), G.Y(-0.8) - G.Y(6.8), 'la droite');
+        K.rond(G, 1, 1, true, 'jaune'); c.texte('A', G.X(1) + 10, G.Y(1) + 18, { couleur: 'jaune', taille: 17 });
+        K.rond(G, 3, 5, true, 'jaune'); c.texte('B', G.X(3) - 24, G.Y(5) - 6, { couleur: 'jaune', taille: 17 });
+        c.texte('A(1 ; 1) et B(3 ; 5)', COL, 80, { couleur: 'cyan', taille: 19 });
+        K.marque('droite');
+        c.pause(.3);
+        K.anime(.8, p => c.direct(() => c.ligne(G.X(1), G.Y(1), G.X(1 + 2 * p), G.Y(1), { couleur: 'vert', largeur: 2.4 })));
+        c.texte('→ 2', G.X(2) - 12, G.Y(1) + 22, { couleur: 'vert', taille: 18 });
+        c.texte('vers la droite : 3 − 1 = 2', COL, 118, { couleur: 'vert', taille: 18 });
+        c.repere('avancee', G.X(1), G.Y(1) - 10, G.X(3) - G.X(1), 34, 'on avance de 2');
+        K.marque('avancee');
+        c.pause(.3);
+        K.anime(.8, p => c.direct(() => c.ligne(G.X(3), G.Y(1), G.X(3), G.Y(1 + 4 * p), { couleur: 'orange', largeur: 2.4 })));
+        c.texte('↑ 4', G.X(3) + 8, G.Y(3), { couleur: 'orange', taille: 18 });
+        c.texte('vers le haut : 5 − 1 = 4', COL, 150, { couleur: 'orange', taille: 18 });
+        c.repere('montee', G.X(3) - 6, G.Y(5), 40, G.Y(1) - G.Y(5), 'on monte de 4');
+        K.marque('montee');
+        c.pause(.3);
+        c.texte('pente = 4 / 2 = 2', COL, 192, { couleur: 'jaune', taille: 22 });
+        c.repere('pente', COL - 6, 168, 200, 32, 'la pente : 2');
+        K.marque('pente');
+        // deuxième manière : l'escalier, 1 vers la droite, 2 vers le haut
+        c.pause(.4);
+        const marches = [[0.5, 0], [1.5, 2], [2.5, 4]];
+        for (const [x, y] of marches) {
+          K.anime(.5, p => c.direct(() => {
+            c.ligne(G.X(x), G.Y(y), G.X(x + p), G.Y(y), { couleur: 'violet', largeur: 2 });
+            if (p > .5) c.ligne(G.X(x + 1), G.Y(y), G.X(x + 1), G.Y(y + 2 * (p - .5) * 2), { couleur: 'violet', largeur: 2 });
+          }));
+        }
+        c.texte('l’escalier : 1 à droite, 2 en haut', COL, 232, { couleur: 'violet', taille: 18 });
+        c.repere('escalier', G.X(0.5), G.Y(6), G.X(3.5) - G.X(0.5), G.Y(0) - G.Y(6), 'l’escalier');
+        K.marque('escalier');
+        c.pause(.4);
+        const mini = (x, y, pente, s, coul) => {
+          c.ligne(x, y + 14 * pente, x + 50, y - 14 * pente, { couleur: coul, largeur: 2.2 });
+          c.texte(s, x + 62, y + 6, { couleur: coul, taille: 17 });
+        };
+        mini(COL, 280, 1, 'monte : pente > 0', 'vert');
+        mini(COL, 320, -1, 'descend : pente < 0', 'rouge');
+        mini(COL, 360, 0, 'plate : pente = 0', 'blanc');
+        c.repere('signes', COL - 6, 260, 300, 112, 'trois droites, trois signes');
+        K.marque('signes');
+      },
+      decrire: {
+        droite: 'Une droite (cyan) passe par A(1 ; 1) et B(3 ; 5).',
+        avancee: 'De A, un trait vert vers la droite : on avance de 3 − 1 = 2.',
+        montee: 'Puis un trait orange vers le haut : on monte de 5 − 1 = 4.',
+        pente: 'Écrit : pente = 4 / 2 = 2.',
+        escalier: 'Un escalier violet sous la droite : chaque marche, 1 vers la droite et 2 vers le haut.',
+        signes: 'Trois petites droites : elle monte, pente positive ; elle descend, pente négative ; plate, pente nulle.',
+      },
+      motifs: { droite: 'la droite (AB)', avancee: 'on avance de 2', montee: 'on monte de 4', pente: 'la pente : 2', escalier: 'l’escalier', signes: 'le signe de la pente' },
+    },
+    /* 2. L'équation y = ax + b : la pente et l'ordonnée à l'origine, puis le test d'un point. */
+    equation: {
+      titre: 'L’équation d’une droite',
+      dessiner(c, K) {
+        primes(c); K.titre('L’équation d’une droite : y = ax + b');
+        const G = K.axes({ x0: 50, y0: 60, w: 330, h: 300, xmin: -1.5, xmax: 3.5, ymin: -2.5, ymax: 5.5, gx: [[1, '1'], [2, '2']], gy: [[-1, '−1'], [1, '1'], [3, '3']] });
+        c.texte('y = 2x − 1', COL, 80, { couleur: 'cyan', taille: 22 });
+        K.anime(1.3, p => K.courbePart(G, x => 2 * x - 1, -0.7, 3.1, p, { couleur: 'cyan' }));
+        c.repere('droite', G.X(-0.7), G.Y(5.2), G.X(3.1) - G.X(-0.7), G.Y(-2.4) - G.Y(5.2), 'la droite y = 2x − 1');
+        K.marque('droite');
+        c.pause(.3);
+        K.rond(G, 0, -1, true, 'jaune'); c.cercle(G.X(0), G.Y(-1), 12, { couleur: 'jaune', largeur: 1.6 });
+        c.texte('x = 0 : y = −1 = b', COL, 120, { couleur: 'jaune', taille: 18 });
+        c.repere('origine', G.X(0) - 14, G.Y(-1) - 14, 28, 28, 'b : la droite coupe l’axe des ordonnées en −1');
+        K.marque('origine');
+        c.pause(.3);
+        K.anime(.8, p => c.direct(() => {
+          c.ligne(G.X(0), G.Y(-1), G.X(Math.min(1, 2 * p)), G.Y(-1), { couleur: 'vert', largeur: 2.2 });
+          if (p > .5) c.ligne(G.X(1), G.Y(-1), G.X(1), G.Y(-1 + 2 * (p - .5) * 2), { couleur: 'orange', largeur: 2.2 });
+        }));
+        c.texte('1 à droite, 2 en haut : a = 2', COL, 152, { couleur: 'vert', taille: 18 });
+        c.repere('pente', G.X(0), G.Y(1), G.X(1) - G.X(0) + 20, G.Y(-1) - G.Y(1) + 10, 'a : la pente, 2');
+        K.marque('pente');
+        // deuxième manière : l'équation est un test
+        c.pause(.4);
+        K.rond(G, 2, 3, true, 'vert'); c.texte('(2 ; 3)', G.X(2) + 10, G.Y(3) + 4, { couleur: 'vert', taille: 16 });
+        c.texte('(2 ; 3) : 2 × 2 − 1 = 3  ✓ sur la droite', COL, 200, { couleur: 'vert', taille: 17, max: 320 });
+        c.repere('point_test', G.X(2) - 12, G.Y(3) - 12, 24, 24, 'le point (2 ; 3), sur la droite');
+        K.marque('point_test');
+        c.pause(.4);
+        K.rond(G, 1, 3, false, 'rouge'); c.texte('(1 ; 3)', G.X(1) - 58, G.Y(3) + 4, { couleur: 'rouge', taille: 16 });
+        c.texte('(1 ; 3) : 2 × 1 − 1 = 1 ≠ 3  ✗', COL, 236, { couleur: 'rouge', taille: 17, max: 320 });
+        c.repere('point_faux', G.X(1) - 12, G.Y(3) - 12, 24, 24, 'le point (1 ; 3), hors de la droite');
+        K.marque('point_faux');
+        c.pause(.3);
+        c.texte('a : la pente', COL, 300, { couleur: 'blanc', taille: 18 });
+        c.texte('b : l’ordonnée à l’origine', COL, 330, { couleur: 'blanc', taille: 18 });
+        K.marque('bilan');
+      },
+      decrire: {
+        droite: 'Écrit y = 2x − 1 ; la droite est tracée.',
+        origine: 'Le point (0 ; −1) est entouré : en x = 0, y = −1, c’est b.',
+        pente: 'De (0 ; −1) : 1 vers la droite, 2 vers le haut : a = 2, la pente.',
+        point_test: 'Le point (2 ; 3) : 2 × 2 − 1 = 3, il est sur la droite.',
+        point_faux: 'Le point (1 ; 3) : 2 × 1 − 1 = 1 ≠ 3, il n’est pas sur la droite.',
+        bilan: 'Écrit : a la pente, b l’ordonnée à l’origine.',
+      },
+      motifs: { droite: 'la droite', origine: 'b = −1', pente: 'a = 2', point_test: 'un point sur la droite', point_faux: 'un point hors de la droite', bilan: 'a et b' },
+    },
+    /* 3. Dériver un polynôme : l'exposant descend ; puis la dérivée vue comme une pente. */
+    derivee: {
+      titre: 'Dériver un polynôme',
+      dessiner(c, K) {
+        primes(c); K.titre('Dériver un polynôme : (xⁿ)′ = n·xⁿ⁻¹');
+        const t = Number.isFinite(c.t) ? c.t : Infinity;
+        // x³ : le 3 descend devant, puis l'exposant perd 1
+        c.texte('(x³)′', 40, 92, { couleur: 'cyan', taille: 30 });
+        c.texte('=', 120, 92, { couleur: 'blanc', taille: 30 });
+        const d0 = c.cur; K.anime(1.4, () => {}); K.marque('exposant_descend');
+        const p1 = Math.max(0, Math.min(1, (t - d0) / 1.4));
+        if (t >= d0) c.direct(() => {
+          const x = 108 + (150 - 108) * p1, y = 70 + (92 - 70) * p1;
+          c.texte('3', x, y, { couleur: 'jaune', taille: 30 - 10 * (1 - p1) });
+        });
+        c.texte('x', 170, 92, { couleur: 'cyan', taille: 30 });
+        c.pause(.2);
+        c.texte('²', 186, 80, { couleur: 'orange', taille: 26 });
+        c.texte('3 − 1 = 2', 220, 92, { couleur: 'orange', taille: 18 });
+        c.repere('regle', 30, 56, 300, 46, '(x³)′ = 3x²');
+        K.marque('moins_un');
+        c.pause(.4);
+        c.texte('f(x) = 3x² − 5x + 4', 40, 160, { couleur: 'cyan', taille: 24 });
+        K.marque('exemple');
+        c.pause(.3);
+        c.texte('6x', 70, 204, { couleur: 'vert', taille: 24 }); c.texte('↓', 78, 182, { couleur: 'faible', taille: 16 });
+        K.marque('terme1');
+        c.pause(.3);
+        c.texte('− 5', 150, 204, { couleur: 'vert', taille: 24 }); c.texte('↓', 160, 182, { couleur: 'faible', taille: 16 });
+        K.marque('terme2');
+        c.pause(.3);
+        c.texte('+ 0', 222, 204, { couleur: 'vert', taille: 24 }); c.texte('↓', 236, 182, { couleur: 'faible', taille: 16 });
+        c.texte('f′(x) = 6x − 5', 40, 248, { couleur: 'jaune', taille: 24 });
+        c.repere('resultat', 30, 140, 330, 120, 'f′(x) = 6x − 5');
+        K.marque('terme3');
+        // deuxième manière : la dérivée est une pente
+        c.pause(.4);
+        const G = K.axes({ x0: 420, y0: 70, w: 300, h: 260, xmin: -2, xmax: 2, ymin: -6, ymax: 6, gy: [[4, '4']], origine: false });
+        K.anime(.9, p => K.courbePart(G, () => 4, -1.9, 1.9, p, { couleur: 'violet' }));
+        c.texte('y = 4 : plate, pente 0 → (4)′ = 0', 420, 360, { couleur: 'violet', taille: 17, max: 330 });
+        c.repere('droite_plate', G.X(-1.9), G.Y(4) - 12, G.X(1.9) - G.X(-1.9), 24, 'y = 4 : pente 0');
+        K.marque('droite_plate');
+        c.pause(.3);
+        K.anime(.9, p => K.courbePart(G, x => -5 * x, -1.1, 1.1, p, { couleur: 'orange' }));
+        c.texte('y = −5x : pente −5 → (−5x)′ = −5', 420, 392, { couleur: 'orange', taille: 17, max: 330 });
+        c.repere('droite_penchee', G.X(-1.1), G.y0, G.X(1.1) - G.X(-1.1), G.h, 'y = −5x : pente −5');
+        K.marque('droite_penchee');
+      },
+      decrire: {
+        exposant_descend: 'Écrit (x³)′ = … : l’exposant 3 descend devant le x.',
+        moins_un: 'L’exposant perd 1 : 3 − 1 = 2 ; écrit (x³)′ = 3x².',
+        exemple: 'Écrit : f(x) = 3x² − 5x + 4.',
+        terme1: 'Sous 3x², sa dérivée : 6x.',
+        terme2: 'Sous − 5x, sa dérivée : − 5.',
+        terme3: 'Sous + 4, une constante, sa dérivée : 0 ; écrit f′(x) = 6x − 5.',
+        droite_plate: 'Dans un petit repère, la droite y = 4, plate : pente 0, donc (4)′ = 0.',
+        droite_penchee: 'Une droite qui descend, y = −5x : pente −5, donc (−5x)′ = −5.',
+      },
+      motifs: { exposant_descend: 'l’exposant descend', moins_un: 'l’exposant perd 1', exemple: 'l’exemple', terme1: '(3x²)′ = 6x', terme2: '(−5x)′ = −5', terme3: '(4)′ = 0', droite_plate: 'une droite plate', droite_penchee: 'une droite penchée' },
+    },
+    /* 4. Le signe d'un produit : un tableau facteur par facteur, puis trois nombres essayés. */
+    signe: {
+      titre: 'Le signe d’un produit',
+      dessiner(c, K) {
+        primes(c); K.titre('Le signe de (x − 1)(x + 1)');
+        const X0 = 40, LAB = 150, D = 520, H = [70, 108, 146, 184, 222];
+        const o = { couleur: 'faible', largeur: 1.4 };
+        for (const y of H) c.ligne(X0, y, D, y, o);
+        c.ligne(LAB, H[0], LAB, H[4], o);
+        const ligneX = [['−∞', 180], ['−1', 280], ['1', 400], ['+∞', 500]];
+        c.texte('x', 95, H[0] + 26, { couleur: 'blanc', taille: 18, align: 'center' });
+        for (const [s, x] of ligneX) c.texte(s, x, H[0] + 26, { couleur: 'blanc', taille: 17, align: 'center' });
+        K.marque('axe');
+        const ecrire = (ligne, nom, vals) => {
+          c.texte(nom, 95, H[ligne] + 26, { couleur: 'cyan', taille: 18, align: 'center' });
+          for (const [s, x, coul] of vals) c.texte(s, x, H[ligne] + 27, { couleur: coul, taille: 20, align: 'center' });
+        };
+        c.pause(.3);
+        ecrire(1, 'x − 1', [['−', 230, 'rouge'], ['−', 340, 'rouge'], ['0', 400, 'jaune'], ['+', 450, 'vert']]);
+        c.repere('facteur1', X0, H[1], D - X0, H[2] - H[1], 'le signe de x − 1');
+        K.marque('facteur1');
+        c.pause(.3);
+        ecrire(2, 'x + 1', [['−', 230, 'rouge'], ['0', 280, 'jaune'], ['+', 340, 'vert'], ['+', 450, 'vert']]);
+        c.repere('facteur2', X0, H[2], D - X0, H[3] - H[2], 'le signe de x + 1');
+        K.marque('facteur2');
+        c.pause(.3);
+        ecrire(3, 'produit', [['+', 230, 'vert'], ['0', 280, 'jaune'], ['−', 340, 'rouge'], ['0', 400, 'jaune'], ['+', 450, 'vert']]);
+        c.repere('produit', X0, H[3], D - X0, H[4] - H[3], 'le signe du produit');
+        c.texte('règle des signes :  − × − = +   − × + = −   + × + = +', 60, 250, { couleur: 'blanc', taille: 17 });
+        K.marque('produit');
+        // deuxième manière : on essaie trois nombres
+        const essais = [[-2, '(−3) × (−1) = 3 > 0', 'vert', 'test1'], [0, '(−1) × 1 = −1 < 0', 'rouge', 'test2'], [2, '1 × 3 = 3 > 0', 'vert', 'test3']];
+        c.pause(.2); c.texte('on essaie trois nombres :', 60, 290, { couleur: 'faible', taille: 16 });
+        essais.forEach(([x, s, coul, m], i) => {
+          c.pause(.4);
+          c.texte('x = ' + fr(x) + ' :  ' + s, 60, 324 + i * 34, { couleur: coul, taille: 19 });
+          c.repere(m, 50, 302 + i * 34, 420, 30, 'x = ' + fr(x));
+          K.marque(m);
+        });
+      },
+      decrire: {
+        axe: 'Un tableau de signe vide : ligne x avec −∞, −1, 1, +∞.',
+        facteur1: 'Ligne x − 1 : − avant 1, 0 en 1, + après 1.',
+        facteur2: 'Ligne x + 1 : − avant −1, 0 en −1, + après −1.',
+        produit: 'Ligne du produit : + avant −1, − entre −1 et 1, + après 1 ; à droite la règle des signes.',
+        test1: 'Essai x = −2 : (−3) × (−1) = 3, positif.',
+        test2: 'Essai x = 0 : (−1) × 1 = −1, négatif.',
+        test3: 'Essai x = 2 : 1 × 3 = 3, positif : les mêmes signes que le tableau.',
+      },
+      motifs: { facteur1: 'le signe de x − 1', facteur2: 'le signe de x + 1', produit: 'le signe du produit', test1: 'x = −2', test2: 'x = 0', test3: 'x = 2' },
+    },
+    /* 5. 1/x près de 0 : la courbe, puis un bâton de longueur 1 coupé en morceaux de plus en plus petits. */
+    inverse: {
+      titre: '1 sur un tout petit nombre',
+      dessiner(c, K) {
+        primes(c); K.titre('1/x quand x s’approche de 0');
+        const G = K.axes({ x0: 40, y0: 56, w: 300, h: 300, xmin: -2, xmax: 3, ymin: -12, ymax: 12, gx: [[1, '1'], [2, '2']], gy: [[10, '10'], [-10, '−10']] });
+        K.anime(1.6, p => K.courbePart(G, x => 1 / x, 3, 0.084, p, { couleur: 'cyan' }));
+        c.texte('y = 1/x', G.X(1.6), G.Y(2.5), { couleur: 'cyan', taille: 18 });
+        c.repere('courbe', G.X(0.08), G.y0, G.X(3) - G.X(0.08), G.Y(0) - G.y0, 'la courbe de 1/x');
+        K.marque('courbe');
+        const vals = [[0.5, '1/0,5 = 2'], [0.1, '1/0,1 = 10'], [0.01, '1/0,01 = 100']];
+        vals.forEach(([x, s], i) => {
+          c.pause(.3);
+          c.texte('x = ' + fr(x) + '  →  ' + s, 370, 84 + i * 30, { couleur: 'jaune', taille: 18 });
+        });
+        c.texte('x → 0⁺ : 1/x → +∞', 370, 180, { couleur: 'vert', taille: 20 });
+        c.repere('zero_plus', 364, 62, 380, 126, 'x tend vers 0⁺');
+        K.marque('zero_plus');
+        c.pause(.4);
+        K.anime(1.4, p => K.courbePart(G, x => 1 / x, -2, -0.084, p, { couleur: 'cyan' }));
+        c.texte('x → 0⁻ : 1/x → −∞', 370, 212, { couleur: 'rouge', taille: 20 });
+        c.repere('zero_moins', G.x0, G.Y(0), G.X(0) - G.x0, G.y0 + G.h - G.Y(0), 'x tend vers 0⁻');
+        K.marque('zero_moins');
+        c.pause(.3);
+        c.texte('x → +∞ : 1/x → 0', 370, 244, { couleur: 'cyan', taille: 20 });
+        K.marque('infini');
+        // deuxième manière : un bâton de longueur 1 coupé en morceaux
+        c.pause(.4);
+        const bx = 370, bw = 340;
+        c.ligne(bx, 268, bx, 300, { couleur: 'faible', largeur: 1.2, duree: .05 }); c.ligne(bx + bw, 268, bx + bw, 300, { couleur: 'faible', largeur: 1.2, duree: .05 });
+        c.texte('1', bx - 14, 290, { couleur: 'blanc', taille: 16 });
+        MathsTableau.peindre(c, .6, () => MathsTableau.bloc(c, bx, 276, bw, 18, 'orange'));
+        c.repere('baton', bx, 270, bw, 30, 'un bâton de longueur 1');
+        c.pause(.2);
+        MathsTableau.peindre(c, .6, () => { for (let i = 0; i < 10; i++) MathsTableau.bloc(c, bx + i * bw / 10 + 1, 316, bw / 10 - 2, 18, 'jaune'); });
+        c.texte('morceaux de 0,1 : 10 morceaux', bx, 354, { couleur: 'jaune', taille: 17 });
+        K.marque('baton_dix');
+        c.pause(.3);
+        MathsTableau.peindre(c, .6, () => { for (let i = 0; i < 100; i++) MathsTableau.bloc(c, bx + i * bw / 100 + .3, 366, bw / 100 - .6, 14, 'vert', { arrondi: 0 }); });
+        c.texte('morceaux de 0,01 : 100 morceaux', bx, 404, { couleur: 'vert', taille: 17 });
+        c.repere('baton_cent', bx, 360, bw, 50, '100 morceaux de 0,01');
+        K.marque('baton_cent');
+      },
+      decrire: {
+        courbe: 'La branche de y = 1/x pour x > 0 est tracée.',
+        zero_plus: 'Écrit : x = 0,5 donne 2 ; x = 0,1 donne 10 ; x = 0,01 donne 100 ; x → 0⁺ : 1/x → +∞.',
+        zero_moins: 'La branche pour x < 0 plonge : x → 0⁻ : 1/x → −∞.',
+        infini: 'Écrit : x → +∞ : 1/x → 0.',
+        baton_dix: 'Un bâton de bois de longueur 1, puis le même coupé en 10 morceaux de 0,1.',
+        baton_cent: 'Coupé en morceaux de 0,01 : 100 morceaux. Plus le morceau est petit, plus il y en a.',
+      },
+      motifs: { courbe: 'la courbe de 1/x', zero_plus: 'x → 0⁺', zero_moins: 'x → 0⁻', infini: 'x → +∞', baton_dix: '10 morceaux de 0,1', baton_cent: '100 morceaux de 0,01' },
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

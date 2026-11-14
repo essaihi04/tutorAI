@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rappels avant les primitives</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Rappels à la craie avant les primitives : la dérivée comme pente, la dérivée d'une puissance, écrire en puissance, la dérivée d'un produit, cos et sin, la dérivée d'une puissance d'une expression"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Fonctions primitives » (math_ch4_primitives), audit « rythme et départ de zéro » (14 novembre 2026,
+ * professeur règles 33 et 34) : les rappels des années d'avant, enseignés depuis zéro, un par diapositive.
+ * Vues :
+ *   pente           (pr_z1_pente)       moments : courbe, glisse, pente_positive, pente_negative, constante ;
+ *                                       repères : courbe, tangente_A, tangente_B, droite_k, regle_k
+ *   puissances      (pr_z2_puissances)  moments : descend, autres, regle, escalier ; repères : exposant, regle, escalier
+ *   ecrire_puissance(pr_z3_ecrire)      moments : inverse, inverse_carre, racine, verification, cubique ;
+ *                                       + derivee_inverse, derivee_racine ; repères : fraction, racine, verification, derivees
+ *   produit         (pr_z4_produit)     moments : regle, exemple, faux, juste ; repères : regle, faux, juste
+ *   cos_sin         (pr_z5_cos_sin)     moments : cercle, derivees, courbe_sin, pentes ;
+ *                                       repères : cos, sin, derivees, pente_un, pente_zero
+ *   puissance_u     (pr_c1)             moments : expression, descend, resultat, regle, boites ;
+ *                                       repères : descend, interieur, regle, boites
+ * `fin` = construction complète.
+ */
+const fr = MathsTableau.fr;
+
+/* Un segment de tangente en (a ; g(a)), de pente s, de demi-largeur h (unités de x). */
+function tangente(c, G, a, ya, s, h, couleur) {
+  c.ligne(G.X(a - h), G.Y(ya - s * h), G.X(a + h), G.Y(ya + s * h), { couleur, largeur: 2.4 });
+}
+/* Texte encadré ; renvoie [x, y, w, h]. */
+function encadre(c, s, x, y, taille, couleur) {
+  const w = c.largeurTexte(s.replace(/[\^{}]/g, ''), taille) + 18;
+  c.texte(s, x, y, { couleur, taille });
+  c.rect(x - 9, y - taille - 4, w, taille + 14, { couleur, arrondi: 8, largeur: 1.6 });
+  return [x - 9, y - taille - 4, w, taille + 14];
+}
+
+MathsTableau.page({
+  id: 'pr_rappels', titre: 'Rappels avant les primitives',
+  texte: 'Construction à la craie du cours Fonctions primitives : les notions des années d’avant, réexpliquées depuis zéro (dérivée et pente, puissances, écriture en puissance, produit, cos et sin)',
+  vues: {
+    pente: {
+      titre: 'La dérivée, c’est la pente',
+      dessiner(c, K) {
+        K.titre('La dérivée, c’est la pente');
+        const f = x => x * x, G = K.axes({ x0: 60, y0: 58, w: 360, h: 300, xmin: -2.4, xmax: 2.4, ymin: -1, ymax: 6.4, gx: [[-1, '−1'], [1, '1']], gy: [[1, '1'], [5, '5']] });
+        const XR = 452;
+        K.anime(1.6, p => K.courbePart(G, f, -2.3, 2.3, p, { couleur: 'cyan' }));
+        c.texte('f(x) = x²', XR, 84, { couleur: 'cyan', taille: 20 });
+        c.repere('courbe', G.X(-2.3), G.Y(5.3), G.X(2.3) - G.X(-2.3), G.Y(0) - G.Y(5.3), 'la courbe de f');
+        K.marque('courbe');
+        // Un point glisse sur la courbe, sa tangente le suit.
+        c.pause(.3);
+        K.anime(2.6, p => {
+          const a = -1.8 + 3.6 * p;
+          tangente(c, G, a, f(a), 2 * a, 0.6, 'blanc');
+          c.point(G.X(a), G.Y(f(a)), 5, 'jaune');
+          c.texte('pente = ' + fr(2 * a, 1), XR, 124, { couleur: 'jaune', taille: 19 });
+        });
+        K.marque('glisse');
+        // En x = 1 : la tangente monte, pente 2.
+        c.pause(.3);
+        tangente(c, G, 1, 1, 2, 0.7, 'vert');
+        K.rond(G, 1, 1, true, 'vert');
+        c.texte('A', G.X(1) + 10, G.Y(1) + 18, { couleur: 'vert', taille: 18 });
+        c.texte('en x = 1 : ça monte, pente 2', XR, 164, { couleur: 'vert', taille: 18 });
+        c.texte('f’(1) = 2', XR + 10, 192, { couleur: 'vert', taille: 20 });
+        c.repere('tangente_A', G.X(0.3), G.Y(2.4), G.X(1.7) - G.X(0.3), G.Y(-0.4) - G.Y(2.4), 'la tangente en A');
+        K.marque('pente_positive');
+        // En x = −1 : la tangente descend, pente −2.
+        c.pause(.3);
+        tangente(c, G, -1, 1, -2, 0.7, 'orange');
+        K.rond(G, -1, 1, true, 'orange');
+        c.texte('B', G.X(-1) - 22, G.Y(1) + 18, { couleur: 'orange', taille: 18 });
+        c.texte('en x = −1 : ça descend, pente −2', XR, 232, { couleur: 'orange', taille: 18 });
+        c.texte('f’(−1) = −2', XR + 10, 260, { couleur: 'orange', taille: 20 });
+        c.repere('tangente_B', G.X(-1.7), G.Y(2.4), G.X(-0.3) - G.X(-1.7), G.Y(-0.4) - G.Y(2.4), 'la tangente en B');
+        K.marque('pente_negative');
+        // Une fonction constante : une droite plate, pente 0.
+        c.pause(.4);
+        c.ligne(G.X(-2.3), G.Y(5), G.X(2.3), G.Y(5), { couleur: 'rose', largeur: 2.6 });
+        c.texte('g(x) = 5', G.X(1.2), G.Y(5) - 10, { couleur: 'rose', taille: 18 });
+        c.repere('droite_k', G.X(-2.3), G.Y(5) - 16, G.X(2.3) - G.X(-2.3), 32, 'la droite plate y = 5');
+        c.pause(.2);
+        const b = encadre(c, '(5)’ = 0  ;  (k)’ = 0', XR + 9, 316, 21, 'rose');
+        c.texte('plate : pente 0', XR, 356, { couleur: 'rose', taille: 17 });
+        c.repere('regle_k', b[0], b[1], b[2], b[3], 'la dérivée d’une constante');
+        K.marque('constante');
+      },
+      decrire: {
+        courbe: 'Un repère ; la parabole de f(x) = x² est tracée en cyan.',
+        glisse: 'Un point jaune glisse sur la courbe de gauche à droite ; sa tangente blanche le suit ; à droite, la pente s’écrit : négative à gauche, positive à droite.',
+        pente_positive: 'En A (x = 1), la tangente verte monte : « en x = 1 : ça monte, pente 2 », « f’(1) = 2 ».',
+        pente_negative: 'En B (x = −1), la tangente orange descend : « en x = −1 : ça descend, pente −2 », « f’(−1) = −2 ».',
+        constante: 'Une droite plate rose y = 5, « g(x) = 5 » ; encadré : « (5)’ = 0 ; (k)’ = 0 », « plate : pente 0 ».',
+      },
+      motifs: { courbe: 'la courbe', glisse: 'la tangente suit le point', pente_positive: 'pente 2 en A', pente_negative: 'pente −2 en B', constante: 'une constante : pente 0' },
+      explication: [{ repere: 'tangente_A', texte: 'En A, la courbe monte : la pente est positive, f’(1) = 2.' }, { repere: 'tangente_B', texte: 'En B, elle descend : la pente est négative.' }, { repere: 'droite_k', texte: 'Une constante est plate : sa dérivée est 0.' }],
+    },
+
+    puissances: {
+      titre: 'Dériver une puissance',
+      dessiner(c, K) {
+        K.titre('Dériver une puissance');
+        const y1 = 110, T = 40;
+        // (x³)’ : le 3 descend devant, l'exposant devient 2.
+        c.texte('(x³)’', 60, y1, { couleur: 'cyan', taille: T });
+        c.texte('=', 190, y1, { couleur: 'faible', taille: T });
+        const x0 = 60 + c.largeurTexte('(x', T), xa = 240;
+        K.anime(1.8, p => {
+          const x = x0 + (xa - x0) * p, y = y1 - 18 * (1 - p);
+          c.texte('3', x, y, { couleur: 'jaune', taille: Math.round(T * (0.6 + 0.4 * p)) });
+        });
+        const w3 = c.largeurTexte('3', T);
+        c.texte('x²', xa + w3 + 2, y1, { couleur: 'blanc', taille: T });
+        c.repere('exposant', 54, y1 - 50, 300, 64, 'l’exposant 3 qui descend devant');
+        c.pause(.2);
+        c.texte('l’exposant descend devant, puis il baisse de 1 : 3 → 2', 60, y1 + 42, { couleur: 'orange', taille: 18, max: 660 });
+        K.marque('descend');
+        // Deux autres.
+        c.pause(.4);
+        c.texte('(x²)’ = 2x', 60, 210, { couleur: 'blanc', taille: 26 });
+        c.texte('(x⁴)’ = 4x³', 250, 210, { couleur: 'blanc', taille: 26 });
+        K.marque('autres');
+        c.pause(.4);
+        const b = encadre(c, '(xⁿ)’ = n xⁿ⁻¹', 69, 282, 30, 'jaune');
+        c.repere('regle', b[0], b[1], b[2], b[3], 'la règle des puissances');
+        K.marque('regle');
+        // L'escalier : chaque dérivée descend d'une marche.
+        c.pause(.5);
+        const ex = 470, ey = 120, mw = 56, mh = 44, noms = ['x⁴', '4x³', '12x²', '24x', '24'];
+        K.anime(2.2, p => {
+          const n = Math.min(5, Math.floor(p * 5.999) + 1);
+          for (let i = 0; i < n; i++) {
+            const x = ex + i * mw, y = ey + i * mh;
+            c.ligne(x, y, x + mw, y, { couleur: 'faible', largeur: 2 });
+            c.ligne(x + mw, y, x + mw, y + mh, { couleur: 'faible', largeur: 2 });
+            c.texte(noms[i], x + 4, y - 8, { couleur: i ? 'blanc' : 'cyan', taille: 19 });
+          }
+        });
+        c.texte('chaque dérivée :', ex, ey - 66, { couleur: 'orange', taille: 17 });
+        c.texte('une marche plus bas', ex, ey - 44, { couleur: 'orange', taille: 17 });
+        c.repere('escalier', ex - 6, ey - 84, 5 * mw + 14, 5 * mh + 74, 'l’escalier des exposants');
+        K.marque('escalier');
+      },
+      decrire: {
+        descend: 'Écrit en grand : (x³)’ = 3x² ; le 3 de l’exposant glisse devant ; en orange : « l’exposant descend devant, puis il baisse de 1 : 3 → 2 ».',
+        autres: 'Deux autres lignes : (x²)’ = 2x et (x⁴)’ = 4x³.',
+        regle: 'La règle encadrée en jaune : (xⁿ)’ = n xⁿ⁻¹.',
+        escalier: 'À droite, un escalier : x⁴, puis 4x³, 12x², 24x, 24, chaque dérivée une marche plus bas.',
+      },
+      motifs: { descend: 'l’exposant descend', autres: 'deux autres puissances', regle: 'la règle', escalier: 'l’escalier' },
+      explication: [{ repere: 'exposant', texte: 'Le 3 descend devant, et l’exposant devient 2.' }, { repere: 'regle', texte: '(xⁿ)’ = n xⁿ⁻¹.' }, { repere: 'escalier', texte: 'À chaque dérivée, l’exposant descend d’une marche.' }],
+    },
+
+    ecrire_puissance: {
+      titre: 'Écrire en puissance',
+      dessiner(c, K) {
+        K.titre('Écrire en puissance');
+        c.texte('1/x = x^{−1}', 60, 100, { couleur: 'blanc', taille: 30 });
+        K.marque('inverse');
+        // 1/x² : x² monte du bas vers le haut, l'exposant prend un moins.
+        c.pause(.4);
+        const fx = 90, fy = 180;
+        c.texte('1', fx + 10, fy - 18, { couleur: 'blanc', taille: 30 });
+        c.ligne(fx - 4, fy - 6, fx + 44, fy - 6, { couleur: 'blanc', largeur: 2 });
+        c.texte('=', fx + 70, fy, { couleur: 'faible', taille: 30 });
+        K.anime(1.8, p => {
+          const x = fx + (fx + 110 - fx) * p, y = fy + 30 - 30 * p;
+          c.texte('x', x, y, { couleur: 'cyan', taille: 30 });
+          c.texte(p < 0.6 ? '2' : '−2', x + 16, y - 16, { couleur: p < 0.6 ? 'cyan' : 'rouge', taille: 19 });
+        });
+        c.texte('en bas → en haut : l’exposant prend un moins', 290, fy, { couleur: 'orange', taille: 18, max: 450 });
+        c.repere('fraction', fx - 10, fy - 54, 200, 96, '1/x² = x⁻²');
+        K.marque('inverse_carre');
+        // La racine : un exposant un demi.
+        c.pause(.5);
+        const r = encadre(c, '√x = x^{1/2}', 69, 286, 30, 'jaune');
+        c.repere('racine', r[0], r[1], r[2], r[3], 'la racine en puissance');
+        K.marque('racine');
+        c.pause(.3);
+        c.texte('car x^{1/2} × x^{1/2} = x^{1/2 + 1/2} = x¹ = x', 290, 286, { couleur: 'vert', taille: 19, max: 460 });
+        c.texte('comme √x × √x = x', 290, 316, { couleur: 'vert', taille: 19 });
+        c.repere('verification', 282, 262, 470, 66, 'deux moitiés font un');
+        K.marque('verification');
+        c.pause(.3);
+        c.texte('∛x = x^{1/3}', 60, 370, { couleur: 'blanc', taille: 28 });
+        K.marque('cubique');
+        // La règle des puissances redonne les dérivées de 1/x et de √x.
+        c.pause(.5);
+        c.texte('(1/x)’ = (x^{−1})’ = −x^{−2} = −1/x²', 330, 96, { couleur: 'cyan', taille: 19, max: 420 });
+        K.marque('derivee_inverse');
+        c.pause(.3);
+        c.texte('(√x)’ = (x^{1/2})’ = ½ x^{−1/2} = 1/(2√x)', 330, 130, { couleur: 'cyan', taille: 19, max: 420 });
+        c.repere('derivees', 322, 72, 430, 70, 'les dérivées de 1/x et de √x');
+        K.marque('derivee_racine');
+      },
+      decrire: {
+        inverse: 'Écrit : 1/x = x⁻¹.',
+        inverse_carre: 'La fraction 1 sur x² ; le x² monte du bas vers le haut et son exposant devient −2 : 1/x² = x⁻² ; en orange : « en bas → en haut : l’exposant prend un moins ».',
+        racine: 'Encadré en jaune : √x = x^(1/2).',
+        verification: 'En vert : x^(1/2) × x^(1/2) = x^(1/2 + 1/2) = x¹ = x, comme √x × √x = x.',
+        cubique: 'Écrit : ∛x = x^(1/3).',
+        derivee_inverse: 'En haut à droite, en cyan : (1/x)’ = (x⁻¹)’ = −x⁻² = −1/x².',
+        derivee_racine: 'Dessous : (√x)’ = (x^(1/2))’ = ½ x^(−1/2) = 1/(2√x).',
+      },
+      motifs: { inverse: '1/x', inverse_carre: '1/x² en puissance', racine: 'la racine', verification: 'deux moitiés font un', cubique: 'la racine cubique', derivee_inverse: 'la dérivée de 1/x', derivee_racine: 'la dérivée de √x' },
+      explication: [{ repere: 'fraction', texte: 'Ce qui est en bas monte en haut avec un exposant négatif.' }, { repere: 'racine', texte: 'La racine carrée, c’est la puissance un demi.' }],
+    },
+
+    produit: {
+      titre: 'Dériver un produit',
+      dessiner(c, K) {
+        K.titre('Dériver un produit');
+        const b = encadre(c, '(u · v)’ = u’ · v + u · v’', 69, 104, 30, 'jaune');
+        c.repere('regle', b[0], b[1], b[2], b[3], 'la règle du produit');
+        K.marque('regle');
+        c.pause(.5);
+        c.texte('exemple : x · x = x²   et   (x²)’ = 2x', 60, 176, { couleur: 'blanc', taille: 22 });
+        K.marque('exemple');
+        c.pause(.5);
+        const t1 = 'facteur par facteur : (x)’ · (x)’ = 1 · 1 = 1';
+        c.texte(t1, 60, 236, { couleur: 'rouge', taille: 22, max: 680 });
+        const w1 = Math.min(680, c.largeurTexte(t1, 22));
+        c.pause(.2);
+        c.ligne(56, 240, 64 + w1, 218, { couleur: 'rouge', largeur: 2.4 });
+        c.texte('1 ≠ 2x : faux', 60 + Math.min(560, w1 - 120), 268, { couleur: 'rouge', taille: 18 });
+        c.repere('faux', 52, 210, w1 + 16, 66, 'facteur par facteur : faux');
+        K.marque('faux');
+        c.pause(.5);
+        const t2 = 'avec la règle : 1 · x + x · 1 = 2x  ✓';
+        c.texte(t2, 60, 330, { couleur: 'vert', taille: 24 });
+        c.repere('juste', 52, 302, c.largeurTexte(t2, 24) + 16, 40, 'avec la règle : juste');
+        K.marque('juste');
+      },
+      decrire: {
+        regle: 'Encadré en jaune : (u · v)’ = u’ · v + u · v’.',
+        exemple: 'Écrit : exemple : x · x = x² et (x²)’ = 2x.',
+        faux: 'En rouge, barré : « facteur par facteur : (x)’ · (x)’ = 1 · 1 = 1 » ; « 1 ≠ 2x : faux ».',
+        juste: 'En vert : « avec la règle : 1 · x + x · 1 = 2x ✓ ».',
+      },
+      motifs: { regle: 'la règle', exemple: 'x fois x', faux: 'facteur par facteur : faux', juste: 'avec la règle : juste' },
+      explication: [{ repere: 'regle', texte: 'La dérivée d’un produit : u’v + uv’.' }, { repere: 'faux', texte: 'Dériver facteur par facteur donne un résultat faux.' }, { repere: 'juste', texte: 'La règle redonne bien 2x.' }],
+    },
+
+    cos_sin: {
+      titre: 'cos x, sin x et leurs dérivées',
+      dessiner(c, K) {
+        K.titre('cos x, sin x et leurs dérivées');
+        const CX = 160, CY = 220, R = 104, A = 0.9;
+        c.ligne(CX - R - 20, CY, CX + R + 20, CY, { couleur: 'faible', largeur: 1.4 });
+        c.ligne(CX, CY + R + 20, CX, CY - R - 20, { couleur: 'faible', largeur: 1.4 });
+        c.cercle(CX, CY, R, { couleur: 'faible', largeur: 1.8 });
+        c.texte('1', CX + R + 4, CY + 18, { couleur: 'faible', taille: 14 });
+        K.anime(1.8, p => {
+          const a = A * p, mx = CX + R * Math.cos(a), my = CY - R * Math.sin(a);
+          c.ligne(CX, CY, mx, my, { couleur: 'blanc', largeur: 1.6 });
+          c.point(mx, my, 5, 'blanc');
+        });
+        const mx = CX + R * Math.cos(A), my = CY - R * Math.sin(A);
+        c.texte('M', mx + 8, my - 6, { couleur: 'blanc', taille: 18 });
+        c.texte('x', CX + 26, CY - 8, { couleur: 'blanc', taille: 15 });
+        c.ligne(mx, my, mx, CY, { couleur: 'cyan', largeur: 1.4, pointille: [5, 5] });
+        c.ligne(CX, CY, mx, CY, { couleur: 'cyan', largeur: 4 });
+        c.texte('cos x', CX + (mx - CX) / 2, CY + 22, { couleur: 'cyan', taille: 17, align: 'center' });
+        c.repere('cos', CX, CY - 10, mx - CX, 38, 'cos x : l’abscisse de M');
+        c.ligne(mx, my, CX, my, { couleur: 'jaune', largeur: 1.4, pointille: [5, 5] });
+        c.ligne(CX, CY, CX, my, { couleur: 'jaune', largeur: 4 });
+        c.texte('sin x', CX - 8, CY - (CY - my) / 2, { couleur: 'jaune', taille: 17, align: 'right' });
+        c.repere('sin', CX - 60, my, 66, CY - my, 'sin x : l’ordonnée de M');
+        K.marque('cercle');
+        c.pause(.5);
+        const b = encadre(c, '(sin x)’ = cos x     (cos x)’ = −sin x', 339, 92, 22, 'jaune');
+        c.repere('derivees', b[0], b[1], b[2], b[3], 'les deux dérivées');
+        K.marque('derivees');
+        // La courbe de sin : sa pente se lit dans cos.
+        c.pause(.5);
+        const G = K.axes({ x0: 330, y0: 150, w: 400, h: 190, xmin: -0.3, xmax: 6.6, ymin: -1.3, ymax: 1.3, gx: [[Math.PI / 2, 'π/2'], [Math.PI, 'π']], gy: [[1, '1'], [-1, '−1']], origine: false });
+        K.anime(1.6, p => K.courbePart(G, Math.sin, 0, 6.4, p, { couleur: 'jaune' }));
+        c.texte('y = sin x', G.X(4.2), G.Y(0.9), { couleur: 'jaune', taille: 17 });
+        K.marque('courbe_sin');
+        c.pause(.3);
+        tangente(c, G, 0, 0, 1, 0.55, 'vert');
+        c.texte('en 0 : pente 1 = cos 0', G.X(0.15), G.Y(-0.85), { couleur: 'vert', taille: 16 });
+        c.repere('pente_un', G.X(-0.3), G.Y(0.7), G.X(0.9) - G.X(-0.3), G.Y(-1) - G.Y(0.7), 'en 0, la pente vaut 1');
+        c.pause(.3);
+        tangente(c, G, Math.PI / 2, 1, 0, 0.6, 'orange');
+        c.texte('en π/2 : pente 0 = cos(π/2)', G.X(1.3), G.Y(1.32), { couleur: 'orange', taille: 16 });
+        c.repere('pente_zero', G.X(0.9), G.Y(1.3), G.X(2.3) - G.X(0.9), 30, 'en π/2, la pente vaut 0');
+        K.marque('pentes');
+      },
+      decrire: {
+        cercle: 'Un cercle de rayon 1 ; un point M tourne d’un angle x ; son abscisse, en cyan, est cos x ; son ordonnée, en jaune, est sin x.',
+        derivees: 'Encadré en jaune : (sin x)’ = cos x et (cos x)’ = −sin x.',
+        courbe_sin: 'À droite, la courbe de sin x est tracée en jaune.',
+        pentes: 'Sur la courbe de sin : en 0, une tangente verte de pente 1 = cos 0 ; en π/2, au sommet, une tangente orange plate, pente 0 = cos(π/2).',
+      },
+      motifs: { cercle: 'cos et sin sur le cercle', derivees: 'les deux dérivées', courbe_sin: 'la courbe de sin', pentes: 'la pente de sin, c’est cos' },
+      explication: [{ repere: 'cos', texte: 'cos x est l’abscisse du point M.' }, { repere: 'sin', texte: 'sin x est son ordonnée.' }, { repere: 'pente_zero', texte: 'Au sommet de sin, la pente est 0 : cos(π/2) = 0.' }],
+    },
+
+    puissance_u: {
+      titre: 'Dériver une puissance d’une expression',
+      dessiner(c, K) {
+        K.titre('Dériver une puissance d’une expression');
+        c.texte('((x² + 1)³)’', 50, 100, { couleur: 'cyan', taille: 30 });
+        K.marque('expression');
+        c.pause(.5);
+        c.texte('= 3 (x² + 1)²  ×  (x² + 1)’', 70, 160, { couleur: 'blanc', taille: 28, max: 660 });
+        c.repere('descend', 64, 128, 250, 46, 'la puissance descend');
+        const xi = 70 + c.largeurTexte('= 3 (x² + 1)²  ×  ', 28);
+        c.repere('interieur', xi - 6, 128, c.largeurTexte('(x² + 1)’', 28) + 12, 46, 'la dérivée de l’intérieur');
+        c.texte('la puissance descend, puis × la dérivée de ce qui est dedans', 70, 196, { couleur: 'orange', taille: 17, max: 660 });
+        K.marque('descend');
+        c.pause(.5);
+        c.texte('= 3 (x² + 1)² × 2x = 6x (x² + 1)²', 70, 250, { couleur: 'blanc', taille: 28, max: 660 });
+        K.marque('resultat');
+        c.pause(.5);
+        const b = encadre(c, '(uⁿ)’ = n · u’ · uⁿ⁻¹', 79, 322, 28, 'jaune');
+        c.repere('regle', b[0], b[1], b[2], b[3], 'la règle');
+        K.marque('regle');
+        // Deux boîtes : dehors puis dedans.
+        c.pause(.5);
+        const bx = 470, by = 280;
+        c.rect(bx, by, 260, 100, { couleur: 'cyan', arrondi: 12, largeur: 2 });
+        c.texte('dehors : ( … )³ → 3( … )²', bx + 12, by + 28, { couleur: 'cyan', taille: 16, max: 240 });
+        c.rect(bx + 40, by + 44, 180, 46, { couleur: 'vert', arrondi: 10, largeur: 2 });
+        c.texte('dedans : x² + 1 → 2x', bx + 52, by + 74, { couleur: 'vert', taille: 16, max: 160 });
+        c.repere('boites', bx - 4, by - 4, 268, 108, 'dehors, puis dedans');
+        K.marque('boites');
+      },
+      decrire: {
+        expression: 'Écrit : ((x² + 1)³)’.',
+        descend: 'Ligne suivante : = 3(x² + 1)² × (x² + 1)’ ; en orange : « la puissance descend, puis × la dérivée de ce qui est dedans ».',
+        resultat: 'Ligne suivante : = 3(x² + 1)² × 2x = 6x(x² + 1)².',
+        regle: 'La règle encadrée en jaune : (uⁿ)’ = n · u’ · uⁿ⁻¹.',
+        boites: 'À droite, deux boîtes l’une dans l’autre : « dehors : (…)³ → 3(…)² », « dedans : x² + 1 → 2x ».',
+      },
+      motifs: { expression: 'l’expression', descend: 'la puissance descend', resultat: 'le résultat', regle: 'la règle', boites: 'dehors puis dedans' },
+      explication: [{ repere: 'descend', texte: 'La puissance descend devant.' }, { repere: 'interieur', texte: 'On multiplie par la dérivée de ce qui est dedans.' }, { repere: 'boites', texte: 'D’abord dehors, puis dedans.' }],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

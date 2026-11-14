@@ -39,7 +39,8 @@ const PXCM = 20, PXM = 100 * PXCM, LENT = 0.1;
 const R = { x: 58, y: 50, w: 672, h: 290 }, YC = R.y + R.h / 2, XW = 300;     // XW : plan de la paroi
 const CIRC = vue === 'circulaire_incidente';
 const SRC = CIRC ? { x: 112, y: YC } : { x: 78, y: YC };                        // pointe S, ou réglette en x = 78
-const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0, a: { large: 6, voisine: 2, etroite: 1, circulaire_incidente: 1 }[vue] };
+// conclusions : false pendant une question d'observation du tuteur (14 novembre 2026) : la scène montre, elle n'écrit pas ce que fait l'onde.
+const S = { conclusions: true, t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0, a: { large: 6, voisine: 2, etroite: 1, circulaire_incidente: 1 }[vue] };
 
 /* Géométrie de l'ouverture (px) et chemins (m). */
 const bords = () => { const h = S.a * PXCM / 2; return { y1: YC - h, y2: YC + h }; };
@@ -160,7 +161,7 @@ function dessiner(c) {
   c.texte(CIRC ? 'S' : 'S (réglette)', CIRC ? SRC.x - 8 : SRC.x + 8, CIRC ? SRC.y - 12 : R.y + R.h - 12, { couleur: 'cyan', taille: 15, align: CIRC ? 'right' : 'left' });
   c.texte('paroi', XW + 10, R.y + 22, { couleur: 'faible', taille: 14 });
   c.direct(() => {
-    if (tau >= P.tw + T) {
+    if (S.conclusions && tau >= P.tw + T) {
       const nom = reg.nom === 'diaphragmee' ? 'onde diaphragmée' : 'onde diffractée';
       c.texte(nom, 560, R.y + 22, { couleur: 'blanc', taille: 15, align: 'center' });
     }
@@ -175,7 +176,7 @@ function dessiner(c) {
     c.repere('ouverture', XW - 40, y1 - 10, 60, y2 - y1 + 20, `l’ouverture : a = ${fr(S.a, 1)} cm`);
     // En bas : a et λ côte à côte, puis ce que fait l'onde.
     c.texte(`a = ${fr(S.a, 1)} cm ;  λ = ${fr(LAM * 100, 1)} cm`, 12, 368, { couleur: 'jaune', taille: 18 });
-    if (S.t >= M.premier_arc) { c.texte(reg.l1, 12, 392, { couleur: 'vert', taille: 16, max: 440 }); c.texte(reg.l2, 12, 414, { couleur: 'vert', taille: 16, max: 440 }); }
+    if (S.conclusions && S.t >= M.premier_arc) { c.texte(reg.l1, 12, 392, { couleur: 'vert', taille: 16, max: 440 }); c.texte(reg.l2, 12, 414, { couleur: 'vert', taille: 16, max: 440 }); }
     const Rg = regles();
     if (Rg.avant) { dessinerRegle(c, Rg.avant, 'regle_avant', 'orange'); if (Rg.avant.p >= 1) c.texte(`λ avant : ${fr(3 * LAM * 100, 1)} / 3 = ${fr(LAM * 100, 1)} cm`, 480, 368, { couleur: 'orange', taille: 17 }); }
     if (Rg.apres) { dessinerRegle(c, Rg.apres, 'regle_apres', 'rose'); if (Rg.apres.p >= 1) { c.texte(`λ après : ${fr(3 * LAM * 100, 1)} / 3 = ${fr(LAM * 100, 1)} cm`, 480, 392, { couleur: 'rose', taille: 17 }); } }
@@ -194,7 +195,7 @@ scene.avancer = dt => {
     bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 3)} s`) + '.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre();
     return true;
   }
-  if (S.t >= fin) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), message(), 'good'); pont.emettre(); }
+  if (S.t >= fin) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; if (S.conclusions) bulle($('feedback'), message(), 'good'); else bulle($('feedback'), 'Observe l’onde derrière la paroi.'); pont.emettre(); }
   else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
   return true;
 };
@@ -229,7 +230,7 @@ function ceQuiSeVoit() {
   else {
     const passees = cretesU(tau).filter(u => u > uW).length;
     m.push(`L’onde a atteint l’ouverture ; ${passees} ride(s) passée(s) derrière la paroi.`);
-    if (t >= M.premier_arc) m.push(`Derrière la paroi (écrit au tableau) : ${reg.l1} ${reg.l2}`);
+    if (S.conclusions && t >= M.premier_arc) m.push(`Derrière la paroi (écrit au tableau) : ${reg.l1} ${reg.l2}`);
   }
   if (t > P.tP) m.push('Photo : l’image est arrêtée.');
   const Rg = regles();
@@ -255,6 +256,11 @@ function setTime(p) {
   bulle($('feedback'), `Arrêt sur image : t = ${fr(S.t, 3)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
 }
 function setParameters(p) {
+  if ('conclusions' in p) {
+    const v = p.conclusions === true || p.conclusions === 'true' || p.conclusions === 1;
+    if (v !== S.conclusions) { S.conclusions = v; scene.sale = true; if (v && S.fait) bulle($('feedback'), message(), 'good'); }
+    pont.noter('set_parameters', { conclusions: v }); pont.emettre();
+  }
   if (!Number.isFinite(+p.a_cm)) return;
   S.a = Math.min(6, Math.max(1, Math.round(+p.a_cm * 2) / 2)); scene.sale = true;
   bulle($('feedback'), `Ouverture réglée : a = ${fr(S.a, 1)} cm.`);
@@ -279,7 +285,7 @@ window.Tableau.explication({ [vue]: EXPLICATIONS[vue] });
 const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
 const config = { id: 'ondes_periodiques_fente', version: '1.0', title: 'Ouverture et diffraction — ' + vue, variants: [{ id: vue, label: vue }], commands: commandes,
   command_schema: {
-    set_parameters: { a_cm: '1..6 (largeur de l’ouverture, en cm, pas de 0,5)' },
+    set_parameters: { a_cm: '1..6 (largeur de l’ouverture, en cm, pas de 0,5)', conclusions: 'true | false (false : ni « onde diffractée » ni la phrase sur la diffraction écrites, pour une question d’observation)' },
     set_time: { time_s: `0..${fr(plan().fin, 3)} (arrêt sur cet instant, en s de l’expérience)` },
     play_until: { moment: Object.keys(moments()).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' } } };
 const pont = protocole({ id: config.id, commandes, config,

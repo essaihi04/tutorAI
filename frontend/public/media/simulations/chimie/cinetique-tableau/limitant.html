@@ -24,7 +24,7 @@
  */
 const { fr } = window.Tableau;
 const N0H = 2.0;
-const P = { n0I: 10.0 };
+const P = { n0I: 10.0, conclusions: true };   // conclusions : false pendant la question d'observation (14 novembre 2026, règle 30)
 const xm1 = () => N0H, xm2 = () => P.n0I / 2, xmax = () => Math.min(xm1(), xm2());
 const BASE = 330, ECH = 22, LB = 44;
 const BARRES = [
@@ -63,7 +63,7 @@ function dessiner(c, D) {
         c.texte(b.expr(), b.x + LB / 2, BASE + 46, { couleur: 'faible', taille: 14, align: 'center' });
         c.texte(fr(n, 2), b.x + LB / 2, BASE - h - 8, { couleur: b.couleur, taille: 15, align: 'center' });
       }
-      if (b.id !== 'barre_diiode' && D.vu('x_max') && n < 1e-6) c.texte('épuisé', b.x + LB / 2, BASE - 30, { couleur: 'rouge', taille: 15, align: 'center' });
+      if (P.conclusions && b.id !== 'barre_diiode' && D.vu('x_max') && n < 1e-6) c.texte('épuisé', b.x + LB / 2, BASE - 30, { couleur: 'rouge', taille: 15, align: 'center' });
       c.repere(b.id, b.x - 8, BASE - Math.max(b.n(0), b.n(xmax()), 2) * ECH - 28, LB + 16, Math.max(b.n(0), b.n(xmax()), 2) * ECH + 80, 'la quantité de ' + b.nom);
     });
   }
@@ -78,7 +78,7 @@ function dessiner(c, D) {
     }
     if (D.commence('hypothese_1')) c.ligne(AXX(xm1()), AX.y - 34, AXX(xm1()), AX.y + 6, { couleur: 'cyan', largeur: 2.4 });
     if (D.commence('hypothese_2') && xm2() <= AX.max) c.ligne(AXX(xm2()), AX.y - 34, AXX(xm2()), AX.y + 6, { couleur: 'violet', largeur: 2.4 });
-    if (D.commence('plus_petite')) c.cercle(AXX(xmax()), AX.y - 14, 22, { couleur: 'jaune', largeur: 2 });
+    if (P.conclusions && D.commence('plus_petite')) c.cercle(AXX(xmax()), AX.y - 14, 22, { couleur: 'jaune', largeur: 2 });
   });
   c.repere('axe_x', AX.x0 - 10, AX.y - 50, AX.x1 - AX.x0 + 20, 76, 'l’axe des x');
   if (D.commence('hypothese_1')) {
@@ -91,16 +91,16 @@ function dessiner(c, D) {
     c.direct(() => c.texte(`Hyp. 2 : I⁻ épuisé : ${fr(P.n0I, 1)} − 2x_max = 0 → x_max = ${fr(xm2(), 1)} mmol`, HX, HY[1], { couleur: 'violet', taille: 16, max: 410 }));
     c.repere('hypothese_2', HX - 6, HY[1] - 22, 416, 30, 'hypothèse 2 : I⁻ épuisé');
   }
-  if (D.commence('plus_petite')) {
+  if (P.conclusions && D.commence('plus_petite')) {
     D.ecrire(c, 'plus_petite');
     c.direct(() => c.texte(`on garde la plus petite : x_max = ${fr(xmax(), 1)} mmol`, HX, HY[2], { couleur: 'jaune', taille: 17 }));
     c.repere('x_max', HX - 6, HY[2] - 22, 416, 30, 'x_max, la plus petite valeur');
   }
-  if (D.vu('x_max')) {
+  if (P.conclusions && D.vu('x_max')) {
     D.ecrire(c, 'x_max');
     c.direct(() => c.texte(`x ne peut plus avancer : la réaction s’arrête à ${fr(xmax(), 1)} mmol`, HX, HY[3] + 50, { couleur: 'blanc', taille: 15, max: 410 }));
   }
-  if (D.commence('limitant')) {
+  if (P.conclusions && D.commence('limitant')) {
     D.ecrire(c, 'limitant');
     const l = limitant();
     c.direct(() => {
@@ -131,15 +131,18 @@ document.getElementById('reglage').replaceChildren(regl);
 
 const DER = window.Deroule({
   id: 'cinetique_tableau_limitant', titre: 'Le réactif limitant', etapes, dessiner, voir,
-  params: () => ({ n0_iodure_mmol: P.n0I }),
+  params: () => ({ n0_iodure_mmol: P.n0I, conclusions: P.conclusions }),
   appliquer: p => {
-    const v = +p.n0_iodure_mmol; if (!Number.isFinite(v)) return false;
+    let ok = false;
+    if (typeof p.conclusions === 'boolean') { P.conclusions = p.conclusions; ok = true; }
+    if (p.n0_iodure_mmol == null) return ok;
+    const v = +p.n0_iodure_mmol; if (!Number.isFinite(v)) return ok;
     P.n0I = Math.min(10, Math.max(1, Math.round(v * 2) / 2)); regl.maj(P.n0I); return true;
   },
-  schema: { n0_iodure_mmol: '1..10 (pas de 0,5), quantité initiale d’ions iodure ; n₀(H₂O₂) reste 2,0 mmol' },
+  schema: { n0_iodure_mmol: '1..10 (pas de 0,5), quantité initiale d’ions iodure ; n₀(H₂O₂) reste 2,0 mmol', conclusions: 'true | false : false tait « épuisé », « on garde la plus petite » et le réactif limitant (question d’observation)' },
   depart: () => 'État initial : x = 0. Regarde quelle barre de réactif se vide la première.',
   accueil: () => 'Lance : x avance, et la réaction s’arrête quand un réactif est épuisé.',
-  apresReglage: () => `n₀(I⁻) = ${fr(P.n0I, 1)} mmol : hypothèse 2, x_max = ${fr(xm2(), 2)} mmol ; ${limitant() === 'les deux' ? 'les deux réactifs s’épuisent ensemble' : limitant() + ' est limitant'}, x_max = ${fr(xmax(), 2)} mmol.`,
+  apresReglage: () => !P.conclusions ? 'Regarde les barres des réactifs quand x avance.' : `n₀(I⁻) = ${fr(P.n0I, 1)} mmol : hypothèse 2, x_max = ${fr(xm2(), 2)} mmol ; ${limitant() === 'les deux' ? 'les deux réactifs s’épuisent ensemble' : limitant() + ' est limitant'}, x_max = ${fr(xmax(), 2)} mmol.`,
   messageFin: () => (limitant() === 'les deux' ? `Les deux réactifs s’épuisent ensemble à x_max = ${fr(xmax(), 1)} mmol.` : `${limitant()} s’épuise le premier : x_max = ${fr(xmax(), 1)} mmol, ${limitant()} est le réactif limitant.`),
   texte: 'Exemple A : H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O, n₀(H₂O₂) = 2,0 mmol, n₀(I⁻) = 10,0 mmol (réglable de 1,0 à 10,0), H⁺ en excès. Hypothèse 1 : 2,0 − x_max = 0, x_max = 2,0 mmol ; hypothèse 2 : 10,0 − 2x_max = 0, x_max = 5,0 mmol ; on garde la plus petite, 2,0 mmol : H₂O₂ est le réactif limitant. Les barres des quantités diminuent quand x avance ; la réaction s’arrête quand la barre de H₂O₂ est vide.',
   explication: [

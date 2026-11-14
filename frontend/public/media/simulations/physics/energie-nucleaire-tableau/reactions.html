@@ -32,7 +32,8 @@ const VUES = ['fission', 'chaine', 'fusion', 'spontanee'];
 const TEMPERATURES = ['basse', 'haute'];
 const q = new URLSearchParams(location.search);
 const P = { vue: VUES.includes(q.get('vue')) ? q.get('vue') : 'fission', temperature: TEMPERATURES.includes(q.get('temperature')) ? q.get('temperature') : 'basse' };
-const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0 };
+// conclusions : false pendant une question d'observation (14 novembre 2026) : les noyaux rebondissent, « ils se repoussent » n'est pas écrit.
+const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0, conclusions: !['0', 'false'].includes(q.get('conclusions')) };
 const NOMS_VUES = { fission: 'La fission', chaine: 'La réaction en chaîne', fusion: 'La fusion', spontanee: 'La réaction spontanée' };
 const EQUATIONS = {
   fission: '²³⁵₉₂U + ¹₀n → ⁹⁴₃₈Sr + ¹⁴⁰₅₄Xe + 2 ¹₀n',
@@ -564,7 +565,7 @@ function craieFusion(c) {
     ecrit(c, 'repulsion', () => T(c, 'ils se repoussent, mais vont assez vite pour se toucher', FU.M[0] - 20, 102, { couleur: 'jaune', taille: 15, align: 'center', max: 420 }));
   } else {
     T(c, 'basse', tx + 16, FU.TH.y1 - 2, { couleur: 'faible', taille: 12 });
-    ecrit(c, 'repulsion', () => {
+    if (S.conclusions) ecrit(c, 'repulsion', () => {
       T(c, 'ils se repoussent : deux charges positives', FU.M[0], 102, { couleur: 'jaune', taille: 15, align: 'center' });
       c.fleche(200, 226, 148, 226, { couleur: 'jaune', largeur: 1.6, tete: 8 });
       c.fleche(470, 226, 522, 226, { couleur: 'jaune', largeur: 1.6, tete: 8 });
@@ -604,7 +605,7 @@ function motsFusion() {
   const d = distFusion(t);
   if (t < L.contact) {
     let quoi;
-    if (P.temperature === 'basse' && t < 3.8) quoi = t < 2.6 ? 'les deux noyaux s’approchent lentement' : 'les deux noyaux se repoussent et rebondissent (ils ne se touchent pas)';
+    if (P.temperature === 'basse' && t < 3.8) quoi = t < 2.6 ? 'les deux noyaux s’approchent lentement' : (S.conclusions ? 'les deux noyaux se repoussent et rebondissent (ils ne se touchent pas)' : 'les deux noyaux rebondissent loin l’un de l’autre, sans se toucher (rien d’écrit : question d’observation)');
     else if (P.temperature === 'basse' && t < 6) quoi = 'les deux noyaux sont écartés et s’agitent de plus en plus (on chauffe)';
     else quoi = 'les deux noyaux foncent l’un vers l’autre';
     m.push(`²₁H (1 proton, 1 neutron) et ³₁H (1 proton, 2 neutrons) sont séparés (distance entre centres ≈ ${Math.round(d)} px à l’écran) : ${quoi}.`);
@@ -707,7 +708,7 @@ scene.avancer = dt => {
   S.t = Math.min(FIN(), S.t + dt);
   if (S.jusqua != null && S.t >= S.jusqua && S.jusqua < FIN()) {
     S.t = S.jusqua; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre';
-    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 2)} s`) + '.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre();
+    bulle($('feedback'), S.conclusions ? 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 2)} s`) + '.' : 'Arrêt sur image : observe bien.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre();
     return true;
   }
   if (S.t >= FIN()) { S.running = false; S.fait = true; S.jusqua = null; $('run').textContent = 'Rejouer'; bulle($('feedback'), message(), 'good'); pont.emettre(); }
@@ -735,7 +736,7 @@ function ecritsCraie() {
     if (n) e.push(`le compteur « fissions : ${['1', '1, 2', '1, 2, 4'][n - 1]} »`);
     if (fini('legende')) e.push('« chaque fission libère des neutrons qui provoquent d’autres fissions : réaction en chaîne »');
   } else if (v === 'fusion') {
-    if (fini('repulsion')) e.push(P.temperature === 'haute' ? '« ils se repoussent, mais vont assez vite pour se toucher »' : '« ils se repoussent : deux charges positives » (deux flèches qui s’écartent)');
+    if (fini('repulsion') && S.conclusions) e.push(P.temperature === 'haute' ? '« ils se repoussent, mais vont assez vite pour se toucher »' : '« ils se repoussent : deux charges positives » (deux flèches qui s’écartent)');
     if (fini('chauffage')) e.push('« température très élevée, ≈ 10⁸ K »');
     if (fini('produits')) e.push('les noms ⁴₂He et ¹₀n à côté des produits');
     if (fini('energie')) e.push('« énergie libérée : E_lib = 17,6 MeV »');
@@ -792,6 +793,7 @@ function setParameters(p) {
   const avant = P.vue + '/' + P.temperature;
   if (VUES.includes(p.vue)) P.vue = p.vue;
   if (TEMPERATURES.includes(p.temperature)) P.temperature = p.temperature;
+  if ('conclusions' in p) S.conclusions = p.conclusions === true || p.conclusions === 'true' || p.conclusions === 1;
   recalculer();
   if (P.vue + '/' + P.temperature !== avant) remettre();
   scene.sale = true;
@@ -860,7 +862,7 @@ window.Tableau.explication(EXPLICATIONS);
 const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
 const config = { id: 'energie_nucleaire_reactions', version: '1.0', title: 'Les réactions nucléaires', variants: VUES.map(v => ({ id: v, label: NOMS_VUES[v] })), commands: commandes,
   command_schema: {
-    set_parameters: { vue: 'fission | chaine | fusion | spontanee (change la scène et la remet à zéro)', temperature: 'basse | haute (vue fusion : température de départ ; basse = ils se repoussent puis on chauffe ; haute = déjà ≈ 10⁸ K, ils fusionnent tout de suite)' },
+    set_parameters: { vue: 'fission | chaine | fusion | spontanee (change la scène et la remet à zéro)', conclusions: 'true | false (false : « ils se repoussent » n’est pas écrit, pour une question d’observation)', temperature: 'basse | haute (vue fusion : température de départ ; basse = ils se repoussent puis on chauffe ; haute = déjà ≈ 10⁸ K, ils fusionnent tout de suite)' },
     set_time: { time_s: '0..fin (arrêt sur cet instant, s ; voir moments)' },
     play_until: { moment: 'fission : neutron_arrive | choc | noyau_deforme | coupure | produits_partent | energie | equation | definition | fin ; chaine : premiere_fission | deux_fissions | quatre_fissions | legende | fin ; fusion : approche | repulsion | chauffage | fusion | produits | energie | equation | definition | fin ; spontanee : noyau_seul | emission | produits | legende | fin (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' } } };
 const pont = protocole({ id: config.id, commandes, config,

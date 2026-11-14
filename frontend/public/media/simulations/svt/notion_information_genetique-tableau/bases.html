@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La cellule, les chromosomes, la mitose — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="genetique.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Départ de zéro : la cellule et ses trois parties, les chromosomes dans le noyau, et la mitose qui donne deux cellules identiques"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="etapes.js"></script>
+<script>
+/*
+ * Départ de zéro (cours « Notion de l’information génétique », 14 novembre 2026, règle 34 du skill professeur) :
+ * ce que le cours utilisait comme déjà connu, enseigné avant de s’en servir, chaque notion dite deux fois autrement.
+ * Vue cellule : le corps fait de cellules (un tissu peint), une cellule en grand, sa membrane, son cytoplasme, son
+ *   noyau ; puis la même idée autrement : une maison (murs = membrane, pièces = cytoplasme, bureau des plans = noyau).
+ * Vue chromosomes : dans le noyau, 46 chromosomes = 23 paires (un du père, un de la mère) ; un chromosome = un long
+ *   fil d’ADN enroulé ; puis autrement : une bibliothèque de 46 livres rangés par paires.
+ * Vue mitose : une cellule (4 chromosomes dessinés au lieu de 46) copie chaque chromosome, partage les copies et donne
+ *   deux cellules filles identiques ; puis autrement : la cellule-œuf → 2 → 4 → 8… toutes avec les mêmes chromosomes.
+ * Toutes les vues attendent le tuteur (autoDepart: false). Le vivant est peint ; la craie écrit les légendes.
+ */
+const { rampe, entre, Peint } = window.Etapes;
+const TAU = Math.PI * 2;
+const COUL = [['#fecaca', '#dc2626'], ['#bfdbfe', '#2563eb'], ['#bbf7d0', '#16a34a'], ['#fde68a', '#d97706'], ['#e9d5ff', '#9333ea'], ['#fbcfe8', '#db2777']];
+
+/* ── Vue cellule ─────────────────────────────────────────────────────────── */
+const MC = { c_tissu: 2.4, c_cellule: 4.8, c_membrane: 6.4, c_cytoplasme: 8.0, c_noyau: 9.6, c_maison: 13.0 };
+function maison(x, cx, cy, a) {
+  x.save(); x.globalAlpha = a;
+  // murs (crépi chaud), toit (tuiles), deux pièces et un bureau avec des plans
+  const g = x.createLinearGradient(cx - 90, cy - 50, cx + 90, cy + 60); g.addColorStop(0, '#fde7c7'); g.addColorStop(1, '#e8b98a');
+  x.fillStyle = 'rgba(0,0,0,.25)'; x.fillRect(cx - 86, cy + 62, 180, 8);
+  x.fillStyle = g; x.fillRect(cx - 90, cy - 40, 180, 100);
+  x.strokeStyle = '#7c4a1e'; x.lineWidth = 5; x.strokeRect(cx - 90, cy - 40, 180, 100);
+  const gt = x.createLinearGradient(0, cy - 100, 0, cy - 40); gt.addColorStop(0, '#c2410c'); gt.addColorStop(1, '#7c2d12');
+  x.fillStyle = gt; x.beginPath(); x.moveTo(cx - 104, cy - 40); x.lineTo(cx, cy - 100); x.lineTo(cx + 104, cy - 40); x.closePath(); x.fill();
+  x.strokeStyle = 'rgba(124,74,30,.7)'; x.lineWidth = 2; x.beginPath(); x.moveTo(cx - 10, cy - 40); x.lineTo(cx - 10, cy + 60); x.stroke();
+  // le bureau : une table et des plans bleus roulés
+  const gb = x.createLinearGradient(cx + 10, 0, cx + 80, 0); gb.addColorStop(0, '#a16207'); gb.addColorStop(1, '#713f12');
+  x.fillStyle = gb; x.fillRect(cx + 18, cy + 18, 60, 10);
+  x.fillStyle = '#93c5fd'; x.fillRect(cx + 24, cy + 4, 46, 14); x.strokeStyle = '#1d4ed8'; x.lineWidth = 1; for (let i = 0; i < 4; i++) { x.beginPath(); x.moveTo(cx + 28, cy + 7 + i * 3); x.lineTo(cx + 66, cy + 7 + i * 3); x.stroke(); }
+  // fenêtre de la pièce de gauche
+  x.fillStyle = '#bae6fd'; x.fillRect(cx - 70, cy - 14, 34, 28); x.strokeStyle = '#7c4a1e'; x.lineWidth = 2; x.strokeRect(cx - 70, cy - 14, 34, 28);
+  x.restore();
+}
+function dessinerCellule(c, k) {
+  const t = k.t, zoom = rampe(t, 2.8, 1.6);
+  c.direct(() => {
+    const x = c.ctx;
+    // un tissu : des cellules serrées les unes contre les autres (puis il s’efface au profit d’une seule, en grand)
+    const aT = rampe(t, .3, .8) * (1 - zoom);
+    for (let r = 0; r < 4; r++) for (let q = 0; q < 6; q++) {
+      const cx = 70 + q * 44 + (r % 2) * 22, cy = 120 + r * 40;
+      Peint.cellule(x, cx, cy, 22, 19, aT); Peint.noyau(x, cx + 2, cy, 7, aT, { chromatine: false });
+    }
+    if (zoom > 0) { const a = zoom; Peint.cellule(x, 270, 230, 200 * (.3 + .7 * a), 150 * (.3 + .7 * a), a); Peint.noyau(x, 300, 220, 58 * (.3 + .7 * a), a); }
+    if (t >= MC.c_maison - 2.2) maison(x, 630, 250, rampe(t, MC.c_maison - 2.2, .8));
+  });
+  c.texte('La cellule : le point de départ', 14, 26, { couleur: 'cyan', taille: 18 });
+  if (t < 3.2) c.repere('tissu', 40, 96, 290, 170, 'un morceau de ton corps : des cellules');
+  if (k.ecrit(c, 'tissu', .8) && t < 3.4) k.T(c, 'ton corps : des milliards de cellules', 360, 150, { couleur: 'jaune', taille: 15 });
+  if (zoom > .9) {
+    c.repere('cellule', 70, 80, 400, 300, 'une cellule');
+    c.repere('membrane', 70, 200, 30, 60, 'la membrane plasmique');
+    c.repere('cytoplasme', 130, 260, 90, 60, 'le cytoplasme');
+    c.repere('noyau', 242, 162, 116, 116, 'le noyau');
+  }
+  if (k.ecrit(c, 'cel', 4.4)) k.T(c, 'une cellule, en grand', 270, 62, { couleur: 'jaune', taille: 15, align: 'center' });
+  if (k.ecrit(c, 'mem', 5.6)) { c.fleche(36, 300, 74, 262, { couleur: 'faible', largeur: 1.4 }); k.T(c, 'la membrane', 14, 318, { couleur: 'blanc', taille: 14 }); k.T(c, '(l’enveloppe)', 14, 336, { couleur: 'faible', taille: 12 }); }
+  if (k.ecrit(c, 'cyt', 7.2)) { c.fleche(160, 360, 170, 300, { couleur: 'faible', largeur: 1.4 }); k.T(c, 'le cytoplasme (l’intérieur)', 120, 380, { couleur: 'blanc', taille: 14 }); }
+  if (k.ecrit(c, 'noy', 8.8)) { c.fleche(420, 130, 350, 180, { couleur: 'faible', largeur: 1.4 }); k.T(c, 'le noyau : il commande', 380, 116, { couleur: 'blanc', taille: 14 }); }
+  if (t >= MC.c_maison - 2.2) c.repere('maison', 520, 140, 220, 190, 'la cellule vue comme une maison');
+  if (k.ecrit(c, 'mai', MC.c_maison - 1.6)) {
+    k.T(c, 'autrement : une maison', 630, 120, { couleur: 'cyan', taille: 15, align: 'center' });
+    k.T(c, 'murs = membrane', 540, 344, { couleur: 'blanc', taille: 13 });
+    k.T(c, 'pièces = cytoplasme', 540, 364, { couleur: 'blanc', taille: 13 });
+    k.T(c, 'le bureau du chef = noyau', 540, 384, { couleur: 'jaune', taille: 13 });
+  }
+}
+function voitCellule(k) {
+  const t = k.t, m = [];
+  if (t < 3.4) m.push('Un morceau de tissu peint : des cellules serrées, chacune avec un petit noyau ; écrit « ton corps : des milliards de cellules ».');
+  if (t >= 4.4) m.push('Une cellule en grand : rose, avec une membrane sombre au bord, un cytoplasme granuleux et un noyau violet.');
+  if (t >= 5.6) m.push('Légendes : la membrane (l’enveloppe), le cytoplasme (l’intérieur), le noyau (il commande).');
+  if (t >= MC.c_maison - 1.6) m.push('À droite, une maison peinte : murs = membrane, pièces = cytoplasme, bureau du chef = noyau.');
+  return m;
+}
+
+/* ── Vue chromosomes ─────────────────────────────────────────────────────── */
+const MK = { k_noyau: 2.0, k_chromosomes: 5.0, k_paire: 7.8, k_adn: 10.8, k_livres: 14.0 };
+// 23 paires dans le noyau : positions déterministes, une couleur claire (mère) et une sombre (père) par paire
+const PAIRES = Array.from({ length: 23 }, (_, i) => { const a = i * 2.39996, r = 18 + 72 * Math.sqrt((i + .5) / 23); return { x: 200 + Math.cos(a) * r, y: 224 + Math.sin(a) * r * .9, ang: i * .7, L: 26 - (i % 6) * 2.4 }; });
+function livres(x, x0, y0, a) {
+  x.save(); x.globalAlpha = a;
+  const gp = x.createLinearGradient(0, y0 + 64, 0, y0 + 76); gp.addColorStop(0, '#92400e'); gp.addColorStop(1, '#451a03');
+  for (let r = 0; r < 2; r++) { x.fillStyle = gp; x.fillRect(x0 - 6, y0 + 64 + r * 82, 220, 10); }
+  for (let i = 0; i < 46; i++) {
+    const r = i < 24 ? 0 : 1, j = i < 24 ? i : i - 24, bx = x0 + j * 9 + Math.floor(j / 2) * 1.5, by = y0 + r * 82, h = 52 + ((i * 7) % 12);
+    const c = COUL[Math.floor(i / 2) % COUL.length], g = x.createLinearGradient(bx, 0, bx + 8, 0);
+    g.addColorStop(0, i % 2 ? c[1] : c[0]); g.addColorStop(1, i % 2 ? '#1f2937' : c[1]);
+    x.fillStyle = g; x.fillRect(bx, by + 64 - h, 8, h); x.fillStyle = 'rgba(255,255,255,.5)'; x.fillRect(bx + 1, by + 64 - h + 6, 6, 2);
+  }
+  x.restore();
+}
+function dessinerChromosomes(c, k) {
+  const t = k.t, aK = rampe(t, 2.6, 1.6), deroule = rampe(t, 8.6, 1.8);
+  c.direct(() => {
+    const x = c.ctx;
+    Peint.noyau(x, 200, 224, 130, rampe(t, .3, .8), { chromatine: t < 3.2, nucleole: false, double: true });
+    PAIRES.forEach((P, i) => {
+      for (const s of [-1, 1]) {
+        const col = s < 0 ? COUL[i % COUL.length] : [COUL[i % COUL.length][0], '#1f2937'];
+        Peint.chromosome(x, P.x + s * 5 * Math.cos(P.ang + 1.57), P.y + s * 5 * Math.sin(P.ang + 1.57), P.L, P.ang, i === 0 ? ['#fde68a', s < 0 ? '#f59e0b' : '#92400e'] : col, { epaisseur: 5, alpha: aK * (i === 0 || t < 6.4 ? 1 : .55) });
+      }
+    });
+    if (t >= 6.4) { // la paire 1 en grand, à droite
+      const a = rampe(t, 6.4, .8);
+      Peint.chromosome(x, 420, 170, 90, 1.57, ['#fde68a', '#f59e0b'], { epaisseur: 14, alpha: a });
+      Peint.chromosome(x, 470, 170, 90, 1.57, ['#fde68a', '#92400e'], { epaisseur: 14, alpha: a });
+    }
+    if (t >= 9.0) { // un chromosome se déroule : un très long fil fin, l’ADN
+      x.save(); x.globalAlpha = rampe(t, 9.0, .6); x.strokeStyle = '#c084fc'; x.lineWidth = 2; x.beginPath();
+      const n = 240;
+      for (let i = 0; i <= n * deroule; i++) { const s = i / n, px = 400 + s * 330, py = 300 + Math.sin(s * 40) * 10 * (1 - s * .4) + Math.sin(s * 9) * 14; x[i ? 'lineTo' : 'moveTo'](px, py); }
+      x.stroke(); x.restore();
+    }
+    if (t >= MK.k_livres - 2.2) livres(x, 530, 40, rampe(t, MK.k_livres - 2.2, .8) * 1);
+  });
+  c.texte('Dans le noyau : les chromosomes', 14, 26, { couleur: 'cyan', taille: 18 });
+  c.repere('noyau', 70, 94, 260, 260, 'le noyau');
+  if (k.ecrit(c, 'noy', .8)) k.T(c, 'le noyau', 200, 380, { couleur: 'blanc', taille: 14, align: 'center' });
+  if (t >= 3.4) c.repere('chromosomes', 110, 140, 180, 170, 'les chromosomes');
+  if (k.ecrit(c, 'k46', 3.8)) { k.T(c, '46 chromosomes', 200, 404, { couleur: 'jaune', taille: 15, align: 'center' }); k.T(c, '= 23 paires', 300, 404, { couleur: 'jaune', taille: 15 }); }
+  if (t >= 6.4) { c.repere('paire', 396, 116, 100, 110, 'une paire de chromosomes'); c.repere('mere', 400, 116, 40, 110, 'le chromosome venu de la mère'); c.repere('pere', 450, 116, 40, 110, 'le chromosome venu du père'); }
+  if (k.ecrit(c, 'pai', 6.8)) { k.T(c, 'une paire :', 444, 100, { couleur: 'blanc', taille: 14, align: 'center' }); k.T(c, 'mère', 420, 238, { couleur: 'faible', taille: 13, align: 'center' }); k.T(c, 'père', 470, 238, { couleur: 'faible', taille: 13, align: 'center' }); }
+  if (t >= 9.2) c.repere('adn', 400, 270, 330, 60, 'un long fil : l’ADN');
+  if (k.ecrit(c, 'adn', 9.4)) { k.T(c, 'un chromosome déroulé :', 400, 262, { couleur: 'blanc', taille: 14 }); k.T(c, 'un très long fil, l’ADN', 520, 348, { couleur: 'orange', taille: 15 }); }
+  if (t >= MK.k_livres - 2.2) c.repere('livres', 520, 30, 230, 160, 'une bibliothèque de 46 livres');
+  if (k.ecrit(c, 'liv', MK.k_livres - 1.2)) { k.T(c, 'autrement : 46 livres,', 540, 210, { couleur: 'cyan', taille: 14 }); k.T(c, 'rangés par paires', 540, 228, { couleur: 'cyan', taille: 14 }); }
+}
+function voitChromosomes(k) {
+  const t = k.t, m = ['Un grand noyau violet à double enveloppe.'];
+  if (t >= 3.8) m.push('Dedans, des chromosomes en bâtonnets de couleur, deux par deux ; écrit « 46 chromosomes = 23 paires ».');
+  if (t >= 6.8) m.push('À droite, une paire en grand : un chromosome venu de la mère, un venu du père.');
+  if (t >= 9.4) m.push('Un chromosome se déroule en un très long fil fin orange : l’ADN.');
+  if (t >= MK.k_livres - 1.2) m.push('En haut à droite, une bibliothèque peinte de 46 livres rangés par paires.');
+  return m;
+}
+
+/* ── Vue mitose (l'idée) ─────────────────────────────────────────────────── */
+const MM = { m_mere: 2.0, m_copie: 4.6, m_partage: 8.4, m_filles: 10.6 };
+const CH = [{ dx: -26, dy: -14, L: 34, c: COUL[0] }, { dx: 18, dy: -20, L: 26, c: COUL[1] }, { dx: -10, dy: 22, L: 30, c: COUL[2] }, { dx: 26, dy: 16, L: 22, c: COUL[3] }];
+function dessinerMitose(c, k) {
+  const t = k.t, cop = rampe(t, 2.8, 1.4), sep = rampe(t, 6.0, 2.0), fin = rampe(t, 8.6, 1.2);
+  c.direct(() => {
+    const x = c.ctx;
+    const a0 = rampe(t, .3, .7);
+    const ecart = 70 * sep;   // la cellule s'allonge puis s'étrangle en deux
+    if (fin < 1) Peint.cellule(x, 240, 220, 110 + ecart * .9, 96 - 20 * sep, a0 * (1 - fin));
+    if (fin > 0) for (const s of [-1, 1]) Peint.cellule(x, 240 + s * 104, 220, 92, 84, a0 * fin);
+    CH.forEach((C, i) => {
+      for (const s of [-1, 1]) {   // s : la copie qui ira à gauche ou à droite
+        const sx = 240 + C.dx * (1 - sep * .6) + s * entre(cop * 3.5, 104, sep), sy = 220 + C.dy;
+        Peint.chromosome(x, sx, sy, C.L, 1.2 + i * .5, C.c, { epaisseur: 7, alpha: a0 * (s < 0 ? 1 : cop) });
+      }
+    });
+  });
+  c.texte('La mitose : une cellule donne deux cellules', 14, 26, { couleur: 'cyan', taille: 18 });
+  c.repere('cellule_mere', 120, 120, 240, 200, 'la cellule mère');
+  if (k.ecrit(c, 'mere', .8)) k.T(c, 'une cellule (on dessine 4 chromosomes au lieu de 46)', 240, 82, { couleur: 'blanc', taille: 13, align: 'center' });
+  if (t >= 3.0) c.repere('copies', 160, 160, 160, 120, 'chaque chromosome copié');
+  if (k.ecrit(c, 'cop', 3.6)) k.T(c, '1. chaque chromosome est copié', 480, 120, { couleur: 'jaune', taille: 15 });
+  if (k.ecrit(c, 'par', 6.6)) k.T(c, '2. les copies se partagent', 480, 150, { couleur: 'jaune', taille: 15 });
+  if (t >= 9.4) c.repere('filles', 40, 120, 410, 200, 'les deux cellules filles');
+  if (k.ecrit(c, 'fil', 9.6)) { k.T(c, '3. deux cellules filles,', 480, 180, { couleur: 'jaune', taille: 15 }); k.T(c, 'identiques à la cellule mère', 500, 202, { couleur: 'vert', taille: 15 }); }
+}
+function voitMitose(k) {
+  const t = k.t, m = ['Une cellule peinte avec 4 chromosomes de couleur (on en dessine 4 au lieu de 46).'];
+  if (t >= 3.6) m.push('1. Chaque chromosome est copié : une copie identique apparaît à côté.');
+  if (t >= 6.6) m.push('2. Les copies se partagent : la cellule s’allonge, un exemplaire de chaque chromosome va de chaque côté.');
+  if (t >= 9.6) m.push('3. Deux cellules filles, chacune avec les mêmes 4 chromosomes que la cellule mère : identiques.');
+  return m;
+}
+
+/* ── Vue oeuf : la même idée autrement, de la cellule-œuf au corps ────────── */
+const MO = { o_oeuf: 1.4, o_deux: 3.0, o_quatre: 4.6, o_huit: 6.2, o_milliards: 7.8, o_memes: 9.6 };
+function dessinerOeuf(c, k) {
+  const t = k.t;
+  c.direct(() => {
+    const x = c.ctx;
+    [1, 2, 4, 8].forEach((n, j) => {
+      const a = rampe(t, .4 + j * 1.6, .6), cx0 = 70 + j * 150, rx = n === 1 ? 40 : n === 2 ? 30 : n === 4 ? 24 : 17;
+      for (let q = 0; q < n; q++) {
+        const col = n === 1 ? 0 : q % 2, row = n === 1 ? 0 : Math.floor(q / 2), rows = Math.max(1, n / 2);
+        const cx = cx0 + (n === 1 ? 0 : (col - .5) * rx * 2.1), cy = 220 + (n === 1 ? 0 : (row - (rows - 1) / 2) * rx * 1.9);
+        Peint.cellule(x, cx, cy, rx, rx * .92, a); Peint.noyau(x, cx, cy, rx * .34, a, { chromatine: false });
+      }
+    });
+    if (t >= 7.0) { // des milliards : un tissu serré
+      const a = rampe(t, 7.0, .8);
+      for (let r = 0; r < 6; r++) for (let q = 0; q < 5; q++) Peint.cellule(x, 652 + q * 18 + (r % 2) * 9, 150 + r * 24, 10, 9, a * .9);
+    }
+  });
+  c.texte('Autrement : de la cellule-œuf à tout le corps', 14, 26, { couleur: 'cyan', taille: 18 });
+  ['cellule-œuf', '2 cellules', '4 cellules', '8 cellules'].forEach((s, j) => {
+    if (k.ecrit(c, 'e' + j, .6 + j * 1.6)) k.T(c, s, 70 + j * 150, 320, { couleur: 'blanc', taille: 14, align: 'center' });
+    if (j && k.ecrit(c, 'f' + j, .4 + j * 1.6)) c.fleche(124 + (j - 1) * 150, 220, 168 + (j - 1) * 150, 220, { couleur: 'faible', largeur: 1.5 });
+  });
+  c.repere('oeuf', 40, 170, 100, 100, 'la cellule-œuf');
+  if (t >= 7.0) c.repere('corps', 620, 130, 130, 170, 'des milliards de cellules');
+  if (k.ecrit(c, 'mil', 7.2)) { c.fleche(580, 220, 640, 220, { couleur: 'faible', largeur: 1.5 }); k.T(c, '… des milliards', 690, 320, { couleur: 'blanc', taille: 14, align: 'center' }); }
+  if (k.ecrit(c, 'mem', 8.8)) { k.T(c, 'chaque fois une mitose :', 380, 370, { couleur: 'jaune', taille: 15, align: 'center' }); k.T(c, 'toutes les cellules ont les mêmes 46 chromosomes', 380, 394, { couleur: 'vert', taille: 15, align: 'center' }); c.repere('memes', 150, 352, 460, 50, 'les mêmes chromosomes partout'); }
+}
+function voitOeuf(k) {
+  const t = k.t, m = ['Une rangée de cellules peintes : la cellule-œuf'];
+  if (t >= 2.0) m.push('→ 2 cellules'); if (t >= 3.6) m.push('→ 4 cellules'); if (t >= 5.2) m.push('→ 8 cellules');
+  if (t >= 7.2) m.push('→ … des milliards (un tissu serré à droite).');
+  if (t >= 8.8) m.push('Écrit : « chaque fois une mitose : toutes les cellules ont les mêmes 46 chromosomes ».');
+  return [m.join(' ')];
+}
+
+window.Etapes.lancer({
+  id: 'genetique_bases', titre: 'La cellule, les chromosomes, la mitose', graine: 41,
+  vues: {
+    cellule: { titre: 'La cellule', fin: 13.6, moments: MC, autoDepart: false, dessiner: dessinerCellule, voit: voitCellule,
+      motifs: { c_tissu: 'le corps est fait de cellules', c_cellule: 'une cellule, en grand', c_membrane: 'la membrane', c_cytoplasme: 'le cytoplasme', c_noyau: 'le noyau', c_maison: 'la cellule vue comme une maison' },
+      conclusion: 'La cellule : une membrane, un cytoplasme, un noyau qui commande.',
+      texte: 'La cellule : la plus petite partie vivante du corps ; une membrane, un cytoplasme, un noyau ; comme une maison : murs, pièces, bureau des plans.',
+      explication: [{ repere: 'membrane', texte: 'La membrane entoure la cellule.' }, { repere: 'cytoplasme', texte: 'Le cytoplasme est l’intérieur.' }, { repere: 'noyau', texte: 'Le noyau commande la cellule.' }] },
+    chromosomes: { titre: 'Les chromosomes', fin: 14.6, moments: MK, autoDepart: false, dessiner: dessinerChromosomes, voit: voitChromosomes,
+      motifs: { k_noyau: 'le noyau', k_chromosomes: '46 chromosomes = 23 paires', k_paire: 'une paire : un de la mère, un du père', k_adn: 'un chromosome déroulé : un long fil d’ADN', k_livres: '46 livres rangés par paires' },
+      conclusion: 'Dans le noyau d’une cellule humaine : 46 chromosomes, 23 paires ; chacun est un long fil d’ADN enroulé.',
+      texte: 'Dans le noyau : 46 chromosomes en 23 paires (un de la mère, un du père) ; un chromosome est un long fil d’ADN enroulé ; comme 46 livres rangés par paires.',
+      explication: [{ repere: 'chromosomes', texte: '46 chromosomes, en 23 paires.' }, { repere: 'paire', texte: 'Dans chaque paire, un chromosome de la mère et un du père.' }, { repere: 'adn', texte: 'Déroulé, un chromosome est un très long fil : l’ADN.' }] },
+    mitose: { titre: 'La mitose, l’idée', fin: 11.2, moments: MM, autoDepart: false, dessiner: dessinerMitose, voit: voitMitose,
+      motifs: { m_mere: 'une cellule et ses chromosomes', m_copie: 'chaque chromosome est copié', m_partage: 'les copies se partagent', m_filles: 'deux cellules filles identiques' },
+      conclusion: 'La mitose : une cellule donne deux cellules filles identiques, avec les mêmes chromosomes.',
+      texte: 'La mitose : chaque chromosome est copié, les copies se partagent, deux cellules filles identiques à la cellule mère.',
+      explication: [{ repere: 'copies', texte: 'D’abord chaque chromosome est copié.' }, { repere: 'filles', texte: 'Puis deux cellules filles identiques.' }] },
+    oeuf: { titre: 'De la cellule-œuf au corps', fin: 10.4, moments: MO, autoDepart: false, dessiner: dessinerOeuf, voit: voitOeuf,
+      motifs: { o_oeuf: 'la cellule-œuf', o_deux: 'une mitose : 2 cellules', o_quatre: '4 cellules', o_huit: '8 cellules', o_milliards: 'des milliards de cellules', o_memes: 'toutes avec les mêmes chromosomes' },
+      conclusion: 'Mitose après mitose, la cellule-œuf donne des milliards de cellules, toutes avec les mêmes 46 chromosomes.',
+      texte: 'La cellule-œuf → 2 → 4 → 8 → des milliards de cellules, par des mitoses : toutes ont les mêmes 46 chromosomes.',
+      explication: [{ repere: 'oeuf', texte: 'Au départ, une seule cellule : la cellule-œuf.' }, { repere: 'memes', texte: 'Toutes les cellules ont les mêmes chromosomes.' }] },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

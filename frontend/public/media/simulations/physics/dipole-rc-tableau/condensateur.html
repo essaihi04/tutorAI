@@ -260,6 +260,16 @@ const ETAPES = {
 };
 const MOTIFS = { fin: 'fin' };
 for (const v of VUES) for (const e of ETAPES[v]) MOTIFS[e.nom] = e.motif;
+/* Question d’observation (règle 30 du professeur, audit « rythme », 14 novembre 2026) : `conclusions: false`
+ * (set_parameters, ou ?conclusions=0) tait ce que l’élève doit trouver lui-même : les phrases écrites des étapes de CACHE
+ * et le motif de leur arrêt sur image. `conclusions: true` les rend. Par défaut : true (comportement inchangé). */
+const lireConclusions = p => (!p || p.conclusions === undefined || p.conclusions === null || p.conclusions === '' ? null : !(p.conclusions === false || p.conclusions === 0 || /^(false|0|non)$/i.test(String(p.conclusions))));
+let CONCL = new URLSearchParams(location.search).get('conclusions') !== '0';
+const CACHE = { k_ferme: 'K fermé : regarde les deux aiguilles' };
+const MOTIFS_VRAIS = { ...MOTIFS };
+const cache = nom => !CONCL && nom in CACHE;
+function majConclusions() { for (const n in CACHE) MOTIFS[n] = CONCL ? MOTIFS_VRAIS[n] : CACHE[n]; }
+majConclusions();
 const S2 = { kForce: null, uFige: 0 };   // kForce = 0 : K rouvert à la main (le condensateur garde sa charge)
 
 /* ── Géométrie (cadre 760 × 420) ─────────────────────────────────────── */
@@ -423,7 +433,7 @@ function vueCharge(c, M) {
   const ligne1 = M.commence('k_ferme') ? null : 'k_ouvert';
   if (ligne1) M.etape(c, 'k_ouvert', () => c.texte('K ouvert : les deux aiguilles sont à 0', 20, 340, { couleur: 'blanc', taille: 17 }));
   M.etape(c, 'k_ferme', () => {
-    c.texte('K fermé : l’aiguille de l’ampèremètre saute puis redescend ; u_C monte', 20, 340, { couleur: 'blanc', taille: 17, max: 720 });
+    c.texte('K fermé : l’aiguille de l’ampèremètre saute puis redescend ; u_C monte', 20, 340, { couleur: 'blanc', taille: 17, max: 720, alpha: cache('k_ferme') ? 0 : undefined });
   });
   M.etape(c, 'electrons', () => {
     c.texte('des électrons quittent A, font le tour par le générateur et s’entassent sur B :', 20, 366, { couleur: 'bleu', taille: 16, max: 720 });
@@ -516,6 +526,7 @@ const MOT = Moteur({
   messageFin: M => (M.S.vue === 'plaques' ? 'Un condensateur : deux armatures conductrices séparées par un isolant.' : 'Chargé : i = 0 et u_C = E = 6 V. A porte q_A = q, B porte q_B = −q.'),
   appliquer: (p, M) => {
     const r = {};
+    { const k = lireConclusions(p); if (k !== null) { CONCL = k; majConclusions(); M.scene.sale = true; } }
     if (VUES.includes(p.vue) && p.vue !== M.S.vue) { r.vue = p.vue; S2.kForce = null; }
     if (p.K !== undefined && p.K !== null && p.K !== '' && [0, 1].includes(+p.K)) {
       const k = +p.K, changerVue = M.S.vue !== 'charge' || r.vue === 'plaques';
@@ -526,7 +537,7 @@ const MOT = Moteur({
     if (r.vue && !r.apres) S2.kForce = null;
     return r;
   },
-  schema: { vue: VUES.join(' | ') + ' (change la vue et relance)', K: '0 | 1 (vue charge ; 1 : on ferme K, la charge se fait ; 0 : K ouvert — au départ, ou rouvert : le condensateur garde sa charge)' },
+  schema: { conclusions: 'true | false (question d’observation : false tait la phrase écrite à k_ferme, sans relancer)', vue: VUES.join(' | ') + ' (change la vue et relance)', K: '0 | 1 (vue charge ; 1 : on ferme K, la charge se fait ; 0 : K ouvert — au départ, ou rouvert : le condensateur garde sa charge)' },
   texte: 'Un condensateur : deux armatures métalliques (A et B) face à face, séparées par un isolant ; symbole : deux traits parallèles. Charge sous E = 6 V : quand on ferme K, l’aiguille de l’ampèremètre saute puis redescend, celle du voltmètre monte jusqu’à E ; des électrons quittent A, font le tour par le générateur et s’entassent sur B, aucun ne traverse l’isolant ; A porte q_A = q, B porte q_B = −q ; à la fin i = 0 et u_C = E : le condensateur est chargé.',
   explications: {
     plaques: [

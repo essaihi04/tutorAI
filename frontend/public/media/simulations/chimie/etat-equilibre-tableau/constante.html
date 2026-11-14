@@ -499,7 +499,9 @@ const ETAPES = {
   ],
 };
 let MO = null;
-const MOTIFS = new Proxy({}, { get: (_, nom) => (nom === 'fin' ? 'fin' : (ETAPES[MO ? MO.S.vue : VUES[0]].find(e => e.nom === nom) || {}).motif) });
+/** Pendant la question d'observation (`conclusions: false`), la bulle d'arrêt ne dit pas ce que l'élève doit trouver. */
+const MOTIFS_TUS = { comparer: 'les colonnes τ et Qr,éq encadrées : compare-les' };
+const MOTIFS = new Proxy({}, { get: (_, nom) => (nom === 'fin' ? 'fin' : (!CONCL && MOTIFS_TUS[nom]) || (ETAPES[MO ? MO.S.vue : VUES[0]].find(e => e.nom === nom) || {}).motif) });
 
 /* ── Grille d’un tableau d’avancement (en-tête = équation) ──────────── */
 const xCol = (G, k) => G.x + G.wl + k * G.w;
@@ -583,6 +585,11 @@ function vueTroisC(c, M) {
     [d.C, ph2(d.pH), d.tau, d.qr].forEach((s, k) => c.texte(s, cxg(k), ys(i + 1), { taille: 16, align: 'center', couleur: k === 2 ? 'bleu' : k === 3 ? 'violet' : 'blanc' }));
   }));
   M.etape(c, 'comparer', () => {
+    if (!CONCL) {   // les deux colonnes encadrées pareil, rien d'écrit : c'est à l'élève de comparer
+      c.rect(gx3(2) + 4, G.y + G.h + 2, G.ws[2] - 8, 3 * G.h - 4, { couleur: 'blanc', largeur: 2, arrondi: 6 });
+      c.rect(gx3(3) + 4, G.y + G.h + 2, G.ws[3] - 8, 3 * G.h - 4, { couleur: 'blanc', largeur: 2, arrondi: 6 });
+      return;
+    }
     c.rect(gx3(2) + 4, G.y + G.h + 2, G.ws[2] - 8, 3 * G.h - 4, { couleur: 'bleu', largeur: 2, arrondi: 6 });
     c.rect(gx3(3) + 4, G.y + G.h + 2, G.ws[3] - 8, 3 * G.h - 4, { couleur: 'jaune', largeur: 2, arrondi: 6, fond: M.vu('comparer') || M.p('comparer') >= 1 ? 'jaune' : null, fondAlpha: .14 });
     c.texte('τ : 0,039 → 0,055 → 0,117', XD, 104, { taille: 17, couleur: 'bleu' });
@@ -865,8 +872,10 @@ function voir(M) {
   for (const e of ETAPES[v]) if (M.commence(e.nom)) m.push(e.vu);
   return m.join(' ');
 }
+/** Question d'observation (14 novembre 2026, règle 30) : `conclusions: false` tait, dans trois_c, la colonne surlignée et « ne change pas ». */
+let CONCL = true;
 const params = M => {
-  const v = M.S.vue, p = { vue: v };
+  const v = M.S.vue, p = { vue: v, conclusions: CONCL };
   if (v === 'trois_c') { const E = etatTrois(M); Object.assign(p, { C_mol_L: [1.0e-2, 5.0e-3, 1.0e-3], pH: [3.41, 3.56, 3.93], tau: [.039, .055, .117], Qr_eq: [1.57e-5, 1.61e-5, 1.56e-5], pH_affiche: E.ph == null ? null : +E.ph.toFixed(2) }); }
   if (v === 'produits') { const E = etatProduits(M); Object.assign(p, { pH_final: 3.56, Qr_eq: 1.61e-5, pH_affiche: E.ph == null ? null : +E.ph.toFixed(2) }); }
   if (v === 'definition') Object.assign(p, { K: 1.6e-5, temperature_C: 25 });
@@ -883,8 +892,8 @@ const MOT = Moteur({
   messageFin: M => ({ trois_c: 'τ change avec C, mais Qr,éq ≈ 1,6·10⁻⁵ ne change pas.', produits: 'En partant des produits : Qr,éq = 1,61·10⁻⁵, la même valeur.',
     definition: 'K = Qr,éq : ne dépend que de la température ; acide éthanoïque : K = 1,6·10⁻⁵ à 25 °C.', inverse: "K' = 1/K = 6,25·10⁴.",
     c_tau: 'K = C·τ²/(1 − τ) ; exemple A : 1,57·10⁻⁵.', autre_acide: 'Acide méthanoïque : K = 1,8·10⁻⁴ ; acide éthanoïque : K = 1,6·10⁻⁵.' })[M.S.vue],
-  appliquer: (p, M) => { const r = {}; if (VUES.includes(p.vue)) r.vue = p.vue; r.change = !!(r.vue && r.vue !== M.S.vue); return r; },
-  schema: { vue: VUES.join(' | ') + ' (change la vue et relance)' },
+  appliquer: (p, M) => { const r = {}; if (typeof p.conclusions === 'boolean') CONCL = p.conclusions; if (VUES.includes(p.vue)) r.vue = p.vue; r.change = !!(r.vue && r.vue !== M.S.vue); return r; },
+  schema: { vue: VUES.join(' | ') + ' (change la vue et relance)', conclusions: 'true | false (question d’observation, 14 novembre 2026 : false tait ce que l’élève doit trouver ; true par défaut)' },
   texte: 'La constante d’équilibre (acide éthanoïque : CH₃COOH + H₂O ⇌ CH₃COO⁻ + H₃O⁺). ' +
     'Trois concentrations (exemple B) : C = 1,0·10⁻² ; 5,0·10⁻³ ; 1,0·10⁻³ mol/L → pH 3,41 ; 3,56 ; 3,93 → τ 0,039 ; 0,055 ; 0,117 (change) → Qr,éq 1,57·10⁻⁵ ; 1,61·10⁻⁵ ; 1,56·10⁻⁵ : « Qr,éq ne dépend pas de C ». ' +
     'En partant des produits (exemple C) : 50 mL d’acide chlorhydrique + 50 mL d’éthanoate de sodium (1,0·10⁻² mol/L) : sens 2, pH final 3,56 ; [CH₃COO⁻]éq = [H₃O⁺]éq = 2,75·10⁻⁴ mol/L ; Qr,éq = 10^(−7,12)/(5,0·10⁻³ − 10^(−3,56)) = 1,61·10⁻⁵ : même valeur. ' +

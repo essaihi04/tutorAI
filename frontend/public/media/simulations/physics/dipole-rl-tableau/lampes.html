@@ -411,6 +411,16 @@ const ETAPES = () => [
 /** Après l’étape « ouverture », le courant finit de s’annuler jusqu’au moment « fin ». */
 const QUEUE = () => 5.5 * tau2() * RALENTI + .4;
 const MOTIFS = { fin: 'fin' }; for (const e of ETAPES()) MOTIFS[e.nom] = e.motif;
+/* Question d’observation (règle 30 du professeur, audit « rythme », 14 novembre 2026) : `conclusions: false`
+ * (set_parameters, ou ?conclusions=0) tait ce que l’élève doit trouver lui-même : les phrases écrites des étapes de CACHE
+ * et le motif de leur arrêt sur image. `conclusions: true` les rend. Par défaut : true (comportement inchangé). */
+const lireConclusions = p => (!p || p.conclusions === undefined || p.conclusions === null || p.conclusions === '' ? null : !(p.conclusions === false || p.conclusions === 0 || /^(false|0|non)$/i.test(String(p.conclusions))));
+let CONCL = new URLSearchParams(location.search).get('conclusions') !== '0';
+const CACHE = { retard: 'K fermé : regarde la lampe L₂' };
+const MOTIFS_VRAIS = { ...MOTIFS };
+const cache = nom => !CONCL && nom in CACHE;
+function majConclusions() { for (const n in CACHE) MOTIFS[n] = CONCL ? MOTIFS_VRAIS[n] : CACHE[n]; }
+majConclusions();
 
 /* ── Géométrie (cadre 760 × 420) ─────────────────────────────────────── */
 const XG = 50, YH = 70, Y1 = 132, Y2 = 246, YB = 300, XA = 230, XB = 560;
@@ -509,7 +519,7 @@ function dessiner(c, M) {
   });
   if (M.commence('k_ferme') || M.vu('k_ouvert')) lectures(c);
   M.etape(c, 'k_ferme', () => c.texte('K fermé : L_1 (avec R) s’allume aussitôt', 14, 353, { couleur: 'vert', taille: 15, max: 730 }));
-  M.etape(c, 'retard', () => c.texte('L_2 (avec la bobine) s’allume en retard : la bobine freine la montée du courant', 14, 374, { couleur: 'vert', taille: 15, max: 730 }));
+  M.etape(c, 'retard', () => c.texte('L_2 (avec la bobine) s’allume en retard : la bobine freine la montée du courant', 14, 374, { couleur: 'vert', taille: 15, max: 730, alpha: cache('retard') ? 0 : undefined }));
   M.etape(c, 'egal', () => c.texte(`ensuite L_1 et L_2 brillent pareil : même courant ${mA(I)} mA (r = R)`, 14, 395, { couleur: 'vert', taille: 15, max: 730 }));
   M.etape(c, 'ouverture', () => c.texte('K ouvert : L_2 ne s’éteint pas d’un coup, le courant de la bobine passe encore un instant (par R et L_1)', 14, 416, { couleur: 'bleu', taille: 15, max: 730 }));
   reperes(c);
@@ -550,13 +560,14 @@ const MOT = Moteur({
   depart: () => `Deux lampes identiques ; la bobine est ${S2.noyau ? 'avec' : 'sans'} son noyau de fer.`,
   messageFin: () => `La bobine retarde l’allumage de L₂ et son extinction : le courant ne change pas d’un coup${S2.noyau ? ' (avec le noyau, L est grande : le retard est long).' : ' (sans le noyau, L est petite : le retard est court).'}`,
   appliquer: p => {
+    { const k = lireConclusions(p); if (k !== null) { CONCL = k; majConclusions(); MOT.scene.sale = true; } }
     let v = p.noyau;
     if (v === undefined) return {};
     v = !(v === false || v === 0 || v === '0' || /^(sans|non|false|retire|sorti)/i.test(String(v)));
     if (v === S2.noyau) return {};
     S2.noyau = v; return { change: true };
   },
-  schema: { noyau: 'avec | sans (noyau de fer dans la bobine : L = 1,2 H ; sorti : L = 0,3 H ; relance)' },
+  schema: { conclusions: 'true | false (question d’observation : false tait la phrase « L₂ s’allume en retard »)', noyau: 'avec | sans (noyau de fer dans la bobine : L = 1,2 H ; sorti : L = 0,3 H ; relance)' },
   texte: 'Deux branches en parallèle sur un générateur E = 6 V et un interrupteur K : lampe L₁ + résistor R = 10 Ω ; lampe L₂ + bobine (L, r = R). On ferme K : L₁ s’allume aussitôt, L₂ s’allume en retard (la bobine freine la montée du courant) ; ensuite les deux lampes brillent pareil. On ouvre K : L₂ ne s’éteint pas d’un coup, le courant de la bobine passe encore un instant (par R et L₁). Avec le noyau de fer, L est grande et le retard est long ; sans noyau, il est court. Éclat d’une lampe ∝ i².',
   explications: {
     lampes: [

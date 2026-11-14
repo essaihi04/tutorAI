@@ -112,7 +112,7 @@ function voitGriffith(k) {
 
 /* ── Vue Avery ──────────────────────────────────────────────────────── */
 const TUBES = [{ x: 200, enz: 'protéase', det: 'détruit les protéines', meurt: true }, { x: 330, enz: 'ribonucléase', det: 'détruit l’ARN', meurt: true }, { x: 460, enz: 'désoxyribonucléase', det: 'détruit l’ADN', meurt: false }];
-const MA = { extrait: 2.0, tube_protease: 4.2, tube_arnase: 6.2, tube_adnase: 8.2, resultats: 12.2, fragment_adn_entre: 17.0 };
+const MA = { extrait: 2.0, tube_protease: 4.2, tube_arnase: 6.2, tube_adnase: 8.2, av_injection: 10.8, resultats: 12.2, fragment_adn_entre: 17.0 };   // av_injection ajouté le 14 novembre 2026 (souris injectées, avant les résultats)
 const T0 = [3.0, 5.0, 7.0];
 function dessinerAvery(c, k) {
   const t = k.t, inj = rampe(t, 9.0, 1.2), res = t >= 11.4;
@@ -127,9 +127,9 @@ function dessinerAvery(c, k) {
       Peint.tube(x, T.x, 92, 90, 30, ['rgba(160,120,80,.55)', 'rgba(210,180,130,.6)'], a, .6);
       if (k.P.tube === i + 1 && t >= T0[i]) { x.save(); x.strokeStyle = 'rgba(250,204,21,.9)'; x.lineWidth = 2.5; x.beginPath(); x.ellipse(T.x, 140, 30, 60, 0, 0, TAU); x.stroke(); x.restore(); }
       if (inj > 0) { pneumocoques(x, T.x, 168, 3, false, false, inj, .8); seringue(x, T.x - 4, 236, inj); }
-      if (t >= 10.0) Peint.souris(x, T.x, 292, .9, res && T.meurt, rampe(t, 10.0, .6));
+      if (t >= 10.0) Peint.souris(x, T.x, 292, .9, res && T.meurt && i < REG.resultats, rampe(t, 10.0, .6));
     });
-    if (t >= 13.0) { // agrandi : un fragment d’ADN entre dans une bactérie R
+    if (t >= 13.0 && REG.resultats >= 3) { // agrandi : un fragment d’ADN entre dans une bactérie R
       const cx = 660, cy = 230, a = rampe(t, 13.0, .7), u = rampe(t, 13.8, 1.8), cap = rampe(t, 15.4, 1.4);
       x.save(); x.globalAlpha = a;
       x.fillStyle = 'rgba(30,41,59,.0)';
@@ -151,12 +151,13 @@ function dessinerAvery(c, k) {
     c.repere('tube_' + (i + 1), T.x - 18, 88, 36, 100, 'le tube ' + (i + 1) + ' : ' + T.enz);
     if (k.ecrit(c, 'tube' + i, T0[i])) { if (i === 0) c.fleche(92, 110, T.x - 22, 110, { couleur: 'tresfaible', largeur: 1.2 }); k.T(c, '+ ' + T.enz, T.x, 72, { couleur: 'jaune', taille: 14, align: 'center' }); k.T(c, T.det, T.x, 206, { couleur: 'faible', taille: 12, align: 'center' }); }
     if (t >= 10.0) c.repere('souris_' + (i + 1), T.x - 44, 270, 88, 44, 'la souris ' + (i + 1));
-    if (k.ecrit(c, 'res' + i, 11.6)) { k.T(c, T.meurt ? 'meurt' : 'vit', T.x, 342, { couleur: T.meurt ? 'rouge' : 'vert', taille: 15, align: 'center' }); k.T(c, T.meurt ? 'R transformés' : 'pas de transformation', T.x, 360, { couleur: 'faible', taille: 12, align: 'center' }); }
+    if (res && i >= REG.resultats && k.ecrit(c, 'q' + i, 11.6)) k.T(c, '?', T.x, 250, { couleur: 'jaune', taille: 26, align: 'center' });   // résultat pas encore dit
+    if (i < REG.resultats && k.ecrit(c, 'res' + i, 11.6)) { k.T(c, T.meurt ? 'meurt' : 'vit', T.x, 342, { couleur: T.meurt ? 'rouge' : 'vert', taille: 15, align: 'center' }); k.T(c, T.meurt ? 'R transformés' : 'pas de transformation', T.x, 360, { couleur: 'faible', taille: 12, align: 'center' }); }
   });
   if (k.ecrit(c, 'inj', 9.0)) { k.T(c, '+ R vivants', 70, 222, { couleur: 'blanc', taille: 13, align: 'center' }); k.T(c, 'puis injection', 70, 240, { couleur: 'blanc', taille: 13, align: 'center' }); }
-  if (t >= 13.0) { c.repere('bacterie_r', 600, 190, 120, 80, 'une bactérie R'); c.repere('fragment_adn', 700, 160, 60, 40, 'un fragment d’ADN des S'); }
-  if (k.ecrit(c, 'zoom', 13.2)) { k.T(c, 'agrandi : une bactérie R', 660, 150, { couleur: 'blanc', taille: 13, align: 'center' }); k.T(c, 'fragment d’ADN des S', 690, 120, { couleur: 'orange', taille: 13, align: 'center' }); }
-  if (k.ecrit(c, 'cap', MA.fragment_adn_entre - .8)) {
+  if (t >= 13.0 && REG.resultats >= 3) { c.repere('bacterie_r', 600, 190, 120, 80, 'une bactérie R'); c.repere('fragment_adn', 700, 160, 60, 40, 'un fragment d’ADN des S'); }
+  if (REG.resultats >= 3 && k.ecrit(c, 'zoom', 13.2)) { k.T(c, 'agrandi : une bactérie R', 660, 150, { couleur: 'blanc', taille: 13, align: 'center' }); k.T(c, 'fragment d’ADN des S', 690, 120, { couleur: 'orange', taille: 13, align: 'center' }); }
+  if (REG.resultats >= 3 && k.ecrit(c, 'cap', MA.fragment_adn_entre - .8)) {
     k.T(c, 'elle fabrique une capsule :', 660, 304, { couleur: 'blanc', taille: 13, align: 'center' }); k.T(c, 'elle devient S', 660, 322, { couleur: 'vert', taille: 14, align: 'center' });
     c.repere('capsule', 590, 180, 140, 100, 'la capsule');
     k.T(c, 'L’ADN est le support de l’information génétique.', 380, 400, { couleur: 'jaune', taille: 16, align: 'center' });
@@ -167,14 +168,187 @@ function voitAvery(k) {
   const t = k.t, m = ['À gauche, un tube d’extrait de pneumocoques S tués.'];
   TUBES.forEach((T, i) => { if (t >= T0[i]) m.push(`Tube ${i + 1} : extrait + ${T.enz} (${T.det})${k.P.tube === i + 1 ? ', entouré en jaune' : ''}.`); });
   if (t >= 9) m.push('On ajoute des R vivants dans chaque tube, puis on injecte à trois souris.');
-  if (t >= 11.4) m.push('Résultats : souris 1 morte (R transformés), souris 2 morte, souris 3 VIVANTE (pas de transformation : l’ADN a été détruit).');
-  if (t >= 13) m.push('À droite, agrandi : une bactérie R (violette) et un fragment d’ADN des S (orange)' + (t >= 15.6 ? ' entré dedans ; elle fabrique une capsule claire et devient S ; écrit « L’ADN est le support de l’information génétique. »' : ' qui entre dedans.'));
+  if (t >= 11.4 && REG.resultats >= 3) m.push('Résultats : souris 1 morte (R transformés), souris 2 morte, souris 3 VIVANTE (pas de transformation : l’ADN a été détruit).');
+  else if (t >= 11.4) m.push('Résultats montrés : ' + (['souris 1 morte (R transformés)', 'souris 2 morte (R transformés)'].slice(0, REG.resultats).join(', ') || 'aucun') + ' ; les autres souris portent un « ? ».');
+  if (t >= 13 && REG.resultats >= 3) m.push('À droite, agrandi : une bactérie R (violette) et un fragment d’ADN des S (orange)' + (t >= 15.6 ? ' entré dedans ; elle fabrique une capsule claire et devient S ; écrit « L’ADN est le support de l’information génétique. »' : ' qui entre dedans.'));
+  return m;
+}
+
+/* ── Griffith pas à pas (14 novembre 2026, règle 33 du skill professeur) ─────────────────────────────────────
+ * Cinq vues, une chose à la fois : le principe (S, R, la souris, ce qu'on regarde), puis chaque expérience SEULE, en
+ * grand, jouée, figée, son résultat ; à droite, le récapitulatif des expériences déjà faites (jamais celles à venir).
+ * La 4ᵉ (R vivants + S tués) s'arrête avant le résultat : avec `conclusions: false` (question d'observation, ou
+ * ?conclusions=false dans l'adresse) la souris reste sous un « ? », ni résultat, ni sang, ni principe écrits.
+ * Ces vues attendent le tuteur (`autoDepart: false`) : rien ne se joue avant son premier geste.
+ * Les vues griffith et avery d'avant gardent exactement leur comportement.
+ */
+const REG = { conclusions: true, resultats: 3 };
+const vrai = v => (typeof v === 'string' ? !/^(false|0|non|no|off)$/i.test(v.trim()) : !!v);
+const EXP = [
+  { n: 1, txt: 'S vivants', S: true, R: false, tues: false, meurt: true },
+  { n: 2, txt: 'R vivants', S: false, R: true, tues: false, meurt: false },
+  { n: 3, txt: 'S tués par la chaleur', S: true, R: false, tues: true, meurt: false },
+  { n: 4, txt: 'R vivants + S tués', S: true, R: true, tues: true, meurt: true },
+];
+/** Les instants d'une expérience seule (la 3ᵉ a sa chauffe, la 4ᵉ son sang et son principe). */
+function tempsExp(E) {
+  const tB = 1.6, tCh = E.tues ? 3.8 : null, tA = E.tues ? 4.2 : 2.2;
+  const tInj = tA + 2.0, tAtt = tA + 3.4, tRes = tA + 4.2;
+  return { tB, tCh, tA, tInj, tAtt, tRes, tSang: tRes + 2.4, tPrin: tRes + 4.4, fin: E.n === 4 ? tRes + 5.0 : tRes + 1.6 };
+}
+function montrerResultat(E) { return E.n !== 4 || REG.conclusions; }
+/** Le récapitulatif à droite : les expériences déjà faites, plus celle-ci quand son résultat est atteint. */
+function recap(c, k, E, T) {
+  const x0 = 548, y0 = 70;
+  if (k.ecrit(c, 'recap', .1)) { k.T(c, 'Déjà vu :', x0, y0, { couleur: 'cyan', taille: 14 }); c.ligne(x0, y0 + 8, 748, y0 + 8, { couleur: 'tresfaible', largeur: 1 }); }
+  const lignes = EXP.filter(L => L.n < E.n);
+  if (k.t >= T.tRes + .3 && montrerResultat(E)) lignes.push(E);
+  if (!lignes.length && k.ecrit(c, 'rien', .2)) k.T(c, '(rien encore)', x0, y0 + 30, { couleur: 'faible', taille: 13 });
+  lignes.forEach((L, i) => {
+    const y = y0 + 32 + i * 46;
+    if (k.ecrit(c, 'rc' + L.n, L.n < E.n ? .2 : T.tRes + .3)) {
+      k.T(c, L.n + '. ' + L.txt, x0, y, { couleur: 'jaune', taille: 13 });
+      k.T(c, '→ ' + (L.meurt ? 'la souris meurt' : 'la souris vit'), x0 + 14, y + 18, { couleur: L.meurt ? 'rouge' : 'vert', taille: 13 });
+    }
+  });
+  c.repere('recap', x0 - 6, y0 - 16, 206, 32 + Math.max(1, lignes.length) * 46, 'le récapitulatif des expériences');
+}
+/** Un horloge peinte « on attend quelques jours ». */
+function horloge(x, cx, cy, a, u) {
+  x.save(); x.globalAlpha = a;
+  const g = x.createRadialGradient(cx - 5, cy - 5, 2, cx, cy, 18); g.addColorStop(0, '#fefce8'); g.addColorStop(1, '#d6d3d1');
+  x.fillStyle = g; x.beginPath(); x.arc(cx, cy, 16, 0, TAU); x.fill(); x.strokeStyle = '#78716c'; x.lineWidth = 2; x.stroke();
+  x.strokeStyle = '#292524'; x.lineWidth = 2; x.lineCap = 'round';
+  x.beginPath(); x.moveTo(cx, cy); x.lineTo(cx + Math.cos(u * TAU * 3 - Math.PI / 2) * 11, cy + Math.sin(u * TAU * 3 - Math.PI / 2) * 11); x.stroke();
+  x.beginPath(); x.moveTo(cx, cy); x.lineTo(cx + Math.cos(u * TAU / 2 - Math.PI / 2) * 7, cy + Math.sin(u * TAU / 2 - Math.PI / 2) * 7); x.stroke();
+  x.restore();
+}
+function dessinerExp(E) {
+  return function (c, k) {
+    const t = k.t, T = tempsExp(E), res = montrerResultat(E);
+    const XB = 120, YB = 210, XS = 400, YS = 236;
+    const mortS = E.tues ? (T.tCh ? rampe(t, T.tCh - 1.4, 1.2) : 1) : 0;    // les S grisent sous la flamme (exp. 3), déjà tués (exp. 4)
+    c.direct(() => {
+      const x = c.ctx;
+      const aB = rampe(t, .4, .8);
+      // le contenu de la seringue, en grand
+      if (E.R && E.S) { pneumocoques(x, XB - 34, YB, 5, false, false, aB, 1.5); pneumocoques(x, XB + 34, YB, 5, true, true, aB, 1.5); }
+      else if (E.n === 3) { pneumocoques(x, XB, YB, 7, true, false, aB * (1 - mortS), 1.6); pneumocoques(x, XB, YB, 7, true, true, aB * mortS, 1.6); }
+      else pneumocoques(x, XB, YB, 7, E.S, false, aB, 1.6);
+      if (E.n === 3 && t >= T.tCh - 1.8) { const af = rampe(t, T.tCh - 1.8, .5) * (1 - rampe(t, T.tA - .2, .4)); for (const dx of [-26, 0, 26]) { x.save(); x.translate(XB + dx, YB + 74); x.scale(2.2, 2.2); flamme(x, 0, 0, af); x.restore(); } }
+      // la seringue : se remplit, va vers la souris, pousse
+      const u = rampe(t, T.tA, 1.2), push = rampe(t, T.tA + 1.3, .5);
+      if (t >= T.tA - .4) seringue(x, entre(XB + 90, XS - 60, u) + push * 8, entre(YB, YS - 18, u), rampe(t, T.tA - .4, .4) * (1 - rampe(t, T.tInj + .2, .5)));
+      // la souris
+      const morte = res && E.meurt && t >= T.tRes;
+      Peint.souris(x, XS, YS, 1.5, morte, rampe(t, .6, .6));
+      if (t >= T.tInj && !(res && t >= T.tRes)) horloge(x, XS + 70, YS - 70, rampe(t, T.tInj, .4), rampe(t, T.tInj, 3));
+      // la loupe sur le sang (exp. 4)
+      if (E.n === 4 && res && t >= T.tSang - 1.2) {
+        const a = rampe(t, T.tSang - 1.2, .8), cx = 250, cy = 330, r = 52;
+        x.save(); x.globalAlpha = a; x.beginPath(); x.arc(cx, cy, r, 0, TAU); x.save(); x.clip();
+        const g = x.createRadialGradient(cx - 18, cy - 18, 4, cx, cy, r); g.addColorStop(0, '#b91c1c'); g.addColorStop(1, '#5f0f0f'); x.fillStyle = g; x.fillRect(cx - r, cy - r, 2 * r, 2 * r);
+        x.fillStyle = 'rgba(248,113,113,.55)'; for (let i = 0; i < 12; i++) { x.beginPath(); x.ellipse(cx + Math.cos(i * 1.9) * 34, cy + Math.sin(i * 2.3) * 34, 7, 4, i, 0, TAU); x.fill(); }
+        x.restore(); x.strokeStyle = 'rgba(226,232,240,.9)'; x.lineWidth = 2; x.beginPath(); x.arc(cx, cy, r, 0, TAU); x.stroke(); x.restore();
+        pneumocoques(x, cx, cy, 6, true, false, a, 1.2);
+      }
+    });
+    c.texte('Griffith : expérience ' + E.n, 14, 26, { couleur: 'cyan', taille: 18 });
+    if (k.ecrit(c, 'quoi', .4)) k.T(c, 'On injecte : ' + E.txt, 14, 62, { couleur: 'jaune', taille: 16 });
+    c.repere('bacteries', XB - 80, YB - 50, 160, 100, 'les bactéries injectées : ' + E.txt);
+    if (k.ecrit(c, 'lb', .9)) {
+      if (E.R && E.S) { k.T(c, 'R vivants', XB - 34, YB + 56, { couleur: 'blanc', taille: 13, align: 'center' }); k.T(c, 'S tués', XB + 34, YB + 56, { couleur: 'faible', taille: 13, align: 'center' }); }
+      else if (E.n !== 3) k.T(c, E.S ? 'S vivants : avec capsule' : 'R vivants : sans capsule', XB, YB + 62, { couleur: 'blanc', taille: 13, align: 'center' });
+      else k.T(c, 'des S (avec capsule)', XB, YB - 58, { couleur: 'blanc', taille: 13, align: 'center' });
+    }
+    if (E.n === 3) { if (t >= T.tCh - 1.8) c.repere('flamme', XB - 30, YB + 40, 60, 50, 'la chaleur qui tue les S'); if (k.ecrit(c, 'ch', T.tCh - .6)) k.T(c, 'chauffés : les S sont tués (gris)', XB, YB + 122, { couleur: 'orange', taille: 13, align: 'center' }); }
+    if (t >= T.tA - .4) c.repere('seringue', XB + 60, YB - 30, 240, 50, 'la seringue');
+    c.repere('souris', XS - 50, YS - 36, 110, 64, 'la souris');
+    if (k.ecrit(c, 'att', T.tInj)) k.T(c, 'on attend quelques jours…', XS - 10, YS - 104, { couleur: 'faible', taille: 13, align: 'center' });
+    if (!res && t >= T.tAtt && k.ecrit(c, 'q', T.tAtt)) k.T(c, '?', XS + 4, YS - 50, { couleur: 'jaune', taille: 30, align: 'center' });
+    if (res && k.ecrit(c, 'res', T.tRes)) k.T(c, E.meurt ? 'la souris meurt' : 'la souris vit', XS, YS + 52, { couleur: E.meurt ? 'rouge' : 'vert', taille: 17, align: 'center' });
+    if (E.n === 4 && res) {
+      if (t >= T.tSang - 1.2) c.repere('sang', 196, 276, 108, 108, 'le sang de la souris 4');
+      if (k.ecrit(c, 'sang', T.tSang - .6)) { c.ligne(372, 262, 296, 300, { couleur: 'tresfaible', largeur: 1.2, pointille: [4, 5] }); k.T(c, 'dans son sang :', 250, 268, { couleur: 'blanc', taille: 13, align: 'center' }); k.T(c, 'des S vivants', 250, 398, { couleur: 'vert', taille: 15, align: 'center' }); }
+      if (k.ecrit(c, 'prin', T.tPrin - .6)) {
+        k.T(c, 'Des R ont été transformés en S :', 330, 352, { couleur: 'jaune', taille: 15 });
+        k.T(c, 'le principe transformant', 330, 374, { couleur: 'jaune', taille: 15 });
+        c.repere('principe', 324, 336, 220, 46, 'le principe transformant');
+      }
+    }
+    recap(c, k, E, T);
+  };
+}
+function voitExp(E) {
+  return function (k) {
+    const t = k.t, T = tempsExp(E), res = montrerResultat(E), m = [`Expérience ${E.n} de Griffith, seule, en grand : on injecte « ${E.txt} » à une souris.`];
+    if (E.n === 3 && t >= T.tCh - 1.8) m.push('Une flamme chauffe les S : ils deviennent gris (tués).');
+    if (t >= T.tA) m.push('La seringue va vers la souris et injecte.');
+    if (t >= T.tInj) m.push('Une horloge : on attend quelques jours.');
+    if (t >= T.tRes) m.push(res ? (E.meurt ? 'La souris meurt (couchée, écrit en rouge).' : 'La souris vit (écrit en vert).') : 'Le résultat n’est pas montré : un « ? » au-dessus de la souris (question au tuteur).');
+    if (E.n === 4 && res && t >= T.tSang - .6) m.push('Une loupe sur son sang : des pneumocoques S vivants (avec capsule).');
+    if (E.n === 4 && res && t >= T.tPrin - .6) m.push('Écrit : « Des R ont été transformés en S : le principe transformant ».');
+    m.push('À droite, « Déjà vu » : ' + (EXP.filter(L => L.n < E.n).map(L => `${L.n}. ${L.txt} → ${L.meurt ? 'meurt' : 'vit'}`).join(' ; ') || 'rien encore') + '.');
+    return m;
+  };
+}
+function vueExp(E) {
+  const T = tempsExp(E), p = 'g' + E.n + '_';
+  const moments = { [p + 'bacteries']: T.tB };
+  if (E.n === 3) moments[p + 'chauffage'] = T.tCh;
+  Object.assign(moments, { [p + 'injection']: T.tInj, [p + 'attente']: T.tAtt, [p + 'resultat']: T.tRes + .8 });
+  if (E.n === 4) Object.assign(moments, { g4_sang: T.tSang, g4_principe: T.tPrin });
+  const motifsVrais = { [p + 'bacteries']: 'on prépare : ' + E.txt, [p + 'chauffage']: 'les S sont tués par la chaleur', [p + 'injection']: 'injection à la souris', [p + 'attente']: 'on attend quelques jours', [p + 'resultat']: E.meurt ? 'la souris meurt' : 'la souris vit', g4_sang: 'des S vivants dans son sang', g4_principe: 'des R ont été transformés en S' };
+  const cache = { [p + 'resultat']: 'observe la souris 4', g4_sang: 'observe la souris 4', g4_principe: 'observe la souris 4' };
+  return {
+    titre: 'Griffith : expérience ' + E.n + ' seule', fin: T.fin, moments, autoDepart: false,
+    get motifs() { return montrerResultat(E) ? motifsVrais : { ...motifsVrais, ...cache }; },
+    get conclusion() { return montrerResultat(E) ? `Expérience ${E.n} : ${E.txt} → ${E.meurt ? 'la souris meurt' : 'la souris vit'}${E.n === 4 ? ', et des S vivants dans son sang : des R ont été transformés en S.' : '.'}` : 'Que devient la souris 4 ? Observe et réfléchis.'; },
+    surReglage: (k) => { k.S.vu = { ...k.S.vu }; },
+    dessiner: dessinerExp(E), voit: voitExp(E),
+    texte: `Griffith, expérience ${E.n} seule : ${E.txt} injectés à une souris → ${E.meurt ? 'elle meurt' : 'elle vit'}.`,
+    explication: [{ repere: 'bacteries', texte: 'Ce qu’on injecte : ' + E.txt + '.' }, { repere: 'souris', texte: 'On regarde la souris : vit-elle ou meurt-elle ?' }, { repere: 'recap', texte: 'Les expériences déjà faites, avec leur résultat.' }],
+  };
+}
+/* Le principe : les deux formes, la souris, et ce qu'on regarde. */
+const MP = { gp_forme_s: 2.4, gp_forme_r: 5.0, gp_injection: 8.4, gp_observer: 10.6 };
+function dessinerPrincipe(c, k) {
+  const t = k.t;
+  c.direct(() => {
+    const x = c.ctx;
+    pneumocoques(x, 130, 130, 6, true, false, rampe(t, .4, .8), 1.7);
+    pneumocoques(x, 130, 290, 6, false, false, rampe(t, 2.9, .8), 1.7);
+    const u = rampe(t, 6.0, 1.4), push = rampe(t, 7.5, .5);
+    if (t >= 5.6) seringue(x, entre(330, 450, u) + push * 8, 210, rampe(t, 5.6, .4));
+    Peint.souris(x, 560, 228, 1.5, false, rampe(t, 5.4, .6));
+  });
+  c.texte('Griffith (1928) : le principe de l’expérience', 14, 26, { couleur: 'cyan', taille: 18 });
+  c.repere('bacterie_s', 50, 76, 170, 110, 'la forme S');
+  if (k.ecrit(c, 's', 1.0)) { k.T(c, 'forme S : une capsule autour', 236, 112, { couleur: 'blanc', taille: 14 }); k.T(c, 'virulente : elle tue la souris', 236, 134, { couleur: 'rouge', taille: 14 }); c.fleche(232, 116, 176, 126, { couleur: 'tresfaible', largeur: 1.2 }); }
+  if (t >= 2.9) c.repere('bacterie_r', 50, 236, 170, 110, 'la forme R');
+  if (k.ecrit(c, 'r', 3.6)) { k.T(c, 'forme R : pas de capsule', 236, 280, { couleur: 'blanc', taille: 14 }); k.T(c, 'non virulente : ne tue pas', 236, 302, { couleur: 'vert', taille: 14 }); }
+  if (t >= 5.4) { c.repere('souris', 500, 190, 120, 70, 'la souris'); c.repere('seringue', 320, 190, 170, 40, 'la seringue'); }
+  if (k.ecrit(c, 'inj', 6.2)) k.T(c, 'on injecte des bactéries à une souris', 560, 172, { couleur: 'jaune', taille: 14, align: 'center' });
+  if (k.ecrit(c, 'obs', 9.0)) { k.T(c, 'puis on regarde :', 560, 300, { couleur: 'blanc', taille: 15, align: 'center' }); k.T(c, 'la souris vit ou meurt ?', 560, 324, { couleur: 'jaune', taille: 16, align: 'center' }); c.repere('question', 470, 284, 180, 50, 'ce qu’on regarde'); }
+}
+function voitPrincipe(k) {
+  const t = k.t, m = ['Le principe de l’expérience de Griffith, sans résultat.'];
+  if (t >= 1) m.push('En haut à gauche, des pneumocoques S peints, avec une capsule claire : virulents, ils tuent la souris.');
+  if (t >= 3.6) m.push('En bas, des pneumocoques R, sans capsule : non virulents.');
+  if (t >= 6) m.push('Une seringue va vers une souris : on lui injecte des bactéries.');
+  if (t >= 9) m.push('Écrit : « puis on regarde : la souris vit ou meurt ? »');
   return m;
 }
 
 window.Etapes.lancer({
   id: 'genetique_bacteries', titre: 'La transformation bactérienne', graine: 31,
-  parametres: { tube: { defaut: 0, schema: '1..3 (vue avery : le tube mis en lumière ; 0 aucun)', lire: v => Math.min(3, Math.max(0, Math.round(+v))) } },
+  parametres: {
+    tube: { defaut: 0, schema: '1..3 (vue avery : le tube mis en lumière ; 0 aucun)', lire: v => Math.min(3, Math.max(0, Math.round(+v))) },
+    conclusions: { defaut: true, schema: 'true | false (vue griffith_4 : false tait le résultat de la souris 4, son sang et le principe, pendant une question d’observation)', lire: vrai },
+    resultats: { defaut: 3, schema: '0..3 (vue avery : nombre de résultats de souris montrés, dans l’ordre des tubes ; 3 = tous, et la suite)', lire: v => Math.min(3, Math.max(0, Math.round(+v))) },
+  },
+  auDepart: (P) => { const q = new URLSearchParams(location.search); if (q.has('conclusions')) P.conclusions = vrai(q.get('conclusions')); if (q.has('resultats')) P.resultats = Math.min(3, Math.max(0, Math.round(+q.get('resultats')))) || 0; REG.conclusions = P.conclusions; REG.resultats = P.resultats; },
+  auReglage: (P) => { REG.conclusions = P.conclusions; REG.resultats = P.resultats; },
   vues: {
     griffith: { titre: 'Griffith : S, R et souris', fin: 16.4, moments: MG, dessiner: dessinerGriffith, voit: voitGriffith,
       motifs: { s_vivants: 'pneumocoques S vivants : la souris meurt', r_vivants: 'pneumocoques R vivants : la souris vit', s_tues: 'S tués par la chaleur : la souris vit', melange: 'R vivants + S tués : la souris meurt', s_dans_le_sang: 'des S vivants dans le sang : des R ont été transformés' },
@@ -183,11 +357,17 @@ window.Etapes.lancer({
       explication: [{ repere: 'bacterie_s', texte: 'La forme S a une capsule : elle tue la souris.' }, { repere: 'souris_4', texte: 'R vivants et S tués ensemble : la souris meurt.' }, { repere: 'sang', texte: 'Dans son sang, des S vivants : des R ont été transformés.' }] },
     avery: { titre: 'Avery : trois enzymes', fin: 17.8, moments: MA, dessiner: dessinerAvery, voit: voitAvery,
       reglages: { tube_protease: { tube: 1 }, tube_arnase: { tube: 2 }, tube_adnase: { tube: 3 }, resultats: { tube: 3 } },
-      motifs: { extrait: 'un extrait de S tués', tube_protease: 'tube 1 : extrait + protéase', tube_arnase: 'tube 2 : extrait + ribonucléase', tube_adnase: 'tube 3 : extrait + désoxyribonucléase', resultats: 'souris 1 et 2 mortes, souris 3 vivante', fragment_adn_entre: 'un fragment d’ADN entre dans une bactérie R, qui devient S' },
-      conclusion: 'Sans ADN, plus de transformation : l’ADN est le support de l’information génétique.',
+      get motifs() { const m = { extrait: 'un extrait de S tués', tube_protease: 'tube 1 : extrait + protéase', tube_arnase: 'tube 2 : extrait + ribonucléase', tube_adnase: 'tube 3 : extrait + désoxyribonucléase', resultats: 'souris 1 et 2 mortes, souris 3 vivante', fragment_adn_entre: 'un fragment d’ADN entre dans une bactérie R, qui devient S' }; return REG.resultats >= 3 ? m : { ...m, resultats: 'les résultats, souris par souris', fragment_adn_entre: 'observe les souris' }; },
+      get conclusion() { return REG.resultats >= 3 ? 'Sans ADN, plus de transformation : l’ADN est le support de l’information génétique.' : 'Observe les souris…'; },
       surReglage: (k, cles) => { k.S.vu = { ...k.S.vu }; },
       texte: 'Avery : extrait de S tués + protéase → transformation (souris morte) ; + ribonucléase → transformation ; + désoxyribonucléase → pas de transformation (souris vivante). Un fragment d’ADN des S entre dans une bactérie R : elle fabrique une capsule.',
       explication: [{ repere: 'tube_1', texte: 'Protéase : les protéines sont détruites, et pourtant la souris meurt.' }, { repere: 'tube_3', texte: 'Désoxyribonucléase : l’ADN est détruit, la souris vit.' }, { repere: 'fragment_adn', texte: 'Un fragment d’ADN des S entre dans la bactérie R.' }, { repere: 'conclusion', texte: 'L’ADN est le support de l’information génétique.' }] },
+    griffith_principe: { titre: 'Griffith : le principe', fin: 11.2, moments: MP, autoDepart: false, dessiner: dessinerPrincipe, voit: voitPrincipe,
+      motifs: { gp_forme_s: 'la forme S : capsule, virulente', gp_forme_r: 'la forme R : sans capsule, non virulente', gp_injection: 'on injecte des bactéries à une souris', gp_observer: 'on regarde : la souris vit ou meurt ?' },
+      conclusion: 'Le principe : on injecte des pneumocoques à une souris et on regarde si elle vit ou meurt.',
+      texte: 'Griffith, le principe : forme S (capsule, virulente), forme R (sans capsule, non virulente) ; on injecte des bactéries à une souris et on regarde si elle vit ou meurt.',
+      explication: [{ repere: 'bacterie_s', texte: 'La forme S a une capsule : elle tue la souris.' }, { repere: 'bacterie_r', texte: 'La forme R n’a pas de capsule : elle ne tue pas.' }, { repere: 'question', texte: 'On injecte, puis on regarde si la souris vit ou meurt.' }] },
+    griffith_1: vueExp(EXP[0]), griffith_2: vueExp(EXP[1]), griffith_3: vueExp(EXP[2]), griffith_4: vueExp(EXP[3]),
   },
 });
 </script>

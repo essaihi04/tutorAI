@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rappels — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ondes.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Rappels au tableau : une grande roue et la courbe de la hauteur de sa cabine (la sinusoïde), ou une règle et un chronomètre découpés en mille (milli, micro)"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Rappels des années précédentes, enseignés depuis zéro (règle 34, audit rythme du 14 novembre 2026).
+ * Deux vues (?vue=) :
+ *  - sinusoide : une grande roue tourne à vitesse constante ; la hauteur de sa cabine rouge, tracée en fonction du
+ *    temps, dessine une sinusoïde ; un tour = le même dessin, qui se répète à chaque tour.
+ *  - puissances : une règle de 1 m découpée en 1000 → 1 mm = 10⁻³ m ; la virgule recule de 3 rangs (0,001) ;
+ *    un chronomètre : 1 s en 1000 → 1 ms = 10⁻³ s ; 1 ms encore en 1000 → 1 µs = 10⁻⁶ s.
+ * Un seul bouton ; le tuteur fige chaque étape avec `play_until {moment}`.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const VUES = ['sinusoide', 'puissances'];
+const demande = new URLSearchParams(location.search).get('vue');
+const vue = VUES.includes(demande) ? demande : 'sinusoide';
+const SIN = vue === 'sinusoide';
+const DUREE = SIN ? 4.6 : 12;                     // s de scène
+const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0 };
+
+/* ── Les instants clés ── */
+const MOMENTS = SIN
+  ? { roue: 0.6, hauteur: 1.1, un_tour: 2.0, deux_tours: 4.0, sinusoide: 4.6 }
+  : { metre: 1.5, mille_parts: 4.0, virgule: 6.2, milliseconde: 9.0, microseconde: 12 };
+const MOTIFS = SIN
+  ? { roue: 'la roue tourne, la cabine rouge monte', hauteur: 'la hauteur h de la cabine, mesurée depuis l’axe', un_tour: 'un tour complet : la courbe a fait un motif (en haut, en bas, revenue)', deux_tours: 'deuxième tour : le même motif se répète', sinusoide: 'cette courbe qui se répète s’appelle une sinusoïde' }
+  : { metre: 'une règle d’un mètre', mille_parts: 'le mètre coupé en mille parts : un millimètre', virgule: '10⁻³ = 1 / 1000 = 0,001 : la virgule recule de trois rangs', milliseconde: 'la seconde coupée en mille : une milliseconde', microseconde: 'la milliseconde coupée encore en mille : une microseconde' };
+const vu = m => S.t >= MOMENTS[m] - 1e-3;
+
+/* ── Peinture (règle 32) : objets réels peints avant la craie ── */
+function peindreRoue(ctx, cx, cy, R, ang) {
+  ctx.save();
+  // pied de la roue (acier peint)
+  const gp = ctx.createLinearGradient(cx - R, 0, cx + R, 0); gp.addColorStop(0, '#64748b'); gp.addColorStop(.5, '#cbd5e1'); gp.addColorStop(1, '#475569');
+  ctx.strokeStyle = gp; ctx.lineWidth = 7; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(cx - R * .55, cy + R + 34); ctx.lineTo(cx, cy); ctx.lineTo(cx + R * .55, cy + R + 34); ctx.stroke();
+  // jante
+  ctx.lineWidth = 5; ctx.strokeStyle = '#94a3b8'; ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.stroke();
+  ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(203,213,225,.55)';
+  for (let k = 0; k < 8; k++) { const a = ang + k * Math.PI / 4; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + R * Math.cos(a), cy - R * Math.sin(a)); ctx.stroke(); }
+  // moyeu
+  const gm = ctx.createRadialGradient(cx - 3, cy - 3, 1, cx, cy, 10); gm.addColorStop(0, '#f8fafc'); gm.addColorStop(1, '#475569');
+  ctx.fillStyle = gm; ctx.beginPath(); ctx.arc(cx, cy, 9, 0, Math.PI * 2); ctx.fill();
+  // cabines : les autres en bleu, la cabine suivie en rouge
+  for (let k = 0; k < 8; k++) {
+    const a = ang + k * Math.PI / 4, x = cx + R * Math.cos(a), y = cy - R * Math.sin(a), rouge = k === 0;
+    const g = ctx.createLinearGradient(x - 10, y, x + 10, y + 16);
+    g.addColorStop(0, rouge ? '#fca5a5' : '#93c5fd'); g.addColorStop(1, rouge ? '#b91c1c' : '#1d4ed8');
+    ctx.fillStyle = g; ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 5;
+    ctx.beginPath(); ctx.moveTo(x - 10, y + 3); ctx.lineTo(x + 10, y + 3); ctx.lineTo(x + 8, y + 17); ctx.lineTo(x - 8, y + 17); ctx.closePath(); ctx.fill();
+    ctx.shadowBlur = 0; ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.fillRect(x - 6, y + 6, 12, 4);
+    ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + 3); ctx.stroke();
+  }
+  ctx.restore();
+}
+function peindreRegle(ctx, x, y, w, h) {
+  ctx.save();
+  const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#fde68a'); g.addColorStop(.5, '#f59e0b'); g.addColorStop(1, '#b45309');
+  ctx.fillStyle = g; ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 6; ctx.fillRect(x, y, w, h); ctx.shadowBlur = 0;
+  ctx.strokeStyle = 'rgba(120,53,15,.35)'; ctx.lineWidth = 1;          // fil du bois
+  for (let k = 1; k < 4; k++) { ctx.beginPath(); ctx.moveTo(x, y + k * h / 4 + Math.sin(k) * 2); ctx.bezierCurveTo(x + w / 3, y + k * h / 4 - 2, x + 2 * w / 3, y + k * h / 4 + 3, x + w, y + k * h / 4); ctx.stroke(); }
+  ctx.strokeStyle = '#451a03'; ctx.lineWidth = 1.4;                       // graduations peintes : 10 dm, 100 cm
+  for (let k = 0; k <= 100; k++) { const xx = x + k * w / 100, l = k % 10 === 0 ? h * .55 : k % 5 === 0 ? h * .38 : h * .22; ctx.beginPath(); ctx.moveTo(xx, y); ctx.lineTo(xx, y + l); ctx.stroke(); }
+  ctx.restore();
+}
+function peindreChrono(ctx, cx, cy, r, frac) {
+  ctx.save();
+  const g = ctx.createRadialGradient(cx - r * .3, cy - r * .35, r * .1, cx, cy, r); g.addColorStop(0, '#f1f5f9'); g.addColorStop(1, '#94a3b8');
+  ctx.fillStyle = '#334155'; ctx.fillRect(cx - 6, cy - r - 12, 12, 9);    // bouton
+  ctx.fillStyle = g; ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 7; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
+  ctx.fillStyle = '#f8fafc'; ctx.beginPath(); ctx.arc(cx, cy, r * .82, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#0f172a'; ctx.lineWidth = 1.2;
+  for (let k = 0; k < 60; k++) { const a = k / 60 * Math.PI * 2, l = k % 5 ? 3 : 7; ctx.beginPath(); ctx.moveTo(cx + Math.sin(a) * r * .8, cy - Math.cos(a) * r * .8); ctx.lineTo(cx + Math.sin(a) * (r * .8 - l), cy - Math.cos(a) * (r * .8 - l)); ctx.stroke(); }
+  const a = frac * Math.PI * 2; ctx.strokeStyle = '#dc2626'; ctx.lineWidth = 2.2;
+  ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.sin(a) * r * .7, cy - Math.cos(a) * r * .7); ctx.stroke();
+  ctx.fillStyle = '#0f172a'; ctx.beginPath(); ctx.arc(cx, cy, 3, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+/* ── Vue « sinusoïde » ── */
+const ROUE = { cx: 150, cy: 200, R: 95 }, PER = 2.0;                   // un tour en 2 s de scène
+const G = { x0: 330, y0: 200, w: 400, k: 95, tmax: 4.4 };
+function dessinerSinusoide(c) {
+  c.texte('Une grande roue : la hauteur de la cabine rouge au cours du temps', 14, 30, { couleur: 'cyan', taille: 17, max: 730 });
+  c.axe(G.x0, G.y0, G.x0 + G.w, G.y0, [[1 / G.tmax * PER / 1, null], [2 * PER / G.tmax, null]]);
+  c.texte('t', G.x0 + G.w + 4, G.y0 + 5, { couleur: 'jaune', taille: 16 });
+  c.axe(G.x0, G.y0 + G.k + 14, G.x0, G.y0 - G.k - 24, []);
+  c.texte('h', G.x0 - 18, G.y0 - G.k - 14, { couleur: 'jaune', taille: 16 });
+  c.repere('courbe', G.x0, G.y0 - G.k - 10, G.w, 2 * G.k + 20, 'la courbe de la hauteur h en fonction de t');
+  c.direct(() => {
+    const ang = Math.PI * 2 * S.t / PER;
+    peindreRoue(c.ctx, ROUE.cx, ROUE.cy, ROUE.R, ang);
+    c.repere('roue', ROUE.cx - ROUE.R - 12, ROUE.cy - ROUE.R - 12, 2 * ROUE.R + 24, 2 * ROUE.R + 50, 'la grande roue');
+    const xc = ROUE.cx + ROUE.R * Math.cos(ang), yc = ROUE.cy - ROUE.R * Math.sin(ang);
+    c.repere('cabine', xc - 14, yc - 4, 28, 26, 'la cabine rouge');
+    c.ligne(ROUE.cx - ROUE.R - 20, ROUE.cy, G.x0, G.y0, { couleur: 'faible', largeur: 1, pointille: [4, 6], duree: 0 });
+    if (vu('hauteur')) {
+      c.cote(xc + 22, ROUE.cy, xc + 22, yc, '', { couleur: 'jaune' });
+      c.texte('h', xc + 30, (ROUE.cy + yc) / 2 + 6, { couleur: 'jaune', taille: 17 });
+      c.repere('hauteur', xc + 10, Math.min(yc, ROUE.cy), 40, Math.abs(ROUE.cy - yc) + 4, 'la hauteur h, depuis l’axe de la roue');
+    }
+    // La courbe se trace avec le temps : la même hauteur, reportée à droite.
+    const tt = Math.min(S.t, G.tmax);
+    if (tt > 0.02) c.courbe(u => [G.x0 + u * tt / G.tmax * G.w, G.y0 - G.k * Math.sin(Math.PI * 2 * u * tt / PER)], Math.max(8, Math.round(tt * 40)), { couleur: 'rouge', largeur: 2.6, duree: 0 });
+    if (tt > 0.02) c.point(G.x0 + tt / G.tmax * G.w, G.y0 - G.k * Math.sin(ang), 4.5, 'rouge');
+    const xT = G.x0 + PER / G.tmax * G.w;
+    if (vu('un_tour')) {
+      c.cote(G.x0, G.y0 + G.k + 30, xT, G.y0 + G.k + 30, 'un tour', { couleur: 'vert', taille: 15, dessous: true });
+      c.repere('un_tour', G.x0, G.y0 + G.k + 18, xT - G.x0, 40, 'un tour : un motif');
+    }
+    if (vu('deux_tours')) {
+      c.cote(xT, G.y0 + G.k + 30, G.x0 + 2 * xT - 2 * G.x0, G.y0 + G.k + 30, 'encore un tour', { couleur: 'vert', taille: 15, dessous: true });
+      c.texte('le même dessin se répète', xT + 10, 404, { couleur: 'vert', taille: 16 });
+      c.repere('repetition', xT, G.y0 - G.k - 10, xT - G.x0, 2 * G.k + 20, 'le deuxième motif, identique au premier');
+    }
+    if (vu('sinusoide')) {
+      c.texte('sinusoïde', G.x0 + 60, G.y0 - G.k - 30, { couleur: 'jaune', taille: 20 });
+      c.repere('nom', G.x0 + 50, G.y0 - G.k - 52, 120, 30, 'le nom de la courbe : sinusoïde');
+    }
+  });
+}
+
+/* ── Vue « puissances » ── */
+function dessinerPuissances(c) {
+  c.texte('Milli et micro : couper en mille', 14, 30, { couleur: 'cyan', taille: 18 });
+  c.direct(() => {
+    const p = S.t;
+    // Ligne 1 : la règle d'un mètre.
+    const RX = 40, RY = 66, RW = 460, RH = 34;
+    if (p > 0.05) {
+      peindreRegle(c.ctx, RX, RY, RW, RH);
+      c.cote(RX, RY - 8, RX + RW, RY - 8, '1 m', { couleur: 'jaune', taille: 16 });
+      c.repere('regle', RX, RY - 26, RW, RH + 30, 'une règle d’un mètre');
+    }
+    if (vu('mille_parts')) {
+      // Loupe sur le premier centimètre : dix millimètres.
+      const LX = 540, LY = 58, LW = 200, LH = 70;
+      c.trait([[RX, RY + RH], [LX, LY + LH], [LX, LY], [RX + RW / 100, RY]], { couleur: 'faible', largeur: 1, pointille: [3, 5], duree: 0 });
+      c.rect(LX, LY, LW, LH, { couleur: 'blanc', largeur: 1.6, duree: 0 });
+      for (let k = 0; k <= 10; k++) c.ligne(LX + 10 + k * 18, LY + 8, LX + 10 + k * 18, LY + (k % 5 ? 26 : 38), { couleur: 'jaune', largeur: 1.4, duree: 0 });
+      c.cote(LX + 10, LY + 50, LX + 28, LY + 50, '1 mm', { couleur: 'vert', taille: 14, dessous: true });
+      c.texte('1 m ÷ 1000 = 1 mm', 40, 140, { couleur: 'blanc', taille: 19 });
+      c.texte('1 mm = 10⁻³ m', 290, 140, { couleur: 'vert', taille: 21 });
+      c.repere('millimetre', LX, LY, LW, LH, 'un millimètre : un mètre coupé en mille');
+      c.repere('ecriture_mm', 30, 118, 420, 30, '1 mm = 10⁻³ m');
+    }
+    if (vu('virgule')) {
+      c.texte('10⁻³ = 1 / 1000 = 0,001', 40, 182, { couleur: 'jaune', taille: 20 });
+      c.texte('1,0 → 0,001 : la virgule recule de 3 rangs', 330, 182, { couleur: 'orange', taille: 17, max: 420 });
+      c.repere('virgule', 30, 160, 720, 32, '10⁻³ = 0,001 : trois rangs pour la virgule');
+    }
+    // Ligne 2 : le chronomètre.
+    if (vu('milliseconde')) {
+      peindreChrono(c.ctx, 90, 290, 52, ((p - MOMENTS.virgule) * 0.37) % 1);
+      c.repere('chrono', 30, 226, 120, 120, 'un chronomètre');
+      const BX = 170, BY = 262, BW = 380;
+      c.rect(BX, BY, BW, 22, { couleur: 'cyan', largeur: 1.6, fond: 'cyan', fondAlpha: .1, duree: 0 });
+      c.texte('1 s', BX + BW + 8, BY + 18, { couleur: 'cyan', taille: 16 });
+      for (let k = 0; k <= 10; k++) c.ligne(BX + k * BW / 10, BY, BX + k * BW / 10, BY + 22, { couleur: 'cyan', largeur: 1, duree: 0 });
+      c.texte('1 s ÷ 1000 = 1 ms', 170, 312, { couleur: 'blanc', taille: 18 });
+      c.texte('1 ms = 10⁻³ s', 380, 312, { couleur: 'vert', taille: 20 });
+      c.repere('milliseconde', 160, 250, 420, 72, 'une milliseconde : une seconde coupée en mille');
+    }
+    if (vu('microseconde')) {
+      c.texte('1 ms ÷ 1000 = 1 µs', 170, 356, { couleur: 'blanc', taille: 18 });
+      c.texte('1 µs = 10⁻⁶ s', 380, 356, { couleur: 'rose', taille: 20 });
+      c.texte('milli : 10⁻³    micro : 10⁻⁶', 170, 398, { couleur: 'jaune', taille: 18 });
+      c.repere('microseconde', 160, 334, 420, 74, 'une microseconde : une milliseconde coupée encore en mille');
+    }
+  });
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(31); (SIN ? dessinerSinusoide : dessinerPuissances)(c); return c.fin(); });
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(DUREE, S.t + dt);
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.jusqua = null; S.running = false; $('run').textContent = 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || 'instant choisi') + '.'); pont.noter('pause'); pont.emettre();
+    return true;
+  }
+  if (S.t >= DUREE) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), SIN ? 'La hauteur de la cabine dessine une sinusoïde : le même motif à chaque tour.' : 'milli = 10⁻³ (÷ 1000) ; micro = 10⁻⁶ (÷ 1 000 000).', 'good'); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+
+function playUntil(p) {
+  const nom = p.moment in MOMENTS ? p.moment : null, cible = nom ? MOMENTS[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-3) S.t = 0;
+  S.jusqua = Math.min(DUREE, Math.max(0.01, cible)); S.motif = nom ? MOTIFS[nom] : '';
+  S.running = true; S.fait = false; $('run').textContent = 'Pause'; scene.sale = true;
+  pont.noter('play_until', { moment: nom }); pont.emettre();
+}
+function start() { S.jusqua = null; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), SIN ? 'La roue tourne…' : 'On coupe en mille…'); pont.noter('start'); pont.emettre(); }
+function pause() { if (!S.running) return; S.jusqua = null; S.running = false; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait) return start(); S.running = true; $('run').textContent = 'Pause'; pont.noter('resume'); pont.emettre(); }
+function reset() { S.t = 0; S.running = false; S.fait = false; S.jusqua = null; scene.sale = true; $('run').textContent = 'Lancer'; bulle($('feedback'), 'Prêt.'); pont.emettre(); }
+function setTime(p) { const t = +p.time_s; if (!Number.isFinite(t)) return; S.running = false; S.jusqua = null; S.t = Math.min(DUREE, Math.max(0, t)); S.fait = S.t >= DUREE; scene.sale = true; pont.emettre(); }
+function setParameters() { scene.sale = true; pont.emettre(); }
+$('run').onclick = () => (S.running ? pause() : (S.t > 0 && !S.fait) ? resume() : start());
+
+function ceQuiSeVoit() {
+  const faits = Object.keys(MOMENTS).filter(vu);
+  if (SIN) {
+    const m = [`Une grande roue peinte tourne (un tour en ${fr(PER)} s de scène) ; la cabine rouge est suivie. À droite, la courbe de sa hauteur h en fonction de t, à la craie rouge.`];
+    if (!faits.length) m.push('La roue n’a pas encore tourné.');
+    if (vu('hauteur')) m.push('Cote jaune : la hauteur h de la cabine, depuis l’axe.');
+    if (vu('un_tour')) m.push('Un tour : la courbe a monté, est descendue en bas et est revenue (cote verte « un tour »).');
+    if (vu('deux_tours')) m.push('Deuxième tour : le même dessin se répète (écrit « le même dessin se répète »).');
+    if (vu('sinusoide')) m.push('Écrit en jaune : « sinusoïde ».');
+    return m.join(' ');
+  }
+  const m = ['Tableau « Milli et micro : couper en mille ».'];
+  if (S.t > 0.05) m.push('Une règle en bois d’un mètre, peinte, cote « 1 m ».');
+  if (vu('mille_parts')) m.push('Loupe sur le début de la règle : des millimètres ; écrit « 1 m ÷ 1000 = 1 mm » et « 1 mm = 10⁻³ m ».');
+  if (vu('virgule')) m.push('Écrit : « 10⁻³ = 1 / 1000 = 0,001 », la virgule recule de 3 rangs.');
+  if (vu('milliseconde')) m.push('Un chronomètre ; une barre d’une seconde coupée ; écrit « 1 s ÷ 1000 = 1 ms » et « 1 ms = 10⁻³ s ».');
+  if (vu('microseconde')) m.push('Écrit « 1 ms ÷ 1000 = 1 µs », « 1 µs = 10⁻⁶ s » et « milli : 10⁻³, micro : 10⁻⁶ ».');
+  return m.join(' ');
+}
+window.Tableau.explication({ [vue]: SIN
+  ? [{ repere: 'roue', texte: 'La roue tourne toujours à la même vitesse.' }, { repere: 'hauteur', texte: 'On suit la hauteur de la cabine rouge.' }, { repere: 'courbe', texte: 'Reportée en fonction du temps, elle dessine une sinusoïde.' }, { repere: 'repetition', texte: 'À chaque tour, le même dessin.' }]
+  : [{ repere: 'millimetre', texte: 'Un mètre coupé en mille : un millimètre, 10⁻³ m.' }, { repere: 'virgule', texte: '10⁻³ = 0,001.' }, { repere: 'milliseconde', texte: 'Une seconde coupée en mille : une milliseconde.' }, { repere: 'microseconde', texte: 'Encore en mille : une microseconde, 10⁻⁶ s.' }] });
+const commandes = ['start', 'pause', 'resume', 'reset', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'ondes_periodiques_rappels', version: '1.0', title: 'Rappels — ' + vue, variants: VUES.map(v => ({ id: v, label: v })), commands: commandes,
+  command_schema: { play_until: { moment: Object.keys(MOMENTS).join(' | ') + ' (rejoue et se fige à cet instant clé)' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: SIN ? 'Rappel : la hauteur de la cabine d’une grande roue en fonction du temps dessine une sinusoïde, le même motif à chaque tour.' : 'Rappel : milli = 10⁻³ (un millième), micro = 10⁻⁶ (un millionième) ; 1 mm = 10⁻³ m, 1 ms = 10⁻³ s, 1 µs = 10⁻⁶ s.',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : (S.t > 0 ? 'paused' : 'idle'), ce_qui_se_voit: ceQuiSeVoit(), current_variant: vue, moments: MOMENTS, time_s: +S.t.toFixed(2) }),
+  progression: () => S.t / DUREE,
+  executer: (cmd, p) => ({ start, pause, resume, reset, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), SIN ? 'Lance la roue et suis la cabine rouge.' : 'Lance : on coupe en mille.');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rappels du chapitre — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="radio.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Rappels à la craie : l'exponentielle qui décroît, ln qui enlève e, les puissances de dix, la mole"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Rappels enseignés dès zéro (audit « rythme et départ de zéro », 14 novembre 2026, règle 34) :
+ * chaque notion dite deux fois, de deux façons — une écriture à la craie, puis un objet réel peint.
+ *  ?vue=exp        e⁰ = 1, e^(−x) diminue sans jamais atteindre 0 (courbe, point qu'on glisse) ; puis un verre
+ *                  d'eau qui perd la moitié de ce qui reste à chaque minute (même idée, vue autrement).
+ *  ?vue=ln         deux machines peintes : x → [e] → eˣ → [ln] → x (ln enlève e) ; puis la calculatrice : ln(0,5) = −0,693.
+ *  ?vue=puissances 10ⁿ = 1 suivi de n zéros ; puis la virgule qui saute : 1,19·10⁷ = 11 900 000 ; 10⁻³ = 0,001.
+ *  ?vue=mole       une boîte de 12 œufs (une douzaine = un paquet) ; puis 12 g de charbon = 1 mol = 6,02·10²³ atomes ;
+ *                  n = m/M et N = n·N_A (m réglable : set_parameters {m_g}).
+ * Commandes : start, reset, pause, resume, set_time, play_until {moment}, set_parameters {vue, x, m_g}.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lisse = u => { u = clamp(u, 0, 1); return u * u * (3 - 2 * u); };
+const VUES = ['exp', 'ln', 'puissances', 'mole'];
+const SUITES = {
+  exp: [['axes', 1.0, 'les axes'], ['zero', 3.0, 'e⁰ = 1 : la courbe part de 1'], ['decroit', 6.0, 'quand x augmente, e^(−x) diminue'],
+    ['jamais_zero', 8.5, 'elle s’approche de 0 sans jamais l’atteindre'], ['verre', 10.0, 'le verre d’eau plein'],
+    ['moitie_1', 12.0, 'après une minute : la moitié'], ['moitie_2', 14.0, 'encore la moitié de ce qui reste : un quart'],
+    ['moitie_3', 16.0, 'un huitième : jamais vide'], ['fin', 17.0, 'fin']],
+  ln: [['machines', 1.2, 'deux machines : e et ln'], ['entree', 3.0, 'le nombre x entre dans la machine e'], ['apres_e', 5.5, 'il sort eˣ'],
+    ['apres_ln', 8.5, 'eˣ entre dans ln : x ressort, ln enlève e'], ['calculatrice', 11.0, 'la calculatrice : ln(0,5)'],
+    ['ln_demi', 13.0, 'ln(1/2) = −ln2 ≈ −0,693'], ['fin', 14.0, 'fin']],
+  puissances: [['zeros', 3.0, '10¹, 10², 10³ : 1 suivi de n zéros'], ['grand', 5.0, 'un grand nombre : 1,19·10⁷'],
+    ['virgule', 9.0, 'la virgule saute 7 rangs vers la droite : 11 900 000'], ['negatif', 12.0, '10⁻³ : la virgule va à gauche, 0,001'],
+    ['petit', 14.5, 'un petit nombre : 2·10⁻⁶ = 0,000 002'], ['fin', 15.5, 'fin']],
+  mole: [['douzaine', 2.5, 'une boîte de 12 œufs : une douzaine'], ['mole', 6.0, '12 g de charbon : une mole d’atomes, 6,02·10²³'],
+    ['quantite', 9.0, 'n = m/M'], ['nombre', 12.0, 'N = n·N_A'], ['fin', 13.0, 'fin']],
+};
+const q = new URLSearchParams(location.search);
+const S = { vue: VUES.includes(q.get('vue')) ? q.get('vue') : 'exp', t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0,
+  x: 1.2, xLn: 3, m: 24 };
+let SUITE = SUITES[S.vue], M = {}, FIN = 0;
+function calculer() { SUITE = SUITES[S.vue]; M = {}; for (const [n, t] of SUITE) M[n] = t; FIN = M.fin; }
+calculer();
+
+/* ── Écriture liée au temps de la scène (comme datation.html) ── */
+function ecrit(c, t0, fn) { const t = c.t, cur = c.cur; c.t = S.fait ? Infinity : S.t; c.cur = t0; try { fn(); } finally { c.t = t; c.cur = cur; } }
+function quand(c, nom, dur, fn) { if (S.fait || S.t >= M[nom] - dur) ecrit(c, M[nom] - dur, fn); }
+const vu = nom => S.fait || S.t >= M[nom] - 1e-6;
+
+/* ── Peinture d'objets réels (règle 32) ── */
+function verre(ctx, x, y, w, h, niveau) {
+  // eau
+  const hy = y + h - h * 0.92 * niveau;
+  if (niveau > 0.001) {
+    const g = ctx.createLinearGradient(x, hy, x, y + h);
+    g.addColorStop(0, 'rgba(96,165,250,.85)'); g.addColorStop(1, 'rgba(29,78,216,.9)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(x + 4, hy); ctx.lineTo(x + w - 4, hy); ctx.lineTo(x + w - 8, y + h - 3); ctx.lineTo(x + 8, y + h - 3); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(191,219,254,.7)'; ctx.fillRect(x + 5, hy - 1.5, w - 10, 3);
+  }
+  // le verre
+  const v = ctx.createLinearGradient(x, 0, x + w, 0);
+  v.addColorStop(0, 'rgba(255,255,255,.35)'); v.addColorStop(.2, 'rgba(255,255,255,.08)'); v.addColorStop(.8, 'rgba(255,255,255,.05)'); v.addColorStop(1, 'rgba(255,255,255,.3)');
+  ctx.fillStyle = v; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w - 6, y + h); ctx.lineTo(x + 6, y + h); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(226,232,240,.75)'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x + 9, y + 8); ctx.lineTo(x + 12, y + h - 10); ctx.stroke();
+}
+function boite(ctx, x, y, w, h, teinte) {
+  const g = ctx.createLinearGradient(x, y, x, y + h);
+  g.addColorStop(0, teinte[0]); g.addColorStop(1, teinte[1]);
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(x + 6, y + 6, w, h);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 10); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.fillStyle = 'rgba(15,23,42,.8)'; ctx.fillRect(x - 6, y + h / 2 - 9, 8, 18); ctx.fillRect(x + w - 2, y + h / 2 - 9, 8, 18);   // entrée / sortie
+}
+function jeton(ctx, x, y, r) {
+  const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r);
+  g.addColorStop(0, '#fef3c7'); g.addColorStop(.55, '#f59e0b'); g.addColorStop(1, '#92400e');
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(x + 3, y + r + 3, r * .9, 4, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(120,53,15,.8)'; ctx.lineWidth = 1.5; ctx.stroke();
+}
+function calculatrice(ctx, x, y) {
+  const g = ctx.createLinearGradient(x, y, x, y + 190); g.addColorStop(0, '#475569'); g.addColorStop(1, '#1e293b');
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.roundRect(x + 6, y + 6, 130, 190, 12); ctx.fill();
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, 130, 190, 12); ctx.fill();
+  const e = ctx.createLinearGradient(x, y + 14, x, y + 54); e.addColorStop(0, '#d9f99d'); e.addColorStop(1, '#a3e635');
+  ctx.fillStyle = e; ctx.fillRect(x + 12, y + 14, 106, 40);
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) {
+    const bx = x + 14 + j * 36, by = y + 68 + i * 29;
+    const b = ctx.createLinearGradient(bx, by, bx, by + 22); b.addColorStop(0, '#94a3b8'); b.addColorStop(1, '#64748b');
+    ctx.fillStyle = b; ctx.beginPath(); ctx.roundRect(bx, by, 30, 22, 5); ctx.fill();
+  }
+}
+function oeuf(ctx, x, y) {
+  const g = ctx.createRadialGradient(x - 5, y - 7, 2, x, y, 15);
+  g.addColorStop(0, '#fffbeb'); g.addColorStop(.6, '#fde68a'); g.addColorStop(1, '#b45309');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x, y, 11, 14, 0, 0, Math.PI * 2); ctx.fill();
+}
+function carton(ctx, x, y) {
+  const g = ctx.createLinearGradient(x, y, x, y + 70); g.addColorStop(0, '#a8a29e'); g.addColorStop(1, '#78716c');
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(x + 5, y + 5, 236, 70);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, 236, 70, 8); ctx.fill();
+  for (let i = 0; i < 6; i++) for (let j = 0; j < 2; j++) { ctx.fillStyle = 'rgba(68,64,60,.6)'; ctx.beginPath(); ctx.arc(x + 22 + i * 38, y + 19 + j * 32, 14, 0, 7); ctx.fill(); }
+}
+function charbon(ctx, x, y, n) {
+  // un petit tas de morceaux de charbon (carbone) sur une coupelle
+  const c = ctx.createLinearGradient(x - 70, y, x + 70, y + 16); c.addColorStop(0, '#cbd5e1'); c.addColorStop(1, '#64748b');
+  ctx.fillStyle = c; ctx.beginPath(); ctx.ellipse(x, y + 8, 78, 13, 0, 0, Math.PI * 2); ctx.fill();
+  let s = 7; const r = () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
+  for (let k = 0; k < n; k++) {
+    const a = r() * Math.PI, d = r(), px = x + Math.cos(a) * 58 * d * (r() > .5 ? 1 : -1), py = y - 4 - (1 - d) * 26 * r();
+    const g = ctx.createRadialGradient(px - 3, py - 3, 1, px, py, 9);
+    g.addColorStop(0, '#6b7280'); g.addColorStop(.5, '#1f2937'); g.addColorStop(1, '#030712');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(px - 9, py); ctx.lineTo(px - 3, py - 8); ctx.lineTo(px + 8, py - 5); ctx.lineTo(px + 9, py + 4); ctx.lineTo(px - 2, py + 7); ctx.closePath(); ctx.fill();
+  }
+}
+
+/* ── Vue exp ── */
+const EX = { ox: 60, oy: 330, l: 300, h: 220, xmax: 4 };
+const ePX = x => EX.ox + x / EX.xmax * EX.l, ePY = y => EX.oy - y * EX.h;
+function dessinerExp(c) {
+  c.texte('L’exponentielle qui décroît', 16, 26, { couleur: 'cyan', taille: 18 });
+  quand(c, 'axes', 1.0, () => {
+    c.axe(EX.ox, EX.oy, EX.ox + EX.l + 20, EX.oy, [[.25, '1'], [.5, '2'], [.75, '3'], [1, '4']]);
+    c.axe(EX.ox, EX.oy, EX.ox, EX.oy - EX.h - 30, [[EX.h / (EX.h + 30), '1']], { vertical: true });
+    c.texte('x', EX.ox + EX.l + 26, EX.oy + 4, { couleur: 'jaune', taille: 15 });
+    c.texte('e^(−x)', EX.ox + 8, EX.oy - EX.h - 30, { couleur: 'jaune', taille: 15 });
+  });
+  c.repere('courbe', EX.ox, EX.oy - EX.h - 10, EX.l, EX.h + 10, 'la courbe de e^(−x)');
+  quand(c, 'zero', 1.4, () => {
+    c.point(ePX(0), ePY(1), 5, 'jaune');
+    c.texte('e⁰ = 1', ePX(0) + 16, ePY(1) + 20, { couleur: 'jaune', taille: 18 });
+  });
+  c.repere('e_zero', ePX(0) - 10, ePY(1) - 10, 100, 40, 'e⁰ = 1');
+  quand(c, 'decroit', 2.6, () => {
+    c.courbe(u => [ePX(u * EX.xmax), ePY(Math.exp(-u * EX.xmax))], 80, { couleur: 'blanc', largeur: 2.4, duree: 2.2 });
+    c.texte('x augmente → e^(−x) diminue', ePX(1.3), ePY(.62), { couleur: 'vert', taille: 16 });
+  });
+  quand(c, 'jamais_zero', 1.6, () => {
+    c.ligne(EX.ox, ePY(0) - 3, ePX(4), ePY(0) - 3, { couleur: 'rose', largeur: 1.2, pointille: [4, 5] });
+    c.texte('elle s’approche de 0, sans jamais y arriver', ePX(.4), EX.oy + 42, { couleur: 'rose', taille: 16, max: 330 });
+  });
+  c.repere('jamais_zero', EX.ox, EX.oy + 20, 340, 30, 'jamais zéro');
+  if (vu('decroit')) c.direct(() => {   // le point qu'on glisse
+    const X = S.x, Y = Math.exp(-X);
+    c.ligne(ePX(X), EX.oy, ePX(X), ePY(Y), { couleur: 'faible', largeur: 1.2, pointille: [3, 4] });
+    c.point(ePX(X), ePY(Y), 6, 'orange');
+    c.texte(`x = ${fr(X, 1)} → e^(−x) = ${fr(Y, 3)}`, ePX(X) + 10, ePY(Y) - 12, { couleur: 'orange', taille: 15, max: 220 });
+    c.texte('⇠ glisse le point ⇢', ePX(X), EX.oy + 20, { couleur: 'faible', taille: 13, align: 'center' });
+  });
+  c.repere('point', ePX(S.x) - 14, ePY(Math.exp(-S.x)) - 14, 28, 28, 'le point qu’on glisse');
+  // Deuxième façon : le verre qui perd la moitié de ce qui reste.
+  quand(c, 'verre', 1.2, () => {
+    c.texte('Autrement : un verre qui perd', 430, 70, { couleur: 'cyan', taille: 16 });
+    c.texte('la moitié de ce qui reste, chaque minute', 430, 92, { couleur: 'cyan', taille: 16, max: 320 });
+  });
+  const k = (vu('moitie_3') ? 3 : vu('moitie_2') ? 2 : vu('moitie_1') ? 1 : 0);
+  if (vu('verre')) {
+    const prog = k < 3 ? lisse((S.t - (M['moitie_' + (k + 1)] - 1.4)) / 1.2) : 0;
+    const niveau = 0.5 ** k * (1 - prog * 0.5);
+    c.direct(() => verre(c.ctx, 470, 130, 110, 190, S.fait ? 0.125 : niveau));
+  }
+  c.repere('verre', 460, 120, 130, 210, 'le verre d’eau');
+  const lignes = [['moitie_1', '1 min : 1/2'], ['moitie_2', '2 min : 1/4'], ['moitie_3', '3 min : 1/8 … jamais vide']];
+  quand(c, 'verre', .6, () => c.texte('0 min : plein', 600, 160, { couleur: 'blanc', taille: 15 }));
+  lignes.forEach(([n, s], i) => quand(c, n, .8, () => c.texte(s, 600, 192 + 32 * i, { couleur: i === 2 ? 'vert' : 'blanc', taille: 15, max: 150 })));
+}
+
+/* ── Vue ln ── */
+function dessinerLn(c) {
+  c.texte('ln enlève e', 16, 26, { couleur: 'cyan', taille: 18 });
+  const BE = { x: 210, y: 90, w: 110, h: 80 }, BL = { x: 470, y: 90, w: 110, h: 80 }, Y = 130;
+  if (vu('machines')) c.direct(() => { boite(c.ctx, BE.x, BE.y, BE.w, BE.h, ['#0e7490', '#164e63']); boite(c.ctx, BL.x, BL.y, BL.w, BL.h, ['#7c2d12', '#431407']); });
+  quand(c, 'machines', 1.0, () => {
+    c.texte('e', BE.x + BE.w / 2, Y + 10, { couleur: 'blanc', taille: 34, align: 'center' });
+    c.texte('ln', BL.x + BL.w / 2, Y + 10, { couleur: 'blanc', taille: 34, align: 'center' });
+  });
+  c.repere('machine_e', BE.x, BE.y, BE.w, BE.h, 'la machine e');
+  c.repere('machine_ln', BL.x, BL.y, BL.w, BL.h, 'la machine ln');
+  const x = S.xLn, ex = Math.exp(x);
+  // le jeton voyage : entrée → e → milieu → ln → sortie
+  if (S.fait || S.t >= M.entree - 1.6) {
+    const p = S.t;
+    let jx;
+    if (p < M.entree) jx = 70 + (BE.x - 70) * lisse((p - (M.entree - 1.6)) / 1.4);
+    else if (p < M.apres_e) jx = BE.x + BE.w / 2 + (BE.w / 2 + 70) * lisse((p - (M.apres_e - 1.8)) / 1.6);
+    else if (p < M.apres_ln) jx = 390 + (BL.x + BL.w / 2 - 390 + BL.w / 2 + 80) * lisse((p - (M.apres_ln - 2.2)) / 2.0);
+    else jx = BL.x + BL.w + 80;
+    if (S.fait) jx = BL.x + BL.w + 80;
+    const cache = (jx > BE.x + 8 && jx < BE.x + BE.w - 8) || (jx > BL.x + 8 && jx < BL.x + BL.w - 8);
+    const lib = jx < BE.x + BE.w / 2 ? fr(x, 0) : jx < BL.x + BL.w / 2 ? `e^${fr(x, 0)}` : fr(x, 0);
+    if (!cache) c.direct(() => { jeton(c.ctx, jx, Y, 26); c.texte(lib, jx, Y + 6, { couleur: '#451a03', taille: 17, align: 'center' }); });
+  }
+  quand(c, 'entree', 1.0, () => c.texte(`x = ${fr(x, 0)}`, 70, Y + 60, { couleur: 'jaune', taille: 18, align: 'center' }));
+  quand(c, 'apres_e', 1.0, () => c.texte(`eˣ = e^${fr(x, 0)} ≈ ${fr(ex, 1)}`, 390, Y + 60, { couleur: 'jaune', taille: 18, align: 'center' }));
+  quand(c, 'apres_ln', 1.4, () => {
+    c.texte(`ln(e^${fr(x, 0)}) = ${fr(x, 0)}`, BL.x + BL.w + 80, Y + 60, { couleur: 'vert', taille: 18, align: 'center' });
+    c.texte('ln(eˣ) = x : ln enlève e, on retrouve x', 210, 250, { couleur: 'vert', taille: 22 });
+  });
+  c.repere('regle', 200, 225, 420, 36, 'ln(eˣ) = x');
+  // deuxième façon : la calculatrice
+  if (vu('calculatrice')) c.direct(() => calculatrice(c.ctx, 60, 216));
+  quand(c, 'calculatrice', 1.2, () => {
+    c.texte('ln(0,5)', 76, 246, { couleur: '#1a2e05', taille: 16 });
+    c.texte('−0,693', 166, 266, { couleur: '#1a2e05', taille: 18, align: 'right' });
+  });
+  c.repere('calculatrice', 60, 216, 130, 190, 'la calculatrice');
+  quand(c, 'ln_demi', 1.6, () => {
+    c.texte('ln(1/2) = −ln2', 230, 320, { couleur: 'jaune', taille: 24 });
+    c.texte('ln2 ≈ 0,693', 230, 358, { couleur: 'jaune', taille: 22 });
+  });
+  c.repere('ln_demi', 220, 296, 300, 72, 'ln(1/2) = −ln2 ≈ −0,693');
+}
+
+/* ── Vue puissances ── */
+function dessinerPuissances(c) {
+  c.texte('Les puissances de dix', 16, 26, { couleur: 'cyan', taille: 18 });
+  quand(c, 'zeros', 2.6, () => {
+    [['10¹ = 10', 1], ['10² = 100', 2], ['10³ = 1 000', 3], ['10⁶ = 1 000 000', 6]].forEach(([s, n], i) => {
+      c.texte(s, 40, 74 + i * 32, { couleur: 'blanc', taille: 20 });
+      c.texte(`${n} zéro${n > 1 ? 's' : ''}`, 260, 74 + i * 32, { couleur: 'faible', taille: 15 });
+    });
+  });
+  c.repere('zeros', 30, 50, 300, 130, '1 suivi de n zéros');
+  quand(c, 'grand', 1.2, () => c.texte('1,19·10⁷ secondes = ?', 400, 74, { couleur: 'jaune', taille: 20 }));
+  // la virgule qui saute 7 rangs : 1,19 → 11 900 000
+  const chif = ['1', '1', '9', '0', '0', '0', '0', '0'], X0 = 410, PAS = 34, YV = 140;
+  if (vu('grand')) {
+    const sauts = S.fait ? 7 : clamp(Math.floor((S.t - (M.virgule - 3.6)) / 0.5), 0, 7);
+    c.direct(() => {
+      const n = vu('virgule') ? 8 : 3;
+      for (let i = 0; i < n; i++) c.texte(chif[i], X0 + i * PAS, YV, { couleur: 'blanc', taille: 30, align: 'center' });
+      const pos = 1 + sauts, vx = X0 + (pos - .5) * PAS;
+      c.texte(',', vx, YV + 4, { couleur: 'orange', taille: 34, align: 'center' });
+      for (let k = 0; k < sauts; k++) {
+        const a = X0 + (k + .5) * PAS, b = a + PAS;
+        c.courbe(u => [a + (b - a) * u, YV + 16 + 14 * Math.sin(Math.PI * u)], 12, { couleur: 'orange', largeur: 1.4 });
+      }
+      if (sauts > 0) c.texte(`${sauts} saut${sauts > 1 ? 's' : ''}`, X0 + 4 * PAS, YV + 56, { couleur: 'orange', taille: 15, align: 'center' });
+    });
+  }
+  c.repere('virgule', X0 - 20, YV - 34, 8 * PAS + 30, 100, 'la virgule qui saute');
+  quand(c, 'virgule', 1.0, () => c.texte('= 11 900 000 s', 400, 230, { couleur: 'vert', taille: 22 }));
+  quand(c, 'negatif', 2.2, () => {
+    c.texte('Puissance négative : la virgule va à gauche', 40, 290, { couleur: 'cyan', taille: 17, max: 420 });
+    c.texte('10⁻³ = 0,001 = 1/1 000', 40, 326, { couleur: 'blanc', taille: 21 });
+  });
+  c.repere('negatif', 30, 270, 440, 66, '10⁻³ = 0,001');
+  quand(c, 'petit', 1.6, () => c.texte('2·10⁻⁶ g = 0,000 002 g', 40, 370, { couleur: 'jaune', taille: 21 }));
+  c.repere('petit', 30, 348, 340, 32, '2·10⁻⁶ = 0,000 002');
+}
+
+/* ── Vue mole ── */
+const NA = 6.02e23;
+const sci = v => { const e = Math.floor(Math.log10(v)); return `${fr(v / 10 ** e, 2)}·10${String(e).split('').map(ch => '⁰¹²³⁴⁵⁶⁷⁸⁹'['0123456789'.indexOf(ch)] || ch).join('')}`; };
+function dessinerMole(c) {
+  c.texte('La mole : un paquet', 16, 26, { couleur: 'cyan', taille: 18 });
+  if (vu('douzaine')) c.direct(() => {
+    carton(c.ctx, 30, 70);
+    for (let i = 0; i < 6; i++) for (let j = 0; j < 2; j++) oeuf(c.ctx, 30 + 22 + i * 38, 70 + 17 + j * 32);
+  });
+  quand(c, 'douzaine', 1.4, () => {
+    c.texte('1 douzaine = 12 œufs', 40, 176, { couleur: 'jaune', taille: 20 });
+    c.texte('on compte par paquets', 40, 202, { couleur: 'faible', taille: 15 });
+  });
+  c.repere('douzaine', 26, 64, 250, 150, 'une douzaine : un paquet de 12');
+  if (vu('mole')) c.direct(() => charbon(c.ctx, 520, 130, 26));
+  quand(c, 'mole', 2.0, () => {
+    c.texte('12 g de carbone', 520, 70, { couleur: 'blanc', taille: 18, align: 'center' });
+    c.texte('1 mole = 6,02·10²³ atomes', 520, 182, { couleur: 'jaune', taille: 20, align: 'center' });
+    c.texte('N_A = 6,02·10²³ mol⁻¹ : nombre d’Avogadro', 520, 208, { couleur: 'faible', taille: 15, align: 'center', max: 330 });
+  });
+  c.repere('mole', 420, 50, 200, 170, 'une mole : 6,02·10²³');
+  const n = S.m / 12, N = n * NA;
+  quand(c, 'quantite', 1.6, () => {
+    c.texte('n = m / M', 40, 270, { couleur: 'blanc', taille: 24 });
+    c.texte('M = 12 g/mol : la masse d’une mole', 190, 270, { couleur: 'faible', taille: 15, max: 300 });
+  });
+  if (vu('quantite')) c.direct(() => c.texte(`m = ${fr(S.m, 0)} g → n = ${fr(S.m, 0)}/12 = ${fr(n, 2)} mol`, 40, 304, { couleur: 'orange', taille: 19, max: 470 }));
+  c.repere('quantite', 30, 246, 480, 66, 'n = m/M');
+  quand(c, 'nombre', 1.6, () => c.texte('N = n · N_A', 40, 352, { couleur: 'blanc', taille: 24 }));
+  if (vu('nombre')) c.direct(() => c.texte(`N = ${fr(n, 2)} × 6,02·10²³ = ${sci(N)} atomes`, 40, 388, { couleur: 'vert', taille: 19, max: 520 }));
+  c.repere('nombre', 30, 328, 540, 70, 'N = n·N_A');
+}
+
+function dessiner(c) {
+  ({ exp: dessinerExp, ln: dessinerLn, puissances: dessinerPuissances, mole: dessinerMole })[S.vue](c);
+}
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(23); dessiner(c); return c.fin(); });
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(FIN, S.t + dt);
+  if (S.jusqua != null && S.t >= S.jusqua && S.jusqua < FIN) {
+    S.t = S.jusqua; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 1)} s`) + '.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre();
+    return true;
+  }
+  if (S.t >= FIN) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), FINS[S.vue], 'good'); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+const FINS = { exp: 'e⁰ = 1, puis e^(−x) diminue sans jamais atteindre 0. Glisse le point.', ln: 'ln(eˣ) = x : ln enlève e. ln(1/2) = −ln2 ≈ −0,693.',
+  puissances: '10ⁿ : 1 suivi de n zéros ; la virgule saute de n rangs.', mole: 'Une mole = 6,02·10²³ entités ; n = m/M ; N = n·N_A.' };
+
+/* ── Ce que voit le tuteur ── */
+function phase() { let d = null; for (const [n, t, m] of SUITE) if (S.t >= t - 1e-6) d = m; return S.fait ? 'tout est écrit' : d || 'rien encore'; }
+function ceQuiSeVoit() {
+  const etat = S.running ? 'la scène se déroule' : S.fait ? 'fin' : S.t > 0 ? 'scène arrêtée' : 'pas encore lancée';
+  const m = [`Vue « ${S.vue} » (${etat}). Dernière étape : ${phase()}.`];
+  const e = SUITE.filter(([n]) => n !== 'fin' && vu(n)).map(([, , d]) => d);
+  if (e.length) m.push('Déjà montré : ' + e.join(' ; ') + '.');
+  if (S.vue === 'exp' && vu('decroit')) m.push(`Point orange à x = ${fr(S.x, 1)}, e^(−x) = ${fr(Math.exp(-S.x), 3)}.`);
+  if (S.vue === 'exp' && vu('verre')) m.push('À droite, un verre d’eau peint dont le niveau baisse de moitié à chaque minute.');
+  if (S.vue === 'ln' && vu('entree')) m.push(`Un jeton doré portant x = ${fr(S.xLn, 0)} traverse la machine e (bleue) puis la machine ln (brune).`);
+  if (S.vue === 'mole' && vu('quantite')) m.push(`m = ${fr(S.m, 0)} g de carbone : n = ${fr(S.m / 12, 2)} mol, N = ${sci(S.m / 12 * NA)}.`);
+  return m.join(' ');
+}
+
+/* ── Commandes ── */
+function playUntil(p) {
+  const nom = p && p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-4) S.t = 0;
+  S.jusqua = Math.min(FIN, Math.max(.001, cible)); S.motif = nom ? SUITE.find(s => s[0] === nom)[2] : '';
+  S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+function start() { S.jusqua = null; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('start', params()); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait || S.t >= FIN) return start(); S.running = true; $('run').textContent = 'Pause'; pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  const t = +p.time_s; if (!Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = clamp(t, 0, FIN); S.fait = S.t >= FIN; scene.sale = true;
+  $('run').textContent = S.fait ? 'Rejouer' : 'Reprendre'; pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function params() { return { vue: S.vue, x: S.x, x_ln: S.xLn, m_g: S.m }; }
+function setParameters(p) {
+  p = p || {};
+  if (VUES.includes(p.vue) && p.vue !== S.vue) { S.vue = p.vue; calculer(); scene.reecrire(); start(); }
+  if (Number.isFinite(+p.x) && p.x !== null && p.x !== '') S.x = clamp(+p.x, 0, 4);
+  if (Number.isFinite(+p.x_ln) && p.x_ln !== null && p.x_ln !== '') S.xLn = clamp(Math.round(+p.x_ln), -3, 3);
+  if (Number.isFinite(+p.m_g) && p.m_g !== null && p.m_g !== '') S.m = clamp(Math.round(+p.m_g), 1, 120);
+  scene.sale = true; pont.noter('set_parameters', params()); pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : (S.t > 0 && S.t < FIN && !S.fait ? resume() : start()));
+// Vue exp : le point qu'on glisse le long de la courbe.
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => { if (S.vue !== 'exp' || !vu('decroit')) return null; const [x, y] = scene.local(px, py); return Math.hypot(x - ePX(S.x), y - ePY(Math.exp(-S.x))) < 24 || (y > EX.oy && y < EX.oy + 30 && x > EX.ox && x < EX.ox + EX.l) ? 'x' : null; },
+  bouger: (id, px, py) => { const [x] = scene.local(px, py); S.x = Math.round(clamp((x - EX.ox) / EX.l * EX.xmax, 0, 4) * 10) / 10; scene.sale = true; },
+  lacher: () => { bulle($('feedback'), `x = ${fr(S.x, 1)} : e^(−x) = ${fr(Math.exp(-S.x), 3)}.`); pont.noter('set_parameters', params()); pont.emettre(); },
+});
+window.Tableau.explication({
+  exp: [{ repere: 'e_zero', texte: 'e⁰ = 1 : la courbe part de 1.' }, { repere: 'courbe', texte: 'Quand x augmente, e^(−x) diminue.' },
+    { repere: 'jamais_zero', texte: 'Elle s’approche de 0 sans jamais l’atteindre.' }, { repere: 'verre', texte: 'Comme un verre qui perd la moitié de ce qui reste chaque minute.' }],
+  ln: [{ repere: 'machine_e', texte: 'x entre dans e : il sort eˣ.' }, { repere: 'machine_ln', texte: 'eˣ entre dans ln : x ressort.' },
+    { repere: 'regle', texte: 'ln(eˣ) = x : ln enlève e.' }, { repere: 'ln_demi', texte: 'ln(1/2) = −ln2 ≈ −0,693.' }],
+  puissances: [{ repere: 'zeros', texte: '10ⁿ : 1 suivi de n zéros.' }, { repere: 'virgule', texte: '× 10⁷ : la virgule saute 7 rangs à droite.' }, { repere: 'negatif', texte: '10⁻³ : la virgule va à gauche.' }],
+  mole: [{ repere: 'douzaine', texte: 'Une douzaine : un paquet de 12.' }, { repere: 'mole', texte: 'Une mole : un paquet de 6,02·10²³.' },
+    { repere: 'quantite', texte: 'n = m/M.' }, { repere: 'nombre', texte: 'N = n·N_A.' }],
+});
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'radioactivite_rappels', version: '1.0', title: 'Rappels : exponentielle, ln, puissances de dix, la mole', variants: VUES.map(id => ({ id, label: id })), commands: commandes,
+  command_schema: {
+    set_parameters: { vue: VUES.join(' | '), x: '0..4 (vue exp : le point sur la courbe)', x_ln: '−3..3 entier (vue ln : le nombre qui traverse les machines)', m_g: '1..120 (vue mole : masse de carbone en g)' },
+    set_time: { time_s: 'instant de la scène, s' },
+    play_until: { moment: Object.entries(SUITES).map(([v, s]) => v + ' : ' + s.map(x => x[0]).join(' | ')).join(' ; ') + ' (rejoue et se fige)', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Rappels enseignés dès zéro : e⁰ = 1 et e^(−x) décroît sans atteindre 0 (comme un verre qui perd la moitié de ce qui reste) ; ln(eˣ) = x, ln(1/2) = −ln2 ≈ −0,693 ; 10ⁿ = 1 suivi de n zéros, 1,19·10⁷ = 11 900 000, 10⁻³ = 0,001 ; une mole = 6,02·10²³ entités (comme une douzaine = 12), n = m/M, N = n·N_A.',
+  etat: () => ({ simulation_status: S.running ? 'running' : (S.fait ? 'finished' : (S.t > 0 ? 'paused' : 'idle')), ce_qui_se_voit: ceQuiSeVoit(), current_variant: S.vue,
+    time_s: +S.t.toFixed(2), parameters: params(), moments: { ...M } }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Observe…');
+setTimeout(() => { if (!S.running && S.t === 0) start(); }, 1600);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

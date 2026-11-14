@@ -30,6 +30,7 @@
     const demandee = new URLSearchParams(location.search).get('vue');
     const P = {};
     for (const [n, d] of Object.entries(def.parametres || {})) P[n] = d.defaut;
+    if (def.auDepart) def.auDepart(P);   // optionnel (14 novembre 2026) : une page lit ses réglages de départ (ex. ?conclusions=false)
     const S = { vue: noms.includes(demandee) ? demandee : noms[0], t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0, vu: {}, P };
     const V = () => def.vues[S.vue];
     let scene = null;
@@ -75,6 +76,7 @@
         if (P[n] !== v) { P[n] = v; cles.push(n); }
       }
       if (def.apresReglage) def.apresReglage(k(), cles);
+      if (def.auReglage) def.auReglage(P, cles);
       scene.sale = true;
       return cles;
     }
@@ -143,7 +145,9 @@
       progression: () => (S.fait ? 1 : Math.min(1, S.t / FIN())),
       executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
     bulle($('feedback'), (V().titre || def.titre) + '…');
-    setTimeout(() => { if (!S.running && S.t === 0) start(); }, 1600);
+    // Une vue peut attendre le tuteur (`autoDepart: false`, 14 novembre 2026) : rien ne se joue avant son premier geste,
+    // sinon le résultat d'une expérience passerait sous les yeux de l'élève avant d'être dit. Par défaut : départ seul.
+    setTimeout(() => { if (!S.running && S.t === 0 && V().autoDepart !== false) start(); }, 1600);
     window.__etapes = { S, P, scene, playUntil, setTime, setParameters, etat: () => ({ ce_qui_se_voit: ceQuiSeVoit(), moments: V().moments, statut: statut() }) };
     return window.__etapes;
   }

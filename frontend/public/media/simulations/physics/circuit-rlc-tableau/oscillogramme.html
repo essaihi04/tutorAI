@@ -46,6 +46,11 @@ const TITRES = { periodique: 'R + r = 0 (LC idéal)', pseudo: 'R + r = 20 Ω', a
 const R_DEFAUT = { pseudo: 10, aperiodique: 1000, critique: 300 };
 const AVEC_R = v => v in R_DEFAUT;
 const q = new URLSearchParams(location.search);
+/* Question d’observation (règle 30 du professeur, audit « rythme », 14 novembre 2026) : `conclusions: false`
+ * (set_parameters, ou ?conclusions=0) tait ce que l’élève doit trouver lui-même : les phrases écrites des étapes de CACHE
+ * et le motif de leur arrêt sur image. `conclusions: true` les rend. Par défaut : true (comportement inchangé). */
+const lireConclusions = p => (!p || p.conclusions === undefined || p.conclusions === null || p.conclusions === '' ? null : !(p.conclusions === false || p.conclusions === 0 || /^(false|0|non)$/i.test(String(p.conclusions))));
+const tais = () => (S.conclusions === false ? { alpha: 0 } : {});   // vue aperiodique : « revient vers 0 sans changer de signe » et le nom du régime, après la réponse
 const S = { vue: VUES[q.get('vue')] ? q.get('vue') : 'periodique', R: { ...R_DEFAUT }, t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0, dit: '', anneauR: null, spot: null };
 let M = {}, MM = {};
 const VITESSE = 2;
@@ -264,13 +269,13 @@ function retour(Rt) {
 function vueAperiodique(c, Rt) {
   const [a, b] = retour(Rt), reg = regime(Rt);
   lire(c, 120, 'u_C(t) au ralenti :', { couleur: 'rouge' });
-  lire(c, 142, a, { couleur: 'rouge' }); lire(c, 164, b, { couleur: 'rouge' });
+  lire(c, 142, a, { couleur: 'rouge', ...tais() }); lire(c, 164, b, { couleur: 'rouge', ...tais() });
   tracer(c, Rt);
   marque(c, 'trace');
   c.pause(.4);
-  lire(c, 196, reg === 'pseudo' ? `R + r = ${fR(Rt)} : ${NOM_REGIME.pseudo}` : 'aucune oscillation :', { couleur: 'blanc', max: LW });
-  if (reg !== 'pseudo') lire(c, 218, NOM_REGIME[reg], { couleur: 'blanc', taille: 18 });
-  sousEcran(c, NOM_REGIME[reg]);
+  lire(c, 196, reg === 'pseudo' ? `R + r = ${fR(Rt)} : ${NOM_REGIME.pseudo}` : 'aucune oscillation :', { couleur: 'blanc', max: LW, ...tais() });
+  if (reg !== 'pseudo') lire(c, 218, NOM_REGIME[reg], { couleur: 'blanc', taille: 18, ...tais() });
+  sousEcran(c, NOM_REGIME[reg], 0, tais());
   marque(c, 'retour_sans_oscillation');
   c.pause(.4);
   // la poignée R descend à 300 Ω, puis la courbe de la frontière se trace en pointillés
@@ -497,7 +502,7 @@ function playUntil(p) {
   const nom = VUES[S.vue].includes(p.moment) ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
   if (!Number.isFinite(cible)) return;
   if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
-  S.jusqua = clamp(cible, .01, M.fin); S.motif = nom ? MOTIFS[nom] : ''; S.running = true; S.pause = false; etiquette(); dire('Observe, au ralenti…');
+  S.jusqua = clamp(cible, .01, M.fin); S.motif = nom ? (S.conclusions === false && nom === 'retour_sans_oscillation' ? 'regarde u_C sur l’écran' : MOTIFS[nom]) : ''; S.running = true; S.pause = false; etiquette(); dire('Observe, au ralenti…');
   pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
 }
 const auPasR = v => Math.round(clamp(v, 0, 2000) / 10) * 10;
@@ -511,6 +516,7 @@ function montrerReglage() {
 }
 function setParameters(p) {
   p = p || {}; let vue = false, phys = false;
+  { const k = lireConclusions(p); if (k !== null) { S.conclusions = k; scene.sale = true; } }
   if (p.vue && VUES[p.vue] && p.vue !== S.vue) { S.vue = p.vue; vue = true; }
   const R = p.R ?? p.R_ohm;
   if (R !== undefined && R !== null && R !== '' && Number.isFinite(+R) && AVEC_R(S.vue)) { const v = auPasR(+R); if (v !== S.R[S.vue]) { S.R[S.vue] = v; phys = true; } }

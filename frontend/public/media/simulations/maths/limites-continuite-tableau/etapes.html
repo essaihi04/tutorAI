@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Une étape à la fois — limites</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un calcul écrit à la craie une ligne à la fois"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/limites-continuite-tableau/lc-outils.js"></script>
+<script>
+/*
+ * Cours « Limites et continuité » (math_ch1_limites_continuite) : les étapes des diapos découpées par l'audit
+ * « rythme » du 14 novembre 2026 (professeur règle 33 : une chose à la fois). Une ligne = un moment.
+ * Vues : ?vue=regles (lc_l4_formes_b) | l8_facteur (lc_l8_racine_infini_b) | e1_enonce (lc_e1_probleme).
+ */
+const pas = (lignes) => (c, K, titre) => { K.titre(titre); K.lignes(36, 84, lignes, 40); };
+
+MathsTableau.page({
+  id: 'lc_etapes', titre: 'Une étape à la fois',
+  texte: 'Calculs du cours Limites et continuité écrits à la craie une ligne à la fois',
+  vues: {
+    regles: {
+      titre: 'Ce qui n’est pas indéterminé',
+      dessiner(c, K) {
+        pas([
+          { t: 'Pas indéterminées : on connaît le résultat.', couleur: 'faible', taille: 18, moment: 'titre' },
+          { t: '+∞ + ∞  →  +∞', couleur: 'vert', taille: 22, moment: 'somme', repere: 'somme', label: '+∞ + ∞' },
+          { t: '(−∞) × (−∞)  →  +∞     (règle des signes : − × − = +)', couleur: 'cyan', taille: 22, moment: 'produit', repere: 'produit', label: 'la règle des signes' },
+          { t: 'k / ∞  →  0     (k un nombre)', couleur: 'jaune', taille: 22, moment: 'k_infini', repere: 'k_infini', label: 'un nombre sur l’infini' },
+          { t: 'k / 0  (k ≠ 0)  →  ∞ : le signe à droite et à gauche', couleur: 'orange', taille: 22, moment: 'k_zero', repere: 'k_zero', label: 'un nombre sur zéro' },
+        ])(c, K, 'Ce qui n’est pas indéterminé');
+      },
+      decrire: {
+        titre: 'Écrit : pas indéterminées, on connaît le résultat.',
+        somme: 'Écrit : +∞ + ∞ → +∞.',
+        produit: 'Écrit : (−∞) × (−∞) → +∞, règle des signes.',
+        k_infini: 'Écrit : un nombre k sur l’infini tend vers 0.',
+        k_zero: 'Écrit : k/0 avec k ≠ 0 donne un infini, son signe s’étudie à droite et à gauche.',
+      },
+      motifs: { somme: '+∞ + ∞', produit: 'la règle des signes', k_infini: 'k sur l’infini', k_zero: 'k sur zéro' },
+      explication: [{ repere: 'produit', texte: 'Un produit d’infinis : la règle des signes.' }, { repere: 'k_zero', texte: 'Un nombre sur zéro : regarder le signe.' }],
+    },
+    l8_facteur: {
+      titre: '√(x² + 1) − 3x en +∞ : le facteur x',
+      dessiner(c, K) {
+        K.titre('Puissances différentes : je factorise');
+        LC.limite(c, 36, 84, 'x → +∞', '√(x² + 1) − 3x      « +∞ − ∞ »', { couleur: 'blanc', taille: 20 });
+        K.marque('forme');
+        K.lignes(36, 138, [
+          { t: '√(x² + 1) pèse comme x ;  3x pèse trois fois plus : pas le même poids', couleur: 'orange', taille: 18, moment: 'poids', repere: 'poids', label: 'les poids' },
+          { t: '√(x² + 1) = √(x²) · √(1 + 1/x²) = |x| √(1 + 1/x²) = x √(1 + 1/x²)   (x > 0)', couleur: 'cyan', taille: 18, moment: 'sortir', repere: 'sortir', label: '√(x²) = |x| = x' },
+          { t: '√(x² + 1) − 3x = x ( √(1 + 1/x²) − 3 )', couleur: 'blanc', taille: 21, moment: 'facteur', repere: 'facteur', label: 'x en facteur', cadre: 'faible' },
+          { t: '√(1 + 1/x²) → 1 ;   ( … ) → −2 ;   x → +∞', couleur: 'jaune', taille: 19, moment: 'morceaux', repere: 'morceaux', label: 'chaque morceau' },
+          { t: 'donc la limite est −∞', couleur: 'jaune', taille: 22, cadre: 'jaune', moment: 'resultat', repere: 'resultat', label: 'le résultat' },
+        ], 44);
+      },
+      decrire: {
+        forme: 'Écrit : lim √(x² + 1) − 3x quand x → +∞, forme « +∞ − ∞ ».',
+        poids: 'Écrit : √(x² + 1) pèse comme x, 3x trois fois plus : pas le même poids.',
+        sortir: 'Écrit : √(x² + 1) = |x| √(1 + 1/x²) = x √(1 + 1/x²) car x > 0.',
+        facteur: 'Écrit : √(x² + 1) − 3x = x(√(1 + 1/x²) − 3).',
+        morceaux: 'Écrit : la racine tend vers 1, la parenthèse vers −2, x vers +∞.',
+        resultat: 'Écrit et encadré : la limite est −∞.',
+      },
+      motifs: { forme: '« +∞ − ∞ »', poids: 'les poids', sortir: '√(x²) = |x|', facteur: 'x en facteur', morceaux: 'chaque morceau', resultat: 'la limite : −∞' },
+      explication: [{ repere: 'sortir', texte: '√(x²) = |x|, et |x| = x en +∞.' }, { repere: 'facteur', texte: 'Le terme le plus lourd en facteur.' }],
+    },
+    e1_enonce: {
+      titre: 'Un problème du national : l’énoncé et ses cinq questions',
+      dessiner(c, K) {
+        K.titre('Un problème du national');
+        K.lignes(36, 86, [
+          { t: 'f(x) = x³ + x − 1   sur ℝ', couleur: 'cyan', taille: 24, cadre: 'cyan', moment: 'enonce', repere: 'enonce', label: 'la fonction' },
+          { t: '1) Les limites en −∞ et en +∞.', couleur: 'jaune', taille: 19, pause: .3, repere: 'q1', label: 'question 1' },
+          { t: '2) Le sens de variation de f.', couleur: 'blanc', taille: 19 },
+          { t: '3) Une solution unique α de f(x) = 0 ; l’encadrer.', couleur: 'blanc', taille: 19 },
+          { t: '4) Une étape de dichotomie.', couleur: 'blanc', taille: 19 },
+          { t: '5) La fonction réciproque et sa courbe.', couleur: 'blanc', taille: 19, moment: 'plan' },
+        ], 44);
+      },
+      decrire: {
+        enonce: 'Écrit et encadré : f(x) = x³ + x − 1 sur ℝ.',
+        plan: 'Les cinq questions du problème sont écrites : limites, sens de variation, solution unique et encadrement, dichotomie, réciproque.',
+      },
+      motifs: { enonce: 'la fonction', plan: 'les cinq questions' },
+      explication: [{ repere: 'q1', texte: 'Question 1 : les limites, avec le terme de plus haut degré.' }],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

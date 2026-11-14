@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Chauffer un échantillon radioactif — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="radio.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un flacon d'échantillon radioactif posé sur un bec de gaz, un thermomètre et un compteur Geiger : on chauffe, le compteur compte toujours le même nombre de désintégrations par seconde"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Spontanée et inéluctable (audit rythme, 14 novembre 2026) : un échantillon radioactif dans un flacon, un compteur
+ * Geiger devant. Froid (20 °C) : environ 40 désintégrations par seconde. On chauffe fort (800 °C) : toujours environ 40.
+ * La désintégration se fait toute seule (spontanée) et rien ne l'arrête ni ne la ralentit (inéluctable).
+ * La température se glisse (poignée du thermomètre) ou se règle : set_parameters {temperature_c}. conclusions: false
+ * tait la phrase « même nombre : la température n'y change rien » (question d'observation).
+ * Moments : froid, chauffe, chaud, compare, fin.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lisse = u => { u = clamp(u, 0, 1); return u * u * (3 - 2 * u); };
+const SUITE = [['froid', 3.0, 'à 20 °C : le compteur compte environ 40 désintégrations par seconde'], ['chauffe', 5.5, 'on allume le feu : la température monte'],
+  ['chaud', 8.0, 'à 800 °C : le compteur compte toujours environ 40 par seconde'], ['compare', 10.5, 'même nombre : la température n’y change rien'], ['fin', 11.5, 'fin']];
+const M = {}; for (const [n, t] of SUITE) M[n] = t; const FIN = M.fin;
+const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0, conclusions: true, tReglee: null, clics: [] };
+const RATE = 40;  // désintégrations par seconde, quelle que soit la température
+const temperature = () => (S.tReglee != null ? S.tReglee : 20 + 780 * lisse((S.t - (M.chauffe - 1.8)) / 2.2));
+function ecrit(c, t0, fn) { const t = c.t, cur = c.cur; c.t = S.fait ? Infinity : S.t; c.cur = t0; try { fn(); } finally { c.t = t; c.cur = cur; } }
+function quand(c, nom, dur, fn) { if (S.fait || S.t >= M[nom] - dur) ecrit(c, M[nom] - dur, fn); }
+const vu = nom => S.fait || S.t >= M[nom] - 1e-6;
+// Le compte d'une seconde : tiré autour de 40, le même tirage que l'échantillon soit froid ou chaud.
+const compte = k => { let s = (k * 2654435761) >>> 0; const r = () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; }; return RATE + Math.round((r() + r() + r() - 1.5) * 6); };
+
+/* ── Peinture (règle 32) : flacon, échantillon, bec de gaz, flamme, thermomètre, compteur ── */
+function peindre(ctx) {
+  const T = temperature(), chaleur = clamp((T - 20) / 780, 0, 1);
+  // support métallique et bec de gaz
+  ctx.fillStyle = '#334155'; ctx.fillRect(150, 300, 120, 14); ctx.fillRect(160, 314, 10, 70); ctx.fillRect(250, 314, 10, 70);
+  const b = ctx.createLinearGradient(195, 0, 225, 0); b.addColorStop(0, '#64748b'); b.addColorStop(.5, '#cbd5e1'); b.addColorStop(1, '#475569');
+  ctx.fillStyle = b; ctx.fillRect(198, 340, 24, 50); ctx.fillStyle = '#1e293b'; ctx.fillRect(184, 386, 52, 10);
+  // flamme
+  if (chaleur > 0.02) {
+    const h = 20 + 26 * chaleur, f = ctx.createRadialGradient(210, 336, 2, 210, 330 - h / 3, h);
+    f.addColorStop(0, 'rgba(191,219,254,.95)'); f.addColorStop(.4, 'rgba(59,130,246,.85)'); f.addColorStop(.75, 'rgba(251,146,60,.7)'); f.addColorStop(1, 'rgba(251,146,60,0)');
+    ctx.fillStyle = f; ctx.beginPath(); ctx.moveTo(196, 340); ctx.quadraticCurveTo(200, 330 - h, 210, 320 - h); ctx.quadraticCurveTo(220, 330 - h, 224, 340); ctx.closePath(); ctx.fill();
+  }
+  // le flacon (verre) et l'échantillon qui luit faiblement
+  const lueur = ctx.createRadialGradient(210, 270, 4, 210, 270, 40);
+  lueur.addColorStop(0, `rgba(${Math.round(132 + 120 * chaleur)},${Math.round(204 - 80 * chaleur)},22,.9)`); lueur.addColorStop(1, 'rgba(77,124,15,.75)');
+  ctx.fillStyle = lueur; ctx.beginPath(); ctx.moveTo(176, 296); ctx.lineTo(244, 296); ctx.lineTo(232, 262); ctx.lineTo(188, 262); ctx.closePath(); ctx.fill();
+  const v = ctx.createLinearGradient(170, 0, 250, 0); v.addColorStop(0, 'rgba(255,255,255,.35)'); v.addColorStop(.3, 'rgba(255,255,255,.06)'); v.addColorStop(1, 'rgba(255,255,255,.28)');
+  ctx.fillStyle = v; ctx.beginPath(); ctx.moveTo(198, 200); ctx.lineTo(222, 200); ctx.lineTo(222, 232); ctx.lineTo(250, 298); ctx.lineTo(170, 298); ctx.lineTo(198, 232); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(226,232,240,.8)'; ctx.lineWidth = 2; ctx.stroke();
+  // thermomètre
+  ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.beginPath(); ctx.roundRect(300, 150, 18, 200, 9); ctx.fill(); ctx.strokeStyle = 'rgba(226,232,240,.7)'; ctx.stroke();
+  const hm = 180 * clamp((T - 0) / 1000, 0, 1);
+  ctx.fillStyle = '#ef4444'; ctx.fillRect(305, 340 - hm, 8, hm); ctx.beginPath(); ctx.arc(309, 350, 12, 0, 7); ctx.fill();
+  // compteur Geiger
+  const g = ctx.createLinearGradient(470, 170, 470, 330); g.addColorStop(0, '#facc15'); g.addColorStop(1, '#a16207');
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.roundRect(476, 176, 200, 150, 14); ctx.fill();
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(470, 170, 200, 150, 14); ctx.fill();
+  const e = ctx.createLinearGradient(0, 190, 0, 240); e.addColorStop(0, '#1f2937'); e.addColorStop(1, '#0f172a');
+  ctx.fillStyle = e; ctx.fillRect(490, 190, 160, 52);
+  ctx.fillStyle = '#334155'; ctx.fillRect(420, 238, 54, 14);   // la sonde, tournée vers le flacon
+  ctx.fillStyle = '#94a3b8'; ctx.beginPath(); ctx.arc(420, 245, 9, 0, 7); ctx.fill();
+}
+
+function dessiner(c) {
+  c.texte('On chauffe un échantillon radioactif', 16, 26, { couleur: 'cyan', taille: 18 });
+  c.direct(() => peindre(c.ctx));
+  const T = temperature(), sec = Math.floor(S.t);
+  c.direct(() => {
+    c.texte(`${fr(T, 0)} °C`, 330, 160, { couleur: 'rouge', taille: 18 });
+    c.texte(S.t > .5 ? String(compte(sec)) : '—', 570, 228, { couleur: '#4ade80', taille: 30, align: 'center' });
+    c.texte('désintégrations par seconde', 570, 280, { couleur: '#422006', taille: 13, align: 'center' });
+    // petits éclairs : chaque désintégration comptée
+    const now = S.t;
+    S.clics.forEach(([t0, x, y]) => { const a = 1 - (now - t0) / .25; if (a > 0) { c.ctx.globalAlpha = a; c.ctx.fillStyle = '#fef08a'; c.ctx.beginPath(); c.ctx.arc(x, y, 3.5, 0, 7); c.ctx.fill(); c.ctx.globalAlpha = 1; } });
+  });
+  c.repere('echantillon', 166, 196, 90, 106, 'l’échantillon radioactif dans son flacon');
+  c.repere('flamme', 180, 280, 60, 70, 'le feu sous le flacon');
+  c.repere('thermometre', 296, 140, 90, 230, 'le thermomètre');
+  c.repere('compteur', 466, 166, 210, 160, 'le compteur Geiger : désintégrations par seconde');
+  quand(c, 'froid', 1.2, () => c.texte('à 20 °C : ≈ 40 par seconde', 470, 360, { couleur: 'blanc', taille: 17 }));
+  quand(c, 'chaud', 1.2, () => c.texte('à 800 °C : ≈ 40 par seconde', 470, 388, { couleur: 'blanc', taille: 17 }));
+  if (S.conclusions) quand(c, 'compare', 1.6, () => {
+    c.texte('même nombre : la température n’y change rien', 16, 70, { couleur: 'vert', taille: 18, max: 430 });
+    c.texte('spontanée, inéluctable : rien ne l’arrête ni ne la ralentit', 16, 96, { couleur: 'vert', taille: 16, max: 430 });
+  });
+  c.repere('conclusion', 10, 50, 440, 56, 'la température n’y change rien');
+}
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(31); dessiner(c); return c.fin(); });
+let accu = 0;
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(FIN, S.t + dt);
+  accu += dt * RATE / 4;   // on n'en dessine qu'une sur quatre, pour l'œil
+  while (accu >= 1) { accu -= 1; S.clics.push([S.t, 180 + Math.random() * 60, 266 + Math.random() * 26]); }
+  S.clics = S.clics.filter(([t0]) => S.t - t0 < .3);
+  if (S.jusqua != null && S.t >= S.jusqua && S.jusqua < FIN) {
+    S.t = S.jusqua; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre';
+    bulle($('feedback'), S.conclusions ? 'Arrêt sur image : ' + (S.motif || '') + '.' : 'Arrêt sur image : observe le compteur.'); pont.noter('pause'); pont.emettre(); return true;
+  }
+  if (S.t >= FIN) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; if (S.conclusions) bulle($('feedback'), 'Froid ou chaud : environ 40 désintégrations par seconde. La température n’y change rien.', 'good'); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function ceQuiSeVoit() {
+  const m = [`Flacon d’échantillon radioactif sur un bec de gaz ; thermomètre : ${fr(temperature(), 0)} °C ; compteur Geiger : environ ${RATE} désintégrations par seconde (le nombre affiché bouge de quelques unités autour de 40, au hasard).`];
+  if (vu('froid')) m.push('Écrit : « à 20 °C : ≈ 40 par seconde ».');
+  if (vu('chaud')) m.push('Flamme haute. Écrit : « à 800 °C : ≈ 40 par seconde ».');
+  if (vu('compare') && S.conclusions) m.push('Écrit en vert : « même nombre : la température n’y change rien ».');
+  return m.join(' ');
+}
+function playUntil(p) {
+  const nom = p && p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-4) S.t = 0;
+  S.jusqua = Math.min(FIN, Math.max(.001, cible)); S.motif = nom ? SUITE.find(s => s[0] === nom)[2] : '';
+  S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe le compteur…');
+  pont.noter('play_until', { moment: nom }); pont.emettre();
+}
+function start() { S.jusqua = null; S.t = 0; S.tReglee = null; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe le compteur…'); pont.noter('start'); pont.emettre(); }
+function reset() { start(); }
+function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait || S.t >= FIN) return start(); S.running = true; $('run').textContent = 'Pause'; pont.noter('resume'); pont.emettre(); }
+function setTime(p) { const t = +p.time_s; if (!Number.isFinite(t)) return; S.running = false; S.jusqua = null; S.t = clamp(t, 0, FIN); S.fait = S.t >= FIN; scene.sale = true; pont.noter('set_time', { time_s: S.t }); pont.emettre(); }
+function params() { return { temperature_c: Math.round(temperature()), conclusions: S.conclusions }; }
+function setParameters(p) {
+  p = p || {};
+  if (p.temperature_c !== undefined && p.temperature_c !== null && p.temperature_c !== '' && Number.isFinite(+p.temperature_c)) S.tReglee = clamp(Math.round(+p.temperature_c), 20, 1000);
+  if ('conclusions' in p) S.conclusions = p.conclusions === true || p.conclusions === 'true' || p.conclusions === 1;
+  scene.sale = true; pont.noter('set_parameters', params()); pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : (S.t > 0 && S.t < FIN && !S.fait ? resume() : start()));
+// La poignée : le haut de la colonne rouge du thermomètre (20 à 1000 °C).
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => { const [x, y] = scene.local(px, py); return x > 290 && x < 330 && y > 150 && y < 350 ? 'T' : null; },
+  bouger: (id, px, py) => { const [, y] = scene.local(px, py); S.tReglee = clamp(Math.round((340 - y) / 180 * 1000 / 10) * 10, 20, 1000); scene.sale = true; },
+  lacher: () => { bulle($('feedback'), `${fr(temperature(), 0)} °C : le compteur compte toujours environ ${RATE} par seconde.`); pont.noter('set_parameters', params()); pont.emettre(); if (!S.running) { S.running = true; S.jusqua = Math.min(FIN, S.t + 2); } },
+});
+window.Tableau.explication({ chauffer: [
+  { repere: 'echantillon', texte: 'Un échantillon radioactif : ses noyaux se désintègrent tout seuls.' },
+  { repere: 'compteur', texte: 'Le compteur compte environ 40 désintégrations par seconde.' },
+  { repere: 'flamme', texte: 'On chauffe à 800 °C…' },
+  { repere: 'conclusion', texte: '… et le compteur compte toujours environ 40 : la température n’y change rien.' },
+] });
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'radioactivite_chauffer', version: '1.0', title: 'Chauffer un échantillon radioactif', variants: [{ id: 'chauffer', label: 'chauffer' }], commands: commandes,
+  command_schema: { set_parameters: { temperature_c: '20..1000 (°C)', conclusions: 'true | false (false : la phrase « la température n’y change rien » n’est pas écrite)' },
+    set_time: { time_s: `0..${FIN}` }, play_until: { moment: Object.keys(M).join(' | ') } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Un échantillon radioactif chauffé de 20 °C à 800 °C : le compteur Geiger compte toujours environ 40 désintégrations par seconde. La désintégration est spontanée (elle se fait toute seule) et inéluctable (ni la température ni la pression ne l’arrêtent ou ne la ralentissent).',
+  etat: () => ({ simulation_status: S.running ? 'running' : (S.fait ? 'finished' : (S.t > 0 ? 'paused' : 'idle')), ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'chauffer',
+    time_s: +S.t.toFixed(2), parameters: params(), moments: { ...M } }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Observe le compteur…');
+setTimeout(() => { if (!S.running && S.t === 0) start(); }, 1600);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

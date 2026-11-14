@@ -35,7 +35,8 @@ const q = new URLSearchParams(location.search);
 const P = { vue: VUES.includes(q.get('vue')) ? q.get('vue') : 'helium', noyau: LISTE_NOYAUX.includes(q.get('noyau')) ? q.get('noyau') : 'helium' };
 if (P.vue === 'helium') P.noyau = 'helium';
 if (q.get('noyau') && LISTE_NOYAUX.includes(q.get('noyau')) && q.get('noyau') !== 'helium' && !q.get('vue')) P.vue = 'noyau';
-const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0 };
+// conclusions : false pendant une question d'observation du tuteur (14 novembre 2026) : le fléau penche, mais la conclusion n'est pas écrite.
+const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0, conclusions: !['0', 'false'].includes(q.get('conclusions')) };
 
 /* ── Données (valeurs de référence du cours) ─────────────────────────────────────────────── */
 const NOYAUX = {
@@ -399,7 +400,7 @@ function dessinerBalance(c) {
   // Les annotations, au rythme de la scène.
   if (vu('plateaux_vides') && !S.fait && S.t < chutes()[0][2] + .3) ecrit(c, 'plateaux_vides', () => T(c, 'deux plateaux vides : équilibre', 300, 56, { couleur: 'vert', taille: 15, align: 'center' }));
   if (vu('balance_penche')) ecrit(c, 'balance_penche', () => {
-    T(c, R ? 'les produits sont plus légers : la masse diminue' : 'm(noyau) < masse des nucléons séparés', 306, 52, { couleur: 'jaune', taille: 16, align: 'center', max: 300 });
+    if (S.conclusions) T(c, R ? 'les produits sont plus légers : la masse diminue' : 'm(noyau) < masse des nucléons séparés', 306, 52, { couleur: 'jaune', taille: 16, align: 'center', max: 300 });
     c.fleche(PX - 62, 186, PX - 62, 216, { couleur: 'jaune', largeur: 1.6, tete: 8 });
     T(c, 'inclinaison exagérée pour l’œil', 14, 412, { couleur: 'faible', taille: 13 });
   });
@@ -445,7 +446,7 @@ scene.avancer = dt => {
   S.t = Math.min(FIN(), S.t + dt);
   if (S.jusqua != null && S.t >= S.jusqua && S.jusqua < FIN()) {
     S.t = S.jusqua; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre';
-    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 2)} s`) + '.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre();
+    bulle($('feedback'), S.conclusions ? 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 2)} s`) + '.' : 'Arrêt sur image : observe bien.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre();
     return true;
   }
   if (S.t >= FIN()) { S.running = false; S.fait = true; S.jusqua = null; $('run').textContent = 'Rejouer'; bulle($('feedback'), message(), 'good'); pont.emettre(); }
@@ -481,6 +482,7 @@ function ceQuiSeVoit() {
   m.push(`Vue « ${P.vue} » (${nomVue}), t = ${fr(S.t, 2)} s (${etat}). Deux vues : « La balance » (à gauche) et « Les masses » (colonne de craie à droite).`);
   m.push(`Plateau gauche (${R ? 'réactifs' : 'nucléons séparés'}) : ${contenuMots('g')}. Plateau droit (${R ? 'produits' : 'noyau'}) : ${contenuMots('d')}.`);
   if (bloque()) m.push('Le fléau est bloqué, horizontal.');
+  else if (!S.conclusions) m.push('Le fléau penche du côté gauche (inclinaison exagérée pour l’œil) ; aucune conclusion écrite : question d’observation en cours.');
   else m.push(`Le fléau penche du côté gauche (${R ? 'les réactifs, plus lourds : les produits sont plus légers, la masse diminue' : 'les nucléons séparés, plus lourds : m(noyau) < masse des nucléons séparés'}) ; inclinaison exagérée pour l’œil (écrit au tableau).`);
   const ecrits = [];
   if (R) {
@@ -492,12 +494,12 @@ function ceQuiSeVoit() {
   } else {
     if (fini('nucleons_poses')) ecrits.push(`${N.Z} m_p + ${N.A - N.Z} m_n = ${N.Z} × 1,00728 + ${N.A - N.Z} × 1,00866 = ${N.somme} u`);
     if (fini('noyau_pose')) ecrits.push(`m(${uni(N.A, N.Z, N.X)}) = ${N.m} u`);
-    if (fini('balance_penche')) ecrits.push('« m(noyau) < masse des nucléons séparés »');
+    if (fini('balance_penche') && S.conclusions) ecrits.push('« m(noyau) < masse des nucléons séparés »');
     if (fini('delta_m')) ecrits.push(`Δm = ${N.somme} − ${N.m} = ${N.dm} u, « défaut de masse » (cote Δm entre les plateaux)`);
     if (fini('energie')) ecrits.push(`E_ℓ = Δm·c² = ${N.dm} × 931,5 = ${N.El} MeV`);
     if (fini('par_nucleon')) ecrits.push(`E_ℓ/A = ${N.El} / ${N.A} = ${N.ElA} MeV/nucléon`);
   }
-  if (R && fini('balance_penche')) ecrits.unshift('« les produits sont plus légers : la masse diminue »');
+  if (R && fini('balance_penche') && S.conclusions) ecrits.unshift('« les produits sont plus légers : la masse diminue »');
   m.push(ecrits.length ? 'Écrit à la craie : ' + ecrits.join(' ; ') + '.' : 'Rien d’écrit encore dans la colonne des masses.');
   if (fini('delta_m')) m.push(`Δm = ${R ? RX().dm : N.dm} u.`);
   if (fini('energie')) m.push(R ? `Énergie : ΔE ${RX().egal} ${RX().dE} MeV, E_lib ${RX().egal} ${RX().lib} MeV.` : `Énergie de liaison : E_ℓ = ${N.El} MeV.`);
@@ -537,6 +539,7 @@ function setParameters(p) {
   if (VUES.includes(p.vue)) P.vue = p.vue;
   if (LISTE_NOYAUX.includes(p.noyau)) { P.noyau = p.noyau; if (!VUES.includes(p.vue) && p.noyau !== 'helium' && P.vue !== 'noyau') P.vue = 'noyau'; }
   if (P.vue === 'helium') P.noyau = 'helium';
+  if ('conclusions' in p) S.conclusions = p.conclusions === true || p.conclusions === 'true' || p.conclusions === 1;
   recalculer();
   if (P.vue !== avant) { S.running = false; S.jusqua = null; S.t = 0; S.fait = false; $('run').textContent = 'Lancer'; }
   else if (S.t > FIN()) S.t = FIN();
@@ -608,7 +611,7 @@ window.Tableau.explication(EXPLICATIONS);
 const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
 const config = { id: 'energie_nucleaire_balance', version: '1.0', title: 'La balance des masses', variants: VUES.map(v => ({ id: v, label: v })), commands: commandes,
   command_schema: {
-    set_parameters: { vue: 'helium | noyau | fusion | fission (change la scène et la remet à zéro)', noyau: 'helium | carbone12 | carbone14 | fer56 | nickel60 | uranium235 (vue noyau)' },
+    set_parameters: { vue: 'helium | noyau | fusion | fission (change la scène et la remet à zéro)', noyau: 'helium | carbone12 | carbone14 | fer56 | nickel60 | uranium235 (vue noyau)', conclusions: 'true | false (false : le fléau penche mais « m(noyau) < … » n’est pas écrit, pour une question d’observation)' },
     set_time: { time_s: '0..fin (arrêt sur cet instant, s ; voir moments)' },
     play_until: { moment: 'helium/noyau : plateaux_vides | nucleons_poses | noyau_pose | balance_penche | delta_m | energie | par_nucleon (vue noyau) | fin ; fusion/fission : plateaux_vides | reactifs_poses | produits_poses | balance_penche | delta_m | energie | fin (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' } } };
 const pont = protocole({ id: config.id, commandes, config,

@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Les bases à revoir — suites numériques</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Le tableau à la craie : les bases à revoir avant les suites — puissances, ordre d'une inégalité, comparer par une différence, même dénominateur"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Suites numériques » (math_ch3_suites_numeriques) : les rappels d'ouverture (audit « rythme et départ de zéro »,
+ * 14 novembre 2026, professeur règle 34). Une vue = un prérequis de 1re bac / collège, enseigné de deux façons.
+ * Vues :
+ *   puissances     (su_z1_puissances)     moments un, deux, trois, retour, regle ; repères un, deux, trois, retour, regle.
+ *   ordre_garde    (su_z2_ordre_garde)    moments depart, ajoute, fois, regle ; repères depart, ajoute, fois, regle.
+ *   ordre_inverse  (su_z3_ordre_inverse)  moments depart, miroir, inverse, regle ; repères depart, miroir, inverse, regle.
+ *   difference     (su_z4_difference)     moments positif, negatif, application, regle ; repères positif, negatif, application, regle.
+ *   denominateur   (su_z5_denominateur)   moments parts, sixiemes, somme, lettres ; repères parts, sixiemes, somme, lettres.
+ * Les objets concrets (blocs, barres coupées en parts) sont peints (règle 32) ; la craie garde nombres, axes et formules.
+ */
+const { fr, peindre, bloc } = MathsTableau;
+const lerp = (a, b, p) => a + (b - a) * p;
+
+/** Une droite graduée horizontale ; renvoie X(v). */
+function droite(c, y, xmin, xmax, x0 = 60, w = 400) {
+  const X = (v) => x0 + (v - xmin) / (xmax - xmin) * w;
+  c.fleche(x0 - 10, y, x0 + w + 16, y, { couleur: 'faible', largeur: 1.6 });
+  for (let v = Math.ceil(xmin); v <= xmax; v++) {
+    c.ligne(X(v), y - 5, X(v), y + 5, { couleur: 'faible', largeur: 1.2, duree: .02 });
+    c.texte(fr(v), X(v), y + 22, { couleur: 'faible', taille: 14, align: 'center', duree: .03 });
+  }
+  return X;
+}
+/** Deux points a (cyan) et b (orange) qui glissent de (a0, b0) vers (a1, b1) sur la droite y. */
+function glissent(c, K, X, y, a0, a1, b0, b1, duree = 1.6) {
+  K.anime(duree, (p) => {
+    const a = lerp(a0, a1, p), b = lerp(b0, b1, p);
+    c.point(X(a), y, 6, 'cyan'); c.point(X(b), y, 6, 'orange');
+    c.texte('a', X(a), y - 14, { couleur: 'cyan', taille: 16, align: 'center' });
+    c.texte('b', X(b), y - 14, { couleur: 'orange', taille: 16, align: 'center' });
+  });
+}
+/** Une barre peinte coupée en n parts, k premières colorées. */
+function barre(c, x, y, w, h, n, k, couleur, k2 = 0, couleur2 = 'orange') {
+  peindre(c, .4, () => {
+    for (let i = 0; i < n; i++) {
+      const coul = i < k ? couleur : i < k + k2 ? couleur2 : '#475569';
+      bloc(c, x + i * w / n + 1, y, w / n - 2, h, coul, { clair: i >= k + k2 });
+    }
+  });
+}
+
+const puissances = {
+  titre: 'Les puissances : qⁿ, q⁰ = 1, qⁿ⁺¹ = qⁿ × q',
+  dessiner(c, K) {
+    K.titre('Rappel : les puissances');
+    const L = [['2¹ = 2', 2], ['2² = 2 × 2 = 4', 4], ['2³ = 2 × 2 × 2 = 8', 8]];
+    const noms = ['un', 'deux', 'trois'];
+    L.forEach(([t, n], i) => {
+      const y = 92 + i * 62;
+      c.texte(t, 30, y + 22, { couleur: 'blanc', taille: 20 });
+      peindre(c, .5, () => { for (let j = 0; j < n; j++) bloc(c, 250 + j * 30, y, 26, 26, i === 2 ? 'cyan' : 'vert'); });
+      c.repere(noms[i], 24, y - 6, 240 + n * 30, 40, t);
+      K.marque(noms[i]);
+      c.pause(.4);
+    });
+    K.lignes(520, 90, [
+      { t: 'on recule : ÷ 2', couleur: 'jaune', taille: 18 },
+      { t: '2³ = 8', couleur: 'blanc', taille: 19 },
+      { t: '2² = 8 ÷ 2 = 4', couleur: 'blanc', taille: 19, pause: .3 },
+      { t: '2¹ = 4 ÷ 2 = 2', couleur: 'blanc', taille: 19, pause: .3 },
+      { t: '2⁰ = 2 ÷ 2 = 1', couleur: 'vert', taille: 21, pause: .3, cadre: 'vert' },
+    ], 34);
+    peindre(c, .4, () => bloc(c, 700, 222, 26, 26, 'vert'));
+    c.repere('retour', 512, 66, 240, 196, 'on recule en divisant par 2 : 2⁰ = 1');
+    K.marque('retour');
+    c.pause(.5);
+    c.rect(30, 300, 700, 76, { couleur: 'jaune', arrondi: 8, largeur: 1.6 });
+    c.texte('qⁿ = q × q × … × q  (n fois)', 380, 330, { couleur: 'jaune', taille: 20, align: 'center' });
+    c.texte('q⁰ = 1        q^{n+1} = qⁿ × q', 380, 362, { couleur: 'jaune', taille: 21, align: 'center' });
+    c.repere('regle', 26, 296, 708, 84, 'q⁰ = 1 et qⁿ⁺¹ = qⁿ × q');
+    K.marque('regle');
+  },
+  decrire: {
+    un: 'Écrit : 2¹ = 2, avec deux blocs peints.',
+    deux: 'Écrit : 2² = 2 × 2 = 4, avec quatre blocs.',
+    trois: 'Écrit : 2³ = 2 × 2 × 2 = 8, avec huit blocs : chaque puissance double le nombre de blocs.',
+    retour: 'À droite, on recule en divisant par 2 : 8, 4, 2, puis 2⁰ = 2 ÷ 2 = 1 (encadré vert, un seul bloc).',
+    regle: 'Encadré jaune : qⁿ = q × … × q (n fois) ; q⁰ = 1 ; qⁿ⁺¹ = qⁿ × q.',
+  },
+  motifs: { un: '2¹ = 2', deux: '2² = 4', trois: '2³ = 8', retour: '2⁰ = 1', regle: 'la règle' },
+  explication: [{ repere: 'trois', texte: 'Une puissance de plus, une multiplication de plus.' }, { repere: 'retour', texte: 'En reculant, on divise par 2 : 2⁰ = 1, pas 0.' }],
+};
+
+const ordre_garde = {
+  titre: 'L’ordre reste : ajouter, multiplier par un positif',
+  dessiner(c, K) {
+    K.titre('Rappel : ce qui garde le sens d’une inégalité');
+    const X1 = droite(c, 110, -1, 8, 50, 420);
+    glissent(c, K, X1, 110, 1, 1, 3, 3, .5);
+    c.texte('1 < 3', 540, 116, { couleur: 'blanc', taille: 22 });
+    c.repere('depart', 40, 80, 680, 56, 'a = 1 et b = 3 : 1 < 3');
+    K.marque('depart');
+    c.pause(.5);
+    const X2 = droite(c, 210, -1, 8, 50, 420);
+    c.texte('+ 2', 500, 180, { couleur: 'jaune', taille: 18 });
+    glissent(c, K, X2, 210, 1, 3, 3, 5);
+    c.texte('3 < 5', 540, 216, { couleur: 'blanc', taille: 22 });
+    c.texte('même ordre', 620, 216, { couleur: 'vert', taille: 17 });
+    c.repere('ajoute', 40, 180, 680, 56, 'on ajoute 2 : 3 < 5');
+    K.marque('ajoute');
+    c.pause(.5);
+    const X3 = droite(c, 310, -1, 8, 50, 420);
+    c.texte('× 2  (2 > 0)', 488, 280, { couleur: 'jaune', taille: 18 });
+    glissent(c, K, X3, 310, 1, 2, 3, 6);
+    c.texte('2 < 6', 540, 316, { couleur: 'blanc', taille: 22 });
+    c.texte('même ordre', 620, 316, { couleur: 'vert', taille: 17 });
+    c.repere('fois', 40, 280, 680, 56, 'on multiplie par 2 : 2 < 6');
+    K.marque('fois');
+    c.pause(.5);
+    c.rect(30, 362, 700, 42, { couleur: 'vert', arrondi: 8, largeur: 1.6 });
+    c.texte('a < b  ⇒  a + c < b + c      et, si k > 0,   ka < kb', 380, 391, { couleur: 'vert', taille: 20, align: 'center' });
+    c.repere('regle', 26, 358, 708, 50, 'ajouter, multiplier par un positif : même sens');
+    K.marque('regle');
+  },
+  decrire: {
+    depart: 'Une droite graduée : a = 1 (cyan) avant b = 3 (orange). Écrit : 1 < 3.',
+    ajoute: 'Deuxième droite : on ajoute 2, les deux points glissent de 2 vers la droite : 3 < 5, même ordre.',
+    fois: 'Troisième droite : on multiplie par 2 (positif) : 2 < 6, même ordre.',
+    regle: 'Encadré vert : a < b ⇒ a + c < b + c ; si k > 0, ka < kb.',
+  },
+  motifs: { depart: '1 < 3', ajoute: '+ 2 : même ordre', fois: '× 2 : même ordre', regle: 'la règle' },
+  explication: [{ repere: 'ajoute', texte: 'Les deux bougent de la même façon : celui de devant reste devant.' }, { repere: 'regle', texte: 'Ajouter, ou multiplier par un positif, garde le sens.' }],
+};
+
+const ordre_inverse = {
+  titre: 'L’ordre s’inverse : multiplier par un négatif, passer à l’inverse',
+  dessiner(c, K) {
+    K.titre('Rappel : ce qui change le sens d’une inégalité');
+    const X1 = droite(c, 110, -4, 4, 40, 360);
+    glissent(c, K, X1, 110, 1, 1, 3, 3, .5);
+    c.texte('1 < 3', 40, 76, { couleur: 'blanc', taille: 20 });
+    c.repere('depart', 30, 56, 390, 80, '1 < 3');
+    K.marque('depart');
+    c.pause(.5);
+    const X2 = droite(c, 220, -4, 4, 40, 360);
+    c.ligne(X2(0), 168, X2(0), 250, { couleur: 'jaune', largeur: 1.6, pointille: [5, 5] });
+    c.texte('× (−1) : le miroir en 0', 40, 166, { couleur: 'jaune', taille: 17 });
+    glissent(c, K, X2, 220, 1, -1, 3, -3, 2);
+    c.texte('−1 > −3', 300, 166, { couleur: 'rouge', taille: 21 });
+    c.repere('miroir', 30, 148, 390, 102, 'multiplier par −1 : −1 > −3');
+    K.marque('miroir');
+    c.pause(.5);
+    c.texte('2 < 4', 470, 76, { couleur: 'blanc', taille: 20 });
+    barre(c, 470, 96, 250, 30, 2, 1, 'vert');
+    c.texte('1/2', 600, 150, { couleur: 'vert', taille: 18 });
+    barre(c, 470, 166, 250, 30, 4, 1, 'orange');
+    c.texte('1/4', 520, 220, { couleur: 'orange', taille: 18 });
+    c.texte('1/2 > 1/4', 560, 252, { couleur: 'rouge', taille: 21 });
+    c.repere('inverse', 460, 56, 280, 206, '2 < 4 mais 1/2 > 1/4');
+    K.marque('inverse');
+    c.pause(.5);
+    c.rect(30, 290, 700, 92, { couleur: 'rouge', arrondi: 8, largeur: 1.6 });
+    c.texte('si k < 0 :   a < b  ⇒  ka > kb', 380, 324, { couleur: 'rouge', taille: 20, align: 'center' });
+    c.texte('si 0 < a < b :   1/a > 1/b', 380, 360, { couleur: 'rouge', taille: 20, align: 'center' });
+    c.repere('regle', 26, 286, 708, 100, 'le sens change');
+    K.marque('regle');
+  },
+  decrire: {
+    depart: 'Une droite graduée de −4 à 4 : a = 1, b = 3 ; écrit 1 < 3.',
+    miroir: 'Deuxième droite, un miroir en pointillés à 0 : en multipliant par −1, les points passent de l’autre côté : −1 et −3 ; écrit en rouge −1 > −3.',
+    inverse: 'À droite, deux barres peintes : l’une coupée en 2 (une part verte, 1/2), l’autre en 4 (une part orange, 1/4) ; écrit 2 < 4 et 1/2 > 1/4.',
+    regle: 'Encadré rouge : si k < 0, a < b ⇒ ka > kb ; si 0 < a < b, 1/a > 1/b.',
+  },
+  motifs: { depart: '1 < 3', miroir: 'le miroir : −1 > −3', inverse: '1/2 > 1/4', regle: 'la règle' },
+  explication: [{ repere: 'miroir', texte: 'Multiplier par un négatif retourne la droite : l’ordre s’inverse.' }, { repere: 'inverse', texte: 'Plus on coupe en parts, plus chaque part est petite.' }],
+};
+
+const difference = {
+  titre: 'Comparer deux nombres : le signe de la différence',
+  dessiner(c, K) {
+    K.titre('Rappel : comparer avec a − b');
+    const X1 = droite(c, 110, -1, 7, 50, 420);
+    c.point(X1(5), 110, 6, 'cyan'); c.texte('a = 5', X1(5), 94, { couleur: 'cyan', taille: 16, align: 'center' });
+    c.point(X1(2), 110, 6, 'orange'); c.texte('b = 2', X1(2), 94, { couleur: 'orange', taille: 16, align: 'center' });
+    c.fleche(X1(2), 140, X1(5), 140, { couleur: 'vert', largeur: 2 });
+    c.texte('a − b = 3 > 0  :  a > b', 520, 116, { couleur: 'vert', taille: 20 });
+    c.repere('positif', 40, 76, 690, 76, 'a − b = 3, positif : a > b');
+    K.marque('positif');
+    c.pause(.6);
+    const X2 = droite(c, 230, -1, 7, 50, 420);
+    c.point(X2(1), 230, 6, 'cyan'); c.texte('a = 1', X2(1), 214, { couleur: 'cyan', taille: 16, align: 'center' });
+    c.point(X2(4), 230, 6, 'orange'); c.texte('b = 4', X2(4), 214, { couleur: 'orange', taille: 16, align: 'center' });
+    c.fleche(X2(4), 260, X2(1), 260, { couleur: 'rouge', largeur: 2 });
+    c.texte('a − b = −3 < 0  :  a < b', 520, 236, { couleur: 'rouge', taille: 20 });
+    c.repere('negatif', 40, 196, 690, 76, 'a − b = −3, négatif : a < b');
+    K.marque('negatif');
+    c.pause(.6);
+    c.texte('dans le cours :   u_{n+1} > 1   ⇔   u_{n+1} − 1 > 0', 40, 318, { couleur: 'blanc', taille: 20 });
+    c.repere('application', 34, 294, 600, 34, 'uₙ₊₁ > 1 ⇔ uₙ₊₁ − 1 > 0');
+    K.marque('application');
+    c.pause(.5);
+    c.rect(30, 348, 700, 44, { couleur: 'jaune', arrondi: 8, largeur: 1.6 });
+    c.texte('a > b   ⇔   a − b > 0', 380, 378, { couleur: 'jaune', taille: 22, align: 'center' });
+    c.repere('regle', 26, 344, 708, 52, 'a > b ⇔ a − b > 0');
+    K.marque('regle');
+  },
+  decrire: {
+    positif: 'Une droite graduée : a = 5, b = 2 ; une flèche verte de b à a ; écrit a − b = 3 > 0 : a > b.',
+    negatif: 'Deuxième droite : a = 1, b = 4 ; flèche rouge de b vers a, vers la gauche ; écrit a − b = −3 < 0 : a < b.',
+    application: 'Écrit : dans le cours, uₙ₊₁ > 1 ⇔ uₙ₊₁ − 1 > 0.',
+    regle: 'Encadré jaune : a > b ⇔ a − b > 0.',
+  },
+  motifs: { positif: 'a − b positif', negatif: 'a − b négatif', application: 'dans le cours', regle: 'la règle' },
+  explication: [{ repere: 'positif', texte: 'a − b positif : a est à droite de b.' }, { repere: 'regle', texte: 'Comparer, c’est étudier le signe de la différence.' }],
+};
+
+const denominateur = {
+  titre: 'Additionner des fractions : le même dénominateur',
+  dessiner(c, K) {
+    K.titre('Rappel : le même dénominateur');
+    barre(c, 30, 70, 300, 34, 2, 1, 'cyan');
+    c.texte('1/2', 350, 96, { couleur: 'cyan', taille: 21 });
+    barre(c, 30, 120, 300, 34, 3, 1, 'orange');
+    c.texte('1/3', 350, 146, { couleur: 'orange', taille: 21 });
+    c.texte('parts différentes : on ne peut pas ajouter', 30, 186, { couleur: 'rouge', taille: 16 });
+    c.repere('parts', 24, 62, 370, 132, '1/2 et 1/3 : des parts de tailles différentes');
+    K.marque('parts');
+    c.pause(.6);
+    barre(c, 30, 214, 300, 34, 6, 3, 'cyan', 2, 'orange');
+    c.texte('3/6 + 2/6', 350, 240, { couleur: 'blanc', taille: 21 });
+    c.repere('sixiemes', 24, 206, 470, 50, 'tout coupé en 6 : 3/6 + 2/6');
+    K.marque('sixiemes');
+    c.pause(.4);
+    c.texte('1/2 + 1/3 = 3/6 + 2/6 = 5/6', 30, 290, { couleur: 'jaune', taille: 22 });
+    c.repere('somme', 24, 266, 330, 34, '= 5/6');
+    K.marque('somme');
+    c.pause(.6);
+    K.lignes(440, 300, [
+      { t: '4 − 6/(1 + x)', couleur: 'blanc', taille: 19 },
+      { t: '= 4(1 + x)/(1 + x) − 6/(1 + x)', couleur: 'blanc', taille: 19, pause: .3 },
+      { t: '= (4x − 2)/(1 + x)', couleur: 'vert', taille: 20, pause: .3, cadre: 'vert' },
+    ], 34);
+    c.repere('lettres', 430, 276, 310, 112, 'avec des lettres : (4x − 2)/(1 + x)');
+    K.marque('lettres');
+  },
+  decrire: {
+    parts: 'Deux barres peintes : une coupée en 2 (une part cyan, 1/2), une coupée en 3 (une part orange, 1/3) ; écrit en rouge « parts différentes : on ne peut pas ajouter ».',
+    sixiemes: 'Une barre coupée en 6 : 3 parts cyan et 2 parts orange ; écrit 3/6 + 2/6.',
+    somme: 'Écrit : 1/2 + 1/3 = 3/6 + 2/6 = 5/6.',
+    lettres: 'À droite : 4 − 6/(1 + x) = 4(1 + x)/(1 + x) − 6/(1 + x) = (4x − 2)/(1 + x).',
+  },
+  motifs: { parts: '1/2 et 1/3', sixiemes: 'tout en sixièmes', somme: '5/6', lettres: 'avec des lettres' },
+  explication: [{ repere: 'sixiemes', texte: 'Même dénominateur : des parts de même taille, qu’on peut compter.' }, { repere: 'lettres', texte: 'Avec des lettres, c’est le même geste.' }],
+};
+
+MathsTableau.page({
+  id: 'su_rappels', titre: 'Les bases avant les suites',
+  texte: 'Rappels à la craie, un prérequis par vue : les puissances, le sens d’une inégalité (gardé ou inversé), comparer par le signe d’une différence, le même dénominateur',
+  vues: { puissances, ordre_garde, ordre_inverse, difference, denominateur },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

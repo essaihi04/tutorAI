@@ -34,6 +34,11 @@ const P = { R: 1, C: 220 };                                   // kΩ, µF
 const tauDe = p => p.R * 1e3 * p.C * 1e-6;
 const uc = (t, tau) => E * (1 - Math.exp(-t / tau));
 const S = { t: 0, running: false, pause: false, fait: false, trace: null, fantome: null, jusqua: null, motif: '', emis: 0 };
+/* Question d’observation (règle 30 du professeur, audit « rythme », 14 novembre 2026) : `conclusions: false`
+ * (set_parameters, ou ?conclusions=0) tait ce que l’élève doit trouver lui-même : les phrases écrites des étapes de CACHE
+ * et le motif de leur arrêt sur image. `conclusions: true` les rend. Par défaut : true (comportement inchangé). */
+const lireConclusions = p => (!p || p.conclusions === undefined || p.conclusions === null || p.conclusions === '' ? null : !(p.conclusions === false || p.conclusions === 0 || /^(false|0|non)$/i.test(String(p.conclusions))));
+let CONCL = new URLSearchParams(location.search).get('conclusions') !== '0';   // false : ni « τ × 2 : charge plus lente » ni motif qui le dit
 
 /* ── Appareils peints (règle 32 : ils ressemblent aux vrais, comme dans circuit-rc.html ; la craie garde fils et lettres) ── */
 const Peint = {
@@ -154,7 +159,7 @@ function dessiner(c) {
       }
       if (S.t >= 5 * tau) c.texte(`5τ = ${fx(5 * tau)} s : chargé`, 130, 364, { couleur: 'vert', taille: 16, align: 'center', max: 240 });
       else if (5 * tau > TMAX && S.t >= TMAX) c.texte(`5τ = ${fx(5 * tau)} s : pas encore chargé`, 130, 364, { couleur: 'orange', taille: 15, align: 'center', max: 240 });
-      if (S.fantome && S.fait) {
+      if (S.fantome && S.fait && CONCL) {
         const tf = tauDe(S.fantome), k = tau / tf;
         const msg = Math.abs(k - 1) < 0.02 ? 'même τ : la même charge' : k > 1 ? `τ × ${fx(k, 1)} : charge plus lente` : `τ ÷ ${fx(1 / k, 1)} : charge plus rapide`;
         c.texte(msg, 130, 394, { couleur: k > 1.02 ? 'orange' : 'vert', taille: 16, align: 'center', max: 240 });
@@ -196,7 +201,8 @@ function playUntil(p) {
   const pr = PRESETS[p.moment]; if (!pr) return;
   P.R = pr.p.R; P.C = pr.p.C; rR.maj(P.R); rC.maj(P.C);
   S.trace = null; S.fantome = pr.fantome ? { ...pr.fantome } : null;
-  lancer('Je trace ' + pr.motif + '…'); S.motif = pr.motif;
+  const mo = CONCL ? pr.motif : pr.motif.split(' : ')[0];
+  lancer('Je trace ' + mo + '…'); S.motif = mo;
   pont.noter('play_until', { moment: p.moment }); pont.emettre();
 }
 function ceQuiSeVoit() {
@@ -216,6 +222,7 @@ function pause() { if (!S.running) return; S.jusqua = null; S.running = false; S
 function resume() { if (S.running || !S.pause) return start(); S.running = true; S.pause = false; $('run').textContent = 'Pause'; pont.noter('resume'); pont.emettre(); }
 function reset() { S.t = 0; S.running = false; S.pause = false; S.fait = false; S.trace = null; S.fantome = null; S.jusqua = null; scene.sale = true; $('run').textContent = 'Fermer K'; bulle($('feedback'), 'Ferme K, puis change R ou C et compare les deux charges.'); pont.emettre(); }
 function setParameters(p) {
+  { const k = lireConclusions(p); if (k !== null) { CONCL = k; scene.sale = true; pont.noter('set_parameters', { conclusions: CONCL }); pont.emettre(); } }
   let change = false;
   if (Number.isFinite(+p.R_kohm)) { P.R = Math.min(3, Math.max(0.5, Math.round(+p.R_kohm * 2) / 2)); rR.maj(P.R); change = true; }
   if (Number.isFinite(+p.C_uF)) { P.C = Math.min(470, Math.max(100, Math.round(+p.C_uF / 10) * 10)); rC.maj(P.C); change = true; }
@@ -236,7 +243,7 @@ window.Tableau.explication({ tau_rc: [
 ] });
 const commandes = ['start', 'pause', 'resume', 'reset', 'set_parameters', 'play_until'];
 const config = { id: 'rc_tableau_tau_rc', version: '1.0', title: 'τ = R·C : régler R et C', variants: [{ id: 'tau_rc', label: 'τ = R·C' }], commands: commandes,
-  command_schema: { set_parameters: { R_kohm: '0,5..3 (pas de 0,5 kΩ)', C_uF: '100..470 (pas de 10 µF)' }, play_until: { moment: Object.keys(PRESETS).join(' | ') + ' (règle R et C, garde la référence en pointillés, trace la charge)' } } };
+  command_schema: { set_parameters: { R_kohm: '0,5..3 (pas de 0,5 kΩ)', C_uF: '100..470 (pas de 10 µF)', conclusions: 'true | false (question d’observation : false tait la comparaison écrite)' }, play_until: { moment: Object.keys(PRESETS).join(' | ') + ' (règle R et C, garde la référence en pointillés, trace la charge)' } } };
 const pont = protocole({ id: config.id, commandes, config,
   texte: 'Charge d’un condensateur sous E = 12 V. Curseurs R (0,5 à 3 kΩ) et C (100 à 470 µF). La courbe u_C(t) se trace au ralenti, τ = R·C est marqué à 0,63·E ; la courbe précédente reste en pointillés. Référence R = 1 kΩ, C = 220 µF : τ = 0,22 s ; R doublée : τ = 0,44 s. E change la valeur finale, pas τ.',
   etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : (S.fait ? 'finished' : 'idle'), ce_qui_se_voit: ceQuiSeVoit(), moments: moments(),

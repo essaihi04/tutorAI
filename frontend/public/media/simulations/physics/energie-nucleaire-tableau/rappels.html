@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rappels au tableau — énergie, puissances de dix, charges</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="nucleaire.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un rappel des années précédentes, dessiné au tableau : l'énergie et le joule, les puissances de dix, ou les charges qui se repoussent"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Rappels des années précédentes pour le chapitre « Noyaux, masse et énergie » (audit rythme, 14 novembre 2026,
+ * règle 34 : partir de zéro). Trois vues (?vue= ou set_parameters {vue}) :
+ *   energie    : une pile allume une lampe (l'énergie change de forme), puis une pomme de 100 g levée d'un mètre ≈ 1 J ;
+ *                poignée de l'élève : la pomme se glisse plus haut (hauteur_m 1..3) et l'énergie s'écrit (≈ h joules).
+ *   puissances : 10, 100, 1 000 → l'exposant compte les zéros ; la virgule saute (4 000 000 = 4·10⁶, 0,001 = 10⁻³) ;
+ *                la notation scientifique ; 10⁸ × 10⁸ = 10¹⁶ ; poignée : l'exposant n (−9..9) et 10ⁿ écrit en entier.
+ *   charges    : deux boules suspendues : même signe → elles s'écartent ; signes contraires → elles s'attirent ;
+ *                deux protons : deux charges positives qui se repoussent.
+ * Objets réels peints (pile, lampe, pomme, boules, protons) ; la craie garde les mots, les flèches et les nombres.
+ */
+const { fr, bulle: bulleKit, protocole } = window.Tableau;
+const bulle = (el, t, k) => bulleKit(el, String(t), k);
+const $ = id => document.getElementById(id);
+const Q = new URLSearchParams(location.search);
+const VUES = {
+  energie: { titre: 'L’énergie et le joule', etapes: ['pile', 'lampe', 'forme', 'pomme', 'joule', 'fin'] },
+  puissances: { titre: 'Les puissances de dix', etapes: ['dix', 'grand', 'petit', 'notation', 'produit', 'fin'] },
+  charges: { titre: 'Deux charges : attirer ou repousser', etapes: ['boules', 'meme_signe', 'contraires', 'protons', 'fin'] },
+};
+const MOTIFS = {
+  energie: { pile: 'la pile et la lampe éteinte', lampe: 'la lampe s’allume : lumière et chaleur', forme: 'l’énergie change de forme, elle ne disparaît pas',
+    pomme: 'la pomme de 100 g levée d’un mètre', joule: 'l’unité : le joule (J)', fin: 'figure complète' },
+  puissances: { dix: '10, 100, 1 000 : l’exposant compte les zéros', grand: '4 000 000 = 4 × 10⁶ : la virgule saute 6 fois',
+    petit: '0,001 = 10⁻³ : moins, on divise', notation: 'la notation scientifique', produit: '10⁸ × 10⁸ = 10¹⁶ : on additionne les exposants', fin: 'figure complète' },
+  charges: { boules: 'deux boules suspendues, sans charge', meme_signe: 'même signe : elles se repoussent', contraires: 'signes contraires : elles s’attirent',
+    protons: 'deux protons : deux charges positives qui se repoussent', fin: 'figure complète' },
+};
+let vue = VUES[Q.get('vue')] ? Q.get('vue') : 'energie';
+const VITESSE = 1.5;
+const S = { tw: 0, running: true, pause: false, fait: false, jusqua: null, motif: '', emis: 0,
+  h: Math.min(3, Math.max(1, Math.round(+Q.get('hauteur_m') || 1))), n: Math.min(9, Math.max(-9, Math.round(+Q.get('n') || 3))) };
+let M = {}, MM = {};
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+const craie = scene.craie;
+scene.cadre = function (graine) {             // l'écriture suit l'horloge de la figure (S.tw) : le tuteur la fige sur une étape
+  const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  craie.debut(graine, S.tw);
+  const s = Math.min(W / VW, H / VH);
+  scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
+  craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
+  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+  return craie;
+};
+const marque = (c, nom) => { MM[nom] = c.cur; };
+const debutEtape = (c, nom) => { MM['_' + nom] = c.cur; };
+const peindre = (c, fn) => { if (c.t >= c.cur) c.direct(() => { c.ctx.save(); try { fn(c.ctx); } finally { c.ctx.restore(); } }); };
+const vu = nom => M[nom] !== undefined && S.tw >= M[nom] - 1e-6;
+const prog = (nom, d = 1) => (MM['_' + nom] === undefined ? 0 : Math.max(0, Math.min(1, (S.tw - MM['_' + nom]) / d)));
+const lisse = x => x * x * (3 - 2 * x);
+
+// ───────── Objets peints ─────────
+function ombre(ctx, x, y, rx) { ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(x, y, rx, Math.max(2, rx * .18), 0, 0, 7); ctx.fill(); }
+function pile(ctx, x, y) {                                       // pile cylindrique couchée : corps vert, bout cuivré
+  ombre(ctx, x + 60, y + 30, 64);
+  let g = ctx.createLinearGradient(0, y - 24, 0, y + 24);
+  g.addColorStop(0, '#86efac'); g.addColorStop(.35, '#16a34a'); g.addColorStop(1, '#14532d');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y - 24, 104, 48, 8); ctx.fill();
+  g = ctx.createLinearGradient(0, y - 24, 0, y + 24); g.addColorStop(0, '#fde68a'); g.addColorStop(.4, '#b45309'); g.addColorStop(1, '#78350f');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x + 104, y - 24, 22, 48, 6); ctx.fill();
+  ctx.fillStyle = '#9ca3af'; ctx.fillRect(x + 126, y - 7, 8, 14);
+  ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.fillRect(x + 8, y - 17, 110, 5);
+  ctx.fillStyle = '#f8fafc'; ctx.font = 'bold 18px sans-serif'; ctx.fillText('+', x + 110, y + 6); ctx.fillText('−', x + 8, y + 6);
+}
+function lampe(ctx, x, y, allumee) {                             // ampoule : verre, filament, culot vissé
+  if (allumee > 0) {
+    const g = ctx.createRadialGradient(x, y, 4, x, y, 90);
+    g.addColorStop(0, `rgba(255,244,190,${.85 * allumee})`); g.addColorStop(.35, `rgba(253,224,71,${.35 * allumee})`); g.addColorStop(1, 'rgba(253,224,71,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, 90, 0, 7); ctx.fill();
+  }
+  const g = ctx.createRadialGradient(x - 9, y - 10, 3, x, y, 30);
+  g.addColorStop(0, allumee > 0 ? '#fffbeb' : 'rgba(240,249,255,.75)'); g.addColorStop(1, allumee > 0 ? `rgba(253,224,71,${.5 + .4 * allumee})` : 'rgba(148,163,184,.35)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, 28, Math.PI * .8, Math.PI * 2.2); ctx.lineTo(x + 12, y + 40); ctx.lineTo(x - 12, y + 40); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = allumee > 0 ? '#f59e0b' : '#64748b'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x - 7, y + 30); ctx.lineTo(x - 7, y + 4); ctx.lineTo(x - 3, y - 4); ctx.lineTo(x + 1, y + 4); ctx.lineTo(x + 5, y - 4); ctx.lineTo(x + 7, y + 4); ctx.lineTo(x + 7, y + 30); ctx.stroke();
+  const m = ctx.createLinearGradient(x - 13, 0, x + 13, 0); m.addColorStop(0, '#6b7280'); m.addColorStop(.45, '#e5e7eb'); m.addColorStop(1, '#4b5563');
+  ctx.fillStyle = m; ctx.fillRect(x - 13, y + 40, 26, 20);
+  ctx.strokeStyle = 'rgba(31,41,55,.8)'; ctx.lineWidth = 1.5; for (const k of [45, 50, 55]) { ctx.beginPath(); ctx.moveTo(x - 13, y + k); ctx.lineTo(x + 13, y + k); ctx.stroke(); }
+}
+function pomme(ctx, x, y) {                                      // pomme rouge : dégradé, reflet, queue et feuille
+  ombre(ctx, x + 2, y + 21, 18);
+  const g = ctx.createRadialGradient(x - 7, y - 7, 2, x, y, 22);
+  g.addColorStop(0, '#fca5a5'); g.addColorStop(.45, '#dc2626'); g.addColorStop(1, '#7f1d1d');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(x, y - 14);
+  ctx.bezierCurveTo(x + 16, y - 26, x + 30, y - 4, x + 16, y + 16); ctx.bezierCurveTo(x + 8, y + 24, x - 8, y + 24, x - 16, y + 16);
+  ctx.bezierCurveTo(x - 30, y - 4, x - 16, y - 26, x, y - 14); ctx.fill();
+  ctx.strokeStyle = '#78350f'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x, y - 13); ctx.quadraticCurveTo(x + 2, y - 22, x + 5, y - 27); ctx.stroke();
+  ctx.fillStyle = '#22c55e'; ctx.beginPath(); ctx.ellipse(x + 12, y - 24, 9, 4, -.5, 0, 7); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.45)'; ctx.beginPath(); ctx.ellipse(x - 8, y - 6, 4, 7, .4, 0, 7); ctx.fill();
+}
+function main(ctx, x, y) {                                       // une main (paume vue de côté) qui tient la pomme par dessous
+  const g = ctx.createLinearGradient(x - 26, y, x + 26, y + 18); g.addColorStop(0, '#f5c9a5'); g.addColorStop(1, '#c48a63');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(x - 30, y + 4); ctx.quadraticCurveTo(x, y + 20, x + 30, y + 4); ctx.lineTo(x + 26, y + 16); ctx.quadraticCurveTo(x, y + 30, x - 26, y + 16); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#c48a63'; ctx.fillRect(x + 22, y + 10, 30, 14);
+}
+function boule(ctx, x, y, r, signe) {                            // petite boule de sureau, teintée selon la charge
+  const t = signe === '+' ? ['#fecaca', '#ef4444', '#7f1d1d'] : signe === '−' ? ['#bfdbfe', '#3b82f6', '#1e3a8a'] : ['#f1f5f9', '#cbd5e1', '#64748b'];
+  const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r);
+  g.addColorStop(0, t[0]); g.addColorStop(.45, t[1]); g.addColorStop(1, t[2]);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.beginPath(); ctx.ellipse(x - r * .38, y - r * .42, r * .22, r * .14, -.6, 0, 7); ctx.fill();
+  if (signe) { ctx.fillStyle = '#fff'; ctx.font = `bold ${Math.round(r * 1.1)}px sans-serif`; ctx.textAlign = 'center'; ctx.fillText(signe, x, y + r * .38); ctx.textAlign = 'left'; }
+}
+function potence(ctx, x0, x1, y) {                               // support en bois
+  const g = ctx.createLinearGradient(0, y - 6, 0, y + 6); g.addColorStop(0, '#d6a671'); g.addColorStop(1, '#7c4a1e');
+  ctx.fillStyle = g; ctx.fillRect(x0, y - 6, x1 - x0, 12);
+  ctx.fillStyle = '#8b5a2b'; ctx.fillRect(x0 - 4, y - 6, 10, 150); ctx.fillRect(x0 - 26, y + 140, 56, 10);
+}
+function pendule(ctx, xa, ya, L, angle, signe) {                 // fil de soie + boule
+  const xb = xa + L * Math.sin(angle), yb = ya + L * Math.cos(angle);
+  ctx.strokeStyle = 'rgba(241,245,249,.85)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(xa, ya); ctx.lineTo(xb, yb); ctx.stroke();
+  boule(ctx, xb, yb, 13, signe); return [xb, yb];
+}
+
+// ───────── Les trois vues ─────────
+const DESSINS = {
+  energie(c) {
+    c.texte('L’énergie : ce qui permet d’agir', 30, 30, { couleur: 'cyan', taille: 20 });
+    c.repere('figure', 20, 44, 720, 360, 'l’énergie, ses formes et le joule');
+    debutEtape(c, 'pile');
+    peindre(c, ctx => pile(ctx, 40, 150));
+    c.trait([[174, 150], [214, 150], [214, 96], [300, 96]], { couleur: 'blanc', largeur: 2 });
+    c.trait([[40, 150], [24, 150], [24, 214], [300, 214], [300, 186]], { couleur: 'blanc', largeur: 2 });
+    c.texte('la pile contient de l’énergie', 40, 116, { couleur: 'jaune', taille: 16 });
+    c.repere('pile', 30, 120, 150, 70, 'la pile : une réserve d’énergie');
+    marque(c, 'pile');
+    c.pause(.3); debutEtape(c, 'lampe');
+    c.direct(() => { c.ctx.save(); lampe(c.ctx, 300, 120, vu('lampe') || S.tw >= MM._lampe ? lisse(prog('lampe', .9)) : 0); c.ctx.restore(); });
+    c.pause(.5);
+    c.texte('lumière', 390, 92, { couleur: 'jaune', taille: 18 }); c.texte('chaleur', 390, 150, { couleur: 'orange', taille: 18 });
+    c.fleche(338, 100, 382, 88, { couleur: 'jaune', largeur: 1.6, tete: 7 }); c.fleche(338, 136, 382, 146, { couleur: 'orange', largeur: 1.6, tete: 7 });
+    c.repere('lampe', 262, 60, 200, 140, 'la lampe allumée donne de la lumière et de la chaleur');
+    marque(c, 'lampe');
+    c.pause(.3);
+    c.texte('énergie électrique  →  lumière + chaleur', 30, 262, { couleur: 'blanc', taille: 18, max: 420 });
+    c.texte('L’énergie ne disparaît pas : elle change de forme.', 30, 292, { couleur: 'vert', taille: 18, max: 430 });
+    c.repere('forme', 24, 240, 440, 64, 'l’énergie change de forme, elle ne disparaît pas');
+    marque(c, 'forme');
+    c.pause(.3);
+    // La pomme levée d'un mètre (règle verticale à droite) ; la main la soulève.
+    const XR = 560, Y0 = 330, PXM = 70;           // sol de la pomme ; px par mètre (3 m tiennent sous les légendes)
+    debutEtape(c, 'pomme');
+    c.ligne(470, Y0 + 22, 740, Y0 + 22, { couleur: 'faible', largeur: 2 });
+    c.ligne(XR + 70, Y0 + 20, XR + 70, Y0 - 3 * PXM - 4, { couleur: 'faible', largeur: 1.6 });
+    for (let k = 0; k <= 3; k++) c.texte(k + ' m', XR + 78, Y0 + 24 - k * PXM, { couleur: 'faible', taille: 13, duree: .05 });
+    c.direct(() => {
+      if (!(S.tw >= MM._pomme)) return;
+      const monte = vu('pomme') ? S.h : lisse(prog('pomme', 1.4)) * 1;
+      const y = Y0 - monte * PXM;
+      c.ctx.save(); main(c.ctx, XR, y + 16); pomme(c.ctx, XR, y); c.ctx.restore();
+      c.cote(XR + 44, Y0, XR + 44, y, '', { couleur: 'jaune' });
+      c.texte(`h = ${fr(monte, monte % 1 ? 1 : 0)} m`, XR - 30, y - 34, { couleur: 'jaune', taille: 16, align: 'center' });
+      c.repere('pomme', XR - 40, y - 34, 80, 60, 'la pomme de 100 g (glisse-la plus haut)');
+      if (vu('joule')) c.texte(`énergie ≈ ${S.h} J`, XR - 40, Y0 + 54, { couleur: 'vert', taille: 18, align: 'center' });
+    });
+    c.texte('une pomme de 100 g', 470, 62, { couleur: 'blanc', taille: 16 });
+    c.texte('levée d’un mètre : ≈ 1 J', 470, 84, { couleur: 'blanc', taille: 16 });
+    marque(c, 'pomme');
+    c.pause(.3);
+    c.texte('Unité de l’énergie : le joule (J)', 30, 342, { couleur: 'jaune', taille: 20 });
+    c.texte('Les repas d’une journée ≈ 3 000 000 J : très grand !', 30, 374, { couleur: 'rose', taille: 16, max: 430 });
+    c.repere('joule', 24, 318, 440, 66, 'l’unité de l’énergie est le joule (J)');
+    marque(c, 'joule');
+    marque(c, 'fin');
+  },
+
+  puissances(c) {
+    c.texte('Les puissances de dix', 30, 30, { couleur: 'cyan', taille: 20 });
+    c.repere('figure', 20, 44, 720, 360, 'les puissances de dix et la notation scientifique');
+    const L = [['10', '10¹'], ['100', '10²'], ['1 000', '10³']];
+    L.forEach(([a, b], i) => { c.texte(a + ' = ' + b, 40, 80 + 32 * i, { couleur: 'blanc', taille: 20 }); });
+    c.texte('l’exposant = le nombre de zéros', 40, 180, { couleur: 'vert', taille: 17 });
+    c.repere('dix', 30, 56, 330, 134, '10, 100, 1 000 : l’exposant compte les zéros');
+    marque(c, 'dix');
+    c.pause(.3);
+    // 4 000 000 : la virgule saute six fois vers la gauche.
+    const X0 = 420, YG = 90;
+    c.texte('4 000 000,', X0, YG, { couleur: 'blanc', taille: 24 });
+    const wN = c.largeurTexte('4 000 000,', 24), w4 = c.largeurTexte('4', 24), pas = (wN - w4) / 6;
+    for (let k = 0; k < 6; k++) {
+      const xa = X0 + wN - 4 - k * pas, xb = xa - pas;
+      c.courbe(u => [xa + (xb - xa) * u, YG + 10 + 12 * Math.sin(Math.PI * u)], 12, { couleur: 'jaune', largeur: 1.5, duree: .18 });
+      c.texte(String(k + 1), (xa + xb) / 2, YG + 36, { couleur: 'jaune', taille: 12, align: 'center', duree: .05 });
+    }
+    c.texte('= 4 × 10⁶', X0 + wN + 16, YG, { couleur: 'vert', taille: 24 });
+    c.texte('la virgule saute 6 fois vers la gauche', X0, YG + 62, { couleur: 'faible', taille: 14 });
+    c.repere('grand', X0 - 10, YG - 28, 330, 100, '4 000 000 = 4 × 10⁶');
+    marque(c, 'grand');
+    c.pause(.3);
+    c.texte('0,001 = 10⁻³', X0, 210, { couleur: 'blanc', taille: 24 });
+    const w0 = c.largeurTexte('0', 24), wv = c.largeurTexte('0,', 24);
+    for (let k = 0; k < 3; k++) {
+      const xa = X0 + wv - 3 + k * w0, xb = xa + w0;
+      c.courbe(u => [xa + (xb - xa) * u, 220 + 10 * Math.sin(Math.PI * u)], 10, { couleur: 'jaune', largeur: 1.5, duree: .18 });
+    }
+    c.texte('le signe moins : on divise par 1 000', X0, 254, { couleur: 'vert', taille: 15 });
+    c.repere('petit', X0 - 10, 184, 330, 80, '0,001 = 10⁻³ : moins, on divise');
+    marque(c, 'petit');
+    c.pause(.3);
+    c.texte('Notation scientifique : un seul chiffre avant la virgule', 40, 236, { couleur: 'cyan', taille: 15, max: 360 });
+    c.texte('c = 3 × 10⁸ m/s', 40, 268, { couleur: 'blanc', taille: 19 });
+    c.texte('1 u = 1,66 × 10⁻²⁷ kg', 40, 298, { couleur: 'blanc', taille: 19 });
+    c.repere('notation', 30, 214, 370, 94, 'la notation scientifique');
+    marque(c, 'notation');
+    c.pause(.3);
+    c.texte('10⁸ × 10⁸ = 10⁸⁺⁸ = 10¹⁶', 40, 346, { couleur: 'jaune', taille: 21 });
+    c.texte('on additionne les exposants : (3 × 10⁸)² = 9 × 10¹⁶', 40, 376, { couleur: 'vert', taille: 15, max: 380 });
+    c.repere('produit', 30, 322, 390, 66, '10⁸ × 10⁸ = 10¹⁶ : on additionne les exposants');
+    marque(c, 'produit');
+    marque(c, 'fin');
+    // Poignée de l'élève : l'exposant n, et 10ⁿ écrit en entier.
+    c.direct(() => {
+      if (!vu('fin')) return;
+      const xa = 440, xb = 730, y = 330, xn = xa + (S.n + 9) / 18 * (xb - xa);
+      c.ligne(xa, y, xb, y, { couleur: 'faible', largeur: 2 });
+      for (const k of [-9, -6, -3, 0, 3, 6, 9]) c.texte(String(k).replace('-', '−'), xa + (k + 9) / 18 * (xb - xa), y + 20, { couleur: 'faible', taille: 12, align: 'center' });
+      c.ctx.save(); boule(c.ctx, xn, y, 9, ''); c.ctx.restore();
+      const sup = String(S.n).replace('-', '⁻').replace(/\d/g, d => '⁰¹²³⁴⁵⁶⁷⁸⁹'[d]);
+      const ent = S.n >= 0 ? ('1' + '0'.repeat(S.n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') : '0,' + '0'.repeat(-S.n - 1) + '1';
+      c.texte(`10${sup} = ${ent}`, xa, y - 22, { couleur: 'jaune', taille: 17, max: 300 });
+      c.texte('glisse : n', xb, y + 40, { couleur: 'faible', taille: 12, align: 'right' });
+      c.repere('exposant', xa - 10, y - 44, xb - xa + 20, 76, 'l’exposant n (glisse-le)');
+    });
+  },
+
+  charges(c) {
+    c.texte('Deux charges : attirer ou repousser', 30, 30, { couleur: 'cyan', taille: 20 });
+    c.repere('figure', 20, 44, 720, 360, 'des charges électriques qui s’attirent ou se repoussent');
+    const YA = 80, LF = 120;
+    peindre(c, ctx => potence(ctx, 60, 370, YA));
+    debutEtape(c, 'boules');
+    c.texte('deux boules suspendues', 60, 250, { couleur: 'blanc', taille: 15 });
+    marque(c, 'boules');
+    c.pause(.3); debutEtape(c, 'meme_signe');
+    c.direct(() => {                                              // première paire : sans charge, puis + et + qui s'écartent
+      const a = S.tw >= MM._meme_signe ? .24 * lisse(prog('meme_signe', 1.2)) : 0;
+      const s = S.tw >= MM._meme_signe ? '+' : '';
+      c.ctx.save(); const g = pendule(c.ctx, 150, YA + 6, LF, -a, s), d = pendule(c.ctx, 176, YA + 6, LF, a, s); c.ctx.restore();
+      if (vu('meme_signe')) { c.fleche(g[0] - 16, g[1], g[0] - 40, g[1], { couleur: 'jaune', largeur: 1.6, tete: 7 }); c.fleche(d[0] + 16, d[1], d[0] + 44, d[1], { couleur: 'jaune', largeur: 1.6, tete: 7 }); }
+      c.repere('paire_meme', 90, YA, 150, LF + 40, 'deux boules de même signe');
+    });
+    c.pause(1.2);
+    c.texte('même signe : elles se repoussent', 60, 290, { couleur: 'jaune', taille: 16 });
+    c.repere('meme_signe', 54, 272, 260, 26, 'même signe : elles se repoussent');
+    marque(c, 'meme_signe');
+    c.pause(.3); debutEtape(c, 'contraires');
+    c.direct(() => {                                              // deuxième paire : + et − qui se rapprochent
+      if (!(S.tw >= MM._contraires)) return;
+      const a = .1 * lisse(prog('contraires', 1.2));
+      c.ctx.save(); const g = pendule(c.ctx, 276, YA + 6, LF, a, '+'), d = pendule(c.ctx, 326, YA + 6, LF, -a, '−'); c.ctx.restore();
+      if (vu('contraires')) { c.fleche(g[0] + 2, g[1] - 22, g[0] + 12, g[1] - 22, { couleur: 'vert', largeur: 1.4, tete: 6 }); c.fleche(d[0] - 2, d[1] - 22, d[0] - 12, d[1] - 22, { couleur: 'vert', largeur: 1.4, tete: 6 }); }
+      c.repere('paire_contraire', 250, YA, 110, LF + 40, 'deux boules de signes contraires');
+    });
+    c.pause(1.2);
+    c.texte('signes contraires : elles s’attirent', 60, 316, { couleur: 'vert', taille: 16 });
+    c.repere('contraires', 54, 298, 280, 26, 'signes contraires : elles s’attirent');
+    marque(c, 'contraires');
+    c.pause(.3); debutEtape(c, 'protons');
+    c.direct(() => {                                              // deux protons qui s'approchent, puis repartent
+      if (!(S.tw >= MM._protons)) return;
+      const p = prog('protons', 2), e = p < .5 ? 1 - lisse(p / .5) : lisse((p - .5) / .5);
+      const xg = 560 - 30 - 90 * e, xd = 560 + 30 + 90 * e;
+      c.ctx.save(); ombre(c.ctx, xg, 216, 18); ombre(c.ctx, xd, 216, 18); boule(c.ctx, xg, 190, 20, '+'); boule(c.ctx, xd, 190, 20, '+'); c.ctx.restore();
+      c.texte('proton', xg, 236, { couleur: 'faible', taille: 13, align: 'center' }); c.texte('proton', xd, 236, { couleur: 'faible', taille: 13, align: 'center' });
+      if (vu('protons')) { c.fleche(xg - 26, 158, xg - 60, 158, { couleur: 'jaune', largeur: 1.6, tete: 7 }); c.fleche(xd + 26, 158, xd + 60, 158, { couleur: 'jaune', largeur: 1.6, tete: 7 }); }
+      c.repere('deux_protons', 420, 150, 280, 100, 'deux protons : deux charges positives');
+    });
+    c.pause(2);
+    c.texte('deux noyaux : deux charges positives', 400, 290, { couleur: 'blanc', taille: 16, max: 340 });
+    c.texte('ils se repoussent, plus fort quand ils sont proches', 400, 316, { couleur: 'jaune', taille: 15, max: 340 });
+    c.repere('protons', 394, 270, 350, 56, 'deux charges positives se repoussent');
+    marque(c, 'protons');
+    marque(c, 'fin');
+  },
+};
+
+function dessiner(c) {
+  scene.cadre(23);
+  MM = {};
+  DESSINS[vue](c);
+  M = MM;
+  return c.fin() || !S.running;
+}
+
+// ───────── Horloge, commandes ─────────
+const etapes = () => VUES[vue].etapes;
+const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : 'Rejouer'; };
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.tw += dt * VITESSE;
+  if (S.jusqua != null && S.tw >= S.jusqua) {
+    S.tw = S.jusqua; S.jusqua = null; S.running = false;
+    if (M.fin !== undefined && S.tw >= M.fin - 1e-6) { S.pause = false; S.fait = true; etiquette(); bulle($('feedback'), 'Figure complète.'); pont.emettre(); return true; }
+    S.pause = true; etiquette(); bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || 'instant choisi') + '.'); pont.noter('pause', { moment: S.motif }); pont.emettre();
+    return true;
+  }
+  if (M.fin !== undefined && S.tw >= M.fin + 1.6) { S.running = false; S.pause = false; S.fait = true; etiquette(); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function calculer() { if (M.fin === undefined) { const t = S.tw; S.tw = 1e6; dessiner(craie); S.tw = t; scene.sale = true; } }
+function start() { S.tw = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; scene.sale = true; etiquette(); bulle($('feedback'), ''); pont.noter('start', { vue }); pont.emettre(); }
+function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); bulle($('feedback'), 'Pause.'); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); pont.noter('resume'); pont.emettre(); }
+function playUntil(p) {
+  calculer();
+  const nom = p && p.moment in M && etapes().includes(p.moment) ? p.moment : null, cible = nom ? M[nom] + (nom === 'fin' ? 1.6 : .9) : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || !(S.running || S.pause) || S.tw >= cible - 1e-3) { S.tw = 0; S.fait = false; }
+  S.jusqua = cible; S.motif = nom ? MOTIFS[vue][nom] : ''; S.running = true; S.pause = false; etiquette(); bulle($('feedback'), ''); scene.sale = true;
+  pont.noter('play_until', { moment: nom, time_s: +cible.toFixed(2) }); pont.emettre();
+}
+function setTime(p) {
+  calculer(); const t = Math.max(0, Math.min(+p.time_s, (M.fin ?? 0) + 1.6)); if (!Number.isFinite(t)) return;
+  S.tw = t; S.jusqua = null; S.running = false; S.fait = t >= (M.fin ?? 0) - 1e-6; S.pause = !S.fait; scene.sale = true; etiquette();
+  pont.noter('set_time', { time_s: t }); pont.emettre();
+}
+function setParameters(p) {
+  p = p || {};
+  if (Number.isFinite(+p.hauteur_m)) S.h = Math.min(3, Math.max(1, Math.round(+p.hauteur_m)));
+  if (Number.isFinite(+p.n)) S.n = Math.min(9, Math.max(-9, Math.round(+p.n)));
+  if (VUES[p.vue] && p.vue !== vue) { vue = p.vue; M = {}; start(); }
+  scene.sale = true; pont.noter('set_parameters', params()); pont.emettre();
+}
+const params = () => ({ vue, hauteur_m: S.h, n: S.n });
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+/* Poignées : la pomme (vue énergie, une fois levée) se glisse de 1 à 3 m ; le curseur de l'exposant (vue puissances). */
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => {
+    const [x, y] = scene.local(px, py);
+    if (vue === 'energie' && vu('pomme') && Math.abs(x - 560) < 40 && y > 330 - 3 * 70 - 40 && y < 360) return 'pomme';
+    if (vue === 'puissances' && vu('fin') && x > 430 && x < 740 && Math.abs(y - 330) < 24) return 'n';
+    return null;
+  },
+  bouger: (id, px, py) => {
+    const [x, y] = scene.local(px, py);
+    if (id === 'pomme') setParameters({ hauteur_m: (330 - y) / 70 });
+    else setParameters({ n: (x - 440) / 290 * 18 - 9 });
+  },
+  lacher: id => bulle($('feedback'), id === 'pomme' ? `Pomme levée de ${S.h} m : il faut environ ${S.h} J.` : `10 puissance ${S.n}.`),
+});
+
+function ceQuiSeVoit() {
+  const faites = etapes().filter(n => n !== 'fin' && vu(n));
+  const m = [`Rappel « ${vue} » : ${VUES[vue].titre}.`];
+  if (!faites.length) m.push(S.running ? 'La figure commence à s’écrire.' : 'Rien d’écrit encore.');
+  faites.forEach(n => m.push(MOTIFS[vue][n] + '.'));
+  if (vue === 'energie' && vu('pomme')) m.push(`La pomme peinte est tenue à h = ${S.h} m (énergie ≈ ${S.h} J).`);
+  if (vue === 'puissances' && vu('fin')) m.push(`Curseur de l’exposant : n = ${S.n}.`);
+  m.push(S.running ? 'La craie écrit encore.' : S.pause ? 'Arrêt sur image.' : 'Figure complète.');
+  return m.join(' ');
+}
+window.Tableau.explication(Object.fromEntries(Object.keys(VUES).map(v => [v,
+  VUES[v].etapes.filter(e => e !== 'fin').map(e => ({ repere: e, texte: MOTIFS[v][e] }))])));
+const commandes = ['start', 'reset', 'pause', 'resume', 'play_until', 'set_time', 'set_parameters'];
+const config = { id: 'energie_nucleaire_rappels', version: '1.0', title: 'Rappels — ' + VUES[vue].titre, variants: Object.keys(VUES).map(v => ({ id: v, label: VUES[v].titre })), commands: commandes,
+  command_schema: { play_until: { moment: Object.entries(VUES).map(([v, o]) => v + ' : ' + o.etapes.join(' | ')).join(' ; ') + ' (réécrit et se fige après cette étape)' },
+    set_parameters: { vue: Object.keys(VUES).join(' | '), hauteur_m: '1..3 (vue energie : la pomme levée)', n: '−9..9 (vue puissances : l’exposant)' },
+    set_time: { time_s: 'instant d’écriture (s), figé' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Rappels des années précédentes : l’énergie (elle change de forme ; unité le joule, ≈ 1 J pour lever une pomme de 100 g d’un mètre), les puissances de dix (l’exposant compte les zéros ; 10⁻³ = 0,001 ; notation scientifique ; 10⁸ × 10⁸ = 10¹⁶), les charges (même signe : répulsion ; signes contraires : attraction ; deux protons se repoussent).',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : 'finished', ce_qui_se_voit: ceQuiSeVoit(), current_variant: vue,
+    time_s: +S.tw.toFixed(2), parameters: params(), moments: Object.fromEntries(etapes().filter(n => M[n] !== undefined).map(n => [n, +M[n].toFixed(2)])) }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset: start, pause, resume, play_until: () => playUntil(p), set_time: () => setTime(p), set_parameters: () => setParameters(p) })[cmd]?.() });
+etiquette();
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

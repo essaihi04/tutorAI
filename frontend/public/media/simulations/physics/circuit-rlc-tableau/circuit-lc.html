@@ -351,8 +351,8 @@ function zoneEcriture(c, M, liste, ys, o = {}) {
   liste.forEach((e, j) => {
     if (j > k) return;
     M.etape(c, e.nom, () => {
-      if (garde.has(j)) for (const [t, col] of e.lignes) { c.texte(t, x, ys[y++], { couleur: col, taille, max }); vues.push(t); }
-      e.plus && e.plus(c);
+      if (garde.has(j)) for (const [t, col] of e.lignes) { c.texte(t, x, ys[y++], { couleur: col, taille, max, alpha: cache(e.nom) ? 0 : undefined }); vues.push(t); }
+      e.plus && !cache(e.nom) && e.plus(c);
     });
   });
   return vues;
@@ -408,6 +408,16 @@ const ETAPES = {
   ],
 };
 const MOTIFS = { fin: 'fin' }; for (const v of VUES) for (const e of ETAPES[v]) MOTIFS[e.nom] = e.motif;
+/* Question d’observation (règle 30 du professeur, audit « rythme », 14 novembre 2026) : `conclusions: false`
+ * (set_parameters, ou ?conclusions=0) tait ce que l’élève doit trouver lui-même : les phrases écrites des étapes de CACHE
+ * et le motif de leur arrêt sur image. `conclusions: true` les rend. Par défaut : true (comportement inchangé). */
+const lireConclusions = p => (!p || p.conclusions === undefined || p.conclusions === null || p.conclusions === '' ? null : !(p.conclusions === false || p.conclusions === 0 || /^(false|0|non)$/i.test(String(p.conclusions))));
+let CONCL = new URLSearchParams(location.search).get('conclusions') !== '0';
+const CACHE = { recharge_inverse: 'regarde l’écran de l’oscilloscope' };
+const MOTIFS_VRAIS = { ...MOTIFS };
+const cache = nom => !CONCL && nom in CACHE;
+function majConclusions() { for (const n in CACHE) MOTIFS[n] = CONCL ? MOTIFS_VRAIS[n] : CACHE[n]; }
+majConclusions();
 
 /* ── Géométrie (cadre 760 × 420) ─────────────────────────────────────── */
 const XG = 48, YH = 72, YB = 300, C1 = [164, 72], C2 = [236, 72], PV = [200, 108], XC = 200, YA = 166, YBp = 178, XD = 360;
@@ -752,6 +762,7 @@ const MOT = Moteur({
     echange: 'L’énergie passe du condensateur à la bobine et revient : E = ½·C·u_C² + ½·L·i² reste égale à 72 µJ.' })[M.S.vue],
   appliquer: (p, M) => {
     const r = {};
+    { const k = lireConclusions(p); if (k !== null) { CONCL = k; majConclusions(); M.scene.sale = true; } }
     if (VUES.includes(p.vue)) r.vue = p.vue;
     const K = p.K != null && p.K !== '' ? +p.K : null;
     if (K === 1) { r.vue = 'montage'; r.change = true; r.apres = () => M.playUntil({ moment: 'charge' }); }

@@ -31,6 +31,11 @@ const $ = id => document.getElementById(id);
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');
 const VUES = { L: ['courbe', 'L_double', 'fin'], R: ['courbe', 'R_double', 'comparer', 'fin'] };
+/* Question d’observation (règle 30 du professeur, audit « rythme », 14 novembre 2026) : `conclusions: false`
+ * (set_parameters, ou ?conclusions=0) tait ce que l’élève doit trouver lui-même : les phrases écrites des étapes de CACHE
+ * et le motif de leur arrêt sur image. `conclusions: true` les rend. Par défaut : true (comportement inchangé). */
+const lireConclusions = p => (!p || p.conclusions === undefined || p.conclusions === null || p.conclusions === '' ? null : !(p.conclusions === false || p.conclusions === 0 || /^(false|0|non)$/i.test(String(p.conclusions))));
+const tais = () => (S.conclusions === false ? { alpha: 0 } : {});   // vue R : I₀’ et τ’ calculés ne s’écrivent qu’après la réponse
 const TITRES = { L: 'influence de L', R: 'influence de R' };
 const q = new URLSearchParams(location.search);
 const S = { vue: VUES[q.get('vue')] ? q.get('vue') : 'L', L2: .24, R2: 110, t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0, dit: '', fige: null, poignee: false };
@@ -147,8 +152,8 @@ function vueR(c) {
   courbeDe(c, d, POINTILLE);
   c.ligne(LX, 157, LX + 26, 157, { couleur: 'vert', largeur: 2.6, duree: .1, ...POINTILLE });
   leg(c, 162, `R’ = ${fx(d.R, 0)} Ω : R’ + r = ${fx(d.R + r, 0)} Ω`);
-  lire(c, 186, `I_0’ = 6/${fx(d.R + r, 0)} = ${fmA(I2)}`, { taille: 15 });
-  lire(c, 208, `τ’ = 0,12/${fx(d.R + r, 0)} = ${fms(T2)}`, { taille: 15 });
+  lire(c, 186, `I_0’ = 6/${fx(d.R + r, 0)} = ${fmA(I2)}`, { taille: 15, ...tais() });
+  lire(c, 208, `τ’ = 0,12/${fx(d.R + r, 0)} = ${fms(T2)}`, { taille: 15, ...tais() });
   marque(c, 'R_double');
   c.pause(.5);
   palier(c, REF, 'I_0');
@@ -261,6 +266,7 @@ const auPasL = v => Math.round(clamp(v, .06, .48) * 100) / 100;
 const auPasR = v => Math.round(clamp(v, 20, 200) / 10) * 10;
 function setParameters(p) {
   p = p || {}; let vue = false, phys = false;
+  { const k = lireConclusions(p); if (k !== null) { S.conclusions = k; scene.sale = true; } }
   if (p.vue && VUES[p.vue] && p.vue !== S.vue) { S.vue = p.vue; vue = true; }
   const ok = v => v !== undefined && v !== null && v !== '' && Number.isFinite(+v);
   const L = p.L ?? p.L_H, R = p.R ?? p.R_ohm;

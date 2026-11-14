@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La dérivée d'un produit — dérivation</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un rectangle de côtés u et v, d'aire u·v, grandit : une bande à droite u′·v, une bande en haut u·v′ ; la formule (u·v)′ = u′v + uv′, puis un exemple vérifié en développant"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Dérivation et étude des fonctions » (math_ch2_derivation_etude_fonctions) : la dérivée d'un produit, seule sur
+ * sa diapo (df_dv2_produit_quotient, audit « rythme », 14 novembre 2026). Vue : ?vue=rectangle.
+ * Un rectangle de bois u × v (aire u·v). Quand x avance un peu, u grandit (bande à droite, aire ≈ u′·v) et v grandit
+ * (bande en haut, aire ≈ u·v′) : l'aire grandit de u′v + uv′, d'où (u·v)′ = u′v + uv′. Puis l'exemple x²(x + 1).
+ * Moments : rectangle, bande_droite, bande_haut, formule, exemple, remplace, verification ; `fin`.
+ */
+const P = MathsTableau.peindre, B = MathsTableau.bloc;
+function primes(c) {
+  if (c.__primes) return; c.__primes = true;
+  const texte = c.texte;
+  c.texte = function (s, ...r) { return texte.call(this, String(s).replace(/″/g, "''").replace(/′/g, "'"), ...r); };
+}
+MathsTableau.page({
+  id: 'df_produit', titre: 'La dérivée d’un produit',
+  texte: 'Construction du cours Dérivation : un rectangle u × v qui grandit explique (u·v)′ = u′v + uv′',
+  vues: {
+    rectangle: {
+      titre: 'L’aire d’un rectangle qui grandit',
+      dessiner(c, K) {
+        primes(c); K.titre('(u · v)′ = u′v + uv′');
+        const x0 = 50, yb = 330, W = 220, H = 160, dW = 44, dH = 34;
+        P(c, .7, () => B(c, x0, yb - H, W, H, 'cyan'));
+        c.texte('u', x0 + W / 2, yb + 24, { couleur: 'cyan', taille: 20, align: 'center' });
+        c.texte('v', x0 - 18, yb - H / 2 + 6, { couleur: 'cyan', taille: 20, align: 'center' });
+        c.texte('aire u · v', x0 + W / 2, yb - H / 2 + 6, { couleur: 'blanc', taille: 20, align: 'center' });
+        c.repere('rectangle', x0, yb - H, W, H, 'le rectangle u × v');
+        K.marque('rectangle');
+        c.pause(.4);
+        P(c, .7, () => B(c, x0 + W + 2, yb - H, dW, H, 'orange'));
+        c.texte('u′', x0 + W + dW / 2, yb + 24, { couleur: 'orange', taille: 18, align: 'center' });
+        c.texte('u′·v', x0 + W + dW / 2, yb - H / 2 + 6, { couleur: 'blanc', taille: 16, align: 'center' });
+        c.repere('bande_droite', x0 + W, yb - H, dW + 4, H, 'la bande à droite : u′ · v');
+        K.marque('bande_droite');
+        c.pause(.4);
+        P(c, .7, () => B(c, x0, yb - H - dH - 2, W, dH, 'vert'));
+        c.texte('v′', x0 - 18, yb - H - dH / 2 + 4, { couleur: 'vert', taille: 18, align: 'center' });
+        c.texte('u·v′', x0 + W / 2, yb - H - dH / 2 + 6, { couleur: 'blanc', taille: 16, align: 'center' });
+        c.repere('bande_haut', x0, yb - H - dH - 4, W, dH + 4, 'la bande en haut : u · v′');
+        K.marque('bande_haut');
+        c.pause(.4);
+        K.lignes(380, 90, [
+          { t: 'ce que l’aire gagne :', couleur: 'faible', taille: 17 },
+          { t: '(u · v)′ = u′v + uv′', couleur: 'jaune', taille: 26, cadre: 'jaune', repere: 'formule', label: '(u·v)′ = u′v + uv′', moment: 'formule' },
+        ], 42);
+        c.pause(.4);
+        K.lignes(380, 190, [
+          { t: 'f(x) = x² · (x + 1)', couleur: 'cyan', moment: 'exemple' },
+          { t: 'u = x², u′ = 2x ; v = x + 1, v′ = 1', couleur: 'blanc', taille: 17 },
+          { t: 'f′(x) = 2x(x + 1) + x² · 1 = 3x² + 2x', couleur: 'jaune', taille: 18, moment: 'remplace' },
+          { t: 'vérification : x³ + x²  →  3x² + 2x  ✓', couleur: 'vert', taille: 17, moment: 'verification', repere: 'verification', label: 'la vérification en développant' },
+        ], 34);
+      },
+      decrire: {
+        rectangle: 'Un rectangle de bois bleu, de côtés u et v : son aire est u · v.',
+        bande_droite: 'u grandit : une bande orange à droite, de largeur u′ et de hauteur v, aire u′ · v.',
+        bande_haut: 'v grandit : une bande verte en haut, de largeur u et de hauteur v′, aire u · v′.',
+        formule: 'Écrit dans un cadre : (u · v)′ = u′v + uv′.',
+        exemple: 'Exemple écrit : f(x) = x²(x + 1).',
+        remplace: 'u = x², u′ = 2x, v = x + 1, v′ = 1 ; f′(x) = 2x(x + 1) + x² = 3x² + 2x.',
+        verification: 'Vérification : x²(x + 1) = x³ + x², dont la dérivée est 3x² + 2x, le même résultat.',
+      },
+      motifs: { rectangle: 'le rectangle u × v', bande_droite: 'la bande u′v', bande_haut: 'la bande uv′', formule: 'la formule', exemple: 'l’exemple', remplace: 'le calcul', verification: 'la vérification' },
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

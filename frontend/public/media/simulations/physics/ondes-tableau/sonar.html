@@ -20,7 +20,9 @@
 const { fr, bulle, protocole } = window.Tableau;
 const $ = id => document.getElementById(id);
 const V = 1500;
-const S = { jusqua: null, d: 30, p: 0, running: false, pause: false, fait: false, emis: 0 };
+// conclusions : false pendant une question d'observation du tuteur (audit rythme, 14 novembre 2026) : la salve fait l'aller-retour,
+// mais ni « 2d = v·τ » ni « d = v·τ / 2 » ne s'écrivent avant la réponse de l'élève. Vrai par défaut.
+const S = { jusqua: null, d: 30, p: 0, running: false, pause: false, fait: false, emis: 0, conclusions: true };
 const tau = () => 2 * S.d / V * 1000;            // ms
 const YS = 80, PX = 3.9;                         // surface ; px par mètre
 const YF = () => YS + S.d * PX;
@@ -70,10 +72,12 @@ function dessiner(c) {
       salve(tau(), 26); c.texte('écho', T(tau()), gy - 40, { couleur: 'vert', taille: 14 });
       c.cote(T(0), gy + 36, T(tau()), gy + 36, `τ = ${fr(tau(), 0)} ms`, { couleur: 'jaune', dessous: true });
       c.repere('tau', T(0), gy + 24, T(tau()) - T(0), 40, 'τ : durée de l’aller-retour');
-      c.texte('L’onde parcourt 2d : 2d = v · τ', gx, 300, { couleur: 'vert', taille: 18 });
-      c.texte(`d = v · τ / 2 = ${V} × ${fr(tau() / 1000, 3)} / 2 = ${fr(S.d, 0)} m`, gx, 330, { couleur: 'vert', taille: 18 });
-      c.texte('sans le « / 2 » : le double, faux !', gx, 362, { couleur: 'rose', taille: 16 });
-      c.repere('formule', gx, 280, 320, 90, 'd = v·τ / 2');
+      if (S.conclusions) {
+        c.texte('L’onde parcourt 2d : 2d = v · τ', gx, 300, { couleur: 'vert', taille: 18 });
+        c.texte(`d = v · τ / 2 = ${V} × ${fr(tau() / 1000, 3)} / 2 = ${fr(S.d, 0)} m`, gx, 330, { couleur: 'vert', taille: 18 });
+        c.texte('sans le « / 2 » : le double, faux !', gx, 362, { couleur: 'rose', taille: 16 });
+        c.repere('formule', gx, 280, 320, 90, 'd = v·τ / 2');
+      }
     }
   });
   c.texte(`eau de mer : v ≈ ${V} m/s`, gx, 404, { couleur: 'faible', taille: 15 });
@@ -88,7 +92,7 @@ scene.avancer = dt => {
   if (arreterSiInstantAtteint()) return true;
   if (S.p >= 1) {
     S.running = false; S.fait = true; $('run').textContent = 'Émettre';
-    bulle($('feedback'), `Écho après ${fr(tau(), 0)} ms : l’aller-retour fait 2d, donc d = v·τ / 2.`, 'good');
+    bulle($('feedback'), S.conclusions ? `Écho après ${fr(tau(), 0)} ms : l’aller-retour fait 2d, donc d = v·τ / 2.` : `Écho reçu après ${fr(tau(), 0)} ms : regarde le chemin de la salve.`, 'good');
     pont.noter('measurement', { d_m: S.d, tau_ms: tau() }); pont.emettre();
   } else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
   return true;
@@ -121,7 +125,7 @@ function ceQuiSeVoit() {
   if (S.running || S.pause) {
     const prof = S.p < 0.5 ? S.p / 0.5 * S.d : (1 - (S.p - 0.5) / 0.5) * S.d;
     m.push(`${S.pause ? 'Scène arrêtée : ' : ''}la salve ${S.p < 0.5 ? 'DESCEND (aller)' : 'REMONTE (retour, écho)'}, à environ ${fr(prof, 0)} m de profondeur ; t ≈ ${fr(S.p * tau(), 0)} ms depuis l’émission. Sur le graphe : émission tracée, écho pas encore reçu.`);
-  } else if (S.fait) m.push(`Écho reçu après τ = ${fr(tau(), 0)} ms (cote jaune sur le graphe). Flèches aller et retour dessinées. Affiché : 2d = v·τ et d = v·τ/2 = ${fr(S.d, 0)} m, avec l’avertissement « sans le /2 : le double, faux ».`);
+  } else if (S.fait) m.push(`Écho reçu après τ = ${fr(tau(), 0)} ms (cote jaune sur le graphe). Flèches aller et retour dessinées.` + (S.conclusions ? ` Affiché : 2d = v·τ et d = v·τ/2 = ${fr(S.d, 0)} m, avec l’avertissement « sans le /2 : le double, faux ».` : ' Aucune formule écrite (question d’observation en cours).'));
   else m.push('Aucune salve émise pour cette profondeur : graphe vide.');
   return m.join(' ');
 }
@@ -131,6 +135,11 @@ function pause() { if (!S.running) return; S.jusqua = null; S.running = false; S
 function resume() { if (S.running || !S.pause) return start(); S.running = true; S.pause = false; $('run').textContent = 'Pause'; pont.noter('resume'); pont.emettre(); }
 function reset() { S.p = 0; S.running = false; S.fait = false; scene.sale = true; bulle($('feedback'), 'Émets une salve.'); pont.emettre(); }
 function setParameters(p) {
+  if ('conclusions' in p) {
+    const v = p.conclusions === true || p.conclusions === 'true' || p.conclusions === 1;
+    if (v !== S.conclusions) { S.conclusions = v; scene.sale = true; if (v && S.fait) bulle($('feedback'), `Écho après ${fr(tau(), 0)} ms : l’aller-retour fait 2d, donc d = v·τ / 2.`, 'good'); }
+    pont.noter('set_parameters', { conclusions: S.conclusions }); pont.emettre();
+  }
   if (!Number.isFinite(+p.d_m)) return;
   S.d = Math.min(75, Math.max(10, Math.round(+p.d_m / 7.5) * 7.5)); S.fait = false; scene.sale = true;
   pont.noter('set_parameters', { d_m: S.d }); pont.emettre();
@@ -149,10 +158,10 @@ window.Tableau.explication({ sonar: [
 ] });
 const commandes = ['start', 'fire_pulse', 'pause', 'resume', 'reset', 'set_parameters', 'play_until'];
 const config = { id: 'ondes_tableau_sonar', version: '1.0', title: 'Sonar et écho', variants: [{ id: 'sonar', label: 'sonar' }], commands: commandes,
-  command_schema: { play_until: { moment: Object.keys(MOTIFS).join(' | ') + ' (rejoue et se fige à cet instant clé)' }, set_parameters: { d_m: '10..75 (pas de 7,5 m)' } } };
+  command_schema: { play_until: { moment: Object.keys(MOTIFS).join(' | ') + ' (rejoue et se fige à cet instant clé)' }, set_parameters: { d_m: '10..75 (pas de 7,5 m)', conclusions: 'true | false (false : la formule 2d = v·τ n’est pas écrite, pour une question d’observation)' } } };
 const pont = protocole({ id: config.id, commandes, config,
   texte: `Sonar dans l’eau de mer, v = ${V} m/s. Profondeur d réglable de 10 à 75 m. τ = 2d / v ; d = v·τ / 2.`,
-  etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : (S.fait ? 'finished' : 'idle'), ce_qui_se_voit: ceQuiSeVoit(), moments: moments(), parameters: { d_m: S.d }, tau_ms: +tau().toFixed(1) }),
+  etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : (S.fait ? 'finished' : 'idle'), ce_qui_se_voit: ceQuiSeVoit(), moments: moments(), parameters: { d_m: S.d, conclusions: S.conclusions }, tau_ms: +tau().toFixed(1) }),
   progression: () => (S.fait ? 1 : 0),
   executer: (cmd, p) => ({ start, fire_pulse: start, pause, resume, reset, set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
 bulle($('feedback'), 'Émets une salve, puis lis τ.');

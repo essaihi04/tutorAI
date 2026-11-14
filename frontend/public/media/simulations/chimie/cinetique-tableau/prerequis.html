@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Les bases, depuis zéro — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css">
+<style>
+/* Copie identique dans les quatre dossiers de chimie (cinetique, transformations-deux-sens, etat-equilibre, acides-bases) :
+ * même style que cin.css / tds.css / ee.css / ab.css, écrit ici pour que les quatre copies restent identiques. */
+:root { color-scheme: normal; }
+html, body { background: transparent !important; }
+body { background-image: none !important; }
+.tableau { padding: .4em .6em; gap: .3em; }
+.barre { justify-content: flex-start; order: -1; }
+.barre .bulle { flex: 1 1 10em; }
+.scene { padding-bottom: 4.5em; }
+</style></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Les notions de base de la chimie, expliquées depuis zéro à la craie : la mole, la concentration, l'ion, l'équation et ses coefficients, la pente et la tangente, la pression d'un gaz, les puissances de dix et le log, la dilution"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume reset play_until set_time">Lancer</button>
+    <span id="reglage" data-professor-control="set_parameters"></span>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script src="deroule.js"></script>
+<script>
+/*
+ * Les bases, depuis zéro (14 novembre 2026, professeur règles 33 et 34 : l'élève ne connaît rien ; chaque prérequis
+ * des années d'avant est ENSEIGNÉ sur une diapositive de rappel, avec une animation, puis redit d'une autre façon).
+ * Copie identique dans chimie/cinetique-tableau, transformations-deux-sens-tableau, etat-equilibre-tableau, acides-bases-tableau.
+ *
+ * Vues (?vue=) et moments (play_until) :
+ *   mole          : entites | douzaine | paquet | millimole | masse            curseur masse_g (9 → 90 g d'eau)
+ *   concentration : solute | dissoudre | relation | plus_eau | n_cv            curseur volume_ml (50 → 250 mL)
+ *   ion           : atome | perd | gagne | proton | solution
+ *   equation      : equation | coefficients | une_fois | trois_fois | recette  curseur fois (1 → 5)
+ *   pente         : droite | triangle | pente | courbe | tangente               curseur date_min (0 → 30 min)
+ *   gaz           : ballon | chocs | plus | relation | unites                  curseur molecules (10 → 60)
+ *   puissance     : dix | negatif | ecriture | log | moins_log                 curseur exposant (−7 → 0)
+ *   dilution      : mere | prelever | fiole | completer | meme_quantite | facteur   curseur volume_fiole_ml (20 → 500 mL)
+ * Repères : un par étape (même nom), plus ceux cités dans chaque vue (voir `explication`).
+ */
+const T = window.Tableau, { fr } = T, P = window.Peinture, sci = window.Deroule.sci;
+const VUES = ['mole', 'concentration', 'ion', 'equation', 'pente', 'gaz', 'puissance', 'dilution'];
+const R = { masse_g: 36, volume_ml: 100, fois: 3, date_min: 0, molecules: 24, exposant: -3, volume_fiole_ml: 100 };
+const TITRES = { mole: 'La mole : compter par paquets', concentration: 'La concentration : C = n / V', ion: 'L’ion : un atome qui a perdu ou gagné des électrons',
+  equation: 'L’équation : une recette, les coefficients', pente: 'La pente d’une droite, la tangente à une courbe', gaz: 'La pression d’un gaz : P·V = n·R·T',
+  puissance: 'Les puissances de dix et le log', dilution: 'La dilution : même quantité, plus d’eau' };
+
+/* ── Petites peintures en couleur (règle 32), sous la craie ─────────────────────────────────────────────── */
+const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+function hasard(n) { let s = n * 9301 + 49297; return () => ((s = (s * 9301 + 49297) % 233280) / 233280); }
+function oeufs(ctx, x, y) {
+  ctx.save();
+  const g = ctx.createLinearGradient(0, y, 0, y + 64); g.addColorStop(0, '#b9a27f'); g.addColorStop(1, '#8a7558');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y + 22, 196, 44, 6); ctx.fill();
+  for (let k = 0; k < 12; k++) {
+    const ex = x + 18 + (k % 6) * 32, ey = y + (k < 6 ? 30 : 50);
+    const e = ctx.createRadialGradient(ex - 4, ey - 6, 2, ex, ey, 15); e.addColorStop(0, '#fffaf0'); e.addColorStop(.6, '#f1e3c8'); e.addColorStop(1, '#c9b48e');
+    ctx.fillStyle = e; ctx.beginPath(); ctx.ellipse(ex, ey - 8, 11, 14, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+function caisse(ctx, x, y, w, h) {
+  ctx.save();
+  const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#b07a45'); g.addColorStop(1, '#7a4e26');
+  ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = 'rgba(60,35,15,.75)'; ctx.lineWidth = 2;
+  for (let k = 1; k < 4; k++) { ctx.beginPath(); ctx.moveTo(x, y + k * h / 4); ctx.lineTo(x + w, y + k * h / 4); ctx.stroke(); }
+  ctx.strokeRect(x, y, w, h);
+  ctx.restore();
+}
+function balance(ctx, x, y, m) {
+  ctx.save();
+  let g = ctx.createLinearGradient(0, y, 0, y + 46); g.addColorStop(0, '#d7dde3'); g.addColorStop(1, '#8d979f');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y + 20, 150, 46, 6); ctx.fill();
+  ctx.fillStyle = '#c3cbd2'; ctx.beginPath(); ctx.ellipse(x + 75, y + 18, 60, 7, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#13261b'; ctx.beginPath(); ctx.roundRect(x + 38, y + 34, 74, 22, 3); ctx.fill();
+  ctx.fillStyle = '#7CFC9A'; ctx.font = '15px monospace'; ctx.textAlign = 'center'; ctx.fillText(`${fr(m, 1)} g`, x + 75, y + 50);
+  ctx.restore();
+}
+function ballon(ctx, cx, cy, r) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(190,220,240,.1)'; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(225,240,252,.85)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI / 2 + .2, Math.PI * 1.5 - .2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx - 17, cy - r + 3); ctx.lineTo(cx - 17, cy - r - 46); ctx.moveTo(cx + 17, cy - r + 3); ctx.lineTo(cx + 17, cy - r - 46); ctx.stroke();
+  const g = ctx.createLinearGradient(cx - 20, 0, cx + 20, 0); g.addColorStop(0, '#5a2e12'); g.addColorStop(.5, '#a0603a'); g.addColorStop(1, '#5a2e12');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(cx - 21, cy - r - 62, 42, 22, 4); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(cx, cy, r * .8, Math.PI * 1.1, Math.PI * 1.4); ctx.stroke();
+  ctx.restore();
+}
+function manometre(ctx, cx, cy, r, part) {
+  ctx.save();
+  ctx.fillStyle = '#2b3138'; ctx.beginPath(); ctx.arc(cx, cy, r + 6, 0, Math.PI * 2); ctx.fill();
+  const g = ctx.createRadialGradient(cx - 8, cy - 8, 4, cx, cy, r); g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#d9dee3');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#333'; ctx.lineWidth = 1.2;
+  for (let k = 0; k <= 10; k++) { const a = Math.PI * (.75 + 1.5 * k / 10); ctx.beginPath(); ctx.moveTo(cx + (r - 8) * Math.cos(a), cy + (r - 8) * Math.sin(a)); ctx.lineTo(cx + (r - 2) * Math.cos(a), cy + (r - 2) * Math.sin(a)); ctx.stroke(); }
+  const a = Math.PI * (.75 + 1.5 * Math.max(0, Math.min(1, part)));
+  ctx.strokeStyle = '#c0392b'; ctx.lineWidth = 2.6; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + (r - 10) * Math.cos(a), cy + (r - 10) * Math.sin(a)); ctx.stroke();
+  ctx.fillStyle = '#222'; ctx.beginPath(); ctx.arc(cx, cy, 3.5, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+function regle(ctx, x, y, w) {
+  ctx.save();
+  const g = ctx.createLinearGradient(0, y, 0, y + 30); g.addColorStop(0, '#e9c98f'); g.addColorStop(1, '#b8924f');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, 30, 4); ctx.fill();
+  ctx.strokeStyle = 'rgba(90,60,20,.6)'; ctx.lineWidth = 1;
+  for (let k = 0; k <= 70; k++) { const xx = x + 10 + k * (w - 20) / 70; ctx.beginPath(); ctx.moveTo(xx, y); ctx.lineTo(xx, y + (k % 10 ? 7 : 14)); ctx.stroke(); }
+  ctx.restore();
+}
+function fiole(ctx, cx, yb, r, yCol, surface, liq) {
+  const cy = yb - r, col = 15, d = Math.asin(col / 2 / r), yJ = cy - r * Math.cos(d);
+  const forme = () => {
+    ctx.beginPath(); ctx.moveTo(cx - col / 2, yCol); ctx.lineTo(cx - col / 2, yJ);
+    ctx.arc(cx, cy, r, -Math.PI / 2 - d, -Math.PI / 2 + d, true); ctx.lineTo(cx + col / 2, yCol);
+  };
+  ctx.save();
+  forme(); ctx.fillStyle = 'rgba(190,220,240,.1)'; ctx.fill();
+  if (liq && surface != null) {
+    ctx.save(); forme(); ctx.closePath(); ctx.clip();
+    ctx.fillStyle = rgba(liq, liq[3]); ctx.fillRect(cx - r - 2, surface, 2 * r + 4, yb - surface + 2); ctx.restore();
+  }
+  ctx.strokeStyle = 'rgba(225,240,252,.85)'; ctx.lineWidth = 1.8; forme(); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(cx - col / 2 - 3, yCol + 24); ctx.lineTo(cx + col / 2 + 3, yCol + 24); ctx.stroke();
+  ctx.restore();
+  return yCol + 24;
+}
+function pipette(ctx, x, yh, yb, part, liq) {
+  ctx.save();
+  const ym = (yh + yb) / 2;
+  ctx.fillStyle = 'rgba(190,220,240,.12)'; ctx.strokeStyle = 'rgba(225,240,252,.85)'; ctx.lineWidth = 1.4;
+  ctx.beginPath(); ctx.rect(x - 3, yh, 6, yb - yh); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(x, ym, 9, 20, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  if (part > 0) { ctx.fillStyle = rgba(liq, liq[3]); const h = (yb - ym + 20) * part; ctx.fillRect(x - 2.4, yb - h, 4.8, h); if (yb - h < ym + 18) { ctx.beginPath(); ctx.ellipse(x, ym, 8, 19, 0, 0, Math.PI * 2); ctx.globalAlpha = Math.min(1, (ym + 18 - (yb - h)) / 20); ctx.fill(); } }
+  ctx.restore();
+}
+const CPK = P.CPK;
+function eau(ctx, x, y, s = 1) { P.sphere(ctx, x, y, 8 * s, CPK.O); P.sphere(ctx, x - 8 * s, y + 6 * s, 5 * s, CPK.H); P.sphere(ctx, x + 8 * s, y + 6 * s, 5 * s, CPK.H); }
+function peroxyde(ctx, x, y, s = 1) { P.sphere(ctx, x - 6 * s, y, 7.5 * s, CPK.O); P.sphere(ctx, x + 6 * s, y, 7.5 * s, CPK.O); P.sphere(ctx, x - 14 * s, y - 6 * s, 4.5 * s, CPK.H); P.sphere(ctx, x + 14 * s, y + 6 * s, 4.5 * s, CPK.H); }
+const iode = (ctx, x, y, s = 1) => P.sphere(ctx, x, y, 9 * s, CPK.I);
+
+/* ── Les étapes de chaque vue ───────────────────────────────────────────────────────────────────────────── */
+const ETAPES = {
+  mole: [
+    { nom: 'entites', duree: 1.4, motif: 'des entités trop nombreuses pour les compter une à une' },
+    { nom: 'douzaine', duree: 1.2, motif: 'on compte les œufs par douzaine : 12' },
+    { nom: 'paquet', duree: 1.6, motif: 'la mole : un paquet de 6,02·10²³ entités' },
+    { nom: 'millimole', duree: 1, motif: '1 mmol = 10⁻³ mol' },
+    { nom: 'masse', duree: 1.4, motif: 'n = m / M : la balance donne m, le tableau donne M' },
+  ],
+  concentration: [
+    { nom: 'solute', duree: 1, motif: 'une quantité n de soluté' },
+    { nom: 'dissoudre', duree: 1.6, motif: 'dissous dans un volume V d’eau' },
+    { nom: 'relation', duree: 1, motif: 'C = n / V' },
+    { nom: 'plus_eau', duree: 1.6, motif: 'la même quantité dans plus d’eau : plus pâle, C plus petite' },
+    { nom: 'n_cv', duree: 1, motif: 'n = C · V' },
+  ],
+  ion: [
+    { nom: 'atome', duree: 1.2, motif: 'l’atome : autant de + que de −, il est neutre' },
+    { nom: 'perd', duree: 1.6, motif: 'Na perd un électron : Na⁺, un ion positif' },
+    { nom: 'gagne', duree: 1.6, motif: 'Cl gagne un électron : Cl⁻, un ion négatif' },
+    { nom: 'proton', duree: 1.6, motif: 'H perd son électron : H⁺, il ne reste qu’un proton' },
+    { nom: 'solution', duree: 1.2, motif: 'des ions dans l’eau : une solution ionique' },
+  ],
+  equation: [
+    { nom: 'equation', duree: 1.2, motif: 'l’équation de la réaction' },
+    { nom: 'coefficients', duree: 1, motif: 'les coefficients : 1, 2, 2 donnent 1, 2' },
+    { nom: 'une_fois', duree: 2.2, motif: 'une fois la recette : 1 H₂O₂ et 2 I⁻ donnent 1 I₂' },
+    { nom: 'trois_fois', duree: 1.8, motif: 'plusieurs fois la recette : toujours les mêmes proportions' },
+    { nom: 'recette', duree: 1, motif: 'comme une recette de cuisine' },
+  ],
+  pente: [
+    { nom: 'droite', duree: 1.4, motif: 'une droite : x monte toujours de la même façon' },
+    { nom: 'triangle', duree: 1.2, motif: 'un triangle : Δt en bas, Δx à droite' },
+    { nom: 'pente', duree: 1, motif: 'pente = Δx / Δt' },
+    { nom: 'courbe', duree: 1.6, motif: 'une courbe : sa pente change d’un point à l’autre' },
+    { nom: 'tangente', duree: 1.4, motif: 'la tangente : la droite qui touche la courbe en un point' },
+  ],
+  gaz: [
+    { nom: 'ballon', duree: 1, motif: 'un ballon fermé relié à un manomètre' },
+    { nom: 'chocs', duree: 1.6, motif: 'les molécules frappent la paroi : c’est la pression' },
+    { nom: 'plus', duree: 1.4, motif: 'plus de molécules, plus de chocs, P plus grande' },
+    { nom: 'relation', duree: 1, motif: 'P · V = n · R · T' },
+    { nom: 'unites', duree: 1, motif: 'les unités : Pa, m³, mol, K' },
+  ],
+  puissance: [
+    { nom: 'dix', duree: 1.2, motif: '10¹ = 10, 10² = 100, 10³ = 1000' },
+    { nom: 'negatif', duree: 1.6, motif: 'puissance négative : chaque pas divise par dix' },
+    { nom: 'ecriture', duree: 1.2, motif: '4,0·10⁻⁴ = 0,00040' },
+    { nom: 'log', duree: 1.2, motif: 'log(10⁻³) = −3 : le log donne l’exposant' },
+    { nom: 'moins_log', duree: 1, motif: '− log(10⁻³) = 3 : un nombre simple' },
+  ],
+  dilution: [
+    { nom: 'mere', duree: 1, motif: 'la solution mère' },
+    { nom: 'prelever', duree: 1.6, motif: 'la pipette prélève 10 mL' },
+    { nom: 'fiole', duree: 1.4, motif: 'les 10 mL vont dans la fiole jaugée' },
+    { nom: 'completer', duree: 1.8, motif: 'on complète avec l’eau jusqu’au trait' },
+    { nom: 'meme_quantite', duree: 1, motif: 'la quantité de soluté n’a pas changé : C₀·V₀ = C₁·V₁' },
+    { nom: 'facteur', duree: 1, motif: 'C₁ = C₀ / F : diluée F fois' },
+  ],
+};
+const etapes = v => ETAPES[v];
+
+/* ── Dessins ───────────────────────────────────────────────────────────────────────────────────────────── */
+function titre(c, D) { c.texte(TITRES[D.S.vue], 380, 26, { couleur: 'blanc', taille: 19, align: 'center', max: 720 }); }
+function ecrire(c, D, nom, fn) { if (!D.commence(nom)) return; D.ecrire(c, nom); fn(); }
+
+function vueMole(c, D) {
+  const ctx = c.ctx;
+  ecrire(c, D, 'entites', () => {
+    c.direct(() => { const r = hasard(3); for (let k = 0; k < 70; k++) eau(ctx, 50 + r() * 170, 110 + r() * 150, .55); });
+    c.texte('des entités (molécules, ions…)', 135, 290, { couleur: 'faible', taille: 15, align: 'center' });
+    c.texte('trop nombreuses pour les compter une à une', 135, 310, { couleur: 'faible', taille: 14, align: 'center', max: 230 });
+    c.repere('entites', 40, 95, 200, 225, 'des entités trop nombreuses');
+  });
+  ecrire(c, D, 'douzaine', () => {
+    c.direct(() => oeufs(ctx, 262, 120));
+    c.texte('1 douzaine = 12 œufs', 360, 222, { couleur: 'jaune', taille: 18, align: 'center' });
+    c.texte('on compte par paquets', 360, 246, { couleur: 'faible', taille: 15, align: 'center' });
+    c.repere('douzaine', 256, 110, 210, 145, 'la douzaine : 12 œufs');
+  });
+  ecrire(c, D, 'paquet', () => {
+    const p = D.p('paquet');
+    c.direct(() => {
+      caisse(ctx, 520, 130, 190, 110);
+      const r = hasard(7); for (let k = 0; k < 26; k++) { const x0 = 230, y0 = 180, x1 = 540 + r() * 150, y1 = 145 + r() * 80; eau(ctx, x0 + (x1 - x0) * p, y0 + (y1 - y0) * p, .5); }
+    });
+    c.texte('1 mole = 6,02·10²³ entités', 615, 112, { couleur: 'jaune', taille: 18, align: 'center' });
+    c.texte('la mole : le paquet des chimistes', 615, 268, { couleur: 'blanc', taille: 15, align: 'center', max: 240 });
+    c.repere('mole', 510, 92, 210, 185, 'la mole : un paquet de 6,02·10²³ entités');
+  });
+  ecrire(c, D, 'millimole', () => {
+    c.texte('1 mmol = 10⁻³ mol (un millième de paquet)', 615, 296, { couleur: 'cyan', taille: 15, align: 'center', max: 250 });
+    c.texte('n : la quantité de matière, en mol', 615, 318, { couleur: 'faible', taille: 14, align: 'center', max: 250 });
+    c.repere('millimole', 490, 280, 250, 46, '1 mmol = 10⁻³ mol');
+  });
+  ecrire(c, D, 'masse', () => {
+    c.direct(() => balance(ctx, 40, 334, R.masse_g));
+    c.texte('n = m / M', 250, 372, { couleur: 'jaune', taille: 22 });
+    c.direct(() => c.texte(`eau : M = 18 g/mol ; m = ${fr(R.masse_g, 0)} g → n = ${fr(R.masse_g, 0)} / 18 = ${fr(R.masse_g / 18, 1)} mol`, 250, 400, { couleur: 'blanc', taille: 15, max: 490 }));
+    c.repere('relation', 240, 350, 500, 60, 'n = m / M');
+    c.repere('balance', 36, 330, 160, 76, 'la balance : la masse m');
+  });
+}
+
+function vueConcentration(c, D) {
+  const ctx = c.ctx, V = R.volume_ml, n = 2.0, C = n / (V / 1000), C2 = n / 0.2;
+  const coul = C => [37, 99, 235, Math.min(.85, .1 + C / 45)];
+  ecrire(c, D, 'solute', () => {
+    c.direct(() => {
+      ctx.save(); ctx.fillStyle = 'rgba(200,225,245,.25)'; ctx.beginPath(); ctx.ellipse(95, 200, 50, 10, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+      const r = hasard(5); for (let k = 0; k < 14; k++) P.sphere(ctx, 70 + r() * 50, 192 - r() * 10, 4, [37, 99, 235]);
+    });
+    c.texte('soluté : n = 2,0 mmol', 95, 236, { couleur: 'cyan', taille: 15, align: 'center' });
+    c.repere('solute', 40, 170, 110, 75, 'le soluté : n = 2,0 mmol');
+  });
+  const hB = 170, y0 = 110;
+  ecrire(c, D, 'dissoudre', () => {
+    const p = D.p('dissoudre');
+    c.direct(() => P.becher(ctx, 175, y0, 110, hB, { surface: y0 + hB - hB * .8 * Math.min(1, V / 250) * p, liquide: coul(C) }));
+    c.direct(() => c.texte(`V = ${fr(V, 0)} mL`, 230, y0 + hB + 24, { couleur: 'blanc', taille: 15, align: 'center' }));
+    c.repere('becher', 170, y0, 120, hB + 30, 'la solution : n dans V');
+  });
+  ecrire(c, D, 'relation', () => {
+    c.texte('C = n / V', 480, 110, { couleur: 'jaune', taille: 26 });
+    c.direct(() => c.texte(`C = 2,0 mmol / ${fr(V / 1000, 3)} L = ${fr(C, 0)} mmol/L`, 480, 142, { couleur: 'blanc', taille: 16, max: 270 }));
+    c.texte('C en mol/L : combien de soluté dans un litre', 480, 166, { couleur: 'faible', taille: 14, max: 270 });
+    c.repere('relation', 470, 84, 280, 92, 'C = n / V');
+  });
+  ecrire(c, D, 'plus_eau', () => {
+    const p = D.p('plus_eau');
+    c.direct(() => P.becher(ctx, 315, y0, 120, hB, { surface: y0 + hB - hB * .8 * .8 * p, liquide: coul(C2) }));
+    c.texte('même n, V = 200 mL', 375, y0 + hB + 24, { couleur: 'blanc', taille: 15, align: 'center' });
+    c.texte('→ C = 10 mmol/L : plus pâle', 375, y0 + hB + 44, { couleur: 'cyan', taille: 15, align: 'center' });
+    c.repere('becher_2', 310, y0, 130, hB + 50, 'la même quantité dans 200 mL');
+  });
+  ecrire(c, D, 'n_cv', () => {
+    c.texte('n = C · V', 480, 230, { couleur: 'jaune', taille: 24 });
+    c.texte('connaître C et V, c’est connaître n', 480, 258, { couleur: 'faible', taille: 14, max: 270 });
+    c.repere('n_cv', 470, 204, 280, 64, 'n = C · V');
+  });
+}
+
+function vueIon(c, D) {
+  const ctx = c.ctx;
+  const atome = (cx, cy, couleurNoyau, nE, lib) => {
+    c.direct(() => {
+      ctx.save(); ctx.strokeStyle = 'rgba(147,197,253,.35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(cx, cy, 44, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+      P.sphere(ctx, cx, cy, 14, couleurNoyau);
+      for (let k = 0; k < nE; k++) { const a = k / Math.max(1, nE) * Math.PI * 2 + .4; P.sphere(ctx, cx + 44 * Math.cos(a), cy + 44 * Math.sin(a), 5, [96, 165, 250]); }
+    });
+    c.texte(lib, cx, cy + 5, { couleur: 'blanc', taille: 13, align: 'center' });
+  };
+  ecrire(c, D, 'atome', () => {
+    atome(130, 160, [234, 88, 12], 3, '+');
+    c.texte('atome de sodium Na', 130, 232, { couleur: 'blanc', taille: 15, align: 'center' });
+    c.texte('autant de + que de − : neutre', 130, 252, { couleur: 'faible', taille: 14, align: 'center', max: 220 });
+    c.repere('atome', 70, 100, 120, 160, 'l’atome : neutre');
+  });
+  ecrire(c, D, 'perd', () => {
+    const p = D.p('perd');
+    c.direct(() => P.sphere(ctx, 174 + 70 * p, 160 - 40 * p, 5, [96, 165, 250]));
+    c.texte('e⁻', 186 + 70 * p, 136 - 40 * p, { couleur: 'bleu', taille: 14 });
+    c.texte('il perd un électron → Na⁺', 130, 278, { couleur: 'rouge', taille: 16, align: 'center', max: 240 });
+    c.texte('un ion positif', 130, 298, { couleur: 'rouge', taille: 14, align: 'center' });
+    c.repere('cation', 60, 262, 150, 44, 'Na⁺ : ion positif');
+  });
+  ecrire(c, D, 'gagne', () => {
+    const p = D.p('gagne');
+    atome(380, 160, [34, 197, 94], 3, '+');
+    c.direct(() => P.sphere(ctx, 460 - 36 * p, 110 + 30 * p, 5, [96, 165, 250]));
+    c.texte('atome de chlore Cl', 380, 232, { couleur: 'blanc', taille: 15, align: 'center' });
+    c.texte('il gagne un électron → Cl⁻', 380, 278, { couleur: 'bleu', taille: 16, align: 'center', max: 240 });
+    c.texte('un ion négatif', 380, 298, { couleur: 'bleu', taille: 14, align: 'center' });
+    c.repere('anion', 310, 100, 150, 206, 'Cl⁻ : ion négatif');
+  });
+  ecrire(c, D, 'proton', () => {
+    const p = D.p('proton');
+    c.direct(() => { P.sphere(ctx, 620, 160, 10, [220, 38, 38]); P.sphere(ctx, 620 + 30 + 60 * p, 160 - 30 * p, 5, [96, 165, 250]); });
+    c.texte('atome H : 1 proton, 1 électron', 620, 232, { couleur: 'blanc', taille: 15, align: 'center', max: 230 });
+    c.texte('il perd son électron → H⁺', 620, 278, { couleur: 'jaune', taille: 16, align: 'center', max: 240 });
+    c.texte('il ne reste qu’un proton', 620, 298, { couleur: 'jaune', taille: 14, align: 'center' });
+    c.repere('proton', 550, 110, 150, 196, 'H⁺ : un proton seul');
+  });
+  ecrire(c, D, 'solution', () => {
+    c.direct(() => {
+      P.becher(ctx, 70, 322, 90, 80, { surface: 334, liquide: [125, 180, 230, .35] });
+      const r = hasard(11), t = performance.now() / 1000;
+      for (let k = 0; k < 10; k++) { const x = 84 + r() * 62 + 3 * Math.sin(t * 2 + k), y = 345 + r() * 48; P.sphere(ctx, x, y, 4, k % 2 ? [220, 38, 38] : [37, 99, 235]); }
+    });
+    c.texte('une solution ionique : des ions + et − dans l’eau', 190, 352, { couleur: 'blanc', taille: 16, max: 540 });
+    c.texte('ce sont eux qui portent le courant', 190, 378, { couleur: 'faible', taille: 15, max: 540 });
+    c.repere('solution', 64, 318, 680, 92, 'la solution ionique');
+  });
+}
+
+function vueEquation(c, D) {
+  const ctx = c.ctx;
+  ecrire(c, D, 'equation', () => {
+    c.texte('H₂O₂  +  2 I⁻  +  2 H⁺   →   I₂  +  2 H₂O', 380, 74, { couleur: 'blanc', taille: 24, align: 'center' });
+    c.repere('equation', 120, 48, 520, 36, 'l’équation');
+  });
+  ecrire(c, D, 'coefficients', () => {
+    c.texte('les coefficients :  1   2   2   →   1   2', 380, 106, { couleur: 'jaune', taille: 17, align: 'center' });
+    c.texte('(H⁺ en excès : il y en a toujours assez)', 380, 128, { couleur: 'faible', taille: 13, align: 'center' });
+    c.repere('coefficients', 180, 88, 400, 46, 'les coefficients');
+  });
+  ecrire(c, D, 'une_fois', () => {
+    const p = D.p('une_fois'), avant = p < .55, k = Math.min(1, p / .55);
+    c.direct(() => {
+      if (avant) { peroxyde(ctx, 120 + 120 * k, 190); iode(ctx, 190 + 70 * k, 170); iode(ctx, 190 + 70 * k, 210); }
+      else { iode(ctx, 470, 190); iode(ctx, 486, 190); eau(ctx, 560, 186); eau(ctx, 610, 186); }
+    });
+    c.fleche(320, 190, 420, 190, { couleur: 'faible', largeur: 2 });
+    c.texte('1 H₂O₂ + 2 I⁻', 170, 240, { couleur: 'cyan', taille: 15, align: 'center' });
+    c.texte('1 I₂ + 2 H₂O', 530, 240, { couleur: 'violet', taille: 15, align: 'center' });
+    c.repere('molecules', 90, 150, 580, 100, 'une fois la recette');
+  });
+  ecrire(c, D, 'trois_fois', () => {
+    const f = R.fois;
+    c.direct(() => { for (let k = 0; k < f; k++) peroxyde(ctx, 70 + k * 34, 290, .6); for (let k = 0; k < 2 * f; k++) iode(ctx, 70 + k * 18, 318, .6); for (let k = 0; k < f; k++) { iode(ctx, 470 + k * 34, 300, .6); iode(ctx, 480 + k * 34, 300, .6); } });
+    c.fleche(300, 304, 420, 304, { couleur: 'faible', largeur: 2 });
+    c.direct(() => c.texte(`${f} H₂O₂ + ${2 * f} I⁻  →  ${f} I₂ + ${2 * f} H₂O`, 380, 352, { couleur: 'blanc', taille: 18, align: 'center' }));
+    c.texte('il faut toujours 2 I⁻ pour 1 H₂O₂', 380, 376, { couleur: 'jaune', taille: 15, align: 'center' });
+    c.repere('proportions', 50, 270, 660, 112, 'plusieurs fois la recette');
+  });
+  ecrire(c, D, 'recette', () => {
+    c.texte('comme une recette : 1 œuf et 2 verres de farine', 380, 404, { couleur: 'orange', taille: 16, align: 'center', max: 700 });
+    c.repere('recette', 120, 386, 520, 26, 'une recette');
+  });
+}
+
+const G = { x0: 70, y0: 370, w: 380, h: 270, tm: 32, xm: 2.4 };
+const gx = t => G.x0 + t / G.tm * G.w, gy = x => G.y0 - x / G.xm * G.h;
+const courbeX = t => 2 * (1 - Math.exp(-t / 8)), penteX = t => .25 * Math.exp(-t / 8);
+function vuePente(c, D) {
+  c.axe(G.x0, G.y0, G.x0 + G.w + 14, G.y0, [0, 8, 16, 24, 32].map(t => [t / G.tm * G.w / (G.w + 14), String(t)]), { taille: 13 });
+  c.axe(G.x0, G.y0, G.x0, G.y0 - G.h - 14, [0, 1, 2].map(x => [x / G.xm * G.h / (G.h + 14), String(x)]), { taille: 13, vertical: true });
+  c.texte('t (min)', G.x0 + G.w + 10, G.y0 + 36, { couleur: 'faible', taille: 14, align: 'right' });
+  c.texte('x (mmol)', G.x0 + 6, G.y0 - G.h - 20, { couleur: 'faible', taille: 14 });
+  const RX = 490;
+  const droiteVisible = !D.commence('courbe');
+  ecrire(c, D, 'droite', () => {
+    if (droiteVisible) c.ligne(gx(0), gy(0), gx(22), gy(2.2), { couleur: 'cyan', largeur: 2.4 });
+    c.texte('une droite : x monte toujours pareil', RX, 90, { couleur: 'cyan', taille: 15, max: 260 });
+    c.repere('droite', G.x0, G.y0 - G.h, G.w, G.h, 'la droite');
+  });
+  ecrire(c, D, 'triangle', () => {
+    if (droiteVisible) { c.ligne(gx(8), gy(.8), gx(16), gy(.8), { couleur: 'jaune', largeur: 2 }); c.ligne(gx(16), gy(.8), gx(16), gy(1.6), { couleur: 'jaune', largeur: 2 }); c.texte('Δt = 8 min', gx(12), gy(.8) + 18, { couleur: 'jaune', taille: 13, align: 'center' }); c.texte('Δx = 0,8', gx(16) + 6, gy(1.2), { couleur: 'jaune', taille: 13 }); }
+    c.texte('Δt : on avance dans le temps ; Δx : de combien x monte', RX, 116, { couleur: 'faible', taille: 14, max: 260 });
+    c.repere('triangle', gx(8) - 6, gy(1.6) - 6, gx(16) - gx(8) + 60, gy(.8) - gy(1.6) + 26, 'le triangle Δt, Δx');
+  });
+  ecrire(c, D, 'pente', () => {
+    c.texte('pente = Δx / Δt = 0,8 / 8 = 0,1 mmol/min', RX, 146, { couleur: 'jaune', taille: 16, max: 260 });
+    c.repere('pente', RX - 6, 128, 266, 28, 'pente = Δx / Δt');
+  });
+  ecrire(c, D, 'courbe', () => {
+    const p = D.p('courbe');
+    c.direct(() => c.courbe(u => [gx(u * 32 * p), gy(courbeX(u * 32 * p))], 80, { couleur: 'blanc', largeur: 2.4 }));
+    c.texte('une courbe : raide au début, plate à la fin', RX, 186, { couleur: 'blanc', taille: 15, max: 260 });
+    c.texte('sa pente change à chaque date', RX, 208, { couleur: 'faible', taille: 14, max: 260 });
+    c.repere('courbe', G.x0, G.y0 - G.h, G.w, G.h, 'la courbe x(t)');
+  });
+  ecrire(c, D, 'tangente', () => {
+    const t0 = R.date_min, x0 = courbeX(t0), s = penteX(t0), a = Math.max(0, t0 - 9), b = Math.min(32, t0 + 9);
+    c.direct(() => {
+      c.ligne(gx(a), gy(Math.max(0, x0 + s * (a - t0))), gx(b), gy(Math.min(2.4, x0 + s * (b - t0))), { couleur: 'vert', largeur: 2.4 });
+      c.point(gx(t0), gy(x0), 5, 'jaune');
+      c.texte(`à t = ${fr(t0, 0)} min : pente ≈ ${fr(s, 2)} mmol/min`, RX, 252, { couleur: 'vert', taille: 15, max: 260 });
+    });
+    c.texte('la tangente touche la courbe en un seul point', RX, 276, { couleur: 'faible', taille: 14, max: 260 });
+    c.texte('sa pente : dx/dt à cette date', RX, 300, { couleur: 'jaune', taille: 15, max: 260 });
+    c.repere('tangente', RX - 6, 234, 266, 76, 'la tangente et sa pente');
+  });
+}
+
+function vueGaz(c, D) {
+  const ctx = c.ctx, cx = 190, cy = 250, r = 105, N = R.molecules, t = performance.now() / 1000;
+  ecrire(c, D, 'ballon', () => {
+    c.direct(() => { ballon(ctx, cx, cy, r); manometre(ctx, 470, 120, 48, D.commence('chocs') ? N / 70 : .1); });
+    c.direct(() => { ctx.save(); ctx.strokeStyle = '#888'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(cx + 22, cy - r - 52); ctx.lineTo(410, cy - r - 52); ctx.lineTo(430, 150); ctx.stroke(); ctx.restore(); });
+    c.texte('ballon fermé', cx, cy + r + 28, { couleur: 'faible', taille: 15, align: 'center' });
+    c.texte('manomètre', 470, 196, { couleur: 'faible', taille: 15, align: 'center' });
+    c.repere('ballon', cx - r, cy - r - 62, 2 * r, 2 * r + 70, 'le ballon fermé');
+    c.repere('manometre', 416, 66, 108, 140, 'le manomètre');
+  });
+  ecrire(c, D, 'chocs', () => {
+    c.direct(() => {
+      const rr = hasard(13);
+      for (let k = 0; k < N; k++) {
+        const ax = rr() * 6.28, sp = .5 + rr(), ph = rr() * 6.28, rad = (r - 12) * Math.abs(Math.sin(t * sp + ph));
+        P.sphere(ctx, cx + rad * Math.cos(ax + t * .2), cy + rad * Math.sin(ax + t * .2), 5, [148, 163, 184]);
+      }
+    });
+    c.texte('chaque molécule frappe la paroi : la pression P', 560, 252, { couleur: 'blanc', taille: 15, align: 'center', max: 290 });
+    c.repere('molecules', cx - r, cy - r, 2 * r, 2 * r, 'les molécules du gaz');
+  });
+  ecrire(c, D, 'plus', () => {
+    c.direct(() => c.texte(`${N} molécules`, 560, 280, { couleur: 'cyan', taille: 16, align: 'center' }));
+    c.texte('plus de molécules → plus de chocs → P plus grande', 560, 304, { couleur: 'jaune', taille: 15, align: 'center', max: 290 });
+    c.repere('plus', 410, 262, 300, 52, 'plus de gaz, plus de pression');
+  });
+  ecrire(c, D, 'relation', () => {
+    c.texte('P · V = n · R · T', 560, 346, { couleur: 'jaune', taille: 24, align: 'center' });
+    c.repere('relation', 440, 322, 240, 34, 'P · V = n · R · T');
+  });
+  ecrire(c, D, 'unites', () => {
+    c.texte('P en Pa · V en m³ · n en mol · T en K', 560, 376, { couleur: 'blanc', taille: 15, align: 'center', max: 300 });
+    c.texte('R = 8,31 ; 1 L = 10⁻³ m³ ; T = θ + 273', 560, 400, { couleur: 'faible', taille: 14, align: 'center', max: 300 });
+    c.repere('unites', 410, 360, 300, 50, 'les unités');
+  });
+}
+
+const RG = { x: 60, y: 150, w: 640 };
+const rgx = e => RG.x + 10 + (-e) / 7 * (RG.w - 20);   // 10⁰ à gauche, 10⁻⁷ à droite
+function decimal(e) { if (e >= 0) return fr(10 ** e, 0); const n = -e; return '0,' + '0'.repeat(n - 1) + '1'; }
+function vuePuissance(c, D) {
+  const ctx = c.ctx, e = R.exposant;
+  ecrire(c, D, 'dix', () => {
+    c.texte('10¹ = 10      10² = 100      10³ = 1 000', 380, 70, { couleur: 'blanc', taille: 19, align: 'center' });
+    c.texte('l’exposant compte les zéros', 380, 94, { couleur: 'faible', taille: 15, align: 'center' });
+    c.repere('dix', 160, 50, 440, 52, 'puissances positives');
+  });
+  ecrire(c, D, 'negatif', () => {
+    c.direct(() => regle(ctx, RG.x, RG.y, RG.w));
+    const p = D.p('negatif');
+    for (let k = 0; k <= 7; k++) if (p * 8 >= k) {
+      c.texte(k ? `10⁻${'¹²³⁴⁵⁶⁷'[k - 1]}` : '10⁰', rgx(-k), RG.y - 8, { couleur: 'cyan', taille: 15, align: 'center' });
+      c.texte(decimal(-k), rgx(-k), RG.y + 50, { couleur: 'faible', taille: 13, align: 'center' });
+    }
+    c.texte('à chaque pas vers la droite : on divise par 10', 380, RG.y + 76, { couleur: 'jaune', taille: 15, align: 'center' });
+    c.repere('regle', RG.x, RG.y - 26, RG.w, 86, 'la règle des puissances de dix');
+  });
+  ecrire(c, D, 'ecriture', () => {
+    c.direct(() => { const x = rgx(Math.log10(4e-4)); c.point(x, RG.y + 15, 6, 'jaune'); });
+    c.texte('4,0·10⁻⁴ = 0,00040 : entre 10⁻³ et 10⁻⁴', 380, 270, { couleur: 'jaune', taille: 17, align: 'center' });
+    c.repere('ecriture', 200, 250, 360, 30, 'l’écriture scientifique');
+  });
+  ecrire(c, D, 'log', () => {
+    c.texte('log(10⁻³) = −3 : le log donne l’exposant', 380, 312, { couleur: 'vert', taille: 18, align: 'center' });
+    c.repere('log', 180, 292, 400, 28, 'le log');
+  });
+  ecrire(c, D, 'moins_log', () => {
+    c.texte('− log(10⁻³) = 3  ;  − log(4,0·10⁻⁴) ≈ 3,4', 380, 350, { couleur: 'orange', taille: 18, align: 'center' });
+    c.texte('un nombre simple à la place d’un nombre tout petit', 380, 374, { couleur: 'faible', taille: 14, align: 'center' });
+    c.repere('moins_log', 150, 330, 460, 52, '− log');
+  });
+  if (D.commence('negatif') && (D.S.touche || D.commence('log'))) c.direct(() => {
+    c.point(rgx(e), RG.y + 15, 7, 'rose');
+    c.texte(`nombre = ${sci(10 ** e, 1)} ; log = ${fr(e, 1)} ; − log = ${fr(-e, 1)}`, 380, 404, { couleur: 'rose', taille: 15, align: 'center', max: 700 });
+  });
+}
+
+function vueDilution(c, D) {
+  const ctx = c.ctx, V1 = R.volume_fiole_ml, F = V1 / 10, C0 = 1e-2, C1 = C0 / F;
+  const coul = C => [234, 88, 12, Math.min(.85, .08 + .77 * C / C0)];
+  ecrire(c, D, 'mere', () => {
+    c.direct(() => P.becher(ctx, 40, 170, 110, 150, { surface: 210, liquide: coul(C0) }));
+    c.texte('solution mère', 95, 346, { couleur: 'blanc', taille: 15, align: 'center' });
+    c.texte('C₀ = 1,0·10⁻² mol/L', 95, 368, { couleur: 'orange', taille: 15, align: 'center' });
+    c.repere('mere', 34, 160, 122, 214, 'la solution mère');
+  });
+  const pPre = D.p('prelever'), pFi = D.p('fiole');
+  ecrire(c, D, 'prelever', () => {
+    const px = pFi > 0 ? 95 + (300 - 95) * Math.min(1, pFi * 1.6) : 95, py = pFi > 0 ? 100 - 20 * Math.min(1, pFi * 1.6) : 100 + 40 * Math.sin(pPre * Math.PI);
+    if (!D.commence('completer')) c.direct(() => pipette(ctx, px, py, py + 150, pFi > .6 ? 1 - (pFi - .6) / .4 : pPre, coul(C0)));
+    c.texte('pipette : V₀ = 10 mL', 200, 92, { couleur: 'cyan', taille: 15, align: 'center' });
+    c.repere('pipette', 60, 70, 270, 190, 'la pipette prélève 10 mL');
+  });
+  const sMarque = 154;
+  ecrire(c, D, 'fiole', () => {
+    const pC = D.p('completer'), base = pFi > .6 ? (pFi - .6) / .4 : 0;
+    const yb = 380, surf = pC > 0 ? yb - (yb - sMarque) * pC : yb - 30 * base;
+    const C = pC > 0 ? C0 * 10 / (10 + (V1 - 10) * pC) : C0;
+    c.direct(() => fiole(ctx, 300, yb, 70, 120, base > 0 || pC > 0 ? surf : null, coul(C)));
+    c.direct(() => c.texte(`fiole jaugée de ${fr(V1, 0)} mL`, 300, 406, { couleur: 'faible', taille: 14, align: 'center' }));
+    c.repere('fiole', 226, 112, 150, 300, 'la fiole jaugée');
+  });
+  ecrire(c, D, 'completer', () => {
+    c.direct(() => { if (D.p('completer') > 0 && D.p('completer') < 1) for (let k = 0; k < 3; k++) P.goutte(ctx, 300, 70 + ((performance.now() / 6 + k * 30) % 60), 3); });
+    c.texte('on complète avec l’eau distillée jusqu’au trait', 560, 150, { couleur: 'blanc', taille: 15, align: 'center', max: 300 });
+    c.texte('même soluté, plus d’eau : la couleur pâlit', 560, 174, { couleur: 'faible', taille: 14, align: 'center', max: 300 });
+    c.repere('trait', 280, sMarque - 12, 40, 24, 'le trait de jauge');
+  });
+  ecrire(c, D, 'meme_quantite', () => {
+    c.texte('n ne change pas :  C₀ · V₀ = C₁ · V₁', 560, 222, { couleur: 'jaune', taille: 18, align: 'center', max: 310 });
+    c.repere('meme_quantite', 406, 200, 310, 32, 'C₀ · V₀ = C₁ · V₁');
+  });
+  ecrire(c, D, 'facteur', () => {
+    c.direct(() => c.texte(`C₁ = C₀ · V₀ / V₁ = ${sci(C1, 1)} mol/L`, 560, 262, { couleur: 'orange', taille: 17, align: 'center', max: 310 }));
+    c.direct(() => c.texte(`facteur de dilution F = V₁ / V₀ = ${fr(F, F < 10 ? 1 : 0)}`, 560, 290, { couleur: 'blanc', taille: 15, align: 'center', max: 310 }));
+    c.texte('comme un verre de jus versé dans une carafe d’eau', 560, 322, { couleur: 'faible', taille: 14, align: 'center', max: 310 });
+    c.repere('facteur', 406, 240, 310, 92, 'C₁ = C₀ / F');
+  });
+}
+
+const VUES_DESSIN = { mole: vueMole, concentration: vueConcentration, ion: vueIon, equation: vueEquation, pente: vuePente, gaz: vueGaz, puissance: vuePuissance, dilution: vueDilution };
+function dessiner(c, D) {
+  D.scene.cadre(41);
+  titre(c, D);
+  VUES_DESSIN[D.S.vue](c, D);
+  return c.fin();
+}
+
+/* ── Ce que voit le tuteur (ce_qui_se_voit) ───────────────────────────────────────────────────────────── */
+function voir(D) {
+  const v = D.S.vue, faits = ETAPES[v].filter(e => D.commence(e.nom)).map(e => e.motif);
+  const reg = { mole: `m = ${fr(R.masse_g, 0)} g d’eau → n = ${fr(R.masse_g / 18, 1)} mol`, concentration: `V = ${fr(R.volume_ml, 0)} mL → C = ${fr(2 / (R.volume_ml / 1000), 0)} mmol/L`,
+    equation: `${R.fois} fois la recette`, pente: `tangente à t = ${fr(R.date_min, 0)} min, pente ≈ ${fr(penteX(R.date_min), 2)} mmol/min`, gaz: `${R.molecules} molécules dans le ballon`,
+    puissance: `exposant ${fr(R.exposant, 1)}`, dilution: `fiole de ${fr(R.volume_fiole_ml, 0)} mL, F = ${fr(R.volume_fiole_ml / 10, 1)}`, ion: '' }[v];
+  return `${TITRES[v]}. ${faits.length ? 'Déjà montré : ' + faits.join(' ; ') + '.' : 'Pas encore lancé.'}${reg ? ' Réglage : ' + reg + '.' : ''}`;
+}
+
+/* ── Le curseur de la vue (un seul) ───────────────────────────────────────────────────────────────────── */
+const CURSEURS = {
+  mole: { id: 'masse_g', label: 'm =', min: 9, max: 90, step: 9, unite: 'g' },
+  concentration: { id: 'volume_ml', label: 'V =', min: 50, max: 250, step: 10, unite: 'mL' },
+  equation: { id: 'fois', label: 'recettes :', min: 1, max: 5, step: 1, unite: '' },
+  pente: { id: 'date_min', label: 't =', min: 0, max: 30, step: 1, unite: 'min' },
+  gaz: { id: 'molecules', label: 'molécules :', min: 10, max: 60, step: 2, unite: '' },
+  puissance: { id: 'exposant', label: 'exposant :', min: -7, max: 0, step: .1, unite: '' },
+  dilution: { id: 'volume_fiole_ml', label: 'fiole :', min: 20, max: 500, step: 10, unite: 'mL' },
+};
+const vueDemandee = new URLSearchParams(location.search).get('vue');
+const VUE = VUES.includes(vueDemandee) ? vueDemandee : VUES[0];
+let regl = null;
+if (CURSEURS[VUE]) {
+  const k = CURSEURS[VUE];
+  regl = T.curseur({ id: k.id, label: k.label, min: k.min, max: k.max, step: k.step, valeur: R[k.id], unite: k.unite, commande: 'set_parameters',
+    onchange: v => DER.setParameters({ [k.id]: v }) });
+  document.getElementById('reglage').replaceChildren(regl);
+}
+
+const EXPLICATIONS = {
+  mole: [{ repere: 'douzaine', texte: 'Les œufs se comptent par douzaine.' }, { repere: 'mole', texte: 'Les entités se comptent par mole : 6,02·10²³.' }, { repere: 'relation', texte: 'n = m / M.' }],
+  concentration: [{ repere: 'becher', texte: 'n dissous dans V.' }, { repere: 'relation', texte: 'C = n / V.' }, { repere: 'becher_2', texte: 'Même n, plus d’eau : C plus petite.' }],
+  ion: [{ repere: 'cation', texte: 'Un électron en moins : ion positif.' }, { repere: 'anion', texte: 'Un électron en plus : ion négatif.' }, { repere: 'proton', texte: 'H⁺ : un proton seul.' }],
+  equation: [{ repere: 'coefficients', texte: 'Les coefficients : les proportions.' }, { repere: 'molecules', texte: '1 H₂O₂ avec 2 I⁻ donne 1 I₂.' }, { repere: 'proportions', texte: 'Toujours 2 I⁻ pour 1 H₂O₂.' }],
+  pente: [{ repere: 'triangle', texte: 'Δx en Δt.' }, { repere: 'pente', texte: 'pente = Δx / Δt.' }, { repere: 'tangente', texte: 'La tangente touche la courbe en un point.' }],
+  gaz: [{ repere: 'molecules', texte: 'Les chocs font la pression.' }, { repere: 'manometre', texte: 'Le manomètre mesure P.' }, { repere: 'relation', texte: 'P·V = n·R·T.' }],
+  puissance: [{ repere: 'regle', texte: 'Chaque pas divise par 10.' }, { repere: 'log', texte: 'Le log donne l’exposant.' }],
+  dilution: [{ repere: 'pipette', texte: 'On prélève V₀.' }, { repere: 'fiole', texte: 'On complète jusqu’au trait.' }, { repere: 'meme_quantite', texte: 'C₀·V₀ = C₁·V₁.' }],
+};
+
+const DER = window.Deroule({
+  id: 'chimie_tableau_prerequis', titre: 'Les bases, depuis zéro', vues: VUES, etapes, dessiner, voir,
+  anime: D => (D.S.vue === 'gaz' && D.commence('chocs')) || (D.S.vue === 'ion' && D.commence('solution')),
+  params: () => ({ vue: VUE, ...(CURSEURS[VUE] ? { [CURSEURS[VUE].id]: R[CURSEURS[VUE].id] } : {}) }),
+  appliquer: p => {
+    let ok = false;
+    for (const [id, k] of Object.entries(CURSEURS)) {
+      if (p[k.id] == null) continue;
+      const v = +p[k.id]; if (!Number.isFinite(v)) continue;
+      R[k.id] = Math.min(k.max, Math.max(k.min, Math.round(v / k.step) * k.step));
+      if (id === VUE && regl) regl.maj(R[k.id]);
+      if (k.id === 'exposant') DER.S.touche = true;
+      ok = true;
+    }
+    return ok;
+  },
+  schema: Object.fromEntries(Object.values(CURSEURS).map(k => [k.id, `${k.min}..${k.max} (pas ${k.step})`])),
+  depart: D => `${TITRES[D.S.vue]} : regarde, une chose à la fois.`,
+  accueil: D => `${TITRES[D.S.vue]}. Lance quand tu es prêt.`,
+  apresReglage: D => voir(D),
+  messageFin: D => `${TITRES[D.S.vue]} : tout est au tableau.`,
+  texte: 'Les bases de la chimie, depuis zéro. Mole : on compte les entités par paquets, comme les œufs par douzaine ; 1 mol = 6,02·10²³ entités ; 1 mmol = 10⁻³ mol ; n = m / M. Concentration : C = n / V (mol/L) ; la même quantité dans plus d’eau donne une solution plus pâle, moins concentrée ; n = C·V. Ion : un atome qui perd un électron devient un ion positif (Na⁺), qui en gagne un devient un ion négatif (Cl⁻) ; H⁺ est un proton seul ; une solution ionique conduit le courant. Équation : H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O, les coefficients donnent les proportions, comme une recette. Pente : pente = Δx/Δt ; la tangente touche la courbe en un point, sa pente est dx/dt. Gaz : les chocs des molécules sur la paroi font la pression ; P·V = n·R·T (Pa, m³, mol, K). Puissances : 10⁻³ = 0,001 ; log(10⁻³) = −3 ; −log(10⁻³) = 3. Dilution : on prélève V₀ à la pipette, on complète la fiole jaugée jusqu’au trait ; C₀·V₀ = C₁·V₁ ; F = V₁/V₀.',
+  explication: EXPLICATIONS[VUE],
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

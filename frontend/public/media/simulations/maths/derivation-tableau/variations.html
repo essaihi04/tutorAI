@@ -28,7 +28,11 @@ const f = x => x * x * x - 3 * x;
 const fp = x => 3 * x * x - 3;
 const OPT = { x0: 110, y0: 40, w: 400, h: 190, xmin: -2.4, xmax: 2.4, ymin: -3.2, ymax: 3.2,
   gx: [[-2, '−2'], [-1, ''], [1, ''], [2, '2']], gy: [[2, '2'], [-2, '−2']] };
-const XA = -2.1, XB = 2.1;                         // P parcourt la courbe de XA à XB
+const XA = -2.1, XB = 2.1;
+/* `conclusions` (14 novembre 2026, question d'observation de df_va2_sommet) : à 0, la valeur de f′ au sommet et au creux
+ * (« 0 », « f′(−1) = 0 ») et la lecture en direct ne s'écrivent pas : l'élève doit voir lui-même la tangente horizontale.
+ * Par défaut 1 : la construction est la même qu'avant. */
+let CONCL = true;                         // P parcourt la courbe de XA à XB
 // Le tableau de variations, sous la courbe (rien sous y = 356).
 const TB = { g: 20, lab: 100, d: 520, haut: 246, l1: 272, l2: 298, bas: 356, yx: 266, yfp: 292, yh: 318, yb: 350 };
 
@@ -97,9 +101,10 @@ MathsTableau.page({
   vues: {
     glisse: {
       titre: 'Le signe de f′ donne le sens de variation',
-      params: { x_p: { min: -2.1, max: 2.1, pas: 0.01, defaut: 1.8, sens: 'abscisse du point P sur la courbe' } },
+      params: { x_p: { min: -2.1, max: 2.1, pas: 0.01, defaut: 1.8, sens: 'abscisse du point P sur la courbe' },
+        conclusions: { min: 0, max: 1, pas: 1, defaut: 1, sens: '0 : la valeur de f′ au sommet et au creux est tue (question d’observation)' } },
       dessiner(c, K) {
-        primes(c);
+        primes(c); CONCL = K.P.conclusions !== 0;
         K.titre('Signe de f′ et variations');
         const G = K.axes(OPT);
         c.repere('repere', G.x0, G.y0, G.w, G.h, 'le repère');
@@ -121,9 +126,9 @@ MathsTableau.page({
         glisse(-1.6, -1, 1.4);
         c.ligne(G.X(-1), G.Y(2), G.X(-1), TB.haut, { couleur: 'tresfaible', largeur: 1.2, pointille: [4, 6] });
         c.texte('−1', G.X(-1), TB.yx, { couleur: 'blanc', taille: 17, align: 'center' });
-        c.texte('0', G.X(-1), TB.yfp, { couleur: 'jaune', taille: 18, align: 'center' });
+        if (CONCL) c.texte('0', G.X(-1), TB.yfp, { couleur: 'jaune', taille: 18, align: 'center' });
         c.texte('2', G.X(-1), TB.yh, { couleur: 'jaune', taille: 18, align: 'center' });
-        c.texte('f′(−1) = 0', G.X(-1) - 24, G.Y(2) - 16, { couleur: 'jaune', taille: 16, align: 'right' });
+        if (CONCL) c.texte('f′(−1) = 0', G.X(-1) - 24, G.Y(2) - 16, { couleur: 'jaune', taille: 16, align: 'right' });
         c.repere('sommet', G.X(-1) - 20, G.Y(2) - 20, 40, 40, 'le sommet : maximum f(−1) = 2');
         K.marque('sommet');
         // 3. P descend : f′ < 0
@@ -133,9 +138,9 @@ MathsTableau.page({
         glisse(0.4, 1, 1.2);
         c.ligne(G.X(1), G.Y(-2), G.X(1), TB.haut, { couleur: 'tresfaible', largeur: 1.2, pointille: [4, 6] });
         c.texte('1', G.X(1), TB.yx, { couleur: 'blanc', taille: 17, align: 'center' });
-        c.texte('0', G.X(1), TB.yfp, { couleur: 'jaune', taille: 18, align: 'center' });
+        if (CONCL) c.texte('0', G.X(1), TB.yfp, { couleur: 'jaune', taille: 18, align: 'center' });
         c.texte('−2', G.X(1), TB.yb, { couleur: 'jaune', taille: 18, align: 'center' });
-        c.texte('f′(1) = 0', G.X(1) + 24, G.Y(-2) + 26, { couleur: 'jaune', taille: 16 });
+        if (CONCL) c.texte('f′(1) = 0', G.X(1) + 24, G.Y(-2) + 26, { couleur: 'jaune', taille: 16 });
         c.repere('creux', G.X(1) - 20, G.Y(-2) - 20, 40, 40, 'le creux : minimum f(1) = −2');
         K.marque('creux');
         // 5. P remonte : f′ > 0
@@ -154,7 +159,7 @@ MathsTableau.page({
         K.marque('tableau_complet');
         // Après la construction : P va à x_p (la poignée de l'élève).
         glisse(XB, K.P.x_p, 0.8);
-        if (xr !== null) c.direct(() => { auPassage(c, G, K.vu('remonte') ? XB : Math.min(xr, XB)); pointP(c, G, xr); lectureP(c, xr); });
+        if (xr !== null) c.direct(() => { auPassage(c, G, K.vu('remonte') ? XB : Math.min(xr, XB)); pointP(c, G, xr); if (CONCL) lectureP(c, xr); });
       },
       poignees(K) { const G = K.grille(OPT); const x = K.P.x_p;
         return [{ id: 'x_p', x: G.X(x), y: G.Y(f(x)), bouger: (px) => ({ x_p: G.inv(px, 0)[0] }) }]; },
@@ -169,7 +174,7 @@ MathsTableau.page({
         remonte: 'P glisse de 1 à 2,1 : la tangente penche vers le haut, f′(x) > 0 ; « + » et une flèche montante à partir de −2.',
         tableau_complet: 'Le tableau est complet : x : −∞, −1, 1, +∞ ; f′(x) : + 0 − 0 + ; f(x) monte de −∞ à 2, descend de 2 à −2, remonte de −2 à +∞. À droite : f′(x) = 3x² − 3 = 3(x − 1)(x + 1).',
       },
-      motifs: { courbe_tracee: 'la courbe tracée', monte: 'P monte, f′ > 0', sommet: 'le sommet, f′(−1) = 0', descend: 'P descend, f′ < 0', creux: 'le creux, f′(1) = 0', remonte: 'P remonte, f′ > 0', tableau_complet: 'le tableau complet' },
+      motifs: { courbe_tracee: 'la courbe tracée', monte: 'P monte, f′ > 0', get sommet() { return CONCL ? 'le sommet, f′(−1) = 0' : 'le sommet'; }, descend: 'P descend, f′ < 0', get creux() { return CONCL ? 'le creux, f′(1) = 0' : 'le creux'; }, remonte: 'P remonte, f′ > 0', tableau_complet: 'le tableau complet' },
       explication: [
         { repere: 'point_p', texte: 'P glisse sur la courbe ; la pente de sa tangente est f′(x).' },
         { repere: 'ligne_signe', texte: 'Là où f′(x) > 0, la courbe monte ; là où f′(x) < 0, elle descend.' },

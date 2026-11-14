@@ -174,8 +174,8 @@ function zoneEcriture(c, M, liste, ys, o = {}) {
   liste.forEach((e, j) => {
     if (j > k) return;
     M.etape(c, e.nom, () => {
-      if (garde.has(j)) for (const [t, col] of e.lignes) { c.texte(t, x, ys[y++], { couleur: col, taille, max }); vues.push(t); }
-      e.plus && e.plus(c);
+      if (garde.has(j)) for (const [t, col] of e.lignes) { c.texte(t, x, ys[y++], { couleur: col, taille, max, alpha: cache(e.nom) ? 0 : undefined }); vues.push(t); }
+      e.plus && !cache(e.nom) && e.plus(c);
     });
   });
   return vues;
@@ -475,7 +475,14 @@ function ETAPES(v) {
     ],
   })[v];
 }
-const MOTIFS = new Proxy({}, { get: (_, nom) => (nom === 'fin' ? 'fin' : (ETAPES(MO ? MO.S.vue : VUES[0]).find(e => e.nom === nom) || {}).motif) });
+/* Question d’observation (règle 30 du professeur, audit « rythme », 14 novembre 2026) : `conclusions: false`
+ * (set_parameters, ou ?conclusions=0) tait ce que l’élève doit trouver lui-même : les phrases écrites des étapes de CACHE
+ * et le motif de leur arrêt sur image. `conclusions: true` les rend. Par défaut : true (comportement inchangé). */
+const lireConclusions = p => (!p || p.conclusions === undefined || p.conclusions === null || p.conclusions === '' ? null : !(p.conclusions === false || p.conclusions === 0 || /^(false|0|non)$/i.test(String(p.conclusions))));
+let CONCL = new URLSearchParams(location.search).get('conclusions') !== '0';
+const CACHE = { catalyse_avance: 'regarde les deux béchers', catalyse_fini: 'regarde les deux béchers' };
+const cache = nom => !CONCL && nom in CACHE;
+const MOTIFS = new Proxy({}, { get: (_, nom) => (nom === 'fin' ? 'fin' : cache(nom) ? CACHE[nom] : (ETAPES(MO ? MO.S.vue : VUES[0]).find(e => e.nom === nom) || {}).motif) });
 let MO = null;
 /** Temps simulé (min) : il avance pendant l’animation des étapes qui ont `sim: [début, fin]`, pas pendant l’écriture. */
 function tSim(M = MO) {
@@ -893,6 +900,7 @@ const MOT = Moteur({
     catalyseur: 'Le catalyseur accélère la transformation, ne figure pas dans l’équation et ne change pas l’état final.' })[M.S.vue],
   appliquer: (p, M) => {
     const r = {};
+    { const k = lireConclusions(p); if (k !== null) { CONCL = k; M.scene.sale = true; } }
     if (VUES.includes(p.vue)) r.vue = p.vue;
     if (p.theta_c != null && p.theta_c !== '' && Number.isFinite(+p.theta_c)) {
       PAR.theta_c = clamp(Math.round(+p.theta_c), 30, 60); DRAG = null; r.vue = 'temperature'; r.change = true;

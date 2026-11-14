@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>L’ADN et la protéine — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="genetique.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Départ de zéro : l’ADN, un long fil en double brin dont les bases A, T, C, G se font face ; la protéine, une chaîne d’acides aminés dont l’ordre fait la protéine"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/svt/notion_information_genetique-tableau/commun.js"></script>
+<script src="/media/simulations/svt/notion_information_genetique-tableau/etapes.js"></script>
+<script>
+/*
+ * Départ de zéro du cours « Relation gène – protéine » (14 novembre 2026, règle 34 du skill professeur) : l’ADN (rappel
+ * du chapitre précédent) et la protéine, enseignés avant d’être utilisés, chacun dit deux fois autrement.
+ * Vue adn : un chromosome, son fil d’ADN, puis le fil en grand : deux brins, des bases face à face (A–T, C–G) ;
+ *   autrement : une fermeture éclair dont chaque dent a sa dent d’en face.
+ * Vue proteine : des perles de vingt couleurs (les acides aminés) qui s’enfilent en chaîne ; l’ordre fait la protéine ;
+ *   autrement : des lettres qui font un mot (CHAT / TACH : mêmes lettres, autre ordre, autre sens) ; puis la chaîne se
+ *   replie : une protéine a une forme, donc un rôle.
+ * Moteur : etapes.js de la génétique (vues, moments, play_until, autoDepart).
+ */
+const { rampe, entre, Peint } = window.Etapes;
+const TAU = Math.PI * 2;
+const BASES = { A: '#22c55e', T: '#ef4444', C: '#3b82f6', G: '#eab308' }, COMP = { A: 'T', T: 'A', C: 'G', G: 'C' };
+const SEQ = 'ATGCCGATAGCT'.split('');
+
+/* ── Vue adn ─────────────────────────────────────────────────────────────── */
+const MA = { a_chromosome: 1.8, a_fil: 3.8, a_deux_brins: 6.0, a_bases: 8.4, a_face: 10.8, a_zip: 14.0 };
+function dessinerAdn(c, k) {
+  const t = k.t;
+  c.direct(() => {
+    const x = c.ctx;
+    Peint.chromosome(x, 80, 150, 110, 1.57, ['#e9c8ff', '#7e22ce'], { epaisseur: 18, deux: true, alpha: rampe(t, .3, .6) });
+    if (t >= 2.2) { x.save(); x.globalAlpha = rampe(t, 2.2, .6); x.strokeStyle = '#c084fc'; x.lineWidth = 2; x.beginPath(); for (let i = 0; i <= 200 * rampe(t, 2.2, 1.4); i++) { const s = i / 200; x[i ? 'lineTo' : 'moveTo'](110 + s * 120, 150 + Math.sin(s * 30) * 12); } x.stroke(); x.restore(); }
+    if (t >= 4.4) { // le fil en grand : deux brins (rails), puis les bases face à face
+      const a = rampe(t, 4.4, .6), x0 = 250, y1 = 200, y2 = 300, pas = 38;
+      x.save(); x.globalAlpha = a;
+      for (const y of [y1, y2]) { const g = x.createLinearGradient(0, y - 6, 0, y + 6); g.addColorStop(0, '#e9d5ff'); g.addColorStop(1, '#7e22ce'); x.fillStyle = g; x.fillRect(x0, y - 6, pas * SEQ.length, 12); }
+      x.restore();
+      SEQ.forEach((b, i) => {
+        const ab = rampe(t, 6.6 + i * .12, .4), af = rampe(t, 9.0 + i * .12, .4), px = x0 + 14 + i * pas;
+        x.save(); x.globalAlpha = ab; x.fillStyle = BASES[b]; x.fillRect(px, y1 + 6, 12, 40); x.restore();
+        x.save(); x.globalAlpha = af; x.fillStyle = BASES[COMP[b]]; x.fillRect(px, y2 - 46, 12, 40); x.restore();
+      });
+    }
+    if (t >= 12.0) { // l’autre façon : une fermeture éclair peinte
+      const a = rampe(t, 12.0, .6), y = 380, x0 = 250;
+      x.save(); x.globalAlpha = a; const g = x.createLinearGradient(0, y - 18, 0, y + 18); g.addColorStop(0, '#475569'); g.addColorStop(1, '#1e293b');
+      x.fillStyle = g; x.fillRect(x0, y - 22, 300, 10); x.fillRect(x0, y + 12, 300, 10);
+      x.fillStyle = '#cbd5e1'; for (let i = 0; i < 20; i++) { x.fillRect(x0 + 6 + i * 15, y - 12, 7, 9); x.fillRect(x0 + 13 + i * 15, y + 3, 7, 9); }
+      x.restore();
+    }
+  });
+  c.texte('Rappel : l’ADN', 14, 26, { couleur: 'cyan', taille: 18 });
+  c.repere('chromosome', 50, 90, 60, 120, 'un chromosome');
+  if (k.ecrit(c, 'chr', .6)) k.T(c, 'un chromosome', 80, 228, { couleur: 'blanc', taille: 13, align: 'center' });
+  if (t >= 2.2) c.repere('fil', 110, 130, 120, 40, 'le fil d’ADN');
+  if (k.ecrit(c, 'fil', 2.6)) k.T(c, 'déroulé : un long fil, l’ADN', 170, 110, { couleur: 'orange', taille: 13, align: 'center' });
+  if (t >= 4.4) c.repere('brins', 250, 190, 456, 120, 'les deux brins');
+  if (k.ecrit(c, 'brins', 4.8)) { k.T(c, 'brin 1', 716, 204, { couleur: 'blanc', taille: 13 }); k.T(c, 'brin 2', 716, 304, { couleur: 'blanc', taille: 13 }); }
+  if (k.ecrit(c, 'bas', 6.8)) { SEQ.forEach((b, i) => k.T(c, b, 270 + i * 38, 176, { couleur: 'jaune', taille: 15, align: 'center' })); c.repere('bases', 250, 160, 456, 90, 'les bases du brin 1'); }
+  if (k.ecrit(c, 'face', 9.2)) { SEQ.forEach((b, i) => k.T(c, COMP[b], 270 + i * 38, 332, { couleur: 'jaune', taille: 15, align: 'center' })); k.T(c, 'A en face de T ; C en face de G', 478, 356, { couleur: 'vert', taille: 14, align: 'center' }); c.repere('face', 250, 160, 456, 190, 'les bases face à face'); }
+  if (t >= 12.0) c.repere('zip', 250, 356, 300, 50, 'une fermeture éclair');
+  if (k.ecrit(c, 'zip', 12.4)) k.T(c, 'autrement : une fermeture éclair', 160, 384, { couleur: 'cyan', taille: 13, align: 'center' });
+}
+function voitAdn(k) {
+  const t = k.t, m = ['Un chromosome violet à gauche.'];
+  if (t >= 2.6) m.push('Il se déroule : un long fil, l’ADN.');
+  if (t >= 4.8) m.push('Le fil en grand : deux brins violets parallèles (brin 1, brin 2).');
+  if (t >= 6.8) m.push('Sur le brin 1, des bases de couleur : A T G C C G A T A G C T.');
+  if (t >= 9.2) m.push('En face, sur le brin 2, les bases complémentaires ; écrit « A en face de T ; C en face de G ».');
+  if (t >= 12.4) m.push('En bas, une fermeture éclair peinte : chaque dent a sa dent d’en face.');
+  return m;
+}
+
+/* ── Vue proteine ────────────────────────────────────────────────────────── */
+const MP = { p_perles: 2.0, p_chaine: 4.6, p_ordre: 7.4, p_mot: 10.4, p_forme: 13.4 };
+const AA = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#3b82f6', '#8b5cf6', '#ec4899', '#a3e635', '#f472b6'];
+const CHAINE = [0, 3, 5, 1, 7, 2, 6, 4, 9, 8];
+function perle(x, cx, cy, r, col, a) {
+  x.save(); x.globalAlpha = a; const g = x.createRadialGradient(cx - r * .35, cy - r * .35, 1, cx, cy, r); g.addColorStop(0, '#ffffff'); g.addColorStop(.25, col); g.addColorStop(1, 'rgba(15,23,42,.9)');
+  x.fillStyle = g; x.beginPath(); x.arc(cx, cy, r, 0, TAU); x.fill(); x.restore();
+}
+function dessinerProteine(c, k) {
+  const t = k.t, enfile = rampe(t, 2.6, 1.6), plie = rampe(t, 11.8, 1.4);
+  c.direct(() => {
+    const x = c.ctx;
+    // les perles en vrac (à gauche), puis enfilées en chaîne
+    CHAINE.forEach((ci, i) => {
+      const vx = 70 + (i % 5) * 34, vy = 120 + Math.floor(i / 5) * 40;
+      const cx0 = 260 + i * 44, cy0 = 150;
+      const an = i * .9, R = 60 - i * 3, fx = 520 + Math.cos(an) * R * .9, fy = 330 + Math.sin(an) * R * .6;   // la chaîne repliée
+      let px = entre(vx, cx0, enfile), py = entre(vy, cy0, enfile);
+      if (plie > 0) { px = entre(cx0, fx, plie); py = entre(cy0, fy, plie); }
+      perle(x, px, py, 14, AA[ci], rampe(t, .3 + i * .08, .4));
+    });
+    if (enfile > .9) {   // le fil
+      x.save(); x.globalAlpha = .7 * (1 - plie); x.strokeStyle = '#e2e8f0'; x.lineWidth = 2; x.beginPath(); x.moveTo(246, 150); x.lineTo(260 + 9 * 44 + 14, 150); x.stroke(); x.restore();
+    }
+  });
+  c.texte('Une protéine : une chaîne d’acides aminés', 14, 26, { couleur: 'cyan', taille: 18 });
+  c.repere('perles', 50, 96, 180, 90, 'des acides aminés');
+  if (k.ecrit(c, 'aa', .8)) k.T(c, 'des acides aminés (20 sortes)', 140, 84, { couleur: 'blanc', taille: 13, align: 'center' });
+  if (t >= 4.2 && plie < 1) c.repere('chaine', 240, 130, 460, 40, 'la chaîne d’acides aminés');
+  if (k.ecrit(c, 'ch', 4.2) && plie < .5) k.T(c, 'enfilés : une chaîne = une protéine', 480, 196, { couleur: 'jaune', taille: 15, align: 'center' });
+  if (k.ecrit(c, 'ordre', 6.6) && plie < .5) k.T(c, 'l’ordre des perles fait la protéine', 480, 222, { couleur: 'vert', taille: 15, align: 'center' });
+  if (t >= 8.6) c.repere('mot', 40, 250, 260, 110, 'des lettres et des mots');
+  if (k.ecrit(c, 'mot', 8.8)) {
+    k.T(c, 'autrement : des lettres', 160, 262, { couleur: 'cyan', taille: 14, align: 'center' });
+    k.T(c, 'C H A T  → un mot', 160, 296, { couleur: 'blanc', taille: 16, align: 'center' });
+    k.T(c, 'T A C H  → rien', 160, 326, { couleur: 'rouge', taille: 16, align: 'center' });
+    k.T(c, 'mêmes lettres, autre ordre', 160, 352, { couleur: 'faible', taille: 13, align: 'center' });
+  }
+  if (t >= 12.6) c.repere('forme', 440, 260, 170, 140, 'la protéine repliée');
+  if (k.ecrit(c, 'forme', 12.8)) k.T(c, 'la chaîne se replie : une forme, donc un rôle', 520, 410, { couleur: 'jaune', taille: 14, align: 'center' });
+}
+function voitProteine(k) {
+  const t = k.t, m = ['Des perles de couleur : des acides aminés (20 sortes).'];
+  if (t >= 4.2) m.push('Elles s’enfilent en une chaîne : « une chaîne = une protéine » ; « l’ordre des perles fait la protéine ».');
+  if (t >= 8.8) m.push('À gauche : CHAT (un mot) et TACH (rien) : mêmes lettres, autre ordre.');
+  if (t >= 12.8) m.push('La chaîne se replie : « une forme, donc un rôle ».');
+  return m;
+}
+
+window.Etapes.lancer({
+  id: 'genetique_rappels_adn_proteine', titre: 'L’ADN et la protéine', graine: 61,
+  vues: {
+    adn: { titre: 'Rappel : l’ADN', fin: 14.6, moments: MA, autoDepart: false, dessiner: dessinerAdn, voit: voitAdn,
+      motifs: { a_chromosome: 'un chromosome', a_fil: 'déroulé : un long fil d’ADN', a_deux_brins: 'deux brins', a_bases: 'des bases A, T, C, G', a_face: 'A en face de T, C en face de G', a_zip: 'comme une fermeture éclair' },
+      conclusion: 'L’ADN : deux brins dont les bases se font face, A avec T, C avec G.',
+      texte: 'Un chromosome est un long fil d’ADN ; deux brins ; bases A, T, C, G ; A en face de T, C en face de G ; comme une fermeture éclair.',
+      explication: [{ repere: 'brins', texte: 'Deux brins.' }, { repere: 'face', texte: 'A en face de T, C en face de G.' }, { repere: 'zip', texte: 'Comme une fermeture éclair.' }] },
+    proteine: { titre: 'La protéine', fin: 14.4, moments: MP, autoDepart: false, dessiner: dessinerProteine, voit: voitProteine,
+      motifs: { p_perles: 'des acides aminés', p_chaine: 'une chaîne d’acides aminés : une protéine', p_ordre: 'l’ordre fait la protéine', p_mot: 'mêmes lettres, autre ordre : autre mot', p_forme: 'la chaîne se replie : une forme, un rôle' },
+      conclusion: 'Une protéine : une chaîne d’acides aminés dans un ordre précis ; l’ordre donne sa forme et son rôle.',
+      texte: 'Une protéine est une chaîne d’acides aminés (20 sortes) dans un ordre précis ; comme des lettres qui font un mot ; la chaîne se replie et prend une forme, donc un rôle.',
+      explication: [{ repere: 'chaine', texte: 'Une chaîne d’acides aminés.' }, { repere: 'mot', texte: 'Changer l’ordre change le mot.' }, { repere: 'forme', texte: 'La chaîne repliée a une forme et un rôle.' }] },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

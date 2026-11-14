@@ -169,8 +169,8 @@ function zoneEcriture(c, M, liste, ys, o = {}) {
   liste.forEach((e, j) => {
     if (j > k) return;
     M.etape(c, e.nom, () => {
-      if (garde.has(j)) for (const [t, col] of e.lignes) { ecrireChim(c, t, x, ys[y++], { couleur: col, taille, max }); vues.push(t); }
-      e.plus && e.plus(c);
+      if (garde.has(j)) for (const [t, col] of e.lignes) { ecrireChim(c, t, x, ys[y++], { couleur: col, taille, max, alpha: cache(e.nom) ? 0 : undefined }); vues.push(t); }
+      e.plus && !cache(e.nom) && e.plus(c);
     });
   });
   return vues;
@@ -372,6 +372,16 @@ const ETAPES = {
   ],
 };
 const MOTIFS = { fin: 'fin' }; for (const v of VUES) for (const e of ETAPES[v]) MOTIFS[e.nom] = e.motif;
+/* Question d’observation (règle 30 du professeur, audit « rythme », 14 novembre 2026) : `conclusions: false`
+ * (set_parameters, ou ?conclusions=0) tait ce que l’élève doit trouver lui-même : les phrases écrites des étapes de CACHE
+ * et le motif de leur arrêt sur image. `conclusions: true` les rend. Par défaut : true (comportement inchangé). */
+const lireConclusions = p => (!p || p.conclusions === undefined || p.conclusions === null || p.conclusions === '' ? null : !(p.conclusions === false || p.conclusions === 0 || /^(false|0|non)$/i.test(String(p.conclusions))));
+let CONCL = new URLSearchParams(location.search).get('conclusions') !== '0';
+const CACHE = { rapide_fini: 'regarde le bécher de gauche', lente_continue: 'regarde les deux béchers' };
+const MOTIFS_VRAIS = { ...MOTIFS };
+const cache = nom => !CONCL && nom in CACHE;
+function majConclusions() { for (const n in CACHE) MOTIFS[n] = CONCL ? MOTIFS_VRAIS[n] : CACHE[n]; }
+majConclusions();
 let MO = null;
 const ZY = [376, 402];
 const lignesChrono = min => [[`t = ${duree(min)}`, 'blanc', 18], ['(temps accéléré)', 'faible', 14], ['20 °C', 'faible', 15]];
@@ -401,7 +411,7 @@ function dessinerComparer(c, M) {
   ecrireChim(c, 'H₂C₂O₄', XBO + 18, 76, { couleur: 'blanc', taille: 19 }); c.texte('acide oxalique', XBO + 18, 98, { couleur: 'faible', taille: 15 });
   for (const B of [BR, BLT]) ecrireChim(c, 'permanganate acidifié (MnO₄⁻ + H⁺)', B.x + B.w / 2, 356, { couleur: 'faible', taille: 15, align: 'center' });
   chrono(c, CH[0], CH[1], 36, tComparer(), lignesChrono(tComparer()));
-  M.etape(c, 'rapide_fini', () => c.texte('réaction rapide', BR.x + BR.w / 2, 384, { couleur: 'jaune', taille: 21, align: 'center' }));
+  M.etape(c, 'rapide_fini', () => c.texte('réaction rapide', BR.x + BR.w / 2, 384, { couleur: 'jaune', taille: 21, align: 'center', alpha: cache('rapide_fini') ? 0 : undefined }));
   M.etape(c, 'lente_finie', () => c.texte('réaction lente', BLT.x + BLT.w / 2, 384, { couleur: 'jaune', taille: 21, align: 'center' }));
   return zoneEcriture(c, M, [
     { nom: 'depart', lignes: [['même solution violette de permanganate (MnO₄⁻) dans les deux béchers', 'blanc']] },
@@ -655,7 +665,7 @@ const MOT = Moteur({
     lente: 'La couleur fonce pendant ≈ 40 min puis ne change plus : réaction lente.',
     soufre: 'Le soufre trouble la solution : la croix est cachée après ≈ 2 min. Réaction lente.',
     echelle: 'Instantanée, lente, très lente : et le classement dépend des moyens d’observation.' })[M.S.vue],
-  appliquer: (p, M) => { const r = {}; if (VUES.includes(p.vue)) r.vue = p.vue; r.change = !!(r.vue && r.vue !== M.S.vue); return r; },
+  appliquer: (p, M) => { const r = {}; { const k = lireConclusions(p); if (k !== null) { CONCL = k; majConclusions(); M.scene.sale = true; } } if (VUES.includes(p.vue)) r.vue = p.vue; r.change = !!(r.vue && r.vue !== M.S.vue); return r; },
   schema: { vue: VUES.join(' | ') + ' (change la vue et relance)' },
   texte: 'Réactions rapides et lentes, à 20 °C, en temps accéléré. Vue comparer : deux béchers de permanganate acidifié (violet) ; ions fer II versés à gauche : décoloré aussitôt (réaction rapide) ; acide oxalique à droite : le violet pâlit et disparaît en ≈ 7 min (réaction lente). Vue lente : eau oxygénée acidifiée + ions iodure, H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O ; incolore, jaune (≈ 2 min), brun (≈ 12 min), teinte finale vers 40 min. Vue soufre : thiosulfate + acide sur une croix noire : le soufre solide trouble la solution, la croix est cachée vers 2 min. Vue echelle : instantanée (moins d’une seconde), lente (secondes → heures), très lente (jours, années : un portail qui rouille) ; le classement dépend des moyens d’observation.',
   explications: {

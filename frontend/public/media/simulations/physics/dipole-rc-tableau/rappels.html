@@ -1,0 +1,880 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rappels d’électricité et de maths — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="rc.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Rappels peints et à la craie : le courant, la tension, la loi d’Ohm, l’additivité des tensions, les puissances de dix, la dérivée, l’exponentielle, la sinusoïde et la dérivée d’un cosinus ; chaque notion montrée de deux façons"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <span id="reglage" data-professor-control="set_parameters"></span>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Rappels d’électricité et de maths — au tableau (audit « rythme et départ de zéro », 14 novembre 2026 — règles 33 et 34 du professeur).
+ * Moteur du déroulé et appareils peints recopiés de dipole-rc-tableau/condensateur.html (même protocole, mêmes commandes).
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lisse = p => p * p * (3 - 2 * p);
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');   // 1,50 → 1,5 ; 2,00 → 2
+const ECRITURE = 2.5;
+function Moteur(o) {
+  const q = new URLSearchParams(location.search);
+  const S = { vue: o.vues.includes(q.get('vue')) ? q.get('vue') : o.vues[0], t: 0, running: false, pause: false, fait: false,
+    jusqua: null, motif: '', emis: 0, dit: '', mesure: false };
+  const V = o.vitesse ?? 1.7, T0 = o.T0 ?? .8, HOLD = {};
+  let TL = null;
+  function construire() {
+    let s = T0; const ev = [];
+    for (const e of o.etapes(S.vue)) {
+      const anim = e.anim || 0, d = { ...e, anim, debut: s, ecrit: s + (e.ecritDes ?? anim) };
+      d.fin = Math.max(s + anim, d.ecrit + (HOLD[e.nom] ?? 1.5)) + .35;
+      s = d.fin; ev.push(d);
+    }
+    const mom = {}; for (const e of ev) mom[e.nom] = e.fin; mom.fin = s + (o.queue ?? .6);
+    TL = { ev, M: mom };
+  }
+  const ev = nom => TL.ev.find(e => e.nom === nom);
+  const M = {
+    S, ev, Moments: () => TL.M,
+    /** Avancement (0 → 1) de l’animation de l’étape `nom`. */
+    p(nom) { const e = ev(nom); if (!e) return 0; return e.anim > 0 ? clamp((S.t - e.debut) / e.anim, 0, 1) : (S.t >= e.debut - 1e-6 ? 1 : 0); },
+    commence(nom) { const e = ev(nom); return !!e && S.t > e.debut + 1e-6; },
+    vu(nom) { if (nom === 'fin') return S.t >= TL.M.fin - 1e-6; const e = ev(nom); return !!e && S.t >= e.fin - 1e-6; },
+    /** Ce qui s’écrit à l’étape `nom` : la craie écrit à partir de la fin de son animation. */
+    etape(c, nom, fn) {
+      const e = ev(nom); if (!e) return;
+      const t = c.t, cur = c.cur, comp = c.complet, w0 = e.ecrit;
+      c.t = S.t > 1e5 ? 1e9 : w0 + (S.t - w0) * V; c.cur = w0;
+      try { fn(); } finally { if (S.mesure) HOLD[nom] = (c.cur - w0) / V; c.t = t; c.cur = cur; if (!S.running) c.complet = comp; }
+    },
+    etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
+  };
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const cadreBase = scene.cadre;
+  scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
+  M.scene = scene; M.craie = scene.craie;
+  function calculer() {
+    construire();
+    const t = S.t, r = S.running; S.t = 1e6; S.running = false; S.mesure = true;
+    try { o.dessiner(scene.craie, M); } finally { S.t = t; S.running = r; S.mesure = false; }
+    construire(); scene.sale = true;
+  }
+  // La bulle est du texte simple : jamais de « _ » visible (u_C → uC, I_0 → I₀).
+  const sansSouligne = s => String(s).replace(/([A-Za-zΔτ])_\{?([A-Za-z0-9]+)\}?/g, (m, a, i) => a + (/^\d+$/.test(i) ? [...i].map(d => '₀₁₂₃₄₅₆₇₈₉'[d]).join('') : i));
+  const dire = (texte, kind = '') => { texte = sansSouligne(texte); S.dit = texte; bulle($('feedback'), texte, kind); };
+  const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+  let pont = null;
+  const emettre = () => pont && pont.emettre();
+  const noter = (a, d) => pont && pont.noter(a, d);
+  scene.avancer = dt => {
+    if (!S.running) return !!(o.anime && o.anime());
+    const avant = S.t; S.t += dt;
+    for (const e of TL.ev) if (avant < e.debut && S.t >= e.debut && e.bulle) dire(e.bulle());
+    if (S.jusqua != null && S.t >= S.jusqua) {
+      S.t = S.jusqua; S.jusqua = null; S.running = false;
+      if (S.t >= TL.M.fin - 1e-6) { finir(); return true; }
+      S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fx(S.t, 1)} s`) + '.');
+      noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); return true;
+    }
+    if (S.t >= TL.M.fin) { S.t = TL.M.fin; finir(); return true; }
+    if (performance.now() - S.emis > 500) { S.emis = performance.now(); emettre(); }
+    return true;
+  };
+  function finir() { S.running = false; S.fait = true; S.pause = false; S.jusqua = null; etiquette(); dire(o.messageFin(M), 'good'); noter('measurement', o.params(M)); emettre(); }
+  function start() { o.reprise && o.reprise(); S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire(o.depart(M)); noter('start', o.params(M)); emettre(); }
+  function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); }
+  function resume() { if (S.running) return; o.reprise && o.reprise(); if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('Ça repart…'); noter('resume'); emettre(); }
+  function setTime(p) {
+    const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+    o.reprise && o.reprise(); S.running = false; S.jusqua = null; S.t = clamp(t, 0, TL.M.fin); S.fait = S.t >= TL.M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+    etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fx(S.t, 1)} s.`); noter('set_time', { time_s: S.t }); emettre();
+  }
+  function playUntil(p) {
+    const noms = o.etapes(S.vue).map(e => e.nom).concat('fin');
+    const nom = noms.includes(p.moment) ? p.moment : null, cible = nom ? TL.M[nom] : +p.time_s;
+    if (!Number.isFinite(cible) || (p.moment && !nom && (p.time_s == null || p.time_s === ''))) { dire(`Moment inconnu : ${p.moment}.`, 'bad'); emettre(); return; }
+    o.reprise && o.reprise();
+    if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+    S.jusqua = clamp(cible, .01, TL.M.fin); S.motif = nom ? (o.motifs[nom] || nom) : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+    noter('play_until', { moment: nom, time_s: S.jusqua }); emettre();
+  }
+  function setParameters(p) {
+    p = p || {};
+    const r = o.appliquer(p, M) || {};
+    if (r.vue && o.vues.includes(r.vue) && r.vue !== S.vue) { S.vue = r.vue; r.change = true; r.vueChange = true; }
+    if (r.change) { calculer(); if (r.vueChange) scene.reecrire(); }
+    noter('set_parameters', o.params(M));
+    if (r.apres) r.apres();
+    else if (r.change && !r.garder) start();
+    else { scene.sale = true; emettre(); }
+  }
+  Object.assign(M, { noter, calculer, dire, start, pause, resume, setTime, playUntil, setParameters, emettre, etiquette });
+  $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+  window.Tableau.explication(o.explications);
+  const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+  M.lancer = () => {
+    calculer();
+    const listeMoments = o.vues.map(v => `${o.vues.length > 1 ? v + ' : ' : ''}${o.etapes(v).map(e => e.nom).concat('fin').join(' | ')}`).join(' ; ');
+    const config = { id: o.id, version: '1.0', title: o.titre, variants: o.vues.length > 1 ? o.vues.map(id => ({ id, label: o.titres[id] })) : [], commands: commandes,
+      command_schema: { set_parameters: o.schema, set_time: { time_s: '0..fin (arrêt sur cet instant de la scène, en s ; voir moments)' },
+        play_until: { moment: listeMoments, time_s: 'ou un instant en s' } } };
+    pont = protocole({ id: o.id, commandes, config, texte: o.texte,
+      etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle',
+        ce_qui_se_voit: o.voir(M) + (S.dit ? ` La bulle dit : « ${S.dit} »` : ''), current_variant: S.vue, time_s: +S.t.toFixed(2),
+        parameters: o.params(M), moments: Object.fromEntries(Object.entries(TL.M).map(([k, v]) => [k, +v.toFixed(2)])) }),
+      progression: () => (S.fait ? 1 : 0),
+      executer: (cmd, p) => ({ start, reset: start, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+    dire(o.depart(M));
+    setTimeout(() => { if (!S.running && S.t === 0 && !S.pause && !S.fait) start(); }, 900);
+  };
+  return M;
+}
+
+/* ── Appareils peints (règle 7 : ils ressemblent aux vrais ; le peint ne change jamais la physique) ── */
+const Peint = {
+  /** Sphère ombrée (électron : bleu). */
+  sphere(ctx, x, y, r, [clair, milieu, sombre] = ['#e3f3ff', '#3b9cff', '#0a3a8c'], a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r); g.addColorStop(0, clair); g.addColorStop(.45, milieu); g.addColorStop(1, sombre);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  },
+  /** Boîtier d’un générateur (vu de face) : coffret gris, afficheur, deux bornes (rouge +, noire −). */
+  generateur(ctx, x, y, w, h, affiche, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(x + 3, y + 4, w, h, 7); ctx.fill();
+    const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#5b6670'); g.addColorStop(.5, '#3b444c'); g.addColorStop(1, '#262c32');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 7); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1; ctx.stroke();
+    const ex = x + w * .14, ey = y + h * .3, ew = w * .72, eh = h * .26;
+    ctx.fillStyle = '#0d1a10'; ctx.beginPath(); ctx.roundRect(ex, ey, ew, eh, 3); ctx.fill();
+    ctx.fillStyle = '#7dfc8a'; ctx.font = `600 ${Math.round(eh * .72)}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(affiche, ex + ew / 2, ey + eh / 2 + 1);
+    ctx.restore();
+  },
+  /** Borne ronde (rouge ou noire). */
+  borne(ctx, x, y, rouge, a = 1) { Peint.sphere(ctx, x, y, 5, rouge ? ['#ffd0d0', '#e0393e', '#6d0f12'] : ['#9aa0a6', '#2b2f33', '#050607'], a); },
+  /** Appareil à cadran (ampèremètre ou voltmètre) : boîtier, cadran crème, graduations, aiguille (f de 0 à 1). */
+  cadran(ctx, cx, cy, r, f, lettre, graduations = null, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(cx - r - 4 + 3, cy - r - 4 + 4, 2 * r + 8, 2 * r + 8, 9); ctx.fill();
+    const g = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r); g.addColorStop(0, '#3a3f45'); g.addColorStop(1, '#1b1e22');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(cx - r - 4, cy - r - 4, 2 * r + 8, 2 * r + 8, 9); ctx.fill();
+    const f2 = ctx.createRadialGradient(cx - r * .3, cy - r * .4, r * .1, cx, cy, r); f2.addColorStop(0, '#fffaf0'); f2.addColorStop(1, '#e4dcc8');
+    ctx.fillStyle = f2; ctx.beginPath(); ctx.roundRect(cx - r, cy - r, 2 * r, 2 * r * .92, 6); ctx.fill();
+    const px = cx, py = cy + r * .55, R = r * 1.05, a0 = -Math.PI * .78, a1 = -Math.PI * .22;
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(px, py, R * .82, a0, a1); ctx.stroke();
+    const n = graduations ? graduations.length - 1 : 10;
+    for (let i = 0; i <= n * 2; i++) {
+      const an = a0 + (a1 - a0) * i / (n * 2), l = i % 2 ? .07 : .13;
+      ctx.beginPath(); ctx.moveTo(px + Math.cos(an) * R * .82, py + Math.sin(an) * R * .82); ctx.lineTo(px + Math.cos(an) * R * (.82 + l), py + Math.sin(an) * R * (.82 + l)); ctx.stroke();
+    }
+    ctx.fillStyle = '#c0392b'; ctx.beginPath(); ctx.arc(px + Math.cos(a1) * R * .86, py + Math.sin(a1) * R * .86, 1.6, 0, 7); ctx.fill();
+    if (graduations) {
+      ctx.fillStyle = '#333'; ctx.font = `${Math.round(r * .2)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      graduations.forEach((s, i) => { const an = a0 + (a1 - a0) * i / n; ctx.fillText(s, px + Math.cos(an) * R * 1.08, py + Math.sin(an) * R * 1.08 + 1); });
+    }
+    ctx.fillStyle = '#222'; ctx.font = `700 ${Math.round(r * .42)}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(lettre, cx, cy + r * .38);
+    const an = a0 + (a1 - a0) * clamp(f, -.02, 1.03);
+    ctx.strokeStyle = '#111'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px + Math.cos(an) * R * .9, py + Math.sin(an) * R * .9); ctx.stroke();
+    ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(px, py, 2.6, 0, 7); ctx.fill();
+    // Verre : un reflet léger (pour l’œil seulement).
+    ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.beginPath(); ctx.ellipse(cx - r * .35, cy - r * .55, r * .5, r * .16, -.3, 0, 7); ctx.fill();
+    ctx.restore();
+  },
+  /** Condensateur chimique bleu (vu de côté, debout) avec ses deux pattes ; bande claire « − ». */
+  chimique(ctx, x, y, w, h, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.strokeStyle = '#b8bec6'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x + w * .32, y + h); ctx.lineTo(x + w * .32, y + h + 14); ctx.moveTo(x + w * .68, y + h); ctx.lineTo(x + w * .68, y + h + 18); ctx.stroke();
+    const g = ctx.createLinearGradient(x, 0, x + w, 0); g.addColorStop(0, '#0b2a6b'); g.addColorStop(.35, '#2f6fe0'); g.addColorStop(.6, '#1d4fb8'); g.addColorStop(1, '#091f52');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, [w * .25, w * .25, 4, 4]); ctx.fill();
+    ctx.fillStyle = 'rgba(210,225,255,.75)'; ctx.fillRect(x + w * .7, y + 4, w * .16, h - 8);
+    ctx.fillStyle = '#0b2a6b'; for (let k = 0; k < 3; k++) ctx.fillRect(x + w * .74, y + 10 + k * (h - 20) / 3, w * .08, 2.4);
+    ctx.fillStyle = '#9aa3ad'; ctx.beginPath(); ctx.ellipse(x + w / 2, y + 3, w / 2 - 1, 3.2, 0, 0, 7); ctx.fill();
+    ctx.restore();
+  },
+  /** Résistor : corps beige en cylindre, bandes de couleur lues sur la valeur (Ω). */
+  resistor(ctx, x, y, w, h, ohm, a = 1) {
+    const COUL = ['#111', '#7b4a1e', '#d32f2f', '#f57c00', '#fbc02d', '#2e7d32', '#1565c0', '#7b1fa2', '#9e9e9e', '#fafafa'];
+    const e = Math.floor(Math.log10(ohm) + 1e-9) - 1, m = Math.round(ohm / 10 ** e), d1 = Math.floor(m / 10) % 10, d2 = m % 10;
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#f3e1bf'); g.addColorStop(.45, '#d9bf8f'); g.addColorStop(1, '#9c8358');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, h / 2.2); ctx.fill();
+    [[.24, d1], [.38, d2], [.52, clamp(e, 0, 9)], [.78, -1]].forEach(([f, k]) => {
+      ctx.fillStyle = k < 0 ? '#c9a227' : COUL[k]; ctx.fillRect(x + w * f, y + 1, w * .07, h - 2);
+    });
+    ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(x + h * .3, y + h * .18, w - h * .6, h * .12);
+    ctx.restore();
+  },
+  /** Interrupteur : socle sombre, plots laiton, levier métallique (pivot → bout). */
+  levier(ctx, px, py, bx, by, a = 1) {
+    ctx.save(); ctx.globalAlpha = a; ctx.lineCap = 'round';
+    ctx.strokeStyle = '#4a4f55'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(bx, by); ctx.stroke();
+    ctx.strokeStyle = '#c8ccd2'; ctx.lineWidth = 3.4; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(bx, by); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(px, py - 1); ctx.lineTo(bx, by - 1); ctx.stroke();
+    Peint.sphere(ctx, bx, by, 4.2, ['#ffe9c2', '#c98a2a', '#5a3a08']);
+    ctx.restore();
+  },
+  plot(ctx, x, y, a = 1) { Peint.sphere(ctx, x, y, 4.6, ['#fff1c9', '#cfa046', '#5e4210'], a); },
+};
+/* ── Rappels des années précédentes (règle 34 du professeur : on part de zéro, chaque notion dite deux fois, de deux façons) ──
+ * Vues (?vue=) et moments (play_until) :
+ *  - courant      : circuit, ferme, sens, amperemetre, eau            (le courant = des charges qui circulent ; l’eau dans un tuyau)
+ *  - tension      : circuit, fleche, voltmetre, niveaux, fil          (la tension entre deux points ; deux réservoirs à deux hauteurs)
+ *  - ohm          : montage, mesure_1, mesure_2, droite, convention   (u_R = R·i ; curseur R)
+ *  - additivite   : circuit, tensions, somme, escalier                (u_R + u_C = E ; curseur u_C ; l’escalier)
+ *  - puissances   : milli, micro, nano, exemple, decoupe              (10⁻³, 10⁻⁶, 10⁻⁹ ; la virgule qui recule)
+ *  - derivee      : courbe, corde, tangente, pente_nulle, voiture     (la dérivée = la pente de la tangente ; le compteur de vitesse)
+ *  - exponentielle: depart, tau, jamais_zero, montee, reservoir       (e^(−t/τ) : 1, 0,37, jamais 0 ; 1 − e^(−t/τ) ; le réservoir qui se vide)
+ *  - sinusoide    : cercle, courbe, amplitude, periode, balancoire    (U_m·cos(2πt/T) ; la balançoire)
+ * set_parameters : vue ; R_ohm (ohm, 50..200) ; u_C_V (additivite, 0..6) ; t_s (derivee 0..10, exponentielle 0..5) ; T_ms (sinusoide, 2..8).
+ * Les dessins des objets réels (pile, lampe, appareils, voiture, réservoir, balançoire) sont peints (règle 32) ; la craie garde
+ * fils, flèches, axes, valeurs et phrases. Le peint ne change jamais les valeurs (i, u, pentes, e^(−t/τ) sont exacts).
+ */
+Peint.lampe = function (ctx, cx, yf, eclat = 0, a = 1) {
+  const e = clamp(eclat, 0, 1), gy = yf - 30, R = 14;
+  ctx.save(); ctx.globalAlpha = a;
+  if (e > .01) {
+    const h = ctx.createRadialGradient(cx, gy, 2, cx, gy, R + 50 * Math.sqrt(e));
+    h.addColorStop(0, `rgba(255,236,160,${.75 * e})`); h.addColorStop(.35, `rgba(255,214,110,${.32 * e})`); h.addColorStop(1, 'rgba(255,200,90,0)');
+    ctx.fillStyle = h; ctx.beginPath(); ctx.arc(cx, gy, R + 50 * Math.sqrt(e), 0, 7); ctx.fill();
+  }
+  const gs = ctx.createLinearGradient(0, yf - 9, 0, yf + 9); gs.addColorStop(0, '#4a5058'); gs.addColorStop(1, '#1d2125');
+  ctx.fillStyle = gs; ctx.beginPath(); ctx.roundRect(cx - 21, yf - 8, 42, 16, 4); ctx.fill();
+  Peint.plot(ctx, cx - 21, yf, a); Peint.plot(ctx, cx + 21, yf, a);
+  const gc = ctx.createLinearGradient(cx - 7, 0, cx + 7, 0); gc.addColorStop(0, '#7d7a6e'); gc.addColorStop(.5, '#e4e0d0'); gc.addColorStop(1, '#6c695e');
+  ctx.fillStyle = gc; ctx.fillRect(cx - 7, yf - 19, 14, 11);
+  const gv = ctx.createRadialGradient(cx - 4, gy - 5, 1, cx, gy, R);
+  gv.addColorStop(0, `rgba(255,255,255,${.55 + .4 * e})`); gv.addColorStop(.6, `rgba(${200 + 55 * e},${215 + 30 * e},${230 - 70 * e},${.18 + .55 * e})`); gv.addColorStop(1, `rgba(190,205,220,${.28 + .4 * e})`);
+  ctx.fillStyle = gv; ctx.beginPath(); ctx.arc(cx, gy, R, 0, 7); ctx.fill();
+  ctx.strokeStyle = 'rgba(230,240,255,.55)'; ctx.lineWidth = 1; ctx.stroke();
+  const f = e < .3 ? [120 + 400 * e, 70 + 100 * e, 60] : [255, 150 + 105 * Math.min(1, (e - .3) / .7), 60 + 150 * Math.min(1, (e - .3) / .7)];
+  ctx.strokeStyle = `rgb(${f.map(Math.round).join(',')})`; ctx.lineWidth = 1.3 + e;
+  if (e > .05) { ctx.shadowColor = 'rgba(255,230,150,.9)'; ctx.shadowBlur = 10 * e; }
+  ctx.beginPath(); ctx.moveTo(cx - 5, yf - 19); ctx.lineTo(cx - 5, gy + 2);
+  for (let k = 0; k <= 6; k++) ctx.lineTo(cx - 5 + k * 10 / 6, gy + (k % 2 ? -3 : 2));
+  ctx.lineTo(cx + 5, yf - 19); ctx.stroke(); ctx.shadowBlur = 0;
+  ctx.restore();
+};
+/** Pile ronde (debout) : corps cuivré et noir, capuchon « + » en haut. */
+Peint.pile = function (ctx, x, y, w, h, a = 1) {
+  ctx.save(); ctx.globalAlpha = a;
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(x + 3, y + 4, w, h, 5); ctx.fill();
+  const g = ctx.createLinearGradient(x, 0, x + w, 0); g.addColorStop(0, '#2a2a2a'); g.addColorStop(.45, '#5a5a5a'); g.addColorStop(1, '#151515');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y + h * .3, w, h * .7, [0, 0, 5, 5]); ctx.fill();
+  const g2 = ctx.createLinearGradient(x, 0, x + w, 0); g2.addColorStop(0, '#8a4b12'); g2.addColorStop(.45, '#e39a3b'); g2.addColorStop(1, '#6b3609');
+  ctx.fillStyle = g2; ctx.beginPath(); ctx.roundRect(x, y, w, h * .3, [5, 5, 0, 0]); ctx.fill();
+  ctx.fillStyle = '#b9bec4'; ctx.fillRect(x + w * .32, y - 6, w * .36, 6);
+  ctx.fillStyle = '#fff'; ctx.font = `700 ${Math.round(w * .5)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('+', x + w / 2, y + h * .16); ctx.fillText('−', x + w / 2, y + h * .82);
+  ctx.restore();
+};
+/** Voiture vue de côté (carrosserie rouge, vitres, roues). */
+Peint.voiture = function (ctx, x, y, a = 1) {
+  ctx.save(); ctx.globalAlpha = a;
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(x + 30, y + 20, 32, 4, 0, 0, 7); ctx.fill();
+  const g = ctx.createLinearGradient(0, y - 18, 0, y + 14); g.addColorStop(0, '#ff7a6b'); g.addColorStop(.5, '#d62f22'); g.addColorStop(1, '#7c140c');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(x, y + 12); ctx.lineTo(x, y); ctx.lineTo(x + 14, y - 2); ctx.lineTo(x + 22, y - 14); ctx.lineTo(x + 44, y - 14); ctx.lineTo(x + 52, y - 2); ctx.lineTo(x + 62, y); ctx.lineTo(x + 62, y + 12); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(190,225,255,.85)'; ctx.beginPath(); ctx.moveTo(x + 18, y - 2); ctx.lineTo(x + 24, y - 11); ctx.lineTo(x + 32, y - 11); ctx.lineTo(x + 32, y - 2); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(x + 35, y - 2); ctx.lineTo(x + 35, y - 11); ctx.lineTo(x + 42, y - 11); ctx.lineTo(x + 48, y - 2); ctx.closePath(); ctx.fill();
+  for (const rx of [x + 14, x + 48]) Peint.sphere(ctx, rx, y + 12, 7, ['#8a8f96', '#2a2d31', '#050607']);
+  ctx.restore();
+};
+/** Eau dans un récipient : tranche peinte (claire en surface, foncée en profondeur). */
+function eau(ctx, x, y, w, h) {
+  if (h <= 0) return;
+  const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, 'rgba(110,190,255,.85)'); g.addColorStop(1, 'rgba(20,80,170,.9)');
+  ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = 'rgba(230,245,255,.9)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + w, y); ctx.stroke();
+}
+function verre(ctx, x, y, w, h) {
+  ctx.save(); ctx.strokeStyle = 'rgba(220,235,250,.75)'; ctx.lineWidth = 2.4;
+  ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + h); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w, y); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fillRect(x + 3, y + 4, 4, h - 8); ctx.restore();
+}
+
+const VUES = ['courant', 'tension', 'ohm', 'additivite', 'puissances', 'derivee', 'exponentielle', 'sinusoide', 'derivee_cos'];
+const TITRES = {
+  courant: 'le courant électrique', tension: 'la tension électrique', ohm: 'la loi d’Ohm', additivite: 'la loi d’additivité des tensions',
+  puissances: 'les puissances de dix', derivee: 'la dérivée : la pente', exponentielle: 'la fonction exponentielle', sinusoide: 'la sinusoïde', derivee_cos: 'la dérivée d’un cosinus',
+};
+const P = { R: 100, uC: 4, t: 1, T: 4 };
+/* ?dipole=bobine (vue additivite, cours du dipôle RL) : la bobine remplace le condensateur ; u_b remplace u_C (u_C_V ou u_b_V). */
+const BOB = new URLSearchParams(location.search).get('dipole') === 'bobine', UX = BOB ? 'u_b' : 'u_C', NX = BOB ? 'bobine' : 'C';
+Peint.bobine = function (ctx, x, y, w, h) {
+  ctx.save();
+  const g = ctx.createLinearGradient(x, 0, x + w, 0); g.addColorStop(0, '#5a5f66'); g.addColorStop(.5, '#aab1b9'); g.addColorStop(1, '#4a4f55');
+  ctx.fillStyle = g; ctx.fillRect(x + w * .2, y, w * .6, h);
+  for (let k = 0; k < 9; k++) { const yy = y + 4 + k * (h - 8) / 8, gc = ctx.createLinearGradient(x, 0, x + w, 0); gc.addColorStop(0, '#7a3d12'); gc.addColorStop(.45, '#f0a35a'); gc.addColorStop(1, '#6b3209');
+    ctx.strokeStyle = gc; ctx.lineWidth = 4; ctx.beginPath(); ctx.ellipse(x + w / 2, yy, w / 2, 3.2, 0, 0, Math.PI); ctx.stroke(); }
+  ctx.restore();
+};
+const ETAPES = {
+  courant: [
+    { nom: 'circuit', anim: .8, motif: 'le circuit : pile, interrupteur K, lampe, ampèremètre ; K ouvert', bulle: () => 'Un circuit simple, K ouvert : rien ne passe.' },
+    { nom: 'ferme', anim: 3.2, motif: 'K fermé : les électrons circulent, la lampe brille', bulle: () => 'On ferme K…' },
+    { nom: 'sens', anim: 1, motif: 'le sens de i : du + vers le − à l’extérieur de la pile', bulle: () => 'Dans quel sens ?' },
+    { nom: 'amperemetre', anim: 1.6, motif: 'l’ampèremètre, en série, mesure i = 0,2 A', bulle: () => 'Combien de courant ?' },
+    { nom: 'eau', anim: 3.2, motif: 'comme l’eau dans un tuyau : i = la charge qui passe en une seconde', bulle: () => 'Une autre façon de le voir…' },
+  ],
+  tension: [
+    { nom: 'circuit', anim: .8, motif: 'le circuit, K fermé, la lampe brille ; ses bornes A et B', bulle: () => 'Le même circuit ; la lampe a deux bornes, A et B.' },
+    { nom: 'fleche', anim: 1.2, motif: 'la tension u_AB : une flèche de B vers A', bulle: () => 'Entre A et B…' },
+    { nom: 'voltmetre', anim: 1.6, motif: 'le voltmètre, en dérivation, mesure u_AB = 4,5 V', bulle: () => 'Combien de volts ?' },
+    { nom: 'niveaux', anim: 3.2, motif: 'deux réservoirs à deux hauteurs : la différence de niveau fait couler l’eau', bulle: () => 'Une autre façon de le voir…' },
+    { nom: 'fil', anim: 1.2, motif: 'deux points du même fil : u = 0', bulle: () => 'Et entre deux points du même fil ?' },
+  ],
+  ohm: [
+    { nom: 'montage', anim: .8, motif: 'le conducteur ohmique R, l’ampèremètre et le voltmètre', bulle: () => 'Un conducteur ohmique, et deux appareils.' },
+    { nom: 'mesure_1', anim: 1.6, motif: () => `i = 20 mA : u_R = ${fx(P.R * .02)} V`, bulle: () => 'Première mesure…' },
+    { nom: 'mesure_2', anim: 1.6, motif: () => `i double (40 mA) : u_R double (${fx(P.R * .04)} V)`, bulle: () => 'On double i…' },
+    { nom: 'droite', anim: 1.8, motif: () => `une droite qui passe par l’origine : u_R = R·i, pente R = ${P.R} Ω`, bulle: () => 'Une troisième mesure, et la droite…' },
+    { nom: 'convention', anim: 1, motif: 'convention récepteur : la flèche de u_R est opposée à celle de i', bulle: () => 'Et les flèches ?' },
+  ],
+  additivite: [
+    { nom: 'circuit', anim: .8, motif: 'E, R et C en série : une seule boucle', bulle: () => 'Un générateur, R et C, l’un après l’autre.' },
+    { nom: 'tensions', anim: 2, motif: () => `les trois flèches : E = 6 V, u_R = ${fx(6 - P.uC)} V, ${UX} = ${fx(P.uC)} V`, bulle: () => 'Les trois tensions…' },
+    { nom: 'somme', anim: 1, motif: () => `u_R + ${UX} = E : ${fx(6 - P.uC)} + ${fx(P.uC)} = 6 V`, bulle: () => 'Additionnons…' },
+    { nom: 'escalier', anim: 3.2, motif: 'l’escalier : la pile monte de 6 V, R et C descendent, on revient au départ', bulle: () => 'Une autre façon de le voir…' },
+  ],
+  puissances: [
+    { nom: 'milli', anim: 1, motif: 'milli : 10⁻³', bulle: () => 'milli…' },
+    { nom: 'micro', anim: 1, motif: 'micro : 10⁻⁶', bulle: () => 'micro…' },
+    { nom: 'nano', anim: 1, motif: 'nano : 10⁻⁹', bulle: () => 'nano…' },
+    { nom: 'exemple', anim: 1, motif: '47 µF = 47·10⁻⁶ F', bulle: () => 'Un exemple…' },
+    { nom: 'decoupe', anim: 4, motif: 'la virgule recule de 6 rangs : 47 µF = 0,000 047 F', bulle: () => 'Une autre façon de le voir…' },
+  ],
+  derivee: [
+    { nom: 'courbe', anim: 1.4, motif: 'la courbe d(t) : la distance parcourue en fonction du temps', bulle: () => 'Une voiture démarre, puis ralentit…' },
+    { nom: 'corde', anim: 2, motif: 'deux points M et N : Δd sur Δt', bulle: () => 'Deux instants…' },
+    { nom: 'tangente', anim: 2.6, motif: 'N se rapproche de M : la corde devient la tangente ; f′(t) = sa pente', bulle: () => 'Rapprochons N de M…' },
+    { nom: 'pente_nulle', anim: 2.2, motif: 'là où la courbe est plate, la pente est presque nulle', bulle: () => 'Et à la fin ?' },
+    { nom: 'voiture', anim: 3.6, motif: 'la voiture : la pente de d(t), c’est sa vitesse (le compteur)', bulle: () => 'Une autre façon de le voir…' },
+  ],
+  exponentielle: [
+    { nom: 'depart', anim: 1.6, motif: 'e^(−t/τ) part de 1 : e⁰ = 1', bulle: () => 'La courbe de e^(−t/τ)…' },
+    { nom: 'tau', anim: 1.4, motif: 'à t = τ : e⁻¹ ≈ 0,37', bulle: () => 'À t = τ…' },
+    { nom: 'jamais_zero', anim: 2, motif: 'elle s’approche de 0 sans jamais l’atteindre', bulle: () => 'Et plus tard ?' },
+    { nom: 'montee', anim: 2, motif: '1 − e^(−t/τ) : de 0 vers 1, 0,63 à t = τ', bulle: () => 'Et 1 − e^(−t/τ) ?' },
+    { nom: 'reservoir', anim: 4, motif: 'le réservoir : plus il est plein, plus il se vide vite', bulle: () => 'Une autre façon de le voir…' },
+  ],
+  sinusoide: [
+    { nom: 'cercle', anim: 1, motif: 'un point sur un cercle, en haut : sa hauteur vaut U_m', bulle: () => 'Un point qui tourne…' },
+    { nom: 'courbe', anim: 4, motif: 'un tour : la hauteur trace la courbe u = U_m·cos(2πt/T)', bulle: () => 'Il fait un tour…' },
+    { nom: 'amplitude', anim: .8, motif: 'U_m : l’amplitude, la hauteur d’un sommet', bulle: () => 'La hauteur d’un sommet…' },
+    { nom: 'periode', anim: 4, motif: 'T : la période, la durée entre deux sommets successifs', bulle: () => 'Un deuxième tour…' },
+    { nom: 'balancoire', anim: 4, motif: 'la balançoire : elle va et vient, avec la même amplitude et la même période', bulle: () => 'Une autre façon de le voir…' },
+  ],
+  derivee_cos: [
+    { nom: 'courbe', anim: 2, motif: 'la courbe de cos(2πt/T)', bulle: () => 'La courbe du cosinus…' },
+    { nom: 'sommet', anim: 1, motif: 'au sommet, la tangente est horizontale : la dérivée vaut 0', bulle: () => 'Au sommet…' },
+    { nom: 'descente', anim: 1, motif: 'au passage par 0, la pente est la plus forte', bulle: () => 'Et quand la courbe passe par 0 ?' },
+    { nom: 'derivee', anim: 3, motif: 'la courbe de la dérivée : −(2π/T)·sin(2πt/T)', bulle: () => 'Traçons la pente à chaque instant…' },
+    { nom: 'decalage', anim: 1, motif: 'la dérivée est la même sinusoïde, décalée d’un quart de période', bulle: () => 'Une autre façon de le voir…' },
+  ],
+};
+const MOTIFS = { fin: 'fin' };
+const motifDe = nom => { for (const v of VUES) for (const e of ETAPES[v]) if (e.nom === nom && v === MOT.S.vue) return typeof e.motif === 'function' ? e.motif() : e.motif; return nom; };
+let MOT = null;
+const MOTIFS_PROXY = new Proxy(MOTIFS, { get: (o, k) => (k === 'fin' ? 'fin' : motifDe(k)) });
+
+/* ── Dessin ──────────────────────────────────────────────────────────── */
+function dessiner(c, M) {
+  M.scene.cadre(17);
+  c.texte('Rappel : ' + TITRES[M.S.vue], 14, 26, { couleur: 'cyan', taille: 20 });
+  ({ courant: vueCourant, tension: vueTension, ohm: vueOhm, additivite: vueAdditivite, puissances: vuePuissances,
+    derivee: vueDerivee, exponentielle: vueExpo, sinusoide: vueSinus, derivee_cos: vueDcos })[M.S.vue](c, M);
+  return c.fin();
+}
+/** Un point qui avance le long d’une boucle de fils (s de 0 à 1). */
+function surBoucle(pts, s) {
+  const seg = []; let L = 0;
+  for (let i = 0; i < pts.length; i++) { const a = pts[i], b = pts[(i + 1) % pts.length], l = Math.hypot(b[0] - a[0], b[1] - a[1]); seg.push([a, b, l]); L += l; }
+  let d = ((s % 1) + 1) % 1 * L;
+  for (const [a, b, l] of seg) { if (d <= l) return [a[0] + (b[0] - a[0]) * d / l, a[1] + (b[1] - a[1]) * d / l]; d -= l; }
+  return pts[0];
+}
+// Circuit des vues courant et tension : pile à gauche, K et la lampe en haut, l’ampèremètre à droite.
+const XG = 70, YH = 120, YB = 300, XD = 470;
+const BOUCLE = [[XG, YB], [XG, YH], [XD, YH], [XD, YB]];   // sens des électrons : du − (bas de la pile) … on la parcourt à l’envers
+function circuitDeBase(c, M, ferme, eclat, avecAmpere, f) {
+  c.direct(() => {
+    const ctx = c.ctx;
+    Peint.pile(ctx, XG - 18, 175, 36, 80);
+    Peint.levier(ctx, 140, YH, ferme ? 196 : 186, ferme ? YH : YH - 22);
+    Peint.plot(ctx, 196, YH);
+    Peint.lampe(ctx, 300, YH, eclat);
+    if (avecAmpere) Peint.cadran(ctx, XD, 215, 30, f, 'A', ['0', '0,1', '0,2', '0,3']);
+  });
+  c.ligne(XG, 175, XG, YH); c.ligne(XG, YH, 140, YH); c.ligne(196, YH, 279, YH); c.ligne(321, YH, XD, YH);
+  if (avecAmpere) { c.ligne(XD, YH, XD, 181); c.ligne(XD, 249, XD, YB); } else c.ligne(XD, YH, XD, YB);
+  c.ligne(XD, YB, XG, YB); c.ligne(XG, YB, XG, 255);
+  c.texte('pile', XG + 26, 268, { couleur: 'faible', taille: 14 });
+  c.texte('K', 168, YH - 26, { couleur: 'faible', taille: 15, align: 'center' });
+  c.texte('lampe', 300, YH + 28, { couleur: 'faible', taille: 14, align: 'center' });
+  c.repere('pile', XG - 24, 166, 56, 96, 'la pile (le générateur)');
+  c.repere('interrupteur', 132, YH - 34, 72, 46, 'l’interrupteur K');
+  c.repere('lampe', 270, YH - 50, 60, 66, 'la lampe');
+}
+function vueCourant(c, M) {
+  const pf = M.p('ferme'), ferme = M.commence('ferme') && pf > .1, vu = n => M.vu(n);
+  const s0 = M.commence('ferme') ? (M.S.t - M.ev('ferme').debut) * .12 : 0;
+  const f = ferme ? 2 / 3 * lisse(clamp(pf * 3, 0, 1)) : 0;
+  circuitDeBase(c, M, ferme, ferme ? lisse(clamp(pf * 2, 0, 1)) : 0, true, f);
+  c.repere('amperemetre', XD - 36, 179, 72, 72, 'l’ampèremètre, branché en série');
+  // Électrons : du − de la pile (en bas) vers le + (en haut), par le circuit extérieur (sens inverse de i).
+  if (ferme) c.direct(() => { for (let k = 0; k < 14; k++) { const [x, y] = surBoucle([[XG, YB], [XD, YB], [XD, YH], [XG, YH]], k / 14 + s0); if (!(x === XG && y > 175 && y < 255)) Peint.sphere(c.ctx, x, y, 4); } });
+  if (ferme) c.repere('electrons', XG, YH - 8, XD - XG, YB - YH + 16, 'les électrons (petites boules bleues) qui circulent');
+  M.etape(c, 'ferme', () => c.texte('K fermé : les électrons circulent dans tout le circuit : c’est le courant électrique', 14, 340, { couleur: 'blanc', taille: 16, max: 730 }));
+  M.etape(c, 'sens', () => {
+    c.fleche(220, YH - 14, 262, YH - 14, { couleur: 'rouge', largeur: 2.8 }); c.texte('i', 238, YH - 22, { couleur: 'rouge', taille: 18 });
+    c.fleche(XD + 14, YH + 20, XD + 14, YH + 52, { couleur: 'rouge', largeur: 2.8 });
+    c.texte('sens de i : du + vers le −, à l’extérieur de la pile (les électrons vont dans l’autre sens)', 14, 364, { couleur: 'rouge', taille: 16, max: 730 });
+    c.repere('fleche_i', 214, YH - 40, 60, 34, 'la flèche du sens du courant i');
+  });
+  M.etape(c, 'amperemetre', () => {
+    c.texte('i = 0,2 A', XD + 40, 222, { couleur: 'jaune', taille: 18 });
+    c.texte('l’ampèremètre, branché en série, mesure l’intensité i, en ampère (A)', 14, 388, { couleur: 'jaune', taille: 16, max: 730 });
+  });
+  if (M.commence('eau')) {
+    const pe = M.p('eau'), s = (M.S.t - M.ev('eau').debut) * .35;
+    c.direct(() => {
+      const ctx = c.ctx, x0 = 560, x1 = 740, y0 = 150, h = 34;
+      const g = ctx.createLinearGradient(0, y0, 0, y0 + h); g.addColorStop(0, '#9aa3ad'); g.addColorStop(1, '#4d555e');
+      ctx.globalAlpha = lisse(Math.min(1, pe * 3));
+      ctx.fillStyle = g; ctx.fillRect(x0, y0 - 6, x1 - x0, h + 12);
+      eau(ctx, x0, y0, x1 - x0, h);
+      ctx.fillStyle = 'rgba(235,248,255,.9)';
+      for (let k = 0; k < 9; k++) { const x = x0 + ((k / 9 + s) % 1) * (x1 - x0); ctx.beginPath(); ctx.arc(x, y0 + 8 + (k % 3) * 9, 3, 0, 7); ctx.fill(); }
+      ctx.globalAlpha = 1;
+    });
+    c.texte('comme l’eau dans un tuyau', 650, 128, { couleur: 'bleu', taille: 16, align: 'center' });
+    c.fleche(600, 214, 700, 214, { couleur: 'bleu' });
+    c.texte('i = la charge qui passe', 650, 240, { couleur: 'bleu', taille: 16, align: 'center' });
+    c.texte('en une seconde', 650, 262, { couleur: 'bleu', taille: 16, align: 'center' });
+    c.texte('plus de charges par seconde', 650, 290, { couleur: 'vert', taille: 15, align: 'center' });
+    c.texte('→ i plus grande', 650, 310, { couleur: 'vert', taille: 15, align: 'center' });
+    c.repere('tuyau', 552, 110, 196, 210, 'l’eau dans un tuyau : le débit, comme l’intensité');
+  }
+}
+function vueTension(c, M) {
+  const A = [279, YH], B = [321, YH];
+  circuitDeBase(c, M, true, 1, false, 0);
+  c.texte('A', A[0] - 6, YH + 20, { couleur: 'jaune', taille: 17, align: 'center' }); c.texte('B', B[0] + 6, YH + 20, { couleur: 'jaune', taille: 17, align: 'center' });
+  c.repere('bornes', 268, YH + 2, 64, 26, 'les bornes A et B de la lampe');
+  M.etape(c, 'fleche', () => {
+    c.courbe(u => [B[0] - (B[0] - A[0]) * u, YH - 66 - 12 * Math.sin(Math.PI * u)], 20, { couleur: 'vert', largeur: 2.6 });
+    c.fleche(A[0] + 6, YH - 70, A[0], YH - 66, { couleur: 'vert', largeur: 2.6 });
+    c.texte('u_AB', 300, YH - 86, { couleur: 'vert', taille: 18, align: 'center' });
+    c.texte('la tension entre A et B : u_AB, une flèche qui va de B vers A', 14, 340, { couleur: 'vert', taille: 16, max: 730 });
+    c.repere('fleche_u', 266, YH - 104, 70, 46, 'la flèche de la tension u_AB');
+  });
+  if (M.commence('voltmetre')) {
+    const f = lisse(M.p('voltmetre')) * .75;
+    c.direct(() => Peint.cadran(c.ctx, 300, 215, 30, f, 'V', ['0', '2', '4', '6']));
+    c.ligne(A[0], YH, A[0], 160); c.ligne(A[0], 160, 270, 190); c.ligne(B[0], YH, B[0], 160); c.ligne(B[0], 160, 330, 190);
+    c.repere('voltmetre', 264, 179, 72, 72, 'le voltmètre, branché aux bornes de la lampe');
+  }
+  M.etape(c, 'voltmetre', () => {
+    c.texte('u_AB = 4,5 V', 340, 262, { couleur: 'jaune', taille: 17 });
+    c.texte('le voltmètre, branché en dérivation (aux bornes A et B), mesure la tension, en volt (V)', 14, 364, { couleur: 'jaune', taille: 16, max: 730 });
+  });
+  if (M.commence('niveaux')) {
+    const p = M.p('niveaux'), s = (M.S.t - M.ev('niveaux').debut) * .4;
+    c.direct(() => {
+      const ctx = c.ctx; ctx.globalAlpha = lisse(Math.min(1, p * 3));
+      verre(ctx, 540, 90, 70, 80); eau(ctx, 543, 104, 64, 63);
+      verre(ctx, 660, 210, 70, 80); eau(ctx, 663, 248 - 10 * p, 64, 39 + 10 * p);
+      ctx.fillStyle = '#7d858e'; ctx.fillRect(607, 158, 10, 8); ctx.fillRect(612, 158, 8, 76); ctx.fillRect(612, 226, 52, 8);
+      ctx.fillStyle = 'rgba(120,195,255,.9)';
+      for (let k = 0; k < 5; k++) { const u = (k / 5 + s) % 1; const [x, y] = u < .6 ? [616, 162 + u / .6 * 68] : [616 + (u - .6) / .4 * 46, 230]; ctx.beginPath(); ctx.arc(x, y, 2.6, 0, 7); ctx.fill(); }
+      ctx.globalAlpha = 1;
+    });
+    c.cote(745, 104, 745, 245, null, { couleur: 'vert' });
+    c.texte('différence', 690, 140, { couleur: 'vert', taille: 14, align: 'center' });
+    c.texte('de niveau', 690, 158, { couleur: 'vert', taille: 14, align: 'center' });
+    c.texte('l’eau coule du haut vers le bas :', 640, 300, { couleur: 'bleu', taille: 15, align: 'center' });
+    c.texte('la tension, c’est cette différence', 640, 318, { couleur: 'bleu', taille: 15, align: 'center' });
+    c.repere('reservoirs', 532, 80, 222, 270, 'deux réservoirs à deux hauteurs différentes');
+  }
+  M.etape(c, 'fil', () => {
+    c.point(380, YB, 5, 'orange'); c.point(430, YB, 5, 'orange');
+    c.texte('C', 380, YB + 22, { couleur: 'orange', taille: 16, align: 'center' }); c.texte('D', 430, YB + 22, { couleur: 'orange', taille: 16, align: 'center' });
+    c.texte('deux points du même fil : u_CD = 0 (même niveau)', 14, 388, { couleur: 'orange', taille: 16, max: 730 });
+    c.repere('fil', 366, YB - 12, 80, 40, 'deux points C et D du même fil');
+  });
+}
+/* Loi d’Ohm : à gauche le résistor et ses appareils, à droite le graphe u_R(i). */
+const GO = { x0: 420, y0: 320, x1: 735, y1: 70, imax: 70, umax: 14 };
+const gx = i => GO.x0 + i / GO.imax * (GO.x1 - 20 - GO.x0), gy = u => GO.y0 - u / GO.umax * (GO.y0 - GO.y1 - 20);
+const S3 = { ancienR: null };
+function vueOhm(c, M) {
+  const mes = [M.commence('mesure_1') ? 20 : null, M.commence('mesure_2') ? 40 : null, M.commence('droite') ? 60 : null].filter(v => v != null);
+  const iNow = mes.length ? mes[mes.length - 1] : 0;
+  c.direct(() => {
+    const ctx = c.ctx;
+    Peint.resistor(ctx, 140, 151, 90, 22, P.R);
+    Peint.cadran(ctx, 120, 250, 28, iNow / 80, 'A', ['0', '40', '80']);
+    Peint.cadran(ctx, 185, 76, 26, (P.R * iNow / 1000) / 15, 'V', ['0', '5', '10', '15']);
+  });
+  c.ligne(60, 162, 140, 162); c.ligne(230, 162, 330, 162); c.ligne(60, 162, 60, 250); c.ligne(60, 250, 88, 250);
+  c.ligne(152, 250, 200, 250); c.ligne(200, 250, 200, 340); c.ligne(200, 340, 330, 340); c.ligne(330, 340, 330, 162);
+  c.ligne(140, 162, 140, 76); c.ligne(140, 76, 155, 76); c.ligne(230, 162, 230, 76); c.ligne(230, 76, 215, 76);
+  c.texte('générateur', 340, 300, { couleur: 'faible', taille: 13, align: 'left' });
+  c.direct(() => c.texte(`R = ${P.R} Ω`, 185, 198, { couleur: 'orange', taille: 17, align: 'center' }));
+  c.repere('resistance', 132, 140, 106, 66, 'le conducteur ohmique R');
+  c.repere('amperemetre', 86, 216, 68, 68, 'l’ampèremètre (i), en série'); c.repere('voltmetre', 153, 44, 64, 64, 'le voltmètre (u_R), aux bornes de R');
+  c.direct(() => { c.texte(`i = ${iNow} mA`, 90, 304, { couleur: 'jaune', taille: 15 }); c.texte(`u_R = ${fx(P.R * iNow / 1000)} V`, 240, 70, { couleur: 'jaune', taille: 15 }); });
+  // Graphe.
+  c.fleche(GO.x0, GO.y0, GO.x1, GO.y0, { couleur: 'faible', largeur: 1.6 }); c.fleche(GO.x0, GO.y0, GO.x0, GO.y1, { couleur: 'faible', largeur: 1.6 });
+  c.texte('i (mA)', GO.x1, GO.y0 + 20, { couleur: 'faible', taille: 14, align: 'right' }); c.texte('u_R (V)', GO.x0 + 8, GO.y1 + 6, { couleur: 'faible', taille: 14 });
+  for (const i of [20, 40, 60]) c.texte(String(i), gx(i), GO.y0 + 18, { couleur: 'faible', taille: 13, align: 'center', duree: .1 });
+  for (const u of [4, 8, 12]) c.texte(String(u), GO.x0 - 6, gy(u) + 5, { couleur: 'faible', taille: 13, align: 'right', duree: .1 });
+  c.repere('graphe', GO.x0, GO.y1, GO.x1 - GO.x0, GO.y0 - GO.y1, 'le graphe u_R en fonction de i');
+  c.direct(() => {
+    for (const i of mes) { const u = P.R * i / 1000; if (u <= GO.umax) { c.point(gx(i), gy(u), 5, 'jaune'); c.ligne(gx(i), GO.y0, gx(i), gy(u), { couleur: 'tresfaible', pointille: [3, 4], tremble: 0 }); c.ligne(GO.x0, gy(u), gx(i), gy(u), { couleur: 'tresfaible', pointille: [3, 4], tremble: 0 }); } }
+    if (M.vu('droite')) {
+      if (S3.ancienR && S3.ancienR !== P.R) c.courbe(u => [gx(u * 70), gy(Math.min(GO.umax, S3.ancienR * u * 70 / 1000))], 20, { couleur: 'faible', pointille: [5, 5], tremble: 0 });
+      const imax = Math.min(70, GO.umax * 1000 / P.R);
+      c.courbe(u => [gx(u * imax), gy(P.R * u * imax / 1000)], 20, { couleur: 'jaune', largeur: 2.6, tremble: 0 });
+      c.repere('droite', GO.x0, GO.y1, GO.x1 - GO.x0, GO.y0 - GO.y1, 'la droite u_R = R·i, de pente R');
+    }
+  });
+  M.etape(c, 'mesure_1', () => c.texte('mesure 1 : i = 20 mA', 14, 364, { couleur: 'jaune', taille: 15 }));
+  M.etape(c, 'mesure_2', () => c.texte('mesure 2 : i double → u_R double', 200, 364, { couleur: 'jaune', taille: 15 }));
+  M.etape(c, 'droite', () => {
+    c.texte('u_R = R·i', 470, 100, { couleur: 'jaune', taille: 22 });
+    c.texte('une droite qui passe par l’origine : sa pente, c’est R (en ohm, Ω)', 14, 388, { couleur: 'jaune', taille: 15, max: 730 });
+  });
+  M.etape(c, 'convention', () => {
+    c.fleche(92, 150, 128, 150, { couleur: 'rouge', largeur: 2.8 }); c.texte('i', 104, 142, { couleur: 'rouge', taille: 18 });
+    c.fleche(222, 132, 148, 132, { couleur: 'vert', largeur: 2.6 }); c.texte('u_R', 236, 138, { couleur: 'vert', taille: 17 });
+    c.texte('convention récepteur : flèches opposées', 14, 412, { couleur: 'vert', taille: 15 });
+    c.repere('fleches', 86, 94, 150, 64, 'la flèche de i et la flèche de u_R, opposées');
+  });
+}
+function vueAdditivite(c, M) {
+  const uC = P.uC, uR = 6 - uC;
+  c.direct(() => {
+    const ctx = c.ctx;
+    Peint.generateur(ctx, 34, 170, 62, 80, '6 V');
+    Peint.resistor(ctx, 160, 89, 80, 20, 1000);
+    if (BOB) Peint.bobine(ctx, 322, 120, 38, 72); else Peint.chimique(ctx, 330, 175, 22, 44);
+  });
+  c.ligne(65, 170, 65, 100); c.ligne(65, 100, 160, 100); c.ligne(240, 100, 341, 100); c.ligne(341, 100, 341, 150);
+  if (!BOB) { c.ligne(321, 150, 361, 150, { largeur: 3.4, couleur: 'cyan' }); c.ligne(321, 162, 361, 162, { largeur: 3.4, couleur: 'cyan' }); }
+  c.ligne(341, BOB ? 192 : 162, 341, 320); c.ligne(341, 320, 65, 320); c.ligne(65, 320, 65, 250);
+  c.texte('R', 200, 132, { couleur: 'orange', taille: 17, align: 'center' }); if (BOB) c.texte('bobine', 366, 108, { couleur: 'cyan', taille: 17 }); else c.texte('C', 374, 162, { couleur: 'cyan', taille: 17 });
+  c.repere('generateur', 28, 164, 74, 92, 'le générateur, E = 6 V'); c.repere('resistance', 152, 80, 96, 38, 'le conducteur ohmique R'); c.repere(BOB ? 'bobine' : 'condensateur', 316, 116, 70, 114, BOB ? 'la bobine' : 'le condensateur C');
+  c.repere('boucle', 60, 92, 290, 236, 'une seule boucle : E, R et C en série');
+  M.etape(c, 'circuit', () => c.texte('en série : une seule boucle', 110, 360, { couleur: 'faible', taille: 15, align: 'center' }));
+  M.etape(c, 'tensions', () => {
+    c.fleche(110, 250, 110, 172, { couleur: 'jaune', largeur: 2.6 }); c.texte('E = 6 V', 118, 214, { couleur: 'jaune', taille: 16 });
+    c.fleche(236, 70, 164, 70, { couleur: 'orange', largeur: 2.6 }); c.texte(`u_R = ${fx(uR)} V`, 200, 60, { couleur: 'orange', taille: 16, align: 'center' });
+    c.fleche(390, 220, 390, 140, { couleur: 'cyan', largeur: 2.6 }); c.texte(`${UX} = ${fx(uC)} V`, 398, 186, { couleur: 'cyan', taille: 16 });
+    c.repere('fleches', 100, 40, 320, 220, `les trois tensions E, u_R et ${UX}`);
+  });
+  M.etape(c, 'somme', () => { c.texte(`u_R + ${UX} = E`, 470, 100, { couleur: 'blanc', taille: 22 }); c.texte(`${fx(uR)} + ${fx(uC)} = 6 V`, 480, 130, { couleur: 'blanc', taille: 18 }); c.repere('somme', 462, 76, 220, 64, `u_R + ${UX} = E`); });
+  if (M.commence('escalier')) {
+    const p = lisse(M.p('escalier')), X0 = 470, Y0 = 330, k = 26, xs = [X0, X0 + 60, X0 + 120, X0 + 180, X0 + 240];
+    const h = [0, 6, 6 - uR, 0, 0];
+    c.direct(() => {
+      const ctx = c.ctx; ctx.globalAlpha = p;
+      for (let j = 0; j < 4; j++) { const g = ctx.createLinearGradient(0, Y0 - h[j] * k, 0, Y0); g.addColorStop(0, '#b98b5a'); g.addColorStop(1, '#6e4b2a'); ctx.fillStyle = g; ctx.fillRect(xs[j], Y0 - h[j] * k, 60, h[j] * k); }
+      ctx.globalAlpha = 1;
+      c.fleche(xs[0] + 30, Y0 - 4, xs[0] + 30, Y0 - 6 * k + 6, { couleur: 'jaune', largeur: 2.4, tremble: 0 }); c.texte('+6 V (pile)', xs[0] + 4, Y0 - 6 * k - 8, { couleur: 'jaune', taille: 14 });
+      c.texte(`−${fx(uR)} V (R)`, xs[2] + 4, Y0 - h[2] * k - 8, { couleur: 'orange', taille: 14 });
+      c.texte(`−${fx(uC)} V (${NX})`, xs[3] + 4, Y0 - 8, { couleur: 'cyan', taille: 14 });
+    });
+    c.texte('comme un escalier :', 600, 356, { couleur: 'faible', taille: 15, align: 'center' }); c.texte('on monte de 6 V, on redescend de 6 V', 600, 376, { couleur: 'faible', taille: 15, align: 'center' });
+    c.repere('escalier', X0, Y0 - 6 * k - 30, 250, 6 * k + 40, 'l’escalier des tensions');
+  }
+}
+function vuePuissances(c, M) {
+  const L = [['milli', 'm', '10⁻³', '1 mF = 0,001 F', 'milli'], ['micro', 'µ', '10⁻⁶', '1 µF = 0,000 001 F', 'micro'], ['nano', 'n', '10⁻⁹', '1 nF = 0,000 000 001 F', 'nano']];
+  L.forEach(([nom, sym, p, ex, mo], k) => M.etape(c, mo, () => {
+    const y = 90 + k * 50;
+    c.texte(`${nom} (${sym})`, 40, y, { couleur: 'jaune', taille: 20 }); c.texte(`= ${p}`, 190, y, { couleur: 'blanc', taille: 20 });
+    c.texte(ex, 300, y, { couleur: 'faible', taille: 17 });
+    c.repere(mo, 30, y - 26, 520, 36, `${nom} = ${p}`);
+  }));
+  M.etape(c, 'exemple', () => {
+    c.texte('47 µF = 47 × 10⁻⁶ F', 40, 250, { couleur: 'vert', taille: 24 });
+    c.repere('exemple', 30, 222, 340, 40, '47 µF = 47·10⁻⁶ F');
+  });
+  if (M.commence('decoupe')) {
+    const p = M.p('decoupe'), n = Math.min(6, Math.floor(p * 7.2)), chiffres = '000000047';
+    c.direct(() => {
+      // 47 s’écrit « 47, » puis la virgule recule d’un rang à chaque saut : 4,7 ; 0,47 ; … ; 0,000047.
+      const ent = 2 - n, s = ent === 2 ? '47' : ent > 0 ? '4,7' : '0,' + '0'.repeat(-ent) + '47';
+      c.texte(s + ' F', 420, 330, { couleur: 'cyan', taille: 30, align: 'center' });
+      c.texte(`la virgule a reculé de ${n} rang${n > 1 ? 's' : ''}`, 420, 370, { couleur: 'faible', taille: 16, align: 'center' });
+      for (let k = 0; k < n; k++) c.courbe(u => [560 - k * 18 - u * 18, 296 - 12 * Math.sin(Math.PI * u)], 8, { couleur: 'jaune', largeur: 1.6, tremble: 0 });
+    });
+    c.repere('virgule', 260, 296, 340, 84, 'la virgule recule de six rangs');
+  }
+  M.etape(c, 'decoupe', () => c.texte('micro = 6 rangs : 47 µF = 0,000 047 F', 420, 404, { couleur: 'vert', taille: 17, align: 'center' }));
+}
+/* Dérivée : d(t) = 6(1 − e^(−t/2)), en m ; d′(t) = 3·e^(−t/2), en m/s. */
+const D = { x0: 50, y0: 320, x1: 450, y1: 70, tmax: 10, dmax: 7 };
+const dX = t => D.x0 + t / D.tmax * (D.x1 - D.x0 - 10), dY = d => D.y0 - d / D.dmax * (D.y0 - D.y1 - 10);
+const dist = t => 6 * (1 - Math.exp(-t / 2)), vit = t => 3 * Math.exp(-t / 2);
+function vueDerivee(c, M) {
+  c.fleche(D.x0, D.y0, D.x1, D.y0, { couleur: 'faible', largeur: 1.6 }); c.fleche(D.x0, D.y0, D.x0, D.y1, { couleur: 'faible', largeur: 1.6 });
+  c.texte('t (s)', D.x1, D.y0 + 20, { couleur: 'faible', taille: 14, align: 'right' }); c.texte('d (m)', D.x0 + 8, D.y1 + 6, { couleur: 'faible', taille: 14 });
+  for (const t of [2, 4, 6, 8]) c.texte(String(t), dX(t), D.y0 + 18, { couleur: 'faible', taille: 13, align: 'center', duree: .1 });
+  for (const d of [2, 4, 6]) c.texte(String(d), D.x0 - 6, dY(d) + 5, { couleur: 'faible', taille: 13, align: 'right', duree: .1 });
+  const pc = M.p('courbe');
+  if (pc > 0) c.direct(() => c.courbe(u => [dX(u * 10 * pc), dY(dist(u * 10 * pc))], 80, { couleur: 'blanc', largeur: 2.6, tremble: 0 }));
+  c.repere('courbe', D.x0, D.y1, D.x1 - D.x0, D.y0 - D.y1, 'la courbe d en fonction de t');
+  // Le point M (t_M) et le point N.
+  let tM = 1, tN = null;
+  if (M.commence('corde')) { tN = 1 + 3 * lisse(Math.min(1, M.p('corde') * 1.5)); }
+  if (M.commence('tangente')) tN = 1 + 3 * (1 - lisse(M.p('tangente')));
+  if (M.vu('tangente')) tN = null;
+  if (M.commence('pente_nulle')) tM = 1 + 8 * lisse(M.p('pente_nulle'));
+  if (M.vu('pente_nulle')) tM = 9;
+  if (M.S.libre) tM = P.t;
+  if (M.commence('corde')) c.direct(() => {
+    const xm = dX(tM), ym = dY(dist(tM));
+    if (tN != null && tN - tM > .02) {
+      const xn = dX(tN), yn = dY(dist(tN)), a = (yn - ym) / (xn - xm);
+      c.ligne(xm - 40, ym - 40 * a, xn + 40, yn + 40 * a, { couleur: 'orange', largeur: 2, tremble: 0 });
+      c.point(xn, yn, 5, 'orange'); c.texte('N', xn + 8, yn + 18, { couleur: 'orange', taille: 16 });
+      c.ligne(xm, ym, xn, ym, { couleur: 'faible', pointille: [3, 4], tremble: 0 }); c.ligne(xn, ym, xn, yn, { couleur: 'faible', pointille: [3, 4], tremble: 0 });
+      c.texte('Δt', (xm + xn) / 2, ym + 18, { couleur: 'faible', taille: 14, align: 'center' }); c.texte('Δd', xn + 6, (ym + yn) / 2, { couleur: 'faible', taille: 14 });
+      c.texte(`pente de la corde = Δd / Δt = ${fx((dist(tN) - dist(tM)) / (tN - tM))} m/s`, 250, 370, { couleur: 'orange', taille: 15, align: 'center', max: 400 });
+    } else {
+      const v = vit(tM), a = -v / D.dmax * (D.y0 - D.y1 - 10) / ((D.x1 - D.x0 - 10) / D.tmax);
+      c.ligne(xm - 70, ym - 70 * a, xm + 70, ym + 70 * a, { couleur: 'jaune', largeur: 2.4, tremble: 0 });
+      c.texte(`pente de la tangente : d′(${fx(tM, 1)}) = ${fx(v)} m/s`, 250, 370, { couleur: 'jaune', taille: 16, align: 'center', max: 400 });
+      c.repere('tangente', xm - 70, ym - 40, 140, 80, 'la tangente en M');
+    }
+    c.point(xm, ym, 5.5, 'jaune'); c.texte('M', xm - 16, ym - 8, { couleur: 'jaune', taille: 16 });
+    c.repere('point_M', xm - 14, ym - 14, 28, 28, 'le point M');
+  });
+  M.etape(c, 'tangente', () => c.texte('la dérivée en un point = la pente de la tangente en ce point', 250, 396, { couleur: 'jaune', taille: 15, align: 'center', max: 460 }));
+  M.etape(c, 'pente_nulle', () => c.texte('courbe plate → pente presque nulle', 250, 100, { couleur: 'vert', taille: 15 }));
+  if (M.commence('voiture')) {
+    const p = M.p('voiture'), tt = M.S.libre ? P.t : 10 * p, xr0 = 490, xr1 = 740;
+    c.direct(() => {
+      const ctx = c.ctx;
+      ctx.fillStyle = '#3d4247'; ctx.fillRect(xr0, 292, xr1 - xr0, 20);
+      ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.setLineDash([10, 8]); ctx.beginPath(); ctx.moveTo(xr0, 302); ctx.lineTo(xr1, 302); ctx.stroke(); ctx.setLineDash([]);
+      Peint.voiture(ctx, xr0 + dist(tt) / 6 * (xr1 - xr0 - 70), 278);
+      Peint.cadran(ctx, 615, 150, 44, vit(tt) / 3, 'v', ['0', '1', '2', '3']);
+    });
+    c.direct(() => { c.texte(`t = ${fx(tt, 1)} s : v = ${fx(vit(tt))} m/s`, 615, 228, { couleur: 'jaune', taille: 15, align: 'center' }); c.point(dX(tt), dY(dist(tt)), 5, 'rouge'); });
+    c.texte('le compteur montre la pente de d(t) :', 615, 76, { couleur: 'bleu', taille: 14, align: 'center' });
+    c.texte('la dérivée, c’est la vitesse', 615, 94, { couleur: 'bleu', taille: 14, align: 'center' });
+    c.repere('voiture', xr0, 250, xr1 - xr0, 70, 'la voiture sur la route'); c.repere('compteur', 565, 100, 100, 110, 'le compteur de vitesse');
+  }
+}
+/* Exponentielle : τ = 1 s. */
+const X = { x0: 50, y0: 300, x1: 470, y1: 70, tmax: 5 };
+const eX = t => X.x0 + t / X.tmax * (X.x1 - X.x0 - 10), eY = v => X.y0 - v * (X.y0 - X.y1 - 40);
+function vueExpo(c, M) {
+  c.fleche(X.x0, X.y0, X.x1, X.y0, { couleur: 'faible', largeur: 1.6 }); c.fleche(X.x0, X.y0, X.x0, X.y1, { couleur: 'faible', largeur: 1.6 });
+  c.texte('t', X.x1, X.y0 + 20, { couleur: 'faible', taille: 15, align: 'right' });
+  for (let k = 1; k <= 5; k++) c.texte(k === 1 ? 'τ' : k + 'τ', eX(k), X.y0 + 18, { couleur: 'faible', taille: 13, align: 'center', duree: .1 });
+  c.texte('1', X.x0 - 8, eY(1) + 5, { couleur: 'faible', taille: 14, align: 'right' }); c.ligne(X.x0, eY(1), X.x1 - 10, eY(1), { couleur: 'tresfaible', pointille: [5, 6] });
+  const pd = M.p('depart');
+  if (pd > 0) c.direct(() => c.courbe(u => [eX(u * 5 * pd), eY(Math.exp(-u * 5 * pd))], 80, { couleur: 'rouge', largeur: 2.8, tremble: 0 }));
+  if (pd > 0) c.repere('courbe_descend', X.x0, X.y1, X.x1 - X.x0, X.y0 - X.y1, 'la courbe de e^(−t/τ), qui descend');
+  M.etape(c, 'depart', () => { c.point(eX(0), eY(1), 5.5, 'rouge'); c.texte('e⁰ = 1', eX(0) + 12, eY(1) - 10, { couleur: 'rouge', taille: 17 }); c.texte('y = e^(−t/τ)', 300, 110, { couleur: 'rouge', taille: 19 }); });
+  M.etape(c, 'tau', () => {
+    c.ligne(eX(1), X.y0, eX(1), eY(.368), { couleur: 'jaune', pointille: [4, 5] }); c.ligne(X.x0, eY(.368), eX(1), eY(.368), { couleur: 'jaune', pointille: [4, 5] });
+    c.point(eX(1), eY(.368), 5, 'jaune'); c.texte('0,37', X.x0 - 6, eY(.368) + 5, { couleur: 'jaune', taille: 14, align: 'right' });
+    c.texte('à t = τ : e⁻¹ ≈ 0,37', eX(1) + 10, eY(.368) - 10, { couleur: 'jaune', taille: 16 });
+    c.repere('point_tau', eX(1) - 20, eY(.368) - 30, 170, 50, 'à t = τ, la valeur 0,37');
+  });
+  M.etape(c, 'jamais_zero', () => {
+    c.texte('à 5τ : ≈ 0,007… jamais 0', eX(3.4), eY(.1), { couleur: 'vert', taille: 15 });
+    c.texte('elle s’approche de 0 sans jamais s’annuler', 260, 340, { couleur: 'vert', taille: 16, align: 'center', max: 440 });
+    c.repere('fin_courbe', eX(3), eY(.2), eX(5) - eX(3), X.y0 - eY(.2) + 6, 'la courbe frôle l’axe sans le toucher');
+  });
+  if (M.commence('montee')) {
+    const pm = M.p('montee');
+    c.direct(() => c.courbe(u => [eX(u * 5 * pm), eY(1 - Math.exp(-u * 5 * pm))], 80, { couleur: 'cyan', largeur: 2.8, tremble: 0 }));
+    c.repere('courbe_monte', X.x0, X.y1, X.x1 - X.x0, X.y0 - X.y1, 'la courbe de 1 − e^(−t/τ), qui monte');
+  }
+  M.etape(c, 'montee', () => {
+    c.texte('y = 1 − e^(−t/τ)', 300, 140, { couleur: 'cyan', taille: 19 });
+    c.point(eX(1), eY(.632), 5, 'cyan'); c.texte('0,63', eX(1) + 8, eY(.632) + 18, { couleur: 'cyan', taille: 14 });
+    c.texte('elle part de 0, vaut 0,63 à τ, et tend vers 1', 260, 366, { couleur: 'cyan', taille: 16, align: 'center', max: 440 });
+  });
+  if (M.commence('reservoir')) {
+    const p = M.p('reservoir'), tt = M.S.libre ? P.t : 5 * p, h = Math.exp(-tt), H = 200, y0 = 110;
+    c.direct(() => {
+      const ctx = c.ctx;
+      verre(ctx, 560, y0, 110, H); eau(ctx, 563, y0 + H - 4 - (H - 8) * h, 104, (H - 8) * h);
+      ctx.fillStyle = '#9aa3ad'; ctx.fillRect(670, y0 + H - 18, 26, 10); ctx.fillStyle = '#c9a227'; ctx.fillRect(690, y0 + H - 24, 6, 22);
+      if (h > .01) { ctx.strokeStyle = 'rgba(110,190,255,.85)'; ctx.lineWidth = 1 + 5 * h; ctx.beginPath(); ctx.moveTo(698, y0 + H - 12); ctx.quadraticCurveTo(706 + 20 * h, y0 + H, 708 + 22 * h, y0 + H + 40); ctx.stroke(); }
+      c.point(eX(tt), eY(h), 5, 'bleu');
+    });
+    c.texte('le réservoir se vide : plus il est plein,', 620, 350, { couleur: 'bleu', taille: 14, align: 'center' });
+    c.texte('plus l’eau sort vite → niveau = e^(−t/τ)', 620, 370, { couleur: 'bleu', taille: 14, align: 'center' });
+    c.direct(() => c.texte(`t = ${fx(tt, 1)}τ : niveau ${fx(h)}`, 615, 96, { couleur: 'jaune', taille: 15, align: 'center' }));
+    c.repere('reservoir', 552, y0 - 4, 170, H + 50, 'le réservoir qui se vide');
+  }
+}
+/* Sinusoïde : U_m = 6 V ; T = P.T ms ; point sur un cercle (angle compté depuis le haut). */
+const SC = { cx: 100, cy: 150, r: 70 }, SG = { x0: 210, x1: 735, y0: 230, a: 100 };
+function vueSinus(c, M) {
+  const T = P.T, msPx = (SG.x1 - SG.x0 - 20) / (2.2 * T);
+  const tx = t => SG.x0 + t * msPx, ty = u => SG.y0 - u / 6 * SG.a;
+  c.cercle(SC.cx, SC.cy, SC.r, { couleur: 'faible', largeur: 1.6 });
+  c.fleche(SG.x0, SG.y0, SG.x1, SG.y0, { couleur: 'faible', largeur: 1.6 }); c.fleche(SG.x0, SG.y0 + SG.a + 20, SG.x0, SG.y0 - SG.a - 30, { couleur: 'faible', largeur: 1.6 });
+  c.texte('t (ms)', SG.x1, SG.y0 + 20, { couleur: 'faible', taille: 14, align: 'right' }); c.texte('u (V)', SG.x0 + 8, SG.y0 - SG.a - 22, { couleur: 'faible', taille: 14 });
+  // Le temps tracé : un tour pendant « courbe », un deuxième pendant « periode ».
+  let tt = 0;
+  if (M.commence('courbe')) tt = T * M.p('courbe');
+  if (M.commence('periode')) tt = T + T * M.p('periode');
+  const th = 2 * Math.PI * tt / T, px = SC.cx + SC.r * Math.sin(th), py = SC.cy - SC.r * Math.cos(th);
+  c.direct(() => {
+    Peint.sphere(c.ctx, px, py, 7, ['#ffe0e0', '#e04848', '#6d1010']);
+    c.ligne(px, py, tx(tt), ty(6 * Math.cos(th)), { couleur: 'tresfaible', pointille: [3, 5], tremble: 0 });
+    if (tt > 0) c.courbe(u => [tx(u * tt), ty(6 * Math.cos(2 * Math.PI * u * tt / T))], 120, { couleur: 'rouge', largeur: 2.8, tremble: 0 });
+    c.point(tx(tt), ty(6 * Math.cos(th)), 4.5, 'rouge');
+  });
+  c.repere('cercle', SC.cx - SC.r - 10, SC.cy - SC.r - 10, 2 * SC.r + 20, 2 * SC.r + 20, 'le point qui tourne sur le cercle');
+  c.repere('courbe', SG.x0, SG.y0 - SG.a - 10, SG.x1 - SG.x0, 2 * SG.a + 20, 'la courbe u = U_m·cos(2πt/T)');
+  M.etape(c, 'courbe', () => c.texte('u = U_m·cos(2πt / T)', 520, 60, { couleur: 'rouge', taille: 20, align: 'center' }));
+  M.etape(c, 'amplitude', () => {
+    c.ligne(SG.x0, ty(6), SG.x1 - 20, ty(6), { couleur: 'jaune', pointille: [4, 6] }); c.ligne(SG.x0, ty(-6), SG.x1 - 20, ty(-6), { couleur: 'jaune', pointille: [4, 6] });
+    c.cote(SG.x0 + 18, SG.y0, SG.x0 + 18, ty(6), null, { couleur: 'jaune' });
+    c.texte('U_m = 6 V', SG.x0 + 26, ty(3), { couleur: 'jaune', taille: 16 }); c.texte('−U_m', SG.x0 - 6, ty(-6) + 5, { couleur: 'jaune', taille: 14, align: 'right' });
+    c.texte('U_m : l’amplitude, la hauteur d’un sommet à partir de 0', 470, 366, { couleur: 'jaune', taille: 15, align: 'center', max: 520 });
+    c.repere('amplitude', SG.x0, ty(6) - 10, 160, SG.a + 20, 'U_m, l’amplitude');
+  });
+  M.etape(c, 'periode', () => {
+    c.cote(tx(0), ty(6) - 14, tx(T), ty(6) - 14, null, { couleur: 'vert' });
+    c.texte(`T = ${fx(T, 1)} ms`, tx(T / 2), ty(6) - 24, { couleur: 'vert', taille: 16, align: 'center' });
+    c.texte('T : la période, la durée entre deux sommets successifs (un tour)', 470, 389, { couleur: 'vert', taille: 15, align: 'center', max: 520 });
+    c.repere('periode', tx(0), ty(6) - 44, tx(T) - tx(0), 40, 'T, la période');
+  });
+  if (M.commence('balancoire')) {
+    const p = M.p('balancoire'), a = .5 * Math.cos(2 * Math.PI * p * 2), ox = 100, oy = 256;
+    c.direct(() => {
+      const ctx = c.ctx; ctx.save();
+      ctx.fillStyle = '#6e4b2a'; ctx.fillRect(ox - 66, oy - 4, 132, 7); ctx.fillRect(ox - 66, oy, 7, 92); ctx.fillRect(ox + 59, oy, 7, 92);
+      const sx = ox + 70 * Math.sin(a), sy = oy + 70 * Math.cos(a);
+      ctx.strokeStyle = '#d8c7a0'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(ox - 8, oy); ctx.lineTo(sx - 12, sy); ctx.moveTo(ox + 8, oy); ctx.lineTo(sx + 12, sy); ctx.stroke();
+      const g = ctx.createLinearGradient(0, sy - 3, 0, sy + 7); g.addColorStop(0, '#c58a46'); g.addColorStop(1, '#7a4f22');
+      ctx.translate(sx, sy); ctx.rotate(-a); ctx.fillStyle = g; ctx.fillRect(-18, -2, 36, 8); ctx.restore();
+    });
+    c.texte('la balançoire va et vient : même amplitude, même période', 470, 412, { couleur: 'bleu', taille: 15, align: 'center', max: 520 });
+    c.repere('balancoire', 30, 250, 140, 100, 'la balançoire qui va et vient');
+  }
+}
+
+
+/* Dérivée d'un cosinus : f(t) = cos(2πt/T) (T = 4 ms), f′(t) = −(2π/T)·sin(2πt/T), tracée à l'échelle de sa propre amplitude. */
+const DC = { x0: 60, x1: 735, yf: 150, yd: 305, a: 62, T: 4, tmax: 8.6 };
+const dcx = t => DC.x0 + t / DC.tmax * (DC.x1 - DC.x0 - 20);
+function vueDcos(c, M) {
+  const T = DC.T, w = 2 * Math.PI / T, f = t => Math.cos(w * t), fp = t => -Math.sin(w * t);
+  c.fleche(DC.x0, DC.yf, DC.x1, DC.yf, { couleur: 'faible', largeur: 1.4 }); c.fleche(DC.x0, DC.yf + DC.a + 12, DC.x0, DC.yf - DC.a - 22, { couleur: 'faible', largeur: 1.4 });
+  c.texte('t (ms)', DC.x1, DC.yf + 18, { couleur: 'faible', taille: 13, align: 'right' });
+  const pc = M.p('courbe');
+  if (pc > 0) c.direct(() => c.courbe(u => [dcx(u * DC.tmax * pc), DC.yf - DC.a * f(u * DC.tmax * pc)], 160, { couleur: 'rouge', largeur: 2.8, tremble: 0 }));
+  M.etape(c, 'courbe', () => c.texte('f(t) = cos(2πt/T)', 520, 64, { couleur: 'rouge', taille: 19, align: 'center' }));
+  c.repere('courbe', DC.x0, DC.yf - DC.a - 10, DC.x1 - DC.x0, 2 * DC.a + 20, 'la courbe du cosinus');
+  const tangente = (t, coul) => {
+    const x = dcx(t), y = DC.yf - DC.a * f(t), pente = -DC.a * w * fp(t) / ((DC.x1 - DC.x0 - 20) / DC.tmax), L = 55 / Math.sqrt(1 + pente * pente);
+    c.ligne(x - L, y - pente * L, x + L, y + pente * L, { couleur: coul, largeur: 2.4, tremble: 0 });
+    c.point(x, y, 5, coul);
+  };
+  M.etape(c, 'sommet', () => {
+    c.direct(() => tangente(T, 'jaune'));
+    c.texte('au sommet : tangente horizontale, pente nulle', dcx(T) + 14, DC.yf - DC.a - 14, { couleur: 'jaune', taille: 14 });
+    c.repere('sommet', dcx(T) - 60, DC.yf - DC.a - 30, 120, 40, 'le sommet : pente nulle');
+  });
+  M.etape(c, 'descente', () => {
+    c.direct(() => tangente(T / 4 + T, 'vert'));
+    c.texte('en passant par 0 : pente la plus forte', dcx(1.25 * T) + 14, DC.yf + 30, { couleur: 'vert', taille: 14 });
+    c.repere('descente', dcx(1.25 * T) - 40, DC.yf - 40, 80, 80, 'le passage par zéro : la pente la plus forte');
+  });
+  if (M.commence('derivee')) {
+    const pd = M.p('derivee');
+    c.fleche(DC.x0, DC.yd, DC.x1, DC.yd, { couleur: 'faible', largeur: 1.4 }); c.fleche(DC.x0, DC.yd + DC.a + 10, DC.x0, DC.yd - DC.a - 12, { couleur: 'faible', largeur: 1.4 });
+    c.direct(() => c.courbe(u => [dcx(u * DC.tmax * pd), DC.yd - DC.a * fp(u * DC.tmax * pd)], 160, { couleur: 'cyan', largeur: 2.6, tremble: 0 }));
+    c.repere('derivee', DC.x0, DC.yd - DC.a - 10, DC.x1 - DC.x0, 2 * DC.a + 20, 'la courbe de la dérivée (la pente du cosinus)');
+  }
+  M.etape(c, 'derivee', () => c.texte('f’(t) = −(2π/T)·sin(2πt/T)', 520, DC.yd - DC.a - 14, { couleur: 'cyan', taille: 18, align: 'center' }));
+  M.etape(c, 'decalage', () => {
+    for (const t of [T, 2 * T]) c.ligne(dcx(t), DC.yf - DC.a, dcx(t), DC.yd, { couleur: 'jaune', largeur: 1.2, pointille: [4, 5] });
+    c.cote(dcx(T), DC.yd + DC.a + 16, dcx(1.25 * T), DC.yd + DC.a + 16, 'T/4', { couleur: 'jaune', taille: 14 });
+    c.texte('la dérivée : la même sinusoïde, décalée d’un quart de période', 380, 410, { couleur: 'jaune', taille: 15, align: 'center', max: 700 });
+    c.repere('decalage', dcx(T) - 10, DC.yd + DC.a, dcx(1.25 * T) - dcx(T) + 20, 40, 'le décalage d’un quart de période');
+  });
+  if (M.S.libre) c.direct(() => { const t = clamp(P.t, 0, 8); tangente(t, 'rose'); c.texte(`pente en t = ${fx(t, 1)} ms : ${fx(-w * Math.sin(w * t), 2)}`, 380, 386, { couleur: 'rose', taille: 15, align: 'center' }); });
+}
+
+/* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
+function voir(M) {
+  const v = M.S.vue, vus = ETAPES[v].filter(e => M.vu(e.nom)).map(e => (typeof e.motif === 'function' ? e.motif() : e.motif));
+  const m = [`Rappel « ${TITRES[v]} », ${M.etat()}.`];
+  m.push(vus.length ? `Déjà montré : ${vus.join(' ; ')}.` : 'Rien n’est encore montré.');
+  if (v === 'ohm') m.push(`R = ${P.R} Ω.`);
+  if (v === 'additivite') m.push(`${BOB ? 'Dipôle R + bobine' : 'Dipôle R + C'} ; ${UX} = ${fx(P.uC)} V, u_R = ${fx(6 - P.uC)} V, E = 6 V.`);
+  if (v === 'derivee') m.push(`Point M à t = ${fx(P.t, 1)} s : d = ${fx(dist(P.t))} m, pente d′ = ${fx(vit(P.t))} m/s.`);
+  if (v === 'exponentielle') m.push(`t = ${fx(P.t, 1)}τ : e^(−t/τ) = ${fx(Math.exp(-P.t))}.`);
+  if (v === 'sinusoide') m.push(`U_m = 6 V, T = ${fx(P.T, 1)} ms.`);
+  return m.join(' ');
+}
+const params = M => ({ vue: M.S.vue, R_ohm: P.R, u_C_V: P.uC, t_s: P.t, T_ms: P.T });
+MOT = Moteur({
+  id: 'rappels_electricite', titre: 'Rappels : courant, tension, loi d’Ohm, additivité, puissances de dix, dérivée, exponentielle, sinusoïde', vues: VUES, titres: TITRES,
+  etapes: v => ETAPES[v], motifs: MOTIFS_PROXY, dessiner, voir, params,
+  depart: M => `Rappel : ${TITRES[M.S.vue]}.`,
+  messageFin: M => ({ courant: 'Le courant : des charges qui circulent ; i en ampère, mesurée en série.', tension: 'La tension : entre deux points ; u en volt, mesurée en dérivation.',
+    ohm: 'u_R = R·i : la tension est proportionnelle à l’intensité.', additivite: `En série : u_R + ${UX} = E.`, puissances: 'milli 10⁻³, micro 10⁻⁶, nano 10⁻⁹.',
+    derivee: 'La dérivée en un point : la pente de la tangente.', exponentielle: 'e^(−t/τ) : 1 au départ, 0,37 à τ, jamais 0.', sinusoide: 'U_m : l’amplitude ; T : la période.', derivee_cos: 'La dérivée de cos(2πt/T) : −(2π/T)·sin(2πt/T).' })[M.S.vue],
+  appliquer: (p, M) => {
+    const r = {};
+    if (VUES.includes(p.vue) && p.vue !== M.S.vue) { r.vue = p.vue; r.change = true; }
+    const num = k => p[k] !== undefined && p[k] !== null && p[k] !== '' && Number.isFinite(+p[k]);
+    if (num('R_ohm')) { if (M.vu('droite')) S3.ancienR = P.R; P.R = clamp(Math.round(+p.R_ohm / 50) * 50, 50, 200); r.garder = true; }
+    if (num('u_C_V')) { P.uC = clamp(Math.round(+p.u_C_V * 2) / 2, 0, 6); r.garder = true; }
+    if (num('u_b_V')) { P.uC = clamp(Math.round(+p.u_b_V * 2) / 2, 0, 6); r.garder = true; }
+    if (num('t_s')) { P.t = clamp(+p.t_s, 0, M.S.vue === 'exponentielle' ? 5 : 10); M.S.libre = true; r.garder = true; }
+    if (num('t_ms')) { P.t = clamp(+p.t_ms, 0, 8); M.S.libre = true; r.garder = true; }
+    if (num('T_ms')) { P.T = clamp(+p.T_ms, 2, 8); r.change = true; }
+    return r;
+  },
+  schema: { vue: VUES.join(' | '), R_ohm: '50..200 (pas de 50 ; vue ohm)', u_C_V: '0..6 (vue additivite : u_R = 6 − u_C)', u_b_V: '0..6 (vue additivite avec ?dipole=bobine : u_R = 6 − u_b)', t_s: '0..10 (vue derivee : place le point M) ; 0..5 en τ (vue exponentielle)', T_ms: '2..8 (vue sinusoide, relance)', t_ms: '0..8 (vue derivee_cos : tangente en ce point)' },
+  texte: 'Rappels des années précédentes, chacun en deux façons : le courant (des électrons qui circulent ; l’eau dans un tuyau), la tension (entre deux points ; deux réservoirs à deux hauteurs), la loi d’Ohm (u_R = R·i, droite par l’origine, convention récepteur), l’additivité (u_R + u_C = E ; l’escalier), les puissances de dix (milli, micro, nano ; la virgule qui recule), la dérivée (la pente de la tangente ; le compteur de vitesse), l’exponentielle (e^(−t/τ) : 1, 0,37 à τ, jamais 0 ; le réservoir qui se vide), la sinusoïde (U_m, T ; la balançoire).',
+  explications: {
+    courant: [{ repere: 'electrons', texte: 'Les électrons circulent dans tout le circuit : c’est le courant.' }, { repere: 'amperemetre', texte: 'L’ampèremètre, en série, mesure i en ampère.' }, { repere: 'tuyau', texte: 'Comme le débit de l’eau dans un tuyau.' }],
+    tension: [{ repere: 'fleche_u', texte: 'La tension se prend entre deux points : une flèche de B vers A.' }, { repere: 'voltmetre', texte: 'Le voltmètre, en dérivation, mesure u en volt.' }, { repere: 'reservoirs', texte: 'Comme une différence de hauteur entre deux réservoirs.' }],
+    ohm: [{ repere: 'graphe', texte: 'Quand i double, u_R double : c’est une droite.' }, { repere: 'droite', texte: 'Sa pente, c’est R : u_R = R·i.' }, { repere: 'fleches', texte: 'Convention récepteur : la flèche de u_R est opposée à celle de i.' }],
+    additivite: [{ repere: 'fleches', texte: 'Trois tensions dans la même boucle.' }, { repere: 'somme', texte: `u_R + ${UX} = E, toujours.` }, { repere: 'escalier', texte: 'On monte de E, on redescend de E.' }],
+    puissances: [{ repere: 'micro', texte: 'micro = 10⁻⁶.' }, { repere: 'virgule', texte: 'La virgule recule de six rangs.' }],
+    derivee: [{ repere: 'tangente', texte: 'La dérivée en M est la pente de la tangente.' }, { repere: 'compteur', texte: 'Le compteur de vitesse montre la pente de d(t).' }],
+    exponentielle: [{ repere: 'courbe_descend', texte: 'e^(−t/τ) part de 1 et descend.' }, { repere: 'point_tau', texte: 'À τ, il reste 0,37.' }, { repere: 'reservoir', texte: 'Comme un réservoir qui se vide.' }],
+    sinusoide: [{ repere: 'amplitude', texte: 'U_m : la hauteur d’un sommet.' }, { repere: 'periode', texte: 'T : la durée d’un tour.' }, { repere: 'balancoire', texte: 'Comme une balançoire.' }],
+    derivee_cos: [{ repere: 'sommet', texte: 'Au sommet, la pente est nulle.' }, { repere: 'descente', texte: 'Au passage par 0, la pente est la plus forte.' }, { repere: 'decalage', texte: 'La dérivée : la même sinusoïde, décalée d’un quart de période.' }],
+  },
+});
+MOT.lancer();
+const CURSEURS = {
+  ohm: () => window.Tableau.curseur({ id: 'R', label: 'R =', min: 50, max: 200, step: 50, valeur: P.R, unite: 'Ω', commande: 'set_parameters', onchange: v => MOT.setParameters({ R_ohm: v }) }),
+  additivite: () => window.Tableau.curseur({ id: 'uC', label: `${UX} =`, min: 0, max: 6, step: .5, valeur: P.uC, unite: 'V', decimales: 1, commande: 'set_parameters', onchange: v => MOT.setParameters({ u_C_V: v }) }),
+  derivee: () => window.Tableau.curseur({ id: 't', label: 't =', min: 0, max: 10, step: .5, valeur: P.t, unite: 's', decimales: 1, commande: 'set_parameters', onchange: v => MOT.setParameters({ t_s: v }) }),
+  derivee_cos: () => window.Tableau.curseur({ id: 't', label: 't =', min: 0, max: 8, step: .25, valeur: 1, unite: 'ms', decimales: 2, commande: 'set_parameters', onchange: v => MOT.setParameters({ t_ms: v }) }),
+  exponentielle: () => window.Tableau.curseur({ id: 't', label: 't/τ =', min: 0, max: 5, step: .25, valeur: P.t, decimales: 2, commande: 'set_parameters', onchange: v => MOT.setParameters({ t_s: v }) }),
+};
+if (CURSEURS[MOT.S.vue]) $('reglage').replaceChildren(CURSEURS[MOT.S.vue]());
+
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Les bases, depuis zéro — limites</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Rappels des années précédentes construits à la craie : une identité vue avec des blocs, un signe sur l'axe, une pente, une distance, une racine d'un polynôme"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/limites-continuite-tableau/lc-outils.js"></script>
+<script>
+/*
+ * Cours « Limites et continuité » (math_ch1_limites_continuite), diapos de rappel (audit « rythme et départ de zéro »,
+ * 14 novembre 2026, professeur règle 34) : chaque prérequis des années précédentes est ENSEIGNÉ, pas supposé.
+ * Vues : ?vue=factoriser | signe | derivee | valeur_absolue | racine_facteur | sinus. Moments nommés : voir chaque vue.
+ *   factoriser     : a² − b² = (a − b)(a + b) vu avec des blocs de bois (le petit carré enlevé, le morceau retourné).
+ *   signe          : x − 1 près de 1, à droite puis à gauche, la flèche de 1 vers x, le tableau de signe.
+ *   derivee        : la tangente glisse sur x³ + x − 1 : pente f′(x) > 0, la courbe monte ; le tableau de variations.
+ *   valeur_absolue : |3| = |−3| = 3 (distance à 0) ; la machine « au carré puis racine » : √(x²) = |x|.
+ *   racine_facteur : x² − 4x + 3 coupe l'axe en 1 et en 3 : les facteurs (x − 1) et (x − 3), puis on développe.
+ *   sinus          : sin x et la droite y = x près de 0 ; sin(x)/x s'approche de 1.
+ */
+const fr = MathsTableau.fr;
+const COL = 440;
+
+MathsTableau.page({
+  id: 'lc_rappels', titre: 'Les bases, depuis zéro',
+  texte: 'Rappels du cours Limites et continuité, construits à la craie pas à pas : identité remarquable, signe, dérivée, valeur absolue, facteur d’un polynôme, sin(x)/x',
+  vues: {
+    factoriser: {
+      titre: 'a² − b² = (a − b)(a + b) avec des blocs',
+      dessiner(c, K) {
+        K.titre('a² − b² : une identité qui se voit');
+        const t = LC.temps(c);
+        const x0 = 60, y0 = 62, A = 200, B = 80, D = A - B;
+        // 1. Le grand carré a × a, peint en bois.
+        const tA = c.cur;
+        c.pause(.8);
+        c.texte('a', x0 + D / 2, y0 - 8, { couleur: 'cyan', taille: 18, align: 'center' });
+        c.texte('a', x0 - 16, y0 + A / 2 + 6, { couleur: 'cyan', taille: 18, align: 'center' });
+        c.texte('surface : a²', COL, 84, { couleur: 'cyan', taille: 19 });
+        c.repere('grand_carre', x0, y0, A, A, 'le carré a × a');
+        K.marque('carre_a');
+        // 2. Le petit carré b × b, dans le coin en haut à droite.
+        c.pause(.4); const tB = c.cur; c.pause(.8);
+        c.texte('b', x0 + D + B / 2, y0 - 8, { couleur: 'orange', taille: 17, align: 'center' });
+        c.texte('on enlève b²', COL, 118, { couleur: 'orange', taille: 19 });
+        c.repere('petit_carre', x0 + D, y0, B, B, 'le petit carré b × b');
+        K.marque('petit_b');
+        // 3. Il reste a² − b² : le petit carré part.
+        c.pause(.4); const tEnleve = c.cur; c.pause(.6);
+        c.texte('il reste a² − b²', COL, 152, { couleur: 'blanc', taille: 19 });
+        K.marque('reste');
+        // 4. Le morceau de droite descend et se couche sous le reste.
+        c.pause(.4); const tTourne = c.cur; K.anime(2.2, () => {}); K.marque('tourne');
+        // 5. Le rectangle (a − b) × (a + b).
+        c.pause(.3);
+        c.rect(x0 - 4, y0 - 4, D + 8, A + B + 8, { couleur: 'jaune', arrondi: 4, largeur: 1.8 });
+        c.texte('a − b', x0 + D / 2, y0 + A + B + 26, { couleur: 'jaune', taille: 17, align: 'center' });
+        c.texte('a + b', x0 + D + 34, y0 + (A + B) / 2, { couleur: 'jaune', taille: 17, align: 'center' });
+        c.texte('un rectangle : (a − b) × (a + b)', COL, 186, { couleur: 'jaune', taille: 19 });
+        c.repere('rectangle', x0, y0, D, A + B, 'le rectangle (a − b) × (a + b)');
+        K.marque('rectangle');
+        c.pause(.3);
+        K.lignes(COL, 230, [{ t: 'a² − b² = (a − b)(a + b)', couleur: 'jaune', taille: 22, cadre: 'jaune', repere: 'formule', label: 'l’identité' }]);
+        K.marque('formule');
+        c.pause(.3);
+        K.lignes(COL, 278, [{ t: 'x² − 9 = x² − 3² = (x − 3)(x + 3)', couleur: 'cyan', taille: 18, repere: 'exemple', label: 'l’exemple' }]);
+        K.marque('exemple');
+        c.pause(.3);
+        K.lignes(COL, 318, [
+          { t: '10² − 3² = 100 − 9 = 91', couleur: 'vert', taille: 17 },
+          { t: '(10 − 3)(10 + 3) = 7 × 13 = 91 ✓', couleur: 'vert', taille: 17 },
+        ], 28);
+        c.repere('nombres', COL - 6, 298, 300, 58, 'la vérification avec des nombres');
+        K.marque('nombres');
+        // Peinture : les blocs suivent l'horloge de la scène (dessin direct, peints avant la craie de chaque instant).
+        c.direct(() => {
+          const vis = (a) => t >= a;
+          const q = LC.piste(t, [[tTourne, 2.2, 0, 1]]) ?? 0;
+          if (vis(tA)) {
+            // le reste gauche (D × A) : toujours là après le grand carré
+            if (!vis(tEnleve)) MathsTableau.bloc(c, x0, y0, A, A, 'cyan');
+            else {
+              MathsTableau.bloc(c, x0, y0, D, A, 'cyan');
+              // le morceau de droite (B × D), sous le petit carré enlevé, glisse et se couche sous le reste
+              const xa = x0 + D, ya = y0 + B, wa = B, ha = D;
+              const xb = x0, yb = y0 + A, wb = D, hb = B;
+              MathsTableau.bloc(c, xa + (xb - xa) * q, ya + (yb - ya) * q, wa + (wb - wa) * q, ha + (hb - ha) * q, 'vert');
+            }
+          }
+          if (vis(tB) && !vis(tEnleve)) MathsTableau.bloc(c, x0 + D, y0, B, B, 'orange');
+          if (vis(tEnleve)) c.rect(x0 + D, y0, B, B, { couleur: 'orange', largeur: 1.4, pointille: [5, 5], duree: 0 });
+        });
+      },
+      decrire: {
+        carre_a: 'Un grand carré de bois de côté a : sa surface est a².',
+        petit_b: 'Dans le coin en haut à droite, un petit carré orange de côté b : surface b².',
+        reste: 'Le petit carré est enlevé (contour en pointillés) : il reste a² − b².',
+        tourne: 'Le morceau de droite descend et se couche sous le reste.',
+        rectangle: 'Les deux morceaux forment un rectangle de largeur a − b et de hauteur a + b.',
+        formule: 'Écrit et encadré : a² − b² = (a − b)(a + b).',
+        exemple: 'Écrit : x² − 9 = x² − 3² = (x − 3)(x + 3).',
+        nombres: 'Vérification : 10² − 3² = 91 et (10 − 3)(10 + 3) = 7 × 13 = 91.',
+      },
+      motifs: { carre_a: 'le carré a²', petit_b: 'le petit carré b²', reste: 'il reste a² − b²', tourne: 'le morceau se couche', rectangle: 'le rectangle', formule: 'l’identité', exemple: 'x² − 9', nombres: 'avec des nombres' },
+      explication: [{ repere: 'grand_carre', texte: 'Le carré de côté a : surface a².' }, { repere: 'rectangle', texte: 'Le reste devient un rectangle (a − b) × (a + b).' }, { repere: 'formule', texte: 'a² − b² = (a − b)(a + b).' }],
+    },
+
+    signe: {
+      titre: 'Le signe de x − 1 près de 1',
+      dessiner(c, K) {
+        K.titre('x − 1 : positif à droite de 1, négatif à gauche');
+        const t = LC.temps(c);
+        const G = MathsTableau.grille({ x0: 50, y0: 120, w: 660, h: 80, xmin: -1.2, xmax: 3.2, ymin: -1, ymax: 1 });
+        const yA = 170;
+        c.fleche(G.X(-1.2), yA, G.X(3.2), yA, { couleur: 'faible', largeur: 1.8 });
+        for (const v of [-1, 0, 1, 2, 3]) { c.ligne(G.X(v), yA - 5, G.X(v), yA + 5, { couleur: 'faible', largeur: 1.3, duree: .02 }); c.texte(fr(v), G.X(v), yA + 24, { couleur: v === 1 ? 'orange' : 'faible', taille: 16, align: 'center', duree: .05 }); }
+        c.cercle(G.X(1), yA, 7, { couleur: 'orange', largeur: 2 });
+        c.repere('un', G.X(1) - 12, yA - 12, 24, 24, 'le nombre 1');
+        K.marque('droite');
+        // à droite : x part de 2 et s'approche de 1
+        c.pause(.3); const d0 = c.cur; K.anime(1.2, () => {}); K.marque('a_droite');
+        c.pause(.4); const d1 = c.cur; K.anime(2.2, () => {}); K.marque('tout_pres_droite');
+        // à gauche : x part de 0 et s'approche de 1
+        c.pause(.4); const g0 = c.cur; K.anime(1.2, () => {}); c.pause(.3); const g1 = c.cur; K.anime(2.2, () => {}); K.marque('tout_pres_gauche');
+        const pd = LC.piste(t, [[d0, 1.2, 0, 0], [d1, 2.2, 0, 1]]), pg = LC.piste(t, [[g0, 1.2, 0, 0], [g1, 2.2, 0, 1]]);
+        const loin = (p, d) => d * Math.pow(0.01 / d, p);
+        c.direct(() => {
+          if (pd !== null && pg === null) {
+            const x = 1 + loin(pd, 1);
+            c.fleche(G.X(1), yA - 26, G.X(x), yA - 26, { couleur: 'vert', largeur: 2.2, tete: 8 });
+            c.point(G.X(x), yA, 6, 'vert'); c.texte('x', G.X(x), yA - 40, { couleur: 'vert', taille: 17, align: 'center' });
+            c.texte(`x = ${fr(x, 2)}   →   x − 1 = ${fr(x - 1, 2)}   positif`, 380, 92, { couleur: 'vert', taille: 19, align: 'center' });
+          }
+          if (pg !== null && !K.vu('fleches')) {
+            const x = 1 - loin(pg, 1);
+            c.fleche(G.X(1), yA - 26, G.X(x), yA - 26, { couleur: 'rouge', largeur: 2.2, tete: 8 });
+            c.point(G.X(x), yA, 6, 'rouge'); c.texte('x', G.X(x), yA - 40, { couleur: 'rouge', taille: 17, align: 'center' });
+            c.texte(`x = ${fr(x, 2)}   →   x − 1 = ${fr(x - 1, 2)}   négatif`, 380, 92, { couleur: 'rouge', taille: 19, align: 'center' });
+          }
+        });
+        // autre façon de voir : la flèche de 1 vers x
+        c.pause(.5);
+        c.fleche(G.X(1), yA + 44, G.X(2.4), yA + 44, { couleur: 'vert', largeur: 2.4, tete: 9 });
+        c.texte('vers la droite : +', G.X(2.4) + 10, yA + 50, { couleur: 'vert', taille: 17 });
+        c.fleche(G.X(1), yA + 44, G.X(-0.4), yA + 44, { couleur: 'rouge', largeur: 2.4, tete: 9 });
+        c.texte('vers la gauche : −', G.X(-0.4) - 10, yA + 50, { couleur: 'rouge', taille: 17, align: 'right' });
+        c.repere('fleches', G.X(-0.5), yA + 30, G.X(2.5) - G.X(-0.5), 28, 'la flèche de 1 vers x');
+        K.marque('fleches');
+        // le tableau de signe
+        c.pause(.4);
+        const tx = 200, ty = 286, w = 360;
+        c.rect(tx, ty, w, 60, { couleur: 'faible', arrondi: 4, largeur: 1.3 });
+        c.ligne(tx, ty + 28, tx + w, ty + 28, { couleur: 'faible', largeur: 1.1 });
+        c.ligne(tx + 80, ty, tx + 80, ty + 60, { couleur: 'faible', largeur: 1.1 });
+        c.texte('x', tx + 40, ty + 20, { couleur: 'faible', taille: 16, align: 'center' });
+        c.texte('x − 1', tx + 40, ty + 50, { couleur: 'faible', taille: 16, align: 'center' });
+        c.texte('−∞', tx + 104, ty + 20, { couleur: 'blanc', taille: 16, align: 'center' });
+        c.texte('1', tx + 220, ty + 20, { couleur: 'orange', taille: 16, align: 'center' });
+        c.texte('+∞', tx + 336, ty + 20, { couleur: 'blanc', taille: 16, align: 'center' });
+        c.texte('−', tx + 160, ty + 51, { couleur: 'rouge', taille: 22, align: 'center' });
+        c.texte('0', tx + 220, ty + 50, { couleur: 'blanc', taille: 16, align: 'center' });
+        c.texte('+', tx + 282, ty + 51, { couleur: 'vert', taille: 22, align: 'center' });
+        c.repere('tableau_signe', tx - 4, ty - 4, w + 8, 68, 'le tableau de signe de x − 1');
+        K.marque('tableau');
+      },
+      decrire: {
+        droite: 'Un axe gradué de −1 à 3 ; le nombre 1 est entouré en orange.',
+        a_droite: 'Un point x vert est posé en 2, à droite de 1 : x − 1 = 1, positif ; une flèche verte va de 1 vers x.',
+        tout_pres_droite: 'Le point vert a glissé tout près de 1 par la droite : x = 1,01, x − 1 = 0,01, petit et positif.',
+        tout_pres_gauche: 'Un point rouge glisse de 0 vers 1 par la gauche : x = 0,99, x − 1 = −0,01, petit et négatif.',
+        fleches: 'Sous l’axe, deux flèches partent de 1 : vers la droite « + », vers la gauche « − ».',
+        tableau: 'Le tableau de signe de x − 1 : « − » avant 1, 0 en 1, « + » après 1.',
+      },
+      motifs: { droite: 'l’axe', a_droite: 'x à droite de 1', tout_pres_droite: 'x tout près de 1 à droite', tout_pres_gauche: 'x tout près de 1 à gauche', fleches: 'la flèche de 1 vers x', tableau: 'le tableau de signe' },
+      explication: [{ repere: 'un', texte: '1 sépare les deux côtés.' }, { repere: 'fleches', texte: 'x − 1 est la flèche de 1 vers x : à droite +, à gauche −.' }, { repere: 'tableau_signe', texte: 'Négatif avant 1, positif après.' }],
+    },
+
+    derivee: {
+      titre: 'f′(x) > 0 : la courbe monte',
+      dessiner(c, K) {
+        K.titre('Le signe de f’ donne le sens de variation');
+        const t = LC.temps(c), f = x => x * x * x + x - 1, fp = x => 3 * x * x + 1;
+        const G = K.axes({ x0: 50, y0: 58, w: 330, h: 300, xmin: -1.3, xmax: 1.3, ymin: -4.2, ymax: 2.4, gx: [[-1, '−1'], [1, '1']], gy: [[-2, '−2'], [1, '1']] });
+        c.texte('f(x) = x³ + x − 1', COL, 84, { couleur: 'cyan', taille: 19 });
+        K.anime(2, p => K.courbePart(G, f, -1.25, 1.25, p, { couleur: 'cyan' }));
+        c.repere('courbe', G.x0, G.y0, G.w, G.h, 'la courbe de f');
+        K.marque('courbe_tracee');
+        c.pause(.3); const t0 = c.cur; K.anime(3.4, () => {}); K.marque('tangente_glisse');
+        const q = LC.piste(t, [[t0, 3.4, 0, 1]]);
+        c.direct(() => {
+          if (q === null) return;
+          const x = -1.1 + 2.2 * q, y = f(x), s = fp(x);
+          const kx = G.w / (G.xmax - G.xmin), ky = G.h / (G.ymax - G.ymin), L = 60 / Math.sqrt(kx * kx + ky * ky * s * s);
+          c.ligne(G.X(x - L), G.Y(y - s * L), G.X(x + L), G.Y(y + s * L), { couleur: 'jaune', largeur: 2, duree: 0 });
+          c.point(G.X(x), G.Y(y), 5.5, 'jaune');
+          c.texte(`x = ${fr(x, 2)} : pente f’(x) = ${fr(s, 2)}`, COL, 124, { couleur: 'jaune', taille: 18 });
+          c.repere('tangente', G.X(x) - 20, G.Y(y) - 20, 40, 40, 'la tangente');
+        });
+        c.pause(.4);
+        K.lignes(COL, 164, [{ t: 'f’(x) = 3x² + 1 > 0 partout', couleur: 'vert', taille: 19, repere: 'pente_positive', label: 'f′ positive' }, { t: 'donc f est strictement croissante', couleur: 'vert', taille: 19, cadre: 'vert' }], 34);
+        K.marque('pente_positive');
+        c.pause(.4);
+        // le tableau de variations
+        const tx = COL, ty = 236, w = 290;
+        c.rect(tx, ty, w, 116, { couleur: 'faible', arrondi: 4, largeur: 1.3 });
+        c.ligne(tx, ty + 28, tx + w, ty + 28, { couleur: 'faible', largeur: 1.1 }); c.ligne(tx, ty + 56, tx + w, ty + 56, { couleur: 'faible', largeur: 1.1 });
+        c.ligne(tx + 64, ty, tx + 64, ty + 116, { couleur: 'faible', largeur: 1.1 });
+        c.texte('x', tx + 32, ty + 20, { couleur: 'faible', taille: 16, align: 'center' });
+        c.texte('f’(x)', tx + 32, ty + 48, { couleur: 'faible', taille: 16, align: 'center' });
+        c.texte('f', tx + 32, ty + 92, { couleur: 'faible', taille: 16, align: 'center' });
+        c.texte('−∞', tx + 86, ty + 20, { couleur: 'blanc', taille: 16, align: 'center' });
+        c.texte('+∞', tx + w - 22, ty + 20, { couleur: 'blanc', taille: 16, align: 'center' });
+        c.texte('+', tx + 178, ty + 49, { couleur: 'vert', taille: 22, align: 'center' });
+        c.fleche(tx + 96, ty + 106, tx + w - 30, ty + 66, { couleur: 'cyan', largeur: 2, tete: 9 });
+        c.repere('tableau', tx - 4, ty - 4, w + 8, 124, 'le tableau de variations');
+        K.marque('tableau');
+      },
+      decrire: {
+        courbe_tracee: 'La courbe de f(x) = x³ + x − 1 est tracée : elle monte de gauche à droite.',
+        tangente_glisse: 'Un point jaune glisse sur la courbe avec sa tangente ; la pente f′(x) = 3x² + 1 s’écrit, toujours positive (au moins 1).',
+        pente_positive: 'Écrit : f′(x) = 3x² + 1 > 0 partout, donc f est strictement croissante.',
+        tableau: 'Le tableau de variations : « + » dans la ligne de f′(x), une flèche qui monte dans la ligne de f.',
+      },
+      motifs: { courbe_tracee: 'la courbe', tangente_glisse: 'la tangente glisse', pente_positive: 'f′ > 0', tableau: 'le tableau de variations' },
+      explication: [{ repere: 'tangente', texte: 'La pente de la tangente, c’est f′(x).' }, { repere: 'pente_positive', texte: 'f′ > 0 : la courbe monte.' }, { repere: 'tableau', texte: '+ sous f′, flèche qui monte pour f.' }],
+    },
+
+    valeur_absolue: {
+      titre: '|x| : une distance ; √(x²) = |x|',
+      dessiner(c, K) {
+        K.titre('La valeur absolue : une distance à 0');
+        const G = MathsTableau.grille({ x0: 60, y0: 80, w: 640, h: 60, xmin: -4.4, xmax: 4.4, ymin: -1, ymax: 1 });
+        const yA = 120;
+        c.fleche(G.X(-4.4), yA, G.X(4.4), yA, { couleur: 'faible', largeur: 1.8 });
+        for (let v = -4; v <= 4; v++) { c.ligne(G.X(v), yA - 5, G.X(v), yA + 5, { couleur: 'faible', largeur: 1.2, duree: .02 }); c.texte(fr(v), G.X(v), yA + 24, { couleur: v === 0 ? 'blanc' : 'faible', taille: 15, align: 'center', duree: .04 }); }
+        K.marque('droite');
+        c.pause(.3);
+        c.fleche(G.X(0), yA - 18, G.X(3), yA - 18, { couleur: 'vert', largeur: 2.4, tete: 8 });
+        c.texte('distance 3 : |3| = 3', G.X(1.5), yA - 30, { couleur: 'vert', taille: 17, align: 'center' });
+        c.repere('distance_plus', G.X(0), yA - 46, G.X(3) - G.X(0), 32, 'la distance de 0 à 3');
+        K.marque('distance_plus');
+        c.pause(.3);
+        c.fleche(G.X(0), yA - 18, G.X(-3), yA - 18, { couleur: 'rouge', largeur: 2.4, tete: 8 });
+        c.texte('distance 3 : |−3| = 3', G.X(-1.5), yA - 30, { couleur: 'rouge', taille: 17, align: 'center' });
+        c.repere('distance_moins', G.X(-3), yA - 46, G.X(0) - G.X(-3), 32, 'la distance de 0 à −3');
+        K.marque('distance_moins');
+        // la machine « au carré, puis racine »
+        c.pause(.5);
+        const y = 214;
+        LC.boite(c, 60, y, 90, 46, '−3', { couleur: 'rouge' });
+        c.fleche(156, y + 23, 214, y + 23, { couleur: 'faible', largeur: 1.8, tete: 8 }); c.texte('au carré', 185, y + 12, { couleur: 'faible', taille: 14, align: 'center' });
+        LC.boite(c, 220, y, 90, 46, '9', { couleur: 'cyan' });
+        c.fleche(316, y + 23, 374, y + 23, { couleur: 'faible', largeur: 1.8, tete: 8 }); c.texte('racine', 345, y + 12, { couleur: 'faible', taille: 14, align: 'center' });
+        LC.boite(c, 380, y, 90, 46, '3', { couleur: 'vert' });
+        c.texte('√((−3)²) = √9 = 3, pas −3', 490, y + 30, { couleur: 'jaune', taille: 18 });
+        c.repere('machine', 56, y - 4, 650, 54, 'au carré puis racine');
+        K.marque('machine');
+        c.pause(.4);
+        K.lignes(220, 316, [{ t: '√(x²) = |x|', couleur: 'jaune', taille: 24, cadre: 'jaune', repere: 'regle', label: 'la règle' }]);
+        K.marque('regle');
+        c.pause(.3);
+        K.lignes(120, 366, [{ t: 'x ≥ 0 : √(x²) = x          x ≤ 0 : √(x²) = −x', couleur: 'cyan', taille: 18, repere: 'cas', label: 'les deux cas' }]);
+        K.marque('cas');
+      },
+      decrire: {
+        droite: 'Un axe gradué de −4 à 4.',
+        distance_plus: 'Une flèche verte de 0 à 3 : la distance est 3, |3| = 3.',
+        distance_moins: 'Une flèche rouge de 0 à −3, de même longueur : |−3| = 3.',
+        machine: 'Une machine : −3, au carré 9, puis racine 3 ; on revient à 3, pas à −3.',
+        regle: 'Écrit et encadré : √(x²) = |x|.',
+        cas: 'Écrit : si x ≥ 0, √(x²) = x ; si x ≤ 0, √(x²) = −x.',
+      },
+      motifs: { distance_plus: '|3| = 3', distance_moins: '|−3| = 3', machine: 'au carré puis racine', regle: '√(x²) = |x|', cas: 'les deux cas' },
+      explication: [{ repere: 'distance_moins', texte: '|−3| = 3 : la distance à 0.' }, { repere: 'machine', texte: 'Au carré puis racine : le signe est perdu.' }, { repere: 'regle', texte: '√(x²) = |x|.' }],
+    },
+
+    racine_facteur: {
+      titre: 'P(a) = 0 : (x − a) est un facteur',
+      dessiner(c, K) {
+        K.titre('Une racine a donne le facteur (x − a)');
+        const P = x => x * x - 4 * x + 3;
+        const G = K.axes({ x0: 50, y0: 60, w: 330, h: 290, xmin: -0.6, xmax: 4.6, ymin: -1.6, ymax: 4.2, gx: [[1, '1'], [2, '2'], [3, '3']], gy: [[3, '3']] });
+        c.texte('P(x) = x² − 4x + 3', COL, 84, { couleur: 'cyan', taille: 19 });
+        K.anime(1.8, p => K.courbePart(G, P, -0.4, 4.4, p, { couleur: 'cyan' }));
+        K.marque('courbe_tracee');
+        c.pause(.4);
+        K.rond(G, 3, 0, true, 'jaune'); c.cercle(G.X(3), G.Y(0), 12, { couleur: 'jaune', largeur: 1.6 });
+        c.repere('zero_3', G.X(3) - 14, G.Y(0) - 14, 28, 28, 'la courbe coupe l’axe en 3');
+        K.lignes(COL, 126, [{ t: 'P(3) = 9 − 12 + 3 = 0', couleur: 'jaune', taille: 18 }, { t: 'donc (x − 3) est un facteur', couleur: 'jaune', taille: 18 }], 28);
+        K.marque('zero_3');
+        c.pause(.4);
+        K.rond(G, 1, 0, true, 'vert'); c.cercle(G.X(1), G.Y(0), 12, { couleur: 'vert', largeur: 1.6 });
+        c.repere('zero_1', G.X(1) - 14, G.Y(0) - 14, 28, 28, 'la courbe coupe l’axe en 1');
+        K.lignes(COL, 192, [{ t: 'P(1) = 1 − 4 + 3 = 0', couleur: 'vert', taille: 18 }, { t: 'donc (x − 1) est un facteur', couleur: 'vert', taille: 18 }], 28);
+        K.marque('zero_1');
+        c.pause(.4);
+        K.lignes(COL, 262, [{ t: 'x² − 4x + 3 = (x − 3)(x − 1)', couleur: 'blanc', taille: 20, cadre: 'jaune', repere: 'facteurs', label: 'la factorisation' }]);
+        K.marque('facteurs');
+        c.pause(.4);
+        K.lignes(COL, 312, [{ t: '(x − 3)(x − 1) = x² − x − 3x + 3', couleur: 'faible', taille: 17 }, { t: '= x² − 4x + 3  ✓', couleur: 'vert', taille: 17 }], 28);
+        c.repere('verification', COL - 6, 292, 300, 58, 'on développe pour vérifier');
+        K.marque('verification');
+      },
+      decrire: {
+        courbe_tracee: 'La parabole de P(x) = x² − 4x + 3 : elle coupe l’axe des abscisses en 1 et en 3.',
+        zero_3: 'Le point (3 ; 0) est entouré ; écrit : P(3) = 0, donc (x − 3) est un facteur.',
+        zero_1: 'Le point (1 ; 0) est entouré ; écrit : P(1) = 0, donc (x − 1) est un facteur.',
+        facteurs: 'Écrit et encadré : x² − 4x + 3 = (x − 3)(x − 1).',
+        verification: 'On développe (x − 3)(x − 1) et on retrouve x² − 4x + 3.',
+      },
+      motifs: { courbe_tracee: 'la parabole', zero_3: 'P(3) = 0', zero_1: 'P(1) = 0', facteurs: 'la factorisation', verification: 'la vérification' },
+      explication: [{ repere: 'zero_3', texte: 'P(3) = 0 : (x − 3) est un facteur.' }, { repere: 'facteurs', texte: 'x² − 4x + 3 = (x − 3)(x − 1).' }],
+    },
+
+    sinus: {
+      titre: 'sin(x)/x quand x s’approche de 0',
+      dessiner(c, K) {
+        K.titre('La limite de sin(x)/x en 0');
+        const t = LC.temps(c);
+        const G = K.axes({ x0: 50, y0: 60, w: 340, h: 290, xmin: -1.7, xmax: 1.7, ymin: -1.3, ymax: 1.3, gx: [[-1, '−1'], [1, '1']], gy: [[1, '1'], [-1, '−1']] });
+        K.anime(1.4, p => K.courbePart(G, x => x, -1.3, 1.3, p, { couleur: 'faible', pointille: [7, 5], largeur: 2 }));
+        c.texte('y = x', G.X(1.05), G.Y(1.25), { couleur: 'faible', taille: 15 });
+        K.anime(1.8, p => K.courbePart(G, Math.sin, -1.65, 1.65, p, { couleur: 'cyan' }));
+        c.texte('y = sin x', G.X(1.1), G.Y(0.72), { couleur: 'cyan', taille: 15 });
+        c.repere('courbes', G.x0, G.y0, G.w, G.h, 'les deux courbes');
+        K.marque('courbes');
+        c.pause(.3); const a0 = c.cur; K.anime(1, () => {}); K.marque('x_un');
+        c.pause(.3); const a1 = c.cur; K.anime(1.6, () => {}); K.marque('x_demi');
+        c.pause(.3); const a2 = c.cur; K.anime(2, () => {}); K.marque('proche_un');
+        const q = LC.piste(t, [[a0, 1, 1, 1], [a1, 1.6, 1, 0.5], [a2, 2, 0.5, 0.05]]);
+        c.direct(() => {
+          if (q === null) return;
+          const x = q, s = Math.sin(x);
+          K.proj(G, x, s, { couleur: 'jaune', versY: false });
+          K.rond(G, x, s, true, 'jaune');
+          c.texte('M', G.X(x) + 8, G.Y(s) - 8, { couleur: 'jaune', taille: 16 });
+          c.texte(`x = ${fr(x, 2)}   sin(x)/x = ${fr(s / x, 3)}`, COL, 110, { couleur: 'jaune', taille: 19 });
+          c.repere('M', G.X(x) - 12, G.Y(s) - 12, 24, 24, 'le point M');
+        });
+        c.pause(.4);
+        c.cercle(G.X(0), G.Y(0), 34, { couleur: 'vert', largeur: 1.8 });
+        K.lignes(COL, 170, [{ t: 'Près de 0, sin x colle à x :', couleur: 'vert', taille: 18 }, { t: 'sin x ≈ x', couleur: 'vert', taille: 20 }], 30);
+        c.repere('colle', G.X(0) - 36, G.Y(0) - 36, 72, 72, 'près de 0, les courbes se collent');
+        K.marque('colle');
+        c.pause(.4);
+        LC.limite(c, COL, 280, 'x → 0', 'sin(x)/x = 1', { couleur: 'jaune', taille: 24 });
+        c.repere('limite', COL - 6, 254, 260, 52, 'la limite de référence');
+        K.marque('limite');
+      },
+      decrire: {
+        courbes: 'La droite y = x en pointillés et la courbe de sin x, qui passent toutes les deux par l’origine.',
+        x_un: 'Un point M jaune sur la courbe de sin en x = 1 : sin(x)/x = 0,841.',
+        x_demi: 'M a glissé en x = 0,5 : sin(x)/x = 0,959.',
+        proche_un: 'M est tout près de 0, en x = 0,05 : sin(x)/x = 0,9996, presque 1.',
+        colle: 'L’origine est entourée en vert : près de 0, la courbe de sin colle à la droite y = x ; écrit sin x ≈ x.',
+        limite: 'Écrit : lim sin(x)/x = 1 quand x → 0.',
+      },
+      motifs: { courbes: 'les deux courbes', x_un: 'x = 1', x_demi: 'x = 0,5', proche_un: 'x tout près de 0', colle: 'sin x colle à x', limite: 'la limite' },
+      explication: [{ repere: 'M', texte: 'Le rapport sin(x)/x s’approche de 1.' }, { repere: 'colle', texte: 'Près de 0, sin x ≈ x.' }, { repere: 'limite', texte: 'lim sin(x)/x = 1 en 0.' }],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

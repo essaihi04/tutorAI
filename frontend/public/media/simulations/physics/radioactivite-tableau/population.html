@@ -48,7 +48,9 @@ const MOMENTS = {
 };
 const q = new URLSearchParams(location.search);
 const S = { vue: VUES.includes(q.get('vue')) ? q.get('vue') : 'hasard', tdemi: 8, graine: null, t: 0, running: false, pause: false, fait: false,
-  jusqua: null, motif: '', emis: 0, dit: '', glisse: false, axe: { max: 48, pas: 8 } };
+  jusqua: null, motif: '', emis: 0, dit: '', glisse: false, axe: { max: 48, pas: 8 },
+  // conclusions : false pendant une question d'observation (14 novembre 2026) : le tableau se remplit, la phrase « même proportion » attend la réponse.
+  conclusions: true };
 { const v = Math.round(+q.get('t_demi_j')); if (v >= 2 && v <= 20) S.tdemi = v; const g = q.get('graine'); if (g !== null && g !== '' && Number.isFinite(+g)) S.graine = Math.round(+g); }
 const VJ = 4;          // jours simulés par seconde réelle (1 jour = 0,25 s)
 const T0 = 1.0;        // on montre d’abord les N₀ noyaux intacts ; l’horloge part à T0 (moment « depart »)
@@ -290,7 +292,7 @@ function dessiner(c) {
       c.texte(`${d}/${av} ≈ ${fr(d / av, 3)}`, 682, y, { couleur: 'blanc', taille: 16, align: 'center' });
       c.ligne(PX(k), G.oy, PX(k), PY(av - d), { couleur: 'rose', largeur: 1.2, pointille: [4, 4] });
     });
-    ecritA(c, 'conclusion', () => {
+    if (S.conclusions) ecritA(c, 'conclusion', () => {
       c.texte('la même proportion par unité de temps : λ', 334, 372, { couleur: 'vert', taille: 16, max: 400 });
       c.texte(`proportion ≈ λ·Δt ; λ = ln2/t½ = ${fr(lambda(), 3)} jour⁻¹`, 334, 398, { couleur: 'vert', taille: 15, max: 400 });
     });
@@ -431,7 +433,7 @@ function ceQuiSeVoit() {
   }
   if (S.vue === 'proportion') {
     for (let k = 1; k <= 3; k++) if (vu('ligne_' + k)) { const av = avantJour(k - 1), d = av - avantJour(k); ecrits.push(`ligne ${k} du tableau : N avant ${av}, désintégrés ${d}, proportion ${fr(d / av, 3)}`); }
-    if (vu('conclusion')) ecrits.push(`« la même proportion par unité de temps : λ » ; λ = ln2/t½ = ${fr(lambda(), 3)} jour⁻¹`);
+    if (vu('conclusion') && S.conclusions) ecrits.push(`« la même proportion par unité de temps : λ » ; λ = ln2/t½ = ${fr(lambda(), 3)} jour⁻¹`);
   }
   if (S.vue === 'restants') {
     if (vu('croisement')) ecrits.push(`croisement entouré à t = t½ = ${T} jours : ${vise(1)} restants et ${n0 - vise(1)} désintégrés`);
@@ -492,6 +494,7 @@ function setParameters(p) {
   if (VUES.includes(p.vue) && p.vue !== S.vue) { S.vue = p.vue; S.graine = null; change = vue = true; }
   if (p.t_demi_j != null && p.t_demi_j !== '' && Number.isFinite(+p.t_demi_j)) { const v = clamp(Math.round(+p.t_demi_j), 2, 20); if (v !== S.tdemi) { S.tdemi = v; change = true; } }
   if (p.graine != null && p.graine !== '' && Number.isFinite(+p.graine)) { const g = Math.round(+p.graine); if (g !== graine()) { S.graine = g; change = true; } }
+  if ('conclusions' in p) { const v = p.conclusions === true || p.conclusions === 'true' || p.conclusions === 1; if (v !== S.conclusions) { S.conclusions = v; scene.sale = true; } if (!change) { pont.noter('set_parameters', { conclusions: v }); pont.emettre(); return; } }
   if (change) { G = geo(); calculer(); if (vue) scene.reecrire(); }
   pont.noter('set_parameters', params());
   if (change) start(); else pont.emettre();
@@ -547,7 +550,7 @@ const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_paramet
 calculer();
 const config = { id: 'radioactivite_population', version: '1.0', title: 'Beaucoup de noyaux : le hasard, la loi, la demi-vie', variants: VUES.map(id => ({ id, label: TITRES[id] })), commands: commandes,
   command_schema: {
-    set_parameters: { vue: VUES.join(' | ') + ' (change la vue et relance)', t_demi_j: '2..20 (demi-vie en jours, pas 1 ; relance)', graine: 'entier (autre tirage au hasard, reproductible ; relance)' },
+    set_parameters: { vue: VUES.join(' | ') + ' (change la vue et relance)', t_demi_j: '2..20 (demi-vie en jours, pas 1 ; relance)', graine: 'entier (autre tirage au hasard, reproductible ; relance)', conclusions: 'true | false (false : la phrase « la même proportion » n’est pas écrite, pour une question d’observation)' },
     set_time: { time_s: '0..fin (arrêt sur cet instant de la scène, en s ; voir moments)' },
     play_until: { moment: 'hasard : depart | premier | deuxieme | plusieurs | fin ; grand_nombre : depart | un_t_demi | deux_t_demi | trois_t_demi | loi | fin ; proportion : depart | ligne_1 | ligne_2 | ligne_3 | conclusion | fin ; restants : depart | croisement | deux_t_demi | formule | fin', time_s: 'ou un instant en s' } } };
 const pont = protocole({ id: config.id, commandes, config,

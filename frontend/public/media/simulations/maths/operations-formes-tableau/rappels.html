@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Les bases avant les complexes</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Rappels à la craie avant les nombres complexes : le repère et les coordonnées, le vecteur, Pythagore, le cercle trigonométrique, développer"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Nombres complexes (première partie) » (math_ch6_nombres_complexes) : les rappels d'ouverture (audit rythme,
+ * 14 novembre 2026 — professeur règle 34 : les notions des années passées sont enseignées, pas supposées).
+ * Vues et moments :
+ *   repere      : axes, point, coordonnees, ordre
+ *   vecteur     : points, fleche, deplacement, coordonnees, glisse
+ *   pythagore   : triangle, carres, calcul, echelle   (l'échelle et le mur sont peints : règle 32)
+ *   cercle      : cercle, tours, point, cos_sin, ombre
+ *   identites   : distributivite, carre, difference, aire
+ * Chaque moment porte aussi un repère du même nom (sauf mention).
+ */
+const fr = MathsTableau.fr;
+const PI = Math.PI;
+const T = (c, s, x, y, couleur, taille, o = {}) => c.texte(s, x, y, { couleur, taille, ...o });
+
+MathsTableau.page({
+  id: 'nc_rappels', titre: 'Les bases avant les complexes',
+  texte: 'Rappels à la craie des notions des années passées utilisées dans le cours des nombres complexes',
+  vues: {
+    /* ---------- le repère et les coordonnées ---------- */
+    repere: {
+      titre: 'Un repère, un point, deux coordonnées',
+      dessiner(c, K) {
+        K.titre('Un point, deux nombres : ses coordonnées');
+        const G = K.axes({ x0: 50, y0: 60, w: 330, h: 300, xmin: -2, xmax: 5, ymin: -2, ymax: 4.5, gx: [1, 2, 3, 4], gy: [1, 2, 3, 4], quadrillage: true });
+        T(c, 'axe des abscisses', G.X(5), G.Y(0) + 38, 'faible', 14, { align: 'right' });
+        T(c, 'axe des ordonnées', G.X(0) + 8, G.y0 + 4, 'faible', 14);
+        c.repere('axes', G.x0, G.y0, G.w, G.h, 'les deux axes et l’origine O');
+        K.marque('axes');
+        c.pause(.4);
+        c.fleche(G.X(0), G.Y(0) + 3, G.X(3), G.Y(0) + 3, { couleur: 'vert', largeur: 3, tete: 9 });
+        T(c, '3', G.X(1.5), G.Y(0) + 24, 'vert', 18, { align: 'center' });
+        c.pause(.2);
+        c.fleche(G.X(3) + 3, G.Y(0), G.X(3) + 3, G.Y(2), { couleur: 'orange', largeur: 3, tete: 9 });
+        T(c, '2', G.X(3) + 12, G.Y(1) + 6, 'orange', 18);
+        K.rond(G, 3, 2, true, 'cyan');
+        T(c, 'M', G.X(3) + 10, G.Y(2) - 8, 'cyan', 20);
+        c.repere('point', G.X(3) - 14, G.Y(2) - 14, 28, 28, 'le point M');
+        K.marque('point');
+        c.pause(.4);
+        K.lignes(420, 110, [
+          { t: 'M(3 ; 2)', couleur: 'cyan', taille: 28 },
+          { t: 'abscisse : 3  (on avance)', couleur: 'vert', taille: 19 },
+          { t: 'ordonnée : 2  (on monte)', couleur: 'orange', taille: 19 },
+        ], 36);
+        c.repere('coordonnees', 412, 80, 320, 110, 'M(3 ; 2) : abscisse 3, ordonnée 2');
+        K.marque('coordonnees');
+        c.pause(.5);
+        K.rond(G, 2, 3, true, 'rose');
+        T(c, 'P(2 ; 3)', G.X(2) - 10, G.Y(3) - 10, 'rose', 18, { align: 'right' });
+        K.lignes(420, 250, [
+          { t: '(3 ; 2) ≠ (2 ; 3)', couleur: 'rose', taille: 22 },
+          { t: 'l’ordre compte : d’abord x, puis y', couleur: 'jaune', taille: 18 },
+        ], 34);
+        c.repere('ordre', 412, 222, 320, 76, 'l’ordre compte');
+        K.marque('ordre');
+      },
+      decrire: {
+        axes: 'Un repère quadrillé : l’axe des abscisses horizontal, l’axe des ordonnées vertical, l’origine O, graduations 1 à 4.',
+        point: 'Une flèche verte avance de 3 sur l’axe des abscisses, puis une flèche orange monte de 2 : le point M.',
+        coordonnees: 'À droite : « M(3 ; 2) », abscisse 3 (on avance), ordonnée 2 (on monte).',
+        ordre: 'Un autre point, P(2 ; 3), en rose, à un autre endroit ; écrit « (3 ; 2) ≠ (2 ; 3) : l’ordre compte ».',
+      },
+      motifs: { axes: 'les deux axes', point: 'le point M', coordonnees: 'les coordonnées', ordre: 'l’ordre compte' },
+    },
+
+    /* ---------- le vecteur ---------- */
+    vecteur: {
+      titre: 'Un vecteur : un déplacement',
+      dessiner(c, K) {
+        K.titre('Un vecteur, c’est un déplacement');
+        const G = K.axes({ x0: 50, y0: 60, w: 330, h: 300, xmin: -1, xmax: 6, ymin: -3.5, ymax: 3.5, gx: [1, 2, 3, 4, 5], gy: [-3, -2, -1, 1, 2, 3], quadrillage: true });
+        K.rond(G, 1, 2, true, 'cyan'); T(c, 'A(1 ; 2)', G.X(1) - 6, G.Y(2) - 10, 'cyan', 17);
+        K.rond(G, 4, -1, true, 'jaune'); T(c, 'B(4 ; −1)', G.X(4) + 8, G.Y(-1) + 22, 'jaune', 17);
+        c.repere('points', G.X(1) - 14, G.Y(2) - 30, G.X(4) - G.X(1) + 90, G.Y(-1) - G.Y(2) + 60, 'A et B');
+        K.marque('points');
+        c.pause(.4);
+        c.fleche(G.X(1), G.Y(2), G.X(4), G.Y(-1), { couleur: 'blanc', largeur: 2.6, tete: 11 });
+        T(c, 'AB', G.X(2.7), G.Y(.7) - 6, 'blanc', 18);
+        c.repere('fleche', G.X(1), G.Y(2), G.X(4) - G.X(1), G.Y(-1) - G.Y(2), 'la flèche de A vers B');
+        K.marque('fleche');
+        c.pause(.4);
+        c.fleche(G.X(1), G.Y(2), G.X(4), G.Y(2), { couleur: 'vert', largeur: 2.2, pointille: [6, 5], tete: 8 });
+        T(c, '+3', G.X(2.5), G.Y(2) - 8, 'vert', 18, { align: 'center' });
+        c.fleche(G.X(4), G.Y(2), G.X(4), G.Y(-1), { couleur: 'orange', largeur: 2.2, pointille: [6, 5], tete: 8 });
+        T(c, '−3', G.X(4) + 8, G.Y(.5), 'orange', 18);
+        c.repere('deplacement', G.X(1), G.Y(2) - 24, G.X(4) - G.X(1) + 44, G.Y(-1) - G.Y(2) + 24, '3 vers la droite, 3 vers le bas');
+        K.marque('deplacement');
+        c.pause(.4);
+        K.lignes(420, 100, [
+          { t: 'AB(xB − xA ; yB − yA)', couleur: 'blanc', taille: 21 },
+          { t: 'AB(4 − 1 ; −1 − 2)', couleur: 'blanc', taille: 19 },
+          { t: 'AB(3 ; −3)', couleur: 'jaune', taille: 25, cadre: 'jaune' },
+          { t: 'arrivée moins départ', couleur: 'jaune', taille: 18 },
+        ], 36);
+        c.repere('coordonnees', 412, 72, 330, 150, 'AB(3 ; −3) : arrivée moins départ');
+        K.marque('coordonnees');
+        c.pause(.5);
+        c.fleche(G.X(0), G.Y(0), G.X(3), G.Y(-3), { couleur: 'rose', largeur: 2.6, tete: 11 });
+        K.rond(G, 3, -3, true, 'rose');
+        T(c, '(3 ; −3)', G.X(3) + 8, G.Y(-3) + 4, 'rose', 17);
+        K.lignes(420, 290, [
+          { t: 'même déplacement, parti de O :', couleur: 'rose', taille: 18 },
+          { t: 'la flèche arrive en (3 ; −3)', couleur: 'rose', taille: 18 },
+        ], 30);
+        c.repere('glisse', G.X(0) - 8, G.Y(0) - 8, G.X(3) - G.X(0) + 70, G.Y(-3) - G.Y(0) + 20, 'la même flèche partie de O');
+        K.marque('glisse');
+      },
+      decrire: {
+        points: 'Un repère quadrillé ; A(1 ; 2) en cyan et B(4 ; −1) en jaune.',
+        fleche: 'Une flèche blanche de A vers B : le vecteur AB.',
+        deplacement: 'En pointillés : 3 carreaux vers la droite (vert, +3), puis 3 vers le bas (orange, −3).',
+        coordonnees: 'À droite : AB(xB − xA ; yB − yA) = (4 − 1 ; −1 − 2) = (3 ; −3), encadré, « arrivée moins départ ».',
+        glisse: 'La même flèche, partie de O, arrive au point (3 ; −3) : même déplacement.',
+      },
+      motifs: { points: 'A et B', fleche: 'la flèche AB', deplacement: 'le déplacement', coordonnees: 'arrivée moins départ', glisse: 'la même flèche depuis O' },
+    },
+
+    /* ---------- Pythagore ---------- */
+    pythagore: {
+      titre: 'Pythagore : la distance OM',
+      dessiner(c, K) {
+        K.titre('Pythagore : la longueur du côté penché');
+        const G = K.axes({ x0: 50, y0: 70, w: 280, h: 290, xmin: -.6, xmax: 4.5, ymin: -.6, ymax: 4.8, gx: [1, 2, 3, 4], gy: [1, 2, 3, 4], quadrillage: true });
+        c.ligne(G.X(0), G.Y(0), G.X(3), G.Y(0), { couleur: 'vert', largeur: 3.2 });
+        c.ligne(G.X(3), G.Y(0), G.X(3), G.Y(4), { couleur: 'orange', largeur: 3.2 });
+        c.ligne(G.X(0), G.Y(0), G.X(3), G.Y(4), { couleur: 'jaune', largeur: 3.2 });
+        c.trait([[G.X(3) - 12, G.Y(0)], [G.X(3) - 12, G.Y(0) - 12], [G.X(3), G.Y(0) - 12]], { couleur: 'blanc', largeur: 1.4 });
+        K.rond(G, 3, 4, true, 'cyan'); T(c, 'M(3 ; 4)', G.X(3) + 8, G.Y(4) - 6, 'cyan', 17);
+        T(c, 'H', G.X(3) + 6, G.Y(0) + 20, 'blanc', 16);
+        c.repere('triangle', G.X(0), G.Y(4), G.X(3) - G.X(0), G.Y(0) - G.Y(4), 'le triangle OHM, rectangle en H');
+        K.marque('triangle');
+        c.pause(.4);
+        T(c, '3', G.X(1.5), G.Y(0) + 24, 'vert', 20, { align: 'center' });
+        T(c, '4', G.X(3) + 10, G.Y(2), 'orange', 20);
+        T(c, '?', G.X(1.3), G.Y(2.1), 'jaune', 24, { align: 'center' });
+        K.lignes(380, 100, [
+          { t: 'OM² = OH² + HM²', couleur: 'blanc', taille: 23, cadre: 'faible' },
+        ]);
+        c.repere('carres', 372, 72, 260, 40, 'OM² = OH² + HM²');
+        K.marque('carres');
+        c.pause(.4);
+        K.lignes(380, 150, [
+          { t: 'OM² = 3² + 4² = 9 + 16 = 25', couleur: 'blanc', taille: 20 },
+          { t: 'OM = √25 = 5', couleur: 'jaune', taille: 25, cadre: 'jaune' },
+        ], 38);
+        c.repere('calcul', 372, 124, 360, 78, 'OM = 5');
+        K.marque('calcul');
+        c.pause(.6);
+        // L'échelle contre le mur, peinte (professeur règle 32) : pied à 3 m du mur, haut à 4 m, longueur 5 m.
+        const sol = 380, xm = 690, u = 34, xp = xm - 3 * u, yh = sol - 4 * u;
+        MathsTableau.peindre(c, .8, (ctx) => {
+          const g = ctx.createLinearGradient(xm, 0, xm + 26, 0); g.addColorStop(0, '#b45f3a'); g.addColorStop(1, '#7c3a22');
+          ctx.fillStyle = g; ctx.fillRect(xm, yh - 30, 26, sol - yh + 30);
+          ctx.strokeStyle = 'rgba(255,230,210,.35)'; ctx.lineWidth = 1;
+          for (let y = yh - 30; y < sol; y += 12) { ctx.beginPath(); ctx.moveTo(xm, y); ctx.lineTo(xm + 26, y); ctx.stroke(); }
+          ctx.fillStyle = '#5b6b3a'; ctx.fillRect(xp - 40, sol, xm + 30 - xp + 40, 6);
+          const montant = (dx) => { ctx.strokeStyle = '#d9a441'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(xp + dx, sol); ctx.lineTo(xm + dx * .2, yh + dx); ctx.stroke(); };
+          ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 5; montant(-5); montant(5); ctx.shadowBlur = 0;
+          ctx.strokeStyle = '#c28a2c'; ctx.lineWidth = 3;
+          for (let k = 1; k < 9; k++) { const p = k / 9, x = xp + (xm - xp) * p, y = sol + (yh - sol) * p; ctx.beginPath(); ctx.moveTo(x - 5, y + 2); ctx.lineTo(x + 6, y - 3); ctx.stroke(); }
+        });
+        T(c, '3 m', (xp + xm) / 2, sol + 24, 'vert', 16, { align: 'center' });
+        T(c, '4 m', xm + 32, (sol + yh) / 2, 'orange', 16);
+        T(c, '5 m', (xp + xm) / 2 - 26, (sol + yh) / 2 - 6, 'jaune', 17, { align: 'right' });
+        c.repere('echelle', xp - 40, yh - 30, xm + 70 - xp, sol - yh + 60, 'l’échelle contre le mur : 5 m');
+        K.marque('echelle');
+      },
+      decrire: {
+        triangle: 'Le point M(3 ; 4), sa projection H(3 ; 0) ; le triangle OHM rectangle en H : OH = 3 en vert, HM = 4 en orange, OM en jaune avec un « ? ».',
+        carres: 'Écrit, encadré : OM² = OH² + HM².',
+        calcul: 'OM² = 3² + 4² = 9 + 16 = 25 ; encadré jaune : OM = √25 = 5.',
+        echelle: 'À droite, peints : un mur de briques et une échelle posée contre lui ; le pied à 3 m du mur, le haut à 4 m : l’échelle mesure 5 m.',
+      },
+      motifs: { triangle: 'le triangle rectangle', carres: 'la relation de Pythagore', calcul: 'OM = 5', echelle: 'l’échelle contre le mur' },
+    },
+
+    /* ---------- le cercle trigonométrique ---------- */
+    cercle: {
+      titre: 'Le cercle trigonométrique : radians, cos et sin',
+      dessiner(c, K) {
+        K.titre('Le cercle de rayon 1 : un angle, un cosinus, un sinus');
+        const ox = 210, oy = 220, u = 140;
+        const P = (a) => [ox + u * Math.cos(a), oy - u * Math.sin(a)];
+        c.fleche(ox - u - 30, oy, ox + u + 40, oy, { couleur: 'faible', largeur: 1.5 });
+        c.fleche(ox, oy + u + 20, ox, oy - u - 30, { couleur: 'faible', largeur: 1.5 });
+        T(c, 'O', ox - 16, oy + 18, 'faible', 15);
+        c.cercle(ox, oy, u, { couleur: 'cyan', largeur: 2, depart: 0 });
+        T(c, '1', ox + u + 6, oy + 20, 'faible', 15);
+        c.repere('cercle', ox - u, oy - u, 2 * u, 2 * u, 'le cercle de centre O et de rayon 1');
+        K.marque('cercle');
+        c.pause(.4);
+        const marque = (a, s, dx, dy, coul) => { const [x, y] = P(a); c.point(x, y, 5, coul); T(c, s, x + dx, y + dy, coul, 18, { align: 'center' }); };
+        marque(0, '0', 18, -8, 'blanc');
+        K.anime(.8, p => { c.trait(Array.from({ length: 30 }, (_, i) => { const a = p * PI / 2 * i / 29; return [ox + (u + 14) * Math.cos(a), oy - (u + 14) * Math.sin(a)]; }), { couleur: 'jaune', largeur: 1.6 }); });
+        marque(PI / 2, 'π/2', 20, -10, 'jaune');
+        K.anime(.8, p => { c.trait(Array.from({ length: 30 }, (_, i) => { const a = PI / 2 + p * PI / 2 * i / 29; return [ox + (u + 14) * Math.cos(a), oy - (u + 14) * Math.sin(a)]; }), { couleur: 'jaune', largeur: 1.6 }); });
+        marque(PI, 'π', -22, -8, 'jaune');
+        marque(-PI / 2, '−π/2', 26, 22, 'jaune');
+        K.lignes(470, 92, [
+          { t: 'un tour = 2π', couleur: 'jaune', taille: 20 },
+          { t: 'un demi-tour = π', couleur: 'jaune', taille: 20 },
+          { t: 'un quart de tour = π/2', couleur: 'jaune', taille: 20 },
+        ], 30);
+        c.repere('tours', 462, 66, 280, 98, 'un tour 2π, un demi-tour π, un quart de tour π/2');
+        K.marque('tours');
+        c.pause(.4);
+        const a = PI / 3, [mx, my] = P(a);
+        c.ligne(ox, oy, mx, my, { couleur: 'blanc', largeur: 2 });
+        K.anime(.6, p => { c.trait(Array.from({ length: 20 }, (_, i) => { const t = p * a * i / 19; return [ox + 40 * Math.cos(t), oy - 40 * Math.sin(t)]; }), { couleur: 'rose', largeur: 2 }); });
+        T(c, 'θ = π/3', ox + 46, oy - 22, 'rose', 17);
+        c.point(mx, my, 6, 'rose'); T(c, 'M', mx + 10, my - 8, 'rose', 20);
+        c.repere('point', mx - 14, my - 14, 28, 28, 'le point M à l’angle π/3');
+        K.marque('point');
+        c.pause(.4);
+        c.ligne(mx, my, mx, oy, { couleur: 'vert', largeur: 1.6, pointille: [5, 5] });
+        c.ligne(ox, oy, mx, oy, { couleur: 'vert', largeur: 4 });
+        T(c, 'cos θ', (ox + mx) / 2, oy + 24, 'vert', 18, { align: 'center' });
+        c.ligne(mx, my, ox, my, { couleur: 'orange', largeur: 1.6, pointille: [5, 5] });
+        c.ligne(ox, oy, ox, my, { couleur: 'orange', largeur: 4 });
+        T(c, 'sin θ', ox - 8, (oy + my) / 2, 'orange', 18, { align: 'right' });
+        K.lignes(470, 210, [
+          { t: 'M(cos θ ; sin θ)', couleur: 'blanc', taille: 22, cadre: 'faible' },
+          { t: 'cos π/3 = 1/2', couleur: 'vert', taille: 19 },
+          { t: 'sin π/3 = √3/2', couleur: 'orange', taille: 19 },
+        ], 32);
+        c.repere('cos_sin', 462, 184, 280, 110, 'cos θ : l’abscisse de M ; sin θ : son ordonnée');
+        K.marque('cos_sin');
+        c.pause(.5);
+        // L'autre façon : la lumière tombe d'en haut, l'ombre de M sur l'axe réel est cos θ.
+        for (let k = 0; k < 3; k++) c.fleche(mx - 20 + k * 20, my - 44, mx - 20 + k * 20, my - 14, { couleur: 'jaune', largeur: 1.3, tete: 6, duree: .08 });
+        c.cercle(mx, oy, 9, { couleur: 'vert', largeur: 2 });
+        K.lignes(470, 330, [
+          { t: 'lumière d’en haut : l’ombre de M', couleur: 'jaune', taille: 17 },
+          { t: 'sur l’axe horizontal, c’est cos θ', couleur: 'vert', taille: 17 },
+        ], 26);
+        c.repere('ombre', mx - 30, my - 48, 70, oy - my + 62, 'l’ombre de M : cos θ');
+        K.marque('ombre');
+      },
+      decrire: {
+        cercle: 'Deux axes et le cercle de centre O, de rayon 1.',
+        tours: 'Les angles 0, π/2 (en haut), π (à gauche), −π/2 (en bas) ; écrit : un tour = 2π, un demi-tour = π, un quart de tour = π/2.',
+        point: 'Le point M sur le cercle à l’angle θ = π/3, l’arc rose depuis l’axe horizontal.',
+        cos_sin: 'Projections : cos θ en vert sur l’axe horizontal, sin θ en orange sur l’axe vertical ; écrit : M(cos θ ; sin θ), cos π/3 = 1/2, sin π/3 = √3/2.',
+        ombre: 'Des flèches de lumière tombent d’en haut sur M ; son ombre sur l’axe horizontal est entourée : c’est cos θ.',
+      },
+      motifs: { cercle: 'le cercle', tours: 'tour, demi-tour, quart de tour', point: 'le point M', cos_sin: 'cos et sin', ombre: 'l’ombre de M' },
+    },
+
+    /* ---------- développer : identités remarquables ---------- */
+    identites: {
+      titre: 'Développer : chaque terme fois chaque terme',
+      dessiner(c, K) {
+        K.titre('Développer : chaque terme multiplie chaque terme');
+        T(c, '(a + b)(c + d) = ac + ad + bc + bd', 40, 92, 'blanc', 24);
+        T(c, 'chaque terme de la 1re parenthèse × chaque terme de la 2e', 40, 124, 'jaune', 17);
+        c.repere('distributivite', 32, 40, 420, 82, 'chaque terme fois chaque terme');
+        K.marque('distributivite');
+        c.pause(.4);
+        K.lignes(40, 160, [
+          { t: '(a + b)² = a² + 2ab + b²', couleur: 'cyan', taille: 23, cadre: 'cyan' },
+        ]);
+        c.repere('carre', 32, 132, 320, 40, '(a + b)² = a² + 2ab + b²');
+        K.marque('carre');
+        c.pause(.4);
+        K.lignes(40, 216, [
+          { t: '(a − b)(a + b) = a² + ab − ab − b²   (+ab − ab = 0)', couleur: 'blanc', taille: 20 },
+          { t: '(a − b)(a + b) = a² − b²', couleur: 'orange', taille: 23, cadre: 'orange' },
+          { t: '(x − 3)(x + 3) = x² − 9', couleur: 'orange', taille: 20 },
+        ], 40);
+        c.repere('difference', 32, 190, 400, 130, '(a − b)(a + b) = a² − b²');
+        K.marque('difference');
+        c.pause(.5);
+        // L'autre façon : l'aire d'un carré de côté a + b, coupé en quatre morceaux.
+        const x0 = 500, y0 = 140, A = 130, B = 70;
+        MathsTableau.peindre(c, .6, (ctx) => {
+          const zone = (x, y, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(x, y, w, h); };
+          zone(x0, y0, A, A, 'rgba(34,211,238,.28)'); zone(x0 + A, y0, B, A, 'rgba(250,204,21,.25)');
+          zone(x0, y0 + A, A, B, 'rgba(250,204,21,.25)'); zone(x0 + A, y0 + A, B, B, 'rgba(244,114,182,.28)');
+        });
+        c.rect(x0, y0, A + B, A + B, { couleur: 'blanc', arrondi: 2, largeur: 2 });
+        c.ligne(x0 + A, y0, x0 + A, y0 + A + B, { couleur: 'blanc', largeur: 1.6 });
+        c.ligne(x0, y0 + A, x0 + A + B, y0 + A, { couleur: 'blanc', largeur: 1.6 });
+        T(c, 'a', x0 + A / 2, y0 - 8, 'blanc', 18, { align: 'center' }); T(c, 'b', x0 + A + B / 2, y0 - 8, 'blanc', 18, { align: 'center' });
+        T(c, 'a²', x0 + A / 2, y0 + A / 2 + 8, 'cyan', 24, { align: 'center' });
+        T(c, 'ab', x0 + A + B / 2, y0 + A / 2 + 8, 'jaune', 20, { align: 'center' });
+        T(c, 'ab', x0 + A / 2, y0 + A + B / 2 + 8, 'jaune', 20, { align: 'center' });
+        T(c, 'b²', x0 + A + B / 2, y0 + A + B / 2 + 8, 'rose', 22, { align: 'center' });
+        T(c, 'aire = a² + 2ab + b²', x0 + (A + B) / 2, y0 + A + B + 34, 'cyan', 18, { align: 'center' });
+        c.repere('aire', x0 - 6, y0 - 30, A + B + 12, A + B + 76, 'le carré de côté a + b : quatre morceaux');
+        K.marque('aire');
+      },
+      decrire: {
+        distributivite: 'Écrit : (a + b)(c + d) = ac + ad + bc + bd, et dessous « chaque terme de la 1re parenthèse × chaque terme de la 2e ».',
+        carre: 'Encadré cyan : (a + b)² = a² + 2ab + b².',
+        difference: '(a − b)(a + b) = a² + ab − ab − b², « +ab − ab = 0 » ; encadré orange : (a − b)(a + b) = a² − b² ; exemple (x − 3)(x + 3) = x² − 9.',
+        aire: 'À droite, un carré de côté a + b coupé en quatre : un carré a² (cyan), deux rectangles ab (jaune), un petit carré b² (rose) ; « aire = a² + 2ab + b² ».',
+      },
+      motifs: { distributivite: 'chaque terme fois chaque terme', carre: '(a + b)²', difference: '(a − b)(a + b)', aire: 'l’aire du carré' },
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

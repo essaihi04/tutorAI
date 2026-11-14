@@ -19,6 +19,7 @@
  * Vues : ?vue=produit (diapo ln_a1 ; curseurs a et b, entiers de 1 à 5) : ln a et ln b à la calculatrice, ln(ab),
  *          puis ln a et ln b empilées : la pile arrive exactement à la hauteur de ln(ab).
  *          Moments deux, trois, six, somme, produit, regle. Repères a, b, ab, somme, produit, regle.
+ *          Paramètre conclusions (défaut 1) : 0 tait les pointillés et la somme écrite (question d'observation de ln_a1).
  *        ?vue=puissance (diapo ln_a4 ; curseurs a de 2 à 9 et n de 1 à 6) : ln(a²) = deux blocs ln a, ln(aⁿ) = n blocs,
  *          ln √a = un demi-bloc (deux demi-blocs refont ln a), ln(√2 × 8) = 3,5 blocs ln 2.
  *          Moments carre, puissance, racine_produit, racine, generale, exemple, resultat.
@@ -39,7 +40,9 @@ function barre(c, x, y0, h, w, couleur, o = {}) {
 
 const produit = {
   titre: 'ln du produit = somme des ln',
-  params: { a: { min: 1, max: 5, pas: 1, defaut: 2, label: 'a =' }, b: { min: 1, max: 5, pas: 1, defaut: 3, label: 'b =' } },
+  params: { a: { min: 1, max: 5, pas: 1, defaut: 2, label: 'a =' }, b: { min: 1, max: 5, pas: 1, defaut: 3, label: 'b =' },
+    // 14 novembre 2026 (règle 30) : conclusions = 0 tait les pointillés et la somme écrite pendant la question d'observation.
+    conclusions: { min: 0, max: 1, pas: 1, defaut: 1, sens: '0 : la pile sans pointillés ni somme écrite (question d’observation)' } },
   curseurs: ['a', 'b'],
   dessiner(c, K) {
     const a = K.P.a, b = K.P.b, ab = a * b;
@@ -70,8 +73,10 @@ const produit = {
       const h1 = barre(c, 540, BASE, ln(a) * q1, 58, 'cyan', { duree: 0 });
       if (q2 > 0) barre(c, 540, h1, ln(b) * q2, 58, 'orange', { duree: 0 });
     });
-    c.ligne(452, hab, 600, hab, { couleur: 'jaune', largeur: 1.8, pointille: [6, 5] });
-    c.texte(`${f2(ln(a))} + ${f2(ln(b))} = ${f2(ln(a) + ln(b))}`, 620, Math.max(80, hab + 6), { couleur: 'jaune', taille: 18 });
+    if (K.P.conclusions !== 0) {
+      c.ligne(452, hab, 600, hab, { couleur: 'jaune', largeur: 1.8, pointille: [6, 5] });
+      c.texte(`${f2(ln(a))} + ${f2(ln(b))} = ${f2(ln(a) + ln(b))}`, 620, Math.max(80, hab + 6), { couleur: 'jaune', taille: 18 });
+    }
     c.texte('pile = ln a + ln b', 540, BASE + 26, { couleur: 'faible', taille: 16, align: 'center' });
     c.repere('somme', 500, hab - 20, 250, BASE - hab + 24, 'la pile tombe juste à la hauteur de ln(ab)');
     K.marque('somme');
@@ -92,7 +97,7 @@ const produit = {
     deux: `Une barre cyan : ln ${a} ≈ ${f2(ln(a))}.`,
     trois: `Une barre orange : ln ${b} ≈ ${f2(ln(b))}.`,
     six: `Une barre verte : ln ${ab} ≈ ${f2(ln(ab))}.`,
-    somme: `À droite, ln ${a} puis ln ${b} empilées : la pile arrive exactement à la hauteur de ln ${ab} (pointillés jaunes) ; écrit ${f2(ln(a))} + ${f2(ln(b))} = ${f2(ln(ab))}.`,
+    somme: K.P.conclusions === 0 ? `À droite, ln ${a} puis ln ${b} empilées, à côté de la barre de ln ${ab} (rien d’écrit : l’élève compare les hauteurs).` : `À droite, ln ${a} puis ln ${b} empilées : la pile arrive exactement à la hauteur de ln ${ab} (pointillés jaunes) ; écrit ${f2(ln(a))} + ${f2(ln(b))} = ${f2(ln(ab))}.`,
     produit: `Sous la barre verte : ${ab} = ${a} × ${b} ; ln(${a} × ${b}) = ln ${a} + ln ${b}.`,
     regle: 'Encadré jaune en haut : ln(ab) = ln a + ln b (a > 0, b > 0).',
   }; },

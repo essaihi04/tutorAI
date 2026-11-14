@@ -113,7 +113,7 @@ function legendesCellule(c, k) {
   const W = (s, x, y, o) => k.T(c, s, x, y, { duree: .45, ...o });
   if (k.ecrit(c, 'cell', .2)) {
     W('noyau : ADN', COL, 92, { couleur: 'bleu', taille: 15 }); c.ligne(COL - 4, 88, N.cx + N.rx - 12, 160, { couleur: 'bleu', largeur: 1.1 });
-    W('cytoplasme : ribosomes,', COL, 132, { couleur: 'rose', taille: 15 }); W('synthèse des protéines', COL, 150, { couleur: 'rose', taille: 15 });
+    W('cytoplasme : ribosomes,', COL, 132, { couleur: 'rose', taille: 15 }); if (k.P.conclusions !== false) W('synthèse des protéines', COL, 150, { couleur: 'rose', taille: 15 });
     c.ligne(COL - 4, 136, 505, 168, { couleur: 'rose', largeur: 1.1 });
     W('ribosomes', 36, 78, { couleur: 'cyan', taille: 14 }); c.ligne(80, 84, RIBOS[0][0] - 4, RIBOS[0][1] - 6, { couleur: 'cyan', largeur: 1.1 });
     const [qx, qy] = posPore(PORE_LEG);
@@ -181,7 +181,9 @@ const seuil1 = i => .3 + (i % 10) * .45, seuil2 = i => 8 + (i % 7) * 2.5;
 const nRibosMarques = tau => RIBOS.filter((_, i) => tau >= seuil1(i)).length;
 const CONCL = [['conclusion : l’ARN est fabriqué', 'vert'], ['dans le noyau, passe dans le', 'vert'], ['cytoplasme ; les protéines sont', 'vert'], ['fabriquées dans le cytoplasme,', 'vert'],
   ['sur les ribosomes :', 'vert'], ['l’ARN messager (ARNm) porte', 'jaune'], ['l’information du noyau aux', 'jaune'], ['ribosomes.', 'jaune']];
+let CONCL_ACIDES = true;   // miroir de k.P.conclusions pour la bulle (motifs, conclusion)
 function dessinerAcides(c, k) {
+  CONCL_ACIDES = k.P.conclusions !== false;
   const t = k.t, tau = tauDe('acides_amines', t); k.P.temps_min = minutes(tau);
   c.direct(() => {
     const x = c.ctx;
@@ -196,9 +198,9 @@ function dessinerAcides(c, k) {
   legendesCellule(c, k);
   if (k.ecrit(c, 'leu', 1.2)) { k.T(c, 'leucine radioactive', COL, 186, { couleur: 'vert', taille: 15, duree: .6 }); k.T(c, '(un acide aminé)', COL, 204, { couleur: 'faible', taille: 13, duree: .5 }); }
   if (tau >= seuil1(0)) c.repere('grains_ribosomes', RIBOS[0][0] - 30, RIBOS[0][1] - 24, 70, 56, 'les grains noirs sur les ribosomes');
-  if (k.ecrit(c, 'rib', 5.4)) { k.T(c, 'grains sur les ribosomes ;', COL, 232, { couleur: 'blanc', taille: 13, duree: .6 }); k.T(c, 'noyau non marqué', COL, 249, { couleur: 'blanc', taille: 13, duree: .5 }); }
-  if (t >= 8.4) c.repere('conclusion', COL - 4, 262, 196, 150, 'la conclusion');
-  if (k.ecrit(c, 'concl', 8.4)) CONCL.forEach(([s, coul], i) => k.T(c, s, COL, 278 + i * 17, { couleur: coul, taille: 13, duree: .5 }));
+  if (k.P.conclusions !== false && k.ecrit(c, 'rib', 5.4)) { k.T(c, 'grains sur les ribosomes ;', COL, 232, { couleur: 'blanc', taille: 13, duree: .6 }); k.T(c, 'noyau non marqué', COL, 249, { couleur: 'blanc', taille: 13, duree: .5 }); }
+  if (t >= 8.4 && k.P.conclusions !== false) c.repere('conclusion', COL - 4, 262, 196, 150, 'la conclusion');
+  if (k.P.conclusions !== false && k.ecrit(c, 'concl', 8.4)) CONCL.forEach(([s, coul], i) => k.T(c, s, COL, 278 + i * 17, { couleur: coul, taille: 13, duree: .5 }));
 }
 function voitAcides(k) {
   const t = k.t, tau = tauDe('acides_amines', t), n = nRibosMarques(tau);
@@ -215,6 +217,8 @@ function voitAcides(k) {
 window.Etapes.lancer({
   id: 'expression_marquage', titre: 'Marquage radioactif : ARN et protéines', graine: 29,
   parametres: {
+    // conclusions (14 novembre 2026) : false pendant une question d’observation — la scène montre les grains, elle n’écrit ni « grains sur les ribosomes » ni la conclusion. Défaut : true (rien ne change).
+    conclusions: { defaut: true, schema: 'true | false (false : n’écrit pas où sont les grains ni la conclusion, pendant une question d’observation)', lire: v => (typeof v === 'string' ? !/^(false|0|non)$/i.test(v.trim()) : !!v) },
     temps_min: { defaut: 0, schema: '0..30, pas 1 (minutes depuis l’apport du produit radioactif ; la scène s’affiche à cet instant)', lire: v => { const n = Math.round(+v); return Number.isFinite(n) ? Math.min(30, Math.max(0, n)) : undefined; } },
   },
   poignees: {
@@ -229,9 +233,9 @@ window.Etapes.lancer({
       texte: 'Uracile radioactif (base propre à l’ARN) : à 5 min les grains d’autoradiographie sont dans le noyau ; l’ARN sort par les pores ; à 30 min le cytoplasme est marqué et le noyau s’est vidé en partie. Document reconstitué.',
       explication: [{ repere: 'adn', texte: 'L’ADN reste dans le noyau.' }, { repere: 'grains_noyau', texte: 'D’abord, les grains sont dans le noyau : l’ARN y est fabriqué.' }, { repere: 'pore', texte: 'L’ARN sort par les pores.' }, { repere: 'grains_cytoplasme', texte: 'Puis l’ARN est dans le cytoplasme.' }] },
     acides_amines: { titre: 'Marquage aux acides aminés radioactifs', fin: 14.5, moments: MA, dessiner: dessinerAcides, voit: voitAcides,
-      motifs: { acides_amines_apportes: 'on apporte un acide aminé radioactif, la leucine', ribosomes_marques: 'les grains sont sur les ribosomes du cytoplasme, aucun dans le noyau', conclusion: 'l’ARN messager porte l’information du noyau aux ribosomes' },
-      conclusion: 'Les protéines sont fabriquées dans le cytoplasme, sur les ribosomes ; l’ARNm porte l’information du noyau aux ribosomes.',
-      surReglage: (k, cles, api) => { if (cles.includes('temps_min')) api.setTime({ time_s: tDe('acides_amines', k.P.temps_min) }); },
+      get motifs() { const m = { acides_amines_apportes: 'on apporte un acide aminé radioactif, la leucine', ribosomes_marques: 'les grains sont sur les ribosomes du cytoplasme, aucun dans le noyau', conclusion: 'l’ARN messager porte l’information du noyau aux ribosomes' }; return CONCL_ACIDES ? m : { ...m, ribosomes_marques: 'observe où sont les grains noirs', conclusion: 'observe où sont les grains noirs' }; },
+      get conclusion() { return CONCL_ACIDES ? 'Les protéines sont fabriquées dans le cytoplasme, sur les ribosomes ; l’ARNm porte l’information du noyau aux ribosomes.' : 'Où sont les grains noirs ? Observe.'; },
+      surReglage: (k, cles, api) => { if (cles.includes('temps_min')) api.setTime({ time_s: tDe('acides_amines', k.P.temps_min) }); else k.S.vu = { ...k.S.vu }; },
       texte: 'Leucine radioactive : les grains sont seulement dans le cytoplasme, sur les ribosomes. Conclusion : l’ARN est fabriqué dans le noyau et passe dans le cytoplasme ; les protéines sont fabriquées sur les ribosomes ; l’ARNm porte l’information du noyau aux ribosomes.',
       explication: [{ repere: 'grains_ribosomes', texte: 'Les grains sont sur les ribosomes : les protéines y sont fabriquées.' }, { repere: 'noyau', texte: 'Le noyau n’est pas marqué.' }, { repere: 'conclusion', texte: 'L’ARN messager porte l’information du noyau aux ribosomes.' }] },
   },
