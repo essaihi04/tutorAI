@@ -21,6 +21,11 @@
  *   membrane_externe (2)  membrane_interne (4)  cretes (6)  espace_intermembranaire (8)  matrice (10)
  *   spheres_pedonculees (12,5)  lieux (16) : où se passe chaque étape.
  * set_parameters {legendes: 'noms' | 'numeros'} (aussi ?legendes=numeros) : en « numeros », seuls les numéros 1 à 6.
+ * Vue « construire » (?vue=construire, schéma à légender comme au bac, 15 novembre 2026) : la même mitochondrie sans ses
+ * noms, six étiquettes à glisser au bout des flèches ; bien posée, une étiquette devient verte et s’aimante.
+ *   etiquettes (2,5)  corrige (6,5) ; set_parameters {corrige: true} : le tuteur pose toutes les étiquettes.
+ *   Lecture seule (pour le lecteur) : legende_total, legende_places, legende_erreurs (étiquette lâchée sur le schéma
+ *   loin de sa place), legende_mal (noms, séparés par des virgules).
  */
 const { fr, bulle, protocole } = window.Tableau;
 const { Scene, Chrono, Apparitions, doux } = window.SVTTableau;
@@ -42,7 +47,8 @@ const MOTIFS = {
   lieux: 'où se passe chaque étape de la respiration',
 };
 const q = new URLSearchParams(location.search);
-const S = { legendes: q.get('legendes') === 'numeros' ? 'numeros' : 'noms' };
+const S = { legendes: q.get('legendes') === 'numeros' ? 'numeros' : 'noms', corrige: false };
+const CONSTRUIRE = q.get('vue') === 'construire';
 
 /* Les six légendes : numéro, nom, position du texte, pointe de la flèche, instant où elle commence à s’écrire. */
 const LEG = [
@@ -58,13 +64,13 @@ LEG.forEach(l => { l.t0 = M[l.id] - 1.3; });
 const canvas = $('canvas');
 const scene = Scene(canvas, (c) => { scene.cadre(31); MOS.dessiner(c, () => { dessiner(c); }); return c.fin(); }, { large: true });
 /* Tableau large (portable 1366 × 613) : la page est rangée sur toute la largeur (SVTLarge.Mosaique, dans peinture.js) ; grand écran : inchangée. */
-const MOS = window.SVTLarge.Mosaique(scene, (L) => L >= 1000 ? (() => { const s = Math.min(1.2, (L - 300) / 752, 412 / 392), B = 752 * s, wc = Math.min(300, L - B - 24), x0 = (L - wc - 16 - B) / 2, X = x0 + wc + 16; return { police: 1.12, blocs: [
+const MOS = window.SVTLarge.Mosaique(scene, (L) => L >= 1000 && !CONSTRUIRE ? (() => { const s = Math.min(1.2, (L - 300) / 752, 412 / 392), B = 752 * s, wc = Math.min(300, L - B - 24), x0 = (L - wc - 16 - B) / 2, X = x0 + wc + 16; return { police: 1.12, blocs: [
   { src: [8, 28, 752, 392], X, Y: (420 - 392 * s) / 2, s },
   { src: [790, 0, 270, 100], X: x0, Y: 40, s: Math.min(1.05, wc / 270), police: 1 }] }; })() : null);
 const ecrit = Apparitions(scene);
-const chrono = Chrono({ fin: () => FIN, moments: () => M, motifs: MOTIFS, bouton: $('run'), bulle: $('feedback'), pont: () => pont,
-  depart: 'Observe la mitochondrie en coupe…', reinit: () => ecrit.oublier(),
-  fini: () => 'Deux membranes : la membrane externe et la membrane interne repliée en crêtes, qui porte les sphères pédonculées.' });
+const chrono = Chrono({ fin: () => (CONSTRUIRE ? FIN_C : FIN), moments: () => (CONSTRUIRE ? MC : M), motifs: MOTIFS, bouton: $('run'), bulle: $('feedback'), pont: () => pont,
+  depart: CONSTRUIRE ? 'À toi : légende la mitochondrie.' : 'Observe la mitochondrie en coupe…', reinit: () => ecrit.oublier(),
+  fini: () => CONSTRUIRE ? `Étiquettes bien posées : ${compte(positions())} sur ${ORDRE.length}.` : 'Deux membranes : la membrane externe et la membrane interne repliée en crêtes, qui porte les sphères pédonculées.' });
 scene.avancer = chrono.avancer;
 
 /* ── Peinture ──────────────────────────────────────────────────────────────────────────────── */
@@ -131,6 +137,7 @@ function lieux(c) {
 }
 
 function dessiner(c) {
+  if (CONSTRUIRE) return dessinerConstruire(c);
   const t = chrono.t;
   c.direct(() => peindre(c.ctx));
   if (MOS.actif()) c.direct(() => ['La mitochondrie :', 'un organite', 'à deux membranes'].forEach((l, i) => c.texte(l, 800, 30 + i * 28, { couleur: 'cyan', taille: 22 })));   // tableau large : le titre en colonne à gauche
@@ -152,8 +159,115 @@ function dessiner(c) {
   c.repere('medaillon', MED.x, MED.y, MED.w, MED.h, 'une crête agrandie');
 }
 
+/* ── Vue construire : la même mitochondrie sans ses noms, six étiquettes à poser (schéma à légender, 15 novembre 2026) ── */
+const MC = { etiquettes: 2.5, corrige: 6.5 }, FIN_C = 8, T_CORR = 4.6;
+MOTIFS.etiquettes = 'pose chaque étiquette au bout de sa flèche';
+MOTIFS.corrige = 'la correction : toutes les étiquettes à leur place';
+const FX = 76, FY = 0, FS = .8;                       // le dessin d’origine, réduit, laisse la place aux étiquettes en bas
+const tr = (x, y) => [FX + FS * x, FY + FS * y];
+const NOMS = Object.fromEntries(LEG.map(l => [l.id, l.nom]));
+/* La place de chaque étiquette (centre, en coordonnées du cadre) ; la flèche part de là vers la structure. */
+const SLOT = { membrane_externe: [140, 60], cretes: [262, 60], espace_intermembranaire: [414, 60], membrane_interne: [150, 312], matrice: [330, 312], spheres_pedonculees: [598, 292] };
+const ORDRE = ['matrice', 'spheres_pedonculees', 'membrane_interne', 'cretes', 'espace_intermembranaire', 'membrane_externe'];
+const largeurEt = id => 18 + 8.2 * NOMS[id].length;
+const COLS = (() => {                                  // deux rangées d’étiquettes sous le schéma
+  const out = {}, rangs = [ORDRE.slice(0, 3), ORDRE.slice(3)], ys = [362, 398];
+  rangs.forEach((r, j) => { const tot = r.reduce((a, id) => a + largeurEt(id), 0) + 28 * (r.length - 1); let x = 380 - tot / 2; for (const id of r) { out[id] = [x + largeurEt(id) / 2, ys[j]]; x += largeurEt(id) + 28; } });
+  return out;
+})();
+let ET = {}, ERREURS = 0, MAL = new Set(), dernierT = 0;
+function remiseEtiquettes() { ET = {}; ERREURS = 0; MAL = new Set(); for (const id of ORDRE) { const [x, y] = COLS[id]; ET[id] = { x, y, ok: false }; } }
+remiseEtiquettes();
+const rampe = (t, a, d) => doux(Math.max(0, Math.min(1, (t - a) / d)));
+/** Positions affichées (la correction les amène à leur place). */
+function positions() {
+  const t = chrono.t, out = {};
+  ORDRE.forEach((id, i) => {
+    const e = ET[id];
+    if (S.corrige && t >= T_CORR) { const u = rampe(t, T_CORR + .15 * i, 1.0), [sx, sy] = SLOT[id]; out[id] = { x: e.x + (sx - e.x) * u, y: e.y + (sy - e.y) * u, ok: e.ok || u >= 1 }; }
+    else out[id] = { ...e };
+  });
+  return out;
+}
+const compte = pos => ORDRE.filter(id => pos[id].ok).length;
+/** Ce que le lecteur lit pour noter et commenter le schéma (lecture seule). */
+function legende() { return { legende_total: ORDRE.length, legende_places: ORDRE.filter(id => ET[id].ok).length, legende_erreurs: ERREURS, legende_mal: [...MAL].join(', ') }; }
+function dessinerConstruire(c) {
+  const t = chrono.t, ctx = c.ctx;
+  if (t + .3 < dernierT) remiseEtiquettes();
+  dernierT = t;
+  ctx.save(); ctx.translate(FX, FY); ctx.scale(FS, FS);
+  c.direct(() => {   // le schéma est déjà au tableau : seules les flèches et les étiquettes s'écrivent
+    peindre(ctx);
+    c.rect(MED.x, MED.y, MED.w, MED.h, { couleur: 'tresfaible', largeur: 1.4, arrondi: 12 });
+    c.rect(ZOOM.x, ZOOM.y, ZOOM.w, ZOOM.h, { couleur: 'jaune', largeur: 1.4, arrondi: 4 });
+    c.ligne(ZOOM.x + ZOOM.w, ZOOM.y, MED.x, MED.y + 12, { couleur: 'tresfaible', largeur: 1.1, pointille: [5, 5] });
+    c.ligne(ZOOM.x + ZOOM.w, ZOOM.y + ZOOM.h, MED.x, MED.y + MED.h - 12, { couleur: 'tresfaible', largeur: 1.1, pointille: [5, 5] });
+  });
+  ctx.restore();
+  c.direct(() => c.texte('une crête agrandie', ...tr(MED.x + MED.w / 2, 56), { couleur: 'faible', taille: 13, align: 'center' }));
+  c.texte('Légende la mitochondrie : pose les étiquettes', 18, 24, { couleur: 'cyan', taille: 18, duree: .8 });
+  // les flèches et les places vides (pointillés), écrites vite
+  for (const l of LEG) {
+    const [sx, sy] = SLOT[l.id], [ax, ay] = tr(l.a[0], l.a[1]), haut = sy < 200, w = largeurEt(l.id);
+    c.fleche(sx + (ax - sx) * .12, haut ? sy + 14 : sy - 14, ax, ay, { couleur: 'blanc', largeur: 1.5, tete: 9, duree: .12 });
+    c.direct(() => c.rect(sx - w / 2, sy - 13, w, 26, { couleur: 'faible', largeur: 1.2, pointille: [4, 4], arrondi: 6 }));
+  }
+  c.repere('schema', FX + FS * 12, FY + FS * 44, FS * 736, FS * 372, 'la mitochondrie à légender');
+  c.repere('zone_membranes', 60, 40, 480, 110, 'les flèches du haut : membrane externe, crêtes, espace intermembranaire');
+  c.repere('zone_interieur', 60, 180, 340, 145, 'les flèches du bas : membrane interne, matrice');
+  c.repere('medaillon', ...tr(MED.x, MED.y), FS * MED.w, FS * MED.h + 50, 'la crête agrandie et ses sphères pédonculées');
+  if (t >= 1.0) c.repere('etiquettes', 140, 346, 480, 70, 'les étiquettes à poser');
+  const pos = positions();
+  if (t >= 1.0) ecrit.ecrire(c, 'et', () => {
+    ORDRE.forEach(id => {
+      const p = pos[id], w = largeurEt(id), coul = p.ok ? 'vert' : 'blanc';
+      c.rect(p.x - w / 2, p.y - 13, w, 26, { couleur: coul, largeur: 1.6, fond: p.ok ? '#14532d' : '#1e293b', fondAlpha: .88, arrondi: 6, duree: .06 });
+      c.texte(NOMS[id], p.x, p.y + 6, { couleur: coul, taille: 16, align: 'center', duree: .25 });
+    });
+  });
+  if (S.corrige && t >= T_CORR + 1.9) ecrit.ecrire(c, 'bravo', () => c.texte('corrigé : les 6 étiquettes sont à leur place', 740, 24, { couleur: 'vert', taille: 15, align: 'right' }));
+}
+function voitConstruire() {
+  const t = chrono.t, pos = positions(), m = [];
+  m.push(`t = ${fr(t, 1)} s. La mitochondrie peinte en coupe SANS ses noms (deux membranes, crêtes, matrice) et, à droite, une crête agrandie avec ses sphères pédonculées ; six flèches finissent sur une place vide en pointillés.`);
+  if (t < 1.0) return m.join(' ');
+  const col = [], bien = [], ailleurs = [];
+  for (const id of ORDRE) {
+    const p = pos[id], [cx0, cy0] = COLS[id];
+    if (p.ok) bien.push(`« ${NOMS[id]} »`);
+    else if (Math.hypot(p.x - cx0, p.y - cy0) < 4) col.push(`« ${NOMS[id]} »`);
+    else { let best = null, d = 1e9; for (const [s2, [sx, sy]] of Object.entries(SLOT)) { const dd = Math.hypot(p.x - sx, p.y - sy); if (dd < d) { d = dd; best = s2; } } ailleurs.push(`« ${NOMS[id]} » (posée près de la place de « ${NOMS[best]} »)`); }
+  }
+  if (col.length) m.push(`Sous le schéma, étiquettes à poser : ${col.join(', ')}.`);
+  if (bien.length) m.push(`Bien posées (vertes, aimantées) : ${bien.join(', ')}.`);
+  if (ailleurs.length) m.push(`Mal posées (blanches) : ${ailleurs.join(', ')}.`);
+  if (S.corrige && t >= T_CORR && t < T_CORR + 1.9) m.push('Correction : les étiquettes glissent vers leur place.');
+  m.push(`Bien posées : ${compte(pos)} sur ${ORDRE.length}. Erreurs de l’élève : ${ERREURS}.`);
+  return m.join(' ');
+}
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => {
+    if (!CONSTRUIRE || chrono.t < 1.2 || (S.corrige && chrono.t >= T_CORR)) return null;
+    const [x, y] = scene.local(px, py);
+    for (let i = ORDRE.length - 1; i >= 0; i--) { const id = ORDRE[i], e = ET[id]; if (Math.abs(x - e.x) <= largeurEt(id) / 2 + 4 && Math.abs(y - e.y) <= 16) return id; }
+    return null;
+  },
+  bouger: (id, px, py) => { const [x, y] = scene.local(px, py); ET[id] = { x: Math.min(740, Math.max(20, x)), y: Math.min(408, Math.max(40, y)), ok: false }; scene.sale = true; },
+  lacher: (id) => {
+    const [sx, sy] = SLOT[id], e = ET[id], [cx0, cy0] = COLS[id];
+    if (Math.hypot(e.x - sx, e.y - sy) <= 40) ET[id] = { x: sx, y: sy, ok: true };
+    // lâchée sur le schéma, loin de sa place : une erreur (la reposer en bas, parmi les étiquettes, n’en est pas une)
+    else if (e.y < 340 && Math.hypot(e.x - cx0, e.y - cy0) > 30) { ERREURS += 1; MAL.add(NOMS[id]); }
+    const n = legende().legende_places;
+    bulle($('feedback'), ET[id].ok ? `Bien placée : « ${NOMS[id]} » (${n} sur ${ORDRE.length}).` : `« ${NOMS[id]} » n’est pas à sa place.`, ET[id].ok ? 'good' : undefined);
+    pont.noter('glisser', { poignee: id, parameters: params() }); pont.emettre(); scene.sale = true;
+  },
+});
+
 /* ── Ce qui se voit ────────────────────────────────────────────────────────────────────────── */
 function ceQuiSeVoit() {
+  if (CONSTRUIRE) return voitConstruire();
   const t = chrono.t, num = S.legendes === 'numeros';
   const ecrites = LEG.filter(l => t >= M[l.id]).map(l => (num ? `${l.n} (${l.nom})` : l.nom));
   const cours = LEG.find(l => t >= l.t0 && t < M[l.id]);
@@ -166,7 +280,16 @@ function ceQuiSeVoit() {
 }
 
 /* ── Réglages ──────────────────────────────────────────────────────────────────────────────── */
+const bool = v => v === true || v === 'true' || v === 1 || v === '1';
+function params() { return CONSTRUIRE ? { legendes: S.legendes, corrige: S.corrige, ...legende() } : { legendes: S.legendes }; }
 function setParameters(p) {
+  if (CONSTRUIRE && 'corrige' in p) {
+    S.corrige = bool(p.corrige);
+    if (S.corrige) chrono.playUntil({ moment: 'corrige' }); else { remiseEtiquettes(); chrono.start(); }
+    bulle($('feedback'), S.corrige ? 'Correction : regarde où va chaque étiquette.' : 'À toi : pose les étiquettes.');
+    pont.noter('set_parameters', { corrige: S.corrige }); pont.emettre(); scene.sale = true;
+    return;
+  }
   if (p.legendes !== 'noms' && p.legendes !== 'numeros') return;
   S.legendes = p.legendes;
   chrono.running = false; chrono.jusqua = null; chrono.t = 0; chrono.fait = false; ecrit.oublier(); $('run').textContent = 'Lancer'; scene.sale = true;
@@ -183,23 +306,28 @@ const EXPL = [
   { repere: 'matrice', texte: 'À l’intérieur : la matrice.' },
   { repere: 'medaillon', texte: 'Agrandissons une crête.' },
   { repere: 'spheres_pedonculees', texte: 'La membrane interne porte les sphères pédonculées, têtes vers la matrice.' } ];
-window.Tableau.explication({ noms: EXPL, numeros: EXPL });
+window.Tableau.explication({ noms: EXPL, numeros: EXPL, construire: [
+  { repere: 'etiquettes', texte: 'Glisse chaque étiquette au bout de sa flèche.' },
+  { repere: 'zone_membranes', texte: 'En haut : les deux membranes et l’espace entre elles.' },
+  { repere: 'zone_interieur', texte: 'En bas : la membrane interne et l’intérieur, la matrice.' },
+  { repere: 'medaillon', texte: 'Dans la crête agrandie : les sphères pédonculées.' } ] });
 const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
 const config = { id: 'svt_energie_mitochondrie', version: '1.0', title: 'La mitochondrie : un organite à deux membranes',
-  variants: [{ id: 'noms', label: 'légendes avec les noms' }, { id: 'numeros', label: 'numéros seuls' }], commands: commandes,
+  variants: [{ id: 'noms', label: 'légendes avec les noms' }, { id: 'numeros', label: 'numéros seuls' }, { id: 'construire', label: 'schéma à légender (?vue=construire)' }], commands: commandes,
   command_schema: {
-    set_parameters: { legendes: 'noms | numeros (numéros 1 à 6 seuls)' },
-    set_time: { time_s: `0..${FIN} (arrêt sur cet instant)` },
-    play_until: { moment: Object.keys(M).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' } } };
+    set_parameters: CONSTRUIRE ? { corrige: 'true | false (true : toutes les étiquettes vont à leur place)', legende_total: 'lecture seule : étiquettes à poser', legende_places: 'lecture seule : étiquettes bien posées', legende_erreurs: 'lecture seule : étiquettes lâchées loin de leur place', legende_mal: 'lecture seule : les étiquettes mal posées au moins une fois' }
+      : { legendes: 'noms | numeros (numéros 1 à 6 seuls)' },
+    set_time: { time_s: `0..${CONSTRUIRE ? FIN_C : FIN} (arrêt sur cet instant)` },
+    play_until: { moment: Object.keys(CONSTRUIRE ? MC : M).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' } } };
 const pont = protocole({ id: config.id, commandes, config,
-  texte: 'L’ultrastructure de la mitochondrie en coupe : 1 membrane externe, 2 membrane interne, 3 crêtes (replis de la membrane interne), 4 espace intermembranaire, 5 matrice, 6 sphères pédonculées sur la membrane interne, têtes vers la matrice (crête agrandie à droite). Lieux : matrice → formation de l’acétyl-CoA et cycle de Krebs ; membrane interne → chaîne respiratoire et synthèse d’ATP ; hyaloplasme → glycolyse, hors de la mitochondrie.',
-  etat: () => ({ simulation_status: chrono.statut(), ce_qui_se_voit: ceQuiSeVoit(), current_variant: S.legendes, time_s: +chrono.t.toFixed(2), parameters: { legendes: S.legendes }, moments: M }),
-  progression: () => chrono.t / FIN,
+  texte: (CONSTRUIRE ? 'Schéma à légender : la mitochondrie sans ses noms, six étiquettes à glisser au bout des flèches (membrane externe, membrane interne, crêtes, espace intermembranaire, matrice, sphères pédonculées) ; bien posée, une étiquette devient verte et s’aimante ; corrige : toutes à leur place. ' : '') + 'L’ultrastructure de la mitochondrie en coupe : 1 membrane externe, 2 membrane interne, 3 crêtes (replis de la membrane interne), 4 espace intermembranaire, 5 matrice, 6 sphères pédonculées sur la membrane interne, têtes vers la matrice (crête agrandie à droite). Lieux : matrice → formation de l’acétyl-CoA et cycle de Krebs ; membrane interne → chaîne respiratoire et synthèse d’ATP ; hyaloplasme → glycolyse, hors de la mitochondrie.',
+  etat: () => ({ simulation_status: chrono.statut(), ce_qui_se_voit: ceQuiSeVoit(), current_variant: CONSTRUIRE ? 'construire' : S.legendes, time_s: +chrono.t.toFixed(2), parameters: params(), moments: CONSTRUIRE ? MC : M }),
+  progression: () => chrono.t / (CONSTRUIRE ? FIN_C : FIN),
   executer: (cmd, p) => ({ start: chrono.start, reset: chrono.start, pause: chrono.pause, resume: chrono.resume, set_time: () => { chrono.setTime(p); scene.sale = true; },
     set_parameters: () => setParameters(p || {}), play_until: () => chrono.playUntil(p) })[cmd]?.() });
-bulle($('feedback'), 'Une mitochondrie en coupe, dans le hyaloplasme…');
+bulle($('feedback'), CONSTRUIRE ? 'La mitochondrie sans ses noms : à toi de la légender…' : 'Une mitochondrie en coupe, dans le hyaloplasme…');
 setTimeout(() => { if (!chrono.running && chrono.t === 0) chrono.start(); }, 1600);
-window.__sim = { chrono, scene, M, S, ecrit };
+window.__sim = { chrono, scene, M, S, ecrit, get ET() { return ET; }, SLOT, COLS, legende, params };
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>
 </body></html>

@@ -25,6 +25,12 @@
  * Dans la première partie, les protons ne bougent pas ; le relais est rejoué ensuite avec le pompage.
  * Aucun nom de complexe appris, aucun nombre de protons pompés : la vue « examen » montre CI…CV comme un sujet.
  * Le rythme est celui d’une explication, pas une vitesse réelle.
+ * Vue « construire » (?vue=construire, schéma à légender comme au bac, 15 novembre 2026 ; national 2017 normale,
+ * « Nommez les structures 1, 2, 3 et les réactions A, B, C ») : le schéma porte des numéros 1-4 et des lettres A-C,
+ * l’élève glisse sept étiquettes dans la légende ; bien posée, une étiquette devient verte et s’aimante.
+ *   etiquettes (2,5)  corrige (6,5) ; set_parameters {corrige: true} : le tuteur pose toutes les étiquettes.
+ *   Lecture seule : legende_total, legende_places, legende_erreurs (étiquette lâchée sur le schéma ou la légende loin
+ *   de sa place), legende_mal (noms, séparés par des virgules).
  */
 const { fr, bulle, protocole } = window.Tableau;
 const { Scene, Chrono, Apparitions, doux, mix } = window.SVTTableau;
@@ -51,6 +57,8 @@ const SORTIES = [[572, 296], [554, 280], [550, 306], [534, 312]];
 const q = new URLSearchParams(location.search);
 const S = { o2: !['0', 'false', 'non'].includes(q.get('o2')), entree: q.get('entree') === 'fadh2' ? 'fadh2' : 'nadh',
   poison: q.get('poison') === 'cyanure' ? 'cyanure' : 'aucun', etiquettes: q.get('etiquettes') === 'examen' ? 'examen' : 'cours' };
+const CONSTRUIRE = q.get('vue') === 'construire';
+S.corrige = false;
 let poigneeX = null;                                    // pendant qu’on glisse la poignée O2
 
 /* ── Pistes : une bille suit des points clés (t, x, y), apparaît à `de`, disparaît à `a` ─────── */
@@ -194,15 +202,15 @@ const MOTIFS = {
 const canvas = $('canvas');
 const scene = Scene(canvas, (c) => { scene.cadre(29); MOS.dessiner(c, () => { dessiner(c); }); return c.fin(); }, { large: true });
 /* Tableau large (portable 1366 × 613) : la page est rangée sur toute la largeur (SVTLarge.Mosaique, dans peinture.js) ; grand écran : inchangée. */
-const MOS = window.SVTLarge.Mosaique(scene, (L) => L >= 1000 ? (() => { const s = Math.min(1.24, (L - 280) / 760), B = 760 * s, wc = Math.min(300, L - B - 24), x0 = (L - wc - 16 - B) / 2, X = x0 + wc + 16; return { police: 1.1, blocs: [
+const MOS = window.SVTLarge.Mosaique(scene, (L) => L >= 1000 && !CONSTRUIRE ? (() => { const s = Math.min(1.24, (L - 280) / 760), B = 760 * s, wc = Math.min(300, L - B - 24), x0 = (L - wc - 16 - B) / 2, X = x0 + wc + 16; return { police: 1.1, blocs: [
   { src: [0, 92, 760, 328], X, Y: (420 - 328 * s) / 2, s },                      // le schéma de la membrane, sur toute la hauteur
   { src: [790, 0, 260, 190], X: x0, Y: 4, s: Math.min(1, wc / 260) },             // le titre, en colonne à gauche
   { src: [0, 0, 136, 92], X: x0 + (wc - 204) / 2, Y: 196, s: 1.5 },               // le médaillon (zoom)
   { src: [486, 54, 260, 38], X: x0, Y: 352, s: Math.min(1.1, wc / 260) }] }; })() : null);
 const ecrit = Apparitions(scene);
-const chrono = Chrono({ fin: () => PL.FIN, moments: () => M, motifs: MOTIFS, bouton: $('run'), bulle: $('feedback'), pont: () => pont,
-  depart: 'Observe la membrane interne, vue de près…', reinit: () => ecrit.oublier(),
-  fini: () => (PL.cyan ? 'Cyanure : transfert des électrons arrêté, pas de gradient, pas d’ATP.'
+const chrono = Chrono({ fin: () => (CONSTRUIRE ? FIN_C : PL.FIN), moments: () => (CONSTRUIRE ? MC : M), motifs: MOTIFS, bouton: $('run'), bulle: $('feedback'), pont: () => pont,
+  depart: CONSTRUIRE ? 'À toi : légende le schéma, comme au bac.' : 'Observe la membrane interne, vue de près…', reinit: () => ecrit.oublier(),
+  fini: () => CONSTRUIRE ? `Étiquettes bien posées : ${compte(positions())} sur ${ORDRE.length}.` : (PL.cyan ? 'Cyanure : transfert des électrons arrêté, pas de gradient, pas d’ATP.'
     : PL.sansO2 ? 'Sans dioxygène, les électrons s’entassent : tout s’arrête.'
       : `Les H+ pompés redescendent par la sphère pédonculée : ${PL.ATP.length} ATP formés.`) });
 scene.avancer = chrono.avancer;
@@ -305,6 +313,7 @@ function capsule(c, x, y, w, h, coul, nom, a, taille = 12, coulTexte = 'blanc') 
 function largeurTaxi(charge) { return ex() ? (charge ? 46 : 30) : PL.fadh ? (charge ? 68 : 44) : (charge ? 74 : 46); }
 
 function dessiner(c) {
+  if (CONSTRUIRE) return dessinerConstruire(c);
   const t = chrono.t, L = ecrits();
   c.direct(() => peindre(c.ctx));
   medaillon(c);
@@ -392,6 +401,143 @@ function dessiner(c) {
   c.repere('equation', ...RECT[der], 'ce qui vient de s’écrire');
 }
 
+/* ── Vue construire : le schéma d’un sujet du national, à légender (15 novembre 2026) ─────────────────────────── */
+const MC = { etiquettes: 2.5, corrige: 6.5 }, FIN_C = 8, T_CORR = 4.6;
+MOTIFS.etiquettes = 'pose chaque étiquette en face de son numéro ou de sa lettre';
+MOTIFS.corrige = 'la correction : toutes les étiquettes à leur place';
+const FX = 6, FY = -20.7, FS = .66;                    // la membrane, réduite à gauche ; la légende à droite ; les étiquettes en bas
+const tr = (x, y) => [FX + FS * x, FY + FS * y];
+const LG = [                                           // repère au schéma, nom, et ce qu’il désigne
+  { id: 'membrane_interne', rep: '1', nom: 'membrane interne' },
+  { id: 'sphere', rep: '2', nom: 'sphère pédonculée' },
+  { id: 'espace', rep: '3', nom: 'espace intermembranaire' },
+  { id: 'matrice', rep: '4', nom: 'matrice' },
+  { id: 'oxydation', rep: 'A', nom: 'oxydation de NADH,H+' },
+  { id: 'reduction', rep: 'B', nom: 'réduction de O_{2} en H_{2}O' },
+  { id: 'phosphorylation', rep: 'C', nom: 'phosphorylation de l’ADP' } ];
+const NOMS = Object.fromEntries(LG.map(l => [l.id, l.nom]));
+const nomLu = id => NOMS[id].replace(/_\{([^}]*)\}/g, '$1');
+const LIGNE = i => 58 + 31 * i, XREP = 524, XSLOT = 647, WSLOT = 206;
+const SLOT = Object.fromEntries(LG.map((l, i) => [l.id, [XSLOT, LIGNE(i)]]));
+const ORDRE = ['phosphorylation', 'matrice', 'sphere', 'membrane_interne', 'reduction', 'espace', 'oxydation'];
+const largeurEt = id => 18 + 8.2 * nomLu(id).length;
+const COLS = (() => {                                  // trois rangées d’étiquettes sous le schéma
+  const out = {}, rangs = [ORDRE.slice(0, 3), ORDRE.slice(3, 5), ORDRE.slice(5)], ys = [300, 340, 380];
+  rangs.forEach((r, j) => { const tot = r.reduce((a, id) => a + largeurEt(id), 0) + 28 * (r.length - 1); let x = 380 - tot / 2; for (const id of r) { out[id] = [x + largeurEt(id) / 2, ys[j]]; x += largeurEt(id) + 28; } });
+  return out;
+})();
+let ET = {}, ERREURS = 0, MAL = new Set(), dernierT = 0;
+function remiseEtiquettes() { ET = {}; ERREURS = 0; MAL = new Set(); for (const id of ORDRE) { const [x, y] = COLS[id]; ET[id] = { x, y, ok: false }; } }
+remiseEtiquettes();
+const rampe = (t, a, d) => doux(Math.max(0, Math.min(1, (t - a) / d)));
+function positions() {
+  const t = chrono.t, out = {};
+  ORDRE.forEach((id, i) => {
+    const e = ET[id];
+    if (S.corrige && t >= T_CORR) { const u = rampe(t, T_CORR + .15 * i, 1.0), [sx, sy] = SLOT[id]; out[id] = { x: mix(e.x, sx, u), y: mix(e.y, sy, u), ok: e.ok || u >= 1 }; }
+    else out[id] = { ...e };
+  });
+  return out;
+}
+const compte = pos => ORDRE.filter(id => pos[id].ok).length;
+function legende() { return { legende_total: ORDRE.length, legende_places: ORDRE.filter(id => ET[id].ok).length, legende_erreurs: ERREURS, legende_mal: [...MAL].map(nomLu).join(', ') }; }
+function pastille(c, x, y, s, coul) { c.cercle(x, y, 10, { couleur: coul, largeur: 1.5, duree: .05 }); c.texte(s, x, y + 5, { couleur: coul, taille: 15, align: 'center', duree: .05 }); }
+const HE = [[70, 150], [150, 132], [236, 152], [330, 136], [430, 152], [520, 132], [700, 150]];   // H+ de l’espace (coordonnées d’origine)
+function dessinerConstruire(c) {
+  const t = chrono.t, ctx = c.ctx;
+  if (t + .3 < dernierT) remiseEtiquettes();
+  dernierT = t;
+  // le document : la membrane interne peinte (transporteurs, sphère pédonculée), des H+ dans l’espace
+  ctx.save(); ctx.translate(FX, FY); ctx.scale(FS, FS);
+  c.direct(() => { peindre(ctx); for (const [x, y] of HE) P.bille(ctx, x, y, 8, ROUGE); });
+  ctx.restore();
+  c.direct(() => {
+    for (const [x, y] of HE.slice(1, 6).filter((_, i) => i % 2 === 0)) c.texte('H+', ...tr(x + 14, y + 4), { couleur: 'rouge', taille: 15 });
+    // A : le transporteur réduit cède ses électrons au premier transporteur
+    c.texte('NADH,H+', 40, 176, { couleur: 'cyan', taille: 15 });
+    c.fleche(100, 166, 114, 154, { couleur: 'cyan', largeur: 1.6, tete: 8 });
+    c.fleche(118, 160, 96, 204, { couleur: 'cyan', largeur: 1.6, tete: 8 });
+    c.texte('NAD+', 62, 222, { couleur: 'cyan', taille: 15 });
+    // les électrons passent de transporteur en transporteur
+    c.fleche(...tr(196, 212), ...tr(470, 212), { couleur: 'jaune', largeur: 2, tete: 9 });
+    c.texte('e−', ...tr(320, 184), { couleur: 'jaune', taille: 15, align: 'center' });
+    // B : le dioxygène reçoit les électrons
+    c.texte('½ O_{2} + 2 H+', 300, 178, { couleur: 'bleu', taille: 15, align: 'center' });
+    c.fleche(300, 186, 300, 214, { couleur: 'bleu', largeur: 1.6, tete: 8 });
+    c.texte('H_{2}O', 300, 234, { couleur: 'bleu', taille: 15, align: 'center' });
+    // H+ pompés vers l’espace, retour par la sphère, C : ADP + Pi → ATP
+    for (const k of [0, 2, 3]) c.fleche(...tr(TX[k] + 34, 262), ...tr(TX[k] + 34, 166), { couleur: 'rouge', largeur: 1.6, tete: 7 });
+    c.fleche(...tr(SX - 30, 150), ...tr(SX - 30, 262), { couleur: 'rouge', largeur: 1.6, tete: 7 });
+    c.texte('ADP + Pi', 448, 184, { couleur: 'jaune', taille: 15, align: 'center' });
+    c.fleche(448, 190, 448, 214, { couleur: 'jaune', largeur: 1.6, tete: 8 });
+    c.texte('ATP', 448, 234, { couleur: 'jaune', taille: 15, align: 'center' });
+  });
+  // les numéros et les lettres, comme dans un sujet
+  c.direct(() => {
+    pastille(c, 22, 60, '3', 'blanc');
+    c.ligne(26, 106, 34, 116, { couleur: 'blanc', largeur: 1.2 }); pastille(c, 22, 96, '1', 'blanc');
+    c.ligne(...tr(SX + 16, 196), 438, 92, { couleur: 'blanc', largeur: 1.2 }); pastille(c, 438, 82, '2', 'blanc');
+    pastille(c, 22, 244, '4', 'blanc');
+    pastille(c, 142, 200, 'A', 'rose'); pastille(c, 270, 202, 'B', 'rose'); pastille(c, 420, 202, 'C', 'rose');
+  });
+  c.texte('Légende le schéma, comme au bac', 18, 24, { couleur: 'cyan', taille: 18, duree: .8 });
+  c.texte('légende', XREP - 12, 34, { couleur: 'faible', taille: 15 });
+  LG.forEach((l, i) => c.direct(() => {
+    pastille(c, XREP, LIGNE(i), l.rep, i < 4 ? 'blanc' : 'rose');
+    c.rect(XSLOT - WSLOT / 2, LIGNE(i) - 13, WSLOT, 26, { couleur: 'faible', largeur: 1.2, pointille: [4, 4], arrondi: 6 });
+  }));
+  c.repere('schema', FX + FS * 8, FY + FS * Y.esp, FS * 744, FS * (Y.bas - Y.esp), 'le schéma de la chaîne respiratoire');
+  c.repere('legende', XREP - 14, LIGNE(0) - 16, 760 - XREP + 6, LIGNE(6) - LIGNE(0) + 32, 'la légende : 1 à 4 et A, B, C');
+  c.repere('structures', 430, 54, 76, 204, 'les structures 1 à 4');
+  c.repere('reactions', 14, 160, 460, 82, 'les réactions A, B, C');
+  c.repere('sphere', ...tr(SX - 24, Y.m0 - 6), FS * 48, FS * (TETE.y + TETE.r - Y.m0 + 10), 'la sphère pédonculée (2)');
+  if (t >= 1.0) c.repere('etiquettes', 120, 284, 520, 112, 'les étiquettes à poser');
+  const pos = positions();
+  if (t >= 1.0) ecrit.ecrire(c, 'et', () => {
+    ORDRE.forEach(id => {
+      const p = pos[id], w = largeurEt(id), coul = p.ok ? 'vert' : 'blanc';
+      c.rect(p.x - w / 2, p.y - 13, w, 26, { couleur: coul, largeur: 1.6, fond: p.ok ? '#14532d' : '#1e293b', fondAlpha: .9, arrondi: 6, duree: .06 });
+      c.texte(NOMS[id], p.x, p.y + 6, { couleur: coul, taille: 16, align: 'center', duree: .25 });
+    });
+  });
+  if (S.corrige && t >= T_CORR + 1.9) ecrit.ecrire(c, 'bravo', () => c.texte('corrigé : les 7 étiquettes sont à leur place', 380, 412, { couleur: 'vert', taille: 15, align: 'center' }));
+}
+function voitConstruire() {
+  const t = chrono.t, pos = positions(), m = [];
+  m.push(`t = ${fr(t, 1)} s. Vue construire : le schéma d’un sujet du national (membrane interne peinte avec quatre transporteurs et la sphère pédonculée ; NADH,H+ → NAD+ sous le premier transporteur, flèche des e− le long de la membrane, ½ O2 + 2 H+ → H2O, flèches rouges des H+ pompés vers l’espace et redescendant par la sphère, ADP + Pi → ATP) avec les numéros 1 (membrane), 2 (sphère), 3 (espace, en haut), 4 (matrice, en bas) et les lettres A (NADH,H+ → NAD+), B (O2 → H2O), C (ADP + Pi → ATP). À droite, la légende 1, 2, 3, 4, A, B, C avec des places vides.`);
+  if (t < 1.0) return m.join(' ');
+  const col = [], bien = [], ailleurs = [];
+  for (const id of ORDRE) {
+    const p = pos[id], [cx0, cy0] = COLS[id];
+    if (p.ok) bien.push(`« ${nomLu(id)} »`);
+    else if (Math.hypot(p.x - cx0, p.y - cy0) < 4) col.push(`« ${nomLu(id)} »`);
+    else { let best = null, d = 1e9; for (const l of LG) { const [sx, sy] = SLOT[l.id], dd = Math.hypot(p.x - sx, p.y - sy); if (dd < d) { d = dd; best = l; } } ailleurs.push(`« ${nomLu(id)} » (posée près de la place ${best.rep})`); }
+  }
+  if (col.length) m.push(`Sous le schéma, étiquettes à poser : ${col.join(', ')}.`);
+  if (bien.length) m.push(`Bien posées (vertes, aimantées) : ${bien.join(', ')}.`);
+  if (ailleurs.length) m.push(`Mal posées (blanches) : ${ailleurs.join(', ')}.`);
+  if (S.corrige && t >= T_CORR && t < T_CORR + 1.9) m.push('Correction : les étiquettes glissent vers leur place.');
+  m.push(`Bien posées : ${compte(pos)} sur ${ORDRE.length}. Erreurs de l’élève : ${ERREURS}.`);
+  return m.join(' ');
+}
+const glisserEtiquette = {
+  toucher: (x, y) => {
+    if (chrono.t < 1.2 || (S.corrige && chrono.t >= T_CORR)) return null;
+    for (let i = ORDRE.length - 1; i >= 0; i--) { const id = ORDRE[i], e = ET[id]; if (Math.abs(x - e.x) <= largeurEt(id) / 2 + 4 && Math.abs(y - e.y) <= 16) return id; }
+    return null;
+  },
+  bouger: (id, x, y) => { ET[id] = { x: Math.min(740, Math.max(20, x)), y: Math.min(408, Math.max(36, y)), ok: false }; scene.sale = true; },
+  lacher: (id) => {
+    const [sx, sy] = SLOT[id], e = ET[id], [cx0, cy0] = COLS[id];
+    if (Math.abs(e.x - sx) <= WSLOT / 2 && Math.abs(e.y - sy) <= 15) ET[id] = { x: sx, y: sy, ok: true };
+    // lâchée sur le schéma ou la légende, loin de sa place : une erreur (la reposer en bas n’en est pas une)
+    else if (e.y < 276 && Math.hypot(e.x - cx0, e.y - cy0) > 30) { ERREURS += 1; MAL.add(id); }
+    const n = legende().legende_places;
+    bulle($('feedback'), ET[id].ok ? `Bien placée : « ${nomLu(id)} » (${n} sur ${ORDRE.length}).` : `« ${nomLu(id)} » n’est pas à sa place.`, ET[id].ok ? 'good' : undefined);
+    pont.noter('glisser', { poignee: id, parameters: params() }); pont.emettre(); scene.sale = true;
+  },
+};
+
 /* ── Ce qui se voit ────────────────────────────────────────────────────────────────────────── */
 function compter(t) {
   let haut = 0, bas = 0;
@@ -436,17 +582,26 @@ function modeTexte() {
 function nATP(t) { return PL.ATP.filter(A => t >= A.t0 + .5).length; }
 function nEau(t) { return PL.EAUX.filter(w => t >= w.de).length; }
 function ceQuiSeVoit() {
+  if (CONSTRUIRE) return voitConstruire();
   const t = chrono.t, n = compter(t), w = ecrits().filter(e => t >= e.t0).map(e => '« ' + e.mot.replace(/_\{([^}]*)\}/g, '$1') + ' »');
   return `t = ${fr(t, 1)} s${chrono.running ? ' (ça avance)' : chrono.fait ? ' (fin)' : ' (arrêté)'}. ${modeTexte()} ${phase(t)} Électrons : ${ouElectrons(t)}. Protons : ${n.haut} H+ dans l’espace intermembranaire, ${n.bas} dans la matrice. Eau formée : ${nEau(t)}. ATP formés : ${nATP(t)}. Écrit : ${w.length ? w.join(', ') : 'rien encore'}.`;
 }
-function variante() { return ex() ? 'examen' : PL.cyan ? 'cyanure' : PL.sansO2 ? 'sans_o2' : PL.fadh ? 'fadh2' : 'normal'; }
+function variante() { return CONSTRUIRE ? 'construire' : ex() ? 'examen' : PL.cyan ? 'cyanure' : PL.sansO2 ? 'sans_o2' : PL.fadh ? 'fadh2' : 'normal'; }
 
 /* ── Réglages ──────────────────────────────────────────────────────────────────────────────── */
 const bool = v => !(v === false || v === 'false' || v === 0 || v === '0' || v === 'non');
-function params() { return { o2: S.o2, entree: S.entree, poison: S.poison, etiquettes: S.etiquettes }; }
+function params() { return CONSTRUIRE ? { corrige: S.corrige, ...legende() } : { o2: S.o2, entree: S.entree, poison: S.poison, etiquettes: S.etiquettes }; }
 function arreter() { chrono.running = false; chrono.jusqua = null; chrono.t = 0; chrono.fait = false; ecrit.oublier(); $('run').textContent = 'Lancer'; planifier(); scene.sale = true; }
 function dire() { return `dioxygène ${S.o2 ? 'présent' : 'absent'}, entrée ${S.entree === 'fadh2' ? 'FADH2' : 'NADH,H+'}, poison ${S.poison}, vue ${S.etiquettes}.`; }
 function setParameters(p) {
+  if (CONSTRUIRE) {
+    if (!('corrige' in p)) return;
+    S.corrige = bool(p.corrige);
+    if (S.corrige) chrono.playUntil({ moment: 'corrige' }); else { remiseEtiquettes(); chrono.start(); }
+    bulle($('feedback'), S.corrige ? 'Correction : regarde où va chaque étiquette.' : 'À toi : pose les étiquettes.');
+    pont.noter('set_parameters', { corrige: S.corrige }); pont.emettre(); scene.sale = true;
+    return;
+  }
   let ok = false;
   if ('o2' in p) { S.o2 = bool(p.o2); ok = true; }
   if (p.entree === 'nadh' || p.entree === 'fadh2') { S.entree = p.entree; ok = true; }
@@ -458,6 +613,7 @@ function setParameters(p) {
 }
 /* Un moment propre à un mode règle ce mode avant de rejouer (les autres réglages restent). */
 function playUntil(p) {
+  if (CONSTRUIRE) return chrono.playUntil(p);
   const m = p && p.moment;
   if (m && !(m in M)) {
     if (m === 'sans_o2_arret') { S.o2 = false; S.poison = 'aucun'; }
@@ -470,7 +626,11 @@ function playUntil(p) {
   }
   chrono.playUntil(p);
 }
-window.Tableau.glisser(canvas, {
+window.Tableau.glisser(canvas, CONSTRUIRE ? {
+  toucher: (px, py) => glisserEtiquette.toucher(...scene.local(px, py)),
+  bouger: (id, px, py) => glisserEtiquette.bouger(id, ...scene.local(px, py)),
+  lacher: glisserEtiquette.lacher,
+} : {
   toucher: (px, py) => { const [x, y] = scene.local(px, py), hx = S.o2 ? RAIL.x0 : RAIL.x1; return Math.abs(x - hx) < 16 && Math.abs(y - RAIL.y) < 16 ? 'o2' : null; },
   bouger: (id, px, py) => { const [x] = scene.local(px, py); poigneeX = Math.min(RAIL.x1, Math.max(RAIL.x0, x)); scene.sale = true; },
   lacher: () => {
@@ -494,26 +654,30 @@ window.Tableau.explication({ normal: BASE,
   fadh2: [{ repere: 't1', texte: 'Le FADH2 ne dépose pas ses électrons sur T1 mais plus loin, sur T2.' }, { repere: 'protons', texte: 'Moins de transporteurs franchis : moins de H+ pompés.' }, { repere: 'atp', texte: 'Un NADH,H+ donne 3 ATP, un FADH2 en donne 2.' }],
   sans_o2: [{ repere: 'o2', texte: 'Sans dioxygène, personne ne reçoit les électrons.' }, { repere: 'electrons', texte: 'Ils s’entassent : le relais s’arrête, plus de pompage, plus d’ATP.' }],
   cyanure: [{ repere: 't4', texte: 'Le cyanure bloque T4.' }, { repere: 'electrons', texte: 'Les électrons s’arrêtent derrière : embouteillage.' }, { repere: 'o2', texte: 'Le dioxygène n’est pas réduit : il n’est pas consommé.' }, { repere: 'equation', texte: 'Pas de pompage, pas de gradient, pas d’ATP.' }],
+  construire: [{ repere: 'etiquettes', texte: 'Glisse chaque étiquette en face de son numéro ou de sa lettre.' }, { repere: 'structures', texte: 'Les numéros : des structures.' }, { repere: 'reactions', texte: 'Les lettres : des réactions.' }, { repere: 'sphere', texte: 'Pour se repérer : la tête de la sphère est du côté de la matrice.' }],
   examen: [{ repere: 'membrane', texte: 'Dans un sujet, les structures portent des numéros : 1 la membrane interne.' }, { repere: 'sphere', texte: '2, la sphère pédonculée, appelée ici CV.' }, { repere: 'espace', texte: '3, l’espace intermembranaire.' }, { repere: 'taxi', texte: 'A : l’oxydation des transporteurs réduits, écrits RH2.' }, { repere: 'o2', texte: 'B : la réduction de O2 en H2O.' }, { repere: 'atp', texte: 'C : la phosphorylation de l’ADP.' }] });
 const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
 const TOUS = 'membrane_seule | taxi_arrive | taxi_decharge | electrons_passent | o2_recoit | eau_formee | protons_pompes | espace_charge | retour_par_la_sphere | atp_forme | sans_o2_arret (règle o2 false) | entree_fadh2 (règle entree fadh2) | bloque | pas_d_atp (règlent poison cyanure) | structures | reactions | solution (règlent etiquettes examen)';
 const config = { id: 'svt_energie_chaine_respiratoire', version: '1.0', title: 'La chaîne respiratoire et la phosphorylation oxydative',
-  variants: ['normal', 'fadh2', 'sans_o2', 'cyanure', 'examen'].map(id => ({ id, label: id })), commands: commandes,
-  command_schema: {
+  variants: ['normal', 'fadh2', 'sans_o2', 'cyanure', 'examen', 'construire'].map(id => ({ id, label: id })), commands: commandes,
+  command_schema: CONSTRUIRE ? {
+    set_parameters: { corrige: 'true | false (true : toutes les étiquettes vont à leur place)', legende_total: 'lecture seule : étiquettes à poser', legende_places: 'lecture seule : étiquettes bien posées', legende_erreurs: 'lecture seule : étiquettes lâchées loin de leur place', legende_mal: 'lecture seule : les étiquettes mal posées au moins une fois' },
+    set_time: { time_s: `0..${FIN_C} (arrêt sur cet instant)` },
+    play_until: { moment: 'etiquettes | corrige (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' } } : {
     set_parameters: { o2: 'true | false (dioxygène présent)', entree: 'nadh | fadh2 (qui apporte les électrons)', poison: 'aucun | cyanure (bloque T4)', etiquettes: 'cours | examen (vue document type : CI…CV, numéros et lettres)' },
     set_time: { time_s: '0..fin du mode (27 s ; 30 s en examen ; 14 s sans O2 ; 17,5 s avec cyanure)' },
     play_until: { moment: TOUS + ' (un moment d’un autre mode règle ce mode, rejoue et se fige)', time_s: 'ou un instant en s (garde les réglages)' } } };
 const pont = protocole({ id: config.id, commandes, config,
-  texte: 'Chaîne respiratoire et phosphorylation oxydative sur la membrane interne de la mitochondrie (vue de près d’une crête). Le NADH,H+ venu de la matrice cède 2 H+ à la matrice et 2 e− au premier transporteur (NADH,H+ → NAD+ + 2 H+ + 2 e−) ; les électrons passent de transporteur en transporteur (T1 → T2 → T3 → T4 : réactions d’oxydoréduction) jusqu’au dioxygène, accepteur final, qui forme de l’eau (½ O2 + 2 H+ + 2 e− → H2O). Au passage des électrons, des H+ sont pompés de la matrice vers l’espace intermembranaire (à travers T1, T3, T4) : gradient de protons ([H+] élevée, pH bas, dans l’espace). Les H+ redescendent seulement par la sphère pédonculée (ATP synthase) : ADP + Pi + énergie → ATP, phosphorylation oxydative. FADH2 dépose ses électrons sur T2 : moins de pompage (1 NADH,H+ → 3 ATP ; 1 FADH2 → 2 ATP). Sans dioxygène ou avec du cyanure (qui bloque T4), le transfert s’arrête : pas d’eau, pas de pompage, pas de gradient, pas d’ATP.',
+  texte: (CONSTRUIRE ? 'Schéma à légender, comme au national (2017) : 1 membrane interne, 2 sphère pédonculée, 3 espace intermembranaire, 4 matrice ; A oxydation de NADH,H+, B réduction de O2 en H2O, C phosphorylation de l’ADP ; l’élève glisse les sept étiquettes dans la légende, bien posée une étiquette devient verte et s’aimante ; corrige : toutes à leur place. ' : '') + 'Chaîne respiratoire et phosphorylation oxydative sur la membrane interne de la mitochondrie (vue de près d’une crête). Le NADH,H+ venu de la matrice cède 2 H+ à la matrice et 2 e− au premier transporteur (NADH,H+ → NAD+ + 2 H+ + 2 e−) ; les électrons passent de transporteur en transporteur (T1 → T2 → T3 → T4 : réactions d’oxydoréduction) jusqu’au dioxygène, accepteur final, qui forme de l’eau (½ O2 + 2 H+ + 2 e− → H2O). Au passage des électrons, des H+ sont pompés de la matrice vers l’espace intermembranaire (à travers T1, T3, T4) : gradient de protons ([H+] élevée, pH bas, dans l’espace). Les H+ redescendent seulement par la sphère pédonculée (ATP synthase) : ADP + Pi + énergie → ATP, phosphorylation oxydative. FADH2 dépose ses électrons sur T2 : moins de pompage (1 NADH,H+ → 3 ATP ; 1 FADH2 → 2 ATP). Sans dioxygène ou avec du cyanure (qui bloque T4), le transfert s’arrête : pas d’eau, pas de pompage, pas de gradient, pas d’ATP.',
   etat: () => ({ simulation_status: chrono.statut(), ce_qui_se_voit: ceQuiSeVoit(), current_variant: variante(), time_s: +chrono.t.toFixed(2),
-    parameters: params(), moments: { ...M },
+    parameters: params(), moments: CONSTRUIRE ? { ...MC } : { ...M },
     valeurs: { h_espace: compter(chrono.t).haut, h_matrice: compter(chrono.t).bas, eau: nEau(chrono.t), atp: nATP(chrono.t), fin_s: PL.FIN } }),
-  progression: () => chrono.t / PL.FIN,
+  progression: () => chrono.t / (CONSTRUIRE ? FIN_C : PL.FIN),
   executer: (cmd, p) => ({ start: chrono.start, reset: chrono.start, pause: chrono.pause, resume: chrono.resume, set_time: () => { chrono.setTime(p); scene.sale = true; },
     set_parameters: () => setParameters(p || {}), play_until: () => playUntil(p || {}) })[cmd]?.() });
-bulle($('feedback'), 'La membrane interne, vue de près : un NADH,H+ va arriver de la matrice…');
+bulle($('feedback'), CONSTRUIRE ? 'Un schéma comme au national : à toi de le légender…' : 'La membrane interne, vue de près : un NADH,H+ va arriver de la matrice…');
 setTimeout(() => { if (!chrono.running && chrono.t === 0) chrono.start(); }, 1600);
-window.__sim = { chrono, scene, M, S, ecrit, get PL() { return PL; } };
+window.__sim = { chrono, scene, M, S, ecrit, get PL() { return PL; }, get ET() { return ET; }, SLOT, COLS, legende, params };
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>
 </body></html>
