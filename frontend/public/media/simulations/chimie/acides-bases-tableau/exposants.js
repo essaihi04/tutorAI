@@ -301,7 +301,7 @@
         const b = R.blocs[i].r, tip = c.tip, f = P.f || 1, ext = pile.length ? pile[pile.length - 1] : null, estD = nom === 'direct';
         /* Plancher d'écriture (troisième passe, tableau large) : aucun texte d'un bloc sous R.plancher px À L'ÉCRAN
          * (graduations d'un graphe, légendes) : le kit relève la taille avec echelle × tailleMin, ici échelle du bloc. */
-        const ech0 = c.echelle, tmin0 = c.tailleMin, plancher = R.plancher && c.__rcS ? R.plancher : 0;
+        const ech0 = c.echelle, tmin0 = c.tailleMin, plancher = R.plancher && c.__rcS ? R.plancher + (P.fig ? 0 : 1) : 0;   // figure 17, colonnes de texte 18
         if (plancher) { c.echelle = c.__rcS * P.k; c.tailleMin = Math.max(tmin0 || 0, plancher); }
         encre(R, i, nom, a);
         // Dans un dessin peint, chaque trait ou texte de craie retrouve SON bloc (le repère du cadre est remis d'abord).
@@ -405,5 +405,16 @@
     c.__rc = R; c.__rcS = scene.s;
     return c.__rc;
   }
+  /** Coupe `s` en lignes d'au plus `largeur` (unités du cadre) écrites en `taille` : pour une phrase longue posée,
+   * sur un tableau large, dans une colonne étroite à côté de la figure (troisième passe). */
+  Recompose.couper = function (c, s, largeur, taille = 18) {
+    const ctx = c.ctx; ctx.save(); ctx.font = `${taille}px ${window.Tableau.POLICE}`;
+    const l = t => ctx.measureText(t.replace(/[_^{}]/g, '')).width, out = [];
+    let ligne = '';
+    for (const m of String(s).split(' ')) { const e = ligne ? ligne + ' ' + m : m; if (ligne && l(e) > largeur) { out.push(ligne); ligne = m; } else ligne = e; }
+    if (ligne) out.push(ligne);
+    ctx.restore();
+    return out;
+  };
   window.Recompose = Recompose;
 })();
