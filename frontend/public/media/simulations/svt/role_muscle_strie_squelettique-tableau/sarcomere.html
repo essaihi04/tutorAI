@@ -12,6 +12,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
 <script src="filaments.js"></script>
+<script src="etiquettes.js"></script>
 <script>
 /*
  * Le sarcomère (cours « Rôle du muscle strié squelettique », 2 Bac PC BIOF, 10 novembre 2026).
@@ -19,7 +20,9 @@
  *   construire (défaut) : stries Z, actine, myosine, puis bande sombre (A), bandes claires (I), zone H, l’accolade du sarcomère,
  *                         et plusieurs myofibrilles côte à côte dont les bandes s’alignent (la striation de la fibre) ;
  *   legende             : électronographie reconstituée d’une myofibrille, cinq numéros, puis les noms (paramètre reponses) ;
- *   contraction         : état relâché en haut (gardé en gris), état courant en bas, règle en µm, tableau relâché / contracté.
+ *   contraction         : état relâché en haut (gardé en gris), état courant en bas, règle en µm, tableau relâché / contracté ;
+ *   etiquettes          : schéma à légender comme au bac (15 novembre 2026) : filaments et électronographie sans noms,
+ *                         sept étiquettes à glisser dans leurs cases (etiquettes.js : legende_*, réglage corrige).
  * Valeurs (µm) : actine 1,0 et myosine 1,5, constantes. Relâché : sarcomère 2,5 ; A 1,5 ; I 1,0 (2 × 0,5) ; H 0,5.
  * Contracté : sarcomère 2,0 ; A 1,5 ; I 0,5 (2 × 0,25) ; H 0. La myosine est fixe au centre : l’actine glisse vers le centre,
  * les stries Z se rapprochent. Modèle : L = 2,5 − 0,5·c (c = degré de contraction 0..1), I = L − 1,5, H = L − 2,0 (≥ 0).
@@ -28,10 +31,10 @@
 const { fr, bulle, protocole } = window.Tableau;
 const F = window.Filaments;
 const $ = id => document.getElementById(id);
-const VUES = ['construire', 'legende', 'contraction'];
+const VUES = ['construire', 'legende', 'contraction', 'etiquettes'];
 const demande = new URLSearchParams(location.search).get('vue');
 const vue = VUES.includes(demande) ? demande : 'construire';
-const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0, vu: {}, c: 1, reponses: false };
+const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0, vu: {}, c: 1, reponses: false, corrige: false };
 const lisse = x => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
 const rampe = (t, a, d) => lisse((t - a) / d);
 /** 0 → « 0 » ; 2,5 → « 2,5 » ; 1 → « 1,0 » ; 0,375 → « 0,375 » (jamais d’arrondi trompeur). */
@@ -288,6 +291,65 @@ function voitContraction() {
   return m.join(' ');
 }
 
+/* ══════════════════════ Vue « etiquettes » : le sarcomère à légender (15 novembre 2026) ══════════════════════
+ * Comme au bac (2021 normale : « nommez les structures 1 à 5 » d'une électronographie) : en haut les filaments
+ * (stries Z, actine, myosine), en dessous l'électronographie et l'accolade d'un sarcomère ; des traits de rappel
+ * finissent sur des cases vides ; sept étiquettes à glisser depuis la colonne de droite. Le schéma garde sa taille
+ * (760 × 420) et se centre sur un tableau large. */
+let DXE = 0; const KE = 130, WE = 2.0;
+const XE = u => DXE + 290 + u * KE;
+const RANGS_E = [{ y: 106, type: 'actine' }, { y: 127, type: 'myosine' }, { y: 148, type: 'actine' }, { y: 169, type: 'myosine' }, { y: 190, type: 'actine' }];
+const ZE = [96, 200], ELE = { y: 212, h: 26 }, ACC_E = 294, YH_E = 60, YB_E = 272, YS_E = 340;
+const NOMS_E = { strie_z: 'strie Z', actine: 'filament d’actine', myosine: 'filament de myosine', bande_claire: 'bande claire (I)', zone_h: 'zone H', bande_sombre: 'bande sombre (A)', sarcomere: 'sarcomère' };
+const ORDRE_E = ['zone_h', 'myosine', 'sarcomere', 'strie_z', 'bande_sombre', 'actine', 'bande_claire'];
+/** Chaque case : où va l'étiquette, et le point du schéma que montre le trait de rappel (u en µm, y en px). */
+const CASES_E = {
+  strie_z: { u: -1.62, y: YH_E, vers: [-1.25, ZE[0]] },
+  actine: { u: -.45, y: YH_E, vers: [-.7, 106] },
+  myosine: { u: .95, y: YH_E, vers: [.45, 127] },
+  bande_claire: { u: -1.6, y: YB_E, vers: [-1.0, ELE.y + ELE.h] },
+  zone_h: { u: 0, y: YB_E, vers: [0, ELE.y + ELE.h] },
+  bande_sombre: { u: 1.1, y: YB_E, vers: [.5, ELE.y + ELE.h] },
+  sarcomere: { u: 0, y: YS_E, vers: [0, ACC_E + 16] },
+};
+const COL_E = () => DXE + 668;
+const ME = { etiquettes: 2.5, corrige: 6.5 }, T_CORR_E = 4.6, FIN_E = 8;
+const E = window.Etiquettes({ noms: NOMS_E, ordre: ORDRE_E, place: id => [XE(CASES_E[id].u), CASES_E[id].y], colonne: i => [COL_E(), 62 + 40 * i], limite: () => DXE + 566 });
+function vEtiquettes(c) {
+  const t = S.t, a = rampe(t, .1, .6), G = F.geo(2.5);
+  c.direct(() => {
+    const x = c.ctx;
+    F.bloc(x, { cx: XE(0), k: KE, L: 2.5, W: WE, rangs: RANGS_E, zy1: ZE[0], zy2: ZE[1], alpha: a });
+    F.electro(x, XE(-WE), XE(WE), ELE.y, ELE.h, G, XE, { alpha: a });
+  });
+  c.texte('Légende le sarcomère : pose les étiquettes', DXE + 12, 24, { couleur: 'cyan', taille: 18 });
+  c.repere('schema', XE(-WE), 40, 2 * WE * KE, YS_E - 20, 'le schéma du sarcomère à légender');
+  c.repere('filaments', XE(-WE), ZE[0] - 6, 2 * WE * KE, ZE[1] - ZE[0] + 12, 'les filaments (stries Z, actine, myosine)');
+  c.repere('electronographie', XE(-WE), ELE.y, 2 * WE * KE, ELE.h, 'l’électronographie (bandes)');
+  if (ecrit(c, 'cadres', .6)) {
+    accolade(c, XE(-1.25), XE(1.25), ACC_E, 16, { couleur: 'faible', largeur: 1.8 });
+    for (const id of ORDRE_E) { const k = CASES_E[id], [u, y] = k.vers; c.ligne(XE(u), y, XE(k.u), k.y + (k.y < y ? 13 : -13), { couleur: 'faible', largeur: 1.3, duree: .2 }); }
+    E.cadres(c);
+  }
+  for (const id of ORDRE_E) { const k = CASES_E[id]; c.repere('case_' + id, XE(k.u) - 40, k.y - 15, 80, 30, `la case de « ${NOMS_E[id]} »`); }
+  if (t >= 1.0) {
+    E.dessiner(c, { t, corrige: S.corrige, tCorr: T_CORR_E });
+    c.repere('etiquettes', COL_E() - 95, 44, 190, 280, 'les étiquettes à poser');
+  }
+  if (ecrit(c, 'consigne', 1.6)) {
+    T(c, 'glisse chaque étiquette', COL_E(), 352, { couleur: 'faible', taille: 15, align: 'center' });
+    T(c, 'dans sa case', COL_E(), 372, { couleur: 'faible', taille: 15, align: 'center' });
+  }
+  if (S.corrige && ecrit(c, 'bravo', T_CORR_E + 1.9)) T(c, 'corrigé : les 7 étiquettes sont à leur place', XE(0), 404, { couleur: 'vert', taille: 16, align: 'center' });
+}
+function voitEtiquettes() {
+  const t = S.t, m = ['Le schéma du sarcomère SANS noms : en haut les filaments peints (stries Z en zigzag, filaments fins d’actine rouge-orangé attachés aux stries Z, filaments épais de myosine bleus au centre) ; en dessous l’électronographie (bandes claires autour des stries Z, bande sombre au milieu, zone H plus pâle au centre) et une accolade d’une strie Z à la suivante. Sept traits de rappel finissent sur des cases vides : trois au-dessus des filaments (vers une strie Z, un filament d’actine, un filament de myosine), trois sous l’électronographie (vers une bande claire, la zone H, la bande sombre) et une sous l’accolade.'];
+  if (t < 1.0) return m.join(' ');
+  m.push(...E.voit({ t, corrige: S.corrige, tCorr: T_CORR_E }));
+  if (S.corrige && t >= T_CORR_E && t < T_CORR_E + 1.9) m.push('Correction : les étiquettes glissent vers leurs cases.');
+  return m.join(' ');
+}
+
 /* Disposition selon la largeur du tableau (15 novembre 2026, « mieux exploiter tout le tableau, grands calibres de
  * texte ») : tableau large (scene.L ≥ 1000) → filaments plus longs (échelle k plus grande), légendes, myofibrilles et
  * tableau des longueurs repoussés à droite, textes ×1,3. Sinon la disposition d'origine (760 × 420). */
@@ -307,6 +369,7 @@ function disposer(L) {
     Object.assign(TAB, { x: tx, v1: tx + 185, c1: tx + 222, v2: tx + 260, c2: tx + 298, pas: 28, x1: L - 12 }); YCONC = TAB.y0 + 6 + 7 * 28 + 20;
   }
   for (const d of NUM) d.x = XL(d.u);
+  DXE = Math.max(0, Math.round((L - 760) / 2));
 }
 
 /* ══════════════════════ Commun : temps, moments, commandes ══════════════════════ */
@@ -320,10 +383,14 @@ const VD = {
   contraction: { dessiner: vContraction, voit: voitContraction, fin: () => FIN_K, moments: () => ({ ...MK }),
     motifs: { relache: 'l’état relâché, sarcomère de 2,5 µm', mesure_relache: 'relâché : sarcomère 2,5 ; A 1,5 ; I 1,0 ; H 0,5 µm', glissement: 'au milieu du glissement : l’actine glisse vers le centre, les stries Z se rapprochent', contracte: 'l’état contracté : sarcomère de 2,0 µm', mesure_contracte: 'contracté : sarcomère 2,0 ; A 1,5 ; I 0,5 ; H 0 µm', filaments_mesures: 'actine 1,0 µm et myosine 1,5 µm dans les deux états : les filaments ne raccourcissent pas' },
     message: 'Le sarcomère raccourcit (2,5 → 2,0 µm) : la bande sombre garde 1,5 µm, la bande claire et la zone H diminuent, les filaments gardent leur longueur.' },
+  etiquettes: { dessiner: vEtiquettes, voit: voitEtiquettes, fin: () => FIN_E, moments: () => ({ ...ME }),
+    motifs: { etiquettes: 'pose chaque étiquette dans sa case', corrige: 'la correction : toutes les étiquettes à leur place' },
+    message: '' },
 }[vue];
 const fin = () => VD.fin();
 function message() {
   if (vue === 'legende') return S.reponses ? 'Les cinq noms sont écrits : 1 strie Z, 2 bande claire (I), 3 bande sombre (A), 4 zone H, 5 sarcomère.' : 'À toi : nomme les éléments numérotés de 1 à 5.';
+  if (vue === 'etiquettes') return S.corrige ? 'Corrigé : strie Z, filament d’actine, filament de myosine, bande claire (I), zone H, bande sombre (A), sarcomère.' : E.places() === ORDRE_E.length ? 'Bravo : les sept étiquettes sont à leur place.' : 'Glisse chaque étiquette dans sa case.';
   if (vue === 'contraction' && S.c < .999) return `Contraction à ${Math.round(S.c * 100)} % : sarcomère ${fv(longueurs(S.c).L)} µm ; la bande sombre garde 1,5 µm ; les filaments gardent leur longueur.`;
   return VD.message;
 }
@@ -338,13 +405,13 @@ scene.avancer = dt => {
     bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 1)} s`) + '.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre();
     return true;
   }
-  if (S.t >= fin()) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), message(), vue === 'legende' && !S.reponses ? '' : 'good'); pont.emettre(); }
+  if (S.t >= fin()) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), message(), (vue === 'legende' && !S.reponses) || (vue === 'etiquettes' && !S.corrige && E.places() < ORDRE_E.length) ? '' : 'good'); pont.emettre(); }
   else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
   return true;
 };
 
 function demarrer(texte) { S.vu = {}; S.t = 0; S.fait = false; S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), texte); scene.sale = true; }
-function start() { S.jusqua = null; demarrer(vue === 'contraction' ? 'Le sarcomère va se contracter…' : 'Observe…'); pont.noter('start', parametres()); pont.emettre(); }
+function start() { S.jusqua = null; if (vue === 'etiquettes') E.remise(); demarrer(vue === 'contraction' ? 'Le sarcomère va se contracter…' : 'Observe…'); pont.noter('start', parametres()); pont.emettre(); }
 function reset() { start(); }
 function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
 function resume() { if (S.running) return; if (S.fait || S.t >= fin()) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
@@ -369,6 +436,7 @@ function setTime(p) {
 }
 function parametres() {
   if (vue === 'legende') return { reponses: S.reponses };
+  if (vue === 'etiquettes') return E.noter({ corrige: S.corrige, places: S.corrige && S.t >= T_CORR_E + 1.9 ? ORDRE_E.length : E.places() });
   if (vue === 'contraction') { const v = longueurs(degre(S.t)); return { contraction: S.c, degre_affiche: +degre(S.t).toFixed(2), sarcomere_um: +v.L.toFixed(3), bande_sombre_um: 1.5, bande_claire_um: +v.I.toFixed(3), zone_h_um: +v.H.toFixed(3), actine_um: 1.0, myosine_um: 1.5 }; }
   return { etape: etape(), sarcomere_um: 2.5, bande_sombre_um: 1.5, bande_claire_um: 1.0, zone_h_um: 0.5, actine_um: 1.0, myosine_um: 1.5 };
 }
@@ -394,6 +462,11 @@ function setParameters(p) {
     S.t = Math.min(S.t, FIN_L()); S.vu = {}; S.running = false; S.fait = S.t >= FIN_L(); $('run').textContent = 'Rejouer'; scene.sale = true;
     bulle($('feedback'), message()); pont.noter('set_parameters', { reponses: false }); pont.emettre(); return;
   }
+  if (vue === 'etiquettes' && p.corrige !== undefined) {
+    S.corrige = p.corrige === true || p.corrige === 'true' || p.corrige === 1 || p.corrige === '1';
+    pont.noter('set_parameters', { corrige: S.corrige });
+    return S.corrige ? playUntil({ moment: 'corrige' }) : start();
+  }
   if (vue === 'construire' && Number.isFinite(+p.etape)) {
     const k = Math.min(ETAPES.length, Math.max(1, Math.round(+p.etape)));
     pont.noter('set_parameters', { etape: k }); return playUntil({ moment: ETAPES[k - 1] });
@@ -401,15 +474,17 @@ function setParameters(p) {
 }
 $('run').onclick = () => (S.running ? pause() : (S.t > 0 && S.t < fin() && !S.fait ? resume() : start()));
 
-/* Poignées : la strie Z droite du bas (vue contraction) ; l’interrupteur des noms (vue legende). */
+/* Poignées : la strie Z droite du bas (vue contraction) ; l’interrupteur des noms (vue legende) ; les étiquettes (vue etiquettes). */
 window.Tableau.glisser(canvas, {
   toucher: (px, py) => {
     const [x, y] = scene.local(px, py);
     if (vue === 'contraction') { const xz = XK(longueurs(degre(S.t)).L / 2); return Math.abs(x - xz) < 18 && y > BAS + 10 && y < POIGNEE_Y + 14 ? 'z' : null; }
+    if (vue === 'etiquettes') { if (S.t < 1.0 || (S.corrige && S.t >= T_CORR_E)) return null; const id = E.toucher(x, y); return id ? 'et:' + id : null; }
     if (vue === 'legende') return x > TOGGLE.x && x < TOGGLE.x + TOGGLE.w && y > TOGGLE.y && y < TOGGLE.y + TOGGLE.h ? 'noms' : null;
     return null;
   },
   bouger: (id, px, py) => {
+    if (id.startsWith('et:')) { const [x, y] = scene.local(px, py); E.bouger(id.slice(3), x, y, [DXE + 12, 40, scene.L - 12, 408]); scene.sale = true; return; }
     if (id !== 'z') return;
     const [x] = scene.local(px, py), u = (x - CXK) / KK, c = Math.min(1, Math.max(0, Math.round((1.25 - u) / .25 * 10) / 10));
     if (S.running) { S.running = false; S.jusqua = null; }
@@ -418,6 +493,11 @@ window.Tableau.glisser(canvas, {
   },
   lacher: (id) => {
     if (id === 'noms') return setParameters({ reponses: !S.reponses });
+    if (id.startsWith('et:')) {
+      const n = id.slice(3), ok = E.lacher(n), toutes = E.places() === ORDRE_E.length; scene.sale = true;
+      bulle($('feedback'), toutes ? message() : ok ? `Bien placée : « ${NOMS_E[n]} ».` : `« ${NOMS_E[n]} » : pas à cette place.`, toutes || ok ? 'good' : 'bad');
+      pont.noter('etiquette', { etiquette: NOMS_E[n], bien_posee: ok, places: E.places() }); pont.emettre(); return;
+    }
     if (id === 'z') { $('run').textContent = 'Rejouer'; bulle($('feedback'), message()); pont.noter('set_parameters', { contraction: S.c }); pont.emettre(); }
   },
 });
@@ -445,6 +525,11 @@ const EXPLICATIONS = {
     { repere: 'bande_claire', texte: 'La bande claire passe de 1 à 0,5 micromètre.' },
     { repere: 'zone_h', texte: 'La zone H disparaît.' },
     { repere: 'tableau', texte: 'Les filaments gardent leur longueur : ils glissent, ils ne raccourcissent pas.' }],
+  etiquettes: [
+    { repere: 'etiquettes', texte: 'Glisse chaque étiquette dans sa case.' },
+    { repere: 'filaments', texte: 'En haut : les stries Z, l’actine et la myosine.' },
+    { repere: 'electronographie', texte: 'En bas : les bandes de l’électronographie.' },
+    { repere: 'case_sarcomere', texte: 'D’une strie Z à la suivante : le sarcomère.' }],
 };
 window.Tableau.explication({ [vue]: EXPLICATIONS[vue] });
 const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
@@ -452,6 +537,7 @@ const SCHEMA_PARAMS = {
   construire: { etape: `1..${ETAPES.length} (rejoue jusqu’à l’étape : ${ETAPES.join(', ')})` },
   legende: { reponses: 'true | false (écrire les noms en face des numéros)' },
   contraction: { contraction: '0..1 (degré de contraction, pas de 0,1 ; 1 = sarcomère de 2,0 µm)' },
+  etiquettes: { corrige: 'true | false (true : toutes les étiquettes vont à leur place)', legende_total: 'lecture seule : étiquettes à poser (7)', legende_places: 'lecture seule : étiquettes bien posées', legende_erreurs: 'lecture seule : étiquettes lâchées sur le schéma loin de leur case', legende_mal: 'lecture seule : les étiquettes mal posées au moins une fois' },
 }[vue];
 const config = { id: 'muscle_sarcomere', version: '1.0', title: 'Le sarcomère — ' + vue, variants: VUES.map(v => ({ id: v, label: v })), commands: commandes,
   command_schema: {
@@ -461,6 +547,7 @@ const config = { id: 'muscle_sarcomere', version: '1.0', title: 'Le sarcomère �
 const TEXTES = {
   construire: 'Construction d’un sarcomère : deux stries Z à 2,5 µm, filaments fins d’actine (1,0 µm) attachés aux stries Z, filaments épais de myosine (1,5 µm) au centre. Bande sombre (A) = longueur de la myosine (1,5 µm) ; bande claire (I) = actine seule, de part et d’autre de chaque strie Z (1,0 µm) ; zone H = myosine seule au centre (0,5 µm). 1 sarcomère = 1 bande sombre + 2 demi-bandes claires. Les bandes des myofibrilles voisines sont alignées : striation de la fibre.',
   legende: 'Électronographie reconstituée d’une myofibrille avec cinq numéros : 1 strie Z, 2 bande claire (I), 3 bande sombre (A), 4 zone H, 5 sarcomère. Les noms s’écrivent quand reponses = true.',
+  etiquettes: 'Le sarcomère à légender, comme au bac : filaments (stries Z, actine, myosine), électronographie et accolade sans noms ; sept étiquettes à glisser dans leurs cases (strie Z, filament d’actine, filament de myosine, bande claire (I), zone H, bande sombre (A), sarcomère) ; bien posée, une étiquette devient verte et s’aimante ; corrige : toutes à leur place.',
   contraction: 'Contraction d’un sarcomère : relâché 2,5 µm (A 1,5 ; I 1,0 ; H 0,5), contracté 2,0 µm (A 1,5 ; I 0,5 ; H 0). L’actine (1,0 µm) glisse vers le centre, les stries Z se rapprochent, la myosine (1,5 µm) ne bouge pas ; les filaments gardent leur longueur.',
 };
 const pont = protocole({ id: config.id, commandes, config, texte: TEXTES[vue],
@@ -468,7 +555,7 @@ const pont = protocole({ id: config.id, commandes, config, texte: TEXTES[vue],
     current_variant: vue, time_s: +S.t.toFixed(2), parameters: parametres(), moments: VD.moments() }),
   progression: () => (S.fait ? 1 : Math.min(1, S.t / fin())),
   executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
-bulle($('feedback'), vue === 'legende' ? 'Une électronographie de myofibrille…' : vue === 'contraction' ? 'Un sarcomère relâché…' : 'On construit un sarcomère…');
+bulle($('feedback'), vue === 'etiquettes' ? 'Un sarcomère à légender…' : vue === 'legende' ? 'Une électronographie de myofibrille…' : vue === 'contraction' ? 'Un sarcomère relâché…' : 'On construit un sarcomère…');
 setTimeout(() => { if (!S.running && S.t === 0) start(); }, 1600);
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>

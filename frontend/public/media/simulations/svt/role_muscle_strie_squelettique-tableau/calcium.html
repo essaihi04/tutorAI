@@ -12,6 +12,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
 <script src="molecules.js"></script>
+<script src="etiquettes.js"></script>
 <script>
 /*
  * Le Ca²⁺ ouvre l’accès (cours « Rôle du muscle strié squelettique », 10 novembre 2026).
@@ -21,13 +22,15 @@
  *    les sites sont libérés ; à la fin de l’excitation, les Ca²⁺ rentrent dans le réticulum et les sites sont recachés.
  *    La tête de myosine NE s’accroche PAS ici (c’est cycle.html). Le Ca²⁺ autorise ; il ne fournit pas l’énergie.
  *  - molecules : schéma fixe légendé (filament fin = actine + troponine + tropomyosine ; filament épais = myosine ;
- *    tête de myosine et ses deux sites).
+ *    tête de myosine et ses deux sites) ;
+ *  - etiquettes : le même schéma sans noms, à légender comme au bac (15 novembre 2026, sujet 2023 rattrapage :
+ *    actine, troponine, tropomyosine, tête de myosine) : sept étiquettes à glisser (etiquettes.js : legende_*, corrige).
  * Le temps est celui de la scène (en secondes), énormément ralenti par rapport à la cellule (quelques millisecondes).
  */
 const { fr, bulle, protocole } = window.Tableau;
 const P = window.MoleculesPeintes;
 const $ = id => document.getElementById(id);
-const VUES = ['acces', 'molecules'];
+const VUES = ['acces', 'molecules', 'etiquettes'];
 const demande = new URLSearchParams(location.search).get('vue');
 const vue = VUES.includes(demande) ? demande : 'acces';
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
@@ -39,7 +42,8 @@ const TA = { exc0: 1.0, exc1: 1.6, lib0: 1.9, lib1: 3.74, ouv0: 3.85, ouv1: 4.6,
 const MOMENTS_ACCES = { repos_sites_caches: 0.5, excitation: 1.65, ca_libere: 2.7, ca_sur_troponine: 3.78, sites_liberes: 4.7, fin_excitation: 5.85, ca_repris: 7.5, sites_recaches: 7.9 };
 const TM = { fin_paint: [0.2, 1.2], epais_paint: [4.2, 4.9], tete_paint: [7.6, 8.4], sites_paint: [10.8, 11.4], fin: 14 };
 const MOMENTS_MOL = { filament_fin: 1.3, filament_epais: 5.0, tete: 8.5, deux_sites: 11.5 };
-const FIN = vue === 'acces' ? TA.fin : TM.fin;
+const MOMENTS_ET = { etiquettes: 2.5, corrige: 6.5 }, T_CORR_ET = 4.6;
+const FIN = vue === 'acces' ? TA.fin : vue === 'etiquettes' ? 8 : TM.fin;
 const MOTIFS = {
   repos_sites_caches: 'au repos, la tropomyosine cache les sites de fixation de l’actine',
   excitation: 'l’excitation arrive sur le réticulum sarcoplasmique',
@@ -49,12 +53,14 @@ const MOTIFS = {
   fin_excitation: 'fin de l’excitation',
   ca_repris: 'les Ca²⁺ quittent la troponine et rentrent dans le réticulum',
   sites_recaches: 'la tropomyosine est revenue : les sites sont de nouveau cachés',
+  etiquettes: 'pose chaque étiquette dans sa case',
+  corrige: 'la correction : toutes les étiquettes à leur place',
   filament_fin: 'filament fin = actine + troponine + tropomyosine',
   filament_epais: 'filament épais = molécules de myosine',
   tete: 'la tête de myosine, agrandie',
   deux_sites: 'les deux sites de la tête : site de fixation de l’ATP et site de fixation de l’actine',
 };
-const S = { t: 0, running: false, jusqua: null, nom: null, fait: false, emis: 0, excitation: true, legendes: true };
+const S = { t: 0, running: false, jusqua: null, nom: null, fait: false, emis: 0, excitation: true, legendes: true, corrige: false };
 
 /* Écriture « au moment dit » : un élément apparu à un instant s’écrit à la craie depuis cet instant (horloge de la page). */
 const vus = {};
@@ -314,9 +320,68 @@ function dessinerMolecules(c) {
   }));
 }
 
+/* ── Vue « etiquettes » : les molécules à légender (15 novembre 2026) ─────────
+ * Le schéma de la vue « molecules » sans ses noms (ni la pastille « ATP ») ; des traits de rappel finissent sur des
+ * cases vides ; sept étiquettes à glisser depuis la colonne de droite. Dessin prévu sur 860 × 420 (ZG : centré sur un
+ * tableau large, réduit si le tableau est plus étroit) ; G1 = les filaments, G2 = la loupe sur une tête. */
+const ZG = { k: 1, ox: 0, oy: 0 }, G1 = { k: .85, ox: -4, oy: 130 - 88 * .85 }, G2 = { k: .68, ox: 490 - 630 * .68, oy: 250 - 215 * .68 };
+const NOMS_ET = { actine: 'actine', troponine: 'troponine', tropomyosine: 'tropomyosine', myosine: 'filament de myosine', tete: 'tête de myosine', site_atp: 'site de fixation de l’ATP', site_actine: 'site de fixation de l’actine' };
+const ORDRE_ET = ['tete', 'troponine', 'site_actine', 'myosine', 'tropomyosine', 'site_atp', 'actine'];
+const GFIN = P.geoFin({ ...MF, dx: 0, ouverture: 0 });
+const T_ET = { x: 0, y: 0 };   // site de l'ATP de la grande tête (repère de G2), connu au premier dessin
+/** Les cases (x, y) et le point montré par le trait de rappel (repère du dessin 860 × 420). */
+const CASES_ET = {
+  actine: () => ({ x: 80, y: 62, vers: vers(G1, 120, MF.y - 6) }),
+  tropomyosine: () => ({ x: 250, y: 62, vers: vers(G1, 330, GFIN.yTropo) }),
+  troponine: () => ({ x: 200, y: 196, vers: vers(G1, GFIN.troponines[1].x, GFIN.troponines[1].y + 6) }),
+  myosine: () => ({ x: 105, y: 352, vers: vers(G1, 130, YE + 4) }),
+  tete: () => ({ x: 290, y: 352, vers: vers(G1, 300 + 26, YE + 32) }),
+  site_actine: () => ({ x: 480, y: 62, vers: vers(G2, BIG.Pt.x, BIG.Pt.y - 4) }),
+  site_atp: () => ({ x: 490, y: 352, vers: vers(G2, T_ET.x || 676, (T_ET.y || 222) + 6) }),
+};
+const COL_ET = 738;
+const ET = window.Etiquettes({ noms: NOMS_ET, ordre: ORDRE_ET, place: id => { const k = CASES_ET[id](); return [k.x, k.y]; }, colonne: i => [COL_ET, 62 + 42 * i], limite: () => 612 });
+function disposerEtiquettes(L) { const k = Math.min(1, L / 860); Object.assign(ZG, { k, ox: (L - 860 * k) / 2, oy: (420 - 420 * k) / 2 }); }
+const versZG = (x, y) => [(x - ZG.ox) / ZG.k, (y - ZG.oy) / ZG.k];
+function dessinerEtiquettes(c) {
+  const t = S.t, a = rampe(t, 0.1, 0.7), ctx = c.ctx;
+  dans(c, ZG, () => {
+    c.direct(() => {
+      dans(c, G1, () => {
+        P.actine(ctx, { ...MF, dx: 0, alpha: a }, GFIN); P.tropomyosine(ctx, { ...MF, dx: 0, alpha: a }, GFIN); P.troponine(ctx, { ...MF, dx: 0, alpha: a }, GFIN);
+        P.filamentEpais(ctx, 60, 450, YE, { alpha: a });
+        for (let i = 0; i < 6; i++) {
+          const gauche = i < 3, bx = gauche ? 90 + i * 50 : 300 + (i - 3) * 50, s = gauche ? -1 : 1;
+          for (const haut of [true, false]) {
+            const vy = haut ? -1 : 1, ang = Math.atan2(vy * 0.94, s * 0.34), tip = { x: bx + s * 26, y: YE + vy * 34 };
+            P.tete(ctx, { x: bx, y: YE + vy * 6 }, tip, ang, { L: 22, ry: 6.5, cou: 4, alpha: a });
+          }
+        }
+      });
+      dans(c, G2, () => { const T = teteGrande(ctx, a); if (T) { P.sitesTete(ctx, T, { alpha: a, r: 7 }); T_ET.x = T.siteAtp.x; T_ET.y = T.siteAtp.y; } });
+    });
+    c.texte('Légende les molécules des filaments : pose les étiquettes', 12, 24, { couleur: 'cyan', taille: 18 }); c._fixe = c.cur;
+    c.repere('schema', 20, 40, 600, 360, 'le schéma des molécules à légender');
+    { const [x0, y0] = vers(G1, MF.x0, MF.y - 16), [x1, y1] = vers(G1, MF.x1, MF.y + 16); c.repere('filament_fin', x0, y0, x1 - x0, y1 - y0, 'le filament fin'); }
+    { const [x0, y0] = vers(G1, 60, YE - 40), [x1, y1] = vers(G1, 450, YE + 40); c.repere('filament_epais', x0, y0, x1 - x0, y1 - y0, 'le filament épais'); }
+    dans(c, G2, () => c.repere('loupe', LOUPE.x - LOUPE.r, LOUPE.y - LOUPE.r, 2 * LOUPE.r, 2 * LOUPE.r, 'la tête de myosine agrandie'));
+    quand(c, 'cadres', t >= 0.6, () => {
+      const [ax, ay] = vers(G1, TETE_CHOISIE.x - 6, TETE_CHOISIE.y - 4), [bx, by] = vers(G2, LOUPE.x - LOUPE.r, LOUPE.y - 10);
+      c.cercle(ax, ay, 16, { couleur: 'jaune', largeur: 1.4 }); c.ligne(ax + 16, ay - 2, bx, by, { couleur: 'jaune', largeur: 1.2, pointille: [5, 5] });
+      dans(c, G2, () => c.cercle(LOUPE.x, LOUPE.y, LOUPE.r, { couleur: 'jaune', largeur: 1.6 }));
+      for (const id of ORDRE_ET) { const k = CASES_ET[id](), [vx, vy] = k.vers; c.ligne(vx, vy, k.x, k.y + (k.y < vy ? 13 : -13), { couleur: 'faible', largeur: 1.4, duree: .2 }); }
+      ET.cadres(c);
+    });
+    for (const id of ORDRE_ET) { const k = CASES_ET[id](); c.repere('case_' + id, k.x - 40, k.y - 15, 80, 30, `la case de « ${NOMS_ET[id]} »`); }
+    if (t >= 1.0) { ET.dessiner(c, { t, corrige: S.corrige, tCorr: T_CORR_ET }); c.repere('etiquettes', COL_ET - 120, 44, 240, 296, 'les étiquettes à poser'); }
+    quand(c, 'consigne', t >= 1.6, () => { c.texte('glisse chaque étiquette', COL_ET, 360, { couleur: 'faible', taille: 15, align: 'center' }); c.texte('dans sa case', COL_ET, 380, { couleur: 'faible', taille: 15, align: 'center' }); });
+    quand(c, 'bravo', S.corrige && t >= T_CORR_ET + 1.9, () => c.texte('corrigé : les 7 étiquettes sont à leur place', 300, 408, { couleur: 'vert', taille: 16, align: 'center' }));
+  });
+}
+
 /* ── Boucle, moments, commandes ──────────────────────────────────────────── */
 const canvas = $('canvas');
-const scene = window.MuscleTableau.Scene(canvas, (c) => { scene.cadre(41); disposer(scene.L); (vue === 'acces' ? dessinerAcces : dessinerMolecules)(c); return c.fin(); }, { large: true });
+const scene = window.MuscleTableau.Scene(canvas, (c) => { scene.cadre(41); disposer(scene.L); disposerEtiquettes(scene.L); (vue === 'acces' ? dessinerAcces : vue === 'etiquettes' ? dessinerEtiquettes : dessinerMolecules)(c); return c.fin(); }, { large: true });
 const LENT_TEXTE = vue === 'acces' ? ' (ralenti : dans la fibre, tout dure quelques millisecondes)' : '';
 scene.avancer = dt => {
   if (!S.running) return false;
@@ -327,12 +392,13 @@ scene.avancer = dt => {
     pont.noter('pause', { time_s: +S.t.toFixed(2), moment: S.nom }); pont.emettre();
     return true;
   }
-  if (S.t >= FIN) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), message(), 'good'); pont.emettre(); }
+  if (S.t >= FIN) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), message(), vue === 'etiquettes' && !S.corrige && ET.places() < ORDRE_ET.length ? '' : 'good'); pont.emettre(); }
   else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
   return true;
 };
-function moments() { const m = { ...(vue === 'acces' ? MOMENTS_ACCES : MOMENTS_MOL), fin: FIN }; return m; }
+function moments() { const m = { ...(vue === 'acces' ? MOMENTS_ACCES : vue === 'etiquettes' ? MOMENTS_ET : MOMENTS_MOL), fin: FIN }; return m; }
 function message() {
+  if (vue === 'etiquettes') return S.corrige ? 'Corrigé : actine, troponine, tropomyosine ; filament de myosine, tête de myosine ; site de fixation de l’ATP et site de fixation de l’actine.' : ET.places() === ORDRE_ET.length ? 'Bravo : les sept étiquettes sont à leur place.' : 'Glisse chaque étiquette dans sa case.';
   if (vue === 'molecules') return 'Filament fin = actine + troponine + tropomyosine ; filament épais = myosine ; la tête porte un site pour l’ATP et un site pour l’actine.';
   return S.excitation ? 'Le Ca²⁺ libéré se fixe sur la troponine : la tropomyosine se déplace et libère les sites de l’actine. Le Ca²⁺ autorise ; il ne fournit pas l’énergie.' : 'Sans excitation, le réticulum garde le Ca²⁺ : les sites de l’actine restent cachés.';
 }
@@ -348,6 +414,12 @@ function playUntil(p) {
 }
 function ceQuiSeVoit() {
   const t = S.t, m = [`Vue « ${vue} ». Temps de la scène ${fr(t, 1)} s${S.running ? ' (la scène défile)' : S.fait ? ' (fin de la scène)' : t > 0 ? ' (arrêt sur image)' : ' (pas encore lancée)'}.`];
+  if (vue === 'etiquettes') {
+    m.push('Le schéma des molécules SANS noms : en haut le filament fin peint (perles d’actine rouge-orangé, fil de tropomyosine, blocs violets de troponine) ; en dessous le filament épais bleu hérissé de petites têtes ; à droite une loupe (cercle jaune) sur une tête de myosine agrandie, avec ses deux sites (une poche verte et la pointe cyan). Sept traits de rappel finissent sur des cases vides : au-dessus (vers l’actine, vers la tropomyosine), entre les deux filaments (vers la troponine), en bas (vers le filament épais, vers une petite tête, vers la poche de la grande tête) et au-dessus de la loupe (vers la pointe de la grande tête).');
+    if (t >= 1.0) m.push(...ET.voit({ t, corrige: S.corrige, tCorr: T_CORR_ET }));
+    if (S.corrige && t >= T_CORR_ET && t < T_CORR_ET + 1.9) m.push('Correction : les étiquettes glissent vers leurs cases.');
+    return m.join(' ');
+  }
   if (vue === 'acces') {
     const ouv = ouverture(t);
     m.push(`Dessin peint, très agrandi : en haut le réticulum sarcoplasmique (sac translucide) rempli de billes jaunes de Ca²⁺ ; au milieu le filament fin (perles d’actine rouge-orangé, fil de tropomyosine, ${NTN} blocs violets de troponine) ; en bas le filament épais bleu et trois têtes de myosine qui restent détachées.`);
@@ -376,7 +448,7 @@ function ceQuiSeVoit() {
   return m.join(' ');
 }
 
-function start() { S.jusqua = null; S.nom = null; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; scene.sale = true; bulle($('feedback'), (vue === 'acces' ? (S.excitation ? 'Au repos… puis l’excitation arrive.' : 'Sans excitation…') : 'Le schéma se construit…') + LENT_TEXTE); pont.noter('start', parametres()); pont.emettre(); }
+function start() { if (vue === 'etiquettes') ET.remise(); S.jusqua = null; S.nom = null; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; scene.sale = true; bulle($('feedback'), (vue === 'acces' ? (S.excitation ? 'Au repos… puis l’excitation arrive.' : 'Sans excitation…') : 'Le schéma se construit…') + LENT_TEXTE); pont.noter('start', parametres()); pont.emettre(); }
 function reset() { start(); }
 function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
 function resume() { if (S.running) return; if (S.fait || S.t >= FIN) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
@@ -387,8 +459,13 @@ function setTime(p) {
   bulle($('feedback'), `Arrêt sur image : t = ${fr(S.t, 1)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
 }
 const bool = v => (typeof v === 'string' ? !/^(false|0|non|no|off|absent)$/i.test(v.trim()) : !!v);
-const parametres = () => (vue === 'acces' ? { excitation: S.excitation } : { legendes: S.legendes });
+const parametres = () => (vue === 'acces' ? { excitation: S.excitation } : vue === 'etiquettes' ? ET.noter({ corrige: S.corrige, places: S.corrige && S.t >= T_CORR_ET + 1.9 ? ORDRE_ET.length : ET.places() }) : { legendes: S.legendes });
 function setParameters(p) {
+  if (vue === 'etiquettes') {
+    if (!('corrige' in p)) return;
+    S.corrige = bool(p.corrige); pont.noter('set_parameters', { corrige: S.corrige });
+    return S.corrige ? playUntil({ moment: 'corrige' }) : start();
+  }
   if (vue === 'acces' && 'excitation' in p) S.excitation = bool(p.excitation);
   if (vue === 'molecules' && 'legendes' in p) S.legendes = bool(p.legendes);
   scene.sale = true;
@@ -399,9 +476,17 @@ $('run').onclick = () => (S.running ? pause() : (S.t > 0 && S.t < FIN && !S.fait
 
 /* Poignée : l’interrupteur de l’excitation (vue acces) ; un clic le bascule et relance la scène. */
 window.Tableau.glisser(canvas, {
-  toucher: (px, py) => { if (vue !== 'acces') return null; const [x, y] = scene.local(px, py); return x > INTER.x - 6 && x < INTER.x + INTER.w + 36 && y > INTER.y - 8 && y < INTER.y + INTER.h + 8 ? 'excitation' : null; },
-  bouger: () => {},
-  lacher: () => { S.excitation = !S.excitation; scene.sale = true; pont.noter('set_parameters', parametres()); start(); },
+  toucher: (px, py) => {
+    if (vue === 'etiquettes') { if (S.t < 1.0 || (S.corrige && S.t >= T_CORR_ET)) return null; const id = ET.toucher(...versZG(...scene.local(px, py))); return id ? 'et:' + id : null; }
+    if (vue !== 'acces') return null; const [x, y] = scene.local(px, py); return x > INTER.x - 6 && x < INTER.x + INTER.w + 36 && y > INTER.y - 8 && y < INTER.y + INTER.h + 8 ? 'excitation' : null; },
+  bouger: (id, px, py) => { if (!id.startsWith('et:')) return; const [x, y] = versZG(...scene.local(px, py)); ET.bouger(id.slice(3), x, y, [12, 40, 850, 410]); scene.sale = true; },
+  lacher: (id) => {
+    if (id.startsWith('et:')) {
+      const n = id.slice(3), ok = ET.lacher(n), toutes = ET.places() === ORDRE_ET.length; scene.sale = true;
+      bulle($('feedback'), toutes ? message() : ok ? `Bien placée : « ${NOMS_ET[n]} ».` : `« ${NOMS_ET[n]} » : pas à cette place.`, toutes || ok ? 'good' : 'bad');
+      pont.noter('etiquette', { etiquette: NOMS_ET[n], bien_posee: ok, places: ET.places() }); pont.emettre(); return;
+    }
+    S.excitation = !S.excitation; scene.sale = true; pont.noter('set_parameters', parametres()); start(); },
 });
 
 const EXPLICATIONS = {
@@ -421,23 +506,32 @@ const EXPLICATIONS = {
     { repere: 'site_atp', texte: 'La tête a un site de fixation de l’ATP…' },
     { repere: 'site_actine', texte: '…et un site de fixation de l’actine.' },
   ],
+  etiquettes: [
+    { repere: 'etiquettes', texte: 'Glisse chaque étiquette dans sa case.' },
+    { repere: 'filament_fin', texte: 'En haut, le filament fin : trois protéines.' },
+    { repere: 'filament_epais', texte: 'En bas, le filament épais et ses têtes.' },
+    { repere: 'loupe', texte: 'Dans la loupe, la tête et ses deux sites.' },
+  ],
 };
 window.Tableau.explication({ [vue]: EXPLICATIONS[vue] });
 const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
 const config = { id: 'muscle_calcium', version: '1.0', title: 'Le Ca²⁺ ouvre l’accès — ' + vue, variants: VUES.map(v => ({ id: v, label: v })), commands: commandes,
   command_schema: {
-    set_parameters: vue === 'acces' ? { excitation: 'true | false (le réticulum reçoit-il l’excitation ? false : pas de Ca²⁺ libéré)' } : { legendes: 'true | false (écrire les légendes)' },
+    set_parameters: vue === 'acces' ? { excitation: 'true | false (le réticulum reçoit-il l’excitation ? false : pas de Ca²⁺ libéré)' }
+      : vue === 'etiquettes' ? { corrige: 'true | false (true : toutes les étiquettes vont à leur place)', legende_total: 'lecture seule : étiquettes à poser (7)', legende_places: 'lecture seule : étiquettes bien posées', legende_erreurs: 'lecture seule : étiquettes lâchées sur le schéma loin de leur case', legende_mal: 'lecture seule : les étiquettes mal posées au moins une fois' }
+      : { legendes: 'true | false (écrire les légendes)' },
     set_time: { time_s: `0..${fr(FIN, 1)} (arrêt sur cet instant, en s de la scène)` },
     play_until: { moment: Object.keys(moments()).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s de la scène' } } };
 const pont = protocole({ id: config.id, commandes, config,
   texte: vue === 'acces'
     ? 'Filament fin très agrandi (actine, tropomyosine, troponine) en face des têtes de myosine, sous le réticulum sarcoplasmique rempli de Ca²⁺. Au repos, la tropomyosine cache les sites de fixation de l’actine. L’excitation fait libérer le Ca²⁺ par le réticulum ; il se fixe sur la troponine ; la tropomyosine se déplace et les sites sont libérés. À la fin de l’excitation, le Ca²⁺ est repris par le réticulum et les sites sont recachés. Le Ca²⁺ autorise ; il ne fournit pas l’énergie (c’est l’ATP). Les têtes ne s’accrochent pas dans cette scène.'
+    : vue === 'etiquettes' ? 'Les molécules des filaments à légender, comme au bac : filament fin (actine, troponine, tropomyosine), filament épais (myosine) et une tête de myosine agrandie avec ses deux sites, sans noms ; sept étiquettes à glisser dans leurs cases (actine, troponine, tropomyosine, filament de myosine, tête de myosine, site de fixation de l’ATP, site de fixation de l’actine) ; bien posée, une étiquette devient verte et s’aimante ; corrige : toutes à leur place.'
     : 'Schéma légendé : filament fin = actine + troponine + tropomyosine ; filament épais = molécules de myosine ; tête de myosine avec un site de fixation de l’ATP et un site de fixation de l’actine.',
   etat: () => ({ simulation_status: S.running ? 'running' : (S.fait ? 'finished' : (S.t > 0 ? 'paused' : 'idle')), ce_qui_se_voit: ceQuiSeVoit(), current_variant: vue,
     time_s: +S.t.toFixed(2), parameters: parametres(), moments: moments() }),
   progression: () => (S.fait ? 1 : 0),
   executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
-bulle($('feedback'), vue === 'acces' ? 'Une fibre au repos, très agrandie…' : 'Les molécules des filaments…');
+bulle($('feedback'), vue === 'acces' ? 'Une fibre au repos, très agrandie…' : vue === 'etiquettes' ? 'Des molécules à légender…' : 'Les molécules des filaments…');
 setTimeout(() => { if (!S.running && S.t === 0) start(); }, 1600);
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>
