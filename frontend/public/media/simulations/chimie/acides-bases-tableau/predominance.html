@@ -653,6 +653,11 @@ function vueDistribution(c, M) {
     });
   }
   M.etape(c, 'phrase', () => {
+    if (large(M)) {   // tableau large (troisième passe) : la phrase coupée à la ligne, sous la lecture, à côté du graphe
+      c.rect(DP_L.x, DP_L.y, DP_L.w, 3 * 26 + 18, { couleur: 'jaune', largeur: 2, arrondi: 10 });
+      ['diagramme de distribution :', 'les courbes se croisent', 'à pH = pKa'].forEach((l, i) => c.texte(l, DP_L.x + 12, DP_L.y + 30 + i * 26, { couleur: 'jaune', taille: 19 }));
+      return;
+    }
     c.rect(60, 362, 640, 38, { couleur: 'jaune', largeur: 2, arrondi: 10 });
     c.texte('diagramme de distribution : les courbes se croisent à pH = pKa', 380, 388, { couleur: 'jaune', taille: 19, align: 'center', max: 610 });
   });
@@ -848,9 +853,11 @@ const BLOCS = {
 /* Troisième passe (tableau large) : vue indicateur, les phrases du couple coupées à la ligne dans une colonne à droite des
  * béchers (hors du cadre 760 × 420) ; les béchers, plus larges, prennent la hauteur. */
 const large = M => M.scene.L >= 1000;
-const CP_L = { x: 790, y: 90 };
-const BLOCS_L = { indicateur: [BLOCS.indicateur[0], { r: [CP_L.x - 4, CP_L.y - 24, 210, 130], e: ['couple'] }, BLOCS.indicateur[3]] };
-const COLS_L = { indicateur: [[1], [2, 3]] };
+const CP_L = { x: 790, y: 90 }, DP_L = { x: 790, y: 120, w: 240 };
+const BLOCS_L = {
+  distribution: [BLOCS.distribution[0], { r: [DP_L.x - 4, DP_L.y - 4, DP_L.w + 8, 104], e: ['phrase'] }, BLOCS.distribution[2]],
+  indicateur: [BLOCS.indicateur[0], { r: [CP_L.x - 4, CP_L.y - 24, 210, 130], e: ['couple'] }, BLOCS.indicateur[3]] };
+const COLS_L = { distribution: [[3], [1, 2]], indicateur: [[1], [2, 3]] };
 const COLS_RC = { domaines: [[1, 2]], distribution: [[3, 2], [1]], indicateur: [[1], [2, 3, 4]] };
 function dessiner(c, M) {
   MO = M; M.scene.cadre(83);
@@ -888,7 +895,8 @@ function reperes(c, M) {
     R('courbe_base', XG(2), YG(100) - 6, XG(9.5) - XG(2), g.h + 12, `la courbe verte « % CH₃COO⁻ », qui croît${q('courbe_base')}`);
     R('croisement', XG(PKA) - 14, YG(50) - 14, 190, 28, `le croisement : 50 % à pH = pKa = 4,8${q('croisement')}`);
     R('poignee_ph', XG(pH) - 16, g.y0 - 16, 32, 32, `la poignée : l’anneau violet sur l’axe des pH (pH = ${phTxt(pH)} ; de 0 à 14)${q('lecture')}`);
-    R('phrase', 60, 362, 640, 38, `« diagramme de distribution : les courbes se croisent à pH = pKa »${q('phrase')}`);
+    if (large(M)) R('phrase', DP_L.x, DP_L.y, DP_L.w, 96, `« diagramme de distribution : les courbes se croisent à pH = pKa »${q('phrase')}`);
+    else R('phrase', 60, 362, 640, 38, `« diagramme de distribution : les courbes se croisent à pH = pKa »${q('phrase')}`);
   } else if (v === 'indicateur') {
     R('flacon', FLB.cx - 50, FLB.y - 70, 100, FLB.h + 124, `le flacon de BBT et son compte-gouttes${q('flacon')}`);
     SOLB.forEach((s, k) => { const B = BI(k); R('becher_' + (k + 1), B.x - 20, B.y - 6, B.w + 40, 200, `le bécher ${k + 1} : ${s.nom}, pH = ${s.pH} ; avec le BBT : ${s.coul}${q('couleurs')}`); });
