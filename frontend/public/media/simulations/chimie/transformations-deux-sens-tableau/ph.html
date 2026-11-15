@@ -413,7 +413,7 @@ function dessiner(c, M) {
   // Tableau large (≥ 1000) : la vue est découpée en zones rangées sur toute la largeur (zones.js, ZONES plus bas).
   const Z = ZONES[v] || { cols: [[[0, 40, 760, 420]]] }, large = M.scene.L >= Zones.L_MIN;
   const titre = () => c.texte(TITRE_TABLEAU[v], 14, 26, { couleur: 'cyan', taille: large ? 24 : 20 });
-  if (large) titre();
+  // tableau large : pas de titre interne, celui de la diapositive le dit déjà (deuxième passe)
   Zones.dessiner(c, M.scene.L, large ? Z : null, () => {
     if (!large) titre();
     ({ definition: vueDefinition, calcul: vueCalcul, phmetre: vuePhmetre })[v](c, M);
@@ -422,12 +422,17 @@ function dessiner(c, M) {
   return c.fin();
 }
 /* Zones du tableau large, par vue : colonnes de rectangles du dessin d'origine (760 × 420). */
+/* Deuxième passe (« agrandir les figures ») : plus de titre interne ; zones.js : { zs, max } = figure sur toute la
+ * hauteur, { zs, t } = colonne de texte (t : taille d'écriture d'origine, mise à 20 px à l'écran). */
 const ZONES = {
-  // le bécher et la loupe à gauche, grandis ; à droite les formules, puis les phrases du bas
-  definition: { cols: [[[14, 40, 386, 334]], [[390, 50, 690, 314], [14, 338, 650, 410]]] },
+  // bécher et loupe à gauche, sur toute la hauteur ; à droite les formules puis la phrase « plus… plus… » (sensColonne)
+  definition: { cols: [{ zs: [[14, 56, 386, 336]], max: 2.2 }, { zs: [[390, 48, 756, 416]], t: 17 }] },
   // l'échelle de pH et le calcul, serrés sur leur hauteur réelle (le clic sur l'échelle est ramené au dessin d'origine)
-  calcul: { cols: [[[14, 78, 752, 402]]] },
+  calcul: { cols: [{ zs: [[14, 56, 752, 402]], max: 1.7 }] },
+  phmetre: { cols: [{ zs: [[14, 26, 752, 414]], max: 1.7 }] },
 };
+/** Tableau large, vue definition : la phrase du bas va dans la colonne des formules. */
+const sensColonne = M => M.S.vue === 'definition' && M.scene.L >= Zones.L_MIN;
 
 /* ── Vue definition : bécher de l’exemple A, loupe sur les ions H₃O⁺ ──────────────────────────────────────────────── */
 const BD = { x: 34, y: 112, w: 116, h: 146 }, LD = { x: 288, y: 188, r: 82 }, XT = 396;
@@ -469,6 +474,13 @@ function vueDefinition(c, M) {
     c.texte('ici : 10^{−3,4} = 4,0·10⁻⁴ mol/L', XT, 300, { taille: 17, couleur: 'jaune' });
   });
   M.etape(c, 'sens', () => {
+    if (sensColonne(M)) {   // tableau large : sous les formules, dans la colonne de droite, coupé à la ligne
+      c.texte('plus [H₃O⁺] est grande,', XT, 338, { couleur: 'jaune', taille: 20 });
+      c.texte('plus le pH est petit', XT, 362, { couleur: 'jaune', taille: 20 });
+      c.texte('[H₃O⁺] = 1,0·10⁻² mol/L → pH = 2,0', XT, 388, { couleur: 'faible', taille: 16, max: 352 });
+      c.texte('[H₃O⁺] = 4,0·10⁻⁴ mol/L → pH = 3,4', XT, 410, { couleur: 'faible', taille: 16, max: 352 });
+      return;
+    }
     c.texte('plus [H₃O⁺] est grande, plus le pH est petit', 20, 372, { couleur: 'jaune', taille: 22 });
     c.texte('[H₃O⁺] = 1,0·10⁻² mol/L → pH = 2,0 ;  [H₃O⁺] = 4,0·10⁻⁴ mol/L → pH = 3,4', 20, 402, { couleur: 'faible', taille: 16, max: 720 });
   });
@@ -597,7 +609,7 @@ function reperes(c, M) {
     R('concentration', XT - 4, 50, 356, 56, `« [H₃O⁺] = 4,0·10⁻⁴ mol/L » dans ce bécher${q('concentration')}`);
     R('formule', XT - 4, 122, 340, 98, `« pH = −log[H₃O⁺] » ([H₃O⁺] en mol/L)${q('formule')}`);
     R('inverse', XT - 4, 234, 340, 74, `« [H₃O⁺] = 10^(−pH) »${q('inverse')}`);
-    R('sens', 16, 348, 720, 62, `« plus [H₃O⁺] est grande, plus le pH est petit »${q('sens')}`);
+    if (sensColonne(M)) R('sens', XT - 6, 318, 362, 98, `« plus [H₃O⁺] est grande, plus le pH est petit »${q('sens')}`); else R('sens', 16, 348, 720, 62, `« plus [H₃O⁺] est grande, plus le pH est petit »${q('sens')}`);
   } else if (v === 'calcul') {
     const ph = pHVu(), k = conc(ph);
     R('poignee_pH', XP(ph) - 20, AX.y - 14, 40, 28, `la poignée : glisser l’anneau jaune pour choisir le pH (${phTxt(ph)}, de 1,0 à 13,0)`);

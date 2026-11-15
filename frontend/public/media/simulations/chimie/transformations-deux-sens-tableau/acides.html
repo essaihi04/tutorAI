@@ -413,7 +413,7 @@ function dessiner(c, M) {
   // Tableau large (≥ 1000) : la vue est découpée en zones rangées sur toute la largeur (zones.js, ZONES plus bas).
   const Z = ZONES[v] || { cols: [[[0, 40, 760, 420]]] }, large = M.scene.L >= Zones.L_MIN;
   const titre = () => c.texte(TITRE_TABLEAU[v], 14, 26, { couleur: 'cyan', taille: large ? 24 : 20 });
-  if (large) titre();
+  // tableau large : pas de titre interne, celui de la diapositive le dit déjà (deuxième passe)
   Zones.dessiner(c, M.scene.L, large ? Z : null, () => {
     if (!large) titre();
     ({ ouverture: vueOuverture, acide: vueAcide, base: vueBase, couple: vueCouple, reaction: vueReaction })[v](c, M);
@@ -422,10 +422,16 @@ function dessiner(c, M) {
   return c.fin();
 }
 /* Zones du tableau large, par vue : colonnes de rectangles du dessin d'origine (760 × 420). */
+/* Deuxième passe (« agrandir les figures ») : plus de titre interne ; chaque vue serrée sur sa hauteur réelle, la figure
+ * sur toute la hauteur ; zones.js : { zs, t } = colonne de texte (t : taille d'écriture d'origine, mise à 20 px à
+ * l'écran), { zs, max } = figure. */
 const ZONES = {
-  // la loupe à gauche, grandie sur toute la hauteur ; la définition, l'équation et la phrase du bas à droite, plus grandes
-  acide: { cols: [[[14, 40, 366, 322]], [[366, 84, 744, 284], [0, 336, 440, 384]]] },
-  base: { cols: [[[14, 40, 366, 322]], [[366, 84, 744, 284], [0, 336, 440, 384]]] },
+  ouverture: { cols: [{ zs: [[10, 46, 740, 414]], max: 1.7 }] },
+  // la loupe à gauche, grandie sur toute la hauteur ; la définition, l'équation et la phrase du bas à droite
+  acide: { cols: [{ zs: [[14, 56, 366, 324]], max: 2.2 }, { zs: [[366, 84, 744, 284], [0, 336, 440, 384]], t: 21 }] },
+  base: { cols: [{ zs: [[14, 56, 366, 324]], max: 2.2 }, { zs: [[366, 84, 744, 284], [0, 336, 440, 384]], t: 21 }] },
+  couple: { cols: [{ zs: [[10, 44, 700, 412]], max: 1.7 }] },
+  reaction: { cols: [{ zs: [[10, 40, 740, 414]], max: 1.7 }] },
 };
 
 /* ── Vue ouverture : deux flacons, un pH-mètre, une sonde ─────────────────────────────────────────────────────────── */

@@ -32,7 +32,8 @@ const $ = id => document.getElementById(id);
 const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');
 const VUE = new URLSearchParams(location.search).get('vue') === 'concentration' ? 'concentration' : 'temperature';
 const TMAX = 40, VITESSE = 0.12;                       // min ; s d'image par minute
-const AX = 80, AY = 360, NMAX = 4.5, YH = 96;
+const NMAX = 4.5;
+let AX = 80, AY = 360, YH = 96;
 /* Tableau large (15 novembre 2026) : le cadre prend la largeur du tableau (scene.L de 760 à 1596) ; le graphe s’étire en
  * largeur (AX1) et le panneau de droite (bécher, conditions, légende) se décale de DX = L − 760. */
 let AX1 = 540, DX = 0;
@@ -72,34 +73,80 @@ function peindreBecher(ctx, x, y, w, h, ys, liq) {
   ctx.restore();
 }
 
-let T = 1;   // facteur d’écriture (tableau large)
+/* Deuxième passe (« agrandir les figures elles-mêmes ») : sur un tableau large (L ≥ 1000), tailles en px À L'ÉCRAN
+ * (u(px) = px / scene.s) ; le graphe prend toute la hauteur (le nom de l'axe des t sous la flèche) et le panneau de droite
+ * (équation, bécher, conditions, chronomètre, légende) se resserre en une colonne, ou en deux sous-colonnes quand le tableau
+ * est bas (bande de formules). Sous 1000, la disposition d'origine (cadre 760, panneau décalé de DX). */
+function disposer(c) {
+  const L = Math.max(760, scene.L || 760);
+  if (L < 1000) {
+    DX = L - 760; AX = 80; AY = 360; YH = 96; AX1 = 540 + DX;
+    const x = 645 + DX;
+    return { large: false, eq: [[(AX + AX1) / 2, 24, 'center']], tEq: 17, axeHaut: 70, ticks: 13, nomAxe: 14, nomT: [AX1, AY - 10, 'right'], nomN: [AX + 8, 78],
+      bec: { x: 600 + DX, y: 70, w: 90, h: 110 }, cond: [[x, 212, 16], [x, 234, 14], [x, 256, 14]], condBoite: [560 + DX, 194, 170, 70], align: 'center',
+      chrono: [x, 296, 16], chronoBoite: [590 + DX, 278, 110, 26], nI2: [x, 320, 15], accel: [x, 342, 13], leg: { x: 568 + DX, y: 372, pas: 20, t: 14, max: 150 },
+      palier: 13, valPalier: 14, msg: [(AX + AX1) / 2, 52, 15], meme: 16 };
+  }
+  const u = px => px / (c.echelle || 1), H = 420 * (c.echelle || 1), deux = H < 395;
+  const PW = deux ? u(470) : u(250), x0 = L - u(12) - PW;
+  AX = u(46); AY = 420 - u(58); YH = u(62); AX1 = x0 - u(26); DX = 0;
+  const l1 = deux ? x0 : x0, w1 = deux ? PW * .48 : PW, xc1 = l1 + w1 / 2, l2 = deux ? x0 + PW * .52 : x0;
+  const P = { large: true, tEq: u(18), axeHaut: u(26), ticks: u(17), nomAxe: u(18), nomT: [AX1, AY + u(46), 'right'], nomN: [AX + u(10), u(36)], align: 'left',
+    palier: u(18), valPalier: u(18), msg: [(AX + AX1) / 2, u(26), u(19)], meme: u(19) };
+  let y = u(24);
+  P.eq = [[xc1, y, 'center'], [xc1, y + u(24), 'center']]; y += u(24) + u(16);
+  const bw = Math.min(u(92), w1 * .5), bh = u(96);
+  P.bec = { x: xc1 - bw / 2, y, w: bw, h: bh }; y += bh + u(12);
+  if (deux) {
+    P.chrono = [l1, y + u(22), u(20)]; P.chronoBoite = [l1 - 6, y, w1, u(28)];
+    P.nI2 = [l1, y + u(48), u(19)]; P.accel = [l1, y + u(72), u(17)];
+    y = u(24);
+  } else y += u(8);
+  const xt = deux ? l2 : l1;
+  P.cond = [[xt, y + u(20), u(20)], [xt, y + u(44), u(18)], [xt, y + u(68), u(18)]]; P.condBoite = [xt - 6, y, PW, u(76)]; y += u(80);
+  if (!deux) {
+    P.chrono = [xt, y + u(22), u(20)]; P.chronoBoite = [xt - 6, y, PW, u(28)];
+    P.nI2 = [xt, y + u(46), u(19)]; P.accel = [xt, y + u(68), u(17)]; y += u(76);
+  } else y += u(14);
+  P.leg = { x: xt, y: y + u(22), pas: u(25), t: u(18), max: (deux ? PW * .48 : PW) - u(40) };
+  P.ecart = u(16);
+  return P;
+}
 function dessiner(c) {
   scene.cadre(17);
-  DX = Math.max(0, (scene.L || 760) - 760); AX1 = 540 + DX;
-  T = (scene.L || 760) >= 1000 ? 1.25 : 1;   // tableau large : écriture plus grande
-  c.texte('H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O', (AX + AX1) / 2, 24, { couleur: 'blanc', taille: 17 * T, align: 'center' });
-  c.fleche(AX, AY, AX1, AY, { couleur: 'faible', largeur: 1.6 }); c.fleche(AX, AY, AX, 70, { couleur: 'faible', largeur: 1.6 });
-  for (let k = 1; k <= 4; k++) { const x = X(10 * k); c.ligne(x, AY - 4, x, AY + 4, { couleur: 'faible', largeur: 1.3, duree: .03 }); c.texte(String(10 * k), x, AY + 19, { couleur: 'faible', taille: 13 * T, align: 'center', duree: .1 }); }
-  for (let n = 1; n <= 4; n++) { c.ligne(AX - 4, Y(n), AX + 4, Y(n), { couleur: 'faible', largeur: 1.3, duree: .03 }); c.texte(String(n), AX - 8, Y(n) + 5, { couleur: 'faible', taille: 13 * T, align: 'right', duree: .1 }); }
-  c.texte('t (min)', AX1, AY - 10, { couleur: 'faible', taille: 14 * T, align: 'right' });
-  c.texte('n(I₂) (mmol)', AX + 8, 78, { couleur: 'faible', taille: 14 * T });
-  c.repere('axe_n', AX - 34, 60, 150, AY - 60, 'l’axe vertical : la quantité de diiode n(I₂), en mmol');
-  c.repere('axe_t', AX + 40, AY - 26, AX1 - AX - 40, 52, 'l’axe horizontal : le temps t, en min');
+  const Q = disposer(c), lg = Q.large, ctr = lg ? 'left' : 'center';
+  const EQ = 'H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O';
+  if (lg) { c.texte('H₂O₂ + 2I⁻ + 2H⁺', Q.eq[0][0], Q.eq[0][1], { couleur: 'blanc', taille: Q.tEq, align: 'center' }); c.texte('→ I₂ + 2H₂O', Q.eq[1][0], Q.eq[1][1], { couleur: 'blanc', taille: Q.tEq, align: 'center' }); }
+  else c.texte(EQ, Q.eq[0][0], Q.eq[0][1], { couleur: 'blanc', taille: Q.tEq, align: 'center' });
+  c.fleche(AX, AY, AX1, AY, { couleur: 'faible', largeur: 1.6 }); c.fleche(AX, AY, AX, Q.axeHaut, { couleur: 'faible', largeur: 1.6 });
+  const dt = lg ? Q.ticks * 1.15 : 19, dn = lg ? Q.ticks * .35 : 5;
+  for (let k = 1; k <= 4; k++) { const x = X(10 * k); c.ligne(x, AY - 4, x, AY + 4, { couleur: 'faible', largeur: 1.3, duree: .03 }); c.texte(String(10 * k), x, AY + dt, { couleur: 'faible', taille: Q.ticks, align: 'center', duree: .1 }); }
+  for (let n = 1; n <= 4; n++) { c.ligne(AX - 4, Y(n), AX + 4, Y(n), { couleur: 'faible', largeur: 1.3, duree: .03 }); c.texte(String(n), AX - 8, Y(n) + dn, { couleur: 'faible', taille: Q.ticks, align: 'right', duree: .1 }); }
+  c.texte('t (min)', Q.nomT[0], Q.nomT[1], { couleur: 'faible', taille: Q.nomAxe, align: Q.nomT[2] });
+  c.texte('n(I₂) (mmol)', Q.nomN[0], Q.nomN[1], { couleur: 'faible', taille: Q.nomAxe });
+  if (lg) {
+    c.repere('axe_n', AX - Q.ticks * 2, Q.axeHaut - 10, Q.ticks * 2 + 150, AY - Q.axeHaut + 10, 'l’axe vertical : la quantité de diiode n(I₂), en mmol');
+    c.repere('axe_t', AX + 40, AY - 26, AX1 - AX - 40, Q.nomT[1] - AY + 34, 'l’axe horizontal : le temps t, en min');
+  } else {
+    c.repere('axe_n', AX - 34, 60, 150, AY - 60, 'l’axe vertical : la quantité de diiode n(I₂), en mmol');
+    c.repere('axe_t', AX + 40, AY - 26, AX1 - AX - 40, 52, 'l’axe horizontal : le temps t, en min');
+  }
   // Le bécher (à droite) : sa teinte suit la quantité de diiode formé.
-  const BX = 600 + DX, BY = 70, BW = 90, BH = 110;
+  const { x: BX, y: BY, w: BW, h: BH } = Q.bec;
   c.direct(() => {
     const p = S.cur ? S.cur.p : P, tt = Math.min(S.t, TMAX), n = S.cur ? nDe(tt, p) : 0, f = Math.min(1, n / 4);
     // Peint (règle 32) : le bécher en verre ; le mélange incolore jaunit puis brunit avec le diiode formé.
-    peindreBecher(c.ctx, BX, BY, BW, BH, BY + 22, f < 0.01 ? [215, 230, 240, 0.22] : [Math.round(245 - 75 * f), Math.round(215 - 137 * f), Math.round(140 - 126 * f), 0.3 + 0.6 * f]);
+    peindreBecher(c.ctx, BX, BY, BW, BH, BY + BH * .2, f < 0.01 ? [215, 230, 240, 0.22] : [Math.round(245 - 75 * f), Math.round(215 - 137 * f), Math.round(140 - 126 * f), 0.3 + 0.6 * f]);
     c.repere('becher', BX - 8, BY - 6, BW + 16, BH + 14, 'le bécher : il brunit quand le diiode se forme');
-    c.texte(VUE === 'temperature' ? `θ = ${p.theta} °C` : `[I⁻]₀ = ${fx(p.c)} mol/L`, 645 + DX, 212, { couleur: couleurDe(p), taille: 16 * T, align: 'center' });
-    c.texte(VUE === 'temperature' ? `[I⁻]₀ = 0,1 mol/L` : `θ = 20 °C`, 645 + DX, 234, { couleur: 'faible', taille: 14 * T, align: 'center' });
-    c.texte(`n(H₂O₂)₀ = ${p.n} mmol`, 645 + DX, 256, { couleur: VUE === 'concentration' ? 'rose' : 'faible', taille: 14 * T, align: 'center' });
-    c.repere('conditions', 560 + DX, 194, 170, 70, 'les conditions de l’expérience');
-    c.texte(`t = ${fx(tt, 0)} min`, 645 + DX, 296, { couleur: 'vert', taille: 16 * T, align: 'center' });
-    c.repere('chrono', 590 + DX, 278, 110, 26, 'le chronomètre');
-    if (S.cur) c.texte(`n(I₂) = ${fx(n, 1)} mmol`, 645 + DX, 320, { couleur: couleurDe(p), taille: 15 * T, align: 'center' });
-    if (S.running || S.pause) c.texte('(temps accéléré)', 645 + DX, 342, { couleur: 'faible', taille: 13 * T, align: 'center' });
+    const [c1, c2, c3] = Q.cond;
+    c.texte(VUE === 'temperature' ? `θ = ${p.theta} °C` : `[I⁻]₀ = ${fx(p.c)} mol/L`, c1[0], c1[1], { couleur: couleurDe(p), taille: c1[2], align: ctr });
+    c.texte(VUE === 'temperature' ? `[I⁻]₀ = 0,1 mol/L` : `θ = 20 °C`, c2[0], c2[1], { couleur: 'faible', taille: c2[2], align: ctr });
+    c.texte(`n(H₂O₂)₀ = ${p.n} mmol`, c3[0], c3[1], { couleur: VUE === 'concentration' ? 'rose' : 'faible', taille: c3[2], align: ctr });
+    c.repere('conditions', ...Q.condBoite, 'les conditions de l’expérience');
+    c.texte(`t = ${fx(tt, 0)} min`, Q.chrono[0], Q.chrono[1], { couleur: 'vert', taille: Q.chrono[2], align: ctr });
+    c.repere('chrono', ...Q.chronoBoite, 'le chronomètre');
+    if (S.cur) c.texte(`n(I₂) = ${fx(n, 1)} mmol`, Q.nI2[0], Q.nI2[1], { couleur: couleurDe(p), taille: Q.nI2[2], align: ctr });
+    if (S.running || S.pause) c.texte('(temps accéléré)', Q.accel[0], Q.accel[1], { couleur: 'faible', taille: Q.accel[2], align: ctr });
     // Les courbes d'avant, en pointillés, puis la courbe en cours.
     let legende = 0;
     const courbe = (tr, tfin, pointille) => {
@@ -108,12 +155,13 @@ function dessiner(c) {
       const t5 = 5 * tau;
       if (tfin >= Math.min(t5, TMAX) && t5 <= TMAX) {
         c.ligne(X(t5), Y(p.n) + 6, X(t5), Y(p.n) - 6, { couleur: couleurDe(p), largeur: 2, tremble: 0 });
-        c.texte(`palier vers ${fx(t5, 0)} min`, Math.min(X(t5) + 6, AX1 - 120), Y(p.n) + 20 + 16 * legende, { couleur: couleurDe(p), taille: 13 * T });
+        const lp = lg ? Q.palier * 9 : 120, pas = lg ? Q.palier * 1.25 : 16;
+        c.texte(`palier vers ${fx(t5, 0)} min`, Math.min(X(t5) + 6, AX1 - lp), Y(p.n) + (lg ? Q.palier * 1.3 : 20) + pas * legende, { couleur: couleurDe(p), taille: Q.palier });
       }
       // Légende, sous le bécher : un trait de la couleur de la courbe et ses conditions.
-      const yl = 372 + 20 * legende++;
-      c.ligne(568 + DX, yl - 5, 596 + DX, yl - 5, { couleur: couleurDe(p), largeur: pointille ? 2 : 2.8, pointille: pointille ? [5, 4] : null, tremble: 0 });
-      c.texte(nomDe(p), 602 + DX, yl, { couleur: couleurDe(p), taille: 14 * T, max: 150 });
+      const yl = Q.leg.y + Q.leg.pas * legende++, xl = Q.leg.x;
+      c.ligne(xl, yl - Q.leg.t * .35, xl + 28, yl - Q.leg.t * .35, { couleur: couleurDe(p), largeur: pointille ? 2 : 2.8, pointille: pointille ? [5, 4] : null, tremble: 0 });
+      c.texte(nomDe(p), xl + 34, yl, { couleur: couleurDe(p), taille: Q.leg.t, max: Q.leg.max });
       c.repere(tr.id, AX, Y(p.n) - 12, Math.max(80, X(Math.min(TMAX, 3 * tau)) - AX), AY - Y(p.n) + 12, `la courbe ${nomDe(p)}`);
     };
     for (const g of S.fantomes) courbe(g, TMAX, true);
@@ -123,15 +171,15 @@ function dessiner(c) {
     const paliers = [...new Set(tous.map(g => g.p.n))];
     for (const n of paliers) {
       c.ligne(AX, Y(n), AX1 - 20, Y(n), { couleur: S.montre.palier ? 'jaune' : 'tresfaible', largeur: S.montre.palier ? 1.8 : 1.2, pointille: [3, 6], tremble: 0 });
-      c.texte(`${n} mmol`, AX1 - 20, Y(n) - 7, { couleur: S.montre.palier ? 'jaune' : 'faible', taille: 14 * T, align: 'right' });
+      c.texte(`${n} mmol`, AX1 - 20, Y(n) - 7, { couleur: S.montre.palier ? 'jaune' : 'faible', taille: Q.valPalier, align: 'right' });
       c.repere(n === 2 || paliers.length === 1 ? 'palier' : 'palier_' + n, AX, Y(n) - 22, AX1 - AX, 30, `le palier : ${n} mmol de diiode`);
     }
-    if (S.montre.palier && paliers.length === 1 && tous.length > 1) c.texte('même palier : même état final', (AX + AX1) / 2, Y(paliers[0]) - 30, { couleur: 'jaune', taille: 16 * T, align: 'center' });
-    if (S.montre.piege) c.texte('H₂O₂ limitant doublé : le palier double', (AX + AX1) / 2, 52, { couleur: 'orange', taille: 15 * T, align: 'center' });
+    if (S.montre.palier && paliers.length === 1 && tous.length > 1) c.texte('même palier : même état final', (AX + AX1) / 2, Y(paliers[0]) - (lg ? Q.meme * 1.5 : 30), { couleur: 'jaune', taille: Q.meme, align: 'center' });
+    if (S.montre.piege) c.texte('H₂O₂ limitant doublé : le palier double', Q.msg[0], Q.msg[1], { couleur: 'orange', taille: Q.msg[2], align: 'center' });
     if (S.montre.debut) {
       // Les débuts des courbes : la plus raide atteint son palier le plus tôt.
       for (const g of tous) { const p = g.p, pente = p.n / tauDe(p), t1 = Math.min(TMAX, 0.8 * p.n / pente); c.ligne(X(0), Y(0), X(t1), Y(pente * t1), { couleur: couleurDe(p), largeur: 1.4, pointille: [2, 4], tremble: 0 }); }
-      c.texte('la plus raide au début : la température la plus élevée', (AX + AX1) / 2, 52, { couleur: 'jaune', taille: 15 * T, align: 'center', max: 470 });
+      c.texte('la plus raide au début : la température la plus élevée', Q.msg[0], Q.msg[1], { couleur: 'jaune', taille: Q.msg[2], align: 'center', max: lg ? AX1 - AX - 20 : 470 });
       c.repere('debut', AX - 6, Y(2.2), 120, AY - Y(2.2) + 6, 'le début des courbes : la plus raide');
     }
   });

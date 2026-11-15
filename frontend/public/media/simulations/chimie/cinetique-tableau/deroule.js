@@ -77,8 +77,21 @@
     const complet = fn => { const t = S.t, f = S.fait; S.t = FIN; S.fait = true; try { fn(); } finally { S.t = t; S.fait = f; } };
     scene = window.OndesTableau.Scene($('canvas'), c => o.dessiner(c, D), { ajuster: true, complet, ...(o.scene || {}) });
     const cadreBase = scene.cadre;
-    scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
+    /* Tableau large (15 novembre 2026, deuxième passe : « textes vers 15 px, trop petits ») : quand le tableau serait large
+     * (L ≥ 1000, écran d'ordinateur portable), aucun texte sous o.tailleMinLarge px à l'écran (18 par défaut) ; sur un
+     * grand écran (L < 1000), rien ne change. */
+    scene.cadre = function (g) {
+      const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE;
+      if (!scene.mesurant && k.tailleMin && 420 * k.W / Math.max(1, k.H) >= 1000) k.tailleMin = o.tailleMinLarge ?? 18;
+      return k;
+    };
     D.scene = scene;
+    D.large = () => 420 * scene.craie.W / Math.max(1, scene.craie.H) >= 1000;
+    // tableau large : une phrase plus grosse peut déborder un peu de sa largeur prévue au lieu d'être écrasée sous 18 px
+    scene.craie.texte = function (s, x, y, opt) {
+      if (opt && opt.max && this.tailleMin >= 18) opt = { ...opt, max: opt.max * (o.maxLarge ?? 1.5) };
+      return Object.getPrototypeOf(this).texte.call(this, s, x, y, opt);
+    };
     function finir() { S.t = FIN; S.running = false; S.pause = false; S.fait = true; S.jusqua = null; etiquette(); dire(o.messageFin(D), 'good'); noter('finished', o.params()); emettre(); }
     scene.avancer = dt => {
       if (!S.running) return !!(o.anime && o.anime(D));

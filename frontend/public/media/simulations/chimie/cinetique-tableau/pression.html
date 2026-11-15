@@ -173,43 +173,66 @@ let RELEVE = null;
 /** Pendant la passe de mesure du moteur (image finale) : relève l'encre de la figure, hors colonne de gauche. */
 function relever(c, M) {
   if (M.S.mesure && !RELEVE) {
-    const b = { x0: Infinity, x1: -Infinity, y1: -Infinity }, f = { trait: c.trait, texte: c.texte, point: c.point };
-    const pt = (x, y) => { if (!LARGE.dansGauche && Number.isFinite(x) && Number.isFinite(y)) { b.x0 = Math.min(b.x0, x); b.x1 = Math.max(b.x1, x); b.y1 = Math.max(b.y1, y); } };
+    const b = { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity }, f = { trait: c.trait, texte: c.texte, point: c.point, repere: c.repere };
+    const pt = (x, y) => { if (!LARGE.dansGauche && Number.isFinite(x) && Number.isFinite(y)) { b.x0 = Math.min(b.x0, x); b.x1 = Math.max(b.x1, x); b.y0 = Math.min(b.y0, y); b.y1 = Math.max(b.y1, y); } };
     c.trait = function (pts, o) { for (const p of pts || []) pt(p[0], p[1]); return f.trait.call(this, pts, o); };
-    c.point = function (x, y, r = 4, col) { pt(x - r, y + r); pt(x + r, y + r); return f.point.call(this, x, y, r, col); };
+    // les objets peints (bécher, appareil…) ne passent pas par la craie : leurs repères donnent leur place
+    c.repere = function (id, x, y, w, h, l) { if (w < 600 && h < 400) { pt(x, y); pt(x + w, y + h); } return f.repere.call(this, id, x, y, w, h, l); };
+    c.point = function (x, y, r = 4, col) { pt(x - r, y - r); pt(x + r, y + r); return f.point.call(this, x, y, r, col); };
     c.texte = function (s, x, y, o = {}) {
       const t = o.taille ?? 18; let l = larg(this, String(s), t); if (o.max && l > o.max) l = o.max;
-      const a = o.align === 'center' ? x - l / 2 : o.align === 'right' ? x - l : x; pt(a, y + t * .3); pt(a + l, y + t * .3);
+      const a = o.align === 'center' ? x - l / 2 : o.align === 'right' ? x - l : x; pt(a, y + t * .3); pt(a + l, y - t * .8);
       return f.texte.call(this, s, x, y, o);
     };
     RELEVE = { b, vue: M.S.vue, gauche: false };
   } else if (!M.S.mesure && RELEVE) {
-    delete c.trait; delete c.texte; delete c.point;
+    delete c.trait; delete c.texte; delete c.point; delete c.repere;
     const b = RELEVE.b; b.gauche = RELEVE.gauche; if (b.x1 > b.x0) BOITES[RELEVE.vue] = b;
     RELEVE = null;
   }
 }
+/* Deuxième passe (15 novembre 2026, « agrandir les figures elles-mêmes, pas seulement le texte autour ») : sur un tableau
+ * large, les tailles sont choisies en PIXELS À L'ÉCRAN (u(px) = px / échelle). La boîte de la figure (haut ET bas relevés)
+ * prend toute la hauteur ; la colonne de gauche s'écrit en 20 px à l'écran et ne prend que la largeur que la figure laisse
+ * (entre 28 % et 45 % du tableau) ; le titre interne est retiré (le titre de la diapositive le dit déjà) ; aucun texte de la
+ * figure sous 17 px à l'écran. Même idée que figures.html (disposer). */
 function agrandir(c, scene, M) {
   const L = scene.L;
   relever(c, M);
   LARGE.actif = L >= 1000;
+  if (typeof AVANT_LARGE === 'function') AVANT_LARGE(L, LARGE.actif);   // la page adapte sa géométrie au tableau large
   if (!LARGE.actif) {   // grand écran : la figure d'origine, centrée sur la largeur du tableau
     Object.assign(LARGE, { k: 1, dx: Math.max(0, (L - 760) / 2), dy: 0 }); c.ctx.translate(LARGE.dx, 0);
     if (c.cadre) c.cadre = { ...c.cadre, w: 760 };
     return;
   }
-  // la figure (boîte relevée de cette vue) prend toute la hauteur et la droite du tableau ; la colonne de gauche le reste
-  // (une vue sans phrases écrites n'a pas de colonne de gauche : la figure est centrée sur toute la largeur)
-  const b = BOITES[M.S.vue] || { x0: 0, x1: 760, y1: HAUT_FIGURE, gauche: true };
-  const x0 = Math.max(0, Math.min(14, b.x0 - 10)), x1 = Math.max(b.x1 + 10, 300), y1 = Math.max(b.y1 + 8, 200);
-  const reserve = b.gauche ? Math.max(330, L * .26) : 8;
-  const k = Math.min((420 - 6) / y1, (L - reserve) / (x1 - x0), 1.6), dy = 3;
-  const dx = b.gauche ? L - 4 - x1 * k : (L - (x1 - x0) * k) / 2 - x0 * k;
-  Object.assign(LARGE, { k, dx, dy, base: c.ctx.getTransform(), echelle: c.echelle, gauche: dx + x0 * k - 12, ys: [] });
-  const pas = Math.max(27, Math.round(Math.max(LARGE.taille, 15 / (c.echelle || 1)) * 1.3));   // tableau bas : la craie grossit, l'interligne suit
-  for (let y = 46; y <= 412; y += pas) LARGE.ys.push(y);
+  const s0 = c.echelle || 1, u = px => px / s0;
+  const b = BOITES[M.S.vue] || { x0: 0, x1: 760, y0: 40, y1: HAUT_FIGURE, gauche: true };
+  const AJ = (typeof AJUSTE_LARGE !== 'undefined' && AJUSTE_LARGE[M.S.vue]) || {};
+  const x0 = b.x0 - 10, x1 = Math.max(b.x1 + 10, x0 + 300), y0 = Math.max(0, (b.y0 ?? 40) - 8), y1 = Math.max(b.y1 + 8, y0 + 160);
+  const HMAX = 420 - 8, kH = HMAX / (y1 - y0), KMAX = AJ.kmax ?? 2;
+  LARGE.taille = u(AJ.px ?? 20);
+  let reserve = 8;
+  if (b.gauche) {
+    const mini = Math.max(u(AJ.colMin ?? 280), L * (AJ.partMin ?? .28)), maxi = L * .45;
+    const kNat = Math.min(kH, KMAX), wNat = (x1 - x0) * kNat;
+    reserve = Math.min(maxi, Math.max(mini, L - wNat - u(16)));
+  }
+  const k = Math.min(kH, (L - reserve - u(8)) / (x1 - x0), KMAX);
+  const hFig = (y1 - y0) * k, dy = Math.max(2, (420 - hFig) / 2) - y0 * k;
+  const dx = b.gauche ? L - u(6) - x1 * k : (L - (x1 - x0) * k) / 2 - x0 * k;
+  Object.assign(LARGE, { k, dx, dy, base: c.ctx.getTransform(), echelle: c.echelle, gauche: dx + x0 * k - u(10), ys: [] });
+  const pas = Math.round(LARGE.taille * 1.3);
+  for (let y = Math.round(LARGE.taille + u(10)); y <= 420 - u(6); y += pas) LARGE.ys.push(y);
   c.ctx.translate(dx, dy); c.ctx.scale(k, k); if (c.echelle) c.echelle *= k;
-  if (c.cadre) c.cadre = { ...c.cadre, w: (L - dx) / k, h: (420 - dy) / k };
+  c.tailleMin = AJ.min ?? 18;   // aucun texte de la figure sous 18 px à l’écran
+  if (c.cadre) c.cadre = { ...c.cadre, w: (L - dx) / k, h: (420 - dy) / k, haut: -dy / k };
+}
+/** Le titre interne de la figure : seulement hors tableau large (le titre de la diapositive le dit déjà), hors boîte. */
+function titreFigure(c, t, o) {
+  if (LARGE.actif) return;
+  const g = LARGE.dansGauche; LARGE.dansGauche = true;
+  try { c.texte(t, 14, 26, o); } finally { LARGE.dansGauche = g; }
 }
 /** Dessine `fn` dans la colonne de gauche (coordonnées du tableau entier, sans l'agrandissement de la figure). */
 function aGauche(c, fn) {
@@ -544,7 +567,7 @@ function ruban(ctx, x, y, L, ang = -.12) {
 function dessiner(c, M) {
   MO = M; M.scene.cadre(67); agrandir(c, M.scene, M);
   const v = M.S.vue;
-  c.texte(TITRE_TABLEAU[v], 14, 26, { couleur: 'cyan', taille: 20 });
+  titreFigure(c, TITRE_TABLEAU[v], { couleur: 'cyan', taille: 20 });
   M.vues = ({ ballon: vueBallon, relation: vueRelation, volume: vueVolume })[v](c, M) || [];
   reperes(c, M);
   return c.fin();

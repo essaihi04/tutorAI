@@ -100,48 +100,64 @@ function fenetre(ctx, b, chaud) {
 const repereLoupe = k => VUE === 'temperature' ? (k === 0 ? 'becher_froid' : 'becher_chaud') : (k === 0 ? 'becher_dilue' : 'becher_concentre');
 
 /* Tableau large (15 novembre 2026) : le cadre prend la largeur du tableau (scene.L de 760 à 1596) ; les deux loupes
- * s’élargissent (les entités gardent leur place relative dans la fenêtre), les légendes se centrent. */
-let LL = 760;
-function placerLoupes(L) {
-  if (L === LL) return;
+ * s’élargissent (les entités gardent leur place relative dans la fenêtre). */
+let LL = 760, LY = 92, LH = 236;
+function placerLoupes(L, y = 92, h = 236) {
+  if (L === LL && y === LY && h === LH) return;
   const w = (L - 160) / 2, avant = BOX.map(b => ({ ...b }));
   BOX[0].w = w; BOX[1].x = 120 + w; BOX[1].w = w;
-  S.loupes.forEach((Lp, k) => { for (const q of Lp.parts) q.x = BOX[k].x + (q.x - avant[k].x) / avant[k].w * BOX[k].w; });
-  LL = L;
+  for (const b of BOX) { b.y = y; b.h = h; }
+  S.loupes.forEach((Lp, k) => { for (const q of Lp.parts) { q.x = BOX[k].x + (q.x - avant[k].x) / avant[k].w * BOX[k].w; q.y = BOX[k].y + (q.y - avant[k].y) / avant[k].h * BOX[k].h; } });
+  LL = L; LY = y; LH = h;
 }
-let T = 1;   // facteur d’écriture (tableau large)
+/* Deuxième passe (« agrandir les figures elles-mêmes ») : sur un tableau large, tailles en px À L'ÉCRAN (u(px) = px / scene.s),
+ * titre interne retiré ; les deux loupes prennent toute la hauteur : leur titre au-dessus, une ligne sous chacune (entités à gauche,
+ * rencontres par seconde à droite), en bas la légende (à gauche) et la remarque (à droite). */
 function dessiner(c) {
   scene.cadre(41);
-  placerLoupes(Math.max(760, scene.L || 760));
+  const L = Math.max(760, scene.L || 760), large = L >= 1000, u = px => px / (c.echelle || 1);
+  if (large) {
+    const haut = u(24) + u(12), bas = 420 - u(10) - u(34) - u(26);
+    placerLoupes(L, Math.round(haut), Math.round(bas - haut));
+  } else placerLoupes(L);
   const XC = LL / 2;
-  T = (scene.L || 760) >= 1000 ? 1.25 : 1;   // tableau large : écriture plus grande
-  c.texte('À la loupe : le même mélange H₂O₂ + I⁻, deux béchers', XC, 26, { couleur: 'blanc', taille: 17 * T, align: 'center' });
-  c.direct(() => { ion(c.ctx, XC - 130, 52, 6.5); h2o2(c.ctx, XC - 10, 52, 0.4, 0.8); });
-  c.texte('ion I⁻', XC - 118, 57, { couleur: 'violet', taille: 15 * T });
-  c.texte('molécule H₂O₂', XC + 6, 57, { couleur: 'rouge', taille: 15 * T });
-  c.texte('✦ rencontre', XC + 140, 57, { couleur: 'jaune', taille: 15 * T });
+  const T = large ? { titre: u(22), leg: u(18), sous: u(18), rythme: u(20), note: u(18), ralenti: u(17) } : { titre: 17, leg: 15, sous: 14, rythme: 16, note: 14, ralenti: 13 };
+  const yLeg = large ? 420 - u(10) : 57, yNote = large ? 420 - u(10) : 410;
+  if (!large) c.texte('À la loupe : le même mélange H₂O₂ + I⁻, deux béchers', XC, 26, { couleur: 'blanc', taille: 17, align: 'center' });
+  // La légende : en haut au centre (cadre 760), en bas à gauche (tableau large).
+  const xl = large ? BOX[0].x + u(10) : XC - 136, m = s => { c.ctx.font = `${T.leg}px ${window.Tableau.POLICE}`; return c.ctx.measureText(s).width; };
+  const lx = large ? [xl + u(14), xl + u(14) + m('ion I⁻') + u(40), xl + u(14) + m('ion I⁻') + m('molécule H₂O₂') + u(70)] : [XC - 118, XC + 6, XC + 140];
+  c.direct(() => { ion(c.ctx, lx[0] - (large ? u(14) : 12), yLeg - T.leg * .33, large ? u(8) : 6.5); h2o2(c.ctx, lx[1] - (large ? u(16) : 16), yLeg - T.leg * .33, 0.4, large ? u(1) : 0.8); });
+  c.texte('ion I⁻', lx[0], yLeg, { couleur: 'violet', taille: T.leg });
+  c.texte('molécule H₂O₂', lx[1], yLeg, { couleur: 'rouge', taille: T.leg });
+  c.texte('✦ rencontre', lx[2], yLeg, { couleur: 'jaune', taille: T.leg });
   c.direct(() => {
-    S.loupes.forEach((L, k) => {
-      const b = BOX[k], chaud = VUE === 'temperature' && L.p.theta > 25;
+    S.loupes.forEach((Lp, k) => {
+      const b = BOX[k], chaud = VUE === 'temperature' && Lp.p.theta > 25;
       fenetre(c.ctx, b, chaud);
       c.rect(b.x, b.y, b.w, b.h, { arrondi: 14, couleur: chaud ? 'orange' : VUE === 'temperature' ? 'cyan' : 'faible', largeur: 2.2, tremble: 0 });
-      L.parts.forEach((q, i) => (q.type === 'I' ? ion(c.ctx, q.x, q.y, RI - 1.5) : h2o2(c.ctx, q.x, q.y, i * 1.7 + S.t * 1.3 * (i % 2 ? 1 : -1), 1)));
-      for (const e of L.etoiles) { const a = 1 - (S.t - e.t) / 0.5; c.texte('✦', e.x, e.y + 7, { couleur: 'jaune', taille: 14 * T + 10 * a, align: 'center', alpha: Math.max(0.2, a) }); }
-      const titre = VUE === 'temperature' ? `${L.p.theta} °C` : `[I⁻]₀ = ${fx(L.p.c)} mol/L`;
-      c.texte(titre, b.x + b.w / 2, b.y - 8, { couleur: chaud ? 'orange' : VUE === 'temperature' ? 'cyan' : 'blanc', taille: 17 * T, align: 'center' });
-      c.repere(repereLoupe(k), b.x - 6, b.y - 28, b.w + 12, b.h + 34, (k === 0 ? 'la loupe de gauche : ' : 'la loupe de droite : ') + titre);
-      c.texte(`${nI(L.p)} I⁻ et ${NH} H₂O₂`, b.x + b.w / 2, b.y + b.h + 22, { couleur: 'faible', taille: 14 * T, align: 'center' });
-      if (S.t - L.depuis >= 2) {
-        c.texte(`${fx(parSeconde(L), 1)} rencontres par seconde`, b.x + b.w / 2, b.y + b.h + 46, { couleur: 'jaune', taille: 16 * T, align: 'center' });
-        c.repere('compteur_' + repereLoupe(k).replace('becher_', ''), b.x, b.y + b.h + 28, b.w, 26, 'le nombre de rencontres par seconde, ' + titre);
+      Lp.parts.forEach((q, i) => (q.type === 'I' ? ion(c.ctx, q.x, q.y, RI - 1.5) : h2o2(c.ctx, q.x, q.y, i * 1.7 + S.t * 1.3 * (i % 2 ? 1 : -1), 1)));
+      for (const e of Lp.etoiles) { const a = 1 - (S.t - e.t) / 0.5; c.texte('✦', e.x, e.y + 7, { couleur: 'jaune', taille: (large ? 17.5 : 14) + 10 * a, align: 'center', alpha: Math.max(0.2, a) }); }
+      const titre = VUE === 'temperature' ? `${Lp.p.theta} °C` : `[I⁻]₀ = ${fx(Lp.p.c)} mol/L`;
+      c.texte(titre, b.x + b.w / 2, b.y - (large ? u(10) : 8), { couleur: chaud ? 'orange' : VUE === 'temperature' ? 'cyan' : 'blanc', taille: T.titre, align: 'center' });
+      c.repere(repereLoupe(k), b.x - 6, b.y - (large ? u(34) : 28), b.w + 12, b.h + (large ? u(34) : 34), (k === 0 ? 'la loupe de gauche : ' : 'la loupe de droite : ') + titre);
+      const ys = b.y + b.h + (large ? u(26) : 22);
+      c.texte(`${nI(Lp.p)} I⁻ et ${NH} H₂O₂`, large ? b.x + u(6) : b.x + b.w / 2, ys, { couleur: 'faible', taille: T.sous, align: large ? 'left' : 'center' });
+      if (S.t - Lp.depuis >= 2) {
+        const yr = large ? ys : b.y + b.h + 46;
+        c.texte(`${fx(parSeconde(Lp), 1)} rencontres par seconde`, large ? b.x + b.w - u(6) : b.x + b.w / 2, yr, { couleur: 'jaune', taille: T.rythme, align: large ? 'right' : 'center' });
+        c.repere('compteur_' + repereLoupe(k).replace('becher_', ''), large ? b.x + b.w / 2 : b.x, yr - (large ? u(22) : 18), large ? b.w / 2 : b.w, large ? u(28) : 26, 'le nombre de rencontres par seconde, ' + titre);
       }
     });
     c.repere('loupe', BOX[0].x, BOX[0].y - 30, BOX[1].x + BOX[1].w - BOX[0].x, BOX[0].h + 34, 'les deux loupes : les entités qui bougent et se rencontrent');
+    const xn = large ? BOX[1].x + BOX[1].w : XC, an = large ? 'right' : 'center';
     if (VUE === 'temperature') {
-      c.texte('même nombre d’entités des deux côtés : même état final', XC, 410, { couleur: 'faible', taille: 14 * T, align: 'center' });
-      c.repere('nombre', XC - 220, 394, 440, 22, 'les mêmes entités, en même nombre');
-    } else c.texte('même température (20 °C) des deux côtés', XC, 410, { couleur: 'faible', taille: 14 * T, align: 'center' });
-    if (S.running || S.pause) c.texte(`(ralenti)`, LL - 20, 30, { couleur: 'faible', taille: 13 * T, align: 'right' });
+      const note = 'même nombre d’entités des deux côtés : même état final';
+      c.texte(note, xn, yNote, { couleur: 'faible', taille: T.note, align: an });
+      if (large) { c.ctx.font = `${T.note}px ${window.Tableau.POLICE}`; const w = c.ctx.measureText(note).width; c.repere('nombre', xn - w - 6, yNote - T.note - 4, w + 12, T.note + 10, 'les mêmes entités, en même nombre'); }
+      else c.repere('nombre', XC - 220, 394, 440, 22, 'les mêmes entités, en même nombre');
+    } else c.texte('même température (20 °C) des deux côtés', xn, yNote, { couleur: 'faible', taille: T.note, align: an });
+    if (S.running || S.pause) c.texte(`(ralenti)`, LL - 20, large ? u(22) : 30, { couleur: 'faible', taille: T.ralenti, align: 'right' });
   });
   return c.fin();
 }

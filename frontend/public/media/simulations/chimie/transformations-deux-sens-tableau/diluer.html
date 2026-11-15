@@ -13,6 +13,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
 <script src="exposants.js"></script>
+<script src="zones.js"></script>
 <script src="deroule.js"></script>
 <script>
 /*
@@ -65,9 +66,18 @@ function courante(D) {
   return { m: mesure(dil < 1 ? avant : cur.C), avant, dil, mes: Math.min(1, mes), libre: false };
 }
 
+/* Tableau large (deuxième passe, « agrandir les figures ») : Scene({ large: true }) ; le dessin d'origine, sans son titre
+ * (celui de la diapositive le dit), serré sur sa hauteur réelle et agrandi sur toute la hauteur (zones.js). En dessous de
+ * L_MIN (grand écran) : la disposition d'origine. */
+const ZONE_LARGE = { cols: [{ zs: [[14, 42, 756, 416]], max: 1.7 }] };
 function dessiner(c, D) {
   D.scene.cadre(41);
-  c.texte('Acide éthanoïque : on dilue, on mesure le pH, on calcule τ', 380, 26, { couleur: 'blanc', taille: 17, align: 'center' });
+  const large = D.scene.L >= Zones.L_MIN;
+  Zones.dessiner(c, D.scene.L, large ? ZONE_LARGE : null, () => dessinerVue(c, D, large));
+  return c.fin();
+}
+function dessinerVue(c, D, large) {
+  if (!large) c.texte('Acide éthanoïque : on dilue, on mesure le pH, on calcule τ', 380, 26, { couleur: 'blanc', taille: 17, align: 'center' });
   const cu = courante(D), m = cu.m;
   // Peints (règle 32) : le bécher en verre, sa solution incolore (un peu plus voilée quand elle est concentrée),
   // le pH-mètre (boîtier, écran, câble) et son électrode de verre qui trempe dans la solution.
@@ -102,10 +112,11 @@ function dessiner(c, D) {
     window.Peinture.loupeCadre(ctx, LP.x, LP.y, LP.r);
     c.texte(`${n} sur 25 ont réagi`, LP.x, LP.y + LP.r + 22, { couleur: 'jaune', taille: 16, align: 'center' });
   });
-  c.direct(() => { const yl = LP.y + LP.r + 46; window.Peinture.sphere(c.ctx, LP.x - 92, yl, 4.5, COUL.acide); window.Peinture.sphere(c.ctx, LP.x - 10, yl, 4.5, COUL.base); window.Peinture.sphere(c.ctx, LP.x + 64, yl, 4.5, COUL.oxonium); });
-  c.texte('CH₃COOH', LP.x - 84, LP.y + LP.r + 51, { couleur: 'faible', taille: 13 });
-  c.texte('CH₃COO⁻', LP.x - 2, LP.y + LP.r + 51, { couleur: 'faible', taille: 13 });
-  c.texte('H₃O⁺', LP.x + 72, LP.y + LP.r + 51, { couleur: 'faible', taille: 13 });
+  const LG = large ? [-136, -36, 62] : [-92, -10, 64];   // tableau large : légende plus grosse (17 px à l'écran), entrées écartées
+  c.direct(() => { const yl = LP.y + LP.r + 46; window.Peinture.sphere(c.ctx, LP.x + LG[0], yl, 4.5, COUL.acide); window.Peinture.sphere(c.ctx, LP.x + LG[1], yl, 4.5, COUL.base); window.Peinture.sphere(c.ctx, LP.x + LG[2], yl, 4.5, COUL.oxonium); });
+  c.texte('CH₃COOH', LP.x + LG[0] + 8, LP.y + LP.r + 51, { couleur: 'faible', taille: 13 });
+  c.texte('CH₃COO⁻', LP.x + LG[1] + 8, LP.y + LP.r + 51, { couleur: 'faible', taille: 13 });
+  c.texte('H₃O⁺', LP.x + LG[2] + 8, LP.y + LP.r + 51, { couleur: 'faible', taille: 13 });
   // À droite : la relation, une ligne par solution, les barres de τ.
   if (D.commence('relation')) {
     D.ecrire(c, 'relation');
@@ -142,7 +153,6 @@ function dessiner(c, D) {
     c.texte('⚠ Le pH monte aussi : moins d’ions H₃O⁺ par litre, mais une plus grande part de l’acide a réagi.', 380, 412, { couleur: 'orange', taille: 15, align: 'center', max: 740 });
     c.repere('conclusion', R.x, 366, 380, 28, 'la conclusion');
   }
-  return c.fin();
 }
 function barre(c, x, h, C, tau, col, ecrit) {
   c.direct(() => {
@@ -171,6 +181,7 @@ regl.input.addEventListener('input', lireC); lireC();
 document.getElementById('reglage').replaceChildren(regl);
 
 const DER = window.Deroule({
+  scene: { large: true },
   id: 'transformations_deux_sens_diluer', titre: 'La dilution augmente τ', etapes, dessiner, voir,
   params: () => ({ concentration_mol_l: P.libre }),
   appliquer: p => {

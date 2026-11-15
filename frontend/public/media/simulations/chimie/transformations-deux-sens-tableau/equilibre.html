@@ -840,10 +840,12 @@ function dessiner(c, M) {
   MO = M; M.scene.cadre(83);
   const v = M.S.vue;
   // Tableau large (≥ 1000) : la vue est découpée en zones rangées sur toute la largeur (zones.js, ZONES plus bas).
-  const Z = ZONES[v] || { cols: [[[0, 40, 760, 420]]] }, large = M.scene.L >= Zones.L_MIN;
+  // Deuxième passe (« agrandir les figures ») : le titre interne est retiré (celui de la diapositive le dit) ; une vue à
+  // colonne de phrases prend Zones.avecColonne : phrases à 20 px à l'écran sur toute la hauteur, figure agrandie à droite.
+  const Z0 = ZONES[v] || { cols: [[[0, 40, 760, 420]]] }, large = M.scene.L >= Zones.L_MIN;
+  const Z = large && Z0.colonne ? Zones.avecColonne(M.scene.L, M.scene.s, Z0.cols.slice(1), Z0.large) : Z0;
   M.colonne = large && Z.colonne ? Z.colonne : null;
   const titre = () => c.texte(TITRE_TABLEAU[v], 14, 26, { couleur: 'cyan', taille: large ? 24 : 20, max: large ? 900 : (v === 'inverse' ? 280 : 560) });
-  if (large) titre();
   Zones.dessiner(c, M.scene.L, large ? Z : null, () => {
     if (!large) titre();
     M.vues = ({ inverse: vueInverse, double_fleche: vueDoubleFleche, etat: vueEtat, dynamique: vueDynamique, esterification: vueEsterification })[v](c, M);
@@ -854,7 +856,8 @@ function dessiner(c, M) {
 /* Zones du tableau large, par vue : colonnes de rectangles du dessin d'origine (760 × 420). */
 const ZONES = {
   // la colonne de gauche : les phrases écrites au fil du déroulé (coupées à la ligne) ; à droite l'expérience, grandie
-  inverse: { cols: [[[796, 46, 1054, 414]], [[14, 40, 762, 350]]], colonne: { x: 800, w: 250, y0: 70, pas: 26, taille: 19 } },
+  // (deuxième passe) étiquettes des trois béchers serrées : plancher 15 px dans la figure
+  inverse: { cols: [[[796, 46, 1054, 414]], [[14, 40, 762, 350]]], colonne: { x: 800, w: 250, y0: 70, pas: 26, taille: 19 }, large: { pxMinFig: 15 } },
   double_fleche: { cols: [[[796, 46, 1054, 414]], [[14, 40, 752, 362]]], colonne: { x: 800, w: 250, y0: 70, pas: 26, taille: 19 } },
   etat: { cols: [[[796, 46, 1054, 414]], [[14, 30, 762, 380]]], colonne: { x: 800, w: 250, y0: 70, pas: 26, taille: 19 } },
   dynamique: { cols: [[[796, 46, 1054, 414]], [[14, 44, 762, 370]]], colonne: { x: 800, w: 250, y0: 70, pas: 26, taille: 19 } },

@@ -470,21 +470,22 @@ function quadrillage(c, g, a) {
 }
 /** Axes, graduations et noms (à la craie). */
 function axesGraphe(c, g, o = {}) {
-  const t = o.taille ?? 14;
+  const t = o.taille ?? D.axes, dy = D.gradY;
   c.fleche(g.x0, g.y0, g.x0 + g.w + 14, g.y0, { largeur: 1.8 });
   c.fleche(g.x0, g.y0, g.x0, g.y0 - g.h - 12, { largeur: 1.8 });
   for (let v = g.xmin + g.dx; v <= g.xmax + 1e-9; v += g.dx) {
     c.ligne(g.X(v), g.y0 - 4, g.X(v), g.y0 + 4, { largeur: 1.3, duree: .02 });
-    if (proche(v, g.xLab)) c.texte(nbr(v, 1), g.X(v), g.y0 + 18, { couleur: 'faible', taille: t, align: 'center', duree: .08 });
+    if (proche(v, g.xLab)) c.texte(nbr(v, 1), g.X(v), g.y0 + dy, { couleur: 'faible', taille: t, align: 'center', duree: .08 });
   }
-  c.texte(nbr(g.xmin, 1), g.x0 - 3, g.y0 + 18, { couleur: 'faible', taille: t, align: 'right', duree: .05 });
+  c.texte(nbr(g.xmin, 1), g.x0 - 3, g.y0 + dy, { couleur: 'faible', taille: t, align: 'right', duree: .05 });
   for (let v = g.ymin + g.dy; v <= g.ymax + 1e-9; v += g.dy) {
     c.ligne(g.x0 - 4, g.Y(v), g.x0 + 4, g.Y(v), { largeur: 1.3, duree: .02 });
     if (proche(v, g.yLab)) c.texte(nbr(v, g.dec ?? 1), g.x0 - 7, g.Y(v) + 5, { couleur: 'faible', taille: t, align: 'right', duree: .08 });
   }
   if (g.ymin !== 0) c.texte(nbr(g.ymin, 1), g.x0 - 7, g.y0 + 2, { couleur: 'faible', taille: t, align: 'right', duree: .05 });
-  c.texte(g.xNom, g.xNomAt ? g.xNomAt[0] : g.x0 + g.w + 2, g.xNomAt ? g.xNomAt[1] : g.y0 + 34, { couleur: 'blanc', taille: 15, align: g.xNomAlign ?? 'right' });
-  c.texte(g.yNom, g.x0 + 10, g.y0 - g.h - 2, { couleur: 'blanc', taille: 15 });
+  if (D.large) c.texte(g.xNom, g.x0 + g.w + 14, g.y0 + dy + D.nomAxe * 1.1, { couleur: 'blanc', taille: D.nomAxe, align: 'right' });   // sous la flèche, sous la ligne des graduations
+  else c.texte(g.xNom, g.xNomAt ? g.xNomAt[0] : g.x0 + g.w + 2, g.xNomAt ? g.xNomAt[1] : g.y0 + 34, { couleur: 'blanc', taille: 15, align: g.xNomAlign ?? 'right' });
+  c.texte(g.yNom, g.x0 + 10, g.y0 - g.h - 2, { couleur: 'blanc', taille: D.nomAxe });
 }
 /** Trace f de a à a + (b − a)·p (craie, en direct). */
 function tracer(c, g, f, a, b, p, col, o = {}) {
@@ -608,8 +609,8 @@ const ION = { h3o: ['#ffe1c7', '#f97316', '#7c2d12'], na: ['#f3e8ff', '#a855f7',
 
 /* ── Le graphe (à gauche), le panneau (à droite), les lignes du bas ────────────────────────────────────────────────── */
 const GX = { x0: 66, y0: 300, w: 380, h: 236 };
-const PX = 516, PW = 234;
-const ZY = [356, 380, 404];
+let PX = 516, PW = 234;
+let ZY = [356, 380, 404];
 let F = null;
 const pctA = pKa => ph => 100 / (1 + Math.pow(10, ph - pKa));   // % de la forme acide (tracé seulement)
 const pctB = pKa => ph => 100 / (1 + Math.pow(10, pKa - ph));   // % de la forme basique
@@ -855,26 +856,107 @@ function calculGraphe(c, M, p) {
 /* Étiquettes écrites à la craie sur le graphe (une fois l’étape commencée). */
 function etiquettes(c, M, nom) {
   const f = F, g = f.G;
-  if (nom === 'courbe' && f.type === 'distribution') f.courbes.forEach(k => c.texte(k.nom, g.X(k.lab[0]), g.Y(k.lab[1]), { couleur: k.col, taille: 15 }));
-  if (nom === 'construction' && f.type === 'distribution') c.texte('50 %', g.X(14) + 4, g.Y(50) + 5, { couleur: 'jaune', taille: 14 });
+  if (nom === 'courbe' && f.type === 'distribution') f.courbes.forEach(k => c.texte(k.nom, g.X(k.lab[0]), g.Y(k.lab[1]), { couleur: k.col, taille: D.eti }));
+  if (nom === 'construction' && f.type === 'distribution') {
+    if (D.large) c.texte('50 %', g.X(14) - 4, g.Y(50) - 8, { couleur: 'jaune', taille: D.lec, align: 'right' });   // au-dessus du trait, au bout du graphe
+    else c.texte('50 %', g.X(14) + 4, g.Y(50) + 5, { couleur: 'jaune', taille: D.lec });
+  }
   if (nom === 'construction' && f.type === 'derivee') {
-    ligneM(c, g.X(23.2), g.Y(5.6), [{ frac: ['dpH', 'dV_b'] }], { taille: 15, couleur: 'orange' });
+    ligneM(c, g.X(23.2), g.Y(5.6), [{ frac: ['dpH', 'dV_b'] }], { taille: D.eti, couleur: 'orange' });
     c.fleche(g.X(23.6), g.Y(3.6), g.X(21.4), g.Y(f.derivee(21.4)) - 4, { couleur: 'orange', largeur: 1.5, tete: 7 });
   }
   if (nom === 'lecture') {
-    if (f.type === 'distribution') c.texte(f.point.lab, g.X(f.point.labX ?? f.point.x) - 10, g.Y(f.point.labY ?? 50) - 8, { couleur: 'jaune', taille: 15, align: 'right' });
-    if (f.type === 'distribution' && f.marque) c.texte('11,88', g.X(f.marque.x) + 4, g.Y(64), { couleur: 'violet', taille: 14 });
-    if (f.type === 'dosage') c.texte('E', g.X(f.E.x) + (f.T.s > 0 ? -16 : 10), g.Y(f.E.y) + (f.T.s > 0 ? -2 : -6), { couleur: 'jaune', taille: 17 });
-    if (f.type === 'derivee') { c.texte('20', g.X(20), g.y0 + 34, { couleur: 'jaune', taille: 14, align: 'center' }); c.texte('4,4', g.x0 + 4, g.Y(4.4) - 6, { couleur: 'jaune', taille: 14 }); }
+    if (f.type === 'distribution') c.texte(f.point.lab, g.X(f.point.labX ?? f.point.x) - 10, g.Y(f.point.labY ?? 50) - 8, { couleur: 'jaune', taille: D.eti, align: 'right' });
+    if (f.type === 'distribution' && f.marque) c.texte('11,88', g.X(f.marque.x) + 4, g.Y(64), { couleur: 'violet', taille: D.lec });
+    if (f.type === 'dosage') c.texte('E', g.X(f.E.x) + (f.T.s > 0 ? -16 : 10), g.Y(f.E.y) + (f.T.s > 0 ? -2 : -6), { couleur: 'jaune', taille: D.E });
+    if (f.type === 'derivee') { c.texte('20', g.X(20), g.y0 + D.gradY + D.lec + 2, { couleur: 'jaune', taille: D.lec, align: 'center' }); c.texte('4,4', g.x0 + 4, g.Y(4.4) - 6, { couleur: 'jaune', taille: D.lec }); }
   }
   if (nom === 'calcul') {
-    if (f.type === 'distribution' && f.calc.de === 'x') c.texte('20 %', g.x0 + 4, g.Y(f.calc.y) - 6, { couleur: 'violet', taille: 14 });
-    if (f.type === 'distribution' && f.calc.de === 'y') c.texte('10,2', g.X(f.calc.x) - 4, g.Y(30), { couleur: 'violet', taille: 14, align: 'right' });
-    if (f.bande) c.texte(f.bande.nom, g.X(g.xmax) + 20, g.Y(f.bande.b) - 8, { couleur: 'blanc', taille: 13, align: 'center' });
+    if (f.type === 'distribution' && f.calc.de === 'x') c.texte('20 %', g.x0 + 4, g.Y(f.calc.y) - 6, { couleur: 'violet', taille: D.lec });
+    if (f.type === 'distribution' && f.calc.de === 'y') c.texte('10,2', g.X(f.calc.x) - 4, g.Y(30), { couleur: 'violet', taille: D.lec, align: 'right' });
+    if (f.bande) {
+      if (D.large) c.texte(f.bande.nom, g.X(g.xmax) + 26, g.Y(f.bande.b) - 8, { couleur: 'blanc', taille: D.lec, align: 'right' });   // au-dessus de la bande, vers la gauche (dans le graphe)
+      else c.texte(f.bande.nom, g.X(g.xmax) + 20, g.Y(f.bande.b) - 8, { couleur: 'blanc', taille: 13, align: 'center' });
+    }
   }
 }
 
 const ORDRE = ['axes', 'courbe', 'construction', 'lecture', 'calcul'];
+/* Deuxième passe (15 novembre 2026, « agrandir les graphes eux-mêmes ») — méthode de transformations-deux-sens-tableau/figures.html :
+ * sur un tableau large (scene.L ≥ 1000), les tailles sont choisies en PIXELS À L'ÉCRAN (u(px) = px / échelle) ; trois colonnes :
+ * à gauche les phrases du déroulé (coupées à la ligne), au centre le graphe sur toute la hauteur (50 à 62 % de la largeur),
+ * à droite le panneau (coupé à la ligne ; une ligne à fractions est coupée entre deux morceaux). On garde la plus grande
+ * écriture (22 → 17 px) qui fait tenir le panneau, puis le plus grand graphe. Le titre interne est retiré (la diapositive le dit).
+ * L < 1000 : la disposition d'origine, inchangée. */
+let D = { large: false, axes: 14, gradY: 18, nomAxe: 15, eti: 15, lec: 14, E: 17 };
+/** Une phrase coupée en lignes qui tiennent dans `max` (mesurée à la craie). */
+function couper(c, t, max, taille) {
+  const mots = String(t).split(' '), out = []; let l = '';
+  for (const m of mots) { const e = l ? l + ' ' + m : m; if (l && larg(c, e, taille) > max) { out.push(l); l = m; } else l = e; }
+  if (l) out.push(l);
+  return out;
+}
+/** Les lignes du panneau coupées à la largeur `cote` (taille t) : { nom: [{ t | m, col, h }] } et la hauteur totale. */
+function panneauCoupe(c, f, cote, t, pas, ecart) {
+  const out = {}; let y = 0;
+  const hFrac = Math.round(t * 3.2);
+  for (const nom of ORDRE) {
+    const lignes = f.panneau[nom]; if (!lignes) continue;
+    const l2 = [];
+    for (const [txt, col] of lignes) {
+      if (txt && txt.m) {                              // morceaux (fractions dessinées) : coupés entre deux morceaux
+        let cur = [], w = 0;
+        const pousser = () => { if (cur.length) l2.push({ m: cur, col, h: cur.some(p => p && p.frac) ? hFrac : pas }); cur = []; w = 0; };
+        for (const p of txt.m) { const lp = largeurMorceau(c, p, t); if (cur.length && w + 6 + lp > cote) pousser(); w += (cur.length ? 6 : 0) + lp; cur.push(p); }
+        pousser();
+      } else for (const m of couper(c, String(txt).trim(), cote, t)) l2.push({ t: m, col, h: pas });
+    }
+    out[nom] = l2; y += l2.reduce((a, l) => a + l.h, 0) + ecart;
+  }
+  return { lignes: out, h: y - ecart };
+}
+function disposer(L, c, s, f) {
+  const g = f.G;
+  if (L < 1000) {
+    Object.assign(g, GX); PX = 516; PW = 234; ZY = [356, 380, 404];
+    D = { large: false, axes: 14, gradY: 18, nomAxe: 15, eti: 15, lec: 14, E: 17 };
+    return;
+  }
+  const u = px => px / (s || 1), HAUT = 420, M0 = 12;
+  let choix = null;
+  const essai = (px, part, serre) => {
+    const t = u(px), pas = Math.round(t * (serre ? 1.12 : 1.28)), ecart = Math.round(t * (serre ? .3 : .55));
+    const cote = Math.floor((L - L * part - 2 * M0) / 2) - u(10), y0 = Math.round(t + u(10));
+    const P = panneauCoupe(c, f, cote, t, pas, ecart);
+    const larges = Object.values(P.lignes).every(l => l.every(x => !x.m || x.m.length === 1 || placer(c, 0, x.m, t, { gap: 6 }).tot <= cote + 1));
+    return { px, part, t, pas, ecart, cote, y0, P, ok: larges && y0 + P.h - pas + u(6) <= HAUT - 6 };
+  };
+  // ordre des essais : écriture de 19 à 22 px et graphe de 50 à 62 %, le meilleur compromis d'abord (score px + 25 × part),
+  // puis 18 et 17 px
+  const cands = [];
+  for (const px of [22, 21, 20, 19, 18, 17]) for (const part of [.62, .58, .54, .5]) cands.push([px, part, (px >= 19 ? 100 : 0) + px + 25 * part]);
+  cands.sort((a, b) => b[2] - a[2]);
+  for (const [px, part] of cands) { const e = essai(px, part); if (e.ok) { choix = e; break; } }
+  if (!choix) choix = essai(17, .48, true);           // rien ne tient : 17 px, interligne resserré
+  const { t, pas, cote } = choix;
+  const gx0 = M0 + cote + u(10), gx1 = L - M0 - cote - u(10);
+  const droite = f.type === 'dosage' ? u(34) : u(22);   // la bande de l'indicateur à droite du graphe
+  const haut = u(16) + u(22), y0 = HAUT - u(54);
+  Object.assign(g, { x0: gx0 + u(46), y0, w: Math.max(200, gx1 - gx0 - u(46) - droite), h: Math.max(160, y0 - haut) });
+  PX = L - M0 - cote; PW = cote;
+  // le panneau : position de chaque ligne (y = ligne de base) et boîte de chaque groupe (pour les repères)
+  const place = {}; let y = choix.y0;
+  for (const nom of ORDRE) {
+    const l = choix.P.lignes[nom]; if (!l) continue;
+    const debut = y - t - 2; const ys = [];
+    let yb = y;
+    for (const x of l) { ys.push(x.h > pas ? yb + x.h - pas - .4 * t : yb); yb += x.h; }
+    place[nom] = { ys, lignes: l, boite: [debut, yb - pas + t * .45 - debut] };
+    y = yb + choix.ecart;
+  }
+  D = { large: true, L, px: choix.px, part: choix.part, axes: u(18), gradY: 6 + u(18), nomAxe: u(19), eti: u(19), lec: u(18), E: u(21), t, pas, place, y0: choix.y0, cote, M0 };
+  ZY = []; for (let yy = choix.y0; yy <= HAUT - 8; yy += pas) ZY.push(yy);
+}
 /* Recomposition sur la largeur (tableau large, L ≥ 1000 : voir Recompose dans exposants.js) ; cadre 760 × 420 :
  * le graphe étiré à gauche avec les phrases du bas dessous, le panneau à droite agrandi. */
 const BLOCS_RC = [{ r: [10, 6, 740, 28], haut: true }, { r: [460, 40, 300, 262] }, { r: [10, 306, 660, 74] }, { r: [20, 40, 436, 272], etire: true }];
@@ -883,8 +965,10 @@ function dessiner(c, M) {
   // Essayé le 15 novembre 2026 : le panneau (fractions, lignes ajoutées à chaque étape) se recompose mal en blocs ;
   // la figure garde sa disposition, centrée dans le tableau large (BLOCS_RC laissé pour une reprise).
   window.Recompose(c, M.scene, null);
-  c.texte(f.titre, 14, 26, { couleur: 'cyan', taille: 20, max: 560 });
-  c.texte(`diapositive ${f.diapo}`, 746, 26, { couleur: 'faible', taille: 15, align: 'right' });
+  disposer(M.scene.L, c, M.scene.s, f);
+  if (D.large) c.__rc = null;                        // deuxième passe : disposition propre sur toute la largeur (pas de centrage)
+  if (!D.large) c.texte(f.titre, 14, 26, { couleur: 'cyan', taille: 20, max: 560 });
+  if (!D.large) c.texte(`diapositive ${f.diapo}`, 746, 26, { couleur: 'faible', taille: 15, align: 'right' });
   if (M.commence('axes')) quadrillage(c, g, lisse(M.p('axes')));
   c.direct(() => {
     if (M.commence('courbe')) f.courbes.forEach(k => tracer(c, g, k.f, k.a, k.b, M.p('courbe'), k.col, { pointille: k.pointille }));
@@ -896,6 +980,15 @@ function dessiner(c, M) {
   let y = 64; const ecrites = [], panneau = {};
   for (const nom of ORDRE) {
     const lignes = f.panneau[nom]; if (!lignes) continue;
+    if (D.large) {
+      const q = D.place[nom];
+      panneau[nom] = () => q.lignes.forEach((l, i) => {
+        if (l.m) ligneM(c, PX, q.ys[i], l.m, { taille: D.t, couleur: l.col, gap: 6 });
+        else c.texte(l.t, PX, q.ys[i], { couleur: l.col, taille: D.t, max: PW });
+      });
+      if (M.commence(nom)) ecrites.push(...lignes.map(l => (l[0] && l[0].txt) || l[0]));
+      continue;
+    }
     const ys = []; let yb = y;
     for (const l of lignes) { const h = l[2] ?? 22; ys.push(yb + h - 22 - (h > 22 ? 6 : 0)); yb += h; }
     y = yb + 7;
@@ -906,8 +999,11 @@ function dessiner(c, M) {
     if (M.commence(nom)) ecrites.push(...lignes.map(l => (l[0] && l[0].txt) || l[0]));
   }
   M.panneau = ecrites;
-  M.vues = zoneEcriture(c, M, etapesDe(M.S.vue).map(e => ({ nom: e.nom, lignes: [[f.bas[e.nom], e.nom === 'calcul' ? 'jaune' : 'blanc']],
-    plus: () => { if (e.nom === 'axes') axesGraphe(c, g); etiquettes(c, M, e.nom); panneau[e.nom] && panneau[e.nom](); } })), ZY, { taille: 16 });
+  // tableau large : chaque phrase va à la ligne dans la colonne de gauche ; sinon une ligne en bas
+  const lignesBas = t => (D.large ? couper(c, t, D.cote, D.t) : [t]);
+  M.vues = zoneEcriture(c, M, etapesDe(M.S.vue).map(e => ({ nom: e.nom, lignes: lignesBas(f.bas[e.nom]).map(t => [t, e.nom === 'calcul' ? 'jaune' : 'blanc']),
+    plus: () => { if (e.nom === 'axes') axesGraphe(c, g); etiquettes(c, M, e.nom); panneau[e.nom] && panneau[e.nom](); } })), ZY,
+    D.large ? { x: D.M0, max: D.cote, taille: D.t } : { taille: 16 });
   reperes(c, M);
   return c.fin();
 }
@@ -915,6 +1011,7 @@ const seg = (p, a, b) => clamp((p - a) / (b - a), 0, 1);
 
 /* ── Repères (tous déclarés dès le début ; le libellé dit à quel moment ils apparaissent) ─────────────────────────── */
 function panneauY(nom) {
+  if (D.large) { const q = D.place[nom]; return q ? q.boite : [D.y0 - D.t, 30]; }
   let y = 64;
   for (const n of ORDRE) {
     const l = F.panneau[n]; if (!l) continue;

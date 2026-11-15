@@ -12,6 +12,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
 <script src="exposants.js"></script>
+<script src="blocs.js"></script>
 <script>
 /*
  * Conductimétrie et constante d’équilibre (cours phys_ch12_etat_equilibre « État d’équilibre d’un système chimique », 2e Bac PC BIOF, novembre 2026).
@@ -178,8 +179,14 @@ function Moteur(o) {
  * déplacé dans la place libre à droite (grp(c, nom, fn) entoure son dessin ET son repère, que le professeur pointe donc
  * au bon endroit). Les autres vues, et tout le grand écran (L < 1000), gardent l'ajustement automatique. */
 const LARGE = {};
+/* Deuxième passe (15 novembre 2026, « agrandir les figures elles-mêmes ») : une vue déclarée dans BLOCS[vue] est
+ * redistribuée en colonnes par blocs.js (la figure sur toute la hauteur, les colonnes de texte agrandies autour) ;
+ * elle passe avant LARGE. */
+const BLOCS = {};
 let LG = null;
 function poser(c, M) {
+  const bl = window.Blocs && window.Blocs.poser(c, M.scene, BLOCS[M.S.vue]);
+  if (bl) { LG = bl.lg ? {} : null; return; }   // bl.lg : les variantes « tableau large » du dessin (sur deux lignes…), sans déplacement
   const sc = M.scene, d = !sc.mesurant && sc.L >= 1000 && LARGE[M.S.vue];
   LG = d || null; if (!d) return;
   const s0 = Math.min(c.W / sc.L, c.H / 420), ox0 = (c.W - sc.L * s0) / 2, oy0 = (c.H - 420 * s0) / 2;
@@ -433,6 +440,14 @@ const BR = { x: 622, y: 232, w: 108, h: 112 }, AR = { x: 596, y: 52, w: 158, h: 
 const AC2 = { x: 598, y: 232, w: 150, h: 72 };                                          // vue calcul : conductimètre
 const AN = { x: 598, y: 40, w: 150, h: 72 };                                            // vue national : conductimètre
 const LIGNES = {};                                                                      // positions mesurées des lignes à fraction (repères)
+
+/* Tableau large, deuxième passe (blocs.js) : la figure sur toute la hauteur, les écritures en colonne à côté ; une vue
+ * toute en formules est agrandie d'un bloc (sans le titre interne : le titre de la diapositive le dit déjà). */
+Object.assign(BLOCS, {
+  calcul: { cols: [[{ r: [8, 42, 500, 406] }], [{ r: [584, 212, 762, 288], k: 1.6 }]] },
+  national: { cols: [[{ r: [8, 42, 578, 406] }], [{ r: [594, 62, 762, 138], k: 1.6 }]] },
+  relation: { cols: [[{ r: [8, 42, 444, 386] }], [{ r: [556, 42, 762, 388] }]] },
+});
 
 /* ── Dessin ──────────────────────────────────────────────────────────── */
 function dessiner(c, M) {

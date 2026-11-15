@@ -290,20 +290,60 @@ let ZY = [352, 376, 400];                           // lignes écrites en bas
  * colonnes — à gauche les phrases écrites au fil du déroulé (à la ligne), au centre le graphe sur toute la hauteur, à
  * droite le panneau en une colonne, plus gros. Sinon la disposition d’origine (760 × 420). */
 let D = null;
-function disposer(L) {
+const GROUPES = ['axes', 'courbe', 'lecture', 'calcul'];
+/* Deuxième passe (15 novembre 2026, « agrandir les graphes eux-mêmes, pas seulement le texte autour », comme
+ * transformations-deux-sens-tableau/figures.html) : sur un tableau large, les tailles sont choisies en PIXELS À L'ÉCRAN
+ * (u(px) = px / échelle), le graphe prend 50 à 62 % de la largeur et toute la hauteur, les deux colonnes de texte se
+ * resserrent autour et leurs phrases vont à la ligne. On prend la plus grande écriture (22 → 17 px) qui fait tenir tout
+ * le panneau de droite (une ligne à fraction compte pour deux), puis le plus grand graphe. */
+function disposer(L, c, s) {
   if (L < 1000) {
     Object.assign(G, { x0: 66, y0: 300, w: 380, h: 236 }); PX = 520; PW = 230; ZY = [352, 376, 400];
     D = { large: false, L, titre: 20, axes: 15, nomAxe: 16, eti: 17, lec: 15, pt: 16, k: 1, ecart: 8, y0: 66, bas: 17, xBas: 14, maxBas: 730 };
     return;
   }
-  const gauche = Math.round(L * .23), droite = Math.round(L * .27);
-  Object.assign(G, { x0: gauche + 64, y0: 380, w: L - gauche - droite - 64 - 60, h: 318 });
-  PX = L - droite + 6; PW = droite - 20;
-  const noms = ['axes', 'courbe', 'lecture', 'calcul'], haut = noms.reduce((k, n) => k + (F.panneau[n] || []).reduce((a, l) => a + (l[2] ?? 23), 0), 0);
-  const nGroupes = noms.filter(n => F.panneau[n]).length, k = Math.min(1.4, (404 - 70 - (nGroupes - 1) * 14) / haut);
-  D = { large: true, L, titre: 24, axes: 18, nomAxe: 20, eti: 21, lec: 19, pt: Math.min(22, 16 * k), k, ecart: 14, y0: 70,
-    bas: 19, xBas: 14, maxBas: gauche - 6 };
-  ZY = []; for (let y = 76; y <= 404; y += 28) ZY.push(y);
+  const u = px => px / (s || 1), HAUT = 420, M0 = 12;
+  /* Le panneau coupé : chaque ligne [texte, couleur, y] ; une fraction ({ m }) n'est pas coupée et prend deux pas. */
+  function ranger(t, pas, ecart, cote, y0) {
+    let y = y0; const place = {};
+    for (const nom of GROUPES) {
+      const lignes = F.panneau[nom]; if (!lignes) continue;
+      const l2 = [];
+      for (const [txt, col, h] of lignes) {
+        if (txt && txt.m) { y += pas * .5; l2.push([txt, col, y]); y += pas * 1.3; continue; }   // numérateur au-dessus, dénominateur en dessous
+        for (const m of couper(c, txt.trim(), cote, t)) { l2.push([m, col, y]); y += pas; }
+      }
+      place[nom] = { y: l2.length ? l2[0][2] : y, lignes: l2, fin: y - pas }; y += ecart;
+    }
+    return { place, bas: y - ecart - pas };
+  }
+  const fracTient = (t, cote) => Object.values(F.panneau).every(ls => ls.every(([x]) => !(x && x.m) || placer(c, 0, x.m, t).tot <= cote));
+  let choix = null;
+  for (const px of [22, 21, 20, 19, 18, 17]) {
+    for (const part of [.62, .58, .54, .5]) {
+      const t = u(px), pas = Math.round(t * 1.28), ecart = Math.round(t * .55);
+      const cote = Math.floor((L - L * part - 2 * M0) / 2) - u(10);
+      const y0 = Math.round(t + u(12));            // pas de titre interne : le titre de la diapositive le dit déjà
+      if (!fracTient(t, cote)) continue;
+      const r = ranger(t, pas, ecart, cote, y0);
+      if (r.bas + u(8) <= HAUT - 6) { choix = { px, part, t, pas, ecart, cote, y0, place: r.place }; break; }
+    }
+    if (choix) break;
+  }
+  if (!choix) {                                   // rien ne tient : 17 px, interligne resserré
+    const t = u(17), cote = Math.floor((L * .48 - 2 * M0) / 2) - u(10), pas = Math.round(t * 1.12);
+    choix = { px: 17, part: .52, t, pas, ecart: 4, cote, y0: Math.round(t + u(10)) };
+    choix.place = ranger(t, pas, 4, cote, choix.y0).place;
+  }
+  const { t, pas, cote } = choix, gr = L - 2 * M0 - 2 * (cote + u(10));
+  const gauche = M0 + u(46) + cote + u(10);             // abscisse de l'axe des ordonnées (place des graduations)
+  const haut = u(16) + u(22);                           // sommet de la flèche des ordonnées (nom de l'axe au-dessus)
+  const y0 = HAUT - u(34);                              // axe des abscisses : graduations et nom en dessous
+  Object.assign(G, { x0: gauche, y0, w: Math.max(200, gr - u(46) - u(22)), h: Math.max(160, y0 - haut) });
+  PX = L - M0 - cote; PW = cote;
+  D = { large: true, L, px: choix.px, titre: u(24), axes: u(17), nomAxe: u(19), eti: u(20), lec: u(18), pt: t, pas, ecart: choix.ecart,
+    y0: choix.y0, place: choix.place, bas: t, xBas: M0, maxBas: cote };
+  ZY = []; for (let y = choix.y0; y <= HAUT - 8; y += pas) ZY.push(y);
 }
 /** Une phrase coupée en lignes qui tiennent dans `max` (mesurée à la craie). */
 function couper(c, t, max, taille) {
@@ -395,14 +435,15 @@ function axes(c) {
   c.fleche(G.x0, G.y0, G.x0, G.y0 - G.h - 12, { largeur: 1.8 });
   for (let k = 1; k * F.dt <= F.tTop + 1e-9; k++) {
     const t = k * F.dt; c.ligne(X(t), G.y0 - 4, X(t), G.y0 + 4, { largeur: 1.4, duree: .03 });
-    if (proche(t, F.tLab)) c.texte(nb(t), X(t), G.y0 + 22, { couleur: 'faible', taille: D.axes, align: 'center', duree: .1 });
+    if (proche(t, F.tLab)) c.texte(nb(t), X(t), G.y0 + 6 + D.axes, { couleur: 'faible', taille: D.axes, align: 'center', duree: .1 });
   }
-  c.texte('0', G.x0 - 8, G.y0 + 20, { couleur: 'faible', taille: D.axes, align: 'right', duree: .05 });
+  c.texte('0', G.x0 - 8, G.y0 + 4 + D.axes, { couleur: 'faible', taille: D.axes, align: 'right', duree: .05 });
   for (let k = 1; k * F.dy <= F.yTop + 1e-9; k++) {
     const v = k * F.dy; c.ligne(G.x0 - 4, Y(v), G.x0 + 4, Y(v), { largeur: 1.4, duree: .03 });
     if (proche(v, F.yLab)) c.texte(v === 1 ? '1' : fr(v, F.dec), G.x0 - 8, Y(v) + 5, { couleur: 'faible', taille: D.axes, align: 'right', duree: .1 });
   }
-  c.texte(F.xNom, D.large ? G.x0 + G.w - 10 : G.x0 + G.w + 4, G.y0 + (D.large ? 30 : 26), { couleur: 'blanc', taille: D.nomAxe });
+  if (D.large) c.texte(F.xNom, G.x0 + G.w + 14, G.y0 + 6 + D.axes, { couleur: 'blanc', taille: D.nomAxe, align: 'right' });   // sous la flèche, sur la ligne des graduations
+  else c.texte(F.xNom, G.x0 + G.w + 4, G.y0 + 26, { couleur: 'blanc', taille: D.nomAxe });
   c.texte(F.yNom, G.x0 + 10, G.y0 - G.h - 2, { couleur: 'blanc', taille: D.nomAxe });
 }
 function trace(c, f, fin, p, col) {
@@ -412,9 +453,9 @@ function trace(c, f, fin, p, col) {
 }
 
 function dessiner(c, M) {
-  MO = M; F = FIGS[M.S.vue]; M.scene.cadre(73); disposer(M.scene.L);
-  c.texte(F.titre, D.large ? G.x0 - 50 : 14, 28, { couleur: 'cyan', taille: D.titre, max: D.large ? G.w + 50 : 470 });
-  c.texte(`diapositive ${F.diapo}`, D.L - 14, 28, { couleur: 'faible', taille: 15, align: 'right' });
+  MO = M; F = FIGS[M.S.vue]; M.scene.cadre(73); disposer(M.scene.L, c, M.scene.s);
+  if (!D.large) c.texte(F.titre, 14, 28, { couleur: 'cyan', taille: D.titre, max: 470 });   // tableau large : le titre de la diapositive suffit
+  if (!D.large) c.texte(`diapositive ${F.diapo}`, D.L - 14, 28, { couleur: 'faible', taille: 15, align: 'right' });
   if (M.commence('axes')) c.direct(() => quadrillage(c, lisse(M.p('axes'))));
   c.direct(() => {
     if (M.commence('courbe')) F.courbes.forEach(k => trace(c, k.f, k.fin, M.p('courbe'), k.col));
@@ -437,8 +478,17 @@ function dessiner(c, M) {
     lecture: () => F.lectures.forEach(l => c.texte(l.lab, X(l.labAt[0]), Y(l.labAt[1]), { couleur: l.col, taille: D.lec, align: l.ph == null ? 'left' : 'right' })),
   };
   let y = D.y0; const ecrites = [], panneau = {};
-  for (const nom of ['axes', 'courbe', 'lecture', 'calcul']) {
+  for (const nom of GROUPES) {
     const lignes = F.panneau[nom]; if (!lignes) continue;
+    if (D.large) {                                  // tableau large : lignes déjà coupées et placées par disposer()
+      const vues = D.place[nom].lignes;
+      panneau[nom] = () => vues.forEach(([t, col, yl]) => {
+        if (t && t.m) ligneM(c, PX, yl, t.m, { taille: D.pt, couleur: col });
+        else c.texte(t, PX, yl, { couleur: col, taille: D.pt, max: PW });
+      });
+      if (M.commence(nom)) ecrites.push(...lignes.map(l => (l[0] && l[0].txt) || l[0]));
+      continue;
+    }
     const ys = []; let yb = y;
     for (const l of lignes) { const h = (l[2] ?? 23) * D.k; ys.push(yb + h - 23 * D.k); yb += h; }   // une ligne à fraction (h = 46) descend sa ligne de base
     y = yb + D.ecart;
@@ -460,6 +510,7 @@ function dessiner(c, M) {
 
 /* ── Repères (tous déclarés dès le début ; le libellé dit à quel moment ils apparaissent) ─────────────── */
 function panneauY(nom) {
+  if (D.large) { const q = D.place[nom]; return q ? [q.lignes[0][2] - D.pt - 2 - (q.lignes[0][0].m ? D.pt : 0), q.fin - q.lignes[0][2] + D.pas + (q.lignes[0][0].m ? D.pt : 0)] : [D.y0, 30]; }
   let y = D.y0;
   for (const n of ['axes', 'courbe', 'lecture', 'calcul']) {
     const l = F.panneau[n]; if (!l) continue;

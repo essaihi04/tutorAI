@@ -547,10 +547,13 @@ function dessiner(c, M) {
   MO = M; M.scene.cadre(71);
   const v = M.S.vue;
   // Tableau large (≥ 1000) : la vue est découpée en zones rangées sur toute la largeur (zones.js, ZONES plus bas).
-  const Z = ZONES[v] || { cols: [[[0, 40, 760, 420]]] }, large = M.scene.L >= Zones.L_MIN;
+  // Deuxième passe (« agrandir les figures ») : le titre interne est retiré (celui de la diapositive le dit) ; une vue à
+  // colonne de phrases prend Zones.avecColonne : phrases à 20 px à l'écran sur toute la hauteur, figure agrandie à droite.
+  const Z0 = ZONES[v] || { cols: [[[0, 40, 760, 420]]] }, large = M.scene.L >= Zones.L_MIN;
+  const Z = large && Z0.colonne ? Zones.avecColonne(M.scene.L, M.scene.s, Z0.cols.slice(1), Z0.large) : Z0;
   M.colonne = large && Z.colonne ? Z.colonne : null;
   const titre = () => c.texte(TITRE_TABLEAU[v], 14, 26, { couleur: 'cyan', taille: large ? 24 : 20 });
-  if (large) titre();
+  // tableau large : pas de titre interne, celui de la diapositive le dit déjà (deuxième passe)
   Zones.dessiner(c, M.scene.L, large ? Z : null, () => {
     if (!large) titre();
     M.vues = ({ mesures: vueMesures, taux: vueTaux, nature: vueNature })[v](c, M) || [];

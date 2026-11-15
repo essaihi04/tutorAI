@@ -12,6 +12,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
 <script src="exposants.js"></script>
+<script src="blocs.js"></script>
 <script>
 /*
  * rappel.html (contrat etat_equilibre § 1) — cours « État d’équilibre d’un système chimique » (phys_ch12_etat_equilibre, 2e Bac PC BIOF, novembre 2026).
@@ -162,8 +163,14 @@ function Moteur(o) {
  * déplacé dans la place libre à droite (grp(c, nom, fn) entoure son dessin ET son repère, que le professeur pointe donc
  * au bon endroit). Les autres vues, et tout le grand écran (L < 1000), gardent l'ajustement automatique. */
 const LARGE = {};
+/* Deuxième passe (15 novembre 2026, « agrandir les figures elles-mêmes ») : une vue déclarée dans BLOCS[vue] est
+ * redistribuée en colonnes par blocs.js (la figure sur toute la hauteur, les colonnes de texte agrandies autour) ;
+ * elle passe avant LARGE. */
+const BLOCS = {};
 let LG = null;
 function poser(c, M) {
+  const bl = window.Blocs && window.Blocs.poser(c, M.scene, BLOCS[M.S.vue]);
+  if (bl) { LG = bl.lg ? {} : null; return; }   // bl.lg : les variantes « tableau large » du dessin (sur deux lignes…), sans déplacement
   // Lmin : largeur du cadre sous laquelle le bloc déplacé à droite sortirait du tableau (portable 1366 × 613, L ≈ 1035) :
   // on garde alors l'ajustement automatique.
   const sc = M.scene, d = !sc.mesurant && sc.L >= Math.max(1000, (LARGE[M.S.vue] || {}).Lmin || 0) && LARGE[M.S.vue];
@@ -750,6 +757,13 @@ function vueEquilibre(c, M) {
 Object.assign(LARGE, {
   taux: { k: 1.15, x: 10, y: 0, Lmin: 1160, g: { limitee: [752, -170] } },
   equilibre: { k: 1.15, x: 10, y: 0, Lmin: 1225, g: { bas: [624, -232] } },
+});
+
+/* Tableau large, deuxième passe (blocs.js) : la figure sur toute la hauteur, les écritures en colonne à côté. */
+Object.assign(BLOCS, {
+  ouverture: { cols: [[{ r: [90, 160, 700, 400], k: 1.5, centre: true }]] },
+  taux: { lg: true, cols: [[{ r: [16, 38, 748, 196] }, { r: [16, 196, 748, 345] }], [{ r: [16, 360, 356, 466], k: 1.2 }]] },
+  equilibre: { lg: true, cols: [[{ r: [10, 38, 492, 325] }], [{ r: [488, 46, 760, 336] }], [{ r: [145, 334, 487, 490], k: 1 }]] },
 });
 
 /* ── Dessin ──────────────────────────────────────────────────────────── */
