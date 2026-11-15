@@ -164,7 +164,9 @@ function Moteur(o) {
 const LARGE = {};
 let LG = null;
 function poser(c, M) {
-  const sc = M.scene, d = !sc.mesurant && sc.L >= 1000 && LARGE[M.S.vue];
+  // Lmin : largeur du cadre sous laquelle la conclusion déplacée à droite sortirait du tableau (portable 1366 × 613, L ≈ 1130) :
+  // on garde alors l'ajustement automatique, où la conclusion reste en bas.
+  const sc = M.scene, d = !sc.mesurant && sc.L >= Math.max(1000, (LARGE[M.S.vue] || {}).Lmin || 0) && LARGE[M.S.vue];
   LG = d || null; if (!d) return;
   const s0 = Math.min(c.W / sc.L, c.H / 420), ox0 = (c.W - sc.L * s0) / 2, oy0 = (c.H - 420 * s0) / 2;
   const cx = Math.max(0, (sc.L - (d.L || 1292)) / 2);   // tableau plus large (jusqu'à 1596) : la disposition est centrée
@@ -422,7 +424,8 @@ function morceau(c, p, x, y, t, col = 'blanc') {
   if (p === '⇌') return flecheDouble(c, x, y - t * .32, FL, col);
   if (p && p.frac) {
     const w = largeurMorceau(c, p, t), yb = y - t * .32;
-    c.texte(p.frac[0], x + w / 2, yb - 7, { taille: t, align: 'center', couleur: col });
+    const bas = /_\{|[₀-₉]/.test(p.frac[0]) ? t * .26 : 0;   // un indice au numérateur ne touche pas la barre
+    c.texte(p.frac[0], x + w / 2, yb - 7 - bas, { taille: t, align: 'center', couleur: col });
     c.ligne(x, yb, x + w, yb, { couleur: col, largeur: 1.8, duree: .1 });
     c.texte(p.frac[1], x + w / 2, yb + t * .98, { taille: t, align: 'center', couleur: col });
     return;
@@ -518,9 +521,9 @@ function axeTau(c, g, pas, d) {
 
 /* Tableau large : la vue agrandie, la conclusion du bas à droite (sur deux lignes, conclusion2). */
 Object.assign(LARGE, {
-  dilution: { k: 1.12, x: 10, y: 0, g: { conclusion: [622, -216] } },
-  nature: { k: 1.12, x: 10, y: 0, g: { conclusion: [622, -218] } },
-  courbe: { k: 1.1, x: 10, y: 0, g: { phrase: [721, -224] } },
+  dilution: { k: 1.12, x: 10, y: 0, Lmin: 1270, g: { conclusion: [622, -216] } },   // bord droit : 10 + (150 + 622 + 340) × 1,12 ≈ 1256
+  nature: { k: 1.12, x: 10, y: 0, Lmin: 1270, g: { conclusion: [622, -218] } },
+  courbe: { k: 1.1, x: 10, y: 0, Lmin: 1285, g: { phrase: [721, -224] } },   // 10 + (52 + 721 + 380) × 1,1 ≈ 1278
 });
 /** La conclusion encadrée en jaune, sur deux lignes (tableau large) ; (x, y) = coin haut gauche du cadre. */
 function conclusion2(c, x, y, l1, l2, w = 340) {

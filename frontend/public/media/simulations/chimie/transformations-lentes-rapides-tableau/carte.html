@@ -144,14 +144,34 @@ function statut(comps) {
   return (S.acquis || []).some(a => comps.includes(a)) ? 'acquis' : null;
 }
 /* Anneau rouge/orange ou coche verte autour d'un cadre (état de l'élève). */
+/* La légende ne recouvre pas une étiquette (« à revoir », ✓) écrite sous une branche du haut. */
+function yLegende(c, y0, t) {
+  const te = Math.max(t, (c.tailleMin || 0) / (c.echelle || 1)), n = NOEUDS.reduce((a, b) => (b.y < a.y ? b : a)), sous = n.y + n.h / 2 + 7 + te;
+  return y0 - te * .95 > sous + te * .3 + 3 ? y0 : sous + te * 1.3 + 6;
+}
+/* Étiquettes écrites sous une branche du haut : écrites après tous les traits (dessiner les vide à la fin). */
+const DESSOUS = [];
+/* Fond couleur tableau sous une étiquette écrite sous une branche : le trait pâle de la branche passe derrière, pas à travers. */
+function fond(c, s, x, y, t, droite) {
+  const l = c.largeurTexte(s, t), ctx = c.ctx;
+  ctx.save(); ctx.globalAlpha = .88; ctx.fillStyle = '#0f1d18'; ctx.beginPath(); ctx.roundRect(droite ? x - l - 3 : x - 3, y - t * .9, l + 6, t * 1.15, 4); ctx.fill(); ctx.restore();
+}
 function etat(c, comps, x, y, w, h) {
   const st = statut(comps);
   c.direct(() => {
     if (st && ANNEAUX[st]) {
       const [coul, etiq] = ANNEAUX[st];
       c.rect(x - 5, y - 5, w + 10, h + 10, { couleur: coul, arrondi: 16, largeur: 2, pointille: [6, 6] });
-      c.texte(etiq, x + w - 4, y - 8, { couleur: coul, taille: 12 * G, align: 'right' });
-    } else if (st === 'acquis') c.texte('✓', x + w - 14 * G, y + 16 * G, { couleur: 'vert', taille: 18 * G });
+      // Au-dessus du cadre s'il y a la place, sinon dessous (une branche du haut : l'étiquette sortait du tableau).
+      const te = Math.max(12 * G, (c.tailleMin || 0) / (c.echelle || 1)), dessus = y - 8 - te >= 2, droite = dessus || x + w / 2 >= CENTRE.x;   // dessous : du côté opposé au centre (loin du trait de la branche)
+      const ecrire = () => { if (!dessus) fond(c, etiq, droite ? x + w - 4 : x + 4, y + h + 7 + te, te, droite); c.texte(etiq, droite ? x + w - 4 : x + 4, dessus ? y - 8 : y + h + 7 + te, { couleur: coul, taille: 12 * G, align: droite ? 'right' : 'left' }); };
+      if (dessus) ecrire(); else DESSOUS.push(ecrire);
+    } else if (st === 'acquis') {
+      // La coche se met au coin du cadre, dehors (dedans, elle recouvrait la fin du titre de la branche).
+      const tc = Math.max(18 * G, (c.tailleMin || 0) / (c.echelle || 1)), dessus = y - 6 - tc >= 2, droite = dessus || x + w / 2 >= CENTRE.x;
+      const ecrire = () => { if (!dessus) fond(c, '✓', droite ? x + w - 4 : x + 4, y + h + 4 + tc * .9, tc, droite); c.texte('✓', droite ? x + w - 4 : x + 4, dessus ? y - 6 : y + h + 4 + tc * .9, { couleur: 'vert', taille: 18 * G, align: droite ? 'right' : 'left' }); };
+      if (dessus) ecrire(); else DESSOUS.push(ecrire);
+    }
   });
 }
 
@@ -195,7 +215,12 @@ function dessiner(c) {
     c.cur = S.entoure === AVANT ? AVANT : Math.max(apres, S.entoure);
     for (const n of NOEUDS) c.rect(n.x - n.w / 2 - 7, n.y - n.h / 2 - 7, n.w + 14, n.h + 14, { couleur: 'jaune', arrondi: 17, largeur: 1.8, alpha: .8, duree: .35 });
   }
-  if (S.lacunes) c.direct(() => c.texte('✓ acquis · ⟳ à revoir · ✗ à reprendre', LC - 16, 140, { couleur: 'faible', taille: 12, align: 'right' }));
+  c.direct(() => { for (const f of DESSOUS.splice(0)) f(); });
+  if (S.lacunes) c.direct(() => {
+    const xl = LC - 16, yl = yLegende(c, 140, 12), tl = Math.max(12, (c.tailleMin || 0) / (c.echelle || 1));
+    fond(c, '✓ acquis · ⟳ à revoir · ✗ à reprendre', xl, yl, tl, true);
+    c.texte('✓ acquis · ⟳ à revoir · ✗ à reprendre', xl, yl, { couleur: 'faible', taille: 12, align: 'right' });
+  });
 }
 /* Le peint (béchers) apparaît quand l’écriture arrive à lui. */
 const peindre = (c, fn) => { if (c.t >= c.cur) c.direct(() => { c.ctx.save(); try { fn(c.ctx); } finally { c.ctx.restore(); } }); };

@@ -294,7 +294,10 @@ const Peint = {
     ctx.fillStyle = e; ctx.beginPath(); ctx.roundRect(sx, sy, sw, sh, 3); ctx.fill();
     ctx.fillStyle = '#123b17'; ctx.textBaseline = 'middle';
     ctx.font = `600 ${Math.round(sh * .34)}px monospace`; ctx.textAlign = 'left'; ctx.fillText('pH', sx + 6, sy + sh * .5);
-    ctx.font = `700 ${Math.round(sh * .62)}px monospace`; ctx.textAlign = 'right'; ctx.fillText(txt, sx + sw - 8, sy + sh * .54);
+    // La lecture tient à droite de « pH » sans le recouvrir (« - -,- - » est plus long qu'un nombre) : police réduite s'il le faut.
+    const placePH = sw - 14 - ctx.measureText('pH').width - 6; let tl = Math.round(sh * .62);
+    ctx.font = `700 ${tl}px monospace`; const lt = ctx.measureText(txt).width; if (lt > placePH) { tl = Math.floor(tl * placePH / lt); ctx.font = `700 ${tl}px monospace`; }
+    ctx.textAlign = 'right'; ctx.fillText(txt, sx + sw - 8, sy + sh * .54);
     ctx.fillStyle = '#3e464d'; for (let k = 0; k < 3; k++) { ctx.beginPath(); ctx.arc(x + w * (.3 + k * .2), y + h * .84, 3.4, 0, 7); ctx.fill(); }
     ctx.restore();
   },
@@ -364,7 +367,8 @@ function morceau(c, p, x, y, t, col = 'blanc') {
   if (p === '→' || p === '←' || p === '⇌') return flecheType(c, x + 2, x + FL - 2, y - t * .32, p, { couleur: col });
   if (p && p.frac) {
     const w = largeurMorceau(c, p, t), yb = y - t * .32;
-    c.texte(p.frac[0], x + w / 2, yb - 7, { taille: t, align: 'center', couleur: col });
+    const bas = /_\{|[₀-₉]/.test(p.frac[0]) ? t * .26 : 0;   // un indice au numérateur ne touche pas la barre
+    c.texte(p.frac[0], x + w / 2, yb - 7 - bas, { taille: t, align: 'center', couleur: col });
     c.ligne(x, yb, x + w, yb, { couleur: col, largeur: 1.8, duree: .1 });
     c.texte(p.frac[1], x + w / 2, yb + t * .98, { taille: t, align: 'center', couleur: col });
     return;
