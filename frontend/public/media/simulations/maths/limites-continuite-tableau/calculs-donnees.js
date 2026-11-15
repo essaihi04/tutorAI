@@ -282,7 +282,7 @@ window.CALCULS = {
   ]
  },
  "l12_sinus": {
-  "titre": "sin(x)/x et le changement de variable",
+  "titre": "sin(x)/x : on pose t = 3x",
   "lignes": [
    {
     "lim": "x → 0",
@@ -1009,22 +1009,8 @@ window.CALCULS = {
     "col": 2,
     "couleur": "cyan",
     "taille": 17,
-    "moment": "dichotomie",
-    "t": "4) f(3/4) = 11/64 > 0"
-   },
-   {
-    "col": 2,
-    "taille": 17,
-    "dx": 20,
-    "couleur": "jaune",
-    "t": "donc 1/2 < α < 3/4"
-   },
-   {
-    "col": 2,
-    "couleur": "cyan",
-    "taille": 17,
     "moment": "reciproque",
-    "t": "5) continue et strictement croissante :"
+    "t": "4) continue et strictement croissante :"
    },
    {
     "col": 2,
