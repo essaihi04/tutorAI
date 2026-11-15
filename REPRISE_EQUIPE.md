@@ -141,9 +141,14 @@ encore des réactions (la voix en direct ou l'écrit prend le relais).
 > - regarder le quota réel sur kaggle.com (profil → *Your Kaggle Quota*) avant toute génération : le compteur du backend
 >   (7 jours glissants, plafond `KAGGLE_TTS_BUDGET_H_SEMAINE=30`) ne compte que la voix en direct, pas les lots ;
 > - un kernel qui reste en `QUEUED` = GPU T4 de Kaggle saturés : attendre, ne pas repousser (chaque poussée refait la file).
-> - reste à faire après la recharge : la voix du bilan de physique ch3 (`ol_b1_bilan`, texte de 899 caractères → en
->   morceaux de ~300, sinon erreur 524 du tunnel), puis `poser_en_ligne.py 13 phys_ch3_ondes_lumineuses` et déploiement ;
->   les réactions encore muettes de physique ch1 à ch4.
+> - ✅ **fait le 15/11 au soir** : la voix du bilan de physique ch3 (`ol_b1_bilan`, 899 caractères, 3 morceaux,
+>   compte 2) est posée en v13, commitée (`ed6585ad`), déployée, et le lien libre est reconstruit. Les réactions muettes
+>   de physique ch1-4 et ch11 sont posées aussi (`71f2b3a3`). `poser_en_ligne.py --compter` sur `origin/main` :
+>   **0 piste muette** dans tous les cours en ligne.
+> - voix isolée sur le compte 2 : `voix_unique_compte2.py <dossier> <id>` lancé avec `setsid nohup` et l'env de
+>   `lancer_compte2_inverse.sh` (journal ~4 min : démarrage à froid ~190 s, puis ~20 s par morceau). Si le suivi du
+>   journal renvoie `500 Server Error … logs/stream` (panne de l'API Kaggle, vue le 15/11 à 18 h 40) ou si le kernel
+>   finit en `COMPLETE` avant la voix (veille de 5 min), relancer simplement plus tard : chaque essai coûte ~10 min de GPU.
 
 **Quota Kaggle revenu sur les deux comptes** (14/11 au soir : ferdaous04 23 h 50, zouhairessaihi 14 h 52) : les
 deux lots tournent ensemble, depuis les deux bouts de la file, sans se gêner (une piste déjà écrite n'est pas refaite) :
