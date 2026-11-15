@@ -65,7 +65,7 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), o.scene || {});
   const cadreBase = scene.cadre;
   scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
   M.scene = scene; M.craie = scene.craie;
@@ -382,8 +382,33 @@ const MOTIFS = { fin: 'fin' }; for (const e of ETAPES.equation) MOTIFS[e.nom] = 
 /* ── Géométrie (cadre 760 × 420) ─────────────────────────────────────── */
 const X1 = 90, X2 = 330, Y1 = 80, Y2 = 290, YA = 175, YBp = 187;
 const KP = [[112, Y1], [150, Y1]], RES = { x: 190, y: 72, w: 60, h: 16 }, BOB = { x: 212, y: 170, w: 70, h: 20 }, CHIM = { x: 128, y: 148, w: 20, h: 32 };
-const XL = 396, WL = 356;   // colonne des lignes
+let XL = 396, WL = 356;   // colonne des lignes
 const YL = { add: 70, add2: 96, rempl: 128, der: 158, eqq: 194, uc1: 230, uc2: 258, uc3: 286, lc: 326 };
+/* Agrandissement du 15 novembre 2026 (« la simulation n'occupe qu'une bande étroite, les textes sont minuscules »).
+ * Scene en { large: true } : le cadre prend le format du tableau (scene.L de 760 à 1596, hauteur 420).
+ * Tableau large (L ≥ 1000, écran d'ordinateur) : trois colonnes — à gauche la maille agrandie (zone ZC, × 1,12),
+ * au milieu « juste après la bascule », l'additivité, le remplacement et la dérivée, à droite l'équation en q,
+ * l'équation en u_C et le LC idéal ; tout écrit 1,25 fois plus grand. Sinon (grand écran) : la disposition
+ * d'origine, centrée. */
+const YL0 = { ...YL };
+let LARGE = false, KT = 1, ZC = null, XA = 396, WA = 356, UB = { x: 14, ys: [334, 358, 382, 406], max: 372 }, COURBE = { gx: 600, gw: 148, gy: 384 }, DX = 0;
+function disposer(L) {
+  LARGE = L >= 1000;
+  if (!LARGE) {
+    DX = Math.round((L - 760) / 2); ZC = null; KT = 1; XL = 396; WL = 356; XA = 396; WA = 356; Object.assign(YL, YL0);
+    UB = { x: 14, ys: [334, 358, 382, 406], max: 372 }; COURBE = { gx: 600, gw: 148, gy: 384 }; return;
+  }
+  DX = 0; KT = 1.25; ZC = { x: 10, y: 44, k: 1.12, x0: 10, y0: 34 };
+  XA = 452; WA = 336; XL = 806; WL = L - 14 - XL;
+  UB = { x: XA, ys: [70, 102, 134, 166], max: WA };
+  Object.assign(YL, { add: 220, add2: 252, rempl: 302, der: 350, eqq: 78, uc1: 146, uc2: 190, uc3: 234, lc: 316 });
+  COURBE = { gx: XL + WL - 230, gw: 210, gy: 392 };
+}
+/** La maille (et ce qui s'écrit dessus) : agrandie dans sa zone quand le tableau est large. */
+function zoneC(c, fn) {
+  const ctx = c.ctx; ctx.save();
+  try { if (ZC) { ctx.translate(ZC.x - ZC.x0 * ZC.k, ZC.y - ZC.y0 * ZC.k); ctx.scale(ZC.k, ZC.k); } fn(); } finally { ctx.restore(); }
+}
 const POS = {};   // positions mesurées des morceaux (repères)
 
 /** Largeur d’un texte de craie (indices et exposants plus petits, comme le kit et exposants.js). */
@@ -397,13 +422,13 @@ function largeur(c, s, taille) {
 }
 /** Une ligne en morceaux [[texte, couleur], …] écrits l’un après l’autre ; renvoie [x0, x1] de chaque morceau. */
 function ligne(c, morceaux, x, y, o = {}) {
-  let t = o.taille ?? 17; const maxW = o.max ?? WL;
+  let t = (o.taille ?? 17) * KT; const maxW = o.max ?? WL;
   const tot = morceaux.reduce((w, [s]) => w + largeur(c, s, t), 0); if (tot > maxW) t *= maxW / tot;
   let px = x; const pos = [];
   for (const [s, col] of morceaux) { const w = largeur(c, s, t); c.texte(s, px, y, { couleur: col, taille: t }); pos.push([px, px + w]); px += w; }
   return pos;
 }
-const encadre = (c, p, y, col = 'blanc') => c.rect(p[0] - 7, y - 21, p[1] - p[0] + 14, 30, { arrondi: 6, largeur: 1.8, couleur: col });
+const encadre = (c, p, y, col = 'blanc') => c.rect(p[0] - 7, y - 21 * KT, p[1] - p[0] + 14, 30 * KT, { arrondi: 6, largeur: 1.8, couleur: col });
 
 /* ── Peinture et craie du circuit ───────────────────────────────────── */
 function appareils(c, a) {
@@ -425,9 +450,9 @@ function circuit(c) {
   c.trait([[X2, 140], [X2, Y1], [RES.x + RES.w, Y1]], { largeur: 2 });
   c.texte('K (position 2)', 131, 66, { couleur: 'blanc', taille: 14, align: 'center' });
   c.texte('A', 116, YA - 2, { couleur: 'rouge', taille: 15 }); c.texte('B', 116, YBp + 15, { couleur: 'rouge', taille: 15 });
-  c.texte('C = 4 µF', 150, 240, { couleur: 'rouge', taille: 14, align: 'center' });
+  c.texte('C = 4 µF', 150, 244, { couleur: 'rouge', taille: 14, align: 'center', max: 66 });
   c.texte('R = 10 Ω', 220, 128, { couleur: 'faible', taille: 14, align: 'center' });
-  c.texte('L = 0,1 H ; r = 10 Ω', 248, 222, { couleur: 'vert', taille: 14, align: 'center' });
+  c.texte('L = 0,1 H ; r = 10 Ω', 248, 222, { couleur: 'vert', taille: 14, align: 'center', max: 140 });
   c.texte('pas de générateur', 210, Y2 + 20, { couleur: 'faible', taille: 14, align: 'center' });
 }
 function fleches(c) {
@@ -440,27 +465,32 @@ function fleches(c) {
 /* ── Dessin ──────────────────────────────────────────────────────────── */
 let MO = null;
 function dessiner(c, M) {
-  MO = M; M.scene.cadre(37);
-  c.texte('Le circuit RLC : l’équation différentielle', 14, 26, { couleur: 'cyan', taille: 20 });
-  appareils(c, lisse(M.p('fleches')));
-  M.etape(c, 'fleches', () => { circuit(c); fleches(c); });
+  MO = M; M.scene.cadre(37); disposer(M.scene.L);
+  if (DX) c.ctx.translate(DX, 0);   // grand écran : la disposition d'origine, centrée dans le cadre
+  c.texte('Le circuit RLC : l’équation différentielle', 14, 26, { couleur: 'cyan', taille: 20 * KT });
+  zoneC(c, () => {
+    appareils(c, lisse(M.p('fleches')));
+    M.etape(c, 'fleches', () => { circuit(c); fleches(c); });
+  });
   M.etape(c, 'ub_initial', () => {
-    c.texte('juste après la bascule (t = 0⁺) :', 14, 334, { couleur: 'faible', taille: 15 });
-    c.texte('i(0⁺) = 0 : i est continue dans la bobine', 14, 358, { couleur: 'vert', taille: 16, max: 372 });
-    c.texte('u_R(0⁺) = R·0 = 0', 14, 382, { couleur: 'blanc', taille: 16, max: 372 });
-    c.texte('u_b(0⁺) = −u_C(0) = −6 V', 14, 406, { couleur: 'blanc', taille: 16, max: 372 });
+    c.texte('juste après la bascule (t = 0⁺) :', UB.x, UB.ys[0], { couleur: 'faible', taille: 15 * KT, max: UB.max });
+    c.texte('i(0⁺) = 0 : i est continue dans la bobine', UB.x, UB.ys[1], { couleur: 'vert', taille: 16 * KT, max: UB.max });
+    c.texte('u_R(0⁺) = R·0 = 0', UB.x, UB.ys[2], { couleur: 'blanc', taille: 16 * KT, max: UB.max });
+    c.texte('u_b(0⁺) = −u_C(0) = −6 V', UB.x, UB.ys[3], { couleur: 'blanc', taille: 16 * KT, max: UB.max });
   });
   M.etape(c, 'additivite', () => {
-    POS.add = ligne(c, [['u_C + u_R + u_b = 0', 'blanc']], XL, YL.add)[0];
-    c.texte('pas de générateur dans la maille : 0', XL, YL.add2, { couleur: 'faible', taille: 15, max: WL });
+    POS.add = ligne(c, [['u_C + u_R + u_b = 0', 'blanc']], XA, YL.add, { max: WA })[0];
+    c.texte('pas de générateur dans la maille : 0', XA, YL.add2, { couleur: 'faible', taille: 15 * KT, max: WA });
   });
   M.etape(c, 'remplacer', () => {
-    c.texte('u_C = q/C', 14, 262, { couleur: 'rouge', taille: 16 });
-    c.texte('u_R = R·i', 220, 108, { couleur: 'blanc', taille: 16, align: 'center' });
-    c.texte('u_b = L·di/dt + r·i', 318, 262, { couleur: 'vert', taille: 16, align: 'right' });
-    POS.rempl = ligne(c, [['q/C', 'rouge'], [' + R·i', 'blanc'], [' + L·di/dt + r·i', 'vert'], [' = 0', 'blanc']], XL, YL.rempl);
+    zoneC(c, () => {
+      c.texte('u_C = q/C', 14, 262, { couleur: 'rouge', taille: 16 });
+      c.texte('u_R = R·i', 220, 108, { couleur: 'blanc', taille: 16, align: 'center' });
+      c.texte('u_b = L·di/dt + r·i', 318, 262, { couleur: 'vert', taille: 16, align: 'right' });
+    });
+    POS.rempl = ligne(c, [['q/C', 'rouge'], [' + R·i', 'blanc'], [' + L·di/dt + r·i', 'vert'], [' = 0', 'blanc']], XA, YL.rempl, { max: WA });
   });
-  M.etape(c, 'deriver_deux_fois', () => { POS.der = ligne(c, [['i = dq/dt ; di/dt = d²q/dt²', 'vert']], XL, YL.der)[0]; });
+  M.etape(c, 'deriver_deux_fois', () => { POS.der = ligne(c, [['i = dq/dt ; di/dt = d²q/dt²', 'vert']], XA, YL.der, { max: WA })[0]; });
   M.etape(c, 'equation_q', () => {
     POS.eqq = ligne(c, [['L·d²q/dt² + (R + r)·dq/dt + q/C = 0', 'blanc']], XL + 8, YL.eqq, { max: WL - 16 })[0];
     encadre(c, POS.eqq, YL.eqq);
@@ -474,23 +504,35 @@ function dessiner(c, M) {
     const m = POS.uc3 ? POS.uc3[1] : [XL + 120, XL + 240];
     c.ligne(m[0] - 2, YL.uc3 - 6, m[1] + 2, YL.uc3 - 6, { couleur: 'jaune', largeur: 2.6 });
     c.ligne(m[0], YL.uc3 + 2, m[1], YL.uc3 - 14, { couleur: 'jaune', largeur: 2 });
-    c.texte('R + r = 0', (m[0] + m[1]) / 2, YL.uc3 + 18, { couleur: 'jaune', taille: 14, align: 'center' });
-    const p = ligne(c, [['d²u_C/dt² + u_C/(LC) = 0', 'blanc']], XL + 92, YL.lc + 6, { max: WL - 100 })[0];
-    c.texte('LC idéal :', XL, YL.lc + 6, { couleur: 'blanc', taille: 16 });
+    c.texte('R + r = 0', (m[0] + m[1]) / 2, YL.uc3 + 18 * KT, { couleur: 'jaune', taille: 14 * KT, align: 'center' });
+    const p = ligne(c, [['d²u_C/dt² + u_C/(LC) = 0', 'blanc']], XL + 92 * KT, YL.lc + 6, { max: WL - 100 * KT })[0];
+    c.texte('LC idéal :', XL, YL.lc + 6, { couleur: 'blanc', taille: 16 * KT });
     encadre(c, p, YL.lc + 6); POS.lc = [XL, p[1]];
     // Petite courbe : u_C(t) à sommets égaux.
-    const gx = 600, gw = 148, gy = 384, ga = 20;
+    const { gx, gw, gy } = COURBE, ga = 20 * KT;
     c.ligne(gx, gy, gx + gw + 6, gy, { couleur: 'faible', largeur: 1.2 });
     c.courbe(u => [gx + u * gw, gy - ga * Math.cos(u * 3 * 2 * Math.PI)], 90, { couleur: 'rouge', largeur: 2.2 });
     c.ligne(gx - 4, gy - ga, gx + gw + 4, gy - ga, { couleur: 'jaune', largeur: 1.3, pointille: [4, 4] });
-    c.texte('sommets égaux', XL + 196, gy + 2, { couleur: 'jaune', taille: 14, align: 'right' });
-    c.texte('u_C', gx + gw + 8, gy - ga - 6, { couleur: 'rouge', taille: 14, align: 'right' });
+    c.texte('sommets égaux', gx - 12, gy - ga + 6, { couleur: 'jaune', taille: 14 * KT, align: 'right' });
+    c.texte('u_C', gx + gw + 8, gy - ga - 6, { couleur: 'rouge', taille: 14 * KT, align: 'right' });
   });
   reperes(c);
   return c.fin();
 }
 function reperes(c) {
-  const lg = (k, y, def) => { const p = POS[k] || def; return [p[0] - 6, y - 22, p[1] - p[0] + 12, 30]; };
+  const lg = (k, y, def) => { const p = POS[k] || def; return [p[0] - 6, y - 22 * KT, p[1] - p[0] + 12, 30 * KT]; };
+  zoneC(c, () => reperesMaille(c));
+  c.repere('ub_initial', UB.x - 4, UB.ys[0] - 18 * KT, (LARGE ? UB.max : 372) + 8, UB.ys[3] - UB.ys[0] + 26 * KT, 'juste après la bascule : i(0⁺) = 0, u_R(0⁺) = 0, u_b(0⁺) = −u_C(0) = −6 V');
+  c.repere('additivite', ...lg('add', YL.add, [XA, XA + 150]).slice(0, 3), YL.add2 - YL.add + 30 * KT, 'u_C + u_R + u_b = 0 (pas de générateur)');
+  c.repere('derivee', ...lg('der', YL.der, [XA, XA + 200]), 'i = dq/dt ; di/dt = d²q/dt²');
+  c.repere('equation_q', ...lg('eqq', YL.eqq, [XL, XL + 300]), 'L·d²q/dt² + (R + r)·dq/dt + q/C = 0');
+  const u1 = POS.uc1 || [XL, XL + 340], u3 = POS.uc3 ? [POS.uc3[0][0], POS.uc3[2][1]] : [XL, XL + 340];
+  c.repere('equation_uc', Math.min(u1[0], u3[0]) - 6, YL.uc1 - 22 * KT, Math.max(u1[1], u3[1]) - Math.min(u1[0], u3[0]) + 12, YL.uc3 - YL.uc1 + 30 * KT, 'LC·d²u_C/dt² + (R + r)·C·du_C/dt + u_C = 0, puis ÷ LC');
+  const m = POS.uc3 ? POS.uc3[1] : [XL + 120, XL + 240];
+  c.repere('terme_milieu', m[0] - 4, YL.uc3 - 22 * KT, m[1] - m[0] + 8, 30 * KT, 'le terme du milieu ((R + r)/L)·du_C/dt : nul si R + r = 0');
+  c.repere('lc_ideal', XL - 6, YL.lc - 20 * KT, WL + 6, 412 - YL.lc + 20 * KT, 'LC idéal : d²u_C/dt² + u_C/(LC) = 0 ; sommets égaux');
+}
+function reperesMaille(c) {
   c.repere('circuit', 14, 40, 376, 270, 'la maille de décharge (K en 2, sans générateur)');
   c.repere('condensateur', X1 - 26, YA - 30, 90, 50, 'le condensateur C = 4 µF (armatures A et B)');
   c.repere('resistance', RES.x - 6, RES.y - 4, RES.w + 12, 62, 'le résistor R = 10 Ω');
@@ -499,18 +541,9 @@ function reperes(c) {
   c.repere('fleche_uC', 14, 144, 46, 74, 'la flèche u_C (vers A, convention récepteur)');
   c.repere('fleche_uR', RES.x - 4, 32, RES.w + 8, 32, 'la flèche u_R, opposée à i');
   c.repere('fleche_ub', 354, 146, 36, 78, 'la flèche u_b, opposée à i');
-  c.repere('ub_initial', 10, 316, 380, 98, 'juste après la bascule : i(0⁺) = 0, u_R(0⁺) = 0, u_b(0⁺) = −u_C(0) = −6 V');
-  c.repere('additivite', ...lg('add', YL.add, [XL, XL + 150]).slice(0, 3), 56, 'u_C + u_R + u_b = 0 (pas de générateur)');
   c.repere('remplacement_uC', 10, 244, 76, 26, 'u_C = q/C');
   c.repere('remplacement_uR', 180, 92, 80, 24, 'u_R = R·i');
   c.repere('remplacement_ub', 176, 244, 146, 26, 'u_b = L·di/dt + r·i');
-  c.repere('derivee', ...lg('der', YL.der, [XL, XL + 200]), 'i = dq/dt ; di/dt = d²q/dt²');
-  c.repere('equation_q', ...lg('eqq', YL.eqq, [XL, XL + 300]), 'L·d²q/dt² + (R + r)·dq/dt + q/C = 0');
-  const u1 = POS.uc1 || [XL, XL + 340], u3 = POS.uc3 ? [POS.uc3[0][0], POS.uc3[2][1]] : [XL, XL + 340];
-  c.repere('equation_uc', Math.min(u1[0], u3[0]) - 6, YL.uc1 - 22, Math.max(u1[1], u3[1]) - Math.min(u1[0], u3[0]) + 12, YL.uc3 - YL.uc1 + 30, 'LC·d²u_C/dt² + (R + r)·C·du_C/dt + u_C = 0, puis ÷ LC');
-  const m = POS.uc3 ? POS.uc3[1] : [XL + 120, XL + 240];
-  c.repere('terme_milieu', m[0] - 4, YL.uc3 - 22, m[1] - m[0] + 8, 30, 'le terme du milieu ((R + r)/L)·du_C/dt : nul si R + r = 0');
-  c.repere('lc_ideal', XL - 6, YL.lc - 20, WL + 6, 412 - YL.lc + 20, 'LC idéal : d²u_C/dt² + u_C/(LC) = 0 ; sommets égaux');
 }
 
 /* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
@@ -531,7 +564,7 @@ function voir(M) {
 }
 const params = M => ({ E_V: EG, C_uF: 4, L_H: IND, r_ohm: 10, R_ohm: 10, u_C0_V: EG, u_b0_V: -EG });
 const MOT = Moteur({
-  id: 'circuit_rlc_equation', titre: 'Le circuit RLC : l’équation différentielle de la décharge', vues: VUES, titres: TITRES,
+  id: 'circuit_rlc_equation', titre: 'Le circuit RLC : l’équation différentielle de la décharge', vues: VUES, titres: TITRES, scene: { large: true },
   etapes: v => ETAPES[v], motifs: MOTIFS, dessiner, voir, params,
   depart: () => 'Établissons l’équation différentielle de la décharge.',
   messageFin: () => 'L·d²q/dt² + (R + r)·dq/dt + q/C = 0 ; en u_C : d²u_C/dt² + ((R + r)/L)·du_C/dt + u_C/(LC) = 0 ; LC idéal : d²u_C/dt² + u_C/(LC) = 0.',

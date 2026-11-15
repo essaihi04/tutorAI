@@ -54,8 +54,12 @@
    * l'agrandissement est borné (ZOOM_MAX × le cadre entier) pour qu'une vue d'une ligne ne devienne pas énorme.
    * La boîte ne fait que grandir pendant la vue (un point glissé hors de la boîte l'élargit au lâcher) : rien ne saute. */
   const MARGE = 14, ZOOM_MAX = 2.2;
+  /* 15 novembre 2026 (« textes minuscules, grands vides à gauche et à droite ») : texte jamais plus petit que TAILLE_MIN
+   * px à l'écran (15 ; c'était 11) ; `large` : le cadre prend le format du tableau, scene.L de 760 à 760 × L_MAX (1596) (hauteur
+   * 420), la page place ses blocs avec scene.L (figure à gauche, calculs à droite) au lieu de les empiler. */
+  const TAILLE_MIN = 15, L_MAX = 2.1;
   function Scene(canvas, dessiner, options = {}) {
-    const scene = { sale: true, boite: null, mesurant: false };
+    const scene = { sale: true, boite: null, mesurant: false, L: VW };
     const craie = new T.Craie(canvas, { onresize: () => { scene.sale = true; } });
     /* La boîte de l'encre (coordonnées du cadre) : la construction complète dessinée une fois, chaque trait et chaque
      * texte relevés au passage. Le dessin de mesure est effacé par l'image suivante. */
@@ -77,7 +81,7 @@
       try { dessiner(craie, scene); } catch (e) { console.warn('[maths] mesure de la boîte', e); }
       finally { craie.trait = trait; craie.texte = texte; craie.point = point; scene.mesurant = false; scene.horloge = h; scene.ouvert = t; }
       if (!(b.x1 > b.x0 && b.y1 > b.y0)) return null;
-      const n = { x0: Math.max(0, b.x0 - MARGE), y0: Math.max(0, b.y0 - MARGE), x1: Math.min(VW, b.x1 + MARGE), y1: Math.min(VH, b.y1 + MARGE) };
+      const n = { x0: Math.max(0, b.x0 - MARGE), y0: Math.max(0, b.y0 - MARGE), x1: Math.min(scene.L, b.x1 + MARGE), y1: Math.min(VH, b.y1 + MARGE) };
       const a = scene.boite;
       return a ? { x0: Math.min(a.x0, n.x0), y0: Math.min(a.y0, n.y0), x1: Math.max(a.x1, n.x1), y1: Math.max(a.y1, n.y1) } : n;
     }
@@ -85,15 +89,17 @@
       craie, ouvert: performance.now(), s: 1, ox: 0, oy: 0, horloge: null,
       cadre(graine = 7) {
         const W = craie.W, H = craie.H;
+        const L = options.large ? Math.round(Math.min(VW * L_MAX, Math.max(VW, VH * W / Math.max(1, H)))) : VW;
+        if (L !== scene.L) { scene.L = L; scene.boite = null; }
         if (options.ajuster && !scene.mesurant && !scene.boite && W > 1) scene.boite = mesurer();
         craie.debut(graine, scene.horloge ? scene.horloge() : (performance.now() - scene.ouvert) / 1000);
         if (scene.mesurant) { scene.s = 1; scene.ox = 0; scene.oy = 0; craie.echelle = 1; craie.tailleMin = 0; craie.cadre = null; return craie; }
-        const k = scene.boite || { x0: 0, y0: 0, x1: VW, y1: VH };
-        const sCadre = Math.min(W / VW, H / VH), bw = k.x1 - k.x0, bh = k.y1 - k.y0;
+        const k = scene.boite || { x0: 0, y0: 0, x1: L, y1: VH };
+        const sCadre = Math.min(W / L, H / VH), bw = k.x1 - k.x0, bh = k.y1 - k.y0;
         const s = Math.min(W / bw, H / bh, sCadre * ZOOM_MAX);
         scene.s = s; scene.ox = (W - bw * s) / 2 - k.x0 * s; scene.oy = (H - bh * s) / 2 - k.y0 * s;
         craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
-        craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+        craie.echelle = s; craie.tailleMin = TAILLE_MIN; craie.cadre = { w: L, h: VH, haut: 0 };
         return craie;
       },
       /** La construction a changé de forme (réglage, vue) : la boîte sera remesurée (elle ne fait que grandir). */
@@ -224,7 +230,7 @@
 
     document.body.insertAdjacentHTML('afterbegin', '');
     const canvas = $('canvas');
-    const scene = Scene(canvas, dessiner, { ajuster: def.ajuster !== false && V.ajuster !== false });
+    const scene = Scene(canvas, dessiner, { ajuster: def.ajuster !== false && V.ajuster !== false, large: !!(def.large || V.large) });
     scene.horloge = () => S.tw;
     const craie = scene.craie;
 

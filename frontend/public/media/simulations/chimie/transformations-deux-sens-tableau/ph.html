@@ -12,6 +12,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
 <script src="exposants.js"></script>
+<script src="zones.js"></script>
 <script>
 /*
  * Le pH (cours « Transformations chimiques s’effectuant dans les deux sens », 2e Bac PC BIOF, novembre 2026).
@@ -74,7 +75,7 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), { large: true });   // tableau large : zones.js
   const cadreBase = scene.cadre;
   scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
   M.scene = scene; M.craie = scene.craie;
@@ -409,11 +410,24 @@ const MOTIFS = MOTIFS_DE(ETAPES);
 function dessiner(c, M) {
   MO = M; M.scene.cadre(43);
   const v = M.S.vue;
-  c.texte(TITRE_TABLEAU[v], 14, 26, { couleur: 'cyan', taille: 20 });
-  ({ definition: vueDefinition, calcul: vueCalcul, phmetre: vuePhmetre })[v](c, M);
-  reperes(c, M);
+  // Tableau large (≥ 1000) : la vue est découpée en zones rangées sur toute la largeur (zones.js, ZONES plus bas).
+  const Z = ZONES[v] || { cols: [[[0, 40, 760, 420]]] }, large = M.scene.L >= Zones.L_MIN;
+  const titre = () => c.texte(TITRE_TABLEAU[v], 14, 26, { couleur: 'cyan', taille: large ? 24 : 20 });
+  if (large) titre();
+  Zones.dessiner(c, M.scene.L, large ? Z : null, () => {
+    if (!large) titre();
+    ({ definition: vueDefinition, calcul: vueCalcul, phmetre: vuePhmetre })[v](c, M);
+    reperes(c, M);
+  });
   return c.fin();
 }
+/* Zones du tableau large, par vue : colonnes de rectangles du dessin d'origine (760 × 420). */
+const ZONES = {
+  // le bécher et la loupe à gauche, grandis ; à droite les formules, puis les phrases du bas
+  definition: { cols: [[[14, 40, 386, 334]], [[390, 50, 690, 314], [14, 338, 650, 410]]] },
+  // l'échelle de pH et le calcul, serrés sur leur hauteur réelle (le clic sur l'échelle est ramené au dessin d'origine)
+  calcul: { cols: [[[14, 78, 752, 402]]] },
+};
 
 /* ── Vue definition : bécher de l’exemple A, loupe sur les ions H₃O⁺ ──────────────────────────────────────────────── */
 const BD = { x: 34, y: 112, w: 116, h: 146 }, LD = { x: 288, y: 188, r: 82 }, XT = 396;
@@ -678,10 +692,10 @@ MOT.lancer();
 window.Tableau.glisser(MOT.scene.craie.canvas, {
   toucher: (px, py) => {
     if (MOT.S.vue !== 'calcul') return null;
-    const [x, y] = MOT.scene.local(px, py);
+    const [x, y] = Zones.depuis(...MOT.scene.local(px, py)) || [-1e9, -1e9];   // tableau large : point du dessin d'origine
     return x > AX.x0 - 20 && x < AX.x1 + 20 && Math.abs(y - AX.y) < 22 ? 'pH' : null;
   },
-  bouger: (id, px) => { const [x] = MOT.scene.local(px, 0); DRAG = clamp(Math.round((1 + (x - AX.x0) / (AX.x1 - AX.x0) * 12) * 10) / 10, 1, 13); MOT.scene.sale = true; },
+  bouger: (id, px) => { const lx = MOT.scene.local(px, 0)[0], [x] = Zones.depuis(lx, Zones.vers(AX.x0, AX.y)[1]) || [lx]; DRAG = clamp(Math.round((1 + (x - AX.x0) / (AX.x1 - AX.x0) * 12) * 10) / 10, 1, 13); MOT.scene.sale = true; },
   lacher: () => { if (DRAG != null) { const pH = DRAG; MOT.setParameters({ pH }); } },
 });
 </script>

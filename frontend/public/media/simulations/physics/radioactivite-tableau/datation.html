@@ -214,18 +214,19 @@ function dessinerTemps(c) {
     c.fleche(112, 128, 140, 94, { couleur: 'bleu', largeur: 1.6, tete: 7, duree: .2 });
     c.texte('CO_2', 20, 112, { taille: 14, couleur: 'bleu', duree: .15 });
     c.texte('CO_2', 148, 118, { taille: 14, couleur: 'bleu', align: 'right', duree: .15 });
-    formule(c, 'vivant : la proportion de [14,6]C reste constante, a_0', 14, 346, { taille: 17, couleur: 'vert', duree: .5 });
+    ligneF(c, 'vivant : la proportion de [14,6]C reste constante, a_0', 14, 346, { taille: 17, couleur: 'vert', duree: .5 }, 0);
   });
   quand(c, 'mort', 1.4, () => {
     c.texte('→', 156, 60, { taille: 16, align: 'center', couleur: 'faible', duree: .1 });
     c.texte('2. mort', PAN[1].x + PAN[1].w / 2, 60, { taille: 17, align: 'center', duree: .3 });
     c.texte('✗', PAN[1].x + PAN[1].w / 2, 112, { taille: 26, align: 'center', couleur: 'rouge', duree: .1 });
     c.texte('plus d’échanges', PAN[1].x + PAN[1].w / 2, 136, { taille: 14, align: 'center', couleur: 'faible', duree: .3 });
-    c.texte('mort : plus d’échanges,', 14, 372, { taille: 17, couleur: 'orange', duree: .5 });
+    ligneF(c, 'mort : plus d’échanges,', 14, 372, { taille: 17, couleur: 'orange', duree: .5 }, 1);
   });
   if (S.conclusions) quand(c, 'desintegration', 1.2, () => {
     c.texte('a diminue', PAN[1].x + PAN[1].w / 2, 314, { taille: 14, align: 'center', couleur: 'jaune', duree: .3 });
-    formule(c, ' le [14,6]C se désintègre', 14 + c.largeurTexte('mort : plus d’échanges,', 17), 372, { taille: 17, couleur: 'orange', duree: .6 });
+    if (LARGE) ligneF(c, 'le [14,6]C se désintègre', 14, 372, { taille: 17, couleur: 'orange', duree: .6 }, 2);
+    else formule(c, ' le [14,6]C se désintègre', 14 + c.largeurTexte('mort : plus d’échanges,', 17), 372, { taille: 17, couleur: 'orange', duree: .6 });
   });
   quand(c, 'mesure', 1.4, () => {
     c.texte('→', 300, 60, { taille: 16, align: 'center', couleur: 'faible', duree: .1 });
@@ -235,7 +236,7 @@ function dessinerTemps(c) {
   // L’activité mesurée : valeur sous la jauge, règle et poignée, ligne du bas (suivent la poignée).
   if (vu('mesure')) ecrit(c, M.mesure - 1.0, () => {
     c.texte(`a = ${P.a} Bq`, PAN[2].x + PAN[2].w / 2, 314, { taille: 14, align: 'center', couleur: 'jaune', duree: .2 });
-    c.texte(`mesure : a = ${P.a} Bq ; bois récent de même masse : a_0 = ${A0} Bq`, 14, 398, { taille: 17, couleur: 'jaune', duree: .6 });
+    ligneF(c, `mesure : a = ${P.a} Bq ; bois récent de même masse : a_0 = ${A0} Bq`, 14, 398, { taille: 17, couleur: 'jaune', duree: .6 }, 3);
   });
   if (S.t >= 7.4 || S.fait) c.direct(() => {
     c.ligne(REGLE.x0, REGLE.y, REGLE.x1, REGLE.y, { couleur: 'faible', largeur: 1.5, tremble: .3 });
@@ -275,7 +276,14 @@ function dessiner(c) {
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(61); dessiner(c); return c.fin(); });
+/* Tableau large (15 novembre 2026) : les trois temps et le calcul agrandis à gauche, les phrases du bas à droite. */
+let LARGE = false;
+const ligneF = (c, s, x, y, o, rang) => RadioLarge.ligne(LARGE, c, s, x, y, o, rang, 4, (l, x2, y2, oo) => formule(c, l, x2, y2, oo), (e, t) => c.largeurNoyaux(e.replace(/_/g, ''), t));
+const scene = RadioLarge.brancher(window.OndesTableau.Scene(canvas, (c) => {
+  scene.cadre(61); LARGE = RadioLarge.large(scene);
+  RadioLarge.dessiner(c, scene, 61, LARGE ? RadioLarge.blocsStd(scene, [0, 0, 760, 330]) : null, () => dessiner(c));
+  return c.fin();
+}, { large: true }));
 scene.avancer = dt => {
   if (!S.running) return false;
   S.t = Math.min(FIN, S.t + dt);

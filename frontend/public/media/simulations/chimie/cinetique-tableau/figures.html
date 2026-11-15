@@ -78,7 +78,7 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), o.scene || {});
   const cadreBase = scene.cadre;
   scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
   M.scene = scene; M.craie = scene.craie;
@@ -202,8 +202,51 @@ function attention(c, x, y, o = {}) {
 
 /* ── Outils du graphe ────────────────────────────────────────────────────────────────────────────── */
 const G = { x0: 66, y0: 300, w: 380, h: 236 };     // le graphe, à gauche
-const PX = 520, PW = 230;                           // panneau d’écriture, à droite
-const ZY = [352, 376, 400];                         // lignes écrites en bas
+let PX = 520, PW = 230;                             // panneau d’écriture, à droite
+let ZY = [352, 376, 400];                           // lignes écrites en bas
+/* Disposition selon la largeur du tableau (15 novembre 2026, demande de l'utilisateur : « grands vides à gauche et à
+ * droite, textes minuscules ; le texte du bas à gauche de l'écran, le diagramme étendu vers le bas et dans les deux
+ * sens, le texte de droite étendu verticalement et agrandi »). Tableau large (scene.L ≥ 1000, écran d'ordinateur
+ * portable) : trois colonnes — à gauche les phrases écrites au fil du déroulé (à la ligne), au centre le graphe sur
+ * toute la hauteur, à droite le panneau en une colonne, plus gros. Sinon la disposition d'origine (760 × 420).
+ * Modèle : chimie/transformations-deux-sens-tableau/figures.html. */
+let D = null;
+const GROUPES = ['axes', 'courbe', 'tangente', 'lecture'];
+const groupes = () => GROUPES.filter(n => F.panneau[n] && (n !== 'tangente' || F.tangente));
+function disposer(L, e = 1) {
+  if (L < 1000) {
+    Object.assign(G, { x0: 66, y0: 300, w: 380, h: 236 }); PX = 520; PW = 230; ZY = [352, 376, 400];
+    D = { large: false, L, titre: 20, axes: 15, nomAxe: 16, eti: 17, lec: 15, lec2: 16, pt: 16, pas: 23, ecart: 8, y0: 66, bas: 17, xBas: 14, maxBas: 730 };
+    return;
+  }
+  const gauche = Math.round(L * .24), droite = Math.round(L * .27);
+  Object.assign(G, { x0: gauche + 64, y0: 370, w: L - gauche - droite - 64 - 80, h: 310 });
+  PX = L - droite + 6; PW = droite - 18;
+  const n = groupes().reduce((k, nom) => k + F.panneau[nom].length, 0), ng = groupes().length;
+  const pas = Math.min(34, Math.floor((404 - 66 - (ng - 1) * 12) / Math.max(1, n)));
+  D = { large: true, L, titre: 24, axes: 18, nomAxe: 20, eti: 21, lec: 19, lec2: 19, pt: Math.min(21, pas - 7), pas, ecart: 12, y0: 72,
+    bas: 19, xBas: 14, maxBas: gauche - 6 };
+  const pasBas = Math.max(27, Math.round(Math.max(19, 15 / (e || 1)) * 1.3));   // tableau bas : la craie grossit, l'interligne suit
+  ZY = []; for (let y = 76; y <= 406; y += pasBas) ZY.push(y);
+}
+/** Où s'écrit un groupe du panneau : [x, y, largeur max]. */
+function placeDe(nom) {
+  let y = D.y0;
+  for (const n of groupes()) {
+    if (n === nom) return [PX, y, PW];
+    y += F.panneau[n].length * D.pas + D.ecart;
+  }
+  return [PX, y, PW];
+}
+/** Une phrase coupée en lignes qui tiennent dans `max` (mesurée à la craie). */
+function couper(c, t, max, taille) {
+  const mots = String(t).replace(/ ([=≈×→<>≤≥]) /g, '\u00a0$1\u00a0').replace(/\([^()]{1,18}\)/g, m => m.replace(/ /g, '\u00a0'))
+    .replace(/(\d) (?=(mmol|mol|min|mL|L|s|h|K|Pa|g|mS|S|°C)\b)/g, '$1\u00a0').split(' ')
+    .flatMap(m => (larg(c, m.replace(/\u00a0/g, ' '), taille) > max ? m.split('\u00a0') : [m])), out = []; let l = '';
+  for (const m of mots) { const e = l ? l + ' ' + m : m; if (l && larg(c, e, taille) > max) { out.push(l); l = m; } else l = e; }
+  if (l) out.push(l);
+  return out.map(s => s.replace(/\u00a0/g, ' '));
+}
 let F = null;                                       // figure courante
 const X = t => G.x0 + t / F.tmax * G.w, Y = v => G.y0 - v / F.ymax * G.h;
 const pointille = (c, x1, y1, x2, y2, p, col = 'jaune') => { if (p > 0) c.ligne(x1, y1, x1 + (x2 - x1) * p, y1 + (y2 - y1) * p, { couleur: col, largeur: 1.8, pointille: [5, 5] }); };
@@ -484,18 +527,19 @@ const proche = (v, l) => l.some(u => Math.abs(u - v) < 1e-6);
 function axes(c) {
   c.fleche(G.x0, G.y0, G.x0 + G.w + 14, G.y0, { largeur: 1.8 });
   c.fleche(G.x0, G.y0, G.x0, G.y0 - G.h - 12, { largeur: 1.8 });
-  const tt = F.tTaille ?? 15;
+  const tt = D.large ? (F.tTaille ? D.axes - 2 : D.axes) : (F.tTaille ?? 15);
   for (let k = 1; k * F.dt <= F.tTop + 1e-9; k++) {
     const t = k * F.dt; c.ligne(X(t), G.y0 - 4, X(t), G.y0 + 4, { largeur: 1.4, duree: .03 });
-    if (!F.tLab || proche(t, F.tLab)) c.texte(nb(t), X(t), G.y0 + 20, { couleur: 'faible', taille: tt, align: 'center', duree: .1 });
+    if (!F.tLab || proche(t, F.tLab)) c.texte(nb(t), X(t), G.y0 + 22, { couleur: 'faible', taille: tt, align: 'center', duree: .1 });
   }
-  c.texte('0', G.x0 - 8, G.y0 + 18, { couleur: 'faible', taille: 15, align: 'right', duree: .05 });
+  c.texte('0', G.x0 - 8, G.y0 + 20, { couleur: 'faible', taille: D.axes, align: 'right', duree: .05 });
   for (let k = 1; k * F.dy <= F.yTop + 1e-9; k++) {
     const v = k * F.dy; c.ligne(G.x0 - 4, Y(v), G.x0 + 4, Y(v), { largeur: 1.4, duree: .03 });
-    if (!F.yLab || proche(v, F.yLab)) c.texte(F.yFmt ? F.yFmt(v) : F.dec ? fr(v, F.dec) : nb(v), G.x0 - 8, Y(v) + 5, { couleur: 'faible', taille: 15, align: 'right', duree: .1 });
+    if (!F.yLab || proche(v, F.yLab)) c.texte(F.yFmt ? F.yFmt(v) : F.dec ? fr(v, F.dec) : nb(v), G.x0 - 8, Y(v) + 5, { couleur: 'faible', taille: D.axes, align: 'right', duree: .1 });
   }
-  c.texte(F.tNom, G.x0 + G.w + 4, G.y0 + 26, { couleur: 'blanc', taille: 16 });
-  c.texte(F.yNom, G.x0 + 10, G.y0 - G.h - 2, { couleur: 'blanc', taille: 16 });
+  if (D.large) c.texte(F.tNom, G.x0 + G.w + 16, G.y0 - 10, { couleur: 'blanc', taille: D.nomAxe, align: 'right' });   // au-dessus de la flèche : jamais sur la dernière graduation
+  else c.texte(F.tNom, G.x0 + G.w + 4, G.y0 + 26, { couleur: 'blanc', taille: 16 });
+  c.texte(F.yNom, G.x0 + 10, G.y0 - G.h - 2, { couleur: 'blanc', taille: D.nomAxe });
 }
 function trace(c, f, fin, p, col) {
   if (p <= 0) return;
@@ -508,9 +552,11 @@ const surT = (T, t) => T.A[1] + penteT(T) * (t - T.A[0]);
 function croix(c, x, y, col = 'blanc') { c.ligne(x - 5, y - 5, x + 5, y + 5, { couleur: col, largeur: 2 }); c.ligne(x - 5, y + 5, x + 5, y - 5, { couleur: col, largeur: 2 }); }
 
 function dessiner(c, M) {
-  MO = M; F = FIGS[M.S.vue]; M.scene.cadre(73);
-  c.texte(F.titre, 14, 26, { couleur: 'cyan', taille: 20, max: 470 });
-  c.texte(`diapositive ${F.diapo}`, 746, 26, { couleur: 'faible', taille: 15, align: 'right' });
+  MO = M; F = FIGS[M.S.vue]; M.scene.cadre(73); disposer(M.scene.L, c.echelle);
+  if (!D.large && D.L > 760) c.ctx.translate((D.L - 760) / 2, 0);   // grand écran : la figure d'origine, centrée
+  if (D.large) c.texte(F.titre, 14, 30, { couleur: 'cyan', taille: D.titre, max: PX - 40 });
+  else c.texte(F.titre, 14, 26, { couleur: 'cyan', taille: 20, max: 470 });
+  c.texte(`diapositive ${F.diapo}`, D.large ? D.L - 14 : 746, D.large ? 30 : 26, { couleur: 'faible', taille: 15, align: 'right' });
   if (M.commence('axes')) c.direct(() => quadrillage(c, lisse(M.p('axes'))));
   c.direct(() => {
     if (M.commence('courbe')) F.courbes.forEach(k => trace(c, k.f, k.fin, M.p('courbe'), k.col));
@@ -537,41 +583,40 @@ function dessiner(c, M) {
   });
   // Étiquettes du graphe et panneau de droite : écrits dans l’étape elle-même (une seule écriture par étape, après la ligne du bas)
   const etiquettes = {
-    courbe: () => F.courbes.forEach(k => { if (k.lab) c.texte(k.nom, X(k.lab[0]), Y(k.lab[1]), { couleur: k.col, taille: 17, align: k.lab[2] || 'left' }); }),
-    tangente: () => F.tangente && c.texte('(T)', X(F.tangente.lab[0]), Y(F.tangente.lab[1]), { couleur: 'vert', taille: 17 }),
+    courbe: () => F.courbes.forEach(k => { if (k.lab) c.texte(k.nom, X(k.lab[0]), Y(k.lab[1]), { couleur: k.col, taille: D.eti, align: k.lab[2] || 'left' }); }),
+    tangente: () => F.tangente && c.texte('(T)', X(F.tangente.lab[0]), Y(F.tangente.lab[1]), { couleur: 'vert', taille: D.eti }),
     lecture: () => F.lectures.forEach(l => {
-      if (l.k === 'palier') c.texte(l.lab, X(l.labAt[0]), Y(l.labAt[1]), { couleur: 'jaune', taille: 16 });
+      if (l.k === 'palier') c.texte(l.lab, X(l.labAt[0]), Y(l.labAt[1]), { couleur: 'jaune', taille: D.lec2 });
       else {
-        if (l.yLab && l.yLabGauche) c.texte(l.yLab, G.x0 - 8, Y(l.y) + 5, { couleur: 'jaune', taille: 15, align: 'right' });
-        else if (l.yLab) c.texte(l.yLab, X(l.yLabAt[0]), Y(l.yLabAt[1]), { couleur: 'jaune', taille: 15 });
-        if (l.tLabSous) c.texte(l.tLab, X(l.t), G.y0 + 38, { couleur: 'jaune', taille: 15, align: 'center' });
-        else { const at = l.tLabAt || [l.t, 0]; c.texte(l.tLab, X(at[0]) + 6, Y(at[1]) - 8, { couleur: 'jaune', taille: 16 }); }
+        if (l.yLab && l.yLabGauche) c.texte(l.yLab, G.x0 - 8, Y(l.y) + 5, { couleur: 'jaune', taille: D.axes, align: 'right' });
+        else if (l.yLab) c.texte(l.yLab, X(l.yLabAt[0]), Y(l.yLabAt[1]), { couleur: 'jaune', taille: D.lec });
+        if (l.tLabSous) c.texte(l.tLab, X(l.t), G.y0 + (D.large ? 42 : 38), { couleur: 'jaune', taille: D.axes, align: 'center' });
+        else { const at = l.tLabAt || [l.t, 0]; c.texte(l.tLab, X(at[0]) + 6, Y(at[1]) - 8, { couleur: 'jaune', taille: D.lec2 }); }
       }
     }),
   };
-  let y = 66; const ecrites = [], panneau = {};
+  const ecrites = [], panneau = {};
   for (const nom of ['axes', 'courbe', 'tangente', 'lecture']) {
     const lignes = F.panneau[nom]; if (!lignes || !M.ev(nom)) continue;
-    const y0 = y; y += lignes.length * 23 + 8;
-    panneau[nom] = () => lignes.forEach(([t, col, tl], i) => c.texte(t, PX, y0 + i * 23, { couleur: col, taille: tl ?? 16, max: PW }));
+    const [x0, y0, mx] = placeDe(nom);
+    panneau[nom] = () => lignes.forEach(([t, col, tl], i) => c.texte(t, x0, y0 + i * D.pas, { couleur: col, taille: tl ? (D.large ? D.pt - 1.5 : tl) : D.pt, max: mx }));
     if (M.commence(nom)) ecrites.push(...lignes.map(l => l[0]));
   }
   M.panneau = ecrites;
-  M.vues = zoneEcriture(c, M, etapesDe(M.S.vue).map(e => ({ nom: e.nom, lignes: [[F.bas[e.nom], e.nom === 'lecture' ? 'jaune' : e.nom === 'tangente' ? 'vert' : 'blanc']],
-    plus: () => { if (e.nom === 'axes') axes(c); etiquettes[e.nom] && etiquettes[e.nom](); panneau[e.nom] && panneau[e.nom](); } })), ZY);
+  // tableau large : chaque phrase va à la ligne dans la colonne de gauche ; sinon une ligne en bas
+  const lignesBas = t => (D.large ? couper(c, t, D.maxBas, D.bas) : [t]);
+  M.vues = zoneEcriture(c, M, etapesDe(M.S.vue).map(e => ({ nom: e.nom, lignes: lignesBas(F.bas[e.nom]).map(t => [t, e.nom === 'lecture' ? 'jaune' : e.nom === 'tangente' ? 'vert' : 'blanc']),
+    plus: () => { if (e.nom === 'axes') axes(c); etiquettes[e.nom] && etiquettes[e.nom](); panneau[e.nom] && panneau[e.nom](); } })), ZY,
+    { x: D.xBas, max: D.maxBas, taille: D.bas });
   reperes(c, M);
   return c.fin();
 }
 
 /* ── Repères (tous déclarés dès le début ; le libellé dit à quel moment ils apparaissent) ─────────────── */
-function panneauY(nom) {                            // haut et hauteur du bloc écrit à droite pour l’étape nom
-  let y = 66;
-  for (const n of ['axes', 'courbe', 'tangente', 'lecture']) {
-    const l = F.panneau[n]; if (!l || !(n !== 'tangente' || F.tangente)) continue;
-    if (n === nom) return [y - 18, l.length * 23 + 4];
-    y += l.length * 23 + 8;
-  }
-  return [y - 18, 30];
+/** Le rectangle d'un groupe du panneau de droite : [x, y, largeur, hauteur]. */
+function panneauR(nom) {
+  const [x, y, mx] = placeDe(nom), n = (F.panneau[nom] || []).length || 1;
+  return [x - 6, y - D.pt - 2, mx + 10, n * D.pas + 4];
 }
 function reperes(c, M) {
   const R = (id, x, y, w, h, l) => c.repere(id, x, y, w, h, l), q = nom => quand(M, nom);
@@ -583,8 +628,8 @@ function reperes(c, M) {
     R('tangente', X(T.de) - 6, Math.min(y1, y2) - 6, X(T.a) - X(T.de) + 12, Math.abs(y2 - y1) + 12, `la tangente (T) verte, ${T.dit}${q('tangente')}`);
   }
   const P = F.point; R('point', X(P.t) - 14, Y(P.y) - 14, 28, 28, `${P.dit}${q('lecture')}`);
-  const [yv, hv] = panneauY('lecture');
-  R('valeur', PX - 6, yv, PW + 10, hv, `les valeurs lues et calculées : ${F.valeur}${q('lecture')}`);
+  const [xv, yv, wv, hv] = panneauR('lecture');
+  R('valeur', xv, yv, wv, hv, `les valeurs lues et calculées : ${F.valeur}${q('lecture')}`);
 }
 
 /* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
@@ -604,7 +649,7 @@ const params = M => {
     lectures: f.lectures.map(l => l.k === 'palier' ? { palier: l.y } : { y: l.y, t: +l.t.toFixed(2) }) };
 };
 const MOT = Moteur({
-  id: 'cin_figures', titre: 'Figures des examens nationaux : suivi temporel, tangente, t₁/₂', vues: CLES,
+  id: 'cin_figures', titre: 'Figures des examens nationaux : suivi temporel, tangente, t₁/₂', vues: CLES, scene: { large: true },
   titres: Object.fromEntries(CLES.map(k => [k, `national ${FIGS[k].session}`])),
   etapes: etapesDe, motifs: MOTIFS, dessiner, voir, params,
   depart: M => `Figure du national ${FIGS[M.S.vue].session}.`,

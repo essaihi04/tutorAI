@@ -71,15 +71,25 @@ export function TableauCahier({ bloc, onEcrit, entetes }: { bloc: BlocCours; onE
   const parLigne = !!entetes && plan.every(Boolean) && lignes.length === bloc.slide_ids.length;
   useEffect(() => { debut.current = Date.now(); }, [bloc.id]);
   return (
-    <div className="flex flex-col gap-4">
-      <div>
-        <p className="text-xs uppercase tracking-wide text-white/45" style={{ fontFamily: 'system-ui, sans-serif' }}>Le cours s’arrête : recopie dans ton cahier</p>
-        {bloc.titre && <h3 className="mt-1 text-2xl underline decoration-amber-200/40 underline-offset-4" style={{ fontFamily: CRAIE, color: '#fef3c7' }}>{bloc.titre}</h3>}
-      </div>
-      <div className="rounded-2xl border border-amber-100/15 bg-[#1d2b22] p-5 shadow-inner" style={{ fontFamily: CRAIE }}>
-        {/* les dessins du bloc (courbe, schéma, croquis) : à droite du texte sur grand écran, dessous sur téléphone */}
-        <div className={figures.length ? 'flex flex-col gap-5 md:flex-row md:items-start' : ''}>
+    <div className="flex h-full min-h-0 flex-col gap-3">
+      {/* « C'est écrit » sur la ligne du titre : la hauteur gagnée va au texte du cahier */}
+      <div className="flex shrink-0 items-end gap-3">
         <div className="min-w-0 flex-1">
+          <p className="text-xs uppercase tracking-wide text-white/45" style={{ fontFamily: 'system-ui, sans-serif' }}>Le cours s’arrête : recopie dans ton cahier</p>
+          {bloc.titre && <h3 className="mt-1 text-2xl underline decoration-amber-200/40 underline-offset-4" style={{ fontFamily: CRAIE, color: '#fef3c7' }}>{bloc.titre}</h3>}
+        </div>
+        <button type="button" onClick={() => onEcrit(Math.round((Date.now() - debut.current) / 1000))}
+          className="shrink-0 rounded-full bg-cyan-400/90 px-7 py-3 text-base font-bold text-slate-950 shadow-lg hover:bg-cyan-300"
+          style={{ fontFamily: 'system-ui, sans-serif' }}>
+          ✍️ C’est écrit
+        </button>
+      </div>
+      {/* Le texte et les dessins tiennent chacun leur place (15 novembre 2026, « le texte du cahier est parfois trop petit
+          avec le diagramme ») : un seul zoom pour les deux faisait rétrécir le texte dès que deux dessins s'empilaient.
+          Le texte remplit sa colonne (SansDefilement), les dessins se partagent la hauteur de la leur. */}
+      <div className="flex min-h-0 flex-1 flex-col gap-4 rounded-2xl border border-amber-100/15 bg-[#1d2b22] p-3 shadow-inner md:flex-row md:p-4" style={{ fontFamily: CRAIE }}>
+        {/* les dessins du bloc (courbe, schéma, croquis) : à droite du texte sur grand écran, dessous sur téléphone */}
+        <SansDefilement agrandirMax={1.6} className="min-w-0">
         {plan.length > 0 && (() => {
           const tete = plan.find(e => e?.cours)?.cours;
           return tete ? (
@@ -109,15 +119,9 @@ export function TableauCahier({ bloc, onEcrit, entetes }: { bloc: BlocCours; onE
             </ol>
           </>
         ) : <p className="text-lg text-white/60">Écris avec tes mots ce que tu viens de comprendre.</p>}
-        </div>
-        {figures.length > 0 && <FiguresCahier figures={figures} className="md:w-[44%] md:flex-none md:flex-col md:flex-nowrap" />}
-        </div>
+        </SansDefilement>
+        {figures.length > 0 && <FiguresCahier figures={figures} remplir className="h-[42%] shrink-0 md:h-auto md:w-[38%]" />}
       </div>
-      <button type="button" onClick={() => onEcrit(Math.round((Date.now() - debut.current) / 1000))}
-        className="self-end rounded-full bg-cyan-400/90 px-7 py-3 text-base font-bold text-slate-950 shadow-lg hover:bg-cyan-300"
-        style={{ fontFamily: 'system-ui, sans-serif' }}>
-        ✍️ C’est écrit
-      </button>
     </div>
   );
 }
@@ -190,7 +194,7 @@ export default function CycleBloc({ bloc, place, etapeInitiale = 'cahier', titre
 
   if (!etape) return null;
   return (
-    <div className="relative flex h-full min-h-0 flex-col gap-4 overflow-y-auto rounded-2xl border border-white/15 bg-[#14201a]/95 p-5 text-white md:p-7">
+    <div className="relative flex h-full min-h-0 flex-col gap-3 overflow-y-auto rounded-2xl border border-white/15 bg-[#14201a]/95 p-4 text-white md:p-5">
       {onFermer && (
         <button type="button" onClick={() => { taire(); onFermer(); }} title="Fermer et revenir au cours" aria-label="Fermer"
           className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-lg text-white/70 hover:bg-white/20 hover:text-white">×</button>
@@ -200,10 +204,10 @@ export default function CycleBloc({ bloc, place, etapeInitiale = 'cahier', titre
       </div>
       {alerte && <p className="rounded-lg bg-sky-400/10 px-3 py-2 text-sm text-sky-100" style={{ fontFamily: 'system-ui, sans-serif' }}>{PHRASES_SATURATION[alerte]}</p>}
       {etape === 'cahier' && (
-        // tout le cahier du bloc dans l'écran, sans défiler (user rule, 12 novembre 2026)
-        <SansDefilement agrandirMax={1.6}>
+        // tout le cahier du bloc dans l'écran, sans défiler (user rule, 12 novembre 2026) : le texte s'ajuste dans TableauCahier
+        <div className="flex min-h-0 flex-1 flex-col">
           <TableauCahier bloc={bloc} entetes={entetes} onEcrit={duree => { void noter({ evenement: 'cahier', ...base, duree_s: duree }); suivante(); }} />
-        </SansDefilement>
+        </div>
       )}
       {etape === 'retrouver' && bloc.retrouver && (
         <QuestionMemoire mode="retrouver" question={bloc.retrouver} titre={bloc.titre || titreCours} deckId={place.coursId} onDire={onDire}

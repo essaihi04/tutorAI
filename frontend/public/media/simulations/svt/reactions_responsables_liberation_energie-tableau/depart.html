@@ -12,6 +12,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="/media/simulations/svt/notion_information_genetique-tableau/commun.js"></script>
 <script src="/media/simulations/svt/notion_information_genetique-tableau/etapes.js"></script>
+<script src="peinture.js"></script>
 <script>
 /*
  * Départ de zéro du cours « Libération de l’énergie emmagasinée dans la matière organique » (14 novembre 2026,
@@ -158,15 +159,28 @@ function voitGlucose(k) {
   return m;
 }
 
+/* Tableau large (portable 1366 × 613, 15 novembre 2026) : le cadre prend la largeur du tableau (option large du Scene
+ * de la génétique, qu'on demande ici sans toucher à etapes.js) et la mosaïque (SVTLarge.Mosaique, peinture.js) centre le dessin, textes
+ * 1,15 fois plus gros ; grand écran : inchangé. */
+let MOS = null;
+{
+  const S0 = window.GenetiqueTableau.Scene;
+  window.GenetiqueTableau.Scene = (canvas, dessiner, o = {}) => {
+    const sc = S0(canvas, dessiner, { ...o, large: true });
+    MOS = window.SVTLarge.Mosaique(sc, (L) => L >= 1000 ? { police: 1.15, blocs: [{ src: [0, 0, 760, 420], X: (L - 760) / 2, Y: 0, s: 1 }] } : null);
+    return sc;
+  };
+}
+const enMosaique = (f) => (c, k) => (MOS ? MOS.dessiner(c, () => f(c, k)) : f(c, k));
 window.Etapes.lancer({
   id: 'svt_depart_energie', titre: 'La cellule et le glucose', graine: 53,
   vues: {
-    cellule: { titre: 'La cellule', fin: 13.0, moments: MC, autoDepart: false, dessiner: dessinerCellule, voit: voitCellule,
+    cellule: { titre: 'La cellule', fin: 13.0, moments: MC, autoDepart: false, dessiner: enMosaique(dessinerCellule), voit: voitCellule,
       motifs: { d_cellule: 'une cellule', d_membrane: 'la membrane plasmique', d_hyaloplasme: 'le hyaloplasme', d_noyau: 'le noyau', d_mitochondries: 'des mitochondries', d_ville: 'la cellule vue comme une petite ville' },
       conclusion: 'La cellule : une membrane, le hyaloplasme, un noyau, des mitochondries.',
       texte: 'Une cellule : membrane plasmique, hyaloplasme (liquide intérieur), noyau (il commande), mitochondries (rôle vu plus tard) ; comme une petite ville.',
       explication: [{ repere: 'membrane', texte: 'La membrane entoure la cellule.' }, { repere: 'hyaloplasme', texte: 'Le hyaloplasme est le liquide intérieur.' }, { repere: 'mitochondries', texte: 'Des mitochondries : leur rôle est vu plus loin.' }] },
-    glucose: { titre: 'Le glucose et l’énergie chimique', fin: 15.6, moments: MG, autoDepart: false, dessiner: dessinerGlucose, voit: voitGlucose,
+    glucose: { titre: 'Le glucose et l’énergie chimique', fin: 15.6, moments: MG, autoDepart: false, dessiner: enMosaique(dessinerGlucose), voit: voitGlucose,
       motifs: { g_pain: 'du pain : de l’amidon', g_sang: 'du glucose dans le sang', g_molecule: 'une molécule de glucose, six carbones', g_liaisons: 'l’énergie chimique, dans les liaisons', g_casser: 'liaisons cassées : énergie libérée', g_buche: 'la bûche brûle d’un coup ; la cellule avance pas à pas' },
       conclusion: 'Le glucose contient de l’énergie chimique, rangée dans ses liaisons ; la cellule la libère pas à pas.',
       texte: 'Du pain (amidon) au glucose du sang ; la molécule C₆H₁₂O₆ (six carbones) ; énergie chimique dans les liaisons, libérée quand elles se cassent ; comme une bûche qui brûle, mais pas à pas.',

@@ -126,8 +126,43 @@ function lien(c, n, o = {}) {
   const m = [(a[0] + b[0]) / 2 - uy * 8, (a[1] + b[1]) / 2 + ux * 8];
   c.courbe(u => [(1 - u) * (1 - u) * a[0] + 2 * (1 - u) * u * m[0] + u * u * b[0], (1 - u) * (1 - u) * a[1] + 2 * (1 - u) * u * m[1] + u * u * b[1]], 20, { couleur: 'faible', largeur: 2, pointille: o.pointille });
 }
+/* Tableau large (15 novembre 2026, « mieux exploiter tout le tableau ») : la scène est `large` (scene.L jusqu'à 1292) ;
+ * quand L ≥ 1000, la carte s'étale sur toute la largeur et chaque cadre est agrandi (GEO.k, GEO.kc) : son contenu est
+ * dessiné tel quel, sous une mise à l'échelle autour de son centre ; les liens, eux, relient les cadres à leur nouvelle place.
+ * L < 1000 (grand écran, déjà haut) : la disposition d'origine. */
+const ORIG = { C: { x: CENTRE.x, y: CENTRE.y, w: CENTRE.w, h: CENTRE.h, comps: CENTRE.comps }, N: NOEUDS.map(n => ({ x: n.x, y: n.y, w: n.w, h: n.h })), P2X, P2W, P2H, ys: PARTIE2.map(q => q.y) };
+const GEO = { L: 760, k: 1, kc: 1, k2: 1, p2x: P2X, p2w: P2W, p2h: P2H, ys: ORIG.ys.slice() };
+function geometrie(Lg) {
+  if (GEO.L === Lg) return;
+  GEO.L = Lg;
+  if (Lg < 1000) {
+    Object.assign(CENTRE, ORIG.C); NOEUDS.forEach((n, i) => Object.assign(n, ORIG.N[i]));
+    Object.assign(GEO, { k: 1, kc: 1, k2: 1, p2x: ORIG.P2X, p2w: ORIG.P2W, p2h: ORIG.P2H, ys: ORIG.ys.slice() });
+    return;
+  }
+  const k = 1.4, kc = 1.3, k2 = 1.4, marge = 12;
+  const p2w = ORIG.P2W * k2, p2x = Lg - marge - p2w / 2 - 4, Lw = p2x - p2w / 2 - 40 - marge;
+  const xs = [1, 3, 5].map(j => marge + Lw * j / 6);
+  Object.assign(CENTRE, { x: xs[1], y: 205, w: ORIG.C.w * kc, h: ORIG.C.h * kc });
+  NOEUDS.forEach((n, i) => Object.assign(n, { x: xs[i % 3], y: i < 3 ? 52 : 358, w: ORIG.N[i].w * k, h: ORIG.N[i].h * k }));
+  Object.assign(GEO, { k, kc, k2, p2x, p2w, p2h: ORIG.P2H * k2, ys: [118, 205, 292] });
+}
+/** Dessine `fn` (coordonnées d'origine, autour de `de`) mis à l'échelle `k` et centré sur `vers`. */
+function groupe(c, k, de, vers, fn) {
+  if (k === 1 && de[0] === vers[0] && de[1] === vers[1]) return fn();
+  const ctx = c.ctx, M = ctx.getTransform(), e = c.echelle, tip = c.tip;
+  ctx.translate(vers[0], vers[1]); ctx.scale(k, k); ctx.translate(-de[0], -de[1]); if (e) c.echelle = e * k;
+  try { return fn(); } finally {
+    ctx.setTransform(M); c.echelle = e;
+    if (c.tip && c.tip !== tip) c.tip = [vers[0] + k * (c.tip[0] - de[0]), vers[1] + k * (c.tip[1] - de[1])];
+  }
+}
 function branche(c, n) {
   lien(c, n);
+  const i = NOEUDS.indexOf(n), n0 = { ...n, ...ORIG.N[i] };
+  groupe(c, GEO.k, [n0.x, n0.y], [n.x, n.y], () => boite(c, n0));
+}
+function boite(c, n) {
   const x = n.x - n.w / 2, y = n.y - n.h / 2;
   c.rect(x, y, n.w, n.h, { couleur: n.couleur, arrondi: 14, largeur: 2.4 });
   c.texte(n.titre, n.x, y + 20, { couleur: n.couleur, taille: 16, align: 'center', max: n.w - 16, duree: .7 });
@@ -138,6 +173,10 @@ function branche(c, n) {
 }
 
 function dessinerCentre(c) {
+  const C = ORIG.C;
+  groupe(c, GEO.kc, [C.x, C.y], [CENTRE.x, CENTRE.y], () => contenuCentre(c, C));
+}
+function contenuCentre(c, CENTRE) {
   const x = CENTRE.x - CENTRE.w / 2, y = CENTRE.y - CENTRE.h / 2;
   c.rect(x, y, CENTRE.w, CENTRE.h, { couleur: 'jaune', arrondi: 18, largeur: 3 });
   // un petit plan complexe et le point M
@@ -170,31 +209,37 @@ function dessinerCentre(c) {
   if (S.choisi === 'centre') c.direct(() => c.rect(x - 3, y - 3, CENTRE.w + 6, CENTRE.h + 6, { couleur: 'blanc', arrondi: 19, largeur: 1.2, alpha: .6 }));
 }
 function dessinerPartie2(c) {
-  c.texte('partie 2 : à venir', P2X, 74, { couleur: 'faible', taille: 15, align: 'center' });
-  for (const q of PARTIE2) {
-    const x = P2X - P2W / 2, y = q.y - P2H / 2;
-    c.ligne(CENTRE.x + CENTRE.w / 2, CENTRE.y + (q.y - CENTRE.y) * .4, x, q.y, { couleur: 'faible', largeur: 1.4, pointille: [5, 6] });
-    c.rect(x, y, P2W, P2H, { couleur: 'faible', arrondi: 12, largeur: 1.8, pointille: [7, 6] });
-    c.texte(q.titre, P2X, q.y - 2, { couleur: 'blanc', taille: 14, align: 'center', max: P2W - 12, alpha: .85 });
-    c.texte('annoncé, pas calculé', P2X, q.y + 15, { couleur: 'faible', taille: 11, align: 'center', max: P2W - 12 });
-    c.repere(q.id, x - 4, y - 4, P2W + 8, P2H + 8, q.titre + ' (partie 2)');
-  }
-  c.repere('partie2', P2X - P2W / 2 - 8, 56, P2W + 16, 236, 'partie 2 : écriture exponentielle, équation du second degré, rotation');
+  const X = GEO.p2x, W = GEO.p2w, H = GEO.p2h, k = GEO.k2;
+  c.texte('partie 2 : à venir', X, GEO.ys[0] - H / 2 - 14 * k, { couleur: 'faible', taille: 15 * k, align: 'center' });
+  PARTIE2.forEach((q, i) => {
+    const y = GEO.ys[i];
+    c.ligne(CENTRE.x + CENTRE.w / 2, CENTRE.y + (y - CENTRE.y) * .4, X - W / 2, y, { couleur: 'faible', largeur: 1.4, pointille: [5, 6] });
+    groupe(c, k, [P2X, q.y], [X, y], () => {
+      const x0 = P2X - P2W / 2, y0 = q.y - P2H / 2;
+      c.rect(x0, y0, P2W, P2H, { couleur: 'faible', arrondi: 12, largeur: 1.8, pointille: [7, 6] });
+      c.texte(q.titre, P2X, q.y - 2, { couleur: 'blanc', taille: 14, align: 'center', max: P2W - 12, alpha: .85 });
+      c.texte('annoncé, pas calculé', P2X, q.y + 15, { couleur: 'faible', taille: 11, align: 'center', max: P2W - 12 });
+      c.repere(q.id, x0 - 4, y0 - 4, P2W + 8, P2H + 8, q.titre + ' (partie 2)');
+    });
+  });
+  c.repere('partie2', X - W / 2 - 8, GEO.ys[0] - H / 2 - 32 * k, W + 16, GEO.ys[2] - GEO.ys[0] + H + 40 * k, 'partie 2 : écriture exponentielle, équation du second degré, rotation');
 }
 
 function dessiner(c) {
-  const quand = { centre: dessinerCentre, branches: c2 => { NOEUDS.forEach(n => branche(c2, n)); c2.repere('branches', 4, 34, 600, 310, 'les six branches autour du centre'); }, partie2: dessinerPartie2 };
+  geometrie(scene.L || 760);
+  const zoneBranches = () => { const b = NOEUDS.reduce((u, n) => [Math.min(u[0], n.x - n.w / 2), Math.min(u[1], n.y - n.h / 2), Math.max(u[2], n.x + n.w / 2), Math.max(u[3], n.y + n.h / 2)], [1e9, 1e9, -1e9, -1e9]); return [b[0] - 4, b[1] - 4, b[2] - b[0] + 8, b[3] - b[1] + 8]; };
+  const quand = { centre: dessinerCentre, branches: c2 => { NOEUDS.forEach(n => branche(c2, n)); c2.repere('branches', ...zoneBranches(), 'les six branches autour du centre'); }, partie2: dessinerPartie2 };
   for (const p of PHASES) {
     const t = S.ph[p];
     if (t == null) continue;
     c.cur = t === AVANT ? AVANT : Math.max(c.cur, t);
     quand[p](c);
   }
-  if (S.lacunes) c.direct(() => c.texte('✓ acquis · ⟳ à revoir · ✗ à reprendre', 742, 18, { couleur: 'faible', taille: 12, align: 'right' }));
+  if (S.lacunes) c.direct(() => c.texte('✓ acquis · ⟳ à revoir · ✗ à reprendre', (scene.L || 760) - 18, 18, { couleur: 'faible', taille: 12, align: 'right' }));
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(53); dessiner(c); return c.fin(); });
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(53); dessiner(c); return c.fin(); }, { large: true });
 const maintenant = () => (performance.now() - scene.ouvert) / 1000;
 function moments() { return { centre: 1, branches: 2, partie2: 3 }; }
 const MOTS = { centre: 'Au centre : un point M, a + ib et r(cos θ + i sin θ).', branches: 'Les six branches : calcul algébrique, conjugué, module, argument, produit et Moivre, géométrie.', partie2: 'En pointillé : ce qui viendra dans la partie 2.' };

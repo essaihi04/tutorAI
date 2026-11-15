@@ -83,12 +83,18 @@ const S = { vue: VUES.includes(demande.get('vue')) ? demande.get('vue') : 'courb
 let M = {}, MM = {};
 
 /* ── Géométrie : axe x vers la droite, axe y vers le BAS (−E_ℓ/A de 0 à −9) ── */
-const O = { x: 84, y: 82 }, KX = 2.5, KY = 30;
+/* Tableau large (15 novembre 2026, « la courbe n’occupe qu’une bande étroite, textes minuscules ») : si le tableau
+ * est large (LV ≥ 1000, voir scene.cadre), l’axe des A s’étire sur toute la largeur (KX) et le texte grossit (G).
+ * XA(x) : une abscisse écrite pour le cadre 760 (KX = 2,5) ramenée au même A sur l’axe étiré. */
+const O = { x: 84, y: 82 }, KY = 30;
+let KX = 2.5, LV = 760, G = 1, XF = O.x + 240 * KX + 18;
 const PX = A => O.x + A * KX, PY = ea => O.y + ea * KY;
-const XF = O.x + 240 * KX + 18, YF = O.y + 9 * KY + 16;      // bouts des flèches des axes
+const XA = x => PX((x - O.x) / 2.5);
+const YF = O.y + 9 * KY + 16;      // bouts des flèches des axes
 const BAS = O.y + 9 * KY + 8;                                  // bas des zones peintes
 const ZONES = { fusion: [0, 20], stable: [20, 190], fission: [190, 240] };
-const FL_FUSION = [[170, 168], [203, 322]], FL_FISSION = [[632, 262], [338, 316]];
+const FL_F0 = [[170, 168], [203, 322]], FL_F1 = [[632, 262], [338, 316]];
+let FL_FUSION = FL_F0, FL_FISSION = FL_F1;
 
 /* ── Peinture : petites sphères ombrées et zones légèrement teintées ── */
 function sphere(ctx, x, y, r, rgb) {
@@ -125,29 +131,29 @@ function dessiner(c) {
       zonePeinte(c.ctx, z, Number.isFinite(c.t) ? clamp((S.t - t0) / .6) : 1);
     }
   });
-  c.texte(CMP ? 'La courbe d’Aston : comparer deux noyaux' : 'La courbe d’Aston : −E_{ℓ}/A = f(A)', 10, 26, { couleur: 'cyan', taille: 17, duree: 1 });
+  c.texte(CMP ? 'La courbe d’Aston : comparer deux noyaux' : 'La courbe d’Aston : −E_{ℓ}/A = f(A)', 10, 26, { couleur: 'cyan', taille: 17 * G, duree: 1 });
   // Axes : noms ET unités ; l’axe y descend (0 en haut, −9 en bas).
-  c.axe(O.x, O.y, XF, O.y, [50, 100, 150, 200].map(A => [A * KX / (XF - O.x), null]), { taille: 13 });
-  [50, 100, 150, 200].forEach(A => c.texte(String(A), PX(A), O.y - 9, { couleur: 'faible', taille: 13, align: 'center', duree: .1 }));
-  c.texte('A (nombre de nucléons)', 752, O.y - 28, { couleur: 'blanc', taille: 15, align: 'right', duree: .8 });
-  c.axe(O.x, O.y, O.x, YF, [1, 2, 3, 4, 5, 6, 7, 8, 9].map(k => [k * KY / (YF - O.y), '−' + k]), { taille: 13, vertical: true });
-  c.texte('0', O.x - 8, O.y - 6, { couleur: 'faible', taille: 13, align: 'right' });
-  c.texte('−E_{ℓ}/A (MeV/nucléon)', O.x + 8, YF + 16, { couleur: 'blanc', taille: 15, duree: .8 });
+  c.axe(O.x, O.y, XF, O.y, [50, 100, 150, 200].map(A => [A * KX / (XF - O.x), null]), { taille: 13 * G });
+  [50, 100, 150, 200].forEach(A => c.texte(String(A), PX(A), O.y - 9, { couleur: 'faible', taille: 13 * G, align: 'center', duree: .1 }));
+  c.texte('A (nombre de nucléons)', LV - 8, O.y - 28, { couleur: 'blanc', taille: 15 * G, align: 'right', duree: .8 });
+  c.axe(O.x, O.y, O.x, YF, [1, 2, 3, 4, 5, 6, 7, 8, 9].map(k => [k * KY / (YF - O.y), '−' + k]), { taille: 13 * G, vertical: true });
+  c.texte('0', O.x - 8, O.y - 6, { couleur: 'faible', taille: 13 * G, align: 'right' });
+  c.texte('−E_{ℓ}/A (MeV/nucléon)', O.x + 8, YF + 16, { couleur: 'blanc', taille: 15 * G, duree: .8 });
   marque(c, 'axes');
 
   // Les points des noyaux (sphères peintes, apparues une à une), puis les noms des cinq noyaux repères.
   const apparu = [];
   c.pause(.3);
   for (const n of NOYAUX) { apparu.push(c.cur); c.pause(CMP ? .03 : .09); }
-  c.direct(() => NOYAUX.forEach((n, i) => { if (vu(c, apparu[i])) sphere(c.ctx, PX(n.A), PY(n.ea), 3.6, OR); }));
+  c.direct(() => NOYAUX.forEach((n, i) => { if (vu(c, apparu[i])) sphere(c.ctx, PX(n.A), PY(n.ea), 3.6 * Math.sqrt(G), OR); }));
   if (!CMP) {
-    c.texte('²H', PX(2) + 8, PY(1.11) + 5, { couleur: 'jaune', taille: 15 });
-    c.ligne(PX(4) + 4, PY(7.07) - 3, 137, 264, { couleur: 'faible', largeur: 1.1, duree: .1 });
-    c.texte('⁴He', 139, 268, { couleur: 'jaune', taille: 15 });
-    c.ligne(PX(12) + 4, PY(7.68) - 2, 137, 300, { couleur: 'faible', largeur: 1.1, duree: .1 });
-    c.texte('¹²C', 139, 302, { couleur: 'jaune', taille: 15 });
-    c.texte('⁵⁶Fe', PX(56), PY(8.79) - 16, { couleur: 'jaune', taille: 15, align: 'center' });
-    c.texte('²³⁵U', PX(235) - 4, PY(7.59) - 13, { couleur: 'jaune', taille: 15, align: 'center' });
+    c.texte('²H', PX(2) + 8, PY(1.11) + 5, { couleur: 'jaune', taille: 15 * G });
+    c.ligne(PX(4) + 4, PY(7.07) - 3, XA(137), 264, { couleur: 'faible', largeur: 1.1, duree: .1 });
+    c.texte('⁴He', XA(139), 268, { couleur: 'jaune', taille: 15 * G });
+    c.ligne(PX(12) + 4, PY(7.68) - 2, XA(137), 300, { couleur: 'faible', largeur: 1.1, duree: .1 });
+    c.texte('¹²C', XA(139), 302, { couleur: 'jaune', taille: 15 * G });
+    c.texte('⁵⁶Fe', PX(56), PY(8.79) - 16, { couleur: 'jaune', taille: 15 * G, align: 'center' });
+    c.texte('²³⁵U', PX(235) - 4, PY(7.59) - 13, { couleur: 'jaune', taille: 15 * G, align: 'center' });
     marque(c, 'points');
   }
   // La courbe lisse par les points.
@@ -159,59 +165,59 @@ function dessiner(c) {
     // Le fer : le creux de la courbe.
     c.pause(.4);
     c.cercle(PX(56), PY(8.79), 11, { couleur: 'orange', largeur: 2 });
-    c.texte('les plus stables : −E_{ℓ}/A le plus bas', 268, 404, { couleur: 'orange', taille: 15 });
-    c.ligne(266, 398, PX(56) + 9, PY(8.79) + 9, { couleur: 'orange', largeur: 1.2, duree: .15 });
+    c.texte('les plus stables : −E_{ℓ}/A le plus bas', XA(268), 404, { couleur: 'orange', taille: 15 * G });
+    c.ligne(XA(266), 398 - 4 * (G - 1), PX(56) + 9, PY(8.79) + 9, { couleur: 'orange', largeur: 1.2, duree: .15 });
     marque(c, 'fer');
     // « plus stable » vers le bas de l’axe y.
     c.pause(.3);
-    c.texte('plus', 27, 186, { couleur: 'rose', taille: 14, align: 'center' });
-    c.texte('stable', 27, 202, { couleur: 'rose', taille: 14, align: 'center' });
+    c.texte('plus', 27, 186, { couleur: 'rose', taille: 14 * G, align: 'center' });
+    c.texte('stable', 27, 202, { couleur: 'rose', taille: 14 * G, align: 'center' });
     c.fleche(27, 212, 27, 330, { couleur: 'rose', largeur: 2.2 });
     marque(c, 'plus_stable');
     // Les zones (peintes à leur moment), bornes approchées écrites « environ ».
     marque(c, 'z_fusion'); c.pause(.7);
     c.ligne(PX(20), O.y + 4, PX(20), BAS, { couleur: 'tresfaible', largeur: 1.3, pointille: [5, 5] });
-    c.texte('environ 20', PX(20) + 5, O.y + 18, { couleur: 'faible', taille: 13 });
-    c.texte('fusion', (PX(0) + PX(20)) / 2 + 1, 206, { couleur: 'orange', taille: 15, align: 'center' });
+    c.texte('environ 20', PX(20) + 5, O.y + 18, { couleur: 'faible', taille: 13 * G });
+    c.texte('fusion', (PX(0) + PX(20)) / 2 + 1, 206, { couleur: 'orange', taille: 15 * G, align: 'center' });
     marque(c, 'zone_fusion');
     marque(c, 'z_fission'); c.pause(.7);
     c.ligne(PX(190), O.y + 4, PX(190), BAS, { couleur: 'tresfaible', largeur: 1.3, pointille: [5, 5] });
-    c.texte('environ 190', PX(190) + 5, O.y + 18, { couleur: 'faible', taille: 13 });
-    c.texte('fission', (PX(190) + PX(240)) / 2, 206, { couleur: 'violet', taille: 15, align: 'center' });
+    c.texte('environ 190', PX(190) + 5, O.y + 18, { couleur: 'faible', taille: 13 * G });
+    c.texte('fission', (PX(190) + PX(240)) / 2, 206, { couleur: 'violet', taille: 15 * G, align: 'center' });
     marque(c, 'zone_fission');
     marque(c, 'z_stable'); c.pause(.7);
-    c.texte('noyaux stables', (PX(20) + PX(190)) / 2, 206, { couleur: 'vert', taille: 15, align: 'center' });
+    c.texte('noyaux stables', (PX(20) + PX(190)) / 2, 206, { couleur: 'vert', taille: 15 * G, align: 'center' });
     marque(c, 'zone_stable');
     // Les deux flèches vers le creux.
     c.pause(.4);
-    c.texte('fusion', FL_FUSION[0][0], FL_FUSION[0][1] - 8, { couleur: 'orange', taille: 15, align: 'center' });
+    c.texte('fusion', FL_FUSION[0][0], FL_FUSION[0][1] - 8, { couleur: 'orange', taille: 15 * G, align: 'center' });
     c.fleche(...FL_FUSION[0], ...FL_FUSION[1], { couleur: 'orange', largeur: 2.2 });
-    c.texte('fission', FL_FISSION[0][0] - 4, FL_FISSION[0][1] - 8, { couleur: 'violet', taille: 15, align: 'center' });
+    c.texte('fission', FL_FISSION[0][0] - 4, FL_FISSION[0][1] - 8, { couleur: 'violet', taille: 15 * G, align: 'center' });
     c.fleche(...FL_FISSION[0], ...FL_FISSION[1], { couleur: 'violet', largeur: 2.2 });
     marque(c, 'fleches');
   } else {
     // Deux points de lecture : les poignées de l’élève.
-    for (const [k, n, coul, yRow] of [[1, S.n1, 'rose', 384], [2, S.n2, 'cyan', 406]]) {
+    for (const [k, n, coul, yRow] of [[1, S.n1, 'rose', G > 1 ? 380 : 384], [2, S.n2, 'cyan', 406]]) {
       c.pause(.4);
       const x = PX(n.A), y = PY(n.ea);
       c.ligne(x, O.y, x, y, { couleur: coul, largeur: 1.2, pointille: [3, 4], duree: .25 });
       c.ligne(O.x, y, x, y, { couleur: coul, largeur: 1.2, pointille: [3, 4], duree: .25 });
       c.cercle(x, y, 8, { couleur: coul, largeur: 2, duree: .2 });
-      c.texte(n.sym, x + (k === 1 ? 12 : -12), y + (k === 1 ? -10 : 20), { couleur: coul, taille: 15, align: k === 1 ? 'left' : 'right', duree: .2 });
-      c.texte(`point ${k} (${n.sym}) : A = ${n.A} ; −E_{ℓ}/A = −${fr(n.ea, 2)} MeV/nucléon`, 286, yRow, { couleur: coul, taille: 15, duree: 1.4 });
+      c.texte(n.sym, x + (k === 1 ? 12 : -12), y + (k === 1 ? -10 : 20), { couleur: coul, taille: 15 * G, align: k === 1 ? 'left' : 'right', duree: .2 });
+      c.texte(`point ${k} (${n.sym}) : A = ${n.A} ; −E_{ℓ}/A = −${fr(n.ea, 2)} MeV/nucléon`, XA(286), yRow, { couleur: coul, taille: 15 * G, duree: 1.4 });
       marque(c, 'noyau' + k);
     }
     c.pause(.5);
     const p = plusStable();
-    c.texte(p ? `le plus stable : ${p.sym} (E_{ℓ}/A = ${fr(p.ea, 2)} MeV/nucléon)` : 'les deux points sont le même noyau', 300, 132, { couleur: 'jaune', taille: 16, duree: 1 });
-    c.texte('le plus stable : celui qui a la plus grande E_{ℓ}/A,', 300, 158, { couleur: 'blanc', taille: 15, duree: 1.2 });
-    c.texte('donc le point le plus bas', 300, 178, { couleur: 'blanc', taille: 15, duree: .7 });
+    c.texte(p ? `le plus stable : ${p.sym} (E_{ℓ}/A = ${fr(p.ea, 2)} MeV/nucléon)` : 'les deux points sont le même noyau', XA(300), 132, { couleur: 'jaune', taille: 16 * G, duree: 1 });
+    c.texte('le plus stable : celui qui a la plus grande E_{ℓ}/A,', XA(300), 132 + 26 * G, { couleur: 'blanc', taille: 15 * G, duree: 1.2 });
+    c.texte('donc le point le plus bas', XA(300), 132 + 46 * G, { couleur: 'blanc', taille: 15 * G, duree: .7 });
     marque(c, 'comparaison');
   }
   c.pause(.8); marque(c, 'fin');
 
   // Repères (toujours déclarés, dans les deux vues).
-  c.repere('vue_courbe', 4, 36, 752, 380, 'la courbe d’Aston');
+  c.repere('vue_courbe', 4, 36, LV - 8, 380, 'la courbe d’Aston');
   c.repere('axe_x', O.x, O.y - 34, XF - O.x + 4, 46, 'axe des abscisses : A (nombre de nucléons), de 0 à 240');
   c.repere('axe_y', O.x - 34, O.y, 50, YF - O.y + 20, 'axe des ordonnées : −E_ℓ/A en MeV/nucléon, de 0 (en haut) à −9 (en bas)');
   c.repere('courbe', PX(2), O.y + 20, PX(238) - PX(2), 9 * KY - 6, 'la courbe d’Aston −E_ℓ/A = f(A)');
@@ -237,12 +243,19 @@ const canvas = $('canvas');
 const scene = window.OndesTableau.Scene(canvas, dessiner);
 const craie = scene.craie;
 scene.cadre = function (graine) {
-  const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  const W = craie.W, H = craie.H, VH = 420;
+  const L = Math.round(Math.min(760 * 2.1, Math.max(760, VH * W / Math.max(1, H))));   // comme Scene({ large: true })
+  const VW = L >= 1000 ? L : 760;
+  if (VW !== LV) {
+    LV = VW; G = VW > 760 ? 1.4 : 1; KX = VW > 760 ? (VW - O.x - 46) / 240 : 2.5; XF = O.x + 240 * KX + 18;
+    FL_FUSION = FL_F0.map(([x, y]) => [XA(x), y]); FL_FISSION = FL_F1.map(([x, y]) => [XA(x), y]);
+  }
+  scene.L = VW;
   craie.debut(graine, S.t);
   const s = Math.min(W / VW, H / VH) || 1;
   scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
   craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
-  craie.echelle = s; craie.tailleMin = 11;
+  craie.echelle = s; craie.tailleMin = 15;
   // Garde-fou « hors cadre » seulement une fois la police du tableau chargée (la police de secours est plus large).
   craie.cadre = !document.fonts || document.fonts.status === 'loaded' ? { w: VW, h: VH, haut: 0 } : null;
   return craie;

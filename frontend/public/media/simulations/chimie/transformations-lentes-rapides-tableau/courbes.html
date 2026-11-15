@@ -11,6 +11,7 @@
 </div>
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
+<script src="large.js"></script>
 <script src="exposants.js"></script>
 <script>
 /*
@@ -77,7 +78,7 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), { large: true });
   const cadreBase = scene.cadre;
   scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
   M.scene = scene; M.craie = scene.craie;
@@ -165,6 +166,7 @@ function zoneEcriture(c, M, liste, ys, o = {}) {
   }
   let k = -1;
   liste.forEach((e, j) => { const ev = M.ev(e.nom); if (ev && S.t > ev.ecrit + .05) k = j; });
+  if (window.TLRLarge.actif()) return window.TLRLarge.zone(c, liste, k, (e, lignes) => M.etape(c, e.nom, () => { lignes(); e.plus && e.plus(c); }));   // tableau large : la colonne de gauche
   const garde = new Set(); let nb = 0;
   for (let j = k; j >= 0; j--) { const l = liste[j].lignes.length; if (nb + l > n) break; garde.add(j); nb += l; }
   let y = 0;
@@ -302,7 +304,9 @@ function debuts(c, ids, L = 46) {
 function dessiner(c, M) {
   MO = M; M.scene.cadre(53);
   const v = M.S.vue, g = gr();
-  c.texte(`Les courbes : ${TITRES[v]}`, 14, 26, { couleur: 'cyan', taille: 20 });
+  // Tableau large (large.js) : le graphe et le panneau de droite agrandis, le titre et les lignes du bas dans la colonne de gauche.
+  window.TLRLarge.debut(c, M.scene, { src: [40, 48, 752, 332] });
+  window.TLRLarge.titre(c, `Les courbes : ${TITRES[v]}`, 14, 26, { couleur: 'cyan', taille: 20 });
   if (M.commence(v === 'lecture' ? 'enonce' : 'axes')) c.direct(() => quadrillage(c, lisse(M.p(v === 'lecture' ? 'enonce' : 'axes'))));
   // Les courbes se tracent pendant l’animation de leur étape ; dans la vue lecture, les trois ensemble.
   c.direct(() => {
@@ -359,6 +363,7 @@ function dessiner(c, M) {
       plus: () => c.texte('« x_f est le même » : vrai', PX, 284, { couleur: 'jaune', taille: 19 }) },
   ], ZY);
   reperes(c, M);
+  window.TLRLarge.fin(c);
   M.vues = vues;
   return c.fin();
 }

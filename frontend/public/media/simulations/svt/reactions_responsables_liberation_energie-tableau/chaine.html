@@ -192,7 +192,13 @@ const MOTIFS = {
 
 /* ── Scène ─────────────────────────────────────────────────────────────────────────────────── */
 const canvas = $('canvas');
-const scene = Scene(canvas, (c) => { scene.cadre(29); dessiner(c); return c.fin(); });
+const scene = Scene(canvas, (c) => { scene.cadre(29); MOS.dessiner(c, () => { dessiner(c); }); return c.fin(); }, { large: true });
+/* Tableau large (portable 1366 × 613) : la page est rangée sur toute la largeur (SVTLarge.Mosaique, dans peinture.js) ; grand écran : inchangée. */
+const MOS = window.SVTLarge.Mosaique(scene, (L) => L >= 1000 ? (() => { const s = Math.min(1.24, (L - 280) / 760), B = 760 * s, wc = Math.min(300, L - B - 24), x0 = (L - wc - 16 - B) / 2, X = x0 + wc + 16; return { police: 1.1, blocs: [
+  { src: [0, 92, 760, 328], X, Y: (420 - 328 * s) / 2, s },                      // le schéma de la membrane, sur toute la hauteur
+  { src: [790, 0, 260, 190], X: x0, Y: 4, s: Math.min(1, wc / 260) },             // le titre, en colonne à gauche
+  { src: [0, 0, 136, 92], X: x0 + (wc - 204) / 2, Y: 196, s: 1.5 },               // le médaillon (zoom)
+  { src: [486, 54, 260, 38], X: x0, Y: 352, s: Math.min(1.1, wc / 260) }] }; })() : null);
 const ecrit = Apparitions(scene);
 const chrono = Chrono({ fin: () => PL.FIN, moments: () => M, motifs: MOTIFS, bouton: $('run'), bulle: $('feedback'), pont: () => pont,
   depart: 'Observe la membrane interne, vue de près…', reinit: () => ecrit.oublier(),
@@ -211,7 +217,8 @@ function ecrits() {
   const L = [], cours = !ex(), ok = !PL.bloque;
   const add = (cle, t0, cond, mot, f) => { if (cond) L.push({ cle, t0, mot, f }); };
   add('titre_ex', .3, ex(), 'bandeau : document type, les noms des complexes sont donnés par le sujet', c =>
-    c.texte('document type : les noms des complexes sont donnés par le sujet, on ne les apprend pas', 146, 54, { couleur: 'faible', taille: 12 }));
+    (MOS.actif() ? ['document type : les noms', 'des complexes sont donnés', 'par le sujet, on ne les', 'apprend pas'].forEach((l, i) => c.texte(l, 800, 112 + i * 20, { couleur: 'faible', taille: 16 }))
+      : c.texte('document type : les noms des complexes sont donnés par le sujet, on ne les apprend pas', 146, 54, { couleur: 'faible', taille: 12 })));
   add('n_espace', .2, cours, 'espace intermembranaire', c => c.texte('espace intermembranaire', 20, 112, { couleur: 'orange', taille: 14 }));
   add('n_membrane', .6, cours, 'membrane interne', c => c.texte('membrane interne', 20, 186, { couleur: 'jaune', taille: 14 }));
   add('n_matrice', 1.0, true, 'matrice', c => c.texte('matrice', 20, 262, { couleur: 'bleu', taille: 14 }));
@@ -245,7 +252,9 @@ function ecrits() {
     c.texte('transfert des e− arrêté → O_{2} non consommé → pas de pompage des H+ → pas de gradient → pas d’ATP', 380, R4, { couleur: 'rouge', taille: 14, align: 'center', max: 735, duree: 2 }));
   add('gradient', 18.4, ok && cours, 'gradient de protons : [H+] élevée (pH bas) dans l’espace, faible dans la matrice', c =>
     c.texte('gradient de protons : [H+] élevée (pH bas) dans l’espace, faible dans la matrice', 200, 112, { couleur: 'rouge', taille: 14, max: 540, duree: 1.8 }));
-  add('retour', 21.0, ok && cours, 'retour des H+ : seulement par la sphère', c => c.texte('retour des H+ : seulement par la sphère', 745, R2, { couleur: 'rouge', taille: 13, align: 'right' }));
+  add('retour', 21.0, ok && cours, 'retour des H+ : seulement par la sphère', c => (MOS.actif()   // tableau large : sur deux lignes (le texte grossi ne touche pas « O2 : accepteur final »)
+    ? (c.texte('retour des H+ :', 680, R1, { couleur: 'rouge', taille: 13, align: 'right' }), c.texte('seulement par la sphère', 745, R2, { couleur: 'rouge', taille: 13, align: 'right' }))
+    : c.texte('retour des H+ : seulement par la sphère', 745, R2, { couleur: 'rouge', taille: 13, align: 'right' })));
   add('lettre_C', 23.4, ok && ex(), 'lettre C (à la tête de la sphère)', c => { c.cercle(560, 244, 9, { couleur: 'rose', largeur: 1.4 }); c.texte('C', 560, 249, { couleur: 'rose', taille: 14, align: 'center' }); });
   add('atp_eq', 23.4, ok && cours, 'ADP + Pi + énergie → ATP : phosphorylation oxydative', c => {
     c.texte('ADP + Pi + énergie → ATP :', 640, R3, { couleur: 'jaune', taille: 15, align: 'center' });
@@ -300,8 +309,13 @@ function dessiner(c) {
   c.direct(() => peindre(c.ctx));
   medaillon(c);
   // la craie fixe : titre, transporteurs, poignée du dioxygène
-  c.texte('Chaîne respiratoire et phosphorylation oxydative', 146, 30, { couleur: 'cyan', taille: 19 });
-  if (!ex()) c.texte('vue de près : une crête de la membrane interne', 146, 54, { couleur: 'faible', taille: 12 });
+  if (MOS.actif()) {   // tableau large : le titre en colonne, à gauche du schéma (bloc [790, 0, 260, 190] de la mosaïque)
+    ['Chaîne respiratoire', 'et phosphorylation', 'oxydative'].forEach((l, i) => c.texte(l, 800, 28 + i * 24, { couleur: 'cyan', taille: 20 }));
+    if (!ex()) { c.texte('vue de près : une crête', 800, 114, { couleur: 'faible', taille: 17 }); c.texte('de la membrane interne', 800, 136, { couleur: 'faible', taille: 17 }); }
+  } else {
+    c.texte('Chaîne respiratoire et phosphorylation oxydative', 146, 30, { couleur: 'cyan', taille: 19 });
+    if (!ex()) c.texte('vue de près : une crête de la membrane interne', 146, 54, { couleur: 'faible', taille: 12 });
+  }
   for (let k = 0; k < 4; k++) {
     c.texte('T' + (k + 1), TX[k], 194, { couleur: 'blanc', taille: 13, align: 'center' });
     if (ex()) ecrit.ecrire(c, 'c' + k, () => c.texte(NOMS_C[k], TX[k], 239, { couleur: 'blanc', taille: 12, align: 'center' }));

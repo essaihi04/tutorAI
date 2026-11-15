@@ -87,7 +87,28 @@ function etat(c, comps, x, y, w, h) {
   });
 }
 
-function branche(c, n) {
+/* Tableau large (15 novembre 2026, « les textes débordent des cadres, la carte n’occupe que le milieu ») : sur un
+ * tableau large (scene.L ≥ 1000), les trois colonnes de la carte s’écartent sur toute la largeur, les cadres
+ * grandissent et les textes sont écrits à la taille qu’ils auront vraiment (≥ 15 px à l’écran) ; la hauteur des cadres
+ * est calculée sur ces tailles. Grand écran (L < 1000) : la carte d’origine (760 de large), centrée. */
+let GEO = { large: false, DX: 0 };
+function geometrie() {
+  const L = scene.L || 760, s = scene.s || 1, min = 15.2 / s;
+  if (L < 1000) { GEO = { large: false, DX: (L - 760) / 2, TT: 17, TL: 14, LS: 18 }; return; }
+  const k = 1.3, TT = Math.max(17 * k, min), TL = Math.max(14 * k, min), LS = TL * 1.25, M = 18, G = 30;
+  const w = Math.min((L - 2 * M - 2 * G) / 3, 430), h = TT * 1.24 + 2 * LS + 16, haut = 12 + h / 2, bas = 420 - 34 - h / 2;
+  GEO = { large: true, DX: 0, L, TT, TL, LS, w, h, cols: [L / 2 - w - G, L / 2, L / 2 + w + G], rows: [haut, (haut + bas) / 2, bas], ch: h * 1.15, cw: Math.min(w * .92, 300) };
+}
+/** Le nœud tel qu’il se dessine (positions et tailles du tableau large, ou d’origine). */
+function geo(n) {
+  if (!GEO.large) return { ...n, TT: 17, TL: 14, LS: 18 };
+  if (n.seul) return { ...n, x: GEO.L / 2, y: 410, w: GEO.L * .6, TT: GEO.TL, TL: GEO.TL, LS: GEO.LS };
+  const col = n.x < 300 ? 0 : n.x < 500 ? 1 : 2, row = n.y < 140 ? 0 : n.y < 270 ? 1 : 2;
+  return { ...n, x: GEO.cols[col], y: GEO.rows[row], w: GEO.w, h: GEO.h, TT: GEO.TT, TL: GEO.TL, LS: GEO.LS };
+}
+const geoCentre = () => (GEO.large ? { ...CENTRE, x: GEO.L / 2, y: GEO.rows[1], w: GEO.cw, h: GEO.ch } : CENTRE);
+function branche(c, n0) {
+  const n = geo(n0), CENTRE = geoCentre();
   const x = n.x - n.w / 2, y = n.y - n.h / 2;
   if (!n.seul) {
     const dx = n.x - CENTRE.x, dy = n.y - CENTRE.y, L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L;
@@ -100,11 +121,11 @@ function branche(c, n) {
   }
   if (n.seul) {
     // la suite du programme : une flèche et une ligne, sans cadre de branche
-    c.texte('→ ' + n.titre, n.x, n.y + 6, { couleur: 'faible', taille: 17, align: 'center', max: n.w - 10, duree: .9 });
+    c.texte('→ ' + n.titre, n.x, n.y + 6, { couleur: 'faible', taille: n.TT, align: 'center', max: n.w - 10, duree: .9 });
   } else {
     c.rect(x, y, n.w, n.h, { couleur: n.couleur, arrondi: n.encadre ? 4 : 14, largeur: n.encadre ? 1.6 : 2.4, pointille: n.encadre ? [6, 5] : undefined });
-    c.texte(n.titre, n.x, y + 21, { couleur: n.couleur, taille: 17, align: 'center', max: n.w - 16, duree: .8 });
-    n.lignes.forEach((l, k) => c.texte(l, n.x, y + 42 + k * 18, { couleur: 'blanc', taille: 14, align: 'center', max: n.w - 14, alpha: .92, duree: 1 }));
+    c.texte(n.titre, n.x, y + n.TT * 1.24, { couleur: n.couleur, taille: n.TT, align: 'center', max: n.w - 16, duree: .8 });
+    n.lignes.forEach((l, k) => c.texte(l, n.x, y + n.TT * 1.24 + 3 + n.LS * (k + 1), { couleur: 'blanc', taille: n.TL, align: 'center', max: n.w - 14, alpha: .92, duree: 1 }));
   }
   c.repere(n.id, x - 5, y - 5, n.w + 10, n.h + 10, lisible(n.titre));
   etat(c, n.comps, x, y, n.w, n.h);
@@ -112,21 +133,23 @@ function branche(c, n) {
 }
 
 function dessiner(c) {
+  geometrie(); if (GEO.DX) c.ctx.translate(GEO.DX, 0);
+  const CENTRE = geoCentre(), kc = GEO.large ? CENTRE.h / 82 : 1;
   const x = CENTRE.x - CENTRE.w / 2, y = CENTRE.y - CENTRE.h / 2;
   if (S.def === AVANT) c.cur = AVANT;   // déjà dit (saut ou retour en arrière) : le centre est écrit d'un coup
   c.rect(x, y, CENTRE.w, CENTRE.h, { couleur: 'blanc', arrondi: 18, largeur: 3 });
-  c.texte('Dipôle RC', CENTRE.x, y + 34, { couleur: 'blanc', taille: 28, align: 'center', gras: true });
+  c.texte('Dipôle RC', CENTRE.x, y + 34 * kc, { couleur: 'blanc', taille: 28 * kc, align: 'center', gras: true });
   c.repere('centre', x, y, CENTRE.w, CENTRE.h, 'le centre : le dipôle RC');
   const apres = c.cur;   // fin du titre du centre
   if (S.def != null) {
     c.depuis(S.def);
-    peindre(c, ctx => { resistorPeint(ctx, CENTRE.x - 44, y + 58); condoPeint(ctx, CENTRE.x + 26, y + 44); });
-    c.texte('R et C en série', CENTRE.x, y + 76, { couleur: 'faible', taille: 13, align: 'center', duree: .8 });
+    peindre(c, ctx => { resistorPeint(ctx, CENTRE.x - 44 * kc, y + 58 * kc, 34 * kc, 10 * kc); condoPeint(ctx, CENTRE.x + 26 * kc, y + 44 * kc, 13 * kc, 22 * kc); });
+    c.texte('R et C en série', CENTRE.x, y + 76 * kc, { couleur: 'faible', taille: Math.max(13 * kc, GEO.TL ? GEO.TL * .8 : 13), align: 'center', duree: .8 });
     if (S.choisi === 'centre') c.direct(() => c.rect(x - 3, y - 3, CENTRE.w + 6, CENTRE.h + 6, { couleur: 'blanc', arrondi: 19, largeur: 1.2, alpha: .6 }));
   }
   // chaque branche a sa ligne de temps : elle s'écrit dès que la voix la dit, sans attendre la précédente
   for (let i = 0; i < S.n; i++) { c.cur = S.apparu[i] === AVANT ? AVANT : Math.max(apres, S.apparu[i]); branche(c, NOEUDS[i]); }
-  if (S.lacunes) c.direct(() => c.texte('✓ acquis · ⟳ à revoir · ✗ à reprendre', 744, 412, { couleur: 'faible', taille: 12, align: 'right' }));
+  if (S.lacunes) c.direct(() => c.texte('✓ acquis · ⟳ à revoir · ✗ à reprendre', GEO.large ? GEO.L - 16 : 744, 412, { couleur: 'faible', taille: 12, align: 'right' }));
 }
 /* Le peint (résistor, condensateur chimique) apparaît quand l’écriture arrive à lui. */
 const peindre = (c, fn) => { if (c.t >= c.cur) c.direct(() => { c.ctx.save(); try { fn(c.ctx); } finally { c.ctx.restore(); } }); };
@@ -148,7 +171,7 @@ function resistorPeint(ctx, cx, cy, L = 34, e = 10) {
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(71); dessiner(c); return c.fin(); });
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(71); dessiner(c); return c.fin(); }, { large: true });
 const maintenant = () => (performance.now() - scene.ouvert) / 1000;
 let horloge = 0;
 scene.avancer = dt => {
@@ -202,8 +225,8 @@ $('imprimer').onclick = () => {
   pont.noter('imprimer', { pages: 1 }); pont.emettre();
 };
 canvas.addEventListener('pointerdown', e => {
-  const r = canvas.getBoundingClientRect(), [x, y] = scene.local(e.clientX - r.left, e.clientY - r.top);
-  const n = NOEUDS.slice(0, S.n).find(n => Math.abs(x - n.x) <= n.w / 2 + 6 && Math.abs(y - n.y) <= n.h / 2 + 6);
+  const r = canvas.getBoundingClientRect(), [xl, y] = scene.local(e.clientX - r.left, e.clientY - r.top), x = xl - GEO.DX, CENTRE = geoCentre();
+  const n = NOEUDS.slice(0, S.n).map(geo).find(n => Math.abs(x - n.x) <= n.w / 2 + 6 && Math.abs(y - n.y) <= n.h / 2 + 6);
   if (n) { S.choisi = n.id; bulle($('feedback'), lisible(n.phrase)); }
   else if (Math.abs(x - CENTRE.x) <= CENTRE.w / 2 && Math.abs(y - CENTRE.y) <= CENTRE.h / 2) { S.choisi = 'centre'; bulle($('feedback'), lisible(CENTRE.phrase)); }
   else return;

@@ -11,6 +11,7 @@
 </div>
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
+<script src="large.js"></script>
 <script src="exposants.js"></script>
 <script>
 /*
@@ -80,7 +81,7 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), { large: true });
   const cadreBase = scene.cadre;
   scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
   M.scene = scene; M.craie = scene.craie;
@@ -168,6 +169,7 @@ function zoneEcriture(c, M, liste, ys, o = {}) {
   }
   let k = -1;
   liste.forEach((e, j) => { const ev = M.ev(e.nom); if (ev && S.t > ev.ecrit + .05) k = j; });
+  if (window.TLRLarge.actif()) return window.TLRLarge.zone(c, liste, k, (e, lignes) => M.etape(c, e.nom, () => { lignes(); e.plus && !cache(e.nom) && e.plus(c); }), cache);   // tableau large : la colonne de gauche
   const garde = new Set(); let nb = 0;
   for (let j = k; j >= 0; j--) { const l = liste[j].lignes.length; if (nb + l > n) break; garde.add(j); nb += l; }
   let y = 0;
@@ -547,11 +549,17 @@ function legende(c, y) {
 function dessiner(c, M) {
   MO = M; M.scene.cadre(41);
   const v = M.S.vue;
-  c.texte(TITRE_TABLEAU[v], 14, 26, { couleur: 'cyan', taille: 20 });
+  // Tableau large (large.js) : la figure agrandie, le titre et les lignes du bas dans la colonne de gauche.
+  window.TLRLarge.debut(c, M.scene, { src: SRC_LARGE[v] });
+  window.TLRLarge.titre(c, TITRE_TABLEAU[v], 14, 26, { couleur: 'cyan', taille: 20 });
   M.vues = ({ temperature: vueTemperature, concentration: vueConcentration, trempe: vueTrempe, une_variable: vueUneVariable, vie: vueVie, catalyseur: vueCatalyseur })[v](c, M) || [];
   reperes(c, M);
+  window.TLRLarge.fin(c);
   return c.fin();
 }
+/* Boîte de chaque figure dans le dessin d’origine (sans le titre ni les lignes du bas) : tableau large, voir large.js. */
+const SRC_LARGE = { temperature: [24, 12, 730, 336], concentration: [24, 12, 730, 336], catalyseur: [24, 40, 756, 345],
+  trempe: [16, 36, 748, 342], une_variable: [20, 60, 800, 342], vie: [20, 40, 730, 322] };
 function vueTemperature(c, M) {
   const t = tSim(), th = thetaVu(), tc = tauC(), fF = avance(t, TAU_F), fC = avance(t, tc), niv = NIV * lisse(M.p('melange'));
   eqn(c, 724, 26, 'H₂O₂ + 2I⁻ + 2H⁺', 'I₂ + 2H₂O', { align: 'right', taille: 16 });
@@ -953,11 +961,11 @@ MOT.lancer();
 window.Tableau.glisser(MOT.scene.craie.canvas, {
   toucher: (px, py) => {
     if (MOT.S.vue !== 'temperature') return null;
-    const [x, y] = MOT.scene.local(px, py);
+    const [x, y] = window.TLRLarge.local(MOT.scene, px, py);
     return Math.abs(x - TH2.x) < 22 && y > TH2.yT - 12 && y < TH2.yB + 4 ? 'theta' : null;
   },
   bouger: (id, px, py) => {
-    const [, y] = MOT.scene.local(px, py);
+    const [, y] = window.TLRLarge.local(MOT.scene, px, py);
     DRAG = clamp(Math.round(80 * (TH2.yB - 8 - y) / (TH2.yB - TH2.yT - 16)), 30, 60); MOT.scene.sale = true;
   },
   lacher: () => { if (DRAG != null) { const th = DRAG; MOT.setParameters({ theta_c: th }); } },

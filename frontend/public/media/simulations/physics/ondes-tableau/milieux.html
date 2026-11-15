@@ -24,7 +24,12 @@ const { fr, bulle, protocole } = window.Tableau;
 const $ = id => document.getElementById(id);
 const D = 1000;                       // m
 const RALENTI = 2.5;                  // l'image va 2,5 fois moins vite que le vrai son
-const X0 = 170, X1 = 640;
+/* Agrandissement (15 novembre 2026, « mieux exploiter tout le tableau ») : Scene en { large: true } ; sur le
+ * tableau large (scene.L ≥ 1000) les pistes s'étirent, les temps d'arrivée s'écrivent dans une colonne à droite
+ * de l'oreille et les textes grossissent (× 1,35) ; sur un grand écran (L < 1000) la disposition d'origine reste. */
+let X0 = 170, X1 = 640, L = 760, GR = false;
+const f = n => (GR ? Math.round(n * 1.35) : n);
+function disposer() { L = scene.L; GR = L >= 1000; X0 = GR ? 215 : 170; X1 = GR ? L - 320 : 640; }
 const S0 = { theta: 20 };
 const vAir = () => Math.round(331.3 * Math.sqrt(1 + S0.theta / 273.15));
 const PISTES = [
@@ -115,42 +120,47 @@ function peindrePistes(ctx) {
 }
 
 function dessiner(c) {
-  scene.cadre(11);
+  scene.cadre(11); disposer();
   c.direct(() => peindrePistes(c.ctx));
-  c.texte('Une seule frappe, au même instant, sur 1 km de chaque milieu', 380, 24, { couleur: 'blanc', taille: 17, align: 'center' });
-  c.cote(X0, 66, X1, 66, 'd = 1 km', { couleur: 'faible' });
+  c.texte('Une seule frappe, au même instant, sur 1 km de chaque milieu', L / 2, 26, { couleur: 'blanc', taille: f(17), align: 'center' });
+  c.cote(X0, 66, X1, 66, 'd = 1 km', { couleur: 'faible', taille: f(18) });
   for (const p of PISTES) {
-    c.texte(p.nom, 20, p.y + (p.nom2 ? -2 : 6), { couleur: p.couleur, taille: 17 });
-    if (p.nom2) c.texte(p.nom2, 20, p.y + 18, { couleur: p.couleur, taille: 17 });
+    c.texte(p.nom, 20, p.y + (p.nom2 ? -2 : 6), { couleur: p.couleur, taille: f(17) });
+    if (p.nom2) c.texte(p.nom2, 20, p.y + 18, { couleur: p.couleur, taille: f(17) });
     // Le milieu (barreau d'acier, eau, air), le marteau et l'oreille sont peints plus haut, sous la craie.
-    c.repere(p.id, 14, p.y - 26, 720, 52, p.id === 'air_fort' ? 'l’air frappé plus fort' : 'piste ' + p.nom);
+    c.repere(p.id, 14, p.y - 26, (GR ? X1 + 40 : 720), 52, p.id === 'air_fort' ? 'l’air frappé plus fort' : 'piste ' + p.nom);
   }
   c.direct(() => {
-    c.texte(`${fr(S0.theta, 0)} °C`, 20, PISTES[2].y + 24, { couleur: S0.theta > 25 ? 'orange' : S0.theta < 5 ? 'cyan' : 'faible', taille: 15 });
-    c.repere('temperature', 14, PISTES[2].y + 8, 90, 24, 'la température de l’air');
+    c.texte(`${fr(S0.theta, 0)} °C`, 20, PISTES[2].y + (GR ? 30 : 24), { couleur: S0.theta > 25 ? 'orange' : S0.theta < 5 ? 'cyan' : 'faible', taille: f(15) });
+    c.repere('temperature', 14, PISTES[2].y + 8, GR ? 110 : 90, GR ? 30 : 24, 'la température de l’air');
     for (const p of PISTES) {
-      const ta = arrivee(p), f = Math.min(1, S.t / ta);
-      if ((S.running || S.pause || S.fait) && S.t > 0 && f < 1) {
-        const x = X0 + f * (X1 - X0), h = p.fort ? 22 : 11;
+      const ta = arrivee(p), fr_ = Math.min(1, S.t / ta);
+      if ((S.running || S.pause || S.fait) && S.t > 0 && fr_ < 1) {
+        const x = X0 + fr_ * (X1 - X0), h = p.fort ? 22 : 11;
         for (let k = 0; k < 3; k++) c.courbe(u => [x - k * 7 + 5 * Math.sin(Math.PI * u), p.y - h + 2 * h * u], 16, { couleur: p.couleur, largeur: p.fort ? 3.4 : 2.2 });
       }
       if (S.t >= ta) {
-        c.texte('arrivé', X1 + 34, p.y + 6, { couleur: p.couleur, taille: 15 });
-        c.texte(`${fr(ta, ta < 1 ? 2 : 1)} s  →  v ≈ ${vit(p)} m/s`, X1 - 4, p.y + 32, { couleur: p.couleur, taille: 15, align: 'right' });
+        if (GR) {
+          c.texte('arrivé', X1 + 44, p.y - 4, { couleur: p.couleur, taille: f(15) });
+          c.texte(`${fr(ta, ta < 1 ? 2 : 1)} s  →  v ≈ ${vit(p)} m/s`, X1 + 44, p.y + 22, { couleur: p.couleur, taille: f(15) });
+        } else {
+          c.texte('arrivé', X1 + 34, p.y + 6, { couleur: p.couleur, taille: f(15) });
+          c.texte(`${fr(ta, ta < 1 ? 2 : 1)} s  →  v ≈ ${vit(p)} m/s`, X1 - 4, p.y + 32, { couleur: p.couleur, taille: f(15), align: 'right' });
+        }
       }
     }
-    c.texte(`t = ${fr(Math.min(S.t, tfin()), 2)} s`, 740, 30, { couleur: 'vert', taille: 16, align: 'right' });
-    if (S.running || S.pause) c.texte('(ralenti)', 740, 50, { couleur: 'faible', taille: 13, align: 'right' });
+    c.texte(`t = ${fr(Math.min(S.t, tfin()), 2)} s`, L - 20, GR ? 36 : 30, { couleur: 'vert', taille: f(16), align: 'right' });
+    if (S.running || S.pause) c.texte('(ralenti)', L - 20, GR ? 60 : 50, { couleur: 'faible', taille: f(13), align: 'right' });
     if (S.fait) {
-      c.texte('même v : la force de la frappe ne change rien', 400, 405, { couleur: 'orange', taille: 15, align: 'center' });
-      c.repere('meme_v', 180, 330, 520, 85, 'même célérité dans l’air, frappe forte ou faible');
+      c.texte('même v : la force de la frappe ne change rien', (X0 + X1) / 2, 408, { couleur: 'orange', taille: f(15), align: 'center' });
+      c.repere('meme_v', X0 + 10, 330, X1 - X0 + 50, 85, 'même célérité dans l’air, frappe forte ou faible');
     }
   });
   return c.fin();
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, dessiner);
+const scene = window.OndesTableau.Scene(canvas, dessiner, { large: true });
 scene.avancer = dt => {
   if (!S.running) return false;
   S.t = Math.min(tfin(), S.t + dt / RALENTI);

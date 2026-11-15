@@ -51,12 +51,42 @@ const facteur = k => fx(k, 2);
 
 /* ── Géométrie (cadre 760 × 420) ───────────────────────────────────────── */
 const GR = { x: 8, y: 40, w: 470, h: 376 }, RL = { x: 486, y: 40, w: 266, h: 376 };
-const LX = RL.x + 8, LW = RL.w - 16;
-const O = { x: 50, y: 226 }, AXL = 400, TMAX = 16, KU = 11;
+let LX = RL.x + 8, LW = RL.w - 16, AXL = 400;
+const O = { x: 50, y: 226 }, TMAX = 16, KU = 11;
+/* Agrandissement du 15 novembre 2026 (« la simulation n'occupe qu'une bande étroite, les textes sont minuscules ») :
+ * le cadre prend le format du tableau (LL de 760 à 1596, hauteur 420). Tableau large (LL ≥ 1000, écran d'ordinateur) :
+ * le graphe s'élargit, la lecture passe sur deux colonnes (les premières lignes à gauche, la suite à droite), lignes
+ * écartées et écrites 1,3 fois plus grand. Sinon (grand écran, déjà haut) : la disposition d'origine, 760 × 420. */
+let LL = 760, LARGE = false, KT = 1, COLS = null;
+function disposer(Lv) {
+  LL = Lv >= 1000 ? Lv : 760; LARGE = LL >= 1000;
+  if (!LARGE) { GR.w = 470; Object.assign(RL, { x: 486, w: 266 }); LX = RL.x + 8; LW = RL.w - 16; AXL = 400; KT = 1; COLS = null; return; }
+  const gw = Math.round(Math.min(620, LL * .48));
+  GR.w = gw; AXL = gw - 70;
+  Object.assign(RL, { x: GR.x + gw + 10, w: LL - 8 - (GR.x + gw + 10) });
+  const cw = (RL.w - 34) / 2;
+  KT = 1.3; LX = RL.x + 10; LW = cw; COLS = { xa: RL.x + 10, xb: RL.x + 24 + cw, cw };
+}
+/** Où s'écrit la ligne de lecture prévue à la hauteur y (cadre 760) : [x, y, largeur max]. */
+const COUPE = { T0: [190, 202, 2.2, 2], influence_L: [200, 218, 2.2, 2], influence_C: [200, 218, 2.2, 2] };
+function ouLire(y) {
+  if (!LARGE) return [LX, y, LW];
+  const [s, y2, fa, fb] = COUPE[S.vue];
+  return y < s ? [COLS.xa, 62 + (y - 62) * fa, COLS.cw] : [COLS.xb, 62 + (y - y2) * fb, COLS.cw];
+}
+/** Le rectangle (repère) des lignes de lecture entre y et y + h : il suit la colonne de son milieu. */
+function rectLire(y, h, m = 4) {
+  if (!LARGE) return [LX - m, y, LW + 2 * m, h];
+  const [s, y2, fa, fb] = COUPE[S.vue], a = y + h / 2 < s, f = a ? fa : fb, y0 = a ? 62 : y2;
+  const ya = Math.max(40, 62 + (y - y0) * f - 4), yb = Math.min(416, 62 + (y + h - y0) * f);
+  return [(a ? COLS.xa : COLS.xb) - m, ya, COLS.cw + 2 * m, yb - ya];
+}
+/** Un cadre jaune autour de la ligne écrite en y (taille t) : [x, y haut, hauteur]. */
+const autourDe = (y, t) => { const [x, yy] = ouLire(y); return [x - 5, yy - (t + 1) * KT, (t + 9) * KT]; };
 const PX = t => O.x + t * AXL / TMAX;
 const PU = u => O.y - u * KU;
 const marque = (c, nom) => { MM[nom] = c.cur; };
-const lire = (c, y, s, o = {}) => c.texte(s, LX + (o.dx || 0), y, { couleur: 'blanc', taille: 15, max: LW, duree: Math.max(.3, s.length / 28), ...o });
+const lire = (c, y, s, o = {}) => { const [x, yy, mx] = ouLire(y); return c.texte(s, x + (o.dx || 0) * KT, yy, { couleur: 'blanc', max: mx, duree: Math.max(.3, s.length / 28), ...o, taille: (o.taille ?? 15) * KT, ...(o.max ? { max: Math.min(mx - (o.dx || 0) * KT, o.max * KT) } : {}) }); };
 const POINTILLE = { pointille: [8, 6], alpha: .9 };
 
 /** Courbe tracée au ralenti, uniformément dans le temps (morceaux de 0,5 ms) ; S.plume = instant en cours de tracé. */
@@ -71,9 +101,9 @@ function courbeT(c, f, o = {}) {
 
 function dessiner(c) {
   scene.cadre(47); MM = {}; S.plume = null;
-  c.texte(`Période propre : ${TITRES[S.vue]}`, GR.x + 6, 30, { couleur: 'cyan', taille: 18, max: GR.w - 10, duree: .8 });
+  c.texte(`Période propre : ${TITRES[S.vue]}`, GR.x + 6, 30, { couleur: 'cyan', taille: 18 * KT, max: GR.w - 10, duree: .8 });
   c.rect(GR.x, GR.y, GR.w, GR.h, { couleur: 'tresfaible', arrondi: 10, duree: .4 });
-  c.texte('Lecture', RL.x + 6, 30, { couleur: 'cyan', taille: 17, duree: .3 });
+  c.texte('Lecture', RL.x + 6, 30, { couleur: 'cyan', taille: 17 * KT, duree: .3 });
   c.rect(RL.x, RL.y, RL.w, RL.h, { couleur: 'tresfaible', arrondi: 10, duree: .4 });
   axes(c);
   lire(c, 62, 'LC idéal : E = 6 V ; C = 4 µF ; L = 0,1 H', { couleur: 'faible', taille: 14, duree: .6 });
@@ -120,7 +150,7 @@ function vueT0(c) {
   lire(c, 122, 'T_0 = 2π√(LC)', { taille: 17 });
   lire(c, 146, '= 2π√(0,1 × 4·10⁻⁶)', { taille: 15 });
   lire(c, 170, '≈ 4·10⁻³ s = 4 ms', { taille: 17 });
-  c.rect(LX - 5, 152, 150, 26, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  { const [x, y, h] = autourDe(170, 17); c.rect(x, y, 150 * KT, h, { couleur: 'jaune', largeur: 1.5, arrondi: 6 }); }
   marque(c, 'calcul_T0');
   c.pause(.4);
   lire(c, 202, '[L] = [U]·[T]/[I] (u = L·di/dt)', { taille: 14 });
@@ -135,7 +165,7 @@ function vueT0(c) {
   lire(c, 306, `E’ = ${fx(d.E, 1)} V : U_m = ${fx(d.E, 1)} V (pointillés)`, { couleur: 'rouge', taille: 15 });
   lire(c, 328, 'sommets aux mêmes instants', { taille: 15 });
   lire(c, 356, 'T_0 ne dépend pas de E', { taille: 17 });
-  c.rect(LX - 5, 338, 186, 26, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  { const [x, y, h] = autourDe(356, 17); c.rect(x, y, 186 * KT, h, { couleur: 'jaune', largeur: 1.5, arrondi: 6 }); }
   marque(c, 'E_change');
 }
 
@@ -144,7 +174,7 @@ function vueInfluence(c) {
   const d = DEUX(), T2 = T0De(d.L, d.C), estL = S.vue === 'influence_L';
   courbeT(c, uDe(E, T0));
   coteSommets(c, 0, T0, E, 'T_0 ≈ 4 ms');
-  c.ligne(LX, 86, LX + 26, 86, { couleur: 'rouge', largeur: 2.5, duree: .1 });
+  { const [x, y] = ouLire(91); c.ligne(x, y - 5 * KT, x + 26 * KT, y - 5 * KT, { couleur: 'rouge', largeur: 2.5, duree: .1 }); }
   lire(c, 91, 'référence : L = 0,1 H ; C = 4 µF', { taille: 14, max: LW - 34, dx: 34 });
   lire(c, 116, 'T_0 = 2π√(LC) ≈ 4 ms', { taille: 16 });
   marque(c, 'courbe');
@@ -156,11 +186,11 @@ function vueInfluence(c) {
   c.ligne(PX(0), PU(-E) + 4, PX(0), yb + 4, { couleur: 'faible', largeur: 1.2, pointille: [3, 4], duree: .05 });
   c.cote(PX(0), yb, PX(T2), yb, `T_0’ ≈ ${fms(T2)} ms`, { couleur: 'jaune', largeur: 1.6, taille: 14, dessous: true });
   const k = estL ? d.L / L1 : d.C / C1;
-  c.ligne(LX, 152, LX + 26, 152, { couleur: 'rouge', largeur: 2.5, duree: .1, ...POINTILLE });
+  { const [x, y] = ouLire(157); c.ligne(x, y - 5 * KT, x + 26 * KT, y - 5 * KT, { couleur: 'rouge', largeur: 2.5, duree: .1, ...POINTILLE }); }
   lire(c, 157, estL ? `L’ = ${fx(d.L, 3)} H (pointillés)` : `C’ = ${fx(d.C, 1)} µF (pointillés)`, { couleur: 'rouge', taille: 15, max: LW - 34, dx: 34 });
   lire(c, 182, estL ? `T_0’ = 2π√(L’C) ≈ ${fms(T2)} ms` : `T_0’ = 2π√(LC’) ≈ ${fms(T2)} ms`, { taille: 15 });
   lire(c, 218, `${estL ? 'L' : 'C'} × ${facteur(k)} → T_0 × ${facteur(Math.sqrt(k))}`, { taille: 18 });
-  c.rect(LX - 5, 198, Math.min(LW + 8, c.largeurTexte(`${estL ? 'L' : 'C'} × ${facteur(k)} → T0 × ${facteur(Math.sqrt(k))}`, 18) + 16), 28, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  { const [x, y, h] = autourDe(218, 18); c.rect(x, y, Math.min(LW + 8, c.largeurTexte(`${estL ? 'L' : 'C'} × ${facteur(k)} → T0 × ${facteur(Math.sqrt(k))}`, 18 * KT) + 16), h, { couleur: 'jaune', largeur: 1.5, arrondi: 6 }); }
   lire(c, 250, `√${facteur(k)} = ${facteur(Math.sqrt(k))} : T_0 suit √(LC)`, { couleur: 'faible', taille: 14 });
   lire(c, 276, T2 > T0 + .05 ? 'oscillations plus lentes' : T2 < T0 - .05 ? 'oscillations plus rapides' : 'même période', { taille: 15 });
   lire(c, 300, 'même amplitude : U_m = E = 6 V', { couleur: 'faible', taille: 14 });
@@ -186,8 +216,8 @@ function declarerReperes(c) {
   c.repere('courbe', O.x, PU(E), AXL, 2 * E * KU, 'la courbe de référence (trait plein) : E = 6 V, L = 0,1 H, C = 4 µF, T₀ ≈ 4 ms');
   if (S.vue === 'T0') c.repere('T0', PX(T0), PU(E) - 34, PX(2 * T0) - PX(T0), 30, 'T₀ ≈ 4 ms, lue entre deux sommets successifs');
   else c.repere('T0', PX(0), PU(E) - 34, PX(T0) - PX(0), 30, 'T₀ ≈ 4 ms, la période de référence');
-  c.repere('calcul', LX - 6, 104, LW + 10, 76, `T₀ = 2π√(LC) = 2π√(0,1 × 4·10⁻⁶) ≈ 4·10⁻³ s = 4 ms${ici('T0')}`);
-  c.repere('unites', LX - 6, 186, LW + 10, 94, `[L]·[C] = [T]² : √(LC) est un temps${ici('T0')}`);
+  c.repere('calcul', ...rectLire(104, 76, 6), `T₀ = 2π√(LC) = 2π√(0,1 × 4·10⁻⁶) ≈ 4·10⁻³ s = 4 ms${ici('T0')}`);
+  c.repere('unites', ...rectLire(186, 94, 6), `[L]·[C] = [T]² : √(LC) est un temps${ici('T0')}`);
   c.repere('courbe_E', O.x, PU(S.E2), AXL, 2 * S.E2 * KU, `la courbe en pointillés : E’ = ${fx(S.E2, 1)} V, U_m = ${fx(S.E2, 1)} V, mêmes sommets dans le temps${ici('T0')}`);
   c.repere('courbe_L', O.x, PU(E), AXL, 2 * E * KU, `la courbe en pointillés : L’ = ${fx(S.L2, 3)} H, T₀’ ≈ ${fms(T2L)} ms${ici('influence_L')}`);
   c.repere('courbe_C', O.x, PU(E), AXL, 2 * E * KU, `la courbe en pointillés : C’ = ${fx(S.C2, 1)} µF, T₀’ ≈ ${fms(T2C)} ms${ici('influence_C')}`);
@@ -199,12 +229,13 @@ const canvas = $('canvas');
 const scene = window.OndesTableau.Scene(canvas, dessiner);
 const craie = scene.craie;
 scene.cadre = function (graine) {
-  const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  const W = craie.W, H = craie.H, VH = 420;
+  disposer(Math.round(Math.min(760 * 2.1, Math.max(760, VH * W / Math.max(1, H)))));
   craie.debut(graine, S.t);
-  const s = Math.min(W / VW, H / VH) || 1;
-  scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
+  const s = Math.min(W / LL, H / VH) || 1;
+  scene.s = s; scene.ox = (W - LL * s) / 2; scene.oy = (H - VH * s) / 2;
   craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
-  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+  craie.echelle = s; craie.tailleMin = 15; craie.cadre = { w: LL, h: VH, haut: 0 };
   return craie;
 };
 function calculer() { const t = S.t, rn = S.running; S.t = 1e6; S.running = false; try { dessiner(craie); } finally { S.t = t; S.running = rn; } dessiner(craie); scene.sale = true; }

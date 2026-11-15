@@ -66,7 +66,7 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), o.scene || {});
   const cadreBase = scene.cadre;
   scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
   M.scene = scene; M.craie = scene.craie;
@@ -389,6 +389,37 @@ const RES = { x: 150, y: 62, w: 60, h: 16 }, BOB = { x: 90, y: 128, w: 64, h: 20
 const CAS = { x: 432, y: 38, w: 320, h: 250 }, ECR = { x: 458, y: 48, w: 284, h: 200 }, V1 = [446, 100], MS = [446, 220];
 const KX0 = 120, KX1 = 280, KY = 330;     // curseur k : 0 → 20 Ω
 const YLG = [368, 392, 414], YLD = [312, 336, 360, 384];
+/* Agrandissement du 15 novembre 2026 (« la simulation n'occupe qu'une bande étroite, les textes sont minuscules ») :
+ * Scene en { large: true }, le cadre prend le format du tableau (scene.L de 760 à 1596, hauteur 420). Tableau large
+ * (L ≥ 1150, écran d'ordinateur) : le circuit, la boîte G, la poignée k et l'oscilloscope sont agrandis ensemble
+ * (zone ZK, × 1,15) ; les phrases (sous l'écran) et l'équation (sous le circuit) passent dans une colonne à droite,
+ * écrites plus grand et coupées à la ligne. Sinon : la disposition d'origine, centrée. */
+const YLG0 = [...YLG], YLD0 = [...YLD];
+let ZK = null, COL = null, DX = 0, BASE = null, KT = 1;
+function disposer(L) {
+  if (L < 1150) { ZK = null; COL = null; KT = 1; DX = Math.round((L - 760) / 2); YLG.splice(0, 3, ...YLG0); YLD.splice(0, 4, ...YLD0); return; }
+  DX = 0; KT = 1.2;
+  ZK = { k: 1.15, x0: 14, y0: 36, x: 14, y: 44 };
+  const xc = Math.round(14 + (752 - 14) * ZK.k + 26);
+  COL = { x: xc, w: L - 12 - xc };
+  YLD.splice(0, 4, 62, 114, 166, 218); YLG.splice(0, 3, 286, 324, 362);
+}
+const versMontage = (x, y) => (ZK ? [(x - ZK.x) / ZK.k + ZK.x0, (y - ZK.y) / ZK.k + ZK.y0] : [x - DX, y]);
+/** Hors de la zone agrandie (la colonne de droite) : le repère du cadre, sans l'agrandissement du montage. */
+function hors(c, fn) { if (!ZK) return fn(); const ctx = c.ctx; ctx.save(); try { ctx.setTransform(BASE); fn(); } finally { ctx.restore(); } }
+function couper(c, s, w, t) {
+  t = Math.max(t, (c.tailleMin || 0) / (c.echelle || 1));
+  const mots = String(s).split(' '), out = []; let l = '';
+  for (const m of mots) { const e = l ? l + ' ' + m : m; if (l && c.largeurTexte(e.replace(/_/g, ''), t) > w) { out.push(l); l = m; } else l = e; }
+  if (l) out.push(l);
+  return out;
+}
+/** Une phrase de commentaire : à sa place d'origine (x, y, max), ou dans la colonne de droite, coupée à la ligne. */
+function phrase(c, s, x, y, o = {}) {
+  if (!COL) return c.texte(s, x, y, o);
+  const t = (o.taille ?? 15) * KT * 1.12, h = Math.max(t, (c.tailleMin || 0) / (c.echelle || 1)) * 1.12;
+  hors(c, () => couper(c, s, COL.w, t).forEach((r, k) => c.texte(r, COL.x, y + k * h, { ...o, taille: t, max: COL.w })));
+}
 const SX = t => ECR.x + t / TECR * ECR.w, SY = u => ECR.y + ECR.h / 2 - u / 8 * (ECR.h / 2);
 const POS = {};
 let MO = null, glisse = false;
@@ -451,7 +482,8 @@ function largeur(c, s, taille) {
   return w;
 }
 function ligne(c, morceaux, x, y, o = {}) {
-  let t = o.taille ?? 16; const maxW = o.max ?? 406;
+  if (COL) { x = COL.x; o = { ...o, max: COL.w }; }
+  let t = (o.taille ?? 16) * KT; const maxW = o.max ?? 406;
   const tot = morceaux.reduce((w, [s]) => w + largeur(c, s, t), 0); if (tot > maxW) t *= maxW / tot;
   let px = x; const pos = [];
   for (const [s, col] of morceaux) { const w = largeur(c, s, t); c.texte(s, px, y, { couleur: col, taille: t }); pos.push([px, px + w]); px += w; }
@@ -460,9 +492,12 @@ function ligne(c, morceaux, x, y, o = {}) {
 
 /* ── Dessin ──────────────────────────────────────────────────────────── */
 function dessiner(c, M) {
-  MO = M; M.scene.cadre(41);
+  MO = M; M.scene.cadre(41); disposer(M.scene.L);
   const e = ecran();
-  c.texte('Le circuit RLC : l’entretien des oscillations', 14, 26, { couleur: 'cyan', taille: 20 });
+  BASE = c.ctx.getTransform();
+  if (DX) c.ctx.translate(DX, 0);   // grand écran : la disposition d'origine, centrée dans le cadre
+  c.texte('Le circuit RLC : l’entretien des oscillations', 14, 26, { couleur: 'cyan', taille: 20 * KT });
+  if (ZK) { c.ctx.translate(ZK.x - ZK.x0 * ZK.k, ZK.y - ZK.y0 * ZK.k); c.ctx.scale(ZK.k, ZK.k); }
   appareils(c, 1);
   circuit(c);
   // La boîte G arrive sur le fil du bas (peinte par-dessus le fil).
@@ -484,31 +519,33 @@ function dessiner(c, M) {
     if (M.commence('entretenu') && !M.S.mesure) return;   // l’écran a été effacé : ces marques partent avec la vieille courbe
     const d = [[0, EG, '6 V'], [decharge(0, RT).T, decharge(decharge(0, RT).T, RT).u, '4,0 V'], [2 * decharge(0, RT).T, decharge(2 * decharge(0, RT).T, RT).u, '2,7 V']];
     for (const [t, u, s] of d) { c.point(SX(t) + 1, SY(u), 4, 'blanc'); c.texte(s, SX(t) + 8, SY(u) - 8, { couleur: 'blanc', taille: 14 }); }
-    c.texte('sans G : u_C oscille, les sommets baissent', 440, YLD[0], { couleur: 'rouge', taille: 15, max: 312 });
-    c.texte('6 V → 4,0 V → 2,7 V : énergie perdue dans R et r', 440, YLD[1], { couleur: 'blanc', taille: 14, max: 312 });
+    phrase(c, 'sans G : u_C oscille, les sommets baissent', 440, YLD[0], { couleur: 'rouge', taille: 15, max: 312 });
+    phrase(c, '6 V → 4,0 V → 2,7 V : énergie perdue dans R et r', 440, YLD[1], { couleur: 'blanc', taille: 14, max: 312 });
   });
   M.etape(c, 'dispositif', () => {
     c.fleche(230, 284, 150, 284, { couleur: 'blanc', largeur: 1.8, tete: 9 });
     c.texte('u_G = k·i', 190, 304, { couleur: 'blanc', taille: 16, align: 'center' });
-    c.texte('G rend l’énergie perdue', 440, YLD[2], { couleur: 'blanc', taille: 15, max: 312 });
-    c.texte('(son fonctionnement interne n’est pas étudié)', 440, YLD[3], { couleur: 'faible', taille: 14, max: 312 });
+    phrase(c, 'G rend l’énergie perdue', 440, YLD[2], { couleur: 'blanc', taille: 15, max: 312 });
+    phrase(c, '(son fonctionnement interne n’est pas étudié)', 440, YLD[3], { couleur: 'faible', taille: 14, max: 312 });
     c.ligne(KX0, KY, KX1, KY, { couleur: 'faible', largeur: 2 });
     for (const [f, s] of [[0, '0'], [.5, '10'], [1, '20 Ω']]) { c.ligne(KX0 + f * (KX1 - KX0), KY - 5, KX0 + f * (KX1 - KX0), KY + 5, { couleur: 'faible', largeur: 1.4 }); c.texte(s, KX0 + f * (KX1 - KX0), KY + 20, { couleur: 'faible', taille: 13, align: 'center' }); }
     c.texte('k', KX0 - 12, KY + 5, { couleur: 'blanc', taille: 16, align: 'right' });
   });
-  M.etape(c, 'equation', () => {
+  M.etape(c, 'equation', () => hors(c, () => {
     POS.eq1 = ligne(c, [['u_C + u_R + u_b = u_G = k·i', 'blanc']], 14, YLG[0])[0];
     POS.eq2 = ligne(c, [['L·d²q/dt² + ', 'blanc'], ['(R + r − k)·dq/dt', 'blanc'], [' + q/C = 0', 'blanc']], 14, YLG[1]);
-  });
+  }));
   M.etape(c, 'compensation', () => {
     const m = POS.eq2 ? POS.eq2[1] : [100, 230];
-    c.ligne(m[0] - 2, YLG[1] - 6, m[1] + 2, YLG[1] - 6, { couleur: 'jaune', largeur: 2.6 });
-    c.ligne(m[0], YLG[1] + 2, m[1], YLG[1] - 14, { couleur: 'jaune', largeur: 2 });
-    c.texte('k = R + r = 20 Ω : le terme du milieu s’annule', 14, YLG[2], { couleur: 'jaune', taille: 16, max: 406 });
+    hors(c, () => {
+      c.ligne(m[0] - 2, YLG[1] - 6 * KT, m[1] + 2, YLG[1] - 6 * KT, { couleur: 'jaune', largeur: 2.6 });
+      c.ligne(m[0], YLG[1] + 2 * KT, m[1], YLG[1] - 14 * KT, { couleur: 'jaune', largeur: 2 });
+    });
+    phrase(c, 'k = R + r = 20 Ω : le terme du milieu s’annule', 14, YLG[2], { couleur: 'jaune', taille: 16, max: 406 });
   });
   M.etape(c, 'entretenu', () => {
-    c.texte(`k = ${fr(S2.k, 0)} Ω : ${S2.k === 20 ? 'amplitude constante 6 V' : 'les sommets baissent encore'}`, 440, YLD[0], { couleur: 'rouge', taille: 15, max: 312 });
-    c.texte(S2.k === 20 ? 'oscillations entretenues (k < 20 Ω : amorties)' : 'il faut k = R + r = 20 Ω pour une amplitude constante', 440, YLD[1], { couleur: 'blanc', taille: 15, max: 312 });
+    phrase(c, `k = ${fr(S2.k, 0)} Ω : ${S2.k === 20 ? 'amplitude constante 6 V' : 'les sommets baissent encore'}`, 440, YLD[0], { couleur: 'rouge', taille: 15, max: 312 });
+    phrase(c, S2.k === 20 ? 'oscillations entretenues (k < 20 Ω : amorties)' : 'il faut k = R + r = 20 Ω pour une amplitude constante', 440, YLD[1], { couleur: 'blanc', taille: 15, max: 312 });
     if (S2.k === 20) c.ligne(ECR.x + 3, SY(EG), ECR.x + ECR.w - 3, SY(EG), { couleur: 'jaune', largeur: 1.3, pointille: [5, 5] });
   });
   M.etape(c, 'periode_T0', () => {
@@ -526,10 +563,12 @@ function reperes(c, M, e) {
   c.repere('formule_uG', 140, 270, 100, 40, 'u_G = k·i : G est proportionnel à i');
   c.repere('ecran', ECR.x, ECR.y, ECR.w, ECR.h, 'l’écran de l’oscilloscope : u_C(t), 2 V/div, 2 ms/div');
   c.repere('courbe', ECR.x, ECR.y, ECR.w, ECR.h, e.phase === 'entretenu' ? `la courbe u_C(t) avec G (k = ${S2.k} Ω)` : 'la courbe u_C(t) sans G : les sommets baissent');
-  const p = POS.eq2 ? [POS.eq2[0][0], POS.eq2[2][1]] : [14, 380], q = POS.eq1 || [14, 220];
-  c.repere('equation', 8, YLG[0] - 22, Math.max(p[1], q[1]) - 8 + 14, YLG[1] - YLG[0] + 30, 'u_C + u_R + u_b = u_G = k·i, puis L·d²q/dt² + (R + r − k)·dq/dt + q/C = 0');
-  const m = POS.eq2 ? POS.eq2[1] : [100, 230];
-  c.repere('terme_milieu', m[0] - 4, YLG[1] - 22, m[1] - m[0] + 8, 30, 'le terme du milieu (R + r − k)·dq/dt : nul si k = R + r');
+  const p = POS.eq2 ? [POS.eq2[0][0], POS.eq2[2][1]] : [14, 380], q = POS.eq1 || [14, 220], x0 = COL ? COL.x - 6 : 8;
+  hors(c, () => {
+    c.repere('equation', x0, YLG[0] - 22 * KT, Math.max(p[1], q[1]) - x0 + 6, YLG[1] - YLG[0] + 30 * KT, 'u_C + u_R + u_b = u_G = k·i, puis L·d²q/dt² + (R + r − k)·dq/dt + q/C = 0');
+    const m = POS.eq2 ? POS.eq2[1] : [100, 230];
+    c.repere('terme_milieu', m[0] - 4, YLG[1] - 22 * KT, m[1] - m[0] + 8, 30 * KT, 'le terme du milieu (R + r − k)·dq/dt : nul si k = R + r');
+  });
   c.repere('poignee_k', KX0 - 26, KY - 16, KX1 - KX0 + 110, 40, `la poignée k (0 → 20 Ω) : k = ${fr(kAff(), 0)} Ω`);
   const s = sommets(e.phase === 'avant' ? { t: 0, k: 0 } : e);
   c.repere('sommets', ECR.x, SY(EG) - 16, ECR.w, Math.max(32, SY(Math.min(...s.map(z => z[1]))) - SY(EG) + 32), 'les sommets de u_C');
@@ -556,7 +595,7 @@ function voir(M) {
 }
 const params = M => { const e = ecran(); return { k_ohm: S2.k, k_affiche_ohm: +kAff().toFixed(1), R_ohm: 10, r_ohm: 10, C_uF: 4, L_H: IND, phase: e.phase, t_ecran_ms: +(e.t * 1000).toFixed(3), u_C_V: +decharge(e.t, RT - e.k).u.toFixed(3) }; };
 const MOT = Moteur({
-  id: 'circuit_rlc_entretien', titre: 'Le circuit RLC : entretien des oscillations par un générateur G (u_G = k·i)', vues: VUES, titres: TITRES,
+  id: 'circuit_rlc_entretien', titre: 'Le circuit RLC : entretien des oscillations par un générateur G (u_G = k·i)', vues: VUES, titres: TITRES, scene: { large: true },
   etapes: v => ETAPES[v], motifs: MOTIFS, dessiner, voir, params,
   depart: () => 'Un circuit RLC : regardons d’abord u_C sans rien ajouter.',
   messageFin: () => (S2.k === 20 ? 'Avec k = R + r = 20 Ω, G compense les pertes : amplitude constante 6 V, période T₀ = 2π√(LC) ≈ 4 ms.' : `Avec k = ${S2.k} Ω < R + r, les pertes ne sont pas toutes compensées : les sommets baissent encore.`),
@@ -590,9 +629,9 @@ const MOT = Moteur({
 });
 MOT.lancer();
 window.Tableau.glisser(MOT.scene.craie.canvas, {
-  toucher: (px, py) => { const [x, y] = MOT.scene.local(px, py); return MOT.vu('dispositif') && x > KX0 - 16 && x < KX1 + 16 && y > KY - 18 && y < KY + 18 ? 'k' : null; },
+  toucher: (px, py) => { const [x, y] = versMontage(...MOT.scene.local(px, py)); return MOT.vu('dispositif') && x > KX0 - 16 && x < KX1 + 16 && y > KY - 18 && y < KY + 18 ? 'k' : null; },
   bouger: (id, px) => {
-    const [x] = MOT.scene.local(px, 0); S2.k = clamp(Math.round((x - KX0) / (KX1 - KX0) * 20), 0, 20); glisse = true;
+    const [x] = versMontage(...MOT.scene.local(px, 0)); S2.k = clamp(Math.round((x - KX0) / (KX1 - KX0) * 20), 0, 20); glisse = true;
     if (!MOT.commence('compensation')) MOT.dire(`k = ${S2.k} Ω (appliqué au moment « compensation »).`);
     MOT.scene.sale = true;
   },

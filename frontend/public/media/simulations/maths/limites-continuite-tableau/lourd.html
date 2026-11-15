@@ -12,6 +12,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="/media/simulations/maths/commun/exposants.js"></script>
 <script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/limites-continuite-tableau/lc-outils.js"></script>
 <script>
 /*
  * Cours « Limites et continuité » (math_ch1_limites_continuite), diapo lc_l7_plus_lourd (14 novembre 2026,
@@ -27,7 +28,9 @@ const f = x => (3 * x * x + 1) / (x * x - x);
 const grand = v => (v >= 1e4 ? Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ') : fr(v, v < 10 ? 2 : 0));
 /** La part du terme léger, en % : deux chiffres significatifs (0,00003 % en x = 1000). */
 const pourcent = q => { const v = 100 * q; return v >= 1 ? fr(v, 0) : fr(+v.toPrecision(1), 8); };
-const BX = 190, BW = 440, BH = 26;
+const BX = 190, BH = 26;
+/* Tableau large : les barres s'allongent (BW) et les textes grossissent (TT) ; posés au début de chaque dessin. */
+let BW = 440, TT = (t) => t;
 
 /** Une barre partagée : le terme lourd (part p) à gauche, le terme léger à droite. */
 function barre(c, y, part, lourd, leger, vLourd, vLeger, coulLourd) {
@@ -35,12 +38,12 @@ function barre(c, y, part, lourd, leger, vLourd, vLeger, coulLourd) {
   c.rect(BX, y, w, BH, { couleur: coulLourd, fond: coulLourd, fondAlpha: .35, arrondi: 4, largeur: 1.6, duree: 0 });
   if (BW - w > 1.5) c.rect(BX + w, y, BW - w, BH, { couleur: 'orange', fond: 'orange', fondAlpha: .35, arrondi: 4, largeur: 1.6, duree: 0 });
   else c.ligne(BX + BW, y - 4, BX + BW, y + BH + 4, { couleur: 'orange', largeur: 2, duree: 0 });
-  c.texte(`${lourd} = ${grand(vLourd)}`, BX + 4, y - 8, { couleur: coulLourd, taille: 17, duree: 0 });
-  c.texte(leger === String(vLeger) ? leger : `${leger} = ${grand(vLeger)}`, BX + BW, y - 8, { couleur: 'orange', taille: 17, align: 'right', duree: 0 });
-  c.texte(`${leger} : ${pourcent(1 - part)} %`, BX + BW + 8, y + 19, { couleur: 'orange', taille: 15, duree: 0 });
+  c.texte(`${lourd} = ${grand(vLourd)}`, BX + 4, y - 8, { couleur: coulLourd, taille: TT(17), duree: 0 });
+  c.texte(leger === String(vLeger) ? leger : `${leger} = ${grand(vLeger)}`, BX + BW, y - 8, { couleur: 'orange', taille: TT(17), align: 'right', duree: 0 });
+  c.texte(`${leger} : ${pourcent(1 - part)} %`, BX + BW + 8, y + 19, { couleur: 'orange', taille: TT(15), duree: 0 });
 }
 
-MathsTableau.page({
+LC.page({
   id: 'lc_lourd', titre: 'Limites à l’infini',
   texte: 'Construction à la craie : lim (3x² + 1)/(x² − x) quand x → +∞. Deux barres : en haut 3x² et 1, en bas x² et x ; x grandit de 2 à 1000 et les termes de plus haut degré prennent toute la barre ; le quotient se rapproche de 3x²/x² = 3. En un point (x → 2), on remplace : 13/2',
   vues: {
@@ -50,39 +53,40 @@ MathsTableau.page({
       curseurs: ['i'],
       dessiner(c, K) {
         const X = XS[K.P.i];
+        BW = 440 + LC.e(K) * 0.7; TT = (t) => LC.t(K, t); const k = LC.k(K);
         K.titre('x → +∞ : qui pèse le plus ?');
-        c.texte('f(x) = (3x² + 1) / (x² − x)', 30, 76, { couleur: 'blanc', taille: 24 });
-        c.texte('x → +∞ : « ∞ / ∞ », forme indéterminée', 380, 76, { couleur: 'orange', taille: 18 });
-        c.repere('forme', 374, 54, 370, 30, 'la forme ∞/∞');
+        c.texte('f(x) = (3x² + 1) / (x² − x)', 30, 76, { couleur: 'blanc', taille: LC.t(K, 24) });
+        c.texte('x → +∞ : « ∞ / ∞ », forme indéterminée', 380 * k, 76, { couleur: 'orange', taille: LC.t(K, 18) });
+        c.repere('forme', 380 * k - 6, 50, 370 * k, 34, 'la forme ∞/∞');
         K.marque('infini_infini');
         c.pause(.3);
-        c.texte('le haut', 30, 160, { couleur: 'cyan', taille: 19 });
-        c.texte('le bas', 30, 246, { couleur: 'vert', taille: 19 });
+        c.texte('le haut', 30, 160, { couleur: 'cyan', taille: LC.t(K, 19) });
+        c.texte('le bas', 30, 246, { couleur: 'vert', taille: LC.t(K, 19) });
         // x grandit de 2 jusqu'à la valeur du curseur : les barres se partagent en direct.
         K.anime(3.6, p => {
           const x = 2 * Math.pow(X / 2, p);
           barre(c, 140, 3 * x * x / (3 * x * x + 1), '3x²', '1', 3 * x * x, 1, 'cyan');
           barre(c, 226, x * x / (x * x + x), 'x²', 'x', x * x, x, 'vert');
-          c.texte(`x = ${grand(x)}`, 30, 196, { couleur: 'jaune', taille: 20, duree: 0 });
+          c.texte(`x = ${grand(x)}`, 30, 196, { couleur: 'jaune', taille: LC.t(K, 20), duree: 0 });
         });
         c.repere('haut', BX - 4, 116, BW + 8, BH + 30, '3x² écrase 1');
         c.repere('bas', BX - 4, 202, BW + 8, BH + 30, 'x² écrase x');
         K.marque('croissance');
         c.pause(.3);
-        c.texte('il ne reste que', 30, 312, { couleur: 'blanc', taille: 19 });
-        c.texte('3x² / x²', 172, 312, { couleur: 'jaune', taille: 24 });
-        c.rect(162, 288, 104, 34, { couleur: 'jaune', arrondi: 7, largeur: 1.5 });
-        c.repere('lourds', 26, 286, 246, 38, 'les termes de plus haut degré');
+        c.texte('il ne reste que', 30, 312, { couleur: 'blanc', taille: LC.t(K, 19) });
+        c.texte('3x² / x²', 172 * k, 312, { couleur: 'jaune', taille: LC.t(K, 24) });
+        c.rect(172 * k - 10, 312 - LC.t(K, 24), LC.t(K, 104), LC.t(K, 34), { couleur: 'jaune', arrondi: 7, largeur: 1.5 });
+        c.repere('lourds', 26, 286, 246 * k, 38, 'les termes de plus haut degré');
         K.marque('lourds');
         c.pause(.2);
-        c.texte('= 3', 276, 312, { couleur: 'jaune', taille: 24 });
-        c.texte(`en x = ${grand(X)} :  f(x) ≈ ${fr(f(X), X >= 1000 ? 4 : 3)}`, 380, 312, { couleur: 'vert', taille: 19 });
-        c.repere('resultat', 270, 286, 470, 38, 'le quotient se rapproche de 3');
+        c.texte('= 3', 276 * k + (k > 1 ? 20 : 0), 312, { couleur: 'jaune', taille: LC.t(K, 24) });
+        c.texte(`en x = ${grand(X)} :  f(x) ≈ ${fr(f(X), X >= 1000 ? 4 : 3)}`, 380 * k + (k > 1 ? 20 : 0), 312, { couleur: 'vert', taille: LC.t(K, 19) });
+        c.repere('resultat', 270 * k, 286, 470 * k, 38, 'le quotient se rapproche de 3');
         K.marque('resultat');
         c.pause(.4);
-        c.texte('Seulement à l’infini ! En un point, on remplace :', 30, 368, { couleur: 'orange', taille: 18 });
-        c.texte('x → 2 :  (12 + 1) / (4 − 2) = 13/2  (et pas 3)', 60, 400, { couleur: 'orange', taille: 18 });
-        c.repere('attention', 26, 346, 480, 64, 'en un point, on remplace');
+        c.texte('Seulement à l’infini ! En un point, on remplace :', 30, 368, { couleur: 'orange', taille: LC.t(K, 18) });
+        c.texte('x → 2 :  (12 + 1) / (4 − 2) = 13/2  (et pas 3)', 60, 400, { couleur: 'orange', taille: LC.t(K, 18) });
+        c.repere('attention', 26, 346, LC.t(K, 480), 64, 'en un point, on remplace');
         K.marque('attention');
       },
       lecture: K => { const X = XS[K.P.i], x2 = X * X; return `x = ${grand(X)} : 3x² fait ${fr(100 * 3 * x2 / (3 * x2 + 1), 2)} % du haut, x² fait ${fr(100 * x2 / (x2 + X), 2)} % du bas ; f(x) ≈ ${fr(f(X), 4)}` + (X >= 100 ? ', presque 3.' : ' : x n’est pas encore assez grand, pousse-le.'); },

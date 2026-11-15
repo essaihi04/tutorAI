@@ -72,7 +72,7 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), { large: true });   // pas d'« ajuster » : la page dispose elle-même ses blocs sur scene.L (transformation du contexte)
   const cadreBase = scene.cadre;
   scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
   M.scene = scene; M.craie = scene.craie;
@@ -428,6 +428,45 @@ const GEN = { x: 22, y: 150, w: 56, h: 80 }, KP = [128, YH], KC = [186, YH];
 const L1 = 310, L2 = 310, RES = { x: 420, y: Y1 - 9, w: 70, h: 18 };
 const BOB = { x: 404, y: Y2 - 40, w: 100, h: 26 };
 let MO = null;
+/* Disposition selon la largeur du tableau (15 novembre 2026 : « la simulation n'occupe qu'une bande étroite, textes
+ * minuscules »). Tableau large (scene.L ≥ 1000) : à gauche les phrases écrites au fil de l'expérience (à la ligne),
+ * au centre le circuit agrandi sur toute la hauteur (transformation CT appliquée au contexte : repères et clics
+ * suivent), à droite les lectures (i₁, i₂, L…) plus grosses. Sinon la disposition d'origine (760 × 420). */
+let CT = { large: false, k: 1, tx: 0, ty: 0, L: 760, gw: 0, px: 600, pw: 150, kt: 1 };
+function disposer(L) {
+  if (L < 1000) { CT = { large: false, k: 1, tx: 0, ty: 0, L, gw: 0, px: 600, pw: 150, kt: 1 }; return; }
+  const gw = Math.round(L * .22), pw = Math.round(L * .17), dispo = L - gw - pw - 14 - 40;
+  const k = Math.min((404 - 48) / 266, dispo / 548), cw = 548 * k;
+  const x0 = gw + 14 + 16 + (dispo - cw) / 2;
+  CT = { large: true, k, tx: x0 - 18 * k, ty: 48 - 40 * k, L, gw, px: L - pw - 10, pw, kt: 1.22 };
+}
+/** Dessine `fn` dans le repère du circuit (agrandi et décalé sur le tableau large). */
+function circuit(c, fn) {
+  if (!CT.large) return fn();
+  const ctx = c.ctx; ctx.save(); ctx.translate(CT.tx, CT.ty); ctx.scale(CT.k, CT.k);
+  try { return fn(); } finally { ctx.restore(); }
+}
+/** Ordonnée d'un texte de la colonne de droite, alignée sur le circuit. */
+const yC = y => CT.ty + y * CT.k;
+/** Coordonnées du dessin → repère du circuit (pour les clics). */
+const versCircuit = (x, y) => [(x - CT.tx) / CT.k, (y - CT.ty) / CT.k];
+/* Les phrases du bas : une ligne chacune (disposition d'origine), ou à la ligne dans la colonne de gauche. */
+const BAS_Y = [332, 353, 374, 395, 416];
+let BAS = null;
+function phrasesBas(c, textes) {
+  if (!CT.large) { BAS = null; return; }
+  const t = 19, max = CT.gw - 14; let y = 74; BAS = [];
+  for (const s of textes) {
+    const mots = s.split(' '), lignes = []; let l = '';
+    for (const m of mots) { const e = l ? l + ' ' + m : m; if (l && c.largeurTexte(e.replace(/_/g, ''), t) > max) { lignes.push(l); l = m; } else l = e; }
+    if (l) lignes.push(l);
+    BAS.push({ y, lignes }); y += lignes.length * (t + 5) + 12;
+  }
+}
+function ecrireBas(c, i, s, o) {
+  if (!BAS) return c.texte(s, 14, BAS_Y[i], { taille: 15, max: 730, ...o });
+  BAS[i].lignes.forEach((l, k) => c.texte(l, 14, BAS[i].y + k * 24, { ...o, taille: 19 }));
+}
 /** Le levier de K : 0 ouvert, 1 fermé. */
 function fermeture() {
   if (!MO.commence('k_ferme')) return 0;
@@ -492,37 +531,43 @@ function fils(c) {
 }
 function lectures(c) {
   const { i1, i2, ph } = courants(), col = ph.nom === 'rupture' ? 'bleu' : 'vert';
-  c.direct(() => {
+  c.direct(() => circuit(c, () => {
     // Flèches des courants (sens réel) : vert à l’établissement, bleu à la rupture.
     if (Math.abs(i1) > 1e-4) { const s = Math.sign(i1); c.fleche(376 - 16 * s, Y1, 376 + 16 * s, Y1, { couleur: col, largeur: 2.6, tete: 9 }); c.texte('i_1', 376, Y1 - 9, { couleur: col, taille: 16, align: 'center' }); }
     if (Math.abs(i2) > 1e-4) { c.fleche(356, Y2, 388, Y2, { couleur: col, largeur: 2.6, tete: 9 }); c.texte('i_2', 372, Y2 + 22, { couleur: col, taille: 16, align: 'center' }); }
-    c.texte(`i_1 = ${mA(i1)} mA`, 600, Y1 + 6, { couleur: Math.abs(i1) > 1e-4 ? col : 'faible', taille: 20 });
-    c.texte(`i_2 = ${mA(i2)} mA`, 600, Y2 + 6, { couleur: Math.abs(i2) > 1e-4 ? col : 'faible', taille: 20 });
+  }));
+  c.direct(() => {
+    c.texte(`i_1 = ${mA(i1)} mA`, CT.px, yC(Y1 + 6), { couleur: Math.abs(i1) > 1e-4 ? col : 'faible', taille: 20 * CT.kt });
+    c.texte(`i_2 = ${mA(i2)} mA`, CT.px, yC(Y2 + 6), { couleur: Math.abs(i2) > 1e-4 ? col : 'faible', taille: 20 * CT.kt });
     const t = ph.nom === 'ouvert' ? '' : `t = ${fx(ph.t * 1000, 0)} ms ${ph.nom === 'rupture' ? 'après l’ouverture' : 'après la fermeture'}`;
-    if (t) c.texte(t, 600, Y2 + 40, { couleur: 'faible', taille: 14, max: 155 });
+    if (t) c.texte(t, CT.px, yC(Y2 + 40), { couleur: 'faible', taille: 14 * CT.kt, max: CT.pw + 5 });
   });
 }
 
 /* ── Dessin ──────────────────────────────────────────────────────────── */
 function dessiner(c, M) {
-  MO = M; M.scene.cadre(31);
-  c.texte('Deux lampes : l’une avec R, l’autre avec la bobine', 14, 28, { couleur: 'cyan', taille: 20, max: 560 });
-  c.texte('(au ralenti)', 746, 28, { couleur: 'faible', taille: 14, align: 'right' });
+  MO = M; M.scene.cadre(31); disposer(M.scene.L);
+  const PH = ['K ouvert : pas de courant, les deux lampes sont éteintes', 'K fermé : L_1 (avec R) s’allume aussitôt',
+    'L_2 (avec la bobine) s’allume en retard : la bobine freine la montée du courant', `ensuite L_1 et L_2 brillent pareil : même courant ${mA(I)} mA (r = R)`,
+    'K ouvert : L_2 ne s’éteint pas d’un coup, le courant de la bobine passe encore un instant (par R et L_1)'];
+  phrasesBas(c, PH);
+  c.texte('Deux lampes : l’une avec R, l’autre avec la bobine', 14, 28, { couleur: 'cyan', taille: CT.large ? 24 : 20, max: CT.large ? CT.L - 200 : 560 });
+  c.texte('(au ralenti)', CT.L - 14, 28, { couleur: 'faible', taille: CT.large ? 18 : 14, align: 'right' });
   const a = lisse(M.p('k_ouvert'));
-  appareils(c, a);
+  circuit(c, () => appareils(c, a));
   M.etape(c, 'k_ouvert', () => {
-    fils(c);
-    c.texte(S2.noyau ? 'avec noyau : L = 1,2 H' : 'sans noyau : L = 0,3 H', 600, YH + 4, { couleur: 'blanc', taille: 16, max: 150 });
-    c.texte('lampes identiques', 600, YH + 26, { couleur: 'faible', taille: 14, max: 150 });
-    c.texte(`r = R = ${R} Ω`, 600, YH + 46, { couleur: 'faible', taille: 14, max: 150 });
-    c.texte('K ouvert : pas de courant, les deux lampes sont éteintes', 14, 332, { couleur: 'blanc', taille: 15, max: 730 });
+    circuit(c, () => fils(c));
+    c.texte(S2.noyau ? 'avec noyau : L = 1,2 H' : 'sans noyau : L = 0,3 H', CT.px, yC(YH + 4), { couleur: 'blanc', taille: 16 * CT.kt, max: CT.pw });
+    c.texte('lampes identiques', CT.px, yC(YH + 4) + 22 * CT.kt, { couleur: 'faible', taille: 14 * CT.kt, max: CT.pw });
+    c.texte(`r = R = ${R} Ω`, CT.px, yC(YH + 4) + 42 * CT.kt, { couleur: 'faible', taille: 14 * CT.kt, max: CT.pw });
+    ecrireBas(c, 0, PH[0], { couleur: 'blanc' });
   });
   if (M.commence('k_ferme') || M.vu('k_ouvert')) lectures(c);
-  M.etape(c, 'k_ferme', () => c.texte('K fermé : L_1 (avec R) s’allume aussitôt', 14, 353, { couleur: 'vert', taille: 15, max: 730 }));
-  M.etape(c, 'retard', () => c.texte('L_2 (avec la bobine) s’allume en retard : la bobine freine la montée du courant', 14, 374, { couleur: 'vert', taille: 15, max: 730, alpha: cache('retard') ? 0 : undefined }));
-  M.etape(c, 'egal', () => c.texte(`ensuite L_1 et L_2 brillent pareil : même courant ${mA(I)} mA (r = R)`, 14, 395, { couleur: 'vert', taille: 15, max: 730 }));
-  M.etape(c, 'ouverture', () => c.texte('K ouvert : L_2 ne s’éteint pas d’un coup, le courant de la bobine passe encore un instant (par R et L_1)', 14, 416, { couleur: 'bleu', taille: 15, max: 730 }));
-  reperes(c);
+  M.etape(c, 'k_ferme', () => ecrireBas(c, 1, PH[1], { couleur: 'vert' }));
+  M.etape(c, 'retard', () => ecrireBas(c, 2, PH[2], { couleur: 'vert', alpha: cache('retard') ? 0 : undefined }));
+  M.etape(c, 'egal', () => ecrireBas(c, 3, PH[3], { couleur: 'vert' }));
+  M.etape(c, 'ouverture', () => ecrireBas(c, 4, PH[4], { couleur: 'bleu' }));
+  circuit(c, () => reperes(c));
   return c.fin();
 }
 function reperes(c) {
@@ -583,7 +628,7 @@ const MOT = Moteur({
 });
 MOT.lancer();
 window.Tableau.glisser(MOT.scene.craie.canvas, {
-  toucher: (px, py) => { const [x, y] = MOT.scene.local(px, py), n = NOY(); return x > n.x - 8 && x < n.x + n.w + 8 && y > n.y - 10 && y < n.y + n.h + 10 ? 'noyau' : null; },
+  toucher: (px, py) => { const [x, y] = versCircuit(...MOT.scene.local(px, py)), n = NOY(); return x > n.x - 8 && x < n.x + n.w + 8 && y > n.y - 10 && y < n.y + n.h + 10 ? 'noyau' : null; },
   bouger: () => {},
   lacher: () => { MOT.setParameters({ noyau: S2.noyau ? 'sans' : 'avec' }); },
 });

@@ -13,6 +13,7 @@
 <script src="/media/simulations/maths/commun/exposants.js"></script>
 <script src="/media/simulations/maths/commun/maths-tableau.js"></script>
 <script src="/media/simulations/maths/ln-tableau/calculs-vues.js"></script>
+<script src="/media/simulations/maths/ln-tableau/large.js"></script>
 <script>
 /*
  * Cours « Fonctions logarithmiques » (math_ch5_fonctions_ln) : les calculs écrits à la main au tableau (?vue=<id de la
@@ -29,30 +30,61 @@ const lisible = s => String(s)
   .replace(/\^\{([^}]+)\}|\^([0-9])/g, (m, a, b) => [...(a || b)].map(ch => SUP[ch] || ch).join(''));
 const nettoyer = s => String(s).replace(/[_^{}]/g, '');
 const SU = {
-  larg: (c, s, taille = 18) => c.largeurTexte(nettoyer(s), taille),
+  larg: (c, s, taille = 18) => c.largeurTexte(nettoyer(s), Math.max(taille, LnLarge.min(c))),
   barre: (c, x, y, w, o = {}) => c.ligne(x - 3, y + 2, x + w + 3, y - 14, { couleur: o.couleur || 'rouge', largeur: o.largeur || 2.4 }),
 };
+/* Tableau large (15 novembre 2026, « grands calibres de texte, tout le tableau ») : les lignes du calcul sont placées
+ * sur une ou deux colonnes et agrandies (k) jusqu’à remplir le tableau ; hors du tableau large, la disposition d’origine. */
+function plan(c, d, L) {
+  const ls = d.lignes.map(l => {
+    const taille = l.taille || d.taille || 19;
+    return { taille, dx: l.dx || 0, w: SU.larg(c, l.t, taille) * 1.05 + (l.dx || 0) + (l.cadre ? 16 : 0), inter: l.inter ?? Math.round(taille * 1.8) };
+  });
+  if (L < 1000) {
+    let y = d.y0 || 82;
+    return ls.map(l => { const r = { x: 30 + l.dx, y, taille: l.taille, droite: 740 }; y += l.inter; return r; });
+  }
+  // interlignes resserrés (l’agrandissement les rend lisibles) ; deux colonnes (tout le tableau) dès que l’écriture y reste aussi grande
+  for (const l of ls) l.inter = Math.min(l.inter, Math.round(l.taille * 1.85));
+  const HAUT = 74, BAS = 404, K_MAX = 1.9;
+  const hauteur = (a, b) => { let h = ls[a].taille; for (let i = a; i < b - 1; i++) h += ls[i].inter; return h + 12; };
+  const largeur = (a, b) => Math.max(...ls.slice(a, b).map(l => l.w));
+  const n = ls.length;
+  const k1 = Math.min((BAS - HAUT) / hauteur(0, n), (L - 70) / largeur(0, n), K_MAX);
+  let best = null;   // la meilleure coupure en deux colonnes (au moins deux lignes chacune, la plus équilibrée à taille égale)
+  for (let s = 2; s <= n - 2; s++) {
+    const colW = (L - 110) / 2, h = Math.max(hauteur(0, s), hauteur(s, n));
+    const k = Math.min((BAS - HAUT) / h, colW / Math.max(largeur(0, s), largeur(s, n)), K_MAX), note = k - 0.03 * Math.abs(s - n / 2);
+    if (!best || note > best.note) best = { k, cut: s, note };
+  }
+  const deux = !!best && best.k >= 0.97 * k1, k = deux ? best.k : k1, cut = deux ? best.cut : n;
+  const colW = deux ? (L - 110) / 2 : L - 70, x0s = deux ? [40, 40 + colW + 30] : [Math.max(40, (L - largeur(0, n) * k) / 2)];
+  const out = [];
+  const hMax = deux ? Math.max(hauteur(0, cut), hauteur(cut, n)) : hauteur(0, n);
+  for (const [ci, a, b] of deux ? [[0, 0, cut], [1, cut, n]] : [[0, 0, n]]) {
+    let y = HAUT + ((BAS - HAUT) - hMax * k) / 3 + ls[a].taille * k;
+    for (let i = a; i < b; i++) { out[i] = { x: x0s[ci] + ls[i].dx * k, y, taille: Math.round(ls[i].taille * k), droite: x0s[ci] + colW }; y += ls[i].inter * k; }
+  }
+  return out;
+}
 const vues = {};
 for (const [id, d] of Object.entries(window.CALCULS || {})) {
   vues[id] = {
     titre: d.titre,
     dessiner(c, K) {
-      K.titre(d.titre);
-      let y = d.y0 || 82, yPrec = y, xPrec = 30;
-      for (const l of d.lignes) {
+      const L = LnLarge.ouvrir(c);
+      LnLarge.titre(c, K, d.titre);
+      const pl = plan(c, d, L);
+      d.lignes.forEach((l, i) => {
         c.pause(l.p ?? .25);
-        const taille = l.taille || d.taille || 19;
-        if (l.meme) y = yPrec;
-        const x = l.x ?? (l.meme ? xPrec : 30 + (l.dx || 0));
-        const w = Math.min(740 - x, SU.larg(c, l.t, taille));
-        c.texte(l.t, x, y, { couleur: l.c || 'blanc', taille, max: 740 - x });
+        const { x, y, taille, droite } = pl[i];
+        const w = Math.min(droite - x, SU.larg(c, l.t, taille) * (L < 1000 ? 1 : 1.05));
+        c.texte(l.t, x, y, { couleur: l.c || 'blanc', taille, max: droite - x });
         if (l.cadre) c.rect(x - 8, y - taille - 4, w + 16, taille + 14, { couleur: l.cadre, arrondi: 7, largeur: 1.6 });
         if (l.barre) SU.barre(c, x, y - 4, w, { couleur: 'rouge' });
         if (l.r) c.repere(l.r[0], x - 6, y - taille - 6, w + 12, taille + 16, l.r[1]);
         if (l.m) K.marque(l.m);
-        yPrec = y; xPrec = x + w + 14;
-        y += l.inter ?? Math.round(taille * 1.8);
-      }
+      });
     },
     decrire(K) {
       const D = {}; let acc = [];
@@ -63,7 +95,7 @@ for (const [id, d] of Object.entries(window.CALCULS || {})) {
   };
 }
 MathsTableau.page({
-  id: 'ln_calculs', titre: 'Calculs au tableau',
+  id: 'ln_calculs', titre: 'Calculs au tableau', ajuster: !LnLarge.actif,
   texte: 'Calculs et démonstrations du cours Fonctions logarithmiques écrits à la craie, ligne après ligne, rédigés comme au barème du national',
   vues,
 });

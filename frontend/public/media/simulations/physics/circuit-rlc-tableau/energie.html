@@ -68,6 +68,43 @@ const X = tms => G.x + tms * G.w / TMAX, Y = uj => G.y - uj * G.h / 80;
 const BAR = { ax: 606, e: 622, m: 690, w: 32 };
 const CI = { g: 86, d: 200, h: 92, b: 196, yc: 144 };
 const LIG = [292, 314, 336, 358, 380, 402];                                  // lignes du bas
+/* Agrandissement du 15 novembre 2026 (« la simulation n'occupe qu'une bande étroite, les textes sont minuscules ») :
+ * le cadre prend le format du tableau (LL de 760 à 1596, hauteur 420). Tableau large (LL ≥ 1000, écran d'ordinateur) :
+ * à gauche les phrases du déroulé, l'une sous l'autre (coupées à la ligne), au centre le graphe sur presque toute la
+ * hauteur, puis les deux barres, à droite le circuit et les trois formules de l'énergie. Sinon : la disposition
+ * d'origine, 760 × 420. */
+const G0 = { ...G }, BAR0 = { ...BAR };
+let LL = 760, LARGE = false, DXC = 0, FLOW = { x: 16, w: 420, y0: 46, k: 1 }, FY = 0;
+const POSB = {}, KF = { echange: 1, amortie: 1 };
+function disposer(Lv) {
+  LL = Lv >= 1000 ? Lv : 760; LARGE = LL >= 1000;
+  if (!LARGE) { Object.assign(G, G0); Object.assign(BAR, BAR0); DXC = 0; return; }
+  const colW = Math.round(LL * .33), x0 = LL - 8 - 244;
+  DXC = x0 - 4;
+  BAR.w = 36; BAR.m = x0 - 34 - BAR.w; BAR.e = BAR.m - 58; BAR.ax = BAR.e - 16;
+  Object.assign(G, { x: colW + 52, y: 384, h: 300 }); G.w = BAR.ax - 50 - G.x;
+  FLOW = { x: 14, w: colW, y0: 44, k: KF[S.vue] };
+}
+/** Le circuit (et sa règle R) : à droite quand le tableau est large. */
+function zoneC(c, fn) { const ctx = c.ctx; ctx.save(); try { if (DXC) ctx.translate(DXC, 0); fn(); } finally { ctx.restore(); } }
+/** Coupe une phrase en lignes de largeur w (taille t). */
+function couper(c, s, w, t) {
+  t = Math.max(t, (c.tailleMin || 0) / (c.echelle || 1));
+  const mots = String(s).split(' '), out = []; let l = '';
+  for (const m of mots) { const e = l ? l + ' ' + m : m; if (l && c.largeurTexte(e.replace(/_/g, ''), t) > w) { out.push(l); l = m; } else l = e; }
+  if (l) out.push(l);
+  return out;
+}
+/** Une phrase du déroulé : à sa place d'origine, ou (tableau large) à la suite dans la colonne de gauche, coupée à la ligne.
+ *  Renvoie son rectangle [x, y, w, h] (repères, cadre jaune). */
+function bas(c, s, x, y, o = {}) {
+  if (!LARGE) { c.texte(s, x, y, o); const t = o.taille ?? 16; return [x - 4, y - t, Math.min(o.max ?? 728, c.largeurTexte(s, t)) + 8, t + 8]; }
+  const t = Math.max(o.taille ?? 16, 16) * 1.15 * FLOW.k, h = Math.max(t, (c.tailleMin || 0) / (c.echelle || 1)) * 1.2;
+  const y0 = FY;
+  for (const l of couper(c, s, FLOW.w, t)) { c.texte(l, FLOW.x, FY + h * .8, { ...o, taille: t, max: FLOW.w }); FY += h; }
+  FY += 7 * FLOW.k;
+  return [FLOW.x - 6, y0 - 2, FLOW.w + 12, FY - y0 - 3 * FLOW.k];
+}
 const marque = (c, nom) => { MM[nom] = c.cur; };
 
 /* Fenêtres de temps : le temps du circuit avance seulement pendant une fenêtre (la craie se tait), puis reste figé. */
@@ -84,8 +121,10 @@ function tcDe(ct) {
 }
 
 function dessiner(c) {
-  scene.cadre(83); MM = { _w: [] }; tcFin = 0;
+  scene.cadre(83); MM = { _w: [] }; tcFin = 0; FY = FLOW.y0;
   (S.vue === 'echange' ? vueEchange : vueAmortie)(c);
+  // tableau large : la colonne des phrases doit tenir dans la hauteur (la taille s'ajuste une fois pour toutes)
+  if (LARGE && c.t > 1e5 && FY > 414) { KF[S.vue] = Math.max(.75, KF[S.vue] * (414 - FLOW.y0) / (FY - FLOW.y0)); scene.sale = true; }
   c.pause(.8); marque(c, 'fin');
   declarerReperes(c);
   const fini = c.fin();
@@ -154,6 +193,10 @@ function symboleBobine(c, x, y1, y2, n = 4) {
 /* ── Le circuit (à gauche), commun aux deux vues ───────────────────────── */
 function circuit(c, chaleur) {
   const ctx = c.ctx, amortie = S.vue === 'amortie', xr = (CI.g + CI.d) / 2;
+  zoneC(c, () => circuitIci(c, chaleur));
+}
+function circuitIci(c, chaleur) {
+  const ctx = c.ctx, amortie = S.vue === 'amortie', xr = (CI.g + CI.d) / 2;
   c.direct(() => {
     peindreCondensateur(ctx, 26, CI.yc - 25);
     peindreBobine(ctx, 226, CI.yc, 56, 20, amortie ? chaleur * .6 : 0);
@@ -197,6 +240,13 @@ function cadreGraphe(c) {
   c.texte('(µJ)', BAR.ax + 8, Y(80) - 2, { couleur: 'faible', taille: 12 });
 }
 function legende(c) {
+  if (LARGE) {
+    const x = DXC + 12;
+    c.texte('E_e = ½·C·u_C²', x, 300, { couleur: 'rouge', taille: 21, max: LL - 12 - x });
+    c.texte('E_m = ½·L·i²', x, 336, { couleur: 'vert', taille: 21, max: LL - 12 - x });
+    c.texte('E = ½·C·u_C² + ½·L·i²', x, 372, { couleur: 'blanc', taille: 21, max: LL - 12 - x });
+    return;
+  }
   c.texte('E_e = ½·C·u_C²', 16, 268, { couleur: 'rouge', taille: 18 });
   c.texte('E_m = ½·L·i²', 168, 268, { couleur: 'vert', taille: 18 });
   c.texte('E = ½·C·u_C² + ½·L·i²', 310, 268, { couleur: 'blanc', taille: 18 });
@@ -217,7 +267,7 @@ function traces(c, tc, blanche) {
       const y = Y(v * 1e6);
       if (G.y - y > .5) { ctx.globalAlpha = .55; ctx.fillStyle = c.couleur(col); ctx.fillRect(x + 1, y, BAR.w - 2, G.y - y); ctx.globalAlpha = 1; }
     }
-    c.texte(`t = ${fx(tc, 2)} ms`, G.x + G.w / 2 + 40, 50, { couleur: 'cyan', taille: 15, align: 'center' });
+    c.texte(`t = ${fx(tc, 2)} ms`, G.x + G.w / 2 + 40, LARGE ? 62 : 50, { couleur: 'cyan', taille: LARGE ? 19 : 15, align: 'center' });
   });
 }
 
@@ -226,33 +276,33 @@ function vueEchange(c) {
   const tc = tcDe(c.t);
   circuit(c, 0);
   traces(c, tc, false);
-  c.texte(`Énergie : ${TITRES.echange} — au ralenti`, 16, 26, { couleur: 'cyan', taille: 18, max: 728, duree: .9 });
+  c.texte(`Énergie : ${TITRES.echange} — au ralenti`, 16, 26, { couleur: 'cyan', taille: LARGE ? 21 : 18, max: LL - 32, duree: .9 });
   cadreGraphe(c);
   legende(c);
   c.pause(.3);
   // depart
-  c.texte('t = 0 : u_C = E = 6 V, i = 0 → E = ½·C·E² = ½ × 4·10⁻⁶ × 6² = 7,2·10⁻⁵ J (72 µJ)', 16, LIG[0], { couleur: 'blanc', taille: 16, max: 728 });
+  bas(c, 't = 0 : u_C = E = 6 V, i = 0 → E = ½·C·E² = ½ × 4·10⁻⁶ × 6² = 7,2·10⁻⁵ J (72 µJ)', 16, LIG[0], { couleur: 'blanc', taille: 16, max: 728 });
   marque(c, 'depart'); c.pause(.4);
   // echange : les courbes se tracent, les barres suivent (jusqu’à T₀/8 : 36 µJ chacune)
   fenetre(c, T0 / 8);
-  c.texte('Les courbes se tracent : la barre rouge se vide pendant que la verte se remplit (36 µJ chacune à T₀/8).', 16, LIG[1], { couleur: 'faible', taille: 16, max: 728 });
+  bas(c, 'Les courbes se tracent : la barre rouge se vide pendant que la verte se remplit (36 µJ chacune à T₀/8).', 16, LIG[1], { couleur: 'faible', taille: 16, max: 728 });
   marque(c, 'echange'); c.pause(.3);
   // tout_bobine : T₀/4, u_C = 0
   fenetre(c, T0 / 4);
   c.ligne(X(T0 / 4), G.y, X(T0 / 4), Y(76), { couleur: 'jaune', largeur: 1.2, pointille: [3, 4] });
-  c.texte('t = T₀/4 ≈ 1 ms : u_C = 0 → E_e = 0, E_m = 72 µJ : toute l’énergie est dans la bobine.', 16, LIG[2], { couleur: 'vert', taille: 16, max: 728 });
+  bas(c, 't = T₀/4 ≈ 1 ms : u_C = 0 → E_e = 0, E_m = 72 µJ : toute l’énergie est dans la bobine.', 16, LIG[2], { couleur: 'vert', taille: 16, max: 728 });
   marque(c, 'tout_bobine'); c.pause(.3);
   // tout_condensateur : T₀/2, creux de u_C
   fenetre(c, T0 / 2);
   c.ligne(X(T0 / 2), G.y, X(T0 / 2), Y(76), { couleur: 'jaune', largeur: 1.2, pointille: [3, 4] });
-  c.texte('t = T₀/2 ≈ 2 ms : u_C = −6 V (creux), i = 0 : toute l’énergie est dans le condensateur.', 16, LIG[3], { couleur: 'rouge', taille: 16, max: 728 });
-  c.texte('E_e est maximale deux fois par période (u_C = +6 V puis u_C = −6 V).', 16, LIG[4], { couleur: 'faible', taille: 16, max: 728 });
+  bas(c, 't = T₀/2 ≈ 2 ms : u_C = −6 V (creux), i = 0 : toute l’énergie est dans le condensateur.', 16, LIG[3], { couleur: 'rouge', taille: 16, max: 728 });
+  bas(c, 'E_e est maximale deux fois par période (u_C = +6 V puis u_C = −6 V).', 16, LIG[4], { couleur: 'faible', taille: 16, max: 728 });
   marque(c, 'tout_condensateur'); c.pause(.3);
   // somme_constante : on trace jusqu’à 10 ms, puis E blanche horizontale
   fenetre(c, TMAX);
   c.ligne(X(0), Y(72), X(TMAX), Y(72), { couleur: 'blanc', largeur: 2.8 });
   c.texte('E = 72 µJ', X(TMAX) - 2, Y(72) - 8, { couleur: 'blanc', taille: 15, align: 'right' });
-  c.texte('R + r = 0 : E se conserve ;  E_m = E − ½·C·u_C²', 16, LIG[5], { couleur: 'blanc', taille: 17, max: 728 });
+  bas(c, 'R + r = 0 : E se conserve ;  E_m = E − ½·C·u_C²', 16, LIG[5], { couleur: 'blanc', taille: 17, max: 728 });
   marque(c, 'somme_constante');
 }
 
@@ -263,34 +313,39 @@ function vueAmortie(c) {
   circuit(c, chaleur);
   traces(c, tc, true);
   // la poignée R : une petite règle de 0 à 100 Ω sous le circuit
-  c.direct(() => {
+  zoneC(c, () => c.direct(() => {
     c.ligne(RG.x0, RG.y, RG.x1, RG.y, { couleur: 'faible', largeur: 1.6 });
     c.cercle(RG.x(S.R), RG.y, 7, { couleur: 'rose', largeur: 2.2 });
     c.texte(`R = ${S.R} Ω`, RG.x1 + 8, RG.y + 5, { couleur: 'rose', taille: 14 });
-  });
-  c.texte(`Énergie : ${TITRES.amortie}, R + r = ${Rtot} Ω — au ralenti`, 16, 26, { couleur: 'cyan', taille: 18, max: 728, duree: .9 });
+  }));
+  c.texte(`Énergie : ${TITRES.amortie}, R + r = ${Rtot} Ω — au ralenti`, 16, 26, { couleur: 'cyan', taille: LARGE ? 21 : 18, max: LL - 32, duree: .9 });
   cadreGraphe(c);
   legende(c);
   c.pause(.3);
   // pertes : E_e et E_m s’échangent, E descend par marches
   fenetre(c, TMAX);
-  c.texte(`R + r = ${Rtot} Ω : E_e et E_m s’échangent encore, mais E (blanc) descend par marches.`, 16, LIG[0], { couleur: 'blanc', taille: 16, max: 728 });
+  bas(c, `R + r = ${Rtot} Ω : E_e et E_m s’échangent encore, mais E (blanc) descend par marches.`, 16, LIG[0], { couleur: 'blanc', taille: 16, max: 728 });
   marque(c, 'pertes'); c.pause(.3);
   // chaleur : le résistor rougit
   MM._ch = c.cur; c.pause(.6);
-  c.texte('chaleur', (CI.g + CI.d) / 2, CI.h + 26, { couleur: 'orange', taille: 14, align: 'center' });
-  c.texte('Effet Joule dans R et dans r : l’énergie perdue devient de la chaleur.', 16, LIG[1], { couleur: 'orange', taille: 16, max: 728 });
+  zoneC(c, () => c.texte('chaleur', (CI.g + CI.d) / 2, CI.h + 26, { couleur: 'orange', taille: 14, align: 'center' }));
+  bas(c, 'Effet Joule dans R et dans r : l’énergie perdue devient de la chaleur.', 16, LIG[1], { couleur: 'orange', taille: 16, max: 728 });
   marque(c, 'chaleur'); c.pause(.3);
   // derivee
-  c.texte('d(½·C·u_C²)/dt = C·u_C·du_C/dt = u_C·i', 16, LIG[2], { couleur: 'rouge', taille: 17, max: 360 });
-  c.texte('d(½·L·i²)/dt = L·i·di/dt', 400, LIG[2], { couleur: 'vert', taille: 17, max: 340 });
+  const d1 = bas(c, 'd(½·C·u_C²)/dt = C·u_C·du_C/dt = u_C·i', 16, LIG[2], { couleur: 'rouge', taille: 17, max: 360 });
+  const d2 = bas(c, 'd(½·L·i²)/dt = L·i·di/dt', 400, LIG[2], { couleur: 'vert', taille: 17, max: 340 });
+  POSB.derivee = LARGE ? [d1[0], d1[1], d1[2], d2[1] + d2[3] - d1[1]] : [10, LIG[2] - 18, 740, 24];
   marque(c, 'derivee'); c.pause(.3);
   // dE_dt
-  c.texte('dE/dt = i·(u_C + L·di/dt)', 16, LIG[3], { couleur: 'blanc', taille: 17, max: 360 });
-  c.texte('u_C + R·i + L·di/dt + r·i = 0 → u_C + L·di/dt = −(R + r)·i', 260, LIG[3], { couleur: 'faible', taille: 15, max: 484 });
-  c.texte('dE/dt = −(R + r)·i² ≤ 0', 26, LIG[4] + 1, { couleur: 'blanc', taille: 18 });
-  c.rect(16, LIG[4] - 17, 220, 25, { couleur: 'jaune', largeur: 1.6, arrondi: 6 });
-  c.texte('E ne fait que diminuer (elle reste constante quand i = 0)', 252, LIG[4], { couleur: 'faible', taille: 15, max: 492 });
+  const e1_ = bas(c, 'dE/dt = i·(u_C + L·di/dt)', 16, LIG[3], { couleur: 'blanc', taille: 17, max: 360 });
+  bas(c, 'u_C + R·i + L·di/dt + r·i = 0 → u_C + L·di/dt = −(R + r)·i', 260, LIG[3], { couleur: 'faible', taille: 15, max: 484 });
+  if (LARGE) FY += 3;
+  const b = bas(c, 'dE/dt = −(R + r)·i² ≤ 0', 26, LIG[4] + 1, { couleur: 'blanc', taille: 18 });
+  if (LARGE) c.rect(b[0] + 2, b[1] - 2, Math.min(b[2] - 4, c.largeurTexte('dE/dt = −(R + r)·i² ≤ 0', 18 * 1.15 * FLOW.k) + 18), b[3] + 2, { couleur: 'jaune', largeur: 1.6, arrondi: 6 });
+  else c.rect(16, LIG[4] - 17, 220, 25, { couleur: 'jaune', largeur: 1.6, arrondi: 6 });
+  if (LARGE) FY += 3;
+  const e3_ = bas(c, 'E ne fait que diminuer (elle reste constante quand i = 0)', 252, LIG[4], { couleur: 'faible', taille: 15, max: 492 });
+  POSB.dE_dt = LARGE ? [e1_[0], e1_[1], e1_[2], e3_[1] + e3_[3] - e1_[1]] : [10, LIG[3] - 18, 740, 48];
   marque(c, 'dE_dt'); c.pause(.3);
   // deux_sommets : sommets de u_C à t = 0 et t = T (i = 0 : E = E_e)
   const e1 = 72, e2 = phys(T).E * 1e6;
@@ -303,7 +358,7 @@ function vueAmortie(c) {
   c.texte(`≈ ${fx(e1 - e2, 0)} µJ perdus`, X(T) + 22, Math.min((Y(e1) + Y(e2)) / 2 + 5, Y(e2) - 16), { couleur: 'jaune', taille: 14 });
   const dE = .5 * C * (36 - (S.R === 10 ? 16 : u2 * u2));
   const an = S.R === 10 ? '½ × 4·10⁻⁶ × (6² − 4²) = 4·10⁻⁵ J' : `½ × 4·10⁻⁶ × (6² − ${fx(u2, 1)}²) ≈ ${sciTxt(dE)} J`;
-  c.texte(`sommets de u_C (i = 0) : E = ½·C·u_C² ; |ΔE| = ½·C·(U_1² − U_2²) = ${an}`, 16, LIG[5], { couleur: 'jaune', taille: 16, max: 728 });
+  bas(c, `sommets de u_C (i = 0) : E = ½·C·u_C² ; |ΔE| = ½·C·(U_1² − U_2²) = ${an}`, 16, LIG[5], { couleur: 'jaune', taille: 16, max: 728 });
   marque(c, 'deux_sommets');
 }
 const RG = { x0: 40, x1: 170, y: 236, x: R => 40 + R * 130 / 100 };
@@ -324,18 +379,19 @@ function declarerReperes(c) {
   c.repere('courbe_Ee', G.x, Y(74), G.w, G.h - 8, 'la courbe E_e(t) en rouge');
   c.repere('courbe_Em', G.x, Y(74), G.w, G.h - 8, 'la courbe E_m(t) en vert');
   c.repere('courbe_E', G.x, Y(76), G.w, amortie ? G.h - 6 : 16, amortie ? 'E(t) en blanc : elle descend par marches' : 'E(t) en blanc : droite horizontale à 72 µJ');
-  c.repere('formule', 10, 250, 560, 26, 'E = ½·C·u_C² + ½·L·i²');
-  c.repere('resistance', (CI.g + CI.d) / 2 - 32, CI.h - 30, 64, 64, amortie ? 'le résistor R : il rougit (effet Joule)' : 'pas de résistance : R + r = 0 (LC idéal)');
+  if (LARGE) c.repere('formule', DXC + 4, 276, LL - 12 - DXC, 106, 'E = ½·C·u_C² + ½·L·i²');
+  else c.repere('formule', 10, 250, 560, 26, 'E = ½·C·u_C² + ½·L·i²');
+  zoneC(c, () => c.repere('resistance', (CI.g + CI.d) / 2 - 32, CI.h - 30, 64, 64, amortie ? 'le résistor R : il rougit (effet Joule)' : 'pas de résistance : R + r = 0 (LC idéal)'));
   if (amortie) {
     const T = Tpseudo(), e2 = phys(T).E * 1e6;
-    c.repere('derivee', 10, LIG[2] - 18, 740, 24, 'd(½·C·u_C²)/dt = u_C·i ; d(½·L·i²)/dt = L·i·di/dt');
-    c.repere('dE_dt', 10, LIG[3] - 18, 740, 48, 'dE/dt = −(R + r)·i² ≤ 0');
+    c.repere('derivee', ...(POSB.derivee || [10, LIG[2] - 18, 740, 24]), 'd(½·C·u_C²)/dt = u_C·i ; d(½·L·i²)/dt = L·i·di/dt');
+    c.repere('dE_dt', ...(POSB.dE_dt || [10, LIG[3] - 18, 740, 48]), 'dE/dt = −(R + r)·i² ≤ 0');
     c.repere('sommet_1', X(0) - 12, Y(72) - 12, 24, 24, 'premier sommet de u_C (t = 0) : E = 72 µJ');
     c.repere('sommet_2', X(T) - 12, Y(e2) - 12, 24, 24, `deuxième sommet (t = T ≈ 4 ms) : E ≈ ${fx(e2, 0)} µJ`);
     c.repere('energie_perdue', X(T) + 6, Y(72) - 4, 120, Y(e2) - Y(72) + 8, '|ΔE| = ½·C·(U₁² − U₂²)');
   } else {
     for (const [id, lab] of [['derivee', 'dE/dt'], ['dE_dt', 'dE/dt = −(R + r)·i²'], ['sommet_1', 'premier sommet'], ['sommet_2', 'deuxième sommet'], ['energie_perdue', 'énergie perdue']])
-      c.repere(id, 10, LIG[5] - 18, 740, 24, lab + ailleurs);
+      c.repere(id, ...(LARGE ? [FLOW.x - 6, FY - 30, FLOW.w + 12, 26] : [10, LIG[5] - 18, 740, 24]), lab + ailleurs);
   }
 }
 
@@ -343,12 +399,13 @@ const canvas = $('canvas');
 const scene = window.OndesTableau.Scene(canvas, dessiner);
 const craie = scene.craie;
 scene.cadre = function (graine) {
-  const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  const W = craie.W, H = craie.H, VH = 420;
+  disposer(Math.round(Math.min(760 * 2.1, Math.max(760, VH * W / Math.max(1, H)))));
   craie.debut(graine, S.t);
-  const s = Math.min(W / VW, H / VH) || 1;
-  scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
+  const s = Math.min(W / LL, H / VH) || 1;
+  scene.s = s; scene.ox = (W - LL * s) / 2; scene.oy = (H - VH * s) / 2;
   craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
-  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+  craie.echelle = s; craie.tailleMin = 15; craie.cadre = { w: LL, h: VH, haut: 0 };
   return craie;
 };
 function calculer() { const t = S.t, rn = S.running; S.t = 1e6; S.running = false; try { dessiner(craie); dessiner(craie); } finally { S.t = t; S.running = rn; } scene.sale = true; }
@@ -452,8 +509,8 @@ $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
 /* La poignée R (vue amortie) : on la glisse le long de la petite règle sous le circuit ; le tracé se refait d’un coup. */
 let glisse = false;
 window.Tableau.glisser(canvas, {
-  toucher: (px, py) => { if (S.vue !== 'amortie' || S.running) return null; const [x, y] = scene.local(px, py); return Math.hypot(x - RG.x(S.R), y - RG.y) < 16 ? 'R' : null; },
-  bouger: (id, px) => { const [x] = scene.local(px, 0), v = clamp(Math.round((x - RG.x0) * 100 / (RG.x1 - RG.x0)), 0, 100); if (v !== S.R) { S.R = v; glisse = true; M = {}; calculer(); S.t = M.fin; S.fait = true; scene.sale = true; } },
+  toucher: (px, py) => { if (S.vue !== 'amortie' || S.running) return null; const [x, y] = scene.local(px, py); return Math.hypot(x - DXC - RG.x(S.R), y - RG.y) < 16 ? 'R' : null; },
+  bouger: (id, px) => { const [x] = scene.local(px, 0), v = clamp(Math.round((x - DXC - RG.x0) * 100 / (RG.x1 - RG.x0)), 0, 100); if (v !== S.R) { S.R = v; glisse = true; M = {}; calculer(); S.t = M.fin; S.fait = true; scene.sale = true; } },
   lacher: () => { if (!glisse) return; glisse = false; changerR(S.R); pont.noter('set_parameters', { R: S.R }); pont.emettre(); },
 });
 

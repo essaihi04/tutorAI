@@ -57,20 +57,27 @@ let M = {};                                       // étape → instant d’écr
 const canvas = $('canvas');
 const scene = window.OndesTableau.Scene(canvas, dessiner);
 const craie = scene.craie;
-/* Même cadre que commun.js, mais l’écriture suit l’horloge de la figure (S.tw) : le tuteur peut la figer sur une étape. */
+/* Même cadre que commun.js, mais l’écriture suit l’horloge de la figure (S.tw) : le tuteur peut la figer sur une étape.
+ * Tableau large (15 novembre 2026, « la figure n’occupe qu’une bande étroite au centre, textes minuscules ») : le cadre
+ * prend le format du tableau (L de 760 à 1596, hauteur 420, comme Scene({ large: true })) et, si L ≥ 1000, chaque étape
+ * de la figure est replacée et agrandie (BLOC, plus bas). */
+const L_MAX = 2.1;
 scene.cadre = function (graine) {
   const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  const L = Math.round(Math.min(VW * L_MAX, Math.max(VW, VH * W / Math.max(1, H))));
+  scene.L = L;
   craie.debut(graine, S.tw);
-  const s = Math.min(W / VW, H / VH);
-  scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
+  const large = L >= 1000, LL = large ? L : VW;
+  const s = Math.min(W / LL, H / VH);
+  scene.s = s; scene.ox = (W - LL * s) / 2; scene.oy = (H - VH * s) / 2;
   craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
-  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+  craie.echelle = s; craie.tailleMin = 15; craie.cadre = large ? null : { w: VW, h: VH, haut: 0 };
   return craie;
 };
 let MM = {};
-const marque = (c, nom) => { MM[nom] = c.cur; };
+const marque = (c, nom) => { MM[nom] = c.cur; BLOC.marque(c); };
 /* Une partie peinte (Soleil, nucléons, baril) apparaît quand l’écriture arrive à elle, d’un coup. */
-const peindre = (c, fn) => { if (c.t >= c.cur) c.direct(() => { c.ctx.save(); try { fn(c.ctx); } finally { c.ctx.restore(); } }); };
+const peindre = (c, fn) => { if (BLOC.mesure) return BLOC.peinture(fn); if (c.t >= c.cur) c.direct(() => { c.ctx.save(); try { fn(c.ctx); } finally { c.ctx.restore(); } }); };
 const vu = nom => M[nom] !== undefined && S.tw >= M[nom] - 1e-6;
 
 // ───────────────────────── Le rendu « réel » (peint, pour l’œil ; la physique reste dans la craie) ─────────────────────────
@@ -473,8 +480,8 @@ const DESSINS = {
 
   fig_methode_masses(c) {
     c.texte('Énergie libérée : la méthode des masses', 40, 30, { couleur: 'cyan', taille: 20 });
+    c.texte('exemple : la fusion', 724, 30, { couleur: 'faible', align: 'right', taille: 15 });   // avant le repère : reste à côté du titre
     c.repere('figure', 20, 44, 720, 360, 'la méthode des masses en quatre lignes, avec l’exemple de la fusion ²₁H + ³₁H');
-    c.texte('exemple : la fusion', 724, 30, { couleur: 'faible', align: 'right', taille: 15 });
     const Y = [78, 166, 254, 342];
     c.texte('1. L’équation de la réaction, toutes les particules :', 40, Y[0], { couleur: 'blanc', taille: 21, max: 690 });
     ligne(c, [N(2, 1, 'H'), ' + ', N(3, 1, 'H'), ' → ', N(4, 2, 'He'), ' + ', NEUTRON], 70, Y[0] + 38, { taille: 23, couleur: 'vert' });
@@ -721,10 +728,137 @@ const R_CAS = [
   ['equation', '« déterminer A et Z, x neutrons »', 'lois de Soddy'],
 ];
 
+/* ── Disposition par étapes sur le tableau large (15 novembre 2026) ──────────────────────────────────────────────
+ * Les figures sont écrites pour un cadre 760 × 420. Sur un tableau large (scene.L ≥ 1000, écran de portable), on relève
+ * d’abord l’encre de chaque étape (le morceau écrit entre deux `marque`, plus le titre avant le repère `figure`), on
+ * réunit les étapes qui se chevauchent (un tableau rempli au fil des étapes reste un seul bloc), puis on range les blocs
+ * en 1 à 3 colonnes, dans l’ordre de lecture, avec le plus grand agrandissement commun qui tient dans le tableau (borné
+ * à 1,75). Si la figure d’origine, agrandie d’un bloc, fait aussi bien, on la garde telle quelle. Chaque étape est
+ * dessinée avec sa transformation : les repères (`c.repere`, coordonnées de la figure) suivent donc d’eux-mêmes.
+ * L < 1000 (grand écran, déjà haut) : rien ne change. */
+const BLOC = {
+  mesure: false, actif: false, idx: 0, boites: [], plan: null, cle: '', base: null,
+  pt(x, y, m = 0) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    const b = BLOC.boites[BLOC.idx] || (BLOC.boites[BLOC.idx] = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity });
+    b.x0 = Math.min(b.x0, x - m); b.y0 = Math.min(b.y0, y - m); b.x1 = Math.max(b.x1, x + m); b.y1 = Math.max(b.y1, y + m);
+  },
+  /** Une partie peinte, mesurée sans être dessinée : un faux contexte relève arcs, ellipses, rectangles et traits. */
+  peinture(fn) {
+    const P = BLOC.pt, grad = { addColorStop() {} };
+    const ctx = new Proxy({}, { set: () => true, get: (_, k) => ({
+      arc: (x, y, r) => P(x, y, r), ellipse: (x, y, rx, ry) => { P(x - rx, y - ry); P(x + rx, y + ry); },
+      fillRect: (x, y, w, h) => { P(x, y); P(x + w, y + h); }, strokeRect: (x, y, w, h) => { P(x, y); P(x + w, y + h); },
+      moveTo: (x, y) => P(x, y), lineTo: (x, y) => P(x, y),
+      createRadialGradient: () => grad, createLinearGradient: () => grad }[k] || (() => {})) });
+    try { fn(ctx); } catch (e) { /* mesure seulement */ }
+  },
+  marque(c) { if (BLOC.mesure) BLOC.idx++; else if (BLOC.actif) { BLOC.idx++; BLOC.appliquer(c); } },
+  /** L’encre de chaque étape, la figure complète écrite d’un coup (rien n’est dessiné). */
+  mesurer(c) {
+    BLOC.mesure = true; BLOC.idx = 0; BLOC.boites = [];
+    const noms = ['trait', 'point', 'texte'], avant = {};
+    for (const k of noms) avant[k] = Object.prototype.hasOwnProperty.call(c, k) ? c[k] : undefined;
+    const tMin = 15 / (c.echelle || 1);
+    c.trait = function (pts, o = {}) { const m = (o.largeur ?? 2.4) / 2 + 1; for (const p of pts || []) BLOC.pt(p[0], p[1], m); return this; };
+    c.point = function (x, y, r = 4) { BLOC.pt(x, y, r); return this; };
+    c.texte = function (s, x, y, o = {}) {
+      const t = Math.max(o.taille ?? 18, tMin); let l = largeur(this, String(s), t); if (o.max && l > o.max) l = o.max;
+      const x0 = o.align === 'center' ? x - l / 2 : o.align === 'right' ? x - l : x;
+      BLOC.pt(x0, y - t * .95); BLOC.pt(x0 + l, y + t * .35); return this;
+    };
+    try { MM = {}; DESSINS[fig](c); } catch (e) { console.warn('[figures] mesure des étapes', e); }
+    finally { for (const k of noms) { if (avant[k] === undefined) delete c[k]; else c[k] = avant[k]; } BLOC.mesure = false; }
+  },
+  /** Range les blocs sur la largeur L. */
+  planifier(L) {
+    const B = BLOC.boites, CAP = 1.75, GAP = 14, GCOL = 36;
+    const titre = B[0] || { x0: 40, y0: 12, x1: 400, y1: 36 };
+    const kt = Math.min(1.3, (L - 40) / Math.max(1, titre.x1 - titre.x0));
+    const top = 8 + (titre.y1 - titre.y0) * kt + 12, bas = 410, gauche = 16, WA = L - 32, HA = bas - top;
+    let g = [];
+    for (let i = 1; i < B.length; i++) if (B[i] && B[i].x1 > B[i].x0) g.push({ i0: i, i1: i, ...B[i] });
+    const inter = (a, b) => Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0) > 4 && Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0) > 4;
+    const union = (u, v) => ({ i0: Math.min(u.i0, v.i0), i1: Math.max(u.i1, v.i1), x0: Math.min(u.x0, v.x0), y0: Math.min(u.y0, v.y0), x1: Math.max(u.x1, v.x1), y1: Math.max(u.y1, v.y1) });
+    for (let change = true; change;) {
+      change = false;
+      for (let a = 0; a < g.length && !change; a++) for (let b = a + 1; b < g.length && !change; b++) {
+        if (inter(g[a], g[b])) { g.splice(a, b - a + 1, g.slice(a, b + 1).reduce(union)); change = true; }
+      }
+    }
+    if (!g.length) g = [{ i0: 1, i1: 1, x0: 20, y0: 44, x1: 740, y1: 404 }];
+    const tout = g.reduce(union);
+    // Candidat « figure d’origine » : tout en un bloc, agrandi.
+    const k0 = Math.min(CAP, WA / (tout.x1 - tout.x0), HA / (tout.y1 - tout.y0));
+    // Candidats « colonnes » : découpes contiguës en 1 à 3 colonnes.
+    const colonne = (gs) => ({ gs, x0: Math.min(...gs.map(b => b.x0)), w: Math.max(...gs.map(b => b.x1)) - Math.min(...gs.map(b => b.x0)),
+      h: gs.reduce((s, b) => s + b.y1 - b.y0, 0) + GAP * (gs.length - 1) });
+    const essai = cols => ({ cols, k: Math.min(CAP, (WA - GCOL * (cols.length - 1)) / cols.reduce((s, c) => s + c.w, 0), ...cols.map(c => HA / c.h)) });
+    let mieux = null; const n = g.length;
+    const garder = e => { if (!mieux || e.k > mieux.k + 1e-6) mieux = e; };
+    garder(essai([colonne(g)]));
+    for (let a = 1; a < n; a++) {
+      garder(essai([colonne(g.slice(0, a)), colonne(g.slice(a))]));
+      for (let b = a + 1; b < n; b++) garder(essai([colonne(g.slice(0, a)), colonne(g.slice(a, b)), colonne(g.slice(b))]));
+    }
+    const tr = [];
+    if (k0 >= mieux.k * .97) {
+      const t = { k: k0, tx: gauche + (WA - (tout.x1 - tout.x0) * k0) / 2 - tout.x0 * k0, ty: top + (HA - (tout.y1 - tout.y0) * k0) / 2 - tout.y0 * k0 };
+      for (const b of g) tr.push({ ...b, t });
+    } else {
+      const k = mieux.k, cols = mieux.cols, place = (WA - cols.reduce((s, c) => s + c.w * k, 0)) / (cols.length + 1);
+      let x = gauche + place;
+      for (const c of cols) {
+        const hs = c.gs.reduce((s, b) => s + (b.y1 - b.y0) * k, 0);
+        const ecart = c.gs.length > 1 ? Math.min((HA - hs) / (c.gs.length - 1), 40) : 0;
+        let y = top + (HA - hs - ecart * (c.gs.length - 1)) / 2;
+        for (const b of c.gs) { tr.push({ ...b, t: { k, tx: x - c.x0 * k, ty: y - b.y0 * k } }); y += (b.y1 - b.y0) * k + ecart; }
+        x += c.w * k + place;
+      }
+    }
+    BLOC.plan = { top, tr, titre: { k: kt, tx: 22 - titre.x0 * kt, ty: 8 - titre.y0 * kt } };
+  },
+  /** Le bout de craie (c.tip) est noté dans les coordonnées de l’étape : on le ramène à celles du cadre. */
+  pointe(c) {
+    if (!c.tip || c.tip.cadre) return;
+    const d = c.ctx.getTransform().transformPoint(new DOMPoint(c.tip[0], c.tip[1])), q = BLOC.base.inverse().transformPoint(d);
+    c.tip = [q.x, q.y]; c.tip.cadre = true;
+  },
+  /** La transformation de l’étape en cours. */
+  appliquer(c) {
+    const p = BLOC.plan; if (!p) return;
+    BLOC.pointe(c);
+    let t = p.titre;
+    if (BLOC.idx >= 1) { t = p.tr[0].t; for (const b of p.tr) if (b.i0 <= BLOC.idx) t = b.t; }
+    c.ctx.setTransform(BLOC.base); c.ctx.translate(t.tx, t.ty); c.ctx.scale(t.k, t.k);
+    c.echelle = scene.s * t.k;
+  },
+};
+{
+  const repereKit = craie.repere;
+  craie.repere = function (id, x, y, w, h, label) {
+    if (BLOC.mesure) { if (id === 'figure') BLOC.idx = 1; return this; }
+    if (BLOC.actif && id === 'figure') {
+      this.ctx.setTransform(BLOC.base);
+      repereKit.call(this, id, 12, BLOC.plan.top - 6, scene.L - 24, 414 - BLOC.plan.top, label);
+      BLOC.idx = 1; BLOC.appliquer(this); return this;
+    }
+    return repereKit.call(this, id, x, y, w, h, label);
+  };
+}
+
 function dessiner(c) {
   scene.cadre(31);
+  const large = scene.L >= 1000;
+  if (large && BLOC.cle !== fig + '/' + scene.L) {
+    BLOC.mesurer(c); BLOC.planifier(scene.L); BLOC.cle = fig + '/' + scene.L;
+    scene.cadre(31);
+  }
   MM = {};
-  DESSINS[fig](c);
+  BLOC.actif = large; BLOC.idx = 0;
+  if (large) { BLOC.base = c.ctx.getTransform(); BLOC.appliquer(c); }
+  try { DESSINS[fig](c); }
+  finally { if (large) { BLOC.pointe(c); c.ctx.setTransform(BLOC.base); c.echelle = scene.s; } BLOC.actif = false; }
   M = MM;
   return c.fin() || !S.running;   // figée sur une étape : l’image ne change plus, on cesse de la redessiner
 }

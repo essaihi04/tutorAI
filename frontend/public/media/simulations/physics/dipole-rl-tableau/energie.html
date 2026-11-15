@@ -152,7 +152,7 @@ function vueBarre(c) {
   for (let v = 20; v <= 120; v += 20) ig.push([(G.y - PY(v / 1000)) / LY, v % 40 === 0 ? String(v) : null]);
   c.axe(G.x, G.y, G.x, G.y - LY, ig, { taille: 12, vertical: true });
   c.texte('i (mA)', G.x + 8, G.y - LY + 4, { couleur: 'blanc', taille: 15 });
-  c.texte('t (ms)', G.x + G.w + 12, G.y + 36, { couleur: 'blanc', taille: 14, align: 'right' });
+  c.texte('t (ms)', G.x + G.w + 12, G.y - 14, { couleur: 'blanc', taille: 14, align: 'right' });
   const bg = [];
   for (let v = 1; v <= BMAX; v++) bg.push([(G.y - PB(v * 1e-4)) / LY, v % 2 === 0 ? String(v) : null]);
   c.axe(BAR.ax, G.y, BAR.ax, G.y - LY, bg, { taille: 12, vertical: true });
@@ -239,17 +239,13 @@ function declarerReperes(c) {
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, dessiner);
+/* Cadre de commun.js avec `large` et `ajuster` (15 novembre 2026) : la boîte de l'encre de l'image complète remplit le
+ * tableau ; l'écriture suit l'horloge de la page (S.t). */
+const complet = f => { const t = S.t; S.t = 1e6; try { f(); } finally { S.t = t; } };
+const scene = window.OndesTableau.Scene(canvas, dessiner, { large: true, ajuster: true, complet });
 const craie = scene.craie;
-scene.cadre = function (graine) {
-  const W = craie.W, H = craie.H, VW = 760, VH = 420;
-  craie.debut(graine, S.t);
-  const s = Math.min(W / VW, H / VH) || 1;
-  scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
-  craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
-  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
-  return craie;
-};
+const cadreBase = scene.cadre;
+scene.cadre = function (graine) { const k = cadreBase.call(scene, graine); if (Number.isFinite(k.t)) k.t = Math.max(0, S.t); return k; };
 function calculer() { const t = S.t, rn = S.running; S.t = 1e6; S.running = false; try { dessiner(craie); dessiner(craie); } finally { S.t = t; S.running = rn; } scene.sale = true; }
 function moments() { if (M.fin === undefined) calculer(); const out = {}; for (const k of VUES[S.vue]) out[k] = +M[k].toFixed(2); return out; }
 const vu = n => M[n] !== undefined && S.t >= M[n] - 1e-6;
@@ -326,7 +322,7 @@ function playUntil(p) {
 }
 function setParameters(p) {
   p = p || {};
-  if (p.vue && VUES[p.vue] && p.vue !== S.vue) { S.vue = p.vue; M = {}; calculer(); pont.noter('set_parameters', { vue: S.vue }); start(); return; }
+  if (p.vue && VUES[p.vue] && p.vue !== S.vue) { S.vue = p.vue; M = {}; scene.boite = null; scene.remesurer(); calculer(); pont.noter('set_parameters', { vue: S.vue }); start(); return; }
   pont.emettre();
 }
 $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());

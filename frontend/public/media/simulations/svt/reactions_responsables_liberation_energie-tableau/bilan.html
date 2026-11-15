@@ -71,12 +71,23 @@ function lignes(c, texte, taille, max) {
   return out;
 }
 function paragraphe(c, texte, x, y, taille, max, o = {}) {
-  for (const l of lignes(c, texte, taille, max)) { c.texte(l, x, y, { taille, ...o }); y += taille * 1.2; }
+  // la taille vraiment écrite : la craie ne descend pas sous 15 px à l'écran (c.tailleMin / c.echelle)
+  const te = c.echelle && c.tailleMin ? Math.max(taille, c.tailleMin / c.echelle) : taille, pas = LARG > 760 ? te * 1.1 : taille * 1.2;
+  for (const l of lignes(c, texte, te, max)) { c.texte(l, x, y, { taille, ...o }); y += pas; }
   return y;
 }
 
-// Trois colonnes de trois blocs, dans le cadre 760 × 420.
-const COL = [{ x: 18, w: 228 }, { x: 264, w: 228 }, { x: 510, w: 228 }], HAUT = 48, HBLOC = 122;
+// Trois colonnes de trois blocs, dans le cadre 760 × 420 ; tableau large (portable, scene.L ≥ 1000) : les colonnes
+// s'étirent sur toute la largeur et le texte grossit (titres 18, définitions 15, pièges 14 au lieu de 14 / 11,5 / 11).
+let COL = [{ x: 18, w: 228 }, { x: 264, w: 228 }, { x: 510, w: 228 }], LARG = 760;
+const HAUT = 48, HBLOC = 122;
+let T = { titre: 14, formule: 13, hf: 19, def: 11.5, att: 11, pas: 17 };
+function regler(L) {
+  LARG = L >= 1000 ? L : 760;
+  const g = 18, e = LARG > 760 ? 30 : 18, w = (LARG - 2 * g - 2 * e - 12) / 3;
+  COL = [0, 1, 2].map(k => ({ x: g + 6 + k * (w + e), w }));
+  T = L >= 1000 ? { titre: 18, formule: 15.5, hf: 22, def: 15, att: 15, pas: 21 } : { titre: 14, formule: 13, hf: 19, def: 11.5, att: 11, pas: 17 };
+}
 const place = i => ({ x: COL[Math.floor(i / 3)].x, w: COL[Math.floor(i / 3)].w, y0: HAUT + (i % 3) * HBLOC });
 function bloc(c, b, i) {
   const { x, w, y0 } = place(i), enLumiere = S.focus === b.id, st = statut(b);
@@ -89,33 +100,33 @@ function bloc(c, b, i) {
     else if (st && STATUTS[st]) c.texte(STATUTS[st][0], x + w, y0 + 12, { couleur: STATUTS[st][1], taille: 11, align: 'right' });
   });
   let y = y0 + 12;
-  c.texte(b.titre, x, y, { couleur: 'jaune', taille: 14, max: st ? w - 62 : w });
-  y += 17;
+  c.texte(b.titre, x, y, { couleur: 'jaune', taille: T.titre, max: st ? w - 62 : w });
+  y += T.pas;
   if (b.formules) {
     // formules encadrées, à la ligne quand la suivante ne tient plus
     let fx = x;
     for (const f of b.formules) {
-      c.ctx.font = `13px ${window.Tableau.POLICE}`;
+      c.ctx.font = `${T.formule}px ${window.Tableau.POLICE}`;
       const l = Math.min(w, c.ctx.measureText(f.replace(/_/g, '')).width + 14);
-      if (fx > x && fx + l > x + w) { fx = x; y += 21; }
-      c.rect(fx, y - 13, l, 19, { couleur: 'faible', arrondi: 6, largeur: 1.2, duree: .25 });
-      c.texte(f, fx + 7, y + 1, { couleur: 'jaune', taille: 13, max: l - 10 });
+      if (fx > x && fx + l > x + w) { fx = x; y += T.hf + 2; }
+      c.rect(fx, y - T.formule, l, T.hf, { couleur: 'faible', arrondi: 6, largeur: 1.2, duree: .25 });
+      c.texte(f, fx + 7, y + 1, { couleur: 'jaune', taille: T.formule, max: l - 10 });
       fx += l + 7;
     }
-    y += 20;
+    y += T.hf + 1;
   }
-  y = paragraphe(c, b.def, x, y, 11.5, w, { couleur: 'blanc' });
-  c.texte('⚠', x, y, { couleur: 'orange', taille: 11 });
-  y = paragraphe(c, b.attention, x + 14, y, 11, w - 14, { couleur: 'orange', alpha: .92 });
-  if (y - 11 > cy + ch && !window.__debordeBlocs.includes(b.id)) window.__debordeBlocs.push(b.id);
+  y = paragraphe(c, b.def, x, y, T.def, w, { couleur: 'blanc' });
+  c.texte('⚠', x, y, { couleur: 'orange', taille: T.att });
+  y = paragraphe(c, b.attention, x + T.att + 3, y, T.att, w - T.att - 3, { couleur: 'orange', alpha: .92 });
+  if (y - T.att > cy + ch && !window.__debordeBlocs.includes(b.id)) window.__debordeBlocs.push(b.id);
   c.repere(b.id, cx, cy, cw, ch, b.titre.replace(/^\d+ · /, ''));
 }
 
 function dessinerFiche(c) {
   if (S.apparu.some(a => a === AVANT)) c.cur = AVANT;   // la voix est déjà passée : le titre est écrit d'un coup
   c.texte('Ce qu’il faut retenir', 18, 30, { couleur: 'jaune', taille: 22 });
-  c.texte('définition · formule · ⚠ piège', 742, 28, { couleur: 'faible', taille: 12, align: 'right' });
-  c.ligne(18, 38, 742, 38, { couleur: 'tresfaible', largeur: 1.4 });
+  c.texte('définition · formule · ⚠ piège', LARG - 18, 28, { couleur: 'faible', taille: LARG > 760 ? 15 : 12, align: 'right' });
+  c.ligne(18, 38, LARG - 18, 38, { couleur: 'tresfaible', largeur: 1.4 });
   const debut = c.cur;
   let fin = c.cur;
   BLOCS.forEach((b, i) => {
@@ -128,7 +139,7 @@ function dessinerFiche(c) {
 
 function dessinerLacunes(c) {
   c.texte('Ta page : ce qu’il te reste à retravailler', 22, 30, { couleur: 'jaune', taille: 22 });
-  c.ligne(22, 38, 740, 38, { couleur: 'tresfaible', largeur: 1.4 });
+  c.ligne(22, 38, LARG - 20, 38, { couleur: 'tresfaible', largeur: 1.4 });
   let y = 70;
   const lac = S.lacunes, acq = S.acquis || [];
   if (!lac) {
@@ -144,8 +155,8 @@ function dessinerLacunes(c) {
     for (const l of lac.slice(0, 5)) {
       const [etiq, coul] = STATUTS[l.statut] || STATUTS.non_acquis;
       c.texte(l.statut === 'partiel' ? '⟳' : '✗', 22, y, { couleur: coul, taille: 17 });
-      y = paragraphe(c, `${l.label} — ${etiq}`, 42, y, 16, 690, { couleur: 'blanc' });
-      if (l.reprendre_avec && l.reprendre_avec.length) y = paragraphe(c, 'reprendre avec ' + l.reprendre_avec.join(', puis '), 42, y, 13, 690, { couleur: coul, alpha: .85 });
+      y = paragraphe(c, `${l.label} — ${etiq}`, 42, y, 16, LARG - 70, { couleur: 'blanc' });
+      if (l.reprendre_avec && l.reprendre_avec.length) y = paragraphe(c, 'reprendre avec ' + l.reprendre_avec.join(', puis '), 42, y, 13, LARG - 70, { couleur: coul, alpha: .85 });
       y += 4;
     }
     if (lac.length > 5) { c.texte(`… et ${lac.length - 5} autre(s)`, 42, y, { couleur: 'faible', taille: 13 }); y += 18; }
@@ -153,12 +164,12 @@ function dessinerLacunes(c) {
   }
   if (acq.length) {
     y += 6; c.texte('✓ Acquis', 22, y, { couleur: 'vert', taille: 15 }); y += 20;
-    paragraphe(c, acq.join(' · '), 22, y, 14, 700, { couleur: 'vert', alpha: .85 });
+    paragraphe(c, acq.join(" · "), 22, y, 14, LARG - 60, { couleur: 'vert', alpha: .85 });
   }
 }
 
 const canvas = $('canvas');
-const scene = window.SVTTableau.Scene(canvas, (c) => { scene.cadre(41 + S.page); if (S.page === 1) dessinerFiche(c); else dessinerLacunes(c); return c.fin(); });
+const scene = window.SVTTableau.Scene(canvas, (c) => { scene.cadre(41 + S.page); regler(scene.L); if (S.page === 1) dessinerFiche(c); else dessinerLacunes(c); return c.fin(); }, { large: true });
 const maintenant = () => (performance.now() - scene.ouvert) / 1000;
 
 /* Page n ; `focus` = le bloc que la voix dit maintenant ; `tout` = toute la fiche d'un coup. */

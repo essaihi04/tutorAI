@@ -12,6 +12,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
 <script src="exposants.js"></script>
+<script src="colonne.js"></script>
 <script>
 /*
  * Le condensateur : deux plaques, un isolant ; la charge vue sur les appareils (cours « Dipôle RC », 2e Bac PC BIOF, novembre 2026).
@@ -71,7 +72,7 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), { large: true });
   const cadreBase = scene.cadre;
   scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
   M.scene = scene; M.craie = scene.craie;
@@ -338,8 +339,13 @@ function plaqueCouchee(ctx, r) {
 }
 
 /* ── Dessin ──────────────────────────────────────────────────────────── */
+/* Tableau large : les phrases du bas passent dans la colonne de gauche, le montage s’agrandit (colonne.js). */
+const COL = { debut(c) { (this.k ||= RCColonne(MO.scene, {
+  boite: () => (MO.S.vue === 'plaques' ? { x0: 6, y0: 6, x1: 730, y1: 352 } : { x0: 6, y0: 6, x1: 734, y1: 326 }),
+  versColonne: (s, x, y) => (MO.S.vue === 'plaques' ? y >= 360 && x <= 30 : y >= 330 && (x <= 30 || y >= 385)),
+})).debut(c); } };
 function dessiner(c, M) {
-  MO = M; M.scene.cadre(11);
+  MO = M; M.scene.cadre(11); COL.debut(c);
   if (M.S.vue === 'plaques') vuePlaques(c, M); else vueCharge(c, M);
   reperes(c, M);
   return c.fin();

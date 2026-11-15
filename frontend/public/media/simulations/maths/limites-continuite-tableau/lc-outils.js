@@ -59,5 +59,54 @@
     if (o.vertical) { const x = G.X(Math.min(Math.max(0, G.xmin), G.xmax)); c.ligne(x, G.Y(a), x, G.Y(b), { couleur: coul, largeur: l, alpha: o.alpha ?? .75, duree: o.duree }); }
     else { const y = G.Y(Math.min(Math.max(0, G.ymin), G.ymax)); c.ligne(G.X(a), y, G.X(b), y, { couleur: coul, largeur: l, alpha: o.alpha ?? .75, duree: o.duree }); }
   };
+  /* Tableau large (15 novembre 2026, « grands vides à gauche et à droite, textes minuscules ») : sur un tableau en
+   * bandeau (portable 1366 × 613), le cadre prend la largeur du tableau, L de 760 à 1596 (même formule que le kit,
+   * option `large` de Scene). LC.L(c) donne L à tout moment, mesure comprise ; K.large = L ≥ 1000. Les pages placent la
+   * figure plus large et la colonne de texte plus à droite avec `LC.e(K)` = L − 760 (0 sur un tableau haut : la
+   * disposition d'origine, déjà bonne en 1920 × 1080), et écrivent plus gros avec `LC.t(K, taille)`. */
+  LC.L = (c) => Math.round(Math.min(760 * 2.1, Math.max(760, 420 * c.W / Math.max(1, c.H))));
+  LC.e = (K) => { const L = LC.L(K.c); return L >= 1000 ? L - 760 : 0; };
+  LC.t = (K, t) => (LC.L(K.c) >= 1000 ? Math.round(t * 1.35) : t);
+  /* Disposition type « figure à gauche, texte à droite » : la figure prend 60 % de la largeur gagnée, la colonne de
+   * texte se décale de 67 % (elle garde ~450 de large pour un texte 1,35 fois plus gros). */
+  /* Disposition type « schéma sur toute la largeur » : les abscisses et les largeurs × k = L / 760 (1 sur un tableau haut). */
+  LC.k = (K) => { const L = LC.L(K.c); return L >= 1000 ? L / 760 : 1; };
+  LC.gw = (K, w) => w + LC.e(K) * 0.6;
+  LC.col = (K, x) => x + LC.e(K) * 0.67;
+  /* L'aide K, élargie : titre plus gros, lignes de calcul plus grosses (et sans la largeur max de 760), graduations des
+   * axes plus grosses ; tout le reste du kit inchangé. */
+  LC.etendre = function (c, K) {
+    const L = LC.L(c), large = L >= 1000;
+    K.L = L; K.large = large;
+    if (!large) return K;
+    K.titre = (s) => { c.texte(s, 20, 34, { couleur: 'cyan', taille: 26, max: L - 40 }); return K; };
+    K.lignes = (x, y, liste, inter = 30) => {
+      for (const l of liste) {
+        const t = Math.round((l.taille || 19) * 1.45);
+        if (l.pause) c.pause(l.pause);
+        if (l.t) c.texte(l.t, x + (l.dx || 0), y, { couleur: l.couleur || 'blanc', taille: t, max: l.max ? l.max * 1.45 : (L - x - 16) });
+        if (l.cadre) { const w = Math.min(L - x - 8, c.largeurTexte(l.t, t) + 16); c.rect(x + (l.dx || 0) - 8, y - t - 2, w, t + 12, { couleur: l.cadre, arrondi: 6, largeur: 1.4 }); }
+        if (l.repere) c.repere(l.repere, x + (l.dx || 0) - 4, y - t - 3, Math.min(L - x - 10, c.largeurTexte(l.t || '', t) + 10), t * 1.55, l.label || l.t);
+        if (l.moment) K.marque(l.moment);
+        y += (l.inter ?? inter) * 1.15;
+      }
+      return y;
+    };
+    const axes = K.axes;
+    K.axes = (o) => {
+      const texte = c.texte;
+      c.texte = function (s, x, y, oo = {}) { return texte.call(this, s, x, y, { ...oo, taille: Math.round((oo.taille || 18) * 1.25) }); };
+      try { return axes(o); } finally { c.texte = texte; }
+    };
+    return K;
+  };
+  /* MathsTableau.page avec le tableau large (le kit transmet `def.large` à sa Scene) et l'aide K élargie. */
+  LC.page = function (def) {
+    for (const V of Object.values(def.vues)) {
+      const d = V.dessiner;
+      if (d) V.dessiner = function (c, K) { LC.etendre(c, K); return d.call(this, c, K); };
+    }
+    return window.MathsTableau.page({ ...def, large: true });
+  };
   window.LC = LC;
 })();

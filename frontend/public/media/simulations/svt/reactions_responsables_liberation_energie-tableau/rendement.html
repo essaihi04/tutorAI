@@ -45,7 +45,9 @@ const B1 = { x: 60, w: 90 }, B2 = { x: 220, w: 90 }, TOP = 90, BOT = 380, H = BO
 const BRIQUE = [250, 190, 60], CHALEUR = [248, 113, 60], RESIDU = [140, 170, 120];
 
 const canvas = $('canvas');
-const scene = Scene(canvas, (c) => { scene.cadre(61); dessiner(c); return c.fin(); });
+const scene = Scene(canvas, (c) => { scene.cadre(61); MOS.dessiner(c, () => { dessiner(c); }); return c.fin(); }, { large: true });
+/* Tableau large (portable 1366 × 613) : la page est rangée sur toute la largeur (SVTLarge.Mosaique, dans peinture.js) ; grand écran : inchangée. */
+const MOS = window.SVTLarge.Mosaique(scene, (L) => L >= 1000 ? { police: 1.15, lignes: [[[0, 40, 326, 380], { r: [326, 0, 434, 380], k: 1.3 }]] } : null);
 const ecrit = Apparitions(scene);
 const chrono = Chrono({ fin: () => FIN, moments: () => M, motifs: MOTIFS, bouton: $('run'), bulle: $('feedback'), pont: () => pont,
   depart: 'Une mole de glucose : combien d’énergie récupérée en ATP ?', reinit: () => ecrit.oublier(),
@@ -176,7 +178,7 @@ function dessiner(c) {
   if (t >= 15.4) {
     ecrit.ecrire(c, 'f_' + S.glucose, () => {
       c.texte(`${S.glucose} kJ`, B2.x + B2.w / 2, TOP - 8, { couleur: 'jaune', taille: 14, align: 'center' });
-      c.texte('61 kJ', B2.x + B2.w + 6, BOT - 2, { couleur: 'jaune', taille: 13 });
+      c.texte('61 kJ', MOS.actif() ? B2.x - 6 : B2.x + B2.w + 6, BOT - 2, { couleur: 'jaune', taille: 13, align: MOS.actif() ? 'right' : 'left' });   // tableau large : à gauche de la barre (la colonne des calculs est à part)
       c.texte('fermentation : 2 × 30,5 = 61 kJ', X, 266, { couleur: 'blanc', taille: 15 });
       c.texte(`r = (2 × 30,5) / ${S.glucose} × 100 = ${pct(k.rf, 2)} %`, X, 294, { couleur: 'jaune', taille: 18 });
     });

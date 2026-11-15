@@ -13,6 +13,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
 <script src="exposants.js"></script>
+<script src="zones.js"></script>
 <script>
 /*
  * Deux condensateurs, en parallèle ou en série (14 novembre 2026, règle 28 du professeur : une manip au lieu d'une liste).
@@ -72,8 +73,11 @@ const COULEUR_PEINT = { cyan: '#22d3ee', vert: '#4ade80' };
 /** Un condensateur horizontal (armatures l'une au-dessus de l'autre) centré en (cx, cy), avec ses charges. */
 function condensateur(c, cx, cy, C, q, couleur, nom) {
   const w = Math.max(14, C * KW), g = 14;
-  armature(c.ctx, cx - w / 2, cx + w / 2, cy - g / 2, COULEUR_PEINT[couleur] || couleur);
-  armature(c.ctx, cx - w / 2, cx + w / 2, cy + g / 2, COULEUR_PEINT[couleur] || couleur);
+  // tableau large (zones.js) : les armatures peintes suivent la zone de leur condensateur
+  scene.peindreDans(cx, cy, () => {
+    armature(c.ctx, cx - w / 2, cx + w / 2, cy - g / 2, COULEUR_PEINT[couleur] || couleur);
+    armature(c.ctx, cx - w / 2, cx + w / 2, cy + g / 2, COULEUR_PEINT[couleur] || couleur);
+  });
   const n = Math.round(q / QPT);
   for (let k = 0; k < n; k++) {
     const x = cx - w / 2 + (k + 0.5) * w / n;
@@ -162,6 +166,9 @@ function dessiner(c) {
 
 const canvas = $('canvas');
 const scene = window.OndesTableau.Scene(canvas, dessiner);
+/* Tableau large (zones.js) : le circuit (générateur peint) à gauche, à l’identique ; la colonne du résultat C_eq, à
+ * droite, écrite plus grande. Grand écran : cadre d’origine. */
+scene.cadre = RCZones(scene, () => (performance.now() - scene.ouvert) / 1000, RCZones.gaucheFixe(520, { iso: true, y0: 56, y1: 372, kMax: 1.3 }));
 scene.avancer = dt => {
   if (!S.running) return false;
   S.f = Math.min(1, S.f + dt / CHARGE);

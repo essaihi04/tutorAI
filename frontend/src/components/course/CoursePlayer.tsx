@@ -418,7 +418,7 @@ export default function CoursePlayer({
         {started && mode === 'concentration' && <ClavierFlottant droite={tuteur3D ? COLONNE_TUTEUR : 0} bas={memoire.ecran ? 16 : 76} />}
         {started && memoire.ecran && (
           // le tuteur 3D garde sa colonne à droite : il reste visible et parle pendant le cahier, le rappel, l'exercice
-          <div className={`absolute inset-0 z-[110] flex items-stretch justify-center bg-[#07101f]/92 p-3 backdrop-blur-sm sm:p-6 ${tuteur3D ? 'md:pr-[var(--colonne-tuteur)]' : ''}`}
+          <div className={`absolute inset-0 z-[110] flex items-stretch justify-center bg-[#07101f]/92 p-2 backdrop-blur-sm sm:p-3 ${tuteur3D ? 'md:pr-[var(--colonne-tuteur)]' : ''}`}
             style={{ ['--colonne-tuteur' as string]: `${COLONNE_TUTEUR + placeClavier}px`, paddingRight: !tuteur3D && placeClavier ? placeClavier : undefined,
               paddingBottom: hauteurClavierTelephone(clavierOuvert) || undefined }}>
             {/* large (14 novembre 2026) : le cahier et ses dessins prennent la place de l'écran au lieu de rester petits */}

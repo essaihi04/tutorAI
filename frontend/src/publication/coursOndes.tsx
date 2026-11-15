@@ -58,7 +58,7 @@ function Navigation({ id, matiere }: { id: string; matiere: string | null }) {
   const liste = coursDe(matiere);
   const m = matiereDe(id);
   return (
-    <div className="flex h-10 items-center gap-2 px-2 text-sm">
+    <div className="flex h-9 items-center gap-2 px-2 text-sm">
       <a href={matiere ? `?matiere=${matiere}&cours=liste` : '?cours=liste'} className="shrink-0 rounded-lg px-2 py-1 text-white/70 hover:bg-white/10" title="Tous les cours">☰</a>
       <span className="hidden shrink-0 text-white/50 sm:inline">{m?.nom || ''}</span>
       <select value={id} onChange={e => { window.location.search = lienCours(e.target.value, matiere); }}

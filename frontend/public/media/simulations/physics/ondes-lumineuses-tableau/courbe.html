@@ -90,7 +90,20 @@ const VITESSE = 1.5;                               // horloge de l’écriture (
 
 /* ── Géométrie ───────────────────────────────────────────────────────── */
 const RX = { x: 8, y: 44, w: 254, h: 368 }, RC = { x: 270, y: 44, w: 482, h: 368 };
-const O = { x: 322, y: 366 }, AXL = 400, AYL = 290;
+const O = { x: 322, y: 366 }, AYL = 290;
+let AXL = 400;
+/* Agrandissement du 15 novembre 2026 : sur un tableau large (L ≥ 1000, portable 1366 × 613), le graphe s'élargit
+ * (axe des abscisses plus long) et les phrases (droite, pente, identification, point lu) passent dans une colonne
+ * à droite du graphe, en plus grand. Sinon (grand écran) : la disposition d'origine. TX = la colonne des phrases. */
+const TX = { large: false, x: 338, w: 330, k: 1, D: 742 };
+function disposer(L) {
+  TX.large = L >= 1000;
+  if (TX.large) {
+    TX.w = Math.round(Math.min(380, L * .27)); TX.k = 1.18;
+    RC.w = L - 8 - TX.w - 14 - RC.x; TX.x = RC.x + RC.w + 14;
+  } else { RC.w = 482; TX.x = 338; TX.w = 330; TX.k = 1; }
+  AXL = RC.w - 82; TX.D = RC.x + RC.w - 10;   // TX.D : bord droit du graphe (nom de l'axe x, point lu)
+}
 const PX = x => O.x + x * AXL / C().xmax, PY = y => O.y - y * AYL / C().ymax;
 const MV = { yc: 100, yh: 74, yb: 126, xs: 74 };             // petit montage vu de dessus
 const BANDE = { x: 18, w: 234, yc: 186, h: 18 }, PXMM = 2.2;  // écran vu de face : 2,2 px par mm (largeur exacte à cette échelle)
@@ -164,8 +177,8 @@ function peindreExperience(ctx, val) {
 /* ── Dessin : l’écriture suit l’horloge de la scène ; chaque moment = fin de l’écriture de sa phase ── */
 const marque = (c, nom) => { MM[nom] = c.cur; };
 function dessiner(c) {
-  scene.cadre(41); MM = {};
-  const K = C(), val = reglageA(c.t), E = peindreLaVue(c, val);
+  scene.cadre(41); MM = {}; disposer(scene.L);
+  const K = C(), val = reglageA(c.t), E = peindreLaVue(c, val), k = TX.k;
   c.texte('L’expérience', RX.x + 6, 32, { couleur: 'cyan', taille: 17 });
   c.rect(RX.x, RX.y, RX.w, RX.h, { couleur: 'tresfaible', arrondi: 10 });
   c.texte(`La courbe : ${K.titre}`, RC.x + 6, 32, { couleur: 'cyan', taille: 17 });
@@ -177,8 +190,8 @@ function dessiner(c) {
   c.texte('0', O.x - 8, O.y + 18, { couleur: 'faible', taille: 13, align: 'right' });
   c.texte(K.ylab, O.x + 10, 70, { couleur: 'blanc', taille: 16 });
   if (K.ymul) c.texte(K.ymul, O.x + 72, 70, { couleur: 'faible', taille: 14 });
-  c.texte(K.xlab, 742, O.y - 10, { couleur: 'blanc', taille: 16, align: 'right' });
-  if (K.xmul) c.texte(K.xmul, 742, O.y + 20, { couleur: 'faible', taille: 14, align: 'right' });
+  c.texte(K.xlab, TX.D, O.y - 10, { couleur: 'blanc', taille: 16, align: 'right' });
+  if (K.xmul) c.texte(K.xmul, TX.D, O.y + 20, { couleur: 'faible', taille: 14, align: 'right' });
   // Tableau des mesures : l’en-tête.
   const cols = K.colonnes.length === 3 ? [50, 135, 216] : [72, 190];
   c.texte('Mesures', 14, 266, { couleur: 'cyan', taille: 15 });
@@ -206,8 +219,8 @@ function dessiner(c) {
     c.pause(.4); marque(c, 'debut_courbe');
     const x2 = .96 * K.xmax;
     c.ligne(O.x, O.y, PX(x2), PY(K.f(x2)), { couleur: 'vert', largeur: 2.4 });
-    c.texte(K.tDroite[0], 338, 92, { couleur: 'vert', taille: 16, max: 330 });
-    c.texte(K.tDroite[1], 338, 114, { couleur: 'vert', taille: 17, max: 330 });
+    c.texte(K.tDroite[0], TX.x, 92, { couleur: 'vert', taille: 16 * k, max: TX.w });
+    c.texte(K.tDroite[1], TX.x, 92 + 22 * k, { couleur: 'vert', taille: 17 * k, max: TX.w });
     marque(c, 'droite');
     // Le triangle de pente, depuis l’origine jusqu’au point de mesure.
     c.pause(.4);
@@ -216,18 +229,21 @@ function dessiner(c) {
     c.ligne(xp, O.y, xp, yp, { couleur: 'orange', largeur: 2.2, pointille: [6, 5] });
     c.texte(K.penteX, (O.x + xp) / 2 + 16, O.y - 8, { couleur: 'orange', taille: 14, align: 'center' });
     c.texte(K.penteY, xp + 8, (O.y + yp) / 2 + 5, { couleur: 'orange', taille: 14 });
-    c.texte(K.tPente, 338, 142, { couleur: 'orange', taille: 16, max: 295 });
+    if (TX.large) { const [p1, p2] = K.tPente.split(' = ').length > 2 ? [K.tPente.split(' = ').slice(0, 2).join(' = ') + ' =', K.tPente.split(' = ').slice(2).join(' = ')] : [K.tPente, ''];
+      c.texte(p1, TX.x, 178, { couleur: 'orange', taille: 16 * k, max: TX.w }); if (p2) c.texte(p2, TX.x + 20, 178 + 22 * k, { couleur: 'orange', taille: 16 * k, max: TX.w - 20 }); }
+    else c.texte(K.tPente, 338, 142, { couleur: 'orange', taille: 16, max: 295 });
     marque(c, 'pente');
     // L’identification avec la formule du cours.
     c.pause(.5);
-    c.texte(K.tIdent[0], 338, 172, { couleur: 'blanc', taille: 16, max: 215 });
-    c.texte(K.tIdent[1], 338, 196, { couleur: 'jaune', taille: 16, max: 215 });
-    c.rect(332, 179, 226, 24, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+    const yi = TX.large ? 270 : 172, wi = TX.large ? TX.w - 4 : 215;
+    c.texte(K.tIdent[0], TX.x, yi, { couleur: 'blanc', taille: 16 * k, max: wi });
+    c.texte(K.tIdent[1], TX.x, yi + 24 * k, { couleur: 'jaune', taille: 16 * k, max: wi });
+    c.rect(TX.x - 6, yi + 24 * k - 17 * k, wi + 11, 24 * k, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
     marque(c, 'identification');
   } else {
     c.pause(.4); marque(c, 'debut_courbe');
     c.courbe(u => { const x = .05 + (.43 - .05) * u; return [PX(x), PY(K.f(x))]; }, 40, { couleur: 'vert', largeur: 2.4 });
-    K.tCourbe.forEach((t, i) => c.texte(t, 440, 92 + 22 * i, { couleur: i ? 'blanc' : 'vert', taille: 16, max: 300 }));
+    K.tCourbe.forEach((t, i) => c.texte(t, TX.large ? TX.x : 440, 92 + 22 * k * i, { couleur: i ? 'blanc' : 'vert', taille: 16 * k, max: TX.large ? TX.w : 300 }));
     marque(c, 'courbe');
   }
   c.pause(.8); marque(c, 'fin');
@@ -237,7 +253,8 @@ function dessiner(c) {
     const x = PX(lu.x), y = PY(lu.y);
     c.ligne(x, O.y, x, y, { couleur: 'rose', largeur: 1.3, pointille: [3, 4] }); c.ligne(O.x, y, x, y, { couleur: 'rose', largeur: 1.3, pointille: [3, 4] });
     c.cercle(x, y, 7, { couleur: 'rose', largeur: 2 });
-    c.texte(K.lu.texte(lu.x, lu.y), K.lu.pos[0], K.lu.pos[1], { couleur: 'rose', taille: 15, align: 'right' });
+    if (TX.large) c.texte(K.lu.texte(lu.x, lu.y), TX.x, 380, { couleur: 'rose', taille: 15 * k, max: TX.w });
+    else c.texte(K.lu.texte(lu.x, lu.y), K.lu.pos[0], K.lu.pos[1], { couleur: 'rose', taille: 15, align: 'right' });
   });
   // Repères (toujours déclarés).
   c.repere('vue_experience', RX.x, RX.y, RX.w, RX.h, 'l’expérience et ses mesures');
@@ -249,11 +266,11 @@ function dessiner(c) {
   if (K.lineaire) {
     c.repere('droite', O.x, PY(K.f(.96 * K.xmax)), PX(.96 * K.xmax) - O.x, O.y - PY(K.f(.96 * K.xmax)), 'la droite qui passe par l’origine');
     c.repere('pente', O.x, PY(K.f(K.xp)) - 4, PX(K.xp) - O.x + 90, O.y - PY(K.f(K.xp)) + 8, K.k);
-    c.repere('identification', 332, 154, 300, 52, K.conclusion);
+    c.repere('identification', TX.x - 6, (TX.large ? 270 : 172) - 18 * k, (TX.large ? TX.w : 300), 52 * k, K.conclusion);
   } else {
     c.repere('droite', PX(.05), PY(K.f(.05)), PX(.43) - PX(.05), PY(K.f(.43)) - PY(K.f(.05)), 'la courbe (pas une droite)');
     c.repere('courbe', PX(.05), PY(K.f(.05)), PX(.43) - PX(.05), PY(K.f(.43)) - PY(K.f(.05)), 'la courbe (pas une droite)');
-    c.repere('identification', 434, 74, 310, 74, K.conclusion);
+    c.repere('identification', (TX.large ? TX.x : 440) - 6, 74, TX.large ? TX.w : 310, 74 * k, K.conclusion);
   }
   c.repere('point_lu', PX(lu.x) - 12, PY(lu.y) - 12, 24, 24, `le point lu : ${K.lu.phrase(lu.x, lu.y)}`);
   c.repere('ecran_face', BANDE.x, BANDE.yc - 17, BANDE.w, 34, `la tache : L = ${fx(E.Lmm, 1)} mm`);
@@ -283,12 +300,14 @@ const canvas = $('canvas');
 const scene = window.OndesTableau.Scene(canvas, dessiner);
 const craie = scene.craie;
 scene.cadre = function (graine) {
-  const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  const W = craie.W, H = craie.H, VH = 420;
+  // format du tableau (comme Scene(…, { large: true }) de commun.js) : largeur de 760 à 760 × 2,1
+  const VW = scene.L = Math.round(Math.min(760 * 2.1, Math.max(760, VH * W / Math.max(1, H))));
   craie.debut(graine, S.t);
   const s = Math.min(W / VW, H / VH) || 1;
   scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
   craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
-  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+  craie.echelle = s; craie.tailleMin = 15; craie.cadre = { w: VW, h: VH, haut: 0 };
   return craie;
 };
 function calculer() { const t = S.t, r = S.running; S.t = 1e6; S.running = false; dessiner(craie); dessiner(craie); S.t = t; S.running = r; scene.sale = true; }

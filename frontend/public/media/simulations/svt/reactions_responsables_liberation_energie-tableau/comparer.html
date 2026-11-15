@@ -47,7 +47,11 @@ const MOTIFS = {
 const motifs = new Proxy({}, { get: (_, k) => (typeof MOTIFS[k] === 'function' ? MOTIFS[k](S) : MOTIFS[k]) });
 
 const canvas = $('canvas');
-const scene = Scene(canvas, (c) => { scene.cadre(23); dessiner(c); return c.fin(); });
+const scene = Scene(canvas, (c) => { scene.cadre(23); MOS.dessiner(c, () => { dessiner(c); }); return c.fin(); }, { large: true });
+/* Tableau large (portable 1366 × 613) : la page est rangée sur toute la largeur (SVTLarge.Mosaique, dans peinture.js) ; grand écran : inchangée. */
+const MOS = window.SVTLarge.Mosaique(scene, (L) => L >= 1000 ? (() => { const s = Math.min(1.2, (L - 300) / 760, 412 / 364), B = 760 * s, wc = Math.min(300, L - B - 24), x0 = (L - wc - 16 - B) / 2, X = x0 + wc + 16; return { police: 1.1, blocs: [
+  { src: [0, 38, 760, 364], X, Y: (420 - 364 * s) / 2, s },
+  { src: [790, 0, 270, 100], X: x0, Y: 40, s: Math.min(1.05, wc / 270), police: 1 }] }; })() : null);
 const ecrit = Apparitions(scene);      // ce qui apparaît pendant l'essai (effacé à chaque essai)
 const ecritR = Apparitions(scene);     // la colonne des résultats (gardée)
 const chrono = Chrono({ fin: FIN, moments, motifs, bouton: $('run'), bulle: $('feedback'), pont: () => pont,
@@ -137,7 +141,8 @@ function dessiner(c) {
     g.restore();
   });
   // Le cadre fixe s'affiche d'un coup : la voix peut lancer l'essai dès l'ouverture.
-  c.direct(() => c.texte('Le même glucose : avec ou sans dioxygène ?', 14, 26, { couleur: 'blanc', taille: 17 }));
+  if (MOS.actif()) c.direct(() => ['Le même glucose :', 'avec ou sans', 'dioxygène ?'].forEach((l, i) => c.texte(l, 800, 30 + i * 28, { couleur: 'blanc', taille: 22 })));   // tableau large : le titre en colonne à gauche
+  else c.direct(() => c.texte('Le même glucose : avec ou sans dioxygène ?', 14, 26, { couleur: 'blanc', taille: 17 }));
   c.texte('hyaloplasme', 28, 66, { couleur: 'faible', taille: 14 });
   c.repere('hyaloplasme', 20, 50, 110, 24, 'le hyaloplasme');
   c.texte(S.o2 ? 'mitochondrie' : 'mitochondrie à l’arrêt : pas de O₂', MITO.x, MITO.y + MITO.ry + 20, { couleur: S.o2 ? 'cyan' : 'rouge', taille: 14, align: 'center' });

@@ -74,9 +74,11 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  /* Agrandissement du 15 novembre 2026 : le cadre prend le format du tableau et la boîte de l'encre de l'image complète
+   * (fin du déroulé) remplit le tableau ; elle est remesurée à chaque changement de vue. */
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), { large: true, ajuster: true, complet: f => { const t = S.t; S.t = 1e6; try { f(); } finally { S.t = t; } } });
   const cadreBase = scene.cadre;
-  scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
+  scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; poser(k, M); return k; };
   M.scene = scene; M.craie = scene.craie;
   function calculer() {
     construire();
@@ -127,7 +129,7 @@ function Moteur(o) {
     p = p || {};
     const r = o.appliquer(p, M) || {};
     if (r.vue && o.vues.includes(r.vue) && r.vue !== S.vue) { S.vue = r.vue; r.change = true; r.vueChange = true; }
-    if (r.change) { calculer(); if (r.vueChange) scene.reecrire(); }
+    if (r.change) { calculer(); if (r.vueChange) { scene.boite = null; scene.reecrire(); } else scene.remesurer(); }
     noter('set_parameters', o.params(M));
     if (r.apres) r.apres();
     else if (r.change && !r.garder) start();
@@ -153,6 +155,29 @@ function Moteur(o) {
     setTimeout(() => { if (!S.running && S.t === 0 && !S.pause && !S.fait) start(); }, 900);
   };
   return M;
+}
+/* ── Tableau large (15 novembre 2026, « la simulation n'occupe qu'une bande étroite, textes minuscules ») ──────────────
+ * Sur un tableau large (scene.L ≥ 1000, écran de portable), une vue déclarée dans LARGE[vue] = { k, x, y, g } est agrandie
+ * k fois et posée en (x, y) du cadre ; chaque groupe g[nom] = [dx, dy] (la conclusion du bas, la suite d'un calcul…) est
+ * déplacé dans la place libre à droite (grp(c, nom, fn) entoure son dessin ET son repère, que le professeur pointe donc
+ * au bon endroit). Les autres vues, et tout le grand écran (L < 1000), gardent l'ajustement automatique. */
+const LARGE = {};
+let LG = null;
+function poser(c, M) {
+  const sc = M.scene, d = !sc.mesurant && sc.L >= 1000 && LARGE[M.S.vue];
+  LG = d || null; if (!d) return;
+  const s0 = Math.min(c.W / sc.L, c.H / 420), ox0 = (c.W - sc.L * s0) / 2, oy0 = (c.H - 420 * s0) / 2;
+  const cx = Math.max(0, (sc.L - (d.L || 1292)) / 2);   // tableau plus large (jusqu'à 1596) : la disposition est centrée
+  const ns = s0 * d.k, nox = ox0 + (d.x + cx) * s0, noy = oy0 + d.y * s0;
+  c.ctx.scale(1 / sc.s, 1 / sc.s); c.ctx.translate(-sc.ox, -sc.oy);   // défait le cadrage de l'ajustement
+  c.ctx.translate(nox, noy); c.ctx.scale(ns, ns);
+  sc.s = ns; sc.ox = nox; sc.oy = noy; c.echelle = ns;
+  c.cadre = { w: (sc.L - d.x) / d.k, h: (420 - d.y) / d.k, haut: 0 };
+}
+/** Dessine `fn` dans le groupe `nom` : déplacé sur un tableau large si la vue le demande. */
+function grp(c, nom, fn) {
+  const d = LG && LG.g && LG.g[nom]; if (!d) return fn();
+  c.ctx.save(); c.ctx.translate(d[0], d[1]); try { return fn(); } finally { c.ctx.restore(); }
 }
 /** Zone d’écriture du bas : le professeur efface les plus vieilles lignes (copie du modèle). */
 function zoneEcriture(c, M, liste, ys, o = {}) {
@@ -491,6 +516,19 @@ function axeTau(c, g, pas, d) {
   c.texte('τ', g.x0 + 10, g.y0 - g.h - 6, { taille: 19 });
 }
 
+/* Tableau large : la vue agrandie, la conclusion du bas à droite (sur deux lignes, conclusion2). */
+Object.assign(LARGE, {
+  dilution: { k: 1.12, x: 10, y: 0, g: { conclusion: [622, -216] } },
+  nature: { k: 1.12, x: 10, y: 0, g: { conclusion: [622, -218] } },
+  courbe: { k: 1.1, x: 10, y: 0, g: { phrase: [721, -224] } },
+});
+/** La conclusion encadrée en jaune, sur deux lignes (tableau large) ; (x, y) = coin haut gauche du cadre. */
+function conclusion2(c, x, y, l1, l2, w = 340) {
+  c.rect(x, y, w, 70, { couleur: 'jaune', largeur: 2, arrondi: 10 });
+  c.texte(l1, x + w / 2, y + 28, { couleur: 'jaune', taille: 20, align: 'center', max: w - 20 });
+  c.texte(l2, x + w / 2, y + 56, { couleur: 'jaune', taille: 20, align: 'center', max: w - 20 });
+}
+
 /* ── Vue dilution (exemple B) ─────────────────────────────────────────────────────────────────────────────────────── */
 const GD = { x0: 70, x1: 548, y0: 296, h: 200, max: .15, xs: [170, 320, 470], w: 62 };
 const KT = { y: 58, w: 124, h: 30 };
@@ -519,10 +557,11 @@ function vueDilution(c, M) {
     c.texte('la même K', 590, 214, { couleur: 'jaune', taille: 18 });
     c.texte('pour les trois (25 °C)', 590, 236, { couleur: 'jaune', taille: 16, max: 160 });
   });
-  M.etape(c, 'conclusion', () => {
+  M.etape(c, 'conclusion', () => grp(c, 'conclusion', () => {
+    if (LG) return conclusion2(c, 150, 368, 'même K :', 'plus C est petite, plus τ est grand');   // tableau large : à droite, sur deux lignes
     c.rect(150, 368, 460, 38, { couleur: 'jaune', largeur: 2, arrondi: 10 });
     c.texte('même K : plus C est petite, plus τ est grand', 380, 394, { couleur: 'jaune', taille: 20, align: 'center', max: 440 });
-  });
+  }));
   const vues = [];
   if (M.commence('barres')) vues.push('axe τ ; sous les barres : C = 1,0·10⁻² ; 5,0·10⁻³ ; 1,0·10⁻³ mol/L ; « acide éthanoïque, trois concentrations »');
   for (let k = 0; k < 3; k++) if (M.vu('taux_' + (k + 1))) vues.push(`barre ${k + 1} : τ = ${SOLS[k].tau} (pH = ${SOLS[k].pH})`);
@@ -555,10 +594,11 @@ function vueNature(c, M) {
       c.texte(`K = ${a.K}`, g.xs[k], g.y0 + 42, { couleur: 'jaune', taille: 14, align: 'center' });
     });
   });
-  M.etape(c, 'conclusion', () => {
+  M.etape(c, 'conclusion', () => grp(c, 'conclusion', () => {
+    if (LG) return conclusion2(c, 150, 370, 'même C :', 'plus K est grande, plus τ est grand');
     c.rect(150, 370, 460, 38, { couleur: 'jaune', largeur: 2, arrondi: 10 });
     c.texte('même C : plus K est grande, plus τ est grand', 380, 396, { couleur: 'jaune', taille: 20, align: 'center', max: 440 });
-  });
+  }));
   const vues = [];
   if (M.commence('deux_acides')) vues.push('même C = 1,0·10⁻² mol/L ; bécher 1 : acide éthanoïque CH₃COOH ; bécher 2 : acide méthanoïque HCOOH');
   if (M.commence('constantes')) vues.push('K = 1,6·10⁻⁵ (éthanoïque) ; K = 1,8·10⁻⁴ (méthanoïque)');
@@ -618,10 +658,11 @@ function vueCourbe(c, M) {
       c.texte(AIDE_POIGNEE, PX, 302, { couleur: 'faible', taille: 14, max: 190 });
     });
   }
-  M.etape(c, 'phrase', () => {
+  M.etape(c, 'phrase', () => grp(c, 'phrase', () => {
+    if (LG) return conclusion2(c, 52, 384, 'τ dépend de K (nature de la réaction)', 'et de l’état initial (C)', 380);
     c.rect(52, 384, 656, 32, { couleur: 'jaune', largeur: 2, arrondi: 10 });
     c.texte('τ dépend de K (nature de la réaction) et de l’état initial (C)', 380, 406, { couleur: 'jaune', taille: 19, align: 'center', max: 630 });
-  });
+  }));
   M.cb = { C, taus };
   const vues = [];
   if (M.commence('axes')) vues.push('axes : τ de 0 à 1 ; C de 1,0·10⁻⁴ à 1,0·10⁻¹ mol/L (échelle : puissances de dix)');
@@ -708,12 +749,12 @@ function reperes(c, M) {
     for (let k = 0; k < 3; k++) R('barre_' + (k + 1), g.xs[k] - 60, g.y0 - SOLS[k].v / g.max * g.h - 30, 120, SOLS[k].v / g.max * g.h + 80,
       `la barre ${k + 1} : C = ${SOLS[k].C} mol/L, pH = ${SOLS[k].pH}, τ = ${SOLS[k].tau}${q('taux_' + (k + 1))}`);
     R('constante', g.xs[0] - KT.w / 2 - 4, KT.y - 4, g.xs[2] - g.xs[0] + KT.w + 8, KT.h + 8, `les trois étiquettes identiques « K = 1,6·10⁻⁵ »${q('constante')}`);
-    R('conclusion', 150, 368, 460, 38, `« même K : plus C est petite, plus τ est grand »${q('conclusion')}`);
+    grp(c, 'conclusion', () => R('conclusion', 150, 368, LG ? 340 : 460, LG ? 70 : 38, `« même K : plus C est petite, plus τ est grand »${q('conclusion')}`));
   } else if (v === 'nature') {
     ACS.forEach((a, k) => { const B = BN(k); R('becher_' + (k + 1), B.x - 30, B.y - 6, B.w + 60, 246, `le bécher ${k + 1} : ${a.nom} (${a.f}), C = 1,0·10⁻² mol/L, K = ${a.K}, pH = ${a.pH}, τ = ${a.tau}${q('deux_acides')}`); });
     R('constantes', 30, 262, 320, 28, `« K = 1,6·10⁻⁵ » et « K = 1,8·10⁻⁴ »${q('constantes')}`);
     R('barres', GN.x0 - 40, GN.y0 - GN.h - 24, GN.x1 - GN.x0 + 50, GN.h + 72, `les deux barres τ : 0,039 (éthanoïque) et 0,13 (méthanoïque)${q('barres')}`);
-    R('conclusion', 150, 370, 460, 38, `« même C : plus K est grande, plus τ est grand »${q('conclusion')}`);
+    grp(c, 'conclusion', () => R('conclusion', 150, 370, LG ? 340 : 460, LG ? 70 : 38, `« même C : plus K est grande, plus τ est grand »${q('conclusion')}`));
   } else if (v === 'courbe') {
     const g = GC, C = cVue(), taus = KS.map(K => tauDe(K, C.v)), x = XC(C.l);
     R('axe_taux', g.x0 - 40, g.y0 - g.h - 22, 52, g.h + 30, `l’axe τ, de 0 à 1${q('axes')}`);
@@ -723,7 +764,7 @@ function reperes(c, M) {
       R('courbe_' + (i + 1), g.x0, Math.min(y1, y2) - 8, g.w, Math.abs(y2 - y1) + 16, `la courbe ${i ? 'jaune' : 'bleu clair'} : ${a.nom}, K = ${a.K}${q('courbe_' + (i + 1))}`);
     });
     R('poignee_C', x - 16, g.y0 - 16, 32, 32, `la poignée : glisser l’anneau jaune sur l’axe C (C = ${C.txt} mol/L ; τ = ${tauTxt(taus[0])} et ${tauTxt(taus[1])} ; de 1,0·10⁻⁴ à 1,0·10⁻¹ mol/L)${q('lecture')}`);
-    R('phrase', 52, 384, 656, 32, `« τ dépend de K (nature de la réaction) et de l’état initial (C) »${q('phrase')}`);
+    grp(c, 'phrase', () => R('phrase', 52, 384, LG ? 380 : 656, LG ? 70 : 32, `« τ dépend de K (nature de la réaction) et de l’état initial (C) »${q('phrase')}`));
   } else {
     const T = TBD, W = T.xs[3] - T.x;
     R('titre', T.x, T.y, W, T.h, `l’en-tête « quand on dilue » et le bécher où l’on ajoute de l’eau${q('titre')}`);

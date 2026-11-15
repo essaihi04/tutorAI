@@ -261,16 +261,19 @@ function dessinerGraphe(c) {
 
 function dessinerTexte(c) {
   const X = 14;
-  c.repere('definition', X - 4, 336, 560, 46, 'la définition de l’activité et du becquerel');
-  quand(c, 'une_seconde', .9, () => c.texte('en 1 s : 400 désintégrations → a = 400 Bq', X, 328, { taille: 17, couleur: 'jaune', duree: .8 }));
+  // Tableau large : ces lignes passent dans la colonne de droite (5 cases), coupées à la ligne.
+  const ligne = (s, x, y, o, rang) => RadioLarge.ligne(LARGE, c, s, x, y, o, rang, 5);
+  if (LARGE) c.repere('definition', RadioLarge.X0 - 6, 14 + 392 / 5, RadioLarge.COLW + 12, 2 * 392 / 5, 'la définition de l’activité et du becquerel');
+  else c.repere('definition', X - 4, 336, 560, 46, 'la définition de l’activité et du becquerel');
+  quand(c, 'une_seconde', .9, () => ligne('en 1 s : 400 désintégrations → a = 400 Bq', X, 328, { taille: 17, couleur: 'jaune', duree: .8 }, 0));
   quand(c, 'definition', 2.0, () => {
-    c.texte('activité a : nombre de désintégrations par seconde', X, 354, { taille: 18, duree: 1.1 });
-    c.texte('1 Bq = 1 désintégration par seconde', X, 378, { taille: 18, couleur: 'vert', duree: .8 });
+    ligne('activité a : nombre de désintégrations par seconde', X, 354, { taille: 18, duree: 1.1 }, 1);
+    ligne('1 Bq = 1 désintégration par seconde', X, 378, { taille: 18, couleur: 'vert', duree: .8 }, 2);
   });
-  quand(c, 'plus_tard', 1.0, () => c.texte(`${P.t_j} jours plus tard : a = 400·2^{−${P.t_j}/8} = ${Math.round(activite(P.t_j))} Bq`, 446, 328, { taille: 16, couleur: 'jaune', duree: .8 }));
+  quand(c, 'plus_tard', 1.0, () => ligne(`${P.t_j} jours plus tard : a = 400·2^{−${P.t_j}/8} = ${Math.round(activite(P.t_j))} Bq`, 446, 328, { taille: 16, couleur: 'jaune', duree: .8 }, 3));
   quand(c, 'proportionnelle', 1.8, () => {
     const f = Math.pow(2, -P.t_j / TD);
-    c.texte(P.t_j === 8 ? 'a = λ·N : moitié des noyaux, moitié de l’activité' : `a = λ·N : N et a sont multipliés par le même nombre (${fr(f, 2)})`, X, 406, { taille: 18, couleur: 'orange', duree: 1.2 });
+    ligne(P.t_j === 8 ? 'a = λ·N : moitié des noyaux, moitié de l’activité' : `a = λ·N : N et a sont multipliés par le même nombre (${fr(f, 2)})`, X, 406, { taille: 18, couleur: 'orange', duree: 1.2 }, 4);
   });
 }
 
@@ -280,7 +283,13 @@ function dessiner(c) {
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(53); dessiner(c); return c.fin(); });
+/* Tableau large (15 novembre 2026) : le compteur et la courbe agrandis à gauche, les phrases à droite. */
+let LARGE = false;
+const scene = RadioLarge.brancher(window.OndesTableau.Scene(canvas, (c) => {
+  scene.cadre(53); LARGE = RadioLarge.large(scene);
+  RadioLarge.dessiner(c, scene, 53, LARGE ? RadioLarge.blocsStd(scene, [0, 0, 760, 312]) : null, () => dessiner(c));
+  return c.fin();
+}, { large: true }));
 scene.avancer = dt => {
   if (!S.running) return false;
   if (S.libre) { S.libre = false; }

@@ -53,33 +53,53 @@ const T63 = -TAU * Math.log(1 - .63);                        // ≈ τ
 
 /* ── Géométrie (cadre 760 × 420) ───────────────────────────────────────── */
 const RG = { x: 8, y: 40, w: 500, h: 372 }, RL = { x: 516, y: 40, w: 236, h: 372 };
-const O = { x: 66, y: 352 }, AXL = 396, AYL = 268, TMAX = 12, IMAX = 120, UMAX = 7;
+const O = { x: 66, y: 352 }, TMAX = 12, IMAX = 120, UMAX = 7;
+let AXL = 396, AYL = 268;
+/* Disposition selon la largeur du tableau (15 novembre 2026 : « la simulation n'occupe qu'une bande étroite, textes
+ * minuscules »). Tableau large (L ≥ 1000, écran d'ordinateur portable) : le graphe s'étend sur toute la largeur
+ * libre, la colonne « Lecture » à droite est plus large et écrite plus gros (lignes espacées en proportion).
+ * Sinon (grand écran, déjà haut) : la disposition d'origine 760 × 420. */
+let D = { large: false, k: 1, kl: 1, ky: 1 };
+function disposer(L) {
+  if (L < 1000) {
+    Object.assign(RG, { x: 8, w: 500 }); Object.assign(RL, { x: 516, w: 236 }); O.x = 66; AXL = 396;
+    D = { large: false, L, k: 1, kl: 1, ky: 1 };
+  } else {
+    const lw = Math.round(L * .26);
+    Object.assign(RL, { x: L - lw - 6, w: lw }); Object.assign(RG, { x: 8, w: L - lw - 22 }); O.x = 82; AXL = RG.w - 120;
+    D = { large: true, L, k: 1.3, kl: 1.22, ky: 1.08 };
+  }
+  LX = RL.x + 10; LW = RL.w - 20;
+}
+const T = n => Math.round(n * D.k);                 // taille d'un texte du graphe
+const ly = y => (D.large ? 70 + (y - 64) * D.ky : y); // ordonnée d'une ligne de la colonne « Lecture »
 const PX = t => O.x + t * AXL / TMAX;
 const PI_ = i => O.y - i * AYL / IMAX;        // ordonnée d’un courant (mA)
 const PU = u => O.y - u * AYL / UMAX;          // ordonnée d’une tension (V)
-const LX = RL.x + 8, LW = RL.w - 16;
+let LX = RL.x + 8, LW = RL.w - 16;
 const marque = (c, nom) => { MM[nom] = c.cur; };
-const lire = (c, y, s, o = {}) => c.texte(s, LX, y, { couleur: 'blanc', taille: 16, max: LW, ...o });
+const lire = (c, y, s, o = {}) => c.texte(s, LX, ly(y), { couleur: 'blanc', max: LW, ...o, taille: Math.round((o.taille ?? 16) * D.kl) });
+const encadre = (c, y, w, h) => c.rect(LX - 4, ly(y), w * D.kl, h * (D.large ? 1.18 : 1), { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
 const courbeI = (c, o = {}) => c.courbe(u => { const t = u * TMAX; return [PX(t), PI_(iT(t))]; }, 90, { couleur: 'vert', largeur: 2.6, duree: 1.6, ...o });
 
 function dessiner(c) {
-  scene.cadre(31); MM = {};
+  scene.cadre(31); disposer(scene.L); MM = {};
   const ub = S.vue === 'ub';
-  c.texte(ub ? 'Établissement : u_b(t) aux bornes de la bobine' : `Établissement : i(t) — ${TITRES[S.vue]}`, RG.x + 6, 30, { couleur: 'cyan', taille: 17, max: RG.w - 10, duree: .9 });
+  c.texte(ub ? 'Établissement : u_b(t) aux bornes de la bobine' : `Établissement : i(t) — ${TITRES[S.vue]}`, RG.x + 6, 30, { couleur: 'cyan', taille: T(17), max: RG.w - 10, duree: .9 });
   c.rect(RG.x, RG.y, RG.w, RG.h, { couleur: 'tresfaible', arrondi: 10, duree: .5 });
-  c.texte('Lecture', RL.x + 6, 30, { couleur: 'cyan', taille: 17, duree: .3 });
+  c.texte('Lecture', RL.x + 6, 30, { couleur: 'cyan', taille: T(17), duree: .3 });
   c.rect(RL.x, RL.y, RL.w, RL.h, { couleur: 'tresfaible', arrondi: 10, duree: .4 });
   // Axe des temps : graduations de 1 ms, nombres à 5 et 10 ms (aucun nombre sur τ = 2 ms).
   const LT = AXL + 16, tg = [];
   for (let k = 1; k <= TMAX; k++) tg.push([(PX(k) - O.x) / LT, k % 5 === 0 ? String(k) : null]);
-  c.axe(O.x, O.y, O.x + LT, O.y, tg, { taille: 13 });
+  c.axe(O.x, O.y, O.x + LT, O.y, tg, { taille: T(13) });
   const LY = AYL + 14, yg = [];
   if (ub) for (let v = 1; v <= UMAX; v++) yg.push([(O.y - PU(v)) / LY, String(v)]);
   else for (let v = 10; v <= IMAX; v += 10) yg.push([(O.y - PI_(v)) / LY, v % 20 === 0 ? String(v) : null]);
-  c.axe(O.x, O.y, O.x, O.y - LY, yg, { taille: 13, vertical: true });
-  c.texte('0', O.x - 8, O.y + 18, { couleur: 'faible', taille: 13, align: 'right' });
-  c.texte(ub ? 'u_b (V)' : 'i (mA)', O.x + 10, 66, { couleur: 'blanc', taille: 16 });
-  c.texte('t (ms)', RG.x + RG.w - 8, O.y + 40, { couleur: 'blanc', taille: 16, align: 'right' });
+  c.axe(O.x, O.y, O.x, O.y - LY, yg, { taille: T(13), vertical: true });
+  c.texte('0', O.x - 8, O.y + 18, { couleur: 'faible', taille: T(13), align: 'right' });
+  c.texte(ub ? 'u_b (V)' : 'i (mA)', O.x + 10, 66, { couleur: 'blanc', taille: T(16) });
+  c.texte('t (ms)', RG.x + RG.w - 8, O.y + 40, { couleur: 'blanc', taille: T(16), align: 'right' });
   lire(c, 64, 'E = 6 V ; R = 50 Ω ; r = 10 Ω', { couleur: 'faible', taille: 14, duree: .6 });
   lire(c, 84, 'L = 0,12 H', { couleur: 'faible', taille: 14, duree: .3 });
   c.pause(.3);
@@ -92,11 +112,11 @@ function dessiner(c) {
 }
 function etiquetteTau(c, t, txt = 'τ') {
   c.cercle(PX(t), O.y, 5, { couleur: 'cyan', largeur: 1.8 });
-  c.texte(txt, PX(t), O.y + 40, { couleur: 'cyan', taille: 18, align: 'center' });
+  c.texte(txt, PX(t), O.y + 40, { couleur: 'cyan', taille: T(18), align: 'center' });
 }
 function asymptote(c) {
   c.ligne(O.x, PI_(I0), PX(TMAX), PI_(I0), { couleur: 'blanc', largeur: 1.6, pointille: [8, 6] });
-  c.texte('I_0 = 100 mA', PX(8.8), PI_(I0) - 10, { couleur: 'blanc', taille: 15, align: 'right' });
+  c.texte('I_0 = 100 mA', PX(8.8), PI_(I0) - 10, { couleur: 'blanc', taille: T(15), align: 'right' });
 }
 /** Vue « trace » : la courbe se trace, l’asymptote I₀, puis 5τ. */
 function vueTrace(c) {
@@ -114,10 +134,10 @@ function vueTrace(c) {
   const x5 = PX(5 * TAU), y99 = PI_(.99 * I0);
   c.ligne(x5, O.y, x5, PI_(112), { couleur: 'cyan', largeur: 1.8, pointille: [7, 5] });
   c.cercle(x5, y99, 5, { couleur: 'cyan', largeur: 1.8 });
-  c.texte('5τ', x5, O.y + 40, { couleur: 'cyan', taille: 18, align: 'center' });
-  c.texte('i ≈ 0,99·I_0', x5 + 8, PI_(85), { couleur: 'cyan', taille: 15 });
-  c.texte('régime transitoire', (O.x + x5) / 2 + 40, O.y - 24, { couleur: 'faible', taille: 14, align: 'center' });
-  c.texte('permanent', x5 + 8, O.y - 24, { couleur: 'cyan', taille: 14 });
+  c.texte('5τ', x5, O.y + 40, { couleur: 'cyan', taille: T(18), align: 'center' });
+  c.texte('i ≈ 0,99·I_0', x5 + 8, PI_(85), { couleur: 'cyan', taille: T(15) });
+  c.texte('régime transitoire', (O.x + x5) / 2 + 40, O.y - 24, { couleur: 'faible', taille: T(14), align: 'center' });
+  c.texte('permanent', x5 + 8, O.y - 24, { couleur: 'cyan', taille: T(14) });
   lire(c, 266, 'τ = L/(R + r) = 0,12/60', { couleur: 'faible', taille: 15 });
   lire(c, 288, 'τ = 2 ms', { couleur: 'faible', taille: 15 });
   lire(c, 322, 'à 5τ = 10 ms :', { couleur: 'cyan', taille: 17 });
@@ -142,7 +162,7 @@ function vueTangente(c) {
   lire(c, 194, 'la tangente à l’origine', { couleur: 'cyan' });
   lire(c, 216, 'coupe l’asymptote en t = τ', { couleur: 'cyan' });
   lire(c, 256, 'on lit τ ≈ 2 ms', { couleur: 'blanc', taille: 19 });
-  c.rect(LX - 4, 234, 140, 32, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  encadre(c, 234, 140, 32);
   lire(c, 296, 'τ = L/(R + r) = 0,12/60', { couleur: 'faible', taille: 14 });
   lire(c, 318, 'τ = 2·10⁻³ s = 2 ms', { couleur: 'faible', taille: 14 });
   marque(c, 'tangente');
@@ -156,7 +176,7 @@ function vuePourcent(c) {
   c.pause(.4);
   c.ligne(O.x, y63, x63, y63, { couleur: 'cyan', largeur: 1.8, pointille: [7, 5] });
   c.cercle(x63, y63, 5, { couleur: 'cyan', largeur: 1.8 });
-  c.texte('0,63·I_0', x63 + 12, y63 + 22, { couleur: 'cyan', taille: 15 });
+  c.texte('0,63·I_0', x63 + 12, y63 + 22, { couleur: 'cyan', taille: T(15) });
   lire(c, 156, 'à t = τ : i = 0,63·I_0', { couleur: 'blanc', taille: 16 });
   lire(c, 186, '0,63 × 100 = 63 mA', { couleur: 'cyan', taille: 19 });
   lire(c, 210, 'horizontale jusqu’à la courbe', { couleur: 'faible', taille: 14 });
@@ -167,14 +187,14 @@ function vuePourcent(c) {
   etiquetteTau(c, T63);
   lire(c, 266, 'puis verticale vers l’axe', { couleur: 'faible', taille: 14 });
   lire(c, 298, 'τ ≈ 2 ms', { couleur: 'blanc', taille: 21 });
-  c.rect(LX - 4, 274, 100, 34, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  encadre(c, 274, 100, 34);
   marque(c, 'projection');
 }
 /** Vue « ub » : u_b(0) = E = 6 V, descente, palier r·I₀ = 1 V. */
 function vueUb(c) {
   c.cercle(O.x, PU(E), 6, { couleur: 'vert', largeur: 2.4 });
   c.ligne(O.x, PU(E), O.x + 26, PU(E), { couleur: 'faible', largeur: 1.2, pointille: [3, 4] });
-  c.texte('E = 6 V', O.x + 14, PU(E) - 12, { couleur: 'vert', taille: 16 });
+  c.texte('E = 6 V', O.x + 14, PU(E) - 12, { couleur: 'vert', taille: T(16) });
   lire(c, 120, 'u_b = L·di/dt + r·i', { couleur: 'blanc', taille: 18 });
   lire(c, 150, 'à t = 0 : i = 0 et u_R = 0', { couleur: 'faible', taille: 15 });
   lire(c, 174, 'u_b(0) = E = 6 V', { couleur: 'vert', taille: 17 });
@@ -186,11 +206,11 @@ function vueUb(c) {
   marque(c, 'ub_descente');
   c.pause(.4);
   c.ligne(O.x, PU(r * I0 / 1000), PX(TMAX), PU(r * I0 / 1000), { couleur: 'blanc', largeur: 1.6, pointille: [8, 6] });
-  c.texte('r·I_0 = 1 V', PX(TMAX) - 4, PU(1) - 10, { couleur: 'blanc', taille: 15, align: 'right' });
+  c.texte('r·I_0 = 1 V', PX(TMAX) - 4, PU(1) - 10, { couleur: 'blanc', taille: T(15), align: 'right' });
   lire(c, 268, 'régime permanent : di/dt = 0', { couleur: 'faible', taille: 15 });
   lire(c, 294, 'u_b = r·I_0 = 10 × 0,1', { couleur: 'blanc', taille: 16 });
   lire(c, 322, 'u_b = 1 V', { couleur: 'blanc', taille: 20 });
-  c.rect(LX - 4, 300, 92, 32, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  encadre(c, 300, 92, 32);
   lire(c, 360, 'la bobine agit comme un', { couleur: 'faible', taille: 14 });
   lire(c, 380, 'résistor de résistance r', { couleur: 'faible', taille: 14 });
   marque(c, 'ub_fin');
@@ -215,12 +235,13 @@ const canvas = $('canvas');
 const scene = window.OndesTableau.Scene(canvas, dessiner);
 const craie = scene.craie;
 scene.cadre = function (graine) {
-  const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  const W = craie.W, H = craie.H, VH = 420;
+  const VW = Math.round(Math.min(760 * 2.1, Math.max(760, VH * W / Math.max(1, H)))); scene.L = VW;
   craie.debut(graine, S.t);
   const s = Math.min(W / VW, H / VH) || 1;
   scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
   craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
-  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+  craie.echelle = s; craie.tailleMin = 15; craie.cadre = { w: VW, h: VH, haut: 0 };
   return craie;
 };
 function calculer() { const t = S.t, rn = S.running; S.t = 1e6; S.running = false; try { dessiner(craie); dessiner(craie); } finally { S.t = t; S.running = rn; } scene.sale = true; }

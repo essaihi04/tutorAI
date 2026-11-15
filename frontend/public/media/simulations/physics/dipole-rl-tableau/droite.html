@@ -37,26 +37,47 @@ const MESURES = [[.5, .03], [1.5, -.04], [2.5, .03], [3.5, -.03], [4.5, .04], [5
 
 /* ── Géométrie (cadre 760 × 420) ───────────────────────────────────────── */
 const RG = { x: 8, y: 40, w: 500, h: 372 }, RL = { x: 516, y: 40, w: 236, h: 372 };
-const O = { x: 74, y: 350 }, AXL = 392, AYL = 266, IMAX = 7, DMAX = 3.5;
+const O = { x: 74, y: 350 };
+const IMAX = 7, DMAX = 3.5;
+let AXL = 392, AYL = 266;
+/* Disposition selon la largeur du tableau (15 novembre 2026 : « la simulation n'occupe qu'une bande étroite, textes
+ * minuscules »). Tableau large (L ≥ 1000, écran d'ordinateur portable) : le graphe s'étend sur toute la largeur
+ * libre, la colonne « Lecture » à droite est plus large et écrite plus gros (lignes espacées en proportion).
+ * Sinon (grand écran, déjà haut) : la disposition d'origine 760 × 420. */
+let D = { large: false, k: 1, kl: 1, ky: 1 };
+function disposer(L) {
+  if (L < 1000) {
+    Object.assign(RG, { x: 8, w: 500 }); Object.assign(RL, { x: 516, w: 236 }); O.x = 74; AXL = 392;
+    D = { large: false, L, k: 1, kl: 1, ky: 1 };
+  } else {
+    const lw = Math.round(L * .26);
+    Object.assign(RL, { x: L - lw - 6, w: lw }); Object.assign(RG, { x: 8, w: L - lw - 22 }); O.x = 90; AXL = RG.w - 124;
+    D = { large: true, L, k: 1.3, kl: 1.2, ky: 1.03 };
+  }
+  LX = RL.x + 8; LW = RL.w - 16;
+}
+const T = n => Math.round(n * D.k);                 // taille d'un texte du graphe
+const ly = y => (D.large ? 70 + (y - 64) * D.ky : y); // ordonnée d'une ligne de la colonne « Lecture »
 const PX = i => O.x + i * AXL / IMAX, PY = d => O.y - d * AYL / DMAX;
-const LX = RL.x + 8, LW = RL.w - 16;
+let LX = RL.x + 8, LW = RL.w - 16;
 const marque = (c, nom) => { MM[nom] = c.cur; };
-const lire = (c, y, s, o = {}) => c.texte(s, LX, y, { couleur: 'blanc', taille: 16, max: LW, ...o });
+const lire = (c, y, s, o = {}) => c.texte(s, LX, ly(y), { couleur: 'blanc', max: LW, ...o, taille: Math.round((o.taille ?? 16) * D.kl) });
+const encadre = (c, y, w, h) => c.rect(LX - 4, ly(y), w * D.kl, h * (D.large ? 1.18 : 1), { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
 
 function dessiner(c) {
-  scene.cadre(71); MM = {};
-  c.texte('2024 N : la droite di/dt = f(i)', RG.x + 6, 30, { couleur: 'cyan', taille: 17, max: RG.w - 10, duree: .9 });
+  scene.cadre(71); disposer(scene.L); MM = {};
+  c.texte('2024 N : la droite di/dt = f(i)', RG.x + 6, 30, { couleur: 'cyan', taille: T(17), max: RG.w - 10, duree: .9 });
   c.rect(RG.x, RG.y, RG.w, RG.h, { couleur: 'tresfaible', arrondi: 10, duree: .5 });
   c.texte('Lecture', RL.x + 6, 30, { couleur: 'cyan', taille: 17, duree: .3 });
   c.rect(RL.x, RL.y, RL.w, RL.h, { couleur: 'tresfaible', arrondi: 10, duree: .4 });
   const LT = AXL + 16, ig = [], LY = AYL + 16, dg = [];
   for (let k = 1; k <= IMAX; k++) ig.push([(PX(k) - O.x) / LT, String(k)]);
-  c.axe(O.x, O.y, O.x + LT, O.y, ig, { taille: 13 });
+  c.axe(O.x, O.y, O.x + LT, O.y, ig, { taille: T(13) });
   for (let k = 1; k <= 7; k++) dg.push([(O.y - PY(k / 2)) / LY, k % 2 === 0 ? String(k / 2) : null]);
-  c.axe(O.x, O.y, O.x, O.y - LY, dg, { taille: 13, vertical: true });
-  c.texte('0', O.x - 8, O.y + 18, { couleur: 'faible', taille: 13, align: 'right' });
-  c.texte('di/dt (10³ A/s)', O.x + 10, 64, { couleur: 'blanc', taille: 16 });
-  c.texte('i (mA)', RG.x + RG.w - 8, O.y + 42, { couleur: 'blanc', taille: 16, align: 'right' });
+  c.axe(O.x, O.y, O.x, O.y - LY, dg, { taille: T(13), vertical: true });
+  c.texte('0', O.x - 8, O.y + 18, { couleur: 'faible', taille: T(13), align: 'right' });
+  c.texte('di/dt (10³ A/s)', O.x + 10, 64, { couleur: 'blanc', taille: T(16) });
+  c.texte('i (mA)', RG.x + RG.w - 8, O.y + 42, { couleur: 'blanc', taille: T(16), align: 'right' });
   lire(c, 64, 'E = 6 V ; bobine (L, r) et R_1', { couleur: 'faible', taille: 14, duree: .6 });
   lire(c, 92, 'di/dt + (1/τ)·i = E/L', { couleur: 'blanc', taille: 17 });
   c.pause(.3);
@@ -73,27 +94,27 @@ function dessiner(c) {
   c.pause(.4);
   // ordonnee : E/L = 3·10³ A/s → L = 2 mH.
   c.cercle(PX(0), PY(3), 7, { couleur: 'cyan', largeur: 2 });
-  c.texte('E/L = 3·10³ A/s', PX(0) + 14, PY(3) - 12, { couleur: 'cyan', taille: 16 });
+  c.texte('E/L = 3·10³ A/s', PX(0) + 14, PY(3) - 12, { couleur: 'cyan', taille: T(16) });
   lire(c, 206, 'i = 0 : di/dt = E/L = 3·10³ A/s', { couleur: 'cyan', taille: 15 });
   lire(c, 230, 'L = 6/(3·10³) = 2·10⁻³ H', { couleur: 'cyan', taille: 15 });
   lire(c, 256, 'L = 2 mH', { couleur: 'blanc', taille: 19 });
-  c.rect(LX - 4, 236, 92, 28, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  encadre(c, 236, 92, 28);
   marque(c, 'ordonnee');
   c.pause(.4);
   // pente : triangle Δi = 2 mA, Δ(di/dt) = −1·10³ A/s.
   c.ligne(PX(2), PY(2), PX(4), PY(2), { couleur: 'cyan', largeur: 1.6, pointille: [5, 4] });
   c.ligne(PX(4), PY(2), PX(4), PY(1), { couleur: 'cyan', largeur: 1.6, pointille: [5, 4] });
-  c.texte('Δi = 2 mA', PX(3), PY(2) - 10, { couleur: 'cyan', taille: 14, align: 'center' });
-  c.texte('−1·10³ A/s', PX(4) + 8, PY(1.5) + 5, { couleur: 'cyan', taille: 14 });
+  c.texte('Δi = 2 mA', PX(3), PY(2) - 10, { couleur: 'cyan', taille: T(14), align: 'center' });
+  c.texte('−1·10³ A/s', PX(4) + 8, PY(1.5) + 5, { couleur: 'cyan', taille: T(14) });
   lire(c, 290, 'pente = −1·10³/(2·10⁻³)', { couleur: 'cyan', taille: 15 });
   lire(c, 312, 'pente = −5·10⁵ s⁻¹ = −1/τ', { couleur: 'cyan', taille: 15 });
   lire(c, 336, 'τ = 2·10⁻⁶ s = 2 µs', { couleur: 'blanc', taille: 18 });
-  c.rect(LX - 4, 316, 162, 28, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  encadre(c, 316, 162, 28);
   marque(c, 'pente');
   c.pause(.4);
   // abscisse : di/dt = 0 → i = I₀ = 6 mA.
   c.cercle(PX(6), PY(0), 7, { couleur: 'cyan', largeur: 2 });
-  c.texte('I_0', PX(6), O.y + 40, { couleur: 'cyan', taille: 18, align: 'center' });
+  c.texte('I_0', PX(6), O.y + 40, { couleur: 'cyan', taille: T(18), align: 'center' });
   lire(c, 368, 'di/dt = 0 : régime permanent', { couleur: 'faible', taille: 14 });
   lire(c, 392, 'i = I_0 = 6 mA', { couleur: 'cyan', taille: 18 });
   marque(c, 'abscisse');
@@ -117,12 +138,13 @@ const canvas = $('canvas');
 const scene = window.OndesTableau.Scene(canvas, dessiner);
 const craie = scene.craie;
 scene.cadre = function (graine) {
-  const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  const W = craie.W, H = craie.H, VH = 420;
+  const VW = Math.round(Math.min(760 * 2.1, Math.max(760, VH * W / Math.max(1, H)))); scene.L = VW;
   craie.debut(graine, S.t);
   const s = Math.min(W / VW, H / VH) || 1;
   scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
   craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
-  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+  craie.echelle = s; craie.tailleMin = 15; craie.cadre = { w: VW, h: VH, haut: 0 };
   return craie;
 };
 function calculer() { const t = S.t, rn = S.running; S.t = 1e6; S.running = false; try { dessiner(craie); dessiner(craie); } finally { S.t = t; S.running = rn; } scene.sale = true; }

@@ -12,6 +12,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="/media/simulations/maths/commun/exposants.js"></script>
 <script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/ln-tableau/large.js"></script>
 <script>
 /*
  * Cours « Fonctions logarithmiques » (math_ch5_fonctions_ln) : les rappels d'ouverture (audit « rythme et départ de zéro »,
@@ -25,6 +26,10 @@
  */
 const { fr, peindre, bloc } = MathsTableau;
 const temps = (c) => (Number.isFinite(c.t) ? c.t : Infinity);
+/* Tableau large (15 novembre 2026) : figures étirées sur la largeur, colonnes de texte reportées et agrandies (Z : ce qui
+ * est écrit autour de (x0 ; y0) passe en (nx ; ny), k fois plus grand) ; hors du tableau large, rien ne change. */
+const LARGE = () => LnLarge.L >= 1000;
+const Z = (c, x0, y0, k, nx, ny, fn) => LnLarge.colonne(c, x0, y0, LARGE() ? k : 1, LARGE() ? nx : x0, LARGE() ? ny : y0, fn);
 
 /** Tangente en (x0 ; f(x0)) de pente m, segment de demi-longueur d (en x). */
 function tangente(c, G, f, m, x0, d, couleur) {
@@ -35,8 +40,9 @@ function tangente(c, G, f, m, x0, d, couleur) {
 const primitive = {
   titre: 'Une primitive : F’ = f',
   dessiner(c, K) {
-    K.titre('Rappel : une primitive');
-    const G = K.axes({ x0: 50, y0: 60, w: 330, h: 300, xmin: -0.6, xmax: 2.6, ymin: -1, ymax: 10, gx: [[1, '1'], [2, '2']], gy: [[1, '1'], [4, '4'], [7, '7']] });
+    const LL = LnLarge.ouvrir(c), CX = LARGE() ? LL / 2 : 380;
+    LnLarge.titre(c, K, 'Rappel : une primitive');
+    const G = K.axes({ x0: 50, y0: 60, w: LARGE() ? 540 : 330, h: 300, xmin: -0.6, xmax: 2.6, ymin: -1, ymax: 10, gx: [[1, '1'], [2, '2']], gy: [[1, '1'], [4, '4'], [7, '7']] });
     const F = (x) => x * x, F3 = (x) => x * x + 3;
     K.anime(1.8, (p) => K.courbePart(G, F, -0.5, 2.5, p, { couleur: 'cyan' }));
     c.texte('F(x) = x²', G.X(2.05), G.Y(6.2), { couleur: 'cyan', taille: 19 });
@@ -51,17 +57,21 @@ const primitive = {
     c.direct(() => {
       tangente(c, G, F, 2 * xm, xm, 0.45, 'jaune');
       K.rond(G, xm, F(xm), true, 'jaune');
-      c.texte(`en x = ${fr(xm, 1)} : pente = ${fr(2 * xm, 1)}`, 420, 90, { couleur: 'jaune', taille: 19 });
+      Z(c, 410, 60, 1.2, 660, 60, () => c.texte(`en x = ${fr(xm, 1)} : pente = ${fr(2 * xm, 1)}`, 420, 90, { couleur: 'jaune', taille: 19 }));
     });
-    c.texte('pente de la tangente = 2x', 420, 120, { couleur: 'jaune', taille: 19 });
-    c.repere('pente', 410, 66, 330, 64, 'la pente de la tangente');
+    Z(c, 410, 60, 1.2, 660, 60, () => {
+      c.texte('pente de la tangente = 2x', 420, 120, { couleur: 'jaune', taille: 19 });
+      c.repere('pente', 410, 66, 330, 64, 'la pente de la tangente');
+    });
     K.marque('pente');
     c.pause(.3);
-    K.lignes(420, 166, [
-      { t: 'F’(x) = 2x', couleur: 'blanc', taille: 20 },
-      { t: 'f(x) = 2x  :  F’ = f', couleur: 'vert', taille: 20 },
-      { t: 'F est une primitive de f', couleur: 'vert', taille: 20, repere: 'definition' },
-    ], 30);
+    Z(c, 410, 60, 1.2, 660, 60, () => {
+      K.lignes(420, 166, [
+        { t: 'F’(x) = 2x', couleur: 'blanc', taille: 20 },
+        { t: 'f(x) = 2x  :  F’ = f', couleur: 'vert', taille: 20 },
+        { t: 'F est une primitive de f', couleur: 'vert', taille: 20, repere: 'definition' },
+      ], 30);
+    });
     K.marque('definition');
     c.pause(.4);
     K.anime(1.6, (q) => K.courbePart(G, F3, -0.5, 2.5, q, { couleur: 'orange', largeur: 2.2 }));
@@ -69,14 +79,22 @@ const primitive = {
     tangente(c, G, F, 2, 1, 0.45, 'orange');
     c.fleche(G.X(1.75), G.Y(F(1.75)) - 6, G.X(1.75), G.Y(F3(1.75)) + 6, { couleur: 'orange', largeur: 1.6 });
     c.texte('+3', G.X(1.75) + 8, G.Y(F(1.75) + 1.6), { couleur: 'orange', taille: 17 });
-    c.texte('x² + 3 : même pente 2x', 420, 278, { couleur: 'orange', taille: 19 });
-    c.texte('→ aussi une primitive de 2x', 420, 306, { couleur: 'orange', taille: 19 });
+    Z(c, 410, 60, 1.2, 660, 60, () => {
+      c.texte('x² + 3 : même pente 2x', 420, 278, { couleur: 'orange', taille: 19 });
+      c.texte('→ aussi une primitive de 2x', 420, 306, { couleur: 'orange', taille: 19 });
+    });
     c.repere('famille', G.X(-0.5), G.Y(9.6), G.X(2.5) - G.X(-0.5), G.Y(2.6) - G.Y(9.6), 'la courbe montée de 3');
     K.marque('famille');
     c.pause(.4);
-    c.texte('F primitive de f sur I  ⇔  F’(x) = f(x) pour tout x de I', 380, 392, { couleur: 'jaune', taille: 19, align: 'center', max: 720 });
-    c.rect(28, 368, 704, 36, { couleur: 'jaune', arrondi: 8, largeur: 1.5 });
-    c.repere('relire', 24, 364, 712, 44, 'la définition à relire');
+    if (LARGE()) {   // tableau large : la définition sur toute la largeur, plus grande
+      c.texte('F primitive de f sur I  ⇔  F’(x) = f(x) pour tout x de I', CX, 396, { couleur: 'jaune', taille: 24, align: 'center', max: LL - 80 });
+      c.rect(28, 366, LL - 56, 42, { couleur: 'jaune', arrondi: 8, largeur: 1.5 });
+      c.repere('relire', 24, 362, LL - 48, 50, 'la définition à relire');
+    } else {
+      c.texte('F primitive de f sur I  ⇔  F’(x) = f(x) pour tout x de I', 380, 392, { couleur: 'jaune', taille: 19, align: 'center', max: 720 });
+      c.rect(28, 368, 704, 36, { couleur: 'jaune', arrondi: 8, largeur: 1.5 });
+      c.repere('relire', 24, 364, 712, 44, 'la définition à relire');
+    }
     K.marque('relire');
   },
   decrire: {
@@ -97,33 +115,36 @@ const primitive = {
 const puissances = {
   titre: 'Les puissances : 2⁰ = 1, x⁻¹ = 1/x, √x = x^{1/2}',
   dessiner(c, K) {
-    K.titre('Rappel : les puissances');
-    c.texte('2³ = 2 × 2 × 2 = 8', 30, 74, { couleur: 'blanc', taille: 21 });
+    const LL = LnLarge.ouvrir(c), CX = LARGE() ? LL / 2 : 380;
+    LnLarge.titre(c, K, 'Rappel : les puissances');
+    c.texte('2³ = 2 × 2 × 2 = 8', 30, 74, { couleur: 'blanc', taille: LARGE() ? 25 : 21 });
     c.repere('definition', 24, 52, 230, 30, '2³ = 2 × 2 × 2');
     K.marque('definition');
     c.pause(.3);
-    const BASE = 360, U = 30, W = 46;
+    const BASE = 360, U = 30, W = LARGE() ? 62 : 46, PAS = LARGE() ? 104 : 68;
     const cols = [['2³', 8, 'cyan'], ['2²', 4, 'cyan'], ['2¹', 2, 'cyan'], ['2⁰', 1, 'vert'], ['2⁻¹', 0.5, 'orange']];
-    c.ligne(20, BASE, 360, BASE, { couleur: 'faible', largeur: 1.4 });
+    c.ligne(20, BASE, 60 + 4 * PAS + 40, BASE, { couleur: 'faible', largeur: 1.4 });
     cols.forEach(([nom, v, coul], i) => {
-      const x = 50 + i * 68;
+      const x = 50 + i * PAS;
       peindre(c, .35, () => bloc(c, x - W / 2, BASE - v * U, W, v * U, coul));
-      c.texte(nom, x, BASE + 24, { couleur: coul, taille: 18, align: 'center' });
-      c.texte(v === 0.5 ? '1/2' : String(v), x, BASE - v * U - 8, { couleur: coul, taille: 18, align: 'center' });
-      if (i > 0) c.texte('÷2', x - 34, BASE - 40 - (i < 3 ? 60 : 0), { couleur: 'jaune', taille: 15, align: 'center' });
-      if (i === 2) { c.repere('echelle', 20, BASE - 8 * U - 30, 200, 8 * U + 60, 'chaque marche divise par 2'); K.marque('echelle'); c.pause(.3); }
+      c.texte(nom, x, BASE + 24, { couleur: coul, taille: LARGE() ? 21 : 18, align: 'center' });
+      c.texte(v === 0.5 ? '1/2' : String(v), x, BASE - v * U - 8, { couleur: coul, taille: LARGE() ? 21 : 18, align: 'center' });
+      if (i > 0) c.texte('÷2', x - PAS / 2, BASE - 40 - (i < 3 ? 60 : 0), { couleur: 'jaune', taille: LARGE() ? 19 : 15, align: 'center' });
+      if (i === 2) { c.repere('echelle', 20, BASE - 8 * U - 30, 2 * PAS + 64, 8 * U + 60, 'chaque marche divise par 2'); K.marque('echelle'); c.pause(.3); }
     });
-    c.repere('zero_moins', 222, BASE - 70, 140, 100, '2⁰ = 1 et 2⁻¹ = 1/2');
+    c.repere('zero_moins', 50 + 2.5 * PAS, BASE - 70, 2 * PAS + 4, 100, '2⁰ = 1 et 2⁻¹ = 1/2');
     K.marque('zero_moins');
     c.pause(.4);
-    K.lignes(390, 130, [
-      { t: 'On multiplie : on ajoute les puissances', couleur: 'jaune', taille: 18 },
-      { t: '2² × 2³ = 2⁵', couleur: 'blanc', taille: 20, repere: 'regle', moment: 'regle' },
-      { pause: .5, t: 'x¹ × x⁻¹ = x⁰ = 1', couleur: 'blanc', taille: 20 },
-      { t: 'donc  x⁻¹ = 1/x', couleur: 'vert', taille: 20, repere: 'inverse', moment: 'inverse' },
-      { pause: .5, t: 'x^{1/2} × x^{1/2} = x¹ = x', couleur: 'blanc', taille: 20 },
-      { t: 'donc  √x = x^{1/2}', couleur: 'vert', taille: 20, repere: 'racine', moment: 'racine' },
-    ], 36);
+    Z(c, 384, 110, 1.45, 660, 100, () => {
+      K.lignes(390, 130, [
+        { t: 'On multiplie : on ajoute les puissances', couleur: 'jaune', taille: 18 },
+        { t: '2² × 2³ = 2⁵', couleur: 'blanc', taille: 20, repere: 'regle', moment: 'regle' },
+        { pause: .5, t: 'x¹ × x⁻¹ = x⁰ = 1', couleur: 'blanc', taille: 20 },
+        { t: 'donc  x⁻¹ = 1/x', couleur: 'vert', taille: 20, repere: 'inverse', moment: 'inverse' },
+        { pause: .5, t: 'x^{1/2} × x^{1/2} = x¹ = x', couleur: 'blanc', taille: 20 },
+        { t: 'donc  √x = x^{1/2}', couleur: 'vert', taille: 20, repere: 'racine', moment: 'racine' },
+      ], 36);
+    });
   },
   decrire: {
     definition: 'Écrit en haut : 2³ = 2 × 2 × 2 = 8.',
@@ -144,11 +165,12 @@ const puissances = {
 const signe = {
   titre: 'Le signe de x − 1',
   dessiner(c, K) {
-    K.titre('Rappel : le signe de x − 1');
+    const LL = LnLarge.ouvrir(c), CX = LARGE() ? LL / 2 : 380;
+    LnLarge.titre(c, K, 'Rappel : le signe de x − 1');
     // Un axe gradué ; un point x glisse de −1 à 3, la valeur de x − 1 s'écrit avec sa couleur.
-    const ax = { x0: 60, y: 120, w: 620, min: -1.5, max: 3.5 }, X = (v) => ax.x0 + (v - ax.min) / (ax.max - ax.min) * ax.w;
+    const ax = { x0: 60, y: 120, w: LARGE() ? LL - 140 : 620, min: -1.5, max: 3.5 }, X = (v) => ax.x0 + (v - ax.min) / (ax.max - ax.min) * ax.w;
     c.fleche(ax.x0 - 10, ax.y, ax.x0 + ax.w + 14, ax.y, { couleur: 'faible', largeur: 1.6 });
-    [-1, 0, 1, 2, 3].forEach((v) => { c.ligne(X(v), ax.y - 5, X(v), ax.y + 5, { couleur: 'faible', largeur: 1.2, duree: .02 }); c.texte(fr(v), X(v), ax.y + 24, { couleur: 'faible', taille: 15, align: 'center', duree: .05 }); });
+    [-1, 0, 1, 2, 3].forEach((v) => { c.ligne(X(v), ax.y - 5, X(v), ax.y + 5, { couleur: 'faible', largeur: 1.2, duree: .02 }); c.texte(fr(v), X(v), ax.y + 24, { couleur: 'faible', taille: LARGE() ? 19 : 15, align: 'center', duree: .05 }); });
     K.marque('axe');
     c.pause(.3);
     const segs = [[c.cur, 2.2, -1, 0.95]];
@@ -161,45 +183,47 @@ const signe = {
     if (xv !== null) c.direct(() => {
       const v = xv - 1, coul = v < -0.02 ? 'rouge' : v > 0.02 ? 'vert' : 'jaune';
       c.point(X(xv), ax.y, 6, coul);
-      c.texte(`x = ${fr(xv, 1)}  →  x − 1 = ${fr(v, 1)}`, X(xv), ax.y - 22, { couleur: coul, taille: 18, align: 'center' });
+      c.texte(`x = ${fr(xv, 1)}  →  x − 1 = ${fr(v, 1)}`, X(xv), ax.y - 22, { couleur: coul, taille: LARGE() ? 22 : 18, align: 'center' });
       c.repere('point', X(xv) - 12, ax.y - 12, 24, 24, 'le point x');
     });
     c.pause(.3);
     c.ligne(X(-1.4), ax.y + 40, X(1) - 4, ax.y + 40, { couleur: 'rouge', largeur: 5, alpha: .75 });
-    c.texte('x − 1 < 0', X(-0.3), ax.y + 66, { couleur: 'rouge', taille: 18, align: 'center' });
+    c.texte('x − 1 < 0', X(-0.3), ax.y + 66, { couleur: 'rouge', taille: LARGE() ? 22 : 18, align: 'center' });
     c.ligne(X(1) + 4, ax.y + 40, X(3.4), ax.y + 40, { couleur: 'vert', largeur: 5, alpha: .75 });
-    c.texte('x − 1 > 0', X(2.2), ax.y + 66, { couleur: 'vert', taille: 18, align: 'center' });
+    c.texte('x − 1 > 0', X(2.2), ax.y + 66, { couleur: 'vert', taille: LARGE() ? 22 : 18, align: 'center' });
     c.cercle(X(1), ax.y, 10, { couleur: 'jaune', largeur: 2 });
-    c.texte('x − 1 = 0 en x = 1', X(1), ax.y - 48, { couleur: 'jaune', taille: 17, align: 'center' });
+    c.texte('x − 1 = 0 en x = 1', X(1), ax.y - 50, { couleur: 'jaune', taille: LARGE() ? 21 : 17, align: 'center' });
     c.repere('racine', X(1) - 14, ax.y - 14, 28, 28, 'la racine : 1');
     K.marque('racine');
     c.pause(.4);
     // Le tableau de signe.
-    const x0 = 60, y0 = 220, w = 300, g = 70, h = 32, P = [x0 + g + 30, x0 + g + 115, x0 + w - 24];
-    c.rect(x0, y0, w, 2 * h, { couleur: 'faible', arrondi: 3, largeur: 1.4 });
-    c.ligne(x0, y0 + h, x0 + w, y0 + h, { couleur: 'faible', largeur: 1.2 }); c.ligne(x0 + g, y0, x0 + g, y0 + 2 * h, { couleur: 'faible', largeur: 1.2 });
-    c.texte('x', x0 + g / 2, y0 + 22, { couleur: 'faible', taille: 17, align: 'center' });
-    c.texte('x − 1', x0 + g / 2, y0 + h + 22, { couleur: 'faible', taille: 17, align: 'center' });
-    ['−∞', '1', '+∞'].forEach((s, i) => c.texte(s, P[i], y0 + 22, { couleur: 'blanc', taille: 17, align: 'center' }));
-    c.texte('−', (P[0] + P[1]) / 2, y0 + h + 23, { couleur: 'rouge', taille: 22, align: 'center' });
-    c.texte('0', P[1], y0 + h + 22, { couleur: 'jaune', taille: 18, align: 'center' });
-    c.texte('+', (P[1] + P[2]) / 2, y0 + h + 23, { couleur: 'vert', taille: 22, align: 'center' });
-    c.repere('tableau', x0 - 4, y0 - 4, w + 8, 2 * h + 8, 'le tableau de signe de x − 1');
+    Z(c, 56, 216, 1.32, 60, 212, () => {
+      const x0 = 60, y0 = 220, w = 300, g = 70, h = 32, P = [x0 + g + 30, x0 + g + 115, x0 + w - 24];
+      c.rect(x0, y0, w, 2 * h, { couleur: 'faible', arrondi: 3, largeur: 1.4 });
+      c.ligne(x0, y0 + h, x0 + w, y0 + h, { couleur: 'faible', largeur: 1.2 }); c.ligne(x0 + g, y0, x0 + g, y0 + 2 * h, { couleur: 'faible', largeur: 1.2 });
+      c.texte('x', x0 + g / 2, y0 + 22, { couleur: 'faible', taille: 17, align: 'center' });
+      c.texte('x − 1', x0 + g / 2, y0 + h + 22, { couleur: 'faible', taille: 17, align: 'center' });
+      ['−∞', '1', '+∞'].forEach((s, i) => c.texte(s, P[i], y0 + 22, { couleur: 'blanc', taille: 17, align: 'center' }));
+      c.texte('−', (P[0] + P[1]) / 2, y0 + h + 23, { couleur: 'rouge', taille: 22, align: 'center' });
+      c.texte('0', P[1], y0 + h + 22, { couleur: 'jaune', taille: 18, align: 'center' });
+      c.texte('+', (P[1] + P[2]) / 2, y0 + h + 23, { couleur: 'vert', taille: 22, align: 'center' });
+      c.repere('tableau', x0 - 4, y0 - 4, w + 8, 2 * h + 8, 'le tableau de signe de x − 1');
+    });
     K.marque('tableau');
     c.pause(.4);
     // Deuxième façon : la droite y = x − 1.
-    const G = K.axes({ x0: 440, y0: 190, w: 280, h: 170, xmin: -1.5, xmax: 3.2, ymin: -2.5, ymax: 2.3, gx: [[1, '1']], gy: [] });
+    const G = K.axes({ x0: LARGE() ? 640 : 440, y0: 190, w: LARGE() ? LL - 720 : 280, h: 170, xmin: -1.5, xmax: 3.2, ymin: -2.5, ymax: 2.3, gx: [[1, '1']], gy: [] });
     K.anime(1.2, (q) => K.courbePart(G, (x) => x - 1, -1.4, 3.1, q, { couleur: 'cyan' }));
     K.courbe(G, (x) => x - 1, -1.4, 0.98, { couleur: 'rouge', largeur: 3.6 });
     K.courbe(G, (x) => x - 1, 1.02, 3.1, { couleur: 'vert', largeur: 3.6 });
-    c.texte('y = x − 1', G.X(2.1), G.Y(2.1), { couleur: 'cyan', taille: 17 });
-    c.texte('sous l’axe', G.X(-1.3), G.Y(-1.5), { couleur: 'rouge', taille: 15 });
-    c.texte('au-dessus', G.X(1.6), G.Y(-0.6), { couleur: 'vert', taille: 15 });
+    c.texte('y = x − 1', G.X(2.1), G.Y(2.1), { couleur: 'cyan', taille: LARGE() ? 21 : 17 });
+    c.texte('sous l’axe', G.X(-1.3), G.Y(-1.5), { couleur: 'rouge', taille: LARGE() ? 19 : 15 });
+    c.texte('au-dessus', G.X(1.6), G.Y(-0.6), { couleur: 'vert', taille: LARGE() ? 19 : 15 });
     c.repere('droite_graphe', G.x0, G.y0, G.w, G.h, 'la droite y = x − 1');
     K.marque('droite_graphe');
     c.pause(.4);
-    c.texte('ax + b : signe de a après la racine, signe contraire avant', 380, 404, { couleur: 'jaune', taille: 18, align: 'center', max: 730 });
-    c.repere('relire', 20, 384, 720, 28, 'la phrase à relire');
+    c.texte('ax + b : signe de a après la racine, signe contraire avant', CX, 404, { couleur: 'jaune', taille: LARGE() ? 22 : 18, align: 'center', max: LARGE() ? LL - 60 : 730 });
+    c.repere('relire', 20, 382, LARGE() ? LL - 40 : 720, 30, 'la phrase à relire');
     K.marque('relire');
   },
   decrire: {
@@ -222,13 +246,14 @@ const signe = {
 const sens = {
   titre: 'Multiplier par un négatif retourne l’inégalité',
   dessiner(c, K) {
-    K.titre('Rappel : le sens d’une inégalité');
-    const ax = { x0: 70, y: 150, w: 600, min: -4, max: 4 }, X = (v) => ax.x0 + (v - ax.min) / (ax.max - ax.min) * ax.w;
+    const LL = LnLarge.ouvrir(c), CX = LARGE() ? LL / 2 : 380;
+    LnLarge.titre(c, K, 'Rappel : le sens d’une inégalité');
+    const ax = { x0: 70, y: 150, w: LARGE() ? LL - 140 : 600, min: -4, max: 4 }, X = (v) => ax.x0 + (v - ax.min) / (ax.max - ax.min) * ax.w, kk = LARGE() ? 1.2 : 1;
     c.fleche(ax.x0 - 10, ax.y, ax.x0 + ax.w + 14, ax.y, { couleur: 'faible', largeur: 1.6 });
-    for (let v = -4; v <= 4; v++) { c.ligne(X(v), ax.y - 5, X(v), ax.y + 5, { couleur: 'faible', largeur: 1.2, duree: .02 }); c.texte(fr(v), X(v), ax.y + 24, { couleur: 'faible', taille: 14, align: 'center', duree: .04 }); }
-    c.point(X(2), ax.y, 6, 'cyan'); c.texte('2', X(2), ax.y - 16, { couleur: 'cyan', taille: 19, align: 'center' });
-    c.point(X(3), ax.y, 6, 'orange'); c.texte('3', X(3), ax.y - 16, { couleur: 'orange', taille: 19, align: 'center' });
-    c.texte('2 < 3', 380, 84, { couleur: 'blanc', taille: 22, align: 'center' });
+    for (let v = -4; v <= 4; v++) { c.ligne(X(v), ax.y - 5, X(v), ax.y + 5, { couleur: 'faible', largeur: 1.2, duree: .02 }); c.texte(fr(v), X(v), ax.y + 24, { couleur: 'faible', taille: 14 * kk, align: 'center', duree: .04 }); }
+    c.point(X(2), ax.y, 6, 'cyan'); c.texte('2', X(2), ax.y - 16, { couleur: 'cyan', taille: 19 * kk, align: 'center' });
+    c.point(X(3), ax.y, 6, 'orange'); c.texte('3', X(3), ax.y - 16, { couleur: 'orange', taille: 19 * kk, align: 'center' });
+    c.texte('2 < 3', CX, 84, { couleur: 'blanc', taille: 22 * kk, align: 'center' });
     c.repere('deux_nombres', X(1.6), ax.y - 40, X(3.4) - X(1.6), 60, '2 et 3 sur l’axe');
     K.marque('deux_nombres');
     c.pause(.4);
@@ -239,22 +264,22 @@ const sens = {
         if (p < 1) c.point(X(x), ax.y - Math.sin(Math.PI * p) * 40 * v / 3, 6, coul);
       });
     });
-    c.point(X(-2), ax.y, 6, 'cyan'); c.texte('−2', X(-2), ax.y - 16, { couleur: 'cyan', taille: 19, align: 'center' });
-    c.point(X(-3), ax.y, 6, 'orange'); c.texte('−3', X(-3), ax.y - 16, { couleur: 'orange', taille: 19, align: 'center' });
-    c.texte('× (−1)', 380, 116, { couleur: 'jaune', taille: 19, align: 'center' });
+    c.point(X(-2), ax.y, 6, 'cyan'); c.texte('−2', X(-2), ax.y - 16, { couleur: 'cyan', taille: 19 * kk, align: 'center' });
+    c.point(X(-3), ax.y, 6, 'orange'); c.texte('−3', X(-3), ax.y - 16, { couleur: 'orange', taille: 19 * kk, align: 'center' });
+    c.texte('× (−1)', CX, 116, { couleur: 'jaune', taille: 19 * kk, align: 'center' });
     c.repere('retourne', X(-3.4), ax.y - 40, X(-1.6) - X(-3.4), 60, '−3 et −2 : les places sont échangées');
     K.marque('retourne');
     c.pause(.4);
-    c.texte('−2 > −3 : le sens a changé', 380, 226, { couleur: 'vert', taille: 22, align: 'center' });
-    c.texte('(−2 < −3 serait faux)', 380, 254, { couleur: 'rouge', taille: 17, align: 'center' });
-    c.repere('sens', 200, 204, 360, 58, 'le sens a changé');
+    c.texte('−2 > −3 : le sens a changé', CX, 226, { couleur: 'vert', taille: 22 * kk, align: 'center' });
+    c.texte('(−2 < −3 serait faux)', CX, 256, { couleur: 'rouge', taille: 17 * kk, align: 'center' });
+    c.repere('sens', CX - 180 * kk, 200, 360 * kk, 64, 'le sens a changé');
     K.marque('sens');
     c.pause(.4);
-    K.lignes(240, 306, [
-      { t: '−2x > 4', couleur: 'blanc', taille: 21 },
-      { t: '÷ (−2) : x < −2', couleur: 'jaune', taille: 21, repere: 'exemple' },
-    ], 34);
-    c.texte('× ou ÷ par un négatif : le sens change', 380, 404, { couleur: 'jaune', taille: 18, align: 'center', max: 720 });
+    K.lignes(CX - 140 * kk, 306, [
+      { t: '−2x > 4', couleur: 'blanc', taille: 21 * kk },
+      { t: '÷ (−2) : x < −2', couleur: 'jaune', taille: 21 * kk, repere: 'exemple' },
+    ], 34 * kk);
+    c.texte('× ou ÷ par un négatif : le sens change', CX, 406, { couleur: 'jaune', taille: 18 * kk, align: 'center', max: LARGE() ? LL - 60 : 720 });
     K.marque('exemple');
   },
   decrire: {
@@ -273,25 +298,30 @@ const sens = {
 const second_degre = {
   titre: 'x² + x − 6 = 0',
   dessiner(c, K) {
-    K.titre('Rappel : le second degré');
-    K.lignes(30, 76, [
-      { t: 'x² + x − 6 = 0     a = 1, b = 1, c = −6', couleur: 'blanc', taille: 19, repere: 'equation', moment: 'equation' },
-      { pause: .4, t: 'Δ = b² − 4ac = 1 + 24 = 25 > 0', couleur: 'cyan', taille: 19, repere: 'delta', moment: 'delta' },
-      { pause: .4, t: 'x = (−b ± √Δ)/(2a) = (−1 ± 5)/2', couleur: 'blanc', taille: 19 },
-      { t: 'x = 2  ou  x = −3', couleur: 'jaune', taille: 21, repere: 'racines', moment: 'racines' },
-    ], 38);
+    const LL = LnLarge.ouvrir(c), CX = LARGE() ? LL / 2 : 380;
+    LnLarge.titre(c, K, 'Rappel : le second degré');
+    Z(c, 24, 60, 1.38, 24, 60, () => {
+      K.lignes(30, 76, [
+        { t: 'x² + x − 6 = 0     a = 1, b = 1, c = −6', couleur: 'blanc', taille: 19, repere: 'equation', moment: 'equation' },
+        { pause: .4, t: 'Δ = b² − 4ac = 1 + 24 = 25 > 0', couleur: 'cyan', taille: 19, repere: 'delta', moment: 'delta' },
+        { pause: .4, t: 'x = (−b ± √Δ)/(2a) = (−1 ± 5)/2', couleur: 'blanc', taille: 19 },
+        { t: 'x = 2  ou  x = −3', couleur: 'jaune', taille: 21, repere: 'racines', moment: 'racines' },
+      ], 38);
+    });
     c.pause(.4);
-    const G = K.axes({ x0: 420, y0: 120, w: 300, h: 240, xmin: -4.5, xmax: 3.5, ymin: -7, ymax: 7, gx: [[-3, '−3'], [2, '2']], gy: [] });
+    const G = K.axes({ x0: LARGE() ? 660 : 420, y0: LARGE() ? 90 : 120, w: LARGE() ? LL - 720 : 300, h: LARGE() ? 290 : 240, xmin: -4.5, xmax: 3.5, ymin: -7, ymax: 7, gx: [[-3, '−3'], [2, '2']], gy: [] });
     K.anime(1.8, (q) => K.courbePart(G, (x) => x * x + x - 6, -4.3, 3.3, q, { couleur: 'cyan' }));
     K.rond(G, -3, 0, true, 'jaune'); K.rond(G, 2, 0, true, 'jaune');
-    c.texte('y = x² + x − 6', G.X(0.5), G.Y(-5.6), { couleur: 'cyan', taille: 16 });
+    c.texte('y = x² + x − 6', G.X(0.5), G.Y(-5.6), { couleur: 'cyan', taille: LARGE() ? 20 : 16 });
     c.repere('parabole', G.x0, G.y0, G.w, G.h, 'la parabole coupe l’axe en −3 et 2');
     K.marque('parabole');
     c.pause(.4);
-    K.lignes(30, 268, [
-      { t: 'Vérifier : 2² + 2 − 6 = 4 + 2 − 6 = 0 ✓', couleur: 'vert', taille: 18, repere: 'verification', moment: 'verification' },
-      { t: 'Δ > 0 : deux solutions (−b ± √Δ)/(2a)', couleur: 'jaune', taille: 18 },
-    ], 36);
+    Z(c, 24, 60, 1.38, 24, 60, () => {
+      K.lignes(30, 268, [
+        { t: 'Vérifier : 2² + 2 − 6 = 4 + 2 − 6 = 0 ✓', couleur: 'vert', taille: 18, repere: 'verification', moment: 'verification' },
+        { t: 'Δ > 0 : deux solutions (−b ± √Δ)/(2a)', couleur: 'jaune', taille: 18 },
+      ], 36);
+    });
   },
   decrire: {
     equation: 'Écrit : x² + x − 6 = 0, a = 1, b = 1, c = −6.',
@@ -308,7 +338,7 @@ const second_degre = {
 };
 
 MathsTableau.page({
-  id: 'ln_rappels', titre: 'Les bases à revoir',
+  id: 'ln_rappels', titre: 'Les bases à revoir', ajuster: !LnLarge.actif,
   texte: 'Construction à la craie des rappels du chapitre ln : une primitive (F’ = f, x² et x² + 3), les puissances (2⁰ = 1, x⁻¹ = 1/x, √x = x^{1/2}), le signe de x − 1, le sens d’une inégalité multipliée par un négatif, l’équation x² + x − 6 = 0',
   vues: { primitive, puissances, signe, sens, second_degre },
 });

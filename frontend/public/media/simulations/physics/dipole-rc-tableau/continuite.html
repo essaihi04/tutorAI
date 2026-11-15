@@ -12,6 +12,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
 <script src="exposants.js"></script>
+<script src="zones.js"></script>
 <script>
 /*
  * u_C ne saute pas, i change de sens (cours « Dipôle RC », 2e Bac PC BIOF, 12 novembre 2026).
@@ -203,15 +204,10 @@ function declarerReperes(c) {
 const canvas = $('canvas');
 const scene = window.OndesTableau.Scene(canvas, dessiner);
 const craie = scene.craie;
-scene.cadre = function (graine) {
-  const W = craie.W, H = craie.H, VW = 760, VH = 420;
-  craie.debut(graine, S.t);
-  const s = Math.min(W / VW, H / VH) || 1;
-  scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
-  craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
-  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
-  return craie;
-};
+/* Tableau large (zones.js) : graphe étiré sur la largeur, panneau Lecture en deux colonnes écrites plus gros ;
+ * coupe du panneau entre deux lignes, par vue. Grand écran : cadre d’origine 760 × 420. L’écriture suit S.t. */
+const COUPE_PANNEAU = { enchaine: 232, decharge: 240 };
+scene.cadre = RCZones(scene, () => S.t, RCZones.grapheEtPanneau(RL, () => COUPE_PANNEAU[S.vue] ?? 232));
 function calculer() { const t = S.t, r = S.running; S.t = 1e6; S.running = false; try { dessiner(craie); dessiner(craie); } finally { S.t = t; S.running = r; } scene.sale = true; }
 function moments() { if (M.fin === undefined) calculer(); const out = {}; for (const k of VUES[S.vue]) out[k] = +M[k].toFixed(2); return out; }
 const vu = n => M[n] !== undefined && S.t >= M[n] - 1e-6;

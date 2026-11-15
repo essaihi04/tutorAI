@@ -12,6 +12,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="/media/simulations/maths/commun/exposants.js"></script>
 <script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/ln-tableau/large.js"></script>
 <script>
 /*
  * Cours « Fonctions logarithmiques » (math_ch5_fonctions_ln) : le logarithme décimal.
@@ -24,6 +25,11 @@ const log = x => Math.log(x) / L10;
 const OPT = { x0: 50, y0: 50, w: 400, h: 190, xmin: 0, xmax: 12, ymin: -1.4, ymax: 2.7,
   gx: [[1, '1'], [5, '5'], [10, '10']], gy: [[-1, '−1'], [1, '1'], [2, '2']], nomx: 'x', nomy: 'y' };
 const XR = 484;
+/* Tableau large (15 novembre 2026) : repère étiré sur la largeur (GW), colonne de droite reportée et agrandie (Z : ce qui
+ * est écrit autour de (x0 ; y0) passe en (nx ; ny), k fois plus grand) ; hors du tableau large, rien ne change. */
+const LARGE = () => LnLarge.L >= 1000;
+const GW = (o, w = 680) => LARGE() ? { ...o, w } : o;
+const Z = (c, x0, y0, k, nx, ny, fn) => LnLarge.colonne(c, x0, y0, LARGE() ? k : 1, LARGE() ? nx : x0, LARGE() ? ny : y0, fn);
 
 /* Une règle graduée : en haut les valeurs du haut, en bas celles du bas, une graduation par case. */
 function regle(c, x0, y, w, haut, bas, coulH, coulB) {
@@ -39,14 +45,16 @@ function regle(c, x0, y, w, haut, bas, coulH, coulB) {
 }
 
 MathsTableau.page({
+  ajuster: !LnLarge.actif,
   id: 'ln_log', titre: 'Fonctions logarithmiques',
   texte: 'Construction à la craie du logarithme décimal : log x = ln x / ln 10, courbe plus aplatie que ln, log 10 = 1, « × 10 ⇒ + 1 » ; 10ˣ = a ⇔ x = log a ; pH = −log[H₃O⁺]',
   vues: {
     regle: {
       titre: 'Le logarithme décimal',
       dessiner(c, K) {
-        K.titre('Le logarithme décimal');
-        const G = K.axes(OPT);
+        LnLarge.ouvrir(c);
+        LnLarge.titre(c, K, 'Le logarithme décimal');
+        const G = K.axes(GW(OPT, 680));
         K.anime(1.3, p => K.courbePart(G, Math.log, 0.08, 11.8, p, { couleur: 'rouge' }));
         c.texte('ln', G.X(11.2), G.Y(Math.log(11.2)) - 8, { couleur: 'rouge', taille: 19 });
         c.pause(.2);
@@ -62,22 +70,25 @@ MathsTableau.page({
         c.texte('(10 ; 1)', G.X(10) - 30, G.Y(1) - 12, { couleur: 'jaune', taille: 16 });
         K.marque('points');
         c.pause(.3);
-        regle(c, 80, 302, 330, ['1', '10', '100', '1000'], ['0', '1', '2', '3'], 'blanc', 'cyan');
+        const RW = LARGE() ? 600 : 330;   // tableau large : la règle graduée s’allonge
+        regle(c, 80, 302, RW, ['1', '10', '100', '1000'], ['0', '1', '2', '3'], 'blanc', 'cyan');
         c.texte('x', 50, 288, { couleur: 'blanc', taille: 17 });
         c.texte('log x', 30, 332, { couleur: 'cyan', taille: 15 });
-        c.texte('× 10 ⇒ + 1', 300, 268, { couleur: 'jaune', taille: 18 });
-        c.repere('regle', 30, 262, 400, 80, '× 10 ⇒ + 1');
+        c.texte('× 10 ⇒ + 1', 80 + RW - 30, 268, { couleur: 'jaune', taille: LARGE() ? 21 : 18 });
+        c.repere('regle', 30, 262, RW + 70, 80, '× 10 ⇒ + 1');
         K.marque('regle');
         c.pause(.3);
-        c.rect(XR - 8, 70, 268, 52, { couleur: 'jaune', arrondi: 8, largeur: 1.7 });
-        c.texte('log x = ln x / ln 10', XR, 104, { couleur: 'jaune', taille: 21 });
-        K.lignes(XR, 156, [
-          { t: 'log 1 = 0', couleur: 'blanc', taille: 19 },
-          { t: 'log 10 = 1', couleur: 'blanc', taille: 19 },
-          { t: 'log(10ⁿ) = n', couleur: 'blanc', taille: 19 },
-          { t: 'mêmes règles que ln', couleur: 'vert', taille: 18 },
-        ], 30);
-        c.repere('formule', XR - 8, 70, 268, 190, 'log x = ln x / ln 10');
+        Z(c, XR - 8, 60, 1.35, 800, 58, () => {
+          c.rect(XR - 8, 70, 268, 52, { couleur: 'jaune', arrondi: 8, largeur: 1.7 });
+          c.texte('log x = ln x / ln 10', XR, 104, { couleur: 'jaune', taille: 21 });
+          K.lignes(XR, 156, [
+            { t: 'log 1 = 0', couleur: 'blanc', taille: 19 },
+            { t: 'log 10 = 1', couleur: 'blanc', taille: 19 },
+            { t: 'log(10ⁿ) = n', couleur: 'blanc', taille: 19 },
+            { t: 'mêmes règles que ln', couleur: 'vert', taille: 18 },
+          ], 30);
+          c.repere('formule', XR - 8, 70, 268, 190, 'log x = ln x / ln 10');
+        });
         K.marque('formule');
       },
       decrire: {
@@ -96,28 +107,35 @@ MathsTableau.page({
     ph: {
       titre: '10ˣ = a ; le pH',
       dessiner(c, K) {
-        K.titre('10ˣ = a ; le pH');
-        K.lignes(60, 92, [
-          { t: '10ˣ = 5', couleur: 'blanc', taille: 22 },
-          { t: '⇔ x = log 5', couleur: 'blanc', taille: 22 },
-          { t: 'x ≈ 0,70', couleur: 'jaune', taille: 22 },
-        ], 36);
-        c.repere('equation', 50, 66, 260, 120, '10ˣ = 5 ⇔ x = log 5');
+        LnLarge.ouvrir(c);
+        LnLarge.titre(c, K, '10ˣ = a ; le pH');
+        Z(c, 50, 60, 1.3, 50, 56, () => {
+          K.lignes(60, 92, [
+            { t: '10ˣ = 5', couleur: 'blanc', taille: 22 },
+            { t: '⇔ x = log 5', couleur: 'blanc', taille: 22 },
+            { t: 'x ≈ 0,70', couleur: 'jaune', taille: 22 },
+          ], 36);
+          c.repere('equation', 50, 66, 260, 120, '10ˣ = 5 ⇔ x = log 5');
+        });
         K.marque('equation');
         c.pause(.3);
-        regle(c, 80, 250, 330, ['10⁻¹', '10⁻²', '10⁻³', '10⁻⁴'], ['1', '2', '3', '4'], 'blanc', 'vert');
-        c.texte('[H₃O⁺]', 20, 236, { couleur: 'blanc', taille: 15 });
-        c.texte('pH', 36, 280, { couleur: 'vert', taille: 16 });
-        c.repere('regle', 20, 210, 420, 90, '[H₃O⁺] et pH');
+        const RW = LARGE() ? 600 : 330;   // tableau large : la règle graduée s’allonge, plus bas
+        const yR = LARGE() ? 300 : 250;
+        regle(c, 80, yR, RW, ['10⁻¹', '10⁻²', '10⁻³', '10⁻⁴'], ['1', '2', '3', '4'], 'blanc', 'vert');
+        c.texte('[H₃O⁺]', 20, yR - 14, { couleur: 'blanc', taille: 15 });
+        c.texte('pH', 36, yR + 30, { couleur: 'vert', taille: 16 });
+        c.repere('regle', 20, yR - 40, RW + 90, 90, '[H₃O⁺] et pH');
         K.marque('regle');
         c.pause(.3);
-        c.rect(XR - 8, 74, 264, 52, { couleur: 'jaune', arrondi: 8, largeur: 1.7 });
-        c.texte('pH = −log[H₃O⁺]', XR, 108, { couleur: 'jaune', taille: 21 });
-        K.lignes(XR, 162, [
-          { t: 'pH = 3', couleur: 'blanc', taille: 19 },
-          { t: '⇒ [H₃O⁺] = 10⁻³ mol/L', couleur: 'vert', taille: 18 },
-        ], 30);
-        c.repere('ph', XR - 8, 74, 264, 120, 'pH = −log[H₃O⁺]');
+        Z(c, XR - 8, 60, 1.35, 800, 58, () => {
+          c.rect(XR - 8, 74, 264, 52, { couleur: 'jaune', arrondi: 8, largeur: 1.7 });
+          c.texte('pH = −log[H₃O⁺]', XR, 108, { couleur: 'jaune', taille: 21 });
+          K.lignes(XR, 162, [
+            { t: 'pH = 3', couleur: 'blanc', taille: 19 },
+            { t: '⇒ [H₃O⁺] = 10⁻³ mol/L', couleur: 'vert', taille: 18 },
+          ], 30);
+          c.repere('ph', XR - 8, 74, 264, 120, 'pH = −log[H₃O⁺]');
+        });
         K.marque('ph');
       },
       decrire: {

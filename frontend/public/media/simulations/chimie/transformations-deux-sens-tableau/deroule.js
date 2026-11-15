@@ -70,7 +70,7 @@
     const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : (o.bouton || 'Lancer'); };
     const emettre = () => pont && pont.emettre();
     const noter = (a, d) => pont && pont.noter(a, d);
-    scene = window.OndesTableau.Scene($('canvas'), c => o.dessiner(c, D));
+    scene = window.OndesTableau.Scene($('canvas'), c => o.dessiner(c, D), o.scene || {});   // o.scene : { large: true } (tableau large, zones.js)
     const cadreBase = scene.cadre;
     scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
     D.scene = scene;

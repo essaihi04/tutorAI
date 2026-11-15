@@ -62,32 +62,52 @@ function echelles() {
 
 /* ── Géométrie (cadre 760 × 420) ───────────────────────────────────────── */
 const RG = { x: 8, y: 40, w: 500, h: 372 }, RL = { x: 516, y: 40, w: 236, h: 372 };
-const O = { x: 66, y: 352 }, AXL = 396, AYL = 268;
+const O = { x: 66, y: 352 };
+let AXL = 396, AYL = 268;
+/* Disposition selon la largeur du tableau (15 novembre 2026 : « la simulation n'occupe qu'une bande étroite, textes
+ * minuscules »). Tableau large (L ≥ 1000, écran d'ordinateur portable) : le graphe s'étend sur toute la largeur
+ * libre, la colonne « Lecture » à droite est plus large et écrite plus gros (lignes espacées en proportion).
+ * Sinon (grand écran, déjà haut) : la disposition d'origine 760 × 420. */
+let D = { large: false, k: 1, kl: 1, ky: 1 };
+function disposer(L) {
+  if (L < 1000) {
+    Object.assign(RG, { x: 8, w: 500 }); Object.assign(RL, { x: 516, w: 236 }); O.x = 66; AXL = 396;
+    D = { large: false, L, k: 1, kl: 1, ky: 1 };
+  } else {
+    const lw = Math.round(L * .26);
+    Object.assign(RL, { x: L - lw - 6, w: lw }); Object.assign(RG, { x: 8, w: L - lw - 22 }); O.x = 82; AXL = RG.w - 120;
+    D = { large: true, L, k: 1.3, kl: 1.22, ky: 1.08 };
+  }
+  LX = RL.x + 8; LW = RL.w - 16;
+}
+const TZ = n => Math.round(n * D.k);                 // taille d'un texte du graphe
+const ly = y => (D.large ? 70 + (y - 64) * D.ky : y); // ordonnée d'une ligne de la colonne « Lecture »
 const PX = t => O.x + t * AXL / echelles().tmax;
 const PY = i => O.y - i * AYL / echelles().imax;
-const LX = RL.x + 8, LW = RL.w - 16;
+let LX = RL.x + 8, LW = RL.w - 16;
 const marque = (c, nom) => { MM[nom] = c.cur; };
-const lire = (c, y, s, o = {}) => c.texte(s, LX, y, { couleur: 'blanc', taille: 16, max: LW, ...o });
-const leg = (c, y, s, o = {}) => c.texte(s, LX + 34, y, { taille: 16, max: LW - 34, couleur: 'vert', ...o });
+const lire = (c, y, s, o = {}) => c.texte(s, LX, ly(y), { couleur: 'blanc', max: LW, ...o, taille: Math.round((o.taille ?? 16) * D.kl) });
+const encadre = (c, y, w, h) => c.rect(LX - 4, ly(y), w * D.kl, h * (D.large ? 1.18 : 1), { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+const leg = (c, y, s, o = {}) => c.texte(s, LX + 34, ly(y), { max: LW - 34, couleur: 'vert', ...o, taille: Math.round((o.taille ?? 16) * D.kl) });
 const courbeDe = (c, p, o = {}) => c.courbe(u => { const t = u * echelles().tmax; return [PX(t), PY(iDe(p, t))]; }, 90, { couleur: 'vert', largeur: 2.6, duree: 1.6, ...o });
 const POINTILLE = { pointille: [10, 6], alpha: .85 };
 
 function dessiner(c) {
-  scene.cadre(41); MM = {};
+  scene.cadre(41); disposer(scene.L); MM = {};
   const e = echelles();
-  c.texte(`Établissement : i(t) — ${TITRES[S.vue]}`, RG.x + 6, 30, { couleur: 'cyan', taille: 17, max: RG.w - 10, duree: .9 });
+  c.texte(`Établissement : i(t) — ${TITRES[S.vue]}`, RG.x + 6, 30, { couleur: 'cyan', taille: TZ(17), max: RG.w - 10, duree: .9 });
   c.rect(RG.x, RG.y, RG.w, RG.h, { couleur: 'tresfaible', arrondi: 10, duree: .5 });
   c.texte('Lecture', RL.x + 6, 30, { couleur: 'cyan', taille: 17, duree: .3 });
   c.rect(RL.x, RL.y, RL.w, RL.h, { couleur: 'tresfaible', arrondi: 10, duree: .4 });
   const LT = AXL + 16, tg = [];
   for (let k = 1; k * e.pas <= e.tmax + 1e-9; k++) { const v = k * e.pas; tg.push([(PX(v) - O.x) / LT, v % e.lab === 0 ? String(v) : null]); }
-  c.axe(O.x, O.y, O.x + LT, O.y, tg, { taille: 13 });
+  c.axe(O.x, O.y, O.x + LT, O.y, tg, { taille: TZ(13) });
   const LY = AYL + 14, yg = [];
   for (let k = 1; k * e.ipas <= e.imax + 1e-9; k++) { const v = k * e.ipas; yg.push([(O.y - PY(v)) / LY, k % 2 === 0 ? String(v) : null]); }
-  c.axe(O.x, O.y, O.x, O.y - LY, yg, { taille: 13, vertical: true });
-  c.texte('0', O.x - 8, O.y + 18, { couleur: 'faible', taille: 13, align: 'right' });
-  c.texte('i (mA)', O.x + 10, 66, { couleur: 'blanc', taille: 16 });
-  c.texte('t (ms)', RG.x + RG.w - 8, O.y + 40, { couleur: 'blanc', taille: 16, align: 'right' });
+  c.axe(O.x, O.y, O.x, O.y - LY, yg, { taille: TZ(13), vertical: true });
+  c.texte('0', O.x - 8, O.y + 18, { couleur: 'faible', taille: TZ(13), align: 'right' });
+  c.texte('i (mA)', O.x + 10, 66, { couleur: 'blanc', taille: TZ(16) });
+  c.texte('t (ms)', RG.x + RG.w - 8, O.y + 40, { couleur: 'blanc', taille: TZ(16), align: 'right' });
   lire(c, 64, S.vue === 'L' ? 'E = 6 V ; R = 50 Ω ; r = 10 Ω' : 'E = 6 V ; r = 10 Ω ; L = 0,12 H', { couleur: 'faible', taille: 14, duree: .6 });
   c.pause(.3);
   (S.vue === 'L' ? vueL : vueR)(c);
@@ -110,12 +130,12 @@ function marquerTau(c, p, nom, bas = 40) {
   const T = tauDe(p.L, p.R), x = PX(T), y = PY(.63 * I0De(p.R));
   c.cercle(x, y, 5, { couleur: 'cyan', largeur: 1.8 });
   c.ligne(x, y, x, O.y, { couleur: 'cyan', largeur: 1.5, pointille: [4, 5] });
-  c.texte(nom, x, O.y + bas, { couleur: 'cyan', taille: 17, align: 'center' });
+  c.texte(nom, x, O.y + bas, { couleur: 'cyan', taille: TZ(17), align: 'center' });
 }
 function palier(c, p, nom, dessous = false) {
   const y = PY(I0De(p.R));
   c.ligne(O.x, y, PX(echelles().tmax), y, { couleur: 'blanc', largeur: 1.4, pointille: [8, 6] });
-  c.texte(`${nom} = ${fmA(I0De(p.R))}`, PX(echelles().tmax * .74), y + (dessous ? 20 : -9), { couleur: 'blanc', taille: 15, align: 'right' });
+  c.texte(`${nom} = ${fmA(I0De(p.R))}`, PX(echelles().tmax * .74), y + (dessous ? 20 : -9), { couleur: 'blanc', taille: TZ(15), align: 'right' });
 }
 const facteur = k => (Math.abs(k - 2) < 1e-6 ? 'double' : Math.abs(k - .5) < 1e-6 ? 'divisé par 2' : `× ${fx(k, 2)}`);
 function vueL(c) {
@@ -123,14 +143,14 @@ function vueL(c) {
   courbeDe(c, REF);
   palier(c, REF, 'I_0');
   marquerTau(c, REF, 'τ');
-  c.ligne(LX, 95, LX + 26, 95, { couleur: 'vert', largeur: 2.6, duree: .1 });
+  c.ligne(LX, ly(95), LX + 26, ly(95), { couleur: 'vert', largeur: 2.6, duree: .1 });
   leg(c, 100, 'L = 0,12 H');
   lire(c, 124, 'τ = L/(R + r) = 2 ms', { taille: 15 });
   marque(c, 'courbe');
   c.pause(.5);
   courbeDe(c, d, POINTILLE);
   marquerTau(c, d, 'τ’', Math.abs(PX(T2) - PX(T1)) < 34 ? 58 : 40);
-  c.ligne(LX, 157, LX + 26, 157, { couleur: 'vert', largeur: 2.6, duree: .1, ...POINTILLE });
+  c.ligne(LX, ly(157), LX + 26, ly(157), { couleur: 'vert', largeur: 2.6, duree: .1, ...POINTILLE });
   leg(c, 162, `L’ = ${fH(d.L)}`);
   lire(c, 186, `τ’ = L’/(R + r) = ${fx(d.L, 2)}/60`, { taille: 15 });
   lire(c, 208, `τ’ = ${fms(T2)}`, { taille: 15 });
@@ -144,13 +164,13 @@ function vueL(c) {
 function vueR(c) {
   const d = DEUX(), T1 = tauDe(L1, R1), T2 = tauDe(d.L, d.R), I1 = I0De(R1), I2 = I0De(d.R);
   courbeDe(c, REF);
-  c.ligne(LX, 95, LX + 26, 95, { couleur: 'vert', largeur: 2.6, duree: .1 });
+  c.ligne(LX, ly(95), LX + 26, ly(95), { couleur: 'vert', largeur: 2.6, duree: .1 });
   leg(c, 100, 'R = 50 Ω : R + r = 60 Ω');
   lire(c, 124, 'I_0 = 6/60 = 100 mA ; τ = 2 ms', { taille: 15 });
   marque(c, 'courbe');
   c.pause(.5);
   courbeDe(c, d, POINTILLE);
-  c.ligne(LX, 157, LX + 26, 157, { couleur: 'vert', largeur: 2.6, duree: .1, ...POINTILLE });
+  c.ligne(LX, ly(157), LX + 26, ly(157), { couleur: 'vert', largeur: 2.6, duree: .1, ...POINTILLE });
   leg(c, 162, `R’ = ${fx(d.R, 0)} Ω : R’ + r = ${fx(d.R + r, 0)} Ω`);
   lire(c, 186, `I_0’ = 6/${fx(d.R + r, 0)} = ${fmA(I2)}`, { taille: 15, ...tais() });
   lire(c, 208, `τ’ = 0,12/${fx(d.R + r, 0)} = ${fms(T2)}`, { taille: 15, ...tais() });
@@ -186,12 +206,13 @@ const canvas = $('canvas');
 const scene = window.OndesTableau.Scene(canvas, dessiner);
 const craie = scene.craie;
 scene.cadre = function (graine) {
-  const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  const W = craie.W, H = craie.H, VH = 420;
+  const VW = Math.round(Math.min(760 * 2.1, Math.max(760, VH * W / Math.max(1, H)))); scene.L = VW;
   craie.debut(graine, S.t);
   const s = Math.min(W / VW, H / VH) || 1;
   scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
   craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
-  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+  craie.echelle = s; craie.tailleMin = 15; craie.cadre = { w: VW, h: VH, haut: 0 };
   return craie;
 };
 function calculer() { const t = S.t, rn = S.running; S.t = 1e6; S.running = false; try { dessiner(craie); dessiner(craie); } finally { S.t = t; S.running = rn; } scene.sale = true; }

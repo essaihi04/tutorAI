@@ -27,23 +27,29 @@ const tau = () => 2 * S.d / V * 1000;            // ms
 const YS = 80, PX = 3.9;                         // surface ; px par mètre
 const YF = () => YS + S.d * PX;
 const XB = 170;
+/* Agrandissement (15 novembre 2026, « mieux exploiter tout le tableau ») : Scene en { large: true } ; sur le
+ * tableau large (scene.L ≥ 1000) la mer s'élargit à gauche, le graphe des signaux et les calculs prennent toute
+ * la droite, textes plus grands (× 1,35) ; sur un grand écran (L < 1000) la disposition d'origine reste. */
+let L = 760, GR = false, MER = 360;
+const f = n => (GR ? Math.round(n * 1.35) : n);
+function disposer() { L = scene.L; GR = L >= 1000; MER = GR ? 470 : 360; }
 
 function dessiner(c) {
-  scene.cadre(9);
+  scene.cadre(9); disposer();
   // ── La mer, le bateau ──
-  c.courbe(u => [20 + u * 360, YS + 3 * Math.sin(u * 30)], 90, { couleur: 'bleu', largeur: 2 });
+  c.courbe(u => [20 + u * MER, YS + 3 * Math.sin(u * 30)], 90, { couleur: 'bleu', largeur: 2 });
   c.trait([[XB - 46, YS - 4], [XB + 46, YS - 4], [XB + 32, YS + 14], [XB - 32, YS + 14]], { couleur: 'blanc', ferme: true });
   c.ligne(XB, YS - 4, XB, YS - 34, { couleur: 'blanc' }).trait([[XB, YS - 34], [XB + 24, YS - 22], [XB, YS - 12]], { couleur: 'blanc' });
-  c.texte('sonar', XB - 56, YS + 4, { couleur: 'cyan', align: 'right', taille: 14 });
+  c.texte('sonar', XB - 56, YS - 12, { couleur: 'cyan', align: 'right', taille: f(14) });
   c.repere('sonar', XB - 50, YS - 40, 100, 60, 'le sonar : émetteur et récepteur');
   c.direct(() => {
     // Le fond, qu’on glisse.
-    c.courbe(u => [20 + u * 360, YF() + 5 * Math.sin(u * 13 + 1)], 90, { couleur: 'orange', largeur: 2.4 });
-    c.texte('fond', 34, YF() + 26, { couleur: 'orange', taille: 15 });
-    c.texte('⇡ glisse le fond ⇣', 290, YF() + 26, { couleur: 'faible', taille: 14, align: 'center' });
-    c.cote(XB + 90, YS + 8, XB + 90, YF(), '', { couleur: 'jaune' }).texte(`d = ${fr(S.d, 0)} m`, XB + 100, (YS + YF()) / 2 + 6, { couleur: 'jaune', taille: 17 });
+    c.courbe(u => [20 + u * MER, YF() + 5 * Math.sin(u * 13 + 1)], 90, { couleur: 'orange', largeur: 2.4 });
+    c.texte('fond', 34, YF() + 26, { couleur: 'orange', taille: f(15) });
+    c.texte('⇡ glisse le fond ⇣', GR ? 360 : 290, YF() + 26, { couleur: 'faible', taille: f(14), align: 'center' });
+    c.cote(XB + 90, YS + 8, XB + 90, YF(), '', { couleur: 'jaune' }).texte(`d = ${fr(S.d, 0)} m`, XB + 100, (YS + YF()) / 2 + 6, { couleur: 'jaune', taille: f(17) });
     c.repere('profondeur', XB + 80, YS, 110, YF() - YS, 'la profondeur d');
-    c.repere('fond', 20, YF() - 14, 360, 28, 'le fond (glisse-le)');
+    c.repere('fond', 20, YF() - 14, MER, 28, 'le fond (glisse-le)');
     // La salve : descend (aller) puis remonte (retour).
     if (S.running || S.pause) {   // en marche ou figée : la salve reste visible
       const aller = S.p < 0.5, f = aller ? S.p / 0.5 : (S.p - 0.5) / 0.5;
@@ -53,39 +59,39 @@ function dessiner(c) {
       c.fleche(x, yy + (aller ? -30 : 30), x, yy + (aller ? -8 : 8), { couleur: aller ? 'jaune' : 'vert', largeur: 1.6, tete: 7 });
     }
     if (S.fait) {
-      c.fleche(XB - 14, YS + 18, XB - 14, YF() - 6, { couleur: 'jaune', largeur: 1.6, pointille: [5, 5] }).texte('aller', XB - 22, (YS + YF()) / 2, { couleur: 'jaune', taille: 14, align: 'right' });
-      c.fleche(XB + 14, YF() - 6, XB + 14, YS + 18, { couleur: 'vert', largeur: 1.6, pointille: [5, 5] }).texte('retour', XB + 22, (YS + YF()) / 2 + 22, { couleur: 'vert', taille: 14 });
+      c.fleche(XB - 14, YS + 18, XB - 14, YF() - 6, { couleur: 'jaune', largeur: 1.6, pointille: [5, 5] }).texte('aller', XB - 22, (YS + YF()) / 2, { couleur: 'jaune', taille: f(14), align: 'right' });
+      c.fleche(XB + 14, YF() - 6, XB + 14, YS + 18, { couleur: 'vert', largeur: 1.6, pointille: [5, 5] }).texte('retour', XB + 22, (YS + YF()) / 2 + 22, { couleur: 'vert', taille: f(14) });
     }
   });
 
   // ── Émission et écho en fonction du temps ──
-  const gx = 410, gy = 200, gw = 290, tmax = 100;
-  c.texte('Signaux reçus par le sonar', gx, 60, { couleur: 'cyan', taille: 16 });
-  c.axe(gx, gy, gx + gw, gy, [[0.2, '20'], [0.4, '40'], [0.6, '60'], [0.8, '80'], [1, '100']]);
-  c.texte('t (ms)', gx + gw + 4, gy + 4, { couleur: 'jaune', taille: 14 });
+  const gx = GR ? 560 : 410, gy = 200, gw = GR ? L - 560 - 110 : 290, tmax = 100;
+  c.texte('Signaux reçus par le sonar', gx, 60, { couleur: 'cyan', taille: f(16) });
+  c.axe(gx, gy, gx + gw, gy, [[0.2, '20'], [0.4, '40'], [0.6, '60'], [0.8, '80'], [1, '100']], { taille: f(14) });
+  c.texte('t (ms)', gx + gw + 4, gy + 4, { couleur: 'jaune', taille: f(14) });
   c.repere('axe_t', gx + gw - 40, gy - 14, 90, 30, 'axe : le temps en ms');
   c.direct(() => {
     const T = t => gx + t / tmax * gw, salve = (t0, h) => c.courbe(u => [T(t0) + u * 12, gy - h * Math.exp(-u * 3) * Math.sin(u * 22)], 40, { couleur: 'blanc', largeur: 2 });
     const tNow = (S.running || S.pause) ? S.p * tau() : (S.fait ? tau() : -1);
-    if (tNow >= 0) { salve(0, 60); c.texte('émission', T(0), gy - 74, { couleur: 'jaune', taille: 14 }); }
+    if (tNow >= 0) { salve(0, 60); c.texte('émission', T(0), gy - 74, { couleur: 'jaune', taille: f(14) }); }
     if (S.fait) {
-      salve(tau(), 26); c.texte('écho', T(tau()), gy - 40, { couleur: 'vert', taille: 14 });
-      c.cote(T(0), gy + 36, T(tau()), gy + 36, `τ = ${fr(tau(), 0)} ms`, { couleur: 'jaune', dessous: true });
+      salve(tau(), 26); c.texte('écho', T(tau()), gy - 40, { couleur: 'vert', taille: f(14) });
+      c.cote(T(0), gy + 36, T(tau()), gy + 36, `τ = ${fr(tau(), 0)} ms`, { couleur: 'jaune', dessous: true, taille: f(18) });
       c.repere('tau', T(0), gy + 24, T(tau()) - T(0), 40, 'τ : durée de l’aller-retour');
       if (S.conclusions) {
-        c.texte('L’onde parcourt 2d : 2d = v · τ', gx, 300, { couleur: 'vert', taille: 18 });
-        c.texte(`d = v · τ / 2 = ${V} × ${fr(tau() / 1000, 3)} / 2 = ${fr(S.d, 0)} m`, gx, 330, { couleur: 'vert', taille: 18 });
-        c.texte('sans le « / 2 » : le double, faux !', gx, 362, { couleur: 'rose', taille: 16 });
-        c.repere('formule', gx, 280, 320, 90, 'd = v·τ / 2');
+        c.texte('L’onde parcourt 2d : 2d = v · τ', gx, GR ? 296 : 300, { couleur: 'vert', taille: f(18) });
+        c.texte(`d = v · τ / 2 = ${V} × ${fr(tau() / 1000, 3)} / 2 = ${fr(S.d, 0)} m`, gx, 330, { couleur: 'vert', taille: f(18) });
+        c.texte('sans le « / 2 » : le double, faux !', gx, GR ? 366 : 362, { couleur: 'rose', taille: f(16) });
+        c.repere('formule', gx, 276, GR ? 560 : 320, 96, 'd = v·τ / 2');
       }
     }
   });
-  c.texte(`eau de mer : v ≈ ${V} m/s`, gx, 404, { couleur: 'faible', taille: 15 });
+  c.texte(`eau de mer : v ≈ ${V} m/s`, gx, 404, { couleur: 'faible', taille: f(15) });
   return c.fin();
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, dessiner);
+const scene = window.OndesTableau.Scene(canvas, dessiner, { large: true });
 scene.avancer = dt => {
   if (!S.running) return false;
   S.p = Math.min(1, S.p + dt / 2.4);
@@ -146,7 +152,7 @@ function setParameters(p) {
 }
 $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
 window.Tableau.glisser(canvas, {
-  toucher: (px, py) => { const [x, y] = scene.local(px, py); return x > 15 && x < 385 && Math.abs(y - YF()) < 22 ? 'fond' : null; },
+  toucher: (px, py) => { const [x, y] = scene.local(px, py); return x > 15 && x < MER + 25 && Math.abs(y - YF()) < 22 ? 'fond' : null; },
   bouger: (id, px, py) => { const [, y] = scene.local(px, py); setParameters({ d_m: (y - YS) / PX }); },
   lacher: () => bulle($('feedback'), `Profondeur ${fr(S.d, 1)} m : émets une salve.`),
 });

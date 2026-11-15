@@ -11,6 +11,7 @@
 </div>
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
+<script src="large.js"></script>
 <script src="exposants.js"></script>
 <script>
 /*
@@ -65,7 +66,7 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), { large: true });
   const cadreBase = scene.cadre;
   scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
   M.scene = scene; M.craie = scene.craie;
@@ -160,6 +161,7 @@ function zoneEcriture(c, M, liste, ys, o = {}) {
   }
   let k = -1;
   liste.forEach((e, j) => { const ev = M.ev(e.nom); if (ev && S.t > ev.ecrit + .05) k = j; });   // l’instant même d’un moment n’efface pas encore ses lignes
+  if (window.TLRLarge.actif()) return window.TLRLarge.zone(c, liste, k, (e, lignes) => M.etape(c, e.nom, () => { lignes(); e.plus && e.plus(c); }));   // tableau large : la colonne de gauche
   const garde = new Set(); let nb = 0;
   for (let j = k; j >= 0; j--) { const l = liste[j].lignes.length; if (nb + l > n) break; garde.add(j); nb += l; }
   let y = 0;
@@ -474,7 +476,13 @@ function dessinerZinc(c, M) {
     { nom: 'etiquettes', lignes: [],
       plus: () => { ecrireChim(c, 'Zn : réducteur, cède 2 e⁻', 404, 328, { couleur: 'vert', taille: 18 }); ecrireChim(c, 'Cu²⁺ : oxydant, capte 2 e⁻', 404, 354, { couleur: 'rouge', taille: 18 }); } },
     { nom: 'bilan', lignes: [],
-      plus: () => { const [x0, x1] = equation(c, EQ_ZINC, LC[0], 400, { taille: 22, align: 'center' }); c.rect(x0 - 10, 376, x1 - x0 + 20, 32, { couleur: 'jaune', largeur: 1.6, arrondi: 8 }); } },
+      plus: () => {
+        if (window.TLRLarge.actif()) {   // tableau large : l’équation encadrée, sous les lignes de la colonne
+          const G = window.TLRLarge.G, y = Math.max(G.y + 34, 420 - 30);
+          window.TLRLarge.colonne(() => { const [x0, x1] = equation(c, EQ_ZINC, 26, y, { taille: 26 }); c.rect(x0 - 10, y - 30, x1 - x0 + 20, 40, { couleur: 'jaune', largeur: 1.8, arrondi: 8 }); BOITE_COL.equation = [x0 - 12, y - 32, x1 - x0 + 24, 44]; });
+          return;
+        }
+        const [x0, x1] = equation(c, EQ_ZINC, LC[0], 400, { taille: 22, align: 'center' }); c.rect(x0 - 10, 376, x1 - x0 + 20, 32, { couleur: 'jaune', largeur: 1.6, arrondi: 8 }); } },
   ], ZY, { max: 370 });
   if (M.commence('loupe')) {
     const al = lisse(M.p('loupe')), u = ue(), tr = transforme();
@@ -509,7 +517,9 @@ function reperesZinc(c, M) {
   c.repere('ion_zn', P2[0] - 50, P2[1] - 28, 66, 44, `l’ion Zn²⁺ qui part en solution${plus('electrons')}`);
   c.repere('etiquette_reducteur', 398, 308, 230, 26, `« Zn : réducteur, cède 2 e⁻ »${plus('etiquettes')}`);
   c.repere('etiquette_oxydant', 398, 334, 240, 26, `« Cu²⁺ : oxydant, capte 2 e⁻ »${plus('etiquettes')}`);
-  c.repere('equation', LC[0] - 140, 372, 280, 40, `l’équation Zn + Cu²⁺ → Zn²⁺ + Cu${plus('bilan')}`);
+  const le = `l’équation Zn + Cu²⁺ → Zn²⁺ + Cu${plus('bilan')}`;
+  if (window.TLRLarge.actif()) window.TLRLarge.repere(c, 'equation', BOITE_COL.equation || [10, 420 - 64, window.TLRLarge.G.col - 14, 44], le);
+  else c.repere('equation', LC[0] - 140, 372, 280, 40, le);
 }
 function voirZinc(M) {
   const m = [], t = tZinc(), coul = pali() > .7 ? 'bleu pâle' : pali() > .25 ? 'bleu qui pâlit' : 'bleu';
@@ -559,6 +569,7 @@ const EXEMPLES = [
   { id: 'couple_i', nom: 'I₂/I⁻', eq: ['I₂ + 2e⁻', '⇌', '2I⁻'], y: 260 },
 ];
 const CAP_R = 'réduction : gain d’électrons', CAP_O = 'oxydation : perte d’électrons';
+let BOITE_COL = {};   // tableau large : boîtes (repère du cadre) de ce qui s’écrit dans la colonne de gauche
 function dessinerCouple(c, M) {
   peindreBalance(c, lisse(M.p('oxydant')));
   const g = gauche(c);
@@ -582,9 +593,16 @@ function dessinerCouple(c, M) {
   M.etape(c, 'couple', () => {
     doubleFleche(c, 202, 298, YT - TT * .3, { couleur: 'jaune', largeur: 2.2 });
     c.texte('couple Ox/Red', 250, 84, { couleur: 'jaune', taille: 24, align: 'center' });
-    c.texte('un couple : un oxydant et un réducteur liés par', 14, 392, { couleur: 'blanc', taille: 16 });
-    equation(c, ['Ox + n e⁻', '⇌', 'Red'], 14, 414, { taille: 18, couleur: 'jaune' });
-    c.texte('(demi-équation)', 196, 414, { couleur: 'faible', taille: 15 });
+    if (window.TLRLarge.actif()) {   // tableau large : la définition s’écrit dans la colonne de gauche
+      const b = window.TLRLarge.phrase(c, 'un couple : un oxydant et un réducteur liés par', { couleur: 'blanc' }), G = window.TLRLarge.G;
+      window.TLRLarge.colonne(() => equation(c, ['Ox + n e⁻', '⇌', 'Red'], 16, G.y + 8, { taille: 26, couleur: 'jaune' }));
+      G.y += 44; window.TLRLarge.phrase(c, '(demi-équation)', { couleur: 'faible', taille: 19 });
+      BOITE_COL.definition = [b[0], b[1], b[2], G.y - b[1]];
+    } else {
+      c.texte('un couple : un oxydant et un réducteur liés par', 14, 392, { couleur: 'blanc', taille: 16 });
+      equation(c, ['Ox + n e⁻', '⇌', 'Red'], 14, 414, { taille: 18, couleur: 'jaune' });
+      c.texte('(demi-équation)', 196, 414, { couleur: 'faible', taille: 15 });
+    }
   });
   M.etape(c, 'exemples', () => {
     c.texte('Exemples de couples', 490, 70, { couleur: 'blanc', taille: 18 });
@@ -612,7 +630,9 @@ function reperesCouple(c, M) {
   c.repere('sens_reduction', 62, YR - 32, 376, 42, `→ réduction : gain d’électrons${plus('gagne')}`);
   c.repere('sens_oxydation', 62, YO - 32, 376, 42, `← oxydation : perte d’électrons${plus('perd')}`);
   for (const ex of EXEMPLES) c.repere(ex.id, 484, ex.y - 22, 266, 60, `le couple ${ex.nom} : ${enTexte(ex.eq)}${plus('exemples')}`);
-  c.repere('definition', 10, 374, 470, 46, `la définition : un couple Ox/Red, Ox + n e⁻ ⇌ Red${plus('couple')}`);
+  const ld = `la définition : un couple Ox/Red, Ox + n e⁻ ⇌ Red${plus('couple')}`;
+  if (window.TLRLarge.actif()) window.TLRLarge.repere(c, 'definition', BOITE_COL.definition || [10, window.TLRLarge.G.y - 24, window.TLRLarge.G.col - 14, 110], ld);
+  else c.repere('definition', 10, 374, 470, 46, ld);
 }
 function voirCouple(M) {
   const m = ['Une balance de Roberval (peinte, laiton).'];
@@ -632,9 +652,13 @@ function voirCouple(M) {
 function dessiner(c, M) {
   MO = M; M.scene.cadre(17);
   const v = M.S.vue;
-  c.texte(v === 'zinc' ? 'Transfert d’électrons : zinc et ions cuivre II' : 'Oxydant, réducteur : le couple Ox/Red', 14, 28, { couleur: 'cyan', taille: 21, max: v === 'zinc' ? 430 : 460 });
+  // Tableau large (large.js) : la figure agrandie ; le titre, les lignes du bas, la définition et l’équation bilan dans la colonne de gauche.
+  BOITE_COL = {};
+  window.TLRLarge.debut(c, M.scene, { src: v === 'zinc' ? [24, 40, 752, 364] : [10, 46, 752, 382], ecrire: ecrireChim, basCol: v === 'zinc' ? 350 : undefined });
+  window.TLRLarge.titre(c, v === 'zinc' ? 'Transfert d’électrons : zinc et ions cuivre II' : 'Oxydant, réducteur : le couple Ox/Red', 14, 28, { couleur: 'cyan', taille: 21, max: v === 'zinc' ? 430 : 460 });
   M.vues = v === 'zinc' ? dessinerZinc(c, M) : dessinerCouple(c, M);
   if (v === 'zinc') reperesZinc(c, M); else reperesCouple(c, M);
+  window.TLRLarge.fin(c);
   return c.fin();
 }
 function voir(M) {

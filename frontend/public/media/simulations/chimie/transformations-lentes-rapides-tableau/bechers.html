@@ -11,6 +11,7 @@
 </div>
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
+<script src="large.js"></script>
 <script src="exposants.js"></script>
 <script>
 /*
@@ -68,7 +69,7 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), { large: true });
   const cadreBase = scene.cadre;
   scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
   M.scene = scene; M.craie = scene.craie;
@@ -163,6 +164,7 @@ function zoneEcriture(c, M, liste, ys, o = {}) {
   }
   let k = -1;
   liste.forEach((e, j) => { const ev = M.ev(e.nom); if (ev && S.t > ev.ecrit + .05) k = j; });   // l’instant même d’un moment n’efface pas encore ses lignes
+  if (window.TLRLarge.actif()) return window.TLRLarge.zone(c, liste, k, (e, lignes) => M.etape(c, e.nom, () => { lignes(); e.plus && !cache(e.nom) && e.plus(c); }), cache);
   const garde = new Set(); let nb = 0;
   for (let j = k; j >= 0; j--) { const l = liste[j].lignes.length; if (nb + l > n) break; garde.add(j); nb += l; }
   let y = 0;
@@ -406,7 +408,7 @@ function dessinerComparer(c, M) {
       const f = (M.S.t * 1.6 + i / 3) % 1; Peint.goutte(ctx, x, 190 + f * (YLB - 194), k);
     }
   });
-  c.texte('Réaction rapide ou réaction lente ?', 14, 28, { couleur: 'cyan', taille: 21 });
+  window.TLRLarge.titre(c, 'Réaction rapide ou réaction lente ?', 14, 28, { couleur: 'cyan', taille: 21 });
   ecrireChim(c, 'Fe²⁺', XBF + 18, 76, { couleur: 'blanc', taille: 19 }); c.texte('ions fer II', XBF + 18, 98, { couleur: 'faible', taille: 15 });
   ecrireChim(c, 'H₂C₂O₄', XBO + 18, 76, { couleur: 'blanc', taille: 19 }); c.texte('acide oxalique', XBO + 18, 98, { couleur: 'faible', taille: 15 });
   for (const B of [BR, BLT]) ecrireChim(c, 'permanganate acidifié (MnO₄⁻ + H⁺)', B.x + B.w / 2, 356, { couleur: 'faible', taille: 15, align: 'center' });
@@ -459,7 +461,7 @@ function dessinerLente(c, M) {
     for (const s of [0, .15, .3, .5, .75, 1]) g.addColorStop(s, rgba(teinteIode(s), 1));
     ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(BARRE.x, BARRE.y, BARRE.w, BARRE.h, 4); ctx.fill();
   });
-  c.texte('Une réaction lente', 14, 28, { couleur: 'cyan', taille: 21 });
+  window.TLRLarge.titre(c, 'Une réaction lente', 14, 28, { couleur: 'cyan', taille: 21 });
   ecrireChim(c, 'I⁻ (iodure de potassium)', XBI + 16, 74, { couleur: 'blanc', taille: 16 });
   ecrireChim(c, 'eau oxygénée acidifiée (H₂O₂ + H⁺)', BI.x + BI.w / 2, 354, { couleur: 'faible', taille: 15, align: 'center' });
   c.rect(BARRE.x, BARRE.y, BARRE.w, BARRE.h, { couleur: 'faible', largeur: 1.4, arrondi: 4 });
@@ -524,10 +526,10 @@ function dessinerSoufre(c, M) {
     ctx.strokeStyle = 'rgba(160,190,215,.9)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(cx, cy, RS, 0, 7); ctx.stroke();
     ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(cx, cy, RS - 4, Math.PI * 1.1, Math.PI * 1.45); ctx.stroke();
   });
-  c.texte('La croix disparaît', 14, 28, { couleur: 'cyan', taille: 21 });
+  window.TLRLarge.titre(c, 'La croix disparaît', 14, 28, { couleur: 'cyan', taille: 21 });
   ecrireChim(c, 'acide (H⁺)', XBS + 16, 72, { couleur: 'blanc', taille: 16 });
   c.texte('thiosulfate', BS.x + BS.w + 8, 286, { couleur: 'faible', taille: 15 }); ecrireChim(c, '(S₂O₃²⁻)', BS.x + BS.w + 8, 308, { couleur: 'faible', taille: 15 });
-  c.texte('croix noire sous le bécher', 306, BS.y + BS.h + 14, { couleur: 'faible', taille: 14 });
+  c.texte('croix noire sous le bécher', BS.x + BS.w / 2, BS.y + BS.h + 38, { couleur: 'faible', taille: 14, align: 'center' });   // sous la feuille : loin de « la croix est cachée »
   c.texte('vu de dessus', DS[0], DS[1] - 104, { couleur: 'jaune', taille: 17, align: 'center' });
   chrono(c, CHS[0], CHS[1], 32, tSoufre() / 60, lignesChrono(tSoufre() / 60));
   M.etape(c, 'croix_cachee', () => c.texte('la croix est cachée : t ≈ 2 min', DS[0], 334, { couleur: 'jaune', taille: 19, align: 'center' }));
@@ -577,7 +579,9 @@ function peindrePortail(ctx, P, r) {
   }
   ctx.restore();
 }
+let BOITE_PHRASE = null;   // tableau large : où la conclusion est écrite dans la colonne
 function dessinerEchelle(c, M) {
+  BOITE_PHRASE = null;
   c.direct(() => {
     const ctx = c.ctx, pr = M.p('rapide');
     if (M.commence('rapide')) {
@@ -587,7 +591,7 @@ function dessinerEchelle(c, M) {
     if (M.commence('lente')) Peint.becher(ctx, VL, .6, teinteIode(fEchelle()));
     if (M.commence('tres_lente')) peindrePortail(ctx, PORTAIL, rouille());
   });
-  c.texte('Rapide ? Lente ? Classer selon la durée', 14, 28, { couleur: 'cyan', taille: 21 });
+  window.TLRLarge.titre(c, 'Rapide ? Lente ? Classer selon la durée', 14, 28, { couleur: 'cyan', taille: 21 });
   M.etape(c, 'axe', () => {
     c.fleche(22, YA, 744, YA, { couleur: 'blanc', largeur: 2.4, tete: 14 });
     for (const x of SEP) c.ligne(x, 66, x, 340, { couleur: 'tresfaible', largeur: 1.4, pointille: [6, 6] });
@@ -609,8 +613,14 @@ function dessinerEchelle(c, M) {
     c.texte('le fer rouille : des années', CX3[2], 330, { couleur: 'blanc', taille: 15, align: 'center' });
   });
   M.etape(c, 'appareils', () => {
-    c.texte('le classement dépend des moyens d’observation', 380, 378, { couleur: 'jaune', taille: 21, align: 'center' });
-    c.texte('(à l’œil, avec un chronomètre, avec un appareil de mesure…)', 380, 404, { couleur: 'faible', taille: 15, align: 'center' });
+    if (window.TLRLarge.actif()) {   // tableau large : la conclusion s’écrit dans la colonne de gauche
+      const b1 = window.TLRLarge.phrase(c, 'le classement dépend des moyens d’observation', { couleur: 'jaune', taille: 24 });
+      const b2 = window.TLRLarge.phrase(c, '(à l’œil, avec un chronomètre, avec un appareil de mesure…)', { couleur: 'faible', taille: 20 });
+      BOITE_PHRASE = [b1[0], b1[1], b1[2], b2[1] + b2[3] - b1[1]];
+    } else {
+      c.texte('le classement dépend des moyens d’observation', 380, 378, { couleur: 'jaune', taille: 21, align: 'center' });
+      c.texte('(à l’œil, avec un chronomètre, avec un appareil de mesure…)', 380, 404, { couleur: 'faible', taille: 15, align: 'center' });
+    }
   });
   return [];
 }
@@ -621,7 +631,9 @@ function reperesEchelle(c, M) {
   c.repere('case_lente', SEP[0] + 4, 70, SEP[1] - SEP[0] - 8, 270, `lente (secondes → heures) : le bécher brunit peu à peu${plus('lente')}`);
   c.repere('case_tres_lente', SEP[1] + 4, 70, 744 - SEP[1] - 4, 270, `très lente (jours, années) : un portail qui rouille${plus('tres_lente')}`);
   c.repere('portail', PORTAIL.x - 6, PORTAIL.y - 12, PORTAIL.w + 12, PORTAIL.h + 18, `le portail en fer : ${rouille() > .6 ? 'rouillé' : rouille() > .05 ? 'il rouille peu à peu' : 'pas encore rouillé'}${plus('tres_lente')}`);
-  c.repere('phrase', 60, 358, 640, 54, `« le classement dépend des moyens d’observation »${plus('appareils')}`);
+  const lp = `« le classement dépend des moyens d’observation »${plus('appareils')}`;
+  if (window.TLRLarge.actif()) { const G = window.TLRLarge.G; window.TLRLarge.repere(c, 'phrase', BOITE_PHRASE || [10, G.y - 24, G.col - 14, 70], lp); }
+  else c.repere('phrase', 60, 358, 640, 54, lp);
 }
 function voirEchelle(M) {
   const m = [];
@@ -635,14 +647,17 @@ function voirEchelle(M) {
 }
 
 /* ── Dessin et ce que voit le tuteur ─────────────────────────────────────── */
+/* Boîte de chaque figure dans le dessin d’origine (sans le titre ni les lignes du bas) : tableau large, voir large.js. */
+const SRC = { comparer: [40, 36, 720, 394], lente: [60, 40, 720, 362], soufre: [24, 40, 690, 362], echelle: [14, 60, 750, 345] };
 const PAGES = {
   comparer: [dessinerComparer, reperesComparer, voirComparer], lente: [dessinerLente, reperesLente, voirLente],
   soufre: [dessinerSoufre, reperesSoufre, voirSoufre], echelle: [dessinerEchelle, reperesEchelle, voirEchelle],
 };
 function dessiner(c, M) {
   MO = M; M.scene.cadre(29);
+  window.TLRLarge.debut(c, M.scene, { src: SRC[M.S.vue], ecrire: ecrireChim });
   const [d, r] = PAGES[M.S.vue];
-  M.vues = d(c, M); r(c, M);
+  try { M.vues = d(c, M); r(c, M); } finally { window.TLRLarge.fin(c); }
   return c.fin();
 }
 function voir(M) {

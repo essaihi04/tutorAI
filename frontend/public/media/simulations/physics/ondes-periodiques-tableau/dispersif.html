@@ -29,7 +29,11 @@ const $ = id => document.getElementById(id);
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const P = { eau_hz: 30, air_hz: 2000 };
 const vEau = N => 0.30 * Math.pow(N / 20, 0.235);           // m/s
-const X0 = 140, X1 = 470, K = 2.5;                           // zone des ondes ; accélération de l'image
+let X0 = 140; const K = 2.5;                                     // début de la zone des ondes ; accélération de l'image
+/* Tableau large (15 novembre 2026) : le cadre prend le format du tableau (scene.L de 760 à 1292) ; la zone des ondes
+ * s'allonge (X1), l'image va plus vite d'autant (KZ) pour garder le même calendrier ; λ, N, v inchangés ; la colonne
+ * des mesures suit, écrite plus grand (≥ 18 px à l'écran). */
+let X1 = 470, KZ = 1, LL = 760;
 const RANGS = [
   { id: 'eau_1', milieu: 'eau', y: 84, N: () => 20 },
   { id: 'eau_2', milieu: 'eau', y: 156, N: () => P.eau_hz, prime: true },
@@ -39,7 +43,7 @@ const RANGS = [
 const v = r => (r.milieu === 'eau' ? vEau(r.N()) : 340);
 const lamCm = r => 100 * v(r) / r.N();
 const lamPx = r => (r.milieu === 'eau' ? 40 : 2) * lamCm(r);              // eau 40 px/cm, air 2 px/cm
-const vVis = r => K * lamPx(r) * r.N() / (r.milieu === 'eau' ? 20 : 1000);  // px/s
+const vVis = r => K * KZ * lamPx(r) * r.N() / (r.milieu === 'eau' ? 20 : 1000);  // px/s
 /* Calendrier (s) */
 const T0 = { eau_1: 0.2, eau_2: 3.4, air_1: 6.6, air_2: 9.4 };
 const T = { eau_1: 3.4, eau_2: 6.4, air_1: 9.4, air_2: 12.2, verdict: 12.6 };
@@ -72,9 +76,12 @@ function peindreAir(ctx, y) {
 
 function dessiner(c) {
   scene.cadre(17);
+  LL = scene.L; X0 = LL >= 1000 ? 185 : 140; X1 = 470 + Math.max(0, LL - 760) * 0.7; KZ = (X1 - X0) / 330;
+  if (LL >= 1000 && c.echelle >= 0.8) c.tailleMin = 18;   // tableau bas : 15 px suffit
+  const XC = X1 + 18, XV = (X0 + X1) / 2;
   c.texte('Surface de l’eau (cuve à ondes)', 14, 34, { couleur: 'cyan', taille: 18 });
   c.texte('Air (le son)', 14, 232, { couleur: 'cyan', taille: 18 });
-  c.ligne(10, 206, 750, 206, { couleur: 'tresfaible', largeur: 1.2, duree: .3 });
+  c.ligne(10, 206, LL - 10, 206, { couleur: 'tresfaible', largeur: 1.2, duree: .3 });
   // La source (vibreur sur l'eau, haut-parleur dans l'air) est peinte avec son milieu, sous la craie, ci-dessous.
   c.direct(() => {
     for (const r of RANGS) {
@@ -99,33 +106,33 @@ function dessiner(c) {
       const xr = X1 - 24 - lp;
       c.cote(xr, r.y + (r.milieu === 'eau' ? 26 : 34), xr + lp, r.y + (r.milieu === 'eau' ? 26 : 34), '', { couleur: 'vert', largeur: 1.8 });
       const lam = lamCm(r), vt = v(r);
-      c.texte(`${r.prime ? 'λ′' : 'λ'} = ${fr(lam, lam < 10 ? 1 : 0)} cm`, 488, r.y - 4, { couleur: 'vert', taille: 17 });
-      if (S.t >= T[r.id] - 0.5) c.texte(`${r.prime ? 'v′' : 'v'} = λ·N = ${r.milieu === 'eau' ? fr(vt, 2) : fr(vt, 0)} m/s`, 488, r.y + 22, { couleur: 'blanc', taille: 17 });
+      c.texte(`${r.prime ? 'λ′' : 'λ'} = ${fr(lam, lam < 10 ? 1 : 0)} cm`, XC, r.y - 4, { couleur: 'vert', taille: 17 });
+      if (S.t >= T[r.id] - 0.5) c.texte(`${r.prime ? 'v′' : 'v'} = λ·N = ${r.milieu === 'eau' ? fr(vt, 2) : fr(vt, 0)} m/s`, XC, r.y + 22, { couleur: 'blanc', taille: 17 });
     }
     // Ce que disent les deux mesures de chaque milieu.
     if (vu('eau_2')) {
-      c.texte('v′ ≠ v : la célérité change avec N', 488, 196, { couleur: 'orange', taille: 16 });
-      c.repere('v_eau', 482, 60, 270, 144, 'les deux célérités dans l’eau');
+      c.texte('v′ ≠ v : la célérité change avec N', XC, 196, { couleur: 'orange', taille: 16 });
+      c.repere('v_eau', XC - 6, 60, LL - XC, 144, 'les deux célérités dans l’eau');
     }
     if (vu('air_2')) {
-      c.texte('v′ = v : la célérité ne change pas', 488, 396, { couleur: 'vert', taille: 16 });
-      c.repere('v_air', 482, 258, 270, 146, 'les deux célérités dans l’air');
+      c.texte('v′ = v : la célérité ne change pas', XC, 396, { couleur: 'vert', taille: 16 });
+      c.repere('v_air', XC - 6, 258, LL - XC, 146, 'les deux célérités dans l’air');
     }
     if (vu('verdict')) {
-      c.rect(250, 18, 230, 30, { couleur: 'orange', largeur: 1.6, fond: 'orange', fondAlpha: .08 });
-      c.texte('eau : milieu dispersif', 365, 39, { couleur: 'orange', taille: 17, align: 'center' });
-      c.repere('verdict_eau', 250, 18, 230, 30, 'l’eau : milieu dispersif');
-      c.rect(250, 214, 230, 30, { couleur: 'vert', largeur: 1.6, fond: 'vert', fondAlpha: .08 });
-      c.texte('air : non dispersif', 365, 235, { couleur: 'vert', taille: 17, align: 'center' });
-      c.repere('verdict_air', 250, 214, 230, 30, 'l’air : non dispersif pour le son');
+      c.rect(XV - 125, 16, 250, 32, { couleur: 'orange', largeur: 1.6, fond: 'orange', fondAlpha: .08 });
+      c.texte('eau : milieu dispersif', XV, 39, { couleur: 'orange', taille: 17, align: 'center' });
+      c.repere('verdict_eau', XV - 125, 16, 250, 32, 'l’eau : milieu dispersif');
+      c.rect(XV - 125, 212, 250, 32, { couleur: 'vert', largeur: 1.6, fond: 'vert', fondAlpha: .08 });
+      c.texte('air : non dispersif', XV, 235, { couleur: 'vert', taille: 17, align: 'center' });
+      c.repere('verdict_air', XV - 125, 212, 250, 32, 'l’air : non dispersif pour le son');
     }
-    if (S.running || S.pause) c.texte(`t = ${fr(S.t, 1)} s`, 748, 34, { couleur: 'faible', taille: 14, align: 'right' });
+    if (S.running || S.pause) c.texte(`t = ${fr(S.t, 1)} s`, LL - 12, 34, { couleur: 'faible', taille: 14, align: 'right' });
   });
   return c.fin();
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, dessiner);
+const scene = window.OndesTableau.Scene(canvas, dessiner, { large: true });
 scene.avancer = dt => {
   if (S.pause || !(S.running || S.fait)) return false;
   S.phase += dt;

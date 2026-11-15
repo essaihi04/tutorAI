@@ -77,17 +77,23 @@ for (const [id, d] of Object.entries(window.CALCULS || {})) {
     titre: d.titre,
     dessiner(c, K) {
       K.titre(craie(d.titre));
-      let y = d.y0 || 82, yPrec = y, xPrec = 30;
-      for (const l of d.lignes) {
+      /* Tableau large (15 novembre 2026, écran 1366 × 613 : « textes minuscules, grands vides à gauche et à droite ») :
+       * le tableau est trois fois plus large que haut, c'est la hauteur qui borne l'agrandissement (ajuster). Les lignes
+       * se serrent (interligne 1,6 au lieu de 1,8, moins de vide sous le titre) : la boîte de l'encre est moins haute, le
+       * kit l'agrandit d'autant ; textes environ 25 % plus grands. Grand écran (1920 × 1080) : disposition d'origine. */
+      const large = c.W > 1 && c.W / Math.max(1, c.H) >= 2.3;
+      let y = large ? Math.min(d.y0 || 82, 68) : (d.y0 || 82), yPrec = y, xPrec = 30;
+      d.lignes.forEach((l, i) => {
         c.pause(l.p ?? .25);
-        const taille = l.taille || d.taille || 19;
+        const taille = l.taille || d.taille || 19, suiv = d.lignes[i + 1];
+        const inter = l.inter === undefined ? undefined : large ? Math.min(l.inter, Math.round(taille * 1.9)) : l.inter;
         if (l.meme) y = yPrec;
         const x = l.x ?? (l.meme ? xPrec : 30 + (l.dx || 0));
         if (l.tab) {
           const H = tableau(c, K, l.tab, x, y - 18);
           if (l.m) K.marque(l.m);
-          yPrec = y; y += l.inter ?? (H + 26);
-          continue;
+          yPrec = y; y += inter ?? (H + (large ? 18 : 26));
+          return;
         }
         const t = craie(l.t), w = Math.min(740 - x, larg(c, t, taille));
         c.texte(t, x, y, { couleur: l.c || 'blanc', taille, max: 740 - x });
@@ -96,8 +102,8 @@ for (const [id, d] of Object.entries(window.CALCULS || {})) {
         if (l.r) c.repere(l.r[0], x - 6, y - taille - 6, w + 12, taille + 16, l.r[1]);
         if (l.m) K.marque(l.m);
         yPrec = y; xPrec = x + w + 14;
-        y += l.inter ?? Math.round(taille * 1.8);
-      }
+        y += inter ?? Math.round(taille * (!large ? 1.8 : l.cadre || (suiv && suiv.cadre) ? 1.95 : 1.6));
+      });
     },
     decrire(K) {
       const D = {}; let acc = [];

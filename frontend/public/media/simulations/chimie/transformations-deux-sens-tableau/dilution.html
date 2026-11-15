@@ -12,6 +12,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
 <script src="exposants.js"></script>
+<script src="zones.js"></script>
 <script>
 /*
  * Dilution et nature de l’acide (cours « Transformations chimiques s’effectuant dans les deux sens », 2e Bac PC BIOF, novembre 2026).
@@ -75,7 +76,7 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), { large: true });   // tableau large : zones.js
   const cadreBase = scene.cadre;
   scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
   M.scene = scene; M.craie = scene.craie;
@@ -156,7 +157,22 @@ function Moteur(o) {
   return M;
 }
 /** Zone d’écriture du bas : le professeur efface les plus vieilles lignes (copie du modèle). */
+/* Tableau large : les lignes du bas vont dans une colonne de texte à gauche (M.colonne = { x, w, y0, pas, taille }), coupées
+ * à la ligne, plus nombreuses ; la page met cette colonne (hors du cadre 760, x ≥ 800) dans une zone de zones.js. */
+function couperZ(c, t, max, taille) {
+  const mots = String(t).split(' '), out = []; let l = '';
+  for (const m of mots) { const e = l ? l + ' ' + m : m; if (l && larg(c, e, taille) > max) { out.push(l); l = m; } else l = e; }
+  if (l) out.push(l);
+  return out;
+}
 function zoneEcriture(c, M, liste, ys, o = {}) {
+  const K = M.colonne;
+  if (K) {
+    const t = K.taille ?? 18;
+    liste = liste.map(e => ({ ...e, lignes: e.lignes.flatMap(([s, col]) => couperZ(c, s, K.w, t).map(l => [l, col])) }));
+    ys = []; for (let y = K.y0; y <= (K.bas ?? 410); y += K.pas) ys.push(y);
+    o = { ...o, x: K.x, max: K.w, taille: t };
+  }
   const S = M.S, x = o.x ?? 14, max = o.max ?? 730, taille = o.taille ?? 17, n = ys.length, vues = [];
   if (S.mesure) {
     for (const e of liste) M.etape(c, e.nom, () => { for (const [t, col] of e.lignes) c.texte(t, x, ys[0], { couleur: col, taille, max }); e.plus && e.plus(c); });
@@ -530,11 +546,24 @@ const seg = (p, a, b) => clamp((p - a) / (b - a), 0, 1);
 function dessiner(c, M) {
   MO = M; M.scene.cadre(71);
   const v = M.S.vue;
-  c.texte(TITRE_TABLEAU[v], 14, 26, { couleur: 'cyan', taille: 20 });
-  M.vues = ({ mesures: vueMesures, taux: vueTaux, nature: vueNature })[v](c, M) || [];
-  reperes(c, M);
+  // Tableau large (≥ 1000) : la vue est découpée en zones rangées sur toute la largeur (zones.js, ZONES plus bas).
+  const Z = ZONES[v] || { cols: [[[0, 40, 760, 420]]] }, large = M.scene.L >= Zones.L_MIN;
+  M.colonne = large && Z.colonne ? Z.colonne : null;
+  const titre = () => c.texte(TITRE_TABLEAU[v], 14, 26, { couleur: 'cyan', taille: large ? 24 : 20 });
+  if (large) titre();
+  Zones.dessiner(c, M.scene.L, large ? Z : null, () => {
+    if (!large) titre();
+    M.vues = ({ mesures: vueMesures, taux: vueTaux, nature: vueNature })[v](c, M) || [];
+    reperes(c, M);
+  });
   return c.fin();
 }
+/* Zones du tableau large, par vue : colonnes de rectangles du dessin d'origine (760 × 420). */
+const ZONES = {
+  // la colonne de gauche : les phrases écrites au fil du déroulé (coupées à la ligne) ; à droite la manip, grandie
+  mesures: { cols: [[[796, 46, 1054, 414]], [[14, 40, 762, 346]]], colonne: { x: 800, w: 250, y0: 70, pas: 26, taille: 19 } },
+  nature: { cols: [[[796, 46, 1054, 414]], [[14, 40, 752, 346]]], colonne: { x: 800, w: 250, y0: 70, pas: 26, taille: 19 } },
+};
 /** Câble de la sonde vers le pH-mètre (à droite : vers son bord gauche ; à gauche : vers son bord droit). */
 function cable(ctx, x1, y1, A) {
   const droite = A.x > x1, x2 = droite ? A.x : A.x + A.w, y2 = A.y + A.h / 2;

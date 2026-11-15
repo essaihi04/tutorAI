@@ -74,9 +74,11 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  /* Agrandissement du 15 novembre 2026 : le cadre prend le format du tableau et la boîte de l'encre de l'image complète
+   * (fin du déroulé) remplit le tableau ; elle est remesurée à chaque changement de vue. */
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), { large: true, ajuster: true, complet: f => { const t = S.t; S.t = 1e6; try { f(); } finally { S.t = t; } } });
   const cadreBase = scene.cadre;
-  scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
+  scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; poser(k, M); return k; };
   M.scene = scene; M.craie = scene.craie;
   function calculer() {
     construire();
@@ -127,7 +129,7 @@ function Moteur(o) {
     p = p || {};
     const r = o.appliquer(p, M) || {};
     if (r.vue && o.vues.includes(r.vue) && r.vue !== S.vue) { S.vue = r.vue; r.change = true; r.vueChange = true; }
-    if (r.change) { calculer(); if (r.vueChange) scene.reecrire(); }
+    if (r.change) { calculer(); if (r.vueChange) { scene.boite = null; scene.reecrire(); } else scene.remesurer(); }
     noter('set_parameters', o.params(M));
     if (r.apres) r.apres();
     else if (r.change && !r.garder) start();
@@ -153,6 +155,29 @@ function Moteur(o) {
     setTimeout(() => { if (!S.running && S.t === 0 && !S.pause && !S.fait) start(); }, 900);
   };
   return M;
+}
+/* ── Tableau large (15 novembre 2026, « la simulation n'occupe qu'une bande étroite, textes minuscules ») ──────────────
+ * Sur un tableau large (scene.L ≥ 1000, écran de portable), une vue déclarée dans LARGE[vue] = { k, x, y, g } est agrandie
+ * k fois et posée en (x, y) du cadre ; chaque groupe g[nom] = [dx, dy] (la conclusion du bas, la suite d'un calcul…) est
+ * déplacé dans la place libre à droite (grp(c, nom, fn) entoure son dessin ET son repère, que le professeur pointe donc
+ * au bon endroit). Les autres vues, et tout le grand écran (L < 1000), gardent l'ajustement automatique. */
+const LARGE = {};
+let LG = null;
+function poser(c, M) {
+  const sc = M.scene, d = !sc.mesurant && sc.L >= 1000 && LARGE[M.S.vue];
+  LG = d || null; if (!d) return;
+  const s0 = Math.min(c.W / sc.L, c.H / 420), ox0 = (c.W - sc.L * s0) / 2, oy0 = (c.H - 420 * s0) / 2;
+  const cx = Math.max(0, (sc.L - (d.L || 1292)) / 2);   // tableau plus large (jusqu'à 1596) : la disposition est centrée
+  const ns = s0 * d.k, nox = ox0 + (d.x + cx) * s0, noy = oy0 + d.y * s0;
+  c.ctx.scale(1 / sc.s, 1 / sc.s); c.ctx.translate(-sc.ox, -sc.oy);   // défait le cadrage de l'ajustement
+  c.ctx.translate(nox, noy); c.ctx.scale(ns, ns);
+  sc.s = ns; sc.ox = nox; sc.oy = noy; c.echelle = ns;
+  c.cadre = { w: (sc.L - d.x) / d.k, h: (420 - d.y) / d.k, haut: 0 };
+}
+/** Dessine `fn` dans le groupe `nom` : déplacé sur un tableau large si la vue le demande. */
+function grp(c, nom, fn) {
+  const d = LG && LG.g && LG.g[nom]; if (!d) return fn();
+  c.ctx.save(); c.ctx.translate(d[0], d[1]); try { return fn(); } finally { c.ctx.restore(); }
 }
 /** Zone d’écriture du bas : le professeur efface les plus vieilles lignes (copie du modèle). */
 function zoneEcriture(c, M, liste, ys, o = {}) {
@@ -582,11 +607,14 @@ function vueTaux(c, M) {
       { taille: 21, cols: [0, 0, 0, 0, 0, 0, 0, 'jaune'] });
     c.texte('([H₃O⁺]_{éq} = 10^{−pH} mol/L ; pH = 3,41)', 470, YT.taux - 6, { couleur: 'faible', taille: 15, max: 280 });
   });
-  M.etape(c, 'limitee', () => {
+  M.etape(c, 'limitee', () => grp(c, 'limitee', () => {
     c.rect(22, YT.limitee - 26, 290, 38, { couleur: 'jaune', largeur: 2, arrondi: 8 });
     c.texte('τ < 1 : réaction limitée', 36, YT.limitee, { couleur: 'jaune', taille: 22 });
-    c.texte('x_{éq} < x_max : il reste du CH₃COOH à l’équilibre', 330, YT.limitee, { couleur: 'faible', taille: 16, max: 420 });
-  });
+    if (LG) {   // tableau large : la remarque sous le cadre, sur deux lignes
+      c.texte('x_{éq} < x_max :', 22, YT.limitee + 40, { couleur: 'faible', taille: 18 });
+      c.texte('il reste du CH₃COOH à l’équilibre', 22, YT.limitee + 66, { couleur: 'faible', taille: 18, max: 320 });
+    } else c.texte('x_{éq} < x_max : il reste du CH₃COOH à l’équilibre', 330, YT.limitee, { couleur: 'faible', taille: 16, max: 420 });
+  }));
   const vues = [];
   if (M.commence('tableau')) vues.push('tableau d’avancement : CH₃COOH + H₂O ⇌ CH₃COO⁻ + H₃O⁺ ; état initial : C·V, excès, 0, 0 ; état d’équilibre : C·V − x_éq, excès, x_éq, x_éq');
   if (M.commence('x_max')) vues.push('x_max = C·V = 1,0·10⁻² × 0,100 = 1,0·10⁻³ mol');
@@ -687,11 +715,24 @@ function vueEquilibre(c, M) {
       c.texte(nom, BG.xs[i], BG.y0 + 20, { couleur: 'blanc', taille: 15, align: 'center' });
     });
   });
-  M.etape(c, 'phrase', () => {
+  M.etape(c, 'phrase', () => grp(c, 'bas', () => {
+    if (LG) {   // tableau large : à droite, sur deux lignes
+      c.rect(150, 340, 330, 70, { couleur: 'jaune', largeur: 2, arrondi: 10 });
+      c.texte('état d’équilibre dynamique :', 315, 368, { couleur: 'jaune', taille: 20, align: 'center', max: 310 });
+      c.texte('concentrations constantes', 315, 396, { couleur: 'jaune', taille: 20, align: 'center', max: 310 });
+      return;
+    }
     c.rect(150, 340, 460, 36, { couleur: 'jaune', largeur: 2, arrondi: 10 });
     c.texte('état d’équilibre dynamique : concentrations constantes', 380, 364, { couleur: 'jaune', taille: 19, align: 'center', max: 440 });
-  });
-  M.etape(c, 'question', () => c.texte('quel nombre relie ces trois concentrations ?', 380, 406, { couleur: 'cyan', taille: 21, align: 'center' }));
+  }));
+  M.etape(c, 'question', () => grp(c, 'bas', () => {
+    if (LG) {
+      c.texte('quel nombre relie', 315, 452, { couleur: 'cyan', taille: 22, align: 'center' });
+      c.texte('ces trois concentrations ?', 315, 480, { couleur: 'cyan', taille: 22, align: 'center' });
+      return;
+    }
+    c.texte('quel nombre relie ces trois concentrations ?', 380, 406, { couleur: 'cyan', taille: 21, align: 'center' });
+  }));
   M.eq = { E, tc };
   const vues = [];
   if (M.vu('chrono')) vues.push('pH = 3,41 à t = 0, 5 et 10 min');
@@ -701,6 +742,12 @@ function vueEquilibre(c, M) {
   if (M.commence('question')) vues.push('quel nombre relie ces trois concentrations ?');
   return vues;
 }
+
+/* Tableau large : vue agrandie, le bas (encadré, question) à droite. */
+Object.assign(LARGE, {
+  taux: { k: 1.15, x: 10, y: 0, g: { limitee: [752, -170] } },
+  equilibre: { k: 1.15, x: 10, y: 0, g: { bas: [624, -232] } },
+});
 
 /* ── Dessin ──────────────────────────────────────────────────────────── */
 const seg = (p, a, b) => clamp((p - a) / (b - a), 0, 1);
@@ -731,15 +778,17 @@ function reperes(c, M) {
     R('x_max', 24, YT.x_max - 22, 420, 30, `« x_max = C·V = 1,0·10⁻³ mol »${q('x_max')}`);
     R('x_eq', 24, YT.x_eq - 22, 560, 30, `« x_éq = [H₃O⁺]éq·V = 3,89·10⁻⁵ mol »${q('x_eq')}`);
     R('taux', 24, YT.taux - 40, 440, 62, `« τ = 10^(−pH)/C = 10^(−3,41)/1,0·10⁻² = 0,039 »${q('taux')}`);
-    R('limitee', 22, YT.limitee - 26, 290, 38, `« τ < 1 : réaction limitée »${q('limitee')}`);
+    grp(c, 'limitee', () => R('limitee', 22, YT.limitee - 26, LG ? 330 : 290, LG ? 104 : 38, `« τ < 1 : réaction limitée »${q('limitee')}`));
   } else {
     const { MET, B } = VE, e = ecranPH(MET);
     R('becher', B.x - 6, B.y - 6, B.w + 12, B.h + 12, 'le bécher de l’exemple A (acide éthanoïque, C = 1,0·10⁻² mol/L, incolore)');
     R('afficheur', e.x, e.y, e.w, e.h, 'l’afficheur du pH-mètre : 3,41 tout le temps');
     CPT.forEach((b, k) => R('compteur_' + (k + 1), b.x, b.y, b.w, b.h, `le compteur « ${b.nom} »${q('compteurs')}`));
     R('barres', 490, 44, 262, 270, `les trois barres constantes : [CH₃COOH]éq 9,61·10⁻³, [CH₃COO⁻]éq et [H₃O⁺]éq 3,89·10⁻⁴ mol/L${q('barres')}`);
-    R('phrase', 150, 340, 460, 36, `« état d’équilibre dynamique : concentrations constantes »${q('phrase')}`);
-    R('question', 160, 386, 440, 28, `« quel nombre relie ces trois concentrations ? »${q('question')}`);
+    grp(c, 'bas', () => {
+      R('phrase', 150, 340, LG ? 330 : 460, LG ? 70 : 36, `« état d’équilibre dynamique : concentrations constantes »${q('phrase')}`);
+      R('question', 160, LG ? 428 : 386, LG ? 310 : 440, LG ? 60 : 28, `« quel nombre relie ces trois concentrations ? »${q('question')}`);
+    });
   }
 }
 

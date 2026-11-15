@@ -82,36 +82,52 @@ function lignes(c, texte, taille, max) {
   return out;
 }
 function paragraphe(c, texte, x, y, taille, max, o, dessiner) {
-  for (const l of lignes(c, texte, taille, max)) { if (dessiner) c.texte(l, x, y, { taille, ...o }); y += taille * 1.2; }
+  for (const l of lignes(c, texte, taille, max)) { if (dessiner) c.texte(l, x, y, { taille, ...o }); y += taille * INTER; }
   return y;
 }
 
 // Quatre colonnes de deux blocs, dans le cadre 760 × 420, rien sous y = 360 ; hauteurs mesurées, réparties dans la colonne.
-const COL = [{ x: 16, w: 168 }, { x: 204, w: 168 }, { x: 392, w: 168 }, { x: 580, w: 164 }], HAUT = 52, BAS = 358;
+let COL = [{ x: 16, w: 168 }, { x: 204, w: 168 }, { x: 392, w: 168 }, { x: 580, w: 164 }], HAUT = 52, BAS = 358, INTER = 1.2;
 const POS = [];   // position calculée de chaque bloc : { x, w, y0, h }
-const TF = 12.5;  // taille des formules
-const TD = 11.5;  // taille du texte
+let TF = 12.5;    // taille des formules
+let TD = 11.5;    // taille du texte
+let TT = 14, TA = 11, LF = 760, DX = 0;   // titre d’un bloc, piège ; largeur de la fiche, décalage (centrage)
+/* Tableau large (15 novembre 2026, « cases serrées, petits textes qui se chevauchent ») : sur un tableau large
+ * (scene.L ≥ 1000), les quatre colonnes s’étalent sur toute la largeur, jusqu’en bas du cadre, et les tailles sont
+ * celles qui s’écriront VRAIMENT (au moins 15,5 px à l’écran) : la mise en page est mesurée avec elles, rien ne
+ * déborde ni ne se chevauche. Grand écran (L < 1000) : la fiche d’origine (760 de large), centrée. */
+function geometrie() {
+  const L = scene.L || 760, large = L >= 1000, s = scene.s || 1, min = 15.1 / s;
+  if (large) {
+    const M = 16, G = 22, w = (L - 2 * M - 3 * G) / 4;
+    COL = [0, 1, 2, 3].map(k => ({ x: M + k * (w + G), w })); BAS = 416; HAUT = 48; LF = L; DX = 0; INTER = 1.13;
+    const k = 1.4; TF = Math.max(12.5 * k, min); TD = Math.max(11.5 * k, min); TT = Math.max(14 * k, min); TA = Math.max(11 * k, min);
+  } else {
+    COL = [{ x: 16, w: 168 }, { x: 204, w: 168 }, { x: 392, w: 168 }, { x: 580, w: 164 }]; BAS = 358; HAUT = 52; LF = 760; DX = (L - 760) / 2; INTER = 1.2;
+    TF = 12.5; TD = 11.5; TT = 14; TA = 11;
+  }
+}
 
 /* Écrit (ou mesure seulement) le contenu d'un bloc ; rend l'ordonnée de fin. */
 function contenu(c, b, x, y0, w, st, dessiner) {
-  let y = y0 + 12;
-  if (dessiner) c.texte(b.titre, x, y, { couleur: 'cyan', taille: 14, max: st ? w - 56 : w });
-  y += 19;
+  let y = y0 + TT * .85;
+  if (dessiner) c.texte(b.titre, x, y, { couleur: 'cyan', taille: TT, max: st ? w - 56 : w });
+  y += TT * 1.35;
   // formules encadrées, à la ligne quand la suivante ne tient plus
   let fx = x;
   for (const f of b.formules) {
     const l = Math.min(w, largeur(c, f, TF) + 14);
-    if (fx > x && fx + l > x + w) { fx = x; y += 22; }
+    if (fx > x && fx + l > x + w) { fx = x; y += TF * 1.76; }
     if (dessiner) {
-      c.rect(fx, y - 13, l, 19, { couleur: 'jaune', arrondi: 6, largeur: 1.2, alpha: .7, duree: .25 });
+      c.rect(fx, y - TF * 1.04, l, TF * 1.52, { couleur: 'jaune', arrondi: 6, largeur: 1.2, alpha: .7, duree: .25 });
       c.texte(f, fx + 7, y + 1, { couleur: 'blanc', taille: TF, max: l - 10 });
     }
     fx += l + 7;
   }
-  y += 22;
+  y += TF * 1.76;
   y = paragraphe(c, b.def, x, y, TD, w, { couleur: 'blanc', alpha: .9 }, dessiner);
-  if (dessiner) c.texte('⚠', x, y, { couleur: 'orange', taille: 11 });
-  y = paragraphe(c, b.attention, x + 14, y, 11, w - 14, { couleur: 'orange', alpha: .92 }, dessiner);
+  if (dessiner) c.texte('⚠', x, y, { couleur: 'orange', taille: TA });
+  y = paragraphe(c, b.attention, x + TA * 1.3, y, TA, w - TA * 1.3, { couleur: 'orange', alpha: .92 }, dessiner);
   return y - 8;   // la dernière ligne descend d'environ 0,3 taille sous sa base
 }
 function placer(c) {
@@ -140,12 +156,13 @@ function bloc(c, b, i) {
 }
 
 function dessinerFiche(c) {
+  geometrie(); if (DX) c.ctx.translate(DX, 0);
   placer(c);
   if (S.apparu.some(a => a === AVANT)) c.cur = AVANT;   // la voix est déjà passée : le titre est écrit d'un coup
   c.texte('Ce qu’il faut retenir · le dipôle RC', 16, 30, { couleur: 'cyan', taille: 22 });
-  c.texte('formules · à savoir · ⚠ piège', 744, 28, { couleur: 'faible', taille: 12, align: 'right' });
-  c.ligne(16, 38, 744, 38, { couleur: 'tresfaible', largeur: 1.4 });
-  c.repere('fiche', 10, 10, 740, BAS - 4, 'la fiche du chapitre');
+  c.texte('formules · à savoir · ⚠ piège', LF - 16, 28, { couleur: 'faible', taille: 12, align: 'right' });
+  c.ligne(16, 38, LF - 16, 38, { couleur: 'tresfaible', largeur: 1.4 });
+  c.repere('fiche', 10, 10, LF - 20, BAS - 4, 'la fiche du chapitre');
   const debut = c.cur;
   let fin = c.cur;
   BLOCS.forEach((b, i) => {
@@ -156,6 +173,7 @@ function dessinerFiche(c) {
 }
 
 function dessinerLacunes(c) {
+  geometrie(); c.ctx.translate((LF > 760 ? (LF - 760) / 2 : DX), 0);   // page de l’élève : texte d’origine, centré
   c.texte('Ta page : ce qu’il te reste à retravailler', 22, 30, { couleur: 'cyan', taille: 22 });
   c.ligne(22, 38, 740, 38, { couleur: 'tresfaible', largeur: 1.4 });
   let y = 70;
@@ -188,7 +206,7 @@ function dessinerLacunes(c) {
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(61 + S.page); if (S.page === 1) dessinerFiche(c); else dessinerLacunes(c); return c.fin(); });
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(61 + S.page); if (S.page === 1) dessinerFiche(c); else dessinerLacunes(c); return c.fin(); }, { large: true });
 const maintenant = () => (performance.now() - scene.ouvert) / 1000;
 
 /* Page n ; `focus` = le bloc que la voix dit maintenant ; `tout` = toute la fiche d'un coup. */
@@ -252,7 +270,7 @@ $('imprimer').onclick = () => {
 };
 canvas.addEventListener('pointerdown', e => {
   if (S.page !== 1) return;
-  const r = canvas.getBoundingClientRect(), [x, y] = scene.local(e.clientX - r.left, e.clientY - r.top);
+  const r = canvas.getBoundingClientRect(), [xl, y] = scene.local(e.clientX - r.left, e.clientY - r.top), x = xl - DX;
   const i = BLOCS.findIndex((b, k) => { const p = POS[k]; return p && S.apparu[k] != null && x >= p.x - 6 && x <= p.x + p.w + 6 && y >= p.y0 - 6 && y <= p.y0 + p.h; });
   if (i < 0) return;
   S.focus = BLOCS[i].id; scene.sale = true; bulle($('feedback'), lisible(BLOCS[i].def));

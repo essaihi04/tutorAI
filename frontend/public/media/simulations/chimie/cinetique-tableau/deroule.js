@@ -70,7 +70,12 @@
     const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : (o.bouton || 'Lancer'); };
     const emettre = () => pont && pont.emettre();
     const noter = (a, d) => pont && pont.noter(a, d);
-    scene = window.OndesTableau.Scene($('canvas'), c => o.dessiner(c, D));
+    /* Agrandissement (15 novembre 2026, « la simulation n'occupe qu'une bande étroite, textes minuscules ») : la boîte de
+     * l'encre de l'image FINALE (toutes les étapes jouées, `complet`) remplit le tableau ; elle est mesurée une fois, donc
+     * rien ne saute pendant le déroulé, et remesurée après un réglage du curseur. o.scene peut changer ces options.
+     * (Copie de ce dossier seulement : les autres copies de deroule.js ne sont pas touchées.) */
+    const complet = fn => { const t = S.t, f = S.fait; S.t = FIN; S.fait = true; try { fn(); } finally { S.t = t; S.fait = f; } };
+    scene = window.OndesTableau.Scene($('canvas'), c => o.dessiner(c, D), { ajuster: true, complet, ...(o.scene || {}) });
     const cadreBase = scene.cadre;
     scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
     D.scene = scene;
@@ -109,7 +114,7 @@
     }
     function setParameters(p) {
       if (!o.appliquer(p || {}, D)) return;
-      scene.sale = true; noter('set_parameters', o.params()); if (o.apresReglage) dire(o.apresReglage(D)); emettre();
+      scene.remesurer(); scene.sale = true; noter('set_parameters', o.params()); if (o.apresReglage) dire(o.apresReglage(D)); emettre();
     }
     Object.assign(D, { start, pause, resume, reset, setTime, playUntil, setParameters, dire, emettre, noter, etiquette });
     $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());

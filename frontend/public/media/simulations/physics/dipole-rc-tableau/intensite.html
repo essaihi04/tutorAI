@@ -12,6 +12,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
 <script src="exposants.js"></script>
+<script src="colonne.js"></script>
 <script>
 /*
  * i est la pente de q(t) (cours « Dipôle RC », 2e Bac PC BIOF, novembre 2026).
@@ -66,7 +67,7 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), { large: true });
   const cadreBase = scene.cadre;
   scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
   M.scene = scene; M.craie = scene.craie;
@@ -239,7 +240,7 @@ const Peint = {
 const Q = 2640, TAU = .22, TMAX = 1.2, QMAX = 3000, I0D = 1.5, DT0 = .3, TP = 1.1, TDEC = .2;
 const qc = t => Q * (1 - Math.exp(-t / TAU)), qd = t => Q * Math.exp(-t / TAU);
 const iC = t => Q / TAU * Math.exp(-t / TAU) / 1000;   // mA
-const O = { x: 70, y: 340, w: 380, h: 270 }, O2 = { x: 530, y: 385, w: 200, h: 150 };
+let O = { x: 70, y: 340, w: 380, h: 270 }, O2 = { x: 530, y: 385, w: 200, h: 150 };   // geo() : tableau large
 const PX = t => O.x + t * O.w / TMAX, PY = q => O.y - q * O.h / QMAX;
 const PX2 = t => O2.x + t * O2.w / TMAX, PY2 = q => O2.y - q * O2.h / QMAX;
 const S2 = { ts: .2, libre: false };
@@ -267,8 +268,20 @@ function droite(c, t1, q1, k, demi, o) {
   if (k < 0) { tb = Math.min(tb, t1 - q1 / k); }
   c.ligne(PX(ta), PY(q(ta)), PX(tb), PY(q(tb)), o);
 }
+/* Tableau large (colonne.js, sans colonne) : dessin prévu sur 1292 × 420 — grand graphe q(t) à gauche, calculs agrandis
+ * au centre, la décharge à droite. Grand écran (L < 1000) : disposition d’origine. */
+const COL = { debut(c) { (this.k ||= RCColonne(MO.scene, { boite: { x0: 0, y0: 0, x1: 1292, y1: 420 }, colonne: 0, zoomMax: 1, versColonne: () => false })).debut(c); } };
+/** Géométrie de l’image : origine (760 × 420) ou large (1292 × 420). */
+function geo() {
+  const g = !!(COL.k && COL.k.st.on);
+  O = g ? { x: 80, y: 372, w: 540, h: 322 } : { x: 70, y: 340, w: 380, h: 270 };
+  O2 = g ? { x: 1000, y: 372, w: 250, h: 210 } : { x: 530, y: 385, w: 200, h: 150 };
+  return g
+    ? { large: true, px: 690, k: 1.3, y: [70, 102, 150, 192, 238, 290], bx: 724, bw: 146, dx: O2.x, dy1: O2.y - O2.h - 74, dy2: O2.y - O2.h - 46, dmax: 260 }
+    : { large: false, px: 494, k: 1, y: [64, 88, 122, 150, 182, 214], bx: 520, bw: 110, dx: 604, dy1: 270, dy2: 292, dmax: 150 };
+}
 function dessiner(c, M) {
-  MO = M; M.scene.cadre(13);
+  MO = M; M.scene.cadre(13); COL.debut(c); const G = geo();
   c.texte('i est la pente de q(t)', 14, 28, { couleur: 'cyan', taille: 20 });
   // Axes et la courbe de charge (rouge), écrits d’abord.
   const tg = []; for (let k = 1; k <= 6; k++) tg.push([k * .2 * O.w / TMAX / (O.w + 16), fr(k * .2, 1)]);
@@ -285,8 +298,8 @@ function dessiner(c, M) {
   if (p1 > 0) c.direct(() => c.ligne(PX(0), PY(0), PX(TMAX * p1), PY(I0D * 1000 * TMAX * p1), { couleur: 'blanc', largeur: 1.8, pointille: [7, 6] }));
   M.etape(c, 'courant_constant', () => {
     c.texte('q = I_0·t', PX(.62) + 8, PY(I0D * 1000 * .62) + 22, { couleur: 'blanc', taille: 15 });
-    c.texte('si I_0 est constant :', 494, 64, { couleur: 'blanc', taille: 17 });
-    c.texte('q = I_0·t  donc  I_0 = q/t', 494, 88, { couleur: 'blanc', taille: 17 });
+    c.texte('si I_0 est constant :', G.px, G.y[0], { couleur: 'blanc', taille: 17 * G.k });
+    c.texte('q = I_0·t  donc  I_0 = q/t', G.px, G.y[1], { couleur: 'blanc', taille: 17 * G.k });
   });
   // 2-3. La corde, qui devient la tangente.
   const tp = tPoint(), qp = qc(tp);
@@ -309,16 +322,16 @@ function dessiner(c, M) {
   // Le point de tangence (poignée).
   c.direct(() => { c.point(PX(tp), PY(qp), 5.5, 'jaune'); c.ctx.strokeStyle = 'rgba(250,204,21,.6)'; c.ctx.lineWidth = 1.2; c.ctx.beginPath(); c.ctx.arc(PX(tp), PY(qp), 9, 0, 7); c.ctx.stroke(); });
   M.etape(c, 'corde', () => {
-    c.texte('corde : pente = Δq/Δt', 494, 122, { couleur: 'vert', taille: 17 });
+    c.texte('corde : pente = Δq/Δt', G.px, G.y[2], { couleur: 'vert', taille: 17 * G.k });
   });
   const valeur = () => `à t = ${fr(tp, 2)} s : i ≈ ${fr(iC(tp), 1)} mA`;
   M.etape(c, 'tangente', () => {
-    c.texte('Δt → 0 : la corde devient la tangente', 494, 150, { couleur: 'jaune', taille: 16, max: 256 });
-    c.texte('i = dq/dt', 520, 182, { couleur: 'jaune', taille: 23 });
-    c.rect(508, 160, 110, 32, { couleur: 'jaune', largeur: 1.4, arrondi: 6 });
-    if (!M.vu('tangente') || M.S.mesure) c.texte(valeur(), 494, 214, { couleur: 'blanc', taille: 16, max: 256 });
+    c.texte('Δt → 0 : la corde devient la tangente', G.px, G.y[3], { couleur: 'jaune', taille: 16 * G.k, max: 256 * G.k * 1.1 });
+    c.texte('i = dq/dt', G.bx, G.y[4], { couleur: 'jaune', taille: 23 * G.k });
+    c.rect(G.bx - 12, G.y[4] - 22 * G.k, G.bw, 32 * G.k, { couleur: 'jaune', largeur: 1.4, arrondi: 6 });
+    if (!M.vu('tangente') || M.S.mesure) c.texte(valeur(), G.px, G.y[5], { couleur: 'blanc', taille: 16 * G.k, max: 256 * G.k * 1.1 });
   });
-  if (M.vu('tangente') && !M.S.mesure) c.direct(() => c.texte(valeur(), 494, 214, { couleur: 'blanc', taille: 16, max: 256 }));
+  if (M.vu('tangente') && !M.S.mesure) c.direct(() => c.texte(valeur(), G.px, G.y[5], { couleur: 'blanc', taille: 16 * G.k, max: 256 * G.k * 1.1 }));
   // 4. Au palier : pente nulle.
   M.etape(c, 'pente_nulle', () => {
     c.texte('pente nulle : i = 0', PX(1.2), PY(qc(1.1)) - 16, { couleur: 'jaune', taille: 17, align: 'right' });
@@ -339,13 +352,13 @@ function dessiner(c, M) {
     c.ligne(PX2(ta), PY2(q1 + k * (ta - TDEC)), PX2(tb), PY2(q1 + k * (tb - TDEC)), { couleur: 'jaune', largeur: 2 });
     c.point(PX2(TDEC), PY2(q1), 4, 'jaune');
     c.texte('décharge', PX2(.5), PY2(qd(.5)) - 34, { couleur: 'bleu', taille: 15 });
-    c.texte('q diminue : i < 0', 604, 270, { couleur: 'jaune', taille: 17 });
-    c.texte(`à t = ${fr(TDEC, 1)} s : i ≈ −${fr(iC(TDEC), 1)} mA`, 604, 292, { couleur: 'blanc', taille: 14, max: 150 });
+    c.texte('q diminue : i < 0', G.dx, G.dy1, { couleur: 'jaune', taille: 17 * G.k });
+    c.texte(`à t = ${fr(TDEC, 1)} s : i ≈ −${fr(iC(TDEC), 1)} mA`, G.dx, G.dy2, { couleur: 'blanc', taille: 14 * G.k, max: G.dmax });
   });
-  reperes(c, M, tp, qp);
+  reperes(c, M, tp, qp, G);
   return c.fin();
 }
-function reperes(c, M, tp, qp) {
+function reperes(c, M, tp, qp, G) {
   c.repere('axe_t', O.x, O.y - 12, O.w + 20, 36, 'l’axe des temps : t (s)');
   c.repere('axe_q', O.x - 46, O.y - O.h - 22, 60, O.h + 28, 'l’axe des charges : q (µC)');
   c.repere('courbe', O.x, O.y - O.h, O.w, O.h, 'la courbe q(t) de la charge (rouge)');
@@ -356,7 +369,7 @@ function reperes(c, M, tp, qp) {
   c.repere('point', PX(tp) - 12, PY(qp) - 12, 24, 24, `le point de tangence, t = ${fr(tp, 2)} s (poignée : glisser le long de la courbe)`);
   c.repere('pente_nulle', PX(.9), PY(Q) - 36, PX(1.2) - PX(.9), 48, 'au palier : tangente horizontale, i = 0');
   c.repere('courbe_decharge', O2.x, O2.y - O2.h, O2.w, O2.h, 'la courbe de décharge q(t), en bleu');
-  c.repere('signe_i', 598, 250, 152, 50, '« q diminue : i < 0 »');
+  c.repere('signe_i', G.dx - 6, G.dy1 - 20 * G.k, G.dmax + 8, G.dy2 - G.dy1 + 30 * G.k, '« q diminue : i < 0 »');
 }
 function voir(M) {
   const tp = tPoint(), m = [`${M.etat()[0].toUpperCase() + M.etat().slice(1)}. Courbe q(t) de la charge à la craie rouge (E = 12 V, R = 1 kΩ, C = 220 µF : Q = 2640 µC), axes t (s, 0 à 1,2) et q (µC, 0 à 3000).`];

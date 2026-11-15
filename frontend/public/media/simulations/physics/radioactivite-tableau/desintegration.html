@@ -393,7 +393,7 @@ function dessinerEquation(c) {
       const x1 = c.texte('X = ', X0, 296, { taille: 24, couleur: 'jaune', duree: .2 }) && X0 + c.largeurTexte('X = ', 24);
       const x2 = formule(c, '[32,16]S', x1, 296, { taille: 24, couleur: 'jaune', duree: .4 });
       c.texte(' : le soufre', x2, 296, { taille: 20, couleur: 'jaune', duree: .4 });
-      formule(c, '[32,15]P → [32,16]S + [0,-1]e : désintégration β⁻', 380, 380, { taille: 19, couleur: 'vert', duree: .01, align: 'center' });
+      basDePage(c, '[32,15]P → [32,16]S + [0,-1]e : désintégration β⁻', { taille: 19, couleur: 'vert', duree: .01 });
     });
     return;
   }
@@ -424,8 +424,18 @@ function dessinerEquation(c) {
     c.texte('conservation du nombre de charge', X0 + 4, yZ + 22, { taille: 14, couleur: 'faible', duree: .4 });
   });
   c.repere('tableau_Z', R2.x + 10, 296, R2.w - 20, 32, 'pas de tableau des symboles ici (voir le type « inconnu »)');
-  c.repere('conclusion', 20, 356, 720, 34, 'la conclusion');
-  quand(c, 'conclusion', 1.6, () => formule(c, d.conclusion, 380, 380, { taille: 20, couleur: 'vert', duree: 1.4, align: 'center' }));
+  if (LARGE) c.repere('conclusion', RadioLarge.X0, COL.y - 30, COL.w, 150, 'la conclusion');
+  else c.repere('conclusion', 20, 356, 720, 34, 'la conclusion');
+  quand(c, 'conclusion', 1.6, () => basDePage(c, d.conclusion, { taille: 20, couleur: 'vert', duree: 1.4 }));
+}
+/* La phrase du bas (conclusion) : centrée sous les deux vues ; sur un tableau large, dans la colonne de droite,
+ * coupée à la ligne et plus grosse (15 novembre 2026). */
+let LARGE = false;
+const COL = { w: 260, y: 170 };
+function basDePage(c, s, o) {
+  if (!LARGE) return formule(c, s, 380, 380, { ...o, align: 'center' });
+  const t = o.taille + 4, lignes = RadioLarge.couper(s, COL.w, e => largeurF(c, e, t));
+  lignes.forEach((l, i) => formule(c, l, RadioLarge.X0, COL.y + i * t * 1.45, { ...o, taille: t, duree: o.duree / lignes.length }));
 }
 
 function dessiner(c) {
@@ -434,7 +444,17 @@ function dessiner(c) {
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(41); dessiner(c); return c.fin(); });
+const scene = RadioLarge.brancher(window.OndesTableau.Scene(canvas, (c) => {
+  scene.cadre(41);
+  LARGE = RadioLarge.large(scene);
+  // Tableau large : les deux vues agrandies à gauche, la conclusion à droite.
+  const Lg = scene.L - 300;
+  RadioLarge.dessiner(c, scene, 41, LARGE ? [
+    { src: [0, 0, 760, 340], dst: [0, 0, Lg, 420] },
+    { src: [RadioLarge.X0 - 10, 0, RadioLarge.X0 + COL.w + 10, 420], dst: [Lg + 6, 0, scene.L, 420], ax: 0 },
+  ] : null, () => dessiner(c));
+  return c.fin();
+}, { large: true }));
 scene.avancer = dt => {
   if (!S.running) return false;
   S.t = Math.min(FIN, S.t + dt);

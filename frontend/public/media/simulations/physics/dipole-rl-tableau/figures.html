@@ -142,17 +142,18 @@ const S = { tw: 0, running: true, pause: false, fait: false, jusqua: null, motif
 let M = {};                                       // étape → instant d’écriture (s), relevé pendant le dessin
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, dessiner);
+/* Cadre de commun.js avec `large` et `ajuster` (15 novembre 2026, « la figure n'occupe qu'une bande étroite ») : la boîte
+ * de l'encre de la figure complète remplit le tableau (les figures n'écrivent rien sous y = 360 : gain ~ 1/6 en hauteur,
+ * davantage pour une figure plus petite que le cadre). L’écriture suit l’horloge de la figure (S.tw) : le tuteur peut
+ * la figer sur une étape. */
+const complet = f => { const t = S.tw; S.tw = 1e6; try { f(); } finally { S.tw = t; } };
+const scene = window.OndesTableau.Scene(canvas, dessiner, { large: true, ajuster: true, complet });
 const craie = scene.craie;
-/* Même cadre que commun.js, mais l’écriture suit l’horloge de la figure (S.tw) : le tuteur peut la figer sur une étape. */
+const cadreBase = scene.cadre;
 scene.cadre = function (graine) {
-  const W = craie.W, H = craie.H, VW = 760, VH = 420;
-  craie.debut(graine, S.tw);
-  const s = Math.min(W / VW, H / VH);
-  scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
-  craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
-  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
-  return craie;
+  const k = cadreBase.call(scene, graine);
+  if (Number.isFinite(k.t)) k.t = Math.max(0, S.tw);
+  return k;
 };
 let MM = {};
 const marque = (c, nom) => { MM[nom] = c.cur; };
@@ -827,7 +828,7 @@ function setTime(p) {
 function setParameters(p) {
   const f = p.fig || p.figure || p.variant;
   if (!f || !FIGS[f] || f === fig) return;
-  fig = f; M = {}; config.title = 'Figure — ' + lisible(FIGS[fig].titre); config.variants = [{ id: fig, label: lisible(FIGS[fig].titre) }];
+  fig = f; M = {}; scene.boite = null; scene.remesurer(); config.title = 'Figure — ' + lisible(FIGS[fig].titre); config.variants = [{ id: fig, label: lisible(FIGS[fig].titre) }];
   config.command_schema.play_until.moment = etapes().join(' | ') + ' (réécrit la figure et s’arrête après cette étape)';
   start(); setTimeout(() => pont.manifeste(), 400);
 }

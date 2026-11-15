@@ -77,7 +77,7 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), o.scene || {});
   const cadreBase = scene.cadre;
   scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
   M.scene = scene; M.craie = scene.craie;
@@ -225,8 +225,46 @@ function eqf(c, x, y, gauche, droite, o = {}) {
 
 /* ── Outils du graphe (copie de cinetique-tableau/figures.html) ─────────────────────────────────── */
 const G = { x0: 66, y0: 300, w: 380, h: 236 };     // le graphe, à gauche
-const PX = 520, PW = 230;                           // panneau d’écriture, à droite
-const ZY = [352, 376, 400];                         // lignes écrites en bas
+let PX = 520, PW = 230;                             // panneau d’écriture, à droite
+let ZY = [352, 376, 400];                           // lignes écrites en bas
+/* Disposition selon la largeur du tableau (15 novembre 2026, demande de l'utilisateur : « grands vides à gauche et à
+ * droite, textes minuscules ; le texte du bas à gauche de l'écran, le diagramme étendu vers le bas et dans les deux
+ * sens, le texte de droite étendu verticalement et agrandi »). Tableau large (scene.L ≥ 1000, écran d'ordinateur
+ * portable) : trois colonnes — à gauche les phrases écrites au fil du déroulé (à la ligne), au centre le graphe sur
+ * toute la hauteur, à droite le panneau en une colonne, plus gros. Sinon la disposition d'origine (760 × 420). */
+let D = null;
+function disposer(L) {
+  if (L < 1000) {
+    Object.assign(G, { x0: 66, y0: 300, w: 380, h: 236 }); PX = 520; PW = 230; ZY = [352, 376, 400];
+    D = { large: false, L, titre: 20, axes: 15, nomAxe: 16, eti: 17, lec: 15, pt: 16, pas: 23, ecart: 8, y0: 66, bas: 17, xBas: 14, maxBas: 730 };
+    return;
+  }
+  const gauche = Math.round(L * .24), droite = Math.round(L * .25);
+  Object.assign(G, { x0: gauche + 64, y0: 384, w: L - gauche - droite - 64 - 70, h: 322 });
+  PX = L - droite + 6; PW = droite - 20;
+  const n = ['axes', 'courbe', 'lecture', 'calcul'].reduce((k, nom) => k + (F.panneau[nom] || []).length, 0);
+  const pas = Math.min(36, Math.floor((404 - 64 - 3 * 14) / Math.max(1, n)));
+  D = { large: true, L, titre: 24, axes: 18, nomAxe: 20, eti: 21, lec: 19, pt: Math.min(22, pas - 7), pas, ecart: 14, y0: 70,
+    bas: 19, xBas: 14, maxBas: gauche - 6 };
+  ZY = []; for (let y = 76; y <= 404; y += 28) ZY.push(y);
+}
+/** Où s'écrit un groupe du panneau : [x, y, largeur max]. */
+function placeDe(nom) {
+  let y = D.y0;
+  for (const n of ['axes', 'courbe', 'lecture', 'calcul']) {
+    const l = F.panneau[n]; if (!l) continue;
+    if (n === nom) return [PX, y, PW];
+    y += l.length * D.pas + D.ecart;
+  }
+  return [PX, y, PW];
+}
+/** Une phrase coupée en lignes qui tiennent dans `max` (mesurée à la craie). */
+function couper(c, t, max, taille) {
+  const mots = String(t).split(' '), out = []; let l = '';
+  for (const m of mots) { const e = l ? l + ' ' + m : m; if (l && larg(c, e, taille) > max) { out.push(l); l = m; } else l = e; }
+  if (l) out.push(l);
+  return out;
+}
 let F = null;                                       // figure courante
 const X = t => G.x0 + t / F.tmax * G.w, Y = v => G.y0 - v / F.ymax * G.h;
 const pointille = (c, x1, y1, x2, y2, p, col = 'jaune') => { if (p > 0) c.ligne(x1, y1, x1 + (x2 - x1) * p, y1 + (y2 - y1) * p, { couleur: col, largeur: 1.8, pointille: [5, 5] }); };
@@ -332,15 +370,15 @@ function axes(c) {
   c.fleche(G.x0, G.y0, G.x0, G.y0 - G.h - 12, { largeur: 1.8 });
   for (let k = 1; k * F.dt <= F.tTop + 1e-9; k++) {
     const t = k * F.dt; c.ligne(X(t), G.y0 - 4, X(t), G.y0 + 4, { largeur: 1.4, duree: .03 });
-    if (proche(t, F.tLab)) c.texte(nb(t), X(t), G.y0 + 20, { couleur: 'faible', taille: 15, align: 'center', duree: .1 });
+    if (proche(t, F.tLab)) c.texte(nb(t), X(t), G.y0 + 22, { couleur: 'faible', taille: D.axes, align: 'center', duree: .1 });
   }
-  c.texte('0', G.x0 - 8, G.y0 + 18, { couleur: 'faible', taille: 15, align: 'right', duree: .05 });
+  c.texte('0', G.x0 - 8, G.y0 + 20, { couleur: 'faible', taille: D.axes, align: 'right', duree: .05 });
   for (let k = 1; k * F.dy <= F.yTop + 1e-9; k++) {
     const v = k * F.dy; c.ligne(G.x0 - 4, Y(v), G.x0 + 4, Y(v), { largeur: 1.4, duree: .03 });
-    if (proche(v, F.yLab)) c.texte(v === 1 ? '1' : fr(v, F.dec), G.x0 - 8, Y(v) + 5, { couleur: 'faible', taille: 15, align: 'right', duree: .1 });
+    if (proche(v, F.yLab)) c.texte(v === 1 ? '1' : fr(v, F.dec), G.x0 - 8, Y(v) + 5, { couleur: 'faible', taille: D.axes, align: 'right', duree: .1 });
   }
-  c.texte(F.xNom, G.x0 + G.w + 4, G.y0 + 26, { couleur: 'blanc', taille: 16 });
-  c.texte(F.yNom, G.x0 + 10, G.y0 - G.h - 2, { couleur: 'blanc', taille: 16 });
+  c.texte(F.xNom, G.x0 + G.w - 10, G.y0 + 30, { couleur: 'blanc', taille: D.nomAxe });
+  c.texte(F.yNom, G.x0 + 10, G.y0 - G.h - 2, { couleur: 'blanc', taille: D.nomAxe });
 }
 function trace(c, f, fin, p, col) {
   if (p <= 0) return;
@@ -349,9 +387,9 @@ function trace(c, f, fin, p, col) {
 }
 
 function dessiner(c, M) {
-  MO = M; F = FIGS[M.S.vue]; M.scene.cadre(73);
-  c.texte(F.titre, 14, 26, { couleur: 'cyan', taille: 20, max: 470 });
-  c.texte(`diapositive ${F.diapo}`, 746, 26, { couleur: 'faible', taille: 15, align: 'right' });
+  MO = M; F = FIGS[M.S.vue]; M.scene.cadre(73); disposer(M.scene.L);
+  c.texte(F.titre, D.large ? G.x0 - 50 : 14, 28, { couleur: 'cyan', taille: D.titre, max: D.large ? G.w + 50 : 470 });
+  c.texte(`diapositive ${F.diapo}`, D.L - 14, 28, { couleur: 'faible', taille: 15, align: 'right' });
   if (M.commence('axes')) c.direct(() => quadrillage(c, lisse(M.p('axes'))));
   c.direct(() => {
     if (M.commence('courbe')) F.courbes.forEach(k => trace(c, k.f, k.fin, M.p('courbe'), k.col));
@@ -370,35 +408,34 @@ function dessiner(c, M) {
     }
   });
   const etiquettes = {
-    courbe: () => F.courbes.forEach(k => { if (k.lab) { const w = larg(c, k.nom, 17) + 12, x = X(k.lab[0]), y = Y(k.lab[1]); c.rect(x - 6, y - 17, w, 24, { couleur: k.col, largeur: 1.4, arrondi: 4 }); c.texte(k.nom, x, y, { couleur: k.col, taille: 17 }); } }),
-    lecture: () => F.lectures.forEach(l => c.texte(l.lab, X(l.labAt[0]), Y(l.labAt[1]), { couleur: l.col, taille: 15, align: l.ph == null ? 'left' : 'right' })),
+    courbe: () => F.courbes.forEach(k => { if (k.lab) { const t = D.eti, w = larg(c, k.nom, t) + 12, x = X(k.lab[0]), y = Y(k.lab[1]); c.rect(x - 6, y - t, w, t + 7, { couleur: k.col, largeur: 1.4, arrondi: 4 }); c.texte(k.nom, x, y, { couleur: k.col, taille: t }); } }),
+    lecture: () => F.lectures.forEach(l => c.texte(l.lab, X(l.labAt[0]), Y(l.labAt[1]), { couleur: l.col, taille: D.lec, align: l.ph == null ? 'left' : 'right' })),
   };
-  let y = 66; const ecrites = [], panneau = {};
+  const ecrites = [], panneau = {};
   for (const nom of ['axes', 'courbe', 'lecture', 'calcul']) {
     const lignes = F.panneau[nom]; if (!lignes) continue;
-    const y0 = y; y += lignes.length * 23 + 8;
+    const [x0, y0, mx] = placeDe(nom);
     panneau[nom] = () => lignes.forEach(([t, col], i) => {
-      if (t === null) eqf(c, PX, y0 + i * 23, 'plus diluée', 'τ plus grand', { couleur: col, taille: 16 });
-      else c.texte(t, PX, y0 + i * 23, { couleur: col, taille: 16, max: PW });
+      if (t === null) eqf(c, x0, y0 + i * D.pas, 'plus diluée', 'τ plus grand', { couleur: col, taille: D.pt });
+      else c.texte(t, x0, y0 + i * D.pas, { couleur: col, taille: D.pt, max: mx });
     });
     if (M.commence(nom)) ecrites.push(...lignes.map(l => l[0] ?? 'plus diluée → τ plus grand'));
   }
   M.panneau = ecrites;
-  M.vues = zoneEcriture(c, M, etapesDe(M.S.vue).map(e => ({ nom: e.nom, lignes: [[F.bas[e.nom], e.nom === 'calcul' ? 'jaune' : 'blanc']],
-    plus: () => { if (e.nom === 'axes') axes(c); etiquettes[e.nom] && etiquettes[e.nom](); panneau[e.nom] && panneau[e.nom](); } })), ZY);
+  // tableau large : chaque phrase va à la ligne dans la colonne de gauche ; sinon une ligne en bas
+  const lignesBas = t => (D.large ? couper(c, t, D.maxBas, D.bas) : [t]);
+  M.vues = zoneEcriture(c, M, etapesDe(M.S.vue).map(e => ({ nom: e.nom, lignes: lignesBas(F.bas[e.nom]).map(t => [t, e.nom === 'calcul' ? 'jaune' : 'blanc']),
+    plus: () => { if (e.nom === 'axes') axes(c); etiquettes[e.nom] && etiquettes[e.nom](); panneau[e.nom] && panneau[e.nom](); } })), ZY,
+    { x: D.xBas, max: D.maxBas, taille: D.bas });
   reperes(c, M);
   return c.fin();
 }
 
 /* ── Repères (tous déclarés dès le début ; le libellé dit à quel moment ils apparaissent) ─────────────── */
-function panneauY(nom) {
-  let y = 66;
-  for (const n of ['axes', 'courbe', 'lecture', 'calcul']) {
-    const l = F.panneau[n]; if (!l) continue;
-    if (n === nom) return [y - 18, l.length * 23 + 4];
-    y += l.length * 23 + 8;
-  }
-  return [y - 18, 30];
+/** Le rectangle d'un groupe du panneau : [x, y, largeur, hauteur]. */
+function panneauR(nom) {
+  const [x, y, mx] = placeDe(nom), n = (F.panneau[nom] || []).length || 1;
+  return [x - 6, y - D.pt - 2, mx + 10, n * D.pas + 4];
 }
 function reperes(c, M) {
   const R = (id, x, y, w, h, l) => c.repere(id, x, y, w, h, l), q = nom => quand(M, nom);
@@ -406,10 +443,10 @@ function reperes(c, M) {
   R('axe_y', G.x0 - 50, G.y0 - G.h - 20, 60, G.h + 30, `l’axe des ordonnées : ${F.yNom}, de 0 à ${nb(F.yTop)}`);
   R('courbe', G.x0, Y(F.yTop) - 4, X(F.tTop) - G.x0 + 8, G.y0 - Y(F.yTop) + 4, `${F.courbes.length > 1 ? 'les courbes ' + F.courbes.map(k => k.nom).join(' et ') : 'la courbe τ en fonction du pH'}${q('courbe')}`);
   const P = F.point; R('point', X(P.t) - 14, Y(P.y) - 14, 28, 28, `${P.dit}${q('lecture')}`);
-  const [yv, hv] = panneauY('lecture');
-  R('valeur', PX - 6, yv, PW + 10, hv, `les valeurs lues : ${F.valeur}${q('lecture')}`);
-  const [yc, hc] = panneauY('calcul');
-  R('calcul', PX - 6, yc, PW + 10, hc, `le calcul : ${F.calc}${q('calcul')}`);
+  const [xv, yv, wv, hv] = panneauR('lecture');
+  R('valeur', xv, yv, wv, hv, `les valeurs lues : ${F.valeur}${q('lecture')}`);
+  const [xc, yc, wc, hc] = panneauR('calcul');
+  R('calcul', xc, yc, wc, hc, `le calcul : ${F.calc}${q('calcul')}`);
 }
 
 /* ── Ce que voit le tuteur ─────────────────────────────────────────────── */
@@ -429,7 +466,7 @@ const params = M => {
     : { fig: k, session: f.session, diapositive: f.diapo, lectures: [{ pH: 2.8, tau: .1 }, { pH: 3.6, tau: .45 }], C1_mol_L: .0158, C2_mol_L: 5.58e-4 };
 };
 const MOT = Moteur({
-  id: 'tds_figures', titre: 'Figures des examens nationaux : taux d’avancement final', vues: CLES,
+  id: 'tds_figures', titre: 'Figures des examens nationaux : taux d’avancement final', vues: CLES, scene: { large: true },
   titres: Object.fromEntries(CLES.map(k => [k, `national ${FIGS[k].session}`])),
   etapes: etapesDe, motifs: MOTIFS, dessiner, voir, params,
   depart: M => `Figure du national ${FIGS[M.S.vue].session}.`,

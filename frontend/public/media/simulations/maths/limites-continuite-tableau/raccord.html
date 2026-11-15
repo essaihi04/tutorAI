@@ -21,25 +21,29 @@
  * deux_branches : f(x) = 3x − 1 si x < 1, x² + m si x ≥ 1 : limite à gauche 2, limite à droite et f(1) = 1 + m ; soudée pour m = 1.
  */
 const fr = MathsTableau.fr;
-const COL = 470;
-const OPT_LI = { x0: 56, y0: 66, w: 370, h: 270, xmin: -0.4, xmax: 2.4, ymin: -0.5, ymax: 4, gx: [[1, '1'], [2, '2']], gy: [[1, '1'], [2, '2'], [3, '3']] };
-const OPT_DB = { x0: 50, y0: 60, w: 380, h: 285, xmin: -0.4, xmax: 2.2, ymin: -2.5, ymax: 8, gx: [[1, '1'], [2, '2']], gy: [[2, '2'], [4, '4'], [6, '6']] };
+const COL0 = 470;   // colonne de texte ; décalée à droite sur un tableau large (LC.col)
+const OPT_LI0 = { x0: 56, y0: 66, w: 370, h: 270, xmin: -0.4, xmax: 2.4, ymin: -0.5, ymax: 4, gx: [[1, '1'], [2, '2']], gy: [[1, '1'], [2, '2'], [3, '3']] };
+const OPT_LI = (K) => ({ ...OPT_LI0, w: LC.gw(K, OPT_LI0.w) });
+const OPT_DB0 = { x0: 50, y0: 60, w: 380, h: 285, xmin: -0.4, xmax: 2.2, ymin: -2.5, ymax: 8, gx: [[1, '1'], [2, '2']], gy: [[2, '2'], [4, '4'], [6, '6']] };
+const OPT_DB = (K) => ({ ...OPT_DB0, w: LC.gw(K, OPT_DB0.w) });
 
-MathsTableau.page({
+LC.page({
   id: 'lc_raccord', titre: 'Soudée ou coupée',
   texte: 'Construction à la craie du cours Limites et continuité : la continuité en un point, où la courbe arrive et où est le point (a ; f(a))',
   vues: {
     trois_cas: {
       titre: 'Trois courbes en a : soudée, saut, point ailleurs',
       dessiner(c, K) {
+        const COL = LC.col(K, COL0);
         K.titre('Que se passe-t-il en a ?');
+        const kk = LC.k(K);   // tableau large : les trois repères s'étalent sur la largeur
         const CAS = [
           { x0: 40, mot: 'continue en a ✓', coul: 'vert', id: 'courbe_soudee' },
           { x0: 292, mot: 'saut : pas continue ✗', coul: 'orange', id: 'saut' },
           { x0: 544, mot: 'point ailleurs : pas continue ✗', coul: 'orange', id: 'point_ailleurs' },
         ];
         CAS.forEach((k, i) => {
-          const G = K.axes({ x0: k.x0, y0: 92, w: 176, h: 170, xmin: -0.3, xmax: 2.4, ymin: -0.3, ymax: 3.3, gx: [[1, 'a']], gy: [], origine: false });
+          const G = K.axes({ x0: k.x0 * kk, y0: 92, w: 176 * kk, h: 170, xmin: -0.3, xmax: 2.4, ymin: -0.3, ymax: 3.3, gx: [[1, 'a']], gy: [], origine: false });
           if (i === 0) {
             K.anime(1.2, p => K.courbePart(G, x => 0.5 * x + 1, -0.2, 2.3, p, { couleur: 'cyan' }));
             K.rond(G, 1, 1.5, true, 'jaune');
@@ -53,12 +57,12 @@ MathsTableau.page({
             K.rond(G, 1, 1.5, false, 'cyan');
             K.rond(G, 1, 2.8, true, 'jaune');
           }
-          c.texte(k.mot, k.x0 + 88, 300, { couleur: k.coul, taille: 16, align: 'center', max: 210 });
-          c.repere('cas' + (i + 1), k.x0 - 6, 80, 200, 230, k.mot);
+          c.texte(k.mot, (k.x0 + 88) * kk, 300, { couleur: k.coul, taille: LC.t(K, 16), align: 'center', max: 210 * kk });
+          c.repere('cas' + (i + 1), k.x0 * kk - 6, 80, 200 * kk, 230, k.mot);
           K.marque(k.id);
           c.pause(.4);
         });
-        c.texte('Continue en a : la courbe arrive exactement sur le point (a ; f(a)).', 380, 346, { couleur: 'jaune', taille: 18, align: 'center', max: 730 });
+        c.texte('Continue en a : la courbe arrive exactement sur le point (a ; f(a)).', LC.col(K, 380), 346, { couleur: 'jaune', taille: LC.t(K, 18), align: 'center', max: 730 });
         K.marque('conclusion');
       },
       decrire: {
@@ -74,22 +78,23 @@ MathsTableau.page({
       titre: 'La limite et l’image en 1',
       params: { fa: { min: 0.5, max: 3.5, pas: 0.5, defaut: 3, sens: 'valeur de f(1)' } },
       dessiner(c, K) {
+        const COL = LC.col(K, COL0);
         K.titre('La limite égale-t-elle l’image ?');
-        const G = K.axes(OPT_LI), fa = K.P.fa, cont = Math.abs(fa - 2) < 1e-9;
-        c.texte('f(x) = x + 1 si x ≠ 1', COL, 90, { couleur: 'cyan', taille: 19 });
-        c.texte('f(1) = ' + fr(fa, 1), COL, 118, { couleur: 'vert', taille: 19 });
+        const G = K.axes(OPT_LI(K)), fa = K.P.fa, cont = Math.abs(fa - 2) < 1e-9;
+        c.texte('f(x) = x + 1 si x ≠ 1', COL, 90, { couleur: 'cyan', taille: LC.t(K, 19) });
+        c.texte('f(1) = ' + fr(fa, 1), COL, 118, { couleur: 'vert', taille: LC.t(K, 19) });
         K.anime(1.8, p => K.courbePart(G, x => (Math.abs(x - 1) < 0.025 ? NaN : x + 1), -0.3, 2.3, p, { couleur: 'cyan' }));
         K.rond(G, 1, 2, false, 'cyan');
         K.marque('courbe_tracee');
         c.pause(.3);
         c.fleche(G.X(1) - 16, G.Y(2), G.X(0) + 6, G.Y(2), { couleur: 'jaune', largeur: 1.6, pointille: [6, 5] });
-        c.texte('la limite : 2', G.X(0.15), G.Y(2) - 12, { couleur: 'jaune', taille: 16 });
-        LC.limite(c, COL, 172, 'x → 1', 'f(x) = 2', { couleur: 'jaune', taille: 20 });
+        c.texte('la limite : 2', G.X(0.15), G.Y(2) - 12, { couleur: 'jaune', taille: LC.t(K, 16) });
+        LC.limite(c, COL, 172, 'x → 1', 'f(x) = 2', { couleur: 'jaune', taille: LC.t(K, 20) });
         c.repere('limite', G.X(0) - 4, G.Y(2) - 30, G.X(1) - G.X(0) + 16, 42, 'la limite en 1 : 2');
         K.marque('limite_lue');
         c.pause(.3);
         K.rond(G, 1, fa, true, 'vert');
-        c.texte('f(1) = ' + fr(fa, 1), G.X(1) + 12, G.Y(fa) + (fa > 2 ? -8 : 20), { couleur: 'vert', taille: 16 });
+        c.texte('f(1) = ' + fr(fa, 1), G.X(1) + 12, G.Y(fa) + (fa > 2 ? -8 : 20), { couleur: 'vert', taille: LC.t(K, 16) });
         c.repere('image', G.X(1) - 14, G.Y(fa) - 14, 28, 28, 'le point (1 ; f(1))');
         K.marque('image_placee');
         c.pause(.3);
@@ -102,7 +107,7 @@ MathsTableau.page({
         ], 36);
         K.marque('comparaison');
       },
-      poignees(K) { const G = K.grille(OPT_LI); return [{ id: 'fa', x: G.X(1), y: G.Y(K.P.fa), bouger: (x, y) => ({ fa: G.inv(x, y)[1] }) }]; },
+      poignees(K) { const G = K.grille(OPT_LI(K)); return [{ id: 'fa', x: G.X(1), y: G.Y(K.P.fa), bouger: (x, y) => ({ fa: G.inv(x, y)[1] }) }]; },
       lecture: K => (Math.abs(K.P.fa - 2) < 1e-9 ? 'f(1) = 2 : le point bouche le trou, la limite égale l’image, f est continue en 1.' : `f(1) = ${fr(K.P.fa, 1)} : la limite en 1 vaut 2, elle n’égale pas f(1), f n’est pas continue en 1.`),
       decrire: K => ({
         courbe_tracee: 'La courbe de f(x) = x + 1 pour x ≠ 1 : une droite avec un trou en (1 ; 2).',
@@ -117,23 +122,24 @@ MathsTableau.page({
       titre: 'Deux expressions : f(x) = 3x − 1 si x < 1, x² + m si x ≥ 1',
       params: { m: { min: -2, max: 3, pas: 0.5, defaut: 3, sens: 'le réel m de la branche droite' } },
       dessiner(c, K) {
+        const COL = LC.col(K, COL0);
         K.titre('Chaque côté sa branche');
-        const G = K.axes(OPT_DB), m = K.P.m, soude = Math.abs(m - 1) < 1e-9;
-        c.texte('f(x) = 3x − 1  si x < 1', COL, 88, { couleur: 'rouge', taille: 18 });
-        c.texte('f(x) = x² + m  si x ≥ 1', COL, 116, { couleur: 'vert', taille: 18 });
+        const G = K.axes(OPT_DB(K)), m = K.P.m, soude = Math.abs(m - 1) < 1e-9;
+        c.texte('f(x) = 3x − 1  si x < 1', COL, 88, { couleur: 'rouge', taille: LC.t(K, 18) });
+        c.texte('f(x) = x² + m  si x ≥ 1', COL, 116, { couleur: 'vert', taille: LC.t(K, 18) });
         K.anime(1.4, p => K.courbePart(G, x => 3 * x - 1, -0.3, 0.995, p, { couleur: 'rouge' }));
         K.rond(G, 1, 2, false, 'rouge');
-        c.texte('limite à gauche : 2', COL, 162, { couleur: 'rouge', taille: 18 });
+        c.texte('limite à gauche : 2', COL, 162, { couleur: 'rouge', taille: LC.t(K, 18) });
         c.repere('limite_gauche', G.X(1) - 14, G.Y(2) - 14, 28, 28, 'la limite à gauche : 2');
         K.marque('branche_gauche_arrive');
         c.pause(.3);
         K.anime(1.4, p => K.courbePart(G, x => x * x + m, 1, 2.15, p, { couleur: 'vert' }));
-        c.texte('limite à droite : 1 + m = ' + fr(1 + m, 1), COL, 196, { couleur: 'vert', taille: 18 });
+        c.texte('limite à droite : 1 + m = ' + fr(1 + m, 1), COL, 196, { couleur: 'vert', taille: LC.t(K, 18) });
         c.repere('limite_droite', G.X(1) - 6, G.Y(1 + m) - 14, 50, 28, 'la limite à droite : 1 + m');
         K.marque('branche_droite_part');
         c.pause(.3);
         K.rond(G, 1, 1 + m, true, 'jaune');
-        c.texte('f(1) = 1 + m = ' + fr(1 + m, 1), COL, 230, { couleur: 'jaune', taille: 18 });
+        c.texte('f(1) = 1 + m = ' + fr(1 + m, 1), COL, 230, { couleur: 'jaune', taille: LC.t(K, 18) });
         c.repere('f1', G.X(1) - 14, G.Y(1 + m) - 14, 28, 28, 'f(1)');
         K.marque('point_image');
         c.pause(.3);
@@ -147,7 +153,7 @@ MathsTableau.page({
         c.repere('verdict', COL - 8, 256, 270, 76, 'le verdict');
         K.marque('verdict');
       },
-      poignees(K) { const G = K.grille(OPT_DB); return [{ id: 'm', x: G.X(1), y: G.Y(1 + K.P.m), bouger: (x, y) => ({ m: G.inv(x, y)[1] - 1 }) }]; },
+      poignees(K) { const G = K.grille(OPT_DB(K)); return [{ id: 'm', x: G.X(1), y: G.Y(1 + K.P.m), bouger: (x, y) => ({ m: G.inv(x, y)[1] - 1 }) }]; },
       lecture: K => `m = ${fr(K.P.m, 1)} : limite à gauche 2, limite à droite et f(1) = ${fr(1 + K.P.m, 1)} : ${Math.abs(K.P.m - 1) < 1e-9 ? 'soudée, f est continue en 1' : 'coupée, f n’est pas continue en 1'}.`,
       decrire: K => ({
         branche_gauche_arrive: 'La branche rouge 3x − 1 arrive en x = 1 à la hauteur 2 (rond vide) : limite à gauche 2.',

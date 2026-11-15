@@ -302,7 +302,44 @@ function deviation(c, R, rayonArc, couleur) {
   const mil = arc(c, J, ang(D_IN), ang(R.dO), rayonArc, couleur);
   c.texte('D', ...add(J, dir(mil), rayonArc + 9), { couleur, taille: 16, base: 'middle' });
 }
+/* Agrandissement du 15 novembre 2026 : sur un tableau large (scene.L ≥ 1000, portable 1366 × 613), les deux vues
+ * (zone d'origine 760 × 335) sont agrandies de Z.k à gauche, et les phrases du bas passent dans une colonne à droite,
+ * à la ligne, en plus grand. Sinon (grand écran) : comme avant. */
+const Z = { large: false, k: 1, oy: 0, base: null, col: 0, w: 0 };
+function zone(L) {
+  Z.large = L >= 1000;
+  Z.k = Z.large ? Math.min(1.26, (L - Math.max(320, L * .26) - 16) / 756, 404 / 322) : 1;
+  Z.oy = Z.large ? -12 * Z.k : 0; Z.col = 756 * Z.k + 16; Z.w = L - Z.col - 8;
+}
+function horsZoom(c, fn) {
+  if (!Z.large) return fn();
+  c.ctx.save(); c.ctx.setTransform(Z.base);
+  try { return fn(); } finally { c.ctx.restore(); }
+}
+const versVues = (x, y) => [x / Z.k, (y - Z.oy) / Z.k];
+/** Coupe un texte en lignes de largeur `max`. */
+function couperLignes(c, texte, taille, max) {
+  const ctx = c.ctx; ctx.font = `${taille}px ${window.Tableau.POLICE}`;
+  const out = []; let l = '';
+  for (const m of String(texte).split(/ +/)) { const e = l ? l + ' ' + m : m; if (ctx.measureText(e).width > max && l) { out.push(l); l = m; } else l = e; }
+  if (l) out.push(l); return out;
+}
+/** Une phrase du bas (rang i = 0, 1, 2) : sous les vues (d'origine) ou dans la colonne de droite (tableau large). */
+function phrase(c, txt, i, o) {
+  if (!Z.large) return c.texte(txt, 12, [354, 378, 402][i], { ...o, max: 740 });
+  horsZoom(c, () => {
+    const t = o.taille + 6, lh = t * 1.22;
+    let y = 60 + i * 4 * lh;   // chaque phrase a sa place (au plus 3 lignes), elle ne bouge pas quand la suivante arrive
+    for (const l of couperLignes(c, txt, t, Z.w)) { c.texte(l, Z.col, y, { ...o, taille: t, max: Z.w }); y += lh; }
+  });
+}
 function dessiner(c) {
+  zone(scene.L);
+  Z.base = c.ctx.getTransform();
+  if (Z.large) { c.ctx.translate(0, Z.oy); c.ctx.scale(Z.k, Z.k); }
+  try { dessinerTout(c); } finally { if (Z.large) c.ctx.setTransform(Z.base); }
+}
+function dessinerTout(c) {
   const t = S.t, M = moments(), laser = estLaser(), Rl = laser ? LASERS[S.source] : null;
   c.direct(() => { peindreDessus(c.ctx, t); peindreEcran(c.ctx, t); });
   // Écrit dès l’ouverture : les deux vues et le montage.
@@ -327,9 +364,9 @@ function dessiner(c) {
     if (vu(c, 'point_sur_ecran', t >= M.point_sur_ecran)) {
       c.fleche(xEcran(Rl.s), 268, xEcran(Rl.s), Y_BANDE + 16, { couleur: 'jaune', largeur: 1.6 });
       c.texte('un seul point', R2.x + R2.w / 2, 290, { couleur: 'jaune', taille: 15, align: 'center' });
-      c.texte('Un seul rayon sort du prisme : pas d’éventail, un seul point sur l’écran.', 12, Y1, { couleur: 'vert', taille: 16, max: 740 });
+      phrase(c, 'Un seul rayon sort du prisme : pas d’éventail, un seul point sur l’écran.', 0, { couleur: 'vert', taille: 16 });
     }
-    if (vu(c, 'fin', t >= M.fin)) c.texte('Lumière monochromatique (une seule radiation) : le prisme la dévie sans la décomposer.', 12, Y2, { couleur: 'vert', taille: 16, max: 740 });
+    if (vu(c, 'fin', t >= M.fin)) phrase(c, 'Lumière monochromatique (une seule radiation) : le prisme la dévie sans la décomposer.', 1, { couleur: 'vert', taille: 16 });
   } else {
     if (vu(c, 'blanc_arrive', t >= M.blanc_arrive)) c.texte('lumière blanche', 60, 140, { couleur: 'blanc', taille: 15 });
     if (vu(c, 'couleurs_se_separent', t >= M.couleurs_se_separent)) c.texte('les couleurs se séparent', 250, 300, { couleur: 'jaune', taille: 15 });
@@ -341,14 +378,14 @@ function dessiner(c) {
       c.fleche(xEcran(VIOLET.s), 262, xEcran(VIOLET.s), Y_BANDE + H_BANDE / 2 + 4, { couleur: 'violet', largeur: 1.6 });
       c.texte('violet', xEcran(VIOLET.s) - 4, 280, { couleur: 'violet', taille: 14, align: 'center' });
       c.texte('spectre continu', R2.x + R2.w / 2, 308, { couleur: 'jaune', taille: 15, align: 'center' });
-      c.texte('Sur l’écran : un spectre continu, du rouge au violet.', 12, Y1, { couleur: 'vert', taille: 16, max: 740 });
+      phrase(c, 'Sur l’écran : un spectre continu, du rouge au violet.', 0, { couleur: 'vert', taille: 16 });
     }
     if (vu(c, 'rouge_moins_devie', t >= M.rouge_moins_devie)) deviation(c, ROUGE, 46, 'rouge');
     if (vu(c, 'violet_plus_devie', t >= M.violet_plus_devie)) {
       deviation(c, VIOLET, 74, 'violet');
-      c.texte('Le violet est le plus dévié, le rouge le moins dévié.', 12, Y2, { couleur: 'vert', taille: 16, max: 740 });
+      phrase(c, 'Le violet est le plus dévié, le rouge le moins dévié.', 1, { couleur: 'vert', taille: 16 });
     }
-    if (vu(c, 'fin', t >= M.fin)) c.texte('Le verre est dispersif : n dépend de la fréquence (n violet ≈ 1,66 > n rouge ≈ 1,61).', 12, Y3, { couleur: 'vert', taille: 16, max: 740 });
+    if (vu(c, 'fin', t >= M.fin)) phrase(c, 'Le verre est dispersif : n dépend de la fréquence (n violet ≈ 1,66 > n rouge ≈ 1,61).', 2, { couleur: 'vert', taille: 16 });
   }
 
   // Repères pointables.
@@ -367,7 +404,7 @@ function dessiner(c) {
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(41); dessiner(c); return c.fin(); });
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(41); dessiner(c); return c.fin(); }, { large: true });
 scene.avancer = dt => {
   if (!S.running) return false;
   const fin = finDe();
@@ -450,7 +487,7 @@ $('run').onclick = () => (S.running ? pause() : (S.t > 0 && S.t < finDe() && !S.
 
 /* Poignée : la source. La toucher passe à la suivante (blanche → rouge → verte) et relance. */
 window.Tableau.glisser(canvas, {
-  toucher: (px, py) => { const [x, y] = scene.local(px, py); return Math.hypot(x - LAMPE[0], y - LAMPE[1]) < 32 ? 'source' : null; },
+  toucher: (px, py) => { const [x, y] = versVues(...scene.local(px, py)); return Math.hypot(x - LAMPE[0], y - LAMPE[1]) < 32 ? 'source' : null; },
   bouger: () => {},
   lacher: () => {
     changerSource(SOURCES[(SOURCES.indexOf(S.source) + 1) % SOURCES.length]);

@@ -12,6 +12,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
 <script src="exposants.js"></script>
+<script src="zones.js"></script>
 <script>
 /*
  * Avancement final et taux d’avancement (cours « Transformations chimiques s’effectuant dans les deux sens », 2e Bac PC BIOF, novembre 2026).
@@ -74,7 +75,7 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), { large: true });   // tableau large : zones.js
   const cadreBase = scene.cadre;
   scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
   M.scene = scene; M.craie = scene.craie;
@@ -443,12 +444,35 @@ const VUE_FN = {};
 function dessiner(c, M) {
   MO = M; M.scene.cadre(71);
   const v = M.S.vue;
-  c.texte(TITRE_TABLEAU[v], 14, 26, { couleur: 'cyan', taille: 20 });
-  M.geo = {};
-  VUE_FN[v](c, M);
-  reperes(c, M);
+  // Tableau large (≥ 1000) : la vue est découpée en zones rangées sur toute la largeur (zones.js, ZONES plus bas).
+  const Z = ZONES[v] || { cols: [[[0, 40, 760, 420]]] }, large = M.scene.L >= Zones.L_MIN;
+  const titre = () => c.texte(TITRE_TABLEAU[v], 14, 26, { couleur: 'cyan', taille: large ? 24 : 20 });
+  if (large) titre();
+  Zones.dessiner(c, M.scene.L, large ? Z : null, () => {
+    if (!large) titre();
+    M.geo = {};
+    VUE_FN[v](c, M);
+    reperes(c, M);
+  });
   return c.fin();
 }
+/* Zones du tableau large, par vue : colonnes de rectangles du dessin d'origine (760 × 420). */
+const ZONES = {
+  // bécher et loupe à gauche, grandis ; à droite les phrases du transfert, puis l'équation et les couples
+  acide_eau: { cols: [[[14, 40, 432, 326, [[200, 288, 432, 326]]]], [[440, 52, 684, 196], [14, 288, 600, 404, [[14, 288, 200, 326]], 792]]] },
+  base_eau: { cols: [[[14, 40, 432, 326, [[200, 288, 432, 326]]]], [[440, 52, 746, 276], [14, 288, 600, 404, [[14, 288, 200, 326]], 792]]] },
+  // vues d'écriture : le dessin serré sur sa hauteur réelle, donc plus grand
+  attendu: { cols: [[[14, 42, 752, 374]]] },
+  tableau: { cols: [[[14, 42, 752, 352]]] },
+  x_max: { cols: [[[14, 42, 652, 354]]] },
+  // x_f : le tableau et le calcul à gauche, les deux barres x_f / x_max à droite, grandies
+  x_f: { cols: [[[14, 40, 654, 194], [14, 196, 470, 372]], [[536, 196, 752, 404]]], centre: false },
+  taux: { cols: [[[14, 62, 752, 374]]] },
+  totale: { cols: [[[14, 44, 752, 400]]] },
+  relation: { cols: [[[14, 64, 752, 404]]] },
+  proportion: { cols: [[[14, 62, 752, 404]]] },
+  dosage: { cols: [[[14, 58, 752, 404]]] },
+};
 
 /* Loupe (vues acide_eau et base_eau) : donneur de proton, accepteur, proton jaune qui saute. */
 const BE = { x: 34, y: 122, w: 112, h: 128 }, LP = { x: 318, y: 162, r: 100 };

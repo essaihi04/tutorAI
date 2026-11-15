@@ -142,7 +142,9 @@ function dessinerMitose(c, k, vegetal) {
   c.texte(vegetal ? 'La mitose d’une cellule végétale (2n = 4)' : 'La mitose d’une cellule animale (2n = 4)', 14, 26, { couleur: 'cyan', taille: 19 });
   // frise des phases
   const PH = [['interphase', 0, 2], ['prophase', 2, 10.6], ['métaphase', 10.6, 13.6], ['anaphase', 13.6, 18.6], ['télophase', 18.6, 99]];
-  let xx = 430; for (const [nom, a, b] of PH) { const actif = t >= a && t < b && t > 0; c.texte(nom, xx, 50, { couleur: actif ? 'jaune' : 'tresfaible', taille: 13, duree: .1 }); xx += c.largeurTexte(nom, 13) + 12; }
+  // espacement mesuré à la taille réellement écrite (le kit relève le texte à 15 px à l'écran) : les noms ne se chevauchent plus
+  const tPh = Math.max(13, c.echelle && c.tailleMin ? c.tailleMin / c.echelle : 13);
+  let xx = 430; for (const [nom, a, b] of PH) { const actif = t >= a && t < b && t > 0; c.texte(nom, xx, 50, { couleur: actif ? 'jaune' : 'tresfaible', taille: tPh, duree: .1 }); xx += c.largeurTexte(nom, tPh) + 10; }
   // repères
   c.repere('cellule', CX - 168, CY - 142, 336, 284, 'la cellule');
   if (E.env > .2) { c.repere('noyau', CX - 62, CY - 62, 124, 124, 'le noyau'); c.repere('enveloppe', CX - 62, CY - 70, 124, 16, 'l’enveloppe nucléaire'); c.repere('nucleole', CX + 4, CY - 20, 32, 30, 'le nucléole'); }
@@ -283,6 +285,12 @@ function voitPhoto(k) {
   return m;
 }
 
+/* Tableau large (15 novembre 2026) : la cellule à gauche, le panneau des critères à droite et agrandi, la frise des
+ * phases en haut à côté du titre (etapes.js). Le schéma légendé de l'anaphase (traits de la cellule aux légendes) garde
+ * la disposition d'origine, d'un seul tenant. */
+const BL_MITOSE = { titre: [6, 6, 400, 34], phases: [424, 30, 812, 58], cellule: [8, 60, 436, 418], panneau: [436, 62, 760, 300] };
+const BL_VEGETALE = { ...BL_MITOSE, panneau: [436, 62, 760, 404] };
+const DISPO_MITOSE = { haut: ['titre', 'phases'], colonnes: [['cellule'], ['panneau']] };
 const sansLeg = {}; for (const n of Object.keys(M)) if (n !== 'schema_anaphase') sansLeg[n] = { legendes: false };
 window.Etapes.lancer({
   id: 'genetique_mitose', titre: 'Les phases de la mitose', graine: 29,
@@ -293,12 +301,13 @@ window.Etapes.lancer({
   },
   apresReglage: (k, cles) => { if (k.P.type) { if (k.S.vue !== k.P.type && k.S.vue !== 'photo') { k.S.vue = k.P.type; k.S.vu = {}; k.S.t = 0; } k.P.type = null; } },
   vues: {
-    animale: { titre: 'La mitose d’une cellule animale', fin: 26.2, moments: M, reglages: { ...sansLeg, schema_anaphase: { legendes: true } }, dessiner: (c, k) => dessinerMitose(c, k, false), voit: k => voitMitose(k, false),
+    animale: { titre: 'La mitose d’une cellule animale', fin: 26.2,
+      get blocs() { return window.__etapes && window.__etapes.P.legendes ? undefined : BL_MITOSE; }, disposition: DISPO_MITOSE, moments: M, reglages: { ...sansLeg, schema_anaphase: { legendes: true } }, dessiner: (c, k) => dessinerMitose(c, k, false), voit: k => voitMitose(k, false),
       motifs: { debut: 'interphase, fin de G2 : le noyau et sa chromatine', condensation: 'prophase : la chromatine se condense en chromosomes à deux chromatides', enveloppe_disparait: 'prophase : l’enveloppe nucléaire et le nucléole disparaissent', asters_fuseau: 'prophase : le fuseau achromatique se forme entre deux asters', plaque_equatoriale: 'métaphase : chromosomes alignés sur la plaque équatoriale', clivage_centromere: 'anaphase : clivage du centromère', migration: 'anaphase : les chromatides migrent vers les pôles opposés', etranglement: 'télophase : étranglement équatorial', deux_noyaux: 'télophase : deux noyaux se reforment', fin: 'deux cellules filles génétiquement identiques', schema_anaphase: 'le schéma de l’anaphase (2n = 4), légendé' },
       conclusion: 'Une cellule mère, deux cellules filles génétiquement identiques (2n = 4).',
       texte: 'Mitose d’une cellule animale 2n = 4 : prophase (condensation, disparition de l’enveloppe et du nucléole, fuseau entre deux asters), métaphase (plaque équatoriale), anaphase (clivage du centromère, chromatides vers les pôles opposés, 4 à chaque pôle), télophase (étranglement, deux noyaux).',
       explication: [{ repere: 'chromosomes', texte: 'En prophase, la chromatine se condense en chromosomes à deux chromatides.' }, { repere: 'plaque', texte: 'En métaphase, ils s’alignent sur la plaque équatoriale.' }, { repere: 'chromatides', texte: 'En anaphase, les chromatides sœurs partent vers les pôles opposés.' }, { repere: 'etranglement', texte: 'En télophase, la cellule s’étrangle : deux cellules filles.' }] },
-    vegetale: { titre: 'La mitose d’une cellule végétale', fin: 28, moments: MV, dessiner: (c, k) => dessinerMitose(c, k, true), voit: k => voitMitose(k, true),
+    vegetale: { titre: 'La mitose d’une cellule végétale', fin: 28, blocs: BL_VEGETALE, disposition: DISPO_MITOSE, moments: MV, dessiner: (c, k) => dessinerMitose(c, k, true), voit: k => voitMitose(k, true),
       motifs: { debut: 'interphase, fin de G2', condensation: 'prophase : condensation', enveloppe_disparait: 'prophase : l’enveloppe et le nucléole disparaissent', asters_fuseau: 'prophase : fuseau entre deux calottes polaires, sans asters', plaque_equatoriale: 'métaphase : plaque équatoriale', clivage_centromere: 'anaphase : clivage du centromère', migration: 'anaphase : migration vers les pôles opposés', etranglement: 'télophase : une nouvelle paroi se forme au milieu', deux_noyaux: 'télophase : deux noyaux', fin: 'deux cellules filles', comparaison: 'cellule animale / cellule végétale' },
       conclusion: 'Cellule végétale : calottes polaires au lieu d’asters, nouvelle paroi au lieu d’étranglement.',
       texte: 'Mitose d’une cellule végétale : mêmes phases ; pas d’asters mais des calottes polaires ; pas d’étranglement mais une nouvelle paroi au milieu.',

@@ -112,6 +112,20 @@ const NOEUDS = [
     lignes: ['chapitre suivant :', 'état d’équilibre d’un', 'système chimique'],
     phrase: 'Chapitre suivant : état d’équilibre d’un système chimique.' },
 ];
+/* Tableau large (15 novembre 2026, « mieux exploiter tout le tableau, grands calibres de texte ») : quand scene.L ≥ 1000,
+ * les branches s'écartent sur toute la largeur, leurs cadres et leurs textes grandissent (K), le centre est agrandi (KC).
+ * Sinon la carte d'origine (760 × 420). */
+const ORIGINE = NOEUDS.map(n => ({ x: n.x, y: n.y, w: n.w, h: n.h }));
+let K = 1, KC = 1, LARGE = false, CX = 380;
+function disposer(L) {
+  LARGE = L >= 1000;
+  if (!LARGE) { NOEUDS.forEach((n, i) => Object.assign(n, ORIGINE[i])); K = 1; KC = 1; CX = 380; CENTRE.x = CX; return; }
+  K = 1.36; KC = 1.45; CX = L / 2; CENTRE.x = CX;
+  const w = Math.round(W * K * 1.12), h = Math.round(H * K), xs = [.13, .377, .623, .87].map(f => Math.round(L * f));
+  const place = { bronsted: [xs[0], 62], ph: [xs[1], 62], acide_eau: [xs[2], 62], taux: [xs[3], 62],
+    deux_sens: [L - w / 2 - 16, 210], equilibre: [xs[3], 356], conductimetrie: [xs[2], 356], dilution: [xs[1], 356], national: [xs[0], 356], suite: [w / 2 + 16, 210] };
+  NOEUDS.forEach(n => { const [x, y] = place[n.id]; Object.assign(n, { x, y, w, h: n.id === 'suite' ? Math.round(88 * K) : h }); });
+}
 const ANNEAUX = { non_acquis: ['rouge', 'à reprendre'], partiel: ['orange', 'à revoir'] };
 const AVANT = -1e9;   // instant d'un élément déjà dit : écrit d'un coup
 
@@ -134,8 +148,8 @@ function etat(c, comps, x, y, w, h) {
     if (st && ANNEAUX[st]) {
       const [coul, etiq] = ANNEAUX[st];
       c.rect(x - 5, y - 5, w + 10, h + 10, { couleur: coul, arrondi: 16, largeur: 2, pointille: [6, 6] });
-      c.texte(etiq, x + w - 4, y - 8, { couleur: coul, taille: 12, align: 'right' });
-    } else if (st === 'acquis') c.texte('✓', x + w - 14, y + 16, { couleur: 'vert', taille: 18 });
+      c.texte(etiq, x + w - 4, y - 8, { couleur: coul, taille: 12 * K, align: 'right' });
+    } else if (st === 'acquis') c.texte('✓', x + w - 14, y + 16 * K, { couleur: 'vert', taille: 18 * K });
   });
 }
 
@@ -143,20 +157,28 @@ function branche(c, n) {
   const x = n.x - n.w / 2, y = n.y - n.h / 2;
   const dx = n.x - CENTRE.x, dy = n.y - CENTRE.y, L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L;
   // du bord du centre au bord de la branche, avec une légère courbure
-  const d0 = Math.min(CENTRE.w / 2 / Math.max(.2, Math.abs(ux)), CENTRE.h / 2 / Math.max(.2, Math.abs(uy)));
+  const d0 = Math.min(CENTRE.w * KC / 2 / Math.max(.2, Math.abs(ux)), CENTRE.h * KC / 2 / Math.max(.2, Math.abs(uy)));
   const d1 = Math.min(n.w / 2 / Math.max(.2, Math.abs(ux)), n.h / 2 / Math.max(.2, Math.abs(uy)));
   const a = [CENTRE.x + ux * d0, CENTRE.y + uy * d0], b = [n.x - ux * d1, n.y - uy * d1];
   const m = [(a[0] + b[0]) / 2 - uy * 12, (a[1] + b[1]) / 2 + ux * 12];
   c.courbe(u => [(1 - u) * (1 - u) * a[0] + 2 * (1 - u) * u * m[0] + u * u * b[0], (1 - u) * (1 - u) * a[1] + 2 * (1 - u) * u * m[1] + u * u * b[1]], 24, { couleur: 'faible', largeur: 2, pointille: n.encadre ? [6, 6] : undefined });
   c.rect(x, y, n.w, n.h, { couleur: n.couleur, arrondi: n.encadre ? 4 : 14, largeur: n.encadre ? 1.6 : 2.4, pointille: n.encadre ? [6, 5] : undefined });
-  c.texte(n.titre, n.x, y + 21, { couleur: n.couleur, taille: 17, align: 'center', max: n.w - 16, duree: .8 });
-  n.lignes.forEach((l, k) => ecrire(c, l, n.x, y + 42 + k * 18, { couleur: 'blanc', taille: 14, align: 'center', max: n.w - 14, alpha: .92, duree: .6 }));
+  c.texte(n.titre, n.x, y + 21 * K, { couleur: n.couleur, taille: 17 * K, align: 'center', max: n.w - 16, duree: .8 });
+  n.lignes.forEach((l, k) => ecrire(c, l, n.x, y + (42 + k * 18) * K, { couleur: 'blanc', taille: 14 * K, align: 'center', max: n.w - 14, alpha: .92, duree: .6 }));
   c.repere(n.id, x - 5, y - 5, n.w + 10, n.h + 10, n.titre);
   etat(c, n.comps, x, y, n.w, n.h);
   if (S.choisi === n.id) c.direct(() => c.rect(x - 3, y - 3, n.w + 6, n.h + 6, { couleur: 'blanc', arrondi: 15, largeur: 1.2, alpha: .6 }));
 }
 
 function dessiner(c) {
+  disposer(scene.L);
+  // le centre est dessiné tel quel, agrandi KC fois autour de son milieu ; la courbe des branches part de son bord agrandi
+  const ctx = c.ctx; ctx.save(); ctx.translate(CENTRE.x, CENTRE.y); ctx.scale(KC, KC); ctx.translate(-CENTRE.x, -CENTRE.y);
+  const apres = centre(c);
+  ctx.restore();
+  brancher(c, apres);
+}
+function centre(c) {
   const x = CENTRE.x - CENTRE.w / 2, y = CENTRE.y - CENTRE.h / 2;
   if (S.def === AVANT) c.cur = AVANT;   // déjà dit (saut ou retour en arrière) : le centre est écrit d'un coup
   c.rect(x, y, CENTRE.w, CENTRE.h, { couleur: 'blanc', arrondi: 18, largeur: 3 });
@@ -178,6 +200,9 @@ function dessiner(c) {
     c.texte('τ = 0,040', bx + 44, by - 16, { couleur: 'jaune', taille: 13, duree: .4 });
     if (S.choisi === 'centre') c.direct(() => c.rect(x - 3, y - 3, CENTRE.w + 6, CENTRE.h + 6, { couleur: 'blanc', arrondi: 19, largeur: 1.2, alpha: .6 }));
   }
+  return apres;
+}
+function brancher(c, apres) {
   // chaque branche a sa ligne de temps : elle s'écrit dès que la voix la dit, sans attendre la précédente
   for (let i = 0; i < S.n; i++) { c.cur = S.apparu[i] === AVANT ? AVANT : Math.max(apres, S.apparu[i]); branche(c, NOEUDS[i]); }
   // complete : toutes les branches entourées une à une (jaune = surlignage)
@@ -185,7 +210,7 @@ function dessiner(c) {
     c.cur = S.entoure === AVANT ? AVANT : Math.max(apres, S.entoure);
     for (const n of NOEUDS) c.rect(n.x - n.w / 2 - 7, n.y - n.h / 2 - 7, n.w + 14, n.h + 14, { couleur: 'jaune', arrondi: 17, largeur: 1.8, alpha: .8, duree: .35 });
   }
-  if (S.lacunes) c.direct(() => c.texte('✓ acquis · ⟳ à revoir · ✗ à reprendre', 744, 140, { couleur: 'faible', taille: 12, align: 'right' }));
+  if (S.lacunes) c.direct(() => c.texte('✓ acquis · ⟳ à revoir · ✗ à reprendre', scene.L - 16, LARGE ? 300 : 140, { couleur: 'faible', taille: 12 * K, align: 'right' }));
 }
 /* Le peint (béchers) apparaît quand l’écriture arrive à lui. */
 const peindre = (c, fn) => { if (c.t >= c.cur) c.direct(() => { c.ctx.save(); try { fn(c.ctx); } finally { c.ctx.restore(); } }); };
@@ -201,7 +226,7 @@ function becherPeint(ctx, x, y, w, h, haut, bas) {
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(73); dessiner(c); return c.fin(); });
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(73); dessiner(c); return c.fin(); }, { large: true });
 const maintenant = () => (performance.now() - scene.ouvert) / 1000;
 let horloge = 0;
 scene.avancer = dt => {

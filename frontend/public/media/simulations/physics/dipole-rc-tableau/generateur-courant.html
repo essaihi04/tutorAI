@@ -12,6 +12,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
 <script src="exposants.js"></script>
+<script src="colonne.js"></script>
 <script>
 /*
  * Charge d’un condensateur à courant constant (National 2025) : I₀ = 1 µA, pente k = 1 V/s → C = I₀/k = 1 µF.
@@ -64,7 +65,7 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), { large: true });
   const cadreBase = scene.cadre;
   scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
   M.scene = scene; M.craie = scene.craie;
@@ -256,8 +257,14 @@ const enP = (v) => (Math.abs(v - 1) < 1e-9 ? '10⁻⁶' : `${fx(v)}·10⁻⁶`);
 const kTxt = () => { const kk = k(), r = Math.round(kk * 100) / 100; return { s: fx(kk, 2), exact: Math.abs(kk - r) < 1e-9 }; };
 const tracerT = M => (M.commence('droite') ? TMAXG * M.p('droite') : 0);
 
+/* Tableau large : les formules et le résultat du bas passent dans la colonne de gauche, le graphe s’agrandit (colonne.js). */
+const COL = { debut(c) { (this.k ||= RCColonne(MOT.scene, {
+  boite: { x0: 6, y0: 6, x1: 750, y1: 366 },
+  versColonne: (s, x, y) => x <= 30 && y >= 300,
+})).debut(c); } };
+const colonneActive = () => !!(COL.k && COL.k.st.on);
 function dessiner(c, M) {
-  M.scene.cadre(17);
+  M.scene.cadre(17); COL.debut(c);
   const pc = M.p('carte_generateurs');
   c.texte('Charger à courant constant', 14, 28, { couleur: 'cyan', taille: 20 });
   // Les cartes : boîtiers peints, puis la craie.
@@ -328,8 +335,8 @@ function dessiner(c, M) {
   });
   // C déduite.
   M.etape(c, 'C_deduite', () => {
-    c.texte(`I_0/C = k  donc  C = I_0/k = ${enP(S2.I0)}/${kt.s} ${kt.exact ? '=' : '≈'} ${enP(S2.C)} F = ${fx(S2.C)} µF`, 26, 403, { couleur: 'jaune', taille: 20, max: 700 });
-    c.rect(14, 380, 720, 34, { couleur: 'jaune', largeur: 1.4, arrondi: 8 });
+    c.texte(`I_0/C = k  donc  C = I_0/k = ${enP(S2.I0)}/${kt.s} ${kt.exact ? '=' : '≈'} ${enP(S2.C)} F = ${fx(S2.C)} µF`, 26, 403, { couleur: 'jaune', taille: 20, max: 700, encadre: 'jaune' });
+    if (!colonneActive()) c.rect(14, 380, 720, 34, { couleur: 'jaune', largeur: 1.4, arrondi: 8 });
   });
   reperes(c, M);
   return c.fin();

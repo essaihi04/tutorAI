@@ -138,65 +138,83 @@ function peindre(ctx, t, E) {
   return { g, T, ps };
 }
 
+/* Disposition selon la largeur du tableau (15 novembre 2026, « mieux exploiter tout le tableau, grands calibres de
+ * texte ») : tableau large (scene.L ≥ 1000) → la scène moléculaire est agrandie (groupe GR mis à l'échelle ; les
+ * repères suivent car ils lisent la transformation du canvas), la colonne de texte passe à droite de la scène agrandie,
+ * le compteur et l'interrupteur descendent sous la scène. Textes plus gros. Sinon la disposition d'origine (760 × 420). */
+let LG = false, TK = 1, TKG = 1, XT = 528, YC = 372, LISTE_Y = [80, 126, 172, 218, 264, 310];
+const GR = { k: 1, ox: 0, oy: 0 };
+const tk = v => Math.round(v * TK), tkg = v => Math.round(v * TKG), tkr = v => Math.round(v * (LG ? 1.6 : 1));   // tkr : la colonne de droite
+function disposer(L) {
+  LG = L >= 1000; TK = LG ? 1.3 : 1; TKG = LG ? 1.08 : 1;
+  if (!LG) { Object.assign(GR, { k: 1, ox: 0, oy: 0 }); XT = 528; YC = 372; LISTE_Y = [80, 126, 172, 218, 264, 310]; Object.assign(INTER, { x: 300, y: 357 }); return; }
+  const k = 1.25; Object.assign(GR, { k, ox: 20 - 20 * k, oy: 40 - 40 * k });
+  const xg = GR.ox + 500 * k; XT = Math.round(xg + Math.max(28, (L - xg - 560) / 2)); YC = 410; LISTE_Y = [80, 136, 192, 248, 304, 360]; Object.assign(INTER, { x: 340, y: 392 });
+}
+const dans = (c, fn) => { const x = c.ctx; x.save(); x.translate(GR.ox, GR.oy); x.scale(GR.k, GR.k); try { return fn(); } finally { x.restore(); } };
+
 function dessiner(c) {
   const t = S.t, tb = t - OFF, E = etat(tb); let geo;
-  c.direct(() => { geo = peindre(c.ctx, t, E); });
+  c.direct(() => { geo = dans(c, () => peindre(c.ctx, t, E)); });
   const { g, T, ps } = geo;
   // Parties fixes.
-  c.texte('Une tête de myosine tire l’actine (molécules très agrandies)', 12, 24, { couleur: 'cyan', taille: 16 }); c._fixe = c.cur;   // les éléments « au moment dit » n’attendent pas la fin des légendes fixes
-  c.texte('actine', 24, 162, { couleur: 'orange', taille: 15 });
-  c.texte('tête de myosine', 40, 214, { couleur: 'bleu', taille: 15 });
-  c.texte('myosine (filament épais, fixe)', 24, 280, { couleur: 'bleu', taille: 15 });
-  c.ligne(X_REPERE, Y_EPAIS - 8, X_REPERE, 142, { couleur: 'faible', largeur: 1.3, pointille: [4, 5] });
-  c.trait([[X_REPERE - 7, Y_EPAIS + 16], [X_REPERE, Y_EPAIS + 7], [X_REPERE + 7, Y_EPAIS + 16]], { couleur: 'blanc', largeur: 1.8, ferme: true });
-  c.texte('repère fixe', X_REPERE, 280, { couleur: 'faible', taille: 14, align: 'center' });
-  c.texte('crans de glissement :', 24, 372, { couleur: 'jaune', taille: 17 });
-  if (!ETAPES) c.texte('Ce qui se passe', 525, 56, { couleur: 'faible', taille: 15 });
-  else c.texte('Les étapes', 525, 50, { couleur: 'cyan', taille: 16 });
+  c.texte('Une tête de myosine tire l’actine (molécules très agrandies)', 12, 24, { couleur: 'cyan', taille: tk(16) }); c._fixe = c.cur;   // les éléments « au moment dit » n’attendent pas la fin des légendes fixes
+  dans(c, () => {
+    c.texte('actine', 24, 162, { couleur: 'orange', taille: tkg(15) });
+    c.texte('tête de myosine', 40, 214, { couleur: 'bleu', taille: tkg(15) });
+    c.texte('myosine (filament épais, fixe)', 24, 280, { couleur: 'bleu', taille: tkg(15) });
+    c.ligne(X_REPERE, Y_EPAIS - 8, X_REPERE, 142, { couleur: 'faible', largeur: 1.3, pointille: [4, 5] });
+    c.trait([[X_REPERE - 7, Y_EPAIS + 16], [X_REPERE, Y_EPAIS + 7], [X_REPERE + 7, Y_EPAIS + 16]], { couleur: 'blanc', largeur: 1.8, ferme: true });
+    c.texte('repère fixe', X_REPERE, 280, { couleur: 'faible', taille: tkg(14), align: 'center' });
+  });
+  c.texte('crans de glissement :', 24, YC, { couleur: 'jaune', taille: tk(17) });
+  if (!ETAPES) c.texte('Ce qui se passe', XT - 3, 56, { couleur: 'faible', taille: tkr(15) });
+  else c.texte('Les étapes', XT - 3, 50, { couleur: 'cyan', taille: tkr(16) });
   // Ce qui bouge.
   c.direct(() => {
-    c.texte(String(E.crans), 186, 374, { couleur: 'jaune', taille: 26 });
+    c.texte(String(E.crans), 24 + c.largeurTexte('crans de glissement :', tk(17)) + 10, YC + 2, { couleur: 'jaune', taille: tk(26) });
     interrupteur(c);
-    const tn = g.troponines.find(x => x.x > 70);
-    if (tn && (!ETAPES || t >= MOMENTS().liberation_ca)) c.ligne(70, 76, tn.x - 6, tn.y - 16, { couleur: 'faible', largeur: 1.1 });
-    if (E.phase === 'rotation' || (E.phase === 'glisse' && E.u < U.rot1 + 0.4)) {
-      const cx = T.H.x, cy = T.H.y, R = 64, a0 = -122 * Math.PI / 180, a1 = -62 * Math.PI / 180;
-      c.courbe(f => [cx + R * Math.cos(lerp(a0, a1, f)), cy + R * Math.sin(lerp(a0, a1, f))], 14, { couleur: 'blanc', largeur: 1.8 });
-      const xe = cx + R * Math.cos(a1), ye = cy + R * Math.sin(a1);
-      c.fleche(cx + R * Math.cos(a1 - 0.12), cy + R * Math.sin(a1 - 0.12), xe, ye, { couleur: 'blanc', largeur: 1.8, tete: 8 });
-    }
-    // Repères pointables.
-    c.repere('actine', FINE.x0, FINE.y - 14, FINE.x1 - FINE.x0, 30, 'le filament d’actine');
-    c.repere('myosine', 20, Y_EPAIS - 8, 480, 16, 'le filament épais (myosine), fixe');
-    const xs = [BASE.x, T.H.x, E.tip.x, T.C.x], ys = [BASE.y, T.H.y, E.tip.y];
-    c.repere('tete_myosine', Math.min(...xs) - 16, Math.min(...ys) - 6, Math.max(...xs) - Math.min(...xs) + 32, Math.max(...ys) - Math.min(...ys) + 8, 'la tête de myosine');
-    const atp = ps.find(p => p.txt === 'ATP' && p.a > 0.5), adp = ps.find(p => p.txt === 'ADP' && p.a > 0.5);
-    if (atp) c.repere('atp', atp.x - 12, atp.y - 12, 24, 24, atp.nouvel ? 'un nouvel ATP' : 'l’ATP fixé sur la tête');
-    if (adp) c.repere('adp_pi', adp.x - 12, adp.y - 12, 30, 40, 'ADP + Pi');
-    c.repere('compteur', 20, 350, 190, 32, `le compteur : ${E.crans} cran(s)`);
-    if (tb >= U.rot0) c.repere('sens_glissement', 300, 56, 180, 32, 'vers le centre du sarcomère');
-    if (ETAPES) c.repere('liste', 520, 34, 236, 310, 'la liste des étapes');
+    dans(c, () => {
+      const tn = g.troponines.find(x => x.x > 70);
+      if (tn && (!ETAPES || t >= MOMENTS().liberation_ca)) c.ligne(70, 76, tn.x - 6, tn.y - 16, { couleur: 'faible', largeur: 1.1 });
+      if (E.phase === 'rotation' || (E.phase === 'glisse' && E.u < U.rot1 + 0.4)) {
+        const cx = T.H.x, cy = T.H.y, R = 64, a0 = -122 * Math.PI / 180, a1 = -62 * Math.PI / 180;
+        c.courbe(f => [cx + R * Math.cos(lerp(a0, a1, f)), cy + R * Math.sin(lerp(a0, a1, f))], 14, { couleur: 'blanc', largeur: 1.8 });
+        const xe = cx + R * Math.cos(a1), ye = cy + R * Math.sin(a1);
+        c.fleche(cx + R * Math.cos(a1 - 0.12), cy + R * Math.sin(a1 - 0.12), xe, ye, { couleur: 'blanc', largeur: 1.8, tete: 8 });
+      }
+      // Repères pointables.
+      c.repere('actine', FINE.x0, FINE.y - 14, FINE.x1 - FINE.x0, 30, 'le filament d’actine');
+      c.repere('myosine', 20, Y_EPAIS - 8, 480, 16, 'le filament épais (myosine), fixe');
+      const xs = [BASE.x, T.H.x, E.tip.x, T.C.x], ys = [BASE.y, T.H.y, E.tip.y];
+      c.repere('tete_myosine', Math.min(...xs) - 16, Math.min(...ys) - 6, Math.max(...xs) - Math.min(...xs) + 32, Math.max(...ys) - Math.min(...ys) + 8, 'la tête de myosine');
+      const atp = ps.find(p => p.txt === 'ATP' && p.a > 0.5), adp = ps.find(p => p.txt === 'ADP' && p.a > 0.5);
+      if (atp) c.repere('atp', atp.x - 12, atp.y - 12, 24, 24, atp.nouvel ? 'un nouvel ATP' : 'l’ATP fixé sur la tête');
+      if (adp) c.repere('adp_pi', adp.x - 12, adp.y - 12, 30, 40, 'ADP + Pi');
+      if (tb >= U.rot0) c.repere('sens_glissement', 300, 56, 180, 32, 'vers le centre du sarcomère');
+    });
+    c.repere('compteur', 20, YC - 22, 190 * TK, 32, `le compteur : ${E.crans} cran(s)`);
+    if (ETAPES) c.repere('liste', XT - 8, 34, scene.L - XT, LISTE_Y[5] + 36 - 34, 'la liste des étapes');
     // La liste : un trait jaune devant l’étape en cours.
-    if (ETAPES) { const n = etapeCourante(E); if (n) c.fleche(512, LISTE_Y[n - 1] - 5, 522, LISTE_Y[n - 1] - 5, { couleur: 'jaune', largeur: 2.4, tete: 6 }); }
+    if (ETAPES) { const n = etapeCourante(E); if (n) c.fleche(XT - 16, LISTE_Y[n - 1] - 5, XT - 6, LISTE_Y[n - 1] - 5, { couleur: 'jaune', largeur: 2.4, tete: 6 }); }
   });
   // Écrit au moment dit.
   const M = MOMENTS();
-  quand(c, 'ca', !ETAPES || t >= M.liberation_ca, () => c.texte('Ca²⁺ fixé sur la troponine', 24, 70, { couleur: 'jaune', taille: 14 }));
+  quand(c, 'ca', !ETAPES || t >= M.liberation_ca, () => dans(c, () => c.texte('Ca²⁺ fixé sur la troponine', 24, 70, { couleur: 'jaune', taille: tkg(14) })));
   const fixe = ['complexe', 'hydrolyse', 'rotation', 'glisse', 'nouvel_atp', 'bloquee'].includes(E.phase) || (E.phase === 'approche' && E.attache);
-  quand(c, 'cx' + E.cyc, fixe, () => c.texte('complexe actomyosine', 250, 160, { couleur: 'vert', taille: 15 }));
-  quand(c, 'rot' + E.cyc, ['rotation', 'glisse', 'nouvel_atp', 'bloquee'].includes(E.phase), () => c.texte('rotation de la tête', 250, 186, { couleur: 'blanc', taille: 15 }));
-  quand(c, 'na' + (E.phase === 'retour' ? 0 : E.cyc), ['nouvel_atp', 'detachement', 'detache', 'retour', 'fin'].includes(E.phase), () => c.texte('nouvel ATP → détachement', 250, 212, { couleur: 'vert', taille: 15 }));
-  quand(c, 'bloq', E.phase === 'bloquee', () => c.texte('pas d’ATP : tête bloquée', 250, 212, { couleur: 'rouge', taille: 15 }));
-  quand(c, 'eq', tb >= U.hyd0, () => c.texte('ATP → ADP + Pi + énergie', 260, 312, { couleur: 'jaune', taille: 17, align: 'center' }));
-  quand(c, 'sens', tb >= U.rot0, () => { c.fleche(304, 80, 474, 80, { couleur: 'vert', largeur: 2.2 }); c.texte('vers le centre du sarcomère', 389, 68, { couleur: 'vert', taille: 14, align: 'center' }); });
+  quand(c, 'cx' + E.cyc, fixe, () => dans(c, () => c.texte('complexe actomyosine', 250, 160, { couleur: 'vert', taille: tkg(15) })));
+  quand(c, 'rot' + E.cyc, ['rotation', 'glisse', 'nouvel_atp', 'bloquee'].includes(E.phase), () => dans(c, () => c.texte('rotation de la tête', 250, 186, { couleur: 'blanc', taille: tkg(15) })));
+  quand(c, 'na' + (E.phase === 'retour' ? 0 : E.cyc), ['nouvel_atp', 'detachement', 'detache', 'retour', 'fin'].includes(E.phase), () => dans(c, () => c.texte('nouvel ATP → détachement', 250, 212, { couleur: 'vert', taille: tkg(15) })));
+  quand(c, 'bloq', E.phase === 'bloquee', () => dans(c, () => c.texte('pas d’ATP : tête bloquée', 250, 212, { couleur: 'rouge', taille: tkg(15) })));
+  quand(c, 'eq', tb >= U.hyd0, () => dans(c, () => c.texte('ATP → ADP + Pi + énergie', 260, 312, { couleur: 'jaune', taille: tkg(17), align: 'center' })));
+  quand(c, 'sens', tb >= U.rot0, () => dans(c, () => { c.fleche(304, 80, 474, 80, { couleur: 'vert', largeur: 2.2 }); c.texte('vers le centre du sarcomère', 389, 68, { couleur: 'vert', taille: tkg(14), align: 'center' }); }));
   if (!ETAPES) {
     const L = LEGENDE[E.phase] || [];
-    quand(c, 'leg_' + E.phase + E.cyc, L.length > 0, () => L.forEach((l, i) => c.texte(l, 528, 88 + i * 23, { couleur: E.phase === 'bloquee' ? 'rouge' : 'blanc', taille: 16 })));
+    quand(c, 'leg_' + E.phase + E.cyc, L.length > 0, () => L.forEach((l, i) => c.texte(l, XT, (LG ? 96 : 88) + i * tkr(23), { couleur: E.phase === 'bloquee' ? 'rouge' : 'blanc', taille: tkr(16) })));
   } else {
-    ITEMS().forEach((it, i) => quand(c, 'it' + i + it[2], t >= it[3], () => { c.texte(it[0], 528, LISTE_Y[i], { couleur: it[2], taille: 15 }); if (it[1]) c.texte(it[1], 546, LISTE_Y[i] + 19, { couleur: it[2], taille: 14 }); }));
+    ITEMS().forEach((it, i) => quand(c, 'it' + i + it[2], t >= it[3], () => { c.texte(it[0], XT, LISTE_Y[i], { couleur: it[2], taille: tkr(15) }); if (it[1]) c.texte(it[1], XT + 18, LISTE_Y[i] + tkr(18), { couleur: it[2], taille: tkr(14) }); }));
   }
 }
-const LISTE_Y = [80, 126, 172, 218, 264, 310];
 function ITEMS() {
   const M = MOMENTS();
   return [
@@ -219,13 +237,13 @@ function interrupteur(c) {
   ctx.save(); ctx.fillStyle = on ? 'rgba(74,222,128,.25)' : 'rgba(248,113,113,.15)'; ctx.beginPath(); ctx.roundRect(INTER.x, INTER.y, INTER.w, INTER.h, 11); ctx.fill(); ctx.restore();
   c.rect(INTER.x, INTER.y, INTER.w, INTER.h, { couleur: on ? 'vert' : 'rouge', arrondi: 11, largeur: 1.6 });
   c.cercle(on ? INTER.x + INTER.w - 11 : INTER.x + 11, INTER.y + 11, 7, { couleur: on ? 'vert' : 'rouge', fond: on ? 'vert' : 'rouge', fondAlpha: .7, largeur: 1.4 });
-  c.texte(on ? 'ATP disponible' : 'ATP épuisé', INTER.x + INTER.w + 9, INTER.y + 16, { couleur: on ? 'vert' : 'rouge', taille: 16 });
-  c.repere('interrupteur_atp', INTER.x - 4, INTER.y - 4, INTER.w + 130, INTER.h + 8, `l’interrupteur ATP : ${on ? 'disponible' : 'épuisé'}`);
+  c.texte(on ? 'ATP disponible' : 'ATP épuisé', INTER.x + INTER.w + 9, INTER.y + 16, { couleur: on ? 'vert' : 'rouge', taille: tk(16) });
+  c.repere('interrupteur_atp', INTER.x - 4, INTER.y - 4, INTER.w + 130 * TK, INTER.h + 8, `l’interrupteur ATP : ${on ? 'disponible' : 'épuisé'}`);
 }
 
 /* ── Boucle, moments, commandes ──────────────────────────────────────────── */
 const canvas = $('canvas');
-const scene = window.MuscleTableau.Scene(canvas, (c) => { scene.cadre(53); dessiner(c); return c.fin(); });
+const scene = window.MuscleTableau.Scene(canvas, (c) => { scene.cadre(53); disposer(scene.L); dessiner(c); return c.fin(); }, { large: true });
 scene.avancer = dt => {
   if (!S.running) return false;
   S.t = Math.min(FIN(), S.t + dt);

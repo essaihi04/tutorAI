@@ -45,21 +45,55 @@ const D = { E: 10, R: 100, R1: 1000 }, D_I0 = D.E / D.R, D_UB = -D.R1 * D_I0;   
 
 /* ── Géométrie (cadre 760 × 420) ───────────────────────────────────────── */
 const RG = { x: 8, y: 40, w: 500, h: 372 }, RL = { x: 516, y: 40, w: 236, h: 372 };
-const O = { x: 66, y: 352 }, AXL = 396, AYL = 268, TMAX = 12, IMAX = 120;
+const O = { x: 66, y: 352 };
+const TMAX = 12, IMAX = 120;
+let AXL = 396, AYL = 268;
+/* Disposition selon la largeur du tableau (15 novembre 2026 : « la simulation n'occupe qu'une bande étroite, textes
+ * minuscules »). Tableau large (L ≥ 1000, écran d'ordinateur portable) : le graphe s'étend sur toute la largeur
+ * libre, la colonne « Lecture » à droite est plus large et écrite plus gros (lignes espacées en proportion).
+ * Sinon (grand écran, déjà haut) : la disposition d'origine 760 × 420. */
+let DL = { large: false, k: 1, kl: 1, ky: 1 };
+function disposer(L) {
+  if (L < 1000) {
+    Object.assign(RG, { x: 8, w: 500 }); Object.assign(RL, { x: 516, w: 236 }); O.x = 66; AXL = 396;
+    DL = { large: false, L, k: 1, kl: 1, ky: 1 };
+  } else {
+    const lw = Math.round(L * .26);
+    Object.assign(RL, { x: L - lw - 6, w: lw }); Object.assign(RG, { x: 8, w: L - lw - 22 }); O.x = 82; AXL = RG.w - 120;
+    DL = { large: true, L, k: 1.3, kl: 1.2, ky: 1.03 };
+  }
+  LX = RL.x + 8; LW = RL.w - 16;
+  // vue « diode » : le circuit (dessiné pour 480 de large) est centré dans la partie gauche (décalage DL.dx, appliqué
+  // au contexte), la colonne de lecture va à droite, plus large.
+  if (DL.large) {
+    const lwD = Math.round(L * .27), plx = L - lwD - 6, dx = Math.round((plx - 8 - 480 - 8) / 2);
+    Object.assign(PC, { x: 8 - dx, w: plx - 14 }); Object.assign(PL, { x: plx - dx, w: lwD }); DL.dx = dx;
+  } else { Object.assign(PC, { x: 8, w: 480 }); Object.assign(PL, { x: 496, w: 256 }); DL.dx = 0; }
+  DX = PL.x + 8; DW = PL.w - 16;
+}
+const T = n => Math.round(n * DL.k);                 // taille d'un texte du graphe
+const lyL = y => (DL.large ? 70 + (y - 64) * DL.ky : y); // ordonnée d'une ligne de la colonne « Lecture »
 const PX = t => O.x + t * AXL / TMAX, PY = i => O.y - i * AYL / IMAX;
-const LX = RL.x + 8, LW = RL.w - 16;
-const PC = { x: 8, y: 40, w: 480, h: 372 }, PL = { x: 496, y: 40, w: 256, h: 372 }, DX = PL.x + 8, DW = PL.w - 16;
+let LX = RL.x + 8, LW = RL.w - 16;
+const PC = { x: 8, y: 40, w: 480, h: 372 }, PL = { x: 496, y: 40, w: 256, h: 372 };
+let DX = PL.x + 8, DW = PL.w - 16;
 const marque = (c, nom) => { MM[nom] = c.cur; };
-const lire = (c, y, s, o = {}) => c.texte(s, LX, y, { couleur: 'blanc', taille: 16, max: LW, ...o });
-const lireD = (c, y, s, o = {}) => c.texte(s, DX, y, { couleur: 'blanc', taille: 15, max: DW, ...o });
+const lire = (c, y, s, o = {}) => c.texte(s, LX, lyL(y), { couleur: 'blanc', max: LW, ...o, taille: Math.round((o.taille ?? 16) * DL.kl) });
+const encadre = (c, y, w, h) => c.rect(LX - 4, lyL(y), w * DL.kl, h * (DL.large ? 1.18 : 1), { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+// colonne de la vue « diode » : déjà pleine jusqu'en bas (y = 400) : mêmes lignes, texte un peu plus gros seulement
+const lireD = (c, y, s, o = {}) => c.texte(s, DX, y, { couleur: 'blanc', max: DW, ...o, taille: Math.round((o.taille ?? 15) * (DL.large ? 1.13 : 1)) });
 /** Part (0..1) d’un geste commencé à `debut` (s de scène) et durant `d` s. */
 const geste = (c, debut, d = .5) => (debut === undefined ? 0 : clamp((c.t - debut) / d));
 
 function dessiner(c) {
-  scene.cadre(61); MM = {};
-  (S.vue === 'descente' ? vueDescente : vueDiode)(c);
-  c.pause(.8); marque(c, 'fin');
-  declarerReperes(c);
+  scene.cadre(61); disposer(scene.L); MM = {};
+  const decale = S.vue !== 'descente' && DL.dx;
+  if (decale) { c.ctx.save(); c.ctx.translate(DL.dx, 0); }
+  try {
+    (S.vue === 'descente' ? vueDescente : vueDiode)(c);
+    c.pause(.8); marque(c, 'fin');
+    declarerReperes(c);
+  } finally { if (decale) c.ctx.restore(); }
   const fini = c.fin();
   M = MM;
   return fini || !S.running;
@@ -67,14 +101,14 @@ function dessiner(c) {
 
 /* ── Vue « descente » ──────────────────────────────────────────────────── */
 function interrupteurK(c) {
-  const px = LX + 96, py = 124, x1 = LX + 40, y1 = 106, y2 = 142;
+  const px = LX + 96, py = lyL(124), x1 = LX + 40, y1 = lyL(106), y2 = lyL(142);
   c.ligne(LX + 4, y1, x1, y1, { couleur: 'blanc', largeur: 1.8 });
   c.ligne(LX + 4, y2, x1, y2, { couleur: 'blanc', largeur: 1.8 });
   c.ligne(px, py, px + 50, py, { couleur: 'blanc', largeur: 1.8 });
   c.point(x1, y1, 3.5); c.point(x1, y2, 3.5); c.point(px, py, 3.5);
-  c.texte('1', x1 - 4, y1 - 6, { couleur: 'faible', taille: 14, align: 'right' });
-  c.texte('2', x1 - 4, y2 + 18, { couleur: 'faible', taille: 14, align: 'right' });
-  c.texte('K', px + 26, py - 8, { couleur: 'blanc', taille: 17, align: 'center' });
+  c.texte('1', x1 - 4, y1 - 6, { couleur: 'faible', taille: T(14), align: 'right' });
+  c.texte('2', x1 - 4, y2 + 18, { couleur: 'faible', taille: T(14), align: 'right' });
+  c.texte('K', px + 26, py - 8, { couleur: 'blanc', taille: T(17), align: 'center' });
   c.texte('avec E', LX + 152, y1 + 4, { couleur: 'faible', taille: 13 });
   c.texte('sans E', LX + 152, y2 + 4, { couleur: 'faible', taille: 13 });
   MM._k = c.cur;
@@ -82,18 +116,18 @@ function interrupteurK(c) {
   c.direct(() => { const y = y1 + (y2 - y1) * f; c.ligne(px, py, x1, y, { couleur: f >= 1 ? 'bleu' : 'blanc', largeur: 2.4 }); });
 }
 function vueDescente(c) {
-  c.texte(`Rupture : ${TITRES.descente}`, RG.x + 6, 30, { couleur: 'cyan', taille: 17, max: RG.w - 10, duree: .9 });
+  c.texte(`Rupture : ${TITRES.descente}`, RG.x + 6, 30, { couleur: 'cyan', taille: T(17), max: RG.w - 10, duree: .9 });
   c.rect(RG.x, RG.y, RG.w, RG.h, { couleur: 'tresfaible', arrondi: 10, duree: .5 });
   c.texte('Lecture', RL.x + 6, 30, { couleur: 'cyan', taille: 17, duree: .3 });
   c.rect(RL.x, RL.y, RL.w, RL.h, { couleur: 'tresfaible', arrondi: 10, duree: .4 });
   const LT = AXL + 16, tg = [], LY = AYL + 14, yg = [];
   for (let k = 1; k <= TMAX; k++) tg.push([(PX(k) - O.x) / LT, k % 5 === 0 ? String(k) : null]);
-  c.axe(O.x, O.y, O.x + LT, O.y, tg, { taille: 13 });
+  c.axe(O.x, O.y, O.x + LT, O.y, tg, { taille: T(13) });
   for (let v = 10; v <= IMAX; v += 10) yg.push([(O.y - PY(v)) / LY, v % 20 === 0 ? String(v) : null]);
-  c.axe(O.x, O.y, O.x, O.y - LY, yg, { taille: 13, vertical: true });
-  c.texte('0', O.x - 8, O.y + 18, { couleur: 'faible', taille: 13, align: 'right' });
-  c.texte('i (mA)', O.x + 10, 66, { couleur: 'blanc', taille: 16 });
-  c.texte('t (ms)', RG.x + RG.w - 8, O.y + 40, { couleur: 'blanc', taille: 16, align: 'right' });
+  c.axe(O.x, O.y, O.x, O.y - LY, yg, { taille: T(13), vertical: true });
+  c.texte('0', O.x - 8, O.y + 18, { couleur: 'faible', taille: T(13), align: 'right' });
+  c.texte('i (mA)', O.x + 10, 66, { couleur: 'blanc', taille: T(16) });
+  c.texte('t (ms)', RG.x + RG.w - 8, O.y + 40, { couleur: 'blanc', taille: T(16), align: 'right' });
   lire(c, 64, 'E = 6 V ; R = 50 Ω ; r = 10 Ω', { couleur: 'faible', taille: 14, duree: .6 });
   lire(c, 84, 'L = 0,12 H', { couleur: 'faible', taille: 14, duree: .3 });
   c.pause(.3);
@@ -103,7 +137,7 @@ function vueDescente(c) {
   const pose = M._k !== undefined && c.t >= M._k + .6;
   c.direct(() => { if (pose) { c.ctx.globalAlpha = .9; c.point(O.x, PY(I0), 6, 'bleu'); c.ctx.globalAlpha = 1; } });
   c.cercle(O.x, PY(I0), 9, { couleur: 'bleu', largeur: 2 });
-  c.texte('i(0) = I_0 = 100 mA', O.x + 16, PY(I0) - 12, { couleur: 'bleu', taille: 15 });
+  c.texte('i(0) = I_0 = 100 mA', O.x + 16, PY(I0) - 12, { couleur: 'bleu', taille: T(15) });
   lire(c, 172, 'K passe de 1 à 2 à t = 0', { couleur: 'bleu', taille: 15 });
   lire(c, 194, 'i(0) = I_0 = 100 mA', { couleur: 'blanc', taille: 16 });
   lire(c, 214, 'i ne saute pas : continuité', { couleur: 'faible', taille: 14 });
@@ -117,12 +151,12 @@ function vueDescente(c) {
   c.ligne(O.x, y37, x37, y37, { couleur: 'cyan', largeur: 1.8, pointille: [7, 5] });
   c.cercle(x37, y37, 5, { couleur: 'cyan', largeur: 1.8 });
   c.ligne(x37, y37, x37, O.y, { couleur: 'cyan', largeur: 1.8, pointille: [7, 5] });
-  c.texte('0,37·I_0', x37 + 12, y37 - 8, { couleur: 'cyan', taille: 15 });
+  c.texte('0,37·I_0', x37 + 12, y37 - 8, { couleur: 'cyan', taille: T(15) });
   c.cercle(PX(TAU), O.y, 5, { couleur: 'cyan', largeur: 1.8 });
-  c.texte('τ', PX(TAU), O.y + 40, { couleur: 'cyan', taille: 18, align: 'center' });
+  c.texte('τ', PX(TAU), O.y + 40, { couleur: 'cyan', taille: T(18), align: 'center' });
   lire(c, 280, 'i(τ) = 0,37·I_0 = 37 mA', { couleur: 'cyan', taille: 16 });
   lire(c, 306, 'on lit τ ≈ 2 ms', { couleur: 'blanc', taille: 18 });
-  c.rect(LX - 4, 286, 128, 28, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  encadre(c, 286, 128, 28);
   marque(c, 'ligne_37');
   c.pause(.4);
   c.ligne(O.x, PY(I0), PX(TAU * 1.1), PY(-I0 * .1), { couleur: 'cyan', largeur: 2.2 });
@@ -225,7 +259,7 @@ function vueDiode(c) {
     if (avecDiode) { peindreDiode(ctx, C.d + 32, 192); peindreResistor(ctx, C.d, 275, 50, 14, true); }
     if (etinc) peindreEtincelle(ctx, lx, ly, C.k2, C.h, tc, Math.min(1, (tc - M._o1) / .4));
   });
-  c.texte(`Rupture : ${TITRES.diode}`, PC.x + 6, 30, { couleur: 'cyan', taille: 17, max: PC.w - 10, duree: .9 });
+  c.texte(`Rupture : ${TITRES.diode}`, PC.x + 6, 30, { couleur: 'cyan', taille: T(17), max: PC.w - 10, duree: .9 });
   c.rect(PC.x, PC.y, PC.w, PC.h, { couleur: 'tresfaible', arrondi: 10, duree: .4 });
   c.texte('Lecture', PL.x + 6, 30, { couleur: 'cyan', taille: 17, duree: .3 });
   c.rect(PL.x, PL.y, PL.w, PL.h, { couleur: 'tresfaible', arrondi: 10, duree: .4 });
@@ -237,21 +271,21 @@ function vueDiode(c) {
   c.trait([[C.b, C.bob2], [C.b, C.bas], [C.g, C.bas], [C.g, 253]], { couleur: 'blanc', largeur: 2 });
   c.point(C.k1, C.h, 3.5); c.point(C.k2, C.h, 3.5);
   c.direct(() => c.ligne(C.k1, C.h, lx, ly, { couleur: 'blanc', largeur: 2.4 }));
-  c.texte('K', (C.k1 + C.k2) / 2, C.h + 26, { couleur: 'blanc', taille: 17, align: 'center' });
-  c.texte('E', C.g - 30, 226, { couleur: 'blanc', taille: 18, align: 'right' });
-  c.texte('+', C.g + 30, 196, { couleur: 'rouge', taille: 16 });
-  c.texte('R', (C.r1 + C.r2) / 2, C.h - 16, { couleur: 'blanc', taille: 17, align: 'center' });
-  c.texte('L', C.b + 18, C.bob1 + 4, { couleur: 'blanc', taille: 17 });
-  c.texte('bobine', C.b - 47, 260, { couleur: 'faible', taille: 13, align: 'center' });
+  c.texte('K', (C.k1 + C.k2) / 2, C.h + 26, { couleur: 'blanc', taille: T(17), align: 'center' });
+  c.texte('E', C.g - 30, 226, { couleur: 'blanc', taille: T(18), align: 'right' });
+  c.texte('+', C.g + 30, 196, { couleur: 'rouge', taille: T(16) });
+  c.texte('R', (C.r1 + C.r2) / 2, C.h - 16, { couleur: 'blanc', taille: T(17), align: 'center' });
+  c.texte('L', C.b + 18, C.bob1 + 4, { couleur: 'blanc', taille: T(17) });
+  c.texte('bobine', C.b - 47, 260, { couleur: 'faible', taille: T(13), align: 'center' });
   c.fleche(C.r2 + 14, C.h - 0, C.r2 + 44, C.h, { couleur: 'vert', largeur: 2.2, tete: 9 });
-  c.texte('i', C.r2 + 28, C.h - 10, { couleur: 'vert', taille: 16, align: 'center' });
+  c.texte('i', C.r2 + 28, C.h - 10, { couleur: 'vert', taille: T(16), align: 'center' });
   lireD(c, 64, `2025 R : E = 10 V ; R = 100 Ω`, { couleur: 'faible', taille: 14, duree: .6 });
   lireD(c, 86, 'bobine idéale (r = 0)', { couleur: 'faible', taille: 14, duree: .4 });
   lireD(c, 118, 'K fermé : I_0 = E/R = 0,1 A', { taille: 16 });
   c.pause(.4);
   // etincelle : K s’ouvre, i doit tomber à 0 d’un coup → étincelle entre les contacts.
   MM._o1 = c.cur; c.pause(1.2);
-  c.texte('étincelle !', C.k2 + 8, C.h - 34, { couleur: 'cyan', taille: 16 });
+  c.texte('étincelle !', C.k2 + 8, C.h - 34, { couleur: 'cyan', taille: T(16) });
   lireD(c, 150, 'on ouvre K : i doit tomber', { couleur: 'bleu' });
   lireD(c, 172, 'à 0 d’un coup', { couleur: 'bleu' });
   lireD(c, 196, 'u_b = L·di/dt très grande', { taille: 15 });
@@ -266,8 +300,8 @@ function vueDiode(c) {
   c.trait([[C.d, 202], [C.d, 250]], { couleur: 'blanc', largeur: 2 });
   c.trait([[C.d, 300], [C.d, C.bas], [C.b, C.bas]], { couleur: 'blanc', largeur: 2 });
   c.point(C.b, C.h, 3.5); c.point(C.b, C.bas, 3.5);
-  c.texte('D', C.d + 46, 197, { couleur: 'blanc', taille: 17 });
-  c.texte('R_1 = 1 kΩ', C.d - 14, 296, { couleur: 'blanc', taille: 15, align: 'right' });
+  c.texte('D', C.d + 46, 197, { couleur: 'blanc', taille: T(17) });
+  c.texte('R_1 = 1 kΩ', C.d - 14, 296, { couleur: 'blanc', taille: T(15), align: 'right' });
   lireD(c, 254, 'on ajoute la diode D et', { taille: 15 });
   lireD(c, 274, 'R_1 = 1 kΩ en parallèle sur L', { taille: 15 });
   lireD(c, 296, 'K fermé : la diode bloque', { couleur: 'faible', taille: 14 });
@@ -280,12 +314,12 @@ function vueDiode(c) {
   c.fleche(C.d + 14, 238, C.d + 14, 214, { couleur: 'bleu', largeur: 2.2, tete: 9 });
   c.fleche(C.d - 30, C.h - 14, C.b + 40, C.h - 14, { couleur: 'bleu', largeur: 2.2, tete: 9 });
   c.fleche(C.b + 38, C.bob2, C.b + 38, C.bob1, { couleur: 'blanc', largeur: 2.2, tete: 10 });
-  c.texte('u_b', C.b + 46, (C.bob1 + C.bob2) / 2 + 6, { couleur: 'blanc', taille: 18 });
+  c.texte('u_b', C.b + 46, (C.bob1 + C.bob2) / 2 + 6, { couleur: 'blanc', taille: T(18) });
   lireD(c, 326, 'on ouvre K : i(0) = I_0 = 0,1 A', { couleur: 'bleu', taille: 15 });
   lireD(c, 348, 'i passe dans D et R_1', { couleur: 'bleu', taille: 15 });
   lireD(c, 372, 'u_b = −R_1·I_0 = −1000 × 0,1', { taille: 15 });
   lireD(c, 400, 'u_b = −100 V', { taille: 20 });
-  c.rect(DX - 4, 378, 132, 30, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  c.rect(DX - 4, 378, 132 * (DL.large ? 1.13 : 1), 30, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
   marque(c, 'surtension');
 }
 function declarerReperes(c) {
@@ -297,11 +331,11 @@ function declarerReperes(c) {
     c.repere('ligne_37', O.x, PY(37) - 12, PX(T37) - O.x + 12, 24, '0,37·I₀ = 37 mA, horizontale jusqu’à la courbe');
     c.repere('tangente', O.x, PY(I0), PX(TAU * 1.1) - O.x, O.y - PY(I0) + 8, 'la tangente à l’origine : elle coupe l’axe des temps en t = τ');
     c.repere('tau', PX(TAU) - 20, O.y - 10, 40, 58, 'τ = L/(R + r) = 2 ms');
-    c.repere('interrupteur', LX, 92, 140, 62, 'l’interrupteur K : il bascule de 1 à 2 à t = 0');
-    c.repere('etincelle', LX, 92, 140, 62, `l’étincelle à l’ouverture d’un interrupteur simple${ici('diode')}`);
-    c.repere('diode', LX, 92, 140, 62, `la diode en parallèle sur la bobine${ici('diode')}`);
-    c.repere('R1', LX, 92, 140, 62, `R₁ = 1 kΩ${ici('diode')}`);
-    c.repere('fleche_ub', LX, 92, 140, 62, `la flèche u_b : u_b = −R₁·I₀ = −100 V${ici('diode')}`);
+    c.repere('interrupteur', LX, lyL(92), 140, 62 * DL.ky, 'l’interrupteur K : il bascule de 1 à 2 à t = 0');
+    c.repere('etincelle', LX, lyL(92), 140, 62 * DL.ky, `l’étincelle à l’ouverture d’un interrupteur simple${ici('diode')}`);
+    c.repere('diode', LX, lyL(92), 140, 62 * DL.ky, `la diode en parallèle sur la bobine${ici('diode')}`);
+    c.repere('R1', LX, lyL(92), 140, 62 * DL.ky, `R₁ = 1 kΩ${ici('diode')}`);
+    c.repere('fleche_ub', LX, lyL(92), 140, 62 * DL.ky, `la flèche u_b : u_b = −R₁·I₀ = −100 V${ici('diode')}`);
   } else {
     c.repere('interrupteur', C.k1 - 10, C.h - 40, C.k2 - C.k1 + 20, 70, 'l’interrupteur K (simple)');
     c.repere('etincelle', C.k1 + 10, C.h - 50, C.k2 - C.k1 + 60, 60, 'l’étincelle entre les contacts : surtension');
@@ -316,12 +350,13 @@ const canvas = $('canvas');
 const scene = window.OndesTableau.Scene(canvas, dessiner);
 const craie = scene.craie;
 scene.cadre = function (graine) {
-  const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  const W = craie.W, H = craie.H, VH = 420;
+  const VW = Math.round(Math.min(760 * 2.1, Math.max(760, VH * W / Math.max(1, H)))); scene.L = VW;
   craie.debut(graine, S.t);
   const s = Math.min(W / VW, H / VH) || 1;
   scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
   craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
-  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+  craie.echelle = s; craie.tailleMin = 15; craie.cadre = { w: VW, h: VH, haut: 0 };
   return craie;
 };
 function calculer() { const t = S.t, rn = S.running; S.t = 1e6; S.running = false; try { dessiner(craie); dessiner(craie); } finally { S.t = t; S.running = rn; } scene.sale = true; }

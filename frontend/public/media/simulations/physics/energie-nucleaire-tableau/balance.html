@@ -331,18 +331,43 @@ function groupes() {
   return g;
 }
 const PAN = { x: 482, y: 32, w: 272, h: 384 }, VB = { x: 6, y: 32, w: 468, h: 384 };
+/* Tableau large (15 novembre 2026, « la simulation n’occupe qu’une bande étroite, textes minuscules ») :
+ * Scene({ large: true }) ; si scene.L ≥ 1000, la colonne des masses s’étend sur toute la droite, en deux colonnes
+ * de calculs écrits plus gros (placement). L < 1000 : disposition d’origine, centrée. */
+let LT = 760;
+function cadreLarge(graine) {
+  scene.cadre(graine);
+  if (scene.L < 1000 && scene.L > 760) { const d = (scene.L - 760) / 2; scene.craie.ctx.translate(d, 0); scene.ox += d * scene.s; }
+  LT = scene.L; PAN.w = LT >= 1000 ? LT - 488 : 272;
+}
 /** Positions (y) des lignes : { moment: [y, …] }, pas resserré s’il y a beaucoup de lignes. */
 function placement() {
   const gs = groupes(), n = gs.reduce((s, [, l]) => s + l.length, 0), ecartG = 7;
+  const out = {}, X = {}, W = {};
+  if (LT >= 1000) {
+    // deux colonnes : la coupure qui équilibre le nombre de lignes
+    let k = 1, mieux = Infinity;
+    for (let j = 1; j < gs.length; j++) {
+      const a = gs.slice(0, j).reduce((s, [, l]) => s + l.length, 0), m = Math.max(a, n - a);
+      if (m < mieux) { mieux = m; k = j; }
+    }
+    const cols = [gs.slice(0, k), gs.slice(k)], cw = (PAN.w - 30) / 2;
+    const pas = Math.min(44, ...cols.map(cg => (392 - 72 - 14 * (cg.length - 1)) / Math.max(1, cg.reduce((s, [, l]) => s + l.length, 0) - 1)));
+    cols.forEach((cg, ci) => {
+      let y = 76;
+      cg.forEach(([nom, lignes], j) => { if (j) y += 14; X[nom] = PAN.x + 14 + ci * (cw + 16); W[nom] = cw; out[nom] = lignes.map(() => { const yy = y; y += pas; return yy; }); });
+    });
+    return { Y: out, X, W, pas };
+  }
   const pas = Math.min(27, (392 - 60 - ecartG * (gs.length - 1)) / Math.max(1, n - 1));
-  let y = 60; const out = {};
-  gs.forEach(([nom, lignes], j) => { if (j) y += ecartG; out[nom] = lignes.map(() => { const yy = y; y += pas; return yy; }); });
-  return out;
+  let y = 60;
+  gs.forEach(([nom, lignes], j) => { if (j) y += ecartG; X[nom] = PAN.x + 10; W[nom] = PAN.w - 10; out[nom] = lignes.map(() => { const yy = y; y += pas; return yy; }); });
+  return { Y: out, X, W, pas };
 }
 
 function dessinerBalance(c) {
   const R = REAC(), N = NUC();
-  c.texte('La balance', 14, 24, { couleur: 'cyan', taille: 17 });
+  c.texte('La balance', 14, 24, { couleur: 'cyan', taille: LT >= 1000 ? 22 : 17 });
   c.rect(VB.x, VB.y, VB.w, VB.h, { couleur: 'tresfaible', arrondi: 8, duree: .5 });
   c.repere('vue_balance', VB.x, VB.y, VB.w, VB.h, 'la balance');
   // Légende des couleurs.
@@ -414,33 +439,40 @@ function dessinerBalance(c) {
 }
 
 function dessinerMasses(c) {
-  c.texte('Les masses', PAN.x + 6, 24, { couleur: 'cyan', taille: 17 });
+  c.texte('Les masses', PAN.x + 6, 24, { couleur: 'cyan', taille: LT >= 1000 ? 22 : 17 });
   c.rect(PAN.x, PAN.y, PAN.w, PAN.h, { couleur: 'tresfaible', arrondi: 8, duree: .5 });
   c.repere('vue_masses', PAN.x, PAN.y, PAN.w, PAN.h, 'la colonne des masses');
   c.repere('colonne_masses', PAN.x + 4, 40, PAN.w - 8, 370, 'la colonne des masses (u), Δm et l’énergie');
-  const Y = placement(), X = PAN.x + 10, gs = groupes(), TL = REAC() ? 15 : 16;
+  const pl = placement(), Y = pl.Y, gs = groupes();
+  let TL = REAC() ? 15 : 16;
+  if (LT >= 1000) {
+    // le plus gros texte (jusqu’à 30) qui tient dans la largeur d’une colonne et dans le pas des lignes
+    const larg = parts => parts.reduce((s, p) => s + (typeof p === 'string' || p.t != null ? c.largeurTexte(String(p.t ?? p).replace(/[_{}]/g, ''), 10) : 12), 0);
+    const w1 = Math.max(...gs.flatMap(([nom, l]) => l.map(([parts]) => larg(parts) / (pl.W[nom] - 24))));
+    TL = Math.max(16, Math.min(30, 10 / w1, pl.pas * .72));
+  }
   for (const [nom, lignes] of gs) {
-    const ys = Y[nom];
+    const ys = Y[nom], X = pl.X[nom];
     const id = { delta_m: 'delta_m', energie: 'energie', par_nucleon: 'par_nucleon' }[nom];
     if (id) {
       const lib = { delta_m: 'le défaut de masse Δm', energie: REAC() ? 'l’énergie libérée' : 'l’énergie de liaison E_ℓ', par_nucleon: 'l’énergie de liaison par nucléon E_ℓ/A' }[id];
-      c.repere(id, X - 6, ys[0] - 20, PAN.w - 10, ys[ys.length - 1] - ys[0] + 28, lib);
+      c.repere(id, X - 6, ys[0] - 20, pl.W[nom], ys[ys.length - 1] - ys[0] + 8 + TL * 1.25, lib);
     }
     if (!vu(nom)) continue;
     ecrit(c, nom, () => {
       lignes.forEach(([parts, coul], i) => ligne(c, parts, X + (i && !/^(nucléons|noyau|réactifs|produits|Δm|ΔE|E_)/.test(String(parts[0].t ?? parts[0])) ? 14 : 0), ys[i], { taille: TL, couleur: coul }));
-      if (nom === 'energie' && REAC()) { const y = ys[ys.length - 1]; c.rect(X - 4, y - 19, c.largeurTexte(`Elib = |ΔE| ${RX().egal} ${RX().lib} MeV`, TL) + 14, 26, { couleur: 'vert', arrondi: 6, largeur: 1.4 }); }
+      if (nom === 'energie' && REAC()) { const y = ys[ys.length - 1]; c.rect(X - 4, y - TL * 1.2, c.largeurTexte(`Elib = |ΔE| ${RX().egal} ${RX().lib} MeV`, TL) + 14, TL * 1.65, { couleur: 'vert', arrondi: 6, largeur: 1.4 }); }
     });
   }
 }
 
 function dessiner(c) {
   dessinerBalance(c); dessinerMasses(c);
-  c.direct(() => { if (S.running || S.t > 0) c.texte(S.fait ? 'fin' : `t = ${fr(S.t, 1)} s`, 748, 24, { couleur: 'faible', taille: 13, align: 'right' }); });
+  c.direct(() => { if (S.running || S.t > 0) c.texte(S.fait ? 'fin' : `t = ${fr(S.t, 1)} s`, LT >= 1000 ? LT - 12 : 748, 24, { couleur: 'faible', taille: 13, align: 'right' }); });
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(41); dessiner(c); return c.fin(); });
+const scene = window.OndesTableau.Scene(canvas, (c) => { cadreLarge(41); dessiner(c); return c.fin(); }, { large: true });
 scene.avancer = dt => {
   if (!S.running) return false;
   S.t = Math.min(FIN(), S.t + dt);

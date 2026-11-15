@@ -23,6 +23,9 @@ function arbre(c, x, base) {
   c.ligne(x + 4, base, x + 3, base - 58, { couleur: 'orange', largeur: 2.2 });
   c.cercle(x, base - 86, 34, { couleur: 'vert', largeur: 2.2, fond: 'vert', fondAlpha: .1 });
 }
+/* Tableau large (SU.large, 15 novembre 2026) : la vue remonte et l'exemple / la somme passent à droite ; le kit l'agrandit
+ * alors sur toute la largeur. */
+let LG = false;
 MathsTableau.page({
   id: 'su_arbres', titre: 'Combien de termes ?',
   texte: 'Constructions à la craie : trois arbres numérotés 5, 6, 7 (de uₚ à uₙ il y a n − p + 1 termes) ; la somme des uₖ = 1 + vₖ séparée en 2022 fois 1 et une somme géométrique',
@@ -30,28 +33,30 @@ MathsTableau.page({
     arbres: {
       titre: 'De uₚ à uₙ : n − p + 1 termes',
       dessiner(c, K) {
+        LG = SU.large(c);
         K.titre('Combien de termes dans une somme ?');
-        const XS = [90, 200, 310], BASE = 250;
+        const XS = [90, 200, 310], BASE = LG ? 214 : 250, d = LG ? -36 : 0;
         c.ligne(30, BASE + 4, 380, BASE + 4, { couleur: 'faible', largeur: 1.8 });
         c.ligne(30, BASE + 40, 380, BASE + 40, { couleur: 'faible', largeur: 1.8 });
         XS.forEach((x, i) => { c.pause(.2); arbre(c, x, BASE); c.texte(String(5 + i), x, BASE + 30, { couleur: 'jaune', taille: 22, align: 'center' }); });
-        c.repere('arbres', 40, 120, 320, 180, 'les arbres numéros 5, 6 et 7');
+        c.repere('arbres', 40, 120 + d, 320, 180, 'les arbres numéros 5, 6 et 7');
         K.marque('arbres');
         c.pause(.4);
-        c.texte('du 5 au 7 :', 420, 110, { couleur: 'blanc', taille: 20 });
-        c.texte('7 − 5 + 1 = 3 arbres', 420, 146, { couleur: 'jaune', taille: 22 });
-        c.texte('(et pas 7 − 5 = 2)', 420, 176, { couleur: 'orange', taille: 17 });
+        c.texte('du 5 au 7 :', 420, 110 + d, { couleur: 'blanc', taille: 20 });
+        c.texte('7 − 5 + 1 = 3 arbres', 420, 146 + d, { couleur: 'jaune', taille: 22 });
+        c.texte('(et pas 7 − 5 = 2)', 420, 176 + d, { couleur: 'orange', taille: 17 });
         K.marque('compte');
         c.pause(.4);
-        c.rect(410, 200, 330, 70, { couleur: 'jaune', arrondi: 8, largeur: 1.8 });
-        c.texte('de u_p à u_n :', 425, 228, { couleur: 'blanc', taille: 19 });
-        c.texte('n − p + 1 termes', 425, 258, { couleur: 'jaune', taille: 22 });
-        c.repere('regle', 406, 196, 338, 78, 'la règle : n − p + 1 termes');
+        c.rect(410, 200 + d, 330, 70, { couleur: 'jaune', arrondi: 8, largeur: 1.8 });
+        c.texte('de u_p à u_n :', 425, 228 + d, { couleur: 'blanc', taille: 19 });
+        c.texte('n − p + 1 termes', 425, 258 + d, { couleur: 'jaune', taille: 22 });
+        c.repere('regle', 406, 196 + d, 338, 78, 'la règle : n − p + 1 termes');
         K.marque('regle');
         c.pause(.4);
-        c.texte('de u_0 à u_{2021} :', 30, 322, { couleur: 'cyan', taille: 19 });
-        c.texte('2021 − 0 + 1 = 2022 termes', 220, 322, { couleur: 'cyan', taille: 21 });
-        c.repere('exemple', 26, 300, 470, 30, 'de u₀ à u₂₀₂₁ : 2022 termes');
+        c.texte('de u_0 à u_{2021} :', LG ? 420 : 30, LG ? 268 : 322, { couleur: 'cyan', taille: 19 });
+        c.texte('2021 − 0 + 1 = 2022 termes', LG ? 420 : 220, LG ? 298 : 322, { couleur: 'cyan', taille: 21 });
+        if (LG) c.repere('exemple', 414, 248, 330, 58, 'de u₀ à u₂₀₂₁ : 2022 termes');
+        else c.repere('exemple', 26, 300, 470, 30, 'de u₀ à u₂₀₂₁ : 2022 termes');
         K.marque('exemple');
       },
       decrire: {
@@ -65,34 +70,35 @@ MathsTableau.page({
     colonne: {
       titre: 'La somme des uₖ = 1 + vₖ',
       dessiner(c, K) {
+        LG = SU.large(c);
         K.titre('Une somme qui n’est pas géométrique');
         const L = [['u_0 = ', 'v_0'], ['u_1 = ', 'v_1'], ['u_2 = ', 'v_2'], null, ['u_{2021} = ', 'v_{2021}']];
         const uns = [], vs = [];
         L.forEach((l, i) => {
-          const y = 82 + i * 40;
+          const y = LG ? 76 + i * 34 : 82 + i * 40;
           c.pause(.15);
           if (!l) { c.texte('⋮', 120, y, { couleur: 'faible', taille: 22 }); return; }
           const xs = SU.morceaux(c, 40, y, [{ t: l[0] }, { t: '1', couleur: 'vert' }, { t: ' + ' }, { t: l[1], couleur: 'jaune' }], { taille: 21 });
           uns.push([xs[1], y]); vs.push([xs[3], xs[4], y]);
         });
-        c.repere('colonne', 34, 58, 260, 200, 'la colonne uₖ = 1 + vₖ');
+        c.repere('colonne', 34, LG ? 52 : 58, 260, LG ? 172 : 200, 'la colonne uₖ = 1 + vₖ');
         K.marque('colonne');
         c.pause(.4);
         uns.forEach(([x, y]) => c.cercle(x + 5, y - 7, 12, { couleur: 'vert', largeur: 1.6 }));
-        c.texte('2022 fois 1 = 2022', 360, 110, { couleur: 'vert', taille: 21 });
-        c.repere('les_un', 340, 86, 260, 34, 'les 1 : 2022 fois 1');
+        c.texte('2022 fois 1 = 2022', 360, LG ? 100 : 110, { couleur: 'vert', taille: 21 });
+        c.repere('les_un', 340, LG ? 76 : 86, 260, 34, 'les 1 : 2022 fois 1');
         K.marque('les_un');
         c.pause(.4);
         const xv = Math.max(...vs.map(v => v[1])) + 12;
-        SU.accolade(c, xv, 62, 252, { couleur: 'jaune' });
-        c.texte('v_0 + … + v_{2021} :', 360, 180, { couleur: 'jaune', taille: 20 });
-        c.texte('somme géométrique', 360, 210, { couleur: 'jaune', taille: 20 });
-        c.repere('les_v', xv - 4, 62, 380, 190, 'les vₖ : une somme géométrique');
+        SU.accolade(c, xv, LG ? 56 : 62, LG ? 218 : 252, { couleur: 'jaune' });
+        c.texte('v_0 + … + v_{2021} :', 360, LG ? 156 : 180, { couleur: 'jaune', taille: 20 });
+        c.texte('somme géométrique', 360, LG ? 184 : 210, { couleur: 'jaune', taille: 20 });
+        c.repere('les_v', xv - 4, LG ? 56 : 62, 380, LG ? 162 : 190, 'les vₖ : une somme géométrique');
         K.marque('les_v');
         c.pause(.4);
-        c.rect(40, 290, 560, 46, { couleur: 'blanc', arrondi: 8, largeur: 1.6 });
-        c.texte('S = 2022 + (v_0 + v_1 + … + v_{2021})', 60, 321, { couleur: 'blanc', taille: 22 });
-        c.repere('somme', 36, 286, 568, 54, 'la somme S');
+        c.rect(LG ? 330 : 40, LG ? 226 : 290, LG ? 420 : 560, 46, { couleur: 'blanc', arrondi: 8, largeur: 1.6 });
+        c.texte('S = 2022 + (v_0 + v_1 + … + v_{2021})', LG ? 344 : 60, LG ? 257 : 321, { couleur: 'blanc', taille: 22, max: LG ? 396 : 540 });
+        c.repere('somme', LG ? 326 : 36, LG ? 222 : 286, LG ? 428 : 568, 54, 'la somme S');
         K.marque('somme');
       },
       decrire: {

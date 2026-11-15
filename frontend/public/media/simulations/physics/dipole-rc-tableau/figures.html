@@ -180,20 +180,110 @@ const S = { tw: 0, running: true, pause: false, fait: false, jusqua: null, motif
 let M = {};                                       // étape → instant d’écriture (s), relevé pendant le dessin
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, dessiner);
+const scene = window.OndesTableau.Scene(canvas, dessiner, { large: true });
 const craie = scene.craie;
+/* Mise en page large (15 novembre 2026, « la figure n’occupe qu’une bande étroite, les textes sont minuscules ») :
+ * sur un tableau large (scene.L ≥ 1000, portable 1366 × 613), la figure est coupée en deux colonnes entre deux étapes :
+ * la suite de l’écriture repart en haut, à droite de la première colonne, et l’ensemble (boîte de l’encre) remplit le
+ * tableau. La coupe est choisie par la mesure : celle qui donne la plus grande écriture. Les étapes, les moments et les
+ * repères ne changent pas (les repères suivent la transformation du dessin). Grand écran (L < 1000) : disposition d’origine. */
+const LARGE_MIN = 1000, VW0 = 760, VH0 = 420, MARGE = 14, ECART = 46, HAUT_COL2 = 58;
+const MISE = { cle: '', coupe: null, dx: 0, dy: 0, boite: null, large: false };
+let MESURE = null;                                // pendant la mesure : boîtes de l’encre par morceau (titre, puis une par étape)
+let BASE = null;                                  // transformation du cadre (avant la coupe), pour les repères d’ensemble
+function boiteVide() { return { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity }; }
+function unir(a, b) { return { x0: Math.min(a.x0, b.x0), y0: Math.min(a.y0, b.y0), x1: Math.max(a.x1, b.x1), y1: Math.max(a.y1, b.y1) }; }
+const vide = b => !(b.x1 > b.x0);
+/** Mesure de l’encre de la figure complète, par morceaux, puis choix de la coupe en deux colonnes. */
+function disposer(cle, W, H) {
+  MISE.cle = cle; MISE.coupe = null; MISE.dx = 0; MISE.dy = 0; MISE.boite = null;
+  const m = { morceaux: [{ nom: 'titre', b: boiteVide(), corps: boiteVide() }], i: 0 }, k = craie, t0 = S.tw, mm = MM, m0 = M;
+  const { trait, point } = k, texte = texteBase;
+  const pt = (x, y, r = 0) => {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    const p = m.inv.multiply(k.ctx.getTransform()).transformPoint(new DOMPoint(x, y)), mo = m.morceaux[m.i];
+    for (const b of p.y < HAUT_COL2 - 6 ? [mo.b] : [mo.b, mo.corps]) { b.x0 = Math.min(b.x0, p.x - r); b.y0 = Math.min(b.y0, p.y - r); b.x1 = Math.max(b.x1, p.x + r); b.y1 = Math.max(b.y1, p.y + r); }
+  };
+  k.trait = function (pts, o = {}) { const r = (o.largeur ?? 2.4) / 2 + 1; for (const p of pts || []) pt(p[0], p[1], r); return trait.call(this, pts, o); };
+  k.point = function (x, y, r = 4, c) { pt(x, y, r); return point.call(this, x, y, r, c); };
+  texteBase = function (s, x, y, o = {}) {
+    const t = o.taille ?? 18; let l = largeurEncre(this, s, t, o.gras); if (o.max && l > o.max) l = o.max;
+    const x0 = o.align === 'center' ? x - l / 2 : o.align === 'right' ? x - l : x;
+    pt(x0, y - t * .95); pt(x0 + l, y + t * .35);
+    return texte.call(this, s, x, y, o);
+  };
+  MESURE = m; S.tw = 1e6;
+  try { dessiner(k); } catch (e) { console.warn('[figures] mesure', e); }
+  finally { k.trait = trait; texteBase = texte; k.point = point; MESURE = null; S.tw = t0; MM = mm; M = m0; }
+  const titreB = m.morceaux[0].b, etapes = m.morceaux.slice(1).filter(x => !vide(x.b));
+  if (!etapes.length) return;
+  const echelle = b => Math.min(W / (b.x1 - b.x0 + 2 * MARGE), H / (b.y1 - b.y0 + 2 * MARGE));
+  const avecTitre = b => (vide(titreB) ? b : unir(b, titreB));
+  let best = { s: echelle(avecTitre(etapes.reduce((a, x) => unir(a, x.b), boiteVide()))), coupe: null, dx: 0, dy: 0 };
+  best.boite = avecTitre(etapes.reduce((a, x) => unir(a, x.b), boiteVide()));
+  const sansCoupe = best.s;
+  for (let j = 0; j < etapes.length - 1; j++) {
+    const c1 = etapes.slice(0, j + 1).reduce((a, x) => unir(a, x.b), boiteVide());
+    const c2 = etapes.slice(j + 1).reduce((a, x) => unir(a, x.b), boiteVide());
+    const k1 = etapes.slice(0, j + 1).reduce((a, x) => unir(a, x.corps), boiteVide());   // sans l’en-tête : la 2e colonne passe sous lui
+    if (vide(k1) || vide(c2)) continue;
+    const dx = k1.x1 + ECART - c2.x0, dy = HAUT_COL2 - c2.y0;
+    const tout = avecTitre(unir(c1, { x0: c2.x0 + dx, y0: c2.y0 + dy, x1: c2.x1 + dx, y1: c2.y1 + dy }));
+    const s = echelle(tout);
+    if (s > best.s) best = { s, coupe: etapes[j].nom, dx, dy, boite: tout };
+  }
+  if (best.coupe && best.s < sansCoupe * 1.08) best = { s: sansCoupe, coupe: null, dx: 0, dy: 0, boite: best.boite };
+  if (!best.coupe) best.boite = avecTitre(etapes.reduce((a, x) => unir(a, x.b), boiteVide()));
+  Object.assign(MISE, { coupe: best.coupe, dx: best.dx, dy: best.dy,
+    boite: { x0: best.boite.x0 - MARGE, y0: best.boite.y0 - MARGE, x1: best.boite.x1 + MARGE, y1: best.boite.y1 + MARGE } });
+}
 /* Même cadre que commun.js, mais l’écriture suit l’horloge de la figure (S.tw) : le tuteur peut la figer sur une étape. */
 scene.cadre = function (graine) {
-  const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  const W = craie.W, H = craie.H;
+  const Lw = Math.round(Math.min(VW0 * 2.1, Math.max(VW0, VH0 * W / Math.max(1, H))));
+  scene.L = Lw;
+  if (MESURE) {                                    // passe de mesure : cadre 1:1, la boîte est relevée en coordonnées du dessin
+    craie.debut(graine, S.tw); MESURE.inv = craie.ctx.getTransform().inverse();
+    craie.echelle = 1; craie.tailleMin = 0; craie.cadre = null; BASE = craie.ctx.getTransform(); return craie;
+  }
+  const large = Lw >= LARGE_MIN && W > 1;
+  MISE.large = large;
+  if (large && MISE.cle !== fig + '|' + W + 'x' + H) disposer(fig + '|' + W + 'x' + H, W, H);
+  if (!large) { MISE.cle = ''; MISE.coupe = null; MISE.boite = null; }
   craie.debut(graine, S.tw);
-  const s = Math.min(W / VW, H / VH);
-  scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
+  const k = MISE.boite || { x0: 0, y0: 0, x1: VW0, y1: VH0 }, bw = k.x1 - k.x0, bh = k.y1 - k.y0;
+  const s = Math.min(W / bw, H / bh, Math.min(W / VW0, H / VH0) * 2);
+  scene.s = s; scene.ox = (W - bw * s) / 2 - k.x0 * s; scene.oy = (H - bh * s) / 2 - k.y0 * s;
   craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
-  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+  BASE = craie.ctx.getTransform();
+  craie.echelle = s; craie.tailleMin = 15; craie.cadre = { w: Math.max(VW0, k.x1), h: Math.max(VH0, k.y1), haut: Math.min(0, k.y0) };
   return craie;
 };
+/* Tableau large : une longue phrase du bas (conclusion, exemple) s’écrit sur deux lignes, pour tenir dans une colonne. */
+let texteBase = window.Tableau.Craie.prototype.texte;
+/** Largeur d’un texte pour la mise en page (un peu large : indices et exposants comptés pleine taille). */
+function largeurEncre(c, s, t, gras) { c.ctx.font = `${gras ? '700 ' : ''}${t}px ${window.Tableau.POLICE}`; return c.ctx.measureText(String(s).replace(/[_{}^]/g, '')).width; }
+craie.texte = function (s, x, y, o = {}) {
+  const t = o.taille ?? 18;
+  if (MISE.large && (o.max ?? 0) >= 600 && y >= 330 && largeurEncre(this, s, t) > 360) {
+    const mots = String(s).split(' '); let best = null;
+    for (let i = 1; i < mots.length; i++) {
+      const a = mots.slice(0, i).join(' '), b = mots.slice(i).join(' '), w = Math.max(largeurEncre(this, a, t), largeurEncre(this, b, t));
+      // Coupure de préférence avant « = » ou après « : », « ; », « , » (jamais au milieu d’une valeur et de son unité).
+      const bon = /^[=→]/.test(mots[i]) || /[:;,]$/.test(mots[i - 1]), cout = w * (bon ? 1 : 1.45);
+      if (!best || cout < best.cout) best = { a, b, w, cout };
+    }
+    if (best) { const o2 = { ...o }; delete o2.max; texteBase.call(this, best.a, x, y, o2); return texteBase.call(this, best.b, x, y + t * 1.2, o2); }
+  }
+  return texteBase.call(this, s, x, y, o);
+};
 let MM = {};
-const marque = (c, nom) => { MM[nom] = c.cur; };
+/** Fin d’une étape : son instant d’écriture ; à la coupe choisie, la suite s’écrit dans la deuxième colonne. */
+const marque = (c, nom) => {
+  MM[nom] = c.cur;
+  if (MESURE) { MESURE.morceaux[MESURE.i].nom = nom; MESURE.morceaux.push({ nom: '', b: boiteVide(), corps: boiteVide() }); MESURE.i = MESURE.morceaux.length - 1; }
+  else if (MISE.coupe && nom === MISE.coupe) c.ctx.translate(MISE.dx, MISE.dy);
+};
 /* Une partie peinte apparaît quand l’écriture arrive à elle, d’un coup. */
 const peindre = (c, fn) => { if (c.t >= c.cur) c.direct(() => { c.ctx.save(); try { fn(c.ctx); } finally { c.ctx.restore(); } }); };
 const vu = nom => M[nom] !== undefined && S.tw >= M[nom] - 1e-6;
@@ -257,6 +347,7 @@ function titre(c, s, label) {
   c.texte(s, 40, 32, { couleur: 'cyan', taille: 21, max: 680 });
   c.ligne(40, 42, 40 + Math.min(680, L(c, s, 21)), 42, { couleur: 'tresfaible', largeur: 1.2, duree: .2 });
   c.repere('figure', 16, 12, 728, 400, label);
+  if (MESURE && MESURE.i === 0) { MESURE.morceaux.push({ nom: '', b: boiteVide(), corps: boiteVide() }); MESURE.i = 1; }   // le titre est mesuré à part
 }
 /** Ellipse de craie (une bulle). */
 function bulleCraie(c, cx, cy, rx, ry, couleur = 'blanc') {
@@ -781,119 +872,123 @@ const DESSINS = {
   },
 
   fig_du_dt(c) {
+    const D = MISE.large ? 90 : 0;   // tableau large : graphe plus grand, calculs décalés à droite
     titre(c, 'La droite du_C/dt = f(u_C) (national 2021 N)', 'la droite du_C/dt = f(u_C) : national 2021 N');
     c.texte('du_C/dt = −(1/RC)·u_C + E/(RC)', 40, 82, { couleur: 'blanc', taille: 24 });
-    c.texte('E = 12 V ; R = 1 kΩ', 460, 82, { couleur: 'faible', taille: 18 });
+    c.texte('E = 12 V ; R = 1 kΩ', 460 + D, 82, { couleur: 'faible', taille: 18 });
     c.repere('equation', 32, 58, 620, 36, 'du_C/dt = −(1/RC)·u_C + E/(RC)');
     marque(c, 'equation'); c.pause(.4);
-    const g = graphe(c, { ox: 80, oy: 370, w: 280, h: 230, xmax: 14, ymax: 1200, dx: 1, dy: 100, xt: [2, 4, 6, 8, 10, 12], yt: [200, 400, 600, 800, 1000], xl: 'u_C (V)', yl: 'du_C/dt (V/s)' });
+    const g = graphe(c, { ox: 80, oy: 370 + D * .3, w: 280 + D * .8, h: 230 + D * .45, xmax: 14, ymax: 1200, dx: 1, dy: 100, xt: [2, 4, 6, 8, 10, 12], yt: [200, 400, 600, 800, 1000], xl: 'u_C (V)', yl: 'du_C/dt (V/s)' });
     c.ligne(g.X(0), g.Y(1000), g.X(12), g.Y(0), { couleur: 'rouge', largeur: 2.6 });
-    c.repere('droite', 30, 110, 360, 290, 'la droite de (0 ; 1000) à (12 ; 0)');
+    c.repere('droite', 30, 110, 360 + D * .8, 290 + D * .3, 'la droite de (0 ; 1000) à (12 ; 0)');
     marque(c, 'droite'); c.pause(.4);
-    c.texte('a = (0 − 1000)/(12 − 0) ≈ −83,3 s⁻¹', 400, 150, { couleur: 'blanc', taille: 22, max: 340 });
-    c.repere('pente', 392, 126, 350, 36, 'a ≈ −83,3 s⁻¹');
+    c.texte('a = (0 − 1000)/(12 − 0) ≈ −83,3 s⁻¹', 400 + D, 150, { couleur: 'blanc', taille: 22, max: 340 });
+    c.repere('pente', 392 + D, 126, 350, 36, 'a ≈ −83,3 s⁻¹');
     marque(c, 'pente'); c.pause(.4);
     c.point(g.X(0), g.Y(1000), 5, 'vert');
-    c.texte('E/(RC) = 1000 V/s', 400, 200, { couleur: 'blanc', taille: 22 });
-    c.repere('ordonnee', 392, 176, 260, 36, 'E/(RC) = 1000 V/s');
+    c.texte('E/(RC) = 1000 V/s', 400 + D, 200, { couleur: 'blanc', taille: 22 });
+    c.repere('ordonnee', 392 + D, 176, 260, 36, 'E/(RC) = 1000 V/s');
     marque(c, 'ordonnee'); c.pause(.4);
-    c.texte('a = −1/(RC), donc', 400, 250, { couleur: 'faible', taille: 18 });
-    encadre(c, 'C = −1/(R·a) = 1,2·10⁻⁵ F = 12 µF', 400, 294, { taille: 21, align: 'left' });
-    c.repere('resultat', 392, 230, 350, 80, 'C = −1/(R·a) = 12 µF');
+    c.texte('a = −1/(RC), donc', 400 + D, 250, { couleur: 'faible', taille: 18 });
+    encadre(c, 'C = −1/(R·a) = 1,2·10⁻⁵ F = 12 µF', 400 + D, 294, { taille: 21, align: 'left' });
+    c.repere('resultat', 392 + D, 230, 350, 80, 'C = −1/(R·a) = 12 µF');
     marque(c, 'resultat'); c.pause(.3);
-    c.texte('vérif : E/(RC) = 12/(10³ × 12·10⁻⁶) = 1000 V/s', 400, 356, { couleur: 'cyan', taille: 17, max: 340 });
-    c.repere('fin', 392, 334, 350, 32, 'vérification : 1000 V/s');
+    c.texte('vérif : E/(RC) = 12/(10³ × 12·10⁻⁶) = 1000 V/s', 400 + D, 356, { couleur: 'cyan', taille: 17, max: 340 });
+    c.repere('fin', 392 + D, 334, 350, 32, 'vérification : 1000 V/s');
     marque(c, 'fin');
   },
 
   fig_q_u(c) {
+    const D = MISE.large ? 90 : 0;   // tableau large : graphe plus grand, calculs décalés à droite
     titre(c, 'q = f(u) : la capacité équivalente (national 2018 N)', 'q = f(u) : national 2018 N');
-    const g = graphe(c, { ox: 80, oy: 370, w: 270, h: 260, xmax: 7, ymax: 70, dx: .5, dy: 5, xt: [1, 2, 3, 4, 5, 6], yt: [10, 20, 30, 40, 50, 60], xl: 'u (V)', yl: 'q (µC)' });
+    const g = graphe(c, { ox: 80, oy: 370 + D * .3, w: 270 + D * .8, h: 260 + D * .45, xmax: 7, ymax: 70, dx: .5, dy: 5, xt: [1, 2, 3, 4, 5, 6], yt: [10, 20, 30, 40, 50, 60], xl: 'u (V)', yl: 'q (µC)' });
     c.ligne(g.X(0), g.Y(0), g.X(6.6), g.Y(66), { couleur: 'rouge', largeur: 2.6 });
     c.ligne(g.X(4), g.Y(40), g.X(4), g.Y(0), { couleur: 'faible', largeur: 1.4, pointille: [5, 5] });
     c.ligne(g.X(4), g.Y(40), g.X(0), g.Y(40), { couleur: 'faible', largeur: 1.4, pointille: [5, 5] });
     c.point(g.X(4), g.Y(40), 4.5, 'blanc');
-    c.repere('courbe', 30, 70, 360, 330, 'la droite q = f(u) par l’origine');
+    c.repere('courbe', 30, 70, 360 + D * .8, 330 + D * .3, 'la droite q = f(u) par l’origine');
     marque(c, 'courbe'); c.pause(.4);
-    c.texte('pente = 40 µC / 4 V', 400, 100, { couleur: 'faible', taille: 19 });
-    c.texte('pente = C_eq = 10 µF', 400, 136, { couleur: 'blanc', taille: G });
-    c.repere('pente', 392, 78, 340, 70, 'pente = C_eq = 10 µF');
+    c.texte('pente = 40 µC / 4 V', 400 + D, 100, { couleur: 'faible', taille: 19 });
+    c.texte('pente = C_eq = 10 µF', 400 + D, 136, { couleur: 'blanc', taille: G });
+    c.repere('pente', 392 + D, 78, 340, 70, 'pente = C_eq = 10 µF');
     marque(c, 'pente'); c.pause(.4);
-    c.texte('en parallèle, avec C_1 = 7,5 µF :', 400, 192, { couleur: 'faible', taille: 18 });
-    c.texte('C_eq = C_1 + C_2', 400, 228, { couleur: 'blanc', taille: G });
-    c.repere('C_eq', 392, 172, 340, 68, 'C_eq = C₁ + C₂');
+    c.texte('en parallèle, avec C_1 = 7,5 µF :', 400 + D, 192, { couleur: 'faible', taille: 18 });
+    c.texte('C_eq = C_1 + C_2', 400 + D, 228, { couleur: 'blanc', taille: G });
+    c.repere('C_eq', 392 + D, 172, 340, 68, 'C_eq = C₁ + C₂');
     marque(c, 'C_eq'); c.pause(.4);
-    encadre(c, 'C_2 = 10 − 7,5 = 2,5 µF', 400, 292, { taille: G, align: 'left' });
-    c.repere('C2', 392, 260, 320, 50, 'C₂ = 2,5 µF');
+    encadre(c, 'C_2 = 10 − 7,5 = 2,5 µF', 400 + D, 292, { taille: G, align: 'left' });
+    c.repere('C2', 392 + D, 260, 320, 50, 'C₂ = 2,5 µF');
     marque(c, 'C2'); c.pause(.3);
-    c.texte('C_eq > C_1 : le parallèle augmente la capacité', 400, 356, { couleur: 'cyan', taille: 18, max: 340 });
-    c.repere('fin', 392, 334, 350, 32, 'le parallèle augmente la capacité');
+    c.texte('C_eq > C_1 : le parallèle augmente la capacité', 400 + D, 356, { couleur: 'cyan', taille: 18, max: 340 });
+    c.repere('fin', 392 + D, 334, 350, 32, 'le parallèle augmente la capacité');
     marque(c, 'fin');
   },
 
   fig_n1_2019(c) {
+    const D = MISE.large ? 90 : 0;   // tableau large : graphe plus grand, calculs décalés à droite
     titre(c, 'La courbe q(t) (national 2019 N)', 'la courbe q(t) : national 2019 N');
     c.texte('ED de q  ;  q = A(1 − e^{−αt})', 40, 82, { couleur: 'blanc', taille: 24 });
-    c.texte('E = 10 V', 420, 82, { couleur: 'faible', taille: 20 });
+    c.texte('E = 10 V', 420 + D, 82, { couleur: 'faible', taille: 20 });
     c.repere('enonce', 32, 58, 480, 36, 'ED de q ; q = A(1 − e^(−αt))');
     marque(c, 'enonce'); c.pause(.4);
     // axe des temps gradué de 2 en 2 ms (quadrillage tous les 0,5 ms) : la graduation ne tombe pas sur τ
-    const g = graphe(c, { ox: 80, oy: 370, w: 280, h: 230, xmax: 6, ymax: 120, dx: .5, dy: 10, xt: [2, 4, 6], yt: [20, 40, 60, 80, 100], xl: 't (ms)', yl: 'q (µC)' });
+    const g = graphe(c, { ox: 80, oy: 370 + D * .3, w: 280 + D * .8, h: 230 + D * .45, xmax: 6, ymax: 120, dx: .5, dy: 10, xt: [2, 4, 6], yt: [20, 40, 60, 80, 100], xl: 't (ms)', yl: 'q (µC)' });
     c.ligne(g.X(0), g.Y(100), g.X(6), g.Y(100), { couleur: 'faible', largeur: 1.6, pointille: [7, 6] });
     c.courbe(u => [g.X(6 * u), g.Y(100 * (1 - Math.exp(-6 * u)))], 70, { couleur: 'rouge', largeur: 2.6 });
     c.ligne(g.X(0), g.Y(0), g.X(1.18), g.Y(118), { couleur: 'blanc', largeur: 1.6, pointille: [6, 5] });
     c.ligne(g.X(1), g.Y(100), g.X(1), g.Y(0), { couleur: 'faible', largeur: 1.2, pointille: [3, 5] });
     c.point(g.X(1), g.Y(100), 4.5, 'blanc');
-    c.repere('courbe', 30, 110, 360, 290, 'q(t), l’asymptote et la tangente à l’origine');
+    c.repere('courbe', 30, 110, 360 + D * .8, 290 + D * .3, 'q(t), l’asymptote et la tangente à l’origine');
     marque(c, 'courbe'); c.pause(.4);
-    c.texte('Q = 100 µC', 410, 150, { couleur: 'blanc', taille: G });
-    c.texte('(asymptote)', 560, 150, { couleur: 'faible', taille: 17 });
-    c.repere('Q', 402, 124, 300, 38, 'Q = 100 µC');
+    c.texte('Q = 100 µC', 410 + D, 150, { couleur: 'blanc', taille: G });
+    c.texte('(asymptote)', 560 + D, 150, { couleur: 'faible', taille: 17 });
+    c.repere('Q', 402 + D, 124, 300, 38, 'Q = 100 µC');
     marque(c, 'Q'); c.pause(.4);
-    c.texte('τ = 1 ms', 410, 200, { couleur: 'blanc', taille: G });
-    c.texte('(tangente ∩ asymptote)', 520, 200, { couleur: 'faible', taille: 17 });
-    c.repere('tau', 402, 174, 340, 38, 'τ = 1 ms');
+    c.texte('τ = 1 ms', 410 + D, 200, { couleur: 'blanc', taille: G });
+    c.texte('(tangente ∩ asymptote)', 520 + D, 200, { couleur: 'faible', taille: 17 });
+    c.repere('tau', 402 + D, 174, 340, 38, 'τ = 1 ms');
     marque(c, 'tau'); c.pause(.4);
-    c.texte('C = Q/E = 100·10⁻⁶/10 = 10 µF', 410, 252, { couleur: 'blanc', taille: 22, max: 330 });
-    c.repere('C', 402, 228, 340, 36, 'C = Q/E = 10 µF');
+    c.texte('C = Q/E = 100·10⁻⁶/10 = 10 µF', 410 + D, 252, { couleur: 'blanc', taille: 22, max: 330 });
+    c.repere('C', 402 + D, 228, 340, 36, 'C = Q/E = 10 µF');
     marque(c, 'C'); c.pause(.4);
-    encadre(c, 'R = τ/C = 10⁻³/10⁻⁵ = 100 Ω', 410, 306, { taille: 22, align: 'left' });
-    c.repere('R', 402, 278, 340, 44, 'R = τ/C = 100 Ω');
+    encadre(c, 'R = τ/C = 10⁻³/10⁻⁵ = 100 Ω', 410 + D, 306, { taille: 22, align: 'left' });
+    c.repere('R', 402 + D, 278, 340, 44, 'R = τ/C = 100 Ω');
     marque(c, 'R'); c.pause(.3);
-    c.texte('et A = Q = C·E ;  α = 1/τ = 10³ s⁻¹', 410, 366, { couleur: 'cyan', taille: 19, max: 330 });
-    c.repere('fin', 402, 344, 340, 32, 'A = Q ; α = 1/τ');
+    c.texte('et A = Q = C·E ;  α = 1/τ = 10³ s⁻¹', 410 + D, 366, { couleur: 'cyan', taille: 19, max: 330 });
+    c.repere('fin', 402 + D, 344, 340, 32, 'A = Q ; α = 1/τ');
     marque(c, 'fin');
   },
 
   fig_n2_2021R(c) {
+    const D = MISE.large ? 90 : 0;   // tableau large : graphe plus grand, calculs décalés à droite
     titre(c, 'La courbe i(t) (national 2021 R)', 'la courbe i(t) : national 2021 R');
     c.texte('i + R_{1}C·di/dt = 0  ;  i = I_0·e^{−t/τ}', 40, 82, { couleur: 'blanc', taille: 24 });
-    c.texte('E = 6 V', 470, 82, { couleur: 'faible', taille: 20 });
+    c.texte('E = 6 V', 470 + D, 82, { couleur: 'faible', taille: 20 });
     c.repere('enonce', 32, 58, 520, 36, 'i + R₁C·di/dt = 0 ; i = I₀·e^(−t/τ)');
     marque(c, 'enonce'); c.pause(.4);
     // axe des temps gradué de 10 en 10 ms : la graduation ne tombe pas sur τ = 12 ms
-    const g = graphe(c, { ox: 80, oy: 370, w: 280, h: 230, xmax: 60, ymax: 60, dx: 2, dy: 5, xt: [10, 20, 30, 40, 50, 60], yt: [10, 20, 30, 40, 50], xl: 't (ms)', yl: 'i (mA)' });
+    const g = graphe(c, { ox: 80, oy: 370 + D * .3, w: 280 + D * .8, h: 230 + D * .45, xmax: 60, ymax: 60, dx: 2, dy: 5, xt: [10, 20, 30, 40, 50, 60], yt: [10, 20, 30, 40, 50], xl: 't (ms)', yl: 'i (mA)' });
     c.courbe(u => [g.X(60 * u), g.Y(50 * Math.exp(-60 * u / 12))], 70, { couleur: 'rouge', largeur: 2.6 });
     c.ligne(g.X(0), g.Y(50), g.X(12.6), g.Y(-2.5), { couleur: 'blanc', largeur: 1.6, pointille: [6, 5] });
     c.point(g.X(12), g.Y(0), 4.5, 'blanc');
-    c.repere('courbe', 30, 110, 360, 290, 'i(t) et la tangente à l’origine');
+    c.repere('courbe', 30, 110, 360 + D * .8, 290 + D * .3, 'i(t) et la tangente à l’origine');
     marque(c, 'courbe'); c.pause(.4);
-    c.texte('I_0·e^{−t/τ}(1 − R_{1}C/τ) = 0', 410, 150, { couleur: 'blanc', taille: 23, max: 330 });
-    c.repere('equation', 402, 124, 340, 38, 'I₀·e^(−t/τ)(1 − R₁C/τ) = 0');
+    c.texte('I_0·e^{−t/τ}(1 − R_{1}C/τ) = 0', 410 + D, 150, { couleur: 'blanc', taille: 23, max: 330 });
+    c.repere('equation', 402 + D, 124, 340, 38, 'I₀·e^(−t/τ)(1 − R₁C/τ) = 0');
     marque(c, 'equation'); c.pause(.4);
-    c.texte('τ = R_{1}C', 410, 198, { couleur: 'blanc', taille: G });
-    c.repere('tau', 402, 172, 160, 38, 'τ = R₁C');
+    c.texte('τ = R_{1}C', 410 + D, 198, { couleur: 'blanc', taille: G });
+    c.repere('tau', 402 + D, 172, 160, 38, 'τ = R₁C');
     marque(c, 'tau'); c.pause(.4);
-    c.texte('R_1 = E/I_0 = 120 Ω', 410, 248, { couleur: 'blanc', taille: G });
-    c.texte('I_0 = 50 mA (courbe)', 410, 276, { couleur: 'faible', taille: 16 });
-    c.repere('R1', 402, 222, 300, 58, 'R₁ = E/I₀ = 120 Ω');
+    c.texte('R_1 = E/I_0 = 120 Ω', 410 + D, 248, { couleur: 'blanc', taille: G });
+    c.texte('I_0 = 50 mA (courbe)', 410 + D, 276, { couleur: 'faible', taille: 16 });
+    c.repere('R1', 402 + D, 222, 300, 58, 'R₁ = E/I₀ = 120 Ω');
     marque(c, 'R1'); c.pause(.4);
-    c.texte('τ = 12 ms (tangente)', 410, 304, { couleur: 'faible', taille: 16 });
-    encadre(c, 'C = 100 µF', 410, 340, { taille: G, align: 'left' });
-    c.repere('C', 402, 288, 220, 66, 'C = 100 µF');
+    c.texte('τ = 12 ms (tangente)', 410 + D, 304, { couleur: 'faible', taille: 16 });
+    encadre(c, 'C = 100 µF', 410 + D, 340, { taille: G, align: 'left' });
+    c.repere('C', 402 + D, 288, 220, 66, 'C = 100 µF');
     marque(c, 'C'); c.pause(.3);
-    c.texte('C = τ/R_1 = 12·10⁻³/120 = 10⁻⁴ F', 410, 392, { couleur: 'cyan', taille: 18, max: 330 });
-    c.repere('fin', 402, 370, 340, 32, 'R₁ = 120 Ω et C = 100 µF');
+    c.texte('C = τ/R_1 = 12·10⁻³/120 = 10⁻⁴ F', 410 + D, 392, { couleur: 'cyan', taille: 18, max: 330 });
+    c.repere('fin', 402 + D, 370, 340, 32, 'R₁ = 120 Ω et C = 100 µF');
     marque(c, 'fin');
   },
 
@@ -921,6 +1016,8 @@ function dessiner(c) {
   MM = {};
   DESSINS[fig](c);
   M = MM;
+  // Mise en page large : le repère `figure` couvre les deux colonnes.
+  if (!MESURE && MISE.boite && BASE) { const T = c.ctx.getTransform(), k = MISE.boite; c.ctx.setTransform(BASE); c.repere('figure', k.x0, k.y0, k.x1 - k.x0, k.y1 - k.y0); c.ctx.setTransform(T); }
   return c.fin() || !S.running;   // figée sur une étape : l’image ne change plus, on cesse de la redessiner
 }
 

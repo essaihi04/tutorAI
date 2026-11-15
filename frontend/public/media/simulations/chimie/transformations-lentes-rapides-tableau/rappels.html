@@ -12,6 +12,7 @@
 </div>
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
+<script src="large.js"></script>
 <script>
 /*
  * Rappels de chimie — au tableau (audit « rythme et départ de zéro », 14 novembre 2026 — règles 33 et 34 du professeur).
@@ -55,7 +56,7 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), { large: true });
   const cadreBase = scene.cadre;
   scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
   M.scene = scene; M.craie = scene.craie;
@@ -303,8 +304,11 @@ const MOTIFS_PROXY = new Proxy({}, { get: (o, k) => (k === 'fin' ? 'fin' : motif
 
 function dessiner(c, M) {
   M.scene.cadre(23);
-  c.texte('Rappel : ' + TITRES[M.S.vue], 14, 26, { couleur: 'cyan', taille: 20 });
+  // Tableau large (large.js) : la figure agrandie, le titre dans la colonne de gauche.
+  window.TLRLarge.debut(c, M.scene, { src: ({ ion: [16, 56, 650, 382], conservation: [150, 70, 742, 408], mole: [30, 62, 730, 372], concentration: [40, 58, 742, 404] })[M.S.vue], col: 300 });
+  window.TLRLarge.titre(c, 'Rappel : ' + TITRES[M.S.vue], 14, 26, { couleur: 'cyan', taille: 20 });
   ({ ion: vueIon, conservation: vueConservation, mole: vueMole, concentration: vueConcentration })[M.S.vue](c, M);
+  window.TLRLarge.fin(c);
   return c.fin();
 }
 function vueIon(c, M) {
@@ -416,20 +420,20 @@ function vueConcentration(c, M) {
   const B1 = { x: 60, y: 120, w: 100, h: 150 }, B2 = { x: 230, y: 120, w: 100, h: 150 }, B3 = { x: 400, y: 120, w: 140, h: 150 };
   if (M.commence('becher')) c.direct(() => becher(c.ctx, B1.x, B1.y, B1.w, B1.h, .55 * V1 / 100 * lisse(Math.min(1, M.p('becher') * 2)), teinte(C(V1))));
   M.etape(c, 'becher', () => {
-    c.direct(() => { c.texte(`n = 0,01 mol ; V = ${V1} mL`, 110, 300, { couleur: 'blanc', taille: 14, align: 'center' }); c.texte(`C = ${fx(C(V1), 3)} mol/L`, 110, 322, { couleur: 'jaune', taille: 16, align: 'center' }); });
+    c.direct(() => { c.texte('n = 0,01 mol', 110, 296, { couleur: 'blanc', taille: 14, align: 'center' }); c.texte(`V = ${V1} mL`, 110, 316, { couleur: 'blanc', taille: 14, align: 'center' }); c.texte(`C = ${fx(C(V1), 3)} mol/L`, 110, 340, { couleur: 'jaune', taille: 16, align: 'center' }); });
     c.repere('becher_1', B1.x - 8, B1.y - 10, B1.w + 16, B1.h + 60, 'le premier bécher');
   });
   if (M.commence('double_n')) c.direct(() => becher(c.ctx, B2.x, B2.y, B2.w, B2.h, .55 * lisse(Math.min(1, M.p('double_n') * 2)), teinte(2 * C(100))));
   M.etape(c, 'double_n', () => {
-    c.texte('n = 0,02 mol ; V = 100 mL', 280, 300, { couleur: 'blanc', taille: 14, align: 'center' }); c.texte('C = 0,2 mol/L', 280, 322, { couleur: 'jaune', taille: 16, align: 'center' });
-    c.texte('2 fois plus de soluté → 2 fois plus concentré', 280, 92, { couleur: 'vert', taille: 15, align: 'center' });
+    c.texte('n = 0,02 mol', 280, 296, { couleur: 'blanc', taille: 14, align: 'center' }); c.texte('V = 100 mL', 280, 316, { couleur: 'blanc', taille: 14, align: 'center' }); c.texte('C = 0,2 mol/L', 280, 340, { couleur: 'jaune', taille: 16, align: 'center' });
+    c.texte('2 fois plus de soluté → 2 fois plus concentré', 280, 80, { couleur: 'vert', taille: 15, align: 'center' });
     c.repere('becher_2', B2.x - 8, B2.y - 10, B2.w + 16, B2.h + 60, 'le deuxième bécher, deux fois plus concentré');
   });
   M.etape(c, 'formule', () => { c.texte('C = n / V', 650, 150, { couleur: 'jaune', taille: 30, align: 'center' }); c.texte('en mol/L', 650, 180, { couleur: 'jaune', taille: 16, align: 'center' }); c.repere('formule', 580, 116, 140, 74, 'C = n/V'); });
   if (M.commence('dilution')) c.direct(() => becher(c.ctx, B3.x, B3.y, B3.w, B3.h, .3 + .3 * lisse(M.p('dilution')), teinte(C(100) / (1 + lisse(M.p('dilution'))))));
   M.etape(c, 'dilution', () => {
-    c.texte('n = 0,01 mol ; V = 200 mL', 470, 300, { couleur: 'blanc', taille: 14, align: 'center' }); c.texte('C = 0,05 mol/L', 470, 322, { couleur: 'jaune', taille: 16, align: 'center' });
-    c.texte('plus d’eau → moins concentré (plus clair)', 500, 112, { couleur: 'vert', taille: 15, align: 'center' });
+    c.texte('n = 0,01 mol', 470, 296, { couleur: 'blanc', taille: 14, align: 'center' }); c.texte('V = 200 mL', 470, 316, { couleur: 'blanc', taille: 14, align: 'center' }); c.texte('C = 0,05 mol/L', 470, 340, { couleur: 'jaune', taille: 16, align: 'center' });
+    c.texte('plus d’eau → moins concentré (plus clair)', 500, 110, { couleur: 'vert', taille: 15, align: 'center' });
     c.repere('becher_3', B3.x - 8, B3.y - 10, B3.w + 16, B3.h + 60, 'le bécher dilué');
   });
   if (M.commence('sirop')) {

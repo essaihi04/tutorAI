@@ -64,6 +64,19 @@ const AVANT = -1e9;   // instant d'un élément déjà dit : écrit d'un coup
 const S = { def: null, n: 0, cible: 0, running: false, lacunes: null, acquis: null, apparu: [], choisi: null };
 const DUREE_BRANCHE = 2.6;   // s par branche quand la carte se dessine seule
 
+/* Tableau large (15 novembre 2026, « cases serrées, petits textes ») : Scene({ large: true }) ; si scene.L ≥ 1000, la
+ * carte s’étale sur toute la largeur (abscisses × L/760) et les cadres et leurs textes grossissent (G). L < 1000 :
+ * disposition d’origine, centrée. Les positions d’origine sont gardées dans ORIG. */
+const ORIG = [CENTRE, ...NOEUDS].map(n => ({ n, x: n.x, y: n.y, w: n.w, h: n.h }));
+let G = 1, LT = 760, KXC = 1;
+function cadreLarge(graine) {
+  scene.cadre(graine);
+  if (scene.L < 1000 && scene.L > 760) { const d = (scene.L - 760) / 2; craie.ctx.translate(d, 0); scene.ox += d * scene.s; }
+  if (scene.L === LT) return;
+  LT = scene.L; const large = LT >= 1000;
+  G = large ? Math.min(1.45, LT / 760 * .82) : 1; KXC = large ? LT / 760 : 1;
+  for (const o of ORIG) Object.assign(o.n, { x: o.x * KXC, y: 212 + (o.y - 212) * (large ? 1.04 : 1), w: o.w * G, h: o.h * G });
+}
 function statut(comps) {
   if (!S.lacunes || !comps.length) return null;
   const lac = S.lacunes.filter(l => comps.includes(l.id));
@@ -78,8 +91,8 @@ function etat(c, comps, x, y, w, h) {
     if (st && ANNEAUX[st]) {
       const [coul, etiq] = ANNEAUX[st];
       c.rect(x - 6, y - 6, w + 12, h + 12, { couleur: coul, arrondi: 16, largeur: 2, pointille: [6, 6] });
-      c.texte(etiq, x + w - 4, y - 9, { couleur: coul, taille: 12, align: 'right' });
-    } else if (st === 'acquis') c.texte('✓', x + w - 14, y + 14, { couleur: 'vert', taille: 18 });
+      c.texte(etiq, x + w - 4, y - 9, { couleur: coul, taille: 12 * G, align: 'right' });
+    } else if (st === 'acquis') c.texte('✓', x + w - 14, y + 14, { couleur: 'vert', taille: 18 * G });
   });
 }
 
@@ -93,8 +106,8 @@ function branche(c, n) {
   c.courbe(u => [(1 - u) * (1 - u) * a[0] + 2 * (1 - u) * u * m[0] + u * u * b[0], (1 - u) * (1 - u) * a[1] + 2 * (1 - u) * u * m[1] + u * u * b[1]], 24, { couleur: 'faible', largeur: 2 });
   const x = n.x - n.w / 2, y = n.y - n.h / 2;
   c.rect(x, y, n.w, n.h, { couleur: n.couleur, arrondi: 14, largeur: 2.4 });
-  c.texte(n.titre, n.x, y + 20, { couleur: n.couleur, taille: 16, align: 'center', max: n.w - 16, duree: .8 });
-  n.lignes.forEach((l, k) => c.texte(l, n.x, y + 38 + k * 16, { couleur: 'blanc', taille: 13, align: 'center', max: n.w - 14, alpha: .92, duree: 1 }));
+  c.texte(n.titre, n.x, y + 20 * G, { couleur: n.couleur, taille: 16 * G, align: 'center', max: n.w - 16, duree: .8 });
+  n.lignes.forEach((l, k) => c.texte(l, n.x, y + (38 + k * 16) * G, { couleur: 'blanc', taille: 13 * G, align: 'center', max: n.w - 14, alpha: .92, duree: 1 }));
   c.repere(n.id, x - 6, y - 6, n.w + 12, n.h + 12, lisible(n.titre));
   etat(c, n.comps, x, y, n.w, n.h);
   if (S.choisi === n.id) c.direct(() => c.rect(x - 3, y - 3, n.w + 6, n.h + 6, { couleur: 'blanc', arrondi: 15, largeur: 1.2, alpha: .6 }));
@@ -104,25 +117,26 @@ function dessiner(c) {
   const x = CENTRE.x - CENTRE.w / 2, y = CENTRE.y - CENTRE.h / 2;
   if (S.def === AVANT) c.cur = AVANT;   // déjà dit (saut ou retour en arrière) : le centre est écrit d'un coup
   c.rect(x, y, CENTRE.w, CENTRE.h, { couleur: 'jaune', arrondi: 18, largeur: 3 });
-  c.texte('Noyaux, masse', CENTRE.x, y + 27, { couleur: 'jaune', taille: 20, align: 'center', gras: true });
-  c.texte('et énergie', CENTRE.x, y + 50, { couleur: 'jaune', taille: 20, align: 'center', gras: true });
+  c.texte('Noyaux, masse', CENTRE.x, y + 27 * G, { couleur: 'jaune', taille: 20 * G, align: 'center', gras: true });
+  c.texte('et énergie', CENTRE.x, y + 50 * G, { couleur: 'jaune', taille: 20 * G, align: 'center', gras: true });
   c.repere('centre', x, y, CENTRE.w, CENTRE.h, 'le centre : noyaux, masse et énergie');
   c.repere('definition', x, y, CENTRE.w, CENTRE.h, 'la masse peut devenir énergie : E = m·c²');
   const apres = c.cur;   // fin du titre du centre
   if (S.def != null) {
     c.depuis(S.def);
     ['la masse peut devenir énergie :', 'E = m·c²'].forEach((l, k) =>
-      c.texte(l, CENTRE.x, y + 72 + k * 17, { couleur: k ? 'jaune' : 'blanc', taille: k ? 15 : 13, align: 'center', max: CENTRE.w - 16, alpha: .92, duree: 1.1 }));
+      c.texte(l, CENTRE.x, y + (72 + k * 17) * G, { couleur: k ? 'jaune' : 'blanc', taille: k ? 15 : 13, align: 'center', max: CENTRE.w - 16, alpha: .92, duree: 1.1 }));
     etat(c, CENTRE.comps, x, y, CENTRE.w, CENTRE.h);
     if (S.choisi === 'centre') c.direct(() => c.rect(x - 3, y - 3, CENTRE.w + 6, CENTRE.h + 6, { couleur: 'blanc', arrondi: 19, largeur: 1.2, alpha: .6 }));
   }
   // chaque branche a sa ligne de temps : elle s'écrit dès que la voix la dit, sans attendre la précédente
   for (let i = 0; i < S.n; i++) { c.cur = S.apparu[i] === AVANT ? AVANT : Math.max(apres, S.apparu[i]); branche(c, NOEUDS[i]); }
-  if (S.lacunes) c.direct(() => c.texte('✓ acquis · ⟳ à revoir · ✗ à reprendre', 290, 412, { couleur: 'faible', taille: 12 }));
+  if (S.lacunes) c.direct(() => c.texte('✓ acquis · ⟳ à revoir · ✗ à reprendre', 290 * KXC, 412, { couleur: 'faible', taille: 12 * G }));
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(91); dessiner(c); return c.fin(); });
+const scene = window.OndesTableau.Scene(canvas, (c) => { cadreLarge(91); dessiner(c); return c.fin(); }, { large: true });
+const craie = scene.craie;
 const maintenant = () => (performance.now() - scene.ouvert) / 1000;
 /* Texte lisible (bulle, ce_qui_se_voit) : jamais de « _ » ni d'accolade visible. */
 const lisible = s => String(s).replace(/_\{([^}]+)\}/g, '$1').replace(/_([A-Za-z0-9]+)/g, '$1');

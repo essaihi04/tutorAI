@@ -28,7 +28,11 @@ const qv = new URLSearchParams(location.search).get('vue');
 const vue = VUES.includes(qv) ? qv : 'mille_hertz';
 const COMP = vue === 'comparaison';
 const V = 340, T0 = 0.4, XA_M = 0.68, LONG = 1.02;   // m/s ; début (s affichées) ; repère A (m) ; air dessiné (m)
-const XM = 112, PXM = 600;                           // membrane du haut-parleur ; px par mètre
+const XM = 112;                                      // membrane du haut-parleur
+/* Tableau large (15 novembre 2026) : le cadre prend le format du tableau (scene.L de 760 à 1292) ; l’air s’étire sur
+ * toute la largeur (PXM px par mètre), les textes placés en x suivent (H), ≥ 18 px à l’écran. */
+let PXM = 600, KX = 1;
+const H = x => x * KX;
 const xDe = m => XM + m * PXM;
 const S = { t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', f: vue === 'deux_mille_hertz' ? 2000 : 1000, ecrit: {}, emis: 0 };
 const lam = f => V / f;                               // m
@@ -96,8 +100,10 @@ function compressions(f) {
 
 function dessiner(c) {
   scene.cadre(23);
+  KX = scene.L / 760; PXM = (scene.L - 36 - XM) / LONG;
+  if (scene.L >= 1000 && c.echelle >= 0.8) c.tailleMin = 18;   // tableau bas (bande de formules) : 15 px suffit, le texte est déjà grand dans le cadre
   for (const F of FAISCEAUX) c.direct(() => air(c.ctx, F));
-  c.texte(COMP ? 'Deux sons dans l’air' : `Un son dans l’air`, 40, 24, { couleur: 'cyan', taille: 18 });
+  c.texte(COMP ? 'Deux sons dans l’air' : `Un son dans l’air`, H(40), 24, { couleur: 'cyan', taille: 18 });
 
   // ── Les haut-parleurs ──
   for (const F of FAISCEAUX) {
@@ -132,8 +138,8 @@ function dessiner(c) {
   c.repere('regle', XM - 6, YREG - 4, xDe(LONG) - XM + 40, 34, 'la règle, graduée en cm');
 
   c.direct(() => {
-    c.texte(`t = ${fr(tr() * 1000, 2)} ms`, 740, 24, { couleur: 'jaune', align: 'right', taille: 18 });
-    c.repere('chrono', 610, 6, 134, 24, 'le chrono (temps réel, en ms)');
+    c.texte(`t = ${fr(tr() * 1000, 2)} ms`, H(740), 24, { couleur: 'jaune', align: 'right', taille: 18 });
+    c.repere('chrono', H(740) - 134, 6, 134, 24, 'le chrono (temps réel, en ms)');
     // Une compression repérée, et le front.
     const F0 = FAISCEAUX[0], cs = compressions(fDe(F0));
     if (cs.length) { const x = xDe(cs[Math.min(1, cs.length - 1)]); c.repere('compression', x - 10, F0.yc - F0.h / 2, 20, F0.h, 'une compression (bande claire)'); }
@@ -147,7 +153,7 @@ function dessiner(c) {
   const quand = (nom) => { if (S.ecrit[nom] == null) S.ecrit[nom] = (performance.now() - scene.ouvert) / 1000; c.depuis(S.ecrit[nom]); };
   if (actif && S.t >= M.front_a_repere - 1e-6) {
     quand('a');
-    c.texte(COMP ? 'Les deux fronts atteignent A ensemble, à t = 2,0 ms.' : `Le front atteint A (68 cm) à t = 2,0 ms : v = 0,68 / 2×10⁻³ = 340 m/s`, 40, COMP ? 330 : Y, { couleur: 'vert', taille: 16, max: 700 });
+    c.texte(COMP ? 'Les deux fronts atteignent A ensemble, à t = 2,0 ms.' : `Le front atteint A (68 cm) à t = 2,0 ms : v = 0,68 / 2×10⁻³ = 340 m/s`, H(40), COMP ? 330 : Y, { couleur: 'vert', taille: 16, max: H(700) });
   }
   if (actif && S.t >= M.mesure_lambda - 1e-6) {
     quand('l');
@@ -160,24 +166,24 @@ function dessiner(c) {
       c.cote(xa1, yc + 6, xb1, yc + 6, `λ = ${fr(lam(f) * 100, 0)} cm`, { couleur: 'jaune', taille: 16, dessous: true });
       c.repere(f === 1000 ? 'lambda_1000' : 'lambda_2000', xa1 - 4, F.yc - F.h / 2, xb1 - xa1 + 8, F.h, `λ = ${fr(lam(f) * 100, 0)} cm à ${f} Hz`);
       const lg = `${f} Hz : λ = ${fr(lam(f) * 100, 0)} cm ; v = λ·N = ${fr(lam(f), 2)} × ${f} = 340 m/s`;
-      c.texte(COMP ? lg : `λ = ${fr(lam(f) * 100, 0)} cm = ${fr(lam(f), 2)} m ; v = λ·N = ${fr(lam(f), 2)} × ${f} = 340 m/s`, 40, COMP ? 356 + i * 24 : Y + 30, { couleur: COMP ? F.coul : 'vert', taille: 16, max: 700 });
+      c.texte(COMP ? lg : `λ = ${fr(lam(f) * 100, 0)} cm = ${fr(lam(f), 2)} m ; v = λ·N = ${fr(lam(f), 2)} × ${f} = 340 m/s`, H(40), COMP ? 356 + i * 24 : Y + 30, { couleur: COMP ? F.coul : 'vert', taille: 16, max: H(700) });
     });
-    c.repere('calcul', 36, (COMP ? 356 : Y + 30) - 18, 700, COMP ? 46 : 24, 'λ puis v = λ·N');
+    c.repere('calcul', H(36), (COMP ? 356 : Y + 30) - 18, H(700), COMP ? 46 : 24, 'λ puis v = λ·N');
   }
   if (COMP && actif && S.t >= M.comparaison - 1e-6) {
     quand('c');
-    c.texte('Même célérité pour les deux fréquences : l’air n’est pas un milieu dispersif.', 40, 408, { couleur: 'vert', taille: 17, max: 700 });
-    c.repere('conclusion', 36, 390, 700, 24, 'l’air n’est pas dispersif');
+    c.texte('Même célérité pour les deux fréquences : l’air n’est pas un milieu dispersif.', H(40), 408, { couleur: 'vert', taille: 17, max: H(700) });
+    c.repere('conclusion', H(36), 390, H(700), 24, 'l’air n’est pas dispersif');
   }
   if (!COMP && actif && S.t >= M.fin - 1e-6) {
     quand('f');
-    c.texte(S.f === 1000 ? 'Double la fréquence : tourne la molette.' : 'λ deux fois plus petite qu’à 1000 Hz ; même célérité.', 40, Y + 60, { couleur: 'faible', taille: 15, max: 700 });
+    c.texte(S.f === 1000 ? 'Double la fréquence : tourne la molette.' : 'λ deux fois plus petite qu’à 1000 Hz ; même célérité.', H(40), Y + 60, { couleur: 'faible', taille: 15, max: H(700) });
   }
   return c.fin();
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, dessiner);
+const scene = window.OndesTableau.Scene(canvas, dessiner, { large: true });
 const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
 scene.avancer = dt => {
   if (!S.running) return false;

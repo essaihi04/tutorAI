@@ -68,7 +68,10 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  /* `large` + `ajuster` (15 novembre 2026, « la simulation n'occupe qu'une bande étroite ») : la boîte de l'encre (image
+   * de départ et image complète) remplit le tableau. */
+  const complet = f => { const t = S.t; try { S.t = 0; f(); S.t = 1e6; f(); } finally { S.t = t; } };
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), { large: true, ajuster: true, complet });
   const cadreBase = scene.cadre;
   scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
   M.scene = scene; M.craie = scene.craie;
@@ -121,7 +124,7 @@ function Moteur(o) {
     p = p || {};
     const r = o.appliquer(p, M) || {};
     if (r.vue && o.vues.includes(r.vue) && r.vue !== S.vue) { S.vue = r.vue; r.change = true; r.vueChange = true; }
-    if (r.change) { calculer(); if (r.vueChange) scene.reecrire(); }
+    if (r.change) { calculer(); if (r.vueChange) { scene.boite = null; scene.remesurer(); scene.reecrire(); } }
     noter('set_parameters', o.params(M));
     if (r.apres) r.apres();
     else if (r.change && !r.garder) start();

@@ -151,6 +151,15 @@ function electroDebout(x, P, G, a, strie) {
   x.save(); x.globalAlpha = a * .7; x.strokeStyle = 'rgba(230,230,230,.5)'; x.lineWidth = 1; x.strokeRect(P.x, P.yc - P.demi, P.w, 2 * P.demi); x.restore();
 }
 
+/* Disposition selon la largeur du tableau (15 novembre 2026, « mieux exploiter tout le tableau, grands calibres de
+ * texte ») : tableau large (scene.L ≥ 1000) → les six niveaux s'écartent sur toute la largeur (décalage DX par niveau),
+ * textes ×1,3. Sinon la disposition d'origine (760 × 420). */
+let DX = 0, TK = 1, XR = 748, LL = 760;
+const tk = v => Math.round(v * TK);
+function disposer(L) {
+  const lg = L >= 1000; DX = lg ? Math.round((L - 760) / 5.4) : 0; TK = lg ? 1.3 : 1; XR = lg ? L - 12 : 748; LL = L;
+  C2.x = 192 + DX; P3.x0 = 290 + 2 * DX; P4.x = 398 + 3 * DX; P5.x = 505 + 4 * DX; P6.x = 600 + 5 * DX;
+}
 /* ── Le dessin ─────────────────────────────────────────────────────── */
 function loupe(c, cadre, cible) {   // cadre de la loupe sur un niveau, deux traits de rappel vers le niveau suivant
   const [x, y, w, h] = cadre, [cx, cy1, cy2] = cible;
@@ -169,63 +178,63 @@ function dessiner(c) {
     if (t >= E.myofibrille + .2) electroDebout(x, P5, F.geoPeriodique(2.5, 5), rampe(t, E.myofibrille + .2, .6), false);
     if (t >= E.sarcomere + .2) electroDebout(x, P6, F.geo(2.5), rampe(t, E.sarcomere + .2, .6), true);
   });
-  c.texte('Du muscle au sarcomère', 12, 24, { couleur: 'cyan', taille: 18 });
-  c.texte('chaque niveau agrandi à droite', 748, 24, { couleur: 'faible', taille: 14, align: 'right' });
+  c.texte('Du muscle au sarcomère', 12, 24, { couleur: 'cyan', taille: tk(18) });
+  c.texte('chaque niveau agrandi à droite', XR, 24, { couleur: 'faible', taille: tk(14), align: 'right' });
   if (t >= E.muscle) { c.repere('muscle', MX - 36, 100, 72, 168, 'le muscle'); c.repere('tendon', MX - 9, 76, 18, 30, 'le tendon'); }
   if (t >= E.coupe) c.repere('faisceau', C2.x - C2.r, C2.y - C2.r, 2 * C2.r, 2 * C2.r, 'les faisceaux (coupe)');
   if (t >= E.fibre) c.repere('fibre', P4.x, P4.y0, P4.w, P4.y1 - P4.y0, 'une fibre musculaire');
   if (t >= E.noyaux) c.repere('noyaux', P4.x - 4, 80, P4.w + 8, 40, 'les noyaux, sur les bords de la fibre');
   if (t >= E.myofibrille) c.repere('myofibrille', P5.x - 4, P5.yc - P5.demi, P5.w + 8, 2 * P5.demi, 'une myofibrille');
   if (t >= E.sarcomere) { c.repere('sarcomere', P6.x - 6, P6.yc - 95, P6.w + 12, 190, 'un sarcomère'); c.repere('strie_z', P6.x - 6, P6.yc - 103, P6.w + 60, 16, 'une strie Z'); }
-  if (t >= E.muscle) c.repere('echelle', 20, YE - 16, 720, 40, 'l’échelle de chaque niveau');
+  if (t >= E.muscle) c.repere('echelle', 20, YE - 16, LL - 40, 40, 'l’échelle de chaque niveau');
   // Niveau 1 : le muscle et le tendon.
   if (ecrit(c, 'muscle', E.muscle + .5)) {
-    T(c, 'os', 117, 73, { couleur: 'faible', taille: 14 });
-    c.ligne(74, 92, 80, 92, { couleur: 'blanc', largeur: 1.3 }); T(c, 'tendon', 82, 97, { couleur: 'blanc', taille: 14 });
-    T(c, 'muscle', MX, YN, { couleur: 'blanc', taille: 16, align: 'center' });
-    T(c, 'quelques cm', MX, YE, { couleur: 'jaune', taille: 14, align: 'center' });
+    T(c, 'os', 117, 73, { couleur: 'faible', taille: tk(14) });
+    c.ligne(74, 92, 80, 92, { couleur: 'blanc', largeur: 1.3 }); T(c, 'tendon', 82, 97, { couleur: 'blanc', taille: tk(14) });
+    T(c, 'muscle', MX, YN, { couleur: 'blanc', taille: tk(16), align: 'center' });
+    T(c, 'quelques cm', MX, YE, { couleur: 'jaune', taille: tk(14), align: 'center' });
   }
   // Niveau 2 : une coupe montre les faisceaux.
   if (ecrit(c, 'coupe', E.coupe)) {
     c.trait([...Array(25).keys()].map(i => { const a = i / 24 * Math.PI * 2; return [MX + 38 * Math.cos(a), 190 + 7 * Math.sin(a)]; }), { couleur: 'jaune', largeur: 1.6, pointille: [5, 4], duree: .4 });
     c.ligne(MX + 38, 183, C2.x - 8, C2.y - C2.r + 1, { couleur: 'tresfaible', largeur: 1.3, pointille: [4, 5] });
     c.ligne(MX + 38, 197, C2.x - 8, C2.y + C2.r - 1, { couleur: 'tresfaible', largeur: 1.3, pointille: [4, 5] });
-    T(c, 'coupe : faisceaux', C2.x - 6, YN, { couleur: 'blanc', taille: 16, align: 'center' });
+    T(c, 'coupe : faisceaux', C2.x - 6, YN, { couleur: 'blanc', taille: tk(16), align: 'center' });
     c.ligne(C2.x + 34, C2.y - 18, C2.x + 34, 124, { couleur: 'blanc', largeur: 1.3 });
-    T(c, 'un faisceau', C2.x + 34, 118, { couleur: 'blanc', taille: 14, align: 'center' });
+    T(c, 'un faisceau', C2.x + 34, 118, { couleur: 'blanc', taille: tk(14), align: 'center' });
   }
   // Niveau 3 : un faisceau ouvert en fibres (même échelle : le faisceau).
   if (ecrit(c, 'ouvert', E.ouvert)) {
     loupe(c, [C2.x + 34 - 19, C2.y - 19, 38, 38], [P3.x0 - 10, P3.y0, P3.y1]);
-    T(c, 'faisceau ouvert', 326, YN, { couleur: 'blanc', taille: 16, align: 'center' });
-    T(c, 'faisceau : Ø ≈ 1 mm', 256, YE, { couleur: 'jaune', taille: 14, align: 'center' });
+    T(c, 'faisceau ouvert', 326 + 2 * DX, YN, { couleur: 'blanc', taille: tk(16), align: 'center' });
+    T(c, 'faisceau : Ø ≈ 1 mm', 256 + 1.5 * DX, YE, { couleur: 'jaune', taille: tk(14), align: 'center' });
   }
   // Niveau 4 : une fibre.
   if (ecrit(c, 'fibre', E.fibre)) {
     loupe(c, [xFibre3(5, 262) - 8, 244, 16, 50], [P4.x - 2, P4.y0, P4.y1]);
-    T(c, 'fibre', P4.x + P4.w / 2, YN, { couleur: 'blanc', taille: 16, align: 'center' });
-    T(c, 'Ø 10 à 100 µm', P4.x + P4.w / 2 - 4, YE, { couleur: 'jaune', taille: 14, align: 'center' });
+    T(c, 'fibre', P4.x + P4.w / 2, YN, { couleur: 'blanc', taille: tk(16), align: 'center' });
+    T(c, 'Ø 10 à 100 µm', P4.x + P4.w / 2 - 4, YE, { couleur: 'jaune', taille: tk(14), align: 'center' });
   }
   // Les noyaux, sur les bords.
   if (ecrit(c, 'noyaux', E.noyaux)) {
-    T(c, 'noyaux', P4.x + P4.w / 2, 52, { couleur: 'violet', taille: 15, align: 'center' });
+    T(c, 'noyaux', P4.x + P4.w / 2, 52, { couleur: 'violet', taille: tk(15), align: 'center' });
     c.fleche(P4.x + 12, 56, P4.x + 5, 82, { couleur: 'violet', largeur: 1.6, tete: 7 });
     c.fleche(P4.x + P4.w - 12, 56, P4.x + P4.w - 5, 96, { couleur: 'violet', largeur: 1.6, tete: 7 });
   }
   // Niveau 5 : une myofibrille.
   if (ecrit(c, 'myofibrille', E.myofibrille)) {
     loupe(c, [P4.x + 20, 150, 8, 48], [P5.x - 2, P5.yc - P5.demi, P5.yc + P5.demi]);
-    T(c, 'myofibrille', P5.x + P5.w / 2, YN, { couleur: 'blanc', taille: 16, align: 'center' });
-    T(c, 'Ø 1 à 2 µm', P5.x + P5.w / 2 + 6, YE + 18, { couleur: 'jaune', taille: 14, align: 'center' });
+    T(c, 'myofibrille', P5.x + P5.w / 2, YN, { couleur: 'blanc', taille: tk(16), align: 'center' });
+    T(c, 'Ø 1 à 2 µm', P5.x + P5.w / 2 + 6, YE + tk(18), { couleur: 'jaune', taille: tk(14), align: 'center' });
   }
   // Niveau 6 : un sarcomère entre deux stries Z.
   if (ecrit(c, 'sarcomere', E.sarcomere)) {
     loupe(c, [P5.x - 3, P5.yc - 12.5, P5.w + 6, 25], [P6.x - 8, P6.yc - 95, P6.yc + 95]);
     c.rect(P6.x - 6, P6.yc - 95, P6.w + 12, 190, { couleur: 'vert', largeur: 2, arrondi: 3 });
-    for (const s of [-1, 1]) { const y = P6.yc + s * 95; c.ligne(P6.x + P6.w + 8, y, P6.x + P6.w + 18, y, { couleur: 'blanc', largeur: 1.3 }); T(c, 'strie Z', P6.x + P6.w + 21, y + 5, { couleur: 'blanc', taille: 14 }); }
-    c.cote(742, P6.yc - 95, 742, P6.yc + 95, '', { couleur: 'vert' });
-    T(c, 'sarcomère', P6.x + P6.w / 2, YN, { couleur: 'vert', taille: 16, align: 'center' });
-    T(c, 'longueur ≈ 2,5 µm', P6.x + P6.w / 2, YE, { couleur: 'jaune', taille: 14, align: 'center' });
+    for (const s of [-1, 1]) { const y = P6.yc + s * 95; c.ligne(P6.x + P6.w + 8, y, P6.x + P6.w + 18, y, { couleur: 'blanc', largeur: 1.3 }); T(c, 'strie Z', P6.x + P6.w + 21, y + 5, { couleur: 'blanc', taille: tk(14) }); }
+    const xc = DX ? P6.x + P6.w + 30 + tk(60) : 742; c.cote(xc, P6.yc - 95, xc, P6.yc + 95, '', { couleur: 'vert' });
+    T(c, 'sarcomère', P6.x + P6.w / 2, YN, { couleur: 'vert', taille: tk(16), align: 'center' });
+    T(c, 'longueur ≈ 2,5 µm', P6.x + P6.w / 2, YE, { couleur: 'jaune', taille: tk(14), align: 'center' });
   }
 }
 
@@ -243,7 +252,7 @@ function ceQuiSeVoit() {
 }
 
 const canvas = $('canvas');
-scene = window.MuscleTableau.Scene(canvas, (c) => { scene.cadre(23); dessiner(c); return c.fin(); });
+scene = window.MuscleTableau.Scene(canvas, (c) => { scene.cadre(23); disposer(scene.L); dessiner(c); return c.fin(); }, { large: true });
 scene.avancer = dt => {
   if (!S.running) return false;
   S.t = Math.min(FIN, S.t + dt);

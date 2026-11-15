@@ -32,26 +32,49 @@ const SU = {
   larg: (c, s, taille = 18) => c.largeurTexte(nettoyer(s), taille),
   barre: (c, x, y, w, o = {}) => c.ligne(x - 3, y + 2, x + w + 3, y - 14, { couleur: o.couleur || 'rouge', largeur: o.largeur || 2.4 }),
 };
+/* Disposition sur la largeur du tableau (15 novembre 2026, « mieux exploiter tout le tableau ») : le cadre se cale sur
+ * l'encre (ajuster du kit), donc ce qui compte est la forme du bloc écrit. Un long calcul (6 lignes ou plus) dont les
+ * lignes tiennent dans une demi-largeur s'écrit sur DEUX colonnes, comme au tableau : la première partie à gauche, la
+ * suite à droite (coupure à la ligne suivie du plus grand interligne, près du milieu). Sinon une colonne, interligne
+ * resserré. Mêmes lignes, mêmes moments, mêmes repères : seules les positions changent. */
+const COL = [30, 404], DEMI = 352;
+function disposer(c, d) {
+  const L = d.lignes.map(l => {
+    const taille = l.taille || d.taille || 19;
+    return { l, taille, w: (l.dx || 0) + SU.larg(c, l.t, taille), inter: l.inter ? Math.round(l.inter * .88) : Math.round(taille * 1.6) };
+  });
+  const y0 = d.y0 || 78, n = L.length;
+  let coupe = 0;
+  if (n >= 6 && L.every(e => e.w <= DEMI)) {
+    let mieux = -1;
+    for (let i = Math.max(2, Math.floor(n / 2) - 1); i <= Math.min(n - 2, Math.ceil(n / 2) + 1); i++) {
+      const score = (d.lignes[i - 1].inter || 0) - 4 * Math.abs(i - n / 2);
+      if (score > mieux || !coupe) { mieux = score; coupe = i; }
+    }
+  }
+  let y = y0;
+  return L.map((e, i) => {
+    if (coupe && i === coupe) y = y0;
+    const col = coupe && i >= coupe ? 1 : 0, x = COL[col] + (e.l.dx || 0);
+    const r = { l: e.l, x, y, taille: e.taille, max: (coupe ? COL[col] + DEMI + 8 : 740) - x };
+    y += e.inter;
+    return r;
+  });
+}
 const vues = {};
 for (const [id, d] of Object.entries(window.CALCULS || {})) {
   vues[id] = {
     titre: d.titre,
     dessiner(c, K) {
       K.titre(d.titre);
-      let y = d.y0 || 82, yPrec = y, xPrec = 30;
-      for (const l of d.lignes) {
+      for (const { l, x, y, taille, max } of disposer(c, d)) {
         c.pause(l.p ?? .25);
-        const taille = l.taille || d.taille || 19;
-        if (l.meme) y = yPrec;
-        const x = l.x ?? (l.meme ? xPrec : 30 + (l.dx || 0));
-        const w = Math.min(740 - x, SU.larg(c, l.t, taille));
-        c.texte(l.t, x, y, { couleur: l.c || 'blanc', taille, max: 740 - x });
+        const w = Math.min(max, SU.larg(c, l.t, taille));
+        c.texte(l.t, x, y, { couleur: l.c || 'blanc', taille, max });
         if (l.cadre) c.rect(x - 8, y - taille - 4, w + 16, taille + 14, { couleur: l.cadre, arrondi: 7, largeur: 1.6 });
         if (l.barre) SU.barre(c, x, y - 4, w, { couleur: 'rouge' });
         if (l.r) c.repere(l.r[0], x - 6, y - taille - 6, w + 12, taille + 16, l.r[1]);
         if (l.m) K.marque(l.m);
-        yPrec = y; xPrec = x + w + 14;
-        y += l.inter ?? Math.round(taille * 1.8);
       }
     },
     decrire(K) {

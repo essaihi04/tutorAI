@@ -102,51 +102,87 @@ function peindreAcces(ctx, t) {
   return { g, L };
 }
 
+/* Disposition selon la largeur du tableau (15 novembre 2026, « mieux exploiter tout le tableau, grands calibres de
+ * texte ») : tableau large (scene.L ≥ 1000) → la scène moléculaire est agrandie (groupe mis à l'échelle, les repères
+ * suivent car ils lisent la transformation du canvas), les phrases du bas passent dans une colonne à droite, coupées
+ * à la ligne, textes plus gros. Sinon la disposition d'origine (760 × 420). Les poignées (interrupteur) ne bougent pas. */
+let LG = false, LL = 760, TK = 1, TKG = 1;
+const GR = { k: 1, ox: 0, oy: 0 }, GR2 = { k: 1, ox: 0, oy: 0 };
+const tk = v => Math.round(v * TK), tkg = v => Math.round(v * TKG);
+function disposer(L) {
+  LG = L >= 1000; LL = L; TK = LG ? 1.3 : 1; TKG = LG ? 1.12 : 1;
+  if (!LG) { Object.assign(GR, { k: 1, ox: 0, oy: 0 }); Object.assign(GR2, { k: 1, ox: 0, oy: 0 }); return; }
+  if (vue === 'acces') { const k = 1.15; Object.assign(GR, { k, ox: 90 - 90 * k, oy: 38 - 38 * k }); }
+  else {
+    const k = 1.2; Object.assign(GR, { k, ox: 12 - 12 * k, oy: 40 - 40 * k });
+    const k2 = 1.2, cx = Math.max(800, (GR.ox + 480 * k + L) / 2 + 10); Object.assign(GR2, { k: k2, ox: cx - LOUPE.x * k2, oy: LOUPE.y - LOUPE.y * k2 });
+  }
+}
+const dans = (c, G, fn) => { const x = c.ctx; x.save(); x.translate(G.ox, G.oy); x.scale(G.k, G.k); try { return fn(); } finally { x.restore(); } };
+const vers = (G, x, y) => [G.ox + x * G.k, G.oy + y * G.k];
+/** Une phrase coupée en lignes qui tiennent dans `max` (mesurée à la craie). */
+function couper(c, t, max, taille) {
+  const mots = String(t).split(' '), out = []; let l = '';
+  for (const m of mots) { const e = l ? l + ' ' + m : m; if (l && c.largeurTexte(e, taille) > max) { out.push(l); l = m; } else l = e; }
+  if (l) out.push(l);
+  return out;
+}
+/** Phrase du bas : centrée en bas (cadre 760) ou, tableau large, dans la colonne de droite à partir de y. */
+function phrase(c, s, yBas, yDroite, o) {
+  if (!LG) return c.texte(s, 345, yBas, o);
+  const x0 = vers(GR, 790, 0)[0], max = LL - 12 - x0, t = Math.round(o.taille * 1.25);
+  couper(c, s, max, t).forEach((l, i) => c.texte(l, x0, yDroite + i * Math.round(t * 1.3), { ...o, taille: t, align: 'left' }));
+}
 function dessinerAcces(c) {
   const t = S.t, M = MOMENTS_ACCES; let geo;
-  c.direct(() => { geo = peindreAcces(c.ctx, t); });
+  c.direct(() => { geo = dans(c, GR, () => peindreAcces(c.ctx, t)); });
   const { g, L } = geo;
   // Parties fixes, écrites à l’ouverture.
-  c.texte('Le Ca²⁺ et les sites de fixation de l’actine (molécules très agrandies)', 12, 24, { couleur: 'cyan', taille: 16 }); c._fixe = c.cur;   // les éléments « au moment dit » n’attendent pas la fin des légendes fixes
-  c.texte('réticulum', 612, 66, { couleur: 'blanc', taille: 15 }).texte('sarcoplasmique', 612, 86, { couleur: 'blanc', taille: 15 });
-  c.texte('Ca²⁺ stockés', 146, 66, { couleur: 'jaune', taille: 14 });
-  c.texte('troponine', 612, 182, { couleur: 'violet', taille: 15 }); c.ligne(608, 178, 566, 205, { couleur: 'faible', largeur: 1.2 });
-  c.texte('actine', 612, 208, { couleur: 'orange', taille: 15 });
-  c.texte('tropomyosine', 612, 234, { couleur: 'blanc', taille: 15 }); c.ligne(608, 229, 592, 212, { couleur: 'faible', largeur: 1.2 });
-  c.texte('sites de fixation', 8, 250, { couleur: 'cyan', taille: 15 }); c.fleche(56, 236, 115, 216, { couleur: 'faible', largeur: 1.2, tete: 7 });
-  c.texte('têtes de myosine', 612, 290, { couleur: 'bleu', taille: 15 }); c.ligne(608, 285, 546, 280, { couleur: 'faible', largeur: 1.2 });
-  c.texte('filament épais', 612, 340, { couleur: 'bleu', taille: 15 }).texte('(myosine)', 612, 358, { couleur: 'bleu', taille: 15 });
+  c.texte('Le Ca²⁺ et les sites de fixation de l’actine (molécules très agrandies)', 12, 24, { couleur: 'cyan', taille: tk(16) }); c._fixe = c.cur;   // les éléments « au moment dit » n’attendent pas la fin des légendes fixes
+  dans(c, GR, () => {
+    c.texte('réticulum', 612, 66, { couleur: 'blanc', taille: tkg(15) }).texte('sarcoplasmique', 612, 66 + tkg(20), { couleur: 'blanc', taille: tkg(15) });
+    c.texte('Ca²⁺ stockés', 146, 66, { couleur: 'jaune', taille: tkg(14) });
+    c.texte('troponine', 612, 182, { couleur: 'violet', taille: tkg(15) }); c.ligne(608, 178, 566, 205, { couleur: 'faible', largeur: 1.2 });
+    c.texte('actine', 612, 208, { couleur: 'orange', taille: tkg(15) });
+    c.texte('tropomyosine', 612, 234, { couleur: 'blanc', taille: tkg(15) }); c.ligne(608, 229, 592, 212, { couleur: 'faible', largeur: 1.2 });
+    c.texte('têtes de myosine', 612, 290, { couleur: 'bleu', taille: tkg(15) }); c.ligne(608, 285, 546, 280, { couleur: 'faible', largeur: 1.2 });
+    c.texte('filament épais', 612, 340, { couleur: 'bleu', taille: tkg(15) }).texte('(myosine)', 612, 340 + tkg(18), { couleur: 'bleu', taille: tkg(15) });
+  });
+  const ySites = LG ? 272 : 250, [fx, fy] = vers(GR, 115, 216);
+  c.texte('sites de fixation', 8, ySites, { couleur: 'cyan', taille: tk(15) }); c.fleche(56, ySites - 14, fx, fy, { couleur: 'faible', largeur: 1.2, tete: 7 });
   // Ce qui bouge : le trait d’excitation, l’interrupteur.
   c.direct(() => {
     if (S.excitation && t >= TA.exc0 && t < TA.finExc + 0.3) {
-      const f = rampe(t, TA.exc0, TA.exc1), a = 1 - rampe(t, TA.finExc, TA.finExc + 0.3);
-      if (a > 0.05) c.fleche(12, 82, 12 + 114 * f, 82, { couleur: 'jaune', largeur: 3, alpha: .92 * a, tete: 10 });
+      const f = rampe(t, TA.exc0, TA.exc1), a = 1 - rampe(t, TA.finExc, TA.finExc + 0.3), xe = vers(GR, 126, 0)[0];
+      if (a > 0.05) c.fleche(12, 82, 12 + (xe - 12) * f, 82, { couleur: 'jaune', largeur: 3, alpha: .92 * a, tete: 10 });
     }
     interrupteur(c);
-    c.repere('reticulum', RS.x, RS.y, RS.w, RS.h, 'le réticulum sarcoplasmique');
-    const xs = L.filter(b => b.f > 0.02).map(b => b.x), ys = L.filter(b => b.f > 0.02).map(b => b.y);
-    if (xs.length) c.repere('ca', Math.min(...xs) - 8, Math.min(...ys) - 8, Math.max(...xs) - Math.min(...xs) + 16, Math.max(...ys) - Math.min(...ys) + 16, 'les ions Ca²⁺ libérés');
-    else c.repere('ca', 240, 44, 350, 66, 'les ions Ca²⁺ stockés dans le réticulum');
-    const tn = g.troponines; c.repere('troponine', tn[0].x - 12, tn[0].y - 14, tn[tn.length - 1].x - tn[0].x + 24, 26, 'la troponine');
-    c.repere('tropomyosine', FINE.x0, g.yTropo - 6, FINE.x1 - FINE.x0, 12, 'la tropomyosine');
-    c.repere('site_actine', g.sites[1].x - 9, g.sites[1].y - 7, 18, 16, 'un site de fixation de l’actine');
-    c.repere('actine', FINE.x0, FINE.y - 13, FINE.x1 - FINE.x0, 26, 'le filament d’actine');
-    c.repere('tete_myosine', TETES[1] - 36, 246, 56, 64, 'une tête de myosine');
+    dans(c, GR, () => {
+      c.repere('reticulum', RS.x, RS.y, RS.w, RS.h, 'le réticulum sarcoplasmique');
+      const xs = L.filter(b => b.f > 0.02).map(b => b.x), ys = L.filter(b => b.f > 0.02).map(b => b.y);
+      if (xs.length) c.repere('ca', Math.min(...xs) - 8, Math.min(...ys) - 8, Math.max(...xs) - Math.min(...xs) + 16, Math.max(...ys) - Math.min(...ys) + 16, 'les ions Ca²⁺ libérés');
+      else c.repere('ca', 240, 44, 350, 66, 'les ions Ca²⁺ stockés dans le réticulum');
+      const tn = g.troponines; c.repere('troponine', tn[0].x - 12, tn[0].y - 14, tn[tn.length - 1].x - tn[0].x + 24, 26, 'la troponine');
+      c.repere('tropomyosine', FINE.x0, g.yTropo - 6, FINE.x1 - FINE.x0, 12, 'la tropomyosine');
+      c.repere('site_actine', g.sites[1].x - 9, g.sites[1].y - 7, 18, 16, 'un site de fixation de l’actine');
+      c.repere('actine', FINE.x0, FINE.y - 13, FINE.x1 - FINE.x0, 26, 'le filament d’actine');
+      c.repere('tete_myosine', TETES[1] - 36, 246, 56, 64, 'une tête de myosine');
+    });
     if (S.excitation && t >= TA.exc0) c.repere('excitation', 8, 60, 120, 30, 'l’excitation');
   });
   // Écrit au moment dit.
   const ouv = ouverture(t);
-  quand(c, 'mot_exc', S.excitation && t >= TA.exc0 && t < TA.finExc, () => c.texte('excitation', 14, 70, { couleur: 'jaune', taille: 15 }));
-  quand(c, 'mot_fin_exc', S.excitation && t >= TA.finExc, () => c.texte('fin de l’excitation', 12, 70, { couleur: 'faible', taille: 14 }));
-  quand(c, 'ca_lib', S.excitation && t >= TA.lib0 && t < TA.rep0, () => c.texte('Ca²⁺ libérés', 8, 140, { couleur: 'jaune', taille: 15 }));
-  quand(c, 'ca_tn', S.excitation && t >= M.ca_sur_troponine && t < TA.rep0, () => { c.texte('Ca²⁺ fixés sur', 8, 166, { couleur: 'jaune', taille: 15 }); c.texte('la troponine', 8, 184, { couleur: 'jaune', taille: 15 }); });
-  quand(c, 'ca_rep', S.excitation && t >= TA.rep0, () => { c.texte('Ca²⁺ repris par', 8, 140, { couleur: 'jaune', taille: 15 }); c.texte('le réticulum', 8, 158, { couleur: 'jaune', taille: 15 }); });
-  quand(c, 'sites_caches', ouv < 0.5, () => c.texte('cachés', 8, 268, { couleur: 'faible', taille: 15 }));
-  quand(c, 'sites_libres', ouv >= 0.5, () => c.texte('libérés', 8, 268, { couleur: 'vert', taille: 15 }));
-  quand(c, 'tropo_part', S.excitation && t >= TA.ouv0 && t < TA.ferm0, () => c.texte('la tropomyosine se déplace : les sites sont libérés', 345, 376, { couleur: 'vert', taille: 15, align: 'center' }));
-  quand(c, 'tropo_revient', S.excitation && t >= TA.ferm0, () => c.texte('la tropomyosine revient sur les sites', 345, 376, { couleur: 'faible', taille: 15, align: 'center' }));
-  quand(c, 'autorise', S.excitation && t >= M.sites_liberes, () => c.texte('le Ca²⁺ autorise ; il ne fournit pas l’énergie', 345, 404, { couleur: 'vert', taille: 18, align: 'center' }));
-  quand(c, 'sans_exc', !S.excitation, () => c.texte('sans excitation : pas de Ca²⁺ libéré, les sites restent cachés', 345, 404, { couleur: 'faible', taille: 16, align: 'center' }));
+  quand(c, 'mot_exc', S.excitation && t >= TA.exc0 && t < TA.finExc, () => c.texte('excitation', 14, 70, { couleur: 'jaune', taille: tk(15) }));
+  quand(c, 'mot_fin_exc', S.excitation && t >= TA.finExc, () => c.texte('fin de l’excitation', 12, 70, { couleur: 'faible', taille: tk(14) }));
+  quand(c, 'ca_lib', S.excitation && t >= TA.lib0 && t < TA.rep0, () => c.texte('Ca²⁺ libérés', 8, 140, { couleur: 'jaune', taille: tk(15) }));
+  quand(c, 'ca_tn', S.excitation && t >= M.ca_sur_troponine && t < TA.rep0, () => { c.texte('Ca²⁺ fixés sur', 8, 166, { couleur: 'jaune', taille: tk(15) }); c.texte('la troponine', 8, 166 + tk(18), { couleur: 'jaune', taille: tk(15) }); });
+  quand(c, 'ca_rep', S.excitation && t >= TA.rep0, () => { c.texte('Ca²⁺ repris par', 8, 140, { couleur: 'jaune', taille: tk(15) }); c.texte('le réticulum', 8, 140 + tk(18), { couleur: 'jaune', taille: tk(15) }); });
+  quand(c, 'sites_caches', ouv < 0.5, () => c.texte('cachés', 8, ySites + tk(18), { couleur: 'faible', taille: tk(15) }));
+  quand(c, 'sites_libres', ouv >= 0.5, () => c.texte('libérés', 8, ySites + tk(18), { couleur: 'vert', taille: tk(15) }));
+  quand(c, 'tropo_part', S.excitation && t >= TA.ouv0 && t < TA.ferm0, () => phrase(c, 'la tropomyosine se déplace : les sites sont libérés', 376, 200, { couleur: 'vert', taille: 15, align: 'center' }));
+  quand(c, 'tropo_revient', S.excitation && t >= TA.ferm0, () => phrase(c, 'la tropomyosine revient sur les sites', 376, 200, { couleur: 'faible', taille: 15, align: 'center' }));
+  quand(c, 'autorise', S.excitation && t >= M.sites_liberes, () => phrase(c, 'le Ca²⁺ autorise ; il ne fournit pas l’énergie', 404, 300, { couleur: 'vert', taille: 18, align: 'center' }));
+  quand(c, 'sans_exc', !S.excitation, () => phrase(c, 'sans excitation : pas de Ca²⁺ libéré, les sites restent cachés', 404, 300, { couleur: 'faible', taille: 16, align: 'center' }));
 }
 /* L’interrupteur « excitation : oui / non », sous le trait d’excitation (poignée). */
 const INTER = { x: 14, y: 96, w: 38, h: 18 };
@@ -156,7 +192,7 @@ function interrupteur(c) {
   ctx.beginPath(); ctx.roundRect(INTER.x, INTER.y, INTER.w, INTER.h, 9); ctx.fill(); ctx.restore();
   c.rect(INTER.x, INTER.y, INTER.w, INTER.h, { couleur: on ? 'jaune' : 'faible', arrondi: 9, largeur: 1.6 });
   c.cercle(on ? INTER.x + INTER.w - 9 : INTER.x + 9, INTER.y + 9, 6, { couleur: on ? 'jaune' : 'faible', fond: on ? 'jaune' : 'faible', fondAlpha: .7, largeur: 1.4 });
-  c.texte(on ? 'oui' : 'non', INTER.x + INTER.w + 7, INTER.y + 14, { couleur: on ? 'jaune' : 'faible', taille: 14 });
+  c.texte(on ? 'oui' : 'non', INTER.x + INTER.w + 7, INTER.y + 14, { couleur: on ? 'jaune' : 'faible', taille: tk(14) });
   c.repere('interrupteur_excitation', INTER.x - 4, INTER.y - 4, INTER.w + 40, INTER.h + 8, `l’interrupteur de l’excitation : ${on ? 'oui' : 'non'}`);
 }
 
@@ -199,52 +235,88 @@ function peindreMolecules(ctx, t) {
   return { g, T };
 }
 const TETE_CHOISIE = { x: 350 + 26, y: YE - 34 + 8 };   // la tête montrée à la loupe (moitié droite, en haut)
+/** Peinture de la vue « molecules » en deux groupes : les filaments (GR) et la loupe sur la tête (GR2). */
+function peindreMoleculesGroupes(c, t) {
+  const ctx = c.ctx, aA = rampe(t, 0.2, 0.7), aT = rampe(t, 0.5, 0.9), aN = rampe(t, 0.8, 1.2);
+  const g = P.geoFin({ ...MF, dx: 0, ouverture: 0 });
+  dans(c, GR, () => {
+    if (aA > 0) P.actine(ctx, { ...MF, dx: 0, alpha: aA }, g);
+    if (aT > 0) P.tropomyosine(ctx, { ...MF, dx: 0, alpha: aT }, g);
+    if (aN > 0) P.troponine(ctx, { ...MF, dx: 0, alpha: aN }, g);
+    const aE = rampe(t, ...TM.epais_paint);
+    if (aE > 0) {
+      P.filamentEpais(ctx, 60, 450, YE, { alpha: aE });
+      for (let i = 0; i < 6; i++) {
+        const gauche = i < 3, bx = gauche ? 90 + i * 50 : 300 + (i - 3) * 50, s = gauche ? -1 : 1;
+        for (const haut of [true, false]) {
+          const vy = haut ? -1 : 1, ang = Math.atan2(vy * 0.94, s * 0.34), tip = { x: bx + s * 26, y: YE + vy * 34 };
+          P.tete(ctx, { x: bx, y: YE + vy * 6 }, tip, ang, { L: 22, ry: 6.5, cou: 4, alpha: aE });
+        }
+      }
+    }
+  });
+  let T = null;
+  dans(c, GR2, () => {
+    const aZ = rampe(t, ...TM.tete_paint);
+    if (aZ > 0) T = teteGrande(ctx, aZ);
+    const aS = rampe(t, ...TM.sites_paint);
+    if (T && aS > 0) { P.sitesTete(ctx, T, { alpha: aS, r: 7 }); P.pastille(ctx, T.siteAtp.x + 20, T.siteAtp.y + 14, 'ATP', { alpha: aS * 0.95, r: 12 }); }
+  });
+  return { g, T };
+}
 function dessinerMolecules(c) {
   const t = S.t, M = MOMENTS_MOL; let geo;
-  c.direct(() => { geo = peindreMolecules(c.ctx, t); });
-  c.texte('Les molécules des filaments (très agrandies)', 12, 24, { couleur: 'cyan', taille: 16 }); c._fixe = c.cur;   // les éléments « au moment dit » n’attendent pas la fin des légendes fixes
+  c.direct(() => { geo = peindreMoleculesGroupes(c, t); });
+  c.texte('Les molécules des filaments (très agrandies)', 12, 24, { couleur: 'cyan', taille: tk(16) }); c._fixe = c.cur;   // les éléments « au moment dit » n’attendent pas la fin des légendes fixes
   const { g } = geo, tn = g.troponines;
   c.direct(() => {
-    if (t >= TM.fin_paint[0]) {
-      c.repere('actine', MF.x0, MF.y - 13, MF.x1 - MF.x0, 22, 'l’actine (perles)');
-      c.repere('tropomyosine', MF.x0, g.yTropo - 5, MF.x1 - MF.x0, 10, 'la tropomyosine');
-      c.repere('troponine', tn[0].x - 10, tn[0].y - 8, tn[tn.length - 1].x - tn[0].x + 20, 18, 'la troponine');
-    }
-    if (t >= TM.epais_paint[0]) c.repere('myosine', 60, YE - 42, 390, 84, 'le filament épais : des molécules de myosine');
-    if (t >= TM.tete_paint[0]) c.repere('tete_myosine', LOUPE.x - LOUPE.r, LOUPE.y - LOUPE.r, 2 * LOUPE.r, 2 * LOUPE.r, 'la tête de myosine, agrandie');
-    if (t >= TM.sites_paint[0]) {
-      c.repere('site_atp', 650, 200, 52, 40, 'le site de fixation de l’ATP');
-      c.repere('site_actine', BIG.Pt.x - 12, BIG.Pt.y - 12, 24, 24, 'le site de fixation de l’actine');
-    }
+    dans(c, GR, () => {
+      if (t >= TM.fin_paint[0]) {
+        c.repere('actine', MF.x0, MF.y - 13, MF.x1 - MF.x0, 22, 'l’actine (perles)');
+        c.repere('tropomyosine', MF.x0, g.yTropo - 5, MF.x1 - MF.x0, 10, 'la tropomyosine');
+        c.repere('troponine', tn[0].x - 10, tn[0].y - 8, tn[tn.length - 1].x - tn[0].x + 20, 18, 'la troponine');
+      }
+      if (t >= TM.epais_paint[0]) c.repere('myosine', 60, YE - 42, 390, 84, 'le filament épais : des molécules de myosine');
+    });
+    dans(c, GR2, () => {
+      if (t >= TM.tete_paint[0]) c.repere('tete_myosine', LOUPE.x - LOUPE.r, LOUPE.y - LOUPE.r, 2 * LOUPE.r, 2 * LOUPE.r, 'la tête de myosine, agrandie');
+      if (t >= TM.sites_paint[0]) {
+        c.repere('site_atp', 650, 200, 52, 40, 'le site de fixation de l’ATP');
+        c.repere('site_actine', BIG.Pt.x - 12, BIG.Pt.y - 12, 24, 24, 'le site de fixation de l’actine');
+      }
+    });
   });
   const L = S.legendes;
-  quand(c, 'mf', L && t >= M.filament_fin, () => {
-    c.texte('actine', 44, 64, { couleur: 'orange', taille: 15 });
-    c.ligne(tn[1].x, tn[1].y + 8, tn[1].x, 112, { couleur: 'faible', largeur: 1.2 }); c.texte('troponine', tn[1].x, 128, { couleur: 'violet', taille: 15, align: 'center' });
-    c.ligne(440, 97, 440, 112, { couleur: 'faible', largeur: 1.2 }); c.texte('tropomyosine', 440, 128, { couleur: 'blanc', taille: 15, align: 'center' });
-    c.texte('filament fin = actine + troponine + tropomyosine', 40, 160, { couleur: 'vert', taille: 17 });
-  });
-  quand(c, 'me', L && t >= M.filament_epais, () => {
-    c.texte('myosine', 455, YE + 5, { couleur: 'bleu', taille: 15 });
-    c.texte('filament épais = molécules de myosine', 40, 304, { couleur: 'vert', taille: 17 });
-  });
+  quand(c, 'mf', L && t >= M.filament_fin, () => dans(c, GR, () => {
+    c.texte('actine', 44, 64, { couleur: 'orange', taille: tkg(15) });
+    c.ligne(tn[1].x, tn[1].y + 8, tn[1].x, 112, { couleur: 'faible', largeur: 1.2 }); c.texte('troponine', tn[1].x, 128, { couleur: 'violet', taille: tkg(15), align: 'center' });
+    c.ligne(440, 97, 440, 112, { couleur: 'faible', largeur: 1.2 }); c.texte('tropomyosine', 440, 128, { couleur: 'blanc', taille: tkg(15), align: 'center' });
+    c.texte('filament fin = actine + troponine + tropomyosine', 40, 160, { couleur: 'vert', taille: tkg(17) });
+  }));
+  quand(c, 'me', L && t >= M.filament_epais, () => dans(c, GR, () => {
+    c.texte('myosine', 455, YE + 5, { couleur: 'bleu', taille: tkg(15) });
+    c.texte('filament épais = molécules de myosine', 40, 304, { couleur: 'vert', taille: tkg(17) });
+  }));
   quand(c, 'mt', L && t >= M.tete, () => {
-    c.cercle(TETE_CHOISIE.x - 6, TETE_CHOISIE.y - 4, 18, { couleur: 'jaune', largeur: 1.6 });
-    c.ligne(TETE_CHOISIE.x + 12, TETE_CHOISIE.y - 6, LOUPE.x - LOUPE.r, LOUPE.y - 10, { couleur: 'jaune', largeur: 1.2, pointille: [5, 5] });
-    c.cercle(LOUPE.x, LOUPE.y, LOUPE.r, { couleur: 'jaune', largeur: 1.6 });
-    c.texte('tête de myosine (agrandie)', LOUPE.x, 104, { couleur: 'bleu', taille: 16, align: 'center' });
+    const [ax, ay] = vers(GR, TETE_CHOISIE.x - 6, TETE_CHOISIE.y - 4), [bx, by] = vers(GR2, LOUPE.x - LOUPE.r, LOUPE.y - 10);
+    c.cercle(ax, ay, 18 * GR.k, { couleur: 'jaune', largeur: 1.6 });
+    c.ligne(ax + 18 * GR.k, ay - 2, bx, by, { couleur: 'jaune', largeur: 1.2, pointille: [5, 5] });
+    dans(c, GR2, () => {
+      c.cercle(LOUPE.x, LOUPE.y, LOUPE.r, { couleur: 'jaune', largeur: 1.6 });
+      c.texte('tête de myosine (agrandie)', LOUPE.x, 104, { couleur: 'bleu', taille: tkg(16), align: 'center' });
+    });
   });
-  quand(c, 'ms', L && t >= M.deux_sites, () => {
+  quand(c, 'ms', L && t >= M.deux_sites, () => dans(c, GR2, () => {
     c.ligne(640, 330, 658, 222, { couleur: 'vert', largeur: 1.3 });
-    c.texte('site de fixation de l’ATP', 630, 344, { couleur: 'vert', taille: 15, align: 'center' });
+    c.texte('site de fixation de l’ATP', 630, 344, { couleur: 'vert', taille: tkg(15), align: 'center' });
     c.ligne(722, 360, 676, 158, { couleur: 'cyan', largeur: 1.3 });
-    c.texte('site de fixation de l’actine', 630, 370, { couleur: 'cyan', taille: 15, align: 'center' });
-  });
+    c.texte('site de fixation de l’actine', 630, 344 + tkg(26), { couleur: 'cyan', taille: tkg(15), align: 'center' });
+  }));
 }
 
 /* ── Boucle, moments, commandes ──────────────────────────────────────────── */
 const canvas = $('canvas');
-const scene = window.MuscleTableau.Scene(canvas, (c) => { scene.cadre(41); (vue === 'acces' ? dessinerAcces : dessinerMolecules)(c); return c.fin(); });
+const scene = window.MuscleTableau.Scene(canvas, (c) => { scene.cadre(41); disposer(scene.L); (vue === 'acces' ? dessinerAcces : dessinerMolecules)(c); return c.fin(); }, { large: true });
 const LENT_TEXTE = vue === 'acces' ? ' (ralenti : dans la fibre, tout dure quelques millisecondes)' : '';
 scene.avancer = dt => {
   if (!S.running) return false;

@@ -12,6 +12,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="/media/simulations/maths/commun/exposants.js"></script>
 <script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/ln-tableau/large.js"></script>
 <script>
 /*
  * Cours « Fonctions logarithmiques » (math_ch5_fonctions_ln) : l’ensemble de définition, puis le tri des solutions.
@@ -26,6 +27,7 @@
 const SUPS = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
 /** Largeur réelle d’un texte à la craie, exposants et indices compris. */
 function L(c, s, t = 18) {
+  t = Math.max(t, LnLarge.min(c));   // la craie n’écrit jamais plus petit (tailleMin du kit)
   s = String(s).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUPS[ch]).join('') + '}');
   let w = 0;
   for (const seg of Tableau.Craie.segments(s)) { c.ctx.font = `${seg.sub || seg.sup ? t * .62 : t}px ${Tableau.POLICE}`; w += c.ctx.measureText(seg.t).width; }
@@ -52,7 +54,7 @@ function axeNum(c, o) {
   c.texte('x', o.x1 + 22, o.y + 6, { couleur: 'faible', taille: 16 });
   for (const [v, l] of o.grads) {
     c.ligne(X(v), o.y - 6, X(v), o.y + 6, { couleur: 'faible', largeur: 1.4, duree: .03 });
-    if (l) c.texte(l, X(v), o.y + 27, { couleur: 'faible', taille: 17, align: 'center', duree: .06 });
+    if (l) c.texte(l, X(v), o.y + 27, { couleur: 'faible', taille: T(17), align: 'center', duree: .06 });
   }
   X.o = o;
   return X;
@@ -62,17 +64,23 @@ function zone(c, X, a, b, coul, dy = 0, o = {}) {
   const xa = Number.isFinite(a) ? X(a) + (o.ouvertA ? 7 : 0) : X.o.x0 - 8, xb = Number.isFinite(b) ? X(b) - (o.ouvertB ? 7 : 0) : X.o.x1 + 10;
   c.ligne(xa, X.o.y - dy, xb, X.o.y - dy, { couleur: coul, largeur: o.largeur || 7, alpha: o.alpha ?? .6 });
 }
+/* Tableau large (15 novembre 2026) : les axes s’allongent jusqu’au bord droit, les résultats encadrés passent à droite
+ * (DX = ce que le tableau a gagné en largeur), petits textes un peu plus grands (T) ; hors du tableau large, rien ne change. */
+const LARGE = () => LnLarge.L >= 1000;
+const T = t => (LARGE() ? Math.round(t * 1.2) : t);
 const rondVide = (c, x, y, coul) => c.cercle(x, y, 6.5, { couleur: coul, largeur: 2.4 });
 function croix(c, x, y, coul = 'rouge', r = 11) { c.ligne(x - r, y - r, x + r, y + r, { couleur: coul, largeur: 3 }); c.ligne(x - r, y + r, x + r, y - r, { couleur: coul, largeur: 3 }); }
 
 MathsTableau.page({
   id: 'ln_domaine', titre: 'Fonctions logarithmiques',
   texte: 'Construction à la craie du cours Fonctions logarithmiques : chaque ln demande ce qu’il contient strictement positif ; les conditions se relient par « et » ; on cherche le domaine d’abord, puis on trie les solutions',
+  ajuster: !LnLarge.actif,
   vues: {
     une: {
       titre: 'Une condition par ln : u(x) > 0',
       dessiner(c, K) {
-        K.titre('Une condition par ln : u(x) > 0');
+        const LL = LnLarge.ouvrir(c), DX = LL - 760;
+        LnLarge.titre(c, K, 'Une condition par ln : u(x) > 0');
         const yf = 84;
         c.texte('f(x) = ln(2x − 6)', 50, yf, { couleur: 'blanc', taille: 28 });
         c.pause(.4);
@@ -85,13 +93,13 @@ MathsTableau.page({
         c.texte('x ∈ D_f ⇔ 2x − 6 > 0 ⇔ x > 3', 50, 176, { couleur: 'blanc', taille: 25 });
         K.marque('condition');
         c.pause(.4);
-        const X = axeNum(c, { x0: 80, x1: 640, y: 252, vmin: -1, vmax: 7, grads: [[-1, '−1'], [0, '0'], [1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5'], [6, '6']] });
+        const X = axeNum(c, { x0: 80, x1: 640 + DX, y: 252, vmin: -1, vmax: 7, grads: [[-1, '−1'], [0, '0'], [1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5'], [6, '6']] });
         zone(c, X, 3, Infinity, 'vert', 0, { ouvertA: true });
         rondVide(c, X(3), 252, 'vert');
         c.repere('zone', X(3) - 10, 236, X.o.x1 + 10 - X(3) + 10, 32, ']3 ; +∞[ sur l’axe');
         K.marque('zone');
         c.pause(.4);
-        const b = encadre(c, 'D_f = ]3 ; +∞[', 450, 334, 26, 'jaune', 'jaune');
+        const b = encadre(c, 'D_f = ]3 ; +∞[', 450 + DX, 336, T(26), 'jaune', 'jaune');
         c.repere('resultat', ...b, 'D_f = ]3 ; +∞[');
         K.marque('resultat');
       },
@@ -111,7 +119,8 @@ MathsTableau.page({
     et: {
       titre: 'Plusieurs conditions : et',
       dessiner(c, K) {
-        K.titre('Plusieurs conditions : et');
+        const LL = LnLarge.ouvrir(c), DX = LL - 760;
+        LnLarge.titre(c, K, 'Plusieurs conditions : et');
         c.texte('f(x) = (1 + ln x)/ln x', 50, 84, { couleur: 'blanc', taille: 28 });
         c.pause(.4);
         c.texte('x > 0', 60, 136, { couleur: 'vert', taille: 24 });
@@ -121,24 +130,26 @@ MathsTableau.page({
         c.texte('(dénominateur)', 270, 180, { couleur: 'faible', taille: 19 });
         K.marque('conditions');
         c.pause(.4);
-        const y = 258, X = axeNum(c, { x0: 80, x1: 640, y, vmin: -2, vmax: 5, grads: [[-2, '−2'], [-1, '−1'], [0, '0'], [1, '1'], [2, '2'], [3, '3'], [4, '4']] });
+        const y = 258, X = axeNum(c, { x0: 80, x1: 640 + DX, y, vmin: -2, vmax: 5, grads: [[-2, '−2'], [-1, '−1'], [0, '0'], [1, '1'], [2, '2'], [3, '3'], [4, '4']] });
         zone(c, X, 0, 1, 'vert', 0, { ouvertA: true, ouvertB: true });
         zone(c, X, 1, Infinity, 'vert', 0, { ouvertA: true });
         rondVide(c, X(0), y, 'vert');
         rondVide(c, X(1), y, 'rouge');
-        c.texte('x ≠ 1', X(1), y - 18, { couleur: 'rouge', taille: 17, align: 'center' });
+        c.texte('x ≠ 1', X(1), y - 18, { couleur: 'rouge', taille: T(17), align: 'center' });
         c.repere('trou', X(1) - 16, y - 36, 32, 50, 'le trou en 1');
         K.marque('zones');
         c.pause(.4);
-        c.texte('et', 520, 164, { couleur: 'vert', taille: 30 });
-        ovale(c, 520 + L(c, 'et', 30) / 2, 164 - 10, 26, 22, 'vert');
-        c.pause(.2);
-        c.texte('ou', 610, 164, { couleur: 'blanc', taille: 30 });
-        c.ligne(600, 168, 650, 140, { couleur: 'rouge', largeur: 3 });
-        c.repere('et', 494, 128, 170, 52, '« et », pas « ou »');
+        LnLarge.colonne(c, 494, 128, LARGE() ? 1.3 : 1, 494 + DX * .8, 118, () => {
+          c.texte('et', 520, 164, { couleur: 'vert', taille: 30 });
+          ovale(c, 520 + L(c, 'et', 30) / 2, 164 - 10, 26, 22, 'vert');
+          c.pause(.2);
+          c.texte('ou', 610, 164, { couleur: 'blanc', taille: 30 });
+          c.ligne(600, 168, 650, 140, { couleur: 'rouge', largeur: 3 });
+          c.repere('et', 494, 128, 170, 52, '« et », pas « ou »');
+        });
         K.marque('et');
         c.pause(.4);
-        const b = encadre(c, 'D_f = ]0 ; 1[ ∪ ]1 ; +∞[', 360, 336, 26, 'jaune', 'jaune');
+        const b = encadre(c, 'D_f = ]0 ; 1[ ∪ ]1 ; +∞[', 360 + DX * .8, 338, T(26), 'jaune', 'jaune');
         c.repere('resultat', ...b, 'D_f = ]0 ; 1[ ∪ ]1 ; +∞[');
         K.marque('resultat');
       },
@@ -158,7 +169,8 @@ MathsTableau.page({
     valeur_absolue: {
       titre: 'ln|u| : une condition, u ≠ 0',
       dessiner(c, K) {
-        K.titre('ln|u| : une condition, u ≠ 0');
+        const LL = LnLarge.ouvrir(c), DX = LL - 760;
+        LnLarge.titre(c, K, 'ln|u| : une condition, u ≠ 0');
         const yf = 84;
         c.texte('f(x) = ln|x − 2|', 50, yf, { couleur: 'blanc', taille: 28 });
         c.pause(.3);
@@ -166,24 +178,26 @@ MathsTableau.page({
         c.texte('|x − 2| > 0 ⇔ x ≠ 2', 50, 146, { couleur: 'blanc', taille: 25 });
         K.marque('entoure');
         c.pause(.4);
-        const y = 226, X = axeNum(c, { x0: 70, x1: 360, y, vmin: -1, vmax: 5, grads: [[-1, '−1'], [0, '0'], [1, '1'], [2, '2'], [3, '3'], [4, '4']] });
+        const y = 226, X = axeNum(c, { x0: 70, x1: 360 + DX * .55, y, vmin: -1, vmax: 5, grads: [[-1, '−1'], [0, '0'], [1, '1'], [2, '2'], [3, '3'], [4, '4']] });
         zone(c, X, -Infinity, 2, 'vert', 0, { ouvertB: true });
         zone(c, X, 2, Infinity, 'vert', 0, { ouvertA: true });
         rondVide(c, X(2), y, 'vert');
         c.repere('axe', X.o.x0 - 10, y - 16, X.o.x1 - X.o.x0 + 22, 46, 'tout l’axe sauf 2');
         K.marque('axe');
         c.pause(.4);
-        const b = encadre(c, 'D_f = ]−∞ ; 2[ ∪ ]2 ; +∞[', 60, 320, 24, 'jaune', 'jaune');
+        const b = encadre(c, 'D_f = ]−∞ ; 2[ ∪ ]2 ; +∞[', 60, 324, T(24), 'jaune', 'jaune');
         c.repere('resultat', ...b, 'D_f = ]−∞ ; 2[ ∪ ]2 ; +∞[');
         K.marque('resultat');
         c.pause(.5);
-        const px = 450, y2 = 226;
-        c.rect(px - 14, 112, 304, 174, { couleur: 'orange', arrondi: 10, largeur: 1.5 });
-        c.texte('ln(x − 2) : seulement x > 2', px, 146, { couleur: 'orange', taille: 20 });
-        const X2 = axeNum(c, { x0: px + 6, x1: px + 240, y: y2, vmin: -1, vmax: 5, grads: [[0, '0'], [2, '2'], [4, '4']] });
-        zone(c, X2, 2, Infinity, 'orange', 0, { ouvertA: true });
-        rondVide(c, X2(2), y2, 'orange');
-        c.repere('piege', px - 14, 112, 304, 174, 'le piège : ln(x − 2)');
+        LnLarge.colonne(c, 436, 112, LARGE() ? 1.25 : 1, 436 + DX * .7, 104, () => {
+          const px = 450, y2 = 226;
+          c.rect(px - 14, 112, 304, 174, { couleur: 'orange', arrondi: 10, largeur: 1.5 });
+          c.texte('ln(x − 2) : seulement x > 2', px, 146, { couleur: 'orange', taille: 20 });
+          const X2 = axeNum(c, { x0: px + 6, x1: px + 240, y: y2, vmin: -1, vmax: 5, grads: [[0, '0'], [2, '2'], [4, '4']] });
+          zone(c, X2, 2, Infinity, 'orange', 0, { ouvertA: true });
+          rondVide(c, X2(2), y2, 'orange');
+          c.repere('piege', px - 14, 112, 304, 174, 'le piège : ln(x − 2)');
+        });
         K.marque('piege');
       },
       decrire: {
@@ -202,36 +216,37 @@ MathsTableau.page({
     tri: {
       titre: 'ln a = ln b : le domaine d’abord',
       dessiner(c, K) {
-        K.titre('ln a = ln b : le domaine d’abord');
+        const LL = LnLarge.ouvrir(c), DX = LL - 760;
+        LnLarge.titre(c, K, 'ln a = ln b : le domaine d’abord');
         c.texte('ln(x − 1) + ln(x + 2) = ln 4', 50, 82, { couleur: 'blanc', taille: 27 });
         c.pause(.4);
-        const y = 256, X = axeNum(c, { x0: 80, x1: 650, y, vmin: -4, vmax: 4.4, grads: [[-4, '−4'], [-3, '−3'], [-2, '−2'], [-1, '−1'], [0, '0'], [1, '1'], [2, '2'], [3, '3'], [4, '4']] });
+        const y = 256, X = axeNum(c, { x0: 80, x1: 650 + DX, y, vmin: -4, vmax: 4.4, grads: [[-4, '−4'], [-3, '−3'], [-2, '−2'], [-1, '−1'], [0, '0'], [1, '1'], [2, '2'], [3, '3'], [4, '4']] });
         zone(c, X, 1, Infinity, 'vert', 30, { largeur: 5, alpha: .8 });
         rondVide(c, X(1), y - 30, 'vert');
-        c.texte('x − 1 > 0 : x > 1', X(1) + 12, y - 40, { couleur: 'vert', taille: 17 });
+        c.texte('x − 1 > 0 : x > 1', X(1) + 12, y - 40, { couleur: 'vert', taille: T(17) });
         zone(c, X, -2, Infinity, 'cyan', 62, { largeur: 5, alpha: .8 });
         rondVide(c, X(-2), y - 62, 'cyan');
-        c.texte('x + 2 > 0 : x > −2', X(-2) + 12, y - 72, { couleur: 'cyan', taille: 17 });
+        c.texte('x + 2 > 0 : x > −2', X(-2) + 12, y - 72, { couleur: 'cyan', taille: T(17) });
         K.marque('conditions');
         c.pause(.4);
         zone(c, X, 1, Infinity, 'blanc', 0, { largeur: 8, alpha: .85, ouvertA: true });
         rondVide(c, X(1), y, 'blanc');
-        c.texte('D = ]1 ; +∞[', 50, 130, { couleur: 'jaune', taille: 24 });
+        c.texte('D = ]1 ; +∞[', 50, 134, { couleur: 'jaune', taille: T(24) });
         c.repere('intersection', X(1) - 10, y - 14, X.o.x1 + 10 - X(1) + 10, 28, 'la partie commune ]1 ; +∞[');
         K.marque('intersection');
         c.pause(.4);
-        c.texte('x² + x − 6 = 0 ⇔ x = 2 ou x = −3', 300, 130, { couleur: 'blanc', taille: 22 });
+        c.texte('x² + x − 6 = 0 ⇔ x = 2 ou x = −3', 300 + DX * .3, 134, { couleur: 'blanc', taille: T(22) });
         c.point(X(2), y, 6, 'jaune'); c.point(X(-3), y, 6, 'jaune');
         K.marque('solutions');
         c.pause(.4);
         croix(c, X(-3), y, 'rouge');
-        c.texte('hors de D', X(-3), y + 50, { couleur: 'rouge', taille: 16, align: 'center' });
+        c.texte('hors de D', X(-3), y + 52, { couleur: 'rouge', taille: T(16), align: 'center' });
         c.repere('barre', X(-3) - 16, y - 16, 32, 32, '−3 barré : hors du domaine');
         c.pause(.2);
         c.cercle(X(2), y, 14, { couleur: 'vert', largeur: 2.4 });
         K.marque('tri');
         c.pause(.4);
-        const b = encadre(c, 'S = {2}', 470, 336, 28, 'jaune', 'jaune');
+        const b = encadre(c, 'S = {2}', 470 + DX, 340, T(28), 'jaune', 'jaune');
         c.repere('resultat', ...b, 'S = {2}');
         K.marque('resultat');
       },
@@ -252,17 +267,18 @@ MathsTableau.page({
     inequation: {
       titre: 'Inéquation : ln garde le sens',
       dessiner(c, K) {
-        K.titre('Inéquation : ln garde le sens');
+        const LL = LnLarge.ouvrir(c), DX = LL - 760;
+        LnLarge.titre(c, K, 'Inéquation : ln garde le sens');
         c.texte('ln(2x − 1) < 0', 50, 84, { couleur: 'blanc', taille: 28 });
         c.pause(.4);
-        const y = 264, X = axeNum(c, { x0: 90, x1: 650, y, vmin: -1, vmax: 3, grads: [[-1, '−1'], [0, '0'], [0.5, '½'], [1, '1'], [2, '2'], [3, '3']] });
-        c.texte('domaine : 2x − 1 > 0 ⇔ x > ½', 50, 130, { couleur: 'cyan', taille: 22 });
+        const y = 264, X = axeNum(c, { x0: 90, x1: 650 + DX, y, vmin: -1, vmax: 3, grads: [[-1, '−1'], [0, '0'], [0.5, '½'], [1, '1'], [2, '2'], [3, '3']] });
+        c.texte('domaine : 2x − 1 > 0 ⇔ x > ½', 50, 132, { couleur: 'cyan', taille: T(22) });
         zone(c, X, 0.5, Infinity, 'cyan', 56, { largeur: 5, alpha: .85 });
         rondVide(c, X(0.5), y - 56, 'cyan');
         c.repere('domaine', X(0.5) - 10, y - 70, X.o.x1 + 10 - X(0.5) + 10, 28, 'le domaine x > ½');
         K.marque('domaine');
         c.pause(.4);
-        c.texte('ln(2x − 1) < ln 1 ⇔ 2x − 1 < 1 ⇔ x < 1', 50, 172, { couleur: 'vert', taille: 22 });
+        c.texte('ln(2x − 1) < ln 1 ⇔ 2x − 1 < 1 ⇔ x < 1', 50, 178, { couleur: 'vert', taille: T(22) });
         zone(c, X, -Infinity, 1, 'vert', 30, { largeur: 5, alpha: .85 });
         rondVide(c, X(1), y - 30, 'vert');
         K.marque('resoudre');
@@ -272,7 +288,7 @@ MathsTableau.page({
         c.repere('intersection', X(0.5) - 12, y - 14, X(1) - X(0.5) + 24, 28, ']½ ; 1[');
         K.marque('intersection');
         c.pause(.4);
-        const b = encadre(c, 'S = ]½ ; 1[', 470, 336, 28, 'jaune', 'jaune');
+        const b = encadre(c, 'S = ]½ ; 1[', 470 + DX, 340, T(28), 'jaune', 'jaune');
         c.repere('resultat', ...b, 'S = ]½ ; 1[');
         K.marque('resultat');
       },
@@ -292,7 +308,8 @@ MathsTableau.page({
     produit_nul: {
       titre: 'Produit nul avec ln',
       dessiner(c, K) {
-        K.titre('Produit nul avec ln');
+        const LL = LnLarge.ouvrir(c), DX = LL - 760;
+        LnLarge.titre(c, K, 'Produit nul avec ln');
         c.texte('2x ln x − 2x = 0 sur ]0 ; +∞[', 50, 84, { couleur: 'blanc', taille: 27 });
         c.pause(.4);
         c.texte('2x(ln x − 1) = 0', 50, 132, { couleur: 'blanc', taille: 25 });
@@ -301,22 +318,22 @@ MathsTableau.page({
         c.texte('x = 0 ou ln x = 1 ⇔ x = 0 ou x = e', 50, 178, { couleur: 'blanc', taille: 25 });
         K.marque('deux');
         c.pause(.4);
-        const y = 262, X = axeNum(c, { x0: 90, x1: 650, y, vmin: -1, vmax: 4, grads: [[-1, '−1'], [0, '0'], [1, '1'], [2, '2'], [3, '3'], [4, '4']] });
+        const y = 262, X = axeNum(c, { x0: 90, x1: 650 + DX, y, vmin: -1, vmax: 4, grads: [[-1, '−1'], [0, '0'], [1, '1'], [2, '2'], [3, '3'], [4, '4']] });
         zone(c, X, 0, Infinity, 'vert', 0, { ouvertA: true });
         rondVide(c, X(0), y, 'vert');
-        c.texte('e', X(Math.E), y - 24, { couleur: 'jaune', taille: 19, align: 'center' });
+        c.texte('e', X(Math.E), y - 24, { couleur: 'jaune', taille: T(19), align: 'center' });
         c.point(X(Math.E), y, 5, 'jaune');
         c.repere('axe', X(0) - 10, y - 16, X.o.x1 + 10 - X(0) + 10, 32, ']0 ; +∞[ sur l’axe');
         K.marque('axe');
         c.pause(.4);
         croix(c, X(0), y, 'rouge');
-        c.texte('0 ∉ ]0 ; +∞[', X(0), y + 54, { couleur: 'rouge', taille: 17, align: 'center' });
+        c.texte('0 ∉ ]0 ; +∞[', X(0), y + 56, { couleur: 'rouge', taille: T(17), align: 'center' });
         c.repere('barre', X(0) - 16, y - 16, 32, 32, '0 barré : hors du domaine');
         c.pause(.2);
         c.cercle(X(Math.E), y, 15, { couleur: 'vert', largeur: 2.4 });
         K.marque('tri');
         c.pause(.4);
-        const b = encadre(c, 'S = {e}', 470, 336, 28, 'jaune', 'jaune');
+        const b = encadre(c, 'S = {e}', 470 + DX, 340, T(28), 'jaune', 'jaune');
         c.repere('resultat', ...b, 'S = {e}');
         K.marque('resultat');
       },

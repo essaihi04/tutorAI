@@ -23,7 +23,11 @@
 const { fr, bulle, protocole } = window.Tableau;
 const $ = id => document.getElementById(id);
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
-const LAM = 4, PX = 40, XS = 40, XM = 100, YC = 160, AMP = 38, NVIS = 0.45;   // λ en cm, px par cm, fréquence de l'image (Hz)
+const LAM = 4, YC = 160, AMP = 38, NVIS = 0.45;   // λ en cm, fréquence de l'image (Hz)
+/* Tableau large (15 novembre 2026) : le cadre prend le format du tableau (scene.L de 760 à 1292) ; la corde s'étire
+ * avec lui (PX px par cm, 40 à 68), les textes placés en x suivent (H), ≥ 18 px à l'écran. */
+let PX = 40, XS = 40, XM = 100, KX = 1;
+const H = x => x * KX;
 const P = { d_cm: 10 };
 const T = { lambda: 1.0, distance: 2.0, calcul: 3.2, verdict: 4.2 };
 const TFIN = 4.6;
@@ -61,9 +65,11 @@ function peindreCorde(ctx, f, x0, x1) {
 
 function dessiner(c) {
   scene.cadre(19);
+  KX = scene.L / 760; PX = 40 * KX; XS = 40 * KX; XM = 100 * KX;
+  if (scene.L >= 1000 && c.echelle >= 0.8) c.tailleMin = 18;   // tableau bas (bande de formules) : 15 px suffit, le texte est déjà grand dans le cadre
   c.texte('S', XS - 22, YC + 6, { couleur: 'faible', taille: 16 });
   c.direct(() => {
-    peindreCorde(c.ctx, y, XS, 720);
+    peindreCorde(c.ctx, y, XS, H(720));
     for (const [nom, x, coul] of [['M', XM, 'rouge'], ['P', XP(), 'orange']]) {
       const yy = y(x), s = vitesse(x);
       c.point(x, yy, 6, coul);
@@ -89,22 +95,22 @@ function dessiner(c) {
         c.ligne(x, 262, x, 282, { couleur: 'cyan', largeur: 1.8 });
         c.texte(`${k} λ`, x, 300, { couleur: 'cyan', taille: 15, align: 'center' });
       }
-      c.texte(`d / λ = ${nb(P.d_cm)} / 4 = ${nb(rapport())}`, 120, 346, { couleur: 'blanc', taille: 19 });
-      c.repere('calcul', 112, 322, 360, 32, 'le calcul de d / λ');
+      c.texte(`d / λ = ${nb(P.d_cm)} / 4 = ${nb(rapport())}`, H(120), 346, { couleur: 'blanc', taille: 19 });
+      c.repere('calcul', H(112), 322, H(360), 32, 'le calcul de d / λ');
     }
     if (vu('verdict')) {
       const v = verdict();
-      c.texte(v.detail, 120, 380, { couleur: v.couleur, taille: 17 });
-      c.texte(`→ M et P vibrent ${v.mot}`, 120, 408, { couleur: v.couleur, taille: 19 });
-      c.repere('verdict', 112, 360, 520, 56, 'la conclusion');
+      c.texte(v.detail, H(120), 380, { couleur: v.couleur, taille: 17 });
+      c.texte(`→ M et P vibrent ${v.mot}`, H(120), 408, { couleur: v.couleur, taille: 19 });
+      c.repere('verdict', H(112), 360, H(520), 56, 'la conclusion');
     }
-    c.texte('Les flèches : le sens où va chaque point', 748, 30, { couleur: 'faible', taille: 14, align: 'right' });
+    c.texte('Les flèches : le sens où va chaque point', H(748), 30, { couleur: 'faible', taille: 14, align: 'right' });
   });
   return c.fin();
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, dessiner);
+const scene = window.OndesTableau.Scene(canvas, dessiner, { large: true });
 scene.avancer = dt => {
   if (S.pause || !(S.running || S.fait)) return false;
   S.phase += dt;

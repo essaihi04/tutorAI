@@ -56,6 +56,25 @@ const NOEUDS = [
     lignes: ['n dépend de la fréquence', 'prisme : le violet le plus dévié'],
     phrase: 'Un milieu est dispersif si la célérité de la lumière dépend de sa fréquence : le prisme sépare la lumière blanche, le violet est le plus dévié.' },
 ];
+/* Agrandissement du 15 novembre 2026 : la carte s'étale sur toute la largeur du tableau (scene.L, 760 à 1292) ;
+ * quand le tableau est large, cadres et textes grandissent de K (les positions d'origine sont gardées dans `base`). */
+[CENTRE, ...NOEUDS].forEach(n => { n.base = { x: n.x, y: n.y, w: n.w, h: n.h }; });
+let K = 1;
+const LH = () => Math.max(16 * K, 15 / Math.max(.1, scene.s || 1) * 1.08);   // interligne des lignes d'une branche
+function disposer(L) {
+  const kx = (L - 40) / 720;
+  K = L >= 1000 ? 1.3 : 1;
+  const kw = L >= 1000 ? 1.45 : 1;
+  [CENTRE, ...NOEUDS].forEach(n => {
+    const b = n.base;
+    n.x = L / 2 + (b.x - 380) * kx; n.w = b.w * kw; n.h = b.h * K;
+    // petit canvas : le texte ne descend pas sous 15 px à l'écran, les lignes s'espacent et le cadre grandit d'autant
+    if (n.lignes) n.h = Math.max(n.h, (38 * K + n.lignes.length * LH()) - 4);
+    n.y = 212 + (b.y - 212) * (L >= 1000 ? .97 : 1);
+  });
+  // en haut et en bas, rien ne sort du cadre
+  NOEUDS.forEach(n => { n.y = Math.max(n.h / 2 + 6, Math.min(420 - n.h / 2 - 6, n.y)); });
+}
 const ANNEAUX = { non_acquis: ['rouge', 'à reprendre'], partiel: ['orange', 'à revoir'] };
 const AVANT = -1e9;   // instant d'un élément déjà dit : écrit d'un coup
 
@@ -77,8 +96,8 @@ function etat(c, comps, x, y, w, h) {
     if (st && ANNEAUX[st]) {
       const [coul, etiq] = ANNEAUX[st];
       c.rect(x - 6, y - 6, w + 12, h + 12, { couleur: coul, arrondi: 16, largeur: 2, pointille: [6, 6] });
-      c.texte(etiq, x + w - 4, y - 9, { couleur: coul, taille: 12, align: 'right' });
-    } else if (st === 'acquis') c.texte('✓', x + w - 14, y + 14, { couleur: 'vert', taille: 18 });
+      c.texte(etiq, x + w - 4, y - 9, { couleur: coul, taille: 12 * K, align: 'right' });
+    } else if (st === 'acquis') c.texte('✓', x + w - 14 * K, y + 14 * K, { couleur: 'vert', taille: 18 * K });
   });
 }
 
@@ -92,26 +111,27 @@ function branche(c, n) {
   c.courbe(u => [(1 - u) * (1 - u) * a[0] + 2 * (1 - u) * u * m[0] + u * u * b[0], (1 - u) * (1 - u) * a[1] + 2 * (1 - u) * u * m[1] + u * u * b[1]], 24, { couleur: 'faible', largeur: 2 });
   const x = n.x - n.w / 2, y = n.y - n.h / 2;
   c.rect(x, y, n.w, n.h, { couleur: n.couleur, arrondi: 14, largeur: 2.4 });
-  c.texte(n.titre, n.x, y + 20, { couleur: n.couleur, taille: 16, align: 'center', max: n.w - 16, duree: .8 });
-  n.lignes.forEach((l, k) => c.texte(l, n.x, y + 38 + k * 16, { couleur: 'blanc', taille: 13, align: 'center', max: n.w - 14, alpha: .92, duree: 1 }));
+  c.texte(n.titre, n.x, y + 20 * K, { couleur: n.couleur, taille: 16 * K, align: 'center', max: n.w - 16, duree: .8 });
+  n.lignes.forEach((l, k) => c.texte(l, n.x, y + 38 * K + k * LH(), { couleur: 'blanc', taille: 13 * K, align: 'center', max: n.w - 14, alpha: .92, duree: 1 }));
   c.repere(n.id, x - 6, y - 6, n.w + 12, n.h + 12, n.titre);
   etat(c, n.comps, x, y, n.w, n.h);
   if (S.choisi === n.id) c.direct(() => c.rect(x - 3, y - 3, n.w + 6, n.h + 6, { couleur: 'blanc', arrondi: 15, largeur: 1.2, alpha: .6 }));
 }
 
 function dessiner(c) {
+  disposer(scene.L);
   const x = CENTRE.x - CENTRE.w / 2, y = CENTRE.y - CENTRE.h / 2;
   if (S.def === AVANT) c.cur = AVANT;   // déjà dit (saut ou retour en arrière) : le centre est écrit d'un coup
   c.rect(x, y, CENTRE.w, CENTRE.h, { couleur: 'jaune', arrondi: 18, largeur: 3 });
-  c.texte('La lumière :', CENTRE.x, y + 27, { couleur: 'jaune', taille: 20, align: 'center', gras: true });
-  c.texte('une onde', CENTRE.x, y + 50, { couleur: 'jaune', taille: 20, align: 'center', gras: true });
+  c.texte('La lumière :', CENTRE.x, y + 27 * K, { couleur: 'jaune', taille: 20 * K, align: 'center', gras: true });
+  c.texte('une onde', CENTRE.x, y + 50 * K, { couleur: 'jaune', taille: 20 * K, align: 'center', gras: true });
   c.repere('centre', x, y, CENTRE.w, CENTRE.h, 'le centre : la lumière, une onde');
   c.repere('definition', x, y, CENTRE.w, CENTRE.h, 'la diffraction prouve l’aspect ondulatoire de la lumière');
   const apres = c.cur;   // fin du titre du centre
   if (S.def != null) {
     c.depuis(S.def);
     ['la diffraction prouve', 'son aspect ondulatoire'].forEach((l, k) =>
-      c.texte(l, CENTRE.x, y + 72 + k * 16, { couleur: 'blanc', taille: 13, align: 'center', max: CENTRE.w - 16, alpha: .92, duree: 1.1 }));
+      c.texte(l, CENTRE.x, y + (72 + k * 16) * K, { couleur: 'blanc', taille: 13 * K, align: 'center', max: CENTRE.w - 16, alpha: .92, duree: 1.1 }));
     etat(c, CENTRE.comps, x, y, CENTRE.w, CENTRE.h);
     if (S.choisi === 'centre') c.direct(() => c.rect(x - 3, y - 3, CENTRE.w + 6, CENTRE.h + 6, { couleur: 'blanc', arrondi: 19, largeur: 1.2, alpha: .6 }));
   }
@@ -121,7 +141,7 @@ function dessiner(c) {
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(71); dessiner(c); return c.fin(); });
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(71); dessiner(c); return c.fin(); }, { large: true });
 const maintenant = () => (performance.now() - scene.ouvert) / 1000;
 const lisible = s => String(s).replace(/_([0-3])/g, (m, d) => '₀₁₂₃'[d]);
 let horloge = 0;

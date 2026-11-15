@@ -97,48 +97,88 @@ function paragraphe(c, texte, x, y, taille, max, o = {}) {
   return y;
 }
 
-// Quatre colonnes, deux rangées de blocs : tout au-dessus de y = 360 (la barre du lecteur couvre le bas).
-const COL = [{ x: 14, w: 170 }, { x: 200, w: 170 }, { x: 386, w: 170 }, { x: 572, w: 170 }], HAUT = 50, HBLOC = 154;
+/* Quatre colonnes, deux rangées de blocs sur TOUTE la largeur du tableau (15 novembre 2026, « cases serrées, petits textes
+ * qui se chevauchent ») : la scène est `large` (scene.L de 760 à 1292) ; les colonnes suivent scene.L et le texte prend la
+ * plus grande taille (facteur fz) pour laquelle les huit blocs tiennent dans leur case, jamais sous 15 px à l'écran. */
+let COL = [{ x: 14, w: 170 }, { x: 200, w: 170 }, { x: 386, w: 170 }, { x: 572, w: 170 }], HAUT = 50, HBLOC = 154, FZ = 1, LARG = 760;
+const BAS = 414;
 const place = i => ({ x: COL[i % 4].x, w: COL[i % 4].w, y0: HAUT + Math.floor(i / 4) * HBLOC });
+/** Taille réellement écrite (le kit relève les petits textes à 15 px d'écran). */
+const tEff = (c, t) => (c.echelle && c.tailleMin ? Math.max(t, c.tailleMin / c.echelle) : t);
+function disposer(c, Lg) {
+  const marge = 12, gap = 18, w = (Lg - 2 * marge - 3 * gap) / 4;
+  COL = [0, 1, 2, 3].map(j => ({ x: marge + 7 + j * (w + gap), w: w - 14 }));
+  HBLOC = (BAS - HAUT) / 2;
+  // le plus grand facteur de taille pour lequel tous les blocs tiennent dans leur case
+  let fz = 1;
+  for (let essai = 2.4; essai >= 1; essai -= 0.05) {
+    if (BLOCS.every((b, i) => hauteurBloc(c, b, COL[i % 4].w, essai) <= HBLOC - 14)) { fz = essai; break; }
+  }
+  FZ = fz; LARG = Lg;
+}
+/** Tailles du bloc pour le facteur fz. */
+const tailles = (c, fz) => ({ titre: tEff(c, 14 * fz), formule: 13 * fz, def: tEff(c, 11.5 * fz), att: tEff(c, 11 * fz) });
+/** Hauteur d'un bloc (sans le dessiner). */
+function hauteurBloc(c, b, w, fz) {
+  const t = tailles(c, fz);
+  let y = t.titre + t.titre * 0.3 + 4;
+  if (b.formules) {
+    let fx = 0, rangs = 1;
+    for (const f of b.formules) {
+      const tf = tEff(c, Math.max(10, Math.min(t.formule, t.formule * (w - 14) / L(c, f, t.formule))));
+      const l = Math.min(w, L(c, f, tf) + 14);
+      if (fx > 0 && fx + l > w) { fx = 0; rangs++; }
+      fx += l + 7;
+    }
+    y += rangs * (t.formule * 1.62) + 2;
+  }
+  y += lignes(c, b.def, t.def, w).length * t.def * 1.2;
+  y += lignes(c, b.attention, t.att, w - t.att * 1.3).length * t.att * 1.2;
+  return y;
+}
 function bloc(c, b, i) {
-  const { x, w, y0 } = place(i), enLumiere = S.focus === b.id, st = statut(b);
-  const cx = x - 6, cy = y0 - 6, cw = w + 12, ch = HBLOC - 6;
+  const { x, w, y0 } = place(i), enLumiere = S.focus === b.id, st = statut(b), t = tailles(c, FZ);
+  const cx = x - 7, cy = y0 - 6, cw = w + 14, ch = HBLOC - 8;
   // Le cadre de lumière et l'état de l'élève apparaissent d'un coup : ils ne décalent pas l'écriture du bloc.
+  const ts = tEff(c, 11 * FZ), lst = st && STATUTS[st] ? L(c, STATUTS[st][0], ts) + 8 : 0;
   c.direct(() => {
     if (enLumiere) c.rect(cx, cy, cw, ch, { couleur: 'jaune', arrondi: 10, largeur: 1.6, alpha: .7 });
     else if (st && STATUTS[st] && st !== 'acquis') c.rect(cx, cy, cw, ch, { couleur: STATUTS[st][1], arrondi: 10, largeur: 1.4, pointille: [5, 6], alpha: .8 });
-    if (st === 'acquis') c.texte('✓', x + w - 10, y0 + 12, { couleur: 'vert', taille: 15 });
-    else if (st && STATUTS[st]) c.texte(STATUTS[st][0], x + w, y0 + 12, { couleur: STATUTS[st][1], taille: 11, align: 'right' });
+    if (st === 'acquis') c.texte('✓', x + w - 10, y0 + t.titre * 0.9, { couleur: 'vert', taille: tEff(c, 15 * FZ) });
+    else if (st && STATUTS[st]) c.texte(STATUTS[st][0], x + w, y0 + t.titre * 0.9, { couleur: STATUTS[st][1], taille: ts, align: 'right' });
   });
-  let y = y0 + 12;
-  c.texte(b.titre, x, y, { couleur: 'jaune', taille: 14, max: st ? w - 62 : w });
-  y += 17;
+  let y = y0 + t.titre * 0.9;
+  c.texte(b.titre, x, y, { couleur: 'jaune', taille: t.titre, max: st ? w - lst - 6 : w });
+  y += t.titre * 0.3 + 4;
   if (b.formules) {
     // formules encadrées, à la ligne quand la suivante ne tient plus
-    let fx = x;
+    let fx = x; y += t.formule * 1.05;
     for (const f of b.formules) {
-      const t = Math.max(10, Math.min(13, 13 * (w - 14) / L(c, f, 13)));
-      const l = Math.min(w, L(c, f, t) + 14);
-      if (fx > x && fx + l > x + w) { fx = x; y += 21; }
-      c.rect(fx, y - 13, l, 19, { couleur: 'faible', arrondi: 6, largeur: 1.2, duree: .25 });
-      ecrire(c, f, fx + 7, y + 1, { couleur: 'jaune', taille: t });
+      const tf = tEff(c, Math.max(10, Math.min(t.formule, t.formule * (w - 14) / L(c, f, t.formule))));
+      const l = Math.min(w, L(c, f, tf) + 14);
+      if (fx > x && fx + l > x + w) { fx = x; y += t.formule * 1.62; }
+      c.rect(fx, y - tf - 1, l, tf * 1.46, { couleur: 'faible', arrondi: 6, largeur: 1.2, duree: .25 });
+      ecrire(c, f, fx + 7, y, { couleur: 'jaune', taille: tf });
       fx += l + 7;
     }
-    y += 20;
+    y += t.formule * 0.57 + 2;
   }
-  y = paragraphe(c, b.def, x, y, 11.5, w, { couleur: 'blanc' });
-  c.texte('⚠', x, y, { couleur: 'orange', taille: 11 });
-  y = paragraphe(c, b.attention, x + 14, y, 11, w - 14, { couleur: 'orange', alpha: .92 });
-  if (y - 11 > cy + ch && !window.__debordeBlocs.includes(b.id)) window.__debordeBlocs.push(b.id);
+  y += t.def;
+  y = paragraphe(c, b.def, x, y, t.def, w, { couleur: 'blanc' });
+  c.texte('⚠', x, y, { couleur: 'orange', taille: t.att });
+  y = paragraphe(c, b.attention, x + t.att * 1.3, y, t.att, w - t.att * 1.3, { couleur: 'orange', alpha: .92 });
+  if (y - t.att > cy + ch && !window.__debordeBlocs.includes(b.id)) window.__debordeBlocs.push(b.id);
   c.repere(b.id, cx, cy, cw, ch, b.titre.replace(/^\d+ · /, ''));
 }
 
 function dessinerFiche(c) {
   if (S.apparu.some(a => a === AVANT)) c.cur = AVANT;   // la voix est déjà passée : le titre est écrit d'un coup
-  c.texte('Ce qu’il faut retenir : nombres complexes (1)', 18, 30, { couleur: 'jaune', taille: 22 });
-  c.texte('définition · formule · ⚠ piège', 742, 28, { couleur: 'faible', taille: 12, align: 'right' });
-  c.ligne(18, 38, 742, 38, { couleur: 'tresfaible', largeur: 1.4 });
-  c.repere('fiche', 8, 40, 744, 316, 'la fiche du chapitre');
+  const Lg = scene.L || 760;
+  if (Lg !== LARG || c.echelle !== disposer.e) { disposer(c, Lg); disposer.e = c.echelle; }
+  c.texte('Ce qu’il faut retenir : nombres complexes (1)', 18, 30, { couleur: 'jaune', taille: 24 });
+  c.texte('définition · formule · ⚠ piège', Lg - 18, 28, { couleur: 'faible', taille: tEff(c, 15), align: 'right' });
+  c.ligne(18, 38, Lg - 18, 38, { couleur: 'tresfaible', largeur: 1.4 });
+  c.repere('fiche', 8, 40, Lg - 16, BAS - 40, 'la fiche du chapitre');
   const debut = c.cur;
   let fin = c.cur;
   BLOCS.forEach((b, i) => {
@@ -150,39 +190,42 @@ function dessinerFiche(c) {
 }
 
 function dessinerLacunes(c) {
-  c.texte('Ta page : ce qu’il te reste à retravailler', 22, 30, { couleur: 'jaune', taille: 22 });
-  c.ligne(22, 38, 740, 38, { couleur: 'tresfaible', largeur: 1.4 });
-  let y = 70;
+  const Lg = scene.L || 760, W = Lg - 60;
+  c.texte('Ta page : ce qu’il te reste à retravailler', 22, 30, { couleur: 'jaune', taille: 24 });
+  c.ligne(22, 38, Lg - 20, 38, { couleur: 'tresfaible', largeur: 1.4 });
+  let y = 74;
   const lac = S.lacunes, acq = S.acquis || [];
   if (!lac) {
     c.texte('Pas encore de réponses notées.', 22, y, { couleur: 'faible', taille: 18 }); y += 28;
-    paragraphe(c, 'Réponds aux questions du cours : ton bilan par compétence s’écrira ici, et le professeur y reviendra en mode libre.', 22, y, 16, 700, { couleur: 'faible' });
+    paragraphe(c, 'Réponds aux questions du cours : ton bilan par compétence s’écrira ici, et le professeur y reviendra en mode libre.', 22, y, 18, W, { couleur: 'faible' });
     return;
   }
   if (!lac.length) {
     c.texte('✓ Toutes les compétences évaluées sont acquises. Bravo !', 22, y, { couleur: 'vert', taille: 20 }); y += 30;
   } else {
-    c.texte('À reprendre en mode libre, avec le professeur :', 22, y, { couleur: 'orange', taille: 15 }); y += 24;
+    c.texte('À reprendre en mode libre, avec le professeur :', 22, y, { couleur: 'orange', taille: 18 }); y += 28;
     const y0 = y - 18;
     for (const l of lac.slice(0, 5)) {
       const [etiq, coul] = STATUTS[l.statut] || STATUTS.non_acquis;
-      c.texte(l.statut === 'partiel' ? '⟳' : '✗', 22, y, { couleur: coul, taille: 17 });
-      y = paragraphe(c, `${l.label} — ${etiq}`, 42, y, 16, 690, { couleur: 'blanc' });
-      if (l.reprendre_avec && l.reprendre_avec.length) y = paragraphe(c, 'reprendre avec ' + l.reprendre_avec.join(', puis '), 42, y, 13, 690, { couleur: coul, alpha: .85 });
+      c.texte(l.statut === 'partiel' ? '⟳' : '✗', 22, y, { couleur: coul, taille: 19 });
+      y = paragraphe(c, `${l.label} — ${etiq}`, 44, y, 18, W - 20, { couleur: 'blanc' });
+      if (l.reprendre_avec && l.reprendre_avec.length) y = paragraphe(c, 'reprendre avec ' + l.reprendre_avec.join(', puis '), 44, y, tEff(c, 15), W - 20, { couleur: coul, alpha: .85 });
       y += 4;
     }
-    if (lac.length > 5) { c.texte(`… et ${lac.length - 5} autre(s)`, 42, y, { couleur: 'faible', taille: 13 }); y += 18; }
-    c.repere('lacunes', 18, y0, 720, y - y0, 'ce qu’il reste à retravailler');
+    if (lac.length > 5) { c.texte(`… et ${lac.length - 5} autre(s)`, 44, y, { couleur: 'faible', taille: tEff(c, 15) }); y += 20; }
+    c.repere('lacunes', 18, y0, W + 20, y - y0, 'ce qu’il reste à retravailler');
   }
   if (acq.length) {
-    y += 6; c.texte('✓ Acquis', 22, y, { couleur: 'vert', taille: 15 }); y += 20;
-    paragraphe(c, acq.join(' · '), 22, y, 14, 700, { couleur: 'vert', alpha: .85 });
+    y += 6; c.texte('✓ Acquis', 22, y, { couleur: 'vert', taille: 18 }); y += 24;
+    paragraphe(c, acq.join(' · '), 22, y, 16, W, { couleur: 'vert', alpha: .85 });
   }
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(41 + S.page); if (S.page === 1) dessinerFiche(c); else dessinerLacunes(c); return c.fin(); });
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(41 + S.page); if (S.page === 1) dessinerFiche(c); else dessinerLacunes(c); return c.fin(); }, { large: true });
 const maintenant = () => (performance.now() - scene.ouvert) / 1000;
+// la police de craie arrive après la première image : les tailles de la fiche sont recalculées avec les vraies largeurs
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { disposer.e = null; scene.sale = true; });
 
 /* Page n ; `focus` = le bloc que la voix dit maintenant ; `tout` = toute la fiche d'un coup. */
 function aller(n, par, focus, tout) {

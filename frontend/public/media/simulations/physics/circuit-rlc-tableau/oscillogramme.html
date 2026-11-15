@@ -93,8 +93,43 @@ const fms = v => (Math.abs(v - Math.round(v)) < .1 ? fx(Math.round(v), 0) : fr(v
 
 /* ── Géométrie (cadre 760 × 420) ───────────────────────────────────────── */
 const CAS = { x: 12, y: 44, w: 376, h: 316 }, ECR = { x: 30, y: 56, w: 340, h: 272 };
-const RL = { x: 400, y: 44, w: 352, h: 312 }, LX = RL.x + 10, LW = RL.w - 20;
+const RL = { x: 400, y: 44, w: 352, h: 312 };
+let LX = RL.x + 10, LW = RL.w - 20;
 const RUL = { x0: 432, x1: 728, y: 396 };
+/* Agrandissement du 15 novembre 2026 (« la simulation n'occupe qu'une bande étroite, les textes sont minuscules ») :
+ * le cadre prend le format du tableau (LL de 760 à 1596, hauteur 420). Tableau large (LL ≥ 1000, écran d'ordinateur ;
+ * vues à un écran) : l'oscilloscope s'élargit (même hauteur, carreaux plus larges), la lecture passe sur deux colonnes
+ * à droite, écrite 1,3 fois plus grand, la règle de la poignée R dessous. Sinon : la disposition d'origine, 760 × 420. */
+let LL = 760, LARGE = false, KT = 1, COLS = null;
+function disposer(Lv) {
+  LL = Lv >= 1000 && S.vue !== 'comparer' ? Lv : 760; LARGE = LL >= 1000;
+  if (!LARGE) {
+    Object.assign(CAS, { w: 376 }); Object.assign(ECR, { w: 340 }); Object.assign(RL, { x: 400, w: 352 }); Object.assign(RUL, { x0: 432, x1: 728 });
+    LX = RL.x + 10; LW = RL.w - 20; KT = 1; COLS = null; return;
+  }
+  const gw = Math.round(Math.min(600, LL * .46));
+  Object.assign(CAS, { w: gw }); Object.assign(ECR, { w: gw - 36 });
+  Object.assign(RL, { x: CAS.x + gw + 14, w: LL - 8 - (CAS.x + gw + 14) });
+  Object.assign(RUL, { x0: RL.x + 40, x1: RL.x + RL.w - 40 });
+  const cw = (RL.w - 34) / 2;
+  KT = 1.3; LX = RL.x + 10; LW = cw; COLS = { xa: RL.x + 10, xb: RL.x + 24 + cw, cw };
+}
+/** Où s'écrit la ligne de lecture prévue à la hauteur y (cadre 760) : [x, y, largeur max]. */
+const COUPE = [240, 252, 1.6, 2];
+function ouLire(y) {
+  if (!LARGE) return [LX, y, LW];
+  const [s, , fa, fb] = COUPE, y1 = S.vue === 'periodique' ? 236 : 252;
+  return y < s ? [COLS.xa, 70 + (y - 68) * fa, COLS.cw] : [COLS.xb, 70 + (y - y1) * fb, COLS.cw];
+}
+/** Le rectangle (repère) des lignes de lecture entre y et y + h : il suit la colonne de son milieu. */
+function rectLire(y, h, m = 4) {
+  if (!LARGE) return [LX - m, y, LW + 2 * m, h];
+  const a = y + h / 2 < COUPE[0], f = a ? COUPE[2] : COUPE[3], y0 = a ? 68 : (S.vue === 'periodique' ? 236 : 252);
+  const ya = Math.max(46, 70 + (y - y0) * f - 4), yb = Math.min(356, 70 + (y + h - y0) * f);
+  return [(a ? COLS.xa : COLS.xb) - m, ya, COLS.cw + 2 * m, yb - ya];
+}
+/** Un cadre jaune autour de la ligne écrite en y (taille t) : [x, y haut, hauteur]. */
+const autourDe = (y, t) => { const [x, yy] = ouLire(y); return [x - 5, yy - (t + 2) * KT, (t + 10) * KT]; };
 const xR = R => RUL.x0 + Math.sqrt(clamp(R, 0, 2000) / 2000) * (RUL.x1 - RUL.x0);
 const Rx = x => Math.pow(clamp((x - RUL.x0) / (RUL.x1 - RUL.x0)), 2) * 2000;
 const PX = (e, t) => e.x + t / 20 * e.w;
@@ -103,7 +138,7 @@ const PETITS = [0, 1, 2].map(k => { const x = 14 + k * 249; return { cas: { x, y
 // comparer : à gauche périodique, au milieu pseudo-périodique, à droite apériodique (l’amortissement augmente vers la droite)
 const PETIT = { periodique: { ...PETITS[0], Rt: 0, titre: 'R + r = 0 (LC idéal)' }, pseudo: { ...PETITS[1], Rt: 20, titre: 'R + r = 20 Ω' }, aperiodique: { ...PETITS[2], Rt: 1010, titre: 'R = 1 kΩ' } };
 const marque = (c, nom) => { MM[nom] = c.cur; };
-const lire = (c, y, s, o = {}) => c.texte(s, LX, y, { couleur: 'blanc', taille: 16, max: LW, duree: Math.max(.3, s.length / 30), ...o });
+const lire = (c, y, s, o = {}) => { const [x, yy, mx] = ouLire(y); return c.texte(s, x, yy, { couleur: 'blanc', duree: Math.max(.3, s.length / 30), ...o, taille: (o.taille ?? 16) * KT, max: Math.min(mx, o.max ?? mx) }); };
 
 /** Une phase de durée D (s) : renvoie la part écoulée (0 → 1) ; tant qu’elle n’est pas finie, la scène se redessine. */
 function phase(c, D) {
@@ -155,7 +190,7 @@ function peindreTrace(c, e, Rt, f, o = {}) {
 
 function dessiner(c) {
   scene.cadre(37); MM = {}; S.anneauR = null; S.spot = null;
-  c.texte(`Oscillogramme de u_C(t) : ${titre()}`, 14, 28, { couleur: 'cyan', taille: 19, max: 730, duree: .8 });
+  c.texte(`Oscillogramme de u_C(t) : ${titre()}`, 14, 28, { couleur: 'cyan', taille: 19 * KT, max: LL - 30, duree: .8 });
   if (S.vue === 'comparer') vueComparer(c); else vueSimple(c);
   c.pause(.8); marque(c, 'fin');
   if (AVEC_R(S.vue)) poignee(c);
@@ -250,7 +285,7 @@ function vuePseudo(c, Rt) {
     c.texte('T/2, pas T', xc + 8, yb + 5, { couleur: 'blanc', taille: 14 });
     lire(c, 256, `du 1er au ${n + 1}e sommet : ${n === 1 ? '' : n}T ≈ ${fms(n * T)} ms`, { couleur: 'blanc', taille: 15 });
     lire(c, 282, `donc T ≈ ${fms(T)} ms`, { couleur: 'blanc', taille: 18 });
-    c.rect(LX - 5, 262, 150, 28, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+    { const [x, y, h] = autourDe(282, 18); c.rect(x, y, 150 * KT, h, { couleur: 'jaune', largeur: 1.5, arrondi: 6 }); }
     lire(c, 306, 'sommet → creux suivant : T/2, pas T', { couleur: 'faible', taille: 14 });
   } else lire(c, 256, 'pas de période à mesurer', { couleur: 'faible', taille: 15 });
   marque(c, 'mesure_nT');
@@ -287,7 +322,7 @@ function vueAperiodique(c, Rt) {
   lire(c, 274, 'retour le plus rapide sans oscillation', { couleur: 'rouge', taille: 15 });
   lire(c, 296, '(courbe en pointillés)', { couleur: 'faible', taille: 14 });
   lire(c, 326, 'régime critique : la frontière', { couleur: 'blanc', taille: 17 });
-  c.rect(LX - 5, 308, 236, 28, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  { const [x, y, h] = autourDe(326, 17); c.rect(x, y, Math.min(LW + 10, 236 * KT), h, { couleur: 'jaune', largeur: 1.5, arrondi: 6 }); }
   sousEcran(c, 'pointillés (300 Ω) : la frontière', 1, { taille: 15, couleur: 'faible' });
   marque(c, 'frontiere');
 }
@@ -303,7 +338,7 @@ function vueCritique(c, Rt) {
     lire(c, 198, 'retour le plus rapide', { couleur: 'blanc' });
     lire(c, 220, 'sans oscillation', { couleur: 'blanc' });
     lire(c, 252, 'régime critique : la frontière', { couleur: 'blanc', taille: 17 });
-    c.rect(LX - 5, 234, 236, 28, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+    { const [x, y, h] = autourDe(252, 17); c.rect(x, y, Math.min(LW + 10, 236 * KT), h, { couleur: 'jaune', largeur: 1.5, arrondi: 6 }); }
   } else {
     lire(c, 198, `R = ${fR(S.R.critique)} : ${NOM_REGIME[reg]}`, { couleur: 'blanc', taille: 15 });
     lire(c, 220, 'la frontière est vers R ≈ 300 Ω', { couleur: 'blanc', taille: 15 });
@@ -349,7 +384,7 @@ function poignee(c) {
       const x = xR(v); c.ligne(x, RUL.y - 4, x, RUL.y + 4, { couleur: 'faible', largeur: 1.3 });
       c.texte(s, x, RUL.y + 17, { couleur: 'faible', taille: 12, align: 'center' });
     }
-    c.texte(`poignée R = ${fR(R)} (R + r = ${fR(R + r)})`, RL.x + 10, RUL.y - 16, { couleur: 'blanc', taille: 15, max: RL.w - 20 });
+    c.texte(`poignée R = ${fR(R)} (R + r = ${fR(R + r)})`, RL.x + 10, RUL.y - 16, { couleur: 'blanc', taille: 15 * KT, max: RL.w - 20 });
     c.cercle(xR(R), RUL.y, 8, { couleur: 'rose', largeur: 2.2 });
   });
 }
@@ -385,8 +420,8 @@ function declarerReperes(c) {
   else c.repere('premier_sommet', ECR.x, ECR.y, 40, 40, `le sommet à t = T (vue « pseudo »)`);
   const n = som.length - 1;
   c.repere('mesure', ECR.x - 4, ECR.y + 2, Math.max(40, (n >= 1 && T ? PX(ECR, n * T) : ECR.x + 120) - ECR.x + 8), 34, T && n >= 1 ? `la cote ${n}T ≈ ${fms(n * T)} ms, donc T ≈ ${fms(T)} ms${ici('pseudo')}` : 'la mesure de T sur plusieurs pseudo-périodes (vue « pseudo »)');
-  c.repere('T', LX - 6, 242, LW + 8, 54, T ? `T ≈ ${fms(T)} ms${ici('pseudo')}` : 'la pseudo-période T (vue « pseudo »)');
-  c.repere('T0', LX - 6, 316, LW + 8, 42, `T₀ = 2π√(LC) ≈ 4 ms${ici('pseudo')}`);
+  c.repere('T', ...rectLire(242, 54, 6), T ? `T ≈ ${fms(T)} ms${ici('pseudo')}` : 'la pseudo-période T (vue « pseudo »)');
+  c.repere('T0', ...rectLire(316, 42, 6), `T₀ = 2π√(LC) ≈ 4 ms${ici('pseudo')}`);
   c.repere('regime', CAS.x, 366, CAS.w, 50, `le régime écrit sous l’écran : ${NOM_REGIME[reg]}`);
   if (AVEC_R(v)) c.repere('poignee_R', RL.x, RUL.y - 34, RL.w, 60, `la poignée R : ${fR(S.anneauR ?? S.R[v])} (0 à 2 kΩ)`);
   else c.repere('poignee_R', RL.x, RUL.y - 34, RL.w, 60, 'la poignée R (vues « pseudo », « aperiodique », « critique »)');
@@ -400,12 +435,13 @@ const canvas = $('canvas');
 const scene = window.OndesTableau.Scene(canvas, dessiner);
 const craie = scene.craie;
 scene.cadre = function (graine) {
-  const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  const W = craie.W, H = craie.H, VH = 420;
+  disposer(Math.round(Math.min(760 * 2.1, Math.max(760, VH * W / Math.max(1, H)))));
   craie.debut(graine, S.t);
-  const s = Math.min(W / VW, H / VH) || 1;
-  scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
+  const s = Math.min(W / LL, H / VH) || 1;
+  scene.s = s; scene.ox = (W - LL * s) / 2; scene.oy = (H - VH * s) / 2;
   craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
-  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+  craie.echelle = s; craie.tailleMin = 15; craie.cadre = { w: LL, h: VH, haut: 0 };
   return craie;
 };
 /** Les moments (fin de chaque phase) : une image complète, puis l’image de l’instant courant (spot, poignée à jour). */

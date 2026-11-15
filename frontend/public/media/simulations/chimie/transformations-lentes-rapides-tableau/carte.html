@@ -117,6 +117,17 @@ const NOEUDS = [
     lignes: ['chapitre suivant :', 'suivre l’avancement x(t)'],
     phrase: 'Chapitre suivant : suivre l’avancement x(t) d’une transformation au cours du temps.' },
 ];
+/* Tableau large (15 novembre 2026) : le cadre prend la largeur du tableau (scene.L de 760 à 1596). Les branches s’écartent en
+ * proportion de L ; cadres et écriture grandissent (facteur G, borné par la hauteur du cadre). */
+const CENTRE0 = { x: CENTRE.x, w: CENTRE.w, h: CENTRE.h };
+NOEUDS.forEach(n => { n.x0 = n.x; });
+let G = 1, LC = 760;
+function disposerCarte(L) {
+  if (L === LC) return;
+  LC = L; const f = L / 760; G = Math.min(1.35, Math.max(1, f * .8));
+  CENTRE.x = CENTRE0.x * f; CENTRE.w = CENTRE0.w * G; CENTRE.h = CENTRE0.h * G;
+  for (const n of NOEUDS) { n.x = n.x0 * f; n.w = W * Math.min(G * 1.15, f * .98); n.h = H * G; }
+}
 const ANNEAUX = { non_acquis: ['rouge', 'à reprendre'], partiel: ['orange', 'à revoir'] };
 const AVANT = -1e9;   // instant d'un élément déjà dit : écrit d'un coup
 
@@ -139,8 +150,8 @@ function etat(c, comps, x, y, w, h) {
     if (st && ANNEAUX[st]) {
       const [coul, etiq] = ANNEAUX[st];
       c.rect(x - 5, y - 5, w + 10, h + 10, { couleur: coul, arrondi: 16, largeur: 2, pointille: [6, 6] });
-      c.texte(etiq, x + w - 4, y - 8, { couleur: coul, taille: 12, align: 'right' });
-    } else if (st === 'acquis') c.texte('✓', x + w - 14, y + 16, { couleur: 'vert', taille: 18 });
+      c.texte(etiq, x + w - 4, y - 8, { couleur: coul, taille: 12 * G, align: 'right' });
+    } else if (st === 'acquis') c.texte('✓', x + w - 14 * G, y + 16 * G, { couleur: 'vert', taille: 18 * G });
   });
 }
 
@@ -154,8 +165,8 @@ function branche(c, n) {
   const m = [(a[0] + b[0]) / 2 - uy * 12, (a[1] + b[1]) / 2 + ux * 12];
   c.courbe(u => [(1 - u) * (1 - u) * a[0] + 2 * (1 - u) * u * m[0] + u * u * b[0], (1 - u) * (1 - u) * a[1] + 2 * (1 - u) * u * m[1] + u * u * b[1]], 24, { couleur: 'faible', largeur: 2, pointille: n.encadre ? [6, 6] : undefined });
   c.rect(x, y, n.w, n.h, { couleur: n.couleur, arrondi: n.encadre ? 4 : 14, largeur: n.encadre ? 1.6 : 2.4, pointille: n.encadre ? [6, 5] : undefined });
-  c.texte(n.titre, n.x, y + 21, { couleur: n.couleur, taille: 17, align: 'center', max: n.w - 16, duree: .8 });
-  n.lignes.forEach((l, k) => ecrire(c, l, n.x, y + 42 + k * 18, { couleur: 'blanc', taille: 14, align: 'center', max: n.w - 14, alpha: .92, duree: .6 }));
+  c.texte(n.titre, n.x, y + 21 * G, { couleur: n.couleur, taille: 17 * G, align: 'center', max: n.w - 16, duree: .8 });
+  n.lignes.forEach((l, k) => ecrire(c, l, n.x, y + (42 + k * 18) * G, { couleur: 'blanc', taille: 14 * G, align: 'center', max: n.w - 14, alpha: .92, duree: .6 }));
   c.repere(n.id, x - 5, y - 5, n.w + 10, n.h + 10, n.titre);
   etat(c, n.comps, x, y, n.w, n.h);
   if (S.choisi === n.id) c.direct(() => c.rect(x - 3, y - 3, n.w + 6, n.h + 6, { couleur: 'blanc', arrondi: 15, largeur: 1.2, alpha: .6 }));
@@ -165,16 +176,16 @@ function dessiner(c) {
   const x = CENTRE.x - CENTRE.w / 2, y = CENTRE.y - CENTRE.h / 2;
   if (S.def === AVANT) c.cur = AVANT;   // déjà dit (saut ou retour en arrière) : le centre est écrit d'un coup
   c.rect(x, y, CENTRE.w, CENTRE.h, { couleur: 'blanc', arrondi: 18, largeur: 3 });
-  c.texte('Transformations', CENTRE.x, y + 28, { couleur: 'blanc', taille: 24, align: 'center', gras: true });
-  c.texte('lentes et rapides', CENTRE.x, y + 50, { couleur: 'cyan', taille: 19, align: 'center' });
+  c.texte('Transformations', CENTRE.x, y + 28 * G, { couleur: 'blanc', taille: 24 * G, align: 'center', gras: true });
+  c.texte('lentes et rapides', CENTRE.x, y + 50 * G, { couleur: 'cyan', taille: 19 * G, align: 'center' });
   c.repere('centre', x, y, CENTRE.w, CENTRE.h, 'le centre : transformations lentes et rapides');
   const apres = c.cur;   // fin du titre du centre
   if (S.def != null) {
     c.depuis(S.def);
     // deux petits béchers peints : à gauche le permanganate violet décoloré aussitôt (rapide), à droite le diiode qui brunit (lente)
-    peindre(c, ctx => { becherPeint(ctx, x + 22, y + 60, 22, 30, 'rgba(214,170,232,.34)', 'rgba(170,110,200,.26)'); becherPeint(ctx, x + CENTRE.w - 44, y + 60, 22, 30, '#c7862a', '#8a4b12'); });
-    c.texte('rapide', x + 52, y + 84, { couleur: 'faible', taille: 13, duree: .5 });
-    c.texte('lente', x + CENTRE.w - 52, y + 84, { couleur: 'faible', taille: 13, align: 'right', duree: .5 });
+    peindre(c, ctx => { becherPeint(ctx, x + 22 * G, y + 60 * G, 22 * G, 30 * G, 'rgba(214,170,232,.34)', 'rgba(170,110,200,.26)'); becherPeint(ctx, x + CENTRE.w - 44 * G, y + 60 * G, 22 * G, 30 * G, '#c7862a', '#8a4b12'); });
+    c.texte('rapide', x + 52 * G, y + 84 * G, { couleur: 'faible', taille: 13 * G, duree: .5 });
+    c.texte('lente', x + CENTRE.w - 52 * G, y + 84 * G, { couleur: 'faible', taille: 13 * G, align: 'right', duree: .5 });
     if (S.choisi === 'centre') c.direct(() => c.rect(x - 3, y - 3, CENTRE.w + 6, CENTRE.h + 6, { couleur: 'blanc', arrondi: 19, largeur: 1.2, alpha: .6 }));
   }
   // chaque branche a sa ligne de temps : elle s'écrit dès que la voix la dit, sans attendre la précédente
@@ -184,7 +195,7 @@ function dessiner(c) {
     c.cur = S.entoure === AVANT ? AVANT : Math.max(apres, S.entoure);
     for (const n of NOEUDS) c.rect(n.x - n.w / 2 - 7, n.y - n.h / 2 - 7, n.w + 14, n.h + 14, { couleur: 'jaune', arrondi: 17, largeur: 1.8, alpha: .8, duree: .35 });
   }
-  if (S.lacunes) c.direct(() => c.texte('✓ acquis · ⟳ à revoir · ✗ à reprendre', 744, 140, { couleur: 'faible', taille: 12, align: 'right' }));
+  if (S.lacunes) c.direct(() => c.texte('✓ acquis · ⟳ à revoir · ✗ à reprendre', LC - 16, 140, { couleur: 'faible', taille: 12, align: 'right' }));
 }
 /* Le peint (béchers) apparaît quand l’écriture arrive à lui. */
 const peindre = (c, fn) => { if (c.t >= c.cur) c.direct(() => { c.ctx.save(); try { fn(c.ctx); } finally { c.ctx.restore(); } }); };
@@ -200,7 +211,7 @@ function becherPeint(ctx, x, y, w, h, haut, bas) {
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(73); dessiner(c); return c.fin(); });
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(73); disposerCarte(Math.max(760, scene.L || 760)); dessiner(c); return c.fin(); }, { large: true });
 const maintenant = () => (performance.now() - scene.ouvert) / 1000;
 let horloge = 0;
 scene.avancer = dt => {

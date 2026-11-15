@@ -44,20 +44,37 @@ let M = {};                                       // étape → instant d’écr
 const canvas = $('canvas');
 const scene = window.OndesTableau.Scene(canvas, dessiner);
 const craie = scene.craie;
-/* Même cadre que commun.js, mais l’écriture suit l’horloge de la figure (S.tw) : le tuteur peut la figer sur une étape. */
+/* Même cadre que commun.js, mais l’écriture suit l’horloge de la figure (S.tw) : le tuteur peut la figer sur une étape.
+ * Tableau large (15 novembre 2026 : « la figure n’occupe qu’une bande au centre ») : quand le tableau est plus large
+ * que 760 × 420, la figure s’étire en largeur (KX, jusqu’à 1,55) : abscisses des traits, textes, repères et peintures
+ * multipliées par KX, sans déformer l’écriture ; cercles et cadres gardent leur forme. Toutes les figures sont dessinées
+ * pour 760 × 420 : leurs lectures (λ, T, divisions) restent justes, seules les distances à l’écran s’allongent. */
+let KX = 1, brut = 0;
 scene.cadre = function (graine) {
   const W = craie.W, H = craie.H, VW = 760, VH = 420;
   craie.debut(graine, S.tw);
-  const s = Math.min(W / VW, H / VH);
-  scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
+  // Ondes circulaires et arcs : l'étirement en ferait des ellipses, ces figures restent en 760 × 420.
+  KX = fig === 'fig_enonce_2020' || fig === 'fig_diffraction_a_completer' ? 1 : Math.min(1.55, Math.max(1, VH * W / Math.max(1, H) / VW));
+  const LW = VW * KX, s = Math.min(W / LW, H / VH);
+  scene.L = LW; scene.s = s; scene.ox = (W - LW * s) / 2; scene.oy = (H - VH * s) / 2;
   craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
-  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+  craie.echelle = s; craie.tailleMin = KX > 1.25 && s >= 0.8 ? 18 : 15; craie.cadre = { w: LW, h: VH, haut: 0 };   // tableau large et haut : écriture ≥ 18 px
   return craie;
 };
+{
+  const o = { trait: craie.trait, texte: craie.texte, point: craie.point, repere: craie.repere, rect: craie.rect, cercle: craie.cercle };
+  const X = x => (brut ? x : x * KX);
+  craie.trait = function (pts, opt) { return o.trait.call(this, brut || KX === 1 ? pts : pts.map(p => [p[0] * KX, p[1]]), opt); };
+  craie.texte = function (t, x, y, opt = {}) { return o.texte.call(this, t, X(x), y, opt.max && !brut ? { ...opt, max: opt.max * KX } : opt); };
+  craie.point = function (x, y, r, coul) { return o.point.call(this, X(x), y, r, coul); };
+  craie.repere = function (id, x, y, w, h, lib) { return o.repere.call(this, id, X(x), y, brut ? w : w * KX, h, lib); };
+  craie.rect = function (x, y, w, h, opt) { const xx = X(x), ww = brut ? w : w * KX; brut++; try { return o.rect.call(this, xx, y, ww, h, opt); } finally { brut--; } };
+  craie.cercle = function (cx, cy, r, opt) { const xx = X(cx); brut++; try { return o.cercle.call(this, xx, cy, r, opt); } finally { brut--; } };
+}
 let MM = {};
 const marque = (c, nom) => { MM[nom] = c.cur; };
 /* Une partie peinte (eau, quadrillage) apparaît quand l’écriture arrive à elle, d’un coup. */
-const peindre = (c, fn) => { if (c.t >= c.cur) c.direct(() => fn(c.ctx)); };
+const peindre = (c, fn) => { if (c.t >= c.cur) c.direct(() => { c.ctx.save(); c.ctx.scale(KX, 1); try { fn(c.ctx); } finally { c.ctx.restore(); } }); };   // peinture étirée comme la craie
 const vu = nom => M[nom] !== undefined && S.tw >= M[nom] - 1e-6;
 
 // ───────────────────────── Les figures ─────────────────────────

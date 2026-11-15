@@ -97,9 +97,9 @@ function dessinerGriffith(c, k) {
   if (t >= 13.2) { c.repere('sang', 578, 238, 124, 124, 'le sang de la souris 4'); }
   if (k.ecrit(c, 'sang', 13.4)) { c.ligne(338, 344, 578, 312, { couleur: 'tresfaible', largeur: 1.2, pointille: [4, 5] }); k.T(c, 'dans son sang :', 640, 222, { couleur: 'blanc', taille: 14, align: 'center' }); k.T(c, 'des S vivants', 640, 384, { couleur: 'vert', taille: 15, align: 'center' }); }
   if (k.ecrit(c, 'principe', MG.s_dans_le_sang - .4)) {
-    k.T(c, 'Des R ont été transformés en S :', 362, 392, { couleur: 'jaune', taille: 15 });
-    k.T(c, 'le principe transformant', 362, 412, { couleur: 'jaune', taille: 15 });
-    c.repere('principe', 356, 376, 220, 42, 'le principe transformant');
+    k.T(c, 'Des R ont été transformés en S :', 338, 392, { couleur: 'jaune', taille: 15 });
+    k.T(c, 'le principe transformant', 338, 412, { couleur: 'jaune', taille: 15 });
+    c.repere('principe', 332, 376, 220, 42, 'le principe transformant');
   }
 }
 function voitGriffith(k) {
@@ -149,7 +149,7 @@ function dessinerAvery(c, k) {
   TUBES.forEach((T, i) => {
     if (t < T0[i]) return;
     c.repere('tube_' + (i + 1), T.x - 18, 88, 36, 100, 'le tube ' + (i + 1) + ' : ' + T.enz);
-    if (k.ecrit(c, 'tube' + i, T0[i])) { if (i === 0) c.fleche(92, 110, T.x - 22, 110, { couleur: 'tresfaible', largeur: 1.2 }); k.T(c, '+ ' + T.enz, T.x, 72, { couleur: 'jaune', taille: 14, align: 'center' }); k.T(c, T.det, T.x, 206, { couleur: 'faible', taille: 12, align: 'center' }); }
+    if (k.ecrit(c, 'tube' + i, T0[i])) { if (i === 0) c.fleche(92, 110, T.x - 22, 110, { couleur: 'tresfaible', largeur: 1.2 }); k.T(c, '+ ' + T.enz, T.x, i === 2 ? 54 : 72, { couleur: 'jaune', taille: 14, align: 'center' }); k.T(c, T.det, T.x, 206, { couleur: 'faible', taille: 12, align: 'center' }); }
     if (t >= 10.0) c.repere('souris_' + (i + 1), T.x - 44, 270, 88, 44, 'la souris ' + (i + 1));
     if (res && i >= REG.resultats && k.ecrit(c, 'q' + i, 11.6)) k.T(c, '?', T.x, 250, { couleur: 'jaune', taille: 26, align: 'center' });   // résultat pas encore dit
     if (i < REG.resultats && k.ecrit(c, 'res' + i, 11.6)) { k.T(c, T.meurt ? 'meurt' : 'vit', T.x, 342, { couleur: T.meurt ? 'rouge' : 'vert', taille: 15, align: 'center' }); k.T(c, T.meurt ? 'R transformés' : 'pas de transformation', T.x, 360, { couleur: 'faible', taille: 12, align: 'center' }); }
@@ -300,8 +300,14 @@ function vueExp(E) {
   if (E.n === 4) Object.assign(moments, { g4_sang: T.tSang, g4_principe: T.tPrin });
   const motifsVrais = { [p + 'bacteries']: 'on prépare : ' + E.txt, [p + 'chauffage']: 'les S sont tués par la chaleur', [p + 'injection']: 'injection à la souris', [p + 'attente']: 'on attend quelques jours', [p + 'resultat']: E.meurt ? 'la souris meurt' : 'la souris vit', g4_sang: 'des S vivants dans son sang', g4_principe: 'des R ont été transformés en S' };
   const cache = { [p + 'resultat']: 'observe la souris 4', g4_sang: 'observe la souris 4', g4_principe: 'observe la souris 4' };
+  // Tableau large (15 novembre 2026) : le dessin découpé en blocs, posés côte à côte et agrandis (etapes.js) ; la figure
+  // des expériences 1 et 2 est basse, elle grandit le plus.
+  const bl = bas => ({ titre: [6, 6, 330, 34], quoi: [6, 40, 420, 70], fig: [16, 96, E.n === 4 ? 612 : 560, bas], recap: [540, 48, 756, 290], principe: [324, 336, 612, 386] });
+  const BL = bl(E.n === 4 ? 412 : E.n === 3 ? 346 : 302), BL_Q = bl(302);   // exp. 4 sans conclusion : ni sang ni principe, la figure reste basse
   return {
     titre: 'Griffith : expérience ' + E.n + ' seule', fin: T.fin, moments, autoDepart: false,
+    get blocs() { return montrerResultat(E) ? BL : BL_Q; },
+    disposition: { haut: ['titre', 'quoi'], colonnes: [['fig'], ['recap', 'principe']] },
     get motifs() { return montrerResultat(E) ? motifsVrais : { ...motifsVrais, ...cache }; },
     get conclusion() { return montrerResultat(E) ? `Expérience ${E.n} : ${E.txt} → ${E.meurt ? 'la souris meurt' : 'la souris vit'}${E.n === 4 ? ', et des S vivants dans son sang : des R ont été transformés en S.' : '.'}` : 'Que devient la souris 4 ? Observe et réfléchis.'; },
     surReglage: (k) => { k.S.vu = { ...k.S.vu }; },
@@ -350,19 +356,26 @@ window.Etapes.lancer({
   auDepart: (P) => { const q = new URLSearchParams(location.search); if (q.has('conclusions')) P.conclusions = vrai(q.get('conclusions')); if (q.has('resultats')) P.resultats = Math.min(3, Math.max(0, Math.round(+q.get('resultats')))) || 0; REG.conclusions = P.conclusions; REG.resultats = P.resultats; },
   auReglage: (P) => { REG.conclusions = P.conclusions; REG.resultats = P.resultats; },
   vues: {
-    griffith: { titre: 'Griffith : S, R et souris', fin: 16.4, moments: MG, dessiner: dessinerGriffith, voit: voitGriffith,
+    // Tableau large (15 novembre 2026) : le dessin d'origine découpé en blocs, posés côte à côte et agrandis (etapes.js).
+    griffith: { titre: 'Griffith : S, R et souris', fin: 16.4,
+      blocs: { titre: [6, 6, 470, 34], lignes: [8, 70, 500, 372], legende: [570, 56, 756, 146], sang: [576, 206, 724, 394], principe: [332, 376, 576, 418] },
+      disposition: { haut: ['titre'], colonnes: [['lignes'], ['legende', 'sang'], ['principe']] }, moments: MG, dessiner: dessinerGriffith, voit: voitGriffith,
       motifs: { s_vivants: 'pneumocoques S vivants : la souris meurt', r_vivants: 'pneumocoques R vivants : la souris vit', s_tues: 'S tués par la chaleur : la souris vit', melange: 'R vivants + S tués : la souris meurt', s_dans_le_sang: 'des S vivants dans le sang : des R ont été transformés' },
       conclusion: 'Quelque chose des S morts a transformé des R en S : le principe transformant.',
       texte: 'Griffith : S vivants → souris morte ; R vivants → vivante ; S tués par la chaleur → vivante ; R vivants + S tués → morte, avec des S vivants dans le sang : principe transformant.',
       explication: [{ repere: 'bacterie_s', texte: 'La forme S a une capsule : elle tue la souris.' }, { repere: 'souris_4', texte: 'R vivants et S tués ensemble : la souris meurt.' }, { repere: 'sang', texte: 'Dans son sang, des S vivants : des R ont été transformés.' }] },
-    avery: { titre: 'Avery : trois enzymes', fin: 17.8, moments: MA, dessiner: dessinerAvery, voit: voitAvery,
+    avery: { titre: 'Avery : trois enzymes', fin: 17.8,
+      blocs: { titre: [6, 6, 470, 34], tubes: [8, 38, 552, 372], zoom: [556, 100, 760, 340], concl: [150, 382, 612, 410] },
+      disposition: { haut: ['titre'], colonnes: [['tubes'], ['zoom', 'concl']] }, moments: MA, dessiner: dessinerAvery, voit: voitAvery,
       reglages: { tube_protease: { tube: 1 }, tube_arnase: { tube: 2 }, tube_adnase: { tube: 3 }, resultats: { tube: 3 } },
       get motifs() { const m = { extrait: 'un extrait de S tués', tube_protease: 'tube 1 : extrait + protéase', tube_arnase: 'tube 2 : extrait + ribonucléase', tube_adnase: 'tube 3 : extrait + désoxyribonucléase', resultats: 'souris 1 et 2 mortes, souris 3 vivante', fragment_adn_entre: 'un fragment d’ADN entre dans une bactérie R, qui devient S' }; return REG.resultats >= 3 ? m : { ...m, resultats: 'les résultats, souris par souris', fragment_adn_entre: 'observe les souris' }; },
       get conclusion() { return REG.resultats >= 3 ? 'Sans ADN, plus de transformation : l’ADN est le support de l’information génétique.' : 'Observe les souris…'; },
       surReglage: (k, cles) => { k.S.vu = { ...k.S.vu }; },
       texte: 'Avery : extrait de S tués + protéase → transformation (souris morte) ; + ribonucléase → transformation ; + désoxyribonucléase → pas de transformation (souris vivante). Un fragment d’ADN des S entre dans une bactérie R : elle fabrique une capsule.',
       explication: [{ repere: 'tube_1', texte: 'Protéase : les protéines sont détruites, et pourtant la souris meurt.' }, { repere: 'tube_3', texte: 'Désoxyribonucléase : l’ADN est détruit, la souris vit.' }, { repere: 'fragment_adn', texte: 'Un fragment d’ADN des S entre dans la bactérie R.' }, { repere: 'conclusion', texte: 'L’ADN est le support de l’information génétique.' }] },
-    griffith_principe: { titre: 'Griffith : le principe', fin: 11.2, moments: MP, autoDepart: false, dessiner: dessinerPrincipe, voit: voitPrincipe,
+    griffith_principe: { titre: 'Griffith : le principe', fin: 11.2,
+      blocs: { titre: [6, 6, 440, 34], fig: [30, 56, 748, 342] },
+      disposition: { haut: ['titre'], colonnes: [['fig']] }, moments: MP, autoDepart: false, dessiner: dessinerPrincipe, voit: voitPrincipe,
       motifs: { gp_forme_s: 'la forme S : capsule, virulente', gp_forme_r: 'la forme R : sans capsule, non virulente', gp_injection: 'on injecte des bactéries à une souris', gp_observer: 'on regarde : la souris vit ou meurt ?' },
       conclusion: 'Le principe : on injecte des pneumocoques à une souris et on regarde si elle vit ou meurt.',
       texte: 'Griffith, le principe : forme S (capsule, virulente), forme R (sans capsule, non virulente) ; on injecte des bactéries à une souris et on regarde si elle vit ou meurt.',

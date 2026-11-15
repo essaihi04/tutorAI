@@ -26,7 +26,20 @@ const $ = id => document.getElementById(id);
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const lisse = u => { u = clamp(u); return u * u * (3 - 2 * u); };
 const CASES = { fission: { x: 10, titre: 'Fission : ²³⁵U + n' }, fusion: { x: 385, titre: 'Fusion : ²H + ³H' } };
-const W = 365, Y0 = 8, H = 404, JY0 = 372, JH = 290, EMAX = 900;      // jauge : 0 MeV en JY0, 900 MeV en JY0 − JH
+/* Tableau large (15 novembre 2026, « la simulation n’occupe qu’une bande étroite, textes minuscules ») :
+ * Scene({ large: true }) ; si scene.L ≥ 1000, les deux cases se partagent toute la largeur (W) et le texte grossit (G) ;
+ * tout ce qui est dans une case se place par rapport à son bord gauche (k.x). L < 1000 : disposition d’origine, centrée. */
+let W = 365, G = 1, LT = 760;
+function cadreLarge(graine) {
+  scene.cadre(graine);
+  if (scene.L < 1000 && scene.L > 760) { const d = (scene.L - 760) / 2; craie.ctx.translate(d, 0); scene.ox += d * scene.s; }
+  if (scene.L !== LT) {
+    LT = scene.L; const large = LT >= 1000;
+    W = large ? (LT - 30) / 2 : 365; G = large ? 1.3 : 1;
+    CASES.fusion.x = large ? 20 + W : 385;
+  }
+}
+const Y0 = 8, H = 404, JY0 = 372, JH = 290, EMAX = 900;      // jauge : 0 MeV en JY0, 900 MeV en JY0 − JH
 const T = { trace: 0.6, par_reaction: 3.0, par_nucleon: 4.6, conclusion: 8.4 };
 const R0 = 0.8, RC = 1.7, R1 = 2.6;              // une réaction : approche, contact, produits
 const F0 = 4.8, F1 = 7.8, NF = 47;               // les 47 fusions à masse égale
@@ -70,21 +83,22 @@ function eclair(ctx, x, y, r, a) {
 }
 
 function dessiner(c) {
-  scene.cadre(41);
+  cadreLarge(41);
+  const XU = CASES.fusion.x, MX = W / 365;   // bord gauche de la case fusion ; étirement des positions dans une case
   for (const [id, k] of Object.entries(CASES)) {
     c.rect(k.x, Y0, W, H, { couleur: 'tresfaible', largeur: 1.4, duree: .3 });
-    c.texte(k.titre, k.x + 12, 34, { couleur: id === 'fission' ? 'orange' : 'cyan', taille: 18 });
+    c.texte(k.titre, k.x + 12, 34, { couleur: id === 'fission' ? 'orange' : 'cyan', taille: 18 * G });
     // La jauge d'énergie, à droite de la case.
     const jx = k.x + W - 46;
     c.ligne(jx, JY0, jx, JY0 - JH, { couleur: 'faible', largeur: 1.4, duree: .2 });
-    for (const e of [0, 300, 600, 900]) { const yy = JY0 - JH * e / EMAX; c.ligne(jx - 4, yy, jx + 4, yy, { couleur: 'faible', largeur: 1.2, duree: .03 }); c.texte(String(e), jx + 8, yy + 5, { couleur: 'faible', taille: 12 }); }
-    c.texte('MeV', jx - 6, JY0 + 22, { couleur: 'faible', taille: 13 });
+    for (const e of [0, 300, 600, 900]) { const yy = JY0 - JH * e / EMAX; c.ligne(jx - 4, yy, jx + 4, yy, { couleur: 'faible', largeur: 1.2, duree: .03 }); c.texte(String(e), jx + 8, yy + 5, { couleur: 'faible', taille: 12 * G }); }
+    c.texte('MeV', jx - 6, JY0 + 22, { couleur: 'faible', taille: 13 * G });
     c.repere(id, k.x, Y0, W, H, id === 'fission' ? 'la fission de l’uranium 235' : 'la fusion deutérium-tritium');
   }
   c.direct(() => {
     const ctx = c.ctx, t = S.t, joue = S.running || S.pause || S.fait;
     /* ── Fission : un neutron frappe l'uranium, deux fragments et deux neutrons partent ── */
-    const fx = 120, fy = 112;
+    const fx = 10 + 110 * MX, fy = 112;
     if (!joue || t < RC) {
       noyau(ctx, fx, fy, 30, 92, 235);                                    // uranium 235
       if (joue && t > R0) { const u = lisse((t - R0) / (RC - R0)); neutron(ctx, fx - 120 + 86 * u, fy); }
@@ -95,53 +109,54 @@ function dessiner(c) {
       eclair(ctx, fx, fy, 70, 1 - (t - RC) / 0.6);
     }
     /* ── Fusion : ²H et ³H se rapprochent, fusionnent ; ou, à masse égale, 47 fusions en grille ── */
-    const ux = 385 + 130, uy = 112;
+    const ux = XU + 130 * MX, uy = 112;
     if (t < F0) {
       if (!joue || t < RC) { const u = joue ? lisse((t - R0) / (RC - R0)) : 0; noyau(ctx, ux - 60 + 48 * u, uy, 10, 1, 2); noyau(ctx, ux + 60 - 46 * u, uy, 12, 1, 3); }   // ²H, ³H
       else { const u = lisse((t - RC) / (R1 - RC)); noyau(ctx, ux - 8 * u, uy - 6 * u, 13, 2, 4); neutron(ctx, ux + 90 * u, uy + 30 * u); eclair(ctx, ux, uy, 50, 1 - (t - RC) / 0.6); }   // ⁴He + n
     } else {
       const n = nbFusions();
       for (let i = 0; i < NF; i++) {
-        const x = 385 + 30 + (i % 10) * 24, y = 64 + Math.floor(i / 10) * 25;
+        const x = XU + 30 * MX + (i % 10) * 24 * Math.min(MX, 1.5), y = 64 + Math.floor(i / 10) * 25;
         if (i < n) noyau(ctx, x, y, 8, 2, 4); else noyau(ctx, x, y, 8, 2, 5, .4);   // fusionnée (⁴He) ; pas encore (²H + ³H, voilée)
         if (i === n - 1) eclair(ctx, x, y, 22, 0.9);
       }
-      c.texte(`${n} fusion${n > 1 ? 's' : ''}`, 385 + 12, 196, { couleur: 'cyan', taille: 16 });
+      c.texte(`${n} fusion${n > 1 ? 's' : ''}`, XU + 12, 196, { couleur: 'cyan', taille: 16 * G });
     }
     /* ── Les jauges et ce qu'elles disent ── */
     for (const [id, k] of Object.entries(CASES)) {
       const E = joue && t >= RC ? energie(id) : 0, jx = k.x + W - 46, h = JH * E / EMAX;
       if (h > 0.5) c.rect(jx - 9, JY0 - h, 18, h, { couleur: id === 'fission' ? 'orange' : 'cyan', largeur: 1.4, fond: id === 'fission' ? 'orange' : 'cyan', fondAlpha: .35, arrondi: 3 });
-      if (E > 0.5) c.texte(`${E < 100 ? fr(E, 1) : fr(E, 0)} MeV`, jx - 14, JY0 - h - 8, { couleur: id === 'fission' ? 'orange' : 'cyan', taille: 15, align: 'right' });
+      if (E > 0.5) c.texte(`${E < 100 ? fr(E, 1) : fr(E, 0)} MeV`, jx - 14, JY0 - h - 8, { couleur: id === 'fission' ? 'orange' : 'cyan', taille: 15 * G, align: 'right' });
       c.repere('jauge_' + id, jx - 20, JY0 - JH - 10, 60, JH + 30, 'l’énergie libérée');
     }
     if (vu('par_reaction')) {
-      c.texte('1 réaction : 185 MeV', 22, 230, { couleur: 'blanc', taille: 17 });
-      c.texte('1 réaction : 17,6 MeV', 397, 230, { couleur: 'blanc', taille: 17 });
-      c.repere('par_reaction', 16, 210, 730, 28, 'l’énergie d’une seule réaction');
+      c.texte('1 réaction : 185 MeV', 10 + 12, 230, { couleur: 'blanc', taille: 17 * G });
+      c.texte('1 réaction : 17,6 MeV', XU + 12, 230, { couleur: 'blanc', taille: 17 * G });
+      c.repere('par_reaction', 16, 210, LT >= 1000 ? LT - 30 : 730, 28, 'l’énergie d’une seule réaction');
     }
     if (vu('par_nucleon')) {
-      c.texte('236 nucléons : 185 / 236', 22, 266, { couleur: 'blanc', taille: 16 });
-      c.texte('≈ 0,78 MeV par nucléon', 32, 290, { couleur: 'orange', taille: 17 });
-      c.texte('5 nucléons : 17,6 / 5', 397, 266, { couleur: 'blanc', taille: 16 });
-      c.texte('≈ 3,5 MeV par nucléon', 407, 290, { couleur: 'cyan', taille: 17 });
-      c.repere('par_nucleon', 16, 246, 730, 52, 'l’énergie par nucléon');
+      c.texte('236 nucléons : 185 / 236', 10 + 12, 266, { couleur: 'blanc', taille: 16 * G });
+      c.texte('≈ 0,78 MeV par nucléon', 10 + 22, 290, { couleur: 'orange', taille: 17 * G });
+      c.texte('5 nucléons : 17,6 / 5', XU + 12, 266, { couleur: 'blanc', taille: 16 * G });
+      c.texte('≈ 3,5 MeV par nucléon', XU + 22, 290, { couleur: 'cyan', taille: 17 * G });
+      c.repere('par_nucleon', 16, 246, LT >= 1000 ? LT - 30 : 730, 52, 'l’énergie par nucléon');
     }
     if (t >= F0) {
-      c.texte('même masse : 1 fission', 22, 330, { couleur: 'faible', taille: 16 });
-      c.texte(`même masse : ${nbFusions()} × 17,6 MeV`, 397, 330, { couleur: 'faible', taille: 16 });
+      c.texte('même masse : 1 fission', 10 + 12, 330, { couleur: 'faible', taille: 16 * G });
+      c.texte(`même masse : ${nbFusions()} × 17,6 MeV`, XU + 12, 330, { couleur: 'faible', taille: 16 * G });
     }
     if (vu('conclusion')) {
-      c.texte('À masse égale, la fusion libère', 397, 362, { couleur: 'vert', taille: 17 });
-      c.texte('plus d’énergie que la fission.', 397, 386, { couleur: 'vert', taille: 17 });
-      c.repere('conclusion', 391, 340, 280, 54, 'à masse égale, la fusion libère plus');
+      c.texte('À masse égale, la fusion libère', XU + 12, 362, { couleur: 'vert', taille: 17 * G });
+      c.texte('plus d’énergie que la fission.', XU + 12, 362 + 24 * G, { couleur: 'vert', taille: 17 * G });
+      c.repere('conclusion', XU + 6, 340, 280 * G, 30 + 24 * G, 'à masse égale, la fusion libère plus');
     }
   });
   return c.fin();
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, dessiner);
+const scene = window.OndesTableau.Scene(canvas, dessiner, { large: true });
+const craie = scene.craie;
 scene.avancer = dt => {
   if (!S.running) return false;
   S.t = Math.min(TFIN, S.t + dt);

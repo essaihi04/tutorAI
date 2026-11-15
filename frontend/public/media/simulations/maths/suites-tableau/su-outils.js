@@ -8,11 +8,38 @@
  *   SU.morceaux(c, x, y, liste, o) écrit une ligne en morceaux de couleurs différentes ([{t, couleur}]) ; renvoie les x
  *   SU.larg(c, s, taille)         largeur d'un texte à la craie (sans « _ », « ^ », accolades)
  *   SU.suite(u0, f, n)            [u0, f(u0), …] (n + 1 termes)
+ *   SU.large(c)                   le tableau est-il large (portable 1366×613 : canvas ≈ 3,2:1) ? (15 novembre 2026)
+ *   SU.Y(lg, y) / SU.H(lg, h)     une ordonnée / une hauteur du dessin d'origine, tassée quand le tableau est large
+ *   SU.opt(lg, o)                 options d'un repère (y0, h) tassées
+ *   SU.lignes(K, lg, x, y, l, i)  K.lignes, tassé (ordonnée, interlignes, taille × 0,9) quand le tableau est large
+ *
+ * Tableau large (15 novembre 2026, « grands vides à gauche et à droite, textes minuscules ») : le kit (`ajuster`) agrandit
+ * la boîte de l'encre jusqu'aux bords, mais le cadre reste large de 760 : une construction de 760 × 350 est donc limitée
+ * par la HAUTEUR sur un tableau de 3,2:1 et laisse 40 % de la largeur vide. Quand SU.large(c) est vrai, chaque vue se
+ * dispose plus basse et plus étalée (environ 760 × 250 : figure moins haute, notes rangées à côté, interlignes serrés) :
+ * le kit l'agrandit alors d'environ 1,4 et elle remplit tout le tableau. Sur un grand écran (1920×1080, ≈ 2:1), la
+ * disposition d'origine reste. Quand le format change, la boîte de l'encre est remesurée (sinon l'ancienne resterait).
  */
 (function () {
   'use strict';
   const nettoyer = (s) => String(s).replace(/[_^{}]/g, '');
+  let dernier = null;
   const SU = {
+    TASSE: .64,
+    Y(lg, y) { return lg ? 46 + (y - 46) * SU.TASSE : y; },
+    H(lg, h) { return lg ? h * SU.TASSE : h; },
+    opt(lg, o) { return lg ? { ...o, y0: SU.Y(true, o.y0), h: o.h * SU.TASSE } : o; },
+    lignes(K, lg, x, y, liste, inter = 30) {
+      if (!lg) return K.lignes(x, y, liste, inter);
+      return K.lignes(x, SU.Y(true, y), liste.map(l => ({ ...l, taille: (l.taille || 19) * .9, inter: l.inter != null ? l.inter * .74 : undefined })), inter * .74);
+    },
+    large(c) {
+      const lg = c.W > 1 && c.W / Math.max(1, c.H) > 2.5;
+      const sc = window.__maths && window.__maths.scene;
+      if (dernier !== null && dernier !== lg && sc && !sc.mesurant) { sc.boite = null; sc.sale = true; }
+      dernier = lg;
+      return lg;
+    },
     larg(c, s, taille = 18) { return c.largeurTexte(nettoyer(s), taille); },
     suite(u0, f, n) { const r = [u0]; for (let i = 0; i < n; i++) r.push(f(r[r.length - 1])); return r; },
     points(c, G, vals, o = {}) {

@@ -12,6 +12,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="/media/simulations/maths/commun/exposants.js"></script>
 <script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/suites-tableau/su-outils.js"></script>
 <script>
 /*
  * Cours « Suites numériques » (math_ch3_suites_numeriques), diapo su_p3_limite_somme (14 novembre 2026,
@@ -22,7 +23,9 @@
  * Moments : somme, formule, condition, limite. Repères : morceaux, somme, formule, condition, manque, mur, limite.
  */
 const { fr, peindre, bloc } = MathsTableau;
-const X0 = 50, LARG = 600, RY = 150;
+const X0 = 50, LARG = 600;
+// tableau large (SU.large, 15 novembre 2026) : la rangée remonte, les trois lignes sur deux colonnes ; le kit agrandit le tout
+let RY = 150, LG = false;
 const qtxt = q => (Math.abs(q - 0.5) < 1e-9 ? '1/2' : fr(q, 1));
 const S = (q, n) => (1 - Math.pow(q, n + 1)) / (1 - q);
 /** Écriture décimale sans notation 1e-7 (MathsTableau.fr passe par toString). */
@@ -78,6 +81,7 @@ MathsTableau.page({
       params: { q: { min: 0.1, max: 0.9, pas: 0.1, defaut: 0.5, label: 'q =', sens: 'raison de la suite géométrique (w₀ = 1)' } },
       curseurs: ['q'],
       dessiner(c, K) {
+        LG = SU.large(c); RY = LG ? 132 : 150;
         const q = K.P.q, L = 1 / (1 - q), U = LARG / (L * 1.04), qs = qtxt(q);
         K.titre(`w_0 = 1,  raison q = ${qs} :  S_n = w_0 + w_1 + … + w_n`);
         // La règle.
@@ -98,9 +102,9 @@ MathsTableau.page({
         c.repere('somme', X0, RY + 54, LARG + 20, 56, 'Sₙ sous le bout');
         K.marque('somme');
         c.pause(.3);
-        K.lignes(30, 312, [{ t: `S_n = 1 × (1 − (${qs})^{n + 1}) / (1 − ${qs})`, couleur: 'jaune', taille: 21, repere: 'formule', label: 'la formule de la somme géométrique', moment: 'formule' }]);
+        K.lignes(30, LG ? 278 : 312, [{ t: `S_n = 1 × (1 − (${qs})^{n + 1}) / (1 − ${qs})`, couleur: 'jaune', taille: 21, repere: 'formule', label: 'la formule de la somme géométrique', moment: 'formule' }]);
         c.pause(.3);
-        K.lignes(30, 356, [{ t: `−1 < ${qs} < 1   donc   (${qs})^{n + 1} → 0`, couleur: 'orange', taille: 20, repere: 'condition', label: 'la condition −1 < q < 1' }]);
+        K.lignes(30, LG ? 316 : 356, [{ t: `−1 < ${qs} < 1   donc   (${qs})^{n + 1} → 0`, couleur: 'orange', taille: 20, repere: 'condition', label: 'la condition −1 < q < 1' }]);
         // La somme continue : n = 8 … 20, les morceaux deviennent invisibles, le manque fond.
         K.marque('suite');
         K.anime(2.6, p => {
@@ -119,7 +123,7 @@ MathsTableau.page({
         c.ligne(X0 + L * U, RY - 34, X0 + L * U, RY + 30, { couleur: 'jaune', largeur: 3, pointille: [6, 5] });
         c.texte(`mur : ${fr(L, 3)}`, X0 + L * U + 8, RY - 26, { couleur: 'jaune', taille: 17 });
         c.repere('mur', X0 + L * U - 10, RY - 40, 110, 76, 'le mur : la limite');
-        K.lignes(30, 402, [{ t: `lim S_n = 1 / (1 − ${qs}) = ${fr(L, 3)}`, couleur: 'vert', taille: 22, cadre: 'vert', repere: 'limite', label: 'la limite de Sₙ', moment: 'limite' }]);
+        K.lignes(LG ? 440 : 30, LG ? 298 : 402, [{ t: `lim S_n = 1 / (1 − ${qs}) = ${fr(L, 3)}`, couleur: 'vert', taille: 22, cadre: 'vert', repere: 'limite', label: 'la limite de Sₙ', moment: 'limite' }]);
       },
       lecture: K => { const q = K.P.q, L = 1 / (1 - q); return `Raison ${qtxt(q)} : S₇ = ${fr(S(q, 7), 3)}, S₂₀ = ${tronque(S(q, 20), L - S(q, 20))} ; la somme s’approche de 1/(1 − q) = ${fr(L, 3)} sans le dépasser.`; },
       decrire: K => { const q = K.P.q, qs = qtxt(q), L = 1 / (1 - q); return {

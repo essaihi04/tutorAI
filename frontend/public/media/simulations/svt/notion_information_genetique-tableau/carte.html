@@ -51,6 +51,16 @@ const NOEUDS = [
     phrase: "Décrire un document avec ses valeurs, expliquer, et schématiser avec un titre et des légendes." },
 ];
 const ANNEAUX = { non_acquis: ['rouge', 'à reprendre'], partiel: ['orange', 'à revoir'] };
+/* Tableau large (15 novembre 2026, « mieux exploiter tout le tableau, grands calibres de texte ») : le cadre prend le
+ * format du tableau (Scene { large }, largeur scene.L) ; la carte s'étale sur toute la largeur, cadres et textes agrandis.
+ * Les tailles sont celles réellement écrites (te : plancher de 15 px à l'écran), les cadres grandissent avec elles. */
+const te = t => Math.max(t, 15 / (scene.s || 1));
+function G(n) {
+  const L = scene.L, kx = Math.max(1, Math.min(2.1, (L - 30) / 740)), f = Math.min(1.3, kx), ky = f > 1.05 ? 1.06 : 1;
+  const tt = te(16 * f), tl = te(13 * f), tc = te(19 * f), tl2 = te(12 * f);
+  const h = n === CENTRE ? Math.max(n.h * f, tc * 2.45 + tl2 * 1.25 * 3 + tl2 * .5) : Math.max(n.h * f, tt * 1.15 + tl * 2.5 + tl * .5);
+  return { ...n, x: L / 2 + (n.x - 380) * kx, y: 212 + (n.y - 212) * ky, w: n.w * Math.min(kx * .92, 1.5), h, f, tt, tl, tc, tl2 };
+}
 const AVANT = -1e9;   // instant d'un élément déjà dit : écrit d'un coup
 
 // def : instant où la définition du centre s'écrit (null = pas encore dite) ; n branches dessinées ; apparu[i] leur instant.
@@ -71,12 +81,13 @@ function etat(c, comps, x, y, w, h) {
     if (st && ANNEAUX[st]) {
       const [coul, etiq] = ANNEAUX[st];
       c.rect(x - 6, y - 6, w + 12, h + 12, { couleur: coul, arrondi: 16, largeur: 2, pointille: [6, 6] });
-      c.texte(etiq, x + w - 4, y - 9, { couleur: coul, taille: 12, align: 'right' });
-    } else if (st === 'acquis') c.texte('✓', x + w - 14, y + 14, { couleur: 'vert', taille: 18 });
+      c.texte(etiq, x + w - 4, y - 9, { couleur: coul, taille: te(12), align: 'right' });
+    } else if (st === 'acquis') c.texte('✓', x + w - te(18) * .8, y + te(18) * .8, { couleur: 'vert', taille: te(18) });
   });
 }
 
-function branche(c, n) {
+function branche(c, n0) {
+  const n = G(n0), CENTRE = G(window.CENTRE_CARTE);
   const dx = n.x - CENTRE.x, dy = n.y - CENTRE.y, L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L;
   // du bord du centre au bord de la branche, avec une légère courbure
   const d0 = Math.min(CENTRE.w / 2 / Math.max(.2, Math.abs(ux)), CENTRE.h / 2 / Math.max(.2, Math.abs(uy)));
@@ -86,36 +97,38 @@ function branche(c, n) {
   c.courbe(u => [(1 - u) * (1 - u) * a[0] + 2 * (1 - u) * u * m[0] + u * u * b[0], (1 - u) * (1 - u) * a[1] + 2 * (1 - u) * u * m[1] + u * u * b[1]], 24, { couleur: 'faible', largeur: 2 });
   const x = n.x - n.w / 2, y = n.y - n.h / 2;
   c.rect(x, y, n.w, n.h, { couleur: n.couleur, arrondi: 14, largeur: 2.4 });
-  c.texte(n.titre, n.x, y + 20, { couleur: n.couleur, taille: 16, align: 'center', max: n.w - 16, duree: .8 });
-  n.lignes.forEach((l, k) => c.texte(l, n.x, y + 38 + k * 16, { couleur: 'blanc', taille: 13, align: 'center', max: n.w - 14, alpha: .92, duree: 1 }));
+  c.texte(n.titre, n.x, y + n.tt * 1.15, { couleur: n.couleur, taille: n.tt, align: 'center', max: n.w - 16, duree: .8 });
+  n.lignes.forEach((l, k) => c.texte(l, n.x, y + n.tt * 1.15 + n.tl * 1.25 * (k + 1), { couleur: 'blanc', taille: n.tl, align: 'center', max: n.w - 14, alpha: .92, duree: 1 }));
   c.repere(n.id, x - 6, y - 6, n.w + 12, n.h + 12, n.titre);
   etat(c, n.comps, x, y, n.w, n.h);
   if (S.choisi === n.id) c.direct(() => c.rect(x - 3, y - 3, n.w + 6, n.h + 6, { couleur: 'blanc', arrondi: 15, largeur: 1.2, alpha: .6 }));
 }
 
 function dessiner(c) {
+  const CENTRE = G(window.CENTRE_CARTE);
   const x = CENTRE.x - CENTRE.w / 2, y = CENTRE.y - CENTRE.h / 2;
   if (S.def === AVANT) c.cur = AVANT;   // déjà dit (saut ou retour en arrière) : le centre est écrit d'un coup
   c.rect(x, y, CENTRE.w, CENTRE.h, { couleur: 'jaune', arrondi: 18, largeur: 3 });
-  c.texte('L’information', CENTRE.x, y + 26, { couleur: 'jaune', taille: 19, align: 'center', gras: true });
-  c.texte('génétique', CENTRE.x, y + 47, { couleur: 'jaune', taille: 19, align: 'center', gras: true });
+  c.texte('L’information', CENTRE.x, y + CENTRE.tc * 1.35, { couleur: 'jaune', taille: CENTRE.tc, align: 'center', gras: true });
+  c.texte('génétique', CENTRE.x, y + CENTRE.tc * 2.45, { couleur: 'jaune', taille: CENTRE.tc, align: 'center', gras: true });
   c.repere('centre', x, y, CENTRE.w, CENTRE.h, 'le centre : l’information génétique');
   c.repere('definition', x, y, CENTRE.w, CENTRE.h, 'l’information génétique et sa conservation');
   const apres = c.cur;   // fin du titre du centre
   if (S.def != null) {
     c.depuis(S.def);
     ['dans le noyau, portée par l’ADN,', 'copiée en phase S,', 'partagée par la mitose'].forEach((l, k) =>
-      c.texte(l, CENTRE.x, y + 68 + k * 14, { couleur: 'blanc', taille: 12, align: 'center', max: CENTRE.w - 16, alpha: .92, duree: 1.1 }));
+      c.texte(l, CENTRE.x, y + CENTRE.tc * 2.45 + CENTRE.tl2 * 1.25 * (k + 1), { couleur: 'blanc', taille: CENTRE.tl2, align: 'center', max: CENTRE.w - 16, alpha: .92, duree: 1.1 }));
     etat(c, CENTRE.comps, x, y, CENTRE.w, CENTRE.h);
     if (S.choisi === 'centre') c.direct(() => c.rect(x - 3, y - 3, CENTRE.w + 6, CENTRE.h + 6, { couleur: 'blanc', arrondi: 19, largeur: 1.2, alpha: .6 }));
   }
   // chaque branche a sa ligne de temps : elle s'écrit dès que la voix la dit, sans attendre la précédente
   for (let i = 0; i < S.n; i++) { c.cur = S.apparu[i] === AVANT ? AVANT : Math.max(apres, S.apparu[i]); branche(c, NOEUDS[i]); }
-  if (S.lacunes) c.direct(() => c.texte('✓ acquis · ⟳ à revoir · ✗ à reprendre', 24, 410, { couleur: 'faible', taille: 12 }));
+  if (S.lacunes) c.direct(() => c.texte('✓ acquis · ⟳ à revoir · ✗ à reprendre', 24, 414, { couleur: 'faible', taille: te(12) }));
 }
 
 const canvas = $('canvas');
-const scene = window.GenetiqueTableau.Scene(canvas, (c) => { scene.cadre(51); dessiner(c); return c.fin(); });
+window.CENTRE_CARTE = CENTRE;
+const scene = window.GenetiqueTableau.Scene(canvas, (c) => { scene.cadre(51); dessiner(c); return c.fin(); }, { large: true });
 const maintenant = () => (performance.now() - scene.ouvert) / 1000;
 let horloge = 0;
 scene.avancer = dt => {
@@ -170,9 +183,9 @@ $('imprimer').onclick = () => {
 };
 canvas.addEventListener('pointerdown', e => {
   const r = canvas.getBoundingClientRect(), [x, y] = scene.local(e.clientX - r.left, e.clientY - r.top);
-  const n = NOEUDS.slice(0, S.n).find(n => Math.abs(x - n.x) <= n.w / 2 + 6 && Math.abs(y - n.y) <= n.h / 2 + 6);
+  const n = NOEUDS.slice(0, S.n).map(G).find(n => Math.abs(x - n.x) <= n.w / 2 + 6 && Math.abs(y - n.y) <= n.h / 2 + 6), C = G(CENTRE);
   if (n) { S.choisi = n.id; bulle($('feedback'), n.phrase); }
-  else if (S.def != null && Math.abs(x - CENTRE.x) <= CENTRE.w / 2 && Math.abs(y - CENTRE.y) <= CENTRE.h / 2) { S.choisi = 'centre'; bulle($('feedback'), CENTRE.phrase); }
+  else if (S.def != null && Math.abs(x - C.x) <= C.w / 2 && Math.abs(y - C.y) <= C.h / 2) { S.choisi = 'centre'; bulle($('feedback'), CENTRE.phrase); }
   else return;
   scene.sale = true; pont.noter('touche', { moment: S.choisi === 'centre' ? 'definition' : S.choisi }); pont.emettre();
 });

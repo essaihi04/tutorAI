@@ -55,6 +55,25 @@ const NOEUDS = [
     lignes: ['τ = SM / v', 'y_M(t) = y_S(t − τ)'],
     phrase: "Le point M refait le mouvement de la source avec le retard τ = SM / v : y_M(t) = y_S(t − τ)." },
 ];
+/* Tableau large (15 novembre 2026 : « la carte n'occupe qu'une bande au centre, textes minuscules ») : le cadre prend le
+ * format du tableau (scene.L de 760 à 1292) ; les cadres s'écartent sur toute la largeur (x × L / 760), s'élargissent
+ * et grandissent un peu, l'écriture passe de 13-16 à 18-21 (titre du centre 24). Cadre étroit : disposition d'origine. */
+const BASE = [CENTRE, ...NOEUDS].map(n => ({ n, x: n.x, y: n.y, w: n.w, h: n.h }));
+let GRAND = false;
+const TX = { titre: 16, ligne: 13, pas: 16, dy: 20, dl: 38, ct: 19, cd: 12, cpas: 14, cdy: 26, cdy2: 47, cdl: 68 };
+function disposer(c) {
+  const k = scene.L / 760; GRAND = scene.L >= 1000;
+  Object.assign(TX, GRAND ? { titre: 21, ligne: 18, ct: 24, cd: 17 } : { titre: 16, ligne: 13, ct: 19, cd: 12 });
+  // Interlignes et hauteurs des cadres d'après la taille réellement écrite (jamais moins de 15 px à l'écran).
+  const e = c.echelle && c.tailleMin ? c.tailleMin / c.echelle : 0, t = Math.max(TX.titre, e), l = Math.max(TX.ligne, e);
+  const ct = Math.max(TX.ct, e), cd = Math.max(TX.cd, e);
+  if (GRAND) Object.assign(TX, { dy: t * 1.15, dl: t * 1.15 + l * 1.15, pas: l * 1.1, cdy: ct * 1.2, cdy2: ct * 2.3, cdl: ct * 2.3 + cd * 1.35, cpas: cd * 1.12 });
+  else Object.assign(TX, { pas: 16, dy: 20, dl: 38, cpas: 14, cdy: 26, cdy2: 47, cdl: 68 });
+  const hN = GRAND ? TX.dl + TX.pas + l * 0.55 : 0, hC = GRAND ? TX.cdl + 2 * TX.cpas + cd * 0.6 : 0;
+  for (const b of BASE) { b.n.x = b.x * k; b.n.w = b.w * (GRAND ? 1.5 : 1); b.n.h = GRAND ? Math.max(b.n === CENTRE ? 132 : 78, b.n === CENTRE ? hC : hN) : b.h; }
+  // L'étiquette « à revoir » s'écrit au-dessus du cadre : la rangée du haut descend un peu pour la laisser entière.
+  for (const b of BASE) b.n.y = GRAND ? Math.max(b.y, b.n.h / 2 + 34) : b.y;
+}
 const ANNEAUX = { non_acquis: ['rouge', 'à reprendre'], partiel: ['orange', 'à revoir'] };
 const AVANT = -1e9;   // instant d'un élément déjà dit : écrit d'un coup
 
@@ -76,7 +95,7 @@ function etat(c, comps, x, y, w, h) {
     if (st && ANNEAUX[st]) {
       const [coul, etiq] = ANNEAUX[st];
       c.rect(x - 6, y - 6, w + 12, h + 12, { couleur: coul, arrondi: 16, largeur: 2, pointille: [6, 6] });
-      c.texte(etiq, x + w - 4, y - 9, { couleur: coul, taille: 12, align: 'right' });
+      c.texte(etiq, x + w - 4, y - 9, { couleur: coul, taille: GRAND ? 16 : 12, align: 'right' });
     } else if (st === 'acquis') c.texte('✓', x + w - 14, y + 14, { couleur: 'vert', taille: 18 });
   });
 }
@@ -91,8 +110,8 @@ function branche(c, n) {
   c.courbe(u => [(1 - u) * (1 - u) * a[0] + 2 * (1 - u) * u * m[0] + u * u * b[0], (1 - u) * (1 - u) * a[1] + 2 * (1 - u) * u * m[1] + u * u * b[1]], 24, { couleur: 'faible', largeur: 2 });
   const x = n.x - n.w / 2, y = n.y - n.h / 2;
   c.rect(x, y, n.w, n.h, { couleur: n.couleur, arrondi: 14, largeur: 2.4 });
-  c.texte(n.titre, n.x, y + 20, { couleur: n.couleur, taille: 16, align: 'center', max: n.w - 16, duree: .8 });
-  n.lignes.forEach((l, k) => c.texte(l, n.x, y + 38 + k * 16, { couleur: 'blanc', taille: 13, align: 'center', max: n.w - 14, alpha: .92, duree: 1 }));
+  c.texte(n.titre, n.x, y + TX.dy, { couleur: n.couleur, taille: TX.titre, align: 'center', max: n.w - 16, duree: .8 });
+  n.lignes.forEach((l, k) => c.texte(l, n.x, y + TX.dl + k * TX.pas, { couleur: 'blanc', taille: TX.ligne, align: 'center', max: n.w - 14, alpha: .92, duree: 1 }));
   c.repere(n.id, x - 6, y - 6, n.w + 12, n.h + 12, n.titre);
   etat(c, n.comps, x, y, n.w, n.h);
   if (S.choisi === n.id) c.direct(() => c.rect(x - 3, y - 3, n.w + 6, n.h + 6, { couleur: 'blanc', arrondi: 15, largeur: 1.2, alpha: .6 }));
@@ -102,25 +121,25 @@ function dessiner(c) {
   const x = CENTRE.x - CENTRE.w / 2, y = CENTRE.y - CENTRE.h / 2;
   if (S.def === AVANT) c.cur = AVANT;   // déjà dit (saut ou retour en arrière) : le centre est écrit d'un coup
   c.rect(x, y, CENTRE.w, CENTRE.h, { couleur: 'jaune', arrondi: 18, largeur: 3 });
-  c.texte('Onde progressive', CENTRE.x, y + 26, { couleur: 'jaune', taille: 19, align: 'center', gras: true });
-  c.texte('périodique', CENTRE.x, y + 47, { couleur: 'jaune', taille: 19, align: 'center', gras: true });
+  c.texte('Onde progressive', CENTRE.x, y + TX.cdy, { couleur: 'jaune', taille: TX.ct, align: 'center', gras: true });
+  c.texte('périodique', CENTRE.x, y + TX.cdy2, { couleur: 'jaune', taille: TX.ct, align: 'center', gras: true });
   c.repere('centre', x, y, CENTRE.w, CENTRE.h, 'le centre : l’onde progressive périodique et sa définition');
   c.repere('definition', x, y, CENTRE.w, CENTRE.h, 'la définition de l’onde progressive périodique');
   const apres = c.cur;   // fin du titre du centre
   if (S.def != null) {
     c.depuis(S.def);
     ['la perturbation se répète,', 'identique à elle-même,', 'à intervalles de temps égaux'].forEach((l, k) =>
-      c.texte(l, CENTRE.x, y + 68 + k * 14, { couleur: 'blanc', taille: 12, align: 'center', max: CENTRE.w - 16, alpha: .92, duree: 1.1 }));
+      c.texte(l, CENTRE.x, y + TX.cdl + k * TX.cpas, { couleur: 'blanc', taille: TX.cd, align: 'center', max: CENTRE.w - 16, alpha: .92, duree: 1.1 }));
     etat(c, CENTRE.comps, x, y, CENTRE.w, CENTRE.h);
     if (S.choisi === 'centre') c.direct(() => c.rect(x - 3, y - 3, CENTRE.w + 6, CENTRE.h + 6, { couleur: 'blanc', arrondi: 19, largeur: 1.2, alpha: .6 }));
   }
   // chaque branche a sa ligne de temps : elle s'écrit dès que la voix la dit, sans attendre la précédente
   for (let i = 0; i < S.n; i++) { c.cur = S.apparu[i] === AVANT ? AVANT : Math.max(apres, S.apparu[i]); branche(c, NOEUDS[i]); }
-  if (S.lacunes) c.direct(() => c.texte('✓ acquis · ⟳ à revoir · ✗ à reprendre', 24, 410, { couleur: 'faible', taille: 12 }));
+  if (S.lacunes) c.direct(() => c.texte('✓ acquis · ⟳ à revoir · ✗ à reprendre', 24, 412, { couleur: 'faible', taille: GRAND ? 15 : 12 }));
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(51); dessiner(c); return c.fin(); });
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(51); disposer(c); dessiner(c); return c.fin(); }, { large: true });
 const maintenant = () => (performance.now() - scene.ouvert) / 1000;
 let horloge = 0;
 scene.avancer = dt => {

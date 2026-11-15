@@ -30,7 +30,7 @@ const demande = new URLSearchParams(location.search).get('vue');
 const vue = demande === 'triangle' ? 'triangle' : 'montage';
 const RM = { x: 8, y: 44, w: 440, h: 368 }, RT = { x: 456, y: 44, w: 296, h: 368 };
 const YC = 222, YH = 104, YB = 340, XS = 110, PXD = 80, PXY = 3000;      // px par mètre le long de D, et en travers (exagéré)
-const TA = { x: 474, y: 214 }, DT = 200;                                   // triangle seul : sommet (fente) et côté adjacent (px)
+const TA = { x: 474, y: 214 }; let DT = 200;                                   // triangle seul : sommet (fente) et côté adjacent (px)
 const S = { D: 2.0, a: 0.10, lam: 650, t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0 };
 let M = {}, MM = {};
 const VITESSE = 1.5;                               // horloge de l’écriture (s de scène par s réelle)
@@ -61,6 +61,8 @@ const sinc2 = u => (Math.abs(u) < 1e-6 ? 1 : (Math.sin(Math.PI * u) / (Math.PI *
 /* Géométrie du montage (px du cadre). */
 function geo() {
   const XE = XS + S.D * PXD, hVrai = PXY * theta() * S.D, h = Math.min(hVrai, YC - YH - 4);
+  // tableau large : le triangle seul grandit (même angle), dans la limite de la hauteur de sa vue
+  if (Q.large) DT = Math.max(160, Math.min(Q.dtMax, 270 * (XE - XS) / Math.max(1, h)));
   return { XE, h, g: 2 + S.a * 25, Ht: h * DT / (XE - XS) };
 }
 
@@ -138,8 +140,23 @@ function peindreMontage(ctx, p) {
 
 /* ── Dessin : l’écriture suit l’horloge de la scène (S.t) ; chaque moment = fin de l’écriture de sa phase ── */
 const marque = (c, nom) => { MM[nom] = c.cur; };
+/* Agrandissement du 15 novembre 2026 : sur un tableau large (scene.L ≥ 1000, portable 1366 × 613), « Le triangle seul »
+ * prend toute la largeur restante : le triangle grandit (sommet plus bas, côté adjacent plus long, même angle) et les
+ * lignes tan θ … s'écrivent à sa droite, en plus grand. Sinon (grand écran) : comme avant. Q.y(y) : ligne d'origine →
+ * ligne dans la colonne de droite. */
+const Q = { large: false, k: 1, x: 0, w: 280, dtMax: 200 };
+const RT0 = { ...RT };
+function disposer(L) {
+  Q.large = L >= 1000;
+  if (Q.large) {
+    RT.w = L - 8 - RT.x; Q.k = 1.22; Q.w = Math.min(360, RT.w * .42); Q.x = RT.x + RT.w - Q.w - 8;
+    Q.dtMax = Q.x - RT.x - 18 - 120; TA.x = RT.x + 22; TA.y = 352;
+  } else { Object.assign(RT, RT0); Q.k = 1; Q.x = RT.x + 10; Q.w = 280; TA.x = 474; TA.y = 214; DT = 200; }
+}
+const LIGNES = { 288: 112, 316: 150, 344: 196, 368: 228, 396: 270, 376: 250, 386: 318, 406: 352, 389: 332 };
+Q.y = y => (Q.large ? LIGNES[y] : y);
 function dessiner(c) {
-  scene.cadre(23); MM = {};
+  scene.cadre(23); MM = {}; disposer(scene.L);
   const G = geo(), XE = G.XE, h = G.h, col = couleurDe(S.lam), th = theta(), L = Lm();
   const C = { x: TA.x + DT, y: TA.y }, B = { x: TA.x + DT, y: TA.y - G.Ht };
   // 1. La lumière (peinte), puis les deux vues et leurs étiquettes.
@@ -207,22 +224,24 @@ function dessiner(c) {
   marque(c, 'triangle_isole');
   // 7. tan θ dans le triangle.
   c.pause(.4);
-  c.texte('tan θ = côté opposé / côté adjacent', RT.x + 10, 288, { couleur: 'blanc', taille: 16, max: 280 });
-  c.texte('tan θ = (L/2)/D = L/(2D)', RT.x + 10, 316, { couleur: 'jaune', taille: 20, max: 280 });
+  const qx = Q.large ? Q.x : RT.x + 10, k = Q.k;
+  c.texte('tan θ = côté opposé / côté adjacent', qx, Q.y(288), { couleur: 'blanc', taille: 16 * k, max: Q.w });
+  c.texte('tan θ = (L/2)/D = L/(2D)', qx, Q.y(316), { couleur: 'jaune', taille: 20 * k, max: Q.w });
   marque(c, 'tan_ecrit');
   // 8. θ petit, en radian : tan θ ≈ θ.
   c.pause(.5);
-  c.texte(`θ = ${sci(th)} rad ;  tan θ = ${sci(Math.tan(th))}`, RT.x + 10, 344, { couleur: 'blanc', taille: 16, max: 280 });
-  c.texte('θ petit, en radian : tan θ ≈ θ', RT.x + 10, 368, { couleur: 'vert', taille: 16, max: 280 });
-  c.texte('donc θ = L/(2D)', RT.x + 16, 396, { couleur: 'jaune', taille: 19 });
-  c.rect(RT.x + 8, 376, 138, 28, { couleur: 'jaune', largeur: 1.6, arrondi: 6 });
+  c.texte(`θ = ${sci(th)} rad ;  tan θ = ${sci(Math.tan(th))}`, qx, Q.y(344), { couleur: 'blanc', taille: 16 * k, max: Q.w });
+  c.texte('θ petit, en radian : tan θ ≈ θ', qx, Q.y(368), { couleur: 'vert', taille: 16 * k, max: Q.w });
+  c.texte('donc θ = L/(2D)', qx + 6, Q.y(396), { couleur: 'jaune', taille: 19 * k });
+  c.rect(qx - 2, Q.y(396) - 20 * k, 138 * k, 28 * k, { couleur: 'jaune', largeur: 1.6, arrondi: 6 });
   marque(c, 'petit_angle');
   // 9. (vue triangle) L’égalité avec θ = λ/a.
   if (vue === 'triangle') {
     c.pause(.5);
-    c.texte('or θ = λ/a :', RT.x + 158, 386, { couleur: 'blanc', taille: 15 });
-    c.texte('λ/a = L/(2D)', RT.x + 164, 406, { couleur: 'vert', taille: 19 });
-    c.rect(RT.x + 156, 389, 104, 23, { couleur: 'vert', largeur: 1.6, arrondi: 6 });
+    const ox = Q.large ? qx : RT.x + 158;
+    c.texte('or θ = λ/a :', ox, Q.y(386), { couleur: 'blanc', taille: 15 * k });
+    c.texte('λ/a = L/(2D)', ox + 6, Q.y(406), { couleur: 'vert', taille: 19 * k });
+    c.rect(ox - 2, Q.y(406) - 17 * k, 104 * k + (Q.large ? 14 : 0), 23 * k + (Q.large ? 4 : 0), { couleur: 'vert', largeur: 1.6, arrondi: 6 });
     marque(c, 'egalite');
   }
   c.pause(.8); marque(c, 'fin');
@@ -251,7 +270,8 @@ function dessiner(c) {
     c.repere('D', XS, 348, XE - XS, 26, `D = ${fr(S.D, 1)} m`);
   }
   c.repere('angle_droit', C.x - 18, C.y - 18, 22, 22, 'l’angle droit (au centre de la tache)');
-  c.repere('formule_tan', RT.x + 4, 270, RT.w - 8, 140, 'tan θ = (L/2)/D = L/(2D)');
+  if (Q.large) c.repere('formule_tan', Q.x - 6, Q.y(288) - 24, Q.w + 10, Q.y(406) - Q.y(288) + 34, 'tan θ = (L/2)/D = L/(2D)');
+  else c.repere('formule_tan', RT.x + 4, 270, RT.w - 8, 140, 'tan θ = (L/2)/D = L/(2D)');
   const fini = c.fin();
   M = MM;
   return fini || !S.running;     // figée : l’image ne change plus, on cesse de la redessiner
@@ -262,12 +282,14 @@ const scene = window.OndesTableau.Scene(canvas, dessiner);
 const craie = scene.craie;
 /* Même cadre que commun.js, mais l’écriture suit l’horloge de la scène (S.t) : le tuteur peut la figer sur un moment. */
 scene.cadre = function (graine) {
-  const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  const W = craie.W, H = craie.H, VH = 420;
+  // format du tableau (comme Scene(…, { large: true }) de commun.js) : largeur de 760 à 760 × 2,1
+  const VW = scene.L = Math.round(Math.min(760 * 2.1, Math.max(760, VH * W / Math.max(1, H))));
   craie.debut(graine, S.t);
   const s = Math.min(W / VW, H / VH) || 1;
   scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
   craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
-  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+  craie.echelle = s; craie.tailleMin = 15; craie.cadre = { w: VW, h: VH, haut: 0 };
   return craie;
 };
 function calculer() { const t = S.t, r = S.running; S.t = 1e6; S.running = false; dessiner(craie); S.t = t; S.running = r; scene.sale = true; }

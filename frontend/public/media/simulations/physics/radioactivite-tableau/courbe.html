@@ -65,14 +65,25 @@ const VITESSE = 1.5;                               // horloge de l’écriture (
 
 /* ── Géométrie (cadre 760 × 420) ─────────────────────────────────────── */
 const RC = { x: 8, y: 42, w: 506, h: 370 }, RL = { x: 522, y: 42, w: 230, h: 370 };
-const O = { x: 64, y: 360 }, AXL = 410, AYL = 280;
+const O = { x: 64, y: 360 }, AYL = 280;
+let AXL = 410;
 const PX = t => O.x + t * AXL / C().tAxe, PY = y => O.y - y * AYL / C().ymax;
-const LX = RL.x + 8, LW = RL.w - 16;              // colonne Lecture
+let LX = RL.x + 8, LW = RL.w - 16, TL = 0;          // colonne Lecture ; TL : points de police en plus (tableau large)
+/* Tableau large (15 novembre 2026, « mieux exploiter tout le tableau ») : quand le cadre fait L ≥ 1000 de large, la
+ * courbe s'étire en largeur (même hauteur, axe du temps plus long) et la colonne Lecture s'élargit à droite avec une
+ * police plus grande. Sinon la disposition d'origine (760 × 420). */
+let LCADRE = 760;
+function disposer(L) {
+  LCADRE = L;
+  if (L < 1000) { Object.assign(RC, { w: 506 }); Object.assign(RL, { x: 522, w: 230 }); AXL = 410; TL = 0; }
+  else { Object.assign(RL, { w: 300, x: L - 308 }); RC.w = RL.x - 10 - RC.x; AXL = RC.w - 96; TL = 4; }
+  LX = RL.x + 8; LW = RL.w - 16;
+}
 const tau = () => C().T / LN2;
 
 /* ── Dessin : l’écriture suit l’horloge de la scène ; chaque moment = fin de l’écriture de sa phase ── */
 const marque = (c, nom) => { MM[nom] = c.cur; };
-const lire = (c, y, s, o = {}) => c.texte(s, LX, y, { couleur: 'blanc', taille: 16, max: LW, ...o });
+const lire = (c, y, s, o = {}) => c.texte(s, LX, y, { couleur: 'blanc', taille: 16, max: LW, ...o, taille: (o.taille ?? 16) + TL });
 function dessiner(c) {
   scene.cadre(43); MM = {};
   const K = C();
@@ -103,9 +114,9 @@ function dessiner(c) {
     c.ligne(x, O.y, x, y, { couleur: 'rose', largeur: 1.3, pointille: [3, 4] }); c.ligne(O.x, y, x, y, { couleur: 'rose', largeur: 1.3, pointille: [3, 4] });
     c.cercle(x, y, 7, { couleur: 'rose', largeur: 2 });
     const [l1, l2] = lignesLu(lu);
-    c.texte('point lu (glisse-le) :', LX, 352, { couleur: 'rose', taille: 14 });
-    c.texte(l1, LX, 376, { couleur: 'rose', taille: 15, max: LW });
-    c.texte(l2, LX, 400, { couleur: 'rose', taille: 15, max: LW });
+    c.texte('point lu (glisse-le) :', LX, 352, { couleur: 'rose', taille: 14 + TL });
+    c.texte(l1, LX, 376, { couleur: 'rose', taille: 15 + TL, max: LW });
+    c.texte(l2, LX, 400, { couleur: 'rose', taille: 15 + TL, max: LW });
   });
   declarerReperes(c, K, lu);
   const fini = c.fin();
@@ -130,7 +141,7 @@ function dessinerLectures(c, K) {
   c.pause(.3);
   c.texte('t½', xT + 4, O.y - 7, { couleur: 'jaune', taille: 16 });
   lire(c, 158, K.Ttxt, { couleur: 'jaune', taille: 19 });
-  c.rect(LX - 4, 138, 120, 28, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  c.rect(LX - 4, 138 - TL, 120 * (1 + TL / 16), 28 + TL, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
   marque(c, 't_demi');
   if (l !== 'N') return;
   // Tangente à l’origine : N = N₀(1 − t/τ), elle coupe l’axe des temps en τ.
@@ -144,7 +155,7 @@ function dessinerLectures(c, K) {
   c.texte('τ', PX(tau()), O.y + 38, { couleur: 'orange', taille: 19, align: 'center' });
   lire(c, 250, 'τ = 1/λ = t½/ln2', { couleur: 'blanc' });
   lire(c, 278, 'τ = 8/0,693 = 11,5 jours', { couleur: 'orange', taille: 17 });
-  c.rect(LX - 4, 259, 200, 28, { couleur: 'orange', largeur: 1.5, arrondi: 6 });
+  c.rect(LX - 4, 259 - TL, 200 * (1 + TL / 16), 28 + TL, { couleur: 'orange', largeur: 1.5, arrondi: 6 });
   marque(c, 'tau');
 }
 /** Paliers : N₀ → N₀/2 → N₀/4 → N₀/8 aux dates t½, 2t½, 3t½. */
@@ -158,14 +169,16 @@ function dessinerPaliers(c, K) {
     c.cercle(x, y, 6, { couleur: 'cyan', largeur: 1.8 });
     c.texte(`N_0/${2 ** k}`, x + 9, y - 8, { couleur: 'cyan', taille: 16 });
     c.texte(k === 1 ? 't½' : `${k}t½`, x + 4, O.y - 7, { couleur: 'jaune', taille: 15 });
-    lire(c, 50 + 34 * k, `${k === 1 ? '' : k}t½ = ${t} jours :`, { couleur: 'faible', taille: 15 });
-    lire(c, 68 + 34 * k, `N = N_0/${2 ** k} = ${fr(v, 1)}·10²⁰`, { couleur: 'cyan', taille: 16 });
+    const pas = TL ? 50 : 34;                      // tableau large : police plus grande, lignes plus espacées
+    lire(c, 50 + pas * k, `${k === 1 ? '' : k}t½ = ${t} jours :`, { couleur: 'faible', taille: 15 });
+    lire(c, 68 + TL * 1.5 + pas * k, `N = N_0/${2 ** k} = ${fr(v, 1)}·10²⁰`, { couleur: 'cyan', taille: 16 });
     marque(c, 'palier_' + k);
   }
   c.pause(.5);
-  lire(c, 214, 't = n·t½ :', { couleur: 'blanc', taille: 17 });
-  lire(c, 244, 'N = N_0/2^{n}', { couleur: 'jaune', taille: 21 });
-  c.rect(LX - 4, 220, 140, 34, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  const dy = TL ? 54 : 0;
+  lire(c, 214 + dy, 't = n·t½ :', { couleur: 'blanc', taille: 17 });
+  lire(c, 244 + dy, 'N = N_0/2^{n}', { couleur: 'jaune', taille: 21 });
+  c.rect(LX - 4, 220 + dy - TL, 140 * (1 + TL / 16), 34 + TL, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
   marque(c, 'formule');
 }
 /** Droite ln N = f(t) (national 2021 R) : ordonnée à l’origine, pente, identification. */
@@ -196,7 +209,7 @@ function dessinerLn(c, K) {
   lire(c, 270, 'ln N = ln N_0 − λ·t', { couleur: 'blanc' });
   lire(c, 294, 'donc λ = −k', { couleur: 'blanc' });
   lire(c, 322, 'λ = 0,0485 jour⁻¹', { couleur: 'jaune', taille: 19 });
-  c.rect(LX - 4, 302, 172, 30, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  c.rect(LX - 4, 302 - TL, 172 * (1 + TL / 16), 30 + TL, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
   marque(c, 'identification');
 }
 function lignesLu(lu) {
@@ -228,7 +241,7 @@ function declarerReperes(c, K, lu) {
     c.repere('palier_' + k, PX(t) - 12, PY(v) - 12, 24, 24, `palier ${k} : t = ${k === 1 ? '' : k}t½, ${l} = ${l}₀/${2 ** k}${ici(S.courbe === 'paliers')}`);
   }
   c.repere('pente', PX(0), PY(33) - 14, PX(200) - PX(0), PY(23.3) - PY(33) + 28, S.courbe === 'ln' ? 'le triangle de pente : k = −0,0485 jour⁻¹' : `la pente${ici(false)}`);
-  c.repere('identification', RL.x + 2, S.courbe === 'ln' ? 254 : 200, RL.w - 4, S.courbe === 'ln' ? 84 : 60,
+  c.repere('identification', RL.x + 2, S.courbe === 'ln' ? 254 : 200 + (TL && S.courbe === 'paliers' ? 54 : 0), RL.w - 4, S.courbe === 'ln' ? 84 : 60,
     S.courbe === 'ln' ? 'ln N = ln N₀ − λ·t donc λ = −k = 0,0485 jour⁻¹' : S.courbe === 'paliers' ? 'la formule N = N₀/2ⁿ' : `l’identification${ici(false)}`);
   c.repere('point_lu', PX(lu.t) - 12, PY(lu.y) - 12, 24, 24, `le point lu : ${texteLu(lu)}`);
 }
@@ -237,12 +250,13 @@ const canvas = $('canvas');
 const scene = window.OndesTableau.Scene(canvas, dessiner);
 const craie = scene.craie;
 scene.cadre = function (graine) {
-  const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  const VH = 420, W = craie.W, H = craie.H, VW = Math.round(Math.min(760 * 2.1, Math.max(760, VH * W / Math.max(1, H))));
+  disposer(VW);
   craie.debut(graine, S.t);
   const s = Math.min(W / VW, H / VH) || 1;
   scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
   craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
-  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+  craie.echelle = s; craie.tailleMin = 15; craie.cadre = { w: VW, h: VH, haut: 0 };
   return craie;
 };
 function calculer() { const t = S.t, r = S.running; S.t = 1e6; S.running = false; try { dessiner(craie); dessiner(craie); } finally { S.t = t; S.running = r; } scene.sale = true; }

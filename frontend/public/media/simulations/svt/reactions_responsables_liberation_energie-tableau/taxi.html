@@ -53,7 +53,11 @@ const H0 = [[128, 220], [152, 222]], HAIR = [[190, 168], [208, 168]];
 const TX = { arrivee: [440, 214], pose: [199, 200], loin: [560, 350] };
 
 const canvas = $('canvas');
-const scene = Scene(canvas, (c) => { scene.cadre(41); dessiner(c); return c.fin(); });
+const scene = Scene(canvas, (c) => { scene.cadre(41); MOS.dessiner(c, () => { dessiner(c); }); return c.fin(); }, { large: true });
+/* Tableau large (portable 1366 × 613) : la page est rangée sur toute la largeur (SVTLarge.Mosaique, dans peinture.js) ; grand écran : inchangée. */
+const MOS = window.SVTLarge.Mosaique(scene, (L) => L >= 1000 ? (() => { const s = Math.min(1.3, (L - 290) / 752), B = 752 * s, wc = Math.min(300, L - B - 24), x0 = (L - wc - 16 - B) / 2, X = x0 + wc + 16; return { police: 1.12, blocs: [
+  { src: [8, 118, 752, 300], X, Y: (420 - 300 * s) / 2, s },                     // le hyaloplasme : molécule, transporteur, équations
+  { src: [790, 0, 262, 250], X: x0, Y: 40, s: Math.min(1.05, wc / 262), police: 1 }] }; })() : null);
 const ecrit = Apparitions(scene);
 const chrono = Chrono({ fin: () => FIN, moments: () => M, motifs: MOTIFS, bouton: $('run'), bulle: $('feedback'), pont: () => pont,
   depart: 'Observe la molécule organique dans le hyaloplasme…', reinit: () => ecrit.oublier(),
@@ -65,7 +69,7 @@ const GRAINS = (() => { const r = P.graine(23), g = []; for (let i = 0; i < 120;
 function hyaloplasme(ctx) {
   const g = ctx.createRadialGradient(260, 230, 40, 380, 230, 480);
   g.addColorStop(0, P.rgba(P.T.hyalo, .22)); g.addColorStop(1, P.rgba(P.T.hyalo, .07));
-  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(12, 44, 736, 372, 26) : ctx.rect(12, 44, 736, 372); ctx.fill();
+  ctx.fillStyle = g; ctx.beginPath(); const y0 = MOS.actif() ? 122 : 44; ctx.roundRect ? ctx.roundRect(12, y0, 736, 416 - y0, 26) : ctx.rect(12, y0, 736, 416 - y0);   // tableau large : le titre et la règle sont à gauche ctx.fill();
   ctx.fillStyle = P.rgba([200, 220, 180], .14);
   for (const [x, y, r] of GRAINS) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
 }
@@ -91,13 +95,22 @@ function posH(i, t) {
 function dessiner(c) {
   const t = chrono.t, T = tr(), k = S.transporteur;
   c.direct(() => hyaloplasme(c.ctx));
-  c.texte('Oxydoréduction : un transporteur d’hydrogène', 18, 30, { couleur: 'cyan', taille: 20 });
-  c.texte('hyaloplasme', 28, 72, { couleur: 'vert', taille: 14 });
-  // la règle, encadrée
-  c.rect(498, 52, 242, 56, { couleur: 'jaune', largeur: 1.5, arrondi: 8 });
-  c.texte('prendre des électrons = réduction', 510, 74, { couleur: 'blanc', taille: 14 });
-  c.texte('perdre des électrons = oxydation', 510, 96, { couleur: 'blanc', taille: 14 });
-  c.repere('regle', 498, 52, 242, 56, 'la règle : réduction, oxydation');
+  if (MOS.actif()) {   // tableau large : le titre et la règle en colonne à gauche (bloc [790, 0, 260, 250] de la mosaïque)
+    ['Oxydoréduction :', 'un transporteur', 'd’hydrogène'].forEach((l, i) => c.texte(l, 800, 30 + i * 26, { couleur: 'cyan', taille: 21 }));
+    c.texte('hyaloplasme', 28, 142, { couleur: 'vert', taille: 15 });
+    c.rect(796, 112, 248, 124, { couleur: 'jaune', largeur: 1.5, arrondi: 8 });
+    c.texte('prendre des électrons', 810, 138, { couleur: 'blanc', taille: 17 }); c.texte('= réduction', 830, 162, { couleur: 'vert', taille: 17 });
+    c.texte('perdre des électrons', 810, 194, { couleur: 'blanc', taille: 17 }); c.texte('= oxydation', 830, 218, { couleur: 'orange', taille: 17 });
+    c.repere('regle', 796, 112, 248, 124, 'la règle : réduction, oxydation');
+  } else {
+    c.texte('Oxydoréduction : un transporteur d’hydrogène', 18, 30, { couleur: 'cyan', taille: 20 });
+    c.texte('hyaloplasme', 28, 72, { couleur: 'vert', taille: 14 });
+    // la règle, encadrée
+    c.rect(498, 52, 242, 56, { couleur: 'jaune', largeur: 1.5, arrondi: 8 });
+    c.texte('prendre des électrons = réduction', 510, 74, { couleur: 'blanc', taille: 14 });
+    c.texte('perdre des électrons = oxydation', 510, 96, { couleur: 'blanc', taille: 14 });
+    c.repere('regle', 498, 52, 242, 56, 'la règle : réduction, oxydation');
+  }
 
   // la molécule organique
   const a = doux(chrono.part(0, 1, t));

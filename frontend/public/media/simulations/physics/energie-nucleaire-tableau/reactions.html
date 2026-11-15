@@ -222,28 +222,40 @@ const PARTS_EQ = {
 };
 const VB = { x: 6, y: 32, w: 748, h: 382 };
 const Y_EQ = 330, Y_DEF = 384;
+/* Tableau large (15 novembre 2026, « la simulation n’occupe qu’une bande étroite, textes minuscules ») :
+ * Scene({ large: true }) ; l’animation (écrite pour 760 de large) est centrée sur le tableau (décalage DXA), le cadre
+ * de la vue, le titre et la légende vont aux bords, l’équation et la définition s’écrivent plus gros sur toute la largeur.
+ * Les coordonnées de la page restent celles du cadre 760 : XG est le bord gauche du tableau, XD le bord droit. */
+let DXA = 0, XG = 0, XD = 760, GL = 1;
+function cadreLarge(graine) {
+  scene.cadre(graine);
+  DXA = Math.max(0, (scene.L - 760) / 2);
+  if (DXA) { scene.craie.ctx.translate(DXA, 0); scene.ox += DXA * scene.s; scene.craie.cadre = null; }   // le garde-fou du kit ne connaît pas le décalage
+  XG = -DXA; XD = 760 + DXA; GL = scene.L >= 1000 ? 1.3 : 1;
+  VB.x = XG + 6; VB.w = XD - XG - 12;
+}
 /** L’équation, terme par terme, et son repère. */
 function equation(c, vue, nom) {
   const parts = PARTS_EQ[vue];
-  c.repere('equation', 380 - 190, Y_EQ - 30, 380, 42, `l’équation : ${EQUATIONS[vue]}`);
-  ecrit(c, nom, () => ligne(c, parts, 380, Y_EQ, { taille: 24, couleur: 'blanc', align: 'center', pause: .22 }));
+  c.repere('equation', 380 - 190 * GL, Y_EQ - 30 * GL, 380 * GL, 42 * GL, `l’équation : ${EQUATIONS[vue]}`);
+  ecrit(c, nom, () => ligne(c, parts, 380, Y_EQ, { taille: 24 * GL, couleur: 'blanc', align: 'center', pause: .22 }));
 }
 /** La phrase de définition (encadrée) et son repère. */
 function definition(c, nom, texte, id = 'definition') {
-  c.repere(id, 14, Y_DEF - 22, 732, 32, texte);
+  c.repere(id, XG + 14, Y_DEF - 22 * GL, XD - XG - 28, 32 * GL, texte);
   ecrit(c, nom, () => {
-    T(c, texte, 380, Y_DEF, { couleur: 'jaune', taille: 17, align: 'center', max: 716 });
-    c.rect(16, Y_DEF - 21, 728, 30, { couleur: 'jaune', arrondi: 7, largeur: 1.3, alpha: .7 });
+    T(c, texte, 380, Y_DEF + 3 * (GL - 1), { couleur: 'jaune', taille: 17 * GL, align: 'center', max: XD - XG - 44 });
+    c.rect(XG + 16, Y_DEF - 21 * GL, XD - XG - 32, 30 * GL, { couleur: 'jaune', arrondi: 7, largeur: 1.3, alpha: .7 });
   });
 }
 /** Commun à toutes les vues : titre, cadre de la vue, légende des couleurs. */
 function cadreVue(c) {
-  c.texte(NOMS_VUES[P.vue], 14, 24, { couleur: 'cyan', taille: 17 });
+  c.texte(NOMS_VUES[P.vue], XG + 14, 24, { couleur: 'cyan', taille: 17 * GL });
   c.rect(VB.x, VB.y, VB.w, VB.h, { couleur: 'tresfaible', arrondi: 8, duree: .5 });
   c.repere('vue_' + P.vue, VB.x, VB.y, VB.w, VB.h, 'la vue « ' + NOMS_VUES[P.vue] + ' »');
-  c.direct(() => { sphere(c.ctx, 22, 50, 6, 'p'); sphere(c.ctx, 84, 50, 6, 'n'); });
-  c.texte('proton', 32, 55, { couleur: 'faible', taille: 13 });
-  c.texte('neutron', 94, 55, { couleur: 'faible', taille: 13 });
+  c.direct(() => { sphere(c.ctx, XG + 22, 50, 6, 'p'); sphere(c.ctx, XG + 84, 50, 6, 'n'); });
+  c.texte('proton', XG + 32, 55, { couleur: 'faible', taille: 13 });
+  c.texte('neutron', XG + 94, 55, { couleur: 'faible', taille: 13 });
 }
 /** Une légende de phase, visible de son écriture jusqu’à `jusqua` (le professeur l’efface ensuite). */
 function legendePhase(c, nom, texte, x, y, jusqua = Infinity, o = {}) {
@@ -667,12 +679,12 @@ function craieSpontanee(c) {
     ligne(c, ['particule α : ', { A: 4, Z: 2, X: 'He' }], SP.A_F[0], SP.A_F[1] - 22, { taille: 16, couleur: 'blanc', align: 'center' });
     T(c, 'énergie libérée : 5,4 MeV', 500, 238, { couleur: 'jaune', taille: 15, align: 'center' });
   });
-  if (vu('legende')) ecritA(c, a_('legende'), M.legende - 1.2, () => ligne(c, PARTS_EQ.spontanee, 380, Y_EQ, { taille: 24, couleur: 'blanc', align: 'center', pause: .22 }));
-  c.repere('equation', 380 - 190, Y_EQ - 30, 380, 42, `l’équation : ${EQUATIONS.spontanee}`);
-  c.repere('definition', 14, Y_DEF - 22, 732, 32, 'réaction spontanée : le noyau se transforme seul (radioactivité)');
+  if (vu('legende')) ecritA(c, a_('legende'), M.legende - 1.2, () => ligne(c, PARTS_EQ.spontanee, 380, Y_EQ, { taille: 24 * GL, couleur: 'blanc', align: 'center', pause: .22 }));
+  c.repere('equation', 380 - 190 * GL, Y_EQ - 30 * GL, 380 * GL, 42 * GL, `l’équation : ${EQUATIONS.spontanee}`);
+  c.repere('definition', XG + 14, Y_DEF - 22 * GL, XD - XG - 28, 32 * GL, 'réaction spontanée : le noyau se transforme seul (radioactivité)');
   if (vu('legende')) ecritA(c, M.legende - 1.2, M.legende, () => {
-    T(c, 'réaction spontanée : le noyau se transforme seul (radioactivité)', 380, Y_DEF, { couleur: 'jaune', taille: 17, align: 'center', max: 716 });
-    c.rect(16, Y_DEF - 21, 728, 30, { couleur: 'jaune', arrondi: 7, largeur: 1.3, alpha: .7 });
+    T(c, 'réaction spontanée : le noyau se transforme seul (radioactivité)', 380, Y_DEF + 3 * (GL - 1), { couleur: 'jaune', taille: 17 * GL, align: 'center', max: XD - XG - 44 });
+    c.rect(XG + 16, Y_DEF - 21 * GL, XD - XG - 32, 30 * GL, { couleur: 'jaune', arrondi: 7, largeur: 1.3, alpha: .7 });
   });
   c.direct(() => {
     const pb = t >= L.emet;
@@ -699,10 +711,10 @@ function motsSpontanee() {
 function dessiner(c) {
   cadreVue(c);
   ({ fission: craieFission, chaine: craieChaine, fusion: craieFusion, spontanee: craieSpontanee })[P.vue](c);
-  c.direct(() => { if (S.running || S.t > 0) c.texte(S.fait ? 'fin' : `t = ${fr(S.t, 1)} s`, 748, 24, { couleur: 'faible', taille: 13, align: 'right' }); });
+  c.direct(() => { if (S.running || S.t > 0) c.texte(S.fait ? 'fin' : `t = ${fr(S.t, 1)} s`, XD - 12, 24, { couleur: 'faible', taille: 13, align: 'right' }); });
 }
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(43); dessiner(c); return c.fin(); });
+const scene = window.OndesTableau.Scene(canvas, (c) => { cadreLarge(43); dessiner(c); return c.fin(); }, { large: true });
 scene.avancer = dt => {
   if (!S.running) return false;
   S.t = Math.min(FIN(), S.t + dt);

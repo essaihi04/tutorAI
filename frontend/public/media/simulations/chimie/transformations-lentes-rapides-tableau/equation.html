@@ -11,6 +11,7 @@
 </div>
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
+<script src="large.js"></script>
 <script src="exposants.js"></script>
 <script>
 /*
@@ -65,7 +66,7 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), { large: true });
   const cadreBase = scene.cadre;
   scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
   M.scene = scene; M.craie = scene.craie;
@@ -275,6 +276,7 @@ const ETAPES = Object.fromEntries(VUES.map(v => {
 // Le motif d’un moment dépend de la vue affichée (mêmes noms de moments dans toutes les vues).
 const MOTIFS = new Proxy({}, { get: (_, nom) => (nom === 'fin' ? 'l’équation de la réaction est écrite et vérifiée' : (ETAPES[MOT.S.vue].find(e => e.nom === nom) || {}).motif) });
 let MO = null;
+let BOITE_VERIF = null;   // tableau large : la vérification dans la colonne (repère du cadre)
 
 /* ── Dessin ──────────────────────────────────────────────────────────── */
 function dispo(c, v) {
@@ -292,7 +294,10 @@ function dispo(c, v) {
 function dessiner(c, M) {
   MO = M; M.scene.cadre(47);
   const v = M.S.vue, d = D[v], P = dispo(c, v);
-  ecrit(c, `L’équation de la réaction : ${d.nom}`, XL, 30, { couleur: 'cyan', taille: 20 });
+  // Tableau large (large.js) : les lignes du calcul agrandies ; le titre et la vérification dans la colonne de gauche.
+  BOITE_VERIF = null;
+  window.TLRLarge.debut(c, M.scene, { src: [6, 40, 790, d.simpl ? 304 : 284], ecrire: ecrit });
+  window.TLRLarge.titre(c, `L’équation de la réaction : ${d.nom}`, XL, 30, { couleur: 'cyan', taille: 20 });
   M.etape(c, 'couples', () => {
     ecrit(c, d.couples, XL, Y.couples, { couleur: 'blanc', taille: 17 });
     ecrit(c, `oxydant : ${d.ox}`, P.xo, Y.couples, { couleur: 'rouge', taille: 17 });
@@ -330,10 +335,18 @@ function dessiner(c, M) {
   M.etape(c, 'verifier', () => {
     const L = P.final;
     c.rect(L.x0 - 10, P.yFinal - 26, L.x1 - L.x0 + 20, 36, { couleur: 'jaune', largeur: 1.8, arrondi: 6 });
-    ecrit(c, `charges : à gauche ${d.gauche} ; à droite ${d.droite}`, XE, Y.verif, { couleur: 'blanc', taille: 17, max: 620 });
-    ecrit(c, `${d.q} = ${d.q} : l’équation est équilibrée (atomes et charges)`, XE, Y.phrase, { couleur: 'vert', taille: 17, max: 620 });
+    if (window.TLRLarge.actif()) {   // tableau large : la vérification s’écrit dans la colonne de gauche
+      const G = window.TLRLarge.G; G.y += 10;
+      const b1 = window.TLRLarge.phrase(c, `charges : à gauche ${d.gauche} ; à droite ${d.droite}`, { couleur: 'blanc' });
+      const b2 = window.TLRLarge.phrase(c, `${d.q} = ${d.q} : l’équation est équilibrée (atomes et charges)`, { couleur: 'vert' });
+      BOITE_VERIF = [b1[0], b1[1], b1[2], b2[1] + b2[3] - b1[1]];
+    } else {
+      ecrit(c, `charges : à gauche ${d.gauche} ; à droite ${d.droite}`, XE, Y.verif, { couleur: 'blanc', taille: 17, max: 620 });
+      ecrit(c, `${d.q} = ${d.q} : l’équation est équilibrée (atomes et charges)`, XE, Y.phrase, { couleur: 'vert', taille: 17, max: 620 });
+    }
   });
   reperes(c, M, P);
+  window.TLRLarge.fin(c);
   return c.fin();
 }
 function reperes(c, M, P) {
@@ -350,7 +363,9 @@ function reperes(c, M, P) {
   c.repere('bilan', ...ligne(P.bilan, Y.bilan), `le bilan de l’addition : ${d.bilan}${plus('additionner')}`);
   if (d.simpl) c.repere('simplification', XL - 4, Y.simpl - 22, P.simpl.x1 + 10 - XL, 56, `après simplification des H⁺ : ${nu(d.simpl)}${plus('simplifier')}`);
   else c.repere('simplification', XE - 6, Y.simpl - 22, largeur(c, d.rien, 17) + 12, 30, `${d.rien}${plus('simplifier')}`);
-  c.repere('charges', XE - 6, Y.verif - 22, Math.min(620, largeur(c, `charges : à gauche ${d.gauche} ; à droite ${d.droite}`, 17)) + 12, 30, `vérification des charges : ${d.q} à gauche, ${d.q} à droite${plus('verifier')}`);
+  const lc = `vérification des charges : ${d.q} à gauche, ${d.q} à droite${plus('verifier')}`;
+  if (window.TLRLarge.actif()) window.TLRLarge.repere(c, 'charges', BOITE_VERIF || [10, window.TLRLarge.G.y - 10, window.TLRLarge.G.col - 14, 90], lc);
+  else c.repere('charges', XE - 6, Y.verif - 22, Math.min(620, largeur(c, `charges : à gauche ${d.gauche} ; à droite ${d.droite}`, 17)) + 12, 30, lc);
   c.repere('oxydant', P.xo - 6, Y.couples - 22, largeur(c, `oxydant : ${d.ox}`, 17) + 12, 30, `l’oxydant ${d.ox} (en rouge) : il capte des électrons`);
   c.repere('reducteur', P.xr - 6, Y.couples - 22, largeur(c, `réducteur : ${d.red}`, 17) + 12, 30, `le réducteur ${d.red} (en vert) : il cède des électrons`);
 }

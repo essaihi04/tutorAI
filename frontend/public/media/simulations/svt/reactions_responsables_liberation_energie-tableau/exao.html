@@ -39,6 +39,12 @@ const vue = VUES.includes(demande) ? demande : 'levures';
 
 /* Le graphique : axes, zone tracée (coordonnées du cadre 760 × 420). */
 const G = { X0: 402, X1: 700, Y0: 330, Y1: 128, YT: 114 };
+/* Tableau large (portable, scene.L ≥ 1000) : le graphique s'étire vers la droite sur toute la largeur du tableau
+ * (axe du temps plus long, axes de droite et légendes suivent) ; grand écran : 760 × 420, centré. */
+function regler(L) {
+  G.X1 = L >= 1000 ? L - 60 : 700;
+  for (const xp of Object.values(XP)) for (const d of xp.droite || []) { d.x0 ??= d.x; d.x = d.x0 + G.X1 - 700; }
+}
 const ROW1 = 80, ROW2 = 96, FL_H = 100, FL_B = 122;     // étiquettes d'ajout (deux rangées) et flèches verticales
 
 /* ── Les trois expériences ────────────────────────────────────────────────────────────────────── */
@@ -121,7 +127,9 @@ const majMotifs = () => { for (const k of Object.keys(MOTIFS)) delete MOTIFS[k];
 majMotifs();
 
 const canvas = $('canvas');
-const scene = Scene(canvas, (c) => { scene.cadre(31); dessiner(c); return c.fin(); });
+const scene = Scene(canvas, (c) => { scene.cadre(31); regler(scene.L); MOS.dessiner(c, () => { dessiner(c); }); return c.fin(); }, { large: true });
+/* Tableau large (portable 1366 × 613) : la page est rangée sur toute la largeur (SVTLarge.Mosaique, dans peinture.js) ; grand écran : inchangée. */
+const MOS = window.SVTLarge.Mosaique(scene, (L) => L >= 1000 ? { police: 1.12, blocs: [{ src: [0, 0, L, 420], X: 0, Y: 0, s: 1 }] } : null);
 const ecrit = Apparitions(scene);
 const chrono = Chrono({ fin: () => FIN, moments: () => X.moments(), motifs: MOTIFS, bouton: $('run'), bulle: $('feedback'), pont: () => pont,
   vitesse: X.vitesse || 1, depart: 'L’expérience démarre (temps accéléré)…', reinit: () => ecrit.oublier(), fini: () => X.fini() });
@@ -305,7 +313,7 @@ function axes(c) {
   if (X.droite.length) {
     c.fleche(G.X1, G.Y0, G.X1, G.YT, F);
     for (const d of X.droite) {
-      c.texte(d.titre, d.centre ? G.X1 : 756, d.yTitre, { couleur: d.couleur, taille: 14, align: d.centre ? 'center' : 'right' });
+      c.texte(d.titre, d.centre ? G.X1 : G.X1 + 56, d.yTitre, { couleur: d.couleur, taille: 14, align: d.centre ? 'center' : 'right' });
       d.ticks.forEach((v, i) => {
         const y = yG(v, d.max);
         if (d === X.droite[0]) c.ligne(G.X1 - 4, y, G.X1 + 4, y, { couleur: 'faible', largeur: 1.3, duree: .04 });
@@ -356,7 +364,7 @@ function lecture(s) { return `${s.nom} = ${fr(s.f(chrono.t), 1)} ${s.unite}`; }
 function dessiner(c) {
   const t = chrono.t, M = X.moments();
   c.texte(X.titre, 12, 26, { couleur: 'cyan', taille: 18 });
-  c.direct(() => c.texte(`t = ${fr(t, vue === 'pulse_o2' ? 0 : 1)} ${X.unite} (temps accéléré)`, 752, 26, { couleur: 'faible', taille: 14, align: 'right' }));
+  c.direct(() => c.texte(`t = ${fr(t, vue === 'pulse_o2' ? 0 : 1)} ${X.unite} (temps accéléré)`, G.X1 + 52, 26, { couleur: 'faible', taille: 14, align: 'right' }));
   c.texte('le montage', 12, 46, { couleur: 'faible', taille: 13 });
   c.texte('le graphique', 551, 46, { couleur: 'faible', taille: 13, align: 'center' });
   c.repere('montage', 8, 36, 340, 346, 'le montage');

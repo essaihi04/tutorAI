@@ -12,6 +12,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="/media/simulations/maths/commun/exposants.js"></script>
 <script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/ln-tableau/large.js"></script>
 <script>
 /*
  * Cours « Fonctions logarithmiques » (math_ch5_fonctions_ln) : la courbe de ln.
@@ -28,6 +29,7 @@ const ln = Math.log, E = Math.E;
 const SUPS = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
 /** Largeur réelle d’un texte à la craie, exposants et indices compris. */
 function L(c, s, t = 18) {
+  t = Math.max(t, LnLarge.min(c));   // la craie n’écrit jamais plus petit (tailleMin du kit)
   s = String(s).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUPS[ch]).join('') + '}');
   let w = 0;
   for (const seg of Tableau.Craie.segments(s)) { c.ctx.font = `${seg.sub || seg.sup ? t * .62 : t}px ${Tableau.POLICE}`; w += c.ctx.measureText(seg.t).width; }
@@ -86,17 +88,23 @@ const OC = { x0: 50, y0: 52, w: 430, h: 296, xmin: -0.3, xmax: 6.5, ymin: -2.2, 
 const OT = { x0: 50, y0: 52, w: 430, h: 296, xmin: -0.4, xmax: 5.3, ymin: -3.2, ymax: 3.6, gx: [1, 2, 3, 4, 5], gy: [[1, '1'], [2, '2'], [3, '3'], [-1, '−1'], [-2, '−2'], [-3, '−3']] };
 const OP = { ...BASE, gx: [[1, '1'], [2, ''], [3, ''], [4, '4'], [5, ''], [6, '6'], [7, ''], [8, '']] };
 const XR = 505;
+/* Tableau large (15 novembre 2026) : le repère s’étire sur la largeur (GW), la colonne de droite est reportée plus loin et
+ * agrandie (Z) ; hors du tableau large, rien ne change. */
+const LARGE = () => LnLarge.L >= 1000;
+const GW = o => LARGE() ? { ...o, x0: 60, y0: 54, w: 690, h: 306 } : o;
+const Z = (c, fn) => LnLarge.colonne(c, XR, 60, LARGE() ? 1.25 : 1, LARGE() ? 830 : XR, 60, fn);
 
 MathsTableau.page({
-  id: 'ln_courbe', titre: 'Fonctions logarithmiques',
+  id: 'ln_courbe', titre: 'Fonctions logarithmiques', ajuster: !LnLarge.actif,
   texte: 'Construction à la craie du cours Fonctions logarithmiques : la courbe de ln (rouge) ; strictement croissante car (ln x)’ = 1/x > 0 ; négative sur ]0 ; 1[, nulle en 1, positive après ; le nombre e où ln vaut 1 ; ln compare comme x ; la tangente en 1 y = x − 1 ; ln(eʳ) = r',
   vues: {
     monte: {
       titre: 'ln monte toujours',
       params: { x: { min: 0.2, max: 6, pas: 0.1, defaut: 4, sens: 'abscisse du point mobile sur la courbe' } },
       dessiner(c, K) {
-        K.titre('ln monte toujours');
-        const x = K.P.x, G = K.axes(BASE);
+        LnLarge.ouvrir(c);
+        LnLarge.titre(c, K, 'ln monte toujours');
+        const x = K.P.x, G = K.axes(GW(BASE));
         const pts = [[0.5, '(0,5 ; −0,69)', 'bd'], [1, '(1 ; 0)', 'hg'], [2, '(2 ; 0,69)', 'bd'], [4, '(4 ; 1,39)', 'bd']];
         for (const [a, s, pos] of pts) {
           c.pause(.2);
@@ -116,17 +124,21 @@ MathsTableau.page({
           tangente(c, G, xx, 'cyan', 34, 2.2);
           c.point(G.X(xx), G.Y(ln(xx)), 5.5, 'cyan');
         });
-        c.texte('x = ' + fr(x, 1), XR, 90, { couleur: 'cyan', taille: 20 });
-        c.texte('hauteur : ln x ≈ ' + fr(ln(x), 2), XR, 120, { couleur: 'jaune', taille: 20 });
-        c.texte('la tangente monte', XR, 150, { couleur: 'cyan', taille: 18 });
+        Z(c, () => {
+          c.texte('x = ' + fr(x, 1), XR, 90, { couleur: 'cyan', taille: 20 });
+          c.texte('hauteur : ln x ≈ ' + fr(ln(x), 2), XR, 120, { couleur: 'jaune', taille: 20 });
+          c.texte('la tangente monte', XR, 150, { couleur: 'cyan', taille: 18 });
+        });
         c.repere('point_mobile', G.X(x) - 22, G.Y(ln(x)) - 22, 44, 44, 'le point mobile');
         K.marque('glisse');
         c.pause(.4);
-        const b = bloc(c, [{ t: '1/x > 0 sur ]0 ; +∞[ :', c: 'vert' }, { t: 'ln est strictement croissante', c: 'vert' }], XR + 2, 252, 17, 'vert', 28);
-        c.repere('croissante', ...b, 'ln est strictement croissante');
+        Z(c, () => {
+          const b = bloc(c, [{ t: '1/x > 0 sur ]0 ; +∞[ :', c: 'vert' }, { t: 'ln est strictement croissante', c: 'vert' }], XR + 2, 252, 17, 'vert', 28);
+          c.repere('croissante', ...b, 'ln est strictement croissante');
+        });
         K.marque('croissante');
       },
-      poignees(K) { const G = K.grille(BASE); return [{ id: 'x', x: G.X(K.P.x), y: G.Y(ln(K.P.x)), bouger: (px) => ({ x: G.inv(px, 0)[0] }) }]; },
+      poignees: LnLarge.poignees(K => { const G = K.grille(GW(BASE)); return [{ id: 'x', x: G.X(K.P.x), y: G.Y(ln(K.P.x)), bouger: (px) => ({ x: G.inv(px, 0)[0] }) }]; }),
       lecture: K => `En x = ${fr(K.P.x, 1)}, la hauteur du point est ln x ≈ ${fr(ln(K.P.x), 2)} ; la pente de la tangente vaut 1/x = ${fr(1 / K.P.x, 2)} > 0 : la courbe monte.`,
       decrire: K => ({
         points: 'Un repère ; quatre points jaunes placés avec leurs valeurs : (0,5 ; −0,69), (1 ; 0), (2 ; 0,69), (4 ; 1,39).',
@@ -144,8 +156,9 @@ MathsTableau.page({
     signe: {
       titre: 'Négatif avant 1, positif après 1',
       dessiner(c, K) {
-        K.titre('Négatif avant 1, positif après 1');
-        const G = K.axes(BASE);
+        LnLarge.ouvrir(c);
+        LnLarge.titre(c, K, 'Négatif avant 1, positif après 1');
+        const G = K.axes(GW(BASE));
         K.anime(2, p => courbeLn(c, G, p));
         K.marque('courbe');
         c.pause(.4);
@@ -163,26 +176,28 @@ MathsTableau.page({
         c.repere('positif', G.X(1), G.Y(2.3), G.X(8.1) - G.X(1), G.Y(0) - G.Y(2.3), 'pour x > 1 : ln x > 0');
         K.marque('positif');
         c.pause(.4);
-        // Le tableau de signe : x | 0 ‖ 1 +∞ ; ln x | − 0 +.
-        const x0 = XR, y0 = 70, w = 240, g = 52, h = 32, P = [x0 + g + 16, x0 + g + 98, x0 + w - 18];
-        const o = { couleur: 'faible', largeur: 1.3 };
-        c.rect(x0, y0, w, 2 * h, { couleur: 'faible', arrondi: 3, largeur: 1.4 });
-        c.ligne(x0, y0 + h, x0 + w, y0 + h, o); c.ligne(x0 + g, y0, x0 + g, y0 + 2 * h, o);
-        c.texte('x', x0 + g / 2, y0 + 22, { couleur: 'faible', taille: 17, align: 'center' });
-        c.texte('ln x', x0 + g / 2, y0 + h + 22, { couleur: 'faible', taille: 17, align: 'center' });
-        ['0', '1', '+∞'].forEach((s, i) => c.texte(s, P[i], y0 + 22, { couleur: 'blanc', taille: 17, align: 'center' }));
-        c.ligne(P[0] - 2, y0 + h, P[0] - 2, y0 + 2 * h, { couleur: 'blanc', largeur: 1.6 });
-        c.ligne(P[0] + 3, y0 + h, P[0] + 3, y0 + 2 * h, { couleur: 'blanc', largeur: 1.6 });
-        c.ligne(P[1], y0 + h, P[1], y0 + 2 * h, { couleur: 'tresfaible', largeur: 1.2, pointille: [3, 4] });
-        c.texte('−', (P[0] + P[1]) / 2, y0 + h + 23, { couleur: 'orange', taille: 21, align: 'center' });
-        c.texte('0', P[1], y0 + h + 22, { couleur: 'jaune', taille: 18, align: 'center' });
-        c.texte('+', (P[1] + P[2]) / 2, y0 + h + 23, { couleur: 'vert', taille: 21, align: 'center' });
-        c.repere('tableau', x0 - 4, y0 - 4, w + 8, 2 * h + 8, 'le tableau de signe de ln x');
+        Z(c, () => {
+          // Le tableau de signe : x | 0 ‖ 1 +∞ ; ln x | − 0 +.
+          const x0 = XR, y0 = 70, w = 240, g = 52, h = 32, P = [x0 + g + 16, x0 + g + 98, x0 + w - 18];
+          const o = { couleur: 'faible', largeur: 1.3 };
+          c.rect(x0, y0, w, 2 * h, { couleur: 'faible', arrondi: 3, largeur: 1.4 });
+          c.ligne(x0, y0 + h, x0 + w, y0 + h, o); c.ligne(x0 + g, y0, x0 + g, y0 + 2 * h, o);
+          c.texte('x', x0 + g / 2, y0 + 22, { couleur: 'faible', taille: 17, align: 'center' });
+          c.texte('ln x', x0 + g / 2, y0 + h + 22, { couleur: 'faible', taille: 17, align: 'center' });
+          ['0', '1', '+∞'].forEach((s, i) => c.texte(s, P[i], y0 + 22, { couleur: 'blanc', taille: 17, align: 'center' }));
+          c.ligne(P[0] - 2, y0 + h, P[0] - 2, y0 + 2 * h, { couleur: 'blanc', largeur: 1.6 });
+          c.ligne(P[0] + 3, y0 + h, P[0] + 3, y0 + 2 * h, { couleur: 'blanc', largeur: 1.6 });
+          c.ligne(P[1], y0 + h, P[1], y0 + 2 * h, { couleur: 'tresfaible', largeur: 1.2, pointille: [3, 4] });
+          c.texte('−', (P[0] + P[1]) / 2, y0 + h + 23, { couleur: 'orange', taille: 21, align: 'center' });
+          c.texte('0', P[1], y0 + h + 22, { couleur: 'jaune', taille: 18, align: 'center' });
+          c.texte('+', (P[1] + P[2]) / 2, y0 + h + 23, { couleur: 'vert', taille: 21, align: 'center' });
+          c.repere('tableau', x0 - 4, y0 - 4, w + 8, 2 * h + 8, 'le tableau de signe de ln x');
+        });
         K.marque('tableau');
         c.pause(.4);
         K.rond(G, 0.75, ln(0.75), true, 'orange');
         c.texte('3/4', G.X(0.75) + 8, G.Y(ln(0.75)) + 18, { couleur: 'orange', taille: 15 });
-        c.texte('ln(3/4) < 0 car 3/4 < 1', XR, 170, { couleur: 'orange', taille: 20 });
+        Z(c, () => c.texte('ln(3/4) < 0 car 3/4 < 1', XR, 170, { couleur: 'orange', taille: 20 }));
         K.marque('exemple');
       },
       decrire: {
@@ -203,8 +218,9 @@ MathsTableau.page({
     e: {
       titre: 'Le nombre e : là où ln vaut 1',
       dessiner(c, K) {
-        K.titre('Le nombre e : là où ln vaut 1');
-        const G = K.axes(OE);
+        LnLarge.ouvrir(c);
+        LnLarge.titre(c, K, 'Le nombre e : là où ln vaut 1');
+        const G = K.axes(GW(OE));
         K.anime(2, p => courbeLn(c, G, p));
         K.marque('courbe');
         c.pause(.4);
@@ -223,12 +239,14 @@ MathsTableau.page({
         K.rond(G, 2, ln(2), true, 'cyan'); K.proj(G, 2, ln(2), { versY: false, couleur: 'cyan' });
         K.rond(G, 3, ln(3), true, 'cyan'); K.proj(G, 3, ln(3), { versY: false, couleur: 'cyan' });
         c.ligne(G.X(2), G.Y(0), G.X(3), G.Y(0), { couleur: 'jaune', largeur: 6, alpha: .6 });
-        K.lignes(XR, 100, [
-          { t: 'ln 2 ≈ 0,69 < 1', couleur: 'cyan', taille: 20 },
-          { t: 'ln 3 ≈ 1,10 > 1', couleur: 'cyan', taille: 20 },
-        ], 34);
-        const b = encadre(c, 'donc 2 < e < 3', XR + 9, 196, 24, 'jaune', 'jaune');
-        c.repere('encadrement', XR - 6, 76, 240, b[1] + b[3] - 70, 'l’encadrement 2 < e < 3');
+        Z(c, () => {
+          K.lignes(XR, 100, [
+            { t: 'ln 2 ≈ 0,69 < 1', couleur: 'cyan', taille: 20 },
+            { t: 'ln 3 ≈ 1,10 > 1', couleur: 'cyan', taille: 20 },
+          ], 34);
+          const b = encadre(c, 'donc 2 < e < 3', XR + 9, 196, 24, 'jaune', 'jaune');
+          c.repere('encadrement', XR - 6, 76, 240, b[1] + b[3] - 70, 'l’encadrement 2 < e < 3');
+        });
         K.marque('encadrement');
       },
       decrire: {
@@ -247,8 +265,9 @@ MathsTableau.page({
     compare: {
       titre: 'ln compare comme x compare',
       dessiner(c, K) {
-        K.titre('ln compare comme x compare');
-        const G = K.axes(OC);
+        LnLarge.ouvrir(c);
+        LnLarge.titre(c, K, 'ln compare comme x compare');
+        const G = K.axes(GW(OC));
         K.anime(2, p => courbeLn(c, G, p));
         K.marque('courbe');
         c.pause(.4);
@@ -265,19 +284,25 @@ MathsTableau.page({
         c.pause(.4);
         c.fleche(G.X(2) + 8, G.Y(0) + 36, G.X(5) - 8, G.Y(0) + 36, { couleur: 'vert', largeur: 2, tete: 9 });
         c.fleche(G.X(0) - 30, G.Y(ln(2)), G.X(0) - 30, G.Y(ln(5)), { couleur: 'vert', largeur: 2, tete: 9 });
-        const r = encadre(c, 'a < b ⇔ ln a < ln b', XR + 9, 100, 21, 'vert', 'vert');
-        c.repere('ordre', ...r, 'a < b ⇔ ln a < ln b');
+        Z(c, () => {
+          const r = encadre(c, 'a < b ⇔ ln a < ln b', XR + 9, 100, 21, 'vert', 'vert');
+          c.repere('ordre', ...r, 'a < b ⇔ ln a < ln b');
+        });
         K.marque('ordre');
         c.pause(.4);
-        c.texte('ln a = ln b ⇔ a = b', XR, 156, { couleur: 'blanc', taille: 21 });
-        c.texte('une seule hauteur, un seul x', XR, 182, { couleur: 'faible', taille: 16 });
+        Z(c, () => {
+          c.texte('ln a = ln b ⇔ a = b', XR, 156, { couleur: 'blanc', taille: 21 });
+          c.texte('une seule hauteur, un seul x', XR, 182, { couleur: 'faible', taille: 16 });
+        });
         K.marque('egal');
         c.pause(.4);
         c.ligne(G.X(0) + 6, G.Y(0), G.X(5) - 6, G.Y(0), { couleur: 'vert', largeur: 7, alpha: .55 });
         K.rond(G, 0, 0, false, 'vert'); K.rond(G, 5, 0, false, 'vert');
-        c.texte('ln x < ln 5', XR, 236, { couleur: 'jaune', taille: 21 });
-        c.texte('⇔ 0 < x < 5', XR, 266, { couleur: 'jaune', taille: 21 });
-        c.repere('exemple', XR - 6, 214, 200, 62, 'ln x < ln 5 ⇔ 0 < x < 5');
+        Z(c, () => {
+          c.texte('ln x < ln 5', XR, 236, { couleur: 'jaune', taille: 21 });
+          c.texte('⇔ 0 < x < 5', XR, 266, { couleur: 'jaune', taille: 21 });
+          c.repere('exemple', XR - 6, 214, 200, 62, 'ln x < ln 5 ⇔ 0 < x < 5');
+        });
         K.marque('exemple');
       },
       decrire: {
@@ -297,8 +322,9 @@ MathsTableau.page({
     tangente: {
       titre: 'La tangente en 1 : y = x − 1',
       dessiner(c, K) {
-        K.titre('La tangente en 1 : y = x − 1');
-        const G = K.axes(OT);
+        LnLarge.ouvrir(c);
+        LnLarge.titre(c, K, 'La tangente en 1 : y = x − 1');
+        const G = K.axes(GW(OT));
         K.anime(2, p => courbeLn(c, G, p));
         K.marque('courbe');
         c.pause(.3);
@@ -308,12 +334,14 @@ MathsTableau.page({
         c.pause(.4);
         K.anime(1.4, p => c.ligne(G.X(-0.2), G.Y(-1.2), G.X(-0.2 + 4.7 * p), G.Y(-1.2 + 4.7 * p), { couleur: 'jaune', largeur: 2.6 }));
         c.texte('(T)', G.X(4.5) - 8, G.Y(3.5) + 4, { couleur: 'jaune', taille: 19, align: 'right' });
-        c.texte('pente ln’(1) = 1', XR, 96, { couleur: 'jaune', taille: 20 });
+        Z(c, () => c.texte('pente ln’(1) = 1', XR, 96, { couleur: 'jaune', taille: 20 }));
         c.repere('tangente', G.X(-0.2), G.Y(3.5), G.X(4.5) - G.X(-0.2), G.Y(-1.2) - G.Y(3.5), 'la tangente en 1');
         K.marque('tangente');
         c.pause(.4);
-        const b = encadre(c, '(T) : y = x − 1', XR + 9, 150, 24, 'jaune', 'jaune');
-        c.repere('equation', ...b, '(T) : y = x − 1');
+        Z(c, () => {
+          const b = encadre(c, '(T) : y = x − 1', XR + 9, 150, 24, 'jaune', 'jaune');
+          c.repere('equation', ...b, '(T) : y = x − 1');
+        });
         K.marque('equation');
         c.pause(.4);
         for (let x = 0.2; x <= 4.45; x += 0.13) {
@@ -321,9 +349,11 @@ MathsTableau.page({
           const yb = Math.max(-3.15, ln(x));
           c.ligne(G.X(x), G.Y(x - 1), G.X(x), G.Y(yb), { couleur: 'tresfaible', largeur: 1, duree: .03 });
         }
-        c.texte('la courbe reste', XR, 262, { couleur: 'blanc', taille: 20 });
-        c.texte('sous (T)', XR, 290, { couleur: 'blanc', taille: 20 });
-        c.texte('ln x ≤ x − 1', XR, 326, { couleur: 'faible', taille: 18 });
+        Z(c, () => {
+          c.texte('la courbe reste', XR, 262, { couleur: 'blanc', taille: 20 });
+          c.texte('sous (T)', XR, 290, { couleur: 'blanc', taille: 20 });
+          c.texte('ln x ≤ x − 1', XR, 326, { couleur: 'faible', taille: 18 });
+        });
         c.repere('dessous', G.X(0.2), G.Y(3.4), G.X(4.45) - G.X(0.2), G.Y(-3.1) - G.Y(3.4), 'l’écart entre (T) et la courbe');
         K.marque('dessous');
       },
@@ -344,8 +374,9 @@ MathsTableau.page({
     puissances_e: {
       titre: 'ln(eʳ) = r',
       dessiner(c, K) {
-        K.titre('ln(e^{r}) = r');
-        const G = K.axes(OP);
+        LnLarge.ouvrir(c);
+        LnLarge.titre(c, K, 'ln(e^{r}) = r');
+        const G = K.axes(GW(OP));
         K.anime(2, p => courbeLn(c, G, p));
         K.marque('courbe');
         const P = (x, y, lx, s, dx, dy, id, label, moment) => {
@@ -361,9 +392,17 @@ MathsTableau.page({
         P(1 / E, -1, '1/e', 'ln(1/e) = −1', 12, 18, 'inv_e', 'le point (1/e ; −1)', 'inv_e');
         P(Math.sqrt(E), 0.5, '√e', 'ln √e = ½', -12, -12, 'racine_e', 'le point (√e ; ½)', 'racine_e');
         c.pause(.5);
-        const b = encadre(c, 'ln(e^{r}) = r', 300, 300, 26, 'jaune', 'jaune');
-        c.texte('e^{r} : le nombre dont le ln vaut r', 291, 340, { couleur: 'blanc', taille: 18 });
-        c.repere('regle', b[0], b[1], Math.max(b[2], L(c, 'e^{r} : le nombre dont le ln vaut r', 18) + 10), 76, 'ln(eʳ) = r');
+        if (LARGE()) Z(c, () => {     // tableau large : la règle s’écrit dans la colonne de droite, vide sur cette vue
+          const b = encadre(c, 'ln(e^{r}) = r', XR + 9, 150, 26, 'jaune', 'jaune');
+          c.texte('e^{r} : le nombre', XR, 196, { couleur: 'blanc', taille: 20 });
+          c.texte('dont le ln vaut r', XR, 226, { couleur: 'blanc', taille: 20 });
+          c.repere('regle', b[0], b[1], Math.max(b[2], L(c, 'e^{r} : le nombre', 20) + 10), 240 - b[1], 'ln(eʳ) = r');
+        });
+        else {
+          const b = encadre(c, 'ln(e^{r}) = r', 300, 300, 26, 'jaune', 'jaune');
+          c.texte('e^{r} : le nombre dont le ln vaut r', 291, 340, { couleur: 'blanc', taille: 18 });
+          c.repere('regle', b[0], b[1], Math.max(b[2], L(c, 'e^{r} : le nombre dont le ln vaut r', 18) + 10), 76, 'ln(eʳ) = r');
+        }
         K.marque('regle');
       },
       decrire: {

@@ -43,7 +43,17 @@ const LIGNES = [
     atp: t => lin(t, 0.5, 3.6, 1, 0), pc: () => 1, amp: t => Math.min(1, lin(t, 0.5, 3.6, 1, 0) * 1.4),
     mots: { atp: 's’épuise', pc: 'constante' }, quand: { atp: 3.6, pc: 5 } },
 ];
-const Y = [118, 226, 334], MX0 = 196, MX1 = 520, GA = 590, GP = 690, GH = 60;
+const Y = [118, 226, 334];
+let MX0 = 196, MX1 = 520, GA = 590, GP = 690, GH = 60, GW = 28, AMP = 44, XR = 748, TK = 1, LL = 760;
+/* Disposition selon la largeur du tableau (15 novembre 2026, « mieux exploiter tout le tableau, grands calibres de
+ * texte ») : tableau large (scene.L ≥ 1000) → myogrammes étirés, jauges plus grandes au bord droit, muscles peints
+ * un peu plus grands, textes ×1,3. Sinon la disposition d'origine (760 × 420). */
+const tk = v => Math.round(v * TK);
+function disposer(L) {
+  const lg = L >= 1000; LL = L;
+  if (lg) { TK = 1.3; MX0 = 252; GP = L - 100; GA = GP - 150; MX1 = GA - 80; GH = 72; GW = 40; AMP = 52; XR = L - 12; Object.assign(PM, { x: 214, h: 86, w: 36 }); }
+  else { TK = 1; MX0 = 196; MX1 = 520; GA = 590; GP = 690; GH = 60; GW = 28; AMP = 44; XR = 748; Object.assign(PM, { x: 168, h: 76, w: 30 }); }
+}
 const tx = t => MX0 + (MX1 - MX0) * t / FIN;
 // Une secousse : fonction alpha qui culmine 0,08 s après l'excitation.
 const secousse = u => (u <= 0 ? 0 : (u / 0.08) * Math.exp(1 - u / 0.08));
@@ -89,22 +99,22 @@ function peindrePetitMuscle(ctx, yc, f) {
 }
 
 function dessiner(c) {
-  scene.cadre(41);
+  scene.cadre(41); disposer(scene.L);
   // Les trois muscles, peints sous la craie ; chacun suit sa propre tension.
   c.direct(() => LIGNES.forEach((L, i) => peindrePetitMuscle(c.ctx, Y[i] - 4, S.t > 0 ? Math.min(1, tension(L, S.t)) : 0)));
   c.direct(() => {
-    c.texte('Trois muscles, la même série d’excitations', 12, 26, { couleur: 'blanc', taille: 17 });
-    c.texte('myogramme', (MX0 + MX1) / 2, 56, { couleur: 'faible', taille: 14, align: 'center' });
-    c.texte('ATP', GA, 56, { couleur: 'jaune', taille: 15, align: 'center' });
-    c.texte('phosphocréatine', GP, 56, { couleur: 'rose', taille: 15, align: 'center' });
+    c.texte('Trois muscles, la même série d’excitations', 12, 26, { couleur: 'blanc', taille: tk(17) });
+    c.texte('myogramme', (MX0 + MX1) / 2, 56, { couleur: 'faible', taille: tk(14), align: 'center' });
+    c.texte('ATP', GA, 56, { couleur: 'jaune', taille: tk(15), align: 'center' });
+    c.texte('phosphocréatine', GP, 56, { couleur: 'rose', taille: tk(15), align: 'center' });
   });
   LIGNES.forEach((L, i) => {
     const y = Y[i];
-    L.nom.forEach((s, k) => c.texte(s, 12, y - 8 * (L.nom.length - 1) + k * 17, { couleur: L.couleur, taille: 15, max: 138 }));
+    L.nom.forEach((s, k) => c.texte(s, 12, y - tk(8) * (L.nom.length - 1) + k * tk(17), { couleur: L.couleur, taille: tk(15), max: PM.x - PM.w - 20 }));
     c.ligne(MX0, y + 24, MX1, y + 24, { couleur: 'tresfaible', largeur: 1.2 });
-    c.rect(GA - 14, y - GH / 2, 28, GH, { couleur: 'tresfaible', arrondi: 5 });
-    c.rect(GP - 14, y - GH / 2, 28, GH, { couleur: 'tresfaible', arrondi: 5 });
-    c.repere(L.id, 6, y - 46, 744, 96, L.nom.join(' '));
+    c.rect(GA - GW / 2, y - GH / 2, GW, GH, { couleur: 'tresfaible', arrondi: 5 });
+    c.rect(GP - GW / 2, y - GH / 2, GW, GH, { couleur: 'tresfaible', arrondi: 5 });
+    c.repere(L.id, 6, y - 46, LL - 16, 96, L.nom.join(' '));
     c.repere(L.id + '_atp', GA - 40, y - 40, 80, 84, 'l’ATP du ' + (i === 0 ? 'témoin' : i === 1 ? 'deuxième muscle' : 'troisième muscle'));
     c.repere(L.id + '_pc', GP - 50, y - 40, 100, 84, 'la phosphocréatine du ' + (i === 0 ? 'témoin' : i === 1 ? 'deuxième muscle' : 'troisième muscle'));
   });
@@ -112,24 +122,24 @@ function dessiner(c) {
     LIGNES.forEach((L, i) => {
       const y = Y[i], base = y + 24, g = c.ctx;
       if (S.t > 0) {
-        c.courbe(u => { const t = u * S.t; return [tx(t), base - 44 * tension(L, t)]; }, Math.max(8, Math.round(S.t * 90)), { couleur: L.couleur, largeur: 2, tremble: 0.2 });
+        c.courbe(u => { const t = u * S.t; return [tx(t), base - AMP * tension(L, t)]; }, Math.max(8, Math.round(S.t * 90)), { couleur: L.couleur, largeur: 2, tremble: 0.2 });
         for (let ts = T_EXC; ts <= S.t; ts += PERIODE) c.ligne(tx(ts), base + 4, tx(ts), base + 9, { couleur: 'faible', largeur: 1.2 });
       }
       const atp = S.t > 0 ? L.atp(S.t) : 1, pc = S.t > 0 ? L.pc(S.t) : 1;
-      g.globalAlpha = .6; g.fillStyle = c.couleur('jaune'); g.fillRect(GA - 10, y + GH / 2 - 4 - (GH - 8) * atp, 20, (GH - 8) * atp);
-      g.fillStyle = c.couleur('rose'); g.fillRect(GP - 10, y + GH / 2 - 4 - (GH - 8) * pc, 20, (GH - 8) * pc); g.globalAlpha = 1;
-      if (S.t >= L.quand.atp) c.texte(L.mots.atp, GA, y + GH / 2 + 16, { couleur: 'jaune', taille: 14, align: 'center' });
-      if (S.t >= L.quand.pc) c.texte(L.mots.pc, GP, y + GH / 2 + 16, { couleur: 'rose', taille: 14, align: 'center' });
+      g.globalAlpha = .6; g.fillStyle = c.couleur('jaune'); g.fillRect(GA - GW / 2 + 4, y + GH / 2 - 4 - (GH - 8) * atp, GW - 8, (GH - 8) * atp);
+      g.fillStyle = c.couleur('rose'); g.fillRect(GP - GW / 2 + 4, y + GH / 2 - 4 - (GH - 8) * pc, GW - 8, (GH - 8) * pc); g.globalAlpha = 1;
+      if (S.t >= L.quand.atp) c.texte(L.mots.atp, GA, y + GH / 2 + tk(16), { couleur: 'jaune', taille: tk(14), align: 'center' });
+      if (S.t >= L.quand.pc) c.texte(L.mots.pc, GP, y + GH / 2 + tk(16), { couleur: 'rose', taille: tk(14), align: 'center' });
       const arret = i === 2 ? M.atp_epuise : i === 1 ? M.arret_glycolyse : Infinity;
-      if (S.t >= arret + 0.3) c.texte(i === 1 ? 'arrêt plus tôt' : 'arrêt : plus d’ATP', tx(arret) + 6, base - 10, { couleur: 'rouge', taille: 14, max: 568 - tx(arret) });
+      if (S.t >= arret + 0.3) c.texte(i === 1 ? 'arrêt plus tôt' : 'arrêt : plus d’ATP', tx(arret) + 6, base - 10, { couleur: 'rouge', taille: tk(14), max: GA - 40 - tx(arret) });
     });
-    c.texte(`t = ${fr(S.t, 1)} s`, 748, 26, { couleur: 'vert', taille: 15, align: 'right' });
+    c.texte(`t = ${fr(S.t, 1)} s`, XR, 26, { couleur: 'vert', taille: tk(15), align: 'right' });
   });
   return c.fin();
 }
 
 const canvas = $('canvas');
-const scene = window.MuscleTableau.Scene(canvas, dessiner);
+const scene = window.MuscleTableau.Scene(canvas, dessiner, { large: true });
 scene.avancer = dt => {
   if (!S.running) return false;
   S.t = Math.min(FIN, S.t + dt);

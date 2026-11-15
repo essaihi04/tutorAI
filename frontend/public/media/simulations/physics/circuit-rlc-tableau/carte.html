@@ -76,6 +76,24 @@ const NOEUDS = [
     lignes: ['T₀ = 2π√(LC) resservira :', 'circuit d’accord (modulation)'],
     phrase: 'La suite : T₀ = 2π√(LC) resservira pour le circuit d’accord de la modulation.' },
 ];
+/* Agrandissement du 15 novembre 2026 (« la simulation n'occupe qu'une bande étroite, les textes sont minuscules ») :
+ * Scene en { large: true } : le cadre prend le format du tableau (scene.L de 760 à 1596, hauteur 420). Les colonnes de
+ * la carte se répartissent sur toute la largeur ; tableau large (L ≥ 1000) : branches et centre plus grands, écrits plus
+ * grand (D). Sinon : les tailles d'origine. */
+const COLS = { depuis: 0, decharge: 1, regimes: 2, equation: 3, solution: 4, periode: 4, conditions: 4, lecture: 4, energie: 3, amortissement: 2, entretien: 1, national: 0, suite: 0 };
+const Y0 = Object.fromEntries(NOEUDS.map(n => [n.id, n.y]));
+let D = { k: 1, titre: 17, ligne: 14, pas: 18, haut: 21, bas: 42 }, LC = 760;
+function disposer(L) {
+  LC = L; const large = L >= 1000;
+  D = large ? { k: 1.25, titre: 22, ligne: 18, pas: 22, haut: 27, bas: 54 } : { k: 1, titre: 17, ligne: 14, pas: 18, haut: 21, bas: 42 };
+  const w = large ? Math.min(230, (L - 16) / 5 - 18) : W, h = large ? 88 : H, m = 8 + w / 2;
+  for (const n of NOEUDS) {
+    n.w = w; n.h = h; n.x = m + COLS[n.id] * (L - 2 * m) / 4;
+    n.y = large ? ({ periode: 162, conditions: 258 })[n.id] ?? Y0[n.id] : Y0[n.id];
+    if (large && n.y === HAUT_Y) n.y = 56; else if (large && n.y === BAS_Y) n.y = 362;
+  }
+  Object.assign(CENTRE, { x: L / 2, w: large ? 320 : 230, h: large ? 124 : 96 });
+}
 const ANNEAUX = { non_acquis: ['rouge', 'à reprendre'], partiel: ['orange', 'à revoir'] };
 const AVANT = -1e9;   // instant d'un élément déjà dit : écrit d'un coup
 
@@ -102,8 +120,8 @@ function etat(c, comps, x, y, w, h) {
     if (st && ANNEAUX[st]) {
       const [coul, etiq] = ANNEAUX[st];
       c.rect(x - 5, y - 5, w + 10, h + 10, { couleur: coul, arrondi: 16, largeur: 2, pointille: [6, 6] });
-      c.texte(etiq, x + w - 4, y - 8, { couleur: coul, taille: 12, align: 'right' });
-    } else if (st === 'acquis') c.texte('✓', x + w - 14, y + 16, { couleur: 'vert', taille: 18 });
+      c.texte(etiq, x + w - 4, y - 8, { couleur: coul, taille: 12 * D.k, align: 'right' });
+    } else if (st === 'acquis') c.texte('✓', x + w - 14 * D.k, y + 16 * D.k, { couleur: 'vert', taille: 18 * D.k });
   });
 }
 
@@ -123,8 +141,8 @@ function branche(c, n) {
     c.texte('→ ' + n.titre, n.x, n.y + 6, { couleur: 'faible', taille: 17, align: 'center', max: n.w - 10, duree: .9 });
   } else {
     c.rect(x, y, n.w, n.h, { couleur: n.couleur, arrondi: n.encadre ? 4 : 14, largeur: n.encadre ? 1.6 : 2.4, pointille: n.encadre ? [6, 5] : undefined });
-    c.texte(n.titre, n.x, y + 21, { couleur: n.couleur, taille: 17, align: 'center', max: n.w - 16, duree: .8 });
-    n.lignes.forEach((l, k) => c.texte(l, n.x, y + 42 + k * 18, { couleur: 'blanc', taille: 14, align: 'center', max: n.w - 14, alpha: .92, duree: 1 }));
+    c.texte(n.titre, n.x, y + D.haut, { couleur: n.couleur, taille: D.titre, align: 'center', max: n.w - 16, duree: .8 });
+    n.lignes.forEach((l, k) => c.texte(l, n.x, y + D.bas + k * D.pas, { couleur: 'blanc', taille: D.ligne, align: 'center', max: n.w - 14, alpha: .92, duree: 1 }));
   }
   c.repere(n.id, x - 5, y - 5, n.w + 10, n.h + 10, lisible(n.titre));
   etat(c, n.comps, x, y, n.w, n.h);
@@ -135,14 +153,15 @@ function dessiner(c) {
   const x = CENTRE.x - CENTRE.w / 2, y = CENTRE.y - CENTRE.h / 2;
   if (S.def === AVANT) c.cur = AVANT;   // déjà dit (saut ou retour en arrière) : le centre est écrit d'un coup
   c.rect(x, y, CENTRE.w, CENTRE.h, { couleur: 'blanc', arrondi: 18, largeur: 3 });
-  c.texte('Circuit RLC série', CENTRE.x, y + 30, { couleur: 'blanc', taille: 25, align: 'center', gras: true });
-  c.texte('oscillations libres', CENTRE.x, y + 53, { couleur: 'cyan', taille: 18, align: 'center' });
+  c.texte('Circuit RLC série', CENTRE.x, y + 30 * D.k, { couleur: 'blanc', taille: 25 * D.k, align: 'center', gras: true });
+  c.texte('oscillations libres', CENTRE.x, y + 53 * D.k, { couleur: 'cyan', taille: 18 * D.k, align: 'center' });
   c.repere('centre', x, y, CENTRE.w, CENTRE.h, 'le centre : circuit RLC série, oscillations libres');
   const apres = c.cur;   // fin du titre du centre
   if (S.def != null) {
     c.depuis(S.def);
-    peindre(c, ctx => { condensateurPeint(ctx, CENTRE.x - 100, y + 62, 14, 24); bobinePeinte(ctx, CENTRE.x + 66, y + 70, 44, 14); });
-    c.texte('C chargé → (L, r) + R', CENTRE.x - 12, y + 82, { couleur: 'faible', taille: 13, align: 'center', duree: .8 });
+    const k = D.k;
+    peindre(c, ctx => { condensateurPeint(ctx, CENTRE.x - 100 * k, y + 62 * k, 14 * k, 24 * k); bobinePeinte(ctx, CENTRE.x + 66 * k, y + 70 * k, 44 * k, 14 * k); });
+    c.texte('C chargé → (L, r) + R', CENTRE.x - 12 * k, y + 82 * k + 4 * (k - 1), { couleur: 'faible', taille: 13 * k, align: 'center', duree: .8 });
     if (S.choisi === 'centre') c.direct(() => c.rect(x - 3, y - 3, CENTRE.w + 6, CENTRE.h + 6, { couleur: 'blanc', arrondi: 19, largeur: 1.2, alpha: .6 }));
   }
   // chaque branche a sa ligne de temps : elle s'écrit dès que la voix la dit, sans attendre la précédente
@@ -152,7 +171,7 @@ function dessiner(c) {
     c.cur = S.entoure === AVANT ? AVANT : Math.max(apres, S.entoure);
     for (const n of NOEUDS) c.rect(n.x - n.w / 2 - 7, n.y - n.h / 2 - 7, n.w + 14, n.h + 14, { couleur: 'jaune', arrondi: 17, largeur: 1.8, alpha: .8, duree: .35 });
   }
-  if (S.lacunes) c.direct(() => c.texte('✓ acquis · ⟳ à revoir · ✗ à reprendre', 744, 22, { couleur: 'faible', taille: 12, align: 'right' }));
+  if (S.lacunes) c.direct(() => c.texte('✓ acquis · ⟳ à revoir · ✗ à reprendre', LC - 16, 22, { couleur: 'faible', taille: 12 * D.k, align: 'right' }));
 }
 /* Le peint (résistor, bobine de cuivre) apparaît quand l’écriture arrive à lui. */
 const peindre = (c, fn) => { if (c.t >= c.cur) c.direct(() => { c.ctx.save(); try { fn(c.ctx); } finally { c.ctx.restore(); } }); };
@@ -181,7 +200,7 @@ function bobinePeinte(ctx, x, y, w = 44, h = 14) {
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(71); dessiner(c); return c.fin(); });
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(71); disposer(scene.L); dessiner(c); return c.fin(); }, { large: true });
 const maintenant = () => (performance.now() - scene.ouvert) / 1000;
 let horloge = 0;
 scene.avancer = dt => {

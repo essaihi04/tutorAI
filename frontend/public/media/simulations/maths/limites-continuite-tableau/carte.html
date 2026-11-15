@@ -49,6 +49,17 @@ const NOEUDS = [
     lignes: ['ⁿ√x = y ⇔ x = yⁿ', 'x^{1/n} = ⁿ√x, x > 0'],
     phrase: "La racine n-ième est la réciproque de x puissance n sur [0 ; +∞[ : ⁿ√x = y équivaut à x = yⁿ, pour x et y positifs." },
 ];
+/* Tableau large (15 novembre 2026, « grands vides à gauche et à droite, textes minuscules ») : la scène prend la largeur du
+ * tableau (option large, scene.L de 760 à 1292) ; les abscisses et largeurs des cadres × k = L / 760, leurs hauteurs et
+ * leurs textes × 1,3 à 1,35. Positions de base gardées (bx, bw, bh) ; recalculé à chaque image (disposer). */
+[CENTRE, ...NOEUDS].forEach(n => { n.bx = n.x; n.bw = n.w; n.bh = n.h; });
+let F = 1, HK = 1;
+function disposer(L, sc) {
+  const k = L / 760, large = L >= 1000;   // les cadres s'étalent toujours sur toute la largeur
+  // textes au moins à 15 px à l'écran (15 / sc en unités du cadre) ; les hauteurs des cadres suivent la taille du texte
+  F = large ? Math.max(1.35, 15 / Math.max(.01, sc) / 13) : 1; HK = large ? Math.min(F, 1.7) : 1;
+  [CENTRE, ...NOEUDS].forEach(n => { n.x = n.bx * k; n.w = n.bw * k; n.h = n.bh * HK; });
+}
 const ANNEAUX = { non_acquis: ['rouge', 'à reprendre'], partiel: ['orange', 'à revoir'] };
 const AVANT = -1e9;   // instant d'un élément déjà dit : écrit d'un coup
 
@@ -70,8 +81,8 @@ function etat(c, comps, x, y, w, h) {
     if (st && ANNEAUX[st]) {
       const [coul, etiq] = ANNEAUX[st];
       c.rect(x - 6, y - 6, w + 12, h + 12, { couleur: coul, arrondi: 16, largeur: 2, pointille: [6, 6] });
-      c.texte(etiq, x + w - 4, y - 9, { couleur: coul, taille: 12, align: 'right' });
-    } else if (st === 'acquis') c.texte('✓', x + w - 14, y + 14, { couleur: 'vert', taille: 18 });
+      c.texte(etiq, x + w - 4, y - 9, { couleur: coul, taille: 12 * F, align: 'right' });
+    } else if (st === 'acquis') c.texte('✓', x + w - 14, y + 14 * HK, { couleur: 'vert', taille: 18 * F });
   });
 }
 
@@ -85,8 +96,8 @@ function branche(c, n) {
   c.courbe(u => [(1 - u) * (1 - u) * a[0] + 2 * (1 - u) * u * m[0] + u * u * b[0], (1 - u) * (1 - u) * a[1] + 2 * (1 - u) * u * m[1] + u * u * b[1]], 24, { couleur: 'faible', largeur: 2 });
   const x = n.x - n.w / 2, y = n.y - n.h / 2;
   c.rect(x, y, n.w, n.h, { couleur: n.couleur, arrondi: 14, largeur: 2.4 });
-  c.texte(n.titre, n.x, y + 20, { couleur: n.couleur, taille: 16, align: 'center', max: n.w - 16, duree: .8 });
-  n.lignes.forEach((l, k) => c.texte(l, n.x, y + 38 + k * 16, { couleur: 'blanc', taille: 13, align: 'center', max: n.w - 14, alpha: .92, duree: 1 }));
+  c.texte(n.titre, n.x, y + 20 * HK, { couleur: n.couleur, taille: 16 * F, align: 'center', max: n.w - 16, duree: .8 });
+  n.lignes.forEach((l, k) => c.texte(l, n.x, y + (38 + k * 16) * HK, { couleur: 'blanc', taille: 13 * F, align: 'center', max: n.w - 14, alpha: .92, duree: 1 }));
   c.repere(n.id, x - 6, y - 6, n.w + 12, n.h + 12, n.titre);
   etat(c, n.comps, x, y, n.w, n.h);
   if (S.choisi === n.id) c.direct(() => c.rect(x - 3, y - 3, n.w + 6, n.h + 6, { couleur: 'blanc', arrondi: 15, largeur: 1.2, alpha: .6 }));
@@ -96,25 +107,25 @@ function dessiner(c) {
   const x = CENTRE.x - CENTRE.w / 2, y = CENTRE.y - CENTRE.h / 2;
   if (S.def === AVANT) c.cur = AVANT;   // déjà dit (saut ou retour en arrière) : le centre est écrit d'un coup
   c.rect(x, y, CENTRE.w, CENTRE.h, { couleur: 'jaune', arrondi: 18, largeur: 3 });
-  c.texte('Limites', CENTRE.x, y + 26, { couleur: 'jaune', taille: 19, align: 'center', gras: true });
-  c.texte('et continuité', CENTRE.x, y + 47, { couleur: 'jaune', taille: 19, align: 'center', gras: true });
+  c.texte('Limites', CENTRE.x, y + 26 * HK, { couleur: 'jaune', taille: 19 * F, align: 'center', gras: true });
+  c.texte('et continuité', CENTRE.x, y + 47 * HK, { couleur: 'jaune', taille: 19 * F, align: 'center', gras: true });
   c.repere('centre', x, y, CENTRE.w, CENTRE.h, 'le centre : limites et continuité');
   c.repere('definition', x, y, CENTRE.w, CENTRE.h, 'la définition de la continuité en a');
   const apres = c.cur;   // fin du titre du centre
   if (S.def != null) {
     c.depuis(S.def);
     ['f continue en a :', 'lim f(x) = f(a)', 'quand x → a'].forEach((l, k) =>
-      c.texte(l, CENTRE.x, y + 68 + k * 14, { couleur: 'blanc', taille: 12, align: 'center', max: CENTRE.w - 16, alpha: .92, duree: 1.1 }));
+      c.texte(l, CENTRE.x, y + (68 + k * 14) * HK, { couleur: 'blanc', taille: 12 * F, align: 'center', max: CENTRE.w - 16, alpha: .92, duree: 1.1 }));
     etat(c, CENTRE.comps, x, y, CENTRE.w, CENTRE.h);
     if (S.choisi === 'centre') c.direct(() => c.rect(x - 3, y - 3, CENTRE.w + 6, CENTRE.h + 6, { couleur: 'blanc', arrondi: 19, largeur: 1.2, alpha: .6 }));
   }
   // chaque branche a sa ligne de temps : elle s'écrit dès que la voix la dit, sans attendre la précédente
   for (let i = 0; i < S.n; i++) { c.cur = S.apparu[i] === AVANT ? AVANT : Math.max(apres, S.apparu[i]); branche(c, NOEUDS[i]); }
-  if (S.lacunes) c.direct(() => c.texte('✓ acquis · ⟳ à revoir · ✗ à reprendre', 24, 410, { couleur: 'faible', taille: 12 }));
+  if (S.lacunes) c.direct(() => c.texte('✓ acquis · ⟳ à revoir · ✗ à reprendre', 24, 414, { couleur: 'faible', taille: 12 * F }));
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(51); dessiner(c); return c.fin(); });
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(51); disposer(scene.L, scene.s); dessiner(c); return c.fin(); }, { large: true });
 const maintenant = () => (performance.now() - scene.ouvert) / 1000;
 let horloge = 0;
 scene.avancer = dt => {

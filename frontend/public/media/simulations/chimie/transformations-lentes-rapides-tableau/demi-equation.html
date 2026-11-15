@@ -11,6 +11,7 @@
 </div>
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
+<script src="large.js"></script>
 <script src="exposants.js"></script>
 <script>
 /*
@@ -64,7 +65,7 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), { large: true });
   const cadreBase = scene.cadre;
   scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
   M.scene = scene; M.craie = scene.craie;
@@ -285,6 +286,7 @@ const TITRES = Object.fromEntries(VUES.map(v => [v, `couple ${D[v].couple}`]));
 const XL = 14, XE = 150, TAILLE = 21;
 const Y = { couple: 74, atomes: 118, oxygene: 162, hydrogene: 206, charges: 250, resultat: 332, verifA: 372, verifC: 398 };
 const BAL = { x: 672, y: 300, l: 60, pend: 40, base: 392 };
+const SRC_BAL = [586, 222, 758, 420];   // boîte de la balance (titre, fléau, plateaux, mots) : tableau large, dans la colonne
 const ETAPES = Object.fromEntries(VUES.map(v => {
   const d = D[v], L = d.lignes, rien = k => !L[k][0];
   return [v, [
@@ -347,8 +349,10 @@ function dispo(c, v) {
 function dessiner(c, M) {
   MO = M; M.scene.cadre(43);
   const v = M.S.vue, d = D[v], P = dispo(c, v);
-  ecrit(c, `Écrire la demi-équation du couple ${d.couple}`, XL, 30, { couleur: 'cyan', taille: 20 });
-  balance(c, M);
+  // Tableau large (large.js) : les lignes du calcul agrandies ; le titre et la balance des charges dans la colonne de gauche.
+  window.TLRLarge.debut(c, M.scene, { src: [6, 46, 756, 406], ecrire: ecrit });
+  window.TLRLarge.titre(c, `Écrire la demi-équation du couple ${d.couple}`, XL, 30, { couleur: 'cyan', taille: 20 });
+  if (window.TLRLarge.actif()) window.TLRLarge.groupe(c, SRC_BAL, () => balance(c, M), 1.9); else balance(c, M);
   M.notes = {};
   for (const k of ORDRE.slice(0, 5)) {
     const [eq, note] = d.lignes[k], L = P[k], y = Y[k];
@@ -376,6 +380,7 @@ function dessiner(c, M) {
     ecrit(c, d.verifCharges, XE, Y.verifC, { couleur: 'vert', taille: 16, max: 440 });
   });
   reperes(c, M, P);
+  window.TLRLarge.fin(c);
   return c.fin();
 }
 function reperes(c, M, P) {
@@ -396,7 +401,8 @@ function reperes(c, M, P) {
   c.repere('electrons', ...boite(L, te, y), `les ${d.ne} électrons ajoutés à gauche (jaune) : ${d.ne}e⁻${plus('charges')}`);
   const R = P.resultat;
   c.repere('resultat', R.x0 - 14, Y.resultat - 30, R.x1 - R.x0 + 28, 44, `la demi-équation : ${nu(d.resultat)}${plus('verifier')}`);
-  c.repere('balance', BAL.x - 80, 222, 160, BAL.base - 222 + 8, `la balance des charges : ${etatBalance(M).mot}`);
+  const rb = () => c.repere('balance', BAL.x - 80, 222, 160, BAL.base - 222 + 8, `la balance des charges : ${etatBalance(M).mot}`);
+  if (window.TLRLarge.actif()) window.TLRLarge.groupe(c, SRC_BAL, rb, 1.9); else rb();
 }
 
 /* ── Ce que voit le tuteur ─────────────────────────────────────────────── */

@@ -32,15 +32,31 @@ const CASES = {
   eau: { x: 385, y: 214, w: 365, h: 200, titre: 'L’eau (vue de dessus)' },
 };
 /* Calendrier (s) : chaque case joue à son tour. */
-const A0 = 0.2, VA = 150, XA0 = 40, XM = 200, XA1 = 355;           // corde
-const B0 = 2.9, VB = 150, XB0 = 405, NSP = 27, PAS = 12, IM = 13;    // ressort (spire M = n° 13)
-const C0 = 5.6, VC = 120, SPX = 52, SPY = 318, LC = 30;               // son (longueur entre deux compressions)
-const D0 = 8.3, VD = 60, EX = 567, EY = 320;                          // eau
+const A0 = 0.2; let VA = 150, XA0 = 40, XM = 200, XA1 = 355;         // corde
+const B0 = 2.9, NSP = 27, IM = 13; let VB = 150, XB0 = 405, PAS = 12; // ressort (spire M = n° 13)
+const C0 = 5.6, SPX = 52, SPY = 318; let VC = 120, LC = 30;           // son (longueur entre deux compressions)
+const D0 = 8.3, VD = 60, EY = 320; let EX = 567;                      // eau
 const T = {
   corde: A0 + (XM - XA0) / VA, ressort: B0 + (XB0 + IM * PAS - XB0) / VB,
   son: C0 + 2.0, eau: D0 + 1.4, fin: 10.6,
 };
 const TFIN = 11.0;
+/* Agrandissement (15 novembre 2026, « mieux exploiter tout le tableau ») : Scene en { large: true } ; sur le
+ * tableau large (scene.L ≥ 1000) les quatre cases prennent toute la largeur (corde, ressort et grains d'air
+ * s'étirent avec elles, vitesses mises à l'échelle : les instants clés ne changent pas) et les textes grossissent
+ * (× 1,35) ; sur un grand écran (L < 1000) la disposition d'origine reste. */
+let L = 760, GR = false, kA = 1, kB = 1, KC = 1;
+const f = n => (GR ? Math.round(n * 1.35) : n);
+function disposer() {
+  L = scene.L; GR = L >= 1000;
+  const W = GR ? (L - 30) / 2 : 365, x2 = W + 20;
+  for (const k of Object.values(CASES)) k.w = W;
+  CASES.ressort.x = CASES.eau.x = x2;
+  kA = (W - 50) / 315; XA1 = XA0 + 315 * kA; XM = XA0 + 160 * kA; VA = 150 * kA;
+  kB = GR ? (W - 35) / (NSP * 12) : 1; XB0 = x2 + 20; PAS = 12 * kB; VB = 150 * kB;
+  KC = W / 365; VC = 120 * KC; LC = 30 * KC;
+  EX = x2 + W / 2;
+}
 const S = { t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0 };
 const vu = nom => S.t >= T[nom] - 1e-6;
 
@@ -109,15 +125,15 @@ function peindreBassin(ctx, k) {
 }
 
 function dessiner(c) {
-  scene.cadre(13);
+  scene.cadre(13); disposer();
   for (const [id, k] of Object.entries(CASES)) {
     c.rect(k.x, k.y, k.w, k.h, { couleur: 'tresfaible', largeur: 1.4, duree: .35 });
-    c.texte(k.titre, k.x + 12, k.y + 24, { couleur: 'blanc', taille: 17 });
+    c.texte(k.titre, k.x + 12, k.y + 24, { couleur: 'blanc', taille: f(17) });
     c.repere(id, k.x, k.y, k.w, k.h, { corde: 'la corde', ressort: 'le ressort', son: 'le son dans l’air', eau: 'les rides sur l’eau' }[id]);
   }
   // Décor fixe : la main en S, le haut-parleur, le point de chute de la goutte.
-  c.texte('S', XA0 - 18, 126, { couleur: 'faible', taille: 15 });
-  c.texte('S', XB0 - 18, 126, { couleur: 'faible', taille: 15 });
+  c.texte('S', XA0 - 18, 126, { couleur: 'faible', taille: f(15) });
+  c.texte('S', XB0 - 18, 126, { couleur: 'faible', taille: f(15) });
   // Le haut-parleur et le bassin d'eau sont peints (ci-dessous, sous la craie).
   c.direct(() => {
     const t = S.t, joue = S.running || S.pause || S.fait;
@@ -126,15 +142,15 @@ function dessiner(c) {
     /* ── La corde (peinte : une vraie corde torsadée) ── */
     const xa = XA0 + VA * (t - A0), ya = x => 120 - (joue && t > A0 ? 38 * bosse(x, xa, 22) : 0);
     peindreCorde(c.ctx, ya, XA0, XA1);
-    c.point(XM, ya(XM), 6, 'rouge'); c.texte('M', XM - 6, 146, { couleur: 'rouge', taille: 15 });
+    c.point(XM, ya(XM), 6, 'rouge'); c.texte('M', XM - 6, 146, { couleur: 'rouge', taille: f(15) });
     if (t >= T.corde - 0.35) {
-      c.fleche(XA0 + 40, 64, XA1 - 30, 64, { couleur: 'cyan', largeur: 2 }); c.texte('propagation', 120, 56, { couleur: 'cyan', taille: 15 });
+      c.fleche(XA0 + 40, 64, XA1 - 30, 64, { couleur: 'cyan', largeur: 2 }); c.texte('propagation', XA0 + 80 * kA, 56, { couleur: 'cyan', taille: f(15) });
       c.fleche(XM + 18, 128, XM + 18, 78, { couleur: 'orange', largeur: 2.2, tete: 9 }); c.fleche(XM + 18, 78, XM + 18, 128, { couleur: 'orange', largeur: 2.2, tete: 9 });
-      c.texte('M monte, descend', XM + 28, 100, { couleur: 'orange', taille: 15 });
+      c.texte('M monte, descend', XM + 28, 100, { couleur: 'orange', taille: f(15) });
       c.repere('fleches_corde', XA0 + 30, 44, XA1 - XA0 - 30, 90, 'le mouvement de M et la propagation');
     }
     if (t >= T.corde + 0.5) {
-      c.texte('⊥ : onde transversale', 24, 194, { couleur: 'jaune', taille: 17 });
+      c.texte('⊥ : onde transversale', 24, 194, { couleur: 'jaune', taille: f(17) });
       c.repere('corde_type', 18, 174, 220, 28, 'perpendiculaires : transversale');
     }
     /* ── Le ressort ── */
@@ -142,21 +158,21 @@ function dessiner(c) {
     const pts = [];
     for (let i = 0; i <= NSP; i++) { const x0 = XB0 + i * PAS; pts.push([x0 + dep(x0), 100], [x0 + PAS / 2 + dep(x0 + PAS / 2), 140]); }
     peindreRessort(c.ctx, pts);
-    const xm = XB0 + IM * PAS; c.point(xm + dep(xm), 100, 6, 'rouge'); c.texte('M', xm - 6, 92, { couleur: 'rouge', taille: 15 });
+    const xm = XB0 + IM * PAS; c.point(xm + dep(xm), 100, 6, 'rouge'); c.texte('M', xm - 6, 92, { couleur: 'rouge', taille: f(15) });
     if (t >= T.ressort - 0.35) {
-      c.fleche(XB0 + 30, 64, 720, 64, { couleur: 'cyan', largeur: 2 }); c.texte('propagation', 470, 56, { couleur: 'cyan', taille: 15 });
+      c.fleche(XB0 + 30, 64, XB0 + 315 * kB, 64, { couleur: 'cyan', largeur: 2 }); c.texte('propagation', XB0 + 65 * kB, 56, { couleur: 'cyan', taille: f(15) });
       c.fleche(xm - 22, 158, xm + 24, 158, { couleur: 'orange', largeur: 2.2, tete: 9 }); c.fleche(xm + 24, 158, xm - 22, 158, { couleur: 'orange', largeur: 2.2, tete: 9 });
-      c.texte('M avance, recule', xm + 34, 164, { couleur: 'orange', taille: 15 });
-      c.repere('fleches_ressort', XB0, 44, 340, 130, 'le mouvement de M et la propagation');
+      c.texte('M avance, recule', xm + 34, 164, { couleur: 'orange', taille: f(15) });
+      c.repere('fleches_ressort', XB0, 44, 340 * kB, 130, 'le mouvement de M et la propagation');
     }
     if (t >= T.ressort + 0.5) {
-      c.texte('∥ : onde longitudinale', 399, 194, { couleur: 'jaune', taille: 17 });
-      c.repere('ressort_type', 393, 174, 230, 28, 'même direction : longitudinale');
+      c.texte('∥ : onde longitudinale', CASES.ressort.x + 14, 194, { couleur: 'jaune', taille: f(17) });
+      c.repere('ressort_type', CASES.ressort.x + 8, 174, GR ? 300 : 230, 28, 'même direction : longitudinale');
     }
     /* ── Le son ── */
     const fc = VC * (t - C0);                       // rayon du front
     if (joue && t > C0) {
-      for (let r = fc % LC; r <= Math.min(fc, 300); r += LC) {
+      for (let r = fc % LC; r <= Math.min(fc, 300 * KC); r += LC) {
         if (r < 8) continue;
         const k = CASES.son, dans = (x, y) => x > k.x + 4 && x < k.x + k.w - 4 && y > k.y + 34 && y < k.y + k.h - 30;
         c.courbe(u => { const a = -1.3 + 2.6 * u, x = SPX + r * Math.cos(a), y = SPY + r * Math.sin(a); return dans(x, y) ? [x, y] : null; }, 40, { couleur: 'cyan', largeur: 1.6, alpha: .75 });
@@ -164,16 +180,16 @@ function dessiner(c) {
     }
     // Grains d'air : ils vont et viennent le long de la propagation (longitudinale), seulement là où le son est arrivé.
     for (let i = 0; i < 9; i++) for (let j = -2; j <= 2; j++) {
-      const x0 = SPX + 40 + i * 30, y0 = SPY + j * 26, r = Math.hypot(x0 - SPX, y0 - SPY), a = Math.atan2(y0 - SPY, x0 - SPX);
-      const d = joue && t > C0 && r < fc ? 6 * Math.sin(2 * Math.PI * (r - fc) / LC) : 0;
+      const x0 = SPX + 40 + i * 30 * KC, y0 = SPY + j * 26, r = Math.hypot(x0 - SPX, y0 - SPY), a = Math.atan2(y0 - SPY, x0 - SPX);
+      const d = joue && t > C0 && r < fc ? 6 * KC * Math.sin(2 * Math.PI * (r - fc) / LC) : 0;
       const marque = i === 4 && j === 0;
       c.point(x0 + d * Math.cos(a), y0 + d * Math.sin(a), marque ? 5 : 2.4, marque ? 'rouge' : 'faible');
     }
     if (t >= T.son - 0.4) {
-      c.fleche(SPX + 120 - 16, SPY + 22, SPX + 120 + 16, SPY + 22, { couleur: 'orange', largeur: 2, tete: 8 }); c.fleche(SPX + 120 + 16, SPY + 22, SPX + 120 - 16, SPY + 22, { couleur: 'orange', largeur: 2, tete: 8 });
-      c.texte('∥ : longitudinale', 24, 400, { couleur: 'jaune', taille: 17 });
-      c.texte('pas dans le vide', 200, 400, { couleur: 'faible', taille: 15 });
-      c.repere('son_type', 18, 380, 330, 28, 'le son : longitudinale, il lui faut un milieu matériel');
+      c.fleche(SPX + 40 + 80 * KC - 16, SPY + 22, SPX + 40 + 80 * KC + 16, SPY + 22, { couleur: 'orange', largeur: 2, tete: 8 }); c.fleche(SPX + 40 + 80 * KC + 16, SPY + 22, SPX + 40 + 80 * KC - 16, SPY + 22, { couleur: 'orange', largeur: 2, tete: 8 });
+      c.texte('∥ : longitudinale', 24, 400, { couleur: 'jaune', taille: f(17) });
+      c.texte('pas dans le vide', GR ? 240 : 200, 400, { couleur: 'faible', taille: f(15) });
+      c.repere('son_type', 18, 380, GR ? 420 : 330, 28, 'le son : longitudinale, il lui faut un milieu matériel');
     }
     /* ── L'eau, vue de dessus ── */
     const fd = VD * (t - D0);
@@ -184,15 +200,15 @@ function dessiner(c) {
     }
     if (t >= T.eau - 0.2) {
       for (const a of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) c.fleche(EX + 30 * Math.cos(a), EY + 30 * Math.sin(a), EX + 72 * Math.cos(a), EY + 72 * Math.sin(a), { couleur: 'cyan', largeur: 1.6, tete: 7 });
-      c.texte('⊥ : transversale', 399, 400, { couleur: 'jaune', taille: 17 });
-      c.repere('eau_type', 393, 380, 200, 28, 'l’eau monte et descend : transversale');
+      c.texte('⊥ : transversale', CASES.eau.x + 14, 400, { couleur: 'jaune', taille: f(17) });
+      c.repere('eau_type', CASES.eau.x + 8, 380, GR ? 260 : 200, 28, 'l’eau monte et descend : transversale');
     }
     /* ── Les dimensions, écrites à la fin ── */
     if (vu('fin')) {
       const dims = { corde: '1 dimension', ressort: '1 dimension', son: '3 dimensions', eau: '2 dimensions' };
       for (const [id, k] of Object.entries(CASES)) {
-        c.texte(dims[id], k.x + k.w - 12, k.y + 24, { couleur: 'vert', taille: 17, align: 'right' });
-        c.repere('dim_' + id, k.x + k.w - 120, k.y + 6, 114, 26, dims[id]);
+        c.texte(dims[id], k.x + k.w - 12, k.y + 24, { couleur: 'vert', taille: f(17), align: 'right' });
+        c.repere('dim_' + id, k.x + k.w - (GR ? 160 : 120), k.y + 6, GR ? 154 : 114, GR ? 30 : 26, dims[id]);
       }
     }
   });
@@ -200,7 +216,7 @@ function dessiner(c) {
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, dessiner);
+const scene = window.OndesTableau.Scene(canvas, dessiner, { large: true });
 scene.avancer = dt => {
   if (!S.running) return false;
   S.t = Math.min(TFIN, S.t + dt);

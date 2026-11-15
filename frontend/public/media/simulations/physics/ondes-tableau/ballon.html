@@ -32,7 +32,16 @@ const y = (x, t) => yS(t - x / V);
 // Vue de dessus
 const SX = 120, SY = 175, PXD = 260;              // S ; px par mètre
 // Vue de côté
-const PX0 = 440, PY0 = 215, PXC = 600, K = 34;    // origine (S), px par mètre, amplitude dessinée
+let PX0 = 440, PY0 = 215, PXC = 600, K = 34;      // origine (S), px par mètre, amplitude dessinée
+/* Agrandissement (15 novembre 2026, « mieux exploiter tout le tableau ») : Scene en { large: true } ; sur le
+ * tableau large (scene.L ≥ 1000) la vue de dessus s'élargit, la vue de côté s'étire sur toute la droite avec des
+ * rides plus hautes, textes plus grands (× 1,35) ; sur un grand écran (L < 1000) la disposition d'origine reste. */
+let L = 760, GR = false, WD = 360;
+const f = n => (GR ? Math.round(n * 1.35) : n);
+function disposer() {
+  L = scene.L; GR = L >= 1000; WD = GR ? 420 : 360;
+  PX0 = GR ? WD + 110 : 440; PXC = GR ? (L - PX0 - 50) / XMAX : 600; K = GR ? 46 : 34;
+}
 
 /* L'eau, rendue « pour de vrai » : la surface vue du dessus est éclairée selon sa pente (une ride claire du côté
  * de la lumière, sombre de l'autre), avec un léger affaiblissement en s'éloignant de S pour l'œil seulement ;
@@ -42,7 +51,7 @@ const attenue = r => 1 / Math.sqrt(1 + r / 0.06);
 const mix = (a, b, k) => a.map((v, i) => Math.round(v + (b[i] - v) * Math.max(0, Math.min(1, k))));
 const EAU = [14, 74, 92], CLAIR = [150, 220, 235], SOMBRE = [4, 30, 42];
 function eauDessus(ctx, t) {
-  const X0 = 30, Y0 = 46, W = 360, H = 262, R = Math.hypot(X0 + W - SX, Y0 + H - SY) + 4;
+  const X0 = 30, Y0 = 46, W = WD, H = 262, R = Math.hypot(X0 + W - SX, Y0 + H - SY) + 4;
   ctx.save();
   ctx.beginPath(); ctx.roundRect ? ctx.roundRect(X0, Y0, W, H, 8) : ctx.rect(X0, Y0, W, H); ctx.clip();
   // Le fond : un bassin, plus profond au centre, plus clair vers le bord.
@@ -103,14 +112,14 @@ function balle(ctx, x, yb, r, ombre) {
 }
 
 function vueDessus(c) {
-  c.texte('Vue de dessus', 40, 34, { couleur: 'cyan', taille: 17 });
+  c.texte('Vue de dessus', 40, 34, { couleur: 'cyan', taille: f(17) });
   c.direct(() => eauDessus(c.ctx, S.t));
-  c.rect(30, 46, 360, 262, { couleur: 'tresfaible', arrondi: 8 });
+  c.rect(30, 46, WD, 262, { couleur: 'tresfaible', arrondi: 8 });
   c.direct(() => {
     const t = S.t;
     // La goutte tombe vers S.
     if (t < 0) goutte(c.ctx, SX, SY - (-t / -T0) * 120);
-    c.point(SX, SY, 4, 'cyan').texte('S', SX - 16, SY + 6, { couleur: 'cyan' });
+    c.point(SX, SY, 4, 'cyan').texte('S', SX - 16, SY + 6, { couleur: 'cyan', taille: f(18) });
     // Les rides : crête (trait plein) et creux (trait léger), entre le front et la queue.
     if (t > 0) {
       const crete = V * (t - THETA / 4);
@@ -119,10 +128,10 @@ function vueDessus(c) {
     // Le ballon, vu du dessus : il ne quitte jamais son point (il grossit un peu quand il monte).
     const bx = SX + S.d * PXD;
     balle(c.ctx, bx, SY, 9 * (1 + .12 * y(S.d, t)), true);
-    c.texte('ballon', bx, SY + 30, { couleur: 'orange', align: 'center', taille: 15 });
-    c.texte('⇠ glisse-le ⇢', bx, SY + 50, { couleur: 'faible', align: 'center', taille: 13 });
+    c.texte('ballon', bx, SY + 30, { couleur: 'orange', align: 'center', taille: f(15) });
+    c.texte('⇠ glisse-le ⇢', bx, SY + 50, { couleur: 'faible', align: 'center', taille: f(13) });
     c.repere('bouee', bx - 18, SY - 18, 36, 56, 'le ballon');
-    c.cote(SX, SY + 78, bx, SY + 78, `d = ${fr(S.d)} m`, { couleur: 'jaune', dessous: true });
+    c.cote(SX, SY + 78, bx, SY + 78, `d = ${fr(S.d)} m`, { couleur: 'jaune', dessous: true, taille: f(18) });
   });
   c.repere('goutte', SX - 20, SY - 140, 40, 160, 'la goutte, en S');
 }
@@ -145,9 +154,9 @@ function eauCote(ctx, t) {
 }
 
 function vueCote(c) {
-  c.texte('Vue de côté', 420, 34, { couleur: 'cyan', taille: 17 });
+  c.texte('Vue de côté', PX0 - 20, 34, { couleur: 'cyan', taille: f(17) });
   c.ligne(PX0, PY0, PX0 + XMAX * PXC, PY0, { couleur: 'tresfaible', largeur: 1.2, pointille: [5, 6] });
-  c.fleche(PX0 + 150, PY0 - 96, PX0 + 260, PY0 - 96, { couleur: 'vert' }).texte('sens de propagation', PX0 + 205, PY0 - 106, { couleur: 'vert', align: 'center', taille: 14 });
+  c.fleche(PX0 + 0.25 * XMAX * PXC, PY0 - 96, PX0 + 0.43 * XMAX * PXC, PY0 - 96, { couleur: 'vert' }).texte('sens de propagation', PX0 + 0.34 * XMAX * PXC, PY0 - 106, { couleur: 'vert', align: 'center', taille: f(14) });
   c.repere('profil', PX0, PY0 - 60, XMAX * PXC, 100, 'la surface de l’eau, vue de côté');
   c.direct(() => {
     const t = S.t;
@@ -155,25 +164,25 @@ function vueCote(c) {
     const bx = PX0 + S.d * PXC, by = PY0 - K * y(S.d, t);
     balle(c.ctx, bx, by + 1, 10, false);
     eauCote(c.ctx, t);
-    c.point(PX0, PY0 - K * yS(t), 4, 'cyan').texte('S', PX0 - 6, PY0 + 26, { couleur: 'cyan' });
+    c.point(PX0, PY0 - K * yS(t), 4, 'cyan').texte('S', PX0 - 6, PY0 + 26, { couleur: 'cyan', taille: f(18) });
     c.repere('bouee_cote', bx - 18, by - 24, 36, 34, 'le ballon, vu de côté');
     // Son trajet : un trait vertical, à côté d'elle.
     if (S.trace.length > 1) {
       const lo = Math.min(...S.trace), hi = Math.max(...S.trace);
       if (hi - lo > 0.05) {
         c.ligne(bx + 26, PY0 - K * hi, bx + 26, PY0 - K * lo, { couleur: 'orange', largeur: 3, alpha: .6 });
-        c.texte('trajet du ballon', bx + 34, PY0 - K * hi - 6, { couleur: 'orange', taille: 14 });
+        c.texte('trajet du ballon', bx + 34, PY0 - K * hi - 6, { couleur: 'orange', taille: f(14) });
         c.repere('trajet', bx + 16, PY0 - K * hi - 8, 22, K * (hi - lo) + 16, 'le trajet : monte et descend, sur place');
       }
     }
-    c.texte(`t = ${fr(Math.max(0, t))} s`, 740, 30, { couleur: 'jaune', align: 'right' });
+    c.texte(`t = ${fr(Math.max(0, t))} s`, L - 20, 34, { couleur: 'jaune', align: 'right', taille: f(18) });
   });
-  c.texte('La ride avance ; l’eau et le ballon restent sur place.', 560, 330, { couleur: 'vert', align: 'center', taille: 16 });
-  c.texte(`v ≈ ${fr(V)} m/s`, 560, 356, { couleur: 'faible', align: 'center', taille: 14 });
+  c.texte('La ride avance ; l’eau et le ballon restent sur place.', PX0 + XMAX * PXC / 2, GR ? 336 : 330, { couleur: 'vert', align: 'center', taille: f(16) });
+  c.texte(`v ≈ ${fr(V)} m/s`, PX0 + XMAX * PXC / 2, GR ? 368 : 356, { couleur: 'faible', align: 'center', taille: f(14) });
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(13); vueDessus(c); vueCote(c); return c.fin(); });
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(13); disposer(); vueDessus(c); vueCote(c); return c.fin(); }, { large: true });
 scene.avancer = dt => {
   if (!S.running) return false;
   S.t = Math.min(ARRET, S.t + dt * LENT);

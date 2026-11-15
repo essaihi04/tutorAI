@@ -12,6 +12,7 @@
 </div>
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
+<script src="noyaux.js"></script>
 <script src="exposants.js"></script>
 <script>
 /*
@@ -49,8 +50,14 @@ function sphere(ctx, x, y, r, [clair, milieu, sombre]) {
 }
 const PERE = ['#f5ebff', '#b06cf0', '#43186f'], FILS = ['#e8edf3', '#7d8a99', '#2f3842'];
 
+/* Tableau large (15 novembre 2026) : les deux échantillons agrandis à gauche, λ·t et la conclusion à droite. */
+let LARGE = false;
 function dessiner(c) {
-  scene.cadre(37);
+  scene.cadre(37); LARGE = RadioLarge.large(scene);
+  RadioLarge.dessiner(c, scene, 37, LARGE ? RadioLarge.blocsStd(scene, [20, 0, 760, 312]) : null, () => corps(c));
+  return c.fin();
+}
+function corps(c) {
   c.direct(() => {
     const ctx = c.ctx;
     for (const e of ECH) {
@@ -68,21 +75,26 @@ function dessiner(c) {
       }
     }
     if (vu('conversion')) {
-      c.texte(`λ·t = ${fr(P.lambda_j, 3)} j^{-1} × 8 j = ${fr(P.lambda_j * 8, 2)}  : sans unité`, 40, 340, { couleur: 'vert', taille: 18 });
-      c.texte('(λ et t dans la même unité de temps)', 60, 366, { couleur: 'faible', taille: 15 });
-      c.repere('lambda_t', 34, 318, 560, 56, 'λ·t sans unité');
+      if (LARGE) {
+        const r = RadioLarge.enColonne(c, `λ·t = ${fr(P.lambda_j, 3)} j^{-1} × 8 j = ${fr(P.lambda_j * 8, 2)}  : sans unité`, 0, 3, { couleur: 'vert', taille: 23 });
+        RadioLarge.enColonne(c, '(λ et t dans la même unité de temps)', 1, 3, { couleur: 'faible', taille: 19 });
+        c.repere('lambda_t', r[0], r[1], r[2], r[3] + 50, 'λ·t sans unité');
+      } else {
+        c.texte(`λ·t = ${fr(P.lambda_j, 3)} j^{-1} × 8 j = ${fr(P.lambda_j * 8, 2)}  : sans unité`, 40, 340, { couleur: 'vert', taille: 18 });
+        c.texte('(λ et t dans la même unité de temps)', 60, 366, { couleur: 'faible', taille: 15 });
+        c.repere('lambda_t', 34, 318, 560, 56, 'λ·t sans unité');
+      }
     }
     if (S.t > C0 - 0.2) c.texte(`t = ${fr(jours(), 0)} jours`, 748, 36, { couleur: 'cyan', taille: 18, align: 'right' });
     if (vu('course')) {
-      c.texte(`λ grande : les noyaux partent vite`, 40, 404, { couleur: 'orange', taille: 18 });
-      c.repere('conclusion', 34, 384, 520, 28, 'plus λ est grande, plus la décroissance est rapide');
+      if (LARGE) { const r = RadioLarge.enColonne(c, 'λ grande : les noyaux partent vite', 2, 3, { couleur: 'orange', taille: 24 }); c.repere('conclusion', ...r, 'plus λ est grande, plus la décroissance est rapide'); }
+      else { c.texte(`λ grande : les noyaux partent vite`, 40, 404, { couleur: 'orange', taille: 18 }); c.repere('conclusion', 34, 384, 520, 28, 'plus λ est grande, plus la décroissance est rapide'); }
     }
   });
-  return c.fin();
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, dessiner);
+const scene = RadioLarge.brancher(window.OndesTableau.Scene(canvas, dessiner, { large: true }));
 scene.avancer = dt => {
   if (!S.running) return false;
   S.t = Math.min(TFIN, S.t + dt);

@@ -176,15 +176,52 @@ const f3 = v => fr(v, 3).replace('-', '−');
 const fa = v => (Math.abs(v - Math.round(v)) < 1e-9 ? String(Math.round(v)) : f2(v));
 const fn = v => fr(v, 2).replace(/0+$/, '').replace(/,$/, '');
 const Y_CALC = { tete: 66, l1: 100, l2: 126, l3: 152, l4: 188, l5: 214, l6: 250, l7: 276, l8: 302, l9: 338, l10: 364, fin: 386 };
+/* Agrandissement du 15 novembre 2026 : sur un tableau large (scene.L ≥ 1000, portable 1366 × 613), le prisme est
+ * agrandi de Z.k (zone d'origine 480 × 392), et « Les calculs » prennent toute la largeur restante, sur deux colonnes
+ * (face 1 et A = r + r' à gauche ; face 2 et D à droite), en plus grand. Sinon (grand écran) : comme avant. */
+const Z = { large: false, k: 1, oy: 0, base: null, kc: 1 };
+const R2_0 = { ...R2 };
+function zone(L) {
+  Z.large = L >= 1000;
+  Z.k = Z.large ? 1.08 : 1; Z.oy = Z.large ? -12 : 0; Z.kc = Z.large ? 1.4 : 1;
+  if (Z.large) { R2.x = Math.round(R1.x + R1.w * Z.k + 14); R2.y = 28; R2.w = L - 8 - R2.x; R2.h = 384; }
+  else Object.assign(R2, R2_0);
+}
+/* Position d'une ligne de calcul : une colonne (d'origine) ou deux (tableau large). */
+const COLONNE2 = ['l6', 'l7', 'l8', 'l9', 'l10', 'fin'];
+function posCalc(cle) {
+  if (!Z.large) return { x: R2.x + 10, y: Y_CALC[cle], w: R2.w - 18 };
+  const d = COLONNE2.includes(cle), wc = (R2.w - 36) / 2;
+  const rangs = d ? { l6: 0, l7: 1, l8: 2, l9: 3.5, l10: 4.5, fin: 6 } : { tete: 0, l1: 1.5, l2: 2.5, l3: 3.5, l4: 5, l5: 6 };
+  return { x: R2.x + 12 + (d ? wc + 16 : 0), y: (d ? 120 : 76) + rangs[cle] * 41, w: wc };
+}
+/** Écrit une ligne de calcul hors du zoom du prisme. */
+function calc(c, txt, cle, o) {
+  const q = posCalc(cle);
+  horsZoom(c, () => c.texte(txt, q.x, q.y, { ...o, taille: o.taille * Z.kc, max: q.w }));
+}
+function horsZoom(c, fn) {
+  if (!Z.large) return fn();
+  c.ctx.save(); c.ctx.setTransform(Z.base);
+  try { return fn(); } finally { c.ctx.restore(); }
+}
+/** Coordonnées du cadre → coordonnées du prisme (poignée). */
+const versPrisme = (x, y) => [x / Z.k, (y - Z.oy) / Z.k];
 function dessiner(c) {
-  const T = trajet(), t = S.t, M = M0, X = R2.x + 10, W = R2.w - 18;
+  zone(scene.L);
+  Z.base = c.ctx.getTransform();
+  if (Z.large) { c.ctx.translate(0, Z.oy); c.ctx.scale(Z.k, Z.k); }
+  try { dessinerTout(c); } finally { if (Z.large) c.ctx.setTransform(Z.base); }
+}
+function dessinerTout(c) {
+  const T = trajet(), t = S.t, M = M0;
   c.direct(() => peindre(c.ctx, T, t));
   // Écrit dès l’ouverture.
   c.texte('Le prisme', R1.x + 4, 30, { couleur: 'cyan', taille: 17 });
-  c.texte('Les calculs', R2.x + 4, 30, { couleur: 'cyan', taille: 17 });
+  horsZoom(c, () => c.texte('Les calculs', R2.x + 4, R2.y - 10, { couleur: 'cyan', taille: 17 * Z.kc }));
   c.rect(R1.x, R1.y, R1.w, R1.h, { couleur: 'tresfaible', duree: .5 });
-  c.rect(R2.x, R2.y, R2.w, R2.h, { couleur: 'tresfaible', duree: .4 });
-  c.texte(`A = ${fa(T.A)}° ;  n = ${fn(T.n)} ;  i = ${fa(T.i)}°`, X, Y_CALC.tete, { couleur: 'blanc', taille: 17, max: W });
+  horsZoom(c, () => c.rect(R2.x, R2.y, R2.w, R2.h, { couleur: 'tresfaible', duree: .4 }));
+  calc(c, `A = ${fa(T.A)}° ;  n = ${fn(T.n)} ;  i = ${fa(T.i)}°`, 'tete', { couleur: 'blanc', taille: 17 });
   // Les noms des faces se placent du côté libre : loin du laser (face 1) et loin du point de sortie (face 2).
   { const k2 = dot(sub(T.S, P), sub(T.B2, P)) / (LC * LC), u1 = T.i > T.h ? .2 : .9, u2 = T.base || k2 > .5 ? .2 : .9;
     const f1 = add(add(P, sub(T.B1, P), u1), T.n1, 18), f2p = add(add(P, sub(T.B2, P), u2), T.n2, 18);
@@ -205,17 +242,17 @@ function dessiner(c) {
   }
   if (vu(c, 'refraction_1', t >= M.refraction_1)) {
     angle(c, T.E, ang(T.dV), ang(neg(T.n1)), 44, 'cyan', 'r', 12);
-    c.texte('Face 1 :  sin i = n·sin r', X, Y_CALC.l1, { couleur: 'cyan', taille: 17, max: W });
-    c.texte(`sin r = sin ${fa(T.i)}° / ${fn(T.n)} = ${f3(T.sr)}`, X, Y_CALC.l2, { couleur: 'cyan', taille: 17, max: W });
-    c.texte(`r = ${f2(T.r)}°`, X, Y_CALC.l3, { couleur: 'cyan', taille: 18, max: W });
+    calc(c, 'Face 1 :  sin i = n·sin r', 'l1', { couleur: 'cyan', taille: 17 });
+    calc(c, `sin r = sin ${fa(T.i)}° / ${fn(T.n)} = ${f3(T.sr)}`, 'l2', { couleur: 'cyan', taille: 17 });
+    calc(c, `r = ${f2(T.r)}°`, 'l3', { couleur: 'cyan', taille: 18 });
   }
   if (vu(c, 'trajet_dans_verre', t >= M.trajet_dans_verre)) {
     c.texte(T.base ? 'le rayon atteint la base avant la face 2' : 'dans le verre, le rayon va tout droit jusqu’à la face 2', R1.x + 10, 356, { couleur: 'faible', taille: 15, max: R1.w - 20 });
   }
   if (vu(c, 'A_r_rprime', t >= M.A_r_rprime)) {
     angle(c, P, ang(sub(T.B1, P)), ang(sub(T.B2, P)), 30, 'jaune', 'A', 16);
-    c.texte("A = r + r'", X, Y_CALC.l4, { couleur: 'jaune', taille: 17, max: W });
-    c.texte(`r' = ${fa(T.A)} − ${f2(T.r)} = ${f2(T.rp)}°`, X, Y_CALC.l5, { couleur: 'jaune', taille: 17, max: W });
+    calc(c, "A = r + r'", 'l4', { couleur: 'jaune', taille: 17 });
+    calc(c, `r' = ${fa(T.A)} − ${f2(T.r)} = ${f2(T.rp)}°`, 'l5', { couleur: 'jaune', taille: 17 });
   }
   if (!T.base && vu(c, 'normale_2', t >= M.normale_2)) {
     c.ligne(...P, ...T.B2, { couleur: 'orange', largeur: 1.4, alpha: .55 });
@@ -223,14 +260,14 @@ function dessiner(c) {
     angle(c, T.S, ang(neg(T.dV)), ang(neg(T.n2)), 34, 'orange', "r'", 13);
   }
   if (!T.base && vu(c, 'refraction_2', t >= M.refraction_2)) {
-    c.texte("Face 2 :  sin i' = n·sin r'", X, Y_CALC.l6, { couleur: 'orange', taille: 17, max: W });
+    calc(c, "Face 2 :  sin i' = n·sin r'", 'l6', { couleur: 'orange', taille: 17 });
     if (T.sort) {
       angle(c, T.S, ang(T.n2), ang(T.dO), 40, 'orange', "i'");
-      c.texte(`sin i' = ${fn(T.n)} × sin ${f2(T.rp)}° = ${f3(T.x2)}`, X, Y_CALC.l7, { couleur: 'orange', taille: 17, max: W });
-      c.texte(`i' = ${f2(T.ip)}°`, X, Y_CALC.l8, { couleur: 'orange', taille: 18, max: W });
+      calc(c, `sin i' = ${fn(T.n)} × sin ${f2(T.rp)}° = ${f3(T.x2)}`, 'l7', { couleur: 'orange', taille: 17 });
+      calc(c, `i' = ${f2(T.ip)}°`, 'l8', { couleur: 'orange', taille: 18 });
     } else {
-      c.texte(`n·sin r' = ${fn(T.n)} × sin ${f2(T.rp)}° = ${f3(T.x2)} > 1`, X, Y_CALC.l7, { couleur: 'orange', taille: 17, max: W });
-      c.texte('le rayon ne sort pas par la deuxième face', X, Y_CALC.l8, { couleur: 'rouge', taille: 16, max: W });
+      calc(c, `n·sin r' = ${fn(T.n)} × sin ${f2(T.rp)}° = ${f3(T.x2)} > 1`, 'l7', { couleur: 'orange', taille: 17 });
+      calc(c, 'le rayon ne sort pas par la deuxième face', 'l8', { couleur: 'rouge', taille: 16 });
     }
   }
   if (vu(c, 'sortie', t >= M.sortie)) {
@@ -242,16 +279,19 @@ function dessiner(c) {
     c.ligne(...T.E, ...add(T.E, T.dIn, ti + 110), { couleur: 'rose', pointille: [5, 6], largeur: 1.6 });
     c.ligne(...T.S, ...add(J, T.dO, -24), { couleur: 'rose', pointille: [5, 6], largeur: 1.6 });
     angle(c, J, ang(T.dIn), ang(T.dO), 44, 'rose', 'D');
-    c.texte("D = i + i' − A", X, Y_CALC.l9, { couleur: 'rose', taille: 17, max: W });
-    c.texte(`D = ${fa(T.i)} + ${f2(T.ip)} − ${fa(T.A)} = ${f2(T.D)}°`, X, Y_CALC.l10, { couleur: 'rose', taille: 18, max: W });
+    calc(c, "D = i + i' − A", 'l9', { couleur: 'rose', taille: 17 });
+    calc(c, `D = ${fa(T.i)} + ${f2(T.ip)} − ${fa(T.A)} = ${f2(T.D)}°`, 'l10', { couleur: 'rose', taille: 18 });
   }
-  if (vu(c, 'fin', t >= M.fin)) c.texte('angles mesurés depuis la normale', X, Y_CALC.fin, { couleur: 'faible', taille: 15, max: W });
+  if (vu(c, 'fin', t >= M.fin)) calc(c, 'angles mesurés depuis la normale', 'fin', { couleur: 'faible', taille: 15 });
 
   // Repères pointables.
   const boite = (id, pts, m, lib) => { const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]); const x0 = Math.min(...xs) - m, y0 = Math.min(...ys) - m; c.repere(id, x0, y0, Math.max(...xs) + m - x0, Math.max(...ys) + m - y0, lib); };
   c.repere('vue_prisme', R1.x, R1.y, R1.w, R1.h, 'le prisme');
-  c.repere('vue_calculs', R2.x, R2.y, R2.w, R2.h, 'les calculs');
-  c.repere('calculs', R2.x + 4, Y_CALC.l1 - 20, R2.w - 8, Y_CALC.l10 - Y_CALC.l1 + 30, 'les relations du prisme');
+  horsZoom(c, () => {
+    c.repere('vue_calculs', R2.x, R2.y, R2.w, R2.h, 'les calculs');
+    const a = posCalc('l1'), b = posCalc('l10');
+    c.repere('calculs', R2.x + 4, Math.min(a.y, b.y) - 24 * Z.kc, R2.w - 8, Z.large ? posCalc('l5').y - a.y + 36 * Z.kc : b.y - a.y + 30, 'les relations du prisme');
+  });
   boite('laser', [T.L0, T.L1], 14, 'le laser (on le fait pivoter)');
   boite('rayon', [T.L0, T.E, T.S].concat(T.sort ? [add(T.S, T.dO, 90)] : []), 6, 'le rayon');
   boite('face_1', [P, T.B1], 8, 'la face 1');
@@ -268,7 +308,7 @@ function dessiner(c) {
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(53); dessiner(c); return c.fin(); });
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(53); dessiner(c); return c.fin(); }, { large: true });
 scene.avancer = dt => {
   if (!S.running) return false;
   S.t = Math.min(FIN, S.t + dt);
@@ -349,11 +389,11 @@ $('run').onclick = () => (S.running ? pause() : (S.t > 0 && S.t < FIN && !S.fait
 /* Poignée : le laser, qu’on fait pivoter autour du point d’entrée (i de 20° à 70°, au degré). */
 window.Tableau.glisser(canvas, {
   toucher: (px, py) => {
-    const [x, y] = scene.local(px, py), T = trajet(), m = add(T.L0, T.dIn, -LASER_L / 2);
+    const [x, y] = versPrisme(...scene.local(px, py)), T = trajet(), m = add(T.L0, T.dIn, -LASER_L / 2);
     return Math.hypot(x - m[0], y - m[1]) < 40 ? 'laser' : null;
   },
   bouger: (id, px, py) => {
-    const [x, y] = scene.local(px, py), T = trajet(), a = Math.atan2(T.E[1] - y, T.E[0] - x) / RAD;
+    const [x, y] = versPrisme(...scene.local(px, py)), T = trajet(), a = Math.atan2(T.E[1] - y, T.E[0] - x) / RAD;
     const i = borne(T.h - a, 20, 70, 1);
     if (i !== S.i) { S.i = i; scene.sale = true; }
   },

@@ -26,7 +26,7 @@ function L(c, s, t = 21) {
   for (const seg of Tableau.Craie.segments(s)) { c.ctx.font = `${seg.sub || seg.sup ? t * .62 : t}px ${Tableau.POLICE}`; w += c.ctx.measureText(seg.t).width; }
   return w;
 }
-const largeurs = (c, ms, t) => ms.map(m => (m && m.fl ? (m.w || (m.mot ? Math.max(56, L(c, m.mot, 13) + 18) : 44)) : L(c, typeof m === 'string' ? m : m.t, t)));
+const largeurs = (c, ms, t) => ms.map(m => (m && m.fl ? (m.w || (m.mot ? Math.max(60, L(c, m.mot, 16) + 18) : 44)) : L(c, typeof m === 'string' ? m : m.t, t)));
 /** Écrit des morceaux à la suite : 'texte', {t, c} (couleur), {fl: couleur, mot, w} (flèche de craie). */
 function rang(c, x, y, ms, o = {}) {
   let t = o.taille || 21, ws = largeurs(c, ms, t), tot = ws.reduce((a, b) => a + b, 0);
@@ -38,7 +38,7 @@ function rang(c, x, y, ms, o = {}) {
     if (m && m.fl) {
       const ya = y - t * .3;
       c.fleche(x + 6, ya, x + w - 6, ya, { couleur: m.fl, largeur: 2.2, tete: 9 });
-      if (m.mot) c.texte(m.mot, x + w / 2, ya - 8, { couleur: m.fl, taille: 13, align: 'center' });
+      if (m.mot) c.texte(m.mot, x + w / 2, ya - 8, { couleur: m.fl, taille: 16, align: 'center' });
     } else c.texte(typeof m === 'string' ? m : m.t, x, y, { couleur: (m && m.c) || o.couleur || 'blanc', taille: t });
     p.push({ x, w, m: x + w / 2 }); x += w;
   });
@@ -56,15 +56,16 @@ function zone(c, id, R, label, pad = 7) { c.repere(id, R.x0 - pad, R.y - R.t - p
 
 
 const XT = 44;          // le tronc vertical
-const YB = [112, 164, 216, 268];   // une branche par ordonnée (question), la réponse 22 px plus bas
+const YB = [114, 160, 206, 252];   // une branche par ordonnée : la question, puis la réponse sur la même ligne
 
-/* Une branche : flèche depuis le tronc, la question (cyan), puis la réponse (verte) en retrait. */
+/* Une branche : flèche depuis le tronc, la question (cyan), puis la réponse (verte) à la suite, sur la même ligne
+ * (15 novembre 2026 : une ligne par branche, sur toute la largeur du tableau, écriture plus grande). */
 function branche(c, y, question, reponse, num) {
   c.fleche(XT, y - 7, XT + 22, y - 7, { couleur: 'faible', largeur: 1.6, tete: 7 });
-  const Q = rang(c, XT + 28, y, [{ t: num + ' ', c: 'jaune' }, { t: question, c: 'cyan' }], { taille: 18, max: 700 - XT });
+  const Q = rang(c, XT + 28, y, [{ t: num + ' ', c: 'jaune' }, { t: question, c: 'cyan' }], { taille: 21, max: 520 });
   c.pause(.15);
-  const R = rang(c, XT + 56, y + 22, [{ fl: 'vert', w: 34 }, { t: reponse, c: 'vert' }], { taille: 17, max: 690 - XT });
-  return { x0: Q.x0, x1: Math.max(Q.x1, R.x1), y0: y - 22, y1: y + 30 };
+  const R = rang(c, Q.x1 + 8, y, [{ fl: 'vert', w: 42 }, { t: reponse, c: 'vert' }], { taille: 21, max: 756 - Q.x1 - 8 });
+  return { x0: Q.x0, x1: Math.max(Q.x1, R.x1), y0: y - 27, y1: y + 12 };
 }
 
 MathsTableau.page({
@@ -75,9 +76,9 @@ MathsTableau.page({
       titre: 'Par quoi commencer ?',
       dessiner(c, K) {
         K.titre('Par quoi commencer ?');
-        c.rect(XT - 24, 56, 176, 32, { couleur: 'jaune', arrondi: 10, largeur: 1.8 });
-        c.texte('je regarde f', XT - 8, 79, { couleur: 'jaune', taille: 20 });
-        c.ligne(XT, 88, XT, YB[3] - 7, { couleur: 'faible', largeur: 1.6 });
+        c.rect(XT - 24, 46, 190, 36, { couleur: 'jaune', arrondi: 10, largeur: 1.8 });
+        c.texte('je regarde f', XT - 8, 72, { couleur: 'jaune', taille: 23 });
+        c.ligne(XT, 82, XT, YB[3] - 7, { couleur: 'faible', largeur: 1.6 });
         c.pause(.3);
         const def = [
           ['somme', 'une somme de fonctions du tableau ?', 'chaque terme sa primitive, une seule constante k', '①', 'somme', 'une somme : chaque terme sa primitive'],
@@ -94,14 +95,14 @@ MathsTableau.page({
           K.marque(moment);
         });
         c.pause(.4);
-        const E = rang(c, XT + 28, 334, [{ t: '3(3x + 1)⁴ = ', c: 'blanc' }, { t: '(3x + 1)’', c: 'cyan' }, '(3x + 1)⁴', { fl: 'vert', w: 40 }, { t: '(3x + 1)⁵/5', c: 'jaune' }], { taille: 20, max: 520 });
+        const E = rang(c, XT + 28, 300, [{ t: '3(3x + 1)⁴ = ', c: 'blanc' }, { t: '(3x + 1)’', c: 'cyan' }, '(3x + 1)⁴', { fl: 'vert', w: 48 }, { t: '(3x + 1)⁵/5', c: 'jaune' }], { taille: 25, max: 540 });
         const Zf = zones.formes;
-        const P0 = [E.x1 + 14, 326], P2 = [Zf.x1 + 12, Zf.y0 + 16], P1 = [Math.max(P0[0], P2[0]) + 70, (P0[1] + P2[1]) / 2];
+        const P0 = [E.x1 + 14, 292], P2 = [Zf.x1 + 12, Zf.y0 + 16], P1 = [Math.max(P0[0], P2[0]) + 70, (P0[1] + P2[1]) / 2];
         const bez = u => [0, 1].map(k => (1 - u) * (1 - u) * P0[k] + 2 * u * (1 - u) * P1[k] + u * u * P2[k]);
         c.courbe(u => bez(u * .9), 24, { couleur: 'orange', largeur: 1.8 });
         c.fleche(...bez(.9), ...P2, { couleur: 'orange', largeur: 1.8, tete: 9 });
-        c.texte('branche ②', P1[0] - 50, P1[1] + 40, { couleur: 'orange', taille: 16 });
-        c.repere('exemple', E.x0 - 6, 308, E.x1 - E.x0 + 12, 36, '3(3x + 1)⁴ : branche ②, forme u’uⁿ');
+        c.texte('branche ②', Math.min(P1[0] - 6, 670), P1[1] + 10, { couleur: 'orange', taille: 20 });
+        c.repere('exemple', E.x0 - 6, 270, E.x1 - E.x0 + 12, 40, '3(3x + 1)⁴ : branche ②, forme u’uⁿ');
         K.marque('exemple');
       },
       decrire: {

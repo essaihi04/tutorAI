@@ -67,7 +67,10 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  /* `large` + `ajuster` (15 novembre 2026, « la simulation n'occupe qu'une bande étroite ») : la boîte de l'encre (image
+   * de départ et image complète) remplit le tableau. */
+  const complet = f => { const t = S.t; try { S.t = 0; f(); S.t = 1e6; f(); } finally { S.t = t; } };
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), { large: true, ajuster: true, complet });
   const cadreBase = scene.cadre;
   scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
   M.scene = scene; M.craie = scene.craie;
@@ -120,7 +123,7 @@ function Moteur(o) {
     p = p || {};
     const r = o.appliquer(p, M) || {};
     if (r.vue && o.vues.includes(r.vue) && r.vue !== S.vue) { S.vue = r.vue; r.change = true; r.vueChange = true; }
-    if (r.change) { calculer(); if (r.vueChange) scene.reecrire(); }
+    if (r.change) { calculer(); if (r.vueChange) { scene.boite = null; scene.remesurer(); scene.reecrire(); } }
     noter('set_parameters', o.params(M));
     if (r.apres) r.apres();
     else if (r.change && !r.garder) start();
@@ -405,7 +408,12 @@ const ETAPES = [
 const MOTIFS = { fin: 'fin' }; for (const e of ETAPES) MOTIFS[e.nom] = e.motif;
 
 /* ── Géométrie (cadre 760 × 420) ─────────────────────────────────────── */
-const X0 = 300, KX = 11, Y0I = 180, KI = 520, Y0U = 314, KU = 78, TMAX = 40;
+const Y0I = 180, KI = 520, Y0U = 314, KU = 78, TMAX = 40;
+/* Tableau large (scene.L ≥ 1000, 15 novembre 2026 : « la simulation n'occupe qu'une bande étroite ») : les deux graphes
+ * s'étirent sur toute la largeur libre à droite du montage ; sinon l'échelle d'origine (cadre 760 × 420). */
+let X0 = 300, KX = 11;
+function disposer(L) { if (L < 1000) { X0 = 300; KX = 11; } else { X0 = 320; KX = (L - 14 - 12 - X0) / TMAX; } }
+const XR = () => X0 + TMAX * KX + 12;   // bout droit des axes des temps (752 dans le cadre d'origine)
 const X = t => X0 + t * KX, YI = i => Y0I - i * KI, YU = u => Y0U - u * KU;
 const GBF = { x: 20, y: 52, w: 110, h: 70 }, BOB = { x: 34, y: 150, w: 120, h: 30 }, XS = 226;
 const REG = { x0: 40, x1: 220, y: 268 };
@@ -449,10 +457,10 @@ function axes(c) {
   // Le même axe du temps : verticales communes, graduations en bas.
   for (const t of [10, 20, 30, 40]) c.ligne(X(t), YI(.22), X(t), YU(-1), { couleur: 'tresfaible', largeur: 1, pointille: [3, 6], duree: .1 });
   for (const t of [0, 10, 20, 30, 40]) c.texte(String(t), X(t), 410, { couleur: 'faible', taille: 13, align: 'center' });
-  c.texte('t (ms)', 752, Y0U - 8, { couleur: 'blanc', taille: 14, align: 'right' });
+  c.texte('t (ms)', XR(), Y0U - 8, { couleur: 'blanc', taille: 14, align: 'right' });
 }
 function dessiner(c, M) {
-  MO = M; M.scene.cadre(53);
+  MO = M; M.scene.cadre(53); disposer(M.scene.L);
   c.texte('Un courant triangulaire dans une bobine', 14, 28, { couleur: 'cyan', taille: 20 });
   montage(c); axes(c);
   const P = palier();
@@ -469,7 +477,7 @@ function dessiner(c, M) {
       if (f > d) c.ligne(X(d), YU(-P), X(f), YU(-P), { couleur: 'rose', largeur: 2.6, tremble: .3 });
       if (d === 10 && tb >= 20) c.ligne(X(20), YU(-P), X(20), YU(P), { couleur: 'rose', largeur: 1.4, pointille: [4, 4] });
     }
-    if (ti > 0) c.texte(`i = ${fA(iDe(ti))} A`, 752, YI(.25) - 4, { couleur: 'orange', taille: 15, align: 'right' });
+    if (ti > 0) c.texte(`i = ${fA(iDe(ti))} A`, XR(), YI(.25) - 4, { couleur: 'orange', taille: 15, align: 'right' });
   });
   const L = 14, col = 250;
   M.etape(c, 'pente_montee', () => {

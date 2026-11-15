@@ -51,6 +51,21 @@ const NOEUDS = [
     lignes: ['relation → A.N. → résultat → unité', "lire l'axe, reconnaître le cas"],
     phrase: "Pour chaque calcul : la relation en lettres, l'application numérique en unités SI, le résultat, l'unité." },
 ];
+/* Agrandissement (15 novembre 2026, « mieux exploiter tout le tableau ») : Scene en { large: true } ; sur le
+ * tableau large (scene.L ≥ 1000) les branches s'écartent sur toute la largeur, les cases grandissent (× 1,6 en
+ * largeur, × 1,3 en hauteur) et les textes aussi (× 1,35) ; sur un grand écran (L < 1000) la carte d'origine reste. */
+let L = 760, GR = false;
+const f = n => (GR ? Math.round(n * 1.35) : n);
+for (const n of [CENTRE, ...NOEUDS]) n.o = { x: n.x, y: n.y, w: n.w, h: n.h };
+function disposer() {
+  L = scene.L; GR = L >= 1000;
+  const kx = GR ? (L / 2 - 170) / 256 : 1;
+  for (const n of [CENTRE, ...NOEUDS]) {
+    n.x = GR ? L / 2 + (n.o.x - 380) * kx : n.o.x; n.y = n.o.y;
+    const coin = n.o.x !== 380 && n.o.y !== 212;   // les quatre cases des coins ont plus de place : leurs lignes sont longues
+    n.w = GR ? n.o.w * (coin ? 1.6 + 0.3 * Math.min(1, (L - 1000) / 292) : 1.6) : n.o.w; n.h = GR ? Math.max(84, n.o.h * 1.3) : n.o.h;
+  }
+}
 const ANNEAUX = { non_acquis: ['rouge', 'à reprendre'], partiel: ['orange', 'à revoir'] };
 
 const S = { n: 0, cible: 0, jusqua: null, running: false, lacunes: null, acquis: null, apparu: [], choisi: null };
@@ -70,17 +85,17 @@ function branche(c, n, i) {
   const m = [(a[0] + b[0]) / 2 - uy * 14, (a[1] + b[1]) / 2 + ux * 14];
   c.courbe(u => [(1 - u) * (1 - u) * a[0] + 2 * (1 - u) * u * m[0] + u * u * b[0], (1 - u) * (1 - u) * a[1] + 2 * (1 - u) * u * m[1] + u * u * b[1]], 24, { couleur: 'faible', largeur: 2 });
   point(c, n);
-  c.texte(n.titre, n.x, n.y - n.h / 2 + 20, { couleur: n.couleur, taille: 17, align: 'center', max: n.w - 16 });
-  n.lignes.forEach((l, k) => c.texte(l, n.x, n.y - n.h / 2 + 38 + k * 15, { couleur: 'blanc', taille: 13, align: 'center', max: n.w - 14, alpha: .92 }));
+  c.texte(n.titre, n.x, n.y - n.h / 2 + (GR ? 27 : 20), { couleur: n.couleur, taille: f(17), align: 'center', max: n.w - 16 });
+  n.lignes.forEach((l, k) => c.texte(l, n.x, n.y - n.h / 2 + (GR ? 53 : 38) + k * (GR ? 22 : 15), { couleur: 'blanc', taille: f(13), align: 'center', max: n.w - 14, alpha: .92 }));
   c.repere(n.id, n.x - n.w / 2 - 6, n.y - n.h / 2 - 6, n.w + 12, n.h + 12, n.titre);
   // L'état de l'élève sur cette branche : anneau rouge/orange, ou coche verte.
   const st = statut(n);
   if (st && ANNEAUX[st]) {
     const [coul, etiq] = ANNEAUX[st];
     c.rect(n.x - n.w / 2 - 6, n.y - n.h / 2 - 6, n.w + 12, n.h + 12, { couleur: coul, arrondi: 16, largeur: 2, pointille: [6, 6], duree: .4 });
-    c.texte(etiq, n.x + n.w / 2 - 4, n.y - n.h / 2 - 9, { couleur: coul, taille: 12, align: 'right' });
+    c.texte(etiq, n.x + n.w / 2 - 4, n.y - n.h / 2 - 9, { couleur: coul, taille: f(12), align: 'right' });
   } else if (st === 'acquis') {
-    c.texte('✓', n.x + n.w / 2 - 14, n.y - n.h / 2 + 14, { couleur: 'vert', taille: 18 });
+    c.texte('✓', n.x + n.w / 2 - (GR ? 20 : 14), n.y - n.h / 2 + (GR ? 22 : 14), { couleur: 'vert', taille: f(18) });
   }
   if (S.choisi === n.id) c.direct(() => c.rect(n.x - n.w / 2 - 3, n.y - n.h / 2 - 3, n.w + 6, n.h + 6, { couleur: 'blanc', arrondi: 15, largeur: 1.2, alpha: .6 }));
 }
@@ -94,15 +109,15 @@ function statut(n) {
 
 function dessiner(c) {
   c.rect(CENTRE.x - CENTRE.w / 2, CENTRE.y - CENTRE.h / 2, CENTRE.w, CENTRE.h, { couleur: 'jaune', arrondi: 18, largeur: 3 });
-  c.texte('Onde mécanique', CENTRE.x, CENTRE.y - 6, { couleur: 'jaune', taille: 19, align: 'center', gras: true });
-  c.texte('progressive', CENTRE.x, CENTRE.y + 16, { couleur: 'jaune', taille: 19, align: 'center', gras: true });
+  c.texte('Onde mécanique', CENTRE.x, CENTRE.y - (GR ? 8 : 6), { couleur: 'jaune', taille: f(19), align: 'center', gras: true });
+  c.texte('progressive', CENTRE.x, CENTRE.y + (GR ? 22 : 16), { couleur: 'jaune', taille: f(19), align: 'center', gras: true });
   c.repere('centre', CENTRE.x - CENTRE.w / 2, CENTRE.y - CENTRE.h / 2, CENTRE.w, CENTRE.h, 'le centre : l’onde mécanique progressive');
   for (let i = 0; i < S.n; i++) { c.depuis(S.apparu[i]); branche(c, NOEUDS[i], i); }
-  if (S.lacunes) c.direct(() => c.texte('✓ acquis · ⟳ à revoir · ✗ à reprendre', 24, 410, { couleur: 'faible', taille: 12 }));
+  if (S.lacunes) c.direct(() => c.texte('✓ acquis · ⟳ à revoir · ✗ à reprendre', GR ? L - 16 : 24, GR ? 415 : 410, { couleur: 'faible', taille: f(12), align: GR ? 'right' : 'left' }));
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(31); dessiner(c); return c.fin(); });
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(31); disposer(); dessiner(c); return c.fin(); }, { large: true });
 let horloge = 0;
 scene.avancer = dt => {
   if (!S.running) return false;

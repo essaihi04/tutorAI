@@ -95,39 +95,70 @@ function interrupteur(c, R, on, nom, id) {
   ctx.save(); ctx.fillStyle = on ? 'rgba(74,222,128,.22)' : 'rgba(226,232,240,.06)'; ctx.beginPath(); ctx.roundRect(R.x, R.y, R.w, R.h, 11); ctx.fill(); ctx.restore();
   c.rect(R.x, R.y, R.w, R.h, { couleur: on ? 'vert' : 'faible', arrondi: 11, largeur: 1.6 });
   c.cercle(on ? R.x + R.w - 11 : R.x + 11, R.y + 11, 7, { couleur: on ? 'vert' : 'faible', fond: on ? 'vert' : 'faible', fondAlpha: .7, largeur: 1.4 });
-  c.texte(`${nom} : ${on ? 'présent' : 'absent'}`, R.x + R.w + 10, R.y + 16, { couleur: on ? (nom === 'ATP' ? 'vert' : 'jaune') : 'faible', taille: 16 });
-  c.repere(id, R.x - 4, R.y - 4, R.w + 150, R.h + 8, `l’interrupteur ${nom} : ${on ? 'présent' : 'absent'}`);
+  c.texte(`${nom} : ${on ? 'présent' : 'absent'}`, R.x + R.w + 10, R.y + 16, { couleur: on ? (nom === 'ATP' ? 'vert' : 'jaune') : 'faible', taille: tk(16) });
+  c.repere(id, R.x - 4, R.y - 4, R.w + 150 * TK, R.h + 8, `l’interrupteur ${nom} : ${on ? 'présent' : 'absent'}`);
+}
+
+/* Disposition selon la largeur du tableau (15 novembre 2026, « mieux exploiter tout le tableau, grands calibres de
+ * texte ») : tableau large (scene.L ≥ 1000) → le montage peint (cuve, fibre, levier) est agrandi à gauche (groupe GR ;
+ * les repères suivent la transformation du canvas), les interrupteurs et le tableau des essais passent à droite, plus
+ * larges, la conclusion s'écrit sous le tableau. Textes plus gros. Sinon la disposition d'origine (760 × 420). */
+let LG = false, LL = 760, TK = 1, TKG = 1;
+const GR = { k: 1, ox: 0, oy: 0 };
+const tk = v => Math.round(v * TK), tkg = v => Math.round(v * TKG);
+function disposer(L) {
+  LG = L >= 1000; LL = L; TK = LG ? 1.3 : 1; TKG = LG ? 1.12 : 1;
+  if (!LG) {
+    Object.assign(GR, { k: 1, ox: 0, oy: 0 }); Object.assign(INT_CA, { x: 420, y: 60 }); Object.assign(INT_ATP, { x: 420, y: 94 });
+    Object.assign(TAB, { x: 400, y: 140, cols: [400, 470, 540, 748], h0: 26, h: 30 }); return;
+  }
+  const k = 1.15; Object.assign(GR, { k, ox: 20 - 20 * k, oy: 100 - 100 * k });
+  const x = Math.max(560, Math.round(L * .46)); Object.assign(INT_CA, { x, y: 58 }); Object.assign(INT_ATP, { x, y: 94 });
+  Object.assign(TAB, { x, y: 136, cols: [x, x + 110, x + 220, L - 12], h0: 32, h: 38 });
+}
+const enGroupe = (c, fn) => { const x = c.ctx; x.save(); x.translate(GR.ox, GR.oy); x.scale(GR.k, GR.k); try { return fn(); } finally { x.restore(); } };
+function couper(c, t, max, taille) {
+  const mots = String(t).split(' '), out = []; let l = '';
+  for (const m of mots) { const e = l ? l + ' ' + m : m; if (l && c.largeurTexte(e, taille) > max) { out.push(l); l = m; } else l = e; }
+  if (l) out.push(l);
+  return out;
 }
 
 function dessiner(c) {
   const t = S.t; let geo;
-  c.direct(() => { geo = peindre(c.ctx, t); });
+  c.direct(() => { geo = enGroupe(c, () => peindre(c.ctx, t)); });
   const { s, L } = geo, e = essaiDe(S.ca, S.atp);
+  const cx = i => (TAB.cols[i] + TAB.cols[i + 1]) / 2;
   // Parties fixes.
-  c.texte('Document reconstitué (d’après les expériences classiques des manuels)', 12, 24, { couleur: 'cyan', taille: 15 });
-  c.texte('De quoi la contraction a-t-elle besoin ?', 12, 50, { couleur: 'blanc', taille: 18 });
-  c.texte('On ajoute au liquide :', 420, 50, { couleur: 'faible', taille: 14 });
+  c.texte('Document reconstitué (d’après les expériences classiques des manuels)', 12, 24, { couleur: 'cyan', taille: tk(15) });
+  c.texte('De quoi la contraction a-t-elle besoin ?', 12, 50, { couleur: 'blanc', taille: tk(18) });
+  c.texte('On ajoute au liquide :', INT_CA.x, LG ? 46 : 50, { couleur: 'faible', taille: tk(14) });
   // Le tableau : cadre et en-têtes.
   const yb = TAB.y + TAB.h0 + 4 * TAB.h;
   c.rect(TAB.x, TAB.y, TAB.cols[3] - TAB.x, yb - TAB.y, { duree: .18, couleur: 'tresfaible', arrondi: 4, largeur: 1.4 });
   c.ligne(TAB.x, TAB.y + TAB.h0, TAB.cols[3], TAB.y + TAB.h0, { duree: .18, couleur: 'faible', largeur: 1.3 });
   for (const x of [TAB.cols[1], TAB.cols[2]]) c.ligne(x, TAB.y, x, yb, { duree: .18, couleur: 'tresfaible', largeur: 1.2 });
   for (let i = 1; i < 4; i++) c.ligne(TAB.x, TAB.y + TAB.h0 + i * TAB.h, TAB.cols[3], TAB.y + TAB.h0 + i * TAB.h, { duree: .18, couleur: 'tresfaible', largeur: 1 });
-  c.texte('Ca²⁺', 435, TAB.y + 19, { couleur: 'jaune', taille: 15, align: 'center' });
-  c.texte('ATP', 505, TAB.y + 19, { couleur: 'vert', taille: 15, align: 'center' });
-  c.texte('résultat', 644, TAB.y + 19, { couleur: 'blanc', taille: 15, align: 'center' }); c._fixe = c.cur;   // les éléments « au moment dit » n’attendent pas la fin des légendes fixes
-  c.texte('levier', 384, 116, { couleur: 'blanc', taille: 15 });
-  c.texte('fibre glycérinée', 176, 236, { couleur: 'rose', taille: 15 });
-  c.texte('cuve : liquide physiologique', 60, 344, { couleur: 'blanc', taille: 15 });
-  c.texte('fibre glycérinée : membrane rendue perméable, réserves perdues', 60, 366, { couleur: 'faible', taille: 13 });
+  const yt = TAB.y + Math.round(TAB.h0 * .73);
+  c.texte('Ca²⁺', cx(0), yt, { couleur: 'jaune', taille: tk(15), align: 'center' });
+  c.texte('ATP', cx(1), yt, { couleur: 'vert', taille: tk(15), align: 'center' });
+  c.texte('résultat', cx(2), yt, { couleur: 'blanc', taille: tk(15), align: 'center' }); c._fixe = c.cur;   // les éléments « au moment dit » n’attendent pas la fin des légendes fixes
+  enGroupe(c, () => {
+    c.texte('levier', 384, 116, { couleur: 'blanc', taille: tkg(15) });
+    c.texte('fibre glycérinée', 176, 236, { couleur: 'rose', taille: tkg(15) });
+    c.texte('cuve : liquide physiologique', 60, 344, { couleur: 'blanc', taille: tkg(15) });
+    c.texte('fibre glycérinée : membrane rendue perméable, réserves perdues', 60, 344 + tkg(22), { couleur: 'faible', taille: tkg(13) });
+  });
   // Ce qui bouge.
   c.direct(() => {
     interrupteur(c, INT_CA, S.ca, 'Ca²⁺', 'interrupteur_ca'); interrupteur(c, INT_ATP, S.atp, 'ATP', 'interrupteur_atp');
-    c.texte(`essai : ${e.nom}`, 748, 24, { couleur: 'jaune', taille: 15, align: 'right' });
-    if (s > 0.5) { const r = levier(0); c.cercle(r.bx + 6, r.by, 2.5, { couleur: 'faible', largeur: 1.2 }); }
-    c.repere('cuve', CUVE.x, CUVE.y, CUVE.w, CUVE.h, 'la cuve de liquide physiologique');
-    c.repere('fibre', FIB.x - 14, FIB.haut + s - 4, 28, FIB.bas - FIB.haut - s + 8, 'la fibre glycérinée');
-    c.repere('levier', LEV.px - LEV.gauche - 6, Math.min(L.ay, L.by) - 8, LEV.gauche + LEV.droite + 20, Math.abs(L.ay - L.by) + 16, 'le levier');
+    c.texte(`essai : ${e.nom}`, LL - 12, 24, { couleur: 'jaune', taille: tk(15), align: 'right' });
+    enGroupe(c, () => {
+      if (s > 0.5) { const r = levier(0); c.cercle(r.bx + 6, r.by, 2.5, { couleur: 'faible', largeur: 1.2 }); }
+      c.repere('cuve', CUVE.x, CUVE.y, CUVE.w, CUVE.h, 'la cuve de liquide physiologique');
+      c.repere('fibre', FIB.x - 14, FIB.haut + s - 4, 28, FIB.bas - FIB.haut - s + 8, 'la fibre glycérinée');
+      c.repere('levier', LEV.px - LEV.gauche - 6, Math.min(L.ay, L.by) - 8, LEV.gauche + LEV.droite + 20, Math.abs(L.ay - L.by) + 16, 'le levier');
+    });
     c.repere('tableau', TAB.x, TAB.y, TAB.cols[3] - TAB.x, yb - TAB.y, 'le tableau des essais');
     // L’essai en cours : sa ligne entourée.
     const i = ESSAIS.indexOf(e), y0 = TAB.y + TAB.h0 + i * TAB.h;
@@ -135,22 +166,23 @@ function dessiner(c) {
   });
   // Lignes du tableau, écrites quand l’essai est fait.
   ESSAIS.forEach((E, i) => {
-    const y = TAB.y + TAB.h0 + i * TAB.h + 21, ok = E.ca && E.atp;
+    const y = TAB.y + TAB.h0 + i * TAB.h + Math.round(TAB.h * .7), ok = E.ca && E.atp;
     quand(c, 'l' + i, !!S.lignes[E.id], () => {
-      c.texte(E.ca ? 'présent' : 'absent', 435, y, { couleur: E.ca ? 'jaune' : 'faible', taille: 15, align: 'center' });
-      c.texte(E.atp ? 'présent' : 'absent', 505, y, { couleur: E.atp ? 'vert' : 'faible', taille: 15, align: 'center' });
-      c.texte(ok ? 'contraction' : 'pas de contraction', 644, y, { couleur: ok ? 'vert' : 'rouge', taille: 16, align: 'center' });
+      c.texte(E.ca ? 'présent' : 'absent', cx(0), y, { couleur: E.ca ? 'jaune' : 'faible', taille: tk(15), align: 'center' });
+      c.texte(E.atp ? 'présent' : 'absent', cx(1), y, { couleur: E.atp ? 'vert' : 'faible', taille: tk(15), align: 'center' });
+      c.texte(ok ? 'contraction' : 'pas de contraction', cx(2), y, { couleur: ok ? 'vert' : 'rouge', taille: tk(16), align: 'center' });
     });
   });
-  quand(c, 'reponse', t >= T_REP1, () => c.texte(contracte() ? 'la fibre raccourcit' : 'la fibre ne raccourcit pas', 400, yb + 26, { couleur: contracte() ? 'vert' : 'rouge', taille: 16 }));
-  const conclu = tousRemplis();
-  quand(c, 'conclusion', conclu, () => c.texte('L’ATP et les ions Ca²⁺ sont tous deux nécessaires à la contraction.', 12, 402, { couleur: 'vert', taille: 18 }));
-  c.direct(() => { if (conclu) c.repere('conclusion', 8, 382, 520, 28, 'la conclusion'); });
+  quand(c, 'reponse', t >= T_REP1, () => c.texte(contracte() ? 'la fibre raccourcit' : 'la fibre ne raccourcit pas', TAB.x, yb + tk(26), { couleur: contracte() ? 'vert' : 'rouge', taille: tk(16) }));
+  const conclu = tousRemplis(), phraseC = 'L’ATP et les ions Ca²⁺ sont tous deux nécessaires à la contraction.';
+  const lignesC = LG ? couper(c, phraseC, LL - 12 - TAB.x, tk(18)) : [phraseC], xC = LG ? TAB.x : 12, yC = LG ? 414 - (lignesC.length - 1) * tk(24) : 402;
+  quand(c, 'conclusion', conclu, () => lignesC.forEach((l, i) => c.texte(l, xC, yC + i * tk(24), { couleur: 'vert', taille: tk(18) })));
+  c.direct(() => { if (conclu) c.repere('conclusion', xC - 4, yC - 20, LG ? LL - 8 - xC : 520, 28 + (lignesC.length - 1) * tk(24), 'la conclusion'); });
 }
 
 /* ── Boucle, moments, commandes ──────────────────────────────────────────── */
 const canvas = $('canvas');
-const scene = window.MuscleTableau.Scene(canvas, (c) => { scene.cadre(67); dessiner(c); return c.fin(); });
+const scene = window.MuscleTableau.Scene(canvas, (c) => { scene.cadre(67); disposer(scene.L); dessiner(c); return c.fin(); }, { large: true });
 function noterLigne() { const e = essaiDe(S.ca, S.atp); if (S.t >= T_LIGNE && !S.lignes[e.id]) { S.lignes[e.id] = true; scene.sale = true; } }
 scene.avancer = dt => {
   if (!S.running) return false;

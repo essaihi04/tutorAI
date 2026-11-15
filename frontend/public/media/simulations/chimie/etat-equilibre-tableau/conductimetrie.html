@@ -90,9 +90,11 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  /* Agrandissement du 15 novembre 2026 : le cadre prend le format du tableau et la boîte de l'encre de l'image complète
+   * (fin du déroulé) remplit le tableau ; elle est remesurée à chaque changement de vue. */
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), { large: true, ajuster: true, complet: f => { const t = S.t; S.t = 1e6; try { f(); } finally { S.t = t; } } });
   const cadreBase = scene.cadre;
-  scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
+  scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; poser(k, M); return k; };
   M.scene = scene; M.craie = scene.craie;
   function calculer() {
     construire();
@@ -143,7 +145,7 @@ function Moteur(o) {
     p = p || {};
     const r = o.appliquer(p, M) || {};
     if (r.vue && o.vues.includes(r.vue) && r.vue !== S.vue) { S.vue = r.vue; r.change = true; r.vueChange = true; }
-    if (r.change) { calculer(); if (r.vueChange) scene.reecrire(); }
+    if (r.change) { calculer(); if (r.vueChange) { scene.boite = null; scene.reecrire(); } else scene.remesurer(); }
     noter('set_parameters', o.params(M));
     if (r.apres) r.apres();
     else if (r.change && !r.garder) start();
@@ -169,6 +171,29 @@ function Moteur(o) {
     setTimeout(() => { if (!S.running && S.t === 0 && !S.pause && !S.fait) start(); }, 900);
   };
   return M;
+}
+/* ── Tableau large (15 novembre 2026, « la simulation n'occupe qu'une bande étroite, textes minuscules ») ──────────────
+ * Sur un tableau large (scene.L ≥ 1000, écran de portable), une vue déclarée dans LARGE[vue] = { k, x, y, g } est agrandie
+ * k fois et posée en (x, y) du cadre ; chaque groupe g[nom] = [dx, dy] (la conclusion du bas, la suite d'un calcul…) est
+ * déplacé dans la place libre à droite (grp(c, nom, fn) entoure son dessin ET son repère, que le professeur pointe donc
+ * au bon endroit). Les autres vues, et tout le grand écran (L < 1000), gardent l'ajustement automatique. */
+const LARGE = {};
+let LG = null;
+function poser(c, M) {
+  const sc = M.scene, d = !sc.mesurant && sc.L >= 1000 && LARGE[M.S.vue];
+  LG = d || null; if (!d) return;
+  const s0 = Math.min(c.W / sc.L, c.H / 420), ox0 = (c.W - sc.L * s0) / 2, oy0 = (c.H - 420 * s0) / 2;
+  const cx = Math.max(0, (sc.L - (d.L || 1292)) / 2);   // tableau plus large (jusqu'à 1596) : la disposition est centrée
+  const ns = s0 * d.k, nox = ox0 + (d.x + cx) * s0, noy = oy0 + d.y * s0;
+  c.ctx.scale(1 / sc.s, 1 / sc.s); c.ctx.translate(-sc.ox, -sc.oy);   // défait le cadrage de l'ajustement
+  c.ctx.translate(nox, noy); c.ctx.scale(ns, ns);
+  sc.s = ns; sc.ox = nox; sc.oy = noy; c.echelle = ns;
+  c.cadre = { w: (sc.L - d.x) / d.k, h: (420 - d.y) / d.k, haut: 0 };
+}
+/** Dessine `fn` dans le groupe `nom` : déplacé sur un tableau large si la vue le demande. */
+function grp(c, nom, fn) {
+  const d = LG && LG.g && LG.g[nom]; if (!d) return fn();
+  c.ctx.save(); c.ctx.translate(d[0], d[1]); try { return fn(); } finally { c.ctx.restore(); }
 }
 /** Zone d’écriture du bas : le professeur efface les plus vieilles lignes (copie du modèle). */
 function zoneEcriture(c, M, liste, ys, o = {}) {

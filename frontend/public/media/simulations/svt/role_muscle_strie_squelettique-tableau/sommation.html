@@ -54,9 +54,20 @@ function bandePhase(c, G, ph, d, yh, s0 = 0) {
 const pasT = span => (span <= 0.5 ? 0.1 : span <= 1.2 ? 0.2 : span <= 3 ? 0.5 : 1);
 function gradT(G, span, xmax) { const p = pasT(span), out = []; for (let v = 0; v <= span + 1e-9; v += p) { const x = MG.X(G, v); if (x <= xmax) out.push([+v.toFixed(3), fmt(v, 2)]); } return out; }
 
+/* Disposition selon la largeur du tableau (15 novembre 2026, « mieux exploiter tout le tableau, grands calibres de
+ * texte ») : tableau large (scene.L ≥ 1000) → tout ce qui est horizontal (axes du temps, grille, phrases) s'étire
+ * sur la largeur du tableau (HX), les textes grandissent (tk, ×1,25). Sinon la disposition d'origine (760 × 420). */
+let KX = 1, TK = 1, GX = [404, 484, 572, 660, 748];
+const HX = x => 72 + (x - 72) * KX, tk = v => Math.round(v * TK);
+const large = G => (KX === 1 ? G : { ...G, x0: HX(G.x0), px: G.px * KX, xb: HX(G.xb) });
+function disposer(L) {
+  const lg = L >= 1000; KX = lg ? (L - 14 - 72) / (746 - 72) : 1; TK = lg ? 1.35 : 1;
+  GX = GRILLE.x.map(HX);
+}
+
 /* ════════════════════════ Vue « deux » : deux stimulations ════════════════════════ */
 const DEUX = {
-  lent: 1 / 25, G: { x0: 92, px: 2150, y0: 262, py: 4.2, xa: 72, xb: 746, haut: 86 },
+  lent: 1 / 25, G0: { x0: 92, px: 2150, y0: 262, py: 4.2, xa: 72, xb: 746, haut: 86 }, get G() { return large(this.G0); },
   stims: () => [0, S.delta], tr: () => MG.train([0, S.delta]),
   finRec: () => Math.max(0.13, S.delta + 0.12), fin: () => DEUX.finRec() + 0.01,
   moments: () => ({ s2_apres_la_fin: 0.28, s2_pendant_relachement: 0.2, s2_pendant_contraction: 0.16, s2_pendant_latence: 0.14, stimulation_2: +S.delta.toFixed(3) }),   // réglage → fin de l’enregistrement avec ce Δ
@@ -75,23 +86,23 @@ const DEUX = {
   dessiner(c) {
     const G = DEUX.G, t = S.t, A = DEUX.analyse(), te = Math.min(t, DEUX.finRec()), quand = quandFab(c);
     petitMuscle(c, A.T.y(te), 40, 108, 92);
-    c.texte('muscle', 22, 250, { couleur: 'rose', taille: 12, align: 'center' });
-    c.texte('Deux stimulations de même intensité', 12, 26, { couleur: 'cyan', taille: 17 });
-    MG.axes(c, G, { xa: G.xa, xb: G.xb, haut: G.haut, mm: [[0, '0'], [10, '10'], [20, '20'], [30, '30'], [40, '40']], t: [[0, '0'], [0.05, '0,05'], [0.1, '0,10'], [0.15, '0,15'], [0.2, '0,20'], [0.25, '0,25']], titreT: 't (s)' });
-    c.texte('mm', G.xa + 8, G.haut + 8, { couleur: 'faible', taille: 13 });
+    c.texte('muscle', 22, 250, { couleur: 'rose', taille: tk(12), align: 'center' });
+    c.texte('Deux stimulations de même intensité', 12, 26, { couleur: 'cyan', taille: tk(17) });
+    MG.axes(c, G, { xa: G.xa, xb: G.xb, haut: G.haut, mm: [[0, '0'], [10, '10'], [20, '20'], [30, '30'], [40, '40']], t: [[0, '0'], [0.05, '0,05'], [0.1, '0,10'], [0.15, '0,15'], [0.2, '0,20'], [0.25, '0,25']], titreT: 't (s)', taille: tk(13) });
+    c.texte('mm', G.xa + 8, G.haut + 8, { couleur: 'faible', taille: tk(13) });
     MG.ligneTemps(c, G, 350, G.xa, G.xb - 6, 0.01);
-    c.texte('1 dent = 0,01 s', G.xb - 6, 374, { couleur: 'faible', taille: 13, align: 'right' });
+    c.texte('1 dent = 0,01 s', G.xb - 6, 374, { couleur: 'faible', taille: tk(13), align: 'right' });
     c.repere('ligne_temps', G.xa, 338, G.xb - G.xa, 40, 'la ligne du temps : 1 dent = 0,01 s');
-    c.texte('même intensité pour S1 et S2', G.xb - 6, 327, { couleur: 'jaune', taille: 13, align: 'right' });
-    c.ligne(528, 100, 556, 100, { couleur: 'faible', largeur: 1.6, pointille: [4, 4] });
-    c.texte('S1 seule (référence)', 562, 105, { couleur: 'faible', taille: 13 });
+    c.texte('même intensité pour S1 et S2', G.xb - 6, 327, { couleur: 'jaune', taille: tk(13), align: 'right' });
+    c.ligne(HX(528), 100, HX(528) + 28, 100, { couleur: 'faible', largeur: 1.6, pointille: [4, 4] });
+    c.texte('S1 seule (référence)', HX(528) + 34, 105, { couleur: 'faible', taille: tk(13) });
     c.direct(() => {
-      c.texte(`Δ = ${fmt(S.delta)} s    ${t <= 0 ? '' : `t = ${fr(te, 3)} s `}(ralenti ×25)`, G.xb, 26, { couleur: 'faible', taille: 14, align: 'right' });
+      c.texte(`Δ = ${fmt(S.delta)} s    ${t <= 0 ? '' : `t = ${fr(te, 3)} s `}(ralenti ×25)`, G.xb, 26, { couleur: 'faible', taille: tk(14), align: 'right' });
       if (t >= S.delta && t > 0) bandePhase(c, G, A.ph, S.delta, 112);
       MG.signal(c, G, 308, G.xa, G.xb - 6, DEUX.stims(), t > 0 ? t : -1);
-      if (t > 0) c.texte('S1', MG.X(G, 0) + 2, 334, { couleur: 'jaune', taille: 13, align: 'center' });
+      if (t > 0) c.texte('S1', MG.X(G, 0) + 2, 334, { couleur: 'jaune', taille: tk(13), align: 'center' });
       const x2 = MG.X(G, S.delta);
-      if (t >= S.delta && t > 0) c.texte('S2', x2 + (S.delta < 0.012 ? 14 : 2), 334, { couleur: 'jaune', taille: 13, align: 'center' });
+      if (t >= S.delta && t > 0) c.texte('S2', x2 + (S.delta < 0.012 ? 14 : 2), 334, { couleur: 'jaune', taille: tk(13), align: 'center' });
       c.cercle(x2 + 2, 316, 5, { couleur: 'jaune', largeur: 1.6 });
       c.repere('s2', x2 - 8, 296, 20, 28, `S2, à Δ = ${fmt(S.delta)} s de S1 (à glisser)`);
       c.repere('stimulations', G.xa, 290, Math.max(60, x2 - G.xa + 30), 42, 'les deux stimulations S1 et S2');
@@ -103,20 +114,20 @@ const DEUX = {
       if (t > 0) c.repere('trace', MG.X(G, 0), MG.Y(G, 40), MG.X(G, Math.max(0.02, te)) - MG.X(G, 0), G.y0 - MG.Y(G, 40), 'le tracé obtenu');
       A.som.forEach((s, i) => {
         if (s.t > te) return;
-        c.texte(`${fmm(s.y)} mm`, MG.X(G, s.t), MG.Y(G, s.y) - 9, { couleur: 'vert', taille: 14, align: 'center' });
+        c.texte(`${fmm(s.y)} mm`, MG.X(G, s.t), MG.Y(G, s.y) - 9, { couleur: 'vert', taille: tk(14), align: 'center' });
         c.repere(i ? 'sommet_2' : 'sommet_1', MG.X(G, s.t) - 14, MG.Y(G, s.y) - 24, 28, 30, `${i ? 'le second sommet' : A.som.length > 1 ? 'le premier sommet' : 'le sommet'} : ${fmm(s.y)} mm`);
       });
     });
     if (t >= S.delta && t > 0) {
       quand('ph');
       const phr = A.ph === 'latence' ? 'S2 tombe pendant la latence de la 1re secousse : sans effet visible' : A.ph === 'apres' ? 'S2 tombe après la fin de la 1re secousse' : `S2 tombe pendant ${MG.NOM_PHASE[A.ph]} de la 1re secousse`;
-      c.texte(phr, 400, 76, { couleur: CRAIE_PH[A.ph], taille: 15, align: 'center' });
+      c.texte(phr, HX(400), 76, { couleur: CRAIE_PH[A.ph], taille: tk(15), align: 'center' });
     }
     if (t >= DEUX.finRec()) {
       quand('nom');
       const det = { latence: 'S2 sans effet visible (20 mm)', contraction: 'un seul sommet, plus haut', relachement: 'deux sommets, le second plus haut', apres: 'deux secousses identiques' }[A.ph];
-      c.texte(`→ ${NOMS[A.ph]} : ${det}`, 400, 52, { couleur: 'vert', taille: 19, align: 'center' });
-      c.repere('nom_trace', 170, 32, 460, 26, `le nom du tracé : ${NOMS[A.ph]}`);
+      c.texte(`→ ${NOMS[A.ph]} : ${det}`, HX(400), 52, { couleur: 'vert', taille: tk(19), align: 'center' });
+      c.repere('nom_trace', HX(170), 32, 460 * KX, 26, `le nom du tracé : ${NOMS[A.ph]}`);
     }
   },
   ceQuiSeVoit() {
@@ -143,7 +154,7 @@ const DEUX = {
 /* ════════════════════════ Vue « serie » : 12 stimulations ════════════════════════ */
 const SERIE = {
   span: () => 11 / S.f + 0.15,
-  G() { const px = S.pxFige ?? 650 / SERIE.span(); return { x0: 92, px, y0: 262, py: 2.6, xa: 72, xb: 746, haut: 96 }; },
+  G() { const px = S.pxFige ?? 650 * KX / SERIE.span(); return { x0: HX(92), px, y0: 262, py: 2.6, xa: 72, xb: HX(746), haut: 96 }; },
   stims: () => Array.from({ length: 12 }, (_, k) => k / S.f), tr: () => MG.train(SERIE.stims()),
   lent: () => SERIE.span() / Math.max(5, SERIE.span()),
   finRec: () => SERIE.span(), fin: () => SERIE.span() + 0.005,
@@ -165,21 +176,21 @@ const SERIE = {
   dessiner(c) {
     const G = SERIE.G(), t = S.t, A = SERIE.analyse(), span = SERIE.span(), te = Math.min(t, SERIE.finRec()), quand = quandFab(c), st = SERIE.stims();
     petitMuscle(c, A.T.y(te), 60, 108, 92);
-    c.texte('muscle', 22, 250, { couleur: 'rose', taille: 12, align: 'center' });
-    c.texte('Une série de 12 stimulations de même intensité', 12, 26, { couleur: 'cyan', taille: 17 });
+    c.texte('muscle', 22, 250, { couleur: 'rose', taille: tk(12), align: 'center' });
+    c.texte('Une série de 12 stimulations de même intensité', 12, 26, { couleur: 'cyan', taille: tk(17) });
     c.direct(() => {
-      MG.axes(c, G, { xa: G.xa, xb: G.xb, haut: G.haut, mm: [[0, '0'], [20, '20'], [40, '40'], [60, '60']], t: gradT(G, span, G.xb - 40), titreT: 't (s)' });
-      c.texte('mm', G.xa + 8, G.haut + 8, { couleur: 'faible', taille: 13 });
+      MG.axes(c, G, { xa: G.xa, xb: G.xb, haut: G.haut, mm: [[0, '0'], [20, '20'], [40, '40'], [60, '60']], t: gradT(G, span, G.xb - 40), titreT: 't (s)', taille: tk(13) });
+      c.texte('mm', G.xa + 8, G.haut + 8, { couleur: 'faible', taille: tk(13) });
       const pas = 0.01 * G.px >= 6 ? 0.01 : 0.1;
       MG.ligneTemps(c, G, 350, G.xa, G.xb - 6, pas);
-      c.texte(`1 dent = ${fmt(pas, 2)} s`, G.xb - 6, 374, { couleur: 'faible', taille: 13, align: 'right' });
+      c.texte(`1 dent = ${fmt(pas, 2)} s`, G.xb - 6, 374, { couleur: 'faible', taille: tk(13), align: 'right' });
       c.repere('ligne_temps', G.xa, 338, G.xb - G.xa, 40, `la ligne du temps : 1 dent = ${fmt(pas, 2)} s`);
       const k = 1 / SERIE.lent();
-      c.texte(`${fmt(S.f, 1)} Hz (une stimulation toutes les ${fmt(1 / S.f, 3)} s)   ${k > 1.05 ? `ralenti ×${fmt(k, 0)}` : 'temps réel'}`, G.xb, 26, { couleur: 'faible', taille: 14, align: 'right' });
+      c.texte(`${fmt(S.f, 1)} Hz (une stimulation toutes les ${fmt(1 / S.f, 3)} s)   ${k > 1.05 ? `ralenti ×${fmt(k, 0)}` : 'temps réel'}`, G.xb, 26, { couleur: 'faible', taille: tk(14), align: 'right' });
       MG.signal(c, G, 308, G.xa, G.xb - 6, st, t > 0 ? t : -1);
-      if (t > 0) c.texte('S1', MG.X(G, 0) + 2, 334, { couleur: 'jaune', taille: 13, align: 'center' });
-      if (t >= st[1]) c.texte('S2', MG.X(G, st[1]) + 2, 334, { couleur: 'jaune', taille: 13, align: 'center' });
-      if (t >= st[11]) c.texte('S12', MG.X(G, st[11]) + 2, 334, { couleur: 'jaune', taille: 13, align: 'center' });
+      if (t > 0) c.texte('S1', MG.X(G, 0) + 2, 334, { couleur: 'jaune', taille: tk(13), align: 'center' });
+      if (t >= st[1]) c.texte('S2', MG.X(G, st[1]) + 2, 334, { couleur: 'jaune', taille: tk(13), align: 'center' });
+      if (t >= st[11]) c.texte('S12', MG.X(G, st[11]) + 2, 334, { couleur: 'jaune', taille: tk(13), align: 'center' });
       c.cercle(MG.X(G, st[1]) + 2, 316, 5, { couleur: 'jaune', largeur: 1.6 });
       c.repere('s2', MG.X(G, st[1]) - 8, 296, 20, 28, `S2 : la glisser vers S1 augmente la fréquence (${fmt(S.f, 1)} Hz)`);
       c.repere('stimulations', G.xa, 290, MG.X(G, st[11]) - G.xa + 20, 42, `12 stimulations à ${fmt(S.f, 1)} Hz`);
@@ -192,15 +203,15 @@ const SERIE = {
     if (t >= st[1] + 0.012) {
       quand('ph');
       const ph = SERIE.phase();
-      c.texte(ph === 'apres' ? 'chaque stimulation tombe après la fin de la secousse précédente' : `chaque stimulation tombe pendant ${MG.NOM_PHASE[ph]} de la secousse précédente`, 400, 76, { couleur: CRAIE_PH[ph], taille: 15, align: 'center' });
+      c.texte(ph === 'apres' ? 'chaque stimulation tombe après la fin de la secousse précédente' : `chaque stimulation tombe pendant ${MG.NOM_PHASE[ph]} de la secousse précédente`, HX(400), 76, { couleur: CRAIE_PH[ph], taille: tk(15), align: 'center' });
     }
     if (t >= SERIE.finRec()) {
       quand('nom');
       const nom = SERIE.nom(), xm = MG.X(G, (st[5] + st[11]) / 2);
-      c.texte(`→ ${nom}${nom === 'tétanos imparfait' ? ' : plateau dentelé' : nom === 'tétanos parfait' ? ' : plateau lisse' : ''}`, 400, 52, { couleur: 'vert', taille: 19, align: 'center' });
-      c.repere('nom_trace', 170, 32, 460, 26, `le nom du tracé : ${nom}`);
+      c.texte(`→ ${nom}${nom === 'tétanos imparfait' ? ' : plateau dentelé' : nom === 'tétanos parfait' ? ' : plateau lisse' : ''}`, HX(400), 52, { couleur: 'vert', taille: tk(19), align: 'center' });
+      c.repere('nom_trace', HX(170), 32, 460 * KX, 26, `le nom du tracé : ${nom}`);
       const lib = nom === 'secousses isolées' ? `secousses séparées, toutes de ${fmm(A.ymax)} mm` : nom === 'tétanos imparfait' ? `plateau dentelé : de ${fmm(A.ymin)} à ${fmm(A.ymax)} mm` : `plateau lisse : ${fmm(A.ymax)} mm, ≈ 3 × la secousse`;
-      c.texte(lib, Math.min(560, Math.max(260, xm)), nom === 'tétanos parfait' ? MG.Y(G, A.ymax) + 26 : MG.Y(G, A.ymax) - 12, { couleur: 'vert', taille: 14, align: 'center' });
+      c.texte(lib, Math.min(HX(560), Math.max(HX(260), xm)), nom === 'tétanos parfait' ? MG.Y(G, A.ymax) + 26 : MG.Y(G, A.ymax) - 12, { couleur: 'vert', taille: tk(14), align: 'center' });
     }
   },
   ceQuiSeVoit() {
@@ -228,7 +239,7 @@ const SERIE = {
 const NFAT = 30, FFAT = 2;
 const fat = k => { const r = k / (NFAT - 1); return { amp: 20 * (1 - 0.6 * Math.pow(r, 1.2)), rel: 0.05 * (1 + 1.6 * Math.pow(r, 1.4)), con: 0.04 * (1 + 0.25 * r) }; };
 const FAT = {
-  lent: 2, G: { x0: 92, px: 650 / 15, y0: 170, py: 4, xa: 72, xb: 746, haut: 82 },
+  lent: 2, G0: { x0: 92, px: 650 / 15, y0: 170, py: 4, xa: 72, xb: 746, haut: 82 }, get G() { return large(this.G0); },
   stims: () => Array.from({ length: NFAT }, (_, k) => k / FFAT),
   y: t => { const k = Math.floor(t * FFAT + 1e-9); let v = 0; for (const j of [k - 1, k]) if (j >= 0 && j < NFAT) v += MG.secousse(t - j / FFAT, fat(j)); return v; },
   finRec: () => (NFAT - 1) / FFAT + 0.25, fin: () => 15.2,
@@ -241,38 +252,38 @@ const FAT = {
   dessiner(c) {
     const G = FAT.G, t = S.t, te = Math.min(t, FAT.finRec()), quand = quandFab(c), st = FAT.stims();
     petitMuscle(c, FAT.y(te), 20, 74, 70);
-    c.texte('muscle', 22, 186, { couleur: 'rose', taille: 12, align: 'center' });
-    c.texte('Fatigue : une longue série de secousses isolées (2 Hz)', 12, 26, { couleur: 'cyan', taille: 17 });
-    c.texte('même intensité ; une stimulation toutes les 0,5 s', 12, 52, { couleur: 'faible', taille: 14 });
-    MG.axes(c, G, { xa: G.xa, xb: G.xb, haut: G.haut, mm: [[0, '0'], [10, '10'], [20, '20']], t: [[0, '0'], [5, '5'], [10, '10']], titreT: 't (s)' });
-    c.texte('mm', G.xa + 8, G.haut + 8, { couleur: 'faible', taille: 13 });
+    c.texte('muscle', 22, 186, { couleur: 'rose', taille: tk(12), align: 'center' });
+    c.texte('Fatigue : une longue série de secousses isolées (2 Hz)', 12, 26, { couleur: 'cyan', taille: tk(17) });
+    c.texte('même intensité ; une stimulation toutes les 0,5 s', 12, 52, { couleur: 'faible', taille: tk(14) });
+    MG.axes(c, G, { xa: G.xa, xb: G.xb, haut: G.haut, mm: [[0, '0'], [10, '10'], [20, '20']], t: [[0, '0'], [5, '5'], [10, '10']], titreT: 't (s)', taille: tk(13) });
+    c.texte('mm', G.xa + 8, G.haut + 8, { couleur: 'faible', taille: tk(13) });
     MG.ligneTemps(c, G, 234, G.xa, G.xb - 6, 0.5);
-    c.texte('1 dent = 0,5 s', G.xb - 6, 254, { couleur: 'faible', taille: 13, align: 'right' });
+    c.texte('1 dent = 0,5 s', G.xb - 6, 254, { couleur: 'faible', taille: tk(13), align: 'right' });
     c.repere('ligne_temps', G.xa, 222, G.xb - G.xa, 36, 'la ligne du temps : 1 dent = 0,5 s');
     c.direct(() => {
-      c.texte(t <= 0 ? 'accéléré ×2' : `t = ${fr(te, 1)} s   (accéléré ×2)`, G.xb, 26, { couleur: 'faible', taille: 14, align: 'right' });
+      c.texte(t <= 0 ? 'accéléré ×2' : `t = ${fr(te, 1)} s   (accéléré ×2)`, G.xb, 26, { couleur: 'faible', taille: tk(14), align: 'right' });
       MG.signal(c, G, 210, G.xa, G.xb - 6, st, t > 0 ? t : -1, { largeurS: 0.04 });
       c.repere('stimulations', G.xa, 196, G.xb - G.xa, 20, '30 stimulations de même intensité, à 2 Hz');
       if (te > 0) MG.courbe(c, G, FAT.y, 0, te, { couleur: 'blanc', largeur: 2, pas: 0.6, tremble: .05 });
       MG.courbe(c, G, () => 0, -0.4, 0, { couleur: 'blanc', largeur: 2 });
       if (t > 0) c.repere('trace', MG.X(G, 0), MG.Y(G, 20) - 4, MG.X(G, Math.max(0.3, te)) - MG.X(G, 0), G.y0 - MG.Y(G, 20) + 8, 'le tracé : 30 secousses');
-      if (t > 0.1) { c.texte('1re', MG.X(G, 0.3), MG.Y(G, 20) - 6, { couleur: 'vert', taille: 13 }); c.repere('premiere_secousse', MG.X(G, 0) - 8, MG.Y(G, 20) - 22, 24, G.y0 - MG.Y(G, 20) + 22, 'la première secousse : 20 mm, relâchement 0,05 s'); }
-      if (te >= st[NFAT - 1] + 0.1) { const f = fat(NFAT - 1); c.texte('30e', MG.X(G, st[NFAT - 1] + 0.06), MG.Y(G, f.amp) - 8, { couleur: 'orange', taille: 13, align: 'center' }); c.repere('derniere_secousse', MG.X(G, st[NFAT - 1]) - 8, MG.Y(G, f.amp) - 22, 26, G.y0 - MG.Y(G, f.amp) + 22, `la dernière secousse : ${fmm(f.amp)} mm, relâchement ${fmt(f.rel, 2)} s`); }
+      if (t > 0.1) { c.texte('1re', MG.X(G, 0.3), MG.Y(G, 20) - 6, { couleur: 'vert', taille: tk(13) }); c.repere('premiere_secousse', MG.X(G, 0) - 8, MG.Y(G, 20) - 22, 24, G.y0 - MG.Y(G, 20) + 22, 'la première secousse : 20 mm, relâchement 0,05 s'); }
+      if (te >= st[NFAT - 1] + 0.1) { const f = fat(NFAT - 1); c.texte('30e', MG.X(G, st[NFAT - 1] + 0.06), MG.Y(G, f.amp) - 8, { couleur: 'orange', taille: tk(13), align: 'center' }); c.repere('derniere_secousse', MG.X(G, st[NFAT - 1]) - 8, MG.Y(G, f.amp) - 22, 26, G.y0 - MG.Y(G, f.amp) + 22, `la dernière secousse : ${fmm(f.amp)} mm, relâchement ${fmt(f.rel, 2)} s`); }
     });
     if (t >= FAT.moments().comparaison - 0.05) {
       quand('cmp');
-      c.texte('Fatigue : l’amplitude diminue et le relâchement s’allonge.', 92, 264, { couleur: 'vert', taille: 15 });
-      for (const [k, x0, coul, titre, id] of [[0, 112, 'blanc', '1re secousse', 'premiere_secousse'], [NFAT - 1, 466, 'orange', '30e secousse (même échelle)', 'derniere_secousse']]) {
-        const f = fat(k), Gi = { x0, px: 1150, y0: 372, py: 3.8 };
-        c.texte(titre, x0, 288, { couleur: coul, taille: 14 });
-        c.ligne(x0 - 8, Gi.y0, x0 + 236, Gi.y0, { couleur: 'faible', largeur: 1.4 });
+      c.texte('Fatigue : l’amplitude diminue et le relâchement s’allonge.', HX(92), 264, { couleur: 'vert', taille: tk(15) });
+      for (const [k, x0, coul, titre, id] of [[0, HX(112), 'blanc', '1re secousse', 'premiere_secousse'], [NFAT - 1, HX(466), 'orange', '30e secousse (même échelle)', 'derniere_secousse']]) {
+        const f = fat(k), Gi = { x0, px: 1150 * KX, y0: 372, py: 3.8 };
+        c.texte(titre, x0, 288, { couleur: coul, taille: tk(14) });
+        c.ligne(x0 - 8, Gi.y0, x0 + 236 * KX, Gi.y0, { couleur: 'faible', largeur: 1.4 });
         MG.courbe(c, Gi, tau => MG.secousse(tau, f), 0, 0.2, { couleur: coul, largeur: 2.4 });
         c.cote(x0 - 6, Gi.y0, x0 - 6, MG.Y(Gi, f.amp), '', { couleur: 'vert' });
-        c.texte(`${fmm(f.amp)} mm`, x0 - 12, (Gi.y0 + MG.Y(Gi, f.amp)) / 2 + 5, { couleur: 'vert', taille: 14, align: 'right' });
+        c.texte(`${fmm(f.amp)} mm`, x0 - 12, (Gi.y0 + MG.Y(Gi, f.amp)) / 2 + 5, { couleur: 'vert', taille: tk(14), align: 'right' });
         const a = MG.X(Gi, 0.01 + f.con), b = MG.X(Gi, 0.01 + f.con + f.rel);
         MG.accolade(c, a, b, Gi.y0 + 6, { couleur: 'bleu' });
-        c.texte(`relâchement : ${fmt(f.rel, 2)} s`, (a + b) / 2, Gi.y0 + 30, { couleur: 'bleu', taille: 14, align: 'center' });
-        c.repere(id, x0 - 50, 272, 290, 142, k ? `la 30e secousse agrandie : ${fmm(f.amp)} mm, relâchement ${fmt(f.rel, 2)} s` : 'la 1re secousse agrandie : 20 mm, relâchement 0,05 s');
+        c.texte(`relâchement : ${fmt(f.rel, 2)} s`, (a + b) / 2, Gi.y0 + 30, { couleur: 'bleu', taille: tk(14), align: 'center' });
+        c.repere(id, x0 - 50, 272, 290 * KX, 142, k ? `la 30e secousse agrandie : ${fmm(f.amp)} mm, relâchement ${fmt(f.rel, 2)} s` : 'la 1re secousse agrandie : 20 mm, relâchement 0,05 s');
       }
     }
   },
@@ -301,7 +312,7 @@ const GRILLE = { x: [404, 484, 572, 660, 748], y: [108, 160, 216, 272] };
 const caseDe = k => { const T = TRACES[k]; if (T.cas === 'une') return [0, 1, 4]; const r = T.cas === 'deux' ? 1 : 2, col = { apres: 1, relachement: 2, contraction: 3 }[T.ph]; return [r, col, col + 1]; };
 const NOM = {
   tr: () => TRACES[S.trace], span: () => { const st = TRACES[S.trace].stims; return st[st.length - 1] + 0.15; },
-  G() { return { x0: 92, px: 290 / NOM.span(), y0: 262, py: 2.6, xa: 72, xb: 396, haut: 98 }; },
+  G() { return { x0: HX(92), px: 290 * KX / NOM.span(), y0: 262, py: 2.6, xa: 72, xb: HX(396), haut: 98 }; },
   lent: 1, finRec: () => 2.4, fin: () => 5.8,
   moments: () => ({ trace_affiche: 2.5, stimulations_comptees: 3.4, phase_reperee: 4.4, nom_ecrit: 5.4 }),
   reglages: {},
@@ -313,29 +324,29 @@ const NOM = {
   compte: () => { const n = NOM.tr().stims.length; return n === 1 ? '1 stimulation' : n === 2 ? '2 stimulations' : `${n} stimulations : une série`; },
   dessiner(c) {
     const G = NOM.G(), t = S.t, T = NOM.tr(), tr = MG.train(T.stims), span = NOM.span(), M = NOM.moments(), quand = quandFab(c);
-    c.texte('Exercice : nomme le tracé', 12, 26, { couleur: 'cyan', taille: 17 });
+    c.texte('Exercice : nomme le tracé', 12, 26, { couleur: 'cyan', taille: tk(17) });
     // la grille de lecture (fixe)
-    c.texte('la stimulation suivante tombe :', 616, 62, { couleur: 'faible', taille: 14, align: 'center' });
-    [['après', 'la fin'], ['pendant le', 'relâchement'], ['pendant la', 'contraction']].forEach(([a, b], i) => { const x = (GRILLE.x[i + 1] + GRILLE.x[i + 2]) / 2; c.texte(a, x, 84, { couleur: 'faible', taille: 13, align: 'center' }); c.texte(b, x, 100, { couleur: 'faible', taille: 13, align: 'center' }); });
-    for (const yy of GRILLE.y) c.ligne(GRILLE.x[0], yy, GRILLE.x[4], yy, { couleur: 'tresfaible', largeur: 1.4 });
-    c.ligne(GRILLE.x[0], GRILLE.y[0], GRILLE.x[0], GRILLE.y[3], { couleur: 'tresfaible', largeur: 1.4 });
-    c.ligne(GRILLE.x[1], GRILLE.y[0], GRILLE.x[1], GRILLE.y[3], { couleur: 'tresfaible', largeur: 1.4 });
-    for (const i of [2, 3]) c.ligne(GRILLE.x[i], GRILLE.y[1], GRILLE.x[i], GRILLE.y[3], { couleur: 'tresfaible', largeur: 1.4 });
-    c.ligne(GRILLE.x[4], GRILLE.y[0], GRILLE.x[4], GRILLE.y[3], { couleur: 'tresfaible', largeur: 1.4 });
-    [['une', 'stimulation'], ['deux', 'stimulations'], ['série de', 'stimulations']].forEach(([a, b], r) => { const ym = (GRILLE.y[r] + GRILLE.y[r + 1]) / 2; c.texte(a, 444, ym - 3, { couleur: 'faible', taille: 13, align: 'center' }); c.texte(b, 444, ym + 13, { couleur: 'faible', taille: 13, align: 'center' }); });
-    const cell = (r, c1, c2, l1, l2) => { const x = (GRILLE.x[c1] + GRILLE.x[c2]) / 2, ym = (GRILLE.y[r] + GRILLE.y[r + 1]) / 2; if (l2) { c.texte(l1, x, ym - 3, { couleur: 'blanc', taille: 13, align: 'center' }); c.texte(l2, x, ym + 13, { couleur: 'blanc', taille: 13, align: 'center' }); } else c.texte(l1, x, ym + 5, { couleur: 'blanc', taille: 14, align: 'center' }); };
+    c.texte('la stimulation suivante tombe :', HX(616), KX > 1 ? 100 - tk(16) - tk(20) : 62, { couleur: 'faible', taille: tk(14), align: 'center' });
+    [['après', 'la fin'], ['pendant le', 'relâchement'], ['pendant la', 'contraction']].forEach(([a, b], i) => { const x = (GX[i + 1] + GX[i + 2]) / 2; c.texte(a, x, 100 - tk(16), { couleur: 'faible', taille: tk(13), align: 'center' }); c.texte(b, x, 100, { couleur: 'faible', taille: tk(13), align: 'center' }); });
+    for (const yy of GRILLE.y) c.ligne(GX[0], yy, GX[4], yy, { couleur: 'tresfaible', largeur: 1.4 });
+    c.ligne(GX[0], GRILLE.y[0], GX[0], GRILLE.y[3], { couleur: 'tresfaible', largeur: 1.4 });
+    c.ligne(GX[1], GRILLE.y[0], GX[1], GRILLE.y[3], { couleur: 'tresfaible', largeur: 1.4 });
+    for (const i of [2, 3]) c.ligne(GX[i], GRILLE.y[1], GX[i], GRILLE.y[3], { couleur: 'tresfaible', largeur: 1.4 });
+    c.ligne(GX[4], GRILLE.y[0], GX[4], GRILLE.y[3], { couleur: 'tresfaible', largeur: 1.4 });
+    [['une', 'stimulation'], ['deux', 'stimulations'], ['série de', 'stimulations']].forEach(([a, b], r) => { const ym = (GRILLE.y[r] + GRILLE.y[r + 1]) / 2; c.texte(a, HX(444), ym - tk(4), { couleur: 'faible', taille: tk(13), align: 'center' }); c.texte(b, HX(444), ym + tk(12), { couleur: 'faible', taille: tk(13), align: 'center' }); });
+    const cell = (r, c1, c2, l1, l2) => { const x = (GX[c1] + GX[c2]) / 2, ym = (GRILLE.y[r] + GRILLE.y[r + 1]) / 2; if (l2) { c.texte(l1, x, ym - tk(4), { couleur: 'blanc', taille: tk(13), align: 'center' }); c.texte(l2, x, ym + tk(12), { couleur: 'blanc', taille: tk(13), align: 'center' }); } else c.texte(l1, x, ym + 5, { couleur: 'blanc', taille: tk(14), align: 'center' }); };
     cell(0, 1, 4, 'secousse isolée'); cell(1, 1, 2, 'deux secousses', 'isolées'); cell(1, 2, 3, 'fusion', 'incomplète'); cell(1, 3, 4, 'fusion', 'complète');
     cell(2, 2, 3, 'tétanos', 'imparfait'); cell(2, 3, 4, 'tétanos', 'parfait');
-    c.repere('grille', GRILLE.x[0], 48, GRILLE.x[4] - GRILLE.x[0], GRILLE.y[3] - 48, 'la grille : nombre de stimulations × phase où tombe la suivante');
+    c.repere('grille', GX[0], 48, GX[4] - GX[0], GRILLE.y[3] - 48, 'la grille : nombre de stimulations × phase où tombe la suivante');
     // le tracé
     c.direct(() => {
-      MG.axes(c, G, { xa: G.xa, xb: G.xb, haut: G.haut, mm: [[0, '0'], [20, '20'], [40, '40'], [60, '60']], t: gradT(G, span, G.xb - 34), titreT: 't (s)' });
-      c.texte('mm', G.xa + 8, G.haut + 8, { couleur: 'faible', taille: 13 });
+      MG.axes(c, G, { xa: G.xa, xb: G.xb, haut: G.haut, mm: [[0, '0'], [20, '20'], [40, '40'], [60, '60']], t: gradT(G, span, G.xb - 34), titreT: 't (s)', taille: tk(13) });
+      c.texte('mm', G.xa + 8, G.haut + 8, { couleur: 'faible', taille: tk(13) });
       const pas = 0.01 * G.px >= 5 ? 0.01 : 0.1;
       MG.ligneTemps(c, G, 340, G.xa, G.xb - 6, pas);
-      c.texte(`1 dent = ${fmt(pas, 2)} s`, G.xb - 6, 362, { couleur: 'faible', taille: 13, align: 'right' });
-      c.texte(`tracé n° ${S.trace + 1} / 6    ▸ autre tracé`, 748, 304, { couleur: 'jaune', taille: 14, align: 'right' });
-      c.repere('autre_trace', 560, 288, 190, 22, 'toucher ici : un autre tracé');
+      c.texte(`1 dent = ${fmt(pas, 2)} s`, G.xb - 6, 362, { couleur: 'faible', taille: tk(13), align: 'right' });
+      c.texte(`tracé n° ${S.trace + 1} / 6    ▸ autre tracé`, HX(748), 304, { couleur: 'jaune', taille: tk(14), align: 'right' });
+      c.repere('autre_trace', HX(560), 288, HX(750) - HX(560), 22, 'toucher ici : un autre tracé');
       const tt = span * Math.min(1, t / NOM.finRec());
       MG.signal(c, G, 300, G.xa, G.xb - 6, T.stims, t > 0 ? tt : -1);
       c.repere('stimulations', G.xa, 284, G.xb - G.xa, 40, 'les stimulations (créneaux du signal)');
@@ -344,21 +355,21 @@ const NOM = {
       if (tt > 0) MG.courbe(c, G, tr.y, 0, tt, { couleur: 'blanc', largeur: 2.4, pas: 1 });
       MG.courbe(c, G, () => 0, -0.07 * span, 0, { couleur: 'blanc', largeur: 2.4 });
       c.repere('trace', MG.X(G, 0), MG.Y(G, 62), G.xb - MG.X(G, 0), G.y0 - MG.Y(G, 62), 'le tracé à nommer');
-      if (t >= M.stimulations_comptees - 0.05) T.stims.forEach((s, i) => c.texte(String(i + 1), MG.X(G, s) + 2, 318, { couleur: 'jaune', taille: 12, align: 'center' }));
+      if (t >= M.stimulations_comptees - 0.05) T.stims.forEach((s, i) => c.texte(String(i + 1), MG.X(G, s) + 2, 318, { couleur: 'jaune', taille: tk(12), align: 'center' }));
     });
-    if (t >= M.stimulations_comptees - 0.05) { quand('cpt'); c.texte(NOM.compte(), 92, 388, { couleur: 'jaune', taille: 16 }); }
+    if (t >= M.stimulations_comptees - 0.05) { quand('cpt'); c.texte(NOM.compte(), HX(92), 388, { couleur: 'jaune', taille: tk(16) }); }
     if (t >= M.phase_reperee - 0.05) {
       quand('ph');
       const ph = T.ph;
-      c.texte(!ph ? 'une seule stimulation : pas de suivante' : `la suivante tombe ${ph === 'apres' ? 'après la fin' : 'pendant ' + MG.NOM_PHASE[ph]} de la secousse précédente`, 12, 76, { couleur: ph ? CRAIE_PH[ph] : 'faible', taille: 14, max: 384 });
+      c.texte(!ph ? 'une seule stimulation : pas de suivante' : `la suivante tombe ${ph === 'apres' ? 'après la fin' : 'pendant ' + MG.NOM_PHASE[ph]} de la secousse précédente`, 12, 76, { couleur: ph ? CRAIE_PH[ph] : 'faible', taille: tk(14), max: HX(384) });
     }
     if (t >= M.nom_ecrit - 0.05) {
       quand('nom');
-      c.texte(`→ ${T.nom}`, 12, 52, { couleur: 'vert', taille: 20 });
-      c.repere('nom_trace', 8, 32, 380, 26, `le nom du tracé : ${T.nom}`);
+      c.texte(`→ ${T.nom}`, 12, 52, { couleur: 'vert', taille: tk(20) });
+      c.repere('nom_trace', 8, 32, HX(380), 26, `le nom du tracé : ${T.nom}`);
       const [r, c1, c2] = caseDe(S.trace);
-      c.rect(GRILLE.x[c1] + 3, GRILLE.y[r] + 3, GRILLE.x[c2] - GRILLE.x[c1] - 6, GRILLE.y[r + 1] - GRILLE.y[r] - 6, { couleur: 'jaune', largeur: 2.2, arrondi: 6 });
-      c.texte('✓', GRILLE.x[c2] - 10, GRILLE.y[r] + 18, { couleur: 'vert', taille: 16, align: 'right' });
+      c.rect(GX[c1] + 3, GRILLE.y[r] + 3, GX[c2] - GX[c1] - 6, GRILLE.y[r + 1] - GRILLE.y[r] - 6, { couleur: 'jaune', largeur: 2.2, arrondi: 6 });
+      c.texte('✓', GX[c2] - 10, GRILLE.y[r] + 18, { couleur: 'vert', taille: tk(16), align: 'right' });
     }
   },
   ceQuiSeVoit() {
@@ -378,7 +389,7 @@ const NOM = {
   regler(p) { if (!Number.isFinite(+p.trace)) return false; S.trace = Math.min(5, Math.max(0, Math.round(+p.trace))); S.arretFin = false; return `tracé n° ${S.trace + 1}`; },
   schema: { trace: '0..5 (0 secousse isolée, 1 deux secousses isolées, 2 fusion incomplète, 3 fusion complète, 4 tétanos imparfait, 5 tétanos parfait)' },
   poignee: {
-    toucher: (x, y) => (x > 560 && x < 752 && y > 286 && y < 312 ? 'autre' : null),
+    toucher: (x, y) => (x > HX(560) && x < HX(752) && y > 286 && y < 312 ? 'autre' : null),
     bouger: () => false,
     lacher: () => { S.trace = (S.trace + 1) % 6; },
   },
@@ -389,7 +400,7 @@ const V = { deux: DEUX, serie: SERIE, fatigue: FAT, nomme: NOM }[vue];
 const lent = () => (typeof V.lent === 'function' ? V.lent() : V.lent);
 
 const canvas = $('canvas');
-const scene = window.MuscleTableau.Scene(canvas, (c) => { scene.cadre(61); V.dessiner(c); return c.fin(); });
+const scene = window.MuscleTableau.Scene(canvas, (c) => { scene.cadre(61); disposer(scene.L); V.dessiner(c); return c.fin(); }, { large: true });
 const etiquetteBouton = () => { $('run').textContent = S.running ? 'Pause' : S.fait ? 'Rejouer' : (S.t > 0 ? 'Reprendre' : 'Lancer'); };
 const motif = nom => { const m = V.motifs[nom]; return typeof m === 'function' ? m() : m; };
 scene.avancer = dt => {

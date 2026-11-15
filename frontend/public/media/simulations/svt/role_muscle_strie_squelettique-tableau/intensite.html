@@ -35,10 +35,26 @@ const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, fige: fa
 /* Géométrie (cadre 760 × 420). */
 const BOX = { x: 14, y: 40, w: 290, h: 80 }, TRK = { x0: 40, x1: 270, y: 88 };
 const xI = i => TRK.x0 + (i - 1) * (TRK.x1 - TRK.x0) / 11;
-const PAP = { x: 14, y: 160, w: 478, h: 152 }, BASE = 294, PYMM = 5.6;
-const xSlot = k => 70 + (k - 1) * 31;          // k = 1 … 13
-const C = MG.coupe(628, 238, 96, NF, 9);
-
+const PAP = { x: 14, y: 160, w: 478, h: 152 };
+let BASE = 294, PYMM = 5.6, PAS = 31, LREP = 18, C = MG.coupe(628, 238, 96, NF, 9);
+const xSlot = k => PAP.x + (LARGE ? 80 : 56) + (k - 1) * PAS;          // k = 1 … 13
+/* Disposition selon la largeur du tableau (15 novembre 2026, « mieux exploiter tout le tableau, grands calibres de
+ * texte ») : tableau large (scene.L ≥ 1000) → excitateur plus long, papier du cylindre étiré (réponses plus larges et
+ * plus hautes), coupe plus grande à droite, textes ×1,3. Sinon la disposition d'origine (760 × 420). */
+let LARGE = false, TK = 1, LD = 0, XI = 748;
+const tk = v => Math.round(v * TK);
+function disposer(L) {
+  if (L === LD) return; LD = L; LARGE = L >= 1000; TK = LARGE ? 1.3 : 1;
+  if (!LARGE) {
+    Object.assign(BOX, { x: 14, y: 40, w: 290, h: 80 }); Object.assign(TRK, { x0: 40, x1: 270, y: 88 });
+    Object.assign(PAP, { x: 14, y: 160, w: 478, h: 152 }); BASE = 294; PYMM = 5.6; PAS = 31; LREP = 18;
+    C = MG.coupe(628, 238, 96, NF, 9); XI = 748; return;
+  }
+  const r = 104, pw = Math.round(L - 2 * r - 130);
+  Object.assign(BOX, { x: 14, y: 42, w: 440, h: 84 }); Object.assign(TRK, { x0: 46, x1: 400, y: 90 });
+  Object.assign(PAP, { x: 14, y: 166, w: pw, h: 146 }); BASE = 300; PYMM = 6; PAS = Math.floor((pw - 90) / 13); LREP = Math.min(40, PAS * .7);
+  C = MG.coupe(L - r - 34, 206, r, NF, 9); XI = L - 14;
+}
 const fin = () => Math.max(FIN_SERIE, ...S.extras.map(e => e.t0 + 0.7));
 /* Les réponses visibles : la série, puis au plus deux réponses ajoutées (les dernières). */
 function reponses() {
@@ -60,12 +76,12 @@ function peindre(ctx) {
   // le papier du cylindre et l’encre des réponses
   MG.peindre.cylindre(ctx, PAP.x, PAP.y, PAP.w, PAP.h, { ry: 6 });
   const vis = reponses(), dern = vis[vis.length - 1];
-  const xFin = dern ? xSlot(dern.slot) + 16 : xSlot(1) - 14;
+  const xFin = dern ? xSlot(dern.slot) + LREP - 2 : xSlot(1) - 14;
   P.encre(ctx, [[PAP.x + 8, BASE], [Math.min(PAP.x + PAP.w - 8, xFin), BASE]], 1.3);
   let stylo = [xFin, BASE];
   for (const r of vis) {
     const p = Math.min(1, (S.t - r.t0) / DUREE_REP), x0 = xSlot(r.slot) - 4, pts = [];
-    for (let j = 0; j <= 40 * p; j++) { const tau = j / 40 * 0.12; pts.push([x0 + j / 40 * 18, BASE - PYMM * A(r.i) * MG.unite(tau)]); }
+    for (let j = 0; j <= 40 * p; j++) { const tau = j / 40 * 0.12; pts.push([x0 + j / 40 * LREP, BASE - PYMM * A(r.i) * MG.unite(tau)]); }
     P.encre(ctx, pts, 1.6);
     if (r === dern && p < 1) stylo = pts[pts.length - 1] || stylo;
   }
@@ -81,58 +97,59 @@ function dessiner(c) {
   const t = S.t, mom = moments(), vis = reponses(), dern = vis[vis.length - 1];
   c.direct(() => peindre(c.ctx));
   // parties fixes
-  c.texte('Intensité de l’excitation et réponse du muscle', 12, 26, { couleur: 'cyan', taille: 17 });
-  c.texte('excitateur', BOX.x + 12, BOX.y + 22, { couleur: 'jaune', taille: 15 });
-  c.texte('intensité i (mV)', BOX.x + BOX.w - 40, BOX.y + 22, { couleur: 'faible', taille: 13, align: 'right' });
-  for (let i = 1; i <= 12; i++) { c.ligne(xI(i), TRK.y + 6, xI(i), TRK.y + 10, { couleur: 'faible', largeur: 1.2, duree: .02 }); c.texte(String(i), xI(i), TRK.y + 25, { couleur: 'faible', taille: 12, align: 'center', duree: .05 }); }
+  c.texte('Intensité de l’excitation et réponse du muscle', 12, 26, { couleur: 'cyan', taille: tk(17) });
+  c.texte('excitateur', BOX.x + 12, BOX.y + tk(22), { couleur: 'jaune', taille: tk(15) });
+  c.texte('intensité i (mV)', BOX.x + BOX.w - 40, BOX.y + tk(22), { couleur: 'faible', taille: tk(13), align: 'right' });
+  for (let i = 1; i <= 12; i++) { c.ligne(xI(i), TRK.y + 6, xI(i), TRK.y + 10, { couleur: 'faible', largeur: 1.2, duree: .02 }); c.texte(String(i), xI(i), TRK.y + tk(25), { couleur: 'faible', taille: tk(12), align: 'center', duree: .05 }); }
   c.repere('excitateur', BOX.x, BOX.y, BOX.w, BOX.h, 'l’excitateur');
-  c.texte('coupe transversale du muscle', C.cx, 128, { couleur: 'rose', taille: 15, align: 'center' });
+  c.texte('coupe transversale du muscle', C.cx, C.cy - C.r - 14, { couleur: 'rose', taille: tk(15), align: 'center' });
   c.repere('coupe', C.cx - C.r - 4, C.cy - C.r - 4, 2 * C.r + 8, 2 * C.r + 8, 'la coupe transversale du muscle : les fibres excitées s’allument');
-  c.texte('i (mV)', 16, 334, { couleur: 'faible', taille: 13 });
-  c.texte('cylindre enregistreur, tourné à la main entre deux excitations', 16, 398, { couleur: 'faible', taille: 13 });
+  c.texte('i (mV)', 16, BASE + tk(40), { couleur: 'faible', taille: tk(13) });
+  if (!LARGE) c.texte('cylindre enregistreur, tourné à la main entre deux excitations', 16, 398, { couleur: 'faible', taille: 13 });
+  else { c.texte('cylindre enregistreur,', BOX.x + BOX.w + 24, BOX.y + 50, { couleur: 'faible', taille: tk(13) }); c.texte('tourné à la main entre deux excitations', BOX.x + BOX.w + 24, BOX.y + 50 + tk(20), { couleur: 'faible', taille: tk(13) }); }
   c.repere('trace', PAP.x, PAP.y - 6, PAP.w, PAP.h + 12, 'les réponses du muscle, côte à côte');
 
   c.direct(() => {
     const ic = iCourante();
-    c.texte(`i = ${ic} mV`, 748, 26, { couleur: 'jaune', taille: 18, align: 'right' });
+    c.texte(`i = ${ic} mV`, XI, 26, { couleur: 'jaune', taille: tk(18), align: 'right' });
     c.cercle(xI(ic), TRK.y, 10, { couleur: 'jaune', largeur: 1.6 });
     c.repere('intensite', xI(ic) - 14, TRK.y - 14, 28, 28, `le curseur d’intensité : ${ic} mV`);
     const n = dern ? nFibres(dern.i) : 0;
-    c.texte(`fibres excitées : ${n} / ${NF}${n === NF ? ' (toutes)' : ''}`, C.cx, 360, { couleur: n ? 'rouge' : 'faible', taille: 15, align: 'center' });
+    c.texte(`fibres excitées : ${n} / ${NF}${n === NF ? ' (toutes)' : ''}`, C.cx, C.cy + C.r + tk(24), { couleur: n ? 'rouge' : 'faible', taille: tk(15), align: 'center' });
   });
 
   // ce qui s’écrit en route : les intensités sous les réponses, puis les conclusions
   // chaque élément s’écrit à partir de son apparition, sans attendre les autres (le professeur écrit au moment dit)
   const base = c.cur, quand = nom => { if (S.ecrit[nom] == null) S.ecrit[nom] = (performance.now() - scene.ouvert) / 1000; c.cur = Math.max(base, S.ecrit[nom]); };
-  for (const r of vis) { quand('i' + r.slot + '_' + r.t0); c.texte(String(r.i), xSlot(r.slot) + 5, 334, { couleur: r.extra ? 'cyan' : 'blanc', taille: 13, align: 'center', duree: .1 }); }
+  for (const r of vis) { quand('i' + r.slot + '_' + r.t0); c.texte(String(r.i), xSlot(r.slot) + 5, BASE + tk(40), { couleur: r.extra ? 'cyan' : 'blanc', taille: tk(13), align: 'center', duree: .1 }); }
   if (t >= SERIE[2].t0 + 0.4) {
-    quand('inef'); MG.accolade(c, xSlot(1) - 6, xSlot(3) + 16, 344, { couleur: 'orange' });
-    c.texte('excitations inefficaces', 40, 368, { couleur: 'orange', taille: 14 });
-    c.repere('inefficaces', xSlot(1) - 8, 196, xSlot(3) - xSlot(1) + 26, 180, 'trois excitations inefficaces : tracés plats');
+    quand('inef'); MG.accolade(c, xSlot(1) - 6, xSlot(3) + LREP - 2, BASE + tk(48), { couleur: 'orange' });
+    c.texte('excitations inefficaces', xSlot(1) - 10, BASE + tk(70), { couleur: 'orange', taille: tk(14) });
+    c.repere('inefficaces', xSlot(1) - 8, PAP.y + 36, xSlot(3) - xSlot(1) + LREP + 8, BASE - PAP.y + 50, 'trois excitations inefficaces : tracés plats');
   }
   if (t >= SERIE[3].t0 + 0.4) {
-    quand('seuil'); c.texte('seuil d’excitation = 4 mV', xSlot(4) + 5, 148, { couleur: 'vert', taille: 15, align: 'center' });
-    c.fleche(xSlot(4) + 5, 152, xSlot(4) + 5, 166, { couleur: 'vert', largeur: 1.6, tete: 7 });
-    c.repere('seuil', xSlot(4) - 10, 132, 30, 170, 'la première réponse : seuil d’excitation = 4 mV');
+    quand('seuil'); c.texte('seuil d’excitation = 4 mV', xSlot(4) + 5, PAP.y - tk(12), { couleur: 'vert', taille: tk(15), align: 'center' });
+    c.fleche(xSlot(4) + 5, PAP.y - 8, xSlot(4) + 5, PAP.y + 6, { couleur: 'vert', largeur: 1.6, tete: 7 });
+    c.repere('seuil', xSlot(4) - 10, PAP.y - 28, LREP + 12, BASE - PAP.y + 38, 'la première réponse : seuil d’excitation = 4 mV');
   }
   if (t >= SERIE[6].t0 + 0.4) {
-    quand('recr'); c.texte('recrutement des fibres : plus i augmente,', C.cx, 384, { couleur: 'vert', taille: 14, align: 'center' });
-    c.texte('plus de fibres répondent', C.cx, 402, { couleur: 'vert', taille: 14, align: 'center' });
+    quand('recr'); c.texte('recrutement des fibres : plus i augmente,', C.cx, C.cy + C.r + tk(46), { couleur: 'vert', taille: tk(14), align: 'center' });
+    c.texte('plus de fibres répondent', C.cx, C.cy + C.r + tk(63), { couleur: 'vert', taille: tk(14), align: 'center' });
   }
   if (t >= SERIE[8].t0 + 0.4) {
-    quand('amax'); c.texte('amplitude maximale', xSlot(9) + 5, 148, { couleur: 'rose', taille: 15, align: 'center' });
-    c.fleche(xSlot(9) + 5, 152, xSlot(9) + 5, 166, { couleur: 'rose', largeur: 1.6, tete: 7 });
-    c.repere('amplitude_max', xSlot(9) - 10, 132, xSlot(11) - xSlot(9) + 30, 170, 'l’amplitude maximale, atteinte à 9 mV');
+    quand('amax'); c.texte('amplitude maximale', xSlot(9) + 5, PAP.y - tk(12), { couleur: 'rose', taille: tk(15), align: 'center' });
+    c.fleche(xSlot(9) + 5, PAP.y - 8, xSlot(9) + 5, PAP.y + 6, { couleur: 'rose', largeur: 1.6, tete: 7 });
+    c.repere('amplitude_max', xSlot(9) - 10, PAP.y - 28, xSlot(11) - xSlot(9) + LREP + 12, BASE - PAP.y + 38, 'l’amplitude maximale, atteinte à 9 mV');
   }
   if (t >= SERIE[10].t0 + 0.4) {
-    quand('dela'); MG.accolade(c, xSlot(9) - 6, xSlot(11) + 16, 344, { couleur: 'rose' });
-    c.texte('au-delà de 9 mV : même amplitude', 488, 368, { couleur: 'rose', taille: 14, align: 'right' });
+    quand('dela'); MG.accolade(c, xSlot(9) - 6, xSlot(11) + LREP - 2, BASE + tk(48), { couleur: 'rose' });
+    c.texte('au-delà de 9 mV : même amplitude', xSlot(11) + LREP + 4, BASE + tk(70), { couleur: 'rose', taille: tk(14), align: 'right' });
   }
   return c.fin();
 }
 
 const canvas = $('canvas');
-const scene = window.MuscleTableau.Scene(canvas, (c) => { scene.cadre(53); return dessiner(c); });
+const scene = window.MuscleTableau.Scene(canvas, (c) => { scene.cadre(53); disposer(scene.L); return dessiner(c); }, { large: true });
 const etiquetteBouton = () => { $('run').textContent = S.running ? 'Pause' : S.fait ? 'Rejouer' : (S.t > 0 ? 'Reprendre' : 'Lancer'); };
 scene.avancer = dt => {
   if (!S.running) return false;

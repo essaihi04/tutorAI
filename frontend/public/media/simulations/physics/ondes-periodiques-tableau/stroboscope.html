@@ -31,9 +31,21 @@ const demande = new URLSearchParams(location.search).get('vue');
 const vue = VUES.includes(demande) ? demande : 'sans';
 const N = 20, V = 0.30, LAM = V / N, T = 1 / N;      // vibreur 20 Hz, λ = 1,5 cm
 const PXCM = 20, PXM = 100 * PXCM;
-const R = { x: 50, y: 82, w: 420, h: 250 }, SX = 74, SY = R.y + R.h / 2, LC = (R.x + R.w - SX) / PXM;
+const R = { x: 50, y: 82, w: 420, h: 250 }, SX = 74, SY = R.y + R.h / 2;
+let LC = (R.x + R.w - SX) / PXM;
 const YR = SY + 34;                                   // la règle, posée sous l'axe
 const LAMPE = { x: 640, y: 118 }, KNOB = { x: 700, y: 118 };
+/* Tableau large (15 novembre 2026) : le cadre prend le format du tableau (scene.L de 760 à 1596). La cuve s'allonge
+ * (même échelle, 20 px pour 1 cm), la colonne de droite (lampe, molette, ce que l'on voit, mesures) glisse avec elle et
+ * s'écrit plus grand (≥ 18 px à l'écran quand le tableau est haut). */
+let COL = 500, LL = 760;
+function adapter(c) {
+  if (scene.L !== LL) {
+    LL = scene.L; const plus = Math.max(0, LL - 760) * 0.62;
+    R.w = 420 + plus; LC = (R.x + R.w - SX) / PXM; COL = 500 + plus; LAMPE.x = 640 + plus; KNOB.x = 700 + plus;
+  }
+  if (LL >= 1000 && c.echelle >= 0.8) c.tailleMin = 18;
+}
 const T0 = 1.0;                                       // le vibreur tourne depuis 1 s : les rides couvrent déjà la cuve
 const STROBE = vue === 'immobile' || vue === 'ralenti';
 const S = { t: T0, running: false, jusqua: null, motif: '', fait: false, emis: 0, ne: vue === 'ralenti' ? 19 : 20, regle: null };
@@ -69,7 +81,7 @@ function cretes(tau) { const out = []; for (let k = 0; k < 400; k++) { const r =
 
 function peindre(ctx, L) {
   // La pièce sombre autour de la cuve (peinte), puis l'eau éclairée selon la lampe.
-  ctx.save(); ctx.fillStyle = 'rgba(0,4,8,.55)'; ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(4, 44, 752, 352, 14); else ctx.rect(4, 44, 752, 352); ctx.fill(); ctx.restore();
+  ctx.save(); ctx.fillStyle = 'rgba(0,4,8,.55)'; ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(4, 44, LL - 8, 352, 14); else ctx.rect(4, 44, LL - 8, 352); ctx.fill(); ctx.restore();
   ctx.save(); E.chemin(ctx, R); ctx.clip(); E.fond(ctx, R, { reflets: false });
   for (const sens of [1, -1]) {
     ctx.save(); ctx.beginPath();
@@ -112,14 +124,14 @@ function dessiner(c) {
   c.texte('Pièce sombre : la cuve vue de dessus', 14, 32, { couleur: 'cyan', taille: 17 });
   c.rect(R.x, R.y, R.w, R.h, { couleur: 'tresfaible', arrondi: 8 });
   c.texte('S (réglette)', SX + 8, R.y + 22, { couleur: 'cyan', taille: 15 });
-  c.texte('vibreur : N = 20 Hz', 500, 76, { couleur: 'jaune', taille: 18 });
+  c.texte('vibreur : N = 20 Hz', COL, 76, { couleur: 'jaune', taille: 18 });
   c.texte('stroboscope', LAMPE.x - 6, 160, { couleur: 'faible', align: 'center', taille: 14 });
   c.repere('vibreur', 6, SY - 22, 44, 44, 'le vibreur (N = 20 Hz)');
   c.repere('source', SX - 8, R.y + 6, 16, R.h - 12, 'la source : la réglette');
   c.repere('stroboscope', LAMPE.x - 40, LAMPE.y - 22, 80, 44, 'le stroboscope : une lampe qui envoie des éclairs');
   c.texte('Mouvement ralenti pour l’œil.', R.x, 382, { couleur: 'faible', taille: 13 });
   c.direct(() => {
-    const col = 500;
+    const col = COL;
     if (STROBE) {
       c.texte(`éclairs : ${S.ne} Hz`, col, 196, { couleur: 'jaune', taille: 18 }).texte('⇅ molette : 15 à 25 Hz', col, 216, { couleur: 'faible', taille: 13 });
       c.repere('frequence_eclairs', col - 4, 178, 250, 44, 'la fréquence des éclairs (molette)');
@@ -173,7 +185,7 @@ function dessiner(c) {
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(23); dessiner(c); return c.fin(); });
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(23); adapter(c); dessiner(c); return c.fin(); }, { large: true });
 scene.avancer = dt => {
   if (!S.running) return false;
   const P = plan();

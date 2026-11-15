@@ -19,7 +19,9 @@
  * Vues : ?vue=principe (paramètre trou = 0 ou 1 : un grand écart entre les dominos 5 et 6) | trou (la rangée avec le trou).
  * Les dominos sont dessinés en direct : leur angle suit l’horloge de la scène (K.anime réserve le temps de chaque chute).
  */
-const N = 8, BAS = 268, H = 92, L = 22;
+const N = 8, H = 92, L = 22;
+// tableau large (SU.large, 15 novembre 2026) : la rangée et les trois phrases remontent, le kit agrandit le tout sur la largeur
+let BAS = 268, LG = false;
 const X = (i, trou) => 64 + i * 78 + (trou && i >= 6 ? 34 : 0);
 /* Un domino debout (angle 0) ou penché autour de son coin bas-droit (angle en radians, sens horaire). */
 function domino(c, i, ang, trou, coul) {
@@ -39,6 +41,7 @@ function angleFinal(i, trou) {
   return ecart < H ? Math.asin(Math.min(1, (ecart + 2) / H)) : 1.5;
 }
 function dessiner(c, K, trou, noms) {
+  LG = SU.large(c); BAS = LG ? 240 : 268;
   K.titre(trou ? 'Et s’il manque un passage ?' : 'Les dominos : le principe de récurrence');
   const apparu = K.anime(1.4, () => {});
   c.ligne(40, BAS + 2, 724, BAS + 2, { couleur: 'faible', largeur: 1.6 });
@@ -48,7 +51,7 @@ function dessiner(c, K, trou, noms) {
   c.pause(.3);
   const chute = Array(N).fill(0);
   chute[0] = K.anime(.7, () => {});
-  c.texte('Initialisation : le premier tombe', 40, 80, { couleur: 'vert', taille: 20 });
+  c.texte('Initialisation : le premier tombe', 40, LG ? 70 : 80, { couleur: 'vert', taille: 20 });
   K.marque('premier_tombe');
   c.pause(.4);
   if (!noms.chute) {
@@ -57,7 +60,7 @@ function dessiner(c, K, trou, noms) {
     c.fleche(xk + L + 6, BAS - H - 12, X(k + 1, trou) + 4, BAS - H - 12, { couleur: 'cyan', largeur: 2 });
     c.texte('n', xk + L / 2, BAS + 50, { couleur: 'cyan', taille: 18, align: 'center' });
     c.texte('n + 1', X(k + 1, trou) + L / 2, BAS + 50, { couleur: 'cyan', taille: 18, align: 'center' });
-    c.texte('Hérédité : si le domino n tombe, le n + 1 tombe', 40, 116, { couleur: 'cyan', taille: 20 });
+    c.texte('Hérédité : si le domino n tombe, le n + 1 tombe', 40, LG ? 100 : 116, { couleur: 'cyan', taille: 20 });
     c.repere('passage', xk - 40, BAS - H - 66, 140, 140, 'le passage d’un domino au suivant');
     K.marque('passage');
     c.pause(.4);
@@ -66,13 +69,13 @@ function dessiner(c, K, trou, noms) {
   for (let i = 1; i < fin; i++) chute[i] = K.anime(.45, () => {});
   if (noms.chute) { K.marque('chute'); c.pause(.4); }
   if (trou) {
-    c.texte('le passage de 5 à 6 manque : la chaîne s’arrête', 40, noms.chute ? 116 : 152, { couleur: 'orange', taille: 20 });
+    c.texte('le passage de 5 à 6 manque : la chaîne s’arrête', 40, noms.chute ? (LG ? 100 : 116) : (LG ? 130 : 152), { couleur: 'orange', taille: 20 });
     c.repere('trou', X(5, true) + L, BAS - 40, X(6, true) - X(5, true) - L, 50, 'le trou entre 5 et 6');
     c.repere('debout', X(6, true) - 8, BAS - H - 8, X(7, true) - X(6, true) + L + 16, H + 16, 'les dominos 6 et 7 restent debout');
     K.marque(noms.chute ? 'arret' : 'tous');
   } else {
     c.texte('…', 742, BAS - 10, { couleur: 'faible', taille: 22, align: 'right' });
-    c.texte('Conclusion : tous tombent', 40, 152, { couleur: 'jaune', taille: 20 });
+    c.texte('Conclusion : tous tombent', 40, LG ? 130 : 152, { couleur: 'jaune', taille: 20 });
     c.repere('tous', 40, BAS - H - 10, 700, H + 20, 'toute la rangée tombe');
     K.marque('tous');
   }

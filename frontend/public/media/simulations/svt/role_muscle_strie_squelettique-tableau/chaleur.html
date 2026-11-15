@@ -51,7 +51,17 @@ const chalRet = t => { const s = t - TR; if (s <= 0) return 0; const u = s / TPR
 const T_RET = 40;               // « milieu » de la bosse retardée (s de l'expérience)
 
 /* ── Géométrie (cadre 760 × 420) ────────────────────────────────────── */
-const XA = 292, XB = 502, XC = 526, XD = 736;
+let XA = 292, XB = 502, XC = 526, XD = 736;
+/* Disposition selon la largeur du tableau (15 novembre 2026, « mieux exploiter tout le tableau, grands calibres de
+ * texte ») : tableau large (scene.L ≥ 1000) → les deux graphes s'étirent jusqu'au bord droit, textes ×1,25.
+ * Sinon la disposition d'origine (760 × 420). */
+let KX = 1, TK = 1, XFIN = 748, OX = 0;
+const tk = v => Math.round(v * TK);
+function disposer(L) {
+  const lg = L >= 1000;
+  if (!lg) { XA = 292; XB = 502; XC = 526; XD = 736; } else { XA = 330; XD = L - 44; XB = Math.round(XA + (XD - XA - 24) * 0.47); XC = XB + 24; }
+  KX = (XD - XA) / 444; TK = lg ? 1.25 : 1; XFIN = lg ? L - 12 : 748; OX = X(0.1) - 362;
+}
 const X = t => (t <= TCUT ? XA + t / TCUT * (XB - XA) : XC + (Math.min(t, TMAX) - TCUT) / (TMAX - TCUT) * (XD - XC));
 const YM = 165, AM = 70;        // myogramme : ligne de base, amplitude (px)
 const YC = 328, H1 = 105, H2 = 28;  // chaleur : ligne de base, hauteurs des deux bosses (px)
@@ -181,31 +191,31 @@ function dessiner(c) {
     peindrePince(c.ctx, m, ch);
   });
   // 2. La craie : titre, légendes du dispositif, les deux graphes.
-  c.texte('Le muscle dégage de la chaleur', 12, 28, { couleur: 'cyan', taille: 17 });
-  c.texte('muscle', 40, 172, { couleur: 'blanc', taille: 15, align: 'right' });
-  c.texte('tendon', 80, 78, { couleur: 'faible', taille: 13, align: 'right' });
-  c.texte('pince', 190, 110, { couleur: 'blanc', taille: 14, align: 'center' });
-  c.texte('thermoélectrique', 190, 126, { couleur: 'blanc', taille: 14, align: 'center' });
-  c.texte('appareil de mesure', 213, 302, { couleur: 'faible', taille: 13, align: 'center' });
+  c.texte('Le muscle dégage de la chaleur', 12, 28, { couleur: 'cyan', taille: tk(17) });
+  c.texte('muscle', 40, 172, { couleur: 'blanc', taille: tk(15), align: 'right' });
+  c.texte('tendon', 80, 78, { couleur: 'faible', taille: tk(13), align: 'right' });
+  c.texte('pince', 190, 110, { couleur: 'blanc', taille: tk(14), align: 'center' });
+  c.texte('thermoélectrique', 190, 110 + tk(16), { couleur: 'blanc', taille: tk(14), align: 'center' });
+  c.texte('appareil de mesure', 213, 302, { couleur: 'faible', taille: tk(13), align: 'center' });
   // Myogramme (haut).
-  c.texte('myogramme (une secousse)', 300, 64, { couleur: 'cyan', taille: 15 });
+  c.texte('myogramme (une secousse)', XA + 8, 64, { couleur: 'cyan', taille: tk(15) });
   c.fleche(XA, YM + 6, XA, 70, { couleur: 'faible', largeur: 1.6 });
   c.ligne(XA, YM, XB, YM, { couleur: 'faible', largeur: 1.4 }); c.fleche(XC, YM, XD + 10, YM, { couleur: 'faible', largeur: 1.4 }); coupure(c, YM);
-  c.texte('S', XA - 6, YM + 16, { couleur: 'jaune', taille: 14, align: 'right' });
+  c.texte('S', XA - 6, YM + 16, { couleur: 'jaune', taille: tk(14), align: 'right' });
   // Chaleur dégagée (bas).
-  c.texte('chaleur dégagée', 300, 198, { couleur: 'orange', taille: 15 });
+  c.texte('chaleur dégagée', XA + 8, 198, { couleur: 'orange', taille: tk(15) });
   c.fleche(XA, YC + 6, XA, 202, { couleur: 'faible', largeur: 1.6 });
   c.ligne(XA, YC, XB, YC, { couleur: 'faible', largeur: 1.4 }); c.fleche(XC, YC, XD + 10, YC, { couleur: 'faible', largeur: 1.4 }); coupure(c, YC);
-  for (const [tt, lib] of [[0, '0'], [0.1, '0,1'], [0.2, '0,2'], [0.3, '0,3 s']]) { c.ligne(X(tt), YC - 4, X(tt), YC + 4, { couleur: 'faible', largeur: 1.3, duree: .04 }); c.texte(lib, X(tt), YC + 20, { couleur: 'faible', taille: 13, align: 'center', duree: .12 }); }
-  for (const [tt, lib] of [[60, '1 min'], [120, '2 min']]) { c.ligne(X(tt), YC - 4, X(tt), YC + 4, { couleur: 'faible', largeur: 1.3, duree: .04 }); c.texte(lib, X(tt), YC + 20, { couleur: 'faible', taille: 13, align: 'center', duree: .12 }); }
-  c.texte('t', 752, YC - 8, { couleur: 'faible', taille: 14, align: 'right' });
-  c.texte('0 → 0,3 s : temps dilaté', (XA + XB) / 2, 368, { couleur: 'faible', taille: 13, align: 'center' });
-  c.texte('1 à 2 minutes', (XC + XD) / 2, 368, { couleur: 'faible', taille: 13, align: 'center' });
+  for (const [tt, lib] of [[0, '0'], [0.1, '0,1'], [0.2, '0,2'], [0.3, '0,3 s']]) { c.ligne(X(tt), YC - 4, X(tt), YC + 4, { couleur: 'faible', largeur: 1.3, duree: .04 }); c.texte(lib, X(tt), YC + 20, { couleur: 'faible', taille: tk(13), align: 'center', duree: .12 }); }
+  for (const [tt, lib] of [[60, '1 min'], [120, '2 min']]) { c.ligne(X(tt), YC - 4, X(tt), YC + 4, { couleur: 'faible', largeur: 1.3, duree: .04 }); c.texte(lib, X(tt), YC + 20, { couleur: 'faible', taille: tk(13), align: 'center', duree: .12 }); }
+  c.texte('t', XD + 16, YC - 8, { couleur: 'faible', taille: tk(14), align: 'right' });
+  c.texte('0 → 0,3 s : temps dilaté', (XA + XB) / 2, 368, { couleur: 'faible', taille: tk(13), align: 'center' });
+  c.texte('1 à 2 minutes', (XC + XD) / 2, 368, { couleur: 'faible', taille: tk(13), align: 'center' });
   // Interrupteur dioxygène.
-  c.texte('dioxygène :', 14, SW.y + 6, { couleur: 'bleu', taille: 15 });
+  c.texte('dioxygène :', 14, SW.y + 6, { couleur: 'bleu', taille: tk(15) });
   c.ligne(SW.x1, SW.y, SW.x2, SW.y, { couleur: 'faible', largeur: 3 });
-  c.texte('présent', SW.x1, SW.y + 24, { couleur: S.o2 ? 'vert' : 'faible', taille: 13, align: 'center' });
-  c.texte('absent', SW.x2, SW.y + 24, { couleur: S.o2 ? 'faible' : 'rouge', taille: 13, align: 'center' });
+  c.texte('présent', SW.x1, SW.y + 24, { couleur: S.o2 ? 'vert' : 'faible', taille: tk(13), align: 'center' });
+  c.texte('absent', SW.x2, SW.y + 24, { couleur: S.o2 ? 'faible' : 'rouge', taille: tk(13), align: 'center' });
 
   // 3. Ce qui bouge : courbes, poignée, temps, éclair d'excitation.
   c.direct(() => {
@@ -219,55 +229,55 @@ function dessiner(c) {
     c.repere('coupure', XB - 2, YM - 14, XC - XB + 4, YC + 28 - YM + 14, 'la coupure de l’axe du temps : 0 → 0,3 s dilaté, puis 1 à 2 minutes');
     if (S.t > T0 - 0.05 && t < 0.012) {
       c.trait([[34, 96], [24, 112], [34, 112], [22, 130]], { couleur: 'jaune', largeur: 2.4, duree: .05 });
-      c.texte('excitation', 10, 146, { couleur: 'jaune', taille: 13 });
+      c.texte('excitation', 10, 146, { couleur: 'jaune', taille: tk(13) });
     }
     if (anime) {
       if (S.t < FIN - 1e-6) c.ligne(X(t), 72, X(t), YC, { couleur: 'tresfaible', largeur: 1, pointille: [3, 5] });
       courbe(c, yMyo, t, 'blanc');
       courbe(c, yChal, t, 'orange');
     }
-    if (S.t >= FIN - 1e-6) c.texte('fin de l’enregistrement', 748, 28, { couleur: 'cyan', taille: 14, align: 'right' });
-    else if (t <= 0) c.texte('t = 0 s : avant l’excitation', 748, 28, { couleur: 'faible', taille: 14, align: 'right' });
-    else if (t <= TCUT) c.texte(`t = ${fr(t, 3)} s  (ralenti ×${RALENTI})`, 748, 28, { couleur: 'faible', taille: 14, align: 'right' });
-    else c.texte(`t ≈ ${t < 60 ? Math.round(t) + ' s' : fr(t / 60, 1) + ' min'}  (accéléré ×${ACCELERE})`, 748, 28, { couleur: 'faible', taille: 14, align: 'right' });
+    if (S.t >= FIN - 1e-6) c.texte('fin de l’enregistrement', XFIN, 28, { couleur: 'cyan', taille: tk(14), align: 'right' });
+    else if (t <= 0) c.texte('t = 0 s : avant l’excitation', XFIN, 28, { couleur: 'faible', taille: tk(14), align: 'right' });
+    else if (t <= TCUT) c.texte(`t = ${fr(t, 3)} s  (ralenti ×${RALENTI})`, XFIN, 28, { couleur: 'faible', taille: tk(14), align: 'right' });
+    else c.texte(`t ≈ ${t < 60 ? Math.round(t) + ' s' : fr(t / 60, 1) + ' min'}  (accéléré ×${ACCELERE})`, XFIN, 28, { couleur: 'faible', taille: tk(14), align: 'right' });
   });
 
   // 4. Ce qui s'écrit quand ça arrive.
   plusTard(c, 'lab_init', t >= 0.06, () => {
-    c.fleche(372, 233, 346, 240, { couleur: 'orange', largeur: 1.6, tete: 7 });
-    c.texte('chaleur initiale', 376, 236, { couleur: 'orange', taille: 14 });
+    c.fleche(372 + OX, 233, 346 + OX, 240, { couleur: 'orange', largeur: 1.6, tete: 7 });
+    c.texte('chaleur initiale', 376 + OX, 236, { couleur: 'orange', taille: tk(14) });
     c.repere('chaleur_initiale', XA, YC - H1 - 8, 90, H1 + 8, 'la chaleur initiale : brève et haute, pendant la secousse');
   });
   plusTard(c, 'fin_sec', t >= TR, () => {
     c.ligne(X(TR), 84, X(TR), YC, { couleur: 'faible', largeur: 1.3, pointille: [5, 5] });
-    c.texte('fin de la secousse', 368, 126, { couleur: 'faible', taille: 13 });
+    c.texte('fin de la secousse', 368 + OX, 126, { couleur: 'faible', taille: tk(13) });
   });
-  plusTard(c, 'identique', S.conclusions && !S.o2 && t >= TR, () => c.texte('identique sans O₂', 376, 254, { couleur: 'rouge', taille: 13 }));
+  plusTard(c, 'identique', S.conclusions && !S.o2 && t >= TR, () => c.texte('identique sans O₂', 376 + OX, 254 + tk(4) - 4, { couleur: 'rouge', taille: tk(13) }));
   plusTard(c, 'orig_init', S.origines && t >= TR, () => {
-    c.texte('hydrolyse de l’ATP + phosphocréatine', XA, 392, { couleur: 'vert', taille: 14, max: 214 });
-    c.texte('(rapide, sans O₂)', XA, 410, { couleur: 'vert', taille: 14 });
-    c.repere('origine_initiale', XA - 4, 376, 220, 40, 'l’origine de la chaleur initiale : hydrolyse de l’ATP + phosphocréatine (rapide, sans O₂)');
+    c.texte('hydrolyse de l’ATP + phosphocréatine', XA, 392, { couleur: 'vert', taille: tk(14), max: 214 * KX });
+    c.texte('(rapide, sans O₂)', XA, 392 + tk(18), { couleur: 'vert', taille: tk(14) });
+    c.repere('origine_initiale', XA - 4, 376, 220 * KX, 40, 'l’origine de la chaleur initiale : hydrolyse de l’ATP + phosphocréatine (rapide, sans O₂)');
   });
   plusTard(c, 'lab_ret', S.o2 && t >= 20, () => {
-    c.texte('chaleur retardée', 600, 290, { couleur: 'orange', taille: 14, align: 'center' });
+    c.texte('chaleur retardée', (XC + XD) / 2 - 31 * KX, 290, { couleur: 'orange', taille: tk(14), align: 'center' });
     c.repere('chaleur_retardee', XC, YC - H2 - 30, XD - XC, H2 + 34, 'la chaleur retardée : basse et longue, après la secousse');
   });
   plusTard(c, 'sans_o2', !S.o2 && t >= 20, () => {
-    if (S.conclusions) c.texte('sans O₂ : pas de chaleur retardée', (XC + XD) / 2, 312, { couleur: 'rouge', taille: 14, align: 'center', max: 206 });
+    if (S.conclusions) c.texte('sans O₂ : pas de chaleur retardée', (XC + XD) / 2, 312, { couleur: 'rouge', taille: tk(14), align: 'center', max: 206 * KX });
     c.repere('chaleur_retardee', XC, YC - 34, XD - XC, 40, 'sans dioxygène : pas de chaleur retardée');
   });
   plusTard(c, 'orig_ret', S.origines && S.o2 && t >= T_RET, () => {
-    c.texte('respiration : réactions aérobies', (XC + XD) / 2, 392, { couleur: 'vert', taille: 14, align: 'center', max: 206 });
+    c.texte('respiration : réactions aérobies', (XC + XD) / 2, 392, { couleur: 'vert', taille: tk(14), align: 'center', max: 206 * KX });
     c.repere('origine_retardee', XC - 4, 376, XD - XC + 8, 22, 'l’origine de la chaleur retardée : respiration, réactions aérobies');
   });
   plusTard(c, 'orig_ret_abs', S.origines && !S.o2 && t >= T_RET, () => {
-    c.texte('sans O₂ : pas de respiration', (XC + XD) / 2, 392, { couleur: 'rouge', taille: 14, align: 'center', max: 206 });
+    c.texte('sans O₂ : pas de respiration', (XC + XD) / 2, 392, { couleur: 'rouge', taille: tk(14), align: 'center', max: 206 * KX });
     c.repere('origine_retardee', XC - 4, 376, XD - XC + 8, 22, 'sans dioxygène, pas de respiration : pas de chaleur retardée');
   });
 }
 
 const canvas = $('canvas');
-const scene = window.MuscleTableau.Scene(canvas, (c) => { scene.cadre(41); dessiner(c); return c.fin(); });
+const scene = window.MuscleTableau.Scene(canvas, (c) => { scene.cadre(41); disposer(scene.L); dessiner(c); return c.fin(); }, { large: true });
 scene.avancer = dt => {
   if (!S.running) return false;
   S.t = Math.min(FIN, S.t + dt);

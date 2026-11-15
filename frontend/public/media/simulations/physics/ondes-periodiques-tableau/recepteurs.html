@@ -39,7 +39,7 @@ const DMIN = DEJA ? 95 : 0, DMAX = DEJA ? 125 : 25.5;
 const G = DEJA ? { XE: 78, XR1: 150, PX: 14, coupe: [200, 240], X95: 250 } : { XE: 78, XR1: 250, PX: 16 };
 const LPX = LAMBDA * G.PX;                    // λ en px
 const Y1 = 84, Y2 = 134, YB0 = 52, YB1 = 160, YR = 170;   // pistes de R₁ et R₂ ; faisceau ; règle
-const XB1 = 712;                              // bout du faisceau peint
+let XB1 = 712;                                // bout du faisceau peint (suit le bord droit du tableau)
 const xDe = d => (DEJA ? G.X95 + (d - 95) * G.PX : G.XR1 + d * G.PX);
 const dDe = x => (DEJA ? 95 + (x - G.X95) / G.PX : (x - G.XR1) / G.PX);
 const K = 2;                                  // vue « déjà écartés » : nombre entier de λ caché dans la coupure de la règle
@@ -53,8 +53,15 @@ function phi(x) {
 const arrivee = x => T0 + phi(x) * TA;
 
 // ── Oscilloscope ──
-const SX0 = 40, SY0 = 232, DX = 38, DY = 26, YC = SY0 + 3 * DY, A1 = 2 * DY;
-const XP = 452;                               // panneau des lectures, à droite de l’écran
+const SX0 = 40, SY0 = 232, DY = 26, YC = SY0 + 3 * DY, A1 = 2 * DY;
+let DX = 38, XP = 452, LL = 760, MXP = 296;    // division de l’écran ; panneau des lectures, à droite de l’écran ; sa largeur
+/* Tableau large (15 novembre 2026) : le cadre prend le format du tableau (scene.L de 760 à 1596). Le faisceau va jusqu’au
+ * bord droit, l’écran de l’oscilloscope s’élargit (DX), le panneau des lectures prend le reste, écrit plus grand. La
+ * règle garde son échelle (G.PX : la physique du déplacement de R₂). */
+function adapter(c) {
+  LL = scene.L; XB1 = LL - 48; DX = 38 + Math.max(0, LL - 760) * 0.03; XP = SX0 + 10 * DX + 32; MXP = LL - XP - 16;
+  if (LL >= 1000 && c.echelle >= 0.8) c.tailleMin = 18;
+}
 
 const S = { t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', d: D0, manuel: false, ecrit: null, emis: 0 };
 
@@ -135,16 +142,17 @@ const TITRES = { cote_a_cote: 'Deux récepteurs côte à côte', reculer: 'On re
 
 function dessiner(c) {
   scene.cadre(17);
+  adapter(c);
   c.direct(() => air(c.ctx, S.t));
   c.texte(TITRES[vue], 40, 24, { couleur: 'cyan', taille: 18, duree: .8 });
-  c.texte('ultrasons : N = 40 kHz', 740, 24, { couleur: 'jaune', align: 'right', taille: 16, duree: .6 });
+  c.texte('ultrasons : N = 40 kHz', LL - 20, 24, { couleur: 'jaune', align: 'right', taille: 16, duree: .6 });
 
   // ── L’émetteur ──
   c.texte('émetteur E', 30, 46, { couleur: 'blanc', taille: 14, duree: .35 });
   c.rect(44, 66, 28, 88, { couleur: 'blanc', arrondi: 6, duree: .3 });
   c.ligne(G.XE - 3, 74, G.XE - 3, 146, { couleur: 'blanc', largeur: 3.6 });
   c.repere('emetteur', 36, 34, 52, 126, 'l’émetteur d’ultrasons (40 kHz)');
-  c.texte('air', 722, 112, { couleur: 'faible', taille: 15, duree: .15 });
+  c.texte('air', LL - 38, 112, { couleur: 'faible', taille: 15, duree: .15 });
   c.repere('compressions', G.XE + 4, YB0, XB1 - G.XE - 8, YB1 - YB0, 'les compressions de l’air (bandes claires)');
 
   // ── R₁, fixe ──
@@ -183,7 +191,7 @@ function dessiner(c) {
   for (let j = 1; j < 6; j++) c.ligne(SX0, SY0 + j * DY, SX0 + 10 * DX, SY0 + j * DY, { couleur: j === 3 ? 'faible' : 'tresfaible', largeur: 1, duree: .015 });
   c.repere('ecran', SX0, SY0, 10 * DX, 6 * DY, 'l’écran de l’oscilloscope');
   c.texte('R₁ → voie 1', XP, SY0 + 4, { couleur: 'cyan', taille: 15, duree: .35 });
-  c.texte('R₂ → voie 2', XP + 130, SY0 + 4, { couleur: 'orange', taille: 15, duree: .35 });
+  c.texte('R₂ → voie 2', XP + Math.max(130, MXP / 2), SY0 + 4, { couleur: 'orange', taille: 15, duree: .35 });
 
   // Les parties vivantes apparaissent quand la craie a fini le banc et l’écran (le professeur dessine, puis allume).
   if (c.t >= c.cur) c.direct(() => {
@@ -205,9 +213,9 @@ function dessiner(c) {
 
     // ── Les lectures, à droite ──
     const rel = relation(), deux = r1 && r2;
-    c.texte(DEJA ? `R₂ lu sur la règle : ${fr(S.d / 10, 2)} cm` : `R₂ a reculé de d = ${fr(S.d, 2)} mm`, XP, SY0 + 34, { couleur: 'jaune', taille: 17, max: 290 });
+    c.texte(DEJA ? `R₂ lu sur la règle : ${fr(S.d / 10, 2)} cm` : `R₂ a reculé de d = ${fr(S.d, 2)} mm`, XP, SY0 + 34, { couleur: 'jaune', taille: 17, max: MXP });
     c.texte(!deux ? 'les courbes ne sont pas encore là' : rel === 'phase' ? 'courbes en phase' : rel === 'opposition' ? 'courbes en opposition de phase' : `courbe de R₂ décalée de ${fr(((decal() % 1) + 1) % 1, 2)} T`,
-      XP, SY0 + 62, { couleur: !deux ? 'faible' : rel === 'phase' ? 'vert' : rel === 'opposition' ? 'rose' : 'blanc', taille: 17, max: 290 });
+      XP, SY0 + 62, { couleur: !deux ? 'faible' : rel === 'phase' ? 'vert' : rel === 'opposition' ? 'rose' : 'blanc', taille: 17, max: MXP });
     if (vue !== 'cote_a_cote' || S.d > 0) {
       c.texte(`retours en phase : ${retours()}`, XP, SY0 + 90, { couleur: 'cyan', taille: 17 });
       c.repere('compteur', XP - 4, SY0 + 72, 200, 24, 'le compteur des retours en phase');
@@ -225,35 +233,35 @@ function dessiner(c) {
       for (let k = 1; k <= 5; k++) c.texte(String(k), SX0 + (k + 0.5) * DX, SY0 + 16, { couleur: 'jaune', align: 'center', taille: 14, duree: .15 });
       c.cote(xa, SY0 + 6 * DY - 10, xb, SY0 + 6 * DY - 10, '5 div', { couleur: 'jaune', taille: 15 });
       c.repere('periode', xa, SY0 + 2, xb - xa, 6 * DY - 4, 'une période : 5 divisions');
-      c.texte('T = 5 div × 5 µs/div = 25 µs', XP, y0, { couleur: 'vert', taille: 17, max: 296 });
+      c.texte('T = 5 div × 5 µs/div = 25 µs', XP, y0, { couleur: 'vert', taille: 17, max: MXP });
       c.texte('T = 25×10⁻⁶ s', XP, y0 + 26, { couleur: 'vert', taille: 17 });
-      c.texte('N = 1/T = 40 000 Hz > 20 kHz : ultrason', XP, y0 + 52, { couleur: 'vert', taille: 16, max: 296 });
-      c.repere('calcul', XP - 4, y0 - 18, 300, 78, 'T = 25 µs, N = 40 kHz');
+      c.texte('N = 1/T = 40 000 Hz > 20 kHz : ultrason', XP, y0 + 52, { couleur: 'vert', taille: 16, max: MXP });
+      c.repere('calcul', XP - 4, y0 - 18, MXP + 4, 78, 'T = 25 µs, N = 40 kHz');
     } else if (n >= 1 && relation() === 'phase') {
       const nl = n === 1 ? 'λ' : `${n}λ`;
       if (DEJA) {
-        c.texte(`déplacement : ${fr(S.d / 10, 2)} − 10,00 = ${fr(dep / 10, 2)} cm`, XP, y0, { couleur: 'vert', taille: 16, max: 296 });
-        c.texte(`${n} retour${n > 1 ? 's' : ''} en phase : ${fr(dep / 10, 2)} cm = ${nl}`, XP, y0 + 26, { couleur: 'vert', taille: 16, max: 296 });
-        c.texte(`λ = ${fr(dep / 10, 2)} / ${n} = ${fr(LAMBDA / 10, 2)} cm ; v = λ·N = 340 m/s`, XP, y0 + 52, { couleur: 'vert', taille: 16, max: 296 });
+        c.texte(`déplacement : ${fr(S.d / 10, 2)} − 10,00 = ${fr(dep / 10, 2)} cm`, XP, y0, { couleur: 'vert', taille: 16, max: MXP });
+        c.texte(`${n} retour${n > 1 ? 's' : ''} en phase : ${fr(dep / 10, 2)} cm = ${nl}`, XP, y0 + 26, { couleur: 'vert', taille: 16, max: MXP });
+        c.texte(`λ = ${fr(dep / 10, 2)} / ${n} = ${fr(LAMBDA / 10, 2)} cm ; v = λ·N = 340 m/s`, XP, y0 + 52, { couleur: 'vert', taille: 16, max: MXP });
       } else {
-        c.texte(`${n} retour${n > 1 ? 's' : ''} en phase : ${fr(dep, 1)} mm = ${nl}`, XP, y0, { couleur: 'vert', taille: 16, max: 296 });
-        c.texte(`λ = ${fr(dep, 1)} / ${n} = ${fr(LAMBDA, 1)} mm = 8,5×10⁻³ m`, XP, y0 + 26, { couleur: 'vert', taille: 16, max: 296 });
-        c.texte('v = λ·N = 8,5×10⁻³ × 40 000 = 340 m/s', XP, y0 + 52, { couleur: 'vert', taille: 16, max: 296 });
+        c.texte(`${n} retour${n > 1 ? 's' : ''} en phase : ${fr(dep, 1)} mm = ${nl}`, XP, y0, { couleur: 'vert', taille: 16, max: MXP });
+        c.texte(`λ = ${fr(dep, 1)} / ${n} = ${fr(LAMBDA, 1)} mm = 8,5×10⁻³ m`, XP, y0 + 26, { couleur: 'vert', taille: 16, max: MXP });
+        c.texte('v = λ·N = 8,5×10⁻³ × 40 000 = 340 m/s', XP, y0 + 52, { couleur: 'vert', taille: 16, max: MXP });
       }
-      c.repere('calcul', XP - 4, y0 - 18, 300, 78, 'le calcul de λ puis de v');
+      c.repere('calcul', XP - 4, y0 - 18, MXP + 4, 78, 'le calcul de λ puis de v');
     } else {
-      c.texte('R₂ n’est pas sur un retour en phase :', XP, y0, { couleur: 'rose', taille: 16, max: 296 });
-      c.texte('glisse-le jusqu’à des courbes en phase.', XP, y0 + 26, { couleur: 'rose', taille: 16, max: 296 });
+      c.texte('R₂ n’est pas sur un retour en phase :', XP, y0, { couleur: 'rose', taille: 16, max: MXP });
+      c.texte('glisse-le jusqu’à des courbes en phase.', XP, y0 + 26, { couleur: 'rose', taille: 16, max: MXP });
     }
   }
   if (vue === 'cote_a_cote' && S.t >= moments().courbes_superposees && S.d === 0) {
-    c.texte('même endroit : même signal, au même instant', XP, SY0 + 120, { couleur: 'vert', taille: 16, max: 296 });
+    c.texte('même endroit : même signal, au même instant', XP, SY0 + 120, { couleur: 'vert', taille: 16, max: MXP });
   }
   return c.fin();
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, dessiner);
+const scene = window.OndesTableau.Scene(canvas, dessiner, { large: true });
 const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
 scene.avancer = dt => {
   if (!S.running) return false;

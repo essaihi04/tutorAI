@@ -24,7 +24,7 @@ const { fr } = MathsTableau;
 const f = x => 2 * x / (x + 1), g = x => (4 * x + 3) / (x + 2);
 const OPT = { x0: 60, y0: 52, w: 420, h: 286, xmin: -0.15, xmax: 4.3, ymin: -0.12, ymax: 2.4, gx: [[1, '1'], [2, '2'], [3, '3'], [4, '4']], gy: [[1, '1'], [2, '2']] };
 const OPTN = { x0: 60, y0: 52, w: 420, h: 286, xmin: -0.15, xmax: 4.3, ymin: -0.15, ymax: 4.3, gx: [[1, '1'], [2, '2'], [3, '3'], [4, '4']], gy: [[1, '1'], [2, '2'], [3, '3'], [4, '4']] };
-const texte = (K, y, liste) => K.lignes(510, y, liste, 32);
+const texte = (K, y, liste) => SU.lignes(K, LG, 510, y, liste, 32);
 
 /* Courbe de h et droite y = x, libellées. */
 function courbeEtDroite(c, K, G, h, nom) {
@@ -66,6 +66,7 @@ function placerU0(c, G, u0) {
 }
 const sens = u0 => (u0 > 1 + 1e-9 ? 'descendent' : u0 < 1 - 1e-9 ? 'montent' : 'restent');
 
+let LG = false;   // tableau large (SU.large) : la vue se dispose plus basse et plus étalée
 MathsTableau.page({
   id: 'su_escalier', titre: 'Les termes de uₙ₊₁ = f(uₙ)',
   texte: 'Constructions à la craie : la courbe de f(x) = 2x/(x + 1) et la droite y = x ; les termes u₀, u₁, u₂… se construisent en escalier et se tassent vers le point (1 ; 1) ; intervalle [1 ; 2] envoyé dans [1 ; 4/3] ; courbe sous la droite : la suite descend ; conditions avant ℓ = f(ℓ)',
@@ -73,10 +74,10 @@ MathsTableau.page({
     escalier: {
       titre: 'Voir les termes sur la courbe',
       params: { u0: { min: 0.2, max: 4, pas: 0.1, defaut: 2, sens: 'premier terme u₀ (glisser sur l’axe des abscisses)' } },
-      dessiner(c, K) {
+      dessiner(c, K) { LG = SU.large(c);
         const u0 = K.P.u0;
         K.titre('u_{n+1} = f(u_n), f(x) = 2x / (x + 1)');
-        const G = K.axes(OPT);
+        const G = K.axes(SU.opt(LG, OPT));
         courbeEtDroite(c, K, G, f, '2x/(x + 1)');
         K.marque('courbe_et_droite');
         c.pause(.3);
@@ -94,7 +95,7 @@ MathsTableau.page({
         texte(K, 230, u0 === 1 ? [{ t: 'u_0 = 1 : tous les termes', couleur: 'vert' }, { t: 'valent 1', couleur: 'vert', moment: 'conjecture' }]
           : [{ t: 'les termes ' + sens(u0) + ' vers 1', couleur: 'vert', taille: 17 }, { t: 'le point (1 ; 1)', couleur: 'vert', moment: 'conjecture' }]);
       },
-      poignees(K) { const G = K.grille(OPT); return [{ id: 'u0', x: G.X(K.P.u0), y: G.Y(0), bouger: (x) => ({ u0: G.inv(x, 0)[0] }) }]; },
+      poignees(K) { const G = K.grille(SU.opt(LG, OPT)); return [{ id: 'u0', x: G.X(K.P.u0), y: G.Y(0), bouger: (x) => ({ u0: G.inv(x, 0)[0] }) }]; },
       lecture: K => { const U = SU.suite(K.P.u0, f, 3); return K.P.u0 === 1 ? 'u₀ = 1 : f(1) = 1, tous les termes valent 1.' : `u₀ = ${fr(K.P.u0, 1)} : u₁ = ${fr(U[1], 3)}, u₂ = ${fr(U[2], 3)}, u₃ = ${fr(U[3], 3)} : les termes ${sens(K.P.u0)} vers 1.`; },
       decrire: K => {
         const U = SU.suite(K.P.u0, f, 2);
@@ -113,9 +114,9 @@ MathsTableau.page({
     },
     boite: {
       titre: 'f croissante envoie [1 ; 2] dans [1 ; 4/3]',
-      dessiner(c, K) {
+      dessiner(c, K) { LG = SU.large(c);
         K.titre('f croissante garde l’ordre');
-        const G = K.axes(OPT);
+        const G = K.axes(SU.opt(LG, OPT));
         K.anime(1.2, p => K.courbePart(G, f, 0, 4.2, p, { couleur: 'cyan' }));
         c.texte('C_f : y = 2x/(x + 1)', G.X(3.0), G.Y(f(3.2)) - 12, { couleur: 'cyan', taille: 16 });
         K.marque('courbe');
@@ -146,9 +147,9 @@ MathsTableau.page({
     },
     zone: {
       titre: 'Courbe sous la droite : la suite descend',
-      dessiner(c, K) {
+      dessiner(c, K) { LG = SU.large(c);
         K.titre('Le sens de variation vient de f(x) − x');
-        const G = K.axes(OPT);
+        const G = K.axes(SU.opt(LG, OPT));
         courbeEtDroite(c, K, G, f, '2x/(x + 1)');
         K.marque('courbe_et_droite');
         c.pause(.3);
@@ -179,9 +180,9 @@ MathsTableau.page({
     },
     point: {
       titre: 'Les points où la courbe coupe y = x',
-      dessiner(c, K) {
+      dessiner(c, K) { LG = SU.large(c);
         K.titre('Quelle solution de f(x) = x ?');
-        const G = K.axes(OPT);
+        const G = K.axes(SU.opt(LG, OPT));
         courbeEtDroite(c, K, G, f, '2x/(x + 1)');
         K.marque('courbe_et_droite');
         c.pause(.3);
@@ -202,7 +203,7 @@ MathsTableau.page({
         c.repere('intervalle', G.X(1) - 6, G.Y(0) - 8, G.X(2) - G.X(1) + 12, 56, 'I = [1 ; 2]');
         texte(K, 150, [{ t: 'les u_n dans I = [1 ; 2]', couleur: 'vert', moment: 'intervalle' }]);
         c.pause(.4);
-        SU.barre(c, 516, 214, 28, { couleur: 'rouge' });
+        SU.barre(c, 516, SU.Y(LG, 210) + 4, 28, { couleur: 'rouge' });
         texte(K, 210, [{ t: '0 ∉ [1 ; 2]', couleur: 'rouge' }, { t: 'ℓ = 1', couleur: 'jaune', taille: 24, moment: 'choix' }]);
       },
       decrire: {
@@ -218,9 +219,9 @@ MathsTableau.page({
       titre: 'Une suite du national : g(x) = (4x + 3)/(x + 2)',
       // conclusions (14 novembre 2026, audit rythme) : 0 = la conjecture n'est pas écrite (l'élève la trouve) ; 1 (défaut) = inchangé
       params: { conclusions: { min: 0, max: 1, pas: 1, defaut: 1, sens: '0 : la conjecture reste à trouver ; 1 : écrite' } },
-      dessiner(c, K) {
+      dessiner(c, K) { LG = SU.large(c);
         K.titre('u_0 = 1, u_{n+1} = g(u_n), I = [1 ; 3]');
-        const G = K.axes(OPTN);
+        const G = K.axes(SU.opt(LG, OPTN));
         courbeEtDroite(c, K, G, g, '(4x + 3)/(x + 2)');
         K.marque('courbe_et_droite');
         c.pause(.3);
@@ -232,10 +233,10 @@ MathsTableau.page({
         c.cercle(G.X(3), G.Y(3), 13, { couleur: 'vert', largeur: 2 });
         c.texte('(3 ; 3)', G.X(3) + 16, G.Y(3) + 22, { couleur: 'vert', taille: 15 });
         c.repere('point_trois', G.X(3) - 16, G.Y(3) - 16, 32, 32, 'le point (3 ; 3)');
-        texte(K, 120, [{ t: 'la courbe coupe y = x', couleur: 'vert' }, { t: 'en (3 ; 3)', couleur: 'vert', moment: 'point_intersection' }]);
+        SU.lignes(K, LG, 575, 120, [{ t: 'la courbe coupe y = x', couleur: 'vert' }, { t: 'en (3 ; 3)', couleur: 'vert', moment: 'point_intersection' }]);
         c.pause(.4);
-        if (K.P.conclusions) texte(K, 210, [{ t: 'conjecture :', couleur: 'jaune' }, { t: 'croissante, vers 3', couleur: 'jaune', taille: 22, moment: 'conjecture' }]);
-        else texte(K, 210, [{ t: 'conjecture : ?', couleur: 'jaune', moment: 'conjecture' }]);
+        if (K.P.conclusions) SU.lignes(K, LG, 575, 210, [{ t: 'conjecture :', couleur: 'jaune' }, { t: 'croissante, vers 3', couleur: 'jaune', taille: 22, moment: 'conjecture' }], 32);
+        else SU.lignes(K, LG, 575, 210, [{ t: 'conjecture : ?', couleur: 'jaune', moment: 'conjecture' }]);
       },
       decrire: (K) => ({
         courbe_et_droite: 'La courbe de g(x) = (4x + 3)/(x + 2) (cyan) et la droite y = x (blanc), repère de 0 à 4.',

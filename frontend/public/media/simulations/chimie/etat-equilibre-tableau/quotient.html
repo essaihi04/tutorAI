@@ -86,9 +86,11 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  /* Agrandissement du 15 novembre 2026 : le cadre prend le format du tableau et la boîte de l'encre de l'image complète
+   * (fin du déroulé) remplit le tableau ; elle est remesurée à chaque changement de vue. */
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), { large: true, ajuster: true, complet: f => { const t = S.t; S.t = 1e6; try { f(); } finally { S.t = t; } } });
   const cadreBase = scene.cadre;
-  scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
+  scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; poser(k, M); return k; };
   M.scene = scene; M.craie = scene.craie;
   function calculer() {
     construire();
@@ -139,7 +141,7 @@ function Moteur(o) {
     p = p || {};
     const r = o.appliquer(p, M) || {};
     if (r.vue && o.vues.includes(r.vue) && r.vue !== S.vue) { S.vue = r.vue; r.change = true; r.vueChange = true; }
-    if (r.change) { calculer(); if (r.vueChange) scene.reecrire(); }
+    if (r.change) { calculer(); if (r.vueChange) { scene.boite = null; scene.reecrire(); } else scene.remesurer(); }
     noter('set_parameters', o.params(M));
     if (r.apres) r.apres();
     else if (r.change && !r.garder) start();
@@ -167,6 +169,29 @@ function Moteur(o) {
   return M;
 }
 
+/* ── Tableau large (15 novembre 2026, « la simulation n'occupe qu'une bande étroite, textes minuscules ») ──────────────
+ * Sur un tableau large (scene.L ≥ 1000, écran de portable), une vue déclarée dans LARGE[vue] = { k, x, y, g } est agrandie
+ * k fois et posée en (x, y) du cadre ; chaque groupe g[nom] = [dx, dy] (la conclusion du bas, la suite d'un calcul…) est
+ * déplacé dans la place libre à droite (grp(c, nom, fn) entoure son dessin ET son repère, que le professeur pointe donc
+ * au bon endroit). Les autres vues, et tout le grand écran (L < 1000), gardent l'ajustement automatique. */
+const LARGE = {};
+let LG = null;
+function poser(c, M) {
+  const sc = M.scene, d = !sc.mesurant && sc.L >= 1000 && LARGE[M.S.vue];
+  LG = d || null; if (!d) return;
+  const s0 = Math.min(c.W / sc.L, c.H / 420), ox0 = (c.W - sc.L * s0) / 2, oy0 = (c.H - 420 * s0) / 2;
+  const cx = Math.max(0, (sc.L - (d.L || 1292)) / 2);   // tableau plus large (jusqu'à 1596) : la disposition est centrée
+  const ns = s0 * d.k, nox = ox0 + (d.x + cx) * s0, noy = oy0 + d.y * s0;
+  c.ctx.scale(1 / sc.s, 1 / sc.s); c.ctx.translate(-sc.ox, -sc.oy);   // défait le cadrage de l'ajustement
+  c.ctx.translate(nox, noy); c.ctx.scale(ns, ns);
+  sc.s = ns; sc.ox = nox; sc.oy = noy; c.echelle = ns;
+  c.cadre = { w: (sc.L - d.x) / d.k, h: (420 - d.y) / d.k, haut: 0 };
+}
+/** Dessine `fn` dans le groupe `nom` : déplacé sur un tableau large si la vue le demande. */
+function grp(c, nom, fn) {
+  const d = LG && LG.g && LG.g[nom]; if (!d) return fn();
+  c.ctx.save(); c.ctx.translate(d[0], d[1]); try { return fn(); } finally { c.ctx.restore(); }
+}
 /* ── Aides d’écriture : largeur, flèches dessinées (→, ⇌), expressions avec fractions dessinées (imbriquées) ─────────── */
 function larg(c, s, taille = 17) {
   const T = window.Tableau, ctx = c.ctx; if (c.echelle && c.tailleMin) taille = Math.max(taille, c.tailleMin / c.echelle);
@@ -433,7 +458,7 @@ const VUE_FN = {};
 function dessiner(c, M) {
   MO = M; M.scene.cadre(73);
   const v = M.S.vue;
-  c.texte(TITRE_TABLEAU[v], 14, 28, { couleur: 'cyan', taille: 21 });
+  grp(c, 'titre', () => c.texte(TITRE_TABLEAU[v], 14, 28, { couleur: 'cyan', taille: 21 }));
   if (NOTE[v]) c.texte(NOTE[v], 746, 28, { couleur: 'faible', taille: 15, align: 'right' });
   M.geo = {}; M.rec = {};
   VUE_FN[v](c, M);
@@ -442,6 +467,9 @@ function dessiner(c, M) {
 }
 const espece = (t, id, o = {}) => ({ t, id, ...o });
 const coef = (k, t, id) => ({ row: [{ t: k, col: 'jaune' }, { t, id }], gap: 2 });
+
+/* Tableau large : la vue agrandie, la règle du bas à droite du quotient. */
+Object.assign(LARGE, { definition: { k: 1.2, x: -100, y: 0, g: { phrase: [735, -257], titre: [130, 0] } } });
 
 /* Vue definition : produits en haut, réactifs en bas. */
 VUE_FN.definition = (c, M) => {
@@ -470,10 +498,16 @@ VUE_FN.definition = (c, M) => {
     c.texte('en bas', x0 - 22, d.y + 22, { taille: 17, align: 'right', couleur: 'bleu' });
   });
   M.etape(c, 'quotient', () => { ex(c, Q, 380, yQ, tQ, { align: 'center', rec: R, ph: ['quotient'] }); encadreR(c, R.quotient); });
-  M.etape(c, 'phrase', () => {
+  M.etape(c, 'phrase', () => grp(c, 'phrase', () => {
+    if (LG) {   // tableau large : à droite du quotient, à la ligne
+      ['quotient de réaction :', 'produits en haut,', 'réactifs en bas'].forEach((t, i) => c.texte(t, 40, 382 + i * 30, { taille: 23, couleur: 'jaune' }));
+      c.texte('[X] : concentration', 40, 482, { taille: 18, couleur: 'faible' });
+      c.texte('de l’espèce X, en mol/L', 40, 506, { taille: 18, couleur: 'faible' });
+      return;
+    }
     c.texte('quotient de réaction : produits en haut, réactifs en bas', 380, 382, { taille: 22, align: 'center', couleur: 'jaune' });
     c.texte('[X] : concentration de l’espèce X, en mol/L', 380, 410, { taille: 16, align: 'center', couleur: 'faible' });
-  });
+  }));
 };
 
 /* Vue generale : aA + bB ⇌ cC + dD ; les coefficients glissent en exposants ; exemple I. */
@@ -813,7 +847,7 @@ function reperes(c, M) {
     DR('numerateur', R.num, `le numérateur « [CH₃COO⁻]·[H₃O⁺] » : les produits${quand('produits')}`);
     DR('denominateur', R.den, `le dénominateur « [CH₃COOH] » : le réactif${quand('reactifs')}`);
     DR('quotient', R.quotient, `« Qr = [CH₃COO⁻]·[H₃O⁺] / [CH₃COOH] »${quand('quotient')}`);
-    D('phrase', 60, 358, 640, 58, `« quotient de réaction : produits en haut, réactifs en bas »${quand('phrase')}`);
+    grp(c, 'phrase', () => D('phrase', LG ? 30 : 60, 358, LG ? 280 : 640, LG ? 156 : 58, `« quotient de réaction : produits en haut, réactifs en bas »${quand('phrase')}`));
   } else if (v === 'generale') {
     DR('forme', R.forme, `« aA + bB ⇌ cC + dD »${quand('forme')}`);
     DR('formule', R.formule, `« Qr = [C]^c·[D]^d / ([A]^a·[B]^b) »${quand('forme')}`);

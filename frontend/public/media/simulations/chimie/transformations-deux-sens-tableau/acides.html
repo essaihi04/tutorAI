@@ -12,6 +12,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
 <script src="exposants.js"></script>
+<script src="zones.js"></script>
 <script>
 /*
  * Acides et bases (cours « Transformations chimiques s’effectuant dans les deux sens », 2e Bac PC BIOF, novembre 2026).
@@ -74,7 +75,7 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), { large: true });   // tableau large : zones.js
   const cadreBase = scene.cadre;
   scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
   M.scene = scene; M.craie = scene.craie;
@@ -409,11 +410,23 @@ const MOTIFS = MOTIFS_DE(ETAPES);
 function dessiner(c, M) {
   MO = M; M.scene.cadre(41);
   const v = M.S.vue;
-  c.texte(TITRE_TABLEAU[v], 14, 26, { couleur: 'cyan', taille: 20 });
-  ({ ouverture: vueOuverture, acide: vueAcide, base: vueBase, couple: vueCouple, reaction: vueReaction })[v](c, M);
-  reperes(c, M);
+  // Tableau large (≥ 1000) : la vue est découpée en zones rangées sur toute la largeur (zones.js, ZONES plus bas).
+  const Z = ZONES[v] || { cols: [[[0, 40, 760, 420]]] }, large = M.scene.L >= Zones.L_MIN;
+  const titre = () => c.texte(TITRE_TABLEAU[v], 14, 26, { couleur: 'cyan', taille: large ? 24 : 20 });
+  if (large) titre();
+  Zones.dessiner(c, M.scene.L, large ? Z : null, () => {
+    if (!large) titre();
+    ({ ouverture: vueOuverture, acide: vueAcide, base: vueBase, couple: vueCouple, reaction: vueReaction })[v](c, M);
+    reperes(c, M);
+  });
   return c.fin();
 }
+/* Zones du tableau large, par vue : colonnes de rectangles du dessin d'origine (760 × 420). */
+const ZONES = {
+  // la loupe à gauche, grandie sur toute la hauteur ; la définition, l'équation et la phrase du bas à droite, plus grandes
+  acide: { cols: [[[14, 40, 366, 322]], [[366, 84, 744, 284], [0, 336, 440, 384]]] },
+  base: { cols: [[[14, 40, 366, 322]], [[366, 84, 744, 284], [0, 336, 440, 384]]] },
+};
 
 /* ── Vue ouverture : deux flacons, un pH-mètre, une sonde ─────────────────────────────────────────────────────────── */
 const FL = [{ cx: 110, nom: 'acide éthanoïque', ph: 3.4 }, { cx: 300, nom: 'acide chlorhydrique', ph: 2.0 }];
@@ -502,7 +515,7 @@ function vueAcide(c, M) {
   if (a > 0) c.direct(() => {
     c.texte(pc < .5 ? 'CH₃COOH' : 'CH₃COO⁻', LO.x, 292, { taille: 24, align: 'center', couleur: pc < .5 ? 'blanc' : 'vert' });
     if (pc >= .5) c.texte('−', MA.x + ACET.O2[0] * MA.s + 20, MA.y + ACET.O2[1] * MA.s - 12, { taille: 24, align: 'center', couleur: 'vert' });
-    if (montre && pc <= 0) { c.fleche(338, 214, pos[0] + 14, pos[1], { couleur: 'jaune', largeur: 1.8, tete: 8 }); c.texte('proton H⁺', 342, 220, { couleur: 'jaune', taille: 18 }); }
+    if (montre && pc <= 0) { c.fleche(318, 250, pos[0] + 8, pos[1] + 12, { couleur: 'jaune', largeur: 1.8, tete: 8 }); c.texte('proton H⁺', 286, 272, { couleur: 'jaune', taille: 18 }); }   // sous le proton : reste dans la zone de la loupe (tableau large)
     if (pc > 0) c.texte('H⁺', pos[0] - 14, pos[1] + 7, { couleur: 'jaune', taille: 20, align: 'right' });
   });
   M.etape(c, 'cede', () => {

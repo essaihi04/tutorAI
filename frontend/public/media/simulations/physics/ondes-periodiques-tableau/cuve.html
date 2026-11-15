@@ -39,8 +39,19 @@ const G = AVEC_COTE ? { eau: { x: 60, y: 44, w: 420, h: 200 }, sx: POINTE ? 112 
   : { eau: { x: 60, y: 44, w: 400, h: 250 }, sx: 86, col: 480, yr: 164 };
 G.sy = G.eau.y + G.eau.h / 2;
 const COTE = { x0: G.eau.x, x1: G.eau.x + G.eau.w, y: 326, bas: 370, k: 11 };
-const LC = (G.eau.x + G.eau.w - G.sx) / PXM;          // de la source au bord de la cuve (m)
+let LC = (G.eau.x + G.eau.w - G.sx) / PXM;            // de la source au bord de la cuve (m)
 const KNOB = { x: G.col + 14, y: 66 };
+/* Tableau large (15 novembre 2026 : « la simulation n'occupe qu'une bande étroite ») : le cadre prend le format du
+ * tableau (scene.L de 760 à 1292). La cuve s'allonge (même échelle, 20 px pour 1 cm : plus de rides visibles) et la
+ * colonne de texte glisse à droite, écrite plus grand (≥ 18 px à l'écran). Les dates clés se recalculent (plan()). */
+const G0 = { w: G.eau.w, col: G.col };
+let LARGE_L = 760;
+function adapter(L) {
+  if (L === LARGE_L) return; LARGE_L = L;
+  const plus = Math.max(0, L - 760) * 0.66;
+  G.eau.w = G0.w + plus; G.col = G0.col + plus; COTE.x1 = G.eau.x + G.eau.w; KNOB.x = G.col + 14;
+  LC = (G.eau.x + G.eau.w - G.sx) / PXM;
+}
 const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0, N: 20, regle: null };
 
 /* Le déroulé, calculé depuis la physique (dates en s du temps réel de l'expérience). */
@@ -175,7 +186,7 @@ function vueDessusCote(c) {
   c.texte(POINTE ? 'Pointe : onde circulaire' : 'Réglette : onde rectiligne', G.col, 134, { couleur: 'cyan', taille: 17 });
   c.texte('Bords absorbants : ni amortissement ni réflexion.', COTE.x0, 400, { couleur: 'faible', taille: 13 });
   c.direct(() => {
-    c.texte(`t = ${fr(S.t)} s  (ralenti ×10)`, 748, 26, { couleur: 'faible', align: 'right', taille: 14 });
+    c.texte(`t = ${fr(S.t)} s  (ralenti ×10)`, LARGE_L - 12, 26, { couleur: 'faible', align: 'right', taille: 14 });
     if (S.t >= M.premiere_ride) c.texte('trait clair = une crête', G.col, 166, { couleur: 'jaune', taille: 16 });
     // La crête surlignée, suivie dans les deux vues.
     const rh = creteSuivie(w, N), xh = G.sx + rh * PXM;
@@ -257,7 +268,7 @@ function vueCompter(c) {
   source(c); molette(c);
   c.texte('On compte les intervalles,', G.col, 318, { couleur: 'faible', taille: 15 }).texte('pas les traits.', G.col, 338, { couleur: 'faible', taille: 15 });
   c.direct(() => {
-    c.texte(`t = ${fr(Math.min(S.t, P.tP))} s  (ralenti ×10)`, 748, 26, { couleur: 'faible', align: 'right', taille: 14 });
+    c.texte(`t = ${fr(Math.min(S.t, P.tP))} s  (ralenti ×10)`, LARGE_L - 12, 26, { couleur: 'faible', align: 'right', taille: 14 });
     if (w.fige) c.texte('Photo de la surface', G.col, 134, { couleur: 'cyan', taille: 17 }).texte('(image arrêtée)', G.col, 154, { couleur: 'faible', taille: 14 });
     const Rg = dessinerRegle(c);
     if (Rg && Rg.posee) {
@@ -274,29 +285,29 @@ function vueCompter(c) {
 }
 
 function vueFrequence(c) {
-  const P = plan(), w = eau(S.t), R = G.eau, col = G.col;
+  const P = plan(), w = eau(S.t), R = G.eau, col = G.col, kc = LARGE_L >= 1000 ? 1.4 : 1;   // colonnes du tableau des mesures écartées en grand
   c.direct(() => peindreDessus(c.ctx, w));
   c.texte('Cuve à ondes, vue de dessus', R.x, 32, { couleur: 'cyan', taille: 17 });
   c.rect(R.x, R.y, R.w, R.h, { couleur: 'tresfaible', arrondi: 8 });
   c.repere('vue_dessus', R.x, R.y, R.w, R.h, 'la vue de dessus : les rides');
   source(c); molette(c);
   // Le tableau des mesures.
-  c.texte('N (Hz)', col, 132, { couleur: 'blanc', taille: 16 }).texte('λ (cm)', col + 78, 132, { couleur: 'blanc', taille: 16 }).texte('v = λ·N (m/s)', col + 150, 132, { couleur: 'blanc', taille: 16 });
-  c.ligne(col - 4, 140, col + 272, 140, { couleur: 'faible', largeur: 1.4 });
-  c.ligne(col + 66, 116, col + 66, 202, { couleur: 'tresfaible', largeur: 1.2 }).ligne(col + 140, 116, col + 140, 202, { couleur: 'tresfaible', largeur: 1.2 });
-  c.repere('tableau_mesures', col - 6, 112, 280, 94, 'le tableau des mesures : N, λ, v');
+  c.texte('N (Hz)', col, 132, { couleur: 'blanc', taille: 16 }).texte('λ (cm)', col + kc * 78, 132, { couleur: 'blanc', taille: 16 }).texte('v = λ·N (m/s)', col + kc * 150, 132, { couleur: 'blanc', taille: 16 });
+  c.ligne(col - 4, 140, col + kc * 272, 140, { couleur: 'faible', largeur: 1.4 });
+  c.ligne(col + kc * 66, 116, col + kc * 66, 202, { couleur: 'tresfaible', largeur: 1.2 }).ligne(col + kc * 140, 116, col + kc * 140, 202, { couleur: 'tresfaible', largeur: 1.2 });
+  c.repere('tableau_mesures', col - 6, 112, kc * 280, 94, 'le tableau des mesures : N, λ, v');
   c.direct(() => {
-    c.texte(`t = ${fr(S.t)} s  (ralenti ×10)`, 748, 26, { couleur: 'faible', align: 'right', taille: 14 });
+    c.texte(`t = ${fr(S.t)} s  (ralenti ×10)`, LARGE_L - 12, 26, { couleur: 'faible', align: 'right', taille: 14 });
     const lignes = [[P.ligne1, 20, 166], [P.ligne2, 30, 194]];
     for (const [quand, N, y] of lignes) {
       if (S.t < quand) continue;
-      c.texte(String(N), col + 8, y, { couleur: 'jaune', taille: 18 }).texte(fr(lam(N) * 100, 1), col + 86, y, { couleur: 'jaune', taille: 18 }).texte(fr(VIT[N], 2), col + 170, y, { couleur: 'vert', taille: 18 });
+      c.texte(String(N), col + kc * 8, y, { couleur: 'jaune', taille: 18 }).texte(fr(lam(N) * 100, 1), col + kc * 86, y, { couleur: 'jaune', taille: 18 }).texte(fr(VIT[N], 2), col + kc * 170, y, { couleur: 'vert', taille: 18 });
     }
     if (S.t >= P.conclusion) {
       c.texte('v change quand N change :', col, 236, { couleur: 'vert', taille: 16 });
       c.texte('la surface de l’eau est', col, 260, { couleur: 'vert', taille: 16 });
       c.texte('un milieu dispersif.', col, 286, { couleur: 'vert', taille: 20 });
-      c.repere('dispersif', col - 4, 220, 270, 74, 'conclusion : milieu dispersif');
+      c.repere('dispersif', col - 4, 220, kc * 270, 74, 'conclusion : milieu dispersif');
     }
     const Rg = dessinerRegle(c);
     if (w.phase === 1 && w.fige) c.texte('Photo à 20 Hz (image arrêtée)', R.x, 320, { couleur: 'cyan', taille: 16 });
@@ -313,9 +324,11 @@ function vueFrequence(c) {
 const canvas = $('canvas');
 const scene = window.OndesTableau.Scene(canvas, (c) => {
   scene.cadre(17);
+  adapter(scene.L);
+  if (scene.L >= 1000 && c.echelle >= 0.8) c.tailleMin = 18;   // tableau bas (bande de formules) : 15 px suffit, le texte est déjà grand dans le cadre
   if (vue === 'compter') vueCompter(c); else if (vue === 'frequence') vueFrequence(c); else vueDessusCote(c);
   return c.fin();
-});
+}, { large: true });
 scene.avancer = dt => {
   if (!S.running) return false;
   const fin = plan().fin;

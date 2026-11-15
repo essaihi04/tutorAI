@@ -12,6 +12,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
 <script src="exposants.js"></script>
+<script src="colonne.js"></script>
 <script>
 /*
  * Le montage RC, l’acquisition, la charge et la décharge (cours « Dipôle RC », 2e Bac PC BIOF, novembre 2026).
@@ -71,7 +72,7 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), { large: true });
   const cadreBase = scene.cadre;
   scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
   M.scene = scene; M.craie = scene.craie;
@@ -388,8 +389,13 @@ function echelons(c) {
 }
 
 /* ── Dessin ──────────────────────────────────────────────────────────── */
+/* Tableau large : les phrases du bas passent dans la colonne de gauche, le montage et l’écran s’agrandissent (colonne.js). */
+const COL = { debut(c) { (this.k ||= RCColonne(MO.scene, {
+  boite: () => (MO.S.vue === 'montage' ? { x0: 6, y0: 6, x1: 756, y1: 420 } : { x0: 6, y0: 6, x1: 756, y1: 324 }),
+  versColonne: (s, x, y) => x <= 20 && y >= 325,
+})).debut(c); } };
 function dessiner(c, M) {
-  MO = M; M.scene.cadre(19);
+  MO = M; M.scene.cadre(19); COL.debut(c);
   const v = M.S.vue;
   c.texte(`Le circuit RC : ${TITRES[v]}`, 14, 28, { couleur: 'cyan', taille: 20 });
   const a = v === 'montage' ? lisse(M.p('montage')) : 1;

@@ -11,6 +11,7 @@
 </div>
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
+<script src="noyaux.js"></script>
 <script>
 /*
  * Spontanée et inéluctable (audit rythme, 14 novembre 2026) : un échantillon radioactif dans un flacon, un compteur
@@ -95,7 +96,19 @@ function dessiner(c) {
   c.repere('conclusion', 10, 50, 440, 56, 'la température n’y change rien');
 }
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(31); dessiner(c); return c.fin(); });
+/* Tableau large (15 novembre 2026) : le titre et la conclusion en haut, le montage (flacon, thermomètre, compteur)
+ * agrandi en dessous, les deux mesures à droite. */
+const scene = RadioLarge.brancher(window.OndesTableau.Scene(canvas, (c) => {
+  scene.cadre(31);
+  const L = scene.L, k = Math.min((L - 340) / 570, 312 / 272), ox = (L - 340 - 570 * k) / 2, oy = 106;
+  const ici = (x0, y0, x1, y1) => ({ src: [x0, y0, x1, y1], dst: [ox + (x0 - 130) * k, oy + (y0 - 120) * k, ox + (x1 - 130) * k, oy + (y1 - 120) * k] });
+  RadioLarge.dessiner(c, scene, 31, RadioLarge.large(scene) ? [
+    { src: [0, 0, 470, 110], dst: [0, 0, L, 110], ax: 0, ay: 0 },
+    ici(130, 120, 465, 392), ici(465, 120, 700, 336),            // le montage : deux morceaux, la même échelle
+    { src: [460, 340, 760, 398], dst: [L - 336, 200, L, 330], ax: 0 },
+  ] : null, () => dessiner(c));
+  return c.fin();
+}, { large: true }));
 let accu = 0;
 scene.avancer = dt => {
   if (!S.running) return false;

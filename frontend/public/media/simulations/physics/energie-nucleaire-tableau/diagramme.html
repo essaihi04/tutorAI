@@ -84,9 +84,20 @@ const V = () => VUES[S.vue];
 let M = {}, MM = {};
 
 /* ── Géométrie ───────────────────────────────────────────────────────── */
-const AXE = { x: 148, bas: 352, haut: 40 }, LV = { x0: 160, x1: 372 }, XLAB = 382, XTXT = 280;
-const XF = { fleche_El_produits: 184, fleche_El_reactifs: 222, fleche_delta_E: 260 };
+const AXE = { x: 148, bas: 352, haut: 40 }, LV = { x0: 160, x1: 372 }, XF = { fleche_El_produits: 184, fleche_El_reactifs: 222, fleche_delta_E: 260 };
 const RES = { x: 160, y1: 366, y2: 396 };
+let XLAB = 382, XTXT = 280;
+/* Tableau large (15 novembre 2026, « le diagramme n’occupe qu’une bande étroite, textes minuscules ») : si le tableau
+ * est large (LT ≥ 1000, voir scene.cadre), l’axe recule pour les valeurs plus grosses, les paliers s’allongent, le
+ * texte grossit (G) et les phrases des flèches prennent toute la largeur. DX : décalage des paliers (peintures comprises). */
+let LT = 760, G = 1, DX = 0, XMAX = 470;
+function disposer(L) {
+  LT = L; const large = L >= 1000;
+  G = large ? 1.35 : 1; DX = large ? 72 : 0;
+  AXE.x = 148 + DX; LV.x0 = 160 + DX; LV.x1 = large ? 160 + DX + Math.max(380, 440 + (L - 1336) * .4) : 372;
+  XF.fleche_El_produits = 184 + DX; XF.fleche_El_reactifs = 222 + DX; XF.fleche_delta_E = 260 + DX;
+  RES.x = 160 + DX; XLAB = LV.x1 + 10; XTXT = 280 + DX + (large ? 70 : 0); XMAX = L - XTXT - 14;
+}
 
 /* ── Écriture d’un noyau ᴬ_ZX : A en haut à gauche, Z en bas à gauche, alignés à droite contre le symbole ── */
 const taillePlus = (c, t) => (c.echelle && c.tailleMin ? Math.max(t, c.tailleMin / c.echelle) : t);
@@ -160,13 +171,13 @@ const LARG = {};                                       // largeur écrite de cha
 function dessiner(c) {
   scene.cadre(61); MM = {};
   const D = V(), Y = D.y;
-  c.texte('Diagramme d’énergie', 10, 26, { couleur: 'cyan', taille: 17, duree: .8 });
-  exprTexte(c, D.equation, 196, 26, { couleur: 'blanc', taille: 16, duree: .2 });
+  c.texte('Diagramme d’énergie', 10, 26, { couleur: 'cyan', taille: 17 * G, duree: .8 });
+  exprTexte(c, D.equation, G > 1 ? 300 : 196, 26, { couleur: 'blanc', taille: 16 * G, duree: .2 });
   // L’axe E, sans graduation régulière.
   c.fleche(AXE.x, AXE.bas, AXE.x, AXE.haut, { couleur: 'faible', largeur: 1.8 });
-  c.texte('E (MeV)', AXE.x - 8, AXE.haut + 10, { couleur: 'blanc', taille: 15, align: 'right', duree: .4 });
-  c.texte('échelle', 138, 378, { couleur: 'faible', taille: 13, align: 'right', duree: .3 });
-  c.texte('non respectée', 138, 394, { couleur: 'faible', taille: 13, align: 'right', duree: .5 });
+  c.texte('E (MeV)', AXE.x - 8, AXE.haut + 10, { couleur: 'blanc', taille: 15 * G, align: 'right', duree: .4 });
+  c.texte('échelle', AXE.x - 10, 378, { couleur: 'faible', taille: 13 * G, align: 'right', duree: .3 });
+  c.texte('non respectée', AXE.x - 10, 378 + 16 * G, { couleur: 'faible', taille: 13 * G, align: 'right', duree: .5 });
   marque(c, 'axe');
 
   const peint = {}, apparuFl = {};
@@ -176,8 +187,8 @@ function dessiner(c) {
     c.ligne(LV.x0, y, LV.x1, y, { couleur: 'blanc', largeur: 2.6 });
     peint[k] = c.cur;
     c.ligne(AXE.x - 4, y, AXE.x + 4, y, { couleur: 'faible', largeur: 1.4, duree: .05 });
-    c.texte(P.valeur, 138, y + 5, { couleur: 'jaune', taille: 15, align: 'right', duree: .6 });
-    LARG[k] = exprTexte(c, P.expr, XLAB, y + 6, { couleur: 'blanc', taille: 17 });
+    c.texte(P.valeur, AXE.x - 10, y + 5, { couleur: 'jaune', taille: 15 * G, align: 'right', duree: .6 });
+    LARG[k] = exprTexte(c, P.expr, XLAB, y + 6, { couleur: 'blanc', taille: 17 * G });
     marque(c, 'niveau_' + k);
   };
   const fleche = (id) => {
@@ -186,7 +197,7 @@ function dessiner(c) {
     apparuFl[id] = c.cur;
     c.fleche(x, y1 + s * 3, x, y2 - s * 2, { couleur: F.couleur, largeur: 2.4 });
     c.ligne(x - 6, y1, x + 6, y1, { couleur: F.couleur, largeur: 1.6, duree: .05 });
-    F.lignes.forEach((l, i) => c.texte(l, XTXT, F.ty[i], { couleur: F.couleur, taille: 15, max: 470 }));
+    F.lignes.forEach((l, i) => c.texte(l, XTXT, F.ty[i], { couleur: F.couleur, taille: 15 * G, max: XMAX }));
     marque(c, id);
   };
   for (const id of D.moments) {
@@ -195,25 +206,25 @@ function dessiner(c) {
   }
   // Le résultat.
   c.pause(.4);
-  c.texte(D.resultat[0], RES.x, RES.y1, { couleur: 'jaune', taille: 16 });
-  c.texte(D.resultat[1], RES.x + 6, RES.y2, { couleur: 'blanc', taille: 16 });
-  c.rect(RES.x - 2, RES.y2 - 20, c.largeurTexte(D.resultat[1].replace(/[_{}]/g, ''), 16) + 16, 28, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  c.texte(D.resultat[0], RES.x, RES.y1 - (G - 1) * 20, { couleur: 'jaune', taille: 16 * G });
+  c.texte(D.resultat[1], RES.x + 6, RES.y2, { couleur: 'blanc', taille: 16 * G });
+  c.rect(RES.x - 2, RES.y2 - 20 * G, c.largeurTexte(D.resultat[1].replace(/[_{}]/g, ''), 16 * G) + 16, 28 * G, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
   marque(c, 'resultat');
   c.pause(.8); marque(c, 'fin');
 
   // Les nucléons peints, posés sur leur palier dès qu’il est tracé (sous la craie de l’étiquette : à droite du palier).
-  c.direct(() => { for (const k of PALIERS) if (peint[k] !== undefined && vu(c, peint[k])) PEINTURES[S.vue][k](c.ctx, Y[k]); });
+  c.direct(() => { c.ctx.save(); c.ctx.translate(DX, 0); for (const k of PALIERS) if (peint[k] !== undefined && vu(c, peint[k])) PEINTURES[S.vue][k](c.ctx, Y[k]); c.ctx.restore(); });
   // Le palier touché : entouré, avec son nom complet.
   if (S.palier && peint[S.palier] !== undefined && vu(c, peint[S.palier])) c.direct(() => {
     const k = S.palier, y = Y[k], P = D.paliers[k], xn = XLAB + (LARG[k] || 100) + 6;
-    c.texte(`: ${P.nom}`, xn, y + 6, { couleur: 'rose', taille: 15 });
-    c.rect(LV.x0 - 6, y - 30, xn + c.largeurTexte(`: ${P.nom}`, 15) + 12 - LV.x0, 42, { couleur: 'rose', largeur: 2, arrondi: 10 });
+    c.texte(`: ${P.nom}`, xn, y + 6, { couleur: 'rose', taille: 15 * G });
+    c.rect(LV.x0 - 6, y - 30, xn + c.largeurTexte(`: ${P.nom}`, 15 * G) + 12 - LV.x0, 42, { couleur: 'rose', largeur: 2, arrondi: 10 });
   });
 
   // Repères (toujours déclarés).
-  c.repere('vue_diagramme', 4, 34, 752, 380, `le diagramme d’énergie (${D.titre})`);
+  c.repere('vue_diagramme', 4, 34, LT - 8, 380, `le diagramme d’énergie (${D.titre})`);
   c.repere('axe_E', AXE.x - 14, AXE.haut, 60, AXE.bas - AXE.haut, 'l’axe des énergies E (MeV), sans graduation régulière');
-  c.repere('echelle', 50, 362, 94, 38, 'échelle non respectée');
+  c.repere('echelle', AXE.x - 98, 362, 94, 38, 'échelle non respectée');
   for (const k of PALIERS) {
     const P = D.paliers[k];
     c.repere('niveau_' + k, LV.x0 - 4, Y[k] - 30, XLAB + (LARG[k] || 100) - LV.x0 + 10, 42, `le palier « ${P.texte} » (${P.nom}) : ${P.valeurTexte.replace(/ \(.*\)/, '')}`);
@@ -222,7 +233,7 @@ function dessiner(c) {
     const ya = Math.min(Y[F.de], Y[F.vers]), yb = Math.max(Y[F.de], Y[F.vers]);
     c.repere(id, XF[id] - 10, ya, 20, yb - ya, F.lignes.join(' ').replace(/[_{}]/g, ''));
   }
-  c.repere('resultat', RES.x - 4, RES.y1 - 20, 470, RES.y2 - RES.y1 + 30, D.resultat.join(' ; ').replace(/[_{}]/g, ''));
+  c.repere('resultat', RES.x - 4, RES.y1 - 20 * G, Math.max(470, XMAX), RES.y2 - RES.y1 + 30, D.resultat.join(' ; ').replace(/[_{}]/g, ''));
   const fini = c.fin();
   M = MM;
   return fini || !S.running;
@@ -232,12 +243,16 @@ const canvas = $('canvas');
 const scene = window.OndesTableau.Scene(canvas, dessiner);
 const craie = scene.craie;
 scene.cadre = function (graine) {
-  const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  const W = craie.W, H = craie.H, VH = 420;
+  const L = Math.round(Math.min(760 * 2.1, Math.max(760, VH * W / Math.max(1, H))));   // comme Scene({ large: true })
+  const VW = L >= 1000 ? L : 760;
+  if (VW !== LT) disposer(VW);
+  scene.L = VW;
   craie.debut(graine, S.t);
   const s = Math.min(W / VW, H / VH) || 1;
   scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
   craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
-  craie.echelle = s; craie.tailleMin = 11;
+  craie.echelle = s; craie.tailleMin = 15;
   // Garde-fou « hors cadre » seulement une fois la police du tableau chargée (la police de secours est plus large).
   craie.cadre = !document.fonts || document.fonts.status === 'loaded' ? { w: VW, h: VH, haut: 0 } : null;
   return craie;

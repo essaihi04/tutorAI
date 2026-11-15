@@ -212,10 +212,32 @@ function coteCretes(c, Tr, a, b, y, txt, coul, id, label) {
   return true;
 }
 
+/* Agrandissement du 15 novembre 2026 : sur un tableau large (scene.L ≥ 1000, portable 1366 × 613), la vue
+ * « Air | Verre » (zone d'origine 760 × 240) est agrandie de Z.k en haut à gauche, les deux lignes de calcul passent
+ * dessous en plus grand, et les compteurs vont dans une colonne à droite (l'un sous l'autre). Sinon : comme avant. */
+const Z = { large: false, k: 1, col: 0, w: 0 };
+function zone(L) {
+  Z.large = L >= 1000;
+  Z.k = Z.large ? Math.min(1.36, (L - 310) / 760) : 1;
+  Z.col = Z.large ? 760 * Z.k + 10 : 0; Z.w = L - Z.col - 8;
+}
+/** Dessine `fn` dans la vue « Air | Verre » (agrandie sur un tableau large). */
+function dansVue(c, fn) {
+  if (!Z.large) return fn();
+  c.ctx.save(); c.ctx.scale(Z.k, Z.k);
+  try { return fn(); } finally { c.ctx.restore(); }
+}
+/** Les deux lignes de calcul du bas : position, taille, largeur. */
+const bas = i => (Z.large ? { x: 24, y: 240 * Z.k + 30 + i * 34, taille: 20, max: 760 * Z.k - 40 } : { x: 40, y: [384, 408][i], taille: 16, max: 690 });
+const versVue = (x, y) => [x / Z.k, y / Z.k];
+
 function dessiner(c) {
   scene.cadre(53);
+  zone(scene.L);
   const g = G(), M = moments(), Ts = TRAINS(), act = actif(), ctx = c.ctx;
+  const Kc = Z.large ? 1.2 : 1;   // textes des compteurs
   // ── Vue « Air | Verre » : la salle sombre (dans le cadre de la vue), le bloc, les ondes ──
+  dansVue(c, () => {
   c.direct(() => {
     ctx.save(); ctx.fillStyle = 'rgba(3,5,9,.86)'; ctx.beginPath(); ctx.roundRect(SALLE.x, SALLE.y, SALLE.w, SALLE.h, 8); ctx.fill(); ctx.restore();
     bloc(ctx, 'corps');
@@ -223,7 +245,9 @@ function dessiner(c) {
     bloc(ctx, 'reflets');
     for (const Tr of Ts) laser(ctx, Tr.y);
   });
+  });
   const nomB = DEUX() ? 'verre' : nomMilieu(S.n), Nom = nomB === 'milieu' ? 'Milieu' : nomB[0].toUpperCase() + nomB.slice(1);
+  dansVue(c, () => {
   c.texte(DEUX() ? 'Air | Verre : deux radiations (vue de côté)' : `Air | ${Nom} (vue de côté, incidence normale)`, 20, 26, { couleur: 'cyan', taille: 18 });
   c.texte('mouvement ralenti énormément : 1 s ici = 4·10⁻¹⁵ s', 740, 26, { couleur: 'faible', taille: 14, align: 'right' });
   c.rect(SALLE.x, SALLE.y, SALLE.w, SALLE.h, { couleur: 'tresfaible', arrondi: 8 });
@@ -245,18 +269,22 @@ function dessiner(c) {
     c.texte(lab, x, ybas + (DEUX() ? 26 : 28), { couleur: 'blanc', taille: 13, align: 'center' });
     c.repere(id, x - 34, (DEUX() ? Ts[0].y - Ts[0].A : T0r.y - T0r.A) - 4, 68, ybas + 32 - (DEUX() ? Ts[0].y - Ts[0].A : T0r.y - T0r.A) + 4, id === 'compteur_air' ? 'le compteur 1, dans l’air' : 'le compteur 2, dans le bloc');
   }
+  });
 
   // ── Vue « Compteurs » ──
-  c.rect(SALLE.x, 242, SALLE.w, 118, { couleur: 'tresfaible', arrondi: 8 });
-  c.texte('Compteurs', 48, 262, { couleur: 'cyan', taille: 17 });
-  c.repere('vue_compteurs', SALLE.x, 242, SALLE.w, 118, 'la vue « Compteurs »');
+  const VC = Z.large ? { x: Z.col, y: 8, w: Z.w, h: 404 } : { x: SALLE.x, y: 242, w: SALLE.w, h: 118 };
+  c.rect(VC.x, VC.y, VC.w, VC.h, { couleur: 'tresfaible', arrondi: 8 });
+  c.texte('Compteurs', VC.x + 12, VC.y + 20 * Kc, { couleur: 'cyan', taille: 17 * Kc });
+  c.repere('vue_compteurs', VC.x, VC.y, VC.w, VC.h, 'la vue « Compteurs »');
 
   c.direct(() => {
     const t = tw(), M2 = M;
     // Le chrono du front (temps réel).
-    c.texte(`chrono du front : t = ${t > 0 ? fr(t * S_ECRAN * 1e15, 1) + '·10⁻¹⁵' : '0'} s`, 714, 262, { couleur: 'jaune', taille: 16, align: 'right' });
+    const chrono = `chrono du front : t = ${t > 0 ? fr(t * S_ECRAN * 1e15, 1) + '·10⁻¹⁵' : '0'} s`;
+    if (Z.large) c.texte(chrono, VC.x + 12, VC.y + 50, { couleur: 'jaune', taille: 17 * Kc, max: VC.w - 20 });
+    else c.texte(chrono, 714, 262, { couleur: 'jaune', taille: 16, align: 'right' });
     // Les fronts.
-    for (const Tr of Ts) {
+    dansVue(c, () => { for (const Tr of Ts) {
       const xf = front(t, Tr);
       if (!act || t <= 0 || xf >= g.XE - 2) continue;
       const coul = DEUX() ? Tr.coul : 'blanc';
@@ -266,90 +294,101 @@ function dessiner(c) {
         c.repere(Tr.id === 'rouge' ? 'front_rouge' : 'front_jaune', xf - 12, Tr.y - Tr.A - 12, 24, 2 * Tr.A + 24, `le front ${Tr.id}`);
         if (Tr.id === 'rouge') c.repere('front', xf - 12, Tr.y - Tr.A - 12, 24, 2 * Tr.A + 24, 'le front rouge');
       }
-    }
+    } });
     // Les compteurs : crêtes passées, crêtes par seconde (ralenti), ν réelle.
     const boites = DEUX() ? Ts.map((Tr, i) => ({ Tr, x: i ? 390 : 48, titre: `${Tr.id} (${Tr.lam0} nm)`, coul: Tr.coul }))
       : [{ Tr: Ts[0], x: 48, titre: 'compteur 1 (air)', xc: g.xc1, coul: 'blanc' }, { Tr: Ts[0], x: 390, titre: `compteur 2 (${nomB})`, xc: g.xc2, coul: 'blanc' }];
-    for (const B of boites) {
+    boites.forEach((B, i) => {
       const f = nuEcran(B.Tr.lam0);
-      c.texte(B.titre, B.x, 288, { couleur: B.coul, taille: 15 });
+      // tableau large : les deux compteurs l'un sous l'autre dans la colonne de droite
+      const x = Z.large ? VC.x + 12 : B.x, y0 = Z.large ? 98 + i * 118 : 288, dy = Z.large ? 25 : 0, mx = Z.large ? VC.w - 22 : 320;
+      c.texte(B.titre, x, y0, { couleur: B.coul, taille: 15 * Kc, max: mx });
       if (DEUX()) {
         const na = comptees(g.xc1, B.Tr, t), nv = comptees(g.xc2, B.Tr, t);
-        c.texte(`crêtes passées : air ${na} ; verre ${nv}`, B.x, 310, { couleur: 'blanc', taille: 15 });
-        c.texte(`${fr(f, 1)} crêtes par seconde (ralenti) des deux côtés`, B.x, 330, { couleur: 'faible', taille: 14, max: 320 });
-        c.texte(`ν = ${sci(nuDe(B.Tr.lam0))} Hz`, B.x, 350, { couleur: 'jaune', taille: 15 });
+        c.texte(`crêtes passées : air ${na} ; verre ${nv}`, x, y0 + 22 + dy * .2, { couleur: 'blanc', taille: 15 * Kc, max: mx });
+        c.texte(`${fr(f, 1)} crêtes par seconde (ralenti) des deux côtés`, x, y0 + 42 + dy * .6, { couleur: 'faible', taille: 14 * Kc, max: mx });
+        c.texte(`ν = ${sci(nuDe(B.Tr.lam0))} Hz`, x, y0 + 62 + dy, { couleur: 'jaune', taille: 15 * Kc });
       } else {
         const nc = comptees(B.xc, B.Tr, t);
-        c.texte(`crêtes passées : ${nc}`, B.x + 150, 288, { couleur: 'blanc', taille: 15 });
-        c.texte(nc >= 2 ? `${fr(f, 1)} crêtes par seconde (ralenti)` : 'crêtes par seconde : …', B.x, 310, { couleur: 'faible', taille: 15 });
-        c.texte(nc >= 2 ? `donc ν = ${sci(nuDe(B.Tr.lam0))} Hz` : '', B.x, 332, { couleur: 'jaune', taille: 16 });
+        if (Z.large) c.texte(`crêtes passées : ${nc}`, x, y0 + 26, { couleur: 'blanc', taille: 15 * Kc });
+        else c.texte(`crêtes passées : ${nc}`, B.x + 150, 288, { couleur: 'blanc', taille: 15 });
+        c.texte(nc >= 2 ? `${fr(f, 1)} crêtes par seconde (ralenti)` : 'crêtes par seconde : …', x, y0 + 22 + dy * 1.1, { couleur: 'faible', taille: 15 * Kc, max: mx });
+        c.texte(nc >= 2 ? `donc ν = ${sci(nuDe(B.Tr.lam0))} Hz` : '', x, y0 + 44 + dy * 1.4, { couleur: 'jaune', taille: 16 * Kc });
       }
-    }
+    });
   });
   if (!DEUX() && act && S.t >= M.compte_frequence - 1e-6) {
-    quand(c, 'cf'); c.texte('même nombre de crêtes par seconde : même ν, même couleur', SALLE.x + SALLE.w / 2, 353, { couleur: 'vert', taille: 15, align: 'center' });
+    quand(c, 'cf');
+    if (Z.large) ['même nombre de crêtes par seconde :', 'même ν, même couleur'].forEach((l, i) => c.texte(l, VC.x + 12, 360 + i * 24, { couleur: 'vert', taille: 15 * Kc, max: VC.w - 22 }));
+    else c.texte('même nombre de crêtes par seconde : même ν, même couleur', SALLE.x + SALLE.w / 2, 353, { couleur: 'vert', taille: 15, align: 'center' });
   }
 
   // ── Ce qui s’écrit en route ──
   const Tr = Ts[0], cTxt = 'c = 3,00·10⁸ m/s';
   if (act && S.t >= M.onde_dans_air - 1e-6) {
     quand(c, 'air');
+    dansVue(c, () => {
     c.texte(cTxt, DEUX() ? 42 : 84, DEUX() ? 52 : 58, { couleur: 'blanc', taille: DEUX() ? 14 : 15 });
     if (!DEUX()) c.direct(() => coteCretes(c, Tr, g.X0, Math.min(g.X1, front(tw(), Tr)), 80, `λ_0 = ${S.lam0} nm`, 'jaune', 'lambda0', `λ₀ = ${S.lam0} nm dans l’air`));
+    });
   }
   if (act && S.t >= M.front_entre - 1e-6) {
     quand(c, 'entre');
-    if (!DEUX()) c.texte(`v = c/n = 3,00·10⁸ / ${fr(S.n, 2)} = ${sci(vDe(S.n))} m/s`, (g.X1 + g.X2) / 2, 60, { couleur: 'orange', taille: 15, align: 'center', max: g.X2 - g.X1 - 10 });
-    else c.texte('dans le verre : les deux fronts ralentissent', 40, 234, { couleur: 'orange', taille: 15, max: 330 });
+    dansVue(c, () => { if (!DEUX()) c.texte(`v = c/n = 3,00·10⁸ / ${fr(S.n, 2)} = ${sci(vDe(S.n))} m/s`, (g.X1 + g.X2) / 2, 60, { couleur: 'orange', taille: 15, align: 'center', max: g.X2 - g.X1 - 10 });
+    else c.texte('dans le verre : les deux fronts ralentissent', 40, 234, { couleur: 'orange', taille: 15, max: 330 }); });
   }
   if (!DEUX()) {
-    if (act && S.t >= M.lambda_serree - 1e-6) { quand(c, 'serre'); c.texte(`Dans le bloc (${nomB}), les crêtes se resserrent : λ < λ_0 ; même couleur.`, 40, 384, { couleur: 'vert', taille: 16, max: 690 }); }
+    if (act && S.t >= M.lambda_serree - 1e-6) { quand(c, 'serre'); const b = bas(0); c.texte(`Dans le bloc (${nomB}), les crêtes se resserrent : λ < λ_0 ; même couleur.`, b.x, b.y, { couleur: 'vert', taille: b.taille, max: b.max }); }
     if (act && S.t >= M.mesure_lambda - 1e-6) {
       quand(c, 'mesure');
-      c.direct(() => coteCretes(c, Tr, g.X1, Math.min(g.X2, front(tw(), Tr)), 84, `λ = ${fr(lamDe(S.lam0, S.n), 0)} nm`, 'rose', 'lambda', `λ = λ₀/n = ${fr(lamDe(S.lam0, S.n), 0)} nm dans le bloc`));
-      c.texte(`λ = λ_0/n = ${S.lam0} / ${fr(S.n, 2)} = ${fr(lamDe(S.lam0, S.n), 0)} nm ;  ν = c/λ_0 = ${sci(nuDe(S.lam0))} Hz des deux côtés`, 40, 408, { couleur: 'jaune', taille: 16, max: 690 });
+      dansVue(c, () => c.direct(() => coteCretes(c, Tr, g.X1, Math.min(g.X2, front(tw(), Tr)), 84, `λ = ${fr(lamDe(S.lam0, S.n), 0)} nm`, 'rose', 'lambda', `λ = λ₀/n = ${fr(lamDe(S.lam0, S.n), 0)} nm dans le bloc`)));
+      const b = bas(1);
+      c.texte(`λ = λ_0/n = ${S.lam0} / ${fr(S.n, 2)} = ${fr(lamDe(S.lam0, S.n), 0)} nm ;  ν = c/λ_0 = ${sci(nuDe(S.lam0))} Hz des deux côtés`, b.x, b.y, { couleur: 'jaune', taille: b.taille, max: b.max });
     }
     if (act && S.t >= M.ressort_dans_air - 1e-6) {
       quand(c, 'ressort');
+      dansVue(c, () => {
       c.texte(cTxt, g.X2 + 16, 58, { couleur: 'blanc', taille: 15 });
       c.direct(() => coteCretes(c, Tr, g.X2, Math.min(g.XE, front(tw(), Tr)), 80, `λ_0 = ${S.lam0} nm`, 'jaune', 'lambda0_sortie', 'λ₀ de nouveau, dans l’air'));
+      });
     }
   } else {
     if (act && S.t >= M.fronts_ecartes - 1e-6) {
       quand(c, 'ecart');
-      c.direct(() => {
+      dansVue(c, () => { c.direct(() => {
         const [R, J] = Ts, xr = front(tw(), R), xj = front(tw(), J);
         if (xr < g.XE - 2) {
           c.ligne(xr, R.y + R.A + 10, xr, J.y + J.A + 10, { couleur: 'rouge', largeur: 1.2, pointille: [2, 4], tremble: .2 });
           c.fleche(xr - 4, J.y + J.A + 18, xj + 1, J.y + J.A + 18, { couleur: 'jaune', largeur: 1.6, tete: 6 });
         }
       });
-      c.texte('le front jaune est en retard sur le rouge', 724, 234, { couleur: 'jaune', taille: 15, align: 'right', max: 320 });
+      c.texte('le front jaune est en retard sur le rouge', 724, 234, { couleur: 'jaune', taille: 15, align: 'right', max: 320 }); });
     }
     if (act && S.t >= M.mesure_vitesses - 1e-6) {
       quand(c, 'vitesses');
       const [R, J] = Ts;
-      c.texte(`rouge : v = c/n = 3,00·10⁸ / 1,62 = ${sci(vDe(R.n))} m/s ;  λ = ${fr(lamDe(R.lam0, R.n), 0)} nm`, 40, 384, { couleur: 'rouge', taille: 16, max: 690 });
-      c.texte(`jaune : v = c/n = 3,00·10⁸ / 1,66 = ${sci(vDe(J.n))} m/s ;  λ = ${fr(lamDe(J.lam0, J.n), 0)} nm : le jaune va moins vite`, 40, 408, { couleur: 'jaune', taille: 16, max: 690 });
+      const b0 = bas(0), b1 = bas(1);
+      c.texte(`rouge : v = c/n = 3,00·10⁸ / 1,62 = ${sci(vDe(R.n))} m/s ;  λ = ${fr(lamDe(R.lam0, R.n), 0)} nm`, b0.x, b0.y, { couleur: 'rouge', taille: b0.taille, max: b0.max });
+      c.texte(`jaune : v = c/n = 3,00·10⁸ / 1,66 = ${sci(vDe(J.n))} m/s ;  λ = ${fr(lamDe(J.lam0, J.n), 0)} nm : le jaune va moins vite`, b1.x, b1.y, { couleur: 'jaune', taille: b1.taille, max: b1.max });
     }
   }
 
   // ── La poignée : l’étiquette du bloc, glissée de n = 1,00 à 2,00 ──
-  if (!DEUX()) c.direct(() => {
+  if (!DEUX()) dansVue(c, () => c.direct(() => {
     const xe = xEtiquette(), y = 194;
     const lab = `${nomB} · n = ${fr(S.n, 2)}`, w = c.largeurTexte(lab, 15) + 18;
     ctx.save(); ctx.fillStyle = 'rgba(15,29,24,.78)'; ctx.beginPath(); ctx.roundRect(xe - w / 2, y - 12, w, 22, 6); ctx.fill(); ctx.restore();
     c.rect(xe - w / 2, y - 12, w, 22, { couleur: 'jaune', arrondi: 6, largeur: 1.6 });
     c.texte(lab, xe, y + 4, { couleur: 'jaune', taille: 15, align: 'center' });
     c.repere('etiquette', xe - w / 2, y - 12, w, 22, 'l’étiquette du bloc : glisse-la pour changer n');
-  });
+  }));
   return c.fin();
 }
 const xN = n => G().X1 + 40 + (n - 1) * (G().X2 - G().X1 - 80);
 const xEtiquette = () => xN(S.n);
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, dessiner);
+const scene = window.OndesTableau.Scene(canvas, dessiner, { large: true });
 const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
 scene.avancer = dt => {
   if (!S.running) return false;
@@ -407,9 +446,9 @@ $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
 
 /* La poignée : l’étiquette du bloc, glissée le long du bloc (n de 1,00 à 2,00, pas 0,01 ; aimantée sur l’eau et le verre). */
 window.Tableau.glisser(canvas, {
-  toucher: (px, py) => { if (DEUX()) return null; const [x, y] = scene.local(px, py); return Math.abs(x - xEtiquette()) < 64 && y > 178 && y < 216 ? 'etiquette' : null; },
+  toucher: (px, py) => { if (DEUX()) return null; const [x, y] = versVue(...scene.local(px, py)); return Math.abs(x - xEtiquette()) < 64 && y > 178 && y < 216 ? 'etiquette' : null; },
   bouger: (id, px) => {
-    const [x] = scene.local(px, 0);
+    const [x] = versVue(...scene.local(px, 0));
     let n = 1 + (x - xN(1)) / (xN(2) - xN(1)); n = Math.min(2, Math.max(1, Math.round(n * 100) / 100));
     for (const a of [1.33, 1.5]) if (Math.abs(n - a) <= 0.02) n = a;
     if (n !== S.n) { S.n = n; if (S.t > FIN()) S.t = FIN(); scene.sale = true; }

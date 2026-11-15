@@ -67,7 +67,7 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), o.scene || {});
   const cadreBase = scene.cadre;
   scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
   M.scene = scene; M.craie = scene.craie;
@@ -338,6 +338,7 @@ const T0s = 2 * Math.PI * Math.sqrt(IND * CAP);   // 3,97·10⁻³ s ≈ 4 ms
  * Renvoie les lignes visibles (pour ce_qui_se_voit).
  */
 function zoneEcriture(c, M, liste, ys, o = {}) {
+  if (COL) return colonneEcriture(c, M, liste);
   const S = M.S, x = o.x ?? 14, max = o.max ?? 406, taille = o.taille ?? 16, n = ys.length, vues = [];
   if (S.mesure) {
     for (const e of liste) M.etape(c, e.nom, () => { for (const [t, col] of e.lignes) c.texte(t, x, ys[0], { couleur: col, taille, max }); e.plus && e.plus(c); });
@@ -352,6 +353,56 @@ function zoneEcriture(c, M, liste, ys, o = {}) {
     if (j > k) return;
     M.etape(c, e.nom, () => {
       if (garde.has(j)) for (const [t, col] of e.lignes) { c.texte(t, x, ys[y++], { couleur: col, taille, max, alpha: cache(e.nom) ? 0 : undefined }); vues.push(t); }
+      e.plus && !cache(e.nom) && e.plus(c);
+    });
+  });
+  return vues;
+}
+/* Agrandissement du 15 novembre 2026 (« la simulation n'occupe qu'une bande étroite, les textes sont minuscules ») :
+ * Scene en { large: true }, le cadre prend le format du tableau (scene.L de 760 à 1596, hauteur 420). Tableau large
+ * (L ≥ 1150, écran d'ordinateur) : le montage et l'oscilloscope sont agrandis ensemble (zone ZK, × 1,25 ; × 1 pour la vue
+ * « echange », plus haute), et la zone d'écriture passe en colonne à droite : lignes coupées à la ligne, écrites plus
+ * grand, les six dernières gardées. Sinon : la disposition d'origine, centrée. */
+let ZK = null, COL = null, DX = 0, BASE = null;
+function disposer(L) {
+  if (L < 1150) { ZK = null; COL = null; DX = Math.round((L - 760) / 2); return; }
+  DX = 0;
+  const k = MO.S.vue === 'echange' ? 1 : 1.25;
+  ZK = { k, x0: 14, y0: 36, x: 14, y: 44 };
+  const xr = Math.round(14 + (752 - 14) * k + 24);
+  COL = { x: xr, w: L - 12 - xr, y0: 50, t: 19, n: 6 };
+}
+/** Coordonnées du dessin (cadre) → coordonnées du montage (avant agrandissement de la zone). */
+const versMontage = (x, y) => (ZK ? [(x - ZK.x) / ZK.k + ZK.x0, (y - ZK.y) / ZK.k + ZK.y0] : [x - DX, y]);
+function couper(c, s, w, t) {
+  t = Math.max(t, (c.tailleMin || 0) / (c.echelle || 1));
+  const mots = String(s).split(' '), out = []; let l = '';
+  for (const m of mots) { const e = l ? l + ' ' + m : m; if (l && c.largeurTexte(e.replace(/_/g, ''), t) > w) { out.push(l); l = m; } else l = e; }
+  if (l) out.push(l);
+  return out;
+}
+/** La zone d'écriture en colonne (tableau large) : mêmes étapes, mêmes lignes, coupées à la largeur de la colonne. */
+function colonneEcriture(c, M, liste) {
+  const S = M.S, vues = [], t = COL.t, h = Math.max(t, (c.tailleMin || 0) / (c.echelle || 1)) * 1.2;
+  const ecrire = (fn) => { const ctx = c.ctx; ctx.save(); try { if (BASE) ctx.setTransform(BASE); fn(); } finally { ctx.restore(); } };
+  if (S.mesure) {
+    for (const e of liste) M.etape(c, e.nom, () => { ecrire(() => { for (const [s, col] of e.lignes) for (const r of couper(c, s, COL.w, t)) c.texte(r, COL.x, COL.y0 + t, { couleur: col, taille: t, max: COL.w }); }); e.plus && e.plus(c); });
+    return vues;
+  }
+  let k = -1;
+  liste.forEach((e, j) => { const ev = M.ev(e.nom); if (ev && S.t > ev.ecrit + .05) k = j; });
+  const garde = new Set(); let nb = 0;
+  for (let j = k; j >= 0; j--) { const l = liste[j].lignes.length; if (nb + l > COL.n) break; garde.add(j); nb += l; }
+  let y = COL.y0;
+  liste.forEach((e, j) => {
+    if (j > k) return;
+    M.etape(c, e.nom, () => {
+      if (garde.has(j)) ecrire(() => {
+        for (const [s, col] of e.lignes) {
+          for (const r of couper(c, s, COL.w, t)) { y += h; c.texte(r, COL.x, y, { couleur: col, taille: t, max: COL.w, alpha: cache(e.nom) ? 0 : undefined }); }
+          y += 7; vues.push(s);
+        }
+      });
       e.plus && !cache(e.nom) && e.plus(c);
     });
   });
@@ -597,9 +648,12 @@ function signes(c, u) {
 
 /* ── Dessin ──────────────────────────────────────────────────────────── */
 function dessiner(c, M) {
-  MO = M; M.scene.cadre(31);
+  MO = M; M.scene.cadre(31); disposer(M.scene.L);
   const v = M.S.vue, st = etat();
-  c.texte(`Le circuit RLC : ${TITRES[v]}`, 14, 26, { couleur: 'cyan', taille: 20 });
+  BASE = c.ctx.getTransform();
+  if (DX) c.ctx.translate(DX, 0);   // grand écran : la disposition d'origine, centrée dans le cadre
+  c.texte(`Le circuit RLC : ${TITRES[v]}`, 14, 26, { couleur: 'cyan', taille: ZK ? 23 : 20 });
+  if (ZK) { c.ctx.translate(ZK.x - ZK.x0 * ZK.k, ZK.y - ZK.y0 * ZK.k); c.ctx.scale(ZK.k, ZK.k); }
   const a = v === 'montage' ? lisse(M.p('montage')) : 1;
   appareils(c, a);
   let vues = [];
@@ -754,7 +808,7 @@ function voir(M) {
 }
 const params = M => { const st = etat(); return { vue: M.S.vue, K: positionK(), E_V: EG, C_uF: 4, L_H: IND, r_ohm: M.S.vue === 'echange' ? 0 : 10, R_ohm: M.S.vue === 'echange' ? 0 : brancheRC() ? 1000 : 10, t_circuit_ms: +(tOsc() * 1000).toFixed(3), u_C_V: +st.u.toFixed(3), i_mA: +(st.i * 1000).toFixed(2), E_e_uJ: +Ee(st.u).toFixed(1), E_m_uJ: +Em(st.i).toFixed(1) }; };
 const MOT = Moteur({
-  id: 'circuit_rlc_circuit_lc', titre: 'Le circuit RLC : montage, bascule de K, oscillations et échange d’énergie', vues: VUES, titres: TITRES,
+  id: 'circuit_rlc_circuit_lc', titre: 'Le circuit RLC : montage, bascule de K, oscillations et échange d’énergie', vues: VUES, titres: TITRES, scene: { large: true },
   etapes: v => ETAPES[v], motifs: MOTIFS, dessiner, voir, params,
   depart: M => ({ montage: 'Construisons le montage.', bascule: 'Le condensateur est chargé à 6 V. Rappel d’abord : la décharge dans un résistor seul…', echange: 'K en 2 (LC idéal) : suivons l’énergie, au ralenti.' })[M.S.vue],
   messageFin: M => ({ montage: 'K en 1 : le condensateur se charge à 6 V. K en 2 : il se décharge dans R et la bobine ; la voie 1 montre u_C.',
@@ -801,7 +855,7 @@ const MOT = Moteur({
 });
 MOT.lancer();
 window.Tableau.glisser(MOT.scene.craie.canvas, {
-  toucher: (px, py) => { const [x, y] = MOT.scene.local(px, py); return MOT.S.vue !== 'echange' && x > C1[0] - 20 && x < C2[0] + 20 && y > 44 && y < 132 ? 'K' : null; },
+  toucher: (px, py) => { const [x, y] = versMontage(...MOT.scene.local(px, py)); return MOT.S.vue !== 'echange' && x > C1[0] - 20 && x < C2[0] + 20 && y > 44 && y < 132 ? 'K' : null; },
   bouger: () => {},
   lacher: () => { MOT.setParameters({ K: positionK() === 1 ? 2 : 1 }); },
 });

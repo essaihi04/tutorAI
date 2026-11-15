@@ -73,7 +73,7 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), { large: true });   // pas d'« ajuster » : la page dispose elle-même ses blocs sur scene.L (transformation du contexte)
   const cadreBase = scene.cadre;
   scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
   M.scene = scene; M.craie = scene.craie;
@@ -522,10 +522,37 @@ function axesEcran(c) {
 }
 
 /* ── Dessin ──────────────────────────────────────────────────────────── */
+/* Disposition selon la largeur du tableau (15 novembre 2026 : « la simulation n'occupe qu'une bande étroite, textes
+ * minuscules »). Tableau large (scene.L ≥ 1000) : les phrases du bas (écrites en x = 14, y ≥ 320) vont à la ligne
+ * dans une colonne à gauche ; le circuit et l'oscilloscope, ensemble, sont agrandis sur toute la hauteur à droite
+ * (transformation CT du contexte : repères et clics suivent). Sinon la disposition d'origine (760 × 420). */
+let CT = { large: false, k: 1, tx: 0, ty: 0, gw: 0 };
+function disposer(L) {
+  if (L < 1000) { CT = { large: false, k: 1, tx: 0, ty: 0, gw: 0 }; return; }
+  const gw = Math.round(L * .28), dispo = L - gw - 34, k = Math.min((406 - 44) / 300, dispo / 730);
+  CT = { large: true, k, tx: gw + 24 + (dispo - 730 * k) / 2 - 22 * k, ty: 44 - 38 * k, gw };
+}
+const versCircuit = (x, y) => [(x - CT.tx) / CT.k, (y - CT.ty) / CT.k];
 function dessiner(c, M) {
-  MO = M; M.scene.cadre(23);
+  MO = M; M.scene.cadre(23); disposer(M.scene.L);
   const v = M.S.vue;
-  c.texte(`Le circuit RL : ${TITRES[v]}`, 14, 28, { couleur: 'cyan', taille: 20 });
+  c.texte(`Le circuit RL : ${TITRES[v]}`, 14, 28, { couleur: 'cyan', taille: CT.large ? 24 : 20 });
+  if (!CT.large) return dessinerMontage(c, M, v);
+  const ctx = c.ctx, texte = c.texte;
+  // Une phrase du bas : à la ligne dans la colonne de gauche (coordonnées du tableau ramenées dans le repère agrandi).
+  c.texte = function (s, x, y, o = {}) {
+    if (x !== 14 || y < 320) return texte.call(this, s, x, y, o);
+    const t = 19, max = CT.gw - 10, mots = String(s).split(' '), lignes = []; let l = '';
+    for (const m of mots) { const e = l ? l + ' ' + m : m; if (l && this.largeurTexte(e.replace(/_/g, ''), t) > max) { lignes.push(l); l = m; } else l = e; }
+    if (l) lignes.push(l);
+    const y0 = 80 + Math.max(0, Math.min(3, Math.round((y - 330) / 24.5))) * 80;
+    lignes.forEach((ln, k) => { const [X, Y] = versCircuit(14, y0 + k * 25); texte.call(this, ln, X, Y, { ...o, taille: t / CT.k, max: undefined }); });
+    return this;
+  };
+  ctx.save(); ctx.translate(CT.tx, CT.ty); ctx.scale(CT.k, CT.k);
+  try { return dessinerMontage(c, M, v); } finally { ctx.restore(); c.texte = texte; }
+}
+function dessinerMontage(c, M, v) {
   const a = v === 'montage' ? lisse(M.p('montage')) : 1;
   appareils(c, a);
   if (v === 'montage') {
@@ -683,7 +710,7 @@ const MOT = Moteur({
 });
 MOT.lancer();
 window.Tableau.glisser(MOT.scene.craie.canvas, {
-  toucher: (px, py) => { const [x, y] = MOT.scene.local(px, py); return x > C1[0] - 14 && x < PV[0] + 12 && y > 56 && y < 146 ? 'K' : null; },
+  toucher: (px, py) => { const [x, y] = versCircuit(...MOT.scene.local(px, py)); return x > C1[0] - 14 && x < PV[0] + 12 && y > 56 && y < 146 ? 'K' : null; },
   bouger: () => {},
   lacher: () => { MOT.setParameters({ K: positionK() === 1 ? 2 : 1 }); },
 });

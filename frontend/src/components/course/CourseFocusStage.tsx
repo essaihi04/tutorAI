@@ -1808,7 +1808,10 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
         }} />
 
       {/* ── Le titre et le sous-titre, seulement ── */}
-      <header className="shrink-0 px-6 pt-2 pb-1 text-center" style={tuteur3D ? { paddingRight: COLONNE_TUTEUR } : undefined}>
+      {/* Avec une simulation, titre et sous-titre tiennent sur une seule ligne (15 novembre 2026 : « la simulation n'occupe
+          qu'une bande étroite ») : la hauteur gagnée va au tableau de la simulation. */}
+      <header className={`shrink-0 text-center ${surSim ? 'flex flex-wrap items-baseline justify-center gap-x-4 px-4 pt-1 pb-0.5' : 'px-6 pt-2 pb-1'}`}
+        style={tuteur3D ? { paddingRight: COLONNE_TUTEUR } : undefined}>
         <h1 className="text-xl leading-tight md:text-[26px]" style={{ fontFamily: CRAIE, color: '#fef3c7' }}>{slide.title}</h1>
         {/* pendant une question d'observation, le sous-titre se tait : il dit souvent la réponse (« la lumière s'étale ») */}
         {contenu.lead && (

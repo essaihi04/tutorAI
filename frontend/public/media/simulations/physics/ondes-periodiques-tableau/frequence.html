@@ -24,7 +24,10 @@ const { fr, bulle, protocole } = window.Tableau;
 const $ = id => document.getElementById(id);
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const nb = x => fr(x, 2).replace(/0+$/, '').replace(/,$/, '');
-const RALENTI = 3, XM = 86, OX = 190, OY = 190, L1 = 480, AMP = 64;   // film : 1 s = 480 px
+const RALENTI = 3, XM = 86, OX = 190, OY = 190, AMP = 64;
+/* Tableau large (15 novembre 2026) : le cadre prend le format du tableau (scene.L de 760 à 1292) ; le film s'allonge
+ * (L1 px pour 1 s : 480 à 932), chrono et unités suivent le bord droit, textes ≥ 18 px à l'écran. */
+let L1 = 480, LL = 760;
 const P = { T: 0.5 };
 const T = () => ({ periode: Math.min(P.T, 1), une_seconde: 1.0, calcul: 1.6 });
 const TFIN = 1.9;
@@ -59,6 +62,8 @@ function peindreChrono(ctx, x, y, r, t) {
 
 function dessiner(c) {
   scene.cadre(43);
+  LL = scene.L; L1 = 480 + Math.max(0, LL - 760) * 0.85;
+  if (LL >= 1000 && c.echelle >= 0.8) c.tailleMin = 18;   // tableau bas : 15 px suffit
   c.axe(OX, OY, OX + L1 + 40, OY, [[0, '0'], [0.5 * L1 / (L1 + 40), '0,5 s'], [L1 / (L1 + 40), '1 s']], { taille: 14 });
   c.fleche(OX, OY + AMP + 16, OX, OY - AMP - 22, { couleur: 'faible', largeur: 1.4 });
   c.texte('y', OX - 18, OY - AMP - 14, { couleur: 'faible', taille: 15 });
@@ -68,7 +73,7 @@ function dessiner(c) {
   c.direct(() => {
     const t = Math.min(S.t, 1), joue = S.running || S.pause || S.fait;
     // Le point M qui vibre, et son film qui se trace.
-    peindreChrono(c.ctx, 716, 82, 17, t);
+    peindreChrono(c.ctx, LL - 44, 82, 17, t);
     peindrePerle(c.ctx, XM, OY - (joue ? yM(t) : 0), 9);
     c.texte('M', XM - 28, OY + 6, { couleur: 'rouge', taille: 17 });
     c.repere('M', XM - 30, OY - AMP - 16, 50, 2 * AMP + 32, 'le point M');
@@ -85,15 +90,15 @@ function dessiner(c) {
       c.texte(`T = ${nb(P.T)} s`, OX + P.T * L1 / 2, OY + AMP + 58, { couleur: 'vert', taille: 17, align: 'center' });
       c.repere('T', OX, OY + AMP + 20, P.T * L1, 46, 'la période T');
     }
-    c.texte(`chrono : ${fr(t, 2)} s`, 748, 40, { couleur: S.t >= 1 ? 'orange' : 'faible', taille: 16, align: 'right' });
+    c.texte(`chrono : ${fr(t, 2)} s`, LL - 12, 40, { couleur: S.t >= 1 ? 'orange' : 'faible', taille: 16, align: 'right' });
     if (vu('une_seconde')) {
       c.texte(`En 1 s : ${nb(N())} période${N() >= 2 ? 's' : ''}  →  N = ${nb(N())} Hz`, 60, 352, { couleur: 'orange', taille: 19 });
       c.repere('N', 54, 330, 460, 30, 'la fréquence N');
     }
     if (vu('calcul')) {
       c.texte(`1 / T = 1 / ${nb(P.T)} = ${nb(N())}   donc   N = 1 / T`, 60, 392, { couleur: 'blanc', taille: 19 });
-      c.texte('T en s, N en Hz', 560, 392, { couleur: 'faible', taille: 15 });
-      c.repere('unites', 554, 372, 150, 28, 'les unités : T en seconde, N en hertz');
+      c.texte('T en s, N en Hz', LL - 230, 392, { couleur: 'faible', taille: 15 });
+      c.repere('unites', LL - 236, 372, 150, 28, 'les unités : T en seconde, N en hertz');
       c.repere('calcul', 54, 370, 480, 30, '1 / T');
     }
   });
@@ -101,7 +106,7 @@ function dessiner(c) {
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, dessiner);
+const scene = window.OndesTableau.Scene(canvas, dessiner, { large: true });
 scene.avancer = dt => {
   if (!S.running) return false;
   S.t = Math.min(TFIN, S.t + dt / RALENTI);

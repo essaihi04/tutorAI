@@ -115,39 +115,55 @@ function paragraphe(c, texte, x, y, taille, max, o, dessiner) {
 }
 
 // Trois colonnes (3 + 2 + 3 blocs), dans le cadre 760 × 420 ; hauteurs mesurées, réparties dans la colonne.
-const COL = [{ x: 18, w: 228, ids: [0, 1, 2] }, { x: 266, w: 228, ids: [3, 4] }, { x: 514, w: 228, ids: [5, 6, 7] }], HAUT = 50, BAS = 414;
+// Tableau large (15 novembre 2026, « cases serrées, petits textes ») : Scene({ large: true }) ; si scene.L ≥ 1000, quatre
+// colonnes (2 blocs chacune) sur toute la largeur, et le texte grossit (facteur K) tant que tout tient sur la page.
+let COL = [{ x: 18, w: 228, ids: [0, 1, 2] }, { x: 266, w: 228, ids: [3, 4] }, { x: 514, w: 228, ids: [5, 6, 7] }];
+const HAUT = 50, BAS = 414;
+let K = 1, LD = 742;  // K : agrandissement du texte de la fiche ; LD : bord droit écrit
+function colonnes(L) {
+  LD = L - 18;
+  if (L < 1000) { COL = [{ x: 18, w: 228, ids: [0, 1, 2] }, { x: 266, w: 228, ids: [3, 4] }, { x: 514, w: 228, ids: [5, 6, 7] }]; return; }
+  const g = 26, w = (L - 36 - 3 * g) / 4;
+  COL = [[0, 1], [2, 3], [4, 5], [6, 7]].map((ids, j) => ({ x: 18 + j * (w + g), w, ids }));
+}
 const POS = [];   // position calculée de chaque bloc : { x, w, y0, h }
 const TF = 12.5;  // taille des formules
 
 /* Écrit (ou mesure seulement) le contenu d'un bloc ; rend l'ordonnée de fin. */
 function contenu(c, b, x, y0, w, st, dessiner) {
-  let y = y0 + 12;
-  if (dessiner) c.texte(b.titre, x, y, { couleur: 'jaune', taille: 14, max: st ? w - 62 : w });
-  y += 18;
+  let y = y0 + 12 * K;
+  if (dessiner) c.texte(b.titre, x, y, { couleur: 'jaune', taille: 14 * K, max: st ? w - 62 : w });
+  y += Math.max(18 * K, eff(c, 14 * K) * 1.25);
   if (b.formules) {
     // formules encadrées, à la ligne quand la suivante ne tient plus (une formule trop longue s'écrit plus petit)
     let fx = x;
     for (const f of b.formules) {
-      const brut = formule(c, f, 0, 0, TF, { dessiner: false }), tf = brut + 14 > w ? TF * (w - 14) / brut : TF;
-      const l = Math.min(w, (brut + 14 > w ? w - 14 : brut) + 14);
-      if (fx > x && fx + l > x + w) { fx = x; y += 22; }
+      const T = TF * K, ef = eff(c, T) / T, brut = formule(c, f, 0, 0, T, { dessiner: false }), tf = brut + 14 > w ? T * (w - 14) / brut : T;
+      const l = Math.min(w, (brut + 14 > w ? w - 14 : brut) + 14), hf = 19 * K * ef;
+      if (fx > x && fx + l > x + w) { fx = x; y += hf + 3; }
       if (dessiner) {
-        c.rect(fx, y - 13, l, 19, { couleur: 'faible', arrondi: 6, largeur: 1.2, duree: .25 });
+        c.rect(fx, y - hf * .68, l, hf, { couleur: 'faible', arrondi: 6, largeur: 1.2, duree: .25 });
         formule(c, f, fx + 7, y + 1, tf, { dessiner: true });
       }
       fx += l + 7;
     }
-    y += 21;
+    y += Math.max(21 * K, eff(c, TF * K) * 1.6);
   }
-  y = paragraphe(c, b.def, x, y, 11.5, w, { couleur: 'blanc' }, dessiner);
-  if (dessiner) c.texte('⚠', x, y, { couleur: 'orange', taille: 11 });
-  const dx = Math.max(14, eff(c, 11) * 1.3);   // le ⚠ grossit aussi sur un petit écran
-  y = paragraphe(c, b.attention, x + dx, y, 11, w - dx, { couleur: 'orange', alpha: .92 }, dessiner);
+  y = paragraphe(c, b.def, x, y, 11.5 * K, w, { couleur: 'blanc' }, dessiner);
+  if (dessiner) c.texte('⚠', x, y, { couleur: 'orange', taille: 11 * K });
+  const dx = Math.max(14, eff(c, 11 * K) * 1.3);   // le ⚠ grossit aussi sur un petit écran
+  y = paragraphe(c, b.attention, x + dx, y, 11 * K, w - dx, { couleur: 'orange', alpha: .92 }, dessiner);
   return y - 8;   // la dernière ligne descend d'environ 0,3 taille sous sa base
 }
 function placer(c) {
   window.__debordeBlocs = [];   // recalculé à chaque image (le canvas change de taille au chargement)
   S.loupe = false;
+  colonnes(scene.L); K = 1;
+  if (scene.L >= 1000) {
+    // le plus grand texte qui laisse toute la fiche sur la page
+    const tient = () => COL.every(({ x, w, ids }) => ids.reduce((s, i) => s + contenu(c, BLOCS[i], x, 0, w, true, false) + 6, 0) <= BAS - HAUT - 8 * ids.length);
+    for (K = 2; K > 1 && !tient(); K = Math.round((K - .05) * 100) / 100);
+  }
   for (const { x, w, ids } of COL) {
     const h = ids.map(i => contenu(c, BLOCS[i], x, 0, w, true, false) + 6);
     const libre = BAS - HAUT - h.reduce((s, v) => s + v, 0), g = Math.max(0, libre / ids.length);
@@ -160,7 +176,20 @@ function placer(c) {
     // La fiche se lit alors par groupes de blocs en pleine largeur : le groupe qui contient le bloc que la voix dit
     // (ou celui que l'élève touche).
     POS.length = 0; S.groupes = [];
-    const w = 724, dispo = BAS - 24 - HAUT;
+    const w = LD - 18, dispo = BAS - 24 - HAUT;
+    if (scene.L >= 1000) {
+      // tableau large mais bas (bande de formules sous la simulation) : deux pages de quatre blocs, un par colonne
+      const tient = () => BLOCS.every((b, i) => contenu(c, b, COL[i % 4].x, 0, COL[i % 4].w, true, false) + 14 <= dispo);
+      for (K = 2.6; K > 1 && !tient(); K = Math.round((K - .05) * 100) / 100);   // le plus gros texte qui tient
+      S.groupes = [[0, 1, 2, 3], [4, 5, 6, 7]].map(ids => ids.map((i, j) => {
+        const h = contenu(c, BLOCS[i], COL[j].x, 0, COL[j].w, true, false) + 14;
+        if (h > dispo) window.__debordeBlocs.push(BLOCS[i].id);
+        return { i, h, y: 0, j };
+      }));
+      const k = blocVisible();
+      for (const { i, h, j } of S.groupes.find(gr => gr.some(e => e.i === k))) POS[i] = { x: COL[j].x, w: COL[j].w, y0: HAUT, h: Math.min(h - 8, dispo) };
+      return;
+    }
     let g = [], y = 0;
     BLOCS.forEach((b, i) => {
       const h = contenu(c, b, 18, 0, w, true, false) + 14;
@@ -198,15 +227,15 @@ function bloc(c, b, i) {
 function dessinerFiche(c) {
   placer(c);
   if (S.apparu.some(a => a === AVANT)) c.cur = AVANT;   // la voix est déjà passée : le titre est écrit d'un coup
-  c.texte('Ce qu’il faut retenir · noyaux, masse et énergie', 18, 30, { couleur: 'jaune', taille: 22 });
-  c.texte('définition · formule · ⚠ piège', 742, 28, { couleur: 'faible', taille: 12, align: 'right' });
-  c.ligne(18, 38, 742, 38, { couleur: 'tresfaible', largeur: 1.4 });
+  c.texte('Ce qu’il faut retenir · noyaux, masse et énergie', 18, 30, { couleur: 'jaune', taille: scene.L >= 1000 ? 26 : 22 });
+  c.texte('définition · formule · ⚠ piège', LD, 28, { couleur: 'faible', taille: scene.L >= 1000 ? 16 : 12, align: 'right' });
+  c.ligne(18, 38, LD, 38, { couleur: 'tresfaible', largeur: 1.4 });
   const debut = c.cur;
   let fin = c.cur;
   if (S.loupe) {
     const k = blocVisible(), n = S.groupes.findIndex(gr => gr.some(e => e.i === k));
-    c.direct(() => c.texte(`partie ${n + 1} / ${S.groupes.length} de la fiche · touche : la suite`, 742, BAS - 2, { couleur: 'faible', taille: 11, align: 'right' }));
-    c.repere('loupe', 12, BAS - 18, 736, 22, 'petit écran : la fiche par parties, touche pour la suite');
+    c.direct(() => c.texte(`partie ${n + 1} / ${S.groupes.length} de la fiche · touche : la suite`, LD, BAS - 2, { couleur: 'faible', taille: 11, align: 'right' }));
+    c.repere('loupe', 12, BAS - 18, LD - 6, 22, 'petit écran : la fiche par parties, touche pour la suite');
     POS.forEach((p, i) => { if (!p || S.apparu[i] == null) return; c.cur = S.apparu[i] === AVANT ? AVANT : Math.max(debut, S.apparu[i]); bloc(c, BLOCS[i], i); fin = Math.max(fin, c.cur); });
     c.cur = fin; return;
   }
@@ -219,13 +248,14 @@ function dessinerFiche(c) {
 }
 
 function dessinerLacunes(c) {
+  colonnes(scene.L);   // LD : bord droit (tableau large : toute la largeur)
   c.texte('Ta page : ce qu’il te reste à retravailler', 22, 30, { couleur: 'jaune', taille: 22 });
-  c.ligne(22, 38, 740, 38, { couleur: 'tresfaible', largeur: 1.4 });
+  c.ligne(22, 38, LD - 2, 38, { couleur: 'tresfaible', largeur: 1.4 });
   let y = 70;
   const lac = S.lacunes, acq = S.acquis || [], y0 = y - 18;
   if (!lac) {
     c.texte('Pas encore de réponses notées.', 22, y, { couleur: 'faible', taille: 18 }); y += 28;
-    y = paragraphe(c, 'Réponds aux questions du cours : ton bilan par compétence s’écrira ici, et le professeur y reviendra en mode libre.', 22, y, 16, 700, { couleur: 'faible' }, true);
+    y = paragraphe(c, 'Réponds aux questions du cours : ton bilan par compétence s’écrira ici, et le professeur y reviendra en mode libre.', 22, y, 16, LD - 40, { couleur: 'faible' }, true);
   } else if (!lac.length) {
     c.texte('✓ Toutes les compétences évaluées sont acquises. Bravo !', 22, y, { couleur: 'vert', taille: 20 }); y += 30;
   } else {
@@ -233,28 +263,28 @@ function dessinerLacunes(c) {
     for (const l of lac.slice(0, 5)) {
       const [etiq, coul] = STATUTS[l.statut] || STATUTS.non_acquis;
       c.texte(l.statut === 'partiel' ? '⟳' : '✗', 22, y, { couleur: coul, taille: 17 });
-      y = paragraphe(c, `${l.label} — ${etiq}`, 42, y, 16, 690, { couleur: 'blanc' }, true);
-      if (l.reprendre_avec && l.reprendre_avec.length) y = paragraphe(c, 'reprendre avec ' + l.reprendre_avec.join(', puis '), 42, y, 13, 690, { couleur: coul, alpha: .85 }, true);
+      y = paragraphe(c, `${l.label} — ${etiq}`, 42, y, 16, LD - 50, { couleur: 'blanc' }, true);
+      if (l.reprendre_avec && l.reprendre_avec.length) y = paragraphe(c, 'reprendre avec ' + l.reprendre_avec.join(', puis '), 42, y, 13, LD - 50, { couleur: coul, alpha: .85 }, true);
       y += 4;
     }
     if (lac.length > 5) { c.texte(`… et ${lac.length - 5} autre(s)`, 42, y, { couleur: 'faible', taille: 13 }); y += 18; }
   }
-  c.repere('lacunes', 18, y0, 720, Math.max(30, y - y0), 'ce qu’il reste à retravailler');
+  c.repere('lacunes', 18, y0, LD - 22, Math.max(30, y - y0), 'ce qu’il reste à retravailler');
   if (lac && acq.length) {
     y += 6; c.texte('✓ Acquis', 22, y, { couleur: 'vert', taille: 15 }); y += 20;
-    y = paragraphe(c, acq.join(' · '), 22, y, 14, 700, { couleur: 'vert', alpha: .85 }, true);
+    y = paragraphe(c, acq.join(' · '), 22, y, 14, LD - 40, { couleur: 'vert', alpha: .85 }, true);
   }
   // C9 « rédiger comme le barème » : pas de bloc ni de branche propre, son état se lit ici.
   const st = statutComp('C9'), [etiq, coul] = st ? STATUTS[st] : ['pas encore évalué', 'faible'];
   y = Math.max(y + 14, 340); if (y > 392) y = 392;
-  c.ligne(22, y - 20, 740, y - 20, { couleur: 'tresfaible', largeur: 1 });
+  c.ligne(22, y - 20, LD - 2, y - 20, { couleur: 'tresfaible', largeur: 1 });
   c.texte(`C9 · ${C9.label} : ${etiq}`, 22, y, { couleur: coul, taille: 15 });
-  paragraphe(c, 'À chaque question : ' + C9.texte, 22, y + 20, 13, 700, { couleur: 'faible' }, true);
-  c.repere('rediger', 18, y - 18, 720, 46, 'rédiger comme le barème (C9)');
+  paragraphe(c, 'À chaque question : ' + C9.texte, 22, y + 20, 13, LD - 40, { couleur: 'faible' }, true);
+  c.repere('rediger', 18, y - 18, LD - 22, 46, 'rédiger comme le barème (C9)');
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(81 + S.page); if (S.impression) c.tailleMin = 0; if (S.page === 1) dessinerFiche(c); else dessinerLacunes(c); return c.fin(); });
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(81 + S.page); if (S.impression) c.tailleMin = 0; if (S.page === 1) dessinerFiche(c); else dessinerLacunes(c); return c.fin(); }, { large: true });
 const maintenant = () => (performance.now() - scene.ouvert) / 1000;
 
 /* Page n ; `focus` = le bloc que la voix dit maintenant ; `tout` = toute la fiche d'un coup. */

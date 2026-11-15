@@ -49,15 +49,38 @@ const canvas = $('canvas');
 const scene = window.OndesTableau.Scene(canvas, dessiner);
 const craie = scene.craie;
 /* Même cadre que commun.js, mais l’écriture suit l’horloge de la figure (S.tw) : le tuteur peut la figer sur une étape. */
+/* Agrandissement du 15 novembre 2026 (« la figure n'occupe qu'une bande étroite ») : le cadre prend le format du
+ * tableau (largeur scene.L de 760 à 760 × 2,1, comme Scene(…, { large: true })) et la figure COMPLÈTE est cadrée :
+ * on la dessine une fois toute écrite, on relève la boîte de l'encre sur les pixels du canvas (craie ET peinture),
+ * puis cette boîte remplit le tableau (agrandissement borné à 1,6 × le cadre entier). La boîte ne change pas pendant
+ * l'écriture : rien ne saute. Elle est remesurée si le canvas change de taille. */
+const BOITE = { cle: '', k: null, mesure: false };
 scene.cadre = function (graine) {
-  const W = craie.W, H = craie.H, VW = 760, VH = 420;
-  craie.debut(graine, S.tw);
-  const s = Math.min(W / VW, H / VH);
-  scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
+  const W = craie.W, H = craie.H, VH = 420;
+  const VW = scene.L = Math.round(Math.min(760 * 2.1, Math.max(760, VH * W / Math.max(1, H))));
+  craie.debut(graine, BOITE.mesure ? 1e6 : S.tw);
+  const sC = Math.min(W / VW, H / VH), k = (!BOITE.mesure && BOITE.k) || { x0: 0, y0: 0, x1: VW, y1: VH };
+  const bw = k.x1 - k.x0, bh = k.y1 - k.y0, s = Math.min(W / bw, H / bh, sC * 1.6);
+  scene.s = s; scene.ox = (W - bw * s) / 2 - k.x0 * s; scene.oy = (H - bh * s) / 2 - k.y0 * s;
   craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
-  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+  craie.echelle = s; craie.tailleMin = 15; craie.cadre = { w: VW, h: VH, haut: 0 };
   return craie;
 };
+/** La boîte de l'encre de la figure complète (coordonnées du cadre), lue sur les pixels du canvas. */
+function mesurerBoite() {
+  BOITE.mesure = true;
+  try {
+    const sv = S.tw; S.tw = 1e6; dessiner(craie); S.tw = sv;
+    const cv = canvas, ctx = cv.getContext('2d'), w = cv.width, h = cv.height, d = ctx.getImageData(0, 0, w, h).data;
+    let x0 = w, y0 = h, x1 = -1, y1 = -1;
+    for (let y = 0; y < h; y += 2) for (let x = 0; x < w; x += 2) if (d[(y * w + x) * 4 + 3] > 24) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    if (x1 < 0) return null;
+    const r = w / Math.max(1, craie.W), M = 12, L = scene.L;   // pixels du canvas → px CSS → cadre
+    const f = (px, o) => (px / r - o) / scene.s;
+    return { x0: Math.max(0, f(x0, scene.ox) - M), y0: Math.max(0, f(y0, scene.oy) - M), x1: Math.min(L, f(x1, scene.ox) + M), y1: Math.min(420, f(y1, scene.oy) + M) };
+  } catch (e) { console.warn('[figures] mesure de la boîte', e); return null; }
+  finally { BOITE.mesure = false; }
+}
 let MM = {};
 const marque = (c, nom) => { MM[nom] = c.cur; };
 /* Une partie peinte (eau, faisceau, Soleil, verre) apparaît quand l’écriture arrive à elle, d’un coup. */
@@ -544,15 +567,17 @@ const DESSINS = {
   },
 
   fig_cas_types(c) {
-    c.texte('Le mot de la question → la méthode', 40, 28, { couleur: 'cyan', taille: 20 });
-    c.repere('figure', 16, 40, 728, 370, 'le tableau des cas types');
-    const X0 = 20, XM = 396, X1 = 740, Y0 = 40, H0 = 38, RH = 46, N = 7, Yr = i => Y0 + H0 + RH * i;
+    c.texte('Le mot de la question → la méthode', 40, 28, { couleur: 'cyan', taille: 20 * (scene.L >= 1000 ? 1.2 : 1) });
+    c.repere('figure', 16, 40, (scene.L >= 1000 ? scene.L - 32 : 728), 370, 'le tableau des cas types');
+    // tableau large (scene.L ≥ 1000) : le tableau prend toute la largeur, textes plus grands (k)
+    const lg = scene.L >= 1000, k = lg ? 1.25 : 1;
+    const X0 = 20, X1 = lg ? scene.L - 20 : 740, XM = lg ? X0 + (X1 - X0) * .52 : 396, Y0 = 40, H0 = 38, RH = 46, N = 7, Yr = i => Y0 + H0 + RH * i;
     c.rect(X0, Y0, X1 - X0, H0 + RH * N, { couleur: 'faible', arrondi: 6 });
     c.ligne(XM, Y0, XM, Yr(N), { couleur: 'faible', largeur: 1.6, duree: .2 });
     c.ligne(X0, Yr(0), X1, Yr(0), { couleur: 'faible', largeur: 1.6, duree: .2 });
     for (let i = 1; i < N; i++) c.ligne(X0, Yr(i), X1, Yr(i), { couleur: 'tresfaible', largeur: 1.1, duree: .08 });
-    c.texte('le mot de la question', (X0 + XM) / 2, Y0 + 27, { couleur: 'cyan', align: 'center', taille: 18 });
-    c.texte('la méthode', (XM + X1) / 2, Y0 + 27, { couleur: 'cyan', align: 'center', taille: 18 });
+    c.texte('le mot de la question', (X0 + XM) / 2, Y0 + 27, { couleur: 'cyan', align: 'center', taille: 18 * k });
+    c.texte('la méthode', (XM + X1) / 2, Y0 + 27, { couleur: 'cyan', align: 'center', taille: 18 * k });
     c.repere('trace', X0, Y0, X1 - X0, H0 + RH * N, 'le tableau : le mot de la question, la méthode');
     marque(c, 'trace');
     const R = [['nommer', '« nommer », « que met en évidence »', 'diffraction ; aspect ondulatoire'],
@@ -565,9 +590,9 @@ const DESSINS = {
     R.forEach(([id, q, m], i) => {
       c.pause(.35);
       const yy = Yr(i) + 31;
-      c.texte(q, X0 + 10, yy, { couleur: 'jaune', taille: 17, max: XM - X0 - 20 });
+      c.texte(q, X0 + 10, yy, { couleur: 'jaune', taille: 17 * k, max: XM - X0 - 20 });
       c.fleche(XM - 2, yy - 6, XM + 18, yy - 6, { couleur: 'rose', largeur: 1.8 });
-      c.texte(m, XM + 26, yy, { couleur: 'vert', taille: 19, max: X1 - XM - 36 });
+      c.texte(m, XM + 26, yy, { couleur: 'vert', taille: 19 * k, max: X1 - XM - 36 });
       c.repere(id, X0, Yr(i), X1 - X0, RH, `${q} → ${m.replace(/_/g, '')}`);
       marque(c, id);
     });
@@ -706,6 +731,9 @@ const DESSINS = {
 };
 
 function dessiner(c) {
+  // première image à cette taille (ou autre figure) : la boîte de la figure complète est mesurée d'abord
+  const cle = `${fig}:${craie.W}x${craie.H}`;
+  if (!BOITE.mesure && BOITE.cle !== cle && craie.W > 1) { BOITE.cle = cle; BOITE.k = null; BOITE.k = mesurerBoite(); }
   scene.cadre(31);
   MM = {};
   DESSINS[fig](c);

@@ -33,7 +33,16 @@ const JAUGES = [
   { id: 'pc', nom: 'phosphocréatine', unite: 'mmol/kg', repos: 17, apres: 10, d: 0, couleur: 'rose' },
 ];
 // Une ligne par mesure : nom à gauche, barre horizontale (pointillé = repos), valeur après l'activité au bout.
-const Y0 = 104, PAS = 50, BX = 352, BL = 290, BH = 16;
+let Y0 = 104, PAS = 50, BX = 352, BL = 290, BH = 16;
+/* Disposition selon la largeur du tableau (15 novembre 2026, « mieux exploiter tout le tableau, grands calibres de
+ * texte ») : tableau large (scene.L ≥ 1000) → muscle peint plus grand, barres étirées jusqu'au bord droit, textes ×1,3.
+ * Sinon la disposition d'origine (760 × 420). */
+let LG = false, TK = 1, XN = 172, MK = 1, MCX = 84;
+const tk = v => Math.round(v * TK);
+function disposer(L) {
+  LG = L >= 1000; TK = LG ? 1.3 : 1; MK = LG ? 1.3 : 1; MCX = LG ? 124 : 84; XN = LG ? 250 : 172;
+  if (LG) { Y0 = 100; PAS = 54; BX = 490; BH = 20; BL = L - BX - 150; } else { Y0 = 104; PAS = 50; BX = 352; BL = 290; BH = 16; }
+}
 const M = { repos: 0.8, activite: 2.5, apres: 6.6 };
 const T_ACT = [1.2, 6.2], FIN = 7;
 const MOTIFS = { repos: 'le muscle au repos : chaque ligne à sa valeur de repos', activite: 'le muscle travaille : les barres bougent',
@@ -91,43 +100,43 @@ function peindreMuscle(ctx, k) {
 }
 
 function dessiner(c) {
-  scene.cadre(31);
-  c.direct(() => c.texte('Le muscle au repos, puis après une activité (ordres de grandeur)', 12, 26, { couleur: 'blanc', taille: 17 }));
+  scene.cadre(31); disposer(scene.L);
+  c.direct(() => c.texte('Le muscle au repos, puis après une activité (ordres de grandeur)', 12, 26, { couleur: 'blanc', taille: tk(17) }));
   // Le muscle entre deux os : peint en couleur (peindreMuscle), réaliste, avant la craie.
-  c.texte('muscle', 84, 326, { couleur: 'rose', taille: 16, align: 'center' });
-  c.repere('muscle', 12, 120, 146, 214, 'le muscle');
+  c.texte('muscle', MCX, 225 + 101 * MK, { couleur: 'rose', taille: tk(16), align: 'center' });
+  c.repere('muscle', MCX - 72 * MK, 225 - 105 * MK, 146 * MK, 214 * MK, 'le muscle');
   JAUGES.forEach((j, i) => {
     const y = Y0 + i * PAS;
-    c.texte(j.nom, 172, y + 2, { couleur: j.couleur, taille: 15, max: 172 });
-    c.texte(j.unite, 172, y + 19, { couleur: 'faible', taille: 12 });
+    c.texte(j.nom, XN, y + 2, { couleur: j.couleur, taille: tk(15), max: BX - XN - 16 });
+    c.texte(j.unite, XN, y + tk(19), { couleur: 'faible', taille: tk(12) });
     c.ligne(BX, y + BH / 2 + 2, BX + BL, y + BH / 2 + 2, { couleur: 'tresfaible', largeur: 1.2 });
-    c.repere(j.id, 166, y - 18, 588, PAS - 6, 'la ligne : ' + j.nom);
+    c.repere(j.id, XN - 6, y - 18, BX + BL + 130 - XN, PAS - 6, 'la ligne : ' + j.nom);
   });
   c.direct(() => {
     // Le muscle bat pendant l'activité : il raccourcit et gonfle en rythme.
     const actif = S.t > T_ACT[0] && S.t < T_ACT[1], k = actif ? 0.5 + 0.5 * Math.sin((S.t - T_ACT[0]) * Math.PI * 2 * 1.6) : 0;
-    peindreMuscle(c.ctx, k);
+    c.ctx.save(); c.ctx.translate(MCX, 225); c.ctx.scale(MK, MK); c.ctx.translate(-84, -225); peindreMuscle(c.ctx, k); c.ctx.restore();
     const etat = S.t <= 0 ? '' : S.t < T_ACT[0] ? 'au repos' : S.t < T_ACT[1] ? 'en activité…' : 'après l’activité';
-    if (etat) c.texte(etat, 84, 136, { couleur: S.t < T_ACT[0] ? 'faible' : 'vert', taille: 16, align: 'center' });
+    if (etat) c.texte(etat, MCX, 225 - 89 * MK, { couleur: S.t < T_ACT[0] ? 'faible' : 'vert', taille: tk(16), align: 'center' });
     if (S.t <= 0) return;
     JAUGES.forEach((j, i) => {
       const y = Y0 + i * PAS - BH / 2 - 4, g = c.ctx, l = longueur(j, valeur(j)), lr = longueur(j, j.repos);
       g.globalAlpha = .55; g.fillStyle = c.couleur(j.couleur); g.fillRect(BX, y, l, BH); g.globalAlpha = 1;
       // Repos : trait pointillé vertical et sa valeur au-dessus.
       c.ligne(BX + lr, y - 5, BX + lr, y + BH + 5, { couleur: 'blanc', largeur: 1.4, pointille: [3, 3] });
-      c.texte(nombre(j.repos, j.d), BX + lr, y - 7, { couleur: 'faible', taille: 12, align: 'center' });
+      c.texte(nombre(j.repos, j.d), BX + lr, y - 7, { couleur: 'faible', taille: tk(12), align: 'center' });
       if (S.t >= T_ACT[1]) {
         const diff = (j.apres - j.repos) / j.repos, fl = Math.abs(diff) < 0.06 ? '≈' : diff > 0 ? '↑' : '↓';
-        c.texte(`${fl} ${nombre(j.apres, j.da ?? j.d)}`, BX + BL + 12, y + BH - 2, { couleur: j.couleur, taille: 17 });
+        c.texte(`${fl} ${nombre(j.apres, j.da ?? j.d)}`, BX + BL + 12, y + BH - 2, { couleur: j.couleur, taille: tk(17) });
       }
     });
-    if (S.t >= T_ACT[1]) c.texte('pointillé : au repos ; barre : après l’activité', 500, 404, { couleur: 'faible', taille: 13, align: 'center' });
+    if (S.t >= T_ACT[1]) c.texte('pointillé : au repos ; barre : après l’activité', LG ? BX + BL / 2 : 500, LG ? 414 : 404, { couleur: 'faible', taille: tk(13), align: 'center' });
   });
   return c.fin();
 }
 
 const canvas = $('canvas');
-const scene = window.MuscleTableau.Scene(canvas, dessiner);
+const scene = window.MuscleTableau.Scene(canvas, dessiner, { large: true });
 scene.avancer = dt => {
   if (!S.running) return false;
   S.t = Math.min(FIN, S.t + dt);

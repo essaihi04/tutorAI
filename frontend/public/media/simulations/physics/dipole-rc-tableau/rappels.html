@@ -12,6 +12,7 @@
 </div>
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
+<script src="colonne.js"></script>
 <script>
 /*
  * Rappels d’électricité et de maths — au tableau (audit « rythme et départ de zéro », 14 novembre 2026 — règles 33 et 34 du professeur).
@@ -55,7 +56,7 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), { large: true });
   const cadreBase = scene.cadre;
   scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
   M.scene = scene; M.craie = scene.craie;
@@ -387,8 +388,25 @@ let MOT = null;
 const MOTIFS_PROXY = new Proxy(MOTIFS, { get: (o, k) => (k === 'fin' ? 'fin' : motifDe(k)) });
 
 /* ── Dessin ──────────────────────────────────────────────────────────── */
+/* Tableau large : les phrases du bas passent dans la colonne de gauche, le dessin s’agrandit (colonne.js).
+ * Par vue : la zone du dessin gardée (y1 = bas du dessin sans les phrases) et les phrases qui passent dans la colonne. */
+const LARGE = {
+  courant: { y1: 326, phrase: (x, y) => x <= 20 && y >= 330 },
+  tension: { y1: 330, phrase: (x, y) => x <= 20 && y >= 330 },
+  ohm: { y1: 352, phrase: (x, y) => x <= 210 && y >= 355 },
+  additivite: { y1: 388, phrase: (x, y) => x === 110 && y === 360 },
+  puissances: { y1: 414, phrase: () => false },
+  derivee: { y1: 352, phrase: (x, y) => x === 250 && y >= 360 },
+  exponentielle: { y1: 380, phrase: (x, y) => x === 260 && y >= 330 },
+  sinusoide: { y1: 354, phrase: (x, y) => x === 470 && y >= 360 },
+  derivee_cos: { y1: 416, phrase: (x, y) => x === 380 && y >= 380 },
+};
+const COL = { debut(c) { (this.k ||= RCColonne(MOT.scene, {
+  boite: () => ({ x0: 6, y0: 4, x1: 756, y1: (LARGE[MOT.S.vue] || { y1: 416 }).y1 }),
+  versColonne: (s, x, y) => !!LARGE[MOT.S.vue] && LARGE[MOT.S.vue].phrase(x, y),
+})).debut(c); } };
 function dessiner(c, M) {
-  M.scene.cadre(17);
+  M.scene.cadre(17); COL.debut(c);
   c.texte('Rappel : ' + TITRES[M.S.vue], 14, 26, { couleur: 'cyan', taille: 20 });
   ({ courant: vueCourant, tension: vueTension, ohm: vueOhm, additivite: vueAdditivite, puissances: vuePuissances,
     derivee: vueDerivee, exponentielle: vueExpo, sinusoide: vueSinus, derivee_cos: vueDcos })[M.S.vue](c, M);

@@ -12,6 +12,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="/media/simulations/maths/commun/exposants.js"></script>
 <script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/ln-tableau/large.js"></script>
 <script>
 /*
  * Cours « Fonctions logarithmiques » (math_ch5_fonctions_ln) : primitives de u’/u.
@@ -21,28 +22,38 @@
 const OPT = { x0: 40, y0: 52, w: 400, h: 290, xmin: -5, xmax: 5, ymin: -3, ymax: 3,
   gx: [[-4, '−4'], [-2, '−2'], [2, '2'], [4, '4']], gy: [[-2, '−2'], [-1, '−1'], [1, '1'], [2, '2']], nomx: 'x', nomy: 'y' };
 const XR = 462;
+/* Tableau large (15 novembre 2026) : repère étiré sur la largeur (GW), colonne de droite reportée et agrandie (Z : ce qui
+ * est écrit autour de (x0 ; y0) passe en (nx ; ny), k fois plus grand) ; hors du tableau large, rien ne change. */
+const LARGE = () => LnLarge.L >= 1000;
+const GW = (o, w = 680) => LARGE() ? { ...o, w } : o;
+const Z = (c, x0, y0, k, nx, ny, fn) => LnLarge.colonne(c, x0, y0, LARGE() ? k : 1, LARGE() ? nx : x0, LARGE() ? ny : y0, fn);
 
 MathsTableau.page({
+  ajuster: !LnLarge.actif,
   id: 'ln_uprime', titre: 'Fonctions logarithmiques',
   texte: 'Construction à la craie : le tableau des primitives du chapitre précédent, prolongé par 1/x → ln x et u’/u → ln u (u > 0) ; exemple 2x/(x² + 1) → ln(x² + 1) ; puis ln(−x) pour x < 0, symétrique de ln x, d’où 1/x → ln|x| et u’/u → ln|u|',
   vues: {
     tableau: {
       titre: 'À l’envers : u’/u a pour primitive ln u',
       dessiner(c, K) {
-        K.titre('À l’envers : u’/u a pour primitive ln u');
+        LnLarge.ouvrir(c);
+        LnLarge.titre(c, K, 'À l’envers : u’/u a pour primitive ln u');
+        // tableau large : la colonne des primitives s’écarte (C2), puis tout est agrandi 1,2 fois
+        const C2 = LARGE() ? 520 : 360, kT = LARGE() ? 1.2 : 1;
+        LnLarge.colonne(c, 50, 60, kT, 50, 58, () => {
         c.texte('fonction', 90, 84, { couleur: 'faible', taille: 17 });
-        c.texte('une primitive', 360, 84, { couleur: 'faible', taille: 17 });
-        c.ligne(60, 94, 640, 94, { couleur: 'faible', largeur: 1.2 });
-        c.ligne(330, 66, 330, 300, { couleur: 'faible', largeur: 1.2 });
+        c.texte('une primitive', C2, 84, { couleur: 'faible', taille: 17 });
+        c.ligne(60, 94, C2 + 280, 94, { couleur: 'faible', largeur: 1.2 });
+        c.ligne(C2 - 30, 66, C2 - 30, 300, { couleur: 'faible', largeur: 1.2 });
         const L = [['xⁿ', 'xⁿ⁺¹/(n + 1)'], ['u’uⁿ', 'uⁿ⁺¹/(n + 1)'], ['u’/u²', '−1/u']];
         let y = 126;
-        for (const [a, b] of L) { c.texte(a, 90, y, { couleur: 'blanc', taille: 20 }); c.texte(b, 360, y, { couleur: 'blanc', taille: 20 }); y += 32; c.pause(.15); }
+        for (const [a, b] of L) { c.texte(a, 90, y, { couleur: 'blanc', taille: 20 }); c.texte(b, C2, y, { couleur: 'blanc', taille: 20 }); y += 32; c.pause(.15); }
         K.marque('ancien');
         c.pause(.3);
-        c.texte('1/x', 90, y, { couleur: 'vert', taille: 21 }); c.texte('ln x   (x > 0)', 360, y, { couleur: 'vert', taille: 21 }); y += 34;
+        c.texte('1/x', 90, y, { couleur: 'vert', taille: 21 }); c.texte('ln x   (x > 0)', C2, y, { couleur: 'vert', taille: 21 }); y += 34;
         c.pause(.15);
-        c.texte('u’/u', 90, y, { couleur: 'vert', taille: 21 }); c.texte('ln u   (u > 0)', 360, y, { couleur: 'vert', taille: 21 });
-        c.repere('nouveau', 70, y - 58, 560, 70, 'les lignes nouvelles : 1/x → ln x, u’/u → ln u');
+        c.texte('u’/u', 90, y, { couleur: 'vert', taille: 21 }); c.texte('ln u   (u > 0)', C2, y, { couleur: 'vert', taille: 21 });
+        c.repere('nouveau', 70, y - 58, C2 + 200, 70, 'les lignes nouvelles : 1/x → ln x, u’/u → ln u');
         K.marque('nouveau');
         c.pause(.3);
         K.lignes(60, 300, [
@@ -54,6 +65,7 @@ MathsTableau.page({
         c.texte('(ln(x² + 1))’ = 2x/(x² + 1) ✓', 60, 340, { couleur: 'vert', taille: 19 });
         c.repere('verifier', 50, 320, 420, 30, 'on vérifie en dérivant');
         K.marque('verifier');
+        });
       },
       decrire: {
         ancien: 'Un tableau à deux colonnes « fonction » et « une primitive » : xⁿ → xⁿ⁺¹/(n + 1), u’uⁿ → uⁿ⁺¹/(n + 1), u’/u² → −1/u.',
@@ -71,8 +83,9 @@ MathsTableau.page({
     miroir: {
       titre: 'ln|u| quand u est négatif',
       dessiner(c, K) {
-        K.titre('ln|u| quand u est négatif');
-        const G = K.axes(OPT);
+        LnLarge.ouvrir(c);
+        LnLarge.titre(c, K, 'ln|u| quand u est négatif');
+        const G = K.axes(GW(OPT));
         K.anime(1.2, p => { K.courbePart(G, x => 1 / x, 0.34, 5, p, { couleur: 'jaune', largeur: 2 }); K.courbePart(G, x => 1 / x, -5, -0.34, p, { couleur: 'jaune', largeur: 2 }); });
         c.texte('1/x', G.X(0.5) + 6, G.Y(2.6), { couleur: 'jaune', taille: 18 });
         K.marque('inverse');
@@ -88,20 +101,24 @@ MathsTableau.page({
         c.repere('miroir', G.x0, G.y0, G.w, G.h, 'ln(−x) est le reflet de ln x');
         K.marque('miroir');
         c.pause(.3);
-        c.rect(XR - 8, 70, 286, 74, { couleur: 'jaune', arrondi: 8, largeur: 1.7 });
-        K.lignes(XR, 100, [
-          { t: '1/x → ln|x| sur chaque intervalle', couleur: 'jaune', taille: 17 },
-          { t: 'u’/u → ln|u|', couleur: 'jaune', taille: 19 },
-        ], 30);
-        c.repere('valeur_absolue', XR - 8, 70, 286, 74, '1/x → ln|x| ; u’/u → ln|u|');
+        Z(c, XR - 8, 60, 1.5, 800, 60, () => {
+          c.rect(XR - 8, 70, 286, 74, { couleur: 'jaune', arrondi: 8, largeur: 1.7 });
+          K.lignes(XR, 100, [
+            { t: '1/x → ln|x| sur chaque intervalle', couleur: 'jaune', taille: 17 },
+            { t: 'u’/u → ln|u|', couleur: 'jaune', taille: 19 },
+          ], 30);
+          c.repere('valeur_absolue', XR - 8, 70, 286, 74, '1/x → ln|x| ; u’/u → ln|u|');
+        });
         K.marque('valeur_absolue');
         c.pause(.3);
-        K.lignes(XR, 186, [
-          { t: 'sur ]−∞ ; 3[ :', couleur: 'blanc', taille: 18 },
-          { t: '1/(x − 3) → ln|x − 3|', couleur: 'vert', taille: 18 },
-          { t: '= ln(3 − x)', couleur: 'vert', taille: 18 },
-        ], 30);
-        c.repere('exemple', XR - 8, 166, 286, 100, 'exemple : 1/(x − 3) → ln(3 − x) sur ]−∞ ; 3[');
+        Z(c, XR - 8, 60, 1.5, 800, 60, () => {
+          K.lignes(XR, 186, [
+            { t: 'sur ]−∞ ; 3[ :', couleur: 'blanc', taille: 18 },
+            { t: '1/(x − 3) → ln|x − 3|', couleur: 'vert', taille: 18 },
+            { t: '= ln(3 − x)', couleur: 'vert', taille: 18 },
+          ], 30);
+          c.repere('exemple', XR - 8, 166, 286, 100, 'exemple : 1/(x − 3) → ln(3 − x) sur ]−∞ ; 3[');
+        });
         K.marque('exemple');
       },
       decrire: {

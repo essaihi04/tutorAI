@@ -12,6 +12,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="/media/simulations/maths/commun/exposants.js"></script>
 <script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/limites-continuite-tableau/lc-outils.js"></script>
 <script>
 /*
  * Cours « Limites et continuité » (math_ch1_limites_continuite), bloc TVI (diapositives t1 à t9).
@@ -22,16 +23,18 @@
 const f = x => x * x * x + x - 1;
 const ALPHA = 0.6823;
 const OPT = { x0: 70, y0: 70, w: 380, h: 300, xmin: -0.3, xmax: 1.35, ymin: -1.6, ymax: 1.7, gx: [[0, ''], [1, '']], gy: [[1, '1'], [-1, '−1']] };
-const base = (K, o = {}) => K.axes({ ...OPT, ...o });
+/* Tableau large (LC.e > 0) : la figure s'élargit, la colonne de texte part plus à droite et s'écrit plus gros. */
+const opt = (K) => ({ ...OPT, w: LC.gw(K, OPT.w) });
+const base = (K, o = {}) => K.axes({ ...opt(K), ...o });
 function bornes(c, K, G, a, b) {
   c.ligne(G.X(a), G.Y(-1.5), G.X(a), G.Y(1.6), { couleur: 'tresfaible', largeur: 1.2, pointille: [4, 6] });
   c.ligne(G.X(b), G.Y(-1.5), G.X(b), G.Y(1.6), { couleur: 'tresfaible', largeur: 1.2, pointille: [4, 6] });
-  c.texte('a', G.X(a) - 4, G.Y(0) + 20, { couleur: 'jaune', taille: 17 });
-  c.texte('b', G.X(b) + 4, G.Y(0) + 20, { couleur: 'jaune', taille: 17 });
+  c.texte('a', G.X(a) - 4, G.Y(0) + 20, { couleur: 'jaune', taille: LC.t(K, 17) });
+  c.texte('b', G.X(b) + 4, G.Y(0) + 20, { couleur: 'jaune', taille: LC.t(K, 17) });
 }
-function texteDroite(c, K, liste) { return K.lignes(470, 110, liste.map(l => ({ taille: 17, ...l })), 32); }
+function texteDroite(c, K, liste) { return K.lignes(LC.col(K, 470), 110, liste.map(l => ({ taille: 17, ...l })), 32); }
 
-MathsTableau.page({
+LC.page({
   id: 'lc_traversee', titre: 'Le théorème des valeurs intermédiaires',
   texte: 'Construction à la craie du cours Limites et continuité : une courbe continue sur [a ; b], une image sous l’axe, une au-dessus ; elle coupe l’axe des abscisses en au moins un point α',
   vues: {
@@ -45,15 +48,15 @@ MathsTableau.page({
         c.repere('courbe', G.X(0), G.Y(1.2), G.X(1) - G.X(0), G.Y(-1.2) - G.Y(1.2), 'la courbe de f');
         K.marque('courbe_tracee');
         c.pause(.3); K.rond(G, 0, f(0), true, 'rouge'); K.proj(G, 0, f(0), { versX: false, ly: '', couleur: 'rouge' });
-        c.texte('f(a) < 0', G.X(0) + 12, G.Y(-1) + 22, { couleur: 'rouge', taille: 17 });
+        c.texte('f(a) < 0', G.X(0) + 12, G.Y(-1) + 22, { couleur: 'rouge', taille: LC.t(K, 17) });
         c.repere('fa', G.X(0) - 10, G.Y(-1) - 10, 90, 40, 'f(a), sous l’axe'); K.marque('fa_place');
         c.pause(.3); K.rond(G, 1, f(1), true, 'vert');
-        c.texte('f(b) > 0', G.X(1) - 80, G.Y(1) - 12, { couleur: 'vert', taille: 17 });
+        c.texte('f(b) > 0', G.X(1) - 80, G.Y(1) - 12, { couleur: 'vert', taille: LC.t(K, 17) });
         c.repere('fb', G.X(1) - 84, G.Y(1) - 30, 100, 40, 'f(b), au-dessus de l’axe'); K.marque('fb_place');
         c.pause(.4); K.rond(G, ALPHA, 0, true, 'jaune'); c.cercle(G.X(ALPHA), G.Y(0), 12, { couleur: 'jaune', largeur: 1.6 });
         c.repere('croisement', G.X(ALPHA) - 16, G.Y(0) - 16, 32, 32, 'le point où la courbe coupe l’axe'); K.marque('croisement');
-        c.pause(.3); c.texte('α', G.X(ALPHA) - 5, G.Y(0) + 34, { couleur: 'jaune', taille: 22 });
-        c.texte('f(α) = 0', G.X(ALPHA) + 14, G.Y(0) - 14, { couleur: 'jaune', taille: 16 });
+        c.pause(.3); c.texte('α', G.X(ALPHA) - 5, G.Y(0) + 34, { couleur: 'jaune', taille: LC.t(K, 22) });
+        c.texte('f(α) = 0', G.X(ALPHA) + 14, G.Y(0) - 14, { couleur: 'jaune', taille: LC.t(K, 16) });
         K.marque('alpha_nomme');
         c.pause(.3);
         texteDroite(c, K, [
@@ -86,12 +89,12 @@ MathsTableau.page({
         K.anime(1.0, p => K.courbePart(G, g2, xs, 1.2, p, { couleur: 'cyan' }));
         K.rond(G, xs, g2(xs), false, 'cyan');
         K.marque('courbe_tracee');
-        K.rond(G, 0, g1(0), true, 'rouge'); c.texte('f(a) < 0', G.X(0) + 12, G.Y(g1(0)) + 22, { couleur: 'rouge', taille: 17 });
-        K.rond(G, 1, g2(1), true, 'vert'); c.texte('f(b) > 0', G.X(1) - 80, G.Y(g2(1)) - 14, { couleur: 'vert', taille: 17 });
+        K.rond(G, 0, g1(0), true, 'rouge'); c.texte('f(a) < 0', G.X(0) + 12, G.Y(g1(0)) + 22, { couleur: 'rouge', taille: LC.t(K, 17) });
+        K.rond(G, 1, g2(1), true, 'vert'); c.texte('f(b) > 0', G.X(1) - 80, G.Y(g2(1)) - 14, { couleur: 'vert', taille: LC.t(K, 17) });
         K.marque('signes_places');
         c.pause(.4);
         c.fleche(G.X(xs) + 40, G.Y(-0.3), G.X(xs) + 6, G.Y(-0.4), { couleur: 'orange' });
-        c.texte('saut', G.X(xs) + 44, G.Y(-0.3) + 6, { couleur: 'orange', taille: 18 });
+        c.texte('saut', G.X(xs) + 44, G.Y(-0.3) + 6, { couleur: 'orange', taille: LC.t(K, 18) });
         c.repere('saut', G.X(xs) - 20, G.Y(g2(xs)) - 10, 80, G.Y(g1(xs)) - G.Y(g2(xs)) + 20, 'le saut de la courbe');
         K.marque('saut_sans_croisement');
         c.pause(.3);
@@ -119,8 +122,8 @@ MathsTableau.page({
         const h = x => 0.9 * (x - 0.5) * (x - 0.5) + 0.35;
         K.anime(1.8, p => K.courbePart(G, h, -0.15, 1.2, p, { couleur: 'cyan' }));
         K.rond(G, 0, h(0), true, 'vert'); K.rond(G, 1, h(1), true, 'vert');
-        c.texte('f(a) > 0', G.X(0) + 10, G.Y(h(0)) - 12, { couleur: 'vert', taille: 17 });
-        c.texte('f(b) > 0', G.X(1) - 30, G.Y(h(1)) - 14, { couleur: 'vert', taille: 17 });
+        c.texte('f(a) > 0', G.X(0) + 10, G.Y(h(0)) - 12, { couleur: 'vert', taille: LC.t(K, 17) });
+        c.texte('f(b) > 0', G.X(1) - 30, G.Y(h(1)) - 14, { couleur: 'vert', taille: LC.t(K, 17) });
         K.marque('toute_au_dessus');
         c.pause(.3);
         texteDroite(c, K, [
@@ -143,7 +146,7 @@ MathsTableau.page({
         K.rond(G, 0, w(0), true, 'rouge'); K.rond(G, 1, w(1), true, 'vert');
         K.marque('courbe_tracee');
         const Z = [1 / 6, 0.5, 5 / 6].map(z => { let a = z - .1, b = z + .1; for (let i = 0; i < 40; i++) { const m = (a + b) / 2; if (w(a) * w(m) <= 0) b = m; else a = m; } return (a + b) / 2; });
-        Z.forEach((z, i) => { c.pause(.25); K.rond(G, z, 0, true, 'jaune'); c.texte(['α₁', 'α₂', 'α₃'][i], G.X(z) - 8, G.Y(0) + 30, { couleur: 'jaune', taille: 18 }); });
+        Z.forEach((z, i) => { c.pause(.25); K.rond(G, z, 0, true, 'jaune'); c.texte(['α₁', 'α₂', 'α₃'][i], G.X(z) - 8, G.Y(0) + 30, { couleur: 'jaune', taille: LC.t(K, 18) }); });
         c.repere('trois', G.X(Z[0]) - 14, G.Y(0) - 14, G.X(Z[2]) - G.X(Z[0]) + 28, 46, 'trois points de rencontre');
         K.marque('trois_croisements');
         c.pause(.3);
@@ -166,10 +169,10 @@ MathsTableau.page({
         K.marque('courbe_tracee');
         c.pause(.2);
         c.fleche(G.X(0.15), G.Y(f(0.15)) + 26, G.X(0.95), G.Y(f(0.95)) + 26, { couleur: 'vert', largeur: 2 });
-        c.texte('strictement croissante', G.X(0.5) + 6, G.Y(f(0.5)) + 54, { couleur: 'vert', taille: 16 });
+        c.texte('strictement croissante', G.X(0.5) + 6, G.Y(f(0.5)) + 54, { couleur: 'vert', taille: LC.t(K, 16) });
         c.repere('croissante', G.X(0.1), G.Y(f(0.9)), G.X(0.9) - G.X(0.1), G.Y(f(0.1)) - G.Y(f(0.9)) + 60, 'f strictement croissante');
         K.marque('monotone');
-        c.pause(.3); K.rond(G, ALPHA, 0, true, 'jaune'); c.texte('α', G.X(ALPHA) - 5, G.Y(0) + 32, { couleur: 'jaune', taille: 22 });
+        c.pause(.3); K.rond(G, ALPHA, 0, true, 'jaune'); c.texte('α', G.X(ALPHA) - 5, G.Y(0) + 32, { couleur: 'jaune', taille: LC.t(K, 22) });
         c.repere('alpha', G.X(ALPHA) - 14, G.Y(0) - 14, 28, 50, 'la solution unique α'); K.marque('alpha_nomme');
         c.pause(.3);
         texteDroite(c, K, [
@@ -189,17 +192,17 @@ MathsTableau.page({
         const G = base(K); bornes(c, K, G, 0, 1); K.marque('repere_pose');
         K.anime(1.8, p => K.courbePart(G, f, -0.15, 1.2, p, { couleur: 'cyan' }));
         K.marque('courbe_tracee');
-        c.pause(.3); K.rond(G, ALPHA, 0, true, 'jaune'); c.texte('α', G.X(ALPHA) - 5, G.Y(0) + 32, { couleur: 'jaune', taille: 22 });
-        c.texte('f(α) = 0', G.X(ALPHA) - 70, G.Y(0) - 14, { couleur: 'jaune', taille: 16 });
+        c.pause(.3); K.rond(G, ALPHA, 0, true, 'jaune'); c.texte('α', G.X(ALPHA) - 5, G.Y(0) + 32, { couleur: 'jaune', taille: LC.t(K, 22) });
+        c.texte('f(α) = 0', G.X(ALPHA) - 70, G.Y(0) - 14, { couleur: 'jaune', taille: LC.t(K, 16) });
         c.repere('alpha', G.X(ALPHA) - 14, G.Y(0) - 14, 28, 50, 'α, où f(α) = 0'); K.marque('alpha_nomme');
         c.pause(.3);
         c.ligne(G.X(0), G.Y(0) + 6, G.X(ALPHA) - 8, G.Y(0) + 6, { couleur: 'rouge', largeur: 5, alpha: .7 });
-        c.texte('f(x) < 0', G.X(0.12), G.Y(-0.75), { couleur: 'rouge', taille: 17 });
+        c.texte('f(x) < 0', G.X(0.12), G.Y(-0.75), { couleur: 'rouge', taille: LC.t(K, 17) });
         c.repere('avant', G.X(0), G.Y(0), G.X(ALPHA) - G.X(0), 60, 'avant α : f négative');
         K.marque('signe_avant');
         c.pause(.3);
         c.ligne(G.X(ALPHA) + 8, G.Y(0) + 6, G.X(1), G.Y(0) + 6, { couleur: 'vert', largeur: 5, alpha: .7 });
-        c.texte('f(x) > 0', G.X(0.82), G.Y(0.75), { couleur: 'vert', taille: 17 });
+        c.texte('f(x) > 0', G.X(0.82), G.Y(0.75), { couleur: 'vert', taille: LC.t(K, 17) });
         c.repere('apres', G.X(ALPHA), G.Y(1), G.X(1) - G.X(ALPHA), G.Y(0) - G.Y(1), 'après α : f positive');
         K.marque('signe_apres');
         c.pause(.3);
@@ -223,16 +226,16 @@ MathsTableau.page({
         const g = x => (x < -0.15 || x > 1.2) ? NaN : f(x);
         K.courbe(G, f, 0, 1, { couleur: 'cyan' });
         K.rond(G, 0, f(0), true, 'rouge'); K.rond(G, 1, f(1), true, 'vert');
-        c.texte('f(a)', G.X(0) - 40, G.Y(f(0)) + 6, { couleur: 'rouge', taille: 16 });
-        c.texte('f(b)', G.X(1) + 10, G.Y(f(1)) + 6, { couleur: 'vert', taille: 16 });
+        c.texte('f(a)', G.X(0) - 40, G.Y(f(0)) + 6, { couleur: 'rouge', taille: LC.t(K, 16) });
+        c.texte('f(b)', G.X(1) + 10, G.Y(f(1)) + 6, { couleur: 'vert', taille: LC.t(K, 16) });
         K.marque('courbe_tracee');
         const k = K.P.k, dedans = k >= f(0) && k <= f(1);
         K.anime(.8, p => { c.ligne(G.X(-0.25), G.Y(k), G.X(-0.25) + p * (G.X(1.3) - G.X(-0.25)), G.Y(k), { couleur: dedans ? 'jaune' : 'orange', largeur: 2 }); });
-        c.texte('y = ' + K.fr(k, 1), G.X(1.3) - 70, G.Y(k) - 8, { couleur: dedans ? 'jaune' : 'orange', taille: 16 });
+        c.texte('y = ' + K.fr(k, 1), G.X(1.3) - 70, G.Y(k) - 8, { couleur: dedans ? 'jaune' : 'orange', taille: LC.t(K, 16) });
         c.repere('droite_k', G.X(-0.25), G.Y(k) - 12, G.X(1.3) - G.X(-0.25), 24, 'la droite y = k');
         if (dedans) {
           let a = 0, b = 1; for (let i = 0; i < 40; i++) { const m = (a + b) / 2; if ((f(a) - k) * (f(m) - k) <= 0) b = m; else a = m; }
-          K.rond(G, a, k, true, 'jaune'); K.proj(G, a, k, { versY: false, couleur: 'jaune' }); c.texte('c', G.X(a) - 4, G.Y(0) + 34, { couleur: 'jaune', taille: 18 });
+          K.rond(G, a, k, true, 'jaune'); K.proj(G, a, k, { versY: false, couleur: 'jaune' }); c.texte('c', G.X(a) - 4, G.Y(0) + 34, { couleur: 'jaune', taille: LC.t(K, 18) });
         }
         K.marque(dedans ? 'k_entre' : 'k_hors');
         c.pause(.3);
@@ -247,7 +250,7 @@ MathsTableau.page({
           { t: 'rencontre pas la courbe.', couleur: 'blanc', moment: 'conclusion' },
         ]);
       },
-      poignees(K) { const G = K.grille(OPT);
+      poignees(K) { const G = K.grille(opt(K));
         return [{ id: 'k', x: G.X(-0.25), y: G.Y(K.P.k), bouger: (x, y) => ({ k: G.inv(x, y)[1] }) }]; },
       lecture: K => (K.P.k >= -1 && K.P.k <= 1 ? `k = ${K.fr(K.P.k, 1)} est entre f(a) = −1 et f(b) = 1 : la droite coupe la courbe, f(x) = k a une solution dans [a ; b].` : `k = ${K.fr(K.P.k, 1)} n’est pas entre f(a) = −1 et f(b) = 1 : pas de rencontre sur [a ; b].`),
       decrire: K => ({ repere_pose: 'Un repère, a et b.', courbe_tracee: 'La courbe de f sur [a ; b], de f(a) = −1 (rouge) à f(b) = 1 (vert).', k_entre: 'La droite horizontale y = k (jaune) coupe la courbe en un point d’abscisse c.', k_hors: 'La droite horizontale y = k (orange) est hors de [f(a) ; f(b)] : elle ne coupe pas la courbe au-dessus de [a ; b].', conclusion: K.P.k >= -1 && K.P.k <= 1 ? 'Écrit : f(a) ≤ k ≤ f(b), donc f(x) = k a au moins une solution c dans [a ; b].' : 'Écrit : k hors de [f(a) ; f(b)], pas de rencontre.' }),

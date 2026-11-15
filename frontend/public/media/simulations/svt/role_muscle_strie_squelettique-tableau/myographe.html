@@ -36,9 +36,27 @@ const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, fige: fa
 
 /* Géométrie : le dispositif est dessiné en « unités dispositif » puis mis à l’échelle (k) ; le myogramme a son repère G. */
 const D = MONTAGE ? { k: 1.2, ox: 6, oy: -8 } : { k: 1, ox: 0, oy: 0 };
-const px = x => D.ox + D.k * x, py = y => D.oy + D.k * y, tk = s => Math.round(s * (MONTAGE ? 1.12 : 1));
-const G = MONTAGE ? { x0: 520, px: 1750, y0: 230, py: 6.5, xa: 497, xb: 744, haut: 76 } : { x0: 390, px: 3000, y0: 250, py: 8, xa: 360, xb: 746, haut: 66 };
-const R = { sig: G.y0 + 46, lt: G.y0 + 72 }; R.dent = R.lt + 24; R.acc = R.lt + 36;
+let TK = 1;                                            // agrandissement des textes (tableau large)
+const px = x => D.ox + D.k * x, py = y => D.oy + D.k * y, tk = s => Math.round(s * (MONTAGE ? 1.12 : 1) * TK);
+const G0 = MONTAGE ? { x0: 520, px: 1750, y0: 230, py: 6.5, xa: 497, xb: 744, haut: 76 } : { x0: 390, px: 3000, y0: 250, py: 8, xa: 360, xb: 746, haut: 66 };
+const G = { ...G0 }, R = {};
+/* Disposition selon la largeur du tableau (15 novembre 2026, « mieux exploiter tout le tableau, grands calibres de
+ * texte ») : tableau large (scene.L ≥ 1000) → le myographe peint un peu plus grand à gauche, le myogramme étiré
+ * sur toute la largeur restante et plus haut, textes ×1,3. Sinon la disposition d'origine (760 × 420). */
+let LARGE = false;
+function disposer(L) {
+  LARGE = L >= 1000; TK = LARGE ? 1.3 : 1;
+  if (!LARGE) { Object.assign(D, MONTAGE ? { k: 1.2, ox: 6, oy: -8 } : { k: 1, ox: 0, oy: 0 }); Object.assign(G, G0); }
+  else {
+    Object.assign(D, MONTAGE ? { k: 1.2, ox: 10, oy: -8 } : { k: 1.08, ox: 8, oy: -14 });
+    const xa = Math.round(px(MONTAGE ? 350 : 335)) + 70, xb = L - 24;
+    const pxs = (xb - xa - 30) / 0.13;
+    Object.assign(G, MONTAGE ? { xa, xb, px: pxs, x0: xa + 0.01 * pxs, y0: 230, py: 8, haut: 48 }
+      : { xa, xb, px: pxs, x0: xa + 0.01 * pxs, y0: 236, py: 8.6, haut: 48 });
+  }
+  R.sig = G.y0 + (LARGE ? 52 : 46); R.lt = G.y0 + (LARGE ? 80 : 72); R.dent = R.lt + (LARGE ? 28 : 24); R.acc = R.lt + 36;
+}
+disposer(760);
 const XT = t => MG.X(G, t), YM = mm => MG.Y(G, mm);
 
 /* Le muscle : raccourcissement (unités dispositif) proportionnel à l’amplitude enregistrée. */
@@ -103,7 +121,7 @@ function dessiner(c) {
   let geo;
   c.direct(() => { geo = peindreDispositif(c.ctx, t); });
   // ── parties fixes, écrites trait par trait ──
-  c.texte(MONTAGE ? 'Le montage : le myographe' : 'Secousse musculaire : muscle gastrocnémien de grenouille', 12, 26, { couleur: 'cyan', taille: 17 });
+  c.texte(MONTAGE ? 'Le montage : le myographe' : 'Secousse musculaire : muscle gastrocnémien de grenouille', 12, 26, { couleur: 'cyan', taille: tk(17) });
   etiquette(c, 'muscle', 'muscle', { couleur: 'rose' });
   etiquette(c, 'tendon', 'tendon', { taille: 13 });
   etiquette(c, 'excitateur', 'excitateur', { couleur: 'jaune' });
@@ -121,24 +139,25 @@ function dessiner(c) {
   c.courbe(u => [px(246 + 32 * u), py(182 - 5 * Math.sin(Math.PI * u))], 10, { couleur: 'faible', largeur: 1.4 });
   c.fleche(px(274), py(179), px(279), py(182), { couleur: 'faible', largeur: 1.4, tete: 6 });
   // le myogramme : axes, signal d’excitation, ligne du temps
-  MG.axes(c, G, { xa: G.xa, xb: G.xb, haut: G.haut, mm: [[0, '0'], [5, '5'], [10, '10'], [15, '15'], [20, '20']], t: [[0, '0'], [0.05, '0,05'], [0.1, '0,10']], titreT: 't (s)' });
-  c.texte('amplitude (mm)', G.xa - 6, G.haut + 2, { couleur: 'faible', taille: 13, align: 'right' });
+  MG.axes(c, G, { xa: G.xa, xb: G.xb, haut: G.haut, mm: [[0, '0'], [5, '5'], [10, '10'], [15, '15'], [20, '20']], t: [[0, '0'], [0.05, '0,05'], [0.1, '0,10']], titreT: LARGE ? null : 't (s)', taille: tk(13) });
+  if (LARGE) c.texte('t (s)', G.xb, G.y0 + 24, { couleur: 'faible', taille: tk(13), align: 'right' });
+  c.texte('amplitude (mm)', G.xa - 6, G.haut + 2, { couleur: 'faible', taille: tk(13), align: 'right' });
   MG.ligneTemps(c, G, R.lt, G.xa, G.xb - 6, 0.01);
-  c.texte('1 dent = 0,01 s', G.xb - 6, R.dent, { couleur: 'faible', taille: 13, align: 'right' });
+  c.texte('1 dent = 0,01 s', G.xb - 6, R.dent, { couleur: 'faible', taille: tk(13), align: 'right' });
   c.repere('ligne_temps', G.xa, R.lt - 12, G.xb - G.xa, 32, 'la ligne du temps : 1 dent = 0,01 s');
-  c.texte('signal d’excitation', G.xb - 6, R.sig - 6, { couleur: 'jaune', taille: 13, align: 'right' });
+  c.texte('signal d’excitation', G.xb - 6, R.sig - 6, { couleur: 'jaune', taille: tk(13), align: 'right' });
 
   // ── ce qui bouge : signal, zones de phase, courbe ──
   c.direct(() => {
     const ctx = c.ctx;
-    c.texte(t <= 0 ? 'avant l’excitation' : t <= FIN_ENR ? `t = ${fr(Math.min(t, FIN_ENR), 3)} s   (ralenti ×40)` : 'enregistrement terminé', G.xb, 26, { couleur: 'faible', taille: 14, align: 'right' });
+    c.texte(t <= 0 ? 'avant l’excitation' : t <= FIN_ENR ? `t = ${fr(Math.min(t, FIN_ENR), 3)} s   (ralenti ×40)` : 'enregistrement terminé', G.xb, 26, { couleur: 'faible', taille: tk(14), align: 'right' });
     // zones de phase peintes très légèrement, à mesure qu’elles sont finies
     const zone = (a, b, coul) => { ctx.save(); ctx.fillStyle = coul; ctx.fillRect(XT(a), YM(20) - 4, XT(b) - XT(a), G.y0 - YM(20) + 4); ctx.restore(); };
     if (t >= mom.fin_latence) zone(0, 0.01, 'rgba(251,146,60,.16)');
     if (t >= mom.sommet) zone(0.01, 0.05, 'rgba(244,114,182,.12)');
     if (t >= mom.retour_repos) zone(0.05, 0.10, 'rgba(96,165,250,.12)');
     MG.signal(c, G, R.sig, G.xa, G.xb - 6, [0], t > 0 ? t : -1);
-    if (t > 0) c.texte('S', XT(0) + 9, R.sig - 4, { couleur: 'jaune', taille: 14 });
+    if (t > 0) c.texte('S', XT(0) + 9, R.sig - 4, { couleur: 'jaune', taille: tk(14) });
     c.repere('signal_excitation', G.xa, R.sig - 16, G.xb - G.xa, 22, 'le signal d’excitation : le créneau en S');
     const te = Math.min(t, FIN_ENR);
     MG.courbe(c, G, () => 0, -0.01, Math.min(0, te > 0 ? 0 : 0), { couleur: 'blanc' });
@@ -152,32 +171,32 @@ function dessiner(c) {
   // ── ce qui s’écrit en route ──
   // chaque élément s’écrit à partir de son apparition, sans attendre les autres
   const base = c.cur, quand = nom => { if (S.ecrit[nom] == null) S.ecrit[nom] = (performance.now() - scene.ouvert) / 1000; c.cur = Math.max(base, S.ecrit[nom]); };
-  const yPh = MONTAGE ? [70, 86, 86] : [82, 82, 82];
-  if (t >= mom.fin_latence) { quand('lat'); c.texte('latence', XT(0.005), yPh[0], { couleur: 'orange', taille: 14, align: 'center' }); }
-  if (t >= mom.sommet) { quand('con'); c.texte('contraction', XT(0.03), yPh[1], { couleur: 'rose', taille: 14, align: 'center' }); }
-  if (t >= mom.retour_repos) { quand('rel'); c.texte('relâchement', XT(0.075), yPh[2], { couleur: 'bleu', taille: 14, align: 'center' }); }
+  const yPh = LARGE ? [YM(20) - 8, YM(20) - 8, YM(20) - 8] : MONTAGE ? [70, 86, 86] : [82, 82, 82];
+  if (t >= mom.fin_latence) { quand('lat'); c.texte('latence', XT(0.005), yPh[0], { couleur: 'orange', taille: tk(14), align: 'center' }); }
+  if (t >= mom.sommet) { quand('con'); c.texte('contraction', XT(0.03), yPh[1], { couleur: 'rose', taille: tk(14), align: 'center' }); }
+  if (t >= mom.retour_repos) { quand('rel'); c.texte('relâchement', XT(0.075), yPh[2], { couleur: 'bleu', taille: tk(14), align: 'center' }); }
   if (t >= mom.mesure_amplitude) {
     quand('amp');
     c.ligne(G.xa, YM(20), XT(0.05), YM(20), { couleur: 'vert', largeur: 1.2, pointille: [4, 5] });
     c.cote(G.xa + 15, G.y0, G.xa + 15, YM(20), '', { couleur: 'vert' });
-    c.texte('amplitude', G.xa + 22, YM(10) - 4, { couleur: 'vert', taille: 14 });
-    c.texte('20 mm', G.xa + 22, YM(10) + 15, { couleur: 'vert', taille: 15 });
+    c.texte('amplitude', G.xa + 22, YM(10) - 4, { couleur: 'vert', taille: tk(14) });
+    c.texte('20 mm', G.xa + 22, YM(10) + (LARGE ? 20 : 15), { couleur: 'vert', taille: tk(15) });
     c.repere('amplitude', G.xa + 4, YM(20) - 4, 70, G.y0 - YM(20) + 8, 'l’amplitude : 20 mm');
   }
   if (t >= mom.mesure_durees) {
     quand('dur');
-    const ya = R.acc, yv = ya + 22;
-    MG.accolade(c, XT(0) + 1, XT(0.01) - 1, ya, { couleur: 'orange' }); c.texte('0,01 s', XT(0.005), yv, { couleur: 'orange', taille: 14, align: 'center' });
-    MG.accolade(c, XT(0.01) + 1, XT(0.05) - 1, ya, { couleur: 'rose' }); c.texte('0,04 s', XT(0.03), yv, { couleur: 'rose', taille: 14, align: 'center' });
-    MG.accolade(c, XT(0.05) + 1, XT(0.10) - 1, ya, { couleur: 'bleu' }); c.texte('0,05 s', XT(0.075), yv, { couleur: 'bleu', taille: 14, align: 'center' });
-    MG.accolade(c, XT(0), XT(0.10), ya + 30, { couleur: 'vert' });
-    c.texte('durée de la secousse : 0,10 s', XT(0.05), ya + 50, { couleur: 'vert', taille: 15, align: 'center' });
+    const ya = R.acc, yv = ya + (LARGE ? 26 : 22);
+    MG.accolade(c, XT(0) + 1, XT(0.01) - 1, ya, { couleur: 'orange' }); c.texte('0,01 s', XT(0.005), yv, { couleur: 'orange', taille: tk(14), align: 'center' });
+    MG.accolade(c, XT(0.01) + 1, XT(0.05) - 1, ya, { couleur: 'rose' }); c.texte('0,04 s', XT(0.03), yv, { couleur: 'rose', taille: tk(14), align: 'center' });
+    MG.accolade(c, XT(0.05) + 1, XT(0.10) - 1, ya, { couleur: 'bleu' }); c.texte('0,05 s', XT(0.075), yv, { couleur: 'bleu', taille: tk(14), align: 'center' });
+    MG.accolade(c, XT(0), XT(0.10), ya + (LARGE ? 34 : 30), { couleur: 'vert' });
+    c.texte('durée de la secousse : 0,10 s', XT(0.05), ya + (LARGE ? 58 : 50), { couleur: 'vert', taille: tk(15), align: 'center' });
   }
   return c.fin();
 }
 
 const canvas = $('canvas');
-const scene = window.MuscleTableau.Scene(canvas, (c) => { scene.cadre(41); return dessiner(c); });
+const scene = window.MuscleTableau.Scene(canvas, (c) => { scene.cadre(41); disposer(scene.L); return dessiner(c); }, { large: true });
 const etiquetteBouton = () => { $('run').textContent = S.running ? 'Pause' : S.fait ? 'Rejouer' : (S.t > 0 ? 'Reprendre' : 'Lancer'); };
 scene.avancer = dt => {
   if (!S.running) return false;

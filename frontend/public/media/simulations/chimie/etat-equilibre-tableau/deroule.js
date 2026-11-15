@@ -70,7 +70,8 @@
     const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : (o.bouton || 'Lancer'); };
     const emettre = () => pont && pont.emettre();
     const noter = (a, d) => pont && pont.noter(a, d);
-    scene = window.OndesTableau.Scene($('canvas'), c => o.dessiner(c, D));
+    // 15 novembre 2026 : cadre au format du tableau, la boîte de l'encre de l'image complète remplit le tableau.
+    scene = window.OndesTableau.Scene($('canvas'), c => o.dessiner(c, D), o.scene || { large: true, ajuster: true, complet: f => { const t = S.t; S.t = 1e9; try { f(); } finally { S.t = t; } } });
     const cadreBase = scene.cadre;
     scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
     D.scene = scene;

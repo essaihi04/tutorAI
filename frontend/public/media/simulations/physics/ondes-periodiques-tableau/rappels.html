@@ -92,8 +92,17 @@ function peindreChrono(ctx, cx, cy, r, frac) {
 /* ── Vue « sinusoïde » ── */
 const ROUE = { cx: 150, cy: 200, R: 95 }, PER = 2.0;                   // un tour en 2 s de scène
 const G = { x0: 330, y0: 200, w: 400, k: 95, tmax: 4.4 };
+/* Tableau large (15 novembre 2026) : le cadre prend le format du tableau (scene.L de 760 à 1596) ; la courbe s'allonge
+ * jusqu'au bord droit, la vue « puissances » s'étire en x (H), textes ≥ 18 px à l'écran quand le tableau est haut. */
+let KX = 1, LL = 760;
+const H = x => x * KX;
+function adapter(c) {
+  LL = scene.L; KX = LL / 760;
+  ROUE.cx = 150 + (LL - 760) * 0.12; G.x0 = ROUE.cx + 180; G.w = LL - G.x0 - 40;
+  if (LL >= 1000 && c.echelle >= 0.8) c.tailleMin = 18;
+}
 function dessinerSinusoide(c) {
-  c.texte('Une grande roue : la hauteur de la cabine rouge au cours du temps', 14, 30, { couleur: 'cyan', taille: 17, max: 730 });
+  c.texte('Une grande roue : la hauteur de la cabine rouge au cours du temps', 14, 30, { couleur: 'cyan', taille: 17, max: LL - 30 });
   c.axe(G.x0, G.y0, G.x0 + G.w, G.y0, [[1 / G.tmax * PER / 1, null], [2 * PER / G.tmax, null]]);
   c.texte('t', G.x0 + G.w + 4, G.y0 + 5, { couleur: 'jaune', taille: 16 });
   c.axe(G.x0, G.y0 + G.k + 14, G.x0, G.y0 - G.k - 24, []);
@@ -138,7 +147,7 @@ function dessinerPuissances(c) {
   c.direct(() => {
     const p = S.t;
     // Ligne 1 : la règle d'un mètre.
-    const RX = 40, RY = 66, RW = 460, RH = 34;
+    const RX = H(40), RY = 66, RW = H(460), RH = 34;
     if (p > 0.05) {
       peindreRegle(c.ctx, RX, RY, RW, RH);
       c.cote(RX, RY - 8, RX + RW, RY - 8, '1 m', { couleur: 'jaune', taille: 16 });
@@ -146,44 +155,44 @@ function dessinerPuissances(c) {
     }
     if (vu('mille_parts')) {
       // Loupe sur le premier centimètre : dix millimètres.
-      const LX = 540, LY = 58, LW = 200, LH = 70;
+      const LX = H(540), LY = 58, LW = H(200), LH = 70;
       c.trait([[RX, RY + RH], [LX, LY + LH], [LX, LY], [RX + RW / 100, RY]], { couleur: 'faible', largeur: 1, pointille: [3, 5], duree: 0 });
       c.rect(LX, LY, LW, LH, { couleur: 'blanc', largeur: 1.6, duree: 0 });
-      for (let k = 0; k <= 10; k++) c.ligne(LX + 10 + k * 18, LY + 8, LX + 10 + k * 18, LY + (k % 5 ? 26 : 38), { couleur: 'jaune', largeur: 1.4, duree: 0 });
-      c.cote(LX + 10, LY + 50, LX + 28, LY + 50, '1 mm', { couleur: 'vert', taille: 14, dessous: true });
-      c.texte('1 m ÷ 1000 = 1 mm', 40, 140, { couleur: 'blanc', taille: 19 });
-      c.texte('1 mm = 10⁻³ m', 290, 140, { couleur: 'vert', taille: 21 });
+      for (let k = 0; k <= 10; k++) c.ligne(LX + 10 + k * (LW - 20) / 10, LY + 8, LX + 10 + k * (LW - 20) / 10, LY + (k % 5 ? 26 : 38), { couleur: 'jaune', largeur: 1.4, duree: 0 });
+      c.cote(LX + 10, LY + 50, LX + 10 + (LW - 20) / 10, LY + 50, '1 mm', { couleur: 'vert', taille: 14, dessous: true });
+      c.texte('1 m ÷ 1000 = 1 mm', H(40), 140, { couleur: 'blanc', taille: 19 });
+      c.texte('1 mm = 10⁻³ m', H(290), 140, { couleur: 'vert', taille: 21 });
       c.repere('millimetre', LX, LY, LW, LH, 'un millimètre : un mètre coupé en mille');
-      c.repere('ecriture_mm', 30, 118, 420, 30, '1 mm = 10⁻³ m');
+      c.repere('ecriture_mm', H(30), 118, H(420), 30, '1 mm = 10⁻³ m');
     }
     if (vu('virgule')) {
-      c.texte('10⁻³ = 1 / 1000 = 0,001', 40, 182, { couleur: 'jaune', taille: 20 });
-      c.texte('1,0 → 0,001 : la virgule recule de 3 rangs', 330, 182, { couleur: 'orange', taille: 17, max: 420 });
-      c.repere('virgule', 30, 160, 720, 32, '10⁻³ = 0,001 : trois rangs pour la virgule');
+      c.texte('10⁻³ = 1 / 1000 = 0,001', H(40), 182, { couleur: 'jaune', taille: 20 });
+      c.texte('1,0 → 0,001 : la virgule recule de 3 rangs', H(330), 182, { couleur: 'orange', taille: 17, max: H(420) });
+      c.repere('virgule', H(30), 160, H(720), 32, '10⁻³ = 0,001 : trois rangs pour la virgule');
     }
     // Ligne 2 : le chronomètre.
     if (vu('milliseconde')) {
-      peindreChrono(c.ctx, 90, 290, 52, ((p - MOMENTS.virgule) * 0.37) % 1);
-      c.repere('chrono', 30, 226, 120, 120, 'un chronomètre');
-      const BX = 170, BY = 262, BW = 380;
+      peindreChrono(c.ctx, H(90), 290, 52, ((p - MOMENTS.virgule) * 0.37) % 1);
+      c.repere('chrono', H(90) - 60, 226, 120, 120, 'un chronomètre');
+      const BX = H(170), BY = 262, BW = H(380);
       c.rect(BX, BY, BW, 22, { couleur: 'cyan', largeur: 1.6, fond: 'cyan', fondAlpha: .1, duree: 0 });
       c.texte('1 s', BX + BW + 8, BY + 18, { couleur: 'cyan', taille: 16 });
       for (let k = 0; k <= 10; k++) c.ligne(BX + k * BW / 10, BY, BX + k * BW / 10, BY + 22, { couleur: 'cyan', largeur: 1, duree: 0 });
-      c.texte('1 s ÷ 1000 = 1 ms', 170, 312, { couleur: 'blanc', taille: 18 });
-      c.texte('1 ms = 10⁻³ s', 380, 312, { couleur: 'vert', taille: 20 });
-      c.repere('milliseconde', 160, 250, 420, 72, 'une milliseconde : une seconde coupée en mille');
+      c.texte('1 s ÷ 1000 = 1 ms', H(170), 312, { couleur: 'blanc', taille: 18 });
+      c.texte('1 ms = 10⁻³ s', H(380), 312, { couleur: 'vert', taille: 20 });
+      c.repere('milliseconde', H(160), 250, H(420), 72, 'une milliseconde : une seconde coupée en mille');
     }
     if (vu('microseconde')) {
-      c.texte('1 ms ÷ 1000 = 1 µs', 170, 356, { couleur: 'blanc', taille: 18 });
-      c.texte('1 µs = 10⁻⁶ s', 380, 356, { couleur: 'rose', taille: 20 });
-      c.texte('milli : 10⁻³    micro : 10⁻⁶', 170, 398, { couleur: 'jaune', taille: 18 });
-      c.repere('microseconde', 160, 334, 420, 74, 'une microseconde : une milliseconde coupée encore en mille');
+      c.texte('1 ms ÷ 1000 = 1 µs', H(170), 356, { couleur: 'blanc', taille: 18 });
+      c.texte('1 µs = 10⁻⁶ s', H(380), 356, { couleur: 'rose', taille: 20 });
+      c.texte('milli : 10⁻³    micro : 10⁻⁶', H(170), 398, { couleur: 'jaune', taille: 18 });
+      c.repere('microseconde', H(160), 334, H(420), 74, 'une microseconde : une milliseconde coupée encore en mille');
     }
   });
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(31); (SIN ? dessinerSinusoide : dessinerPuissances)(c); return c.fin(); });
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(31); adapter(c); (SIN ? dessinerSinusoide : dessinerPuissances)(c); return c.fin(); }, { large: true });
 scene.avancer = dt => {
   if (!S.running) return false;
   S.t = Math.min(DUREE, S.t + dt);

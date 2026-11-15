@@ -25,6 +25,7 @@ body { background-image: none !important; }
 <script src="commun.js"></script>
 <script src="exposants.js"></script>
 <script src="deroule.js"></script>
+<script src="zones.js"></script>
 <script>
 /*
  * Les bases, depuis zéro (14 novembre 2026, professeur règles 33 et 34 : l'élève ne connaît rien ; chaque prérequis
@@ -538,10 +539,15 @@ function vueDilution(c, D) {
 }
 
 const VUES_DESSIN = { mole: vueMole, concentration: vueConcentration, ion: vueIon, equation: vueEquation, pente: vuePente, gaz: vueGaz, puissance: vuePuissance, dilution: vueDilution };
+/* Tableau large (scene.L ≥ 1000) : zones du dessin d'origine rangées sur toute la largeur (zones.js) ; sans zone pour
+ * la vue, le dessin d'origine entier, centré. Le titre est dans la zone du haut. */
+const ZONES = {
+  concentration: { top: 0, cols: [[[0, 8, 760, 338]]] },
+};
 function dessiner(c, D) {
   D.scene.cadre(41);
-  titre(c, D);
-  VUES_DESSIN[D.S.vue](c, D);
+  const L = D.scene.L, Z = L >= Zones.L_MIN ? (ZONES[D.S.vue] || { top: 0, cols: [[[0, 0, 760, 420]]] }) : null;
+  Zones.dessiner(c, L, Z, () => { titre(c, D); VUES_DESSIN[D.S.vue](c, D); });
   return c.fin();
 }
 
@@ -586,6 +592,7 @@ const EXPLICATIONS = {
 };
 
 const DER = window.Deroule({
+  scene: { large: true },
   id: 'chimie_tableau_prerequis', titre: 'Les bases, depuis zéro', vues: VUES, etapes, dessiner, voir,
   anime: D => (D.S.vue === 'gaz' && D.commence('chocs')) || (D.S.vue === 'ion' && D.commence('solution')),
   params: () => ({ vue: VUE, ...(CURSEURS[VUE] ? { [CURSEURS[VUE].id]: R[CURSEURS[VUE].id] } : {}) }),

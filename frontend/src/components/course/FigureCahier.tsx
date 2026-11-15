@@ -337,7 +337,9 @@ function TableauVariations({ v, fleche }: { v: VariationsFigure; fleche: (c: str
   return { H, contenu: out };
 }
 
-export function FigureCahier({ fig, compact = false }: { fig: FigureCahierData; compact?: boolean }) {
+export function FigureCahier({ fig, compact = false, remplir = false }: { fig: FigureCahierData; compact?: boolean;
+  /** le dessin prend la hauteur qu'on lui donne (écran du cahier de fin de bloc) au lieu de fixer sa largeur */
+  remplir?: boolean }) {
   const id = useId().replace(/:/g, '');
   const filtre = `url(#craie-${id})`;
   const fleches = new Set<string>();
@@ -347,9 +349,9 @@ export function FigureCahier({ fig, compact = false }: { fig: FigureCahierData; 
     ? TableauVariations({ v: fig.variations, fleche })
     : Repere2D({ fig, filtre, fleche });
   return (
-    <figure className={`mx-auto w-full ${compact ? 'max-w-[360px]' : 'max-w-[440px]'}`} style={{ fontFamily: CRAIE }}>
-      {fig.titre && <figcaption className="mb-1 text-center text-lg text-amber-200 underline decoration-amber-200/30 underline-offset-4"><TexteLegende t={fig.titre} /></figcaption>}
-      <svg viewBox={`0 0 ${W} ${H}`} className="block h-auto w-full" role="img" aria-label={[fig.titre, fig.legende].filter(Boolean).join(' — ')} style={{ fontFamily: CRAIE }}>
+    <figure className={remplir ? 'flex h-full min-h-0 w-full flex-col' : `mx-auto w-full ${compact ? 'max-w-[360px]' : 'max-w-[440px]'}`} style={{ fontFamily: CRAIE }}>
+      {fig.titre && <figcaption className={`mb-1 shrink-0 text-center text-amber-200 underline decoration-amber-200/30 underline-offset-4 ${remplir ? 'text-base' : 'text-lg'}`}><TexteLegende t={fig.titre} /></figcaption>}
+      <svg viewBox={`0 0 ${W} ${H}`} className={remplir ? 'block min-h-0 w-full flex-1' : 'block h-auto w-full'} role="img" aria-label={[fig.titre, fig.legende].filter(Boolean).join(' — ')} style={{ fontFamily: CRAIE }}>
         <defs>
           {/* en unités du dessin : un trait seul horizontal ou vertical a une boîte plate et disparaîtrait en % */}
           <filter id={`craie-${id}`} filterUnits="userSpaceOnUse" x={-10} y={-10} width={W + 20} height={H + 20}>
@@ -364,7 +366,7 @@ export function FigureCahier({ fig, compact = false }: { fig: FigureCahierData; 
         </defs>
         {contenu.map((c, i) => <Fragment key={i}>{c}</Fragment>)}
       </svg>
-      {fig.legende && <p className="mt-1 text-center text-base italic leading-snug text-[#e7e5c9]" dir="auto"><TexteLegende t={fig.legende} /></p>}
+      {fig.legende && <p className={`mt-1 shrink-0 text-center italic leading-snug text-[#e7e5c9] ${remplir ? 'line-clamp-2 text-sm' : 'text-base'}`} dir="auto"><TexteLegende t={fig.legende} /></p>}
     </figure>
   );
 }
@@ -384,9 +386,15 @@ function TexteLegende({ t }: { t: string }) {
   return <>{parts}</>;
 }
 
-/** Les dessins d'un cahier, l'un sous l'autre (ou côte à côte quand la place le permet). */
-export default function FiguresCahier({ figures, compact = false, className = '' }: { figures?: FigureCahierData[] | null; compact?: boolean; className?: string }) {
+/** Les dessins d'un cahier, l'un sous l'autre (ou côte à côte quand la place le permet). Avec `remplir`, ils se partagent
+ * la hauteur donnée, chacun réduit à sa part sans déformer : le texte du cahier n'a plus à rétrécir pour leur faire place. */
+export default function FiguresCahier({ figures, compact = false, remplir = false, className = '' }: { figures?: FigureCahierData[] | null; compact?: boolean; remplir?: boolean; className?: string }) {
   if (!figures?.length) return null;
+  if (remplir) return (
+    <div className={`flex min-h-0 flex-col gap-3 ${className}`}>
+      {figures.map((f, i) => <div key={i} className="min-h-0 flex-1"><FigureCahier fig={f} remplir /></div>)}
+    </div>
+  );
   return (
     <div className={`flex flex-wrap items-start justify-center gap-4 ${className}`}>
       {figures.map((f, i) => <div key={i} className="min-w-[240px] flex-1"><FigureCahier fig={f} compact={compact} /></div>)}

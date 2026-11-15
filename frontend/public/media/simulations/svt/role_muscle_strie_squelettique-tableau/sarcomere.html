@@ -49,12 +49,13 @@ function accolade(c, x1, x2, y, h, o = {}) {
 const pointille = (c, x, y1, y2, couleur = 'jaune') => c.ligne(x, y1, x, y2, { couleur, pointille: [5, 5], largeur: 1.4, tremble: .2, duree: .25 });
 
 /* ══════════════════════ Vue « construire » ══════════════════════ */
-const KC = 130, CXC = 290, WC = 2.0, XC = u => CXC + u * KC;
+let KC = 130, CXC = 290; const WC = 2.0, XC = u => CXC + u * KC;
 const RANGS_C = [{ y: 92, type: 'actine' }, { y: 113, type: 'myosine' }, { y: 134, type: 'actine' }, { y: 155, type: 'myosine' }, { y: 176, type: 'actine' }];
 const TC = { z: .4, actine: 1.8, myosine: 3.8, A: 5.8, I: 7.8, H: 10.0, acc: 11.8, myof: 15.2 };
 const MC = { stries_z: 1.4, filaments_fins: 3.4, filaments_epais: 5.2, bande_sombre: 7.2, bandes_claires: 9.4, zone_h: 11.2, accolade_sarcomere: 14.4, myofibrilles_alignees: 17.4 };
 const FIN_C = 17.8;
 const MYOF = { x0: 566, x1: 746, y: 188, h: 10, gap: 4, n: 5, k: 24 };
+let XD = 562;          // colonne de droite de la vue « construire »
 function vConstruire(c) {
   const t = S.t, pz = rampe(t, TC.z, .6), pa = rampe(t, TC.actine, 1.2), pm = rampe(t, TC.myosine, .8), G = F.geo(2.5);
   const Gc = { ...G, actine: G.z.flatMap(z => [[z - pa, z], [z, z + pa]]) };
@@ -67,45 +68,45 @@ function vConstruire(c) {
       for (let i = 0; i < MYOF.n; i++) F.electro(x, MYOF.x0, MYOF.x1, MYOF.y + i * (MYOF.h + MYOF.gap), MYOF.h, Gm, X, { alpha: a });
     }
   });
-  c.texte('Construire un sarcomère', 12, 24, { couleur: 'cyan', taille: 18 });
-  c.texte('électronographie', 562, 52, { couleur: 'faible', taille: 13 });
-  c.texte('reconstituée', 562, 67, { couleur: 'faible', taille: 13 });
+  c.texte('Construire un sarcomère', 12, 24, { couleur: 'cyan', taille: tkx(18) });
+  c.texte('électronographie', XD, 52, { couleur: 'faible', taille: tkx(13) });
+  c.texte('reconstituée', XD, 52 + tkx(15), { couleur: 'faible', taille: tkx(13) });
   c.repere('electronographie', XC(-WC), 38, XC(WC) - XC(-WC), 28, 'l’électronographie (bandes)');
   if (ecrit(c, 'z', TC.z + .3)) {
-    for (const z of G.z) T(c, 'strie Z', XC(z), 204, { couleur: 'blanc', taille: 15, align: 'center' });
+    for (const z of G.z) T(c, 'strie Z', XC(z), 204, { couleur: 'blanc', taille: tkx(15), align: 'center' });
   }
   if (t >= TC.z) c.repere('strie_z', XC(-1.25) - 14, 78, 28, 132, 'une strie Z');
-  if (ecrit(c, 'actine', TC.actine + .8)) { c.ligne(553, 92, 559, 92, { couleur: 'orange', largeur: 1.4 }); T(c, 'actine (filament fin)', 562, 97, { couleur: 'orange', taille: 14 }); }
+  if (ecrit(c, 'actine', TC.actine + .8)) { c.ligne(XD - 9, 92, XD - 3, 92, { couleur: 'orange', largeur: 1.4 }); T(c, 'actine (filament fin)', XD, 97, { couleur: 'orange', taille: tkx(14) }); }
   if (pa > 0) c.repere('actine', XC(-1.25), 84, KC, 16, 'un filament fin d’actine');
-  if (ecrit(c, 'myosine', TC.myosine + .6)) { c.ligne(553, 113, 559, 113, { couleur: 'bleu', largeur: 1.4 }); T(c, 'myosine (filament épais)', 562, 118, { couleur: 'bleu', taille: 14 }); }
+  if (ecrit(c, 'myosine', TC.myosine + .6)) { c.ligne(XD - 9, 113, XD - 3, 113, { couleur: 'bleu', largeur: 1.4 }); T(c, 'myosine (filament épais)', XD, 118, { couleur: 'bleu', taille: tkx(14) }); }
   if (pm > 0) c.repere('myosine', XC(-.75), 102, 1.5 * KC, 22, 'un filament épais de myosine');
   if (ecrit(c, 'A', TC.A)) {
     for (const u of [-.75, .75]) pointille(c, XC(u), 38, 258);
-    c.cote(XC(-.75), 258, XC(.75), 258, 'bande sombre (A)', { couleur: 'jaune', dessous: true, taille: 15 });
+    c.cote(XC(-.75), 258, XC(.75), 258, 'bande sombre (A)', { couleur: 'jaune', dessous: true, taille: tkx(15) });
   }
   if (t >= TC.A) c.repere('bande_sombre', XC(-.75), 38, 1.5 * KC, 246, 'la bande sombre (A) : toute la longueur de la myosine');
   if (ecrit(c, 'I', TC.I)) {
     for (const u of [-1.75, 1.75]) pointille(c, XC(u), 38, 216, 'cyan');
-    for (const z of G.z) c.cote(XC(z - .5), 216, XC(z + .5), 216, 'bande claire (I)', { couleur: 'cyan', dessous: true, taille: 15 });
+    for (const z of G.z) c.cote(XC(z - .5), 216, XC(z + .5), 216, 'bande claire (I)', { couleur: 'cyan', dessous: true, taille: tkx(15) });
   }
   if (t >= TC.I) c.repere('bande_claire', XC(.75), 38, KC, 204, 'une bande claire (I) : l’actine seule, de part et d’autre de la strie Z');
   if (ecrit(c, 'H', TC.H)) {
     for (const u of [-.25, .25]) pointille(c, XC(u), 38, 216, 'rose');
-    c.cote(XC(-.25), 216, XC(.25), 216, 'zone H', { couleur: 'rose', dessous: true, taille: 15 });
+    c.cote(XC(-.25), 216, XC(.25), 216, 'zone H', { couleur: 'rose', dessous: true, taille: tkx(15) });
   }
   if (t >= TC.H) c.repere('zone_h', XC(-.25), 38, .5 * KC, 204, 'la zone H : la myosine seule, au centre');
   if (ecrit(c, 'acc', TC.acc)) {
     accolade(c, XC(-1.25), XC(1.25), 290, 14, { couleur: 'vert', largeur: 2 });
-    c.texte('1 sarcomère = 1 bande sombre + 2 demi-bandes claires', CXC, 324, { couleur: 'vert', taille: 16, align: 'center', duree: 1.6 });
+    c.texte('1 sarcomère = 1 bande sombre + 2 demi-bandes claires', CXC, 324, { couleur: 'vert', taille: tkx(16), align: 'center', duree: 1.6 });
   }
   if (t >= TC.acc) c.repere('sarcomere', XC(-1.25), 78, 2.5 * KC, 252, 'un sarcomère : d’une strie Z à la suivante');
   if (ecrit(c, 'myof', TC.myof + .2)) {
-    T(c, 'plusieurs myofibrilles', 562, 160, { couleur: 'blanc', taille: 14 });
-    T(c, 'côte à côte :', 562, 177, { couleur: 'blanc', taille: 14 });
+    T(c, 'plusieurs myofibrilles', XD, MYOF.y - 8 - tkx(17), { couleur: 'blanc', taille: tkx(14) });
+    T(c, 'côte à côte :', XD, MYOF.y - 8, { couleur: 'blanc', taille: tkx(14) });
     const cx = (MYOF.x0 + MYOF.x1) / 2, yb = MYOF.y + MYOF.n * (MYOF.h + MYOF.gap) - MYOF.gap;
     for (const z of [-3.75, -1.25, 1.25, 3.75]) pointille(c, cx + z * MYOF.k, MYOF.y - 6, yb + 6, 'jaune');
-    T(c, 'les bandes s’alignent :', 562, yb + 26, { couleur: 'vert', taille: 14 });
-    T(c, 'la fibre paraît striée', 562, yb + 44, { couleur: 'vert', taille: 14 });
+    T(c, 'les bandes s’alignent :', XD, yb + tkx(26), { couleur: 'vert', taille: tkx(14) });
+    T(c, 'la fibre paraît striée', XD, yb + tkx(26) + tkx(18), { couleur: 'vert', taille: tkx(14) });
   }
   if (t >= TC.myof) c.repere('myofibrilles', MYOF.x0, MYOF.y - 4, MYOF.x1 - MYOF.x0, MYOF.n * (MYOF.h + MYOF.gap) + 4, 'plusieurs myofibrilles côte à côte, bandes alignées');
 }
@@ -127,46 +128,47 @@ function voitConstruire() {
 }
 
 /* ══════════════════════ Vue « legende » ══════════════════════ */
-const KL = 136, CXL = 380, XL = u => CXL + u * KL, YL = 140, HL = 56;
+let KL = 136, CXL = 380; const XL = u => CXL + u * KL, YL = 140, HL = 56;
 const TL = { numeros: .8, noms: 3.6 };
 const NUM = [   // numéro, x de la pointe, y de la pointe, y du numéro, nom
-  { n: 1, x: XL(-1.25), y: YL - 2, yn: 100, nom: 'strie Z', id: 'n1' },
-  { n: 2, x: XL(1.25 + .25), y: YL - 2, yn: 100, nom: 'bande claire (I)', id: 'n2' },
-  { n: 3, x: XL(-.6), y: YL + HL + 2, yn: 238, nom: 'bande sombre (A)', id: 'n3' },
-  { n: 4, x: XL(0), y: YL - 2, yn: 100, nom: 'zone H', id: 'n4' },
+  { n: 1, u: -1.25, x: XL(-1.25), y: YL - 2, yn: 100, nom: 'strie Z', id: 'n1' },
+  { n: 2, u: 1.25 + .25, x: XL(1.25 + .25), y: YL - 2, yn: 100, nom: 'bande claire (I)', id: 'n2' },
+  { n: 3, u: -.6, x: XL(-.6), y: YL + HL + 2, yn: 238, nom: 'bande sombre (A)', id: 'n3' },
+  { n: 4, u: 0, x: XL(0), y: YL - 2, yn: 100, nom: 'zone H', id: 'n4' },
 ];
 const ML = () => ({ numeros: 3.0, reponses: 7.6 });
 const FIN_L = () => (S.reponses ? 8.0 : 3.4);
 const TOGGLE = { x: 590, y: 300, w: 150, h: 30 };
+let XR = 748;
 function vLegende(c) {
   const t = S.t, a = rampe(t, 0, .6), G = F.geoPeriodique(2.5, 1);
   c.direct(() => F.electro(c.ctx, XL(-2.5), XL(2.5), YL, HL, G, XL, { alpha: Math.max(.15, a) }));
-  c.texte('Électronographie d’une myofibrille', 12, 24, { couleur: 'cyan', taille: 18 });
-  c.texte('document reconstitué', 748, 24, { couleur: 'faible', taille: 14, align: 'right' });
+  c.texte('Électronographie d’une myofibrille', 12, 24, { couleur: 'cyan', taille: tkx(18) });
+  c.texte('document reconstitué', XR, 24, { couleur: 'faible', taille: tkx(14), align: 'right' });
   c.repere('electronographie', XL(-2.5), YL, 5 * KL, HL, 'l’électronographie d’une myofibrille');
   // Échelle : 1 µm.
   c.ligne(XL(-2.5), 330, XL(-1.5), 330, { couleur: 'faible', largeur: 2 });
   for (const u of [-2.5, -1.5]) c.ligne(XL(u), 325, XL(u), 335, { couleur: 'faible', largeur: 1.4 });
-  c.texte('1 µm', XL(-2), 322, { couleur: 'faible', taille: 14, align: 'center' });
+  c.texte('1 µm', XL(-2), 322, { couleur: 'faible', taille: tkx(14), align: 'center' });
   // Interrupteur des noms (poignée cliquable).
   c.rect(TOGGLE.x, TOGGLE.y, TOGGLE.w, TOGGLE.h, { couleur: 'faible', arrondi: 10 });
-  c.direct(() => c.texte(S.reponses ? 'noms : affichés ⇄' : 'noms : cachés ⇄', TOGGLE.x + TOGGLE.w / 2, TOGGLE.y + 21, { couleur: S.reponses ? 'vert' : 'jaune', taille: 15, align: 'center' }));
+  c.direct(() => c.texte(S.reponses ? 'noms : affichés ⇄' : 'noms : cachés ⇄', TOGGLE.x + TOGGLE.w / 2, TOGGLE.y + Math.round(TOGGLE.h * .7), { couleur: S.reponses ? 'vert' : 'jaune', taille: tkx(15), align: 'center' }));
   c.repere('interrupteur_noms', TOGGLE.x, TOGGLE.y, TOGGLE.w, TOGGLE.h, 'afficher ou cacher les noms');
   if (ecrit(c, 'num', TL.numeros)) {
     for (const d of NUM) {
       c.ligne(d.x, d.y, d.x, d.yn + (d.yn < YL ? 6 : -20), { couleur: 'jaune', largeur: 1.6 });
-      c.texte(String(d.n), d.x, d.yn, { couleur: 'jaune', taille: 20, align: 'center', duree: .2 });
+      c.texte(String(d.n), d.x, d.yn, { couleur: 'jaune', taille: tkx(20), align: 'center', duree: .2 });
     }
     accolade(c, XL(-1.25), XL(1.25), 262, 16, { couleur: 'jaune', largeur: 2 });
-    c.texte('5', CXL, 302, { couleur: 'jaune', taille: 20, align: 'center', duree: .2 });
+    c.texte('5', CXL, 302, { couleur: 'jaune', taille: tkx(20), align: 'center', duree: .2 });
   }
   if (t >= TL.numeros) {
     for (const d of NUM) c.repere(d.id, d.x - 14, Math.min(d.y, d.yn - 18), 28, Math.abs(d.yn - d.y) + 20, `numéro ${d.n}`);
     c.repere('n5', XL(-1.25), 258, 2.5 * KL, 48, 'numéro 5');
   }
   if (S.reponses && ecrit(c, 'noms', TL.noms)) {
-    for (const d of NUM) T(c, d.nom, d.x + 14, d.yn, { couleur: 'vert', taille: 16, duree: .9 });
-    T(c, 'sarcomère', CXL + 14, 302, { couleur: 'vert', taille: 16, duree: .9 });
+    for (const d of NUM) T(c, d.nom, d.x + 14, d.yn, { couleur: 'vert', taille: tkx(16), duree: .9 });
+    T(c, 'sarcomère', CXL + 14, 302, { couleur: 'vert', taille: tkx(16), duree: .9 });
   }
 }
 function voitLegende() {
@@ -179,7 +181,7 @@ function voitLegende() {
 }
 
 /* ══════════════════════ Vue « contraction » ══════════════════════ */
-const KK = 110, CXK = 270, WK = 2.0, XK = u => CXK + u * KK;
+let KK = 110, CXK = 270; const WK = 2.0, XK = u => CXK + u * KK;
 const HAUT = 34, BAS = 212, POIGNEE_Y = 322;   // POIGNEE_Y : la poignée de la strie Z droite, sur son pointillé              // y de la ligne « a » de chaque bloc (cote de la zone H)
 const rangs = y0 => [{ y: y0 + 30, type: 'actine' }, { y: y0 + 45, type: 'myosine' }, { y: y0 + 60, type: 'actine' }];
 const TK = { mr: 1.2, g0: 5.4, g1: 9.4, mc: 10.0, fm: 14.0 };
@@ -187,16 +189,16 @@ const MK = { relache: .8, mesure_relache: 5.0, glissement: 7.4, contracte: 9.6, 
 const FIN_K = 17.8;
 const degre = t => S.c * lisse((t - TK.g0) / (TK.g1 - TK.g0));
 const longueurs = c => { const L = 2.5 - .5 * c; return { L, A: 1.5, I: L - 1.5, demiI: (L - 1.5) / 2, H: Math.max(0, L - 2), actine: 1.0, myosine: 1.5 }; };
-const TAB = { x: 515, c1: 668, c2: 724, v1: 640, v2: 696, y0: 50, pas: 22 };
+const TAB = { x: 515, c1: 668, c2: 724, v1: 640, v2: 696, y0: 50, pas: 22, x1: 752 };
 const LIGNES = [['sarcomère', 'L'], ['bande sombre (A)', 'A'], ['bande claire (I)', 'I'], ['zone H', 'H'], ['actine', 'actine'], ['myosine', 'myosine']];
 function cotesBloc(c, y0, v, filaments) {
   const X = XK, zl = -v.L / 2, zr = v.L / 2;
-  if (v.H > 0.001) c.cote(X(-v.H / 2), y0, X(v.H / 2), y0, `H = ${fv(v.H)}`, { couleur: 'rose', taille: 14 });
-  else c.texte('H = 0', CXK, y0 - 6, { couleur: 'rose', taille: 14, align: 'center', duree: .3 });
+  if (v.H > 0.001) c.cote(X(-v.H / 2), y0, X(v.H / 2), y0, `H = ${fv(v.H)}`, { couleur: 'rose', taille: tkx(14) });
+  else c.texte('H = 0', CXK, y0 - 6, { couleur: 'rose', taille: tkx(14), align: 'center', duree: .3 });
   c.cote(X(zl), y0 + 78, X(-.75), y0 + 78, '', { couleur: 'cyan' });
-  c.cote(X(-.75), y0 + 78, X(.75), y0 + 78, 'A = 1,5', { couleur: 'jaune', dessous: true, taille: 14 });
+  c.cote(X(-.75), y0 + 78, X(.75), y0 + 78, 'A = 1,5', { couleur: 'jaune', dessous: true, taille: tkx(14) });
   c.cote(X(.75), y0 + 78, X(zr), y0 + 78, '', { couleur: 'cyan' });
-  for (const s of [-1, 1]) c.texte(fv(v.demiI), X(s * (.75 + v.demiI / 2)), y0 + 98, { couleur: 'cyan', taille: 14, align: 'center', duree: .3 });
+  for (const s of [-1, 1]) c.texte(fv(v.demiI), X(s * (.75 + v.demiI / 2)), y0 + 98, { couleur: 'cyan', taille: tkx(14), align: 'center', duree: .3 });
 }
 function vContraction(c) {
   const t = S.t, d = degre(t), v0 = longueurs(0), v = longueurs(d), gris = d > 0.0005;
@@ -208,33 +210,33 @@ function vContraction(c) {
     F.bloc(x, { cx: CXK, k: KK, L: v.L, W: WK, rangs: rangs(BAS), zy1: BAS + 22, zy2: BAS + 68 });
   });
   // Fixe : noms des deux états, la règle, le tableau.
-  c.texte(gris ? 'relâché (en gris)' : 'relâché', 8, HAUT - 8, { couleur: gris ? 'faible' : 'blanc', taille: 14 });
+  c.texte(gris ? 'relâché (en gris)' : 'relâché', 8, HAUT - 8, { couleur: gris ? 'faible' : 'blanc', taille: tkx(14) });
   c.repere('etat_relache', XK(-WK), HAUT + 4, 2 * WK * KK, 68, 'l’état relâché, gardé pour comparer');
   const yR = 344, u0 = -1.25;
   c.ligne(XK(u0 - .5), yR, XK(u0 + 3.0), yR, { couleur: 'faible', largeur: 2 });
   for (let i = 0; i <= 14; i++) { const u = u0 - .5 + i * .25, maj = i % 2 === 0; c.ligne(XK(u), yR, XK(u), yR - (maj ? 9 : 5), { couleur: 'faible', largeur: 1.3, duree: .03 }); }
-  for (let i = 0; i <= 5; i++) c.texte(fv(i * .5).replace(',0', ''), XK(u0 + i * .5), yR + 17, { couleur: 'faible', taille: 13, align: 'center', duree: .08 });
-  c.texte('µm', XK(u0 + 3.0) + 8, yR + 5, { couleur: 'faible', taille: 13 });
+  for (let i = 0; i <= 5; i++) c.texte(fv(i * .5).replace(',0', ''), XK(u0 + i * .5), yR + 17, { couleur: 'faible', taille: tkx(13), align: 'center', duree: .08 });
+  c.texte('µm', XK(u0 + 3.0) + 8, yR + 5, { couleur: 'faible', taille: tkx(13) });
   c.repere('regle', XK(u0 - .5), yR - 12, 3.5 * KK, 32, 'la règle graduée en µm');
-  c.texte('Longueurs (µm)', TAB.x, 24, { couleur: 'cyan', taille: 16 });
-  c.ligne(TAB.x, TAB.y0 + 6, 752, TAB.y0 + 6, { couleur: 'faible', largeur: 1.3 });
+  c.texte('Longueurs (µm)', TAB.x, 24, { couleur: 'cyan', taille: tkx(16) });
+  c.ligne(TAB.x, TAB.y0 + 6, TAB.x1, TAB.y0 + 6, { couleur: 'faible', largeur: 1.3 });
   for (const xv of [TAB.v1, TAB.v2]) c.ligne(xv, TAB.y0 - 14, xv, TAB.y0 + 6 + LIGNES.length * TAB.pas, { couleur: 'tresfaible', largeur: 1.3 });
-  c.texte('relâché', TAB.c1, TAB.y0, { couleur: 'blanc', taille: 14, align: 'center' });
-  c.direct(() => c.texte(S.c >= .999 ? 'contracté' : `à ${Math.round(S.c * 100)} %`, TAB.c2, TAB.y0, { couleur: 'blanc', taille: 14, align: 'center' }));
-  LIGNES.forEach(([nom], i) => c.texte(nom, TAB.x, TAB.y0 + 6 + (i + 1) * TAB.pas, { couleur: 'faible', taille: 14 }));
-  c.repere('tableau', TAB.x, TAB.y0 - 18, 752 - TAB.x, LIGNES.length * TAB.pas + 30, 'le tableau relâché / contracté');
+  c.texte('relâché', TAB.c1, TAB.y0, { couleur: 'blanc', taille: tkx(14), align: 'center' });
+  c.direct(() => c.texte(S.c >= .999 ? 'contracté' : `à ${Math.round(S.c * 100)} %`, TAB.c2, TAB.y0, { couleur: 'blanc', taille: tkx(14), align: 'center' }));
+  LIGNES.forEach(([nom], i) => c.texte(nom, TAB.x, TAB.y0 + 6 + (i + 1) * TAB.pas, { couleur: 'faible', taille: tkx(14) }));
+  c.repere('tableau', TAB.x, TAB.y0 - 18, TAB.x1 - TAB.x, LIGNES.length * TAB.pas + 30, 'le tableau relâché / contracté');
   // Bloc du bas : son nom suit le degré de contraction ; poignée sur la strie Z droite.
   c.direct(() => {
     const nom = d <= .0005 ? 'relâché' : d >= .999 ? 'contracté' : 'contraction';
-    c.texte(`${nom} (${Math.round(d * 100)} %)`, 8, BAS - 8, { couleur: 'blanc', taille: 14 });
-    const xz = XK(v.L / 2); c.cercle(xz, POIGNEE_Y, 7, { couleur: 'jaune', largeur: 2.2 }); c.texte('⇔', xz + 10, POIGNEE_Y + 5, { couleur: 'faible', taille: 13 });
+    c.texte(`${nom} (${Math.round(d * 100)} %)`, 8, BAS - 8, { couleur: 'blanc', taille: tkx(14) });
+    const xz = XK(v.L / 2); c.cercle(xz, POIGNEE_Y, 7, { couleur: 'jaune', largeur: 2.2 }); c.texte('⇔', xz + 10, POIGNEE_Y + 5, { couleur: 'faible', taille: tkx(13) });
     // La règle : où sont les stries Z du bas.
     for (const s of [-1, 1]) c.ligne(XK(s * v.L / 2), BAS + 70, XK(s * v.L / 2), yR - 2, { couleur: 'jaune', pointille: [4, 5], largeur: 1.2, tremble: .2 });
-    c.texte(`sarcomère = ${fv(v.L)} µm`, XK(u0 + 3.0) + 30, yR + 5, { couleur: 'jaune', taille: 15 });
+    c.texte(`sarcomère = ${fv(v.L)} µm`, XK(u0 + 3.0) + 8 + tkx(32), yR + 5, { couleur: 'jaune', taille: tkx(15) });
     // Pendant le glissement : flèches vers le centre.
     if (d > .0005 && t >= TK.g0 && t < TK.g1 - .02) {      // seulement pendant que ça glisse
       for (const s of [-1, 1]) { const xa = XK(s * (v.L / 2 + .05)); c.fleche(xa, BAS - 2, xa - s * 42, BAS - 2, { couleur: 'vert', largeur: 2 }); }
-      c.texte('vers le centre', CXK, BAS - 6, { couleur: 'vert', taille: 14, align: 'center' });
+      c.texte('vers le centre', CXK, BAS - 6, { couleur: 'vert', taille: tkx(14), align: 'center' });
     }
   });
   const zl = XK(-v.L / 2), zr = XK(v.L / 2);
@@ -249,30 +251,30 @@ function vContraction(c) {
   // Mesures de l’état relâché (bloc du haut) et colonne « relâché ».
   if (ecrit(c, 'mr', TK.mr)) {
     cotesBloc(c, HAUT, v0);
-    c.cote(XK(-1.25), HAUT + 124, XK(1.25), HAUT + 124, 'sarcomère = 2,5 µm', { couleur: 'blanc', dessous: true, taille: 14 });
-    for (const [i, cle] of [[0, 'L'], [1, 'A'], [2, 'I'], [3, 'H']].map(([i, k]) => [i, k])) c.texte(fv(v0[cle]), TAB.c1, TAB.y0 + 6 + (i + 1) * TAB.pas, { couleur: 'jaune', taille: 15, align: 'center', duree: .3 });
+    c.cote(XK(-1.25), HAUT + 124, XK(1.25), HAUT + 124, 'sarcomère = 2,5 µm', { couleur: 'blanc', dessous: true, taille: tkx(14) });
+    for (const [i, cle] of [[0, 'L'], [1, 'A'], [2, 'I'], [3, 'H']].map(([i, k]) => [i, k])) c.texte(fv(v0[cle]), TAB.c1, TAB.y0 + 6 + (i + 1) * TAB.pas, { couleur: 'jaune', taille: tkx(15), align: 'center', duree: .3 });
   }
   // Fin du glissement : la phrase du cours.
   if (ecrit(c, 'concl', TK.g1 + .1)) {
-    T(c, 'l’actine glisse vers le centre ;', TAB.x, 222, { couleur: 'vert', taille: 14 });
-    T(c, 'les stries Z se rapprochent ;', TAB.x, 240, { couleur: 'vert', taille: 14 });
-    T(c, 'la myosine ne bouge pas.', TAB.x, 258, { couleur: 'vert', taille: 14 });
+    T(c, 'l’actine glisse vers le centre ;', TAB.x, YCONC, { couleur: 'vert', taille: tkx(14) });
+    T(c, 'les stries Z se rapprochent ;', TAB.x, YCONC + tkx(18), { couleur: 'vert', taille: tkx(14) });
+    T(c, 'la myosine ne bouge pas.', TAB.x, YCONC + 2 * tkx(18), { couleur: 'vert', taille: tkx(14) });
   }
   // Mesures de l’état courant (bloc du bas) et colonne « contracté ».
   if (ecrit(c, 'mc', TK.mc)) {
     cotesBloc(c, BAS, v);
-    [['L', 0], ['A', 1], ['I', 2], ['H', 3]].forEach(([cle, i]) => c.texte(fv(v[cle]), TAB.c2, TAB.y0 + 6 + (i + 1) * TAB.pas, { couleur: 'jaune', taille: 15, align: 'center', duree: .3 }));
+    [['L', 0], ['A', 1], ['I', 2], ['H', 3]].forEach(([cle, i]) => c.texte(fv(v[cle]), TAB.c2, TAB.y0 + 6 + (i + 1) * TAB.pas, { couleur: 'jaune', taille: tkx(15), align: 'center', duree: .3 }));
   }
   // Les filaments mesurés : même longueur dans les deux états.
   if (ecrit(c, 'fm', TK.fm)) {
     for (const [y0, vv] of [[HAUT, v0], [BAS, v]]) {
       const zl0 = -vv.L / 2;
       c.cote(XK(zl0), y0, XK(zl0 + 1), y0, '', { couleur: 'orange' });
-      c.texte('actine 1,0', XK(zl0 + .5), y0 - 6, { couleur: 'orange', taille: 14, align: 'center', duree: .4 });
-      c.texte('myosine 1,5', CXK, y0 + 114, { couleur: 'bleu', taille: 14, align: 'center', duree: .4 });
+      c.texte('actine 1,0', XK(zl0 + .5), y0 - 6, { couleur: 'orange', taille: tkx(14), align: 'center', duree: .4 });
+      c.texte('myosine 1,5', CXK, y0 + 114, { couleur: 'bleu', taille: tkx(14), align: 'center', duree: .4 });
     }
-    for (const [i, cle] of [[4, 'actine'], [5, 'myosine']]) for (const xc of [TAB.c1, TAB.c2]) c.texte(fv(v[cle]), xc, TAB.y0 + 6 + (i + 1) * TAB.pas, { couleur: 'jaune', taille: 15, align: 'center', duree: .25 });
-    T(c, 'les filaments gardent leur longueur.', TAB.x, 276, { couleur: 'vert', taille: 14 });
+    for (const [i, cle] of [[4, 'actine'], [5, 'myosine']]) for (const xc of [TAB.c1, TAB.c2]) c.texte(fv(v[cle]), xc, TAB.y0 + 6 + (i + 1) * TAB.pas, { couleur: 'jaune', taille: tkx(15), align: 'center', duree: .25 });
+    T(c, 'les filaments gardent leur longueur.', TAB.x, YCONC + 3 * tkx(18), { couleur: 'vert', taille: tkx(14) });
   }
 }
 function voitContraction() {
@@ -284,6 +286,27 @@ function voitContraction() {
   if (t >= TK.mc) m.push(`Cotes du bloc du bas écrites${v.H > .001 ? ` : H = ${fv(v.H)}` : ' : H = 0'} ; demi-bandes claires ${fv(v.demiI)} ; A = 1,5 ; colonne « ${S.c >= .999 ? 'contracté' : `à ${Math.round(S.c * 100)} %`} » : sarcomère ${fv(v.L)}, bande sombre (A) 1,5, bande claire (I) ${fv(v.I)}, zone H ${fv(v.H)}.`);
   if (t >= TK.fm) m.push('Filaments mesurés dans les deux états : « actine 1,0 » (cote orange sur un filament d’actine) et « myosine 1,5 » ; lignes actine 1,0 / 1,0 et myosine 1,5 / 1,5 du tableau ; écrit « les filaments gardent leur longueur. »');
   return m.join(' ');
+}
+
+/* Disposition selon la largeur du tableau (15 novembre 2026, « mieux exploiter tout le tableau, grands calibres de
+ * texte ») : tableau large (scene.L ≥ 1000) → filaments plus longs (échelle k plus grande), légendes, myofibrilles et
+ * tableau des longueurs repoussés à droite, textes ×1,3. Sinon la disposition d'origine (760 × 420). */
+let TKX = 1, YCONC = 222;
+const tkx = v => Math.round(v * TKX);
+function disposer(L) {
+  const lg = L >= 1000; TKX = lg ? 1.3 : 1; XR = lg ? L - 12 : 748;
+  if (!lg) {
+    KC = 130; CXC = 290; XD = 562; Object.assign(MYOF, { x0: 566, x1: 746, k: 24, h: 10, gap: 4 });
+    KL = 136; CXL = 380; Object.assign(TOGGLE, { x: 590, w: 150, h: 30 });
+    KK = 110; CXK = 270; Object.assign(TAB, { x: 515, c1: 668, c2: 724, v1: 640, v2: 696, pas: 22, x1: 752 }); YCONC = 222;
+  } else {
+    KC = Math.min(200, Math.round((L - 360) / 4.2)); CXC = 24 + WC * KC; XD = XC(WC) + 26;
+    Object.assign(MYOF, { x0: XD + 4, x1: Math.min(L - 16, XD + 300), h: 12, gap: 5 }); MYOF.k = (MYOF.x1 - MYOF.x0) / 7.5;
+    KL = Math.round((L - 80) / 5); CXL = Math.round(L / 2); Object.assign(TOGGLE, { x: XL(2.5) - 200, w: 200, h: 36 });
+    KK = Math.min(190, Math.floor((L - 700) / 3.75)); CXK = 40 + 2 * KK; const tx = L - 350;
+    Object.assign(TAB, { x: tx, v1: tx + 185, c1: tx + 222, v2: tx + 260, c2: tx + 298, pas: 28, x1: L - 12 }); YCONC = TAB.y0 + 6 + 7 * 28 + 20;
+  }
+  for (const d of NUM) d.x = XL(d.u);
 }
 
 /* ══════════════════════ Commun : temps, moments, commandes ══════════════════════ */
@@ -306,7 +329,7 @@ function message() {
 }
 
 const canvas = $('canvas');
-scene = window.MuscleTableau.Scene(canvas, (c) => { scene.cadre(41); VD.dessiner(c); return c.fin(); });
+scene = window.MuscleTableau.Scene(canvas, (c) => { scene.cadre(41); disposer(scene.L); VD.dessiner(c); return c.fin(); }, { large: true });
 scene.avancer = dt => {
   if (!S.running) return false;
   S.t = Math.min(fin(), S.t + dt);

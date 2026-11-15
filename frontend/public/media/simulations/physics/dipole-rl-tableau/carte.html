@@ -65,6 +65,26 @@ const NOEUDS = [
   { id: 'suite', x: 380, y: 344, w: 200, h: 22, couleur: 'faible', comps: [], titre: 'vers le RLC', seul: true, lignes: [],
     phrase: 'Après ce chapitre : vers le circuit RLC.' },
 ];
+/* Disposition selon la largeur du tableau (15 novembre 2026 : « la carte n'occupe qu'une bande étroite, textes
+ * minuscules »). Tableau large (scene.L ≥ 1000) : les quatre colonnes s'écartent sur toute la largeur, cadres et textes
+ * plus grands ; sinon les positions d'origine (cadre 760 × 420). */
+NOEUDS.forEach(n => { n.o = { x: n.x, y: n.y, w: n.w, h: n.h }; });
+CENTRE.o = { x: CENTRE.x, y: CENTRE.y, w: CENTRE.w, h: CENTRE.h };
+let K = { large: false, L: 760, titre: 17, ligne: 14, pas: 18, haut: 21, centre: 28 };
+function disposer(L) {
+  if (L === K.L) return;
+  if (L < 1000) {
+    NOEUDS.forEach(n => Object.assign(n, n.o)); Object.assign(CENTRE, CENTRE.o);
+    K = { large: false, L, titre: 17, ligne: 14, pas: 18, haut: 21, centre: 28 }; return;
+  }
+  const g = 34, w = Math.floor((L - 28 - 3 * g) / 4), COLS = { 100: 0, 290: 1, 470: 2, 660: 3 }, RANGS = { 80: 62, 190: 198, 298: 334 };
+  NOEUDS.forEach(n => {
+    if (n.seul) { Object.assign(n, { x: L / 2, y: 404, w: 300, h: 26 }); return; }
+    Object.assign(n, { x: 14 + w / 2 + COLS[n.o.x] * (w + g), y: RANGS[n.o.y], w, h: 96 });
+  });
+  Object.assign(CENTRE, { x: L / 2, y: 198, w: 320, h: 116 });
+  K = { large: true, L, titre: 24, ligne: 20, pas: 25, haut: 29, centre: 36 };
+}
 const ANNEAUX = { non_acquis: ['rouge', 'à reprendre'], partiel: ['orange', 'à revoir'] };
 const AVANT = -1e9;   // instant d'un élément déjà dit : écrit d'un coup
 
@@ -90,7 +110,7 @@ function etat(c, comps, x, y, w, h) {
     if (st && ANNEAUX[st]) {
       const [coul, etiq] = ANNEAUX[st];
       c.rect(x - 5, y - 5, w + 10, h + 10, { couleur: coul, arrondi: 16, largeur: 2, pointille: [6, 6] });
-      c.texte(etiq, x + w - 4, y - 8, { couleur: coul, taille: 12, align: 'right' });
+      c.texte(etiq, x + w - 4, y - 8, { couleur: coul, taille: K.large ? 18 : 12, align: 'right' });
     } else if (st === 'acquis') c.texte('✓', x + w - 14, y + 16, { couleur: 'vert', taille: 18 });
   });
 }
@@ -108,11 +128,11 @@ function branche(c, n) {
   }
   if (n.seul) {
     // la suite du programme : une flèche et une ligne, sans cadre de branche
-    c.texte('→ ' + n.titre, n.x, n.y + 6, { couleur: 'faible', taille: 17, align: 'center', max: n.w - 10, duree: .9 });
+    c.texte('→ ' + n.titre, n.x, n.y + 6, { couleur: 'faible', taille: K.titre, align: 'center', max: n.w - 10, duree: .9 });
   } else {
     c.rect(x, y, n.w, n.h, { couleur: n.couleur, arrondi: n.encadre ? 4 : 14, largeur: n.encadre ? 1.6 : 2.4, pointille: n.encadre ? [6, 5] : undefined });
-    c.texte(n.titre, n.x, y + 21, { couleur: n.couleur, taille: 17, align: 'center', max: n.w - 16, duree: .8 });
-    n.lignes.forEach((l, k) => c.texte(l, n.x, y + 42 + k * 18, { couleur: 'blanc', taille: 14, align: 'center', max: n.w - 14, alpha: .92, duree: 1 }));
+    c.texte(n.titre, n.x, y + K.haut, { couleur: n.couleur, taille: K.titre, align: 'center', max: n.w - 16, duree: .8 });
+    n.lignes.forEach((l, k) => c.texte(l, n.x, y + K.haut * 2 + k * K.pas, { couleur: 'blanc', taille: K.ligne, align: 'center', max: n.w - 14, alpha: .92, duree: 1 }));
   }
   c.repere(n.id, x - 5, y - 5, n.w + 10, n.h + 10, lisible(n.titre));
   etat(c, n.comps, x, y, n.w, n.h);
@@ -123,18 +143,22 @@ function dessiner(c) {
   const x = CENTRE.x - CENTRE.w / 2, y = CENTRE.y - CENTRE.h / 2;
   if (S.def === AVANT) c.cur = AVANT;   // déjà dit (saut ou retour en arrière) : le centre est écrit d'un coup
   c.rect(x, y, CENTRE.w, CENTRE.h, { couleur: 'blanc', arrondi: 18, largeur: 3 });
-  c.texte('Dipôle RL', CENTRE.x, y + 32, { couleur: 'blanc', taille: 28, align: 'center', gras: true });
+  c.texte('Dipôle RL', CENTRE.x, y + K.centre * 1.15, { couleur: 'blanc', taille: K.centre, align: 'center', gras: true });
   c.repere('centre', x, y, CENTRE.w, CENTRE.h, 'le centre : le dipôle RL');
   const apres = c.cur;   // fin du titre du centre
   if (S.def != null) {
     c.depuis(S.def);
-    peindre(c, ctx => { resistorPeint(ctx, CENTRE.x - 44, y + 50); bobinePeinte(ctx, CENTRE.x + 18, y + 43, 44, 14); });
-    c.texte('R et bobine en série', CENTRE.x, y + 72, { couleur: 'faible', taille: 13, align: 'center', duree: .8 });
+    peindre(c, ctx => {
+      const k = K.large ? 1.5 : 1, yp = K.large ? y + 66 : y + 50;
+      ctx.translate(CENTRE.x, yp); ctx.scale(k, k); ctx.translate(-CENTRE.x, -yp);
+      resistorPeint(ctx, CENTRE.x - 44, yp); bobinePeinte(ctx, CENTRE.x + 18, yp - 7, 44, 14);
+    });
+    c.texte('R et bobine en série', CENTRE.x, y + CENTRE.h - 8, { couleur: 'faible', taille: K.large ? 18 : 13, align: 'center', duree: .8 });
     if (S.choisi === 'centre') c.direct(() => c.rect(x - 3, y - 3, CENTRE.w + 6, CENTRE.h + 6, { couleur: 'blanc', arrondi: 19, largeur: 1.2, alpha: .6 }));
   }
   // chaque branche a sa ligne de temps : elle s'écrit dès que la voix la dit, sans attendre la précédente
   for (let i = 0; i < S.n; i++) { c.cur = S.apparu[i] === AVANT ? AVANT : Math.max(apres, S.apparu[i]); branche(c, NOEUDS[i]); }
-  if (S.lacunes) c.direct(() => c.texte('✓ acquis · ⟳ à revoir · ✗ à reprendre', 744, 22, { couleur: 'faible', taille: 12, align: 'right' }));
+  if (S.lacunes) c.direct(() => c.texte('✓ acquis · ⟳ à revoir · ✗ à reprendre', K.L - 16, 22, { couleur: 'faible', taille: K.large ? 17 : 12, align: 'right' }));
 }
 /* Le peint (résistor, bobine de cuivre) apparaît quand l’écriture arrive à lui. */
 const peindre = (c, fn) => { if (c.t >= c.cur) c.direct(() => { c.ctx.save(); try { fn(c.ctx); } finally { c.ctx.restore(); } }); };
@@ -162,7 +186,7 @@ function resistorPeint(ctx, cx, cy, L = 34, e = 10) {
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(71); dessiner(c); return c.fin(); });
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(71); disposer(scene.L); dessiner(c); return c.fin(); }, { large: true });
 const maintenant = () => (performance.now() - scene.ouvert) / 1000;
 let horloge = 0;
 scene.avancer = dt => {

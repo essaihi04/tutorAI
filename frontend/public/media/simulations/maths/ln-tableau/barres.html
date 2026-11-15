@@ -12,6 +12,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="/media/simulations/maths/commun/exposants.js"></script>
 <script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/ln-tableau/large.js"></script>
 <script>
 /*
  * Cours « Fonctions logarithmiques » (math_ch5_fonctions_ln), 14 novembre 2026 (professeur règle 28 : montrer au lieu
@@ -29,6 +30,12 @@ const { fr, peindre, bloc } = MathsTableau;
 const ln = Math.log;
 const BASE = 330, U = 56;            // ligne de base des barres, pixels par unité de ln
 const f2 = v => v.toFixed(2).replace('.', ',');   // toujours deux décimales : 1,10 comme à la calculatrice
+/* Tableau large (15 novembre 2026) : les barres s’écartent sur toute la largeur (X : abscisse d’origine → abscisse large),
+ * plus larges (B), les écritures plus grandes (T) ; hors du tableau large, rien ne change. */
+const LARGE = () => LnLarge.L >= 1000;
+const X = x => (LARGE() ? 30 + (x - 30) * (LnLarge.L - 70) / 710 : x);
+const T = t => (LARGE() ? Math.round(t * 1.25) : t);
+const B = w => (LARGE() ? Math.round(w * 1.35) : w);
 
 /** Une barre verticale de hauteur h (en unités de ln) posée sur y0 : un bloc de bois peint (règle 32) ; renvoie le haut (px). */
 function barre(c, x, y0, h, w, couleur, o = {}) {
@@ -45,51 +52,52 @@ const produit = {
     conclusions: { min: 0, max: 1, pas: 1, defaut: 1, sens: '0 : la pile sans pointillés ni somme écrite (question d’observation)' } },
   curseurs: ['a', 'b'],
   dessiner(c, K) {
+    LnLarge.ouvrir(c);
     const a = K.P.a, b = K.P.b, ab = a * b;
-    K.titre('À la calculatrice : trois hauteurs');
-    c.ligne(40, BASE, 730, BASE, { couleur: 'faible', largeur: 1.4 });
+    LnLarge.titre(c, K, 'À la calculatrice : trois hauteurs');
+    c.ligne(40, BASE, X(730), BASE, { couleur: 'faible', largeur: 1.4 });
     // ln a
-    let h = barre(c, 110, BASE, ln(a), 58, 'cyan');
-    c.texte(`ln ${a} ≈ ${f2(ln(a))}`, 110, h - 10, { couleur: 'cyan', taille: 19, align: 'center' });
-    c.texte(`a = ${a}`, 110, BASE + 26, { couleur: 'faible', taille: 16, align: 'center' });
-    c.repere('a', 70, h - 34, 80, BASE - h + 40, `ln ${a}`);
+    let h = barre(c, X(110), BASE, ln(a), B(58), 'cyan');
+    c.texte(`ln ${a} ≈ ${f2(ln(a))}`, X(110), h - 10, { couleur: 'cyan', taille: T(19), align: 'center' });
+    c.texte(`a = ${a}`, X(110), BASE + 26, { couleur: 'faible', taille: T(16), align: 'center' });
+    c.repere('a', X(110) - B(40), h - 34, B(80), BASE - h + 40, `ln ${a}`);
     K.marque('deux');
     c.pause(.3);
-    h = barre(c, 230, BASE, ln(b), 58, 'orange');
-    c.texte(`ln ${b} ≈ ${f2(ln(b))}`, 230, h - 10, { couleur: 'orange', taille: 19, align: 'center' });
-    c.texte(`b = ${b}`, 230, BASE + 26, { couleur: 'faible', taille: 16, align: 'center' });
-    c.repere('b', 190, h - 34, 80, BASE - h + 40, `ln ${b}`);
+    h = barre(c, X(230), BASE, ln(b), B(58), 'orange');
+    c.texte(`ln ${b} ≈ ${f2(ln(b))}`, X(230), h - 10, { couleur: 'orange', taille: T(19), align: 'center' });
+    c.texte(`b = ${b}`, X(230), BASE + 26, { couleur: 'faible', taille: T(16), align: 'center' });
+    c.repere('b', X(230) - B(40), h - 34, B(80), BASE - h + 40, `ln ${b}`);
     K.marque('trois');
     c.pause(.3);
-    const hab = barre(c, 420, BASE, ln(ab), 58, 'vert');
-    c.texte(`ln ${ab} ≈ ${f2(ln(ab))}`, 420, hab - 10, { couleur: 'vert', taille: 19, align: 'center' });
-    c.texte(`ab = ${ab}`, 420, BASE + 26, { couleur: 'faible', taille: 16, align: 'center' });
-    c.repere('ab', 380, hab - 34, 80, BASE - hab + 40, `ln ${ab}`);
+    const hab = barre(c, X(420), BASE, ln(ab), B(58), 'vert');
+    c.texte(`ln ${ab} ≈ ${f2(ln(ab))}`, X(420), hab - 10, { couleur: 'vert', taille: T(19), align: 'center' });
+    c.texte(`ab = ${ab}`, X(420), BASE + 26, { couleur: 'faible', taille: T(16), align: 'center' });
+    c.repere('ab', X(420) - B(40), hab - 34, B(80), BASE - hab + 40, `ln ${ab}`);
     K.marque('six');
     c.pause(.3);
     // La pile : ln a, puis ln b posé dessus, qui monte jusqu'à la hauteur de ln(ab).
     K.anime(1.6, p => {
       const q1 = Math.min(1, p * 2), q2 = Math.max(0, p * 2 - 1);
-      const h1 = barre(c, 540, BASE, ln(a) * q1, 58, 'cyan', { duree: 0 });
-      if (q2 > 0) barre(c, 540, h1, ln(b) * q2, 58, 'orange', { duree: 0 });
+      const h1 = barre(c, X(540), BASE, ln(a) * q1, B(58), 'cyan', { duree: 0 });
+      if (q2 > 0) barre(c, X(540), h1, ln(b) * q2, B(58), 'orange', { duree: 0 });
     });
     if (K.P.conclusions !== 0) {
-      c.ligne(452, hab, 600, hab, { couleur: 'jaune', largeur: 1.8, pointille: [6, 5] });
-      c.texte(`${f2(ln(a))} + ${f2(ln(b))} = ${f2(ln(a) + ln(b))}`, 620, Math.max(80, hab + 6), { couleur: 'jaune', taille: 18 });
+      c.ligne(X(452), hab, X(600), hab, { couleur: 'jaune', largeur: 1.8, pointille: [6, 5] });
+      c.texte(`${f2(ln(a))} + ${f2(ln(b))} = ${f2(ln(a) + ln(b))}`, X(620), Math.max(80, hab + 6), { couleur: 'jaune', taille: T(18) });
     }
-    c.texte('pile = ln a + ln b', 540, BASE + 26, { couleur: 'faible', taille: 16, align: 'center' });
-    c.repere('somme', 500, hab - 20, 250, BASE - hab + 24, 'la pile tombe juste à la hauteur de ln(ab)');
+    c.texte('pile = ln a + ln b', X(540), BASE + 26, { couleur: 'faible', taille: T(16), align: 'center' });
+    c.repere('somme', X(500), hab - 20, X(750) - X(500), BASE - hab + 24, 'la pile tombe juste à la hauteur de ln(ab)');
     K.marque('somme');
     c.pause(.3);
-    c.texte(`${ab} = ${a} × ${b}`, 420, 384, { couleur: 'blanc', taille: 20, align: 'center' });
-    c.texte(`ln(${a} × ${b}) = ln ${a} + ln ${b}`, 420, 410, { couleur: 'blanc', taille: 20, align: 'center' });
-    c.repere('produit', 300, 364, 240, 54, `${ab} = ${a} × ${b}`);
+    c.texte(`${ab} = ${a} × ${b}`, X(420), 384, { couleur: 'blanc', taille: T(20), align: 'center' });
+    c.texte(`ln(${a} × ${b}) = ln ${a} + ln ${b}`, X(420), 410, { couleur: 'blanc', taille: T(20), align: 'center' });
+    c.repere('produit', X(420) - T(120), 362, T(240), 56, `${ab} = ${a} × ${b}`);
     K.marque('produit');
     c.pause(.3);
-    c.texte('ln(ab) = ln a + ln b', 520, 84, { couleur: 'jaune', taille: 22, align: 'center' });
-    c.texte('(a > 0, b > 0)', 520, 106, { couleur: 'jaune', taille: 16, align: 'center' });
-    c.rect(410, 60, 220, 56, { couleur: 'jaune', arrondi: 8, largeur: 1.6 });
-    c.repere('regle', 406, 56, 228, 64, 'la règle du produit');
+    c.texte('ln(ab) = ln a + ln b', X(520), 84, { couleur: 'jaune', taille: T(22), align: 'center' });
+    c.texte('(a > 0, b > 0)', X(520), 108, { couleur: 'jaune', taille: T(16), align: 'center' });
+    c.rect(X(520) - T(110), 60, T(220), 60, { couleur: 'jaune', arrondi: 8, largeur: 1.6 });
+    c.repere('regle', X(520) - T(114), 56, T(228), 68, 'la règle du produit');
     K.marque('regle');
   },
   lecture: K => { const a = K.P.a, b = K.P.b; return `ln ${a} + ln ${b} ≈ ${f2(ln(a))} + ${f2(ln(b))} = ${f2(ln(a) + ln(b))} = ln ${a * b} : la pile tombe juste.`; },
@@ -115,8 +123,8 @@ function pile(c, x, k, H, couleur, etiquette, o = {}) {
   let y = BASE;
   for (let i = 0; i < Math.ceil(k - 1e-9); i++) {
     const part = Math.min(1, k - i), h = part * H;
-    peindre(c, o.duree ?? .25, () => bloc(c, x - 32, y - h, 64, h, couleur, { clair: part < 1 }));
-    if (h > 16) c.texte(part < 1 ? '½' : etiquette, x, y - h / 2 + 6, { couleur, taille: 15, align: 'center', duree: o.duree ?? .1 });
+    peindre(c, o.duree ?? .25, () => bloc(c, x - B(32), y - h, B(64), h, couleur, { clair: part < 1 }));
+    if (h > 16) c.texte(part < 1 ? '½' : etiquette, x, y - h / 2 + 6, { couleur, taille: T(15), align: 'center', duree: o.duree ?? .1 });
     y -= h;
   }
   return y;
@@ -127,45 +135,46 @@ const puissance = {
   params: { a: { min: 2, max: 9, pas: 1, defaut: 3, label: 'a =' }, n: { min: 1, max: 6, pas: 1, defaut: 4, label: 'n =' } },
   curseurs: ['a', 'n'],
   dessiner(c, K) {
+    LnLarge.ouvrir(c);
     const a = K.P.a, n = K.P.n, H = 34;
-    K.titre(`Un bloc = ln ${a} ≈ ${f2(ln(a))}`);
-    c.ligne(30, BASE, 740, BASE, { couleur: 'faible', largeur: 1.4 });
+    LnLarge.titre(c, K, `Un bloc = ln ${a} ≈ ${f2(ln(a))}`);
+    c.ligne(30, BASE, X(740), BASE, { couleur: 'faible', largeur: 1.4 });
     // ln(a²) : deux blocs.
-    let y = pile(c, 90, 2, H, 'cyan', `ln ${a}`);
-    c.texte(`ln(${a}²)`, 90, BASE + 26, { couleur: 'cyan', taille: 18, align: 'center' });
-    c.texte('= 2 ln ' + a, 90, y - 10, { couleur: 'cyan', taille: 18, align: 'center' });
-    c.repere('carre', 50, y - 30, 80, BASE - y + 64, `ln(${a}²) = 2 ln ${a}`);
+    let y = pile(c, X(90), 2, H, 'cyan', `ln ${a}`);
+    c.texte(`ln(${a}²)`, X(90), BASE + 26, { couleur: 'cyan', taille: T(18), align: 'center' });
+    c.texte('= 2 ln ' + a, X(90), y - 10, { couleur: 'cyan', taille: T(18), align: 'center' });
+    c.repere('carre', X(90) - B(40), y - 30, B(80), BASE - y + 64, `ln(${a}²) = 2 ln ${a}`);
     K.marque('carre');
     c.pause(.3);
     // ln(aⁿ) : n blocs.
-    y = pile(c, 220, n, H, 'vert', `ln ${a}`);
-    c.texte(`ln(${a}^${n})`, 220, BASE + 26, { couleur: 'vert', taille: 18, align: 'center' });
-    c.texte(`= ${n} ln ${a}`, 220, y - 10, { couleur: 'vert', taille: 18, align: 'center' });
-    c.texte(`${a}^${n} = ${a ** n}`, 220, BASE + 50, { couleur: 'faible', taille: 15, align: 'center' });
-    c.repere('puissance', 176, y - 30, 88, BASE - y + 88, `ln(aⁿ) = n ln a`);
+    y = pile(c, X(220), n, H, 'vert', `ln ${a}`);
+    c.texte(`ln(${a}^${n})`, X(220), BASE + 26, { couleur: 'vert', taille: T(18), align: 'center' });
+    c.texte(`= ${n} ln ${a}`, X(220), y - 10, { couleur: 'vert', taille: T(18), align: 'center' });
+    c.texte(`${a}^${n} = ${a ** n}`, X(220), BASE + 50, { couleur: 'faible', taille: T(15), align: 'center' });
+    c.repere('puissance', X(220) - B(44), y - 30, B(88), BASE - y + 88, `ln(aⁿ) = n ln a`);
     K.marque('puissance');
     c.pause(.3);
     // ln √a : un bloc coupé en deux moitiés.
-    peindre(c, .3, () => bloc(c, 318, BASE - H, 64, H, 'orange'));
-    c.texte(`ln ${a}`, 350, BASE - H - 10, { couleur: 'orange', taille: 16, align: 'center' });
-    c.ligne(318, BASE - H / 2, 382, BASE - H / 2, { couleur: 'orange', largeur: 2, pointille: [5, 4] });
-    c.texte(`√${a} × √${a} = ${a}`, 350, BASE + 26, { couleur: 'orange', taille: 17, align: 'center' });
+    peindre(c, .3, () => bloc(c, X(350) - B(32), BASE - H, B(64), H, 'orange'));
+    c.texte(`ln ${a}`, X(350), BASE - H - 10, { couleur: 'orange', taille: T(16), align: 'center' });
+    c.ligne(X(350) - B(32), BASE - H / 2, X(350) + B(32), BASE - H / 2, { couleur: 'orange', largeur: 2, pointille: [5, 4] });
+    c.texte(`√${a} × √${a} = ${a}`, X(350), BASE + 26, { couleur: 'orange', taille: T(17), align: 'center' });
     K.marque('racine_produit');
     c.pause(.3);
-    c.texte(`ln √${a} = ½ ln ${a}`, 350, BASE + 52, { couleur: 'orange', taille: 18, align: 'center' });
-    c.texte('½', 350, BASE - H / 4 + 6, { couleur: 'jaune', taille: 15, align: 'center' });
-    c.repere('racine', 300, BASE - H - 30, 100, H + 92, 'ln √a : un demi-bloc');
+    c.texte(`ln √${a} = ½ ln ${a}`, X(350), BASE + 52, { couleur: 'orange', taille: T(18), align: 'center' });
+    c.texte('½', X(350), BASE - H / 4 + 6, { couleur: 'jaune', taille: T(15), align: 'center' });
+    c.repere('racine', X(350) - B(50), BASE - H - 30, B(100), H + 92, 'ln √a : un demi-bloc');
     K.marque('racine');
     c.pause(.3);
-    c.texte('ln(a^{r}) = r ln a', 560, 82, { couleur: 'jaune', taille: 22, align: 'center' });
-    c.rect(470, 58, 180, 36, { couleur: 'jaune', arrondi: 8, largeur: 1.6 });
-    c.repere('generale', 466, 54, 188, 44, 'ln(aʳ) = r ln a');
+    c.texte('ln(a^{r}) = r ln a', X(560), 82, { couleur: 'jaune', taille: T(22), align: 'center' });
+    c.rect(X(560) - T(90), 56, T(180), 40, { couleur: 'jaune', arrondi: 8, largeur: 1.6 });
+    c.repere('generale', X(560) - T(94), 52, T(188), 48, 'ln(aʳ) = r ln a');
     K.marque('generale');
     c.pause(.3);
     // ln(√2 × 8) : un demi-bloc ln 2 + trois blocs ln 2 (8 = 2³).
-    const x = 600;
-    c.texte('ln(√2 × 8)', x, BASE + 26, { couleur: 'rose', taille: 18, align: 'center' });
-    c.texte('8 = 2³', x, BASE + 50, { couleur: 'faible', taille: 15, align: 'center' });
+    const x = X(600);
+    c.texte('ln(√2 × 8)', x, BASE + 26, { couleur: 'rose', taille: T(18), align: 'center' });
+    c.texte('8 = 2³', x, BASE + 50, { couleur: 'faible', taille: T(15), align: 'center' });
     K.anime(1.8, p => {
       const k = 3.5 * p;
       let yy = BASE;
@@ -174,16 +183,16 @@ const puissance = {
       for (const w of parts) {
         const part = Math.min(w, Math.max(0, reste)); if (part <= 0) break;
         const h = part * H;
-        bloc(c, x - 32, yy - h, 64, h, 'rose', { clair: w < 1 });
-        if (h > 14) c.texte(w < 1 ? '½ ln 2' : 'ln 2', x, yy - h / 2 + 6, { couleur: 'rose', taille: 14, align: 'center', duree: 0 });
+        bloc(c, x - B(32), yy - h, B(64), h, 'rose', { clair: w < 1 });
+        if (h > 14) c.texte(w < 1 ? '½ ln 2' : 'ln 2', x, yy - h / 2 + 6, { couleur: 'rose', taille: T(14), align: 'center', duree: 0 });
         yy -= h; reste -= w;
       }
     });
-    c.repere('exemple', x - 40, BASE - 3.5 * H - 6, 80, 3.5 * H + 64, 'ln(√2 × 8) : ½ + 3 blocs ln 2');
+    c.repere('exemple', x - B(40), BASE - 3.5 * H - 6, B(80), 3.5 * H + 64, 'ln(√2 × 8) : ½ + 3 blocs ln 2');
     K.marque('exemple');
     c.pause(.3);
-    c.texte('= ½ ln 2 + 3 ln 2 = (7/2) ln 2', x, BASE - 3.5 * H - 14, { couleur: 'jaune', taille: 18, align: 'center' });
-    c.repere('resultat', x - 140, BASE - 3.5 * H - 36, 280, 30, '(7/2) ln 2');
+    c.texte('= ½ ln 2 + 3 ln 2 = (7/2) ln 2', x, BASE - 3.5 * H - 14, { couleur: 'jaune', taille: T(18), align: 'center' });
+    c.repere('resultat', x - T(140), BASE - 3.5 * H - 38, T(280), 34, '(7/2) ln 2');
     K.marque('resultat');
   },
   lecture: K => `ln(${K.P.a}^${K.P.n}) = ${K.P.n} ln ${K.P.a} ≈ ${f2(K.P.n * ln(K.P.a))} : une pile de ${K.P.n} blocs.`,
@@ -209,6 +218,7 @@ const puissance = {
 MathsTableau.page({
   id: 'ln_barres', titre: 'Les règles de ln',
   texte: 'Construction à la craie : des barres dont la hauteur est un ln. Vue produit : ln a et ln b empilées arrivent exactement à la hauteur de ln(ab) (ln 2 ≈ 0,69, ln 3 ≈ 1,10, ln 6 ≈ 1,79). Vue puissance : ln(aⁿ) est une pile de n blocs ln a, ln √a un demi-bloc, ln(√2 × 8) = (7/2) ln 2',
+  ajuster: !LnLarge.actif,
   vues: { produit, puissance },
 });
 </script>

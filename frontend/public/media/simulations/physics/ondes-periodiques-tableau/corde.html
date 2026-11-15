@@ -45,12 +45,17 @@ const ft = t => (Math.abs(t * 100 - Math.round(t * 100)) > 1e-6 ? fm(t) : fr(t, 
 const signe = s => s.replace(/^-/, '−');
 
 /* Géométrie de chaque vue dans le cadre 760 × 420 : origine S, px par mètre, repos de la corde, amplitude dessinée. */
-const G = {
+const G0 = {
   secousse: { X0: 110, PX: 300, y0: 165, K: 58 }, vibreur: { X0: 110, PX: 300, y0: 165, K: 58 },
   periode: { X0: 110, PX: 300, y0: 112, K: 42 }, lambda: { X0: 110, PX: 300, y0: 150, K: 55 },
   double: { X0: 70, PX: 140, y0: 200, K: 50 }, avance: { X0: 110, PX: 300, y0: 140, K: 50 },
   phase: { X0: 110, PX: 300, y0: 160, K: 58 }, retard: { X0: 110, PX: 300, y0: 92, K: 34 },
 }[vue];
+/* Tableau large (15 novembre 2026) : le cadre prend le format du tableau (scene.L de 760 à 1292) ; tout ce qui
+ * est placé en x s’étire avec lui (KX = scene.L / 760), la hauteur reste 420 ; textes ≥ 18 px à l’écran. */
+const G = { ...G0 };
+let KX = 1;
+const H = x => x * KX;
 const X = x => G.X0 + x * G.PX;
 const Y = (x, t) => G.y0 - G.K * y(x, t);
 const HAUT_VIBREUR = G.y0 + G.K + 16;              // dessus du boîtier du vibreur
@@ -121,7 +126,7 @@ function milieu(c, avecVibreur = true) {
 function reperesSource(c) {
   c.direct(() => { const ys = G.y0 - G.K * yS(S.t); c.repere('source', X(0) - 16, Math.min(ys, G.y0) - 16, 32, Math.abs(ys - G.y0) + 32, 'la source S'); });
 }
-function heure(c) { c.direct(() => c.texte(`t = ${ft(S.t)} s`, 740, 26, { couleur: 'jaune', align: 'right' })); }
+function heure(c) { c.direct(() => c.texte(`t = ${ft(S.t)} s`, H(740), 26, { couleur: 'jaune', align: 'right' })); }
 /* Un point de la corde (perle) avec son nom au-dessus ; flèche verte s’il monte, rose s’il descend. */
 function pointCorde(c, x, nom, teinte, fleche = false) {
   const yb = Y(x, S.t);
@@ -215,10 +220,10 @@ const dessins = {
 
   periode(c) {
     milieu(c); montage(c); reperesSource(c); heure(c);
-    const cx = 500, cy = 205, r = 22; cadranChrono(c, cx, cy, r);
-    c.texte('Glisse M le long de la corde, puis rejoue.', 150, 244, { couleur: 'faible', taille: 14 });
-    const oy = 335, k2 = 40, Tx = axeTemps(c, 110, oy, 580, ARRET, 56, 'y_M', 396);
-    c.repere('courbe_ym', 110, oy - k2 - 8, 580, 2 * k2 + 16, 'le film du point M (son élongation au cours du temps)');
+    const cx = H(500), cy = 205, r = 22; cadranChrono(c, cx, cy, r);
+    c.texte('Glisse M le long de la corde, puis rejoue.', H(150), 244, { couleur: 'faible', taille: 14 });
+    const oy = 335, k2 = 40, Tx = axeTemps(c, H(110), oy, H(580), ARRET, 56, 'y_M', 396);
+    c.repere('courbe_ym', H(110), oy - k2 - 8, H(580), 2 * k2 + 16, 'le film du point M (son élongation au cours du temps)');
     c.direct(() => {
       const t = S.t, tau = S.xM / V, t0 = tau + T / 4, val = t < t0 ? 0 : Math.min(T, t - t0);
       pointCorde(c, S.xM, 'M', 'rouge', true);
@@ -244,22 +249,22 @@ const dessins = {
       // La photo : un motif colorié de crête à crête, la règle dessous.
       const cr = sur(t, T / 4), xa = proche(cr, 0.5), xb = xa + LAMBDA;
       surlignerMotif(c.ctx, t, xa, xb);
-      c.texte(`Photo de la corde à t = ${fm(t)} s`, 110, 34, { couleur: 'cyan', taille: 17 });
+      c.texte(`Photo de la corde à t = ${fm(t)} s`, H(110), 34, { couleur: 'cyan', taille: 17 });
       for (const x of [xa, xb]) c.ligne(X(x), G.y0 - G.K + 4, X(x), yr, { couleur: 'jaune', largeur: 1.2, pointille: [3, 4] });
       c.cote(X(xa), yr - 12, X(xb), yr - 12, `λ = ${fr(LAMBDA)} m`, { couleur: 'jaune', taille: 17 });
       c.repere('motif', X(xa) - 4, G.y0 - G.K - 8, X(xb) - X(xa) + 8, 2 * G.K + 16, 'un motif, de crête à crête');
       creteCreux(c, 1.5, [xa, xb], true);
-      c.texte('Le même motif se répète tout le long de la corde.', 380, 372, { couleur: 'vert', align: 'center', taille: 16 });
+      c.texte('Le même motif se répète tout le long de la corde.', H(380), 372, { couleur: 'vert', align: 'center', taille: 16 });
     });
   },
 
   double(c) {
     // À gauche : la photo de la corde, y en fonction de x (axe en m). À droite : le film du point M, y en fonction de t (axe en s).
     const y0 = G.y0, K = G.K, ligneNb = y0 + K + 20;
-    c.texte('Photo de la corde : y en fonction de x', 40, 64, { couleur: 'cyan', taille: 16 });
-    c.texte('Film du point M : y_M en fonction de t', 418, 64, { couleur: 'rouge', taille: 16 });
-    c.repere('vue_photo', 34, 46, 360, 250, 'la photo de la corde (axe x en m)');
-    c.repere('vue_film', 412, 46, 344, 250, 'le film du point M (axe t en s)');
+    c.texte('Photo de la corde : y en fonction de x', H(40), 64, { couleur: 'cyan', taille: 16 });
+    c.texte('Film du point M : y_M en fonction de t', H(418), 64, { couleur: 'rouge', taille: 16 });
+    c.repere('vue_photo', H(34), 46, H(360), 250, 'la photo de la corde (axe x en m)');
+    c.repere('vue_film', H(412), 46, H(344), 250, 'le film du point M (axe t en s)');
     c.direct(() => peindreCorde(c.ctx, S.t, 4.5));
     const grad = []; for (let k = 1; k <= 4; k++) grad.push([k / 4, null]);
     c.axe(X(0), y0, X(L) + 14, y0, grad.map(([f]) => [f * (X(L) - X(0)) / (X(L) + 14 - X(0)), null]));
@@ -268,8 +273,8 @@ const dessins = {
     for (let k = 0; k <= 4; k++) c.texte(fn(k * 0.5), X(k * 0.5), ligneNb, { couleur: 'faible', taille: 13, align: 'center', duree: .1 });
     c.texte('x (m)', X(L) + 18, y0 + 5, { couleur: 'jaune', taille: 15 });
     c.texte('S', X(0) - 10, y0 + 18, { couleur: 'cyan', align: 'right', taille: 15 });
-    const Tx = axeTemps(c, 425, y0, 279, 3, K + 22, 'y_M', ligneNb);
-    c.repere('courbe_ym', 425, y0 - K - 8, 279, 2 * K + 16, 'le film du point M (son élongation au cours du temps)');
+    const Tx = axeTemps(c, H(425), y0, H(279), 3, K + 22, 'y_M', ligneNb);
+    c.repere('courbe_ym', H(425), y0 - K - 8, H(279), 2 * K + 16, 'le film du point M (son élongation au cours du temps)');
     heure(c);
     c.direct(() => {
       const t = S.t, tau = S.xM / V;
@@ -289,14 +294,14 @@ const dessins = {
         for (const tt of [ta, tb]) c.ligne(Tx(tt), y0 - K + 2, Tx(tt), yc, { couleur: 'jaune', largeur: 1.2, pointille: [3, 4] });
         c.cote(Tx(ta), yc, Tx(tb), yc, `T = ${fr(T)} s`, { couleur: 'jaune', taille: 16 });
       }
-      c.texte('Même dessin, deux axes : une distance donne λ, un temps donne T.', 380, 340, { couleur: 'vert', align: 'center', taille: 17 });
+      c.texte('Même dessin, deux axes : une distance donne λ, un temps donne T.', H(380), 340, { couleur: 'vert', align: 'center', taille: 17 });
     });
   },
 
   avance(c) {
     milieu(c); montage(c); reperesSource(c); heure(c);
     const yr = 280; regle(c, yr);
-    const cx = 150, cy = 380, r = 22; cadranChrono(c, cx, cy, r);
+    const cx = H(150), cy = 380, r = 22; cadranChrono(c, cx, cy, r);
     c.direct(() => {
       const t = S.t, xf = Math.min(L, V * t);
       if (t > 0 && V * t < L) {
@@ -309,21 +314,21 @@ const dessins = {
       aiguille(c, cx, cy, r, t);
       c.texte(`chrono : ${fr(t)} s`, cx + 34, cy - 4, { couleur: 'jaune', taille: 16 });
       c.texte(`soit ${fn(t / T)} T`, cx + 34, cy + 20, { couleur: 'faible', taille: 16 });
-      if (t >= T - 1e-6) c.texte(`En 1 T (${fr(T)} s), le front avance de 1 λ (${fr(LAMBDA)} m).`, 360, 376, { couleur: 'vert', taille: 16 });
-      if (t >= 2 * T - 1e-6) c.texte(`En 2 T (${fr(2 * T)} s), il avance de 2 λ (${fr(2 * LAMBDA)} m).`, 360, 402, { couleur: 'vert', taille: 16 });
+      if (t >= T - 1e-6) c.texte(`En 1 T (${fr(T)} s), le front avance de 1 λ (${fr(LAMBDA)} m).`, H(360), 376, { couleur: 'vert', taille: 16 });
+      if (t >= 2 * T - 1e-6) c.texte(`En 2 T (${fr(2 * T)} s), il avance de 2 λ (${fr(2 * LAMBDA)} m).`, H(360), 402, { couleur: 'vert', taille: 16 });
     });
   },
 
   phase(c) {
     milieu(c); montage(c); reperesSource(c); heure(c);
-    c.texte('Glisse P le long de la corde, puis rejoue.', 430, 340, { couleur: 'faible', align: 'center', taille: 14 });
+    c.texte('Glisse P le long de la corde, puis rejoue.', H(430), 340, { couleur: 'faible', align: 'center', taille: 14 });
     c.direct(() => {
       const t = S.t, d = Math.abs(S.xP - S.xM), q = d / LAMBDA;
       front(c, G.y0 + 10, G.y0 + G.K + 30, false);
       pointCorde(c, S.xM, 'M', 'rouge', true); pointCorde(c, S.xP, 'P', 'violet', true);
       const yc = G.y0 + G.K + 42;
       c.cote(X(Math.min(S.xM, S.xP)), yc, X(Math.max(S.xM, S.xP)), yc, `MP = ${fm(d)} m`, { couleur: 'jaune', dessous: true, taille: 16 });
-      c.texte(`MP / λ = ${fm(d)} / ${fr(LAMBDA)} = ${fn(q)}`, 430, 312, { couleur: 'vert', align: 'center', taille: 18 });
+      c.texte(`MP / λ = ${fm(d)} / ${fr(LAMBDA)} = ${fn(q)}`, H(430), 312, { couleur: 'vert', align: 'center', taille: 18 });
       // Figé avec M en haut : les creux qui suivent M sont numérotés 1, 2, 3 (0,5 λ ; 1,5 λ ; 2,5 λ de M).
       if (fige() && t >= S.xM / V && Math.sin(2 * Math.PI * (t - S.xM / V) / T) > 0.97) {
         const creux = sur(t, 3 * T / 4).filter(x => x > S.xM).slice(0, 3);
@@ -336,22 +341,22 @@ const dessins = {
   retard(c) {
     milieu(c); montage(c); reperesSource(c); heure(c);
     const oy1 = 250, oy2 = 350, k2 = 30, tmax = 3;
-    const Tx = axeTemps(c, 110, oy1, 570, tmax, 44, 'y_S', null);
-    axeTemps(c, 110, oy2, 570, tmax, 44, 'y_M', 398);
-    c.repere('courbe_ys', 110, oy1 - k2 - 8, 570, 2 * k2 + 16, 'le film de la source S (son élongation au cours du temps)');
-    c.repere('courbe_ym', 110, oy2 - k2 - 8, 570, 2 * k2 + 16, 'le film du point M (son élongation au cours du temps)');
+    const Tx = axeTemps(c, H(110), oy1, H(570), tmax, 44, 'y_S', null);
+    axeTemps(c, H(110), oy2, H(570), tmax, 44, 'y_M', 398);
+    c.repere('courbe_ys', H(110), oy1 - k2 - 8, H(570), 2 * k2 + 16, 'le film de la source S (son élongation au cours du temps)');
+    c.repere('courbe_ym', H(110), oy2 - k2 - 8, H(570), 2 * k2 + 16, 'le film du point M (son élongation au cours du temps)');
     c.direct(() => {
       const t = S.t, tau = S.xM / V;
       pointCorde(c, S.xM, 'M', 'rouge');
       courbeTemps(c, Tx, oy1, k2, yS, 0, Math.min(t, tmax), 'cyan');
       courbeTemps(c, Tx, oy2, k2, tt => yS(tt - tau), 0, Math.min(t, tmax), 'rouge');
-      c.texte(`τ = SM / v = ${fm(S.xM)} / ${fn(V)} = ${fm(tau)} s`, 250, 162, { couleur: 'vert', taille: 17 });
-      c.texte(`SM = ${fn(S.xM / LAMBDA)} λ   donc   τ = ${fn(tau / T)} T`, 250, 188, { couleur: 'vert', taille: 17 });
-      c.texte('y_M(t) = y_S(t − τ)', 545, 188, { couleur: 'vert', taille: 17 });
+      c.texte(`τ = SM / v = ${fm(S.xM)} / ${fn(V)} = ${fm(tau)} s`, H(250), 162, { couleur: 'vert', taille: 17 });
+      c.texte(`SM = ${fn(S.xM / LAMBDA)} λ   donc   τ = ${fn(tau / T)} T`, H(250), 188, { couleur: 'vert', taille: 17 });
+      c.texte('y_M(t) = y_S(t − τ)', H(560), 188, { couleur: 'vert', taille: 17 });
       if (t >= tau) {
         c.ligne(Tx(tau), oy1 - k2 - 4, Tx(tau), oy2 + k2 + 4, { couleur: 'jaune', largeur: 1.2, pointille: [3, 4] });
-        c.cote(Tx(0), 300, Tx(tau), 300, `τ = ${fm(tau)} s`, { couleur: 'jaune', taille: 16 });
-        c.repere('retard_tau', Tx(0), 284, Tx(tau) - Tx(0), 24, 'le retard τ');
+        c.cote(Tx(0), 318, Tx(tau), 318, `τ = ${fm(tau)} s`, { couleur: 'jaune', taille: 16 });
+        c.repere('retard_tau', Tx(0), 302, Tx(tau) - Tx(0), 24, 'le retard τ');
       }
     });
   },
@@ -360,7 +365,7 @@ const dessins = {
 function vueCorde(c, phrase) {
   milieu(c); montage(c); reperesSource(c); heure(c);
   c.fleche(X(1.3), 70, X(1.8), 70, { couleur: 'vert' }).texte('sens de propagation', X(1.55), 58, { couleur: 'vert', align: 'center', taille: 15 });
-  c.texte(phrase, 420, 350, { couleur: 'vert', align: 'center', taille: 16 });
+  c.texte(phrase, H(420), 350, { couleur: 'vert', align: 'center', taille: 16 });
   c.direct(() => {
     front(c, G.y0 + 10, G.y0 + G.K + 30);
     pointCorde(c, S.xM, 'M', 'rouge');
@@ -369,7 +374,12 @@ function vueCorde(c, phrase) {
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(17); dessins[vue](c); return c.fin(); });
+const scene = window.OndesTableau.Scene(canvas, (c) => {
+  scene.cadre(17);
+  KX = scene.L / 760; G.X0 = G0.X0 * KX; G.PX = G0.PX * KX;
+  if (scene.L >= 1000 && c.echelle >= 0.8) c.tailleMin = 18;   // tableau bas (bande de formules) : 15 px suffit, le texte est déjà grand dans le cadre
+  dessins[vue](c); return c.fin();
+}, { large: true });
 scene.avancer = dt => {
   if (!S.running) return false;
   S.t = Math.min(ARRET, S.t + dt * LENT);

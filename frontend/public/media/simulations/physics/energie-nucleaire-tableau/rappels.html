@@ -49,13 +49,19 @@ let M = {}, MM = {};
 const canvas = $('canvas');
 const scene = window.OndesTableau.Scene(canvas, dessiner);
 const craie = scene.craie;
+/* Tableau large (15 novembre 2026, « textes minuscules ») : la figure (pleine hauteur, deux colonnes serrées) garde
+ * sa place, mais sur un tableau large (L ≥ 1000) ses textes grossissent (G) ; les largeurs `max` les gardent dans leur
+ * colonne. */
+let G = 1;
 scene.cadre = function (graine) {             // l'écriture suit l'horloge de la figure (S.tw) : le tuteur la fige sur une étape
   const W = craie.W, H = craie.H, VW = 760, VH = 420;
+  const L = Math.round(Math.min(VW * 2.1, Math.max(VW, VH * W / Math.max(1, H))));
+  G = L >= 1000 ? 1.25 : 1;
   craie.debut(graine, S.tw);
   const s = Math.min(W / VW, H / VH);
   scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
   craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
-  craie.echelle = s; craie.tailleMin = 11; craie.cadre = { w: VW, h: VH, haut: 0 };
+  craie.echelle = s; craie.tailleMin = 15; craie.cadre = { w: VW, h: VH, haut: 0 };
   return craie;
 };
 const marque = (c, nom) => { MM[nom] = c.cur; };
@@ -130,25 +136,25 @@ function pendule(ctx, xa, ya, L, angle, signe) {                 // fil de soie 
 // ───────── Les trois vues ─────────
 const DESSINS = {
   energie(c) {
-    c.texte('L’énergie : ce qui permet d’agir', 30, 30, { couleur: 'cyan', taille: 20 });
+    c.texte('L’énergie : ce qui permet d’agir', 30, 30, { couleur: 'cyan', taille: 20 * G });
     c.repere('figure', 20, 44, 720, 360, 'l’énergie, ses formes et le joule');
     debutEtape(c, 'pile');
     peindre(c, ctx => pile(ctx, 40, 150));
     c.trait([[174, 150], [214, 150], [214, 96], [300, 96]], { couleur: 'blanc', largeur: 2 });
     c.trait([[40, 150], [24, 150], [24, 214], [300, 214], [300, 186]], { couleur: 'blanc', largeur: 2 });
-    c.texte('la pile contient de l’énergie', 40, 116, { couleur: 'jaune', taille: 16 });
+    c.texte('la pile contient de l’énergie', 40, 116, { couleur: 'jaune', taille: 16 * G });
     c.repere('pile', 30, 120, 150, 70, 'la pile : une réserve d’énergie');
     marque(c, 'pile');
     c.pause(.3); debutEtape(c, 'lampe');
     c.direct(() => { c.ctx.save(); lampe(c.ctx, 300, 120, vu('lampe') || S.tw >= MM._lampe ? lisse(prog('lampe', .9)) : 0); c.ctx.restore(); });
     c.pause(.5);
-    c.texte('lumière', 390, 92, { couleur: 'jaune', taille: 18 }); c.texte('chaleur', 390, 150, { couleur: 'orange', taille: 18 });
+    c.texte('lumière', 390, 92, { couleur: 'jaune', taille: 18 * G }); c.texte('chaleur', 390, 150, { couleur: 'orange', taille: 18 * G });
     c.fleche(338, 100, 382, 88, { couleur: 'jaune', largeur: 1.6, tete: 7 }); c.fleche(338, 136, 382, 146, { couleur: 'orange', largeur: 1.6, tete: 7 });
     c.repere('lampe', 262, 60, 200, 140, 'la lampe allumée donne de la lumière et de la chaleur');
     marque(c, 'lampe');
     c.pause(.3);
-    c.texte('énergie électrique  →  lumière + chaleur', 30, 262, { couleur: 'blanc', taille: 18, max: 420 });
-    c.texte('L’énergie ne disparaît pas : elle change de forme.', 30, 292, { couleur: 'vert', taille: 18, max: 430 });
+    c.texte('énergie électrique  →  lumière + chaleur', 30, 262, { couleur: 'blanc', taille: 18 * G, max: 420 });
+    c.texte('L’énergie ne disparaît pas : elle change de forme.', 30, 292, { couleur: 'vert', taille: 18 * G, max: 430 });
     c.repere('forme', 24, 240, 440, 64, 'l’énergie change de forme, elle ne disparaît pas');
     marque(c, 'forme');
     c.pause(.3);
@@ -157,69 +163,69 @@ const DESSINS = {
     debutEtape(c, 'pomme');
     c.ligne(470, Y0 + 22, 740, Y0 + 22, { couleur: 'faible', largeur: 2 });
     c.ligne(XR + 70, Y0 + 20, XR + 70, Y0 - 3 * PXM - 4, { couleur: 'faible', largeur: 1.6 });
-    for (let k = 0; k <= 3; k++) c.texte(k + ' m', XR + 78, Y0 + 24 - k * PXM, { couleur: 'faible', taille: 13, duree: .05 });
+    for (let k = 0; k <= 3; k++) c.texte(k + ' m', XR + 78, Y0 + 24 - k * PXM, { couleur: 'faible', taille: 13 * G, duree: .05 });
     c.direct(() => {
       if (!(S.tw >= MM._pomme)) return;
       const monte = vu('pomme') ? S.h : lisse(prog('pomme', 1.4)) * 1;
       const y = Y0 - monte * PXM;
       c.ctx.save(); main(c.ctx, XR, y + 16); pomme(c.ctx, XR, y); c.ctx.restore();
       c.cote(XR + 44, Y0, XR + 44, y, '', { couleur: 'jaune' });
-      c.texte(`h = ${fr(monte, monte % 1 ? 1 : 0)} m`, XR - 30, y - 34, { couleur: 'jaune', taille: 16, align: 'center' });
+      c.texte(`h = ${fr(monte, monte % 1 ? 1 : 0)} m`, XR - 30, y - 34, { couleur: 'jaune', taille: 16 * G, align: 'center' });
       c.repere('pomme', XR - 40, y - 34, 80, 60, 'la pomme de 100 g (glisse-la plus haut)');
-      if (vu('joule')) c.texte(`énergie ≈ ${S.h} J`, XR - 40, Y0 + 54, { couleur: 'vert', taille: 18, align: 'center' });
+      if (vu('joule')) c.texte(`énergie ≈ ${S.h} J`, XR - 40, Y0 + 54, { couleur: 'vert', taille: 18 * G, align: 'center' });
     });
-    c.texte('une pomme de 100 g', 470, 62, { couleur: 'blanc', taille: 16 });
-    c.texte('levée d’un mètre : ≈ 1 J', 470, 84, { couleur: 'blanc', taille: 16 });
+    c.texte('une pomme de 100 g', 470, 62, { couleur: 'blanc', taille: 16 * G });
+    c.texte('levée d’un mètre : ≈ 1 J', 470, 84, { couleur: 'blanc', taille: 16 * G });
     marque(c, 'pomme');
     c.pause(.3);
-    c.texte('Unité de l’énergie : le joule (J)', 30, 342, { couleur: 'jaune', taille: 20 });
-    c.texte('Les repas d’une journée ≈ 3 000 000 J : très grand !', 30, 374, { couleur: 'rose', taille: 16, max: 430 });
+    c.texte('Unité de l’énergie : le joule (J)', 30, 342, { couleur: 'jaune', taille: 20 * G });
+    c.texte('Les repas d’une journée ≈ 3 000 000 J : très grand !', 30, 374, { couleur: 'rose', taille: 16 * G, max: 430 });
     c.repere('joule', 24, 318, 440, 66, 'l’unité de l’énergie est le joule (J)');
     marque(c, 'joule');
     marque(c, 'fin');
   },
 
   puissances(c) {
-    c.texte('Les puissances de dix', 30, 30, { couleur: 'cyan', taille: 20 });
+    c.texte('Les puissances de dix', 30, 30, { couleur: 'cyan', taille: 20 * G });
     c.repere('figure', 20, 44, 720, 360, 'les puissances de dix et la notation scientifique');
     const L = [['10', '10¹'], ['100', '10²'], ['1 000', '10³']];
-    L.forEach(([a, b], i) => { c.texte(a + ' = ' + b, 40, 80 + 32 * i, { couleur: 'blanc', taille: 20 }); });
-    c.texte('l’exposant = le nombre de zéros', 40, 180, { couleur: 'vert', taille: 17 });
+    L.forEach(([a, b], i) => { c.texte(a + ' = ' + b, 40, 80 + 32 * i, { couleur: 'blanc', taille: 20 * G }); });
+    c.texte('l’exposant = le nombre de zéros', 40, 180, { couleur: 'vert', taille: 17 * G });
     c.repere('dix', 30, 56, 330, 134, '10, 100, 1 000 : l’exposant compte les zéros');
     marque(c, 'dix');
     c.pause(.3);
     // 4 000 000 : la virgule saute six fois vers la gauche.
     const X0 = 420, YG = 90;
-    c.texte('4 000 000,', X0, YG, { couleur: 'blanc', taille: 24 });
+    c.texte('4 000 000,', X0, YG, { couleur: 'blanc', taille: 24 * G });
     const wN = c.largeurTexte('4 000 000,', 24), w4 = c.largeurTexte('4', 24), pas = (wN - w4) / 6;
     for (let k = 0; k < 6; k++) {
       const xa = X0 + wN - 4 - k * pas, xb = xa - pas;
       c.courbe(u => [xa + (xb - xa) * u, YG + 10 + 12 * Math.sin(Math.PI * u)], 12, { couleur: 'jaune', largeur: 1.5, duree: .18 });
-      c.texte(String(k + 1), (xa + xb) / 2, YG + 36, { couleur: 'jaune', taille: 12, align: 'center', duree: .05 });
+      c.texte(String(k + 1), (xa + xb) / 2, YG + 36, { couleur: 'jaune', taille: 12 * G, align: 'center', duree: .05 });
     }
-    c.texte('= 4 × 10⁶', X0 + wN + 16, YG, { couleur: 'vert', taille: 24 });
-    c.texte('la virgule saute 6 fois vers la gauche', X0, YG + 62, { couleur: 'faible', taille: 14 });
+    c.texte('= 4 × 10⁶', X0 + wN + 16, YG, { couleur: 'vert', taille: 24 * G });
+    c.texte('la virgule saute 6 fois vers la gauche', X0, YG + 62, { couleur: 'faible', taille: 14 * G });
     c.repere('grand', X0 - 10, YG - 28, 330, 100, '4 000 000 = 4 × 10⁶');
     marque(c, 'grand');
     c.pause(.3);
-    c.texte('0,001 = 10⁻³', X0, 210, { couleur: 'blanc', taille: 24 });
+    c.texte('0,001 = 10⁻³', X0, 210, { couleur: 'blanc', taille: 24 * G });
     const w0 = c.largeurTexte('0', 24), wv = c.largeurTexte('0,', 24);
     for (let k = 0; k < 3; k++) {
       const xa = X0 + wv - 3 + k * w0, xb = xa + w0;
       c.courbe(u => [xa + (xb - xa) * u, 220 + 10 * Math.sin(Math.PI * u)], 10, { couleur: 'jaune', largeur: 1.5, duree: .18 });
     }
-    c.texte('le signe moins : on divise par 1 000', X0, 254, { couleur: 'vert', taille: 15 });
+    c.texte('le signe moins : on divise par 1 000', X0, 254, { couleur: 'vert', taille: 15 * G });
     c.repere('petit', X0 - 10, 184, 330, 80, '0,001 = 10⁻³ : moins, on divise');
     marque(c, 'petit');
     c.pause(.3);
-    c.texte('Notation scientifique : un seul chiffre avant la virgule', 40, 236, { couleur: 'cyan', taille: 15, max: 360 });
-    c.texte('c = 3 × 10⁸ m/s', 40, 268, { couleur: 'blanc', taille: 19 });
-    c.texte('1 u = 1,66 × 10⁻²⁷ kg', 40, 298, { couleur: 'blanc', taille: 19 });
+    c.texte('Notation scientifique : un seul chiffre avant la virgule', 40, 236, { couleur: 'cyan', taille: 15 * G, max: 360 });
+    c.texte('c = 3 × 10⁸ m/s', 40, 268, { couleur: 'blanc', taille: 19 * G });
+    c.texte('1 u = 1,66 × 10⁻²⁷ kg', 40, 298, { couleur: 'blanc', taille: 19 * G });
     c.repere('notation', 30, 214, 370, 94, 'la notation scientifique');
     marque(c, 'notation');
     c.pause(.3);
-    c.texte('10⁸ × 10⁸ = 10⁸⁺⁸ = 10¹⁶', 40, 346, { couleur: 'jaune', taille: 21 });
-    c.texte('on additionne les exposants : (3 × 10⁸)² = 9 × 10¹⁶', 40, 376, { couleur: 'vert', taille: 15, max: 380 });
+    c.texte('10⁸ × 10⁸ = 10⁸⁺⁸ = 10¹⁶', 40, 346, { couleur: 'jaune', taille: 21 * G });
+    c.texte('on additionne les exposants : (3 × 10⁸)² = 9 × 10¹⁶', 40, 376, { couleur: 'vert', taille: 15 * G, max: 380 });
     c.repere('produit', 30, 322, 390, 66, '10⁸ × 10⁸ = 10¹⁶ : on additionne les exposants');
     marque(c, 'produit');
     marque(c, 'fin');
@@ -228,23 +234,23 @@ const DESSINS = {
       if (!vu('fin')) return;
       const xa = 440, xb = 730, y = 330, xn = xa + (S.n + 9) / 18 * (xb - xa);
       c.ligne(xa, y, xb, y, { couleur: 'faible', largeur: 2 });
-      for (const k of [-9, -6, -3, 0, 3, 6, 9]) c.texte(String(k).replace('-', '−'), xa + (k + 9) / 18 * (xb - xa), y + 20, { couleur: 'faible', taille: 12, align: 'center' });
+      for (const k of [-9, -6, -3, 0, 3, 6, 9]) c.texte(String(k).replace('-', '−'), xa + (k + 9) / 18 * (xb - xa), y + 20, { couleur: 'faible', taille: 12 * G, align: 'center' });
       c.ctx.save(); boule(c.ctx, xn, y, 9, ''); c.ctx.restore();
       const sup = String(S.n).replace('-', '⁻').replace(/\d/g, d => '⁰¹²³⁴⁵⁶⁷⁸⁹'[d]);
       const ent = S.n >= 0 ? ('1' + '0'.repeat(S.n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') : '0,' + '0'.repeat(-S.n - 1) + '1';
-      c.texte(`10${sup} = ${ent}`, xa, y - 22, { couleur: 'jaune', taille: 17, max: 300 });
-      c.texte('glisse : n', xb, y + 40, { couleur: 'faible', taille: 12, align: 'right' });
+      c.texte(`10${sup} = ${ent}`, xa, y - 22, { couleur: 'jaune', taille: 17 * G, max: 300 });
+      c.texte('glisse : n', xb, y + 40, { couleur: 'faible', taille: 12 * G, align: 'right' });
       c.repere('exposant', xa - 10, y - 44, xb - xa + 20, 76, 'l’exposant n (glisse-le)');
     });
   },
 
   charges(c) {
-    c.texte('Deux charges : attirer ou repousser', 30, 30, { couleur: 'cyan', taille: 20 });
+    c.texte('Deux charges : attirer ou repousser', 30, 30, { couleur: 'cyan', taille: 20 * G });
     c.repere('figure', 20, 44, 720, 360, 'des charges électriques qui s’attirent ou se repoussent');
     const YA = 80, LF = 120;
     peindre(c, ctx => potence(ctx, 60, 370, YA));
     debutEtape(c, 'boules');
-    c.texte('deux boules suspendues', 60, 250, { couleur: 'blanc', taille: 15 });
+    c.texte('deux boules suspendues', 60, 250, { couleur: 'blanc', taille: 15 * G });
     marque(c, 'boules');
     c.pause(.3); debutEtape(c, 'meme_signe');
     c.direct(() => {                                              // première paire : sans charge, puis + et + qui s'écartent
@@ -255,7 +261,7 @@ const DESSINS = {
       c.repere('paire_meme', 90, YA, 150, LF + 40, 'deux boules de même signe');
     });
     c.pause(1.2);
-    c.texte('même signe : elles se repoussent', 60, 290, { couleur: 'jaune', taille: 16 });
+    c.texte('même signe : elles se repoussent', 60, 290, { couleur: 'jaune', taille: 16 * G });
     c.repere('meme_signe', 54, 272, 260, 26, 'même signe : elles se repoussent');
     marque(c, 'meme_signe');
     c.pause(.3); debutEtape(c, 'contraires');
@@ -267,7 +273,7 @@ const DESSINS = {
       c.repere('paire_contraire', 250, YA, 110, LF + 40, 'deux boules de signes contraires');
     });
     c.pause(1.2);
-    c.texte('signes contraires : elles s’attirent', 60, 316, { couleur: 'vert', taille: 16 });
+    c.texte('signes contraires : elles s’attirent', 60, 316, { couleur: 'vert', taille: 16 * G });
     c.repere('contraires', 54, 298, 280, 26, 'signes contraires : elles s’attirent');
     marque(c, 'contraires');
     c.pause(.3); debutEtape(c, 'protons');
@@ -276,13 +282,13 @@ const DESSINS = {
       const p = prog('protons', 2), e = p < .5 ? 1 - lisse(p / .5) : lisse((p - .5) / .5);
       const xg = 560 - 30 - 90 * e, xd = 560 + 30 + 90 * e;
       c.ctx.save(); ombre(c.ctx, xg, 216, 18); ombre(c.ctx, xd, 216, 18); boule(c.ctx, xg, 190, 20, '+'); boule(c.ctx, xd, 190, 20, '+'); c.ctx.restore();
-      c.texte('proton', xg, 236, { couleur: 'faible', taille: 13, align: 'center' }); c.texte('proton', xd, 236, { couleur: 'faible', taille: 13, align: 'center' });
+      c.texte('proton', xg, 236, { couleur: 'faible', taille: 13 * G, align: 'center' }); c.texte('proton', xd, 236, { couleur: 'faible', taille: 13 * G, align: 'center' });
       if (vu('protons')) { c.fleche(xg - 26, 158, xg - 60, 158, { couleur: 'jaune', largeur: 1.6, tete: 7 }); c.fleche(xd + 26, 158, xd + 60, 158, { couleur: 'jaune', largeur: 1.6, tete: 7 }); }
       c.repere('deux_protons', 420, 150, 280, 100, 'deux protons : deux charges positives');
     });
     c.pause(2);
-    c.texte('deux noyaux : deux charges positives', 400, 290, { couleur: 'blanc', taille: 16, max: 340 });
-    c.texte('ils se repoussent, plus fort quand ils sont proches', 400, 316, { couleur: 'jaune', taille: 15, max: 340 });
+    c.texte('deux noyaux : deux charges positives', 400, 290, { couleur: 'blanc', taille: 16 * G, max: 340 });
+    c.texte('ils se repoussent, plus fort quand ils sont proches', 400, 316, { couleur: 'jaune', taille: 15 * G, max: 340 });
     c.repere('protons', 394, 270, 350, 56, 'deux charges positives se repoussent');
     marque(c, 'protons');
     marque(c, 'fin');
