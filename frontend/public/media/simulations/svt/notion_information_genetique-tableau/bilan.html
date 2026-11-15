@@ -92,10 +92,18 @@ function contenuBloc(c, b, x, y0, w, t, dessiner, st) {
     let fx = x, base = y + tf * 1.1;
     for (const f of b.formules) {
       ctx.font = `${tf}px ${window.Tableau.POLICE}`;
-      const l = Math.min(w, ctx.measureText(f.replace(/_/g, '')).width + tf);
-      if (fx > x && fx + l > x + w) { fx = x; base += tf * 1.65; }
-      if (dessiner) { c.rect(fx, base - tf * 1.02, l, tf * 1.42, { couleur: 'faible', arrondi: 6, largeur: 1.2, duree: .25 }); c.texte(f, fx + tf * .5, base, { couleur: 'jaune', taille: tf, max: l - tf * .7 }); }
-      fx += l + tf * .5;
+      const larg = s => ctx.measureText(s.replace(/_/g, '')).width + tf;
+      // une formule plus large que le bloc passe à la ligne avant un « = » (au lieu d'être rétrécie sous 15 px)
+      const morceaux = [];
+      for (const p of f.split(/ (?==)/)) { const d = morceaux.length - 1; if (d >= 0 && larg(morceaux[d] + ' ' + p) <= w) morceaux[d] += ' ' + p; else morceaux.push(p); }
+      const l = Math.min(w, Math.max(...morceaux.map(larg))), n = morceaux.length;
+      if (fx > x && (fx + l > x + w || n > 1)) { fx = x; base += tf * 1.65; }
+      if (dessiner) {
+        c.rect(fx, base - tf * 1.02, l, tf * 1.42 + (n - 1) * tf * 1.25, { couleur: 'faible', arrondi: 6, largeur: 1.2, duree: .25 });
+        morceaux.forEach((m, i) => c.texte(m, fx + tf * .5 + (i ? tf : 0), base + i * tf * 1.25, { couleur: 'jaune', taille: tf, max: l - tf * .7 - (i ? tf : 0) }));
+      }
+      base += (n - 1) * tf * 1.25;
+      fx = n > 1 ? x + w : fx + l + tf * .5;
     }
     y = base + tf * .55;
   }

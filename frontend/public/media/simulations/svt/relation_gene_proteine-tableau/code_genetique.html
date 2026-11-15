@@ -32,6 +32,10 @@ const clamp = v => Math.max(0, Math.min(1, v));
 const L4 = 'UCAG';
 const CRAIE_LETTRE = { U: 'rose', C: 'bleu', A: 'rouge', G: 'vert' };
 const aaDe = cod => M.traduire(cod);
+/** Taille réellement écrite : le kit agrandit le texte pour qu'il ne passe jamais sous 15 px à l'écran. */
+const tailleEcrite = (c, t) => (c.echelle && c.tailleMin ? Math.max(t, c.tailleMin / c.echelle) : t);
+/** x juste après un texte écrit en x0 (mesuré à sa taille réelle, pas à sa taille nominale). */
+const apres = (c, s, x0, t, ecart = 8) => x0 + c.largeurTexte(s, tailleEcrite(c, t)) + ecart;
 
 /* ── Le tableau du code génétique, à double entrée ── */
 function geo(x0, y0, leftW, colW, rightW, headH, lineH) {
@@ -50,7 +54,7 @@ function dessinerTableau(c, k, g, tEv, o) {
   for (let j = 0; j <= 4; j++) c.ligne(g.cx0 + j * g.colW, g.y0, g.cx0 + j * g.colW, g.y1, tr);
   c.ligne(g.x0, g.y0, g.cx0, g.ly0, { ...tr, largeur: .9 });
   const tp = { duree: .03 };
-  c.texte('2e', g.cx0 - 3, g.y0 + 11, { couleur: 'faible', taille: 12, align: 'right', ...tp });
+  c.texte('2e', g.cx0 - 3, g.y0 - 3, { couleur: 'faible', taille: 12, align: 'right', ...tp });
   c.texte('1re', g.x0 + 2, g.ly0 - 2, { couleur: 'faible', taille: 12, ...tp });
   c.texte('3e', g.x1 - g.rightW / 2, g.ly0 - 5, { couleur: 'faible', taille: 12, align: 'center', ...tp });
   for (let j = 0; j < 4; j++) c.texte(L4[j], g.cx0 + (j + .5) * g.colW, g.ly0 - 4, { couleur: CRAIE_LETTRE[L4[j]], taille: 16, align: 'center', ...tp });
@@ -96,26 +100,32 @@ function dessinerCodons(c, k) {
     if (t >= 1.0) { const a = rampe(t, 1.0, .6); VINGT.forEach((n, i) => M.perle(x, 436 + (i % 10) * 32, 74 + Math.floor(i / 10) * 32, 13, n, { alpha: a })); }
     if (t >= 10.0) M.brin(x, CA.x0, CA.y, CA.pas, ARN_EX, 'arn', -1, { lb: 24, alpha: rampe(t, 10.0, .5) });
   });
+  // les perles peintes comptent dans le cadrage automatique (qui ne mesure que la craie) : coins invisibles
+  c.direct(() => { c.point(36, 70, 0); c.point(436 + 9 * 32 + 15, 74 + 32 + 15, 0); });
   c.texte('Trois lettres pour un acide aminé', 380, 24, { couleur: 'cyan', taille: 19, align: 'center' });
   if (t >= .3) c.repere('lettres', 36, 70, 196, 44, 'les 4 lettres de l’ARNm : U, C, A, G');
   if (t >= 1.0) c.repere('vingt_acides_amines', 420, 58, 320, 90, 'les 20 acides aminés');
   if (k.ecrit(c, 'lettres', .4)) { k.T(c, '4 lettres (bases) dans l’ARNm :', 36, 60, { couleur: 'blanc', taille: 15 }); }
   if (k.ecrit(c, 'vingt', 1.2)) k.T(c, '20 acides aminés dans les protéines', 580, 140, { couleur: 'blanc', taille: 15, align: 'center' });
   const yl = [184, 220, 256];
+  const s1 = '1 lettre → 4 possibilités : 4 < 20,', s2 = '2 lettres → 4 × 4 = 16 : 16 < 20,', s3 = '3 lettres → 4 × 4 × 4 = 64 : 64 ≥ 20,';
+  // La colonne des exemples part après la plus longue ligne (mesurée à sa taille réelle), jamais avant x = 520.
+  const finLigne = (sl, mot) => apres(c, sl, 36, 17) + c.largeurTexte(mot, tailleEcrite(c, 17));
+  const xEx = Math.max(520, finLigne(s1, 'trop peu') + 16, finLigne(s2, 'trop peu') + 16, finLigne(s3, 'assez') + 16);
   if (k.ecrit(c, 'l1', 3.0)) {
-    const s1 = '1 lettre → 4 possibilités : 4 < 20,'; k.T(c, s1, 36, yl[0], { couleur: 'blanc', taille: 17 });
-    k.T(c, 'trop peu', 44 + c.largeurTexte(s1, 17), yl[0], { couleur: 'rouge', taille: 17 });
-    k.T(c, 'U, C, A, G', 520, yl[0], { couleur: 'faible', taille: 14 });
+    k.T(c, s1, 36, yl[0], { couleur: 'blanc', taille: 17 });
+    k.T(c, 'trop peu', apres(c, s1, 36, 17), yl[0], { couleur: 'rouge', taille: 17 });
+    k.T(c, 'U, C, A, G', xEx, yl[0], { couleur: 'faible', taille: 14 });
   }
   if (k.ecrit(c, 'l2', 5.5)) {
-    const s2 = '2 lettres → 4 × 4 = 16 : 16 < 20,'; k.T(c, s2, 36, yl[1], { couleur: 'blanc', taille: 17 });
-    k.T(c, 'trop peu', 44 + c.largeurTexte(s2, 17), yl[1], { couleur: 'rouge', taille: 17 });
-    k.T(c, 'UU, UC, UA, UG, CU, … GG', 520, yl[1], { couleur: 'faible', taille: 14 });
+    k.T(c, s2, 36, yl[1], { couleur: 'blanc', taille: 17 });
+    k.T(c, 'trop peu', apres(c, s2, 36, 17), yl[1], { couleur: 'rouge', taille: 17 });
+    k.T(c, 'UU, UC, UA, UG, CU, … GG', xEx, yl[1], { couleur: 'faible', taille: 14 });
   }
   if (k.ecrit(c, 'l3', 8.0)) {
-    const s3 = '3 lettres → 4 × 4 × 4 = 64 : 64 ≥ 20,'; k.T(c, s3, 36, yl[2], { couleur: 'blanc', taille: 17 });
-    k.T(c, 'assez', 44 + c.largeurTexte(s3, 17), yl[2], { couleur: 'vert', taille: 17 });
-    k.T(c, 'UUU, UUC, … GGG : 64', 520, yl[2], { couleur: 'faible', taille: 14 });
+    k.T(c, s3, 36, yl[2], { couleur: 'blanc', taille: 17 });
+    k.T(c, 'assez', apres(c, s3, 36, 17), yl[2], { couleur: 'vert', taille: 17 });
+    k.T(c, 'UUU, UUC, … GGG : 64', xEx, yl[2], { couleur: 'faible', taille: 14 });
     k.T(c, 'un acide aminé est codé par 3 nucléotides : un codon (triplet)', 36, 288, { couleur: 'vert', taille: 15 });
   }
   if (t >= 3.0) c.repere('calcul', 30, 166, 700, 100, 'le calcul : 4, 16, 64 possibilités');

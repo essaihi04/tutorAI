@@ -349,8 +349,12 @@ function dessiner(c) {
   }
   // dioxygène et eau
   for (const o of PL.O2) {
-    const a = vis(o, t); if (a <= 0) continue; const [x, y] = ou(o, t);
-    c.direct(() => { P.bille(c.ctx, x, y, 9, OXY, { alpha: a }); const droite = o === PL.O2[1]; c.texte(PL.cyan ? 'O_{2}' : '½ O_{2}', droite ? x + 13 : x - 13, y + 4, { couleur: 'blanc', taille: 12, align: droite ? 'left' : 'right', alpha: a }); });
+    const a = vis(o, t); if (a <= 0) continue; const [x, y] = ou(o, t), droite = o === PL.O2[1];
+    // l'étiquette s'efface quand les H+ et e− arrivent sur la bille : leurs étiquettes ne la recouvrent pas
+    let d = Infinity;
+    for (const p of PL.H.concat(PL.E)) if (vis(p, t) > 0) { const [px, py] = ou(p, t); d = Math.min(d, Math.hypot(px - (droite ? x + 30 : x - 30), py - y)); }
+    const aE = a * Math.max(0, Math.min(1, (d - 26) / 14));
+    c.direct(() => { P.bille(c.ctx, x, y, 9, OXY, { alpha: a }); if (aE > .02) c.texte(PL.cyan ? 'O_{2}' : '½ O_{2}', droite ? x + 13 : x - 13, y + 4, { couleur: 'blanc', taille: 12, align: droite ? 'left' : 'right', alpha: aE }); });
   }
   for (const w of PL.EAUX) {
     const a = vis(w, t); if (a <= 0) continue; const [x, y] = ou(w, t);

@@ -81,11 +81,24 @@ const COL = [{ x: 18, w: 228 }, { x: 264, w: 228 }, { x: 510, w: 228 }], HAUT = 
 const T0 = { ti: 14, fo: 13, de: 11.5, at: 11, st: 11, lh: 1.2 };
 let T = T0, POS = null, POS_L = 0;
 const TM = [T0, T0];
+/** Une formule plus large que le bloc passe à la ligne avant un « = » ou une « → » (au lieu d'être rétrécie sous 15 px). */
+function morceauxFormule(c, f, taille, w) {
+  c.ctx.font = `${taille}px ${window.Tableau.POLICE}`;
+  const larg = s => c.ctx.measureText(s.replace(/_/g, '')).width + 14, out = [];
+  if (larg(f) <= w) return [f];
+  for (const p of f.split(/ (?=[=→] )/)) { const d = out.length - 1; if (d >= 0 && larg(out[d] + ' ' + p) <= w) out[d] += ' ' + p; else out.push(p); }
+  return out;
+}
 function hauteurBloc(c, b, w, t) {
   let h = t.ti * 1.25;
   if (b.formules) {
     let fx = 0, rangs = 1;
-    for (const f of b.formules) { c.ctx.font = `${t.fo}px ${window.Tableau.POLICE}`; const l = Math.min(w, c.ctx.measureText(f).width + 14); if (fx > 0 && fx + l > w) { fx = 0; rangs++; } fx += l + 7; }
+    for (const f of b.formules) {
+      const m = morceauxFormule(c, f, t.fo, w); c.ctx.font = `${t.fo}px ${window.Tableau.POLICE}`;
+      const l = Math.min(w, Math.max(...m.map(s => c.ctx.measureText(s).width)) + 14);
+      if (fx > 0 && (fx + l > w || m.length > 1)) { fx = 0; rangs++; }
+      if (m.length > 1) { rangs += m.length - 1; fx = w; } else fx += l + 7;
+    }
     h += rangs * (t.fo + 9) + 4;
   }
   h += lignes(c, b.def, t.de, w).length * t.de * t.lh + lignes(c, b.attention, t.at, w - 18).length * t.at * t.lh;
@@ -109,7 +122,9 @@ function moitieVue() {
 function disposer(c, L) {
   const cle = L + ':' + (c.echelle || 1).toFixed(3);
   if (cle === POS_L) return; POS_L = cle;
-  if (L < 1000) { T = T0; POS = null; return; }
+  // la grille d'origine seulement si ses petites tailles restent ≥ 15 px à l'écran ; sinon le kit les agrandit et
+  // les lignes, coupées à la taille nominale, se chevauchent : on passe aux blocs qui coulent (tailles réelles)
+  if (L < 1000 && Math.min(T0.de, T0.at) * (c.echelle || 1) >= 15) { T = T0; POS = null; return; }
   const minimum = 15 / Math.max(.01, c.echelle || 1);       // la taille plancher, en unités du dessin
   // la plus grande taille qui tient d'abord (quatre blocs par moitié : 2, 3 ou 4 colonnes)
   const essais = [];
@@ -118,7 +133,8 @@ function disposer(c, L) {
   const pos = [];
   MOITIES.forEach((moitie, m) => {
     for (const [n, f] of essais) {
-      const t = { ti: Math.max(21, minimum * 1.1) * f, fo: Math.max(18, minimum) * f, de: Math.max(19, minimum) * f, at: Math.max(18, minimum) * f, st: Math.max(15, minimum), lh: 1.13 };
+      const g = L >= 1000 ? 1 : 0;   // tableau étroit agrandi : on part du plancher de 15 px, pas des grandes tailles du tableau large
+      const t = { ti: Math.max(21 * g, minimum * 1.1) * f, fo: Math.max(18 * g, minimum) * f, de: Math.max(19 * g, minimum) * f, at: Math.max(18 * g, minimum) * f, st: Math.max(15, minimum), lh: g ? 1.13 : 1.25 };
       const gap = 22, w = (L - 36 - (n - 1) * gap) / n;
       let ok = true, col = 0, y = HAUT + 4;
       for (const i of moitie) {
@@ -155,12 +171,12 @@ function bloc(c, b, i) {
     // formules encadrées, à la ligne quand la suivante ne tient plus
     let fx = x;
     for (const f of b.formules) {
-      c.ctx.font = `${T.fo}px ${window.Tableau.POLICE}`;
-      const l = Math.min(w, c.ctx.measureText(f.replace(/_/g, '')).width + 14);
-      if (fx > x && fx + l > x + w) { fx = x; y += T.fo + 8; }
-      c.rect(fx, y - T.fo, l, T.fo + 6, { couleur: 'faible', arrondi: 6, largeur: 1.2, duree: .25 });
-      c.texte(f, fx + 7, y + 1, { couleur: 'jaune', taille: T.fo, max: l - 10 });
-      fx += l + 7;
+      const m = morceauxFormule(c, f, T.fo, w); c.ctx.font = `${T.fo}px ${window.Tableau.POLICE}`;
+      const l = Math.min(w, Math.max(...m.map(s => c.ctx.measureText(s.replace(/_/g, '')).width)) + 14);
+      if (fx > x && (fx + l > x + w || m.length > 1)) { fx = x; y += T.fo + 8; }
+      c.rect(fx, y - T.fo, l, T.fo + 6 + (m.length - 1) * (T.fo + 9), { couleur: 'faible', arrondi: 6, largeur: 1.2, duree: .25 });
+      m.forEach((s, k) => c.texte(s, fx + 7, y + 1 + k * (T.fo + 9), { couleur: 'jaune', taille: T.fo, max: l - 10 }));
+      if (m.length > 1) { y += (m.length - 1) * (T.fo + 9); fx = x + w; } else fx += l + 7;
     }
     y += T.fo + 7;
   }
