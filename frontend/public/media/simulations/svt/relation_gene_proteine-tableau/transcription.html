@@ -122,32 +122,33 @@ function nucleotidesLibres(t) {
   }
   return out;
 }
+/** La peinture de la transcription à l’instant t (fond compris : `fond` = [x0, y0, w, h]) ; partagée avec la vue « legender ». */
+function peindreTranscription(x, t, E, fond = [4, 34, 752, 384], tLibres = t) {
+  M.milieu(x, fond[0], fond[1], fond[2], fond[3], 'noyau');
+  // l’ARN polymérase, derrière les brins (translucide : les lettres restent lisibles)
+  polymerase(x, E.px, E.py, E.ps, E.pa * (t >= 2.4 ? 1 : 0));
+  // brin non transcrit (haut, 5′ à gauche) et brin transcrit (bas, 3′ à gauche), avec une base pâle de chaque côté
+  const ntP = FL_G + NT + FL_D, trP = COMP[FL_G] + TR + COMP[FL_D];
+  const pale = i => (i === 0 || i === N + 1 ? .35 : 1);
+  for (const [s, sens, fy] of [[ntP, 1, E.yT], [trP, -1, E.yB]]) {
+    for (const i of [0, N + 1]) baseP(x, xu(i - .5), fy(i - .5), s[i], sens, LB, PAS, pale(i), false);
+    brinCourbe(x, X0, PAS, s.slice(1, N + 1), 'adn', sens, fy, { lb: LB, u0: -1.5, u1: N + 1.5 });
+  }
+  // l’ARNm : apparié dans l’œil, détaché derrière (il passe devant le brin transcrit)
+  if (E.nA > 0) brinCourbe(x, X0, PAS, ARN, 'arn', 1, E.yA, { lb: LB, de: 0, a: E.nA, u0: 0, u1: E.nA });
+  // nucléotides d’ARN libres, dans le nucléoplasme
+  if (t >= 2.4) for (const n of nucleotidesLibres(tLibres)) nucLibre(x, n.x, n.y, n.L, n.ang, rampe(t, 2.4, .8));
+  // le nucléotide qui arrive en face de sa base complémentaire
+  if (t >= 6.4 && E.nb < N) {
+    const i = E.nA, u = lisse(clamp(E.nb - i)), xi = xu(i + .5);
+    const sx = xi + 34, sy = 352, cx = xi + 44, cy = 262, ex = xi, ey = YARN;
+    const q = 1 - u, bx = q * q * sx + 2 * q * u * cx + u * u * ex, by = q * q * sy + 2 * q * u * cy + u * u * ey;
+    nucLibre(x, bx, by, ARN[i], -Math.PI / 2 + Math.PI * u);
+  }
+}
 function dessinerTranscription(c, k) {
   const t = k.t, E = etatT(t);
-  c.direct(() => {
-    const x = c.ctx;
-    M.milieu(x, 4, 34, 752, 384, 'noyau');
-    // l’ARN polymérase, derrière les brins (translucide : les lettres restent lisibles)
-    polymerase(x, E.px, E.py, E.ps, E.pa * (t >= 2.4 ? 1 : 0));
-    // brin non transcrit (haut, 5′ à gauche) et brin transcrit (bas, 3′ à gauche), avec une base pâle de chaque côté
-    const ntP = FL_G + NT + FL_D, trP = COMP[FL_G] + TR + COMP[FL_D];
-    const pale = i => (i === 0 || i === N + 1 ? .35 : 1);
-    for (const [s, sens, fy] of [[ntP, 1, E.yT], [trP, -1, E.yB]]) {
-      for (const i of [0, N + 1]) baseP(x, xu(i - .5), fy(i - .5), s[i], sens, LB, PAS, pale(i), false);
-      brinCourbe(x, X0, PAS, s.slice(1, N + 1), 'adn', sens, fy, { lb: LB, u0: -1.5, u1: N + 1.5 });
-    }
-    // l’ARNm : apparié dans l’œil, détaché derrière (il passe devant le brin transcrit)
-    if (E.nA > 0) brinCourbe(x, X0, PAS, ARN, 'arn', 1, E.yA, { lb: LB, de: 0, a: E.nA, u0: 0, u1: E.nA });
-    // nucléotides d’ARN libres, dans le nucléoplasme
-    if (t >= 2.4) for (const n of nucleotidesLibres(t)) nucLibre(x, n.x, n.y, n.L, n.ang, rampe(t, 2.4, .8));
-    // le nucléotide qui arrive en face de sa base complémentaire
-    if (t >= 6.4 && E.nb < N) {
-      const i = E.nA, u = lisse(clamp(E.nb - i)), xi = xu(i + .5);
-      const sx = xi + 34, sy = 352, cx = xi + 44, cy = 262, ex = xi, ey = YARN;
-      const q = 1 - u, bx = q * q * sx + 2 * q * u * cx + u * u * ex, by = q * q * sy + 2 * q * u * cy + u * u * ey;
-      nucLibre(x, bx, by, ARN[i], -Math.PI / 2 + Math.PI * u);
-    }
-  });
+  c.direct(() => peindreTranscription(c.ctx, t, E));
   c.texte('La transcription : du gène à l’ARNm', 380, 24, { couleur: 'cyan', taille: 19, align: 'center' });
   // ── légendes qui suivent les brins ──
   const yT0 = E.yT(-1.5), yB0 = E.yB(-1.5), yT1 = E.yT(N + 1.5), yB1 = E.yB(N + 1.5);
@@ -402,6 +403,96 @@ function voitNoyau(k) {
   return m;
 }
 
+/* ════════════════ Vue « legender » (schéma de la transcription à légender, comme au bac) ════════════════
+ * Ajoutée le 15 novembre 2026 sur le modèle exact de schema_bilan.html vue `construire` : la transcription arrêtée en
+ * cours (œil ouvert, ARNm à moitié fait) sans légende, des traits de rappel, cinq étiquettes à glisser ; bien posée, une
+ * étiquette devient verte et s’aimante. `legende_*` (lecture seule) disent au lecteur ce que l’élève a fait ; `corrige`
+ * les pose toutes. La peinture est celle de la vue « transcription » à 13,5 s, décalée de 60 px vers la gauche. */
+const TL = { tf: 13.5, dx: -60 };
+const NOMS_T = { non_transcrit: 'brin non transcrit', transcrit: 'brin transcrit', polymerase: 'ARN polymérase', arnm: 'ARNm', libres: 'nucléotides libres' };
+const SLOT_T = { non_transcrit: [468, 88], transcrit: [470, 240], polymerase: [262, 66], arnm: [62, 238], libres: [330, 404] };
+const CIBLE_T = { non_transcrit: [452, 136], transcrit: [452, 194], polymerase: [352, 165], arnm: [80, 294], libres: [292, 368] };
+const ORDRE_T = ['transcrit', 'arnm', 'libres', 'non_transcrit', 'polymerase'];
+const COL_T = i => [672, 78 + 40 * i];
+const MLT = { etiquettes: 2.5, corrige: 6.5 };
+const T_CORR_T = 4.6;
+let ETT = {}, dernierTT = 0, ERREURS_T = 0, MAL_T = new Set();
+function remiseT() { ETT = {}; ERREURS_T = 0; MAL_T = new Set(); ORDRE_T.forEach((id, i) => { const [x, y] = COL_T(i); ETT[id] = { x, y, ok: false }; }); }
+/** Ce que le lecteur lit pour noter et commenter le schéma (`legende_*`, lecture seule). */
+function noterT(P) { P.legende_total = ORDRE_T.length; P.legende_places = ORDRE_T.filter(n => ETT[n].ok).length; P.legende_erreurs = ERREURS_T; P.legende_mal = [...MAL_T].join(', '); }
+remiseT();
+const largeurT = id => 18 + 8.2 * NOMS_T[id].length;
+function positionsT(k) {
+  const out = {};
+  ORDRE_T.forEach((id, i) => {
+    const e = ETT[id];
+    if (k.P.corrige && k.t >= T_CORR_T) { const u = rampe(k.t, T_CORR_T + .15 * i, 1.0), [sx, sy] = SLOT_T[id]; out[id] = { x: entre(e.x, sx, u), y: entre(e.y, sy, u), ok: e.ok || u >= 1 }; }
+    else out[id] = { ...e };
+  });
+  return out;
+}
+function dessinerLegender(c, k) {
+  const t = k.t, a = rampe(t, .1, .6), E = etatT(TL.tf);
+  if (t + .3 < dernierTT) remiseT();
+  dernierTT = t;
+  if (!k.P.legende_total) noterT(k.P);   // la vue legender est un schéma à légender
+  c.direct(() => {
+    const x = c.ctx;
+    x.save(); x.globalAlpha *= a; x.translate(TL.dx, 0);
+    peindreTranscription(x, TL.tf, E, [4 - TL.dx, 34, 580, 384], TL.tf);
+    x.restore();
+  });
+  c.texte('Légende le schéma de la transcription', 20, 24, { couleur: 'cyan', taille: 19 });
+  c.repere('schema', 4, 34, 580, 384, 'le schéma de la transcription (dans le noyau)');
+  c.repere('oeil', xu(E.L) + TL.dx, 100, xu(E.R) - xu(E.L), 160, 'l’ADN ouvert sous l’ARN polymérase');
+  c.repere('arnm', X0 + TL.dx, 190, E.nA * PAS, 140, 'l’ARNm en formation');
+  if (t >= .6 && k.ecrit(c, 'ends', .6)) {
+    const g = xu(-1.5) + TL.dx - 11, d = xu(N + 1.5) + TL.dx + 11;
+    k.T(c, '5′', g, E.yT(-1.5) + 5, { couleur: 'vert', taille: 15, align: 'center' }); k.T(c, '3′', d, E.yT(N + 1.5) + 5, { couleur: 'vert', taille: 15, align: 'center' });
+    k.T(c, '3′', g, E.yB(-1.5) + 5, { couleur: 'vert', taille: 15, align: 'center' }); k.T(c, '5′', d, E.yB(N + 1.5) + 5, { couleur: 'vert', taille: 15, align: 'center' });
+  }
+  // les traits de rappel (où va chaque étiquette)
+  if (t >= .8 && k.ecrit(c, 'traits', .8)) {
+    ORDRE_T.forEach(id => {
+      const [sx, sy] = SLOT_T[id], [tx, ty] = CIBLE_T[id], w = largeurT(id) / 2;
+      const ex = tx < sx - w ? sx - w : tx > sx + w ? sx + w : tx, ey = ex === tx ? (ty < sy ? sy - 13 : sy + 13) : sy;
+      // trait de rappel sombre : il se lit sur le nucléoplasme clair
+      c.ligne(tx, ty, ex, ey, { couleur: '#334155', largeur: 1.5, duree: .06 });
+      c.cercle(tx, ty, 2.6, { couleur: '#334155', largeur: 1.8, duree: .04 });
+    });
+  }
+  if (t >= 1.0) c.repere('etiquettes', 586, 58, 172, 210, 'les étiquettes à poser');
+  const pos = positionsT(k);
+  if (k.P.corrige && t >= T_CORR_T + 1.9) k.P.places = ORDRE_T.length;
+  if (t >= 1.0 && k.ecrit(c, 'et', 1.0)) {
+    ORDRE_T.forEach(id => {
+      const p = pos[id], w = largeurT(id), coul = p.ok ? 'vert' : 'blanc';
+      c.rect(p.x - w / 2, p.y - 13, w, 26, { couleur: coul, largeur: 1.6, fond: p.ok ? '#14532d' : '#1e293b', fondAlpha: .88, arrondi: 6 });
+      c.texte(NOMS_T[id], p.x, p.y + 6, { couleur: coul, taille: 16, align: 'center', duree: .25 });
+    });
+  }
+  if (t >= 1.6 && k.ecrit(c, 'consigne', 1.6)) { k.T(c, 'glisse chaque étiquette', 672, 300, { couleur: 'faible', taille: 15, align: 'center' }); k.T(c, 'au bout de son trait', 672, 320, { couleur: 'faible', taille: 15, align: 'center' }); }
+  if (k.P.corrige && t >= T_CORR_T + 1.9 && k.ecrit(c, 'bravo', T_CORR_T + 1.9)) { k.T(c, 'corrigé : les 5', 672, 360, { couleur: 'vert', taille: 16, align: 'center' }); k.T(c, 'sont à leur place', 672, 382, { couleur: 'vert', taille: 16, align: 'center' }); }
+}
+function voitLegender(k) {
+  const t = k.t, pos = positionsT(k), m = [];
+  m.push('Le schéma de la transcription SANS légende, dans le noyau (fond bleuté) : un gène de deux brins (en haut 5′ → 3′, en bas 3′ → 5′) ouvert au milieu sous l’ARN polymérase (ovale rose-violet) ; un ARNm orange déjà formé (8 nucléotides, AUG CGC AG) s’apparie au brin du bas dans l’œil et pend dessous, à gauche ; en bas, des nucléotides d’ARN libres. Cinq traits de rappel partent des structures.');
+  if (t < 1.0) return m;
+  const col = [], bien = [], ailleurs = [];
+  ORDRE_T.forEach((id, i) => {
+    const p = pos[id], [cx0, cy0] = COL_T(i);
+    if (p.ok) bien.push(`« ${NOMS_T[id]} »`);
+    else if (Math.hypot(p.x - cx0, p.y - cy0) < 4) col.push(`« ${NOMS_T[id]} »`);
+    else { let best = null, d = 1e9; for (const [s, [sx, sy]] of Object.entries(SLOT_T)) { const dd = Math.hypot(p.x - sx, p.y - sy); if (dd < d) { d = dd; best = s; } } ailleurs.push(`« ${NOMS_T[id]} » (posée près de la place de « ${NOMS_T[best]} »)`); }
+  });
+  if (col.length) m.push(`Dans la colonne de droite, étiquettes à poser : ${col.join(', ')}.`);
+  if (bien.length) m.push(`Bien posées (vertes, aimantées) : ${bien.join(', ')}.`);
+  if (ailleurs.length) m.push(`Mal posées (blanches) : ${ailleurs.join(', ')}.`);
+  if (k.P.corrige && t >= T_CORR_T && t < T_CORR_T + 1.9) m.push('Correction : les étiquettes glissent vers leur place.');
+  m.push(`Bien posées : ${ORDRE_T.filter(id => pos[id].ok).length} sur ${ORDRE_T.length}.`);
+  return m;
+}
+
 /* ════════════════ Paramètres et lancement ════════════════ */
 function lireBrin(v, vide) {
   const s = String(v ?? '').toUpperCase().replace(/U/g, 'T').replace(/[^ATCG]/g, '');
@@ -415,20 +506,43 @@ window.Etapes.lancer({
   parametres: {
     brin_non_transcrit: { defaut: 'ATG CGC AGT CAG TAG', schema: 'vue brins : 3 à 6 triplets A T C G séparés par des espaces, lu 5′→3′ (défaut ATG CGC AGT CAG TAG)', lire: v => lireBrin(v, false) },
     brin_transcrit: { defaut: '', schema: 'vue brins : 3 à 6 triplets A T C G, lu 3′→5′ ; s’il est donné il prime (brin non transcrit = complémentaire) ; vide = pas utilisé', lire: v => lireBrin(v, true) },
+
+    places: { defaut: 0, schema: 'lecture seule : nombre d’étiquettes bien posées (0..5), vue legender', lire: () => undefined },
+    legende_total: { defaut: 0, schema: 'lecture seule : étiquettes à poser (vue legender)', lire: () => undefined },
+    legende_places: { defaut: 0, schema: 'lecture seule : étiquettes bien posées par l’élève', lire: () => undefined },
+    legende_erreurs: { defaut: 0, schema: 'lecture seule : étiquettes lâchées loin de leur place', lire: () => undefined },
+    legende_mal: { defaut: '', schema: 'lecture seule : les étiquettes mal posées au moins une fois', lire: () => undefined },
+    corrige: { defaut: false, schema: 'true | false (true : toutes les étiquettes vont à leur place, vue legender)', lire: v => v === true || v === 'true' || v === 1 || v === '1' },
   },
   apresReglage: (k, cles) => {
     if (cles.includes('brin_transcrit') && k.P.brin_transcrit) k.P.brin_non_transcrit = compBrin(k.P.brin_transcrit);
     else if (cles.includes('brin_non_transcrit') && !cles.includes('brin_transcrit')) k.P.brin_transcrit = '';
+    if (cles.includes('corrige') && !k.P.corrige) { remiseT(); k.P.places = 0; if (k.P.legende_total) noterT(k.P); }
   },
   poignees: {
     // vue brins : toucher une base du brin non transcrit la fait tourner A → T → C → G (les trois lignes se recalculent)
+    // vue legender : les étiquettes à glisser (comme schema_bilan.html vue construire)
     toucher: (x, y, k) => {
+      if (k.vue === 'legender') {
+        if (k.t < 1.8 || (k.P.corrige && k.t >= T_CORR_T)) return null;
+        for (let i = ORDRE_T.length - 1; i >= 0; i--) { const id = ORDRE_T[i], e = ETT[id]; if (Math.abs(x - e.x) <= largeurT(id) / 2 + 4 && Math.abs(y - e.y) <= 16) return 'et:' + id; }
+        return null;
+      }
       if (k.vue !== 'brins') return null;
       const n = k.P.brin_non_transcrit.replace(/ /g, '').length, pas = geoBrins(n).pas, i = Math.floor((x - BX0) / pas);
       return (i >= 0 && i < n && y >= BYNT - 8 && y <= BYNT + BLB + 8) ? 'b' + i : null;
     },
-    bouger: () => {},
+    bouger: (id, x, y) => { if (id.startsWith('et:')) ETT[id.slice(3)] = { x: Math.min(745, Math.max(25, x)), y: Math.min(408, Math.max(40, y)), ok: false }; },
     lacher: (id, k, api) => {
+      if (id.startsWith('et:')) {
+        const n = id.slice(3), [sx, sy] = SLOT_T[n], e = ETT[n], [cx0, cy0] = COL_T(ORDRE_T.indexOf(n));
+        if (Math.hypot(e.x - sx, e.y - sy) <= 42) ETT[n] = { x: sx, y: sy, ok: true };
+        // lâchée sur le schéma, loin de sa place : une erreur (la reposer dans la colonne n'en est pas une)
+        else if (e.x < 586 && Math.hypot(e.x - cx0, e.y - cy0) > 30) { ERREURS_T += 1; MAL_T.add(NOMS_T[n]); }
+        k.P.places = ORDRE_T.filter(m => ETT[m].ok).length;
+        noterT(k.P);
+        return;
+      }
       const i = +id.slice(1), s = k.P.brin_non_transcrit.replace(/ /g, '').split(''), ordre = 'ATCG';
       s[i] = ordre[(ordre.indexOf(s[i]) + 1) % 4];
       api.poser({ brin_non_transcrit: s.join('') }); api.setTime({ time_s: k.fin });
@@ -451,6 +565,14 @@ window.Etapes.lancer({
       conclusion: 'L’ARNm porte l’information du noyau aux ribosomes du cytoplasme ; l’ADN reste dans le noyau.',
       texte: 'La cellule : l’ARNm formé dans le noyau sort par un pore vers le cytoplasme où attendent les ribosomes ; l’ADN ne sort jamais du noyau.',
       explication: [{ repere: 'adn', texte: 'L’ADN reste dans le noyau.' }, { repere: 'pore', texte: 'L’ARNm sort par un pore nucléaire.' }, { repere: 'ribosomes', texte: 'Dans le cytoplasme, les ribosomes l’attendent.' }] },
+
+    legender: { titre: 'Légende le schéma de la transcription', encre: [4, 34, 584, 418], fin: 8, moments: MLT, reglages: { etiquettes: { corrige: false }, corrige: { corrige: true } },
+      dessiner: dessinerLegender, voit: voitLegender,
+      motifs: { etiquettes: 'pose chaque étiquette au bout de son trait', corrige: 'la correction : toutes les étiquettes à leur place' },
+      conclusion: 'Pose les cinq étiquettes : brin transcrit, brin non transcrit, ARN polymérase, ARNm, nucléotides libres.',
+      surReglage: (k, cles, api) => { if (cles.includes('corrige')) { if (k.P.corrige) api.playUntil({ moment: 'corrige' }); else api.start(); } },
+      texte: 'Le schéma de la transcription en cours, sans légende ; cinq étiquettes à glisser au bout des traits de rappel (brin transcrit, brin non transcrit, ARN polymérase, ARNm, nucléotides libres) ; bien posée, une étiquette devient verte et s’aimante ; corrige : toutes à leur place.',
+      explication: [{ repere: 'etiquettes', texte: 'Glisse chaque étiquette au bout de son trait.' }, { repere: 'oeil', texte: 'L’ARN polymérase ouvre l’ADN et lit un seul brin.' }, { repere: 'arnm', texte: 'L’ARNm s’apparie au brin transcrit.' }] },
   },
 });
 </script>
