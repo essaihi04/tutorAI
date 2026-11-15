@@ -163,10 +163,15 @@ const TUBES = [{ cx: 52, top: 58 }, { cx: 52, top: 168 }, { cx: 52, top: 278 }];
 const BOC = { xs: [340, 420, 540, 620], top: 136, bas: 292, w: 70, cell: 20, rang: 12.5 };
 // Comptage de chaque espèce : début, fin du remplissage, départ des nombres vers le tube.
 const CPT = [{ a: 3.0, b: 8.4, vers: 14.4 }, { a: 15.0, b: 16.3, vers: 16.4 }, { a: 16.7, b: 18.0, vers: 18.0 }];
-const VOL = .55, VERS_D = .45;
+const VOL = .55, VERS_D = .45, DEPART = .22;   // DEPART : les nombres quittent les bocaux une fois les compteurs effacés (0,2 s)
 const nb = (i, j) => Math.round(DONNEES[i][j + 1]);
 const posTube = (i, j) => [100 + j * 46, TUBES[i].top + 50];
-const posCase = (i, j) => [COLS[j + 1], 160 + i * 46];
+/* Tableau large (finition du 15 novembre 2026, « le tableau ne fait que la moitié de la hauteur, chiffres vers 15 px ») :
+ * lignes plus espacées et chiffres plus gros quand le tableau est large (le bloc grandit alors sur presque toute la
+ * hauteur) ; disposition d'origine sur un tableau étroit. */
+const grandTableau = () => { const E = window.__etapes; return !!E && E.scene.L >= 1000; };
+const ligneY = i => (grandTableau() ? 154 + i * 72 : 160 + i * 46);
+const posCase = (i, j) => [COLS[j + 1], ligneY(i)];
 
 function molecule(x, cx, cy, L, s = 1, a = 1, lettre = false) {
   // pyrimidine (T, C) : un cycle à six ; purine (A, G) : un cycle à six accolé à un cycle à cinq (deux cycles)
@@ -216,7 +221,7 @@ function vols(i) {
 }
 const PLANS = [0, 1, 2].map(vols);
 /** L’espèce dont les bases sont dans les bocaux à l’instant t, ou -1. */
-function especeEnCours(t) { for (let i = 2; i >= 0; i--) if (t >= CPT[i].a && t < CPT[i].vers + VERS_D) return i; return -1; }
+function especeEnCours(t) { for (let i = 2; i >= 0; i--) if (t >= CPT[i].a && t < CPT[i].vers + DEPART + VERS_D) return i; return -1; }
 const posee = (i, j, t) => PLANS[i].filter(m => m.j === j && t >= m.t0 + VOL).length;
 
 function dessinerChargaff(c, k) {
@@ -284,32 +289,33 @@ function dessinerChargaff(c, k) {
   const tVol = (i, j) => MCH.especes + .5 + i * .35 + j * .08;
   c.direct(() => {
     for (let i = 0; i < 3; i++) for (let j = 0; j < 4; j++) {
-      const t1 = CPT[i].vers + j * .06; if (t < t1) continue;
+      const t1 = CPT[i].vers + DEPART + j * .06; if (t <= t1) continue;   // après l'effacement des compteurs : pas de chevauchement
       const s = fr(DONNEES[i][j + 1], 1), u = lisse((t - t1) / VERS_D), [ax, ay] = [BOC.xs[j], BOC.top - 10], [bx, by] = posTube(i, j), [cx2, cy2] = posCase(i, j);
       const t2 = tVol(i, j), v = lisse((t - t2) / .7);
       let px, py, taille, couleur = CRAIE_B[j];
       if (t < t2) { px = entre(ax, bx, u); py = entre(ay, by, u); taille = entre(17, 14, u); }
-      else { px = entre(bx, cx2, v); py = entre(by, cy2, v); taille = entre(14, 16, v); if (v >= 1) couleur = 'blanc'; }
+      else { px = entre(bx, cx2, v); py = entre(by, cy2, v); taille = entre(14, grandTableau() ? 18 : 16, v); if (v >= 1) couleur = 'blanc'; }
       c.texte(s, px, py, { couleur, taille, align: 'center' });
     }
   });
   // ④ le tableau
+  const TN = grandTableau() ? 18 : 16;   // chiffres du tableau
   c.repere('tableau', 30, 80, 600, 200, 'le tableau de Chargaff');
   if (k.ecrit(c, 'tab', MCH.especes + .3)) {
     ['espèce', 'A', 'T', 'G', 'C'].forEach((h, j) => k.T(c, h, COLS[j], 110, { couleur: j ? CRAIE_B[j - 1] : 'faible', taille: 17, align: j ? 'center' : 'left', duree: .12 }));
     c.ligne(30, 122, 640, 122, { couleur: 'faible', largeur: 1.3, duree: .35 });
-    DONNEES.forEach((d, i) => k.T(c, d[0], COLS[0], 160 + i * 46, { couleur: 'blanc', taille: 16, duree: .15 }));
-    c.repere('ligne_homme', 30, 140, 600, 30, 'la ligne de l’homme');
+    DONNEES.forEach((d, i) => k.T(c, d[0], COLS[0], ligneY(i), { couleur: 'blanc', taille: TN, duree: .15 }));
+    c.repere('ligne_homme', 30, ligneY(0) - 20, 600, 30, 'la ligne de l’homme');
   }
   if (k.ecrit(c, 'at', MCH.especes + 1.7)) {
-    c.ligne(440, 86, 440, 290, { couleur: 'tresfaible', largeur: 1.1, duree: .2 }); k.T(c, 'A/T', COLS[5], 110, { couleur: 'orange', taille: 17, align: 'center', duree: .15 });
-    DONNEES.forEach((d, i) => k.T(c, fr(d[1] / d[2], 2), COLS[5], 160 + i * 46, { couleur: 'orange', taille: 16, align: 'center', duree: .18 }));
-    c.repere('colonne_at', COLS[5] - 34, 92, 68, 190, 'la colonne A/T');
+    c.ligne(440, 86, 440, grandTableau() ? 318 : 290, { couleur: 'tresfaible', largeur: 1.1, duree: .2 }); k.T(c, 'A/T', COLS[5], 110, { couleur: 'orange', taille: 17, align: 'center', duree: .15 });
+    DONNEES.forEach((d, i) => k.T(c, fr(d[1] / d[2], 2), COLS[5], ligneY(i), { couleur: 'orange', taille: TN, align: 'center', duree: .18 }));
+    c.repere('colonne_at', COLS[5] - 34, 92, 68, ligneY(2) + 30 - 92, 'la colonne A/T');
   }
   if (k.ecrit(c, 'cg', MCH.especes + 2.0)) {
     k.T(c, 'C/G', COLS[6], 110, { couleur: 'cyan', taille: 17, align: 'center', duree: .15 });
-    DONNEES.forEach((d, i) => k.T(c, fr(d[4] / d[3], 2), COLS[6], 160 + i * 46, { couleur: 'cyan', taille: 16, align: 'center', duree: .18 }));
-    c.repere('colonne_cg', COLS[6] - 34, 92, 68, 190, 'la colonne C/G');
+    DONNEES.forEach((d, i) => k.T(c, fr(d[4] / d[3], 2), COLS[6], ligneY(i), { couleur: 'cyan', taille: TN, align: 'center', duree: .18 }));
+    c.repere('colonne_cg', COLS[6] - 34, 92, 68, ligneY(2) + 30 - 92, 'la colonne C/G');
   }
   if (k.ecrit(c, 'conc', MCH.tableau + .2)) {
     k.T(c, 'A/T ≈ 1 et C/G ≈ 1 : autant de A que de T,', 40, 330, { couleur: 'jaune', taille: 17 });
@@ -385,7 +391,8 @@ function voitComplementaire(k) {
   return m;
 }
 
-const DISPO_CHARGAFF = [{ colonnes: [['anim'], { texte: ['leg', 'rapports'] }] }, { colonnes: [['tableau'], { texte: ['conc'] }] }];
+// finition : pendant le comptage, les tubes et les bocaux en deux blocs, chacun sur toute la hauteur (les bocaux d'abord)
+const DISPO_CHARGAFF = [{ colonnes: [['tubes'], ['bocaux'], { texte: ['leg', 'rapports'] }], partMax: .8, ecart: 18 }, { colonnes: [['tableau'], { texte: ['conc'] }], partMax: .7 }];
 // Tableau large (15 novembre 2026) : le dessin d'origine découpé en blocs, posés côte à côte et agrandis (etapes.js).
 const BLOCS_LARGES = {
   /* deuxième passe (« agrandir les figures ») : pas de titre interne ; le nucléotide à gauche, la molécule sur toute la
@@ -395,7 +402,7 @@ const BLOCS_LARGES = {
   /* Deuxième passe (15 novembre 2026, « agrandir les figures ») : pas de titre interne (la diapositive le dit). Pendant le
    * comptage, l'animation (tubes, bocaux, vols des bases) d'un seul tenant sur toute la hauteur, la légende et les
    * rapports récrits en colonne à droite ; puis le tableau de Chargaff agrandi, la conclusion en colonne à droite. */
-  chargaff: { blocs: { anim: [10, 36, 700, 360], leg: [280, 52, 720, 82], rapports: [270, 364, 700, 400], tableau: [22, 84, 650, 292], conc: [30, 306, 650, 400] },
+  chargaff: { blocs: { tubes: [12, 40, 250, 358], bocaux: [290, 104, 670, 354], leg: [280, 52, 720, 82], rapports: [270, 364, 700, 400], tableau: [22, 84, 650, 322], conc: [30, 322, 650, 400] },
     disposition: (L, k) => (k.t < MCH.especes + .5 ? DISPO_CHARGAFF[0] : DISPO_CHARGAFF[1]) },
   complementaire: { blocs: { brins: [56, 78, 602, 306], reserve: [604, 64, 730, 302], resultat: [90, 312, 580, 366] },
     disposition: { colonnes: [['brins'], ['reserve'], { texte: ['resultat'] }], ecart: 18 } },
