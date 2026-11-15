@@ -25,8 +25,10 @@ const XR = 462;
 /* Tableau large (15 novembre 2026) : repère étiré sur la largeur (GW), colonne de droite reportée et agrandie (Z : ce qui
  * est écrit autour de (x0 ; y0) passe en (nx ; ny), k fois plus grand) ; hors du tableau large, rien ne change. */
 const LARGE = () => LnLarge.L >= 1000;
-const GW = (o, w = 680) => LARGE() ? { ...o, w } : o;
-const Z = (c, x0, y0, k, nx, ny, fn) => LnLarge.colonne(c, x0, y0, LARGE() ? k : 1, LARGE() ? nx : x0, LARGE() ? ny : y0, fn);
+/* Entre le cadre d’origine (L = 760) et le tableau large (L = 1292), la largeur du repère, la place et l’agrandissement de la
+ * colonne de droite suivent L (LnLarge.t) : sur un écran moyen (L ≈ 1060), la colonne ne sort plus du tableau. */
+const GW = (o, w = 680) => LARGE() ? { ...o, w: LnLarge.t(o.w, w) } : o;
+const Z = (c, x0, y0, k, nx, ny, fn) => LnLarge.colonne(c, x0, y0, LARGE() ? LnLarge.t(1, k) : 1, LARGE() ? LnLarge.t(x0, nx) : x0, LARGE() ? LnLarge.t(y0, ny) : y0, fn);
 
 MathsTableau.page({
   ajuster: !LnLarge.actif,
@@ -95,7 +97,7 @@ MathsTableau.page({
         K.marque('ln');
         c.pause(.3);
         c.ligne(G.X(0), G.y0, G.X(0), G.y0 + G.h, { couleur: 'orange', largeur: 1.6, pointille: [6, 6] });
-        c.texte('miroir', G.X(0) + 6, G.y0 + 16, { couleur: 'orange', taille: 15 });
+        c.texte('miroir', G.X(0) - 6, G.y0 + 16, { couleur: 'orange', taille: 15, align: 'right' });   // à gauche de l’axe : « 1/x » est à droite
         K.anime(1.2, p => K.courbePart(G, x => Math.log(-x), -0.06, -5, p, { couleur: 'cyan' }));
         c.texte('ln(−x)', G.X(-4.6), G.Y(Math.log(4.6)) - 10, { couleur: 'cyan', taille: 18 });
         c.repere('miroir', G.x0, G.y0, G.w, G.h, 'ln(−x) est le reflet de ln x');
@@ -111,13 +113,15 @@ MathsTableau.page({
         });
         K.marque('valeur_absolue');
         c.pause(.3);
+        // cadre d’origine : l’exemple descend sous le nom de l’axe des abscisses (x, écrit au bout de l’axe, au bord de la colonne)
+        const yE = LARGE() ? 186 : 236;
         Z(c, XR - 8, 60, 1.5, 800, 60, () => {
-          K.lignes(XR, 186, [
+          K.lignes(XR, yE, [
             { t: 'sur ]−∞ ; 3[ :', couleur: 'blanc', taille: 18 },
             { t: '1/(x − 3) → ln|x − 3|', couleur: 'vert', taille: 18 },
             { t: '= ln(3 − x)', couleur: 'vert', taille: 18 },
           ], 30);
-          c.repere('exemple', XR - 8, 166, 286, 100, 'exemple : 1/(x − 3) → ln(3 − x) sur ]−∞ ; 3[');
+          c.repere('exemple', XR - 8, yE - 20, 286, 100, 'exemple : 1/(x − 3) → ln(3 − x) sur ]−∞ ; 3[');
         });
         K.marque('exemple');
       },

@@ -29,11 +29,15 @@
 const f = x => x + 1 / x;
 const X0 = 3 - 2 * Math.SQRT2;                           // f(X0) = 6 : la courbe entre dans le cadre (y ≤ 6)
 /* La police de la craie dessine « ′ » (U+2032) vide : au tableau, f′ s’écrit f'. */
-function primes(c) {
-  if (c.__primes) return; c.__primes = true;
-  const texte = c.texte;
-  c.texte = function (s, ...r) { return texte.call(this, String(s).replace(/″/g, "''").replace(/′/g, "'"), ...r); };
+/* Posé sur Tableau.Craie (15 novembre 2026) et non sur `c` : sur le tableau large, `c` est l'intermédiaire de large.js ;
+ * remplacer c.texte bouclait sans fin (mesure de la boîte arrêtée, phrases hors du cadre) ou était effacé par le kit. */
+function primes() {
+  const P = window.Tableau.Craie.prototype;
+  if (P.__primes) return; P.__primes = true;
+  const texte = P.texte;
+  P.texte = function (s, ...r) { return texte.call(this, String(s).replace(/″/g, "''").replace(/′/g, "'"), ...r); };
 }
+primes();   // avant la première image : la mesure de la boîte du kit écrit déjà f'
 /* Cases du tableau qui s’allument pendant que la craie trace l’élément qu’elles annoncent (et jusqu’au moment marqué). */
 function lumieres(c) {
   const L = [], t = c.t;
@@ -367,7 +371,7 @@ MathsTableau.page({
         c.ligne(G.X(XM - 0.22), G.Y(YM), G.X(XM + 0.22), G.Y(YM), { couleur: 'orange', largeur: 2.4 });
         K.rond(G, XM, YM, true, 'jaune');
         c.texte('−2/3', G.X(XM) + 2, G.Y(0) - 8, { couleur: 'jaune', taille: 14, align: 'center' });
-        c.texte('−2√3/9 ≈ −0,38', G.X(0) + 6, G.Y(YM) + 6, { couleur: 'jaune', taille: 14 });
+        c.texte('−2√3/9 ≈ −0,38', G.X(0) + 6, Math.max(G.Y(YM) + 6, G.Y(0) + 38), { couleur: 'jaune', taille: 14 });   // sous la ligne des graduations (il couvrait le « 1 »)
         c.repere('minimum', G.X(XM) - 16, G.Y(YM) - 16, 32, 32, 'le minimum f(−2/3) = −2√3/9');
         Lu.fin(e); K.marque('minimum_place');
         // Point O
@@ -414,6 +418,11 @@ MathsTableau.page({
     },
   },
 });
+</script>
+<script>
+/* Police du tableau arrivée après la première image (15 novembre 2026, phrases hors du cadre) : la boîte de l'encre
+ * mesurée avec la police de secours est jetée et refaite avec Patrick Hand (le kit ne la refait pas seul). */
+if (document.fonts) document.fonts.addEventListener('loadingdone', () => { const m = window.__maths; if (m) { m.scene.boite = null; m.scene.sale = true; } });
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>
 </body></html>

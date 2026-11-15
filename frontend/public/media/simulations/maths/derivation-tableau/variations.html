@@ -84,11 +84,15 @@ function lectureP(c, x) {
   c.texte(z ? 'tangente horizontale' : d > 0 ? 'f croissante' : 'f décroissante', 535, 147, { couleur: coul, taille: 17 });
 }
 /* La police de la craie (Patrick Hand) dessine « ′ » (U+2032) vide : au tableau, f′ s'écrit f' et f″ s'écrit f''. */
-function primes(c) {
-  if (c.__primes) return; c.__primes = true;
-  const texte = c.texte;
-  c.texte = function (s, ...r) { return texte.call(this, String(s).replace(/″/g, "''").replace(/′/g, "'"), ...r); };
+/* Posé sur Tableau.Craie (15 novembre 2026) et non sur `c` : sur le tableau large, `c` est l'intermédiaire de large.js ;
+ * remplacer c.texte bouclait sans fin (mesure de la boîte arrêtée, phrases hors du cadre) ou était effacé par le kit. */
+function primes() {
+  const P = window.Tableau.Craie.prototype;
+  if (P.__primes) return; P.__primes = true;
+  const texte = P.texte;
+  P.texte = function (s, ...r) { return texte.call(this, String(s).replace(/″/g, "''").replace(/′/g, "'"), ...r); };
 }
+primes();   // avant la première image : la mesure de la boîte du kit écrit déjà f'
 const sens = x => {
   const d = fp(x);
   if (Math.abs(d) < 0.005) return x < 0 ? 'f′ nulle : tangente horizontale, maximum f(−1) = 2' : 'f′ nulle : tangente horizontale, minimum f(1) = −2';
@@ -188,6 +192,11 @@ MathsTableau.page({
     },
   },
 });
+</script>
+<script>
+/* Police du tableau arrivée après la première image (15 novembre 2026, phrases hors du cadre) : la boîte de l'encre
+ * mesurée avec la police de secours est jetée et refaite avec Patrick Hand (le kit ne la refait pas seul). */
+if (document.fonts) document.fonts.addEventListener('loadingdone', () => { const m = window.__maths; if (m) { m.scene.boite = null; m.scene.sale = true; } });
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>
 </body></html>

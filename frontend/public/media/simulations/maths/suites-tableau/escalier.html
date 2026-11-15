@@ -39,7 +39,7 @@ function courbeEtDroite(c, K, G, h, nom) {
 /* L’escalier depuis u0 : n marches ; libellés des premiers termes sous l’axe. Renvoie les termes. */
 function escalier(c, K, G, h, u0, n, o = {}) {
   const U = SU.suite(u0, h, n), coul = o.couleur || 'jaune', lab = o.labels ?? 3;
-  const sous = (x, t, i) => { const dy = i % 2 ? 40 : 22; c.texte(t, G.X(x), G.Y(0) + dy, { couleur: coul, taille: 15, align: 'center' }); };
+  const sous = (x, t, i) => { const dy = (i % 2 ? 40 : 22) + sousGrad(G, x); c.texte(t, G.X(x), G.Y(0) + dy, { couleur: coul, taille: 15, align: 'center' }); };
   for (let i = 0; i < n; i++) {
     const a = U[i], b = U[i + 1];
     if (i === 0) {
@@ -60,9 +60,14 @@ function escalier(c, K, G, h, u0, n, o = {}) {
   }
   return U;
 }
+/* Un nom de terme posé sous l'axe juste au-dessous d'une graduation (« 1 », « 2 »…) la recouvrirait : il descend d'une ligne. */
+function sousGrad(G, x) {
+  const pres = (G.gx || []).some((v) => { const [g, l] = Array.isArray(v) ? v : [v, String(v)]; return l !== '' && Math.abs(G.X(g) - G.X(x)) < 20; });
+  return pres ? 36 : 0;
+}
 function placerU0(c, G, u0) {
   c.point(G.X(u0), G.Y(0), 6, 'orange');
-  c.texte('u_0', G.X(u0), G.Y(0) + 22, { couleur: 'orange', taille: 16, align: 'center' });
+  c.texte('u_0', G.X(u0), G.Y(0) + 22 + sousGrad(G, u0), { couleur: 'orange', taille: 16, align: 'center' });
 }
 const sens = u0 => (u0 > 1 + 1e-9 ? 'descendent' : u0 < 1 - 1e-9 ? 'montent' : 'restent');
 

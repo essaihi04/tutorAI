@@ -130,12 +130,14 @@ function paragrapheMixte(c, b, w, t) {
 }
 function hauteurBloc(c, b, w, T) {
   const R = rangees(c, b, w, T), n = paragrapheMixte(c, b, w, T.de).length;
-  return T.ti + (R.apresTitre ? 4 : R.rangs.length * (T.fo + 12)) + 4 + n * T.de * 1.12 + T.de * .25;
+  // avec le bilan de l'élève, une ligne de plus en bas du bloc pour « à reprendre » / ✓ (il recouvrait la dernière ligne)
+  const etat = S.lacunes ? T.de * 1.1 : 0;
+  return T.ti + (R.apresTitre ? 4 : R.rangs.length * (T.fo + 12)) + 4 + n * T.de * 1.12 + T.de * .25 + etat;
 }
 function geometrie(c) {
   const tmin = 15.2 / Math.max(.1, scene.s || 1);
   const police = document.fonts ? document.fonts.status : '';   // mesures refaites quand la police de la craie est chargée
-  if (GEO && GEO.L === L && GEO.police === police && Math.abs(GEO.tmin - tmin) < .01) return GEO;
+  if (GEO && GEO.L === L && GEO.police === police && GEO.etats === !!S.lacunes && Math.abs(GEO.tmin - tmin) < .01) return GEO;
   let choix = null;
   // une feuille d'abord (trois colonnes, puis cinq) ; sinon deux feuilles, puis trois ; jamais sous 15 px
   for (const nf of [1, 2, 3]) {
@@ -154,7 +156,7 @@ function geometrie(c) {
     }
     if (choix.ok) break;
   }
-  GEO = { L, tmin, police, ...choix };
+  GEO = { L, tmin, police, etats: !!S.lacunes, ...choix };
   return GEO;
 }
 function bloc(c, b, i) {

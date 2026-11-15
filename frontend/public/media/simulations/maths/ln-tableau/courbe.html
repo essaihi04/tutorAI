@@ -91,8 +91,13 @@ const XR = 505;
 /* Tableau large (15 novembre 2026) : le repère s’étire sur la largeur (GW), la colonne de droite est reportée plus loin et
  * agrandie (Z) ; hors du tableau large, rien ne change. */
 const LARGE = () => LnLarge.L >= 1000;
-const GW = o => LARGE() ? { ...o, x0: 60, y0: 54, w: 690, h: 306 } : o;
-const Z = (c, fn) => LnLarge.colonne(c, XR, 60, LARGE() ? 1.25 : 1, LARGE() ? 830 : XR, 60, fn);
+/* Le nom de l’axe des ordonnées (écrit 6 px au-dessus du repère) ne doit pas toucher le titre de la vue : le haut du repère
+ * descend à y = 66 au moins, le bas ne bouge pas. */
+const SOUS_TITRE = 66, sousTitre = o => (o.y0 >= SOUS_TITRE ? o : { ...o, y0: SOUS_TITRE, h: o.h - (SOUS_TITRE - o.y0) });
+/* Entre le cadre d’origine (L = 760) et le tableau large (L = 1292), la largeur du repère, la place et l’agrandissement de la
+ * colonne de droite suivent L (LnLarge.t) : sur un écran moyen (L ≈ 1060), la colonne ne sort plus du tableau. */
+const GW = o => sousTitre(LARGE() ? { ...o, x0: LnLarge.t(o.x0, 60), y0: LnLarge.t(o.y0, 54), w: LnLarge.t(o.w, 690), h: LnLarge.t(o.h, 306) } : o);
+const Z = (c, fn) => LnLarge.colonne(c, XR, 60, LARGE() ? LnLarge.t(1, 1.25) : 1, LARGE() ? LnLarge.t(XR, 830) : XR, 60, fn);
 
 MathsTableau.page({
   id: 'ln_courbe', titre: 'Fonctions logarithmiques', ajuster: !LnLarge.actif,
