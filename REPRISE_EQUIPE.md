@@ -167,6 +167,44 @@ la voix en direct ; si le GPU dort, l'élève n'entend rien. Le 15/11 à 0 h : 3
 **Vérifier un lot de cours avant mise en ligne** : contenu identique à `origin` hors champs audio, chaque URL
 `/media/audio/...` présente sur `origin` ou sur le disque, page qui se charge et voix de la 1ʳᵉ diapo qui part.
 
+## 3 sexies. Point du 15 novembre 2026 (soir, 22 h 50)
+
+**Tout ce qui suit est sur `origin/main`, déployé (serveur sur `a9e32ded` à 22 h 40) et le lien libre est reconstruit
+(22 h 43).**
+
+### Voix
+- **394 réactions** muettes de physique ch1-4 et ch11 posées en v13 (`71f2b3a3`) ; **bilan de physique ch3**
+  (`ol_b1_bilan`) posé (`ed6585ad`).
+- **Prononciation** (hématies, cliquer, MeV, henry, BBT/LDL/HDL, codons) : les 144 pistes touchées sont refaites et
+  posées en v13 (`01d8a70c`). Les anciennes WAV sont gardées dans `/srv/corpus_v4/voix_lot/_refaire_prononciation/`.
+- **Relance « Suite → »** (`frontend/public/media/audio/reactions/relance-suite.mp3`) : le modèle lisait « كليكي »
+  comme « koliki ». Elle est maintenant **en français** : « On continue ? Clique sur la suite. » (`de5598d3`, compte 2,
+  script `/srv/corpus_v4/voix_lot/voix_relance_compte2.py` et ses variantes `voix_relance_variantes.py`). Pour un mot
+  que le modèle déforme, écrire la phrase en français ou ajouter le mot à `PRONONCIATION` dans
+  `backend/kaggle_tts/texte_parle.py` : écrire la darija en lettres arabes ne suffit pas.
+- **Reste muet : 9 réactions** des nouveaux schémas à légender de SVT (ch1 : 2, ch2 : 2, ch3 : 3, ch4 : 2), ajoutés
+  par les sessions cloud ce soir. `python -X utf8 scripts/voix/poser_en_ligne.py --compter` les liste. À faire en voix
+  isolée sur le compte 2 (`voix_unique_compte2.py`) ou au lot d'après la recharge (≈ 21/11). En attendant, la voix en
+  direct ou l'écrit prend le relais.
+- Kaggle à 22 h 50 : aucun lot ne tourne ; seul le kernel `ferdaous04/academy-tts-direct` sert les élèves.
+
+### Hors programme
+- Retiré et en ligne (`01d8a70c`) : la dichotomie (maths ch1) et les relations du prisme (physique ch3). Les deux
+  notions sont marquées hors cadre dans la liste du programme ; seul l'examen national compte.
+
+### Sessions cloud (autre compte de l'équipe)
+- Elles ont toutes poussé sur `main` entre 21 h 47 et 22 h 37 :
+  - figures agrandies en chimie ch9-ch13 (`ad2142cc` en cours, puis ch9, ch11, ch13 et ch12 jusqu'à `a9e32ded`). La
+    session s'était arrêtée faute de crédits ; elle a repris après la recharge de 22 h. **Le ch10 (cinétique) n'a que
+    la passe « en cours »** : à vérifier dans le lecteur, ou à finir par une nouvelle session ;
+  - schémas à légender comme au bac en SVT ch1-ch4 (`93b39e93`, `886f39f2`, `4d70eeba`, `1bda0bcc`, plus
+    `bca6bb8f` fait en local) ;
+  - textes qui se chevauchent corrigés dans les simulations tableau de maths, physique, chimie et SVT.
+- **Ramené en local** sans pull : `python scripts/recuperer_cloud.py de5598d3 --appliquer` → 135 fichiers, 0 conflit.
+  Prochaine récupération : base `a9e32ded`.
+- Une session cloud qui manque de crédits ne pousse rien. La partager avec l'équipe donne seulement un accès en
+  lecture : il faut attendre la recharge du forfait (22 h), puis lui demander de commiter et de pousser sur `main`.
+
 ## 4. Ce qui attend une décision
 - Déployer la correction des questions de reprise (formules écrites) — commit prêt, pas encore déployé.
 - Passer le nouveau lecteur sur `main` pour les élèves connectés, après la relecture des profs.
