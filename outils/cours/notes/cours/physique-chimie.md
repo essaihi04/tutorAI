@@ -540,3 +540,6 @@ contrat : cours/acides_bases_contrat_simulations.md ; tout refaire : `sh outils/
   n'a reçu aucun commit depuis le contrôle d'ensemble du 12 nov. (contrôles non refaits : rien n'a changé).
 - Décision à prendre par l'utilisateur : arrêter la routine ou lui donner une nouvelle liste (ex. ondes_mecaniques_periodiques à mettre à jour
   dans programme_semestre1, audits vidéo, relecture dans /dev/course-player).
+
+## Passage routine cloud du 15 nov. (00 h 50 UTC)
+- Rien à construire, aucun commit sur la branche depuis le 14 nov. : même constat, aucun contrôle refait. Décision toujours attendue (arrêter la routine ou nouvelle liste).
