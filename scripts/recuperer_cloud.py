@@ -34,11 +34,20 @@ for ligne in noms:
     avant = git('show', f'{base}:{chemin}', ok=True)
     avant = norm(avant.stdout) if avant.returncode == 0 else None
     local = norm(p.read_bytes()) if p.exists() else None
-    if local != avant and not (local is None and avant is None):
+    # Intact ici si le fichier local est sa version de BASE, ou une version poussée depuis (récupération précédente).
+    connues = [avant]
+    for sha in git('log', '--format=%H', f'{base}..origin/main', '--', chemin).stdout.decode().split():
+        v = git('show', f'{sha}:{chemin}', ok=True)
+        connues.append(norm(v.stdout) if v.returncode == 0 else None)
+    if local not in connues:
         nouveau = git('show', f'origin/main:{chemin}', ok=True)
         if nouveau.returncode == 0 and local == norm(nouveau.stdout):
             continue                                           # déjà à jour
         print('CONFLIT (modifié ici, non touché)', chemin); conflits += 1; continue
+    if etat != 'D':
+        actuel = git('show', f'origin/main:{chemin}', ok=True)
+        if actuel.returncode == 0 and local == norm(actuel.stdout):
+            continue                                           # déjà à jour
     if etat == 'D':
         print('supprimer', chemin)
         if appliquer and p.exists(): p.unlink()
