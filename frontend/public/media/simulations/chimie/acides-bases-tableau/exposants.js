@@ -299,6 +299,10 @@
         const P = i >= 0 ? R.pos[i] : null; if (!P) return orig(...a);
         if (P.cache) return nom === 'repere' ? orig(...a) : undefined;   // titre interne d'un tableau large (deuxième passe) : non écrit (un repère reste déclaré)
         const b = R.blocs[i].r, tip = c.tip, f = P.f || 1, ext = pile.length ? pile[pile.length - 1] : null, estD = nom === 'direct';
+        /* Plancher d'écriture (troisième passe, tableau large) : aucun texte d'un bloc sous R.plancher px À L'ÉCRAN
+         * (graduations d'un graphe, légendes) : le kit relève la taille avec echelle × tailleMin, ici échelle du bloc. */
+        const ech0 = c.echelle, tmin0 = c.tailleMin, plancher = R.plancher && c.__rcS ? R.plancher : 0;
+        if (plancher) { c.echelle = c.__rcS * P.k; c.tailleMin = Math.max(tmin0 || 0, plancher); }
         encre(R, i, nom, a);
         // Dans un dessin peint, chaque trait ou texte de craie retrouve SON bloc (le repère du cadre est remis d'abord).
         if (ext && ext.f !== 1) rendreCtx();
@@ -314,6 +318,7 @@
         }
         if (estD) { pile.push({ x0: b[0], f }); if (f !== 1) etirerCtx(b[0], f); } else prof++;
         try { return orig(...a); } finally {
+          if (plancher) { c.echelle = ech0; c.tailleMin = tmin0; }
           if (estD) { if (f !== 1) rendreCtx(); pile.pop(); } else prof--;
           ctx.restore();
           if (ext && ext.f !== 1) etirerCtx(ext.x0, ext.f);
@@ -381,7 +386,7 @@
         return ext[i] ? { ...b, ...t, r: [ext[i][0], ext[i][1], ext[i][2] - ext[i][0], ext[i][3] - ext[i][1]] } : { ...b, ...t }; }), o)
         .map((P, i) => (P && ext1[i] ? { ...P, x: P.x + (blocs[i].r[0] - ext1[i][0]) * P.k * (P.f || 1), y: P.y + (blocs[i].r[1] - ext1[i][1]) * P.k } : P));
       const parEtape = {}; blocs.forEach((b, i) => (b.e || []).forEach(n => { (parEtape[n] ||= []).push(i); }));
-      c.__rcCache = { cle, R: { blocs, pos, parEtape, ext, tai, change: false, direct: blocs.findIndex(b => b.direct),
+      c.__rcCache = { cle, R: { blocs, pos, parEtape, ext, tai, change: false, direct: blocs.findIndex(b => b.direct), plancher: o.fig ? (o.plancher ?? 17) : 0,
         trouver(x, y, parmi) {
           const ids = parmi || blocs.map((b, j) => j);
           let i = ids.find(j => dedans(blocs[j].r, x, y, 0)); if (i != null) return i;
@@ -397,7 +402,7 @@
     const R = c.__rcCache.R, corps = R.pos.map((P, i) => [P, blocs[i]]).filter(([P, b]) => P && !b.haut);
     const ok = corps.every(([P, b]) => P.k >= (b.etire ? .88 : .97)), gain = Math.max(...corps.map(([P]) => P.k * (P.f || 1)));
     if (!R.pos.some(P => P && P.fig) && !(ok && gain >= 1.15)) return centrer(c, scene);
-    c.__rc = R;
+    c.__rc = R; c.__rcS = scene.s;
     return c.__rc;
   }
   window.Recompose = Recompose;

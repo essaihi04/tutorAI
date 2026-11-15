@@ -488,10 +488,10 @@ Object.assign(BLOCS, {
   solides: { cols: [[{ r: [28, 50, 218, 340], k: 1.6 }], [{ r: [236, 56, 752, 392] }]] },
   sans_unite: { cols: [[{ r: [16, 42, 620, 392] }]] },
   initial: { cols: [[{ r: [12, 42, 228, 380], k: 1.6 }], [{ r: [250, 50, 754, 390] }]] },
-  melange: { cols: [[{ r: [12, 42, 300, 390] }], [{ r: [296, 44, 756, 404] }]] },
-  au_cours: { cols: [[{ r: [56, 50, 452, 328] }], [{ r: [454, 50, 757, 326] }, { r: [120, 334, 732, 386] }]] },
-  national: { cols: [[{ r: [12, 40, 756, 392] }]] },
-  pile: { cols: [[{ r: [8, 40, 760, 372] }]] },
+  melange: { lg: true, cols: [[{ r: [12, 42, 316, 390] }], [{ r: [316, 44, 756, 404] }]] },
+  au_cours: { lg: true, cols: [[{ r: [40, 50, 452, 352] }], [{ r: [454, 46, 757, 404] }]] },
+  national: { lg: true, cols: [[{ r: [12, 40, 756, 392] }]] },
+  pile: { cols: [[{ r: [16, 50, 340, 272] }, { r: [20, 280, 450, 350] }], [{ r: [350, 60, 762, 350] }]] },
 });
 
 /* Vue definition : produits en haut, réactifs en bas. */
@@ -689,6 +689,7 @@ const FM = [0, 1, 2, 3].map(i => ({ x: 46 + i * 72, y: 118, w: 44, h: 70 }));
 const FM_NOM = ['HCOOH', 'CH₃COO⁻', 'CH₃COOH', 'HCOO⁻'], FM_V = ['100 mL', '100 mL', '50 mL', '50 mL'], FM_N = [.8, .8, .45, .45];
 const BM = { x: 70, y: 214, w: 170, h: 120 };
 VUE_FN.melange = (c, M) => {
+  FM.forEach((f, i) => { f.x = LG ? 40 + i * 80 : 46 + i * 72; });   // tableau large : texte à 18 px, flacons plus espacés
   const R = M.rec, a = M.commence('flacons') ? lisse(clamp(M.p('flacons') * 1.3, 0, 1)) : 0, pm = M.commence('melange') ? lisse(clamp(M.p('melange') / .85, 0, 1)) : 0;
   c.direct(() => {
     const ctx = c.ctx;
@@ -777,7 +778,8 @@ VUE_FN.au_cours = (c, M) => {
     c.texte('Q_{r,éq} = 1,57·10⁻⁵ : Q_r ne bouge plus', G.x0 + 10, y - 12, { taille: 17, couleur: 'jaune' });
   });
   M.etape(c, 'phrase', () => {
-    c.texte('Q_r augmente de Q_{r,i} = 0 jusqu’à Q_{r,éq} = 1,57·10⁻⁵, puis ne bouge plus', 380, 394, { taille: 20, align: 'center', couleur: 'jaune' });
+    if (LG) ['Q_r augmente de Q_{r,i} = 0', 'jusqu’à Q_{r,éq} = 1,57·10⁻⁵,', 'puis ne bouge plus'].forEach((l, i) => c.texte(l, TA.x, 352 + i * 24, { taille: 20, couleur: 'jaune' }));
+    else c.texte('Q_r augmente de Q_{r,i} = 0 jusqu’à Q_{r,éq} = 1,57·10⁻⁵, puis ne bouge plus', 380, 394, { taille: 20, align: 'center', couleur: 'jaune' });
   });
   // Poignée x (point violet sur la courbe) et sa lecture, dès le départ.
   if (M.commence('depart') || DRAG != null) {
@@ -785,7 +787,7 @@ VUE_FN.au_cours = (c, M) => {
     M.geo.poignee = [px, py];
     c.direct(() => poignee(c.ctx, px, py));
     c.direct(() => {
-      const ctx = c.ctx, T = window.Tableau; ctx.save(); ctx.font = `15px ${T.POLICE}`; ctx.fillStyle = T.COULEURS.violet; ctx.globalAlpha = .95;
+      const ctx = c.ctx, T = window.Tableau; ctx.save(); ctx.font = `${LG ? Math.max(15, 18 / (c.echelle || 1)) : 15}px ${T.POLICE}`; ctx.fillStyle = T.COULEURS.violet; ctx.globalAlpha = .95;
       ctx.fillText(`poignée : x = ${fr(x, 2)}`, TA.x, 270); ctx.restore();
     });
     c.texte(`[H₃O⁺] = ${h ? sci(h) : '0'} mol/L`, TA.x, 296, { taille: 16, couleur: 'violet', duree: .05 });
@@ -802,8 +804,13 @@ VUE_FN.national = (c, M) => {
   if (a > 0) c.direct(() => FN.forEach(f => Peint.flacon(c.ctx, f.x, f.y, f.w, f.h, .8, EAU, { a })));
   M.etape(c, 'donnees', () => {
     ex(c, { row: ['HCOOH', '+', 'CH₃COO⁻', '⇌', 'HCOO⁻', '+', 'CH₃COOH'], gap: 10, id: 'equation' }, 20, 66, 21, { rec: R });
-    FN.forEach((f, i) => c.texte(FN_NOM[i], f.x, f.y + 22, { taille: 14, align: 'center' }));
-    c.texte('chacun : V = 100 mL ; C = 0,1 mol/L', 191, 206, { taille: 15, align: 'center', couleur: 'faible' });
+    if (LG) {   // tableau large : texte à 18 px, « (1) » puis le nom à la ligne (les étiquettes se toucheraient)
+      FN.forEach((f, i) => { const [n, nom] = FN_NOM[i].split(' '); c.texte(n, f.x, f.y + 20, { taille: 14, align: 'center' }); c.texte(nom, f.x, f.y + 40, { taille: 14, align: 'center' }); });
+      c.texte('chacun : V = 100 mL ; C = 0,1 mol/L', 191, 226, { taille: 15, align: 'center', couleur: 'faible' });
+    } else {
+      FN.forEach((f, i) => c.texte(FN_NOM[i], f.x, f.y + 22, { taille: 14, align: 'center' }));
+      c.texte('chacun : V = 100 mL ; C = 0,1 mol/L', 191, 206, { taille: 15, align: 'center', couleur: 'faible' });
+    }
   });
   const X = 410;
   M.etape(c, 'volume_total', () => {
@@ -913,7 +920,7 @@ function reperes(c, M) {
     const [px, py] = M.geo.poignee; D('poignee_x', px - 20, py - 14, 40, 28, `la poignée violette : x = ${fr(xVu(), 2)} (glisser de 0 à 1)${quand('depart')}`);
     D('tableau', TA.x, TA.y, TA.w1 + TA.w2, 6 * TA.h, `le tableau des valeurs [H₃O⁺] et Qr${quand('points')}`);
     D('point_eq', GX(H_EQ) - 14, GY(qrDe(H_EQ)) - 14, 28, 28, `le dernier point : Qr,éq = 1,57·10⁻⁵${quand('arrivee')}`);
-    D('phrase', 30, 370, 700, 34, `« Qr augmente de Qr,i = 0 jusqu’à Qr,éq = 1,57·10⁻⁵, puis ne bouge plus »${quand('phrase')}`);
+    D('phrase', LG ? TA.x - 4 : 30, LG ? 334 : 370, LG ? 296 : 700, LG ? 74 : 34, `« Qr augmente de Qr,i = 0 jusqu’à Qr,éq = 1,57·10⁻⁵, puis ne bouge plus »${quand('phrase')}`);
   } else if (v === 'national') {
     D('donnees', 14, 40, 340, 176, `les données : quatre flacons de 100 mL à 0,1 mol/L${quand('donnees')}`);
     DR('volume_total', R.vt, `« V_T = 400 mL »${quand('volume_total')}`);
