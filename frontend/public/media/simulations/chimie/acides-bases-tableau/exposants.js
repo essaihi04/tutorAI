@@ -374,9 +374,12 @@
     if (c.__rcCache && c.__rcCache.R.change) { c.__rcCache = null; scene.sale = true; }
     if (!c.__rcCache || c.__rcCache.cle !== cle) {
       // disposition sur l'encre relevée (le rectangle déclaré, agrandi s'il le faut) ; le classement garde le rectangle déclaré
-      const pos = disposer(scene.L, blocs.map((b, i) => { const t = tai && tai[i] && Object.keys(tai[i]).length ? { tm: mediane(tai[i]), tmin: Math.min(...Object.keys(tai[i]).map(Number)) } : {};
+      // deuxième passe : l'encre d'un bloc ne l'agrandit que de 40 au plus de chaque côté (un trait rattaché de loin ne
+      // fait plus enfler une colonne de texte au détriment de la figure)
+      const ext0 = ext, M40 = 40, ext1 = o.fig ? blocs.map((b, i) => ext0[i] && [Math.max(ext0[i][0], b.r[0] - M40), Math.max(ext0[i][1], b.r[1] - M40), Math.min(ext0[i][2], b.r[0] + b.r[2] + M40), Math.min(ext0[i][3], b.r[1] + b.r[3] + M40)]) : ext0;
+      const pos = disposer(scene.L, blocs.map((b, i) => { const ext = ext1, t = tai && tai[i] && Object.keys(tai[i]).length ? { tm: mediane(tai[i]), tmin: Math.min(...Object.keys(tai[i]).map(Number)) } : {};
         return ext[i] ? { ...b, ...t, r: [ext[i][0], ext[i][1], ext[i][2] - ext[i][0], ext[i][3] - ext[i][1]] } : { ...b, ...t }; }), o)
-        .map((P, i) => (P && ext[i] ? { ...P, x: P.x + (blocs[i].r[0] - ext[i][0]) * P.k * (P.f || 1), y: P.y + (blocs[i].r[1] - ext[i][1]) * P.k } : P));
+        .map((P, i) => (P && ext1[i] ? { ...P, x: P.x + (blocs[i].r[0] - ext1[i][0]) * P.k * (P.f || 1), y: P.y + (blocs[i].r[1] - ext1[i][1]) * P.k } : P));
       const parEtape = {}; blocs.forEach((b, i) => (b.e || []).forEach(n => { (parEtape[n] ||= []).push(i); }));
       c.__rcCache = { cle, R: { blocs, pos, parEtape, ext, tai, change: false, direct: blocs.findIndex(b => b.direct),
         trouver(x, y, parmi) {
