@@ -169,8 +169,8 @@ la voix en direct ; si le GPU dort, l'élève n'entend rien. Le 15/11 à 0 h : 3
 
 ## 3 sexies. Point du 15 novembre 2026 (soir, 22 h 50)
 
-**Tout ce qui suit est sur `origin/main`, déployé (serveur sur `a9e32ded` à 22 h 40) et le lien libre est reconstruit
-(22 h 43).**
+**Tout ce qui suit est sur `origin/main`, déployé (serveur sur `858af5df` à 23 h 05) et le lien libre est reconstruit
+(23 h 06).** Pas encore déployé : `c29325df` (chimie ch12-ch13, « travail en cours »).
 
 ### Voix
 - **394 réactions** muettes de physique ch1-4 et ch11 posées en v13 (`71f2b3a3`) ; **bilan de physique ch3**
@@ -182,11 +182,22 @@ la voix en direct ; si le GPU dort, l'élève n'entend rien. Le 15/11 à 0 h : 3
   script `/srv/corpus_v4/voix_lot/voix_relance_compte2.py` et ses variantes `voix_relance_variantes.py`). Pour un mot
   que le modèle déforme, écrire la phrase en français ou ajouter le mot à `PRONONCIATION` dans
   `backend/kaggle_tts/texte_parle.py` : écrire la darija en lettres arabes ne suffit pas.
-- **Reste muet : 9 réactions** des nouveaux schémas à légender de SVT (ch1 : 2, ch2 : 2, ch3 : 3, ch4 : 2), ajoutés
-  par les sessions cloud ce soir. `python -X utf8 scripts/voix/poser_en_ligne.py --compter` les liste. À faire en voix
-  isolée sur le compte 2 (`voix_unique_compte2.py`) ou au lot d'après la recharge (≈ 21/11). En attendant, la voix en
-  direct ou l'écrit prend le relais.
+- ✅ **Schémas à légender de SVT ch1-ch4 : toutes leurs voix sont faites** (`858af5df`, déployé) : les 9 diapositives
+  ajoutées par les sessions cloud et leurs 36 réactions (juste, partiel, faux, aide), plus les 4 réactions de
+  `rg_s3_construire` (`bca6bb8f`). Script : `/srv/corpus_v4/voix_lot/voix_textes_compte2.py TEXTES.json SORTIE`
+  (compte 2, coupe seul les textes de plus de ~330 caractères ; 39 textes ≈ 15 min avec le démarrage à froid).
 - Kaggle à 22 h 50 : aucun lot ne tourne ; seul le kernel `ferdaous04/academy-tts-direct` sert les élèves.
+
+### Questions à choix et schémas à légender (lecteur, déployé)
+- **Questions à choix** (`3617412f`) : s'il ne reste qu'un seul choix après une erreur (vrai/faux, autres choix barrés),
+  la question se ferme comme une faute avec la réponse ; après une faute, le cours attend « Suite → » (il ne passe seul
+  qu'après une bonne réponse) ; au bilan, une compétence avec une question réussie seulement au 2e essai (ou ratée) est
+  au mieux « partielle ».
+- **Schéma à légender** (`bca6bb8f`, contrat détaillé dans le commit) : la simulation expose `legende_total`,
+  `legende_places`, `legende_erreurs`, `legende_mal` et le réglage `corrige` ; la diapositive porte
+  `concentration.legende.reactions`. Tant que le schéma n'est pas fini, la question ne s'ouvre pas par-dessus et le
+  tuteur ne pose les étiquettes qu'après 60 s sans toucher ; le résultat compte au bilan (0 erreur = du premier coup,
+  1-2 = partiel, plus = raté). Modèle : `svt/relation_gene_proteine-tableau/schema_bilan.html` vue `construire`.
 
 ### Hors programme
 - Retiré et en ligne (`01d8a70c`) : la dichotomie (maths ch1) et les relations du prisme (physique ch3). Les deux
@@ -201,7 +212,8 @@ la voix en direct ; si le GPU dort, l'élève n'entend rien. Le 15/11 à 0 h : 3
     `bca6bb8f` fait en local) ;
   - textes qui se chevauchent corrigés dans les simulations tableau de maths, physique, chimie et SVT.
 - **Ramené en local** sans pull : `python scripts/recuperer_cloud.py de5598d3 --appliquer` → 135 fichiers, 0 conflit.
-  Prochaine récupération : base `a9e32ded`.
+  Vérifié à 23 h : tout est déjà en local (`recuperer_cloud.py 3617412f .` → 0 fichier, 0 conflit). Prochaine
+  récupération : base `858af5df`.
 - Une session cloud qui manque de crédits ne pousse rien. La partager avec l'équipe donne seulement un accès en
   lecture : il faut attendre la recharge du forfait (22 h), puis lui demander de commiter et de pousser sur `main`.
 
