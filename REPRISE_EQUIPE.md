@@ -132,6 +132,19 @@ encore des réactions (la voix en direct ou l'écrit prend le relais).
 - `phys_ch1_waves_exemple` : diapositives complètes, mais c'est le cours servi aux élèves connectés → à vérifier en
   dernier, avec le plus de soin (procédure du § 3 quater).
 
+> **⚠ Quota GPU bas jusqu'à la recharge (≈ samedi 21 novembre)** — relevé le 15/11 à 13 h 45 sur le site Kaggle :
+> **ferdaous04 : 8 h 27 restantes**, **zouhairessaihi : 2 h 44 restantes** (le lot de la nuit du 14 au 15 a fait
+> ~2 600 voix). Règles jusqu'à la recharge :
+> - **ne relancer AUCUN lot de voix** (`lancer_compte1*.sh`, `lancer_compte2*.sh`) ;
+> - ferdaous04 est réservé à la **voix en direct des élèves** ; zouhairessaihi ne sert qu'à une voix isolée
+>   (`voix_unique_compte2.py`, `attendre_bilan.sh` dans `/srv/corpus_v4/voix_lot/`) ;
+> - regarder le quota réel sur kaggle.com (profil → *Your Kaggle Quota*) avant toute génération : le compteur du backend
+>   (7 jours glissants, plafond `KAGGLE_TTS_BUDGET_H_SEMAINE=30`) ne compte que la voix en direct, pas les lots ;
+> - un kernel qui reste en `QUEUED` = GPU T4 de Kaggle saturés : attendre, ne pas repousser (chaque poussée refait la file).
+> - reste à faire après la recharge : la voix du bilan de physique ch3 (`ol_b1_bilan`, texte de 899 caractères → en
+>   morceaux de ~300, sinon erreur 524 du tunnel), puis `poser_en_ligne.py 13 phys_ch3_ondes_lumineuses` et déploiement ;
+>   les réactions encore muettes de physique ch1 à ch4.
+
 **Quota Kaggle revenu sur les deux comptes** (14/11 au soir : ferdaous04 23 h 50, zouhairessaihi 14 h 52) : les
 deux lots tournent ensemble, depuis les deux bouts de la file, sans se gêner (une piste déjà écrite n'est pas refaite) :
 - compte 1 : `voix_compte1.log` (ordre normal) ;
