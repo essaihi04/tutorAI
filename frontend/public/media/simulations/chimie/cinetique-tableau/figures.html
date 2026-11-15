@@ -213,24 +213,55 @@ let ZY = [352, 376, 400];                           // lignes écrites en bas
 let D = null;
 const GROUPES = ['axes', 'courbe', 'tangente', 'lecture'];
 const groupes = () => GROUPES.filter(n => F.panneau[n] && (n !== 'tangente' || F.tangente));
-function disposer(L, e = 1) {
+/* Deuxième passe (15 novembre 2026, « agrandir les graphes eux-mêmes, pas seulement le texte autour ») : sur un tableau
+ * large, les tailles sont choisies en PIXELS À L'ÉCRAN (u(px) = px / échelle), le graphe prend 50 à 62 % de la largeur
+ * et toute la hauteur, les deux colonnes de texte se resserrent autour et leurs phrases vont à la ligne. On prend la
+ * plus grande écriture (22 → 17 px) qui fait tenir tout le panneau de droite, puis le plus grand graphe.
+ * Même méthode que chimie/transformations-deux-sens-tableau/figures.html. */
+function decouperPanneau(c, cote, t) {
+  const place = {}; let n = 0;
+  for (const nom of groupes()) {
+    const l2 = [];
+    for (const [txt, col, tl] of F.panneau[nom]) for (const m of couper(c, txt.trim(), cote, tl ? t * .93 : t)) l2.push([m, col, tl]);
+    place[nom] = { lignes: l2 }; n += l2.length;
+  }
+  return { place, n };
+}
+function disposer(L, e = 1, c = null) {
   if (L < 1000) {
     Object.assign(G, { x0: 66, y0: 300, w: 380, h: 236 }); PX = 520; PW = 230; ZY = [352, 376, 400];
     D = { large: false, L, titre: 20, axes: 15, nomAxe: 16, eti: 17, lec: 15, lec2: 16, pt: 16, pas: 23, ecart: 8, y0: 66, bas: 17, xBas: 14, maxBas: 730 };
     return;
   }
-  const gauche = Math.round(L * .24), droite = Math.round(L * .27);
-  Object.assign(G, { x0: gauche + 64, y0: 370, w: L - gauche - droite - 64 - 80, h: 310 });
-  PX = L - droite + 6; PW = droite - 18;
-  const n = groupes().reduce((k, nom) => k + F.panneau[nom].length, 0), ng = groupes().length;
-  const pas = Math.min(34, Math.floor((404 - 66 - (ng - 1) * 12) / Math.max(1, n)));
-  D = { large: true, L, titre: 24, axes: 18, nomAxe: 20, eti: 21, lec: 19, lec2: 19, pt: Math.min(21, pas - 7), pas, ecart: 12, y0: 72,
-    bas: 19, xBas: 14, maxBas: gauche - 6 };
-  const pasBas = Math.max(27, Math.round(Math.max(19, 15 / (e || 1)) * 1.3));   // tableau bas : la craie grossit, l'interligne suit
-  ZY = []; for (let y = 76; y <= 406; y += pasBas) ZY.push(y);
+  const u = px => px / (e || 1), HAUT = 420, M0 = 12;
+  let choix = null;
+  for (const px of [22, 21, 20, 19, 18, 17]) {
+    for (const part of [.62, .58, .54, .5]) {
+      const t = u(px), pas = Math.round(t * 1.28), ecart = Math.round(t * .55);
+      const cote = Math.floor((L - L * part - 2 * M0) / 2) - u(10);
+      const { place, n } = decouperPanneau(c, cote, t), ng = groupes().length;
+      const y0 = Math.round(t + u(12));
+      if (y0 + (n - 1) * pas + (ng - 1) * ecart + u(8) <= HAUT - 6) { choix = { px, t, pas, ecart, cote, y0, place }; break; }
+    }
+    if (choix) break;
+  }
+  if (!choix) {
+    const t = u(17), cote = Math.floor((L * .5 - 2 * M0) / 2) - u(10);
+    choix = { px: 17, t, pas: Math.round(t * 1.12), ecart: 4, cote, y0: Math.round(t + u(10)), place: decouperPanneau(c, cote, t).place };
+  }
+  let y = choix.y0;
+  for (const nom of groupes()) { choix.place[nom].y = y; y += choix.place[nom].lignes.length * choix.pas + choix.ecart; }
+  const { t, pas, cote } = choix, gr = L - 2 * M0 - 2 * (cote + u(10));
+  const y0 = HAUT - u(34), haut = u(16) + u(22);
+  Object.assign(G, { x0: M0 + u(56) + cote + u(10), y0, w: Math.max(200, gr - u(56) - u(22)), h: Math.max(160, y0 - haut) });
+  PX = L - M0 - cote; PW = cote;
+  D = { large: true, L, px: choix.px, titre: u(24), axes: u(17), nomAxe: u(19), eti: u(20), lec: u(18), lec2: u(18), pt: t, pas, ecart: choix.ecart,
+    y0: choix.y0, place: choix.place, bas: t, xBas: M0, maxBas: cote };
+  ZY = []; for (let yy = choix.y0; yy <= HAUT - 8; yy += pas) ZY.push(yy);
 }
 /** Où s'écrit un groupe du panneau : [x, y, largeur max]. */
 function placeDe(nom) {
+  if (D.large) { const q = D.place[nom]; return [PX, q ? q.y : D.y0, PW]; }
   let y = D.y0;
   for (const n of groupes()) {
     if (n === nom) return [PX, y, PW];
@@ -238,6 +269,8 @@ function placeDe(nom) {
   }
   return [PX, y, PW];
 }
+/** Les lignes d'un groupe du panneau, coupées à la ligne sur un tableau large. */
+const lignesDe = nom => (D.large && D.place[nom] ? D.place[nom].lignes : (F.panneau[nom] || []));
 /** Une phrase coupée en lignes qui tiennent dans `max` (mesurée à la craie). */
 function couper(c, t, max, taille) {
   const mots = String(t).replace(/ ([=≈×→<>≤≥]) /g, '\u00a0$1\u00a0').replace(/\([^()]{1,18}\)/g, m => m.replace(/ /g, '\u00a0'))
@@ -530,9 +563,9 @@ function axes(c) {
   const tt = D.large ? (F.tTaille ? D.axes - 2 : D.axes) : (F.tTaille ?? 15);
   for (let k = 1; k * F.dt <= F.tTop + 1e-9; k++) {
     const t = k * F.dt; c.ligne(X(t), G.y0 - 4, X(t), G.y0 + 4, { largeur: 1.4, duree: .03 });
-    if (!F.tLab || proche(t, F.tLab)) c.texte(nb(t), X(t), G.y0 + 22, { couleur: 'faible', taille: tt, align: 'center', duree: .1 });
+    if (!F.tLab || proche(t, F.tLab)) c.texte(nb(t), X(t), G.y0 + (D.large ? 6 + tt : 22), { couleur: 'faible', taille: tt, align: 'center', duree: .1 });
   }
-  c.texte('0', G.x0 - 8, G.y0 + 20, { couleur: 'faible', taille: D.axes, align: 'right', duree: .05 });
+  c.texte('0', G.x0 - 8, G.y0 + (D.large ? 4 + D.axes : 20), { couleur: 'faible', taille: D.axes, align: 'right', duree: .05 });
   for (let k = 1; k * F.dy <= F.yTop + 1e-9; k++) {
     const v = k * F.dy; c.ligne(G.x0 - 4, Y(v), G.x0 + 4, Y(v), { largeur: 1.4, duree: .03 });
     if (!F.yLab || proche(v, F.yLab)) c.texte(F.yFmt ? F.yFmt(v) : F.dec ? fr(v, F.dec) : nb(v), G.x0 - 8, Y(v) + 5, { couleur: 'faible', taille: D.axes, align: 'right', duree: .1 });
@@ -552,11 +585,10 @@ const surT = (T, t) => T.A[1] + penteT(T) * (t - T.A[0]);
 function croix(c, x, y, col = 'blanc') { c.ligne(x - 5, y - 5, x + 5, y + 5, { couleur: col, largeur: 2 }); c.ligne(x - 5, y + 5, x + 5, y - 5, { couleur: col, largeur: 2 }); }
 
 function dessiner(c, M) {
-  MO = M; F = FIGS[M.S.vue]; M.scene.cadre(73); disposer(M.scene.L, c.echelle);
+  MO = M; F = FIGS[M.S.vue]; M.scene.cadre(73); disposer(M.scene.L, M.scene.s, c);
   if (!D.large && D.L > 760) c.ctx.translate((D.L - 760) / 2, 0);   // grand écran : la figure d'origine, centrée
-  if (D.large) c.texte(F.titre, 14, 30, { couleur: 'cyan', taille: D.titre, max: PX - 40 });
-  else c.texte(F.titre, 14, 26, { couleur: 'cyan', taille: 20, max: 470 });
-  c.texte(`diapositive ${F.diapo}`, D.large ? D.L - 14 : 746, D.large ? 30 : 26, { couleur: 'faible', taille: 15, align: 'right' });
+  // tableau large : le titre de la diapositive suffit, toute la hauteur va au graphe
+  if (!D.large) { c.texte(F.titre, 14, 26, { couleur: 'cyan', taille: 20, max: 470 }); c.texte(`diapositive ${F.diapo}`, 746, 26, { couleur: 'faible', taille: 15, align: 'right' }); }
   if (M.commence('axes')) c.direct(() => quadrillage(c, lisse(M.p('axes'))));
   c.direct(() => {
     if (M.commence('courbe')) F.courbes.forEach(k => trace(c, k.f, k.fin, M.p('courbe'), k.col));
@@ -590,7 +622,7 @@ function dessiner(c, M) {
       else {
         if (l.yLab && l.yLabGauche) c.texte(l.yLab, G.x0 - 8, Y(l.y) + 5, { couleur: 'jaune', taille: D.axes, align: 'right' });
         else if (l.yLab) c.texte(l.yLab, X(l.yLabAt[0]), Y(l.yLabAt[1]), { couleur: 'jaune', taille: D.lec });
-        if (l.tLabSous) c.texte(l.tLab, X(l.t), G.y0 + (D.large ? 42 : 38), { couleur: 'jaune', taille: D.axes, align: 'center' });
+        if (l.tLabSous) c.texte(l.tLab, X(l.t), G.y0 + (D.large ? 8 + D.axes * 2.1 : 38), { couleur: 'jaune', taille: D.axes, align: 'center' });
         else { const at = l.tLabAt || [l.t, 0]; c.texte(l.tLab, X(at[0]) + 6, Y(at[1]) - 8, { couleur: 'jaune', taille: D.lec2 }); }
       }
     }),
@@ -598,8 +630,8 @@ function dessiner(c, M) {
   const ecrites = [], panneau = {};
   for (const nom of ['axes', 'courbe', 'tangente', 'lecture']) {
     const lignes = F.panneau[nom]; if (!lignes || !M.ev(nom)) continue;
-    const [x0, y0, mx] = placeDe(nom);
-    panneau[nom] = () => lignes.forEach(([t, col, tl], i) => c.texte(t, x0, y0 + i * D.pas, { couleur: col, taille: tl ? (D.large ? D.pt - 1.5 : tl) : D.pt, max: mx }));
+    const [x0, y0, mx] = placeDe(nom), vues = lignesDe(nom);
+    panneau[nom] = () => vues.forEach(([t, col, tl], i) => c.texte(t, x0, y0 + i * D.pas, { couleur: col, taille: tl ? (D.large ? D.pt * .93 : tl) : D.pt, max: mx }));
     if (M.commence(nom)) ecrites.push(...lignes.map(l => l[0]));
   }
   M.panneau = ecrites;
@@ -615,7 +647,7 @@ function dessiner(c, M) {
 /* ── Repères (tous déclarés dès le début ; le libellé dit à quel moment ils apparaissent) ─────────────── */
 /** Le rectangle d'un groupe du panneau de droite : [x, y, largeur, hauteur]. */
 function panneauR(nom) {
-  const [x, y, mx] = placeDe(nom), n = (F.panneau[nom] || []).length || 1;
+  const [x, y, mx] = placeDe(nom), n = lignesDe(nom).length || 1;
   return [x - 6, y - D.pt - 2, mx + 10, n * D.pas + 4];
 }
 function reperes(c, M) {
