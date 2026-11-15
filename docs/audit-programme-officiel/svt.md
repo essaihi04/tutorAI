@@ -440,3 +440,7 @@ Rien d'autre n'est hors programme : il n'y a ni épissage, ni promoteur détaill
 #### (e) Nombre total de corrections
 
 **14** : 13 dans le cours (dont 3 voix à refaire) et 1 dans la simulation `paire_homologues.html`.
+
+## Étape 3 — Le skill
+
+Ajouté à `.agents/skills/exploration-de-cours/SKILL.md` et `.agents/skills/cours-concentration/SKILL.md` : la section obligatoire « Conformité au cadre officiel du ministère » (partir du JSON officiel de la filière PC, chaque partie cite sa notion officielle, un mot d'un document d'examen se lit sans s'apprendre) et sa sous-partie « SVT » (les 4 domaines, ce que la filière PC n'a pas, la règle de l'examen, les pièges trouvés dans cet audit).
