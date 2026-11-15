@@ -539,6 +539,16 @@ function dessiner(c) {
 
 const canvas = $('canvas');
 const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(41); dessiner(c); return c.fin(); });
+/* Les noyaux [A,Z]X se mesurent à la taille vraiment écrite (la craie ne descend pas sous 15 px à l’écran) : sinon, sur
+ * un tableau étroit, A et Z, plus gros que mesurés, débordent à gauche sur le texte qui précède (« à mi-chemin : ²²²₈₆Rn »). */
+for (const nom of ['noyaux', 'largeurNoyaux', 'nucleide', 'largeurNucleide']) {
+  const f = scene.craie[nom];
+  scene.craie[nom] = function (...args) {
+    const mesure = this.largeurTexte, mini = (this.tailleMin || 0) / (this.echelle || 1);
+    this.largeurTexte = (s, t = 18) => mesure.call(this, s, Math.max(t, mini));
+    try { return f.apply(this, args); } finally { this.largeurTexte = mesure; }
+  };
+}
 scene.avancer = dt => {
   if (!S.running) return false;
   S.t = Math.min(FIN, S.t + dt);

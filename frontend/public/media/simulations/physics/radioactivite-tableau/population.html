@@ -319,7 +319,10 @@ function dessiner(c) {
       if (S.vue === 'restants') tracer(c, tj, v => n0 - v, 'orange');
       tracer(c, tj, v => v, 'jaune');
     } else c.point(PX(0), PY(n0), 4.6, 'jaune');
-    for (const [x, y, a] of volants) if (x > RE.x + 6 && x < RE.x + RE.w - 26 && y > RE.y + 24 && y < RE.y + RE.h - 6) c.texte('e⁻', x + 6, y - 6, { couleur: 'bleu', taille: 14, alpha: .95 * a });
+    // « e⁻ » suit l'électron, mais ne s'écrit ni sur l'équation du haut (y < RE.y + 56) ni sur le numéro d'un noyau (vue hasard : 12 noyaux numérotés)
+    const kN = Math.max(1, (c.tailleMin || 0) / (c.echelle || 1) / 12);
+    const surNumero = (x, y) => N0() === 12 && Array.from({ length: 12 }, (_, i) => posNoyau(i)).some(([nx, ny]) => Math.abs(x + 13 - nx) < 22 * kN && Math.abs(y - 10 - (ny - 36)) < 16 * kN);
+    for (const [x, y, a] of volants) if (x > RE.x + 6 && x < RE.x + RE.w - 26 && y > RE.y + 56 && y < RE.y + RE.h - 6 && !surNumero(x, y)) c.texte('e⁻', x + 6, y - 6, { couleur: 'bleu', taille: 14, alpha: .95 * a });
     c.texte(`N = ${N} noyau${N > 1 ? 'x' : ''} restant${N > 1 ? 's' : ''}`, 16, 352, { couleur: 'jaune', taille: 19 });
     c.texte(`désintégrés : N_d = ${n0 - N}`, 16, 376, { couleur: 'orange', taille: 16 });
     c.texte(`t = ${fx(tj, 1)} ${jourS(tj)}`, 16, 402, { couleur: 'blanc', taille: 18 });
@@ -380,12 +383,22 @@ function dessiner(c) {
       tVol = c.cur; c.pause(.9);
       for (let k = 1; k <= 3; k++) { const av = avantJour(k - 1), d = av - avantJour(k); c.texte(`${d}/${av} ≈ ${fr(d / av, 3)}`, 682, 268 + 24 * k, { couleur: 'blanc', taille: 16, align: 'center', duree: .45 }); }
     });
+    const clampU = v => Math.min(1, Math.max(0, v));
     if (Number.isFinite(tVol) && S.t >= tVol) c.direct(() => {
       for (let k = 1; k <= 3; k++) {
         const av = avantJour(k - 1), d = av - avantJour(k), yc = 268 + 24 * k, ya = PR.ys[k - 1] + 5, u = lisseP((S.t - tVol - .1 * (k - 1)) / .7);
         if (S.t < tVol + .1 * (k - 1)) continue;
-        c.texte(String(av), PR.nav - 12 + (466 - PR.nav + 12) * u, ya + (yc - ya) * u, { couleur: u < 1 ? 'violet' : 'jaune', taille: 16, align: 'center' });
-        c.texte(String(d), PR.cpt + (572 - PR.cpt) * u, ya + (yc - ya) * u, { couleur: 'orange', taille: u < 1 ? 18 : 16, align: 'center' });
+        // Les nombres ne traversent pas l'en-tête du tableau (« Δt = 1 jour », « N avant », « proportion ») : le compteur orange
+        // descend d'abord (à droite de « proportion »), puis glisse vers sa case ; le nombre violet de la 1re rangée (au-dessus de
+        // l'en-tête) passe par le vide entre « N avant » et « désintégrés » (x = 513), les autres vont droit à leur case.
+        const uy = Math.min(1, u / .4), ux = Math.max(0, (u - .3) / .7), yv = ya + (yc - ya) * uy;
+        let xa = PR.nav - 12 + (466 - PR.nav + 12) * u, ya2 = ya + (yc - ya) * u;
+        if (ya < 266) {
+          const s1 = Math.min(1, u / .35), s2 = clampU((u - .35) / .3), s3 = clampU((u - .65) / .35);
+          xa = s3 > 0 ? 513 + (466 - 513) * s3 : PR.nav - 12 + (513 - PR.nav + 12) * s1; ya2 = ya + (yc - ya) * s2;
+        }
+        c.texte(String(av), xa, ya2, { couleur: u < 1 ? 'violet' : 'jaune', taille: 16, align: 'center' });
+        c.texte(String(d), PR.cpt + 8 + (572 - PR.cpt - 8) * ux, yv, { couleur: 'orange', taille: u < 1 ? 18 : 16, align: 'center' });
       }
     });
     if (S.conclusions) ecritA(c, 'conclusion', () => {
