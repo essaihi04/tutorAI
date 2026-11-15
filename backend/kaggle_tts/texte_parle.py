@@ -60,7 +60,28 @@ def parle(p):
     p = re.sub(r"(?<=[A-Za-z])-([0-9]{1,2})-(?=[A-Za-z])", r" \1 ", p)          # glucose-6-phosphate
     p = re.sub(r"(?<!\w)(?<![0-9][,.])[0-9]{1,2}(?!\w)(?![,.][0-9])", lambda mt: _nombre(p, mt), p)   # pas les décimaux (1,70)
     p = re.sub(r"\b(complexe)\s+I\b", r"\1 un", p)
-    return re.sub(r"\b(IV|III|II)\b", lambda mt: {"II": "deux", "III": "trois", "IV": "quatre"}[mt.group(1)], p)
+    p = re.sub(r"\b(IV|III|II)\b", lambda mt: {"II": "deux", "III": "trois", "IV": "quatre"}[mt.group(1)], p)
+    return prononciation(p)
+
+
+# Mots que le modèle n'a jamais entendus (absents des 38 852 transcriptions d'entraînement) et dont l'orthographe le
+# trompe : on les écrit comme ils se disent (signalé par l'utilisateur le 15 novembre 2026 : « les hématies, il lit
+# t au lieu de si », « cliquer est mal prononcé »). Le texte affiché ne change pas.
+PRONONCIATION = [
+    (re.compile(r"\bh[ée]maties?\b", re.I), "émassi"),                 # t prononcé s
+    (re.compile(r"\bcliqu(?:er|ez|é|ée|és|ées)\b", re.I), "kliké"),     # jamais « cliquer » au corpus
+    (re.compile(r"\bcliques?\b", re.I), "klik"),
+    (re.compile(r"\bMeV\b"), "méga électron-volts"),
+    (re.compile(r"\b(milli)?henrys?\b"), lambda mt: (mt.group(1) or "") + "anri"),   # unité (H, mH) ; pas le nom propre
+    (re.compile(r"\b(BBT|LDL|HDL)\b"), lambda mt: " ".join(mt.group(1))),   # sigles lus lettre par lettre
+    (re.compile(r"\b([AUGC]{3})\b"), lambda mt: " ".join(mt.group(1))),     # codons : UAA -> U A A
+]
+
+
+def prononciation(p):
+    for motif, dit in PRONONCIATION:
+        p = motif.sub(dit, p)
+    return p
 
 
 COUPE = re.compile(r"\s*([:;؛])\s+|\s*([,،])\s+")
