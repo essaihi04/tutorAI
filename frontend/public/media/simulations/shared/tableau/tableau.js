@@ -292,16 +292,137 @@
   }
   /** Script d'explication de la simulation pour le tuteur : il dit chaque phrase en pointant le repère. */
   function explication(script) { EXPLICATION = script; }
+  // ── Entourage à la craie : il serre le repère sans empiéter sur ses voisins ──
+  const inter = (a, b) => a.l < b.r && b.l < a.r && a.t < b.b && b.t < a.b;
+  const boite = (r) => ({ l: r.left ?? r.x, t: r.top ?? r.y, r: (r.left ?? r.x) + r.width, b: (r.top ?? r.y) + r.height });
+  /** Boîtes (px de la page) des autres éléments visibles : repères voisins, textes HTML/SVG, images, boutons. */
+  function obstacles(id, cible) {
+    const out = [], c = boite(cible), el = elementRepere(id);
+    const contient = (a, b) => a.l <= b.l + 1 && a.r >= b.r - 1 && a.t <= b.t + 1 && a.b >= b.b - 1;
+    const ajouter = (o) => {
+      if (!(o.r - o.l > 0.5 && o.b - o.t > 0.5)) return;
+      if (contient(o, c) || contient(c, o)) return;           // un cadre qui contient le repère, ou un morceau du repère
+      out.push(o);
+    };
+    for (const k of Object.keys(REPERES)) { if (k !== String(id)) { const r = rectRepere(k); if (r) ajouter(boite(r)); } }
+    const feuilles = document.body.querySelectorAll('h1,h2,h3,h4,p,span,li,td,th,label,button,small,strong,em,b,i,sub,sup,output,figcaption,legend,summary,img,svg text,svg image,.katex,mjx-container,[data-professor-point]');
+    for (const n of feuilles) {
+      if (n.closest('.repere-anneau') || (el && (el.contains(n) || n.contains(el)))) continue;
+      if (!n.closest('svg') && !n.matches('img') && !n.textContent.trim()) continue;
+      const cs = getComputedStyle(n); if (cs.visibility === 'hidden' || cs.display === 'none' || +cs.opacity === 0) continue;
+      ajouter(boite(n.getBoundingClientRect()));
+    }
+    return out;
+  }
+  /** Distance (px) jusqu'à la première trace de craie sur la toile du repère, de chaque côté, jusqu'à `max`. */
+  function encreAutour(id, c, max) {
+    const libre = { l: max, t: max, r: max, b: max }, cr = REPERES[id] && REPERES[id].craie;
+    if (!cr || !cr.canvas) return libre;
+    try {
+      const cv = cr.canvas, br = cv.getBoundingClientRect(), d = cv.width / Math.max(1, br.width);
+      const x0 = Math.max(0, Math.floor((c.l - max - br.left) * d)), y0 = Math.max(0, Math.floor((c.t - max - br.top) * d));
+      const x1 = Math.min(cv.width, Math.ceil((c.r + max - br.left) * d)), y1 = Math.min(cv.height, Math.ceil((c.b + max - br.top) * d));
+      if (x1 <= x0 || y1 <= y0) return libre;
+      const px = cv.getContext('2d').getImageData(x0, y0, x1 - x0, y1 - y0).data, w = x1 - x0;
+      const encre = (X, Y) => { const i = ((Y - y0) * w + (X - x0)) * 4 + 3; return px[i] > 60; };
+      const cl = (c.l - br.left) * d, ct = (c.t - br.top) * d, crr = (c.r - br.left) * d, cb = (c.b - br.top) * d;
+      for (let Y = y0; Y < y1; Y++) for (let X = x0; X < x1; X++) {
+        if (X >= cl && X < crr && Y >= ct && Y < cb) continue;            // dans le repère lui-même
+        const dedansX = X >= cl - 2 && X < crr + 2, dedansY = Y >= ct - 2 && Y < cb + 2;
+        if (!dedansX && !dedansY) continue;                                 // coins : non concernés par le tracé
+        if (!encre(X, Y)) continue;
+        if (dedansX && Y < ct) libre.t = Math.min(libre.t, (ct - Y) / d);
+        if (dedansX && Y >= cb) libre.b = Math.min(libre.b, (Y - cb) / d);
+        if (dedansY && X < cl) libre.l = Math.min(libre.l, (cl - X) / d);
+        if (dedansY && X >= crr) libre.r = Math.min(libre.r, (X - crr) / d);
+      }
+    } catch (_) { /* toile illisible : on garde la marge par défaut */ }
+    return libre;
+  }
+  /** Resserre un repère dessiné sur la craie réellement tracée dans sa boîte (les boîtes déclarées sont souvent larges). */
+  function serrer(id, rect) {
+    const cr = rect && REPERES[id] && REPERES[id].craie; if (!cr || !cr.canvas) return rect;
+    if (cr.complet === false) return rect;                                 // craie encore en train d'écrire : la boîte déclarée fait foi
+    try {
+      const cv = cr.canvas, br = cv.getBoundingClientRect(), d = cv.width / Math.max(1, br.width);
+      const x0 = Math.max(0, Math.floor((rect.x - br.left) * d)), y0 = Math.max(0, Math.floor((rect.y - br.top) * d));
+      const x1 = Math.min(cv.width, Math.ceil((rect.x + rect.width - br.left) * d)), y1 = Math.min(cv.height, Math.ceil((rect.y + rect.height - br.top) * d));
+      if (x1 <= x0 || y1 <= y0) return rect;
+      const px = cv.getContext('2d').getImageData(x0, y0, x1 - x0, y1 - y0).data, w = x1 - x0;
+      let l = Infinity, t = Infinity, r = -1, b = -1;
+      for (let i = 3, k = 0; i < px.length; i += 4, k++) if (px[i] > 60) { const X = k % w, Y = (k / w) | 0; if (X < l) l = X; if (X > r) r = X; if (Y < t) t = Y; if (Y > b) b = Y; }
+      if (r < 0) return rect;                                              // rien de tracé : on garde la boîte déclarée
+      let nx = br.left + (x0 + l) / d, ny = br.top + (y0 + t) / d, nw = (r - l + 1) / d, nh = (b - t + 1) / d;
+      const MIN = 14;                                                      // un point ou un trait fin garde une boîte visible
+      if (nw < MIN) { nx -= (MIN - nw) / 2; nw = MIN; } if (nh < MIN) { ny -= (MIN - nh) / 2; nh = MIN; }
+      return { x: nx, y: ny, width: nw, height: nh };
+    } catch (_) { return rect; }
+  }
+  /** Vrai si la toile du repère porte de la craie dans la boîte `b` (px de la page). */
+  function encreDans(id, b) {
+    const cr = REPERES[id] && REPERES[id].craie; if (!cr || !cr.canvas) return false;
+    try {
+      const cv = cr.canvas, br = cv.getBoundingClientRect(), d = cv.width / Math.max(1, br.width);
+      const x0 = Math.max(0, Math.floor((b.l - br.left) * d)), y0 = Math.max(0, Math.floor((b.t - br.top) * d));
+      const x1 = Math.min(cv.width, Math.ceil((b.r - br.left) * d)), y1 = Math.min(cv.height, Math.ceil((b.b - br.top) * d));
+      if (x1 <= x0 || y1 <= y0) return false;
+      const px = cv.getContext('2d').getImageData(x0, y0, x1 - x0, y1 - y0).data;
+      for (let i = 3; i < px.length; i += 4) if (px[i] > 60) return true;
+    } catch (_) { /* toile illisible */ }
+    return false;
+  }
+  /** Marge de chaque côté : petite, et au plus la moitié de l'écart avec le voisin le plus proche. */
+  function marges(id, rect, voisins) {
+    const c = boite(rect), base = Math.max(3, Math.min(7, Math.min(rect.width, rect.height) * .18)), m = { l: base, t: base, r: base, b: base };
+    const encre = encreAutour(id, c, base * 2 + 2);
+    for (const k of ['l', 't', 'r', 'b']) m[k] = Math.min(m[k], encre[k] / 2);
+    for (const o of voisins) {
+      if (inter(o, c)) continue;                                           // chevauchement déjà présent dans la page
+      const recX = o.l < c.r && o.r > c.l, recY = o.t < c.b && o.b > c.t;
+      if (recX && o.b <= c.t) m.t = Math.min(m.t, (c.t - o.b) / 2);
+      if (recX && o.t >= c.b) m.b = Math.min(m.b, (o.t - c.b) / 2);
+      if (recY && o.r <= c.l) m.l = Math.min(m.l, (c.l - o.r) / 2);
+      if (recY && o.l >= c.r) m.r = Math.min(m.r, (o.l - c.r) / 2);
+    }
+    for (const k of ['l', 't', 'r', 'b']) m[k] = Math.max(0, m[k]);
+    return m;
+  }
+  /** Libellé lisible d'un repère (sans la mention interne « (au moment …) ») ; vide s'il répète le texte montré. */
+  function libelleCourt(id) {
+    let s = REPERES[id] ? REPERES[id].label : (elementRepere(id)?.dataset.professorLabel || '');
+    s = String(s || '').replace(/\s*\(au moment[^)]*\)\s*$/i, '').trim();
+    return s && s !== id && s.length <= 48 ? s : '';
+  }
   /** Entoure un repère à la craie pendant `duree` ms : le professeur vient de le montrer. */
   function surligner(id, duree = 4500) {
-    const rect = rectRepere(id); if (!rect) return false;
+    const rect = serrer(id, rectRepere(id)); if (!rect) return false;
     document.querySelectorAll('.repere-anneau').forEach((el) => el.remove());
+    const voisins = obstacles(id, rect), m = marges(id, rect, voisins);
+    const w = rect.width + m.l + m.r, h = rect.height + m.t + m.b;
+    // Rectangle arrondi : il suit la boîte réelle (une ellipse coupe les coins du texte et déborde sur les côtés).
+    // Les rayons restent dans la marge disponible pour ne pas mordre sur le repère.
+    const rayon = Math.max(2, Math.min(h / 2, w / 2, 4 + Math.min(m.l, m.t, m.r, m.b) * 1.6));
     const el = document.createElement('div'); el.className = 'repere-anneau'; el.setAttribute('aria-hidden', 'true');
-    const marge = 8;
-    Object.assign(el.style, { left: (rect.x - marge + scrollX) + 'px', top: (rect.y - marge + scrollY) + 'px', width: (rect.width + 2 * marge) + 'px', height: (rect.height + 2 * marge) + 'px' });
-    const label = REPERES[id] ? REPERES[id].label : (elementRepere(id)?.dataset.professorLabel || '');
-    if (label && label !== id) { const s = document.createElement('span'); s.textContent = label; el.append(s); }
+    Object.assign(el.style, { left: (rect.x - m.l + scrollX) + 'px', top: (rect.y - m.t + scrollY) + 'px', width: w + 'px', height: h + 'px',
+      borderRadius: `${rayon * 1.1}px ${rayon * .9}px ${rayon * 1.05}px ${rayon * .95}px` });
     document.body.append(el);
+    // Le libellé ne s'écrit que dans une place libre (dessous, sinon dessus), entièrement dans l'écran.
+    const label = libelleCourt(id);
+    if (label) {
+      const s = document.createElement('span'); s.textContent = label; el.append(s);
+      const anneau = { l: rect.x - m.l, t: rect.y - m.t, r: rect.x - m.l + w, b: rect.y - m.t + h }, lw = s.offsetWidth, lh = s.offsetHeight, cx = (anneau.l + anneau.r) / 2;
+      const gauche = Math.max(4, Math.min(innerWidth - 4 - lw, cx - lw / 2));
+      const places = [{ t: anneau.b + 2, cote: 'dessous' }, { t: anneau.t - 2 - lh, cote: 'dessus' }];
+      const ok = places.find((p) => {
+        const b = { l: gauche, r: gauche + lw, t: p.t, b: p.t + lh };
+        if (b.t < 0 || b.b > innerHeight || lw > innerWidth - 8) return false;
+        if (voisins.some((o) => inter(o, b))) return false;
+        return !encreDans(id, b);
+      });
+      if (ok) { s.dataset.cote = ok.cote; const bord = parseFloat(getComputedStyle(el).borderLeftWidth) || 0;
+        s.style.left = (gauche - anneau.l - bord) + 'px'; s.style.top = (ok.t - anneau.t - bord) + 'px'; }
+      else s.remove();
+    }
     setTimeout(() => el.remove(), duree);
     return true;
   }
