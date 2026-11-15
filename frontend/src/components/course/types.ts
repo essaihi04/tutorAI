@@ -190,6 +190,13 @@ export interface SlideConcentration {
    */
   variante?: { apres_s?: number; etapes: { commande?: string; parametres?: Record<string, unknown>; repere?: string }[] };
   /**
+   * Le schéma à légender (15 novembre 2026), comme au bac : la simulation dit combien d'étiquettes sont à poser
+   * (`legende_total`), bien posées et ses erreurs. Tant qu'il n'est pas fini, les questions attendent ; fini, il compte
+   * pour les acquis et le tuteur le commente avec sa réaction préparée : `juste` (sans erreur), `partiel` (1 ou 2
+   * erreurs), `faux` (plus), `aide` (l'élève n'a rien posé : le tuteur place les étiquettes).
+   */
+  legende?: { reactions?: Partial<Record<'juste' | 'partiel' | 'faux' | 'aide', ReactionPreparee>> };
+  /**
    * Les réactions préparées, pour CHAQUE réponse possible : `reponses[cle][option]` avec `juste` (bonne option)
    * ou `1` (indice, 1er essai) et `2` (réponse et justification, 2e essai). `cle` : `q` (question de la
    * diapositive), `e{i}` (QCM de l'exercice i), `e{i}s{j}` (affirmation j d'un vrai/faux ; option 0 = Vrai).

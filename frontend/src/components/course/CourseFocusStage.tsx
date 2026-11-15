@@ -204,6 +204,8 @@ const REFLEXION_MS = 10_000;
 const REFLEXION_VRAI_FAUX_MS = 6_000;
 /** Silence (sans action de l'élève) au bout duquel le tuteur relance doucement, une seule fois, quand « Suite → » attend. */
 const RELANCE_APRES_MS = 45_000;
+/** Un schéma à légender : le temps laissé à l'élève sans qu'il touche à rien avant que le tuteur pose les étiquettes. */
+const LEGENDE_AIDE_MS = 60_000;
 /** La phrase de relance préenregistrée (voix du cours). Absente du dossier : le bouton « Suite → » clignote seulement. */
 const CLIP_RELANCE = '/media/audio/reactions/relance-suite.mp3';
 /**
@@ -317,6 +319,17 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   const coursEnPause = useRef(false);
   const eleveATouche = useRef(false);
   const varianteFaite = useRef(false);
+  /**
+   * Le schéma à légender de la diapositive (15 novembre 2026) : la simulation dit combien d'étiquettes sont à poser
+   * (`legende_total`), combien l'élève en a bien posé, ses erreurs et lesquelles. Tant qu'il n'est pas fini, les
+   * questions attendent (elles ne recouvrent plus le schéma) et le tuteur ne pose pas les étiquettes à sa place.
+   */
+  const legendeRef = useRef<{ total: number; places: number; erreurs: number; mal: string; close: boolean } | null>(null);
+  const finirLegendeRef = useRef<(abandon: boolean) => void>(() => {});
+  /** Le commentaire écrit du tuteur sur le schéma légendé, sous le tableau. */
+  const [legendeMot, setLegendeMot] = useState<{ texte: string; correct: boolean | null } | null>(null);
+  /** le schéma à légender attend encore l'élève */
+  const legendeEnCours = () => !!legendeRef.current && !legendeRef.current.close;
   // ── La question libre de l'élève : écrite, au micro ou en image ; le tuteur répond sans quitter la diapositive ──
   type QuestionLibre = { phase: 'saisie' | 'envoi' | 'reponse'; texte: string; image?: { b64: string; mime: string; nom: string }; audio?: string; enregistre: boolean;
     /** La transcription du micro est en cours : elle va s'écrire dans le champ, pour que l'élève la vérifie. */
@@ -465,7 +478,9 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     dejaFaits.current = new Set(); demarree.current = false;
     setReaction(null); dernierEtat.current = null; dernierResultat.current = null; historique.current = [];
     setResultat(null); tourResultat.current += 1; tourDemo.current += 1; panneauAvant.current = null;
-    coursEnPause.current = false; eleveATouche.current = false; varianteFaite.current = false;
+    coursEnPause.current = false; eleveATouche.current = false; varianteFaite.current = false; setLegendeMot(null);
+    // un schéma à légender déclaré dans le cours attend l'élève dès le départ (la simulation donne ensuite son total)
+    legendeRef.current = slide.concentration?.legende ? { total: 0, places: 0, erreurs: 0, mal: '', close: false } : null;
     setCycle(null); finies.current = {}; fausses.current = {}; voixLancee.current = false;
     setLibre({ phase: 'saisie', texte: '', enregistre: false });
     setTableauProf(null); setAnnonce(null); tourQuestion.current += 1;
@@ -820,7 +835,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     const audio = audioRef.current;
     if (coursEnPause.current) { coursEnPause.current = false; void audio?.play(); if (demarree.current) envoyerASim('resume'); return; }
     if (audio && !audio.ended && audio.currentTime > 0 && piste?.url) return;   // la voix du cours joue encore
-    if (questions.some(q => !(q.cle in finies.current))) setPanneau('questions');
+    if (questions.some(q => !(q.cle in finies.current)) && !legendeEnCours()) setPanneau('questions');
   }, [envoyerASim, piste?.url, questions, predictionEnCours]);
   /** L'élève a répondu à l'exercice : le tuteur réagit à la voix, la réponse compte pour les acquis. */
   const exerciceFini = useCallback((ex: Exercice, correct: boolean, reponse: string) => {
@@ -1150,6 +1165,49 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     voix.src = url; void voix.play().catch((e: unknown) => { if (secours && (e as Error)?.name !== 'AbortError') void dire(secours); });
   }, [dire]);
 
+  /**
+   * Le schéma à légender est fini (toutes les étiquettes à leur place) ou abandonné (le tuteur les pose) : il compte
+   * pour les acquis — sans erreur = juste du premier coup ; 1 ou 2 erreurs = juste au 2e essai (partiel) ; plus = raté ;
+   * abandonné = passé — le tuteur le commente avec sa réaction préparée, puis les questions de la diapositive viennent.
+   */
+  const finirLegende = (abandon: boolean) => {
+    const L = legendeRef.current;
+    if (!L || L.close) return;
+    L.close = true;
+    const genre = abandon ? 'aide' : L.erreurs === 0 ? 'juste' : L.erreurs <= 2 ? 'partiel' : 'faux';
+    const correct = abandon ? null : L.erreurs <= 2;
+    const mal = L.mal ? ` Erreurs sur : ${L.mal}.` : '';
+    const prep = conc.legende?.reactions?.[genre];
+    const ecrits = {
+      juste: `Bravo : les ${L.total} étiquettes sont à leur place du premier coup.`,
+      partiel: `Toutes les étiquettes sont à leur place, avec ${L.erreurs} erreur${L.erreurs > 1 ? 's' : ''} en route.${mal}`,
+      faux: `Le schéma est complet, mais avec ${L.erreurs} erreurs : regarde bien où va chaque étiquette.${mal}`,
+      aide: 'Je place les étiquettes : regarde bien où va chacune. La prochaine fois, c’est toi qui les poses.',
+    } as const;
+    const ecrit = prep?.ecrit ? `${prep.ecrit}${genre === 'partiel' || genre === 'faux' ? mal : ''}` : ecrits[genre];
+    void appelerApi('/course-player/acquis', {
+      slide_id: slide.id, slide_title: slide.title, deck_id: deckId, cle: 'legende', type: 'legende', enonce: `Légender le schéma : ${slide.title}`.slice(0, 500),
+      reponse: abandon ? '' : `${L.places}/${L.total} étiquettes, ${L.erreurs} erreur(s)${L.mal ? ` sur ${L.mal}` : ''}`.slice(0, 500),
+      tentative: abandon || L.erreurs === 0 ? 1 : 2, correct, passee: abandon, reaction_preparee: !!prep?.audio,
+      methodes: { visuel: visuel?.kind || 'simulation', eleve_a_manipule: !abandon, exercice: true },
+    }).catch(() => { /* le suivi ne doit jamais gêner l'élève */ });
+    if (correct !== null) onReponseJugee?.({ correct });
+    ressentir(genre === 'juste' ? 'celebrate' : genre === 'faux' ? 'wrong' : 'encourage');
+    setLegendeMot({ texte: ecrit, correct });
+    const parole = prep?.parole || ecrit;
+    const finVoix: Promise<unknown> = prep?.audio
+      ? (jouer(prep.audio, parole), attendre(1500).then(() => new Promise<void>(ok => {
+        const tic = () => { const v = voixRef.current; if (v && !v.paused && !v.ended) window.setTimeout(tic, 300); else ok(); };
+        tic();
+      })))
+      : dire(parole);
+    void finVoix.then(() => attendre(800)).then(() => {
+      if (legendeRef.current !== L) return;   // l'élève a changé de diapositive
+      if (questions.some(q => !(q.cle in finies.current))) setPanneau('questions');
+    });
+  };
+  finirLegendeRef.current = finirLegende;
+
   /** Un texte dit jusqu'au bout (voix en direct) ; sans voix, le temps de le lire. */
   const direEtAttendre = useCallback(async (url: Promise<string | null>, texte: string) => {
     const u = await url;
@@ -1378,6 +1436,17 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
       const avant = dernierEtat.current;
       dernierEtat.current = etat;
       if (etat.derniere_main === 'eleve') eleveATouche.current = true;   // il a touché : le tuteur ne fait pas la variante à sa place
+      // le schéma à légender : ce que l'élève a posé lui-même (les étiquettes posées par le tuteur ne comptent pas)
+      const pl = (etat.parameters || {}) as Record<string, unknown>;
+      const total = Number(pl.legende_total) || 0;
+      if (total > 0) {
+        const L = (legendeRef.current ||= { total, places: 0, erreurs: 0, mal: '', close: false });
+        L.total = total;
+        if (etat.derniere_main === 'eleve' && !L.close) {
+          L.places = Number(pl.legende_places) || 0; L.erreurs = Number(pl.legende_erreurs) || 0; L.mal = String(pl.legende_mal || '');
+          if (L.places >= total) finirLegendeRef.current(false);
+        }
+      }
       if (etat.simulation_status !== 'finished' || avant?.simulation_status === 'finished') return;
       const precedent = dernierResultat.current;
       dernierResultat.current = etat;
@@ -1396,14 +1465,22 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   useEffect(() => {
     const v = conc.variante;
     if (!finie || !v?.etapes?.length || varianteFaite.current || !simPrete || (observation && !obsClose)) return;
-    const id = window.setTimeout(() => {
+    // Un schéma à légender laisse à l'élève une minute sans le toucher avant que le tuteur pose les étiquettes.
+    const debut = Date.now();
+    let id = 0;
+    const essayer = () => {
       if (eleveATouche.current || reactionRef.current || varianteFaite.current) return;
+      const L = legendeRef.current;
+      if (L?.close) return;   // l'élève l'a fini : rien à poser à sa place
+      if (L && Date.now() - debut < LEGENDE_AIDE_MS) { id = window.setTimeout(essayer, 1000); return; }
       varianteFaite.current = true;
       v.etapes.forEach(e => {
         if (e.commande) parTuteur(e.commande, e.parametres || {});
         else if (e.repere) parTuteur('highlight', { target: e.repere });
       });
-    }, (v.apres_s ?? 5) * 1000);
+      if (L) finirLegendeRef.current(true);
+    };
+    id = window.setTimeout(essayer, (v.apres_s ?? 5) * 1000);
     return () => window.clearTimeout(id);
   }, [finie, conc.variante, simPrete, parTuteur, observation, obsClose]);
 
@@ -1799,7 +1876,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
           onTimeUpdate={event => setTemps(event.currentTarget.currentTime)}
           onLoadedMetadata={event => { const d = event.currentTarget.duration; if (Number.isFinite(d) && d > 0) setDuree(d); }}
           // la bulle du cahier s'ouvre à la demande ; les questions, elles, s'affichent tout de suite
-          onEnded={() => { setEnLecture(false); setFinie(true); iframeRef.current?.contentWindow?.postMessage({ type: 'simulation_manifest_request' }, '*'); if (conc.acquis) direLesLacunes(); if (questions.length && !reactionRef.current && !(observation && !obsFaite.current)) setPanneau('questions'); }}
+          onEnded={() => { setEnLecture(false); setFinie(true); iframeRef.current?.contentWindow?.postMessage({ type: 'simulation_manifest_request' }, '*'); if (conc.acquis) direLesLacunes(); if (questions.length && !reactionRef.current && !(observation && !obsFaite.current) && !legendeEnCours()) setPanneau('questions'); }}
         />
       )}
       <audio ref={voixRef} onPlay={event => { setVoixParle(true); void audioUnlock.ensureRunning(); observeAvatarMedia(event.currentTarget); }} onPause={() => setVoixParle(false)}
@@ -1965,6 +2042,15 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
               );
             })}
           </div>
+        )}
+
+        {/* ── Le schéma légendé : le commentaire écrit du tuteur, en bas du tableau, sans couvrir le schéma ── */}
+        {legendeMot && panneau !== 'questions' && (
+          <p className={`absolute bottom-2 left-1/2 z-20 max-w-[80%] -translate-x-1/2 rounded-xl border px-4 py-2 text-center text-lg ${
+            legendeMot.correct === true ? 'border-emerald-400/60 bg-emerald-950/85 text-emerald-100' : legendeMot.correct === false ? 'border-rose-400/60 bg-rose-950/85 text-rose-100' : 'border-amber-300/50 bg-slate-900/85 text-amber-100'}`}
+            style={{ fontFamily: CRAIE }}>
+            {legendeMot.correct === true ? '✔ ' : legendeMot.correct === false ? '✘ ' : ''}{legendeMot.texte}
+          </p>
         )}
 
         {/* ── Un nouveau résultat de l'élève : rien ne s'ouvre, ce bouton clignote ; le cours continue ── */}

@@ -141,7 +141,11 @@ const COL = i => [675, 78 + 38 * i];
 const MC = { etiquettes: 2.5, corrige: 6.5 };
 const T_CORR = 4.6;
 let ET = {}, dernierT = 0;
-function remiseEtiquettes() { ET = {}; ORDRE.forEach((id, i) => { const [x, y] = COL(i); ET[id] = { x, y, ok: false }; }); }
+/** Le travail de l'élève (schéma à légender, 15 novembre 2026) : étiquettes lâchées loin de leur place, et lesquelles. */
+let ERREURS = 0, MAL = new Set();
+function remiseEtiquettes() { ET = {}; ERREURS = 0; MAL = new Set(); ORDRE.forEach((id, i) => { const [x, y] = COL(i); ET[id] = { x, y, ok: false }; }); }
+/** Ce que le lecteur lit pour noter et commenter le schéma (`legende_*`, lecture seule). */
+function noterLegende(P) { P.legende_total = ORDRE.length; P.legende_places = ORDRE.filter(n => ET[n].ok).length; P.legende_erreurs = ERREURS; P.legende_mal = [...MAL].join(', '); }
 remiseEtiquettes();
 const largeurEt = id => 18 + 8.2 * NOMS[id].length;
 /** Positions affichées (la correction les amène à leur place). */
@@ -159,6 +163,7 @@ function dessinerConstruire(c, k) {
   const t = k.t;
   if (t + .3 < dernierT) { remiseEtiquettes(); k.P.places = 0; }
   dernierT = t;
+  if (!k.P.legende_total) noterLegende(k.P);   // la vue construire est un schéma à légender
   c.direct(() => {
     const x = c.ctx;
     peindreCellule(x, rampe(t, .1, .6));
@@ -210,9 +215,13 @@ window.Etapes.lancer({
   id: 'svt_schema_bilan', titre: 'Du gène au caractère', graine: 61,
   parametres: {
     places: { defaut: 0, schema: 'lecture seule : nombre d’étiquettes bien posées (0..7), vue construire', lire: () => undefined },
+    legende_total: { defaut: 0, schema: 'lecture seule : étiquettes à poser (vue construire)', lire: () => undefined },
+    legende_places: { defaut: 0, schema: 'lecture seule : étiquettes bien posées par l’élève', lire: () => undefined },
+    legende_erreurs: { defaut: 0, schema: 'lecture seule : étiquettes lâchées loin de leur place', lire: () => undefined },
+    legende_mal: { defaut: '', schema: 'lecture seule : les étiquettes mal posées au moins une fois', lire: () => undefined },
     corrige: { defaut: false, schema: 'true | false (true : toutes les étiquettes vont à leur place, vue construire)', lire: v => v === true || v === 'true' || v === 1 || v === '1' },
   },
-  apresReglage: (k, cles) => { if (cles.includes('corrige') && !k.P.corrige) { remiseEtiquettes(); k.P.places = 0; } },
+  apresReglage: (k, cles) => { if (cles.includes('corrige') && !k.P.corrige) { remiseEtiquettes(); k.P.places = 0; if (k.P.legende_total) noterLegende(k.P); } },
   poignees: {
     toucher: (x, y, k) => {
       if (k.vue !== 'construire' || k.t < 1.8 || (k.P.corrige && k.t >= T_CORR)) return null;
@@ -221,9 +230,12 @@ window.Etapes.lancer({
     },
     bouger: (id, x, y) => { ET[id] = { x: Math.min(735, Math.max(25, x)), y: Math.min(400, Math.max(40, y)), ok: false }; },
     lacher: (id, k) => {
-      const [sx, sy] = SLOT[id], e = ET[id];
+      const [sx, sy] = SLOT[id], e = ET[id], [cx0, cy0] = COL(ORDRE.indexOf(id));
       if (Math.hypot(e.x - sx, e.y - sy) <= 42) ET[id] = { x: sx, y: sy, ok: true };
+      // lâchée sur le schéma, loin de sa place : une erreur (la reposer dans la colonne n'en est pas une)
+      else if (e.x < 600 && Math.hypot(e.x - cx0, e.y - cy0) > 30) { ERREURS += 1; MAL.add(NOMS[id]); }
       k.P.places = ORDRE.filter(n => ET[n].ok).length;
+      noterLegende(k.P);
     },
   },
   vues: {
