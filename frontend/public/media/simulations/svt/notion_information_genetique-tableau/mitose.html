@@ -288,9 +288,20 @@ function voitPhoto(k) {
 /* Tableau large (15 novembre 2026) : la cellule à gauche, le panneau des critères à droite et agrandi, la frise des
  * phases en haut à côté du titre (etapes.js). Le schéma légendé de l'anaphase (traits de la cellule aux légendes) garde
  * la disposition d'origine, d'un seul tenant. */
-const BL_MITOSE = { titre: [6, 6, 400, 34], phases: [424, 30, 812, 58], cellule: [8, 60, 436, 418], panneau: [436, 62, 760, 300] };
-const BL_VEGETALE = { ...BL_MITOSE, panneau: [436, 62, 760, 404] };
-const DISPO_MITOSE = { haut: ['titre', 'phases'], colonnes: [['cellule'], ['panneau']] };
+/* Deuxième passe (15 novembre 2026, « agrandir les figures ») : pas de titre interne ; la cellule sur toute la hauteur,
+ * à droite la frise des phases puis les critères de la phase en cours récrits en colonne, à la ligne, en grand (et, en
+ * fin de mitose végétale, le tableau de comparaison dessous). Le panneau change à chaque phase : un bloc de texte par
+ * phase (même boîte), pour que chaque phase soit mise en page avec ses seules phrases. */
+const PAN = [['p_inter', 2], ['p_pro', 10.6], ['p_meta', 13.6], ['p_ana', 18.6], ['p_telo', Infinity]];
+const BL_MITOSE = { phases: [424, 30, 812, 58], cellule: [8, 34, 436, 418] };
+for (const [n] of PAN) BL_MITOSE[n] = [436, 62, 760, 300];
+const BL_VEGETALE = { ...BL_MITOSE, comp: [432, 304, 760, 380] };
+const DISPOS_M = {};
+const dispoMitose = veg => (L, k) => {
+  const n = PAN.find(([, f]) => k.t < f)[0], cle = n + (veg ? 'v' : 'a'), comp = veg && n === 'p_telo' && k.t >= MV.comparaison - 1.2;
+  return (DISPOS_M[cle + comp] ||= { colonnes: [['cellule'], { texte: [n], haut: ['phases'], bas: comp ? ['comp'] : [] }] });
+};
+const DISPO_PHOTO = [{ colonnes: [['champ']], zmax: 1.2 }, { colonnes: [['champ'], { texte: ['reponses'] }] }];
 const sansLeg = {}; for (const n of Object.keys(M)) if (n !== 'schema_anaphase') sansLeg[n] = { legendes: false };
 window.Etapes.lancer({
   id: 'genetique_mitose', titre: 'Les phases de la mitose', graine: 29,
@@ -302,17 +313,18 @@ window.Etapes.lancer({
   apresReglage: (k, cles) => { if (k.P.type) { if (k.S.vue !== k.P.type && k.S.vue !== 'photo') { k.S.vue = k.P.type; k.S.vu = {}; k.S.t = 0; } k.P.type = null; } },
   vues: {
     animale: { titre: 'La mitose d’une cellule animale', fin: 26.2,
-      get blocs() { return window.__etapes && window.__etapes.P.legendes ? undefined : BL_MITOSE; }, disposition: DISPO_MITOSE, moments: M, reglages: { ...sansLeg, schema_anaphase: { legendes: true } }, dessiner: (c, k) => dessinerMitose(c, k, false), voit: k => voitMitose(k, false),
+      get blocs() { return window.__etapes && window.__etapes.P.legendes ? undefined : BL_MITOSE; }, disposition: dispoMitose(false), moments: M, reglages: { ...sansLeg, schema_anaphase: { legendes: true } }, dessiner: (c, k) => dessinerMitose(c, k, false), voit: k => voitMitose(k, false),
       motifs: { debut: 'interphase, fin de G2 : le noyau et sa chromatine', condensation: 'prophase : la chromatine se condense en chromosomes à deux chromatides', enveloppe_disparait: 'prophase : l’enveloppe nucléaire et le nucléole disparaissent', asters_fuseau: 'prophase : le fuseau achromatique se forme entre deux asters', plaque_equatoriale: 'métaphase : chromosomes alignés sur la plaque équatoriale', clivage_centromere: 'anaphase : clivage du centromère', migration: 'anaphase : les chromatides migrent vers les pôles opposés', etranglement: 'télophase : étranglement équatorial', deux_noyaux: 'télophase : deux noyaux se reforment', fin: 'deux cellules filles génétiquement identiques', schema_anaphase: 'le schéma de l’anaphase (2n = 4), légendé' },
       conclusion: 'Une cellule mère, deux cellules filles génétiquement identiques (2n = 4).',
       texte: 'Mitose d’une cellule animale 2n = 4 : prophase (condensation, disparition de l’enveloppe et du nucléole, fuseau entre deux asters), métaphase (plaque équatoriale), anaphase (clivage du centromère, chromatides vers les pôles opposés, 4 à chaque pôle), télophase (étranglement, deux noyaux).',
       explication: [{ repere: 'chromosomes', texte: 'En prophase, la chromatine se condense en chromosomes à deux chromatides.' }, { repere: 'plaque', texte: 'En métaphase, ils s’alignent sur la plaque équatoriale.' }, { repere: 'chromatides', texte: 'En anaphase, les chromatides sœurs partent vers les pôles opposés.' }, { repere: 'etranglement', texte: 'En télophase, la cellule s’étrangle : deux cellules filles.' }] },
-    vegetale: { titre: 'La mitose d’une cellule végétale', fin: 28, blocs: BL_VEGETALE, disposition: DISPO_MITOSE, moments: MV, dessiner: (c, k) => dessinerMitose(c, k, true), voit: k => voitMitose(k, true),
+    vegetale: { titre: 'La mitose d’une cellule végétale', fin: 28, blocs: BL_VEGETALE, disposition: dispoMitose(true), moments: MV, dessiner: (c, k) => dessinerMitose(c, k, true), voit: k => voitMitose(k, true),
       motifs: { debut: 'interphase, fin de G2', condensation: 'prophase : condensation', enveloppe_disparait: 'prophase : l’enveloppe et le nucléole disparaissent', asters_fuseau: 'prophase : fuseau entre deux calottes polaires, sans asters', plaque_equatoriale: 'métaphase : plaque équatoriale', clivage_centromere: 'anaphase : clivage du centromère', migration: 'anaphase : migration vers les pôles opposés', etranglement: 'télophase : une nouvelle paroi se forme au milieu', deux_noyaux: 'télophase : deux noyaux', fin: 'deux cellules filles', comparaison: 'cellule animale / cellule végétale' },
       conclusion: 'Cellule végétale : calottes polaires au lieu d’asters, nouvelle paroi au lieu d’étranglement.',
       texte: 'Mitose d’une cellule végétale : mêmes phases ; pas d’asters mais des calottes polaires ; pas d’étranglement mais une nouvelle paroi au milieu.',
       explication: [{ repere: 'calottes', texte: 'Pas d’asters : des calottes polaires.' }, { repere: 'nouvelle_paroi', texte: 'Pas d’étranglement : une nouvelle paroi se construit au milieu.' }, { repere: 'tableau', texte: 'La comparaison des deux cellules.' }] },
-    photo: { titre: 'Reconnaître les phases sur une photo', fin: 14.4, moments: MP, reglages: { champ: { reponses: false }, reponses: { reponses: true } }, dessiner: dessinerPhoto, voit: voitPhoto,
+    photo: { titre: 'Reconnaître les phases sur une photo', fin: 14.4, moments: MP,
+      blocs: { champ: [80, 40, 456, 410], reponses: [464, 50, 760, 400] }, disposition: (L, k) => DISPO_PHOTO[k.P.reponses ? 1 : 0], reglages: { champ: { reponses: false }, reponses: { reponses: true } }, dessiner: dessinerPhoto, voit: voitPhoto,
       motifs: { champ: 'le champ du microscope : apex de racine d’oignon', cellule_1: 'la cellule 1', cellule_2: 'la cellule 2', cellule_3: 'la cellule 3', cellule_4: 'la cellule 4', cellule_5: 'la cellule 5', reponses: 'les cinq réponses écrites, chacune avec son « car »' },
       conclusion: 'Nom de la phase, « car », puis le critère vu sur la photo.',
       surReglage: (k, cles, api) => { if (cles.includes('reponses')) api.playUntil({ moment: 'reponses' }); },

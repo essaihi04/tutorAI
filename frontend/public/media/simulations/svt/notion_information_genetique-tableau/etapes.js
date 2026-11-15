@@ -50,12 +50,130 @@
      * chaque colonne grandit autant que la hauteur le permet (borné par zmax, 1,7 par défaut) ; si la largeur manque, toutes
      * rétrécissent ensemble ; le reste de la largeur va aux écarts. Tableau étroit (L < 1000, grand écran 1920 × 1080) :
      * disposition d'origine, centrée. Une vue sans `blocs` est simplement centrée dans le cadre large. */
-    const POSES = {};   // vue → { L, map: nom → {x0,y0,X,Y,z} }
+    /* Deuxième passe (15 novembre 2026, « agrandir les figures elles-mêmes, pas seulement le texte autour ») : une colonne
+     * de la disposition peut être une COLONNE DE TEXTE, `{ texte: [noms de blocs] }`. Les phrases écrites dans ces blocs
+     * par le dessin d'origine ne sont plus agrandies telles quelles : elles sont relevées (à chaque moment de la vue et à
+     * la fin), remises en paragraphes (une ligne qui commence par une minuscule continue la phrase d'avant) et récrites
+     * en colonne, coupées à la ligne, à une taille choisie EN PIXELS À L'ÉCRAN (u(px) = px / échelle) : on prend la plus
+     * grande écriture (22 → 17 px) qui fait tenir la colonne en hauteur, avec la figure la plus grande possible (pleine
+     * hauteur, au moins la moitié de la largeur), comme `disposer` de chimie/transformations-deux-sens-tableau. L'écriture
+     * en direct garde son rythme (un texte coupé en morceaux partage sa durée), les repères posés sur ces phrases les
+     * suivent. Les traits de ces blocs (cadres, soulignés) ne sont pas repris. `disposition` peut aussi être une fonction
+     * (L, k) : la disposition change alors avec la scène (ex. une animation, puis un tableau). */
+    const POSES = {};   // vue → { cle, map: nom → {x0,y0,X,Y,z} | {texte, X, Y, lay} }
     const estLarge = v => scene.L >= 1000 && !!(v.blocs && v.disposition);
-    function disposer(v, L) {
-      const B = v.blocs, memo = POSES[S.vue]; if (memo && memo.L === L && memo.B === B) return memo.map;
-      const map = {};
-      const D = typeof v.disposition === 'function' ? v.disposition(L) : v.disposition;
+    const estTexte = col => !!col && !Array.isArray(col) && Array.isArray(col.texte);
+    const dispoDe = v => (typeof v.disposition === 'function' ? v.disposition(scene.L, k()) : v.disposition);
+    const dansB = (q, px, py) => px >= q[0] && px < q[2] && py >= q[1] && py < q[3];
+    const cleT = (nom, x, y) => nom + '|' + Math.round(x) + ',' + Math.round(y);
+    const RELEVES = {};
+    /** Les phrases des blocs de texte, relevées à chaque moment de la vue (sans rien dessiner) : nom → [{s, x, y, taille…}]. */
+    function relever(c, v) {
+      const cle = S.vue + '|' + JSON.stringify(P), memo = RELEVES[cle];
+      if (memo && memo.B === v.blocs) return memo.par;
+      const B = v.blocs, par = {}, x = c.ctx;
+      const temps = [...new Set([...Object.values(v.moments || {}), v.fin])].filter(Number.isFinite).sort((a, b) => a - b);
+      const sv = { t: S.t, vu: S.vu, cur: c.cur, ct: c.t, tip: c.tip, complet: c.complet };
+      const rien = function () { return this; }, FN = ['direct', 'trait', 'rect', 'cercle', 'point', 'repere', 'texte'];
+      try {
+        for (const t of temps) {
+          S.t = t; S.vu = {};
+          const D = dispoDe(v), noms = (D.colonnes || []).filter(estTexte).flatMap(col => col.texte);
+          if (!noms.length) continue;
+          x.save(); x.beginPath(); x.rect(0, 0, 0, 0); x.clip();
+          for (const f of FN) c[f] = rien;
+          c.texte = function (s, tx, ty, o = {}) {
+            const ta = o.taille ?? 18, ay = ty - ta * .35, nom = noms.find(n => B[n] && dansB(B[n], tx, ay));
+            if (nom) {
+              const L = (par[nom] ||= {}), q = cleT(nom, tx, ty), a = L[q]; s = String(s);
+              if (!a || s.length > a.s.length) L[q] = { cle: q, s, x: tx, y: ty, taille: ta, align: o.align || 'left', couleur: o.couleur, gras: o.gras };
+            }
+            return this;
+          };
+          try { v.dessiner(c, k()); } catch (e) { console.warn('[etapes] relevé des textes', e); }
+          finally { x.restore(); for (const f of FN) delete c[f]; }
+        }
+      } finally { S.t = sv.t; S.vu = sv.vu; c.cur = sv.cur; c.t = sv.ct; c.tip = sv.tip; c.complet = sv.complet; }
+      for (const n of Object.keys(par)) par[n] = Object.values(par[n]);
+      RELEVES[cle] = { B, par };
+      return par;
+    }
+    /** Les phrases d'un bloc remises en paragraphes : [{runs, taille, ecart}]. */
+    function paragraphes(c, items) {
+      const gauche = it => { const l = c.largeurTexte(it.s, it.taille); return it.align === 'center' ? it.x - l / 2 : it.align === 'right' ? it.x - l : it.x; };
+      const lignes = [];
+      for (const it of items.map(o => ({ ...o, alias: undefined })).sort((a, b) => a.y - b.y || a.x - b.x)) {
+        const l = lignes.find(q => Math.abs(q.y - it.y) <= Math.max(q.taille, it.taille) * .45);
+        // deux phrases au même endroit (l'une remplace l'autre au fil de la scène) : une seule place, la plus longue
+        const autre = l && l.runs.find(r => Math.abs(r.x - it.x) < 4 && r.align === it.align);
+        if (autre) {
+          const [garde, laisse] = autre.s.length >= it.s.length ? [autre, it] : [it, autre];
+          garde.alias = [...(garde.alias || []), laisse.cle, ...(laisse.alias || [])];
+          if (garde === it) l.runs[l.runs.indexOf(autre)] = it;
+          continue;
+        }
+        if (l) { l.runs.push(it); l.taille = Math.max(l.taille, it.taille); } else lignes.push({ y: it.y, taille: it.taille, runs: [it] });
+      }
+      lignes.sort((a, b) => a.y - b.y);
+      // deux morceaux d'une même ligne très écartés (deux légendes côte à côte) : deux paragraphes
+      const morceaux = [];
+      for (const l of lignes) {
+        l.runs.sort((a, b) => gauche(a) - gauche(b));
+        let cur = null, fin = -Infinity;
+        for (const r of l.runs) {
+          const g = gauche(r);
+          if (!cur || g - fin > 1.5 * l.taille) { cur = { y: l.y, taille: l.taille, runs: [] }; morceaux.push(cur); }
+          cur.runs.push(r); fin = Math.max(fin, g + c.largeurTexte(r.s, r.taille));
+        }
+      }
+      const paras = []; let prev = null;
+      for (const l of morceaux) {
+        const debut = l.runs[0].s.trim(), fin = prev ? prev.runs[prev.runs.length - 1].s.trim() : '';
+        const suite = prev && l.y - prev.y > .3 * l.taille && l.y - prev.y <= 1.8 * Math.max(l.taille, prev.taille) && (/^[a-zàâçéèêëîïôûùüÿœ(«]/.test(debut) || /,$/.test(fin)) && l.runs[0].couleur === prev.runs[prev.runs.length - 1].couleur && !/ = /.test(debut);
+        if (suite) paras[paras.length - 1].runs.push(...l.runs);
+        else paras.push({ runs: [...l.runs], taille: l.taille, ecart: !prev || l.y - prev.y > 1.95 * l.taille });
+        prev = l;
+      }
+      return paras;
+    }
+    /** Compose des paragraphes dans une colonne de largeur W, écriture t (cadre) : { h, pieces: cle → [{dx, dy, s, taille}] }. */
+    function composer(c, paras, W, t, base) {
+      const pieces = {}, boites = {}; let y = 0;
+      const larg = (s, ta, gras) => { c.ctx.font = `${gras ? '700 ' : ''}${ta}px ${window.Tableau.POLICE}`; return c.ctx.measureText(s).width; };
+      paras.forEach((p, i) => {
+        const ta = t * Math.min(1.2, Math.max(.92, p.taille / base)), pas = ta * 1.24, esp = larg(' ', ta);
+        if (i) y += (p.ecart ? ta * .5 : ta * .12);
+        y += ta; let lx = 0, ly = y;
+        for (const r of p.runs) {
+          const L = (pieces[r.cle] ||= []);
+          for (const m of r.s.trim().split(/\s+/)) {
+            if (!m) continue;
+            const w = larg(m, ta, r.gras);
+            if (lx > 0 && lx + esp + w > W) { ly += pas; lx = 0; }
+            const x0 = lx > 0 ? lx + esp : 0, der = L[L.length - 1];
+            if (der && der.dy === ly && Math.abs(der.dx + der.w - (x0 - esp)) < .5) { der.s += ' ' + m; der.w = x0 + w - der.dx; }
+            else L.push({ dx: x0, dy: ly, s: m, w, taille: ta });
+            lx = x0 + w;
+            const b = (boites[r.cle] ||= [Infinity, Infinity, -Infinity, -Infinity]);
+            b[0] = Math.min(b[0], x0); b[1] = Math.min(b[1], ly - ta * .95); b[2] = Math.max(b[2], x0 + w); b[3] = Math.max(b[3], ly + ta * .3);
+          }
+        }
+        y = ly;
+        for (const r of p.runs) for (const a of r.alias || []) { pieces[a] = pieces[r.cle]; boites[a] = boites[r.cle]; }
+      });
+      return { h: y + t * .35, pieces, boites };
+    }
+    function disposer(v, L, c) {
+      const B = v.blocs, D = dispoDe(v), mixte = D.colonnes.some(estTexte);
+      const par = mixte ? relever(c, v) : null;
+      const cle = [L, (scene.s || 1).toFixed(4), JSON.stringify(D)].join('|'), memo = POSES[S.vue];
+      if (memo && memo.cle === cle && memo.B === B && memo.par === par) return memo.map;
+      const map = mixte ? disposerMixte(v, D, L, c, par) : disposerBlocs(v, D, L);
+      POSES[S.vue] = { cle, B, par, map };
+      return map;
+    }
+    function disposerBlocs(v, D, L) {
+      const B = v.blocs, map = {};
       const M = D.marge ?? 12, E = D.ecart ?? 22, HT = 420;
       const dim = n => { const b = B[n]; return { w: b[2] - b[0], h: b[3] - b[1], zmax: b[4] || D.zmax || 1.7 }; };
       let y = M;
@@ -81,20 +199,116 @@
         c.col.forEach((n, i) => { const d = c.ds[i]; map[n] = { x0: B[n][0], y0: B[n][1], X: x + (c.w - d.w) * c.z / 2, Y: yy, z: c.z }; yy += d.h * c.z + E; });
         x += c.w * c.z + ecart;
       }
-      POSES[S.vue] = { L, B, map };
       return map;
     }
+    /** Colonnes de figure (mises à l'échelle, pleine hauteur) et colonnes de texte (récrites à la ligne). */
+    function disposerMixte(v, D, L, c, par) {
+      const B = v.blocs, map = {}, s = scene.s || 1, u = px => px / s;
+      const M = D.marge ?? 12, E = D.ecart ?? 22, HT = 420, Ha = HT - 2 * M;
+      const dim = n => { const b = B[n]; return { w: b[2] - b[0], h: b[3] - b[1], zmax: b[4] || D.zmax || 3 }; };
+      const cols = D.colonnes.map(col => {
+        if (estTexte(col)) {
+          const items = col.texte.map(n => paragraphes(c, par[n] || [])).flat();
+          const tailles = col.texte.flatMap(n => (par[n] || []).map(it => it.taille)).sort((a, b) => a - b);
+          // `haut` : des blocs de figure posés en tête de la colonne de texte (une image et sa légende), à sa largeur
+          const haut = (col.haut || []).map(n => ({ n, ...dim(n) })), bas = (col.bas || []).map(n => ({ n, ...dim(n) }));
+          haut.push(...bas.map(d => ({ ...d, bas: true })));
+          return { texte: col.texte, haut, paras: items, base: tailles.length ? tailles[Math.floor(tailles.length / 2)] : 16, poids: col.poids || 1, max: col.max };
+        }
+        const ds = col.map(dim), w = Math.max(...ds.map(d => d.w)), h = ds.reduce((a, d) => a + d.h, 0);
+        return { col, ds, w, z0: Math.min(Math.min(...ds.map(d => d.zmax)), (Ha - E * (col.length - 1)) / h) };
+      });
+      const fig = cols.filter(q => !q.texte), txt = cols.filter(q => q.texte), gaps = E * (cols.length - 1);
+      const figN = fig.reduce((a, q) => a + q.w * q.z0, 0), fig0 = Math.min(figN, (D.partMax ?? .64) * L);
+      let choix = null;
+      essai: for (const px of D.tailles || [22, 21, 20, 19, 18, 17]) {
+        for (const f of [1, .94, .88, .82, .76, .7, .64, .58, .52]) {
+          const figW = fig0 * f;
+          if (f < 1 && figW < (D.partMin ?? .5) * L) break;
+          const t = u(px), libre = L - 2 * M - gaps - figW, poids = txt.reduce((a, q) => a + q.poids, 0);
+          if (libre < txt.length * t * (D.colMin ?? 8.5)) continue;
+          const lays = txt.map(q => {
+            const W = Math.min(libre * q.poids / poids, t * (q.max || 24));
+            const lay = composer(c, q.paras, W, t, q.base), sh = q.haut.reduce((a, d) => a + d.h, 0);
+            const zh = q.haut.length ? Math.min(...q.haut.map(d => Math.min(d.zmax, W / d.w)), (Ha - lay.h - E * q.haut.length) / sh) : 0;
+            const hh = q.haut.reduce((a, d) => a + d.h * zh + E, 0);
+            return { W, zh: q.haut.length && zh < (D.zhautMin ?? .9) ? -1 : zh, hh, lay };
+          });
+          choix = { px, f, t, lays };
+          if (lays.every(l => l.zh >= 0 && l.lay.h + l.hh <= Ha + .5)) break essai;
+        }
+      }
+      if (!choix) return disposerBlocs(v, { ...D, colonnes: D.colonnes.filter(q => !estTexte(q)) }, L);
+      fig.forEach(q => { q.z = q.z0 * choix.f * fig0 / figN; q.lw = q.w * q.z; });
+      txt.forEach((q, i) => { Object.assign(q, { lay: choix.lays[i].lay, lw: choix.lays[i].W, zh: choix.lays[i].zh, hh: choix.lays[i].hh }); });
+      const reste = L - 2 * M - gaps - cols.reduce((a, q) => a + q.lw, 0), ecart = Math.max(0, reste) / (cols.length + 1);
+      let x = M + ecart + (reste < 0 ? reste / 2 : 0);
+      for (const q of cols) {
+        if (q.texte) {
+          let Y = M + Math.max(0, (Ha - q.lay.h - q.hh) / 2);
+          for (const d of q.haut.filter(d => !d.bas)) { map[d.n] = { x0: B[d.n][0], y0: B[d.n][1], X: x + (q.lw - d.w * q.zh) / 2, Y, z: q.zh }; Y += d.h * q.zh + E; }
+          for (const n of q.texte) map[n] = { texte: true, X: x, Y, W: q.lw, lay: q.lay, px: choix.px };
+          Y += q.lay.h + E;
+          for (const d of q.haut.filter(d => d.bas)) { map[d.n] = { x0: B[d.n][0], y0: B[d.n][1], X: x + (q.lw - d.w * q.zh) / 2, Y, z: q.zh }; Y += d.h * q.zh + E; }
+        } else {
+          const hz = q.ds.reduce((a, d) => a + d.h * q.z, 0) + E * (q.col.length - 1);
+          let yy = M + Math.max(0, (Ha - hz) / 2);
+          q.col.forEach((n, i) => { const d = q.ds[i]; map[n] = { x0: B[n][0], y0: B[n][1], X: x + (q.w - d.w) * q.z / 2, Y: yy, z: q.z }; yy += d.h * q.z + E; });
+        }
+        x += q.lw + E + ecart;
+      }
+      return map;
+    }
+    const PIECES_FN = ['direct', 'trait', 'rect', 'cercle', 'point'];
     /** Le dessin de la vue rejoué bloc par bloc (tableau large). */
     function dessinerBlocs(c, v) {
-      const blocs = v.blocs, map = disposer(v, scene.L), x = c.ctx, e = c.echelle, cadre = c.cadre;
+      const blocs = v.blocs, map = disposer(v, scene.L, c), x = c.ctx, e = c.echelle, cadre = c.cadre;
+      const aire = q => (q[2] - q[0]) * (q[3] - q[1]);
+      const recouvre = (q, b) => q[0] < b[2] && q[2] > b[0] && q[1] < b[3] && q[3] > b[1];
       let complet = true, tip = null, cur = 0;
+      const proto = Object.getPrototypeOf(c);
       for (const [nom, p] of Object.entries(map)) {
         const b = blocs[nom];
         c.cur = 0; c.tip = null; c.complet = true;
-        x.save(); x.translate(p.X - p.x0 * p.z, p.Y - p.y0 * p.z); x.scale(p.z, p.z);
-        // un bloc plus petit qui chevauche celui-ci (un texte sorti de la figure) en est retiré : il est dessiné à sa place
-        const dans = (q, px, py) => px >= q[0] && px < q[2] && py >= q[1] && py < q[3], aire = q => (q[2] - q[0]) * (q[3] - q[1]);
-        const trous = Object.entries(blocs).filter(([n, q]) => n !== nom && aire(q) < aire(b) && q[0] < b[2] && q[2] > b[0] && q[1] < b[3] && q[3] > b[1]).map(([, q]) => q);
+        // un bloc plus petit qui chevauche celui-ci (un texte sorti de la figure) en est retiré : il est dessiné à sa place ;
+        // un bloc de texte est toujours retiré des figures
+        const trous = Object.entries(map).filter(([n, q]) => n !== nom && recouvre(blocs[n], b) && (aire(blocs[n]) < aire(b) || (q.texte && !p.texte))).map(([n]) => blocs[n]);
+        const dedans = (px, py) => dansB(b, px, py) && !trous.some(q => dansB(q, px, py));
+        x.save();
+        if (p.texte) {
+          // ── colonne de texte : les traits du bloc avancent l'horloge sans rien dessiner, les phrases sont récrites ──
+          const lay = p.lay, coupeTout = nomF => function (...a) { x.save(); x.beginPath(); x.rect(0, 0, 0, 0); x.clip(); try { return proto[nomF].apply(this, a); } finally { x.restore(); } };
+          for (const nomF of PIECES_FN) c[nomF] = coupeTout(nomF);
+          c.cadre = null;
+          c.texte = function (s, tx, ty, o = {}) {
+            const ta = o.taille ?? 18; s = String(s);
+            if (!dedans(tx, ty - ta * .35)) return proto.texte.call(this, s, tx, ty, { ...o, alpha: 0 });
+            const pcs = lay.pieces[cleT(nom, tx, ty)], duree = o.duree ?? Math.max(.1, s.length / 28), opt = { couleur: o.couleur, gras: o.gras, alpha: o.alpha };
+            if (!pcs || !pcs.length) return proto.texte.call(this, s, tx, ty, { ...o, alpha: 0 });
+            const tout = pcs.map(q => q.s).join(' ');
+            if (tout.replace(/\s+/g, ' ') !== s.trim().replace(/\s+/g, ' ')) return proto.texte.call(this, s, p.X + pcs[0].dx, p.Y + pcs[0].dy, { ...opt, taille: pcs[0].taille, duree });
+            for (const q of pcs) proto.texte.call(this, q.s, p.X + q.dx, p.Y + q.dy, { ...opt, taille: q.taille, duree: duree * Math.max(1, q.s.length) / Math.max(1, tout.length) });
+            return this;
+          };
+          c.repere = function (id, rx, ry, w, h, label) {
+            if (!dedans(rx + w / 2, ry + h / 2)) return this;
+            const R = [Infinity, Infinity, -Infinity, -Infinity]; let proche = null, dMin = Infinity;
+            for (const [q, bt] of Object.entries(lay.boites)) {
+              if (!q.startsWith(nom + '|')) continue;
+              const [ax, ay] = q.slice(nom.length + 1).split(',').map(Number);
+              if (ax >= rx - 6 && ax <= rx + w + 6 && ay >= ry - 6 && ay <= ry + h + 6) { R[0] = Math.min(R[0], bt[0]); R[1] = Math.min(R[1], bt[1]); R[2] = Math.max(R[2], bt[2]); R[3] = Math.max(R[3], bt[3]); }
+              const d = Math.hypot(ax - (rx + w / 2), ay - (ry + h / 2)); if (d < dMin) { dMin = d; proche = bt; }
+            }
+            const r = R[0] < Infinity ? R : proche; if (!r) return this;
+            return proto.repere.call(this, id, p.X + r[0] - 4, p.Y + r[1] - 3, r[2] - r[0] + 8, r[3] - r[1] + 6, label);
+          };
+          try { v.dessiner(c, k()); }
+          finally { x.restore(); c.cadre = cadre; for (const f of [...PIECES_FN, 'texte', 'repere']) delete c[f]; }
+          complet = complet && c.complet; cur = Math.max(cur, c.cur);
+          if (c.tip) tip = c.tip;
+          continue;
+        }
+        x.translate(p.X - p.x0 * p.z, p.Y - p.y0 * p.z); x.scale(p.z, p.z);
         // La découpe : la peinture et les traits sont coupés à la boîte du bloc (moins ses trous) ; un TEXTE est écrit en
         // entier par le bloc qui contient son point d'ancrage (le plancher de 15 px à l'écran peut l'élargir au-delà de
         // sa boîte d'origine : il n'est jamais coupé) et, dans les autres blocs, il est « écrit » invisible pour que
@@ -106,13 +320,12 @@
           x.clip('evenodd');
         };
         if (e) c.echelle = e * p.z; c.cadre = null;
-        const dedans = (px, py) => dans(b, px, py) && !trous.some(q => dans(q, px, py));
-        const proto = Object.getPrototypeOf(c), coupe = nomF => function (...a) { x.save(); decouper(); try { return proto[nomF].apply(this, a); } finally { x.restore(); } };
-        for (const nomF of ['direct', 'trait', 'rect', 'cercle', 'point']) c[nomF] = coupe(nomF);
+        const coupe = nomF => function (...a) { x.save(); decouper(); try { return proto[nomF].apply(this, a); } finally { x.restore(); } };
+        for (const nomF of PIECES_FN) c[nomF] = coupe(nomF);
         c.texte = function (s, tx, ty, o = {}) { return proto.texte.call(this, s, tx, ty, dedans(tx, ty - (o.taille ?? 18) * .35) ? o : { ...o, alpha: 0 }); };
         c.repere = function (id, rx, ry, w, h, label) { return dedans(rx + w / 2, ry + h / 2) ? proto.repere.call(this, id, rx, ry, w, h, label) : this; };
         try { v.dessiner(c, k()); }
-        finally { x.restore(); c.echelle = e; c.cadre = cadre; for (const f of ['direct', 'trait', 'rect', 'cercle', 'point', 'texte', 'repere']) delete c[f]; }
+        finally { x.restore(); c.echelle = e; c.cadre = cadre; for (const f of [...PIECES_FN, 'texte', 'repere']) delete c[f]; }
         complet = complet && c.complet; cur = Math.max(cur, c.cur);
         if (c.tip && dedans(c.tip[0], c.tip[1])) tip = [p.X + (c.tip[0] - p.x0) * p.z, p.Y + (c.tip[1] - p.y0) * p.z];
       }
@@ -123,7 +336,7 @@
       const v = V();
       if (!estLarge(v)) return [X - (scene.L - 760) / 2, Y];
       const aire = q => (q[2] - q[0]) * (q[3] - q[1]);
-      const tri = Object.entries(disposer(v, scene.L)).sort(([a], [b]) => aire(v.blocs[a]) - aire(v.blocs[b]));   // le plus petit d'abord
+      const tri = Object.entries(disposer(v, scene.L, scene.craie)).filter(([, p]) => !p.texte).sort(([a], [b]) => aire(v.blocs[a]) - aire(v.blocs[b]));   // le plus petit d'abord
       for (const [nom, p] of tri) {
         const b = v.blocs[nom], x = (X - p.X) / p.z + p.x0, y = (Y - p.Y) / p.z + p.y0;
         if (x >= b[0] - 8 && x < b[2] + 8 && y >= b[1] - 8 && y < b[3] + 8) return [x, y];
@@ -256,7 +469,7 @@
     // Une vue peut attendre le tuteur (`autoDepart: false`, 14 novembre 2026) : rien ne se joue avant son premier geste,
     // sinon le résultat d'une expérience passerait sous les yeux de l'élève avant d'être dit. Par défaut : départ seul.
     setTimeout(() => { if (!S.running && S.t === 0 && V().autoDepart !== false) start(); }, 1600);
-    window.__etapes = { S, P, scene, playUntil, setTime, setParameters, etat: () => ({ ce_qui_se_voit: ceQuiSeVoit(), moments: V().moments, statut: statut() }) };
+    window.__etapes = { S, P, scene, POSES, RELEVES, playUntil, setTime, setParameters, etat: () => ({ ce_qui_se_voit: ceQuiSeVoit(), moments: V().moments, statut: statut() }) };
     return window.__etapes;
   }
 
