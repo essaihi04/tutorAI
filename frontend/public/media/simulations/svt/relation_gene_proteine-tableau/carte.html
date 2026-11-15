@@ -50,6 +50,21 @@ const NOEUDS = [
     lignes: ['lignes alignées', 'origine génétique'],
     phrase: "Écrire les séquences alignées des deux allèles puis la phrase de l’origine génétique, maillon par maillon." },
 ];
+/* Disposition selon la largeur du tableau (15 novembre 2026, « mieux exploiter tout le tableau, grands calibres de
+ * texte ») : tableau large (scene.L ≥ 1000) → la carte s'étale sur toute la largeur (cadres plus larges et plus hauts,
+ * espacés en proportion de L), textes plus gros (jamais sous 15 px à l'écran : la hauteur des cadres suit la taille
+ * réelle). Sinon la disposition d'origine (760 × 420). On garde les valeurs d'origine (x0, w0, h0). */
+for (const n of [CENTRE, ...NOEUDS]) Object.assign(n, { x0: n.x, w0: n.w, h0: n.h });
+let F = { ti: 16, li: 13, pas: 16, c: 19, cd: 12, cpas: 14, et: 12 }, CLE = '';
+function disposer(c, L) {
+  const cle = L + ':' + (c.echelle || 1).toFixed(3); if (cle === CLE) return; CLE = cle;
+  if (L < 1000) { for (const n of [CENTRE, ...NOEUDS]) Object.assign(n, { x: n.x0, w: n.w0, h: n.h0 }); F = { ti: 16, li: 13, pas: 16, c: 19, cd: 12, cpas: 14, et: 12 }; return; }
+  const m = Math.max(18, 15 / Math.max(.01, c.echelle || 1)), li = m, ti = Math.round(m * 1.15), pas = Math.round(li * 1.15);
+  F = { ti, li, pas, c: Math.round(m * 1.3), cd: li, cpas: pas, et: Math.max(15, m * .85) };
+  const KW = Math.min(1.9, (L - 40) / 3 / 225), wMax = 222 * KW, KX = (L / 2 - 12 - wMax / 2) / 258, hN = ti + 2 * pas + 22;
+  for (const n of NOEUDS) Object.assign(n, { x: L / 2 + (n.x0 - 380) * KX, w: n.w0 * KW, h: hN });
+  Object.assign(CENTRE, { x: L / 2, w: CENTRE.w0 * KW, h: Math.round(F.c * 2.3 + 3 * F.cpas + 18) });
+}
 const ANNEAUX = { non_acquis: ['rouge', 'à reprendre'], partiel: ['orange', 'à revoir'] };
 const AVANT = -1e9;   // instant d'un élément déjà dit : écrit d'un coup
 
@@ -71,7 +86,7 @@ function etat(c, comps, x, y, w, h) {
     if (st && ANNEAUX[st]) {
       const [coul, etiq] = ANNEAUX[st];
       c.rect(x - 6, y - 6, w + 12, h + 12, { couleur: coul, arrondi: 16, largeur: 2, pointille: [6, 6] });
-      c.texte(etiq, x + w - 4, y - 9, { couleur: coul, taille: 12, align: 'right' });
+      c.texte(etiq, x + w - 4, y - 9, { couleur: coul, taille: F.et, align: 'right' });
     } else if (st === 'acquis') c.texte('✓', x + w - 14, y + 14, { couleur: 'vert', taille: 18 });
   });
 }
@@ -86,36 +101,37 @@ function branche(c, n) {
   c.courbe(u => [(1 - u) * (1 - u) * a[0] + 2 * (1 - u) * u * m[0] + u * u * b[0], (1 - u) * (1 - u) * a[1] + 2 * (1 - u) * u * m[1] + u * u * b[1]], 24, { couleur: 'faible', largeur: 2 });
   const x = n.x - n.w / 2, y = n.y - n.h / 2;
   c.rect(x, y, n.w, n.h, { couleur: n.couleur, arrondi: 14, largeur: 2.4 });
-  c.texte(n.titre, n.x, y + 20, { couleur: n.couleur, taille: 16, align: 'center', max: n.w - 16, duree: .8 });
-  n.lignes.forEach((l, k) => c.texte(l, n.x, y + 38 + k * 16, { couleur: 'blanc', taille: 13, align: 'center', max: n.w - 14, alpha: .92, duree: 1 }));
+  c.texte(n.titre, n.x, y + F.ti + 6, { couleur: n.couleur, taille: F.ti, align: 'center', max: n.w - 16, duree: .8 });
+  n.lignes.forEach((l, k) => c.texte(l, n.x, y + F.ti + 6 + F.pas + 4 + k * F.pas, { couleur: 'blanc', taille: F.li, align: 'center', max: n.w - 14, alpha: .92, duree: 1 }));
   c.repere(n.id, x - 6, y - 6, n.w + 12, n.h + 12, n.titre);
   etat(c, n.comps, x, y, n.w, n.h);
   if (S.choisi === n.id) c.direct(() => c.rect(x - 3, y - 3, n.w + 6, n.h + 6, { couleur: 'blanc', arrondi: 15, largeur: 1.2, alpha: .6 }));
 }
 
 function dessiner(c) {
+  disposer(c, scene.L);
   const x = CENTRE.x - CENTRE.w / 2, y = CENTRE.y - CENTRE.h / 2;
   if (S.def === AVANT) c.cur = AVANT;   // déjà dit (saut ou retour en arrière) : le centre est écrit d'un coup
   c.rect(x, y, CENTRE.w, CENTRE.h, { couleur: 'jaune', arrondi: 18, largeur: 3 });
-  c.texte('Gène → protéine', CENTRE.x, y + 26, { couleur: 'jaune', taille: 19, align: 'center', gras: true });
-  c.texte('→ caractère', CENTRE.x, y + 47, { couleur: 'jaune', taille: 19, align: 'center', gras: true });
+  c.texte('Gène → protéine', CENTRE.x, y + F.c + 7, { couleur: 'jaune', taille: F.c, align: 'center', gras: true });
+  c.texte('→ caractère', CENTRE.x, y + Math.round(F.c * 2.1) + 7, { couleur: 'jaune', taille: F.c, align: 'center', gras: true });
   c.repere('centre', x, y, CENTRE.w, CENTRE.h, 'le centre : gène → protéine → caractère');
   c.repere('definition', x, y, CENTRE.w, CENTRE.h, 'l’expression de l’information génétique');
   const apres = c.cur;   // fin du titre du centre
   if (S.def != null) {
     c.depuis(S.def);
     ['transcrit en ARNm dans le noyau,', 'traduit en protéine', 'dans le cytoplasme'].forEach((l, k) =>
-      c.texte(l, CENTRE.x, y + 68 + k * 14, { couleur: 'blanc', taille: 12, align: 'center', max: CENTRE.w - 16, alpha: .92, duree: 1.1 }));
+      c.texte(l, CENTRE.x, y + Math.round(F.c * 2.1) + 7 + F.cpas + 6 + k * F.cpas, { couleur: 'blanc', taille: F.cd, align: 'center', max: CENTRE.w - 16, alpha: .92, duree: 1.1 }));
     etat(c, CENTRE.comps, x, y, CENTRE.w, CENTRE.h);
     if (S.choisi === 'centre') c.direct(() => c.rect(x - 3, y - 3, CENTRE.w + 6, CENTRE.h + 6, { couleur: 'blanc', arrondi: 19, largeur: 1.2, alpha: .6 }));
   }
   // chaque branche a sa ligne de temps : elle s'écrit dès que la voix la dit, sans attendre la précédente
   for (let i = 0; i < S.n; i++) { c.cur = S.apparu[i] === AVANT ? AVANT : Math.max(apres, S.apparu[i]); branche(c, NOEUDS[i]); }
-  if (S.lacunes) c.direct(() => c.texte('✓ acquis · ⟳ à revoir · ✗ à reprendre', 24, 410, { couleur: 'faible', taille: 12 }));
+  if (S.lacunes) c.direct(() => c.texte('✓ acquis · ⟳ à revoir · ✗ à reprendre', 24, 412, { couleur: 'faible', taille: F.et }));
 }
 
 const canvas = $('canvas');
-const scene = window.GenetiqueTableau.Scene(canvas, (c) => { scene.cadre(51); dessiner(c); return c.fin(); });
+const scene = window.GenetiqueTableau.Scene(canvas, (c) => { scene.cadre(51); dessiner(c); return c.fin(); }, { large: true });
 const maintenant = () => (performance.now() - scene.ouvert) / 1000;
 let horloge = 0;
 scene.avancer = dt => {

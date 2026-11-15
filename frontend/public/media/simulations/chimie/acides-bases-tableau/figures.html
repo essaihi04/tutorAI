@@ -80,7 +80,7 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), { large: true });
   const cadreBase = scene.cadre;
   scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
   M.scene = scene; M.craie = scene.craie;
@@ -875,8 +875,14 @@ function etiquettes(c, M, nom) {
 }
 
 const ORDRE = ['axes', 'courbe', 'construction', 'lecture', 'calcul'];
+/* Recomposition sur la largeur (tableau large, L ≥ 1000 : voir Recompose dans exposants.js) ; cadre 760 × 420 :
+ * le graphe étiré à gauche avec les phrases du bas dessous, le panneau à droite agrandi. */
+const BLOCS_RC = [{ r: [10, 6, 740, 28], haut: true }, { r: [460, 40, 300, 262] }, { r: [10, 306, 660, 74] }, { r: [20, 40, 436, 272], etire: true }];
 function dessiner(c, M) {
   MO = M; F = FIGS[M.S.vue]; const f = F, g = f.G; M.scene.cadre(73);
+  // Essayé le 15 novembre 2026 : le panneau (fractions, lignes ajoutées à chaque étape) se recompose mal en blocs ;
+  // la figure garde sa disposition, centrée dans le tableau large (BLOCS_RC laissé pour une reprise).
+  window.Recompose(c, M.scene, null);
   c.texte(f.titre, 14, 26, { couleur: 'cyan', taille: 20, max: 560 });
   c.texte(`diapositive ${f.diapo}`, 746, 26, { couleur: 'faible', taille: 15, align: 'right' });
   if (M.commence('axes')) quadrillage(c, g, lisse(M.p('axes')));

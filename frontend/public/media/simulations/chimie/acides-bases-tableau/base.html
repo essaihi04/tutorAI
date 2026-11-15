@@ -74,7 +74,7 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), { large: true });
   const cadreBase = scene.cadre;
   scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
   M.scene = scene; M.craie = scene.craie;
@@ -715,9 +715,18 @@ function vueNational(c, M) {
 
 /* ── Dessin ──────────────────────────────────────────────────────────── */
 const VUE_FN = { constante: vueConstante, ammoniac: vueAmmoniac, taux: vueTaux, national: vueNational };
+/* Blocs de la recomposition sur la largeur (tableau large, L ≥ 1000 : voir Recompose dans exposants.js) ; cadre 760 × 420. */
+const TITRE_BLOC = { r: [10, 6, 740, 28], haut: true };
+const BLOCS = {
+  constante: [{ r: [16, 34, 604, 156], e: ['tableau'] }, { r: [20, 198, 240, 60], e: ['relation'] }, { r: [16, 266, 488, 48], e: ['constante'] }, { r: [20, 316, 430, 30], e: ['valeur'] }, { r: [20, 346, 630, 34], e: ['question'] }],
+  ammoniac: [{ r: [18, 40, 172, 312], direct: true, e: ['becher', 'mesure'] }, { r: [188, 46, 252, 62], e: ['equation'] }, { r: [190, 118, 182, 244], e: ['loupe'] }, { r: [378, 144, 264, 192], e: ['h3o', 'ho'] }],
+  taux: [{ r: [16, 34, 676, 136], e: ['tableau'] }, { r: [20, 168, 420, 28], e: ['x_max'] }, { r: [20, 204, 570, 28], e: ['x_eq'] }, { r: [20, 234, 244, 62], e: ['relation'] }, { r: [268, 234, 174, 62], e: ['application'] }, { r: [16, 318, 584, 58], e: ['limitee'] }],
+  national: [{ r: [14, 30, 530, 74], e: ['donnees'] }, { r: [550, 30, 142, 200], direct: true }, { r: [14, 110, 420, 42], e: ['equation'] }, { r: [14, 164, 560, 42], e: ['ho'] }, { r: [14, 206, 440, 70], e: ['taux'] }, { r: [14, 290, 400, 66], e: ['quotient'] }],
+};
 function dessiner(c, M) {
   MO = M; M.scene.cadre(73);
   const v = M.S.vue;
+  window.Recompose(c, M.scene, BLOCS[v] ? [TITRE_BLOC, ...BLOCS[v]] : null, { M });
   c.texte(TITRE_TABLEAU[v], 14, 26, { couleur: 'cyan', taille: 20, max: 560 });
   M.vues = VUE_FN[v](c, M) || [];
   reperes(c, M);

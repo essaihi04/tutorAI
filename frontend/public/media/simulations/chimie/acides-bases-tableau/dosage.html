@@ -75,7 +75,7 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), { large: true });
   const cadreBase = scene.cadre;
   scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
   M.scene = scene; M.craie = scene.craie;
@@ -972,9 +972,23 @@ function vueDerivee(c, M) {
 }
 
 /* ── Dessin ──────────────────────────────────────────────────────────── */
+/* Blocs de la recomposition sur la largeur (tableau large, L ≥ 1000 : voir Recompose dans exposants.js) ; cadre 760 × 420.
+ * Les graphes sont « etire » : la largeur libre les élargit. Le montage reste d'un seul tenant (le câble relie ses pièces). */
+const TITRE_BLOC = { r: [10, 6, 740, 28], haut: true };
+const GJ = ['axes', 'debut', 'zone_1', 'saut', 'zone_3'], GT = ['courbe', 'tangente_1', 'tangente_2', 'mediane', 'point_e'];
+const BLOCS = {
+  reaction: [{ r: [16, 58, 350, 334], direct: true, centre: true }, { r: [368, 54, 388, 266] }],
+  equivalence: [{ r: [14, 34, 732, 220], e: ['tableau'] }, { r: [14, 258, 440, 30], e: ['definition'] }, { r: [14, 290, 420, 54], e: ['relation'] }, { r: [14, 348, 330, 64], e: ['application'] }],
+  courbe: [{ r: [10, 40, 522, 340], etire: true, e: GJ }, { r: [10, 382, 520, 36], e: ['phrase'] }, { r: [534, 40, 222, 376], direct: true }],
+  // légende et lecture d'abord : un point dans leur cadre leur revient, même si le cadre du graphe (étiquette « V_B (mL) ») le recouvre
+  tangentes: [{ r: [556, 88, 200, 164], e: GT }, { r: [556, 256, 200, 88], e: ['lecture'] }, { r: [30, 46, 570, 332], etire: true, e: GT }],
+  derivee: [{ r: [538, 66, 218, 92], e: ['courbe', 'derivee'] }, { r: [538, 238, 218, 122], e: ['lecture', 'national'] }, { r: [16, 46, 580, 370], etire: true, e: ['courbe', 'derivee', 'pic'] }],
+};
+const COLS_RC = { courbe: [[1, 2], [3]], tangentes: [[3], [1, 2]], derivee: [[3], [1, 2]] };
 function dessiner(c, M) {
   MO = M; M.scene.cadre(89);
   const v = M.S.vue;
+  window.Recompose(c, M.scene, BLOCS[v] ? [TITRE_BLOC, ...BLOCS[v]] : null, { M, cols: COLS_RC[v] });
   c.texte(TITRE_TABLEAU[v], 14, 26, { couleur: 'cyan', taille: 20, max: 560 });
   M.vues = ({ montage: vueMontage, reaction: vueReaction, equivalence: vueEquivalence, courbe: vueCourbe, tangentes: vueTangentes, derivee: vueDerivee })[v](c, M) || [];
   reperes(c, M);

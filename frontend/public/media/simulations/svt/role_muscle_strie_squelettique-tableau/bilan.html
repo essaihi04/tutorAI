@@ -56,7 +56,7 @@ const BLOCS = [
 const STATUTS = { non_acquis: ['à reprendre', 'rouge'], partiel: ['à revoir', 'orange'], acquis: ['acquis', 'vert'] };
 const AVANT = -1e9;   // instant d'un bloc déjà dit : il est écrit d'un coup
 // apparu[i] : null = pas encore dit (pas écrit) ; un nombre = l'instant (s de la scène) où il commence à s'écrire.
-const S = { moitie: 0, moitieAuto: null, page: 1, focus: null, lacunes: null, acquis: null, acquis_ids: null, apparu: [] };
+const S = { moitie: 0, vueSig: null, page: 1, focus: null, lacunes: null, acquis: null, acquis_ids: null, apparu: [] };
 window.__debordeBlocs = [];   // vérification : un bloc dont le texte dépasse son cadre
 
 /* Coupe un texte en lignes qui tiennent dans `max` px (mesure sans les « _ » des indices). */
@@ -98,15 +98,24 @@ function hauteurBloc(c, b, w, t) {
  * écrit, et « Ma page → » passe de la 1re moitié à la 2de avant la page de l'élève. */
 const MOITIES = [[0, 1, 2, 3, 4], [5, 6, 7, 8]];
 const moitieDe = i => (i >= 5 ? 1 : 0);
-function moitieVue() {
-  if (!POS) return null;
+/* « Signature » de ce que la voix a dit en dernier : le bloc en lumière, sinon le dernier bloc écrit au fil de la voix.
+ * La moitié affichée ne suit la voix que quand cette signature CHANGE (un nouveau bloc est dit) : un choix manuel
+ * (« Ma page → », clic sur l'en-tête, next / previous) reste donc affiché jusqu'au bloc suivant de la voix. */
+function signature() {
   const f = BLOCS.findIndex(b => b.id === S.focus);
-  if (f >= 0) return (S.moitie = moitieDe(f));
+  if (f >= 0) return { sig: 'f' + f, i: f };
   let dern = -1, tDern = -Infinity;
   S.apparu.forEach((a, i) => { if (a != null && a !== AVANT && a >= tDern) { tDern = a; dern = i; } });
-  if (dern >= 0 && S.moitieAuto !== dern) { S.moitieAuto = dern; S.moitie = moitieDe(dern); }
+  return dern >= 0 ? { sig: 'd' + dern + '@' + tDern, i: dern } : { sig: null, i: -1 };
+}
+function moitieVue() {
+  if (!POS) return null;
+  const { sig, i } = signature();
+  if (sig && sig !== S.vueSig) { S.vueSig = sig; S.moitie = moitieDe(i); }
   return S.moitie || 0;
 }
+/** Choix manuel d'une moitié : il reste tant que la voix ne dit pas un nouveau bloc. */
+function choisirMoitie(m) { S.moitie = m; S.vueSig = signature().sig; scene.sale = true; }
 function disposer(c, L) {
   const cle = L + ':' + (c.echelle || 1).toFixed(3);
   if (cle === POS_L) return; POS_L = cle;
@@ -267,11 +276,16 @@ function ceQuiSeVoit() {
   const ecrits = BLOCS.filter((b, i) => S.apparu[i] != null).length;
   return `Page 1/2, la fiche du chapitre du muscle strié squelettique : ${ecrits}/9 blocs écrits (définition, formule, piège)${f ? ` ; en lumière « ${f.titre} » : ${f.def}${f.formules ? ' Formules : ' + f.formules.join(' ; ') + '.' : ''} Piège : ${f.attention}` : '.'}${S.lacunes ? ` Blocs à reprendre : ${BLOCS.filter(b => statut(b) && statut(b) !== 'acquis').map(b => b.titre).join(', ') || 'aucun'}.` : ''}`;
 }
-$('suiv').onclick = () => {
-  if (S.page === 1 && POS && (S.moitie || 0) === 0) { S.moitie = 1; S.focus = null; S.moitieAuto = -2; scene.sale = true; return; }
+/* « Ma page → » / next : 1re moitié → 2de moitié (tableau large) → page de l'élève ; « ← La fiche » / previous : retour. */
+function suivant() {
+  if (S.page === 1 && POS && (moitieVue() || 0) === 0) { choisirMoitie(1); pont.noter('next', { page: 1, moitie: 2 }); pont.emettre(); return; }
   if (S.page === 1) return aller(2, 'next');
-  S.moitie = 0; S.moitieAuto = -2; aller(1, 'previous', null, true);
-};
+}
+function precedent() {
+  if (S.page === 1 && POS && (moitieVue() || 0) === 1) { choisirMoitie(0); pont.noter('previous', { page: 1, moitie: 1 }); pont.emettre(); return; }
+  if (S.page === 2) { aller(1, 'previous', null, true); if (POS) choisirMoitie(1); }
+}
+$('suiv').onclick = () => (S.page === 1 ? suivant() : precedent());
 // Imprimer / PDF : la fiche entière et la page de l'élève, sur fond blanc (shared/tableau/imprimer.js).
 $('imprimer').onclick = () => {
   const avant = { page: S.page, focus: S.focus, apparu: S.apparu.slice() };
@@ -285,6 +299,7 @@ $('imprimer').onclick = () => {
 canvas.addEventListener('pointerdown', e => {
   if (S.page !== 1) return;
   const r = canvas.getBoundingClientRect(), [x, y] = scene.local(e.clientX - r.left, e.clientY - r.top);
+  if (POS && y < 40) { choisirMoitie(1 - (moitieVue() || 0)); return; }   // clic sur l'en-tête : l'autre moitié
   const mv = moitieVue(), i = BLOCS.findIndex((b, k) => { const p = place(k); return S.apparu[k] != null && (mv == null || moitieDe(k) === mv) && x >= p.x - 6 && x <= p.x + p.w + 6 && y >= p.y0 - 6 && y <= p.y0 + p.h - 12; });
   if (i < 0) return;
   S.focus = BLOCS[i].id; scene.sale = true; bulle($('feedback'), BLOCS[i].def);
@@ -301,7 +316,7 @@ const pont = protocole({ id: config.id, commandes, config,
   etat: () => ({ simulation_status: 'paused', ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'bilan', time_s: S.page, parameters: { page: S.page, focus: S.focus, lacunes: S.lacunes ? S.lacunes.length : null }, moments: moments() }),
   progression: () => S.page / 2,
   executer: (cmd, p) => ({ start: () => aller(1, 'start', 'secousse'), reset: () => aller(1, 'reset', 'secousse'), play_until: () => playUntil(p), set_parameters: () => setParameters(p),
-    next: () => aller(2, 'next'), previous: () => aller(1, 'previous', null, true) })[cmd]?.() });
+    next: suivant, previous: precedent })[cmd]?.() });
 aller(1, 'start', 'secousse');   // la voix commence par la définition : le premier bloc s'écrit et est en lumière
 window.__bilan = { S, scene, BLOCS };   // pour les vérifications automatiques
 </script>

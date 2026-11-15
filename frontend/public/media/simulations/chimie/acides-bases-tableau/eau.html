@@ -75,7 +75,7 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), { large: true });
   const cadreBase = scene.cadre;
   scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
   M.scene = scene; M.craie = scene.craie;
@@ -942,9 +942,20 @@ function vueSoude(c, M) {
 
 /* ── Dessin ──────────────────────────────────────────────────────────── */
 const VUE_FN = { ouverture: vueOuverture, rappel: vueRappel, autoprotolyse: vueAuto, ke: vueKe, solutions: vueSolutions, ho: vueHo, soude: vueSoude };
+/* Blocs de la recomposition sur la largeur (tableau large, L ≥ 1000 : voir Recompose dans exposants.js) ; cadre 760 × 420.
+ * ouverture, rappel, solutions : dessin déjà dense sur toute la hauteur, disposition d'origine centrée. */
+const TITRE_BLOC = { r: [10, 6, 740, 28], haut: true };
+const BLOCS = {
+  autoprotolyse: [{ r: [38, 60, 304, 318], direct: true }, { r: [366, 62, 346, 322] }],
+  ke: [{ r: [20, 40, 400, 262] }, { r: [630, 40, 112, 282], direct: true }, { r: [20, 322, 612, 84] }],
+  ho: [{ r: [22, 38, 434, 298] }, { r: [628, 98, 94, 224], direct: true }, { r: [22, 354, 444, 44] }],
+  soude: [{ r: [70, 76, 310, 296], direct: true }, { r: [384, 72, 372, 312] }],
+};
+const COLS_RC = { ke: [[1, 3], [2]], ho: [[1, 3], [2]] };
 function dessiner(c, M) {
   MO = M; M.scene.cadre(73);
   const v = M.S.vue;
+  window.Recompose(c, M.scene, BLOCS[v] ? [TITRE_BLOC, ...BLOCS[v]] : null, { cols: COLS_RC[v] });
   c.texte(TITRE_TABLEAU[v], 14, 26, { couleur: 'cyan', taille: 20, max: v === 'solutions' ? 440 : 560 });
   M.vues = VUE_FN[v](c, M) || [];
   reperes(c, M);

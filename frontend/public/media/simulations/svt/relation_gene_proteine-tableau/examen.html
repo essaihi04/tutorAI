@@ -29,6 +29,9 @@ const { rampe, entre } = window.Etapes;
 const M = window.Molecules;
 const TAU = Math.PI * 2;
 
+/* Tableau large (15 novembre 2026, « grands calibres de texte, tout le tableau ») : la largeur du cadre (scene.L) ;
+ * 0 quand le tableau est étroit (L < 1000) : les vues gardent alors leur disposition d’origine. */
+const LARGE = () => { const L = window.__etapes ? window.__etapes.scene.L : 760; return L >= 1000 ? L : 0; };
 /* ── Outils d’écriture : taille effective, coupure des lignes, maillons fléchés ── */
 const eff = (c, t) => Math.max(t, c.tailleMin && c.echelle ? c.tailleMin / c.echelle : 0);
 const larg = (c, s, t) => c.largeurTexte(s, eff(c, t));
@@ -247,23 +250,34 @@ const CASES = [
   { id: 'case_brin', titre: '3. Le brin donné', t0: 7.2, l: [[['brin ', 'blanc'], ['NON', 'rouge'], [' transcrit', 'blanc']], [['→ ARNm : on le recopie, T devient U', 'faible']]] },
   { id: 'case_mutation', titre: '4. Le type de mutation', t0: 9.2, l: [[['substitution (triplet 149 : AGT → AGA)', 'blanc']], [['un nucléotide remplacé, pas de décalage', 'faible']]] },
 ];
-const CX0 = 388, CW = 354, CH = 78, CY = [44, 132, 220, 308];
+let CX0 = 388, CW = 354, CH = 78, CY = [44, 132, 220, 308];
+/* Géométrie de la vue reperages : étroit = celle d’origine ; large = l’énoncé à gauche et les quatre cases à droite,
+ * sur toute la largeur, en grand. */
+let GR = { L: 760, xe: 16, we: 358, T: 14, lh: 19, tc: 15, tl: 14, lhc: 21, titre: 19 };
+function geoRep() {
+  const L = LARGE();
+  if (!L) { GR = { L: 760, xe: 16, we: 358, T: 14, lh: 19, tc: 15, tl: 14, lhc: 21, titre: 19 }; CX0 = 388; CW = 354; CH = 78; CY = [44, 132, 220, 308]; return GR; }
+  const we = Math.round(L * .47) - 16;
+  GR = { L, xe: 16, we, T: L >= 1250 ? 20 : 17, lh: L >= 1250 ? 26 : 22, tc: 21, tl: 20, lhc: 26, titre: 25 };
+  CX0 = 16 + we + 30; CW = L - CX0 - 16; CH = 86; CY = [46, 138, 230, 322];
+  return GR;
+}
 function disposerEnonce(c) {
-  const out = []; let y = 64;
-  ENONCE.forEach((p, ip) => { couper(c, p.s, 334, 14).forEach(l => { out.push({ s: l, x: 26, y, p: ip, couleur: p.couleur || 'blanc' }); y += 19; }); y += 5; });
+  const G = geoRep(), out = []; let y = G.L > 760 ? 72 : 64;
+  ENONCE.forEach((p, ip) => { couper(c, p.s, G.we - 24, G.T).forEach(l => { out.push({ s: l, x: 26, y, p: ip, couleur: p.couleur || 'blanc' }); y += G.lh; }); y += 5; });
   return out;
 }
 /** Position d’un passage dans l’énoncé disposé : [x, y, largeur]. */
 function chercher(c, L, p, mot, re) {
-  for (const l of L) { if (l.p !== p) continue; const i = re ? l.s.search(re) : l.s.indexOf(mot); if (i >= 0) return [l.x + larg(c, l.s.slice(0, i), 14), l.y, larg(c, mot, 14)]; }
+  for (const l of L) { if (l.p !== p) continue; const i = re ? l.s.search(re) : l.s.indexOf(mot); if (i >= 0) return [l.x + larg(c, l.s.slice(0, i), GR.T), l.y, larg(c, mot, GR.T)]; }
   return null;
 }
 function dessinerReperages(c, k) {
-  const t = k.t, L = disposerEnonce(c), yb = L[L.length - 1].y + 14;
-  c.texte('Avant d’écrire : quatre repérages', 380, 24, { couleur: 'cyan', taille: 19, align: 'center' });
-  c.repere('enonce', 16, 42, 358, yb - 42, 'l’énoncé résumé (2025 N)');
-  if (k.ecrit(c, 'enonce', .2)) { c.rect(16, 42, 358, yb - 42, { couleur: 'faible', largeur: 1.6, duree: .25 }); L.forEach(l => k.T(c, l.s, l.x, l.y, { couleur: l.couleur, taille: 14, duree: .17 })); }
-  if (k.ecrit(c, 'cases', .3)) CASES.forEach((C, i) => { c.rect(CX0, CY[i], CW, CH, { couleur: 'faible', largeur: 1.6, duree: .15 }); k.T(c, C.titre, CX0 + 10, CY[i] + 21, { couleur: 'jaune', taille: 15, duree: .2 }); });
+  const t = k.t, L = disposerEnonce(c), G = GR, ye = G.L > 760 ? 46 : 42, yb = L[L.length - 1].y + 14;
+  c.texte('Avant d’écrire : quatre repérages', G.L / 2, 26, { couleur: 'cyan', taille: G.titre, align: 'center' });
+  c.repere('enonce', 16, ye, G.we, yb - ye, 'l’énoncé résumé (2025 N)');
+  if (k.ecrit(c, 'enonce', .2)) { c.rect(16, ye, G.we, yb - ye, { couleur: 'faible', largeur: 1.6, duree: .25 }); L.forEach(l => k.T(c, l.s, l.x, l.y, { couleur: l.couleur, taille: G.T, duree: .17 })); }
+  if (k.ecrit(c, 'cases', .3)) CASES.forEach((C, i) => { c.rect(CX0, CY[i], CW, CH, { couleur: 'faible', largeur: 1.6, duree: .15 }); k.T(c, C.titre, CX0 + 10, CY[i] + G.tc + 6, { couleur: 'jaune', taille: G.tc, duree: .2 }); });
   CASES.forEach((C, i) => { if (t >= .3) c.repere(C.id, CX0, CY[i], CW, CH, 'la case « ' + C.titre.slice(3) + ' »'); });
   const souligne = (pos, coul) => { if (pos) c.ligne(pos[0], pos[1] + 4, pos[0] + pos[2], pos[1] + 4, { couleur: coul, largeur: 2, duree: .2 }); };
   CASES.forEach((C, i) => {
@@ -272,8 +286,8 @@ function dessinerReperages(c, k) {
     if (i === 1) { souligne(chercher(c, L, 2, 'ALDP'), 'vert'); }
     if (i === 3) { souligne(chercher(c, L, 5, 'AGT'), 'rouge'); souligne(chercher(c, L, 6, 'AGA'), 'rouge'); }
     if (i === 2) { const p = chercher(c, L, 4, 'non', /\bnon\b/); if (p) c.cercle(p[0] + p[2] / 2, p[1] - 5, p[2] / 2 + 7, { couleur: 'rouge', largeur: 2.2, duree: .25 }); }
-    c.fleche(374, CY[i] + CH / 2, CX0 - 3, CY[i] + CH / 2, { couleur: 'faible', largeur: 1.3, tete: 6, duree: .1 });
-    C.l.forEach((parts, j) => morceaux(c, k, parts, CX0 + 14, CY[i] + 44 + j * 21, 14, .3));
+    c.fleche(16 + G.we, CY[i] + CH / 2, CX0 - 3, CY[i] + CH / 2, { couleur: 'faible', largeur: 1.3, tete: 6, duree: .1 });
+    C.l.forEach((parts, j) => morceaux(c, k, parts, CX0 + 14, CY[i] + G.tc + 6 + G.lhc + j * G.lhc, G.tl, .3));
   });
   if (t >= CASES[2].t0) { const p = chercher(c, L, 4, 'non', /\bnon\b/); if (p) c.repere('mot_non', p[0] - 8, p[1] - 20, p[2] + 16, 26, 'le mot « non » : brin NON transcrit'); }
 }
@@ -302,13 +316,20 @@ function analyser(code) {
   return { S, tn, tm, an: arn(tn), am: arn(tm), pn: aa(tn), pm: aa(tm), j, b };
 }
 const ML = { triplets: 1.6, brin_normal: 3.6, arnm_normal: 6.0, aa_normal: 8.5, allele_mute: 12.0, difference: 14.2 };
-const LX = 214, LXMAX = 740, RY = { tri: 72, nb: 120, na: 144, np: 168, mb: 222, ma: 246, mp: 270 };
+let LX = 214, LXMAX = 740, SUJ_X = [160, 600];
+const RY = { tri: 72, nb: 120, na: 144, np: 168, mb: 222, ma: 246, mp: 270 };
+/* Tableau large (15 novembre 2026) : les lignes alignées s’étalent sur les deux tiers gauches, en plus gros (rangées
+ * plus espacées) ; « ce qui diffère » passe dans la colonne de droite. Étroit : la disposition d’origine. */
+const RY0 = { ...RY }, RYL = { tri: 92, nb: 152, na: 186, np: 220, mb: 290, ma: 324, mp: 358 };
 function dessinerLignes(c, k) {
-  const t = k.t, A = analyser(k.P.sujet), n = A.tn.length, cw = (LXMAX - LX) / n, cx = i => LX + (i + .5) * cw, T = 15;
-  c.texte('Les lignes du barème', 380, 24, { couleur: 'cyan', taille: 19, align: 'center' });
-  c.texte('sujet ' + A.S.nom + '  (toucher pour changer)', 380, 46, { couleur: 'faible', taille: 13, align: 'center' });
-  c.repere('sujet', 200, 32, 360, 20, 'le sujet (toucher pour changer)');
-  const titre = (s, y, coul = 'faible') => k.T(c, s, 18, y, { couleur: coul, taille: 14, duree: .3 });
+  const Lg = LARGE(), XM = Lg ? Lg * .5 : 380;
+  if (Lg) { LX = 300; LXMAX = Math.round(Lg * .68); Object.assign(RY, RYL); } else { LX = 214; LXMAX = 740; Object.assign(RY, RY0); }
+  SUJ_X = [XM - 230, XM + 230];
+  const t = k.t, A = analyser(k.P.sujet), n = A.tn.length, cw = (LXMAX - LX) / n, cx = i => LX + (i + .5) * cw, T = Lg ? 22 : 15, TT = Lg ? 19 : 14, TA = Lg ? 21 : 15;
+  c.texte('Les lignes du barème', XM, Lg ? 28 : 24, { couleur: 'cyan', taille: Lg ? 25 : 19, align: 'center' });
+  c.texte('sujet ' + A.S.nom + '  (toucher pour changer)', XM, Lg ? 52 : 46, { couleur: 'faible', taille: Lg ? 18 : 13, align: 'center' });
+  c.repere('sujet', XM - 180, 32, 360, 20, 'le sujet (toucher pour changer)');
+  const titre = (s, y, coul = 'faible') => k.T(c, s, 18, y, { couleur: coul, taille: TT, duree: .3 });
   const ligneTri = (y, arr, coul, rouge) => arr.forEach((s, i) => {
     if (rouge != null && i === rouge && A.b >= 0 && coul === 'blanc') morceaux(c, k, [[s.slice(0, A.b), 'blanc'], [s[A.b], 'rouge'], [s.slice(A.b + 1), 'blanc']], cx(i) - larg(c, s, T) / 2, y, T, .05);
     else if (rouge != null && i === rouge && coul === 'orange') morceaux(c, k, [[s.slice(0, A.b), 'orange'], [s[A.b], 'rouge'], [s.slice(A.b + 1), 'orange']], cx(i) - larg(c, s, T) / 2, y, T, .05);
@@ -320,12 +341,12 @@ function dessinerLignes(c, k) {
     if (i > 0) k.T(c, '–', LX + i * cw, y, { couleur: 'faible', taille: T, align: 'center', duree: .05 });
     k.T(c, s, cx(i), y, { couleur: j === i ? 'rouge' : 'vert', taille: T, align: 'center', duree: .14 });
   } };
-  if (k.ecrit(c, 'tri', .3)) { titre('N° des triplets', RY.tri); A.tn.forEach((s, i) => k.T(c, String(A.S.n0 + i), cx(i), RY.tri, { couleur: 'cyan', taille: 14, align: 'center', duree: .1 })); c.ligne(18, RY.tri + 10, LXMAX, RY.tri + 10, { couleur: 'tresfaible', largeur: 1.2, duree: .2 }); }
+  if (k.ecrit(c, 'tri', .3)) { titre('N° des triplets', RY.tri); A.tn.forEach((s, i) => k.T(c, String(A.S.n0 + i), cx(i), RY.tri, { couleur: 'cyan', taille: TT, align: 'center', duree: .1 })); c.ligne(18, RY.tri + 10, LXMAX, RY.tri + 10, { couleur: 'tresfaible', largeur: 1.2, duree: .2 }); }
   if (t >= .3) c.repere('ligne_triplets', 14, RY.tri - 16, LXMAX - 10, 22, 'la ligne des numéros de triplets');
-  if (k.ecrit(c, 'bn', 2.0)) { k.T(c, 'Allèle normal', 18, RY.nb - 24, { couleur: 'vert', taille: 15, duree: .3 }); titre('brin non transcrit', RY.nb); ligneTri(RY.nb, A.tn, 'blanc'); }
+  if (k.ecrit(c, 'bn', 2.0)) { k.T(c, 'Allèle normal', 18, RY.nb - (Lg ? 32 : 24), { couleur: 'vert', taille: TA, duree: .3 }); titre('brin non transcrit', RY.nb); ligneTri(RY.nb, A.tn, 'blanc'); }
   if (k.ecrit(c, 'an', 4.5)) { titre('ARNm', RY.na); ligneTri(RY.na, A.an, 'orange'); }
   if (k.ecrit(c, 'pn', 7.0)) { titre('séquence d’acides aminés', RY.np, 'faible'); ligneAA(RY.np, A.pn, -1); }
-  if (k.ecrit(c, 'bm', 9.3)) { k.T(c, 'Allèle muté', 18, RY.mb - 24, { couleur: 'rouge', taille: 15, duree: .3 }); titre('brin non transcrit', RY.mb); ligneTri(RY.mb, A.tm, 'blanc', A.j); }
+  if (k.ecrit(c, 'bm', 9.3)) { k.T(c, 'Allèle muté', 18, RY.mb - (Lg ? 32 : 24), { couleur: 'rouge', taille: TA, duree: .3 }); titre('brin non transcrit', RY.mb); ligneTri(RY.mb, A.tm, 'blanc', A.j); }
   if (k.ecrit(c, 'am', 10.2)) { titre('ARNm', RY.ma); ligneTri(RY.ma, A.am, 'orange', A.j); }
   if (k.ecrit(c, 'pm', 11.0)) { titre('séquence d’acides aminés', RY.mp, 'faible'); ligneAA(RY.mp, A.pm, A.j); }
   if (t >= 2.0) { c.repere('ligne_brin', 14, RY.nb - 16, LXMAX - 10, 22, 'la ligne du brin non transcrit'); c.repere('allele_normal', 14, RY.nb - 40, LXMAX - 10, RY.np - RY.nb + 48, 'l’allèle normal'); }
@@ -334,13 +355,22 @@ function dessinerLignes(c, k) {
   if (t >= 9.3) c.repere('allele_mute', 14, RY.mb - 40, LXMAX - 10, RY.mp - RY.mb + 48, 'l’allèle muté');
   const xd = LX + A.j * cw + 3, wd = cw - 6;
   if (k.ecrit(c, 'diff', 12.5)) {
-    c.rect(xd, RY.mb - 18, wd, RY.mp - RY.mb + 26, { couleur: 'rouge', largeur: 2.2, duree: .35 });
-    if (A.pm.length < n) c.rect(LX + A.j * cw + 3, RY.mp - 18, (n - A.j) * cw - 6, 25, { couleur: 'rouge', largeur: 1.6, duree: .25, pointille: [5, 4] });
+    c.rect(xd, RY.mb - T - 3, wd, RY.mp - RY.mb + T + 11, { couleur: 'rouge', largeur: 2.2, duree: .35 });
+    if (A.pm.length < n) c.rect(LX + A.j * cw + 3, RY.mp - T - 3, (n - A.j) * cw - 6, T + 10, { couleur: 'rouge', largeur: 1.6, duree: .25, pointille: [5, 4] });
+    if (Lg) {
+      const xr = LXMAX + 34, wr = Lg - xr - 16; let y = 130;
+      k.T(c, 'Ce qui diffère', xr, y, { couleur: 'rouge', taille: 22, duree: .3 }); y += 6;
+      k.T(c, '(encadré en rouge) :', xr, y + 26, { couleur: 'rouge', taille: 19, duree: .3 }); y += 62;
+      couper(c, A.S.dit, wr, 20).forEach(l => { k.T(c, l, xr, y, { couleur: 'blanc', taille: 20, duree: .5 }); y += 27; });
+      y += 16;
+      couper(c, 'Pour chaque allèle : N° des triplets, brin, ARNm, acides aminés, alignés.', wr, 18).forEach(l => { k.T(c, l, xr, y, { couleur: 'faible', taille: 18, duree: .5 }); y += 24; });
+    } else {
     k.T(c, 'Ce qui diffère (encadré en rouge) :', 18, 314, { couleur: 'rouge', taille: 15, duree: .4 });
     couper(c, A.S.dit, 720, 15).forEach((l, i) => k.T(c, l, 18, 336 + i * 20, { couleur: 'blanc', taille: 15, duree: .5 }));
     k.T(c, 'Pour chaque allèle : N° des triplets, brin, ARNm, acides aminés, alignés.', 18, 392, { couleur: 'faible', taille: 14, duree: .5 });
+    }
   }
-  if (t >= 12.5) c.repere('difference', xd, RY.mb - 18, wd, RY.mp - RY.mb + 26, 'ce qui diffère');
+  if (t >= 12.5) c.repere('difference', xd, RY.mb - T - 3, wd, RY.mp - RY.mb + T + 11, 'ce qui diffère');
 }
 function voitLignes(k) {
   const t = k.t, A = analyser(k.P.sujet), m = [`Sujet ${A.S.nom}, écrit sous le titre.`], tr = A.tn.map((s, i) => A.S.n0 + i);
@@ -368,45 +398,56 @@ const VERSIONS = [
   { id: 'version_non_sens', type: 'non_sens', t0: 14.9, titre: 'non-sens :', s: 'substitution du nucléotide … par … au niveau du triplet … du brin non transcrit → codon stop prématuré UAG → protéine incomplète (raccourcie), non fonctionnelle → maladie' },
 ];
 const MP = { maillon_mutation: 3.4, maillon_codon: 5.2, maillon_acide_amine: 7.4, maillon_proteine: 9.6, maillon_maladie: 12.4, versions: 16.6 };
-let PH_ZONES = { phrase: [44, 200], versions: [] };
+let PH_ZONES = { phrase: [44, 200], versions: [], xv: 0 };
+/* Géométrie de la vue phrase : étroit = la phrase puis les versions dessous ; large = la phrase à gauche (en grand),
+ * les phrases types à droite. */
+function geoPhrase() {
+  const L = LARGE();
+  if (!L) return { L: 760, T: 16, dy: 22, wP: 690, xb: 744, y0: 66, xv: 16, wv: 700, Tv: 15, dyv: 20, titre: 19 };
+  const xb = Math.round(L * .56) - 10;
+  return { L, T: 23, dy: 31, wP: xb - 66, xb, y0: 80, xv: xb + 24, wv: L - xb - 24 - 30, Tv: 20, dyv: 26, titre: 25 };
+}
 function disposerPhrase(c) {
-  const T = 16, dy = 22, xs = 50, out = []; let y = 66;
+  const G = geoPhrase(), T = G.T, dy = G.dy, xs = 50, out = []; let y = G.y0;
   PHRASE.forEach((P, i) => {
-    const lignes = couper(c, P.s, 690, T), bloc = { ...P, lignes: lignes.map((l, j) => ({ s: l, y: y + j * dy })), fleche: i > 0 };
+    const lignes = couper(c, P.s, G.wP, T), bloc = { ...P, lignes: lignes.map((l, j) => ({ s: l, y: y + j * dy })), fleche: i > 0 };
     if (P.fin) { const yl = y + (lignes.length - 1) * dy, xl = xs + larg(c, lignes[lignes.length - 1], T); bloc.finPos = { f: [xl + 6, xl + 24], x: xl + 30, y: yl }; }
     out.push(bloc); y += lignes.length * dy + 6;
   });
   return out;
 }
 function disposerVersions(c, y0) {
-  let y = y0; return VERSIONS.map(V => { const l = couper(c, V.titre + ' ' + V.s, 700, 15), b = { ...V, lignes: l, y, h: l.length * 20 + 10 }; y += b.h + 12; return b; });
+  const G = geoPhrase();
+  let y = y0; return VERSIONS.map(V => { const l = couper(c, V.titre + ' ' + V.s, G.wv, G.Tv), b = { ...V, lignes: l, y, h: l.length * G.dyv + 10 }; y += b.h + 12; return b; });
 }
 function dessinerPhrase(c, k) {
-  const t = k.t, T = 16, B = disposerPhrase(c), yFin = B[B.length - 1].lignes.slice(-1)[0].y + 14;
-  c.texte('La phrase de l’origine génétique (2025 N)', 380, 24, { couleur: 'cyan', taille: 19, align: 'center' });
+  const G = geoPhrase(), t = k.t, T = G.T, B = disposerPhrase(c), yFin = B[B.length - 1].lignes.slice(-1)[0].y + Math.round(T * .9), WB = G.xb - 16;
+  c.texte('La phrase de l’origine génétique (2025 N)', G.L / 2, 26, { couleur: 'cyan', taille: G.titre, align: 'center' });
   B.forEach(P => {
     const x1 = Math.max(...P.lignes.map(l => 50 + larg(c, l.s, T)), P.finPos ? P.finPos.x + larg(c, P.fin, T) : 0);
-    if (t >= P.t0) c.repere(P.id, 22, P.lignes[0].y - 17, x1 - 18, P.lignes.length * 22 + 2, 'le maillon « ' + P.s.slice(0, 32) + '… »');
+    if (t >= P.t0) c.repere(P.id, 22, P.lignes[0].y - T - 1, x1 - 18, P.lignes.length * G.dy + 2, 'le maillon « ' + P.s.slice(0, 32) + '… »');
     if (!k.ecrit(c, P.id, P.t0)) return;
-    if (P.fleche) c.fleche(24, P.lignes[0].y - 5, 42, P.lignes[0].y - 5, { couleur: 'jaune', largeur: 1.8, tete: 6, duree: .12 });
+    if (P.fleche) c.fleche(24, P.lignes[0].y - T * .32, 42, P.lignes[0].y - T * .32, { couleur: 'jaune', largeur: 1.8, tete: 6, duree: .12 });
     P.lignes.forEach(l => k.T(c, l.s, 50, l.y, { couleur: 'blanc', taille: T, duree: Math.min(1.1, l.s.length / 50) }));
-    if (P.finPos) { c.fleche(P.finPos.f[0], P.finPos.y - 5, P.finPos.f[1], P.finPos.y - 5, { couleur: 'jaune', largeur: 1.8, tete: 6, duree: .12 }); k.T(c, P.fin, P.finPos.x, P.finPos.y, { couleur: 'rouge', taille: T, duree: .4 }); }
+    if (P.finPos) { c.fleche(P.finPos.f[0], P.finPos.y - T * .32, P.finPos.f[1], P.finPos.y - T * .32, { couleur: 'jaune', largeur: 1.8, tete: 6, duree: .12 }); k.T(c, P.fin, P.finPos.x, P.finPos.y, { couleur: 'rouge', taille: T, duree: .4 }); }
   });
-  if (t >= .5) c.repere('phrase', 16, 44, 728, yFin - 40, 'la phrase complète (substitution)');
-  if (k.P.type === 'substitution' && t >= MP.maillon_maladie) bord(c, 16, 44, 728, yFin - 40, 'jaune', 1.8);
-  const V = disposerVersions(c, yFin + 48);
-  PH_ZONES = { phrase: [44, yFin + 4], versions: V.map(v => [v.type, v.y - 4, v.y - 4 + v.h]) };
-  if (k.ecrit(c, 'vtitre', VERSIONS[0].t0)) k.T(c, 'Les autres phrases types, à compléter :', 18, yFin + 30, { couleur: 'jaune', taille: 15, duree: .4 });
+  const yb = G.y0 - T - 8;
+  if (t >= .5) c.repere('phrase', 16, yb, WB, yFin - yb, 'la phrase complète (substitution)');
+  if (k.P.type === 'substitution' && t >= MP.maillon_maladie) bord(c, 16, yb, WB, yFin - yb, 'jaune', 1.8);
+  const lg = G.L > 760, yv = lg ? G.y0 + 20 : yFin + 48, WV = lg ? G.wv + 20 : 728, XV = G.xv;
+  const V = disposerVersions(c, yv);
+  PH_ZONES = { phrase: [yb, yFin + 4], versions: V.map(v => [v.type, v.y - 4, v.y - 4 + v.h]), xv: lg ? XV : 0 };
+  if (k.ecrit(c, 'vtitre', VERSIONS[0].t0)) k.T(c, 'Les autres phrases types, à compléter :', XV + 2, lg ? G.y0 - 14 : yFin + 30, { couleur: 'jaune', taille: lg ? 21 : 15, duree: .4 });
   V.forEach(v => {
     const choisi = k.P.type === v.type;
-    if (t >= v.t0) c.repere(v.id, 16, v.y - 4, 728, v.h, 'la version « ' + v.titre.replace(' :', '') + ' »');
+    if (t >= v.t0) c.repere(v.id, XV, v.y - 4, WV, v.h, 'la version « ' + v.titre.replace(' :', '') + ' »');
     if (!k.ecrit(c, v.id, v.t0)) return;
     v.lignes.forEach((l, i) => {
-      const y = v.y + 16 + i * 20;
-      if (i === 0) { k.T(c, v.titre, 26, y, { couleur: choisi ? 'jaune' : 'faible', taille: 15, duree: .2 }); k.T(c, l.slice(v.titre.length), 26 + larg(c, v.titre, 15), y, { couleur: choisi ? 'blanc' : 'faible', taille: 15, duree: .55 }); }
-      else k.T(c, l, 26, y, { couleur: choisi ? 'blanc' : 'faible', taille: 15, duree: .55 });
+      const y = v.y + G.Tv + 1 + i * G.dyv, xt = XV + 10;
+      if (i === 0) { k.T(c, v.titre, xt, y, { couleur: choisi ? 'jaune' : 'faible', taille: G.Tv, duree: .2 }); k.T(c, l.slice(v.titre.length), xt + larg(c, v.titre, G.Tv), y, { couleur: choisi ? 'blanc' : 'faible', taille: G.Tv, duree: .55 }); }
+      else k.T(c, l, xt, y, { couleur: choisi ? 'blanc' : 'faible', taille: G.Tv, duree: .55 });
     });
-    if (choisi) bord(c, 16, v.y - 4, 728, v.h, 'jaune', 1.8);
+    if (choisi) bord(c, XV, v.y - 4, WV, v.h, 'jaune', 1.8);
   });
 }
 function voitPhrase(k) {
@@ -430,14 +471,16 @@ const t0Def = i => .4 + i * 2.2;
 const MDEF = Object.fromEntries(DEFS.map((D, i) => [D.m, +(t0Def(i) + 2.0).toFixed(1)]));
 function dessinerRestitution(c, k) {
   const t = k.t;
-  c.texte('Les définitions à savoir mot pour mot', 380, 24, { couleur: 'cyan', taille: 19, align: 'center' });
+  // Tableau large : trois colonnes de deux cartes sur toute la largeur, en grand ; étroit : deux colonnes (d’origine).
+  const L = LARGE(), nc = L ? 3 : 2, W = L || 760, gap = L ? 18 : 20, w = L ? (W - 36 - 2 * gap) / 3 : 352, h = L ? 176 : 114, tm = L ? 24 : 17, td = L ? 21 : 15, lh = L ? 28 : 21;
+  c.texte('Les définitions à savoir mot pour mot', W / 2, 26, { couleur: 'cyan', taille: L ? 25 : 19, align: 'center' });
   DEFS.forEach((D, i) => {
-    const x = 18 + (i % 2) * 372, y = 42 + Math.floor(i / 2) * 124, w = 352, h = 114;
+    const x = 18 + (i % nc) * (w + gap), y = (L ? 46 : 42) + Math.floor(i / nc) * (h + 10);
     if (t >= t0Def(i)) c.repere(D.id, x, y, w, h, 'la carte « ' + D.mot.replace(' :', '') + ' »');
     if (!k.ecrit(c, D.id, t0Def(i))) return;
     c.rect(x, y, w, h, { couleur: 'faible', largeur: 1.6, duree: .25 });
-    k.T(c, D.mot, x + 12, y + 25, { couleur: 'jaune', taille: 17, duree: .3 });
-    couper(c, D.s, w - 26, 15).forEach((l, j) => k.T(c, l, x + 14, y + 48 + j * 21, { couleur: 'blanc', taille: 15, duree: .34 }));
+    k.T(c, D.mot, x + 12, y + tm + 8, { couleur: 'jaune', taille: tm, duree: .3 });
+    couper(c, D.s, w - 26, td).forEach((l, j) => k.T(c, l, x + 14, y + tm + 8 + lh + 4 + j * lh, { couleur: 'blanc', taille: td, duree: .34 }));
   });
 }
 function voitRestitution(k) {
@@ -531,10 +574,11 @@ window.Etapes.lancer({
   },
   poignees: {
     toucher: (x, y, k) => {
-      if (k.vue === 'lignes' && y > 30 && y < 54 && x > 160 && x < 600) return 'sujet';
+      if (k.vue === 'lignes' && y > 30 && y < 58 && x > SUJ_X[0] && x < SUJ_X[1]) return 'sujet';
       if (k.vue === 'phrase') {
-        if (y > PH_ZONES.phrase[0] && y < PH_ZONES.phrase[1] && k.t >= PHRASE[0].t0) return 'type:substitution';
-        const v = PH_ZONES.versions.find(([, y0, y1]) => y > y0 && y < y1); if (v && k.t >= VERSIONS[0].t0) return 'type:' + v[0];
+        const aDroite = PH_ZONES.xv && x >= PH_ZONES.xv;
+        if (!aDroite && y > PH_ZONES.phrase[0] && y < PH_ZONES.phrase[1] && k.t >= PHRASE[0].t0) return 'type:substitution';
+        const v = (!PH_ZONES.xv || aDroite) && PH_ZONES.versions.find(([, y0, y1]) => y > y0 && y < y1); if (v && k.t >= VERSIONS[0].t0) return 'type:' + v[0];
       }
       return null;
     },

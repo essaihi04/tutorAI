@@ -40,7 +40,98 @@
     const k = () => ({ t: S.t, S, P, vue: S.vue, ecrit, T, rampe, lisse, entre, fin: V().fin, fr });
 
     const canvas = $('canvas');
-    scene = window.GenetiqueTableau.Scene(canvas, (c) => { scene.cadre(def.graine || 17); V().dessiner(c, k()); return c.fin(); });
+    /* Agrandissement au tableau (15 novembre 2026, « la simulation n'occupe qu'une bande étroite, textes minuscules ») :
+     * le cadre prend le format du tableau (`large`) et la boîte de l'encre de la vue (`ajuster`) le remplit. La boîte est
+     * mesurée sur toute la scène (plusieurs instants de 0 à fin, tout écrit), sans toucher à l'état : rien ne saute
+     * pendant le déroulé. Une vue peut aussi déplacer des morceaux de son dessin sur la largeur (`blocs(L)`, plus bas). */
+    function complet(fn) {
+      const t = S.t, vu = S.vu;
+      try {
+        for (const f of [.2, .45, .7, .85, 1]) { S.t = V().fin * f; S.vu = {}; fn(); }
+        // `encre: [x0, y0, x1, y1]` d'une vue : la peinture (hors craie, non mesurée) qui doit rester entière
+        const e = V().encre; if (e) { scene.craie.point(e[0], e[1], 0); scene.craie.point(e[2], e[3], 0); }
+      }
+      finally { S.t = t; S.vu = vu; }
+    }
+    scene = window.GenetiqueTableau.Scene(canvas, (c) => { scene.cadre(def.graine || 17); dessinerVue(c); return c.fin(); }, { large: true, ajuster: true, complet });
+    /* Tableau large (L ≥ 1000) : une vue qui déclare `blocs` { nom: [x0, y0, x1, y1, zmax?] } et `disposition`
+     * { haut: [noms], colonnes: [[noms empilés], …], zmax, zhaut, pleine } (même format que le moteur du cours « Notion
+     * de l'information génétique ») voit chaque morceau de son dessin d'origine redessiné (découpé) à sa nouvelle place,
+     * agrandi. Les repères suivent leur morceau, le texte garde son plancher de 15 px à l'écran, les poignées sont
+     * touchées à leur nouvelle place. */
+    const POSES = {};   // vue → { L, map: nom → {x0,y0,X,Y,z} }
+        function disposer(v, L) {
+      const memo = POSES[S.vue]; if (memo && memo.L === L) return memo.map;
+      const map = {}, B = v.blocs;
+      const D = typeof v.disposition === 'function' ? v.disposition(L) : v.disposition;
+      const M = D.marge ?? 12, E = D.ecart ?? 22, HT = 420;
+      const dim = n => { const b = B[n]; return { w: b[2] - b[0], h: b[3] - b[1], zmax: b[4] || D.zmax || 1.7 }; };
+      let y = M;
+      if (D.haut) {   // bandeau du haut : les blocs en ligne, à gauche
+        let x = M, hMax = 0;
+        for (const n of D.haut) { const d = dim(n), z = Math.min(d.zmax, D.zhaut || 1.3); map[n] = { x0: B[n][0], y0: B[n][1], X: x, Y: M, z }; x += d.w * z + E; hMax = Math.max(hMax, d.h * z); }
+        y = M + hMax + (D.sousHaut ?? 4);
+      }
+      // `pleine` : les colonnes après la première (à droite du titre) prennent toute la hauteur
+      const cols = D.colonnes.map((col, i) => {
+        const y0 = D.pleine && i > 0 ? M : y, Ha = HT - y0 - M;
+        const ds = col.map(dim), w = Math.max(...ds.map(d => d.w)), h = ds.reduce((a, d) => a + d.h, 0);
+        return { col, ds, w, y0, Ha, z: Math.min(Math.min(...ds.map(d => d.zmax)), (Ha - E * (col.length - 1)) / h) };
+      });
+      const gaps = E * (cols.length - 1), somme = cols.reduce((a, c) => a + c.w * c.z, 0);
+      const f = Math.min(1, (L - 2 * M - gaps) / somme);
+      cols.forEach(c => { c.z *= f; });
+      const reste = L - 2 * M - cols.reduce((a, c) => a + c.w * c.z, 0), ecart = reste / Math.max(1, cols.length + 1);
+      let x = M + ecart;
+      for (const c of cols) {
+        const hz = c.ds.reduce((a, d) => a + d.h * c.z, 0) + E * (c.col.length - 1);
+        let yy = c.y0 + Math.max(0, (c.Ha - hz) / 2);
+        c.col.forEach((n, i) => { const d = c.ds[i]; map[n] = { x0: B[n][0], y0: B[n][1], X: x + (c.w - d.w) * c.z / 2, Y: yy, z: c.z }; yy += d.h * c.z + E; });
+        x += c.w * c.z + ecart;
+      }
+      POSES[S.vue] = { L, map };
+      return map;
+    }
+
+    let BLOCS = null;
+    function dessinerVue(c) {
+      const v = V(), lay = v.blocs && v.disposition && scene.L >= 1000 ? Object.entries(disposer(v, scene.L)).map(([n, p]) => { const b = v.blocs[n]; return { src: [b[0], b[1], b[2] - b[0], b[3] - b[1]], dst: [p.X, p.Y], z: p.z }; }) : null;
+      BLOCS = lay;
+      if (!lay) return v.dessiner(c, k());
+      if (scene.mesurant) { for (const b of lay) { const [x, y] = b.dst, w = b.src[2] * b.z, h = b.src[3] * b.z; c.point(x, y, 0); c.point(x + w, y + h, 0); } return; }
+      const x = c.ctx, cur0 = c.cur, ech = c.echelle, cadre = c.cadre, r0 = c.r, rep = c.repere, tirage = [];
+      let fin = cur0, complet = true, tip = null, n = 0;
+      const vus = new Set(), candidats = {};
+      lay.forEach((b, i) => {
+        const [sx, sy, sw, sh] = b.src, [dx, dy] = b.dst, z = b.z;
+        c.cur = cur0; c.tip = null; c.complet = true; c.cadre = null; c.echelle = ech * z; n = 0;
+        c.r = i === 0 ? () => { const v = r0(); tirage.push(v); return v; } : () => (n < tirage.length ? tirage[n++] : r0());
+        c.repere = function (id, rx, ry, rw, rh, label) {
+          const cx = rx + rw / 2, cy = ry + rh / 2, dedans = cx >= sx && cx <= sx + sw && cy >= sy && cy <= sy + sh;
+          if (dedans && !vus.has(id)) { vus.add(id); return rep.call(this, id, rx, ry, rw, rh, label); }
+          const ix = Math.max(0, Math.min(rx + rw, sx + sw) - Math.max(rx, sx)), iy = Math.max(0, Math.min(ry + rh, sy + sh) - Math.max(ry, sy));
+          if (!candidats[id] || ix * iy > candidats[id].aire) candidats[id] = { aire: ix * iy, args: [id, rx, ry, rw, rh, label], m: this.ctx.getTransform() };
+          return this;
+        };
+        x.save(); x.translate(dx, dy); x.scale(z, z); x.translate(-sx, -sy);
+        x.beginPath(); x.rect(sx, sy, sw, sh); x.clip();
+        try { V().dessiner(c, k()); } finally {
+          x.restore();
+          fin = Math.max(fin, c.cur); complet = complet && c.complet;
+          if (c.tip && c.tip[0] >= sx && c.tip[0] <= sx + sw && c.tip[1] >= sy && c.tip[1] <= sy + sh) tip = [dx + (c.tip[0] - sx) * z, dy + (c.tip[1] - sy) * z];
+        }
+      });
+      c.r = r0; c.repere = rep; c.echelle = ech; c.cadre = cadre; c.cur = fin; c.complet = complet; c.tip = tip;
+      for (const [id, d] of Object.entries(candidats)) if (!vus.has(id)) { x.save(); x.setTransform(d.m); rep.apply(c, d.args); x.restore(); }
+    }
+    /** Point du tableau (coordonnées du cadre) → point du dessin d'origine, à travers les blocs déplacés. */
+    function versDessin(lx, ly) {
+      if (!BLOCS) return [lx, ly];
+      for (const b of BLOCS) { const [dx, dy] = b.dst, w = b.src[2] * b.z, h = b.src[3] * b.z; if (lx >= dx && lx <= dx + w && ly >= dy && ly <= dy + h) return [b.src[0] + (lx - dx) / b.z, b.src[1] + (ly - dy) / b.z]; }
+      return [-1e4, -1e4];
+    }
+    const localDessin = (x, y) => versDessin(...scene.local(x, y));
+    const nouvelleBoite = () => { scene.boite = null; scene.sale = true; };
     const FIN = () => V().fin;
     scene.avancer = dt => {
       if (!S.running) return false;
@@ -67,7 +158,7 @@
     function resume() { if (S.running) return; if (S.fait || S.t >= FIN()) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
     function poser(p, rejouer) {
       const cles = [];
-      if (p.vue && def.vues[p.vue] && p.vue !== S.vue) { S.vue = p.vue; cles.push('vue'); S.vu = {}; S.t = 0; S.fait = false; }
+      if (p.vue && def.vues[p.vue] && p.vue !== S.vue) { S.vue = p.vue; cles.push('vue'); S.vu = {}; S.t = 0; S.fait = false; nouvelleBoite(); }
       for (const [n, d] of Object.entries(def.parametres || {})) {
         if (!(n in p)) continue;
         const v = d.lire ? d.lire(p[n], S) : p[n];
@@ -82,7 +173,7 @@
       const v = V(); let nom = p.moment;
       if (nom && !(nom in v.moments)) {   // un moment d’une autre vue : on change de vue
         const autre = noms.find(n => def.vues[n].moments && nom in def.vues[n].moments);
-        if (autre) { S.vue = autre; S.vu = {}; S.t = 0; S.fait = false; } else nom = null;
+        if (autre) { S.vue = autre; S.vu = {}; S.t = 0; S.fait = false; nouvelleBoite(); } else nom = null;
       }
       const vv = V(), ok = nom && nom in vv.moments;
       let rejoue = false;
@@ -119,8 +210,8 @@
     if (def.poignees) {
       const pg = def.poignees;
       window.Tableau.glisser(canvas, {
-        toucher: (x, y) => { const [lx, ly] = scene.local(x, y); return pg.toucher(lx, ly, k()); },
-        bouger: (id, x, y) => { const [lx, ly] = scene.local(x, y); pg.bouger(id, lx, ly, k(), { poser, playUntil, setTime, start }); scene.sale = true; },
+        toucher: (x, y) => { const [lx, ly] = localDessin(x, y); return pg.toucher(lx, ly, k()); },
+        bouger: (id, x, y) => { const [lx, ly] = localDessin(x, y); pg.bouger(id, lx, ly, k(), { poser, playUntil, setTime, start }); scene.sale = true; },
         lacher: (id) => { if (pg.lacher) pg.lacher(id, k(), { poser, playUntil, setTime, start }); pont.noter('glisser', { poignee: id, parameters: { ...P } }); pont.emettre(); scene.sale = true; },
       });
     }
@@ -144,7 +235,7 @@
       executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
     bulle($('feedback'), (V().titre || def.titre) + '…');
     setTimeout(() => { if (!S.running && S.t === 0) start(); }, 1600);
-    window.__etapes = { S, P, scene, playUntil, setTime, setParameters, etat: () => ({ ce_qui_se_voit: ceQuiSeVoit(), moments: V().moments, statut: statut() }) };
+    window.__etapes = { S, P, scene, localDessin, playUntil, setTime, setParameters, etat: () => ({ ce_qui_se_voit: ceQuiSeVoit(), moments: V().moments, statut: statut() }) };
     return window.__etapes;
   }
 

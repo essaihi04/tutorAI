@@ -83,13 +83,32 @@ function brin(c, X, y, couleur, u, sucreAllume, nomSucre) {
   if (sucreAllume && u > 0 && nomSucre) c.texte(nomSucre, X(0) - 14, y - 22, { couleur, taille: 13 });
 }
 
+/* Tableau large (15 novembre 2026, « mieux exploiter tout le tableau ») : les molécules (x 16..748, y 40..300) sont
+ * agrandies à gauche sur toute la hauteur ; la comparaison passe dans une colonne à droite (une ligne par différence,
+ * ADN et ARN côte à côte), en grand. Tableau étroit : la disposition d'origine (comparaison sous les molécules). */
+let LG = null;
+function disposer(L) {
+  if (L < 1150) return null;
+  const W = Math.min(420, Math.max(300, L * .25)), z = Math.min(1.54, (L - W - 48) / 732);
+  const fx = 12, fy = (420 - 260 * z) / 2;
+  const x0 = fx + 732 * z + 26, w = L - 12 - x0;
+  return { z, ox: fx - 16 * z, oy: fy - 40 * z, x0, w, xa: x0 + w * .25, xb: x0 + w * .75 };
+}
 function dessiner(c) {
   scene.cadre(53);
+  LG = disposer(scene.L);
+  if (LG && scene.mesurant) { c.point(4, 4, 0); c.point(scene.L - 4, 416, 0); return c.fin(); }   // la disposition large remplit déjà le cadre
+  const base = c.ctx.getTransform(), ech = c.echelle;
+  if (LG) {
+    c.ctx.translate(LG.ox, LG.oy); c.ctx.scale(LG.z, LG.z); c.echelle = ech * LG.z;
+    c.cadre = null;
+  }
+  const aPlat = fn => { if (!LG) return fn(); const m = c.ctx.getTransform(); c.ctx.setTransform(base); c.echelle = ech; try { fn(); } finally { c.ctx.setTransform(m); c.echelle = ech * LG.z; } };
   c.direct(() => {
     c.texte('ADN', 196, 64, { couleur: VIOLET, taille: 22, align: 'center' });
     c.texte('ARN', 566, 64, { couleur: ORANGE, taille: 22, align: 'center' });
   });
-  c.ligne(380, 50, 380, 380, { couleur: 'tresfaible', largeur: 1.2 });
+  c.ligne(380, 50, 380, LG ? 300 : 380, { couleur: 'tresfaible', largeur: 1.2 });
   c.repere('adn', 16, 40, 356, 240, 'l’ADN');
   c.repere('arn', 388, 40, 360, 240, 'l’ARN');
   c.direct(() => {
@@ -131,7 +150,16 @@ function dessiner(c) {
     if (S.t >= M.bases - 0.6) c.repere('uracile', XR(1) - 16, YH + 22, 48, 32, 'U, l’uracile, à la place de T');
   });
   // Ce qui s'écrit, au moment où on le voit : la comparaison, ligne par ligne.
-  const ligne = (y, gauche, droite, couleur) => { c.texte(gauche, 196, y, { couleur, taille: 16, align: 'center', max: 340 }); c.texte(droite, 566, y, { couleur, taille: 16, align: 'center', max: 340 }); };
+  const ROW = { 330: ['brins', 0], 358: ['sucre', 1], 386: ['bases', 2] };
+  const ligne = (y, gauche, droite, couleur) => {
+    if (LG) return aPlat(() => {
+      const [nom, i] = ROW[y], yy = 116 + i * 108, enleve = s => s.replace(/^(sucre|bases) : /, '');
+      if (i === 0) { c.texte('ADN', LG.xa, 60, { couleur: VIOLET, taille: 30, align: 'center' }); c.texte('ARN', LG.xb, 60, { couleur: ORANGE, taille: 30, align: 'center' }); c.ligne(LG.x0, 72, LG.x0 + LG.w, 72, { couleur: 'tresfaible', largeur: 1.2 }); }
+      c.texte(nom, LG.x0 + LG.w / 2, yy, { couleur: 'faible', taille: 21, align: 'center' });
+      c.texte(enleve(gauche), LG.xa, yy + 42, { couleur, taille: 28, align: 'center', max: LG.w / 2 - 8 });
+      c.texte(enleve(droite), LG.xb, yy + 42, { couleur, taille: 28, align: 'center', max: LG.w / 2 - 8 });
+    });
+ c.texte(gauche, 196, y, { couleur, taille: 16, align: 'center', max: 340 }); c.texte(droite, 566, y, { couleur, taille: 16, align: 'center', max: 340 }); };
   if (S.t >= M.brins - 0.4) { ecrit.ecrire(c, 'brins', () => ligne(330, '2 brins', '1 seul brin', 'blanc')); c.repere('adn_brins', 40, YH - 16, 316, YB - YH + 32, 'les deux brins de l’ADN'); c.repere('arn_brin', 410, YH - 16, 330, 34, 'le brin unique de l’ARN (orange)'); }
   if (S.t >= M.sucre - 0.4) { ecrit.ecrire(c, 'sucre', () => ligne(358, 'sucre : désoxyribose', 'sucre : ribose', 'cyan')); c.repere('sucre_adn', 40, YH - 40, 160, 54, 'le désoxyribose'); c.repere('sucre_arn', 410, YH - 40, 160, 54, 'le ribose'); }
   if (S.t >= M.bases - 0.4) { ecrit.ecrire(c, 'bases', () => ligne(386, 'bases : A, T, C, G', 'bases : A, U, C, G', 'jaune')); c.repere('bases_adn', 40, YH + 22, 316, YB - YH - 44, 'les bases de l’ADN : A, T, C, G'); c.repere('bases_arn', 410, YH + 22, 330, 60, 'les bases de l’ARN : A, U, C, G'); }
@@ -162,18 +190,23 @@ function dessiner(c) {
     });
     c.repere('sortes', 410, 212, 336, 88, 'les trois sortes d’ARN : ARNm, ARNt, ARNr');
   }
-  if (S.t >= M.brins - 0.4) c.repere('comparaison', 16, 312, 732, 82, 'la comparaison ADN / ARN, ligne par ligne');
+  if (S.t >= M.brins - 0.4) { if (LG) aPlat(() => c.repere('comparaison', LG.x0, 40, LG.w, 320, 'la comparaison ADN / ARN, ligne par ligne')); else c.repere('comparaison', 16, 312, 732, 82, 'la comparaison ADN / ARN, ligne par ligne'); }
+  if (LG) { c.ctx.setTransform(base); c.echelle = ech; }
   return c.fin();
 }
 
 const canvas = $('canvas');
-const scene = window.GenetiqueTableau.Scene(canvas, dessiner);
+// Agrandissement (15 novembre 2026) : cadre au format du tableau, la boîte de l'encre de la scène complète le remplit.
+const scene = window.GenetiqueTableau.Scene(canvas, dessiner, { large: true, ajuster: true,
+  complet: fn => { const t = S.t, app = ecrit.garder(); S.t = FIN; try { fn(); } finally { S.t = t; ecrit.remettre(app); } } });
 // Ce qui apparaît pendant la scène s'écrit à la craie à partir de cet instant (comme le professeur qui l'écrit en le disant).
 const ecrit = (() => {
   const APP = {};
   return {
     ecrire(c, cle, fn) { if (!(cle in APP)) APP[cle] = (performance.now() - scene.ouvert) / 1000; const cur = c.cur; c.depuis(APP[cle]); try { fn(); } finally { c.cur = cur; } },
     oublier() { for (const k of Object.keys(APP)) delete APP[k]; scene.sale = true; },
+    garder() { const a = { ...APP }; for (const k of Object.keys(APP)) delete APP[k]; return a; },
+    remettre(a) { for (const k of Object.keys(APP)) delete APP[k]; Object.assign(APP, a); },
   };
 })();
 scene.avancer = dt => {

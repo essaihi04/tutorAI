@@ -80,7 +80,7 @@ function Moteur(o) {
     },
     etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
   };
-  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M));
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), { large: true });
   const cadreBase = scene.cadre;
   scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
   M.scene = scene; M.craie = scene.craie;
@@ -774,9 +774,22 @@ function vueNational(c, M) {
 }
 
 /* ── Dessin ──────────────────────────────────────────────────────────── */
+/* Blocs de la recomposition sur la largeur (tableau large, L ≥ 1000 : voir Recompose dans exposants.js) ; cadre 760 × 420.
+ * « classement » (axe vertical des pKa sur toute la hauteur) garde sa disposition. */
+const TITRE_BLOC = { r: [10, 6, 740, 28], haut: true };
+const DUO_RC = [{ r: [10, 38, 318, 300] }, { r: [334, 40, 414, 100] }, { r: [334, 144, 312, 90] }, { r: [334, 246, 334, 60] }, { r: [334, 332, 416, 62], centre: true }];
+const COLS_RC = { acides: [[1], [2, 3, 4, 5]], bases: [[1], [2, 3, 4, 5]] };
+const BLOCS = {
+  acides: DUO_RC, bases: DUO_RC,
+  reaction: [{ r: [220, 52, 320, 64], centre: true, e: ['equation'] }, { r: [18, 138, 284, 66], e: ['quotient', 'multiplier'] }, { r: [302, 154, 250, 30], e: ['multiplier'] }, { r: [18, 214, 424, 206], e: ['separer', 'relation'] }],
+  puissance: [{ r: [254, 28, 260, 96], centre: true, e: ['relation'] }, { r: [16, 138, 320, 202], e: ['exemple_1', 'inverse', 'exemple_2'] }, { r: [428, 138, 266, 202], e: ['exemple_1', 'inverse', 'exemple_2'] }, { r: [16, 362, 484, 38], e: ['piege'] }],
+  totale: [{ r: [198, 52, 374, 42], centre: true }, { r: [34, 114, 324, 62] }, { r: [34, 178, 394, 102] }, { r: [34, 274, 324, 66] }, { r: [24, 332, 454, 64] }, { r: [494, 346, 174, 34] }],
+  national: [{ r: [10, 64, 138, 144] }, { r: [162, 44, 374, 180] }, { r: [632, 198, 124, 28] }, { r: [16, 244, 238, 78] }, { r: [414, 248, 260, 74] }, { r: [16, 340, 444, 60] }],
+};
 function dessiner(c, M) {
   MO = M; M.scene.cadre(137);
   const v = M.S.vue;
+  window.Recompose(c, M.scene, BLOCS[v] ? [TITRE_BLOC, ...BLOCS[v]] : null, { M, cols: COLS_RC[v] });
   c.texte(TITRE_TABLEAU[v], 14, 26, { couleur: 'cyan', taille: 20, max: 730 });
   ({ acides: vueDuo, bases: vueDuo, classement: vueClassement, reaction: vueReaction, puissance: vuePuissance, totale: vueTotale, national: vueNational })[v](c, M);
   reperes(c, M);

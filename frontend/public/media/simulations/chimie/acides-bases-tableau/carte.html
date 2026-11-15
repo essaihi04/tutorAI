@@ -142,6 +142,20 @@ const NOEUDS = [
     lignes: ['semestre 2 :', 'piles,', 'électrolyse,', 'estérification'],
     phrase: 'La suite du programme, au semestre 2 : piles, électrolyse, estérification.' },
 ];
+/* Tableau large (15 novembre 2026, « mieux exploiter tout le tableau, grands calibres de texte ») : scene.L va de 760 à
+ * 1596 ; au-delà de 1000, les branches s'écartent sur toute la largeur, cadres et textes grandissent de F. */
+NOEUDS.forEach(n => { n.x0 = n.x; n.y0 = n.y; n.w0 = n.w; n.h0 = n.h; });
+let F = 1;
+function geometrie(L) {
+  if (geometrie.L === L) return; geometrie.L = L;
+  const large = L >= 1000, m = large ? Math.min(150, (L - 40) / 10 + 16) : 82;
+  F = large ? 1.28 : 1;
+  for (const n of NOEUDS) {
+    n.x = m + (n.x0 - 82) / (678 - 82) * (L - 2 * m); n.w = large ? Math.min(250, (L - 40) / 5 - 24) : n.w0; n.h = n.h0 * F;
+    n.y = !large ? n.y0 : n.y0 < 150 ? 8 + n.h / 2 : n.y0 > 300 ? 412 - n.h / 2 : 210;
+  }
+  CENTRE.x = L / 2; CENTRE.w = 300 * (large ? 1.45 : 1); CENTRE.h = 112 * F;
+}
 const nomDe = n => n.titre.replace(/_\{([^}]+)\}/g, '$1');   // « Quotient Qr » pour la bulle et le tuteur
 const ANNEAUX = { non_acquis: ['rouge', 'à reprendre'], partiel: ['orange', 'à revoir'] };
 const AVANT = -1e9;   // instant d'un élément déjà dit : écrit d'un coup
@@ -180,8 +194,8 @@ function branche(c, n) {
   const m = [(a[0] + b[0]) / 2 - uy * 12, (a[1] + b[1]) / 2 + ux * 12];
   c.courbe(u => [(1 - u) * (1 - u) * a[0] + 2 * (1 - u) * u * m[0] + u * u * b[0], (1 - u) * (1 - u) * a[1] + 2 * (1 - u) * u * m[1] + u * u * b[1]], 24, { couleur: 'faible', largeur: 2, pointille: n.encadre ? [6, 6] : undefined });
   c.rect(x, y, n.w, n.h, { couleur: n.couleur, arrondi: n.encadre ? 4 : 14, largeur: n.encadre ? 1.6 : 2.4, pointille: n.encadre ? [6, 5] : undefined });
-  c.texte(n.titre, n.x, y + 21, { couleur: n.couleur, taille: 17, align: 'center', max: n.w - 16, duree: .8 });
-  n.lignes.forEach((l, k) => ecrire(c, l, n.x, y + 42 + k * 18, { couleur: 'blanc', taille: 14, align: 'center', max: n.w - 14, alpha: .92, duree: .6 }));
+  c.texte(n.titre, n.x, y + 21 * F, { couleur: n.couleur, taille: 17 * F, align: 'center', max: n.w - 16, duree: .8 });
+  n.lignes.forEach((l, k) => ecrire(c, l, n.x, y + (42 + k * 18) * F, { couleur: 'blanc', taille: 14 * F, align: 'center', max: n.w - 14, alpha: .92, duree: .6 }));
   c.repere(n.id, x - 5, y - 5, n.w + 10, n.h + 10, nomDe(n));
   etat(c, n.comps, x, y, n.w, n.h);
   if (S.choisi === n.id) c.direct(() => c.rect(x - 3, y - 3, n.w + 6, n.h + 6, { couleur: 'blanc', arrondi: 15, largeur: 1.2, alpha: .6 }));
@@ -191,16 +205,17 @@ function dessiner(c) {
   const x = CENTRE.x - CENTRE.w / 2, y = CENTRE.y - CENTRE.h / 2;
   if (S.def === AVANT) c.cur = AVANT;   // déjà dit (saut ou retour en arrière) : le centre est écrit d'un coup
   c.rect(x, y, CENTRE.w, CENTRE.h, { couleur: 'blanc', arrondi: 18, largeur: 3 });
-  ecrire(c, 'Couple AH/A⁻ : K_a, pK_a', CENTRE.x, y + 32, { couleur: 'blanc', taille: 23, align: 'center', gras: true });
-  ecrire(c, 'dosage : C_A·V_A = C_B·V_{BE}', CENTRE.x, y + 62, { couleur: 'jaune', taille: 20, align: 'center' });
+  ecrire(c, 'Couple AH/A⁻ : K_a, pK_a', CENTRE.x, y + 32 * F, { couleur: 'blanc', taille: 23 * F, align: 'center', gras: true });
+  ecrire(c, 'dosage : C_A·V_A = C_B·V_{BE}', CENTRE.x, y + 62 * F, { couleur: 'jaune', taille: 20 * F, align: 'center' });
   c.repere('centre', x, y, CENTRE.w, CENTRE.h, 'le centre : couple AH/A⁻ (Ka, pKa) ; dosage : C_A·V_A = C_B·V_BE');
   const apres = c.cur;   // fin du titre du centre
   if (S.def != null) {
     c.depuis(S.def);
     // un petit bécher peint, incolore comme l’acide éthanoïque (exemple B), son pH mesuré au centième, et le pKa du couple
-    peindre(c, ctx => becherPeint(ctx, x + 40, y + 72, 22, 30, 'rgba(205,228,245,.20)', 'rgba(165,200,228,.38)'));
-    c.texte('pH = 3,41', x + 74, y + 96, { couleur: 'vert', taille: 15, duree: .5 });
-    ecrire(c, 'pK_a = 4,8', x + 160, y + 96, { couleur: 'jaune', taille: 15, duree: .5 });
+    const G = CENTRE.w / 300;   // le centre s'élargit avec le tableau
+    peindre(c, ctx => becherPeint(ctx, x + 40 * G, y + 72 * F, 22 * F, 30 * F, 'rgba(205,228,245,.20)', 'rgba(165,200,228,.38)'));
+    c.texte('pH = 3,41', x + 74 * G, y + 96 * F, { couleur: 'vert', taille: 15 * F, duree: .5 });
+    ecrire(c, 'pK_a = 4,8', x + 160 * G, y + 96 * F, { couleur: 'jaune', taille: 15 * F, duree: .5 });
     if (S.choisi === 'centre') c.direct(() => c.rect(x - 3, y - 3, CENTRE.w + 6, CENTRE.h + 6, { couleur: 'blanc', arrondi: 19, largeur: 1.2, alpha: .6 }));
   }
   // chaque branche a sa ligne de temps : elle s'écrit dès que la voix la dit, sans attendre la précédente
@@ -210,7 +225,7 @@ function dessiner(c) {
     c.cur = S.entoure === AVANT ? AVANT : Math.max(apres, S.entoure);
     for (const n of NOEUDS) c.rect(n.x - n.w / 2 - 7, n.y - n.h / 2 - 7, n.w + 14, n.h + 14, { couleur: 'jaune', arrondi: 17, largeur: 1.8, alpha: .8, duree: .35 });
   }
-  if (S.lacunes) c.direct(() => c.texte('✓ acquis · ⟳ à revoir · ✗ à reprendre', 744, 140, { couleur: 'faible', taille: 12, align: 'right' }));
+  if (S.lacunes) c.direct(() => c.texte('✓ acquis · ⟳ à revoir · ✗ à reprendre', geometrie.L - 16, 140, { couleur: 'faible', taille: 12, align: 'right' }));
 }
 /* Le peint (béchers) apparaît quand l’écriture arrive à lui. */
 const peindre = (c, fn) => { if (c.t >= c.cur) c.direct(() => { c.ctx.save(); try { fn(c.ctx); } finally { c.ctx.restore(); } }); };
@@ -226,7 +241,7 @@ function becherPeint(ctx, x, y, w, h, haut, bas) {
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(73); dessiner(c); return c.fin(); });
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(73); geometrie(scene.L); dessiner(c); return c.fin(); }, { large: true });
 const maintenant = () => (performance.now() - scene.ouvert) / 1000;
 let horloge = 0;
 scene.avancer = dt => {
