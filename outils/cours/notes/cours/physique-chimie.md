@@ -543,3 +543,6 @@ contrat : cours/acides_bases_contrat_simulations.md ; tout refaire : `sh outils/
 
 ## Passage routine cloud du 15 nov. (00 h 50 UTC)
 - Rien à construire, aucun commit sur la branche depuis le 14 nov. : même constat, aucun contrôle refait. Décision toujours attendue (arrêter la routine ou nouvelle liste).
+
+## Passage routine cloud du 15 nov. (04 h 50 UTC)
+- Rien à construire, aucun commit de cours sur la branche depuis le 12 nov. : même constat, aucun contrôle refait. Décision toujours attendue (arrêter la routine ou nouvelle liste).
