@@ -1086,8 +1086,9 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   const surFinie = useCallback((cle: string, correct: boolean, fraiche: boolean, apresDemo = false) => {
     finies.current[cle] = correct;
     setVersionFinies(v => v + 1);
-    // après la démonstration (son tableau fermé), la réaction est dite depuis longtemps : rien à attendre
-    if (fraiche && !cle.startsWith('cycle')) programmerSuite(apresDemo);
+    // après la démonstration (son tableau fermé), la réaction est dite depuis longtemps : rien à attendre.
+    // Une question ratée ne passe pas seule : la correction reste à l'écran jusqu'à « Suite → » (15 novembre 2026).
+    if (fraiche && correct && !cle.startsWith('cycle')) programmerSuite(apresDemo);
     const c = cycleRef.current;
     if (!c || !cle.startsWith('cycle') || !fraiche || c.n < MAX_CYCLES) return;
     const liste = jumellesRef.current;
@@ -2429,34 +2430,41 @@ function UneQuestion({ q, diapo, dire, jouer, preparees, compact = false, onRepo
     setPassee(false);
     vientDeFinir.current = true;
     const verdict = indice !== null && q.bonne !== undefined ? indice === q.bonne : null;
+    // Après cette erreur, il ne resterait qu'un seul choix (vrai/faux, ou les autres choix déjà barrés) : le cliquer
+    // ne prouverait rien. La question se ferme tout de suite comme une faute, avec la réponse (15 novembre 2026).
+    const dernierChoix = verdict === false && !!q.choix && q.choix.length - exclus.length - 1 <= 1;
+    const close = verdict === false && (tentative >= essaisMax || dernierChoix);
+    /** l'erreur est notée : le choix est barré et, si la question est close, elle passe au-delà des essais permis */
+    const noterErreur = (i: number | null) => {
+      if (i !== null) setExclus(e => [...e, i]);
+      setTentative(t => (dernierChoix ? Math.max(t + 1, essaisMax + 1) : t + 1));
+    };
     // La réaction préparée pour cette réponse : tout de suite, avec sa voix.
-    const prete = indice !== null && verdict !== null ? preparees?.[String(indice)]?.[verdict ? 'juste' : (tentative >= essaisMax ? '2' : '1')] : undefined;
+    const prete = indice !== null && verdict !== null ? preparees?.[String(indice)]?.[verdict ? 'juste' : (close ? '2' : '1')] : undefined;
     if (prete) {
       onReponse?.({ cle: q.cle, type: q.type, enonce: q.enonce, reponse, tentative, correct: verdict, preparee: true });
       setPris(indice);
       setRetour({ correct: verdict, ecrit: prete.ecrit });
       if (prete.audio) { jouer(prete.audio, prete.parole); voixReaction.current = Promise.resolve(); } else voixReaction.current = dire(prete.parole);
-      if (verdict === false) { setExclus(e => [...e, indice!]); setTentative(t => t + 1); }
+      if (verdict === false) noterErreur(indice);
       return;
     }
     setAttente(true); setPris(indice);
     if (verdict !== null) setRetour({ correct: verdict, ecrit: '' });     // la couleur tout de suite, la voix suit
     try {
       const r = await appelerApi<{ correct: boolean | null; parole: string; ecrit: string }>('/course-player/answer-reaction', {
-        diapo, question: { type: q.type, enonce: q.enonce, choix: q.choix, bonne: q.bonne }, reponse, tentative, verdict,
+        // une question close donne la réponse : le serveur reçoit le dernier essai permis
+        diapo, question: { type: q.type, enonce: q.enonce, choix: q.choix, bonne: q.bonne }, reponse, tentative: close ? Math.max(tentative, essaisMax) : tentative, verdict,
       });
       onReponse?.({ cle: q.cle, type: q.type, enonce: q.enonce, reponse, tentative, correct: r.correct, preparee: false });
       setRetour({ correct: r.correct, ecrit: r.ecrit });
       voixReaction.current = dire(r.parole);
-      if (r.correct === false) {
-        if (indice !== null) setExclus(e => [...e, indice]);
-        setTentative(t => t + 1);
-      }
+      if (r.correct === false) noterErreur(indice);
     } catch {
       if (verdict !== null) onReponse?.({ cle: q.cle, type: q.type, enonce: q.enonce, reponse, tentative, correct: verdict, preparee: false });
       setRetour(verdict === null ? { correct: null, ecrit: 'Le professeur ne peut pas répondre pour le moment.' }
-        : { correct: verdict, ecrit: verdict ? 'Juste.' : (q.explication || 'Pas tout à fait : réessaie.') });
-      if (verdict === false) { if (indice !== null) setExclus(e => [...e, indice]); setTentative(t => t + 1); }
+        : { correct: verdict, ecrit: verdict ? 'Juste.' : close ? (q.explication || 'Pas tout à fait.') : (q.explication || 'Pas tout à fait : réessaie.') });
+      if (verdict === false) noterErreur(indice);
     } finally { setAttente(false); }
   };
 

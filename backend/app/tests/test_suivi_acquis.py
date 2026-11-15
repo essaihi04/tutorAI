@@ -73,3 +73,13 @@ def test_une_prediction_fausse_ne_compte_pas_dans_le_score():
     # une compétence qui n'a qu'une prédiction reste non évaluée
     b2 = sa.bilan([pred], DECK)
     assert b2["competences"][0]["statut"] == "non_evalue" and b2["competences"][0]["score"] is None
+
+def test_une_reussite_au_deuxieme_essai_n_est_jamais_acquise():
+    # 3 questions justes du premier coup + 1 juste au 2e essai : moyenne 0,875 >= 0,8, mais la compétence reste partielle
+    evs = [ev("s1", "q", 1, True), ev("s1", "r", 1, True), ev("s2", "q", 1, True),
+           ev("s2", "r", 1, False), ev("s2", "r", 2, True)]
+    c1 = sa.bilan(evs, DECK)["competences"][0]
+    assert c1["score"] >= sa.SEUIL_ACQUIS and c1["statut"] == "partiel"
+    assert c1["id"] in {l["id"] for l in sa.lacunes(sa.bilan(evs, DECK))}
+    # tout juste du premier coup : acquise
+    assert sa.bilan(evs[:3], DECK)["competences"][0]["statut"] == "acquis"

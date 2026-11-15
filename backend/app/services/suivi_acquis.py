@@ -201,6 +201,10 @@ def bilan(evenements: Iterable[dict], deck: dict) -> dict:
         scores = [q["score"] for q in c["questions"] if q["score"] is not None]
         c["score"] = round(sum(scores) / len(scores), 2) if scores else None
         c["statut"] = statut(c["score"])
+        # Une question réussie seulement au 2e essai (ou ratée) laisse la compétence au mieux « partielle », même si la
+        # moyenne atteint le seuil : elle reviendra en reprise (règle de l'utilisateur, 15 novembre 2026).
+        if c["statut"] == "acquis" and any(s < 1.0 for s in scores):
+            c["statut"] = "partiel"
         c["passees"] = sum(1 for q in c["questions"] if q.get("passee"))
         if c["statut"] in ("non_acquis", "partiel"):
             ratees = {m for q in c["questions"] if q["score"] is not None and q["score"] < SEUIL_ACQUIS for m in q["methodes"]}
