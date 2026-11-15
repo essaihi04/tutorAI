@@ -139,6 +139,13 @@ deux lots tournent ensemble, depuis les deux bouts de la file, sans se gêner (u
 Il restait ~2 650 réactions (≈ 20-50 s chacune). Au fil du lot : `attente_poser.py` ne sert plus que pour les cours
 encore en attente ; pour les réactions des cours en ligne, poser avec `rapatrier.sh` / `poser` (§ 3) puis republier.
 
+**Réactions muettes** (« bravo » / « pas tout à fait » sans son) : une réaction sans voix posée est demandée à
+la voix en direct ; si le GPU dort, l'élève n'entend rien. Le 15/11 à 0 h : 368 posées et déployées (`f337dd17`),
+2 213 encore dans la file du lot (~500/h avec les deux comptes, toutes avec le bon texte). Quand le lot avance :
+1. `python -X utf8 scripts/voix/poser_en_ligne.py --compter` (muettes / prêtes par cours) ;
+2. `python -X utf8 scripts/voix/poser_en_ligne.py 12 <deck…>` (pose les prêtes dans les cours en ligne) ;
+3. commiter cours + `*_v12.mp3` (index temporaire), déployer, reconstruire le lien libre (§ 3 quater, étape 4).
+
 **Vérifier un lot de cours avant mise en ligne** : contenu identique à `origin` hors champs audio, chaque URL
 `/media/audio/...` présente sur `origin` ou sur le disque, page qui se charge et voix de la 1ʳᵉ diapo qui part.
 
