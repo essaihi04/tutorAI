@@ -12,6 +12,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="exposants.js"></script>
 <script src="commun.js"></script>
+<script src="eau.js"></script>
 <script>
 /*
  * Figures fixes du cours « Ondes mécaniques progressives périodiques » (10 novembre 2026), écrites à la craie pas à pas,
@@ -75,6 +76,39 @@ let MM = {};
 const marque = (c, nom) => { MM[nom] = c.cur; };
 /* Une partie peinte (eau, quadrillage) apparaît quand l’écriture arrive à elle, d’un coup. */
 const peindre = (c, fn) => { if (c.t >= c.cur) c.direct(() => { c.ctx.save(); c.ctx.scale(KX, 1); try { fn(c.ctx); } finally { c.ctx.restore(); } }); };   // peinture étirée comme la craie
+/* Peinture sans étirement (objets ronds : cloche, bille) : l'appelant place lui-même ses abscisses (x × KX). */
+const peindreIci = (c, fn) => { if (c.t >= c.cur) c.direct(() => { c.ctx.save(); try { fn(c.ctx); } finally { c.ctx.restore(); } }); };
+/* Un trait de craie remplacé par un objet peint garde sa place dans l'écriture : même durée, même tremblé, invisible
+ * (les instants des étapes, que le tuteur vise, ne bougent pas). */
+const INVISIBLE = 'rgba(0,0,0,0)';
+const E = window.EauPeinte;
+/* Cloche de laiton (16 novembre 2026) : corps en dégradé doré, reflet, lèvre plus sombre, battant, ombre douce. */
+function peindreCloche(ctx, x, y) {
+  ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 8; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 4;
+  const g = ctx.createLinearGradient(x - 26, 0, x + 26, 0);
+  g.addColorStop(0, '#7a4f12'); g.addColorStop(.28, '#f6d36b'); g.addColorStop(.42, '#fff3c4'); g.addColorStop(.62, '#d9a637'); g.addColorStop(1, '#6b430d');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(x - 8, y - 45);
+  ctx.bezierCurveTo(x - 10, y - 30, x - 13, y - 16, x - 25, y - 4); ctx.lineTo(x + 25, y - 4);
+  ctx.bezierCurveTo(x + 13, y - 16, x + 10, y - 30, x + 8, y - 45); ctx.quadraticCurveTo(x, y - 50, x - 8, y - 45); ctx.fill();
+  ctx.shadowColor = 'transparent';
+  ctx.fillStyle = 'rgba(90,55,10,.9)'; ctx.beginPath(); ctx.ellipse(x, y - 4, 25, 4, 0, 0, Math.PI * 2); ctx.fill();
+  const b = ctx.createRadialGradient(x - 2, y + 1, 1, x, y + 3, 6); b.addColorStop(0, '#fff1b8'); b.addColorStop(1, '#8a5a12');
+  ctx.fillStyle = b; ctx.beginPath(); ctx.arc(x, y + 3, 5, 0, Math.PI * 2); ctx.fill();
+  const a = ctx.createRadialGradient(x - 2, y - 52, 1, x, y - 50, 6); a.addColorStop(0, '#fff1b8'); a.addColorStop(1, '#8a5a12');
+  ctx.fillStyle = a; ctx.beginPath(); ctx.arc(x, y - 50, 5, 0, Math.PI * 2); ctx.fill();
+}
+/* Écran d'oscilloscope : boîtier gris sombre, écran vert profond, léger reflet en haut. */
+function peindreEcranOscillo(ctx, x, y, w, h) {
+  ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 12; ctx.shadowOffsetY = 4;
+  const bt = ctx.createLinearGradient(0, y - 10, 0, y + h + 10); bt.addColorStop(0, '#4a535b'); bt.addColorStop(1, '#22282d');
+  ctx.fillStyle = bt; ctx.beginPath(); ctx.roundRect(x - 7, y - 7, w + 14, h + 14, 9); ctx.fill(); ctx.shadowColor = 'transparent';
+  const e = ctx.createRadialGradient(x + w / 2, y + h / 2, 10, x + w / 2, y + h / 2, Math.max(w, h) * .7);
+  e.addColorStop(0, '#0f3a26'); e.addColorStop(1, '#06180f'); ctx.fillStyle = e; ctx.beginPath(); ctx.roundRect(x, y, w, h, 4); ctx.fill();
+  const r = ctx.createLinearGradient(0, y, 0, y + h * .35); r.addColorStop(0, 'rgba(255,255,255,.07)'); r.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = r; ctx.fillRect(x, y, w, h * .35);
+}
+/* Trace lumineuse d'oscilloscope : la courbe de craie reçoit une lueur de sa couleur. */
+function lueur(c, couleur, fn) { const x = c.ctx; x.save(); x.shadowColor = couleur; x.shadowBlur = 9; try { fn(); } finally { x.restore(); } }
 const vu = nom => M[nom] !== undefined && S.tw >= M[nom] - 1e-6;
 
 // ───────────────────────── Les figures ─────────────────────────
@@ -87,10 +121,11 @@ const DESSINS = {
     const X = [180, 380, 580], H = ['8 h', '9 h', '10 h'];
     X.forEach((x, i) => {
       const y = 190;
-      c.cercle(x, y - 50, 5, { couleur: 'jaune' });
-      c.trait([[x - 8, y - 45], [x - 10, y - 30], [x - 14, y - 15], [x - 24, y - 3], [x + 24, y - 3], [x + 14, y - 15], [x + 10, y - 30], [x + 8, y - 45], [x - 8, y - 45]], { couleur: 'jaune' });
-      c.point(x, y + 3, 4, 'jaune');
-      c.trait([[x - 34, y - 34], [x - 40, y - 24], [x - 34, y - 14]], { couleur: 'faible', largeur: 1.6 }).trait([[x + 34, y - 34], [x + 40, y - 24], [x + 34, y - 14]], { couleur: 'faible', largeur: 1.6 });
+      peindreIci(c, ctx => peindreCloche(ctx, x * KX, y));   // la cloche est peinte ; ses traits gardent leur place dans l'écriture
+      c.cercle(x, y - 50, 5, { couleur: INVISIBLE });
+      c.trait([[x - 8, y - 45], [x - 10, y - 30], [x - 14, y - 15], [x - 24, y - 3], [x + 24, y - 3], [x + 14, y - 15], [x + 10, y - 30], [x + 8, y - 45], [x - 8, y - 45]], { couleur: INVISIBLE });
+      c.point(x, y + 3, 4, INVISIBLE);
+      c.trait([[x - 34, y - 34], [x - 40, y - 24], [x - 34, y - 14]], { couleur: 'jaune', largeur: 1.6, alpha: .6 }).trait([[x + 34, y - 34], [x + 40, y - 24], [x + 34, y - 14]], { couleur: 'jaune', largeur: 1.6, alpha: .6 });
       c.ligne(x, y + 10, x, ya, { couleur: 'tresfaible', largeur: 1.2, pointille: [4, 5] });
       c.ligne(x, ya - 7, x, ya + 7, { couleur: 'blanc', largeur: 2 });
       c.texte(H[i], x, ya + 28, { couleur: 'blanc', align: 'center', taille: 17 });
@@ -142,14 +177,15 @@ const DESSINS = {
     c.texte('sensibilité horizontale : 0,1 ms/div', 40, 60, { couleur: 'jaune', taille: 17 });
     c.repere('sensibilite', 36, 42, 290, 26, 'la sensibilité horizontale : 0,1 ms par division');
     const x0 = 50, y0 = 80, dx = 40, dy = 30, yc = y0 + 4 * dy;
-    c.rect(x0, y0, 10 * dx, 8 * dy, { couleur: 'faible', arrondi: 4 });
-    for (let i = 1; i < 10; i++) c.ligne(x0 + i * dx, y0, x0 + i * dx, y0 + 8 * dy, { couleur: 'tresfaible', largeur: 1, duree: .03 });
-    for (let j = 1; j < 8; j++) c.ligne(x0, y0 + j * dy, x0 + 10 * dx, y0 + j * dy, { couleur: j === 4 ? 'faible' : 'tresfaible', largeur: 1, duree: .03 });
+    peindre(c, ctx => peindreEcranOscillo(ctx, x0, y0, 10 * dx, 8 * dy));   // écran vert peint sous la grille
+    c.rect(x0, y0, 10 * dx, 8 * dy, { couleur: 'rgba(160,240,190,.45)', arrondi: 4 });
+    for (let i = 1; i < 10; i++) c.ligne(x0 + i * dx, y0, x0 + i * dx, y0 + 8 * dy, { couleur: 'rgba(160,240,190,.2)', largeur: 1, duree: .03 });
+    for (let j = 1; j < 8; j++) c.ligne(x0, y0 + j * dy, x0 + 10 * dx, y0 + j * dy, { couleur: j === 4 ? 'rgba(160,240,190,.4)' : 'rgba(160,240,190,.2)', largeur: 1, duree: .03 });
     c.repere('ecran', x0, y0, 10 * dx, 8 * dy, 'l’écran de l’oscilloscope');
-    c.courbe(u => [x0 + u * 10 * dx, yc - 2.5 * dy * Math.sin(2 * Math.PI * u * 10 / 5)], 200, { couleur: 'cyan', largeur: 2.6 });
+    lueur(c, '#22d3ee', () => c.courbe(u => [x0 + u * 10 * dx, yc - 2.5 * dy * Math.sin(2 * Math.PI * u * 10 / 5)], 200, { couleur: '#7ff0ff', largeur: 2.6 }));
     c.texte('voie 1', x0 + 10 * dx + 8, yc - 2.5 * dy + 6, { couleur: 'cyan', taille: 15 });
     c.repere('courbe_1', x0, yc - 2.5 * dy - 6, 10 * dx, 5 * dy + 12, 'la courbe de la voie 1');
-    c.courbe(u => [x0 + u * 10 * dx, yc - 1.5 * dy * Math.sin(2 * Math.PI * (u * 10 - 1) / 5)], 200, { couleur: 'orange', largeur: 2 });
+    lueur(c, '#fb923c', () => c.courbe(u => [x0 + u * 10 * dx, yc - 1.5 * dy * Math.sin(2 * Math.PI * (u * 10 - 1) / 5)], 200, { couleur: '#ffc08a', largeur: 2 }));
     c.texte('voie 2', x0 + 10 * dx + 8, yc + 1.5 * dy + 20, { couleur: 'orange', taille: 15 });
     c.repere('courbe_2', x0, yc - 1.5 * dy - 6, 10 * dx, 3 * dy + 12, 'la courbe de la voie 2');
     marque(c, 'trace');
@@ -208,13 +244,19 @@ const DESSINS = {
   fig_enonce_cuve(c) {
     c.texte('Cuve à ondes vue de dessus', 40, 30, { couleur: 'cyan', taille: 20 });
     const X0 = 60, Y0 = 52, W = 650, H = 270, xs = 92, L = 72;
-    peindre(c, ctx => {
-      ctx.save(); const g = ctx.createLinearGradient(X0, Y0, X0 + W, Y0 + H);
-      g.addColorStop(0, 'rgba(40,120,150,.22)'); g.addColorStop(1, 'rgba(20,80,110,.16)'); ctx.fillStyle = g; ctx.fillRect(X0, Y0, W, H); ctx.restore();
+    peindre(c, ctx => {   // eau peinte : fond bleu-vert, rides claires et sombres, liseré sur chaque crête, réglette de métal
+      const r = { x: X0, y: Y0, w: W, h: H };
+      ctx.save(); E.chemin(ctx, r); ctx.clip(); E.fond(ctx, r, { reflets: false });
+      const zone = { x: xs, y: Y0, w: X0 + W - xs, h: H };
+      E.rides(ctx, { forme: 'lineaire', x: xs, umax: 8.5 * L, pas: 3, zone, onde: u => ({ h: Math.cos(2 * Math.PI * u / L), s: Math.cos(2 * Math.PI * u / L) * .9 }) });
+      E.liseres(ctx, { forme: 'lineaire', x: xs, zone, largeur: 1.6 }, Array.from({ length: 8 }, (_, k) => ({ u: (k + 1) * L, a: .5 })));
+      ctx.restore();
+      ctx.save(); ctx.strokeStyle = '#3d4a54'; ctx.lineWidth = 6; E.chemin(ctx, r); ctx.stroke(); ctx.restore();
+      E.reglette(ctx, xs, Y0 + 14, Y0 + H - 14, 7);
     });
     c.rect(X0, Y0, W, H, { couleur: 'faible', arrondi: 4 });
     c.repere('cuve', X0, Y0, W, H, 'la surface de l’eau, vue de dessus');
-    c.ligne(xs, Y0 + 14, xs, Y0 + H - 14, { couleur: 'blanc', largeur: 5 });
+    c.ligne(xs, Y0 + 14, xs, Y0 + H - 14, { couleur: INVISIBLE, largeur: 5 });   // la réglette est peinte
     c.texte('S', xs - 18, Y0 + H / 2 + 6, { couleur: 'blanc', taille: 20 });
     c.repere('point_s', xs - 24, Y0 + 8, 34, H - 16, 'la plaque du vibreur, en S');
     for (let k = 1; k <= 8; k++) c.ligne(xs + k * L, Y0 + 14, xs + k * L, Y0 + H - 14, { couleur: 'blanc', largeur: 2 });
@@ -249,7 +291,7 @@ const DESSINS = {
       ctx.save(); ctx.beginPath(); ctx.moveTo(xs - xg * k, 268);
       for (let i = 0; i <= 400; i++) { const x = -xg + 2 * xg * i / 400; ctx.lineTo(xs + x * k, yS(x)); }
       ctx.lineTo(xs + xg * k, 268); ctx.closePath();
-      const g = ctx.createLinearGradient(0, ys - A, 0, 268); g.addColorStop(0, 'rgba(150,170,185,.55)'); g.addColorStop(1, 'rgba(90,105,120,.5)');
+      const g = ctx.createLinearGradient(0, ys - A, 0, 268); g.addColorStop(0, 'rgba(70,180,210,.75)'); g.addColorStop(.4, 'rgba(18,96,122,.8)'); g.addColorStop(1, 'rgba(6,40,56,.85)');
       ctx.fillStyle = g; ctx.fill(); ctx.restore();
     });
     c.courbe(u => { const x = -xg + 2 * xg * u; return [xs + x * k, yS(x)]; }, 300, { couleur: 'blanc', largeur: 2.4 });
@@ -341,8 +383,21 @@ const DESSINS = {
   fig_diffraction_a_completer(c) {
     c.texte('Ondes incidentes et obstacle : complète la figure', 40, 30, { couleur: 'cyan', taille: 19, max: 690 });
     const X0 = 40, Y0 = 48, W = 680, H = 300, xo = 330, yo = Y0 + H / 2, L = 45, a = 30;
-    peindre(c, ctx => { ctx.save(); const g = ctx.createLinearGradient(X0, 0, X0 + W, 0);
-      g.addColorStop(0, 'rgba(40,120,150,.22)'); g.addColorStop(1, 'rgba(20,80,110,.16)'); ctx.fillStyle = g; ctx.fillRect(X0, Y0, W, H); ctx.restore(); });
+    peindre(c, ctx => {   // eau peinte : rides incidentes avant l'obstacle ; après, l'eau reste calme tant que les arcs ne sont pas tracés
+      const r = { x: X0, y: Y0, w: W, h: H };
+      ctx.save(); E.chemin(ctx, r); ctx.clip(); E.fond(ctx, r, { reflets: false });
+      const zone = { x: X0, y: Y0, w: xo - X0, h: H }, x6 = xo - 6.5 * L;
+      E.rides(ctx, { forme: 'lineaire', x: x6, umax: 6.5 * L, pas: 3, zone, onde: u => ({ h: Math.cos(2 * Math.PI * (u - .5 * L) / L), s: Math.cos(2 * Math.PI * (u - .5 * L) / L) * .9 }) });
+      if (vu('arcs')) {
+        const zd = { x: xo, y: Y0, w: X0 + W - xo, h: H };
+        ctx.save(); ctx.beginPath(); ctx.rect(zd.x, zd.y, zd.w, zd.h); ctx.clip();
+        E.rides(ctx, { forme: 'radial', x: xo, y: yo, umax: 8.5 * L, pas: 3, zone: zd, onde: u => (u > 8.3 * L ? null : { h: Math.cos(2 * Math.PI * u / L), s: Math.cos(2 * Math.PI * u / L) * .8, amp: .75 }) });
+        ctx.restore();
+      }
+      ctx.restore();
+      ctx.save(); ctx.strokeStyle = '#3d4a54'; ctx.lineWidth = 6; E.chemin(ctx, r); ctx.stroke(); ctx.restore();
+      E.paroi(ctx, xo - 5, Y0, yo - a / 2, 10); E.paroi(ctx, xo - 5, yo + a / 2, Y0 + H, 10);
+    });
     for (let k = 1; k <= 6; k++) {
       // Le trait le plus proche de l’obstacle laisse la place de la cote « a = 1 cm ».
       if (k === 1) c.ligne(xo - L, Y0 + 36, xo - L, yo - 16, { couleur: 'blanc', largeur: 2 }).ligne(xo - L, yo + 14, xo - L, Y0 + H - 12, { couleur: 'blanc', largeur: 2 });
@@ -351,7 +406,7 @@ const DESSINS = {
     c.repere('ondes_incidentes', xo - 6 * L - 6, Y0 + 30, 6 * L, H - 40, 'les ondes incidentes rectilignes');
     c.fleche(xo - 5.5 * L, Y0 + H - 24, xo - 3.5 * L, Y0 + H - 24, { couleur: 'vert' });
     c.cote(xo - 5 * L, Y0 + 22, xo - 4 * L, Y0 + 22, 'λ = 1,5 cm', { couleur: 'jaune', taille: 15 });
-    c.trait([[xo, Y0], [xo, yo - a / 2]], { couleur: 'orange', largeur: 7 }).trait([[xo, yo + a / 2], [xo, Y0 + H]], { couleur: 'orange', largeur: 7 });
+    c.trait([[xo, Y0], [xo, yo - a / 2]], { couleur: INVISIBLE, largeur: 7 }).trait([[xo, yo + a / 2], [xo, Y0 + H]], { couleur: INVISIBLE, largeur: 7 });   // l'obstacle est peint
     c.texte('obstacle', xo, Y0 + H + 17, { couleur: 'orange', align: 'center', taille: 15 });
     c.repere('obstacle', xo - 8, Y0, 16, H, 'l’obstacle');
     c.cote(xo - 16, yo - a / 2, xo - 16, yo + a / 2, '', { couleur: 'jaune' });
@@ -382,6 +437,14 @@ const DESSINS = {
   fig_enonce_2020(c) {
     // Redessinée d’après le national 2020 N (exercice II) : quatre rides circulaires autour de S, 1 cm couvre deux intervalles.
     const xs = 230, ys = 196, L = 40;
+    peindre(c, ctx => {   // la cuve vue de dessus : rides circulaires peintes sous les cercles de l'énoncé
+      const r = { x: xs - 4 * L - 22, y: ys - 4 * L - 22, w: 8 * L + 44, h: 8 * L + 44 };
+      ctx.save(); E.chemin(ctx, r); ctx.clip(); E.fond(ctx, r, { reflets: false });
+      E.rides(ctx, { forme: 'radial', x: xs, y: ys, umax: 4.3 * L, pas: 2, zone: r, onde: u => (u > 4.25 * L ? null : { h: Math.cos(2 * Math.PI * u / L), s: Math.cos(2 * Math.PI * u / L) * .9 }) });
+      ctx.restore();
+      ctx.save(); ctx.strokeStyle = '#3d4a54'; ctx.lineWidth = 6; E.chemin(ctx, r); ctx.stroke(); ctx.restore();
+      E.pointe(ctx, xs, ys, 6);
+    });
     for (let k = 1; k <= 4; k++) c.cercle(xs, ys, k * L, { couleur: 'blanc', largeur: 2 });
     c.point(xs, ys, 4, 'blanc').texte('S', xs, ys - 12, { couleur: 'blanc', align: 'center', taille: 18 });
     c.repere('point_s', xs - 14, ys - 30, 28, 40, 'la source S');

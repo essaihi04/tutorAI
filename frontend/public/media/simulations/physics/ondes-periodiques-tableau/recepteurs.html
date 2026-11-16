@@ -132,10 +132,38 @@ function air(ctx, t) {
   ctx.restore();
 }
 
+/* Objets peints (16 novembre 2026) : capsules à ultrasons (boîtier noir, grille argentée, bague de couleur),
+ * écran vert d'oscilloscope. Les traits de craie qu'ils remplacent restent, invisibles, pour garder le rythme de l'écriture. */
+const INVISIBLE = 'rgba(0,0,0,0)';
+const peint = (c, fn) => { if (c.t >= c.cur) c.direct(() => { c.ctx.save(); try { fn(c.ctx); } finally { c.ctx.restore(); } }); };
+function capsule(ctx, x, y, w, h, bague) {
+  ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 6; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 3;
+  const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#4b535a'); g.addColorStop(.45, '#262c31'); g.addColorStop(1, '#121619');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, Math.min(6, w / 3)); ctx.fill(); ctx.shadowColor = 'transparent';
+  ctx.fillStyle = 'rgba(255,255,255,.14)'; ctx.fillRect(x + 3, y + 2, w - 6, 2);
+  // La face sensible, côté gauche : grille argentée.
+  const fx = x - 3, fw = 6, f = ctx.createLinearGradient(fx, 0, fx + fw, 0); f.addColorStop(0, '#f2f5f7'); f.addColorStop(.5, '#a9b3bb'); f.addColorStop(1, '#5b656d');
+  ctx.fillStyle = f; ctx.beginPath(); ctx.roundRect(fx, y + 2, fw, h - 4, 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(40,46,52,.55)'; ctx.lineWidth = .8;
+  for (let yy = y + 5; yy < y + h - 4; yy += 3) { ctx.beginPath(); ctx.moveTo(fx + 1, yy); ctx.lineTo(fx + fw - 1, yy); ctx.stroke(); }
+  if (bague) { ctx.fillStyle = bague; ctx.fillRect(x + w - 7, y + 1, 3, h - 2); }
+}
+function cable(ctx, x0, y, x1) { ctx.strokeStyle = '#1b2024'; ctx.lineWidth = 2.6; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke(); }
+function ecranOscillo(ctx, x, y, w, h) {
+  ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 12; ctx.shadowOffsetY = 4;
+  const bt = ctx.createLinearGradient(0, y - 8, 0, y + h + 8); bt.addColorStop(0, '#4a535b'); bt.addColorStop(1, '#22282d');
+  ctx.fillStyle = bt; ctx.beginPath(); ctx.roundRect(x - 7, y - 7, w + 14, h + 14, 9); ctx.fill(); ctx.shadowColor = 'transparent';
+  const e = ctx.createRadialGradient(x + w / 2, y + h / 2, 10, x + w / 2, y + h / 2, Math.max(w, h) * .7);
+  e.addColorStop(0, '#0f3a26'); e.addColorStop(1, '#06180f'); ctx.fillStyle = e; ctx.beginPath(); ctx.roundRect(x, y, w, h, 4); ctx.fill();
+  const r = ctx.createLinearGradient(0, y, 0, y + h * .35); r.addColorStop(0, 'rgba(255,255,255,.07)'); r.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = r; ctx.fillRect(x, y, w, h * .35);
+}
+const BAGUE = { cyan: '#22d3ee', orange: '#fb923c' };
 function recepteur(c, x, y, couleur) {
-  c.rect(x, y - 11, 24, 22, { couleur, arrondi: 5 });
-  c.ligne(x + 1, y - 7, x + 1, y + 7, { couleur, largeur: 3.4 });          // la face sensible, tournée vers l’émetteur
-  c.ligne(x + 24, y, x + 36, y, { couleur: 'faible', largeur: 1.4 });     // le fil vers l’oscilloscope
+  peint(c, ctx => { cable(ctx, x + 22, y, x + 36); capsule(ctx, x, y - 11, 24, 22, BAGUE[couleur]); });
+  c.rect(x, y - 11, 24, 22, { couleur: INVISIBLE, arrondi: 5 });
+  c.ligne(x + 1, y - 7, x + 1, y + 7, { couleur: INVISIBLE, largeur: 3.4 });          // la face sensible, tournée vers l’émetteur
+  c.ligne(x + 24, y, x + 36, y, { couleur: INVISIBLE, largeur: 1.4 });     // le fil vers l’oscilloscope
 }
 
 const TITRES = { cote_a_cote: 'Deux récepteurs côte à côte', reculer: 'On recule R₂', ecran: 'Lire la période sur l’écran', deja_ecartes: 'Récepteurs déjà écartés au départ' };
@@ -149,8 +177,15 @@ function dessiner(c) {
 
   // ── L’émetteur ──
   c.texte('émetteur E', 30, 46, { couleur: 'blanc', taille: 14, duree: .35 });
-  c.rect(44, 66, 28, 88, { couleur: 'blanc', arrondi: 6, duree: .3 });
-  c.ligne(G.XE - 3, 74, G.XE - 3, 146, { couleur: 'blanc', largeur: 3.6 });
+  peint(c, ctx => {   // l'émetteur : un boîtier sombre, sa grande face argentée tournée vers l'air
+    capsule(ctx, 44, 66, 28, 88, null);
+    const f = ctx.createLinearGradient(G.XE - 7, 0, G.XE + 1, 0); f.addColorStop(0, '#f2f5f7'); f.addColorStop(.5, '#a9b3bb'); f.addColorStop(1, '#5b656d');
+    ctx.fillStyle = f; ctx.beginPath(); ctx.roundRect(G.XE - 7, 72, 8, 76, 3); ctx.fill();
+    ctx.strokeStyle = 'rgba(40,46,52,.5)'; ctx.lineWidth = .8;
+    for (let yy = 76; yy < 146; yy += 3.5) { ctx.beginPath(); ctx.moveTo(G.XE - 6, yy); ctx.lineTo(G.XE, yy); ctx.stroke(); }
+  });
+  c.rect(44, 66, 28, 88, { couleur: INVISIBLE, arrondi: 6, duree: .3 });
+  c.ligne(G.XE - 3, 74, G.XE - 3, 146, { couleur: INVISIBLE, largeur: 3.6 });
   c.repere('emetteur', 36, 34, 52, 126, 'l’émetteur d’ultrasons (40 kHz)');
   c.texte('air', LL - 38, 112, { couleur: 'faible', taille: 15, duree: .15 });
   c.repere('compressions', G.XE + 4, YB0, XB1 - G.XE - 8, YB1 - YB0, 'les compressions de l’air (bandes claires)');
@@ -186,9 +221,10 @@ function dessiner(c) {
   // ── L’écran de l’oscilloscope : 10 × 6 divisions ──
   c.texte(`Oscilloscope : ${SENS} µs/div`, SX0, SY0 - 10, { couleur: 'cyan', taille: 16, duree: .6 });
   c.repere('sensibilite', SX0 - 4, SY0 - 30, 196, 26, 'la sensibilité horizontale : 5 µs par division');
-  c.rect(SX0, SY0, 10 * DX, 6 * DY, { couleur: 'faible', arrondi: 4, duree: .6 });
-  for (let i = 1; i < 10; i++) c.ligne(SX0 + i * DX, SY0, SX0 + i * DX, SY0 + 6 * DY, { couleur: 'tresfaible', largeur: 1, duree: .015 });
-  for (let j = 1; j < 6; j++) c.ligne(SX0, SY0 + j * DY, SX0 + 10 * DX, SY0 + j * DY, { couleur: j === 3 ? 'faible' : 'tresfaible', largeur: 1, duree: .015 });
+  peint(c, ctx => ecranOscillo(ctx, SX0, SY0, 10 * DX, 6 * DY));   // écran vert peint sous la grille
+  c.rect(SX0, SY0, 10 * DX, 6 * DY, { couleur: 'rgba(160,240,190,.45)', arrondi: 4, duree: .6 });
+  for (let i = 1; i < 10; i++) c.ligne(SX0 + i * DX, SY0, SX0 + i * DX, SY0 + 6 * DY, { couleur: 'rgba(160,240,190,.2)', largeur: 1, duree: .015 });
+  for (let j = 1; j < 6; j++) c.ligne(SX0, SY0 + j * DY, SX0 + 10 * DX, SY0 + j * DY, { couleur: j === 3 ? 'rgba(160,240,190,.4)' : 'rgba(160,240,190,.2)', largeur: 1, duree: .015 });
   c.repere('ecran', SX0, SY0, 10 * DX, 6 * DY, 'l’écran de l’oscilloscope');
   c.texte('R₁ → voie 1', XP, SY0 + 4, { couleur: 'cyan', taille: 15, duree: .35 });
   c.texte('R₂ → voie 2', XP + Math.max(130, MXP / 2), SY0 + 4, { couleur: 'orange', taille: 15, duree: .35 });
@@ -204,10 +240,12 @@ function dessiner(c) {
     c.repere('recepteur_2', x2 - 10, Y2 - 36, 52, 56, 'le récepteur R₂ (glisse-le le long de la règle)');
 
     // ── Les deux courbes : celle de R₁ (épaisse, cyan) sous celle de R₂ (fine, orange) ──
-    const trace = (retard, a, couleur, largeur, actif) => c.courbe(k => [SX0 + k * 10 * DX, YC - (actif ? u(k * 10 * SENS, retard, a) : 0)], 240, { couleur, largeur, alpha: actif ? .92 : .35 });
+    // Traces lumineuses sur l'écran vert : une lueur de leur couleur.
+    const trace = (retard, a, couleur, lueur, largeur, actif) => { const x = c.ctx; x.save(); if (actif) { x.shadowColor = lueur; x.shadowBlur = 8; }
+      c.courbe(k => [SX0 + k * 10 * DX, YC - (actif ? u(k * 10 * SENS, retard, a) : 0)], 240, { couleur, largeur, alpha: actif ? .92 : .35 }); x.restore(); };
     const r1 = recu(G.XR1), r2 = recu(x2);
-    trace(0, A1, 'cyan', 5, r1);
-    trace(decal(), A1 * amp2(), 'orange', 1.6, r2);
+    trace(0, A1, '#7ff0ff', '#22d3ee', 5, r1);
+    trace(decal(), A1 * amp2(), '#ffc08a', '#fb923c', 1.8, r2);
     c.repere('courbe_1', SX0, YC - A1 - 6, 10 * DX, 2 * A1 + 12, 'la courbe de R₁ (voie 1)');
     c.repere('courbe_2', SX0, YC - A1 * amp2() - 6, 10 * DX, 2 * A1 * amp2() + 12, 'la courbe de R₂ (voie 2)');
 
