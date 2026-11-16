@@ -48,9 +48,9 @@ const MEMB = { ext: 250, esp: 262, int: 288, mat: 304 };
 const canvas = $('canvas');
 const scene = Scene(canvas, (c) => { scene.cadre(43); MOS.dessiner(c, () => { dessiner(c); }); return c.fin(); }, { large: true });
 /* Tableau large (portable 1366 × 613) : la page est rangée sur toute la largeur (SVTLarge.Mosaique, dans peinture.js) ; grand écran : inchangée. */
-const MOS = window.SVTLarge.Mosaique(scene, (L) => L >= 1000 ? (() => { const s = Math.min(1.2, (L - 300) / 752, 412 / 380), B = 752 * s, wc = Math.min(300, L - B - 24), x0 = (L - wc - 16 - B) / 2, X = x0 + wc + 16; return { police: 1.12, blocs: [
-  { src: [8, 40, 752, 380], X, Y: (420 - 380 * s) / 2, s },
-  { src: [790, 0, 270, 100], X: x0, Y: 40, s: Math.min(1.05, wc / 270), police: 1 }] }; })() : null);
+/* 16 novembre 2026 : plus de colonne de titre (la diapositive le dit) ; en cadre large le dessin est centré, le hyaloplasme et la
+ * matrice peints s'étendent jusqu'aux bords du tableau (peindre). */
+const MOS = window.SVTLarge.Mosaique(scene, () => null);
 const ecrit = Apparitions(scene);
 const chrono = Chrono({ fin: () => FIN, moments: () => M, motifs: MOTIFS, bouton: $('run'), bulle: $('feedback'), pont: () => pont,
   depart: 'Observe l’acide pyruvique dans le hyaloplasme…', reinit: () => ecrit.oublier(),
@@ -62,22 +62,17 @@ const R = P.graine(29), GH = [], GM = [];
 for (let i = 0; i < 40; i++) GH.push([16 + R() * 230, 50 + R() * 360, .7 + R() * 1.4]);
 for (let i = 0; i < 70; i++) GM.push([310 + R() * 432, 50 + R() * 360, .7 + R() * 1.3]);
 function peindre(ctx) {
-  ctx.save(); ctx.beginPath(); ctx.roundRect ? ctx.roundRect(12, 44, 736, 372, 22) : ctx.rect(12, 44, 736, 372); ctx.clip();
-  let g = ctx.createLinearGradient(12, 0, MEMB.ext, 0); g.addColorStop(0, P.rgba(P.T.hyalo, .10)); g.addColorStop(1, P.rgba(P.T.hyalo, .24));
-  ctx.fillStyle = g; ctx.fillRect(12, 44, MEMB.ext - 12, 372);
-  ctx.fillStyle = P.rgba([200, 220, 180], .14); for (const [x, y, r] of GH) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
-  // membrane externe
-  g = ctx.createLinearGradient(MEMB.ext, 0, MEMB.esp, 0); g.addColorStop(0, P.rgba(P.T.mitoExt, .95)); g.addColorStop(1, P.rgba(P.T.mitoExt, .6));
-  ctx.fillStyle = g; ctx.fillRect(MEMB.ext, 44, MEMB.esp - MEMB.ext, 372);
-  // espace intermembranaire
-  ctx.fillStyle = P.rgba(P.T.mitoEsp, .42); ctx.fillRect(MEMB.esp, 44, MEMB.int - MEMB.esp, 372);
-  // matrice
-  g = ctx.createLinearGradient(MEMB.mat, 0, 748, 0); g.addColorStop(0, P.rgba(P.T.matrice, .50)); g.addColorStop(1, P.rgba(P.T.matrice, .30));
-  ctx.fillStyle = g; ctx.fillRect(MEMB.mat, 44, 748 - MEMB.mat, 372);
-  ctx.fillStyle = 'rgba(230,240,250,.20)'; for (const [x, y, r] of GM) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
-  // membrane interne : une double couche debout (repère du dessin couché, mis debout par la transformation)
-  ctx.save(); ctx.transform(0, 1, -1, 0, MEMB.mat, 44); P.membrane(ctx, 0, 0, 372, MEMB.mat - MEMB.int, { pas: 8 }); ctx.restore();
-  ctx.restore();
+  // (16 novembre 2026) couleurs vives et volumes : hyaloplasme vert d'eau, membrane externe corail, espace pêche, membrane interne
+  // dorée en double couche, matrice bleu lumineux ; en cadre large, les deux milieux vont jusqu'aux bords du tableau.
+  const e = Math.max(0, (scene.L - 760) / 2), y0 = 8, h = 408;
+  P.fondHyalo(ctx, 8 - e, y0, MEMB.ext - 8 + e, h);
+  let g = ctx.createLinearGradient(MEMB.ext, 0, MEMB.esp, 0); g.addColorStop(0, '#9a3412'); g.addColorStop(.45, '#fb7d4f'); g.addColorStop(1, '#c2410c');
+  ctx.fillStyle = g; ctx.fillRect(MEMB.ext, y0, MEMB.esp - MEMB.ext, h);
+  g = ctx.createLinearGradient(MEMB.esp, 0, MEMB.int, 0); g.addColorStop(0, 'rgba(255,186,120,.75)'); g.addColorStop(1, 'rgba(255,214,160,.55)');
+  ctx.fillStyle = g; ctx.fillRect(MEMB.esp, y0, MEMB.int - MEMB.esp, h);
+  P.fondMatrice(ctx, MEMB.mat, y0, 752 + e - MEMB.mat, h, { cx: 560, cy: 214 });
+  ctx.save(); ctx.transform(0, 1, -1, 0, MEMB.mat, y0); P.membrane(ctx, 0, 0, h, MEMB.mat - MEMB.int, { pas: 8 }); ctx.restore();
+  ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(MEMB.ext + 3, y0); ctx.lineTo(MEMB.ext + 3, y0 + h); ctx.stroke(); ctx.restore();
 }
 function capsule(c, x, y, w, couleur, nom, a = 1) {
   c.direct(() => { P.capsule(c.ctx, x, y, w, 24, couleur, { alpha: a }); c.texte(nom, x, y + 5, { couleur: ENCRE, gras: true, taille: 14, align: 'center', alpha: a }); });
@@ -89,14 +84,12 @@ const centre = (t) => mix(X0, X1, doux(chrono.part(1, 3, t)));
 function dessiner(c) {
   const t = chrono.t, cx = centre(t);
   c.direct(() => peindre(c.ctx));
-  if (MOS.actif()) c.direct(() => ['L’acide pyruvique', 'entre dans la matrice :', 'l’acétyl-CoA'].forEach((l, i) => c.texte(l, 800, 30 + i * 28, { couleur: 'cyan', taille: 22 })));   // tableau large : le titre en colonne à gauche
-  else c.texte('L’acide pyruvique entre dans la matrice : l’acétyl-CoA', 18, 30, { couleur: 'cyan', taille: 20 });
-  c.texte('hyaloplasme', 24, 96, { couleur: 'vert', taille: 14 });
-  c.texte('membrane externe', 250, 64, { couleur: 'orange', taille: 13, align: 'right' });
-  c.fleche(244, 70, 255, 94, { couleur: 'orange', largeur: 1.3, tete: 7 });
-  c.texte('membrane interne', 312, 64, { couleur: 'jaune', taille: 13 });
-  c.fleche(318, 70, 299, 94, { couleur: 'jaune', largeur: 1.3, tete: 7 });
-  c.texte('matrice', 700, 96, { couleur: 'bleu', taille: 15, align: 'center' });
+  c.texte('hyaloplasme', 24, 96, { couleur: 'vert', taille: 18, gras: true });
+  c.texte('membrane externe', 244, 52, { couleur: 'orange', taille: 15, gras: true, align: 'right' });
+  c.fleche(240, 58, 254, 80, { couleur: 'orange', largeur: 1.6, tete: 7 });
+  c.texte('membrane interne', 316, 52, { couleur: 'jaune', taille: 15, gras: true });
+  c.fleche(322, 58, 300, 80, { couleur: 'jaune', largeur: 1.6, tete: 7 });
+  c.texte('matrice', 700, 96, { couleur: 'cyan', taille: 20, gras: true, align: 'center' });
   c.repere('hyaloplasme', 14, 80, 230, 40, 'le hyaloplasme');
   c.repere('membranes', MEMB.ext - 4, 80, MEMB.mat - MEMB.ext + 8, 300, 'les deux membranes de la mitochondrie');
   c.repere('matrice', 640, 80, 104, 24, 'la matrice');
@@ -107,8 +100,8 @@ function dessiner(c) {
   const u3 = doux(chrono.part(5.5, 7.3, t));
   const b3 = [mix(cx + PAS, CO2[0], u3), mix(Y, CO2[1], u3)];
   c.direct(() => {
-    P.bille(c.ctx, b3[0], b3[1], 11 - 3 * u3, CARBONE, { alpha: Math.max(.05, a) });
-    if (u3 > 0) P.bulleGaz(c.ctx, b3[0], b3[1], 11 + 6 * u3);
+    if (u3 <= 0) P.bille(c.ctx, b3[0], b3[1], 11, CARBONE, { alpha: Math.max(.05, a) });
+    else { P.bille(c.ctx, b3[0], b3[1], 11 - 3 * u3, CARBONE, { alpha: 1 - u3 }); P.co2(c.ctx, b3[0], b3[1], 1.3, u3); P.bulleGaz(c.ctx, b3[0], b3[1], 16 + 6 * u3); }   // le carbone part en CO2 : O = C = O
   });
   // les deux hydrogènes, sous la molécule, jusqu’au NAD+
   const uh = doux(chrono.part(9, 9.8, t));
@@ -116,9 +109,9 @@ function dessiner(c) {
   // la formule au-dessus
   const fx = t < 6.3 ? cx : t < 13 ? cx - PAS / 2 : (cx - PAS + CA.pose[0] + 28) / 2;
   const formule = t < 6.3 ? 'CH_3-CO-COOH' : t < 13 ? 'CH_3-CO' : 'CH_3-CO-CoA';
-  ecrit.ecrire(c, 'f' + formule, () => c.texte(formule, fx, Y - 26, { couleur: 'jaune', taille: 16, align: 'center' }));
+  ecrit.ecrire(c, 'f' + formule, () => c.texte(formule, fx, Y - 26, { couleur: 'jaune', taille: 18, gras: true, align: 'center' }));
   c.repere('formule', fx - 56, Y - 46, 112, 26, 'la formule ' + formule.replace(/_/g, ''));
-  if (t < 3.2) ecrit.ecrire(c, 'nom', () => c.texte('acide pyruvique (3 C)', cx, Y + 50, { couleur: 'blanc', taille: 14, align: 'center' }));
+  if (t < 3.2) ecrit.ecrire(c, 'nom', () => c.texte('acide pyruvique (3 C)', cx, Y + 50, { couleur: 'blanc', taille: 16, gras: true, align: 'center' }));
   // le groupe COOH entouré
   if (t >= 3.6 && t < 6.3) {
     const W = c.largeurTexte('CH3-CO-COOH', 16), d = cx - W / 2 + c.largeurTexte('CH3-CO-', 16);
@@ -129,17 +122,17 @@ function dessiner(c) {
   // le CO2 parti
   if (t >= 6) {
     ecrit.ecrire(c, 'decarb', () => {
-      c.texte('décarboxylation : un CO_{2} part', 330, 122, { couleur: 'orange', taille: 15 });
-      c.texte('(il reste 2 carbones)', 330, 144, { couleur: 'faible', taille: 14 });
+      c.texte('décarboxylation : un CO_{2} part', 326, 122, { couleur: 'orange', taille: 17, gras: true });
+      c.texte('(il reste 2 carbones)', 326, 146, { couleur: 'blanc', taille: 15 });
     });
-    if (t >= 7.2) ecrit.ecrire(c, 'co2', () => c.texte('CO_{2}', CO2[0] + 24, CO2[1] + 6, { couleur: 'blanc', taille: 15 }));
+    if (t >= 7.2) ecrit.ecrire(c, 'co2', () => c.texte('CO_{2}', CO2[0] + 30, CO2[1] + 6, { couleur: 'blanc', taille: 17, gras: true }));
     c.repere('co2', CO2[0] - 22, CO2[1] - 22, 74, 44, 'le CO2 qui part');
   }
   // le NAD+ prend deux hydrogènes
   if (t >= 8) {
     const u = doux(chrono.part(8, 9, t));
     capsule(c, mix(TX.depart[0], TX.pose[0], u), mix(TX.depart[1], TX.pose[1], u), t >= 9.8 ? 78 : 50, TAXI, t >= 9.8 ? 'NADH,H+' : 'NAD+', doux(chrono.part(8, 8.5, t)));
-    if (t >= 9.8) ecrit.ecrire(c, 'deshydro', () => c.texte('déshydrogénation', 520, 301, { couleur: 'cyan', taille: 15 }));
+    if (t >= 9.8) ecrit.ecrire(c, 'deshydro', () => c.texte('déshydrogénation', 520, 302, { couleur: 'cyan', taille: 17, gras: true }));
     c.repere('taxi', TX.pose[0] - 42, TX.pose[1] - 14, 84, 28, t >= 9.8 ? 'NADH,H+' : 'NAD+');
   }
   // le coenzyme A s’accroche
@@ -147,21 +140,22 @@ function dessiner(c) {
     const u = doux(chrono.part(10.5, 12, t));
     capsule(c, mix(CA.depart[0], CA.pose[0], u), mix(CA.depart[1], CA.pose[1], u), 56, COA, t >= 12.2 ? 'CoA' : 'CoA-H', doux(chrono.part(10.5, 11, t)));
     if (t >= 11.6) ecrit.ecrire(c, 'coa', () => {
-      c.texte('coenzyme A (CoA-H) :', 552, 196, { couleur: 'violet', taille: 13 });
-      c.texte('transporteur du', 552, 212, { couleur: 'violet', taille: 13 });
-      c.texte('groupement acétyl', 552, 228, { couleur: 'violet', taille: 13 });
+      c.texte('coenzyme A (CoA-H) :', 552, 196, { couleur: 'violet', taille: 15 });
+      c.texte('transporteur du', 552, 214, { couleur: 'violet', taille: 15 });
+      c.texte('groupement acétyl', 552, 232, { couleur: 'violet', taille: 15 });
     });
     c.repere('coa', CA.pose[0] - 30, Y - 14, 60 + 140, 30, 'le coenzyme A, transporteur du groupement acétyl');
   }
   // l’acétyl-CoA et l’équation
   if (t >= 13) {
-    ecrit.ecrire(c, 'acetyl', () => c.texte('acétyl-CoA : CH_3-CO-CoA', fx, 258, { couleur: 'jaune', taille: 16, align: 'center' }));
+    ecrit.ecrire(c, 'acetyl', () => c.texte('acétyl-CoA : CH_3-CO-CoA', fx, 260, { couleur: 'jaune', taille: 18, gras: true, align: 'center' }));
     c.repere('acetyl', fx - 90, 240, 180, 24, 'l’acétyl-CoA');
   }
   if (t >= 13.6) {
+    c.direct(() => { c.ctx.save(); c.ctx.globalAlpha = doux(chrono.part(13.6, 14.2, t)); P.carte(c.ctx, 312, 330, 436, 62, { alpha: .86 }); c.ctx.restore(); });
     ecrit.ecrire(c, 'equation', () => {
-      c.texte('CH_3-CO-COOH + CoA-H + NAD+ → CH_3-CO-CoA + CO_{2} + NADH,H+', 527, 352, { couleur: 'blanc', taille: 15, align: 'center', max: 428 });
-      c.texte('pour un glucose : × 2', 527, 378, { couleur: 'jaune', taille: 15, align: 'center' });
+      c.texte('CH_3-CO-COOH + CoA-H + NAD+ → CH_3-CO-CoA + CO_{2} + NADH,H+', 530, 354, { couleur: 'blanc', taille: 16, gras: true, align: 'center', max: 420 });
+      c.texte('pour un glucose : × 2', 530, 380, { couleur: 'jaune', taille: 17, gras: true, align: 'center' });
     });
     c.repere('equation', 312, 334, 432, 50, 'l’équation de la formation de l’acétyl-CoA');
   }
