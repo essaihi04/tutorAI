@@ -82,5 +82,102 @@
     });
     return scene;
   }
-  window.OndesTableau = { Scene, VW, VH };
+
+  /* ── Peinture des objets réels (16 novembre 2026, « plus réaliste, plus attractif ») ────────────────────────
+   * Canvas brut, appelé dans craie.direct(() => …) AVANT la craie : la craie (légendes, flèches, axes) passe
+   * par-dessus. Mêmes teintes que les ondes périodiques (corde de chanvre, perles ombrées, écran vert). */
+  const P = {
+    lin(ctx, x0, y0, x1, y1, arrets) { const g = ctx.createLinearGradient(x0, y0, x1, y1); arrets.forEach(([o, c]) => g.addColorStop(o, c)); return g; },
+    rr(ctx, x, y, w, h, r) { ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x, y, w, h, r); else ctx.rect(x, y, w, h); },
+    /** Corde de chanvre éclairée par le haut, passant par `pts` ([[x,y],…]), avec son ombre portée. */
+    corde(ctx, pts, w = 5.5, alpha = 1) {
+      const chemin = (dx, dy) => { ctx.beginPath(); pts.forEach(([px, py], i) => (i ? ctx.lineTo(px + dx, py + dy) : ctx.moveTo(px + dx, py + dy))); };
+      ctx.save(); ctx.globalAlpha = alpha; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      chemin(2, 6); ctx.strokeStyle = 'rgba(0,0,0,.28)'; ctx.lineWidth = w + 2; ctx.stroke();
+      chemin(0, 1); ctx.strokeStyle = '#6b4521'; ctx.lineWidth = w; ctx.stroke();
+      chemin(0, -.4); ctx.strokeStyle = '#c99a5b'; ctx.lineWidth = w - 1.8; ctx.stroke();
+      chemin(0, 0); ctx.setLineDash([2, 4]); ctx.strokeStyle = 'rgba(92,58,26,.55)'; ctx.lineWidth = w - 2.4; ctx.stroke(); ctx.setLineDash([]);
+      chemin(0, -w * .3); ctx.strokeStyle = 'rgba(255,238,205,.78)'; ctx.lineWidth = 1.1; ctx.stroke();
+      ctx.restore();
+    },
+    /** Perle (sphère ombrée) : orange, jaune, rouge, violet, cyan. */
+    perle(ctx, x, y, r, teinte = 'orange') {
+      const T = { orange: ['#ffe2c2', '#f97316', '#7c2d12'], jaune: ['#fff7c2', '#facc15', '#854d0e'], rouge: ['#ffd5cc', '#ef4444', '#7f1d1d'],
+        violet: ['#ede9fe', '#8b5cf6', '#3b1d7a'], cyan: ['#e0fbff', '#22d3ee', '#155e75'], gris: ['#f1f5f9', '#94a3b8', '#334155'] }[teinte] || ['#ffe2c2', '#f97316', '#7c2d12'];
+      ctx.save();
+      ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(x + 2, y + 5, r, r * .7, 0, 0, Math.PI * 2); ctx.fill();
+      const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r);
+      g.addColorStop(0, T[0]); g.addColorStop(.45, T[1]); g.addColorStop(1, T[2]);
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.beginPath(); ctx.ellipse(x - r * .38, y - r * .42, r * .22, r * .14, -.6, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    },
+    /** Poignée en bois tenue en S : elle monte et descend avec le bout de la corde (y). */
+    poignee(ctx, x, y) {
+      const w = 13, h = 46;
+      ctx.save();
+      ctx.fillStyle = 'rgba(0,0,0,.3)'; P.rr(ctx, x - w / 2 + 3, y - h / 2 + 5, w, h, 6); ctx.fill();
+      ctx.fillStyle = P.lin(ctx, x - w / 2, 0, x + w / 2, 0, [[0, '#5a3216'], [.35, '#c8894a'], [.6, '#b0733b'], [1, '#4a2810']]);
+      P.rr(ctx, x - w / 2, y - h / 2, w, h, 6); ctx.fill();
+      ctx.strokeStyle = 'rgba(70,35,10,.4)'; ctx.lineWidth = .7;
+      for (const d of [-2.5, 1, 3.5]) { ctx.beginPath(); ctx.moveTo(x + d, y - h / 2 + 5); ctx.quadraticCurveTo(x + d + 1, y, x + d - .5, y + h / 2 - 5); ctx.stroke(); }
+      ctx.fillStyle = P.lin(ctx, x - w / 2, 0, x + w / 2, 0, [[0, '#4b5563'], [.5, '#e5e7eb'], [1, '#4b5563']]);   // bague de serrage de la corde
+      ctx.fillRect(x - w / 2 - 1, y - 3.5, w + 2, 7);
+      ctx.restore();
+    },
+    /** Micro sur pied : grille noire, bague métallique, pied ; `teinte` = couleur de la bague (repère de voie). */
+    micro(ctx, x0, y0, teinte = '#22d3ee', k = 1.25) {
+      const x = 0, y = 0;
+      ctx.save(); ctx.translate(x0, y0); ctx.scale(k, k);
+      ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(x + 2, y + 38, 15, 4, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = P.lin(ctx, x - 2, 0, x + 2, 0, [[0, '#4b5563'], [.5, '#e5e7eb'], [1, '#4b5563']]); ctx.fillRect(x - 2, y + 10, 4, 26);
+      ctx.fillStyle = P.lin(ctx, 0, y + 33, 0, y + 38, [[0, '#9ca3af'], [1, '#1f2937']]); P.rr(ctx, x - 13, y + 33, 26, 5, 2.5); ctx.fill();
+      ctx.fillStyle = P.lin(ctx, x - 6, 0, x + 6, 0, [[0, '#1f2937'], [.5, '#6b7280'], [1, '#111827']]); P.rr(ctx, x - 5.5, y + 4, 11, 10, 2); ctx.fill();
+      ctx.fillStyle = teinte; ctx.fillRect(x - 5.5, y + 7, 11, 2.5);
+      const g = ctx.createRadialGradient(x - 3.5, y - 4, 1, x, y, 11);
+      g.addColorStop(0, '#6b7280'); g.addColorStop(.6, '#1f2937'); g.addColorStop(1, '#0b0f14');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y - 1, 10, 0, Math.PI * 2); ctx.fill();
+      ctx.save(); ctx.beginPath(); ctx.arc(x, y - 1, 10, 0, Math.PI * 2); ctx.clip(); ctx.strokeStyle = 'rgba(160,170,180,.35)'; ctx.lineWidth = .6;
+      for (let k = -10; k <= 10; k += 3) { ctx.beginPath(); ctx.moveTo(x + k, y - 11); ctx.lineTo(x + k, y + 9); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x - 10, y - 1 + k); ctx.lineTo(x + 10, y - 1 + k); ctx.stroke(); }
+      ctx.restore();
+      ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.ellipse(x - 4, y - 5, 3, 2, -.6, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    },
+    /** Oscilloscope : boîtier gris, écran vert sombre et sa grille fine (nx × ny divisions) dans (x, y, w, h). */
+    oscillo(ctx, x, y, w, h, nx = 10, ny = 6) {
+      const m = 9;
+      ctx.save();
+      ctx.fillStyle = 'rgba(0,0,0,.35)'; P.rr(ctx, x - m + 5, y - m + 7, w + 2 * m, h + 2 * m, 10); ctx.fill();
+      ctx.fillStyle = P.lin(ctx, 0, y - m, 0, y + h + m, [[0, '#6b7480'], [.5, '#3b434c'], [1, '#22282e']]);
+      P.rr(ctx, x - m, y - m, w + 2 * m, h + 2 * m, 10); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1; ctx.stroke();
+      const g = ctx.createRadialGradient(x + w / 2, y + h / 2, 10, x + w / 2, y + h / 2, Math.max(w, h) * .7);
+      g.addColorStop(0, '#12382a'); g.addColorStop(1, '#06180f');
+      ctx.fillStyle = g; P.rr(ctx, x, y, w, h, 5); ctx.fill();
+      ctx.strokeStyle = 'rgba(134,239,172,.16)'; ctx.lineWidth = 1;
+      for (let i = 1; i < nx; i++) { ctx.beginPath(); ctx.moveTo(x + i * w / nx, y); ctx.lineTo(x + i * w / nx, y + h); ctx.stroke(); }
+      for (let j = 1; j < ny; j++) { ctx.beginPath(); ctx.moveTo(x, y + j * h / ny); ctx.lineTo(x + w, y + j * h / ny); ctx.stroke(); }
+      ctx.fillStyle = 'rgba(255,255,255,.04)'; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + w * .55, y); ctx.lineTo(x + w * .3, y + h); ctx.lineTo(x, y + h); ctx.fill();   // reflet de la vitre
+      ctx.restore();
+    },
+    /** Trace lumineuse nette (sur l'écran vert ou un graphe) : un cœur clair et un halo de la couleur. */
+    trace(ctx, pts, couleur, w = 2.2) {
+      if (pts.length < 2) return;
+      ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      const chemin = () => { ctx.beginPath(); pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py))); };
+      ctx.shadowColor = couleur; ctx.shadowBlur = 8; chemin(); ctx.strokeStyle = couleur; ctx.lineWidth = w; ctx.stroke();
+      ctx.shadowBlur = 0; chemin(); ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = w * .35; ctx.stroke();
+      ctx.restore();
+    },
+    /** Arc de son (ou d'ultrasons) : un front lumineux doux, centré en (x, y), de rayon r, entre les angles a0 et a1. */
+    front(ctx, x, y, r, a0, a1, couleur = '250,204,21', alpha = 1) {
+      if (r <= 2) return;
+      ctx.save(); ctx.lineCap = 'round';
+      for (const [w, a] of [[9, .12], [4.5, .3], [1.8, .9]]) { ctx.strokeStyle = `rgba(${couleur},${a * alpha})`; ctx.lineWidth = w; ctx.beginPath(); ctx.arc(x, y, r, a0, a1); ctx.stroke(); }
+      ctx.restore();
+    },
+  };
+  /** Adoucit un mouvement (départ et arrivée en douceur). */
+  P.doux = u => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u));
+  window.OndesTableau = { Scene, VW, VH, P };
 })();

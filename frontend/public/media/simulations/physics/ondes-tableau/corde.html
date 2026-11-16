@@ -3,7 +3,7 @@
 <link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ondes.css"></head>
 <body>
 <div class="tableau">
-  <section class="scene"><canvas id="canvas" role="img" aria-label="Corde tendue dessinée à la craie, une perturbation la parcourt"></canvas></section>
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Corde tendue peinte, tenue par une poignée en S ; une perturbation la parcourt"></canvas></section>
   <footer class="barre">
     <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Rejouer</button>
     <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
@@ -44,11 +44,18 @@ const f = n => (GR ? Math.round(n * 1.35) : n);
 function disposer() { L = scene.L; GR = L >= 1000; X0C = GR ? 90 : 70; PXC = GR ? (L - 90 - 130) / 2 : 310; }
 const X = x => X0C + x * PXC;                    // corde : 0 → 2 m
 const Xinv = px => (px - X0C) / PXC;
-const corde = (c, y0, t, k = 34, o = {}) => c.courbe(u => [X(u * 2), y0 - k * y(u * 2, t)], 220, { couleur: 'blanc', largeur: 2.6, ...o });
+/* La corde est PEINTE (chanvre éclairé par le haut, ombre portée) ; la source S est une poignée en bois qui monte et
+ * descend avec le bout de la corde (16 novembre 2026). `source: false` pour les photos et le graphe y(x). */
+const P = window.OndesTableau.P;
+const corde = (c, y0, t, k = 34, o = {}) => c.direct(() => {
+  const pts = []; for (let i = 0; i <= 220; i++) { const u = i / 220; pts.push([X(u * 2), y0 - k * y(u * 2, t)]); }
+  P.corde(c.ctx, pts, o.epaisseur ?? 5.5, o.alpha ?? 1);
+  if (o.source !== false) P.poignee(c.ctx, X(0) - 7, y0 - k * yS(t));
+});
 
 function regle(c, y0, avecM = true) {
   c.ligne(X(0), y0, X(2), y0, { couleur: 'tresfaible', largeur: 1.2, pointille: [5, 6] });
-  c.rect(X(0) - 24, y0 - 26, 14, 52, { couleur: 'faible' }).texte('S', X(0) - 17, y0 + 46, { couleur: 'cyan', align: 'center', taille: f(18) });
+  c.texte('S', X(0) - 17, y0 + 46, { couleur: 'cyan', align: 'center', taille: f(18) });
   // Le sens de propagation : au-dessus de la corde, ou en dessous quand la corde est tout en haut du cadre
   // (vues « front » et « retard »), pour que la flèche et son texte restent entièrement visibles.
   const bas = y0 < 110, yf = bas ? y0 + 46 : y0 - 66;
@@ -59,7 +66,8 @@ function regle(c, y0, avecM = true) {
 function pointM(c, y0, t, k = 34) {
   const yy = y0 - k * y(S.xM, t);
   c.ligne(X(S.xM), y0 - 46, X(S.xM), y0 + 30, { couleur: 'tresfaible', largeur: 1, pointille: [3, 5] });
-  c.point(X(S.xM), yy, 6.5, 'orange').texte('M', X(S.xM) + 10, y0 + 26, { couleur: 'orange', taille: f(18) });
+  c.direct(() => P.perle(c.ctx, X(S.xM), yy, 7.5, 'orange'));
+  c.texte('M', X(S.xM) + 10, y0 + 26, { couleur: 'orange', taille: f(18) });
   c.repere('point_m', X(S.xM) - 16, y0 - 50, 32, 84, 'le point M');
 }
 
@@ -75,7 +83,8 @@ function grapheTemps(c, ox, oy, larg, tmax, haut, etiquette = 't (s)') {
 }
 function courbeTemps(c, Tx, oy, k, f, tFin, couleur) {
   if (tFin <= 0) return;
-  c.courbe(u => [Tx(u * tFin), oy - k * f(u * tFin)], 160, { couleur, largeur: 2.4 });
+  // Courbe nette et lumineuse (trace d'acquisition), dans la couleur de la grandeur.
+  c.direct(() => P.trace(c.ctx, Array.from({ length: 161 }, (_, i) => [Tx(i / 160 * tFin), oy - k * f(i / 160 * tFin)]), c.couleur(couleur), 2.6));
 }
 
 const dessins = {
@@ -101,7 +110,7 @@ const dessins = {
       for (const [ti, yi, nom] of [[t1, y1, 'photo 1'], [t2, y2, 'photo 2']]) {
         if (S.t < ti) continue;
         c.ligne(X(0), yi, X(2), yi, { couleur: 'tresfaible', largeur: 1, pointille: [5, 6] });
-        corde(c, yi, ti, 34, { alpha: .9 });
+        corde(c, yi, ti, 34, { alpha: .9, source: false });
         c.texte(`${nom} : t = ${fr(ti, 1)} s`, X(0), yi - 44, { couleur: 'cyan', taille: f(16) });
         c.ligne(X(V * ti), yi - 50, X(V * ti), yi + 18, { couleur: 'jaune', largeur: 1.6, pointille: [4, 4] });
         c.texte('front', X(V * ti) + 6, yi + 16, { couleur: 'jaune', taille: f(15) });
@@ -163,10 +172,11 @@ const dessins = {
     c.axe(X(0), oy1, X(2) + 10, oy1, grad); c.texte('x (m)', X(2) + 16, oy1 + 4, { couleur: 'jaune', taille: f(16) });
     c.repere('axe_x', X(2) - 20, oy1 - 14, 90, 30, 'axe : la distance x');
     c.direct(() => {
-      corde(c, oy1, t, 60, { couleur: 'cyan' });
+      corde(c, oy1, t, 60, { source: false, epaisseur: 4.5 });
       if (t >= ARRET - 1e-6) {
         c.fleche(X(V * t) + 40, oy1 - 60, X(V * t) + 4, oy1 - 8, { couleur: 'jaune' }).texte('front : à droite', X(V * t) + 44, oy1 - 64, { couleur: 'jaune', taille: f(15) });
-        c.point(X(S.xM), oy1, 5, 'orange').texte('M', X(S.xM), oy1 + 38, { couleur: 'orange', align: 'center', taille: f(15) });
+        c.direct(() => P.perle(c.ctx, X(S.xM), oy1, 6.5, 'orange'));
+        c.texte('M', X(S.xM), oy1 + 38, { couleur: 'orange', align: 'center', taille: f(15) });
       }
     });
     // En bas : l’élongation y_M(t) — le film d’un seul point.
@@ -184,7 +194,7 @@ const dessins = {
     const y0 = 220, t = Math.min(S.t, ARRET);
     regle(c, y0, false);
     c.direct(() => {
-      corde(c, y0, t, 110, { couleur: 'cyan' });
+      corde(c, y0, t, 110);
       c.texte(`t = ${fr(t)} s`, L - 20, 34, { couleur: 'jaune', align: 'right', taille: f(18) });
       if (t < ARRET - 1e-6) return;
       for (let x = 0.5; x <= 1.3001; x += 0.1) {
@@ -195,8 +205,9 @@ const dessins = {
       }
       const xA = 1.05, xB = 0.85;
       for (const x of [xA, xB]) { const yy = y0 - 110 * y(x, t), s = vy(x, t), l = Math.sign(s) * Math.min(48, 18 + 14 * Math.abs(s)); c.fleche(X(x), yy, X(x), yy - l, { couleur: s > 0 ? 'vert' : 'rose', largeur: 2.6, tete: 9 }); }
-      c.point(X(xA), y0 - 110 * y(xA, t), 6, 'jaune').texte('A', X(xA) + 10, y0 - 110 * y(xA, t) + 22, { couleur: 'jaune', taille: f(18) });
-      c.point(X(xB), y0 - 110 * y(xB, t), 6, 'jaune').texte('B', X(xB) - 18, y0 - 110 * y(xB, t) + 22, { couleur: 'jaune', taille: f(18) });
+      c.direct(() => { P.perle(c.ctx, X(xA), y0 - 110 * y(xA, t), 7, 'jaune'); P.perle(c.ctx, X(xB), y0 - 110 * y(xB, t), 7, 'jaune'); });
+      c.texte('A', X(xA) + 10, y0 - 110 * y(xA, t) + 22, { couleur: 'jaune', taille: f(18) });
+      c.texte('B', X(xB) - 18, y0 - 110 * y(xB, t) + 22, { couleur: 'jaune', taille: f(18) });
       c.repere('point_a', X(xA) - 14, y0 - 110 * y(xA, t) - 50, 30, 80, 'A, devant le sommet');
       c.texte('↑ monte (devant le sommet)', 70, 340, { couleur: 'vert', taille: f(17) });
       c.texte('↓ descend (derrière le sommet)', 70, 366, { couleur: 'rose', taille: f(17) });

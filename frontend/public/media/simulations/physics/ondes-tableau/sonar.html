@@ -3,7 +3,7 @@
 <link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ondes.css"></head>
 <body>
 <div class="tableau">
-  <section class="scene"><canvas id="canvas" role="img" aria-label="Bateau muni d'un sonar au-dessus du fond marin, et la courbe émission / écho, dessinés à la craie"></canvas></section>
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Bateau muni d'un sonar au-dessus du fond marin, et la courbe émission / écho, peints sur le tableau (légendes à la craie)"></canvas></section>
   <footer class="barre">
     <button class="craie-btn principal" id="run" data-professor-control="start fire_pulse pause resume play_until">Émettre</button>
     <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
@@ -34,17 +34,51 @@ let L = 760, GR = false, MER = 360;
 const f = n => (GR ? Math.round(n * 1.35) : n);
 function disposer() { L = scene.L; GR = L >= 1000; MER = GR ? 470 : 360; }
 
+/* ── Objets peints (16 novembre 2026) : la mer en coupe, le fond de sable, le bateau et son sonar. ── */
+const P = window.OndesTableau.P;
+const surface = u => YS + 3 * Math.sin(u * 30), fond = u => YF() + 5 * Math.sin(u * 13 + 1);
+function peindreMer(ctx) {
+  const x0 = 20, N = 90, X = u => x0 + u * MER;
+  // L'eau : du bleu clair en surface au bleu profond près du fond.
+  ctx.beginPath(); for (let i = 0; i <= N; i++) { const u = i / N; i ? ctx.lineTo(X(u), surface(u)) : ctx.moveTo(X(u), surface(u)); }
+  for (let i = N; i >= 0; i--) { const u = i / N; ctx.lineTo(X(u), fond(u)); } ctx.closePath();
+  ctx.fillStyle = P.lin(ctx, 0, YS, 0, YF(), [[0, 'rgba(56,160,220,.55)'], [.5, 'rgba(24,100,170,.55)'], [1, 'rgba(10,50,110,.7)']]); ctx.fill();
+  // Le fond : sable brun-orangé, qui se fond dans le tableau vers le bas.
+  ctx.beginPath(); for (let i = 0; i <= N; i++) { const u = i / N; i ? ctx.lineTo(X(u), fond(u)) : ctx.moveTo(X(u), fond(u)); }
+  ctx.lineTo(X(1), YF() + 34); ctx.lineTo(X(0), YF() + 34); ctx.closePath();
+  ctx.fillStyle = P.lin(ctx, 0, YF() - 5, 0, YF() + 34, [[0, 'rgba(214,160,92,.95)'], [.5, 'rgba(160,110,60,.6)'], [1, 'rgba(120,80,40,0)']]); ctx.fill();
+  ctx.fillStyle = 'rgba(90,60,30,.35)'; for (let i = 0; i < 26; i++) { const u = (i * .6180339) % 1; ctx.beginPath(); ctx.arc(X(u), fond(u) + 6 + (i * 7) % 12, 1.4, 0, Math.PI * 2); ctx.fill(); }
+  // La surface, claire et ondulée.
+  ctx.strokeStyle = 'rgba(200,235,255,.9)'; ctx.lineWidth = 1.6; ctx.beginPath();
+  for (let i = 0; i <= N; i++) { const u = i / N; i ? ctx.lineTo(X(u), surface(u)) : ctx.moveTo(X(u), surface(u)); } ctx.stroke();
+}
+function peindreBateau(ctx) {
+  ctx.save();
+  // Coque : blanche au-dessus de la ligne de flottaison, rouge en dessous.
+  const coque = () => { ctx.beginPath(); ctx.moveTo(XB - 48, YS - 6); ctx.lineTo(XB + 48, YS - 6); ctx.quadraticCurveTo(XB + 40, YS + 10, XB + 30, YS + 14); ctx.lineTo(XB - 30, YS + 14); ctx.quadraticCurveTo(XB - 42, YS + 8, XB - 48, YS - 6); ctx.closePath(); };
+  ctx.shadowColor = 'rgba(0,0,0,.4)'; ctx.shadowBlur = 6; ctx.shadowOffsetY = 3;
+  coque(); ctx.fillStyle = P.lin(ctx, 0, YS - 6, 0, YS + 14, [[0, '#f8fafc'], [.4, '#cbd5e1'], [.42, '#dc2626'], [1, '#7f1d1d']]); ctx.fill();
+  ctx.shadowColor = 'transparent';
+  ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(XB - 46, YS - 5); ctx.lineTo(XB + 46, YS - 5); ctx.stroke();
+  // Cabine, hublots, mât et fanion.
+  ctx.fillStyle = P.lin(ctx, 0, YS - 22, 0, YS - 6, [[0, '#e2e8f0'], [1, '#94a3b8']]); P.rr(ctx, XB - 26, YS - 22, 30, 16, 3); ctx.fill();
+  ctx.fillStyle = '#1e3a5f'; for (const dx of [-20, -11, -2]) { ctx.beginPath(); ctx.arc(XB + dx, YS - 14, 2.6, 0, Math.PI * 2); ctx.fill(); }
+  ctx.fillStyle = P.lin(ctx, XB + 7, 0, XB + 11, 0, [[0, '#6b7280'], [.5, '#e5e7eb'], [1, '#6b7280']]); ctx.fillRect(XB + 7, YS - 40, 3, 34);
+  ctx.fillStyle = '#facc15'; ctx.beginPath(); ctx.moveTo(XB + 10, YS - 40); ctx.lineTo(XB + 30, YS - 34); ctx.lineTo(XB + 10, YS - 28); ctx.closePath(); ctx.fill();
+  // Le sonar sous la coque : un dôme sombre (émetteur et récepteur).
+  const g = ctx.createRadialGradient(XB - 3, YS + 14, 1, XB, YS + 16, 9); g.addColorStop(0, '#94a3b8'); g.addColorStop(1, '#1f2937');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(XB, YS + 15, 9, 6, 0, 0, Math.PI); ctx.fill();
+  ctx.restore();
+}
+
 function dessiner(c) {
   scene.cadre(9); disposer();
   // ── La mer, le bateau ──
-  c.courbe(u => [20 + u * MER, YS + 3 * Math.sin(u * 30)], 90, { couleur: 'bleu', largeur: 2 });
-  c.trait([[XB - 46, YS - 4], [XB + 46, YS - 4], [XB + 32, YS + 14], [XB - 32, YS + 14]], { couleur: 'blanc', ferme: true });
-  c.ligne(XB, YS - 4, XB, YS - 34, { couleur: 'blanc' }).trait([[XB, YS - 34], [XB + 24, YS - 22], [XB, YS - 12]], { couleur: 'blanc' });
+  c.direct(() => { peindreMer(c.ctx); peindreBateau(c.ctx); });
   c.texte('sonar', XB - 56, YS - 12, { couleur: 'cyan', align: 'right', taille: f(14) });
   c.repere('sonar', XB - 50, YS - 40, 100, 60, 'le sonar : émetteur et récepteur');
   c.direct(() => {
     // Le fond, qu’on glisse.
-    c.courbe(u => [20 + u * MER, YF() + 5 * Math.sin(u * 13 + 1)], 90, { couleur: 'orange', largeur: 2.4 });
     c.texte('fond', 34, YF() + 26, { couleur: 'orange', taille: f(15) });
     c.texte('⇡ glisse le fond ⇣', GR ? 360 : 290, YF() + 26, { couleur: 'faible', taille: f(14), align: 'center' });
     c.cote(XB + 90, YS + 8, XB + 90, YF(), '', { couleur: 'jaune' }).texte(`d = ${fr(S.d, 0)} m`, XB + 100, (YS + YF()) / 2 + 6, { couleur: 'jaune', taille: f(17) });
@@ -55,7 +89,8 @@ function dessiner(c) {
       const aller = S.p < 0.5, f = aller ? S.p / 0.5 : (S.p - 0.5) / 0.5;
       const yy = aller ? YS + 16 + f * (YF() - YS - 16) : YF() - f * (YF() - YS - 16);
       const x = aller ? XB - 14 : XB + 14;
-      for (let k = 0; k < 3; k++) c.courbe(u => [x - 16 + 32 * u, yy + (aller ? -1 : 1) * (k * 7 + 6 * Math.sin(Math.PI * u))], 20, { couleur: aller ? 'jaune' : 'vert', largeur: 1.8 });
+      // La salve : trois fronts lumineux (jaune à l'aller, vert au retour), de plus en plus pâles.
+      for (let k = 0; k < 3; k++) P.front(c.ctx, x, yy + (aller ? -1 : 1) * (k * 7 - 14), 18, aller ? Math.PI * .2 : Math.PI * 1.2, aller ? Math.PI * .8 : Math.PI * 1.8, aller ? '250,204,21' : '74,222,128', 1 - k * .3);
       c.fleche(x, yy + (aller ? -30 : 30), x, yy + (aller ? -8 : 8), { couleur: aller ? 'jaune' : 'vert', largeur: 1.6, tete: 7 });
     }
     if (S.fait) {
@@ -71,7 +106,7 @@ function dessiner(c) {
   c.texte('t (ms)', gx + gw + 4, gy + 4, { couleur: 'jaune', taille: f(14) });
   c.repere('axe_t', gx + gw - 40, gy - 14, 90, 30, 'axe : le temps en ms');
   c.direct(() => {
-    const T = t => gx + t / tmax * gw, salve = (t0, h) => c.courbe(u => [T(t0) + u * 12, gy - h * Math.exp(-u * 3) * Math.sin(u * 22)], 40, { couleur: 'blanc', largeur: 2 });
+    const T = t => gx + t / tmax * gw, salve = (t0, h) => P.trace(c.ctx, Array.from({ length: 41 }, (_, i) => { const u = i / 40; return [T(t0) + u * 12, gy - h * Math.exp(-u * 3) * Math.sin(u * 22)]; }), '#e2e8f0', 2);
     const tNow = (S.running || S.pause) ? S.p * tau() : (S.fait ? tau() : -1);
     if (tNow >= 0) { salve(0, 60); c.texte('émission', T(0), gy - 74, { couleur: 'jaune', taille: f(14) }); }
     if (S.fait) {

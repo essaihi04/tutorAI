@@ -3,7 +3,7 @@
 <link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ondes.css"></head>
 <body>
 <div class="tableau">
-  <section class="scene"><canvas id="canvas" role="img" aria-label="Deux microphones, un oscilloscope et le graphe du retard en fonction de la distance, dessinés à la craie"></canvas></section>
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Deux microphones, un oscilloscope et le graphe du retard en fonction de la distance, peints sur le tableau (légendes à la craie)"></canvas></section>
   <footer class="barre">
     <button class="craie-btn principal" id="run" data-professor-control="start fire_pulse pause resume play_until">Clap !</button>
     <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
@@ -33,9 +33,26 @@ const f = n => (GR ? Math.round(n * 1.35) : n);
 function disposer() { L = scene.L; GR = L >= 1000; }
 const signal = (t, t0) => (t < t0 ? 0 : Math.exp(-(t - t0) / 0.16) * Math.sin(2 * Math.PI * 4 * (t - t0)));   // t en ms, 4 kHz
 
+/* Objets peints (16 novembre 2026) : micros sur pied, claquoir en bois, oscilloscope à écran vert, front sonore lumineux. */
+const P = window.OndesTableau.P;
 function micro(c, x, y, nom, couleur) {
-  c.cercle(x, y, 11, { couleur }).ligne(x, y + 11, x, y + 34, { couleur }).ligne(x - 9, y + 34, x + 9, y + 34, { couleur });
-  c.texte(nom, x, y - 18, { couleur, align: 'center', taille: f(17) });
+  c.direct(() => P.micro(c.ctx, x, y, c.couleur(couleur)));
+  c.texte(nom, x, y - 24, { couleur, align: 'center', taille: f(17) });
+}
+
+/* Claquoir : deux planchettes de bois articulées ; `ferme` = 1 quand on a claqué (les planchettes se touchent). */
+function peindreClap(ctx, x, y, ferme) {
+  const a = ferme ? 0.12 : 0.55;
+  ctx.save(); ctx.translate(x - 16, y + 12);
+  for (const [s, teinte] of [[1, ['#7a4520', '#d39a5c', '#8a5228']], [-1, ['#6b3c1b', '#c48a4e', '#7a4722']]]) {
+    ctx.save(); ctx.rotate(-s * a);
+    ctx.shadowColor = 'rgba(0,0,0,.4)'; ctx.shadowBlur = 5; ctx.shadowOffsetY = 3;
+    ctx.fillStyle = P.lin(ctx, 0, -4, 0, 4, [[0, teinte[0]], [.45, teinte[1]], [1, teinte[2]]]);
+    P.rr(ctx, 0, -4, 36, 8, 2.5); ctx.fill(); ctx.restore();
+  }
+  ctx.fillStyle = '#9ca3af'; ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI * 2); ctx.fill();   // la charnière
+  ctx.restore();
+  if (ferme) { const g = ctx.createRadialGradient(x + 20, y + 12, 1, x + 20, y + 12, 18); g.addColorStop(0, 'rgba(250,204,21,.55)'); g.addColorStop(1, 'rgba(250,204,21,0)'); ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x + 20, y + 12, 18, 0, Math.PI * 2); ctx.fill(); }
 }
 
 function dessiner(c) {
@@ -43,7 +60,7 @@ function dessiner(c) {
   // ── Le montage ──
   const yM = 62;
   c.texte('clap', 95, yM - 18, { couleur: 'faible', align: 'center', taille: f(16) });
-  c.trait([[80, yM - 6], [95, yM + 10], [110, yM - 6]], { couleur: 'blanc' }).trait([[84, yM + 22], [95, yM + 8], [106, yM + 22]], { couleur: 'blanc' });
+  c.direct(() => peindreClap(c.ctx, 95, yM + 8, (S.running || S.pause || S.fait) ? 1 : 0));
   micro(c, XM1, yM, 'M₁', 'cyan');
   c.repere('micro_1', XM1 - 18, yM - 40, 36, 80, 'micro M₁');
   c.direct(() => {
@@ -54,7 +71,7 @@ function dessiner(c) {
     // Le front sonore, au ralenti, part du clap.
     if ((S.running || S.pause) && S.p < 0.45) {   // en marche ou figé : le front reste visible
       const r = (S.p / 0.45) * (XM2() - 95 + 40);
-      c.trait(Array.from({ length: 25 }, (_, i) => { const a = -0.7 + 1.4 * i / 24; return [95 + r * Math.cos(a), yM + 4 + r * Math.sin(a)]; }), { couleur: 'jaune', largeur: 1.6, alpha: .7 });
+      P.front(c.ctx, 95, yM + 4, r, -0.7, 0.7, '250,204,21', 1 - .4 * S.p / 0.45);
     }
   });
 
@@ -62,16 +79,14 @@ function dessiner(c) {
   const ox = 40, oy = 180, dx = GR ? 54 : 40, dy = 28;
   c.texte(`Oscilloscope — ${fr(SENS, 1)} ms/div`, ox, oy - 12, { couleur: 'cyan', taille: f(17) });
   c.repere('sensibilite', ox, oy - 32, GR ? 330 : 240, 28, 'la sensibilité horizontale');
-  c.rect(ox, oy, 10 * dx, 6 * dy, { couleur: 'faible', arrondi: 4 });
-  for (let i = 1; i < 10; i++) c.ligne(ox + i * dx, oy, ox + i * dx, oy + 6 * dy, { couleur: 'tresfaible', largeur: 1, duree: .03 });
-  for (let j = 1; j < 6; j++) c.ligne(ox, oy + j * dy, ox + 10 * dx, oy + j * dy, { couleur: 'tresfaible', largeur: 1, duree: .03 });
+  c.direct(() => P.oscillo(c.ctx, ox, oy, 10 * dx, 6 * dy, 10, 6));
   c.repere('oscillogramme', ox, oy, 10 * dx, 6 * dy, 'l’oscillogramme');
   c.direct(() => {
     const tmax = 10 * SENS, tFin = (S.running || S.pause) ? Math.max(0, (S.p - 0.45) / 0.55) * tmax : (S.fait ? tmax : 0);
-    const voie = (y0, t0, couleur) => { if (tFin > 0) c.courbe(u => [ox + u * tFin / tmax * 10 * dx, y0 - 26 * signal(u * tFin, t0)], 260, { couleur, largeur: 2 }); };
+    const voie = (y0, t0, couleur) => { if (tFin > 0) P.trace(c.ctx, Array.from({ length: 261 }, (_, i) => { const u = i / 260; return [ox + u * tFin / tmax * 10 * dx, y0 - 26 * signal(u * tFin, t0)]; }), c.couleur(couleur), 2); };
     voie(oy + 1.5 * dy, T1, 'cyan'); voie(oy + 4.5 * dy, T1 + tau(), 'orange');
-    c.texte('voie 1 (M₁)', ox + 10 * dx + 6, oy + 1.5 * dy + 5, { couleur: 'cyan', taille: f(14) });
-    c.texte('voie 2 (M₂)', ox + 10 * dx + 6, oy + 4.5 * dy + 5, { couleur: 'orange', taille: f(14) });
+    c.texte('voie 1 (M₁)', ox + 10 * dx + 16, oy + 1.5 * dy + 5, { couleur: 'cyan', taille: f(14) });
+    c.texte('voie 2 (M₂)', ox + 10 * dx + 16, oy + 4.5 * dy + 5, { couleur: 'orange', taille: f(14) });
     if (S.fait && !S.running) {
       const xa = ox + T1 / SENS * dx, xb = ox + (T1 + tau()) / SENS * dx, n = tau() / SENS;
       c.ligne(xa, oy + 1.5 * dy, xa, oy + 6 * dy + 8, { couleur: 'jaune', largeur: 1.4, pointille: [4, 4] });
@@ -91,10 +106,10 @@ function dessiner(c) {
   c.texte('d (m)', gx + gw + 4, gy + 4, { couleur: 'jaune', taille: f(14) });
   c.texte('τ (ms)', gx + 10, gy - gh + 8, { couleur: 'jaune', taille: f(14) });
   c.direct(() => {
-    const P = (d, t) => [gx + d / dmax * gw, gy - t / tmaxg * gh];
-    for (const m of S.mesures) { const [x, y] = P(m.d, m.tau); c.point(x, y, 4.5, 'orange'); }
+    const Pt = (d, t) => [gx + d / dmax * gw, gy - t / tmaxg * gh];
+    for (const m of S.mesures) { const [x, y] = Pt(m.d, m.tau); P.perle(c.ctx, x, y, 5.5, 'orange'); }
     if (S.mesures.length >= 2) {
-      const [x2, y2] = P(dmax, dmax / V * 1000);
+      const [x2, y2] = Pt(dmax, dmax / V * 1000);
       c.ligne(gx, gy, x2, y2, { couleur: 'vert', largeur: 1.6, pointille: [6, 5] });
       c.texte('droite : pente = 1 / v', gx + 40, gy - 14, { couleur: 'vert', taille: f(15) });
       c.repere('droite', gx, gy - gh, gw, gh, 'la droite τ = f(d)');
