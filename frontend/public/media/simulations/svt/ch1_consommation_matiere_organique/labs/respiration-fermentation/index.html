@@ -49,6 +49,7 @@
   </footer>
 </div>
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/svt/reactions_responsables_liberation_energie-tableau/peinture.js"></script>
 <script>
 (() => {
   const { Craie, fr, bulle, ecrire, onglets, curseur, appuyer, surligner, listeReperes, explication } = window.Tableau;
@@ -137,22 +138,33 @@
     craie.repere('sonde_o2',94,40,32,160,'sonde O₂').repere('sonde_co2',146,40,40,160,'sonde CO₂').repere('interface_exao',228,144,94,48,'interface EXAO').repere('ordinateur',334,114,82,74,'ordinateur');
     craie.repere('graphe',420,50,322,210,'courbes d’acquisition').repere('legende_courbes',430,238,250,22,'légende des courbes');
     if(S.last)craie.repere('resultats',426,258,318,66,'mesures de l’essai');if(S.trials.length)craie.repere('carnet',426,324,318,56,'carnet de laboratoire');
-    craie.trait([[70,110],[70,250],[200,250],[200,110]],{largeur:2.6}).ligne(60,110,210,110,{largeur:2});
+    // (16 novembre 2026) le montage PEINT : bioréacteur en verre, suspension de levures, sondes, boîtier, écran ; la craie écrit
+    craie.direct(()=>{const x=craie.ctx,P=window.SVTPeinture;
+      P.becher(x,70,110,130,140,{niveau:.57,teinte:[196,170,110],alpha:.5});
+      for(let i=0;i<9;i++)P.levure(x,88+(i*37)%104,182+(i*23)%34,5.5,{graine:7+i});
+      const sonde=(px,c)=>{const g=x.createLinearGradient(px-4,0,px+4,0);g.addColorStop(0,P.rgba(c.map(v=>v*.5),1));g.addColorStop(.45,P.rgba(c,1));g.addColorStop(1,P.rgba(c.map(v=>v*.45),1));x.fillStyle=g;x.beginPath();x.roundRect(px-4,60,8,135,4);x.fill();x.fillStyle='rgba(255,255,255,.4)';x.fillRect(px-2.4,64,1.4,126);};
+      sonde(110,[96,165,250]);sonde(160,[248,113,113]);
+      x.save();x.shadowColor='rgba(0,0,0,.5)';x.shadowBlur=8;x.shadowOffsetY=3;
+      const gb=x.createLinearGradient(0,150,0,184);gb.addColorStop(0,'#4b5563');gb.addColorStop(1,'#1f2937');x.fillStyle=gb;x.beginPath();x.roundRect(235,150,80,34,6);x.fill();
+      const ge=x.createLinearGradient(0,120,0,172);ge.addColorStop(0,'#374151');ge.addColorStop(1,'#111827');x.fillStyle=ge;x.beginPath();x.roundRect(340,120,70,52,5);x.fill();
+      x.shadowColor='transparent';x.fillStyle='#0b1f2a';x.fillRect(345,125,60,42);x.fillStyle='#4b5563';x.fillRect(370,172,10,8);x.fillRect(355,179,40,4);
+      x.fillStyle=S.running?'#4ade80':'#a16207';x.beginPath();x.arc(305,158,2.6,0,Math.PI*2);x.fill();x.restore();
+    });
     craie.ligne(72,170,198,170,{couleur:'cyan',largeur:1.4,pointille:[6,5]});
     craie.texte('levures + glucose',135,235,{couleur:'faible',taille:14,align:'center'});
     if(S.oxygen){craie.fleche(30,80,80,112,{couleur:'vert',largeur:1.8}).texte('air',22,72,{couleur:'vert',taille:15})}
     else craie.texte('milieu fermé',135,98,{couleur:'orange',taille:14,align:'center'});
     // Sondes O2 et CO2 → interface → ordinateur
-    craie.ligne(110,60,110,195,{couleur:'bleu',largeur:3}).texte('O₂',96,54,{couleur:'bleu',taille:15});
-    craie.ligne(160,60,160,195,{couleur:'rouge',largeur:3}).texte('CO₂',150,54,{couleur:'rouge',taille:15});
+    craie.texte('O₂',96,54,{couleur:'bleu',taille:15});
+    craie.texte('CO₂',150,54,{couleur:'rouge',taille:15});
     craie.texte('1 · sondes',175,40,{taille:15});
     craie.trait([[110,60],[110,32],[260,32],[260,150]],{couleur:'faible',largeur:1.2}).trait([[160,60],[160,44],[270,44],[270,150]],{couleur:'faible',largeur:1.2});
-    craie.rect(235,150,80,34,{arrondi:6,couleur:'jaune'}).texte('interface',275,172,{couleur:'jaune',taille:14,align:'center'}).texte('2 · interface EXAO',230,205,{taille:14});
+    craie.texte('interface',275,172,{couleur:'jaune',taille:14,align:'center'}).texte('2 · interface EXAO',230,205,{taille:14});
     craie.ligne(315,167,340,167,{couleur:'faible',largeur:1.2});
-    craie.rect(340,120,70,52,{arrondi:5,couleur:'blanc'}).ligne(355,180,395,180,{largeur:2}).ligne(375,172,375,180,{largeur:2}).texte('3 · ordinateur',330,205,{taille:14});
+    craie.texte('3 · ordinateur',330,205,{taille:14});
     craie.direct(()=>{
       // Bulles pendant l'acquisition, et mini-courbe sur l'écran
-      if(S.running){for(let i=0;i<7;i++){const ph=(temps*1.3+i*.37)%1;craie.cercle(85+(i*19)%110,245-ph*70,3+(i%3),{couleur:'cyan',largeur:1,tremble:0})}}
+      if(S.running){for(let i=0;i<7;i++){const ph=(temps*1.3+i*.37)%1;window.SVTPeinture.bulleGaz(craie.ctx,85+(i*19)%110,245-ph*72,3+(i%3))}}
       if(S.last){const p=S.progress;craie.courbe(u=>u>p?null:[346+u*58,160-u*22],30,{couleur:'bleu',largeur:1.2,tremble:0});craie.courbe(u=>u>p?null:[346+u*58,165-u*(S.last.co2_relative/8)*30],30,{couleur:'rouge',largeur:1.2,tremble:0})}
     });
     // Graphe d'acquisition
@@ -176,12 +188,18 @@
   function drawCell(temps){
     // Cellule, cytoplasme et mitochondrie ; les trois zones sont des boutons posés sur le dessin
     craie.repere('cytoplasme',62,42,250,316,'cytoplasme').repere('glucose_pyruvate',112,130,160,66,'glucose → pyruvate').repere('mitochondrie',308,78,246,246,'mitochondrie').repere('matrice',380,172,100,60,'matrice').repere('cretes',480,88,84,44,'crêtes');
-    craie.rect(60,40,640,320,{arrondi:60,largeur:2.2}).texte('CYTOPLASME',90,70,{couleur:'faible',taille:14});
-    craie.texte('glucose',120,150,{couleur:'jaune',taille:16}).cercle(150,180,14,{couleur:'jaune',largeur:2}).fleche(170,180,250,180,{couleur:'jaune',largeur:1.6}).texte('pyruvate',200,170,{couleur:'jaune',taille:13});
-    craie.cercle(430,200,120,{couleur:'vert',largeur:2.8,fond:'vert',fondAlpha:.05});
-    craie.courbe(u=>{const a=u*Math.PI*2;return[430+95*Math.cos(a)+(u*40%1>.5?6:-6)*Math.cos(a*7),200+78*Math.sin(a)+(u*40%1>.5?6:-6)*Math.sin(a*7)]},140,{couleur:'vert',largeur:1.6});
+    // (16 novembre 2026) cellule PEINTE : hyaloplasme granuleux, membrane, mitochondrie (membranes, crêtes, matrice), glucose en bille
+    craie.direct(()=>{const x=craie.ctx,P=window.SVTPeinture,T=P.T;
+      x.save();x.beginPath();x.roundRect(60,40,640,320,60);const g=x.createRadialGradient(240,140,20,380,200,380);g.addColorStop(0,P.rgba(T.hyalo,.32));g.addColorStop(1,P.rgba(T.hyalo,.14));x.fillStyle=g;x.fill();
+      x.lineWidth=2.4;x.strokeStyle=P.rgba(T.membrane,.8);x.stroke();x.clip();const r=P.graine(17);x.fillStyle='rgba(200,220,180,.16)';
+      for(let i=0;i<150;i++){x.beginPath();x.arc(60+r()*640,40+r()*320,.8+r()*1.5,0,Math.PI*2);x.fill()}x.restore();
+      P.mitochondrie(x,430,200,122,96,{cretes:7});
+      P.bille(x,150,180,13,[250,204,21]);
+    });
+    craie.texte('CYTOPLASME',90,70,{couleur:'faible',taille:14});
+    craie.texte('glucose',120,150,{couleur:'jaune',taille:16}).fleche(170,180,250,180,{couleur:'jaune',largeur:1.6}).texte('pyruvate',200,170,{couleur:'jaune',taille:13});
     craie.texte('MITOCHONDRIE',430,330,{couleur:'vert',taille:14,align:'center'});
-    craie.texte('matrice',430,200,{couleur:'faible',taille:13,align:'center'}).texte('crêtes',500,110,{couleur:'faible',taille:13});
+    craie.texte('matrice',430,200,{couleur:'blanc',taille:13,align:'center'}).texte('crêtes',500,110,{couleur:'faible',taille:13});
     place(document.querySelector('[data-zone=cytoplasme]'),190,260);place(document.querySelector('[data-zone=matrice]'),430,240);place(document.querySelector('[data-zone=cretes]'),540,135);
     S.notes.forEach((n,i)=>{craie.depuis(n.at);craie.texte(`${i+1}. ${notes[n.zone]}`,80,300+i*22,{couleur:['jaune','cyan','violet'][i],taille:14,max:430})});
     if(S.route.length===3){craie.depuis(S.notes[2].at+2);craie.texte('≈ 36 ATP au total',600,300,{couleur:'vert',taille:17})}

@@ -50,6 +50,27 @@ window.addEventListener('message',e=>{const d=e.data||{};if(d.type==='simulation
 // ── Dessin à la craie (repère logique 900 × 350) ────────────────────────────
 const craie=new Craie($('scene'),{onresize:()=>{S.dirty=true}});
 const ease=k=>k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2;
+/* ── Peinture (16 novembre 2026) : filaments, têtes et tropomyosine peints ; la craie écrit et cote. ── */
+const T={cle:null,de:null,vers:null,actuel:null,t0:0};
+function peindreMyosine(x,x0,x1,y){
+ x.save();x.shadowColor='rgba(0,0,0,.45)';x.shadowBlur=8;x.shadowOffsetY=3;
+ const g=x.createLinearGradient(0,y-8,0,y+8);g.addColorStop(0,'#bfdbfe');g.addColorStop(.35,'#3b82f6');g.addColorStop(1,'#1e3a8a');
+ x.fillStyle=g;x.beginPath();x.roundRect(x0,y-8,x1-x0,16,8);x.fill();x.shadowColor='transparent';
+ x.strokeStyle='rgba(255,255,255,.45)';x.lineWidth=2;x.beginPath();x.moveTo(x0+8,y-4);x.lineTo(x1-8,y-4);x.stroke();x.restore();
+}
+function peindreTete(x,x1,y1,x2,y2,liee){
+ const a=Math.atan2(y2-y1,x2-x1);
+ x.save();x.lineCap='round';x.strokeStyle='#1e40af';x.lineWidth=6;x.beginPath();x.moveTo(x1,y1);x.lineTo(x2,y2);x.stroke();
+ x.strokeStyle='#60a5fa';x.lineWidth=3;x.stroke();
+ x.translate(x2,y2);x.rotate(a);x.shadowColor='rgba(0,0,0,.4)';x.shadowBlur=6;x.shadowOffsetY=2;
+ const g=x.createRadialGradient(-3,-4,1,0,0,13);
+ if(liee){g.addColorStop(0,'#fef9c3');g.addColorStop(.45,'#facc15');g.addColorStop(1,'#a16207')}else{g.addColorStop(0,'#dbeafe');g.addColorStop(.45,'#4f8ef7');g.addColorStop(1,'#1e3a8a')}
+ x.fillStyle=g;x.beginPath();x.ellipse(2,0,13,8.5,0,0,Math.PI*2);x.fill();x.restore();
+}
+function peindreTropomyosine(x,x0,x1,y){
+ x.save();x.lineCap='round';const ch=()=>{x.beginPath();for(let px=x0;px<=x1;px+=3)x.lineTo(px,y+Math.sin((px-x0)/9)*2.2)};
+ x.strokeStyle='#92400e';x.lineWidth=5;ch();x.stroke();x.strokeStyle='#fbbf24';x.lineWidth=3;ch();x.stroke();x.strokeStyle='rgba(255,255,255,.5)';x.lineWidth=1;x.translate(0,-1);ch();x.stroke();x.restore();
+}
 function draw(){
  const W=craie.W,H=craie.H;if(W<1||H<1)return true;
  const temps=(performance.now()-S.ouvert)/1000;
@@ -60,26 +81,30 @@ function draw(){
  craie.ligne(450,80,450,300,{couleur:'tresfaible',largeur:1.2,pointille:[4,6],duree:.2}).texte('centre du sarcomère',462,62,{couleur:'faible',taille:14});
  craie.texte('━ actine (fine)',400,32,{couleur:'rose',taille:14}).texte('━ myosine (épaisse)',530,32,{couleur:'bleu',taille:14}).texte('┃ stries Z : limites',690,32,{couleur:'blanc',taille:14});
  craie.pause(.1);
- craie.ligne(270,190,630,190,{couleur:'bleu',largeur:16,alpha:.85});
+ craie.direct(()=>peindreMyosine(craie.ctx,270,630,190));   // (16 novembre 2026) filament épais peint (avant : un trait de craie)
  craie.texte('myosine',450,177,{couleur:'bleu',taille:13,align:'center'});
  craie.repere('myosine',266,176,368,30,'filament de myosine').repere('tetes_myosine',322,132,256,116,'têtes de myosine').repere('centre',440,50,210,40,'centre du sarcomère');
  // Parties mobiles : stries Z, actine, têtes, tropomyosine, cote Z–Z
  craie.direct(()=>{
   for(const [side,sign] of [['g',1],['d',-1]]){
    const zx=side==='g'?110+sh:790-sh;
-   craie.ligne(zx,95,zx,285,{couleur:'blanc',largeur:6});craie.texte('Z',zx,308,{taille:17,align:'center'});
+   window.Filaments.strieZ(craie.ctx,zx,95,285);window.Filaments.strieZ(craie.ctx,zx+1.5,95,285,{alpha:.6});craie.texte('Z',zx,308,{taille:17,align:'center'});
    craie.repere(side==='g'?'strie_z_gauche':'strie_z_droite',zx-14,90,28,230,side==='g'?'strie Z gauche':'strie Z droite');
    const ax=side==='g'?[zx,400+sh]:[zx,500-sh];
-   craie.ligne(ax[0],140,ax[1],140,{couleur:'rose',largeur:9});craie.ligne(ax[0],240,ax[1],240,{couleur:'rose',largeur:9});
+   window.Filaments.actine(craie.ctx,ax[0],ax[1],140,{phase:sign});window.Filaments.actine(craie.ctx,ax[0],ax[1],240,{phase:-sign});
    if(side==='g'){craie.repere('actine',ax[0]+10,128,ax[1]-ax[0]-10,124,'filaments d’actine');craie.repere('stries_z',zx-14,90,790-sh-zx+28,230,'les deux stries Z');craie.repere('tropomyosine',276+sh,118,124,24,'tropomyosine')}
    if(!(S.calcium&&S.step>=1)){ // tropomyosine masque les sites
     const mx=side==='g'?[280+sh,395+sh]:[505-sh,620-sh];
-    craie.ligne(mx[0],130,mx[1],130,{couleur:'jaune',largeur:4,pointille:[12,9]});craie.ligne(mx[0],250,mx[1],250,{couleur:'jaune',largeur:4,pointille:[12,9]});
+    peindreTropomyosine(craie.ctx,mx[0],mx[1],134);peindreTropomyosine(craie.ctx,mx[0],mx[1],246);
    }
   }
   const col=S.step===2||S.step===3?'jaune':'bleu';
   const base=S.step===3?[[330,190,375,140],[385,190,410,240],[515,190,490,140],[570,190,525,240]]:S.step===2?[[330,190,350,140],[385,190,365,240],[515,190,535,140],[570,190,550,240]]:[[330,190,350,152],[385,190,365,228],[515,190,535,152],[570,190,550,228]];
-  base.forEach(h=>craie.ligne(...h,{couleur:col,largeur:7}));
+  // têtes peintes, qui pivotent en douceur d'une étape à l'autre (jaunes quand elles sont liées à l'actine)
+  const cle=JSON.stringify(base);if(cle!==T.cle){T.de=T.vers?T.actuel:base;T.vers=base;T.cle=cle;T.t0=performance.now()}
+  const u=ease(Math.min(1,(performance.now()-T.t0)/600));T.actuel=base.map((h,i)=>h.map((v,j)=>T.de[i][j]+(v-T.de[i][j])*u));
+  T.actuel.forEach(h=>peindreTete(craie.ctx,...h,col==='jaune'));
+  T.anim=u<1;
   let note=null,nc='jaune';
   if(!S.calcium&&S.step>=1){note='sites masqués par la tropomyosine';nc='rouge'}
   else if(S.step===2)note=S.atp?'ponts actine–myosine':'pont fixé : sans ATP il ne se détache pas';
@@ -91,7 +116,7 @@ function draw(){
   craie.repere('cote_zz',110+sh,318,680-2*sh,40,'distance Z–Z');if(note)craie.repere('note',290,258,320,24,'ce qui se passe');
  });
  const complet=craie.fin();
- return complet&&k>=1;
+ return complet&&k>=1&&!T.anim;
 }
 function frame(){if(S.dirty||S.status==='running')S.dirty=!draw();requestAnimationFrame(frame)}
 ecrire($('objectif'),'Change une condition, observe, puis explique. Modèle : têtes déjà armées au départ ; sans ATP, un pont formé reste fixé.',{vitesse:70});

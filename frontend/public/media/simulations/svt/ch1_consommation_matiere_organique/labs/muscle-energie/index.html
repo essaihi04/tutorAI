@@ -42,6 +42,8 @@
   </footer>
 </div>
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/svt/role_muscle_strie_squelettique-tableau/filaments.js"></script>
+<script src="/media/simulations/svt/reactions_responsables_liberation_energie-tableau/peinture.js"></script>
 <script>
 (() => {
 const { Craie, fr, bulle, ecrire, onglets, curseur, appuyer, surligner, listeReperes, explication } = window.Tableau;
@@ -115,6 +117,29 @@ window.addEventListener('message',event=>{const d=event.data||{};if(d.type!=='si
 
 // ── Dessin à la craie ─────────────────────────────────────────────────────
 const canvas=$('canvas'),craie=new Craie(canvas,{onresize:redraw});
+/* ── Peinture (16 novembre 2026) : le muscle, le nerf, les appareils et les filaments sont peints ; la craie écrit et trace. ── */
+// Muscle en fuseau de x0 à x1 autour de y, demi-épaisseur e (rouge, fibres, reflet), comme role_muscle_strie_squelettique-tableau/structure.html
+function peindreMuscle(x,x0,x1,y,e){
+  const L=x1-x0,demi=u=>Math.max(2,e*Math.sin(Math.PI*u));
+  const g=x.createLinearGradient(0,y-e,0,y+e);g.addColorStop(0,'#5a1010');g.addColorStop(.25,'#a8302a');g.addColorStop(.45,'#e0605a');g.addColorStop(.7,'#b33a30');g.addColorStop(1,'#561010');
+  x.save();x.shadowColor='rgba(0,0,0,.45)';x.shadowBlur=10;x.shadowOffsetY=4;x.fillStyle=g;x.beginPath();
+  for(let i=0;i<=40;i++){const u=i/40;x.lineTo(x0+u*L,y-demi(u))}for(let i=40;i>=0;i--){const u=i/40;x.lineTo(x0+u*L,y+demi(u))}
+  x.closePath();x.fill();x.shadowColor='transparent';x.clip();x.lineWidth=.7;
+  for(let k=-5;k<=5;k++){x.strokeStyle=k%2?'rgba(255,190,185,.3)':'rgba(70,8,8,.35)';x.beginPath();for(let i=0;i<=30;i++){const u=i/30;x.lineTo(x0+u*L,y+k/5.6*demi(u))}x.stroke()}
+  const h=x.createRadialGradient(x0+L*.4,y-e*.4,2,x0+L*.4,y-e*.4,L*.35);h.addColorStop(0,'rgba(255,255,255,.2)');h.addColorStop(1,'rgba(255,255,255,0)');x.fillStyle=h;x.fillRect(x0,y-e,L,2*e);
+  x.restore();
+  // tendons nacrés aux deux bouts
+  for(const [a,b] of [[x0-14,x0+4],[x1-4,x1+14]]){const gt=x.createLinearGradient(0,y-3,0,y+3);gt.addColorStop(0,'#aeb9c4');gt.addColorStop(.5,'#ffffff');gt.addColorStop(1,'#a3afbb');x.fillStyle=gt;x.beginPath();x.roundRect(a,y-3,b-a,6,3);x.fill()}
+}
+// Un boîtier d'appareil (stimulateur, capteur) : métal sombre, bord clair, petit voyant
+function boitier(x,x0,y0,w,h,voyant,allume){
+  x.save();x.shadowColor='rgba(0,0,0,.5)';x.shadowBlur=8;x.shadowOffsetY=3;
+  const g=x.createLinearGradient(0,y0,0,y0+h);g.addColorStop(0,'#4b5563');g.addColorStop(1,'#1f2937');x.fillStyle=g;x.beginPath();x.roundRect(x0,y0,w,h,6);x.fill();
+  x.shadowColor='transparent';x.strokeStyle='rgba(226,232,240,.35)';x.lineWidth=1;x.stroke();
+  if(voyant){const v=x.createRadialGradient(x0+w-9,y0+8,0,x0+w-9,y0+8,allume?9:4);v.addColorStop(0,allume?'#fef9c3':'#a16207');v.addColorStop(1,allume?'rgba(250,204,21,0)':'rgba(161,98,7,.9)');x.fillStyle=v;x.beginPath();x.arc(x0+w-9,y0+8,allume?9:3.5,0,Math.PI*2);x.fill()}
+  x.restore();
+}
+const doux=v=>v<=0?0:v>=1?1:v*v*(3-2*v);
 function draw(){
   const W=craie.W,H=craie.H;if(W<1||H<1)return true;const temps=scene();craie.debut(5,temps);Object.keys(window.Tableau.REPERES).forEach(k=>delete window.Tableau.REPERES[k]);   // seuls les repères de l'enquête affichée restent pointables
   const c=craie.ctx,s=Math.min(W/760,H/380);c.translate((W-760*s)/2,(H-380*s)/2);c.scale(s,s);
@@ -122,26 +147,38 @@ function draw(){
   if(S.variant==='frequency'){
     // Préparation muscle–nerf : muscle fusiforme, nerf, stimulateur et capteur de tension
     craie.repere('muscle',64,146,212,80,'muscle').repere('nerf',154,104,78,62,'nerf').repere('stimulateur',114,54,92,50,'stimulateur').repere('capteur',324,160,64,70,'capteur de tension').repere('frequence',114,270,124,30,'fréquence réglée');
-    craie.ligne(60,250,60,120,{largeur:3}).ligne(40,120,80,120,{largeur:3}).texte('fixe',30,110,{couleur:'faible',taille:13});
-    craie.courbe(u=>[70+u*200,185-Math.sin(u*Math.PI)*34],40,{couleur:'rose',largeur:3}).courbe(u=>[70+u*200,185+Math.sin(u*Math.PI)*34],40,{couleur:'rose',largeur:3}).texte('muscle',170,192,{couleur:'rose',taille:16,align:'center'});
-    craie.courbe(u=>[160+u*60,120+u*40+Math.sin(u*12)*4],30,{couleur:'jaune',largeur:2}).texte('nerf',205,112,{couleur:'jaune',taille:14});
-    craie.rect(120,60,80,40,{couleur:'jaune',arrondi:5}).texte('stimulateur',160,85,{couleur:'jaune',taille:13,align:'center'}).ligne(160,100,160,120,{couleur:'jaune',largeur:1.5});
-    craie.ligne(270,185,330,185,{largeur:2}).rect(330,165,50,40,{arrondi:5,couleur:'violet'}).texte('capteur',355,190,{couleur:'violet',taille:12,align:'center'}).texte('tension',355,222,{couleur:'violet',taille:13,align:'center'});
+    { const tn=r&&(S.running||S.progress>=1)?tension(Math.min(p,1))[0]:0, court=8*doux(tn), stim=S.running&&tension(p)[1];
+      craie.direct(()=>{const x=craie.ctx;
+        // support fixe en métal, nerf jaune peint, muscle qui raccourcit et s'épaissit avec la tension
+        x.save();const gm=x.createLinearGradient(54,0,66,0);gm.addColorStop(0,'#64748b');gm.addColorStop(.45,'#e2e8f0');gm.addColorStop(1,'#475569');x.fillStyle=gm;x.fillRect(55,120,10,130);x.fillRect(40,116,40,8);x.restore();
+        peindreMuscle(x,70,270-court,185,30+6*doux(tn));
+        SVTPeinture.liaison(x,270-court,185,330,185,{couleur:[200,205,215],epaisseur:3});
+        x.save();x.lineCap='round';x.strokeStyle='#a16207';x.lineWidth=5;x.beginPath();for(let i=0;i<=30;i++){const u=i/30;x.lineTo(160+u*60,120+u*40+Math.sin(u*12)*4)}x.stroke();x.strokeStyle='#fde047';x.lineWidth=2.4;x.stroke();x.restore();
+        if(stim)SVTPeinture.eclat(x,165,118,22,1);
+        boitier(x,120,60,80,40,true,stim);boitier(x,330,165,50,40,false,false);
+      });
+    }
+    craie.texte('fixe',30,110,{couleur:'faible',taille:13});
+    craie.texte('muscle',170,240,{couleur:'rose',taille:16,align:'center'});
+    craie.texte('nerf',205,112,{couleur:'jaune',taille:14});
+    craie.texte('stimulateur',160,85,{couleur:'jaune',taille:13,align:'center'}).ligne(160,100,160,120,{couleur:'jaune',largeur:1.5});
+    craie.texte('capteur',355,190,{couleur:'violet',taille:12,align:'center'}).texte('tension',355,222,{couleur:'violet',taille:13,align:'center'});
     craie.texte(`f = ${S.freq} Hz`,120,290,{couleur:'jaune',taille:17});
-    craie.direct(()=>{if(S.running&&tension(p)[1])craie.texte('ϟ',200,120,{couleur:'jaune',taille:30})});
+
   } else if(S.variant==='crossbridge'){
     // Sarcomère : stries Z, actine fine (rose), myosine épaisse (violet) et ses têtes
     const short=r&&r.shortening_percent>8?p*18:0;const z1=70+short,z2=390-short;
     craie.repere('sarcomere',z1,74,z2-z1,184,'sarcomère').repere('strie_z',z1-12,72,26,186,'strie Z').repere('actine',z1,94,122,22,'filament d’actine').repere('myosine',148,124,166,82,'myosine et ses têtes').repere('calcium',56,274,150,26,'Ca²⁺').repere('atp',226,274,150,26,'ATP');
-    craie.ligne(z1,80,z1,250,{largeur:3}).texte('Z',z1-4,70,{taille:14}).ligne(z2,80,z2,250,{largeur:3}).texte('Z',z2-4,70,{taille:14});
-    craie.direct(()=>{[105,165,225].forEach(y=>{craie.ligne(z1,y,z1+115,y,{couleur:'rose',largeur:2});craie.ligne(z2-115,y,z2,y,{couleur:'rose',largeur:2})});
-      [135,195].forEach(y=>{craie.ligne(150,y,310,y,{couleur:'violet',largeur:5});for(let i=0;i<6;i++){const x=165+i*26;craie.ligne(x,y,x-6,y-12,{couleur:'violet',largeur:2});craie.ligne(x+8,y,x+14,y+12,{couleur:'violet',largeur:2})}});
-      if(S.calcium)for(let i=0;i<10;i++)craie.point(90+(i*31)%280,90+(i*53)%150,2.5,'jaune')});
+    craie.direct(()=>{window.Filaments.strieZ(craie.ctx,z1,80,250);window.Filaments.strieZ(craie.ctx,z2,80,250)});craie.texte('Z',z1-4,70,{taille:14}).texte('Z',z2-4,70,{taille:14});
+    craie.direct(()=>{const x=craie.ctx,F=window.Filaments;
+      [105,165,225].forEach(y=>{F.actine(x,z1,z1+115,y);F.actine(x,z2,z2-115,y)});
+      [135,195].forEach(y=>F.myosine(x,150,310,y));
+      if(S.calcium)for(let i=0;i<10;i++)SVTPeinture.bille(x,90+(i*31)%280,90+(i*53)%150,3.4,[250,204,21]);});
     craie.texte('actine',80,98,{couleur:'rose',taille:13}).texte('myosine',230,128,{couleur:'violet',taille:13});
     craie.texte(`Ca²⁺ : ${S.calcium?'présent':'absent'}`,60,290,{couleur:'jaune',taille:16}).texte(`ATP : ${S.atp?'présent':'absent'}`,230,290,{couleur:'cyan',taille:16});
   } else {
     // Filières : trois réservoirs vers l'ATP du muscle
-    craie.courbe(u=>[60+u*160,62-Math.sin(u*Math.PI)*20],30,{couleur:'rose',largeur:2.6}).courbe(u=>[60+u*160,62+Math.sin(u*Math.PI)*20],30,{couleur:'rose',largeur:2.6}).texte('muscle',140,68,{couleur:'rose',taille:15,align:'center'});
+    craie.direct(()=>peindreMuscle(craie.ctx,60,220,62,20));craie.texte('muscle',140,68,{couleur:'blanc',taille:15,align:'center'});
     craie.repere('muscle',56,36,170,54,'muscle').repere('atp_muscle',110,100,60,32,'ATP du muscle').repere('filiere_pcr',38,156,118,64,'ATP–phosphocréatine').repere('filiere_lactique',163,156,118,64,'glycolyse lactique').repere('filiere_respiration',288,156,118,64,'respiration').repere('conditions',246,44,232,50,'durée, intensité, O₂');
     craie.texte('ATP',140,122,{couleur:'cyan',taille:20,align:'center'}).fleche(140,104,140,92,{couleur:'cyan'});
     const w=r&&r.weights?r.weights:null,tot=w?Object.values(w).reduce((a,b)=>a+b,0):1;
