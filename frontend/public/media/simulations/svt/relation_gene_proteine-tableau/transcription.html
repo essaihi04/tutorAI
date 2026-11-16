@@ -80,11 +80,16 @@ function polymerase(x, cx, cy, s = 1, a = 1) {
   if (a <= 0) return;
   x.save(); x.globalAlpha *= a;
   const rx = 46 * s, ry = 74 * s;
+  // (17 novembre 2026) une enzyme globuleuse violet vif : ombre posée, bord net, deux lobes suggérés, reflet ;
+  // elle reste translucide au centre pour laisser lire les lettres des brins
+  const forme = () => { x.beginPath(); for (let i = 0; i <= 48; i++) { const u = i / 48 * TAU, r = 1 + .06 * Math.cos(2 * u + .6) + .035 * Math.sin(5 * u); const px = cx + Math.cos(u) * rx * r, py = cy + Math.sin(u) * ry * r; i ? x.lineTo(px, py) : x.moveTo(px, py); } x.closePath(); };
+  x.save(); x.shadowColor = 'rgba(0,0,0,.45)'; x.shadowBlur = 14 * s; x.shadowOffsetY = 5 * s;
   const g = x.createRadialGradient(cx - rx * .35, cy - ry * .45, 4, cx, cy, Math.max(rx, ry));
-  g.addColorStop(0, 'rgba(250,232,255,.55)'); g.addColorStop(.5, 'rgba(232,121,249,.30)'); g.addColorStop(1, 'rgba(147,51,234,.42)');
-  x.fillStyle = g; x.beginPath(); x.ellipse(cx, cy, rx, ry, 0, 0, TAU); x.fill();
-  x.strokeStyle = 'rgba(192,38,211,.85)'; x.lineWidth = 2; x.stroke();
-  x.strokeStyle = 'rgba(255,255,255,.35)'; x.lineWidth = 1.4; x.beginPath(); x.ellipse(cx - rx * .15, cy - ry * .2, rx * .62, ry * .62, 0, Math.PI * 1.05, Math.PI * 1.45); x.stroke();
+  g.addColorStop(0, 'rgba(250,220,255,.62)'); g.addColorStop(.45, 'rgba(217,70,239,.36)'); g.addColorStop(1, 'rgba(126,34,206,.62)');
+  x.fillStyle = g; forme(); x.fill(); x.restore();
+  x.strokeStyle = 'rgba(232,121,249,.95)'; x.lineWidth = 2.4; forme(); x.stroke();
+  x.strokeStyle = 'rgba(88,28,135,.55)'; x.lineWidth = 1.2; x.beginPath(); x.moveTo(cx - rx * .8, cy + ry * .12); x.quadraticCurveTo(cx, cy + ry * .3, cx + rx * .8, cy + ry * .12); x.stroke();   // sillon entre les deux lobes
+  x.strokeStyle = 'rgba(255,255,255,.55)'; x.lineWidth = 2; x.lineCap = 'round'; x.beginPath(); x.ellipse(cx - rx * .12, cy - ry * .18, rx * .66, ry * .66, 0, Math.PI * 1.05, Math.PI * 1.45); x.stroke();
   x.restore();
 }
 
@@ -549,18 +554,18 @@ window.Etapes.lancer({
     },
   },
   vues: {
-    transcription: { titre: 'La transcription', fin: 26, moments: MT, dessiner: dessinerTranscription, voit: voitTranscription,
+    transcription: { titre: 'La transcription', encre: [4, 34, 756, 418], fin: 26, moments: MT, dessiner: dessinerTranscription, voit: voitTranscription,
       motifs: { gene: 'le gène : deux brins, A en face de T, C en face de G', polymerase_se_fixe: 'l’ARN polymérase se fixe au début du gène', ouverture_oeil: 'l’ADN s’ouvre sous la polymérase : l’œil de transcription', premier_nucleotide: 'en face de T, un A ; en face de A, un U', allongement: 'la polymérase lit le brin transcrit de 3′ vers 5′, l’ARNm s’allonge de 5′ vers 3′', regle_ecrite: 'la règle : A → U, T → A, C → G, G → C', fin_du_gene: 'la polymérase arrive à la fin du gène', liberation_arnm: 'l’ARNm se détache', refermeture: 'l’ADN se referme, inchangé' },
       conclusion: 'L’ARNm 5′ AUG CGC AGU CAG UAG 3′ est complémentaire du brin transcrit ; l’ADN reste inchangé.',
       texte: 'Transcription : l’ARN polymérase se fixe sur le gène, ouvre l’ADN (œil), lit le brin transcrit 3′ TAC GCG TCA GTC ATC 5′ de 3′ vers 5′ et assemble l’ARNm 5′ AUG CGC AGU CAG UAG 3′ de 5′ vers 3′ (A → U, T → A, C → G, G → C) ; l’ARNm se détache, l’ADN se referme.',
       explication: [{ repere: 'brin_transcrit', texte: 'Le brin transcrit est lu par l’ARN polymérase.' }, { repere: 'polymerase', texte: 'L’ARN polymérase ouvre l’ADN et avance.' }, { repere: 'nucleotide_u', texte: 'En face de A, l’ARN reçoit un U : pas de T dans l’ARN.' }, { repere: 'sens_lecture', texte: 'Lecture de 3′ vers 5′, allongement de 5′ vers 3′.' }, { repere: 'regle', texte: 'La règle de complémentarité ADN → ARN.' }, { repere: 'arnm', texte: 'L’ARNm se détache ; l’ADN se referme.' }] },
-    brins: { titre: 'Brin transcrit ou brin non transcrit ?', fin: 12, moments: MB, dessiner: dessinerBrins, voit: voitBrins,
+    brins: { titre: 'Brin transcrit ou brin non transcrit ?', encre: [4, 34, 756, 418], fin: 12, moments: MB, dessiner: dessinerBrins, voit: voitBrins,
       motifs: { trois_lignes: 'trois lignes alignées par triplets', chemin_transcrit: 'chemin 1 : l’ARNm complémentaire du brin transcrit', comparaison_non_transcrit: 'l’ARNm posé sous le brin non transcrit', t_devient_u: 'mêmes lettres, chaque T devient U' },
       conclusion: 'L’ARNm = complémentaire du brin transcrit = brin non transcrit recopié avec U à la place de T.',
       surReglage: (k, cles, api) => { if (cles.includes('brin_non_transcrit') || cles.includes('brin_transcrit')) api.start(); },
       texte: 'Brin non transcrit 5′ ATG CGC AGT CAG TAG 3′, brin transcrit 3′ TAC GCG TCA GTC ATC 5′, ARNm 5′ AUG CGC AGU CAG UAG 3′ : chemin 1 complémentaire du brin transcrit, chemin 2 brin non transcrit recopié T → U.',
       explication: [{ repere: 'ligne_transcrit', texte: 'Chemin 1 : l’ARNm est complémentaire du brin transcrit.' }, { repere: 'ligne_non_transcrit', texte: 'Chemin 2 : on recopie le brin non transcrit.' }, { repere: 't_entoures', texte: 'Chaque T devient U.' }] },
-    noyau: { titre: 'Du noyau au cytoplasme', fin: 10, moments: MN, dessiner: dessinerNoyau, voit: voitNoyau,
+    noyau: { titre: 'Du noyau au cytoplasme', encre: [44, 58, 756, 398], fin: 10, moments: MN, dessiner: dessinerNoyau, voit: voitNoyau,
       motifs: { arnm_dans_noyau: 'l’ARNm est formé dans le noyau', sortie_pore: 'l’ARNm sort par un pore nucléaire', arnm_cytoplasme: 'l’ARNm arrive dans le cytoplasme, près des ribosomes' },
       conclusion: 'L’ARNm porte l’information du noyau aux ribosomes du cytoplasme ; l’ADN reste dans le noyau.',
       texte: 'La cellule : l’ARNm formé dans le noyau sort par un pore vers le cytoplasme où attendent les ribosomes ; l’ADN ne sort jamais du noyau.',

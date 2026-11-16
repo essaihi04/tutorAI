@@ -129,15 +129,25 @@
     const a = o.alpha ?? 1; if (a <= 0) return;
     x.save(); x.globalAlpha *= a;
     const pas = o.pas ?? 16, w = pas * 3 + 8, h = 46;
-    // corps
-    const g = x.createLinearGradient(cx - w / 2, 0, cx + w / 2, 0); g.addColorStop(0, '#4d7c0f'); g.addColorStop(.4, '#bef264'); g.addColorStop(1, '#3f6212');
-    x.fillStyle = g; x.beginPath();
-    x.moveTo(cx - w / 2, yb - 18); x.lineTo(cx - w / 2 + 6, yb - h); x.lineTo(cx - 6, yb - h - 6); x.lineTo(cx - 5, yb - h - 26); x.lineTo(cx + 5, yb - h - 26); x.lineTo(cx + 6, yb - h - 6); x.lineTo(cx + w / 2 - 6, yb - h); x.lineTo(cx + w / 2, yb - 18); x.closePath(); x.fill();
-    x.strokeStyle = 'rgba(40,70,10,.8)'; x.lineWidth = 1.1; x.stroke();
+    // corps (17 novembre 2026) : une silhouette arrondie d’un seul tenant — tige fine en haut (porte l’acide aminé),
+    // base large en bas (porte l’anticodon) — vert vif, ombre posée, reflet : on la reconnaît d’un coup d’œil
+    const yt = yb - h - 26, ye = yb - h + 4, yl = yb - 16, r = 6;
+    const forme = () => {
+      x.beginPath(); x.moveTo(cx - 5, yt + 3); x.quadraticCurveTo(cx - 5, yt, cx, yt); x.quadraticCurveTo(cx + 5, yt, cx + 5, yt + 3);
+      x.lineTo(cx + 5, ye - 12); x.bezierCurveTo(cx + 5, ye, cx + w / 2, ye - 4, cx + w / 2, ye + 12);
+      x.lineTo(cx + w / 2, yl - r); x.quadraticCurveTo(cx + w / 2, yl, cx + w / 2 - r, yl); x.lineTo(cx - w / 2 + r, yl); x.quadraticCurveTo(cx - w / 2, yl, cx - w / 2, yl - r);
+      x.lineTo(cx - w / 2, ye + 12); x.bezierCurveTo(cx - w / 2, ye - 4, cx - 5, ye, cx - 5, ye - 12); x.closePath();
+    };
+    x.save(); x.shadowColor = 'rgba(0,0,0,.4)'; x.shadowBlur = 6; x.shadowOffsetY = 2;
+    const g = x.createLinearGradient(cx - w / 2, 0, cx + w / 2, 0); g.addColorStop(0, '#3f8f12'); g.addColorStop(.38, '#b6f24a'); g.addColorStop(.62, '#84cc16'); g.addColorStop(1, '#2f6f0e');
+    x.fillStyle = g; forme(); x.fill(); x.restore();
+    x.strokeStyle = 'rgba(30,70,8,.85)'; x.lineWidth = 1.1; forme(); x.stroke();
+    x.strokeStyle = 'rgba(255,255,255,.5)'; x.lineWidth = 1.6; x.lineCap = 'round'; x.beginPath(); x.moveTo(cx - 2, yt + 5); x.lineTo(cx - 2, ye - 12); x.moveTo(cx - w / 2 + 5, ye + 12); x.lineTo(cx - w / 2 + 5, yl - 7); x.stroke();
     // anticodon : trois bases tournées vers le bas
     for (let i = 0; i < 3; i++) {
       const L = anticodon[i], px = cx + (i - 1) * pas;
-      x.fillStyle = BASE[L] || '#888'; x.beginPath(); x.rect(px - 5, yb - 18, 10, 18); x.fill();
+      x.fillStyle = BASE[L] || '#888'; x.beginPath(); x.roundRect ? x.roundRect(px - 5.5, yb - 18, 11, 18, [0, 0, 3, 3]) : x.rect(px - 5, yb - 18, 10, 18); x.fill();
+      x.fillStyle = 'rgba(255,255,255,.28)'; x.fillRect(px - 4, yb - 17, 1.6, 14);
       x.fillStyle = '#fff'; x.font = '700 10px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(L, px, yb - 8);
     }
     if (aa) sphere(x, cx, yb - h - 36, o.r ?? 11, couleurAA(aa));
@@ -165,10 +175,11 @@
   function noyau(x, cx, cy, rx, ry, o = {}) {
     x.save(); x.globalAlpha *= (o.alpha ?? 1);
     const g = x.createRadialGradient(cx - rx * .3, cy - ry * .3, 4, cx, cy, Math.max(rx, ry));
-    g.addColorStop(0, 'rgba(219,234,254,.75)'); g.addColorStop(.7, 'rgba(147,197,253,.55)'); g.addColorStop(1, 'rgba(96,165,250,.6)');
+    g.addColorStop(0, 'rgba(191,225,255,.85)'); g.addColorStop(.55, 'rgba(96,170,255,.72)'); g.addColorStop(1, 'rgba(37,99,235,.74)');   // (17 novembre 2026) bleu franc
     x.fillStyle = g; x.beginPath(); x.ellipse(cx, cy, rx, ry, 0, 0, TAU); x.fill();
-    x.strokeStyle = 'rgba(59,130,246,.9)'; x.lineWidth = 2; x.beginPath(); x.ellipse(cx, cy, rx, ry, 0, 0, TAU); x.stroke();
-    x.strokeStyle = 'rgba(59,130,246,.55)'; x.lineWidth = 1.2; x.beginPath(); x.ellipse(cx, cy, rx + 4, ry + 4, 0, 0, TAU); x.stroke();
+    x.strokeStyle = 'rgba(30,64,175,.95)'; x.lineWidth = 2.2; x.beginPath(); x.ellipse(cx, cy, rx, ry, 0, 0, TAU); x.stroke();
+    x.strokeStyle = 'rgba(255,255,255,.3)'; x.lineWidth = 1.6; x.beginPath(); x.ellipse(cx, cy, rx * .86, ry * .86, 0, Math.PI * 1.08, Math.PI * 1.45); x.stroke();   // reflet
+    x.strokeStyle = 'rgba(96,165,250,.8)'; x.lineWidth = 1.3; x.beginPath(); x.ellipse(cx, cy, rx + 4, ry + 4, 0, 0, TAU); x.stroke();
     const np = o.pores ?? 10;
     for (let i = 0; i < np; i++) { const t = i / np * TAU + (o.phase ?? .3), px = cx + Math.cos(t) * (rx + 2), py = cy + Math.sin(t) * (ry + 2); x.fillStyle = 'rgba(255,255,255,.95)'; x.beginPath(); x.arc(px, py, 3.2, 0, TAU); x.fill(); x.strokeStyle = 'rgba(37,99,235,.9)'; x.lineWidth = 1; x.stroke(); }
     x.restore();
@@ -179,10 +190,11 @@
   function cytoplasme(x, cx, cy, rx, ry, o = {}) {
     x.save(); x.globalAlpha *= (o.alpha ?? 1);
     const g = x.createRadialGradient(cx - rx * .3, cy - ry * .35, 6, cx, cy, Math.max(rx, ry));
-    g.addColorStop(0, 'rgba(255,228,236,.55)'); g.addColorStop(.75, 'rgba(249,168,212,.42)'); g.addColorStop(1, 'rgba(219,112,160,.5)');
+    g.addColorStop(0, 'rgba(255,214,200,.62)'); g.addColorStop(.6, 'rgba(253,150,150,.5)'); g.addColorStop(1, 'rgba(236,72,130,.56)');   // (17 novembre 2026) rose pêche vif
     x.fillStyle = g; x.beginPath(); x.ellipse(cx, cy, rx, ry, 0, 0, TAU); x.fill();
-    x.strokeStyle = 'rgba(190,70,120,.85)'; x.lineWidth = 2; x.stroke();
-    x.fillStyle = 'rgba(160,80,110,.25)';
+    x.strokeStyle = 'rgba(190,24,93,.95)'; x.lineWidth = 2.4; x.stroke();
+    x.strokeStyle = 'rgba(255,255,255,.28)'; x.lineWidth = 2; x.beginPath(); x.ellipse(cx, cy, rx * .93, ry * .9, 0, Math.PI * 1.1, Math.PI * 1.42); x.stroke();
+    x.fillStyle = 'rgba(157,23,77,.3)';
     for (let i = 0; i < 40; i++) { const a2 = i * 2.39996, r = .3 + .62 * ((i * 37) % 23) / 23; x.beginPath(); x.arc(cx + Math.cos(a2) * rx * r, cy + Math.sin(a2) * ry * r, 1.2, 0, TAU); x.fill(); }
     x.restore();
   }
@@ -190,9 +202,22 @@
   function milieu(x, x0, y0, w, h, type, a = 1) {
     x.save(); x.globalAlpha *= a;
     const g = x.createLinearGradient(x0, y0, x0, y0 + h);
-    if (type === 'noyau') { g.addColorStop(0, 'rgba(191,219,254,.30)'); g.addColorStop(1, 'rgba(96,165,250,.22)'); }
-    else { g.addColorStop(0, 'rgba(252,231,243,.26)'); g.addColorStop(1, 'rgba(244,114,182,.18)'); }
-    x.fillStyle = g; x.beginPath(); x.roundRect ? x.roundRect(x0, y0, w, h, 14) : x.rect(x0, y0, w, h); x.fill();
+    // (17 novembre 2026) teintes franches au lieu d’un gris délavé : nucléoplasme bleu, cytoplasme rose pêche ; un halo clair
+    // en haut à gauche et un liseré donnent un milieu « éclairé », les écritures à la craie restent bien lisibles dessus
+    const noy = type === 'noyau';
+    if (noy) { g.addColorStop(0, 'rgba(56,150,255,.34)'); g.addColorStop(1, 'rgba(29,78,216,.30)'); }
+    else { g.addColorStop(0, 'rgba(255,130,150,.30)'); g.addColorStop(1, 'rgba(236,60,140,.28)'); }
+    const forme = () => { x.beginPath(); x.roundRect ? x.roundRect(x0, y0, w, h, 14) : x.rect(x0, y0, w, h); };
+    x.fillStyle = noy ? 'rgba(8,20,60,.55)' : 'rgba(62,12,36,.55)'; forme(); x.fill();   // base sombre : la teinte ne vire pas au gris-brun sur le vert du tableau
+    x.fillStyle = g; forme(); x.fill();
+    x.save(); forme(); x.clip();
+    const hl = x.createRadialGradient(x0 + w * .22, y0 + h * .12, 4, x0 + w * .22, y0 + h * .12, Math.max(w, h) * .7);
+    hl.addColorStop(0, noy ? 'rgba(170,215,255,.20)' : 'rgba(255,215,190,.20)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = hl; x.fillRect(x0, y0, w, h);
+    x.fillStyle = noy ? 'rgba(190,225,255,.16)' : 'rgba(255,220,225,.16)';
+    for (let i = 0; i < 46; i++) { x.beginPath(); x.arc(x0 + (i * 61.7 + 23) % w, y0 + (i * 139.3 + 11) % h, 1 + (i % 3) * .5, 0, TAU); x.fill(); }   // granulations fixes
+    x.restore();
+    x.strokeStyle = noy ? 'rgba(96,165,250,.55)' : 'rgba(251,113,133,.5)'; x.lineWidth = 1.4; forme(); x.stroke();
     x.restore();
   }
 
@@ -200,10 +225,11 @@
   function hematie(x, cx, cy, r, f = 0, ang = 0, a = 1) {
     x.save(); x.globalAlpha *= a; x.translate(cx, cy); x.rotate(ang);
     if (f < .5) {
+      x.fillStyle = 'rgba(0,0,0,.28)'; x.beginPath(); x.ellipse(r * .1, r * .16, r, r * (1 - f * .6), 0, 0, TAU); x.fill();   // ombre (17 novembre 2026)
       const g = x.createRadialGradient(0, 0, r * .1, 0, 0, r);
-      g.addColorStop(0, '#f87171'); g.addColorStop(.45, '#dc2626'); g.addColorStop(.85, '#b91c1c'); g.addColorStop(1, '#7f1d1d');
+      g.addColorStop(0, '#b91c1c'); g.addColorStop(.38, '#ef4444'); g.addColorStop(.8, '#f43f3f'); g.addColorStop(1, '#991b1b');   // creux central sombre, bourrelet vif
       x.fillStyle = g; x.beginPath(); x.ellipse(0, 0, r, r * (1 - f * .6), 0, 0, TAU); x.fill();
-      x.fillStyle = 'rgba(254,202,202,.35)'; x.beginPath(); x.ellipse(0, 0, r * .42, r * .42 * (1 - f * .6), 0, 0, TAU); x.fill();
+      x.strokeStyle = 'rgba(255,220,220,.55)'; x.lineWidth = Math.max(1, r * .13); x.lineCap = 'round'; x.beginPath(); x.ellipse(0, 0, r * .74, r * .74 * (1 - f * .6), 0, Math.PI * 1.1, Math.PI * 1.55); x.stroke();
     } else {
       // faucille : un croissant pointu
       const g = x.createLinearGradient(0, -r, 0, r); g.addColorStop(0, '#ef4444'); g.addColorStop(1, '#7f1d1d');
@@ -219,10 +245,13 @@
     const ht = px => { if (!o.etranglement) return h; const [ex, eh] = o.etranglement, d = Math.abs(px - ex); return d > 60 ? h : eh + (h - eh) * (d / 60) ** 2; };
     const haut = [], bas = [];
     for (let px = x0; px <= x1; px += 6) { haut.push([px, y - ht(px)]); bas.push([px, y + ht(px)]); }
-    const g = x.createLinearGradient(0, y - h, 0, y + h); g.addColorStop(0, 'rgba(254,226,226,.35)'); g.addColorStop(.5, 'rgba(254,242,242,.18)'); g.addColorStop(1, 'rgba(254,226,226,.35)');
+    const g = x.createLinearGradient(0, y - h, 0, y + h); g.addColorStop(0, 'rgba(254,205,160,.42)'); g.addColorStop(.5, 'rgba(254,240,200,.24)'); g.addColorStop(1, 'rgba(254,190,150,.44)');   // plasma jaune pâle
     x.fillStyle = g; x.beginPath(); haut.forEach(([px, py], i) => (i ? x.lineTo(px, py) : x.moveTo(px, py))); for (let i = bas.length - 1; i >= 0; i--) x.lineTo(bas[i][0], bas[i][1]); x.closePath(); x.fill();
-    x.strokeStyle = 'rgba(251,113,133,.9)'; x.lineWidth = 5; x.lineCap = 'round';
-    for (const ligne of [haut, bas]) { x.beginPath(); ligne.forEach(([px, py], i) => (i ? x.lineTo(px, py) : x.moveTo(px, py))); x.stroke(); }
+    x.lineCap = 'round'; x.lineJoin = 'round';
+    for (const [lw, col] of [[7, '#9f1239'], [4.6, '#fb7185'], [1.4, 'rgba(255,228,230,.8)']]) {   // paroi en volume (17 novembre 2026)
+      x.strokeStyle = col; x.lineWidth = lw;
+      for (const ligne of [haut, bas]) { x.beginPath(); ligne.forEach(([px, py], i) => (i ? x.lineTo(px, py - (lw < 2 ? 1 : 0)) : x.moveTo(px, py - (lw < 2 ? 1 : 0)))); x.stroke(); }
+    }
     x.restore();
     return ht;
   }
