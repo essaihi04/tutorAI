@@ -228,7 +228,9 @@ function graphe(c, g) {
   for (const v of g.yt || []) { c.ligne(X(0) - 4, Y(v), X(0) + 4, Y(v), { couleur: 'blanc', largeur: 1.4, duree: .04 }); c.texte(nb(v), X(0) - 7, Y(v) + 4, { couleur: 'blanc', align: 'right', taille: 12, duree: .1 }); }
   c.texte('0', X(0) - 7, Y(0) + 15, { couleur: 'blanc', align: 'right', taille: 12 });
   c.texte(g.yl, X(0) + 8, Y(g.ymax) - 6, { couleur: 'cyan', taille: 15 });
-  c.texte(g.xl, X(g.xmax) + 16, Y(0) - 8, { couleur: 'cyan', align: 'right', taille: 14 });
+  // xlBas : « t (ms) » sous la ligne des graduations, là où la courbe ne passe pas (sinon il la chevauchait).
+  if (g.xlBas) c.texte(g.xl, X(g.xmax) + 16, Y(0) + 33, { couleur: 'cyan', align: 'right', taille: 14 });
+  else c.texte(g.xl, X(g.xmax) + 16, Y(0) - 8, { couleur: 'cyan', align: 'right', taille: 14 });
   return { X, Y };
 }
 /** Une croix jaune qui barre une courbe éliminée. */
@@ -315,12 +317,12 @@ const DESSINS = {
     const pas = 252 + D.dxm / 3, gw3 = 150 + (D.large ? D.dxm / 3 - 14 : 0);
     marque(c, 'enonce'); c.pause(.4);
     const G3 = [
-      { nom: 'C_1', x: 64, A: 12, f: t => 12 * Math.cos(2 * Math.PI * t / 10), yt: [12, 6, -6, -12] },
+      { nom: 'C_1', x: 64, A: 12, xlBas: true, f: t => 12 * Math.cos(2 * Math.PI * t / 10), yt: [12, 6, -6, -12] },
       { nom: 'C_2', x: 64 + pas, A: 10, f: t => -10 * Math.cos(2 * Math.PI * t / 10), yt: [10, 5, -5, -10] },
-      { nom: 'C_3', x: 64 + 2 * pas, A: 12, f: amortie(12, 10, .62), yt: [12, 6, -6, -12] },
+      { nom: 'C_3', x: 64 + 2 * pas, A: 12, xlBas: true, f: amortie(12, 10, .62), yt: [12, 6, -6, -12] },
     ];
     const gs = G3.map(d => {
-      const g = graphe(c, { fixe: true, x: d.x, y: 98, w: gw3, h: 134, xmax: 20, ymin: -d.A * 1.1, ymax: d.A * 1.1, dx: 2.5, dy: d.A / 4, xt: [5, 10, 15], yt: d.yt, xl: 't (ms)', yl: 'u_C (V)' });
+      const g = graphe(c, { fixe: true, x: d.x, y: 98, w: gw3, h: 134, xmax: 20, ymin: -d.A * 1.1, ymax: d.A * 1.1, dx: 2.5, dy: d.A / 4, xt: [5, 10, 15], yt: d.yt, xl: 't (ms)', xlBas: d.xlBas, yl: 'u_C (V)' });
       c.courbe(u => [g.X(20 * u), g.Y(d.f(20 * u))], 90, { couleur: 'rouge', largeur: 2.4 });
       c.texte(`(${d.nom})`, d.x + gw3 / 2, 268, { couleur: 'blanc', taille: 17 * D.kt, align: 'center' });
       return g;
@@ -427,7 +429,7 @@ const DESSINS = {
     peindre(c, ctx => bobinePeinte(ctx, 670 + D.dxm, 56));
     c.repere('enonce', 32, 52, 712 + D.dxm, 28, 'L = 1 H ; r = 10 Ω ; R = 90 Ω');
     marque(c, 'enonce'); c.pause(.4);
-    const gu = graphe(c, { x: 54, y: 98, w: 270, h: 92, xmax: 30, ymin: -5.5, ymax: 5.5, dx: 2.5, dy: 1, xt: [10, 20, 30], yt: [], xl: 't (ms)', yl: 'u_C (V)' });   // y 98 : « u_C (V) » sous l’énoncé
+    const gu = graphe(c, { x: 54, y: 98, w: 270, h: 92, xmax: 30, ymin: -5.5, ymax: 5.5, dx: 2.5, dy: 1, xt: [10, 20, 30], yt: [], xl: 't (ms)', xlBas: true, yl: 'u_C (V)' });   // y 98 : « u_C (V) » sous l’énoncé
     const fu = amortie(5, 10, .6);
     c.courbe(u => [gu.X(30 * u), gu.Y(fu(30 * u))], 140, { couleur: 'rouge', largeur: 2.4 });
     c.repere('courbe_uC', 30, 78, 310 + D.gw, 128, 'u_C(t) pseudo-périodique, T = 10 ms');
@@ -451,7 +453,7 @@ const DESSINS = {
       c.repere('entretien', x - 8, 190, 388, 54, 'u_G = k·i ; k₀ = R + r = 100 Ω');
       marque(c, 'entretien'); c.pause(.4);
     });
-    const gi = graphe(c, { x: 54, y: 222, w: 270, h: 128, xmax: 30, ymin: -9.5, ymax: 9.5, dx: 2.5, dy: 2, xt: [10, 20, 30], yt: [8, 4, -4, -8], xl: 't (ms)', yl: 'i (mA)' });
+    const gi = graphe(c, { x: 54, y: 222, w: 270, h: 128, xmax: 30, ymin: -9.5, ymax: 9.5, dx: 2.5, dy: 2, xt: [10, 20, 30], yt: [8, 4, -4, -8], xl: 't (ms)', xlBas: true, yl: 'i (mA)' });
     const fi = t => -8 * Math.sin(2 * Math.PI * t / 10);
     c.courbe(u => [gi.X(30 * u), gi.Y(fi(30 * u))], 140, { couleur: 'vert', largeur: 2.4 });
     droite(c, () => {
