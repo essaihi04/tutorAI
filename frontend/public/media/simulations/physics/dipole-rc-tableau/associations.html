@@ -99,8 +99,10 @@ function condensateur(c, cx, cy, C, q, couleur, nom) {
   const nr = q / QPT, n = Math.ceil(nr - 1e-9);
   scene.peindreDans(cx, cy, () => {
     isolant(c.ctx, cx - w / 2, cx + w / 2, cy - g / 2 + 4, cy + g / 2 - 4);
+    // Un passage au milieu pour le fil : les charges se rangent de part et d'autre, jamais sur le fil.
+    const pas = 9, ws = w - 2 * pas;
     for (let k = 0; k < n; k++) {
-      const x = cx - w / 2 + (k + 0.5) * w / n, a = Math.min(1, nr - k), rr = Math.max(3, Math.min(5.5, .44 * w / n));
+      const u = (k + 0.5) / n, x = u < .5 ? cx - w / 2 + u * ws : cx + pas + (u - .5) * ws, a = Math.min(1, nr - k), rr = Math.max(3, Math.min(5.5, .44 * ws / n));
       charge(c.ctx, x, cy - g / 2 - 11, +1, a, rr); charge(c.ctx, x, cy + g / 2 + 11, -1, a, rr);
     }
   });
@@ -120,7 +122,9 @@ function dessiner(c) {
   const f = 1 - Math.pow(1 - S.f, 2);   // la charge démarre vite puis ralentit (easing)
   if (VUE === 'parallele') {
     const T = 82, B = 320, X1 = 225, X2 = 425;
-    generateur(c, 90, T, B); c.ligne(90, T, X2 + 70, T); c.ligne(90, B, X2 + 70, B);
+    generateur(c, 90, T, B); c.ligne(90, T, X2, T); c.ligne(90, B, X2, B);
+    // (le bout de fil qui dépassait à droite de C₂ est tracé transparent : même durée d'écriture, rien de visible)
+    c.ligne(X2, T, X2 + 70, T, { couleur: 'rgba(0,0,0,0)' }); c.ligne(X2, B, X2 + 70, B, { couleur: 'rgba(0,0,0,0)' });
     c.ligne(X1, T, X1, 199 - G / 2); c.ligne(X1, 199 + G / 2, X1, B); c.ligne(X2, T, X2, 199 - G / 2); c.ligne(X2, 199 + G / 2, X2, B);
     c.direct(() => {
       const q1 = P.C1 * U * f, q2 = P.C2 * U * f;
