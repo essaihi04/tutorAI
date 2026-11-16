@@ -37,6 +37,7 @@
 
   function sphere(x, cx, cy, r, coul, a = 1) {
     x.save(); x.globalAlpha *= a;
+    x.fillStyle = 'rgba(0,0,0,.25)'; x.beginPath(); x.ellipse(cx + r * .12, cy + r * .78, r * .85, r * .3, 0, 0, TAU); x.fill();   // ombre posée (16 novembre 2026)
     const g = x.createRadialGradient(cx - r * .35, cy - r * .4, r * .1, cx, cy, r);
     g.addColorStop(0, '#ffffff'); g.addColorStop(.25, coul); g.addColorStop(1, ombre(coul, .45));
     x.fillStyle = g; x.beginPath(); x.arc(cx, cy, r, 0, TAU); x.fill();
@@ -65,6 +66,7 @@
       const g = x.createLinearGradient(px - 5, 0, px + 5, 0); g.addColorStop(0, ombre(BASE[L], .75)); g.addColorStop(.45, BASE[L]); g.addColorStop(1, ombre(BASE[L], .6));
       x.fillStyle = g; const y1 = y, y2 = y + sens * lb;
       x.beginPath(); x.roundRect ? x.roundRect(px - Math.min(6, pas * .32), Math.min(y1, y2), 2 * Math.min(6, pas * .32), Math.abs(y2 - y1), 3) : x.rect(px - 6, Math.min(y1, y2), 12, Math.abs(y2 - y1)); x.fill();
+      x.fillStyle = 'rgba(255,255,255,.28)'; x.fillRect(px - Math.min(6, pas * .32) + 1.5, Math.min(y1, y2) + 2, 1.6, Math.max(0, Math.abs(y2 - y1) - 4));
       if (o.lettres !== false) {
         x.fillStyle = '#fff'; x.font = `700 ${Math.round(Math.min(13, pas * .62))}px sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle';
         x.fillText(L, px, y + sens * lb * .55);
@@ -74,8 +76,12 @@
     // squelette (sucre-phosphate) : un ruban ombré
     const [cl, cf] = SQUELETTE[type] || SQUELETTE.adn, xa = x0 + de * pas, xb = x0 + a * pas;
     const gs = x.createLinearGradient(0, y - 5, 0, y + 5); gs.addColorStop(0, cl); gs.addColorStop(.5, cf); gs.addColorStop(1, ombre(cf.length === 7 ? cf : '#4f46e5', .55));
-    x.strokeStyle = gs; x.lineWidth = o.epaisseur ?? 7; x.lineCap = 'round'; x.beginPath(); x.moveTo(xa + 2, y); x.lineTo(xb - 2, y); x.stroke();
-    x.strokeStyle = 'rgba(255,255,255,.45)'; x.lineWidth = 1.4; x.beginPath(); x.moveTo(xa + 4, y - 2); x.lineTo(xb - 4, y - 2); x.stroke();
+    // (16 novembre 2026) le squelette en tube : ombre portée douce, bord foncé, corps en dégradé, reflet net
+    const ep = o.epaisseur ?? 7;
+    x.save(); x.shadowColor = 'rgba(0,0,0,.4)'; x.shadowBlur = ep; x.shadowOffsetY = ep * .35;
+    x.strokeStyle = ombre(cf.length === 7 ? cf : '#4f46e5', .45); x.lineWidth = ep + 2; x.lineCap = 'round'; x.beginPath(); x.moveTo(xa + 2, y); x.lineTo(xb - 2, y); x.stroke(); x.restore();
+    x.strokeStyle = gs; x.lineWidth = ep; x.lineCap = 'round'; x.beginPath(); x.moveTo(xa + 2, y); x.lineTo(xb - 2, y); x.stroke();
+    x.strokeStyle = 'rgba(255,255,255,.6)'; x.lineWidth = Math.max(1.2, ep * .22); x.beginPath(); x.moveTo(xa + 4, y - ep * .22); x.lineTo(xb - 4, y - ep * .22); x.stroke();
     x.restore();
   }
 
@@ -84,7 +90,7 @@
     x.save(); x.globalAlpha *= a; x.translate(px, py); x.rotate(ang + Math.PI / 2);
     x.fillStyle = BASE[L] || '#999'; x.beginPath(); x.rect(-4, -16, 8, 14); x.fill();
     sphere(x, 0, 2, 5, (SQUELETTE[type] || SQUELETTE.arn)[1]);
-    x.translate(0, -9); x.rotate(-(ang + Math.PI / 2)); x.fillStyle = '#fff'; x.font = '700 8px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(L, 0, .5);
+    x.translate(0, -9); x.rotate(-(ang + Math.PI / 2)); x.fillStyle = '#fff'; x.font = '700 10px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(L, 0, .5);
     x.restore();
   }
 
@@ -102,8 +108,13 @@
       x.fillStyle = g; x.beginPath();
       // forme un peu bosselée (pas un simple ovale)
       for (let i = 0; i <= 40; i++) { const t = i / 40 * TAU, r = 1 + .05 * Math.sin(t * 5 + (haut ? 1 : 2)); const px = cx + Math.cos(t) * rx * r, py = cy + Math.sin(t) * ry * r; i ? x.lineTo(px, py) : x.moveTo(px, py); }
-      x.closePath(); x.fill();
+      x.closePath(); x.shadowColor = 'rgba(0,0,0,.45)'; x.shadowBlur = 10 * s; x.shadowOffsetY = 4 * s; x.fill(); x.shadowColor = 'transparent';
       x.strokeStyle = 'rgba(15,80,75,.7)'; x.lineWidth = 1.2; x.stroke();
+      // reflet doux et bord assombri : un volume, pas un ovale plat
+      x.save(); x.clip();
+      const sb = x.createRadialGradient(cx, cy, Math.min(rx, ry) * .5, cx, cy, Math.max(rx, ry) * 1.05); sb.addColorStop(0, 'rgba(0,40,40,0)'); sb.addColorStop(1, 'rgba(0,40,40,.35)'); x.fillStyle = sb; x.fillRect(cx - rx * 1.1, cy - ry * 1.1, 2.2 * rx, 2.2 * ry);
+      const h = x.createRadialGradient(cx - rx * .4, cy - ry * .5, 1, cx - rx * .4, cy - ry * .5, rx * .55); h.addColorStop(0, 'rgba(255,255,255,.4)'); h.addColorStop(1, 'rgba(255,255,255,0)');
+      x.fillStyle = h; x.fillRect(cx - rx, cy - ry, 2 * rx, 2 * ry); x.restore();
       x.restore();
     };
     sous(y - 30 * s + dyg, 50 * s, 36 * s, ag, true);

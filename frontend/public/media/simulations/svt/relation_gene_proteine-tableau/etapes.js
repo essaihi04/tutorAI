@@ -240,7 +240,42 @@
   }
 
   /* ── Petits outils de peinture partagés (règle 7 : le vivant peint, la craie pour les légendes) ── */
+  const rgb = c => { const n = parseInt(String(c).slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+  /** Mélange une couleur #rrggbb vers le noir (f < 0) ou le blanc (f > 0) ; |f| de 0 à 1. */
+  const teinte = (c, f) => { const v = rgb(c).map(k => Math.round(f < 0 ? k * (1 + f) : k + (255 - k) * f)); return `rgb(${v[0]},${v[1]},${v[2]})`; };
   const Peint = {
+    teinte,
+    /**
+     * Un tube peint le long d’un chemin (squelette d’un brin d’ADN, filament) : ombre douce, bord foncé, corps coloré,
+     * reflet clair décalé vers la lumière (en haut à gauche). `chemin()` trace le chemin (beginPath compris) ;
+     * o.reflet = [dx, dy] du reflet (par défaut vers le haut), o.ombre = false pour ne pas poser d’ombre.
+     */
+    ruban(x, chemin, couleur, ep = 6, a = 1, o = {}) {
+      if (a <= 0) return;
+      x.save(); x.globalAlpha *= a; x.lineCap = o.cap || 'round'; x.lineJoin = 'round';
+      if (o.ombre !== false) { x.shadowColor = 'rgba(0,0,0,.45)'; x.shadowBlur = ep * .9; x.shadowOffsetY = ep * .3; }
+      x.strokeStyle = teinte(couleur, -.5); x.lineWidth = ep; chemin(); x.stroke();
+      x.shadowColor = 'transparent';
+      x.strokeStyle = couleur; x.lineWidth = ep * .66; chemin(); x.stroke();
+      const [dx, dy] = o.reflet || [0, -ep * .17];
+      x.translate(dx, dy); x.strokeStyle = teinte(couleur, .55); x.globalAlpha *= .85; x.lineWidth = Math.max(.8, ep * .22); chemin(); x.stroke();
+      x.restore();
+    },
+    /** Une base azotée en bâtonnet arrondi de (x1,y1) à (x2,y2), ombrée en volume (reflet sur le côté gauche du bâtonnet). */
+    barreau(x, x1, y1, x2, y2, couleur, ep = 6, a = 1) {
+      const L = Math.hypot(x2 - x1, y2 - y1) || 1, nx = -(y2 - y1) / L, ny = (x2 - x1) / L, s = nx + ny > 0 ? -1 : 1;
+      Peint.ruban(x, () => { x.beginPath(); x.moveTo(x1, y1); x.lineTo(x2, y2); }, couleur, ep, a, { cap: 'butt', ombre: false, reflet: [s * nx * ep * .17, s * ny * ep * .17] });
+    },
+    /** Une bille peinte (nucléotide libre, molécule) : dégradé sphérique, reflet, ombre portée légère. */
+    bille(x, cx, cy, r, couleur, a = 1) {
+      if (a <= 0) return;
+      x.save(); x.globalAlpha *= a;
+      x.fillStyle = 'rgba(0,0,0,.28)'; x.beginPath(); x.ellipse(cx + r * .15, cy + r * .75, r * .9, r * .32, 0, 0, Math.PI * 2); x.fill();
+      const g = x.createRadialGradient(cx - r * .35, cy - r * .4, r * .08, cx, cy, r);
+      g.addColorStop(0, teinte(couleur, .7)); g.addColorStop(.35, couleur); g.addColorStop(1, teinte(couleur, -.55));
+      x.fillStyle = g; x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill();
+      x.restore();
+    },
     /** Cellule animale : cytoplasme rosé translucide, membrane plus sombre, quelques granulations. */
     cellule(x, cx, cy, rx, ry, a = 1, teinte) {
       x.save(); x.globalAlpha = a;

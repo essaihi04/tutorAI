@@ -23,7 +23,7 @@
  *   replie : une protéine a une forme, donc un rôle.
  * Moteur : etapes.js de la génétique (vues, moments, play_until, autoDepart).
  */
-const { rampe, entre, Peint } = window.Etapes;
+const { rampe, entre, lisse, Peint } = window.Etapes;
 const TAU = Math.PI * 2;
 const BASES = { A: '#22c55e', T: '#ef4444', C: '#3b82f6', G: '#eab308' }, COMP = { A: 'T', T: 'A', C: 'G', G: 'C' };
 const SEQ = 'ATGCCGATAGCT'.split('');
@@ -35,23 +35,29 @@ function dessinerAdn(c, k) {
   c.direct(() => {
     const x = c.ctx;
     Peint.chromosome(x, 80, 150, 110, 1.57, ['#e9c8ff', '#7e22ce'], { epaisseur: 18, deux: true, alpha: rampe(t, .3, .6) });
-    if (t >= 2.2) { x.save(); x.globalAlpha = rampe(t, 2.2, .6); x.strokeStyle = '#c084fc'; x.lineWidth = 2; x.beginPath(); for (let i = 0; i <= 200 * rampe(t, 2.2, 1.4); i++) { const s = i / 200; x[i ? 'lineTo' : 'moveTo'](110 + s * 120, 150 + Math.sin(s * 30) * 12); } x.stroke(); x.restore(); }
-    if (t >= 4.4) { // le fil en grand : deux brins (rails), puis les bases face à face
+    // le fil d’ADN qui se déroule du chromosome : un fin tube violet qui s’allonge (16 novembre 2026 : peint, plus un trait de craie)
+    if (t >= 2.2) { const u = lisse(rampe(t, 2.2, 1.4)), n = Math.max(1, Math.round(200 * u)); Peint.ruban(x, () => { x.beginPath(); for (let i = 0; i <= n; i++) { const s = i / 200; x[i ? 'lineTo' : 'moveTo'](110 + s * 120, 150 + Math.sin(s * 30) * 12); } }, '#a855f7', 4.5, rampe(t, 2.2, .6), { ombre: false }); }
+    if (t >= 4.4) { // le fil en grand : deux brins (tubes peints), puis les bases qui poussent de chaque brin vers l’autre
       const a = rampe(t, 4.4, .6), x0 = 250, y1 = 200, y2 = 300, pas = 38;
-      x.save(); x.globalAlpha = a;
-      for (const y of [y1, y2]) { const g = x.createLinearGradient(0, y - 6, 0, y + 6); g.addColorStop(0, '#e9d5ff'); g.addColorStop(1, '#7e22ce'); x.fillStyle = g; x.fillRect(x0, y - 6, pas * SEQ.length, 12); }
-      x.restore();
       SEQ.forEach((b, i) => {
-        const ab = rampe(t, 6.6 + i * .12, .4), af = rampe(t, 9.0 + i * .12, .4), px = x0 + 14 + i * pas;
-        x.save(); x.globalAlpha = ab; x.fillStyle = BASES[b]; x.fillRect(px, y1 + 6, 12, 40); x.restore();
-        x.save(); x.globalAlpha = af; x.fillStyle = BASES[COMP[b]]; x.fillRect(px, y2 - 46, 12, 40); x.restore();
+        const ab = lisse(rampe(t, 6.6 + i * .12, .5)), af = lisse(rampe(t, 9.0 + i * .12, .5)), px = x0 + 20 + i * pas;
+        if (ab > 0) Peint.barreau(x, px, y1 + 5, px, y1 + 5 + 41 * ab, BASES[b], 13, Math.min(1, ab * 2));
+        if (af > 0) Peint.barreau(x, px, y2 - 5, px, y2 - 5 - 41 * af, BASES[COMP[b]], 13, Math.min(1, af * 2));
+        if (af >= 1) { x.save(); x.fillStyle = 'rgba(255,255,255,.55)'; x.beginPath(); x.arc(px, (y1 + y2) / 2, 1.6, 0, TAU); x.fill(); x.restore(); }   // les deux bases se touchent
       });
+      for (const y of [y1, y2]) Peint.ruban(x, () => { x.beginPath(); x.moveTo(x0, y); x.lineTo(x0 + pas * SEQ.length, y); }, '#9333ea', 13, a);
     }
-    if (t >= 12.0) { // l’autre façon : une fermeture éclair peinte
-      const a = rampe(t, 12.0, .6), y = 380, x0 = 250;
-      x.save(); x.globalAlpha = a; const g = x.createLinearGradient(0, y - 18, 0, y + 18); g.addColorStop(0, '#475569'); g.addColorStop(1, '#1e293b');
-      x.fillStyle = g; x.fillRect(x0, y - 22, 300, 10); x.fillRect(x0, y + 12, 300, 10);
-      x.fillStyle = '#cbd5e1'; for (let i = 0; i < 20; i++) { x.fillRect(x0 + 6 + i * 15, y - 12, 7, 9); x.fillRect(x0 + 13 + i * 15, y + 3, 7, 9); }
+    if (t >= 12.0) { // l’autre façon : une fermeture éclair peinte (rubans de tissu, dents de métal qui se referment)
+      const a = rampe(t, 12.0, .6), y = 380, x0 = 250, ferme = lisse(rampe(t, 12.4, 1.4));
+      x.save(); x.globalAlpha = a;
+      for (const [yb, h] of [[y - 24, 12], [y + 12, 12]]) {
+        const g = x.createLinearGradient(0, yb, 0, yb + h); g.addColorStop(0, '#64748b'); g.addColorStop(.5, '#334155'); g.addColorStop(1, '#1e293b');
+        x.fillStyle = g; x.beginPath(); x.roundRect(x0, yb, 300, h, 3); x.fill();
+        x.strokeStyle = 'rgba(203,213,225,.25)'; x.lineWidth = 1; x.setLineDash([3, 3]); x.beginPath(); x.moveTo(x0 + 3, yb + h / 2); x.lineTo(x0 + 297, yb + h / 2); x.stroke(); x.setLineDash([]);
+      }
+      const dent = (dx, dy, w, h) => { const g = x.createLinearGradient(dx, 0, dx + w, 0); g.addColorStop(0, '#94a3b8'); g.addColorStop(.4, '#f8fafc'); g.addColorStop(1, '#64748b'); x.fillStyle = g; x.beginPath(); x.roundRect(dx, dy, w, h, 2); x.fill(); };
+      const ec = 5 * (1 - ferme);   // les dents s’emboîtent
+      for (let i = 0; i < 20; i++) { dent(x0 + 6 + i * 15, y - 13 - ec, 7, 10); dent(x0 + 13 + i * 15, y + 2 + ec, 7, 10); }
       x.restore();
     }
   });
