@@ -29,13 +29,8 @@ const { rampe, entre, Peint } = window.Etapes;
 const TAU = Math.PI * 2;
 
 function mitochondrie(x, cx, cy, L, H, ang, a) {
-  x.save(); x.globalAlpha = a; x.translate(cx, cy); x.rotate(ang);
-  const g = x.createLinearGradient(0, -H, 0, H); g.addColorStop(0, '#fdba74'); g.addColorStop(1, '#c2410c');
-  x.fillStyle = g; x.beginPath(); x.ellipse(0, 0, L, H, 0, 0, TAU); x.fill();
-  x.strokeStyle = '#7c2d12'; x.lineWidth = 1.6; x.stroke();
-  x.strokeStyle = 'rgba(255,237,213,.85)'; x.lineWidth = 1.4;   // les crêtes
-  for (let i = -3; i <= 3; i++) { const px = i * L / 4.2; x.beginPath(); x.moveTo(px, (i % 2 ? -1 : 1) * H * .82); x.quadraticCurveTo(px + L / 10, 0, px, (i % 2 ? 1 : -1) * H * .2); x.stroke(); }
-  x.restore();
+  // (16 novembre 2026) la mitochondrie commune (deux membranes, crêtes, matrice bleue), assez grande pour être reconnue
+  x.save(); x.globalAlpha = a; window.SVTPeinture.mitochondrie(x, cx, cy, L, H, { angle: ang, cretes: 5, graine: 3, grains: 8 }); x.restore();
 }
 function usine(x, cx, cy, a) {
   x.save(); x.globalAlpha = a;
@@ -52,14 +47,14 @@ function maisonnette(x, cx, cy, a, couleur) {
 
 /* ── Vue cellule ─────────────────────────────────────────────────────────── */
 const MC = { d_cellule: 2.0, d_membrane: 3.6, d_hyaloplasme: 5.2, d_noyau: 6.8, d_mitochondries: 8.8, d_ville: 12.4 };
-const MITOS = [[150, 160, .4], [210, 300, -.3], [330, 320, .2], [380, 150, -.5], [120, 250, 1.2]];
+const MITOS = [[150, 160, .4], [205, 312, -.2], [345, 310, .25], [385, 158, -.5], [112, 250, 1.25]];
 function dessinerCellule(c, k) {
   const t = k.t;
   c.direct(() => {
     const x = c.ctx;
     Peint.cellule(x, 250, 230, 200, 140, rampe(t, .3, .8));
     Peint.noyau(x, 280, 220, 52, rampe(t, .5, .8));
-    MITOS.forEach(([mx, my, an], i) => mitochondrie(x, mx, my, 26, 11, an, rampe(t, 7.4 + i * .2, .5)));
+    MITOS.forEach(([mx, my, an], i) => mitochondrie(x, mx, my, 40, 17, an, rampe(t, 7.4 + i * .2, .5)));
     if (t >= 10.4) { const a = rampe(t, 10.4, .8);   // l’autre façon : une petite ville
       x.save(); x.globalAlpha = a; x.fillStyle = 'rgba(148,163,184,.35)'; x.fillRect(520, 170, 220, 14); x.fillRect(620, 110, 14, 190); x.restore();
       maisonnette(x, 560, 140, a, '#e2e8f0'); maisonnette(x, 700, 140, a, '#e2e8f0'); maisonnette(x, 560, 250, a, '#fecaca');
@@ -75,8 +70,8 @@ function dessinerCellule(c, k) {
   if (t >= 4.2) c.repere('hyaloplasme', 160, 330, 120, 40, 'le hyaloplasme');
   if (k.ecrit(c, 'noy', 5.8)) { c.fleche(372, 84, 300, 168, { couleur: 'faible', largeur: 1.4 }); k.T(c, 'le noyau : il commande', 340, 72, { couleur: 'blanc', taille: 14 }); }
   if (t >= 5.8) c.repere('noyau', 226, 166, 108, 108, 'le noyau');
-  if (k.ecrit(c, 'mit', 8.0)) { c.fleche(470, 150, 410, 150, { couleur: 'faible', largeur: 1.4 }); k.T(c, 'des mitochondries', 474, 146, { couleur: 'orange', taille: 14 }); k.T(c, '(leur rôle : plus loin)', 474, 164, { couleur: 'faible', taille: 12 }); }
-  if (t >= 8.0) c.repere('mitochondries', 350, 128, 60, 44, 'une mitochondrie');
+  if (k.ecrit(c, 'mit', 8.0)) { c.fleche(96, 124, 128, 150, { couleur: 'faible', largeur: 1.4 }); k.T(c, 'des mitochondries', 8, 96, { couleur: 'orange', taille: 14 }); k.T(c, '(leur rôle : plus loin)', 8, 117, { couleur: 'faible', taille: 12 }); }   // étiquette en haut à gauche : avant, elle recouvrait la maison de la petite ville
+  if (t >= 8.0) c.repere('mitochondries', 120, 138, 60, 44, 'une mitochondrie');
   if (t >= 10.4) c.repere('ville', 510, 100, 240, 270, 'la cellule vue comme une petite ville');
   if (k.ecrit(c, 'vil', 10.8)) { k.T(c, 'autrement : une petite ville', 630, 96, { couleur: 'cyan', taille: 14, align: 'center' }); k.T(c, 'mairie = noyau ; rues = hyaloplasme', 630, 392, { couleur: 'blanc', taille: 12, align: 'center' }); k.T(c, 'petites usines = mitochondries', 630, 410, { couleur: 'orange', taille: 12, align: 'center' }); }
 }
@@ -99,13 +94,13 @@ function pain(x, cx, cy, a) {
   x.restore();
 }
 function hexa(x, cx, cy, r, a, casse) {
-  x.save(); x.globalAlpha = a;
+  // (16 novembre 2026) atomes de carbone en billes jaunes (comme dans tout le cours) reliés par des liaisons peintes
+  const Pn = window.SVTPeinture, ec = casse * 20;
   CYCLE.forEach(([u, v], i) => {
-    const [u2, v2] = CYCLE[(i + 1) % 6], ec = casse * 26, dx = u * ec, dy = v * ec;
-    x.strokeStyle = '#e2e8f0'; x.lineWidth = 3; x.beginPath(); x.moveTo(cx + u * r + dx, cy + v * r + dy); x.lineTo(cx + u2 * r + dx, cy + v2 * r + dy); if (!casse || i % 2) x.stroke();
+    const [u2, v2] = CYCLE[(i + 1) % 6], dx = u * ec, dy = v * ec;
+    if (!casse || i % 2) Pn.liaison(x, cx + u * r + dx, cy + v * r + dy, cx + u2 * r + dx, cy + v2 * r + dy, { alpha: a, epaisseur: 5 });
   });
-  CYCLE.forEach(([u, v]) => { const ec = casse * 26; const g = x.createRadialGradient(cx + u * (r + ec) - 3, cy + v * (r + ec) - 3, 1, cx + u * (r + ec), cy + v * (r + ec), 11); g.addColorStop(0, '#94a3b8'); g.addColorStop(1, '#1e293b'); x.fillStyle = g; x.beginPath(); x.arc(cx + u * (r + ec), cy + v * (r + ec), 10, 0, TAU); x.fill(); });
-  x.restore();
+  CYCLE.forEach(([u, v]) => Pn.bille(x, cx + u * (r + ec), cy + v * (r + ec), 11, [250, 204, 21], { alpha: a }));
 }
 function eclairs(x, cx, cy, a, n = 7, R = 70) {
   x.save(); x.globalAlpha = a; x.strokeStyle = '#facc15'; x.lineWidth = 3; x.lineCap = 'round';
@@ -131,9 +126,9 @@ function dessinerGlucose(c, k) {
       for (let i = 0; i < 5; i++) { const px = 200 + ((t * 40 + i * 58) % 260); x.strokeStyle = '#fde68a'; x.lineWidth = 1.6; x.beginPath(); CYCLE.forEach(([u, v], j) => x[j ? 'lineTo' : 'moveTo'](px + u * 7, 132 + v * 7)); x.closePath(); x.stroke(); }
       x.restore();
     }
-    if (t >= 5.6) hexa(x, 250, 290, 52, rampe(t, 5.6, .6), casse);
-    if (t >= 8.2 && t < 10.2) { x.save(); x.globalAlpha = .5 * rampe(t, 8.2, .5); x.strokeStyle = '#facc15'; x.lineWidth = 8; x.beginPath(); CYCLE.forEach(([u, v], j) => x[j ? 'lineTo' : 'moveTo'](250 + u * 52, 290 + v * 52)); x.closePath(); x.stroke(); x.restore(); }
-    if (casse > 0) eclairs(x, 250, 290, casse * (1 - rampe(t, 12.6, 1.2) * .5), 8, 96);
+    if (t >= 5.6) hexa(x, 230, 296, 46, rampe(t, 5.6, .6), casse);
+    if (t >= 8.2 && t < 10.2) { x.save(); x.globalAlpha = .5 * rampe(t, 8.2, .5); x.strokeStyle = '#facc15'; x.lineWidth = 8; x.beginPath(); CYCLE.forEach(([u, v], j) => x[j ? 'lineTo' : 'moveTo'](230 + u * 46, 296 + v * 46)); x.closePath(); x.stroke(); x.restore(); }
+    if (casse > 0) eclairs(x, 230, 296, casse * (1 - rampe(t, 12.6, 1.2) * .5), 8, 64);
     if (t >= 12.8) { const a = rampe(t, 12.8, .6); buche(x, 620, 300, a, rampe(t, 13.4, .6)); }
   });
   c.texte('Le glucose : de l’énergie rangée dans une molécule', 14, 26, { couleur: 'cyan', taille: 18 });
@@ -141,11 +136,11 @@ function dessinerGlucose(c, k) {
   if (k.ecrit(c, 'pain', .6)) k.T(c, 'le pain : de l’amidon', 90, 184, { couleur: 'blanc', taille: 13, align: 'center' });
   if (t >= 2.4) c.repere('sang', 190, 108, 280, 48, 'le glucose dans le sang');
   if (k.ecrit(c, 'sang', 2.8)) { c.fleche(150, 132, 186, 132, { couleur: 'faible', largeur: 1.4 }); k.T(c, 'digestion → du glucose dans le sang', 330, 98, { couleur: 'blanc', taille: 13, align: 'center' }); c.fleche(474, 132, 520, 132, { couleur: 'faible', largeur: 1.4 }); k.T(c, '→ les cellules', 590, 136, { couleur: 'blanc', taille: 13, align: 'center' }); }
-  if (t >= 5.6) c.repere('molecule', 180, 220, 140, 140, 'une molécule de glucose');
-  if (k.ecrit(c, 'mol', 6.0)) { k.T(c, 'glucose : C₆H₁₂O₆', 250, 206, { couleur: 'jaune', taille: 16, align: 'center' }); k.T(c, 'six carbones en anneau', 250, 380, { couleur: 'faible', taille: 13, align: 'center' }); }
-  if (t >= 8.2) c.repere('liaisons', 190, 230, 120, 120, 'les liaisons entre les atomes');
-  if (k.ecrit(c, 'lia', 8.4)) { k.T(c, 'l’énergie est rangée', 330, 260, { couleur: 'jaune', taille: 14 }); k.T(c, 'dans les liaisons :', 330, 280, { couleur: 'jaune', taille: 14 }); k.T(c, 'énergie chimique', 330, 300, { couleur: 'orange', taille: 15 }); }
-  if (k.ecrit(c, 'cas', 10.6)) k.T(c, 'liaisons cassées → énergie libérée', 250, 404, { couleur: 'vert', taille: 14, align: 'center' });
+  if (t >= 5.6) c.repere('molecule', 160, 226, 140, 140, 'une molécule de glucose');
+  if (k.ecrit(c, 'mol', 6.0)) { k.T(c, 'glucose : C₆H₁₂O₆', 230, 196, { couleur: 'jaune', taille: 16, align: 'center' }); k.T(c, 'six carbones en anneau', 230, 392, { couleur: 'faible', taille: 13, align: 'center' }); }
+  if (t >= 8.2) c.repere('liaisons', 170, 236, 120, 120, 'les liaisons entre les atomes');
+  if (k.ecrit(c, 'lia', 8.4)) { k.T(c, 'l’énergie est rangée', 352, 262, { couleur: 'jaune', taille: 14 }); k.T(c, 'dans les liaisons :', 352, 284, { couleur: 'jaune', taille: 14 }); k.T(c, 'énergie chimique', 352, 306, { couleur: 'orange', taille: 15 }); }
+  if (k.ecrit(c, 'cas', 10.6)) k.T(c, 'liaisons cassées → énergie libérée', 230, 415, { couleur: 'vert', taille: 14, align: 'center' });
   if (t >= 12.8) c.repere('buche', 550, 240, 150, 90, 'une bûche qui brûle');
   if (k.ecrit(c, 'buc', 13.4)) { k.T(c, 'autrement : la bûche brûle d’un coup', 620, 226, { couleur: 'cyan', taille: 13, align: 'center' }); k.T(c, 'la cellule, elle, avance pas à pas', 620, 350, { couleur: 'vert', taille: 13, align: 'center' }); }
 }
@@ -167,7 +162,7 @@ let MOS = null;
   const S0 = window.GenetiqueTableau.Scene;
   window.GenetiqueTableau.Scene = (canvas, dessiner, o = {}) => {
     const sc = S0(canvas, dessiner, { ...o, large: true });
-    MOS = window.SVTLarge.Mosaique(sc, (L) => L >= 1000 ? { police: 1.15, blocs: [{ src: [0, 0, 760, 420], X: (L - 760) / 2, Y: 0, s: 1 }] } : null);
+    MOS = window.SVTLarge.Mosaique(sc, (L) => L >= 1000 ? (() => { const z = Math.min(1.11, (L - 30) / 760); return { police: 1.15, blocs: [{ src: [0, 40, 760, 380], X: (L - 760 * z) / 2 - (L - 760) / 2, Y: (420 - 380 * z) / 2, s: z }] }; })()   /* etapes.js centre déjà le dessin (L − 760)/2 : on ne le décale pas deux fois ; le titre interne (bande du haut) est laissé hors du bloc, la figure prend la hauteur */ : null);
     return sc;
   };
 }

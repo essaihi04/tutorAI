@@ -15,39 +15,49 @@
   const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
 
   /* Les teintes (lisibles sur le tableau vert sombre, jamais plus claires que la craie). */
+  /* Palette ravivée le 16 novembre 2026 (« couleurs vives, agréables ») : hyaloplasme vert d'eau frais, mitochondrie corail
+   * à matrice bleu lumineux, membranes dorées. */
   const T = {
-    hyalo: [120, 160, 110], membrane: [214, 186, 120], noyau: [120, 96, 160],
-    mitoExt: [196, 98, 58], mitoEsp: [232, 170, 110], matrice: [120, 170, 196], crete: [240, 206, 150],
-    proteine: [150, 120, 200], sphere: [240, 190, 90], eau: [70, 140, 170], levure: [214, 190, 140],
+    hyalo: [96, 200, 150], membrane: [250, 204, 96], noyau: [150, 110, 220],
+    mitoExt: [240, 100, 62], mitoEsp: [255, 176, 110], matrice: [86, 180, 236], crete: [255, 222, 150],
+    proteine: [160, 120, 240], sphere: [252, 196, 70], eau: [60, 160, 210], levure: [236, 200, 130],
   };
+
 
   /** Une cellule vue en coupe : membrane plasmique, hyaloplasme granuleux, noyau facultatif ({noyau: {x, y, r}}). */
   function cellule(ctx, cx, cy, rx, ry, o = {}) {
-    const r = graine(o.graine || 11);
+    const r = graine(o.graine || 11), ang = o.angle || 0, R = Math.max(rx, ry);
     ctx.save();
-    ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, o.angle || 0, 0, TAU);
-    const g = ctx.createRadialGradient(cx - rx * .25, cy - ry * .3, 4, cx, cy, Math.max(rx, ry));
-    g.addColorStop(0, rgba(T.hyalo, .30)); g.addColorStop(.7, rgba(T.hyalo, .20)); g.addColorStop(1, rgba(T.hyalo, .10));
+    // ombre douce : la cellule est posée sur le tableau
+    ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 6;
+    ctx.fillStyle = 'rgba(12,40,30,.55)'; ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, ang, 0, TAU); ctx.fill(); ctx.restore();
+    ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, ang, 0, TAU);
+    const g = ctx.createRadialGradient(cx - rx * .3, cy - ry * .35, 4, cx, cy, R);
+    g.addColorStop(0, rgba([170, 240, 200], .50)); g.addColorStop(.55, rgba(T.hyalo, .36)); g.addColorStop(1, rgba([40, 130, 110], .34));
     ctx.fillStyle = g; ctx.fill();
     ctx.clip();
     // granulations du hyaloplasme
-    ctx.fillStyle = rgba([200, 220, 180], .16);
+    ctx.fillStyle = rgba([220, 255, 230], .20);
     for (let k = 0; k < (o.grains ?? 90); k++) {
       const a = r() * TAU, d = Math.sqrt(r()), x = cx + Math.cos(a) * rx * d, y = cy + Math.sin(a) * ry * d;
       ctx.beginPath(); ctx.arc(x, y, .8 + r() * 1.6, 0, TAU); ctx.fill();
     }
+    // reflet large en haut à gauche (volume)
+    const h = ctx.createRadialGradient(cx - rx * .4, cy - ry * .5, 2, cx - rx * .4, cy - ry * .5, R * .7);
+    h.addColorStop(0, 'rgba(255,255,255,.14)'); h.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = h; ctx.fillRect(cx - R, cy - R, 2 * R, 2 * R);
     if (o.noyau) {
       const n = o.noyau, gn = ctx.createRadialGradient(n.x - n.r * .3, n.y - n.r * .3, 2, n.x, n.y, n.r);
-      gn.addColorStop(0, rgba(T.noyau, .55)); gn.addColorStop(1, rgba(T.noyau, .28));
+      gn.addColorStop(0, rgba([210, 180, 255], .85)); gn.addColorStop(.6, rgba(T.noyau, .7)); gn.addColorStop(1, rgba([90, 60, 160], .7));
       ctx.fillStyle = gn; ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, TAU); ctx.fill();
-      ctx.strokeStyle = rgba([200, 180, 240], .45); ctx.lineWidth = 2; ctx.stroke();
+      ctx.strokeStyle = rgba([225, 205, 255], .7); ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = rgba([80, 40, 140], .55); ctx.beginPath(); ctx.arc(n.x + n.r * .25, n.y + n.r * .15, n.r * .28, 0, TAU); ctx.fill();   // nucléole
     }
     ctx.restore();
-    // membrane plasmique : deux traits fins rapprochés
-    ctx.save(); ctx.lineWidth = 2.2; ctx.strokeStyle = rgba(T.membrane, .75);
-    ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, o.angle || 0, 0, TAU); ctx.stroke();
-    ctx.lineWidth = 1; ctx.strokeStyle = rgba(T.membrane, .4);
-    ctx.beginPath(); ctx.ellipse(cx, cy, rx - 4, ry - 4, o.angle || 0, 0, TAU); ctx.stroke();
+    // membrane plasmique : un liseré doré net, doublé d'un trait fin
+    ctx.save(); ctx.lineWidth = 3; ctx.strokeStyle = rgba(T.membrane, .95);
+    ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, ang, 0, TAU); ctx.stroke();
+    ctx.lineWidth = 1; ctx.strokeStyle = rgba([255, 240, 190], .5);
+    ctx.beginPath(); ctx.ellipse(cx, cy, Math.max(1, rx - 4), Math.max(1, ry - 4), ang, 0, TAU); ctx.stroke();
     ctx.restore();
   }
 
@@ -74,22 +84,28 @@
     const n = o.cretes ?? 7, r = graine(o.graine || 5);
     ctx.save();
     if (o.angle) { ctx.translate(cx, cy); ctx.rotate(o.angle); ctx.translate(-cx, -cy); }
-    // membrane externe et espace intermembranaire
+    // membrane externe et espace intermembranaire (ombre portée douce : l'organite a du volume)
+    ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = Math.min(14, ry * .5); ctx.shadowOffsetY = Math.min(5, ry * .18);
+    ctx.fillStyle = 'rgba(90,30,15,.9)'; ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, TAU); ctx.fill(); ctx.restore();
     ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, TAU);
     const g = ctx.createLinearGradient(cx, cy - ry, cx, cy + ry);
-    g.addColorStop(0, rgba(T.mitoEsp, .55)); g.addColorStop(1, rgba(T.mitoExt, .55));
+    g.addColorStop(0, rgba([255, 205, 140], .95)); g.addColorStop(.5, rgba(T.mitoEsp, .92)); g.addColorStop(1, rgba(T.mitoExt, .92));
     ctx.fillStyle = g; ctx.fill();
-    ctx.lineWidth = 2.6; ctx.strokeStyle = rgba(T.mitoExt, .95); ctx.stroke();
+    ctx.lineWidth = Math.max(1.6, Math.min(3, ry * .12)); ctx.strokeStyle = rgba([200, 60, 30], 1); ctx.stroke();
     // matrice (à l'intérieur de la membrane interne)
     cheminCretes(ctx, cx, cy, rx, ry, n);
-    const gm = ctx.createRadialGradient(cx - rx * .2, cy - ry * .2, 3, cx, cy, Math.max(rx, ry));
-    gm.addColorStop(0, rgba(T.matrice, .62)); gm.addColorStop(1, rgba(T.matrice, .38));
+    const gm = ctx.createRadialGradient(cx - rx * .25, cy - ry * .3, 3, cx, cy, Math.max(rx, ry));
+    gm.addColorStop(0, rgba([170, 225, 255], .96)); gm.addColorStop(.6, rgba(T.matrice, .92)); gm.addColorStop(1, rgba([40, 110, 180], .92));
     ctx.fillStyle = gm; ctx.fill();
-    ctx.lineWidth = 2.2; ctx.strokeStyle = rgba(T.crete, .9); ctx.stroke();
+    ctx.lineWidth = Math.max(1.2, Math.min(2.4, ry * .1)); ctx.strokeStyle = rgba(T.crete, 1); ctx.stroke();
     // granules de la matrice
-    ctx.save(); cheminCretes(ctx, cx, cy, rx, ry, n); ctx.clip(); ctx.fillStyle = rgba([230, 240, 250], .22);
+    ctx.save(); cheminCretes(ctx, cx, cy, rx, ry, n); ctx.clip(); ctx.fillStyle = rgba([235, 248, 255], .30);
     for (let k = 0; k < (o.grains ?? Math.round(rx * ry / 120)); k++) { ctx.beginPath(); ctx.arc(cx + (r() * 2 - 1) * rx, cy + (r() * 2 - 1) * ry, .7 + r() * 1.3, 0, TAU); ctx.fill(); }
     ctx.restore();
+    // reflet sur le dessus
+    ctx.save(); ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, TAU); ctx.clip();
+    const h = ctx.createLinearGradient(0, cy - ry, 0, cy); h.addColorStop(0, 'rgba(255,255,255,.28)'); h.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = h; ctx.beginPath(); ctx.ellipse(cx - rx * .1, cy - ry * .55, rx * .75, ry * .4, 0, 0, TAU); ctx.fill(); ctx.restore();
     ctx.restore();
   }
 
@@ -100,10 +116,10 @@
   function membrane(ctx, x, y, w, h, o = {}) {
     ctx.save();
     const g = ctx.createLinearGradient(0, y, 0, y + h);
-    g.addColorStop(0, rgba(T.membrane, .18)); g.addColorStop(.5, rgba(T.membrane, .08)); g.addColorStop(1, rgba(T.membrane, .18));
+    g.addColorStop(0, rgba(T.membrane, .30)); g.addColorStop(.5, rgba(T.membrane, .14)); g.addColorStop(1, rgba(T.membrane, .30));
     ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
     const pas = o.pas || 9, rt = Math.min(4, h / 6);
-    ctx.strokeStyle = rgba(T.membrane, .35); ctx.lineWidth = 1;
+    ctx.strokeStyle = rgba(T.membrane, .6); ctx.lineWidth = 1;
     for (let px = x + pas / 2; px < x + w; px += pas) {
       ctx.beginPath(); ctx.moveTo(px, y + rt); ctx.lineTo(px - 1, y + h / 2 - 1); ctx.moveTo(px + 2, y + rt); ctx.lineTo(px + 3, y + h / 2 - 1);
       ctx.moveTo(px, y + h - rt); ctx.lineTo(px - 1, y + h / 2 + 1); ctx.moveTo(px + 2, y + h - rt); ctx.lineTo(px + 3, y + h / 2 + 1); ctx.stroke();
@@ -111,7 +127,7 @@
     for (const yy of [y + rt, y + h - rt]) {
       for (let px = x + pas / 2; px < x + w; px += pas) {
         const gt = ctx.createRadialGradient(px, yy - 1, .5, px + 1, yy, rt);
-        gt.addColorStop(0, rgba([250, 230, 180], .9)); gt.addColorStop(1, rgba(T.membrane, .6));
+        gt.addColorStop(0, rgba([255, 244, 200], 1)); gt.addColorStop(1, rgba([220, 150, 40], .95));
         ctx.fillStyle = gt; ctx.beginPath(); ctx.arc(px + 1, yy, rt, 0, TAU); ctx.fill();
       }
     }
@@ -120,15 +136,17 @@
 
   /** Une protéine de la membrane (transporteur) : masse arrondie traversant la membrane. */
   function proteine(ctx, cx, cy, w, h, o = {}) {
-    const c = o.couleur || T.proteine;
-    ctx.save();
-    const g = ctx.createRadialGradient(cx - w * .25, cy - h * .25, 2, cx, cy, Math.max(w, h) * .7);
-    g.addColorStop(0, rgba(c.map(v => Math.min(255, v + 60)), o.alpha ?? .9)); g.addColorStop(1, rgba(c, (o.alpha ?? .9) * .8));
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(cx - w / 2, cy - h / 2, w, h, Math.min(w, h) * .45); else ctx.rect(cx - w / 2, cy - h / 2, w, h);
-    ctx.fill();
-    ctx.strokeStyle = rgba([255, 255, 255], .25); ctx.lineWidth = 1; ctx.stroke();
+    const c = o.couleur || T.proteine, a = o.alpha ?? .9, rr = Math.min(w, h) * .45;
+    const chemin = () => { ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(cx - w / 2, cy - h / 2, w, h, rr); else ctx.rect(cx - w / 2, cy - h / 2, w, h); };
+    ctx.save(); ctx.globalAlpha = Math.min(1, a / .85);
+    // ombre posée, corps en volume (clair en haut, foncé en bas), liseré, reflet
+    ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(cx + 1.5, cy + h * .56, w * .44, Math.max(1.5, h * .14), 0, 0, TAU); ctx.fill();
+    const g = ctx.createLinearGradient(0, cy - h / 2, 0, cy + h / 2);
+    g.addColorStop(0, rgba(c.map(v => Math.min(255, v + 85)), 1)); g.addColorStop(.45, rgba(c, 1)); g.addColorStop(1, rgba(c.map(v => v * .5), 1));
+    ctx.fillStyle = g; chemin(); ctx.fill();
+    ctx.strokeStyle = rgba(c.map(v => v * .4), .9); ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.32)'; ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(cx - w / 2 + rr * .6, cy - h / 2 + Math.min(2, h * .1), Math.max(1, w - rr * 1.2), h * .26, h * .13); ctx.fill();
     ctx.restore();
   }
 
@@ -137,8 +155,9 @@
     ctx.save(); ctx.globalAlpha = o.alpha ?? 1;
     ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(x + r * .25, y + r * .9, r * .8, r * .25, 0, 0, TAU); ctx.fill();
     const g = ctx.createRadialGradient(x - r * .35, y - r * .35, r * .1, x, y, r);
-    g.addColorStop(0, rgba(c.map(v => Math.min(255, v + 90)), 1)); g.addColorStop(.6, rgba(c, 1)); g.addColorStop(1, rgba(c.map(v => v * .55), 1));
+    g.addColorStop(0, rgba(c.map(v => Math.min(255, v + 120)), 1)); g.addColorStop(.5, rgba(c, 1)); g.addColorStop(1, rgba(c.map(v => v * .5), 1));
     ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+    if (r >= 5) { ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.ellipse(x - r * .35, y - r * .42, r * .22, r * .14, -.6, 0, TAU); ctx.fill(); }
     ctx.restore();
   }
 
