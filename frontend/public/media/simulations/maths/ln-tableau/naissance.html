@@ -49,6 +49,8 @@ function bloc(c, lignes, x, y, taille, couleur, inter = 26) {
 }
 function ovale(c, cx, cy, rx, ry, coul = 'orange') { c.courbe(u => { const a = -2.4 + u * Math.PI * 2.12; return [cx + rx * Math.cos(a), cy + ry * Math.sin(a)]; }, 44, { couleur: coul, largeur: 2.3 }); }
 /** Courbe y = f(x) sur [a ; b] jusqu’à la fraction p, échantillonnée finement près de 0 (ln y plonge). */
+/* Les courbes F + k (k de −2 à 2) : une teinte douce chacune, comme un dégradé (16 novembre 2026). */
+const FAMILLE = ['rgba(192,132,252,.55)', 'rgba(96,165,250,.55)', 'rgba(74,222,128,.55)', 'rgba(250,204,21,.55)', 'rgba(251,146,60,.55)'];
 function courbeF(c, G, f, a, b, p = 1, o = {}) {
   if (p <= 0) return;
   const xs = [], n = o.n || 220;
@@ -65,7 +67,7 @@ function courbeF(c, G, f, a, b, p = 1, o = {}) {
     else if (cur.length) { if (Number.isFinite(y)) cur.push([G.X(x), G.Y(cl(y))]); morceaux.push([]); }
     prec = [x, y];
   }
-  for (const pts of morceaux) if (pts.length > 1) c.trait(pts, { tremble: .35, couleur: o.couleur || 'rouge', largeur: o.largeur ?? 2.6, pointille: o.pointille, alpha: o.alpha, duree: o.duree });
+  for (const pts of morceaux) if (pts.length > 1) MathsTableau.trace(c, pts, { tremble: .35, couleur: o.couleur || 'rouge', largeur: o.largeur ?? 2.6, pointille: o.pointille, alpha: o.alpha, duree: o.duree });
 }
 /** Segment de tangente à y = ln x en a, demi-longueur `L` px, gardé dans le repère. */
 function tangente(c, G, a, couleur = 'blanc', Lpx = 52, largeur = 2.2) {
@@ -96,7 +98,7 @@ const GW = (o, w = 640) => sousTitre(LARGE() ? { ...o, w: LnLarge.t(o.w, w) } : 
 const Z = (c, x0, y0, k, nx, ny, fn) => LnLarge.colonne(c, x0, y0, LARGE() ? LnLarge.t(1, k) : 1, LARGE() ? LnLarge.t(x0, nx) : x0, LARGE() ? LnLarge.t(y0, ny) : y0, fn);
 const Fk = k => x => ln(x) + k;
 
-MathsTableau.page({
+MathsTableau.page({ net: true,
   id: 'ln_naissance', titre: 'Fonctions logarithmiques', ajuster: !LnLarge.actif,
   texte: 'Construction à la craie du cours Fonctions logarithmiques : la règle des puissances ne donne pas de primitive de 1/x ; 1/x est continue sur ]0 ; +∞[ donc elle a des primitives ; celle qui s’annule en 1 s’appelle ln ; ln 1 = 0 et (ln x)’ = 1/x',
   vues: {
@@ -180,7 +182,7 @@ MathsTableau.page({
         K.marque('existe');
         c.pause(.4);
         const G2 = K.axes(GW(BAS));
-        K.anime(1.8, p => { for (let kk = -2; kk <= 2; kk++) courbeF(c, G2, Fk(kk), 0.03, 5.3, p, { couleur: 'faible', largeur: 1.2 }); });
+        K.anime(1.8, p => { for (let kk = -2; kk <= 2; kk++) courbeF(c, G2, Fk(kk), 0.03, 5.3, p, { couleur: FAMILLE[kk + 2], largeur: 1.4 }); });
         c.texte('F + k', G2.X(5.3) + 4, G2.Y(ln(5.3) + 2) + 4, { couleur: 'faible', taille: 16 });
         c.repere('famille', G2.x0, G2.y0, G2.w, G2.h, 'les courbes F + k');
         K.marque('famille');
@@ -221,7 +223,7 @@ MathsTableau.page({
         const LL = LnLarge.ouvrir(c);
         LnLarge.titre(c, K, 'La primitive qui passe par (1 ; 0) s’appelle ln');
         const k = K.P.k, G = K.axes(GW(CHOIX));
-        K.anime(1.6, p => { for (let kk = -2; kk <= 2; kk++) courbeF(c, G, Fk(kk), 0.03, 5.3, p, { couleur: 'tresfaible', largeur: 1.2 }); });
+        K.anime(1.6, p => { for (let kk = -2; kk <= 2; kk++) courbeF(c, G, Fk(kk), 0.03, 5.3, p, { couleur: FAMILLE[kk + 2].replace(',.55)', ',.32)'), largeur: 1.2 }); });
         c.texte('F + k', G.X(5.3) + 4, G.Y(ln(5.3) + 2) + 4, { couleur: 'faible', taille: 16 });
         K.marque('famille');
         c.pause(.3);
