@@ -234,7 +234,7 @@ les cours** (`python -X utf8 scripts/voix/poser_en_ligne.py --compter`).
   règle : le PDF officiel fait foi, AlloSchool en cas de conflit, `ca7996d3`) ; cours de maths ch1-ch6, chimie ch9-ch13,
   physique (8 cours, `d8c09306`) et SVT ch1-ch4 corrigés ; vérification ajoutée aux skills (maths, physique, chimie,
   SVT).
-- **159 voix refaites après l'audit** (`8f1a2901`) : 15 diapositives, 143 réactions et énoncés, 1 démonstration, voix
+- **159 voix refaites après l'audit** (`8f1a2901`) : 12 diapositives, 146 réactions et énoncés, 1 démonstration, voix
   Bodi, compte 2 (`voix_textes_compte2.py`), posées en **v14** pour ne pas servir l'ancienne voix en cache.
 - **Labo** : synthèse de l'acétate de linalyle (tronc commun, le savon est retiré) et CCM pour l'identifier
   (`1d4d86cc`, `9cff8b4d`).
@@ -251,7 +251,41 @@ les cours** (`python -X utf8 scripts/voix/poser_en_ligne.py --compter`).
 - Tout `origin/main` jusqu'à `12aca482` est en local (fichiers identiques, 0 conflit). Prochaine récupération :
   `python scripts/recuperer_cloud.py 12aca482 --appliquer`.
 
+## 3 octies. Point du 16 novembre 2026 (matin, 9 h 45)
+
+**Serveur sur `main` (dernier déploiement : celui qui pousse ce point), lien libre reconstruit après chaque
+déploiement.** Tout ce qui était « pas encore en ligne » au § 3 septies est en ligne.
+
+### Mis en ligne ce matin
+- `12aca482` : SVT ch1-ch4 peints (cellule, mitochondrie, mitose, pollution, coupes géologiques) ; retouches
+  des tableaux d'ondes, RC, RL et RLC.
+- `48a6fda7` : 2e passe « plus vif » des sessions d'animation, de 8 h 55 à 9 h 21 :
+  - chimie : béchers et solutions plus vifs dans les 5 chapitres ;
+  - physique : courbes nettes et lumineuses (RC, RL, RLC, radioactivité, nucléaire), ondes ch1-ch3 plus lisibles ;
+  - SVT : muscle (couleurs vives, barres peintes, réticulum translucide) ;
+  - skill `simulations-au-tableau`, règle 9 : remplir le tableau, écrire grand, rien qui se chevauche ni de minuscule
+    (`446a72fe`).
+- Puis `38309f62` et `001b7409` (9 h 41) : SVT gène-protéine (ARNt et polymérase en volume) et génétique (cellules,
+  noyaux, chromosomes plus vifs, légendes hors des objets).
+
+### Ce que l'utilisateur a remarqué
+- Dans le chapitre des ondes (lien libre), seules la **corde, les micros et le sonar** ont été repeints ; ballon,
+  milieux, types, carte et bilan n'ont eu que des retouches. Le début du cours paraît donc peu changé. Si l'utilisateur
+  veut toutes les animations des ondes repeintes, c'est une nouvelle demande aux sessions d'animation.
+- Après un déploiement, recharger avec **Ctrl+F5** avant de juger.
+
+### Récupération en local
+- Une récupération faite depuis `8f1a2901` avait raté 65 fichiers poussés entre `858af5df` et `8f1a2901`
+  (dont `chimie/shared/chem-lab.js`, le matériel peint des labos de chimie, et la suppression des anciennes voix
+  v10-v12 de maths ch1) : rattrapés en relançant depuis `858af5df`. **Leçon : la base de la récupération est le
+  dernier commit d'origin déjà récupéré, pas le dernier commit déployé.**
+- Tout `origin/main` jusqu'à `001b7409` est en local, sauf les 13 fichiers du labo 3D (`frontend/public/labo/`,
+  `scripts/publier_labo.py`), modifiés localement par la session « Labo virtuel synthèse savon » : à fusionner par elle.
+- Prochaine récupération : `python scripts/recuperer_cloud.py <commit de ce point> --appliquer`.
+- Les autres branches d'origin n'ont rien à récupérer (`deploy-figures-chimie` est dépassée par `main`,
+  `claude/tts-api-access-951ccc` date d'août).
+
 ## 4. Ce qui attend une décision
-- Déployer les simulations peintes et retouchées poussées après `8f1a2901` (§ 3 septies), après un coup d'œil dans le lecteur.
+- Repeindre aussi ballon, milieux, types, carte et bilan du chapitre des ondes, si l'utilisateur le veut (§ 3 octies).
 - Déployer la correction des questions de reprise (formules écrites) — commit prêt, pas encore déployé.
 - Passer le nouveau lecteur sur `main` pour les élèves connectés, après la relecture des profs.
