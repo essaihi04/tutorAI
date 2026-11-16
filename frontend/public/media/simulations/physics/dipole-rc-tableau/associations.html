@@ -31,7 +31,7 @@ const { fr, bulle, protocole } = window.Tableau;
 const $ = id => document.getElementById(id);
 const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');
 const VUE = new URLSearchParams(location.search).get('vue') === 'serie' ? 'serie' : 'parallele';
-const U = 6, KW = 11, QPT = 3, CHARGE = 2.4;           // V ; px d'armature par µF ; µC par point ; s de charge
+const U = 6, KW = 18, QPT = 3, CHARGE = 2.4;           // V ; px d'armature par µF ; µC par point ; s de charge
 const P = { C1: 3, C2: 6 };
 const ETAPES = VUE === 'parallele' ? ['circuit', 'charges', 'formule', 'interet'] : ['circuit', 'tensions', 'formule', 'deux', 'interet'];
 const S = { etape: -1, f: 0, running: false, pause: false, fait: false, motif: '', emis: 0 };
@@ -45,7 +45,7 @@ function sphere(ctx, x, y, r, [clair, milieu, sombre]) {
 }
 /** Une armature : plaque d'aluminium vue sur la tranche (reflet clair, bord sombre, ombre douce), liseré de la couleur du condensateur. */
 function armature(ctx, x0, x1, y, couleur) {
-  const e = 6;
+  const e = 8;
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 5; ctx.shadowOffsetY = 2;
   const g = ctx.createLinearGradient(0, y - e / 2, 0, y + e / 2); g.addColorStop(0, '#ffffff'); g.addColorStop(.35, '#d5dce3'); g.addColorStop(.7, '#8d97a1'); g.addColorStop(1, '#4b535c');
@@ -56,7 +56,7 @@ function armature(ctx, x0, x1, y, couleur) {
 }
 /** L'isolant entre les armatures : une lame translucide ambrée. */
 function isolant(ctx, x0, x1, y0, y1) {
-  const g = ctx.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(250,204,21,.10)'); g.addColorStop(.5, 'rgba(250,204,21,.30)'); g.addColorStop(1, 'rgba(250,204,21,.10)');
+  const g = ctx.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(250,204,21,.22)'); g.addColorStop(.5, 'rgba(250,204,21,.48)'); g.addColorStop(1, 'rgba(250,204,21,.22)');
   ctx.fillStyle = g; ctx.fillRect(x0 + 2, y0, x1 - x0 - 4, y1 - y0);
 }
 /** Une charge : petite sphère ombrée rouge (+) ou bleue (−), avec son signe. */
@@ -78,15 +78,18 @@ function peindreGenerateur(ctx, x, y, w, h) {
   ctx.fillStyle = '#0d1a10'; ctx.beginPath(); ctx.roundRect(ex, ey, ew, eh, 3); ctx.fill();
   ctx.fillStyle = '#7dfc8a'; ctx.font = `600 ${Math.round(eh * .72)}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText('6V', ex + ew / 2, ey + eh / 2 + 1);
-  sphere(ctx, x + w / 2, y, 4.2, ['#ffd0d0', '#e0393e', '#6d0f12']);
-  sphere(ctx, x + w / 2, y + h, 4.2, ['#9aa0a6', '#2b2f33', '#050607']);
+  sphere(ctx, x + w / 2, y, 5, ['#ffd0d0', '#e0393e', '#6d0f12']);
+  sphere(ctx, x + w / 2, y + h, 5, ['#9aa0a6', '#2b2f33', '#050607']);
   ctx.restore();
 }
 const COULEUR_PEINT = { cyan: '#22d3ee', vert: '#4ade80' };
+const G = 28;                                         // écart entre les armatures (px)
+/** Demi-largeur des armatures d'un condensateur de C µF (l'équivalent reste dans sa colonne). */
+const demi = (C, max = 160) => Math.min(max, Math.max(18, C * KW)) / 2;
 
 /** Un condensateur horizontal (armatures l'une au-dessus de l'autre) centré en (cx, cy), avec ses charges. */
 function condensateur(c, cx, cy, C, q, couleur, nom) {
-  const w = Math.max(14, C * KW), g = 14;
+  const w = 2 * demi(C, nom === 'equivalent' ? 200 : 160), g = G;
   // tableau large (zones.js) : les armatures peintes suivent la zone de leur condensateur
   scene.peindreDans(cx, cy, () => {
     armature(c.ctx, cx - w / 2, cx + w / 2, cy - g / 2, COULEUR_PEINT[couleur] || couleur);
@@ -95,20 +98,20 @@ function condensateur(c, cx, cy, C, q, couleur, nom) {
   // Les charges arrivent une à une : la dernière apparaît en fondu (pas de saut).
   const nr = q / QPT, n = Math.ceil(nr - 1e-9);
   scene.peindreDans(cx, cy, () => {
-    isolant(c.ctx, cx - w / 2, cx + w / 2, cy - g / 2 + 3, cy + g / 2 - 3);
+    isolant(c.ctx, cx - w / 2, cx + w / 2, cy - g / 2 + 4, cy + g / 2 - 4);
     for (let k = 0; k < n; k++) {
-      const x = cx - w / 2 + (k + 0.5) * w / n, a = Math.min(1, nr - k), rr = Math.max(2.6, Math.min(4.2, .46 * w / n));
-      charge(c.ctx, x, cy - g / 2 - 8, +1, a, rr); charge(c.ctx, x, cy + g / 2 + 8, -1, a, rr);
+      const x = cx - w / 2 + (k + 0.5) * w / n, a = Math.min(1, nr - k), rr = Math.max(3, Math.min(5.5, .44 * w / n));
+      charge(c.ctx, x, cy - g / 2 - 11, +1, a, rr); charge(c.ctx, x, cy + g / 2 + 11, -1, a, rr);
     }
   });
-  c.repere(nom, cx - w / 2 - 10, cy - 20, w + 20, 40, nom === 'C1' ? 'le condensateur C₁' : nom === 'C2' ? 'le condensateur C₂' : 'le condensateur équivalent');
+  c.repere(nom, cx - w / 2 - 10, cy - g / 2 - 18, w + 20, g + 36, nom === 'C1' ? 'le condensateur C₁' : nom === 'C2' ? 'le condensateur C₂' : 'le condensateur équivalent');
 }
 function generateur(c, x, y1, y2) {
   const ym = (y1 + y2) / 2;
-  c.direct(() => scene.peindreDans(x, ym, () => peindreGenerateur(c.ctx, x - 24, ym - 34, 48, 68)));
-  c.ligne(x, y1, x, ym - 38); c.ligne(x, ym + 38, x, y2);
-  c.texte('+', x + 30, ym - 22, { couleur: 'rouge', taille: 16 }); c.texte('u = 6 V', x - 32, ym + 5, { couleur: 'jaune', taille: 15, align: 'right' });
-  c.repere('generateur', x - 70, ym - 30, 100, 60, 'le générateur : u = 6 V');
+  c.direct(() => scene.peindreDans(x, ym, () => peindreGenerateur(c.ctx, x - 33, ym - 46, 66, 92)));
+  c.ligne(x, y1, x, ym - 50); c.ligne(x, ym + 50, x, y2);
+  c.texte('+', x + 40, ym - 32, { couleur: 'rouge', taille: 16 }); c.texte('u = 6 V', x - 42, ym + 5, { couleur: 'jaune', taille: 15, align: 'right' });
+  c.repere('generateur', x - 100, ym - 48, 140, 96, 'le générateur : u = 6 V');
 }
 
 function dessiner(c) {
@@ -116,16 +119,16 @@ function dessiner(c) {
   c.texte(VUE === 'parallele' ? 'Deux condensateurs en parallèle' : 'Deux condensateurs en série', 280, 26, { couleur: 'blanc', taille: 18, align: 'center' });
   const f = 1 - Math.pow(1 - S.f, 2);   // la charge démarre vite puis ralentit (easing)
   if (VUE === 'parallele') {
-    const T = 82, B = 320, X1 = 250, X2 = 420;
+    const T = 82, B = 320, X1 = 225, X2 = 425;
     generateur(c, 90, T, B); c.ligne(90, T, X2 + 70, T); c.ligne(90, B, X2 + 70, B);
-    c.ligne(X1, T, X1, 192); c.ligne(X1, 206, X1, B); c.ligne(X2, T, X2, 192); c.ligne(X2, 206, X2, B);
+    c.ligne(X1, T, X1, 199 - G / 2); c.ligne(X1, 199 + G / 2, X1, B); c.ligne(X2, T, X2, 199 - G / 2); c.ligne(X2, 199 + G / 2, X2, B);
     c.direct(() => {
       const q1 = P.C1 * U * f, q2 = P.C2 * U * f;
       condensateur(c, X1, 199, P.C1, q1, 'cyan', 'C1'); condensateur(c, X2, 199, P.C2, q2, 'cyan', 'C2');
-      c.texte(`C₁ = ${P.C1} µF`, X1 + 12, 150, { couleur: 'cyan', taille: 15 }); c.texte(`C₂ = ${P.C2} µF`, X2 + 12, 150, { couleur: 'cyan', taille: 15 });
+      c.texte(`C₁ = ${P.C1} µF`, X1 + 12, 140, { couleur: 'cyan', taille: 15 }); c.texte(`C₂ = ${P.C2} µF`, X2 + 12, 140, { couleur: 'cyan', taille: 15 });
       if (voit('circuit')) {
-        const ut = f > 0 ? `${fx(U * f, 1)} V` : 'u'; c.texte(`u₁ = ${ut}`, X1 + 12, 262, { couleur: 'jaune', taille: 15 }); c.texte(`u₂ = ${ut}`, X2 + 12, 262, { couleur: 'jaune', taille: 15 });
-        c.repere('tensions', X1 - 10, 246, X2 - X1 + 100, 24, 'la même tension u aux bornes des deux');
+        const ut = f > 0 ? `${fx(U * f, 1)} V` : 'u'; c.texte(`u₁ = ${ut}`, X1 + 12, 266, { couleur: 'jaune', taille: 15 }); c.texte(`u₂ = ${ut}`, X2 + 12, 266, { couleur: 'jaune', taille: 15 });
+        c.repere('tensions', X1 - 10, 250, X2 - X1 + 100, 24, 'la même tension u aux bornes des deux');
         if (S.etape === 0 && f === 0) c.texte('les deux entre les mêmes points : même tension u', 280, 360, { couleur: 'jaune', taille: 15, align: 'center' });
       }
       if (voit('charges') && f > 0) {
@@ -137,18 +140,20 @@ function dessiner(c) {
   } else {
     const T = 70, B = 350, XR = 300;
     generateur(c, 90, T, B); c.ligne(90, T, XR, T); c.ligne(90, B, XR, B);
-    c.ligne(XR, T, XR, 133); c.ligne(XR, 147, XR, 263); c.ligne(XR, 277, XR, B);
+    c.ligne(XR, T, XR, 140 - G / 2); c.ligne(XR, 140 + G / 2, XR, 270 - G / 2); c.ligne(XR, 270 + G / 2, XR, B);
     c.direct(() => {
       const ce = P.C1 * P.C2 / (P.C1 + P.C2), q = ce * U * f;
+      // Les textes s'écartent des armatures quand elles s'élargissent.
+      const dg = Math.max(70, Math.max(demi(P.C1), demi(P.C2)) + 16), dd = Math.max(72, Math.max(demi(P.C1), demi(P.C2)) + 18);
       condensateur(c, XR, 140, P.C1, q, 'cyan', 'C1'); condensateur(c, XR, 270, P.C2, q, 'cyan', 'C2');
-      c.texte(`C₁ = ${P.C1} µF`, XR - 70, 145, { couleur: 'cyan', taille: 15, align: 'right' }); c.texte(`C₂ = ${P.C2} µF`, XR - 70, 275, { couleur: 'cyan', taille: 15, align: 'right' });
+      c.texte(`C₁ = ${P.C1} µF`, XR - dg, 145, { couleur: 'cyan', taille: 15, align: 'right' }); c.texte(`C₂ = ${P.C2} µF`, XR - dg, 275, { couleur: 'cyan', taille: 15, align: 'right' });
       if (voit('circuit') && f > 0) {
-        c.texte(`q = ${fx(q, 0)} µC`, XR + 72, 132, { couleur: 'rouge', taille: 15 }); c.texte(`q = ${fx(q, 0)} µC`, XR + 72, 262, { couleur: 'rouge', taille: 15 });
-        c.repere('charges', XR + 64, 114, 120, 160, 'la même charge q sur les deux');
+        c.texte(`q = ${fx(q, 0)} µC`, XR + dd, 132, { couleur: 'rouge', taille: 15 }); c.texte(`q = ${fx(q, 0)} µC`, XR + dd, 262, { couleur: 'rouge', taille: 15 });
+        c.repere('charges', XR + dd - 8, 114, 120, 160, 'la même charge q sur les deux');
       }
       if (voit('tensions') && f > 0) {
-        c.texte(`u₁ = ${fx(q / P.C1, 1)} V`, XR + 72, 156, { couleur: 'jaune', taille: 15 }); c.texte(`u₂ = ${fx(q / P.C2, 1)} V`, XR + 72, 286, { couleur: 'jaune', taille: 15 });
-        c.repere('tensions', XR + 64, 140, 120, 160, 'les tensions u₁ et u₂');
+        c.texte(`u₁ = ${fx(q / P.C1, 1)} V`, XR + dd, 156, { couleur: 'jaune', taille: 15 }); c.texte(`u₂ = ${fx(q / P.C2, 1)} V`, XR + dd, 286, { couleur: 'jaune', taille: 15 });
+        c.repere('tensions', XR + dd - 8, 140, 120, 160, 'les tensions u₁ et u₂');
         if (S.fait || f >= 1) { c.texte(`u₁ + u₂ = ${fx(q / P.C1, 1)} + ${fx(q / P.C2, 1)} = ${fx(q / P.C1 + q / P.C2, 1)} V = u`, 260, 396, { couleur: 'jaune', taille: 16, align: 'center', max: 470 }); c.repere('somme', 40, 378, 460, 26, 'les tensions s’ajoutent'); }
       }
     });
@@ -170,9 +175,9 @@ function dessiner(c) {
     }
     if (voit('interet') && (S.fait || S.f >= 1)) {
       c.texte('le condensateur équivalent', X, 190, { couleur: 'faible', taille: 14, align: 'center' });
-      c.ligne(X, 200, X, 230); c.ligne(X, 244, X, 270);
+      c.ligne(X, 200, X, 237 - G / 2); c.ligne(X, 237 + G / 2, X, 274);
       condensateur(c, X, 237, ce, ce * U, 'vert', 'equivalent');
-      c.texte(`C_eq = ${fx(ce)} µF`, X, 296, { couleur: 'vert', taille: 17, align: 'center' });
+      c.texte(`C_eq = ${fx(ce)} µF`, X, 300, { couleur: 'vert', taille: 17, align: 'center' });
       const plus = VUE === 'parallele';
       c.texte(plus ? 'plus grande que C₁ et que C₂' : 'plus petite que C₁ et que C₂', X, 326, { couleur: 'orange', taille: 15, align: 'center', max: 215 });
       c.texte(plus ? 'le parallèle augmente la capacité' : 'la série diminue la capacité', X, 352, { couleur: 'orange', taille: 16, align: 'center', max: 215 });
