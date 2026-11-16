@@ -89,13 +89,14 @@ const ANIMATIONS = `
   .tableau-questions > div:first-child { padding-top: 1px; padding-bottom: 1px }
   .tableau-questions > div:first-child .text-base { font-size: 13px }
   .tableau-questions .p-4, .tableau-questions .p-5 { padding: 5px 9px }
-  .tableau-questions .text-xl { font-size: 15px; line-height: 1.25 }
-  .tableau-questions .text-lg { font-size: 13.5px; line-height: 1.25 }
+  /* la taille suit la hauteur de l'écran : serrée à 266 px (barre du navigateur), plus grande quand la place existe */
+  .tableau-questions .text-xl { font-size: clamp(15px, 5vh, 21px); line-height: 1.25 }
+  .tableau-questions .text-lg { font-size: clamp(13.5px, 4.6vh, 20px); line-height: 1.25 }
   .tableau-questions .text-base { font-size: 14px }
   .tableau-questions [data-choix] { margin-top: 4px }
-  .tableau-questions [data-choix='qcm'] { display: grid; grid-template-columns: 1fr 1fr; gap: 4px }
+  .tableau-questions [data-choix='qcm'] { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(4px, 1.6vh, 8px) }
   .tableau-questions [data-choix='qcm'] > * { margin-top: 0 !important }
-  .tableau-questions [data-choix] > button { padding-top: 3px; padding-bottom: 3px }
+  .tableau-questions [data-choix] > button { padding-top: clamp(3px, 1.8vh, 12px); padding-bottom: clamp(3px, 1.8vh, 12px) }
   .tableau-questions .mt-3 { margin-top: 6px }
   .tableau-questions .mt-2 { margin-top: 4px }
   /* les bulles (cahier, explication, question de l'élève) : toute la hauteur du tableau, texte à la taille de l'écran */
@@ -2599,6 +2600,7 @@ function UneQuestion({ q, diapo, dire, jouer, preparees, compact = false, onRepo
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto rounded-xl border border-white/15 p-4">
+      <RemplirSiCourt>
       <div className="flex items-start gap-2">
         <p className={`${titre} min-w-0 flex-1 text-amber-100`}><Formule t={q.enonce} /></p>
         {lireEnonce && !finie && (
@@ -2659,6 +2661,7 @@ function UneQuestion({ q, diapo, dire, jouer, preparees, compact = false, onRepo
       {q.demonstration?.lignes?.length && revoir ? (
         <DemonstrationPleine d={q.demonstration} lecture={null} complet enonce={q.enonce} onFermer={() => setRevoir(false)} />
       ) : null}
+      </RemplirSiCourt>
     </div>
   );
 }
@@ -3010,6 +3013,25 @@ function BoutonResultat({ onClick, className = '' }: { onClick: () => void; clas
 /** Le texte d'un bouton de la barre : l'icône toujours, le mot sur grand écran (et au survol, `title`). */
 function Libelle({ icone, texte }: { icone: string; texte: string }) {
   return <span title={texte} aria-label={texte}>{icone}<span className="hidden 2xl:inline"> {texte}</span></span>;
+}
+
+/** Téléphone en paysage (hauteur < 520 px) : vrai tant que l'écran garde cette forme. */
+function useCourt() {
+  const requete = '(max-height: 520px) and (orientation: landscape)';
+  const [court, setCourt] = useState(() => typeof window !== 'undefined' && window.matchMedia(requete).matches);
+  useEffect(() => {
+    const m = window.matchMedia(requete), suivre = () => setCourt(m.matches);
+    m.addEventListener('change', suivre);
+    return () => m.removeEventListener('change', suivre);
+  }, []);
+  return court;
+}
+
+/** Sur téléphone en paysage, la question (énoncé, choix, retour) grandit jusqu'à remplir sa carte (16 novembre 2026 :
+ *  « agrandir les suggestions du QCM, il reste de la place ») et se resserre quand le retour du professeur arrive. */
+function RemplirSiCourt({ children }: { children: ReactNode }) {
+  const court = useCourt();
+  return court ? <SansDefilement agrandirMax={1.5} zoomMin={0.85}>{children}</SansDefilement> : <>{children}</>;
 }
 
 function Bulle({ children, actif, pulse, disabled, onClick }: { children: ReactNode; actif?: boolean; pulse?: boolean; disabled?: boolean; onClick: () => void }) {

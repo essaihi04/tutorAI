@@ -305,6 +305,9 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
     };
     const update = () => {
       const rect = bounds();
+      // le repère est caché sous les questions (ou une bulle) : pas de cadre vide ni de baguette vers rien (16 novembre 2026)
+      const dessus = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      if (dessus && dessus !== iframe && !dessus.closest('.moalim-target, .moalim-pointer')) { setFocus(null); return; }
       setFocus({ rect, writing: false });
       const point = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
       fly(reachPosition(point, false, rig.current, iframe.getBoundingClientRect(), discret));
