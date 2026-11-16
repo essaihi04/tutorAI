@@ -18,6 +18,7 @@
  */
 (function () {
   'use strict';
+  const TEXTE_MIN = 18;   // px à l'écran, textes d'une vue en blocs (def.texteMin pour une vue serrée)
   const PRIM = ['texte', 'trait', 'ligne', 'fleche', 'cote', 'rect', 'cercle', 'courbe', 'point', 'repere', 'axe', 'direct'];
   const ancre = {
     texte: (s, x, y, o = {}) => [x, y - (o.taille ?? 18) * .35],
@@ -109,10 +110,11 @@
         if (!DESSINE.includes(n)) return proto[n].apply(ctx, v);
       };
     }
-    const t = c.t, cur = c.cur, tip = c.tip, comp = c.complet; st0.sonde = true;
+    const t = c.t, cur = c.cur, tip = c.tip, comp = c.complet, tm = c.tailleMin; st0.sonde = true;
+    c.tailleMin = Math.max(tm || 0, st0.def.texteMin ?? TEXTE_MIN);   // même plancher qu'au vrai dessin
     ctx.save(); ctx.setTransform(st0.base);
     try { f.apply(c, a); } catch (e) { /* rien */ } finally {
-      ctx.restore(); st0.sonde = false; c.t = t; c.cur = cur; c.tip = tip; c.complet = comp;
+      ctx.restore(); st0.sonde = false; c.t = t; c.cur = cur; c.tip = tip; c.complet = comp; c.tailleMin = tm;
       for (const n of Object.keys(sauve)) { if (sauve[n] === undefined) delete ctx[n]; else ctx[n] = sauve[n]; }
     }
     return bb[2] >= bb[0] ? [(bb[0] + bb[2]) / 2, (bb[1] + bb[3]) / 2] : null;
@@ -140,11 +142,13 @@
         const ctx = this.ctx, avant = ctx.getTransform(), tip = this.tip;
         ctx.setTransform(st.base); ctx.translate(b.dx, b.dy); ctx.scale(b.k, b.k);
         const ech = this.echelle; this.echelle = ech * b.k;   // texte jamais sous 15 px : à l'échelle du bloc
+        // Troisième passe (texte 18-22 px à l'écran) : plancher def.texteMin (défaut 18 px écran) au lieu des 15 de la craie.
+        const tmin = this.tailleMin; this.tailleMin = Math.max(tmin || 0, st.def.texteMin ?? TEXTE_MIN);
         prof++; if (nom === 'direct') st.dansDirect = prof;
         try { return f.apply(this, a); }
         finally {
           prof--; if (nom === 'direct') st.dansDirect = 0;
-          this.echelle = ech;
+          this.echelle = ech; this.tailleMin = tmin;
           if (this.tip && this.tip !== tip) this.tip = [b.dx + this.tip[0] * b.k, b.dy + this.tip[1] * b.k];
           ctx.setTransform(avant);
         }

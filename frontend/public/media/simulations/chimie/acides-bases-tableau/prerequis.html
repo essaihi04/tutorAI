@@ -382,26 +382,28 @@ function vuePente(c, D) {
   c.texte('t (min)', G.x0 + G.w + 10, G.y0 + 36, { couleur: 'faible', taille: 14, align: 'right' });
   c.texte('x (mmol)', G.x0 + 6, G.y0 - G.h - 20, { couleur: 'faible', taille: 14 });
   const RX = 490;
+  // tableau large (troisième passe) : la colonne de droite peut s'élargir, les phrases ne sont plus rétrécies sous 17 px
+  const MX = D.scene.L >= 1000 ? 360 : 260;
   const droiteVisible = !D.commence('courbe');
   ecrire(c, D, 'droite', () => {
     if (droiteVisible) c.ligne(gx(0), gy(0), gx(22), gy(2.2), { couleur: 'cyan', largeur: 2.4 });
-    c.texte('une droite : x monte toujours pareil', RX, 90, { couleur: 'cyan', taille: 15, max: 260 });
+    c.texte('une droite : x monte toujours pareil', RX, 90, { couleur: 'cyan', taille: 15, max: MX });
     c.repere('droite', G.x0, G.y0 - G.h, G.w, G.h, 'la droite');
   });
   ecrire(c, D, 'triangle', () => {
     if (droiteVisible) { c.ligne(gx(8), gy(.8), gx(16), gy(.8), { couleur: 'jaune', largeur: 2 }); c.ligne(gx(16), gy(.8), gx(16), gy(1.6), { couleur: 'jaune', largeur: 2 }); c.texte('Δt = 8 min', gx(12), gy(.8) + 18, { couleur: 'jaune', taille: 13, align: 'center' }); c.texte('Δx = 0,8', gx(16) + 6, gy(1.2), { couleur: 'jaune', taille: 13 }); }
-    c.texte('Δt : on avance dans le temps ; Δx : de combien x monte', RX, 116, { couleur: 'faible', taille: 14, max: 260 });
+    c.texte('Δt : on avance dans le temps ; Δx : de combien x monte', RX, 116, { couleur: 'faible', taille: 14, max: MX });
     c.repere('triangle', gx(8) - 6, gy(1.6) - 6, gx(16) - gx(8) + 60, gy(.8) - gy(1.6) + 26, 'le triangle Δt, Δx');
   });
   ecrire(c, D, 'pente', () => {
-    c.texte('pente = Δx / Δt = 0,8 / 8 = 0,1 mmol/min', RX, 146, { couleur: 'jaune', taille: 16, max: 260 });
+    c.texte('pente = Δx / Δt = 0,8 / 8 = 0,1 mmol/min', RX, 146, { couleur: 'jaune', taille: 16, max: MX });
     c.repere('pente', RX - 6, 128, 266, 28, 'pente = Δx / Δt');
   });
   ecrire(c, D, 'courbe', () => {
     const p = D.p('courbe');
     c.direct(() => c.courbe(u => [gx(u * 32 * p), gy(courbeX(u * 32 * p))], 80, { couleur: 'blanc', largeur: 2.4 }));
-    c.texte('une courbe : raide au début, plate à la fin', RX, 186, { couleur: 'blanc', taille: 15, max: 260 });
-    c.texte('sa pente change à chaque date', RX, 208, { couleur: 'faible', taille: 14, max: 260 });
+    c.texte('une courbe : raide au début, plate à la fin', RX, 186, { couleur: 'blanc', taille: 15, max: MX });
+    c.texte('sa pente change à chaque date', RX, 208, { couleur: 'faible', taille: 14, max: MX });
     c.repere('courbe', G.x0, G.y0 - G.h, G.w, G.h, 'la courbe x(t)');
   });
   ecrire(c, D, 'tangente', () => {
@@ -409,10 +411,10 @@ function vuePente(c, D) {
     c.direct(() => {
       c.ligne(gx(a), gy(Math.max(0, x0 + s * (a - t0))), gx(b), gy(Math.min(2.4, x0 + s * (b - t0))), { couleur: 'vert', largeur: 2.4 });
       c.point(gx(t0), gy(x0), 5, 'jaune');
-      c.texte(`à t = ${fr(t0, 0)} min : pente ≈ ${fr(s, 2)} mmol/min`, RX, 252, { couleur: 'vert', taille: 15, max: 260 });
+      c.texte(`à t = ${fr(t0, 0)} min : pente ≈ ${fr(s, 2)} mmol/min`, RX, 252, { couleur: 'vert', taille: 15, max: MX });
     });
-    c.texte('la tangente touche la courbe en un seul point', RX, 276, { couleur: 'faible', taille: 14, max: 260 });
-    c.texte('sa pente : dx/dt à cette date', RX, 300, { couleur: 'jaune', taille: 15, max: 260 });
+    c.texte('la tangente touche la courbe en un seul point', RX, 276, { couleur: 'faible', taille: 14, max: MX });
+    c.texte('sa pente : dx/dt à cette date', RX, 300, { couleur: 'jaune', taille: 15, max: MX });
     c.repere('tangente', RX - 6, 234, 266, 76, 'la tangente et sa pente');
   });
 }
@@ -541,7 +543,8 @@ const VUES_DESSIN = { mole: vueMole, concentration: vueConcentration, ion: vueIo
 /* Recomposition sur la largeur (tableau large, L ≥ 1000 : voir Recompose dans exposants.js) ; cadre 760 × 420.
  * Les autres vues (pas montrées au tableau large dans ce cours) gardent leur disposition, centrée. */
 const BLOCS_RC = {
-  pente: [{ r: [10, 6, 740, 30], haut: true }, { r: [440, 58, 320, 260] }, { r: [36, 56, 404, 318], etire: true }],
+  // colonne de droite large de 380 : ses phrases s'élargissent (max 360) sur tableau large au lieu de rétrécir
+  pente: [{ r: [10, 6, 740, 30], haut: true }, { r: [440, 58, 380, 260] }, { r: [36, 56, 404, 318], etire: true }],
   puissance: [{ r: [10, 6, 740, 30], haut: true }, { r: [150, 40, 460, 64], centre: true }, { r: [36, 122, 712, 114], centre: true, etire: 1.3 }, { r: [28, 248, 704, 166], centre: true }],
 };
 function dessiner(c, D) {
