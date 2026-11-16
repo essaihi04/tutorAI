@@ -295,7 +295,10 @@ function dessiner(c) {
   ({ exp: dessinerExp, ln: dessinerLn, puissances: dessinerPuissances, mole: dessinerMole })[S.vue](c);
 }
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(23); dessiner(c); return c.fin(); });
+/* (16 novembre 2026, règle 9 : remplir le tableau) : la boîte de l'encre de l'image finale remplit le cadre (ajuster) ;
+ * elle est remesurée à chaque changement de vue. */
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(23); dessiner(c); return c.fin(); },
+  { ajuster: true, complet: f => { const t = S.t, fait = S.fait; S.t = FIN; S.fait = true; try { f(); } finally { S.t = t; S.fait = fait; } } });
 scene.avancer = dt => {
   if (!S.running) return false;
   S.t = Math.min(FIN, S.t + dt);
@@ -346,7 +349,7 @@ function setTime(p) {
 function params() { return { vue: S.vue, x: S.x, x_ln: S.xLn, m_g: S.m }; }
 function setParameters(p) {
   p = p || {};
-  if (VUES.includes(p.vue) && p.vue !== S.vue) { S.vue = p.vue; calculer(); scene.reecrire(); start(); }
+  if (VUES.includes(p.vue) && p.vue !== S.vue) { S.vue = p.vue; calculer(); scene.boite = null; scene.reecrire(); start(); }
   if (Number.isFinite(+p.x) && p.x !== null && p.x !== '') S.x = clamp(+p.x, 0, 4);
   if (Number.isFinite(+p.x_ln) && p.x_ln !== null && p.x_ln !== '') S.xLn = clamp(Math.round(+p.x_ln), -3, 3);
   if (Number.isFinite(+p.m_g) && p.m_g !== null && p.m_g !== '') S.m = clamp(Math.round(+p.m_g), 1, 120);
