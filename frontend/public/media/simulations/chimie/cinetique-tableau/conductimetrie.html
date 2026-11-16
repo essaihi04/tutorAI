@@ -386,6 +386,9 @@ let MO = null;
 })();
 const ZY = [352, 376, 400];
 const NA = ['#f1e1ff', '#a855f7', '#4c1d95'], HO = ['#ffd4d4', '#e04848', '#6a1010'], AC = ['#d6ffe0', '#3fbf62', '#0f5a23'], CL = ['#d9f7ff', '#22b8d6', '#0b4a5a'];
+const MODELE_ION = new Map([[NA, 'Na'], [HO, 'HO'], [AC, 'CH3COO'], [CL, 'Cl']]);
+/** Icône de légende : l'ion peint comme dans les béchers et la loupe. */
+const icone = (ctx, col, x, y) => { const n = MODELE_ION.get(col); window.Rendu.molecule(ctx, n, x, y, n === 'CH3COO' ? .5 : .78); };
 /** Appareil de mesure peint (conductimètre, manomètre) : boîtier sombre, écran vert, valeur affichée. */
 function appareil(c, A, texte, o = {}) {
   c.direct(() => {
@@ -445,7 +448,14 @@ function ions(ctx, Z, liste, t, a = 1) {
     const h1 = ((i * 7919 + 3) % 97) / 97, h2 = ((i * 104729 + 13) % 89) / 89, h3 = ((i * 31337 + 7) % 83) / 83;
     const vx = o.v * (.55 + .9 * h3) / (Z.x1 - Z.x0), vy = o.v * (.5 + .9 * h1) / (Z.y1 - Z.y0);
     const x = Z.x0 + tri(h1 * 2 + vx * t * (h2 > .5 ? 1 : -1)) * (Z.x1 - Z.x0), y = Z.y0 + tri(h2 * 2 + vy * t) * (Z.y1 - Z.y0);
-    Peint.sphere(ctx, x, y, o.r ?? 5, o.col);
+    // Vrais ions peints (Na⁺ violet, Cl⁻ vert, HO⁻ : O rouge + H blanc, CH₃COO⁻ en modèle moléculaire) ; un ion qui se
+    // transforme (HO⁻ remplacé par CH₃COO⁻) passe en fondu de l'un à l'autre (o.mod = [avant, après, f]).
+    const rot = (i * 1.3 + t * .7 * (i % 2 ? 1 : -1)) % 6.3, mod = o.mod || (MODELE_ION.get(o.col) && [MODELE_ION.get(o.col), null, 0]);
+    if (mod) {
+      const k = n => (n === 'CH3COO' ? .55 : n === 'HO' ? .85 : .78);
+      if (mod[2] < 1) window.Rendu.molecule(ctx, mod[0], x, y, k(mod[0]), rot, 1 - mod[2]);
+      if (mod[1] && mod[2] > 0) window.Rendu.molecule(ctx, mod[1], x, y, k(mod[1]), rot, mod[2]);
+    } else Peint.sphere(ctx, x, y, o.r ?? 5, o.col);
     if (o.hl) { ctx.strokeStyle = '#facc15'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, (o.r ?? 5) + 5, 0, 7); ctx.stroke(); }
     o.pos = [x, y];
   });
@@ -611,7 +621,7 @@ function vueCellule(c, M) {
         c.texte('k : constante de cellule', PX + 4, 266, { couleur: 'blanc', taille: 17 }); c.texte('σ : conductivité, en S/m', PX + 4, 290, { couleur: 'blanc', taille: 17 }); } },
     { nom: 'ions', lignes: [['σ vient des ions de la solution : ce sont eux qui transportent le courant entre les plaques', 'jaune']],
       plus: () => { c.texte('σ vient des ions', PX + 4, 66, { couleur: 'jaune', taille: 19 }); c.texte('de la solution', PX + 4, 90, { couleur: 'jaune', taille: 19 });
-        c.direct(() => { Peint.sphere(c.ctx, PX + 10, 110, 5, NA); Peint.sphere(c.ctx, PX + 80, 110, 5, HO); });
+        c.direct(() => { icone(c.ctx, NA, PX + 10, 110); icone(c.ctx, HO, PX + 80, 110); });
         c.texte('Na⁺', PX + 20, 116, { couleur: 'violet', taille: 16 }); c.texte('HO⁻', PX + 90, 116, { couleur: 'rouge', taille: 16 }); } },
   ], ZY);
 }
@@ -638,8 +648,8 @@ function vueIons(c, M) {
     { nom: 'solution', lignes: [['solution d’ions (Na⁺ + HO⁻) : l’afficheur indique beaucoup plus (2,49 mS)', 'blanc']],
       plus: () => c.texte('solution d’ions', n2, BI2.y + BI2.h + 22, { couleur: 'blanc', taille: 16, align: 'center' }) },
     { nom: 'ajout', lignes: [['on ajoute dans l’eau quelques gouttes d’une solution d’ions (Na⁺ + Cl⁻)', 'blanc']],
-      plus: () => { c.direct(() => { Peint.sphere(c.ctx, 182, 196, 4.4, NA); Peint.sphere(c.ctx, 182, 220, 4.4, CL); });
-        c.texte('Na⁺', 192, 202, { couleur: 'violet', taille: 15 }); c.texte('Cl⁻', 192, 226, { couleur: 'cyan', taille: 15 }); } },
+      plus: () => { c.direct(() => { icone(c.ctx, NA, 182, 196); icone(c.ctx, CL, 182, 220); });
+        c.texte('Na⁺', 192, 202, { couleur: 'violet', taille: 15 }); c.texte('Cl⁻', 192, 226, { couleur: 'vert', taille: 15 }); } },
     { nom: 'monte', lignes: [['l’afficheur de gauche monte : 0,01 mS puis 1,26 mS', 'jaune']],
       plus: () => c.fleche(AI1.x + AI1.w / 2, AI1.y + AI1.h + 34, AI1.x + AI1.w / 2, AI1.y + AI1.h + 8, { couleur: 'jaune', largeur: 2.2, tete: 9 }) },
     { nom: 'conclusion', lignes: [['plus d’ions → σ plus grande ; des ions qui changent → σ change', 'jaune']],
@@ -689,13 +699,13 @@ function vueSapo(c, M) {
     const a = lisse(clamp(M.p('loupe') * 2, 0, 1)), pr = M.p('remplace'), hlNa = M.commence('na_spectateur') && !M.commence('final');
     c.direct(() => {
       const ctx = c.ctx; ctx.save(); ctx.beginPath(); ctx.arc(LPS.x, LPS.y, LPS.r - 2, 0, 7); ctx.clip();
-      ctx.fillStyle = 'rgba(220,236,250,.07)'; ctx.fillRect(LPS.x - LPS.r, LPS.y - LPS.r, 2 * LPS.r, 2 * LPS.r);
+      window.Rendu.lentille(ctx, LPS.x, LPS.y, LPS.r);
       const liste = [];
       for (let i = 0; i < 4; i++) liste.push({ col: NA, r: 6, v: 16, hl: hlNa, nom: 'na' });
       for (let i = 0; i < 4; i++) {
         let f = i === 2 ? (M.commence('remplace') ? lisse(pr) : 0) : clamp((x - (i < 2 ? .3 + i * .1 : .9)) * 20, 0, 1);
         if (i === 2 && M.commence('final')) f = 1;
-        liste.push({ col: [0, 1, 2].map(k => melangeHex(HO[k], AC[k], f)), r: lerp(5, 6.5, f), v: lerp(46, 12, f), hl: i === 2 && M.commence('remplace') && !M.commence('na_spectateur'), nom: f > .5 ? 'ac' : 'ho' });
+        liste.push({ col: [0, 1, 2].map(k => melangeHex(HO[k], AC[k], f)), mod: ['HO', 'CH3COO', f], r: lerp(5, 6.5, f), v: lerp(46, 12, f), hl: i === 2 && M.commence('remplace') && !M.commence('na_spectateur'), nom: f > .5 ? 'ac' : 'ho' });
       }
       ions(ctx, { x0: LPS.x - LPS.r * .7, x1: LPS.x + LPS.r * .7, y0: LPS.y - LPS.r * .62, y1: LPS.y + LPS.r * .62 }, liste, M.S.t, a);
       IONS_S = liste; ctx.restore();
@@ -703,9 +713,9 @@ function vueSapo(c, M) {
     c.cercle(LPS.x, LPS.y, LPS.r, { largeur: 2.6 });
     c.ligne(LPS.x - LPS.r * .72, LPS.y + LPS.r * .72, LPS.x - LPS.r * .72 - 20, LPS.y + LPS.r * .72 + 20, { largeur: 6 });
     c.texte('loupe', LPS.x + LPS.r - 4, LPS.y + LPS.r + 6, { couleur: 'faible', taille: 15 });
-    c.direct(() => { Peint.sphere(c.ctx, 480, 104, 5, HO); Peint.sphere(c.ctx, 480, 128, 5.5, AC); Peint.sphere(c.ctx, 480, 152, 5.5, NA); });
+    c.direct(() => { icone(c.ctx, HO, 480, 104); icone(c.ctx, AC, 478, 128); icone(c.ctx, NA, 480, 152); });
     c.texte('HO⁻ : rapide, grand λ', 492, 110, { couleur: 'rouge', taille: 16 });
-    c.texte('CH₃COO⁻ : lent, petit λ', 492, 134, { couleur: 'vert', taille: 16 });
+    c.texte('CH₃COO⁻ : lent, petit λ', 492, 134, { couleur: 'blanc', taille: 16 });
     c.texte('Na⁺ : ne réagit pas', 492, 158, { couleur: 'violet', taille: 16 });
   }
   return zoneEcriture(c, M, [
