@@ -122,15 +122,23 @@ function boule(ctx, x, y, r, signe) {                            // petite boule
   ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.beginPath(); ctx.ellipse(x - r * .38, y - r * .42, r * .22, r * .14, -.6, 0, 7); ctx.fill();
   if (signe) { ctx.fillStyle = '#fff'; ctx.font = `bold ${Math.round(r * 1.1)}px sans-serif`; ctx.textAlign = 'center'; ctx.fillText(signe, x, y + r * .38); ctx.textAlign = 'left'; }
 }
-function potence(ctx, x0, x1, y) {                               // support en bois
-  const g = ctx.createLinearGradient(0, y - 6, 0, y + 6); g.addColorStop(0, '#d6a671'); g.addColorStop(1, '#7c4a1e');
-  ctx.fillStyle = g; ctx.fillRect(x0, y - 6, x1 - x0, 12);
-  ctx.fillStyle = '#8b5a2b'; ctx.fillRect(x0 - 4, y - 6, 10, 150); ctx.fillRect(x0 - 26, y + 140, 56, 10);
+function potence(ctx, x0, x1, y) {                               // support en bois : poutre veinée, montant, socle, ombre douce
+  const bois = (u0, v0, u1, v1) => { const g = ctx.createLinearGradient(u0, v0, u1, v1); g.addColorStop(0, '#e0b07a'); g.addColorStop(.5, '#b07a43'); g.addColorStop(1, '#6b3f18'); return g; };
+  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 8; ctx.shadowOffsetX = 3; ctx.shadowOffsetY = 4;
+  ctx.fillStyle = bois(x0 - 26, 0, x0 + 30, 0); ctx.beginPath(); ctx.roundRect(x0 - 26, y + 138, 56, 12, 3); ctx.fill();
+  ctx.fillStyle = bois(x0 - 4, 0, x0 + 6, 0); ctx.beginPath(); ctx.roundRect(x0 - 4, y - 6, 10, 146, 2); ctx.fill();
+  ctx.fillStyle = bois(0, y - 6, 0, y + 6); ctx.beginPath(); ctx.roundRect(x0, y - 6, x1 - x0, 12, 3); ctx.fill();
+  ctx.restore();
+  ctx.save(); ctx.strokeStyle = 'rgba(90,50,20,.35)'; ctx.lineWidth = .8;          // veines du bois
+  for (const d of [-3, 0, 3]) { ctx.beginPath(); ctx.moveTo(x0 + 8, y + d); ctx.bezierCurveTo((x0 + x1) / 2 - 40, y + d + 1.2, (x0 + x1) / 2 + 40, y + d - 1.2, x1 - 4, y + d); ctx.stroke(); }
+  ctx.restore();
 }
 function pendule(ctx, xa, ya, L, angle, signe) {                 // fil de soie + boule
   const xb = xa + L * Math.sin(angle), yb = ya + L * Math.cos(angle);
   ctx.strokeStyle = 'rgba(241,245,249,.85)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(xa, ya); ctx.lineTo(xb, yb); ctx.stroke();
-  boule(ctx, xb, yb, 13, signe); return [xb, yb];
+  ctx.fillStyle = '#9aa3ad'; ctx.beginPath(); ctx.arc(xa, ya - 1, 2.4, 0, 7); ctx.fill();          // le crochet
+  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 7; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 4;
+  boule(ctx, xb, yb, 13, signe); ctx.restore(); return [xb, yb];
 }
 
 // ───────── Les trois vues ─────────

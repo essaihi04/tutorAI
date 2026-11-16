@@ -112,7 +112,13 @@ function ombre(ctx, x, y, R) {
   g.addColorStop(0, 'rgba(0,0,0,.30)'); g.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x + R * .12, y + R * .28, R * 1.08, 0, Math.PI * 2); ctx.fill();
 }
-function nucleonLibre(ctx, x, y, r, k) { ombre(ctx, x, y, r); sphere(ctx, x, y, r, k); }
+/** Halo doux autour d'une particule libre : on la repère d'un coup d'œil sur le tableau noir. */
+function halo(ctx, x, y, R, rgb, a = .35) {
+  const g = ctx.createRadialGradient(x, y, R * .2, x, y, R);
+  g.addColorStop(0, `rgba(${rgb},${a})`); g.addColorStop(1, `rgba(${rgb},0)`);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.fill();
+}
+function nucleonLibre(ctx, x, y, r, k) { halo(ctx, x, y, r * 2.6, k === 'p' ? '255,140,120' : '170,205,255'); ombre(ctx, x, y, r); sphere(ctx, x, y, r, k); }
 /** Traînée derrière une particule : (dx, dy) = son déplacement récent. */
 function trainee(ctx, x, y, dx, dy, r, k = 'n') {
   if (Math.hypot(dx, dy) < 3) return;
@@ -412,7 +418,7 @@ const CH = (() => {
   g1.forEach(p => noeuds.push({ p, gen: 0, parent: null }));
   g2.forEach(p => noeuds.push({ p, gen: 1, parent: 0 }));
   g3.forEach((p, k) => noeuds.push({ p, gen: 2, parent: 1 + (k >> 1) }));
-  return { noeuds, r, RU, tf, RN: 4, depart: [20, 200], t0: .4 };
+  return { noeuds, r, RU, tf, RN: 5.5, depart: [20, 200], t0: .4 };
 })();
 const RXE_CH = rayonAmas(140, CH.r), RSR_CH = rayonAmas(94, CH.r);
 /** Les neutrons : [départ, arrivée, t départ, t arrivée] (le premier, puis 2 par fission). */
@@ -660,7 +666,7 @@ function peindreSpontanee(ctx) {
     }
     const ca0 = centreAlpha(Math.max(L.emet, t - .3));
     trainee(ctx, ca[0], ca[1], ca[0] - ca0[0], ca[1] - ca0[1], RAL * .9, 'p');
-    ombre(ctx, ca[0], ca[1], RAL);
+    halo(ctx, ca[0], ca[1], RAL * 2.8, '255,190,110', .4); ombre(ctx, ca[0], ca[1], RAL);
     for (const i of SP.alpha) {
       const p = SP.pts[i], s = SP.slotA[i];
       sphere(ctx, lerp(cx + p[0], ca[0] + s[0], ua), lerp(cy + p[1], ca[1] + s[1], ua), SP.r, SP.sorte[i]);
