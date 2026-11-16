@@ -126,7 +126,8 @@ function rendre(t: string, k: { n: number }): ReactNode[] {
 /** « lim_{…} » (l'indice dessous), « lettre_indice », « ]_indice », « ^(exposant) » et « ^x ». */
 function indices(t: string, k: { n: number }): ReactNode[] {
   const parts: ReactNode[] = [];
-  const re = /lim_(\{[^}]+\}|[^\s(]+)|([A-Za-zτθΔλωφℓ\]])_(\{[^}]+\}|[A-Za-z0-9éèêàçℓ]+(?:,[A-Za-zéèêàç]+)?)|\^(\([^()]*(?:\([^()]*\)[^()]*)*\)|[A-Za-z0-9−\-+]+)/g;
+  // (16 novembre 2026) L'état physique collé à une espèce chimique, « HCOOH(aq) + H₂O(l) », s'écrit en petit et en bas.
+  const re = /lim_(\{[^}]+\}|[^\s(]+)|([A-Za-zτθΔλωφℓ\]])_(\{[^}]+\}|[A-Za-z0-9éèêàçℓ]+(?:,[A-Za-zéèêàç]+)?)|\^(\([^()]*(?:\([^()]*\)[^()]*)*\)|[A-Za-z0-9−\-+]+)|(?<=[A-Za-z₀-₉⁺⁻)])(\((?:aq|l|s|g)\))/g;
   let i = 0, m: RegExpExecArray | null;
   while ((m = re.exec(t))) {
     if (m.index > i) parts.push(t.slice(i, m.index));
@@ -139,6 +140,8 @@ function indices(t: string, k: { n: number }): ReactNode[] {
       );
     } else if (m[2] !== undefined) {
       parts.push(m[2], <sub key={k.n++} className="text-[0.7em]">{m[3].replace(/[{}]/g, '')}</sub>);
+    } else if (m[5] !== undefined) {
+      parts.push(<sub key={k.n++} className="text-[0.62em]">{m[5]}</sub>);
     } else {
       const e = m[4].startsWith('(') ? m[4].slice(1, -1) : m[4];
       parts.push(<sup key={k.n++} className="text-[0.7em]">{indices(e, k)}</sup>);

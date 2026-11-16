@@ -35,6 +35,8 @@ A course simulation is a small HTML page drawn with chalk ON the course board. I
    - **Centred in its band.** A line written in a coloured band or frame is centred in it and does not overflow it: if it is too long, split it into two lines.
    - **Objects stay in their container.** Every organelle, cell or particle painted in a container (beaker, bioreactor, cell, hyaloplasm strip) stays inside it with a margin, clear of the probes and the walls — compute the positions from the container's inner edges, rotation included.
 
+11. **Chemical equations on the board carry the physical state of each species** (user rule, 16 November 2026): CH₃COOH(aq) + H₂O(l) ⇌ CH₃COO⁻(aq) + H₃O⁺(aq), Zn(s) + Cu²⁺(aq) → Zn²⁺(aq) + Cu(s), Mg(s) + 2H⁺(aq) → Mg²⁺(aq) + H₂(g), esterification all (l); the state is written small and low, like an index. In the chemistry folders it is automatic: `window.Etats` (end of each `commun.js`, and `chimie/shared/chem-lab.js`) annotates every equation drawn with `c.texte` and the page helpers `eqn`, `eqf`, `eqn2`, `ligneM`, `placer`, `morceau`, `termes` (their first line calls `Etats.cotes` / `Etats.morceaux` / `Etats.liste`), keeps the writing time of the equation without states (moments unchanged) and shrinks a line that would leave the frame. A new helper that draws an equation in pieces calls `window.Etats` the same way. Only the board: the voice, the bubble, `voir()` and `explication` keep plain equations.
+
 ## The tutor must be able to do everything
 
 The tutor explains with the simulation, answers a free question with it, relaunches it as often as needed, pauses on the right instant, moves an element, points at it, or brings another simulation of the lesson. So each simulation:
