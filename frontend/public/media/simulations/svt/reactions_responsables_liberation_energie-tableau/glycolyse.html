@@ -43,14 +43,16 @@ const MOTIFS = {
   deux_acides_pyruviques: 'deux acides pyruviques, CH3-CO-COOH',
   accolade_bilan: 'le bilan de la glycolyse et sa réaction globale',
 };
-const CEL = { x: 290, y: 232, rx: 262, ry: 158 }, NOY = { x: 108, y: 292, r: 40 }, MITO = { x: 470, y: 325, rx: 46, ry: 17 };
-const GLU = { x: 290, y: 190 }, PAS = 24, GAUCHE = { x: 205, y: 232 }, DROITE = { x: 375, y: 232 };
+/* Mise en page du 16 novembre 2026 (cadre étroit du lecteur, textes d'au moins 15 px) : cellule agrandie, mitochondrie grande
+ * (deux membranes et crêtes reconnaissables) avec son nom au-dessus, noyau en bas, molécules espacées, légendes hors des objets. */
+const CEL = { x: 288, y: 230, rx: 292, ry: 160 }, NOY = { x: 250, y: 346, r: 30 }, MITO = { x: 462, y: 302, rx: 72, ry: 30 };
+const GLU = { x: 290, y: 172 }, PAS = 28, GAUCHE = { x: 170, y: 215 }, DROITE = { x: 330, y: 215 };
 const CARBONE = [250, 204, 21], HYDRO = [235, 240, 245], TAXI = [34, 190, 220], CARTE = [250, 190, 60], VIDE = [150, 150, 150];
 
 const canvas = $('canvas');
 const scene = Scene(canvas, (c) => { scene.cadre(23); MOS.dessiner(c, () => { dessiner(c); }); return c.fin(); }, { large: true });
 /* Tableau large (portable 1366 × 613) : la page est rangée sur toute la largeur (SVTLarge.Mosaique, dans peinture.js) ; grand écran : inchangée. */
-const MOS = window.SVTLarge.Mosaique(scene, (L) => L >= 1000 ? { police: 1.15, lignes: [[[-30, 0, 606, 392], { r: [576, 50, 230, 326], k: 2 }], [[-50, 392, 860, 28]]] } : null);
+const MOS = window.SVTLarge.Mosaique(scene, (L) => L >= 1000 ? { police: 1.3, lignes: [[[-8, 62, 592, 334], { r: [586, 56, 222, 320], k: 2 }], [[-50, 396, 860, 26]]] } : null);
 const ecrit = Apparitions(scene);
 const chrono = Chrono({ fin: () => FIN, moments: () => M, motifs: MOTIFS, bouton: $('run'), bulle: $('feedback'), pont: () => pont,
   depart: 'Observe le glucose dans le hyaloplasme…', reinit: () => ecrit.oublier(),
@@ -67,13 +69,13 @@ function carbone(i, t) {
 /* Une petite carte d'énergie (ATP pleine en jaune, ADP vide en gris), peinte, avec son nom à la craie. */
 function carte(c, x, y, nom, plein, a = 1) {
   c.direct(() => {
-    P.proteine(c.ctx, x, y, 40, 18, { couleur: plein ? CARTE : VIDE, alpha: .85 * a });
-    c.texte(nom, x, y + 5, { couleur: plein ? 'tresfaible' : 'blanc', taille: 12, align: 'center', alpha: a });
+    P.proteine(c.ctx, x, y, 46, 21, { couleur: plein ? CARTE : VIDE, alpha: .85 * a });
+    c.texte(nom, x, y + 5, { couleur: plein ? 'rgba(60,40,0,.9)' : 'blanc', taille: 13, align: 'center', alpha: a });
   });
 }
 function taxi(c, x, y, charge, a = 1) {
   c.direct(() => {
-    P.proteine(c.ctx, x, y, charge ? 74 : 46, 22, { couleur: TAXI, alpha: .85 * a });
+    P.capsule(c.ctx, x, y, charge ? 78 : 50, 24, TAXI, { alpha: a, lueur: charge ? 1 : 0 });
     c.texte(charge ? 'NADH,H+' : 'NAD+', x, y + 5, { couleur: 'blanc', taille: 13, align: 'center', alpha: a });
   });
 }
@@ -85,13 +87,12 @@ function dessiner(c) {
     P.mitochondrie(c.ctx, MITO.x, MITO.y, MITO.rx, MITO.ry, { cretes: 5, graine: 3 });
   });
   // la craie : titre, légendes fixes
-  c.texte('La glycolyse, dans le hyaloplasme', 18, 30, { couleur: 'cyan', taille: 20 });
-  c.texte('hyaloplasme', 70, 132, { couleur: 'vert', taille: 15 });
-  c.fleche(118, 138, 150, 160, { couleur: 'vert', largeur: 1.6 });
-  c.texte('noyau', NOY.x, NOY.y + 5, { couleur: 'faible', taille: 13, align: 'center' });
-  c.texte('mitochondrie', MITO.x, MITO.y - 32, { couleur: 'orange', taille: 14, align: 'center' });
+  // (le titre interne répétait celui de la diapositive : retiré le 16 novembre 2026)
+  c.texte('hyaloplasme', 150, 114, { couleur: 'vert', taille: 15 });
+  c.texte('noyau', NOY.x, NOY.y + 5, { couleur: 'blanc', taille: 13, align: 'center' });
+  c.texte('mitochondrie', MITO.x, MITO.y - MITO.ry - 10, { couleur: 'orange', taille: 14, align: 'center' });
   c.texte('pas de dioxygène utilisé', 668, 362, { couleur: 'faible', taille: 13, align: 'center' });
-  c.repere('hyaloplasme', 60, 110, 180, 70, 'le hyaloplasme');
+  c.repere('hyaloplasme', 144, 94, 120, 30, 'le hyaloplasme');
   c.repere('mitochondrie', MITO.x - MITO.rx, MITO.y - MITO.ry - 40, 2 * MITO.rx, 2 * MITO.ry + 40, 'la mitochondrie, loin de la glycolyse');
   // le compteur, à droite
   c.texte('Compteur', 666, 84, { couleur: 'jaune', taille: 17, align: 'center' });
@@ -101,42 +102,44 @@ function dessiner(c) {
   const a1 = doux(chrono.part(1, 2.5, t));
   if (a1 > 0) {
     // le glucose : six billes de carbone
-    for (let i = 0; i < 6; i++) { const [x, y] = carbone(i, t); c.direct(() => P.bille(c.ctx, x, y, 10, CARBONE, { alpha: a1 })); }
+    // les liaisons entre carbones (celle du milieu se rompt à la coupure), puis les atomes
+    c.direct(() => { const cu = doux(chrono.part(6.5, 7.6, t)); for (let i = 0; i < 5; i++) { const [x1, y1] = carbone(i, t), [x2, y2] = carbone(i + 1, t), al = a1 * (i === 2 ? 1 - cu : 1); if (al > .02) P.liaison(c.ctx, x1, y1, x2, y2, { alpha: al }); } if (t >= 6.5 && t < 7.8) P.eclat(c.ctx, GLU.x, mix(GLU.y, GAUCHE.y, doux(chrono.part(6.5, 9, t))), 20, 1 - chrono.part(6.5, 7.8, t)); });
+    for (let i = 0; i < 6; i++) { const [x, y] = carbone(i, t); c.direct(() => P.bille(c.ctx, x, y, 12, CARBONE, { alpha: a1 })); }
     if (t < 6.5) {
-      ecrit.ecrire(c, 'glucose', () => { c.texte('glucose : C_{6}H_{12}O_{6} (6 C)', GLU.x, GLU.y - 24, { couleur: 'jaune', taille: 16, align: 'center' }); });
-      c.repere('glucose', GLU.x - 80, GLU.y - 44, 160, 60, 'le glucose, 6 carbones');
+      ecrit.ecrire(c, 'glucose', () => { c.texte('glucose : C_{6}H_{12}O_{6} (6 C)', GLU.x, GLU.y - 30, { couleur: 'jaune', taille: 16, align: 'center' }); });
+      c.repere('glucose', GLU.x - 90, GLU.y - 50, 180, 68, 'le glucose, 6 carbones');
     }
   }
   // 2 ATP dépensés : du compteur jusqu'au glucose, ils y laissent un phosphate et repartent en ADP
   if (t >= 3) {
     const u = doux(chrono.part(3, 5, t)), v = chrono.part(5, 6, t);
     for (let k = 0; k < 2; k++) {
-      const xa = mix(620, GLU.x - 40 + k * 80, u), ya = mix(118, GLU.y + 34, u);
+      const xa = mix(620, GLU.x - 44 + k * 88, u), ya = mix(118, GLU.y + 40, u) + 58 * Math.sin(Math.PI * u);   // ils arrivent par en dessous : ni l'étiquette ni la chaîne ne sont traversées
       if (t < 6.6) carte(c, xa, ya, v > .5 ? 'ADP' : 'ATP', v <= .5, 1 - chrono.part(6, 6.6, t));
       if (v > 0 && t < 6.2) c.direct(() => P.eclat(c.ctx, xa, ya - 14, 14 * v, 1 - v));
     }
     ecrit.ecrire(c, 'depenses', () => c.texte('ATP dépensés : 2', 594, 120, { couleur: 'orange', taille: 15 }));
   }
-  if (t >= 9) ecrit.ecrire(c, 'coupure', () => c.texte('6 C → 3 C + 3 C', GLU.x, 300, { couleur: 'jaune', taille: 15, align: 'center' }));
+  if (t >= 9) ecrit.ecrire(c, 'coupure', () => c.texte('6 C → 3 C + 3 C', (GAUCHE.x + DROITE.x) / 2, GAUCHE.y - 34, { couleur: 'jaune', taille: 15, align: 'center' }));
   // deux taxis NAD+ arrivent, prennent deux hydrogènes chacun
   if (t >= 9.5) {
     const u = doux(chrono.part(9.5, 11, t)), v = doux(chrono.part(11, 12, t));
     for (const [k, G] of [[0, GAUCHE], [1, DROITE]]) {
-      const xt = mix(k ? 520 : 70, G.x, u), yt = mix(380, G.y + 86, u);
+      const xt = mix(k ? 520 : 70, G.x, u), yt = mix(380, G.y + 92, u);
       for (let h = 0; h < 2; h++) {
         const xh = mix(G.x - 8 + h * 16, xt - 8 + h * 16, v), yh = mix(G.y - 20, yt - 18, v);
         if (v < 1) c.direct(() => P.bille(c.ctx, xh, yh, 5, HYDRO));
       }
       taxi(c, xt, yt, v >= 1);
     }
-    c.repere('nadh', GAUCHE.x - 40, GAUCHE.y + 70, DROITE.x - GAUCHE.x + 80, 34, 'les deux taxis : NAD+ puis NADH,H+');
+    c.repere('nadh', GAUCHE.x - 40, GAUCHE.y + 76, DROITE.x - GAUCHE.x + 80, 34, 'les deux taxis : NAD+ puis NADH,H+');
     if (t >= 12) ecrit.ecrire(c, 'nadh', () => c.texte('NAD+ → NADH,H+ : 2', 594, 214, { couleur: 'cyan', taille: 15 }));
   }
   // 4 ATP formés : ils naissent près des deux molécules et vont au compteur
   if (t >= 12.5) {
     const u = doux(chrono.part(13, 14.6, t));
     for (let k = 0; k < 4; k++) {
-      const G = k < 2 ? GAUCHE : DROITE, x0 = G.x + (k % 2 ? 30 : -30), y0 = G.y - 46;
+      const G = k < 2 ? GAUCHE : DROITE, x0 = G.x + (k % 2 ? 30 : -30), y0 = G.y + 44;   // ils naissent sous les molécules (place libre à cet instant), pas sur une légende
       const a = chrono.part(12.5, 13, t);
       if (u < 1) carte(c, mix(x0, 640, u), mix(y0, 146, u), 'ATP', true, a);
     }
@@ -147,13 +150,13 @@ function dessiner(c) {
       });
     }
   }
-  if (t >= 9) c.repere('acide_pyruvique', GAUCHE.x - 46, GAUCHE.y - 20, DROITE.x - GAUCHE.x + 92, 70, 'les deux molécules à 3 carbones');
+  if (t >= 9) c.repere('acide_pyruvique', GAUCHE.x - 50, GAUCHE.y - 20, DROITE.x - GAUCHE.x + 100, 80, 'les deux molécules à 3 carbones');
   // les deux acides pyruviques nommés
   if (t >= 15.5) {
     ecrit.ecrire(c, 'pyruvique', () => {
       for (const G of [GAUCHE, DROITE]) {
         c.texte('acide pyruvique', G.x, G.y + 34, { couleur: 'blanc', taille: 14, align: 'center' });
-        c.texte('CH_3-CO-COOH', G.x, G.y + 52, { couleur: 'jaune', taille: 14, align: 'center' });
+        c.texte('CH_3-CO-COOH', G.x, G.y + 56, { couleur: 'jaune', taille: 14, align: 'center' });
       }
     });
   }
