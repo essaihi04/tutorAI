@@ -61,7 +61,15 @@
      * suivent. Les traits de ces blocs (cadres, soulignés) ne sont pas repris. `disposition` peut aussi être une fonction
      * (L, k) : la disposition change alors avec la scène (ex. une animation, puis un tableau). */
     const POSES = {};   // vue → { cle, map: nom → {x0,y0,X,Y,z} | {texte, X, Y, lay} }
-    const estLarge = v => scene.L >= 1000 && !!(v.blocs && v.disposition);
+    /* (17 novembre 2026) Cadre du lecteur de cours, ~1025 px de large (L entre 800 et 1000) : les blocs servent aussi là,
+     * mais seulement s'ils AGRANDISSENT la figure (toutes les figures à l'échelle ≥ 1) ; sinon la disposition d'origine,
+     * centrée, reste la plus grande. */
+    const estLarge = v => {
+      if (!(v.blocs && v.disposition)) return false;
+      if (scene.L >= 1000) return true;
+      if (scene.L < 800) return false;
+      try { const figs = Object.values(disposer(v, scene.L, scene.craie)).filter(p => !p.texte); return figs.length > 0 && figs.every(p => p.z >= 1); } catch (_) { return false; }
+    };
     const estTexte = col => !!col && !Array.isArray(col) && Array.isArray(col.texte);
     const dispoDe = v => (typeof v.disposition === 'function' ? v.disposition(scene.L, k()) : v.disposition);
     const dansB = (q, px, py) => px >= q[0] && px < q[2] && py >= q[1] && py < q[3];
@@ -356,9 +364,15 @@
     scene = window.GenetiqueTableau.Scene(canvas, (c) => {
       scene.cadre(def.graine || 17);
       const v = V();
-      if (estLarge(v)) dessinerBlocs(c, v);
-      else if (scene.L > 760) { c.ctx.save(); c.ctx.translate((scene.L - 760) / 2, 0); try { v.dessiner(c, k()); } finally { c.ctx.restore(); } }
-      else v.dessiner(c, k());
+      if (estLarge(v)) { dessinerBlocs(c, v); return c.fin(); }
+      // (17 novembre 2026, règle 9 : « pas de titre interne qui répète la diapositive ») hors disposition en blocs, le titre
+      // de la vue (écrit en cyan tout en haut à gauche) est écrit invisible : l'écriture en direct garde son rythme.
+      const texte = Object.getPrototypeOf(c).texte;
+      c.texte = function (t, tx, ty, o = {}) { return texte.call(this, t, tx, ty, ty <= 30 && tx <= 20 && o.couleur === 'cyan' ? { ...o, alpha: 0 } : o); };
+      try {
+        if (scene.L > 760) { c.ctx.save(); c.ctx.translate((scene.L - 760) / 2, 0); try { v.dessiner(c, k()); } finally { c.ctx.restore(); } }
+        else v.dessiner(c, k());
+      } finally { delete c.texte; }
       return c.fin();
     }, { large: true });
     const FIN = () => V().fin;
@@ -510,24 +524,35 @@
       x.fillStyle = g; x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill();
       x.restore();
     },
-    /** Cellule animale : cytoplasme rosé translucide, membrane plus sombre, quelques granulations. */
+    /** Cellule animale : cytoplasme lumineux (rose corail par défaut), membrane nette à double bord, ombre douce, granulations.
+     *  (17 novembre 2026 : couleurs plus vives et volume — halo clair en haut à gauche, bord plus dense, liseré brillant.) */
     cellule(x, cx, cy, rx, ry, a = 1, teinte) {
-      x.save(); x.globalAlpha = a;
-      const g = x.createRadialGradient(cx - rx * .3, cy - ry * .35, 4, cx, cy, Math.max(rx, ry));
-      const t = teinte || ['rgba(255,214,222,.55)', 'rgba(244,170,190,.45)', 'rgba(214,120,150,.5)'];
-      g.addColorStop(0, t[0]); g.addColorStop(.7, t[1]); g.addColorStop(1, t[2]);
-      x.fillStyle = g; x.beginPath(); x.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); x.fill();
-      x.strokeStyle = 'rgba(150,60,95,.8)'; x.lineWidth = 1.6; x.stroke();
-      x.fillStyle = 'rgba(160,80,110,.28)';
-      for (let i = 0; i < 26; i++) { const a2 = i * 2.39996, r = .25 + .65 * ((i * 37) % 23) / 23; x.beginPath(); x.arc(cx + Math.cos(a2) * rx * r, cy + Math.sin(a2) * ry * r, 1.3, 0, Math.PI * 2); x.fill(); }
+      if (a <= 0) return;
+      x.save(); x.globalAlpha *= a;
+      const R = Math.max(rx, ry), t = teinte || ['rgba(255,226,214,.92)', 'rgba(255,150,150,.82)', 'rgba(226,84,116,.88)'];
+      // ombre portée douce : la cellule se détache du tableau
+      x.save(); x.shadowColor = 'rgba(0,0,0,.5)'; x.shadowBlur = R * .22; x.shadowOffsetY = R * .06;
+      const g = x.createRadialGradient(cx - rx * .3, cy - ry * .35, R * .05, cx, cy, R);
+      g.addColorStop(0, t[0]); g.addColorStop(.62, t[1]); g.addColorStop(1, t[2]);
+      x.fillStyle = g; x.beginPath(); x.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); x.fill(); x.restore();
+      // granulations du cytoplasme (deux tons) et reflet
+      x.save(); x.beginPath(); x.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); x.clip();
+      for (let i = 0; i < 30; i++) { const a2 = i * 2.39996, r = .22 + .68 * ((i * 37) % 23) / 23; x.fillStyle = i % 3 ? 'rgba(150,40,80,.3)' : 'rgba(255,245,235,.4)'; x.beginPath(); x.arc(cx + Math.cos(a2) * rx * r, cy + Math.sin(a2) * ry * r, Math.max(1.1, R / 46), 0, Math.PI * 2); x.fill(); }
+      const h = x.createRadialGradient(cx - rx * .38, cy - ry * .48, 1, cx - rx * .38, cy - ry * .48, R * .6); h.addColorStop(0, 'rgba(255,255,255,.32)'); h.addColorStop(1, 'rgba(255,255,255,0)');
+      x.fillStyle = h; x.fillRect(cx - rx, cy - ry, 2 * rx, 2 * ry); x.restore();
+      // membrane plasmique : bord foncé + liseré clair
+      const e = Math.max(1.6, R / 34);
+      x.strokeStyle = 'rgba(136,28,72,.95)'; x.lineWidth = e; x.beginPath(); x.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); x.stroke();
+      x.strokeStyle = 'rgba(255,214,224,.7)'; x.lineWidth = e * .45; x.beginPath(); x.ellipse(cx, cy, Math.max(1, rx - e * .9), Math.max(1, ry - e * .9), 0, 0, Math.PI * 2); x.stroke();
       x.restore();
     },
     /** Noyau en interphase : violet-mauve, enveloppe double, pores, nucléole, chromatine en fins filaments. */
     noyau(x, cx, cy, r, a = 1, o = {}) {
       x.save(); x.globalAlpha = a;
       const g = x.createRadialGradient(cx - r * .3, cy - r * .3, 2, cx, cy, r);
-      g.addColorStop(0, 'rgba(226,200,240,.85)'); g.addColorStop(1, 'rgba(160,110,200,.75)');
-      x.fillStyle = g; x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill();
+      g.addColorStop(0, 'rgba(240,214,255,.97)'); g.addColorStop(.6, 'rgba(190,132,246,.94)'); g.addColorStop(1, 'rgba(124,58,216,.94)');
+      x.save(); x.shadowColor = 'rgba(30,0,60,.55)'; x.shadowBlur = r * .3; x.shadowOffsetY = r * .08;
+      x.fillStyle = g; x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill(); x.restore();
       if (o.chromatine !== false) {
         // chromatine : fins filaments enchevêtrés (marches aléatoires lissées, déterministes)
         let s = 12345; const rnd = () => { s = (Math.imul(s, 1103515245) + 12345) >>> 0; return s / 4294967296; };
@@ -540,25 +565,31 @@
             const d = Math.hypot(px - cx, py - cy); if (d > r * .86) { ang += Math.PI; px = cx + (px - cx) * .84 * r / d; py = cy + (py - cy) * .84 * r / d; }
             pts.push([px, py]);
           }
-          x.strokeStyle = j % 2 ? 'rgba(95,40,140,.55)' : 'rgba(120,60,170,.45)'; x.beginPath(); x.moveTo(pts[0][0], pts[0][1]);
+          x.strokeStyle = j % 2 ? 'rgba(76,20,140,.7)' : 'rgba(104,40,170,.6)'; x.beginPath(); x.moveTo(pts[0][0], pts[0][1]);
           for (let i = 1; i < pts.length - 1; i++) x.quadraticCurveTo(pts[i][0], pts[i][1], (pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2);
           x.stroke();
         }
       }
-      if (o.nucleole !== false) { const gn = x.createRadialGradient(cx + r * .2, cy - r * .1, 1, cx + r * .25, cy - r * .05, r * .22); gn.addColorStop(0, 'rgba(120,50,150,.95)'); gn.addColorStop(1, 'rgba(70,20,100,.9)'); x.fillStyle = gn; x.beginPath(); x.arc(cx + r * .25, cy - r * .05, r * .2, 0, Math.PI * 2); x.fill(); }
-      x.strokeStyle = 'rgba(90,40,130,.9)'; x.lineWidth = Math.max(1, r / 30); x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.stroke();
+      if (o.nucleole !== false) { const gn = x.createRadialGradient(cx + r * .2, cy - r * .1, 1, cx + r * .25, cy - r * .05, r * .22); gn.addColorStop(0, 'rgba(168,85,247,1)'); gn.addColorStop(.35, 'rgba(107,33,168,1)'); gn.addColorStop(1, 'rgba(59,7,100,1)'); x.fillStyle = gn; x.beginPath(); x.arc(cx + r * .25, cy - r * .05, r * .2, 0, Math.PI * 2); x.fill(); }
+      { const hn = x.createRadialGradient(cx - r * .4, cy - r * .45, 1, cx - r * .4, cy - r * .45, r * .7); hn.addColorStop(0, 'rgba(255,255,255,.3)'); hn.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = hn; x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill(); }   // reflet : un volume
+      x.strokeStyle = 'rgba(76,29,149,.98)'; x.lineWidth = Math.max(1.2, r / 24); x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.stroke();
       if (o.double) { x.beginPath(); x.arc(cx, cy, r + Math.max(2, r / 22), 0, Math.PI * 2); x.stroke();
         x.fillStyle = 'rgba(255,240,250,.95)'; for (let i = 0; i < 12; i++) { const a2 = i * Math.PI / 6 + .2; x.beginPath(); x.arc(cx + Math.cos(a2) * (r + r / 44 + 1), cy + Math.sin(a2) * (r + r / 44 + 1), Math.max(1.6, r / 26), 0, Math.PI * 2); x.fill(); } }
       x.restore();
     },
     /** Un chromosome peint : `pts` = ligne médiane [[x,y],…] d’une chromatide ; deux chromatides si `deux` (écart `ecart`). */
     chromatide(x, pts, couleur, epaisseur = 7, a = 1) {
-      x.save(); x.globalAlpha = a; x.lineCap = 'round'; x.lineJoin = 'round';
-      x.strokeStyle = couleur[1]; x.lineWidth = epaisseur; x.beginPath(); pts.forEach(([px, py], i) => (i ? x.lineTo(px, py) : x.moveTo(px, py))); x.stroke();
-      x.strokeStyle = couleur[0]; x.lineWidth = epaisseur * .45; x.beginPath(); pts.forEach(([px, py], i) => (i ? x.lineTo(px - epaisseur * .15, py - epaisseur * .15) : x.moveTo(px - epaisseur * .15, py - epaisseur * .15))); x.stroke();
+      if (a <= 0) return;
+      x.save(); x.globalAlpha *= a; x.lineCap = 'round'; x.lineJoin = 'round';
+      const trace = (dx = 0, dy = 0) => { x.beginPath(); pts.forEach(([px, py], i) => (i ? x.lineTo(px + dx, py + dy) : x.moveTo(px + dx, py + dy))); };
+      // (17 novembre 2026) trois couches : contour sombre avec ombre douce, corps vif, reflet clair → un bâtonnet en volume
+      x.save(); x.shadowColor = 'rgba(0,0,0,.45)'; x.shadowBlur = epaisseur * .6; x.shadowOffsetY = epaisseur * .18;
+      x.strokeStyle = teinte(couleur[1], -.45); x.lineWidth = epaisseur; trace(); x.stroke(); x.restore();
+      x.strokeStyle = couleur[1]; x.lineWidth = epaisseur * .78; trace(); x.stroke();
+      x.strokeStyle = couleur[0]; x.lineWidth = epaisseur * .34; trace(-epaisseur * .15, -epaisseur * .15); x.stroke();
       x.restore();
     },
-    VIOLET: ['#e9c8ff', '#7e22ce'], BLEU: ['#c7d2fe', '#4338ca'],
+    VIOLET: ['#f0d4ff', '#9333ea'], BLEU: ['#c7d2fe', '#4f46e5'],
     /** Chromosome en bâtonnet (centre cx,cy, longueur L, angle a) ; deux chromatides si `deux`, reliées au centromère (position c ∈ 0..1). */
     chromosome(x, cx, cy, L, ang, couleur, o = {}) {
       const e = o.epaisseur || 7, c = o.centromere ?? .4, deux = o.deux, ec = o.ecart ?? e * .75, al = o.alpha ?? 1;
@@ -572,14 +603,26 @@
     halo(x, cx, cy, r, couleur, a = 1) { x.save(); x.globalAlpha = a; const g = x.createRadialGradient(cx, cy, 0, cx, cy, r); g.addColorStop(0, couleur); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill(); x.restore(); },
     /** Souris simple ombrée ; `morte` = couchée sur le dos, pattes en l’air. */
     souris(x, cx, cy, s = 1, morte = false, a = 1) {
-      x.save(); x.globalAlpha = a; x.translate(cx, cy); x.scale(s, s); if (morte) x.scale(1, -1);
-      const g = x.createRadialGradient(-6, -8, 2, 0, 0, 26); g.addColorStop(0, '#e5e7eb'); g.addColorStop(1, '#6b7280');
-      x.fillStyle = g; x.beginPath(); x.ellipse(0, 0, 24, 13, 0, 0, Math.PI * 2); x.fill();
-      x.beginPath(); x.ellipse(24, -4, 11, 8, -.2, 0, Math.PI * 2); x.fill();
-      x.fillStyle = '#f9a8d4'; x.beginPath(); x.arc(22, -13, 4.5, 0, Math.PI * 2); x.fill(); x.beginPath(); x.arc(34, -2, 2, 0, Math.PI * 2); x.fill();
-      x.fillStyle = '#111'; x.beginPath(); x.arc(28, -6, 1.5, 0, Math.PI * 2); x.fill();
-      x.strokeStyle = '#9ca3af'; x.lineWidth = 1.6; x.beginPath(); x.moveTo(-24, 2); x.quadraticCurveTo(-40, 0, -46, 10); x.stroke();
-      x.strokeStyle = '#6b7280'; x.lineWidth = 2.2; for (const px of [-12, 12]) { x.beginPath(); x.moveTo(px, 10); x.lineTo(px + (morte ? 0 : 2), 17); x.stroke(); }
+      if (a <= 0) return;
+      x.save(); x.globalAlpha *= a; x.translate(cx, cy); x.scale(s, s);
+      if (!morte) { x.fillStyle = 'rgba(0,0,0,.3)'; x.beginPath(); x.ellipse(2, 16, 30, 4, 0, 0, Math.PI * 2); x.fill(); }
+      if (morte) x.scale(1, -1);
+      const TAU2 = Math.PI * 2, pel = morte ? ['#d1d5db', '#9ca3af', '#4b5563'] : ['#ffffff', '#e5e7eb', '#8b95a5'];
+      // queue rose
+      x.strokeStyle = '#f9a8d4'; x.lineWidth = 2.4; x.lineCap = 'round'; x.beginPath(); x.moveTo(-22, 3); x.bezierCurveTo(-34, 2, -36, 12, -48, 8); x.stroke();
+      // pattes
+      x.fillStyle = '#f9a8d4'; for (const px of [-12, 12]) { x.beginPath(); x.ellipse(px + (morte ? 0 : 2), 13, 4.5, 2.6, 0, 0, TAU2); x.fill(); }
+      // corps en poire, tête pointue
+      const g = x.createRadialGradient(-6, -8, 2, 0, 0, 30); g.addColorStop(0, pel[0]); g.addColorStop(.55, pel[1]); g.addColorStop(1, pel[2]);
+      x.fillStyle = g; x.beginPath(); x.ellipse(-2, 0, 23, 13.5, 0, 0, TAU2); x.fill();
+      x.beginPath(); x.moveTo(12, -11); x.quadraticCurveTo(30, -12, 38, -1); x.quadraticCurveTo(30, 8, 12, 10); x.closePath(); x.fill();
+      // oreilles (une derrière, une devant) rose à l'intérieur
+      for (const [ox, oy, r] of [[17, -13, 5.5], [22, -12, 6.5]]) { x.fillStyle = pel[1]; x.beginPath(); x.arc(ox, oy, r, 0, TAU2); x.fill(); x.fillStyle = '#fbcfe8'; x.beginPath(); x.arc(ox, oy, r * .6, 0, TAU2); x.fill(); }
+      // museau, moustaches, œil (une croix si elle est morte)
+      x.fillStyle = '#f472b6'; x.beginPath(); x.arc(38, -1, 2.2, 0, TAU2); x.fill();
+      x.strokeStyle = 'rgba(255,255,255,.7)'; x.lineWidth = .7; for (const dy of [-4, 0, 4]) { x.beginPath(); x.moveTo(34, 0); x.lineTo(43, dy + 1); x.stroke(); }
+      if (morte) { x.strokeStyle = '#111827'; x.lineWidth = 1.4; x.beginPath(); x.moveTo(27, -6); x.lineTo(31, -2); x.moveTo(31, -6); x.lineTo(27, -2); x.stroke(); }
+      else { x.fillStyle = '#111827'; x.beginPath(); x.arc(29, -4, 1.9, 0, TAU2); x.fill(); x.fillStyle = '#fff'; x.beginPath(); x.arc(29.6, -4.6, .6, 0, TAU2); x.fill(); }
       x.restore();
     },
     /** Tube à essai en verre avec liquide teinté. */
@@ -589,7 +632,9 @@
       const gl = x.createLinearGradient(cx - w / 2, 0, cx + w / 2, 0); gl.addColorStop(0, liquide[0]); gl.addColorStop(.5, liquide[1]); gl.addColorStop(1, liquide[0]);
       x.fillStyle = gl; x.beginPath(); x.moveTo(cx - w / 2, yl); x.lineTo(cx - w / 2, y0 + h - w / 2); x.arc(cx, y0 + h - w / 2, w / 2, Math.PI, 0, true); x.lineTo(cx + w / 2, yl); x.closePath(); x.fill();
       x.strokeStyle = 'rgba(220,235,245,.75)'; x.lineWidth = 1.4; x.beginPath(); x.moveTo(cx - w / 2, y0); x.lineTo(cx - w / 2, y0 + h - w / 2); x.arc(cx, y0 + h - w / 2, w / 2, Math.PI, 0, true); x.lineTo(cx + w / 2, y0); x.stroke();
-      x.strokeStyle = 'rgba(255,255,255,.45)'; x.lineWidth = 1.2; x.beginPath(); x.moveTo(cx - w / 2 + 3, y0 + 4); x.lineTo(cx - w / 2 + 3, y0 + h - w / 2); x.stroke();
+      x.strokeStyle = 'rgba(255,255,255,.6)'; x.lineWidth = Math.max(1.2, w * .1); x.lineCap = 'round'; x.beginPath(); x.moveTo(cx - w / 2 + w * .2, y0 + 4); x.lineTo(cx - w / 2 + w * .2, y0 + h - w / 2); x.stroke();
+      x.strokeStyle = 'rgba(255,255,255,.55)'; x.lineWidth = 1; x.beginPath(); x.ellipse(cx, yl, w / 2 - 1, Math.max(.8, w * .08), 0, 0, Math.PI * 2); x.stroke();   // ménisque
+      x.strokeStyle = 'rgba(226,240,250,.85)'; x.lineWidth = 1.6; x.beginPath(); x.ellipse(cx, y0, w / 2 + 1.5, Math.max(1, w * .1), 0, 0, Math.PI * 2); x.stroke();   // bord du verre
       x.restore();
     },
   };
