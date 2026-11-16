@@ -232,6 +232,18 @@
     ctx.fillStyle = gb; ctx.beginPath(); ctx.roundRect(x + w * .14, y, w * .72, yg - y + 1, 3); ctx.fill();
     ctx.restore();
   }
+  /** Barre de diagramme peinte : dégradé de la couleur de craie `nom` (ou [r, g, b]), reflet à gauche, plus sombre en bas. */
+  function barre(c, x, y, w, h, nom, a = 1) {
+    if (!(h > .5) || !(w > .5)) return;
+    let col = nom;
+    if (!Array.isArray(col)) { const s = c.couleur(nom); if (s[0] === '#') { const n = parseInt(s.slice(1), 16); col = [n >> 16 & 255, n >> 8 & 255, n & 255]; } else col = (s.match(/[\d.]+/g) || [200, 200, 200]).slice(0, 3).map(Number); }
+    const ctx = c.ctx; ctx.save(); ctx.globalAlpha *= a;
+    const g = ctx.createLinearGradient(x, 0, x + w, 0);
+    g.addColorStop(0, rgba(fonce(col, .62), .9)); g.addColorStop(.3, rgba(clair(col, .28), .9)); g.addColorStop(.55, rgba(col, .9)); g.addColorStop(1, rgba(fonce(col, .5), .9));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, Math.min(3, w / 2, h / 2)); ctx.fill();
+    const v = ctx.createLinearGradient(0, y, 0, y + h); v.addColorStop(0, 'rgba(255,255,255,.18)'); v.addColorStop(.25, 'rgba(255,255,255,0)'); v.addColorStop(1, 'rgba(0,0,0,.22)');
+    ctx.fillStyle = v; ctx.fill(); ctx.restore();
+  }
   const doux = p => { p = Math.min(1, Math.max(0, p)); return p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2; };
-  window.Rendu = { EL, MODELES, atome, molecule, lentille, choc, fiole, flacon, doux, rgba };
+  window.Rendu = { EL, MODELES, atome, molecule, lentille, choc, fiole, flacon, barre, doux, rgba };
 })();
