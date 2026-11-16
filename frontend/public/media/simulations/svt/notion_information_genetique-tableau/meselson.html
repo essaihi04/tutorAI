@@ -27,11 +27,13 @@ const ANC = '#3b82f6', NOUV = '#f1f5f9';
 /** Une molécule d’ADN en deux barres verticales ; `brins` = [couleur gauche, couleur droite] ou 'mosaique'. */
 function molecule(x, cx, cy, h, brins, a = 1, e = 1) {
   x.save(); x.globalAlpha = a; const w = 4.5 * e, sep = 4 * e;
+  // (16 novembre 2026) barreaux des bases puis deux brins en tubes peints (volume, reflet) au lieu de deux barres plates
+  for (let j = 1; j < 5; j++) { const yy = cy - h / 2 + j * h / 5; Peint.barreau(x, cx - sep, yy, cx + sep, yy, '#cbd5e1', 1.6 * e); }
+  const seg = (xx, y0, y1, coul) => Peint.ruban(x, () => { x.beginPath(); x.moveTo(xx, y0); x.lineTo(xx, y1); }, coul, w * 1.25, 1, { cap: 'butt', ombre: false, reflet: [-w * .22, 0] });
   for (const [k2, xx] of [[0, cx - sep], [1, cx + sep]]) {
-    if (brins === 'mosaique') { for (let j = 0; j < 4; j++) { x.fillStyle = (j + k2) % 2 ? ANC : NOUV; x.fillRect(xx - w / 2, cy - h / 2 + j * h / 4, w, h / 4); } }
-    else { x.fillStyle = brins[k2]; x.fillRect(xx - w / 2, cy - h / 2, w, h); }
+    if (brins === 'mosaique') { for (let j = 0; j < 4; j++) seg(xx, cy - h / 2 + j * h / 4, cy - h / 2 + (j + 1) * h / 4, (j + k2) % 2 ? ANC : NOUV); }
+    else seg(xx, cy - h / 2, cy + h / 2, brins[k2]);
   }
-  x.strokeStyle = 'rgba(148,163,184,.6)'; x.lineWidth = .6; for (let j = 1; j < 5; j++) { const yy = cy - h / 2 + j * h / 5; x.beginPath(); x.moveTo(cx - sep, yy); x.lineTo(cx + sep, yy); x.stroke(); }
   x.restore();
 }
 const HYP = [

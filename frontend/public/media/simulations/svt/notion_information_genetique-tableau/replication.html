@@ -35,6 +35,30 @@ function yeux(t) {
   return [{ c: 380, demi: 240 * a }, { c: 105, demi: 75 * l }, { c: 655, demi: 75 * l }];
 }
 function ouverture(px, Y) { let f = 0; for (const e of Y) { const d = e.demi - Math.abs(px - e.c); if (d > 0) f = Math.max(f, Math.min(1, d / 24)); } return f; }
+/* Peinture (16 novembre 2026) : brins en tubes ombrés, bases en bâtonnets arrondis, ADN polymérase en volume. */
+function echelle(x, n, xi, Li, fOuv, g) {
+  for (let i = 0; i < n; i++) {
+    const px = xi(i), f = fOuv(px), L = Li(i);
+    if (f < .15) { Peint.barreau(x, px, g.yTop(px) + 2, px, g.yMil, COUL[L], 6); Peint.barreau(x, px, g.yMil, px, g.yBot(px) - 2, COUL[COMP[L]], 6); }
+    else {
+      const m1 = (g.yTop(px) + g.yNewH(px)) / 2, m2 = (g.yBot(px) + g.yNewB(px)) / 2;
+      Peint.barreau(x, px, g.yTop(px) + 2, px, m1, COUL[L], 6); Peint.barreau(x, px, m1, px, g.yNewH(px) - 2, COUL[COMP[L]], 6);
+      Peint.barreau(x, px, g.yNewB(px) + 2, px, m2, COUL[L], 6); Peint.barreau(x, px, m2, px, g.yBot(px) - 2, COUL[COMP[L]], 6);
+    }
+  }
+  const brin = (fy, coul, garde) => Peint.ruban(x, () => { x.beginPath(); let on = false; for (let px = g.x0; px <= g.x1; px += 3) { const ok = garde(px); if (ok && !on) { x.moveTo(px, fy(px)); on = true; } else if (ok) x.lineTo(px, fy(px)); else on = false; } }, coul, 8);
+  brin(g.yTop, ANC, () => true); brin(g.yBot, ANC, () => true);
+  const ouvert = px => fOuv(px) >= .15;
+  brin(g.yNewH, NOUV, ouvert); brin(g.yNewB, NOUV, ouvert);
+}
+/** L’ADN polymérase : une enzyme globuleuse en volume (deux lobes), posée à la fourche. */
+function polymerase(x, px, py) {
+  x.save(); x.shadowColor = 'rgba(0,0,0,.45)'; x.shadowBlur = 8; x.shadowOffsetY = 3;
+  const g = x.createRadialGradient(px - 6, py - 7, 2, px, py, 22); g.addColorStop(0, '#fae8ff'); g.addColorStop(.4, '#d946ef'); g.addColorStop(1, '#701a75');
+  x.fillStyle = g; x.beginPath(); x.ellipse(px - 5, py, 15, 13, -.3, 0, TAU); x.moveTo(px + 20, py + 1); x.ellipse(px + 7, py + 1, 13, 12, .3, 0, TAU); x.fill();
+  x.shadowColor = 'transparent'; x.fillStyle = 'rgba(255,255,255,.35)'; x.beginPath(); x.ellipse(px - 9, py - 6, 5, 3, -.5, 0, TAU); x.fill();
+  x.restore();
+}
 function dessiner(c, k) {
   const t = k.t, seq = seqPleine(k.P.sequence.split('')), Y = yeux(t), sep = rampe(t, 17.4, 2.6);
   const ecart = 34;   // écart des brins anciens dans un œil
@@ -55,36 +79,19 @@ function dessiner(c, k) {
     if (t >= .8) {
       const a = rampe(t, .8, .8); x.save(); x.globalAlpha = a;
       // nucléotides libres qui flottent autour
-      if (t >= 4 && sep < 1) for (let i = 0; i < 22; i++) { const px = 60 + ((i * 97 + t * 14 * (i % 2 ? 1 : -1)) % 640 + 640) % 640, py = 200 + (i * 53 % 150) + Math.sin(t + i) * 6; if (Math.abs(py - (YH + YB) / 2) < 50 && ouverture(px, Y) < .2) continue; x.fillStyle = COUL['ATCG'[i % 4]]; x.beginPath(); x.arc(px, py, 3.4, 0, TAU); x.fill(); }
-      // bases : barreaux entre les brins (fermé) ou bases portées par chaque brin (ouvert)
-      for (let i = 0; i < N; i++) {
-        const px = X0 + (i + .5) * PAS, f = Math.max(ouverture(px, Y), sep), L = seq[i];
-        if (f < .15) { x.strokeStyle = COUL[L]; x.lineWidth = 4; x.beginPath(); x.moveTo(px, yTop(px) + 2); x.lineTo(px, (YH + YB) / 2); x.stroke(); x.strokeStyle = COUL[COMP[L]]; x.beginPath(); x.moveTo(px, (YH + YB) / 2); x.lineTo(px, yBot(px) - 2); x.stroke(); }
-        else {
-          const m1 = (yTop(px) + yNewH(px)) / 2, m2 = (yBot(px) + yNewB(px)) / 2;
-          x.lineWidth = 4;
-          x.strokeStyle = COUL[L]; x.beginPath(); x.moveTo(px, yTop(px) + 2); x.lineTo(px, m1); x.stroke();
-          x.strokeStyle = COUL[COMP[L]]; x.beginPath(); x.moveTo(px, m1); x.lineTo(px, yNewH(px) - 2); x.stroke();
-          x.strokeStyle = COUL[L]; x.beginPath(); x.moveTo(px, yNewB(px) + 2); x.lineTo(px, m2); x.stroke();
-          x.strokeStyle = COUL[COMP[L]]; x.beginPath(); x.moveTo(px, m2); x.lineTo(px, yBot(px) - 2); x.stroke();
-        }
-      }
-      // brins : anciens (bleus) partout, nouveaux (orangés) là où l’œil est ouvert
-      const brin = (fy, coul, garde) => { x.strokeStyle = coul; x.lineWidth = 5; x.lineCap = 'round'; x.beginPath(); let on = false; for (let px = X0; px <= X1; px += 3) { const ok = garde(px); if (ok && !on) { x.moveTo(px, fy(px)); on = true; } else if (ok) x.lineTo(px, fy(px)); else on = false; } x.stroke(); };
-      brin(yTop, ANC, () => true); brin(yBot, ANC, () => true);
-      const ouvert = px => Math.max(ouverture(px, Y), sep) >= .15;
-      brin(yNewH, NOUV, ouvert); brin(yNewB, NOUV, ouvert);
+      if (t >= 4 && sep < 1) for (let i = 0; i < 22; i++) { const px = 60 + ((i * 97 + t * 14 * (i % 2 ? 1 : -1)) % 640 + 640) % 640, py = 200 + (i * 53 % 150) + Math.sin(t + i) * 6; if (Math.abs(py - (YH + YB) / 2) < 50 && ouverture(px, Y) < .2) continue; Peint.bille(x, px, py, 4.2, COUL['ATCG'[i % 4]]); }
+      // bases (bâtonnets peints) et brins (tubes peints) : anciens bleus partout, nouveaux orangés là où l’œil est ouvert
+      echelle(x, N, i => X0 + (i + .5) * PAS, i => seq[i], px => Math.max(ouverture(px, Y), sep), { yTop, yBot, yNewH, yNewB, yMil: (YH + YB) / 2, x0: X0, x1: X1 });
       x.restore();
       // l’ADN polymérase : sur le brin nouveau du haut à la fourche de gauche, sur celui du bas à la fourche de droite
       if (t >= 5.0 && sep < .4) {
         const e = Y[0], xl = e.c - e.demi + 22, xr = e.c + e.demi - 22, a2 = rampe(t, 5.0, .6) * (1 - sep * 2.5);
         for (const [px, py] of [[xl, (yTop(xl) + yNewH(xl)) / 2], [xr, (yBot(xr) + yNewB(xr)) / 2]]) {
-          x.save(); x.globalAlpha = a2; const g = x.createRadialGradient(px - 5, py - 6, 2, px, py, 20); g.addColorStop(0, '#f5d0fe'); g.addColorStop(1, '#a21caf');
-          x.fillStyle = g; x.beginPath(); x.ellipse(px, py, 18, 14, 0, 0, TAU); x.fill(); x.restore();
+          x.save(); x.globalAlpha = a2; polymerase(x, px, py); x.restore();
         }
         if (t >= 9.6 && t < 11.6) { // un T libre vient se placer en face d’un A
           const u = rampe(t, 9.6, 1.3), px = xl - 4, py = entre(yNewH(xl) - 70, yNewH(xl) - 6, u);
-          x.save(); x.fillStyle = COUL.T; x.beginPath(); x.arc(px, py, 6, 0, TAU); x.fill(); x.fillStyle = '#111'; x.font = '700 9px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('T', px, py + .5); x.restore();
+          x.save(); Peint.bille(x, px, py, 8, COUL.T); x.fillStyle = '#111'; x.font = '700 11px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('T', px, py + .5); x.restore();
         }
       }
     }
@@ -219,27 +226,11 @@ function dessinerLegender(c, k) {
   c.direct(() => {
     const x = c.ctx; x.save(); x.globalAlpha = a;
     const pas = (RL.x1 - RL.x0) / 20;
-    for (let i = 0; i < 20; i++) {
-      const px = RL.x0 + (i + .5) * pas, f = ouverture(px, YR), L = seq[i % seq.length];
-      x.lineWidth = 4;
-      if (f < .15) { x.strokeStyle = COUL[L]; x.beginPath(); x.moveTo(px, rTop(px) + 2); x.lineTo(px, (RL.yh + RL.yb) / 2); x.stroke(); x.strokeStyle = COUL[COMP[L]]; x.beginPath(); x.moveTo(px, (RL.yh + RL.yb) / 2); x.lineTo(px, rBot(px) - 2); x.stroke(); }
-      else {
-        const m1 = (rTop(px) + rNewH(px)) / 2, m2 = (rBot(px) + rNewB(px)) / 2;
-        x.strokeStyle = COUL[L]; x.beginPath(); x.moveTo(px, rTop(px) + 2); x.lineTo(px, m1); x.stroke();
-        x.strokeStyle = COUL[COMP[L]]; x.beginPath(); x.moveTo(px, m1); x.lineTo(px, rNewH(px) - 2); x.stroke();
-        x.strokeStyle = COUL[L]; x.beginPath(); x.moveTo(px, rNewB(px) + 2); x.lineTo(px, m2); x.stroke();
-        x.strokeStyle = COUL[COMP[L]]; x.beginPath(); x.moveTo(px, m2); x.lineTo(px, rBot(px) - 2); x.stroke();
-      }
-    }
-    const brin = (fy, coul, garde) => { x.strokeStyle = coul; x.lineWidth = 5; x.lineCap = 'round'; x.beginPath(); let on = false; for (let px = RL.x0; px <= RL.x1; px += 3) { const ok = garde(px); if (ok && !on) { x.moveTo(px, fy(px)); on = true; } else if (ok) x.lineTo(px, fy(px)); else on = false; } x.stroke(); };
-    brin(rTop, ANC, () => true); brin(rBot, ANC, () => true);
-    const ouvert = px => ouverture(px, YR) >= .15;
-    brin(rNewH, NOUV, ouvert); brin(rNewB, NOUV, ouvert);
+    echelle(x, 20, i => RL.x0 + (i + .5) * pas, i => seq[i % seq.length], px => ouverture(px, YR), { yTop: rTop, yBot: rBot, yNewH: rNewH, yNewB: rNewB, yMil: (RL.yh + RL.yb) / 2, x0: RL.x0, x1: RL.x1 });
     for (const [px, py] of [POL_G, POL_D]) {
-      const g = x.createRadialGradient(px - 5, py - 6, 2, px, py, 20); g.addColorStop(0, '#f5d0fe'); g.addColorStop(1, '#a21caf');
-      x.fillStyle = g; x.beginPath(); x.ellipse(px, py, 18, 14, 0, 0, TAU); x.fill();
+      polymerase(x, px, py);
     }
-    for (const [px, py, L] of LIBRES) { x.fillStyle = COUL[L]; x.beginPath(); x.arc(px, py, 5, 0, TAU); x.fill(); }
+    for (const [px, py, L] of LIBRES) Peint.bille(x, px, py, 5.5, COUL[L]);
     x.restore();
   });
   c.texte('Légende la réplication de l’ADN', 20, 26, { couleur: 'cyan', taille: 19 });

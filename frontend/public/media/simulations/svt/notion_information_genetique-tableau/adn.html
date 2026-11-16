@@ -45,7 +45,7 @@ function base(x, x0, y0, w, h, L, a = 1, lettre = true) {
   if (lettre && h > 10) { x.fillStyle = '#111827'; x.font = `700 ${Math.round(Math.min(16, h * .7))}px sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(L, x0 + w / 2, y0 + h / 2 + .5); }
   x.restore();
 }
-function lien(x, x1, y1, x2, y2, a = 1) { x.save(); x.globalAlpha = a; x.strokeStyle = 'rgba(203,213,225,.85)'; x.lineWidth = 2.4; x.beginPath(); x.moveTo(x1, y1); x.lineTo(x2, y2); x.stroke(); x.restore(); }
+function lien(x, x1, y1, x2, y2, a = 1) { Peint.ruban(x, () => { x.beginPath(); x.moveTo(x1, y1); x.lineTo(x2, y2); }, '#cbd5e1', 4.5, a, { ombre: false }); }
 
 /* ── Vue construire ─────────────────────────────────────────────────── */
 const SEQ = ['A', 'T', 'C', 'G', 'G', 'A'];
@@ -90,13 +90,21 @@ function dessinerConstruire(c, k) {
       // double hélice : l’échelle se tord (dessin pour l’œil ; les appariements restent A–T et C–G)
       const W = (LD.xS2 - LD.xS) / 2, th = u => helice * u * .85 + rot, yU = u => LD.y0 + u * LD.dy;
       const marches = [...Array(6).keys()].map(i => ({ i, z: Math.sin(th(i)) })).sort((p, q) => p.z - q.z);
-      const ruban = (sg, front) => { x.save(); x.lineCap = 'round'; for (let u = 0; u < 5; u += .1) { const z = sg * Math.sin(th(u + .05)); if ((z >= 0) !== front) continue; x.globalAlpha = .55 + .45 * (z + 1) / 2; x.strokeStyle = sg < 0 ? '#93c5fd' : '#cbd5e1'; x.lineWidth = 7; x.beginPath(); x.moveTo(LD.cx + sg * W * Math.cos(th(u)), yU(u)); x.lineTo(LD.cx + sg * W * Math.cos(th(u + .1)), yU(u + .1)); x.stroke(); } x.restore(); };
+      // rubans peints (tubes ombrés) : la moitié arrière plus sombre, la moitié avant claire — on voit le volume de l’hélice
+      const ruban = (sg, front) => {
+        const coul = sg < 0 ? '#60a5fa' : '#cbd5e1', runs = []; let cur = null;
+        for (let u = 0; u <= 5.001; u += .05) {
+          const z = sg * Math.sin(th(u)), ok = (z >= 0) === front, p = [LD.cx + sg * W * Math.cos(th(u)), yU(u)];
+          if (ok) { if (!cur) { cur = []; runs.push(cur); } cur.push(p); } else if (cur) { cur.push(p); cur = null; }
+        }
+        for (const r of runs) Peint.ruban(x, () => { x.beginPath(); r.forEach(([px, py], j) => (j ? x.lineTo(px, py) : x.moveTo(px, py))); }, front ? coul : Peint.teinte(coul, -.35), 10, front ? 1 : .8);
+      };
       ruban(-1, false); ruban(1, false);
       for (const { i } of marches) {
-        const c0 = Math.cos(th(i)), y = yRow(i), xl = LD.cx - W * c0, xr = LD.cx + W * c0, z = Math.sin(th(i)), a = .55 + .45 * (z + 1) / 2;
-        x.save(); x.globalAlpha = a; x.lineWidth = 9; x.lineCap = 'butt';
-        x.strokeStyle = COUL[SEQ[i]][1]; x.beginPath(); x.moveTo(xl, y); x.lineTo(LD.cx, y); x.stroke();
-        x.strokeStyle = COUL[COMP[SEQ[i]]][1]; x.beginPath(); x.moveTo(LD.cx, y); x.lineTo(xr, y); x.stroke(); x.restore();
+        const c0 = Math.cos(th(i)), y = yRow(i), xl = LD.cx - W * c0, xr = LD.cx + W * c0, z = Math.sin(th(i)), a = .6 + .4 * (z + 1) / 2;
+        const sombre = z < 0 ? -.3 * -z : 0, ep = 10 + 4 * (z + 1) / 2;
+        Peint.barreau(x, xl, y, LD.cx, y, Peint.teinte(COUL[SEQ[i]][1], sombre), ep, a);
+        Peint.barreau(x, LD.cx, y, xr, y, Peint.teinte(COUL[COMP[SEQ[i]]][1], sombre), ep, a);
       }
       ruban(-1, true); ruban(1, true);
     }
@@ -520,7 +528,7 @@ const DISPO_CHARGAFF = [{ colonnes: [['tubes'], ['bocaux'], { texte: ['leg', 'ra
 const BLOCS_LARGES = {
   /* deuxième passe (« agrandir les figures ») : pas de titre interne ; le nucléotide à gauche, la molécule sur toute la
    * hauteur au centre, les phrases de droite (A en face de T, tête-bêche, double hélice) récrites en colonne. */
-  construire: { blocs: { nucleotide: [8, 84, 250, 250, 1.5], helice: [240, 44, 700, 420], droite: [566, 110, 760, 300] },
+  construire: { blocs: { nucleotide: [8, 84, 250, 250, 1.5], helice: [240, 44, 700, 420], droite: [602, 110, 760, 300] },
     disposition: { colonnes: [['nucleotide'], ['helice'], { texte: ['droite'] }] } },
   /* Deuxième passe (15 novembre 2026, « agrandir les figures ») : pas de titre interne (la diapositive le dit). Pendant le
    * comptage, l'animation (tubes, bocaux, vols des bases) d'un seul tenant sur toute la hauteur, la légende et les
