@@ -75,7 +75,7 @@ function draw(){
  const W=craie.W,H=craie.H;if(W<1||H<1)return true;
  const temps=(performance.now()-S.ouvert)/1000;
  craie.debut(13,temps);
- const c=craie.ctx,s=Math.min(W/900,H/350);c.translate((W-900*s)/2,(H-350*s)/2);c.scale(s,s);craie.echelle=s;craie.tailleMin=11;
+ const c=craie.ctx,s=Math.min(W/900,H/350);c.translate((W-900*s)/2,(H-350*s)/2);c.scale(s,s);craie.echelle=s;craie.tailleMin=15;
  const k=ease(Math.min(1,(performance.now()-S.t0)/700));S.shift=S.shiftFrom+(S.shiftTo-S.shiftFrom)*k;const sh=S.shift;
  // Repères fixes (sarcomère entre y = 95 et 310, cote en dessous)
  craie.ligne(450,80,450,300,{couleur:'tresfaible',largeur:1.2,pointille:[4,6],duree:.2}).texte('centre du sarcomère',462,62,{couleur:'faible',taille:14});
