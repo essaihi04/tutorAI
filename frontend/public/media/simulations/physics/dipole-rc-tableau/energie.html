@@ -150,14 +150,14 @@ function vueLampe(c) {
   const U = S.U, ctx = c.ctx;
   // Le peint d’abord (la craie reste par-dessus) : condensateur, lampe, électrons.
   const p = progres(c), u = uLampe(p);
-  c.direct(() => {
+  c.direct(() => scene.peindreDans(CI.g, CI.ym, () => {   // tableau large : le peint suit la zone du circuit
     peindreCondensateur(ctx, CI.g + 22, CI.ym - 25);
     peindreLampe(ctx, CI.d, CI.ym, p > 0 && p < 1.0001 ? (u / 12) ** 2 : 0);
     if (p > 0 && p < 1 && U > 0) {
       const L = 2 * (CI.b - CI.h) + 2 * (CI.d - CI.g), avance = 140 * (1 - Math.exp(-p * T_LAMPE));
       for (let k = 0; k < 9; k++) { const pt = surChemin((k * L / 9 + avance) % (L - 30)); if (pt) electron(ctx, pt[0], pt[1]); }
     }
-  });
+  }));
   c.texte(`Énergie : ${TITRES.lampe}`, PC.x + 6, 30, { couleur: 'cyan', taille: 17, duree: .9 });
   c.rect(PC.x, PC.y, PC.w, PC.h, { couleur: 'tresfaible', arrondi: 10, duree: .3 });
   c.rect(PG.x, PG.y, PG.w, PG.h, { couleur: 'tresfaible', arrondi: 10, duree: .3 });
@@ -180,7 +180,7 @@ function vueLampe(c) {
   axeU(c, GL);
   c.fleche(O.x, O.y, O.x + AXL + 14, O.y, { couleur: 'faible', largeur: 1.6 });
   c.texte('t', O.x + AXL + 18, O.y + 5, { couleur: 'blanc', taille: 15, duree: .1 });
-  c.texte('décharge dans la lampe', O.x + 4, PG.y + 22, { couleur: 'blanc', taille: 14, duree: .6 });
+  c.texte('décharge dans la lampe', O.x + 64, PG.y + 22, { couleur: 'blanc', taille: 14, duree: .6 });
   c.pause(.3);
   // decharge_lampe : K se ferme, la lampe s’allume puis faiblit, u_C descend.
   MM._k = c.cur; c.pause(.6);
@@ -223,7 +223,7 @@ function barre(c, x, u, couleur) {
   if (h <= .5) return;
   c.rect(x, y, BAR.w, h, { couleur, largeur: 2, arrondi: 3 });
   // Le remplissage n’apparaît qu’une fois le cadre de la barre tracé (écriture en direct).
-  if (c.t >= c.cur) c.direct(() => { const k = c.ctx; k.globalAlpha = .35; k.fillStyle = c.couleur(couleur); k.fillRect(x + 1, y + 1, BAR.w - 2, h - 2); k.globalAlpha = 1; });
+  if (c.t >= c.cur) c.direct(() => scene.peindreDans(x, y + h / 2, () => { const k = c.ctx; k.globalAlpha = .35; k.fillStyle = c.couleur(couleur); k.fillRect(x + 1, y + 1, BAR.w - 2, h - 2); k.globalAlpha = 1; }));
 }
 function vueCalcul(c) {
   const U = S.U, E = U, C = S.C, { O, AXL, AYL } = GC, X = 400, T = 1;   // axe des temps en « τ » (0 à 6τ)
@@ -295,7 +295,9 @@ const craie = scene.craie;
  * coupe du panneau entre deux lignes, par vue. Grand écran : cadre d’origine 760 × 420. L’écriture suit S.t. */
 const COUPE_PANNEAU = { calcul: 236 };
 const DISPO_CALCUL = RCZones.grapheEtPanneau({ x: 398, y: 40, w: 354, h: 372 }, () => COUPE_PANNEAU.calcul);
-scene.cadre = RCZones(scene, () => S.t, L => (S.vue === 'calcul' ? DISPO_CALCUL(L) : null));   // vue lampe (circuit peint) : cadre d’origine
+// vue lampe (16 novembre 2026) : le circuit peint à sa taille, le graphe et la barre étirés sur la largeur qui reste
+const DISPO_LAMPE = RCZones.rangee([{ r: [4, 10, 308, 406], kMax: 1.1 }, { r: [312, 10, 446, 406], kMax: 1.1, etire: true, axMax: 2.6, kt: 1.15, isoPeint: false }]);
+scene.cadre = RCZones(scene, () => S.t, L => (S.vue === 'calcul' ? DISPO_CALCUL(L) : DISPO_LAMPE(L)));
 function calculer() { const t = S.t, r = S.running; S.t = 1e6; S.running = false; try { dessiner(craie); dessiner(craie); } finally { S.t = t; S.running = r; } scene.sale = true; }
 function moments() { if (M.fin === undefined) calculer(); const out = {}; for (const k of VUES[S.vue]) out[k] = +M[k].toFixed(2); return out; }
 const vu = n => M[n] !== undefined && S.t >= M[n] - 1e-6;

@@ -14,6 +14,8 @@
 (function () {
   'use strict';
   const VW = 760, VH = 420, L_MIN = 1000;
+  /** Largeur de la colonne des phrases : un nombre, ou une fonction (par vue ; 0 = pas de colonne). */
+  const largeurColonne = O => (typeof O.colonne === 'function' ? O.colonne() : O.colonne) ?? 270;
   function RCColonne(scene, opt) {
     const craie = scene.craie, texte = craie.texte, repere = craie.repere;
     const st = { on: false, z: 1, mx: 0, my: 0, dx: 0, dy: 0, ycol: 0, liste: [], o: opt, b: null };
@@ -31,8 +33,8 @@
     craie.texte = function (s, x, y, o = {}) {
       const O = st.o;
       if (!st.on || !O.versColonne(String(s), x, y, o)) return texte.call(this, s, x, y, o);
-      const t = (o.taille ?? 18) * (O.agrandir ?? 1.08), cw = (O.colonne ?? 270) - 22;
-      const lignes = couper(this, s, t, cw), x0 = st.b.x0 - (O.colonne ?? 270) + 6, y0 = st.ycol;
+      const t = (o.taille ?? 18) * (O.agrandir ?? 1.08), cw = largeurColonne(O) - 22;
+      const lignes = couper(this, s, t, cw), x0 = st.b.x0 - largeurColonne(O) + 6, y0 = st.ycol;
       const o2 = { ...o, taille: t, align: 'left' }; delete o2.max; delete o2.encadre;
       if (o.encadre) st.ycol += 6;
       for (const l of lignes) { st.ycol += t * 1.22; texte.call(this, l, x0, st.ycol, o2); }
@@ -70,7 +72,7 @@
           c.ctx.translate(st.mx, 0);
           return;
         }
-        const b = st.b = typeof O.boite === 'function' ? O.boite() : O.boite, cw = O.colonne ?? 270;
+        const b = st.b = typeof O.boite === 'function' ? O.boite() : O.boite, cw = largeurColonne(O);
         const w = cw + (b.x1 - b.x0), h = b.y1 - b.y0;
         st.z = Math.min(L / w, VH / h, O.zoomMax ?? 1.6);
         st.mx = (L - w * st.z) / 2 + cw * st.z; st.my = (VH - h * st.z) / 2;

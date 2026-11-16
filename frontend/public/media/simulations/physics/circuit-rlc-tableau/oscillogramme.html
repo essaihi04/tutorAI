@@ -102,7 +102,9 @@ const RUL = { x0: 432, x1: 728, y: 396 };
  * à droite, écrite 1,3 fois plus grand, la règle de la poignée R dessous. Sinon : la disposition d'origine, 760 × 420. */
 let LL = 760, LARGE = false, KT = 1, COLS = null;
 function disposer(Lv) {
-  LL = Lv >= 1000 && S.vue !== 'comparer' ? Lv : 760; LARGE = LL >= 1000;
+  LL = Lv >= 1000 ? Lv : 760; LARGE = LL >= 1000;
+  placerPetits(LL);   // (16 novembre 2026) vue comparer : les trois écrans s'étalent sur toute la largeur du tableau
+  if (S.vue === 'comparer') { LARGE = false; Object.assign(CAS, { w: 376 }); Object.assign(ECR, { w: 340 }); Object.assign(RL, { x: 400, w: 352 }); Object.assign(RUL, { x0: 432, x1: 728 }); LX = RL.x + 10; LW = RL.w - 20; KT = 1; COLS = null; return; }
   if (!LARGE) {
     Object.assign(CAS, { w: 376 }); Object.assign(ECR, { w: 340 }); Object.assign(RL, { x: 400, w: 352 }); Object.assign(RUL, { x0: 432, x1: 728 });
     LX = RL.x + 10; LW = RL.w - 20; KT = 1; COLS = null; return;
@@ -135,8 +137,17 @@ const Rx = x => Math.pow(clamp((x - RUL.x0) / (RUL.x1 - RUL.x0)), 2) * 2000;
 const PX = (e, t) => e.x + t / 20 * e.w;
 const PY = (e, u) => e.y + e.h / 2 - u / 8 * (e.h / 2);
 const PETITS = [0, 1, 2].map(k => { const x = 14 + k * 249; return { cas: { x, y: 66, w: 234, h: 204 }, e: { x: x + 12, y: 76, w: 210, h: 168 } }; });
+/** Les trois petits écrans sur la largeur du cadre (760 : comme avant ; plus large : écrans plus larges, même hauteur). */
+function placerPetits(Lv) {
+  const pas = (Lv - 28 + 15) / 3, w = Math.round(pas - 15);
+  for (const [k, nom] of [[0, 'periodique'], [1, 'pseudo'], [2, 'aperiodique']]) {
+    const x = Math.round(14 + k * pas);
+    Object.assign(PETITS[k].cas, { x, w }); Object.assign(PETITS[k].e, { x: x + 12, w: w - 24 });
+    if (PETIT) { Object.assign(PETIT[nom].cas, PETITS[k].cas); Object.assign(PETIT[nom].e, PETITS[k].e); }
+  }
+}
 // comparer : à gauche périodique, au milieu pseudo-périodique, à droite apériodique (l’amortissement augmente vers la droite)
-const PETIT = { periodique: { ...PETITS[0], Rt: 0, titre: 'R + r = 0 (LC idéal)' }, pseudo: { ...PETITS[1], Rt: 20, titre: 'R + r = 20 Ω' }, aperiodique: { ...PETITS[2], Rt: 1010, titre: 'R = 1 kΩ' } };
+var PETIT = { periodique: { cas: { ...PETITS[0].cas }, e: { ...PETITS[0].e }, Rt: 0, titre: 'R + r = 0 (LC idéal)' }, pseudo: { cas: { ...PETITS[1].cas }, e: { ...PETITS[1].e }, Rt: 20, titre: 'R + r = 20 Ω' }, aperiodique: { cas: { ...PETITS[2].cas }, e: { ...PETITS[2].e }, Rt: 1010, titre: 'R = 1 kΩ' } };
 const marque = (c, nom) => { MM[nom] = c.cur; };
 const lire = (c, y, s, o = {}) => { const [x, yy, mx] = ouLire(y); return c.texte(s, x, yy, { couleur: 'blanc', duree: Math.max(.3, s.length / 30), ...o, taille: (o.taille ?? 16) * KT, max: Math.min(mx, o.max ?? mx) }); };
 
@@ -358,7 +369,8 @@ function vueComparer(c) {
     c.texte(k.titre, k.cas.x + k.cas.w / 2, 58, { couleur: 'blanc', taille: 15, align: 'center', duree: .3 });
     c.texte('2 V/div ; 2 ms/div', k.cas.x + k.cas.w / 2, k.cas.y + k.cas.h - 9, { couleur: 'blanc', taille: 13, align: 'center', duree: .3 });
   }
-  c.texte('C = 4 µF ; L = 0,1 H ; u_C(0) = 6 V', 746, 28, { couleur: 'blanc', taille: 13, align: 'right', duree: .3 });
+  const XM = LL / 2;
+  c.texte('C = 4 µF ; L = 0,1 H ; u_C(0) = 6 V', LL - 14, 28, { couleur: 'blanc', taille: 13, align: 'right', duree: .3 });
   c.pause(.3);
   for (const nom of ['pseudo', 'aperiodique', 'periodique']) {
     const k = PETIT[nom];
@@ -367,11 +379,11 @@ function vueComparer(c) {
     marque(c, nom);
     c.pause(.4);
   }
-  c.fleche(40, 318, 722, 318, { couleur: 'blanc', largeur: 2, tete: 12 });
-  c.texte('l’amortissement augmente avec R + r', 380, 344, { couleur: 'blanc', taille: 18, align: 'center' });
-  c.texte('périodique → pseudo-périodique → apériodique', 380, 368, { couleur: 'blanc', taille: 15, align: 'center' });
-  c.texte('L et C font osciller, R + r amortit', 380, 400, { couleur: 'blanc', taille: 18, align: 'center' });
-  c.rect(232, 380, 296, 30, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+  c.fleche(40, 318, LL - 38, 318, { couleur: 'blanc', largeur: 2, tete: 12 });
+  c.texte('l’amortissement augmente avec R + r', XM, 344, { couleur: 'blanc', taille: 18, align: 'center' });
+  c.texte('périodique → pseudo-périodique → apériodique', XM, 368, { couleur: 'blanc', taille: 15, align: 'center' });
+  c.texte('L et C font osciller, R + r amortit', XM, 400, { couleur: 'blanc', taille: 18, align: 'center' });
+  c.rect(XM - 148, 380, 296, 30, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
   marque(c, 'ordre');
 }
 
@@ -428,7 +440,7 @@ function declarerReperes(c) {
   c.repere('courbe_periodique', ECR.x, ECR.y, ECR.w, ECR.h, `régime périodique, R + r = 0${ici('periodique', 'comparer')}`);
   c.repere('courbe_pseudo', ECR.x, ECR.y, ECR.w, ECR.h, `régime pseudo-périodique, R + r = 20 Ω${ici('pseudo', 'comparer')}`);
   c.repere('courbe_aperiodique', ECR.x, ECR.y, ECR.w, ECR.h, `régime apériodique, R = 1 kΩ${ici('aperiodique', 'comparer')}`);
-  c.repere('ordre', CAS.x, 366, CAS.w, 50, 'l’amortissement augmente avec R + r (vue « comparer »)');
+  c.repere('ordre', v === 'comparer' ? LL / 2 - 200 : CAS.x, 366, v === 'comparer' ? 400 : CAS.w, 50, 'l’amortissement augmente avec R + r (vue « comparer »)');
 }
 
 const canvas = $('canvas');

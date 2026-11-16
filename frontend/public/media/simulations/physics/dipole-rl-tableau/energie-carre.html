@@ -12,6 +12,7 @@
 </div>
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
+<script src="/media/simulations/physics/dipole-rc-tableau/zones.js"></script>
 <script src="exposants.js"></script>
 <script>
 /*
@@ -22,7 +23,11 @@
  * Moments (play_until) : donnees (L = 0,2 H, I₀ = 0,5 A écrits), calcul (la ligne de calcul), resultat (le courant s'établit :
  * 0,025 J), I_double (I₀ = 1 A : quatre carreaux, 0,1 J, × 4), L_double (L = 0,4 H, I₀ = 0,5 A : 0,05 J, × 2). Diapo rl_l8_double.
  */
-const { fr, bulle, protocole } = window.Tableau;
+const { fr, bulle: bulleBrute, protocole } = window.Tableau;
+/* La bulle est du texte HTML (16 novembre 2026) : pas de « _ » visible — E_m s'écrit Em, un indice chiffré passe en indice. */
+const INDICES = { 0: '₀', 1: '₁', 2: '₂' };
+const lisible = s => String(s).replace(/_\{?([A-Za-z0-9]+)\}?/g, (_, x) => (/^\d+$/.test(x) ? [...x].map(ch => INDICES[ch] || ch).join('') : x));
+const bulle = (el, texte, kind) => bulleBrute(el, lisible(texte), kind);
 const $ = id => document.getElementById(id);
 const fx = (v, d = 3) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');
 const P = { I: 0.5, L: 0.2 };
@@ -51,7 +56,7 @@ function peindreBobine(ctx, x, y, w, h, n) {
 
 function dessiner(c) {
   scene.cadre(29);
-  c.direct(() => peindreBobine(c.ctx, 52, 140, 116, 26, 14));
+  c.direct(() => scene.peindreDans(110, 153, () => peindreBobine(c.ctx, 52, 140, 116, 26, 14)));
   c.texte('E_m = ½·L·I₀²', 380, 30, { couleur: 'jaune', taille: 22, align: 'center' });
   c.repere('formule', 290, 6, 180, 32, 'E_m = ½·L·I₀² : le courant est au carré');
   // La bobine (peinte ci-dessus : mandrin et spires de cuivre) entre deux fils.
@@ -114,6 +119,17 @@ function dessiner(c) {
 
 const canvas = $('canvas');
 const scene = window.OndesTableau.Scene(canvas, dessiner, { large: true, ajuster: true });   // la boîte de l’encre remplit le tableau (15 novembre 2026)
+/* Tableau large et bas (16 novembre 2026, « remets en page les vues qui laissent une bande vide ») : trois blocs côte à côte,
+ * écartés sur toute la largeur et agrandis sans déformation (le carré reste un carré) — la bobine et ses données, la formule
+ * au-dessus du carré i², la barre E_m. Cadre plus étroit (L < 1000) : `ajuster`, comme avant. */
+const cadreBase = scene.cadre;
+const cadreZones = RCZones(scene, () => (performance.now() - scene.ouvert) / 1000,
+  RCZones.rangee([{ r: [8, 96, 214, 228], kMax: 1.5 }, { r: [232, 4, 340, 412], kMax: 1.1 }, { r: [576, 40, 184, 360], kMax: 1.12 }], { repartir: 160, kMin: .8 }));
+scene.cadre = function (graine) {
+  const W = scene.craie.W, H = scene.craie.H, L = Math.round(Math.min(760 * 2.1, Math.max(760, 420 * W / Math.max(1, H))));
+  const kz = cadreZones(graine);
+  return L >= 1000 && !scene.mesurant ? kz : cadreBase.call(scene, graine);
+};
 scene.avancer = dt => {
   if (!S.running) return false;
   S.f = Math.min(1, S.f + dt / MONTEE);
