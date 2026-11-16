@@ -41,8 +41,13 @@ const vue = VUES.includes(demande) ? demande : 'levures';
 const G = { X0: 402, X1: 700, Y0: 330, Y1: 128, YT: 114 };
 /* Tableau large (portable, scene.L ≥ 1000) : le graphique s'étire vers la droite sur toute la largeur du tableau
  * (axe du temps plus long, axes de droite et légendes suivent) ; grand écran : 760 × 420, centré. */
+/* (16 novembre 2026, cadre très large et bas, ex. 1360 × 420) : le montage était serré à gauche pendant que le graphique
+ * s'étirait dans le vide. Le montage est agrandi (bloc MONT, ×MONT.s) et le graphique décalé d'autant (DECAL) ; les lectures
+ * passent en grand sous le graphique, à droite. Sous 1180 de large : disposition précédente. */
+const MONT = { src: [0, 30, 356, 352], s: 1.14 }, DECAL = Math.round(6 + 356 * 1.14 + 12 - 356);
+const ample = L => L >= 1180;
 function regler(L) {
-  G.X1 = L >= 1000 ? L - 60 : 700;
+  G.X1 = ample(L) ? L - DECAL - 60 : L >= 1000 ? L - 60 : 700;
   for (const xp of Object.values(XP)) for (const d of xp.droite || []) { d.x0 ??= d.x; d.x = d.x0 + G.X1 - 700; }
 }
 const ROW1 = 80, ROW2 = 96, FL_H = 100, FL_B = 122;     // étiquettes d'ajout (deux rangées) et flèches verticales
@@ -129,7 +134,10 @@ majMotifs();
 const canvas = $('canvas');
 const scene = Scene(canvas, (c) => { scene.cadre(31); regler(scene.L); MOS.dessiner(c, () => { dessiner(c); }); return c.fin(); }, { large: true });
 /* Tableau large (portable 1366 × 613) : la page est rangée sur toute la largeur (SVTLarge.Mosaique, dans peinture.js) ; grand écran : inchangée. */
-const MOS = window.SVTLarge.Mosaique(scene, (L) => L >= 1000 ? { police: 1.12, blocs: [{ src: [0, 0, L, 420], X: 0, Y: 0, s: 1 }] } : null);
+const MOS = window.SVTLarge.Mosaique(scene, (L) => (ample(L) ? { police: 1.12, blocs: [
+    { src: MONT.src, X: 6, Y: Math.round((420 - MONT.src[3] * MONT.s) / 2), s: MONT.s },
+    { src: [356, 0, L - 356 - DECAL, 420], X: 356 + DECAL, Y: 0, s: 1 }] }
+  : L >= 1000 ? { police: 1.12, blocs: [{ src: [0, 0, L, 420], X: 0, Y: 0, s: 1 }] } : null));
 const ecrit = Apparitions(scene);
 const chrono = Chrono({ fin: () => FIN, moments: () => X.moments(), motifs: MOTIFS, bouton: $('run'), bulle: $('feedback'), pont: () => pont,
   vitesse: X.vitesse || 1, depart: 'L’expérience démarre (temps accéléré)…', reinit: () => ecrit.oublier(), fini: () => X.fini() });
@@ -223,7 +231,7 @@ function montageLevures(c) {
   c.texte('sonde O_{2}', 62, 80, { couleur: 'cyan', taille: 14, align: 'center' });
   c.texte('sonde CO_{2}', 128, 62, { couleur: 'orange', taille: 14, align: 'center' });
   c.texte('glucose', aj.x, 122, { couleur: 'jaune', taille: 14 });
-  c.texte('levures en suspension, solution aérée', 12, 374, { couleur: 'faible', taille: 14 });
+  c.texte('levures en suspension, solution aérée', 12, 374, { couleur: 'blanc', taille: 15 });
   c.repere('medaillon', 214, 228, 110, 126, 'les levures vues au microscope');
   c.repere('seringue', 154, 60, 80, 134, 'la seringue de glucose');
 }
@@ -244,8 +252,8 @@ function montageMitochondries(c) {
   aj.forEach((a) => {
     c.texte(a.label, a.x, a.rang === ROW1 ? 60 : 82, { couleur: 'jaune', taille: 14, align: 'center' });
   });
-  c.texte('mitochondries isolées', 170, 352, { couleur: 'orange', taille: 14, align: 'center' });
-  c.texte(MT.sans_o2 ? 'milieu sans dioxygène' : 'milieu riche en O_{2}', 170, 370, { couleur: MT.sans_o2 ? 'rouge' : 'faible', taille: 14, align: 'center' });
+  c.texte('mitochondries isolées', 170, 352, { couleur: 'orange', taille: 16, align: 'center' });
+  c.texte(MT.sans_o2 ? 'milieu sans dioxygène' : 'milieu riche en O_{2}', 170, 372, { couleur: MT.sans_o2 ? 'rouge' : 'cyan', taille: 15, align: 'center' });
 }
 
 const MITOS_P = [[58, 196, .5], [106, 190, -.4], [62, 242, -1], [108, 238, .3], [60, 288, .2], [106, 284, -.7], [84, 306, 0], [86, 216, 1.2]];   // (16 novembre 2026) dans le liquide, sans toucher les parois
@@ -260,10 +268,10 @@ function montagePulse(c) {
     nuage(ctx, aj.x, 190, chrono.part(aj.t, aj.t + 14), [200, 230, 250]);
   });
   c.texte(aj.label, aj.x, 62, { couleur: 'jaune', taille: 14, align: 'center' });
-  c.texte('électrode', 160, 66, { couleur: 'faible', taille: 13, align: 'center' });
-  c.texte('du pH-mètre', 160, 80, { couleur: 'faible', taille: 13, align: 'center' });
-  c.texte('mitochondries sans membrane externe', 12, 352, { couleur: 'orange', taille: 13 });
-  c.texte('solution sans O_{2}, riche en NADH,H+', 12, 370, { couleur: 'faible', taille: 13 });
+  c.texte('électrode', 160, 64, { couleur: 'blanc', taille: 14, align: 'center' });
+  c.texte('du pH-mètre', 160, 80, { couleur: 'blanc', taille: 14, align: 'center' });
+  c.texte('mitochondries sans membrane externe', 12, 352, { couleur: 'orange', taille: 14 });
+  c.texte('solution sans O_{2}, riche en NADH,H+', 12, 370, { couleur: 'cyan', taille: 14 });
   encart(c);
 }
 
@@ -294,7 +302,7 @@ function encart(c) {
   c.rect(EN.x, EN.y, EN.w, EN.h, { couleur: 'faible', arrondi: 6, largeur: 1.6 });
   c.texte('dans la membrane interne', EN.x + EN.w / 2, EN.y - 8, { couleur: 'blanc', taille: 13, align: 'center' });
   c.texte('matrice', EN.x + 6, EN.y + 18, { couleur: 'cyan', taille: 13 });
-  c.texte('solution', EN.x + 6, EN.y + EN.h - 8, { couleur: 'faible', taille: 13 });
+  c.texte('solution', EN.x + 6, EN.y + EN.h - 8, { couleur: 'blanc', taille: 13 });
   c.texte('sphère', EN.x + EN.w - 6, EN.y + 18, { couleur: 'jaune', taille: 12, align: 'right' });
   c.texte('pédonculée', EN.x + EN.w - 6, EN.y + 32, { couleur: 'jaune', taille: 12, align: 'right' });
   if (pompe > 0) ecrit.ecrire(c, 'pompe', () => { c.fleche(244, EN.y + 50, 244, EN_M + EN_EP + 40, { couleur: 'rouge', largeur: 2 }); c.texte('H+', 250, EN_M + EN_EP + 46, { couleur: 'rouge', taille: 14 }); });
@@ -308,21 +316,21 @@ function axes(c) {
   c.fleche(G.X0, G.Y0, G.X0, G.YT, F);
   c.fleche(G.X0, G.Y0, G.X1 + 22, G.Y0, F);
   const g = X.gauche;
-  c.texte(g.titre, G.X0, 62, { couleur: g.couleur, taille: 14, align: 'center' });
-  for (const v of g.ticks) { const y = yG(v, g.max); c.ligne(G.X0 - 4, y, G.X0 + 4, y, { couleur: 'faible', largeur: 1.3, duree: .04 }); c.texte(String(v), G.X0 - 8, y + 5, { couleur: g.couleur, taille: 13, align: 'right', duree: .06 }); }
+  c.texte(g.titre, G.X0, 62, { couleur: g.couleur, taille: 16, align: 'center' });
+  for (const v of g.ticks) { const y = yG(v, g.max); c.ligne(G.X0 - 4, y, G.X0 + 4, y, { couleur: 'faible', largeur: 1.3, duree: .04 }); c.texte(String(v), G.X0 - 8, y + 5, { couleur: g.couleur, taille: 14, align: 'right', duree: .06 }); }
   if (X.droite.length) {
     c.fleche(G.X1, G.Y0, G.X1, G.YT, F);
     for (const d of X.droite) {
-      c.texte(d.titre, d.centre ? G.X1 : G.X1 + 56, d.yTitre, { couleur: d.couleur, taille: 14, align: d.centre ? 'center' : 'right' });
+      c.texte(d.titre, d.centre ? G.X1 : G.X1 + 56, d.yTitre, { couleur: d.couleur, taille: 16, align: d.centre ? 'center' : 'right' });
       d.ticks.forEach((v, i) => {
         const y = yG(v, d.max);
         if (d === X.droite[0]) c.ligne(G.X1 - 4, y, G.X1 + 4, y, { couleur: 'faible', largeur: 1.3, duree: .04 });
-        if (v > 0) c.texte(fr(v, 0), d.x, y + 5, { couleur: d.couleur, taille: 13, duree: .06 });
+        if (v > 0) c.texte(fr(v, 0), d.x, y + 5, { couleur: d.couleur, taille: 14, duree: .06 });
       });
     }
   }
-  for (let v = 0; v <= X.tmax + 1e-9; v += X.pasT) { const x = xT(v); c.ligne(x, G.Y0 - 4, x, G.Y0 + 4, { couleur: 'faible', largeur: 1.3, duree: .04 }); c.texte(String(v), x, G.Y0 + 20, { couleur: 'faible', taille: 13, align: 'center', duree: .06 }); }
-  c.texte(`t (${X.unite})`, G.X1 + 22, G.Y0 + 38, { couleur: 'faible', taille: 14, align: 'right' });
+  for (let v = 0; v <= X.tmax + 1e-9; v += X.pasT) { const x = xT(v); c.ligne(x, G.Y0 - 4, x, G.Y0 + 4, { couleur: 'faible', largeur: 1.3, duree: .04 }); c.texte(String(v), x, G.Y0 + 20, { couleur: 'blanc', taille: 14, align: 'center', duree: .06 }); }
+  c.texte(`t (${X.unite})`, G.X1 + 22, G.Y0 + 38, { couleur: 'blanc', taille: 15, align: 'right' });
 }
 /* Une courbe tracée de son début jusqu'à l'instant courant ; renvoie sa boîte (pour le repère). */
 function courbe(c, s) {
@@ -365,10 +373,10 @@ function lecture(s) { return `${s.nom} = ${fr(s.f(chrono.t), 1)} ${s.unite}`; }
 
 function dessiner(c) {
   const t = chrono.t, M = X.moments();
-  c.texte(X.titre, 12, 26, { couleur: 'cyan', taille: 18 });
+  c.texte(X.titre, ample(scene.L) ? 372 : 12, 26, { couleur: 'cyan', taille: 18 });
   c.direct(() => c.texte(`t = ${fr(t, vue === 'pulse_o2' ? 0 : 1)} ${X.unite} (temps accéléré)`, G.X1 + 52, 26, { couleur: 'faible', taille: 14, align: 'right' }));
-  c.texte('le montage', 12, 46, { couleur: 'faible', taille: 13 });
-  c.texte('le graphique', 551, 46, { couleur: 'faible', taille: 13, align: 'center' });
+  c.texte('le montage', 12, 46, { couleur: 'blanc', taille: 15 });
+  c.texte('le graphique', ample(scene.L) ? (G.X0 + G.X1) / 2 : 551, 46, { couleur: 'blanc', taille: 15, align: 'center' });
   c.repere('montage', 8, 36, 340, 346, 'le montage');
   c.repere('graphique', 352, 50, 404, 326, 'le graphique (courbes en direct)');
   if (vue === 'levures') montageLevures(c); else if (vue === 'mitochondries') montageMitochondries(c); else montagePulse(c);
@@ -381,12 +389,14 @@ function dessiner(c) {
   // les lectures (montage) et ce qui s'écrit à son instant (graphique)
   c.direct(() => {
     X.series.forEach((s, i) => {
-      const x = vue === 'levures' ? [12, 170, 12][i] : 12, y = vue === 'levures' ? [394, 394, 414][i] : 394 + 20 * i;
       if (vue === 'pulse_o2') return;
-      c.texte(lecture(s).replace('O2', 'O_{2}'), x, y, { couleur: s.couleur, taille: 15 });
+      // les lectures : le résultat de la manip, écrit grand et vif (sous le graphique, à droite, dans un cadre très large)
+      const n = X.series.length, x = ample(scene.L) ? G.X1 - 250 : vue === 'levures' ? [12, 170, 12][i] : 12;
+      const y = ample(scene.L) ? 416 - 20 * (n - 1 - i) : vue === 'levures' ? [394, 394, 414][i] : 394 + 20 * i;
+      c.texte(lecture(s).replace('O2', 'O_{2}'), x, y, { couleur: s.couleur, taille: ample(scene.L) ? 18 : 16, gras: true });
     });
     if (vue === 'pulse_o2') {
-      c.texte('[H+] du milieu = ' + fr(X.series[0].f(t), 1) + ' × 10⁻⁹ mol/L', G.X0 - 30, 392, { couleur: 'rouge', taille: 15 });
+      c.texte('[H+] du milieu = ' + fr(X.series[0].f(t), 1) + ' × 10⁻⁹ mol/L', G.X0 - 30, 392, { couleur: 'rouge', taille: 17, gras: true });
     }
   });
   if (vue === 'levures') {
