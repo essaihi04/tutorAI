@@ -161,10 +161,10 @@
         remplir(cc, zonePts(G, f, g, a, a + (b - a) * Math.min(1, part), o.n || 120), o);
         return K;
       },
-      /** Bande verticale x ∈ [a ; b] (voisinage, intervalle) sur toute la hauteur du repère, en transparence. */
-      bande(G, a, b, o = {}) { return K.zone.call(this, G, () => G.ymax, () => G.ymin, Math.max(a, G.xmin), Math.min(b, G.xmax), { n: 2, ...o }); },
-      /** Bande horizontale y ∈ [a ; b] sur toute la largeur du repère. */
-      bandeH(G, a, b, o = {}) { return K.zone.call(this, G, () => Math.min(b, G.ymax), () => Math.max(a, G.ymin), G.xmin, G.xmax, { n: 2, ...o }); },
+      /** Bande verticale x ∈ [a ; b] (voisinage, intervalle) sur la hauteur du repère (o.y0, o.y1 pour la borner). */
+      bande(G, a, b, o = {}) { return K.zone.call(this, G, () => o.y1 ?? G.ymax, () => o.y0 ?? G.ymin, Math.max(a, G.xmin), Math.min(b, G.xmax), { n: 2, ...o }); },
+      /** Bande horizontale y ∈ [a ; b] sur la largeur du repère (o.x0, o.x1 pour la borner). */
+      bandeH(G, a, b, o = {}) { const lo = Math.min(a, b), hi = Math.max(a, b); return K.zone.call(this, G, () => Math.min(hi, G.ymax), () => Math.max(lo, G.ymin), Math.max(o.x0 ?? G.xmin, G.xmin), Math.min(o.x1 ?? G.xmax, G.xmax), { n: 2, ...o }); },
       titre(s) { c.texte(s, 20, 30, { couleur: 'cyan', taille: 20, max: 720 }); return K; },
       grille,
       axes(o) {
