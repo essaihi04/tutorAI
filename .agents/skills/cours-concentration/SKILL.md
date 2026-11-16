@@ -81,6 +81,25 @@ A course is judged by what the student still knows a week and a month later, not
 11. **Show the user**, wait for validation; only then register the simulations as lesson resources, publish the deck, refresh the voice cache, deploy.
 12. **Teachers review it on the free link** (user rule, 10 November 2026): every concentration course `<matière>_chN_<clé>.json` is served, even as a draft, at `https://moalim.online/cours-ondes/?cours=<id>` (`?cours=liste` lists them) after `python -I scripts/publier_cours_ondes.py`. On each slide the teacher votes 👍 / 👎 and writes a comment (`/public/cours-ondes/avis`); the admin reads them in the dashboard tab « Avis des profs » (`/admin?tab=avis`), opens the slide, corrects it, marks it « corrigé ». **Students** (account mode) only get a course once it carries `status: published`, `remplace_la_base: true` and `lecon_remplacee: <lesson id>` (lesson ids: table `lessons`, `title_fr`); drafts never reach them.
 
+## Formulas in the written text: written like the board, never like a keyboard (user rule, 16 November 2026)
+
+« Pas de slash dans les équations : un nombre sur un autre, comme dans les simulations. » Everything the student READS on
+screen (notebook `cahier` and `blocs[].cahier`, slide title and `lead`, `bullets`, `essential_text`, questions, choices,
+reactions `ecrit`, demonstrations, exercises, table cells) goes through `<Formule>` (`frontend/src/components/course/Formule.tsx`),
+which draws a real stacked fraction, subscripts and superscripts. The data is written so that it can:
+- **Fractions**: `a/b`, with parentheses around a numerator or denominator of several terms — `K = C·τ²/(1 − τ)`,
+  `K' = 1/K`, `i = dq/dt`, `x = (P − P₀)·V/(R·T)`, `Q_r,éq = [A⁻]_éq·[H₃O⁺]_éq/[AH]_éq`. Never « divisé par » in the writing,
+  never `a / b` with spaces around the bar (it stays a plain bar), never two bars in a row (`a/b/c`): write `a/(b·c)`.
+- **The bar stays a bar** (not stacked) only where it is not a division: units (`mol/L`, `m/s`, `g/mol`, `A/s`), couples
+  (`AH/A⁻`, `Cu²⁺/Cu`, `Ox/Red`), `t₁/₂`, a bar inside an exponent (`e^(−t/τ)`), words (`acide/base`). Prefer `mol·L⁻¹` when
+  the unit sits next to a fraction.
+- **Subscripts** with `_`: `y_M(t)`, `x_max`, `x_f`, `Q_r,éq`, `[A⁻]_éq`, `u_C`, `K_a`, `{…}` for several characters with
+  spaces (`lim_{x→1}`). `Qr,éq`, `xmax`, `Ka`, `[A⁻]éq` are also recognised, but `_` is the rule.
+- **Exponents** with `^( )` or Unicode: `e^(−t/τ)`, `10^(−pH)`, `10⁻⁵`, `x²`.
+- **Check before delivering**: open the notebook step and the questions of the course in the player (desktop and phone in
+  landscape, 724 × 350): no `_`, `^` or calculation bar visible, every fraction stacked. The simulations already draw
+  fractions on the board (chalk kit) — the written text must look the same.
+
 ## Traps already met
 
 - **Lip-sync**: the tutor's mouth follows the SOUND, through the shared analyser (`services/avatarAudio.ts`), not the « speaking » flag (which only moves the body). Every `<audio>` the tutor speaks through (course track, live voice, prepared reactions) must call `observeAvatarMedia` on play (8 November 2026: the course tracks never did, so he talked with his mouth shut). The analyser also retries once the AudioContext is running: a track that starts by itself before the context is up used to stay unconnected for its whole length. To test it, keep the browser pane visible: hidden, `requestAnimationFrame` stops and `data-mouth` stays at 0 whatever the voice does.

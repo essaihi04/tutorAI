@@ -1934,10 +1934,10 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
           qu'une bande étroite ») : la hauteur gagnée va au tableau de la simulation. */}
       <header className={`shrink-0 text-center ${surSim ? 'flex flex-wrap items-baseline justify-center gap-x-4 px-4 pt-1 pb-0.5' : 'px-6 pt-2 pb-1'}`}
         style={tuteur3D ? { paddingRight: COLONNE_TUTEUR } : undefined}>
-        <h1 className="text-xl leading-tight md:text-[26px]" style={{ fontFamily: CRAIE, color: '#fef3c7' }}>{slide.title}</h1>
+        <h1 className="text-xl leading-tight md:text-[26px]" style={{ fontFamily: CRAIE, color: '#fef3c7' }}><Formule t={slide.title} /></h1>
         {/* pendant une question d'observation, le sous-titre se tait : il dit souvent la réponse (« la lumière s'étale ») */}
         {contenu.lead && (
-          <p className="text-sm leading-snug md:text-base text-white/70 transition-opacity" style={{ fontFamily: CRAIE, opacity: obs && obs.etape !== 'fini' ? 0 : 1 }}>{contenu.lead}</p>
+          <p className="text-sm leading-snug md:text-base text-white/70 transition-opacity" style={{ fontFamily: CRAIE, opacity: obs && obs.etape !== 'fini' ? 0 : 1 }}><Formule t={contenu.lead} /></p>
         )}
       </header>
 
@@ -2124,8 +2124,8 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
                 </div>
               )}
               {entete?.partie && <h3 className="mt-3 text-2xl" style={{ fontFamily: CRAIE, color: '#fca5a5' }}>{entete.partie}</h3>}
-              <h4 className={`mt-2 text-xl underline decoration-amber-200/40 underline-offset-4 ${entete ? 'pl-4' : ''}`} style={{ fontFamily: CRAIE, color: '#fef3c7' }}>{entete?.diapo || slide.title}</h4>
-              {contenu.lead && <p className={`mt-1 text-base italic ${entete ? 'pl-4' : ''}`} style={{ fontFamily: CRAIE, color: '#e7e5c9' }}>{contenu.lead}</p>}
+              <h4 className={`mt-2 text-xl underline decoration-amber-200/40 underline-offset-4 ${entete ? 'pl-4' : ''}`} style={{ fontFamily: CRAIE, color: '#fef3c7' }}><Formule t={entete?.diapo || slide.title} /></h4>
+              {contenu.lead && <p className={`mt-1 text-base italic ${entete ? 'pl-4' : ''}`} style={{ fontFamily: CRAIE, color: '#e7e5c9' }}><Formule t={contenu.lead} /></p>}
               {cahier && cahier !== contenu.lead && <p className={`mt-2 text-lg leading-relaxed ${entete ? 'pl-4' : ''}`} style={{ fontFamily: CRAIE, color: '#fef3c7' }}><Formule t={cahier} /></p>}
               {/* les dessins du cahier (courbe, schéma, croquis légendés), sous le texte */}
               <FiguresCahier figures={conc.cahier_figures} compact className={`mt-3 ${entete ? 'pl-4' : ''}`} />
@@ -2142,7 +2142,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
           {panneau === 'explication' && (
             <div style={{ fontFamily: CRAIE }} className="text-lg leading-relaxed">
               <div className="text-sm font-semibold text-cyan-200" style={{ fontFamily: 'inherit' }}>📖 Explication écrite</div>
-              {contenu.lead && <p className="mt-2 text-white/80">{contenu.lead}</p>}
+              {contenu.lead && <p className="mt-2 text-white/80"><Formule t={contenu.lead} /></p>}
               {(contenu.bullets || []).length > 0 && (
                 <ul className="mt-2 list-disc pl-6 space-y-1">{contenu.bullets!.map((b, i) => <li key={i}><Formule t={b} /></li>)}</ul>
               )}
@@ -3053,24 +3053,24 @@ function Exercices({ exercices }: { exercices: NonNullable<CourseSlide['exercise
       <div className="text-sm font-semibold text-emerald-200">✏️ À toi</div>
       {exercices.map((ex, e) => (
         <div key={e}>
-          <p className="font-medium">{ex.prompt}</p>
+          <p className="font-medium"><Formule t={ex.prompt} /></p>
           {ex.type === 'qcm' && (ex.choices || []).map((c, i) => {
             const pris = choix[`${e}`] === i;
             const juste = i === (ex.correct ?? 0);
             return (
               <button key={i} onClick={() => setChoix(s => ({ ...s, [`${e}`]: i }))}
                 className={`mt-2 block w-full rounded-lg border px-3 py-2 text-left ${pris ? (juste ? 'border-emerald-400 bg-emerald-500/20' : 'border-rose-400 bg-rose-500/20') : 'border-white/15 hover:bg-white/5'}`}>
-                {c}
+                <Formule t={c} />
               </button>
             );
           })}
-          {ex.type === 'qcm' && choix[`${e}`] !== undefined && ex.explanation && <p className="mt-2 text-sm text-white/70">{ex.explanation}</p>}
+          {ex.type === 'qcm' && choix[`${e}`] !== undefined && ex.explanation && <p className="mt-2 text-sm text-white/70"><Formule t={ex.explanation} /></p>}
           {ex.type === 'vrai_faux' && (ex.statements || []).map((st, i) => {
             const cle = `${e}:${i}`;
             const rep = choix[cle];
             return (
               <div key={i} className="mt-2 rounded-lg border border-white/15 px-3 py-2">
-                <div>{st.text}</div>
+                <div><Formule t={st.text} /></div>
                 <div className="mt-1 flex gap-2">
                   {[true, false].map(v => (
                     <button key={String(v)} onClick={() => setChoix(s => ({ ...s, [cle]: v }))}

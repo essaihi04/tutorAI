@@ -76,7 +76,7 @@ export function TableauCahier({ bloc, onEcrit, entetes }: { bloc: BlocCours; onE
       <div className="flex shrink-0 items-end gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-xs uppercase tracking-wide text-white/45 court:hidden" style={{ fontFamily: 'system-ui, sans-serif' }}>Le cours s’arrête : recopie dans ton cahier</p>
-          {bloc.titre && <h3 className="mt-1 text-2xl underline decoration-amber-200/40 underline-offset-4 court:mt-0 court:text-lg" style={{ fontFamily: CRAIE, color: '#fef3c7' }}>{bloc.titre}</h3>}
+          {bloc.titre && <h3 className="mt-1 text-2xl underline decoration-amber-200/40 underline-offset-4 court:mt-0 court:text-lg" style={{ fontFamily: CRAIE, color: '#fef3c7' }}><Formule t={bloc.titre} /></h3>}
         </div>
         <button type="button" onClick={() => onEcrit(Math.round((Date.now() - debut.current) / 1000))}
           className="shrink-0 rounded-full bg-cyan-400/90 px-7 py-3 text-base font-bold text-slate-950 shadow-lg hover:bg-cyan-300 court:px-4 court:py-1.5 court:text-sm"
