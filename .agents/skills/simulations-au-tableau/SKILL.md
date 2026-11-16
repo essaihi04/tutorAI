@@ -29,6 +29,11 @@ A course simulation is a small HTML page drawn with chalk ON the course board. I
    - **Nothing too small to recognise.** An organelle or object that is drawn must show its structure: a mitochondrion shows its two membranes and its cristae (at least about 90 px long on screen), in bright colours, with its name beside it. If there is no room, enlarge the cell or move the other objects; do not shrink the organelle.
    - **Do not repeat the slide.** The slide already shows its title: no internal title that says the same thing.
    - **Test narrow.** Check at 1024 × 560 as well as 1280 and 1596 wide.
+10. **Writing is always clearly visible** (user rule, 16 November 2026, on four captures: white text on light-blue NAD⁺ / NADH,H⁺ capsules, white T1–T4 on violet proteins, a pale equation not centred in the blue band of the Krebs cycle, mitochondria spilling out of the bioreactor and of the hyaloplasm strip).
+   - **Contrast first.** Text written ON a painted object (capsule, protein, card, band) is dark and bold on a light object (`#0b1f2a` on cyan/orange/yellow, `#1a0838` on violet) and white only on a dark object. Chalk text on the board uses the bright chalk colours (`jaune`, `cyan`, `vert`, `orange`, `rose`); `faible` / `tresfaible` only for secondary notes, never for an equation, a result or a name the lesson is about.
+   - **Text fits its shape.** A label inside a capsule fits inside it with a margin (enlarge the capsule rather than shrink the text); neighbouring capsules do not touch.
+   - **Centred in its band.** A line written in a coloured band or frame is centred in it and does not overflow it: if it is too long, split it into two lines.
+   - **Objects stay in their container.** Every organelle, cell or particle painted in a container (beaker, bioreactor, cell, hyaloplasm strip) stays inside it with a margin, clear of the probes and the walls — compute the positions from the container's inner edges, rotation included.
 
 ## The tutor must be able to do everything
 
@@ -58,4 +63,4 @@ The tutor explains with the simulation, answers a free question with it, relaunc
 3. Drive it like the tutor, from a test page that loads it in an iframe and posts `{type: 'simulation_control', command, parameters}`: pause, set a parameter, set a time, resume, fire again. Read back `current_state`: status, parameters and `ce_qui_se_voit` must match, and the numbers must be physically right (e.g. M at 1,2 m with v = 1 m/s → τ = 1,20 s; d = 1,02 m → τ = 3 ms = 6 divisions; floor at 60 m → echo after 80 ms).
 4. Open the slide in the course player (`/dev/course-player?scene=…&diapo=<slide id>`) and look at the bottom: nothing of the simulation under the player's bar.
 5. An overview page of the whole course (board text, simulations live, questions, voice) helps the user review: `physics/ondes-tableau/apercu-cours.html` is generated from the course JSON.
-6. Capture each view at 1024 × 560, 1280 × 640 and 1596 × 700, at the start, the middle and the end: no label over an object or another label, nothing cut, no large empty area, no writing under 15 px on screen, every organelle recognisable (rule 9).
+6. Capture each view at 1024 × 560, 1280 × 640 and 1596 × 700, at the start, the middle and the end: no label over an object or another label, nothing cut, no large empty area, no writing under 15 px on screen, every organelle recognisable (rule 9); every text readable on what is under it, centred in its band, every object inside its container (rule 10).

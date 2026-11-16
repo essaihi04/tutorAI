@@ -28,6 +28,7 @@
 const { bulle, protocole } = window.Tableau;
 const { Scene, Chrono, Apparitions, doux, mix, fr } = window.SVTTableau;
 const P = window.SVTPeinture;
+const ENCRE = '#0b1f2a';   // (16 novembre 2026) texte sombre et gras sur les capsules et protéines claires : bien lisible
 const $ = id => document.getElementById(id);
 
 const M = { glycolyse_comptee: 3, acetyl_compte: 6, krebs_fois_deux: 9, conversion: 13, total_34: 16, total_38: 19 };
@@ -40,21 +41,21 @@ const MOTIFS = {
   total_34: 'la chaîne respiratoire : 34 ATP',
   total_38: 'le bilan : 38 ATP par glucose',
 };
-const MITO = { x: 430, y: 100, rx: 145, ry: 54 }, CHAINE = { x: 556, y: 100 }, GLYBOX = { x: 120, y: 86 };
+const MITO = { x: 425, y: 100, rx: 138, ry: 50 }, CHAINE = { x: 548, y: 100 }   /* (16 novembre 2026) la mitochondrie tient dans le hyaloplasme, loin des légendes */, GLYBOX = { x: 120, y: 86 };
 const TAXI = [34, 190, 220], FAD = [192, 132, 252], CARTE = [250, 190, 60];
 /* Les taxis : où ils naissent, quand, de quel type ; puis l’ordre de conversion (les 10 NADH,H+, puis les 2 FADH2). */
 const TAXIS = [
-  { x: 92, y: 142, n: 1.2, fad: false }, { x: 152, y: 142, n: 1.5, fad: false },                                   // glycolyse
-  { x: 365, y: 78, n: 4.2, fad: false }, { x: 420, y: 78, n: 4.5, fad: false },                                    // acétyl-CoA
-  { x: 475, y: 78, n: 7, fad: false }, { x: 365, y: 100, n: 7.15, fad: false }, { x: 420, y: 100, n: 7.3, fad: false },
-  { x: 475, y: 100, n: 7.45, fad: false }, { x: 365, y: 122, n: 7.6, fad: false }, { x: 420, y: 122, n: 7.75, fad: false }, // Krebs
-  { x: 475, y: 122, n: 7.9, fad: true }, { x: 530, y: 122, n: 8.05, fad: true },
+  { x: 88, y: 142, n: 1.2, fad: false }, { x: 152, y: 142, n: 1.5, fad: false },                                   // glycolyse
+  { x: 345, y: 78, n: 4.2, fad: false }, { x: 405, y: 78, n: 4.5, fad: false },                                    // acétyl-CoA
+  { x: 465, y: 78, n: 7, fad: false }, { x: 345, y: 100, n: 7.15, fad: false }, { x: 405, y: 100, n: 7.3, fad: false },
+  { x: 465, y: 100, n: 7.45, fad: false }, { x: 345, y: 122, n: 7.6, fad: false }, { x: 405, y: 122, n: 7.75, fad: false }, // Krebs
+  { x: 465, y: 122, n: 7.9, fad: true }, { x: 525, y: 122, n: 8.05, fad: true },
 ];
 TAXIS.forEach((tx, i) => { tx.dep = 10.3 + .16 * i; tx.arr = tx.dep + .35; });
 /* Les cartes ATP : d’où elles partent, quand, et leur place dans la caisse. */
 const CARTES = [];
 for (let k = 0; k < 2; k++) CARTES.push({ x: GLYBOX.x, y: GLYBOX.y, t0: 1.4 + .3 * k, d: .9 });
-for (let k = 0; k < 2; k++) CARTES.push({ x: 475, y: 100, t0: 7.4 + .3 * k, d: .9 });
+for (let k = 0; k < 2; k++) CARTES.push({ x: 465, y: 100, t0: 7.4 + .3 * k, d: .9 });
 TAXIS.forEach(tx => { for (let m = 0; m < (tx.fad ? 2 : 3); m++) CARTES.push({ x: CHAINE.x, y: CHAINE.y, t0: tx.arr + .05 * m, d: .4 }); });
 const slot = (k) => [628 + (k % 4) * 34, 384 - Math.floor(k / 4) * 17];
 const COL = { etape: 30, atp: 285, nadh: 400, fadh: 520 }, ROWS = [212, 234, 256], TOT = 284;
@@ -84,10 +85,10 @@ function hyaloplasme(ctx, x, y, w, h) {
 }
 function taxi(c, x, y, fad, a = 1) {
   if (a <= 0) return;
-  c.direct(() => { P.capsule(c.ctx, x, y, 52, 16, fad ? FAD : TAXI, { alpha: a }); c.texte(fad ? 'FADH_{2}' : 'NADH,H+', x, y + 4, { couleur: 'blanc', taille: 11, align: 'center', alpha: a }); });
+  c.direct(() => { P.capsule(c.ctx, x, y, 57, 19, fad ? FAD : TAXI, { alpha: a }); c.texte(fad ? 'FADH_{2}' : 'NADH,H+', x, y + 4.5, { couleur: ENCRE, gras: true, taille: 12, align: 'center', alpha: a }); });
 }
 function carte(c, x, y, a = 1) {
-  c.direct(() => { P.proteine(c.ctx, x, y, 31, 14, { couleur: CARTE, alpha: .9 * a }); c.texte('ATP', x, y + 4, { couleur: 'rgba(60,40,0,.85)', taille: 11, align: 'center', alpha: a }); });
+  c.direct(() => { P.proteine(c.ctx, x, y, 31, 14, { couleur: CARTE, alpha: .9 * a }); c.texte('ATP', x, y + 4, { couleur: '#3a2600', gras: true, taille: 11, align: 'center', alpha: a }); });
 }
 const posees = (t) => CARTES.filter(k => t >= k.t0 + k.d).length;
 
@@ -109,10 +110,10 @@ function dessiner(c) {
   c.texte('matrice :', 600, 62, { couleur: 'bleu', taille: 14 });
   c.texte('acétyl-CoA,', 600, 80, { couleur: 'bleu', taille: 14 });
   c.texte('cycle de Krebs', 600, 98, { couleur: 'bleu', taille: 14 });
-  c.fleche(598, 70, 560, 78, { couleur: 'bleu', largeur: 1.4 });
+  c.fleche(598, 70, 540, 78, { couleur: 'bleu', largeur: 1.4 });
   c.texte('membrane interne :', 600, 128, { couleur: 'orange', taille: 14 });
   c.texte('chaîne respiratoire', 600, 146, { couleur: 'orange', taille: 14 });
-  c.fleche(598, 124, 568, 112, { couleur: 'orange', largeur: 1.4 });
+  c.fleche(598, 124, 556, 116, { couleur: 'orange', largeur: 1.4 });
   // ── craie fixe : le tableau de caisse ──
   c.texte('étape', COL.etape, 186, { couleur: 'faible', taille: 14 });
   c.texte('ATP directs', COL.atp, 186, { couleur: 'jaune', taille: 14, align: 'center' });
