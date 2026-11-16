@@ -146,9 +146,25 @@
         const t = c.t, debut = c.cur;
         let p = 1;
         if (Number.isFinite(t)) { c.cur += duree; p = t <= debut ? 0 : Math.min(1, (t - debut) / duree); if (p < 1) c.complet = false; }
+        if (NET.on) p = EASE(p);   // page nette : départ et arrivée en douceur (0 et 1 inchangés)
         if (p > 0) c.direct(() => fn(p));
         return p;
       },
+      /** Fondu (0 → 1) d'un élément peint qui apparaît à l'instant d'écriture courant, SANS réserver de temps (les
+       *  moments ne bougent pas) ; `retard` (s) le fait venir un peu après, `duree` (s) la durée du fondu. */
+      apparait(duree = .7, retard = 0) { return Number.isFinite(c.t) ? doux((c.t - c.cur - retard) / duree) : 1; },
+      /** Zone colorée en transparence entre y = f(x) et y = g(x) (g : fonction ou nombre) pour x de a à b ;
+       *  o.couleur, o.alpha (.16), o.part (fraction remplie depuis a), o.degrade (plus pâle loin de f). Aucun temps réservé. */
+      zone(G, f, g, a, b, o = {}) {
+        const cc = (this && this.c) || c, part = o.part ?? 1;
+        if (part <= 0 || (o.alpha ?? .16) <= 0) return K;
+        remplir(cc, zonePts(G, f, g, a, a + (b - a) * Math.min(1, part), o.n || 120), o);
+        return K;
+      },
+      /** Bande verticale x ∈ [a ; b] (voisinage, intervalle) sur toute la hauteur du repère, en transparence. */
+      bande(G, a, b, o = {}) { return K.zone.call(this, G, () => G.ymax, () => G.ymin, Math.max(a, G.xmin), Math.min(b, G.xmax), { n: 2, ...o }); },
+      /** Bande horizontale y ∈ [a ; b] sur toute la largeur du repère. */
+      bandeH(G, a, b, o = {}) { return K.zone.call(this, G, () => Math.min(b, G.ymax), () => Math.max(a, G.ymin), G.xmin, G.xmax, { n: 2, ...o }); },
       titre(s) { c.texte(s, 20, 30, { couleur: 'cyan', taille: 20, max: 720 }); return K; },
       grille,
       axes(o) {
@@ -179,13 +195,13 @@
         return morceaux.filter((m) => m.length > 1);
       },
       courbe(G, f, a, b, o = {}) {
-        for (const m of K._points(G, f, a, b, o.n || 160)) c.trait(m, { tremble: .35, couleur: o.couleur || 'cyan', largeur: o.largeur ?? 2.6, pointille: o.pointille, duree: o.duree });
+        for (const m of K._points(G, f, a, b, o.n || 160)) trace(c, m, { tremble: .35, couleur: o.couleur || 'cyan', largeur: o.largeur ?? 2.6, pointille: o.pointille, duree: o.duree });
         return K;
       },
       courbePart(G, f, a, b, p, o = {}) {
         if (p <= 0) return K;
         const bb = a + (b - a) * p;
-        for (const m of K._points(G, f, a, bb, Math.max(4, Math.round((o.n || 160) * p)))) c.trait(m, { tremble: .35, couleur: o.couleur || 'cyan', largeur: o.largeur ?? 2.6, pointille: o.pointille });
+        for (const m of K._points(G, f, a, bb, Math.max(4, Math.round((o.n || 160) * p)))) trace(c, m, { tremble: .35, couleur: o.couleur || 'cyan', largeur: o.largeur ?? 2.6, pointille: o.pointille });
         return K;
       },
       proj(G, x, y, o = {}) {
@@ -199,7 +215,7 @@
       },
       rond(G, x, y, plein = true, couleur = 'jaune') {
         const px = G.X(x), py = G.Y(y);
-        if (plein) c.point(px, py, 5, couleur); else c.cercle(px, py, 5.5, { couleur, largeur: 2 });
+        pastille(c, px, py, plein, couleur);
         return K;
       },
       lignes(x, y, liste, inter = 30) {
@@ -233,6 +249,16 @@
     const scene = Scene(canvas, dessiner, { ajuster: def.ajuster !== false && V.ajuster !== false, large: !!(def.large || V.large) });
     scene.horloge = () => S.tw;
     const craie = scene.craie;
+    NET.on = !!def.net;
+    if (NET.on) {
+      // un point posé (c.point) reçoit un halo de sa couleur et un reflet : il se voit, sans rien changer au temps d'écriture
+      const point0 = craie.point;
+      craie.point = function (x, y, r = 4, coul) {
+        const t = this.t, avant = this.cur, res = point0.call(this, x, y, r, coul);
+        if (r >= 2.5 && (!Number.isFinite(t) || t > avant)) halo(this, x, y, r, coul);
+        return res;
+      };
+    }
 
     function dessiner(c) {
       // la mesure de la boîte (kit) dessine la construction complète : temps, moments et repères gardés tels quels
@@ -409,6 +435,93 @@
     if (w > 3 && h > 3) { ctx.strokeStyle = nuance(k, -0.7, 0.8); ctx.lineWidth = 0.8; forme(); ctx.stroke(); }
   }
 
-  window.MathsTableau = { Scene, page, fr, grille, VW, VH, peindre, bloc, nuance, rvb };
+  /* ── Netteté et couleur (16 novembre 2026, « animations plus réalistes, plus attractives, belles couleurs, simples ») ──
+   * Une page qui déclare `net: true` (MathsTableau.page / LC.page) : les courbes (K.courbe, K.courbePart) sont tracées
+   * nettes (tremblement léger) avec une lueur douce de leur couleur ; chaque point posé (c.point, K.rond) a un halo et un
+   * reflet, une borne exclue (rond vide) est évidée ; les mouvements de K.anime sont adoucis (départ et arrivée lents).
+   * Nouveaux outils (sans temps réservé : les moments ne bougent pas) : K.zone / K.bande / K.bandeH (zones en transparence),
+   * K.apparait (fondu), MathsTableau.remplir (polygone coloré), MathsTableau.lueur (un trait qui brille), MathsTableau.halo.
+   * Les écritures, axes et flèches restent à la craie. Sans `net`, rien ne change. */
+  const NET = { on: false };
+  const EASE = (p) => (p <= 0 ? 0 : p >= 1 ? 1 : p * p * (3 - 2 * p));
+  const doux = (p) => (p <= 0 ? 0 : p >= 1 ? 1 : (1 - Math.cos(Math.PI * p)) / 2);
+  /** La couleur `coul` (nom de craie, #rrggbb, rgb[a](…)) avec l'opacité a. */
+  function teinte(c, coul, a) {
+    const s = c.couleur(coul), h = /^#([0-9a-f]{6})$/i.exec(s);
+    if (h) return `rgba(${rvb(s).join(',')},${a})`;
+    const m = /^rgba?\(([^,]+),([^,]+),([^,)]+)/i.exec(s.replace(/\s/g, ''));
+    return m ? `rgba(${m[1]},${m[2]},${m[3]},${a})` : s;
+  }
+  /** Polygone [[x,y],…] rempli en transparence (o.couleur, o.alpha .16, o.dessus : par-dessus le dessin déjà fait ;
+   *  sinon il passe DESSOUS, derrière les traits et les textes). Les intermédiaires du tableau large le transforment
+   *  comme un trait (c.__remplir). */
+  function remplir(c, pts, o = {}) {
+    if (!pts || pts.length < 3) return;
+    if (c.__remplir) return c.__remplir(pts, o);
+    peint(c, c.ctx, pts, o);
+  }
+  function peint(c, ctx, pts, o = {}) {
+    const a = o.alpha ?? .16; if (!(a > .003)) return;
+    ctx.save();
+    if (!o.dessus) ctx.globalCompositeOperation = 'destination-over';
+    ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath();
+    if (o.degrade) {
+      let y0 = Infinity, y1 = -Infinity; for (const p of pts) { y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); }
+      const g = ctx.createLinearGradient(0, o.degrade === 'bas' ? y1 : y0, 0, o.degrade === 'bas' ? y0 : y1);
+      g.addColorStop(0, teinte(c, o.couleur || 'cyan', a)); g.addColorStop(1, teinte(c, o.couleur || 'cyan', a * .25));
+      ctx.fillStyle = g;
+    } else ctx.fillStyle = teinte(c, o.couleur || 'cyan', a);
+    ctx.fill();
+    if (o.bord) { ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = teinte(c, o.couleur || 'cyan', Math.min(1, a * 2.5)); ctx.lineWidth = 1; ctx.stroke(); }
+    ctx.restore();
+  }
+  /** Les points (en px du dessin) de la zone entre y = f(x) et y = g(x), x de a à b, bornés au repère. */
+  function zonePts(G, f, g, a, b, n = 120) {
+    if (!(b > a)) return [];
+    const yb = (y) => G.Y(Math.min(G.ymax, Math.max(G.ymin, y))), gg = typeof g === 'function' ? g : () => g;
+    const haut = [], bas = [];
+    for (let i = 0; i <= n; i++) {
+      const x = a + (b - a) * i / n, y1 = f(x), y2 = gg(x);
+      if (!Number.isFinite(y1) || !Number.isFinite(y2)) continue;
+      haut.push([G.X(x), yb(y1)]); bas.push([G.X(x), yb(y2)]);
+    }
+    return haut.concat(bas.reverse());
+  }
+  /** `fn()` trace avec une lueur douce de la couleur `coul` (force k) ; sans `net`, fn() tel quel. */
+  function lueur(c, coul, fn, k = 1) {
+    if (!NET.on || k <= 0) return fn();
+    const ctx = c.ctx, sc = ctx.shadowColor, sb = ctx.shadowBlur;
+    ctx.shadowColor = teinte(c, coul, .6); ctx.shadowBlur = 6 * k * (devicePixelRatio || 1) * Math.max(1, c.echelle || 1);
+    try { return fn(); } finally { ctx.shadowColor = sc; ctx.shadowBlur = sb; }
+  }
+  /** Un trait de courbe : net et lumineux avec `net`, à la craie sinon (même temps d'écriture dans les deux cas). */
+  function trace(c, pts, o) {
+    if (!NET.on) return c.trait(pts, o);
+    return lueur(c, o.couleur || 'cyan', () => c.trait(pts, { ...o, tremble: Math.min(o.tremble ?? 1, .12) }), o.pointille ? .5 : 1);
+  }
+  /** Halo et reflet d'un point déjà posé (dessin direct, sans temps). */
+  function halo(c, x, y, r, coul) {
+    const ctx = c.ctx, R = r * 2.7;
+    ctx.save();
+    const g = ctx.createRadialGradient(x, y, r * .5, x, y, R);
+    g.addColorStop(0, teinte(c, coul || 'blanc', .36)); g.addColorStop(1, teinte(c, coul || 'blanc', 0));
+    ctx.globalCompositeOperation = 'destination-over'; ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.fill();
+    ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = 'rgba(255,255,255,.6)';
+    ctx.beginPath(); ctx.arc(x - r * .3, y - r * .3, r * .36, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+  /** Le point d'une courbe (K.rond) : plein avec halo, ou rond vide évidé (borne exclue, trou). */
+  function pastille(c, px, py, plein, couleur) {
+    if (plein) return c.point(px, py, 5, couleur);
+    const t = c.t, avant = c.cur;
+    c.cercle(px, py, 5.5, { couleur, largeur: 2 });
+    if (NET.on && (!Number.isFinite(t) || t > avant)) {
+      const pts = []; for (let i = 0; i < 20; i++) pts.push([px + 4.4 * Math.cos(i / 20 * Math.PI * 2), py + 4.4 * Math.sin(i / 20 * Math.PI * 2)]);
+      remplir(c, pts, { couleur: '#0f1d18', alpha: .95, dessus: true });
+    }
+  }
+
+  window.MathsTableau = { Scene, page, fr, grille, VW, VH, peindre, bloc, nuance, rvb,
+    NET, EASE, doux, teinte, remplir, peint, zonePts, lueur, trace, halo, pastille };
   window.OndesTableau = window.OndesTableau || { Scene, VW, VH };   // bilan.html / carte.html du kit des ondes s'y appuient
 })();
