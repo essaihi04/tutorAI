@@ -246,32 +246,54 @@ function geometry() {
   const view = S.objective === 10 ? { x: FW / 2, y: FH / 2 } : S.view;
   return { w, h, d, cx, cy, scale, view };
 }
-const CELL = { duree: .035, tremble: .6 };
+/* ── Peinture des cellules (16 novembre 2026) : un vrai champ de microscope coloré à l’orcéine acétique ──
+ * fond clair rosé (la lumière du microscope), paroi pectocellulosique beige rosé, cytoplasme rose pâle,
+ * noyau et chromosomes rouge violacé (l’orcéine colore l’ADN). Peint, sans traits de craie. */
+const TAU = Math.PI * 2;
+function chromo(c, x1, y1, x2, y2, e = 2.6) {   // un chromosome : bâtonnet rouge violacé avec un léger reflet
+  c.lineCap = 'round';
+  c.strokeStyle = '#4a0d3a'; c.lineWidth = e + 1; c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+  c.strokeStyle = '#8e1f6b'; c.lineWidth = e; c.stroke();
+  c.strokeStyle = 'rgba(255,190,230,.45)'; c.lineWidth = e * .3; c.beginPath(); c.moveTo(x1 - .4, y1 - .4); c.lineTo(x2 - .4, y2 - .4); c.stroke();
+}
+function noyauPeint(c, x, y, r, dt, nucleole = true) {
+  const g = c.createRadialGradient(x - r * .35, y - r * .35, r * .1, x, y, r);
+  g.addColorStop(0, 'rgba(214,140,190,.95)'); g.addColorStop(1, 'rgba(146,52,120,.95)');
+  c.fillStyle = g; c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill();
+  c.strokeStyle = 'rgba(100,20,80,.8)'; c.lineWidth = .8; c.stroke();
+  c.fillStyle = 'rgba(110,25,90,.55)'; for (const [px, py] of dt.dots.slice(0, 8)) { c.beginPath(); c.arc(x + px * r / 22, y + py * r / 18, .9, 0, TAU); c.fill(); }   // chromatine en grains
+  if (nucleole) { c.fillStyle = '#5b1048'; c.beginPath(); c.arc(x + r * .3, y - r * .2, r * .25, 0, TAU); c.fill(); }
+}
 function drawCell(cell, x0, y0) {
   const dt = details[cell.index], c = craie.ctx;
   c.save(); c.translate(x0 + CW / 2, y0 + CH / 2); c.rotate(cell.angle * 0.12);
-  craie.rect(-CW / 2 + 2, -CH / 2 + 2, CW - 4, CH - 4, { couleur: 'faible', largeur: 1.3, arrondi: 4, ...CELL });
+  // paroi et cytoplasme
+  const w = CW - 4, h = CH - 4, gc = c.createRadialGradient(-w * .2, -h * .25, 2, 0, 0, w * .6);
+  gc.addColorStop(0, `rgba(253,226,236,${.9 - cell.shade * .15})`); gc.addColorStop(1, `rgba(236,178,204,${.9 - cell.shade * .15})`);
+  c.fillStyle = gc; c.beginPath(); c.roundRect(-w / 2, -h / 2, w, h, 5); c.fill();
+  c.strokeStyle = 'rgba(166,98,120,.85)'; c.lineWidth = 2.2; c.stroke();
+  c.strokeStyle = 'rgba(255,240,245,.5)'; c.lineWidth = .8; c.beginPath(); c.roundRect(-w / 2 + 2, -h / 2 + 2, w - 4, h - 4, 4); c.stroke();
   switch (cell.phase) {
     case 'interphase':
-      craie.cercle(0, 0, 10 * cell.stretch, { couleur: 'rose', largeur: 1.4, depart: cell.tilt, ...CELL });
-      for (const [x, y] of dt.dots.slice(0, 6)) craie.point(x * .5, y * .5, 1, 'rose');
-      craie.point(3, -2, 2.4, 'violet');
+      noyauPeint(c, 0, 0, 10 * cell.stretch, dt);
       break;
-    case 'prophase':
-      craie.cercle(0, 0, 12.5, { couleur: 'rose', largeur: 1.1, depart: cell.tilt, ...CELL });
-      for (const [x, y, x2, y2] of dt.threads) craie.ligne(x, y, x2, y2, { couleur: 'violet', largeur: 2, ...CELL });
+    case 'prophase':   // noyau encore là, filaments de chromatine condensés
+      noyauPeint(c, 0, 0, 12.5, dt, false);
+      for (const [x, y, x2, y2] of dt.threads) chromo(c, x, y, x2, y2, 2.2);
       break;
-    case 'metaphase':
-      for (let k = -2; k <= 2; k += 2) craie.trait([[-25, 0], [0, k * 4], [25, 0]], { couleur: 'tresfaible', largeur: .8, ...CELL });
-      for (const [x, y, a] of dt.rods) craie.ligne(x - 3.5, y + a * 4, x + 3.5, y - a * 4, { couleur: 'violet', largeur: 2.8, ...CELL });
+    case 'metaphase':   // fuseau pâle, chromosomes alignés sur la plaque équatoriale
+      c.strokeStyle = 'rgba(150,90,130,.28)'; c.lineWidth = .7;
+      for (let k = -2; k <= 2; k += 1) { c.beginPath(); c.moveTo(-25, 0); c.quadraticCurveTo(0, k * 7, 25, 0); c.stroke(); }
+      for (const [x, y, a] of dt.rods) chromo(c, x - 3.5, y + a * 4, x + 3.5, y - a * 4, 3);
       break;
-    case 'anaphase':
-      for (let k = -1; k <= 1; k++) craie.ligne(-25, 0, 25, k * 3, { couleur: 'tresfaible', largeur: .8, ...CELL });
-      for (const side of [-1, 1]) for (const [x, y] of dt.rods) { const vx = side * (15 + x), vy = y * .85; craie.trait([[vx - side * 6, vy - 3], [vx, vy], [vx - side * 6, vy + 3]], { couleur: 'violet', largeur: 2, ...CELL }); }
+    case 'anaphase':   // deux lots en V qui partent vers les pôles
+      c.strokeStyle = 'rgba(150,90,130,.28)'; c.lineWidth = .7;
+      for (let k = -1; k <= 1; k++) { c.beginPath(); c.moveTo(-25, 0); c.lineTo(25, k * 3); c.stroke(); }
+      for (const side of [-1, 1]) for (const [x, y] of dt.rods) { const vx = side * (15 + x), vy = y * .85; chromo(c, vx - side * 6, vy - 3, vx, vy, 2.2); chromo(c, vx, vy, vx - side * 6, vy + 3, 2.2); }
       break;
-    case 'telophase':
-      for (const side of [-1, 1]) { craie.cercle(side * 17, 0, 8.5, { couleur: 'rose', largeur: 1.4, ...CELL }); for (const [x, y] of dt.dots.slice(0, 5)) craie.point(side * 17 + x * .3, y * .5, 1.3, 'violet'); }
-      craie.ligne(0, -CH / 2 + 6, 0, CH / 2 - 6, { couleur: 'faible', largeur: 1.4, pointille: [4, 3], ...CELL });
+    case 'telophase':   // deux noyaux et la nouvelle paroi au milieu
+      for (const side of [-1, 1]) noyauPeint(c, side * 17, 0, 8.5, dt, false);
+      c.strokeStyle = 'rgba(166,98,120,.75)'; c.lineWidth = 1.6; c.setLineDash([4, 3]); c.beginPath(); c.moveTo(0, -CH / 2 + 6); c.lineTo(0, CH / 2 - 6); c.stroke(); c.setLineDash([]);
       break;
   }
   c.restore();
@@ -284,13 +306,21 @@ function draw() {
   craie.repere('champ', cx - d / 2, cy - d / 2, d, d, 'champ du microscope');
   if (!prepared()) { craie.texte('pas encore de lame', cx, cy - 8, { couleur: 'faible', taille: 20, align: 'center' }).texte('prépare-la d’abord', cx, cy + 18, { couleur: 'faible', taille: 16, align: 'center' }); return craie.fin(); }
   craie.depuis(S.lame ?? 0);
+  craie.direct(() => {
   c.save(); c.beginPath(); c.arc(cx, cy, d / 2 - 2, 0, Math.PI * 2); c.clip();
+  // la lumière du microscope : un disque clair, un peu plus sombre au bord
+  const fond = c.createRadialGradient(cx, cy, d * .05, cx, cy, d / 2); fond.addColorStop(0, '#fbf3ec'); fond.addColorStop(.8, '#f1ddd6'); fond.addColorStop(1, '#b89a92');
+  c.fillStyle = fond; c.fillRect(cx - d / 2, cy - d / 2, d, d);
   const blur = Math.min(10, Math.abs(S.focus - field.focus) * (S.objective === 40 ? 34 : 14));
   c.filter = blur > 0.25 ? `blur(${blur.toFixed(1)}px)` : 'none';
   c.translate(cx, cy); c.scale(scale, scale); c.translate(-view.x, -view.y);
   for (const cell of field.cells) drawCell(cell, cell.col * CW, cell.row * CH);
   c.filter = 'none';
   c.restore();
+  // vignettage de l’oculaire
+  const vg = c.createRadialGradient(cx, cy, d * .38, cx, cy, d / 2); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(40,20,20,.45)');
+  c.fillStyle = vg; c.beginPath(); c.arc(cx, cy, d / 2 - 2, 0, TAU); c.fill();
+  });
   craie.repere('lame', cx - d / 2 + 8, cy - d / 2 + 8, d - 16, d - 16, S.objective === 40 ? `lame à l’objectif ×40, ${sharp() ? 'nette' : 'floue'}` : 'lame à l’objectif ×10');
   if (S.step >= 2 && S.objective === 40) {
     const vus = [];
