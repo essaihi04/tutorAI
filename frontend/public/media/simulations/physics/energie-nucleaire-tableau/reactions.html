@@ -266,7 +266,7 @@ function cadreVue(c) {
 /** Une légende de phase, visible de son écriture jusqu’à `jusqua` (le professeur l’efface ensuite). */
 function legendePhase(c, nom, texte, x, y, jusqua = Infinity, o = {}) {
   if (!vu(nom) || (!S.fait && S.t >= jusqua) || (S.fait && jusqua < FIN())) return;
-  ecrit(c, nom, () => T(c, texte, x, y, { couleur: 'faible', taille: 15, align: 'center', ...o }));
+  ecrit(c, nom, () => T(c, texte, x, y, { couleur: 'blanc', taille: 15, align: 'center', ...o }));   // (16 novembre 2026) blanc : ce qui se passe, lisible
 }
 
 /* ══ Vue « La fission » ══════════════════════════════════════════════════════════════════════ */
@@ -666,10 +666,12 @@ function peindreSpontanee(ctx) {
     }
     const ca0 = centreAlpha(Math.max(L.emet, t - .3));
     trainee(ctx, ca[0], ca[1], ca[0] - ca0[0], ca[1] - ca0[1], RAL * .9, 'p');
-    halo(ctx, ca[0], ca[1], RAL * 2.8, '255,190,110', .4); ombre(ctx, ca[0], ca[1], RAL);
+    // (16 novembre 2026) la particule α grossit en partant (×2,2) : ses 2 protons et 2 neutrons se voient
+    const k = 1 + 1.2 * lisse((t - L.emet) / (L.alpha1 - L.emet));
+    halo(ctx, ca[0], ca[1], RAL * 2.8 * k, '255,190,110', .4); ombre(ctx, ca[0], ca[1], RAL * k);
     for (const i of SP.alpha) {
       const p = SP.pts[i], s = SP.slotA[i];
-      sphere(ctx, lerp(cx + p[0], ca[0] + s[0], ua), lerp(cy + p[1], ca[1] + s[1], ua), SP.r, SP.sorte[i]);
+      sphere(ctx, lerp(cx + p[0], ca[0] + s[0] * k, ua), lerp(cy + p[1], ca[1] + s[1] * k, ua), SP.r * k, SP.sorte[i]);
     }
   }
   eclair(ctx, cx + SP.R, cy, (t - L.flash0) / (L.flash1 - L.flash0), 80);
@@ -682,7 +684,7 @@ function craieSpontanee(c) {
   legendePhase(c, 'emission', 'à un instant, il émet une particule α', cx, 292);
   ecrit(c, 'produits', () => {
     noyauTexte(c, 206, 82, 'Pb', cx + SP.PB[0], cy - RPB - 12, { taille: 18, couleur: 'blanc', align: 'center' });
-    ligne(c, ['particule α : ', { A: 4, Z: 2, X: 'He' }], SP.A_F[0], SP.A_F[1] - 22, { taille: 16, couleur: 'blanc', align: 'center' });
+    ligne(c, ['particule α : ', { A: 4, Z: 2, X: 'He' }], SP.A_F[0], SP.A_F[1] - 32, { taille: 16, couleur: 'blanc', align: 'center' });
     T(c, 'énergie libérée : 5,4 MeV', 500, 238, { couleur: 'jaune', taille: 15, align: 'center' });
   });
   if (vu('legende')) ecritA(c, a_('legende'), M.legende - 1.2, () => ligne(c, PARTS_EQ.spontanee, 380, Y_EQ, { taille: 24 * GL, couleur: 'blanc', align: 'center', pause: .22 }));
