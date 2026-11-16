@@ -165,28 +165,58 @@
   const canvas=$('canvas'),craie=new Craie(canvas,{onresize:redraw});const geom={s:1,ox:0,oy:0};
   const toLogical=(x,y)=>[(x-geom.ox)/geom.s,(y-geom.oy)/geom.s];
   const PT={x0:90,x1:720,y0:330,y1:40};const ptX=t=>PT.x0+(t-200)/650*(PT.x1-PT.x0),ptY=p=>PT.y0-(p-.1)/2.4*(PT.y0-PT.y1);
-  function hotspotsDraw(){for(const [id,label,x,y] of HOTSPOTS[state.currentVariant]){const seen=state.observedHotspots.includes(id);const lw=craie.largeurTexte(label,16);craie.repere(id,x-lw/2-8,y-24,lw+16,34,label.toLowerCase());craie.texte(label,x,y,{couleur:seen?'vert':'jaune',taille:16,align:'center'});craie.ligne(x-craie.largeurTexte(label,16)/2,y+4,x+craie.largeurTexte(label,16)/2,y+4,{couleur:seen?'vert':'jaune',largeur:1,duree:.08})}
+  function hotspotsDraw(){for(const [id,label,x,y] of HOTSPOTS[state.currentVariant]){const seen=state.observedHotspots.includes(id);const lw=craie.largeurTexte(label,16);craie.direct(()=>{const c=craie.ctx;c.save();c.fillStyle='rgba(10,20,16,.72)';c.beginPath();c.roundRect(x-lw/2-6,y-18,lw+12,26,6);c.fill();c.restore()});craie.repere(id,x-lw/2-8,y-24,lw+16,34,label.toLowerCase());craie.texte(label,x,y,{couleur:seen?'vert':'jaune',taille:16,align:'center'});craie.ligne(x-craie.largeurTexte(label,16)/2,y+4,x+craie.largeurTexte(label,16)/2,y+4,{couleur:seen?'vert':'jaune',largeur:1,duree:.08})}
     if(state.pulse&&performance.now()-state.pulse.at<1600){const h=HOTSPOTS[state.currentVariant].find(x=>x[0]===state.pulse.id);if(h){const k=(performance.now()-state.pulse.at)/1600;craie.direct(()=>craie.cercle(h[2],h[3]-6,30+k*25,{couleur:'jaune',largeur:2,alpha:1-k}));state.dirty=true}}}
+  /* ── Peinture (16 novembre 2026) : roches, eau, manteau, volcan, granite PEINTS (dégradés doux, grain léger) ;
+   * la craie garde les légendes, les flèches, les failles et le diagramme P–T. */
+  const TAU=Math.PI*2;
+  const peins=f=>craie.direct(()=>{const c=craie.ctx;c.save();f(c);c.restore()});
+  const chemin=(c,pts)=>{c.beginPath();pts.forEach(([x,y],i)=>i?c.lineTo(x,y):c.moveTo(x,y))};
+  function grain(c,x0,y0,w,h,n,coul,seed=1){let s=seed*9301;const r=()=>((s=(s*9301+49297)%233280)/233280);c.fillStyle=coul;for(let i=0;i<n;i++)c.fillRect(x0+r()*w,y0+r()*h,1.4,1.4)}
+  /** Une couche de roche le long d’un chemin (épaisseur e) : bord foncé, corps, reflet clair en haut. */
+  function couche(c,pts,coul,e=30){c.lineJoin='round';c.lineCap='butt';const [h,m,b]=coul;chemin(c,pts);c.strokeStyle=b;c.lineWidth=e;c.stroke();c.strokeStyle=m;c.lineWidth=e-6;c.stroke();
+    c.save();c.translate(0,-e*.3);chemin(c,pts);c.strokeStyle=h;c.lineWidth=e*.18;c.globalAlpha=.6;c.stroke();c.restore()}
+  const ROCHES=[['#fcd9a8','#d39a5a','#7c4a1e'],['#cfe0e6','#8aa7b4','#3f5763'],['#f1ece2','#c9bfa9','#6f6551']];
   function drawChains(){const y=200;
+    peins(c=>{// manteau (orangé, plus chaud en profondeur)
+      const gm=c.createLinearGradient(0,y+40,0,380);gm.addColorStop(0,'rgba(234,128,52,.35)');gm.addColorStop(1,'rgba(190,60,20,.6)');c.fillStyle=gm;c.fillRect(40,y+40,680,380-y-40);
+      // océan
+      const go=c.createLinearGradient(0,y,0,y+40);go.addColorStop(0,'rgba(56,160,220,.55)');go.addColorStop(1,'rgba(12,60,120,.75)');c.fillStyle=go;chemin(c,[[40,y],[330,y],[330,y+70],[300,y+40],[140,y+40],[120,y+18],[100,y+40],[40,y+40]]);c.closePath();c.fill();
+      c.strokeStyle='rgba(255,255,255,.45)';c.lineWidth=1.4;c.beginPath();c.moveTo(42,y+1);c.lineTo(328,y+1);c.stroke();
+      // lithosphère océanique (basalte gris vert) et sa plongée
+      const lo=c.createLinearGradient(0,y+20,0,y+80);lo.addColorStop(0,'#64748b');lo.addColorStop(1,'#334155');c.fillStyle=lo;
+      chemin(c,[[40,y+40],[100,y+40],[120,y+18],[140,y+40],[300,y+40],[330,y+70],[420,y+160],[470,y+230],[448,y+240],[400,y+176],[318,y+94],[300,y+64],[40,y+64]]);c.closePath();c.fill();
+      grain(c,40,y+40,420,200,120,'rgba(15,23,42,.35)',3);
+      // croûte continentale (ocre), chaîne de montagnes et racine crustale
+      const gc=c.createLinearGradient(0,y-40,0,y+150);gc.addColorStop(0,'#e7c58f');gc.addColorStop(.5,'#c79a5c');gc.addColorStop(1,'#8a5a2b');c.fillStyle=gc;
+      chemin(c,[[330,y+70],[360,y+40],[400,y+20],[420,y+5],[440,y+30],[480,y+42],[560,y+42],[590,y+5],[630,y-30],[670,y+5],[700,y+42],[720,y+42],[720,y+100],[700,y+130],[650,y+150],[600,y+130],[560,y+100],[420,y+100],[360,y+90]]);c.closePath();c.fill();
+      grain(c,340,y-30,380,180,180,'rgba(90,50,20,.3)',7);
+      c.strokeStyle='rgba(255,240,210,.5)';c.lineWidth=1.6;chemin(c,[[590,y+5],[630,y-30],[670,y+5]]);c.stroke();   // neige légère des sommets
+      c.fillStyle='rgba(255,255,255,.75)';chemin(c,[[618,y-18],[630,y-30],[642,y-18],[634,y-14],[626,y-16]]);c.closePath();c.fill();
+      // bassin (vert) et volcan
+      const gv=c.createLinearGradient(0,y+10,0,y+42);gv.addColorStop(0,'#86efac');gv.addColorStop(1,'#15803d');c.fillStyle=gv;chemin(c,[[490,y+42],[505,y+20],[540,y+12],[560,y+42]]);c.closePath();c.fill();
+      const vl=c.createLinearGradient(385,0,415,0);vl.addColorStop(0,'#78350f');vl.addColorStop(.5,'#a16207');vl.addColorStop(1,'#451a03');c.fillStyle=vl;chemin(c,[[380,y+22],[396,y-38],[404,y-38],[420,y+22]]);c.closePath();c.fill();
+      c.fillStyle='#ef4444';chemin(c,[[396,y-38],[400,y-30],[404,y-38]]);c.closePath();c.fill();
+      for(const [dx,dy,r] of [[0,-50,7],[4,-60,9],[-2,-72,11]]){const g=c.createRadialGradient(400+dx,y+dy,1,400+dx,y+dy,r);g.addColorStop(0,'rgba(214,211,209,.8)');g.addColorStop(1,'rgba(120,113,108,0)');c.fillStyle=g;c.beginPath();c.arc(400+dx,y+dy,r,0,TAU);c.fill()}});
     craie.texte('coupe : de l’océan à la montagne',380,28,{couleur:'faible',taille:16,align:'center'});
-    craie.ligne(40,y,330,y,{couleur:'cyan',largeur:2}).texte('océan',180,y-10,{couleur:'cyan',taille:14,align:'center'});
-    craie.trait([[40,y+40],[100,y+40],[120,y+18],[140,y+40],[300,y+40],[330,y+70]],{couleur:'orange',largeur:2.4});craie.fleche(120,y+60,120,y+30,{couleur:'rouge',largeur:1.6}).fleche(95,y+30,70,y+30,{couleur:'faible',largeur:1.4}).fleche(145,y+30,170,y+30,{couleur:'faible',largeur:1.4});
-    craie.trait([[330,y+70],[420,y+160],[470,y+230]],{couleur:'orange',largeur:2.4,pointille:[6,5]}).fleche(400,y+120,440,y+165,{couleur:'rouge',largeur:1.5});
-    craie.trait([[330,y+70],[360,y+40],[400,y+20],[420,y+5],[440,y+30],[480,y+42],[720,y+42]],{couleur:'blanc',largeur:2.4});
-    craie.trait([[385,y+20],[400,y-40],[415,y+20]],{couleur:'rouge',largeur:2}).trait([[400,y-40],[398,y-55],[404,y-68]],{couleur:'faible',largeur:1.2});
-    craie.trait([[490,y+42],[505,y+20],[540,y+12],[560,y+42]],{couleur:'vert',largeur:2.4,fond:'vert'});
-    craie.trait([[560,y+42],[590,y+5],[630,y-30],[670,y+5],[700,y+42]],{couleur:'blanc',largeur:2.4});
-    craie.trait([[560,y+42],[600,y+130],[650,y+150],[700,y+130],[720,y+42]],{couleur:'violet',largeur:2,pointille:[5,5]});
+    craie.texte('océan',180,y-10,{couleur:'cyan',taille:14,align:'center'});
+    craie.fleche(120,y+60,120,y+30,{couleur:'rouge',largeur:1.6}).fleche(95,y+30,70,y+30,{couleur:'faible',largeur:1.4}).fleche(145,y+30,170,y+30,{couleur:'faible',largeur:1.4});
+    craie.fleche(400,y+120,440,y+165,{couleur:'rouge',largeur:1.5});
     craie.fleche(735,y+10,700,y+10,{couleur:'rouge',largeur:1.6}).fleche(545,y+90,580,y+90,{couleur:'rouge',largeur:1.6});
-    craie.texte('croûte continentale',640,y+75,{couleur:'faible',taille:13,align:'center'});
+    craie.texte('croûte continentale',640,y+75,{couleur:'blanc',taille:14,align:'center'});
     craie.repere('ocean',40,y-25,290,30,'océan').repere('lithosphere_plongeante',330,y+60,150,180,'lithosphère océanique plongeante').repere('croute_continentale',560,y-40,170,120,'croûte continentale épaissie');}
   function drawDeformations(){const r=state.lastTest?state.lastTest.structure:deformationResult().structure,p=state.deformationParams;
     craie.texte(state.lastTest?'résultat du test : '+r:'aperçu : '+r,380,28,{couleur:state.lastTest?'vert':'faible',taille:17,align:'center'});
     const L=120,R=640,ys=[120,160,200];
-    if(r==='Pli'){ys.forEach((y,i)=>craie.courbe(u=>[L+(R-L)*u,y-55*Math.sin(u*Math.PI*2.5)],120,{couleur:['orange','cyan','blanc'][i],largeur:2.4}))}
-    else if(r==='Faille normale'){ys.forEach((y,i)=>{craie.ligne(L,y,370,y,{couleur:['orange','cyan','blanc'][i],largeur:2.4});craie.ligne(400,y+45,R,y+45,{couleur:['orange','cyan','blanc'][i],largeur:2.4})});craie.ligne(395,70,375,270,{couleur:'rouge',largeur:2,pointille:[7,5]})}
-    else if(r==='Faille inverse'){ys.forEach((y,i)=>{craie.ligne(L,y+30,380,y+30,{couleur:['orange','cyan','blanc'][i],largeur:2.4});craie.ligne(345,y-25,R,y-25,{couleur:['orange','cyan','blanc'][i],largeur:2.4})});craie.ligne(405,70,330,270,{couleur:'rouge',largeur:2,pointille:[7,5]})}
-    else{ys.forEach((y,i)=>{craie.trait([[L,y+40],[380,y+40],[460,y+20],[R,y-40]],{couleur:['orange','cyan','blanc'][i],largeur:2.4})});craie.trait([[360,250],[460,215],[R,150]],{couleur:'rouge',largeur:2,pointille:[7,5]})}
+    // les trois couches sont PEINTES (grès ocre, calcaire gris bleu, marne claire) ; la faille reste à la craie
+    peins(c=>{const pas=n=>[...Array(n+1).keys()].map(k=>k/n);ys.forEach((y,i)=>{const C=ROCHES[i];
+      if(r==='Pli')couche(c,pas(80).map(u=>[L+(R-L)*u,y-55*Math.sin(u*Math.PI*2.5)]),C,38);
+      else if(r==='Faille normale'){couche(c,[[L,y],[372,y]],C,38);couche(c,[[398,y+45],[R,y+45]],C,38)}
+      else if(r==='Faille inverse'){couche(c,[[L,y+30],[378,y+30]],C,38);couche(c,[[346,y-25],[R,y-25]],C,38)}
+      else couche(c,[[L,y+40],[380,y+40],[460,y+20],[R,y-40]],C,38)})});
+    if(r==='Faille normale')craie.ligne(395,70,375,270,{couleur:'rouge',largeur:2,pointille:[7,5]});
+    else if(r==='Faille inverse')craie.ligne(405,70,330,270,{couleur:'rouge',largeur:2,pointille:[7,5]});
+    else if(r!=='Pli')craie.trait([[360,250],[460,215],[R,150]],{couleur:'rouge',largeur:2,pointille:[7,5]});
     if(p.constraint==='compression'){craie.fleche(40,160,105,160,{couleur:'rouge',largeur:2.4}).fleche(720,160,655,160,{couleur:'rouge',largeur:2.4});craie.texte('compression',60,140,{couleur:'rouge',taille:14})}else{craie.fleche(105,160,40,160,{couleur:'rouge',largeur:2.4}).fleche(655,160,720,160,{couleur:'rouge',largeur:2.4});craie.texte('extension',60,140,{couleur:'rouge',taille:14})}
     craie.texte(`${p.behavior==='ductile'?'ductile':'cassant'} · raccourcissement ${p.shortening} %`,380,292,{couleur:'faible',taille:14,align:'center'});
     craie.repere('couches',L,60,R-L,200,'les couches déformées : '+r.toLowerCase()).repere('contrainte',30,135,90,45,p.constraint==='compression'?'compression':'extension').repere('reglages_deformation',200,278,360,24,'réglages du test');
@@ -205,15 +235,22 @@
     craie.direct(()=>{for(const r of state.metamorphicRecords)craie.point(ptX(r.temperature_c),ptY(r.pressure_gpa),4,'vert');const x=ptX(state.pt.t),y=ptY(state.pt.p);craie.repere('point_pt',x-16,y-16,32,32,`point P–T : ${fr(state.pt.p,2)} GPa, ${state.pt.t} °C`);craie.cercle(x,y,9,{couleur:'jaune',largeur:2.2,fond:'jaune',fondAlpha:.35});craie.texte(`${fr(state.pt.p,2)} GPa · ${state.pt.t} °C`,x+14,y-12,{couleur:'jaune',taille:14})});}
   function drawGranitization(){craie.texte('granite d’anatexie',190,40,{couleur:'cyan',taille:17,align:'center'}).texte('granite intrusif',570,40,{couleur:'orange',taille:17,align:'center'});
     craie.ligne(380,55,380,345,{couleur:'tresfaible',largeur:1,pointille:[6,6]});
-    for(let i=0;i<5;i++)craie.courbe(u=>[60+260*u,80+i*22+8*Math.sin(u*9+i)],60,{couleur:'faible',largeur:1.6});
-    craie.courbe(u=>[60+260*u,190+(u<.5?14*Math.sin(u*12):4*Math.sin(u*12))],60,{couleur:'violet',largeur:1.6});
-    for(let i=0;i<4;i++)craie.courbe(u=>[60+260*u,215+i*22+(i<2?6:2)*Math.sin(u*7+i)],60,{couleur:'cyan',largeur:1.8,pointille:i<2?[5,4]:[]});
-    craie.rect(60,300,260,42,{couleur:'cyan',largeur:2,arrondi:6,fond:'cyan',fondAlpha:.08});craie.texte('granite (transition large)',190,328,{couleur:'cyan',taille:13,align:'center'});
+    peins(c=>{const pas=[...Array(61).keys()].map(k=>k/60);
+      // gneiss rubané (lits sombres et clairs), qui fond peu à peu vers le bas : les lits s’estompent dans le granite rose
+      for(let i=0;i<5;i++)couche(c,pas.map(u=>[60+260*u,80+i*22+8*Math.sin(u*9+i)]),i%2?['#e5e7eb','#9ca3af','#4b5563']:['#d6d3d1','#78716c','#292524'],16);
+      couche(c,pas.map(u=>[60+260*u,190+(u<.5?14*Math.sin(u*12):4*Math.sin(u*12))]),['#f5d0fe','#c084fc','#6b21a8'],12);
+      for(let i=0;i<4;i++){c.globalAlpha=1-i*.18;couche(c,pas.map(u=>[60+260*u,215+i*22+(i<2?6:2)*Math.sin(u*7+i)]),['#fde2e4','#e8a3a8','#9f5b62'],16)}c.globalAlpha=1;
+      const gg=c.createLinearGradient(0,300,0,342);gg.addColorStop(0,'#f9c9c9');gg.addColorStop(1,'#d18e8e');c.fillStyle=gg;c.beginPath();c.roundRect(60,300,260,42,6);c.fill();
+      grain(c,60,300,260,42,220,'rgba(40,30,30,.55)',5);grain(c,60,300,260,42,120,'rgba(255,255,255,.8)',9);
+      // encaissant stratifié et pluton de granite (rose moucheté), auréole de contact
+      for(let i=0;i<9;i++)couche(c,[[420,80+i*30],[720,80+i*30]],ROCHES[i%3],26);
+      const ga=c.createRadialGradient(570,230,60,570,230,92);ga.addColorStop(0,'rgba(250,204,21,.35)');ga.addColorStop(1,'rgba(250,204,21,0)');c.fillStyle=ga;c.beginPath();c.arc(570,230,92,0,TAU);c.fill();
+      const gp=c.createRadialGradient(550,205,8,570,230,70);gp.addColorStop(0,'#fbd5d5');gp.addColorStop(.7,'#e9a3a3');gp.addColorStop(1,'#b86b6b');c.fillStyle=gp;c.beginPath();c.arc(570,230,70,0,TAU);c.fill();
+      c.save();c.beginPath();c.arc(570,230,69,0,TAU);c.clip();grain(c,500,160,140,140,320,'rgba(30,20,20,.6)',11);grain(c,500,160,140,140,160,'rgba(255,255,255,.85)',13);c.restore()});craie.direct(()=>{const c=craie.ctx;c.save();c.fillStyle='rgba(10,20,16,.72)';c.beginPath();c.roundRect(100,346,180,20,6);c.fill();c.restore()});craie.texte('granite (transition large)',190,360,{couleur:'cyan',taille:13,align:'center'});
     craie.fleche(190,275,190,296,{couleur:'rouge',largeur:1.5});
-    for(let i=0;i<9;i++)craie.ligne(420,80+i*30,720,80+i*30,{couleur:'faible',largeur:1.6});
-    craie.cercle(570,230,70,{couleur:'orange',largeur:2.4,fond:'orange',fondAlpha:.1});craie.cercle(570,230,92,{couleur:'jaune',largeur:1.4,pointille:[5,5]});
+    craie.cercle(570,230,92,{couleur:'jaune',largeur:1.4,pointille:[5,5]});
     craie.repere('granite_anatexie',55,290,270,60,'granite d’anatexie (transition large)').repere('gneiss_fondu',55,70,270,120,'gneiss en fusion partielle').repere('encaissant',415,70,310,230,'roches encaissantes stratifiées').repere('contact',500,160,140,140,'contact net du pluton');
-    craie.texte('contact net',570,235,{couleur:'orange',taille:13,align:'center'});craie.trait([[560,150],[575,120],[568,95]],{couleur:'orange',largeur:1.6}).fleche(620,320,590,290,{couleur:'rouge',largeur:1.4});}
+    craie.direct(()=>{const c=craie.ctx;c.save();c.fillStyle='rgba(10,20,16,.72)';c.beginPath();c.roundRect(530,268,80,20,6);c.fill();c.restore()});craie.texte('contact net',570,282,{couleur:'orange',taille:13,align:'center'});craie.trait([[560,150],[575,120],[568,95]],{couleur:'orange',largeur:1.6}).fleche(620,320,590,290,{couleur:'rouge',largeur:1.4});}
   function draw(){const W=craie.W,H=craie.H;if(W<1||H<1)return true;craie.debut(11,scene());const c=craie.ctx,s=Math.min(W/760,H/380);geom.s=s;geom.ox=(W-760*s)/2;geom.oy=(H-380*s)/2;c.translate(geom.ox,geom.oy);c.scale(s,s);
     ({chains:drawChains,deformations:drawDeformations,metamorphism:drawMetamorphism,granitization:drawGranitization})[state.currentVariant]();hotspotsDraw();return craie.fin()}
   // Clic sur un repère → observation notée ; glisser le point P–T.
