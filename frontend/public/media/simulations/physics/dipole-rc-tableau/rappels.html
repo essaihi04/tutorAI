@@ -395,14 +395,15 @@ const LARGE = {
   tension: { y1: 330, phrase: (x, y) => x <= 20 && y >= 330 },
   ohm: { y1: 352, phrase: (x, y) => x <= 210 && y >= 355 },
   additivite: { y1: 388, phrase: (x, y) => x === 110 && y === 360 },
-  puissances: { y1: 414, phrase: () => false },
+  puissances: { y1: 266, x1: 936, colonne: 0, phrase: () => false },   // (16 novembre 2026) tableau large : la virgule qui recule passe à droite de la liste
   derivee: { y1: 352, phrase: (x, y) => x === 250 && y >= 360 },
   exponentielle: { y1: 380, phrase: (x, y) => x === 260 && y >= 330 },
   sinusoide: { y1: 354, phrase: (x, y) => x === 470 && y >= 360 },
   derivee_cos: { y1: 416, phrase: (x, y) => x === 380 && y >= 380 },
 };
 const COL = { debut(c) { (this.k ||= RCColonne(MOT.scene, {
-  boite: () => ({ x0: 6, y0: 4, x1: 756, y1: (LARGE[MOT.S.vue] || { y1: 416 }).y1 }),
+  boite: () => ({ x0: 6, y0: 4, x1: (LARGE[MOT.S.vue] || {}).x1 ?? 756, y1: (LARGE[MOT.S.vue] || { y1: 416 }).y1 }),
+  colonne: () => (LARGE[MOT.S.vue] || {}).colonne ?? 270,
   versColonne: (s, x, y) => !!LARGE[MOT.S.vue] && LARGE[MOT.S.vue].phrase(x, y),
 })).debut(c); } };
 function dessiner(c, M) {
@@ -619,6 +620,9 @@ function vueAdditivite(c, M) {
   }
 }
 function vuePuissances(c, M) {
+  // Tableau large et bas (16 novembre 2026) : la virgule qui recule passe à droite de la liste (même dessin, décalé),
+  // pour que l'ensemble remplisse la largeur et s'agrandisse.
+  const large = (MOT.scene.L || 760) >= 1000 && COL.k && COL.k.st.on, DX = large ? 330 : 0, DY = large ? -190 : 0;
   const L = [['milli', 'm', '10⁻³', '1 mF = 0,001 F', 'milli'], ['micro', 'µ', '10⁻⁶', '1 µF = 0,000 001 F', 'micro'], ['nano', 'n', '10⁻⁹', '1 nF = 0,000 000 001 F', 'nano']];
   L.forEach(([nom, sym, p, ex, mo], k) => M.etape(c, mo, () => {
     const y = 90 + k * 50;
@@ -635,13 +639,13 @@ function vuePuissances(c, M) {
     c.direct(() => {
       // 47 s’écrit « 47, » puis la virgule recule d’un rang à chaque saut : 4,7 ; 0,47 ; … ; 0,000047.
       const ent = 2 - n, s = ent === 2 ? '47' : ent > 0 ? '4,7' : '0,' + '0'.repeat(-ent) + '47';
-      c.texte(s + ' F', 420, 330, { couleur: 'cyan', taille: 30, align: 'center' });
-      c.texte(`la virgule a reculé de ${n} rang${n > 1 ? 's' : ''}`, 420, 370, { couleur: 'blanc', taille: 16, align: 'center' });
-      for (let k = 0; k < n; k++) c.courbe(u => [560 - k * 18 - u * 18, 296 - 12 * Math.sin(Math.PI * u)], 8, { couleur: 'jaune', largeur: 1.6, tremble: 0 });
+      c.texte(s + ' F', 420 + DX, 330 + DY, { couleur: 'cyan', taille: 30, align: 'center' });
+      c.texte(`la virgule a reculé de ${n} rang${n > 1 ? 's' : ''}`, 420 + DX, 370 + DY, { couleur: 'blanc', taille: 16, align: 'center' });
+      for (let k = 0; k < n; k++) c.courbe(u => [560 + DX - k * 18 - u * 18, 296 + DY - 12 * Math.sin(Math.PI * u)], 8, { couleur: 'jaune', largeur: 1.6, tremble: 0 });
     });
-    c.repere('virgule', 260, 296, 340, 84, 'la virgule recule de six rangs');
+    c.repere('virgule', 260 + DX, 296 + DY, 340, 84, 'la virgule recule de six rangs');
   }
-  M.etape(c, 'decoupe', () => c.texte('micro = 6 rangs : 47 µF = 0,000 047 F', 420, 404, { couleur: 'vert', taille: 17, align: 'center' }));
+  M.etape(c, 'decoupe', () => c.texte('micro = 6 rangs : 47 µF = 0,000 047 F', 420 + DX, 404 + DY, { couleur: 'vert', taille: 17, align: 'center' }));
 }
 /* Dérivée : d(t) = 6(1 − e^(−t/2)), en m ; d′(t) = 3·e^(−t/2), en m/s. */
 const D = { x0: 50, y0: 320, x1: 450, y1: 70, tmax: 10, dmax: 7 };

@@ -27,7 +27,11 @@
  * Valeurs par défaut : C₁ = 3 µF, C₂ = 6 µF → parallèle 9 µF (q = 54 µC), série 2 µF (q = 12 µC, u₁ = 4 V, u₂ = 2 V).
  * Les nombres s'écrivent quand les charges sont arrivées ; « interet » dessine le condensateur équivalent et le compare.
  */
-const { fr, bulle, protocole } = window.Tableau;
+const { fr, bulle: bulleBrute, protocole } = window.Tableau;
+/* La bulle est du texte HTML (16 novembre 2026) : pas de « _ » visible — C_eq s'écrit Ceq, un indice chiffré passe en indice. */
+const INDICES = { 0: '₀', 1: '₁', 2: '₂', 3: '₃' };
+const lisible = s => String(s).replace(/_\{?([A-Za-z0-9]+)\}?/g, (_, x) => (/^\d+$/.test(x) ? [...x].map(ch => INDICES[ch] || ch).join('') : x));
+const bulle = (el, texte, kind) => bulleBrute(el, lisible(texte), kind);
 const $ = id => document.getElementById(id);
 const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');
 const VUE = new URLSearchParams(location.search).get('vue') === 'serie' ? 'serie' : 'parallele';
@@ -195,7 +199,7 @@ const canvas = $('canvas');
 const scene = window.OndesTableau.Scene(canvas, dessiner);
 /* Tableau large (zones.js) : le circuit (générateur peint) à gauche, à l’identique ; la colonne du résultat C_eq, à
  * droite, écrite plus grande. Grand écran : cadre d’origine. */
-scene.cadre = RCZones(scene, () => (performance.now() - scene.ouvert) / 1000, RCZones.gaucheFixe(520, { iso: true, y0: 56, y1: 372, kMax: 1.3 }));
+scene.cadre = RCZones(scene, () => (performance.now() - scene.ouvert) / 1000, RCZones.rangee([{ r: [0, 8, 526, 404], kMax: 1.2, etire: true, axMax: 1.6 }, { r: [528, 56, 232, 104], kMax: 1.5 }, { r: [528, 168, 232, 202], kMax: 1.5 }]));
 scene.avancer = dt => {
   if (!S.running) return false;
   S.f = Math.min(1, S.f + dt / CHARGE);
