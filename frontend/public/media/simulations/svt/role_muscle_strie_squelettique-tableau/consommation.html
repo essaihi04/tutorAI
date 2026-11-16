@@ -121,7 +121,14 @@ function dessiner(c) {
     if (S.t <= 0) return;
     JAUGES.forEach((j, i) => {
       const y = Y0 + i * PAS - BH / 2 - 4, g = c.ctx, l = longueur(j, valeur(j)), lr = longueur(j, j.repos);
-      g.globalAlpha = .55; g.fillStyle = c.couleur(j.couleur); g.fillRect(BX, y, l, BH); g.globalAlpha = 1;
+      // (16 novembre 2026) barre peinte : couleur vive, arrondie, reflet en haut, ombre douce (au lieu d'un aplat terne)
+      if (l > 1) {
+        g.save(); const col = c.couleur(j.couleur), gb = g.createLinearGradient(0, y, 0, y + BH);
+        gb.addColorStop(0, 'rgba(255,255,255,.55)'); gb.addColorStop(.18, col); gb.addColorStop(.75, col); gb.addColorStop(1, 'rgba(0,0,0,.45)');
+        g.shadowColor = 'rgba(0,0,0,.4)'; g.shadowBlur = 5; g.shadowOffsetY = 2;
+        g.fillStyle = col; g.beginPath(); g.roundRect(BX, y, l, BH, Math.min(BH / 2, 5, l / 2)); g.fill();
+        g.shadowColor = 'transparent'; g.globalAlpha = .55; g.fillStyle = gb; g.fill(); g.restore();
+      }
       // Repos : trait pointillé vertical et sa valeur au-dessus.
       c.ligne(BX + lr, y - 5, BX + lr, y + BH + 5, { couleur: 'blanc', largeur: 1.4, pointille: [3, 3] });
       c.texte(nombre(j.repos, j.d), BX + lr, y - 7, { couleur: 'faible', taille: tk(12), align: 'center' });
