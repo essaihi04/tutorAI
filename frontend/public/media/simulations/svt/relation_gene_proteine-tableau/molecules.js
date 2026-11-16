@@ -35,6 +35,31 @@
   })();
   const traduire = codon => CODE[String(codon).toUpperCase().replace(/T/g, 'U')] || '?';
 
+  /* Lisibilité (16 novembre 2026, règle 10 du skill) : une lettre écrite SUR une peinture prend une encre sombre et grasse si
+   * la peinture est claire (jaune, vert, orange…), blanche (avec une ombre fine) seulement si elle est foncée. */
+  const ENCRE = '#0b1f2a';
+  function clarte(c) {
+    const n = parseInt(String(c).slice(1), 16), f = v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; };
+    return .2126 * f((n >> 16) & 255) + .7152 * f((n >> 8) & 255) + .0722 * f(n & 255);
+  }
+  // encre sombre si elle contraste nettement mieux que le blanc (le blanc garde l'avantage sur les rouges et les bleus saturés)
+  const encre = c => { if (!(typeof c === 'string' && c[0] === '#' && c.length === 7)) return '#fff'; const L = clarte(c); return (L + .05) / .063 > 1.25 * 1.05 / (L + .05) ? ENCRE : '#fff'; };
+  /** Écrit s centré en (px, py) sur une peinture de couleur `fond`, police grasse de `taille` px, encre choisie par encre(). */
+  function lettreSur(x, s, px, py, fond, taille) {
+    x.save(); const e = encre(fond); x.fillStyle = e; x.font = `700 ${taille}px sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle';
+    if (e === '#fff') { x.shadowColor = 'rgba(0,0,0,.6)'; x.shadowBlur = 2; }
+    x.fillText(s, px, py); x.restore();
+  }
+
+  /** Un fond sombre arrondi sous une légende à la craie posée SUR une peinture (cellule, noyau, fond de vue) : elle reste lisible.
+   *  (px, py) = point d'ancrage de la craie (ligne de base), align comme pour craie.texte. */
+  function pastille(x, s, px, py, taille, align = 'left', a = 1) {
+    const w = String(s).replace(/_\{?|\}/g, '').length * taille * .5 + 14, x0 = align === 'center' ? px - w / 2 : align === 'right' ? px - w + 7 : px - 7;
+    x.save(); x.globalAlpha *= a; x.fillStyle = 'rgba(10,18,26,.72)'; x.beginPath();
+    if (x.roundRect) x.roundRect(x0, py - taille * .95, w, taille * 1.35, Math.min(9, taille * .55)); else x.rect(x0, py - taille * .95, w, taille * 1.35);
+    x.fill(); x.restore();
+  }
+
   function sphere(x, cx, cy, r, coul, a = 1) {
     x.save(); x.globalAlpha *= a;
     x.fillStyle = 'rgba(0,0,0,.25)'; x.beginPath(); x.ellipse(cx + r * .12, cy + r * .78, r * .85, r * .3, 0, 0, TAU); x.fill();   // ombre posée (16 novembre 2026)
@@ -68,8 +93,7 @@
       x.beginPath(); x.roundRect ? x.roundRect(px - Math.min(6, pas * .32), Math.min(y1, y2), 2 * Math.min(6, pas * .32), Math.abs(y2 - y1), 3) : x.rect(px - 6, Math.min(y1, y2), 12, Math.abs(y2 - y1)); x.fill();
       x.fillStyle = 'rgba(255,255,255,.28)'; x.fillRect(px - Math.min(6, pas * .32) + 1.5, Math.min(y1, y2) + 2, 1.6, Math.max(0, Math.abs(y2 - y1) - 4));
       if (o.lettres !== false) {
-        x.fillStyle = '#fff'; x.font = `700 ${Math.round(Math.min(13, pas * .62))}px sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle';
-        x.fillText(L, px, y + sens * lb * .55);
+        lettreSur(x, L, px, y + sens * lb * .55, BASE[L], Math.round(Math.min(13, pas * .62)));
       }
       if (o.rouge && o.rouge.has(i)) { x.strokeStyle = '#ff2d2d'; x.lineWidth = 2.4; x.beginPath(); x.ellipse(px, y + sens * lb * .5, pas * .5, lb * .75, 0, 0, TAU); x.stroke(); }
     }
@@ -90,7 +114,7 @@
     x.save(); x.globalAlpha *= a; x.translate(px, py); x.rotate(ang + Math.PI / 2);
     x.fillStyle = BASE[L] || '#999'; x.beginPath(); x.rect(-4, -16, 8, 14); x.fill();
     sphere(x, 0, 2, 5, (SQUELETTE[type] || SQUELETTE.arn)[1]);
-    x.translate(0, -9); x.rotate(-(ang + Math.PI / 2)); x.fillStyle = '#fff'; x.font = '700 10px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(L, 0, .5);
+    x.translate(0, -9); x.rotate(-(ang + Math.PI / 2)); lettreSur(x, L, 0, .5, BASE[L], 10);
     x.restore();
   }
 
@@ -148,7 +172,7 @@
       const L = anticodon[i], px = cx + (i - 1) * pas;
       x.fillStyle = BASE[L] || '#888'; x.beginPath(); x.roundRect ? x.roundRect(px - 5.5, yb - 18, 11, 18, [0, 0, 3, 3]) : x.rect(px - 5, yb - 18, 10, 18); x.fill();
       x.fillStyle = 'rgba(255,255,255,.28)'; x.fillRect(px - 4, yb - 17, 1.6, 14);
-      x.fillStyle = '#fff'; x.font = '700 10px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(L, px, yb - 8);
+      lettreSur(x, L, px, yb - 8, BASE[L] || '#888888', 10);
     }
     if (aa) sphere(x, cx, yb - h - 36, o.r ?? 11, couleurAA(aa));
     x.restore();
@@ -158,8 +182,7 @@
   function perle(x, cx, cy, r, nom, o = {}) {
     sphere(x, cx, cy, r, couleurAA(nom), o.alpha ?? 1);
     if (o.texte !== false && r >= 9) {
-      x.save(); x.globalAlpha *= (o.alpha ?? 1); x.fillStyle = '#fff'; x.font = `700 ${Math.round(r * .72)}px sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle';
-      x.shadowColor = 'rgba(0,0,0,.6)'; x.shadowBlur = 2; x.fillText(nom, cx, cy + .5); x.restore();
+      x.save(); x.globalAlpha *= (o.alpha ?? 1); lettreSur(x, nom, cx, cy + .5, couleurAA(nom), Math.round(r * .72)); x.restore();
     }
   }
   /** Une chaîne d’acides aminés : pts = [[x,y],…], noms = […] ; liaisons peptidiques en traits clairs. */
@@ -206,9 +229,9 @@
     // en haut à gauche et un liseré donnent un milieu « éclairé », les écritures à la craie restent bien lisibles dessus
     const noy = type === 'noyau';
     if (noy) { g.addColorStop(0, 'rgba(56,150,255,.34)'); g.addColorStop(1, 'rgba(29,78,216,.30)'); }
-    else { g.addColorStop(0, 'rgba(255,130,150,.30)'); g.addColorStop(1, 'rgba(236,60,140,.28)'); }
+    else { g.addColorStop(0, 'rgba(255,130,150,.22)'); g.addColorStop(1, 'rgba(236,60,140,.20)'); }   // (règle 10) un peu plus sombre : les craies colorées s'y lisent
     const forme = () => { x.beginPath(); x.roundRect ? x.roundRect(x0, y0, w, h, 14) : x.rect(x0, y0, w, h); };
-    x.fillStyle = noy ? 'rgba(8,20,60,.55)' : 'rgba(62,12,36,.55)'; forme(); x.fill();   // base sombre : la teinte ne vire pas au gris-brun sur le vert du tableau
+    x.fillStyle = noy ? 'rgba(8,20,60,.55)' : 'rgba(52,10,32,.64)'; forme(); x.fill();   // base sombre : la teinte ne vire pas au gris-brun sur le vert du tableau
     x.fillStyle = g; forme(); x.fill();
     x.save(); forme(); x.clip();
     const hl = x.createRadialGradient(x0 + w * .22, y0 + h * .12, 4, x0 + w * .22, y0 + h * .12, Math.max(w, h) * .7);
@@ -258,6 +281,6 @@
   /** Point noir d’autoradiographie (grain d’argent) — quelques pixels sombres et flous. */
   function grain(x, px, py, a = 1) { x.save(); x.globalAlpha *= a; x.fillStyle = 'rgba(10,10,10,.9)'; x.beginPath(); x.arc(px, py, 2.1, 0, TAU); x.fill(); x.fillStyle = 'rgba(10,10,10,.35)'; x.beginPath(); x.arc(px + .8, py - .6, 3.4, 0, TAU); x.fill(); x.restore(); }
 
-  window.Molecules = { BASE, COMP_ADN, COMP_ARN, AA, CODE, traduire, couleurAA, sphere, ombre, brin, nucleotide, ribosome, arnt, perle, chaine,
+  window.Molecules = { pastille, encre, lettreSur, ENCRE, BASE, COMP_ADN, COMP_ARN, AA, CODE, traduire, couleurAA, sphere, ombre, brin, nucleotide, ribosome, arnt, perle, chaine,
     noyau, pore, cytoplasme, milieu, hematie, vaisseau, grain };
 })();
