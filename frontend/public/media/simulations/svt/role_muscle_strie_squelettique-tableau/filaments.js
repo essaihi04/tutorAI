@@ -127,6 +127,8 @@
     const xs = [...cuts].sort((a, b) => a - b);
     ctx.save(); ctx.globalAlpha = o.alpha ?? 1;
     ctx.beginPath(); ctx.rect(x0, y, x1 - x0, h); ctx.clip();
+    // (16 novembre 2026) bords de bandes adoucis, comme sur une vraie photographie au microscope électronique
+    const flou = Math.max(.6, Math.min(2.2, h / 14)); if ('filter' in ctx) ctx.filter = `blur(${flou}px)`;
     const niveau = (a, m) => 214 - 40 * a - 90 * m - (a > 0 && m > 0 ? 34 * Math.min(a, m) : 0);   // gris 0..255
     for (let i = 0; i < xs.length - 1; i++) {
       const xa = xs[i], xb = xs[i + 1]; if (xb - xa < .2) continue;
@@ -137,11 +139,16 @@
       g.addColorStop(0, c(-18)); g.addColorStop(.5, c(10)); g.addColorStop(1, c(-24));
       ctx.fillStyle = g; ctx.fillRect(xa, y, xb - xa + .6, h);
     }
+    if ('filter' in ctx) ctx.filter = 'none';
     if (pr.z) {
       ctx.globalAlpha = (o.alpha ?? 1) * pr.z;
       for (const z of G.z) { const x = X(z); ctx.fillStyle = '#1b1b1b'; ctx.fillRect(x - 1.6, y, 3.2, h); }
     }
     ctx.globalAlpha = (o.alpha ?? 1) * .22; ctx.fillStyle = ctx.createPattern(S.grain, 'repeat'); ctx.fillRect(x0, y, x1 - x0, h);
+    // vignettage léger : le haut et le bas de la bande un peu plus sombres (relief de la myofibrille)
+    ctx.globalAlpha = o.alpha ?? 1; const vg = ctx.createLinearGradient(0, y, 0, y + h);
+    vg.addColorStop(0, 'rgba(0,0,0,.28)'); vg.addColorStop(.25, 'rgba(0,0,0,0)'); vg.addColorStop(.75, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.32)');
+    ctx.fillStyle = vg; ctx.fillRect(x0, y, x1 - x0, h);
     ctx.restore();
   }
 
