@@ -54,6 +54,7 @@
       courbe(fn, n) { const p = []; for (let i = 0; i <= n; i++) { const q = fn(i / n); if (q) p.push(q); } nuage(p); return px; },
       repere() { return px; },
       __bloc(x, y, w, h) { box(x, y, x, y, x + w, y + h); },
+      __remplir() { return px; },
     };
     px = new Proxy(c0, { get(t, k) { if (k in over) return over[k]; const v = t[k]; return typeof v === 'function' ? v.bind(t) : v; }, set(t, k, v) { t[k] = v; return true; } });
     return px;
@@ -127,6 +128,8 @@
       courbe(fn, n, o) { let z = null; return c0.courbe((u) => { const p = fn(u); if (!p) return p; z = z || Z(p[0], p[1]); return map(z, p[0], p[1]); }, n, o); },
       repere(id, x, y, w, h, l) { const z = Z(x + Math.min(w, 2), y + Math.min(h, 2)), a = map(z, x, y); return c0.repere(id, a[0], a[1], w * z.sx, h * z.sy, l); },
       __bloc(x, y, w, h, coul, o) { const z = Z(x, y), a = map(z, x, y); return BLOC(c0, a[0], a[1], w * z.sx, h * z.sy, coul, o); },
+      // zones colorées du kit (MathsTableau.remplir, 16 novembre 2026) : transformées comme un trait
+      __remplir(pts, o) { const z = Z(pts[0][0], pts[0][1]); return window.MathsTableau.peint(c0, c0.ctx, pts.map((p) => map(z, p[0], p[1])), o); },
     };
     /* Peinture directe sur le contexte (c.ctx : remplissages, MathsTableau.peindre) : le contexte rendu porte la
      * transformation de la zone du repère ; chaque tracé de la craie remet d'abord la transformation de la scène. */
@@ -169,11 +172,11 @@
       if (g.origine !== false && g.xmin < 0 && g.ymin < 0) c.texte('O', xA - 14, yA + 17, { couleur: 'faible', taille: 15 });
       return g;
     };
-    K2.courbe = (G, f, a, b, o = {}) => { for (const m of K._points(G, f, a, b, o.n || 160)) c.trait(m, { tremble: .35, couleur: o.couleur || 'cyan', largeur: o.largeur ?? 2.6, pointille: o.pointille, duree: o.duree }); return K2; };
+    K2.courbe = (G, f, a, b, o = {}) => { for (const m of K._points(G, f, a, b, o.n || 160)) window.MathsTableau.trace(c, m, { tremble: .35, couleur: o.couleur || 'cyan', largeur: o.largeur ?? 2.6, pointille: o.pointille, duree: o.duree }); return K2; };
     K2.courbePart = (G, f, a, b, p, o = {}) => {
       if (p <= 0) return K2;
       const bb = a + (b - a) * p;
-      for (const m of K._points(G, f, a, bb, Math.max(4, Math.round((o.n || 160) * p)))) c.trait(m, { tremble: .35, couleur: o.couleur || 'cyan', largeur: o.largeur ?? 2.6, pointille: o.pointille });
+      for (const m of K._points(G, f, a, bb, Math.max(4, Math.round((o.n || 160) * p)))) window.MathsTableau.trace(c, m, { tremble: .35, couleur: o.couleur || 'cyan', largeur: o.largeur ?? 2.6, pointille: o.pointille });
       return K2;
     };
     K2.proj = (G, x, y, o = {}) => {
@@ -184,7 +187,7 @@
       if (o.ly) c.texte(o.ly, G.X(ay) - 8, G.Y(y) + 5, { couleur: o.couleurTexte || coul, taille: o.taille || 15, align: 'right' });
       return K2;
     };
-    K2.rond = (G, x, y, plein = true, couleur = 'jaune') => { const px = G.X(x), py = G.Y(y); if (plein) c.point(px, py, 5, couleur); else c.cercle(px, py, 5.5, { couleur, largeur: 2 }); return K2; };
+    K2.rond = (G, x, y, plein = true, couleur = 'jaune') => { window.MathsTableau.pastille(c, G.X(x), G.Y(y), plein, couleur); return K2; };
     K2.lignes = (x, y, liste, inter = 30) => {
       for (const l of liste) {
         if (l.pause) c.pause(l.pause);
