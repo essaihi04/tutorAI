@@ -745,10 +745,45 @@ function vueExpo(c, M) {
   }
 }
 /* Sinusoïde : U_m = 6 V ; T = P.T ms ; point sur un cercle (angle compté depuis le haut). */
+/** Le cercle : un disque bleu nuit en relief (jante métallique, quatre rayons fins). */
+function peindreRoue(ctx) {
+  const { cx, cy, r } = SC;
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 4;
+  const g = ctx.createRadialGradient(cx - r * .3, cy - r * .35, r * .1, cx, cy, r); g.addColorStop(0, '#2c4a6e'); g.addColorStop(1, '#0f1d2e');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+  ctx.shadowColor = 'transparent';
+  const j = ctx.createLinearGradient(cx - r, cy - r, cx + r, cy + r); j.addColorStop(0, '#e6ebf0'); j.addColorStop(.5, '#8a96a3'); j.addColorStop(1, '#3d4650');
+  ctx.strokeStyle = j; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(cx, cy, r - 2, 0, Math.PI * 2); ctx.stroke();
+  ctx.strokeStyle = 'rgba(200,215,230,.18)'; ctx.lineWidth = 1.2;
+  for (let k = 0; k < 4; k++) { const a = k * Math.PI / 4; ctx.beginPath(); ctx.moveTo(cx - (r - 5) * Math.cos(a), cy - (r - 5) * Math.sin(a)); ctx.lineTo(cx + (r - 5) * Math.cos(a), cy + (r - 5) * Math.sin(a)); ctx.stroke(); }
+  Peint.sphere(ctx, cx, cy, 4, ['#ffffff', '#aab4bf', '#3d4650']);
+  ctx.restore();
+}
+/** La balançoire : portique en bois (poutres veinées, pieds en A), deux cordes, siège en bois ; `a` = angle (rad). */
+function peindreBalancoire(ctx, ox, oy, a) {
+  const bois = (x0, y0, x1, y1) => { const g = ctx.createLinearGradient(x0, y0, x1, y1); g.addColorStop(0, '#9a6a3a'); g.addColorStop(.45, '#d39a5c'); g.addColorStop(1, '#5e3b1c'); return g; };
+  ctx.save(); ctx.lineCap = 'round';
+  ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 6; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 3;
+  for (const s of [-1, 1]) {           // pieds en A
+    ctx.strokeStyle = bois(ox + s * 50, oy, ox + s * 70, oy); ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.moveTo(ox + s * 58, oy); ctx.lineTo(ox + s * 50, oy + 92); ctx.moveTo(ox + s * 62, oy); ctx.lineTo(ox + s * 72, oy + 92); ctx.stroke();
+  }
+  ctx.fillStyle = bois(0, oy - 5, 0, oy + 4); ctx.beginPath(); ctx.roundRect(ox - 70, oy - 5, 140, 9, 3); ctx.fill();
+  ctx.shadowColor = 'transparent';
+  const sx = ox + 70 * Math.sin(a), sy = oy + 70 * Math.cos(a);
+  ctx.strokeStyle = '#e4d3a8'; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(ox - 10, oy + 3); ctx.lineTo(sx - 13 * Math.cos(a), sy + 13 * Math.sin(a)); ctx.moveTo(ox + 10, oy + 3); ctx.lineTo(sx + 13 * Math.cos(a), sy - 13 * Math.sin(a)); ctx.stroke();
+  ctx.translate(sx, sy); ctx.rotate(-a);
+  ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 5; ctx.shadowOffsetY = 3;
+  ctx.fillStyle = bois(0, -3, 0, 6); ctx.beginPath(); ctx.roundRect(-19, -3, 38, 8, 2); ctx.fill();
+  ctx.restore();
+  Peint.sphere(ctx, ox - 10, oy + 1, 2.5, ['#ffffff', '#9aa3ad', '#333a42']); Peint.sphere(ctx, ox + 10, oy + 1, 2.5, ['#ffffff', '#9aa3ad', '#333a42']);
+}
 const SC = { cx: 100, cy: 150, r: 70 }, SG = { x0: 210, x1: 735, y0: 230, a: 100 };
 function vueSinus(c, M) {
   const T = P.T, msPx = (SG.x1 - SG.x0 - 20) / (2.2 * T);
   const tx = t => SG.x0 + t * msPx, ty = u => SG.y0 - u / 6 * SG.a;
+  c.direct(() => peindreRoue(c.ctx));
   c.cercle(SC.cx, SC.cy, SC.r, { couleur: 'faible', largeur: 1.6 });
   c.fleche(SG.x0, SG.y0, SG.x1, SG.y0, { couleur: 'faible', largeur: 1.6 }); c.fleche(SG.x0, SG.y0 + SG.a + 20, SG.x0, SG.y0 - SG.a - 30, { couleur: 'faible', largeur: 1.6 });
   c.texte('t (ms)', SG.x1, SG.y0 + 20, { couleur: 'faible', taille: 14, align: 'right' }); c.texte('u (V)', SG.x0 + 8, SG.y0 - SG.a - 22, { couleur: 'faible', taille: 14 });
@@ -758,7 +793,24 @@ function vueSinus(c, M) {
   if (M.commence('periode')) tt = T + T * M.p('periode');
   const th = 2 * Math.PI * tt / T, px = SC.cx + SC.r * Math.sin(th), py = SC.cy - SC.r * Math.cos(th);
   c.direct(() => {
-    Peint.sphere(c.ctx, px, py, 7, ['#ffe0e0', '#e04848', '#6d1010']);
+    const ctx = c.ctx;
+    // Le rayon qui tourne, et une traînée lumineuse derrière le point (le chemin déjà parcouru).
+    ctx.save(); ctx.strokeStyle = 'rgba(248,113,113,.55)'; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(SC.cx, SC.cy); ctx.lineTo(px, py); ctx.stroke();
+    if (tt > 0) {
+      const n = 24, d = Math.min(th, 1.6);
+      for (let k = 0; k < n; k++) {
+        const a0 = th - d * (k + 1) / n, a1 = th - d * k / n;
+        ctx.strokeStyle = `rgba(248,113,113,${.5 * (1 - k / n)})`; ctx.lineWidth = 6 * (1 - k / n) + 1;
+        ctx.beginPath(); ctx.arc(SC.cx, SC.cy, SC.r, a0 - Math.PI / 2, a1 - Math.PI / 2); ctx.stroke();
+      }
+      // Lueur douce sous la courbe tracée.
+      ctx.shadowColor = 'rgba(248,113,113,.8)'; ctx.shadowBlur = 10; ctx.strokeStyle = 'rgba(248,113,113,.35)'; ctx.lineWidth = 5; ctx.beginPath();
+      for (let i = 0; i <= 120; i++) { const u = i / 120, X = tx(u * tt), Y = ty(6 * Math.cos(2 * Math.PI * u * tt / T)); i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); }
+      ctx.stroke();
+    }
+    ctx.restore();
+    ctx.save(); ctx.shadowColor = 'rgba(248,113,113,.9)'; ctx.shadowBlur = 12;
+    Peint.sphere(ctx, px, py, 8, ['#ffe0e0', '#e04848', '#6d1010']); ctx.restore();
     c.ligne(px, py, tx(tt), ty(6 * Math.cos(th)), { couleur: 'tresfaible', pointille: [3, 5], tremble: 0 });
     if (tt > 0) c.courbe(u => [tx(u * tt), ty(6 * Math.cos(2 * Math.PI * u * tt / T))], 120, { couleur: 'rouge', largeur: 2.8, tremble: 0 });
     c.point(tx(tt), ty(6 * Math.cos(th)), 4.5, 'rouge');
@@ -782,12 +834,7 @@ function vueSinus(c, M) {
   if (M.commence('balancoire')) {
     const p = M.p('balancoire'), a = .5 * Math.cos(2 * Math.PI * p * 2), ox = 100, oy = 256;
     c.direct(() => {
-      const ctx = c.ctx; ctx.save();
-      ctx.fillStyle = '#6e4b2a'; ctx.fillRect(ox - 66, oy - 4, 132, 7); ctx.fillRect(ox - 66, oy, 7, 92); ctx.fillRect(ox + 59, oy, 7, 92);
-      const sx = ox + 70 * Math.sin(a), sy = oy + 70 * Math.cos(a);
-      ctx.strokeStyle = '#d8c7a0'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(ox - 8, oy); ctx.lineTo(sx - 12, sy); ctx.moveTo(ox + 8, oy); ctx.lineTo(sx + 12, sy); ctx.stroke();
-      const g = ctx.createLinearGradient(0, sy - 3, 0, sy + 7); g.addColorStop(0, '#c58a46'); g.addColorStop(1, '#7a4f22');
-      ctx.translate(sx, sy); ctx.rotate(-a); ctx.fillStyle = g; ctx.fillRect(-18, -2, 36, 8); ctx.restore();
+      peindreBalancoire(c.ctx, ox, oy, a);
     });
     c.texte('la balançoire va et vient : même amplitude, même période', 470, 412, { couleur: 'bleu', taille: 15, align: 'center', max: 520 });
     c.repere('balancoire', 30, 250, 140, 100, 'la balançoire qui va et vient');

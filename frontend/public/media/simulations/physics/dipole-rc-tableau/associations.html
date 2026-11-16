@@ -43,15 +43,29 @@ function sphere(ctx, x, y, r, [clair, milieu, sombre]) {
   const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r); g.addColorStop(0, clair); g.addColorStop(.45, milieu); g.addColorStop(1, sombre);
   ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
 }
-/** Une armature : plaque d'aluminium vue sur la tranche (reflet clair, bord sombre), liseré de la couleur du condensateur. */
+/** Une armature : plaque d'aluminium vue sur la tranche (reflet clair, bord sombre, ombre douce), liseré de la couleur du condensateur. */
 function armature(ctx, x0, x1, y, couleur) {
-  const e = 5;
+  const e = 6;
   ctx.save();
-  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(x0 + 2, y - e / 2 + 3, x1 - x0, e);
-  const g = ctx.createLinearGradient(0, y - e / 2, 0, y + e / 2); g.addColorStop(0, '#f2f5f8'); g.addColorStop(.45, '#b9c2cb'); g.addColorStop(1, '#5d6670');
-  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x0, y - e / 2, x1 - x0, e, 1.5); ctx.fill();
-  ctx.strokeStyle = couleur; ctx.globalAlpha = .8; ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 5; ctx.shadowOffsetY = 2;
+  const g = ctx.createLinearGradient(0, y - e / 2, 0, y + e / 2); g.addColorStop(0, '#ffffff'); g.addColorStop(.35, '#d5dce3'); g.addColorStop(.7, '#8d97a1'); g.addColorStop(1, '#4b535c');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x0, y - e / 2, x1 - x0, e, 2); ctx.fill();
+  ctx.shadowColor = 'transparent';
+  ctx.strokeStyle = couleur; ctx.globalAlpha = .85; ctx.lineWidth = 1.3; ctx.stroke();
   ctx.restore();
+}
+/** L'isolant entre les armatures : une lame translucide ambrée. */
+function isolant(ctx, x0, x1, y0, y1) {
+  const g = ctx.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(250,204,21,.10)'); g.addColorStop(.5, 'rgba(250,204,21,.30)'); g.addColorStop(1, 'rgba(250,204,21,.10)');
+  ctx.fillStyle = g; ctx.fillRect(x0 + 2, y0, x1 - x0 - 4, y1 - y0);
+}
+/** Une charge : petite sphère ombrée rouge (+) ou bleue (−), avec son signe. */
+function charge(ctx, x, y, signe, a = 1, r = 4.2) {
+  ctx.save(); ctx.globalAlpha = a;
+  sphere(ctx, x, y, r, signe > 0 ? ['#ffd4d4', '#ef4444', '#7f1d1d'] : ['#d6e8ff', '#3b82f6', '#1e3a8a']);
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.1; ctx.beginPath(); ctx.moveTo(x - r * .48, y); ctx.lineTo(x + r * .48, y);
+  if (signe > 0) { ctx.moveTo(x, y - r * .48); ctx.lineTo(x, y + r * .48); }
+  ctx.stroke(); ctx.restore();
 }
 /** Générateur : coffret gris, afficheur « 6 V », borne rouge (+) en haut, noire (−) en bas. */
 function peindreGenerateur(ctx, x, y, w, h) {
@@ -78,25 +92,29 @@ function condensateur(c, cx, cy, C, q, couleur, nom) {
     armature(c.ctx, cx - w / 2, cx + w / 2, cy - g / 2, COULEUR_PEINT[couleur] || couleur);
     armature(c.ctx, cx - w / 2, cx + w / 2, cy + g / 2, COULEUR_PEINT[couleur] || couleur);
   });
-  const n = Math.round(q / QPT);
-  for (let k = 0; k < n; k++) {
-    const x = cx - w / 2 + (k + 0.5) * w / n;
-    c.point(x, cy - g / 2 - 6, 2.3, 'rouge'); c.point(x, cy + g / 2 + 6, 2.3, 'bleu');
-  }
+  // Les charges arrivent une à une : la dernière apparaît en fondu (pas de saut).
+  const nr = q / QPT, n = Math.ceil(nr - 1e-9);
+  scene.peindreDans(cx, cy, () => {
+    isolant(c.ctx, cx - w / 2, cx + w / 2, cy - g / 2 + 3, cy + g / 2 - 3);
+    for (let k = 0; k < n; k++) {
+      const x = cx - w / 2 + (k + 0.5) * w / n, a = Math.min(1, nr - k), rr = Math.max(2.6, Math.min(4.2, .46 * w / n));
+      charge(c.ctx, x, cy - g / 2 - 8, +1, a, rr); charge(c.ctx, x, cy + g / 2 + 8, -1, a, rr);
+    }
+  });
   c.repere(nom, cx - w / 2 - 10, cy - 20, w + 20, 40, nom === 'C1' ? 'le condensateur C₁' : nom === 'C2' ? 'le condensateur C₂' : 'le condensateur équivalent');
 }
 function generateur(c, x, y1, y2) {
   const ym = (y1 + y2) / 2;
-  c.direct(() => peindreGenerateur(c.ctx, x - 18, ym - 26, 36, 52));
-  c.ligne(x, y1, x, ym - 30); c.ligne(x, ym + 30, x, y2);
-  c.texte('+', x + 24, ym - 18, { couleur: 'rouge', taille: 16 }); c.texte('u = 6 V', x - 24, ym + 5, { couleur: 'jaune', taille: 15, align: 'right' });
+  c.direct(() => scene.peindreDans(x, ym, () => peindreGenerateur(c.ctx, x - 24, ym - 34, 48, 68)));
+  c.ligne(x, y1, x, ym - 38); c.ligne(x, ym + 38, x, y2);
+  c.texte('+', x + 30, ym - 22, { couleur: 'rouge', taille: 16 }); c.texte('u = 6 V', x - 32, ym + 5, { couleur: 'jaune', taille: 15, align: 'right' });
   c.repere('generateur', x - 70, ym - 30, 100, 60, 'le générateur : u = 6 V');
 }
 
 function dessiner(c) {
   scene.cadre(31);
   c.texte(VUE === 'parallele' ? 'Deux condensateurs en parallèle' : 'Deux condensateurs en série', 280, 26, { couleur: 'blanc', taille: 18, align: 'center' });
-  const f = S.f;
+  const f = 1 - Math.pow(1 - S.f, 2);   // la charge démarre vite puis ralentit (easing)
   if (VUE === 'parallele') {
     const T = 82, B = 320, X1 = 250, X2 = 420;
     generateur(c, 90, T, B); c.ligne(90, T, X2 + 70, T); c.ligne(90, B, X2 + 70, B);
