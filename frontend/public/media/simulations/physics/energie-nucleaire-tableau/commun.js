@@ -82,5 +82,42 @@
     });
     return scene;
   }
-  window.OndesTableau = { Scene, VW, VH };
+
+  /* ── Courbes nettes et lumineuses (16 novembre 2026, « plus agréable, couleurs vives ») ───────────────────
+   * Net.courbe(c, fn, n, o, aire) trace la MÊME courbe de craie que c.courbe (même durée d'écriture : les instants
+   * ne bougent pas), entourée d'un halo de sa couleur ; `aire` = { base: y, rgb: 'r,g,b', alpha } pose en plus un
+   * dégradé doux sous la courbe, qui avance avec le tracé. Net.halo(c, couleur, fn) : halo autour de ce que fn dessine. */
+  const Net = {
+    halo(c, couleur, fn, flou = 10) {
+      const ctx = c.ctx; ctx.save(); ctx.shadowColor = c.couleur(couleur); ctx.shadowBlur = flou * (devicePixelRatio || 1) * (c.echelle || 1);
+      try { fn(); } finally { ctx.restore(); }
+    },
+    courbe(c, fn, n, o = {}, aire) {
+      const cur0 = c.cur;
+      Net.halo(c, o.couleur, () => c.courbe(fn, n, o), o.flou ?? 9);
+      if (!aire) return c;
+      const part = !Number.isFinite(c.t) ? 1 : Math.max(0, Math.min(1, (c.t - cur0) / Math.max(1e-6, c.cur - cur0)));
+      if (part <= 0) return c;
+      const pts = []; for (let i = 0; i <= n; i++) { const p = fn(i / n); if (p) pts.push(p); }
+      const m = Math.max(2, Math.round(pts.length * part)), vus = pts.slice(0, m);
+      if (vus.length < 2) return c;
+      const ctx = c.ctx, haut = Math.min(...pts.map(p => p[1])), bas = aire.base, a = aire.alpha ?? .3;
+      ctx.save(); ctx.globalCompositeOperation = 'destination-over';   // sous la craie déjà écrite (axes, graduations, courbe)
+      const g = ctx.createLinearGradient(0, Math.min(haut, bas), 0, Math.max(haut, bas));
+      const [g0, g1] = haut <= bas ? [a, 0] : [0, a];
+      g.addColorStop(0, `rgba(${aire.rgb},${g0})`); g.addColorStop(1, `rgba(${aire.rgb},${g1})`);
+      ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(vus[0][0], bas); vus.forEach(p => ctx.lineTo(p[0], p[1])); ctx.lineTo(vus[vus.length - 1][0], bas); ctx.closePath(); ctx.fill();
+      ctx.restore(); return c;
+    },
+    /** Perle ombrée (point remarquable) : rgb clair, moyen, sombre. */
+    perle(ctx, x, y, r, t = ['#fff7c2', '#facc15', '#854d0e']) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(x + 1.5, y + 3.5, r, r * .7, 0, 0, Math.PI * 2); ctx.fill();
+      const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r); g.addColorStop(0, t[0]); g.addColorStop(.45, t[1]); g.addColorStop(1, t[2]);
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.beginPath(); ctx.ellipse(x - r * .38, y - r * .42, r * .22, r * .14, -.6, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    },
+  };
+  window.OndesTableau = { Scene, VW, VH, Net };
 })();
