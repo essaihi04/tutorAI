@@ -85,15 +85,17 @@ const ANIMATIONS = `
   [data-scene-cours] [data-pied-cours] button[data-suite] { height: 32px; padding-left: 14px; padding-right: 14px; font-size: 14px }
   [data-scene-cours] [data-pied-cours] .px-3 { padding-left: 9px; padding-right: 9px }
   /* le tableau des questions : énoncé et choix plus serrés, les choix d'un QCM sur deux colonnes, tout sans défiler */
-  .tableau-questions > div:first-child { padding-top: 2px; padding-bottom: 2px }
-  .tableau-questions .p-4, .tableau-questions .p-5 { padding: 8px 10px }
-  .tableau-questions .text-xl { font-size: 16px; line-height: 1.25 }
-  .tableau-questions .text-lg { font-size: 14px; line-height: 1.25 }
+  [data-scene-cours]:has(.tableau-questions) > header { display: none }   /* le titre se cache, les questions prennent sa hauteur */
+  .tableau-questions > div:first-child { padding-top: 1px; padding-bottom: 1px }
+  .tableau-questions > div:first-child .text-base { font-size: 13px }
+  .tableau-questions .p-4, .tableau-questions .p-5 { padding: 5px 9px }
+  .tableau-questions .text-xl { font-size: 15px; line-height: 1.25 }
+  .tableau-questions .text-lg { font-size: 13.5px; line-height: 1.25 }
   .tableau-questions .text-base { font-size: 14px }
   .tableau-questions [data-choix] { margin-top: 4px }
   .tableau-questions [data-choix='qcm'] { display: grid; grid-template-columns: 1fr 1fr; gap: 4px }
   .tableau-questions [data-choix='qcm'] > * { margin-top: 0 !important }
-  .tableau-questions [data-choix] > button { padding-top: 4px; padding-bottom: 4px }
+  .tableau-questions [data-choix] > button { padding-top: 3px; padding-bottom: 3px }
   .tableau-questions .mt-3 { margin-top: 6px }
   .tableau-questions .mt-2 { margin-top: 4px }
   /* les bulles (cahier, explication, question de l'élève) : toute la hauteur du tableau, texte à la taille de l'écran */
@@ -102,6 +104,14 @@ const ANIMATIONS = `
   [data-scene-cours] [data-bulle] .text-xl { font-size: 16px; line-height: 1.3 }
   [data-scene-cours] [data-bulle] .text-lg { font-size: 14px; line-height: 1.35 }
   [data-scene-cours] [data-bulle] .mt-3 { margin-top: 6px }
+  /* la question d'observation, sous la figure : une bande fine, pour laisser la hauteur à la figure */
+  [data-scene-cours] [data-observation] { padding: 3px 10px }
+  [data-scene-cours] [data-observation] p { font-size: 14px; line-height: 1.25 }
+  [data-scene-cours] [data-observation] button { padding-top: 4px; padding-bottom: 4px; font-size: 13px }
+  [data-scene-cours] [data-bulle] textarea { min-height: 0; height: 40px; padding-top: 6px; padding-bottom: 6px }
+  [data-scene-cours] [data-bulle] .py-2 { padding-top: 3px; padding-bottom: 3px }
+  [data-scene-cours] [data-bulle] .mt-2 { margin-top: 4px }
+  [data-scene-cours] [data-bulle] .gap-3 { gap: 6px }
 }
 @keyframes tableau-descend { from { transform: translateY(-108%); opacity: .5 } 60% { transform: translateY(1.5%) } to { transform: none; opacity: 1 } }
 @keyframes question-apparait { from { opacity: 0; transform: translateY(-10px) } to { opacity: 1; transform: none } }

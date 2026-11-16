@@ -99,7 +99,7 @@ export function Touches({ matiere = '', onTaper, desactive = false }: { matiere?
         <div className="mb-2 flex items-center gap-1" role="tablist">
           {onglets.map(o => (
             <button key={o} type="button" onClick={() => choisir(o)} role="tab" aria-selected={actuel === o}
-              className={`min-h-[36px] rounded-lg px-3 text-sm ${actuel === o ? 'bg-amber-200 text-black' : 'bg-white/10 hover:bg-white/20'}`}>{o}</button>
+              className={`min-h-[36px] rounded-lg px-3 text-sm court:min-h-[26px] ${actuel === o ? 'bg-amber-200 text-black' : 'bg-white/10 hover:bg-white/20'}`}>{o}</button>
           ))}
         </div>
       )}
@@ -113,7 +113,7 @@ export function Touches({ matiere = '', onTaper, desactive = false }: { matiere?
                 return (
                   <button key={`${l}-${i}`} type="button" disabled={desactive}
                     onClick={() => onTaper(typeof t === 'string' ? (t === '[ ]' ? '[]' : t) : t.t)} title={typeof t === 'string' ? t : t.titre || t.t.trim()}
-                    className="min-h-[44px] rounded-lg border border-white/10 bg-white/[0.06] px-1 text-[17px] leading-none hover:bg-white/15 active:bg-amber-200/30 disabled:opacity-40"
+                    className="min-h-[44px] rounded-lg border border-white/10 bg-white/[0.06] px-1 text-[17px] leading-none hover:bg-white/15 active:bg-amber-200/30 disabled:opacity-40 court:min-h-[32px] court:text-[15px]"
                     style={{ touchAction: 'manipulation', gridColumn: l.length > 4 ? 'span 2' : undefined }}>
                     {l}
                   </button>

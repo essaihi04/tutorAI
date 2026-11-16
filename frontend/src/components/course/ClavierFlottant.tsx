@@ -172,6 +172,7 @@ export default function ClavierFlottant({ droite = 0, bas = 76 }: { droite?: num
     insererAuCurseur(c.ref.current, c.lire(), t, c.poser);
   }, []);
   const etroit = typeof window !== 'undefined' && window.innerWidth < 640;
+  const court = typeof window !== 'undefined' && window.matchMedia('(max-height: 520px) and (orientation: landscape)').matches;
   // juste au-dessus de la barre du bas du lecteur (elle tient sur une ou deux lignes) : jamais sur ses boutons
   const [basBarre, setBasBarre] = useState(bas);
   useEffect(() => {
@@ -186,7 +187,8 @@ export default function ClavierFlottant({ droite = 0, bas = 76 }: { droite?: num
   }, [e.ouvert, bas]);
   const style = useMemo(() => (etroit
     ? { left: 0, right: 0, bottom: 0, height: `${HAUTEUR_TELEPHONE_VH}vh` }
-    : { right: droite + 12, bottom: basBarre, width: 'min(340px, 34vw)', maxHeight: `calc(100% - ${basBarre + 64}px)` }), [etroit, droite, basBarre]);
+    // téléphone en paysage : la hauteur manque, il monte jusqu'en haut de l'écran pour montrer ses touches
+    : { right: droite + 12, bottom: basBarre, width: 'min(340px, 34vw)', maxHeight: `calc(100% - ${basBarre + (court ? 6 : 64)}px)` }), [etroit, court, droite, basBarre]);
   if (!e.ouvert) return null;
   return (
     <aside role="dialog" aria-label="Clavier scientifique"
@@ -195,7 +197,7 @@ export default function ClavierFlottant({ droite = 0, bas = 76 }: { droite?: num
         fontFamily: 'system-ui, "Segoe UI Symbol", "Cambria Math", sans-serif' }}
       // un appui sur le clavier ne fait jamais perdre le curseur du champ
       onMouseDown={ev => ev.preventDefault()}>
-      <div className="flex shrink-0 cursor-grab items-center gap-2 border-b border-white/10 px-3 py-1.5 select-none"
+      <div className="flex shrink-0 cursor-grab items-center gap-2 border-b border-white/10 px-3 py-1.5 select-none court:py-0"
         style={{ touchAction: 'pan-y' }}
         // un glissé vers la droite le range
         onPointerDown={ev => { glisse.current = { x: ev.clientX, y: ev.clientY }; ev.currentTarget.setPointerCapture?.(ev.pointerId); }}
@@ -203,13 +205,13 @@ export default function ClavierFlottant({ droite = 0, bas = 76 }: { droite?: num
         onPointerUp={ev => { const g = glisse.current; glisse.current = null; setDecale(0); if (g && ev.clientX - g.x > 70) clavier.fermer(); }}
         onPointerCancel={() => { glisse.current = null; setDecale(0); }}>
         <span className="text-sm text-amber-100">⌨ Clavier</span>
-        <span className="text-[11px] text-white/35">glisse → pour ranger</span>
+        <span className="text-[11px] text-white/35 court:hidden">glisse → pour ranger</span>
         <button type="button" onClick={clavier.fermer} onPointerDown={ev => ev.stopPropagation()} aria-label="Fermer le clavier"
-          className="ml-auto min-h-[36px] min-w-[36px] rounded-lg text-xl text-white/60 hover:bg-white/10">×</button>
+          className="ml-auto min-h-[36px] min-w-[36px] rounded-lg text-xl text-white/60 hover:bg-white/10 court:min-h-[28px]">×</button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto p-2">
         {e.champ?.suggestions && <Suggestions s={e.champ.suggestions} matiere={e.matiere} onTaper={taper} />}
-        {!e.champ && <p className="mb-2 text-xs text-white/55">Touche un champ de réponse : le clavier y écrira.</p>}
+        {!e.champ && <p className="mb-2 text-xs text-white/55 court:hidden">Touche un champ de réponse : le clavier y écrira.</p>}
         <Touches matiere={e.matiere} onTaper={taper} desactive={!e.champ} />
       </div>
     </aside>

@@ -290,6 +290,10 @@ export default function CoursePlayer({
   const commencer = useCallback(() => {
     setStarted(true);
     setPleinEcranVoulu(true);
+    // Téléphone en paysage (16 novembre 2026) : la barre du navigateur prend un quart de la hauteur ; le plein écran
+    // la cache et la rend au tableau. Demandé sur le geste de l'élève (obligatoire) ; refusé (iPhone) : rien ne change.
+    if (window.matchMedia('(max-height: 520px) and (orientation: landscape) and (pointer: coarse)').matches && !document.fullscreenElement)
+      document.body.requestFullscreen?.().catch(() => {});
   }, []);
 
   // En concentration, le cours prend toute la place dès qu'il démarre.
@@ -419,7 +423,7 @@ export default function CoursePlayer({
         {started && mode === 'concentration' && <ClavierFlottant droite={tuteur3D ? COLONNE_TUTEUR : 0} bas={memoire.ecran ? 16 : 76} />}
         {started && memoire.ecran && (
           // le tuteur 3D garde sa colonne à droite : il reste visible et parle pendant le cahier, le rappel, l'exercice
-          <div className={`absolute inset-0 z-[110] flex items-stretch justify-center bg-[#07101f]/92 p-2 backdrop-blur-sm sm:p-3 ${tuteur3D ? 'md:pr-[var(--colonne-tuteur)]' : ''}`}
+          <div className={`absolute inset-0 z-[110] flex items-stretch justify-center bg-[#07101f]/92 p-2 backdrop-blur-sm sm:p-3 ${tuteur3D ? 'md:pr-[var(--colonne-tuteur)] court:pr-[var(--colonne-tuteur)] court:p-1' : ''}`}
             style={{ ['--colonne-tuteur' as string]: `${COLONNE_TUTEUR + placeClavier}px`, paddingRight: !tuteur3D && placeClavier ? placeClavier : undefined,
               paddingBottom: hauteurClavierTelephone(clavierOuvert) || undefined }}>
             {/* large (14 novembre 2026) : le cahier et ses dessins prennent la place de l'écran au lieu de rester petits */}
@@ -453,18 +457,18 @@ export default function CoursePlayer({
           vitesse, ni loupe, ni plein écran — sa barre d'outils les porte.
           Seulement ce qui lui échappe, l'ordre des diapositives. */}
       {!started && (
-        <div className="absolute inset-0 z-[120] grid place-items-center bg-[#050b14]/90 backdrop-blur-sm p-6">
+        <div className="absolute inset-0 z-[120] grid place-items-center bg-[#050b14]/90 backdrop-blur-sm p-6 court:p-2">
           <div className="max-w-md text-center">
-            <div className="text-5xl">🎓</div>
-            <h2 className="mt-4 text-2xl font-semibold">{deck.title}</h2>
-            <p className="mt-2 text-sm text-white/60">
+            <div className="text-5xl court:hidden">🎓</div>
+            <h2 className="mt-4 text-2xl font-semibold court:mt-0 court:text-lg">{deck.title}</h2>
+            <p className="mt-2 text-sm text-white/60 court:mt-1 court:text-xs">
               {progress?.status === 'completed'
                 ? 'Ce cours est déjà validé. Tu peux le refaire entièrement sans perdre ta réussite.'
                 : 'Le professeur écrit au tableau et explique à voix haute. Tu peux lever la main à tout moment : le cours se met en pause.'}
             </p>
             <button
               onClick={progress?.status === 'completed' ? restartFromBeginning : commencer}
-              className="mt-6 rounded-2xl bg-gradient-to-r from-cyan-500 to-indigo-500 px-6 py-3 font-semibold shadow-lg shadow-cyan-500/20"
+              className="mt-6 rounded-2xl bg-gradient-to-r from-cyan-500 to-indigo-500 px-6 py-3 font-semibold shadow-lg shadow-cyan-500/20 court:mt-3 court:py-2"
             >
               {progress?.status === 'completed' ? '↺ Recommencer depuis le début' : initialIndex > 0 ? 'Reprendre le cours' : 'Commencer le cours'}
             </button>
