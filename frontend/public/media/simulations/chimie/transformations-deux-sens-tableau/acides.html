@@ -193,7 +193,7 @@ const rgba = ([r, g, b, a], k = 1) => `rgba(${Math.round(r)},${Math.round(g)},${
 const melange = (c1, c2, f) => c1.map((v, i) => lerp(v, c2[i], clamp(f, 0, 1)));
 const eclair = (c, k) => [lerp(c[0], 255, k), lerp(c[1], 255, k), lerp(c[2], 255, k), c[3]];
 const sombre = (c, k) => [c[0] * (1 - k), c[1] * (1 - k), c[2] * (1 - k), Math.min(1, c[3] * (1 + k * .4))];
-const EAU = [222, 234, 244, .12];
+const EAU = [112, 194, 248, .34];
 
 const Peint = {
   sphere(ctx, x, y, r, [clair, milieu, foncé], a = 1) {
@@ -203,25 +203,36 @@ const Peint = {
   },
   /** Bécher vu de face : verre, solution (dégradé, ménisque, reflet), bec, graduations. niveau 0 → 1. */
   becher(ctx, B, niveau, col, a = 1) {
+    // Bécher repeint (16 novembre 2026, « plus réaliste, couleurs vives ») : verre net à bord ourlé, eau claire et lumineuse
+    // (une solution incolore se voit comme de l'eau légèrement bleutée, plus un voile gris), ménisque, reflets francs.
     const { x, y, w, h } = B, ep = 3, fond = y + h, yS = fond - ep - niveau * (h - 16);
+    // Solution incolore (ou presque) : peinte comme une eau claire un peu bleutée ; le bleu s'efface en douceur dès qu'une teinte apparaît.
+    const pale = Math.min(col[0], col[1], col[2]) >= 180 ? Math.min(1, Math.max(0, (.27 - col[3]) / .1)) : 0;
+    const c3 = pale > 0 ? [col[0] + (112 - col[0]) * pale, col[1] + (194 - col[1]) * pale, col[2] + (248 - col[2]) * pale, col[3] + (.36 - col[3]) * pale] : col;
     ctx.save(); ctx.globalAlpha = a;
-    ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.beginPath(); ctx.ellipse(x + w / 2 + 3, fond + 4, w / 2, 4.5, 0, 0, 7); ctx.fill();
-    ctx.fillStyle = 'rgba(210,230,250,.06)'; ctx.beginPath(); ctx.roundRect(x, y, w, h, [2, 2, 10, 10]); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,.26)'; ctx.beginPath(); ctx.ellipse(x + w / 2 + 3, fond + 4, w / 2, 4.5, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(200,228,250,.07)'; ctx.beginPath(); ctx.roundRect(x, y, w, h, [2, 2, 10, 10]); ctx.fill();
     if (niveau > .004) {
       ctx.save(); ctx.beginPath(); ctx.roundRect(x + ep, y, w - 2 * ep, h - ep, [0, 0, 8, 8]); ctx.clip();
-      const g = ctx.createLinearGradient(0, yS, 0, fond); g.addColorStop(0, rgba(eclair(col, .18))); g.addColorStop(1, rgba(sombre(col, .22)));
+      const g = ctx.createLinearGradient(x, 0, x + w, 0);
+      g.addColorStop(0, rgba(sombre(c3, .3))); g.addColorStop(.3, rgba(eclair(c3, .12))); g.addColorStop(.62, rgba(eclair(c3, .3))); g.addColorStop(1, rgba(sombre(c3, .28)));
       ctx.fillStyle = g; ctx.fillRect(x, yS, w, fond - yS);
-      ctx.fillStyle = 'rgba(255,255,255,.07)'; ctx.fillRect(x + w * .64, yS + 5, w * .09, Math.max(0, fond - yS - 10));
+      const v = ctx.createLinearGradient(0, yS, 0, fond); v.addColorStop(0, 'rgba(255,255,255,.1)'); v.addColorStop(.5, 'rgba(255,255,255,0)'); v.addColorStop(1, 'rgba(0,0,0,.16)');
+      ctx.fillStyle = v; ctx.fillRect(x, yS, w, fond - yS);
+      ctx.fillStyle = 'rgba(255,255,255,.1)'; ctx.fillRect(x + w * .64, yS + 5, w * .08, Math.max(0, fond - yS - 10));
       ctx.restore();
-      ctx.fillStyle = rgba(eclair(col, .35), 1.1); ctx.beginPath(); ctx.ellipse(x + w / 2, yS, w / 2 - ep, 3, 0, 0, 7); ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,.32)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x + ep + 2, yS); ctx.lineTo(x + w - ep - 2, yS); ctx.stroke();
+      ctx.fillStyle = rgba(eclair(c3, .45), 1.25); ctx.beginPath(); ctx.ellipse(x + w / 2, yS, w / 2 - ep, 3.2, 0, 0, 7); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(x + w / 2, yS, w / 2 - ep - 1, 3.2, 0, Math.PI * 1.05, Math.PI * 1.95); ctx.stroke();
     }
-    ctx.strokeStyle = 'rgba(225,238,250,.78)'; ctx.lineWidth = 2.2; ctx.lineJoin = 'round';
+    ctx.fillStyle = 'rgba(220,238,250,.3)'; ctx.fillRect(x + 8, fond - 3, w - 16, 3);
+    ctx.strokeStyle = 'rgba(232,243,252,.9)'; ctx.lineWidth = 2.2; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(x - 6, y - 4); ctx.quadraticCurveTo(x - 1, y - 2, x, y + 5); ctx.lineTo(x, fond - 10); ctx.quadraticCurveTo(x, fond, x + 10, fond);
     ctx.lineTo(x + w - 10, fond); ctx.quadraticCurveTo(x + w, fond, x + w, fond - 10); ctx.lineTo(x + w, y); ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,.14)'; ctx.fillRect(x + w * .11, y + 12, w * .05, h - 28);
-    ctx.strokeStyle = 'rgba(225,238,250,.35)'; ctx.lineWidth = 1;
-    for (let k = 1; k <= 4; k++) { const gy = fond - 8 - k * (h - 24) / 5; ctx.beginPath(); ctx.moveTo(x + w - 14, gy); ctx.lineTo(x + w - 4, gy); ctx.stroke(); }
+    ctx.strokeStyle = 'rgba(240,248,255,.55)'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.ellipse(x + w / 2, y + 1, w / 2, 2.4, 0, 0, Math.PI); ctx.stroke();
+    const gl = ctx.createLinearGradient(x + w * .09, 0, x + w * .2, 0); gl.addColorStop(0, 'rgba(255,255,255,.34)'); gl.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = gl; ctx.fillRect(x + w * .09, y + 12, w * .11, h - 28);
+    ctx.strokeStyle = 'rgba(232,243,252,.5)'; ctx.lineWidth = 1;
+    for (let k = 1; k <= 4; k++) { const gy = fond - 8 - k * (h - 24) / 5; ctx.beginPath(); ctx.moveTo(x + w - (k % 2 ? 12 : 16), gy); ctx.lineTo(x + w - 4, gy); ctx.stroke(); }
     ctx.restore();
     return yS;
   },
