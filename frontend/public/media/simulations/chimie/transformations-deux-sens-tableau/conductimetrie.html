@@ -357,7 +357,10 @@ function ions(ctx, Z, liste, t, a = 1) {
     const h1 = ((i * 7919 + 3) % 97) / 97, h2 = ((i * 104729 + 13) % 89) / 89, h3 = ((i * 31337 + 7) % 83) / 83;
     const vx = o.v * (.55 + .9 * h3) / (Z.x1 - Z.x0), vy = o.v * (.5 + .9 * h1) / (Z.y1 - Z.y0);
     const x = Z.x0 + tri(h1 * 2 + vx * t * (h2 > .5 ? 1 : -1)) * (Z.x1 - Z.x0), y = Z.y0 + tri(h2 * 2 + vy * t) * (Z.y1 - Z.y0);
-    Peint.sphere(ctx, x, y, o.r ?? 5, o.col);
+    // Une vraie molécule ou un vrai ion quand on le reconnaît (H₃O⁺, CH₃COO⁻, CH₃COOH, Cl⁻, Na⁺, HO⁻), sinon une sphère.
+    const mod = MODELE_ION.get(o.col);
+    if (mod) window.Rendu.molecule(ctx, mod[0], x, y, mod[1], (i * 1.3 + t * .8 * (i % 2 ? 1 : -1)) % 6.3, 1, { hBlanc: true });
+    else Peint.sphere(ctx, x, y, o.r ?? 5, o.col);
     if (o.hl) { ctx.strokeStyle = '#facc15'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, (o.r ?? 5) + 5, 0, 7); ctx.stroke(); }
     o.pos = [x, y];
   });
@@ -413,6 +416,7 @@ function eqn2(c, x, y, gauche, droite, o = {}) {
 }
 const ACIDE = [222, 234, 244, .16];                      // solutions acides : incolores, comme en vrai
 const H3O = ['#ffe1c7', '#f97316', '#7c2d12'], MOL = ['#eef1f4', '#9aa3ab', '#4b535b'];
+const MODELE_ION = new Map([[H3O, ['H3O', .62]], [AC, ['CH3COO', .5]], [MOL, ['CH3COOH', .5]], [CL, ['Cl', .7]], [NA, ['Na', .7]], [HO, ['HO', .7]]]);
 /** pH-mètre peint : boîtier gris, afficheur vert (pH à 0,1 près). */
 function phmetre(c, A, texte) {
   c.direct(() => {
@@ -605,9 +609,9 @@ function vueIons(c, M) {
     loupe(c, L1, l1, a, M.S.t);
     c.texte('loupe : acide chlorhydrique', L2.x, L2.y - L2.r - 8, { couleur: 'faible', taille: 14, align: 'center' });
     loupe(c, L2, l2, a, M.S.t);
-    c.direct(() => { const ctx = c.ctx; [[H3O, 200], [AC, 224], [CL, 248], [MOL, 272]].forEach(([col, y]) => Peint.sphere(ctx, 448, y - 5, 5, col, a)); });
-    c.texte('H₃O⁺', 460, 200, { couleur: 'orange', taille: 16 }); c.texte('CH₃COO⁻', 460, 224, { couleur: 'vert', taille: 16 });
-    c.texte('Cl⁻', 460, 248, { couleur: 'cyan', taille: 16 }); c.texte('CH₃COOH', 460, 272, { couleur: 'blanc', taille: 16 });
+    c.direct(() => { const ctx = c.ctx; [[H3O, 200], [AC, 224], [CL, 248], [MOL, 272]].forEach(([col, y]) => { const m = MODELE_ION.get(col); window.Rendu.molecule(ctx, m[0], 446, y - 6, m[1], 0, a, { hBlanc: true }); }); });
+    c.texte('H₃O⁺', 460, 200, { couleur: 'blanc', taille: 16 }); c.texte('CH₃COO⁻', 460, 224, { couleur: 'blanc', taille: 16 });
+    c.texte('Cl⁻', 460, 248, { couleur: 'vert', taille: 16 }); c.texte('CH₃COOH', 460, 272, { couleur: 'blanc', taille: 16 });
     c.texte('(n’a pas réagi)', 460, 292, { couleur: 'faible', taille: 14 });
   });
   return zoneEcriture(c, M, [
@@ -756,7 +760,7 @@ function voir(M) {
   const v = M.S.vue, m = [`Vue « ${v} » (${TITRES[v]}), ${M.etat()}. Étape en cours : ${etapeEnCours(M)}.`];
   if (v === 'ions') {
     m.push(M.commence('deux_bechers') ? `Deux béchers d’acide incolore de même concentration C = 1,0·10⁻² mol/L, une cellule dans chacun, reliée à un conductimètre. Afficheur de l’acide éthanoïque : ${valeurAff(M, 'afficheur_1', S_A, x => fr(x, 1) + ' mS/m')} ; afficheur de l’acide chlorhydrique : ${valeurAff(M, 'afficheur_2', S_B, x => fr(x, 0) + ' mS/m')}.` : 'Rien encore.');
-    if (M.commence('loupe')) m.push('Deux loupes à droite : dans l’acide éthanoïque, 12 molécules CH₃COOH grises (qui n’ont pas réagi) et seulement 1 ion H₃O⁺ (orange) et 1 ion CH₃COO⁻ (vert) ; dans l’acide chlorhydrique, 12 ions H₃O⁺ et 12 ions Cl⁻ (cyan).');
+    if (M.commence('loupe')) m.push('Deux loupes à droite : dans l’acide éthanoïque, 12 molécules CH₃COOH (modèles en boules : C noir, O rouge, H blanc) qui n’ont pas réagi et seulement 1 ion H₃O⁺ et 1 ion CH₃COO⁻ ; dans l’acide chlorhydrique, 12 ions H₃O⁺ et 12 ions Cl⁻ (sphères vertes).');
   }
   if (v === 'calcul' && M.commence('donnees')) m.push(`À droite : bécher d’acide éthanoïque, cellule, conductimètre qui affiche ${M.p('donnees') > .6 ? '15,6 mS/m' : 'rien encore'}.`);
   if (v === 'national' && M.commence('donnees')) m.push(`En haut à droite : conductimètre qui affiche ${M.p('donnees') > .5 ? '8,6 mS/m (σ = 8,6·10⁻³ S/m)' : 'rien encore'}.`);

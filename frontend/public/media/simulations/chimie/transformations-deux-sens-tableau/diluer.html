@@ -103,17 +103,19 @@ function dessinerVue(c, D, large) {
   c.repere('loupe', LP.x - LP.r - 6, LP.y - LP.r - 6, 2 * LP.r + 12, 2 * LP.r + 12, 'la loupe : 25 molécules d’acide');
   const n = cu.mes > 0 ? Math.round(25 * m.tau * Math.min(1, cu.mes * 1.4)) : 0;
   c.direct(() => {
-    // Les entités en billes ombrées, mêmes couleurs que la légende : acide blanc, ion éthanoate violet, ion oxonium jaune.
+    // Les entités en modèles moléculaires ombrés, comme la légende.
     const reagi = new Set(ORDRE.slice(0, n)), sph = window.Peinture.sphere, ctx = c.ctx;
     for (let i = 0; i < 25; i++) {
       const gx = LP.x + (i % 5 - 2) * LP.pas, gy = LP.y + (Math.floor(i / 5) - 2) * LP.pas;
-      if (reagi.has(i)) { sph(ctx, gx - 6, gy, 5.5, COUL.base); sph(ctx, gx + 6, gy + 2, 4.5, COUL.oxonium); } else sph(ctx, gx, gy, 5.5, COUL.acide);
+      // Vraies molécules (C noir, O rouge, H blanc ; le H⁺ échangé en jaune) : CH₃COOH entière, ou CH₃COO⁻ + H₃O⁺ après réaction.
+      const R = window.Rendu, ang = Math.sin(i * 2.3) * .25;
+      if (reagi.has(i)) { R.molecule(ctx, 'CH3COO', gx - 4, gy - 1, .5, ang); R.molecule(ctx, 'H3O', gx + 8, gy + 4, .5); } else R.molecule(ctx, 'CH3COOH', gx - 1, gy, .55, ang);
     }
     window.Peinture.loupeCadre(ctx, LP.x, LP.y, LP.r);
     c.texte(`${n} sur 25 ont réagi`, LP.x, LP.y + LP.r + 22, { couleur: 'jaune', taille: 16, align: 'center' });
   });
   const LG = large ? [-136, -36, 62] : [-92, -10, 64];   // tableau large : légende plus grosse (17 px à l'écran), entrées écartées
-  c.direct(() => { const yl = LP.y + LP.r + 46; window.Peinture.sphere(c.ctx, LP.x + LG[0], yl, 4.5, COUL.acide); window.Peinture.sphere(c.ctx, LP.x + LG[1], yl, 4.5, COUL.base); window.Peinture.sphere(c.ctx, LP.x + LG[2], yl, 4.5, COUL.oxonium); });
+  c.direct(() => { const yl = LP.y + LP.r + 46, R = window.Rendu; R.molecule(c.ctx, 'CH3COOH', LP.x + LG[0] - 4, yl, .45); R.molecule(c.ctx, 'CH3COO', LP.x + LG[1] - 4, yl, .45); R.molecule(c.ctx, 'H3O', LP.x + LG[2], yl, .55); });
   c.texte('CH₃COOH', LP.x + LG[0] + 8, LP.y + LP.r + 51, { couleur: 'faible', taille: 13 });
   c.texte('CH₃COO⁻', LP.x + LG[1] + 8, LP.y + LP.r + 51, { couleur: 'faible', taille: 13 });
   c.texte('H₃O⁺', LP.x + LG[2] + 8, LP.y + LP.r + 51, { couleur: 'faible', taille: 13 });
@@ -197,7 +199,7 @@ const DER = window.Deroule({
   texte: 'Acide éthanoïque dilué : C = 1,0·10⁻² mol/L, pH 3,4, τ = 0,040 ; 1,0·10⁻³ mol/L, pH 3,9, τ = 0,13 ; 1,0·10⁻⁴ mol/L, pH 4,5, τ = 0,32 (τ = 10^(−pH)/C). La loupe montre 25 molécules d’acide versées : 1, puis 3, puis 8 ont cédé leur proton à l’eau. Plus la solution est diluée, plus τ est grand ; le pH monte aussi (moins d’ions H₃O⁺ par litre). Le curseur C (1,0·10⁻¹ à 1,0·10⁻⁵ mol/L) prépare une autre solution.',
   explication: [
     { repere: 'afficheur', texte: 'Le pH-mètre se stabilise : c’est lui qui donne le pH de chaque solution.' },
-    { repere: 'loupe', texte: 'Dans la loupe, vingt-cinq molécules d’acide : les paires violet-jaune ont cédé leur proton à l’eau.' },
+    { repere: 'loupe', texte: 'Dans la loupe, vingt-cinq molécules d’acide : les paires ion éthanoate et ion oxonium ont cédé leur proton à l’eau.' },
     { repere: 'barres', texte: 'Plus on dilue, plus la barre de tau monte.' },
   ],
 });
