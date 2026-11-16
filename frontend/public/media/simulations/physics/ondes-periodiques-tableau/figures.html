@@ -51,12 +51,16 @@ const craie = scene.craie;
  * multipliées par KX, sans déformer l’écriture ; cercles et cadres gardent leur forme. Toutes les figures sont dessinées
  * pour 760 × 420 : leurs lectures (λ, T, divisions) restent justes, seules les distances à l’écran s’allongent. */
 let KX = 1, brut = 0;
+const E2020 = { L: 760 };
 scene.cadre = function (graine) {
   const W = craie.W, H = craie.H, VW = 760, VH = 420;
   craie.debut(graine, S.tw);
   // Ondes circulaires et arcs : l'étirement en ferait des ellipses, ces figures restent en 760 × 420.
   KX = fig === 'fig_enonce_2020' || fig === 'fig_diffraction_a_completer' ? 1 : Math.min(1.55, Math.max(1, VH * W / Math.max(1, H) / VW));
-  const LW = VW * KX, s = Math.min(W / LW, H / VH);
+  // 16 novembre 2026 (« remets en page les vues qui laissent une bande vide ») : l'énoncé 2020 (cercles, donc sans
+  // étirement) prend lui aussi toute la largeur ; ses calculs, à droite, sont agrandis (E2020, dans la figure).
+  E2020.L = fig === 'fig_enonce_2020' ? Math.min(VW * 1.55, Math.max(VW, VH * W / Math.max(1, H))) : VW;
+  const LW = fig === 'fig_enonce_2020' ? E2020.L : VW * KX, s = Math.min(W / LW, H / VH);
   scene.L = LW; scene.s = s; scene.ox = (W - LW * s) / 2; scene.oy = (H - VH * s) / 2;
   craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
   craie.echelle = s; craie.tailleMin = KX > 1.25 && s >= 0.8 ? 18 : 15; craie.cadre = { w: LW, h: VH, haut: 0 };   // tableau large et haut : écriture ≥ 18 px
@@ -437,6 +441,11 @@ const DESSINS = {
   fig_enonce_2020(c) {
     // Redessinée d’après le national 2020 N (exercice II) : quatre rides circulaires autour de S, 1 cm couvre deux intervalles.
     const xs = 230, ys = 196, L = 40;
+    // Tableau large : les calculs (x ≥ 464) agrandis de k à droite de la cuve, l'ensemble centré dans la largeur E2020.L.
+    const kC = Math.min(1.45, Math.max(1, (E2020.L - 500) / 290)), largeurTout = 464 + 278 * kC, dX = Math.max(0, (E2020.L - largeurTout - 40) / 2);
+    const T0 = c.ctx.getTransform(), ech0 = c.echelle;
+    c.ctx.translate(dX, 0);
+    const calculs = () => { c.ctx.translate(464, 226); c.ctx.scale(kC, kC); c.ctx.translate(-464, -226); c.echelle = ech0 * kC; };
     peindre(c, ctx => {   // la cuve vue de dessus : rides circulaires peintes sous les cercles de l'énoncé
       const r = { x: xs - 4 * L - 22, y: ys - 4 * L - 22, w: 8 * L + 44, h: 8 * L + 44 };
       ctx.save(); E.chemin(ctx, r); ctx.clip(); E.fond(ctx, r, { reflets: false });
@@ -457,6 +466,7 @@ const DESSINS = {
     c.pause(.4);
     c.texte('1', xs + 2.5 * L, ys - 8, { couleur: 'cyan', align: 'center', taille: 17 }).texte('2', xs + 3.5 * L, ys - 8, { couleur: 'cyan', align: 'center', taille: 17 });
     c.repere('intervalles', xs + 2 * L, ys - 26, 2 * L, 26, 'deux intervalles');
+    calculs();
     const xt = 470;
     c.texte('1 cm couvre 2 intervalles :', xt, 110, { couleur: 'blanc', taille: 18, max: 270 });
     c.texte('1 cm = 2 λ  →  λ = 0,5 cm', xt, 144, { couleur: 'vert', taille: 18, max: 270 });
@@ -470,6 +480,7 @@ const DESSINS = {
     c.texte('d = 5 cm : τ = d / v = 0,2 s', xt, 352, { couleur: 'vert', taille: 18, max: 270 });
     c.repere('calcul_n', xt - 6, 216, 276, 146, 'N = 50 Hz ; τ = 0,2 s');
     marque(c, 'fin');
+    c.ctx.setTransform(T0); c.echelle = ech0;
   },
 };
 
