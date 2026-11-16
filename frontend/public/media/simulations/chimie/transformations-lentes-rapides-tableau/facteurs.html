@@ -388,22 +388,29 @@ const Peint = {
   },
 };
 const VERT = ['#d6ffe0', '#3fbf62', '#0f5a23'], ROUGE = ['#ffd4d4', '#e04848', '#6a1010'];
-/** Loupe : un cercle partagé en deux moitiés ; dans chacune, des entités (I⁻ vertes, H₂O₂ rouges) qui s’agitent.
+/** Loupe : un cercle partagé en deux moitiés ; dans chacune, des entités (I⁻ violets, H₂O₂ rouge et blanc) qui s’agitent.
  *  `g` et `d` = { nI, nH, v } (v : vitesse, px/s, pour l’œil). Le temps est celui de la scène : tout se fige à l’arrêt. */
 function entites(ctx, cx, cy, r, g, d, t, a = 1) {
   ctx.save(); ctx.globalAlpha = a;
   ctx.beginPath(); ctx.arc(cx, cy, r - 2, 0, 7); ctx.clip();
-  const gl = ctx.createRadialGradient(cx - r * .3, cy - r * .3, 4, cx, cy, r); gl.addColorStop(0, 'rgba(230,245,255,.10)'); gl.addColorStop(1, 'rgba(200,225,245,.03)');
-  ctx.fillStyle = gl; ctx.fillRect(cx - r, cy - r, 2 * r, 2 * r);
-  const tri = u => { const m = ((u % 2) + 2) % 2; return m < 1 ? m : 2 - m; };
+  window.Rendu.lentille(ctx, cx, cy, r, [190, 150, 90]);
+  // Rebond adouci sur les bords (la vitesse ralentit un peu près de la paroi : plus de saccade au demi-tour).
+  const tri = u => { const m = ((u % 2) + 2) % 2, l = m < 1 ? m : 2 - m; return l * l * (3 - 2 * l) * .35 + l * .65; };
   for (const [cote, o] of [[-1, g], [1, d]]) {
-    const x0 = cote < 0 ? cx - r * .82 : cx + 7, x1 = cote < 0 ? cx - 7 : cx + r * .82, y0 = cy - r * .55, y1 = cy + r * .55;
-    const n = o.nI + o.nH;
+    const x0 = cote < 0 ? cx - r * .82 : cx + 9, x1 = cote < 0 ? cx - 9 : cx + r * .82, y0 = cy - r * .55, y1 = cy + r * .55;
+    const n = o.nI + o.nH, pos = [];
     for (let i = 0; i < n; i++) {
       const h1 = ((i * 7919 + (cote > 0 ? 31 : 0)) % 97) / 97, h2 = ((i * 104729 + 13) % 89) / 89, h3 = ((i * 31337 + 7) % 83) / 83;
       const vx = o.v * (.55 + .9 * h3) / (x1 - x0), vy = o.v * (.5 + .9 * h1) / (y1 - y0);
       const x = x0 + tri(h1 * 2 + vx * t * (h2 > .5 ? 1 : -1)) * (x1 - x0), y = y0 + tri(h2 * 2 + vy * t) * (y1 - y0);
-      Peint.sphere(ctx, x, y, i < o.nI ? 4.2 : 5, i < o.nI ? VERT : ROUGE);
+      pos.push([x, y, i < o.nI]);
+    }
+    // Les molécules : I⁻ (sphère violette de l'iode), H₂O₂ (deux O rouges, deux H blancs) qui tournent en s'agitant.
+    pos.forEach(([x, y, iod], i) => window.Rendu.molecule(ctx, iod ? 'I' : 'H2O2', x, y, iod ? .62 : .78, iod ? 0 : t * (o.v / 16) * (i % 2 ? 1.3 : -1.1) + i));
+    // Une rencontre I⁻ / H₂O₂ assez proche : un éclair (plus d'agitation ou plus d'ions → plus d'éclairs).
+    for (let i = 0; i < o.nI; i++) for (let j = o.nI; j < n; j++) {
+      const dd = Math.hypot(pos[i][0] - pos[j][0], pos[i][1] - pos[j][1]);
+      if (dd < 12) window.Rendu.choc(ctx, (pos[i][0] + pos[j][0]) / 2, (pos[i][1] + pos[j][1]) / 2, 7, 1 - dd / 12);
     }
   }
   ctx.restore();
@@ -540,8 +547,8 @@ function loupeCraie(c, gauche, droite) {
   c.texte(droite, LP.x + 36, LP.y - LP.r - 8, { couleur: 'rouge', taille: 15, align: 'center' });
 }
 function legende(c, y) {
-  c.direct(() => { Peint.sphere(c.ctx, 520, y - 5, 4.6, VERT); Peint.sphere(c.ctx, 606, y - 5, 5.2, ROUGE); });
-  c.texte('I⁻', 530, y, { couleur: 'vert', taille: 16 });
+  c.direct(() => { window.Rendu.molecule(c.ctx, 'I', 520, y - 5, .62); window.Rendu.molecule(c.ctx, 'H2O2', 604, y - 5, .78); });
+  c.texte('I⁻', 530, y, { couleur: 'violet', taille: 16 });
   c.texte('H₂O₂', 616, y, { couleur: 'rouge', taille: 16 });
 }
 
@@ -665,8 +672,9 @@ function vueTrempe(c, M) {
   chrono(c, M, t);
   // Deux pastilles de teinte (le prélèvement figé ; le grand bécher qui continue).
   const pastille = (x, col, l1, l2, coul) => {
-    c.direct(() => { const ctx = c.ctx; ctx.save(); const g = ctx.createLinearGradient(0, 150, 0, 196); g.addColorStop(0, rgba(eclair(col, .15))); g.addColorStop(1, rgba(sombre(col, .2))); ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, 150, 92, 46, 8); ctx.fill(); ctx.restore(); });
-    c.rect(x, 150, 92, 46, { arrondi: 8, largeur: 1.6, couleur: 'faible' });
+    // Un petit flacon de verre peint, rempli de la solution à sa teinte (au lieu d'un aplat de couleur).
+    c.direct(() => window.Rendu.flacon(c.ctx, x + 18, 146, 56, 52, [col[0], col[1], col[2], Math.max(.55, col[3] ?? .8)]));
+    c.rect(x, 150, 92, 46, { arrondi: 8, largeur: 1.6, couleur: 'transparent' });   // même temps d'écriture qu'avant (instants des moments inchangés)
     c.texte(l1, x + 46, 218, { couleur: coul, taille: 15, align: 'center' }); c.texte(l2, x + 46, 236, { couleur: coul, taille: 15, align: 'center' });
   };
   return zoneEcriture(c, M, [
@@ -861,16 +869,16 @@ function voir(M) {
     m.push(`Deux béchers du même mélange (H₂O₂ + I⁻ en milieu acide) : à gauche dans un bain d’eau à 20 °C, à droite dans un bain à ${th} °C (vapeur légère), un thermomètre dans chaque bain (poignée jaune sur celui du bain chaud, 30 à 60 °C).`);
     m.push(`Chronomètre : t = ${min(t)} (temps accéléré). Teinte à 20 °C : ${nomTeinte(avance(t, TAU_F))} (${Math.round(100 * avance(t, TAU_F))} % de la teinte finale) ; à ${th} °C : ${nomTeinte(avance(t, tauC()))} (${Math.round(100 * avance(t, tauC()))} %).`);
     m.push(`Teinte finale atteinte à t ≈ ${min(5 * tauC())} au chaud et à t ≈ 30 min à 20 °C : même brun final.`);
-    if (M.commence('agitation')) m.push(`Loupe à droite : à gauche (20 °C) des ions I⁻ verts et des molécules H₂O₂ rouges qui bougent lentement, à droite (${th} °C) les mêmes qui bougent plus vite.`);
+    if (M.commence('agitation')) m.push(`Loupe à droite : à gauche (20 °C) des ions I⁻ (sphères violettes) et des molécules H₂O₂ (O rouges, H blancs) qui bougent lentement ; un éclair jaune marque chaque choc I⁻ / H₂O₂, à droite (${th} °C) les mêmes qui bougent plus vite.`);
   } else if (v === 'concentration') {
     m.push('Deux béchers à 20 °C, même quantité de H₂O₂ (limitant) : à gauche [I⁻]₀ = 0,1 mol/L, à droite [I⁻]₀ = 0,2 mol/L.');
     m.push(`Chronomètre : t = ${min(t)} (temps accéléré). Teinte à 0,1 mol/L : ${nomTeinte(avance(t, TAU_F))} (${Math.round(100 * avance(t, TAU_F))} %) ; à 0,2 mol/L : ${nomTeinte(avance(t, TAU_CONC))} (${Math.round(100 * avance(t, TAU_CONC))} %). Teinte finale vers 15 min (0,2 mol/L) et 30 min (0,1 mol/L), même brun final.`);
-    if (M.commence('rencontres')) m.push('Loupe : à gauche 6 ions I⁻ (verts) et 4 H₂O₂ (rouges), à droite 12 ions I⁻ et 4 H₂O₂ dans le même volume, même agitation.');
+    if (M.commence('rencontres')) m.push('Loupe : à gauche 6 ions I⁻ (violets) et 4 H₂O₂ (rouge et blanc), à droite 12 ions I⁻ et 4 H₂O₂ dans le même volume, même agitation.');
   } else if (v === 'trempe') {
     const pip = pipetteEtat(M);
     m.push(`Grand bécher (H₂O₂ + I⁻ acidifié) à gauche, teinte ${nomTeinte(avance(t, TAU_F))} ; chronomètre t = ${min(t)} (temps accéléré). Au milieu, un bécher d’eau glacée avec des glaçons.`);
     m.push(M.commence('fige') ? `Le prélèvement (pris à t = ${TP} min) est dans l’eau glacée : teinte ${M.commence('titrage') && M.p('titrage') > .9 ? 'disparue (titrage fini)' : 'jaune-orangé figée'}.` : pip.rempli > 0 ? 'La pipette contient le prélèvement.' : 'La pipette est vide.');
-    if (M.commence('continue')) m.push('À droite, deux pastilles : « prélèvement figé » (ne change plus) et « grand bécher » (continue de foncer).');
+    if (M.commence('continue')) m.push('À droite, deux pastilles : deux petits flacons peints : « prélèvement figé » (ne change plus) et « grand bécher » (continue de foncer).');
     if (M.commence('titrage')) m.push('Une burette de thiosulfate S₂O₃²⁻ (incolore) goutte dans le prélèvement ; équation à droite : I₂ + 2S₂O₃²⁻ → 2I⁻ + S₄O₆²⁻.');
   } else if (v === 'une_variable') {
     m.push('Tableau à la craie : exp. 1 (20 °C ; 0,1 mol/L), exp. 2 (40 °C ; 0,1 mol/L), exp. 3 (40 °C ; 0,2 mol/L).');
