@@ -32,7 +32,7 @@ CIBLE = RACINE / "frontend" / "public" / "labo"
 PAGES = {
     "index.html": "solution-naoh.html",
     "chimie-dosage-acide-base.html": "chimie-dosage-acide-base.html",
-    "chimie-savon.html": "chimie-savon.html",
+    "chimie-linalyle.html": "chimie-linalyle.html",
     "svt-exao-levures.html": "svt-exao-levures.html",
     "svt-sol-retention.html": "svt-sol-retention.html",
     "svt-sol-ph.html": "svt-sol-ph.html",
@@ -47,8 +47,8 @@ ANCIENNES = {
     "physique-5-stations.html": ("Physique · 2ᵉ Bac PC BIOF", "Cinq stations de physique (première version)"),
     "labo-3-manips.html": ("Physique-Chimie · 2ᵉ Bac PC BIOF", "Trois manips de chimie (première version)"),
 }
-# Pages retirées (manips découpées) : leur adresse renvoie au sommaire au lieu de tomber sur l'application.
-RETIREES = ["svt-sol-chimie.html"]
+# Pages retirées (manips découpées ou retirées du programme) : leur adresse renvoie au sommaire au lieu de tomber sur l'application.
+RETIREES = ["svt-sol-chimie.html", "chimie-savon.html"]  # savon : retiré du 2ᵉ Bac (demande de l'enseignant, nov. 2026), remplacé par l'acétate de linalyle (tronc commun)
 
 _LIGNE_LAB = re.compile(r'\{\s*g:\s*"([^"]*)",\s*t:\s*"([^"]*)",\s*n:\s*"([^"]*)",\s*u:\s*"([^"]*)"\s*\}')
 _OUVERTURE = re.compile(
@@ -156,7 +156,7 @@ def main() -> None:
     for nom in RETIREES:
         io.open(CIBLE / nom, "w", encoding="utf-8", newline="\n").write(
             '<!doctype html>\n<html lang="fr"><head><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=./">'
-            '<title>Labo virtuel 3D</title></head><body><p>Cette manip a été découpée : <a href="./">voir toutes les manips</a>.</p></body></html>\n')
+            '<title>Labo virtuel 3D</title></head><body><p>Cette manip a été retirée ou découpée : <a href="./">voir toutes les manips</a>.</p></body></html>\n')
         print(f"{nom:32s} -> renvoi vers le sommaire")
 
 
@@ -176,7 +176,7 @@ def sommaire(groupes: dict[str, list[tuple[str, str]]], pages: dict[str, str]) -
         cartes.append(f'<section class="old"><h2>Premières versions</h2><ul>{anciennes}</ul></section>')
     return f"""<!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Labo virtuel 3D · 2ᵉ Bac PC BIOF — Moalim</title>
+<title>Labo virtuel 3D · Tronc commun et 2ᵉ Bac PC BIOF — Moalim</title>
 <meta name="description" content="Laboratoire virtuel 3D de physique-chimie et SVT pour le 2ᵉ Bac PC BIOF : manipulations libres, mesures, bilan.">
 <link rel="icon" href="/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -199,7 +199,7 @@ footer{{color:var(--mut);font-size:14px;margin-top:28px}}footer a{{display:inlin
 </style></head>
 <body><main>
 <div class="kicker">Moalim · laboratoire virtuel</div>
-<h1>Labo virtuel 3D — 2ᵉ Bac PC BIOF</h1>
+<h1>Labo virtuel 3D — Tronc commun et 2ᵉ Bac PC</h1>
 <p class="intro">Manipulations libres sur une paillasse en 3D : on pèse, on verse, on mesure comme au lycée, on peut se tromper et recommencer. Chaque manip a un mode démonstration, un carnet qui explique chaque geste et un bilan qui compare ce que tu crois à ce qui est vraiment dans le récipient. À ouvrir sur ordinateur de préférence.</p>
 {''.join(cartes)}
 <footer>Retour au <a href="/">site Moalim</a>.</footer>
