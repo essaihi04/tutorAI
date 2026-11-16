@@ -119,12 +119,22 @@ function fiole(ctx, cx, yb, r, yCol, surface, liq) {
     ctx.arc(cx, cy, r, -Math.PI / 2 - d, -Math.PI / 2 + d, true); ctx.lineTo(cx + col / 2, yCol);
   };
   ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(cx + 3, yb + 3, r * .75, 4.5, 0, 0, 7); ctx.fill();   // ombre sur la paillasse
   forme(); ctx.fillStyle = 'rgba(190,220,240,.1)'; ctx.fill();
   if (liq && surface != null) {
+    // Liquide peint : plus sombre sur les bords de la panse (épaisseur traversée), ménisque clair à la surface.
     ctx.save(); forme(); ctx.closePath(); ctx.clip();
-    ctx.fillStyle = rgba(liq, liq[3]); ctx.fillRect(cx - r - 2, surface, 2 * r + 4, yb - surface + 2); ctx.restore();
+    const sh = k => liq.slice(0, 3).map(v => Math.round(v * k)), cl = k => liq.slice(0, 3).map(v => Math.round(v + (255 - v) * k));
+    const g = ctx.createLinearGradient(cx - r, 0, cx + r, 0);
+    g.addColorStop(0, rgba(sh(.7), Math.min(1, liq[3] * 1.35))); g.addColorStop(.42, rgba(cl(.15), liq[3])); g.addColorStop(1, rgba(sh(.68), Math.min(1, liq[3] * 1.35)));
+    ctx.fillStyle = g; ctx.fillRect(cx - r - 2, surface, 2 * r + 4, yb - surface + 2); ctx.restore();
+    const lw = surface < yJ ? col / 2 - 1 : Math.sqrt(Math.max(0, r * r - (surface - cy) ** 2)) - 2;
+    ctx.fillStyle = rgba(cl(.4), Math.min(1, liq[3] + .1)); ctx.beginPath(); ctx.ellipse(cx, surface, Math.max(1, lw), surface < yJ ? 1.6 : 3, 0, 0, 7); ctx.fill();
   }
   ctx.strokeStyle = 'rgba(225,240,252,.85)'; ctx.lineWidth = 1.8; forme(); ctx.stroke();
+  // Reflets du verre : un croissant sur la panse, un filet sur le col.
+  ctx.strokeStyle = 'rgba(255,255,255,.38)'; ctx.lineWidth = 3.5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(cx, cy, r * .78, Math.PI * 1.06, Math.PI * 1.36); ctx.stroke();
+  ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(cx - col / 2 + 2.5, yCol + 6); ctx.lineTo(cx - col / 2 + 2.5, yJ - 6); ctx.stroke();
   ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(cx - col / 2 - 3, yCol + 24); ctx.lineTo(cx + col / 2 + 3, yCol + 24); ctx.stroke();
   ctx.restore();
   return yCol + 24;
