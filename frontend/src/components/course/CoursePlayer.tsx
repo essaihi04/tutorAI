@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import LiveBoard from '../session/LiveBoard';
 import CourseFocusStage from './CourseFocusStage';
-import { COLONNE_TUTEUR } from '../session/AIAvatar';
+import { useColonneTuteur } from '../session/AIAvatar';
 import { useMemoireDuCours } from './memoire/useMemoireDuCours';
 import { MINUTES_PAR_BLOC } from './memoire/CycleBloc';
 import { saveCourseProgress } from '../../services/api';
@@ -101,6 +101,7 @@ export default function CoursePlayer({
   tuteur3D = false,
   onSlideChange,
 }: CoursePlayerProps) {
+  const COLONNE_TUTEUR = useColonneTuteur();   // plus étroite sur téléphone en paysage
   const flatSlides = useMemo<FlatSlide[]>(() =>
     deck.activities.flatMap((activity, activityIndex) =>
       (activity.slides || []).map((slide, slideIndex) => ({

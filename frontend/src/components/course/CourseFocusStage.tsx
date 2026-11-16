@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import AIAvatar, { COLONNE_TUTEUR, type LabControlCommand } from '../session/AIAvatar';
+import AIAvatar, { useColonneTuteur, type LabControlCommand } from '../session/AIAvatar';
 import { observeAvatarMedia } from '../../services/avatarAudio';
 import { audioUnlock } from '../../services/audioUnlock';
 import type { ProfessorEmotionKind } from '../../services/professorEmotion';
@@ -72,6 +72,37 @@ const CRAIE = "'Patrick Hand', 'Caveat', cursive";
 
 /** Le deuxième tableau descend du haut ; chaque question s'y écrit l'une après l'autre. */
 const ANIMATIONS = `
+/* Téléphone en paysage (16 novembre 2026) : la hauteur manque ; titre, barre du bas et boutons se font plus petits
+   pour laisser la place au tableau, et tout tient dans un seul écran. */
+@media (max-height: 520px) and (orientation: landscape) {
+  [data-scene-cours] > header { padding-top: 2px; padding-bottom: 0 }
+  [data-scene-cours] > header h1 { font-size: 17px; line-height: 1.15 }
+  [data-scene-cours] > header p { font-size: 12px; line-height: 1.2 }
+  [data-scene-cours] > main { padding-bottom: 2px }
+  [data-scene-cours] [data-pied-cours] { padding-top: 3px; padding-bottom: 3px; gap: 4px; flex-wrap: nowrap }
+  [data-scene-cours] [data-pied-cours] button { height: 30px; font-size: 13px }
+  [data-scene-cours] [data-pied-cours] button.w-9, [data-scene-cours] [data-pied-cours] .w-9 { width: 30px }
+  [data-scene-cours] [data-pied-cours] button[data-suite] { height: 32px; padding-left: 14px; padding-right: 14px; font-size: 14px }
+  [data-scene-cours] [data-pied-cours] .px-3 { padding-left: 9px; padding-right: 9px }
+  /* le tableau des questions : énoncé et choix plus serrés, les choix d'un QCM sur deux colonnes, tout sans défiler */
+  .tableau-questions > div:first-child { padding-top: 2px; padding-bottom: 2px }
+  .tableau-questions .p-4, .tableau-questions .p-5 { padding: 8px 10px }
+  .tableau-questions .text-xl { font-size: 16px; line-height: 1.25 }
+  .tableau-questions .text-lg { font-size: 14px; line-height: 1.25 }
+  .tableau-questions .text-base { font-size: 14px }
+  .tableau-questions [data-choix] { margin-top: 4px }
+  .tableau-questions [data-choix='qcm'] { display: grid; grid-template-columns: 1fr 1fr; gap: 4px }
+  .tableau-questions [data-choix='qcm'] > * { margin-top: 0 !important }
+  .tableau-questions [data-choix] > button { padding-top: 4px; padding-bottom: 4px }
+  .tableau-questions .mt-3 { margin-top: 6px }
+  .tableau-questions .mt-2 { margin-top: 4px }
+  /* les bulles (cahier, explication, question de l'élève) : toute la hauteur du tableau, texte à la taille de l'écran */
+  [data-scene-cours] [data-bulle] { top: 4px; bottom: 44px; max-height: none; padding: 10px 14px }
+  [data-scene-cours] [data-bulle] .text-2xl { font-size: 18px; line-height: 1.3 }
+  [data-scene-cours] [data-bulle] .text-xl { font-size: 16px; line-height: 1.3 }
+  [data-scene-cours] [data-bulle] .text-lg { font-size: 14px; line-height: 1.35 }
+  [data-scene-cours] [data-bulle] .mt-3 { margin-top: 6px }
+}
 @keyframes tableau-descend { from { transform: translateY(-108%); opacity: .5 } 60% { transform: translateY(1.5%) } to { transform: none; opacity: 1 } }
 @keyframes question-apparait { from { opacity: 0; transform: translateY(-10px) } to { opacity: 1; transform: none } }
 .tableau-questions { animation: tableau-descend .7s cubic-bezier(.2,.8,.2,1) both }
@@ -340,6 +371,8 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   // Sur téléphone, la bulle de la question et le panneau du résultat prennent toute la largeur : le champ et le
   // clavier scientifique y restent utilisables (la colonne du tuteur leur laisserait 140 px à 375 px).
   const [etroit, setEtroit] = useState(() => typeof window !== 'undefined' && window.innerWidth < 640);
+  // la colonne de droite laissée au tuteur 3D : plus étroite sur téléphone en paysage, où il rétrécit
+  const COLONNE_TUTEUR = useColonneTuteur();
   useEffect(() => {
     const suivre = () => setEtroit(window.innerWidth < 640);
     window.addEventListener('resize', suivre);
@@ -1859,7 +1892,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   const surSim = visuel?.kind === 'simulation';
 
   return (
-    <div className="relative h-full w-full flex flex-col text-white" style={{ background: '#12241c' }}>
+    <div data-scene-cours className="relative h-full w-full flex flex-col text-white" style={{ background: '#12241c' }}>
       <style>{ANIMATIONS}</style>
       {piste?.url && (
         <audio
@@ -2066,7 +2099,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
 
       {/* ── Les bulles : l'écrit, fermé par défaut ── */}
       {panneau && panneau !== 'questions' && (
-        <div style={tuteur3D && !etroit ? { right: COLONNE_TUTEUR + placeClavier } : placeClavier ? { right: placeClavier } : undefined} className="absolute left-4 right-4 bottom-[76px] z-30 mx-auto max-w-3xl max-h-[55%] overflow-y-auto rounded-2xl border border-white/15 bg-[#0d1c15]/95 p-5 shadow-2xl backdrop-blur">
+        <div style={tuteur3D && !etroit ? { right: COLONNE_TUTEUR + placeClavier } : placeClavier ? { right: placeClavier } : undefined} data-bulle className="absolute left-4 right-4 bottom-[76px] z-30 mx-auto max-w-3xl max-h-[55%] overflow-y-auto rounded-2xl border border-white/15 bg-[#0d1c15]/95 p-5 shadow-2xl backdrop-blur">
           <button onClick={fermerPanneau} className="absolute right-3 top-2 text-white/50 hover:text-white text-xl" aria-label="Fermer">×</button>
           {panneau === 'cahier' && (
             <>
@@ -2194,7 +2227,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
 
       {/* ── La réaction du tuteur à ce que l'élève a fait lui-même ── */}
       {reaction && (
-        <div style={tuteur3D && !etroit ? { right: COLONNE_TUTEUR } : undefined} className="absolute left-4 right-4 bottom-[76px] z-40 mx-auto max-w-3xl max-h-[45%] overflow-y-auto rounded-2xl border border-cyan-300/30 bg-[#0d1c15]/95 p-5 shadow-2xl backdrop-blur">
+        <div style={tuteur3D && !etroit ? { right: COLONNE_TUTEUR } : undefined} data-bulle className="absolute left-4 right-4 bottom-[76px] z-40 mx-auto max-w-3xl max-h-[45%] overflow-y-auto rounded-2xl border border-cyan-300/30 bg-[#0d1c15]/95 p-5 shadow-2xl backdrop-blur">
           <div className="flex items-center justify-between">
             <div className="text-sm font-semibold text-cyan-200">🔎 Ton résultat</div>
             <button onClick={fermerResultat} className="text-white/50 hover:text-white text-xl" aria-label="Fermer et reprendre le cours">×</button>
@@ -2575,7 +2608,7 @@ function UneQuestion({ q, diapo, dire, jouer, preparees, compact = false, onRepo
         </div>
       )}
       {q.choix && choixVisibles && (
-        <div className={`question-apparait ${q.type === 'vrai_faux' ? 'mt-2 flex gap-2' : `mt-2 ${compact ? 'space-y-1' : 'space-y-2'}`}`}>
+        <div data-choix={q.type} className={`question-apparait ${q.type === 'vrai_faux' ? 'mt-2 flex gap-2' : `mt-2 ${compact ? 'space-y-1' : 'space-y-2'}`}`}>
           {q.choix.map((c, i) => {
             const bonneMontree = finie && (q.bonne === i || (retour?.correct && pris === i));
             const fausse = exclus.includes(i);

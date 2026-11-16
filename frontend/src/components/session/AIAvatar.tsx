@@ -36,18 +36,32 @@ interface AIAvatarProps {
   mainOreille?: boolean;
 }
 type Spark = { id: number; emoji: string; x: number; y: number; dx: number; delay: number; size: number };
-const WIDTH = 180;
-const HEIGHT = 320;
+const WIDTH_BASE = 180;
+const HEIGHT_BASE = 320;
+/**
+ * Téléphone en paysage (16 novembre 2026 : « penser à la position du tuteur dans ce mode ») : la hauteur manque,
+ * le tuteur rétrécit avec elle (180 × 320 px prenaient presque tout l'écran) et sa colonne aussi.
+ */
+export const echelleTuteur = () => (typeof window !== 'undefined' && window.innerHeight < 520 && window.innerWidth > window.innerHeight
+  ? Math.max(0.5, Math.min(1, window.innerHeight / 600)) : 1);
+const largeur = () => WIDTH_BASE * echelleTuteur();
+const hauteur = () => HEIGHT_BASE * echelleTuteur();
+/** Le haut de la scène du cours : en mode concentration, il ne monte jamais sur la barre au-dessus du lecteur. */
+const hautScene = () => document.querySelector('[data-scene-cours]')?.getBoundingClientRect().top ?? 0;
 /** Mesures par défaut, remplacées par celles du modèle dès qu'il est chargé (onRig). */
 const DEFAULT_RIG: ProfessorRig = { shoulderRight: { x: 61, y: 105 }, shoulderLeft: { x: 119, y: 105 }, reach: 112 };
+/** Les mesures du modèle (faites dans sa boîte de 180 × 260 px), à l'échelle où il est affiché. */
+const rigAffiche = (r: ProfessorRig, k = echelleTuteur()): ProfessorRig => k === 1 ? r : {
+  shoulderRight: { x: r.shoulderRight.x * k, y: r.shoulderRight.y * k },
+  shoulderLeft: { x: r.shoulderLeft.x * k, y: r.shoulderLeft.y * k }, reach: r.reach * k };
 const clampPosition = (x: number, y: number) => ({
-  x: Math.max(-40, Math.min(x, window.innerWidth - WIDTH + 40)),
-  y: Math.max(0, Math.min(y, window.innerHeight - HEIGHT)),
+  x: Math.max(-40, Math.min(x, window.innerWidth - largeur() + 40)),
+  y: Math.max(hautScene(), Math.min(y, window.innerHeight - hauteur())),
 });
 /** En vol vers une cible, il peut descendre plus bas : ses jambes peuvent sortir de l'écran. */
 const clampFlight = (x: number, y: number) => ({
-  x: Math.max(-60, Math.min(x, window.innerWidth - WIDTH + 60)),
-  y: Math.max(-20, Math.min(y, window.innerHeight - 150)),
+  x: Math.max(-60, Math.min(x, window.innerWidth - largeur() + 60)),
+  y: Math.max(hautScene() - 20 * echelleTuteur(), Math.min(y, window.innerHeight - 150 * echelleTuteur())),
 });
 /** Délai sans cible avant qu'il ne retourne à sa place. */
 const RETURN_HOME_MS = 1600;
@@ -60,9 +74,22 @@ type Focus = { rect: DOMRect; writing: boolean };
  */
 /** Largeur (px) laissée libre à droite de l'écran pour le professeur en mode concentration. */
 export const COLONNE_TUTEUR = 200;
+/** La colonne du tuteur à la taille de l'écran (plus étroite sur téléphone en paysage). */
+export const colonneTuteur = () => Math.round(COLONNE_TUTEUR * echelleTuteur());
+/** La même, suivie quand l'écran tourne ou change de taille. */
+export function useColonneTuteur() {
+  const [colonne, setColonne] = useState(colonneTuteur);
+  useEffect(() => {
+    const suivre = () => setColonne(colonneTuteur());
+    window.addEventListener('resize', suivre);
+    return () => window.removeEventListener('resize', suivre);
+  }, []);
+  return colonne;
+}
 
-function reachPosition(point: Point, writing: boolean, rig: ProfessorRig, avoid?: DOMRect | null, colonne = false) {
-  const { shoulderRight: right, shoulderLeft: left, reach } = rig;
+function reachPosition(point: Point, writing: boolean, rigModele: ProfessorRig, avoid?: DOMRect | null, colonne = false) {
+  const { shoulderRight: right, shoulderLeft: left, reach } = rigAffiche(rigModele);
+  const WIDTH = largeur();
   if (colonne && !writing) return clampFlight(window.innerWidth - WIDTH - 8, point.y - right.y + reach * 0.16);
   if (avoid && !writing) {
     const y = point.y - right.y + reach * 0.16;
@@ -82,7 +109,7 @@ function reachPosition(point: Point, writing: boolean, rig: ProfessorRig, avoid?
 }
 
 export default function AIAvatar({ isSpeaking, isProcessing, processingStage, isListening = false, control, labControl, emotion, discret = false, mainOreille = false }: AIAvatarProps) {
-  const initial = useMemo(() => clampPosition(window.innerWidth - WIDTH - 20, window.innerHeight - HEIGHT - 100), []);
+  const initial = useMemo(() => clampPosition(window.innerWidth - largeur() - 20, window.innerHeight - hauteur() - 100), []);
   const [minimized, setMinimized] = useState(false);
   const [animationFailed, setAnimationFailed] = useState(false);
   const onAnimationError = useCallback(() => setAnimationFailed(true), []);
@@ -118,13 +145,13 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
     goal.current = next;
     if (immediate) { current.current = { ...next }; motion.current.vx = 0; motion.current.vy = 0; }
   }, []);
-  const aimSide = useCallback((point: Point) => setSide(point.x > goal.current.x + WIDTH / 2 ? 'right' : 'left'), []);
+  const aimSide = useCallback((point: Point) => setSide(point.x > goal.current.x + largeur() / 2 ? 'right' : 'left'), []);
 
   // Émotion : le geste part, et les émoticônes jaillissent de sa tête, là où il se trouve à cet instant.
   const express = useCallback((kind: ProfessorEmotionKind, key: number) => {
     const spec = PROFESSOR_EMOTIONS[kind];
     if (spec.gesture) setGesture({ kind: spec.gesture, key });
-    const origin = { x: current.current.x + WIDTH / 2, y: current.current.y + 52 };
+    const origin = { x: current.current.x + largeur() / 2, y: current.current.y + 52 * echelleTuteur() };
     const batch: Spark[] = Array.from({ length: spec.count }, (_, i) => ({
       id: ++sparkId.current, emoji: spec.emojis[i % spec.emojis.length],
       x: origin.x + (Math.random() - 0.5) * 70, y: origin.y + (Math.random() - 0.5) * 30,
@@ -158,7 +185,10 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
         const lift = Math.min(26, speed * 0.04);
         const hover = reduced.matches ? 0 : Math.sin(now / 600) * 3;
         const tilt = Math.max(-12, Math.min(12, m.vx * 0.012));
-        element.style.transform = `translate(${p.x}px, ${p.y - lift + hover}px) rotate(${tilt}deg)`;
+        // plus petit sur téléphone en paysage : mis à l'échelle depuis son coin haut gauche (sa place reste p)
+        const k = echelleTuteur();
+        element.style.transformOrigin = k === 1 ? '' : '0 0';
+        element.style.transform = `translate(${p.x}px, ${p.y - lift + hover}px) rotate(${tilt}deg)${k === 1 ? '' : ` scale(${k})`}`;
         element.dataset.flying = speed > 60 ? 'true' : 'false';
       }
       frame = requestAnimationFrame(step);

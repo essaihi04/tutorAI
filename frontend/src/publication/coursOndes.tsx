@@ -58,11 +58,11 @@ function Navigation({ id, matiere }: { id: string; matiere: string | null }) {
   const liste = coursDe(matiere);
   const m = matiereDe(id);
   return (
-    <div className="flex h-9 items-center gap-2 px-2 text-sm">
+    <div className="flex h-9 items-center gap-2 px-2 text-sm [@media(max-height:520px)]:h-7 [@media(max-height:520px)]:text-xs">
       <a href={matiere ? `?matiere=${matiere}&cours=liste` : '?cours=liste'} className="shrink-0 rounded-lg px-2 py-1 text-white/70 hover:bg-white/10" title="Tous les cours">☰</a>
       <span className="hidden shrink-0 text-white/50 sm:inline">{m?.nom || ''}</span>
       <select value={id} onChange={e => { window.location.search = lienCours(e.target.value, matiere); }}
-        className="min-w-0 flex-1 truncate rounded-lg border border-white/15 bg-[#121a33] px-2 py-1 text-white sm:max-w-xl">
+        className="min-w-0 flex-1 truncate rounded-lg border border-white/15 bg-[#121a33] px-2 py-1 text-white sm:max-w-xl [@media(max-height:520px)]:py-0">
         {MATIERES.filter(x => !matiere || x.cle === matiere).map(x => (
           <optgroup key={x.cle} label={x.nom}>
             {liste.filter(c => matiereDe(c) === x).map(c => (
@@ -181,7 +181,7 @@ function Relecture({ deckId, diapo: vue, ordre }: { deckId: string; diapo: Diapo
   // à gauche, elle recouvrait la dernière ligne des tableaux) — un clic pour voter, 💬 pour écrire.
   if (!ouvert) {
     return (
-      <div className="flex shrink-0 items-center gap-1 rounded-full bg-[#14142a]/90 border border-amber-400/60 shadow-lg px-1.5 py-1 text-xs text-white">
+      <div className="flex shrink-0 items-center gap-1 rounded-full bg-[#14142a]/90 border border-amber-400/60 shadow-lg px-1.5 py-1 text-xs text-white [@media(max-height:520px)]:py-0">
         <span className="px-1.5 text-amber-300 font-semibold" title="Diapositives notées">📝 {notees}/{diapo.total}</span>
         <button onClick={() => void envoyer('bon', mien?.commentaire || '')} title="Diapositive bonne"
           className={`rounded-full px-2 py-0.5 ${mien?.vote === 'bon' ? 'bg-green-500 text-black' : 'hover:bg-green-500/25'}`}>👍</button>
@@ -258,7 +258,7 @@ function CoursOndes() {
   if (id === 'liste' || introuvable) return <Liste matiere={matiere} />;
   if (!cours) return <div className="h-[100dvh] grid place-items-center bg-[#0a0a18] text-white/70">Chargement du cours…</div>;
   return (
-    <div className="flex h-[100dvh] w-screen flex-col bg-[#0a0a18] text-white p-1 sm:p-2">
+    <div className="flex h-[100dvh] w-screen flex-col bg-[#0a0a18] text-white p-1 sm:p-2 [@media(max-height:520px)]:p-0.5">
       {/* la barre du haut porte aussi la relecture : elle ne recouvre jamais le contenu des tableaux */}
       <div className="flex min-w-0 shrink-0 items-center gap-2 pr-1">
         <div className="min-w-0 flex-1"><Navigation id={id} matiere={matiere} /></div>
