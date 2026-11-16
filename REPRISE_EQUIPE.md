@@ -170,7 +170,7 @@ la voix en direct ; si le GPU dort, l'élève n'entend rien. Le 15/11 à 0 h : 3
 ## 3 sexies. Point du 15 novembre 2026 (soir, 22 h 50)
 
 **Tout ce qui suit est sur `origin/main`, déployé (serveur sur `858af5df` à 23 h 05) et le lien libre est reconstruit
-(23 h 06).** Pas encore déployé : `c29325df` (chimie ch12-ch13, « travail en cours »).
+(23 h 06).** Les figures de chimie ch12-ch13 ont suivi (§ 3 septies).
 
 ### Voix
 - **394 réactions** muettes de physique ch1-4 et ch11 posées en v13 (`71f2b3a3`) ; **bilan de physique ch3**
@@ -217,6 +217,41 @@ la voix en direct ; si le GPU dort, l'élève n'entend rien. Le 15/11 à 0 h : 3
 - Une session cloud qui manque de crédits ne pousse rien. La partager avec l'équipe donne seulement un accès en
   lecture : il faut attendre la recharge du forfait (22 h), puis lui demander de commiter et de pousser sur `main`.
 
+## 3 septies. Point du 16 novembre 2026 (nuit, 2 h 40)
+
+**Serveur sur `8f1a2901` (`main`, déployé à 2 h 16) ; lien libre reconstruit à 2 h 19. 0 piste muette dans tous
+les cours** (`python -X utf8 scripts/voix/poser_en_ligne.py --compter`).
+
+### Ce qui est en ligne
+- **Figures de chimie ch12-ch13** (session cloud du 1er compte, `c29325df` → `034d20cb`, plus la correction des repères
+  du montage de dosage `0d65971c`) : d'abord déployées seules, depuis une branche faite exprès
+  (`deploy-figures-chimie` = `858af5df` + 12 fichiers), puis reprises par le déploiement de `main`. Pour déployer une
+  partie seulement de `main` : faire une telle branche, puis lancer une copie du script avec la branche changée
+  (`sed 's/^BRANCH="main"/BRANCH="<branche>"/' deploy/deploy-ubuntu.sh > /tmp/deploy_branche.sh`). Le déploiement
+  normal suivant revient à `main`.
+- **Audit « conformité au cadre officiel du ministère »** (sessions du 15/11, 23 h 24 → 16/11, 0 h 48) : programmes
+  de maths, physique, chimie et SVT alignés sur les PDF officiels (déposés dans le dépôt, `fd27b164`, `859aa2b2` ;
+  règle : le PDF officiel fait foi, AlloSchool en cas de conflit, `ca7996d3`) ; cours de maths ch1-ch6, chimie ch9-ch13,
+  physique (8 cours, `d8c09306`) et SVT ch1-ch4 corrigés ; vérification ajoutée aux skills (maths, physique, chimie,
+  SVT).
+- **159 voix refaites après l'audit** (`8f1a2901`) : 15 diapositives, 143 réactions et énoncés, 1 démonstration, voix
+  Bodi, compte 2 (`voix_textes_compte2.py`), posées en **v14** pour ne pas servir l'ancienne voix en cache.
+- **Labo** : synthèse de l'acétate de linalyle (tronc commun, le savon est retiré) et CCM pour l'identifier
+  (`1d4d86cc`, `9cff8b4d`).
+- **Animations plus réalistes** jusqu'à 2 h 16 : chimie (lentes/rapides, deux sens, équilibre, cinétique,
+  acide-base, laboratoires peints), physique (ondes, condensateurs, RC), SVT (muscle, levures, mitochondrie).
+
+### Poussé sur `main`, pas encore en ligne (après `8f1a2901`)
+- Simulations seulement, aucun cours ni voix : SVT ch1 (cellule, mitochondrie, glycolyse, chimiosmose, ATP, documents),
+  ch2 (mitose au microscope), ch3 (pollution de l'air et de l'eau), ch4 (coupes géologiques) peints ; petits défauts
+  visuels corrigés dans les tableaux d'ondes (ch1-ch3) ; retouches de RC, RL et RLC (légendes hors des courbes, cadres
+  de la carte). Dernier commit : `12aca482` (2 h 30). À regarder dans le lecteur, puis déployer `main`.
+
+### Récupération en local
+- Tout `origin/main` jusqu'à `12aca482` est en local (fichiers identiques, 0 conflit). Prochaine récupération :
+  `python scripts/recuperer_cloud.py 12aca482 --appliquer`.
+
 ## 4. Ce qui attend une décision
+- Déployer les simulations peintes et retouchées poussées après `8f1a2901` (§ 3 septies), après un coup d'œil dans le lecteur.
 - Déployer la correction des questions de reprise (formules écrites) — commit prêt, pas encore déployé.
 - Passer le nouveau lecteur sur `main` pour les élèves connectés, après la relecture des profs.
