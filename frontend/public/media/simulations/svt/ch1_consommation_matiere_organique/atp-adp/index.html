@@ -31,6 +31,7 @@
   </footer>
 </div>
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/svt/reactions_responsables_liberation_energie-tableau/peinture.js"></script>
 <script>
 (function () {
   'use strict';
@@ -88,10 +89,32 @@
   // ── Dessin à la craie (repère logique 820 × 400) ──────────────────────────
   const craie = new Craie($('canvas'), { onresize: redraw });
   const ease = k => k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+  // ── Peinture (16 novembre 2026) : adénosine et phosphates en volume, liaisons riches en énergie en bâtons dorés,
+  //    le travail cellulaire en machine peinte dont la roue dentée tourne quand l'énergie arrive. ──
+  const P = window.SVTPeinture;
+  function roue(c, cx, cy, r, ang) {
+    c.save(); c.translate(cx, cy); c.rotate(ang);
+    const g = c.createRadialGradient(-r * .3, -r * .3, 2, 0, 0, r * 1.3); g.addColorStop(0, '#d9f99d'); g.addColorStop(.5, '#4ade80'); g.addColorStop(1, '#166534');
+    c.fillStyle = g; c.beginPath();
+    for (let i = 0; i < 20; i++) { const a = i / 20 * Math.PI * 2, rr = i % 2 ? r : r * 1.28; c.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); }
+    c.closePath(); c.fill(); c.strokeStyle = 'rgba(5,46,22,.7)'; c.lineWidth = 1.2; c.stroke();
+    c.fillStyle = '#14532d'; c.beginPath(); c.arc(0, 0, r * .32, 0, Math.PI * 2); c.fill();
+    c.restore();
+  }
+  function peindre(c, travail) {
+    P.capsule(c, 135, 138, 150, 72, [96, 165, 250]);
+    P.liaison(c, 205, 138, 232, 138, { couleur: [203, 213, 225], epaisseur: 6 });
+    P.liaison(c, 288, 138, 324, 138, { couleur: [250, 204, 21], epaisseur: 6 });
+    P.bille(c, 260, 138, 30, [34, 211, 238]); P.bille(c, 352, 138, 30, [34, 211, 238]);
+    // la machine du travail cellulaire
+    c.save(); const gm = c.createLinearGradient(0, 92, 0, 188); gm.addColorStop(0, 'rgba(74,222,128,.28)'); gm.addColorStop(1, 'rgba(22,101,52,.32)');
+    c.fillStyle = gm; c.beginPath(); c.roundRect(625, 92, 125, 96, 20); c.fill(); c.strokeStyle = 'rgba(134,239,172,.55)'; c.lineWidth = 1.5; c.stroke(); c.restore();
+    roue(c, 688, 140, 24, travail > 0 && travail < 1 ? travail * Math.PI * 4 : 0);
+  }
   function draw() {
     const W = craie.W, H = craie.H; if (W < 1 || H < 1) return true;
     craie.debut(3, (performance.now() - state.ouvert) / 1000);
-    const c = craie.ctx, s = Math.min(W / 820, H / 400); c.translate((W - 820 * s) / 2, (H - 400 * s) / 2); c.scale(s, s); craie.echelle = s; craie.tailleMin = 11;
+    const c = craie.ctx, s = Math.min(W / 820, H / 400); c.translate((W - 820 * s) / 2, (H - 400 * s) / 2); c.scale(s, s); craie.echelle = s; craie.tailleMin = 15;
     const v = state.variant, raw = state.anim ? Math.min(1, (performance.now() - state.anim.t0) / state.anim.duree) : 0;
     // Couplage : hydrolyse pendant la première moitié, régénération pendant la seconde.
     let detach = 0, join = 0, energie = 0, travail = 0;
@@ -102,17 +125,15 @@
     const piLoin = v === 'phosphorylation' ? 1 - join : detach; // 0 = lié, 1 = détaché
     // Molécule
     craie.texte(v === 'phosphorylation' && !fini ? 'ADP + Pᵢ' : fini && v === 'couplage' ? 'ATP régénéré' : fini && v === 'hydrolyse' ? 'ADP + Pᵢ' : 'ATP', 250, 50, { taille: 26, align: 'center' });
-    craie.rect(60, 100, 150, 76, { couleur: 'bleu', arrondi: 18, fond: 'bleu' }).texte('Adénosine', 135, 146, { couleur: 'bleu', taille: 22, align: 'center' });
+    // La molécule et la « machine » du travail cellulaire sont PEINTES ; la craie écrit les noms par-dessus.
+    craie.direct(() => peindre(c, travail));
+    craie.texte('Adénosine', 135, 146, { couleur: '#0b1e3d', taille: 22, align: 'center' });
     craie.repere('adenosine', 55, 95, 160, 86, 'adénosine').repere('phosphates', 224, 102, 162, 72, 'phosphates liés').repere('liaison_riche', 376, 114, 44, 48, 'liaison riche en énergie');
-    craie.ligne(210, 138, 226, 138, { couleur: 'jaune', largeur: 4 });
-    craie.cercle(260, 138, 32, { couleur: 'cyan', fond: 'cyan' }).texte('P', 260, 147, { couleur: 'cyan', taille: 24, align: 'center' });
-    craie.ligne(292, 138, 320, 138, { couleur: 'jaune', largeur: 4 });
-    craie.cercle(352, 138, 32, { couleur: 'cyan', fond: 'cyan' }).texte('P', 352, 147, { couleur: 'cyan', taille: 24, align: 'center' });
+    craie.texte('P', 260, 147, { couleur: '#083344', taille: 24, align: 'center' });
+    craie.texte('P', 352, 147, { couleur: '#083344', taille: 24, align: 'center' });
     craie.texte('liaisons riches en énergie', 300, 200, { couleur: 'jaune', taille: 15, align: 'center' });
     craie.pause(.2);
     // Travail cellulaire (machine) et cycle
-    craie.rect(625, 92, 125, 96, { couleur: 'vert', arrondi: 20, fond: 'vert' }).cercle(688, 140, 24, { couleur: 'vert', largeur: 3 });
-    [[688, 105, 688, 118], [688, 162, 688, 175], [653, 140, 666, 140], [710, 140, 723, 140]].forEach(l => craie.ligne(...l, { couleur: 'vert', largeur: 3 }));
     craie.texte('travail cellulaire', 688, 221, { couleur: 'vert', taille: 17, align: 'center' });
     craie.texte('(contraction, transport, synthèses…)', 688, 243, { couleur: 'faible', taille: 13, align: 'center' });
     craie.repere('travail', 618, 86, 140, 165, 'travail cellulaire').repere('cycle', 248, 208, 334, 70, 'cycle ATP ⇄ ADP').repere('bilan', 232, 282, 476, 30, 'bilan');
@@ -122,17 +143,18 @@
     // Parties animées : phosphate terminal, éclair d'énergie, machine qui travaille
     craie.direct(() => {
       const px = 445 + 55 * piLoin, py = 138 + 125 * piLoin;
-      if (piLoin < .55) craie.ligne(384, 138, 413, 138, { couleur: 'jaune', largeur: 4, pointille: piLoin > .1 ? [8, 6] : null, alpha: 1 - piLoin });
-      craie.cercle(px, py, 32, { couleur: 'orange', fond: 'orange', alpha: 1 - .5 * piLoin }).texte('P', px, py + 9, { couleur: 'orange', taille: 24, align: 'center' });
+      // la liaison riche en énergie s'étire et se rompt, le phosphate terminal (peint) s'éloigne
+      if (piLoin < .55) P.liaison(c, 384, 138, 384 + (px - 32 - 384) * 1, 138 + (py - 138) * .6, { couleur: [250, 204, 21], epaisseur: 6, alpha: 1 - piLoin * 1.6 });
+      P.bille(c, px, py, 30, [251, 146, 60], { alpha: 1 - .4 * piLoin }); craie.texte('P', px, py + 9, { couleur: '#431407', taille: 24, align: 'center' });
       craie.repere('phosphate_terminal', px - 36, py - 36, 72, 72, 'phosphate terminal (Pᵢ)');
       if (piLoin > .5) craie.texte('Pᵢ', px + 40, py + 8, { couleur: 'orange', taille: 18 });
       if (energie > 0 && energie < 1) {
         const k = energie, ex = v === 'phosphorylation' ? 560 - 120 * k : 480 + 150 * k, ey = v === 'phosphorylation' ? 300 - 150 * k : 120 + 20 * Math.sin(k * 6);
+        P.eclat(c, ex + 8, ey + 4, 46, Math.sin(Math.PI * k));
         craie.trait([[ex, ey - 30], [ex + 24, ey - 30], [ex + 10, ey - 6], [ex + 30, ey - 6], [ex - 4, ey + 40], [ex + 8, ey + 6], [ex - 10, ey + 6]], { couleur: 'jaune', largeur: 2.6, ferme: true, alpha: .95 });
         craie.texte('énergie', ex + 40, ey + 10, { couleur: 'jaune', taille: 16 });
       }
-      if (travail > 0 && travail < 1) { const a = Math.sin(travail * Math.PI * 4); craie.ligne(688 + 18 * Math.cos(a), 140 + 18 * Math.sin(a), 688 - 18 * Math.cos(a), 140 - 18 * Math.sin(a), { couleur: 'vert', largeur: 3 }); }
-      else craie.ligne(670, 140, 706, 140, { couleur: 'vert', largeur: 3 });
+      // (la roue dentée peinte tourne pendant le travail : voir peindre)
     });
     const complet = craie.fin(); return complet && (!state.anim || raw >= 1);
   }

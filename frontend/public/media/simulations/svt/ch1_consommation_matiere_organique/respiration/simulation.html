@@ -31,6 +31,7 @@
   </footer>
 </div>
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/svt/reactions_responsables_liberation_energie-tableau/peinture.js"></script>
 <script>
   // Même pont que simulation.html : simulation_id « respiration_cellulaire », commandes start / reset / set_oxygen / highlight_button.
   const { Craie, ecrire, bulle, appuyer } = window.Tableau;
@@ -97,18 +98,53 @@
   manifeste(); setTimeout(manifeste, 1800);
 
   // ── Dessin à la craie (repère logique 760 × 420) ──────────────────────────
+  // ── Peinture (16 novembre 2026) : cellule et mitochondrie en couleur, glucose en anneau de six carbones,
+  //    O₂ qui file vers la mitochondrie, ATP qui sortent de la mitochondrie (avec O₂) ou de la glycolyse (sans O₂). ──
+  const P = window.SVTPeinture;
+  const lisse = u => { u = Math.max(0, Math.min(1, u)); return u * u * (3 - 2 * u); };
+  function anneau(c, cx, cy, r, couleur, a) {
+    if (a <= 0) return;
+    const pts = [0, 1, 2, 3, 4, 5].map(i => [cx + r * Math.cos(i * Math.PI / 3 - Math.PI / 2), cy + r * Math.sin(i * Math.PI / 3 - Math.PI / 2)]);
+    pts.forEach((p, i) => { const q = pts[(i + 1) % 6]; P.liaison(c, p[0], p[1], q[0], q[1], { alpha: a, epaisseur: 3.5 }); });
+    pts.forEach(p => P.bille(c, p[0], p[1], 6.5, couleur, { alpha: a }));
+  }
+  function peindre(c, temps) {
+    c.save(); c.globalAlpha = lisse(temps / .8); P.cellule(c, 375, 219, 352, 188, { grains: 170, graine: 9 }); c.restore();
+    // sans O₂ la mitochondrie reste là, éteinte (elle ne prend pas le relais)
+    c.save(); c.globalAlpha = lisse((temps - .4) / .8) * (S.o2 === false ? .4 : .9); P.mitochondrie(c, 537, 240, 106, 96, { cretes: 6, graine: 4 }); c.restore();
+    anneau(c, 110, 220, 17, [251, 146, 60], lisse((temps - .8) / .6));
+    if (S.o2 === null || S.marque === null) return;
+    const t = temps - S.marque;
+    if (S.o2) {
+      // une molécule de dioxygène suit la flèche jusqu'à la mitochondrie
+      const u = lisse((t - .6) / 1.6), ox = 320 + 160 * u, oy = 112 + 63 * u, ao = Math.min(lisse((t - .4) / .4), 1 - lisse((t - 2.1) / .4));
+      if (ao > 0) { P.liaison(c, ox - 6, oy, ox + 6, oy, { alpha: ao, epaisseur: 4 }); P.bille(c, ox - 7, oy, 7, [96, 165, 250], { alpha: ao }); P.bille(c, ox + 7, oy, 7, [96, 165, 250], { alpha: ao }); }
+      // les ATP sortent de la mitochondrie et se rangent au-dessus de « 36 à 38 ATP »
+      for (let i = 0; i < 8; i++) {
+        const v = lisse((t - 2.2 - i * .12) / 1.1); if (v <= 0) continue;
+        const ex = 223 + i * 22, ey = 306;
+        P.bille(c, 537 + (ex - 537) * v, 240 + (ey - 240) * v - 40 * Math.sin(Math.PI * v), 7.5, [250, 204, 21], { alpha: Math.min(1, v * 3) });
+      }
+    } else {
+      // deux ATP seulement, venus de la glycolyse
+      for (let i = 0; i < 2; i++) {
+        const v = lisse((t - 1.2 - i * .15) / 1.0); if (v <= 0) continue;
+        const ex = 104 + i * 32, ey = 292;
+        P.bille(c, 280 + (ex - 280) * v, 250 + (ey - 250) * v - 30 * Math.sin(Math.PI * v), 8, [250, 204, 21], { alpha: Math.min(1, v * 3) });
+      }
+    }
+  }
   const craie = new Craie($('canvas'), { onresize: () => { S.dirty = true; } });
   function draw() {
     const W = craie.W, H = craie.H; if (W < 1 || H < 1) return true;
     const temps = (performance.now() - S.ouvert) / 1000;
     craie.debut(9, temps);
-    const c = craie.ctx, s = Math.min(W / 760, H / 420); c.translate((W - 760 * s) / 2, (H - 420 * s) / 2); c.scale(s, s); craie.echelle = s; craie.tailleMin = 11;
-    craie.trait([[30, 70], [150, 30], [430, 28], [620, 60], [730, 160], [720, 330], [560, 405], [220, 410], [50, 350], [20, 200]], { couleur: 'faible', largeur: 2.4, ferme: true, duree: 1 });
+    const c = craie.ctx, s = Math.min(W / 760, H / 420); c.translate((W - 760 * s) / 2, (H - 420 * s) / 2); c.scale(s, s); craie.echelle = s; craie.tailleMin = 15;
+    // Le vivant est PEINT (cellule, mitochondrie, glucose, O₂, ATP) ; la craie écrit les noms et les flèches par-dessus.
+    craie.direct(() => peindre(c, temps));
     craie.texte('CYTOPLASME', 70, 110, { couleur: 'cyan', taille: 17 });
-    craie.trait([[470, 150], [560, 140], [640, 190], [640, 290], [560, 340], [470, 330], [430, 240]], { couleur: 'rose', largeur: 2.6, ferme: true, duree: .6 });
-    craie.trait([[485, 162], [560, 155], [625, 198], [625, 282], [560, 325], [485, 318], [450, 240]], { couleur: 'rose', largeur: 1.4, ferme: true, duree: .4 });
     craie.texte('MITOCHONDRIE', 540, 365, { couleur: 'rose', taille: 15, align: 'center' });
-    craie.cercle(110, 220, 24, { couleur: 'orange', fond: 'orange' }).texte('glucose', 110, 262, { couleur: 'orange', taille: 15, align: 'center' });
+    craie.texte('glucose', 110, 262, { couleur: 'orange', taille: 15, align: 'center' });
     craie.fleche(140, 220, 215, 220, { couleur: 'faible', largeur: 2 });
     craie.rect(220, 190, 120, 60, { couleur: 'cyan', arrondi: 14 }).texte('glycolyse', 280, 215, { couleur: 'cyan', taille: 17, align: 'center' }).texte('2 ATP', 280, 240, { couleur: 'jaune', taille: 14, align: 'center' });
     craie.texte('pyruvate', 385, 205, { couleur: 'rose', taille: 15, align: 'center' });
@@ -120,9 +156,9 @@
       craie.depuis(S.marque);
       craie.fleche(345, 220, 445, 235, { couleur: 'rose', largeur: 2 });
       craie.texte('O₂', 300, 110, { couleur: 'bleu', taille: 20, align: 'center' }).fleche(320, 112, 480, 175, { couleur: 'bleu', largeur: 1.8 });
-      craie.cercle(520, 240, 34, { couleur: 'vert', largeur: 2.2 }).texte('Krebs', 520, 238, { couleur: 'vert', taille: 14, align: 'center' }).texte('CO₂', 520, 256, { couleur: 'faible', taille: 12, align: 'center' });
+      craie.cercle(520, 240, 34, { couleur: 'vert', largeur: 2.2, fond: '#0b1f1a', fondAlpha: .78 }).texte('Krebs', 520, 238, { couleur: 'vert', taille: 14, align: 'center' }).texte('CO₂', 520, 256, { couleur: 'faible', taille: 12, align: 'center' });
       craie.fleche(555, 240, 575, 240, { couleur: 'vert', largeur: 1.8 });
-      craie.rect(578, 205, 50, 70, { couleur: 'violet', arrondi: 8 }).texte('chaîne', 603, 232, { couleur: 'violet', taille: 12, align: 'center' }).texte('resp.', 603, 250, { couleur: 'violet', taille: 12, align: 'center' });
+      craie.rect(578, 205, 50, 70, { couleur: 'violet', arrondi: 8, fond: '#1a1430', fondAlpha: .8 }).texte('chaîne', 603, 232, { couleur: 'violet', taille: 12, align: 'center' }).texte('resp.', 603, 250, { couleur: 'violet', taille: 12, align: 'center' });
       craie.texte('H₂O', 660, 300, { couleur: 'bleu', taille: 15 });
       craie.pause(.2).texte('36 à 38 ATP', 300, 345, { couleur: 'vert', taille: 26, align: 'center' });
       craie.texte('glucose + O₂ → CO₂ + H₂O + énergie', 60, 395, { couleur: 'faible', taille: 15 });
@@ -136,7 +172,8 @@
       craie.pause(.2).texte('2 ATP seulement', 120, 330, { couleur: 'orange', taille: 24, align: 'center', max: 190 });
       craie.repere('pas_o2', 56, 64, 352, 30, 'absence de dioxygène').repere('atp_fermentation', 22, 306, 196, 36, '2 ATP seulement');
     }
-    return craie.fin();
+    const fini = craie.fin();
+    return fini && temps > 1.5 && (S.marque === null || temps - S.marque > 4.5);   // la peinture finit de s’animer
   }
   function frame() { if (S.dirty) S.dirty = !draw(); requestAnimationFrame(frame); }
   ecrire($('objectif'), 'Choisis la présence de dioxygène pour observer le rendement énergétique.', { vitesse: 60 });

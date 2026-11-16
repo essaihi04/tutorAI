@@ -23,6 +23,7 @@
   </footer>
 </div>
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/svt/reactions_responsables_liberation_energie-tableau/peinture.js"></script>
 <script>
 (() => {
   const { Craie, ecrire, bulle, appuyer, surligner, listeReperes, explication } = window.Tableau;
@@ -81,37 +82,71 @@
 
   // ── Dessin à la craie ──────────────────────────────────────────────────
   const canvas=$('canvas'),craie=new Craie(canvas,{onresize:()=>{S.dirty=true}});
-  function exao(x,y){ // interface + ordinateur
-    craie.rect(x,y,70,30,{arrondi:5,couleur:'jaune'}).texte('interface',x+35,y+20,{couleur:'jaune',taille:12,align:'center'});
+  // ── Peinture (16 novembre 2026) : verrerie, levures, mitochondries, sondes, seringues et ordinateur en couleur ;
+  //    la craie garde les noms, les flèches et le graphique. ──
+  const P=window.SVTPeinture;
+  const Pt={
+    mito(c,x,y,rx,ry,ang=0,cretes=0){c.save();c.translate(x,y);c.rotate(ang);
+      const g=c.createLinearGradient(0,-ry,0,ry);g.addColorStop(0,'#f4b183');g.addColorStop(1,'#a8482a');c.fillStyle=g;c.beginPath();c.ellipse(0,0,rx,ry,0,0,Math.PI*2);c.fill();
+      c.fillStyle='rgba(120,170,196,.75)';c.beginPath();c.ellipse(0,0,rx*.78,ry*.62,0,0,Math.PI*2);c.fill();
+      c.strokeStyle='rgba(250,220,170,.95)';c.lineWidth=Math.max(.8,ry*.18);for(let k=0;k<cretes;k++){const px=-rx*.55+k*rx*1.1/Math.max(1,cretes-1),h=k%2?1:-1;c.beginPath();c.moveTo(px,h*ry*.62);c.lineTo(px,-h*ry*.05);c.stroke()}
+      c.restore()},
+    vacuole(c,x,y,r){const g=c.createRadialGradient(x-r*.3,y-r*.3,2,x,y,r);g.addColorStop(0,'rgba(200,235,255,.5)');g.addColorStop(1,'rgba(90,160,210,.32)');c.fillStyle=g;c.beginPath();c.arc(x,y,r,0,Math.PI*2);c.fill();c.strokeStyle='rgba(160,210,240,.7)';c.lineWidth=1.4;c.stroke()},
+    paroi(c,x,y,r){c.save();c.strokeStyle='rgba(200,170,110,.55)';c.lineWidth=7;c.beginPath();c.arc(x,y,r+2,0,Math.PI*2);c.stroke();c.restore()},
+    sonde(c,x,y0,y1,col){const k={bleu:[96,165,250],rouge:[248,113,113]}[col]||[200,200,200];c.save();const g=c.createLinearGradient(x-3,0,x+3,0);g.addColorStop(0,'#64748b');g.addColorStop(.5,'#e2e8f0');g.addColorStop(1,'#475569');
+      c.fillStyle=g;c.beginPath();c.roundRect(x-3,y0,6,y1-y0,3);c.fill();c.fillStyle=P.rgba(k,1);c.beginPath();c.roundRect(x-3.5,y1-14,7,14,3);c.fill();c.restore()},
+    seringue(c,x,y,w,h,k,vide){c.save();c.fillStyle='rgba(220,235,245,.18)';c.strokeStyle='rgba(220,235,245,.75)';c.lineWidth=1.4;c.beginPath();c.roundRect(x,y,w,h,3);c.fill();c.stroke();
+      const n=vide?.15:.7;c.fillStyle=P.rgba(k,.75);c.fillRect(x+2,y+h*(1-n),w-4,h*n-2);
+      c.fillStyle='#94a3b8';c.fillRect(x+3,y+h*(1-n)-4,w-6,4);c.fillRect(x+w/2-1.5,y-14,3,h*(1-n)+10);c.fillRect(x+w/2-7,y-16,14,3);
+      c.strokeStyle='#cbd5e1';c.lineWidth=1.3;c.beginPath();c.moveTo(x+w/2,y+h);c.lineTo(x+w/2,y+h+30);c.stroke();c.restore()},
+    couvercle(c,x,y,w){const g=c.createLinearGradient(0,y,0,y+6);g.addColorStop(0,'#cbd5e1');g.addColorStop(1,'#64748b');c.fillStyle=g;c.beginPath();c.roundRect(x,y,w,6,2);c.fill()},
+    bouchon(c,x,y,w,h){const g=c.createLinearGradient(0,y,0,y+h);g.addColorStop(0,'#c08a52');g.addColorStop(1,'#7a4a22');c.fillStyle=g;c.beginPath();c.moveTo(x,y);c.lineTo(x+w,y);c.lineTo(x+w-6,y+h);c.lineTo(x+6,y+h);c.closePath();c.fill();
+      c.fillStyle='rgba(60,30,10,.35)';for(let i=0;i<14;i++){c.beginPath();c.arc(x+8+(i*13)%(w-14),y+5+(i*7)%(h-9),1.2,0,Math.PI*2);c.fill()}},
+    tube(c,pts){c.save();c.lineCap='round';c.lineJoin='round';for(const[w,col]of[[6,'rgba(220,235,245,.35)'],[2,'rgba(255,255,255,.55)']]){c.strokeStyle=col;c.lineWidth=w;c.beginPath();pts.forEach(([a,b],i)=>i?c.lineTo(a,b):c.moveTo(a,b));c.stroke()}c.restore()},
+    bandelette(c,x,y,w,h,vire){c.fillStyle='#f1f5f9';c.beginPath();c.roundRect(x,y,w,h,2);c.fill();c.fillStyle=vire?'#a3a35a':'#65a30d';c.fillRect(x+2,y+6,w-4,12)},
+    trouble(c,x,y,w,h,a){c.save();c.globalAlpha=Math.max(0,a);const g=c.createLinearGradient(0,y,0,y+h);g.addColorStop(0,'rgba(240,245,250,.25)');g.addColorStop(1,'rgba(240,245,250,.6)');c.fillStyle=g;c.fillRect(x,y,w,h);c.restore()},
+    exao(c,x,y){c.save();const g=c.createLinearGradient(0,y,0,y+30);g.addColorStop(0,'#3f3f46');g.addColorStop(1,'#18181b');c.fillStyle=g;c.beginPath();c.roundRect(x,y,70,30,5);c.fill();c.strokeStyle='rgba(250,204,21,.7)';c.lineWidth=1.2;c.stroke();
+      c.fillStyle='#4ade80';c.beginPath();c.arc(x+62,y+6,2,0,Math.PI*2);c.fill();
+      const m=c.createLinearGradient(0,y-14,0,y+32);m.addColorStop(0,'#52525b');m.addColorStop(1,'#27272a');c.fillStyle=m;c.beginPath();c.roundRect(x+90,y-14,62,46,5);c.fill();
+      c.fillStyle='#0b2a3a';c.fillRect(x+95,y-9,52,34);c.strokeStyle='#38bdf8';c.lineWidth=1.3;c.beginPath();c.moveTo(x+98,y+4);c.lineTo(x+112,y+4);c.lineTo(x+126,y+18);c.lineTo(x+143,y+20);c.stroke();
+      c.fillStyle='#52525b';c.fillRect(x+118,y+32,6,8);c.fillRect(x+104,y+39,34,3);c.restore()},
+  };
+  function exao(x,y){ // interface + ordinateur (peints), noms à la craie
+    craie.direct(()=>Pt.exao(craie.ctx,x,y));
+    craie.texte('interface',x+35,y+20,{couleur:'jaune',taille:12,align:'center'});
     craie.ligne(x+70,y+15,x+90,y+15,{couleur:'faible',largeur:1.2});
-    craie.rect(x+90,y-14,62,46,{arrondi:5}).ligne(x+104,y+40,x+138,y+40,{largeur:2}).ligne(x+121,y+32,x+121,y+40,{largeur:2}).texte('ordinateur',x+121,y+58,{taille:12,align:'center'})}
-  function sonde(x,yHaut,yBas,label,col){craie.ligne(x,yHaut,x,yBas,{couleur:col,largeur:3}).texte(label,x-8,yHaut-6,{couleur:col,taille:13})}
+    craie.texte('ordinateur',x+121,y+58,{taille:12,align:'center'})}
+  function sonde(x,yHaut,yBas,label,col){craie.direct(()=>Pt.sonde(craie.ctx,x,yHaut,yBas,col));craie.texte(label,x-8,yHaut-6,{couleur:col,taille:13})}
   function dispositif(){
     if(key==='mitochondries'){
       craie.repere('enceinte',58,142,184,168,'enceinte fermée').repere('mitochondries',78,164,144,120,'mitochondries isolées').repere('sonde_o2',94,100,32,156,'sonde O₂').repere('seringue_glucose',152,62,34,102,'seringue de glucose').repere('seringue_pyruvate',192,62,38,102,'seringue de pyruvate').repere('interface_exao',236,96,78,40,'interface EXAO').repere('ordinateur',326,82,70,76,'ordinateur');
-      craie.trait([[70,150],[70,290],[230,290],[230,150]],{largeur:2.6}).ligne(60,150,240,150,{largeur:2}).texte('enceinte fermée',150,310,{couleur:'faible',taille:13,align:'center'});
-      craie.direct(()=>{for(let i=0;i<24;i++)craie.cercle(85+(i*37)%135,175+(i*53)%100,3,{couleur:'vert',largeur:1,tremble:0})});craie.texte('mitochondries isolées',150,280,{couleur:'vert',taille:12,align:'center'});
+      craie.direct(()=>{const c=craie.ctx;Pt.couvercle(c,60,146,180);P.becher(c,70,150,160,140,{niveau:.86});for(let i=0;i<24;i++)Pt.mito(c,85+(i*37)%135,175+(i*53)%100,7,3.6,i*.8)});
+      craie.texte('enceinte fermée',150,310,{couleur:'faible',taille:13,align:'center'});craie.texte('mitochondries isolées',150,280,{couleur:'vert',taille:12,align:'center'});
       sonde(110,110,250,'O₂','bleu');
-      craie.rect(160,80,18,50,{arrondi:3,couleur:'jaune'}).ligne(169,130,169,160,{couleur:'jaune',largeur:2}).texte('glucose',169,72,{couleur:'jaune',taille:12,align:'center'});
-      craie.rect(200,80,18,50,{arrondi:3,couleur:'orange'}).ligne(209,130,209,160,{couleur:'orange',largeur:2}).texte('pyruvate',214,72,{couleur:'orange',taille:12,align:'center'});
+      craie.direct(()=>{Pt.seringue(craie.ctx,160,80,18,50,[250,204,21],step>=1);Pt.seringue(craie.ctx,200,80,18,50,[251,146,60],step>=2)});
+      craie.texte('glucose',169,72,{couleur:'jaune',taille:12,align:'center'});
+      craie.texte('pyruvate',214,72,{couleur:'orange',taille:12,align:'center'});
       craie.trait([[110,110],[110,60],[260,60],[260,100]],{couleur:'faible',largeur:1.2});exao(240,100);
     } else if(key==='aerobie'){
       craie.repere('bioreacteur',58,132,174,168,'bioréacteur aéré').repere('arrivee_air',18,84,72,64,'arrivée d’air').repere('sonde_o2',104,90,32,156,'sonde O₂').repere('sonde_co2',148,90,38,156,'sonde CO₂').repere('interface_exao',236,96,78,40,'interface EXAO').repere('ordinateur',326,82,70,76,'ordinateur');
-      craie.trait([[70,140],[70,290],[220,290],[220,140]],{largeur:2.6}).ligne(60,140,230,140,{largeur:2}).ligne(72,200,218,200,{couleur:'cyan',largeur:1.2,pointille:[6,5]}).texte('levures + glucose',145,278,{couleur:'faible',taille:12,align:'center'});
+      craie.direct(()=>{const c=craie.ctx;P.becher(c,70,140,150,150,{niveau:.6,teinte:[150,170,120]});for(let i=0;i<9;i++)P.levure(c,88+(i*41)%120,222+(i*29)%50,5.5,{graine:30+i})});
+      craie.texte('levures + glucose',145,278,{couleur:'faible',taille:12,align:'center'});
       craie.fleche(30,100,78,142,{couleur:'vert',largeur:1.8}).texte('air',24,92,{couleur:'vert',taille:14});
       sonde(120,100,240,'O₂','bleu');sonde(165,100,240,'CO₂','rouge');
       craie.trait([[120,100],[120,60],[260,60],[260,100]],{couleur:'faible',largeur:1.2}).trait([[165,100],[165,72],[270,72],[270,100]],{couleur:'faible',largeur:1.2});exao(240,100);
-      craie.direct(()=>{if(timer)for(let i=0;i<6;i++){const ph=(scene()*1.1+i*.4)%1;craie.cercle(90+(i*23)%110,285-ph*75,3,{couleur:'cyan',largeur:1,tremble:0})}});
+      craie.direct(()=>{if(timer)for(let i=0;i<6;i++){const ph=(scene()*1.1+i*.4)%1;P.bulleGaz(craie.ctx,90+(i*23)%110,285-ph*75,3.2)}});
     } else if(key==='anaerobie'){
       craie.repere('flacon_ferme',58,108,144,192,'flacon fermé').repere('eau_de_chaux',238,168,64,146,'eau de chaux').repere('sonde_o2',94,80,32,166,'sonde O₂').repere('sonde_co2',124,80,40,166,'sonde CO₂').repere('interface_exao',306,96,78,40,'interface EXAO').repere('ordinateur',396,82,70,76,'ordinateur');
       if(step>=1)craie.repere('bandelette',32,172,34,88,'bandelette glucose');
-      craie.trait([[70,150],[70,290],[190,290],[190,150]],{largeur:2.6}).rect(95,120,70,30,{arrondi:4}).texte('bouchon',130,112,{couleur:'faible',taille:12,align:'center'}).ligne(72,210,188,210,{couleur:'cyan',largeur:1.2,pointille:[6,5]}).texte('levures + glucose',130,278,{couleur:'faible',taille:12,align:'center'});
-      craie.trait([[165,135],[230,135],[230,220],[262,220]],{couleur:'faible',largeur:2}).trait([[250,180],[250,290],[290,290],[290,180]],{largeur:2.2}).texte('eau de chaux',270,305,{couleur:'faible',taille:12,align:'center'});
-      craie.direct(()=>{if(timer&&step>=2)for(let i=0;i<5;i++){const ph=(scene()*1.1+i*.3)%1;craie.cercle(262+(i*9)%22,285-ph*70,2.5,{couleur:'blanc',largeur:1,tremble:0})}});
+      craie.direct(()=>{const c=craie.ctx;P.becher(c,70,150,120,140,{niveau:.57,teinte:[170,150,100]});for(let i=0;i<7;i++)P.levure(c,86+(i*37)%90,232+(i*23)%42,5.5,{graine:50+i,bourgeon:false});
+        Pt.bouchon(c,95,120,70,30);Pt.tube(c,[[165,135],[230,135],[230,220],[262,220]]);P.becher(c,250,180,40,110,{niveau:.55,teinte:[200,215,225],alpha:.35})});
+      craie.texte('bouchon',130,112,{couleur:'faible',taille:12,align:'center'}).texte('levures + glucose',130,278,{couleur:'faible',taille:12,align:'center'});
+      craie.texte('eau de chaux',270,305,{couleur:'faible',taille:12,align:'center'});
+      craie.direct(()=>{if(timer&&step>=2)for(let i=0;i<5;i++){const ph=(scene()*1.1+i*.3)%1;P.bulleGaz(craie.ctx,262+(i*9)%22,285-ph*70,2.6)}});
       sonde(110,90,240,'O₂','bleu');sonde(140,90,240,'CO₂','rouge');
       craie.trait([[110,90],[110,60],[330,60],[330,100]],{couleur:'faible',largeur:1.2}).trait([[140,90],[140,74],[340,74],[340,100]],{couleur:'faible',largeur:1.2});exao(310,100);
-      if(step>=1){craie.depuis(S.stepAt[1]);craie.rect(40,180,14,60,{couleur:'jaune',arrondi:2}).texte('bandelette glucose',47,255,{couleur:'jaune',taille:11,align:'center'})}
-      if(step>=2){craie.depuis(S.stepAt[2]);craie.direct(()=>{craie.ctx.globalAlpha=.3;craie.ctx.fillStyle='#fff';craie.ctx.fillRect(252,230,36,58);craie.ctx.globalAlpha=1});craie.texte('trouble',270,170,{couleur:'blanc',taille:12,align:'center'})}
+      if(step>=1){craie.depuis(S.stepAt[1]);craie.direct(()=>Pt.bandelette(craie.ctx,40,180,14,60,step>=2));craie.texte('bandelette glucose',47,255,{couleur:'jaune',taille:11,align:'center'})}
+      if(step>=2){craie.depuis(S.stepAt[2]);craie.direct(()=>Pt.trouble(craie.ctx,252,230,36,58,Math.min(1,(scene()-S.stepAt[2])/1.5)));craie.texte('trouble',270,170,{couleur:'blanc',taille:12,align:'center'})}
     }
   }
   function graphe(){
@@ -126,12 +161,16 @@
     if(step===0){craie.pause(.2);for(const se of cfg.series)craie.point(px(0),py(cfg.steps[0][se.key]),4,se.couleur)}
   }
   function cellule(cx,cy,titre,aerobie){
-    craie.cercle(cx,cy,110,{largeur:2.6,depart:.4}).texte(titre,cx,cy-128,{couleur:'jaune',taille:16,align:'center'});
-    craie.cercle(cx+40,cy+40,26,{couleur:'violet',largeur:1.8,fond:'violet',fondAlpha:.1}).texte('noyau',cx+40,cy+80,{couleur:'violet',taille:12,align:'center'});
-    if(aerobie){for(let i=0;i<7;i++){const a=i*.9+.3,mx=cx+72*Math.cos(a),my=cy+66*Math.sin(a);craie.rect(mx-22,my-9,44,18,{couleur:'rouge',arrondi:9,largeur:1.6});craie.ligne(mx-10,my-9,mx-10,my+2,{couleur:'rouge',largeur:1});craie.ligne(mx,my+9,mx,my-2,{couleur:'rouge',largeur:1});craie.ligne(mx+10,my-9,mx+10,my+2,{couleur:'rouge',largeur:1})}}
-    else{craie.cercle(cx-30,cy-20,42,{couleur:'cyan',largeur:1.8}).cercle(cx+30,cy-55,26,{couleur:'cyan',largeur:1.8}).cercle(cx-55,cy+50,24,{couleur:'cyan',largeur:1.8});craie.rect(cx+60,cy-20,20,10,{couleur:'rouge',arrondi:5,largeur:1.4}).rect(cx-5,cy+78,18,9,{couleur:'rouge',arrondi:5,largeur:1.4})}
+    // (16 novembre 2026) la levure PEINTE : paroi, hyaloplasme, noyau ; mitochondries allongées à crêtes (aérobiose) ou vacuoles et rares petites mitochondries (anaérobiose)
+    craie.direct(()=>{const c=craie.ctx,a=Math.min(1,scene()/.8);c.save();c.globalAlpha=a;
+      Pt.paroi(c,cx,cy,110);P.cellule(c,cx,cy,106,106,{noyau:{x:cx+40,y:cy+40,r:26},grains:110,graine:cx});
+      if(aerobie){for(let i=0;i<7;i++){const t=i*.9+.3;Pt.mito(c,cx+72*Math.cos(t),cy+66*Math.sin(t),22,9,0,3)}}
+      else{Pt.vacuole(c,cx-30,cy-20,42);Pt.vacuole(c,cx+30,cy-55,26);Pt.vacuole(c,cx-55,cy+50,24);Pt.mito(c,cx+70,cy-15,10,5,0,1);Pt.mito(c,cx+4,cy+82,9,4.5,0,1)}
+      c.restore()});
+    craie.texte(titre,cx,cy-128,{couleur:'jaune',taille:16,align:'center'});
+    craie.texte('noyau',cx+40,cy+80,{couleur:'violet',taille:12,align:'center'});
   }
-  function draw(){const W=craie.W,H=craie.H;if(W<1||H<1)return true;craie.debut(3,scene());const c=craie.ctx,s=Math.min(W/760,H/380);c.translate((W-760*s)/2,(H-380*s)/2);c.scale(s,s);
+  function draw(){const W=craie.W,H=craie.H;if(W<1||H<1)return true;craie.debut(3,scene());const c=craie.ctx,s=Math.min(W/760,H/380);c.translate((W-760*s)/2,(H-380*s)/2);c.scale(s,s);craie.echelle=s;craie.tailleMin=15;
     if(key==='levures'){craie.repere('cellule_aerobie',86,70,228,262,'levure en aérobiose').repere('cellule_anaerobie',446,70,228,262,'levure en anaérobiose').repere('mitochondries',100,110,200,180,'mitochondries').repere('vacuoles',474,118,116,124,'vacuoles');if(step>=3)craie.repere('conclusion',40,354,680,26,'conclusion');
       cellule(200,200,'Aérobiose',true);cellule(560,200,'Anaérobiose',false);
       if(step>=1){craie.depuis(S.stepAt[1]);craie.texte('mitochondries allongées, crêtes développées',200,345,{couleur:'rouge',taille:13,align:'center',max:300})}

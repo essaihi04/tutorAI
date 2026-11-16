@@ -33,6 +33,7 @@
   </footer>
 </div>
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/svt/reactions_responsables_liberation_energie-tableau/peinture.js"></script>
 <script>
 (function () {
   'use strict';
@@ -77,30 +78,42 @@
   // ── Dessin à la craie (repère logique 850 × 420) ──────────────────────────
   const craie = new Craie($('canvas'), { onresize: redraw });
   const complexes = [[110, 'I'], [260, 'III'], [410, 'IV']];
+  // ── Peinture (16 novembre 2026) : espace intermembranaire et matrice teintés, membrane en double couche,
+  //    complexes de la chaîne et ATP synthase en protéines peintes (le rotor tourne à la craie par-dessus). ──
+  const P = window.SVTPeinture;
+  function peindreFond(c) {
+    const ge = c.createLinearGradient(0, 20, 0, 180); ge.addColorStop(0, P.rgba(P.T.mitoEsp, .05)); ge.addColorStop(1, P.rgba(P.T.mitoEsp, .22));
+    c.fillStyle = ge; c.fillRect(14, 20, 822, 160);
+    const gm = c.createLinearGradient(0, 255, 0, 410); gm.addColorStop(0, P.rgba(P.T.matrice, .28)); gm.addColorStop(1, P.rgba(P.T.matrice, .06));
+    c.fillStyle = gm; c.fillRect(14, 255, 822, 155);
+    P.membrane(c, 20, 177, 810, 80, { pas: 11 });
+    for (const [x] of complexes) P.proteine(c, x + 37, 211, 75, 122, { couleur: [56, 160, 200], alpha: .92 });
+    // ATP synthase : la partie dans la membrane, le pied, puis la tête (côté matrice) où tourne le rotor
+    P.proteine(c, 665, 190, 64, 96, { couleur: [150, 110, 210], alpha: .9 });
+    c.save(); c.strokeStyle = P.rgba([200, 170, 240], .9); c.lineWidth = 9; c.lineCap = 'round'; c.beginPath(); c.moveTo(665, 150); c.lineTo(665, 222); c.stroke(); c.restore();
+    P.bille(c, 665, 250, 30, [168, 120, 230]);
+  }
   function draw() {
     const W = craie.W, H = craie.H; if (W < 1 || H < 1) return true;
     craie.debut(11, (performance.now() - S.ouvert) / 1000);
-    const c = craie.ctx, s = Math.min(W / 850, H / 420); c.translate((W - 850 * s) / 2, (H - 420 * s) / 2); c.scale(s, s); craie.echelle = s; craie.tailleMin = 11;
+    const c = craie.ctx, s = Math.min(W / 850, H / 420); c.translate((W - 850 * s) / 2, (H - 420 * s) / 2); c.scale(s, s); craie.echelle = s; craie.tailleMin = 15;
     const running = S.simulationStatus === 'running' || S.simulationStatus === 'finished';
     const k = S.anim ? Math.min(1, (performance.now() - S.anim.t0) / S.anim.duree) : 0, now = performance.now() / 1000;
     const g = S.o2 ? S.gradient / 100 : 0;
-    // Espace intermembranaire, membrane, matrice
+    // Espace intermembranaire, membrane, matrice, complexes et ATP synthase PEINTS ; la craie écrit les noms par-dessus
+    craie.direct(() => peindreFond(c));
     craie.texte('espace intermembranaire : [H⁺] élevée', 30, 40, { couleur: 'rose', taille: 17 });
-    craie.rect(20, 175, 810, 84, { couleur: 'faible', arrondi: 26, fond: 'cyan', fondAlpha: .07, duree: .7 });
-    for (let x = 40; x < 820; x += 22) { craie.cercle(x, 188, 5, { couleur: 'tresfaible', largeur: 1.2, duree: .01 }); craie.cercle(x, 246, 5, { couleur: 'tresfaible', largeur: 1.2, duree: .01 }); }
     craie.texte('membrane interne', 828, 168, { couleur: 'faible', taille: 14, align: 'right' });
     craie.texte('matrice mitochondriale', 28, 300, { couleur: 'cyan', taille: 16 });
     craie.repere('espace_intermembranaire', 24, 18, 560, 34, 'espace intermembranaire').repere('protons', 40, 55, 560, 80, 'protons H⁺ accumulés').repere('membrane', 18, 170, 814, 94, 'membrane interne').repere('matrice', 22, 280, 300, 36, 'matrice mitochondriale');
     craie.pause(.15);
-    complexes.forEach(([x, nom]) => craie.rect(x, 150, 75, 122, { couleur: 'cyan', arrondi: 16, fond: 'cyan', duree: .35 }).texte(nom, x + 37, 218, { couleur: 'cyan', taille: 20, align: 'center' }).repere('complexe_' + nom.toLowerCase(), x - 4, 146, 83, 130, 'complexe ' + nom));
+    complexes.forEach(([x, nom]) => craie.pause(.2).texte(nom, x + 37, 218, { couleur: '#e0f2fe', taille: 20, align: 'center' }).repere('complexe_' + nom.toLowerCase(), x - 4, 146, 83, 130, 'complexe ' + nom));
     craie.texte('chaîne respiratoire', 298, 135, { couleur: 'cyan', taille: 15, align: 'center' });
     // Électrons : chemin pointillé sous les complexes, de NADH vers O₂
     craie.texte('électrons : NADH,H⁺ / FADH₂  →  O₂', 95, 318, { couleur: 'jaune', taille: 15 });
     craie.ligne(95, 340, 515, 340, { couleur: 'jaune', largeur: 2, pointille: [8, 7], duree: .5 });
     craie.repere('electrons', 88, 300, 440, 56, 'trajet des électrons');
     // ATP synthase
-    craie.trait([[625, 150], [640, 118], [665, 108], [690, 118], [705, 150], [695, 265], [665, 290], [635, 265]], { couleur: 'violet', largeur: 2.6, ferme: true });
-    craie.cercle(665, 250, 30, { couleur: 'violet', fond: 'violet' });
     craie.texte('ATP synthase', 665, 322, { couleur: 'violet', taille: 17, align: 'center' });
     craie.repere('atp_synthase', 618, 100, 96, 232, 'ATP synthase').repere('o2', 494, 362, 236, 40, 'O₂, accepteur final').repere('atp', 720, 282, 82, 110, 'ATP produit');
     craie.texte('H⁺', 605, 95, { couleur: 'rose', taille: 16 });
@@ -111,14 +124,14 @@
     craie.direct(() => {
       // Protons pompés dans l'espace intermembranaire (plus le gradient est fort, plus il y en a)
       const nb = Math.round(3 + 9 * (S.o2 ? S.gradient / 100 : .15));
-      for (let i = 0; i < nb; i++) { const x = 60 + (i * 61) % 520, y = 70 + (i * 37) % 60 + (running && S.o2 ? 4 * Math.sin(now * 3 + i) : 0); craie.point(x, y, 6, 'rose'); craie.texte('+', x, y + 4, { couleur: 'blanc', taille: 11, align: 'center' }); }
+      for (let i = 0; i < nb; i++) { const x = 60 + (i * 61) % 520, y = 70 + (i * 37) % 60 + (running && S.o2 ? 4 * Math.sin(now * 3 + i) : 0); P.bille(c, x, y, 7, [244, 114, 182]); craie.texte('+', x, y + 4, { couleur: 'blanc', taille: 11, align: 'center' }); }
       if (running) {
         // Électron qui parcourt la chaîne ; sans O₂ il s'arrête au complexe IV
         const ex = 115 + (S.o2 ? 400 : 330) * Math.min(1, (S.anim ? ((now - S.anim.t0 / 1000) % 2.2) / 2.2 : 0)), ey = 340;
-        craie.point(ex, ey, 9, 'jaune'); craie.texte('e⁻', ex, ey + 5, { couleur: '#111', taille: 13, align: 'center', alpha: 1 });
+        P.bille(c, ex, ey, 10, [250, 204, 21]); craie.texte('e⁻', ex, ey + 5, { couleur: '#111', taille: 13, align: 'center', alpha: 1 });
         if (!S.o2) { craie.texte('✗ pas d’accepteur final', 525, 372, { couleur: 'rouge', taille: 15 }); }
         // Protons qui traversent l'ATP synthase (seulement avec O₂, débit selon le gradient)
-        if (S.o2) for (let i = 0; i < 3; i++) { const ph = ((now * (0.6 + g) + i / 3) % 1); const py = 90 + 200 * ph, px = 652 + 26 * ((i * 7) % 3) / 2; craie.point(px, py, 6, 'rose'); }
+        if (S.o2) for (let i = 0; i < 3; i++) { const ph = ((now * (0.6 + g) + i / 3) % 1); const py = 90 + 200 * ph, px = 652 + 26 * ((i * 7) % 3) / 2; P.bille(c, px, py, 6.5, [244, 114, 182]); }
         // Rotor
         const a = S.o2 ? now * (2 + 4 * g) : 0;
         craie.ligne(665 + 26 * Math.cos(a), 250 + 26 * Math.sin(a), 665 - 26 * Math.cos(a), 250 - 26 * Math.sin(a), { couleur: 'blanc', largeur: 4 });
@@ -126,11 +139,11 @@
         // Eau formée et ATP produit
         if (S.o2 && k > .6) craie.texte('O₂ + 4 e⁻ + 4 H⁺ → 2 H₂O', 500, 390, { couleur: 'bleu', taille: 16 });
         const atpA = S.o2 ? .35 + .65 * g : .15, bounce = S.o2 ? 8 * Math.abs(Math.sin(now * 3)) : 0;
-        craie.cercle(760, 350 - bounce, 32, { couleur: 'vert', fond: 'vert', alpha: atpA }).texte('ATP', 760, 358 - bounce, { couleur: 'vert', taille: 20, align: 'center', alpha: atpA });
+        P.bille(c, 760, 350 - bounce, 30, [74, 222, 128], { alpha: atpA }); craie.texte('ATP', 760, 358 - bounce, { couleur: '#052e16', taille: 20, align: 'center', alpha: atpA });
         craie.texte(`${S.o2 ? S.gradient : 0} %`, 760, 300, { couleur: 'vert', taille: 15, align: 'center' });
       } else {
         craie.ligne(639, 250, 691, 250, { couleur: 'blanc', largeur: 4 }); craie.ligne(665, 224, 665, 276, { couleur: 'blanc', largeur: 4 });
-        craie.cercle(760, 350, 32, { couleur: 'vert', fond: 'vert', alpha: .3 }).texte('ATP', 760, 358, { couleur: 'vert', taille: 20, align: 'center', alpha: .4 });
+        P.bille(c, 760, 350, 30, [74, 222, 128], { alpha: .3 }); craie.texte('ATP', 760, 358, { couleur: 'vert', taille: 20, align: 'center', alpha: .4 });
       }
     });
     const complet = craie.fin();
