@@ -1,5 +1,7 @@
 # Audit des cours de maths face au cours d'un professeur (16 novembre 2026)
 
+> Contre-vérifié avec les cours des Pr Benmoussa et Atmani : `docs/audit-prof/maths-autres-profs.md`.
+
 **Référence** : livre de cours du Prof Fayssal, 2e bac sciences BIOF (`backend/cours 2bac pc/Math/Livre-Cours-2BAC-SC-EXP.pdf`,
 174 pages). Chaque manque a été vérifié dans nos cours (écran, cahier, voix, exercices) et confronté au cadre officiel de
 l'examen (qui fait foi) : ce que le livre donne pour la série sciences maths (SM) est classé « hors cadre, ne pas ajouter ».
