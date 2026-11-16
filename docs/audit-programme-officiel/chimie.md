@@ -3,7 +3,7 @@
 Date : 15 novembre 2026.
 Référence : cadre de référence officiel de l'examen national, physique-chimie, filière Sciences physiques, options internationales (CNEEO, 2015), transcrit dans `backend/cours 2bac pc/cadres de references 2BAC PC/cadre-de-reference-de-l-examen-national-physique-chimie-spc-2.json`.
 
-Le PDF officiel en ligne n'a pas pu être ouvert depuis la session cloud : les sites du ministère et ses miroirs sont bloqués par le réseau. Les points ambigus ont été tranchés avec le JSON officiel seul, dans le sens le plus strict (si ce n'est pas dans le cadre, on le retire).
+Le 15 novembre, le PDF officiel n'a pas pu être ouvert (sites bloqués par le réseau de la session) : les points ambigus ont été tranchés avec le JSON seul. Le 16 novembre, l'utilisateur a fourni le PDF officiel (29 pages, CNEEO, octobre 2015) : tout a été revalidé, voir « Validation avec le PDF officiel » à la fin.
 
 ## Le cadre officiel, partie chimie (33 % de la note)
 
@@ -49,7 +49,7 @@ Fichiers comparés : `perimetre.json` (clés `cinetique`, `acides_bases`, `dosag
 |---|---|---|---|
 | `perimetre.json`, `cinetique` (notion et méthode) | t₁/₂ : « date à laquelle x = x_max/2 » | « durée au bout de laquelle x = x_f/2 (x_f = x_max pour une transformation totale) » | Définition du cours et des corrigés : moitié de l'avancement **final**. L'ancienne écriture est fausse pour une transformation limitée. Nos fiches et nos cours disaient déjà x_f/2. |
 | `physique.json`, `piles_electrolyse` | « Lois de Faraday : m = (M × I × t)/(n × F) » | « Bilan de matière : Q = I·Δt = n(e⁻)·F, d'où m = M·I·Δt/(n·F) » | Le cadre ne parle pas de « lois de Faraday » (et la « loi de Faraday » est hors programme en induction) ; la relation se démontre à partir de Q = n(e⁻)·F. |
-| `physique.json`, `esterification_hydrolyse` | « Déplacement d'équilibre : excès d'un réactif, distillation » | « Contrôle de l'état final : excès d'un réactif, élimination d'un produit (distillation) » | « Déplacement d'équilibre » renvoie au principe de Le Chatelier, hors programme (règle de `perimetre.json`). |
+| `physique.json`, `esterification_hydrolyse` | « Déplacement d'équilibre : excès d'un réactif, distillation » | « Contrôle de l'état final : excès d'un réactif ou élimination d'un produit déplace l'état d'équilibre dans le sens direct » | Écriture du PDF officiel (sous-domaine 4) ; seul le nom « Le Chatelier » reste hors cadre. |
 | `programme_semestre1.json` et fiche `acides_bases` | « Transformations liées aux réactions acide-base » | « Transformations associées aux réactions acido-basiques » | Titre officiel du cadre. |
 | Les cinq fiches de chimie, `_note` | « capacités provisoires, à collationner avec le texte officiel » | « collationnées le 15 novembre 2026 avec le cadre officiel » | Fait par cet audit. |
 | Fiche `transformations_lentes_rapides`, `source` | catalyseur sans source officielle | « CDR-PC-2015 sous-domaine 4 pour le catalyseur » | Le catalyseur est au cadre (sous-domaine 4, et facteur cinétique) : il reste au cours ch9, sans types de catalyse. |
@@ -57,7 +57,7 @@ Fichiers comparés : `perimetre.json` (clés `cinetique`, `acides_bases`, `dosag
 ### Points vérifiés et gardés
 
 - Les capacités TLR1-7, CIN1-8, TD1-8, EE1-7, AB1-10 visent toutes une notion officielle (tableau ci-dessus). Les formules des fiches ont été recalculées : demi-équations et équations équilibrées (éléments et charges), x_max des exemples, conductivités (σ₀ = 0,249 S/m, σ_f = 0,091 S/m), pression (2 490 Pa), Qr,éq (1,57·10⁻⁵), K(méthanoïque) (1,8·10⁻⁴), pKa de NH₄⁺/NH₃ par Ke (9,22), K = 10^(pKa₂ − pKa₁), points de la courbe de dosage (pH_E = 8,25 ; 5,75), zones de virage. Aucune erreur trouvée dans les fiches.
-- « Chocs efficaces » reste hors cadre (déjà dans nos termes hors programme) : le JSON officiel ne cite pas d'interprétation microscopique en cinétique. Si l'utilisateur dispose du PDF détaillé (annexe 1) et qu'elle y figure, la règle est à revoir.
+- ~~« Chocs efficaces » reste hors cadre~~ → **corrigé le 16 novembre** : le PDF officiel les met au programme (voir la fin du fichier).
 - Dosage conductimétrique : gardé (le cadre dit « dosage acido-basique » sans limiter la méthode), une diapositive seulement.
 - Le critère d'évolution spontanée reste hors des cours ch11-ch13 (il appartient au sous-domaine 3).
 - `physique_blueprint.json` : rien hors cadre dans la partie chimie (structure des exercices observée sur 20 nationaux).
@@ -389,3 +389,33 @@ Sous le titre commun « Conformité au cadre officiel du ministère (mandatory c
 - la règle « une notion d'un chapitre suivant est hors champ dans un chapitre précédent » ;
 - la liste des mots hors cadre, avec ce qu'il faut dire à la place ;
 - les pièges trouvés dans cet audit.
+
+## Validation avec le PDF officiel (16 novembre 2026)
+
+Source : PDF du cadre de référence fourni par l'utilisateur (CNEEO, octobre 2015, 29 pages) : pages 14 à 17 (savoirs et savoir-faire par sous-domaine), annexe 1 pages 23 à 25 (programme de chimie), annexe 2 page 28 (TP), annexe 3 page 29 (compétences). Le site AlloSchool proposé n'a pas pu être ouvert (domaine bloqué par le réseau de la session) ; la page indiquée est d'ailleurs celle de la filière Sciences mathématiques, pas de la nôtre.
+
+### Confirmé par le PDF
+
+- Les quatre sous-domaines, leurs poids (6, 10, 10, 7 %) et la liste des 10 TP de chimie.
+- **Absents du PDF, donc bien hors cadre** : solution tampon, spectrophotométrie et absorbance, types de catalyse, ordre de réaction, Henderson, Kb, pKb, pOH, activité.
+- t₁/₂, vitesse volumique v = (1/V)·dx/dt, demi-équations écrites avec ⇌, réaction de dosage écrite « avec une seule flèche », Ke constante d'équilibre de l'autoprotolyse, pKe = −log Ke, diagrammes de prédominance **et** de distribution, zone de virage, critère d'évolution spontanée au sous-domaine 3 seulement.
+- Concentration massique : non citée par le PDF, mais le TP « dosage d'un produit de la vie courante » et le « dosage direct de l'aspirine » (comparer la masse trouvée à celle de la boîte) l'utilisent : elle reste comme outil de calcul.
+
+### Corrigé grâce au PDF
+
+| Point | Avant | Après |
+|---|---|---|
+| **Chocs efficaces** (sous-domaine 1, 2 : « interpréter l'influence de la concentration des réactifs et/ou de la température sur le nombre de chocs efficaces par unité de temps » ; sous-domaine 2, 1 : état d'équilibre interprété « en tenant compte des chocs efficaces ») | classés hors cadre par erreur dans `perimetre.json` et la fiche `cinetique` | retirés des termes hors programme ; capacité **CIN9** ajoutée ; TD5 complétée ; enseignés en ch10 (`ci_v6_epuisement`, `ci_v8_temperature`, compétence C6) et en ch11 (`td_e4_dynamique`). En ch9 (avant ch10), on garde « les entités se rencontrent plus souvent ». |
+| **Choix d'une méthode de suivi selon la valeur de t₁/₂** (annexe 1) | absent du cours ch10 | ajouté sur `ci_h4_comparer` (écran, voix, cahier), capacité CIN7 complétée |
+| **Réaction totale : taux d'avancement final à partir d'un exemple de dosage** (annexe 1, sous-domaine 2, 3) | ch13 disait seulement « K > 10⁴ » | ajouté sur `ab_d2_reaction` : pH = 4,8 après 10 mL → n(HO⁻) restant = 1,9·10⁻¹¹ mol ≪ x_max = 1,0·10⁻⁴ mol → τ ≈ 1 ; capacité AB8 complétée |
+| **Relation entre G et les [Xᵢ]** (sous-domaine 2, 2) | non citée dans la fiche `etat_equilibre` | ajoutée à EE5 |
+| **« Déplace l'état d'équilibre dans le sens direct »** (sous-domaine 4) | j'avais classé l'expression hors programme | c'est l'écriture officielle : remise dans `physique.json` ; seul « Le Chatelier » reste hors cadre |
+
+Voix à refaire en plus (speech_text fr et mixed, mots du pointage gardés) : **`ci_v6_epuisement`, `ci_v8_temperature`, `ci_h4_comparer`** (ch10), **`td_e4_dynamique`** (ch11), **`ab_d2_reaction`** (ch13).
+
+Les réactions de ch9 et ch10 où « chocs efficaces » avait été remplacé par « les entités se rencontrent plus souvent » restent justes. En ch9, « rencontres » est même mieux, car les chocs efficaces ne sont enseignés qu'en ch10. Pour la réaction de ch10 (`ci_v8_temperature`), on peut garder l'ancienne voix qui disait « chocs » si tu préfères.
+
+### À trancher
+
+- **Catalyseur en ch9** : le PDF cite comme facteurs cinétiques du sous-domaine 1 « la température et la concentration des réactifs » seulement. Le catalyseur est défini au sous-domaine 4 (« définition d'un catalyseur », « rôles accélérateur et sélectif »). Notre ch9 le présente comme troisième facteur (`tl_t3`, `tl_t4`, compétence C7). Il est au programme, mais plus tôt que dans le cadre. Faut-il le garder en ch9 ou le renvoyer au chapitre d'estérification ?
+- Le sous-domaine 4 cite aussi le rôle **sélectif** du catalyseur, les groupes caractéristiques, le nom des esters (5 atomes de carbone au plus), la distillation fractionnée, la cristallisation et la filtration sous vide : à prévoir dans le futur cours.
