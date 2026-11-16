@@ -620,6 +620,28 @@ function buildBench(g) {
   tool("bin", bin, [0, 0.105, 0]);
   const cah = rbox(0.17, 0.008, 0.23, 0.002, std(0x2b4f7a, 0.6), g, 0.66, 0.004, 0.12); cah.rotation.y = -0.1;
   print(0.155, 0.215, cah, 0, 0.0045, 0, [{ t: "TP · Acétate de linalyle", b: true, s: 0.05, y: 0.08 }, { t: "linalol + anhydride acétique", s: 0.038, y: 0.16 }, { t: "→ acétate de linalyle + acide acétique", s: 0.034, y: 0.22 }, { t: "C₁₀H₁₈O + C₄H₆O₃ → C₁₂H₂₀O₂ + C₂H₄O₂", s: 0.033, y: 0.29 }, { t: "1) reflux ≈ 30 min", s: 0.038, y: 0.37 }, { t: "2) eau, décantation, NaHCO₃,", s: 0.036, y: 0.44 }, { t: "   décantation, filtration", s: 0.036, y: 0.5 }], "#f6f3ea", "#223").rotation.x = -Math.PI / 2;
+  // --- identification du produit par CCM : plaque de silice, cuve d'élution (cyclohexane / acétate d'éthyle), cuve à diiode, capillaire
+  const tk = new THREE.Group(); tk.position.set(-0.07, 0, 0.1); g.add(tk); X.tank = tk;
+  noShadow(lathe([[0, 0], [0.031, 0], [0.032, 0.003], [0.032, 0.1], [0.0335, 0.102], [0.0305, 0.1], [0.0305, 0.003], [0, 0.003]], M.glass, tk, 0, 0, 0, 48), 3);
+  noShadow(cyl(0.0302, 0.0302, 0.005, liq(0xf4f6f8, 0.45), tk, 0, 0.0055, 0, 36), 2); // éluant : 0,5 cm, sous la ligne de dépôt
+  X.tankLid = noShadow(cyl(0.036, 0.036, 0.003, M.glass, tk, 0, 0.1035, 0, 40), 3);
+  noShadow(mesh(new THREE.CylinderGeometry(0.0322, 0.0322, 0.024, 40, 1, true, -2.4, 1.75), std(0xffffff, 0.6, 0, { map: canvasTex(512, 200, (c, w, h) => { c.fillStyle = "#fff"; c.fillRect(0, 0, w, h); c.fillStyle = "#3b6ea8"; c.fillRect(0, 0, w, 34); c.fillStyle = "#111"; c.textAlign = "center"; c.font = "bold 44px Arial"; c.fillText("Cuve d'élution", w / 2, 92); c.font = "30px Arial"; c.font = "26px Arial"; c.fillText("éluant : cyclohexane / acétate d'éthyle", w / 2, 146); }) }), tk, 0, 0.07, 0));
+  tool("cuve", tk, [0, 0.12, 0]);
+  const ij = new THREE.Group(); ij.position.set(-0.03, 0, -0.03); g.add(ij); X.iodJ = ij;
+  noShadow(lathe([[0, 0], [0.025, 0], [0.026, 0.004], [0.026, 0.075], [0.0275, 0.077], [0.0245, 0.075], [0.0245, 0.004], [0, 0.004]], M.glass, ij, 0, 0, 0, 40), 3);
+  const iM = std(0x2b2236, 0.3, 0.6); for (let i = 0; i < 12; i++) { const s = box(0.004, 0.0015, 0.003, iM, ij, (Math.random() - 0.5) * 0.03, 0.005, (Math.random() - 0.5) * 0.03); s.rotation.y = Math.random() * 3; }
+  noShadow(cyl(0.0242, 0.0242, 0.066, new THREE.MeshBasicMaterial({ color: 0x9a6a3a, transparent: true, opacity: 0.16, depthWrite: false }), ij, 0, 0.04, 0, 30), 2); // vapeurs de diiode
+  X.iodLid = noShadow(cyl(0.03, 0.03, 0.003, M.glass, ij, 0, 0.0785, 0, 36), 3);
+  noShadow(mesh(new THREE.CylinderGeometry(0.0262, 0.0262, 0.02, 40, 1, true, -2.6, 1.9), std(0xffffff, 0.6, 0, { map: canvasTex(512, 180, (c, w, h) => { c.fillStyle = "#fff"; c.fillRect(0, 0, w, h); c.fillStyle = "#6b3f1f"; c.fillRect(0, 0, w, 30); c.fillStyle = "#111"; c.textAlign = "center"; c.font = "bold 44px Arial"; c.fillText("Cuve à diiode I₂", w / 2, 92); c.font = "28px Arial"; c.fillText("révélation", w / 2, 140); }) }), ij, 0, 0.045, 0));
+  tool("iode", ij, [0, 0.095, 0]);
+  X.plateC = document.createElement("canvas"); X.plateC.width = 128; X.plateC.height = 320; X.plateT = new THREE.CanvasTexture(X.plateC); X.plateT.encoding = THREE.sRGBEncoding; X.plateT.anisotropy = 8;
+  const pl = new THREE.Group(); pl.position.set(0.02, 0.0025, 0.13); pl.rotation.set(-Math.PI / 2, 0, 0); g.add(pl); X.plate = pl;
+  box(0.03, 0.075, 0.0012, std(0xd8dde2, 0.4, 0.4), pl, 0, 0.0375, -0.0004); const face = new THREE.Mesh(new THREE.PlaneGeometry(0.0296, 0.0746), new THREE.MeshStandardMaterial({ map: X.plateT, roughness: 0.9 })); face.position.set(0, 0.0375, 0.0003); pl.add(face);
+  const fb = face.clone(); fb.rotation.y = Math.PI; fb.position.z = -0.0011; fb.material = std(0xf4f5f2, 0.9); pl.add(fb);
+  tool("plaque", pl, [0, 0.05, 0.01]);
+  const cp = new THREE.Group(); cp.position.set(0.005, 0, 0.19); g.add(cp); X.capil = cp;
+  noShadow(cyl(0.008, 0.008, 0.03, M.glass, cp, 0, 0.015, 0, 20, true), 3); const ct = noShadow(cyl(0.0008, 0.0008, 0.075, M.glass, cp, 0.002, 0.045, 0, 8), 3); ct.rotation.z = 0.08; X.capTip = ct;
+  tool("capil", cp, [0, 0.09, 0]); const cz = cyl(0.014, 0.014, 0.09, new THREE.MeshBasicMaterial({ visible: false }), cp, 0, 0.045, 0, 10); cz.userData.tool = "capil";
   glassEdges(g);
 }
 
@@ -634,12 +656,13 @@ function resetState(keepAttempt) { /*fini-reset*/ ST.fini = false;
     refr: "up", hose: null, water: false, heat: false, T: 20, reflux: 0, heatMin: 0, bumps: 0, loss: 0, lostV: 0, nextBump: 3, bumpT: 0, maxT: 20, xPour: 0,
     poured: false, amp: { ne: 0, nl: 0, na: 0, acO: 0, acA: 0, salt: 0, hc: 0, w: 0, emul: 0, stop: true, gas: 0, fizz: 0, washes: 0, hcAdds: 0, shakes: 0, needShake: false, seen: false, fizzSeen: false, drains: 0 }, ampAt: "ring",
     bkW: 50, Vw: 0, Vhc: 0, bkAq: { v: 0, org: 0 }, lostOrg: 0, drain: null, funV: 0, vialV: 0, prod: { ne: 0, nl: 0, na: 0, ac: 0, w: 0 }, collected: false,
-    pourArc: null, fall: null, puffT: 0, ans: {}, miss: 0, tblShown: false, cur: null,
+    pourArc: null, fall: null, puffT: 0, ans: {}, ansK: {}, miss: 0, tblShown: false, cur: null,
+    ccm: { dep: 0, s: null, t: 0, inTank: false, over: 0, hf: null, hE: null, hL: null, rev: false },
   });
   for (const k in TOOLS) { const t = TOOLS[k]; if (!t || !t.home) continue; t.obj.position.copy(t.home); t.obj.rotation.copy(t.homeRot); t.obj.scale.set(1, 1, 1); }
   for (const c of [X.anhB.userData.cap, X.linB.userData.cap, X.ponceJ.userData.cap, X.hcB.userData.cap, X.ampStop]) { const u = c.userData; if (u.off && u.par) { u.par.attach(c); c.position.copy(u.p); c.rotation.copy(u.r); u.off = false; } }
   X.funnel.visible = false; X.fall.visible = false; X.arcPour.visible = false; X.sinkStream.visible = false; X.flowIn.visible = false; X.bigBub.visible = false; X.puff.visible = false;
-  X.ponceIn.children.forEach((p) => (p.visible = false)); X.ampTip.visible = false; X.funLiq.visible = false; X.funDrip.visible = false; X.vialLiq.visible = false; X.ampKey.rotation.set(0, 0, 0);
+  X.ponceIn.children.forEach((p) => (p.visible = false)); X.ampTip.visible = false; X.funLiq.visible = false; X.funDrip.visible = false; X.vialLiq.visible = false; X.ampKey.rotation.set(0, 0, 0); X.tankLid.position.set(0, 0.1035, 0); X.iodLid.position.set(0, 0.0785, 0); drawPlate();
   X.valet.visible = true; X.bValet.visible = false; X.neckClamp.visible = false;
   X.hoseG.clear(); X.heatLed.material.emissiveIntensity = 0.05; X.mantleM.emissiveIntensity = 0; X.lcdH.set("--:--", ""); X.faucetH.rotation.set(0, 0, 0);
   if (!keepAttempt) $("#events").innerHTML = ""; $("#btnEval").hidden = true; const sp = $("#btnSpeed"); if (sp) sp.textContent = "⏩ ×" + ST.acc;
@@ -697,6 +720,12 @@ const WHY = {
   qs: `<p>Réponds dans le tableau : chaque réponse s'appuie sur ce que tu as vu pendant la manipulation.</p>`,
   bilan: `<p>Le bilan compare ce qui est réellement dans ton flacon : acétate de linalyle, linalol qui n'a pas réagi, acide et anhydride restants, eau.</p>`,
   odor: `<p>L'acétate de linalyle a une odeur douce de lavande. Une odeur de vinaigre signale de l'acide acétique (ou de l'anhydride) qui n'a pas été éliminé.</p>`,
+  ccm: `<p>La <b>chromatographie sur couche mince</b> (CCM) sert à <b>identifier</b> une espèce chimique. On dépose le produit P à côté de références : L (linalol, le réactif) et A (acétate de linalyle du commerce). L'éluant monte et entraîne chaque espèce à sa propre hauteur.</p>`,
+  ccmRev: `<p>Les taches sont incolores : les vapeurs de <b>diiode</b> les colorent en brun. Si la tache de P est à la <b>même hauteur</b> que celle de A, le produit est de l'acétate de linalyle. Une tache de P à la hauteur de L signale du linalol qui n'a pas réagi.</p>`,
+  ccmTop: `<p>Si le front de l'éluant atteint le haut de la plaque, on ne connaît plus la distance parcourue par l'éluant : le Rf est faux. On sort la plaque quand le front est à ≈ 1 cm du haut et on le marque aussitôt au crayon.</p>`,
+  ccmLow: `<p>Plaque sortie trop tôt : l'éluant a peu monté, les taches sont proches et le Rf est imprécis.</p>`,
+  ccmEarly: `<p>Révéler avant l'élution ne sépare rien : toutes les taches restent sur la ligne de dépôt.</p>`,
+  rf: `<p class="eq">Rf = h(tache) / h(front de l'éluant)</p><p>Les deux hauteurs se mesurent depuis la ligne de dépôt. Deux taches qui ont le même Rf (dans le même éluant) correspondent à la même espèce chimique.</p>`,
   bin: `<p>Les mélanges acides et organiques vont au bidon de récupération, jamais à l'évier.</p>`,
 };
 const TOOL_HELP = [
@@ -714,6 +743,7 @@ const TOOL_HELP = [
   ["Bécher (phase aqueuse)", "Reçoit les phases aqueuses qu'on fait couler : on les jette au bidon."],
   ["Entonnoir et flacon", "Filtration de la phase organique : le produit se recueille dans le flacon."],
   ["Bac à déchets", "Tout vider pour recommencer un essai."],
+  ["CCM : plaque, capillaire, cuves", "Dépôts L (linalol), A (acétate de linalyle du commerce), P (produit) sur la ligne à 1 cm ; élution dans la cuve fermée ; sortir avant que le front atteigne le haut et le marquer ; révéler au diiode ; Rf = h(tache) / h(front)."],
 ];
 function log(kind, txt, why) { const w = why ? WHY[why] : ""; ST.ev.push({ kind, txt }); const d = document.createElement("div"); d.className = "ev " + kind; d.innerHTML = `<span class="t">${clk(ST.simT)}</span>${txt}${w ? '<button type="button">Pourquoi ?</button><div class="why">' + w + "</div>" : ""}`; if (w) d.querySelector("button").onclick = () => d.classList.toggle("open"); $("#events").prepend(d); }
 function once(flag, kind, txt, why) { if (ST.flags[flag]) return; ST.flags[flag] = true; log(kind, txt, why); }
@@ -723,7 +753,8 @@ const CAMS = {
   wide: { p: [0.04, 0.78, 1.1], t: [0.04, 0.2, -0.12] }, fl: { p: [-0.3, 0.38, 0.6], t: [-0.42, 0.08, 0.08] },
   ep: { p: [-0.06, 0.32, 0.45], t: [-0.19, 0.11, 0.1] }, mont: { p: [0.36, 0.52, 0.42], t: [0.02, 0.26, -0.22] }, ball: { p: [0.16, 0.26, 0.12], t: [0.02, 0.12, -0.22] },
   cond: { p: [0.36, 0.58, 0.26], t: [0.08, 0.34, -0.26] }, amp: { p: [0.44, 0.36, 0.3], t: [0.3, 0.2, -0.05] }, ampLow: { p: [0.42, 0.22, 0.22], t: [0.3, 0.14, -0.05] },
-  ampPour: { p: [0.42, 0.42, 0.38], t: [0.27, 0.27, -0.05] }, filt: { p: [0.6, 0.3, 0.42], t: [0.46, 0.1, 0.1] }, bin: { p: [-0.42, 0.4, 0.2], t: [-0.6, 0.06, -0.34] },
+  ampPour: { p: [0.42, 0.42, 0.38], t: [0.27, 0.27, -0.05] }, filt: { p: [0.6, 0.3, 0.42], t: [0.46, 0.1, 0.1] }, ccm: { p: [0.0, 0.3, 0.44], t: [-0.03, 0.05, 0.08] },
+  tank: () => { const t = X.tank.position; return { p: [t.x, 0.085, t.z + 0.15], t: [t.x, 0.043, t.z] }; }, plate: () => { const c = gpos(X.plate, [0, 0.0375, 0]); const f = innerWidth / innerHeight < 1.4 ? 1.7 : 1.4; return { p: [c.x, c.y + 0.088 * f, c.z + 0.036 * f], t: [c.x, c.y, c.z - 0.002] }; }, bin: { p: [-0.42, 0.4, 0.2], t: [-0.6, 0.06, -0.34] },
 };
 let camFocus = null, camBusy = false;
 const look = (k) => { camFocus = k; const c = CAMS[k]; focusCam(typeof c === "function" ? c() : c); };
@@ -867,6 +898,14 @@ function suggestAll() {
     __step({ on: "ampoule", k: "Filtration", t: "Verse la phase organique par le haut de l'ampoule dans l'entonnoir garni de papier filtre.", why: "filt", cam: "filt" });
   }
   if (ST.funV > 0.05) __step({ on: "ffun", k: "Filtration", t: "Le produit traverse le papier filtre et coule dans le flacon.", why: "filt", cam: "filt", v: g1(ST.vialV) + " mL" });
+  if (ST.vialV > 0.2 && ST.funV <= 0.05) {
+    const C = ST.ccm;
+    if (!C.dep) __step({ on: "plaque", k: "CCM", t: "Identifie ton produit par CCM : dépose L (linalol), A (acétate de linalyle du commerce) et P (ton produit) sur la ligne de dépôt.", why: "ccm", cam: "plate" });
+    if (C.hf == null && !C.inTank) __step({ on: "cuve", k: "Élution", t: "Place la plaque dans la cuve d'élution fermée.", why: "ccm", cam: "ccm" });
+    if (C.inTank) __step({ on: "cuve", k: "Élution", t: "L'éluant monte : sors la plaque avant qu'il atteigne le haut, et marque le front.", why: "ccmTop", cam: "tank", v: "front " + g1(ccmD()) + " cm" });
+    if (!C.rev) __step({ on: "iode", k: "Révélation", t: "Révèle la plaque aux vapeurs de diiode, puis compare les taches.", why: "ccmRev", cam: "ccm" });
+    if (C.rev && ST.ans.rf == null) __step({ on: "plaque", k: "Rf", t: "Ouvre « Mesures » : calcule Rf = h / h_f pour la tache de ton produit, et compare avec A.", why: "rf", cam: "plate" });
+  }
   if (Object.keys(QS).some((k) => ST.ans[k] == null)) __step({ on: "vial", k: "Questions", t: "Ouvre « Mesures » et réponds aux questions sur ce que tu as observé.", why: "qs", cam: null });
   __step({ on: "vial", k: "Bilan", t: "Clique sur Évaluer pour voir ce que contient vraiment ton flacon.", why: "bilan", cam: "filt" });
 }
@@ -877,7 +916,7 @@ function updGuide() {
   $("#btnEval").hidden = !ST.poured;
   const key = g.on + g.t.slice(0, 24); if (key === lastKey) return; lastKey = key;
   el.querySelector(".n").textContent = "Guide"; el.querySelector(".k").textContent = g.k; el.querySelector(".t").textContent = g.t; el.querySelector(".h").textContent = g.h || "";
-  const camHeld = CAM_FIX.has(camFocus) && (isBusy() || ST.camNext);
+  const camHeld = (CAM_FIX.has(camFocus) && (isBusy() || ST.camNext)) || (camFocus === "plate" && ST.ccm.rev);
   if (g.cam && ST.guide && !ST.demo && !camHeld) look(g.cam);
 }
 
@@ -1126,6 +1165,62 @@ function emptyAll() {
   go(b, steps.concat([Object.assign(homeOf("ballon"), { dur: 1.0, up: 0.04, at: () => { resetState(true); log("info", "Tout est vidé dans le bidon de récupération et la verrerie rincée. Nouvel essai nº " + ST.attempts + ".", "bin"); toast("Nouvel essai.", ""); } })]));
 }
 
+/* ------------------------------------------------------------ CCM : identification du produit
+   Plaque de silice 3 × 7,5 cm, ligne de dépôt à 1 cm ; trois dépôts : L = linalol (réactif), A = acétate de linalyle du commerce,
+   P = produit synthétisé. Éluant cyclohexane / acétate d'éthyle ; révélation aux vapeurs de diiode (I₂ se fixe sur les doubles
+   liaisons C=C : taches brunes). L'ester, moins polaire que l'alcool, monte plus haut : Rf(acétate de linalyle) ≈ 0,72,
+   Rf(linalol) ≈ 0,38 (valeurs du modèle). Une tache de P à la hauteur de A identifie le produit ; une tache à la hauteur de L
+   = linalol qui n'a pas réagi. Front : d = 6,0·√(t/9) cm (montée capillaire, temps accéléré). */
+const RF_E = 0.72, RF_L = 0.38, CCM_MAX = 6.0, PX = 320 / 7.5, COLS = [0.2, 0.5, 0.8];
+const ccmD = () => CCM_MAX * Math.min(1, Math.sqrt(ST.ccm.t / 9));
+const ccmH = (rf, d, over) => Math.min(CCM_MAX, rf * d + over * 0.45);
+function ccmSample() { const v = prodV(); if (v < 0.05) return null; const P = ST.prod; return { e: (P.ne * VM.e) / v, l: (P.nl * VM.l) / v }; }
+const ccmLinP = () => { const C = ST.ccm; return !!(C.s && C.s.l > 0.04); }; // tache de linalol dans la colonne P
+function drawPlate() {
+  const c = X.plateC, x = c.getContext("2d"), w = c.width, h = c.height, C = ST.ccm || {}, Y = (cm) => h - cm * PX;
+  x.fillStyle = "#f6f6f1"; x.fillRect(0, 0, w, h); for (let i = 0; i < 700; i++) { x.fillStyle = `rgba(0,0,0,${Math.random() * 0.035})`; x.fillRect(Math.random() * w, Math.random() * h, 1.2, 1.2); }
+  const d = C.inTank || C.hf != null ? (C.inTank ? ccmD() : C.hf) : 0;
+  if (d > 0) { x.fillStyle = C.inTank ? "rgba(120,150,185,.34)" : "rgba(170,180,190,.1)"; x.fillRect(0, Y(1 + d), w, h - Y(1 + d)); if (C.inTank) { x.fillStyle = "rgba(90,120,160,.55)"; x.fillRect(0, Y(1 + d) - 1, w, 3); } }
+  x.strokeStyle = "#8a8f95"; x.lineWidth = 1.5; x.beginPath(); x.moveTo(6, Y(1)); x.lineTo(w - 6, Y(1)); x.stroke(); x.fillStyle = "#6d7278"; x.font = "bold 20px Arial"; x.textAlign = "center"; ["L", "A", "P"].forEach((t, i) => x.fillText(t, w * COLS[i], Y(0.35)));
+  if (C.hf != null && !C.inTank) { x.setLineDash([6, 4]); x.beginPath(); x.moveTo(4, Y(1 + C.hf)); x.lineTo(w - 4, Y(1 + C.hf)); x.stroke(); x.setLineDash([]); x.font = "16px Arial"; x.fillText("front", w / 2, Y(1 + C.hf) - 6); }
+  if (!C.dep) { X.plateT.needsUpdate = true; return; }
+  const ov = C.over || 0, hE = d > 0 ? ccmH(RF_E, d, ov) : 0, hL = d > 0 ? ccmH(RF_L, d, ov) : 0, brown = C.rev;
+  const spot = (cx, cm, a) => { x.fillStyle = brown ? `rgba(122,74,30,${a})` : `rgba(200,175,80,${a * 0.32})`; x.beginPath(); x.ellipse(cx, Y(1 + cm), 10, d > 0 ? 9 : 6, 0, 0, 7); x.fill(); if (brown) { x.fillStyle = `rgba(90,52,18,${a * 0.6})`; x.beginPath(); x.ellipse(cx, Y(1 + cm), 5.5, 4.5, 0, 0, 7); x.fill(); } };
+  if (C.dep >= 1) spot(w * COLS[0], hL, 0.85);
+  if (C.dep >= 2) spot(w * COLS[1], hE, 0.85);
+  if (C.dep >= 3 && C.s) { if (C.s.e > 0.05) spot(w * COLS[2], hE, Math.min(0.85, 0.2 + C.s.e * 0.7)); if (ccmLinP()) spot(w * COLS[2], hL, Math.min(0.85, 0.15 + C.s.l * 3)); }
+  X.plateT.needsUpdate = true;
+}
+function plateTo(dest, then) {
+  const P = X.plate, tk = X.tank.position, ij = X.iodJ.position, home = homeOf("plaque");
+  const into = (p, y0) => [{ to: [p.x, 0.16, p.z + 0.06], rot: [0, 0, 0], dur: 0.9, up: 0.05 }, { to: [p.x, 0.16, p.z], rot: [-0.1, 0, 0], dur: 0.5, up: 0 }, { to: [p.x, y0, p.z], dur: 0.6, up: 0 }];
+  if (dest === "tank") { go(X.tankLid, [{ to: [0.05, 0.1035, 0.01], dur: 0.45, up: 0.012 }]); go(P, into(tk, 0.004).concat([{ to: [tk.x, 0.004, tk.z], dur: 0.05, up: 0, at: then }])); go(X.tankLid, [{ to: [0, 0.1035, 0], dur: 0.45, up: 0.012 }]); }
+  else if (dest === "out") { go(X.tankLid, [{ to: [0.05, 0.1035, 0.01], dur: 0.45, up: 0.012 }]); go(P, [{ pre: then, to: [tk.x, 0.16, tk.z], dur: 0.6, up: 0 }, { to: [tk.x, 0.16, tk.z + 0.06], dur: 0.5, up: 0 }, Object.assign(home, { dur: 0.9, up: 0.04, at: () => look("plate") })]); go(X.tankLid, [{ to: [0, 0.1035, 0], dur: 0.45, up: 0.012 }]); }
+  else if (dest === "iode") { go(X.iodLid, [{ to: [0.045, 0.0785, 0.01], dur: 0.45, up: 0.012 }]); go(P, [{ to: [ij.x, 0.17, ij.z + 0.06], rot: [0, 0, 0], dur: 0.9, up: 0.05 }, { to: [ij.x, 0.17, ij.z], rot: [-0.08, 0, 0], dur: 0.5, up: 0 }, { to: [ij.x, 0.006, ij.z], dur: 0.6, up: 0 }, { to: [ij.x, 0.006, ij.z], dur: 1.6, up: 0, at: then }, { to: [ij.x, 0.17, ij.z], dur: 0.6, up: 0 }, Object.assign(homeOf("plaque"), { dur: 0.9, up: 0.04, at: () => look("plate") })]); go(X.iodLid, [{ to: [0, 0.0785, 0], dur: 0.45, up: 0.012 }]); }
+}
+function ccmDeposit() {
+  if (isBusy()) return busyToast(); const s = ccmSample(); if (!s || ST.vialV < 0.2) return toast("Il faut d'abord le produit filtré dans le flacon pour l'identifier par CCM.");
+  if (ST.ccm.dep) return toast("Les dépôts sont déjà faits sur cette plaque."); const P = X.plate.position, cp = X.capil; look("plate");
+  const at = (k) => [P.x + (COLS[k] - 0.5) * 0.026, 0.005, P.z + 0.006];
+  go(cp, [{ to: [at(0)[0], 0.06, P.z + 0.03], rot: [0, 0, 0.12], dur: 0.8, up: 0.05 }, { to: at(0), dur: 0.4, up: 0, at: () => { ST.ccm.dep = 1; drawPlate(); } },
+    { to: [at(1)[0], 0.05, P.z + 0.03], dur: 0.5, up: 0.02 }, { to: at(1), dur: 0.4, up: 0, at: () => { ST.ccm.dep = 2; drawPlate(); } },
+    { to: [at(2)[0], 0.05, P.z + 0.03], dur: 0.5, up: 0.02 }, { to: at(2), dur: 0.4, up: 0, at: () => { ST.ccm.dep = 3; ST.ccm.s = s; drawPlate(); log("good", "Trois dépôts sur la ligne de dépôt (au crayon, à 1 cm du bas) : L = linalol, A = acétate de linalyle du commerce, P = ton produit.", "ccm"); } },
+    Object.assign(homeOf("capil"), { dur: 0.8, up: 0.05 })]);
+}
+function ccmElute() {
+  if (isBusy()) return busyToast(); const C = ST.ccm; if (!C.dep) return toast("Fais d'abord les dépôts L, A et P sur la plaque."); if (C.inTank) return; if (C.hf != null) return toast("Cette plaque a déjà été éluée."); showProduct(X.tank, CAMS.tank(), X.plate, -1.0, 0.7);
+  if (C.rev) once("revEarly", "warn", "Plaque révélée avant l'élution : les taches sont restées sur la ligne de dépôt.", "ccmEarly");
+  plateTo("tank", () => { C.inTank = true; C.t = 0; C.over = 0; log("info", "Plaque placée dans la cuve fermée : l'éluant monte par capillarité.", "ccm"); });
+}
+function ccmOut() {
+  if (isBusy()) return busyToast(); const C = ST.ccm; if (!C.inTank) return; look("tank");
+  plateTo("out", () => { C.inTank = false; C.hf = Math.round(ccmD() * 10) / 10; if (C.over > 0.05) once("ccmTop", "warn", "Plaque sortie trop tard : le front de l'éluant a atteint le haut de la plaque, il n'est plus repérable.", "ccmTop"); else if (C.hf < 3) once("ccmLow", "warn", "Plaque sortie tôt : les taches sont peu séparées.", "ccmLow"); log("info", "Plaque sortie, front de l'éluant marqué au crayon : h_f = " + g1(C.hf) + " cm.", "ccm"); drawPlate(); renderTable(); });
+}
+function ccmReveal() {
+  if (isBusy()) return busyToast(); const C = ST.ccm; if (!C.dep) return toast("La plaque est vierge."); if (C.inTank) return toast("La plaque est encore dans la cuve d'élution."); if (C.rev) return toast("La plaque est déjà révélée."); showProduct(X.iodJ, null, null, -1.25);
+  plateTo("iode", () => { C.rev = true; if (C.hf != null) { C.hE = Math.round(ccmH(RF_E, C.hf, C.over) * 10) / 10; C.hL = Math.round(ccmH(RF_L, C.hf, C.over) * 10) / 10; } drawPlate(); log("good", "Révélation aux vapeurs de diiode : taches brunes." + (C.hf != null ? " Tache de A à h = " + g1(C.hE) + " cm, tache de L à h = " + g1(C.hL) + " cm." : ""), "ccmRev"); renderTable(); showTable(); });
+}
+
 /* ------------------------------------------------------------ menus */
 function menuFor(name) {
   const items = [], I = (ic, t, run, o = {}) => items.push(Object.assign({ ic, t, run }, o)), A = ST.amp;
@@ -1156,10 +1251,14 @@ function menuFor(name) {
   if (name === "nahco3") I("⬇", "Verser 20 mL dans l'ampoule", pourHC);
   if (name === "bkAq") I("ℹ", "Phase aqueuse : " + g1(ST.bkAq.v) + " mL (à jeter)", () => toast(ST.bkAq.org > 0.3 ? "Attention : ce bécher contient aussi " + g1(ST.bkAq.org) + " mL de phase organique perdue." : "Ce bécher reçoit la phase du bas : eau, acide acétique, acétate de sodium."));
   if (name === "vial" || name === "ffun") { if (prodV() > 0.1) I("👃", "Sentir le produit", smell); else I("ℹ", "Flacon vide", () => toast("Le produit filtré coulera ici.")); }
+  if (name === "plaque") { const C = ST.ccm; if (!C.dep) I("✏", "Déposer L, A et P au capillaire", ccmDeposit); else if (C.inTank) I("⬆", "Sortir la plaque et marquer le front", ccmOut, { s: "front " + g1(ccmD()) + " cm" }); else { if (C.hf == null) I("⬇", "Placer dans la cuve d'élution", ccmElute); if (!C.rev) I("🟤", "Révéler aux vapeurs de diiode", ccmReveal, { d: C.hf == null }); if (C.rev || C.hf != null) I("👁", "Regarder la plaque", () => look("plate")); } }
+  if (name === "capil") I("✏", "Déposer L, A et P sur la plaque", ccmDeposit);
+  if (name === "cuve") { if (ST.ccm.inTank) I("⬆", "Sortir la plaque et marquer le front", ccmOut, { s: "front " + g1(ccmD()) + " cm" }); else if (ST.ccm.dep && ST.ccm.hf == null) I("⬇", "Y placer la plaque", ccmElute); else I("ℹ", "Cuve d'élution", () => toast(ST.ccm.dep ? "La plaque a déjà été éluée." : "Fais d'abord les dépôts sur la plaque.")); }
+  if (name === "iode") { if (ST.ccm.dep && !ST.ccm.inTank && !ST.ccm.rev) I("🟤", "Révéler la plaque", ccmReveal); else I("ℹ", "Cuve à diiode", () => toast("Elle révèle les taches de la plaque après l'élution.")); }
   if (name === "bin") I("🗑", "Tout vider et recommencer (nouvel essai)", emptyAll, { d: true });
   return items;
 }
-const NAMES = { ballon: "Ballon 250 mL", linalol: "Linalol", anhydride: "Anhydride acétique", ep: "Éprouvette 25 mL", ponce: "Pierre ponce", refr: "Réfrigérant à boules", eau: "Robinet d'eau", chauffe: "Chauffe-ballon", ampoule: "Ampoule à décanter", eauD: "Eau distillée", nahco3: "Hydrogénocarbonate de sodium", bkAq: "Bécher (phase aqueuse)", vial: "Flacon (produit)", ffun: "Entonnoir + papier filtre", bin: "Déchets" };
+const NAMES = { ballon: "Ballon 250 mL", linalol: "Linalol", anhydride: "Anhydride acétique", ep: "Éprouvette 25 mL", ponce: "Pierre ponce", refr: "Réfrigérant à boules", eau: "Robinet d'eau", chauffe: "Chauffe-ballon", ampoule: "Ampoule à décanter", eauD: "Eau distillée", nahco3: "Hydrogénocarbonate de sodium", bkAq: "Bécher (phase aqueuse)", vial: "Flacon (produit)", ffun: "Entonnoir + papier filtre", bin: "Déchets", plaque: "Plaque de CCM", capil: "Capillaire", cuve: "Cuve d'élution", iode: "Cuve à diiode" };
 const INFO = {
   ballon: "<b>Ballon à fond rond 250 mL</b> : contient le mélange linalol + anhydride acétique ; il se chauffe dans le chauffe-ballon, sous le réfrigérant.",
   linalol: "<b>Linalol C₁₀H₁₈O</b> : alcool de la lavande, réactif. On en prend 5 mL.",
@@ -1175,6 +1274,10 @@ const INFO = {
   bkAq: "<b>Bécher</b> : reçoit la phase du bas qu'on fait couler par le robinet.",
   vial: "<b>Flacon de récupération</b> : reçoit le produit filtré, l'acétate de linalyle.",
   ffun: "<b>Entonnoir + papier filtre</b> : filtre la phase organique versée par le haut de l'ampoule.",
+  plaque: "<b>Plaque de CCM</b> (gel de silice) : identifie le produit. L = linalol, A = acétate de linalyle du commerce, P = ton produit. Une tache de P à la même hauteur que A : même espèce chimique.",
+  capil: "<b>Capillaire</b> : dépose une très petite goutte de chaque échantillon sur la ligne de dépôt, tracée au crayon à 1 cm du bas.",
+  cuve: "<b>Cuve d'élution</b> : un peu d'éluant (cyclohexane / acétate d'éthyle), sous la ligne de dépôt ; cuve fermée. L'éluant monte et entraîne les espèces, plus ou moins loin.",
+  iode: "<b>Cuve à diiode I₂</b> : les vapeurs de diiode colorent en brun les taches, invisibles sinon.",
   bin: "<b>Bidon de récupération</b> : mélanges acides et organiques ; jamais à l'évier.",
 };
 function showTip(name, x, y) {
@@ -1184,7 +1287,7 @@ function showTip(name, x, y) {
   t.hidden = false; const r = t.getBoundingClientRect(), lim = (v, a, b) => Math.max(a, Math.min(b, v));
   t.style.left = lim(x + 16, 8, window.innerWidth - r.width - 8) + "px"; t.style.top = lim(y + 18, 8, window.innerHeight - r.height - 8) + "px";
 }
-const HELP_KEY = { linalol: 0, anhydride: 1, ep: 2, ballon: 3, ponce: 4, refr: 5, eau: 6, chauffe: 7, ampoule: 8, eauD: 9, nahco3: 10, bkAq: 11, ffun: 12, vial: 12, bin: 13 };
+const HELP_KEY = { linalol: 0, anhydride: 1, ep: 2, ballon: 3, ponce: 4, refr: 5, eau: 6, chauffe: 7, ampoule: 8, eauD: 9, nahco3: 10, bkAq: 11, ffun: 12, vial: 12, bin: 13, plaque: 14, capil: 14, cuve: 14, iode: 14 };
 function closeMenu() { $("#menu").hidden = true; }
 function openMenu(name, x, y) {
   const items = menuFor(name); if (!items.length) return;
@@ -1207,18 +1310,31 @@ const QS = {
   q2: { t: "Où est la phase organique dans l'ampoule ?", o: ["en haut : elle est moins dense que l'eau", "en bas : elle est plus dense que l'eau"], ok: 0, need: () => ST.amp.seen, why: "decant" },
   q3: { t: "Gaz dégagé avec l'hydrogénocarbonate", o: ["dihydrogène H₂", "dioxyde de carbone CO₂", "dioxygène O₂"], ok: 1, need: () => ST.amp.fizzSeen, why: "hc" },
   q4: { t: "Rôle de l'hydrogénocarbonate de sodium", o: ["dissoudre l'acétate de linalyle", "neutraliser l'acide acétique (→ acétate de sodium)", "accélérer la réaction"], ok: 1, need: () => ST.amp.fizzSeen, why: "hc" },
+  q5: { t: "CCM : ton produit est-il de l'acétate de linalyle ?", o: ["oui : une tache de P est à la même hauteur que A", "non : aucune tache de P à la hauteur de A"], ok: () => (ST.ccm.s && ST.ccm.s.e > 0.05 ? 0 : 1), need: () => ST.ccm.rev && ST.ccm.hf != null, why: "ccmRev" },
+  q6: { t: "CCM : ton produit est-il pur ?", o: ["oui : une seule tache en P", "non : une 2ᵉ tache en P, à la hauteur de L (linalol restant)"], ok: () => (ccmLinP() ? 1 : 0), need: () => ST.ccm.rev && ST.ccm.hf != null, why: "ccmRev" },
 };
-function rowData() { return { lin: ST.Vlin > 0 ? g1(ST.Vlin) : null, anh: ST.Vanh > 0 ? g1(ST.Vanh) : null, reflux: ST.heatMin > 0 ? String(Math.floor(ST.reflux)) : null, w: ST.Vw > 0 ? g1(ST.Vw) : null, hc: ST.Vhc > 0 ? g1(ST.Vhc) : null, prod: ST.vialV > 0.05 ? g1(ST.vialV) : null }; }
+function rowData() { return { lin: ST.Vlin > 0 ? g1(ST.Vlin) : null, anh: ST.Vanh > 0 ? g1(ST.Vanh) : null, reflux: ST.heatMin > 0 ? String(Math.floor(ST.reflux)) : null, w: ST.Vw > 0 ? g1(ST.Vw) : null, hc: ST.Vhc > 0 ? g1(ST.Vhc) : null, prod: ST.vialV > 0.05 ? g1(ST.vialV) : null, ...ccmRow() }; }
+function ccmRow() { const C = ST.ccm, ok = C.rev && C.hf != null, hP = ok && C.s && C.s.e > 0.05 ? C.hE : null, rf = hP != null ? +(hP / C.hf).toFixed(2) : null, kk = [C.hf, hP].join("|"); if (ST.ansK.rf !== kk) { ST.ansK.rf = kk; delete ST.ans.rf; } return { hf: ok ? C.hf : null, hA: ok ? C.hE : null, hP, rf }; }
+function checkRf(txt) {
+  const d = rowData(), v = parseFloat(String(txt).replace(/\s/g, "").replace(",", "."));
+  if (d.rf == null) { toast("Il manque une mesure : révèle la plaque après l'élution.", "bad"); return false; }
+  if (isNaN(v)) { toast("Écris un nombre, par exemple 0,72.", "bad"); return false; }
+  if (Math.abs(v - d.rf) <= 0.021) { ST.ans.rf = d.rf; log("good", "Calcul juste : Rf(P) = " + fmt(d.rf, 2) + ", le même que celui de A. Bravo !", "rf"); toast("Bravo ! Rf = " + fmt(d.rf, 2), "good"); renderTable(); return true; }
+  ST.miss++; log("warn", "Calcul refusé : Rf ≠ " + String(txt).trim() + ".", "rf"); toast("Résultat faux, refusé : recalcule Rf = h / h_f.", "bad"); return false;
+}
+const qOk = (q) => (typeof q.ok === "function" ? q.ok() : q.ok);
 function checkQ(k, i) {
   const q = QS[k]; if (!q.need()) { toast("Fais d'abord l'expérience qui permet de répondre.", "bad"); return false; }
-  if (i === q.ok) { ST.ans[k] = i; log("good", "Réponse juste : " + q.t + " → " + q.o[i] + ".", q.why); toast("Bravo ! " + q.o[i], "good"); renderTable(); return true; }
+  if (i === qOk(q)) { ST.ans[k] = i; log("good", "Réponse juste : " + q.t + " → " + q.o[i] + ".", q.why); toast("Bravo ! " + q.o[i], "good"); renderTable(); return true; }
   ST.miss++; log("warn", "Réponse refusée : " + q.t + ".", q.why); toast("Ce n'est pas ce que montre l'expérience : regarde de nouveau.", "bad"); renderTable(); return false;
 }
 function renderTable() {
   const box = $("#tbl"); if (!box || !ST.ans) return; const d = rowData(), v = (x, u) => (x == null ? '<td class="na">—</td>' : `<td class="au">${x} ${u}</td>`);
   const qrow = (k) => { const q = QS[k]; const cell = ST.ans[k] != null ? `<td class="ok">${q.o[ST.ans[k]]}<small>✓ Bravo !</small></td>` : !q.need() ? '<td class="na" title="Pas encore observé">— (à observer)</td>' : `<td class="in"><select data-q="${k}" aria-label="${q.t}"><option value="">choisis…</option>${q.o.map((o, i) => `<option value="${i}">${o}</option>`).join("")}</select></td>`; return `<tr><td><b>${q.t}</b></td>${cell}</tr>`; };
   box.innerHTML = `<table class="mt st"><tr><th>linalol<br>(mL)</th><th>anhydride<br>acétique (mL)</th><th>reflux<br>(min)</th><th>eau<br>distillée (mL)</th><th>NaHCO₃<br>(mL)</th><th>produit<br>filtré (mL)</th></tr><tr>${v(d.lin, "mL")}${v(d.anh, "mL")}${v(d.reflux, "min")}${v(d.w, "mL")}${v(d.hc, "mL")}${v(d.prod, "mL")}</tr></table>` +
+    `<table class="mt st"><tr><th>CCM · front<br>h_f (cm)</th><th>tache de A<br>h (cm)</th><th>tache de P<br>h (cm)</th><th class="c">Rf(P)<br>h / h_f</th></tr><tr>${v(d.hf == null ? null : g1(d.hf), "cm")}${v(d.hA == null ? null : g1(d.hA), "cm")}${v(d.hP == null ? null : g1(d.hP), "cm")}${ST.ans.rf != null ? `<td class="ok">${fmt(ST.ans.rf, 2)}<small>✓ Bravo !</small></td>` : d.rf == null ? '<td class="na">—</td>' : '<td class="in"><input type="text" inputmode="decimal" autocomplete="off" spellcheck="false" data-f="rf" placeholder="h / h_f" aria-label="Rf du produit"><button type="button" title="Valider">✓</button></td>'}</tr></table>` +
     `<table class="mt st"><tr><th>Question</th><th>Ta réponse</th></tr>${Object.keys(QS).map(qrow).join("")}</table>`;
+  const inp = box.querySelector('input[data-f="rf"]'); if (inp) { const go1 = () => { if (!inp.value.trim()) return; if (!checkRf(inp.value)) { inp.value = ""; const td = inp.parentElement; td.classList.remove("no"); void td.offsetWidth; td.classList.add("no"); let m = td.querySelector("small"); if (!m) { m = document.createElement("small"); td.append(m); } m.textContent = "✗ faux, refusé : recalcule"; inp.focus(); } }; inp.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") go1(); }); inp.nextElementSibling.onclick = go1; }
   box.querySelectorAll("select[data-q]").forEach((s) => (s.onchange = () => { if (s.value !== "") checkQ(s.dataset.q, +s.value); }));
 }
 function showTable() { if (ST.tblShown) return; ST.tblShown = true; $("#exao").hidden = false; renderTable(); }
@@ -1309,7 +1425,8 @@ function tick(dt) {
   // --- temps de l'expérience (accéléré) : chauffage, réaction, refroidissement, décantation
   const A = ST.amp, pouring = !!(ST.epFlow || ST.drain), dtm = pouring ? dt / 60 : (dt * ST.acc) / 60;
   const inHeat = ST.bPos === "heat", full = Vball() > 1 && !ST.poured;
-  if (ST.heat || ST.T > 20.5 || A.emul > 0) ST.simT += dtm;
+  if (ST.heat || ST.T > 20.5 || A.emul > 0 || ST.ccm.inTank) ST.simT += ST.ccm.inTank && !ST.heat && ST.T <= 20.5 && !A.emul ? (dt * ST.acc) / 120 : dtm;
+  if (ST.ccm.inTank) { const C = ST.ccm; C.t += (dt * ST.acc) / 120; if (C.t > 9) C.over = C.t - 9; C.redraw = (C.redraw || 0) + dt; if (C.redraw > 0.25) { C.redraw = 0; drawPlate(); } } // l'élution suit le temps accéléré
   if (ST.heat) { ST.heatMin += dtm; X.mantleM.emissiveIntensity = Math.min(0.55, X.mantleM.emissiveIntensity + dt * 0.3); } else X.mantleM.emissiveIntensity = Math.max(0, X.mantleM.emissiveIntensity - dt * 0.2);
   if (ST.heat && inHeat && full) { ST.T += (TB + 35 - ST.T) * (1 - Math.exp(-dtm / 4)); ST.T = Math.min(ST.T, TB); } else { const tau = inHeat ? 7 : 5; ST.T += (20 - ST.T) * (1 - Math.exp(-dtm / tau)); }
   ST.maxT = Math.max(ST.maxT, ST.T); const boil = full && ST.T >= TB - 0.6;
@@ -1407,12 +1524,13 @@ function evaluate() { /*fini*/
   if (ST.lostOrg > 0.3) pts.push(g1(ST.lostOrg) + " mL de phase organique partis dans le bécher (robinet fermé trop tard).");
   if (ST.flags.aqLeft) pts.push("Phase aqueuse mal évacuée : " + g1(vW) + " mL d'eau dans le produit, qui est trouble.");
   if (!ST.collected) pts.push("La phase organique n'a pas été recueillie par filtration.");
+  { const C = ST.ccm; if (C.rev && C.hf != null) pts.push("CCM : " + (C.s && C.s.e > 0.05 ? "une tache de P à la hauteur de A (Rf ≈ " + fmt(C.hE / C.hf, 2) + ") : le produit est bien de l'acétate de linalyle" : "aucune tache de P à la hauteur de A : le produit n'est pas de l'acétate de linalyle") + (ccmLinP() ? " ; une 2ᵉ tache à la hauteur de L : il reste du linalol." : " ; pas de tache de linalol.")); else if (ST.collected) pts.push("Produit non identifié par CCM."); if (ST.flags.ccmTop) pts.push("CCM sortie trop tard : front non repérable, Rf faussé."); }
   if (ST.miss) pts.push(ST.miss + " réponse(s) refusée(s) dans le tableau.");
   const nAns = Object.keys(QS).filter((k) => ST.ans[k] != null).length, ok = ST.collected && pur >= 0.88 && vE >= 4;
   const odor = vAc > 0.4 ? "vinaigre piquant (acide acétique)" : vL > 0.6 ? "lavande florale (linalol restant)" : "lavande douce et fruitée";
   const o = $("#overlay"); o.hidden = false;
   o.innerHTML = `<div class="card"><p class="sub" style="margin:0;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--muted)">Bilan · essai nº ${ST.attempts}</p><h1>${ok ? "Synthèse réussie" : !ST.collected ? "Synthèse à terminer" : "Produit à améliorer"}</h1>
-  <div class="res"><span>Linalol / anhydride acétique</span><b>${g1(ST.Vlin)} mL / ${g1(ST.Vanh)} mL</b><span>Durée du reflux</span><b>${Math.floor(ST.reflux)} min</b><span>Linalol transformé</span><b>${Math.round(ST.xPour * 100)} %</b><span>Produit recueilli</span><b>${g1(vT)} mL</b><span>dont acétate de linalyle</span><b>${g1(vE)} mL (${Math.round(pur * 100)} %)</b><span>Linalol qui n'a pas réagi</span><b>${g1(vL)} mL</b><span>Acide acétique et anhydride</span><b>${g1(vAc)} mL</b><span>Eau</span><b>${g1(vW)} mL</b><span>Odeur</span><b>${odor}</b><span>Questions justes</span><b>${nAns} / 4</b></div>
+  <div class="res"><span>Linalol / anhydride acétique</span><b>${g1(ST.Vlin)} mL / ${g1(ST.Vanh)} mL</b><span>Durée du reflux</span><b>${Math.floor(ST.reflux)} min</b><span>Linalol transformé</span><b>${Math.round(ST.xPour * 100)} %</b><span>Produit recueilli</span><b>${g1(vT)} mL</b><span>dont acétate de linalyle</span><b>${g1(vE)} mL (${Math.round(pur * 100)} %)</b><span>Linalol qui n'a pas réagi</span><b>${g1(vL)} mL</b><span>Acide acétique et anhydride</span><b>${g1(vAc)} mL</b><span>Eau</span><b>${g1(vW)} mL</b><span>Odeur</span><b>${odor}</b><span>Identification par CCM</span><b>${ST.ccm.rev && ST.ccm.hf != null ? (ST.ccm.s && ST.ccm.s.e > 0.05 ? "tache de P = tache de A" : "pas d'ester") : "non faite"}</b><span>Questions justes</span><b>${nAns} / ${Object.keys(QS).length}</b></div>
   <p>${ok ? "Le produit est surtout de l'acétate de linalyle : le reflux a fait réagir presque tout le linalol, l'eau puis l'hydrogénocarbonate ont éliminé l'anhydride et l'acide acétique, et la décantation a séparé la phase organique." : "Les points ci-dessous expliquent ce qui reste dans ton produit."}</p>
   ${pts.length ? "<p><b>Ce qui a influencé le résultat :</b></p><ul>" + pts.map((p) => "<li>" + p + "</li>").join("") + "</ul>" : "<p>Aucune erreur de manipulation relevée.</p>"}
   <div class="row"><button class="btn" id="again" type="button">Vider et recommencer</button><button class="btn ghost" id="look" type="button">Continuer à explorer</button><button class="btn ghost" id="seeLog" type="button">Voir le carnet</button></div></div>`;
@@ -1448,7 +1566,10 @@ const DEMO = [
   { k: "Décantation", t: "On enlève le bouchon et on laisse décanter de nouveau.", why: "decant", cam: "amp", run: async () => { ampStopper(); await fast(() => ST.amp.emul <= 0); }, wait: 1.5 },
   { k: "Phase aqueuse", t: "On fait couler la phase du bas (eau + acétate de sodium) dans le bécher.", why: "drain", cam: "ampLow", run: demoDrain, wait: 1 },
   { k: "Filtration", t: "On verse la phase organique par le haut de l'ampoule, à travers le papier filtre, dans un flacon propre.", why: "filt", cam: "filt", run: async () => { collectOrg(); while (ST.q.length) await demoTick(); await until(() => ST.funV <= 0); }, wait: 1.5 },
-  { k: "Questions", t: "Dans le tableau : le rôle du reflux, la place de la phase organique, le gaz dégagé et le rôle de l'hydrogénocarbonate.", why: "qs", cam: "filt", run: () => { for (const k in QS) ST.ans[k] = QS[k].ok; renderTable(); showTable(); }, wait: 3 },
+  { k: "CCM", t: "Identification du produit par CCM : on dépose L (linalol), A (acétate de linalyle du commerce) et P (notre produit) sur la ligne de dépôt.", why: "ccm", cam: "plate", run: ccmDeposit, wait: 1 },
+  { k: "Élution", t: "La plaque est placée dans la cuve fermée : l'éluant monte et entraîne chaque espèce à sa hauteur. On la sort avant que le front atteigne le haut.", why: "ccm", cam: "tank", run: async () => { ccmElute(); await until(() => ST.ccm.inTank); const a = ST.acc; ST.acc = 60; await until(() => ccmD() >= 5.2); ST.acc = a; ccmOut(); }, wait: 1 },
+  { k: "Révélation", t: "Vapeurs de diiode : taches brunes. La tache de P est à la même hauteur que celle de A : le produit est de l'acétate de linalyle. La légende nomme chaque tache.", why: "ccmRev", cam: "plate", run: ccmReveal, wait: 6 },
+  { k: "Questions", t: "Dans le tableau : le Rf du produit, le rôle du reflux, la place de la phase organique, le gaz dégagé, le rôle de l'hydrogénocarbonate et la CCM.", why: "qs", cam: "plate", run: () => { for (const k in QS) ST.ans[k] = qOk(QS[k]); const d = rowData(); if (d.rf != null) ST.ans.rf = d.rf; renderTable(); showTable(); }, wait: 3 },
   { k: "Bilan", t: "Fin de la démonstration : à toi de refaire la synthèse, avec ou sans erreurs.", why: null, cam: "wide", run: evaluate, wait: 0.5 },
 ];
 const demoTick = () => new Promise((r) => setTimeout(r, 100)).then(async () => { while (ST.demo && ST.demoPaused) await new Promise((r) => setTimeout(r, 100)); if (!ST.demo) throw DEMO_STOP; });
@@ -1512,9 +1633,20 @@ init3d(); resetState(); stepButtons(); cadrages(); demoButtons();
     { at: P(X.ffun, [0.022, 0.06, 0]), t: "entonnoir + papier filtre", m: "filtre la phase organique", c: "#5d6670" },
     { at: () => gpos(X.vial, [0.01, 0.003 + Math.max(0.004, (ST.vialV * 1e-6) / (Math.PI * 0.0118 * 0.0118)) / 2, 0]).toArray(), t: () => (ST.fini ? "acétate de linalyle obtenu" : "flacon de récupération"), m: () => (ST.fini ? g1(ST.vialV) + " mL · odeur de lavande" : ST.vialV > 0.05 ? g1(ST.vialV) + " mL" : "vide"), c: "#c99a1a" },
   ];
-  Object.assign(RESVIEW, { ampoule: "amp", bkAq: "amp", vial: "filt", ffun: "filt", refr: "mont", chauffe: "mont", ballon: "mont" });
+  const pt = (k, cm) => () => { const pw = X.plateC.width, ph = X.plateC.height, px = pw * COLS[k], py = ph - (1 + cm) * PX; return gpos(X.plate, [(px / pw - 0.5) * 0.0296, 0.0375 + (0.5 - py / ph) * 0.0746, 0.0006]).toArray(); };
+  const C = () => ST.ccm, el = () => C().hf != null, rv = () => C().rev && C().hf != null;
+  LEGS.plate = [
+    { at: () => pt(0, C().hL)(), t: "L : linalol", m: "référence : le réactif", c: "#6a3d9a", on: rv },
+    { at: () => pt(1, C().hE)(), t: "A : acétate de linalyle", m: "référence : produit du commerce", c: "#7a4a1e", on: rv },
+    { at: () => pt(2, C().hE)(), t: () => (ST.fini ? "P : acétate de linalyle" : "P : tache de ton produit"), m: () => (ST.fini ? "même hauteur que A : même espèce chimique" : "compare sa hauteur à celles de L et de A"), c: "#c99a1a", on: () => rv() && C().s && C().s.e > 0.05 },
+    { at: () => pt(2, C().hL)(), t: () => (ST.fini ? "P : linalol restant" : "P : 2ᵉ tache"), m: () => (ST.fini ? "même hauteur que L : du réactif n'a pas réagi" : "compare sa hauteur à celles de L et de A"), c: "#b2342a", on: () => rv() && ccmLinP() },
+    { at: () => { const v = pt(0, 0)(); return v; }, t: "ligne de dépôt", m: "tracée au crayon à 1 cm du bas", c: "#5d6670", on: () => C().dep > 0 && !C().inTank },
+    { at: () => pt(2, C().hf)(), t: "front de l'éluant", m: "marqué à la sortie de la cuve", c: "#3f6fa3", on: el },
+  ];
+  CAM_FIX.add("plate"); CAM_FIX.add("tank");
+  Object.assign(RESVIEW, { ampoule: "amp", bkAq: "amp", vial: "filt", ffun: "filt", refr: "mont", chauffe: "mont", ballon: "mont", plaque: "plate", cuve: "plate", iode: "plate", capil: "plate" });
 }
-window.__lab = { /*lab-test*/ tick, CAMS, LEGS, RESVIEW, camKey: () => camFocus, placeLabels, camKey: () => camFocus, onClick, ST, evaluate, TOOLS, X, suggest, L, look, menuFor, moveBallon, startEp, stopEp, epAdd, epToBallon, addPonce, refrDown, refrUp, plugHose, setWater, setHeat, pourBallon, pourWater, pourHC, ampStopper, shakeAmp, startDrain, stopDrain, collectOrg, smell, emptyAll, rowData, checkQ, renderTable, runDemo, stopDemo, tick, runQueue, orgV, aqV, prodV, capH, CAMS, QS };
+window.__lab = { /*lab-test*/ tick, CAMS, LEGS, RESVIEW, camKey: () => camFocus, placeLabels, camKey: () => camFocus, onClick, ST, evaluate, TOOLS, X, suggest, L, look, menuFor, moveBallon, startEp, stopEp, epAdd, epToBallon, addPonce, refrDown, refrUp, plugHose, setWater, setHeat, pourBallon, pourWater, pourHC, ampStopper, shakeAmp, startDrain, stopDrain, collectOrg, smell, emptyAll, ccmDeposit, ccmElute, ccmOut, ccmReveal, ccmD, drawPlate, checkRf, rowData, checkQ, renderTable, runDemo, stopDemo, tick, runQueue, orgV, aqV, prodV, capH, CAMS, QS };
 /* pas de mains gantées (demande de l'enseignant, nov. 2026) */
 
 })();
