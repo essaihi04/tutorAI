@@ -19,7 +19,8 @@
  * Source (?source= et set_parameters) : blanche (lampe + fente, défaut) | rouge (laser 650 nm) | verte (laser 532 nm).
  *
  * Physique (le dessin la suit) : prisme d’angle A = 60°, incidence i = 55° sur la face 1.
- *  - Face 1 : sin i = n·sin r ; face 2 : sin i' = n·sin r' avec A = r + r' ; déviation D = i + i' − A.
+ *  - Le trajet est calculé par la réfraction aux deux faces (calcul interne du dessin, jamais affiché ni dit :
+ *    les relations du prisme sont hors programme, la dispersion s'interprète qualitativement).
  *  - Indice d’un verre courant (flint) selon la longueur d’onde dans le vide : n = 1,66 à 400 nm (violet),
  *    n = 1,61 à 700 nm (rouge), interpolé en 1/λ² entre les deux. Le violet est donc le plus dévié, le rouge le moins.
  *  - Pour l’œil SEULEMENT, l’écart entre les couleurs est dessiné deux fois plus grand (indice dessiné
@@ -43,9 +44,9 @@ const nVrai = l => NA + NB / ((l / 1000) ** 2);
 const N0 = 1.635, nDessin = l => N0 + 2 * (nVrai(l) - N0);                // pour l’œil : écart entre couleurs ×2
 /** Les angles (en degrés) pour un indice n : réfraction réelle aux deux faces. */
 function angles(n) {
-  const r = Math.asin(Math.sin(I * RAD) / n) / RAD;                       // face 1 : sin i = n·sin r
-  const rp = A - r;                                                         // A = r + r'
-  const ip = Math.asin(Math.min(1, n * Math.sin(rp * RAD))) / RAD;         // face 2 : sin i' = n·sin r'
+  const r = Math.asin(Math.sin(I * RAD) / n) / RAD;
+  const rp = A - r;
+  const ip = Math.asin(Math.min(1, n * Math.sin(rp * RAD))) / RAD;
   return { r, rp, ip, D: I + ip - A };
 }
 const vrai = l => angles(nVrai(l));
@@ -300,7 +301,6 @@ function deviation(c, R, rayonArc, couleur) {
   c.ligne(...E, ...add(E, D_IN, ti + 150), { couleur: 'faible', pointille: [6, 6], largeur: 1.6 });
   c.ligne(...R.S, ...J, { couleur, pointille: [5, 5], largeur: 1.6 });
   const mil = arc(c, J, ang(D_IN), ang(R.dO), rayonArc, couleur);
-  c.texte('D', ...add(J, dir(mil), rayonArc + 9), { couleur, taille: 16, base: 'middle' });
 }
 /* Agrandissement du 15 novembre 2026 : sur un tableau large (scene.L ≥ 1000, portable 1366 × 613), les deux vues
  * (zone d'origine 760 × 335) sont agrandies de Z.k à gauche, et les phrases du bas passent dans une colonne à droite,
@@ -429,8 +429,8 @@ function ceQuiSeVoit() {
     if (t <= 0) m.push('Le laser est éteint.');
     else if (t < M.rayon_arrive) m.push(`Le rayon laser ${nom} avance vers la face 1 du prisme.`);
     else if (t < T_S) m.push(`Le rayon ${nom} est entré dans le verre : il se réfracte et va vers la face 2.`);
-    else if (t < M.point_sur_ecran) m.push(`Un seul rayon ${nom} sort du prisme, dévié vers la base (D ≈ ${deg(a.D)}°) : pas d’éventail, une seule couleur.`);
-    else m.push(`Sur l’écran : un seul point ${nom}. Ce qui sort du prisme : un seul rayon ${nom}, dévié (D ≈ ${deg(a.D)}°), non décomposé.`);
+    else if (t < M.point_sur_ecran) m.push(`Un seul rayon ${nom} sort du prisme, dévié vers la base : pas d’éventail, une seule couleur.`);
+    else m.push(`Sur l’écran : un seul point ${nom}. Ce qui sort du prisme : un seul rayon ${nom}, dévié, non décomposé.`);
     if (t >= M.fin) m.push('Écrit : lumière monochromatique (une seule radiation) : le prisme la dévie sans la décomposer.');
   } else {
     const ar = vrai(700), av = vrai(400);
@@ -440,8 +440,8 @@ function ceQuiSeVoit() {
     else if (t < T_S) m.push('La lumière blanche entre dans le verre et se réfracte ; chaque couleur prend déjà une direction un peu différente.');
     else if (t < M.spectre_sur_ecran) m.push('À la sortie du prisme, les couleurs se séparent : un éventail continu, du rouge (en haut, le moins dévié) au violet (le plus dévié), avance vers l’écran.');
     else m.push('Ce qui sort du prisme : un éventail continu de couleurs. Sur l’écran : un spectre continu, rouge, orange, jaune, vert, bleu, violet, sans trou.');
-    if (t >= M.rouge_moins_devie) m.push(`Le rayon rouge est souligné, avec l’arc de sa déviation D (≈ ${deg(ar.D)}° pour 700 nm, n ≈ 1,61).`);
-    if (t >= M.violet_plus_devie) m.push(`Le rayon violet est souligné : sa déviation D (≈ ${deg(av.D)}° pour 400 nm, n ≈ 1,66) est la plus grande. Écrit : le violet est le plus dévié, le rouge le moins dévié.`);
+    if (t >= M.rouge_moins_devie) m.push(`Le rayon rouge est souligné, avec l’arc qui montre sa déviation (700 nm, n ≈ 1,61) : c’est le moins dévié.`);
+    if (t >= M.violet_plus_devie) m.push(`Le rayon violet est souligné : il est le plus dévié (400 nm, n ≈ 1,66). Écrit : le violet est le plus dévié, le rouge le moins dévié.`);
     if (t >= M.fin) m.push('Écrit : le verre est dispersif, n dépend de la fréquence (n violet ≈ 1,66 > n rouge ≈ 1,61).');
     m.push('Ordre des couleurs : le violet est le plus dévié, le rouge le moins. Écart entre les couleurs dessiné deux fois plus grand pour l’œil.');
   }
@@ -523,7 +523,7 @@ const config = { id: 'ondes_lumineuses_prisme_dispersion', version: '1.0', title
     set_time: { time_s: '0..8.5 (blanche) ou 0..5.5 (laser) : arrêt sur cet instant, en s' },
     play_until: { moment: `${MOMENTS_BLANCHE} (source blanche) ; ${MOMENTS_LASER} (laser rouge ou vert) — rejoue et se fige à cet instant clé`, time_s: 'ou un instant en s' } } };
 const pont = protocole({ id: config.id, commandes, config,
-  texte: 'Prisme de verre (A = 60°, i = 55°) vu de dessus, et l’écran vu de face. Lumière blanche : elle se décompose en un spectre continu, le violet est le plus dévié (n ≈ 1,66), le rouge le moins (n ≈ 1,61) : le verre est dispersif. Laser rouge ou vert : un seul rayon, une seule couleur, un seul point. Réfraction aux deux faces : sin i = n·sin r, sin i\' = n·sin r\'.',
+  texte: 'Prisme de verre (A = 60°, i = 55°) vu de dessus, et l’écran vu de face. Lumière blanche : elle se décompose en un spectre continu, le violet est le plus dévié (n ≈ 1,66), le rouge le moins (n ≈ 1,61) : le verre est dispersif. Laser rouge ou vert : un seul rayon, une seule couleur, un seul point.',
   etat: () => ({ simulation_status: S.running ? 'running' : (S.fait ? 'finished' : (S.t > 0 ? 'paused' : 'idle')), ce_qui_se_voit: ceQuiSeVoit(), current_variant: S.source,
     time_s: +S.t.toFixed(2), parameters: { source: S.source, A_deg: A, i_deg: I, lambda_nm: estLaser() ? LAMBDA_LASER[S.source] : '400..800', n_rouge: 1.61, n_violet: 1.66 }, moments: moments() }),
   progression: () => (S.fait ? 1 : 0),
