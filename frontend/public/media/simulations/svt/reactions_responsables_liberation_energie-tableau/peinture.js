@@ -142,6 +142,29 @@
     ctx.restore();
   }
 
+  /** Une liaison entre deux atomes : un petit bâton peint (ombre, corps, reflet), à dessiner AVANT les billes. */
+  function liaison(ctx, x1, y1, x2, y2, o = {}) {
+    const e = o.epaisseur ?? 4.5;
+    ctx.save(); ctx.globalAlpha = o.alpha ?? 1; ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(40,40,30,.75)'; ctx.lineWidth = e + 1.6; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.strokeStyle = rgba(o.couleur || [200, 200, 190], 1); ctx.lineWidth = e; ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = e * .3; ctx.beginPath(); ctx.moveTo(x1, y1 - e * .2); ctx.lineTo(x2, y2 - e * .2); ctx.stroke();
+    ctx.restore();
+  }
+  /** Une capsule peinte (transporteur, molécule porteuse) : volume, ombre posée ; o.lueur : halo quand elle est chargée. */
+  function capsule(ctx, cx, cy, w, h, c, o = {}) {
+    const a = o.alpha ?? 1, r = h / 2;
+    ctx.save(); ctx.globalAlpha = a;
+    if (o.lueur) { const gl = ctx.createRadialGradient(cx, cy, 2, cx, cy, w * .8); gl.addColorStop(0, rgba(c, .35 * o.lueur)); gl.addColorStop(1, rgba(c, 0)); ctx.fillStyle = gl; ctx.beginPath(); ctx.ellipse(cx, cy, w * .8, h * 1.4, 0, 0, TAU); ctx.fill(); }
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(cx + 2, cy + h * .62, w * .46, h * .2, 0, 0, TAU); ctx.fill();
+    const g = ctx.createLinearGradient(0, cy - r, 0, cy + r);
+    g.addColorStop(0, rgba(c.map(v => Math.min(255, v + 90)), 1)); g.addColorStop(.45, rgba(c, 1)); g.addColorStop(1, rgba(c.map(v => v * .5), 1));
+    ctx.fillStyle = g; ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(cx - w / 2, cy - r, w, h, r); else ctx.rect(cx - w / 2, cy - r, w, h); ctx.fill();
+    ctx.strokeStyle = rgba(c.map(v => v * .4), .9); ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(cx - w / 2 + r * .6, cy - r + 2, w - r * 1.2, h * .28, h * .14); ctx.fill();
+    ctx.restore();
+  }
+
   /**
    * La sphère pédonculée (ATP synthase) dans une membrane horizontale : un pied qui traverse la membrane et une tête
    * ronde du côté `tete` (+1 = vers le bas, −1 = vers le haut). (x, yMembrane) = milieu de la membrane.
@@ -202,7 +225,7 @@
     ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); ctx.restore();
   }
 
-  window.SVTPeinture = { T, graine, rgba, cellule, mitochondrie, cheminCretes, membrane, proteine, bille, spherePedonculee, becher, levure, bulleGaz, eclat };
+  window.SVTPeinture = { T, graine, rgba, cellule, mitochondrie, cheminCretes, membrane, proteine, bille, liaison, capsule, spherePedonculee, becher, levure, bulleGaz, eclat };
 })();
 
 /* ── Mosaïque du tableau large (15 novembre 2026) : ici plutôt que dans un fichier à part (un nouveau .js de public/ n'est pas servi par le serveur de dev). ── */

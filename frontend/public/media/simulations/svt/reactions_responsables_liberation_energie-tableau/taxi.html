@@ -49,6 +49,7 @@ const MOTIFS = {
 const CARBONE = [250, 204, 21], HYDRO = [235, 240, 245], ELEC = [96, 200, 250];
 /* la molécule organique : un amas de billes de carbone */
 const MOL = [[110, 246], [134, 240], [158, 248], [122, 268], [146, 270], [170, 264]];
+const LIENS = [[0, 1], [1, 2], [0, 3], [3, 4], [4, 5], [2, 5]];   // un cycle d’atomes
 const H0 = [[128, 220], [152, 222]], HAIR = [[190, 168], [208, 168]];
 const TX = { arrivee: [440, 214], pose: [199, 200], loin: [560, 350] };
 
@@ -68,7 +69,7 @@ scene.avancer = chrono.avancer;
 const GRAINS = (() => { const r = P.graine(23), g = []; for (let i = 0; i < 120; i++) g.push([18 + r() * 724, 50 + r() * 360, .7 + r() * 1.4]); return g; })();
 function hyaloplasme(ctx) {
   const g = ctx.createRadialGradient(260, 230, 40, 380, 230, 480);
-  g.addColorStop(0, P.rgba(P.T.hyalo, .22)); g.addColorStop(1, P.rgba(P.T.hyalo, .07));
+  g.addColorStop(0, P.rgba(P.T.hyalo, .3)); g.addColorStop(1, P.rgba(P.T.hyalo, .1));
   ctx.fillStyle = g; ctx.beginPath(); const y0 = MOS.actif() ? 122 : 44; ctx.roundRect ? ctx.roundRect(12, y0, 736, 416 - y0, 26) : ctx.rect(12, y0, 736, 416 - y0);   // tableau large : le titre et la règle sont à gauche ctx.fill();
   ctx.fillStyle = P.rgba([200, 220, 180], .14);
   for (const [x, y, r] of GRAINS) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
@@ -77,8 +78,8 @@ function hyaloplasme(ctx) {
 function taxi(c, x, y, plein, a = 1) {
   const T = tr();
   c.direct(() => {
-    P.proteine(c.ctx, x, y, plein ? T.wp : T.wv, 22, { couleur: T.couleur, alpha: .85 * a });
-    c.texte(plein ? T.plein : T.vide, x, y + 5, { couleur: 'blanc', taille: 13, align: 'center', alpha: a });
+    P.capsule(c.ctx, x, y, plein ? T.wp : T.wv, 24, T.couleur, { alpha: a, lueur: plein ? 1 : 0 });
+    c.texte(plein ? T.plein : T.vide, x, y + 5, { couleur: 'blanc', taille: 14, align: 'center', alpha: a });
   });
 }
 function posTaxi(t) {
@@ -114,6 +115,11 @@ function dessiner(c) {
 
   // la molécule organique
   const a = doux(chrono.part(0, 1, t));
+  // (16 novembre 2026) les atomes reliés par des liaisons peintes : on reconnaît une molécule, pas un tas de billes
+  c.direct(() => {
+    for (const [i, j] of LIENS) P.liaison(c.ctx, MOL[i][0], MOL[i][1], MOL[j][0], MOL[j][1], { alpha: Math.max(.05, a) });
+    if (t < 1.2) for (let i = 0; i < 2; i++) { const [hx, hy] = posH(i, t); P.liaison(c.ctx, MOL[i + 1][0], MOL[i + 1][1], hx, hy, { alpha: Math.max(.05, a) * (1 - chrono.part(.9, 1.2, t)), epaisseur: 3.5 }); }
+  });
   for (const [x, y] of MOL) c.direct(() => P.bille(c.ctx, x, y, 10, CARBONE, { alpha: Math.max(.05, a) }));
   c.texte('molécule organique', 140, 302, { couleur: 'jaune', taille: 15, align: 'center' });
   c.repere('molecule', 88, 226, 104, 84, 'la molécule organique');
