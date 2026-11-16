@@ -115,14 +115,42 @@
 
   // ── Dessin à la craie (repère logique 760 × 380) ───────────────────────
   const canvas=$('canvas'),craie=new Craie(canvas,{onresize:redraw});
-  function ville(x0,sol,n,col='faible'){for(let i=0;i<n;i++){const w=22+(i*7)%16,h=30+(i*23)%55;craie.rect(x0+i*34,sol-h,w,h,{couleur:col,largeur:1.6,arrondi:1,duree:.08});for(let k=0;k<2;k++)craie.point(x0+i*34+6+k*9,sol-h+10,1.5,col)}}
-  function cheminee(x,sol,col='blanc'){craie.rect(x,sol-90,16,90,{couleur:col,largeur:2,arrondi:2});craie.ligne(x-4,sol-90,x+20,sol-90,{couleur:col,largeur:2.4,duree:.05})}
+  /* ── Peinture (16 novembre 2026) : le paysage, la ville, les cheminées, la fumée, l’eau et les poissons sont PEINTS ;
+   * la craie garde les légendes, les flèches, les axes et les courbes. Tout se peint dans craie.direct, avant la craie. */
+  const TAU=Math.PI*2;
+  const peins=f=>craie.direct(()=>{const c=craie.ctx;c.save();f(c);c.restore()});
+  function paysage(x0,x1,sol,o={}){peins(c=>{const ciel=c.createLinearGradient(0,20,0,sol);const sale=o.smog||0;
+    ciel.addColorStop(0,`rgba(${70+60*sale},${110+40*sale},${150-40*sale},.22)`);ciel.addColorStop(1,`rgba(${150+60*sale},${170+30*sale},${170-50*sale},.30)`);
+    c.fillStyle=ciel;c.beginPath();c.roundRect(x0,20,x1-x0,sol-20,10);c.fill();
+    const g=c.createLinearGradient(0,sol,0,sol+14);g.addColorStop(0,'#5d8a3a');g.addColorStop(.3,'#4a6e2e');g.addColorStop(1,'rgba(74,56,36,.0)');c.fillStyle=g;c.fillRect(x0,sol,x1-x0,14)})}
+  function ville(x0,sol,n){peins(c=>{for(let i=0;i<n;i++){const w=22+(i*7)%16,h=30+(i*23)%55,x=x0+i*34,teinte=[[148,163,184],[180,160,140],[160,150,170]][i%3];
+    c.fillStyle='rgba(0,0,0,.3)';c.fillRect(x+3,sol-h+3,w,h-3);
+    const g=c.createLinearGradient(x,0,x+w,0);g.addColorStop(0,`rgb(${teinte.map(v=>v+30)})`);g.addColorStop(.6,`rgb(${teinte})`);g.addColorStop(1,`rgb(${teinte.map(v=>v*.65|0)})`);
+    c.fillStyle=g;c.beginPath();c.roundRect(x,sol-h,w,h,[2,2,0,0]);c.fill();
+    c.fillStyle='rgba(30,41,59,.55)';c.fillRect(x-1,sol-h-2,w+2,3);
+    for(let yy=sol-h+7;yy<sol-8;yy+=10)for(let xx=x+4;xx<x+w-5;xx+=8){c.fillStyle=((xx*7+yy*3)%5)<2?'rgba(253,230,138,.85)':'rgba(30,41,59,.65)';c.fillRect(xx,yy,4,5)}}})}
+  function cheminee(x,sol){peins(c=>{c.fillStyle='rgba(0,0,0,.3)';c.fillRect(x+3,sol-88,16,88);
+    const g=c.createLinearGradient(x,0,x+16,0);g.addColorStop(0,'#c2654a');g.addColorStop(.45,'#a3452c');g.addColorStop(1,'#6b2a1a');c.fillStyle=g;c.fillRect(x,sol-90,16,90);
+    c.strokeStyle='rgba(255,220,200,.18)';c.lineWidth=.8;for(let yy=sol-84;yy<sol;yy+=7){c.beginPath();c.moveTo(x,yy);c.lineTo(x+16,yy);c.stroke()}
+    c.fillStyle='#e5e7eb';c.fillRect(x-1,sol-72,18,4);c.fillStyle='#dc2626';c.fillRect(x-1,sol-60,18,4);
+    const gt=c.createLinearGradient(x-4,0,x+20,0);gt.addColorStop(0,'#78716c');gt.addColorStop(.5,'#a8a29e');gt.addColorStop(1,'#44403c');c.fillStyle=gt;c.fillRect(x-4,sol-93,24,5)})}
+  /** Une bouffée de fumée : boule grise floue (r selon la quantité). */
+  function fumee(c,x,y,r,a=.5,teinte=[120,113,108]){const g=c.createRadialGradient(x-r*.3,y-r*.3,r*.1,x,y,r);g.addColorStop(0,`rgba(${teinte.map(v=>v+60)},${a})`);g.addColorStop(.6,`rgba(${teinte},${a*.7})`);g.addColorStop(1,`rgba(${teinte},0)`);c.fillStyle=g;c.beginPath();c.arc(x,y,r,0,TAU);c.fill()}
+  function nuage(c,x,y,w,a=.85,teinte=[110,110,120]){for(const [dx,dy,r] of [[.15,.1,.28],[.38,-.12,.36],[.62,-.05,.32],[.85,.12,.24],[.5,.18,.3]])fumee(c,x+dx*w,y+dy*w*.5,r*w*.55,a,teinte)}
+  function poisson(c,x,y,vivant){c.save();c.translate(x+15,y);const g=c.createLinearGradient(0,-7,0,7);g.addColorStop(0,vivant?'#7dd3fc':'#a8a29e');g.addColorStop(.5,vivant?'#38bdf8':'#78716c');g.addColorStop(1,vivant?'#0369a1':'#44403c');
+    c.fillStyle=g;c.beginPath();c.ellipse(0,0,12,6.5,0,0,TAU);c.fill();c.beginPath();c.moveTo(-10,0);c.lineTo(-18,-6);c.lineTo(-18,6);c.closePath();c.fill();
+    c.fillStyle='#0f172a';c.beginPath();c.arc(7,-1.5,1.4,0,TAU);c.fill();c.fillStyle='rgba(255,255,255,.4)';c.beginPath();c.ellipse(-1,-3,6,1.4,0,0,TAU);c.fill();c.restore()}
+  function arbre(c,x,sol){c.fillStyle='#6b4423';c.fillRect(x-2,sol-14,4,14);const g=c.createRadialGradient(x-3,sol-26,1,x,sol-22,11);g.addColorStop(0,'#86efac');g.addColorStop(.6,'#16a34a');g.addColorStop(1,'#14532d');c.fillStyle=g;c.beginPath();c.arc(x,sol-22,10,0,TAU);c.fill()}
+  function eolienne(c,x,sol,t){const g=c.createLinearGradient(x-3,0,x+3,0);g.addColorStop(0,'#f8fafc');g.addColorStop(1,'#94a3b8');c.fillStyle=g;c.beginPath();c.moveTo(x-3,sol);c.lineTo(x-1.2,sol-60);c.lineTo(x+1.2,sol-60);c.lineTo(x+3,sol);c.fill();
+    c.fillStyle='#f1f5f9';for(let k=0;k<3;k++){const a=k*TAU/3-Math.PI/2+t;c.save();c.translate(x,sol-60);c.rotate(a);c.beginPath();c.ellipse(11,0,11,2.4,0,0,TAU);c.fill();c.restore()}c.fillStyle='#cbd5e1';c.beginPath();c.arc(x,sol-60,2.6,0,TAU);c.fill()}
+  function vehicule(c,x,y,w,h,coul){c.fillStyle='rgba(0,0,0,.3)';c.fillRect(x+2,y+h-2,w,3);const g=c.createLinearGradient(0,y,0,y+h);g.addColorStop(0,coul[0]);g.addColorStop(1,coul[1]);c.fillStyle=g;c.beginPath();c.roundRect(x,y,w,h-3,3);c.fill();
+    c.fillStyle='rgba(191,219,254,.85)';for(let xx=x+3;xx<x+w-6;xx+=9)c.fillRect(xx,y+2,6,Math.max(3,h*.32));c.fillStyle='#111827';for(const xx of [x+5,x+w-5]){c.beginPath();c.arc(xx,y+h-2,2.6,0,TAU);c.fill()}}
   function drawDispersion(){const r=S.result,p=S.p,sol=250;
-    craie.ligne(30,sol,730,sol,{couleur:'blanc',largeur:2.2});ville(260,sol,9);cheminee(90,sol);cheminee(140,sol);craie.texte('industrie',120,sol+20,{couleur:'faible',taille:13,align:'center'}).texte('quartiers sous le vent',420,sol+20,{couleur:'faible',taille:13,align:'center'});
+    paysage(30,730,sol,{smog:r?clamp(r.pm25_ug_m3*p/120,0,1):.2});ville(260,sol,9);cheminee(90,sol);cheminee(140,sol);craie.texte('industrie',120,sol+20,{couleur:'faible',taille:13,align:'center'}).texte('quartiers sous le vent',420,sol+20,{couleur:'faible',taille:13,align:'center'});
     craie.fleche(560,70,560+Math.max(30,S.wind*5),70,{couleur:'cyan',largeur:2}).texte(`vent ${S.wind} km/h`,560,58,{couleur:'cyan',taille:14});
     craie.repere('cheminees',80,sol-100,90,124,'cheminées de l’industrie').repere('ville',255,sol-95,310,118,'quartiers sous le vent').repere('vent',550,40,200,42,'vent').repere('panache',100,30,420,180,'panache de polluants').repere('station',448,sol-40,70,42,'station de mesure PM2.5').repere('courbe_sol',40,265,340,110,'concentration au sol selon la distance').repere('seuil',40,276,340,16,'seuil sanitaire');
     if(S.inversion){craie.ligne(30,135,730,135,{couleur:'rouge',largeur:1.6,pointille:[8,6]});craie.texte('inversion thermique : air chaud en altitude',380,126,{couleur:'rouge',taille:13,align:'center'});craie.repere('inversion',30,112,700,36,'inversion thermique')}else craie.repere('inversion',30,112,700,36,'altitude de l’inversion (profil normal ici)');
-    craie.direct(()=>{const pm=r?r.pm25_ug_m3*p:40;const haut=S.inversion?138:30,spread=.4+S.wind/20;const n=Math.round(pm/3);for(let i=0;i<n;i++){const u=(i*37%100)/100,x=108+u*(200+S.wind*14)*spread,y=S.inversion?sol-100+Math.min(0,-(u*60))+(i*13%40):sol-90-u*(120+S.wind*4)+(i*17%50)-25;if(y>haut)craie.point(x,y,2+(i%3),'faible')}
+    craie.direct(()=>{const pm=r?r.pm25_ug_m3*p:40;const haut=S.inversion?138:30,spread=.4+S.wind/20;const n=Math.round(pm/3);for(let i=0;i<n;i++){const u=(i*37%100)/100,x=108+u*(200+S.wind*14)*spread,y=S.inversion?sol-100+Math.min(0,-(u*60))+(i*13%40):sol-90-u*(120+S.wind*4)+(i*17%50)-25;if(y>haut)fumee(craie.ctx,x,y,7+(i%4)*3,.42)}
       if(S.inversion&&r)craie.courbe(u=>[108+u*560,140+10*Math.sin(u*6)],30,{couleur:'orange',largeur:1.4,pointille:[3,5]});
       if(r){craie.rect(452,sol-32,60,24,{couleur:'jaune',largeur:1.4,arrondi:4});craie.texte(`PM ${fmt(r.pm25_ug_m3*p)}`,482,sol-15,{couleur:'jaune',taille:13,align:'center'});craie.ligne(482,sol-8,482,sol,{couleur:'jaune',largeur:1.4})}});
     const gx=60,gy=360,gw=300,gh=80;craie.axe(gx,gy,gx+gw+10,gy,[[0,'source'],[.95,'loin']],{taille:12}).axe(gx,gy,gx,gy-gh,[],{});craie.texte('concentration sous le vent',gx+gw/2,gy-gh-4,{couleur:'faible',taille:13,align:'center'});
@@ -130,26 +158,34 @@
     if(r){craie.direct(()=>{const pts=[];for(let i=0;i<18;i++){const distance=i/17,spread=.2+S.wind/18,shape=Math.exp(-Math.pow((distance-.2-spread*.2)/(spread*.42),2)),ground=(S.inversion?1.15:.65)*shape+.12*Math.exp(-distance*2);pts.push(clamp(ground*r.pm25_ug_m3/180,0,1))}const n=Math.max(1,Math.round(17*p));craie.courbe(u=>{const d=u*n,i=Math.floor(d),f=d-i,v=i>=17?pts[17]:pts[i]+(pts[i+1]-pts[i])*f;return[gx+d/17*gw,gy-v*(gh-10)]},40,{couleur:'bleu',largeur:2.2})});
       if(S.fini!=null){craie.depuis(S.fini);metrics(r,1).forEach(([l,v,u],i)=>craie.texte(`${l} = ${fmt(v)} ${u}`,420,300+i*20,{couleur:i===0?'jaune':'blanc',taille:14}));craie.texte(r.plume_state,580,372,{couleur:'violet',taille:14,align:'center',max:330})}else craie.direct(()=>metrics(r,p).forEach(([l,v,u],i)=>craie.texte(`${l} = ${fmt(v)} ${u}`,420,300+i*20,{couleur:'faible',taille:14})))}}
   function drawAcid(){const r=S.result,p=S.p,sol=240;
-    craie.ligne(30,sol,330,sol,{couleur:'blanc',largeur:2.2});cheminee(70,sol);cheminee(120,sol);ville(170,sol,4);
+    peins(c=>{const ciel=c.createLinearGradient(0,40,0,sol);ciel.addColorStop(0,'rgba(100,116,139,.25)');ciel.addColorStop(1,'rgba(148,163,184,.18)');c.fillStyle=ciel;c.beginPath();c.roundRect(30,40,700,sol-40+50,10);c.fill();
+      const g=c.createLinearGradient(0,sol,0,sol+14);g.addColorStop(0,'#5d8a3a');g.addColorStop(1,'rgba(74,56,36,0)');c.fillStyle=g;c.beginPath();c.moveTo(30,sol);c.lineTo(330,sol);c.lineTo(420,200);c.lineTo(450,290);c.lineTo(450,304);c.lineTo(30,sol+14);c.fill();
+      // le lac : eau translucide, plus sombre au fond ; plus le pH est bas, plus l’eau tourne au vert jaunâtre
+      const ph=r?7+(r.lake_ph-7)*p:7,acide=clamp((7-ph)/3,0,1),e=c.createLinearGradient(0,225,0,290);e.addColorStop(0,`rgba(${56+90*acide},${150+20*acide},${210-110*acide},.55)`);e.addColorStop(1,`rgba(${12+40*acide},${50+40*acide},${110-60*acide},.8)`);
+      c.fillStyle=e;c.beginPath();c.moveTo(428,225);c.lineTo(450,290);c.lineTo(690,290);c.lineTo(712,225);c.closePath();c.fill();
+      c.fillStyle='rgba(120,90,60,.55)';c.beginPath();c.moveTo(420,200);c.lineTo(450,290);c.lineTo(690,290);c.lineTo(720,200);c.lineTo(712,225);c.lineTo(690,284);c.lineTo(450,284);c.lineTo(428,225);c.closePath();c.fill();
+      c.strokeStyle='rgba(255,255,255,.35)';c.lineWidth=1.2;c.beginPath();c.moveTo(440,227);c.lineTo(700,227);c.stroke();
+      nuage(c,290,70,180,.8,[120,110,100])});
+    cheminee(70,sol);cheminee(120,sol);ville(170,sol,4);
     craie.texte(`SO₂ · NOₓ (industrie ${S.industry} %, trafic ${S.traffic} %)`,60,sol+22,{couleur:'orange',taille:13});
-    craie.fleche(135,140,260,95,{couleur:'orange',largeur:1.8,pointille:[5,4]});craie.courbe(u=>[290+170*u,80+16*Math.sin(u*Math.PI*3)],40,{couleur:'faible',largeur:2});craie.courbe(u=>[300+150*u,96+6*Math.sin(u*Math.PI*2)],20,{couleur:'faible',largeur:2});
+    craie.fleche(135,140,260,95,{couleur:'orange',largeur:1.8,pointille:[5,4]});
     craie.texte('H₂SO₄ · HNO₃',375,70,{couleur:'orange',taille:14,align:'center'});
-    for(let i=0;i<Math.round(S.rainfall/5)+2;i++)craie.ligne(310+i*18,110,304+i*18,135,{couleur:'cyan',largeur:1.4,duree:.03});craie.texte(`pluie ${S.rainfall} mm`,470,128,{couleur:'cyan',taille:13});
-    craie.trait([[420,200],[450,290],[690,290],[720,200]],{couleur:'cyan',largeur:2.2}).ligne(420,225,720,225,{couleur:'cyan',largeur:1.6}).texte('lac',570,192,{couleur:'cyan',taille:14,align:'center'});
-    craie.ligne(330,sol,420,200,{couleur:'blanc',largeur:2.2});craie.texte(`sol tampon ${S.buffer} %`,360,215,{couleur:'vert',taille:13,align:'center'});
+    peins(c=>{for(let i=0;i<Math.round(S.rainfall/5)+2;i++){const x=310+i*18,g=c.createLinearGradient(x,110,x-6,135);g.addColorStop(0,'rgba(165,243,252,0)');g.addColorStop(1,'rgba(103,232,249,.95)');c.strokeStyle=g;c.lineWidth=2.2;c.lineCap='round';c.beginPath();c.moveTo(x,110);c.lineTo(x-6,135);c.stroke()}});craie.texte(`pluie ${S.rainfall} mm`,470,128,{couleur:'cyan',taille:13});
+    craie.texte('lac',570,192,{couleur:'cyan',taille:14,align:'center'});
+    craie.texte(`sol tampon ${S.buffer} %`,360,215,{couleur:'vert',taille:13,align:'center'});
     craie.repere('cheminees',60,sol-100,90,124,'cheminées et ville émettrices').repere('nuage_acide',285,55,185,60,'nuage acide H₂SO₄ · HNO₃').repere('pluie',300,105,250,40,'pluie acide').repere('lac',415,185,310,110,'lac').repere('sol_tampon',320,195,110,50,'sol tampon').repere('poissons',470,235,220,50,'éclosion des poissons').repere('barres_ph',60,290,330,90,'comparaison des pH');
-    craie.direct(()=>{if(!r)return;const hatch=r.fish_hatching_percent*p;[[480,255],[560,270],[640,250]].forEach(([x,y],i)=>{const ok=hatch>=(i+1)*30;craie.trait([[x,y],[x+12,y-7],[x+22,y],[x+30,y-6],[x+30,y+6],[x+22,y],[x+12,y+7],[x,y]],{couleur:ok?'vert':'rouge',largeur:1.5});if(!ok)craie.ligne(x+8,y-8,x+22,y+8,{couleur:'rouge',largeur:1.2})});craie.texte(`pH ${fr(7+(r.lake_ph-7)*p,2)}`,690,215,{couleur:'jaune',taille:14,align:'right'})});
+    craie.direct(()=>{if(!r)return;const hatch=r.fish_hatching_percent*p;[[480,255],[560,270],[640,250]].forEach(([x,y],i)=>{const ok=hatch>=(i+1)*30;poisson(craie.ctx,x,y,ok);if(!ok)craie.ligne(x+8,y-8,x+22,y+8,{couleur:'rouge',largeur:1.6})});craie.texte(`pH ${fr(7+(r.lake_ph-7)*p,2)}`,690,215,{couleur:'jaune',taille:14,align:'right'})});
     const base=360,labels=['neutre','pluie normale','pluie reçue','lac','éclosion'];craie.ligne(60,base,380,base,{couleur:'faible',largeur:1.4});
     if(r){craie.direct(()=>{const vals=[7,5.6,r.rain_ph,r.lake_ph,r.fish_hatching_percent/16];vals.forEach((v,i)=>{const h=clamp(v/7*55*p,0,55),x=70+i*64;craie.rect(x,base-h,40,h,{couleur:['bleu','cyan','orange','rouge','vert'][i],largeur:1.6,arrondi:3,fond:['bleu','cyan','orange','rouge','vert'][i],fondAlpha:.15});craie.texte(labels[i],x+20,base+16,{couleur:'faible',taille:11,align:'center'})})});
       if(S.fini!=null){craie.depuis(S.fini);metrics(r,1).forEach(([l,v,u],i)=>craie.texte(`${l} = ${fmt(v)} ${u}`,420,312+i*17,{couleur:i===1?'jaune':'blanc',taille:13}));craie.texte(r.state,420,372+6,{couleur:'violet',taille:13})}else craie.direct(()=>metrics(r,p).forEach(([l,v,u],i)=>craie.texte(`${l} = ${fmt(v)} ${u}`,420,312+i*17,{couleur:'faible',taille:13})))}
     else craie.direct(()=>labels.forEach((l,i)=>craie.texte(l,90+i*64,base+16,{couleur:'tresfaible',taille:11,align:'center'})))}
   function drawSolutions(){const r=S.result,p=S.p,sol=230,act=S.solutions;
-    craie.ligne(30,sol,730,sol,{couleur:'blanc',largeur:2.2});ville(300,sol,8);cheminee(90,sol);
-    if(act.filters){craie.rect(84,sol-104,28,14,{couleur:'vert',largeur:1.6,arrondi:3});craie.texte('filtre',98,sol-110,{couleur:'vert',taille:12,align:'center'})}else craie.direct(()=>{for(let i=0;i<8;i++)craie.point(100+i*9,sol-100-i*7,2+(i%2),'faible')});
-    if(act.transport){craie.rect(140,sol-24,70,22,{couleur:'vert',largeur:1.6,arrondi:4});craie.point(152,sol,3,'vert');craie.point(198,sol,3,'vert');craie.texte('tram',175,sol-30,{couleur:'vert',taille:12,align:'center'})}else{for(let i=0;i<3;i++)craie.rect(140+i*28,sol-14,20,12,{couleur:'faible',largeur:1.3,arrondi:3});craie.texte('voitures',175,sol-20,{couleur:'faible',taille:12,align:'center'})}
-    if(act.renewables)for(let i=0;i<2;i++){const x=620+i*50;craie.ligne(x,sol,x,sol-60,{couleur:'vert',largeur:1.6});for(let k=0;k<3;k++){const a=k*Math.PI*2/3-Math.PI/2;craie.ligne(x,sol-60,x+22*Math.cos(a),sol-60+22*Math.sin(a),{couleur:'vert',largeur:1.4,duree:.05})}}else craie.texte('centrale fossile',650,sol-40,{couleur:'faible',taille:12,align:'center'});
-    if(act.greenbelt)for(let i=0;i<6;i++){const x=560+i*20;craie.ligne(x,sol,x,sol-14,{couleur:'vert',largeur:1.4,duree:.04});craie.cercle(x,sol-22,9,{couleur:'vert',largeur:1.4,duree:.06})}
-    craie.direct(()=>{const pm=r?r.pm25_ug_m3:58;const n=Math.round(pm/3);for(let i=0;i<n;i++)craie.point(300+(i*47)%300,sol-120+(i*29)%70,2,'faible')});
+    paysage(30,730,sol,{smog:r?clamp(r.pm25_ug_m3/120,0,1):.45});ville(300,sol,8);cheminee(90,sol);
+    if(act.filters){peins(c=>{const g=c.createLinearGradient(0,sol-104,0,sol-90);g.addColorStop(0,'#86efac');g.addColorStop(1,'#15803d');c.fillStyle=g;c.beginPath();c.roundRect(84,sol-104,28,14,3);c.fill()});craie.texte('filtre',98,sol-110,{couleur:'vert',taille:12,align:'center'})}else peins(c=>{for(let i=0;i<8;i++)fumee(c,100+i*9,sol-100-i*7,6+i*1.2,.5)});
+    if(act.transport){peins(c=>vehicule(c,140,sol-24,70,24,['#4ade80','#15803d']));craie.texte('tram',175,sol-30,{couleur:'vert',taille:12,align:'center'})}else{peins(c=>{for(let i=0;i<3;i++)vehicule(c,140+i*28,sol-14,20,14,[['#f87171','#991b1b'],['#93c5fd','#1d4ed8'],['#fde68a','#b45309']][i])});craie.texte('voitures',175,sol-20,{couleur:'faible',taille:12,align:'center'})}
+    if(act.renewables)peins(c=>{for(let i=0;i<2;i++)eolienne(c,620+i*50,sol,i*.6)});else craie.texte('centrale fossile',650,sol-40,{couleur:'faible',taille:12,align:'center'});
+    if(act.greenbelt)peins(c=>{for(let i=0;i<6;i++)arbre(c,560+i*20,sol)});
+    craie.direct(()=>{const pm=r?r.pm25_ug_m3:58;const n=Math.round(pm/3);for(let i=0;i<n;i++)fumee(craie.ctx,300+(i*47)%300,sol-120+(i*29)%70,8,.35)});
     craie.repere('filtre',80,sol-120,40,40,act.filters?'filtre industriel actif':'cheminée sans filtre').repere('tram',135,sol-40,90,45,act.transport?'tram et bus':'voitures').repere('renouvelables',600,sol-90,110,95,act.renewables?'éoliennes':'centrale fossile').repere('ceinture_verte',550,sol-40,130,45,act.greenbelt?'ceinture verte':'emplacement de la ceinture verte').repere('ville',295,sol-125,300,130,'ville et son air').repere('bilan',140,255,580,120,'avant / après la stratégie');
     const base=355,gx=120;craie.ligne(gx,base,700,base,{couleur:'faible',largeur:1.4});craie.texte('avant / après la stratégie',410,255,{couleur:'faible',taille:13,align:'center'});
     if(r){craie.direct(()=>{const vals=[100,100-r.emission_reduction_percent,58,r.pm25_ug_m3],labels=['ém. avant','ém. après','PM avant','PM après'];vals.forEach((v,i)=>{const h=v/100*85*p,x=gx+40+i*140;craie.rect(x,base-h,70,h,{couleur:i%2?'vert':'rouge',largeur:1.6,arrondi:3,fond:i%2?'vert':'rouge',fondAlpha:.15});craie.texte(labels[i],x+35,base+16,{couleur:'faible',taille:12,align:'center'});craie.texte(fmt(v),x+35,base-h-6,{couleur:'blanc',taille:12,align:'center'})})});

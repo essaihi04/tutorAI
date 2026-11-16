@@ -129,13 +129,33 @@
   const canvas=$('canvas'),craie=new Craie(canvas,{onresize:redraw});const geom={s:1,ox:0,oy:0};
   const toLogical=(x,y)=>[(x-geom.ox)/geom.s,(y-geom.oy)/geom.s];
   const NODES=[[90,'eau',null],[240,'plancton',1],[390,'petits poissons',2],[540,'prédateur',3],[690,'oiseau',4]];
-  function poisson(x,y,w,col){craie.trait([[x,y],[x+w*.4,y-w*.22],[x+w*.75,y],[x+w,y-w*.2],[x+w,y+w*.2],[x+w*.75,y],[x+w*.4,y+w*.22],[x,y]],{couleur:col,largeur:1.6,duree:.12})}
+  /* ── Peinture (16 novembre 2026) : l’eau, les algues, les poissons, l’oiseau, les roseaux et la station sont PEINTS ;
+   * la craie garde les légendes, les flèches, les axes, les courbes et les barres. */
+  const TAU=Math.PI*2;
+  const peins=f=>craie.direct(()=>{const c=craie.ctx;c.save();f(c);c.restore()});
+  const TEINTES={cyan:['#7dd3fc','#0284c7','#0c4a6e'],orange:['#fdba74','#ea580c','#7c2d12'],rouge:['#d6d3d1','#a8a29e','#57534e']};
+  /** Un poisson peint, tête à droite (x,y = bout de la queue, w = longueur) ; « rouge » = poisson mort, gris et couché. */
+  function poisson(x,y,w,col){peins(c=>{const t=TEINTES[col]||TEINTES.cyan,mort=col==='rouge';c.translate(x+w*.55,y);if(mort)c.rotate(.25);
+    const g=c.createLinearGradient(0,-w*.22,0,w*.22);g.addColorStop(0,t[0]);g.addColorStop(.5,t[1]);g.addColorStop(1,t[2]);c.fillStyle=g;
+    c.beginPath();c.ellipse(w*.08,0,w*.38,w*.18,0,0,TAU);c.fill();c.beginPath();c.moveTo(-w*.25,0);c.lineTo(-w*.55,-w*.2);c.lineTo(-w*.55,w*.2);c.closePath();c.fill();
+    c.fillStyle='rgba(255,255,255,.35)';c.beginPath();c.ellipse(w*.05,-w*.08,w*.2,w*.04,0,0,TAU);c.fill();
+    c.fillStyle=mort?'#292524':'#0f172a';c.beginPath();c.arc(w*.3,-w*.04,Math.max(1.2,w*.045),0,TAU);c.fill()})}
+  function algue(c,x,y,k){const g=c.createRadialGradient(x+2,y-1,1,x+5,y,9);g.addColorStop(0,'rgba(190,242,100,.95)');g.addColorStop(1,'rgba(22,101,52,.75)');c.fillStyle=g;c.beginPath();
+    for(let i=0;i<=10;i++){const a=i/10*TAU,r=5+2.2*Math.sin(a*3+k);c.lineTo(x+5+Math.cos(a)*r*1.2,y+Math.sin(a)*r*.8)}c.fill()}
+  function eau(c,pts,yS,vert=0){const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]),y1=Math.max(...ys);const g=c.createLinearGradient(0,yS,0,y1);
+    g.addColorStop(0,`rgba(${60+60*vert},${165+20*vert},${220-140*vert},.5)`);g.addColorStop(1,`rgba(${14+30*vert},${60+40*vert},${120-70*vert},.8)`);c.fillStyle=g;c.beginPath();pts.forEach(([px,py],i)=>i?c.lineTo(px,py):c.moveTo(px,py));c.closePath();c.fill();
+    c.strokeStyle='rgba(255,255,255,.4)';c.lineWidth=1.3;c.beginPath();c.moveTo(Math.min(...xs)+6,yS+2);c.lineTo(Math.max(...xs)-6,yS+2);c.stroke()}
+  function berge(c,pts){c.fillStyle='rgba(120,90,60,.6)';c.strokeStyle='rgba(214,190,150,.7)';c.lineWidth=3;c.lineJoin='round';c.beginPath();pts.forEach(([px,py],i)=>i?c.lineTo(px,py):c.moveTo(px,py));c.stroke()}
+  function oiseau(c,x,y){const g=c.createLinearGradient(0,y-12,0,y+8);g.addColorStop(0,'#f1f5f9');g.addColorStop(1,'#94a3b8');c.fillStyle=g;c.beginPath();c.ellipse(x,y,14,6,-.15,0,TAU);c.fill();
+    c.beginPath();c.moveTo(x-4,y-2);c.quadraticCurveTo(x-2,y-20,x+12,y-16);c.quadraticCurveTo(x+4,y-8,x+4,y-1);c.fill();c.beginPath();c.arc(x+13,y-4,4.5,0,TAU);c.fill();
+    c.fillStyle='#f59e0b';c.beginPath();c.moveTo(x+17,y-5);c.lineTo(x+25,y-3);c.lineTo(x+17,y-2);c.fill();c.fillStyle='#0f172a';c.beginPath();c.arc(x+14,y-5,1.2,0,TAU);c.fill()}
+  function roseau(c,x,y,h,on){c.strokeStyle=on?'#4d7c0f':'#78716c';c.lineWidth=2;c.lineCap='round';c.beginPath();c.moveTo(x,y);c.quadraticCurveTo(x+3,y-h*.6,x+1,y-h);c.stroke();c.fillStyle=on?'#713f12':'#57534e';c.beginPath();c.ellipse(x+1,y-h+4,2.4,6,0,0,TAU);c.fill()}
   function drawEutrophication(){const r=S.result,p=S.p;
-    craie.trait([[40,120],[70,300],[330,300],[360,120]],{couleur:'blanc',largeur:2.6}).ligne(40,150,360,150,{couleur:'cyan',largeur:2});craie.texte('réservoir',200,112,{couleur:'faible',taille:14,align:'center'});
+    peins(c=>{const v=clamp((r?r.chlorophyll_a_ug_l*p:S.nutrients*.3)/90,0,1);eau(c,[[44,150],[70,298],[330,298],[356,150]],150,v);berge(c,[[40,120],[70,300],[330,300],[360,120]])});craie.texte('réservoir',200,112,{couleur:'faible',taille:14,align:'center'});
     craie.fleche(10,135,48,140,{couleur:'orange',largeur:2}).texte('N + P',14,125,{couleur:'orange',taille:14});
     craie.repere('reservoir',40,100,320,205,'réservoir').repere('apports',4,108,52,42,'apports N + P').repere('algues',70,152,240,70,'algues').repere('poissons',110,225,200,60,'poissons').repere('sonde_o2',298,160,52,32,'sonde O₂').repere('courbes',400,70,350,190,'courbes sur 20 jours');
     craie.texte(`${S.nutrients} % · ${S.temp} °C · brassage ${S.mixing} %`,200,335,{couleur:'faible',taille:13,align:'center'});
-    craie.direct(()=>{const n=Math.round((r?r.chlorophyll_a_ug_l*p:S.nutrients*.3)/4);for(let i=0;i<n;i++){const x=75+(i*53)%240,y=160+(i*31)%60;craie.trait([[x,y],[x+6,y-5],[x+11,y+2],[x+5,y+6],[x,y]],{couleur:'vert',largeur:1.4,tremble:.4})}
+    craie.direct(()=>{const n=Math.round((r?r.chlorophyll_a_ug_l*p:S.nutrients*.3)/4);for(let i=0;i<n;i++){const x=75+(i*53)%240,y=160+(i*31)%60;algue(craie.ctx,x,y,i)}
       const survival=r?r.fish_survival_percent*p:100;[[120,250],[220,270],[280,235]].forEach(([x,y],i)=>{const alive=survival>=(i+1)*30;poisson(x,y,30,alive?'cyan':'rouge');if(!alive)craie.ligne(x+8,y-8,x+22,y+8,{couleur:'rouge',largeur:1.2})});
       if(r){craie.rect(300,165,46,22,{couleur:'jaune',largeur:1.4,arrondi:4});craie.texte(`O₂ ${fr(10.4+(r.dissolved_oxygen_mg_l-10.4)*p,1)}`,323,181,{couleur:'jaune',taille:12,align:'center'})}});
     const gx=410,gy=250,gw=320,gh=170;craie.axe(gx,gy,gx+gw+10,gy,[[0,'0'],[.5,'10 j'],[.97,'20 j']],{taille:12}).axe(gx,gy,gx,gy-gh,[],{});craie.texte('algues',gx+gw-30,gy-gh+12,{couleur:'vert',taille:13}).texte('O₂',gx+gw-30,gy-gh+28,{couleur:'cyan',taille:13}).texte('mortalité',gx+gw-30,gy-gh+44,{couleur:'rouge',taille:13});
@@ -145,7 +165,7 @@
   function drawFoodWeb(){const r=S.result,p=S.p,y=110;
     craie.texte('réseau trophique : où va le polluant ?',380,32,{couleur:'faible',taille:15,align:'center'});
     NODES.forEach(([x,label,level],i)=>{if(i)craie.fleche(NODES[i-1][0]+40,y,x-40,y,{couleur:'faible',largeur:1.6});craie.cercle(x,y,34,{couleur:level?['vert','cyan','orange','rose'][level-1]:'bleu',largeur:2});craie.texte(label,x,y+56,{couleur:'blanc',taille:13,align:'center',max:120});
-      if(level===null)craie.courbe(u=>[x-22+44*u,y+4*Math.sin(u*9)],20,{couleur:'bleu',largeur:1.6});else if(level===1)for(let k=0;k<5;k++)craie.point(x-12+k*6,y+(k%2?6:-6),2,'vert');else if(level===2)poisson(x-16,y,32,'cyan');else if(level===3)poisson(x-24,y,48,'orange');else craie.trait([[x-20,y+8],[x-6,y-10],[x+6,y-2],[x+22,y-12],[x+8,y+6],[x-20,y+8]],{couleur:'rose',largeur:1.6})});
+      if(level===null)peins(c=>{const g=c.createRadialGradient(x-8,y-8,2,x,y,30);g.addColorStop(0,'rgba(125,211,252,.75)');g.addColorStop(1,'rgba(3,105,161,.55)');c.fillStyle=g;c.beginPath();c.arc(x,y,30,0,TAU);c.fill();c.strokeStyle='rgba(255,255,255,.5)';c.lineWidth=1.4;c.beginPath();for(let u=0;u<=1;u+=.05)c.lineTo(x-20+40*u,y+3*Math.sin(u*9));c.stroke()});else if(level===1)peins(c=>{for(let k=0;k<7;k++)algue(c,x-17+(k%4)*8,y-8+Math.floor(k/4)*12+(k%2)*3,k)});else if(level===2)poisson(x-16,y,32,'cyan');else if(level===3)poisson(x-24,y,48,'orange');else peins(c=>oiseau(c,x-4,y+4))});
     craie.texte(`pesticide ${fr(S.pesticide,2)} µg/L · persistance ${S.persistence} %`,380,200,{couleur:'faible',taille:13,align:'center'});
     [['eau','eau du lac'],['plancton','plancton'],['petits_poissons','petits poissons'],['predateur','poisson prédateur'],['oiseau','oiseau piscivore']].forEach(([id,label],i)=>craie.repere(id,NODES[i][0]-38,y-38,76,110,label));
     craie.repere('barres',150,220,590,120,'concentrations par maillon').repere('facteur',100,350,560,24,'facteur de biomagnification');
@@ -156,9 +176,9 @@
   function drawRemediation(){const r=S.result,p=S.p,y=200,act=S.solutions;
     craie.texte('eau polluée',40,150,{couleur:'orange',taille:14}).fleche(40,165,120,165,{couleur:'orange',largeur:2.4});
     const dev=[['buffer','bande végétalisée',180,act.buffer],['wetland','zone humide',340,act.wetland],['treatment','station d’épuration',500,act.treatment]];
-    dev.forEach(([k,label,x,on],i)=>{const col=on?'vert':'faible';if(k==='buffer')for(let j=0;j<7;j++)craie.trait([[x-30+j*10,y],[x-26+j*10,y-22-(j%3)*5]],{couleur:col,largeur:1.6,duree:.05});else if(k==='wetland'){craie.courbe(u=>[x-40+80*u,y+4*Math.sin(u*12)],30,{couleur:on?'cyan':'faible',largeur:1.6});for(let j=0;j<4;j++)craie.ligne(x-24+j*16,y,x-24+j*16,y-30,{couleur:col,largeur:1.6,duree:.05})}else{craie.rect(x-36,y-40,72,40,{couleur:col,largeur:2,arrondi:4});craie.cercle(x-14,y-20,8,{couleur:col,largeur:1.4});craie.cercle(x+14,y-20,8,{couleur:col,largeur:1.4})}
+    dev.forEach(([k,label,x,on],i)=>{const col=on?'vert':'faible';peins(c=>{c.globalAlpha=on?1:.45;if(k==='buffer'){const g=c.createLinearGradient(0,y-4,0,y+6);g.addColorStop(0,'#65a30d');g.addColorStop(1,'rgba(101,67,33,.6)');c.fillStyle=g;c.fillRect(x-36,y-3,72,8);for(let j=0;j<14;j++){const bx=x-33+j*5;c.strokeStyle=j%2?'#4ade80':'#16a34a';c.lineWidth=2;c.lineCap='round';c.beginPath();c.moveTo(bx,y);c.quadraticCurveTo(bx+2,y-12,bx+(j%3-1)*3,y-20-(j%3)*5);c.stroke()}}else if(k==='wetland'){eau(c,[[x-42,y-4],[x-36,y+6],[x+36,y+6],[x+42,y-4]],y-4,0);for(let j=0;j<6;j++)roseau(c,x-28+j*11,y,26+(j%3)*6,on)}else{const g=c.createLinearGradient(x-36,0,x+36,0);g.addColorStop(0,'#cbd5e1');g.addColorStop(1,'#64748b');c.fillStyle=g;c.beginPath();c.roundRect(x-36,y-40,72,40,4);c.fill();for(const dx of [-14,14]){const b=c.createRadialGradient(dx+x-3,y-23,1,x+dx,y-20,9);b.addColorStop(0,on?'#7dd3fc':'#a8a29e');b.addColorStop(1,on?'#0369a1':'#57534e');c.fillStyle=b;c.beginPath();c.arc(x+dx,y-20,8,0,TAU);c.fill()}c.fillStyle='#334155';c.fillRect(x-36,y-44,72,5)}});
       craie.texte(label,x,y+24,{couleur:col,taille:13,align:'center',max:130}).texte(on?'actif':'inactif',x,y+42,{couleur:on?'vert':'tresfaible',taille:12,align:'center'});craie.fleche(x+48,165,x+112,165,{couleur:on?'cyan':'orange',largeur:2,pointille:on?[]:[5,4]})});
-    craie.trait([[620,140],[640,230],[740,230],[755,140]],{couleur:'cyan',largeur:2.2}).ligne(620,165,755,165,{couleur:'cyan',largeur:1.6}).texte('lac',688,130,{couleur:'cyan',taille:14,align:'center'});
+    peins(c=>{const v=r?clamp(1-r.pollutant_removal_percent*p/100,0,1)*.7:.6;eau(c,[[625,165],[640,228],[740,228],[751,165]],165,v);berge(c,[[620,140],[640,230],[740,230],[755,140]])});craie.texte('lac',688,130,{couleur:'cyan',taille:14,align:'center'});
     craie.repere('eau_polluee',30,130,100,45,'eau polluée').repere('bande_vegetalisee',130,150,100,100,'bande végétalisée').repere('zone_humide',290,150,100,100,'zone humide').repere('station',455,150,100,100,'station d’épuration').repere('lac',615,120,145,120,'lac').repere('bilan',200,255,420,115,'charge restante / pollution retirée');
     const gy=345,gw=130;craie.ligne(120,gy,720,gy,{couleur:'faible',largeur:1.4});
     if(r){craie.direct(()=>{const removed=r.pollutant_removal_percent*p,remaining=100-removed;craie.rect(220,gy-remaining*.75,gw,remaining*.75,{couleur:'rouge',largeur:1.8,arrondi:3,fond:'rouge',fondAlpha:.15});craie.rect(460,gy-removed*.75,gw,removed*.75,{couleur:'vert',largeur:1.8,arrondi:3,fond:'vert',fondAlpha:.15});craie.texte(`charge restante ${Math.round(remaining)} %`,285,gy+20,{couleur:'rouge',taille:13,align:'center'}).texte(`pollution retirée ${Math.round(removed)} %`,525,gy+20,{couleur:'vert',taille:13,align:'center'})});
