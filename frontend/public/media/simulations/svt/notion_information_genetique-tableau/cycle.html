@@ -35,13 +35,18 @@ const ang = h => -Math.PI / 2 + h / 20 * TAU;
 
 /* ── Le cercle du cycle ──────────────────────────────────────────── */
 function cercle(x, cx, cy, R, h, a = 1) {
+  // (17 novembre 2026) un anneau en couleurs vives (les lettres G1, S, G2, M sont écrites dessus) : la phase en cours est
+  // lumineuse, les autres restent bien visibles ; le centre, plus sombre, laisse voir la cellule peinte.
   x.save(); x.globalAlpha = a;
+  x.save(); x.shadowColor = 'rgba(0,0,0,.45)'; x.shadowBlur = R * .12; x.shadowOffsetY = R * .04; x.fillStyle = 'rgba(15,23,42,.6)'; x.beginPath(); x.arc(cx, cy, R, 0, TAU); x.fill(); x.restore();
   for (const [p, [h0, h1]] of Object.entries(BORNES)) {
     const actif = phase(h) === p;
-    x.fillStyle = COUL[p] + (actif ? '.42)' : '.18)'); x.beginPath(); x.moveTo(cx, cy); x.arc(cx, cy, R, ang(h0), ang(h1)); x.closePath(); x.fill();
-    x.strokeStyle = 'rgba(226,232,240,.35)'; x.lineWidth = 1; x.stroke();
+    const g = x.createRadialGradient(cx, cy, R * .42, cx, cy, R);
+    g.addColorStop(0, COUL[p] + (actif ? '.3)' : '.14)')); g.addColorStop(.25, COUL[p] + (actif ? '.78)' : '.4)')); g.addColorStop(1, COUL[p] + (actif ? '.95)' : '.52)'));
+    x.fillStyle = g; x.beginPath(); x.moveTo(cx, cy); x.arc(cx, cy, R, ang(h0), ang(h1)); x.closePath(); x.fill();
+    x.strokeStyle = 'rgba(241,245,249,.6)'; x.lineWidth = 1.2; x.stroke();
   }
-  x.fillStyle = 'rgba(15,23,42,.0)';
+  x.strokeStyle = 'rgba(241,245,249,.75)'; x.lineWidth = 1.6; x.beginPath(); x.arc(cx, cy, R, 0, TAU); x.stroke();
   x.restore();
 }
 function pointCycle(x, cx, cy, R, h) {
@@ -215,8 +220,9 @@ window.Etapes.lancer({
     cycle: { titre: 'Le cycle cellulaire', fin: 22,
       // deuxième passe (« agrandir les figures ») : pas de titre interne ; la roue sur toute la hauteur, à droite la légende
       // et la conclusion récrites à la ligne, la rangée de cellules dessous
-      blocs: { roue: [40, 44, 306, 314], legende: [316, 88, 628, 286], rangee: [24, 318, 628, 412], filles: [632, 318, 760, 370] },
-      disposition: { colonnes: [['roue'], { texte: ['legende', 'filles'], bas: ['rangee'] }] }, moments: MC, dessiner: dessinerCycle, voit: voitCycle,
+      // (17 novembre 2026) la roue à pleine hauteur, la rangée des cellules à côté (plus sous une colonne de texte trop étroite, où elle rapetissait)
+      blocs: { roue: [40, 44, 306, 314], legende: [316, 88, 628, 286], rangee: [24, 318, 628, 412, 1.15], filles: [632, 318, 760, 370] },
+      disposition: { colonnes: [['roue'], ['rangee'], { texte: ['legende', 'filles'] }], partMax: .76 }, moments: MC, dessiner: dessinerCycle, voit: voitCycle,
       motifs: { g1: 'la phase G1 : la cellule grandit', s: 'la phase S : l’ADN se copie (réplication)', g2: 'la phase G2 : la cellule grandit encore', interphase: 'l’interphase = G1 + S + G2 : 19 h sur 20 h', mitose: 'la mitose : la cellule se divise', deux_filles: 'deux cellules filles, chacune avec q' },
       conclusion: 'Interphase (G1, S, G2) puis mitose : chaque cellule fille reçoit q.',
       surReglage: (k, cles, api) => { if (cles.includes('t_h')) api.setTime({ time_s: tDe(k.P.t_h) }); },
