@@ -631,25 +631,26 @@ function vueReaction(c, M) {
   if (a > 0) {
     c.direct(() => {
       const ctx = c.ctx; ctx.save(); ctx.beginPath(); ctx.arc(LP.x, LP.y, LP.r - 2, 0, 7); ctx.clip();
-      ctx.fillStyle = 'rgba(220,236,250,.08)'; ctx.fillRect(LP.x - LP.r, LP.y - LP.r, 2 * LP.r, 2 * LP.r);
+      window.Rendu.lentille(ctx, LP.x, LP.y, LP.r);
       ctx.globalAlpha = a;
+      // Vraies molécules (C noir, O rouge, H blanc ; le H⁺ échangé en jaune) : CH₃COOH = squelette CH₃COO + H⁺, HO⁻ = O + H.
       const jig = (i, k) => Math.sin(t * (1.7 + i * .31) + i * 2.1 + k) * 2.2;
-      EAU_POS.forEach(([dx, dy], i) => Peint.sphere(ctx, LP.x + dx + jig(i, 0), LP.y + dy + jig(i, 1), 6.5, COLS.EAU, .55));
+      EAU_POS.forEach(([dx, dy], i) => window.Rendu.molecule(ctx, 'H2O', LP.x + dx + jig(i, 0), LP.y + dy + jig(i, 1), .95, i * 1.9 + Math.sin(t * .8 + i) * .4, .55));
       AC_POS.forEach(([dx, dy], i) => {
         const x = LP.x + dx + jig(i + 3, 0), y = LP.y + dy + jig(i + 3, 1);
-        if (i > 2) { Peint.sphere(ctx, x, y, 12, COLS.AH); Peint.sphere(ctx, x + 12, y - 9, 5, COLS.H); return; }
+        if (i > 2) { window.Rendu.molecule(ctx, 'CH3COO', x - 2, y + 1, 1.05, -1.0); window.Rendu.atome(ctx, x + 12, y - 9, 4.2, 'Hp'); return; }
         const u = seg(p, i / 3 + .02, (i + 1) / 3 - .02);
         const xo = x + 30, yo = y - 6, yDep = LP.y - LP.r - 10;
         // 1) HO⁻ tombe ; 2) le H⁺ passe de CH₃COOH à HO⁻ ; 3) il reste CH₃COO⁻ et H₂O.
         const hx = u < .5 ? null : u < .78 ? lerp(x + 12, xo - 10, lisse(seg(u, .5, .78))) : xo - 10;
         const hy = u < .5 ? null : u < .78 ? lerp(y - 9, yo - 8, lisse(seg(u, .5, .78))) - Math.sin(Math.PI * seg(u, .5, .78)) * 14 : yo - 8;
-        Peint.sphere(ctx, x, y, 12, u >= .78 ? COLS.A : COLS.AH);
-        if (u < .5) Peint.sphere(ctx, x + 12, y - 9, 5, COLS.H);
+        window.Rendu.molecule(ctx, 'CH3COO', x - 2, y + 1, 1.05, -1.0);
+        if (u < .5) window.Rendu.atome(ctx, x + 12, y - 9, 4.2, 'Hp');
         if (u > 0) {
           const yh = u < .5 ? lerp(yDep, yo, lisse(u / .5)) : yo;
-          Peint.sphere(ctx, xo, yh, 10, u >= .78 ? COLS.EAU : COLS.HO);
+          window.Rendu.molecule(ctx, 'HO', xo - 3, yh - 1, 1.1);   // + le H⁺ arrivé = une molécule d'eau
         }
-        if (hx != null) Peint.sphere(ctx, hx, hy, 5, COLS.H);
+        if (hx != null) window.Rendu.atome(ctx, hx, hy, 4.2, 'Hp');
         if (u >= .78) fait[i] = 1;
       });
       ctx.restore();
@@ -663,8 +664,8 @@ function vueReaction(c, M) {
   }
   M.etape(c, 'loupe', () => {
     c.texte('loupe : dans le bécher, à chaque goutte de soude', LP.x, LP.y - LP.r - 12, { couleur: 'faible', taille: 15, align: 'center' });
-    const L = [['CH₃COOH', COLS.AH, 'rose', 30], ['H⁺', COLS.H, 'jaune', 140], ['HO⁻', COLS.HO, 'bleu', 202], ['CH₃COO⁻', COLS.A, 'vert', 272], ['H₂O', COLS.EAU, 'faible', 382]];
-    L.forEach(([nom, col, craie, x]) => { c.direct(() => Peint.sphere(c.ctx, x + 6, 376, nom === 'H⁺' ? 5 : 8, col)); c.texte(nom, x + 20, 382, { couleur: craie, taille: 17 }); });
+    const L = [['CH₃COOH', 'CH3COOH', 'blanc', 30], ['H⁺', 'Hp', 'jaune', 140], ['HO⁻', 'HO', 'blanc', 202], ['CH₃COO⁻', 'CH3COO', 'blanc', 272], ['H₂O', 'H2O', 'faible', 382]];
+    L.forEach(([nom, mod, craie, x]) => { c.direct(() => window.Rendu.molecule(c.ctx, mod, x + (mod.startsWith('CH3') ? 2 : 6), 376, mod.startsWith('CH3') ? .62 : .95)); c.texte(nom, x + 20, 382, { couleur: craie, taille: 17 }); });
   });
   const XR = 372;
   M.etape(c, 'equation', () => {
@@ -685,7 +686,7 @@ function vueReaction(c, M) {
   }));
   M.rea = { n: fait.reduce((s, v) => s + v, 0), p };
   const vues = [];
-  if (M.commence('loupe')) vues.push('loupe : des molécules CH₃COOH (rose, avec un H⁺ jaune) et des HO⁻ (bleus) qui tombent ; légende CH₃COOH, H⁺, HO⁻, CH₃COO⁻, H₂O');
+  if (M.commence('loupe')) vues.push('loupe : des molécules CH₃COOH en modèles (C noir, O rouge, H blanc, le H⁺ acide en jaune) et des ions HO⁻ qui tombent ; le H⁺ jaune passe sur HO⁻ qui devient H₂O ; légende CH₃COOH, H⁺, HO⁻, CH₃COO⁻, H₂O');
   if (M.commence('equation')) vues.push('réaction de dosage : CH₃COOH + HO⁻ → CH₃COO⁻ + H₂O (flèche simple)');
   if (M.commence('constante')) vues.push('K = 1,6·10⁹ (encadré jaune), très grande');
   CASES.forEach(([nom, expl]) => { if (M.commence(nom)) vues.push(`case cochée : ${nom} (${expl})`); });
