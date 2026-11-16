@@ -117,7 +117,7 @@ function peindreVibreur(ctx, t) {
 function montage(c) {
   c.ligne(X(0), G.y0, X(L), G.y0, { couleur: 'tresfaible', largeur: 1.1, pointille: [5, 6] });
   c.texte('S', X(0) - 12, G.y0 + 6, { couleur: 'cyan', align: 'right' });
-  c.texte('vibreur', X(0) - 26, HAUT_VIBREUR + 62, { couleur: 'faible', align: 'center', taille: 14 });
+  c.texte('vibreur', X(0) - 34, HAUT_VIBREUR + 62, { couleur: 'faible', align: 'center', taille: 14 });
   c.repere('vibreur', X(0) - 68, HAUT_VIBREUR - 6, 84, 56, 'le vibreur');
 }
 function milieu(c, avecVibreur = true) {
@@ -128,11 +128,12 @@ function reperesSource(c) {
 }
 function heure(c) { c.direct(() => c.texte(`t = ${ft(S.t)} s`, H(740), 26, { couleur: 'jaune', align: 'right' })); }
 /* Un point de la corde (perle) avec son nom au-dessus ; flèche verte s’il monte, rose s’il descend. */
-function pointCorde(c, x, nom, teinte, fleche = false) {
+function pointCorde(c, x, nom, teinte, fleche = false, bas = false) {
   const yb = Y(x, S.t);
   c.ligne(X(x), G.y0 - G.K - 6, X(x), G.y0 + G.K + 6, { couleur: 'tresfaible', largeur: 1, pointille: [3, 5] });
   perle(c.ctx, X(x), yb, 7, teinte);
-  c.texte(nom, X(x), yb - 13, { couleur: teinte === 'violet' ? 'violet' : 'rouge', align: 'center', taille: 17 });
+  // Le nom en haut du pointillé, au-dessus de toute la corde : la corde ne le traverse jamais.
+  c.texte(nom, X(x), bas ? G.y0 + G.K + 26 : G.y0 - G.K - 12, { couleur: teinte === 'violet' ? 'violet' : 'rouge', align: 'center', taille: 17 });
   const s = montee(x, S.t);
   if (fleche && Math.abs(s) > 0.3) c.fleche(X(x) + 14, yb, X(x) + 14, yb - Math.sign(s) * 22, { couleur: s > 0 ? 'vert' : 'rose', largeur: 2, tete: 7 });
   c.repere(nom === 'M' ? 'point_m' : 'point_p', X(x) - 16, G.y0 - G.K - 14, 32, 2 * G.K + 28, nom === 'M' ? 'le point M' : 'le point P');
@@ -278,7 +279,7 @@ const dessins = {
     heure(c);
     c.direct(() => {
       const t = S.t, tau = S.xM / V;
-      pointCorde(c, S.xM, 'M', 'rouge');
+      pointCorde(c, S.xM, 'M', 'rouge', false, true);   // le nom sous la corde : au-dessus passe la cote λ
       courbeTemps(c, Tx, y0, K, tt => y(S.xM, tt), 0, Math.min(t, 3), 'rouge');
       front(c, y0 + 8, y0 + K + 4, false);
       if (t < ARRET - 1e-6) return;
@@ -342,7 +343,8 @@ const dessins = {
     milieu(c); montage(c); reperesSource(c); heure(c);
     const oy1 = 250, oy2 = 350, k2 = 30, tmax = 3;
     const Tx = axeTemps(c, H(110), oy1, H(570), tmax, 44, 'y_S', null);
-    axeTemps(c, H(110), oy2, H(570), tmax, 44, 'y_M', 398);
+    axeTemps(c, H(110), oy2, H(570), tmax, 44, null, 398);
+    c.texte('y_M', H(110) - 8, oy2 - 44 + 8, { couleur: 'faible', taille: 15, align: 'right' });   // à gauche de l'axe : la cote τ passe à droite
     c.repere('courbe_ys', H(110), oy1 - k2 - 8, H(570), 2 * k2 + 16, 'le film de la source S (son élongation au cours du temps)');
     c.repere('courbe_ym', H(110), oy2 - k2 - 8, H(570), 2 * k2 + 16, 'le film du point M (son élongation au cours du temps)');
     c.direct(() => {
