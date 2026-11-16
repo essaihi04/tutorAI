@@ -302,8 +302,11 @@
         /* Plancher d'écriture (troisième passe, tableau large) : aucun texte d'un bloc sous R.plancher px À L'ÉCRAN
          * (graduations d'un graphe, légendes) : le kit relève la taille avec echelle × tailleMin, ici échelle du bloc. */
         const ech0 = c.echelle, tmin0 = c.tailleMin, plancher = R.plancher && c.__rcS ? R.plancher + (P.fig ? 0 : 1) : 0;   // figure 17, colonnes de texte 18
-        if (plancher) { c.echelle = c.__rcS * P.k; c.tailleMin = Math.max(tmin0 || 0, plancher); }
+        // l'encre est relevée SANS le plancher : il dépend du facteur du bloc, et l'encre ne fait que grandir (un facteur
+        // passager, à la première image, gonflerait le bloc pour de bon)
         encre(R, i, nom, a);
+        // (le plancher du kit, tailleMin / echelle dans le cadre, reste un minimum : on ne fait que l'élever)
+        if (plancher) { const e = c.__rcS * P.k; c.tailleMin = Math.max(plancher, ech0 && tmin0 ? tmin0 * e / ech0 : 0); c.echelle = e; }
         // Dans un dessin peint, chaque trait ou texte de craie retrouve SON bloc (le repère du cadre est remis d'abord).
         if (ext && ext.f !== 1) rendreCtx();
         ctx.save();
