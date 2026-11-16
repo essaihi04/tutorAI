@@ -244,7 +244,56 @@
     ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); ctx.restore();
   }
 
-  window.SVTPeinture = { T, graine, rgba, cellule, mitochondrie, cheminCretes, membrane, proteine, bille, liaison, capsule, spherePedonculee, becher, levure, bulleGaz, eclat };
+  /* ── Fonds et cartes communs (16 novembre 2026, refonte « un seul style agréable ») ── */
+  const GR = (() => { const r = graine(77), out = []; for (let i = 0; i < 400; i++) out.push([r(), r(), .7 + r() * 1.6, r()]); return out; })();
+  /** La matrice peinte : bleu lumineux doux, plus clair vers (cx, cy), granules clairs et quelques denses. */
+  function fondMatrice(ctx, x, y, w, h, o = {}) {
+    const cx = o.cx ?? x + w / 2, cy = o.cy ?? y + h / 2;
+    ctx.save(); ctx.beginPath(); if (o.arrondi && ctx.roundRect) ctx.roundRect(x, y, w, h, o.arrondi); else ctx.rect(x, y, w, h); ctx.clip();
+    const g = ctx.createRadialGradient(cx, cy, 20, cx + 60, cy + 30, Math.max(w, h) * .9);
+    g.addColorStop(0, 'rgba(96,190,245,.62)'); g.addColorStop(.45, 'rgba(52,140,210,.50)'); g.addColorStop(1, 'rgba(22,72,128,.42)');
+    ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+    const n = Math.round(w * h / 1800);
+    for (let i = 0; i < Math.min(n, GR.length); i++) {
+      const [u, v, r, k] = GR[i]; ctx.fillStyle = k < .82 ? 'rgba(225,245,255,.22)' : 'rgba(20,60,110,.35)';
+      ctx.beginPath(); ctx.arc(x + u * w, y + v * h, k < .82 ? r : r + 1.4, 0, TAU); ctx.fill();
+    }
+    ctx.restore();
+  }
+  /** Le hyaloplasme peint : vert d'eau lumineux, granules. */
+  function fondHyalo(ctx, x, y, w, h, o = {}) {
+    ctx.save(); ctx.beginPath(); if (o.arrondi && ctx.roundRect) ctx.roundRect(x, y, w, h, o.arrondi); else ctx.rect(x, y, w, h); ctx.clip();
+    const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, rgba(T.hyalo, .40)); g.addColorStop(1, rgba(T.hyalo, .22));
+    ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+    const n = Math.round(w * h / 1600);
+    for (let i = 0; i < Math.min(n, GR.length); i++) { const [u, v, r] = GR[GR.length - 1 - i]; ctx.fillStyle = 'rgba(210,240,200,.20)'; ctx.beginPath(); ctx.arc(x + u * w, y + v * h, r, 0, TAU); ctx.fill(); }
+    ctx.restore();
+  }
+  /**
+   * Une carte (tableau, compteur, bilan) : fond bleu nuit, bord doré, ombre douce ; o.entete = hauteur d'un en-tête doré
+   * (le titre s'écrit dessus en sombre et gras) ; o.rayures = liste des y de lignes à éclaircir une sur deux (hauteur o.pas).
+   */
+  function carte(ctx, x, y, w, h, o = {}) {
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 14; ctx.shadowOffsetY = 5;
+    const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, `rgba(14,32,58,${o.alpha ?? .94})`); g.addColorStop(1, `rgba(8,22,42,${o.alpha ?? .94})`);
+    ctx.fillStyle = g; ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x, y, w, h, o.arrondi ?? 16); else ctx.rect(x, y, w, h); ctx.fill(); ctx.shadowColor = 'transparent';
+    ctx.save(); ctx.clip();
+    if (o.entete) { const gh = ctx.createLinearGradient(0, y, 0, y + o.entete); gh.addColorStop(0, o.clair || '#fde68a'); gh.addColorStop(1, o.fonce || '#f59e0b'); ctx.fillStyle = gh; ctx.fillRect(x, y, w, o.entete); }
+    if (o.rayures) { ctx.fillStyle = 'rgba(255,255,255,.05)'; o.rayures.forEach((yy, i) => { if (i % 2 === 0) ctx.fillRect(x, yy, w, o.pas || 30); }); }
+    ctx.restore();
+    ctx.lineWidth = 2; ctx.strokeStyle = o.bord || 'rgba(250,204,21,.85)'; ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x, y, w, h, o.arrondi ?? 16); else ctx.rect(x, y, w, h); ctx.stroke();
+    ctx.restore();
+  }
+  /** Une molécule de CO2 peinte : O = C = O (carbone gris, oxygènes rouges). */
+  function co2(ctx, x, y, k = 1, a = 1) {
+    if (a <= 0) return;
+    liaison(ctx, x - 9 * k, y, x + 9 * k, y, { alpha: a, epaisseur: 3 * k });
+    bille(ctx, x - 10 * k, y, 5 * k, [235, 85, 70], { alpha: a }); bille(ctx, x + 10 * k, y, 5 * k, [235, 85, 70], { alpha: a }); bille(ctx, x, y, 6 * k, [150, 160, 175], { alpha: a });
+  }
+
+  window.SVTPeinture = { T, graine, rgba, cellule, mitochondrie, cheminCretes, membrane, proteine, bille, liaison, capsule, spherePedonculee, becher, levure, bulleGaz, eclat,
+    fondMatrice, fondHyalo, carte, co2 };
 })();
 
 /* ── Mosaïque du tableau large (15 novembre 2026) : ici plutôt que dans un fichier à part (un nouveau .js de public/ n'est pas servi par le serveur de dev). ── */

@@ -80,6 +80,7 @@ const ROWS = { lieu: 120, degradation: 162, produits: 200, atp: 244, r: 282 };
 
 /* ── Peinture (règle 32 : le vivant et les molécules sont peints, la craie garde légendes et valeurs) ── */
 const P = window.SVTPeinture;
+const ENCRE = '#0b1f2a';   // texte sombre et gras sur les en-têtes dorés
 const TEINTE = { blanc: [228, 226, 214], jaune: [250, 204, 21], orange: [240, 140, 50] };
 const OXYGENE = [214, 64, 58], HYDROGENE = [236, 236, 236], EAU = [70, 150, 210];
 
@@ -143,7 +144,7 @@ function dessiner(c) {
   // Le cadre fixe s'affiche d'un coup : la voix peut lancer l'essai dès l'ouverture.
   if (MOS.actif()) c.direct(() => ['Le même glucose :', 'avec ou sans', 'dioxygène ?'].forEach((l, i) => c.texte(l, 800, 30 + i * 28, { couleur: 'blanc', taille: 22 })));   // tableau large : le titre en colonne à gauche
   else c.direct(() => c.texte('Le même glucose : avec ou sans dioxygène ?', 14, 26, { couleur: 'blanc', taille: 17 }));
-  c.texte('hyaloplasme', 28, 66, { couleur: 'faible', taille: 14 });
+  c.texte('hyaloplasme', 28, 66, { couleur: 'vert', taille: 16, gras: true });
   c.repere('hyaloplasme', 20, 50, 110, 24, 'le hyaloplasme');
   c.texte(S.o2 ? 'mitochondrie' : 'mitochondrie à l’arrêt : pas de O₂', MITO.x, MITO.y + MITO.ry + 20, { couleur: S.o2 ? 'cyan' : 'rouge', taille: 14, align: 'center' });
   c.repere('mitochondrie', MITO.x - MITO.rx, MITO.y - MITO.ry, MITO.rx * 2, MITO.ry * 2 + 26, 'la mitochondrie');
@@ -228,16 +229,16 @@ function dessiner(c) {
 function colonne(c) {
   const X = COL.x;
   c.direct(() => {
-  c.rect(X, CELL.y, 760 - X - 6, CELL.h, { couleur: 'tresfaible', arrondi: 10 });
-  c.texte('avec O₂', COL.c1, 68, { couleur: 'vert', taille: 16, align: 'center' });
-  c.texte('sans O₂', COL.c2, 68, { couleur: 'rouge', taille: 16, align: 'center' });
-  c.texte('respiration', COL.c1, 88, { couleur: 'faible', taille: 13, align: 'center' });
-  c.texte('fermentation', COL.c2, 88, { couleur: 'faible', taille: 13, align: 'center' });
-  c.ligne(X + 6, 98, 748, 98, { couleur: 'tresfaible', largeur: 1.2 });
-  c.ligne(528, 54, 528, 336, { couleur: 'tresfaible', largeur: 1.2 });
-  c.ligne(640, 54, 640, 336, { couleur: 'tresfaible', largeur: 1.2 });
+  // (16 novembre 2026) le tableau en carte : en-tête doré, fond bleu nuit, lignes alternées, texte vif
+  P.carte(c.ctx, X, CELL.y, 760 - X - 6, CELL.h, { entete: 98 - CELL.y, rayures: Object.values(ROWS).map(y => y - 19), pas: 38 });
+  c.texte('avec O₂', COL.c1, 70, { couleur: '#14532d', gras: true, taille: 17, align: 'center' });
+  c.texte('sans O₂', COL.c2, 70, { couleur: '#7f1d1d', gras: true, taille: 17, align: 'center' });
+  c.texte('respiration', COL.c1, 90, { couleur: ENCRE, gras: true, taille: 14, align: 'center' });
+  c.texte('fermentation', COL.c2, 90, { couleur: ENCRE, gras: true, taille: 14, align: 'center' });
+    c.ligne(528, 100, 528, 334, { couleur: 'tresfaible', largeur: 1.2 });
+  c.ligne(640, 54, 640, 334, { couleur: 'tresfaible', largeur: 1.2 });
   const lab = { lieu: 'lieu', degradation: 'dégradation', produits: 'produits', atp: 'ATP', r: 'rendement' };
-  for (const [k, y] of Object.entries(ROWS)) c.texte(lab[k], COL.lab, y + 5, { couleur: 'faible', taille: 14, max: 72 });
+  for (const [k, y] of Object.entries(ROWS)) c.texte(lab[k], COL.lab, y + 5, { couleur: 'blanc', taille: 15, max: 72 });
   c.repere('colonne_respiration', 530, 54, 108, 282, 'la colonne de la respiration (avec O₂)');
   c.repere('colonne_fermentation', 642, 54, 106, 282, 'la colonne de la fermentation (sans O₂)');
   c.repere('comparaison', X, CELL.y, 760 - X - 6, CELL.h, 'la comparaison respiration / fermentation');
@@ -245,7 +246,7 @@ function colonne(c) {
   const cellule = (col, cle, lignes, couleur) => {
     const r = col === 'resp' ? R.resp : R.ferm, x = col === 'resp' ? COL.c1 : COL.c2, y = ROWS[cle];
     if (!r[cle]) return;
-    ecritR.ecrire(c, col + cle, () => lignes.forEach((s, i) => c.texte(s, x, y + (lignes.length > 1 ? -4 + i * 17 : 5), { couleur, taille: lignes.length > 1 ? 13 : 15, align: 'center', max: COL.w })));
+    ecritR.ecrire(c, col + cle, () => lignes.forEach((s, i) => c.texte(s, x, y + (lignes.length > 1 ? -4 + i * 17 : 5), { couleur, taille: lignes.length > 1 ? 14 : 17, gras: true, align: 'center', max: COL.w })));
   };
   cellule('resp', 'lieu', ['hyaloplasme', 'puis mitochondrie'], 'cyan');
   cellule('resp', 'degradation', ['complète'], 'vert');
@@ -257,7 +258,7 @@ function colonne(c) {
   cellule('ferm', 'produits', ['acide lactique', 'ou éthanol + CO₂'], 'orange');
   cellule('ferm', 'atp', ['2'], 'jaune');
   cellule('ferm', 'r', ['2,13 %'], 'jaune');
-  if (R.resp.atp && R.ferm.atp) ecritR.ecrire(c, 'fois19', () => c.texte('avec O₂ : 19 fois plus d’ATP', 597, 326, { couleur: 'vert', taille: 15, align: 'center' }));
+  if (R.resp.atp && R.ferm.atp) ecritR.ecrire(c, 'fois19', () => c.texte('avec O₂ : 19 fois plus d’ATP', 597, 326, { couleur: 'vert', taille: 16, gras: true, align: 'center' }));
 }
 
 /* ── Ce qui se voit ── */

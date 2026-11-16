@@ -96,9 +96,11 @@ function medaillon(ctx) {
   const { x, y, w, h } = MED;
   ctx.save(); ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, 12) : ctx.rect(x, y, w, h); ctx.clip();
   // matrice partout, espace intermembranaire en haut et dans le doigt de la crête
-  let g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, P.rgba(P.T.matrice, .55)); g.addColorStop(1, P.rgba(P.T.matrice, .35));
-  ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
-  ctx.fillStyle = P.rgba(P.T.mitoEsp, .5); ctx.fillRect(x, y, w, CR.haut - 12 - y);
+  // (16 novembre 2026) matrice bleu lumineux et espace intermembranaire pêche vif, comme dans tout le cours
+  ctx.restore(); P.fondMatrice(ctx, x, y, w, h, { arrondi: 12, cx: x + w / 2, cy: y + h * .6 });
+  ctx.save(); ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, 12) : ctx.rect(x, y, w, h); ctx.clip();
+  let g;
+  ctx.fillStyle = 'rgba(255,190,130,.72)'; ctx.fillRect(x, y, w, CR.haut - 12 - y);
   ctx.beginPath(); ctx.moveTo(CR.x - CR.demi, CR.haut - 14); ctx.lineTo(CR.x - CR.demi, CR.bas); ctx.arc(CR.x, CR.bas, CR.demi, Math.PI, 0, true); ctx.lineTo(CR.x + CR.demi, CR.haut - 14); ctx.closePath(); ctx.fill();
   // membrane externe (en haut)
   ctx.strokeStyle = P.rgba(P.T.mitoExt, .95); ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(x, y + 14); ctx.lineTo(x + w, y + 14); ctx.stroke();
@@ -130,10 +132,10 @@ function legende(c, l) {
 }
 function lieux(c) {
   const num = S.legendes === 'numeros';
-  c.texte((num ? 'dans 5 : ' : '') + 'formation de l’acétyl-CoA, cycle de Krebs', num ? 282 : 282, 404, { couleur: 'vert', taille: 13 });
-  c.texte((num ? 'sur 2 : ' : '') + 'chaîne respiratoire, synthèse d’ATP', 30, 404, { couleur: 'vert', taille: 13 });
-  c.texte('hyaloplasme : glycolyse', 548, 384, { couleur: 'vert', taille: 13 });
-  c.texte('(hors de la mitochondrie)', 548, 404, { couleur: 'vert', taille: 13 });
+  c.texte((num ? 'dans 5 : ' : '') + 'formation de l’acétyl-CoA, cycle de Krebs', num ? 282 : 282, 404, { couleur: 'vert', taille: 14, gras: true });
+  c.texte((num ? 'sur 2 : ' : '') + 'chaîne respiratoire, synthèse d’ATP', 30, 404, { couleur: 'vert', taille: 14, gras: true });
+  c.texte('hyaloplasme : glycolyse', 548, 384, { couleur: 'vert', taille: 14, gras: true });
+  c.texte('(hors de la mitochondrie)', 548, 404, { couleur: 'vert', taille: 14 });
 }
 
 function dessiner(c) {
@@ -142,8 +144,8 @@ function dessiner(c) {
   c.direct(() => peindre(c.ctx));
   if (MOS.actif()) c.direct(() => ['La mitochondrie :', 'un organite', 'à deux membranes'].forEach((l, i) => c.texte(l, 800, 30 + i * 28, { couleur: 'cyan', taille: 22 })));   // tableau large : le titre en colonne à gauche
   else c.texte('La mitochondrie : un organite à deux membranes', 18, 30, { couleur: 'cyan', taille: 20 });
-  c.texte('une crête agrandie', MED.x + MED.w / 2, 56, { couleur: 'faible', taille: 13, align: 'center' });
-  c.rect(MED.x, MED.y, MED.w, MED.h, { couleur: 'tresfaible', largeur: 1.4, arrondi: 12 });
+  c.texte('une crête agrandie', MED.x + MED.w / 2, 56, { couleur: 'blanc', taille: 15, gras: true, align: 'center' });
+  c.rect(MED.x, MED.y, MED.w, MED.h, { couleur: 'jaune', largeur: 1.8, arrondi: 12 });
   c.rect(ZOOM.x, ZOOM.y, ZOOM.w, ZOOM.h, { couleur: 'jaune', largeur: 1.4, arrondi: 4 });
   c.ligne(ZOOM.x + ZOOM.w, ZOOM.y, MED.x, MED.y + 12, { couleur: 'tresfaible', largeur: 1.1, pointille: [5, 5] });
   c.ligne(ZOOM.x + ZOOM.w, ZOOM.y + ZOOM.h, MED.x, MED.y + MED.h - 12, { couleur: 'tresfaible', largeur: 1.1, pointille: [5, 5] });
@@ -199,13 +201,13 @@ function dessinerConstruire(c) {
   ctx.save(); ctx.translate(FX, FY); ctx.scale(FS, FS);
   c.direct(() => {   // le schéma est déjà au tableau : seules les flèches et les étiquettes s'écrivent
     peindre(ctx);
-    c.rect(MED.x, MED.y, MED.w, MED.h, { couleur: 'tresfaible', largeur: 1.4, arrondi: 12 });
+    c.rect(MED.x, MED.y, MED.w, MED.h, { couleur: 'jaune', largeur: 1.8, arrondi: 12 });
     c.rect(ZOOM.x, ZOOM.y, ZOOM.w, ZOOM.h, { couleur: 'jaune', largeur: 1.4, arrondi: 4 });
     c.ligne(ZOOM.x + ZOOM.w, ZOOM.y, MED.x, MED.y + 12, { couleur: 'tresfaible', largeur: 1.1, pointille: [5, 5] });
     c.ligne(ZOOM.x + ZOOM.w, ZOOM.y + ZOOM.h, MED.x, MED.y + MED.h - 12, { couleur: 'tresfaible', largeur: 1.1, pointille: [5, 5] });
   });
   ctx.restore();
-  c.direct(() => c.texte('une crête agrandie', ...tr(MED.x + MED.w / 2, 56), { couleur: 'faible', taille: 13, align: 'center' }));
+  c.direct(() => c.texte('une crête agrandie', ...tr(MED.x + MED.w / 2, 56), { couleur: 'blanc', taille: 15, gras: true, align: 'center' }));
   c.texte('Légende la mitochondrie : pose les étiquettes', 18, 24, { couleur: 'cyan', taille: 18, duree: .8 });
   // les flèches et les places vides (pointillés), écrites vite
   for (const l of LEG) {

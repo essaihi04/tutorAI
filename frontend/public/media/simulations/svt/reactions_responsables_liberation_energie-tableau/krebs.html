@@ -49,7 +49,7 @@ const MOTIFS = {
   compteur_par_glucose: 'le bilan pour un glucose',
 };
 const CARBONE = [250, 204, 21], NADC = [34, 190, 220], FADC = [230, 140, 60], ATPC = [250, 190, 60], COA = [168, 110, 220];
-const RO = { x: 280, y: 205, r: 95 };                      // la roue
+const RO = { x: 250, y: 178, r: 84 };                      // la roue (16 novembre 2026 : à gauche, le compteur en carte à droite)
 const DEG = Math.PI / 180, HAUT = -90;
 /* Les crans du cycle : angle sur la roue (sens horaire depuis la droite), sortie, carbones qui restent. */
 const CRANS = [
@@ -79,34 +79,99 @@ const TOURS = [T1, T2];
 const canvas = $('canvas');
 const scene = Scene(canvas, (c) => { scene.cadre(47); MOS.dessiner(c, () => { dessiner(c); }); return c.fin(); }, { large: true });
 /* Tableau large (portable 1366 × 613) : la page est rangée sur toute la largeur (SVTLarge.Mosaique, dans peinture.js) ; grand écran : inchangée. */
-const MOS = window.SVTLarge.Mosaique(scene, (L) => L >= 1000 ? { police: 1.25, lignes: [[[6, 40, 570, 324], { r: [576, 60, 224, 215], k: 1.45 }], [[-50, 364, 860, 56]]] }   /* 16 novembre 2026 : la figure sans la bande du titre, pour remplir la hauteur */ : null);
+/* 16 novembre 2026 : plus de découpe en blocs (elle coupait la matrice en rectangles) ; en cadre large, le dessin est centré et
+ * la matrice peinte s'étend sur toute la largeur du tableau (peindre). */
+const MOS = window.SVTLarge.Mosaique(scene, () => null);
 const ecrit = Apparitions(scene);
 const chrono = Chrono({ fin: () => FIN, moments: () => M, motifs: MOTIFS, bouton: $('run'), bulle: $('feedback'), pont: () => pont,
   depart: 'Observe la matrice : le composé à 4 C attend l’acétyl…', reinit: () => ecrit.oublier(),
   fini: () => 'Un tour du cycle : 2 CO2, 3 NADH,H+, 1 FADH2, 1 ATP ; deux tours pour un glucose.' });
 scene.avancer = chrono.avancer;
 
-/* ── Peinture : la matrice et un bord de membrane interne ── */
-const R = P.graine(31), GM = []; for (let i = 0; i < 110; i++) GM.push([16 + R() * 728, 64 + R() * 348, .7 + R() * 1.3]);
-function peindre(ctx) {
-  ctx.save(); ctx.beginPath(); ctx.roundRect ? ctx.roundRect(12, 44, 736, 372, 22) : ctx.rect(12, 44, 736, 372); ctx.clip();
-  const g = ctx.createRadialGradient(RO.x, RO.y, 30, RO.x + 120, RO.y, 520);
-  g.addColorStop(0, P.rgba(P.T.matrice, .48)); g.addColorStop(1, P.rgba(P.T.matrice, .26));
-  ctx.fillStyle = g; ctx.fillRect(12, 44, 736, 372);
-  ctx.fillStyle = 'rgba(230,240,250,.18)'; for (const [x, y, r] of GM) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
-  P.membrane(ctx, 12, 44, 736, 16, { pas: 8 });
+/* ── Peinture (refonte du 16 novembre 2026 : « couleurs et écriture pâles, fond non cohérent ») ──────────────────────────
+ * Une seule scène peinte, sans rectangle gris : la matrice (bleu lumineux doux, granules) sous un bord de membrane interne
+ * dorée ; la roue du cycle est un anneau coloré en volume, ses flèches de sens peintes dessus ; chaque sortie est un objet
+ * peint (CO2 en molécule grise et rouge, NADH,H+ capsule cyan, FADH2 capsule violette, ATP bille dorée) ; le compteur est
+ * une carte (en-tête doré, une ligne par produit avec son pictogramme, chiffres gras qui tombent en place) ; l'équation
+ * et le bilan pour un glucose ont leur bande en bas, en entier. Disposition du cadre 760 × 420 :
+ *   roue à gauche (centre 250, 178), compteur à droite (500 → 752, 40 → 318), bande des équations en bas (330 → 418). */
+const COUL = { co2: [150, 160, 175], oxy: [235, 85, 70], nadh: NADC, fadh2: [176, 120, 236], atp: [250, 196, 60] };
+const CRAIE_DE = { co2: 'blanc', nadh: 'cyan', fadh2: 'violet', atp: 'jaune' };
+/* Où s'écrit le nom de chaque sortie (le cadre est étroit à gauche : NAD+ → NADH,H+ sur deux lignes). */
+const ETIQ = {
+  co2_et_nadh_1: { x: 362, y: 122, align: 'left', l: ['CO_{2} + NADH,H+'] },
+  co2_et_nadh_2: { x: 362, y: 246, align: 'left', l: ['CO_{2} + NADH,H+'] },
+  atp: { x: RO.x, y: 316, align: 'center', l: ['ADP + Pi → ATP'] },
+  fadh2: { x: 140, y: 252, align: 'right', l: ['FAD → FADH_{2}'] },
+  nadh_3: { x: 126, y: 120, align: 'right', l: ['NAD+ →', 'NADH,H+'] },
+};
+const R = P.graine(31), GM = []; for (let i = 0; i < 300; i++) GM.push([-460 + R() * 1680, 34 + R() * 380, .7 + R() * 1.6, R()]);
+const CARTE_C = { x: 500, y: 40, w: 252, h: 278 }, BANDE = { x: 12, y: 330, w: 736, h: 88 };
+function peindre(ctx, t) {
+  const e = Math.max(0, (scene.L - 760) / 2), X0 = 6 - e, WW = 748 + 2 * e;   // cadre large : la matrice va d'un bord à l'autre
+  // la matrice : un grand volume bleu lumineux, plus clair au centre de la roue, bords fondus dans le tableau
+  ctx.save(); ctx.beginPath(); ctx.roundRect ? ctx.roundRect(X0, 4, WW, 414, 28) : ctx.rect(X0, 4, WW, 414); ctx.clip();
+  const g = ctx.createRadialGradient(RO.x, RO.y, 20, RO.x + 80, RO.y + 40, 560);
+  g.addColorStop(0, 'rgba(96,190,245,.62)'); g.addColorStop(.45, 'rgba(52,140,210,.50)'); g.addColorStop(1, 'rgba(22,72,128,.42)');
+  ctx.fillStyle = g; ctx.fillRect(X0, 4, WW, 414);
+  for (const [x, y, r, k] of GM) {   // granules de la matrice : clairs et quelques-uns plus denses
+    ctx.fillStyle = k < .82 ? 'rgba(225,245,255,.22)' : 'rgba(20,60,110,.35)';
+    ctx.beginPath(); ctx.arc(x, y, k < .82 ? r : r + 1.4, 0, Math.PI * 2); ctx.fill();
+  }
+  const v = ctx.createLinearGradient(0, 4, 0, 418); v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(.8, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(5,20,40,.35)');
+  ctx.fillStyle = v; ctx.fillRect(X0, 4, WW, 414);
+  // le bord de membrane interne, doré, avec deux crêtes qui plongent dans la matrice
+  P.membrane(ctx, X0, 6, WW, 20, { pas: 8 });
+  for (const cx of [172, 322]) {
+    ctx.fillStyle = 'rgba(250,210,120,.30)'; ctx.strokeStyle = 'rgba(250,214,130,.85)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(cx - 12, 24); ctx.quadraticCurveTo(cx - 10, 50, cx, 56); ctx.quadraticCurveTo(cx + 10, 50, cx + 12, 24); ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+  ctx.restore();
+  ctx.save(); ctx.strokeStyle = 'rgba(140,210,250,.45)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(X0, 4, WW, 414, 28) : ctx.rect(X0, 4, WW, 414); ctx.stroke(); ctx.restore();
+  roue(ctx, t);
+}
+/** La roue : ombre, anneau coloré (dégradé conique), reflet, trois flèches de sens peintes. */
+function roue(ctx, t) {
+  const { x, y, r } = RO, ep = 20;
+  ctx.save();
+  ctx.lineWidth = ep + 6; ctx.strokeStyle = 'rgba(0,20,40,.35)'; ctx.beginPath(); ctx.arc(x + 3, y + 5, r, 0, Math.PI * 2); ctx.stroke();
+  const g = ctx.createConicGradient ? ctx.createConicGradient(-Math.PI / 2, x, y) : null;
+  if (g) { g.addColorStop(0, '#fde68a'); g.addColorStop(.2, '#5eead4'); g.addColorStop(.45, '#7dd3fc'); g.addColorStop(.7, '#c4b5fd'); g.addColorStop(.88, '#fdba74'); g.addColorStop(1, '#fde68a'); }
+  ctx.lineWidth = ep; ctx.strokeStyle = g || '#7dd3fc'; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
+  ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.arc(x, y, r - ep / 2 + 2, Math.PI * 1.05, Math.PI * 1.75); ctx.stroke();
+  ctx.strokeStyle = 'rgba(10,40,70,.45)'; ctx.beginPath(); ctx.arc(x, y, r + ep / 2, 0, Math.PI * 2); ctx.stroke(); ctx.beginPath(); ctx.arc(x, y, r - ep / 2, 0, Math.PI * 2); ctx.stroke();
+  for (const a of [0, 120, 240]) {   // chevrons blancs dans le sens des aiguilles d'une montre
+    const [cx, cy] = surRoue(a), d = (a + 90) * DEG, s = 8;
+    ctx.fillStyle = 'rgba(255,255,255,.92)'; ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(d) * s, cy + Math.sin(d) * s);
+    ctx.lineTo(cx - Math.cos(d) * s + Math.cos(d + Math.PI / 2) * s * .9, cy - Math.sin(d) * s + Math.sin(d + Math.PI / 2) * s * .9);
+    ctx.lineTo(cx - Math.cos(d) * s - Math.cos(d + Math.PI / 2) * s * .9, cy - Math.sin(d) * s - Math.sin(d + Math.PI / 2) * s * .9);
+    ctx.closePath(); ctx.fill();
+  }
+  const h = ctx.createRadialGradient(x, y, 4, x, y, r - ep / 2); h.addColorStop(0, 'rgba(255,255,255,.10)'); h.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = h; ctx.beginPath(); ctx.arc(x, y, r - ep / 2, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 }
 const surRoue = (ang, dr = 0) => [RO.x + Math.cos(ang * DEG) * (RO.r + dr), RO.y + Math.sin(ang * DEG) * (RO.r + dr)];
 function capsule(c, x, y, w, couleur, nom, a = 1) {
-  c.direct(() => { P.capsule(c.ctx, x, y, w, 22, couleur, { alpha: a }); c.texte(nom, x, y + 5, { couleur: ENCRE, gras: true, taille: 13, align: 'center', alpha: a }); });
+  c.direct(() => { P.capsule(c.ctx, x, y, w, 22, couleur, { alpha: a }); if (nom) c.texte(nom, x, y + 5, { couleur: ENCRE, gras: true, taille: 13, align: 'center', alpha: a }); });
 }
-/* Un amas de n billes de carbone autour de (x, y). */
+/** Pictogrammes peints des produits (dans la sortie qui s'échappe et dans le compteur). */
+function picto(ctx, s, x, y, a = 1, k = 1) {
+  if (a <= 0) return;
+  if (s === 'co2') {   // O = C = O
+    P.liaison(ctx, x - 9 * k, y, x + 9 * k, y, { alpha: a, epaisseur: 3 * k });
+    P.bille(ctx, x - 10 * k, y, 5 * k, COUL.oxy, { alpha: a }); P.bille(ctx, x + 10 * k, y, 5 * k, COUL.oxy, { alpha: a }); P.bille(ctx, x, y, 6 * k, COUL.co2, { alpha: a });
+  } else if (s === 'nadh') P.capsule(ctx, x, y, 30 * k, 14 * k, COUL.nadh, { alpha: a, lueur: .6 });
+  else if (s === 'fadh2') P.capsule(ctx, x, y, 30 * k, 14 * k, COUL.fadh2, { alpha: a, lueur: .6 });
+  else { P.bille(ctx, x, y, 8 * k, COUL.atp, { alpha: a }); P.eclat(ctx, x, y, 12 * k, .35 * a); }
+}
+/* Un amas de n billes de carbone autour de (x, y), avec un halo doré : le composé du cycle se voit tout de suite. */
 function amas(c, x, y, n, a = 1) {
   const pos = [[-9, -9], [9, -9], [-9, 9], [9, 9], [-27, -9], [-27, 9]];
-  // (16 novembre 2026) les carbones reliés par des liaisons peintes : une molécule, pas un tas de billes
   const LIENS = [[0, 1], [0, 2], [1, 3], [2, 3], [4, 0], [5, 2], [4, 5]], dx = n > 4 ? 9 : 0;
   c.direct(() => {
+    P.eclat(c.ctx, x + dx - (n > 4 ? 9 : 0), y, 34, .45 * a);
     for (const [i, j] of LIENS) if (i < n && j < n) P.liaison(c.ctx, x + pos[i][0] + dx, y + pos[i][1], x + pos[j][0] + dx, y + pos[j][1], { alpha: a, epaisseur: 3.4 });
     for (let i = 0; i < n; i++) P.bille(c.ctx, x + pos[i][0] + dx, y + pos[i][1], 8, CARBONE, { alpha: a });
   });
@@ -130,111 +195,125 @@ function compteur(t) {
   for (const cr of T1.crans) if (t >= cr.ev) for (const s of cr.sort) k[s]++;
   return k;
 }
-/* Une sortie qui part du cran vers l’extérieur pendant la seconde de l’événement. */
+/* Une sortie : l'objet peint quitte la roue au cran, vers l'extérieur, pendant la seconde de l'événement. */
 function sortie(c, cr, t, dur) {
-  const u = chrono.part(cr.ev - .5 * dur, cr.ev + .4 * dur, t); if (u <= 0 || u >= 1) return;
-  const [x0, y0] = surRoue(cr.ang, 0), [x1, y1] = surRoue(cr.ang, 30), v = doux(u), x = mix(x0, x1, v), y = mix(y0, y1, v), a = Math.sin(u * Math.PI);
-  cr.sort.forEach((s, i) => {
-    const dx = cr.sort.length > 1 ? (i ? 16 : -16) : 0;
-    if (s === 'co2') c.direct(() => { P.bille(c.ctx, x + dx, y, 6, CARBONE, { alpha: a }); P.bulleGaz(c.ctx, x + dx, y, 10); });
-    else if (s === 'nadh') capsule(c, x + dx + 10, y, 30, NADC, '', a);
-    else if (s === 'fadh2') capsule(c, x, y, 30, FADC, '', a);
-    else capsule(c, x, y, 30, ATPC, '', a);
+  const u = chrono.part(cr.ev - .5 * dur, cr.ev + .5 * dur, t); if (u <= 0 || u >= 1) return;
+  const [x0, y0] = surRoue(cr.ang, 0), [x1, y1] = surRoue(cr.ang, 36), v = doux(u), x = mix(x0, x1, v), y = mix(y0, y1, v), a = Math.min(1, Math.sin(u * Math.PI) * 1.6);
+  c.direct(() => {
+    P.eclat(c.ctx, x0, y0, 18, a);
+    cr.sort.forEach((s, i) => picto(c.ctx, s, x + (cr.sort.length > 1 ? (i ? 18 : -18) : 0), y + (cr.sort.length > 1 ? (i ? 8 : -8) : 0), a));
   });
-  c.direct(() => P.eclat(c.ctx, x0, y0, 16, a));
 }
+/** Le compteur : une carte arrondie, en-tête doré, une ligne par produit. */
+const LIGNES = [['co2', 'CO_{2}', 146], ['nadh', 'NADH,H+', 184], ['fadh2', 'FADH_{2}', 222], ['atp', 'ATP', 260]];
+const XN = 646, X2 = 714;
+function carte(ctx, t) {
+  const { x, y, w, h } = CARTE_C;
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 14; ctx.shadowOffsetY = 5;
+  const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, 'rgba(14,32,58,.94)'); g.addColorStop(1, 'rgba(8,22,42,.94)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 16); ctx.fill(); ctx.shadowColor = 'transparent';
+  ctx.save(); ctx.clip();
+  const gh = ctx.createLinearGradient(0, y, 0, y + 42); gh.addColorStop(0, '#fde68a'); gh.addColorStop(1, '#f59e0b');
+  ctx.fillStyle = gh; ctx.fillRect(x, y, w, 42);
+  ctx.fillStyle = 'rgba(255,255,255,.05)'; for (let i = 0; i < LIGNES.length; i += 2) ctx.fillRect(x, LIGNES[i][2] - 22, w, 38);
+  ctx.restore();
+  ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(250,204,21,.85)'; ctx.beginPath(); ctx.roundRect(x, y, w, h, 16); ctx.stroke();
+  for (const [id, , yy] of LIGNES) picto(ctx, id, x + 24, yy - 6, 1, .9);
+  if (t >= M.second_tour + .4) { ctx.strokeStyle = 'rgba(250,204,21,.45)'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(X2 - 30, y + 52); ctx.lineTo(X2 - 30, y + h - 12); ctx.stroke(); }
+  ctx.restore();
+}
+/* Le dernier instant où un produit a été compté (pour que son chiffre « tombe » en place). */
+const dernier = (id, t) => { let e = -1; for (const cr of T1.crans) if (cr.sort.includes(id) && t >= cr.ev) e = cr.ev; return e; };
 
 function dessiner(c) {
   const t = chrono.t;
-  c.direct(() => peindre(c.ctx));
-  c.texte('Le cycle de Krebs, dans la matrice', 18, 30, { couleur: 'cyan', taille: 20 });
-  c.texte('membrane interne', 742, 80, { couleur: 'faible', taille: 12, align: 'right' });
-  c.texte('matrice', 24, 82, { couleur: 'bleu', taille: 15 });
-  // la roue : un cercle et trois flèches dans le sens horaire
-  c.cercle(RO.x, RO.y, RO.r, { couleur: 'blanc', largeur: 2, depart: -Math.PI / 2 });
-  for (const a of [0, 120, 240]) {
-    const [x, y] = surRoue(a), d = (a + 90) * DEG, s = 10;
-    c.trait([[x - s * Math.cos(d - .5), y - s * Math.sin(d - .5)], [x, y], [x - s * Math.cos(d + .5), y - s * Math.sin(d + .5)]], { couleur: 'blanc', largeur: 2, duree: .1 });
-  }
+  c.direct(() => { peindre(c.ctx, t); carte(c.ctx, t); });
+  c.texte('matrice', 22, 56, { couleur: 'cyan', taille: 20, gras: true });
+  c.texte('membrane interne', 486, 48, { couleur: 'jaune', taille: 16, align: 'right' });
   c.repere('roue', RO.x - RO.r, RO.y - RO.r, 2 * RO.r, 2 * RO.r, 'le cycle de Krebs');
-  // le compteur, à droite (tableau : un tour, puis × 2)
-  c.texte('Compteur', 664, 104, { couleur: 'jaune', taille: 17, align: 'center' });
-  c.texte('un tour', 670, 128, { couleur: 'faible', taille: 13, align: 'center' });
-  c.ligne(584, 136, 746, 136, { couleur: 'tresfaible', largeur: 1.2 });
-  const LIGNES = [['co2', 'CO_{2}', 160], ['nadh', 'NADH,H+', 184], ['fadh2', 'FADH_{2}', 208], ['atp', 'ATP', 232]];
-  for (const [, nom, y] of LIGNES) c.texte(nom, 588, y, { couleur: 'blanc', taille: 14 });
-  c.repere('compteur', 580, 88, 120, 156, 'le compteur d’un tour du cycle');
-
+  // le compteur
+  c.texte('Compteur', CARTE_C.x + CARTE_C.w / 2, 70, { couleur: ENCRE, taille: 22, gras: true, align: 'center' });
+  c.texte('un tour', XN, 104, { couleur: 'cyan', taille: 16, gras: true, align: 'center' });
+  for (const [, nom, y] of LIGNES) c.texte(nom, 546, y, { couleur: 'blanc', taille: 18 });
+  c.repere('compteur', CARTE_C.x, CARTE_C.y, XN + 26 - CARTE_C.x, CARTE_C.h - 40, 'le compteur d’un tour du cycle');
   const k = compteur(t);
   for (const [id, , y] of LIGNES) {
-    ecrit.ecrire(c, 'n' + id + k[id], () => c.texte(String(k[id]), 670, y, { couleur: k[id] ? 'vert' : 'tresfaible', taille: 15, align: 'center' }));
-    const cr = T1.crans.find(cr => cr.sort.includes(id) && t >= cr.ev && t < cr.ev + 1.2);
-    if (cr) c.direct(() => P.eclat(c.ctx, 646, y - 5, 12, .7 * (1 - chrono.part(cr.ev, cr.ev + 1.2, t))));
+    const e = dernier(id, t), u = e < 0 ? 1 : doux(Math.min(1, (t - e) / .45));
+    c.direct(() => c.texte(String(k[id]), XN, y - 16 * (1 - u), { couleur: k[id] ? 'vert' : 'tresfaible', taille: 27, gras: true, align: 'center', alpha: .3 + .7 * u }));
+    if (e >= 0 && t < e + 1.2) c.direct(() => P.eclat(c.ctx, XN, y - 7, 18, .8 * (1 - chrono.part(e, e + 1.2, t))));
   }
 
   // quel tour est en cours
-  const T = t >= T2.debut ? T2 : T1, dur = T === T1 ? 1 : .5;
+  const T = t >= T2.debut ? T2 : T1;
   // l’acétyl (2 C), porté par le CoA, arrive par la gauche ; le CoA repart
   if (t >= T.debut && t < T.colle) {
     const u = doux(chrono.part(T.debut, T.arrive, t)), [xh, yh] = surRoue(HAUT);
-    const xa = mix(112, xh - 40, u), ya = mix(118, yh, u);
+    const xa = mix(96, xh - 40, u), ya = mix(104, yh, u);
     const va = doux(chrono.part(T.arrive, T.colle, t));
     const xg = mix(xa, xh - 18, va);
     c.direct(() => { P.liaison(c.ctx, xg - 9, ya, xg + 9, ya, { epaisseur: 3.4 }); P.bille(c.ctx, xg - 9, ya, 8, CARBONE); P.bille(c.ctx, xg + 9, ya, 8, CARBONE); });
-    const xc = t < T.arrive ? xa - 34 : mix(xa - 34, 70, va);
-    capsule(c, xc, t < T.arrive ? ya : mix(ya, 112, va), 44, COA, 'CoA', 1 - .7 * va);
+    const xc = t < T.arrive ? xa - 36 : mix(xa - 36, 60, va);
+    capsule(c, xc, t < T.arrive ? ya : mix(ya, 112, va), 48, COA, 'CoA', 1 - .7 * va);
     c.repere('acetyl', xg - 30, ya - 14, 90, 28, 'l’acétyl-CoA : l’acétyl (2 C) porté par le coenzyme A');
   }
-  if (t >= T1.debut) ecrit.ecrire(c, 'acetyl', () => c.texte('acétyl-CoA (2 C)', 112, 100, { couleur: 'violet', taille: 14, align: 'center' }));
+  if (t >= T1.debut) ecrit.ecrire(c, 'acetyl', () => c.texte('acétyl-CoA (2 C)', 22, 84, { couleur: 'violet', taille: 17, gras: true }));
   // le composé du cycle
   const e = t < T2.debut ? compose(T1, t) : compose(T2, t), [xc, yc] = surRoue(e.ang);
   amas(c, xc, yc, e.n, doux(chrono.part(0, 1, t)));
-  ecrit.ecrire(c, 'centre' + e.n, () => c.texte(`${e.n} C`, RO.x, RO.y + 9, { couleur: 'jaune', taille: 28, align: 'center' }));
+  ecrit.ecrire(c, 'centre' + e.n, () => c.texte(`${e.n} C`, RO.x, RO.y + 8, { couleur: 'jaune', taille: 32, gras: true, align: 'center' }));
   if (e.n === 6) c.repere('compose_6c', xc - 34, yc - 20, 68, 40, 'le composé à 6 C');
-  // les crans : flèche vers l’extérieur et ce qui sort, écrits au premier tour
+  // les crans : flèche peinte vers l’extérieur, de la couleur du produit, et son nom, écrits au premier tour
   for (const cr of T1.crans) {
     if (t < cr.ev - .4) continue;
-    const [x0, y0] = surRoue(cr.ang, 8), [x1, y1] = surRoue(cr.ang, 40), [xt, yt] = surRoue(cr.ang, 54);
+    const [x0, y0] = surRoue(cr.ang, 12), [x1, y1] = surRoue(cr.ang, 34), q = ETIQ[cr.id], prin = cr.sort[cr.sort.length - 1];
     ecrit.ecrire(c, 'cran' + cr.id, () => {
-      c.fleche(x0, y0, x1, y1, { couleur: 'orange', largeur: 1.6, tete: 8 });
-      c.texte(cr.texte, xt + (cr.align === 'left' ? 2 : cr.align === 'right' ? -2 : 0), yt + 5, { couleur: 'blanc', taille: 14, align: cr.align });
+      c.fleche(x0, y0, x1, y1, { couleur: CRAIE_DE[prin], largeur: 2.2, tete: 8 });
+      q.l.forEach((l, i) => c.texte(l, q.x, q.y + i * 21, { couleur: CRAIE_DE[prin], taille: 17, gras: true, align: q.align }));
     });
   }
   for (const T of TOURS) for (const cr of T.crans) sortie(c, cr, t, T === T1 ? 1 : .5);
-  const rep = (id, cr, w = 130) => { const [x, y] = surRoue(cr.ang, 54); const x0 = cr.align === 'left' ? x - 50 : cr.align === 'right' ? x - w : x - w / 2; c.repere(id, x0, y - 16, w + 40, 30, cr.texte.replace(/_\{2\}/, '2')); };
-  if (t >= T1.crans[0].ev) rep('co2', T1.crans[0], 120);
-  if (t >= T1.crans[0].ev) rep('nadh', T1.crans[0], 120);
-  if (t >= T1.crans[2].ev) rep('atp', T1.crans[2], 110);
-  if (t >= T1.crans[3].ev) rep('fadh2', T1.crans[3], 100);
-  // un tour du cycle : le composé à 4 C est retrouvé
+  const rep = (id, cr, w = 130) => { const q = ETIQ[cr.id]; const x0 = q.align === 'left' ? q.x - 6 : q.align === 'right' ? q.x - w : q.x - w / 2; c.repere(id, x0, q.y - 18, w + 6, 24 + 20 * (q.l.length - 1), cr.texte.replace(/_\{2\}/, '2')); };
+  if (t >= T1.crans[0].ev) rep('co2', T1.crans[0], 130);
+  if (t >= T1.crans[0].ev) rep('nadh', T1.crans[0], 130);
+  if (t >= T1.crans[2].ev) rep('atp', T1.crans[2], 130);
+  if (t >= T1.crans[3].ev) rep('fadh2', T1.crans[3], 110);
+  // un tour du cycle : le composé à 4 C est retrouvé, mis en valeur ; l'équation d'un tour dans la bande du bas
   if (t >= T1.retour - .2) {
+    const u = doux(chrono.part(T1.retour - .2, T1.retour + .6, t));
+    c.direct(() => {
+      const ctx = c.ctx; ctx.save(); ctx.globalAlpha = u;
+      ctx.fillStyle = 'rgba(20,83,45,.78)'; ctx.strokeStyle = 'rgba(74,222,128,.9)'; ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.roundRect(RO.x - 53, RO.y + 14, 106, 40, 11); ctx.fill(); ctx.stroke();
+      const b = BANDE; ctx.fillStyle = 'rgba(8,24,44,.82)'; ctx.strokeStyle = 'rgba(250,204,21,.6)';
+      ctx.beginPath(); ctx.roundRect(b.x, b.y, b.w, b.h, 14); ctx.fill(); ctx.stroke(); ctx.restore();
+    });
     ecrit.ecrire(c, 'cycle', () => {
-      c.texte('4 C retrouvé :', RO.x, RO.y + 36, { couleur: 'vert', taille: 14, align: 'center' });
-      c.texte('c’est un cycle', RO.x, RO.y + 54, { couleur: 'vert', taille: 14, align: 'center' });
+      c.texte('4 C retrouvé :', RO.x, RO.y + 30, { couleur: 'vert', taille: 15, gras: true, align: 'center' });
+      c.texte('c’est un cycle', RO.x, RO.y + 48, { couleur: 'vert', taille: 15, gras: true, align: 'center' });
     });
-    ecrit.ecrire(c, 'eqtour', () => {   // (16 novembre 2026) en deux lignes centrées, couleur vive : lisible dans la bande bleue
-      c.texte('un tour : CH_3-CO-CoA + 3 NAD+ + FAD + ADP + Pi + 3 H_{2}O', 380, 381, { couleur: 'jaune', taille: 15, align: 'center', max: 700 });
-      c.texte('→ 2 CO_{2} + 3 NADH,H+ + FADH_{2} + ATP + CoA-H', 380, 403, { couleur: 'jaune', taille: 15, align: 'center', max: 700 });
+    ecrit.ecrire(c, 'eqtour', () => {
+      c.texte('un tour : CH_3-CO-CoA + 3 NAD+ + FAD + ADP + Pi + 3 H_{2}O', 380, 352, { couleur: 'jaune', taille: 17, gras: true, align: 'center', max: 720 });
+      c.texte('→ 2 CO_{2} + 3 NADH,H+ + FADH_{2} + ATP + CoA-H', 380, 374, { couleur: 'jaune', taille: 17, gras: true, align: 'center', max: 720 });
     });
-    c.repere('equation', 40, 366, 680, 44, 'l’équation d’un tour du cycle');
+    c.repere('equation', 24, 334, 712, 46, 'l’équation d’un tour du cycle');
   }
-  if (t >= T2.debut) ecrit.ecrire(c, 'second', () => c.texte('2ᵉ tour', RO.x, RO.y - 30, { couleur: 'violet', taille: 14, align: 'center' }));
-  if (t >= T2.debut) ecrit.ecrire(c, 'second2', () => c.texte('(second acide pyruvique', 95, 222, { couleur: 'faible', taille: 12, align: 'center' }));
-  if (t >= T2.debut) ecrit.ecrire(c, 'second3', () => c.texte('du même glucose)', 95, 238, { couleur: 'faible', taille: 12, align: 'center' }));
-  // le bilan pour un glucose
+  if (t >= T2.debut) ecrit.ecrire(c, 'second', () => c.texte('2ᵉ tour', RO.x, RO.y - 30, { couleur: 'violet', taille: 16, gras: true, align: 'center' }));
+  if (t >= T2.debut) ecrit.ecrire(c, 'second2', () => c.texte('(second acide', 18, 282, { couleur: 'violet', taille: 15 }));
+  if (t >= T2.debut) ecrit.ecrire(c, 'second3', () => { c.texte('pyruvique du même', 18, 300, { couleur: 'violet', taille: 15 }); c.texte('glucose)', 18, 318, { couleur: 'violet', taille: 15 }); });
+  // le bilan pour un glucose : la colonne × 2 dans la carte, puis la phrase du bilan dans la bande
   if (t >= M.second_tour + .4) {
     ecrit.ecrire(c, 'x2', () => {
-      c.texte('× 2', 724, 128, { couleur: 'jaune', taille: 14, align: 'center' });
-      c.ligne(698, 112, 698, 240, { couleur: 'tresfaible', largeur: 1.2 });
-      for (const [id, , y] of LIGNES) c.texte(String(2 * { co2: 2, nadh: 3, fadh2: 1, atp: 1 }[id]), 724, y, { couleur: 'jaune', taille: 15, align: 'center' });
-      c.texte('pour un glucose', 664, 262, { couleur: 'jaune', taille: 13, align: 'center' });
+      c.texte('× 2', X2, 104, { couleur: 'jaune', taille: 16, gras: true, align: 'center' });
+      for (const [id, , y] of LIGNES) c.texte(String(2 * { co2: 2, nadh: 3, fadh2: 1, atp: 1 }[id]), X2, y, { couleur: 'jaune', taille: 27, gras: true, align: 'center' });
+      c.texte('pour un glucose', CARTE_C.x + CARTE_C.w / 2, 302, { couleur: 'jaune', taille: 17, gras: true, align: 'center' });
     });
-    c.repere('tableau_glucose', 700, 112, 46, 156, 'le bilan du cycle pour un glucose (× 2)');
+    c.repere('tableau_glucose', X2 - 30, 88, 66, 220, 'le bilan du cycle pour un glucose (× 2)');
   }
   if (t >= M.compteur_par_glucose - .3) {
     ecrit.ecrire(c, 'glucose', () => {
-      c.texte('pour un glucose : 10 NADH,H+ (2 glycolyse + 2 acétyl-CoA + 6 Krebs), 2 FADH_{2}, 6 CO_{2}', 380, 395, { couleur: 'jaune', taille: 14, align: 'center', max: 724 });
-      c.texte('l’énergie est surtout portée par NADH,H+ et FADH_{2}', 380, 413, { couleur: 'vert', taille: 14, align: 'center', max: 724 });
+      c.texte('pour un glucose : 10 NADH,H+ (2 glycolyse + 2 acétyl-CoA + 6 Krebs), 2 FADH_{2}, 6 CO_{2}', 380, 394, { couleur: 'orange', taille: 16, gras: true, align: 'center', max: 724 });
+      c.texte('l’énergie est surtout portée par NADH,H+ et FADH_{2}', 380, 413, { couleur: 'vert', taille: 16, gras: true, align: 'center', max: 724 });
     });
   }
 }
