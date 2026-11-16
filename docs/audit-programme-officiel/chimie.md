@@ -380,3 +380,12 @@ Points vérifiés sans erreur
 - « 17 sessions sur 20, un dosage dans 13 » (ab_o1_carte, ab_cr_carte) : ces chiffres ne sont pas vérifiables depuis le cours.
 - Les réactions de k4 disent « le sens direct est favorisé » quand K > 1. Ce n'est pas le critère Qr/K, mais on peut le neutraliser si on veut éviter toute allusion au sous-domaine 3.
 
+
+## Étape 3 — Les skills
+
+Sous le titre commun « Conformité au cadre officiel du ministère (mandatory check) » de `.agents/skills/exploration-de-cours/SKILL.md` et `.agents/skills/cours-concentration/SKILL.md`, une sous-partie « Chimie » contient :
+- les quatre sous-domaines officiels et leur poids ;
+- les clés de nos fiches ;
+- la règle « une notion d'un chapitre suivant est hors champ dans un chapitre précédent » ;
+- la liste des mots hors cadre, avec ce qu'il faut dire à la place ;
+- les pièges trouvés dans cet audit.
