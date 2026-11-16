@@ -104,6 +104,14 @@ function plan(c, o) {
 /** Le cadre d’un repère entier (pour c.repere). */
 const cadreRep = (G) => [G.x0, G.y0, G.w, G.h];
 
+/** Secteur balayé par une rotation (16 novembre 2026) : centre (cx ; cy), rayon r px, de l’angle a0 à a1 (radians, sens direct),
+ *  coloré en transparence, sans temps d’écriture. */
+function balaye(c, cx, cy, r, a0, a1, couleur = 'jaune', alpha = .14) {
+  if (Math.abs(a1 - a0) < 1e-3 || r <= 0) return;
+  const n = Math.max(4, Math.ceil(Math.abs(a1 - a0) * 18)), pts = [[cx, cy]];
+  for (let i = 0; i <= n; i++) { const a = a0 + (a1 - a0) * i / n; pts.push([cx + r * Math.cos(a), cy - r * Math.sin(a)]); }
+  MathsTableau.remplir(c, pts, { couleur, alpha });
+}
 /** Arc orienté de centre (cx ; cy), rayon r, de l’angle a0 à a1 (radians, sens direct = vers le haut), pointe de flèche au bout. */
 function arcF(c, cx, cy, r, a0, a1, o = {}) {
   const P = a => [cx + r * Math.cos(a), cy - r * Math.sin(a)];
@@ -115,7 +123,7 @@ function arcF(c, cx, cy, r, a0, a1, o = {}) {
 const PUISS = ['1', 'i', '−1', '−i'];
 const XR = 480;
 
-MathsTableau.page({
+MathsTableau.page({ net: true,
   id: 'nc_nombre_i', titre: 'Nombres complexes',
   texte: 'Construction à la craie : sur la droite des réels, tout carré est positif ou nul, donc x² = −1 n’a pas de solution réelle ; multiplier par −1 fait un demi-tour, multiplier par i un quart de tour : deux quarts de tour font un demi-tour, i² = −1 ; x² = −1 a pour solutions i et −i ; les puissances de i reviennent tous les 4 : i⁰ = 1, i¹ = i, i² = −1, i³ = −i, i⁴ = 1',
   vues: {
@@ -180,6 +188,7 @@ MathsTableau.page({
         K.anime(1.8, p => {
           if (p < 1) arcF(c, ox, oy, 2 * u, 0, Math.PI * p, { couleur: 'cyan', largeur: 1.4, pointille: [5, 6], tete: false });
           else arcF(c, ox, oy, 2 * u, 0.05, Math.PI - .05, { couleur: 'cyan', largeur: 1.4, pointille: [5, 6] });
+          balaye(c, ox, oy, 2 * u, 0, Math.PI * p, 'cyan', .1);   // le demi-tour, balayé
           const [x, y] = P(2, Math.PI * p); c.point(x, y, 6, 'cyan');
         });
         c.texte('2 × (−1) = −2', XR, 92, { couleur: 'cyan', taille: 20 });
@@ -190,6 +199,7 @@ MathsTableau.page({
         c.cercle(X(1), oy, 6, { couleur: 'jaune', largeur: 1.4 });
         K.anime(1.4, p => {
           arcF(c, ox, oy, u, 0.04, Math.PI / 2 * p - .04, { couleur: 'jaune', largeur: 1.8, tete: p > .3 ? 8 : false });
+          balaye(c, ox, oy, u, 0, Math.PI / 2 * p, 'jaune', .18);   // le quart de tour
           const [x, y] = P(1, Math.PI / 2 * p); c.point(x, y, 6, 'jaune');
         });
         c.fleche(X(0), Y(-1.8), X(0), Y(2.15), { couleur: 'faible', largeur: 1.8 });
@@ -202,6 +212,7 @@ MathsTableau.page({
         c.pause(.5);
         K.anime(1.4, p => {
           arcF(c, ox, oy, u, Math.PI / 2 + .04, Math.PI / 2 + Math.PI / 2 * p - .04, { couleur: 'jaune', largeur: 1.8, tete: p > .3 ? 8 : false });
+          balaye(c, ox, oy, u, Math.PI / 2, Math.PI / 2 + Math.PI / 2 * p, 'orange', .18);   // le deuxième quart
           const [x, y] = P(1, Math.PI / 2 + Math.PI / 2 * p); c.point(x, y, 6, 'jaune');
         });
         const r = encadre(c, 'i × i = i² = −1', XR + 9, 226, 24, 'jaune', 'jaune');

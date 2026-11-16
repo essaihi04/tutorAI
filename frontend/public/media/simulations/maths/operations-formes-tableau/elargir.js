@@ -36,7 +36,7 @@
     return pageOrig(def);
   };
 
-  const PRIM = ['trait', 'point', 'texte', 'repere', 'rect', 'cercle'];
+  const PRIM = ['trait', 'point', 'texte', 'repere', 'rect', 'cercle', '__remplir'];
   function sauver(c) { const d = {}; for (const k of PRIM) d[k] = Object.getOwnPropertyDescriptor(c, k); return d; }
   function rendre(c, d) { for (const k of PRIM) { if (d[k]) Object.defineProperty(c, k, d[k]); else delete c[k]; } }
 
@@ -237,6 +237,8 @@
       c.texte = function (s, x, y, o) { if (dedans) return base.texte.call(this, s, x, y, o); return sous(zTexte(s, x, y, o), () => base.texte.call(this, s, x, y, o)); };
       c.rect = function (x, y, w, h, o) { if (dedans) return base.rect.call(this, x, y, w, h, o); return sous(zoneDe(lay, { x0: x, y0: y, x1: x + w, y1: y + h }), () => base.rect.call(this, x, y, w, h, o)); };
       c.cercle = function (x, y, r, o) { if (dedans) return base.cercle.call(this, x, y, r, o); return sous(zoneDe(lay, { x0: x - r, y0: y - r, x1: x + r, y1: y + r }), () => base.cercle.call(this, x, y, r, o)); };
+      // zones colorées du kit (MathsTableau.remplir, 16 novembre 2026) : rangées dans la zone de leurs points, comme un trait
+      c.__remplir = function (P, o) { if (dedans) return MT.peint(this, ctx, P, o); return sous(zPts(P), () => MT.peint(this, ctx, P, o)); };
     }
     c.repere = function (id, x, y, w, h, label) {
       const z = zoneDe(lay, { x0: x, y0: y, x1: x + w, y1: y + h });
