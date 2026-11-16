@@ -497,33 +497,152 @@
   const G = { x: 352, y: 34, w: 190, h: 130 };         // courbe
   const accent = () => ACCENT;
 
-  function becher(x, y, w, h, niveau, liquide, o = {}) {
-    craie.trait([[x, y], [x, y + h], [x + w, y + h], [x + w, y]], { couleur: "blanc", largeur: 2.2 });
-    if (niveau > 0) {
-      const ly = y + h - h * clamp(niveau, 0, 1) - 2;
-      const c = craie.ctx; c.globalAlpha = o.alpha ?? .18; c.fillStyle = craie.couleur(liquide); c.fillRect(x + 2, ly, w - 4, y + h - ly - 2); c.globalAlpha = 1;
-      craie.ligne(x + 2, ly, x + w - 2, ly, { couleur: liquide, largeur: 1.6, tremble: .5 });
+  /*
+   * Le montage PEINT (16 novembre 2026 : « des animations plus réalistes, plus attractives, avec de belles couleurs ») :
+   * verre translucide avec reflets, liquides colorés avec ménisque, appareils en boîtier, électrodes métalliques,
+   * noyaux et particules en sphères ombrées. La craie garde les légendes, les flèches, les formules et les valeurs.
+   * Mêmes places, mêmes tailles, mêmes repères qu'avant.
+   */
+  const RGB = (s) => {
+    if (Array.isArray(s)) return s.slice(0, 3);
+    const h = craie.couleur(s);
+    if (h.startsWith("#")) { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
+    const m = h.match(/[\d.]+/g); return m ? m.slice(0, 3).map(Number) : [200, 200, 200];
+  };
+  const rgba = (c, a) => `rgba(${c.map(Math.round).join(",")},${clamp(a, 0, 1).toFixed(3)})`;
+  const clair = (c, k) => c.map((v) => v + (255 - v) * k), fonce = (c, k) => c.map((v) => v * k);
+  const melange = (a, b, f) => a.map((v, i) => v + (b[i] - v) * clamp(f, 0, 1));
+  const doux = (f) => { f = clamp(f, 0, 1); return f * f * (3 - 2 * f); };
+  /** Peint sur le contexte de la craie, tout de suite (la craie continue d'écrire par-dessus). */
+  function peindre(fn) { craie.direct(() => { const c = craie.ctx; c.save(); try { fn(c); } finally { c.restore(); } }); }
+  function ombrePortee(c, cx, yb, rx) { c.fillStyle = "rgba(0,0,0,.3)"; c.beginPath(); c.ellipse(cx + 3, yb + 3, rx, 4, 0, 0, Math.PI * 2); c.fill(); }
+  /** Liquide dans la forme (chemin fermé) : plus sombre aux bords, ménisque clair. */
+  function liquide(c, forme, x0, x1, ys, yb, col, a, menisque = true) {
+    c.save(); forme(); c.clip();
+    const g = c.createLinearGradient(x0, 0, x1, 0);
+    g.addColorStop(0, rgba(fonce(col, .6), a * 1.35)); g.addColorStop(.42, rgba(clair(col, .15), a)); g.addColorStop(1, rgba(fonce(col, .58), a * 1.35));
+    c.fillStyle = g; c.fillRect(x0 - 2, ys, x1 - x0 + 4, yb - ys + 2);
+    c.restore();
+    if (menisque) { c.fillStyle = rgba(clair(col, .45), a + .12); c.beginPath(); c.ellipse((x0 + x1) / 2, ys, Math.max(1, (x1 - x0) / 2 - 1), 2.6, 0, 0, Math.PI * 2); c.fill(); }
+  }
+  /** Contour de verre, reflet vertical à gauche, filet clair à droite. */
+  function verre(c, forme, x, y, h, o = {}) {
+    c.strokeStyle = "rgba(225,240,252,.85)"; c.lineWidth = o.largeur ?? 1.9; c.lineJoin = "round"; c.lineCap = "round"; forme(); c.stroke();
+    const g = c.createLinearGradient(x + 3, 0, x + 12, 0); g.addColorStop(0, "rgba(255,255,255,.4)"); g.addColorStop(1, "rgba(255,255,255,0)");
+    c.fillStyle = g; c.fillRect(x + 3, y + 8, 9, Math.max(0, h - 20));
+  }
+  function sphere(c, x, y, r, col, a = 1) {
+    col = RGB(col); c.save(); c.globalAlpha *= a;
+    c.fillStyle = "rgba(0,0,0,.22)"; c.beginPath(); c.arc(x + r * .2, y + r * .3, r, 0, Math.PI * 2); c.fill();
+    const g = c.createRadialGradient(x - r * .38, y - r * .42, r * .08, x, y, r);
+    g.addColorStop(0, rgba(clair(col, .8), 1)); g.addColorStop(.3, rgba(clair(col, .22), 1)); g.addColorStop(.72, rgba(col, 1)); g.addColorStop(1, rgba(fonce(col, .42), 1));
+    c.fillStyle = g; c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill(); c.restore();
+  }
+  /** Boîtier d'appareil (anthracite, coins arrondis, ombre) ; ecran : { x, y, w, h } en option (écran sombre, la craie y écrit). */
+  function boitier(c, x, y, w, h, ecran) {
+    c.save(); c.shadowColor = "rgba(0,0,0,.45)"; c.shadowBlur = 8; c.shadowOffsetY = 3;
+    const g = c.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, "#5b6673"); g.addColorStop(.5, "#3a434d"); g.addColorStop(1, "#252c33");
+    c.fillStyle = g; c.beginPath(); c.roundRect(x, y, w, h, 7); c.fill(); c.restore();
+    c.strokeStyle = "rgba(255,255,255,.18)"; c.lineWidth = 1; c.beginPath(); c.roundRect(x + .5, y + .5, w - 1, h - 1, 7); c.stroke();
+    if (ecran) {
+      const e = ecran, ge = c.createLinearGradient(0, e.y, 0, e.y + e.h); ge.addColorStop(0, "#16301f"); ge.addColorStop(1, "#0b1a12");
+      c.fillStyle = ge; c.beginPath(); c.roundRect(e.x, e.y, e.w, e.h, 4); c.fill();
+      c.strokeStyle = "rgba(0,0,0,.6)"; c.stroke(); c.fillStyle = "rgba(255,255,255,.06)"; c.fillRect(e.x + 2, e.y + 2, e.w - 4, e.h * .35);
     }
+  }
+  /** Câble noir souple de (x1, y1) à (x2, y2). */
+  function cable(c, x1, y1, x2, y2, creux = 30) {
+    c.strokeStyle = "#64748b"; c.lineWidth = 3; c.lineCap = "round"; c.beginPath(); c.moveTo(x1, y1);
+    c.bezierCurveTo(x1 + (x2 - x1) * .3, y1 + creux, x2 - (x2 - x1) * .3, y2 - creux * .3, x2, y2); c.stroke();
+    c.strokeStyle = "rgba(255,255,255,.25)"; c.lineWidth = 1; c.stroke();
+  }
+  /** Électrode de pH : corps noir, tige de verre, boule sensible. */
+  function sondePH(c, x, yH, yB) {
+    const yc = yH + (yB - yH) * .4, g = c.createLinearGradient(x - 5, 0, x + 5, 0); g.addColorStop(0, "#111"); g.addColorStop(.45, "#4a4f55"); g.addColorStop(1, "#111");
+    c.fillStyle = g; c.beginPath(); c.roundRect(x - 5, yH, 10, yc - yH, 3); c.fill();
+    c.fillStyle = "rgba(200,228,245,.3)"; c.fillRect(x - 3.5, yc, 7, yB - yc - 4); c.strokeStyle = "rgba(230,245,255,.75)"; c.lineWidth = 1; c.strokeRect(x - 3.5, yc, 7, yB - yc - 4);
+    const gb = c.createRadialGradient(x - 2, yB - 2, 1, x, yB, 6); gb.addColorStop(0, "rgba(255,255,255,.8)"); gb.addColorStop(1, "rgba(170,210,240,.35)");
+    c.fillStyle = gb; c.beginPath(); c.arc(x, yB, 5.5, 0, Math.PI * 2); c.fill(); c.strokeStyle = "rgba(230,245,255,.8)"; c.stroke();
+  }
+  /** Plaque de métal (électrode) verticale : col = couleur du métal. */
+  function plaque(c, x, y0, y1, w, col) {
+    col = RGB(col); const g = c.createLinearGradient(x - w / 2, 0, x + w / 2, 0);
+    g.addColorStop(0, rgba(fonce(col, .55), 1)); g.addColorStop(.35, rgba(clair(col, .45), 1)); g.addColorStop(.6, rgba(col, 1)); g.addColorStop(1, rgba(fonce(col, .5), 1));
+    c.fillStyle = g; c.beginPath(); c.roundRect(x - w / 2, y0, w, y1 - y0, 2); c.fill();
+  }
+
+  function becher(x, y, w, h, niveau, liq, o = {}) {
+    const r = 7, forme = (d = 0) => { craie.ctx.beginPath(); craie.ctx.moveTo(x + d, y); craie.ctx.lineTo(x + d, y + h - r); craie.ctx.quadraticCurveTo(x + d, y + h - d, x + r, y + h - d); craie.ctx.lineTo(x + w - r, y + h - d); craie.ctx.quadraticCurveTo(x + w - d, y + h - d, x + w - d, y + h - r); craie.ctx.lineTo(x + w - d, y); };
+    peindre((c) => {
+      ombrePortee(c, x + w / 2, y + h, w * .55);
+      forme(); c.fillStyle = "rgba(190,220,240,.08)"; c.fill();
+      if (niveau > 0 && liq) {
+        const ly = y + h - h * clamp(niveau, 0, 1) - 2, a = o.alpha != null ? clamp(o.alpha * 2.6, .08, .85) : .5;
+        liquide(c, () => { forme(2); c.closePath(); }, x + 2, x + w - 2, ly, y + h, RGB(liq), a);
+      }
+      c.fillStyle = "rgba(220,238,250,.25)"; c.fillRect(x + 6, y + h - 3, w - 12, 3);
+      verre(c, () => forme(), x, y, h);
+      c.strokeStyle = "rgba(240,248,255,.5)"; c.lineWidth = 1;
+      for (let k = 1; k <= 3; k++) { const gy = y + h - k * h / 4.2; c.beginPath(); c.moveTo(x + w - 12, gy); c.lineTo(x + w - 5, gy); c.stroke(); }
+      c.strokeStyle = "rgba(240,248,255,.9)"; c.lineWidth = 2; c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x - 5, y - 1, x - 6, y - 5); c.stroke();
+    });
     if (o.label) craie.texte(o.label, x + w / 2, y + h + 20, { align: "center", taille: 15, couleur: o.labelCouleur || "faible" });
   }
   function thermometre(x, y, h, frac, label) {
-    craie.ligne(x, y, x, y + h, { couleur: "blanc", largeur: 5, alpha: .35 }).cercle(x, y + h + 7, 7, { couleur: "rouge", fond: "rouge", fondAlpha: .6 });
-    craie.direct(() => craie.ligne(x, y + h - h * clamp(frac, 0, 1), x, y + h, { couleur: "rouge", largeur: 3, tremble: .2 }));
+    peindre((c) => {
+      const yb = y + h + 7, top = y + 4 + (h - 4) * (1 - clamp(frac, 0, 1));
+      c.fillStyle = "rgba(215,235,250,.2)"; c.beginPath(); c.roundRect(x - 4, y - 2, 8, h + 6, 4); c.fill();
+      c.strokeStyle = "rgba(230,245,255,.8)"; c.lineWidth = 1.2; c.stroke();
+      const g = c.createLinearGradient(x - 2, 0, x + 2, 0); g.addColorStop(0, "#8f1010"); g.addColorStop(.5, "#ef4444"); g.addColorStop(1, "#8f1010");
+      c.fillStyle = g; c.fillRect(x - 1.6, top, 3.2, yb - top);
+      sphere(c, x, yb, 7, [220, 38, 38]);
+      c.strokeStyle = "rgba(240,248,255,.5)"; c.lineWidth = .8;
+      for (let k = 0; k < 6; k++) { const yy = y + 6 + k * (h - 10) / 5; c.beginPath(); c.moveTo(x + 4, yy); c.lineTo(x + (k % 2 ? 7 : 9), yy); c.stroke(); }
+    });
     if (label) craie.texte(label, x + 12, y + 12, { taille: 15, couleur: "rouge" });
   }
   function bulles(x, y, w, h, n, vitesse, couleur) {
-    craie.direct(() => { for (let i = 0; i < n; i++) { const f = ((scene.now * .00012 * vitesse) + i * .173) % 1; craie.cercle(x + w * ((i * 37 % 100) / 100), y + h - f * h, 2 + i % 3, { couleur, largeur: 1.2, tremble: .2, alpha: .7 }); } });
+    peindre((c) => {
+      for (let i = 0; i < n; i++) {
+        const f = ((scene.now * .00012 * vitesse) + i * .173) % 1, r = 2 + i % 3, bx = x + w * ((i * 37 % 100) / 100) + Math.sin(f * 9 + i) * 1.5, by = y + h - f * h;
+        const g = c.createRadialGradient(bx - r * .35, by - r * .35, r * .1, bx, by, r);
+        g.addColorStop(0, "rgba(255,255,255,.85)"); g.addColorStop(.6, "rgba(255,255,255,.12)"); g.addColorStop(1, rgba(RGB(couleur), .7));
+        c.globalAlpha = Math.min(1, (1 - f) * 3); c.fillStyle = g; c.beginPath(); c.arc(bx, by, r, 0, Math.PI * 2); c.fill();
+      }
+    });
   }
-  function fiole(x, y, w, h, niveau, liquide) {
+  function fiole(x, y, w, h, niveau, liq) {
     // Erlenmeyer : col étroit, corps conique.
-    const col = w * .3;
-    craie.trait([[x + w / 2 - col / 2, y], [x + w / 2 - col / 2, y + h * .3], [x, y + h], [x + w, y + h], [x + w / 2 + col / 2, y + h * .3], [x + w / 2 + col / 2, y]], { couleur: "blanc", largeur: 2.2 });
-    if (niveau > 0) { const c = craie.ctx; c.globalAlpha = .18; c.fillStyle = craie.couleur(liquide); const ly = y + h - h * .7 * niveau; const k = (ly - (y + h * .3)) / (h * .7); const half = w / 2 - col / 2; const xl = x + w / 2 - col / 2 - half * k, xr = x + w / 2 + col / 2 + half * k; c.beginPath(); c.moveTo(xl, ly); c.lineTo(xr, ly); c.lineTo(x + w - 2, y + h - 2); c.lineTo(x + 2, y + h - 2); c.closePath(); c.fill(); c.globalAlpha = 1; craie.ligne(xl, ly, xr, ly, { couleur: liquide, largeur: 1.6 }); }
+    const col = w * .3, xl = x + w / 2 - col / 2, xr = x + w / 2 + col / 2, ye = y + h * .3;
+    const forme = () => { const c = craie.ctx; c.beginPath(); c.moveTo(xl, y); c.lineTo(xl, ye); c.lineTo(x + 3, y + h - 6); c.quadraticCurveTo(x, y + h, x + 8, y + h); c.lineTo(x + w - 8, y + h); c.quadraticCurveTo(x + w, y + h, x + w - 3, y + h - 6); c.lineTo(xr, ye); c.lineTo(xr, y); };
+    peindre((c) => {
+      ombrePortee(c, x + w / 2, y + h, w * .5);
+      forme(); c.fillStyle = "rgba(190,220,240,.08)"; c.fill();
+      if (niveau > 0) {
+        const ly = y + h - h * .7 * niveau, k = (ly - ye) / (h * .7), half = w / 2 - col / 2;
+        liquide(c, () => { forme(); c.closePath(); }, x, x + w, ly, y + h, RGB(liq), .5, false);
+        c.fillStyle = rgba(clair(RGB(liq), .45), .62); c.beginPath(); c.ellipse(x + w / 2, ly, col / 2 + half * k - 2, 2.6, 0, 0, Math.PI * 2); c.fill();
+      }
+      c.strokeStyle = "rgba(225,240,252,.85)"; c.lineWidth = 1.9; c.lineJoin = "round"; forme(); c.stroke();
+      c.strokeStyle = "rgba(255,255,255,.35)"; c.lineWidth = 3; c.lineCap = "round"; c.beginPath(); c.moveTo(x + w * .22, y + h * .82); c.lineTo(xl - 2, ye + 10); c.stroke();
+      c.strokeStyle = "rgba(240,248,255,.9)"; c.lineWidth = 2; c.beginPath(); c.ellipse(x + w / 2, y, col / 2 + 2, 2, 0, 0, Math.PI * 2); c.stroke();
+    });
   }
-  function ballon(x, y, r, niveau, liquide) {
-    craie.cercle(x, y, r, { couleur: "blanc", largeur: 2.2, depart: -1.9 });
-    craie.trait([[x - r * .32, y - r * .95], [x - r * .32, y - r * 1.7], [x + r * .32, y - r * 1.7], [x + r * .32, y - r * .95]], { couleur: "blanc", largeur: 2.2 });
-    if (niveau > 0) { const c = craie.ctx; c.globalAlpha = .2; c.fillStyle = craie.couleur(liquide); c.beginPath(); c.arc(x, y, r - 2, Math.PI * (.5 - .5 * niveau) * 0 + Math.asin(clamp(1 - 2 * niveau, -1, 1)), Math.PI - Math.asin(clamp(1 - 2 * niveau, -1, 1))); c.closePath(); c.fill(); c.globalAlpha = 1; }
+  function ballon(x, y, r, niveau, liq) {
+    const lc = r * .32, th = Math.asin(lc / r), yN = y - r * Math.cos(th);
+    const forme = () => { const c = craie.ctx; c.beginPath(); c.moveTo(x - lc, y - r * 1.7); c.lineTo(x - lc, yN); c.arc(x, y, r, -Math.PI / 2 - th, -Math.PI / 2 + th - 2 * Math.PI, true); c.lineTo(x + lc, y - r * 1.7); };
+    peindre((c) => {
+      forme(); c.fillStyle = "rgba(190,220,240,.08)"; c.fill();
+      if (niveau > 0) {
+        const ly = y + r - 2 * r * clamp(niveau, 0, 1);
+        liquide(c, () => { c.beginPath(); c.arc(x, y, r - 1.5, 0, Math.PI * 2); }, x - r, x + r, ly, y + r, RGB(liq), .55, false);
+        const hw = Math.sqrt(Math.max(0, r * r - (ly - y) ** 2)) - 2;
+        c.fillStyle = rgba(clair(RGB(liq), .45), .65); c.beginPath(); c.ellipse(x, ly, Math.max(1, hw), 3, 0, 0, Math.PI * 2); c.fill();
+      }
+      c.strokeStyle = "rgba(225,240,252,.85)"; c.lineWidth = 2; forme(); c.stroke();
+      c.strokeStyle = "rgba(255,255,255,.38)"; c.lineWidth = 3.5; c.lineCap = "round"; c.beginPath(); c.arc(x, y, r * .76, Math.PI * 1.08, Math.PI * 1.4); c.stroke();
+      c.lineWidth = 1.4; c.beginPath(); c.moveTo(x - lc + 2.5, y - r * 1.7 + 4); c.lineTo(x - lc + 2.5, yN - 4); c.stroke();
+    });
   }
   function fleches2sens(x, y, l, sens) {
     craie.fleche(x, y - 4, x + l, y - 4, { couleur: sens >= 0 ? "jaune" : "faible", largeur: sens > 0 ? 2.6 : 1.4 });
@@ -535,13 +654,22 @@
     const x = M.x, y = M.y, w = M.w, h = M.h, cx = x + w / 2;
     if (kind === "kinetics") {
       if (model === "kinetic_monitor") {
-        craie.rect(x + 10, y + 70, 80, 60, { couleur: "blanc", arrondi: 6 }).texte("lampe", x + 50, y + 150, { align: "center", taille: 14, couleur: "faible" });
-        craie.cercle(x + 50, y + 100, 9, { couleur: "jaune", fond: "jaune", fondAlpha: .5 });
+        const reste = 1 - (v.fraction ?? 0);
+        // Lampe : boîtier, ampoule qui brille ; faisceau jaune avant la cuve, plus faible après (la solution absorbe).
+        peindre((c) => {
+          boitier(c, x + 10, y + 70, 80, 60);
+          const gl = c.createRadialGradient(x + 50, y + 100, 1, x + 50, y + 100, 24); gl.addColorStop(0, "rgba(255,250,210,1)"); gl.addColorStop(.35, "rgba(250,204,21,.85)"); gl.addColorStop(1, "rgba(250,204,21,0)");
+          c.fillStyle = gl; c.beginPath(); c.arc(x + 50, y + 100, 24, 0, Math.PI * 2); c.fill();
+          const faisceau = (x0, x1, a) => { const g = c.createLinearGradient(0, y + 92, 0, y + 108); g.addColorStop(0, "rgba(250,204,21,0)"); g.addColorStop(.5, `rgba(253,230,138,${a})`); g.addColorStop(1, "rgba(250,204,21,0)"); c.fillStyle = g; c.fillRect(x0, y + 92, x1 - x0, 16); };
+          faisceau(x + 90, x + 154, .7); faisceau(x + 186, x + 242, .7 * (1 - .75 * reste));
+          boitier(c, x + 242, y + 70, 44, 60);
+          const gd = c.createLinearGradient(x + 244, 0, x + 256, 0); gd.addColorStop(0, "#1e3a5f"); gd.addColorStop(1, "#0b1726"); c.fillStyle = gd; c.fillRect(x + 244, y + 90, 10, 20);
+        });
+        craie.texte("lampe", x + 50, y + 150, { align: "center", taille: 14, couleur: "faible" });
         craie.fleche(x + 92, y + 100, x + 150, y + 100, { couleur: "jaune", largeur: 2 });
-        becher(x + 152, y + 60, 36, 80, 1, accent(), { label: "cuve" });
-        craie.direct(() => { const c = craie.ctx; c.globalAlpha = .25 * (1 - (v.fraction ?? 0)); c.fillStyle = accent(); c.fillRect(x + 154, y + 62, 32, 76); c.globalAlpha = 1; });
+        becher(x + 152, y + 60, 36, 80, 1, RGB(accent()), { label: "cuve", alpha: .06 + .26 * reste });   // la teinte s'efface au fil de la réaction
         craie.fleche(x + 190, y + 100, x + 240, y + 100, { couleur: "jaune", largeur: 1.6, alpha: .6 });
-        craie.rect(x + 242, y + 70, 44, 60, { couleur: "blanc", arrondi: 6 }).texte("détecteur", x + 264, y + 150, { align: "center", taille: 14, couleur: "faible" });
+        craie.texte("détecteur", x + 264, y + 150, { align: "center", taille: 14, couleur: "faible" });
         craie.texte("spectrophotomètre", cx, y + 30, { align: "center", taille: 19, couleur: accent() });
         craie.repere('lampe', x + 10, y + 70, 80, 60, 'lampe').repere('cuve', x + 148, y + 56, 44, 90, 'cuve de solution').repere('detecteur', x + 242, y + 70, 44, 60, 'détecteur')
           .repere('spectrophotometre', x + 6, y + 10, w - 12, 150, 'spectrophotomètre').repere('formule', x + 14, y + 240, 240, 32, 'loi A(t)');
@@ -550,12 +678,27 @@
         craie.texte("A(t) = A₀ · e^(−k t)", x + 20, y + 262, { taille: 18, couleur: "violet" });
         if (done) { craie.depuis(scene.marque); craie.texte(`A = ${result.primary.value}`, x + 180, y + 200, { taille: 22, couleur: accent() }); }
       } else {
-        craie.rect(x + 40, y + 120, 200, 110, { couleur: "faible", arrondi: 6 }).texte("bain thermostaté", x + 140, y + 250, { align: "center", taille: 15, couleur: "faible" });
-        craie.direct(() => { const c = craie.ctx; c.globalAlpha = .08; c.fillStyle = craie.couleur("cyan"); c.fillRect(x + 42, y + 150, 196, 78); c.globalAlpha = 1; });
-        becher(x + 100, y + 95, 80, 125, .7, accent(), { label: "" });
-        craie.direct(() => { const c = craie.ctx; c.globalAlpha = .2 * (1 - (v.fraction ?? 0)) + .05; c.fillStyle = accent(); c.fillRect(x + 102, y + 134, 76, 84); c.globalAlpha = 1; });
+        // Bain thermostaté : cuve de verre et eau bleutée ; le bécher y trempe ; sa teinte s'efface au fil de la réaction.
+        peindre((c) => {
+          ombrePortee(c, x + 140, y + 230, 110);
+          const fb = () => { c.beginPath(); c.moveTo(x + 40, y + 120); c.lineTo(x + 40, y + 222); c.quadraticCurveTo(x + 40, y + 230, x + 48, y + 230); c.lineTo(x + 232, y + 230); c.quadraticCurveTo(x + 240, y + 230, x + 240, y + 222); c.lineTo(x + 240, y + 120); };
+          fb(); c.fillStyle = "rgba(190,220,240,.06)"; c.fill();
+          liquide(c, () => { fb(); c.closePath(); }, x + 40, x + 240, y + 150, y + 230, [96, 165, 250], .22);
+        });
+        becher(x + 100, y + 95, 80, 125, .7, RGB(accent()), { label: "", alpha: .06 + .2 * (1 - (v.fraction ?? 0)) });
+        peindre((c) => {
+          const fb = () => { c.beginPath(); c.moveTo(x + 40, y + 120); c.lineTo(x + 40, y + 222); c.quadraticCurveTo(x + 40, y + 230, x + 48, y + 230); c.lineTo(x + 232, y + 230); c.quadraticCurveTo(x + 240, y + 230, x + 240, y + 222); c.lineTo(x + 240, y + 120); };
+          c.fillStyle = "rgba(96,165,250,.1)"; c.fillRect(x + 42, y + 150, 196, 78);   // l'eau du bain passe devant le bas du bécher
+          c.strokeStyle = "rgba(255,255,255,.3)"; c.lineWidth = 1.2; c.beginPath(); c.moveTo(x + 42, y + 150); c.lineTo(x + 100, y + 150); c.moveTo(x + 180, y + 150); c.lineTo(x + 238, y + 150); c.stroke();
+          verre(c, fb, x + 40, y + 120, 110);
+          // Chronomètre : boîtier argenté, cadran blanc.
+          const gc = c.createLinearGradient(x + 18, y + 38, x + 62, y + 82); gc.addColorStop(0, "#eef2f5"); gc.addColorStop(.5, "#8d979f"); gc.addColorStop(1, "#4b545c");
+          c.fillStyle = gc; c.beginPath(); c.arc(x + 40, y + 60, 24, 0, Math.PI * 2); c.fill(); c.fillRect(x + 36, y + 30, 8, 8);
+          c.fillStyle = "#f5f7fa"; c.beginPath(); c.arc(x + 40, y + 60, 19, 0, Math.PI * 2); c.fill();
+          c.strokeStyle = "#1f2937"; c.lineWidth = 2; c.beginPath(); c.moveTo(x + 40, y + 60); const an = scene.now * .002 * (run ? 1 : 0); c.lineTo(x + 40 + 13 * Math.sin(an), y + 60 - 13 * Math.cos(an)); c.stroke();
+        });
         thermometre(x + 250, y + 100, 110, (p.temp - 10) / 50, `${fmt(p.temp, 0)} °C`);
-        craie.cercle(x + 40, y + 60, 22, { couleur: "blanc" }).texte("t", x + 40, y + 66, { align: "center", taille: 16 }).ligne(x + 40, y + 32, x + 40, y + 38, { largeur: 2 });
+        craie.texte("bain thermostaté", x + 140, y + 250, { align: "center", taille: 15, couleur: "faible" });
         craie.texte(`c₀ = ${fmt(p.c0, 2)} mol·L⁻¹`, x + 80, y + 50, { taille: 16, couleur: "faible" });
         craie.texte(p.catalyst === "none" ? "sans catalyseur" : p.catalyst === "fe" ? "catalyseur Fe³⁺" : "catalyseur Pt", x + 80, y + 76, { taille: 16, couleur: p.catalyst === "none" ? "faible" : "jaune" });
         if (run || done) bulles(x + 104, y + 140, 72, 76, Math.round(4 + (v.rate || .5) * 4), v.rate || .5, "blanc");
@@ -567,15 +710,41 @@
       if (model === "binding_energy") {
         const n = p.nucleus === "he4" ? 4 : p.nucleus === "fe56" ? 56 : 235, z = p.nucleus === "he4" ? 2 : p.nucleus === "fe56" ? 26 : 92;
         craie.cercle(cx, y + 130, 95, { couleur: "faible", largeur: 1.4, pointille: [5, 6] });
-        craie.direct(() => { const r = graine(n); for (let i = 0; i < Math.min(n, 120); i++) { const a = r() * Math.PI * 2, d = Math.sqrt(r()) * 82; craie.cercle(cx + d * Math.cos(a), y + 130 + d * Math.sin(a), 7, { couleur: i < z * Math.min(n, 120) / n ? "jaune" : "blanc", fond: i < z * Math.min(n, 120) / n ? "jaune" : "blanc", fondAlpha: .35, largeur: 1.2, tremble: .3 }); } });
+        // Le noyau : protons (orangés) et neutrons (gris clair) en sphères ombrées, serrés, dans une lueur.
+        peindre((c) => {
+          const gl = c.createRadialGradient(cx, y + 130, 10, cx, y + 130, 95); gl.addColorStop(0, rgba(RGB(accent()), .16)); gl.addColorStop(1, rgba(RGB(accent()), 0));
+          c.fillStyle = gl; c.beginPath(); c.arc(cx, y + 130, 95, 0, Math.PI * 2); c.fill();
+          const r = graine(n), pts = [];
+          for (let i = 0; i < Math.min(n, 120); i++) { const a = r() * Math.PI * 2, d = Math.sqrt(r()) * 82; pts.push([cx + d * Math.cos(a), y + 130 + d * Math.sin(a), i < z * Math.min(n, 120) / n]); }
+          pts.sort((a, b) => a[1] - b[1]).forEach(([px, py, pro]) => sphere(c, px, py, 7.5, pro ? [245, 158, 11] : [203, 213, 225]));
+        });
         craie.texte(`A = ${n}   Z = ${z}   N = ${n - z}`, cx, y + 255, { align: "center", taille: 18, couleur: accent() });
         craie.texte("protons", x + 20, y + 290, { taille: 15, couleur: "jaune" }).texte("neutrons", x + 110, y + 290, { taille: 15, couleur: "blanc" });
         craie.texte("Eₗ = Δm · c²", x + 190, y + 290, { taille: 18, couleur: "violet" });
         craie.repere('noyau', cx - 95, y + 35, 190, 190, 'le noyau').repere('nucleons', x + 14, y + 272, 170, 28, 'protons et neutrons').repere('formule', x + 184, y + 272, 110, 28, 'Eₗ = Δm·c²');
       } else {
-        craie.rect(x + 20, y + 30, 250, 190, { couleur: "faible", arrondi: 8 }).texte("échantillon", x + 145, y + 240, { align: "center", taille: 15, couleur: "faible" });
         const total = 90, vivants = Math.round(total * (v.alive ?? 1));
-        craie.direct(() => { const r = graine(7); for (let i = 0; i < total; i++) { const px = x + 32 + (i % 15) * 16.5, py = y + 45 + Math.floor(i / 15) * 29; const vif = i < vivants || !done; if (vif) craie.cercle(px, py, 4.5, { couleur: accent(), fond: accent(), fondAlpha: .5, largeur: 1.2, tremble: .2 }); else { craie.ligne(px - 4, py - 4, px + 4, py + 4, { couleur: "rouge", largeur: 1.2, alpha: .5, tremble: .2 }); craie.ligne(px - 4, py + 4, px + 4, py - 4, { couleur: "rouge", largeur: 1.2, alpha: .5, tremble: .2 }); } if (run && r() < .08) craie.ligne(px + 6, py - 6, px + 14, py - 14, { couleur: "jaune", largeur: 1, alpha: .6 }); } });
+        // L'échantillon : une boîte sombre, chaque noyau en sphère lumineuse ; un noyau désintégré devient une petite sphère grise éteinte.
+        peindre((c) => {
+          c.save(); c.shadowColor = "rgba(0,0,0,.45)"; c.shadowBlur = 8; c.shadowOffsetY = 3;
+          const g = c.createLinearGradient(0, y + 30, 0, y + 220); g.addColorStop(0, "rgba(30,41,59,.85)"); g.addColorStop(1, "rgba(15,23,42,.9)");
+          c.fillStyle = g; c.beginPath(); c.roundRect(x + 20, y + 30, 250, 190, 8); c.fill(); c.restore();
+          c.strokeStyle = "rgba(226,232,240,.35)"; c.lineWidth = 1.5; c.beginPath(); c.roundRect(x + 20, y + 30, 250, 190, 8); c.stroke();
+          const r = graine(7);
+          for (let i = 0; i < total; i++) {
+            const px = x + 32 + (i % 15) * 16.5, py = y + 45 + Math.floor(i / 15) * 29, vif = i < vivants || !done;
+            if (vif) {
+              const gl = c.createRadialGradient(px, py, 1, px, py, 9); gl.addColorStop(0, rgba(RGB(accent()), .35)); gl.addColorStop(1, rgba(RGB(accent()), 0));
+              c.fillStyle = gl; c.beginPath(); c.arc(px, py, 9, 0, Math.PI * 2); c.fill();
+              sphere(c, px, py, 5, RGB(accent()));
+            } else {
+              sphere(c, px, py, 3.6, [100, 110, 122], .8);
+              c.strokeStyle = "rgba(248,113,113,.55)"; c.lineWidth = 1.2; c.beginPath(); c.moveTo(px - 4, py - 4); c.lineTo(px + 4, py + 4); c.moveTo(px - 4, py + 4); c.lineTo(px + 4, py - 4); c.stroke();
+            }
+            if (run && r() < .08) { const ge = c.createLinearGradient(px + 6, py - 6, px + 16, py - 16); ge.addColorStop(0, "rgba(253,224,71,.9)"); ge.addColorStop(1, "rgba(253,224,71,0)"); c.strokeStyle = ge; c.lineWidth = 2; c.beginPath(); c.moveTo(px + 6, py - 6); c.lineTo(px + 16, py - 16); c.stroke(); }
+          }
+        });
+        craie.texte("échantillon", x + 145, y + 240, { align: "center", taille: 15, couleur: "faible" });
         const iso = isotopeData[p.isotope];
         craie.texte(`${iso.name} · t½ = ${fmt(iso.halfLife, 2)} ${iso.unit}`, cx, y + 262, { align: "center", taille: 17, couleur: accent() });
         craie.texte(model === "radio_dating" ? `N / N₀ = ${fmt(p.ratio, 3)}` : `N₀ = ${p.n0}   t = ${fmt(p.elapsed, 1)} t½`, x + 20, y + 292, { taille: 17, couleur: "jaune" });
@@ -585,22 +754,36 @@
       }
     } else if (kind === "equilibrium") {
       if (model === "titration") {
-        craie.rect(cx - 10, y + 10, 20, 120, { couleur: "blanc", arrondi: 2 });
+        // Burette de verre peinte (la soude bleutée y descend), robinet, goutte qui tombe.
+        peindre((c) => {
+          const f = clamp(p.vb / 50, 0, 1), forme = () => { c.beginPath(); c.roundRect(cx - 9, y + 10, 18, 120, 2); };
+          forme(); c.fillStyle = "rgba(190,220,240,.08)"; c.fill();
+          liquide(c, () => { c.beginPath(); c.rect(cx - 8, y + 12, 16, 118); }, cx - 8, cx + 8, y + 12 + 116 * f, y + 130, [96, 165, 250], .5);
+          verre(c, forme, cx - 9, y + 10, 120, { largeur: 1.6 });
+          c.fillStyle = "rgba(190,220,240,.25)"; c.beginPath(); c.moveTo(cx - 9, y + 130); c.lineTo(cx, y + 145); c.lineTo(cx + 9, y + 130); c.fill();
+          c.strokeStyle = "rgba(225,240,252,.85)"; c.lineWidth = 1.6; c.stroke();
+          c.fillStyle = "#2b6cb0"; c.beginPath(); c.roundRect(cx - 12, y + 136, 24, 5, 2); c.fill();   // robinet
+          c.fillStyle = "rgba(200,228,245,.4)"; c.fillRect(cx - 1.5, y + 145, 3, 15);
+        });
         for (let i = 1; i < 6; i++) craie.ligne(cx - 10, y + 10 + i * 20, cx - 2, y + 10 + i * 20, { largeur: 1.2, couleur: "faible", duree: .03 });
-        craie.direct(() => { const c = craie.ctx; c.globalAlpha = .25; c.fillStyle = craie.couleur("bleu"); const f = clamp(p.vb / 50, 0, 1); c.fillRect(cx - 8, y + 12 + 116 * f, 16, 116 * (1 - f)); c.globalAlpha = 1; });
-        craie.trait([[cx - 10, y + 130], [cx, y + 145], [cx + 10, y + 130]], { couleur: "blanc", largeur: 2 }).ligne(cx, y + 145, cx, y + 160, { largeur: 2 });
         craie.texte("burette : base", cx + 20, y + 40, { taille: 15, couleur: "bleu" }).texte(`Vᵦ = ${fmt(p.vb, 1)} mL`, cx + 20, y + 64, { taille: 16, couleur: "jaune" });
-        becher(cx - 45, y + 175, 90, 95, .55, (result?.visual?.ratio ?? 0) > 1 ? "bleu" : "rose", { label: "acide dosé" });
-        if (run) craie.direct(() => { const f = (scene.now * .0015) % 1; craie.cercle(cx, y + 162 + f * 40, 2.5, { couleur: "bleu", fond: "bleu", fondAlpha: .6, largeur: 1 }); });
-        craie.rect(x + 10, y + 180, 70, 44, { couleur: "blanc", arrondi: 6 }).texte("pH-mètre", x + 45, y + 240, { align: "center", taille: 14, couleur: "faible" });
-        craie.ligne(x + 80, y + 202, cx - 20, y + 240, { couleur: "faible", largeur: 1.4 });
+        // Teinte progressive : rose avant l'équivalence, violet autour, bleue après (plus de saut d'une couleur à l'autre).
+        const ratio = result?.visual?.ratio ?? 0, teinte = melange(RGB("rose"), RGB("bleu"), doux((ratio - .94) / .12));
+        becher(cx - 45, y + 175, 90, 95, .55, teinte, { label: "acide dosé" });
+        if (run) peindre((c) => {
+          const f = (scene.now * .0015) % 1, gx = cx, gy = y + 162 + f * 40, r = 3;
+          const g = c.createRadialGradient(gx - 1, gy, .5, gx, gy + 1, r * 1.3); g.addColorStop(0, "rgba(235,248,255,.95)"); g.addColorStop(1, "rgba(96,165,250,.85)");
+          c.fillStyle = g; c.beginPath(); c.moveTo(gx, gy - r * 2); c.quadraticCurveTo(gx + r * 1.1, gy - r * .2, gx + r, gy + r * .3); c.arc(gx, gy + r * .3, r, 0, Math.PI); c.quadraticCurveTo(gx - r * 1.1, gy - r * .2, gx, gy - r * 2); c.fill();
+        });
+        peindre((c) => { boitier(c, x + 10, y + 180, 70, 44, { x: x + 15, y: y + 185, w: 60, h: 30 }); cable(c, x + 80, y + 202, cx - 20, y + 186, 10); sondePH(c, cx - 20, y + 186, y + 255); });
+        craie.texte("pH-mètre", x + 45, y + 240, { align: "center", taille: 14, couleur: "faible" });
         if (done) { craie.depuis(scene.marque); craie.texte(`pH = ${result.measurements[0].value}`, x + 45, y + 208, { align: "center", taille: 18, couleur: accent() }); }
         craie.texte("à l’équivalence : n(H₃O⁺) = n(HO⁻)", x + 10, y + 310, { taille: 16, couleur: "violet", max: 280 });
         craie.repere('burette', cx - 14, y + 6, 28, 158, 'burette graduée').repere('becher', cx - 48, y + 172, 96, 100, 'bécher d’acide dosé').repere('ph_metre', x + 6, y + 176, 78, 52, 'pH-mètre').repere('formule', x + 6, y + 292, 280, 26, 'relation à l’équivalence');
       } else if (model === "weak_acid") {
-        becher(cx - 60, y + 90, 120, 150, .65, "rose", { label: "solution d’acide AH" });
-        craie.rect(x + 10, y + 20, 110, 50, { couleur: "blanc", arrondi: 6 }).texte("pH-mètre", x + 65, y + 90, { align: "center", taille: 14, couleur: "faible" });
-        craie.ligne(x + 120, y + 45, cx + 20, y + 110, { couleur: "faible", largeur: 1.4 }).ligne(cx + 20, y + 110, cx + 20, y + 200, { couleur: "blanc", largeur: 3, alpha: .5 });
+        becher(cx - 60, y + 90, 120, 150, .65, "rose", { label: "solution d’acide AH", alpha: .1 });
+        peindre((c) => { boitier(c, x + 10, y + 20, 110, 50, { x: x + 16, y: y + 26, w: 98, h: 34 }); cable(c, x + 120, y + 45, cx + 20, y + 110, 20); sondePH(c, cx + 20, y + 110, y + 200); });
+        craie.texte("pH-mètre", x + 65, y + 90, { align: "center", taille: 14, couleur: "faible" });
         if (done) { craie.depuis(scene.marque); craie.texte(`pH = ${result.measurements[0].value}`, x + 65, y + 52, { align: "center", taille: 20, couleur: accent() }); }
         craie.texte(`c = ${fmt(p.concentration, 3)} mol·L⁻¹`, x + 140, y + 40, { taille: 15, couleur: "jaune", max: 150 });
         craie.texte("AH + H₂O ⇌ A⁻ + H₃O⁺", cx, y + 290, { align: "center", taille: 19, couleur: "violet" });
@@ -608,8 +791,14 @@
         craie.direct(() => { const alpha = v.ratio ?? 0; const r = graine(3); for (let i = 0; i < 24; i++) { const px = cx - 50 + r() * 100, py = y + 150 + r() * 80; craie.texte(i / 24 < alpha ? "A⁻" : "AH", px, py, { taille: 12, couleur: i / 24 < alpha ? accent() : "faible", alpha: .8 }); } });
       } else if (model === "precipitation") {
         const precipite = (result?.visual?.drops ?? 0) > 0;
-        becher(cx - 70, y + 60, 140, 170, .7, "cyan", { label: p.salt === "caf2" ? "Ca²⁺ + F⁻" : "Ag⁺ + Cl⁻" });
-        craie.direct(() => { if (!done) return; const c = craie.ctx; if (precipite) { c.globalAlpha = .5; c.fillStyle = craie.couleur("blanc"); for (let i = 0; i < 40; i++) { const r = graine(i + 1)(); c.fillRect(cx - 66 + (i * 13 % 130), y + 205 + r * 20, 3, 3); } c.globalAlpha = 1; } });
+        becher(cx - 70, y + 60, 140, 170, .7, [125, 211, 252], { label: p.salt === "caf2" ? "Ca²⁺ + F⁻" : "Ag⁺ + Cl⁻", alpha: .1 });
+        // Le précipité : un trouble blanc laiteux, puis des grains blancs qui se déposent au fond.
+        peindre((c) => {
+          if (!done || !precipite) return;
+          const g = c.createLinearGradient(0, y + 120, 0, y + 228); g.addColorStop(0, "rgba(241,245,249,0)"); g.addColorStop(1, "rgba(241,245,249,.32)");
+          c.fillStyle = g; c.fillRect(cx - 68, y + 120, 136, 108);
+          for (let i = 0; i < 70; i++) { const r = graine(i + 1)(); sphere(c, cx - 64 + (i * 17 % 128), y + 216 + r * 10 - (i % 3) * 3, 3, [241, 245, 249], .95); }
+        });
         craie.texte(`[M] = 10^${p.logM}   [X] = 10^${p.logX}`, cx, y + 40, { align: "center", taille: 16, couleur: "jaune" });
         if (done) { craie.depuis(scene.marque); craie.texte(precipite ? "précipité : Q > Kₛ" : "limpide : Q < Kₛ", cx, y + 270, { align: "center", taille: 19, couleur: precipite ? accent() : "faible" }); }
         craie.texte("Q = [M]·[X]  comparé à  Kₛ", cx, y + 310, { align: "center", taille: 17, couleur: "violet" });
@@ -620,15 +809,21 @@
         fleches2sens(x + 100, y + 244, 70, done ? (v.direction ?? 0) : 0);
         craie.texte("C", x + 185, y + 250, { taille: 20, couleur: accent() });
         craie.texte(`K = ${fmt(p.K, 2)}`, x + 220, y + 250, { taille: 17, couleur: "jaune" });
-        craie.direct(() => { const r = graine(5); const ratio = v.ratio ?? (p.c0 / (p.a0 + p.b0 + p.c0)); for (let i = 0; i < 30; i++) { const px = cx - 50 + r() * 100, py = y + 110 + r() * 85; craie.cercle(px, py, 3, { couleur: i / 30 < ratio ? accent() : "faible", fond: i / 30 < ratio ? accent() : "faible", fondAlpha: .5, largeur: 1, tremble: .2 }); } });
+        // Les particules : C (couleur du labo) et A, B (gris clair), en sphères ombrées qui frémissent.
+        peindre((c) => { const r = graine(5); const ratio = v.ratio ?? (p.c0 / (p.a0 + p.b0 + p.c0)); for (let i = 0; i < 30; i++) { const px = cx - 50 + r() * 100 + Math.sin(scene.now * .002 + i) * 1.5, py = y + 110 + r() * 85; sphere(c, px, py, 3.6, i / 30 < ratio ? RGB(accent()) : [203, 213, 225]); } });
         craie.texte("Qᵣ évolue vers K, puis les deux sens s’équilibrent", x + 20, y + 300, { taille: 15, couleur: "violet", max: 275 });
         craie.repere('fiole', cx - 74, y + 36, 148, 178, 'erlenmeyer').repere('fleches', x + 96, y + 226, 78, 36, 'les deux sens ⇌').repere('constante_k', x + 214, y + 230, 70, 28, 'constante K').repere('formule', x + 14, y + 282, 280, 26, 'évolution vers K');
       }
     } else if (kind === "electrochem") {
       if (model === "electrolysis") {
-        becher(cx - 80, y + 110, 160, 150, .7, "cyan", { label: "électrolyte" });
-        craie.ligne(cx - 40, y + 60, cx - 40, y + 240, { couleur: "blanc", largeur: 4 }).ligne(cx + 40, y + 60, cx + 40, y + 240, { couleur: "orange", largeur: 4 });
-        craie.ligne(cx - 40, y + 60, cx - 40, y + 30, { largeur: 2 }).ligne(cx - 40, y + 30, cx - 14, y + 30, { largeur: 2 }).ligne(cx + 14, y + 30, cx + 40, y + 30, { largeur: 2 }).ligne(cx + 40, y + 30, cx + 40, y + 60, { largeur: 2 });
+        becher(cx - 80, y + 110, 160, 150, .7, p.product === "copper" ? [59, 130, 246] : [125, 211, 252], { label: "électrolyte", alpha: p.product === "copper" ? .16 : .08 });
+        // Électrodes : cathode en graphite (−), anode en cuivre (+) ; fils noirs ; dépôt de cuivre sur la cathode.
+        peindre((c) => {
+          c.strokeStyle = "#94a3b8"; c.lineWidth = 2.6; c.lineJoin = "round";
+          c.beginPath(); c.moveTo(cx - 40, y + 60); c.lineTo(cx - 40, y + 30); c.lineTo(cx - 14, y + 30); c.moveTo(cx + 14, y + 30); c.lineTo(cx + 40, y + 30); c.lineTo(cx + 40, y + 60); c.stroke();
+          plaque(c, cx - 40, y + 60, y + 240, 9, [80, 86, 96]); plaque(c, cx + 40, y + 60, y + 240, 9, [205, 112, 52]);
+          if ((run || done) && p.product === "copper") { const e = done ? 1 : .4; c.fillStyle = `rgba(184,92,40,${.55 * e})`; for (let k = 0; k < 14; k++) { c.beginPath(); c.arc(cx - 45 + (k % 2) * 10, y + 160 + k * 5.5, 2.4, 0, Math.PI * 2); c.fill(); } }
+        });
         craie.cercle(cx, y + 30, 14, { couleur: "jaune" }).texte("G", cx, y + 36, { align: "center", taille: 15, couleur: "jaune" });
         craie.texte("−", cx - 40, y + 55, { align: "center", taille: 18, couleur: "cyan" }).texte("+", cx + 40, y + 55, { align: "center", taille: 18, couleur: "orange" });
         craie.texte(`I = ${fmt(p.current, 2)} A   t = ${fmt(p.time, 0)} min`, cx, y + 305, { align: "center", taille: 16, couleur: "jaune" });
@@ -637,15 +832,25 @@
         craie.repere('electrolyseur', cx - 84, y + 106, 168, 158, 'électrolyseur').repere('cathode', cx - 52, y + 56, 24, 190, 'cathode (−)').repere('anode', cx + 28, y + 56, 24, 190, 'anode (+)')
           .repere('generateur', cx - 18, y + 12, 36, 36, 'générateur').repere('formule', x + 14, y + 320, 270, 28, 'loi de Faraday');
       } else {
-        becher(x + 20, y + 120, 100, 130, .65, "faible", { label: "Zn²⁺ / Zn" });
-        becher(x + 170, y + 120, 100, 130, .65, "bleu", { label: "Cu²⁺ / Cu" });
-        craie.ligne(x + 70, y + 60, x + 70, y + 230, { couleur: "faible", largeur: 5 }).ligne(x + 220, y + 60, x + 220, y + 230, { couleur: "orange", largeur: 5 });
-        craie.trait([[x + 105, y + 175], [x + 105, y + 110], [x + 185, y + 110], [x + 185, y + 175]], { couleur: "jaune", largeur: 6, alpha: .45 }).texte("pont salin", cx, y + 100, { align: "center", taille: 14, couleur: "jaune" });
-        craie.trait([[x + 70, y + 60], [x + 70, y + 30], [x + 125, y + 30]], { largeur: 2 }).trait([[x + 220, y + 60], [x + 220, y + 30], [x + 165, y + 30]], { largeur: 2 });
-        craie.cercle(cx, y + 30, 20, { couleur: "blanc" }).texte("V", cx, y + 37, { align: "center", taille: 18 });
+        becher(x + 20, y + 120, 100, 130, .65, [203, 213, 225], { label: "Zn²⁺ / Zn", alpha: .06 });
+        becher(x + 170, y + 120, 100, 130, .65, [37, 99, 235], { label: "Cu²⁺ / Cu", alpha: .2 });
+        // Lames de zinc (gris bleuté) et de cuivre (orangé), pont salin en verre rempli de gel, électrons en petites sphères.
+        peindre((c) => {
+          plaque(c, x + 70, y + 60, y + 230, 10, [168, 178, 190]); plaque(c, x + 220, y + 60, y + 230, 10, [205, 112, 52]);
+          const u = () => { c.beginPath(); c.moveTo(x + 105, y + 175); c.lineTo(x + 105, y + 116); c.quadraticCurveTo(x + 105, y + 110, x + 111, y + 110); c.lineTo(x + 179, y + 110); c.quadraticCurveTo(x + 185, y + 110, x + 185, y + 116); c.lineTo(x + 185, y + 175); };
+          c.lineCap = "round"; c.lineJoin = "round";
+          c.strokeStyle = "rgba(225,240,252,.75)"; c.lineWidth = 11; u(); c.stroke();
+          c.strokeStyle = "rgba(253,230,138,.75)"; c.lineWidth = 7.5; u(); c.stroke();
+          c.strokeStyle = "rgba(255,255,255,.35)"; c.lineWidth = 1.5; c.beginPath(); c.moveTo(x + 102.5, y + 172); c.lineTo(x + 102.5, y + 116); c.stroke();
+          c.strokeStyle = "#94a3b8"; c.lineWidth = 2.6; c.beginPath(); c.moveTo(x + 70, y + 60); c.lineTo(x + 70, y + 30); c.lineTo(x + 125, y + 30); c.moveTo(x + 220, y + 60); c.lineTo(x + 220, y + 30); c.lineTo(x + 165, y + 30); c.stroke();
+          const gv = c.createRadialGradient(cx - 6, y + 24, 2, cx, y + 30, 22); gv.addColorStop(0, "#f8fafc"); gv.addColorStop(1, "#cbd5e1");
+          c.fillStyle = gv; c.beginPath(); c.arc(cx, y + 30, 19, 0, Math.PI * 2); c.fill();
+        });
+        craie.cercle(cx, y + 30, 20, { couleur: "blanc" }).texte("V", cx, y + 37, { align: "center", taille: 18, couleur: "#1f2937" });
+        craie.texte("pont salin", cx, y + 100, { align: "center", taille: 14, couleur: "jaune" });
         craie.texte("Zn", x + 55, y + 55, { taille: 15, couleur: "faible" }).texte("Cu", x + 230, y + 55, { taille: 15, couleur: "orange" });
         if (done) { craie.depuis(scene.marque); craie.texte(`E = ${fmt(v.voltage, 3)} V`, cx, y + 80, { align: "center", taille: 18, couleur: accent() }); }
-        if (done) craie.direct(() => { for (let i = 0; i < 8; i++) { const f = ((scene.now * .00025 * (v.speed || 1)) + i / 8) % 1; const px = f < .5 ? x + 70 : x + 220, py = f < .5 ? y + 60 - (f * 2) * 30 : y + 30 + ((f - .5) * 2) * 30; const qx = f < .25 ? x + 70 : f < .75 ? x + 70 + (f - .25) * 2 * 150 : x + 220; const qy = f < .25 ? y + 60 - f * 4 * 30 : f < .75 ? y + 30 : y + 30 + (f - .75) * 4 * 30; craie.texte("e⁻", qx, qy - 6, { taille: 12, couleur: "cyan" }); void px; void py; } });
+        if (done) craie.direct(() => { for (let i = 0; i < 8; i++) { const f = ((scene.now * .00025 * (v.speed || 1)) + i / 8) % 1; const qx = f < .25 ? x + 70 : f < .75 ? x + 70 + (f - .25) * 2 * 150 : x + 220; const qy = f < .25 ? y + 60 - f * 4 * 30 : f < .75 ? y + 30 : y + 30 + (f - .75) * 4 * 30; sphere(craie.ctx, qx, qy, 3, [34, 211, 238]); craie.texte("e⁻", qx, qy - 6, { taille: 12, couleur: "cyan" }); } });
         craie.texte("Zn → Zn²⁺ + 2e⁻   ;   Cu²⁺ + 2e⁻ → Cu", x + 15, y + 300, { taille: 15, couleur: "violet", max: 280 });
         craie.texte(`[Zn²⁺] = 10^${p.logZn}   [Cu²⁺] = 10^${p.logCu}`, x + 15, y + 325, { taille: 14, couleur: "jaune", max: 280 });
         craie.repere('demi_pile_zn', x + 16, y + 116, 108, 138, 'demi-pile Zn²⁺/Zn').repere('demi_pile_cu', x + 166, y + 116, 108, 138, 'demi-pile Cu²⁺/Cu')
@@ -654,12 +859,29 @@
           .repere('equation', x + 10, y + 282, 284, 26, 'demi-équations').repere('concentrations', x + 10, y + 308, 284, 24, 'concentrations');
       }
     } else if (kind === "organic") {
-      const rendement = v.yield ?? 0;
-      craie.rect(cx - 55, y + 215, 110, 40, { couleur: "orange", arrondi: 8 }).texte("chauffe-ballon", cx, y + 275, { align: "center", taille: 14, couleur: "orange" });
-      ballon(cx, y + 185, 48, .55, done ? accent() : "jaune");
-      craie.direct(() => { const c = craie.ctx; c.save(); c.globalAlpha = .22; c.fillStyle = accent(); c.beginPath(); c.arc(cx, y + 185, 44, 0, Math.PI * 2); c.clip(); c.fillRect(cx - 48, y + 185 + 44 - 70 * clamp(rendement, 0, 1), 96, 70); c.restore(); });
-      craie.rect(cx - 10, y + 20, 20, 90, { couleur: "cyan", arrondi: 4 }).texte("réfrigérant", cx + 20, y + 50, { taille: 14, couleur: "cyan" });
-      craie.ligne(cx - 10, y + 40, cx - 30, y + 40, { couleur: "cyan", largeur: 1.6 }).ligne(cx - 10, y + 90, cx - 30, y + 90, { couleur: "cyan", largeur: 1.6 });
+      const rendement = v.yield ?? 0, chaud = run || done;
+      // Chauffe-ballon : coque sombre, cuvette qui rougeoie quand on chauffe.
+      peindre((c) => {
+        c.save(); c.shadowColor = "rgba(0,0,0,.45)"; c.shadowBlur = 8; c.shadowOffsetY = 3;
+        const g = c.createLinearGradient(0, y + 215, 0, y + 255); g.addColorStop(0, "#4b5563"); g.addColorStop(1, "#1f2937");
+        c.fillStyle = g; c.beginPath(); c.roundRect(cx - 55, y + 215, 110, 40, 8); c.fill(); c.restore();
+        const gl = c.createRadialGradient(cx, y + 222, 4, cx, y + 222, 52); gl.addColorStop(0, chaud ? "rgba(251,146,60,.85)" : "rgba(251,146,60,.25)"); gl.addColorStop(1, "rgba(251,146,60,0)");
+        c.fillStyle = gl; c.beginPath(); c.ellipse(cx, y + 222, 52, 12, 0, 0, Math.PI * 2); c.fill();
+        c.fillStyle = chaud ? "#ef4444" : "#7f1d1d"; c.beginPath(); c.arc(cx + 40, y + 243, 3, 0, Math.PI * 2); c.fill();
+      });
+      ballon(cx, y + 185, 48, .55, melange(RGB("jaune"), RGB(accent()), done ? 1 : clamp(rendement, 0, 1)));
+      // Réfrigérant à eau : manchon de verre, eau bleue qui circule, tube intérieur, tuyaux.
+      peindre((c) => {
+        c.fillStyle = "rgba(190,220,240,.1)"; c.beginPath(); c.roundRect(cx - 10, y + 20, 20, 90, 5); c.fill();
+        const ge = c.createLinearGradient(cx - 9, 0, cx + 9, 0); ge.addColorStop(0, "rgba(37,99,235,.55)"); ge.addColorStop(.45, "rgba(147,197,253,.4)"); ge.addColorStop(1, "rgba(37,99,235,.55)");
+        c.fillStyle = ge; c.fillRect(cx - 8.5, y + 24, 17, 82);
+        c.fillStyle = "rgba(225,240,252,.25)"; c.fillRect(cx - 3, y + 14, 6, 98); c.strokeStyle = "rgba(225,240,252,.7)"; c.lineWidth = 1; c.strokeRect(cx - 3, y + 14, 6, 98);
+        c.strokeStyle = "rgba(225,240,252,.85)"; c.lineWidth = 1.8; c.beginPath(); c.roundRect(cx - 10, y + 20, 20, 90, 5); c.stroke();
+        c.strokeStyle = "#1e40af"; c.lineWidth = 5; c.lineCap = "round"; c.beginPath(); c.moveTo(cx - 10, y + 40); c.lineTo(cx - 30, y + 40); c.moveTo(cx - 10, y + 90); c.lineTo(cx - 30, y + 90); c.stroke();
+        if (chaud) for (let k = 0; k < 3; k++) { const f = ((scene.now * .0004) + k / 3) % 1; c.fillStyle = "rgba(255,255,255,.5)"; c.beginPath(); c.arc(cx + 5, y + 104 - f * 80, 1.6, 0, Math.PI * 2); c.fill(); }
+      });
+      craie.texte("chauffe-ballon", cx, y + 275, { align: "center", taille: 14, couleur: "orange" });
+      craie.texte("réfrigérant", cx + 20, y + 50, { taille: 14, couleur: "cyan" });
       craie.texte("eau", cx - 48, y + 94, { taille: 12, couleur: "cyan" });
       if (p.temp !== undefined) thermometre(x + 40, y + 120, 90, (p.temp - 40) / 60, `${fmt(p.temp, 0)} °C`);
       if (run || done) bulles(cx - 30, y + 170, 60, 40, 6, v.speed || .7, "blanc");
