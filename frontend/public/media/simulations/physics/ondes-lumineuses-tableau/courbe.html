@@ -176,6 +176,8 @@ function peindreExperience(ctx, val) {
 
 /* ── Dessin : l’écriture suit l’horloge de la scène ; chaque moment = fin de l’écriture de sa phase ── */
 const marque = (c, nom) => { MM[nom] = c.cur; };
+/* Halo doux autour d'un tracé à la craie (courbe nette et lumineuse) ; la durée d'écriture ne change pas. */
+function lueur(c, couleur, fn) { const x = c.ctx; x.save(); x.shadowColor = couleur; x.shadowBlur = 9; try { fn(); } finally { x.restore(); } }
 function dessiner(c) {
   scene.cadre(41); MM = {}; disposer(scene.L);
   const K = C(), val = reglageA(c.t), E = peindreLaVue(c, val), k = TX.k;
@@ -209,7 +211,7 @@ function dessiner(c) {
     const efface = M.debut_courbe !== undefined && c.t >= M.debut_courbe;
     if (efface) c.pause(.5);
     else { c.ligne(x, O.y, x, y, { couleur: 'tresfaible', largeur: 1.3, pointille: [4, 5], duree: .25 }); c.ligne(O.x, y, x, y, { couleur: 'tresfaible', largeur: 1.3, pointille: [4, 5], duree: .25 }); }
-    c.point(x, y, 4.8, 'jaune');
+    lueur(c, '#facc15', () => c.point(x, y, 5.6, 'jaune'));   // point de mesure lumineux
     c.trait([[x - 6, y - 6], [x + 6, y + 6]], { couleur: 'jaune', largeur: 1.6, duree: .06 }); c.trait([[x - 6, y + 6], [x + 6, y - 6]], { couleur: 'jaune', largeur: 1.6, duree: .06 });
     marque(c, 'point_' + k);
   }
@@ -218,7 +220,7 @@ function dessiner(c) {
     // La droite par l’origine.
     c.pause(.4); marque(c, 'debut_courbe');
     const x2 = .96 * K.xmax;
-    c.ligne(O.x, O.y, PX(x2), PY(K.f(x2)), { couleur: 'vert', largeur: 2.4 });
+    lueur(c, '#4ade80', () => c.ligne(O.x, O.y, PX(x2), PY(K.f(x2)), { couleur: '#86efac', largeur: 2.8, tremble: .15 }));   // droite nette et lumineuse
     c.texte(K.tDroite[0], TX.x, 92, { couleur: 'vert', taille: 16 * k, max: TX.w });
     c.texte(K.tDroite[1], TX.x, 92 + 22 * k, { couleur: 'vert', taille: 17 * k, max: TX.w });
     marque(c, 'droite');
@@ -242,7 +244,7 @@ function dessiner(c) {
     marque(c, 'identification');
   } else {
     c.pause(.4); marque(c, 'debut_courbe');
-    c.courbe(u => { const x = .05 + (.43 - .05) * u; return [PX(x), PY(K.f(x))]; }, 40, { couleur: 'vert', largeur: 2.4 });
+    lueur(c, '#4ade80', () => c.courbe(u => { const x = .05 + (.43 - .05) * u; return [PX(x), PY(K.f(x))]; }, 40, { couleur: '#86efac', largeur: 2.8, tremble: .15 }));
     K.tCourbe.forEach((t, i) => c.texte(t, TX.large ? TX.x : 440, 92 + 22 * k * i, { couleur: i ? 'blanc' : 'vert', taille: 16 * k, max: TX.large ? TX.w : 300 }));
     marque(c, 'courbe');
   }
@@ -252,7 +254,7 @@ function dessiner(c) {
   if (luVisible) c.direct(() => {
     const x = PX(lu.x), y = PY(lu.y);
     c.ligne(x, O.y, x, y, { couleur: 'rose', largeur: 1.3, pointille: [3, 4] }); c.ligne(O.x, y, x, y, { couleur: 'rose', largeur: 1.3, pointille: [3, 4] });
-    c.cercle(x, y, 7, { couleur: 'rose', largeur: 2 });
+    lueur(c, '#f472b6', () => c.cercle(x, y, 7, { couleur: 'rose', largeur: 2.2 }));
     if (TX.large) c.texte(K.lu.texte(lu.x, lu.y), TX.x, 380, { couleur: 'rose', taille: 15 * k, max: TX.w });
     else c.texte(K.lu.texte(lu.x, lu.y), K.lu.pos[0], K.lu.pos[1], { couleur: 'rose', taille: 15, align: 'right' });
   });
