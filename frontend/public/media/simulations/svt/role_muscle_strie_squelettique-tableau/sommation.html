@@ -38,9 +38,18 @@ const fmm = v => fr(v, 0);
 const quandFab = c => { let base = null; return nom => { if (base == null) base = c.cur; if (S.ecrit[nom] == null) S.ecrit[nom] = (performance.now() - scene.ouvert) / 1000; c.cur = Math.max(base, S.ecrit[nom]); }; };
 
 /* Le petit muscle peint qui raccourcit avec la courbe (a = amplitude actuelle, amax = amplitude du haut de l’échelle). */
+/* (16 novembre 2026, « remets en page les vues qui laissent une bande vide ») : sur un tableau large, le muscle est agrandi
+ * (× MM) dans la bande libre à gauche des axes, son nom passe dessous ; mêmes repère et nom. */
+const MM = () => (TK > 1 ? 1.6 : 1);
+const yNomMuscle = (haut, L0, y0) => (TK > 1 ? Math.round(haut + (L0 + 30) * MM() + 14) : y0);
 function petitMuscle(c, a, amax, haut, L0) {
-  c.direct(() => { const r = a / amax; P.os(c.ctx, 10, haut - 10, 24, 10); P.muscle(c.ctx, { cx: 22, haut, L: L0 * (1 - 0.18 * r), hw: 9 * (1 + 0.25 * r), tendon: 16, excite: Math.min(1, r * 2) }); });
-  c.repere('muscle', 4, haut - 12, 38, L0 + 34, 'le muscle : il raccourcit quand la courbe monte');
+  const m = MM();
+  c.direct(() => {
+    const r = a / amax, x = c.ctx; x.save(); x.translate(22, haut); x.scale(m, m); x.translate(-22, -haut);
+    P.os(x, 10, haut - 10, 24, 10); P.muscle(x, { cx: 22, haut, L: L0 * (1 - 0.18 * r), hw: 9 * (1 + 0.25 * r), tendon: 16, excite: Math.min(1, r * 2) });
+    x.restore();
+  });
+  c.repere('muscle', 22 - 18 * m, haut - 12 * m, 36 * m, (L0 + 34) * m, 'le muscle : il raccourcit quand la courbe monte');
 }
 /* Bande de la phase (de la secousse précédente) où tombe la stimulation suivante. */
 const COUL_PH = { latence: 'rgba(251,146,60,.17)', contraction: 'rgba(244,114,182,.15)', relachement: 'rgba(96,165,250,.16)', apres: 'rgba(74,222,128,.12)' };
@@ -86,7 +95,7 @@ const DEUX = {
   dessiner(c) {
     const G = DEUX.G, t = S.t, A = DEUX.analyse(), te = Math.min(t, DEUX.finRec()), quand = quandFab(c);
     petitMuscle(c, A.T.y(te), 40, 108, 92);
-    c.texte('muscle', 22, 250, { couleur: 'rose', taille: tk(12), align: 'center' });
+    c.texte('muscle', 22 + (TK > 1 ? 8 : 0), yNomMuscle(108, 92, 250), { couleur: 'rose', taille: tk(12), align: 'center' });
     c.texte('Deux stimulations de même intensité', 12, 26, { couleur: 'cyan', taille: tk(17) });
     MG.axes(c, G, { xa: G.xa, xb: G.xb, haut: G.haut, mm: [[0, '0'], [10, '10'], [20, '20'], [30, '30'], [40, '40']], t: [[0, '0'], [0.05, '0,05'], [0.1, '0,10'], [0.15, '0,15'], [0.2, '0,20'], [0.25, '0,25']], titreT: 't (s)', taille: tk(13) });
     c.texte('mm', G.xa + 8, G.haut + 8, { couleur: 'faible', taille: tk(13) });
@@ -176,7 +185,7 @@ const SERIE = {
   dessiner(c) {
     const G = SERIE.G(), t = S.t, A = SERIE.analyse(), span = SERIE.span(), te = Math.min(t, SERIE.finRec()), quand = quandFab(c), st = SERIE.stims();
     petitMuscle(c, A.T.y(te), 60, 108, 92);
-    c.texte('muscle', 22, 250, { couleur: 'rose', taille: tk(12), align: 'center' });
+    c.texte('muscle', 22 + (TK > 1 ? 8 : 0), yNomMuscle(108, 92, 250), { couleur: 'rose', taille: tk(12), align: 'center' });
     c.texte('Une série de 12 stimulations de même intensité', 12, 26, { couleur: 'cyan', taille: tk(17) });
     c.direct(() => {
       MG.axes(c, G, { xa: G.xa, xb: G.xb, haut: G.haut, mm: [[0, '0'], [20, '20'], [40, '40'], [60, '60']], t: gradT(G, span, G.xb - 40), titreT: 't (s)', taille: tk(13) });
@@ -252,7 +261,7 @@ const FAT = {
   dessiner(c) {
     const G = FAT.G, t = S.t, te = Math.min(t, FAT.finRec()), quand = quandFab(c), st = FAT.stims();
     petitMuscle(c, FAT.y(te), 20, 74, 70);
-    c.texte('muscle', 22, 186, { couleur: 'rose', taille: tk(12), align: 'center' });
+    c.texte('muscle', 22 + (TK > 1 ? 8 : 0), yNomMuscle(74, 70, 186), { couleur: 'rose', taille: tk(12), align: 'center' });
     c.texte('Fatigue : une longue série de secousses isolées (2 Hz)', 12, 26, { couleur: 'cyan', taille: tk(17) });
     c.texte('même intensité ; une stimulation toutes les 0,5 s', 12, 52, { couleur: 'faible', taille: tk(14) });
     MG.axes(c, G, { xa: G.xa, xb: G.xb, haut: G.haut, mm: [[0, '0'], [10, '10'], [20, '20']], t: [[0, '0'], [5, '5'], [10, '10']], titreT: 't (s)', taille: tk(13) });

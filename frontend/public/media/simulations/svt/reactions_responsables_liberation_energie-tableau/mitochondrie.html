@@ -172,11 +172,23 @@ const NOMS = Object.fromEntries(LEG.map(l => [l.id, l.nom]));
 const SLOT = { membrane_externe: [140, 60], cretes: [262, 60], espace_intermembranaire: [414, 60], membrane_interne: [150, 312], matrice: [330, 312], spheres_pedonculees: [598, 292] };
 const ORDRE = ['matrice', 'spheres_pedonculees', 'membrane_interne', 'cretes', 'espace_intermembranaire', 'membrane_externe'];
 const largeurEt = id => 18 + 8.2 * NOMS[id].length;
-const COLS = (() => {                                  // deux rangées d’étiquettes sous le schéma
+const COLS_BAS = (() => {                              // deux rangées d’étiquettes sous le schéma
   const out = {}, rangs = [ORDRE.slice(0, 3), ORDRE.slice(3)], ys = [362, 398];
   rangs.forEach((r, j) => { const tot = r.reduce((a, id) => a + largeurEt(id), 0) + 28 * (r.length - 1); let x = 380 - tot / 2; for (const id of r) { out[id] = [x + largeurEt(id) / 2, ys[j]]; x += largeurEt(id) + 28; } });
   return out;
 })();
+/* (16 novembre 2026, « remets en page les vues qui laissent une bande vide ») : sur un tableau large (L ≥ 1150), les
+ * étiquettes passent en colonne à droite et tout le document est agrandi KC fois (coordonnées d'origine inchangées :
+ * l'agrandissement est fait au dessin et défait par localC). */
+const COL_X = 836, COLS_DROITE = Object.fromEntries(ORDRE.map((id, i) => [id, [COL_X, 70 + 44 * i]]));
+let COLS = COLS_BAS, KC = 1, OXC = 0, DXC = 0;
+function disposerConstruire(L) {
+  const large = L >= 1150, avant = COLS;
+  if (large) { KC = Math.min(L / 960, 420 / 342); DXC = Math.max(0, (L - 760) / 2); OXC = Math.max(6, (L - 950 * KC) / 2); COLS = COLS_DROITE; }
+  else { KC = 1; DXC = 0; OXC = 0; COLS = COLS_BAS; }
+  if (COLS !== avant) for (const id of ORDRE) if (ET[id] && !ET[id].ok) { const [x, y] = COLS[id]; ET[id] = { x, y, ok: false }; }
+}
+const localC = (px, py) => { const [x, y] = scene.local(px, py); return KC > 1 ? [(x + DXC - OXC) / KC, y / KC] : [x, y]; };
 let ET = {}, ERREURS = 0, MAL = new Set(), dernierT = 0;
 function remiseEtiquettes() { ET = {}; ERREURS = 0; MAL = new Set(); for (const id of ORDRE) { const [x, y] = COLS[id]; ET[id] = { x, y, ok: false }; } }
 remiseEtiquettes();
@@ -195,6 +207,13 @@ const compte = pos => ORDRE.filter(id => pos[id].ok).length;
 /** Ce que le lecteur lit pour noter et commenter le schéma (lecture seule). */
 function legende() { return { legende_total: ORDRE.length, legende_places: ORDRE.filter(id => ET[id].ok).length, legende_erreurs: ERREURS, legende_mal: [...MAL].join(', ') }; }
 function dessinerConstruire(c) {
+  disposerConstruire(scene.L);
+  if (KC === 1) return dessinerConstruire0(c);
+  const ctx = c.ctx, e0 = c.echelle;
+  ctx.save(); ctx.translate(OXC - DXC, 0); ctx.scale(KC, KC); if (e0) c.echelle = e0 * KC;
+  try { dessinerConstruire0(c); } finally { ctx.restore(); c.echelle = e0; }
+}
+function dessinerConstruire0(c) {
   const t = chrono.t, ctx = c.ctx;
   if (t + .3 < dernierT) remiseEtiquettes();
   dernierT = t;
@@ -219,7 +238,7 @@ function dessinerConstruire(c) {
   c.repere('zone_membranes', 60, 40, 480, 110, 'les flèches du haut : membrane externe, crêtes, espace intermembranaire');
   c.repere('zone_interieur', 60, 180, 340, 145, 'les flèches du bas : membrane interne, matrice');
   c.repere('medaillon', ...tr(MED.x, MED.y), FS * MED.w, FS * MED.h + 50, 'la crête agrandie et ses sphères pédonculées');
-  if (t >= 1.0) c.repere('etiquettes', 140, 346, 480, 70, 'les étiquettes à poser');
+  if (t >= 1.0) { if (KC > 1) c.repere('etiquettes', COL_X - 112, 50, 224, 44 * 6, 'les étiquettes à poser'); else c.repere('etiquettes', 140, 346, 480, 70, 'les étiquettes à poser'); }
   const pos = positions();
   if (t >= 1.0) ecrit.ecrire(c, 'et', () => {
     ORDRE.forEach(id => {
@@ -228,7 +247,7 @@ function dessinerConstruire(c) {
       c.texte(NOMS[id], p.x, p.y + 6, { couleur: coul, taille: 16, align: 'center', duree: .25 });
     });
   });
-  if (S.corrige && t >= T_CORR + 1.9) ecrit.ecrire(c, 'bravo', () => c.texte('corrigé : les 6 étiquettes sont à leur place', 740, 24, { couleur: 'vert', taille: 15, align: 'right' }));
+  if (S.corrige && t >= T_CORR + 1.9) ecrit.ecrire(c, 'bravo', () => c.texte('corrigé : les 6 étiquettes sont à leur place', KC > 1 ? 940 : 740, 24, { couleur: 'vert', taille: 15, align: 'right' }));
 }
 function voitConstruire() {
   const t = chrono.t, pos = positions(), m = [];
@@ -241,7 +260,7 @@ function voitConstruire() {
     else if (Math.hypot(p.x - cx0, p.y - cy0) < 4) col.push(`« ${NOMS[id]} »`);
     else { let best = null, d = 1e9; for (const [s2, [sx, sy]] of Object.entries(SLOT)) { const dd = Math.hypot(p.x - sx, p.y - sy); if (dd < d) { d = dd; best = s2; } } ailleurs.push(`« ${NOMS[id]} » (posée près de la place de « ${NOMS[best]} »)`); }
   }
-  if (col.length) m.push(`Sous le schéma, étiquettes à poser : ${col.join(', ')}.`);
+  if (col.length) m.push(`${KC > 1 ? 'En colonne à droite' : 'Sous le schéma'}, étiquettes à poser : ${col.join(', ')}.`);
   if (bien.length) m.push(`Bien posées (vertes, aimantées) : ${bien.join(', ')}.`);
   if (ailleurs.length) m.push(`Mal posées (blanches) : ${ailleurs.join(', ')}.`);
   if (S.corrige && t >= T_CORR && t < T_CORR + 1.9) m.push('Correction : les étiquettes glissent vers leur place.');
@@ -251,16 +270,16 @@ function voitConstruire() {
 window.Tableau.glisser(canvas, {
   toucher: (px, py) => {
     if (!CONSTRUIRE || chrono.t < 1.2 || (S.corrige && chrono.t >= T_CORR)) return null;
-    const [x, y] = scene.local(px, py);
+    const [x, y] = localC(px, py);
     for (let i = ORDRE.length - 1; i >= 0; i--) { const id = ORDRE[i], e = ET[id]; if (Math.abs(x - e.x) <= largeurEt(id) / 2 + 4 && Math.abs(y - e.y) <= 16) return id; }
     return null;
   },
-  bouger: (id, px, py) => { const [x, y] = scene.local(px, py); ET[id] = { x: Math.min(740, Math.max(20, x)), y: Math.min(408, Math.max(40, y)), ok: false }; scene.sale = true; },
+  bouger: (id, px, py) => { const [x, y] = localC(px, py); ET[id] = { x: Math.min(KC > 1 ? 940 : 740, Math.max(20, x)), y: Math.min(KC > 1 ? 336 : 408, Math.max(40, y)), ok: false }; scene.sale = true; },
   lacher: (id) => {
     const [sx, sy] = SLOT[id], e = ET[id], [cx0, cy0] = COLS[id];
     if (Math.hypot(e.x - sx, e.y - sy) <= 40) ET[id] = { x: sx, y: sy, ok: true };
     // lâchée sur le schéma, loin de sa place : une erreur (la reposer en bas, parmi les étiquettes, n’en est pas une)
-    else if (e.y < 340 && Math.hypot(e.x - cx0, e.y - cy0) > 30) { ERREURS += 1; MAL.add(NOMS[id]); }
+    else if ((KC > 1 ? e.x < 720 : e.y < 340) && Math.hypot(e.x - cx0, e.y - cy0) > 30) { ERREURS += 1; MAL.add(NOMS[id]); }
     const n = legende().legende_places;
     bulle($('feedback'), ET[id].ok ? `Bien placée : « ${NOMS[id]} » (${n} sur ${ORDRE.length}).` : `« ${NOMS[id]} » n’est pas à sa place.`, ET[id].ok ? 'good' : undefined);
     pont.noter('glisser', { poignee: id, parameters: params() }); pont.emettre(); scene.sale = true;
@@ -329,7 +348,7 @@ const pont = protocole({ id: config.id, commandes, config,
     set_parameters: () => setParameters(p || {}), play_until: () => chrono.playUntil(p) })[cmd]?.() });
 bulle($('feedback'), CONSTRUIRE ? 'La mitochondrie sans ses noms : à toi de la légender…' : 'Une mitochondrie en coupe, dans le hyaloplasme…');
 setTimeout(() => { if (!chrono.running && chrono.t === 0) chrono.start(); }, 1600);
-window.__sim = { chrono, scene, M, S, ecrit, get ET() { return ET; }, SLOT, COLS, legende, params };
+window.__sim = { chrono, scene, M, S, ecrit, get ET() { return ET; }, SLOT, get COLS() { return COLS; }, legende, params };
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>
 </body></html>
