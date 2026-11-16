@@ -28,6 +28,8 @@
  */
 const { lisse, rampe, entre } = window.Etapes;
 const M = window.Molecules;
+/** (16 novembre 2026, règle 10) Légende écrite sur le fond peint (nucléoplasme bleu, cellule) : un fond sombre arrondi dessous. */
+const etiq = (c, k, s, x, y, o) => { c.direct(() => M.pastille(c.ctx, s, x, y, o.taille ?? 18, o.align || 'left')); return k.T(c, s, x, y, o); };
 const TAU = Math.PI * 2;
 const clamp = v => Math.max(0, Math.min(1, v));
 const COMP = M.COMP_ADN;
@@ -40,7 +42,7 @@ function baseP(x, px, y, L, sens, lb, pas, a = 1, lettre = true) {
   const w = Math.min(6, pas * .32);
   const g = x.createLinearGradient(px - w, 0, px + w, 0); g.addColorStop(0, M.ombre(col, .75)); g.addColorStop(.45, col); g.addColorStop(1, M.ombre(col, .6));
   x.fillStyle = g; x.beginPath(); if (x.roundRect) x.roundRect(px - w, Math.min(y, y + sens * lb), 2 * w, lb, 3); else x.rect(px - w, Math.min(y, y + sens * lb), 2 * w, lb); x.fill();
-  if (lettre) { x.fillStyle = '#fff'; x.font = `700 ${Math.round(Math.min(13, pas * .62))}px sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(L, px, y + sens * lb * .55); }
+  if (lettre) M.lettreSur(x, L, px, y + sens * lb * .55, col, Math.round(Math.min(13, pas * .62)));
   x.restore();
 }
 /** Squelette sucre-phosphate ombré le long de `pts` (type 'adn' bleu-violet, 'arn' orange). */
@@ -72,7 +74,7 @@ function nucLibre(x, px, py, L, ang, a = 1) {
   x.fillStyle = g; x.beginPath(); if (x.roundRect) x.roundRect(-5.5, -24, 11, 20, 3); else x.rect(-5.5, -24, 11, 20); x.fill();
   M.sphere(x, 0, 0, 5.5, '#ea580c');
   x.translate(0, -14); x.rotate(-(ang + Math.PI / 2));
-  x.fillStyle = '#fff'; x.font = '700 11px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(L, 0, .5);
+  M.lettreSur(x, L, 0, .5, col, 11);
   x.restore();
 }
 /** L’ARN polymérase : ovale rose-violet translucide (les bases restent lisibles à travers). */
@@ -161,15 +163,15 @@ function dessinerTranscription(c, k) {
   c.repere('brin_transcrit', X0, E.yB(7.5) - LB - 4, X1 - X0, LB + 8, 'le brin transcrit (3′ → 5′)');
   c.repere('triplets', X0, 78, X1 - X0, 24, 'les numéros des triplets');
   if (k.ecrit(c, 'adn', .5)) {
-    k.T(c, 'brin non', 6, 118, { couleur: 'bleu', taille: 13 }); k.T(c, 'transcrit', 6, 133, { couleur: 'bleu', taille: 13 });
-    k.T(c, 'brin', 6, 210, { couleur: 'violet', taille: 13 }); k.T(c, 'transcrit', 6, 225, { couleur: 'violet', taille: 13 });
+    etiq(c, k, 'brin non', 6, 118, { couleur: 'bleu', taille: 13 }); etiq(c, k, 'transcrit', 6, 133, { couleur: 'bleu', taille: 13 });
+    etiq(c, k, 'brin', 6, 210, { couleur: 'violet', taille: 13 }); etiq(c, k, 'transcrit', 6, 225, { couleur: 'violet', taille: 13 });
     k.T(c, '5′', xu(-1.5) - 12, yT0 + 5, { couleur: 'vert', taille: 15, align: 'center' }); k.T(c, '3′', xu(N + 1.5) + 12, yT1 + 5, { couleur: 'vert', taille: 15, align: 'center' });
     k.T(c, '3′', xu(-1.5) - 12, yB0 + 5, { couleur: 'vert', taille: 15, align: 'center' }); k.T(c, '5′', xu(N + 1.5) + 12, yB1 + 5, { couleur: 'vert', taille: 15, align: 'center' });
     k.T(c, 'triplets', 104, 92, { couleur: 'faible', taille: 13, align: 'right' });
     for (let j = 0; j < 5; j++) { c.ligne(xu(3 * j) + 4, 98, xu(3 * j + 3) - 4, 98, { couleur: 'faible', largeur: 1.4, duree: .08 }); k.T(c, String(j + 1), xu(3 * j + 1.5), 92, { couleur: 'blanc', taille: 14, align: 'center', duree: .1 }); }
     k.T(c, 'dans le noyau (nucléoplasme)', 750, 50, { couleur: 'faible', taille: 13, align: 'right' });
   }
-  if (t < 9.4 && k.ecrit(c, 'rappel', .9)) k.T(c, 'rappel : A en face de T, C en face de G ; deux brins antiparallèles', X0, 46, { couleur: 'faible', taille: 14 });
+  if (t < 9.4 && k.ecrit(c, 'rappel', .9)) k.T(c, 'rappel : A en face de T, C en face de G ; deux brins antiparallèles', X0, 46, { couleur: 'blanc', taille: 14 });
   // ── la polymérase ──
   if (t >= 2.4) {
     const rx = 46 * E.ps, ry = 74 * E.ps;
@@ -280,13 +282,13 @@ function dessinerBrins(c, k) {
   if (k.ecrit(c, 'lignes', .3)) {
     for (let j = 0; j < n / 3; j++) { const xa = BX0 + 3 * j * pas, xb = xa + 3 * pas; c.ligne(xa + 4, 64, xb - 4, 64, { couleur: 'faible', largeur: 1.4, duree: .08 }); k.T(c, String(j + 1), (xa + xb) / 2, 58, { couleur: 'blanc', taille: 14, align: 'center', duree: .1 }); }
     k.T(c, 'triplets', BX0 - 16, 58, { couleur: 'faible', taille: 13, align: 'right' });
-    k.T(c, 'brin non', 6, BYNT + 8, { couleur: 'bleu', taille: 13 }); k.T(c, 'transcrit', 6, BYNT + 23, { couleur: 'bleu', taille: 13 });
+    etiq(c, k, 'brin non', 6, BYNT + 8, { couleur: 'bleu', taille: 13 }); etiq(c, k, 'transcrit', 6, BYNT + 23, { couleur: 'bleu', taille: 13 });
     k.T(c, '5′', BX0 - 14, BYNT + 6, { couleur: 'vert', taille: 15, align: 'center' }); k.T(c, '3′', X1b + 14, BYNT + 6, { couleur: 'vert', taille: 15, align: 'center' });
-    k.T(c, 'brin', 6, BYTR - 14, { couleur: 'violet', taille: 13 }); k.T(c, 'transcrit', 6, BYTR + 1, { couleur: 'violet', taille: 13 });
+    etiq(c, k, 'brin', 6, BYTR - 14, { couleur: 'violet', taille: 13 }); etiq(c, k, 'transcrit', 6, BYTR + 1, { couleur: 'violet', taille: 13 });
     k.T(c, '3′', BX0 - 14, BYTR + 6, { couleur: 'vert', taille: 15, align: 'center' }); k.T(c, '5′', X1b + 14, BYTR + 6, { couleur: 'vert', taille: 15, align: 'center' });
   }
   // la ligne de l’ARNm (vide au début : pointillés sous le brin non transcrit)
-  if (t < 6.8 && k.ecrit(c, 'vide', .8)) { c.ligne(BX0, BYARN, X1b, BYARN, { couleur: 'faible', largeur: 1.4, pointille: [6, 6], duree: .2 }); k.T(c, 'ARNm ?', 6, BYARN + 6, { couleur: 'faible', taille: 13 }); }
+  if (t < 6.8 && k.ecrit(c, 'vide', .8)) { c.ligne(BX0, BYARN, X1b, BYARN, { couleur: 'faible', largeur: 1.4, pointille: [6, 6], duree: .2 }); k.T(c, 'ARNm ?', 6, BYARN + 6, { couleur: 'orange', taille: 13 }); }
   if (t >= 2.0 && k.ecrit(c, 'arn', 2.0)) {
     k.T(c, 'ARNm', 6, yArn + 16, { couleur: 'orange', taille: 14 });
     k.T(c, '5′', BX0 - 14, yArn + 6, { couleur: 'vert', taille: 15, align: 'center' });
@@ -297,7 +299,7 @@ function dessinerBrins(c, k) {
     k.T(c, 'chemin 1 :', 616, 236, { couleur: 'vert', taille: 15 });
     k.T(c, 'complémentaire', 616, 254, { couleur: 'blanc', taille: 14 });
     k.T(c, 'du brin transcrit', 616, 272, { couleur: 'blanc', taille: 14 });
-    k.T(c, 'A→U  T→A  C→G  G→C', 616, 292, { couleur: 'faible', taille: 13 });
+    k.T(c, 'A→U  T→A  C→G  G→C', 616, 292, { couleur: 'jaune', taille: 14 });
   }
   if (t >= 3.0) c.repere('chemin_1', 610, 220, 146, 80, 'chemin 1 : complémentaire du brin transcrit');
   // chemin 2 : le brin non transcrit recopié, T → U
@@ -383,14 +385,14 @@ function dessinerNoyau(c, k) {
   if (A.croit > 0) c.repere('arnm', A.x0 - 4, A.y - 14, A.long * A.croit + 8, 22, 'l’ARNm');
   if (k.ecrit(c, 'leg', .4)) {
     k.T(c, 'noyau', NCX, 340, { couleur: 'blanc', taille: 15, align: 'center' });
-    k.T(c, 'ADN', 96, 142, { couleur: 'violet', taille: 15 }); c.ligne(124, 146, 158, 170, { couleur: 'violet', largeur: 1.4 });
-    k.T(c, 'cytoplasme', 470, 380, { couleur: 'rose', taille: 15 });
-    k.T(c, 'ribosomes', 620, 356, { couleur: 'cyan', taille: 14, align: 'center' });
+    etiq(c, k, 'ADN', 96, 142, { couleur: 'violet', taille: 15 }); c.ligne(124, 146, 158, 170, { couleur: 'violet', largeur: 1.4 });
+    etiq(c, k, 'cytoplasme', 470, 380, { couleur: 'rose', taille: 15 });
+    etiq(c, k, 'ribosomes', 620, 356, { couleur: 'cyan', taille: 14, align: 'center' });
     k.T(c, 'pore nucléaire', 410, 272, { couleur: 'blanc', taille: 14 }); c.fleche(418, 258, 405, 238, { couleur: 'blanc', largeur: 1.4, tete: 7 });
   }
   if (A.croit > 0 && k.ecrit(c, 'arn', 1.0)) {
     if (t < 2.6) k.T(c, 'ARNm formé dans le noyau', 230, 242, { couleur: 'orange', taille: 15, align: 'center' });
-    else k.T(c, 'ARNm', A.x0 + A.long / 2, A.y + 24, { couleur: 'orange', taille: 14, align: 'center' });
+    else etiq(c, k, 'ARNm', A.x0 + A.long / 2, A.y + 24, { couleur: 'orange', taille: 14, align: 'center' });
   }
   if (k.ecrit(c, 'adn_reste', 4.4)) k.T(c, 'l’ADN ne sort jamais du noyau', NCX, 412, { couleur: 'vert', taille: 15, align: 'center' });
   if (k.ecrit(c, 'sort', 7.6)) k.T(c, 'l’ARNm sort par un pore nucléaire', 575, 412, { couleur: 'orange', taille: 15, align: 'center' });

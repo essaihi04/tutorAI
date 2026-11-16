@@ -136,6 +136,11 @@ function dent(x, cx, top, atteinte, a = 1) {
 }
 
 /* ════════ Vue document_ldl (2023 N, HCF) ════════ */
+/** (16 novembre 2026, règle 10) Un fond sombre arrondi sous une légende écrite SUR la cellule rose : la légende reste lisible. */
+function pastille(c, s, x, y, taille) {
+  const w = String(s).length * taille * .52 + 16;
+  c.direct(() => { const x2 = c.ctx; x2.save(); x2.fillStyle = 'rgba(12,22,28,.78)'; x2.beginPath(); x2.roundRect(x - w / 2, y - taille - 1, w, taille + 9, 8); x2.fill(); x2.restore(); });
+}
 const LDL_PANNEAUX = [{ cx: 195, normal: true }, { cx: 565, normal: false }];
 const CEL = { cy: 202, rx: 155, ry: 50 };
 const DX_REC = [-110, -66, -22, 22, 66, 110];
@@ -203,11 +208,11 @@ function dessinerLDL(c, k) {
     k.T(c, 'LDL', P.cx + 140, 76, { couleur: 'jaune', taille: 13, align: 'right', duree: .2 });
     k.T(c, P.normal ? 'récepteur LDL normal' : 'récepteur LDL anormal', P.cx - 162, 95, { couleur: P.normal ? 'vert' : 'rouge', taille: 13, duree: .4 });
     c.fleche(P.cx - 140, 100, P.cx - 113, 132, { couleur: 'faible', largeur: 1.3, tete: 6, duree: .12 });
-    k.T(c, 'cellule', P.cx, 209, { couleur: 'faible', taille: 13, align: 'center', duree: .2 });
+    pastille(c, 'cellule', P.cx, 209, 14); k.T(c, 'cellule', P.cx, 209, { couleur: 'blanc', taille: 14, align: 'center', duree: .2 });
   }
   if (k.ecrit(c, 'res', 2.9)) {
-    k.T(c, 'les LDL se fixent et entrent', LDL_PANNEAUX[0].cx, 238, { couleur: 'vert', taille: 13, align: 'center', duree: .4 });
-    k.T(c, 'les LDL restent dehors', LDL_PANNEAUX[1].cx, 238, { couleur: 'rouge', taille: 13, align: 'center', duree: .4 });
+    pastille(c, 'les LDL se fixent et entrent', LDL_PANNEAUX[0].cx, 238, 14); k.T(c, 'les LDL se fixent et entrent', LDL_PANNEAUX[0].cx, 238, { couleur: 'vert', taille: 14, align: 'center', duree: .4 });
+    pastille(c, 'les LDL restent dehors', LDL_PANNEAUX[1].cx, 238, 14); k.T(c, 'les LDL restent dehors', LDL_PANNEAUX[1].cx, 238, { couleur: 'rouge', taille: 14, align: 'center', duree: .4 });
   }
   const yS = 290, LS = flux(c, CHAINE_SAINE, 18, yS, 744, T, dy);
   const yM = Math.max(...LS.map(o => o.y)) + 44, LM = flux(c, CHAINE_MALADE, 18, yM, 744, T, dy);
@@ -329,7 +334,8 @@ function dessinerLignes(c, k) {
   c.texte('Les lignes du barème', XM, Lg ? 28 : 24, { couleur: 'cyan', taille: Lg ? 25 : 19, align: 'center' });
   c.texte('sujet ' + A.S.nom + '  (toucher pour changer)', XM, Lg ? 52 : 46, { couleur: 'faible', taille: Lg ? 18 : 13, align: 'center' });
   c.repere('sujet', XM - 180, 32, 360, 20, 'le sujet (toucher pour changer)');
-  const titre = (s, y, coul = 'faible') => k.T(c, s, 18, y, { couleur: coul, taille: TT, duree: .3 });
+  const titre = (s, y, coul = 'blanc') =>   /* (16 novembre 2026, règle 10) noms des lignes lisibles, plus en gris pâle */
+   k.T(c, s, 18, y, { couleur: coul, taille: TT, duree: .3 });
   const ligneTri = (y, arr, coul, rouge) => arr.forEach((s, i) => {
     if (rouge != null && i === rouge && A.b >= 0 && coul === 'blanc') morceaux(c, k, [[s.slice(0, A.b), 'blanc'], [s[A.b], 'rouge'], [s.slice(A.b + 1), 'blanc']], cx(i) - larg(c, s, T) / 2, y, T, .05);
     else if (rouge != null && i === rouge && coul === 'orange') morceaux(c, k, [[s.slice(0, A.b), 'orange'], [s[A.b], 'rouge'], [s.slice(A.b + 1), 'orange']], cx(i) - larg(c, s, T) / 2, y, T, .05);
@@ -345,10 +351,10 @@ function dessinerLignes(c, k) {
   if (t >= .3) c.repere('ligne_triplets', 14, RY.tri - 16, LXMAX - 10, 22, 'la ligne des numéros de triplets');
   if (k.ecrit(c, 'bn', 2.0)) { k.T(c, 'Allèle normal', 18, RY.nb - (Lg ? 32 : 24), { couleur: 'vert', taille: TA, duree: .3 }); titre('brin non transcrit', RY.nb); ligneTri(RY.nb, A.tn, 'blanc'); }
   if (k.ecrit(c, 'an', 4.5)) { titre('ARNm', RY.na); ligneTri(RY.na, A.an, 'orange'); }
-  if (k.ecrit(c, 'pn', 7.0)) { titre('séquence d’acides aminés', RY.np, 'faible'); ligneAA(RY.np, A.pn, -1); }
+  if (k.ecrit(c, 'pn', 7.0)) { titre('séquence d’acides aminés', RY.np, 'vert'); ligneAA(RY.np, A.pn, -1); }
   if (k.ecrit(c, 'bm', 9.3)) { k.T(c, 'Allèle muté', 18, RY.mb - (Lg ? 32 : 24), { couleur: 'rouge', taille: TA, duree: .3 }); titre('brin non transcrit', RY.mb); ligneTri(RY.mb, A.tm, 'blanc', A.j); }
   if (k.ecrit(c, 'am', 10.2)) { titre('ARNm', RY.ma); ligneTri(RY.ma, A.am, 'orange', A.j); }
-  if (k.ecrit(c, 'pm', 11.0)) { titre('séquence d’acides aminés', RY.mp, 'faible'); ligneAA(RY.mp, A.pm, A.j); }
+  if (k.ecrit(c, 'pm', 11.0)) { titre('séquence d’acides aminés', RY.mp, 'vert'); ligneAA(RY.mp, A.pm, A.j); }
   if (t >= 2.0) { c.repere('ligne_brin', 14, RY.nb - 16, LXMAX - 10, 22, 'la ligne du brin non transcrit'); c.repere('allele_normal', 14, RY.nb - 40, LXMAX - 10, RY.np - RY.nb + 48, 'l’allèle normal'); }
   if (t >= 4.5) c.repere('ligne_arnm', 14, RY.na - 16, LXMAX - 10, 22, 'la ligne de l’ARNm');
   if (t >= 7.0) c.repere('ligne_aa', 14, RY.np - 16, LXMAX - 10, 22, 'la ligne des acides aminés');
@@ -363,11 +369,11 @@ function dessinerLignes(c, k) {
       k.T(c, '(encadré en rouge) :', xr, y + 26, { couleur: 'rouge', taille: 19, duree: .3 }); y += 62;
       couper(c, A.S.dit, wr, 20).forEach(l => { k.T(c, l, xr, y, { couleur: 'blanc', taille: 20, duree: .5 }); y += 27; });
       y += 16;
-      couper(c, 'Pour chaque allèle : N° des triplets, brin, ARNm, acides aminés, alignés.', wr, 18).forEach(l => { k.T(c, l, xr, y, { couleur: 'faible', taille: 18, duree: .5 }); y += 24; });
+      couper(c, 'Pour chaque allèle : N° des triplets, brin, ARNm, acides aminés, alignés.', wr, 18).forEach(l => { k.T(c, l, xr, y, { couleur: 'blanc', taille: 18, duree: .5 }); y += 24; });
     } else {
     k.T(c, 'Ce qui diffère (encadré en rouge) :', 18, 314, { couleur: 'rouge', taille: 15, duree: .4 });
     couper(c, A.S.dit, 720, 15).forEach((l, i) => k.T(c, l, 18, 336 + i * 20, { couleur: 'blanc', taille: 15, duree: .5 }));
-    k.T(c, 'Pour chaque allèle : N° des triplets, brin, ARNm, acides aminés, alignés.', 18, 392, { couleur: 'faible', taille: 14, duree: .5 });
+    k.T(c, 'Pour chaque allèle : N° des triplets, brin, ARNm, acides aminés, alignés.', 18, 392, { couleur: 'blanc', taille: 15, duree: .5 });
     }
   }
   if (t >= 12.5) c.repere('difference', xd, RY.mb - T - 3, wd, RY.mp - RY.mb + T + 11, 'ce qui diffère');
@@ -444,8 +450,8 @@ function dessinerPhrase(c, k) {
     if (!k.ecrit(c, v.id, v.t0)) return;
     v.lignes.forEach((l, i) => {
       const y = v.y + G.Tv + 1 + i * G.dyv, xt = XV + 10;
-      if (i === 0) { k.T(c, v.titre, xt, y, { couleur: choisi ? 'jaune' : 'faible', taille: G.Tv, duree: .2 }); k.T(c, l.slice(v.titre.length), xt + larg(c, v.titre, G.Tv), y, { couleur: choisi ? 'blanc' : 'faible', taille: G.Tv, duree: .55 }); }
-      else k.T(c, l, xt, y, { couleur: choisi ? 'blanc' : 'faible', taille: G.Tv, duree: .55 });
+      if (i === 0) { k.T(c, v.titre, xt, y, { couleur: choisi ? 'jaune' : 'orange', taille: G.Tv, duree: .2 }); k.T(c, l.slice(v.titre.length), xt + larg(c, v.titre, G.Tv), y, { couleur: 'blanc', alpha: choisi ? 1 : .82, taille: G.Tv, duree: .55 }); }
+      else k.T(c, l, xt, y, { couleur: 'blanc', alpha: choisi ? 1 : .82, taille: G.Tv, duree: .55 });
     });
     if (choisi) bord(c, XV, v.y - 4, WV, v.h, 'jaune', 1.8);
   });
@@ -542,7 +548,7 @@ function dessinerAmelogenine(c, k) {
   };
   if (k.ecrit(c, 'q2', 8.0)) {
     k.T(c, '2. Séquences (triplets 1 à 5) :', XQ, yQ2, { couleur: 'jaune', taille: 14, duree: .4 });
-    k.T(c, 'brin / ARNm / acides aminés', XQM, yQ2, { couleur: 'faible', taille: 12, align: 'right', duree: .3 });
+    k.T(c, 'brin / ARNm / acides aminés', XQM, yQ2, { couleur: 'blanc', taille: 13, align: 'right', duree: .3 });
     blocSeq(yQ2 + 20, tn, an, pn, 'normal :', 'vert');
     blocSeq(yQ2 + 76, tm, am, pm, 'muté :', 'rouge');
     c.rect(cx(2) - cw / 2 + 2, yQ2 + 64, cw - 4, 54, { couleur: 'rouge', largeur: 1.8, duree: .25 });

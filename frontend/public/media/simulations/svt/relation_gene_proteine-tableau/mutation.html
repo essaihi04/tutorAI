@@ -138,7 +138,7 @@ function base(x, px, y, L, a, pas, rouge) {
   if (rouge) { const h = x.createRadialGradient(px, y - LB / 2, 2, px, y - LB / 2, LB); h.addColorStop(0, 'rgba(255,45,45,.55)'); h.addColorStop(1, 'rgba(255,45,45,0)'); x.fillStyle = h; x.beginPath(); x.arc(px, y - LB / 2, LB, 0, TAU); x.fill(); }
   const g = x.createLinearGradient(px - larg, 0, px + larg, 0); g.addColorStop(0, Mo.ombre(Mo.BASE[L], .75)); g.addColorStop(.45, Mo.BASE[L]); g.addColorStop(1, Mo.ombre(Mo.BASE[L], .6));
   x.fillStyle = g; x.beginPath(); x.roundRect(px - larg, y - LB, 2 * larg, LB, 3); x.fill();
-  x.fillStyle = '#fff'; x.font = `700 ${font}px sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(L, px, y - LB * .55);
+  Mo.lettreSur(x, L, px, y - LB * .55, Mo.BASE[L], font);
   if (rouge) { x.strokeStyle = '#ff2d2d'; x.lineWidth = 2.4; x.beginPath(); x.ellipse(px, y - LB / 2, pas * .5, LB * .78, 0, 0, TAU); x.stroke(); }
   x.restore();
 }
@@ -170,7 +170,7 @@ function perles(x, L, y, pas, t0, t, rouges = [], pointilles = []) {
     const a = vis(i); if (a <= 0) continue;
     const px = xc(i, pas);
     Mo.perle(x, px, y, RP, L.aas[i], { texte: false, alpha: a });
-    x.save(); x.globalAlpha *= a; x.fillStyle = '#fff'; x.font = '700 12px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.shadowColor = 'rgba(0,0,0,.7)'; x.shadowBlur = 2; x.fillText(L.aas[i], px, y + .5); x.restore();
+    x.save(); x.globalAlpha *= a; Mo.lettreSur(x, L.aas[i], px, y + .5, Mo.couleurAA(L.aas[i]), 12); x.restore();
     if (rouges.includes(i) || pointilles.includes(i)) { x.save(); x.globalAlpha *= a; x.strokeStyle = '#ff2d2d'; x.lineWidth = 2.4; x.setLineDash(pointilles.includes(i) ? [4, 3] : []); x.beginPath(); x.arc(px, y, RP + 4, 0, TAU); x.stroke(); x.restore(); }
   }
 }
@@ -210,16 +210,16 @@ function dessiner(c, k) {
   if (k.ecrit(c, 'n_arn', PH.arnN)) { T('ARNm', 6, RN.arn - 4, { couleur: 'orange', taille: 13 }); T('5′', X0 - 11, RN.arn + 4, { couleur: 'vert', taille: 13, align: 'center' }); T('3′', X0 + lN * pas + 11, RN.arn + 4, { couleur: 'vert', taille: 13, align: 'center' }); }
   const arcs = (R, L, n, coul, larg, seul) => { for (const cd of L.cod) { if (!cd.lu || cd.j * 3 + 3 > n || (seul && !seul.includes(cd.j))) continue; const xa = X0 + 3 * cd.j * pas + 3, xb = X0 + (3 * cd.j + 3) * pas - 3; c.courbe(u => [xa + (xb - xa) * u, R.arc + 9 * Math.sin(Math.PI * u)], 10, { couleur: coul, largeur: larg, duree: .06 }); } };
   if (k.ecrit(c, 'n_arcs', PH.arcsN)) arcs(RN, LN, lN, 'faible', 1.6);
-  if (k.ecrit(c, 'n_aa', PH.aaN)) { T('acides aminés', 6, RN.aa + 4, { couleur: 'faible', taille: 13 }); if (LN.stop >= 0) T('arrêt', xc(LN.stop, pas), RN.aa + 5, { couleur: 'rouge', taille: 13, align: 'center' }); }
+  if (k.ecrit(c, 'n_aa', PH.aaN)) { T('acides aminés', 6, RN.aa + 4, { couleur: 'vert', taille: 13 }); if (LN.stop >= 0) T('arrêt', xc(LN.stop, pas), RN.aa + 5, { couleur: 'rouge', taille: 13, align: 'center' }); }
   // ── allèle muté
   const nCommun = Math.min(Math.ceil(lN / 3), Math.ceil(lM / 3));
   if (k.ecrit(c, 'm_lab', PH.brinM)) { titres(RM, 'allèle muté', 'rouge'); for (let j = 0; j < nCommun; j++) T(String(j + 1), xc(j, pas), RM.num, { couleur: 'faible', taille: 13, align: 'center', duree: .03 }); }
-  if (k.ecrit(c, 'm_evt', PH.evt)) T(A.evt, 110, RM.lab, { couleur: A.genre === 'aucune' ? 'faible' : 'rouge', taille: 14, duree: .4, max: 440 });
+  if (k.ecrit(c, 'm_evt', PH.evt)) T(A.evt, 110, RM.lab, { couleur: A.genre === 'aucune' ? 'blanc' : 'rouge', taille: 14, duree: .4, max: 440 });
   if (k.ecrit(c, 'm_num', PH.evtFin)) for (let j = nCommun; j * 3 < lM; j++) T(String(j + 1), xc(j, pas), RM.num, { couleur: 'faible', taille: 13, align: 'center', duree: .03 });
   if (k.ecrit(c, 'm_arn', PH.arnM)) { T('ARNm', 6, RM.arn - 4, { couleur: 'orange', taille: 13 }); T('5′', X0 - 11, RM.arn + 4, { couleur: 'vert', taille: 13, align: 'center' }); T('3′', X0 + lM * pas + 11, RM.arn + 4, { couleur: 'vert', taille: 13, align: 'center' }); }
   if (k.ecrit(c, 'm_arcs', PH.arcsM)) arcs(RM, LM, lM, 'faible', 1.6);
   if (k.ecrit(c, 'm_aa', PH.aaM)) {
-    T('acides aminés', 6, RM.aa + 4, { couleur: 'faible', taille: 13 });
+    T('acides aminés', 6, RM.aa + 4, { couleur: 'vert', taille: 13 });
     if (LM.stop >= 0) T('arrêt', xc(LM.stop, pas), RM.aa + 5, { couleur: 'rouge', taille: 13, align: 'center' });
     else if (LM.init) T('…', xc(LM.aas.length, pas), RM.aa + 5, { couleur: 'faible', taille: 15, align: 'center' });
     if (!LM.init) T('pas de AUG : rien n’est traduit', X0, RM.aa + 5, { couleur: 'rouge', taille: 13 });
