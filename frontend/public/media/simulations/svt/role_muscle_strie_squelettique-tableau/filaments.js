@@ -20,13 +20,13 @@
   const perle = (gris) => sprite(8, 8, (x) => {
     const g = x.createRadialGradient(2.9, 2.6, .3, 4, 4, 4);
     if (gris) { g.addColorStop(0, '#e5e5e5'); g.addColorStop(.55, '#a3a3a3'); g.addColorStop(1, '#5c5c5c'); }
-    else { g.addColorStop(0, '#ffd0b0'); g.addColorStop(.45, '#f26a2e'); g.addColorStop(1, '#9a2c0c'); }
+    else { g.addColorStop(0, '#ffe4c4'); g.addColorStop(.45, '#ff7a2f'); g.addColorStop(1, '#a82c08'); }
     x.fillStyle = g; x.beginPath(); x.arc(4, 4, 3.85, 0, Math.PI * 2); x.fill();
   });
   const tete = (gris) => sprite(12, 8, (x) => {
     const g = x.createRadialGradient(5, 3, .4, 6, 4, 6);
     if (gris) { g.addColorStop(0, '#ececec'); g.addColorStop(.5, '#a8a8a8'); g.addColorStop(1, '#626262'); }
-    else { g.addColorStop(0, '#dbeafe'); g.addColorStop(.45, '#4f8ef7'); g.addColorStop(1, '#1e3a8a'); }
+    else { g.addColorStop(0, '#eff6ff'); g.addColorStop(.45, '#5aa2ff'); g.addColorStop(1, '#1e40af'); }
     x.fillStyle = g; x.beginPath(); x.ellipse(6, 4, 5.6, 3.4, 0, 0, Math.PI * 2); x.fill();
   });
   let SP = null;
@@ -69,10 +69,10 @@
     ctx.save(); ctx.globalAlpha = o.alpha ?? 1;
     const g = ctx.createLinearGradient(0, y - 3.5, 0, y + 3.5);
     if (o.gris) { g.addColorStop(0, '#d4d4d4'); g.addColorStop(.5, '#8a8a8a'); g.addColorStop(1, '#4a4a4a'); }
-    else { g.addColorStop(0, '#93c5fd'); g.addColorStop(.45, '#2f6fe0'); g.addColorStop(1, '#1e3a8a'); }
+    else { g.addColorStop(0, '#cfe4ff'); g.addColorStop(.4, '#3b82f6'); g.addColorStop(1, '#1e3a8a'); }
     // Têtes : de part et d'autre, tournées vers la strie Z la plus proche (inclinées vers le bout du filament).
     const nu = L * .1, pas = 8.6;
-    ctx.strokeStyle = o.gris ? '#7a7a7a' : '#2b5fc4'; ctx.lineWidth = 1.3;
+    ctx.strokeStyle = o.gris ? '#7a7a7a' : '#4f8ef7'; ctx.lineWidth = 1.4;
     for (const cote of [-1, 1]) {
       for (let d = nu, i = 0; d < L / 2 - 2; d += pas, i++) {
         const x = m + cote * d, haut = i % 2 ? -1 : 1, nx = x + cote * 4.2, ny = y + haut * 6.2;
@@ -88,7 +88,7 @@
   function strieZ(ctx, x, y1, y2, o = {}) {
     ctx.save(); ctx.globalAlpha = o.alpha ?? 1; ctx.lineJoin = 'round';
     const pts = []; for (let y = y1, i = 0; y <= y2 + .1; y += 5, i++) pts.push([x + (i % 2 ? 2.6 : -2.6), y]);
-    for (const [w, col] of [[4.4, o.gris ? '#3a3a3a' : '#2a2140'], [1.4, o.gris ? '#8a8a8a' : '#8b7bb8']]) {
+    for (const [w, col] of [[4.6, o.gris ? '#3a3a3a' : '#4c1d95'], [1.6, o.gris ? '#8a8a8a' : '#c4b5fd']]) {
       ctx.strokeStyle = col; ctx.lineWidth = w; ctx.beginPath(); pts.forEach(([a, b], i) => (i ? ctx.lineTo(a, b) : ctx.moveTo(a, b))); ctx.stroke();
     }
     ctx.restore();

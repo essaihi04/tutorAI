@@ -54,8 +54,8 @@
     for (const b of perles) {
       const f = .78 + .22 * (b.p + 1) / 2, rr = r * f;
       if (o.marque != null && b.k === o.marque && b.brin === 0) perle(ctx, b.x, b.y, rr + .6, '#fff7ed', '#f5f5f4', '#a8a29e');
-      else if (b.p >= 0) perle(ctx, b.x, b.y, rr, '#ffd2b0', '#f0703a', '#9a2d12');
-      else perle(ctx, b.x, b.y, rr, '#e7a283', '#b4502c', '#6b200e');
+      else if (b.p >= 0) perle(ctx, b.x, b.y, rr, '#ffe4c4', '#ff7a2f', '#b3300c');
+      else perle(ctx, b.x, b.y, rr, '#f5a57c', '#cc4a1e', '#7a2008');
     }
     ctx.restore();
   }
@@ -77,7 +77,7 @@
     ctx.beginPath(); ctx.rect(o.x0, o.y - 40, o.x1 - o.x0, 80); ctx.clip();
     const pts = [];
     for (let x = o.x0 - 4; x <= o.x1 + 4; x += 4) pts.push([x, g.yTropo + 1.3 * Math.sin((x - o.dx) / 9)]);
-    for (const [w, c] of [[6.4, '#8a6a3c'], [4.2, '#e9cf9a'], [1.4, '#fff6dc']]) {
+    for (const [w, c] of [[6.4, '#92601a'], [4.2, '#fbd36a'], [1.4, '#fffbe6']]) {
       ctx.strokeStyle = c; ctx.lineWidth = w; ctx.lineCap = 'round'; ctx.beginPath();
       pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y - (w < 2 ? 1 : 0)) : ctx.moveTo(x, y))); ctx.stroke();
     }
@@ -89,7 +89,7 @@
     ctx.save(); ctx.globalAlpha *= o.alpha ?? 1;
     for (const t of g.troponines) {
       const gr = ctx.createLinearGradient(t.x, t.y - 7, t.x, t.y + 7);
-      gr.addColorStop(0, '#ddd6fe'); gr.addColorStop(.5, '#8b5cf6'); gr.addColorStop(1, '#4c1d95');
+      gr.addColorStop(0, '#ede9fe'); gr.addColorStop(.45, '#a855f7'); gr.addColorStop(1, '#581c87');
       ctx.fillStyle = gr;
       ctx.beginPath(); ctx.roundRect(t.x - 9, t.y - 6, 18, 12, 4); ctx.fill();
       ctx.beginPath(); ctx.arc(t.x - 7.5, t.y + 5, 4.6, 0, TAU); ctx.fill(); ctx.beginPath(); ctx.arc(t.x + 7.5, t.y + 5, 4.6, 0, TAU); ctx.fill();
@@ -120,8 +120,10 @@
     const h = o.h ?? 14;
     ctx.save(); ctx.globalAlpha *= o.alpha ?? 1;
     const g = ctx.createLinearGradient(0, y - h / 2, 0, y + h / 2);
-    g.addColorStop(0, '#bfdbfe'); g.addColorStop(.35, '#3b82f6'); g.addColorStop(1, '#1e3a8a');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x0, y - h / 2, x1 - x0, h, h / 2); ctx.fill();
+    g.addColorStop(0, '#dbeafe'); g.addColorStop(.3, '#4f9bff'); g.addColorStop(.7, '#2563eb'); g.addColorStop(1, '#1e3a8a');
+    ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.4)'; ctx.shadowBlur = h * .5; ctx.shadowOffsetY = h * .2;
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x0, y - h / 2, x1 - x0, h, h / 2); ctx.fill(); ctx.restore();
+    ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.roundRect(x0 + h * .5, y - h * .36, Math.max(0, x1 - x0 - h), h * .16, h * .08); ctx.fill();
     ctx.strokeStyle = 'rgba(219,234,254,.35)'; ctx.lineWidth = 1;
     for (const f of [-.18, .2]) { ctx.beginPath(); ctx.moveTo(x0 + 6, y + f * h); ctx.lineTo(x1 - 6, y + f * h); ctx.stroke(); }
     ctx.restore();
@@ -137,15 +139,17 @@
     ctx.save(); ctx.globalAlpha *= o.alpha ?? 1;
     // Cou
     const cx = B.x, cy = (B.y + H[1]) / 2;
-    for (const [w, c] of [[o.cou ?? 7, '#1e40af'], [(o.cou ?? 7) * .45, '#93c5fd']]) {
+    for (const [w, c] of [[o.cou ?? 7, '#1d4ed8'], [(o.cou ?? 7) * .45, '#bfdbfe']]) {
       ctx.strokeStyle = c; ctx.lineWidth = w; ctx.lineCap = 'round';
       ctx.beginPath(); ctx.moveTo(B.x, B.y); ctx.quadraticCurveTo(cx, cy, H[0], H[1]); ctx.stroke();
     }
     // Tête renflée
     ctx.translate(C[0], C[1]); ctx.rotate(angle);
     const g = ctx.createRadialGradient(-L * .1, -ry * .45, 1, 0, 0, L * .6);
-    g.addColorStop(0, '#dbeafe'); g.addColorStop(.45, '#3b82f6'); g.addColorStop(1, '#1e3a8a');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(0, 0, L / 2, ry, 0, 0, TAU); ctx.fill();
+    g.addColorStop(0, '#eff6ff'); g.addColorStop(.4, '#4f9bff'); g.addColorStop(1, '#1e3a8a');
+    ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.4)'; ctx.shadowBlur = 6; ctx.shadowOffsetY = 2;
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(0, 0, L / 2, ry, 0, 0, TAU); ctx.fill(); ctx.restore();
+    ctx.fillStyle = 'rgba(255,255,255,.3)'; ctx.beginPath(); ctx.ellipse(-L * .12, -ry * .5, L * .2, ry * .2, 0, 0, TAU); ctx.fill();
     ctx.restore();
     const cote = n[0] >= 0 ? 1 : -1;     // le site de l'ATP est sur le flanc droit de la tête
     return { H: { x: H[0], y: H[1] }, C: { x: C[0], y: C[1] }, siteAtp: { x: C[0] + cote * n[0] * (ry - 1), y: C[1] + cote * n[1] * (ry - 1) }, pointe: { x: P.x, y: P.y } };
@@ -193,13 +197,16 @@
     ctx.save(); ctx.globalAlpha *= o.alpha ?? 1;
     const chemin = () => { ctx.beginPath(); pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py))); ctx.closePath(); };
     const g = ctx.createLinearGradient(0, y, 0, y + h);
-    g.addColorStop(0, 'rgba(186,230,253,.20)'); g.addColorStop(1, 'rgba(125,211,252,.08)');
+    g.addColorStop(0, 'rgba(94,234,212,.34)'); g.addColorStop(.55, 'rgba(45,212,191,.22)'); g.addColorStop(1, 'rgba(13,148,136,.26)');
     chemin(); ctx.fillStyle = g; ctx.fill();
+    // reflet du haut : le sac a du volume
+    ctx.save(); chemin(); ctx.clip(); const gr = ctx.createLinearGradient(0, y, 0, y + h * .45); gr.addColorStop(0, 'rgba(204,251,241,.28)'); gr.addColorStop(1, 'rgba(204,251,241,0)');
+    ctx.fillStyle = gr; ctx.fillRect(x - 6, y - 6, w + 12, h * .45 + 6); ctx.restore();
     const e = o.excite ?? 0;
     ctx.shadowColor = `rgba(250,204,21,${.8 * e})`; ctx.shadowBlur = 10 * e;
-    ctx.strokeStyle = e > 0 ? `rgba(${lerp(186, 253, e)},${lerp(230, 224, e)},${lerp(253, 71, e)},.75)` : 'rgba(186,230,253,.6)';
+    ctx.strokeStyle = e > 0 ? `rgba(${lerp(94, 253, e)},${lerp(234, 224, e)},${lerp(212, 71, e)},.9)` : 'rgba(94,234,212,.85)';
     ctx.lineWidth = 3.2; chemin(); ctx.stroke();
-    ctx.shadowBlur = 0; ctx.strokeStyle = 'rgba(224,242,254,.28)'; ctx.lineWidth = 1.2;
+    ctx.shadowBlur = 0; ctx.strokeStyle = 'rgba(204,251,241,.45)'; ctx.lineWidth = 1.2;
     ctx.save(); ctx.translate(cx, cy); ctx.scale(.965, .9); ctx.translate(-cx, -cy); chemin(); ctx.stroke(); ctx.restore();
     ctx.restore();
   }
@@ -208,11 +215,11 @@
   function cuve(ctx, x, y, w, h, niveau) {
     ctx.save();
     const g = ctx.createLinearGradient(0, niveau, 0, y + h);
-    g.addColorStop(0, 'rgba(147,197,253,.30)'); g.addColorStop(1, 'rgba(59,130,246,.38)');
+    g.addColorStop(0, 'rgba(125,211,252,.38)'); g.addColorStop(1, 'rgba(37,99,235,.5)');
     ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x + 2, niveau, w - 4, y + h - niveau - 2, [0, 0, 8, 8]); ctx.fill();
     ctx.strokeStyle = 'rgba(224,242,254,.75)'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(x + 3, niveau); ctx.lineTo(x + w - 3, niveau); ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,.06)'; ctx.fillRect(x + 8, niveau + 6, 10, y + h - niveau - 18);
-    ctx.strokeStyle = 'rgba(226,232,240,.55)'; ctx.lineWidth = 2.4;
+    ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.fillRect(x + 8, niveau + 6, 8, y + h - niveau - 18);
+    ctx.strokeStyle = 'rgba(226,240,250,.8)'; ctx.lineWidth = 2.6;
     ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + h - 8); ctx.quadraticCurveTo(x, y + h, x + 8, y + h); ctx.lineTo(x + w - 8, y + h); ctx.quadraticCurveTo(x + w, y + h, x + w, y + h - 8); ctx.lineTo(x + w, y); ctx.stroke();
     ctx.restore();
   }
@@ -222,7 +229,7 @@
     const L = yBas - yHaut;
     ctx.save();
     const g = ctx.createLinearGradient(x - w / 2, 0, x + w / 2, 0);
-    g.addColorStop(0, '#a83a50'); g.addColorStop(.3, '#ec8f9e'); g.addColorStop(.55, '#f6b3bd'); g.addColorStop(1, '#9b3046');
+    g.addColorStop(0, '#b3264a'); g.addColorStop(.3, '#fb7f98'); g.addColorStop(.55, '#ffc0cc'); g.addColorStop(1, '#a01d40');
     ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x - w / 2, yHaut, w, L, w / 2.4); ctx.fill();
     ctx.beginPath(); ctx.roundRect(x - w / 2, yHaut, w, L, w / 2.4); ctx.clip();
     // Striation : le nombre de sarcomères dessinés est fixe, ils se resserrent quand la fibre raccourcit.
