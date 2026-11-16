@@ -88,7 +88,8 @@ function peindreBloc(ctx, p) {
 // La source : une petite lampe-torche (corps sombre, lentille qui brille quand elle est allumée).
 function peindreLampe(ctx, y, allumee) {
   const x = XL - 4;
-  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 4; ctx.shadowOffsetY = 2;
+  // Lampe agrandie (16 novembre 2026) : 1,5 fois, autour de sa lentille.
+  ctx.save(); ctx.translate(x, y); ctx.scale(1.5, 1.5); ctx.translate(-x, -y); ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = 4; ctx.shadowOffsetY = 2;
   let g = ctx.createLinearGradient(0, y - 6, 0, y + 6); g.addColorStop(0, '#6b737c'); g.addColorStop(.4, '#c9d0d7'); g.addColorStop(1, '#3a4148');
   ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x - 26, y - 5, 18, 10, 2); ctx.fill();
   ctx.beginPath(); ctx.moveTo(x - 9, y - 5); ctx.lineTo(x, y - 8); ctx.lineTo(x, y + 8); ctx.lineTo(x - 9, y + 5); ctx.closePath(); ctx.fill(); ctx.shadowColor = 'transparent';
@@ -118,7 +119,16 @@ function dessiner(c) {
       c.repere(p.id, 8, p.y - 28, XR - 4, 56, nomPiste(p).toLowerCase());
       if (S.t > T0 && (S.running || S.pause || S.fait)) {
         // Un train d'onde (l'éclair) : il se resserre en entrant dans le milieu.
-        if (x < XR) c.courbe(u => { const xx = x - 50 * KX + u * 50 * KX; if (xx < XL) return null; const g = Math.exp(-(((xx - x + 25 * KX) / (15 * KX)) ** 2)); return [xx, p.y - 16 * g * Math.sin(k * (xx - x))]; }, 60, { couleur: p.couleur, largeur: 2.4, tremble: .2 });
+        // L'éclair est de la lumière : une lueur douce de sa couleur derrière le train d'onde, la trace brille.
+        const coul = c.couleur(p.couleur), xc = x - 25 * KX;
+        if (x < XR && xc > XL - 10) {
+          const h = c.ctx.createRadialGradient(xc, p.y, 2, xc, p.y, 34 * KX);
+          h.addColorStop(0, coul + '55'); h.addColorStop(1, coul + '00');
+          c.ctx.save(); c.ctx.fillStyle = h; c.ctx.beginPath(); c.ctx.ellipse(xc, p.y, 34 * KX, 26, 0, 0, Math.PI * 2); c.ctx.fill(); c.ctx.restore();
+        }
+        c.ctx.save(); c.ctx.shadowColor = coul; c.ctx.shadowBlur = 8;
+        if (x < XR) c.courbe(u => { const xx = x - 50 * KX + u * 50 * KX; if (xx < XL) return null; const g = Math.exp(-(((xx - x + 25 * KX) / (15 * KX)) ** 2)); return [xx, p.y - 16 * g * Math.sin(k * (xx - x))]; }, 60, { couleur: p.couleur, largeur: 2.6, tremble: .2 });
+        c.ctx.restore();
         if (x < XR) c.texte(dans ? 'v' : 'c', x - 25 * KX, p.y - 24, { couleur: p.couleur, taille: 15 * KT, align: 'center' });
       }
       if (S.t >= tArrivee(p)) {
