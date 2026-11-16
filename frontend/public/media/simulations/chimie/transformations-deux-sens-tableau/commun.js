@@ -36,7 +36,11 @@
       const t = scene.ouvert;
       scene.mesurant = true; scene.ouvert = -1e9;
       try { (options.complet || (f => f()))(() => dessiner(craie, scene)); } catch (e) { console.warn('[tableau] mesure de la boîte', e); }
-      finally { craie.trait = trait; craie.texte = texte; craie.point = point; scene.mesurant = false; scene.ouvert = t; }
+      finally {
+        // On rend la main au prototype (pas une copie figée) : une écriture installée plus tard (états physiques) s'applique aussi.
+        for (const [k, f] of [['trait', trait], ['texte', texte], ['point', point]]) { if (f === Object.getPrototypeOf(craie)[k]) delete craie[k]; else craie[k] = f; }
+        scene.mesurant = false; scene.ouvert = t;
+      }
       if (!(b.x1 > b.x0 && b.y1 > b.y0)) return null;
       const n = { x0: Math.max(0, b.x0 - MARGE), y0: Math.max(0, b.y0 - MARGE), x1: Math.min(scene.L, b.x1 + MARGE), y1: Math.min(VH, b.y1 + MARGE) };
       const a = scene.boite;
@@ -246,4 +250,163 @@
   }
   const doux = p => { p = Math.min(1, Math.max(0, p)); return p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2; };
   window.Rendu = { EL, MODELES, atome, molecule, lentille, choc, fiole, flacon, barre, doux, rgba };
+})();
+
+/*
+ * États physiques dans les équations (règle du 16 novembre 2026 : « ajouter dans les équations l'état physique de chaque
+ * élément », comme HCOOH(aq) + H₂O(l) ⇌ HCOO⁻(aq) + H₃O⁺(aq)). Au tableau seulement : la voix, la bulle et l'état envoyé
+ * au tuteur gardent les équations sans états. Chaque espèce d'une équation (deux côtés autour de →, ⇌, ←) reçoit son
+ * état, écrit en petit et en bas : H₂O (l) ; ions, molécules dissoutes (aq) ; métaux et précipités (s) ; H₂, HCl (g) ;
+ * estérification (pas d'ion, un alcool ou un ester) : tout (l). e⁻, Ox, Red et les lettres A, C, D restent sans état.
+ * La durée d'écriture reste celle de l'équation sans états : les instants des moments ne bougent pas.
+ *   Etats.annote(s) : le texte avec les états (« (aq) ») ; Etats.cotes(gauche, droite) : deux côtés dessinés à part ;
+ *   Etats.morceaux(liste) : une ligne à morceaux [côté, '⇌', côté…].
+ */
+(function () {
+  'use strict';
+  const T = window.Tableau; if (!T || T.Craie.__etats) return;
+  const C = T.Craie, P = C.prototype; C.__etats = true;
+  const SOLIDES = new Set(['Cu', 'Zn', 'Mg', 'Al', 'Ag', 'Fe', 'Pb', 'Ni', 'Sn', 'AgCl', 'CaF₂', 'Pt']);
+  const GAZ = new Set(['H₂', 'O₂', 'Cl₂', 'HCl']);
+  const EXCLUS = new Set(['A', 'C', 'D', 'I', 'Ox', 'Red', 'Réd']);
+  const ETAT = String.raw`\((?:aq|l|s|g)\)`, FL = '(?:→|⇌|⇄|⇋|←)';
+  const ESPECE = String.raw`(?:\((?:CH₃|C₂H₅)\)[₀-₉]*)?[A-Z](?:[A-Za-z₀-₉()–\-]*?[₀-₉A-Za-z)])?(?:[⁰¹²³⁴⁵⁶⁷⁸⁹]*[⁺⁻])?|e⁻`;
+  const TERME = String.raw`(?:\d+\s?)?(?:${ESPECE})(?:\s?${ETAT})?`;
+  const COTE = String.raw`${TERME}(?:\s*\+\s*${TERME})*`;
+  const EQ = new RegExp(String.raw`(?<![\w₀-₉⁺⁻\[/])(${COTE})(\s*${FL}\s*)(${COTE})(?![\w₀-₉⁺⁻\]/·])`, 'g');
+  const RE_COTE = new RegExp(`^${COTE}$`), RE_TERME = new RegExp(String.raw`^(\d+\s?)?(.*?)(\s?${ETAT})?$`);
+  const decoupe = s => s.split(/\s*\+\s*/);
+  const formule = t => { const m = t.trim().match(RE_TERME); return [m[1] || '', m[2], m[3] || '']; };
+  const ion = f => /[⁺⁻]$/.test(f) && f !== 'e⁻';
+  function etat(f, eq, ester) {
+    if (f === 'e⁻') return '';
+    if (EXCLUS.has(f)) return null;
+    if (f === 'H₂O' || ester) return '(l)';
+    if (ion(f)) return '(aq)';
+    if (SOLIDES.has(f)) return '(s)';
+    if (GAZ.has(f)) return '(g)';
+    if (f === 'B' && !eq.includes('H₂O')) return null;
+    return '(aq)';
+  }
+  function annoteEq(g, fl, d) {
+    const eq = g + fl + d, fs = decoupe(g).concat(decoupe(d)).map(t => formule(t)[1]);
+    if (fs.some(f => EXCLUS.has(f))) return null;
+    const ions = fs.some(ion), ester = !ions && fs.some(f => /COO[A-Z(]|OH$/.test(f) && !f.endsWith('COOH'));
+    const cote = s => {
+      const out = [];
+      for (const t of s.split(/(\s*\+\s*)/)) {
+        if (/^\s*\+\s*$/.test(t)) { out.push(t); continue; }
+        const [k, f, e] = formule(t);
+        if (e) { out.push(t); continue; }
+        const st = etat(f, eq, ester); if (st == null) return null;
+        out.push(k + f + st);
+      }
+      return out.join('');
+    };
+    const a = cote(g), b = cote(d);
+    return a == null || b == null ? null : a + fl + b;
+  }
+  const annote = s => String(s).replace(EQ, (m, g, fl, d) => annoteEq(g, fl, d) ?? m);
+  /** Deux côtés dessinés à part (fonctions eqn, eqf de la page) : annotés ensemble, rendus séparés. */
+  let pret = false;   // rien n'est annoté avant que la page soit chargée (sa mesure des durées se fait sans les états)
+  const VUS = new Map(), ORIG = new Map();   // côté d'origine → côté annoté ; annoté → d'origine (durée d'écriture inchangée)
+  const retiens = (o, a) => { if (a !== o) { VUS.set(o, a); ORIG.set(a, o); } return a; };
+  function cotes(g, d) {
+    if (!pret || typeof g !== 'string' || typeof d !== 'string' || !RE_COTE.test(g.trim()) || !RE_COTE.test(d.trim())) return [g, d];
+    const r = annoteEq(g, ' → ', d); if (!r) return [g, d];
+    const i = r.lastIndexOf(' → ');
+    return [retiens(g, r.slice(0, i)), retiens(d, r.slice(i + 3))];
+  }
+  const piece = p => (typeof p === 'string' && VUS.has(p) ? VUS.get(p) : p);
+  /** Ligne à morceaux : autour de chaque flèche, les morceaux voisins (côtés entiers « A + B », ou termes un à un
+   *  « A », « + », « B ») forment l'équation ; chaque morceau reçoit les états de ses espèces. */
+  function morceaux(liste) {
+    if (!pret || !Array.isArray(liste)) return liste;
+    const out = liste.slice(), estF = p => /^(→|⇌|←)$/.test(p), ok = p => typeof p === 'string' && (p.trim() === '+' || RE_COTE.test(p.trim()));
+    out.forEach((p, i) => {
+      if (!estF(p)) return;
+      let a = i, b = i;
+      while (a - 1 >= 0 && ok(out[a - 1]) && !estF(out[a - 1])) a--;
+      while (b + 1 < out.length && ok(out[b + 1]) && !estF(out[b + 1])) b++;
+      if (a === i || b === i) return;
+      const g = out.slice(a, i).join(' ').replace(/\s*\+\s*/g, ' + '), d = out.slice(i + 1, b + 1).join(' ').replace(/\s*\+\s*/g, ' + ');
+      if (!RE_COTE.test(g.trim()) || !RE_COTE.test(d.trim())) return;
+      const r = annoteEq(g.trim(), ' → ', d.trim()); if (!r) return;
+      const k = r.lastIndexOf(' → '), termes = decoupe(r.slice(0, k)).concat(decoupe(r.slice(k + 3)));
+      let n = 0;
+      for (let m = a; m <= b; m++) {
+        if (m === i) continue;
+        const q = out[m]; if (q.trim() === '+') continue;
+        const nb = decoupe(q.trim()).length, part = termes.slice(n, n + nb).join(' + '); n += nb;
+        out[m] = retiens(q, nb === 1 ? q.replace(q.trim(), part) : part);
+      }
+    });
+    return out;
+  }
+  /** Liste de termes d'une équation (« H₂O₂ », « + », « ⇌ »…) : l'état de chaque terme (« (aq) », ou ''), ou null. */
+  function liste(txts) {
+    if (!pret) return null;
+    const s = txts.join(' '), a = annote(s); if (a === s) return null;
+    const b = a.split(' '); if (b.length !== txts.length) return null;
+    return b.map((t, i) => t.slice(txts[i].length));
+  }
+  /** Ajoute un état au dernier morceau d'un terme (« H₂O » → « H₂O_{(l)} ») ; sa durée d'écriture reste celle de « H₂O ». */
+  const ajoute = (p, e) => retiens(p, p + '_{' + e + '}');
+  /** « X(aq) » écrit en petit et en bas : « X_{(aq)} ». */
+  const marque = s => String(s).replace(new RegExp(`(?<=[A-Za-z₀-₉⁺⁻)}])\\s?(${ETAT})`, 'g'), '_{$1}');
+  const plain = s => String(s).replace(/[_^]\{([^}]*)\}/g, '$1').replace(/[_^]/g, '').length;
+  /** Largeur approchée d'un texte annoté (états en petit). */
+  function largeur(ctx, s, taille) {
+    ctx.font = `${taille}px ${T.POLICE}`;
+    const etats = (String(s).match(new RegExp(ETAT, 'g')) || []).join('');
+    return ctx.measureText(String(s).replace(new RegExp(ETAT, 'g'), '').replace(/[_^{}]/g, '')).width + ctx.measureText(etats).width * .62;
+  }
+  /** Équation en deux côtés (eqn, eqf) : taille réduite si, avec les états, elle sortirait du cadre. */
+  function ajuste(c, x, g, d, o = {}, fl = 56) {
+    const k = c.cadre; if (!k || typeof g !== 'string' || typeof d !== 'string' || !/\((?:aq|l|s|g)\)/.test(g + d)) return o;
+    const t = o.taille ?? 17, w = largeur(c.ctx, g, t) + largeur(c.ctx, d, t) + fl;
+    const x0 = o.align === 'center' ? x - w / 2 : o.align === 'right' ? x - w : x, x1 = x0 + w;
+    const place = o.align === 'center' ? 2 * Math.min(x - 4, k.w - 4 - x) : o.align === 'right' ? x - 4 : k.w - 4 - x;
+    return x1 > k.w - 4 || x0 < 4 ? { ...o, taille: Math.max(12, t * Math.min(1, (place - fl) / (w - fl))) } : o;
+  }
+  window.Etats = { annote, cotes, morceaux, piece, liste, ajoute, ajuste, marque };
+
+  /* Indice « _{…} » derrière n'importe quel caractère (« H₃O⁺_{(aq)} ») : le kit ne le découpe que derrière une lettre. */
+  const segKit = C.segments;
+  C.segments = function (s) {
+    const out = [], re = /(^|[^A-Za-zτθΔλωφ])_\{([^}]+)\}/g; let i = 0, m;
+    while ((m = re.exec(s))) { if (m.index + m[1].length > i) out.push(...segKit(s.slice(i, m.index + m[1].length))); out.push({ t: m[2], sub: true }); i = re.lastIndex; }
+    if (i < s.length) out.push(...segKit(s.slice(i)));
+    return out;
+  };
+  const texteKit = P.texte;
+  P.texte = function (s, x, y, o = {}) {
+    s = String(s);
+    if (!/(^|[^A-Za-zτθΔλωφ])_\{/.test(s) || /\^|[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]/.test(s)) return texteKit.call(this, s, x, y, o);
+    let taille = o.taille ?? 18;
+    this.ctx.font = `${o.gras ? '700 ' : ''}${taille}px ${T.POLICE}`;
+    this._verifierCadre(s.replace(/[_{}]/g, ''), x, y, taille, o.align);
+    if (this.echelle && this.tailleMin) taille = Math.max(taille, this.tailleMin / this.echelle);
+    return this._texteIndices(s, x, y, o, taille);
+  };
+  /* Une fois la page chargée (ses propres écritures chimiques installées), la couche la plus haute ajoute les états. */
+  function installer() {
+    pret = true;
+    const avant = P.texte;
+    P.texte = function (s, x, y, o = {}) {
+      s = String(s);
+      if (/^_\{\((?:aq|l|s|g)\)\}$/.test(s)) return avant.call(this, s, x, y, { ...o, duree: .001 });   // un état seul (pages à termes)
+      const a = annote(s);
+      if (a === s && !/\((?:aq|l|s|g)\)/.test(a)) return avant.call(this, s, x, y, o);
+      const o2 = { ...o, duree: o.duree ?? Math.max(.1, plain(ORIG.get(s) ?? s) / 16) };
+      const k = this.cadre;
+      if (k && a !== s) {   // un texte qui s'allonge avec ses états ne sort pas du cadre
+        const t = o.taille ?? 18, w = largeur(this.ctx, a, t), x0 = o.align === 'center' ? x - w / 2 : o.align === 'right' ? x - w : x;
+        if (x0 + w > k.w - 4 || x0 < 4) o2.max = Math.min(o.max ?? Infinity, o.align === 'center' ? 2 * Math.min(x - 4, k.w - 4 - x) : o.align === 'right' ? x - 4 : k.w - 4 - x);
+      }
+      return avant.call(this, marque(a), x, y, o2);
+    };
+    if (typeof window.chim === 'function') { const chim = window.chim; window.chim = s => chim(marque(annote(s))); }
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', installer); else installer();
 })();

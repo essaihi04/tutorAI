@@ -175,12 +175,14 @@ function largeurMorceau(c, p, t) {
 }
 /** Positions x de chaque morceau d’une ligne (gap entre deux) : elles ne dépendent pas du temps, chaque étape écrit les siens. */
 function placer(c, x, morceaux, t, o = {}) {
+  if (window.Etats) morceaux = window.Etats.morceaux(morceaux);   // états physiques
   const gap = o.gap ?? 8, ws = morceaux.map(p => largeurMorceau(c, p, t)), tot = ws.reduce((a, b) => a + b, 0) + gap * (morceaux.length - 1);
   let px = o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x;
   const xs = ws.map(w => { const r = px; px += w + gap; return r; });
   return { xs, ws, x0: xs[0], tot };
 }
 function morceau(c, p, x, y, t, col = 'blanc') {
+  if (window.Etats) p = window.Etats.piece(p);
   if (p === '→') return flecheSimple(c, x, y - t * .32, FL, col);
   if (p === '⇌') return flecheDouble(c, x, y - t * .32, FL, col);
   if (p && p.frac) {
@@ -195,6 +197,7 @@ function morceau(c, p, x, y, t, col = 'blanc') {
 }
 /** Écrit une ligne entière ; `cols[i]` colore le morceau i. Renvoie les positions. */
 function ligneM(c, x, y, morceaux, o = {}) {
+  if (window.Etats) morceaux = window.Etats.morceaux(morceaux);   // états physiques
   const t = o.taille ?? 20, P = placer(c, x, morceaux, t, o);
   morceaux.forEach((p, i) => morceau(c, p, P.xs[i], y, t, (o.cols && o.cols[i]) || o.couleur || 'blanc'));
   return P;
