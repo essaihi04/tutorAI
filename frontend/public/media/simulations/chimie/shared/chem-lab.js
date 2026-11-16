@@ -1083,7 +1083,9 @@
     const s = Math.min(W / LW, H / LH); craie.ctx.translate((W - LW * s) / 2, (H - LH * s) / 2); craie.ctx.scale(s, s);
     const result = state.last_result, m = mission(), p = state.variables;
     const v = result?.visual || { kind: cfg.sceneKind || "kinetics", rate: .4, fraction: 0 };
-    craie.texte(m.sceneLabel || m.title, M.x + M.w / 2, 22, { align: "center", taille: 16, couleur: "faible", max: M.w });
+    // (16 novembre 2026) le nom de la scène sous le montage, en couleur vive sur une pastille sombre : en haut, le montage le cachait
+    craie.direct(() => { const x = craie.ctx; x.save(); x.fillStyle = "rgba(8,20,16,.82)"; x.strokeStyle = accent(); x.globalAlpha = .9; x.lineWidth = 1.2; x.beginPath(); x.roundRect(M.x + 6, M.y + M.h + 12, M.w - 12, 30, 9); x.fill(); x.stroke(); x.restore(); });
+    craie.texte(m.sceneLabel || m.title, M.x + M.w / 2, M.y + M.h + 33, { align: "center", taille: 17, gras: true, couleur: "jaune", max: M.w - 24 });
     dessinerMontage(m.model, p, v, result);
     craie.ligne(322, 20, 322, 380, { couleur: "tresfaible", largeur: 1, pointille: [6, 8] });
     dessinerCourbe(result, m.axis || {}, state.status === "running" ? state.animation : 1);
