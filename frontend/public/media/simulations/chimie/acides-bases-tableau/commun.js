@@ -19,6 +19,16 @@
     // `scene` existe avant la craie : le premier redimensionnement la marque déjà « à redessiner ».
     const scene = { sale: true, boite: null, mesurant: false, L: VW };
     const craie = new window.Tableau.Craie(canvas, { onresize: () => { scene.sale = true; } });
+    /* Courbes de graphe nettes et lumineuses (17 novembre 2026, « couleurs vives, facile à lire ») : une courbe tracée
+     * par craie.courbe avec `net: true` garde son écriture progressive et sa durée (même longueur), mais sans tremblé,
+     * avec un halo doux de sa couleur. Les autres courbes (flèches, cartes) restent à la craie. */
+    const courbeCraie = craie.courbe;
+    craie.courbe = function (fn, n, o = {}) {
+      if (o.net !== true) return courbeCraie.call(this, fn, n, o);
+      const ctx = this.ctx;
+      ctx.save(); ctx.shadowColor = this.couleur(o.couleur); ctx.shadowBlur = o.pointille ? 5 : 10;
+      try { return courbeCraie.call(this, fn, n, { ...o, tremble: 0 }); } finally { ctx.restore(); }
+    };
     /* La boîte de l'encre (coordonnées du cadre) : l'image complète dessinée une fois, traits et textes relevés. */
     function mesurer() {
       const b = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
