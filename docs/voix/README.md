@@ -46,3 +46,7 @@ Procédure : skill `voix-du-cours` §3 et `docs/audit-rythme/README.md`, pour le
 2. Construire les dossiers `att_<deck>/` avec `scripts/voix/attente_construire.py`, en ne gardant que les ids de ce lot.
 3. Lancer le lot Bodi avec `VOIX_D_ABORD=att_`.
 4. Poser les voix avec `scripts/voix/attente_poser.py`. Pour les cours `en_ligne/…`, utiliser `scripts/voix/poser_en_ligne.py`.
+
+## Lot 2 : réactions de la physique ch4 à ch8 (déjà en ligne)
+
+`docs/voix/lot_reactions_phys_ch4_ch8.json` contient 895 réactions préparées, environ 266 000 caractères, soit 3 h 30 de GPU environ. Il se répartit ainsi : radioactivité 90, noyaux 65, RC 239, RL 245, RLC 256. Ces cours sont publiés : il faut poser les voix avec `scripts/voix/poser_en_ligne.py`. En attendant, le lecteur dit ces réactions avec la voix en direct.
