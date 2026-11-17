@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Exercices du national — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ondes.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Le schéma d’un exercice du national redessiné à la craie, animé avec les valeurs du sujet, et sa courbe tracée en même temps que le phénomène"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Exercices du national sur les ondes mécaniques progressives (professeur règle 41, simulations-au-tableau règle 14,
+ * 17 novembre 2026) : le schéma du sujet redessiné et annoté, animé avec les valeurs du sujet ; la courbe
+ * (oscillogramme, graphe) se trace en même temps que le phénomène, puis on se fige sur chaque lecture.
+ * Une vue par sujet : ?vue=national_<année>_<session>.
+ *   national_2022_normale     émetteur E et récepteur R, L = 85 cm, 0,5 ms/div (Δt = 5 div, v = 340 m/s)
+ *   national_2024_rattrapage  émetteur entre M₁ et M₂, d = 2,85 m, 0,5 ms/div (τ = 4 div = 2 ms, ℓ ≈ 1,09 m)
+ *   national_2024_normale     caillou dans l’eau, r₁ = 14 cm, r₂ = 56 cm, t₂ = t₁ + 1,5 s (v = 0,28 m/s, t₂ = 2 s)
+ *   national_2021_rattrapage  barre métallique, droite Δt = f(d) (pente 2 × 10⁻⁴ s/m, v = 5000 m/s, aluminium)
+ *   national_2020_rattrapage  échographie, t₁ = 100 µs, t₂ = 180 µs, v = 1540 m/s (d₂ ≈ 6,16 cm)
+ *   national_2018_normale     air et pétrole, L = 1,84 m, 2 ms/div (τ = 2 div = 4 ms, V_p ≈ 1303 m/s)
+ * Chaque vue est une suite d’étapes (phases) ; la fin de chaque étape est un moment (`play_until {moment}`).
+ * Les étapes de lecture et de calcul viennent APRÈS le phénomène : leurs résultats restent cachés jusqu’à leur moment.
+ */
+const { fr, bulle, protocole, lisible } = window.Tableau;
+const P = window.OndesTableau.P;
+const $ = id => document.getElementById(id);
+
+/* ── Petits outils de dessin ─────────────────────────────────────────────────────────────── */
+function arcCraie(c, x, y, r, a0, a1, o) {
+  const n = Math.max(14, Math.round(r * Math.abs(a1 - a0) / 6)), pts = [];
+  for (let i = 0; i <= n; i++) { const a = a0 + (a1 - a0) * i / n; pts.push([x + r * Math.cos(a), y + r * Math.sin(a)]); }
+  c.trait(pts, o);
+}
+/** Salve : `n` oscillations de durée `duree`, à partir de s0 (même unité que s). */
+const salve = (s, s0, duree, n = 8) => (s < s0 || s > s0 + duree ? 0 : Math.sin(2 * Math.PI * n * (s - s0) / duree));
+/** Haut-parleur peint (émetteur) tourné vers la droite (sens = 1) ou la gauche (sens = −1). */
+function peindreHP(ctx, x, y, sens = 1) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(sens, 1);
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; P.rr(ctx, -14, -15, 22, 34, 4); ctx.fill();
+  ctx.fillStyle = P.lin(ctx, 0, -16, 0, 16, [[0, '#6b7280'], [.5, '#374151'], [1, '#111827']]); P.rr(ctx, -18, -18, 20, 36, 4); ctx.fill();
+  ctx.fillStyle = P.lin(ctx, 2, 0, 16, 0, [[0, '#9ca3af'], [1, '#374151']]);
+  ctx.beginPath(); ctx.moveTo(2, -9); ctx.lineTo(16, -18); ctx.lineTo(16, 18); ctx.lineTo(2, 9); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+/** Source ponctuelle (émetteur vu de dessus) : un disque ombré. */
+function peindreSource(ctx, x, y) { P.perle(ctx, x, y, 9, 'gris'); }
+/** Oscilloscope : écran, voies tracées par le spot jusqu’au temps d’écran `t` (unité de `sens`). */
+function oscillo(c, o) {
+  c.direct(() => P.oscillo(c.ctx, o.x, o.y, o.nx * o.dx, o.ny * o.dy, o.nx, o.ny));
+  const smax = o.nx * o.sens, tf = Math.min(Math.max(0, o.t), smax);
+  c.direct(() => {
+    for (const v of o.voies) {
+      const y0 = o.y + v.ligne * o.dy;
+      if (tf <= 0) continue;
+      const N = 1200, pts = [];
+      for (let i = 0; i <= N; i++) { const s = tf * i / N; pts.push([o.x + s / o.sens * o.dx, y0 - v.amp * salve(s, v.debut, v.duree, v.n || 8)]); }
+      P.trace(c.ctx, pts, c.couleur(v.couleur), 1.6);
+      if (tf < smax) {   // le spot, là où il écrit
+        const ctx = c.ctx, x = o.x + tf / o.sens * o.dx, y = pts[pts.length - 1][1];
+        ctx.save(); ctx.fillStyle = '#fff'; ctx.shadowColor = c.couleur(v.couleur); ctx.shadowBlur = 10; ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+      }
+    }
+  });
+}
+
+/* ── Le moteur des étapes ─────────────────────────────────────────────────────────────────── */
+const S = { a: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0 };
+let VUE = null, PH = [], TOTAL = 1;
+const ph = id => PH.find(p => p.id === id);
+/** Part écoulée de l’étape `id` (0 avant, 1 après). */
+const part = id => { const p = ph(id); return p ? Math.max(0, Math.min(1, (S.a - p.debut) / p.d)) : 0; };
+/** L’étape `id` est atteinte (on est figé à sa fin ou après). */
+const vu = id => part(id) >= 0.999;
+/** Le temps physique de la vue (ms, µs ou s selon la vue), interpolé dans les étapes qui en portent un. */
+function tPhys() {
+  let dernier = null;
+  for (const p of PH) {
+    if (!p.t) continue;
+    if (dernier === null) dernier = p.t[0];
+    if (S.a < p.debut) return dernier;
+    if (S.a <= p.debut + p.d) return p.t[0] + (p.t[1] - p.t[0]) * (S.a - p.debut) / p.d;
+    dernier = p.t[1];
+  }
+  return dernier ?? 0;
+}
+/** Les lignes de calcul : chaque ligne paraît à la fin de son étape ; on garde les `max` dernières. */
+function calculs(c, x, y, lignes, o = {}) {
+  const vues = lignes.filter(l => vu(l.id)).slice(-(o.max || 6));
+  let yy = y;
+  c.direct(() => {
+    for (const l of vues) {
+      const frac = String(l.texte).includes('⟦');
+      if (frac) yy += 12;
+      c.texte(l.texte, x, yy, { couleur: l.couleur || 'vert', taille: l.taille || o.taille || 19 });
+      yy += (frac ? 40 : 32);
+    }
+  });
+  if (vues.length) c.repere('calcul', x - 8, y - 26, o.largeur || 230, Math.max(40, yy - y + 6), 'le calcul');
+}
+
+/* ══ Les vues ═══════════════════════════════════════════════════════════════════════════════ */
+const VUES = {};
+
+/* ── National 2022, session normale : E et R à L = 85 cm, signal (a) émis et (b) reçu, 0,5 ms/div ── */
+VUES.national_2022_normale = {
+  titre: 'National 2022 normale : célérité du son dans l’air',
+  phases: [
+    { id: 'signal_emis', d: 1.4, t: [0, 0.95], motif: 'E émet : le signal (a) apparaît sur l’écran' },
+    { id: 'son_arrive', d: 3.2, t: [0.95, 3.0], motif: 'le front sonore arrive au récepteur R' },
+    { id: 'signal_recu', d: 1.2, t: [3.0, 3.45], motif: 'le signal (b) reçu apparaît, plus tard' },
+    { id: 'ecran_complet', d: 1.4, t: [3.45, 5.0], motif: 'le spot a balayé tout l’écran' },
+    { id: 'debuts', d: 1, motif: 'le début de chaque signal est marqué' },
+    { id: 'divisions', d: 1, motif: 'on compte les divisions entre les deux débuts' },
+    { id: 'retard', d: 1, motif: 'Δt = divisions × sensibilité' },
+    { id: 'celerite', d: 1, motif: 'v = L/Δt' },
+  ],
+  dessin(c) {
+    const PX = 440, xE = 110, xR = xE + 0.85 * PX, yM = 74, t = tPhys();
+    c.texte('E (émetteur)', xE - 10, yM - 34, { couleur: 'cyan', align: 'center', taille: 18 });
+    c.direct(() => peindreHP(c.ctx, xE, yM, 1));
+    c.texte('R (récepteur)', xR, yM - 34, { couleur: 'orange', align: 'center', taille: 18 });
+    c.direct(() => P.micro(c.ctx, xR, yM - 4, c.couleur('orange'), 1.1));
+    c.cote(xE, yM + 40, xR, yM + 40, 'L = 85 cm', { couleur: 'jaune', dessous: true, taille: 19 });
+    c.repere('montage', xE - 40, yM - 54, xR - xE + 90, 140, 'le montage : E et R à L = 85 cm');
+    c.direct(() => { if (t > 0.5 && t < 3.25) P.front(c.ctx, xE + 16, yM, (t - 0.5) / 1000 * 340 * PX, -0.55, 0.55, '250,204,21', 1); });
+    const o = { x: 70, y: 196, nx: 10, ny: 6, dx: 44, dy: 30, sens: 0.5, t,
+      voies: [{ ligne: 1.6, debut: 0.5, duree: 0.4, amp: 20, couleur: 'cyan' }, { ligne: 3.6, debut: 3.0, duree: 0.4, amp: 20, couleur: 'orange' }] };
+    c.texte('Écran : 0,5 ms/div', o.x, o.y - 18, { couleur: 'cyan', taille: 19 });
+    c.repere('sensibilite', o.x - 4, o.y - 40, 190, 30, 'la sensibilité horizontale : 0,5 ms/div');
+    oscillo(c, o);
+    c.repere('oscillogramme', o.x, o.y, o.nx * o.dx, o.ny * o.dy, 'l’oscillogramme');
+    const xa = o.x + 1 * o.dx, xb = o.x + 6 * o.dx, ybas = o.y + o.ny * o.dy;
+    c.direct(() => {
+      if (t > 0.5) c.texte('(a) émis', xa + 4, o.y + 1.6 * o.dy - 28, { couleur: 'cyan', taille: 17 });
+      if (t > 3.0) c.texte('(b) reçu', xb + 4, o.y + 3.6 * o.dy - 28, { couleur: 'orange', taille: 17 });
+      if (vu('debuts')) {
+        c.ligne(xa, o.y + 1.6 * o.dy, xa, ybas + 8, { couleur: 'jaune', largeur: 1.5, pointille: [4, 4] });
+        c.ligne(xb, o.y + 3.6 * o.dy, xb, ybas + 8, { couleur: 'jaune', largeur: 1.5, pointille: [4, 4] });
+      }
+      if (vu('divisions')) c.cote(xa, ybas + 16, xb, ybas + 16, '5 divisions', { couleur: 'jaune', dessous: true, taille: 19 });
+    });
+    if (vu('debuts')) { c.repere('debut_a', xa - 12, o.y + 0.6 * o.dy, 24, 2 * o.dy, 'début du signal (a)'); c.repere('debut_b', xb - 12, o.y + 2.6 * o.dy, 24, 2 * o.dy, 'début du signal (b)'); }
+    if (vu('divisions')) c.repere('retard', xa, ybas + 4, xb - xa, 36, 'Δt : du début de (a) au début de (b)');
+    calculs(c, 548, 214, [
+      { id: 'retard', texte: 'Δt = 5 × 0,5 ms' }, { id: 'retard', texte: 'Δt = 2,5 ms = 2,5 × 10⁻³ s' },
+      { id: 'celerite', texte: 'v = ⟦L|Δt⟧' }, { id: 'celerite', texte: 'v = ⟦0,85|2,5 × 10⁻³⟧' }, { id: 'celerite', texte: 'v = 340 m/s', couleur: 'jaune' },
+    ], { taille: 18, largeur: 210 });
+  },
+  vu() {
+    const t = tPhys(), m = ['E et R distants de L = 85 cm ; écran à 0,5 ms/div.'];
+    m.push(t <= 0 ? 'Le spot n’est pas encore parti.' : t < 3 ? `Le spot balaie l’écran (${fr(t / 0.5, 1)} div) ; le signal (a) émis est tracé à partir de 1 div ; le front sonore n’a pas encore atteint R.`
+      : `Le signal (a) commence à 1 div, le signal (b) reçu à 6 div${t < 5 ? ' ; le spot balaie encore' : ''}.`);
+    if (vu('debuts')) m.push('Les débuts des deux signaux sont marqués en pointillés.');
+    if (vu('divisions')) m.push('Cote : 5 divisions entre les deux débuts.');
+    if (vu('retard')) m.push('Écrit : Δt = 5 × 0,5 ms = 2,5 ms.');
+    if (vu('celerite')) m.push('Écrit : v = L/Δt = 0,85/(2,5 × 10⁻³) = 340 m/s.');
+    return m.join(' ');
+  },
+};
+
+/* ── National 2024, rattrapage : l’émetteur entre M₁ et M₂ (d = 2,85 m), 0,5 ms/div ── */
+const L24 = 1.085, D24 = 2.85, V24 = 340, T1_24 = L24 / V24 * 1000, T2_24 = (D24 - L24) / V24 * 1000;   // ms
+VUES.national_2024_rattrapage = {
+  titre: 'National 2024 rattrapage : deux micros, un émetteur entre eux',
+  phases: [
+    { id: 'salve_part', d: 1.2, t: [0, 0.5], motif: 'l’émetteur envoie une salve dans les deux sens' },
+    { id: 'm1_atteint', d: 2.6, t: [0.5, T1_24], motif: 'la salve arrive à M₁ : la voie A démarre' },
+    { id: 'm1_enregistre', d: 1.2, t: [T1_24, T1_24 + 0.5], motif: 'le signal de M₁ est tracé sur la voie A' },
+    { id: 'm2_atteint', d: 2.2, t: [T1_24 + 0.5, T2_24], motif: 'la salve arrive à M₂, plus tard' },
+    { id: 'm2_enregistre', d: 1.2, t: [T2_24, T2_24 + 0.5], motif: 'le signal de M₂ est tracé sur la voie B' },
+    { id: 'ecran_complet', d: 1.4, t: [T2_24 + 0.5, T1_24 + 5], motif: 'le spot a balayé tout l’écran' },
+    { id: 'debuts', d: 1, motif: 'le début de chaque signal est marqué' },
+    { id: 'divisions', d: 1, motif: 'on compte les divisions entre les deux débuts' },
+    { id: 'retard', d: 1, motif: 'τ = divisions × sensibilité' },
+    { id: 'chemins', d: 1.4, motif: 'les deux chemins : ℓ vers M₁, d − ℓ vers M₂' },
+    { id: 'longueur', d: 1, motif: 'ℓ = (d − v·τ)/2' },
+  ],
+  dessin(c) {
+    const PX = 215, x1 = 70, xE = x1 + L24 * PX, x2 = x1 + D24 * PX, yM = 74, t = tPhys();
+    c.direct(() => { P.micro(c.ctx, x1, yM - 4, c.couleur('cyan'), 1.1); P.micro(c.ctx, x2, yM - 4, c.couleur('orange'), 1.1); peindreSource(c.ctx, xE, yM + 6); });
+    c.texte('M₁ (voie A)', x1 + 2, yM - 32, { couleur: 'cyan', align: 'center', taille: 18 });
+    c.texte('M₂ (voie B)', x2 - 6, yM - 32, { couleur: 'orange', align: 'center', taille: 18 });
+    c.texte('émetteur', xE, yM - 26, { couleur: 'blanc', align: 'center', taille: 18 });
+    c.cote(x1, yM + 44, xE, yM + 44, 'ℓ', { couleur: 'cyan', taille: 20 });
+    c.cote(x1, yM + 74, x2, yM + 74, 'd = 2,85 m', { couleur: 'jaune', dessous: true, taille: 19 });
+    c.repere('montage', x1 - 30, yM - 52, x2 - x1 + 60, 150, 'M₁, l’émetteur et M₂ alignés');
+    c.repere('emetteur', xE - 30, yM - 44, 60, 70, 'l’émetteur, à ℓ de M₁');
+    c.direct(() => {
+      const r = t / 1000 * V24 * PX;
+      if (t > 0 && t < T1_24 + 0.25) P.front(c.ctx, xE, yM + 6, r, Math.PI - 0.5, Math.PI + 0.5, '250,204,21', 1);
+      if (t > 0 && t < T2_24 + 0.25) P.front(c.ctx, xE, yM + 6, r, -0.5, 0.5, '250,204,21', 1);
+    });
+    const ts = t - T1_24;   // temps d’écran : le balayage démarre quand le son atteint M₁
+    const o = { x: 70, y: 204, nx: 10, ny: 6, dx: 44, dy: 26, sens: 0.5, t: ts,
+      voies: [{ ligne: 1.5, debut: 0, duree: 0.45, amp: 18, couleur: 'cyan' }, { ligne: 4, debut: T2_24 - T1_24, duree: 0.45, amp: 18, couleur: 'orange' }] };
+    c.texte('Écran : 0,5 ms/div', o.x + 250, o.y - 16, { couleur: 'cyan', taille: 19 });
+    c.repere('sensibilite', o.x + 246, o.y - 38, 190, 30, 'la sensibilité horizontale : 0,5 ms/div');
+    oscillo(c, o);
+    c.repere('oscillogramme', o.x, o.y, o.nx * o.dx, o.ny * o.dy, 'l’oscillogramme');
+    const xa = o.x, xb = o.x + 4 * o.dx, ybas = o.y + o.ny * o.dy;
+    c.direct(() => {
+      if (ts > 0) c.texte('(A)', xa + 26, o.y + 1.5 * o.dy - 20, { couleur: 'cyan', taille: 17 });
+      if (ts > T2_24 - T1_24) c.texte('(B)', xb + 26, o.y + 4 * o.dy - 20, { couleur: 'orange', taille: 17 });
+      if (vu('debuts')) {
+        c.ligne(xa + 1, o.y + 1.5 * o.dy, xa + 1, ybas + 8, { couleur: 'jaune', largeur: 1.5, pointille: [4, 4] });
+        c.ligne(xb, o.y + 4 * o.dy, xb, ybas + 8, { couleur: 'jaune', largeur: 1.5, pointille: [4, 4] });
+      }
+      if (vu('divisions')) c.cote(xa + 1, ybas + 16, xb, ybas + 16, '4 divisions', { couleur: 'jaune', dessous: true, taille: 19 });
+      if (vu('chemins')) {
+        const xm = xE + L24 * PX;   // à ℓ de l’émetteur, côté M₂ : là, les deux salves ont fait le même chemin
+        c.ligne(xm, yM - 10, xm, yM + 26, { couleur: 'vert', largeur: 1.5, pointille: [4, 4] });
+        c.cote(xE, yM + 14, xm, yM + 14, 'ℓ', { couleur: 'cyan', taille: 18 });
+        c.cote(xm, yM + 14, x2, yM + 14, 'd − 2ℓ', { couleur: 'vert', taille: 18 });
+      }
+    });
+    if (vu('debuts')) { c.repere('debut_a', xa - 8, o.y + 0.5 * o.dy, 24, 2 * o.dy, 'début du signal de M₁'); c.repere('debut_b', xb - 12, o.y + 3 * o.dy, 24, 2 * o.dy, 'début du signal de M₂'); }
+    if (vu('divisions')) c.repere('retard', xa, ybas + 4, xb - xa, 36, 'τ : du début de A au début de B');
+    if (vu('chemins')) c.repere('chemins', xE, yM - 14, x2 - xE, 40, 'le chemin en plus vers M₂ : d − 2ℓ');
+    calculs(c, 540, 216, [
+      { id: 'retard', texte: 'τ = 4 × 0,5 ms = 2 ms' },
+      { id: 'chemins', texte: 'τ = ⟦d − ℓ|v⟧ − ⟦ℓ|v⟧ = ⟦d − 2ℓ|v⟧' },
+      { id: 'longueur', texte: 'ℓ = ⟦d − v·τ|2⟧' }, { id: 'longueur', texte: 'ℓ = ⟦2,85 − 0,68|2⟧' }, { id: 'longueur', texte: 'ℓ ≈ 1,09 m', couleur: 'jaune' },
+    ], { taille: 18, max: 5, largeur: 215 });
+  },
+  vu() {
+    const t = tPhys(), m = ['M₁ et M₂ distants de d = 2,85 m ; l’émetteur est entre eux, à ℓ de M₁ ; écran à 0,5 ms/div.'];
+    m.push(t <= 0 ? 'Aucune salve encore.' : t < T1_24 ? 'La salve part dans les deux sens ; elle n’a encore atteint aucun micro ; l’écran est vide.'
+      : t < T2_24 ? 'La salve a atteint M₁ (voie A tracée dès le bord gauche) ; elle va encore vers M₂.' : 'M₁ puis M₂ atteints : le signal B commence 4 divisions après le signal A.');
+    if (vu('debuts')) m.push('Les débuts des deux signaux sont marqués.');
+    if (vu('divisions')) m.push('Cote : 4 divisions.');
+    if (vu('retard')) m.push('Écrit : τ = 4 × 0,5 ms = 2 ms.');
+    if (vu('chemins')) m.push('Sur le montage : ℓ de chaque côté de l’émetteur, puis d − 2ℓ en plus vers M₂ ; τ = (d − 2ℓ)/v.');
+    if (vu('longueur')) m.push('Écrit : ℓ = (d − v·τ)/2 = (2,85 − 0,68)/2 ≈ 1,09 m.');
+    return m.join(' ');
+  },
+};
+
+/* ── National 2024, normale : le caillou en O, aspects de la surface à t₁ et t₂ = t₁ + 1,5 s ── */
+VUES.national_2024_normale = {
+  titre: 'National 2024 normale : une onde circulaire à la surface de l’eau',
+  phases: [
+    { id: 'caillou', d: 1.2, t: [0, 0], motif: 'le caillou tombe en O' },
+    { id: 'onde_t1', d: 2, t: [0, 0.5], motif: 'l’onde circulaire s’éloigne de O' },
+    { id: 'aspect_t1', d: 1, motif: 'aspect à t₁ : front à r₁ = 14 cm' },
+    { id: 'onde_t2', d: 3.5, t: [0.5, 2.0], motif: 'le front continue d’avancer' },
+    { id: 'aspect_t2', d: 1, motif: 'aspect à t₂ : front à r₂ = 56 cm' },
+    { id: 'distance', d: 1, motif: 'Δr = r₂ − r₁' },
+    { id: 'duree', d: 1, motif: 'Δt = t₂ − t₁ = 1,5 s' },
+    { id: 'celerite', d: 1, motif: 'v = Δr/Δt' },
+    { id: 'date_t1', d: 1, motif: 't₁ = r₁/v' },
+    { id: 'date_t2', d: 1, motif: 't₂ = t₁ + 1,5 s' },
+  ],
+  dessin(c) {
+    const ox = 64, oy = 214, k = 3.5, t = tPhys(), v = 28;   // px par cm ; v en cm/s
+    const r1 = 14 * k, r2 = 56 * k;
+    c.direct(() => {   // la cuve vue de dessus (la moitié qui nous intéresse, comme sur la figure du sujet)
+      const ctx = c.ctx;
+      ctx.save(); ctx.beginPath(); ctx.rect(ox - 14, 14, 254, 400); ctx.clip();
+      ctx.fillStyle = P.lin(ctx, ox, 14, ox + 220, 414, [[0, '#0e3a52'], [.5, '#0c4a6e'], [1, '#082f49']]); ctx.fillRect(ox - 14, 14, 254, 400);
+      ctx.fillStyle = 'rgba(255,255,255,.035)'; ctx.beginPath(); ctx.ellipse(ox + 120, 90, 90, 22, -.3, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    });
+    c.ligne(ox, 18, ox, 410, { couleur: 'faible', largeur: 1.4 });
+    c.fleche(ox, oy, ox + 250, oy, { couleur: 'faible', largeur: 1.4 });
+    c.texte('r (cm)', ox + 250, oy + 44, { couleur: 'jaune', align: 'right', taille: 16 });
+    c.texte('O', ox - 8, oy + 22, { couleur: 'blanc', align: 'right', taille: 19 });
+    c.repere('cuve', ox - 14, 14, 254, 400, 'la surface de l’eau vue de dessus');
+    c.direct(() => {
+      const ctx = c.ctx, u = part('caillou');
+      if (u < 1 && (S.running || S.pause || S.fait)) P.perle(ctx, ox, oy - 50 * (1 - u), 5 + 4 * u, 'gris');
+      const r = Math.min(r2, v * t * k);
+      if (t > 0) { P.front(ctx, ox, oy, r, -Math.PI / 2, Math.PI / 2, '186,230,253', 1); if (r > 26) P.front(ctx, ox, oy, r - 18, -Math.PI / 2, Math.PI / 2, '186,230,253', .4); }
+      P.perle(ctx, ox, oy, 3.5, 'gris');
+      if (vu('aspect_t1')) { arcCraie(c, ox, oy, r1, -Math.PI / 2, Math.PI / 2, { couleur: 'cyan', largeur: 2.2 }); c.texte('aspect à t₁', ox + r1 + 10, oy - r1 - 4, { couleur: 'cyan', taille: 17 }); c.texte('r₁', ox + r1 - 2, oy + 22, { couleur: 'cyan', taille: 18 }); }
+      if (vu('aspect_t2')) { arcCraie(c, ox, oy, r2, -Math.PI / 2, Math.PI / 2, { couleur: 'orange', largeur: 2.2 }); c.texte('aspect à t₂', ox + 120, 34, { couleur: 'orange', taille: 17 }); c.texte('r₂', ox + r2 + 6, oy + 22, { couleur: 'orange', taille: 18 }); }
+      if (vu('distance')) c.cote(ox + r1, oy + 76, ox + r2, oy + 76, 'Δr', { couleur: 'jaune', taille: 19 });
+    });
+    if (vu('aspect_t1')) c.repere('aspect_t1', ox, oy - r1, r1 + 10, 2 * r1, 'l’aspect à t₁ (r₁ = 14 cm)');
+    if (vu('aspect_t2')) c.repere('aspect_t2', ox, oy - r2, r2 + 10, 2 * r2, 'l’aspect à t₂ (r₂ = 56 cm)');
+    // Le tableau du sujet
+    const tx = 346, ty = 30, cw = [92, 60, 70, 150], h = 38;
+    const cols = cw.reduce((a, w) => (a.push(a[a.length - 1] + w), a), [tx]);
+    const lignes = [['t (s)', '0', 't₁', 't₂ = t₁ + 1,5'], ['r (cm)', '0', '14', '56']];
+    c.rect(tx, ty, cols[4] - tx, 2 * h, { couleur: 'faible', largeur: 1.4, arrondi: 4 });
+    c.ligne(tx, ty + h, cols[4], ty + h, { couleur: 'faible', largeur: 1.2 });
+    for (let j = 1; j < 4; j++) c.ligne(cols[j], ty, cols[j], ty + 2 * h, { couleur: 'faible', largeur: 1.2 });
+    lignes.forEach((l, i) => l.forEach((s, j) => c.texte(s, (cols[j] + cols[j + 1]) / 2, ty + i * h + 26, { couleur: j ? 'blanc' : 'cyan', align: 'center', taille: 18 })));
+    c.repere('tableau', tx, ty, cols[4] - tx, 2 * h, 'le tableau du sujet : r en fonction de t');
+    calculs(c, 356, 150, [
+      { id: 'distance', texte: 'Δr = r₂ − r₁ = 56 − 14 = 42 cm' }, { id: 'distance', texte: 'Δr = 0,42 m' },
+      { id: 'duree', texte: 'Δt = t₂ − t₁ = 1,5 s' },
+      { id: 'celerite', texte: 'v = ⟦Δr|Δt⟧ = ⟦0,42|1,5⟧ = 0,28 m/s', couleur: 'jaune' },
+      { id: 'date_t1', texte: 't₁ = ⟦r₁|v⟧ = ⟦0,14|0,28⟧ = 0,5 s' },
+      { id: 'date_t2', texte: 't₂ = t₁ + 1,5 = 2,0 s', couleur: 'jaune' },
+    ], { taille: 19, max: 6, largeur: 380 });
+  },
+  vu() {
+    const t = tPhys(), m = ['Surface de l’eau vue de dessus ; le caillou tombe en O ; tableau du sujet : r₁ = 14 cm à t₁, r₂ = 56 cm à t₂ = t₁ + 1,5 s.'];
+    m.push(t <= 0 ? 'Pas encore d’onde.' : t < 2 ? `Un front circulaire s’éloigne de O (rayon ${fr(28 * t, 0)} cm).` : 'Le front est à 56 cm de O.');
+    if (vu('aspect_t1')) m.push('Aspect à t₁ dessiné (cyan), front à r₁ = 14 cm.');
+    if (vu('aspect_t2')) m.push('Aspect à t₂ dessiné (orange), front à r₂ = 56 cm.');
+    if (vu('distance')) m.push('Cote Δr = 42 cm entre les deux fronts.');
+    if (vu('celerite')) m.push('Écrit : v = 0,42/1,5 = 0,28 m/s.');
+    if (vu('date_t2')) m.push('Écrit : t₁ = 0,5 s et t₂ = 2,0 s.');
+    return m.join(' ');
+  },
+};
+
+/* ── National 2021, rattrapage : barre métallique, deux capteurs, droite Δt = f(d) ── */
+const DS21 = [0.10, 0.20, 0.30, 0.40, 0.50], V21 = 5000;
+VUES.national_2021_rattrapage = {
+  titre: 'National 2021 rattrapage : la nature du métal d’une barre',
+  phases: [
+    ...DS21.map((d, i) => ({ id: `mesure_${i + 1}`, d: i ? 1.3 : 2, motif: `capteur C₂ à d = ${fr(d * 100, 0)} cm : un coup de marteau, un point de plus` })),
+    { id: 'droite', d: 1.2, motif: 'les points sont alignés : une droite qui passe par l’origine' },
+    { id: 'lecture', d: 1, motif: 'lecture d’un point de la droite : d = 40 cm, Δt = 0,08 ms' },
+    { id: 'pente', d: 1, motif: 'la pente k = Δt/d' },
+    { id: 'celerite', d: 1, motif: 'v = 1/k' },
+    { id: 'metal', d: 1, motif: 'le métal du tableau qui a cette célérité' },
+  ],
+  dessin(c) {
+    const bx0 = 80, bx1 = 480, by = 70, xC1 = 126, PX = 640;
+    // mesure en cours
+    let i = DS21.findIndex((_, j) => !vu(`mesure_${j + 1}`)); if (i < 0) i = DS21.length - 1;
+    const uM = part(`mesure_${i + 1}`), dPrec = i ? DS21[i - 1] : DS21[0];
+    const dC2 = dPrec + (DS21[i] - dPrec) * P.doux(Math.min(1, uM / 0.25));
+    const xC2 = xC1 + dC2 * PX;
+    c.direct(() => {
+      const ctx = c.ctx;
+      ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(bx0 + 4, by + 6, bx1 - bx0, 20);
+      ctx.fillStyle = P.lin(ctx, 0, by, 0, by + 20, [[0, '#e5e7eb'], [.4, '#9ca3af'], [1, '#4b5563']]); ctx.fillRect(bx0, by, bx1 - bx0, 20);
+      // le marteau
+      const coup = (S.running || S.pause || S.fait) && uM > 0.25 && uM < 0.4;
+      ctx.save(); ctx.translate(bx0 - 6, by + 6); ctx.rotate(coup ? 0 : -0.5);
+      ctx.fillStyle = P.lin(ctx, -4, 0, 4, 0, [[0, '#7a4520'], [.5, '#d39a5c'], [1, '#7a4520']]); ctx.fillRect(-3, -54, 6, 50);
+      ctx.fillStyle = P.lin(ctx, 0, -66, 0, -50, [[0, '#9ca3af'], [1, '#374151']]); ctx.fillRect(-12, -66, 24, 14); ctx.restore();
+      // l’impulsion qui court dans la barre (après le coup)
+      const u = (uM - 0.35) / 0.5;
+      if ((S.running || S.pause) && u > 0 && u < 1) {
+        const x = bx0 + (xC2 + 10 - bx0) * u, g = ctx.createRadialGradient(x, by + 10, 1, x, by + 10, 16);
+        g.addColorStop(0, 'rgba(250,204,21,.9)'); g.addColorStop(1, 'rgba(250,204,21,0)'); ctx.fillStyle = g; ctx.fillRect(x - 16, by - 6, 32, 32);
+      }
+      for (const [x, n, col] of [[xC1, 'C₁', 'cyan'], [xC2, 'C₂', 'orange']]) {
+        ctx.fillStyle = P.lin(ctx, x - 7, 0, x + 7, 0, [[0, '#1f2937'], [.5, '#6b7280'], [1, '#111827']]); P.rr(ctx, x - 7, by - 22, 14, 22, 3); ctx.fill();
+        ctx.fillStyle = c.couleur(col); ctx.fillRect(x - 7, by - 16, 14, 3);
+        c.texte(n, x, by - 30, { couleur: col, align: 'center', taille: 18 });
+      }
+      c.cote(xC1, by + 40, xC2, by + 40, 'd', { couleur: 'jaune', dessous: true, taille: 19 });
+    });
+    c.texte('marteau', bx0 - 10, by + 46, { couleur: 'faible', align: 'right', taille: 16 });
+    c.texte('barre métallique', bx1 - 6, by + 74, { couleur: 'faible', align: 'right', taille: 16 });
+    c.repere('montage', bx0 - 20, by - 70, bx1 - bx0 + 30, 130, 'la barre, le marteau et les capteurs C₁, C₂');
+    // Le graphe Δt = f(d), tracé point par point
+    const gx = 100, gy = 392, gw = 330, gh = 196, dmax = 0.5, tmax = 0.12;
+    const Pt = (d, tt) => [gx + d / dmax * gw, gy - tt / tmax * gh];
+    c.axe(gx, gy, gx + gw + 20, gy, DS21.map(d => [d / dmax * gw / (gw + 20), fr(d * 100, 0)]), { taille: 15 });
+    c.axe(gx, gy, gx, gy - gh - 10, [0.02, 0.04, 0.06, 0.08, 0.10].map(tt => [tt / tmax * gh / (gh + 10), fr(tt, 2)]), { vertical: true, taille: 15 });
+    c.texte('d (cm)', gx + gw + 18, gy - 12, { couleur: 'jaune', align: 'right', taille: 16 });
+    c.texte('Δt (ms)', gx + 8, gy - gh - 8, { couleur: 'jaune', taille: 16 });
+    c.repere('graphe', gx - 40, gy - gh - 20, gw + 60, gh + 40, 'le graphe Δt en fonction de d');
+    c.direct(() => {
+      DS21.forEach((d, j) => { if (vu(`mesure_${j + 1}`)) { const [x, y] = Pt(d, d / V21 * 1000); P.perle(c.ctx, x, y, 5.5, 'orange'); } });
+      if (vu('droite')) { const [x, y] = Pt(0.52, 0.52 / V21 * 1000); c.ligne(gx, gy, x, y, { couleur: 'vert', largeur: 1.8 }); }
+      if (vu('lecture')) { const [x, y] = Pt(0.4, 0.08); c.ligne(x, gy, x, y, { couleur: 'jaune', largeur: 1.4, pointille: [4, 4] }); c.ligne(gx, y, x, y, { couleur: 'jaune', largeur: 1.4, pointille: [4, 4] }); }
+    });
+    if (vu('droite')) c.repere('droite', gx, gy - gh, gw, gh, 'une droite qui passe par l’origine');
+    if (vu('lecture')) { const [x, y] = Pt(0.4, 0.08); c.repere('lecture', x - 14, y - 14, 28, 28, 'le point d = 40 cm, Δt = 0,08 ms'); }
+    // Le tableau des métaux (donnée du sujet)
+    const tx = 516, ty = 26, rows = [['fer', '5960'], ['cuivre', '3900'], ['aluminium', '5000'], ['zinc', '4190']], h = 30;
+    c.texte('Métal', tx + 8, ty + 21, { couleur: 'cyan', taille: 17 }); c.texte('v (m/s)', tx + 120, ty + 21, { couleur: 'cyan', taille: 17 });
+    rows.forEach(([m, v], j) => { c.texte(m, tx + 8, ty + (j + 2) * h - 9, { taille: 17 }); c.texte(v, tx + 120, ty + (j + 2) * h - 9, { taille: 17 }); });
+    c.rect(tx, ty, 205, 5 * h + 2, { couleur: 'faible', largeur: 1.3, arrondi: 4 });
+    c.ligne(tx, ty + h, tx + 205, ty + h, { couleur: 'faible', largeur: 1.1 }); c.ligne(tx + 110, ty, tx + 110, ty + 5 * h + 2, { couleur: 'faible', largeur: 1.1 });
+    c.repere('metaux', tx, ty, 205, 5 * h, 'le tableau des célérités dans les métaux');
+    c.direct(() => { if (vu('metal')) c.rect(tx + 3, ty + 3 * h + 2, 199, h - 2, { couleur: 'jaune', largeur: 2, arrondi: 6 }); });
+    calculs(c, 500, 236, [
+      { id: 'lecture', texte: 'd = 40 cm ; Δt = 0,08 ms' },
+      { id: 'pente', texte: 'k = ⟦Δt|d⟧ = ⟦0,08 × 10⁻³|0,40⟧' }, { id: 'pente', texte: 'k = 2 × 10⁻⁴ s/m' },
+      { id: 'celerite', texte: 'v = ⟦1|k⟧ = 5000 m/s', couleur: 'jaune' },
+      { id: 'metal', texte: '→ l’aluminium', couleur: 'jaune' },
+    ], { taille: 18, max: 5, largeur: 250 });
+  },
+  vu() {
+    const n = DS21.filter((_, j) => vu(`mesure_${j + 1}`)).length;
+    const m = ['Barre métallique frappée au marteau ; capteurs C₁ et C₂ séparés de d ; graphe Δt en fonction de d ; tableau des célérités (fer 5960, cuivre 3900, aluminium 5000, zinc 4190 m/s).'];
+    m.push(n ? `${n} point(s) placé(s) sur le graphe (de 10 cm à ${n * 10} cm, Δt de 0,02 ms à ${fr(n * 0.02, 2)} ms).` : 'Graphe encore vide.');
+    if (vu('droite')) m.push('Droite qui passe par l’origine tracée.');
+    if (vu('lecture')) m.push('Lecture marquée : d = 40 cm, Δt = 0,08 ms.');
+    if (vu('pente')) m.push('Écrit : k = 2 × 10⁻⁴ s/m.');
+    if (vu('celerite')) m.push('Écrit : v = 1/k = 5000 m/s.');
+    if (vu('metal')) m.push('La ligne aluminium est entourée.');
+    return m.join(' ');
+  },
+};
+
+/* ── National 2020, rattrapage : échographie, deux échos à t₁ = 100 µs et t₂ = 180 µs ── */
+const V20 = 1540, D1 = V20 * 100e-6 / 2 * 100, D2 = V20 * 80e-6 / 2 * 100;   // cm : 7,7 et 6,16
+VUES.national_2020_rattrapage = {
+  titre: 'National 2020 rattrapage : les ultrasons au service de la médecine',
+  phases: [
+    { id: 'emission', d: 0.8, t: [0, 5], motif: 'la sonde émet une salve d’ultrasons à t = 0' },
+    { id: 'interface_1', d: 2, t: [5, 50], motif: 'la salve atteint le fœtus : une partie se réfléchit' },
+    { id: 'dos_foetus', d: 1.8, t: [50, 90], motif: 'le reste traverse le fœtus et se réfléchit sur sa face arrière' },
+    { id: 'echo_1_recu', d: 1.2, t: [90, 100], motif: 'le premier écho revient à la sonde : pic à t₁' },
+    { id: 'echo_2_recu', d: 3, t: [100, 180], motif: 'le second écho revient à la sonde : pic à t₂' },
+    { id: 'fin', d: 0.8, t: [180, 220], motif: 'l’enregistrement est complet' },
+    { id: 'dates', d: 1, motif: 'lecture : t₁ = 100 µs, t₂ = 180 µs' },
+    { id: 'trajets', d: 1.4, motif: 'les trajets : 2d₁ pendant t₁, 2(d₁ + d₂) pendant t₂' },
+    { id: 'relation_d1', d: 1, motif: '2d₁ = v·t₁' },
+    { id: 'difference', d: 1, motif: '2d₂ = v·(t₂ − t₁)' },
+    { id: 'epaisseur', d: 1, motif: 'd₂ = v·(t₂ − t₁)/2' },
+  ],
+  dessin(c) {
+    const cx = 180, y0 = 78, k = 14, yF = y0 + D1 * k, yB = yF + D2 * k, t = tPhys(), vc = V20 * 1e-4;   // cm par µs
+    c.direct(() => {
+      const ctx = c.ctx;
+      ctx.save(); ctx.beginPath(); ctx.ellipse(cx, 236, 150, 160, 0, 0, Math.PI * 2);
+      ctx.fillStyle = P.lin(ctx, 0, 76, 0, 396, [[0, '#d9a38a'], [.5, '#b97a63'], [1, '#8c5545']]); ctx.fill(); ctx.restore();
+      ctx.save(); ctx.beginPath(); ctx.ellipse(cx, (yF + yB) / 2, 62, (yB - yF) / 2, 0, 0, Math.PI * 2);
+      ctx.fillStyle = P.lin(ctx, 0, yF, 0, yB, [[0, '#f1d0bd'], [1, '#c99a83']]); ctx.fill(); ctx.restore();
+      ctx.fillStyle = P.lin(ctx, cx - 14, 0, cx + 14, 0, [[0, '#374151'], [.5, '#9ca3af'], [1, '#1f2937']]); P.rr(ctx, cx - 14, 22, 28, y0 - 20, 4); ctx.fill();
+      ctx.fillStyle = '#111827'; ctx.fillRect(cx - 16, y0 - 4, 32, 6);
+      // les salves : l’incidente (jaune) puis les échos (orange) qui remontent
+      const z = [];
+      if (t > 0 && t <= 90) z.push([Math.min(t, 90) * vc, 1]);
+      if (t > 90 && t < 180) z.push([D1 + D2 - (t - 90) * vc, -1]);
+      if (t > 50 && t < 100) z.push([D1 - (t - 50) * vc, -1]);
+      for (const [d, s] of z) P.front(ctx, cx, y0 + d * k - s * 40, 40, s > 0 ? Math.PI / 2 - .5 : -Math.PI / 2 - .5, s > 0 ? Math.PI / 2 + .5 : -Math.PI / 2 + .5, s > 0 ? '250,204,21' : '251,146,60', 1);
+    });
+    c.texte('sonde', cx + 22, 44, { couleur: 'blanc', taille: 17 });
+    c.texte('fœtus', cx + 76, (yF + yB) / 2 + 6, { couleur: 'blanc', taille: 17 });
+    c.cote(cx - 80, y0 + 2, cx - 80, yF, '', { couleur: 'cyan' }); c.texte('d₁', cx - 92, (y0 + yF) / 2 + 6, { couleur: 'cyan', align: 'right', taille: 19 });
+    c.cote(cx - 80, yF, cx - 80, yB, '', { couleur: 'orange' }); c.texte('d₂', cx - 92, (yF + yB) / 2 + 6, { couleur: 'orange', align: 'right', taille: 19 });
+    c.repere('corps', cx - 150, 76, 300, 320, 'le corps vu en coupe, la sonde et le fœtus');
+    c.repere('foetus', cx - 62, yF, 124, yB - yF, 'le fœtus, d’épaisseur d₂');
+    c.direct(() => {
+      if (vu('trajets')) {
+        c.fleche(cx + 26, y0 + 4, cx + 26, yF - 2, { couleur: 'cyan', largeur: 1.8 }); c.fleche(cx + 34, yF - 2, cx + 34, y0 + 4, { couleur: 'cyan', largeur: 1.8 });
+        c.fleche(cx + 50, y0 + 4, cx + 50, yB - 2, { couleur: 'orange', largeur: 1.8 }); c.fleche(cx + 58, yB - 2, cx + 58, y0 + 4, { couleur: 'orange', largeur: 1.8 });
+        c.texte('2d₁', cx - 4, yF - 24, { couleur: 'cyan', align: 'right', taille: 18 });
+        c.texte('2(d₁ + d₂)', cx + 66, yB + 30, { couleur: 'orange', taille: 18 });
+      }
+    });
+    if (vu('trajets')) c.repere('trajets', cx + 20, y0, 44, yB - y0, 'les allers-retours 2d₁ et 2(d₁ + d₂)');
+    // L’enregistrement de la sonde, tracé en même temps
+    const gx = 400, gy = 220, gw = 330, gh = 150, tmax = 220, X = tt => gx + tt / tmax * gw;
+    c.axe(gx, gy, gx + gw + 14, gy, [50, 100, 150, 200].map(tt => [tt / tmax * gw / (gw + 14), vu('dates') && (tt === 100) ? null : String(tt)]), { taille: 15 });
+    c.axe(gx, gy, gx, gy - gh - 10, [], { vertical: true });
+    c.texte('amplitude', gx + 8, gy - gh - 6, { couleur: 'jaune', taille: 16 });
+    c.texte('t (µs)', gx + gw + 12, gy + 36, { couleur: 'jaune', align: 'right', taille: 16 });
+    c.repere('enregistrement', gx - 10, gy - gh - 20, gw + 30, gh + 40, 'les signaux réfléchis reçus par la sonde');
+    c.direct(() => {
+      const tf = Math.min(t, tmax);
+      if (tf > 0) {
+        const pts = []; const pic = tt => (Math.abs(tt - 100) < 1.2 ? 130 : Math.abs(tt - 180) < 1.2 ? 118 : 0);
+        for (let i = 0; i <= 880; i++) { const tt = tf * i / 880; pts.push([X(tt), gy - pic(tt)]); }
+        P.trace(c.ctx, pts, c.couleur('vert'), 2);
+      }
+      if (vu('dates')) {
+        c.texte('t₁ = 100', X(100), gy + 22, { couleur: 'cyan', align: 'center', taille: 16 });
+        c.texte('t₂ = 180', X(180), gy + 44, { couleur: 'orange', align: 'center', taille: 16 });
+      }
+    });
+    if (vu('dates')) { c.repere('t1', X(100) - 12, gy - 140, 24, 150, 'le premier écho, à t₁ = 100 µs'); c.repere('t2', X(180) - 12, gy - 128, 24, 138, 'le second écho, à t₂ = 180 µs'); }
+    calculs(c, 400, 282, [
+      { id: 'relation_d1', texte: '2d₁ = v·t₁ donc d₁ = ⟦v·t₁|2⟧' },
+      { id: 'difference', texte: '2(d₁ + d₂) = v·t₂' }, { id: 'difference', texte: '2d₂ = v·(t₂ − t₁)' },
+      { id: 'epaisseur', texte: 'd₂ = ⟦1540 × 80 × 10⁻⁶|2⟧ ≈ 6,16 cm', couleur: 'jaune' },
+    ], { taille: 18, max: 3, largeur: 345 });
+  },
+  vu() {
+    const t = tPhys(), m = ['Corps en coupe : sonde en haut, fœtus à d₁ de la sonde, d’épaisseur d₂ ; v = 1540 m/s ; à droite, l’enregistrement des signaux réfléchis.'];
+    m.push(t <= 0 ? 'Rien d’émis encore.' : t < 50 ? 'La salve descend vers le fœtus.' : t < 100 ? 'Une partie se réfléchit sur le fœtus et remonte ; le reste traverse le fœtus.'
+      : t < 180 ? 'Premier écho reçu à 100 µs (pic) ; le second écho remonte.' : 'Deux pics : t₁ = 100 µs et t₂ = 180 µs.');
+    if (vu('trajets')) m.push('Flèches : 2d₁ pour le premier écho, 2(d₁ + d₂) pour le second.');
+    if (vu('relation_d1')) m.push('Écrit : 2d₁ = v·t₁, d₁ = v·t₁/2.');
+    if (vu('difference')) m.push('Écrit : 2d₂ = v·(t₂ − t₁).');
+    if (vu('epaisseur')) m.push('Écrit : d₂ ≈ 6,16 cm.');
+    return m.join(' ');
+  },
+};
+
+/* ── National 2018, normale : ultrasons dans l’air et dans le pétrole, même distance L = 1,84 m, 2 ms/div ── */
+const L18 = 1.84, VA18 = 340, VP18 = L18 * VA18 / (L18 - 4e-3 * VA18), SE18 = 6 - L18 / VP18 * 1000;   // m/s ; ms (émission sur l’écran)
+VUES.national_2018_normale = {
+  titre: 'National 2018 normale : célérité des ultrasons dans le pétrole',
+  phases: [
+    { id: 'balayage', d: 1.4, t: [0, SE18], motif: 'le spot balaie l’écran' },
+    { id: 'emission', d: 0.8, t: [SE18, SE18 + 0.3], motif: 'E₁ et E₂ émettent en même temps' },
+    { id: 'petrole_recu', d: 2.2, t: [SE18 + 0.3, 6.0], motif: 'l’onde du pétrole arrive à R₂ : la voie B démarre' },
+    { id: 'air_recu', d: 3.2, t: [6.0, 10.0], motif: 'l’onde de l’air arrive à R₁, plus tard : la voie A démarre' },
+    { id: 'ecran_complet', d: 1.4, t: [10.0, 20.0], motif: 'le spot a balayé tout l’écran' },
+    { id: 'debuts', d: 1, motif: 'le début de chaque signal est marqué' },
+    { id: 'divisions', d: 1, motif: 'on compte les divisions entre les deux débuts' },
+    { id: 'retard', d: 1, motif: 'τ = divisions × sensibilité' },
+    { id: 'durees', d: 1, motif: 'chaque onde met L/v' },
+    { id: 'relation', d: 1, motif: 'τ = L·(1/V_air − 1/V_p)' },
+    { id: 'celerite', d: 1, motif: 'V_p' },
+  ],
+  dessin(c) {
+    const x0 = 100, x1 = 560, PX = (x1 - x0) / L18, yA = 54, yP = 118, t = tPhys();
+    c.direct(() => {
+      const ctx = c.ctx;
+      ctx.fillStyle = 'rgba(148,163,184,.08)'; ctx.fillRect(x0, 22, x1 - x0, 62);
+      ctx.fillStyle = P.lin(ctx, 0, 94, 0, 164, [[0, 'rgba(217,160,60,.55)'], [1, 'rgba(146,94,22,.75)']]); ctx.fillRect(x0, 84, x1 - x0, 64);
+      for (const [x, y, s] of [[x0 + 12, yA, 1], [x0 + 12, yP, 1]]) peindreHP(ctx, x, y, s);
+      P.micro(ctx, x1 - 14, yA - 6, c.couleur('cyan'), 0.9); P.micro(ctx, x1 - 14, yP - 6, c.couleur('orange'), 0.9);
+      const dt = t - SE18;
+      if (dt > 0) {
+        const ra = dt / 1000 * VA18 * PX, rp = dt / 1000 * VP18 * PX;
+        if (ra < x1 - x0 + 10) P.front(ctx, x0 + 20, yA, ra, -0.35, 0.35, '250,204,21', 1);
+        if (rp < x1 - x0 + 10) P.front(ctx, x0 + 20, yP, rp, -0.3, 0.3, '251,146,60', 1);
+      }
+    });
+    c.rect(x0, 22, x1 - x0, 126, { couleur: 'faible', largeur: 1.4, arrondi: 3 });
+    c.texte('air', (x0 + x1) / 2, 44, { couleur: 'blanc', align: 'center', taille: 18 });
+    c.texte('pétrole', (x0 + x1) / 2, 142, { couleur: 'blanc', align: 'center', taille: 18 });
+    c.texte('E₁', x0 - 8, yA + 6, { couleur: 'cyan', align: 'right', taille: 18 }); c.texte('E₂', x0 - 8, yP + 6, { couleur: 'orange', align: 'right', taille: 18 });
+    c.texte('R₁ (A)', x1 + 10, yA + 6, { couleur: 'cyan', taille: 18 }); c.texte('R₂ (B)', x1 + 10, yP + 6, { couleur: 'orange', taille: 18 });
+    c.cote(x0, 164, x1, 164, 'L = 1,84 m', { couleur: 'jaune', dessous: true, taille: 19 });
+    c.repere('montage', x0 - 40, 20, x1 - x0 + 110, 190, 'la cuve : air en haut, pétrole en bas, même distance L');
+    const o = { x: 100, y: 226, nx: 10, ny: 5, dx: 40, dy: 26, sens: 2, t,
+      voies: [{ ligne: 1.3, debut: 10, duree: 5, amp: 14, couleur: 'cyan', n: 14 }, { ligne: 3.6, debut: 6, duree: 5, amp: 14, couleur: 'orange', n: 14 }] };
+    c.texte('Écran : 2 ms/div', o.x + 4, o.y - 14, { couleur: 'cyan', taille: 19 });
+    c.repere('sensibilite', o.x, o.y - 36, 180, 30, 'la sensibilité horizontale : 2 ms/div');
+    oscillo(c, o);
+    c.repere('oscillogramme', o.x, o.y, o.nx * o.dx, o.ny * o.dy, 'l’oscillogramme : voie A (air), voie B (pétrole)');
+    const xb = o.x + 3 * o.dx, xa = o.x + 5 * o.dx, ybas = o.y + o.ny * o.dy;
+    c.direct(() => {
+      if (t > 10) c.texte('A (air)', xa + 106, o.y + 1.3 * o.dy - 14, { couleur: 'cyan', taille: 16 });
+      if (t > 6) c.texte('B (pétrole)', xb - 6, o.y + 3.6 * o.dy - 22, { couleur: 'orange', align: 'right', taille: 16 });
+      if (vu('debuts')) {
+        c.ligne(xa, o.y + 1.3 * o.dy, xa, ybas + 8, { couleur: 'jaune', largeur: 1.5, pointille: [4, 4] });
+        c.ligne(xb, o.y + 3.6 * o.dy, xb, ybas + 8, { couleur: 'jaune', largeur: 1.5, pointille: [4, 4] });
+      }
+      if (vu('divisions')) c.cote(xb, ybas + 16, xa, ybas + 16, '2 divisions', { couleur: 'jaune', dessous: true, taille: 18 });
+    });
+    if (vu('debuts')) { c.repere('debut_b', xb - 12, o.y + 2.6 * o.dy, 24, 2 * o.dy, 'début du signal B (pétrole)'); c.repere('debut_a', xa - 12, o.y + 0.3 * o.dy, 24, 2 * o.dy, 'début du signal A (air)'); }
+    if (vu('divisions')) c.repere('retard', xb, ybas + 4, xa - xb, 36, 'τ : du début de B au début de A');
+    calculs(c, 524, 246, [
+      { id: 'retard', texte: 'τ = 2 × 2 ms = 4 ms' },
+      { id: 'durees', texte: 't_air = ⟦L|V_air⟧ ; t_p = ⟦L|V_p⟧' },
+      { id: 'relation', texte: 'τ = L·(⟦1|V_air⟧ − ⟦1|V_p⟧)' },
+      { id: 'celerite', texte: 'V_p = ⟦L·V_air|L − τ·V_air⟧' }, { id: 'celerite', texte: 'V_p ≈ 1303 m/s', couleur: 'jaune' },
+    ], { taille: 18, max: 3, largeur: 225 });
+  },
+  vu() {
+    const t = tPhys(), m = ['Cuve : air en haut (E₁ → R₁, voie A), pétrole en bas (E₂ → R₂, voie B), même distance L = 1,84 m ; écran à 2 ms/div.'];
+    m.push(t < SE18 ? 'Le spot balaie ; rien n’est encore émis.' : t < 6 ? 'E₁ et E₂ ont émis ensemble ; les deux fronts avancent, celui du pétrole plus vite.'
+      : t < 10 ? 'Le pétrole a déjà livré son onde à R₂ (voie B à 3 div) ; celle de l’air avance encore.' : 'Voie B commence à 3 div, voie A à 5 div.');
+    if (vu('debuts')) m.push('Débuts marqués.');
+    if (vu('divisions')) m.push('Cote : 2 divisions.');
+    if (vu('retard')) m.push('Écrit : τ = 2 × 2 ms = 4 ms.');
+    if (vu('relation')) m.push('Écrit : τ = L·(1/V_air − 1/V_p).');
+    if (vu('celerite')) m.push('Écrit : V_p ≈ 1303 m/s.');
+    return m.join(' ');
+  },
+};
+
+/* ── Choix de la vue, boucle et pont avec le tuteur ───────────────────────────────────────── */
+const VUE_ID = (new URLSearchParams(location.search).get('vue') || '').trim() in VUES ? new URLSearchParams(location.search).get('vue').trim() : 'national_2022_normale';
+VUE = VUES[VUE_ID]; PH = VUE.phases;
+{ let acc = 0; for (const p of PH) { p.debut = acc; acc += p.d; } TOTAL = acc; }
+
+function dessiner(c) { scene.cadre(11); VUE.dessin(c); return c.fin(); }
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner, { ajuster: true, complet: fn => { const a = S.a, f = S.fait; S.a = TOTAL; S.fait = true; try { fn(); } finally { S.a = a; S.fait = f; } } });
+
+function moments() { const m = {}; for (const p of PH) m[p.id] = +((p.debut + p.d) / TOTAL).toFixed(4); return m; }
+const MOTIFS = Object.fromEntries(PH.map(p => [p.id, p.motif]));
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.a = Math.min(TOTAL, S.a + dt);
+  if (S.jusqua != null && S.a >= S.jusqua - 1e-6) {
+    S.a = S.jusqua; S.jusqua = null; S.running = false; S.pause = true; $('run').textContent = 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || 'instant choisi') + '.'); pont.noter('pause'); pont.emettre();
+    return true;
+  }
+  if (S.a >= TOTAL) {
+    S.running = false; S.pause = false; S.fait = true; $('run').textContent = 'Rejouer';
+    bulle($('feedback'), 'Tout est écrit : relis chaque étape au tableau.', 'good'); pont.emettre();
+  } else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function start() { S.jusqua = null; S.a = 0; S.running = true; S.pause = false; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), PH[0].motif + '…'); pont.noter('start'); pont.emettre(); }
+function pause() { if (!S.running) return; S.jusqua = null; S.running = false; S.pause = true; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; $('run').textContent = 'Pause'; pont.noter('resume'); pont.emettre(); }
+function reset() { S.a = 0; S.running = false; S.pause = false; S.fait = false; S.jusqua = null; $('run').textContent = 'Lancer'; scene.sale = true; bulle($('feedback'), 'Lance l’exercice.'); pont.noter('reset'); pont.emettre(); }
+/** Joue (ou continue) jusqu’à la fin d’une étape, puis se fige. Une étape déjà passée : on revient à elle, figé. */
+function playUntil(p) {
+  const M = moments(), nom = p.moment in M ? p.moment : null, cible = nom ? M[nom] * TOTAL : +p.progress * TOTAL;
+  if (!Number.isFinite(cible)) return;
+  S.motif = nom ? MOTIFS[nom] : '';
+  if (cible < S.a - 1e-6) { S.a = cible; S.running = false; S.pause = true; S.fait = false; S.jusqua = null; scene.sale = true; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || 'instant choisi') + '.'); pont.noter('play_until', { moment: nom }); pont.emettre(); return; }
+  if (cible >= TOTAL - 1e-6) { S.jusqua = null; } else S.jusqua = cible;
+  if (S.fait) { S.a = 0; S.fait = false; }
+  S.running = true; S.pause = false; $('run').textContent = 'Pause';
+  pont.noter('play_until', { moment: nom }); pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+
+function etat() {
+  return { simulation_status: S.running ? 'running' : S.pause ? 'paused' : (S.fait ? 'finished' : 'idle'), vue: VUE_ID, progress: +(S.a / TOTAL).toFixed(4),
+    moments: moments(), etape: (PH.find(p => S.a < p.debut + p.d - 1e-6) || PH[PH.length - 1]).id, ce_qui_se_voit: lisible(VUE.vu()) };
+}
+window.Tableau.explication({ [VUE_ID]: PH.map(p => ({ texte: p.motif })) });
+const commandes = ['start', 'pause', 'resume', 'reset', 'play_until'];
+const config = { id: 'ondes_tableau_national', version: '1.0', title: 'Exercices du national joués au tableau', variants: Object.keys(VUES).map(id => ({ id, label: VUES[id].titre })), commands: commandes,
+  command_schema: { play_until: { moment: PH.map(p => p.id).join(' | ') + ' (joue et se fige à la fin de cette étape)' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: `${VUE.titre}. Étapes : ${PH.map(p => p.motif).join(' ; ')}.`,
+  etat, progression: () => S.a / TOTAL,
+  executer: (cmd, p) => ({ start, pause, resume, reset, play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Lance l’exercice, ou laisse le professeur le jouer étape par étape.');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
