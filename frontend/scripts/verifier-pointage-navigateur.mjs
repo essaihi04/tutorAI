@@ -113,6 +113,8 @@ async function verifierDiapo(navigateur, slide, lignes) {
       }
       dire(`  ${voix().toFixed(1).padStart(5)}s  ${g.commande} ${JSON.stringify(g.parametres || {})}  [scène ${avant?.time_s ?? '?'} s → ${apres?.simulation_status}]  « ${g.mot} »${note}`);
     } else if (g.repere) {
+      // l'anneau du geste précédent (4,5 s) ne doit pas passer pour celui-ci : s'il n'en vient pas de nouveau, c'est un écart
+      await cadre.evaluate(() => document.querySelectorAll('.repere-anneau').forEach((el) => el.remove()));
       await envoyer('highlight', { target: g.repere });
       await page.waitForTimeout(250);
       const info = await cadre.evaluate((id) => {

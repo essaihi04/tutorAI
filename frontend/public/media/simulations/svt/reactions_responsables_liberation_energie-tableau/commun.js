@@ -203,7 +203,7 @@
       if (Number.isFinite(d) && d > C.t && d < cible) sauter(d);
       C.jusqua = Math.min(fin(), Math.max(0.001, cible)); C.motif = nom ? ((o.motifs || {})[nom] || nom) : '';
       const duree = +(p && p.duree_s);
-      C.v = Number.isFinite(duree) && duree > 0 ? Math.max(.25, Math.min(4, (C.jusqua - C.t) / duree)) : 1;
+      C.v = Number.isFinite(duree) && duree > 0 ? Math.max(.25, Math.min(4, (C.jusqua - C.t) / duree / (o.vitesse || 1))) : 1;   // durée réelle, même si la page fait défiler son temps plus vite (exao : o.vitesse)
       C.suspendu = null; C.fige = false;
       C.running = true; C.fait = false; texteBouton('Pause'); dire('Observe…');
       noter('play_until', { moment: nom, time_s: C.jusqua });

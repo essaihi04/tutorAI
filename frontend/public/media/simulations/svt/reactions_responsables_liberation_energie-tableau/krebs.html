@@ -24,9 +24,12 @@
  *   atp (13)                  : ADP + Pi → ATP ;
  *   fadh2 (15)                : FAD → FADH2 ;
  *   nadh_3 (17)               : NAD+ → NADH,H+ ;
- *   retour_4c (19)            : le composé à 4 C est retrouvé : un tour du cycle ; compteur d’un tour et son équation ;
+ *   retour_4c (19)            : le composé à 4 C est retrouvé : « c’est un cycle » ;
+ *   equation_tour (20,6)      : l’équation d’un tour, dans la bande du bas ;
  *   second_tour (27)          : un second acétyl-CoA (second acide pyruvique du même glucose) fait un autre tour, plus vite ;
- *   compteur_par_glucose (29) : la colonne × 2 du tableau, puis le bilan pour un glucose.
+ *   compteur_par_glucose (28) : la colonne × 2 du tableau ;   six_co2 (29) : 6 CO2 = 2 (acétyl-CoA) + 4 (Krebs) ;
+ *   dix_nadh (30) : 10 NADH,H+ = 2 + 2 + 6 ;   energie_transporteurs (31) : l’énergie est portée par NADH,H+ et FADH2.
+ *   (17 novembre 2026 : coa_repart (4,4) ajouté ; chaque écrit du bilan à son moment, quand le tuteur le dit.)
  */
 const { fr, bulle, protocole } = window.Tableau;
 const { Scene, Chrono, Apparitions, doux, mix } = window.SVTTableau;
@@ -34,8 +37,9 @@ const P = window.SVTPeinture;
 const ENCRE = '#0b1f2a';   // (16 novembre 2026) texte sombre et gras sur les capsules et protéines claires : bien lisible
 const $ = id => document.getElementById(id);
 
-const M = { acetyl_entre: 3, compose_6c: 5, co2_et_nadh_1: 8, co2_et_nadh_2: 11, atp: 13, fadh2: 15, nadh_3: 17, retour_4c: 19, second_tour: 27, compteur_par_glucose: 29 };
-const FIN = 31;
+const M = { acetyl_entre: 3, coa_repart: 4.4, compose_6c: 5, co2_et_nadh_1: 8, co2_et_nadh_2: 11, atp: 13, fadh2: 15, nadh_3: 17, retour_4c: 19, equation_tour: 20.6,
+  second_tour: 27, compteur_par_glucose: 28, six_co2: 29, dix_nadh: 30, energie_transporteurs: 31 };
+const FIN = 31.4;
 const MOTIFS = {
   acetyl_entre: 'l’acétyl (2 C), porté par le coenzyme A, arrive au composé à 4 C',
   compose_6c: 'l’acétyl s’est accroché : un composé à 6 C',
@@ -44,9 +48,14 @@ const MOTIFS = {
   atp: 'ADP + Pi → ATP',
   fadh2: 'FAD → FADH2',
   nadh_3: 'NAD+ → NADH,H+',
+  coa_repart: 'le coenzyme A repart, l’acétyl va s’accrocher',
   retour_4c: 'le composé à 4 C est retrouvé : un tour du cycle',
+  equation_tour: 'l’équation d’un tour du cycle',
   second_tour: 'le second acétyl-CoA du même glucose a fait un second tour du cycle',
-  compteur_par_glucose: 'le bilan pour un glucose',
+  compteur_par_glucose: 'le tableau pour un glucose : × 2',
+  six_co2: 'les six carbones du glucose : 6 CO2 (2 à l’acétyl-CoA, 4 dans le cycle)',
+  dix_nadh: '10 NADH,H+ : 2 de la glycolyse, 2 de l’acétyl-CoA, 6 du cycle',
+  energie_transporteurs: 'l’énergie est portée par les transporteurs NADH,H+ et FADH2',
 };
 const CARBONE = [250, 204, 21], NADC = [34, 190, 220], FADC = [230, 140, 60], ATPC = [250, 190, 60], COA = [168, 110, 220];
 const RO = { x: 250, y: 178, r: 84 };                      // la roue (16 novembre 2026 : à gauche, le compteur en carte à droite)
@@ -263,6 +272,8 @@ function dessiner(c) {
   amas(c, xc, yc, e.n, doux(chrono.part(0, 1, t)));
   ecrit.ecrire(c, 'centre' + e.n, () => c.texte(`${e.n} C`, RO.x, RO.y + 8, { couleur: 'jaune', taille: 32, gras: true, align: 'center' }));
   if (e.n === 6) c.repere('compose_6c', xc - 34, yc - 20, 68, 40, 'le composé à 6 C');
+  if (e.n === 4) c.repere('compose_4c', xc - 22, yc - 20, 44, 40, 'le composé à 4 C');
+  c.repere('compose', xc - (e.n > 4 ? 34 : 22), yc - 20, e.n > 4 ? 68 : 44, 40, `le composé à ${e.n} C`);
   // les crans : flèche peinte vers l’extérieur, de la couleur du produit, et son nom, écrits au premier tour
   for (const cr of T1.crans) {
     if (t < cr.ev - .4) continue;
@@ -278,6 +289,7 @@ function dessiner(c) {
   if (t >= T1.crans[0].ev) rep('nadh', T1.crans[0], 130);
   if (t >= T1.crans[2].ev) rep('atp', T1.crans[2], 130);
   if (t >= T1.crans[3].ev) rep('fadh2', T1.crans[3], 110);
+  if (t >= T1.crans[4].ev) rep('nadh_3', T1.crans[4], 80);
   // un tour du cycle : le composé à 4 C est retrouvé, mis en valeur ; l'équation d'un tour dans la bande du bas
   if (t >= T1.retour - .2) {
     const u = doux(chrono.part(T1.retour - .2, T1.retour + .6, t));
@@ -292,6 +304,9 @@ function dessiner(c) {
       c.texte('4 C retrouvé :', RO.x, RO.y + 30, { couleur: 'vert', taille: 15, gras: true, align: 'center' });
       c.texte('c’est un cycle', RO.x, RO.y + 48, { couleur: 'vert', taille: 15, gras: true, align: 'center' });
     });
+    c.repere('ecrit_cycle', RO.x - 53, RO.y + 14, 106, 40, '4 C retrouvé : c’est un cycle');
+  }
+  if (t >= M.equation_tour - 1) {
     ecrit.ecrire(c, 'eqtour', () => {
       c.texte('un tour : CH_3-CO-CoA + 3 NAD+ + FAD + ADP + Pi + 3 H_{2}O', 380, 352, { couleur: 'jaune', taille: 17, gras: true, align: 'center', max: 720 });
       c.texte('→ 2 CO_{2} + 3 NADH,H+ + FADH_{2} + ATP + CoA-H', 380, 374, { couleur: 'jaune', taille: 17, gras: true, align: 'center', max: 720 });
@@ -310,11 +325,18 @@ function dessiner(c) {
     });
     c.repere('tableau_glucose', X2 - 30, 88, 66, 220, 'le bilan du cycle pour un glucose (× 2)');
   }
-  if (t >= M.compteur_par_glucose - .3) {
-    ecrit.ecrire(c, 'glucose', () => {
-      c.texte('pour un glucose : 10 NADH,H+ (2 glycolyse + 2 acétyl-CoA + 6 Krebs), 2 FADH_{2}, 6 CO_{2}', 380, 394, { couleur: 'orange', taille: 16, gras: true, align: 'center', max: 724 });
-      c.texte('l’énergie est surtout portée par NADH,H+ et FADH_{2}', 380, 413, { couleur: 'vert', taille: 16, gras: true, align: 'center', max: 724 });
-    });
+  // pour un glucose, chaque écrit quand le tuteur le dit : les 6 CO2, les 10 NADH,H+, puis où est l'énergie
+  if (t >= M.six_co2 - .6) {
+    ecrit.ecrire(c, 'glu_co2', () => c.texte('pour un glucose : 6 CO_{2} = 2 (acétyl-CoA) + 4 (Krebs)', 200, 394, { couleur: 'orange', taille: 16, gras: true, align: 'center', max: 360 }));
+    c.repere('ecrit_co2', 20, 380, 360, 20, '6 CO2 pour un glucose');
+  }
+  if (t >= M.dix_nadh - .6) {
+    ecrit.ecrire(c, 'glu_nadh', () => c.texte('10 NADH,H+ = 2 (glycolyse) + 2 + 6 ; 2 FADH_{2}', 566, 394, { couleur: 'cyan', taille: 16, gras: true, align: 'center', max: 350 }));
+    c.repere('ecrit_nadh', 390, 380, 352, 20, '10 NADH,H+ pour un glucose');
+  }
+  if (t >= M.energie_transporteurs - .6) {
+    ecrit.ecrire(c, 'glu_energie', () => c.texte('l’énergie est surtout portée par NADH,H+ et FADH_{2}', 380, 413, { couleur: 'vert', taille: 16, gras: true, align: 'center', max: 724 }));
+    c.repere('ecrit_energie', 140, 400, 480, 20, 'l’énergie : dans NADH,H+ et FADH2');
   }
 }
 
@@ -330,11 +352,12 @@ function phase(t) {
   if (t < 15.3) return 'Quatrième cran : FAD → FADH2. ' + cpt;
   if (t < 17.3) return 'Cinquième cran : NAD+ → NADH,H+. ' + cpt;
   if (t < 18.8) return 'Le composé à 4 C revient en haut de la roue. ' + cpt;
-  if (t < 21) return 'Le composé à 4 C est retrouvé, prêt pour un autre acétyl : c’est un cycle (écrit au centre). En bas, l’équation d’un tour. ' + cpt;
+  if (t < 21) return 'Le composé à 4 C est retrouvé, prêt pour un autre acétyl : c’est un cycle (écrit au centre).' + (t >= M.equation_tour - 1 ? ' En bas, l’équation d’un tour. ' : ' ') + cpt;
   if (t < M.second_tour) return 'Un second acétyl-CoA (du second acide pyruvique du même glucose) fait un second tour du cycle, plus vite (écrit : 2ᵉ tour). ' + cpt;
   if (t < M.second_tour + .4) return 'Le second tour est fini : le composé à 4 C est de nouveau en haut. ' + cpt;
-  if (t < M.compteur_par_glucose - .3) return 'Le tableau reçoit sa colonne × 2 : pour un glucose 4 CO2, 6 NADH,H+, 2 FADH2, 2 ATP. ' + cpt;
-  return 'Tableau × 2 : 4 CO2, 6 NADH,H+, 2 FADH2, 2 ATP. En bas : pour un glucose, 10 NADH,H+ (2 glycolyse + 2 acétyl-CoA + 6 Krebs), 2 FADH2, 6 CO2 ; l’énergie est surtout portée par NADH,H+ et FADH2. ' + cpt;
+  if (t < M.six_co2 - .6) return 'Le tableau reçoit sa colonne × 2 : pour un glucose 4 CO2, 6 NADH,H+, 2 FADH2, 2 ATP. ' + cpt;
+  return 'Tableau × 2 : 4 CO2, 6 NADH,H+, 2 FADH2, 2 ATP. En bas : « pour un glucose : 6 CO2 = 2 (acétyl-CoA) + 4 (Krebs) »'
+    + (t >= M.dix_nadh - .6 ? ' ; « 10 NADH,H+ = 2 (glycolyse) + 2 + 6 ; 2 FADH2 »' : '') + (t >= M.energie_transporteurs - .6 ? ' ; « l’énergie est surtout portée par NADH,H+ et FADH2 »' : '') + '. ' + cpt;
 }
 function ceQuiSeVoit() {
   const t = chrono.t, e = t < T2.debut ? compose(T1, t) : compose(T2, t);

@@ -46,7 +46,9 @@ function maisonnette(x, cx, cy, a, couleur) {
 }
 
 /* ── Vue cellule ─────────────────────────────────────────────────────────── */
-const MC = { d_cellule: 2.0, d_membrane: 3.6, d_hyaloplasme: 5.2, d_noyau: 6.8, d_mitochondries: 8.8, d_ville: 12.4 };
+/* (17 novembre 2026) un moment par chose dite : la ville d’abord (ses maisons), puis la mairie, les rues et les usines,
+ * chacune dessinée et écrite quand la voix la nomme (avant, tout s’écrivait d’un coup bien avant d’être dit). */
+const MC = { d_cellule: 2.0, d_membrane: 3.6, d_hyaloplasme: 5.2, d_noyau: 6.8, d_mitochondries: 8.8, d_ville: 10.0, d_mairie: 11.0, d_rues: 12.0, d_usines: 13.0 };
 // (17 novembre 2026) positions vérifiées : chaque mitochondrie (40 × 17) reste à ≤ 0,87 du bord de la cellule
 // (ellipse 200 × 140) et loin du noyau ; avant, celle du haut à gauche mordait la membrane et celle du haut à droite débordait
 const MITOS = [[160, 175, .55], [200, 305, -.2], [320, 312, .1], [355, 158, .55], [115, 240, 1.35]];
@@ -57,36 +59,50 @@ function dessinerCellule(c, k) {
     Peint.cellule(x, 250, 230, 200, 140, rampe(t, .3, .8));
     Peint.noyau(x, 280, 220, 52, rampe(t, .5, .8));
     MITOS.forEach(([mx, my, an], i) => mitochondrie(x, mx, my, 40, 17, an, rampe(t, 7.4 + i * .2, .5)));
-    if (t >= 10.4) { const a = rampe(t, 10.4, .8);   // l’autre façon : une petite ville
-      x.save(); x.globalAlpha = a; x.fillStyle = 'rgba(148,163,184,.35)'; x.fillRect(520, 170, 220, 14); x.fillRect(620, 110, 14, 190); x.restore();
+    if (t >= 8.9) { const a = rampe(t, 8.9, .6);   // l’autre façon : une petite ville (ses maisons d’abord)
       maisonnette(x, 560, 140, a, '#e2e8f0'); maisonnette(x, 700, 140, a, '#e2e8f0'); maisonnette(x, 560, 250, a, '#fecaca');
-      x.save(); x.globalAlpha = a; const gm = x.createLinearGradient(0, 220, 0, 270); gm.addColorStop(0, '#fef3c7'); gm.addColorStop(1, '#d6b36a'); x.fillStyle = gm; x.fillRect(672, 222, 56, 44); x.fillStyle = '#92400e'; x.beginPath(); x.moveTo(666, 222); x.lineTo(700, 200); x.lineTo(734, 222); x.closePath(); x.fill(); x.restore();
-      usine(x, 690, 330, a); usine(x, 580, 340, a);
     }
+    if (t >= 10.0) { const a = rampe(t, 10.0, .5);   // la mairie (= le noyau)
+      x.save(); x.globalAlpha = a; const gm = x.createLinearGradient(0, 220, 0, 270); gm.addColorStop(0, '#fef3c7'); gm.addColorStop(1, '#d6b36a'); x.fillStyle = gm; x.fillRect(672, 222, 56, 44); x.fillStyle = '#92400e'; x.beginPath(); x.moveTo(666, 222); x.lineTo(700, 200); x.lineTo(734, 222); x.closePath(); x.fill(); x.restore();
+    }
+    if (t >= 11.0) { const a = rampe(t, 11.0, .5);   // les rues (= le hyaloplasme)
+      x.save(); x.globalAlpha = a; x.fillStyle = 'rgba(148,163,184,.45)'; x.fillRect(520, 170, 220, 14); x.fillRect(620, 110, 14, 190); x.restore();
+    }
+    if (t >= 12.0) { const a = rampe(t, 12.0, .5); usine(x, 690, 330, a); usine(x, 580, 340, a); }   // les usines (= les mitochondries)
   });
   c.texte('La cellule : où tout se passe', 14, 26, { couleur: 'cyan', taille: 18 });
   c.repere('cellule', 50, 90, 400, 280, 'une cellule');
   if (k.ecrit(c, 'mem', 2.6)) { c.fleche(40, 350, 82, 300, { couleur: 'faible', largeur: 1.4 }); k.T(c, 'la membrane plasmique', 14, 372, { couleur: 'blanc', taille: 14 }); }
   if (t >= 2.6) c.repere('membrane', 46, 200, 34, 70, 'la membrane plasmique');
   if (k.ecrit(c, 'hya', 4.2)) { c.fleche(250, 392, 250, 340, { couleur: 'faible', largeur: 1.4 }); k.T(c, 'le hyaloplasme (le liquide intérieur)', 190, 408, { couleur: 'blanc', taille: 14 }); }
-  if (t >= 4.2) c.repere('hyaloplasme', 160, 330, 120, 40, 'le hyaloplasme');
+  if (t >= 4.2) c.repere('hyaloplasme', 232, 282, 90, 50, 'le hyaloplasme');
   if (k.ecrit(c, 'noy', 5.8)) { c.fleche(372, 84, 300, 168, { couleur: 'faible', largeur: 1.4 }); k.T(c, 'le noyau : il commande', 340, 72, { couleur: 'blanc', taille: 14 }); }
   if (t >= 5.8) c.repere('noyau', 226, 166, 108, 108, 'le noyau');
   if (k.ecrit(c, 'mit', 8.0)) { c.fleche(96, 124, 130, 158, { couleur: 'faible', largeur: 1.4 }); k.T(c, 'des mitochondries', 8, 96, { couleur: 'orange', taille: 14 }); k.T(c, '(leur rôle : plus loin)', 8, 117, { couleur: 'faible', taille: 12 }); }   // étiquette en haut à gauche : avant, elle recouvrait la maison de la petite ville
   if (t >= 8.0) c.repere('mitochondries', 125, 150, 72, 52, 'une mitochondrie');
-  if (t >= 10.4) c.repere('ville', 510, 100, 240, 270, 'la cellule vue comme une petite ville');
-  if (k.ecrit(c, 'vil', 10.8)) { k.T(c, 'autrement : une petite ville', 630, 96, { couleur: 'cyan', taille: 14, align: 'center' }); k.T(c, 'mairie = noyau ; rues = hyaloplasme', 630, 392, { couleur: 'blanc', taille: 12, align: 'center' }); k.T(c, 'petites usines = mitochondries', 630, 410, { couleur: 'orange', taille: 12, align: 'center' }); }
+  if (t >= 8.9) c.repere('ville', 510, 100, 240, 270, 'la cellule vue comme une petite ville');
+  if (k.ecrit(c, 'vil', 9.2)) k.T(c, 'autrement : une petite ville', 630, 96, { couleur: 'cyan', taille: 14, align: 'center' });
+  if (t >= 10.0) c.repere('mairie', 664, 198, 74, 70, 'la mairie (= le noyau)');
+  if (k.ecrit(c, 'mai', 10.2)) k.T(c, 'mairie = noyau', 568, 392, { couleur: 'blanc', taille: 12, align: 'center' });
+  if (t >= 11.0) c.repere('rues', 518, 166, 224, 22, 'les rues (= le hyaloplasme)');
+  if (k.ecrit(c, 'rue', 11.2)) k.T(c, 'rues = hyaloplasme', 692, 392, { couleur: 'blanc', taille: 12, align: 'center' });
+  if (t >= 12.0) c.repere('usines', 548, 272, 174, 86, 'de petites usines (= les mitochondries)');
+  if (k.ecrit(c, 'usi', 12.2)) k.T(c, 'petites usines = mitochondries', 630, 410, { couleur: 'orange', taille: 12, align: 'center' });
 }
 function voitCellule(k) {
   const t = k.t, m = ['Une cellule peinte, rose, avec un noyau violet.'];
   if (t >= 2.6) m.push('Légendes : la membrane plasmique ; le hyaloplasme (le liquide intérieur) ; le noyau (il commande).');
   if (t >= 8.0) m.push('Des mitochondries peintes, orange, avec des replis : « des mitochondries (leur rôle : plus loin) ».');
-  if (t >= 10.8) m.push('À droite, une petite ville : mairie = noyau, rues = hyaloplasme, petites usines = mitochondries.');
+  if (t >= 9.2) m.push('À droite, une petite ville : des maisons.');
+  if (t >= 10.2) m.push('La mairie est dessinée : « mairie = noyau ».');
+  if (t >= 11.2) m.push('Les rues sont tracées : « rues = hyaloplasme ».');
+  if (t >= 12.2) m.push('Deux petites usines fument : « petites usines = mitochondries ».');
   return m;
 }
 
 /* ── Vue glucose ─────────────────────────────────────────────────────────── */
-const MG = { g_pain: 1.8, g_sang: 4.4, g_molecule: 7.2, g_liaisons: 9.4, g_casser: 11.8, g_buche: 15.0 };
+/* (17 novembre 2026) la bûche, puis le feu (« quand il brûle »), puis la cellule pas à pas : chacun à son moment. */
+const MG = { g_pain: 1.8, g_sang: 4.4, g_molecule: 7.2, g_liaisons: 9.4, g_casser: 11.8, g_buche: 13.0, g_feu: 14.2, g_pas_a_pas: 16.2 };
 const CYCLE = Array.from({ length: 6 }, (_, i) => { const a = -Math.PI / 2 + i * TAU / 6; return [Math.cos(a), Math.sin(a)]; });
 function pain(x, cx, cy, a) {
   x.save(); x.globalAlpha = a;
@@ -131,7 +147,13 @@ function dessinerGlucose(c, k) {
     if (t >= 5.6) hexa(x, 230, 296, 46, rampe(t, 5.6, .6), casse);
     if (t >= 8.2 && t < 10.2) { x.save(); x.globalAlpha = .5 * rampe(t, 8.2, .5); x.strokeStyle = '#facc15'; x.lineWidth = 8; x.beginPath(); CYCLE.forEach(([u, v], j) => x[j ? 'lineTo' : 'moveTo'](230 + u * 46, 296 + v * 46)); x.closePath(); x.stroke(); x.restore(); }
     if (casse > 0) eclairs(x, 230, 296, casse * (1 - rampe(t, 12.6, 1.2) * .5), 8, 64);
-    if (t >= 12.8) { const a = rampe(t, 12.8, .6); buche(x, 620, 300, a, rampe(t, 13.4, .6)); }
+    if (t >= 12.0) { const a = rampe(t, 12.0, .6); buche(x, 620, 300, a, rampe(t, 13.2, .6)); }
+    if (t >= 14.4) {   // la cellule, elle, descend l’escalier : une petite étincelle à chaque marche
+      for (let i = 0; i < 4; i++) { const u = rampe(t, 14.4 + i * .4, .3); if (u <= 0) continue;
+        x.save(); x.globalAlpha = u; x.strokeStyle = '#e2e8f0'; x.lineWidth = 2.2; x.lineCap = 'round';
+        x.beginPath(); x.moveTo(548 + i * 40, 393 + i * 6); x.lineTo(588 + i * 40, 393 + i * 6); x.lineTo(588 + i * 40, 399 + i * 6); x.stroke(); x.restore();
+        eclairs(x, 568 + i * 40, 383 + i * 6, u, 5, 9); }
+    }
   });
   c.texte('Le glucose : de l’énergie rangée dans une molécule', 14, 26, { couleur: 'cyan', taille: 18 });
   c.repere('pain', 34, 96, 112, 70, 'du pain : de l’amidon');
@@ -143,8 +165,12 @@ function dessinerGlucose(c, k) {
   if (t >= 8.2) c.repere('liaisons', 170, 236, 120, 120, 'les liaisons entre les atomes');
   if (k.ecrit(c, 'lia', 8.4)) { k.T(c, 'l’énergie est rangée', 352, 262, { couleur: 'jaune', taille: 14 }); k.T(c, 'dans les liaisons :', 352, 284, { couleur: 'jaune', taille: 14 }); k.T(c, 'énergie chimique', 352, 306, { couleur: 'orange', taille: 15 }); }
   if (k.ecrit(c, 'cas', 10.6)) k.T(c, 'liaisons cassées → énergie libérée', 230, 415, { couleur: 'vert', taille: 14, align: 'center' });
-  if (t >= 12.8) c.repere('buche', 550, 240, 150, 90, 'une bûche qui brûle');
-  if (k.ecrit(c, 'buc', 13.4)) { k.T(c, 'autrement : la bûche brûle d’un coup', 620, 226, { couleur: 'cyan', taille: 13, align: 'center' }); k.T(c, 'la cellule, elle, avance pas à pas', 620, 350, { couleur: 'vert', taille: 13, align: 'center' }); }
+  if (t >= 12.0) c.repere('buche', 556, 282, 132, 34, 'une bûche');
+  if (t >= 13.2) c.repere('feu', 560, 236, 120, 58, 'le feu : la chaleur d’un coup');
+  if (k.ecrit(c, 'buc', 12.3)) k.T(c, 'autrement : une bûche de bois', 620, 226, { couleur: 'cyan', taille: 13, align: 'center' });
+  if (k.ecrit(c, 'feu', 13.4)) k.T(c, 'elle brûle : la chaleur sort d’un coup', 620, 340, { couleur: 'orange', taille: 13, align: 'center' });
+  if (t >= 14.4) c.repere('pas_a_pas', 540, 348, 176, 70, 'la cellule : pas à pas');
+  if (k.ecrit(c, 'pas', 14.4)) k.T(c, 'la cellule, elle, avance pas à pas', 620, 362, { couleur: 'vert', taille: 13, align: 'center' });
 }
 function voitGlucose(k) {
   const t = k.t, m = ['En haut à gauche, du pain peint (de l’amidon).'];
@@ -152,7 +178,9 @@ function voitGlucose(k) {
   if (t >= 6.0) m.push('Une molécule de glucose en grand : un anneau de six carbones ; écrit « glucose : C₆H₁₂O₆ ».');
   if (t >= 8.4) m.push('Les liaisons brillent : « l’énergie est rangée dans les liaisons : énergie chimique ».');
   if (t >= 10.6) m.push('L’anneau se casse, des éclairs jaunes en sortent : « liaisons cassées → énergie libérée ».');
-  if (t >= 13.4) m.push('À droite, une bûche qui brûle d’un coup ; « la cellule, elle, avance pas à pas ».');
+  if (t >= 12.3) m.push('À droite, une bûche de bois peinte.');
+  if (t >= 13.4) m.push('La bûche brûle, de grandes flammes : « elle brûle : la chaleur sort d’un coup ».');
+  if (t >= 14.4) m.push('En dessous, un petit escalier, une étincelle à chaque marche : « la cellule, elle, avance pas à pas ».');
   return m;
 }
 
@@ -172,13 +200,13 @@ const enMosaique = (f) => (c, k) => (MOS ? MOS.dessiner(c, () => f(c, k)) : f(c,
 window.Etapes.lancer({
   id: 'svt_depart_energie', titre: 'La cellule et le glucose', graine: 53,
   vues: {
-    cellule: { titre: 'La cellule', fin: 13.0, moments: MC, autoDepart: false, dessiner: enMosaique(dessinerCellule), voit: voitCellule,
-      motifs: { d_cellule: 'une cellule', d_membrane: 'la membrane plasmique', d_hyaloplasme: 'le hyaloplasme', d_noyau: 'le noyau', d_mitochondries: 'des mitochondries', d_ville: 'la cellule vue comme une petite ville' },
+    cellule: { titre: 'La cellule', fin: 13.6, moments: MC, autoDepart: false, dessiner: enMosaique(dessinerCellule), voit: voitCellule,
+      motifs: { d_cellule: 'une cellule', d_membrane: 'la membrane plasmique', d_hyaloplasme: 'le hyaloplasme', d_noyau: 'le noyau', d_mitochondries: 'des mitochondries', d_ville: 'la cellule vue comme une petite ville', d_mairie: 'la mairie : le noyau', d_rues: 'les rues : le hyaloplasme', d_usines: 'de petites usines : les mitochondries' },
       conclusion: 'La cellule : une membrane, le hyaloplasme, un noyau, des mitochondries.',
       texte: 'Une cellule : membrane plasmique, hyaloplasme (liquide intérieur), noyau (il commande), mitochondries (rôle vu plus tard) ; comme une petite ville.',
       explication: [{ repere: 'membrane', texte: 'La membrane entoure la cellule.' }, { repere: 'hyaloplasme', texte: 'Le hyaloplasme est le liquide intérieur.' }, { repere: 'mitochondries', texte: 'Des mitochondries : leur rôle est vu plus loin.' }] },
-    glucose: { titre: 'Le glucose et l’énergie chimique', fin: 15.6, moments: MG, autoDepart: false, dessiner: enMosaique(dessinerGlucose), voit: voitGlucose,
-      motifs: { g_pain: 'du pain : de l’amidon', g_sang: 'du glucose dans le sang', g_molecule: 'une molécule de glucose, six carbones', g_liaisons: 'l’énergie chimique, dans les liaisons', g_casser: 'liaisons cassées : énergie libérée', g_buche: 'la bûche brûle d’un coup ; la cellule avance pas à pas' },
+    glucose: { titre: 'Le glucose et l’énergie chimique', fin: 16.8, moments: MG, autoDepart: false, dessiner: enMosaique(dessinerGlucose), voit: voitGlucose,
+      motifs: { g_pain: 'du pain : de l’amidon', g_sang: 'du glucose dans le sang', g_molecule: 'une molécule de glucose, six carbones', g_liaisons: 'l’énergie chimique, dans les liaisons', g_casser: 'liaisons cassées : énergie libérée', g_buche: 'une bûche de bois', g_feu: 'la bûche brûle : la chaleur d’un coup', g_pas_a_pas: 'la cellule avance pas à pas' },
       conclusion: 'Le glucose contient de l’énergie chimique, rangée dans ses liaisons ; la cellule la libère pas à pas.',
       texte: 'Du pain (amidon) au glucose du sang ; la molécule C₆H₁₂O₆ (six carbones) ; énergie chimique dans les liaisons, libérée quand elles se cassent ; comme une bûche qui brûle, mais pas à pas.',
       explication: [{ repere: 'molecule', texte: 'Le glucose : six carbones en anneau.' }, { repere: 'liaisons', texte: 'L’énergie est rangée dans les liaisons.' }, { repere: 'buche', texte: 'Comme une bûche qui brûle, mais la cellule avance pas à pas.' }] },

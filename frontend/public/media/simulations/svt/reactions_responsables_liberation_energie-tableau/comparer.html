@@ -25,7 +25,9 @@
  * À droite, la colonne de chaque essai se remplit au moment où on le voit (lieu, dégradation, produits, ATP, rendement) :
  * le tableau respiration / fermentation est le RÉSULTAT des deux essais. Remplace le tableau de la diapo le_r3_comparer.
  * Moments (s de la scène) — avec O₂ : glycolyse 2,2 ; mitochondrie 3,4 ; mineraux 6 ; rendement 7.
- *                            sans O₂ : glycolyse 2,2 ; rendement 3,2 ; residu 5.
+ *                            sans O₂ : glycolyse 2,2 ; deux_atp 2,8 ; rendement 3,6 ; residu 5,4 ; incomplete 6.
+ *   (17 novembre 2026 : sans O₂, « 2 ATP : 61 kJ » puis « r = 2,13 % » puis « incomplète » s’écrivent chacun quand le tuteur
+ *   le dit ; chaque case remplie du tableau est un repère : resp_lieu, resp_degradation, …, ferm_r.)
  */
 const { bulle, protocole } = window.Tableau;
 const { Scene, Chrono, Apparitions, doux, mix, fr } = window.SVTTableau;
@@ -34,15 +36,17 @@ const $ = id => document.getElementById(id);
 const S = { o2: true };
 const R = { resp: {}, ferm: {} };          // ce que chaque essai a déjà montré (reste écrit d'un essai à l'autre)
 const MR = { glycolyse: 2.2, mitochondrie: 3.4, mineraux: 6, rendement: 7 };
-const MF = { glycolyse: 2.2, rendement: 3.2, residu: 5 };
+const MF = { glycolyse: 2.2, deux_atp: 2.8, rendement: 3.6, residu: 5.4, incomplete: 6 };
 const moments = () => (S.o2 ? MR : MF);
-const FIN = () => (S.o2 ? 7.6 : 5.6);
+const FIN = () => (S.o2 ? 7.6 : 6.4);
 const MOTIFS = {
   glycolyse: 'la glycolyse : le glucose coupé en deux acides pyruviques, 2 ATP',
   mitochondrie: 'avec O₂, les acides pyruviques entrent dans la mitochondrie',
   mineraux: 'tout le carbone est sorti en CO₂, avec de l’eau : 38 ATP',
   rendement: S => (S.o2 ? 'rendement de la respiration : 40,5 %' : 'sans O₂, 2 ATP seulement : rendement 2,13 %'),
   residu: 'l’acide lactique reste : le résidu organique garde l’énergie',
+  deux_atp: 'sans O₂ : 2 ATP seulement, 61 kJ',
+  incomplete: 'sans O₂ : dégradation incomplète',
 };
 const motifs = new Proxy({}, { get: (_, k) => (typeof MOTIFS[k] === 'function' ? MOTIFS[k](S) : MOTIFS[k]) });
 
@@ -67,8 +71,10 @@ function majResultats() {
     if (t >= M.mineraux) { r.degradation = r.produits = r.atp = true; }
     if (t >= M.rendement) r.r = true;
   } else {
-    if (t >= M.rendement) { r.atp = r.r = true; }
-    if (t >= M.residu) { r.lieu = r.degradation = r.produits = true; }
+    if (t >= M.deux_atp) r.atp = true;
+    if (t >= M.rendement) r.r = true;
+    if (t >= M.residu) { r.lieu = r.produits = true; }
+    if (t >= M.incomplete) r.degradation = true;
   }
 }
 
@@ -209,17 +215,18 @@ function dessiner(c) {
       c.repere('rendement', 20, 352, 410, 28, 'le rendement');
     }
   } else {
-    if (t >= M.glycolyse + 0.2) {
-      ecrit.ecrire(c, 'r', () => {
-        c.texte('2 ATP seulement : 2 × 30,5 = 61 kJ', 24, 364, { couleur: 'jaune', taille: 16 });
-        c.texte('r = (2 × 30,5) / 2860 × 100 = 2,13 %', 24, 390, { couleur: 'jaune', taille: 16 });
-      });
-      c.repere('rendement', 20, 344, 410, 54, 'le rendement');
+    if (t >= M.glycolyse + 0.1) {
+      ecrit.ecrire(c, 'r1', () => c.texte('2 ATP seulement : 2 × 30,5 = 61 kJ', 24, 364, { couleur: 'jaune', taille: 16 }));
+      c.repere('ecrit_61', 20, 348, 330, 22, '2 ATP : 61 kJ');
+    }
+    if (t >= M.rendement - 0.6) {
+      ecrit.ecrire(c, 'r2', () => c.texte('r = (2 × 30,5) / 2860 × 100 = 2,13 %', 24, 390, { couleur: 'jaune', taille: 16 }));
+      c.repere('rendement', 20, 374, 340, 22, 'le rendement : 2,13 %');
     }
     if (t >= M.residu - 0.8) {
       ecrit.ecrire(c, 'lact', () => {
         c.texte('2 acides lactiques', 120, 232, { couleur: 'orange', taille: 15 });
-        c.texte('résidu organique : l’énergie y reste', 40, 258, { couleur: 'orange', taille: 14 });
+        c.texte('résidu organique : l’énergie y reste', 40, 284, { couleur: 'orange', taille: 14 });   // (17 novembre 2026) sous la ligne de la mitochondrie à l’arrêt, plus contre elle
       });
       c.repere('residu', 110, 126, 110, 160, 'l’acide lactique : le résidu organique');
     }
@@ -243,9 +250,12 @@ function colonne(c) {
   c.repere('colonne_fermentation', 642, 54, 106, 282, 'la colonne de la fermentation (sans O₂)');
   c.repere('comparaison', X, CELL.y, 760 - X - 6, CELL.h, 'la comparaison respiration / fermentation');
   });
+  // repères des cases remplies : 'resp_lieu' 'resp_degradation' 'resp_produits' 'resp_atp' 'resp_r' 'ferm_lieu' 'ferm_degradation' 'ferm_produits' 'ferm_atp' 'ferm_r'
+  const lab2 = { lieu: 'lieu', degradation: 'dégradation', produits: 'produits', atp: 'ATP', r: 'rendement' };
   const cellule = (col, cle, lignes, couleur) => {
     const r = col === 'resp' ? R.resp : R.ferm, x = col === 'resp' ? COL.c1 : COL.c2, y = ROWS[cle];
     if (!r[cle]) return;
+    c.repere(col + '_' + cle, x - COL.w / 2 - 2, y - (lignes.length > 1 ? 20 : 14), COL.w + 4, lignes.length > 1 ? 40 : 26, `${col === 'resp' ? 'respiration' : 'fermentation'} : ${lab2[cle]} ${lignes.join(' ')}`);
     ecritR.ecrire(c, col + cle, () => lignes.forEach((s, i) => c.texte(s, x, y + (lignes.length > 1 ? -4 + i * 17 : 5), { couleur, taille: lignes.length > 1 ? 14 : 17, gras: true, align: 'center', max: COL.w })));
   };
   cellule('resp', 'lieu', ['hyaloplasme', 'puis mitochondrie'], 'cyan');
@@ -271,7 +281,7 @@ function ceQuiSeVoit() {
     else if (t < M.mineraux) m.push('Dans la mitochondrie, les carbones sortent un à un en CO₂, de l’eau se forme, les ATP montent.');
     else m.push('Il ne reste que 6 CO₂ et 6 H₂O (déchets minéraux) ; 38 ATP' + (t >= M.rendement ? ' ; r = (38 × 30,5) / 2860 × 100 = 40,5 % écrit.' : '.'));
   } else {
-    m.push('La mitochondrie est à l’arrêt. 2 ATP seulement' + (t >= M.rendement - 0.8 ? ' : 61 kJ ; r = 2,13 % écrit.' : '.'));
+    m.push('La mitochondrie est à l’arrêt. 2 ATP seulement' + (t >= M.glycolyse + 0.1 ? ' : 61 kJ écrit' : '') + (t >= M.rendement - 0.6 ? ' ; r = 2,13 % écrit.' : '.'));
     if (t >= M.residu - 0.8) m.push('Les acides pyruviques sont devenus 2 acides lactiques, qui gardent leur énergie : le résidu organique.');
   }
   const col = (r, nom) => (Object.keys(r).length ? `${nom} : ${Object.keys(r).join(', ')} remplis` : `${nom} : vide`);
@@ -305,7 +315,7 @@ const config = { id: 'svt_energie_comparer', version: '1.0', title: 'Avec ou san
   command_schema: {
     set_parameters: { o2: 'true | false (dioxygène présent ou absent ; remet l’essai au début, la colonne de droite reste)' },
     set_time: { time_s: '0..7,6 (avec O₂) ou 0..5,6 (sans O₂)' },
-    play_until: { moment: 'avec O₂ : glycolyse | mitochondrie | mineraux | rendement ; sans O₂ : glycolyse | rendement | residu (rejoue et se fige)' } } };
+    play_until: { moment: 'avec O₂ : glycolyse | mitochondrie | mineraux | rendement ; sans O₂ : glycolyse | deux_atp | rendement | residu | incomplete (rejoue et se fige)', duree_s: 'durée voulue de l’animation' } } };
 const pont = protocole({ id: config.id, commandes, config,
   texte: 'Le même glucose avec ou sans dioxygène. Glycolyse dans le hyaloplasme : 2 acides pyruviques, 2 ATP. Avec O₂ (respiration) : l’acide pyruvique entre dans la mitochondrie, dégradation complète en 6 CO₂ + 6 H₂O (déchets minéraux), 38 ATP, r = (38 × 30,5) / 2860 × 100 = 40,5 %. Sans O₂ (fermentation) : il reste dans le hyaloplasme, devient acide lactique (ou éthanol + CO₂ chez la levure) : dégradation incomplète, résidu organique qui garde l’énergie, 2 ATP, r = (2 × 30,5) / 2860 × 100 = 2,13 %. La colonne de droite se remplit avec les résultats des deux essais.',
   etat: () => ({ simulation_status: chrono.statut(), ce_qui_se_voit: ceQuiSeVoit(), parameters: { o2: S.o2 }, moments: moments(), time_s: +chrono.t.toFixed(2), resultats: { respiration: Object.keys(R.resp), fermentation: Object.keys(R.ferm) } }),
