@@ -111,6 +111,9 @@ function reachPosition(point: Point, writing: boolean, rigModele: ProfessorRig, 
     : clampFlight(point.x - reach * 0.92 - left.x, point.y - left.y + reach * 0.16);
 }
 
+/** Commandes où le professeur montre un élément de la simulation (même liste que le kit shared/tableau). */
+const POINTAGE_SIMULATION = ['highlight', 'point', 'montrer', 'show'];
+
 export default function AIAvatar({ isSpeaking, isProcessing, processingStage, isListening = false, control, labControl, emotion, discret = false, mainOreille = false }: AIAvatarProps) {
   const initial = useMemo(() => clampPosition(window.innerWidth - largeur() - 20, window.innerHeight - hauteur() - 100), []);
   const [minimized, setMinimized] = useState(false);
@@ -295,6 +298,9 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
       iframe?.contentWindow?.postMessage(labControl.message, '*');
     };
     if (!iframe?.contentWindow || minimized || animationFailed) { deliver(); return; }
+    // Dans le cours (discret), la baguette ne va jamais vers les boutons de la simulation (Lancer, Pause, Observe…) :
+    // ces commandes partent seules, et l'élève ne suit la baguette que vers les éléments de la simulation (17 novembre 2026).
+    if (discret && !POINTAGE_SIMULATION.includes(String(labControl.command))) { deliver(); return; }
     let inner: { x: number; y: number; width: number; height: number } | null = null;
     const bounds = () => {
       const frame = iframe.getBoundingClientRect();

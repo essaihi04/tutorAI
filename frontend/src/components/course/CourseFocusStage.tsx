@@ -328,58 +328,6 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const visuelRef = useRef<HTMLDivElement>(null);
   const lignesRef = useRef<(HTMLTableRowElement | null)[]>([]);
-
-  // L'élève clique dans la simulation (17 novembre 2026, « ne pas afficher le tuteur quand on clique sur la simulation,
-  // pour ne pas distraire ») : le tuteur s'efface (corps, baguette, appui) et la simulation tourne seule ; seuls ses
-  // cadres de focus sur les éléments de la simulation restent (AIAvatar.css, `body[data-simu-eleve]`). Il revient
-  // quand l'élève touche le tableau hors de la simulation, ou à la diapositive suivante. Le clic dans l'iframe ne
-  // remonte pas jusqu'ici : c'est la fenêtre qui perd le focus au profit de l'iframe.
-  const avecSimulation = slide.visual?.kind === 'simulation';
-  useEffect(() => {
-    if (!avecSimulation) return;
-    const poser = (oui: boolean) => {
-      if (oui) document.body.dataset.simuEleve = '';
-      else delete document.body.dataset.simuEleve;
-    };
-    let attente = 0;
-    const versLaSimu = () => {
-      window.clearTimeout(attente);
-      attente = window.setTimeout(() => { if (iframeRef.current && document.activeElement === iframeRef.current) poser(true); }, 0);
-    };
-    const ailleurs = (e: PointerEvent) => {
-      const cible = e.target as Element | null;
-      if (!cible || iframeRef.current?.contains(cible)) return;
-      if (cible.closest?.('[data-scene-cours] > main, [data-scene-cours] > header')) poser(false);
-    };
-    // Plus sûr que le focus (17 novembre 2026 : le tuteur restait visible) : la simulation est servie par le site, on
-    // écoute donc le toucher directement dans sa page, à chaque chargement de l'iframe.
-    const dedans = () => poser(true);
-    let fenetre: Window | null = null;
-    const brancher = () => {
-      try {
-        fenetre?.removeEventListener('pointerdown', dedans, true);
-        fenetre = iframeRef.current?.contentWindow || null;
-        fenetre?.addEventListener('pointerdown', dedans, true);
-      } catch { fenetre = null; }   // autre origine : le focus suffit
-    };
-    brancher();
-    const cadre = iframeRef.current;
-    const suivreCadre = new MutationObserver(() => { const f = iframeRef.current; if (f && f !== suivi) { suivi?.removeEventListener('load', brancher); suivi = f; f.addEventListener('load', brancher); brancher(); } });
-    let suivi = cadre;
-    cadre?.addEventListener('load', brancher);
-    if (visuelRef.current) suivreCadre.observe(visuelRef.current, { childList: true, subtree: true });
-    window.addEventListener('blur', versLaSimu);
-    window.addEventListener('pointerdown', ailleurs, true);
-    return () => {
-      window.clearTimeout(attente);
-      suivreCadre.disconnect();
-      suivi?.removeEventListener('load', brancher);
-      try { fenetre?.removeEventListener('pointerdown', dedans, true); } catch { /* cadre parti */ }
-      window.removeEventListener('blur', versLaSimu);
-      window.removeEventListener('pointerdown', ailleurs, true);
-      poser(false);
-    };
-  }, [slide.id, avecSimulation]);
   const centreRef = useRef<(HTMLDivElement | null)[]>([]);
 
   const [temps, setTemps] = useState(0);
