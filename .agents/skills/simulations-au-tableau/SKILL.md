@@ -47,6 +47,8 @@ A course simulation is a small HTML page drawn with chalk ON the course board. I
 
 13. **What was transformed stays visible, marked** (user rule, 17 November 2026, on `carrefour.html` — the glucose slid away to become the pyruvic acids and the pointer then circled an empty spot; professeur rule 40). A reactant consumed or degraded stays at its place, faded and marked (« (dégradé) », « (oxydé) »); copies travel to become the products, linked by the process arrow carrying the process's name. Its landmark stays declared (on the faded source) as long as it is drawn.
 
+14. **National exercises: the exam's figure comes alive** (user rule, 17 November 2026; professeur rule 41). For a slide built on a national subject: redraw the exam's diagram (annotated) and animate it with the exam's own values; never show a finished curve — trace it in time with the phenomenon (oscilloscope spot, growing curve), then freeze on each reading the question needs (fronts, τ, divisions × sensitivity, tangent, 63 %, equivalence) with a landmark per reading so the pointer can show it. One moment per step of the reasoning, results of later steps hidden until their moment.
+
 ## The tutor must be able to do everything
 
 The tutor explains with the simulation, answers a free question with it, relaunches it as often as needed, pauses on the right instant, moves an element, points at it, or brings another simulation of the lesson. So each simulation:
