@@ -5,6 +5,8 @@ audio.mixed), parole d'une démonstration, d'une réaction préparée, d'une obs
 exact à dire. Sortie JSON : {deck: [{id, type, texte}]} (à donner au lot Bodi sur le VPS, skill voix-du-cours §3).
 
     python -I backend/scripts/lister_voix_attente.py [deck…] > voix_attente.json
+    python -I backend/scripts/lister_voix_attente.py --en-ligne > voix_attente.json
+        (ajoute les cours en ligne sans copie en attente qui ont encore des pistes sans voix)
 """
 import json
 import sys
@@ -22,6 +24,8 @@ def pistes(deck: dict) -> list[dict]:
 
     def walk(o, chemin):
         if isinstance(o, dict):
+            if isinstance(o.get("enonce_dit"), str) and not o.get("enonce_audio"):
+                ajouter(chemin + "__enonce", "enonce", o["enonce_dit"])
             dm = o.get("demonstration")
             if isinstance(dm, dict) and not dm.get("audio"):
                 ajouter(chemin + "__demo", "demonstration", dm.get("parole"))
@@ -44,9 +48,27 @@ def pistes(deck: dict) -> list[dict]:
     return out
 
 
+EN_LIGNE = ATTENTE.parent
+
+
 def main() -> None:
-    noms = sys.argv[1:] or sorted(p.stem for p in ATTENTE.glob("*.json"))
+    args = [a for a in sys.argv[1:] if a != "--en-ligne"]
+    noms = args or sorted(p.stem for p in ATTENTE.glob("*.json"))
     res = {n: pistes(json.loads((ATTENTE / f"{n}.json").read_text(encoding="utf-8"))) for n in noms}
+    if "--en-ligne" in sys.argv:
+        for p in sorted(EN_LIGNE.glob("*.json")):
+            if p.stem in res or not (ATTENTE / p.name).exists() and p.stem not in res:
+                if p.stem in res:
+                    continue
+                try:
+                    deck = json.loads(p.read_text(encoding="utf-8"))
+                except ValueError:
+                    continue
+                if not isinstance(deck, dict) or "activities" not in deck or p.stem.endswith("_course_v1"):
+                    continue
+                l = pistes(deck)
+                if l:
+                    res[f"en_ligne/{p.stem}"] = l
     json.dump(res, sys.stdout, ensure_ascii=False, indent=1)
     for n, l in res.items():
         print(f"{n}: {len(l)} pistes, {sum(len(x['texte']) for x in l)} caractères", file=sys.stderr)
