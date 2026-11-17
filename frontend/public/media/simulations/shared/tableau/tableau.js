@@ -545,6 +545,8 @@
       try { parent.postMessage({ type: 'simulation_manifest', simulation_id: id, capabilities: { commands: toutes, config, globals: ['executeAICommand'], command_schema: schema, state_schema: config.state_schema || {}, reperes: listeReperes(), explication: EXPLICATION || undefined }, page_text: texte }, '*'); } catch (_) { /* hors iframe */ }
     };
     window.SIMULATION_CONFIG = config;
+    // L'état tel que le lecteur le reçoit, lisible directement (contrôles automatiques : frontend/scripts/verifier-pointage-navigateur.mjs).
+    window.__etatTableau = () => ({ ...etat(), derniere_main: main });
     /** La commande à exécuter vraiment, ou null si elle effacerait ce qui est déjà au tableau. */
     const sansRetourArriere = (cmd, p) => {
       let e = {};
