@@ -14,6 +14,7 @@ import ChampReponse, { BoutonPhoto, type ContexteOcr } from './SaisieReponse';
 import SansDefilement from './SansDefilement';
 import FiguresCahier from './FigureCahier';
 import { inscrireVoix } from './voixUnique';
+import { basculerPleinEcran, usePleinEcran } from './pleinEcran';
 import { taire as taireMemoire } from './memoire/voix';
 
 /**
@@ -3032,20 +3033,34 @@ function useCourt() {
   return court;
 }
 
-/** Téléphone en paysage, pas en plein écran : « ⛶ » cache la barre du navigateur et rend sa hauteur au tableau
- *  (17 novembre 2026 : la barre d'adresse prenait un quart de l'écran ; Android seulement, l'iPhone n'a pas cette API). */
+/** Plein écran comme un diaporama, sur ordinateur et sur téléphone (17 novembre 2026) : le lecteur prend tout l'écran,
+ *  le tableau et les simulations grandissent. « ⛶ » ou la touche F pour entrer, la même chose ou Échap pour sortir. */
 function BoutonPleinEcran() {
-  const court = useCourt();
-  const [plein, setPlein] = useState(() => typeof document !== 'undefined' && !!document.fullscreenElement);
+  const plein = usePleinEcran();
   useEffect(() => {
-    const suivre = () => setPlein(!!document.fullscreenElement);
-    document.addEventListener('fullscreenchange', suivre);
-    return () => document.removeEventListener('fullscreenchange', suivre);
+    const touche = (e: KeyboardEvent) => {
+      if (e.key !== 'f' && e.key !== 'F') return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const cible = e.target as HTMLElement | null;
+      if (cible && (cible.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(cible.tagName))) return;
+      e.preventDefault();
+      basculerPleinEcran();
+    };
+    window.addEventListener('keydown', touche);
+    return () => window.removeEventListener('keydown', touche);
   }, []);
-  if (!court || plein || !document.fullscreenEnabled) return null;
   return (
-    <button type="button" onClick={() => void document.body.requestFullscreen?.().catch(() => {})} title="Plein écran" aria-label="Plein écran"
-      className="h-9 shrink-0 rounded-full bg-cyan-400/20 px-3 text-sm text-cyan-100 hover:bg-cyan-400/30">⛶</button>
+    <button type="button" onClick={basculerPleinEcran} data-plein-ecran={plein ? 'oui' : 'non'}
+      title={plein ? 'Quitter le plein écran (Échap)' : 'Plein écran (F)'} aria-label={plein ? 'Quitter le plein écran' : 'Plein écran'}
+      className={`flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm ${plein
+        ? 'bg-white/10 text-white/80 hover:bg-white/20' : 'bg-cyan-400/20 text-cyan-100 hover:bg-cyan-400/30'}`}>
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        {plein
+          ? <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
+          : <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />}
+      </svg>
+      <span className="hidden lg:inline">{plein ? 'Quitter' : 'Plein écran'}</span>
+    </button>
   );
 }
 

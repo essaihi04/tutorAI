@@ -9,6 +9,7 @@ import { slideVersScript } from './slideVersScript';
 import ClavierFlottant, { clavier, hauteurClavierTelephone, largeurClavier, useClavier } from './ClavierFlottant';
 import { matiereDuClavier } from './ClavierScientifique';
 import { enteteDuCahier } from './cahier';
+import { entrerPleinEcran } from './pleinEcran';
 
 /**
  * Les questions posées à l'élève sur chaque diapositive sont suspendues pour
@@ -292,8 +293,7 @@ export default function CoursePlayer({
     setPleinEcranVoulu(true);
     // Téléphone en paysage (16 novembre 2026) : la barre du navigateur prend un quart de la hauteur ; le plein écran
     // la cache et la rend au tableau. Demandé sur le geste de l'élève (obligatoire) ; refusé (iPhone) : rien ne change.
-    if (window.matchMedia('(max-height: 520px) and (orientation: landscape) and (pointer: coarse)').matches && !document.fullscreenElement)
-      document.body.requestFullscreen?.().catch(() => {});
+    if (window.matchMedia('(max-height: 520px) and (orientation: landscape) and (pointer: coarse)').matches) entrerPleinEcran();
   }, []);
 
   // En concentration, le cours prend toute la place dès qu'il démarre.
@@ -387,7 +387,7 @@ export default function CoursePlayer({
   return (
     // overflow-clip, pas hidden : un conteneur « hidden » défile encore quand un bouton qui déborde prend le focus,
     // et tout le lecteur glissait hors de l'écran sur téléphone (fenêtre du cahier de fin de bloc, 14 novembre 2026)
-    <div className="relative h-full w-full overflow-clip bg-[#07101f] text-white flex flex-col">
+    <div data-lecteur-cours className="relative h-full w-full overflow-clip bg-[#07101f] text-white flex flex-col">
       {/* le clavier prend les touches de la matière du cours */}
       <MatiereDuClavier id={deck.stable_id || deck.id} subject={(deck as { subject?: string }).subject} />
       {/* Avancement dans le DECK : deux pixels, comme le fil du tableau. Le
