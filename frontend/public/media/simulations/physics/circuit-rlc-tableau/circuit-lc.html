@@ -159,14 +159,27 @@ const Peint = {
   /** Boîtier d’un générateur (vu de face) : coffret gris, afficheur, deux bornes (rouge +, noire −). */
   generateur(ctx, x, y, w, h, affiche, a = 1) {
     ctx.save(); ctx.globalAlpha = a;
-    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(x + 3, y + 4, w, h, 7); ctx.fill();
-    const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#5b6670'); g.addColorStop(.5, '#3b444c'); g.addColorStop(1, '#262c32');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 7); ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1; ctx.stroke();
-    const ex = x + w * .14, ey = y + h * .3, ew = w * .72, eh = h * .26;
-    ctx.fillStyle = '#0d1a10'; ctx.beginPath(); ctx.roundRect(ex, ey, ew, eh, 3); ctx.fill();
-    ctx.fillStyle = '#7dfc8a'; ctx.font = `600 ${Math.round(eh * .72)}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(affiche, ex + ew / 2, ey + eh / 2 + 1);
+    ctx.fillStyle = 'rgba(0,0,0,.32)'; ctx.beginPath(); ctx.roundRect(x + 4, y + 5, w, h, 8); ctx.fill();
+    // Coffret bleu acier, bandeau clair en haut (comme un vrai générateur de TP).
+    const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#5f7d99'); g.addColorStop(.5, '#3a5470'); g.addColorStop(1, '#1f3044');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 8); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.14)'; ctx.beginPath(); ctx.roundRect(x + 3, y + 3, w - 6, h * .16, [6, 6, 2, 2]); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(x, y, w, h, 8); ctx.stroke();
+    // Afficheur vert lumineux.
+    const ex = x + w * .12, ey = y + h * .28, ew = w * .76, eh = h * .28;
+    ctx.fillStyle = '#06140b'; ctx.beginPath(); ctx.roundRect(ex, ey, ew, eh, 3); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.shadowColor = '#4ade80'; ctx.shadowBlur = 8;
+    ctx.fillStyle = '#9dffb0'; ctx.font = `700 ${Math.round(eh * .74)}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(affiche, ex + ew / 2, ey + eh / 2 + 1); ctx.shadowBlur = 0;
+    // Bouton de réglage et voyant allumé.
+    const kr = Math.min(w, h) * .11, kx = x + w * .34, ky = y + h * .74;
+    Peint.sphere(ctx, kx, ky, kr, ['#e5e9ee', '#7b8590', '#1c2127']);
+    ctx.strokeStyle = '#111'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(kx, ky); ctx.lineTo(kx + kr * .7, ky - kr * .7); ctx.stroke();
+    const vx = x + w * .7, vy = y + h * .74;
+    const gl = ctx.createRadialGradient(vx, vy, 0, vx, vy, kr * 1.4); gl.addColorStop(0, 'rgba(134,239,172,.9)'); gl.addColorStop(1, 'rgba(134,239,172,0)');
+    ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(vx, vy, kr * 1.4, 0, 7); ctx.fill();
+    ctx.fillStyle = '#4ade80'; ctx.beginPath(); ctx.arc(vx, vy, kr * .45, 0, 7); ctx.fill();
     ctx.restore();
   },
   /** Borne ronde (rouge ou noire). */
@@ -282,24 +295,38 @@ Object.assign(Peint, {
   /** Condensateur chimique bleu (vu de côté, debout) avec ses deux pattes ; bande claire « − ». */
   chimique(ctx, x, y, w, h, a = 1) {
     ctx.save(); ctx.globalAlpha = a;
-    ctx.strokeStyle = '#b8bec6'; ctx.lineWidth = 2;
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(x + w / 2 + 3, y + h + 4, w * .55, 3.5, 0, 0, 7); ctx.fill();
+    // Pattes (la plus longue : le +).
+    ctx.strokeStyle = '#c3c9d1'; ctx.lineWidth = 2; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.moveTo(x + w * .32, y + h); ctx.lineTo(x + w * .32, y + h + 14); ctx.moveTo(x + w * .68, y + h); ctx.lineTo(x + w * .68, y + h + 18); ctx.stroke();
-    const g = ctx.createLinearGradient(x, 0, x + w, 0); g.addColorStop(0, '#0b2a6b'); g.addColorStop(.35, '#2f6fe0'); g.addColorStop(.6, '#1d4fb8'); g.addColorStop(1, '#091f52');
+    // Corps bleu brillant (gaine plastique sur un cylindre d'aluminium).
+    const g = ctx.createLinearGradient(x, 0, x + w, 0); g.addColorStop(0, '#0a2a72'); g.addColorStop(.3, '#3b82f6'); g.addColorStop(.45, '#93c5fd'); g.addColorStop(.6, '#2563eb'); g.addColorStop(1, '#0a1f5c');
     ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, [w * .25, w * .25, 4, 4]); ctx.fill();
-    ctx.fillStyle = 'rgba(210,225,255,.75)'; ctx.fillRect(x + w * .7, y + 4, w * .16, h - 8);
-    ctx.fillStyle = '#0b2a6b'; for (let k = 0; k < 3; k++) ctx.fillRect(x + w * .74, y + 10 + k * (h - 20) / 3, w * .08, 2.4);
-    ctx.fillStyle = '#9aa3ad'; ctx.beginPath(); ctx.ellipse(x + w / 2, y + 3, w / 2 - 1, 3.2, 0, 0, 7); ctx.fill();
+    // Bande du « − » (claire, marquée de tirets).
+    ctx.fillStyle = 'rgba(219,234,254,.85)'; ctx.fillRect(x + w * .7, y + 4, w * .17, h - 8);
+    ctx.fillStyle = '#0a2a72'; for (let k = 0; k < 3; k++) ctx.fillRect(x + w * .735, y + 9 + k * (h - 18) / 3, w * .1, 2.6);
+    // Opercule d'aluminium en haut, avec sa croix.
+    const go = ctx.createRadialGradient(x + w * .4, y + 2, 1, x + w / 2, y + 3, w / 2); go.addColorStop(0, '#f1f5f9'); go.addColorStop(1, '#8b95a1');
+    ctx.fillStyle = go; ctx.beginPath(); ctx.ellipse(x + w / 2, y + 3, w / 2 - 1, 3.6, 0, 0, 7); ctx.fill();
+    ctx.strokeStyle = 'rgba(60,70,80,.6)'; ctx.lineWidth = .8; ctx.beginPath(); ctx.moveTo(x + w * .3, y + 3); ctx.lineTo(x + w * .7, y + 3); ctx.stroke();
     ctx.restore();
   },
   /** Boîte « G » (générateur d’entretien) : boîtier sombre, plaque « G », deux bornes ; son fonctionnement interne n’est pas montré. */
   boiteG(ctx, x, y, w, h, a = 1) {
     ctx.save(); ctx.globalAlpha = a;
-    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(x + 3, y + 4, w, h, 7); ctx.fill();
-    const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#6b5a86'); g.addColorStop(.5, '#4a3d63'); g.addColorStop(1, '#2c2440');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 7); ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,.2)'; ctx.lineWidth = 1; ctx.stroke();
-    ctx.fillStyle = '#efe6ff'; ctx.font = `700 ${Math.round(h * .55)}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('G', x + w / 2, y + h / 2 + 1);
+    ctx.fillStyle = 'rgba(0,0,0,.32)'; ctx.beginPath(); ctx.roundRect(x + 4, y + 5, w, h, 8); ctx.fill();
+    const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#8b6fd1'); g.addColorStop(.5, '#5b45a0'); g.addColorStop(1, '#30245e');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 8); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.14)'; ctx.beginPath(); ctx.roundRect(x + 3, y + 3, w - 6, h * .22, [6, 6, 2, 2]); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.28)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(x, y, w, h, 8); ctx.stroke();
+    // Plaque « G » (le générateur d'entretien ; son intérieur n'est pas étudié).
+    ctx.fillStyle = '#f5f0ff'; ctx.font = `700 ${Math.round(h * .55)}px serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(196,181,253,.9)'; ctx.shadowBlur = 6; ctx.fillText('G', x + w / 2, y + h / 2 + 1); ctx.shadowBlur = 0;
+    // Voyant : allumé, il fournit l'énergie perdue.
+    const vx = x + w - 13, vy = y + h / 2, gl = ctx.createRadialGradient(vx, vy, 0, vx, vy, 8);
+    gl.addColorStop(0, 'rgba(250,204,21,.95)'); gl.addColorStop(1, 'rgba(250,204,21,0)');
+    ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(vx, vy, 8, 0, 7); ctx.fill();
+    ctx.fillStyle = '#fde047'; ctx.beginPath(); ctx.arc(vx, vy, 2.6, 0, 7); ctx.fill();
     Peint.borne(ctx, x, y + h / 2, true, a); Peint.borne(ctx, x + w, y + h / 2, false, a);
     ctx.restore();
   },
@@ -472,7 +499,7 @@ majConclusions();
 
 /* ── Géométrie (cadre 760 × 420) ─────────────────────────────────────── */
 const XG = 48, YH = 72, YB = 300, C1 = [164, 72], C2 = [236, 72], PV = [200, 108], XC = 200, YA = 166, YBp = 178, XD = 360;
-const GEN = { x: 20, y: 150, w: 56, h: 80 }, CHIM = { x: 240, y: 118, w: 22, h: 36 };
+const GEN = { x: 20, y: 150, w: 56, h: 80 }, CHIM = { x: 238, y: 108, w: 28, h: 46 };
 const RESP = { x: 282, y: 108, w: 56, h: 16 }, RES1K = { x: 282, y: 182, w: 56, h: 16 }, BOB = { x: 282, y: 198, w: 64, h: 20 };
 const CAS = { x: 432, y: 38, w: 320, h: 290 }, ECR = { x: 460, y: 48, w: 282, h: 224 };
 const CASe = { x: 432, y: 38, w: 320, h: 150 }, ECRe = { x: 460, y: 46, w: 282, h: 112 };

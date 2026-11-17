@@ -61,12 +61,12 @@
      * Le plancher du texte (px écran) que chaque labo fixe (`craie.tailleMin = 18`) suit la taille du tableau
      * (16 novembre 2026, téléphone en paysage) : sur un petit tableau, le dessin rétrécit et un texte gardé à 18 px
      * déborde sur ses voisins. En dessous de 900 × 400 px, le plancher baisse dans la même proportion (jamais sous
-     * 60 %). Relire puis remettre la valeur (`const t = c.tailleMin; … c.tailleMin = t`) ne la réduit pas deux fois.
+     * 45 %, 17 novembre 2026 : à 60 % le texte chevauchait encore sur un téléphone avec sa barre d'adresse). Relire puis remettre la valeur (`const t = c.tailleMin; … c.tailleMin = t`) ne la réduit pas deux fois.
      */
     get tailleMin() {
       const brut = this._tailleMinBrut || 0;
       if (!brut) return brut;
-      const f = Math.min(1, Math.max(.6, Math.min((this.W || 900) / 900, (this.H || 400) / 400)));
+      const f = Math.min(1, Math.max(.45, Math.min((this.W || 900) / 900, (this.H || 400) / 400)));
       const rendu = brut * f;
       this._tailleMinLu = [brut, rendu];
       return rendu;
@@ -545,12 +545,33 @@
       try { parent.postMessage({ type: 'simulation_manifest', simulation_id: id, capabilities: { commands: toutes, config, globals: ['executeAICommand'], command_schema: schema, state_schema: config.state_schema || {}, reperes: listeReperes(), explication: EXPLICATION || undefined }, page_text: texte }, '*'); } catch (_) { /* hors iframe */ }
     };
     window.SIMULATION_CONFIG = config;
+    /** La commande à exécuter vraiment, ou null si elle effacerait ce qui est déjà au tableau. */
+    const sansRetourArriere = (cmd, p) => {
+      let e = {};
+      try { e = etat() || {}; } catch (_) { return cmd; }
+      const statut = e.simulation_status, t = +e.time_s || 0;
+      if (statut !== 'finished' && !(t > 0)) return cmd;              // rien encore de dessiné : tout passe
+      if (cmd === 'start') return statut === 'paused' ? 'resume' : null;
+      if (cmd === 'resume') return statut === 'finished' ? null : cmd;
+      if (cmd === 'play_until') {
+        if (statut === 'finished') return null;
+        const moments = e.moments || {};
+        const cible = p.moment != null && p.moment in moments ? +moments[p.moment] : +p.time_s;
+        return Number.isFinite(cible) && t >= cible - 1e-3 ? null : cmd;
+      }
+      return cmd;
+    };
     window.executeAICommand = (cmd, p = {}) => {
       p = p || {};
       main = 'tuteur';
       // Le professeur montre un repère du doigt : le kit l'entoure à la craie, le labo peut en faire plus.
       const pointage = COMMANDES_POINTAGE.includes(cmd) && surligner(cibleDe(p));
       if (!commandes.includes(cmd)) { if (pointage) noter('highlight', { target: cibleDe(p) }); return; }
+      // Ce qui est dessiné reste au tableau jusqu'à la diapositive suivante (17 novembre 2026 : « une fois affichés, les
+      // éléments sont supprimés puis relancés ») : un « start », un « resume » ou un « play_until » reçu après coup ne
+      // rembobine plus la scène. Seul « reset » (Réécouter, demandé par l'élève) et le bouton Rejouer recommencent.
+      cmd = sansRetourArriere(cmd, p);
+      if (!cmd) { emettre(); return; }
       if (!pointage) appuyer(cmd);
       executer(cmd, p);
     };

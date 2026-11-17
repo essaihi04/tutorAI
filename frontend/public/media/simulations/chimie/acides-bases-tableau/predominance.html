@@ -183,6 +183,7 @@ function larg(c, s, taille = 17) {
 }
 /** Équation « gauche → droite » : la flèche est DESSINÉE (la police n’a pas toutes les flèches). Renvoie { x, w }. */
 function eqn(c, x, y, gauche, droite, o = {}) {
+  if (window.Etats) { [gauche, droite] = window.Etats.cotes(gauche, droite); o = window.Etats.ajuste(c, x, gauche, droite, o); }   // états physiques (aq), (l), (s), (g)
   const t = o.taille ?? 17, w1 = larg(c, gauche, t), w2 = larg(c, droite, t), fl = 30, tot = w1 + fl + 16 + w2;
   const x0 = o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x, col = o.couleur ?? 'blanc';
   c.texte(gauche, x0, y, { couleur: col, taille: t });
@@ -227,6 +228,7 @@ function flecheType(c, xa, xb, y, type, o = {}) {
 }
 /** Équation « gauche (flèche) droite » ; renvoie { x, w, xa, xb, ya } (position de la flèche). */
 function eqf(c, x, y, gauche, droite, o = {}) {
+  if (window.Etats) { [gauche, droite] = window.Etats.cotes(gauche, droite); o = window.Etats.ajuste(c, x, gauche, droite, o); }   // états physiques (aq), (l), (s), (g)
   let t = o.taille ?? 17;
   const mesure = tt => larg(c, gauche, tt) + (o.fl ?? 34) + 20 + larg(c, droite, tt);
   if (o.max && mesure(t) > o.max) t = t * o.max / mesure(t);
@@ -331,6 +333,7 @@ const MOTIFS_DE = ETAPES => new Proxy({}, { get: (_, nom) => (nom === 'fin' ? 'f
 /* ── Pièces propres au chapitre « transformations dans les deux sens » : ⇌ dessinée, pH-mètre, sonde, fiole, pipette ── */
 /** Équation « gauche ⇌ droite » : la double flèche est DESSINÉE (deux demi-flèches). Renvoie { x, w }. */
 function eqn2(c, x, y, gauche, droite, o = {}) {
+  if (window.Etats) { [gauche, droite] = window.Etats.cotes(gauche, droite); o = window.Etats.ajuste(c, x, gauche, droite, o); }   // états physiques (aq), (l), (s), (g)
   const t = o.taille ?? 17, w1 = larg(c, gauche, t), w2 = larg(c, droite, t), fl = 32, tot = w1 + fl + 16 + w2;
   const x0 = o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x, col = o.couleur ?? 'blanc';
   const a = x0 + w1 + 8, b = a + fl, ym = y - t * .3;
@@ -399,12 +402,14 @@ function largeurMorceau(c, p, t) {
 }
 /** Positions x de chaque morceau d’une ligne (gap entre deux) : elles ne dépendent pas du temps, chaque étape écrit les siens. */
 function placer(c, x, morceaux, t, o = {}) {
+  if (window.Etats) morceaux = window.Etats.morceaux(morceaux);   // états physiques
   const gap = o.gap ?? 8, ws = morceaux.map(p => largeurMorceau(c, p, t)), tot = ws.reduce((a, b) => a + b, 0) + gap * (morceaux.length - 1);
   let px = o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x;
   const xs = ws.map(w => { const r = px; px += w + gap; return r; });
   return { xs, ws, x0: xs[0], tot };
 }
 function morceau(c, p, x, y, t, col = 'blanc') {
+  if (window.Etats) p = window.Etats.piece(p);
   if (p === '→') return flecheSimple(c, x, y - t * .32, FL, col);
   if (p === '⇌') return flecheDouble(c, x, y - t * .32, FL, col);
   if (p && p.frac) {
@@ -419,6 +424,7 @@ function morceau(c, p, x, y, t, col = 'blanc') {
 }
 /** Écrit une ligne entière ; `cols[i]` colore le morceau i. Renvoie les positions. */
 function ligneM(c, x, y, morceaux, o = {}) {
+  if (window.Etats) morceaux = window.Etats.morceaux(morceaux);   // états physiques
   const t = o.taille ?? 20, P = placer(c, x, morceaux, t, o);
   morceaux.forEach((p, i) => morceau(c, p, P.xs[i], y, t, (o.cols && o.cols[i]) || o.couleur || 'blanc'));
   return P;
@@ -634,7 +640,7 @@ function vueDistribution(c, M) {
     if (M.commence(nom)) {
       const p = M.p(nom);
       c.direct(() => {
-        c.courbe(u => { const v = 14 * u * p; return [XG(v), YG(f(v))]; }, Math.max(8, Math.round(140 * p)), { couleur: col, largeur: 2.6 });
+        c.courbe(u => { const v = 14 * u * p; return [XG(v), YG(f(v))]; }, Math.max(8, Math.round(140 * p)), { net: true, couleur: col, largeur: 2.6 });
         PTS_H.forEach(v => { if (v / 14 <= p + 1e-6) c.point(XG(v), YG(f(v)), 4.2, col); });
       });
     }

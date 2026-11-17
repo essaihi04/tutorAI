@@ -96,7 +96,8 @@
   function courbe(c, G, y, ta, tb, o = {}) {
     if (!(tb > ta)) return;
     const n = Math.max(8, Math.ceil((tb - ta) * G.px / (o.pas ?? 2)));
-    c.courbe(u => { const t = ta + (tb - ta) * u; return [X(G, t), Y(G, y(t))]; }, n, { couleur: o.couleur || 'blanc', largeur: o.largeur ?? 2.4, tremble: o.tremble ?? .15, pointille: o.pointille, alpha: o.alpha });
+    c.courbe(u => { const t = ta + (tb - ta) * u; return [X(G, t), Y(G, y(t))]; }, n, { couleur: o.couleur || 'blanc', largeur: o.largeur ?? 2.4, tremble: o.tremble ?? .15, pointille: o.pointille, alpha: o.alpha,
+      net: o.net ?? true, aire: o.aire === true ? G.y0 : undefined, aireAlpha: o.aireAlpha });   // courbe nette et lumineuse (17/11/2026)
   }
   /** Accolade horizontale de x1 à x2 ; pointe vers le bas (texte dessous) si `bas`, sinon vers le haut. */
   function accolade(c, x1, x2, y, o = {}) {

@@ -188,6 +188,7 @@ function larg(c, s, taille = 17) {
 }
 /** Équation « gauche → droite » : la flèche est DESSINÉE (la police n’a pas toutes les flèches). Renvoie { x, w }. */
 function eqn(c, x, y, gauche, droite, o = {}) {
+  if (window.Etats) { [gauche, droite] = window.Etats.cotes(gauche, droite); o = window.Etats.ajuste(c, x, gauche, droite, o); }   // états physiques (aq), (l), (s), (g)
   const t = o.taille ?? 17, w1 = larg(c, gauche, t), w2 = larg(c, droite, t), fl = 30, tot = w1 + fl + 16 + w2;
   const x0 = o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x, col = o.couleur ?? 'blanc';
   c.texte(gauche, x0, y, { couleur: col, taille: t });
@@ -232,6 +233,7 @@ function flecheType(c, xa, xb, y, type, o = {}) {
 }
 /** Équation « gauche (flèche) droite » ; renvoie { x, w, xa, xb, ya } (position de la flèche). */
 function eqf(c, x, y, gauche, droite, o = {}) {
+  if (window.Etats) { [gauche, droite] = window.Etats.cotes(gauche, droite); o = window.Etats.ajuste(c, x, gauche, droite, o); }   // états physiques (aq), (l), (s), (g)
   let t = o.taille ?? 17;
   const mesure = tt => larg(c, gauche, tt) + (o.fl ?? 34) + 20 + larg(c, droite, tt);
   if (o.max && mesure(t) > o.max) t = t * o.max / mesure(t);
@@ -336,6 +338,7 @@ const MOTIFS_DE = ETAPES => new Proxy({}, { get: (_, nom) => (nom === 'fin' ? 'f
 /* ── Pièces peintes : ⇌ dessinée, pH-mètre, sonde (copie de etat-equilibre-tableau/rappel.html) ── */
 /** Équation « gauche ⇌ droite » : la double flèche est DESSINÉE (deux demi-flèches). Renvoie { x, w }. */
 function eqn2(c, x, y, gauche, droite, o = {}) {
+  if (window.Etats) { [gauche, droite] = window.Etats.cotes(gauche, droite); o = window.Etats.ajuste(c, x, gauche, droite, o); }   // états physiques (aq), (l), (s), (g)
   const t = o.taille ?? 17, w1 = larg(c, gauche, t), w2 = larg(c, droite, t), fl = 32, tot = w1 + fl + 16 + w2;
   const x0 = o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x, col = o.couleur ?? 'blanc';
   const a = x0 + w1 + 8, b = a + fl, ym = y - t * .3;
@@ -404,12 +407,14 @@ function largeurMorceau(c, p, t) {
 }
 /** Positions x de chaque morceau d’une ligne (gap entre deux) : elles ne dépendent pas du temps, chaque étape écrit les siens. */
 function placer(c, x, morceaux, t, o = {}) {
+  if (window.Etats) morceaux = window.Etats.morceaux(morceaux);   // états physiques
   const gap = o.gap ?? 8, ws = morceaux.map(p => largeurMorceau(c, p, t)), tot = ws.reduce((a, b) => a + b, 0) + gap * (morceaux.length - 1);
   let px = o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x;
   const xs = ws.map(w => { const r = px; px += w + gap; return r; });
   return { xs, ws, x0: xs[0], tot };
 }
 function morceau(c, p, x, y, t, col = 'blanc') {
+  if (window.Etats) p = window.Etats.piece(p);
   if (p === '→') return flecheSimple(c, x, y - t * .32, FL, col);
   if (p === '⇌') return flecheDouble(c, x, y - t * .32, FL, col);
   if (p && p.frac) {
@@ -424,6 +429,7 @@ function morceau(c, p, x, y, t, col = 'blanc') {
 }
 /** Écrit une ligne entière ; `cols[i]` colore le morceau i. Renvoie les positions. */
 function ligneM(c, x, y, morceaux, o = {}) {
+  if (window.Etats) morceaux = window.Etats.morceaux(morceaux);   // états physiques
   const t = o.taille ?? 20, P = placer(c, x, morceaux, t, o);
   morceaux.forEach((p, i) => morceau(c, p, P.xs[i], y, t, (o.cols && o.cols[i]) || o.couleur || 'blanc'));
   return P;
@@ -502,7 +508,7 @@ function axesGraphe(c, g, o = {}) {
 function tracer(c, g, f, a, b, p, col, o = {}) {
   if (p <= 0) return;
   const fin = a + (b - a) * p;
-  c.courbe(u => [g.X(a + (fin - a) * u), g.Y(clamp(f(a + (fin - a) * u), g.ymin, g.ymax))], Math.max(16, Math.round((o.n ?? 220) * p)), { couleur: col, largeur: o.largeur ?? 2.6, pointille: o.pointille });
+  c.courbe(u => [g.X(a + (fin - a) * u), g.Y(clamp(f(a + (fin - a) * u), g.ymin, g.ymax))], Math.max(16, Math.round((o.n ?? 220) * p)), { net: true, couleur: col, largeur: o.largeur ?? 2.6, pointille: o.pointille });
 }
 const pointille = (c, x1, y1, x2, y2, p, col = 'jaune') => { if (p > 0) c.ligne(x1, y1, x1 + (x2 - x1) * p, y1 + (y2 - y1) * p, { couleur: col, largeur: 1.7, pointille: [5, 5] }); };
 

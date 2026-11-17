@@ -6,8 +6,10 @@ import { useLayoutEffect, useRef, type CSSProperties, type ReactNode } from 'rea
  * réduit s'il déborde, agrandi jusqu'à `agrandirMax` s'il reste de la place. Recalculé quand la place change
  * ou quand une ligne s'ajoute (la craie qui écrit).
  */
-export default function SansDefilement({ children, agrandirMax = 1, className = '', style, centrer = false }: {
+export default function SansDefilement({ children, agrandirMax = 1, className = '', style, centrer = false, zoomMin = 0.2 }: {
   children: ReactNode; agrandirMax?: number; className?: string; style?: CSSProperties; centrer?: boolean;
+  /** Sous ce zoom, le texte serait illisible (téléphone en paysage) : il garde ce zoom et la zone défile. */
+  zoomMin?: number;
 }) {
   const zone = useRef<HTMLDivElement>(null);
   const contenu = useRef<HTMLDivElement>(null);
@@ -32,8 +34,9 @@ export default function SansDefilement({ children, agrandirMax = 1, className = 
         let bas = 0.2, haut = agrandirMax;
         if (tient(haut)) bas = haut;
         else for (let i = 0; i < 9; i++) { const m = (bas + haut) / 2; if (tient(m)) bas = m; else haut = m; }
-        tient(bas);
-        derniere = bas;
+        // trop petit pour être lu : il garde le zoom minimum et la zone défile (rare, surtout sur téléphone en paysage)
+        if (bas < zoomMin) { tient(zoomMin); z.style.overflowY = 'auto'; derniere = zoomMin; }
+        else { tient(bas); z.style.overflowY = ''; derniere = bas; }
       });
     };
     ajuster();
@@ -42,7 +45,7 @@ export default function SansDefilement({ children, agrandirMax = 1, className = 
     const mo = new MutationObserver(ajuster);
     mo.observe(c, { childList: true, subtree: true, characterData: true });
     return () => { ro.disconnect(); mo.disconnect(); cancelAnimationFrame(frame); void derniere; };
-  }, [agrandirMax]);
+  }, [agrandirMax, zoomMin]);
   return (
     <div ref={zone} className={`min-h-0 flex-1 overflow-hidden ${centrer ? 'flex flex-col justify-center' : ''} ${className}`} style={style}>
       <div ref={contenu} style={{ transformOrigin: 'top left' }}>{children}</div>

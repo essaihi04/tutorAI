@@ -299,6 +299,7 @@ function condoPeint(ctx, x, y, w = 18, h = 32) {
   arrondi(ctx, x, y, w, h, 4); ctx.fillStyle = g; ctx.fill();
   ctx.fillStyle = 'rgba(226,232,240,.75)'; ctx.fillRect(x + w * .68, y + 3, w * .2, h - 6);
   ctx.fillStyle = '#1e3a8a'; for (let k = 0; k < 3; k++) ctx.fillRect(x + w * .72, y + 7 + k * (h - 14) / 2, w * .12, 1.6);
+  ctx.fillStyle = 'rgba(255,255,255,.3)'; ctx.fillRect(x + w * .14, y + 5, w * .14, h - 10);   // reflet
   g = ctx.createLinearGradient(0, y, 0, y + 5); g.addColorStop(0, '#e5e7eb'); g.addColorStop(1, '#9ca3af');
   ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x + w / 2, y + 2, w / 2 - 1, 2.6, 0, 0, 7); ctx.fill();
 }
@@ -307,8 +308,11 @@ function resistorPeint(ctx, cx, cy, L = 44, e = 13, vertical = false) {
   ctx.save(); ctx.translate(cx, cy); if (vertical) ctx.rotate(Math.PI / 2);
   const g = ctx.createLinearGradient(0, -e / 2, 0, e / 2);
   g.addColorStop(0, '#f5deb3'); g.addColorStop(.45, '#d6b98c'); g.addColorStop(1, '#8b6f47');
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; arrondi(ctx, -L / 2 + 2, -e / 2 + 3, L, e, e / 2.2); ctx.fill();   // ombre douce
   arrondi(ctx, -L / 2, -e / 2, L, e, e / 2.2); ctx.fillStyle = g; ctx.fill();
-  [['#7c4a1e', -.28], ['#111827', -.12], ['#dc2626', .04], ['#d4a017', .3]].forEach(([k, f]) => { ctx.fillStyle = k; ctx.fillRect(f * L - 2, -e / 2 + 1, 4, e - 2); });
+  const b = Math.max(4, L * .09);
+  [['#7c4a1e', -.28], ['#111827', -.12], ['#dc2626', .04], ['#d4a017', .3]].forEach(([k, f]) => { ctx.fillStyle = k; ctx.fillRect(f * L - b / 2, -e / 2 + 1, b, e - 2); });
+  ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.fillRect(-L / 2 + e * .4, -e / 2 + e * .18, L - e * .8, e * .13);   // reflet
   ctx.restore();
 }
 /** Générateur : boîtier sombre, petit écran, bornes rouge (+) et noire (−). (x, y) = haut gauche. */
@@ -388,10 +392,12 @@ function circuitRC(c, o) {
   c.trait([[x0, avecE ? yc - 31 : y1], [x0, y0], [xr - 26, y0]], { couleur: 'blanc', largeur: 2 });
   c.trait([[xr + 26, y0], [x1, y0], [x1, yc - 6]], { couleur: 'blanc', largeur: 2 });
   c.trait([[x1, yc + 6], [x1, y1], [x0, y1], [x0, avecE ? yc + 31 : y1]], { couleur: 'blanc', largeur: 2 });
-  peindre(c, ctx => resistorPeint(ctx, xr, y0));
+  peindre(c, ctx => resistorPeint(ctx, xr, y0, 50, 17));   // composants agrandis (17 novembre 2026)
   c.texte('R', xr, y0 + 30, { couleur: 'blanc', taille: 19, align: 'center' });
+  // Armatures en métal sous le symbole (17 novembre 2026), puis le symbole à la craie par-dessus.
+  peindre(c, ctx => { for (const y of [yc - 6, yc + 6]) { const g = ctx.createLinearGradient(0, y - 3, 0, y + 3); g.addColorStop(0, '#f1f5f9'); g.addColorStop(.5, '#94a3b8'); g.addColorStop(1, '#475569'); ctx.fillStyle = g; arrondi(ctx, x1 - 18, y - 3, 36, 6, 2); ctx.fill(); } });
   symboleC(c, x1, yc, true, 'blanc');
-  peindre(c, ctx => condoPeint(ctx, x1 + 40, yc - 20));
+  peindre(c, ctx => condoPeint(ctx, x1 + 38, yc - 26, 24, 42));
   c.texte('C', x1 - 24, yc + 6, { couleur: 'blanc', taille: 19, align: 'right' });
   if (avecE) {
     peindre(c, ctx => generateurPeint(ctx, x0 - 23, yc - 31));

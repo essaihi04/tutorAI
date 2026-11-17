@@ -90,6 +90,9 @@ export function useColonneTuteur() {
 function reachPosition(point: Point, writing: boolean, rigModele: ProfessorRig, avoid?: DOMRect | null, colonne = false) {
   const { shoulderRight: right, shoulderLeft: left, reach } = rigAffiche(rigModele);
   const WIDTH = largeur();
+  // Téléphone en paysage : il reste dans sa colonne, même pour écrire ou montrer une réponse (16 novembre 2026 : « il
+  // masque l'écriture… et les questions QCM ») ; la baguette relie sa main à ce qu'il montre.
+  if (echelleTuteur() < 1) return clampFlight(window.innerWidth - WIDTH - 8, point.y - right.y + reach * 0.16);
   if (colonne && !writing) return clampFlight(window.innerWidth - WIDTH - 8, point.y - right.y + reach * 0.16);
   if (avoid && !writing) {
     const y = point.y - right.y + reach * 0.16;
@@ -302,6 +305,9 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
     };
     const update = () => {
       const rect = bounds();
+      // le repère est caché sous les questions (ou une bulle) : pas de cadre vide ni de baguette vers rien (16 novembre 2026)
+      const dessus = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      if (dessus && dessus !== iframe && !dessus.closest('.moalim-target, .moalim-pointer')) { setFocus(null); return; }
       setFocus({ rect, writing: false });
       const point = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
       fly(reachPosition(point, false, rig.current, iframe.getBoundingClientRect(), discret));
@@ -343,7 +349,8 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
   // Sans rien à montrer, il retourne à sa place (après un court délai, pour enchaîner deux lignes sans aller-retour).
   useEffect(() => {
     if (focus) return;
-    const timer = window.setTimeout(() => fly(home.current), RETURN_HOME_MS);
+    // sa place est recalée à l'écran du moment (la scène du cours n'existait pas encore quand elle a été choisie)
+    const timer = window.setTimeout(() => { home.current = clampPosition(home.current.x, home.current.y); fly(home.current); }, RETURN_HOME_MS);
     return () => window.clearTimeout(timer);
   }, [focus, fly]);
 

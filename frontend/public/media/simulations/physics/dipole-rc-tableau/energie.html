@@ -81,34 +81,50 @@ const uLampe = p => S.U * Math.exp(-p * T_LAMPE);
 
 /** Condensateur chimique peint (cylindre bleu, chapeau argenté, bande claire « − »). */
 function peindreCondensateur(ctx, x, y) {
-  const w = 28, h = 50;
+  const w = 38, h = 68;   // agrandi (17 novembre 2026) : le condensateur se lit d'un coup d'œil
   ctx.save();
   ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(x + w / 2 + 3, y + h + 3, w / 2 + 2, 4, 0, 0, Math.PI * 2); ctx.fill();
   const g = ctx.createLinearGradient(x, 0, x + w, 0);
   g.addColorStop(0, '#1e3a8a'); g.addColorStop(.35, '#3b82f6'); g.addColorStop(.55, '#60a5fa'); g.addColorStop(1, '#1e3a8a');
   ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 5); ctx.fill();
-  ctx.fillStyle = 'rgba(226,232,240,.55)'; ctx.fillRect(x + w - 9, y + 4, 5, h - 8);
-  ctx.fillStyle = '#1e3a8a'; ctx.font = '10px sans-serif'; for (let k = 0; k < 3; k++) ctx.fillText('−', x + w - 9, y + 14 + k * 14);
+  ctx.fillStyle = 'rgba(226,232,240,.55)'; ctx.fillRect(x + w - 11, y + 4, 7, h - 8);
+  ctx.fillStyle = 'rgba(255,255,255,.28)'; ctx.fillRect(x + 6, y + 6, 4, h - 12);   // reflet
+  ctx.fillStyle = '#1e3a8a'; ctx.font = '12px sans-serif'; for (let k = 0; k < 4; k++) ctx.fillText('−', x + w - 10, y + 16 + k * 15);
   const a = ctx.createLinearGradient(x, 0, x + w, 0); a.addColorStop(0, '#94a3b8'); a.addColorStop(.5, '#e2e8f0'); a.addColorStop(1, '#94a3b8');
   ctx.fillStyle = a; ctx.beginPath(); ctx.ellipse(x + w / 2, y + 2, w / 2, 3.5, 0, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 }
 /** Lampe peinte : ampoule de verre, filament, culot ; halo selon la puissance (∝ u_C²). Pour l’œil seulement. */
 function peindreLampe(ctx, x, y, b) {
+  // Agrandie (17 novembre 2026) : ampoule de verre de rayon 21 au-dessus du culot vissé ; les fils entrent dans le culot.
+  const R = 21, cy = y - 8;
   ctx.save();
   if (b > .01) {
-    const h = ctx.createRadialGradient(x, y, 4, x, y, 24 + 46 * b);
-    h.addColorStop(0, `rgba(255,236,170,${.75 * b})`); h.addColorStop(.45, `rgba(255,200,90,${.32 * b})`); h.addColorStop(1, 'rgba(255,200,90,0)');
-    ctx.fillStyle = h; ctx.beginPath(); ctx.arc(x, y, 24 + 46 * b, 0, Math.PI * 2); ctx.fill();
+    const rh = 34 + 70 * b, h = ctx.createRadialGradient(x, cy, 4, x, cy, rh);
+    h.addColorStop(0, `rgba(255,240,180,${.8 * b})`); h.addColorStop(.4, `rgba(255,205,95,${.35 * b})`); h.addColorStop(1, 'rgba(255,200,90,0)');
+    ctx.fillStyle = h; ctx.beginPath(); ctx.arc(x, cy, rh, 0, Math.PI * 2); ctx.fill();
   }
-  const v = ctx.createRadialGradient(x - 5, y - 6, 2, x, y, 17);
-  v.addColorStop(0, b > .05 ? `rgba(255,250,220,${.5 + .5 * b})` : 'rgba(226,232,240,.35)'); v.addColorStop(1, b > .05 ? `rgba(255,214,120,${.25 + .4 * b})` : 'rgba(148,163,184,.18)');
-  ctx.fillStyle = v; ctx.beginPath(); ctx.arc(x, y, 15, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = 'rgba(226,232,240,.6)'; ctx.lineWidth = 1; ctx.stroke();
-  ctx.strokeStyle = b > .05 ? `rgba(255,${200 + 55 * b},${120 + 120 * b},1)` : 'rgba(120,113,108,.9)'; ctx.lineWidth = 1.6;
-  ctx.beginPath(); ctx.moveTo(x - 6, y + 6); ctx.lineTo(x - 4, y - 3); ctx.lineTo(x - 1, y + 2); ctx.lineTo(x + 2, y - 3); ctx.lineTo(x + 4, y + 2); ctx.lineTo(x + 6, y - 3); ctx.lineTo(x + 6, y + 6); ctx.stroke();
-  const c = ctx.createLinearGradient(x - 8, 0, x + 8, 0); c.addColorStop(0, '#64748b'); c.addColorStop(.5, '#cbd5e1'); c.addColorStop(1, '#64748b');
-  ctx.fillStyle = c; ctx.fillRect(x - 8, y + 14, 16, 10);
+  // Culot vissé (laiton) et plot de contact.
+  const cu = ctx.createLinearGradient(x - 10, 0, x + 10, 0); cu.addColorStop(0, '#7a5a1e'); cu.addColorStop(.45, '#f1d48a'); cu.addColorStop(1, '#6b4c14');
+  ctx.fillStyle = cu; ctx.beginPath(); ctx.roundRect(x - 10, y + 10, 20, 17, 3); ctx.fill();
+  ctx.strokeStyle = 'rgba(80,55,15,.7)'; ctx.lineWidth = 1.2;
+  for (let k = 0; k < 3; k++) { ctx.beginPath(); ctx.moveTo(x - 10, y + 14 + k * 4.5); ctx.lineTo(x + 10, y + 12 + k * 4.5); ctx.stroke(); }
+  ctx.fillStyle = '#2b2f33'; ctx.beginPath(); ctx.ellipse(x, y + 28, 5, 2.5, 0, 0, Math.PI * 2); ctx.fill();
+  // Ampoule de verre.
+  const v = ctx.createRadialGradient(x - 7, cy - 8, 2, x, cy, R);
+  v.addColorStop(0, b > .05 ? `rgba(255,252,225,${.55 + .45 * b})` : 'rgba(240,246,255,.42)');
+  v.addColorStop(1, b > .05 ? `rgba(255,214,120,${.3 + .45 * b})` : 'rgba(148,163,184,.2)');
+  ctx.fillStyle = v; ctx.beginPath(); ctx.arc(x, cy, R, Math.PI * .72, Math.PI * 2.28); ctx.lineTo(x + 8, y + 10); ctx.lineTo(x - 8, y + 10); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(226,232,240,.7)'; ctx.lineWidth = 1.2; ctx.stroke();
+  // Supports et filament en spirale (orange vif quand il chauffe).
+  ctx.strokeStyle = 'rgba(160,160,160,.9)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(x - 4, y + 10); ctx.lineTo(x - 7, cy + 1); ctx.moveTo(x + 4, y + 10); ctx.lineTo(x + 7, cy + 1); ctx.stroke();
+  ctx.strokeStyle = b > .05 ? `rgba(255,${190 + 65 * b},${90 + 150 * b},1)` : 'rgba(120,113,108,.95)'; ctx.lineWidth = b > .05 ? 2 : 1.6;
+  if (b > .05) { ctx.shadowColor = 'rgba(255,220,140,.9)'; ctx.shadowBlur = 8 * b; }
+  ctx.beginPath(); ctx.moveTo(x - 7, cy + 1);
+  for (let k = 0; k <= 12; k++) { const xx = x - 7 + 14 * k / 12; ctx.lineTo(xx, cy + 1 + (k % 2 ? -4 : 0)); }
+  ctx.stroke(); ctx.shadowBlur = 0;
+  ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.beginPath(); ctx.ellipse(x - 9, cy - 9, 4, 6, -.5, 0, Math.PI * 2); ctx.fill();   // reflet
   ctx.restore();
 }
 /** Électron : petite sphère bleue ombrée. */
@@ -151,8 +167,7 @@ function vueLampe(c) {
   // Le peint d’abord (la craie reste par-dessus) : condensateur, lampe, électrons.
   const p = progres(c), u = uLampe(p);
   c.direct(() => scene.peindreDans(CI.g, CI.ym, () => {   // tableau large : le peint suit la zone du circuit
-    peindreCondensateur(ctx, CI.g + 22, CI.ym - 25);
-    peindreLampe(ctx, CI.d, CI.ym, p > 0 && p < 1.0001 ? (u / 12) ** 2 : 0);
+    peindreCondensateur(ctx, CI.g + 24, CI.ym - 34);
     if (p > 0 && p < 1 && U > 0) {
       const L = 2 * (CI.b - CI.h) + 2 * (CI.d - CI.g), avance = 140 * (1 - Math.exp(-p * T_LAMPE));
       for (let k = 0; k < 9; k++) { const pt = surChemin((k * L / 9 + avance) % (L - 30)); if (pt) electron(ctx, pt[0], pt[1]); }
@@ -175,6 +190,8 @@ function vueLampe(c) {
   c.texte('K', xk, CI.h - 26, { couleur: 'blanc', taille: 17, align: 'center' });
   c.texte('lampe', CI.d - 26, CI.ym + 46, { couleur: 'blanc', taille: 15, align: 'center' });
   c.texte(`au départ : u_C = ${fx(U, 1)} V`, CI.g + 30, CI.ym + 70, { couleur: 'blanc', taille: 14 });
+  // La lampe est peinte APRÈS les fils : les fils entrent dans son culot (elle s'allume puis faiblit avec u_C²).
+  c.direct(() => scene.peindreDans(CI.g, CI.ym, () => peindreLampe(ctx, CI.d, CI.ym, p > 0 && p < 1.0001 ? (u / 12) ** 2 : 0)));
   // Graphe u_C(t) (allure : pas de graduations sur t) et l’axe de la barre.
   const { O, AXL } = GL;
   axeU(c, GL);

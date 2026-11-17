@@ -72,6 +72,8 @@ PRONONCIATION = [
     (re.compile(r"\bcliqu(?:er|ez|é|ée|és|ées)\b", re.I), "kliké"),     # jamais « cliquer » au corpus
     (re.compile(r"\bcliques?\b", re.I), "klik"),
     (re.compile(r"\bMeV\b"), "méga électron-volts"),
+    # « siemens » (vu une fois à l'entraînement) sortait « milliseconde » ; « si mènsse » choisi à l'écoute (16/11/2026)
+    (re.compile(r"\b(milli|micro)?siemens\b", re.I), lambda mt: (mt.group(1) or "") + "si mènsse"),
     (re.compile(r"\b(milli)?henrys?\b"), lambda mt: (mt.group(1) or "") + "anri"),   # unité (H, mH) ; pas le nom propre
     (re.compile(r"\b(BBT|LDL|HDL)\b"), lambda mt: " ".join(mt.group(1))),   # sigles lus lettre par lettre
     (re.compile(r"\b([AUGC]{3})\b"), lambda mt: " ".join(mt.group(1))),     # codons : UAA -> U A A

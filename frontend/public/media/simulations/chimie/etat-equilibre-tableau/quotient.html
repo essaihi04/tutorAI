@@ -217,7 +217,22 @@ function flecheDouble(c, x, y, w, col = 'blanc') {
  * La barre de fraction est DESSINÉE (numérateur sur dénominateur). `o.ph` : n’écrire que les morceaux de ces étapes (la mise en page,
  * elle, ne dépend pas du temps : chaque étape écrit les siens à leur place). `o.rec[id]` : boîte de chaque morceau nommé.
  */
-const norm = n => (typeof n === 'string' ? { t: n } : Array.isArray(n) ? { row: n } : n);
+const norm0 = n => (typeof n === 'string' ? { t: n } : Array.isArray(n) ? { row: n } : n);
+/* États physiques (16 novembre 2026) : une ligne qui porte une flèche de réaction reçoit l'état de chaque espèce
+ * (« Cu²⁺(aq) + Zn(s) ⇌ Cu(s) + Zn²⁺(aq) ») ; le texte de chaque morceau s'allonge, sa durée d'écriture non. */
+const ETATS_ROW = new WeakMap();
+function norm(n) {
+  n = norm0(n);
+  if (!n.row || !window.Etats || !n.row.some(m => m === '⇌' || m === '→')) return n;
+  if (ETATS_ROW.has(n)) return ETATS_ROW.get(n);
+  const txt = m => (typeof m === 'string' ? m : m && m.t != null ? m.t : m && m.row ? m.row.map(txt).join('') : '?');
+  const et = window.Etats.liste(n.row.map(m => txt(m).replace(/\s+/g, '')));
+  if (!et) return n;   // (pas encore prêt : rien n'est mémorisé)
+  const ajoute = (m, e) => (typeof m === 'string' ? window.Etats.ajoute(m, e) : m.t != null ? { ...m, t: window.Etats.ajoute(m.t, e) }
+    : m.row ? { ...m, row: m.row.map((q, i) => (i === m.row.length - 1 ? ajoute(q, e) : q)) } : m);
+  const r = { ...n, row: n.row.map((m, i) => (et[i] ? ajoute(m, et[i]) : m)) };
+  ETATS_ROW.set(n, r); return r;
+}
 const SUPS = /[\^⁺⁻⁰¹²³⁴⁵⁶⁷⁸⁹]/;
 function exMes(c, n, t) {
   n = norm(n);

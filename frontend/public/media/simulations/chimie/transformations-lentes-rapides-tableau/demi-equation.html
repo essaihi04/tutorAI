@@ -171,7 +171,7 @@ function largeur(c, s, taille) {
 }
 const MARQUES = { '[': 'ajout', '{': 'oxydant', '<': 'reducteur' };
 function termes(spec) {
-  return spec.split(' ').filter(Boolean).map(t => {
+  const T = spec.split(' ').filter(Boolean).map(t => {
     if (t === '⇌' || t === '→') return { fleche: t, txt: t };
     const parts = [];
     t.replace(/\[([^\]]*)\]|\{([^}]*)\}|<([^>]*)>|([^[{<]+)/g, (m, a, o, r, n) => {
@@ -179,6 +179,10 @@ function termes(spec) {
     });
     return { parts, txt: parts.map(p => p[0]).join(''), ajout: parts.some(p => p[1] === 'ajout') };
   });
+  // États physiques (aq), (l), (s), (g) : ajoutés au dernier morceau de chaque espèce, écrits en petit.
+  const et = window.Etats && window.Etats.liste(T.map(t => t.txt));
+  if (et) T.forEach((t, i) => { if (et[i] && t.parts) { const p = t.parts[t.parts.length - 1]; p[0] = window.Etats.ajoute(p[0], et[i]); t.etat = et[i]; } });
+  return T;
 }
 const ECART = 7, LFLECHE = 40;
 /** Place les termes d’une ligne (sans rien écrire) : renvoie { T, x0, x1, taille } ; chaque terme a x et w. */

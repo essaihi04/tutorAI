@@ -14,6 +14,7 @@ import ChampReponse, { BoutonPhoto, type ContexteOcr } from './SaisieReponse';
 import SansDefilement from './SansDefilement';
 import FiguresCahier from './FigureCahier';
 import { inscrireVoix } from './voixUnique';
+import { basculerPleinEcran, usePleinEcran } from './pleinEcran';
 import { taire as taireMemoire } from './memoire/voix';
 
 /**
@@ -85,15 +86,18 @@ const ANIMATIONS = `
   [data-scene-cours] [data-pied-cours] button[data-suite] { height: 32px; padding-left: 14px; padding-right: 14px; font-size: 14px }
   [data-scene-cours] [data-pied-cours] .px-3 { padding-left: 9px; padding-right: 9px }
   /* le tableau des questions : énoncé et choix plus serrés, les choix d'un QCM sur deux colonnes, tout sans défiler */
-  .tableau-questions > div:first-child { padding-top: 2px; padding-bottom: 2px }
-  .tableau-questions .p-4, .tableau-questions .p-5 { padding: 8px 10px }
-  .tableau-questions .text-xl { font-size: 16px; line-height: 1.25 }
-  .tableau-questions .text-lg { font-size: 14px; line-height: 1.25 }
+  [data-scene-cours]:has(.tableau-questions) > header { display: none }   /* le titre se cache, les questions prennent sa hauteur */
+  .tableau-questions > div:first-child { padding-top: 1px; padding-bottom: 1px }
+  .tableau-questions > div:first-child .text-base { font-size: 13px }
+  .tableau-questions .p-4, .tableau-questions .p-5 { padding: 5px 9px }
+  /* la taille suit la hauteur de l'écran : serrée à 266 px (barre du navigateur), plus grande quand la place existe */
+  .tableau-questions .text-xl { font-size: clamp(15px, 5vh, 21px); line-height: 1.25 }
+  .tableau-questions .text-lg { font-size: clamp(13.5px, 4.6vh, 20px); line-height: 1.25 }
   .tableau-questions .text-base { font-size: 14px }
   .tableau-questions [data-choix] { margin-top: 4px }
-  .tableau-questions [data-choix='qcm'] { display: grid; grid-template-columns: 1fr 1fr; gap: 4px }
+  .tableau-questions [data-choix='qcm'] { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(4px, 1.6vh, 8px) }
   .tableau-questions [data-choix='qcm'] > * { margin-top: 0 !important }
-  .tableau-questions [data-choix] > button { padding-top: 4px; padding-bottom: 4px }
+  .tableau-questions [data-choix] > button { padding-top: clamp(3px, 1.8vh, 12px); padding-bottom: clamp(3px, 1.8vh, 12px) }
   .tableau-questions .mt-3 { margin-top: 6px }
   .tableau-questions .mt-2 { margin-top: 4px }
   /* les bulles (cahier, explication, question de l'élève) : toute la hauteur du tableau, texte à la taille de l'écran */
@@ -102,6 +106,19 @@ const ANIMATIONS = `
   [data-scene-cours] [data-bulle] .text-xl { font-size: 16px; line-height: 1.3 }
   [data-scene-cours] [data-bulle] .text-lg { font-size: 14px; line-height: 1.35 }
   [data-scene-cours] [data-bulle] .mt-3 { margin-top: 6px }
+  /* les formules de la diapositive, sous une simulation : à sa droite (le tableau est très large en paysage, sa droite
+     souvent vide), en plus petit ; la simulation garde toute la hauteur (17 novembre 2026, ch12 « Le quotient de réaction ») */
+  [data-scene-cours] > main:has(> [data-formules-centre]):not(:has([data-observation])) { flex-direction: row; align-items: stretch }
+  [data-scene-cours] [data-formules-centre] { flex-direction: column; flex-wrap: nowrap; width: auto; max-width: 36%; justify-content: center; gap: 4px }
+  [data-scene-cours] [data-formules-centre] > div { font-size: clamp(13px, 4.6vh, 18px) !important; padding: 2px 8px }
+  /* la question d'observation, sous la figure : une bande fine, pour laisser la hauteur à la figure */
+  [data-scene-cours] [data-observation] { padding: 3px 10px }
+  [data-scene-cours] [data-observation] p { font-size: 14px; line-height: 1.25 }
+  [data-scene-cours] [data-observation] button { padding-top: 4px; padding-bottom: 4px; font-size: 13px }
+  [data-scene-cours] [data-bulle] textarea { min-height: 0; height: 40px; padding-top: 6px; padding-bottom: 6px }
+  [data-scene-cours] [data-bulle] .py-2 { padding-top: 3px; padding-bottom: 3px }
+  [data-scene-cours] [data-bulle] .mt-2 { margin-top: 4px }
+  [data-scene-cours] [data-bulle] .gap-3 { gap: 6px }
 }
 @keyframes tableau-descend { from { transform: translateY(-108%); opacity: .5 } 60% { transform: translateY(1.5%) } to { transform: none; opacity: 1 } }
 @keyframes question-apparait { from { opacity: 0; transform: translateY(-10px) } to { opacity: 1; transform: none } }
@@ -311,6 +328,58 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const visuelRef = useRef<HTMLDivElement>(null);
   const lignesRef = useRef<(HTMLTableRowElement | null)[]>([]);
+
+  // L'élève clique dans la simulation (17 novembre 2026, « ne pas afficher le tuteur quand on clique sur la simulation,
+  // pour ne pas distraire ») : le tuteur s'efface (corps, baguette, appui) et la simulation tourne seule ; seuls ses
+  // cadres de focus sur les éléments de la simulation restent (AIAvatar.css, `body[data-simu-eleve]`). Il revient
+  // quand l'élève touche le tableau hors de la simulation, ou à la diapositive suivante. Le clic dans l'iframe ne
+  // remonte pas jusqu'ici : c'est la fenêtre qui perd le focus au profit de l'iframe.
+  const avecSimulation = slide.visual?.kind === 'simulation';
+  useEffect(() => {
+    if (!avecSimulation) return;
+    const poser = (oui: boolean) => {
+      if (oui) document.body.dataset.simuEleve = '';
+      else delete document.body.dataset.simuEleve;
+    };
+    let attente = 0;
+    const versLaSimu = () => {
+      window.clearTimeout(attente);
+      attente = window.setTimeout(() => { if (iframeRef.current && document.activeElement === iframeRef.current) poser(true); }, 0);
+    };
+    const ailleurs = (e: PointerEvent) => {
+      const cible = e.target as Element | null;
+      if (!cible || iframeRef.current?.contains(cible)) return;
+      if (cible.closest?.('[data-scene-cours] > main, [data-scene-cours] > header')) poser(false);
+    };
+    // Plus sûr que le focus (17 novembre 2026 : le tuteur restait visible) : la simulation est servie par le site, on
+    // écoute donc le toucher directement dans sa page, à chaque chargement de l'iframe.
+    const dedans = () => poser(true);
+    let fenetre: Window | null = null;
+    const brancher = () => {
+      try {
+        fenetre?.removeEventListener('pointerdown', dedans, true);
+        fenetre = iframeRef.current?.contentWindow || null;
+        fenetre?.addEventListener('pointerdown', dedans, true);
+      } catch { fenetre = null; }   // autre origine : le focus suffit
+    };
+    brancher();
+    const cadre = iframeRef.current;
+    const suivreCadre = new MutationObserver(() => { const f = iframeRef.current; if (f && f !== suivi) { suivi?.removeEventListener('load', brancher); suivi = f; f.addEventListener('load', brancher); brancher(); } });
+    let suivi = cadre;
+    cadre?.addEventListener('load', brancher);
+    if (visuelRef.current) suivreCadre.observe(visuelRef.current, { childList: true, subtree: true });
+    window.addEventListener('blur', versLaSimu);
+    window.addEventListener('pointerdown', ailleurs, true);
+    return () => {
+      window.clearTimeout(attente);
+      suivreCadre.disconnect();
+      suivi?.removeEventListener('load', brancher);
+      try { fenetre?.removeEventListener('pointerdown', dedans, true); } catch { /* cadre parti */ }
+      window.removeEventListener('blur', versLaSimu);
+      window.removeEventListener('pointerdown', ailleurs, true);
+      poser(false);
+    };
+  }, [slide.id, avecSimulation]);
   const centreRef = useRef<(HTMLDivElement | null)[]>([]);
 
   const [temps, setTemps] = useState(0);
@@ -1923,10 +1992,10 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
           qu'une bande étroite ») : la hauteur gagnée va au tableau de la simulation. */}
       <header className={`shrink-0 text-center ${surSim ? 'flex flex-wrap items-baseline justify-center gap-x-4 px-4 pt-1 pb-0.5' : 'px-6 pt-2 pb-1'}`}
         style={tuteur3D ? { paddingRight: COLONNE_TUTEUR } : undefined}>
-        <h1 className="text-xl leading-tight md:text-[26px]" style={{ fontFamily: CRAIE, color: '#fef3c7' }}>{slide.title}</h1>
+        <h1 className="text-xl leading-tight md:text-[26px]" style={{ fontFamily: CRAIE, color: '#fef3c7' }}><Formule t={slide.title} /></h1>
         {/* pendant une question d'observation, le sous-titre se tait : il dit souvent la réponse (« la lumière s'étale ») */}
         {contenu.lead && (
-          <p className="text-sm leading-snug md:text-base text-white/70 transition-opacity" style={{ fontFamily: CRAIE, opacity: obs && obs.etape !== 'fini' ? 0 : 1 }}>{contenu.lead}</p>
+          <p className="text-sm leading-snug md:text-base text-white/70 transition-opacity" style={{ fontFamily: CRAIE, opacity: obs && obs.etape !== 'fini' ? 0 : 1 }}><Formule t={contenu.lead} /></p>
         )}
       </header>
 
@@ -2051,8 +2120,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
             13 novembre 2026 : « ces équations masquent les simulations ») ; la place est gardée dès le début, la figure
             ne saute pas quand une formule apparaît. */}
         {centre.length > 0 && (
-          <div className={`flex ${visuel ? 'pointer-events-none w-full shrink-0 flex-row flex-wrap justify-center gap-2' : table ? 'flex-row flex-wrap justify-center gap-3' : 'flex-col items-center gap-4'}`}
-            style={visuel && tuteur3D ? { paddingRight: COLONNE_TUTEUR } : undefined}>
+          <div data-formules-centre={visuel ? '' : undefined} className={`flex ${visuel ? 'pointer-events-none w-full shrink-0 flex-row flex-wrap justify-center gap-2' : table ? 'flex-row flex-wrap justify-center gap-3' : 'flex-col items-center gap-4'}`}>
             {centre.map((c, i) => {
               const vu = toutVisible || temps >= c.t;
               return (
@@ -2113,8 +2181,8 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
                 </div>
               )}
               {entete?.partie && <h3 className="mt-3 text-2xl" style={{ fontFamily: CRAIE, color: '#fca5a5' }}>{entete.partie}</h3>}
-              <h4 className={`mt-2 text-xl underline decoration-amber-200/40 underline-offset-4 ${entete ? 'pl-4' : ''}`} style={{ fontFamily: CRAIE, color: '#fef3c7' }}>{entete?.diapo || slide.title}</h4>
-              {contenu.lead && <p className={`mt-1 text-base italic ${entete ? 'pl-4' : ''}`} style={{ fontFamily: CRAIE, color: '#e7e5c9' }}>{contenu.lead}</p>}
+              <h4 className={`mt-2 text-xl underline decoration-amber-200/40 underline-offset-4 ${entete ? 'pl-4' : ''}`} style={{ fontFamily: CRAIE, color: '#fef3c7' }}><Formule t={entete?.diapo || slide.title} /></h4>
+              {contenu.lead && <p className={`mt-1 text-base italic ${entete ? 'pl-4' : ''}`} style={{ fontFamily: CRAIE, color: '#e7e5c9' }}><Formule t={contenu.lead} /></p>}
               {cahier && cahier !== contenu.lead && <p className={`mt-2 text-lg leading-relaxed ${entete ? 'pl-4' : ''}`} style={{ fontFamily: CRAIE, color: '#fef3c7' }}><Formule t={cahier} /></p>}
               {/* les dessins du cahier (courbe, schéma, croquis légendés), sous le texte */}
               <FiguresCahier figures={conc.cahier_figures} compact className={`mt-3 ${entete ? 'pl-4' : ''}`} />
@@ -2131,7 +2199,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
           {panneau === 'explication' && (
             <div style={{ fontFamily: CRAIE }} className="text-lg leading-relaxed">
               <div className="text-sm font-semibold text-cyan-200" style={{ fontFamily: 'inherit' }}>📖 Explication écrite</div>
-              {contenu.lead && <p className="mt-2 text-white/80">{contenu.lead}</p>}
+              {contenu.lead && <p className="mt-2 text-white/80"><Formule t={contenu.lead} /></p>}
               {(contenu.bullets || []).length > 0 && (
                 <ul className="mt-2 list-disc pl-6 space-y-1">{contenu.bullets!.map((b, i) => <li key={i}><Formule t={b} /></li>)}</ul>
               )}
@@ -2281,6 +2349,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
           </Bulle>
         )}
         <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          <BoutonPleinEcran />
           {deckControls}
           {/* Le seul bouton qui fait avancer le cours : mis en avant quand l'étape est finie ; il clignote à la relance. */}
           <button onClick={faireSuite} disabled={etapeSuite.quoi === 'rien'} data-suite={etapeSuite.quoi}
@@ -2589,6 +2658,7 @@ function UneQuestion({ q, diapo, dire, jouer, preparees, compact = false, onRepo
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto rounded-xl border border-white/15 p-4">
+      <RemplirSiCourt>
       <div className="flex items-start gap-2">
         <p className={`${titre} min-w-0 flex-1 text-amber-100`}><Formule t={q.enonce} /></p>
         {lireEnonce && !finie && (
@@ -2649,6 +2719,7 @@ function UneQuestion({ q, diapo, dire, jouer, preparees, compact = false, onRepo
       {q.demonstration?.lignes?.length && revoir ? (
         <DemonstrationPleine d={q.demonstration} lecture={null} complet enonce={q.enonce} onFermer={() => setRevoir(false)} />
       ) : null}
+      </RemplirSiCourt>
     </div>
   );
 }
@@ -3002,6 +3073,56 @@ function Libelle({ icone, texte }: { icone: string; texte: string }) {
   return <span title={texte} aria-label={texte}>{icone}<span className="hidden 2xl:inline"> {texte}</span></span>;
 }
 
+/** Téléphone en paysage (hauteur < 520 px) : vrai tant que l'écran garde cette forme. */
+function useCourt() {
+  const requete = '(max-height: 520px) and (orientation: landscape)';
+  const [court, setCourt] = useState(() => typeof window !== 'undefined' && window.matchMedia(requete).matches);
+  useEffect(() => {
+    const m = window.matchMedia(requete), suivre = () => setCourt(m.matches);
+    m.addEventListener('change', suivre);
+    return () => m.removeEventListener('change', suivre);
+  }, []);
+  return court;
+}
+
+/** Plein écran comme un diaporama, sur ordinateur et sur téléphone (17 novembre 2026) : le lecteur prend tout l'écran,
+ *  le tableau et les simulations grandissent. « ⛶ » ou la touche F pour entrer, la même chose ou Échap pour sortir. */
+function BoutonPleinEcran() {
+  const plein = usePleinEcran();
+  useEffect(() => {
+    const touche = (e: KeyboardEvent) => {
+      if (e.key !== 'f' && e.key !== 'F') return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const cible = e.target as HTMLElement | null;
+      if (cible && (cible.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(cible.tagName))) return;
+      e.preventDefault();
+      basculerPleinEcran();
+    };
+    window.addEventListener('keydown', touche);
+    return () => window.removeEventListener('keydown', touche);
+  }, []);
+  return (
+    <button type="button" onClick={basculerPleinEcran} data-plein-ecran={plein ? 'oui' : 'non'}
+      title={plein ? 'Quitter le plein écran (Échap)' : 'Plein écran (F)'} aria-label={plein ? 'Quitter le plein écran' : 'Plein écran'}
+      className={`flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm ${plein
+        ? 'bg-white/10 text-white/80 hover:bg-white/20' : 'bg-cyan-400/20 text-cyan-100 hover:bg-cyan-400/30'}`}>
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        {plein
+          ? <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
+          : <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />}
+      </svg>
+      <span className="hidden lg:inline">{plein ? 'Quitter' : 'Plein écran'}</span>
+    </button>
+  );
+}
+
+/** Sur téléphone en paysage, la question (énoncé, choix, retour) grandit jusqu'à remplir sa carte (16 novembre 2026 :
+ *  « agrandir les suggestions du QCM, il reste de la place ») et se resserre quand le retour du professeur arrive. */
+function RemplirSiCourt({ children }: { children: ReactNode }) {
+  const court = useCourt();
+  return court ? <SansDefilement agrandirMax={1.5} zoomMin={0.85}>{children}</SansDefilement> : <>{children}</>;
+}
+
 function Bulle({ children, actif, pulse, disabled, onClick }: { children: ReactNode; actif?: boolean; pulse?: boolean; disabled?: boolean; onClick: () => void }) {
   return (
     <button
@@ -3021,24 +3142,24 @@ function Exercices({ exercices }: { exercices: NonNullable<CourseSlide['exercise
       <div className="text-sm font-semibold text-emerald-200">✏️ À toi</div>
       {exercices.map((ex, e) => (
         <div key={e}>
-          <p className="font-medium">{ex.prompt}</p>
+          <p className="font-medium"><Formule t={ex.prompt} /></p>
           {ex.type === 'qcm' && (ex.choices || []).map((c, i) => {
             const pris = choix[`${e}`] === i;
             const juste = i === (ex.correct ?? 0);
             return (
               <button key={i} onClick={() => setChoix(s => ({ ...s, [`${e}`]: i }))}
                 className={`mt-2 block w-full rounded-lg border px-3 py-2 text-left ${pris ? (juste ? 'border-emerald-400 bg-emerald-500/20' : 'border-rose-400 bg-rose-500/20') : 'border-white/15 hover:bg-white/5'}`}>
-                {c}
+                <Formule t={c} />
               </button>
             );
           })}
-          {ex.type === 'qcm' && choix[`${e}`] !== undefined && ex.explanation && <p className="mt-2 text-sm text-white/70">{ex.explanation}</p>}
+          {ex.type === 'qcm' && choix[`${e}`] !== undefined && ex.explanation && <p className="mt-2 text-sm text-white/70"><Formule t={ex.explanation} /></p>}
           {ex.type === 'vrai_faux' && (ex.statements || []).map((st, i) => {
             const cle = `${e}:${i}`;
             const rep = choix[cle];
             return (
               <div key={i} className="mt-2 rounded-lg border border-white/15 px-3 py-2">
-                <div>{st.text}</div>
+                <div><Formule t={st.text} /></div>
                 <div className="mt-1 flex gap-2">
                   {[true, false].map(v => (
                     <button key={String(v)} onClick={() => setChoix(s => ({ ...s, [cle]: v }))}

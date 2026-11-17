@@ -71,15 +71,15 @@ export function TableauCahier({ bloc, onEcrit, entetes }: { bloc: BlocCours; onE
   const parLigne = !!entetes && plan.every(Boolean) && lignes.length === bloc.slide_ids.length;
   useEffect(() => { debut.current = Date.now(); }, [bloc.id]);
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3">
+    <div className="flex h-full min-h-0 flex-col gap-3 court:gap-1.5">
       {/* « C'est écrit » sur la ligne du titre : la hauteur gagnée va au texte du cahier */}
       <div className="flex shrink-0 items-end gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-xs uppercase tracking-wide text-white/45" style={{ fontFamily: 'system-ui, sans-serif' }}>Le cours s’arrête : recopie dans ton cahier</p>
-          {bloc.titre && <h3 className="mt-1 text-2xl underline decoration-amber-200/40 underline-offset-4" style={{ fontFamily: CRAIE, color: '#fef3c7' }}>{bloc.titre}</h3>}
+          <p className="text-xs uppercase tracking-wide text-white/45 court:hidden" style={{ fontFamily: 'system-ui, sans-serif' }}>Le cours s’arrête : recopie dans ton cahier</p>
+          {bloc.titre && <h3 className="mt-1 text-2xl underline decoration-amber-200/40 underline-offset-4 court:mt-0 court:text-lg" style={{ fontFamily: CRAIE, color: '#fef3c7' }}><Formule t={bloc.titre} /></h3>}
         </div>
         <button type="button" onClick={() => onEcrit(Math.round((Date.now() - debut.current) / 1000))}
-          className="shrink-0 rounded-full bg-cyan-400/90 px-7 py-3 text-base font-bold text-slate-950 shadow-lg hover:bg-cyan-300"
+          className="shrink-0 rounded-full bg-cyan-400/90 px-7 py-3 text-base font-bold text-slate-950 shadow-lg hover:bg-cyan-300 court:px-4 court:py-1.5 court:text-sm"
           style={{ fontFamily: 'system-ui, sans-serif' }}>
           ✍️ C’est écrit
         </button>
@@ -87,9 +87,9 @@ export function TableauCahier({ bloc, onEcrit, entetes }: { bloc: BlocCours; onE
       {/* Le texte et les dessins tiennent chacun leur place (15 novembre 2026, « le texte du cahier est parfois trop petit
           avec le diagramme ») : un seul zoom pour les deux faisait rétrécir le texte dès que deux dessins s'empilaient.
           Le texte remplit sa colonne (SansDefilement), les dessins se partagent la hauteur de la leur. */}
-      <div className="flex min-h-0 flex-1 flex-col gap-4 rounded-2xl border border-amber-100/15 bg-[#1d2b22] p-3 shadow-inner md:flex-row md:p-4" style={{ fontFamily: CRAIE }}>
+      <div className="flex min-h-0 flex-1 flex-col gap-4 rounded-2xl border border-amber-100/15 bg-[#1d2b22] p-3 shadow-inner md:flex-row md:p-4 court:flex-row court:gap-2 court:p-2" style={{ fontFamily: CRAIE }}>
         {/* les dessins du bloc (courbe, schéma, croquis) : à droite du texte sur grand écran, dessous sur téléphone */}
-        <SansDefilement agrandirMax={1.6} className="min-w-0">
+        <SansDefilement agrandirMax={1.6} zoomMin={0.7} className="min-w-0">
         {plan.length > 0 && (() => {
           const tete = plan.find(e => e?.cours)?.cours;
           return tete ? (
@@ -120,7 +120,7 @@ export function TableauCahier({ bloc, onEcrit, entetes }: { bloc: BlocCours; onE
           </>
         ) : <p className="text-lg text-white/60">Écris avec tes mots ce que tu viens de comprendre.</p>}
         </SansDefilement>
-        {figures.length > 0 && <FiguresCahier figures={figures} remplir className="h-[42%] shrink-0 md:h-auto md:w-[38%]" />}
+        {figures.length > 0 && <FiguresCahier figures={figures} remplir className="h-[42%] shrink-0 md:h-auto md:w-[38%] court:h-auto court:w-[38%]" />}
       </div>
     </div>
   );
@@ -194,10 +194,10 @@ export default function CycleBloc({ bloc, place, etapeInitiale = 'cahier', titre
 
   if (!etape) return null;
   return (
-    <div className="relative flex h-full min-h-0 flex-col gap-3 overflow-y-auto rounded-2xl border border-white/15 bg-[#14201a]/95 p-4 text-white md:p-5">
+    <div data-fenetre-cycle className="relative flex h-full min-h-0 flex-col gap-3 overflow-y-auto rounded-2xl border border-white/15 bg-[#14201a]/95 p-4 text-white md:p-5 court:gap-1.5 court:p-2">
       {onFermer && (
         <button type="button" onClick={() => { taire(); onFermer(); }} title="Fermer et revenir au cours" aria-label="Fermer"
-          className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-lg text-white/70 hover:bg-white/20 hover:text-white">×</button>
+          className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-lg text-white/70 hover:bg-white/20 hover:text-white court:right-1.5 court:top-1.5 court:h-7 court:w-7 court:text-base">×</button>
       )}
       <div className={onFermer ? 'pr-10' : ''}>
         <OuEnEstOn seance={place.seance} nbSeances={place.nbSeances} bloc={place.bloc} nbBlocs={place.nbBlocs} etape={etape} />
