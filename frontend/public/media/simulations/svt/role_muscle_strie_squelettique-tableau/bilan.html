@@ -272,7 +272,11 @@ function statut(b) {
   if (lac.length) return 'partiel';
   return (S.acquis_ids || []).some(a => b.comps.includes(a)) ? 'acquis' : null;
 }
-function moments() { const m = { fiche: 1 }; BLOCS.forEach(b => { m[b.id] = 1; }); m.lacunes = 2; return m; }
+// Chaque bloc a son propre instant, dans l’ordre de la fiche (1,01 ; 1,02 ; …), et time_s dit jusqu’où la fiche est écrite
+// (17 novembre 2026) : le kit refuse un play_until vers un instant déjà passé ; avec le même instant 1 pour tous les blocs,
+// il refusait tous les blocs que la voix appelait, et la fiche restait sur son premier bloc.
+function moments() { const m = {}; BLOCS.forEach((b, i) => { m[b.id] = +(1 + (i + 1) / 100).toFixed(2); }); m.fiche = +(1 + (BLOCS.length + 1) / 100).toFixed(2); m.lacunes = 2; return m; }
+function tempsFiche() { if (S.page === 2) return 2; let k = 0; S.apparu.forEach((a, i) => { if (a != null) k = i + 1; }); return +(1 + k / 100).toFixed(2); }
 function playUntil(p) {
   const nom = p.moment in moments() ? p.moment : null;
   if (!nom && !Number.isFinite(+p.time_s)) return;
@@ -329,7 +333,7 @@ const config = { id: 'muscle_bilan', version: '1.0', title: 'Ce qu’il faut ret
     set_parameters: { lacunes: '[{id: C1..C9, label, statut: non_acquis|partiel, reprendre_avec: [..]}] (bilan de l’élève)', acquis: '[labels acquis]', acquis_ids: '[C1, ..]' } } };
 const pont = protocole({ id: config.id, commandes, config,
   texte: 'Fiche « Ce qu’il faut retenir » du chapitre du muscle strié squelettique, sur une page (neuf blocs : secousse, intensité et fréquence, chaleur et consommation, structure, glissement, Ca²⁺ et ATP, régénération de l’ATP, voie dominante, rédiger ; chacun avec définition, formule, piège), puis la page de l’élève.',
-  etat: () => ({ simulation_status: 'paused', ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'bilan', time_s: S.page, parameters: { page: S.page, focus: S.focus, lacunes: S.lacunes ? S.lacunes.length : null }, moments: moments() }),
+  etat: () => ({ simulation_status: 'paused', ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'bilan', time_s: tempsFiche(), parameters: { page: S.page, focus: S.focus, lacunes: S.lacunes ? S.lacunes.length : null }, moments: moments() }),
   progression: () => S.page / 2,
   executer: (cmd, p) => ({ start: () => aller(1, 'start', 'secousse'), reset: () => aller(1, 'reset', 'secousse'), play_until: () => playUntil(p), set_parameters: () => setParameters(p),
     next: suivant, previous: precedent })[cmd]?.() });
