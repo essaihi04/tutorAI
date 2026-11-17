@@ -174,11 +174,15 @@ function dessinerCourbe(c, k) {
   for (const [p, [h0, h1]] of Object.entries(BORNES)) if (h >= h0) c.texte(p, gx((h0 + h1) / 2), 356, { couleur: p === 'G1' ? 'vert' : p === 'S' ? 'orange' : p === 'G2' ? 'bleu' : 'violet', taille: 15, align: 'center', duree: .15 });
   // la courbe, tracée jusqu’à l’heure courante
   c.direct(() => {
-    const x = c.ctx, n = Math.max(2, Math.ceil(h * 12));
-    x.save(); x.strokeStyle = '#f8fafc'; x.lineWidth = 3; x.lineJoin = 'round'; x.beginPath();
-    for (let i = 0; i <= n; i++) { const hh = h * i / n; x[i ? 'lineTo' : 'moveTo'](gx(hh), gy(ADN(hh))); }
-    x.stroke(); x.restore();
-    Peint.halo(x, gx(h), gy(ADN(h)), 10, 'rgba(250,204,21,.7)');
+    // Une couleur par phase (celle de son nom sous l'axe), aire douce dessous, trait net et lumineux (17 novembre 2026).
+    const x = c.ctx, PH = [[0, 9, '#4ade80'], [9, 15, '#fb923c'], [15, 19, '#60a5fa'], [19, 20, '#c084fc'], [20, 99, '#4ade80']];
+    const morceaux = PH.filter(([a]) => h > a).map(([a, b, couleur]) => {
+      const fin = Math.min(h, b), n = Math.max(2, Math.ceil((fin - a) * 14)), pts = [];
+      for (let i = 0; i <= n; i++) { const hh = a + (fin - a) * i / n; pts.push([gx(hh), gy(ADN(hh))]); }
+      return { pts, couleur };
+    });
+    Peint.courbe(x, morceaux, { aire: G.y0, largeur: 3.2 });
+    Peint.halo(x, gx(h), gy(ADN(h)), 12, 'rgba(250,204,21,.7)');
   });
   c.repere('courbe', G.x0, gy(6.4), gx(h) - G.x0 + 4, G.y0 - gy(6.4), 'la courbe');
   c.repere('palier_q', G.x0, gy(3) - 8, gx(9) - G.x0, 16, 'le palier à q (G1)');
