@@ -228,7 +228,8 @@ function dansVue(c, fn) {
   try { return fn(); } finally { c.ctx.restore(); }
 }
 /** Les deux lignes de calcul du bas : position, taille, largeur. */
-const bas = i => (Z.large ? { x: 24, y: 240 * Z.k + 30 + i * 34, taille: 20, max: 760 * Z.k - 40 } : { x: 40, y: [384, 408][i], taille: 16, max: 690 });
+// (17 novembre 2026) les relations s'écrivent en fractions sur deux étages : les deux lignes s'écartent un peu
+const bas = i => (Z.large ? { x: 24, y: 240 * Z.k + 30 + i * 40, taille: 20, max: 760 * Z.k - 40 } : { x: 40, y: (DEUX() ? [376, 408] : [380, 408])[i], taille: 16, max: 690 });
 const versVue = (x, y) => [x / Z.k, y / Z.k];
 
 function dessiner(c) {
@@ -334,16 +335,17 @@ function dessiner(c) {
   }
   if (act && S.t >= M.front_entre - 1e-6) {
     quand(c, 'entre');
-    dansVue(c, () => { if (!DEUX()) c.texte(`v = c/n = 3,00·10⁸ / ${fr(S.n, 2)} = ${sci(vDe(S.n))} m/s`, (g.X1 + g.X2) / 2, 60, { couleur: 'orange', taille: 15, align: 'center', max: g.X2 - g.X1 - 10 });
+    // v = c/n en fraction (deux étages) : la cote λ du bloc descend un peu (84 → 90) pour lui laisser la place
+    dansVue(c, () => { if (!DEUX()) c.texte(`v = ⟦c|n⟧ = ⟦3,00·10⁸|${fr(S.n, 2)}⟧ = ${sci(vDe(S.n))} m/s`, (g.X1 + g.X2) / 2, 60, { couleur: 'orange', taille: 15, align: 'center', max: g.X2 - g.X1 - 10 });
     else c.texte('dans le verre : les deux fronts ralentissent', 40, 234, { couleur: 'orange', taille: 15, max: 330 }); });
   }
   if (!DEUX()) {
     if (act && S.t >= M.lambda_serree - 1e-6) { quand(c, 'serre'); const b = bas(0); c.texte(`Dans le bloc (${nomB}), les crêtes se resserrent : λ < λ_0 ; même couleur.`, b.x, b.y, { couleur: 'vert', taille: b.taille, max: b.max }); }
     if (act && S.t >= M.mesure_lambda - 1e-6) {
       quand(c, 'mesure');
-      dansVue(c, () => c.direct(() => coteCretes(c, Tr, g.X1, Math.min(g.X2, front(tw(), Tr)), 84, `λ = ${fr(lamDe(S.lam0, S.n), 0)} nm`, 'rose', 'lambda', `λ = λ₀/n = ${fr(lamDe(S.lam0, S.n), 0)} nm dans le bloc`)));
+      dansVue(c, () => c.direct(() => coteCretes(c, Tr, g.X1, Math.min(g.X2, front(tw(), Tr)), 90, `λ = ${fr(lamDe(S.lam0, S.n), 0)} nm`, 'rose', 'lambda', `λ = λ₀/n = ${fr(lamDe(S.lam0, S.n), 0)} nm dans le bloc`)));
       const b = bas(1);
-      c.texte(`λ = λ_0/n = ${S.lam0} / ${fr(S.n, 2)} = ${fr(lamDe(S.lam0, S.n), 0)} nm ;  ν = c/λ_0 = ${sci(nuDe(S.lam0))} Hz des deux côtés`, b.x, b.y, { couleur: 'jaune', taille: b.taille, max: b.max });
+      c.texte(`λ = ⟦λ_0|n⟧ = ⟦${S.lam0}|${fr(S.n, 2)}⟧ = ${fr(lamDe(S.lam0, S.n), 0)} nm ;  ν = ⟦c|λ_0⟧ = ${sci(nuDe(S.lam0))} Hz des deux côtés`, b.x, b.y, { couleur: 'jaune', taille: b.taille, max: b.max });
     }
     if (act && S.t >= M.ressort_dans_air - 1e-6) {
       quand(c, 'ressort');
@@ -368,8 +370,8 @@ function dessiner(c) {
       quand(c, 'vitesses');
       const [R, J] = Ts;
       const b0 = bas(0), b1 = bas(1);
-      c.texte(`rouge : v = c/n = 3,00·10⁸ / 1,62 = ${sci(vDe(R.n))} m/s ;  λ = ${fr(lamDe(R.lam0, R.n), 0)} nm`, b0.x, b0.y, { couleur: 'rouge', taille: b0.taille, max: b0.max });
-      c.texte(`jaune : v = c/n = 3,00·10⁸ / 1,66 = ${sci(vDe(J.n))} m/s ;  λ = ${fr(lamDe(J.lam0, J.n), 0)} nm : le jaune va moins vite`, b1.x, b1.y, { couleur: 'jaune', taille: b1.taille, max: b1.max });
+      c.texte(`rouge : v = ⟦c|n⟧ = ⟦3,00·10⁸|1,62⟧ = ${sci(vDe(R.n))} m/s ;  λ = ${fr(lamDe(R.lam0, R.n), 0)} nm`, b0.x, b0.y, { couleur: 'rouge', taille: b0.taille, max: b0.max });
+      c.texte(`jaune : v = ⟦c|n⟧ = ⟦3,00·10⁸|1,66⟧ = ${sci(vDe(J.n))} m/s ;  λ = ${fr(lamDe(J.lam0, J.n), 0)} nm : le jaune va moins vite`, b1.x, b1.y, { couleur: 'jaune', taille: b1.taille, max: b1.max });
     }
   }
 
@@ -483,17 +485,17 @@ function ceQuiSeVoit() {
     m.push(`Le front rouge ${ou(R)} ; le front jaune ${ou(J)}.`);
     if (xr > g.X1 && xr < g.XE - 2) m.push(`Le front jaune est ${fr((xr - xj) * 10, 0)} nm derrière le rouge (1 px = 10 nm).`);
     m.push(`Compteurs : rouge ${fr(nuEcran(767), 1)} crêtes/s (ralenti) dans l’air et dans le verre ; jaune ${fr(nuEcran(589), 1)} crêtes/s des deux côtés.`);
-    if (S.t >= moments().mesure_vitesses - 1e-6) m.push('Écrit : rouge v = 3,00·10⁸ / 1,62 = 1,85·10⁸ m/s (λ = 473 nm dans le verre) ; jaune v = 3,00·10⁸ / 1,66 = 1,81·10⁸ m/s (λ = 355 nm) : le jaune va moins vite.');
+    if (S.t >= moments().mesure_vitesses - 1e-6) m.push('Écrit : rouge v = (3,00·10⁸)/1,62 = 1,85·10⁸ m/s (λ = 473 nm dans le verre) ; jaune v = (3,00·10⁸)/1,66 = 1,81·10⁸ m/s (λ = 355 nm) : le jaune va moins vite.');
   } else {
     const Tr = Ts[0], na = comptees(g.xc1, Tr, t), nv = comptees(g.xc2, Tr, t);
     m.push(`Le front ${ou(Tr)}.`);
     m.push(`Compteur 1 (air) : ${na} crêtes passées${na >= 2 ? `, ${fr(nuEcran(S.lam0), 1)} crêtes par seconde (ralenti)` : ''} ; compteur 2 (bloc) : ${nv} crêtes passées${nv >= 2 ? `, ${fr(nuEcran(S.lam0), 1)} crêtes par seconde (ralenti) : le même nombre` : ''}.`);
     const M = moments();
     if (S.t >= M.onde_dans_air - 1e-6) m.push(`Écrit : c = 3,00·10⁸ m/s et la cote λ₀ = ${S.lam0} nm dans l’air.`);
-    if (S.t >= M.front_entre - 1e-6) m.push(`Écrit sur le bloc : v = c/n = 3,00·10⁸ / ${fr(S.n, 2)} = ${sci(vDe(S.n))} m/s.`);
+    if (S.t >= M.front_entre - 1e-6) m.push(`Écrit sur le bloc : v = c/n = (3,00·10⁸)/${fr(S.n, 2)} = ${sci(vDe(S.n))} m/s.`);
     if (S.t >= M.lambda_serree - 1e-6) m.push('Écrit : dans le bloc, les crêtes se resserrent, λ < λ₀, même couleur.');
     if (S.t >= M.compte_frequence - 1e-6) m.push('Écrit : même nombre de crêtes par seconde, même ν, même couleur.');
-    if (S.t >= M.mesure_lambda - 1e-6) m.push(`Cotes : λ₀ = ${S.lam0} nm dans l’air, λ = ${fr(lamDe(S.lam0, S.n), 0)} nm dans le bloc ; écrit λ = λ₀/n = ${S.lam0} / ${fr(S.n, 2)} = ${fr(lamDe(S.lam0, S.n), 0)} nm.`);
+    if (S.t >= M.mesure_lambda - 1e-6) m.push(`Cotes : λ₀ = ${S.lam0} nm dans l’air, λ = ${fr(lamDe(S.lam0, S.n), 0)} nm dans le bloc ; écrit λ = λ₀/n = ${S.lam0}/${fr(S.n, 2)} = ${fr(lamDe(S.lam0, S.n), 0)} nm.`);
     if (S.t >= M.ressort_dans_air - 1e-6) m.push(`À la sortie, dans l’air : de nouveau c et λ₀ = ${S.lam0} nm.`);
   }
   return m.join(' ');
@@ -510,7 +512,7 @@ const EXPLICATIONS = {
   eau: [
     { repere: 'bloc', texte: 'Cette fois, de l’eau : n = 1,33.' },
     { repere: 'front', texte: 'Le front ralentit : v = c/n = 2,26·10⁸ m/s.' },
-    { repere: 'lambda', texte: 'λ = λ₀/n = 600 / 1,33 = 451 nm.' },
+    { repere: 'lambda', texte: 'λ = λ₀/n = 600/1,33 = 451 nm.' },
     { repere: 'vue_compteurs', texte: 'La fréquence ne change pas : 5,00·10¹⁴ Hz des deux côtés.' },
   ],
   deux: [

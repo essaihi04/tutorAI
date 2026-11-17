@@ -43,7 +43,7 @@ const BLOCS = [
   { id: 'structure', titre: '6 · La molécule d’ADN', comps: ['C6'], formules: ['A = T ; C ≡ G', "5' → 3' / 3' ← 5'"],
     def: "Nucléotide : acide phosphorique, désoxyribose, base (A, T, C, G). Deux brins complémentaires et antiparallèles, en double hélice.",
     attention: "Brin complémentaire : bases échangées et extrémités inversées." },
-  { id: 'replication', titre: '7 · La réplication', comps: ['C7'], formules: ['d(hybride) = (1,710 + 1,724) / 2 = 1,717 g·cm⁻³'],
+  { id: 'replication', titre: '7 · La réplication', comps: ['C7'], formules: ['d(hybride) = ⟦1,710 + 1,724|2⟧ = 1,717 g·cm⁻³'],
     def: "Semi-conservative : chaque molécule fille garde un brin de la molécule mère. L’ADN polymérase pose les nucléotides complémentaires, de 5′ vers 3′.",
     attention: "La bande hybride ne disparaît jamais." },
   { id: 'rediger', titre: '8 · Rédiger', comps: ['C8'],
@@ -90,22 +90,28 @@ function contenuBloc(c, b, x, y0, w, t, dessiner, st) {
   if (b.formules) {
     // formules encadrées, à la ligne quand la suivante ne tient plus
     let fx = x, base = y + tf * 1.1;
+    // une formule à fraction (« ⟦num|dén⟧ », écrite sur deux étages comme dans le cahier) prend un cadre plus haut
+    let basFr = 0;
     for (const f of b.formules) {
-      ctx.font = `${tf}px ${window.Tableau.POLICE}`;
-      const larg = s => ctx.measureText(s.replace(/_/g, '')).width + tf;
+      const larg = s => c.largeurTexte(s.replace(/_/g, ''), tf) + tf;
       // une formule plus large que le bloc passe à la ligne avant un « = » (au lieu d'être rétrécie sous 15 px)
       const morceaux = [];
       for (const p of f.split(/ (?==)/)) { const d = morceaux.length - 1; if (d >= 0 && larg(morceaux[d] + ' ' + p) <= w) morceaux[d] += ' ' + p; else morceaux.push(p); }
       const l = Math.min(w, Math.max(...morceaux.map(larg))), n = morceaux.length;
-      if (fx > x && (fx + l > x + w || n > 1)) { fx = x; base += tf * 1.65; }
+      const etage = morceaux.map(m => m.includes('⟦')), haut = i => etage[i] ? tf * .42 : 0, bas = i => etage[i] ? tf * .38 : 0;
+      if (fx > x && (fx + l > x + w || n > 1)) { fx = x; base += tf * 1.65 + basFr; basFr = 0; }
+      base += haut(0);
+      // lignes du cadre : chacune descend de son pas, plus la place des étages de part et d'autre
+      const ys = []; let yy = base;
+      morceaux.forEach((m, i) => { if (i) yy += tf * 1.25 + bas(i - 1) + haut(i); ys.push(yy); });
       if (dessiner) {
-        c.rect(fx, base - tf * 1.02, l, tf * 1.42 + (n - 1) * tf * 1.25, { couleur: 'faible', arrondi: 6, largeur: 1.2, duree: .25 });
-        morceaux.forEach((m, i) => c.texte(m, fx + tf * .5 + (i ? tf : 0), base + i * tf * 1.25, { couleur: 'jaune', taille: tf, max: l - tf * .7 - (i ? tf : 0) }));
+        c.rect(fx, base - tf * 1.02 - haut(0), l, (yy - base) + tf * 1.42 + haut(0) + bas(n - 1), { couleur: 'faible', arrondi: 6, largeur: 1.2, duree: .25 });
+        morceaux.forEach((m, i) => c.texte(m, fx + tf * .5 + (i ? tf : 0), ys[i], { couleur: 'jaune', taille: tf, max: l - tf * .7 - (i ? tf : 0) }));
       }
-      base += (n - 1) * tf * 1.25;
+      base = yy; basFr = Math.max(n > 1 ? 0 : basFr, bas(n - 1));
       fx = n > 1 ? x + w : fx + l + tf * .5;
     }
-    y = base + tf * .55;
+    y = base + tf * .55 + basFr;
   }
   y += td * .25;
   for (const l of lignes(c, b.def, td, w)) { y += td * 1.2; if (dessiner) c.texte(l, x, y, { taille: td, couleur: 'blanc' }); }
@@ -268,7 +274,7 @@ function ceQuiSeVoit() {
   if (S.page === 2) return `Page 2/2, la page de l'élève : ${!S.lacunes ? 'pas encore de bilan' : S.lacunes.length ? 'à retravailler : ' + S.lacunes.map(l => l.label).join(' ; ') : 'toutes les compétences évaluées sont acquises'}.`;
   const f = S.focus && BLOCS.find(b => b.id === S.focus);
   const ecrits = BLOCS.filter((b, i) => S.apparu[i] != null).length;
-  return `Page 1/2, la fiche du chapitre de l’information génétique : ${ecrits}/8 blocs écrits (définition, formule, piège)${f ? ` ; en lumière « ${f.titre} » : ${f.def}${f.formules ? ' Formules : ' + f.formules.join(' ; ') + '.' : ''} Piège : ${f.attention}` : '.'}${S.lacunes ? ` Blocs à reprendre : ${BLOCS.filter(b => statut(b) && statut(b) !== 'acquis').map(b => b.titre).join(', ') || 'aucun'}.` : ''}`;
+  return `Page 1/2, la fiche du chapitre de l’information génétique : ${ecrits}/8 blocs écrits (définition, formule, piège)${f ? ` ; en lumière « ${f.titre} » : ${f.def}${f.formules ? ' Formules : ' + f.formules.map(window.Tableau.lisible).join(' ; ') + '.' : ''} Piège : ${f.attention}` : '.'}${S.lacunes ? ` Blocs à reprendre : ${BLOCS.filter(b => statut(b) && statut(b) !== 'acquis').map(b => b.titre).join(', ') || 'aucun'}.` : ''}`;
 }
 $('suiv').onclick = () => (S.page === 1 ? aller(2, 'next') : aller(1, 'previous', null, true));
 // Imprimer / PDF : la fiche entière et la page de l'élève, sur fond blanc (shared/tableau/imprimer.js).

@@ -30,7 +30,7 @@ const demande = new URLSearchParams(location.search).get('vue');
 const vue = demande === 'triangle' ? 'triangle' : 'montage';
 const RM = { x: 8, y: 44, w: 440, h: 368 }, RT = { x: 456, y: 44, w: 296, h: 368 };
 const YC = 222, YH = 104, YB = 340, XS = 110, PXD = 80, PXY = 3000;      // px par mètre le long de D, et en travers (exagéré)
-const TA = { x: 474, y: 214 }; let DT = 200;                                   // triangle seul : sommet (fente) et côté adjacent (px)
+const TA = { x: 474, y: 170 }; let DT = 200;                                   // triangle seul : sommet (fente) et côté adjacent (px)
 const S = { D: 2.0, a: 0.10, lam: 650, t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0 };
 let M = {}, MM = {};
 const VITESSE = 1.5;                               // horloge de l’écriture (s de scène par s réelle)
@@ -151,12 +151,33 @@ function disposer(L) {
   if (Q.large) {
     RT.w = L - 8 - RT.x; Q.k = 1.22; Q.w = Math.min(360, RT.w * .42); Q.x = RT.x + RT.w - Q.w - 8;
     Q.dtMax = Q.x - RT.x - 18 - 120; TA.x = RT.x + 22; TA.y = 352;
-  } else { Object.assign(RT, RT0); Q.k = 1; Q.x = RT.x + 10; Q.w = 280; TA.x = 474; TA.y = 214; DT = 200; }
+  } else { Object.assign(RT, RT0); Q.k = 1; Q.x = RT.x + 10; Q.w = 280; TA.x = 474; TA.y = 170; DT = 200; }
 }
-const LIGNES = { 288: 112, 316: 150, 344: 196, 368: 228, 396: 270, 376: 250, 386: 318, 406: 352, 389: 332 };
-Q.y = y => (Q.large ? LIGNES[y] : y);
+/* 17 novembre 2026 : les relations s'écrivent comme dans le cahier (fractions sur deux étages), les lignes prennent
+ * plus de hauteur ; sur le petit tableau le triangle seul monte un peu (TA.y 214 → 170) pour leur laisser la place. */
+const LIGNES = { 288: 112, 316: 158, 344: 196, 368: 228, 396: 270, 376: 250, 386: 318, 406: 364, 389: 332 };
+const PETIT = { 288: 258, 316: 294, 344: 322, 368: 346, 396: 376, 386: 368, 406: 400 };
+Q.y = y => (Q.large ? LIGNES[y] : PETIT[y] ?? y);
+/* Hauteur d'une ligne de craie au-dessus et au-dessous de sa base : une fraction « ⟦num|dén⟧ » monte et descend plus
+ * qu'une ligne simple ; les étages suivent la taille réellement écrite (plancher du petit écran compris). */
+function hauteurs(c, s, t) {
+  const T = c.echelle && c.tailleMin ? Math.max(t, c.tailleMin / c.echelle) : t;
+  if (!String(s).includes('⟦')) return [.75 * T, .25 * T];
+  const e = c._tailleEtage ? c._tailleEtage(T) : .78 * T;
+  return [.32 * T + 1.05 * e, 1.17 * e - .32 * T];
+}
+const sous = (c, y, s1, t1, s2, t2, ecart = 3) => y + hauteurs(c, s1, t1)[1] + ecart + hauteurs(c, s2, t2)[0];
+const ECRITS = { r1: 'tan θ = ⟦côté opposé|côté adjacent⟧', r2: 'tan θ = ⟦L|2⟧ × ⟦1|D⟧ = ⟦L|2D⟧', r3: 'θ = 6,5·10⁻³ rad', r4: 'θ petit, en radian : tan θ ≈ θ',
+  r5: 'donc θ = ⟦L|2D⟧', or: 'or θ = ⟦λ|a⟧ :', eg: '⟦λ|a⟧ = ⟦L|2D⟧' };
+/* Petit tableau : les lignes sous le triangle seul, chacune juste sous la précédente (les fractions prennent plus de place). */
+function placerPetit(c) {
+  const E = ECRITS, y1 = TA.y + 46 + hauteurs(c, E.r1, 16)[0];
+  const y2 = sous(c, y1, E.r1, 16, E.r2, 20), y3 = sous(c, y2, E.r2, 20, E.r3, 16), y4 = sous(c, y3, E.r3, 16, E.r4, 16);
+  const yo = sous(c, y4, E.r4, 16, E.or, 15), y5 = sous(c, y4, E.r4, 16, E.r5, 19, 6), y6 = sous(c, yo, E.or, 15, E.eg, 19, 6);
+  Object.assign(PETIT, { 288: y1, 316: y2, 344: y3, 368: y4, 396: y5, 386: yo, 406: y6 });
+}
 function dessiner(c) {
-  scene.cadre(23); MM = {}; disposer(scene.L);
+  scene.cadre(23); MM = {}; disposer(scene.L); if (!Q.large) placerPetit(c);
   const G = geo(), XE = G.XE, h = G.h, col = couleurDe(S.lam), th = theta(), L = Lm();
   const C = { x: TA.x + DT, y: TA.y }, B = { x: TA.x + DT, y: TA.y - G.Ht };
   // 1. La lumière (peinte), puis les deux vues et leurs étiquettes.
@@ -195,7 +216,7 @@ function dessiner(c) {
   // 5. La demi-largeur L/2 (du centre au bord), et L entière en pointillé pour comparer.
   c.pause(.4);
   c.cote(XE + 26, YC, XE + 26, YC - h, '', { couleur: 'rose' });
-  c.texte(`L/2 = ${fx(L * 50)} cm`, XE + 32, YC - h / 2 + 5, { couleur: 'rose', taille: 14 });
+  c.texte(`⟦L|2⟧ = ${fx(L * 50)} cm`, XE + 32, YC - h / 2 + 5, { couleur: 'rose', taille: 14 });
   c.ligne(XE + 12, YC - h, XE + 12, YC + h, { couleur: 'faible', largeur: 1.8, pointille: [5, 5] });
   c.ligne(XE + 7, YC - h, XE + 17, YC - h, { couleur: 'faible', largeur: 1.6, duree: .05 }); c.ligne(XE + 7, YC + h, XE + 17, YC + h, { couleur: 'faible', largeur: 1.6, duree: .05 });
   c.texte(`L = ${fx(L * 100)} cm`, XE + 20, YC + Math.max(h / 2, 22) + 5, { couleur: 'faible', taille: 14 });
@@ -213,9 +234,9 @@ function dessiner(c) {
   c.courbe(u => [TA.x + rt * Math.cos(-at * u), TA.y + rt * Math.sin(-at * u)], 14, { couleur: 'orange', largeur: 2.2 });
   c.texte('θ', TA.x + (rt + 14) * Math.cos(at / 2), at > .14 ? TA.y - (rt + 14) * Math.sin(at / 2) + 6 : TA.y - (rt + 14) * Math.sin(at) - 6, { couleur: 'orange', taille: 19, align: 'center' });
   const mid = Math.min(TA.y - G.Ht / 2, TA.y - 34);
-  c.texte('L/2', C.x + 8, mid - 8, { couleur: 'rose', taille: 17 });
-  c.texte(`= ${fx(L * 50)} cm`, C.x + 8, mid + 9, { couleur: 'rose', taille: 14 });
-  c.texte('côté opposé', C.x + 8, mid + 25, { couleur: 'faible', taille: 13 });
+  c.texte('⟦L|2⟧', C.x + 8, mid - 15, { couleur: 'rose', taille: 17 });   // écrite sur deux étages : un peu plus haut
+  c.texte(`= ${fx(L * 50)} cm`, C.x + 8, mid + 11, { couleur: 'rose', taille: 14 });
+  c.texte('côté opposé', C.x + 8, mid + 27, { couleur: 'faible', taille: 13 });
   c.texte(`D = ${fr(S.D, 1)} m`, TA.x + DT / 2, TA.y + 24, { couleur: 'cyan', taille: 16, align: 'center' });
   c.texte('côté adjacent', TA.x + DT / 2, TA.y + 42, { couleur: 'faible', taille: 13, align: 'center' });
   c.texte('fente', TA.x, TA.y + 22, { couleur: 'faible', taille: 13, align: 'center' });
@@ -225,23 +246,26 @@ function dessiner(c) {
   // 7. tan θ dans le triangle.
   c.pause(.4);
   const qx = Q.large ? Q.x : RT.x + 10, k = Q.k;
-  c.texte('tan θ = côté opposé / côté adjacent', qx, Q.y(288), { couleur: 'blanc', taille: 16 * k, max: Q.w });
-  c.texte('tan θ = (L/2)/D = L/(2D)', qx, Q.y(316), { couleur: 'jaune', taille: 20 * k, max: Q.w });
+  c.texte(ECRITS.r1, qx, Q.y(288), { couleur: 'blanc', taille: 16 * k, max: Q.w });
+  c.texte(ECRITS.r2, qx, Q.y(316), { couleur: 'jaune', taille: 20 * k, max: Q.w });
   marque(c, 'tan_ecrit');
   // 8. θ petit, en radian : tan θ ≈ θ.
   c.pause(.5);
   c.texte(`θ = ${sci(th)} rad ;  tan θ = ${sci(Math.tan(th))}`, qx, Q.y(344), { couleur: 'blanc', taille: 16 * k, max: Q.w });
   c.texte('θ petit, en radian : tan θ ≈ θ', qx, Q.y(368), { couleur: 'vert', taille: 16 * k, max: Q.w });
-  c.texte('donc θ = L/(2D)', qx + 6, Q.y(396), { couleur: 'jaune', taille: 19 * k });
-  c.rect(qx - 2, Q.y(396) - 20 * k, 138 * k, 28 * k, { couleur: 'jaune', largeur: 1.6, arrondi: 6 });
+  // relations écrites comme dans le cahier (fractions sur deux étages) : le cadre prend la hauteur des deux étages
+  const [h5, b5] = hauteurs(c, ECRITS.r5, 19 * k);
+  c.texte(ECRITS.r5, qx + 6, Q.y(396), { couleur: 'jaune', taille: 19 * k });
+  c.rect(qx - 2, Q.y(396) - h5 - 3, c.largeurTexte(ECRITS.r5, 19 * k) + 16, h5 + b5 + 6, { couleur: 'jaune', largeur: 1.6, arrondi: 6 });
   marque(c, 'petit_angle');
   // 9. (vue triangle) L’égalité avec θ = λ/a.
   if (vue === 'triangle') {
     c.pause(.5);
     const ox = Q.large ? qx : RT.x + 158;
-    c.texte('or θ = λ/a :', ox, Q.y(386), { couleur: 'blanc', taille: 15 * k });
-    c.texte('λ/a = L/(2D)', ox + 6, Q.y(406), { couleur: 'vert', taille: 19 * k });
-    c.rect(ox - 2, Q.y(406) - 17 * k, 104 * k + (Q.large ? 14 : 0), 23 * k + (Q.large ? 4 : 0), { couleur: 'vert', largeur: 1.6, arrondi: 6 });
+    const [h6, b6] = hauteurs(c, ECRITS.eg, 19 * k);
+    c.texte(ECRITS.or, ox, Q.y(386), { couleur: 'blanc', taille: 15 * k });
+    c.texte(ECRITS.eg, ox + 6, Q.y(406), { couleur: 'vert', taille: 19 * k });
+    c.rect(ox - 2, Q.y(406) - h6 - 3, c.largeurTexte(ECRITS.eg, 19 * k) + 16, h6 + b6 + 6, { couleur: 'vert', largeur: 1.6, arrondi: 6 });
     marque(c, 'egalite');
   }
   c.pause(.8); marque(c, 'fin');
@@ -340,7 +364,7 @@ function ceQuiSeVoit() {
     if (k('demi_largeur')) m.push(`Cote rose L/2 = ${fx(L * 50)} cm du centre au bord ; L = ${fx(L * 100)} cm entière en pointillé à côté.`);
     if (k('triangle_isole')) m.push(`Le triangle seul est tracé à droite (agrandi, même angle) : θ au sommet (fente), L/2 = ${fx(L * 50)} cm en face (côté opposé), D = ${fr(S.D, 1)} m collé à θ (côté adjacent), angle droit au centre de la tache.`);
     else if (t > M.demi_largeur + .3) m.push('Le triangle sort du montage vers « Le triangle seul ».');
-    if (k('tan_ecrit')) m.push('Écrit : tan θ = côté opposé / côté adjacent ; tan θ = (L/2)/D = L/(2D).');
+    if (k('tan_ecrit')) m.push('Écrit : tan θ = (côté opposé)/(côté adjacent) ; tan θ = (L/2)/D = L/(2D).');
     if (k('petit_angle')) m.push(`Écrit : θ = ${sci(th)} rad ; tan θ = ${sci(Math.tan(th))} ; « θ petit, en radian : tan θ ≈ θ » ; donc θ = L/(2D) (encadré).`);
     if (vue === 'triangle' && k('egalite')) m.push('Écrit : or θ = λ/a, donc λ/a = L/(2D) (encadré).');
   }

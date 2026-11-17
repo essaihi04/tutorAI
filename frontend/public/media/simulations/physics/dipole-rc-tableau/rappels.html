@@ -675,7 +675,7 @@ function vueDerivee(c, M) {
       c.point(xn, yn, 5, 'orange'); c.texte('N', xn - 6, yn - 10 - Math.max(0, 24 - (xn - xm)), { couleur: 'orange', taille: 16, align: 'right' });   // au-dessus à gauche de N (ni sur « Δd », ni sur la corde), plus haut quand N est encore près de « M »
       c.ligne(xm, ym, xn, ym, { couleur: 'faible', pointille: [3, 4], tremble: 0 }); c.ligne(xn, ym, xn, yn, { couleur: 'faible', pointille: [3, 4], tremble: 0 });
       c.texte('Δt', (xm + xn) / 2, ym + 18, { couleur: 'faible', taille: 14, align: 'center' }); c.texte('Δd', xn + 6, (ym + yn) / 2, { couleur: 'faible', taille: 14 });
-      c.texte(`pente de la corde = Δd / Δt = ${fx((dist(tN) - dist(tM)) / (tN - tM))} m/s`, 250, 370, { couleur: 'orange', taille: 15, align: 'center', max: 400 });
+      c.texte(`pente de la corde = ⟦Δd|Δt⟧ = ${fx((dist(tN) - dist(tM)) / (tN - tM))} m/s`, 250, 370, { couleur: 'orange', taille: 15, align: 'center', max: 400 });
     } else {
       const v = vit(tM), a = -v / D.dmax * (D.y0 - D.y1 - 10) / ((D.x1 - D.x0 - 10) / D.tmax);
       c.ligne(xm - 70, ym - 70 * a, xm + 70, ym + 70 * a, { couleur: 'jaune', largeur: 2.4, tremble: 0 });
@@ -823,7 +823,7 @@ function vueSinus(c, M) {
   });
   c.repere('cercle', SC.cx - SC.r - 10, SC.cy - SC.r - 10, 2 * SC.r + 20, 2 * SC.r + 20, 'le point qui tourne sur le cercle');
   c.repere('courbe', SG.x0, SG.y0 - SG.a - 10, SG.x1 - SG.x0, 2 * SG.a + 20, 'la courbe u = U_m·cos(2πt/T)');
-  M.etape(c, 'courbe', () => c.texte('u = U_m·cos(2πt / T)', 520, 60, { couleur: 'rouge', taille: 20, align: 'center' }));
+  M.etape(c, 'courbe', () => c.texte('u = U_m·cos(⟦2πt|T⟧)', 520, 60, { couleur: 'rouge', taille: 20, align: 'center' }));
   M.etape(c, 'amplitude', () => {
     c.ligne(SG.x0, ty(6), SG.x1 - 20, ty(6), { couleur: 'jaune', pointille: [4, 6] }); c.ligne(SG.x0, ty(-6), SG.x1 - 20, ty(-6), { couleur: 'jaune', pointille: [4, 6] });
     c.cote(SG.x0 + 18, SG.y0, SG.x0 + 18, ty(6), null, { couleur: 'jaune' });
@@ -849,7 +849,7 @@ function vueSinus(c, M) {
 
 
 /* Dérivée d'un cosinus : f(t) = cos(2πt/T) (T = 4 ms), f′(t) = −(2π/T)·sin(2πt/T), tracée à l'échelle de sa propre amplitude. */
-const DC = { x0: 60, x1: 735, yf: 150, yd: 305, a: 62, T: 4, tmax: 8.6 };
+const DC = { x0: 60, x1: 735, yf: 150, yd: 311, a: 56, T: 4, tmax: 8.6 };   // a 56, yd 311 : la place de f′(t) écrite en fractions (deux étages) entre les deux courbes
 const dcx = t => DC.x0 + t / DC.tmax * (DC.x1 - DC.x0 - 20);
 function vueDcos(c, M) {
   const T = DC.T, w = 2 * Math.PI / T, f = t => Math.cos(w * t), fp = t => -Math.sin(w * t);
@@ -857,7 +857,7 @@ function vueDcos(c, M) {
   c.texte('t (ms)', DC.x1, DC.yf + 18, { couleur: 'faible', taille: 13, align: 'right' });
   const pc = M.p('courbe');
   if (pc > 0) c.direct(() => c.courbe(u => [dcx(u * DC.tmax * pc), DC.yf - DC.a * f(u * DC.tmax * pc)], 160, { couleur: 'rouge', largeur: 2.8, tremble: 0 }));
-  M.etape(c, 'courbe', () => c.texte('f(t) = cos(2πt/T)', 520, 46, { couleur: 'rouge', taille: 19, align: 'center' }));
+  M.etape(c, 'courbe', () => c.texte('f(t) = cos(⟦2πt|T⟧)', 520, 46, { couleur: 'rouge', taille: 19, align: 'center' }));
   c.repere('courbe', DC.x0, DC.yf - DC.a - 10, DC.x1 - DC.x0, 2 * DC.a + 20, 'la courbe du cosinus');
   const tangente = (t, coul) => {
     const x = dcx(t), y = DC.yf - DC.a * f(t), pente = -DC.a * w * fp(t) / ((DC.x1 - DC.x0 - 20) / DC.tmax), L = 55 / Math.sqrt(1 + pente * pente);
@@ -880,10 +880,13 @@ function vueDcos(c, M) {
     c.direct(() => c.courbe(u => [dcx(u * DC.tmax * pd), DC.yd - DC.a * fp(u * DC.tmax * pd)], 160, { couleur: 'cyan', largeur: 2.6, tremble: 0 }));
     c.repere('derivee', DC.x0, DC.yd - DC.a - 10, DC.x1 - DC.x0, 2 * DC.a + 20, 'la courbe de la dérivée (la pente du cosinus)');
   }
-  M.etape(c, 'derivee', () => c.texte('f’(t) = −(2π/T)·sin(2πt/T)', 520, DC.yd - DC.a - 14, { couleur: 'cyan', taille: 18, align: 'center' }));
+  // écrite comme dans le cahier (fractions sur deux étages) : elle tient entre le creux du cosinus et la bosse de la dérivée
+  M.etape(c, 'derivee', () => c.texte('f’(t) = −⟦2π|T⟧·sin(⟦2πt|T⟧)', 520, DC.yd - DC.a - 17, { couleur: 'cyan', taille: 18, align: 'center' }));
   M.etape(c, 'decalage', () => {
     for (const t of [T, 2 * T]) c.ligne(dcx(t), DC.yf - DC.a, dcx(t), DC.yd, { couleur: 'jaune', largeur: 1.2, pointille: [4, 5] });
-    c.cote(dcx(T), DC.yd + DC.a + 16, dcx(1.25 * T), DC.yd + DC.a + 16, 'T/4', { couleur: 'jaune', taille: 14 });
+    // « T/4 » écrit en fraction (deux étages) : posé un peu plus haut pour que son étage du bas ne touche pas la cote
+    c.cote(dcx(T), DC.yd + DC.a + 16, dcx(1.25 * T), DC.yd + DC.a + 16, '', { couleur: 'jaune' });
+    c.texte('⟦T|4⟧', (dcx(T) + dcx(1.25 * T)) / 2, DC.yd + DC.a + 4, { couleur: 'jaune', taille: 14, align: 'center' });
     c.texte('la dérivée : la même sinusoïde, décalée d’un quart de période', 380, 410, { couleur: 'jaune', taille: 15, align: 'center', max: 700 });
     c.repere('decalage', dcx(T) - 10, DC.yd + DC.a, dcx(1.25 * T) - dcx(T) + 20, 40, 'le décalage d’un quart de période');
   });

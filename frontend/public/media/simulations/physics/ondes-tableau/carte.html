@@ -33,11 +33,11 @@ const NOEUDS = [
     lignes: ['transversale ⊥ · longitudinale ∥', '1, 2 ou 3 dimensions'],
     phrase: "Transversale : la perturbation est perpendiculaire à la propagation (corde, eau). Longitudinale : même direction (ressort, son)." },
   { id: 'celerite', x: 610, y: 76, w: 212, h: 66, couleur: 'jaune', comps: ['C3'], titre: 'Célérité',
-    lignes: ['v = d / Δt', 'dépend du milieu, pas de la source'],
-    phrase: "La célérité v = d / Δt se mesure de front à front ; elle dépend du milieu (nature, température, tension), pas de l'amplitude." },
+    lignes: ['v = ⟦d|Δt⟧', 'dépend du milieu, pas de la source'],
+    phrase: "La célérité v = d/Δt se mesure de front à front ; elle dépend du milieu (nature, température, tension), pas de l'amplitude." },
   { id: 'retard', x: 636, y: 212, w: 200, h: 70, couleur: 'jaune', comps: ['C4'], titre: 'Retard τ',
-    lignes: ['τ = SM / v', 'y_M(t) = y_S(t − τ)'],
-    phrase: "Le point M refait le mouvement de la source avec le retard τ = SM / v : y_M(t) = y_S(t − τ)." },
+    lignes: ['τ = ⟦SM|v⟧', 'y_M(t) = y_S(t − τ)'],
+    phrase: "Le point M refait le mouvement de la source avec le retard τ = SM/v : y_M(t) = y_S(t − τ)." },
   { id: 'longueur', x: 610, y: 350, w: 212, h: 62, couleur: 'jaune', comps: ['C5'], titre: 'Durée θ et longueur L',
     lignes: ['L = v · θ', 'θ sur y(t) · L sur y(x)'],
     phrase: "La perturbation dure θ pour un point et occupe la longueur L sur le milieu : L = v · θ." },
@@ -45,8 +45,8 @@ const NOEUDS = [
     lignes: ['y(x) : aspect (photo) · y(t) : un point', 'devant le sommet, les points montent'],
     phrase: "Lire l'axe d'abord : y(x) est l'aspect du milieu à un instant, y(t) le mouvement d'un point ; les deux courbes sont renversées." },
   { id: 'mesures', x: 150, y: 350, w: 220, h: 66, couleur: 'orange', comps: ['C7', 'C8'], titre: 'Mesurer',
-    lignes: ['micros : τ = divisions × sensibilité, v = d / τ', 'écho : 2d = v · τ, d = v · τ / 2'],
-    phrase: "Deux micros : τ = nombre de divisions × sensibilité, puis v = d / τ. Écho : aller et retour, d = v · τ / 2." },
+    lignes: ['micros : τ = divisions × sensibilité', 'v = ⟦d|τ⟧', 'écho : 2d = v · τ, d = ⟦v · τ|2⟧'],
+    phrase: "Deux micros : τ = nombre de divisions × sensibilité, puis v = d/τ. Écho : aller et retour, d = (v · τ)/2." },
   { id: 'methode', x: 124, y: 212, w: 200, h: 70, couleur: 'violet', comps: ['C9'], titre: 'Rédiger',
     lignes: ['relation → A.N. → résultat → unité', "lire l'axe, reconnaître le cas"],
     phrase: "Pour chaque calcul : la relation en lettres, l'application numérique en unités SI, le résultat, l'unité." },
@@ -64,6 +64,10 @@ function disposer() {
     n.x = GR ? L / 2 + (n.o.x - 380) * kx : n.o.x; n.y = n.o.y;
     const coin = n.o.x !== 380 && n.o.y !== 212;   // les quatre cases des coins ont plus de place : leurs lignes sont longues
     n.w = GR ? n.o.w * (coin ? 1.6 + 0.3 * Math.min(1, (L - 1000) / 292) : 1.6) : n.o.w; n.h = GR ? Math.max(84, n.o.h * 1.3) : n.o.h;
+    const e = window.OndesTableau.etages(scene.craie, f(13));   // place des fractions sur deux étages
+    n.h += (n.lignes || []).filter(l => l.includes('⟦')).length * (e.haut + e.bas);
+    n.h += Math.max(0, (n.lignes || []).length - 2) * (GR ? 22 : 15);   // une troisième ligne (Mesurer)
+    n.y = Math.min(n.y, 412 - n.h / 2);   // une case agrandie (fractions) remonte un peu : son anneau reste dans le cadre
   }
 }
 const ANNEAUX = { non_acquis: ['rouge', 'à reprendre'], partiel: ['orange', 'à revoir'] };
@@ -86,7 +90,16 @@ function branche(c, n, i) {
   c.courbe(u => [(1 - u) * (1 - u) * a[0] + 2 * (1 - u) * u * m[0] + u * u * b[0], (1 - u) * (1 - u) * a[1] + 2 * (1 - u) * u * m[1] + u * u * b[1]], 24, { couleur: 'faible', largeur: 2 });
   point(c, n);
   c.texte(n.titre, n.x, n.y - n.h / 2 + (GR ? 27 : 20), { couleur: n.couleur, taille: f(17), align: 'center', max: n.w - 16 });
-  n.lignes.forEach((l, k) => c.texte(l, n.x, n.y - n.h / 2 + (GR ? 53 : 38) + k * (GR ? 22 : 15), { couleur: 'blanc', taille: f(13), align: 'center', max: n.w - 14, alpha: .92 }));
+  // une ligne à fraction (« ⟦num|dén⟧ », sur deux étages comme dans le cahier) prend plus de hauteur : on l'écarte
+  // de ses voisines (la case a déjà grandi d'autant dans disposer())
+  let yl = n.y - n.h / 2 + (GR ? 53 : 38);
+  const e = window.OndesTableau.etages(c, f(13));
+  n.lignes.forEach(l => {
+    const etages = l.includes('⟦');
+    if (etages) yl += e.haut;
+    c.texte(l, n.x, yl, { couleur: 'blanc', taille: f(13), align: 'center', max: n.w - 14, alpha: .92 });
+    yl += (GR ? 22 : 15) + (etages ? e.bas : 0);
+  });
   c.repere(n.id, n.x - n.w / 2 - 6, n.y - n.h / 2 - 6, n.w + 12, n.h + 12, n.titre);
   // L'état de l'élève sur cette branche : anneau rouge/orange, ou coche verte.
   const st = statut(n);

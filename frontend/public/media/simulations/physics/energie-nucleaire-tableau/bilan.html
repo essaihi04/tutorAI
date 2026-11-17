@@ -30,6 +30,7 @@ const { bulle, protocole } = window.Tableau;
 const $ = id => document.getElementById(id);
 
 const NOYAU = '⟦X⟧';   // dans une formule : le noyau ᴬ_ZX, écrit par noyauTexte (A en haut, Z en bas, à gauche du symbole)
+// Une fraction « ⟦num|dén⟧ » (avec la barre « | ») est écrite comme dans le cahier par le kit : numérateur, trait, dénominateur.
 const BLOCS = [
   { id: 'masse_energie', titre: '1 · Masse et énergie', comps: ['C1'], formules: ['E = m·c²', '1 u = 1,66·10⁻²⁷ kg = 931,5 MeV/c²', '1 MeV = 1,6·10⁻¹³ J'],
     def: 'Toute masse correspond à une énergie : E en J, m en kg, c = 3,00·10⁸ m/s.',
@@ -37,10 +38,10 @@ const BLOCS = [
   { id: 'defaut', titre: '2 · Défaut de masse Δm', comps: ['C2'], formules: ['Δm = Z·m_p + (A − Z)·m_n − m(' + NOYAU + ')', 'N = A − Z'],
     def: 'La masse d’un noyau est inférieure à la somme des masses de ses nucléons séparés.',
     attention: 'Δm > 0 ; neutrons : N = A − Z.' },
-  { id: 'liaison', titre: '3 · Énergie de liaison E_{ℓ}', comps: ['C3'], formules: ['E_{ℓ} = Δm·c²', 'E_{ℓ}/A'],
+  { id: 'liaison', titre: '3 · Énergie de liaison E_{ℓ}', comps: ['C3'], formules: ['E_{ℓ} = Δm·c²', '⟦E_{ℓ}|A⟧'],
     def: 'L’énergie de liaison E_{ℓ} est l’énergie qu’il faut fournir à un noyau au repos pour le séparer en ses nucléons au repos.',
     attention: 'E_{ℓ}/A en MeV/nucléon : diviser par A.' },
-  { id: 'stabilite', titre: '4 · Stabilité, courbe d’Aston', comps: ['C4'], formules: ['−E_{ℓ}/A = f(A)'],
+  { id: 'stabilite', titre: '4 · Stabilité, courbe d’Aston', comps: ['C4'], formules: ['−⟦E_{ℓ}|A⟧ = f(A)'],
     def: 'Un noyau est d’autant plus stable que son énergie de liaison par nucléon E_{ℓ}/A est grande. Courbe d’Aston : creux vers le fer (A ≈ 56).',
     attention: 'Comparer E_{ℓ}/A, pas E_{ℓ}.' },
   { id: 'reactions', titre: '5 · Fission et fusion', comps: ['C5'],
@@ -52,7 +53,7 @@ const BLOCS = [
   { id: 'bilan_liaison', titre: '7 · Énergie libérée : les E_{ℓ}', comps: ['C7'], formules: ['ΔE = Σ E_{ℓ}(réactifs) − Σ E_{ℓ}(produits)'],
     def: 'Diagramme d’énergie : les nucléons séparés en haut. Un nucléon seul : E_{ℓ} = 0.',
     attention: 'E_{ℓ} = A·(E_{ℓ}/A) pour chaque noyau.' },
-  { id: 'echantillon', titre: '8 · Énergie d’un échantillon', comps: ['C8'], formules: ['N = m·N_A/M', 'E = N·E_lib'],
+  { id: 'echantillon', titre: '8 · Énergie d’un échantillon', comps: ['C8'], formules: ['N = ⟦m·N_A|M⟧', 'E = N·E_lib'],
     def: 'À masse égale, la fusion libère plus d’énergie que la fission.',
     attention: 'm en g si M en g/mol.' },
 ];
@@ -65,7 +66,7 @@ window.__debordeBlocs = [];   // vérification : un bloc dont le texte dépasse 
 
 /* Texte pour la bulle et ce_qui_se_voit (HTML) : jamais de « _ » ni d'accolade visible. */
 const SOUS = { p: 'ₚ', n: 'ₙ', 0: '₀', 1: '₁', 2: '₂' };
-const lisible = s => String(s).replace(/⟦X⟧/g, 'ᴬZX').replace(/\^\{([^}]+)\}/g, (m, e) => e === '+' ? '⁺' : e === '−' ? '⁻' : e)
+const lisible = s => window.Tableau.lisible(String(s)).replace(/⟦X⟧/g, 'ᴬZX').replace(/\^\{([^}]+)\}/g, (m, e) => e === '+' ? '⁺' : e === '−' ? '⁻' : e)
   .replace(/_\{([^}]+)\}/g, '$1').replace(/_([A-Za-z0-9]+)/g, (m, i) => [...i].map(ch => SOUS[ch] || ch).join(''));
 
 /* Taille réellement écrite (le kit grossit le texte pour qu'il reste lisible sur un petit écran). */
@@ -73,6 +74,9 @@ const eff = (c, t) => (c.echelle && c.tailleMin ? Math.max(t, c.tailleMin / c.ec
 const EXP = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
 /* Largeur d'un texte de craie (indices et exposants plus petits, comme les écrit le kit). */
 function mesure(c, s, t) {
+  // une fraction « ⟦num|dén⟧ » : son plus long étage (écrit à 78 %) plus une marge, comme la mesure du kit
+  if (/⟦[^⟧]*\|/.test(String(s))) return String(s).split(/(⟦[^⟧]*\|[^⟧]*⟧)/).filter(Boolean).reduce((w, p) => w + (p[0] !== '⟦' ? mesure(c, p, t)
+    : Math.max(...p.slice(1, -1).split('|').map(e => mesure(c, e, eff(c, t) * .78))) + eff(c, t) * .36), 0);
   t = eff(c, t);
   const segs = window.Tableau.Craie.segments(String(s).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => EXP[ch]).join('') + '}'));
   return segs.reduce((w, g) => { c.ctx.font = `${g.sub || g.sup ? t * .62 : t}px ${window.Tableau.POLICE}`; return w + c.ctx.measureText(g.t).width; }, 0);
@@ -137,17 +141,20 @@ function contenu(c, b, x, y0, w, st, dessiner) {
   if (b.formules) {
     // formules encadrées, à la ligne quand la suivante ne tient plus (une formule trop longue s'écrit plus petit)
     let fx = x;
+    // une formule à fraction (« ⟦num|dén⟧ », sur deux étages comme dans le cahier) prend des cadres plus hauts
+    const etages = b.formules.some(f => /⟦[^⟧]*\|/.test(f)), efb = eff(c, TF * K) / (TF * K);
+    if (etages) y += 5 * K * efb;
     for (const f of b.formules) {
       const T = TF * K, ef = eff(c, T) / T, brut = formule(c, f, 0, 0, T, { dessiner: false }), tf = brut + 14 > w ? T * (w - 14) / brut : T;
-      const l = Math.min(w, (brut + 14 > w ? w - 14 : brut) + 14), hf = 19 * K * ef;
+      const l = Math.min(w, (brut + 14 > w ? w - 14 : brut) + 14), hf = (etages ? 27 : 19) * K * ef;
       if (fx > x && fx + l > x + w) { fx = x; y += hf + 3; }
       if (dessiner) {
-        c.rect(fx, y - hf * .68, l, hf, { couleur: 'faible', arrondi: 6, largeur: 1.2, duree: .25 });
+        c.rect(fx, y - hf * (etages ? .6 : .68), l, hf, { couleur: 'faible', arrondi: 6, largeur: 1.2, duree: .25 });
         formule(c, f, fx + 7, y + 1, tf, { dessiner: true });
       }
       fx += l + 7;
     }
-    y += Math.max(21 * K, eff(c, TF * K) * 1.6);
+    y += Math.max(21 * K, eff(c, TF * K) * 1.6) + (etages ? 6 * K * efb : 0);
   }
   y = paragraphe(c, b.def, x, y, 11.5 * K, w, { couleur: 'blanc' }, dessiner);
   if (dessiner) c.texte('⚠', x, y, { couleur: 'orange', taille: 11 * K });

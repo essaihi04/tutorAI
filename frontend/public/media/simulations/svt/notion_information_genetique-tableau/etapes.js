@@ -149,15 +149,16 @@
     /** Compose des paragraphes dans une colonne de largeur W, écriture t (cadre) : { h, pieces: cle → [{dx, dy, s, taille}] }. */
     function composer(c, paras, W, t, base) {
       const pieces = {}, boites = {}; let y = 0;
-      const larg = (s, ta, gras) => { c.ctx.font = `${gras ? '700 ' : ''}${ta}px ${window.Tableau.POLICE}`; return c.ctx.measureText(s).width; };
+      const larg = (s, ta, gras) => { if (s.includes('⟦')) return c.largeurTexte(s, ta); c.ctx.font = `${gras ? '700 ' : ''}${ta}px ${window.Tableau.POLICE}`; return c.ctx.measureText(s).width; };
       paras.forEach((p, i) => {
-        const ta = t * Math.min(1.2, Math.max(.92, p.taille / base)), pas = ta * 1.24, esp = larg(' ', ta);
+        // une fraction « ⟦num|dén⟧ » (écrite sur deux étages, comme dans le cahier) reste d'un seul morceau et prend plus de hauteur
+        const fr = p.runs.some(r => String(r.s).includes('⟦'));
+        const ta = t * Math.min(1.2, Math.max(.92, p.taille / base)), pas = ta * (fr ? 1.75 : 1.24), esp = larg(' ', ta);
         if (i) y += (p.ecart ? ta * .5 : ta * .12);
-        y += ta; let lx = 0, ly = y;
+        y += ta + (fr ? ta * .4 : 0); let lx = 0, ly = y;
         for (const r of p.runs) {
           const L = (pieces[r.cle] ||= []);
-          // « ; », « : », « ! », « ? », « » » restent collés au mot d’avant (jamais seuls en début de ligne).
-          for (const m of r.s.trim().replace(/ +([;:!?»])/g, '\u00a0$1').split(/[ \t\n\r]+/)) {
+          for (const m of r.s.trim().match(/(?:⟦[^⟧]*⟧|\S)+/g) || []) {
             if (!m) continue;
             const w = larg(m, ta, r.gras);
             if (lx > 0 && lx + esp + w > W) { ly += pas; lx = 0; }
@@ -166,10 +167,10 @@
             else L.push({ dx: x0, dy: ly, s: m, w, taille: ta });
             lx = x0 + w;
             const b = (boites[r.cle] ||= [Infinity, Infinity, -Infinity, -Infinity]);
-            b[0] = Math.min(b[0], x0); b[1] = Math.min(b[1], ly - ta * .95); b[2] = Math.max(b[2], x0 + w); b[3] = Math.max(b[3], ly + ta * .3);
+            b[0] = Math.min(b[0], x0); b[1] = Math.min(b[1], ly - ta * (fr ? 1.2 : .95)); b[2] = Math.max(b[2], x0 + w); b[3] = Math.max(b[3], ly + ta * (fr ? .62 : .3));
           }
         }
-        y = ly;
+        y = ly + (fr ? ta * .35 : 0);
         for (const r of p.runs) for (const a of r.alias || []) { pieces[a] = pieces[r.cle]; boites[a] = boites[r.cle]; }
       });
       return { h: y + t * .35, pieces, boites };
@@ -288,17 +289,21 @@
         x.save();
         if (p.texte) {
           // ── colonne de texte : les traits du bloc avancent l'horloge sans rien dessiner, les phrases sont récrites ──
-          const lay = p.lay, coupeTout = nomF => function (...a) { x.save(); x.beginPath(); x.rect(0, 0, 0, 0); x.clip(); try { return proto[nomF].apply(this, a); } finally { x.restore(); } };
+          // une fraction « ⟦num|dén⟧ » s'écrit en plusieurs morceaux (texte, numérateur, trait, dénominateur) : une fois la
+          // phrase placée en clair, ses morceaux passent tout droit (ni relevés comme phrases, ni coupés comme des traits)
+          const enClair = (cc, ...a) => { const av = cc._enClair; cc._enClair = true; try { return proto.texte.apply(cc, a); } finally { cc._enClair = av; } };
+          const lay = p.lay, coupeTout = nomF => function (...a) { if (this._enClair) return proto[nomF].apply(this, a); x.save(); x.beginPath(); x.rect(0, 0, 0, 0); x.clip(); try { return proto[nomF].apply(this, a); } finally { x.restore(); } };
           for (const nomF of PIECES_FN) c[nomF] = coupeTout(nomF);
           c.cadre = null;
           c.texte = function (s, tx, ty, o = {}) {
+            if (this._enClair) return proto.texte.call(this, s, tx, ty, o);
             const ta = o.taille ?? 18; s = String(s);
             if (!dedans(tx, ty - ta * .35)) return proto.texte.call(this, s, tx, ty, { ...o, alpha: 0 });
             const pcs = lay.pieces[cleT(nom, tx, ty)], duree = o.duree ?? Math.max(.1, s.length / 28), opt = { couleur: o.couleur, gras: o.gras, alpha: o.alpha };
             if (!pcs || !pcs.length) return proto.texte.call(this, s, tx, ty, { ...o, alpha: 0 });
             const tout = pcs.map(q => q.s).join(' ');
-            if (tout.replace(/\s+/g, ' ') !== s.trim().replace(/\s+/g, ' ')) return proto.texte.call(this, s, p.X + pcs[0].dx, p.Y + pcs[0].dy, { ...opt, taille: pcs[0].taille, duree });
-            for (const q of pcs) proto.texte.call(this, q.s, p.X + q.dx, p.Y + q.dy, { ...opt, taille: q.taille, duree: duree * Math.max(1, q.s.length) / Math.max(1, tout.length) });
+            if (tout.replace(/\s+/g, ' ') !== s.trim().replace(/\s+/g, ' ')) return enClair(this, s, p.X + pcs[0].dx, p.Y + pcs[0].dy, { ...opt, taille: pcs[0].taille, duree });
+            for (const q of pcs) enClair(this, q.s, p.X + q.dx, p.Y + q.dy, { ...opt, taille: q.taille, duree: duree * Math.max(1, q.s.length) / Math.max(1, tout.length) });
             return this;
           };
           c.repere = function (id, rx, ry, w, h, label) {
@@ -610,29 +615,6 @@
     },
     /** Bulle lumineuse (UV, radioactivité). */
     halo(x, cx, cy, r, couleur, a = 1) { x.save(); x.globalAlpha = a; const g = x.createRadialGradient(cx, cy, 0, cx, cy, r); g.addColorStop(0, couleur); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill(); x.restore(); },
-    /** Courbe nette et lumineuse (17 novembre 2026) : aire douce jusqu’à o.aire (y de l’axe), halo de sa couleur, cœur clair.
-     *  `morceaux` : [{ pts: [[x, y], …], couleur: '#rrggbb' }, …] tracés bout à bout (une couleur par phase). */
-    courbe(x, morceaux, o = {}) {
-      const rgba = (h, a) => { const n = parseInt(h.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
-      const ok = morceaux.filter(m => m.pts.length > 1), w = o.largeur ?? 3;
-      const chemin = pts => { x.beginPath(); pts.forEach(([a, b], i) => (i ? x.lineTo(a, b) : x.moveTo(a, b))); };
-      x.save(); x.lineJoin = 'round'; x.lineCap = 'round';
-      if (o.aire != null) for (const m of ok) {
-        const top = Math.min(...m.pts.map(p => p[1])), g = x.createLinearGradient(0, top, 0, o.aire);
-        g.addColorStop(0, rgba(m.couleur, .26)); g.addColorStop(1, rgba(m.couleur, .03));
-        chemin(m.pts); x.lineTo(m.pts[m.pts.length - 1][0], o.aire); x.lineTo(m.pts[0][0], o.aire); x.closePath(); x.fillStyle = g; x.fill();
-      }
-      for (const m of ok) { chemin(m.pts); x.shadowColor = m.couleur; x.shadowBlur = 9; x.strokeStyle = m.couleur; x.lineWidth = w; x.stroke(); }
-      x.shadowBlur = 0;
-      for (const m of ok) { chemin(m.pts); x.strokeStyle = 'rgba(255,255,255,.65)'; x.lineWidth = w * .38; x.stroke(); }
-      x.restore();
-    },
-    /** Perle ombrée (point remarquable d’une courbe). */
-    perle(x, cx, cy, r, couleur) {
-      x.save(); x.fillStyle = 'rgba(0,0,0,.3)'; x.beginPath(); x.ellipse(cx + 1.5, cy + 3, r, r * .7, 0, 0, Math.PI * 2); x.fill();
-      const g = x.createRadialGradient(cx - r * .35, cy - r * .4, r * .1, cx, cy, r); g.addColorStop(0, '#ffffff'); g.addColorStop(.35, couleur); g.addColorStop(1, 'rgba(0,0,0,.55)');
-      x.fillStyle = couleur; x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill(); x.fillStyle = g; x.fill(); x.restore();
-    },
     /** Souris simple ombrée ; `morte` = couchée sur le dos, pattes en l’air. */
     souris(x, cx, cy, s = 1, morte = false, a = 1) {
       if (a <= 0) return;

@@ -207,9 +207,9 @@ function disposer(cle, W, H) {
   k.trait = function (pts, o = {}) { const r = (o.largeur ?? 2.4) / 2 + 1; for (const p of pts || []) pt(p[0], p[1], r); return trait.call(this, pts, o); };
   k.point = function (x, y, r = 4, c) { pt(x, y, r); return point.call(this, x, y, r, c); };
   texteBase = function (s, x, y, o = {}) {
-    const t = o.taille ?? 18; let l = largeurEncre(this, s, t, o.gras); if (o.max && l > o.max) l = o.max;
+    const t = o.taille ?? 18, fr = String(s).includes('⟦'); let l = largeurEncre(this, s, t, o.gras); if (o.max && l > o.max) l = o.max;
     const x0 = o.align === 'center' ? x - l / 2 : o.align === 'right' ? x - l : x;
-    pt(x0, y - t * .95); pt(x0 + l, y + t * .35);
+    pt(x0, y - t * (fr ? 1.25 : .95)); pt(x0 + l, y + t * (fr ? .65 : .35));   // une fraction monte et descend plus loin
     return texte.call(this, s, x, y, o);
   };
   MESURE = m; S.tw = 1e6;
@@ -262,18 +262,21 @@ scene.cadre = function (graine) {
 /* Tableau large : une longue phrase du bas (conclusion, exemple) s’écrit sur deux lignes, pour tenir dans une colonne. */
 let texteBase = window.Tableau.Craie.prototype.texte;
 /** Largeur d’un texte pour la mise en page (un peu large : indices et exposants comptés pleine taille). */
-function largeurEncre(c, s, t, gras) { c.ctx.font = `${gras ? '700 ' : ''}${t}px ${window.Tableau.POLICE}`; return c.ctx.measureText(String(s).replace(/[_{}^]/g, '')).width; }
+function largeurEncre(c, s, t, gras) {
+  if (String(s).includes('⟦')) return c.largeurTexte(s, t);   // fraction « ⟦num|dén⟧ » : mesurée par le kit (étages compris)
+  c.ctx.font = `${gras ? '700 ' : ''}${t}px ${window.Tableau.POLICE}`; return c.ctx.measureText(String(s).replace(/[_{}^]/g, '')).width;
+}
 craie.texte = function (s, x, y, o = {}) {
   const t = o.taille ?? 18;
   if (MISE.large && (o.max ?? 0) >= 600 && y >= 330 && largeurEncre(this, s, t) > 360) {
-    const mots = String(s).split(' '); let best = null;
+    const mots = String(s).match(/(?:⟦[^⟧]*⟧|[^ ⟦])+/g) || []; let best = null;   // une fraction ne se coupe jamais
     for (let i = 1; i < mots.length; i++) {
       const a = mots.slice(0, i).join(' '), b = mots.slice(i).join(' '), w = Math.max(largeurEncre(this, a, t), largeurEncre(this, b, t));
       // Coupure de préférence avant « = » ou après « : », « ; », « , » (jamais au milieu d’une valeur et de son unité).
       const bon = /^[=→]/.test(mots[i]) || /[:;,]$/.test(mots[i - 1]), cout = w * (bon ? 1 : 1.45);
       if (!best || cout < best.cout) best = { a, b, w, cout };
     }
-    if (best) { const o2 = { ...o }; delete o2.max; texteBase.call(this, best.a, x, y, o2); return texteBase.call(this, best.b, x, y + t * 1.2, o2); }
+    if (best) { const o2 = { ...o }; delete o2.max; texteBase.call(this, best.a, x, y, o2); return texteBase.call(this, best.b, x, y + t * (/⟦/.test(best.a + best.b) ? 1.65 : 1.2), o2); }
   }
   return texteBase.call(this, s, x, y, o);
 };
@@ -336,20 +339,24 @@ function quadrillage(ctx, X, Y, xmax, ymax, dx, dy) {
 const EXP = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
 /** Largeur d’un texte de craie (indices et exposants plus petits, comme le kit et exposants.js les écrivent). */
 function L(c, s, t = 24) {
+  if (String(s).includes('⟦')) return c.largeurTexte(s, t);   // fraction « ⟦num|dén⟧ » : mesurée par le kit
   s = String(s).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => EXP[ch]).join('') + '}');
   return window.Tableau.Craie.segments(s).reduce((w, g) => w + c.largeurTexte(g.t, g.sub || g.sup ? t * .62 : t), 0);
 }
 /** Texte centré entouré d’un cadre (le résultat à retenir ; le cadre jaune = surlignage). Renvoie le rectangle. */
 function encadre(c, s, x, y, o = {}) {
   const t = o.taille ?? 26, w = L(c, s, t) + 26, x0 = o.align === 'left' ? x : x - w / 2, cx = x0 + w / 2;
+  // une fraction (deux étages, comme dans le cahier) demande un cadre plus haut
+  const fr = String(s).includes('⟦'), haut = fr ? 1.32 : .95, h = fr ? 2.08 : 1.42;
   c.texte(s, cx, y, { couleur: o.couleur ?? 'vert', taille: t, align: 'center' });
-  c.rect(x0, y - t * .95, w, t * 1.42, { couleur: o.cadre ?? 'jaune', arrondi: 8, largeur: 2 });
-  return { x: x0, y: y - t * .95, w, h: t * 1.42 };
+  c.rect(x0, y - t * haut, w, t * h, { couleur: o.cadre ?? 'jaune', arrondi: 8, largeur: 2 });
+  return { x: x0, y: y - t * haut, w, h: t * h };
 }
 /** Titre de la figure, et le repère `figure`. */
 function titre(c, s, label) {
+  const fr = String(s).includes('⟦');   // un titre à fraction : son étage du bas descend, le trait passe dessous
   c.texte(s, 40, 32, { couleur: 'cyan', taille: 21, max: 680 });
-  c.ligne(40, 42, 40 + Math.min(680, L(c, s, 21)), 42, { couleur: 'tresfaible', largeur: 1.2, duree: .2 });
+  c.ligne(40, fr ? 48 : 42, 40 + Math.min(680, L(c, s, 21)), fr ? 48 : 42, { couleur: 'tresfaible', largeur: 1.2, duree: .2 });
   c.repere('figure', 16, 12, 728, 400, label);
   if (MESURE && MESURE.i === 0) { MESURE.morceaux.push({ nom: '', b: boiteVide(), corps: boiteVide() }); MESURE.i = 1; }   // le titre est mesuré à part
 }
@@ -474,13 +481,13 @@ const DESSINS = {
     titre(c, 'La boîte des relations', 'la boîte des quatre relations');
     c.rect(400, 58, 330, 250, { couleur: 'jaune', arrondi: 12, largeur: 2.2 });
     c.texte('la boîte', 565, 82, { couleur: 'faible', taille: 16, align: 'center' });
-    const lignes = [['ohm', 'u_R = R·i', 'loi d’Ohm'], ['charge', 'q = C·u_C', 'le condensateur'], ['intensite', 'i = C·du_C/dt', 'l’intensité (i = dq/dt)'], ['additivite', 'u_R + u_C = E', 'l’additivité']];
+    const lignes = [['ohm', 'u_R = R·i', 'loi d’Ohm'], ['charge', 'q = C·u_C', 'le condensateur'], ['intensite', 'i = C·⟦du_C|dt⟧', 'l’intensité (i = ⟦dq|dt⟧)'], ['additivite', 'u_R + u_C = E', 'l’additivité']];
     lignes.forEach(([id, f, nom], k) => {
       const y = 128 + k * 50;
       c.texte(nom, 50, y, { couleur: 'cyan', taille: 20, max: 250 });
       c.fleche(310, y - 7, 410, y - 7, { couleur: 'faible', largeur: 1.4, tete: 8 });
       c.texte(f, 430, y, { couleur: 'blanc', taille: G });
-      c.repere(id, 40, y - 30, 690, 42, f);
+      c.repere(id, 40, y - 32, 690, 50, window.Tableau.lisible(f));
       marque(c, id); c.pause(.35);
     });
     c.texte('On y pioche pour écrire chaque équation différentielle.', 40, 370, { couleur: 'vert', taille: 21, max: 680 });
@@ -541,17 +548,17 @@ const DESSINS = {
     c.texte('u = u_1 + u_2', 390, 96, { couleur: 'blanc', taille: G });
     c.repere('tensions', 382, 68, 220, 40, 'u = u₁ + u₂');
     marque(c, 'tensions'); c.pause(.4);
-    c.texte('q/C_eq = q/C_1 + q/C_2', 390, 146, { couleur: 'blanc', taille: 22 });
-    encadre(c, '1/C_eq = 1/C_1 + 1/C_2', 390, 200, { taille: 26, align: 'left' });
-    c.repere('formule', 382, 122, 350, 96, '1/C_eq = 1/C₁ + 1/C₂');
+    c.texte('⟦q|C_eq⟧ = ⟦q|C_1⟧ + ⟦q|C_2⟧', 390, 146, { couleur: 'blanc', taille: 22 });
+    encadre(c, '⟦1|C_eq⟧ = ⟦1|C_1⟧ + ⟦1|C_2⟧', 390, 208, { taille: 26, align: 'left' });
+    c.repere('formule', 382, 116, 350, 112, '1/C_eq = 1/C₁ + 1/C₂');
     marque(c, 'formule'); c.pause(.4);
     c.texte('deux condensateurs :', 390, 248, { couleur: 'blanc', taille: 17 });
-    c.texte('C_eq = C_1·C_2/(C_1 + C_2)', 390, 280, { couleur: 'blanc', taille: G });
-    c.repere('deux', 382, 230, 350, 62, 'C_eq = C₁·C₂/(C₁ + C₂)');
+    c.texte('C_eq = ⟦C_1·C_2|C_1 + C_2⟧', 390, 290, { couleur: 'blanc', taille: G });
+    c.repere('deux', 382, 232, 350, 82, 'C_eq = C₁·C₂/(C₁ + C₂)');
     marque(c, 'deux'); c.pause(.4);
-    c.texte('la série diminue la capacité', 390, 326, { couleur: 'vert', taille: 22, max: 350 });
-    c.texte('C_eq < C_1 et C_eq < C_2', 390, 354, { couleur: 'blanc', taille: 19 });
-    c.repere('interet', 382, 302, 350, 62, 'la série diminue la capacité');
+    c.texte('la série diminue la capacité', 390, 332, { couleur: 'vert', taille: 22, max: 350 });
+    c.texte('C_eq < C_1 et C_eq < C_2', 390, 360, { couleur: 'blanc', taille: 19 });
+    c.repere('interet', 382, 310, 350, 60, 'la série diminue la capacité');
     marque(c, 'interet'); c.pause(.3);
     c.texte('Exemple : 10 µF et 10 µF en série → C_eq = 5 µF', 40, 400, { couleur: 'blanc', taille: 20, max: 680 });
     c.repere('fin', 32, 378, 600, 32, 'exemple : deux 10 µF en série → 5 µF');
@@ -572,15 +579,15 @@ const DESSINS = {
     c.texte('loi d’Ohm', 600, 148, { couleur: 'faible', taille: 16 });
     c.repere('ohm', x - 8, 120, 340, 40, 'u_R = R·i');
     marque(c, 'ohm'); c.pause(.35);
-    c.texte('i = C·du_C/dt', x, 196, { couleur: 'blanc', taille: G });
-    c.texte('i = dq/dt', 600, 196, { couleur: 'faible', taille: 16 });
-    c.repere('intensite', x - 8, 168, 340, 40, 'i = C·du_C/dt');
+    c.texte('i = C·⟦du_C|dt⟧', x, 196, { couleur: 'blanc', taille: G });
+    c.texte('i = ⟦dq|dt⟧', 600, 196, { couleur: 'faible', taille: 16 });
+    c.repere('intensite', x - 8, 164, 340, 52, 'i = C·du_C/dt');
     marque(c, 'intensite'); c.pause(.4);
-    c.fleche(470, 214, 470, 244, { couleur: 'faible', largeur: 1.6, tete: 8 });
-    c.texte('on remplace', 484, 236, { couleur: 'faible', taille: 16 });
-    const r = { x: x - 4, y: 254, w: L(c, 'R·C·du_C/dt + u_C = E', 28) + 24, h: 42 };
-    c.texte('R·C·du_C/dt + u_C = E', x + 8, 284, { couleur: 'vert', taille: 28 });
-    c.repere('remplacer', x - 8, 252, 340, 46, 'R·C·du_C/dt + u_C = E');
+    c.fleche(470, 218, 470, 245, { couleur: 'faible', largeur: 1.6, tete: 8 });
+    c.texte('on remplace', 484, 238, { couleur: 'faible', taille: 16 });
+    const r = { x: x - 4, y: 248, w: L(c, 'R·C·⟦du_C|dt⟧ + u_C = E', 28) + 24, h: 58 };
+    c.texte('R·C·⟦du_C|dt⟧ + u_C = E', x + 8, 284, { couleur: 'vert', taille: 28 });
+    c.repere('remplacer', x - 8, 246, 340, 62, 'R·C·du_C/dt + u_C = E');
     marque(c, 'remplacer'); c.pause(.4);
     c.rect(r.x, r.y, r.w, r.h, { couleur: 'jaune', arrondi: 8, largeur: 2.2 });
     c.texte('l’équation différentielle de la charge', x, 324, { couleur: 'jaune', taille: 16 });
@@ -593,17 +600,17 @@ const DESSINS = {
 
   fig_ed_formes(c) {
     titre(c, 'Deux écritures de la même équation', 'les deux formes de l’équation de la charge');
-    const t = 30, s = 'RC·du_C/dt + u_C = E', w = L(c, s, t), x0 = 380 - w / 2;
+    const t = 30, s = 'RC·⟦du_C|dt⟧ + u_C = E', w = L(c, s, t), x0 = 380 - w / 2;
     c.texte(s, x0, 110, { couleur: 'blanc', taille: t });
-    c.repere('depart', x0 - 10, 78, w + 20, 44, 'RC·du_C/dt + u_C = E');
+    c.repere('depart', x0 - 10, 72, w + 20, 60, 'RC·du_C/dt + u_C = E');
     marque(c, 'depart'); c.pause(.4);
     c.fleche(380, 130, 380, 178, { couleur: 'orange', largeur: 2.2, tete: 10 });
     c.texte('÷ RC', 396, 162, { couleur: 'orange', taille: 24 });
     c.repere('diviser', 360, 126, 120, 56, '÷ RC');
     marque(c, 'diviser'); c.pause(.4);
-    c.texte('du_C/dt + (1/RC)·u_C = E/(RC)', 380, 226, { couleur: 'blanc', taille: t, align: 'center' });
-    const w2 = L(c, 'du_C/dt + (1/RC)·u_C = E/(RC)', t);
-    c.repere('forme', 380 - w2 / 2 - 10, 194, w2 + 20, 44, 'du_C/dt + (1/RC)·u_C = E/(RC)');
+    c.texte('⟦du_C|dt⟧ + ⟦1|RC⟧·u_C = ⟦E|RC⟧', 380, 228, { couleur: 'blanc', taille: t, align: 'center' });
+    const w2 = L(c, '⟦du_C|dt⟧ + ⟦1|RC⟧·u_C = ⟦E|RC⟧', t);
+    c.repere('forme', 380 - w2 / 2 - 10, 188, w2 + 20, 62, 'du_C/dt + (1/RC)·u_C = E/(RC)');
     marque(c, 'forme'); c.pause(.4);
     // dans la première forme : RC (devant la dérivée) et E (à droite) soulignés
     const wRC = L(c, 'RC', t), wE = L(c, 'E', t);
@@ -621,42 +628,42 @@ const DESSINS = {
 
   fig_ed_q(c) {
     titre(c, 'L’équation différentielle en q', 'de u_C à q : l’équation en q');
-    c.texte('u_C = q/C  ;  i = dq/dt', 40, 100, { couleur: 'blanc', taille: G });
-    c.repere('relations', 32, 70, 340, 42, 'u_C = q/C ; i = dq/dt');
+    c.texte('u_C = ⟦q|C⟧  ;  i = ⟦dq|dt⟧', 40, 100, { couleur: 'blanc', taille: G });
+    c.repere('relations', 32, 64, 340, 56, 'u_C = q/C ; i = dq/dt');
     marque(c, 'relations'); c.pause(.4);
-    c.texte('dans  R·i + u_C = E  :', 40, 156, { couleur: 'blanc', taille: 19 });
-    c.texte('R·dq/dt + q/C = E', 260, 158, { couleur: 'blanc', taille: G });
-    c.repere('remplacer', 32, 128, 500, 42, 'R·dq/dt + q/C = E');
+    c.texte('dans  R·i + u_C = E  :', 40, 158, { couleur: 'blanc', taille: 19 });
+    c.texte('R·⟦dq|dt⟧ + ⟦q|C⟧ = E', 260, 160, { couleur: 'blanc', taille: G });
+    c.repere('remplacer', 32, 124, 500, 56, 'R·dq/dt + q/C = E');
     marque(c, 'remplacer'); c.pause(.4);
-    c.fleche(330, 178, 330, 222, { couleur: 'orange', largeur: 2.2, tete: 10 });
-    c.texte('× C', 346, 208, { couleur: 'orange', taille: 24 });
-    c.repere('multiplier', 310, 174, 100, 52, '× C');
+    c.fleche(330, 184, 330, 226, { couleur: 'orange', largeur: 2.2, tete: 10 });
+    c.texte('× C', 346, 212, { couleur: 'orange', taille: 24 });
+    c.repere('multiplier', 310, 180, 100, 50, '× C');
     marque(c, 'multiplier'); c.pause(.4);
-    encadre(c, 'RC·dq/dt + q = C·E', 330, 274, { taille: 30 });
-    c.repere('resultat', 180, 238, 300, 52, 'RC·dq/dt + q = C·E');
+    encadre(c, 'RC·⟦dq|dt⟧ + q = C·E', 330, 278, { taille: 30 });
+    c.repere('resultat', 180, 234, 300, 68, 'RC·dq/dt + q = C·E');
     marque(c, 'resultat'); c.pause(.3);
-    c.texte('Au régime permanent : dq/dt = 0, donc q = C·E.', 40, 370, { couleur: 'cyan', taille: 21, max: 680 });
+    c.texte('Au régime permanent : ⟦dq|dt⟧ = 0, donc q = C·E.', 40, 370, { couleur: 'cyan', taille: 21, max: 680 });
     c.repere('fin', 32, 346, 520, 34, 'au régime permanent : q = C·E');
     marque(c, 'fin');
   },
 
   fig_ed_uR_i(c) {
     titre(c, 'Les équations en u_R et en i', 'les équations en u_R et en i');
-    c.texte('on dérive  u_R + u_C = E  (E constante) :', 40, 86, { couleur: 'blanc', taille: 18 });
-    c.texte('du_R/dt + du_C/dt = 0', 40, 122, { couleur: 'blanc', taille: G });
-    c.repere('deriver', 32, 64, 420, 70, 'du_R/dt + du_C/dt = 0');
+    c.texte('on dérive  u_R + u_C = E  (E constante) :', 40, 80, { couleur: 'blanc', taille: 18 });
+    c.texte('⟦du_R|dt⟧ + ⟦du_C|dt⟧ = 0', 40, 124, { couleur: 'blanc', taille: G });
+    c.repere('deriver', 32, 60, 420, 86, 'du_R/dt + du_C/dt = 0');
     marque(c, 'deriver'); c.pause(.4);
-    c.texte('du_C/dt = i/C = u_R/(RC)', 40, 178, { couleur: 'blanc', taille: G });
-    c.texte('(i = C·du_C/dt ; u_R = R·i)', 360, 178, { couleur: 'blanc', taille: 17 });
-    c.repere('relation', 32, 150, 600, 40, 'du_C/dt = i/C = u_R/(RC)');
+    c.texte('⟦du_C|dt⟧ = ⟦i|C⟧ = ⟦u_R|RC⟧', 40, 184, { couleur: 'blanc', taille: G });
+    c.texte('(i = C·⟦du_C|dt⟧ ; u_R = R·i)', 360, 184, { couleur: 'blanc', taille: 17 });
+    c.repere('relation', 32, 150, 600, 56, 'du_C/dt = i/C = u_R/(RC)');
     marque(c, 'relation'); c.pause(.4);
-    c.texte('× RC :', 40, 242, { couleur: 'orange', taille: 20 });
-    encadre(c, 'RC·du_R/dt + u_R = 0', 120, 244, { taille: 27, align: 'left' });
-    c.repere('uR', 110, 214, 300, 44, 'RC·du_R/dt + u_R = 0');
+    c.texte('× RC :', 40, 250, { couleur: 'orange', taille: 20 });
+    encadre(c, 'RC·⟦du_R|dt⟧ + u_R = 0', 120, 252, { taille: 27, align: 'left' });
+    c.repere('uR', 110, 214, 300, 62, 'RC·du_R/dt + u_R = 0');
     marque(c, 'uR'); c.pause(.4);
-    c.texte('u_R = R·i :', 40, 312, { couleur: 'orange', taille: 20 });
-    encadre(c, 'RC·di/dt + i = 0', 140, 314, { taille: 27, align: 'left' });
-    c.repere('i', 130, 284, 260, 44, 'RC·di/dt + i = 0');
+    c.texte('u_R = R·i :', 40, 322, { couleur: 'orange', taille: 20 });
+    encadre(c, 'RC·⟦di|dt⟧ + i = 0', 140, 324, { taille: 27, align: 'left' });
+    c.repere('i', 130, 286, 260, 62, 'RC·di/dt + i = 0');
     marque(c, 'i'); c.pause(.3);
     c.texte('Second membre nul : u_R et i tendent vers 0.', 40, 386, { couleur: 'cyan', taille: 21, max: 680 });
     c.repere('fin', 32, 362, 480, 34, 'second membre nul');
@@ -672,9 +679,9 @@ const DESSINS = {
     c.texte('(plus de générateur)', 400, 150, { couleur: 'blanc', taille: 17 });
     c.repere('additivite', 392, 92, 300, 66, 'u_R + u_C = 0');
     marque(c, 'additivite'); c.pause(.4);
-    c.texte('u_R = R·i  ;  i = C·du_C/dt', 400, 206, { couleur: 'blanc', taille: 19 });
-    encadre(c, 'RC·du_C/dt + u_C = 0', 400, 262, { taille: 28, align: 'left', couleur: 'bleu' });
-    c.repere('resultat', 392, 184, 330, 98, 'RC·du_C/dt + u_C = 0');
+    c.texte('u_R = R·i  ;  i = C·⟦du_C|dt⟧', 400, 206, { couleur: 'blanc', taille: 19 });
+    encadre(c, 'RC·⟦du_C|dt⟧ + u_C = 0', 400, 268, { taille: 28, align: 'left', couleur: 'bleu' });
+    c.repere('resultat', 392, 180, 330, 110, 'RC·du_C/dt + u_C = 0');
     marque(c, 'resultat'); c.pause(.3);
     c.texte('Même équation qu’à la charge, avec 0 à droite : u_C tend vers 0.', 40, 380, { couleur: 'cyan', taille: 20, max: 680 });
     c.repere('fin', 32, 356, 660, 34, 'même équation, avec 0 à droite');
@@ -683,24 +690,25 @@ const DESSINS = {
 
   fig_tableau_ed(c) {
     titre(c, 'Le tableau des équations différentielles', 'le tableau : u_C, q, u_R, i ; charge et décharge');
-    const x0 = 40, xa = 130, xb = 430, x1 = 730, y0 = 60, h = 46, lig = ['u_C', 'q', 'u_R', 'i'];
-    const ch = ['RC·du_C/dt + u_C = E', 'RC·dq/dt + q = C·E', 'RC·du_R/dt + u_R = 0', 'RC·di/dt + i = 0'];
-    const de = ['RC·du_C/dt + u_C = 0', 'RC·dq/dt + q = 0', 'RC·du_R/dt + u_R = 0', 'RC·di/dt + i = 0'];
+    // lignes de 52 : chaque équation porte une fraction sur deux étages (comme dans le cahier), elle tient dans sa case
+    const x0 = 40, xa = 130, xb = 430, x1 = 730, y0 = 56, h = 52, lig = ['u_C', 'q', 'u_R', 'i'];
+    const ch = ['RC·⟦du_C|dt⟧ + u_C = E', 'RC·⟦dq|dt⟧ + q = C·E', 'RC·⟦du_R|dt⟧ + u_R = 0', 'RC·⟦di|dt⟧ + i = 0'];
+    const de = ['RC·⟦du_C|dt⟧ + u_C = 0', 'RC·⟦dq|dt⟧ + q = 0', 'RC·⟦du_R|dt⟧ + u_R = 0', 'RC·⟦di|dt⟧ + i = 0'];
     c.rect(x0, y0, x1 - x0, 5 * h, { couleur: 'faible', arrondi: 6, largeur: 1.6 });
     for (let k = 1; k <= 4; k++) c.ligne(x0, y0 + k * h, x1, y0 + k * h, { couleur: 'faible', largeur: 1.2, duree: .08 });
     c.ligne(xa, y0, xa, y0 + 5 * h, { couleur: 'faible', largeur: 1.2, duree: .08 });
-    lig.forEach((s, k) => c.texte(s, (x0 + xa) / 2, y0 + (k + 1) * h + 30, { couleur: 'cyan', taille: 22, align: 'center' }));
-    c.texte('charge', (xa + xb) / 2, y0 + 31, { couleur: 'rouge', taille: 22, align: 'center' });
-    ch.forEach((s, k) => c.texte(s, (xa + xb) / 2, y0 + (k + 1) * h + 30, { couleur: 'rouge', taille: 21, align: 'center' }));
+    lig.forEach((s, k) => c.texte(s, (x0 + xa) / 2, y0 + (k + 1) * h + 33, { couleur: 'cyan', taille: 22, align: 'center' }));
+    c.texte('charge', (xa + xb) / 2, y0 + 34, { couleur: 'rouge', taille: 22, align: 'center' });
+    ch.forEach((s, k) => c.texte(s, (xa + xb) / 2, y0 + (k + 1) * h + 33, { couleur: 'rouge', taille: 21, align: 'center' }));
     c.repere('charge', xa, y0, xb - xa, 5 * h, 'la colonne charge');
     marque(c, 'charge'); c.pause(.4);
     c.ligne(xb, y0, xb, y0 + 5 * h, { couleur: 'faible', largeur: 1.2, duree: .08 });
-    c.texte('décharge', (xb + x1) / 2, y0 + 31, { couleur: 'bleu', taille: 22, align: 'center' });
-    de.forEach((s, k) => c.texte(s, (xb + x1) / 2, y0 + (k + 1) * h + 30, { couleur: 'bleu', taille: 21, align: 'center' }));
+    c.texte('décharge', (xb + x1) / 2, y0 + 34, { couleur: 'bleu', taille: 22, align: 'center' });
+    de.forEach((s, k) => c.texte(s, (xb + x1) / 2, y0 + (k + 1) * h + 33, { couleur: 'bleu', taille: 21, align: 'center' }));
     c.repere('decharge', xb, y0, x1 - xb, 5 * h, 'la colonne décharge');
     marque(c, 'decharge'); c.pause(.4);
     c.rect(x0 + 4, y0 + 3 * h + 4, x1 - x0 - 8, 2 * h - 8, { couleur: 'jaune', arrondi: 8, largeur: 2 });
-    c.texte('u_R et i : second membre nul dans les deux cas', 380, 340, { couleur: 'vert', taille: 22, align: 'center', max: 680 });
+    c.texte('u_R et i : second membre nul dans les deux cas', 380, 346, { couleur: 'vert', taille: 22, align: 'center', max: 680 });
     c.repere('remarque', x0, y0 + 3 * h, x1 - x0, 2 * h + 54, 'u_R et i : second membre nul dans les deux cas');
     marque(c, 'remarque'); c.pause(.3);
     c.texte('Seul le second membre change : E (ou C·E) à la charge, 0 à la décharge.', 380, 392, { couleur: 'cyan', taille: 19, align: 'center', max: 690 });
@@ -713,9 +721,9 @@ const DESSINS = {
     encadre(c, '(e^{at})’ = a·e^{at}', 40, 100, { taille: 30, align: 'left' });
     c.repere('regle', 32, 64, 280, 52, '(e^(at))’ = a·e^(at)');
     marque(c, 'regle'); c.pause(.4);
-    c.texte('avec a = −1/τ :', 40, 160, { couleur: 'blanc', taille: 18 });
-    c.texte('(e^{−t/τ})’ = −(1/τ)·e^{−t/τ}', 40, 196, { couleur: 'blanc', taille: 28 });
-    c.repere('exemple', 32, 140, 400, 70, '(e^(−t/τ))’ = −(1/τ)·e^(−t/τ)');
+    c.texte('avec a = −⟦1|τ⟧ :', 40, 154, { couleur: 'blanc', taille: 18 });
+    c.texte('(e^{−t/τ})’ = −⟦1|τ⟧·e^{−t/τ}', 40, 204, { couleur: 'blanc', taille: 28 });
+    c.repere('exemple', 32, 132, 400, 92, '(e^(−t/τ))’ = −(1/τ)·e^(−t/τ)');
     marque(c, 'exemple'); c.pause(.4);
     c.texte('e⁰ = 1', 40, 262, { couleur: 'blanc', taille: 30 });
     c.texte('(à t = 0)', 140, 262, { couleur: 'faible', taille: 18 });
@@ -737,26 +745,27 @@ const DESSINS = {
 
   fig_resolution(c) {
     titre(c, 'Résoudre l’équation de la charge', 'la résolution de RC·du_C/dt + u_C = E');
-    c.texte('RC·du_C/dt + u_C = E', 520, 32, { couleur: 'rouge', taille: 18 });
+    c.texte('RC·⟦du_C|dt⟧ + u_C = E', 520, 32, { couleur: 'rouge', taille: 18 });
     const x = 40, t = 24;
+    // lignes écartées de 48 : les fractions (deux étages, comme dans le cahier) ne touchent pas leurs voisines
     c.texte('on cherche :', x, 82, { couleur: 'blanc', taille: 17 });
     c.texte('u_C = A(1 − e^{−t/τ})', x + 110, 84, { couleur: 'blanc', taille: t });
     c.repere('forme', x - 8, 60, 400, 36, 'u_C = A(1 − e^(−t/τ))');
     marque(c, 'forme'); c.pause(.4);
-    c.texte('du_C/dt = (A/τ)·e^{−t/τ}', x + 110, 130, { couleur: 'blanc', taille: t });
-    c.repere('deriver', x + 100, 106, 320, 36, 'du_C/dt = (A/τ)·e^(−t/τ)');
+    c.texte('⟦du_C|dt⟧ = ⟦A|τ⟧·e^{−t/τ}', x + 110, 132, { couleur: 'blanc', taille: t });
+    c.repere('deriver', x + 100, 100, 320, 48, 'du_C/dt = (A/τ)·e^(−t/τ)');
     marque(c, 'deriver'); c.pause(.4);
-    c.texte('RC·(A/τ)·e^{−t/τ} + A − A·e^{−t/τ} = E', x + 110, 176, { couleur: 'blanc', taille: t });
-    c.repere('remplacer', x + 100, 152, 480, 36, 'RC·(A/τ)·e^(−t/τ) + A − A·e^(−t/τ) = E');
+    c.texte('RC·⟦A|τ⟧·e^{−t/τ} + A − A·e^{−t/τ} = E', x + 110, 180, { couleur: 'blanc', taille: t });
+    c.repere('remplacer', x + 100, 148, 480, 48, 'RC·(A/τ)·e^(−t/τ) + A − A·e^(−t/τ) = E');
     marque(c, 'remplacer'); c.pause(.4);
-    c.texte('A·e^{−t/τ}(RC/τ − 1) + A = E', x + 110, 222, { couleur: 'blanc', taille: t });
-    c.repere('factoriser', x + 100, 198, 380, 36, 'A·e^(−t/τ)(RC/τ − 1) + A = E');
+    c.texte('A·e^{−t/τ}(⟦RC|τ⟧ − 1) + A = E', x + 110, 228, { couleur: 'blanc', taille: t });
+    c.repere('factoriser', x + 100, 196, 380, 48, 'A·e^(−t/τ)(RC/τ − 1) + A = E');
     marque(c, 'factoriser'); c.pause(.4);
-    c.texte('pour tout t :', x, 274, { couleur: 'blanc', taille: 17 });
-    accolade(c, x + 108, 246, 304);
-    c.texte('RC/τ − 1 = 0', x + 124, 266, { couleur: 'blanc', taille: t });
-    c.texte('et  A = E', x + 124, 298, { couleur: 'blanc', taille: t });
-    c.repere('accolade', x - 8, 242, 300, 66, 'RC/τ − 1 = 0 et A = E');
+    c.texte('pour tout t :', x, 282, { couleur: 'blanc', taille: 17 });
+    accolade(c, x + 108, 248, 318);
+    c.texte('⟦RC|τ⟧ − 1 = 0', x + 124, 274, { couleur: 'blanc', taille: t });
+    c.texte('et  A = E', x + 124, 310, { couleur: 'blanc', taille: t });
+    c.repere('accolade', x - 8, 244, 300, 76, 'RC/τ − 1 = 0 et A = E');
     marque(c, 'accolade'); c.pause(.4);
     encadre(c, 'τ = RC  ;  u_C(t) = E(1 − e^{−t/RC})', x + 110, 352, { taille: 26, align: 'left' });
     c.repere('reecrire', x + 104, 322, 440, 44, 'τ = RC ; u_C(t) = E(1 − e^(−t/RC))');
@@ -771,8 +780,8 @@ const DESSINS = {
     c.texte('u_C = A + B·e^{−αt}', 40, 100, { couleur: 'blanc', taille: 28 });
     c.repere('forme', 32, 70, 300, 42, 'u_C = A + B·e^(−αt)');
     marque(c, 'forme'); c.pause(.4);
-    c.texte('l’équation donne A = E et α = 1/RC', 40, 160, { couleur: 'blanc', taille: 24 });
-    c.repere('equation', 32, 134, 420, 38, 'A = E et α = 1/RC');
+    c.texte('l’équation donne A = E et α = ⟦1|RC⟧', 40, 160, { couleur: 'blanc', taille: 24 });
+    c.repere('equation', 32, 128, 420, 50, 'A = E et α = 1/RC');
     marque(c, 'equation'); c.pause(.4);
     c.texte('u_C(0) = 0 : A + B = 0', 40, 222, { couleur: 'blanc', taille: 26 });
     c.texte('(condensateur déchargé au départ ; e⁰ = 1)', 340, 222, { couleur: 'blanc', taille: 17 });
@@ -788,23 +797,23 @@ const DESSINS = {
 
   fig_verifier(c) {
     titre(c, 'Vérifier une solution', 'vérifier que u_C = E(1 − e^(−t/RC)) est solution');
-    c.texte('RC·du_C/dt + u_C = E ?', 520, 32, { couleur: 'rouge', taille: 18 });
+    c.texte('RC·⟦du_C|dt⟧ + u_C = E ?', 520, 32, { couleur: 'rouge', taille: 18 });
     c.texte('u_C = E(1 − e^{−t/RC})', 40, 98, { couleur: 'blanc', taille: G });
     c.repere('solution', 32, 70, 320, 40, 'u_C = E(1 − e^(−t/RC))');
     marque(c, 'solution'); c.pause(.4);
-    c.texte('du_C/dt = (E/RC)·e^{−t/RC}', 40, 154, { couleur: 'blanc', taille: G });
-    c.repere('derivee', 32, 126, 340, 40, 'du_C/dt = (E/RC)·e^(−t/RC)');
+    c.texte('⟦du_C|dt⟧ = ⟦E|RC⟧·e^{−t/RC}', 40, 154, { couleur: 'blanc', taille: G });
+    c.repere('derivee', 32, 118, 340, 56, 'du_C/dt = (E/RC)·e^(−t/RC)');
     marque(c, 'derivee'); c.pause(.4);
-    c.texte('dans  RC·du_C/dt + u_C  :', 40, 200, { couleur: 'blanc', taille: 17 });
-    const t = G, a = 'RC·(E/RC)·e^{−t/RC}', b = ' + E ', d = '− E·e^{−t/RC}', y = 240, x = 40;
+    c.texte('dans  RC·⟦du_C|dt⟧ + u_C  :', 40, 202, { couleur: 'blanc', taille: 17 });
+    const t = G, a = 'RC·⟦E|RC⟧·e^{−t/RC}', b = ' + E ', d = '− E·e^{−t/RC}', y = 252, x = 40;
     c.texte(a + b + d, x, y, { couleur: 'blanc', taille: t });
-    c.repere('remplacer', 32, 182, 560, 70, 'RC·(E/RC)·e^(−t/RC) + E − E·e^(−t/RC)');
+    c.repere('remplacer', 32, 180, 560, 92, 'RC·(E/RC)·e^(−t/RC) + E − E·e^(−t/RC)');
     marque(c, 'remplacer'); c.pause(.4);
     const wa = L(c, a, t), wb = L(c, b, t), wd = L(c, d, t);
     c.ligne(x, y + 4, x + wa, y - 18, { couleur: 'rose', largeur: 2.2 });
     c.ligne(x + wa + wb, y + 4, x + wa + wb + wd, y - 18, { couleur: 'rose', largeur: 2.2 });
     encadre(c, '= E : vérifiée', x + wa + wb + wd + 20, y, { taille: t, align: 'left' });
-    c.repere('egalite', x, 210, Math.min(700, wa + wb + wd + 200), 46, '= E : vérifiée');
+    c.repere('egalite', x, 220, Math.min(700, wa + wb + wd + 200), 50, '= E : vérifiée');
     marque(c, 'egalite'); c.pause(.3);
     c.texte('Et u_C(0) = E(1 − 1) = 0 : la condition initiale est respectée.', 40, 330, { couleur: 'cyan', taille: 21, max: 680 });
     c.repere('fin', 32, 306, 640, 34, 'u_C(0) = 0');
@@ -814,14 +823,14 @@ const DESSINS = {
   fig_dimension(c) {
     titre(c, 'τ = R·C est un temps', 'l’analyse dimensionnelle de τ = R·C');
     c.texte('u_R = R·i  →', 40, 100, { couleur: 'blanc', taille: 20 });
-    c.texte('[R] = [U]/[I]', 200, 100, { couleur: 'blanc', taille: 28 });
-    c.repere('R', 32, 70, 400, 42, '[R] = [U]/[I]');
+    c.texte('[R] = ⟦[U]|[I]⟧', 200, 100, { couleur: 'blanc', taille: 28 });
+    c.repere('R', 32, 62, 400, 58, '[R] = [U]/[I]');
     marque(c, 'R'); c.pause(.4);
-    c.texte('i = C·du_C/dt  →', 40, 164, { couleur: 'blanc', taille: 20 });
-    c.texte('[C] = [I]·[T]/[U]', 200, 164, { couleur: 'blanc', taille: 28 });
-    c.repere('C', 32, 134, 440, 42, '[C] = [I]·[T]/[U]');
+    c.texte('i = C·⟦du_C|dt⟧  →', 40, 164, { couleur: 'blanc', taille: 20 });
+    c.texte('[C] = ⟦[I]·[T]|[U]⟧', 200, 164, { couleur: 'blanc', taille: 28 });
+    c.repere('C', 32, 128, 440, 58, '[C] = [I]·[T]/[U]');
     marque(c, 'C'); c.pause(.4);
-    c.texte('[R]·[C] = ([U]/[I])·([I]·[T]/[U])', 200, 226, { couleur: 'blanc', taille: 22 });
+    c.texte('[R]·[C] = ⟦[U]|[I]⟧·⟦[I]·[T]|[U]⟧', 200, 228, { couleur: 'blanc', taille: 22 });
     encadre(c, '[R]·[C] = [T] : τ est un temps', 200, 288, { taille: 28, align: 'left' });
     c.repere('produit', 192, 200, 480, 104, '[R]·[C] = [T] : τ est un temps');
     marque(c, 'produit'); c.pause(.3);
@@ -832,17 +841,17 @@ const DESSINS = {
 
   fig_decharge_solution(c) {
     titre(c, 'Résoudre l’équation de la décharge', 'la résolution de RC·du_C/dt + u_C = 0');
-    c.texte('RC·du_C/dt + u_C = 0', 520, 32, { couleur: 'bleu', taille: 18 });
+    c.texte('RC·⟦du_C|dt⟧ + u_C = 0', 520, 32, { couleur: 'bleu', taille: 18 });
     const x = 40, t = 24;
     c.texte('on cherche :', x, 82, { couleur: 'blanc', taille: 17 });
     c.texte('u_C = A·e^{−t/τ}', x + 110, 84, { couleur: 'blanc', taille: t });
     c.repere('forme', x - 8, 60, 330, 36, 'u_C = A·e^(−t/τ)');
     marque(c, 'forme'); c.pause(.4);
-    c.texte('du_C/dt = −(A/τ)·e^{−t/τ}', x + 110, 128, { couleur: 'blanc', taille: t });
-    c.repere('deriver', x + 100, 104, 320, 36, 'du_C/dt = −(A/τ)·e^(−t/τ)');
+    c.texte('⟦du_C|dt⟧ = −⟦A|τ⟧·e^{−t/τ}', x + 110, 131, { couleur: 'blanc', taille: t });
+    c.repere('deriver', x + 100, 98, 320, 48, 'du_C/dt = −(A/τ)·e^(−t/τ)');
     marque(c, 'deriver'); c.pause(.4);
-    c.texte('A·e^{−t/τ}(1 − RC/τ) = 0', x + 110, 174, { couleur: 'blanc', taille: t });
-    c.repere('remplacer', x + 100, 150, 320, 36, 'A·e^(−t/τ)(1 − RC/τ) = 0');
+    c.texte('A·e^{−t/τ}(1 − ⟦RC|τ⟧) = 0', x + 110, 180, { couleur: 'blanc', taille: t });
+    c.repere('remplacer', x + 100, 148, 320, 48, 'A·e^(−t/τ)(1 − RC/τ) = 0');
     marque(c, 'remplacer'); c.pause(.4);
     c.texte('A·e^{−t/τ} ≠ 0  donc', x + 110, 220, { couleur: 'blanc', taille: 19 });
     c.texte('τ = RC', x + 124 + L(c, 'A·e^{−t/τ} ≠ 0  donc', 19), 222, { couleur: 'blanc', taille: 26 });
@@ -864,13 +873,13 @@ const DESSINS = {
     encadre(c, 'E = 6 V  ;  i(0) = 50 mA  ;  τ = 12 ms', 380, 98, { taille: 26, couleur: 'blanc', cadre: 'faible' });
     c.repere('donnees', 150, 66, 460, 46, 'E = 6 V ; i(0) = 50 mA ; τ = 12 ms');
     marque(c, 'donnees'); c.pause(.4);
-    c.texte('à t = 0 : u_C = 0, donc E = R_1·i(0)', 40, 160, { couleur: 'blanc', taille: 18 });
-    c.texte('R_1 = E/i(0) = 6/(50·10⁻³) = 120 Ω', 40, 198, { couleur: 'blanc', taille: 27 });
-    c.repere('R', 32, 140, 500, 72, 'R₁ = E/i(0) = 120 Ω');
+    c.texte('à t = 0 : u_C = 0, donc E = R_1·i(0)', 40, 156, { couleur: 'blanc', taille: 18 });
+    c.texte('R_1 = ⟦E|i(0)⟧ = ⟦6|50·10⁻³⟧ = 120 Ω', 40, 202, { couleur: 'blanc', taille: 27 });
+    c.repere('R', 32, 136, 500, 88, 'R₁ = E/i(0) = 120 Ω');
     marque(c, 'R'); c.pause(.4);
-    c.texte('τ = R_1·C, donc', 40, 252, { couleur: 'blanc', taille: 18 });
-    c.texte('C = τ/R_1 = 12·10⁻³/120 = 10⁻⁴ F = 100 µF', 40, 290, { couleur: 'blanc', taille: 27, max: 680 });
-    c.repere('C', 32, 232, 600, 72, 'C = τ/R₁ = 100 µF');
+    c.texte('τ = R_1·C, donc', 40, 250, { couleur: 'blanc', taille: 18 });
+    c.texte('C = ⟦τ|R_1⟧ = ⟦12·10⁻³|120⟧ = 10⁻⁴ F = 100 µF', 40, 296, { couleur: 'blanc', taille: 27, max: 680 });
+    c.repere('C', 32, 230, 600, 88, 'C = τ/R₁ = 100 µF');
     marque(c, 'C'); c.pause(.3);
     c.texte('⚠ convertir : mA → A et ms → s avant de calculer', 40, 364, { couleur: 'orange', taille: 21, max: 680 });
     c.repere('fin', 32, 340, 520, 34, 'convertir avant de calculer');
@@ -879,28 +888,28 @@ const DESSINS = {
 
   fig_du_dt(c) {
     const D = MISE.large ? 90 : 0;   // tableau large : graphe plus grand, calculs décalés à droite
-    titre(c, 'La droite du_C/dt = f(u_C) (national 2021 N)', 'la droite du_C/dt = f(u_C) : national 2021 N');
-    c.texte('du_C/dt = −(1/RC)·u_C + E/(RC)', 40, 82, { couleur: 'blanc', taille: 24 });
-    c.texte('E = 12 V ; R = 1 kΩ', 460 + D, 82, { couleur: 'blanc', taille: 18 });
-    c.repere('equation', 32, 58, 620, 36, 'du_C/dt = −(1/RC)·u_C + E/(RC)');
+    titre(c, 'La droite ⟦du_C|dt⟧ = f(u_C) (national 2021 N)', 'la droite du_C/dt = f(u_C) : national 2021 N');
+    c.texte('⟦du_C|dt⟧ = −⟦1|RC⟧·u_C + ⟦E|RC⟧', 40, 84, { couleur: 'blanc', taille: 24 });
+    c.texte('E = 12 V ; R = 1 kΩ', 460 + D, 84, { couleur: 'blanc', taille: 18 });
+    c.repere('equation', 32, 52, 620, 50, 'du_C/dt = −(1/RC)·u_C + E/(RC)');
     marque(c, 'equation'); c.pause(.4);
-    const g = graphe(c, { ox: 80, oy: 370 + D * .3, w: 280 + D * .8, h: 230 + D * .45, xmax: 14, ymax: 1200, dx: 1, dy: 100, xt: [2, 4, 6, 8, 10, 12], yt: [200, 400, 600, 800, 1000], xl: 'u_C (V)', yl: 'du_C/dt (V/s)' });
+    const g = graphe(c, { ox: 80, oy: 370 + D * .3, w: 280 + D * .8, h: 230 + D * .45, xmax: 14, ymax: 1200, dx: 1, dy: 100, xt: [2, 4, 6, 8, 10, 12], yt: [200, 400, 600, 800, 1000], xl: 'u_C (V)', yl: '⟦du_C|dt⟧ (V/s)' });
     c.ligne(g.X(0), g.Y(1000), g.X(12), g.Y(0), { couleur: 'rouge', largeur: 2.6 });
     c.repere('droite', 30, 110, 360 + D * .8, 290 + D * .3, 'la droite de (0 ; 1000) à (12 ; 0)');
     marque(c, 'droite'); c.pause(.4);
-    c.texte('a = (0 − 1000)/(12 − 0) ≈ −83,3 s⁻¹', 400 + D, 150, { couleur: 'blanc', taille: 22, max: 340 });
-    c.repere('pente', 392 + D, 126, 350, 36, 'a ≈ −83,3 s⁻¹');
+    c.texte('a = ⟦0 − 1000|12 − 0⟧ ≈ −83,3 s⁻¹', 400 + D, 150, { couleur: 'blanc', taille: 22, max: 340 });
+    c.repere('pente', 392 + D, 120, 350, 48, 'a ≈ −83,3 s⁻¹');
     marque(c, 'pente'); c.pause(.4);
     c.point(g.X(0), g.Y(1000), 5, 'vert');
-    c.texte('E/(RC) = 1000 V/s', 400 + D, 200, { couleur: 'blanc', taille: 22 });
-    c.repere('ordonnee', 392 + D, 176, 260, 36, 'E/(RC) = 1000 V/s');
+    c.texte('⟦E|RC⟧ = 1000 V/s', 400 + D, 200, { couleur: 'blanc', taille: 22 });
+    c.repere('ordonnee', 392 + D, 170, 260, 48, 'E/(RC) = 1000 V/s');
     marque(c, 'ordonnee'); c.pause(.4);
-    c.texte('a = −1/(RC), donc', 400 + D, 250, { couleur: 'blanc', taille: 18 });
-    encadre(c, 'C = −1/(R·a) = 1,2·10⁻⁵ F = 12 µF', 400 + D, 294, { taille: 21, align: 'left' });
+    c.texte('a = −⟦1|RC⟧, donc', 400 + D, 250, { couleur: 'blanc', taille: 18 });
+    encadre(c, 'C = −⟦1|R·a⟧ = 1,2·10⁻⁵ F = 12 µF', 400 + D, 296, { taille: 21, align: 'left' });
     c.repere('resultat', 392 + D, 230, 350, 80, 'C = −1/(R·a) = 12 µF');
     marque(c, 'resultat'); c.pause(.3);
-    c.texte('vérif : E/(RC) = 12/(10³ × 12·10⁻⁶) = 1000 V/s', 400 + D, 356, { couleur: 'cyan', taille: 17, max: 340 });
-    c.repere('fin', 392 + D, 334, 350, 32, 'vérification : 1000 V/s');
+    c.texte('vérif : ⟦E|RC⟧ = ⟦12|10³ × 12·10⁻⁶⟧ = 1000 V/s', 400 + D, 358, { couleur: 'cyan', taille: 17, max: 340 });
+    c.repere('fin', 392 + D, 332, 350, 40, 'vérification : 1000 V/s');
     marque(c, 'fin');
   },
 
@@ -914,9 +923,9 @@ const DESSINS = {
     c.point(g.X(4), g.Y(40), 4.5, 'blanc');
     c.repere('courbe', 30, 70, 360 + D * .8, 330 + D * .3, 'la droite q = f(u) par l’origine');
     marque(c, 'courbe'); c.pause(.4);
-    c.texte('pente = 40 µC / 4 V', 400 + D, 100, { couleur: 'blanc', taille: 19 });
-    c.texte('pente = C_eq = 10 µF', 400 + D, 136, { couleur: 'blanc', taille: G });
-    c.repere('pente', 392 + D, 78, 340, 70, 'pente = C_eq = 10 µF');
+    c.texte('pente = ⟦40 µC|4 V⟧', 400 + D, 98, { couleur: 'blanc', taille: 19 });
+    c.texte('pente = C_eq = 10 µF', 400 + D, 138, { couleur: 'blanc', taille: G });
+    c.repere('pente', 392 + D, 72, 340, 76, 'pente = C_eq = 10 µF');
     marque(c, 'pente'); c.pause(.4);
     c.texte('en parallèle, avec C_1 = 7,5 µF :', 400 + D, 192, { couleur: 'blanc', taille: 18 });
     c.texte('C_eq = C_1 + C_2', 400 + D, 228, { couleur: 'blanc', taille: G });
@@ -954,23 +963,23 @@ const DESSINS = {
     c.texte('(tangente ∩ asymptote)', 520 + D, 200, { couleur: 'blanc', taille: 17 });
     c.repere('tau', 402 + D, 174, 340, 38, 'τ = 1 ms');
     marque(c, 'tau'); c.pause(.4);
-    c.texte('C = Q/E = 100·10⁻⁶/10 = 10 µF', 410 + D, 252, { couleur: 'blanc', taille: 22, max: 330 });
-    c.repere('C', 402 + D, 228, 340, 36, 'C = Q/E = 10 µF');
+    c.texte('C = ⟦Q|E⟧ = ⟦100·10⁻⁶|10⟧ = 10 µF', 410 + D, 252, { couleur: 'blanc', taille: 22, max: 330 });
+    c.repere('C', 402 + D, 222, 340, 48, 'C = Q/E = 10 µF');
     marque(c, 'C'); c.pause(.4);
-    encadre(c, 'R = τ/C = 10⁻³/10⁻⁵ = 100 Ω', 410 + D, 306, { taille: 22, align: 'left' });
-    c.repere('R', 402 + D, 278, 340, 44, 'R = τ/C = 100 Ω');
+    encadre(c, 'R = ⟦τ|C⟧ = ⟦10⁻³|10⁻⁵⟧ = 100 Ω', 410 + D, 308, { taille: 22, align: 'left' });
+    c.repere('R', 402 + D, 274, 340, 54, 'R = τ/C = 100 Ω');
     marque(c, 'R'); c.pause(.3);
-    c.texte('et A = Q = C·E ;  α = 1/τ = 10³ s⁻¹', 410 + D, 366, { couleur: 'cyan', taille: 19, max: 330 });
-    c.repere('fin', 402 + D, 344, 340, 32, 'A = Q ; α = 1/τ');
+    c.texte('et A = Q = C·E ;  α = ⟦1|τ⟧ = 10³ s⁻¹', 410 + D, 368, { couleur: 'cyan', taille: 19, max: 330 });
+    c.repere('fin', 402 + D, 342, 340, 40, 'A = Q ; α = 1/τ');
     marque(c, 'fin');
   },
 
   fig_n2_2021R(c) {
     const D = MISE.large ? 90 : 0;   // tableau large : graphe plus grand, calculs décalés à droite
     titre(c, 'La courbe i(t) (national 2021 R)', 'la courbe i(t) : national 2021 R');
-    c.texte('i + R_{1}C·di/dt = 0  ;  i = I_0·e^{−t/τ}', 40, 82, { couleur: 'blanc', taille: 24 });
-    c.texte('E = 6 V', 470 + D, 82, { couleur: 'faible', taille: 20 });
-    c.repere('enonce', 32, 58, 520, 36, 'i + R₁C·di/dt = 0 ; i = I₀·e^(−t/τ)');
+    c.texte('i + R_{1}C·⟦di|dt⟧ = 0  ;  i = I_0·e^{−t/τ}', 40, 84, { couleur: 'blanc', taille: 24 });
+    c.texte('E = 6 V', 470 + D, 84, { couleur: 'faible', taille: 20 });
+    c.repere('enonce', 32, 52, 520, 50, 'i + R₁C·di/dt = 0 ; i = I₀·e^(−t/τ)');
     marque(c, 'enonce'); c.pause(.4);
     // axe des temps gradué de 10 en 10 ms : la graduation ne tombe pas sur τ = 12 ms
     const g = graphe(c, { ox: 80, oy: 370 + D * .3, w: 280 + D * .8, h: 230 + D * .45, xmax: 60, ymax: 60, dx: 2, dy: 5, xt: [10, 20, 30, 40, 50, 60], yt: [10, 20, 30, 40, 50], xl: 't (ms)', yl: 'i (mA)' });
@@ -979,22 +988,22 @@ const DESSINS = {
     c.point(g.X(12), g.Y(0), 4.5, 'blanc');
     c.repere('courbe', 30, 110, 360 + D * .8, 290 + D * .3, 'i(t) et la tangente à l’origine');
     marque(c, 'courbe'); c.pause(.4);
-    c.texte('I_0·e^{−t/τ}(1 − R_{1}C/τ) = 0', 410 + D, 150, { couleur: 'blanc', taille: 23, max: 330 });
-    c.repere('equation', 402 + D, 124, 340, 38, 'I₀·e^(−t/τ)(1 − R₁C/τ) = 0');
+    c.texte('I_0·e^{−t/τ}(1 − ⟦R_{1}C|τ⟧) = 0', 410 + D, 150, { couleur: 'blanc', taille: 23, max: 330 });
+    c.repere('equation', 402 + D, 118, 340, 50, 'I₀·e^(−t/τ)(1 − R₁C/τ) = 0');
     marque(c, 'equation'); c.pause(.4);
     c.texte('τ = R_{1}C', 410 + D, 198, { couleur: 'blanc', taille: G });
     c.repere('tau', 402 + D, 172, 160, 38, 'τ = R₁C');
     marque(c, 'tau'); c.pause(.4);
-    c.texte('R_1 = E/I_0 = 120 Ω', 410 + D, 248, { couleur: 'blanc', taille: G });
-    c.texte('I_0 = 50 mA (courbe)', 410 + D, 276, { couleur: 'blanc', taille: 16 });
-    c.repere('R1', 402 + D, 222, 300, 58, 'R₁ = E/I₀ = 120 Ω');
+    c.texte('R_1 = ⟦E|I_0⟧ = 120 Ω', 410 + D, 248, { couleur: 'blanc', taille: G });
+    c.texte('I_0 = 50 mA (courbe)', 410 + D, 281, { couleur: 'blanc', taille: 16 });
+    c.repere('R1', 402 + D, 214, 300, 72, 'R₁ = E/I₀ = 120 Ω');
     marque(c, 'R1'); c.pause(.4);
-    c.texte('τ = 12 ms (tangente)', 410 + D, 304, { couleur: 'blanc', taille: 16 });
+    c.texte('τ = 12 ms (tangente)', 410 + D, 306, { couleur: 'blanc', taille: 16 });
     encadre(c, 'C = 100 µF', 410 + D, 340, { taille: G, align: 'left' });
     c.repere('C', 402 + D, 288, 220, 66, 'C = 100 µF');
     marque(c, 'C'); c.pause(.3);
-    c.texte('C = τ/R_1 = 12·10⁻³/120 = 10⁻⁴ F', 410 + D, 392, { couleur: 'cyan', taille: 18, max: 330 });
-    c.repere('fin', 402 + D, 370, 340, 32, 'R₁ = 120 Ω et C = 100 µF');
+    c.texte('C = ⟦τ|R_1⟧ = ⟦12·10⁻³|120⟧ = 10⁻⁴ F', 410 + D, 392, { couleur: 'cyan', taille: 18, max: 330 });
+    c.repere('fin', 402 + D, 366, 340, 44, 'R₁ = 120 Ω et C = 100 µF');
     marque(c, 'fin');
   },
 
@@ -1004,15 +1013,15 @@ const DESSINS = {
     encadre(c, 'Q_max = 120 µC  ;  C = 10 µF', 40, 100, { taille: 26, align: 'left', couleur: 'blanc', cadre: 'faible' });
     c.repere('donnees', 32, 68, 380, 48, 'Q_max = 120 µC ; C = 10 µF');
     marque(c, 'donnees'); c.pause(.4);
-    c.texte('au régime permanent : Q_max = C·E', 40, 164, { couleur: 'blanc', taille: 18 });
-    c.texte('E = Q_max/C = 12 V', 40, 202, { couleur: 'blanc', taille: 28 });
-    c.repere('E', 32, 144, 380, 70, 'E = Q_max/C = 12 V');
+    c.texte('au régime permanent : Q_max = C·E', 40, 160, { couleur: 'blanc', taille: 18 });
+    c.texte('E = ⟦Q_max|C⟧ = 12 V', 40, 208, { couleur: 'blanc', taille: 28 });
+    c.repere('E', 32, 140, 380, 90, 'E = Q_max/C = 12 V');
     marque(c, 'E'); c.pause(.4);
-    encadre(c, 'E_e = ½·C·E² = ½ × 10⁻⁵ × 12² = 7,2·10⁻⁴ J', 40, 282, { taille: 26, align: 'left' });
-    c.repere('energie', 32, 250, 600, 50, 'E_e = 7,2·10⁻⁴ J');
+    encadre(c, 'E_e = ⟦1|2⟧·C·E² = ⟦1|2⟧ × 10⁻⁵ × 12² = 7,2·10⁻⁴ J', 40, 284, { taille: 26, align: 'left' });
+    c.repere('energie', 32, 244, 600, 62, 'E_e = 7,2·10⁻⁴ J');
     marque(c, 'energie'); c.pause(.3);
-    c.texte('autre chemin : E_e = Q_max²/(2C) = (120·10⁻⁶)²/(2 × 10⁻⁵) = 7,2·10⁻⁴ J', 40, 364, { couleur: 'cyan', taille: 19, max: 680 });
-    c.repere('fin', 32, 340, 690, 36, 'E_e = q²/(2C)');
+    c.texte('autre chemin : E_e = ⟦Q_max²|2C⟧ = ⟦(120·10⁻⁶)²|2 × 10⁻⁵⟧ = 7,2·10⁻⁴ J', 40, 366, { couleur: 'cyan', taille: 19, max: 680 });
+    c.repere('fin', 32, 338, 690, 46, 'E_e = q²/(2C)');
     marque(c, 'fin');
   },
 };

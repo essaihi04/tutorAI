@@ -41,8 +41,8 @@ const NOEUDS = [
   { id: 'liaison', x: 626, y: 72, w: 228, h: 64, couleur: 'jaune', comps: ['C3'], titre: 'Énergie de liaison',
     lignes: ['E_{ℓ} = Δm·c²', 'E_{ℓ}/A en MeV/nucléon'],
     phrase: 'L’énergie de liaison Eℓ est l’énergie qu’il faut fournir à un noyau au repos pour le séparer en ses nucléons au repos : Eℓ = Δm·c² ; Eℓ/A en MeV/nucléon.' },
-  { id: 'stabilite', x: 640, y: 212, w: 222, h: 64, couleur: 'jaune', comps: ['C4'], titre: 'Stabilité',
-    lignes: ['courbe d’Aston −E_{ℓ}/A = f(A)', 'creux vers le fer (A ≈ 56)'],
+  { id: 'stabilite', x: 640, y: 212, w: 222, h: 76, couleur: 'jaune', comps: ['C4'], titre: 'Stabilité',
+    lignes: ['courbe d’Aston −⟦E_{ℓ}|A⟧ = f(A)', 'creux vers le fer (A ≈ 56)'],
     phrase: 'Un noyau est d’autant plus stable que son énergie de liaison par nucléon Eℓ/A est grande ; sur la courbe d’Aston −Eℓ/A = f(A), le creux est vers le fer (A ≈ 56).' },
   { id: 'reactions', x: 626, y: 352, w: 228, h: 80, couleur: 'orange', comps: ['C5'], titre: 'Fission · fusion',
     lignes: ['fission : lourd → deux plus légers', 'fusion : deux légers → un plus lourd', 'Soddy : A et Z conservés'],
@@ -53,8 +53,8 @@ const NOEUDS = [
   { id: 'bilan_liaison', x: 136, y: 352, w: 232, h: 64, couleur: 'vert', comps: ['C7'], titre: 'Énergie libérée : les E_{ℓ}',
     lignes: ['ΔE = Σ E_{ℓ}(réactifs) − Σ E_{ℓ}(produits)', 'diagramme : nucléons séparés en haut'],
     phrase: 'ΔE = Σ Eℓ(réactifs) − Σ Eℓ(produits), avec Eℓ = A·(Eℓ/A) ; sur le diagramme d’énergie, les nucléons séparés sont en haut.' },
-  { id: 'echantillon', x: 122, y: 212, w: 204, h: 80, couleur: 'violet', comps: ['C8'], titre: 'Un échantillon',
-    lignes: ['N = m·N_A/M', 'E = N·E_lib', 'à masse égale : fusion > fission'],
+  { id: 'echantillon', x: 122, y: 212, w: 204, h: 92, couleur: 'violet', comps: ['C8'], titre: 'Un échantillon',
+    lignes: ['N = ⟦m·N_A|M⟧', 'E = N·E_lib', 'à masse égale : fusion > fission'],
     phrase: 'Dans un échantillon de masse m : N = m·NA/M noyaux et E = N·Elib. À masse égale, la fusion libère plus d’énergie que la fission.' },
 ];
 const ANNEAUX = { non_acquis: ['rouge', 'à reprendre'], partiel: ['orange', 'à revoir'] };
@@ -107,7 +107,14 @@ function branche(c, n) {
   const x = n.x - n.w / 2, y = n.y - n.h / 2;
   c.rect(x, y, n.w, n.h, { couleur: n.couleur, arrondi: 14, largeur: 2.4 });
   c.texte(n.titre, n.x, y + 20 * G, { couleur: n.couleur, taille: 16 * G, align: 'center', max: n.w - 16, duree: .8 });
-  n.lignes.forEach((l, k) => c.texte(l, n.x, y + (38 + k * 16) * G, { couleur: 'blanc', taille: 13 * G, align: 'center', max: n.w - 14, alpha: .92, duree: 1 }));
+  // une ligne à fraction (« ⟦num|dén⟧ », deux étages comme dans le cahier) prend plus de place au-dessus et au-dessous
+  let yl = y + 38 * G;
+  n.lignes.forEach(l => {
+    const etages = l.includes('⟦');
+    if (etages) yl += 6 * G;
+    c.texte(l, n.x, yl, { couleur: 'blanc', taille: 13 * G, align: 'center', max: n.w - 14, alpha: .92, duree: 1 });
+    yl += (etages ? 22 : 16) * G;
+  });
   c.repere(n.id, x - 6, y - 6, n.w + 12, n.h + 12, lisible(n.titre));
   etat(c, n.comps, x, y, n.w, n.h);
   if (S.choisi === n.id) c.direct(() => c.rect(x - 3, y - 3, n.w + 6, n.h + 6, { couleur: 'blanc', arrondi: 15, largeur: 1.2, alpha: .6 }));
@@ -139,7 +146,7 @@ const scene = window.OndesTableau.Scene(canvas, (c) => { cadreLarge(91); dessine
 const craie = scene.craie;
 const maintenant = () => (performance.now() - scene.ouvert) / 1000;
 /* Texte lisible (bulle, ce_qui_se_voit) : jamais de « _ » ni d'accolade visible. */
-const lisible = s => String(s).replace(/_\{([^}]+)\}/g, '$1').replace(/_([A-Za-z0-9]+)/g, '$1');
+const lisible = s => window.Tableau.lisible(String(s)).replace(/_\{([^}]+)\}/g, '$1').replace(/_([A-Za-z0-9]+)/g, '$1');
 let horloge = 0;
 scene.avancer = dt => {
   if (!S.running) return false;

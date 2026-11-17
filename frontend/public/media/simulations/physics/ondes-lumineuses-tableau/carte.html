@@ -35,23 +35,23 @@ const NOEUDS = [
     lignes: ['fente, fil : la lumière s’étale', 'perpendiculairement à la fente'],
     phrase: 'La diffraction de la lumière par une fente fine ou un fil met en évidence l’aspect ondulatoire de la lumière ; la figure s’étale perpendiculairement à la fente.' },
   { id: 'ecart', x: 380, y: 60, w: 212, h: 64, couleur: 'cyan', comps: ['C2'], titre: 'Écart angulaire θ',
-    lignes: ['θ = λ / a', 'du centre à la première extinction'],
-    phrase: 'L’écart angulaire θ = λ / a (θ en rad, λ et a en m) se mesure du centre de la tache centrale à la première extinction.' },
+    lignes: ['θ = ⟦λ|a⟧', 'du centre à la première extinction'],
+    phrase: 'L’écart angulaire θ = λ/a (θ en rad, λ et a en m) se mesure du centre de la tache centrale à la première extinction.' },
   { id: 'largeur', x: 626, y: 76, w: 228, h: 80, couleur: 'jaune', comps: ['C3', 'C4'], titre: 'Largeur L de la tache',
-    lignes: ['L = 2λD / a', 'deux expériences : λ_2 / λ_1 = L_2 / L_1', 'liquide : n = L / L′'],
-    phrase: 'tan θ = L / (2D) et θ petit donc L = 2λD / a. Deux expériences : λ₂ / λ₁ = L₂ / L₁. Dans un liquide : n = L / L′.' },
+    lignes: ['L = ⟦2λD|a⟧', 'deux expériences : ⟦λ_2|λ_1⟧ = ⟦L_2|L_1⟧', 'liquide : n = ⟦L|L′⟧'],
+    phrase: 'tan θ = L/(2D) et θ petit donc L = 2λD/a. Deux expériences : λ₂/λ₁ = L₂/L₁. Dans un liquide : n = L/L′.' },
   { id: 'courbes', x: 640, y: 212, w: 222, h: 64, couleur: 'jaune', comps: ['C5'], titre: 'Courbes',
-    lignes: ['droite par l’origine : pente k', 'k = 2λD · k = λ · k = 2λ / a'],
-    phrase: 'Une droite passant par l’origine : y = k · x. L = f(1/a) donne k = 2λD ; θ = f(1/a) donne k = λ ; L = f(D) donne k = 2λ / a.' },
+    lignes: ['droite par l’origine : pente k', 'k = 2λD · k = λ · k = ⟦2λ|a⟧'],
+    phrase: 'Une droite passant par l’origine : y = k · x. L = f(1/a) donne k = 2λD ; θ = f(1/a) donne k = λ ; L = f(D) donne k = 2λ/a.' },
   { id: 'radiation', x: 626, y: 350, w: 228, h: 64, couleur: 'orange', comps: ['C6'], titre: 'Radiation',
-    lignes: ['monochromatique : une fréquence ν', 'λ_0 = c / ν · c = 3,00·10⁸ m/s'],
-    phrase: 'Une lumière monochromatique est constituée d’une seule radiation, caractérisée par sa fréquence ν ; λ₀ = c / ν avec c = 3,00·10⁸ m/s.' },
+    lignes: ['monochromatique : une fréquence ν', 'λ_0 = ⟦c|ν⟧ · c = 3,00·10⁸ m/s'],
+    phrase: 'Une lumière monochromatique est constituée d’une seule radiation, caractérisée par sa fréquence ν ; λ₀ = c/ν avec c = 3,00·10⁸ m/s.' },
   { id: 'spectre', x: 380, y: 362, w: 212, h: 64, couleur: 'orange', comps: ['C6'], titre: 'Spectre visible',
     lignes: ['400 nm – 800 nm', 'UV avant 400 nm · IR après 800 nm'],
     phrase: 'Le visible va de 400 nm (violet) à 800 nm (rouge) ; en dessous l’ultraviolet, au-dessus l’infrarouge : on ne les voit pas.' },
   { id: 'milieu', x: 136, y: 350, w: 224, h: 64, couleur: 'vert', comps: ['C7'], titre: 'Milieu d’indice n',
-    lignes: ['n = c / v · λ = λ_0 / n', 'ν la même'],
-    phrase: 'Dans un milieu transparent d’indice n : n = c / v et λ = λ₀ / n ; la fréquence ν ne change pas.' },
+    lignes: ['n = ⟦c|v⟧ · λ = ⟦λ_0|n⟧', 'ν la même'],
+    phrase: 'Dans un milieu transparent d’indice n : n = c/v et λ = λ₀/n ; la fréquence ν ne change pas.' },
   { id: 'dispersion', x: 122, y: 212, w: 204, h: 64, couleur: 'violet', comps: ['C8'], titre: 'Dispersion',
     lignes: ['n dépend de la fréquence', 'prisme : le violet le plus dévié'],
     phrase: 'Un milieu est dispersif si la célérité de la lumière dépend de sa fréquence : le prisme sépare la lumière blanche, le violet est le plus dévié.' },
@@ -61,6 +61,17 @@ const NOEUDS = [
 [CENTRE, ...NOEUDS].forEach(n => { n.base = { x: n.x, y: n.y, w: n.w, h: n.h }; });
 let K = 1;
 const LH = () => Math.max(16 * K, 15 / Math.max(.1, scene.s || 1) * 1.08);   // interligne des lignes d'une branche
+/* Une ligne qui porte une fraction « ⟦num|dén⟧ » (deux étages, comme dans le cahier) prend plus de hauteur : ce
+ * qu'elle monte et descend de plus qu'une ligne simple, avec les étages à la taille réellement écrite. */
+function enPlus(l) {
+  if (!l.includes('⟦')) return [0, 0];
+  const c = scene.craie, t = 13 * K, T = c.echelle && c.tailleMin ? Math.max(t, c.tailleMin / c.echelle) : t;
+  const e = c._tailleEtage ? c._tailleEtage(T) : .78 * T;
+  return [.32 * T + 1.05 * e + (/⟦[^|]*_/.test(l) ? .2 * e : 0) - .75 * T + 2, 1.17 * e - .32 * T - .25 * T + 2];
+}
+/* décalage de la ligne k sous la première, et hauteur totale des lignes */
+const decalage = (lignes, k) => lignes.slice(0, k).reduce((h, l) => h + LH() + enPlus(l)[0] + enPlus(l)[1], 0) + (lignes[k] ? enPlus(lignes[k])[0] : 0);
+const hautLignes = lignes => lignes.reduce((h, l) => h + LH() + enPlus(l)[0] + enPlus(l)[1], 0);
 function disposer(L) {
   const kx = (L - 40) / 720;
   K = L >= 1000 ? 1.3 : 1;
@@ -69,7 +80,7 @@ function disposer(L) {
     const b = n.base;
     n.x = L / 2 + (b.x - 380) * kx; n.w = b.w * kw; n.h = b.h * K;
     // petit canvas : le texte ne descend pas sous 15 px à l'écran, les lignes s'espacent et le cadre grandit d'autant
-    if (n.lignes) n.h = Math.max(n.h, (38 * K + n.lignes.length * LH()) - 4);
+    if (n.lignes) n.h = Math.max(n.h, (38 * K + hautLignes(n.lignes)) - 4);
     n.y = 212 + (b.y - 212) * (L >= 1000 ? .97 : 1);
   });
   // en haut et en bas, rien ne sort du cadre
@@ -112,7 +123,7 @@ function branche(c, n) {
   const x = n.x - n.w / 2, y = n.y - n.h / 2;
   c.rect(x, y, n.w, n.h, { couleur: n.couleur, arrondi: 14, largeur: 2.4 });
   c.texte(n.titre, n.x, y + 20 * K, { couleur: n.couleur, taille: 16 * K, align: 'center', max: n.w - 16, duree: .8 });
-  n.lignes.forEach((l, k) => c.texte(l, n.x, y + 38 * K + k * LH(), { couleur: 'blanc', taille: 13 * K, align: 'center', max: n.w - 14, alpha: .92, duree: 1 }));
+  n.lignes.forEach((l, k) => c.texte(l, n.x, y + 38 * K + decalage(n.lignes, k), { couleur: 'blanc', taille: 13 * K, align: 'center', max: n.w - 14, alpha: .92, duree: 1 }));
   c.repere(n.id, x - 6, y - 6, n.w + 12, n.h + 12, n.titre);
   etat(c, n.comps, x, y, n.w, n.h);
   if (S.choisi === n.id) c.direct(() => c.rect(x - 3, y - 3, n.w + 6, n.h + 6, { couleur: 'blanc', arrondi: 15, largeur: 1.2, alpha: .6 }));
@@ -143,7 +154,7 @@ function dessiner(c) {
 const canvas = $('canvas');
 const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(71); dessiner(c); return c.fin(); }, { large: true });
 const maintenant = () => (performance.now() - scene.ouvert) / 1000;
-const lisible = s => String(s).replace(/_([0-3])/g, (m, d) => '₀₁₂₃'[d]);
+const lisible = s => window.Tableau.lisible(String(s)).replace(/_([0-3])/g, (m, d) => '₀₁₂₃'[d]);
 let horloge = 0;
 scene.avancer = dt => {
   if (!S.running) return false;

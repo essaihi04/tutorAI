@@ -45,9 +45,17 @@ function disposer(L, c) {
 const T_ = t => Math.max(Math.round(t * (GEO.k > 1 ? 1.25 : 1)), GEO.min);
 /* Interligne d'une ligne de texte de taille t (d'origine) : l'interligne d'origine, ou plus si le texte a grossi. */
 const IL = (pas, t) => Math.max(pas * GEO.ky, T_(t) * 1.22);
+/* Lignes de base des lignes d'une branche (depuis le haut du cadre) : une ligne à fraction (« ⟦num|dén⟧ », écrite sur
+ * deux étages comme dans le cahier) prend de la place au-dessus (numérateur) et au-dessous (dénominateur). */
+const FR_HAUT = 7, FR_BAS = 6;
+function bases(n) {
+  let y = IL(20, 16) + 4; const out = [];
+  for (const l of n.lignes) { const fr = l.includes('⟦'); y += IL(17, 13) + (fr ? FR_HAUT * GEO.ky : 0); out.push(y); if (fr) y += FR_BAS * GEO.ky; }
+  return { out, fin: y };
+}
 const P_ = n => {
   const nl = n.lignes ? n.lignes.length : 3, titre = n.lignes ? IL(20, 16) : 2 * IL(23, 20);
-  const h = Math.max(n.h * GEO.ky, titre + 6 + nl * IL(n.lignes ? 17 : 16, 13) + 8);
+  const h = Math.max(n.h * GEO.ky, n.lignes ? bases(n).fin + 10 : titre + 6 + nl * IL(16, 13) + 8);
   return { ...n, x: GEO.L / 2 + (n.x - 380) * GEO.fx, y: n.y, w: n.w * GEO.k, h };
 };
 const NOEUDS = [
@@ -64,16 +72,16 @@ const NOEUDS = [
     lignes: ['x α et y β⁻ : un système', 'A d’abord (y), puis Z (x)'],
     phrase: '[238,92]U → [206,82]Pb : on écrit la conservation de A (y d’abord), puis celle de Z : 8 α et 6 β⁻.' },
   { id: 'loi', x: 624, y: 356, w: 232, h: 66, couleur: 'orange', comps: ['C6'], titre: 'Loi de décroissance',
-    lignes: ['N(t) = N_0·e^{−λt}', 'τ = 1/λ (tangente à l’origine)'],
+    lignes: ['N(t) = N_0·e^{−λt}', 'τ = ⟦1|λ⟧ (tangente à l’origine)'],
     phrase: 'N(t) = N_0·e^{−λt} : les noyaux restants ; λ en s⁻¹ ; τ = 1/λ, lu avec la tangente à l’origine.' },
   { id: 'demi_vie', x: 380, y: 366, w: 214, h: 66, couleur: 'orange', comps: ['C7'], titre: 'Demi-vie t½',
-    lignes: ['t½ = ln2/λ', 'N(n·t½) = N_0/2^{n}'],
+    lignes: ['t½ = ⟦ln2|λ⟧', 'N(n·t½) = ⟦N_0|2^{n}⟧'],
     phrase: 'La demi-vie t½ est la durée au bout de laquelle la moitié des noyaux initialement présents se sont désintégrés : t½ = ln2/λ.' },
   { id: 'activite', x: 136, y: 356, w: 228, h: 66, couleur: 'vert', comps: ['C8'], titre: 'Activité a',
-    lignes: ['a = λ·N, en Bq', 'N = (m/M)·N_A'],
+    lignes: ['a = λ·N, en Bq', 'N = ⟦m|M⟧·N_A'],
     phrase: 'L’activité a est le nombre de désintégrations par seconde, en becquerel (Bq) : a = λ·N, a(t) = a_0·e^{−λt} ; N = (m/M)·N_A.' },
   { id: 'datation', x: 124, y: 212, w: 212, h: 66, couleur: 'violet', comps: ['C9'], titre: 'Datation',
-    lignes: ['t = (1/λ)·ln(a_0/a)', 'carbone 14 : t½ = 5730 ans'],
+    lignes: ['t = ⟦1|λ⟧·ln(⟦a_0|a⟧)', 'carbone 14 : t½ = 5730 ans'],
     phrase: 'Dater : t = (1/λ)·ln(a_0/a), avec a_0 l’activité d’un échantillon vivant (récent) de même masse ; carbone 14 : t½ = 5730 ans.' },
 ];
 const ANNEAUX = { non_acquis: ['rouge', 'à reprendre'], partiel: ['orange', 'à revoir'] };
@@ -93,6 +101,7 @@ function morceaux(s) {
 }
 const EXP = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
 function largeurTexte(c, t, taille) {
+  if (String(t).includes('⟦')) return c.largeurTexte(t, taille);   // une fraction « ⟦num|dén⟧ » : mesurée par le kit
   t = String(t).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => EXP[ch]).join('') + '}');
   return window.Tableau.Craie.segments(t).reduce((w, g) => w + c.largeurTexte(g.t, g.sub || g.sup ? taille * .62 : taille), 0);
 }
@@ -117,7 +126,7 @@ const BAS_U = { 0: '₀', 1: '₁', 2: '₂', 3: '₃', 4: '₄', 5: '₅', 6: '
 const enHaut = s => [...s].every(ch => ch in HAUT_U) ? [...s].map(ch => HAUT_U[ch]).join('') : '^(' + s + ')';
 const enBas = s => [...s].every(ch => ch in BAS_U) ? [...s].map(ch => BAS_U[ch]).join('') : '_' + s;
 /* Texte pour la bulle, l'explication et ce_qui_se_voit (HTML) : jamais de « _ » ni de « [A,Z] » visibles. */
-const lisible = s => String(s)
+const lisible = s => window.Tableau.lisible(s)
   .replace(RE_NOYAU, (m, A, Z, X) => (A === 'A' ? `${X} (A nucléons, Z protons)` : enHaut(A) + enBas(Z) + X))
   .replace(/\^\{([^}]+)\}/g, (m, e) => enHaut(e))
   .replace(/([A-Za-zλ])_([0-9A])/g, (m, l, d) => l + BAS_U[d]);
@@ -153,7 +162,8 @@ function branche(c, n0) {
   const x = n.x - n.w / 2, y = n.y - n.h / 2;
   c.rect(x, y, n.w, n.h, { couleur: n.couleur, arrondi: 14, largeur: 2.4 });
   c.texte(n.titre, n.x, y + IL(20, 16), { couleur: n.couleur, taille: T_(16), align: 'center', max: n.w - 16, duree: .8 });
-  n.lignes.forEach((l, k) => ecrire(c, l, n.x, y + IL(20, 16) + 4 + (k + 1) * IL(17, 13), { couleur: 'blanc', taille: T_(13), align: 'center', max: n.w - 14, alpha: .92, duree: 1 }));
+  const yb = bases(n).out;
+  n.lignes.forEach((l, k) => ecrire(c, l, n.x, y + yb[k], { couleur: 'blanc', taille: T_(13), align: 'center', max: n.w - 14, alpha: .92, duree: 1 }));
   c.repere(n.id, x - 6, y - 6, n.w + 12, n.h + 12, n.titre);
   etat(c, n.comps, x, y, n.w, n.h);
   if (S.choisi === n.id) c.direct(() => c.rect(x - 3, y - 3, n.w + 6, n.h + 6, { couleur: 'blanc', arrondi: 15, largeur: 1.2, alpha: .6 }));

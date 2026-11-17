@@ -3,7 +3,7 @@
 <link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ondes.css"></head>
 <body>
 <div class="tableau">
-  <section class="scene"><canvas id="canvas" role="img" aria-label="Une corde parcourue par une onde sinusoïdale, deux points M et P séparés de d ; on compte les longueurs d'onde entre eux et on calcule d / λ"></canvas></section>
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Une corde parcourue par une onde sinusoïdale, deux points M et P séparés de d ; on compte les longueurs d'onde entre eux et on calcule d/λ"></canvas></section>
   <footer class="barre">
     <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Mesurer</button>
     <span id="reglage" data-professor-control="set_parameters"></span>
@@ -95,8 +95,8 @@ function dessiner(c) {
         c.ligne(x, 262, x, 282, { couleur: 'cyan', largeur: 1.8 });
         c.texte(`${k} λ`, x, 300, { couleur: 'cyan', taille: 15, align: 'center' });
       }
-      c.texte(`d / λ = ${nb(P.d_cm)} / 4 = ${nb(rapport())}`, H(120), 346, { couleur: 'blanc', taille: 19 });
-      c.repere('calcul', H(112), 322, H(360), 32, 'le calcul de d / λ');
+      c.texte(`⟦d|λ⟧ = ⟦${nb(P.d_cm)}|4⟧ = ${nb(rapport())}`, H(120), 346, { couleur: 'blanc', taille: 19 });
+      c.repere('calcul', H(112), 318, H(360), 46, 'le calcul de d/λ');
     }
     if (vu('verdict')) {
       const v = verdict();
@@ -124,7 +124,7 @@ scene.avancer = dt => {
   } else if (performance.now() - S.emis > 400) { S.emis = performance.now(); pont.emettre(); }
   return true;
 };
-const MOTIFS = { lambda: 'λ = 4 cm posée sur la corde', distance: 'la distance d entre M et P', calcul: 'on compte les λ entre M et P : d / λ', verdict: 'la conclusion est écrite' };
+const MOTIFS = { lambda: 'λ = 4 cm posée sur la corde', distance: 'la distance d entre M et P', calcul: 'on compte les λ entre M et P : d/λ', verdict: 'la conclusion est écrite' };
 function playUntil(p) {
   const nom = p.moment in T ? p.moment : null, cible = nom ? T[nom] : +p.progress * TFIN;
   if (!Number.isFinite(cible)) return;
@@ -146,20 +146,20 @@ function ceQuiSeVoit() {
   m.push(`En ce moment, M ${sm ? 'monte' : 'descend'} et P ${sp ? 'monte' : 'descend'}.`);
   if (vu('lambda')) m.push('λ = 4 cm est posée au-dessus de la corde.');
   if (vu('distance')) m.push(`d = ${fr(P.d_cm, 1)} cm est écrite sous la corde.`);
-  if (vu('calcul')) m.push(`Les λ sont comptées de M vers P ; écrit : d / λ = ${fr(rapport(), 2)}.`);
+  if (vu('calcul')) m.push(`Les λ sont comptées de M vers P ; écrit : d/λ = ${fr(rapport(), 2)}.`);
   if (vu('verdict')) { const v = verdict(); m.push(`Écrit : « ${v.detail} → M et P vibrent ${v.mot} ».`); }
   return m.join(' ');
 }
 function start() { S.jusqua = null; S.t = 0; S.running = true; S.pause = false; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Regarde M et P : montent-ils ensemble ?'); pont.noter('start'); pont.emettre(); }
 function pause() { if (!(S.running || S.fait)) return; S.jusqua = null; S.running = false; S.pause = true; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause'); pont.emettre(); }
 function resume() { if (S.running || !S.pause) return start(); S.pause = false; if (S.t < TFIN) S.running = true; $('run').textContent = S.running ? 'Pause' : 'Mesurer'; pont.noter('resume'); pont.emettre(); }
-function reset() { S.t = 0; S.running = false; S.pause = false; S.fait = false; S.jusqua = null; scene.sale = true; $('run').textContent = 'Mesurer'; bulle($('feedback'), 'Mesure d et λ, puis calcule d / λ.'); pont.emettre(); }
+function reset() { S.t = 0; S.running = false; S.pause = false; S.fait = false; S.jusqua = null; scene.sale = true; $('run').textContent = 'Mesurer'; bulle($('feedback'), 'Mesure d et λ, puis calcule d/λ.'); pont.emettre(); }
 function setParameters(p) {
   if (!Number.isFinite(+p.d_cm)) return;
   P.d_cm = Math.min(14, Math.max(1, Math.round(+p.d_cm * 5) / 5)); regl.maj(P.d_cm); scene.sale = true;
   if (!(S.running || S.pause || S.fait)) start();
   const v = verdict();
-  bulle($('feedback'), `d = ${nb(P.d_cm)} cm : d / λ = ${nb(rapport())} → ${v.mot}.`, v.couleur === 'rouge' ? '' : 'good');
+  bulle($('feedback'), `d = ${nb(P.d_cm)} cm : d/λ = ${nb(rapport())} → ${v.mot}.`, v.couleur === 'rouge' ? '' : 'good');
   pont.noter('set_parameters', { d_cm: P.d_cm }); pont.emettre();
 }
 const regl = window.Tableau.curseur({ id: 'd', label: 'd =', min: 1, max: 14, step: 0.2, valeur: 10, unite: 'cm', commande: 'set_parameters', decimales: 1, onchange: x => setParameters({ d_cm: x }) });
@@ -172,14 +172,14 @@ window.Tableau.explication({ methode: [
   { repere: 'verdict', texte: 'Un entier : en phase. Un entier et demi : opposition de phase. Sinon, ni l’un ni l’autre.' },
 ] });
 const commandes = ['start', 'pause', 'resume', 'reset', 'set_parameters', 'play_until'];
-const config = { id: 'ondes_periodiques_methode_phase', version: '1.0', title: 'La méthode d / λ', variants: [{ id: 'methode', label: 'méthode' }], commands: commandes,
+const config = { id: 'ondes_periodiques_methode_phase', version: '1.0', title: 'La méthode d/λ', variants: [{ id: 'methode', label: 'méthode' }], commands: commandes,
   command_schema: { set_parameters: { d_cm: '1..14 (pas de 0,2), distance entre M et P en cm ; λ = 4 cm' }, play_until: { moment: Object.keys(MOTIFS).join(' | ') + ' (se fige à cet instant clé)' } } };
 const pont = protocole({ id: config.id, commandes, config,
-  texte: 'Corde, λ = 4 cm ; M fixe, P à la distance d (curseur). On pose λ, puis d, on compte les λ, on écrit d / λ. d = 10 cm : 2,5 → opposition de phase ; d = 12 cm : 3 → en phase ; d = 9,2 cm : 2,3 → ni l’un ni l’autre.',
+  texte: 'Corde, λ = 4 cm ; M fixe, P à la distance d (curseur). On pose λ, puis d, on compte les λ, on écrit d/λ. d = 10 cm : 2,5 → opposition de phase ; d = 12 cm : 3 → en phase ; d = 9,2 cm : 2,3 → ni l’un ni l’autre.',
   etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : (S.fait ? 'finished' : 'idle'), ce_qui_se_voit: ceQuiSeVoit(), moments: { ...T }, parameters: { ...P }, d_sur_lambda: +rapport().toFixed(3), conclusion: verdict().mot, time_s: +S.t.toFixed(2) }),
   progression: () => (S.fait ? 1 : clamp(S.t / TFIN)),
   executer: (cmd, p) => ({ start, pause, resume, reset, set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
-bulle($('feedback'), 'Mesure d et λ, puis calcule d / λ.');
+bulle($('feedback'), 'Mesure d et λ, puis calcule d/λ.');
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>
 </body></html>

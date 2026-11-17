@@ -35,7 +35,9 @@ const VUES = { L: ['courbe', 'L_double', 'fin'], R: ['courbe', 'R_double', 'comp
  * (set_parameters, ou ?conclusions=0) tait ce que l’élève doit trouver lui-même : les phrases écrites des étapes de CACHE
  * et le motif de leur arrêt sur image. `conclusions: true` les rend. Par défaut : true (comportement inchangé). */
 const lireConclusions = p => (!p || p.conclusions === undefined || p.conclusions === null || p.conclusions === '' ? null : !(p.conclusions === false || p.conclusions === 0 || /^(false|0|non)$/i.test(String(p.conclusions))));
-const tais = () => (S.conclusions === false ? { alpha: 0 } : {});   // vue R : I₀’ et τ’ calculés ne s’écrivent qu’après la réponse
+const tais = () => (S.conclusions === false ? { alpha: 0 } : {});
+// caché (alpha 0) : écrit en une ligne, sinon le trait de la fraction (que le kit trace sans alpha) se verrait
+const cache = s => (S.conclusions === false ? window.Tableau.lisible(s) : s);   // vue R : I₀’ et τ’ calculés ne s’écrivent qu’après la réponse
 const TITRES = { L: 'influence de L', R: 'influence de R' };
 const q = new URLSearchParams(location.search);
 const S = { vue: VUES[q.get('vue')] ? q.get('vue') : 'L', L2: .24, R2: 110, t: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0, dit: '', fige: null, poignee: false };
@@ -145,18 +147,18 @@ function vueL(c) {
   marquerTau(c, REF, 'τ');
   c.ligne(LX, ly(95), LX + 26, ly(95), { couleur: 'vert', largeur: 2.6, duree: .1 });
   leg(c, 100, 'L = 0,12 H');
-  lire(c, 124, 'τ = L/(R + r) = 2 ms', { taille: 15 });
+  lire(c, 124, 'τ = ⟦L|R + r⟧ = 2 ms', { taille: 15 });
   marque(c, 'courbe');
   c.pause(.5);
   courbeDe(c, d, POINTILLE);
   marquerTau(c, d, 'τ’', Math.abs(PX(T2) - PX(T1)) < 34 ? 58 : 40);
   c.ligne(LX, ly(157), LX + 26, ly(157), { couleur: 'vert', largeur: 2.6, duree: .1, ...POINTILLE });
   leg(c, 162, `L’ = ${fH(d.L)}`);
-  lire(c, 186, `τ’ = L’/(R + r) = ${fx(d.L, 2)}/60`, { taille: 15 });
-  lire(c, 208, `τ’ = ${fms(T2)}`, { taille: 15 });
+  lire(c, 186, `τ’ = ⟦L’|R + r⟧ = ⟦${fx(d.L, 2)}|60⟧`, { taille: 15 });
+  lire(c, 211, `τ’ = ${fms(T2)}`, { taille: 15 });
   lire(c, 244, `L ${facteur(d.L / L1)} → τ ${facteur(T2 / T1)}`, { couleur: 'cyan', taille: 17 });
   lire(c, 272, `même palier : I_0 = 100 mA`, { couleur: 'cyan', taille: 15 });
-  lire(c, 294, 'I_0 = E/(R + r) ne dépend pas de L', { couleur: 'blanc', taille: 14 });
+  lire(c, 296, 'I_0 = ⟦E|R + r⟧ ne dépend pas de L', { couleur: 'blanc', taille: 14 });
   lire(c, 330, T2 > T1 ? 'le courant s’établit' : T2 < T1 ? 'le courant s’établit' : 'même courbe', { couleur: 'blanc', taille: 16 });
   if (T2 !== T1) lire(c, 352, T2 > T1 ? 'plus lentement' : 'plus vite', { couleur: 'blanc', taille: 16 });
   marque(c, 'L_double');
@@ -166,14 +168,14 @@ function vueR(c) {
   courbeDe(c, REF);
   c.ligne(LX, ly(95), LX + 26, ly(95), { couleur: 'vert', largeur: 2.6, duree: .1 });
   leg(c, 100, 'R = 50 Ω : R + r = 60 Ω');
-  lire(c, 124, 'I_0 = 6/60 = 100 mA ; τ = 2 ms', { taille: 15 });
+  lire(c, 124, 'I_0 = ⟦6|60⟧ = 100 mA ; τ = 2 ms', { taille: 15 });
   marque(c, 'courbe');
   c.pause(.5);
   courbeDe(c, d, POINTILLE);
   c.ligne(LX, ly(157), LX + 26, ly(157), { couleur: 'vert', largeur: 2.6, duree: .1, ...POINTILLE });
   leg(c, 162, `R’ = ${fx(d.R, 0)} Ω : R’ + r = ${fx(d.R + r, 0)} Ω`);
-  lire(c, 186, `I_0’ = 6/${fx(d.R + r, 0)} = ${fmA(I2)}`, { taille: 15, ...tais() });
-  lire(c, 208, `τ’ = 0,12/${fx(d.R + r, 0)} = ${fms(T2)}`, { taille: 15, ...tais() });
+  lire(c, 184, cache(`I_0’ = ⟦6|${fx(d.R + r, 0)}⟧ = ${fmA(I2)}`), { taille: 15, ...tais() });
+  lire(c, 214, cache(`τ’ = ⟦0,12|${fx(d.R + r, 0)}⟧ = ${fms(T2)}`), { taille: 15, ...tais() });
   marque(c, 'R_double');
   c.pause(.5);
   palier(c, REF, 'I_0');
@@ -182,8 +184,8 @@ function vueR(c) {
   marquerTau(c, d, 'τ’', Math.abs(PX(T2) - PX(T1)) < 34 ? 58 : 40);
   lire(c, 246, `R + r ${facteur((d.R + r) / (R1 + r))} :`, { couleur: 'cyan', taille: 17 });
   lire(c, 272, `palier ${facteur(I2 / I1)}, τ ${facteur(T2 / T1)}`, { couleur: 'cyan', taille: 16 });
-  lire(c, 304, 'I_0 = E/(R + r)', { taille: 16 });
-  lire(c, 328, 'τ = L/(R + r)', { taille: 16 });
+  lire(c, 300, 'I_0 = ⟦E|R + r⟧', { taille: 16 });
+  lire(c, 333, 'τ = ⟦L|R + r⟧', { taille: 16 });
   lire(c, 362, 'les deux changent avec R', { couleur: 'blanc', taille: 15 });
   marque(c, 'comparer');
 }

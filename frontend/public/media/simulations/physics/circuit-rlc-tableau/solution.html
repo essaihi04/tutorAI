@@ -55,6 +55,8 @@ function fPhi(phi, signe = false) {
   const pgcd = (a, b) => (b ? pgcd(b, a % b) : a), g = pgcd(k, 12), n = k / g, d = 12 / g;
   return `${s}${n === 1 ? '' : n}π${d === 1 ? '' : '/' + d}`;
 }
+/** Le même angle écrit à la craie : « ⟦π|3⟧ » (fraction sur deux étages, comme dans le cahier). */
+const fPhiC = (phi, signe = false) => fPhi(phi, signe).replace(/^([−+]?)(\d*π)\/(\d+)$/, '$1⟦$2|$3⟧');
 const fV = v => fx(v, 2);
 
 /* ── Géométrie (cadre 760 × 420) ───────────────────────────────────────── */
@@ -97,6 +99,13 @@ const PI_ = i => GI.y0 - i * GI.k;
 const marque = (c, nom) => { MM[nom] = c.cur; };
 const lire = (c, y, s, o = {}) => { const [x, yy, mx] = ouLire(y); return c.texte(s, x, yy, { couleur: 'blanc', max: mx, duree: Math.max(.3, s.length / 28), ...o, taille: (o.taille ?? 15) * KT, ...(o.max ? { max: Math.min(mx, o.max * KT) } : {}) }); };
 const RAPIDE = { duree: .05 };
+/* Fractions sur deux étages (17 novembre 2026, « comme dans le cahier ») : sur le petit tableau, la colonne de lecture est
+ * pleine ; ses lignes sont reposées (hauteur d'origine → nouvelle) et les lignes à fractions écrites un peu plus petit.
+ * Le grand tableau (deux colonnes, lignes déjà écartées) garde les hauteurs d'origine. */
+const YC = { cos: { 112: 110, 134: 130, 158: 150, 182: 174, 204: 194, 230: 218, 254: 247, 276: 274, 300: 303, 322: 327, 344: 353, 372: 382, 394: 400, 412: 415 },
+  phase: { 236: 241, 292: 294, 318: 327, 344: 350, 370: 374 } };
+const yl = y => (LARGE ? y : (YC[S.vue][y] ?? y));
+const tl = (grand, petit) => (LARGE ? grand : petit);
 
 /** Courbe tracée au ralenti, uniformément dans le temps (morceaux de 0,5 ms) ; S.plume = instant en cours de tracé. */
 function courbeT(c, f, D, o = {}) {
@@ -143,7 +152,7 @@ function axes(c) {
 function vueCos(c) {
   const Um = S.Um, u = uDe(Um, 0), i = iDe(Um, 0), Im = C * W * 1000 * Um * 1000;
   courbeT(c, pointU(u), TMAX * RALENTI);
-  lire(c, 88, 'u_C(t) = U_m·cos(2πt/T_0 + φ)', { couleur: 'rouge', taille: 17 });
+  lire(c, 88, 'u_C(t) = U_m·cos(⟦2πt|T_0⟧ + φ)', { couleur: 'rouge', taille: 17 });
   marque(c, 'courbe');
   c.pause(.4);
   // U_m : traits sur un sommet et un creux ; l’écart sommet–creux vaut 2·U_m
@@ -153,8 +162,8 @@ function vueCos(c) {
   const xe = PX(T0 * 1.5);
   c.cote(xe, PU(Um), xe, PU(-Um), '', { couleur: 'blanc', largeur: 1.5 });
   c.texte(`${fV(2 * Um)} V = 2·U_m`, xe, PU(-Um) + 18, { couleur: 'blanc', taille: 14, align: 'center' });
-  lire(c, 112, `U_m = ${fV(Um)} V : l’amplitude`, { couleur: 'blanc', taille: 16 });
-  lire(c, 134, `sommet − creux = ${fV(2 * Um)} V = 2·U_m (pas U_m)`, { couleur: 'blanc', taille: 14 });
+  lire(c, yl(112), `U_m = ${fV(Um)} V : l’amplitude`, { couleur: 'blanc', taille: 16 });
+  lire(c, yl(134), `sommet − creux = ${fV(2 * Um)} V = 2·U_m (pas U_m)`, { couleur: 'blanc', taille: 14 });
   marque(c, 'Um');
   c.pause(.4);
   // T₀ entre deux sommets successifs
@@ -162,7 +171,7 @@ function vueCos(c) {
   c.ligne(PX(T0), PU(Um) - 6, PX(T0), yT - 4, { couleur: 'faible', largeur: 1.2, pointille: [3, 4] });
   c.ligne(PX(2 * T0), PU(Um) - 6, PX(2 * T0), yT - 4, { couleur: 'faible', largeur: 1.2, pointille: [3, 4] });
   c.cote(PX(T0), yT, PX(2 * T0), yT, 'T_0 ≈ 4 ms', { couleur: 'jaune', largeur: 1.6, taille: 14 });
-  lire(c, 158, 'T_0 ≈ 4 ms (deux sommets successifs)', { couleur: 'blanc', taille: 15 });
+  lire(c, yl(158), 'T_0 ≈ 4 ms (deux sommets successifs)', { couleur: 'blanc', taille: 15 });
   marque(c, 'T0');
   c.pause(.4);
   // i(t) sous le graphe : i = C·du_C/dt
@@ -177,25 +186,25 @@ function vueCos(c) {
     const x = PX((k + .5) * T0 / 2), neg = k % 2 === 0;
     c.texte(neg ? 'i < 0' : 'i > 0', x, neg ? GI.y0 + 40 * GI.k + 14 : GI.y0 - 40 * GI.k - 4, { couleur: 'vert', taille: 13, align: 'center', duree: .15 });
   }
-  lire(c, 182, 'i = C·du_C/dt (courbe verte)', { couleur: 'vert', taille: 15 });
-  lire(c, 204, 'u_C descend → i < 0 ; u_C monte → i > 0', { couleur: 'vert', taille: 14 });
+  lire(c, yl(182), 'i = C·⟦du_C|dt⟧ (courbe verte)', { couleur: 'vert', taille: tl(15, 14) });
+  lire(c, yl(204), 'u_C descend → i < 0 ; u_C monte → i > 0', { couleur: 'vert', taille: 14 });
   marque(c, 'signe_i');
   c.pause(.4);
-  lire(c, 230, 'du_C/dt = −(2π/T_0)·U_m·sin(2πt/T_0 + φ)', { taille: 15 });
+  lire(c, yl(230), '⟦du_C|dt⟧ = −⟦2π|T_0⟧·U_m·sin(⟦2πt|T_0⟧ + φ)', { taille: tl(15, 14) });
   marque(c, 'derivee_1');
   c.pause(.4);
-  lire(c, 254, 'd²u_C/dt² = −(2π/T_0)²·U_m·cos(2πt/T_0 + φ)', { taille: 15 });
-  lire(c, 276, '= −(2π/T_0)²·u_C', { taille: 16, couleur: 'blanc' });
+  lire(c, yl(254), '⟦d²u_C|dt²⟧ = −(⟦2π|T_0⟧)²·U_m·cos(⟦2πt|T_0⟧ + φ)', { taille: tl(15, 14) });
+  lire(c, yl(276), '= −(⟦2π|T_0⟧)²·u_C', { taille: tl(16, 15), couleur: 'blanc' });
   marque(c, 'derivee_2');
   c.pause(.4);
-  lire(c, 300, 'dans d²u_C/dt² + u_C/(LC) = 0 :', { couleur: 'blanc', taille: 14 });
-  lire(c, 322, '[1/(LC) − (2π/T_0)²]·u_C = 0', { taille: 15 });
-  lire(c, 344, 'pour tout t : (2π/T_0)² = 1/(LC)', { taille: 15 });
-  lire(c, 372, 'T_0 = 2π√(LC)', { taille: 19, gras: true, max: 140 });
-  { const [x, y, mx] = ouLire(372); c.rect(x - 5, y - 20 * KT, 136 * KT, 28 * KT, { couleur: 'jaune', largeur: 1.6, arrondi: 6 });
-    c.texte('ω_0 = 2π/T_0 = 1/√(LC)', LARGE ? x + mx : RL.x + RL.w - 8, y - 1, { couleur: 'blanc', taille: 12 * KT, align: 'right', max: LARGE ? mx - 136 * KT - 14 : 140 }); }
-  lire(c, 394, 'T_0² = 4π²·L·C = 40 × 0,1 × 4·10⁻⁶ = 1,6·10⁻⁵', { taille: 14 });
-  lire(c, 412, 'T_0 = 4·10⁻³ s = 4 ms (π² = 10)', { taille: 14, couleur: 'blanc' });
+  lire(c, yl(300), 'dans ⟦d²u_C|dt²⟧ + ⟦u_C|LC⟧ = 0 :', { couleur: 'blanc', taille: tl(14, 13) });
+  lire(c, yl(322), '[⟦1|LC⟧ − (⟦2π|T_0⟧)²]·u_C = 0', { taille: tl(15, 14) });
+  lire(c, yl(344), 'pour tout t : (⟦2π|T_0⟧)² = ⟦1|LC⟧', { taille: tl(15, 14) });
+  lire(c, yl(372), 'T_0 = 2π√(LC)', { taille: tl(19, 17), gras: true, max: 140 });
+  { const [x, y, mx] = ouLire(yl(372)), k = tl(1, 17 / 19); c.rect(x - 5, y - 20 * KT * k, 136 * KT * k, 28 * KT * k, { couleur: 'jaune', largeur: 1.6, arrondi: 6 });
+    c.texte('ω_0 = ⟦2π|T_0⟧ = ⟦1|√(LC)⟧', LARGE ? x + mx : RL.x + RL.w - 8, y - 1, { couleur: 'blanc', taille: 12 * KT, align: 'right', max: LARGE ? mx - 136 * KT - 14 : 150 }); }
+  lire(c, yl(394), 'T_0² = 4π²·L·C = 40 × 0,1 × 4·10⁻⁶ = 1,6·10⁻⁵', { taille: tl(14, 13) });
+  lire(c, yl(412), 'T_0 = 4·10⁻³ s = 4 ms (π² = 10)', { taille: tl(14, 13), couleur: 'blanc' });
   marque(c, 'identification');
 }
 
@@ -211,7 +220,7 @@ function vuePhase(c) {
   lire(c, 88, `u_C(0) = U_m·cos φ = E = ${fV(E)} V`, { couleur: 'rouge', taille: 15 });
   lire(c, 110, 'i(0) = 0 : tangente horizontale', { couleur: 'vert', taille: 15 });
   lire(c, 132, '→ U_m = E et φ = 0', { taille: 16 });
-  lire(c, 156, 'u_C = E·cos(2πt/T_0)', { couleur: 'rouge', taille: 17 });
+  lire(c, 156, 'u_C = E·cos(⟦2πt|T_0⟧)', { couleur: 'rouge', taille: 17 });
   marque(c, 'depart');
   c.pause(.6); marque(c, 'debut_deux');
   // nouveau départ : u_C(0) = U_m·cos φ, deux angles possibles
@@ -219,18 +228,18 @@ function vuePhase(c) {
   c.cercle(O.x, PU(u0), 6, { couleur: 'jaune', largeur: 1.8 });
   c.texte(`${fV(u0)} V`, O.x - 12, PU(u0) + 5, { couleur: 'rouge', taille: 14, align: 'right' });
   lire(c, 190, `nouveau départ : U_m = ${fV(Um)} V ; u_C(0) = ${fV(u0)} V`, { couleur: 'blanc', taille: 14 });
-  lire(c, 212, `cos φ = ${fV(u0)}/${fV(Um)} = ${fx(cphi, 2)}`, { taille: 16 });
+  lire(c, 212, `cos φ = ⟦${fV(u0)}|${fV(Um)}⟧ = ${fx(cphi, 2)}`, { taille: 16 });
   if (unSeul) {
     courbeT(c, pointU(uDe(Um, phi)), TMAX * RALENTI, { pointille: [7, 5] });
-    lire(c, 236, `une seule valeur : φ = ${fPhi(phi)}`, { taille: 16 });
+    lire(c, yl(236), `une seule valeur : φ = ${fPhiC(phi)}`, { taille: 16 });
   } else {
     courbeT(c, pointU(uDe(Um, pa)), TMAX * RALENTI * .6, { pointille: [7, 5], alpha: .85 });
     courbeT(c, pointU(uDe(Um, -pa)), TMAX * RALENTI * .6, { pointille: [7, 5], alpha: .85 });
     const tq = T0 / 4;                 // à T₀/4 les deux départs sont le plus écartés : l’un en haut, l’autre en bas
     // Sous tous les creux et au-dessus de tous les sommets : plus de texte sur les courbes.
-    c.texte(`φ = ${fPhi(pa, true)}`, PX(tq) + 8, PU(-Um) + 26, { couleur: 'rouge', taille: 14 });
-    c.texte(`φ = ${fPhi(-pa)}`, PX(tq) + 8, PU(Um) - 10, { couleur: 'rouge', taille: 14 });
-    lire(c, 236, `φ = ${fPhi(pa, true)} ou φ = ${fPhi(-pa)}`, { taille: 17 });
+    c.texte(`φ = ${fPhiC(pa, true)}`, PX(tq) + 8, PU(-Um) + 26, { couleur: 'rouge', taille: 14 });
+    c.texte(`φ = ${fPhiC(-pa)}`, PX(tq) + 8, PU(Um) - 14, { couleur: 'rouge', taille: 14 });
+    lire(c, yl(236), `φ = ${fPhiC(pa, true)} ou φ = ${fPhiC(-pa)}`, { taille: 17 });
   }
   marque(c, 'deux_angles');
   c.pause(.5);
@@ -241,15 +250,15 @@ function vuePhase(c) {
     const autre = uDe(Um, -phi), xa = PX(.6 * T0), ya = PU(autre(.6 * T0));
     c.ligne(xa - 10, ya - 10, xa + 10, ya + 10, { couleur: 'jaune', largeur: 2.2 });
     c.ligne(xa - 10, ya + 10, xa + 10, ya - 10, { couleur: 'jaune', largeur: 2.2 });
-    lire(c, 270, `la courbe part de ${fV(u0)} V en ${monte ? 'montant' : 'descendant'} :`, { taille: 15 });
-    lire(c, 292, `du_C/dt(0) = −(2π/T_0)·U_m·sin φ ${monte ? '> 0' : '< 0'}`, { taille: 15 });
-    lire(c, 318, `→ sin φ ${monte ? '< 0' : '> 0'} → φ = ${fPhi(phi, true)} rad`, { taille: 17 });
-    { const [x, y, mx] = ouLire(318); c.rect(x - 5, y - 18 * KT, Math.min(mx + 8, c.largeurTexte(`→ sin φ < 0 → φ = ${fPhi(phi, true)} rad`, 17 * KT) + 14), 26 * KT, { couleur: 'jaune', largeur: 1.5, arrondi: 6 }); }
-    lire(c, 344, 'l’autre courbe est barrée', { couleur: 'blanc', taille: 14 });
-    lire(c, 370, `u_C = ${fV(Um)}·cos(2πt/T_0 ${phi < 0 ? '−' : '+'} ${fPhi(Math.abs(phi))})`, { couleur: 'rouge', taille: 16 });
+    lire(c, yl(270), `la courbe part de ${fV(u0)} V en ${monte ? 'montant' : 'descendant'} :`, { taille: 15 });
+    lire(c, yl(292), `⟦du_C|dt⟧(0) = −⟦2π|T_0⟧·U_m·sin φ ${monte ? '> 0' : '< 0'}`, { taille: 15 });
+    lire(c, yl(318), `→ sin φ ${monte ? '< 0' : '> 0'} → φ = ${fPhiC(phi, true)} rad`, { taille: 17 });
+    { const [x, y, mx] = ouLire(yl(318)), fr = /⟦/.test(fPhiC(phi)); c.rect(x - 5, y - (fr ? 22 : 18) * KT, Math.min(mx + 8, c.largeurTexte(`→ sin φ < 0 → φ = ${fPhiC(phi, true)} rad`, 17 * KT) + 14), (fr ? 32 : 26) * KT, { couleur: 'jaune', largeur: 1.5, arrondi: 6 }); }
+    lire(c, yl(344), 'l’autre courbe est barrée', { couleur: 'blanc', taille: 14 });
+    lire(c, yl(370), `u_C = ${fV(Um)}·cos(⟦2πt|T_0⟧ ${phi < 0 ? '−' : '+'} ${fPhiC(Math.abs(phi))})`, { couleur: 'rouge', taille: 16 });
   } else {
-    lire(c, 270, `u_C(0) = ${fV(u0)} V : tangente horizontale`, { taille: 15 });
-    lire(c, 292, `φ = ${fPhi(phi)} rad`, { taille: 17 });
+    lire(c, yl(270), `u_C(0) = ${fV(u0)} V : tangente horizontale`, { taille: 15 });
+    lire(c, yl(292), `φ = ${fPhiC(phi)} rad`, { taille: 17 });
   }
   marque(c, 'phi_choisi');
 }
@@ -272,16 +281,16 @@ function declarerReperes(c) {
   c.repere('ecart', PX(T0 * 1.5) - 50, PU(Um), 100, 2 * Um * g.k + 26, `l’écart sommet–creux : ${fV(2 * Um)} V = 2·U_m${ici('cos')}`);
   c.repere('T0', PX(T0), PU(Um) - 44, PX(2 * T0) - PX(T0), 34, `T₀ ≈ 4 ms entre deux sommets successifs${ici('cos')}`);
   c.repere('courbe_i', O.x, GI.y0 - 40 * GI.k - 16, AXL, 80 * GI.k + 32, `la courbe verte i(t) = C·du_C/dt${ici('cos')}`);
-  c.repere('signe_i', ...rectLire(168, 44), `u_C descend → i < 0 ; u_C monte → i > 0${ici('cos')}`);
-  c.repere('derivee_1', ...rectLire(216, 22), `du_C/dt = −(2π/T₀)·U_m·sin(2πt/T₀ + φ)${ici('cos')}`);
-  c.repere('derivee_2', ...rectLire(240, 44), `d²u_C/dt² = −(2π/T₀)²·u_C${ici('cos')}`);
-  c.repere('identification', ...rectLire(286, 66), `(2π/T₀)² = 1/(LC)${ici('cos')}`);
-  c.repere('resultat', ...rectLire(352, 64, 6), `T₀ = 2π√(LC) ; A.N. : T₀ = 4·10⁻³ s = 4 ms${ici('cos')}`);
+  c.repere('signe_i', ...(LARGE ? rectLire(168, 44) : rectLire(158, 42)), `u_C descend → i < 0 ; u_C monte → i > 0${ici('cos')}`);
+  c.repere('derivee_1', ...(LARGE ? rectLire(216, 22) : rectLire(200, 30)), `du_C/dt = −(2π/T₀)·U_m·sin(2πt/T₀ + φ)${ici('cos')}`);
+  c.repere('derivee_2', ...(LARGE ? rectLire(240, 44) : rectLire(229, 56)), `d²u_C/dt² = −(2π/T₀)²·u_C${ici('cos')}`);
+  c.repere('identification', ...(LARGE ? rectLire(286, 66) : rectLire(285, 78)), `(2π/T₀)² = 1/(LC)${ici('cos')}`);
+  c.repere('resultat', ...(LARGE ? rectLire(352, 64, 6) : rectLire(362, 58, 6)), `T₀ = 2π√(LC) ; A.N. : T₀ = 4·10⁻³ s = 4 ms${ici('cos')}`);
   const [px, py] = poigneeXY();
   c.repere('point_depart', px - 16, (cos ? PU(Um) : py) - 16, 32, 32, cos ? 'le point de départ : u_C(0) = U_m (sommet)' : `le point de départ : u_C(0) = ${fV(Um * Math.cos(S.phi))} V`);
   c.repere('tangente_depart', O.x - 8, PU(cos ? Um : S.Um) - 14, PX(1.2) - O.x, 24, `la tangente horizontale au départ : i(0) = 0${ici('phase')}`);
-  c.repere('angles', ...rectLire(176, 66), `cos φ = ${fx(Math.cos(S.phi), 2)} : φ = ${fPhi(Math.abs(S.phi), true)} ou ${fPhi(-Math.abs(S.phi))}${ici('phase')}`);
-  c.repere('phi', ...rectLire(256, 122), `le sens du départ choisit φ = ${fPhi(S.phi, true)} rad${ici('phase')}`);
+  c.repere('angles', ...(LARGE ? rectLire(176, 66) : rectLire(176, 76)), `cos φ = ${fx(Math.cos(S.phi), 2)} : φ = ${fPhi(Math.abs(S.phi), true)} ou ${fPhi(-Math.abs(S.phi))}${ici('phase')}`);
+  c.repere('phi', ...(LARGE ? rectLire(256, 122) : rectLire(256, 130)), `le sens du départ choisit φ = ${fPhi(S.phi, true)} rad${ici('phase')}`);
 }
 
 const canvas = $('canvas');

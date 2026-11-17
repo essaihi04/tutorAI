@@ -248,6 +248,16 @@ function spectreSortie(ctx, x0, y0, x1, yRouge, yViolet) {
 
 // ───────────────────────── Morceaux de craie ─────────────────────────
 /** Une fraction écrite à la craie : numérateur, barre, dénominateur ; renvoie les positions (pour barrer). */
+/* Hauteur d'une ligne de craie au-dessus et au-dessous de sa base : une fraction « ⟦num|dén⟧ » (deux étages, comme
+ * dans le cahier) monte et descend plus qu'une ligne simple ; les étages suivent la taille réellement écrite. */
+function hauteurs(c, s, t) {
+  const T = c.echelle && c.tailleMin ? Math.max(t, c.tailleMin / c.echelle) : t;
+  if (!String(s).includes('⟦')) return [.75 * T, .25 * T];
+  const e = c._tailleEtage ? c._tailleEtage(T) : .78 * T;
+  return [.32 * T + 1.05 * e + (/⟦[^|]*_/.test(s) ? .2 * e : 0), 1.17 * e - .32 * T];
+}
+/** Base de la ligne s2 écrite sous la ligne s1 (base y), sans chevauchement. */
+const sous = (c, y, s1, t1, s2, t2, ecart = 4) => y + hauteurs(c, s1, t1)[1] + ecart + hauteurs(c, s2, t2)[0];
 function fraction(c, x, y, num, den, o = {}) {
   const t = o.taille ?? 26, col = o.couleur ?? 'blanc', net = s => s.replace(/_/g, '');
   const w = Math.max(c.largeurTexte(net(num), t), c.largeurTexte(net(den), t)) + 12;
@@ -369,13 +379,14 @@ const DESSINS = {
     marque(c, 'croix');
     c.pause(.4);
     c.texte('On isole :', 400, 82, { couleur: 'cyan', taille: 19 });
-    const F = [['L', 'L = 2λD/a', 'largeur de la tache'], ['lambda', 'λ = aL/(2D)', 'longueur d’onde'], ['a', 'a = 2λD/L', 'largeur de la fente'], ['D', 'D = aL/(2λ)', 'distance fente – écran']];
+    // les quatre formes écrites comme dans le cahier (fractions sur deux étages) : le cadre prend leur hauteur
+    const F = [['L', 'L = ⟦2λD|a⟧', 'largeur de la tache'], ['lambda', 'λ = ⟦aL|2D⟧', 'longueur d’onde'], ['a', 'a = ⟦2λD|L⟧', 'largeur de la fente'], ['D', 'D = ⟦aL|2λ⟧', 'distance fente – écran']];
     F.forEach(([id, f, sens], i) => {
-      const yy = 132 + 62 * i;
-      c.rect(394, yy - 34, 160, 48, { couleur: 'faible', arrondi: 8 });
+      const yy = 132 + 62 * i, [hh, hb] = hauteurs(c, f, 26);
+      c.rect(394, yy - Math.max(34, hh + 4), 160, Math.max(48, hh + hb + 8), { couleur: 'faible', arrondi: 8 });
       c.texte(f, 474, yy, { couleur: 'vert', align: 'center', taille: 26 });
       c.texte(sens, 566, yy - 4, { couleur: 'faible', taille: 15, max: 172 });
-      c.repere(id, 390, yy - 38, 352, 56, f);
+      c.repere(id, 390, yy - 38, 352, 56, window.Tableau.lisible(f));
       marque(c, id);
       if (i < 3) c.pause(.3);
     });
@@ -402,14 +413,17 @@ const DESSINS = {
     c.repere('D', xf, 236, xe - xf, 34, 'D : la distance fente – écran');
     c.repere('trace', 22, 44, 600, 230, 'le schéma : laser, fente a, écran à D, tache L, angle θ');
     marque(c, 'trace');
-    const LIG = [['ligne1', 'D’après la figure : tan θ = (L/2)/D = L/(2D)', 'blanc'], ['ligne2', 'θ petit : tan θ ≈ θ, donc θ = L/(2D)', 'blanc'],
-      ['ligne3', 'or θ = λ/a', 'blanc'], ['ligne4', 'donc λ/a = L/(2D) et L = 2λD/a', 'vert']];
+    // (17 novembre 2026) les quatre lignes s'écrivent comme dans le cahier (fractions sur deux étages) : plus hautes,
+    // elles passent sur deux colonnes (lignes 1 et 2 à gauche, 3 et 4 à droite)
+    const LIG = [['ligne1', 'D’après la figure : tan θ = ⟦L|2⟧ × ⟦1|D⟧ = ⟦L|2D⟧', 'blanc'], ['ligne2', 'θ petit : tan θ ≈ θ, donc θ = ⟦L|2D⟧', 'blanc'],
+      ['ligne3', 'or θ = ⟦λ|a⟧', 'blanc'], ['ligne4', 'donc ⟦λ|a⟧ = ⟦L|2D⟧ et L = ⟦2λD|a⟧', 'vert']];
+    const yL1 = 306, yL2 = sous(c, yL1, LIG[0][1], 19, LIG[1][1], 19, 6);
     LIG.forEach(([id, t, col], i) => {
       c.pause(.4);
-      const yy = 304 + 32 * i;
-      c.texte(`${i + 1}.`, 40, yy, { couleur: 'faible', taille: 18 });
-      c.texte(t, 66, yy, { couleur: col, taille: 20, max: 660 });
-      c.repere(id, 36, yy - 24, 700, 30, t);
+      const droite = i >= 2, x = droite ? 470 : 40, yy = i % 2 ? yL2 : yL1, w = droite ? 274 : 416, [hh, hb] = hauteurs(c, t, 19);
+      c.texte(`${i + 1}.`, x, yy, { couleur: 'faible', taille: 18 });
+      c.texte(t, x + 26, yy, { couleur: col, taille: 19, max: w - 30 });
+      c.repere(id, x - 4, yy - hh - 2, w, hh + hb + 4, window.Tableau.lisible(t));
       marque(c, id);
     });
     marque(c, 'fin');
@@ -450,8 +464,9 @@ const DESSINS = {
     c.repere('barre', X0, 214, X1 - X0, 88, 'a et 2D barrés : les mêmes');
     marque(c, 'barre');
     c.pause(.4);
-    c.texte('λ_2/λ_1 = L_2/L_1', 380, 336, { couleur: 'vert', align: 'center', taille: 24 });
-    c.texte('λ_2 = L_2·λ_1/L_1 = 3,4 × 580 / 2,7 ≈ 730 nm', 380, 380, { couleur: 'vert', align: 'center', taille: 22, max: 690 });
+    const yR1 = 336, yR2 = Math.max(386, sous(c, yR1, '⟦λ_2|λ_1⟧', 24, '⟦L_2·λ_1|L_1⟧', 22, 3));
+    c.texte('⟦λ_2|λ_1⟧ = ⟦L_2|L_1⟧', 380, yR1, { couleur: 'vert', align: 'center', taille: 24 });
+    c.texte('λ_2 = ⟦L_2·λ_1|L_1⟧ = ⟦3,4 × 580|2,7⟧ ≈ 730 nm', 380, yR2, { couleur: 'vert', align: 'center', taille: 22, max: 690 });
     c.repere('rapport', 36, 312, 704, 78, 'λ₂/λ₁ = L₂/L₁ ; λ₂ ≈ 730 nm');
     marque(c, 'rapport');
     marque(c, 'fin');
@@ -513,15 +528,15 @@ const DESSINS = {
     c.repere('trace', X[0], Y[0], X[3] - X[0], Y[5] - Y[0], 'le tableau à deux colonnes');
     marque(c, 'trace');
     const c1 = (X[1] + X[2]) / 2, c2 = (X[2] + X[3]) / 2;
-    const ROWS = [['celerite', 'c = 3,00·10⁸ m/s', 'v', true], ['indice', 'n = 1', 'n = c/v ; n ≥ 1, donc v = c/n', false],
-      ['longueur', 'λ_0', 'λ = λ_0/n', true], ['frequence', 'ν', 'ν : la même', true]];
+    const ROWS = [['celerite', 'c = 3,00·10⁸ m/s', 'v', true], ['indice', 'n = 1', 'n = ⟦c|v⟧ ; n ≥ 1, donc v = ⟦c|n⟧', false],
+      ['longueur', 'λ_0', 'λ = ⟦λ_0|n⟧', true], ['frequence', 'ν', 'ν : la même', true]];
     ROWS.forEach(([id, g, d, fl], i) => {
       c.pause(.4);
       const yy = Y[i + 1] + 40;
       c.texte(g, c1 - (fl ? 14 : 0), yy, { couleur: 'blanc', align: 'center', taille: 21, max: 210 });
       if (fl) c.fleche(X[2] - 34, yy - 7, X[2] + 30, yy - 7, { couleur: 'rose', largeur: 2 });
       c.texte(d, c2 + (fl ? 14 : 0), yy, { couleur: 'vert', align: 'center', taille: id === 'indice' ? 19 : 22, max: 262 });
-      c.repere(id, X[0], Y[i + 1], X[3] - X[0], Y[i + 2] - Y[i + 1], `${g} → ${d}`);
+      c.repere(id, X[0], Y[i + 1], X[3] - X[0], Y[i + 2] - Y[i + 1], `${g} → ${window.Tableau.lisible(d)}`);
       marque(c, id);
     });
     c.pause(.3);
@@ -598,15 +613,15 @@ const DESSINS = {
       ['fil', '« on remplace la fente par un fil, un cheveu »', 'd à la place de a'],
       ['rapport', '« on remplace la source, mêmes conditions »', 'écrire deux fois, diviser'],
       ['courbe', '« la courbe L = f(…) »', 'droite, pente, identification'],
-      ['milieu', '« dans un liquide », « milieu d’indice n »', `v = c/n ; λ = λ_0/n ; n = L/L'`],
-      ['frequence', '« calculer la fréquence »', 'ν = c/λ_0, λ_0 en m']];
+      ['milieu', '« dans un liquide », « milieu d’indice n »', `v = ⟦c|n⟧ ; λ = ⟦λ_0|n⟧ ; n = ⟦L|L'⟧`],
+      ['frequence', '« calculer la fréquence »', 'ν = ⟦c|λ_0⟧, λ_0 en m']];
     R.forEach(([id, q, m], i) => {
       c.pause(.35);
       const yy = Yr(i) + 31;
       c.texte(q, X0 + 10, yy, { couleur: 'jaune', taille: 17 * k, max: XM - X0 - 20 });
       c.fleche(XM - 2, yy - 6, XM + 18, yy - 6, { couleur: 'rose', largeur: 1.8 });
       c.texte(m, XM + 26, yy, { couleur: 'vert', taille: 19 * k, max: X1 - XM - 36 });
-      c.repere(id, X0, Yr(i), X1 - X0, RH, `${q} → ${m.replace(/_/g, '')}`);
+      c.repere(id, X0, Yr(i), X1 - X0, RH, `${q} → ${window.Tableau.lisible(m).replace(/_/g, '')}`);
       marque(c, id);
     });
     marque(c, 'fin');
@@ -735,7 +750,7 @@ const DESSINS = {
     c.pause(.4);
     c.texte('On cherche :', 492, 288, { couleur: 'cyan', taille: 18 });
     c.texte('• nommer le phénomène', 492, 314, { couleur: 'blanc', taille: 16, max: 250 });
-    c.texte('• montrer L = 2λD/a', 492, 338, { couleur: 'blanc', taille: 16, max: 250 });
+    c.texte('• montrer L = ⟦2λD|a⟧', 492, 338, { couleur: 'blanc', taille: 16, max: 250 });
     c.texte('• vérifier n = 1,33', 492, 362, { couleur: 'blanc', taille: 16, max: 250 });
     c.texte('• v dans le liquide', 492, 386, { couleur: 'blanc', taille: 16, max: 250 });
     c.repere('fin', 484, 268, 260, 126, 'ce qu’on cherche : le phénomène, L, n, v');
@@ -935,7 +950,7 @@ const DESCRIPTIONS = {
   fig_deux_experiences: {
     trace: 'Tableau Expérience 1 (jaune) | Expérience 2 (rouge) : λ₁ = 580 nm, L₁ = 2,7 cm ; λ₂ = ?, L₂ = 3,4 cm (même fente, même D).',
     exp1: 'Colonne 1 : λ₁/a = L₁/(2D).', exp2: 'Colonne 2 : λ₂/a = L₂/(2D).', barre: 'a et 2D barrés en rose dans les deux colonnes : « a et 2D : les mêmes dans les deux expériences ».',
-    rapport: 'Rapport : λ₂/λ₁ = L₂/L₁ ; λ₂ = L₂·λ₁/L₁ = 3,4 × 580 / 2,7 ≈ 730 nm.' },
+    rapport: 'Rapport : λ₂/λ₁ = L₂/L₁ ; λ₂ = L₂·λ₁/L₁ = (3,4 × 580)/2,7 ≈ 730 nm.' },
   fig_soleil_vide: {
     lumiere: 'Panneau gauche : le Soleil peint, le vide de l’espace, la Terre ; flèche « la lumière arrive ».',
     son: 'Panneau droit : une sonnette sous une cloche de verre dont la pompe retire l’air ; les ondes sonores barrées : « on ne l’entend plus ».',

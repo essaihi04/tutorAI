@@ -234,13 +234,54 @@
         (window.__horsCadre ||= []).includes(s) || (window.__horsCadre.push(s), console.warn('[tableau] texte hors cadre :', s, { x: Math.round(x0), y: Math.round(y), largeur: Math.round(l) }));
       }
     }
+    /** Largeur d'un texte à la craie (indices compris, écrits plus petits). */
+    _largeur(s, taille, gras) {
+      const c = this.ctx;
+      return Craie.segments(String(s)).reduce((w, seg) => { c.font = `${gras ? '700 ' : ''}${seg.sub ? taille * .62 : taille}px ${POLICE}`; return w + c.measureText(seg.t).width; }, 0);
+    }
+    /**
+     * Fractions écrites comme dans le cahier (17 novembre 2026 : « bien écrire comme dans le cahier pour les relations ») :
+     * « v = ⟦d|Δt⟧ », « τ = ⟦SM|v⟧ », « d = ⟦v·τ|2⟧ » — le numérateur au-dessus d'un trait de craie, le dénominateur
+     * dessous, jamais de barre « / » de calcul au tableau. Chaque morceau s'écrit à son tour (texte, numérateur, trait,
+     * dénominateur), aligné sur la ligne de base de la phrase. Mesure : `Craie.largeurFormule`.
+     */
+    /** Taille d'un étage de fraction : 78 % de la ligne, jamais sous le plancher du petit écran (que `texte` imposerait
+     *  de toute façon : mesuré plus petit qu'écrit, l'étage débordait sur la suite en téléphone paysage). */
+    _tailleEtage(taille, plancher = true) { const t = taille * .78; return plancher && this.echelle && this.tailleMin ? Math.max(t, this.tailleMin / this.echelle) : t; }
+    _texteFractions(s, x, y, o) {
+      let taille = o.taille ?? 18;
+      const plancher = o.plancher !== false;   // false : ligne déjà réduite pour tenir dans `max` (comme un texte simple)
+      if (plancher && this.echelle && this.tailleMin) taille = Math.max(taille, this.tailleMin / this.echelle);
+      const tf = this._tailleEtage(taille, plancher), morceaux = s.split(/(⟦[^⟧]*⟧)/).filter(Boolean).map(p => {
+        if (p[0] !== '⟦') return { t: p, w: this._largeur(p, taille, o.gras) };
+        const [n, d = ''] = p.slice(1, -1).split('|'), wn = this._largeur(n, tf, o.gras), wd = this._largeur(d, tf, o.gras);
+        return { n, d, wn, wd, w: Math.max(wn, wd) + taille * .36 };
+      });
+      let total = morceaux.reduce((w, m) => w + m.w, 0);
+      if (o.max && total > o.max) { const r = Math.max(10, taille * o.max / total) / taille; return this._texteFractions(s, x, y, { ...o, max: 0, plancher: false, taille: taille * r }); }
+      this._verifierCadre(s.replace(/[⟦⟧|_]/g, ''), x, y, taille, o.align);
+      let px = o.align === 'center' ? x - total / 2 : o.align === 'right' ? x - total : x;
+      const st = { couleur: o.couleur, alpha: o.alpha, gras: o.gras, base: o.base, plancher: o.plancher };
+      for (const m of morceaux) {
+        if (m.t != null) this.texte(m.t, px, y, { ...st, taille, duree: o.duree && o.duree * m.t.length / s.length });
+        else {
+          const xc = px + m.w / 2, yb = y - taille * .32;
+          this.texte(m.n, xc - m.wn / 2, yb - tf * .3 - (/_/.test(m.n) ? tf * .2 : 0), { ...st, taille: tf, duree: o.duree && o.duree * m.n.length / s.length });
+          this.trait([[px + taille * .1, yb], [px + m.w - taille * .1, yb]], { couleur: o.couleur || 'blanc', largeur: Math.max(1.3, taille * .085), tremble: .25, duree: .12 });
+          this.texte(m.d, xc - m.wd / 2, yb + tf * .95, { ...st, taille: tf, duree: o.duree && o.duree * m.d.length / s.length });
+        }
+        px += m.w;
+      }
+      return this;
+    }
     texte(s, x, y, o = {}) {
       const c = this.ctx; let taille = o.taille ?? 18; s = String(s);
+      if (s.includes('⟦')) return this._texteFractions(s, x, y, o);
       c.font = `${o.gras ? '700 ' : ''}${taille}px ${POLICE}`; this._verifierCadre(s.replace(/_/g, ''), x, y, taille, o.align);
-      if (this.echelle && this.tailleMin && /_/.test(s)) taille = Math.max(taille, this.tailleMin / this.echelle);
+      if (o.plancher !== false && this.echelle && this.tailleMin && /_/.test(s)) taille = Math.max(taille, this.tailleMin / this.echelle);
       if (/[A-Za-zτθΔλωφ]_/.test(s)) return this._texteIndices(s, x, y, o, taille);
       // Petit écran : un labo peut fixer `craie.echelle` (facteur appliqué au repère) et `craie.tailleMin` (px écran) pour rester lisible.
-      if (this.echelle && this.tailleMin) taille = Math.max(taille, this.tailleMin / this.echelle);
+      if (o.plancher !== false && this.echelle && this.tailleMin) taille = Math.max(taille, this.tailleMin / this.echelle);
       c.font = `${o.gras ? '700 ' : ''}${taille}px ${POLICE}`;
       if (o.max && c.measureText(s).width > o.max) { taille = Math.max(10, taille * o.max / c.measureText(s).width); c.font = `${o.gras ? '700 ' : ''}${taille}px ${POLICE}`; }
       const part = this._part(o.duree ?? Math.max(.1, s.length / VITESSE_LETTRES));
@@ -265,7 +306,13 @@
       if (this._reperesImage) this._reperesImage.add(id);
       return this;
     }
-    largeurTexte(s, taille = 18) { this.ctx.font = `${taille}px ${POLICE}`; return this.ctx.measureText(String(s)).width; }
+    largeurTexte(s, taille = 18) {
+      s = String(s);
+      // une fraction « ⟦num|dén⟧ » occupe la largeur de son plus long étage (écrit à 78 %), plus une marge
+      if (s.includes('⟦')) return s.split(/(⟦[^⟧]*⟧)/).filter(Boolean).reduce((w, p) => w + (p[0] !== '⟦' ? this._largeur(p, taille)
+        : Math.max(...p.slice(1, -1).split('|').map(t => this._largeur(t, this._tailleEtage(taille)))) + taille * .36), 0);
+      this.ctx.font = `${taille}px ${POLICE}`; return this.ctx.measureText(s).width;
+    }
     /** Axe gradué : de (x0,y0) vers (x1,y1), `graduations` = [[fraction, libellé], …]. */
     axe(x0, y0, x1, y1, graduations = [], o = {}) {
       this.fleche(x0, y0, x1, y1, { couleur: o.couleur || 'faible', largeur: 1.6 });
@@ -567,7 +614,15 @@
       p = p || {};
       main = 'tuteur';
       // Le professeur montre un repère du doigt : le kit l'entoure à la craie, le labo peut en faire plus.
-      const pointage = COMMANDES_POINTAGE.includes(cmd) && surligner(cibleDe(p));
+      let pointage = COMMANDES_POINTAGE.includes(cmd) && surligner(cibleDe(p));
+      // Repère pas encore dessiné (la simulation court vers son moment) : on l'entoure dès qu'il paraît, jusqu'à 3 s
+      // (17 novembre 2026 — jamais d'anneau ailleurs, jamais de bouton enfoncé à sa place).
+      if (COMMANDES_POINTAGE.includes(cmd) && !pointage && cibleDe(p)) {
+        const id = cibleDe(p), debut = Date.now();
+        const guetter = () => { if (!surligner(id) && Date.now() - debut < 3000) setTimeout(guetter, 120); };
+        setTimeout(guetter, 120);
+        pointage = true;
+      }
       if (!commandes.includes(cmd)) { if (pointage) noter('highlight', { target: cibleDe(p) }); return; }
       // Ce qui est dessiné reste au tableau jusqu'à la diapositive suivante (17 novembre 2026 : « une fois affichés, les
       // éléments sont supprimés puis relancés ») : un « start », un « resume » ou un « play_until » reçu après coup ne
@@ -591,5 +646,7 @@
   function bulle(el, texte, kind = '') { if (kind) el.dataset.kind = kind; else delete el.dataset.kind; ecrire(el, texte); }
 
   window.Tableau = { Craie, COULEURS, POLICE, ecrire, bouton, boutons, onglets, curseur, glisser, appuyer, protocole, bulle, fr, nombre, graine,
-    reperes, rectRepere, listeReperes, explication, surligner, REPERES };
+    reperes, rectRepere, listeReperes, explication, surligner, REPERES,
+    /** Une formule du tableau en texte d'une ligne (descriptions pour le tuteur, aria, bulles) : « ⟦d|Δt⟧ » → « d/Δt ». */
+    lisible: s => String(s).replace(/⟦([^|⟧]*)\|([^⟧]*)⟧/g, (m, n, d) => `${/[\s+−-]/.test(n.trim()) ? `(${n})` : n}/${/[\s+−·×-]/.test(d.trim()) ? `(${d})` : d}`) };
 })();

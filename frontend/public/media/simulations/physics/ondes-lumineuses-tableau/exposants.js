@@ -23,7 +23,9 @@
   };
   P.texte = function (s, x, y, o = {}) {
     s = String(s);
-    if (!SUP.test(s)) return texteKit.call(this, s, x, y, o);
+    // une fraction « ⟦num|dén⟧ » passe par le kit (deux étages), qui rappelle texte() pour chaque morceau : les
+    // exposants d'un morceau sont alors écrits ici
+    if (!SUP.test(s) || s.includes('⟦')) return texteKit.call(this, s, x, y, o);
     s = s.replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, (g) => '^{' + [...g].map((ch) => CHIFFRES[ch]).join('') + '}');
     let taille = o.taille ?? 18;
     this.ctx.font = `${o.gras ? '700 ' : ''}${taille}px ${T.POLICE}`;

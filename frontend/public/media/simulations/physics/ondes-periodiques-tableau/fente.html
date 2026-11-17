@@ -54,11 +54,16 @@ function colonne(c, texte, x, y, taille, max, o) {
   const t = c.echelle && c.tailleMin ? Math.max(taille, c.tailleMin / c.echelle) : taille;
   c.ctx.font = `${t}px ${window.Tableau.POLICE}`;
   let ligne = '';
+  // une ligne à fraction (« ⟦num|dén⟧ », sur deux étages comme dans le cahier) prend un demi-étage de plus dessus et dessous
+  const larg = s => (s.includes('⟦') ? c.largeurTexte(s, t) : c.ctx.measureText(s).width);
+  const E = window.OndesTableau.etages(c, taille), avant = Math.max(0, E.haut - t * .21), apres = Math.max(0, E.bas - t * .21);
+  const ecrire = l => { const e = l.includes('⟦'); y += e ? avant : 0; c.texte(l, x, y, { ...o, taille }); y += t * 1.22 + (e ? apres : 0); };
   for (const mot of String(texte).split(' ')) {
     const essai = ligne ? ligne + ' ' + mot : mot;
-    if (ligne && c.ctx.measureText(essai).width > max) { c.texte(ligne, x, y, { ...o, taille }); y += t * 1.22; ligne = mot; } else ligne = essai;
+    c.ctx.font = `${t}px ${window.Tableau.POLICE}`;
+    if (ligne && larg(essai) > max) { ecrire(ligne); ligne = mot; } else ligne = essai;
   }
-  if (ligne) { c.texte(ligne, x, y, { ...o, taille }); y += t * 1.22; }
+  if (ligne) ecrire(ligne);
   return y;
 }
 // conclusions : false pendant une question d'observation du tuteur (14 novembre 2026) : la scène montre, elle n'écrit pas ce que fait l'onde.
@@ -203,17 +208,21 @@ function dessiner(c) {
       let y = colonne(c, `a = ${fr(S.a, 1)} cm ;  λ = ${fr(LAM * 100, 1)} cm`, xc, 84, 21, mx, { couleur: 'jaune' }) + 14;
       if (S.conclusions && S.t >= M.premier_arc) y = colonne(c, reg.l1 + ' ' + reg.l2, xc, y, 18, mx, { couleur: 'vert' });
       y = Math.max(y + 18, 252);
-      if (Rg.avant) { dessinerRegle(c, Rg.avant, 'regle_avant', 'orange'); if (Rg.avant.p >= 1) y = colonne(c, `λ avant : ${fr(3 * LAM * 100, 1)} / 3 = ${fr(LAM * 100, 1)} cm`, xc, y, 19, mx, { couleur: 'orange' }) + 4; }
-      if (Rg.apres) { dessinerRegle(c, Rg.apres, 'regle_apres', 'rose'); if (Rg.apres.p >= 1) y = colonne(c, `λ après : ${fr(3 * LAM * 100, 1)} / 3 = ${fr(LAM * 100, 1)} cm`, xc, y, 19, mx, { couleur: 'rose' }) + 4; }
+      if (Rg.avant) { dessinerRegle(c, Rg.avant, 'regle_avant', 'orange'); if (Rg.avant.p >= 1) y = colonne(c, `λ avant : ⟦${fr(3 * LAM * 100, 1)}|3⟧ = ${fr(LAM * 100, 1)} cm`, xc, y, 19, mx, { couleur: 'orange' }) + 4; }
+      if (Rg.apres) { dessinerRegle(c, Rg.apres, 'regle_apres', 'rose'); if (Rg.apres.p >= 1) y = colonne(c, `λ après : ⟦${fr(3 * LAM * 100, 1)}|3⟧ = ${fr(LAM * 100, 1)} cm`, xc, y, 19, mx, { couleur: 'rose' }) + 4; }
       if (S.t >= P.fin - 0.04) colonne(c, 'même N = 20 Hz, même λ, même v', xc, y + 6, 19, mx, { couleur: 'vert' });
       return;
     }
     // En bas : a et λ côte à côte, puis ce que fait l'onde.
     c.texte(`a = ${fr(S.a, 1)} cm ;  λ = ${fr(LAM * 100, 1)} cm`, 12, 368, { couleur: 'jaune', taille: 18 });
     if (S.conclusions && S.t >= M.premier_arc) { c.texte(reg.l1, 12, 392, { couleur: 'vert', taille: 16, max: 440 }); c.texte(reg.l2, 12, 414, { couleur: 'vert', taille: 16, max: 440 }); }
-    if (Rg.avant) { dessinerRegle(c, Rg.avant, 'regle_avant', 'orange'); if (Rg.avant.p >= 1) c.texte(`λ avant : ${fr(3 * LAM * 100, 1)} / 3 = ${fr(LAM * 100, 1)} cm`, 480, 368, { couleur: 'orange', taille: 17 }); }
-    if (Rg.apres) { dessinerRegle(c, Rg.apres, 'regle_apres', 'rose'); if (Rg.apres.p >= 1) { c.texte(`λ après : ${fr(3 * LAM * 100, 1)} / 3 = ${fr(LAM * 100, 1)} cm`, 480, 392, { couleur: 'rose', taille: 17 }); } }
-    if (S.t >= P.fin - 0.04) c.texte('même N = 20 Hz, même λ, même v', 480, 414, { couleur: 'vert', taille: 16 });
+    // Les deux λ s'écrivent en fraction (deux étages) : côte à côte sur la ligne 368 quand la largeur le permet ;
+    // sinon « λ après » donne seulement le résultat (même calcul), pour laisser la place à la dernière ligne.
+    const lAv = `λ avant : ⟦${fr(3 * LAM * 100, 1)}|3⟧ = ${fr(LAM * 100, 1)} cm`, lAp = `λ après : ⟦${fr(3 * LAM * 100, 1)}|3⟧ = ${fr(LAM * 100, 1)} cm`;
+    const xAp = 480 + c.largeurTexte(lAv, 17) + 24, coteACote = xAp + c.largeurTexte(lAp, 17) <= LL - 12;
+    if (Rg.avant) { dessinerRegle(c, Rg.avant, 'regle_avant', 'orange'); if (Rg.avant.p >= 1) c.texte(lAv, 480, 368, { couleur: 'orange', taille: 17 }); }
+    if (Rg.apres) { dessinerRegle(c, Rg.apres, 'regle_apres', 'rose'); if (Rg.apres.p >= 1) { if (coteACote) c.texte(lAp, xAp, 368, { couleur: 'rose', taille: 17 }); else c.texte(`λ après = ${fr(LAM * 100, 1)} cm (même calcul)`, 480, 394, { couleur: 'rose', taille: 17 }); } }
+    if (S.t >= P.fin - 0.04) c.texte('même N = 20 Hz, même λ, même v', 480, coteACote ? 404 : 414, { couleur: 'vert', taille: 16 });
   });
 }
 

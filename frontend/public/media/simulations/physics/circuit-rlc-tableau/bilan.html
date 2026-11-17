@@ -31,34 +31,34 @@ const { bulle, protocole } = window.Tableau;
 const $ = id => document.getElementById(id);
 
 const BLOCS = [
-  { id: 'oscillations', titre: '1 · Oscillations libres', comps: ['C1'], formules: ['i = dq/dt = C·du_C/dt', 'u_b(0⁺) = −u_C(0)'],
+  { id: 'oscillations', titre: '1 · Oscillations libres', comps: ['C1'], formules: ['i = ⟦dq|dt⟧ = C·⟦du_C|dt⟧', 'u_b(0⁺) = −u_C(0)'],
     def: 'Le condensateur chargé se décharge dans la bobine : u_C change de signe.',
     attention: 'i(0⁺) = 0 : i est continu dans la bobine.' },
   { id: 'regimes', titre: '2 · Trois régimes', comps: ['C2'], formules: ['périodique', 'pseudo-périodique', 'apériodique'],
     def: 'L’amortissement augmente avec R + r.',
     attention: 'apériodique : retour à 0 sans osciller.' },
-  { id: 'equation', titre: '3 · Équation différentielle', comps: ['C3'], formules: ['L·d²q/dt² + (R + r)·dq/dt + q/C = 0', 'LC·d²u_C/dt² + (R + r)·C·du_C/dt + u_C = 0'],
+  { id: 'equation', titre: '3 · Équation différentielle', comps: ['C3'], formules: ['L·⟦d²q|dt²⟧ + (R + r)·⟦dq|dt⟧ + ⟦q|C⟧ = 0', 'LC·⟦d²u_C|dt²⟧ + (R + r)·C·⟦du_C|dt⟧ + u_C = 0'],
     def: 'Additivité sans générateur : u_C + u_R + u_b = 0.',
     attention: 'second membre 0 : pas de E.' },
-  { id: 'lc', titre: '4 · Circuit LC idéal', comps: ['C3'], formules: ['d²u_C/dt² + u_C/(LC) = 0'],
-    def: 'R + r = 0 : le terme en du_C/dt disparaît.',
+  { id: 'lc', titre: '4 · Circuit LC idéal', comps: ['C3'], formules: ['⟦d²u_C|dt²⟧ + ⟦u_C|LC⟧ = 0'],
+    def: 'R + r = 0 : le terme en ⟦du_C|dt⟧ disparaît.',
     attention: 'r = 0 seulement si l’énoncé le dit.' },
-  { id: 'solution', titre: '5 · Solution', comps: ['C4'], formules: ['u_C(t) = U_m·cos(2πt/T₀ + φ)'],
-    def: 'On dérive deux fois : d²u_C/dt² = −(2π/T₀)²·u_C.',
+  { id: 'solution', titre: '5 · Solution', comps: ['C4'], formules: ['u_C(t) = U_m·cos(⟦2πt|T₀⟧ + φ)'],
+    def: 'On dérive deux fois : ⟦d²u_C|dt²⟧ = −(⟦2π|T₀⟧)²·u_C.',
     attention: 'U_m : amplitude ; φ : phase à l’origine.' },
   { id: 'periode', titre: '6 · Période propre', comps: ['C4'], formules: ['T₀ = 2π√(LC)', '√(LC) : un temps'],
-    def: '(2π/T₀)² = 1/(LC). T₀ ne dépend pas de E.',
+    def: '(⟦2π|T₀⟧)² = ⟦1|LC⟧. T₀ ne dépend pas de E.',
     attention: 'L en H, C en F : T₀ en s.' },
   { id: 'conditions', titre: '7 · Conditions initiales', comps: ['C4'], formules: ['u_C(0) = U_m·cos φ'],
     def: 'Chargé sous E, i(0) = 0 : U_m = E et φ = 0.',
     attention: 'cos φ donne ±φ : le sens de départ choisit.' },
-  { id: 'lecture', titre: '8 · Lire un oscillogramme', comps: ['C5'], formules: ['T ≈ T₀', 'C = T₀²/(4π²·L)', 'π² = 10'],
+  { id: 'lecture', titre: '8 · Lire un oscillogramme', comps: ['C5'], formules: ['T ≈ T₀', 'C = ⟦T₀²|4π²·L⟧', 'π² = 10'],
     def: 'T entre deux sommets, sur plusieurs périodes.',
-    attention: 'T, pas T/2 ; élever au carré d’abord.' },
+    attention: 'T, pas ⟦T|2⟧ ; élever au carré d’abord.' },
   { id: 'energie', titre: '9 · Énergie', comps: ['C6'], formules: ['E = ½·C·u_C² + ½·L·i²'],
     def: 'Échange condensateur ↔ bobine ; E constante si R + r = 0.',
     attention: 'sommet de u_C : i = 0, E = ½·C·u_C².' },
-  { id: 'amortissement', titre: '10 · Amortissement', comps: ['C7'], formules: ['dE/dt = −(R + r)·i²', '|ΔE| = ½·C·(U_1² − U_2²)'],
+  { id: 'amortissement', titre: '10 · Amortissement', comps: ['C7'], formules: ['⟦dE|dt⟧ = −(R + r)·i²', '|ΔE| = ½·C·(U_1² − U_2²)'],
     def: 'E diminue : effet Joule dans R et dans r.',
     attention: 'énergie perdue = E(début) − E(fin) > 0.' },
   { id: 'entretien', titre: '11 · Entretien', comps: ['C8'], formules: ['u_G = k·i', 'k = R + r'],
@@ -75,12 +75,15 @@ const EXP = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': 
 /** Largeur d'un texte de craie (indices et exposants plus petits, comme le kit les écrit). */
 function largeur(c, t, taille) {
   taille = Math.max(taille, (c.tailleMin || 0) / (c.echelle || 1));   // la taille vraiment écrite (jamais sous le minimum lisible)
+  // une fraction « ⟦num|dén⟧ » (17 novembre 2026, écrite comme dans le cahier) : la largeur de son plus long étage (78 %) + une marge
+  if (String(t).includes('⟦')) return String(t).split(/(⟦[^⟧]*⟧)/).filter(Boolean).reduce((w, p) => w + (p[0] !== '⟦' ? largeur(c, p, taille)
+    : Math.max(...p.slice(1, -1).split('|').map(e => largeur(c, e, taille * .78))) + taille * .36), 0);
   t = String(t).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => EXP[ch]).join('') + '}');
   return window.Tableau.Craie.segments(t).reduce((w, g) => w + c.largeurTexte(g.t, g.sub || g.sup ? taille * .62 : taille), 0);
 }
-/* Texte pour la bulle et ce_qui_se_voit : pas de « _ » ni d’accolades visibles. */
+/* Texte pour la bulle et ce_qui_se_voit : pas de « _ » ni d’accolades visibles ; une fraction « ⟦a|b⟧ » redevient « a/b ». */
 const BAS_U = { 0: '₀', 1: '₁', 2: '₂', 3: '₃', 4: '₄', 5: '₅', 6: '₆', 7: '₇', 8: '₈', 9: '₉', a: 'ₐ', e: 'ₑ', m: 'ₘ', x: 'ₓ' };
-const lisible = s => String(s).replace(/\^\{([^}]+)\}/g, '^($1)').replace(/_\{?([A-Za-z0-9]+)\}?/g, (m, g) => ([...g].every(ch => ch in BAS_U) ? [...g].map(ch => BAS_U[ch]).join('') : g));
+const lisible = s => window.Tableau.lisible(String(s)).replace(/\^\{([^}]+)\}/g, '^($1)').replace(/_\{?([A-Za-z0-9]+)\}?/g, (m, g) => ([...g].every(ch => ch in BAS_U) ? [...g].map(ch => BAS_U[ch]).join('') : g));
 
 /* Coupe un texte en lignes qui tiennent dans `max` px. */
 function lignes(c, texte, taille, max) {
@@ -94,8 +97,13 @@ function lignes(c, texte, taille, max) {
   return out;
 }
 function paragraphe(c, texte, x, y, taille, max, o, dessiner) {
-  const pas = Math.max(taille, (c.tailleMin || 0) / (c.echelle || 1)) * Z.lh;
-  for (const l of lignes(c, texte, taille, max)) { if (dessiner) c.texte(l, x, y, { taille, ...o }); y += pas; }
+  const t = Math.max(taille, (c.tailleMin || 0) / (c.echelle || 1)), pas = t * Z.lh;
+  for (const l of lignes(c, texte, taille, max)) {
+    const etages = l.includes('⟦');   // une fraction sur deux étages : de la place au-dessus et au-dessous de la ligne
+    if (etages) y += t * .45;
+    if (dessiner) c.texte(l, x, y, { taille, ...o });
+    y += pas + (etages ? t * .5 : 0);
+  }
   return y;
 }
 
@@ -131,16 +139,19 @@ function contenu(c, b, x, y0, w, st, dessiner) {
   // formules encadrées, à la ligne quand la suivante ne tient plus
   let fx = x;
   const tf = Math.max(Z.tf, (c.tailleMin || 0) / (c.echelle || 1));
+  // une formule à fraction (« ⟦num|dén⟧ », sur deux étages comme dans le cahier) prend un cadre plus haut
+  const etages = b.formules.some(f => f.includes('⟦')), haut = etages ? 1.45 : 1.04, bas = etages ? .62 : .48;
+  if (etages) y += tf * .45;
   for (const f of b.formules) {
     const l = Math.min(w, largeur(c, f, Z.tf) + 14);
-    if (fx > x && fx + l > x + w) { fx = x; y += Z.fpas; }
+    if (fx > x && fx + l > x + w) { fx = x; y += Z.fpas + (etages ? tf * .9 : 0); }
     if (dessiner) {
-      c.rect(fx, y - tf * 1.04, l, tf * 1.52, { couleur: 'jaune', arrondi: 6, largeur: 1.2, alpha: .7, duree: .25 });
+      c.rect(fx, y - tf * haut, l, tf * (haut + bas), { couleur: 'jaune', arrondi: 6, largeur: 1.2, alpha: .7, duree: .25 });
       c.texte(f, fx + 7, y + 1, { couleur: 'blanc', taille: Z.tf, max: l - 10 });
     }
     fx += l + 7;
   }
-  y += Z.fpas;
+  y += Z.fpas + (etages ? tf * .4 : 0);
   y = paragraphe(c, b.def, x, y, Z.td, w, { couleur: 'blanc', alpha: .9 }, dessiner);
   if (dessiner) c.texte('⚠', x, y, { couleur: 'orange', taille: Z.att });
   const ind = Math.max(Z.ind, tf * 1.2);   // le ⚠ garde sa place même écrit à la taille minimale

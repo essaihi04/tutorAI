@@ -28,7 +28,7 @@
       craie.point = function (x, y, r = 4, c) { pt(x, y, r); return point.call(this, x, y, r, c); };
       craie.texte = function (s, x, y, o = {}) {
         const t = o.taille ?? 18; this.ctx.font = `${o.gras ? '700 ' : ''}${t}px ${window.Tableau.POLICE}`;
-        let l = this.ctx.measureText(String(s).replace(/_/g, '')).width; if (o.max && l > o.max) l = o.max;
+        let l = String(s).includes('⟦') ? this.largeurTexte(String(s).replace(/_/g, ''), t) : this.ctx.measureText(String(s).replace(/_/g, '')).width; if (o.max && l > o.max) l = o.max;   // « ⟦num|dén⟧ » : fraction sur deux étages
         const x0 = o.align === 'center' ? x - l / 2 : o.align === 'right' ? x - l : x;
         pt(x0, y - t * 0.95); pt(x0 + l, y + t * 0.35);
         return texte.call(this, s, x, y, o);
@@ -82,5 +82,14 @@
     });
     return scene;
   }
-  window.OndesTableau = { Scene, VW, VH };
+  /* Fraction « ⟦num|dén⟧ » écrite à la taille t : ce qu'elle dépasse au-dessus (haut) et au-dessous (bas) d'une ligne
+   * ordinaire, en px du cadre, d'après la taille réellement écrite par la craie (étages jamais sous la taille minimale
+   * à l'écran : en téléphone, ils sont presque aussi grands que la ligne). Sert à écarter les lignes voisines.
+   * `s` (facultatif) : la formule ; un numérateur à indice (« ⟦d_2 − d_1|n⟧ ») est écrit un peu plus haut par la craie. */
+  function etages(c, t, s = '') {
+    const T = c.echelle && c.tailleMin ? Math.max(t, c.tailleMin / c.echelle) : t, tf = c._tailleEtage ? c._tailleEtage(T) : T * .78;
+    const indice = /⟦[^|⟧]*_/.test(s) ? tf * .35 : 0;
+    return { T, haut: Math.max(0, .32 * T + 1.05 * tf - .75 * T) + indice, bas: Math.max(0, 1.15 * tf - .52 * T) };
+  }
+  window.OndesTableau = { Scene, VW, VH, etages };
 })();

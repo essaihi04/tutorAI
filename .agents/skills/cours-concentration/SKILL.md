@@ -100,6 +100,20 @@ which draws a real stacked fraction, subscripts and superscripts. The data is wr
 - **Check before delivering**: open the notebook step and the questions of the course in the player (desktop and phone in
   landscape, 724 × 350): no `_`, `^` or calculation bar visible, every fraction stacked. The simulations already draw
   fractions on the board (chalk kit) — the written text must look the same.
+- **Never a bar with spaces** (user rule, 17 November 2026 — « bien écrire comme dans le cahier pour les relations »,
+  seen on the notebook and the « Ce qu'il faut retenir » of the waves course: `τ = SM / v`, `v = d / Δt` stayed flat).
+  `<Formule>` leaves `a / b` as a plain bar on purpose (it is how « et / ou » is written), so a relation written with
+  spaces is never stacked. Write `τ = SM/v`, `d = v·τ/2`, `v = (6 m)/(0,02 s)`, `C = τ/R₁`, `(ln 2)/λ`, `(tan θ)/θ`;
+  a quantity with its unit, a function (`ln 2`) or a product with spaces goes between parentheses. On 17 November 2026
+  832 strings of physics ch1–ch9 and SVT ch1–ch4 still had it.
+- **Greek letters as symbols** in everything written: λ, τ, θ, α, Δm — never « lambda », « tau », « delta m », and never
+  a spoken sentence copied into the writing (« lambda égale lambda zéro sur n » → « λ = λ₀/n »). The words are for the
+  voice (`parole`, `speech_text`), the symbols for the screen (`ecrit`, `cahier`, `bullets`, `texte`…). Never change an
+  identifier that happens to be a Greek name (`moment: "lambda"`, `repere`, `cible`).
+- **The chalk side follows the same rule**: the simulations, the fiche « Ce qu'il faut retenir » (`bilan.html`) and the
+  chapter map (`carte.html`) write every division as `⟦num|dén⟧` (simulations-au-tableau rule 12).
+- **Check**: `python -I scripts/verifier_formules.py backend/data/courses/<cours>.json` (and the simulation folder of the
+  chapter) must print nothing.
 
 ## Traps already met
 

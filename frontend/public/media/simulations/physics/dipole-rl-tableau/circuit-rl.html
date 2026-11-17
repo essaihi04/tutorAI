@@ -165,27 +165,14 @@ const Peint = {
   /** Boîtier d’un générateur (vu de face) : coffret gris, afficheur, deux bornes (rouge +, noire −). */
   generateur(ctx, x, y, w, h, affiche, a = 1) {
     ctx.save(); ctx.globalAlpha = a;
-    ctx.fillStyle = 'rgba(0,0,0,.32)'; ctx.beginPath(); ctx.roundRect(x + 4, y + 5, w, h, 8); ctx.fill();
-    // Coffret bleu acier, bandeau clair en haut (comme un vrai générateur de TP).
-    const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#5f7d99'); g.addColorStop(.5, '#3a5470'); g.addColorStop(1, '#1f3044');
-    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 8); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,.14)'; ctx.beginPath(); ctx.roundRect(x + 3, y + 3, w - 6, h * .16, [6, 6, 2, 2]); ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(x, y, w, h, 8); ctx.stroke();
-    // Afficheur vert lumineux.
-    const ex = x + w * .12, ey = y + h * .28, ew = w * .76, eh = h * .28;
-    ctx.fillStyle = '#06140b'; ctx.beginPath(); ctx.roundRect(ex, ey, ew, eh, 3); ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 1.5; ctx.stroke();
-    ctx.shadowColor = '#4ade80'; ctx.shadowBlur = 8;
-    ctx.fillStyle = '#9dffb0'; ctx.font = `700 ${Math.round(eh * .74)}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(affiche, ex + ew / 2, ey + eh / 2 + 1); ctx.shadowBlur = 0;
-    // Bouton de réglage et voyant allumé.
-    const kr = Math.min(w, h) * .11, kx = x + w * .34, ky = y + h * .74;
-    Peint.sphere(ctx, kx, ky, kr, ['#e5e9ee', '#7b8590', '#1c2127']);
-    ctx.strokeStyle = '#111'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(kx, ky); ctx.lineTo(kx + kr * .7, ky - kr * .7); ctx.stroke();
-    const vx = x + w * .7, vy = y + h * .74;
-    const gl = ctx.createRadialGradient(vx, vy, 0, vx, vy, kr * 1.4); gl.addColorStop(0, 'rgba(134,239,172,.9)'); gl.addColorStop(1, 'rgba(134,239,172,0)');
-    ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(vx, vy, kr * 1.4, 0, 7); ctx.fill();
-    ctx.fillStyle = '#4ade80'; ctx.beginPath(); ctx.arc(vx, vy, kr * .45, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(x + 3, y + 4, w, h, 7); ctx.fill();
+    const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#5b6670'); g.addColorStop(.5, '#3b444c'); g.addColorStop(1, '#262c32');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 7); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1; ctx.stroke();
+    const ex = x + w * .14, ey = y + h * .3, ew = w * .72, eh = h * .26;
+    ctx.fillStyle = '#0d1a10'; ctx.beginPath(); ctx.roundRect(ex, ey, ew, eh, 3); ctx.fill();
+    ctx.fillStyle = '#7dfc8a'; ctx.font = `600 ${Math.round(eh * .72)}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(affiche, ex + ew / 2, ey + eh / 2 + 1);
     ctx.restore();
   },
   /** Borne ronde (rouge ou noire). */
@@ -292,40 +279,34 @@ Object.assign(Peint, {
    * culot, ampoule de verre ; `eclat` de 0 à 1 (∝ i²) : filament qui rougit puis blanchit, halo.
    */
   lampe(ctx, cx, yf, eclat = 0, a = 1) {
-    const e = clamp(eclat, 0, 1), gy = yf - 34, R = 17;
+    const e = clamp(eclat, 0, 1), gy = yf - 30, R = 14;
     ctx.save(); ctx.globalAlpha = a;
     if (e > .01) {
-      // Halo chaud : il grandit avec l'éclat (la lampe « s'allume » en douceur, l'éclat suit i²).
-      const rh = R + 62 * Math.sqrt(e), h = ctx.createRadialGradient(cx, gy, 2, cx, gy, rh);
-      h.addColorStop(0, `rgba(255,244,190,${.85 * e})`); h.addColorStop(.3, `rgba(255,214,110,${.38 * e})`); h.addColorStop(1, 'rgba(255,190,80,0)');
-      ctx.fillStyle = h; ctx.beginPath(); ctx.arc(cx, gy, rh, 0, 7); ctx.fill();
-      if (e > .5) {   // rayons doux à pleine lumière
-        ctx.strokeStyle = `rgba(255,236,170,${.35 * (e - .5) * 2})`; ctx.lineWidth = 2; ctx.lineCap = 'round';
-        for (let k = 0; k < 8; k++) { const an = -Math.PI / 2 + (k - 3.5) * .36; ctx.beginPath(); ctx.moveTo(cx + Math.cos(an) * (R + 6), gy + Math.sin(an) * (R + 6)); ctx.lineTo(cx + Math.cos(an) * (R + 6 + 14 * e), gy + Math.sin(an) * (R + 6 + 14 * e)); ctx.stroke(); }
-      }
+      const h = ctx.createRadialGradient(cx, gy, 2, cx, gy, R + 50 * Math.sqrt(e));
+      h.addColorStop(0, `rgba(255,236,160,${.75 * e})`); h.addColorStop(.35, `rgba(255,214,110,${.32 * e})`); h.addColorStop(1, 'rgba(255,200,90,0)');
+      ctx.fillStyle = h; ctx.beginPath(); ctx.arc(cx, gy, R + 50 * Math.sqrt(e), 0, 7); ctx.fill();
     }
     // Socle et bornes.
-    const gs = ctx.createLinearGradient(0, yf - 9, 0, yf + 9); gs.addColorStop(0, '#525a63'); gs.addColorStop(1, '#1d2125');
-    ctx.fillStyle = gs; ctx.beginPath(); ctx.roundRect(cx - 22, yf - 8, 44, 16, 4); ctx.fill();
+    const gs = ctx.createLinearGradient(0, yf - 9, 0, yf + 9); gs.addColorStop(0, '#4a5058'); gs.addColorStop(1, '#1d2125');
+    ctx.fillStyle = gs; ctx.beginPath(); ctx.roundRect(cx - 21, yf - 8, 42, 16, 4); ctx.fill();
     Peint.plot(ctx, cx - 21, yf, a); Peint.plot(ctx, cx + 21, yf, a);
-    // Culot vissé (laiton).
-    const gc = ctx.createLinearGradient(cx - 8, 0, cx + 8, 0); gc.addColorStop(0, '#8a6d2e'); gc.addColorStop(.5, '#f3dc96'); gc.addColorStop(1, '#7a5e22');
-    ctx.fillStyle = gc; ctx.fillRect(cx - 8, yf - 21, 16, 13);
-    ctx.strokeStyle = 'rgba(60,40,10,.55)'; ctx.lineWidth = 1; for (let k = 0; k < 3; k++) { ctx.beginPath(); ctx.moveTo(cx - 8, yf - 19 + k * 4); ctx.lineTo(cx + 8, yf - 17.5 + k * 4); ctx.stroke(); }
-    // Ampoule de verre en poire (plus chaude quand elle brille).
-    const verre = () => { ctx.beginPath(); ctx.moveTo(cx - 7, yf - 21); ctx.bezierCurveTo(cx - 8, gy + R * .6, cx - R, gy + R * .5, cx - R, gy); ctx.arc(cx, gy, R, Math.PI, 0); ctx.bezierCurveTo(cx + R, gy + R * .5, cx + 8, gy + R * .6, cx + 7, yf - 21); ctx.closePath(); };
-    const gv = ctx.createRadialGradient(cx - 5, gy - 6, 1, cx, gy, R + 4);
-    gv.addColorStop(0, `rgba(255,255,255,${.6 + .4 * e})`); gv.addColorStop(.55, `rgba(${205 + 50 * e},${220 + 25 * e},${235 - 85 * e},${.2 + .6 * e})`); gv.addColorStop(1, `rgba(185,205,225,${.3 + .45 * e})`);
-    ctx.fillStyle = gv; verre(); ctx.fill();
-    ctx.strokeStyle = 'rgba(230,240,255,.6)'; ctx.lineWidth = 1.1; verre(); ctx.stroke();
+    // Culot vissé.
+    const gc = ctx.createLinearGradient(cx - 7, 0, cx + 7, 0); gc.addColorStop(0, '#7d7a6e'); gc.addColorStop(.5, '#e4e0d0'); gc.addColorStop(1, '#6c695e');
+    ctx.fillStyle = gc; ctx.fillRect(cx - 7, yf - 19, 14, 11);
+    ctx.strokeStyle = 'rgba(40,40,40,.5)'; ctx.lineWidth = 1; for (let k = 0; k < 3; k++) { ctx.beginPath(); ctx.moveTo(cx - 7, yf - 17 + k * 3.5); ctx.lineTo(cx + 7, yf - 15.5 + k * 3.5); ctx.stroke(); }
+    // Ampoule de verre (plus chaude quand elle brille).
+    const gv = ctx.createRadialGradient(cx - 4, gy - 5, 1, cx, gy, R);
+    gv.addColorStop(0, `rgba(255,255,255,${.55 + .4 * e})`); gv.addColorStop(.6, `rgba(${200 + 55 * e},${215 + 30 * e},${230 - 70 * e},${.18 + .55 * e})`); gv.addColorStop(1, `rgba(190,205,220,${.28 + .4 * e})`);
+    ctx.fillStyle = gv; ctx.beginPath(); ctx.arc(cx, gy, R, 0, 7); ctx.fill();
+    ctx.strokeStyle = 'rgba(230,240,255,.55)'; ctx.lineWidth = 1; ctx.stroke();
     // Filament : sombre éteint, rouge puis blanc-jaune.
     const f = e < .3 ? [120 + 400 * e, 70 + 100 * e, 60] : [255, 150 + 105 * Math.min(1, (e - .3) / .7), 60 + 150 * Math.min(1, (e - .3) / .7)];
-    ctx.strokeStyle = `rgb(${f.map(Math.round).join(',')})`; ctx.lineWidth = 1.4 + e;
-    if (e > .05) { ctx.shadowColor = 'rgba(255,230,150,.95)'; ctx.shadowBlur = 14 * e; }
-    ctx.beginPath(); ctx.moveTo(cx - 5, yf - 21); ctx.lineTo(cx - 6, gy + 2);
-    for (let k = 0; k <= 6; k++) ctx.lineTo(cx - 6 + k * 12 / 6, gy + (k % 2 ? -3.5 : 2.5));
-    ctx.lineTo(cx + 5, yf - 21); ctx.stroke(); ctx.shadowBlur = 0;
-    ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.beginPath(); ctx.ellipse(cx - 7, gy - 8, 4.2, 2.3, -.6, 0, 7); ctx.fill();
+    ctx.strokeStyle = `rgb(${f.map(Math.round).join(',')})`; ctx.lineWidth = 1.3 + e;
+    if (e > .05) { ctx.shadowColor = 'rgba(255,230,150,.9)'; ctx.shadowBlur = 10 * e; }
+    ctx.beginPath(); ctx.moveTo(cx - 5, yf - 19); ctx.lineTo(cx - 5, gy + 2);
+    for (let k = 0; k <= 6; k++) ctx.lineTo(cx - 5 + k * 10 / 6, gy + (k % 2 ? -3 : 2));
+    ctx.lineTo(cx + 5, yf - 19); ctx.stroke(); ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.beginPath(); ctx.ellipse(cx - 5, gy - 7, 3.5, 2, -.6, 0, 7); ctx.fill();
     ctx.restore();
   },
   /** Oscilloscope : coffret, écran vert sombre quadrillé (rect `e`), boutons ; prises voie 1, voie 2 et masse (liste de points). */
@@ -454,7 +435,7 @@ const MOTIFS = { fin: 'fin' }; for (const v of VUES) for (const e of ETAPES[v]) 
 /* ── Géométrie (cadre 760 × 420) ─────────────────────────────────────── */
 const XG = 50, YH = 72, YB = 300, C1 = [140, 72], C2 = [140, 128], PV = [205, 100], LG = 66;
 const GEN = { x: 22, y: 150, w: 56, h: 80 }, RES = { x: 230, y: 91, w: 70, h: 18 }, XC = 360, YM = 130, YV2 = 270;
-const BOB = { x: 220, y: 180, w: 92, h: 28 };
+const BOB = { x: 228, y: 186, w: 76, h: 24 };
 const CAS = { x: 432, y: 38, w: 320, h: 300 }, ECR = { x: 466, y: 48, w: 278, h: 226 }, O = { x: 498, y: 246, w: 222, h: 166 };
 const V1 = [446, 80], MS = [446, YM], V2 = [446, YV2], NV1 = 218;
 let MO = null;
@@ -605,8 +586,8 @@ function dessinerMontage(c, M, v) {
       c.texte(`u_R = ${fr(uR(), 2)} V`, ECR.x + ECR.w - 10, ECR.y + 22, { couleur: 'blanc', taille: 15, align: 'right' });
     });
     if (v === 'etablissement') {
-      M.etape(c, 'fermeture', () => c.texte('K en position 1 : le courant s’établit', 14, 338, { couleur: 'vert', taille: 16, max: 400 }));
-      M.etape(c, 'courbe_i', () => c.texte(`u_R = R·i monte de 0 vers ${fx(UR(), 2)} V, comme i`, 14, 364, { couleur: 'vert', taille: 16, max: 400 }));
+      M.etape(c, 'fermeture', () => c.texte('K en position 1 : le courant s’établit', 14, 336, { couleur: 'vert', taille: 16, max: 400 }));
+      M.etape(c, 'courbe_i', () => c.texte(`u_R = R·i monte de 0 vers ${fx(UR(), 2)} V, comme i`, 14, 360, { couleur: 'vert', taille: 16, max: 400 }));
       M.etape(c, 'permanent', () => {
         const ax = axeT(), x5 = PX(Math.min(5 * tau(), ax.max));
         c.ligne(O.x, PY(UR()), O.x + O.w, PY(UR()), { couleur: 'blanc', largeur: 1.4, pointille: [6, 5] });
@@ -614,8 +595,8 @@ function dessinerMontage(c, M, v) {
         c.cote(O.x, O.y - 30, x5, O.y - 30, '', { couleur: 'orange', largeur: 1.4 });
         c.texte('régime transitoire', (O.x + x5) / 2 + 16, O.y - 38, { couleur: 'orange', taille: 14, align: 'center' });
         c.texte('régime permanent', ECR.x + ECR.w - 10, PY(UR()) + 22, { couleur: 'vert', taille: 14, align: 'right' });
-        c.texte(`régime permanent : I_0 = E/(R + r) = ${fx(I0() * 1000, 1)} mA`, 14, 390, { couleur: 'vert', taille: 16, max: 400 });
-        c.texte('avant : régime transitoire (i varie)', 14, 412, { couleur: 'orange', taille: 15, max: 400 });
+        c.texte(`régime permanent : I_0 = ⟦E|R + r⟧ = ${fx(I0() * 1000, 1)} mA`, 14, 388, { couleur: 'vert', taille: 16, max: 400 });
+        c.texte('avant : régime transitoire (i varie)', 14, 414, { couleur: 'orange', taille: 15, max: 400 });
       });
     } else {
       c.texte(`au départ : u_R = ${fx(UR(), 2)} V, i = I_0 = ${fx(I0() * 1000, 1)} mA`, 14, 330, { couleur: 'blanc', taille: 15, max: 400 });

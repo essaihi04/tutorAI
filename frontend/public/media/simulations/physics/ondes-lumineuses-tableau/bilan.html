@@ -34,22 +34,22 @@ const BLOCS = [
   { id: 'diffraction', titre: '1 · Diffraction de la lumière', comps: ['C1'],
     def: 'La diffraction de la lumière par une fente fine ou un fil met en évidence l’aspect ondulatoire de la lumière. La figure s’étale perpendiculairement à la fente.',
     attention: 'Diffraction, pas réfraction ; ondulatoire, pas monochromatique.' },
-  { id: 'ecart', titre: '2 · Écart angulaire θ', comps: ['C2'], formules: ['θ = λ / a'],
+  { id: 'ecart', titre: '2 · Écart angulaire θ', comps: ['C2'], formules: ['θ = ⟦λ|a⟧'],
     def: 'θ : du centre de la tache centrale à la première extinction. θ en rad, λ et a en m.',
     attention: 'a diminue → θ augmente.' },
-  { id: 'largeur', titre: '3 · Largeur L de la tache', comps: ['C3'], formules: ['tan θ = L / (2D)', 'θ petit : tan θ ≈ θ', 'L = 2λD / a'],
-    def: 'Dans le triangle : L/2 en face de θ, D collé à θ. Donc λ / a = L / (2D).',
-    attention: 'Le côté opposé est L/2, pas L. Tout en mètre.' },
-  { id: 'comparer', titre: '4 · Fil, deux expériences, liquide', comps: ['C4'], formules: ['λ_2 / λ_1 = L_2 / L_1', 'n = L / L′'],
-    def: 'Fil (cheveu) : d à la place de a. Deux sources, mêmes a et D : écrire deux fois, diviser. Dans un liquide : L′ = L / n.',
+  { id: 'largeur', titre: '3 · Largeur L de la tache', comps: ['C3'], formules: ['tan θ = ⟦L|2D⟧', 'θ petit : tan θ ≈ θ', 'L = ⟦2λD|a⟧'],
+    def: 'Dans le triangle : ⟦L|2⟧ en face de θ, D collé à θ. Donc ⟦λ|a⟧ = ⟦L|2D⟧.',
+    attention: 'Le côté opposé est ⟦L|2⟧, pas L. Tout en mètre.' },
+  { id: 'comparer', titre: '4 · Fil, deux expériences, liquide', comps: ['C4'], formules: ['⟦λ_2|λ_1⟧ = ⟦L_2|L_1⟧', 'n = ⟦L|L′⟧'],
+    def: 'Fil (cheveu) : d à la place de a. Deux sources, mêmes a et D : écrire deux fois, diviser. Dans un liquide : L′ = ⟦L|n⟧.',
     attention: 'λ appartient à la source : changer a ou D ne la change pas.' },
-  { id: 'courbes', titre: '5 · Exploiter une courbe', comps: ['C5'], formules: ['y = k · x', 'L = f(1/a) : k = 2λD', 'θ = f(1/a) : k = λ', 'L = f(D) : k = 2λ/a'],
+  { id: 'courbes', titre: '5 · Exploiter une courbe', comps: ['C5'], formules: ['y = k · x', 'L = f(⟦1|a⟧) : k = 2λD', 'θ = f(⟦1|a⟧) : k = λ', 'L = f(D) : k = ⟦2λ|a⟧'],
     def: 'Droite passant par l’origine : fonction linéaire ; k = la pente, puis on identifie.',
     attention: 'Convertir les unités des axes en SI (mm → m, mm⁻¹ → m⁻¹).' },
-  { id: 'radiation', titre: '6 · Lumière monochromatique', comps: ['C6'], formules: ['λ_0 = c / ν', 'c = 3,00·10⁸ m/s'],
+  { id: 'radiation', titre: '6 · Lumière monochromatique', comps: ['C6'], formules: ['λ_0 = ⟦c|ν⟧', 'c = 3,00·10⁸ m/s'],
     def: 'Une lumière monochromatique est constituée d’une seule radiation, caractérisée par sa fréquence ν. Visible : 400 nm à 800 nm.',
     attention: 'nm, pas µm ; λ_0 en m dans le calcul (1 nm = 10⁻⁹ m).' },
-  { id: 'milieu', titre: '7 · Dans un milieu d’indice n', comps: ['C7'], formules: ['n = c / v', 'λ = λ_0 / n'],
+  { id: 'milieu', titre: '7 · Dans un milieu d’indice n', comps: ['C7'], formules: ['n = ⟦c|v⟧', 'λ = ⟦λ_0|n⟧'],
     def: 'ν ne change pas : même couleur. Air : n = 1 ; eau : 1,33 ; verre : 1,5.',
     attention: 'n ≥ 1, donc v < c et λ < λ_0.' },
   { id: 'dispersion', titre: '8 · Milieu dispersif', comps: ['C8'],
@@ -64,7 +64,7 @@ window.__debordeBlocs = [];   // vérification : un bloc dont le texte dépasse 
 
 /* Texte pour la bulle et ce_qui_se_voit (HTML) : « λ_0 » → « λ₀ » (jamais de « _ » visible). */
 const SOUS = { 0: '₀', 1: '₁', 2: '₂', 3: '₃' };
-const lisible = s => String(s).replace(/_([0-3])/g, (m, d) => SOUS[d]);
+const lisible = s => window.Tableau.lisible(String(s)).replace(/_([0-3])/g, (m, d) => SOUS[d]);
 
 /* Coupe un texte en lignes qui tiennent dans `max` px (mesure sans les « _ » des indices). */
 function lignes(c, texte, taille, max) {
@@ -74,13 +74,19 @@ function lignes(c, texte, taille, max) {
   const t = String(texte).replace(/ ([=\/·→<>≥≤≈≠−+]) /g, '\u00a0$1\u00a0');
   for (const mot of t.split(/[ \t\n]+/)) {
     const essai = ligne ? ligne + ' ' + mot : mot;
-    if (ctx.measureText(essai.replace(/_/g, '')).width > max && ligne) { out.push(ligne); ligne = mot; } else ligne = essai;
+    if (c.largeurTexte(essai.replace(/_/g, ''), taille) > max && ligne) { out.push(ligne); ligne = mot; } else ligne = essai;
   }
   if (ligne) out.push(ligne);
   return out;
 }
 function paragraphe(c, texte, x, y, taille, max, o, dessiner, interligne = 1.2) {
-  for (const l of lignes(c, texte, taille, max)) { if (dessiner) c.texte(l, x, y, { taille, ...o }); y += taille * interligne; }
+  // une ligne qui porte une fraction « ⟦num|dén⟧ » (deux étages, comme dans le cahier) prend plus de hauteur
+  for (const l of lignes(c, texte, taille, max)) {
+    const fr = l.includes('⟦');
+    if (fr) y += taille * .45;
+    if (dessiner) c.texte(l, x, y, { taille, ...o });
+    y += taille * (interligne + (fr ? .35 : 0));
+  }
   return y;
 }
 
@@ -102,18 +108,20 @@ function contenu(c, b, x, y0, w, st, dessiner) {
   if (b.formules) {
     // formules encadrées, à la ligne quand la suivante ne tient plus
     let fx = x;
-    const hb = tf * 1.36, pad = tf * .5;
+    // une formule à fraction (« ⟦num|dén⟧ », sur deux étages comme dans le cahier) prend un cadre plus haut
+    const etages = b.formules.some(fo => fo.includes('⟦')), haut = etages ? 1.45 : .98, bas = etages ? .62 : .38;
+    const hb = tf * (haut + bas), pad = tf * .5;
+    y += tf * (haut - .98);
     for (const f of b.formules) {
-      c.ctx.font = `${tf}px ${window.Tableau.POLICE}`;
-      const l = Math.min(w, c.ctx.measureText(f.replace(/[_^{}]/g, '')).width + 2 * pad);
+      const l = Math.min(w, c.largeurTexte(f.replace(/[_^{}]/g, ''), tf) + 2 * pad);
       if (fx > x && fx + l > x + w) { fx = x; y += hb + 3; }
       if (dessiner) {
-        c.rect(fx, y - tf * .98, l, hb, { couleur: 'faible', arrondi: 6, largeur: 1.2, duree: .25 });
+        c.rect(fx, y - tf * haut, l, hb, { couleur: 'faible', arrondi: 6, largeur: 1.2, duree: .25 });
         c.texte(f, fx + pad, y + tf * .1, { couleur: 'jaune', taille: tf, max: l - pad * 1.4 });
       }
       fx += l + 7;
     }
-    y += hb;
+    y += tf * (bas + .98);
   }
   y = paragraphe(c, b.def, x, y, td, w, { couleur: 'blanc' }, dessiner, 1.12);
   if (dessiner) c.texte('⚠', x, y, { couleur: 'orange', taille: ta });

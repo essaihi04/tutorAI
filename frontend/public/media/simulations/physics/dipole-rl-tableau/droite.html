@@ -52,21 +52,23 @@ function disposer(L) {
   } else {
     const lw = Math.round(L * .26);
     Object.assign(RL, { x: L - lw - 6, w: lw }); Object.assign(RG, { x: 8, w: L - lw - 22 }); O.x = 90; AXL = RG.w - 124;
-    D = { large: true, L, k: 1.3, kl: 1.2, ky: 1.03 };
+    // colonne « Lecture » : 1,1 (et non 1,2) et lignes au pas d'origine — ses fractions sur deux étages (17 novembre
+    // 2026, écrites comme dans le cahier) prennent la place qui restait
+    D = { large: true, L, k: 1.3, kl: 1.1, ky: 1 };
   }
   LX = RL.x + 8; LW = RL.w - 16;
 }
 const T = n => Math.round(n * D.k);                 // taille d'un texte du graphe
-const ly = y => (D.large ? 70 + (y - 64) * D.ky : y); // ordonnée d'une ligne de la colonne « Lecture »
+const ly = y => (D.large ? 66 + (y - 64) * D.ky : y); // ordonnée d'une ligne de la colonne « Lecture »
 const PX = i => O.x + i * AXL / IMAX, PY = d => O.y - d * AYL / DMAX;
 let LX = RL.x + 8, LW = RL.w - 16;
 const marque = (c, nom) => { MM[nom] = c.cur; };
 const lire = (c, y, s, o = {}) => c.texte(s, LX, ly(y), { couleur: 'blanc', max: LW, ...o, taille: Math.round((o.taille ?? 16) * D.kl) });
-const encadre = (c, y, w, h) => c.rect(LX - 4, ly(y), w * D.kl, h * (D.large ? 1.18 : 1), { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
+const encadre = (c, y, w, h) => c.rect(LX - 4, ly(y), w * D.kl, h * (D.large ? 1.08 : 1), { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
 
 function dessiner(c) {
   scene.cadre(71); disposer(scene.L); MM = {};
-  c.texte('2024 N : la droite di/dt = f(i)', RG.x + 6, 30, { couleur: 'cyan', taille: T(17), max: RG.w - 10, duree: .9 });
+  c.texte('2024 N : la droite ⟦di|dt⟧ = f(i)', RG.x + 6, 27, { couleur: 'cyan', taille: Math.min(T(17), 20), max: RG.w - 10, duree: .9 });   // ≤ 20 : la fraction du titre tient entre le haut du tableau et le cadre du graphe
   c.rect(RG.x, RG.y, RG.w, RG.h, { couleur: 'tresfaible', arrondi: 10, duree: .5 });
   c.texte('Lecture', RL.x + 6, 30, { couleur: 'cyan', taille: 17, duree: .3 });
   c.rect(RL.x, RL.y, RL.w, RL.h, { couleur: 'tresfaible', arrondi: 10, duree: .4 });
@@ -76,29 +78,29 @@ function dessiner(c) {
   for (let k = 1; k <= 7; k++) dg.push([(O.y - PY(k / 2)) / LY, k % 2 === 0 ? String(k / 2) : null]);
   c.axe(O.x, O.y, O.x, O.y - LY, dg, { taille: T(13), vertical: true });
   c.texte('0', O.x - 8, O.y + 18, { couleur: 'faible', taille: T(13), align: 'right' });
-  c.texte('di/dt (10³ A/s)', O.x + 10, 64, { couleur: 'blanc', taille: T(16) });
+  c.texte('⟦di|dt⟧ (10³ A/s)', O.x + 10, 64, { couleur: 'blanc', taille: T(16) });
   c.texte('i (mA)', RG.x + RG.w - 8, O.y + 42, { couleur: 'blanc', taille: T(16), align: 'right' });
-  lire(c, 64, 'E = 6 V ; bobine (L, r) et R_1', { couleur: 'blanc', taille: 14, duree: .6 });
-  lire(c, 92, 'di/dt + (1/τ)·i = E/L', { couleur: 'blanc', taille: 17 });
+  lire(c, 62, 'E = 6 V ; bobine (L, r) et R_1', { couleur: 'blanc', taille: 14, duree: .6 });
+  lire(c, 90, '⟦di|dt⟧ + ⟦1|τ⟧·i = ⟦E|L⟧', { couleur: 'blanc', taille: 17 });
   c.pause(.3);
   // points : les mesures apparaissent une à une.
   for (const [i, d] of MESURES) { c.cercle(PX(i), PY(d), 4.5, { couleur: 'vert', largeur: 2, duree: .18 }); c.pause(.12); }
-  lire(c, 124, 'les points mesurés sont alignés', { couleur: 'vert', taille: 15 });
+  lire(c, 121, 'les points mesurés sont alignés', { couleur: 'vert', taille: 15 });
   marque(c, 'points');
   c.pause(.4);
   // droite : de (0 ; 3·10³ A/s) à (6 mA ; 0).
   c.ligne(PX(0), PY(3), PX(6), PY(0), { couleur: 'vert', largeur: 2.6, duree: .9 });
-  lire(c, 150, 'une droite qui descend :', { couleur: 'blanc', taille: 14 });
-  lire(c, 172, 'di/dt = E/L − (1/τ)·i', { couleur: 'vert', taille: 17 });
+  lire(c, 144, 'une droite qui descend :', { couleur: 'blanc', taille: 14 });
+  lire(c, 171, '⟦di|dt⟧ = ⟦E|L⟧ − ⟦1|τ⟧·i', { couleur: 'vert', taille: 17 });
   marque(c, 'droite');
   c.pause(.4);
   // ordonnee : E/L = 3·10³ A/s → L = 2 mH.
   c.cercle(PX(0), PY(3), 7, { couleur: 'cyan', largeur: 2 });
-  c.texte('E/L = 3·10³ A/s', PX(0) + 14, PY(3) - 12, { couleur: 'cyan', taille: T(16) });
-  lire(c, 206, 'i = 0 : di/dt = E/L = 3·10³ A/s', { couleur: 'cyan', taille: 15 });
-  lire(c, 230, 'L = 6/(3·10³) = 2·10⁻³ H', { couleur: 'cyan', taille: 15 });
-  lire(c, 256, 'L = 2 mH', { couleur: 'blanc', taille: 19 });
-  encadre(c, 236, 92, 28);
+  c.texte('⟦E|L⟧ = 3·10³ A/s', PX(0) + 14, PY(3) - 12, { couleur: 'cyan', taille: T(16) });
+  lire(c, 202, 'i = 0 : ⟦di|dt⟧ = ⟦E|L⟧ = 3·10³ A/s', { couleur: 'cyan', taille: 15 });
+  lire(c, 231, 'L = ⟦6|3·10³⟧ = 2·10⁻³ H', { couleur: 'cyan', taille: 15 });
+  lire(c, 261, 'L = 2 mH', { couleur: 'blanc', taille: 19 });
+  encadre(c, 241, 92, 28);
   marque(c, 'ordonnee');
   c.pause(.4);
   // pente : triangle Δi = 2 mA, Δ(di/dt) = −1·10³ A/s.
@@ -106,17 +108,17 @@ function dessiner(c) {
   c.ligne(PX(4), PY(2), PX(4), PY(1), { couleur: 'cyan', largeur: 1.6, pointille: [5, 4] });
   c.texte('Δi = 2 mA', PX(3), PY(2) - 10, { couleur: 'cyan', taille: T(14), align: 'center' });
   c.texte('−1·10³ A/s', PX(4) + 8, PY(1.5) + 5, { couleur: 'cyan', taille: T(14) });
-  lire(c, 290, 'pente = −1·10³/(2·10⁻³)', { couleur: 'cyan', taille: 15 });
-  lire(c, 312, 'pente = −5·10⁵ s⁻¹ = −1/τ', { couleur: 'cyan', taille: 15 });
-  lire(c, 336, 'τ = 2·10⁻⁶ s = 2 µs', { couleur: 'blanc', taille: 18 });
-  encadre(c, 316, 162, 28);
+  lire(c, 291, 'pente = ⟦−1·10³|2·10⁻³⟧', { couleur: 'cyan', taille: 15 });
+  lire(c, 320, 'pente = −5·10⁵ s⁻¹ = −⟦1|τ⟧', { couleur: 'cyan', taille: 15 });
+  lire(c, 350, 'τ = 2·10⁻⁶ s = 2 µs', { couleur: 'blanc', taille: 18 });
+  encadre(c, 330, 162, 28);
   marque(c, 'pente');
   c.pause(.4);
   // abscisse : di/dt = 0 → i = I₀ = 6 mA.
   c.cercle(PX(6), PY(0), 7, { couleur: 'cyan', largeur: 2 });
   c.texte('I_0', PX(6), O.y + 40, { couleur: 'cyan', taille: T(18), align: 'center' });
-  lire(c, 368, 'di/dt = 0 : régime permanent', { couleur: 'blanc', taille: 14 });
-  lire(c, 392, 'i = I_0 = 6 mA', { couleur: 'cyan', taille: 18 });
+  lire(c, 380, '⟦di|dt⟧ = 0 : régime permanent', { couleur: 'blanc', taille: 14 });
+  lire(c, 402, 'i = I_0 = 6 mA', { couleur: 'cyan', taille: 17 });
   marque(c, 'abscisse');
   c.pause(.8); marque(c, 'fin');
   declarerReperes(c);

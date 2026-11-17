@@ -47,16 +47,16 @@ const BLOCS = [
   { id: 'famille', titre: '5 · Famille : x α et y β⁻', comps: ['C5'], formules: ['[238,92]U → [206,82]Pb + x [0,-1]e + y [4,2]He'],
     def: 'Système en x et y : conservation de A, puis de Z. 238 = 206 + 4y ; 92 = 82 − x + 2y : 8 α et 6 β⁻.',
     attention: 'β ne change pas A : y d’abord.' },
-  { id: 'loi', titre: '6 · Loi de décroissance', comps: ['C6'], formules: ['N(t) = N_0·e^{−λt}', 'τ = 1/λ'],
+  { id: 'loi', titre: '6 · Loi de décroissance', comps: ['C6'], formules: ['N(t) = N_0·e^{−λt}', 'τ = ⟦1|λ⟧'],
     def: 'λ : constante radioactive, en s⁻¹ (ou jour⁻¹, an⁻¹). τ : la tangente à l’origine coupe l’axe des temps en t = τ.',
     attention: 'N(t) = noyaux restants (pas désintégrés).' },
-  { id: 'demi_vie', titre: '7 · Demi-vie t½', comps: ['C7'], formules: ['t½ = ln2/λ', 'N(n·t½) = N_0/2^{n}'],
+  { id: 'demi_vie', titre: '7 · Demi-vie t½', comps: ['C7'], formules: ['t½ = ⟦ln2|λ⟧', 'N(n·t½) = ⟦N_0|2^{n}⟧'],
     def: 'La demi-vie t½ est la durée au bout de laquelle la moitié des noyaux initialement présents se sont désintégrés.',
     attention: 'À 2t½ il reste 25 %, 75 % sont désintégrés.' },
-  { id: 'activite', titre: '8 · Activité a', comps: ['C8'], formules: ['a = λ·N', 'a(t) = a_0·e^{−λt}', 'N = (m/M)·N_A'],
+  { id: 'activite', titre: '8 · Activité a', comps: ['C8'], formules: ['a = λ·N', 'a(t) = a_0·e^{−λt}', 'N = ⟦m|M⟧·N_A'],
     def: 'L’activité a est le nombre de désintégrations par seconde ; elle s’exprime en becquerel (Bq).',
     attention: 'λ en s⁻¹ pour a en Bq.' },
-  { id: 'datation', titre: '9 · Datation', comps: ['C9'], formules: ['t = (1/λ)·ln(a_0/a)'],
+  { id: 'datation', titre: '9 · Datation', comps: ['C9'], formules: ['t = ⟦1|λ⟧·ln(⟦a_0|a⟧)'],
     def: 'Carbone 14 : t½ = 5730 ans. On mesure a, on compare à a_0.',
     attention: 'a_0 : même masse d’un échantillon vivant (récent).' },
 ];
@@ -79,6 +79,7 @@ function morceaux(s) {
 const EXP = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
 /** Largeur d'un texte de craie (indices et exposants plus petits, comme le kit les écrit). */
 function largeurTexte(c, t, taille) {
+  if (String(t).includes('⟦')) return c.largeurTexte(t, taille);   // une fraction « ⟦num|dén⟧ » : mesurée par le kit (étages à 78 %)
   t = String(t).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => EXP[ch]).join('') + '}');
   return window.Tableau.Craie.segments(t).reduce((w, g) => w + c.largeurTexte(g.t, g.sub || g.sup ? taille * .62 : taille), 0);
 }
@@ -104,7 +105,7 @@ const HAUT_U = { 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '�
 const BAS_U = { 0: '₀', 1: '₁', 2: '₂', 3: '₃', 4: '₄', 5: '₅', 6: '₆', 7: '₇', 8: '₈', 9: '₉', '-': '₋', '−': '₋', A: 'ₐ' };
 const enHaut = s => [...s].every(ch => ch in HAUT_U) ? [...s].map(ch => HAUT_U[ch]).join('') : '^(' + s + ')';
 const enBas = s => [...s].every(ch => ch in BAS_U) ? [...s].map(ch => BAS_U[ch]).join('') : '_' + s;
-const lisible = s => String(s)
+const lisible = s => window.Tableau.lisible(s)
   .replace(RE_NOYAU, (m, A, Z, X) => (A === 'A' ? `${X} (A nucléons, Z protons)` : enHaut(A) + enBas(Z) + X))
   .replace(/\^\{([^}]+)\}/g, (m, e) => enHaut(e))
   .replace(/([A-Za-zλ])_([0-9A])/g, (m, l, d) => l + BAS_U[d]);
@@ -195,17 +196,20 @@ function contenu(c, b, x, y0, w, st, dessiner) {
   y += TT * 1.29;
   if (b.formules) {
     // formules encadrées, à la ligne quand la suivante ne tient plus
+    // une formule à fraction (« ⟦num|dén⟧ », sur deux étages comme dans le cahier) prend un cadre plus haut (modèle : ondes-tableau/bilan.html)
+    const etages = b.formules.some(fo => fo.includes('⟦')), haut = etages ? 17 : 13, H = etages ? 26 : 19;
+    if (etages) y += 4 * kf;
     let fx = x;
     for (const f of b.formules) {
       const l = Math.min(w, largeur(c, f, TF) + 14 * kf);
-      if (fx > x && fx + l > x + w) { fx = x; y += 22 * kf; }
+      if (fx > x && fx + l > x + w) { fx = x; y += (H + 3) * kf; }
       if (dessiner) {
-        c.rect(fx, y - 13 * kf, l, 19 * kf, { couleur: 'faible', arrondi: 6, largeur: 1.2, duree: .25 });
+        c.rect(fx, y - haut * kf, l, H * kf, { couleur: 'faible', arrondi: 6, largeur: 1.2, duree: .25 });
         ecrire(c, f, fx + 7 * kf, y + kf, { couleur: 'jaune', taille: TF, max: l - 10 * kf });
       }
       fx += l + 7 * kf;
     }
-    y += 21 * kf;
+    y += (etages ? 27 : 21) * kf;
   }
   y = paragraphe(c, b.def, x, y, TD, w, { couleur: 'blanc' }, dessiner);
   if (dessiner) c.texte('⚠', x, y, { couleur: 'orange', taille: TA });

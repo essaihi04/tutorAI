@@ -93,7 +93,7 @@ function dessiner(c) {
       c.ligne(xb, oy + 4.5 * dy, xb, oy + 6 * dy + 8, { couleur: 'jaune', largeur: 1.4, pointille: [4, 4] });
       c.cote(xa, oy + 6 * dy + 14, xb, oy + 6 * dy + 14, `${fr(n, 0)} div`, { couleur: 'jaune', dessous: true, taille: f(18) });
       c.texte(`τ = ${fr(n, 0)} × ${fr(SENS, 1)} ms = ${fr(tau(), 1)} ms`, ox, 410, { couleur: 'vert', taille: f(17) });
-      c.texte(`v = d / τ = ${fr(S.d)} / ${fr(tau() / 1000, 4)} = ${fr(S.d / (tau() / 1000), 0)} m/s`, GR ? 400 : 400, 410, { couleur: 'vert', taille: f(17) });
+      c.texte(`v = ⟦d|τ⟧ = ⟦${fr(S.d)}|${fr(tau() / 1000, 4)}⟧ = ${fr(S.d / (tau() / 1000), 0)} m/s`, GR ? 400 : 400, 410, { couleur: 'vert', taille: f(17) });
       c.repere('retard', xa, oy + 6 * dy + 2, xb - xa, 36, 'τ : début avec début');
     }
   });
@@ -111,7 +111,7 @@ function dessiner(c) {
     if (S.mesures.length >= 2) {
       const [x2, y2] = Pt(dmax, dmax / V * 1000);
       c.ligne(gx, gy, x2, y2, { couleur: 'vert', largeur: 1.6, pointille: [6, 5] });
-      c.texte('droite : pente = 1 / v', gx + 40, gy - 14, { couleur: 'vert', taille: f(15) });
+      c.texte('droite : pente = ⟦1|v⟧', gx + 40, gy - 14, { couleur: 'vert', taille: f(15) });
       c.repere('droite', gx, gy - gh, gw, gh, 'la droite τ = f(d)');
     }
   });
@@ -201,7 +201,7 @@ const commandes = ['start', 'fire_pulse', 'pause', 'resume', 'reset', 'set_param
 const config = { id: 'ondes_tableau_micros', version: '1.0', title: 'Deux micros et un oscilloscope', variants: [{ id: 'micros', label: 'micros' }], commands: commandes,
   command_schema: { play_until: { moment: Object.keys(MOTIFS).join(' | ') + ' (rejoue et se fige à cet instant clé)' }, set_parameters: { d_m: '0.17..1.36 (pas de 0,17 m)' } } };
 const pont = protocole({ id: config.id, commandes, config,
-  texte: `Son dans l’air, v = ${V} m/s. Oscilloscope à ${fr(SENS, 1)} ms/div. M₂ se déplace par pas de 0,17 m (soit 1 division de retard). Mesures : τ = n div × 0,5 ms ; v = d / τ ; τ = f(d) droite de pente 1/v.`,
+  texte: `Son dans l’air, v = ${V} m/s. Oscilloscope à ${fr(SENS, 1)} ms/div. M₂ se déplace par pas de 0,17 m (soit 1 division de retard). Mesures : τ = n div × 0,5 ms ; v = d/τ ; τ = f(d) droite de pente 1/v.`,
   etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : (S.fait ? 'finished' : 'idle'), ce_qui_se_voit: ceQuiSeVoit(), moments: moments(), parameters: { d_m: S.d }, tau_ms: +tau().toFixed(2), divisions: +(tau() / SENS).toFixed(1), mesures: S.mesures.slice() }),
   progression: () => Math.min(1, S.mesures.length / 2),
   executer: (cmd, p) => ({ start, fire_pulse: start, pause, resume, reset, set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
