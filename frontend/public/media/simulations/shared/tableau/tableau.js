@@ -545,12 +545,33 @@
       try { parent.postMessage({ type: 'simulation_manifest', simulation_id: id, capabilities: { commands: toutes, config, globals: ['executeAICommand'], command_schema: schema, state_schema: config.state_schema || {}, reperes: listeReperes(), explication: EXPLICATION || undefined }, page_text: texte }, '*'); } catch (_) { /* hors iframe */ }
     };
     window.SIMULATION_CONFIG = config;
+    /** La commande à exécuter vraiment, ou null si elle effacerait ce qui est déjà au tableau. */
+    const sansRetourArriere = (cmd, p) => {
+      let e = {};
+      try { e = etat() || {}; } catch (_) { return cmd; }
+      const statut = e.simulation_status, t = +e.time_s || 0;
+      if (statut !== 'finished' && !(t > 0)) return cmd;              // rien encore de dessiné : tout passe
+      if (cmd === 'start') return statut === 'paused' ? 'resume' : null;
+      if (cmd === 'resume') return statut === 'finished' ? null : cmd;
+      if (cmd === 'play_until') {
+        if (statut === 'finished') return null;
+        const moments = e.moments || {};
+        const cible = p.moment != null && p.moment in moments ? +moments[p.moment] : +p.time_s;
+        return Number.isFinite(cible) && t >= cible - 1e-3 ? null : cmd;
+      }
+      return cmd;
+    };
     window.executeAICommand = (cmd, p = {}) => {
       p = p || {};
       main = 'tuteur';
       // Le professeur montre un repère du doigt : le kit l'entoure à la craie, le labo peut en faire plus.
       const pointage = COMMANDES_POINTAGE.includes(cmd) && surligner(cibleDe(p));
       if (!commandes.includes(cmd)) { if (pointage) noter('highlight', { target: cibleDe(p) }); return; }
+      // Ce qui est dessiné reste au tableau jusqu'à la diapositive suivante (17 novembre 2026 : « une fois affichés, les
+      // éléments sont supprimés puis relancés ») : un « start », un « resume » ou un « play_until » reçu après coup ne
+      // rembobine plus la scène. Seul « reset » (Réécouter, demandé par l'élève) et le bouton Rejouer recommencent.
+      cmd = sansRetourArriere(cmd, p);
+      if (!cmd) { emettre(); return; }
       if (!pointage) appuyer(cmd);
       executer(cmd, p);
     };
