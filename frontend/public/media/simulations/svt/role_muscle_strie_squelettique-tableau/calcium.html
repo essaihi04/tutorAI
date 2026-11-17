@@ -40,8 +40,10 @@ const doux = f => f * f * (3 - 2 * f);
 /* ── Instants de la vue « acces » (s de la scène) ─────────────────────────── */
 const TA = { exc0: 1.0, exc1: 1.6, lib0: 1.9, lib1: 3.74, ouv0: 3.85, ouv1: 4.6, finExc: 5.8, rep0: 6.1, rep1: 7.42, ferm0: 6.6, ferm1: 7.8, fin: 8.3 };
 const MOMENTS_ACCES = { repos_sites_caches: 0.5, excitation: 1.65, ca_libere: 2.7, ca_sur_troponine: 3.78, sites_liberes: 4.7, fin_excitation: 5.85, ca_repris: 7.5, sites_recaches: 7.9 };
-const TM = { fin_paint: [0.2, 1.2], epais_paint: [4.2, 4.9], tete_paint: [7.6, 8.4], sites_paint: [10.8, 11.4], fin: 14 };
-const MOMENTS_MOL = { filament_fin: 1.3, filament_epais: 5.0, tete: 8.5, deux_sites: 11.5 };
+// Chaque partie se peint dès que la voix l’appelle (17 novembre 2026) : il y avait ~3 s de tableau immobile avant chaque
+// filament, la voix l’avait déjà nommé et la baguette arrivait sur un dessin absent.
+const TM = { fin_paint: [0.2, 1.2], epais_paint: [1.9, 2.6], tete_paint: [3.3, 4.1], sites_paint: [4.8, 5.4], fin: 7.5 };
+const MOMENTS_MOL = { filament_fin: 1.3, filament_epais: 2.7, tete: 4.2, deux_sites: 5.5 };
 const MOMENTS_ET = { etiquettes: 2.5, corrige: 6.5 }, T_CORR_ET = 4.6;
 const FIN = vue === 'acces' ? TA.fin : vue === 'etiquettes' ? 8 : TM.fin;
 const MOTIFS = {
@@ -532,7 +534,10 @@ const pont = protocole({ id: config.id, commandes, config,
   progression: () => (S.fait ? 1 : 0),
   executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
 bulle($('feedback'), vue === 'acces' ? 'Une fibre au repos, très agrandie…' : vue === 'etiquettes' ? 'Des molécules à légender…' : 'Les molécules des filaments…');
-setTimeout(() => { if (!S.running && S.t === 0) start(); }, 1600);
+// ?attente=1 (17 novembre 2026) : dans le cours, la page attend le tuteur — c’est sa voix qui lance chaque moment
+// (play_until) ; un lancement tout seul jouait la scène avant lui et ses arrêts sur image étaient ignorés.
+const ATTENTE = new URLSearchParams(location.search).has('attente');
+setTimeout(() => { if (!ATTENTE && !S.running && S.t === 0) start(); }, 1600);
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>
 </body></html>
