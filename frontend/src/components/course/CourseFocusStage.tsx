@@ -351,10 +351,30 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
       if (!cible || iframeRef.current?.contains(cible)) return;
       if (cible.closest?.('[data-scene-cours] > main, [data-scene-cours] > header')) poser(false);
     };
+    // Plus sûr que le focus (17 novembre 2026 : le tuteur restait visible) : la simulation est servie par le site, on
+    // écoute donc le toucher directement dans sa page, à chaque chargement de l'iframe.
+    const dedans = () => poser(true);
+    let fenetre: Window | null = null;
+    const brancher = () => {
+      try {
+        fenetre?.removeEventListener('pointerdown', dedans, true);
+        fenetre = iframeRef.current?.contentWindow || null;
+        fenetre?.addEventListener('pointerdown', dedans, true);
+      } catch { fenetre = null; }   // autre origine : le focus suffit
+    };
+    brancher();
+    const cadre = iframeRef.current;
+    const suivreCadre = new MutationObserver(() => { const f = iframeRef.current; if (f && f !== suivi) { suivi?.removeEventListener('load', brancher); suivi = f; f.addEventListener('load', brancher); brancher(); } });
+    let suivi = cadre;
+    cadre?.addEventListener('load', brancher);
+    if (visuelRef.current) suivreCadre.observe(visuelRef.current, { childList: true, subtree: true });
     window.addEventListener('blur', versLaSimu);
     window.addEventListener('pointerdown', ailleurs, true);
     return () => {
       window.clearTimeout(attente);
+      suivreCadre.disconnect();
+      suivi?.removeEventListener('load', brancher);
+      try { fenetre?.removeEventListener('pointerdown', dedans, true); } catch { /* cadre parti */ }
       window.removeEventListener('blur', versLaSimu);
       window.removeEventListener('pointerdown', ailleurs, true);
       poser(false);
