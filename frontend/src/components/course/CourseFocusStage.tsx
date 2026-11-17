@@ -14,6 +14,7 @@ import ChampReponse, { BoutonPhoto, type ContexteOcr } from './SaisieReponse';
 import SansDefilement from './SansDefilement';
 import FiguresCahier from './FigureCahier';
 import { inscrireVoix } from './voixUnique';
+import { basculerPleinEcran, usePleinEcran } from './pleinEcran';
 import { taire as taireMemoire } from './memoire/voix';
 
 /**
@@ -105,6 +106,11 @@ const ANIMATIONS = `
   [data-scene-cours] [data-bulle] .text-xl { font-size: 16px; line-height: 1.3 }
   [data-scene-cours] [data-bulle] .text-lg { font-size: 14px; line-height: 1.35 }
   [data-scene-cours] [data-bulle] .mt-3 { margin-top: 6px }
+  /* les formules de la diapositive, sous une simulation : à sa droite (le tableau est très large en paysage, sa droite
+     souvent vide), en plus petit ; la simulation garde toute la hauteur (17 novembre 2026, ch12 « Le quotient de réaction ») */
+  [data-scene-cours] > main:has(> [data-formules-centre]):not(:has([data-observation])) { flex-direction: row; align-items: stretch }
+  [data-scene-cours] [data-formules-centre] { flex-direction: column; flex-wrap: nowrap; width: auto; max-width: 36%; justify-content: center; gap: 4px }
+  [data-scene-cours] [data-formules-centre] > div { font-size: clamp(13px, 4.6vh, 18px) !important; padding: 2px 8px }
   /* la question d'observation, sous la figure : une bande fine, pour laisser la hauteur à la figure */
   [data-scene-cours] [data-observation] { padding: 3px 10px }
   [data-scene-cours] [data-observation] p { font-size: 14px; line-height: 1.25 }
@@ -331,6 +337,13 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   const [panneau, setPanneau] = useState<'cahier' | 'explication' | 'exercices' | 'questions' | 'question_eleve' | null>(null);
   const [labControl, setLabControl] = useState<LabControlCommand | null>(null);
   const [simPrete, setSimPrete] = useState(false);
+  /** L'URL de la simulation chargée dans l'iframe. L'iframe a pour clé son URL : deux diapositives de suite sur la même
+   *  simulation la gardent, sans rechargement ni `onLoad`, donc sans `simPrete`. Elle est pourtant prête : la variante,
+   *  `sim_avant` et la question d'observation en fin de voix partent aussi (17 novembre 2026 : sur i2, f3, f5, t3, c5, r6
+   *  du cours du muscle, la variante ne partait jamais). Le `demarrer`, lui, reste lié au seul chargement. */
+  const urlChargee = useRef<string | null>(null);
+  const simGardee = visuel?.kind === 'simulation' && !!visuel.url && urlChargee.current === visuel.url;
+  const simDispo = simPrete || simGardee;
   const sequence = useRef(0);
   const prochainGeste = useRef(0);
   const gestesEnAttente = useRef<number[]>([]);
@@ -517,6 +530,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   useEffect(() => {
     // Une prédiction à faire : le tableau des questions est là d'emblée, la voix attend.
     setTemps(0); setEnLecture(false); setFinie(!piste?.url); setPanneau(predictionEnCours ? 'questions' : null); setSimPrete(false);
+    if (visuel?.kind !== 'simulation' || visuel.url !== urlChargee.current) urlChargee.current = null;
     setIndexQuestion(0); setRelance(false); relanceFaite.current = false;
     setDuree((piste?.duration_ms || 0) / 1000);
     dejaFaits.current = new Set(); demarree.current = false;
@@ -602,10 +616,10 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   }, [conc.acquis, deckId, slide.id]);
   // …et donnés à la simulation dès qu'elle est prête : elle entoure ce qui est à reprendre, coche ce qui est acquis.
   useEffect(() => {
-    if (!bilan || !simPrete) return;
+    if (!bilan || !simDispo) return;
     const acquis = bilan.competences.filter(c => c.statut === 'acquis');
     envoyerASim('set_parameters', { lacunes: bilan.lacunes, acquis: acquis.map(c => c.label), acquis_ids: acquis.map(c => c.id) });
-  }, [bilan, simPrete, envoyerASim]);
+  }, [bilan, simDispo, envoyerASim]);
   /** À la fin de la voix du bilan : le tuteur nomme ce qu'il reste à retravailler et ouvre la page de l'élève. */
   const direLesLacunes = useCallback(() => {
     const b = bilanRef.current;
@@ -1508,7 +1522,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   // (après la question d'observation, s'il y en a une : la variante ne change pas la scène pendant que l'élève regarde).
   useEffect(() => {
     const v = conc.variante;
-    if (!finie || !v?.etapes?.length || varianteFaite.current || !simPrete || (observation && !obsClose)) return;
+    if (!finie || !v?.etapes?.length || varianteFaite.current || !simDispo || (observation && !obsClose)) return;
     // Un schéma à légender laisse à l'élève une minute sans le toucher avant que le tuteur pose les étiquettes.
     const debut = Date.now();
     let id = 0;
@@ -1526,7 +1540,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     };
     id = window.setTimeout(essayer, (v.apres_s ?? 5) * 1000);
     return () => window.clearTimeout(id);
-  }, [finie, conc.variante, simPrete, parTuteur, observation, obsClose]);
+  }, [finie, conc.variante, simDispo, parTuteur, observation, obsClose]);
 
   // ── La question d'observation ──
   /** L'instant où la voix s'arrête : juste après `apres_mot` (null : la question vient à la fin de la voix). */
@@ -1563,8 +1577,8 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   }, [questions, observation?.sim_apres, envoyerASim]);
   // La simulation se tait sur la réponse (`sim_avant`) dès qu'elle est prête, tant que la question n'est pas close.
   useEffect(() => {
-    if (simPrete && observation?.sim_avant && !obsClose) envoyerASim('set_parameters', observation.sim_avant);
-  }, [simPrete, observation?.sim_avant, obsClose, envoyerASim]);
+    if (simDispo && observation?.sim_avant && !obsClose) envoyerASim('set_parameters', observation.sim_avant);
+  }, [simDispo, observation?.sim_avant, obsClose, envoyerASim]);
   const finirObservation = useCallback(async (tour: number) => {
     if (tour !== tourObs.current) return;
     await attendre(1400);
@@ -1604,10 +1618,10 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   // Sans `apres_mot` (ou introuvable) : à la fin de la voix, une fois la simulation prête.
   useEffect(() => {
     if (!observation || obsFaite.current || tObservation !== null || !finie) return;
-    if (visuel?.kind === 'simulation' && !simPrete) return;
+    if (visuel?.kind === 'simulation' && !simDispo) return;
     const id = window.setTimeout(ouvrirObservation, 700);
     return () => window.clearTimeout(id);
-  }, [observation, tObservation, finie, simPrete, visuel?.kind, ouvrirObservation]);
+  }, [observation, tObservation, finie, simDispo, visuel?.kind, ouvrirObservation]);
   /** Un silence de plus : le prochain indice (le tuteur peut montrer un repère), puis les cartes. */
   const aiderObservation = useCallback(() => {
     const o = observation, e = obsRef.current;
@@ -1998,7 +2012,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
                 // les tableaux à la craie se redessinent à la taille du cadre : ils remplissent la zone ; les autres
                 // simulations (dessinées pour 760 × 470) gardent leur format
                 style={/-tableau\//.test(visuel.url) ? undefined : { aspectRatio: '760 / 470', maxHeight: '100%' }}
-                onLoad={() => window.setTimeout(() => setSimPrete(true), 700)}
+                onLoad={() => { const url = visuel.url || null; window.setTimeout(() => { urlChargee.current = url; setSimPrete(true); }, 700); }}
               />
             )}
             {visuel.kind === 'image' && visuel.url && (
@@ -2062,8 +2076,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
             13 novembre 2026 : « ces équations masquent les simulations ») ; la place est gardée dès le début, la figure
             ne saute pas quand une formule apparaît. */}
         {centre.length > 0 && (
-          <div className={`flex ${visuel ? 'pointer-events-none w-full shrink-0 flex-row flex-wrap justify-center gap-2' : table ? 'flex-row flex-wrap justify-center gap-3' : 'flex-col items-center gap-4'}`}
-            style={visuel && tuteur3D ? { paddingRight: COLONNE_TUTEUR } : undefined}>
+          <div data-formules-centre={visuel ? '' : undefined} className={`flex ${visuel ? 'pointer-events-none w-full shrink-0 flex-row flex-wrap justify-center gap-2' : table ? 'flex-row flex-wrap justify-center gap-3' : 'flex-col items-center gap-4'}`}>
             {centre.map((c, i) => {
               const vu = toutVisible || temps >= c.t;
               return (
@@ -2292,6 +2305,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
           </Bulle>
         )}
         <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          <BoutonPleinEcran />
           {deckControls}
           {/* Le seul bouton qui fait avancer le cours : mis en avant quand l'étape est finie ; il clignote à la relance. */}
           <button onClick={faireSuite} disabled={etapeSuite.quoi === 'rien'} data-suite={etapeSuite.quoi}
@@ -3025,6 +3039,37 @@ function useCourt() {
     return () => m.removeEventListener('change', suivre);
   }, []);
   return court;
+}
+
+/** Plein écran comme un diaporama, sur ordinateur et sur téléphone (17 novembre 2026) : le lecteur prend tout l'écran,
+ *  le tableau et les simulations grandissent. « ⛶ » ou la touche F pour entrer, la même chose ou Échap pour sortir. */
+function BoutonPleinEcran() {
+  const plein = usePleinEcran();
+  useEffect(() => {
+    const touche = (e: KeyboardEvent) => {
+      if (e.key !== 'f' && e.key !== 'F') return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const cible = e.target as HTMLElement | null;
+      if (cible && (cible.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(cible.tagName))) return;
+      e.preventDefault();
+      basculerPleinEcran();
+    };
+    window.addEventListener('keydown', touche);
+    return () => window.removeEventListener('keydown', touche);
+  }, []);
+  return (
+    <button type="button" onClick={basculerPleinEcran} data-plein-ecran={plein ? 'oui' : 'non'}
+      title={plein ? 'Quitter le plein écran (Échap)' : 'Plein écran (F)'} aria-label={plein ? 'Quitter le plein écran' : 'Plein écran'}
+      className={`flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-sm ${plein
+        ? 'bg-white/10 text-white/80 hover:bg-white/20' : 'bg-cyan-400/20 text-cyan-100 hover:bg-cyan-400/30'}`}>
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        {plein
+          ? <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
+          : <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />}
+      </svg>
+      <span className="hidden lg:inline">{plein ? 'Quitter' : 'Plein écran'}</span>
+    </button>
+  );
 }
 
 /** Sur téléphone en paysage, la question (énoncé, choix, retour) grandit jusqu'à remplir sa carte (16 novembre 2026 :

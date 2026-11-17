@@ -388,7 +388,7 @@ const X1 = 60, X2 = 330, Y1 = 70, Y2 = 250, YA = 154, YBp = 166;
 const RES = { x: 150, y: 62, w: 60, h: 16 }, BOB = { x: 90, y: 128, w: 64, h: 20 }, CHIM = { x: 356, y: 118, w: 20, h: 34 }, GB = { x: 140, y: 232, w: 100, h: 36 };
 const CAS = { x: 432, y: 38, w: 320, h: 250 }, ECR = { x: 458, y: 48, w: 284, h: 200 }, V1 = [446, 100], MS = [446, 220];
 const KX0 = 120, KX1 = 280, KY = 330;     // curseur k : 0 → 20 Ω
-const YLG = [368, 392, 414], YLD = [312, 336, 360, 384];
+const YLG = [364, 392, 415], YLD = [312, 336, 360, 384];
 /* Agrandissement du 15 novembre 2026 (« la simulation n'occupe qu'une bande étroite, les textes sont minuscules ») :
  * Scene en { large: true }, le cadre prend le format du tableau (scene.L de 760 à 1596, hauteur 420). Tableau large
  * (L ≥ 1150, écran d'ordinateur) : le circuit, la boîte G, la poignée k et l'oscilloscope sont agrandis ensemble
@@ -475,6 +475,9 @@ function circuit(c) {
 /** Largeur d’un texte de craie (indices et exposants plus petits, comme le kit et exposants.js). */
 const CHIF = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
 function largeur(c, s, taille) {
+  // une fraction « ⟦num|dén⟧ » (deux étages, comme dans le cahier) : son plus long étage (78 %) et une marge
+  if (String(s).includes('⟦')) return String(s).split(/(⟦[^⟧]*⟧)/).filter(Boolean).reduce((w, p) => w + (p[0] !== '⟦' ? largeur(c, p, taille)
+    : Math.max(...p.slice(1, -1).split('|').map(e => largeur(c, e, taille * .78))) + Math.max(taille, (c.tailleMin || 0) / (c.echelle || 1)) * .36), 0);
   const t = Math.max(taille, (c.tailleMin || 0) / (c.echelle || 1));
   s = String(s).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => CHIF[ch]).join('') + '}');
   let w = 0;
@@ -493,6 +496,13 @@ function ligne(c, morceaux, x, y, o = {}) {
 /* ── Dessin ──────────────────────────────────────────────────────────── */
 function dessiner(c, M) {
   MO = M; M.scene.cadre(41); disposer(M.scene.L);
+  if (!COL) {
+    // l'équation a des fractions sur deux étages ; sur un petit écran leurs étages sont écrits à la taille minimale :
+    // les deux lignes du bas-gauche s'écartent d'autant (17 novembre 2026)
+    const se = Math.max(16 * .78, (c.tailleMin || 0) / (c.echelle || 1));
+    YLG[1] = Math.min(392, Math.round(415 - 12.5 - (1.15 * se - 5.1)));
+    YLG[0] = Math.round(Math.max(362, Math.min(364, YLG[1] - (5.1 + 1.3 * se) - 7.4)));   // 362 : sous les graduations de k
+  }
   const e = ecran();
   BASE = c.ctx.getTransform();
   if (DX) c.ctx.translate(DX, 0);   // grand écran : la disposition d'origine, centrée dans le cadre
@@ -533,13 +543,13 @@ function dessiner(c, M) {
   });
   M.etape(c, 'equation', () => hors(c, () => {
     POS.eq1 = ligne(c, [['u_C + u_R + u_b = u_G = k·i', 'blanc']], 14, YLG[0])[0];
-    POS.eq2 = ligne(c, [['L·d²q/dt² + ', 'blanc'], ['(R + r − k)·dq/dt', 'blanc'], [' + q/C = 0', 'blanc']], 14, YLG[1]);
+    POS.eq2 = ligne(c, [['L·⟦d²q|dt²⟧ + ', 'blanc'], ['(R + r − k)·⟦dq|dt⟧', 'blanc'], [' + ⟦q|C⟧ = 0', 'blanc']], 14, YLG[1]);
   }));
   M.etape(c, 'compensation', () => {
     const m = POS.eq2 ? POS.eq2[1] : [100, 230];
     hors(c, () => {
       c.ligne(m[0] - 2, YLG[1] - 6 * KT, m[1] + 2, YLG[1] - 6 * KT, { couleur: 'jaune', largeur: 2.6 });
-      c.ligne(m[0], YLG[1] + 2 * KT, m[1], YLG[1] - 14 * KT, { couleur: 'jaune', largeur: 2 });
+      c.ligne(m[0], YLG[1] + 8 * KT, m[1], YLG[1] - 18 * KT, { couleur: 'jaune', largeur: 2 });   // le terme barré tient sur deux étages (fraction)
     });
     phrase(c, 'k = R + r = 20 Ω : le terme du milieu s’annule', 14, YLG[2], { couleur: 'jaune', taille: 16, max: 406 });
   });

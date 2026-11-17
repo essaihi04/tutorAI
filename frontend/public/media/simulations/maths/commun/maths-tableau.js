@@ -121,6 +121,35 @@
     return scene;
   }
 
+  /**
+   * Deux colonnes quand elles remplissent mieux le tableau (16 novembre 2026, règle 9 du skill : « une vue qui laisse plus
+   * d'un tiers du cadre vide est remise en page »). Un calcul écrit en une longue colonne étroite, dans un cadre large et
+   * bas, ne peut pas être agrandi (il touche le haut et le bas) : on le coupe en deux colonnes côte à côte, comme au tableau.
+   * boites : les lignes dans l'ordre, [{ x, y (ligne de base), w, t (taille) }] ; L : largeur du cadre (scene.L).
+   * Renvoie pour chaque ligne le décalage [dx, dy] à appliquer (tous nuls : une colonne). Coupure seulement entre deux
+   * rangées (jamais entre une ligne et sa voisine posée à la même hauteur) ; on ne change que si l'écriture y gagne ≥ 10 %.
+   */
+  function colonnes(boites, L = VW, o = {}) {
+    const n = boites.length, nul = boites.map(() => [0, 0]);
+    if (n < (o.min ?? 4)) return nul;
+    const bx = (a, b) => { let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity; for (let i = a; i < b; i++) { const q = boites[i]; x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x + q.w); y0 = Math.min(y0, q.y - q.t * .95); y1 = Math.max(y1, q.y + q.t * .35); } return { x0, x1, y0, y1 }; };
+    const note = (w, h) => Math.min(L / (w + 2 * MARGE), VH / (h + 2 * MARGE), ZOOM_MAX);
+    const T = bx(0, n), y0 = o.haut ?? T.y0, w0 = T.x1 - Math.min(T.x0, o.gauche ?? T.x0), h0 = T.y1 - y0, n1 = note(w0, h0);
+    const rempli = (w, h, s) => Math.min(1, (w + 2 * MARGE) * s / L) * Math.min(1, (h + 2 * MARGE) * s / VH), r1 = rempli(w0, h0, n1);
+    let best = null;
+    for (let i = 2; i <= n - 2; i++) {
+      if (!(boites[i].y > boites[i - 1].y + 1)) continue;
+      const A = bx(0, i), B = bx(i, n), dx = A.x1 + (o.ecart ?? 40) - B.x0, dy = A.y0 - B.y0;
+      const x1 = B.x1 + dx; if (x1 + MARGE + .04 * (x1 - T.x0) > L) continue;   // une marge : la police définitive est un peu plus large
+      const h = Math.max(A.y1, B.y1 + dy) - y0, w = x1 - Math.min(T.x0, o.gauche ?? T.x0), sc = note(w, h);
+      const r = rempli(w, h, sc), val = Math.min(sc / n1, 1.25) + r;   // écrire plus grand d'abord, puis remplir le tableau
+      if (!best || val > best.val + 1e-6 || (Math.abs(val - best.val) < 1e-6 && Math.abs(i - n / 2) < Math.abs(best.i - n / 2))) best = { i, dx, dy, sc, r, val };
+    }
+    // deux colonnes si l'écriture y gagne ≥ 10 %, ou si, à taille presque égale (≥ 95 %), le tableau est nettement plus rempli
+    if (!best || !(best.sc >= n1 * 1.1 || (best.sc >= n1 * .95 && best.r >= r1 * 1.25))) return nul;
+    return boites.map((_, k) => (k >= best.i ? [best.dx, best.dy] : [0, 0]));
+  }
+
   const fr = (v, d = 2) => {
     if (!Number.isFinite(v)) return v > 0 ? '+∞' : v < 0 ? '−∞' : '—';
     let s = (+v.toFixed(d)).toString();
@@ -521,7 +550,7 @@
     }
   }
 
-  window.MathsTableau = { Scene, page, fr, grille, VW, VH, peindre, bloc, nuance, rvb,
+  window.MathsTableau = { Scene, page, fr, grille, VW, VH, peindre, bloc, nuance, rvb, colonnes,
     NET, EASE, doux, teinte, remplir, peint, zonePts, lueur, trace, halo, pastille };
   window.OndesTableau = window.OndesTableau || { Scene, VW, VH };   // bilan.html / carte.html du kit des ondes s'y appuient
 })();

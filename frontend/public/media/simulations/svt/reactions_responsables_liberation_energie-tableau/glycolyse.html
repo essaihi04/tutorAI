@@ -16,14 +16,18 @@
 /*
  * La glycolyse (cours SVT « Libération de l'énergie », diapositives le_g1 à le_g3, capacité LE3), 10 novembre 2026.
  * Ce qui se voit, dans l'ordre (t en s de la scène) :
+ *   (17 novembre 2026 : un moment par chose que dit le tuteur ; chaque écrit quand il le dit)
  *   glucose_dans_hyaloplasme (2,5) : la cellule peinte, le noyau, une mitochondrie au loin ; le glucose (6 billes de
  *     carbone) dans le hyaloplasme ;
- *   deux_atp_depenses (6)          : deux ATP du compteur viennent se décharger sur le glucose (ils deviennent ADP) ;
- *   coupure_en_deux (9)            : les 6 billes se séparent en deux groupes de 3 ;
- *   taxis_charges (12)             : deux taxis NAD+ arrivent, chacun prend deux hydrogènes : NADH,H+ ;
- *   quatre_atp_formes (15)         : quatre ATP se forment (gain net : 4 − 2 = 2) ;
- *   deux_acides_pyruviques (17)    : chaque groupe de 3 est nommé : acide pyruvique, CH3-CO-COOH ;
- *   accolade_bilan (21)            : l'accolade des trois produits, puis la réaction globale.
+ *   glycolyse_ici (3,4)            : « hyaloplasme : ici, la glycolyse » ;   sans_o2 (4,2) : « pas de dioxygène utilisé » ;
+ *   deux_atp_depenses (7,4)        : deux ATP du compteur viennent se décharger sur le glucose (ils deviennent ADP) ;
+ *   coupure_en_deux (10,8)         : les 6 billes se séparent en deux groupes de 3 ;
+ *   taxis_charges (14)             : deux taxis NAD+ arrivent, chacun prend deux hydrogènes : NADH,H+ ;
+ *   quatre_atp_formes (16,8)       : quatre ATP se forment ;   gain_net (17,8) : 4 − 2 = 2 ATP ;
+ *   deux_acides_pyruviques (18,8)  : chaque groupe de 3 est nommé : acide pyruvique ;   formule (19,8) : CH3-CO-COOH ;
+ *   accolade_bilan (21,6)          : l'accolade des trois produits ;
+ *   reaction_droite (22,8), reaction_glucose (23,6), reaction_adp (24,6), reaction_nad (25,5) : la réaction globale,
+ *     écrite comme le tuteur la construit : les produits à droite, puis à gauche le glucose, 2 ADP + 2 Pi, 2 NAD+.
  * Aucun intermédiaire, aucune enzyme nommés (hors programme). Pas de dioxygène dans la scène : la glycolyse n'en a pas
  * besoin. Le rythme est celui d'une explication, pas une vitesse réelle.
  */
@@ -33,16 +37,26 @@ const P = window.SVTPeinture;
 const ENCRE = '#0b1f2a';   // (16 novembre 2026) texte sombre et gras sur les capsules et protéines claires : bien lisible
 const $ = id => document.getElementById(id);
 
-const M = { glucose_dans_hyaloplasme: 2.5, deux_atp_depenses: 6, coupure_en_deux: 9, taxis_charges: 12, quatre_atp_formes: 15, deux_acides_pyruviques: 17, accolade_bilan: 21 };
-const FIN = 21.5;
+const M = { glucose_dans_hyaloplasme: 2.5, glycolyse_ici: 3.4, sans_o2: 4.2, deux_atp_depenses: 7.4, coupure_en_deux: 10.8, taxis_charges: 14,
+  quatre_atp_formes: 16.8, gain_net: 17.8, deux_acides_pyruviques: 18.8, formule: 19.8, accolade_bilan: 21.6,
+  reaction_droite: 22.8, reaction_glucose: 23.6, reaction_adp: 24.6, reaction_nad: 25.5 };
+const FIN = 26;
 const MOTIFS = {
   glucose_dans_hyaloplasme: 'le glucose est dans le hyaloplasme, loin de la mitochondrie',
   deux_atp_depenses: 'deux ATP sont dépensés pour lancer la glycolyse',
   coupure_en_deux: 'le glucose (6 C) est coupé en deux molécules à 3 C',
   taxis_charges: 'deux NAD+ ont pris chacun deux hydrogènes : deux NADH,H+',
-  quatre_atp_formes: 'quatre ATP sont formés : gain net de deux ATP',
-  deux_acides_pyruviques: 'deux acides pyruviques, CH3-CO-COOH',
-  accolade_bilan: 'le bilan de la glycolyse et sa réaction globale',
+  glycolyse_ici: 'la glycolyse commence ici, dans le hyaloplasme',
+  sans_o2: 'la glycolyse n’utilise pas de dioxygène',
+  quatre_atp_formes: 'quatre ATP sont formés',
+  gain_net: 'deux dépensés, quatre formés : gain net de deux ATP',
+  deux_acides_pyruviques: 'chaque molécule à 3 carbones : un acide pyruvique',
+  formule: 'l’acide pyruvique : CH3-CO-COOH',
+  accolade_bilan: 'le bilan de la glycolyse',
+  reaction_droite: 'la réaction globale : à droite, les produits',
+  reaction_glucose: 'à gauche : le glucose',
+  reaction_adp: 'pour 2 ATP : 2 ADP + 2 Pi',
+  reaction_nad: 'pour 2 NADH,H+ : 2 NAD+',
 };
 /* Mise en page du 16 novembre 2026 (cadre étroit du lecteur, textes d'au moins 15 px) : cellule agrandie, mitochondrie grande
  * (deux membranes et crêtes reconnaissables) avec son nom au-dessus, noyau en bas, molécules espacées, légendes hors des objets. */
@@ -62,7 +76,7 @@ scene.avancer = chrono.avancer;
 
 /* Position de la bille de carbone i (0..5) à l'instant t. */
 function carbone(i, t) {
-  const u = doux(chrono.part(6.5, 9, t));
+  const u = doux(chrono.part(7.9, 10.4, t));
   const x0 = GLU.x + (i - 2.5) * PAS, y0 = GLU.y;
   const cible = i < 3 ? GAUCHE : DROITE, k = i % 3;
   return [mix(x0, cible.x + (k - 1) * PAS, u), mix(y0, cible.y, u)];
@@ -92,9 +106,21 @@ function dessiner(c) {
   c.texte('hyaloplasme', 150, 114, { couleur: 'vert', taille: 15 });
   c.texte('noyau', NOY.x, NOY.y + 5, { couleur: 'blanc', taille: 13, align: 'center' });
   c.texte('mitochondrie', MITO.x, MITO.y - MITO.ry - 10, { couleur: 'orange', taille: 14, align: 'center' });
-  c.texte('pas de dioxygène utilisé', 668, 362, { couleur: 'faible', taille: 13, align: 'center' });
-  c.repere('hyaloplasme', 144, 94, 120, 30, 'le hyaloplasme');
-  c.repere('mitochondrie', MITO.x - MITO.rx, MITO.y - MITO.ry - 40, 2 * MITO.rx, 2 * MITO.ry + 40, 'la mitochondrie, loin de la glycolyse');
+  // la largeur d'un texte telle qu'il est écrit (police de la mosaïque, minimum lisible à l'écran)
+  const larg = (s, taille) => { const tt = Math.max(taille * ((MOS.blocs() || {}).police || 1), c.echelle && c.tailleMin ? c.tailleMin / c.echelle : 0);
+    return window.Tableau.Craie.segments(String(s)).reduce((w, g) => w + c.largeurTexte(g.t, g.sub ? tt * .62 : tt), 0); };   // indices écrits à 0,62 (kit)
+  if (t >= 3.6) {
+    ecrit.ecrire(c, 'sansO2', () => c.texte('pas de dioxygène utilisé', 668, 362, { couleur: 'faible', taille: 13, align: 'center' }));
+    c.repere('sans_o2', 600, 346, 136, 22, 'pas de dioxygène utilisé');
+  }
+  c.repere('hyaloplasme', 144, 94, larg('hyaloplasme', 15) + 12, 30, 'le hyaloplasme');
+  c.repere('noyau', NOY.x - NOY.r - 4, NOY.y - NOY.r - 4, 2 * NOY.r + 8, 2 * NOY.r + 8, 'le noyau');
+  if (t >= 2.7) {
+    const x = 150 + larg('hyaloplasme', 15) + 6;
+    ecrit.ecrire(c, 'ici', () => c.texte(': ici, la glycolyse', x, 114, { couleur: 'vert', taille: 15 }));
+    c.repere('ecrit_glycolyse', x - 2, 98, larg(': ici, la glycolyse', 15) + 4, 22, 'ici, dans le hyaloplasme : la glycolyse');
+  }
+  c.repere('mitochondrie', MITO.x - MITO.rx - 4, MITO.y - MITO.ry - 4, 2 * MITO.rx + 8, 2 * MITO.ry + 8, 'la mitochondrie, loin de la glycolyse');
   // le compteur, à droite
   c.texte('Compteur', 666, 84, { couleur: 'jaune', taille: 17, align: 'center' });
   c.ligne(590, 92, 742, 92, { couleur: 'tresfaible', largeur: 1.2 });
@@ -104,27 +130,31 @@ function dessiner(c) {
   if (a1 > 0) {
     // le glucose : six billes de carbone
     // les liaisons entre carbones (celle du milieu se rompt à la coupure), puis les atomes
-    c.direct(() => { const cu = doux(chrono.part(6.5, 7.6, t)); for (let i = 0; i < 5; i++) { const [x1, y1] = carbone(i, t), [x2, y2] = carbone(i + 1, t), al = a1 * (i === 2 ? 1 - cu : 1); if (al > .02) P.liaison(c.ctx, x1, y1, x2, y2, { alpha: al }); } if (t >= 6.5 && t < 7.8) P.eclat(c.ctx, GLU.x, mix(GLU.y, GAUCHE.y, doux(chrono.part(6.5, 9, t))), 20, 1 - chrono.part(6.5, 7.8, t)); });
+    c.direct(() => { const cu = doux(chrono.part(7.9, 9.0, t)); for (let i = 0; i < 5; i++) { const [x1, y1] = carbone(i, t), [x2, y2] = carbone(i + 1, t), al = a1 * (i === 2 ? 1 - cu : 1); if (al > .02) P.liaison(c.ctx, x1, y1, x2, y2, { alpha: al }); } if (t >= 7.9 && t < 9.2) P.eclat(c.ctx, GLU.x, mix(GLU.y, GAUCHE.y, doux(chrono.part(7.9, 10.4, t))), 20, 1 - chrono.part(7.9, 9.2, t)); });
     for (let i = 0; i < 6; i++) { const [x, y] = carbone(i, t); c.direct(() => P.bille(c.ctx, x, y, 12, CARBONE, { alpha: a1 })); }
-    if (t < 6.5) {
+    if (t < 7.9) {
       ecrit.ecrire(c, 'glucose', () => { c.texte('glucose : C_{6}H_{12}O_{6} (6 C)', GLU.x, GLU.y - 30, { couleur: 'jaune', taille: 16, align: 'center' }); });
-      c.repere('glucose', GLU.x - 90, GLU.y - 50, 180, 68, 'le glucose, 6 carbones');
+      if (a1 > .3) c.repere('glucose', GLU.x - 3 * PAS + 4, GLU.y - 50, 6 * PAS - 8, 66, 'le glucose, 6 carbones');
     }
   }
   // 2 ATP dépensés : du compteur jusqu'au glucose, ils y laissent un phosphate et repartent en ADP
-  if (t >= 3) {
-    const u = doux(chrono.part(3, 5, t)), v = chrono.part(5, 6, t);
+  if (t >= 4.4) {
+    const u = doux(chrono.part(4.4, 6.4, t)), v = chrono.part(6.4, 7.4, t);
     for (let k = 0; k < 2; k++) {
       const xa = mix(620, GLU.x - 44 + k * 88, u), ya = mix(118, GLU.y + 40, u) + 58 * Math.sin(Math.PI * u);   // ils arrivent par en dessous : ni l'étiquette ni la chaîne ne sont traversées
-      if (t < 6.6) carte(c, xa, ya, v > .5 ? 'ADP' : 'ATP', v <= .5, 1 - chrono.part(6, 6.6, t));
-      if (v > 0 && t < 6.2) c.direct(() => P.eclat(c.ctx, xa, ya - 14, 14 * v, 1 - v));
+      if (t < 8.0) carte(c, xa, ya, v > .5 ? 'ADP' : 'ATP', v <= .5, 1 - chrono.part(7.4, 8.0, t));
+      if (v > 0 && t < 7.6) c.direct(() => P.eclat(c.ctx, xa, ya - 14, 14 * v, 1 - v));
     }
-    ecrit.ecrire(c, 'depenses', () => c.texte('ATP dépensés : 2', 594, 120, { couleur: 'orange', taille: 15 }));
+    if (t >= 6.4 && t < 7.6) c.repere('atp_depenses', GLU.x - 72, GLU.y + 28, 232, 26, 'deux ATP qui se déchargent');
   }
-  if (t >= 9) ecrit.ecrire(c, 'coupure', () => c.texte('6 C → 3 C + 3 C', (GAUCHE.x + DROITE.x) / 2, GAUCHE.y - 34, { couleur: 'jaune', taille: 15, align: 'center' }));
+  if (t >= 6.6) {
+    ecrit.ecrire(c, 'depenses', () => c.texte('ATP dépensés : 2', 594, 120, { couleur: 'orange', taille: 15 }));
+    c.repere('ecrit_depenses', 590, 104, larg('ATP dépensés : 2', 15) + 8, 22, 'ATP dépensés : 2');
+  }
+  if (t >= 10.4) ecrit.ecrire(c, 'coupure', () => c.texte('6 C → 3 C + 3 C', (GAUCHE.x + DROITE.x) / 2, GAUCHE.y - 34, { couleur: 'jaune', taille: 15, align: 'center' }));
   // deux taxis NAD+ arrivent, prennent deux hydrogènes chacun
-  if (t >= 9.5) {
-    const u = doux(chrono.part(9.5, 11, t)), v = doux(chrono.part(11, 12, t));
+  if (t >= 11) {
+    const u = doux(chrono.part(11, 12.5, t)), v = doux(chrono.part(12.5, 13.5, t));
     for (const [k, G] of [[0, GAUCHE], [1, DROITE]]) {
       const xt = mix(k ? 520 : 70, G.x, u), yt = mix(380, G.y + 92, u);
       for (let h = 0; h < 2; h++) {
@@ -133,62 +163,81 @@ function dessiner(c) {
       }
       taxi(c, xt, yt, v >= 1);
     }
-    c.repere('nadh', GAUCHE.x - 40, GAUCHE.y + 76, DROITE.x - GAUCHE.x + 80, 34, 'les deux taxis : NAD+ puis NADH,H+');
-    if (t >= 12) ecrit.ecrire(c, 'nadh', () => c.texte('NAD+ → NADH,H+ : 2', 594, 214, { couleur: 'cyan', taille: 15 }));
+    c.repere('nadh', GAUCHE.x - 44, GAUCHE.y + 78, DROITE.x - GAUCHE.x + 88, 30, 'les deux taxis : NAD+ puis NADH,H+');
+    if (t >= 13.5) {
+      ecrit.ecrire(c, 'nadh', () => c.texte('NAD+ → NADH,H+ : 2', 594, 214, { couleur: 'cyan', taille: 15 }));
+      c.repere('ecrit_nadh', 590, 198, larg('NAD+ → NADH,H+ : 2', 15) + 8, 22, 'NAD+ → NADH,H+ : 2');
+    }
   }
   // 4 ATP formés : ils naissent près des deux molécules et vont au compteur
-  if (t >= 12.5) {
-    const u = doux(chrono.part(13, 14.6, t));
+  if (t >= 14.2) {
+    const u = doux(chrono.part(14.7, 16.3, t));
     for (let k = 0; k < 4; k++) {
       const G = k < 2 ? GAUCHE : DROITE, x0 = G.x + (k % 2 ? 30 : -30), y0 = G.y + 44;   // ils naissent sous les molécules (place libre à cet instant), pas sur une légende
-      const a = chrono.part(12.5, 13, t);
+      const a = chrono.part(14.2, 14.7, t);
       if (u < 1) carte(c, mix(x0, 640, u), mix(y0, 146, u), 'ATP', true, a);
     }
-    if (t >= 14.6) {
-      ecrit.ecrire(c, 'formes', () => {
-        c.texte('ATP formés : 4', 594, 148, { couleur: 'vert', taille: 15 });
-        c.texte('gain net : 4 − 2 = 2 ATP', 594, 176, { couleur: 'jaune', taille: 15 });
-      });
+    if (t >= 16.3) {
+      ecrit.ecrire(c, 'formes', () => c.texte('ATP formés : 4', 594, 148, { couleur: 'vert', taille: 15 }));
+      c.repere('ecrit_formes', 590, 132, larg('ATP formés : 4', 15) + 8, 22, 'ATP formés : 4');
+    }
+    if (t >= 17.0) {
+      ecrit.ecrire(c, 'gain', () => c.texte('gain net : 4 − 2 = 2 ATP', 594, 176, { couleur: 'jaune', taille: 15 }));
+      c.repere('gain_net', 590, 160, larg('gain net : 4 − 2 = 2 ATP', 15) + 8, 22, 'gain net : 2 ATP');
     }
   }
-  if (t >= 9) c.repere('acide_pyruvique', GAUCHE.x - 50, GAUCHE.y - 20, DROITE.x - GAUCHE.x + 100, 80, 'les deux molécules à 3 carbones');
-  // les deux acides pyruviques nommés
-  if (t >= 15.5) {
-    ecrit.ecrire(c, 'pyruvique', () => {
-      for (const G of [GAUCHE, DROITE]) {
-        c.texte('acide pyruvique', G.x, G.y + 34, { couleur: 'blanc', taille: 14, align: 'center' });
-        c.texte('CH_3-CO-COOH', G.x, G.y + 56, { couleur: 'jaune', taille: 14, align: 'center' });
-      }
-    });
+  if (t >= 10.4) c.repere('acide_pyruvique', GAUCHE.x - 50, GAUCHE.y - 20, DROITE.x - GAUCHE.x + 100, 40, 'les deux molécules à 3 carbones');
+  // les deux acides pyruviques nommés, puis leur formule
+  if (t >= 18.0) ecrit.ecrire(c, 'pyruvique', () => { for (const G of [GAUCHE, DROITE]) c.texte('acide pyruvique', G.x, G.y + 34, { couleur: 'blanc', taille: 14, align: 'center' }); });
+  if (t >= 19.0) {
+    ecrit.ecrire(c, 'formule', () => { for (const G of [GAUCHE, DROITE]) c.texte('CH_3-CO-COOH', G.x, G.y + 56, { couleur: 'jaune', taille: 14, align: 'center' }); });
+    c.repere('ecrit_formule', GAUCHE.x - 56, GAUCHE.y + 42, DROITE.x - GAUCHE.x + 112, 20, 'CH3-CO-COOH');
   }
-  // le bilan : l'accolade des trois produits, puis la réaction globale
-  if (t >= 17.5) {
+  // le bilan : l'accolade des trois produits
+  if (t >= 20.0) {
     ecrit.ecrire(c, 'bilan', () => {
       c.texte('Bilan, pour 1 glucose :', 594, 262, { couleur: 'jaune', taille: 15 });
       c.trait([[596, 274], [590, 280], [590, 300], [584, 306], [590, 312], [590, 332], [596, 338]], { couleur: 'jaune', largeur: 2 });
       c.texte('2 acides pyruviques', 602, 284, { couleur: 'blanc', taille: 14 });
       c.texte('2 ATP (net)', 602, 308, { couleur: 'blanc', taille: 14 });
       c.texte('2 NADH,H+', 602, 332, { couleur: 'blanc', taille: 14 });
-      c.texte('C_{6}H_{12}O_{6} + 2 ADP + 2 Pi + 2 NAD+ → 2 CH_3-CO-COOH + 2 ATP + 2 NADH,H+', 380, 414, { couleur: 'jaune', taille: 14, align: 'center', max: 740 });
     });
     c.repere('bilan', 580, 246, 166, 98, 'le bilan de la glycolyse');
-    c.repere('reaction', 20, 398, 720, 22, 'la réaction globale de la glycolyse');
+  }
+  // la réaction globale, construite comme le tuteur la dit : les produits à droite, puis à gauche ce qui les a donnés
+  if (t >= 21.8) {
+    const morceaux = ['C_{6}H_{12}O_{6}', ' + 2 ADP + 2 Pi', ' + 2 NAD+', '  →  2 CH_3-CO-COOH + 2 ATP + 2 NADH,H+'];
+    let ta = 14; const W0 = morceaux.reduce((a, m) => a + larg(m, ta), 0); if (W0 > 730) ta *= 730 / W0;
+    const W = morceaux.reduce((a, m) => a + larg(m, ta), 0); let x = 380 - W / 2; const xs = morceaux.map(m => { const x0 = x; x += larg(m, ta); return x0; });
+    const debut = [23.0, 23.8, 24.8, 21.8], cles = ['r_glu', 'r_adp', 'r_nad', 'r_droite'], reps = ['reaction_glucose', 'reaction_adp', 'reaction_nad', 'reaction_droite'];
+    const noms = ['à gauche : le glucose', '2 ADP + 2 Pi', '2 NAD+', 'à droite : les produits'];
+    morceaux.forEach((m, i) => {
+      if (t < debut[i]) return;
+      ecrit.ecrire(c, cles[i], () => c.texte(m, xs[i], 414, { couleur: 'jaune', taille: ta }));
+      c.repere(reps[i], xs[i] + (i ? 6 : -2), 398, larg(m, ta) - (i ? 6 : -4), 22, noms[i]);
+    });
+    c.repere('reaction', xs[0] - 4, 398, W + 8, 22, 'la réaction globale de la glycolyse');
   }
 }
 
 function phase(t) {
   if (t < 1) return 'La cellule : hyaloplasme, noyau, une mitochondrie à droite. Le glucose n’est pas encore là.';
-  if (t < 3) return 'Le glucose (6 billes de carbone, C6H12O6) est dans le hyaloplasme, loin de la mitochondrie.';
-  if (t < 6.5) return 'Deux ATP du compteur viennent se décharger sur le glucose : ils deviennent ADP (2 ATP dépensés).';
-  if (t < 9.5) return 'Le glucose (6 C) se coupe en deux molécules à 3 carbones.';
-  if (t < 12.5) return 'Deux taxis NAD+ arrivent ; chacun prend deux hydrogènes et devient NADH,H+.';
-  if (t < 15.5) return 'Quatre ATP se forment et vont au compteur : 4 formés − 2 dépensés = 2 ATP gagnés.';
-  if (t < 17.5) return 'Chaque molécule à 3 carbones est nommée : acide pyruvique, CH3-CO-COOH.';
-  return 'Bilan écrit à droite : 2 acides pyruviques, 2 ATP nets, 2 NADH,H+ ; en bas la réaction globale : C6H12O6 + 2 ADP + 2 Pi + 2 NAD+ → 2 CH3-CO-COOH + 2 ATP + 2 NADH,H+.';
+  if (t < 2.7) return 'Le glucose (6 billes de carbone, C6H12O6) est dans le hyaloplasme, loin de la mitochondrie.';
+  if (t < 4.4) return 'Écrit : « hyaloplasme : ici, la glycolyse »' + (t >= 3.6 ? ' ; « pas de dioxygène utilisé ».' : '.');
+  if (t < 7.9) return 'Deux ATP du compteur viennent se décharger sur le glucose : ils deviennent ADP (2 ATP dépensés).';
+  if (t < 11) return 'Le glucose (6 C) se coupe en deux molécules à 3 carbones : 6 C → 3 C + 3 C.';
+  if (t < 14.2) return 'Deux taxis NAD+ arrivent ; chacun prend deux hydrogènes et devient NADH,H+.';
+  if (t < 17) return 'Quatre ATP se forment et vont au compteur : « ATP formés : 4 ».';
+  if (t < 18) return 'Compteur : 4 formés − 2 dépensés : « gain net : 4 − 2 = 2 ATP ».';
+  if (t < 20) return 'Chaque molécule à 3 carbones est nommée : acide pyruvique' + (t >= 19 ? ', CH3-CO-COOH.' : '.');
+  if (t < 21.8) return 'Bilan écrit à droite : 2 acides pyruviques, 2 ATP nets, 2 NADH,H+.';
+  const r = ['→ 2 CH3-CO-COOH + 2 ATP + 2 NADH,H+'];
+  if (t >= 23) r.unshift('C6H12O6'); if (t >= 23.8) r.splice(1, 0, '+ 2 ADP + 2 Pi'); if (t >= 24.8) r.splice(r.length - 1, 0, '+ 2 NAD+');
+  return 'Bilan à droite ; en bas, la réaction globale s’écrit : ' + r.join(' ') + '.';
 }
 function ceQuiSeVoit() {
   const t = chrono.t;
-  return `t = ${fr(t, 1)} s${chrono.running ? ' (ça avance)' : chrono.fait ? ' (fin)' : ' (arrêté)'}. ${phase(t)} Compteur : ATP dépensés ${t >= 6 ? 2 : 0}, ATP formés ${t >= 14.6 ? 4 : 0}, NADH,H+ ${t >= 12 ? 2 : 0}. Aucun dioxygène n’intervient.`;
+  return `t = ${fr(t, 1)} s${chrono.running ? ' (ça avance)' : chrono.fait ? ' (fin)' : ' (arrêté)'}. ${phase(t)} Compteur : ATP dépensés ${t >= 6.6 ? 2 : 0}, ATP formés ${t >= 16.3 ? 4 : 0}, NADH,H+ ${t >= 13.5 ? 2 : 0}. Aucun dioxygène n’intervient.`;
 }
 
 $('run').onclick = chrono.clic;
@@ -206,9 +255,9 @@ const pont = protocole({ id: config.id, commandes, config,
   texte: 'La glycolyse dans le hyaloplasme : un glucose (6 C) est coupé en deux acides pyruviques (3 C, CH3-CO-COOH) ; 2 ATP dépensés, 4 formés, gain net 2 ATP ; 2 NAD+ réduits en 2 NADH,H+ ; pas de dioxygène. Réaction globale : C6H12O6 + 2 ADP + 2 Pi + 2 NAD+ → 2 CH3-CO-COOH + 2 ATP + 2 NADH,H+.',
   etat: () => ({ simulation_status: chrono.statut(), ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'glycolyse', time_s: +chrono.t.toFixed(2), parameters: {}, moments: M }),
   progression: () => chrono.t / FIN,
-  executer: (cmd, p) => ({ start: chrono.start, reset: chrono.start, pause: chrono.pause, resume: chrono.resume, set_time: () => chrono.setTime(p), play_until: () => chrono.playUntil(p) })[cmd]?.() });
+  executer: (cmd, p) => ({ start: chrono.start, reset: chrono.reset, pause: chrono.pause, resume: chrono.resume, set_time: () => chrono.setTime(p), play_until: () => chrono.playUntil(p) })[cmd]?.() });
 bulle($('feedback'), 'Une cellule : le glucose va arriver dans le hyaloplasme…');
-setTimeout(() => { if (!chrono.running && chrono.t === 0) chrono.start(); }, 1600);
+setTimeout(() => { if (!chrono.pilote && !chrono.running && chrono.t === 0) chrono.start(); }, 1600);
 window.__sim = { chrono, scene, M };
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>

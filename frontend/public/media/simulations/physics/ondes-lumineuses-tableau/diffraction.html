@@ -485,10 +485,20 @@ function zone(L) {
 /** Coordonnées du cadre → coordonnées des vues (pour les poignées). */
 const versVues = (x, y) => [(x - Z.x) / Z.k, (y - Z.y) / Z.k];
 /** Coupe un texte en lignes de largeur `max` (la formule « a = b » ne se coupe pas). */
+/* Hauteur d'une ligne de craie au-dessus et au-dessous de sa base : une fraction « ⟦num|dén⟧ » (deux étages, comme
+ * dans le cahier) monte et descend plus qu'une ligne simple ; les étages suivent la taille réellement écrite. */
+function hauteurs(c, s, t) {
+  const T = c.echelle && c.tailleMin ? Math.max(t, c.tailleMin / c.echelle) : t;
+  if (!String(s).includes('⟦')) return [.75 * T, .25 * T];
+  const e = c._tailleEtage ? c._tailleEtage(T) : .78 * T;
+  return [.32 * T + 1.05 * e, 1.17 * e - .32 * T];
+}
+/** Base de la ligne s2 écrite sous la ligne s1 (base y), sans chevauchement. */
+const sous = (c, y, s1, t1, s2, t2, ecart = 4) => y + hauteurs(c, s1, t1)[1] + ecart + hauteurs(c, s2, t2)[0];
 function couper(c, texte, taille, max) {
   const ctx = c.ctx; ctx.font = `${taille}px ${window.Tableau.POLICE}`;
   const mots = String(texte).replace(/ ([=\/·→<>≥≤≈≠−+]) /g, ' $1 ').split(/ +/), out = []; let l = '';
-  for (const m of mots) { const e = l ? l + ' ' + m : m; if (ctx.measureText(e).width > max && l) { out.push(l); l = m; } else l = e; }
+  for (const m of mots) { const e = l ? l + ' ' + m : m; if (c.largeurTexte(e, taille) > max && l) { out.push(l); l = m; } else l = e; }
   if (l) out.push(l); return out.map(x => x.replace(/ /g, ' '));
 }
 /* Les valeurs et les conclusions : chaque entrée a sa case (sa place ne bouge pas quand les suivantes arrivent). */
@@ -504,11 +514,11 @@ function dessinerValeurs(c) {
     const d = [];
     if (P.source === 'blanche') d.push(['lumière blanche : chaque couleur donne sa propre tache', 'vert', 16, 1.1]);
     else if (P.objet === 'trou') d.push(['trou : tache ronde entourée d’anneaux (pas de formule ici)', 'vert', 16, 1.1]);
-    else if (CUVE) { const v1 = valeurs(1); d.push([`dans l’air : L = 2λD/a = ${fr(v1.L * 100, 2)} cm ;  θ = λ/a = ${sci(v1.theta)} rad`, 'vert', 16, 1.1]); }
+    else if (CUVE) { const v1 = valeurs(1); d.push([`dans l’air : L = ⟦2λD|a⟧ = ${fr(v1.L * 100, 2)} cm ;  θ = ⟦λ|a⟧ = ${sci(v1.theta)} rad`, 'vert', 16, 1.1]); }
     else {
-      const eau = v.n > 1 ? `λ = λ₀/n = ${Math.round(v.lam * 1e9)} nm ;  ` : '';
-      d.push([`${eau}L = 2λD/${lA} = ${fr(v.L * 100, 2)} cm`, 'vert', 17, .6]);
-      d.push([`θ = λ/${lA} = ${sci(v.theta)} rad`, 'rose', 17, .5]);
+      const eau = v.n > 1 ? `λ = ⟦λ_0|n⟧ = ${Math.round(v.lam * 1e9)} nm ;  ` : '';
+      d.push([`${eau}L = ⟦2λD|${lA}⟧ = ${fr(v.L * 100, 2)} cm`, 'vert', 17, .6]);
+      d.push([`θ = ⟦λ|${lA}⟧ = ${sci(v.theta)} rad`, 'rose', 17, .5]);
     }
     E.push({ k: 1, nom: 'mesure_L', l: d });
   }
@@ -523,16 +533,23 @@ function dessinerValeurs(c) {
     E.push({ k: 2, nom: 'cuve_se_remplit', l: [['la cuve se remplit d’eau : n = 1,33', 'bleu', 16, .7]] });
     const v1 = valeurs(1), v2 = valeurs(N_EAU);
     E.push({ k: 4, nom: 'mesure_L_prime', l: Z.large
-      ? [[`dans l’eau : λ = λ₀/n = ${Math.round(v2.lam * 1e9)} nm ;  L’ = ${fr(v2.L * 100, 2)} cm`, 'vert', 16, .8], [`n = L/L’ = ${fr(v1.L * 100, 2)} / ${fr(v2.L * 100, 2)} = ${fr(v1.L / v2.L, 2)}`, 'vert', 16, .6]]
-      : [[`dans l’eau : λ = λ₀/n = ${Math.round(v2.lam * 1e9)} nm ;  L’ = ${fr(v2.L * 100, 2)} cm ;  n = L/L’ = ${fr(v1.L * 100, 2)} / ${fr(v2.L * 100, 2)} = ${fr(v1.L / v2.L, 2)}`, 'vert', 16, 1.1]] });
+      ? [[`dans l’eau : λ = ⟦λ_0|n⟧ = ${Math.round(v2.lam * 1e9)} nm ;  L’ = ${fr(v2.L * 100, 2)} cm`, 'vert', 16, .8], [`n = ⟦L|L’⟧ = ⟦${fr(v1.L * 100, 2)}|${fr(v2.L * 100, 2)}⟧ = ${fr(v1.L / v2.L, 2)}`, 'vert', 16, .6]]
+      : [[`dans l’eau : λ = ⟦λ_0|n⟧ = ${Math.round(v2.lam * 1e9)} nm ;  L’ = ${fr(v2.L * 100, 2)} cm ;  n = ⟦L|L’⟧ = ⟦${fr(v1.L * 100, 2)}|${fr(v2.L * 100, 2)}⟧ = ${fr(v1.L / v2.L, 2)}`, 'vert', 16, 1.1]] });
   }
   // seules les entrées dont le moment existe dans cette vue (la place reste réservée tant qu'elles ne sont pas dites)
   const F = E.filter(e => e.direct || e.nom in M).sort((p, q) => p.k - q.k);
   const ecrire = (e, f) => (e.direct ? c.direct(f) : vu(e.nom) ? ecrit(c, a_(e.nom), f) : null);
   if (!Z.large) {
-    // disposition d'origine : une ligne par entrée (deux pour la mesure), sous les vues
+    // disposition d'origine : une ligne par entrée (deux pour la mesure), sous les vues. (17 novembre 2026) Une ligne
+    // qui porte une fraction « ⟦num|dén⟧ » (deux étages, comme dans le cahier) prend plus de hauteur : chaque case
+    // descend juste ce qu'il faut sous la précédente, et le tout remonte s'il dépasserait le bas du cadre.
+    const lk = []; for (const e of F) e.l.forEach((l, i) => { lk[e.k + i] = l; });
+    const Yk = [Y[0]];
+    for (let k = 1; k < 5; k++) { const p = lk[k - 1] || ['', '', 15], l = lk[k] || ['', '', 15]; Yk[k] = Math.max(Y[k] - Y[k - 1] + Yk[k - 1] - 2, sous(c, Yk[k - 1], p[0], p[2], l[0], l[2], 3)); }
+    const der = lk[4] || ['', '', 15], trop = Yk[4] + hauteurs(c, der[0], der[2])[1] - 417;
+    if (trop > 0) for (let k = 0; k < 5; k++) Yk[k] -= Math.min(trop, 16);
     for (const e of F) ecrire(e, () => e.l.forEach(([t, coul, taille, duree], i) =>
-      c.texte(t, X, Y[e.k + i], { couleur: coul, taille, max: 735, ...(duree ? { duree } : {}) })));
+      c.texte(t, X, Yk[e.k + i], { couleur: coul, taille, max: 735, ...(duree ? { duree } : {}) })));
     return;
   }
   // tableau large : une colonne à droite des vues, à la ligne, plus grand (+4)
@@ -542,8 +559,11 @@ function dessinerValeurs(c) {
     const kt = Math.min(1.15, Math.max(1, w / 380));   // colonne plus large (L jusqu'à 1596) : texte plus grand
     const blocs = e.l.map(([t, coul, taille, duree]) => ({ coul, taille: (taille + 4) * kt, duree, lignes: couper(c, t, (taille + 4) * kt, w) }));
     const y0 = y;
-    ecrire(e, () => { let yy = y0; for (const b of blocs) for (const l of b.lignes) { c.texte(l, xc, yy, { couleur: b.coul, taille: b.taille, max: w, ...(b.duree ? { duree: b.duree / b.lignes.length } : {}) }); yy += b.taille * 1.22; } });
-    y += blocs.reduce((s, b) => s + b.lignes.length * b.taille * 1.22, 0) + 14;
+    // une ligne à fraction (deux étages) descend un peu et laisse plus de place sous elle
+    const pas = (l, t) => { const [h, b] = hauteurs(c, l, t), [h0, b0] = hauteurs(c, '', t); return [h - h0, b - b0]; };
+    const hauteur = blocs.reduce((s, b) => s + b.lignes.reduce((u, l) => { const [h, d] = pas(l, b.taille); return u + b.taille * 1.22 + h + d; }, 0), 0);
+    ecrire(e, () => { let yy = y0; for (const b of blocs) for (const l of b.lignes) { const [h, d] = pas(l, b.taille); yy += h; c.texte(l, xc, yy, { couleur: b.coul, taille: b.taille, max: w, ...(b.duree ? { duree: b.duree / b.lignes.length } : {}) }); yy += b.taille * 1.22 + d; } });
+    y += hauteur + 14;
     if (j === 0) { c.direct(() => c.ligne(xc, y - 20, xc + w, y - 20, { couleur: 'tresfaible', largeur: 1.2 })); y += 8; }
   });
 }

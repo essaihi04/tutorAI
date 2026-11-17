@@ -33,28 +33,28 @@ const BLOCS = [
   { id: 'bobine', titre: '1 · La bobine', comps: ['C1'], formules: ['L en henry (H)', 'r en ohm (Ω)'],
     def: 'Fil de cuivre enroulé : inductance L et résistance r. Un noyau de fer augmente L.',
     attention: 'bobine idéale (r = 0) seulement si l’énoncé le dit.' },
-  { id: 'tension', titre: '2 · La tension u_b', comps: ['C1'], formules: ['u_b = L·di/dt + r·i', 'u_b = r·I_0'],
-    def: 'Convention récepteur. Régime permanent : di/dt = 0, donc u_b = r·I_0.',
+  { id: 'tension', titre: '2 · La tension u_b', comps: ['C1'], formules: ['u_b = L·⟦di|dt⟧ + r·i', 'u_b = r·I_0'],
+    def: 'Convention récepteur. Régime permanent : ⟦di|dt⟧ = 0, donc u_b = r·I_0.',
     attention: 'u_b = 0 en permanent seulement si r = 0.' },
-  { id: 'echelon', titre: '3 · Échelon de tension', comps: ['C2', 'C3'], formules: ['u_R + u_b = E', 'I_0 = E/(R + r)'],
+  { id: 'echelon', titre: '3 · Échelon de tension', comps: ['C2', 'C3'], formules: ['u_R + u_b = E', 'I_0 = ⟦E|R + r⟧'],
     def: 'La bobine retarde i ; i est continu. u_R = R·i : image de i à l’oscilloscope.',
-    attention: 'I_0 = E/(R + r), pas E/R.' },
-  { id: 'equation', titre: '4 · Équation différentielle', comps: ['C4'], formules: ['L·di/dt + (R + r)·i = E', 'di/dt + ((R + r)/L)·i = E/L'],
-    def: 'Additivité, u_R = R·i et u_b = L·di/dt + r·i, puis on divise par L.',
-    attention: 'en u_R : R·E/L à droite.' },
+    attention: 'I_0 = ⟦E|R + r⟧, pas ⟦E|R⟧.' },
+  { id: 'equation', titre: '4 · Équation différentielle', comps: ['C4'], formules: ['L·⟦di|dt⟧ + (R + r)·i = E', '⟦di|dt⟧ + ⟦R + r|L⟧·i = ⟦E|L⟧'],
+    def: 'Additivité, u_R = R·i et u_b = L·⟦di|dt⟧ + r·i, puis on divise par L.',
+    attention: 'en u_R : ⟦R·E|L⟧ à droite.' },
   { id: 'solution', titre: '5 · Solution', comps: ['C5'], formules: ['i(t) = I_0(1 − e^{−t/τ})', 'i(t) = A + B·e^{−t/τ}'],
-    def: 'On remplace : τ = L/(R + r) et A = I_0 ; i(0) = 0 donne B = −A.',
+    def: 'On remplace : τ = ⟦L|R + r⟧ et A = I_0 ; i(0) = 0 donne B = −A.',
     attention: 'deux conditions, pour tout t.' },
-  { id: 'tau', titre: '6 · Constante de temps', comps: ['C6'], formules: ['τ = L/(R + r)', '[τ] = [T]'],
+  { id: 'tau', titre: '6 · Constante de temps', comps: ['C6'], formules: ['τ = ⟦L|R + r⟧', '[τ] = [T]'],
     def: 'τ en s. L plus grand : plus lent. À 5τ : i ≈ 0,99·I_0.',
     attention: 'L en H, τ en s : L = τ·(R + r).' },
   { id: 'rupture', titre: '7 · Rupture', comps: ['C2', 'C4'], formules: ['u_R + u_b = 0', 'i(t) = I_0·e^{−t/τ}'],
     def: 'K en 2 : plus de générateur. i part de I_0 (continu) et tend vers 0.',
     attention: 'second membre 0, pas E.' },
-  { id: 'lecture', titre: '8 · Lire les courbes', comps: ['C7'], formules: ['i(τ) = 0,63·I_0', 'r = E/I_0 − R', 'L = τ·(R + r)'],
+  { id: 'lecture', titre: '8 · Lire les courbes', comps: ['C7'], formules: ['i(τ) = 0,63·I_0', 'r = ⟦E|I_0⟧ − R', 'L = τ·(R + r)'],
     def: 'Tangente à l’origine et asymptote : t = τ. Rupture : i(τ) = 0,37·I_0.',
     attention: '63 % de la valeur finale lue.' },
-  { id: 'energie', titre: '9 · Énergie', comps: ['C8'], formules: ['E_m = ½·L·i²', 'E_m = ½·L·I_0²'],
+  { id: 'energie', titre: '9 · Énergie', comps: ['C8'], formules: ['E_m = ⟦1|2⟧·L·i²', 'E_m = ⟦1|2⟧·L·I_0²'],
     def: 'La bobine stocke l’énergie quand i passe ; elle la rend à la rupture.',
     attention: 'i en A ; i × 2 → E_m × 4.' },
 ];
@@ -67,12 +67,14 @@ window.__debordeBlocs = [];   // vérification : un bloc dont le texte dépasse 
 const EXP = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
 /** Largeur d'un texte de craie (indices et exposants plus petits, comme le kit les écrit). */
 function largeur(c, t, taille) {
+  // une fraction « ⟦num|dén⟧ » (deux étages, comme dans le cahier) : mesurée par le kit
+  if (String(t).includes('⟦')) return String(t).split(/(⟦[^⟧]*⟧)/).filter(Boolean).reduce((w, p) => w + (p[0] === '⟦' ? c.largeurTexte(p, taille) : largeur(c, p, taille)), 0);
   t = String(t).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => EXP[ch]).join('') + '}');
   return window.Tableau.Craie.segments(t).reduce((w, g) => w + c.largeurTexte(g.t, g.sub || g.sup ? taille * .62 : taille), 0);
 }
 /* Texte pour la bulle et ce_qui_se_voit : pas de « _ » ni d’accolades visibles. */
 const BAS_U = { 0: '₀', 1: '₁', 2: '₂', 3: '₃', 4: '₄', 5: '₅', 6: '₆', 7: '₇', 8: '₈', 9: '₉', a: 'ₐ', e: 'ₑ', m: 'ₘ', x: 'ₓ' };
-const lisible = s => String(s).replace(/\^\{([^}]+)\}/g, '^($1)').replace(/_\{?([A-Za-z0-9]+)\}?/g, (m, g) => ([...g].every(ch => ch in BAS_U) ? [...g].map(ch => BAS_U[ch]).join('') : g));
+const lisible = s => window.Tableau.lisible(String(s)).replace(/\^\{([^}]+)\}/g, '^($1)').replace(/_\{?([A-Za-z0-9]+)\}?/g, (m, g) => ([...g].every(ch => ch in BAS_U) ? [...g].map(ch => BAS_U[ch]).join('') : g));
 
 /* Coupe un texte en lignes qui tiennent dans `max` px. */
 function lignes(c, texte, taille, max) {
@@ -86,7 +88,12 @@ function lignes(c, texte, taille, max) {
   return out;
 }
 function paragraphe(c, texte, x, y, taille, max, o, dessiner) {
-  for (const l of lignes(c, texte, taille, max)) { if (dessiner) c.texte(l, x, y, { taille, ...o }); y += taille * (LG >= 1000 ? 1.13 : 1.2); }
+  for (const l of lignes(c, texte, taille, max)) {
+    const et = l.includes('⟦');   // une ligne à fraction (deux étages) s'écarte de ses voisines
+    if (et) y += taille * .42;
+    if (dessiner) c.texte(l, x, y, { taille, ...o });
+    y += taille * (LG >= 1000 ? 1.13 : 1.2) + (et ? taille * .34 : 0);
+  }
   return y;
 }
 
@@ -136,17 +143,20 @@ function contenu(c, b, x, y0, w, st, dessiner) {
   if (dessiner) c.texte(b.titre, x, y, { couleur: 'cyan', taille: TT, max: st ? w - 56 : w });
   y += TT + 5;
   // formules encadrées, à la ligne quand la suivante ne tient plus
+  // une formule à fraction (« ⟦num|dén⟧ », deux étages comme dans le cahier) : cadres plus hauts pour tout le bloc
   let fx = x;
+  const et = b.formules.some(f => f.includes('⟦')), hh = et ? 1.45 : 1.04, bb = et ? .62 : .48;
+  if (et) y += TF * .42;
   for (const f of b.formules) {
     const l = Math.min(w, largeur(c, f, TF) + 14);
-    if (fx > x && fx + l > x + w) { fx = x; y += TF + (LG >= 1000 ? 7 : 9.5); }
+    if (fx > x && fx + l > x + w) { fx = x; y += TF + (LG >= 1000 ? 7 : 9.5) + (et ? TF * .55 : 0); }
     if (dessiner) {
-      c.rect(fx, y - TF * 1.04, l, TF * 1.52, { couleur: 'jaune', arrondi: 6, largeur: 1.2, alpha: .7, duree: .25 });
+      c.rect(fx, y - TF * hh, l, TF * (hh + bb), { couleur: 'jaune', arrondi: 6, largeur: 1.2, alpha: .7, duree: .25 });
       c.texte(f, fx + 7, y + 1, { couleur: 'blanc', taille: TF, max: l - 10 });
     }
     fx += l + 7;
   }
-  y += TF + (LG >= 1000 ? 7 : 9.5);
+  y += TF + (LG >= 1000 ? 7 : 9.5) + (et ? TF * .14 : 0);
   y = paragraphe(c, b.def, x, y, TD, w, { couleur: 'blanc', alpha: .9 }, dessiner);
   if (dessiner) c.texte('⚠', x, y, { couleur: 'orange', taille: TA });
   y = paragraphe(c, b.attention, x + TA * 1.3, y, TA, w - TA * 1.3, { couleur: 'orange', alpha: .92 }, dessiner);

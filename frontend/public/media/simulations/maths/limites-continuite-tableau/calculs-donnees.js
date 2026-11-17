@@ -12,7 +12,7 @@ window.CALCULS = {
     "t": "① x² − 9 = (x − 3)(x + 3)"
    },
    {
-    "couleur": "faible",
+    "couleur": "blanc",
     "taille": 16,
     "t": "    car a² − b² = (a − b)(a + b)"
    },
@@ -22,7 +22,7 @@ window.CALCULS = {
     "t": "② x un peu plus grand que 1 : x − 1 > 0, petit"
    },
    {
-    "couleur": "faible",
+    "couleur": "blanc",
     "taille": 16,
     "t": "    x = 1,01 → x − 1 = 0,01"
    },
@@ -596,7 +596,7 @@ window.CALCULS = {
   "titre": "Les règles : √ et ⁿ√",
   "lignes": [
    {
-    "couleur": "faible",
+    "couleur": "blanc",
     "moment": "titres",
     "t": "avec √"
    },
@@ -621,7 +621,7 @@ window.CALCULS = {
     "t": "√(√x) = ⁴√x"
    },
    {
-    "couleur": "faible",
+    "couleur": "blanc",
     "col": 2,
     "t": "avec ⁿ√  (x ≥ 0, y > 0)"
    },

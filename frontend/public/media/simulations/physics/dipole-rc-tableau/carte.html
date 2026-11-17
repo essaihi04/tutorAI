@@ -31,13 +31,13 @@ const CENTRE = { x: 380, y: 200, w: 200, h: 82, comps: [],
   phrase: 'Le dipôle RC : un résistor R et un condensateur C en série ; on étudie la charge et la décharge du condensateur.' };
 const NOEUDS = [
   { id: 'condensateur', x: 128, y: 70, w: 216, h: 70, couleur: 'cyan', comps: ['C1', 'C2'], titre: 'Le condensateur',
-    lignes: ['q = C·u_C', 'C en farad (F) ; i = dq/dt'],
+    lignes: ['q = C·u_C', 'C en farad (F) ; i = ⟦dq|dt⟧'],
     phrase: 'Le condensateur : deux armatures séparées par un isolant ; q = C·u_C, C en farad ; i = dq/dt = C·du_C/dt.' },
   { id: 'echelon', x: 380, y: 62, w: 220, h: 70, couleur: 'cyan', comps: ['C3'], titre: 'Échelon de tension',
     lignes: ['0 → E : charge ; E → 0 : décharge', 'transitoire, puis permanent'],
     phrase: 'Un échelon de tension : la tension passe de 0 à E (charge) ou de E à 0 (décharge) ; régime transitoire puis régime permanent.' },
   { id: 'equation', x: 632, y: 70, w: 224, h: 70, couleur: 'orange', comps: ['C4'], titre: 'Équation différentielle',
-    lignes: ['RC·du_C/dt + u_C = E', 'décharge : 0 à droite'],
+    lignes: ['RC·⟦du_C|dt⟧ + u_C = E', 'décharge : 0 à droite'],
     phrase: 'L’équation différentielle de la charge : RC·du_C/dt + u_C = E ; à la décharge : RC·du_C/dt + u_C = 0.' },
   { id: 'solution', x: 644, y: 200, w: 210, h: 70, couleur: 'orange', comps: ['C5'], titre: 'Solution u_C(t)',
     lignes: ['u_C(t) = E(1 − e^{−t/τ})', 'décharge : u_C(t) = E·e^{−t/τ}'],
@@ -49,7 +49,7 @@ const NOEUDS = [
     lignes: ['tangente à l’origine', '0,63·E (charge) ; 0,37·E'],
     phrase: 'Lire τ sur une courbe : la tangente à l’origine, ou l’instant où u_C = 0,63·E (charge), 0,37·E (décharge).' },
   { id: 'energie', x: 128, y: 326, w: 210, h: 72, couleur: 'violet', comps: ['C8'], titre: 'Énergie',
-    lignes: ['E_e = ½·C·u_C²', 'rendue à la décharge'],
+    lignes: ['E_e = ⟦1|2⟧·C·u_C²', 'rendue à la décharge'],
     phrase: 'L’énergie stockée dans le condensateur : E_e = ½·C·u_C² ; il la rend à la décharge.' },
   { id: 'national', x: 116, y: 200, w: 196, h: 72, couleur: 'blanc', comps: [], titre: 'Au national', encadre: true,
     lignes: ['une partie RC dans 11 sujets sur 20', 'lire τ dans 8'],
@@ -100,15 +100,27 @@ function geometrie() {
   GEO = { large: true, DX: 0, L, TT, TL, LS, w, h, cols: [L / 2 - w - G, L / 2, L / 2 + w + G], rows: [haut, (haut + bas) / 2, bas], ch: h * 1.15, cw: Math.min(w * .92, 300) };
 }
 /** Le nœud tel qu’il se dessine (positions et tailles du tableau large, ou d’origine). */
-function geo(n) {
+function geo(n, c) {
+  return etages(geo0(n), c);
+}
+function geo0(n) {
   if (!GEO.large) return { ...n, TT: 17, TL: 14, LS: 18 };
   if (n.seul) return { ...n, x: GEO.L / 2, y: 403, w: GEO.L * .6, TT: GEO.TL, TL: GEO.TL, LS: GEO.LS };
   const col = n.x < 300 ? 0 : n.x < 500 ? 1 : 2, row = n.y < 140 ? 0 : n.y < 270 ? 1 : 2;
   return { ...n, x: GEO.cols[col], y: GEO.rows[row], w: GEO.w, h: GEO.h, TT: GEO.TT, TL: GEO.TL, LS: GEO.LS };
 }
+/* Une ligne à fraction (« ⟦num|dén⟧ », deux étages comme dans le cahier) prend plus de hauteur : la case grandit
+ * d'autant (vers le bas, ou vers le haut pour la rangée du bas, qui ne doit pas descendre sur « après : … »).
+ * La taille réellement écrite compte (taille minimale du kit sur petit écran). */
+function etages(n, c) {
+  const fr = (n.lignes || []).filter(l => l.includes('⟦')).length; if (!fr || n.seul) return n;
+  const k = c && c.echelle && c.tailleMin ? Math.max(1, c.tailleMin / c.echelle / n.TL) : 1;
+  const e = fr * n.TL * k * .95, haut = n.y >= 270 || (GEO.large && n.y >= GEO.rows[2] - 1);
+  return { ...n, h: n.h + e, y: n.y + (haut ? -e / 2 : e / 2), kFr: k };
+}
 const geoCentre = () => (GEO.large ? { ...CENTRE, x: GEO.L / 2, y: GEO.rows[1], w: GEO.cw, h: GEO.ch } : CENTRE);
 function branche(c, n0) {
-  const n = geo(n0), CENTRE = geoCentre();
+  const n = geo(n0, c), CENTRE = geoCentre();
   const x = n.x - n.w / 2, y = n.y - n.h / 2;
   if (!n.seul) {
     const dx = n.x - CENTRE.x, dy = n.y - CENTRE.y, L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L;
@@ -125,7 +137,14 @@ function branche(c, n0) {
   } else {
     c.rect(x, y, n.w, n.h, { couleur: n.couleur, arrondi: n.encadre ? 4 : 14, largeur: n.encadre ? 1.6 : 2.4, pointille: n.encadre ? [6, 5] : undefined });
     c.texte(n.titre, n.x, y + n.TT * 1.24, { couleur: n.couleur, taille: n.TT, align: 'center', max: n.w - 16, duree: .8 });
-    n.lignes.forEach((l, k) => c.texte(l, n.x, y + n.TT * 1.24 + 3 + n.LS * (k + 1), { couleur: 'blanc', taille: n.TL, align: 'center', max: n.w - 14, alpha: .92, duree: 1 }));
+    // une ligne à fraction s'écarte de la précédente (étage du haut) et de la suivante (étage du bas)
+    let dy = 0;
+    n.lignes.forEach((l, k) => {
+      const fr = l.includes('⟦'), e = n.TL * (n.kFr || 1);
+      if (fr) dy += e * .5;
+      c.texte(l, n.x, y + n.TT * 1.24 + 3 + n.LS * (k + 1) + dy, { couleur: 'blanc', taille: n.TL, align: 'center', max: n.w - 14, alpha: .92, duree: 1 });
+      if (fr) dy += e * .45;
+    });
   }
   c.repere(n.id, x - 5, y - 5, n.w + 10, n.h + 10, lisible(n.titre));
   etat(c, n.comps, x, y, n.w, n.h);

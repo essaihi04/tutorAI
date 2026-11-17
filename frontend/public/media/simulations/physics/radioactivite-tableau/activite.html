@@ -189,7 +189,7 @@ function ecrit(c, t0, fn) {
 }
 function quand(c, nom, dur, fn) { if (nom in M && (S.fait || S.t >= M[nom] - dur)) ecrit(c, M[nom] - dur, fn); }
 const vu = nom => nom in M && (S.fait || S.t >= M[nom] - 1e-6);
-const sousN = tj => ({ 0: 'N = N_0', 8: 'N = N_0/2', 16: 'N = N_0/4', 24: 'N = N_0/8', 32: 'N = N_0/16', 40: 'N = N_0/32' }[tj] || `N = ${fr(Math.pow(2, -tj / TD), 2)}·N_0`);
+const sousN = tj => ({ 0: 'N = N_0', 8: 'N = ⟦N_0|2⟧', 16: 'N = ⟦N_0|4⟧', 24: 'N = ⟦N_0|8⟧', 32: 'N = ⟦N_0|16⟧', 40: 'N = ⟦N_0|32⟧' }[tj] || `N = ${fr(Math.pow(2, -tj / TD), 2)}·N_0`);
 
 function dessinerCompteur(c) {
   const t = S.t, v = visible(), cc = compte();
@@ -220,7 +220,7 @@ function dessinerCompteur(c) {
   if (v.geiger > 0 && (cc.actif || cc.chrono > 0)) c.direct(() => c.texte('(ralenti : 1 s de mesure)', BOITE.x + BOITE.w / 2, BOITE.y + 120, { taille: 12, align: 'center', couleur: 'tresfaible' }));
   if (vu('plus_tard') || S.libre) {
     const tj = P.t_j;
-    ecrit(c, vu('plus_tard') ? M.plus_tard - 1.2 : -99, () => c.texte(sousN(tj), FIOLE.x + FIOLE.w + 10, 229, { taille: 15, couleur: 'jaune', duree: .5 }));
+    ecrit(c, vu('plus_tard') ? M.plus_tard - 1.2 : -99, () => c.texte(sousN(tj), FIOLE.x + FIOLE.w + 10, sousN(tj).includes('⟦') ? 233 : 229, { taille: 15, couleur: 'jaune', duree: .5 }));
   }
 }
 
@@ -251,7 +251,7 @@ function dessinerGraphe(c) {
     c.ligne(gx(8), gy(200), gx(8), G.oy, { couleur: 'jaune', largeur: 1.1, pointille: [4, 4], alpha: .7, duree: .2 });
     c.ligne(gx(8), gy(200), G.ox, gy(200), { couleur: 'jaune', largeur: 1.1, pointille: [4, 4], alpha: .7, duree: .2 });
     c.texte('t½', gx(8), G.oy - 8, { taille: 14, couleur: 'jaune', align: 'center', duree: .1 });
-    c.texte('a_0/2', G.ox + 4, gy(200) + 16, { taille: 13, couleur: 'jaune', duree: .1 });
+    c.texte('⟦a_0|2⟧', G.ox + 4, gy(200) + 20, { taille: 13, couleur: 'jaune', duree: .1 });
   });
   if (vu('proportionnelle')) ecrit(c, M.proportionnelle - 1.6, () => {
     window.OndesTableau.Net.courbe(c, u => [gx(40 * u), gy(activite(40 * u))], 60, { couleur: 'vert', largeur: 1.6, pointille: [5, 5], duree: .8 }, { base: G.oy, rgb: '74,222,128', alpha: .2 });
@@ -328,7 +328,7 @@ function ceQuiSeVoit() {
   const e = [];
   if (vu('une_seconde')) e.push('« en 1 s : 400 désintégrations → a = 400 Bq »');
   if (vu('definition')) e.push('« activité a : nombre de désintégrations par seconde » et « 1 Bq = 1 désintégration par seconde »');
-  if (vu('plus_tard')) e.push(`« ${P.t_j} jours plus tard : a = ${Math.round(activite(P.t_j))} Bq » et « ${sousN(P.t_j).replace('N_0', 'N₀')} » sous la fiole`);
+  if (vu('plus_tard')) e.push(`« ${P.t_j} jours plus tard : a = ${Math.round(activite(P.t_j))} Bq » et « ${window.Tableau.lisible(sousN(P.t_j)).replace('N_0', 'N₀')} » sous la fiole`);
   if (vu('proportionnelle')) e.push(P.t_j === 8 ? '« a = λ·N : moitié des noyaux, moitié de l’activité »' : '« a = λ·N : N et a sont multipliés par le même nombre »');
   if (e.length) m.push('Écrit à la craie : ' + e.join(' ; ') + '.');
   m.push(`Phase : ${phase()}.`);

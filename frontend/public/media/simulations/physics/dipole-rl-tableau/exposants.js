@@ -21,9 +21,17 @@
     if (i < s.length) out.push(...segmentsKit(s.slice(i)));
     return out;
   };
+  /** Largeur d'un morceau de texte (le kit la prend pour placer une fraction) : les exposants comptent petits, comme
+   * ils sont écrits ; sans cela « (e^{−t/τ})’ = −⟦1|τ⟧ » laissait un grand blanc avant la fraction. */
+  P._largeur = function (s, taille, gras) {
+    const c = this.ctx;
+    s = String(s).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, (g) => '^{' + [...g].map((ch) => CHIFFRES[ch]).join('') + '}');
+    return C.segments(s).reduce((w, seg) => { c.font = `${gras ? '700 ' : ''}${seg.sub || seg.sup ? taille * .62 : taille}px ${T.POLICE}`; return w + c.measureText(seg.t).width; }, 0);
+  };
   P.texte = function (s, x, y, o = {}) {
     s = String(s);
-    if (!SUP.test(s)) return texteKit.call(this, s, x, y, o);
+    // une fraction « ⟦num|dén⟧ » passe par le kit (17 novembre 2026) : il écrit chaque étage, et chaque morceau revient ici pour ses exposants
+    if (!SUP.test(s) || s.includes('⟦')) return texteKit.call(this, s, x, y, o);
     s = s.replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, (g) => '^{' + [...g].map((ch) => CHIFFRES[ch]).join('') + '}');
     let taille = o.taille ?? 18;
     this.ctx.font = `${o.gras ? '700 ' : ''}${taille}px ${T.POLICE}`;

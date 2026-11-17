@@ -16,12 +16,13 @@
 /*
  * « Quelle part de l’énergie du glucose ? » : rendement énergétique de la respiration et de la fermentation
  * (cours SVT « Libération de l’énergie »), 10 novembre 2026. Ce qui se voit (t en s de la scène) :
+ *   (17 novembre 2026 : chaque écrit quand le tuteur le dit, plus tout d’un coup)
  *   barre_glucose (3)         : énergie d’une mole de glucose : 2860 kJ (la barre se remplit) ;
- *   briques_respiration (8)   : 38 briques de 30,5 kJ s’empilent : 38 × 30,5 = 1159 kJ ; la relation du rendement ;
- *                               r = (38 × 30,5) / 2860 × 100 = 40,5 % ;
- *   chaleur (12)              : le reste (1701 kJ, 59,5 %) part en chaleur ;
- *   briques_fermentation (16) : seconde barre, 2 briques : 61 kJ ; r = (2 × 30,5) / 2860 × 100 = 2,13 % ;
- *   residu_organique (19)     : le reste reste dans l’acide lactique ou l’éthanol : résidu organique, énergie non libérée.
+ *   briques_respiration (7,8) : 38 briques de 30,5 kJ s’empilent ;   produit_1159 (8,8) : 38 × 30,5 = 1159 kJ ;
+ *   relation (10,2) : la relation du rendement ;   application (11,2) : r = (38 × 30,5) / 2860 × 100 ;   resultat (12) : = 40,5 % ;
+ *   chaleur (14,2)            : le reste (1701 kJ, 59,5 %) part en chaleur ;
+ *   briques_fermentation (18) : seconde barre, 2 briques : 61 kJ ; r = (2 × 30,5) / 2860 × 100 = 2,13 % ;
+ *   residu_organique (21)     : le reste reste dans l’acide lactique ou l’éthanol : résidu organique, énergie non libérée.
  * Réglages (set_parameters ou poignée en haut de la pile de briques) : atp 36 | 38, glucose_kj 2860 | 2870 ;
  * tout se recalcule (36 → 38,4 % ; 2870 → 40,4 % ; fermentation 2,13 %). Les hauteurs sont proportionnelles aux énergies.
  */
@@ -30,11 +31,15 @@ const { Scene, Chrono, Apparitions, doux, mix, fr } = window.SVTTableau;
 const P = window.SVTPeinture;
 const $ = id => document.getElementById(id);
 
-const M = { barre_glucose: 3, briques_respiration: 8, chaleur: 12, briques_fermentation: 16, residu_organique: 19 };
-const FIN = 21;
+const M = { barre_glucose: 3, briques_respiration: 7.8, produit_1159: 8.8, relation: 10.2, application: 11.2, resultat: 12, chaleur: 14.2, briques_fermentation: 18, residu_organique: 21 };
+const FIN = 23;
 const MOTIFS = {
   barre_glucose: 'l’énergie d’une mole de glucose',
-  briques_respiration: 'les ATP de la respiration et le rendement',
+  briques_respiration: 'les ATP de la respiration : des briques de 30,5 kJ',
+  produit_1159: 'l’énergie mise dans l’ATP : 38 × 30,5 = 1159 kJ',
+  relation: 'la relation du rendement',
+  application: 'l’application numérique',
+  resultat: 'le rendement de la respiration',
   chaleur: 'le reste de l’énergie part en chaleur',
   briques_fermentation: 'les 2 ATP de la fermentation et son rendement',
   residu_organique: 'le reste de l’énergie reste dans le résidu organique',
@@ -114,17 +119,17 @@ function residu(ctx, b, yHaut, a) {
 
 function dessiner(c) {
   const t = chrono.t, k = calc();
-  const remp1 = doux(chrono.part(.5, 2.6, t)), remp2 = doux(chrono.part(13.4, 14.6, t));
+  const remp1 = doux(chrono.part(.5, 2.6, t)), remp2 = doux(chrono.part(15.4, 16.6, t));
   const pile1 = haut(S.atp), pile2 = haut(2);
   c.direct(() => {
     const ctx = c.ctx;
     tube(ctx, B1, remp1);
-    if (t >= 10.5) chaleur(ctx, B1, pile1, doux(chrono.part(10.5, 12, t)), t);
+    if (t >= 12.2) chaleur(ctx, B1, pile1, doux(chrono.part(12.2, 13.7, t)), t);
     for (let i = 0; i < S.atp; i++) { const t0 = 4 + i * 3.6 / S.atp; if (t >= t0) brique(ctx, B1, i, chrono.part(t0, t0 + .35, t)); }
-    if (t >= 13.2) {
+    if (t >= 15.2) {
       tube(ctx, B2, remp2);
-      if (t >= 17.4) residu(ctx, B2, pile2, doux(chrono.part(17.4, 18.6, t)));
-      for (let i = 0; i < 2; i++) { const t0 = 14.8 + i * .25; if (t >= t0) brique(ctx, B2, i, chrono.part(t0, t0 + .35, t)); }
+      if (t >= 19.4) residu(ctx, B2, pile2, doux(chrono.part(19.4, 20.6, t)));
+      for (let i = 0; i < 2; i++) { const t0 = 16.8 + i * .25; if (t >= t0) brique(ctx, B2, i, chrono.part(t0, t0 + .35, t)); }
     }
   });
   // ── craie fixe ──
@@ -134,19 +139,33 @@ function dessiner(c) {
   if (t >= 2.5) {
     ecrit.ecrire(c, 'g1_' + S.glucose, () => c.texte(`${S.glucose} kJ`, B1.x - 6, TOP + 8, { couleur: 'jaune', taille: 16, gras: true, align: 'right' }));
     ecrit.ecrire(c, 'g_' + S.glucose, () => c.texte(`énergie d’une mole de glucose : ${S.glucose} kJ`, X, 64, { couleur: 'jaune', taille: 15 }));
+    c.repere('ecrit_glucose', X - 4, 48, 330, 22, 'la valeur donnée : énergie d’une mole de glucose');
   }
   // la pile de briques et sa poignée
-  if (t >= 7.6) {
-    const cle = S.atp + '_' + S.glucose;
+  const cle = S.atp + '_' + S.glucose;
+  const larg = (s, taille) => c.largeurTexte(s, Math.max(taille * ((MOS.blocs() || {}).police || 1), c.echelle && c.tailleMin ? c.tailleMin / c.echelle : 0));
+  if (t >= 7.6) c.repere('briques', B1.x - 4, pile1 - 22, B1.w + 76, BOT - pile1 + 24, `les ${S.atp} briques d’ATP (30,5 kJ chacune)`);
+  if (t >= 8.0) {
     ecrit.ecrire(c, 'pile_' + cle, () => { c.texte(`${kj(k.E)} kJ`, B1.x + B1.w + 6, pile1 + 16, { couleur: 'jaune', taille: 15, gras: true }); });
-    ecrit.ecrire(c, 'resp_' + cle, () => {
-      c.texte(`respiration : ${S.atp} × 30,5 = ${kj(k.E)} kJ`, X, 98, { couleur: 'blanc', taille: 15 });
-      c.texte('rendement = (nombre d’ATP × énergie d’une mole d’ATP)', X, 124, { couleur: 'blanc', taille: 15, max: 420 });
-      c.texte('/ énergie d’une mole de glucose × 100', X + 74, 145, { couleur: 'blanc', taille: 15, max: 340 });
-      c.texte(`r = (${S.atp} × 30,5) / ${S.glucose} × 100 = ${pct(k.r, 1)} %`, X, 174, { couleur: 'jaune', taille: 18 });
+    ecrit.ecrire(c, 'resp_' + cle, () => c.texte(`respiration : ${S.atp} × 30,5 = ${kj(k.E)} kJ`, X, 98, { couleur: 'blanc', taille: 15 }));
+    c.repere('ecrit_1159', X - 4, 82, 300, 22, `${S.atp} × 30,5 = ${kj(k.E)} kJ`);
+  }
+  if (t >= 9.0) {
+    ecrit.ecrire(c, 'rel', () => {
+      // la relation écrite comme dans le cahier : une vraie fraction sur deux étages (17 novembre 2026)
+      c.texte('rendement = ⟦nombre d’ATP × énergie d’une mole d’ATP|énergie d’une mole de glucose⟧ × 100', X, 136, { couleur: 'blanc', taille: 17, max: 420 });
     });
-    c.repere('briques', B1.x - 4, pile1 - 22, B1.w + 76, BOT - pile1 + 24, `les ${S.atp} briques d’ATP (30,5 kJ chacune)`);
-    c.repere('relation', X - 4, 82, 424, 100, 'la relation du rendement');
+    c.repere('relation', X - 4, 110, 424, 42, 'la relation du rendement');
+  }
+  const AN = `r = ⟦${S.atp} × 30,5|${S.glucose}⟧ × 100`;
+  if (t >= 10.4) {
+    ecrit.ecrire(c, 'an_' + cle, () => c.texte(AN, X, 178, { couleur: 'jaune', taille: 18 }));
+    c.repere('ecrit_application', X - 4, 156, larg(AN, 18) + 8, 32, 'l’application numérique');
+  }
+  if (t >= 11.4) {
+    const x = X + larg(AN, 18) + 6, R = `= ${pct(k.r, 1)} %`;
+    ecrit.ecrire(c, 'res_' + cle, () => c.texte(R, x, 178, { couleur: 'jaune', taille: 18, gras: true }));
+    c.repere('ecrit_resultat', x - 4, 160, larg(R, 18) + 10, 24, `le rendement : ${pct(k.r, 1)} %`);
   }
   if (t >= 8) {
     const ky = pile1 - 10, kx = B1.x + B1.w / 2;
@@ -158,7 +177,7 @@ function dessiner(c) {
     });
   }
   // la chaleur
-  if (t >= 11.5) {
+  if (t >= 13.2) {
     const cle = S.atp + '_' + S.glucose;
     ecrit.ecrire(c, 'ch1_' + cle, () => {
       c.texte(`${kj(k.reste)} kJ`, B1.x + B1.w + 6, (TOP + pile1) / 2 - 4, { couleur: 'orange', taille: 15, gras: true });
@@ -171,19 +190,19 @@ function dessiner(c) {
     c.repere('chaleur', B1.x - 4, TOP - 48, B1.w + 76, pile1 - TOP + 46, 'la chaleur');
   }
   // la fermentation
-  if (t >= 13.2) {
+  if (t >= 15.2) {
     c.texte('fermentation', B2.x + B2.w / 2, 402, { couleur: 'orange', taille: 15, align: 'center' });
     c.repere('barre_fermentation', B2.x - 4, TOP - 4, B2.w + 8, H + 8, 'la barre de la fermentation');
   }
-  if (t >= 15.4) {
+  if (t >= 17.4) {
     ecrit.ecrire(c, 'f_' + S.glucose, () => {
       c.texte(`${S.glucose} kJ`, B2.x + B2.w / 2, TOP - 8, { couleur: 'jaune', taille: 16, gras: true, align: 'center' });
       c.texte('61 kJ', MOS.actif() ? B2.x - 6 : B2.x + B2.w + 6, BOT - 2, { couleur: 'jaune', taille: 15, gras: true, align: MOS.actif() ? 'right' : 'left' });   // tableau large : à gauche de la barre (la colonne des calculs est à part)
       c.texte('fermentation : 2 × 30,5 = 61 kJ', X, 266, { couleur: 'blanc', taille: 15 });
-      c.texte(`r = (2 × 30,5) / ${S.glucose} × 100 = ${pct(k.rf, 2)} %`, X, 294, { couleur: 'jaune', taille: 18 });
+      c.texte(`r = ⟦2 × 30,5|${S.glucose}⟧ × 100 = ${pct(k.rf, 2)} %`, X, 297, { couleur: 'jaune', taille: 18 });
     });
   }
-  if (t >= 18.4) {
+  if (t >= 20.4) {
     ecrit.ecrire(c, 'res', () => {
       c.texte('acide lactique ou éthanol : résidu organique,', X, 328, { couleur: 'vert', taille: 15 });
       c.texte('énergie non libérée', X, 350, { couleur: 'vert', taille: 15 });
@@ -197,10 +216,16 @@ function phase(t) {
   if (t < 2.6) return `La barre de la respiration se remplit : l’énergie d’une mole de glucose.`;
   if (t < 4) return `Énergie d’une mole de glucose : ${S.glucose} kJ.`;
   if (t < 7.6) return `Des briques d’ATP (30,5 kJ chacune) s’empilent au fond de la barre.`;
-  if (t < 11.5) return `${S.atp} briques empilées : ${S.atp} × 30,5 = ${kj(k.E)} kJ ; relation du rendement écrite ; r = (${S.atp} × 30,5) / ${S.glucose} × 100 = ${pct(k.r, 1)} %.`;
-  if (t < 13.2) return `Le reste (${kj(k.reste)} kJ, ${pct(k.pr, 1)} %) part en vagues de chaleur au-dessus de la barre : « le reste est libéré sous forme de chaleur ».`;
-  if (t < 15.4) return 'La seconde barre (fermentation) se remplit ; deux briques d’ATP tombent au fond.';
-  if (t < 18.4) return `Fermentation : 2 × 30,5 = 61 kJ ; r = (2 × 30,5) / ${S.glucose} × 100 = ${pct(k.rf, 2)} %.`;
+  if (t < 12.2) {
+    const s = [`${S.atp} briques empilées.`];
+    if (t >= 8) s.push(`« respiration : ${S.atp} × 30,5 = ${kj(k.E)} kJ ».`);
+    if (t >= 9) s.push('Relation du rendement écrite.');
+    if (t >= 10.4) s.push(`« r = (${S.atp} × 30,5)/${S.glucose} × 100${t >= 11.4 ? ' = ' + pct(k.r, 1) + ' %' : ''} ».`);
+    return s.join(' ');
+  }
+  if (t < 15.2) return `Le reste (${kj(k.reste)} kJ, ${pct(k.pr, 1)} %) part en vagues de chaleur au-dessus de la barre : « le reste est libéré sous forme de chaleur ».`;
+  if (t < 17.4) return 'La seconde barre (fermentation) se remplit ; deux briques d’ATP tombent au fond.';
+  if (t < 20.4) return `Fermentation : 2 × 30,5 = 61 kJ ; r = (2 × 30,5)/${S.glucose} × 100 = ${pct(k.rf, 2)} %.`;
   return `Le reste de la seconde barre (${kj(k.restef)} kJ) reste dans l’acide lactique ou l’éthanol : résidu organique, énergie non libérée.`;
 }
 function ceQuiSeVoit() {
@@ -248,9 +273,9 @@ const pont = protocole({ id: config.id, commandes, config,
   texte: 'Rendement énergétique. Une mole de glucose contient 2860 kJ ; une mole d’ATP libère 30,5 kJ. Respiration : 38 ATP, 38 × 30,5 = 1159 kJ ; rendement = (nombre d’ATP × énergie d’une mole d’ATP) / énergie d’une mole de glucose × 100 ; r = (38 × 30,5) / 2860 × 100 = 40,5 % ; le reste (1701 kJ, 59,5 %) est libéré sous forme de chaleur. Fermentation : 2 ATP, 61 kJ ; r = (2 × 30,5) / 2860 × 100 = 2,13 % ; le reste reste dans l’acide lactique ou l’éthanol (résidu organique, énergie non libérée). Avec 36 ATP : 38,4 % ; avec 2870 kJ : 40,4 %.',
   etat: () => ({ simulation_status: chrono.statut(), ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'rendement', time_s: +chrono.t.toFixed(2), parameters: params(), moments: M }),
   progression: () => chrono.t / FIN,
-  executer: (cmd, p) => ({ start: chrono.start, reset: chrono.start, pause: chrono.pause, resume: chrono.resume, set_time: () => chrono.setTime(p), set_parameters: () => setParameters(p), play_until: () => chrono.playUntil(p) })[cmd]?.() });
+  executer: (cmd, p) => ({ start: chrono.start, reset: chrono.reset, pause: chrono.pause, resume: chrono.resume, set_time: () => chrono.setTime(p), set_parameters: () => setParameters(p), play_until: () => chrono.playUntil(p) })[cmd]?.() });
 bulle($('feedback'), 'Une mole de glucose : quelle part de son énergie finit en ATP ?');
-setTimeout(() => { if (!chrono.running && chrono.t === 0) chrono.start(); }, 1600);
+setTimeout(() => { if (!chrono.pilote && !chrono.running && chrono.t === 0) chrono.start(); }, 1600);
 window.__sim = { chrono, scene, M, S, calc };
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>

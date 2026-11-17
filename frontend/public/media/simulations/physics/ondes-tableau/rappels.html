@@ -39,7 +39,7 @@ function moments() {
 }
 const MOTIFS = VIT
   ? { depart: 'la voiture part, le chronomètre démarre', une_seconde: 'au bout d’une seconde : la première marque', arrivee: 'la voiture a parcouru 100 m : on lit Δt',
-      formule: 'v = d / Δt écrit avec les valeurs', par_seconde: 'deuxième façon : la distance parcourue en UNE seconde', son: 'le son dans l’air : 340 m en une seconde' }
+      formule: 'v = d/Δt écrit avec les valeurs', par_seconde: 'deuxième façon : la distance parcourue en UNE seconde', son: 'le son dans l’air : 340 m en une seconde' }
   : { chrono: 'un chronomètre : une seconde', mille: 'la seconde coupée en mille parts égales', une_ms: 'une part : une milliseconde, 1 ms = 10⁻³ s',
       deux_ms: 'deux parts : 2 ms = 2 × 10⁻³ s', virgule: '2 × 10⁻³ s = 0,002 s : la virgule recule de trois rangs' };
 const DUREE = () => VIT ? moments().son + 0.6 : 10.4;
@@ -122,9 +122,9 @@ function dessinerVitesse(c) {
       c.texte(`Δt = ${fr(S.duree, 0)} s`, 700, 160, { couleur: 'jaune', taille: 18, align: 'center' });
     }
     if (vu('formule')) {
-      c.texte('v = d / Δt', 60, 300, { couleur: 'blanc', taille: 26 });
-      c.texte(`v = ${D} / ${fr(S.duree, 0)} = ${fr(v, 0)} m/s`, 230, 300, { couleur: 'vert', taille: 24 });
-      c.repere('formule', 50, 274, 520, 36, 'v = d / Δt, en mètre par seconde');
+      c.texte('v = ⟦d|Δt⟧', 60, 300, { couleur: 'blanc', taille: 26 });
+      c.texte(`v = ⟦${D}|${fr(S.duree, 0)}⟧ = ${fr(v, 0)} m/s`, 230, 300, { couleur: 'vert', taille: 24 });
+      c.repere('formule', 50, 266, 520, 54, 'v = d/Δt, en mètre par seconde');
     }
     if (vu('par_seconde')) {
       const x1 = xDe(v);
@@ -161,8 +161,8 @@ function dessinerMilli(c) {
       c.repere('mille', BX, BY, BW, 60, 'la seconde coupée en mille parts égales');
     }
     if (vu('une_ms')) {
-      c.texte('1 ms = 1 / 1000 s = 10⁻³ s', 190, 236, { couleur: 'vert', taille: 24 });
-      c.repere('milliseconde', 180, 212, 420, 34, '1 ms = 10⁻³ s');
+      c.texte('1 ms = ⟦1|1000⟧ s = 10⁻³ s', 190, 236, { couleur: 'vert', taille: 24 });
+      c.repere('milliseconde', 180, 204, 420, 50, '1 ms = 10⁻³ s');
     }
     if (vu('deux_ms')) {
       c.texte('2 ms = 2 × 10⁻³ s', 190, 290, { couleur: 'jaune', taille: 24 });
@@ -186,7 +186,7 @@ scene.avancer = dt => {
     bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || 'instant choisi') + '.'); pont.noter('pause'); pont.emettre();
     return true;
   }
-  if (S.t >= DUREE()) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), VIT ? `v = d / Δt = ${D} / ${fr(S.duree, 0)} = ${fr(D / S.duree, 0)} m/s : la distance parcourue en une seconde.` : '1 ms = 10⁻³ s ; 2 ms = 2 × 10⁻³ s = 0,002 s.', 'good'); pont.emettre(); }
+  if (S.t >= DUREE()) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), VIT ? `v = d/Δt = ${D}/${fr(S.duree, 0)} = ${fr(D / S.duree, 0)} m/s : la distance parcourue en une seconde.` : '1 ms = 10⁻³ s ; 2 ms = 2 × 10⁻³ s = 0,002 s.', 'good'); pont.emettre(); }
   else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
   return true;
 };
@@ -217,7 +217,7 @@ function ceQuiSeVoit() {
     if (S.t <= T0) m.push('La voiture est au départ.');
     else if (!vu('arrivee')) m.push(`La voiture roule : elle a parcouru ${fr(v * tc, 0)} m ; une marque jaune à chaque seconde passée.`);
     if (vu('arrivee')) m.push(`Arrivée : cote verte d = ${D} m, écrit Δt = ${fr(S.duree, 0)} s ; ${Math.floor(S.duree)} marques jaunes, une par seconde.`);
-    if (vu('formule')) m.push(`Écrit : v = d / Δt = ${D} / ${fr(S.duree, 0)} = ${fr(v, 0)} m/s.`);
+    if (vu('formule')) m.push(`Écrit : v = d/Δt = ${D}/${fr(S.duree, 0)} = ${fr(v, 0)} m/s.`);
     if (vu('par_seconde')) m.push(`Cote orange « ${fr(v, 0)} m en 1 s » sur la première seconde ; écrit : chaque seconde, elle avance de ${fr(v, 0)} m.`);
     if (vu('son')) m.push('Écrit : le son dans l’air, 340 m en 1 s, v ≈ 340 m/s.');
     return m.join(' ');
@@ -232,13 +232,13 @@ function ceQuiSeVoit() {
   return m.join(' ');
 }
 window.Tableau.explication({ [vue]: VIT
-  ? [{ repere: 'distance', texte: 'La voiture parcourt une distance d.' }, { repere: 'chrono', texte: 'Le chronomètre donne la durée Δt.' }, { repere: 'formule', texte: 'v = d / Δt, en mètre par seconde.' }, { repere: 'par_seconde', texte: 'Autrement dit : la distance parcourue en une seconde.' }]
+  ? [{ repere: 'distance', texte: 'La voiture parcourt une distance d.' }, { repere: 'chrono', texte: 'Le chronomètre donne la durée Δt.' }, { repere: 'formule', texte: 'v = d/Δt, en mètre par seconde.' }, { repere: 'par_seconde', texte: 'Autrement dit : la distance parcourue en une seconde.' }]
   : [{ repere: 'mille', texte: 'Une seconde coupée en mille parts égales.' }, { repere: 'milliseconde', texte: 'Une part : une milliseconde, 10⁻³ s.' }, { repere: 'deux_ms', texte: 'Deux parts : 2 × 10⁻³ s.' }, { repere: 'virgule', texte: '0,002 s : la virgule recule de trois rangs.' }] });
 const commandes = ['start', 'pause', 'resume', 'reset', 'set_time', 'set_parameters', 'play_until'];
 const config = { id: 'ondes_tableau_rappels', version: '1.0', title: 'Rappels — ' + vue, variants: VUES.map(v => ({ id: v, label: v })), commands: commandes,
   command_schema: { play_until: { moment: Object.keys(MOTIFS).join(' | ') + ' (rejoue et se fige à cet instant clé)' }, set_parameters: { duree_s: '4 | 5 | 10 (vue vitesse : durée du trajet de 100 m)' } } };
 const pont = protocole({ id: config.id, commandes, config,
-  texte: VIT ? 'Rappel : la vitesse est la distance parcourue divisée par la durée, v = d / Δt (m/s) ; autrement dit, la distance parcourue en une seconde.' : 'Rappel : une milliseconde est une seconde coupée en mille, 1 ms = 10⁻³ s ; 2 ms = 2 × 10⁻³ s = 0,002 s.',
+  texte: VIT ? 'Rappel : la vitesse est la distance parcourue divisée par la durée, v = d/Δt (m/s) ; autrement dit, la distance parcourue en une seconde.' : 'Rappel : une milliseconde est une seconde coupée en mille, 1 ms = 10⁻³ s ; 2 ms = 2 × 10⁻³ s = 0,002 s.',
   etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : (S.t > 0 ? 'paused' : 'idle'), ce_qui_se_voit: ceQuiSeVoit(), current_variant: vue, moments: moments(), parameters: VIT ? { duree_s: S.duree, d_m: D } : {}, time_s: +S.t.toFixed(2) }),
   progression: () => S.t / DUREE(),
   executer: (cmd, p) => ({ start, pause, resume, reset, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });

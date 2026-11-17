@@ -35,7 +35,9 @@
     const V = () => def.vues[S.vue];
     let scene = null;
     const horloge = () => (performance.now() - scene.ouvert) / 1000;
-    function ecrit(c, nom, tEv) { if (S.t < tEv - 1e-6) return false; if (!(nom in S.vu)) S.vu[nom] = horloge(); c.depuis(S.vu[nom]); return true; }
+    // (17 novembre 2026) Après un saut (set_time), ce qui était déjà au tableau à l'instant du saut s'affiche d'un coup
+    // (déjà dit, à la diapositive d'avant) ; seul ce qui vient ensuite s'écrit trait par trait.
+    function ecrit(c, nom, tEv) { if (S.t < tEv - 1e-6) return false; if (!(nom in S.vu)) S.vu[nom] = S.saut != null && tEv <= S.saut + 1e-6 ? -1e9 : horloge(); c.depuis(S.vu[nom]); return true; }
     const dureeTexte = s => Math.min(1.2, Math.max(.3, String(s).length / 28));
     const T = (c, s, x, y, o = {}) => c.texte(s, x, y, { duree: dureeTexte(s), ...o });
     /* ── Tableau large (15 novembre 2026, « mieux exploiter tout le tableau, grands calibres de texte ») ──────────────
@@ -147,14 +149,16 @@
     /** Compose des paragraphes dans une colonne de largeur W, écriture t (cadre) : { h, pieces: cle → [{dx, dy, s, taille}] }. */
     function composer(c, paras, W, t, base) {
       const pieces = {}, boites = {}; let y = 0;
-      const larg = (s, ta, gras) => { c.ctx.font = `${gras ? '700 ' : ''}${ta}px ${window.Tableau.POLICE}`; return c.ctx.measureText(s).width; };
+      const larg = (s, ta, gras) => { if (s.includes('⟦')) return c.largeurTexte(s, ta); c.ctx.font = `${gras ? '700 ' : ''}${ta}px ${window.Tableau.POLICE}`; return c.ctx.measureText(s).width; };
       paras.forEach((p, i) => {
-        const ta = t * Math.min(1.2, Math.max(.92, p.taille / base)), pas = ta * 1.24, esp = larg(' ', ta);
+        // une fraction « ⟦num|dén⟧ » (écrite sur deux étages, comme dans le cahier) reste d'un seul morceau et prend plus de hauteur
+        const fr = p.runs.some(r => String(r.s).includes('⟦'));
+        const ta = t * Math.min(1.2, Math.max(.92, p.taille / base)), pas = ta * (fr ? 1.75 : 1.24), esp = larg(' ', ta);
         if (i) y += (p.ecart ? ta * .5 : ta * .12);
-        y += ta; let lx = 0, ly = y;
+        y += ta + (fr ? ta * .4 : 0); let lx = 0, ly = y;
         for (const r of p.runs) {
           const L = (pieces[r.cle] ||= []);
-          for (const m of r.s.trim().split(/\s+/)) {
+          for (const m of r.s.trim().match(/(?:⟦[^⟧]*⟧|\S)+/g) || []) {
             if (!m) continue;
             const w = larg(m, ta, r.gras);
             if (lx > 0 && lx + esp + w > W) { ly += pas; lx = 0; }
@@ -163,10 +167,10 @@
             else L.push({ dx: x0, dy: ly, s: m, w, taille: ta });
             lx = x0 + w;
             const b = (boites[r.cle] ||= [Infinity, Infinity, -Infinity, -Infinity]);
-            b[0] = Math.min(b[0], x0); b[1] = Math.min(b[1], ly - ta * .95); b[2] = Math.max(b[2], x0 + w); b[3] = Math.max(b[3], ly + ta * .3);
+            b[0] = Math.min(b[0], x0); b[1] = Math.min(b[1], ly - ta * (fr ? 1.2 : .95)); b[2] = Math.max(b[2], x0 + w); b[3] = Math.max(b[3], ly + ta * (fr ? .62 : .3));
           }
         }
-        y = ly;
+        y = ly + (fr ? ta * .35 : 0);
         for (const r of p.runs) for (const a of r.alias || []) { pieces[a] = pieces[r.cle]; boites[a] = boites[r.cle]; }
       });
       return { h: y + t * .35, pieces, boites };
@@ -285,17 +289,21 @@
         x.save();
         if (p.texte) {
           // ── colonne de texte : les traits du bloc avancent l'horloge sans rien dessiner, les phrases sont récrites ──
-          const lay = p.lay, coupeTout = nomF => function (...a) { x.save(); x.beginPath(); x.rect(0, 0, 0, 0); x.clip(); try { return proto[nomF].apply(this, a); } finally { x.restore(); } };
+          // une fraction « ⟦num|dén⟧ » s'écrit en plusieurs morceaux (texte, numérateur, trait, dénominateur) : une fois la
+          // phrase placée en clair, ses morceaux passent tout droit (ni relevés comme phrases, ni coupés comme des traits)
+          const enClair = (cc, ...a) => { const av = cc._enClair; cc._enClair = true; try { return proto.texte.apply(cc, a); } finally { cc._enClair = av; } };
+          const lay = p.lay, coupeTout = nomF => function (...a) { if (this._enClair) return proto[nomF].apply(this, a); x.save(); x.beginPath(); x.rect(0, 0, 0, 0); x.clip(); try { return proto[nomF].apply(this, a); } finally { x.restore(); } };
           for (const nomF of PIECES_FN) c[nomF] = coupeTout(nomF);
           c.cadre = null;
           c.texte = function (s, tx, ty, o = {}) {
+            if (this._enClair) return proto.texte.call(this, s, tx, ty, o);
             const ta = o.taille ?? 18; s = String(s);
             if (!dedans(tx, ty - ta * .35)) return proto.texte.call(this, s, tx, ty, { ...o, alpha: 0 });
             const pcs = lay.pieces[cleT(nom, tx, ty)], duree = o.duree ?? Math.max(.1, s.length / 28), opt = { couleur: o.couleur, gras: o.gras, alpha: o.alpha };
             if (!pcs || !pcs.length) return proto.texte.call(this, s, tx, ty, { ...o, alpha: 0 });
             const tout = pcs.map(q => q.s).join(' ');
-            if (tout.replace(/\s+/g, ' ') !== s.trim().replace(/\s+/g, ' ')) return proto.texte.call(this, s, p.X + pcs[0].dx, p.Y + pcs[0].dy, { ...opt, taille: pcs[0].taille, duree });
-            for (const q of pcs) proto.texte.call(this, q.s, p.X + q.dx, p.Y + q.dy, { ...opt, taille: q.taille, duree: duree * Math.max(1, q.s.length) / Math.max(1, tout.length) });
+            if (tout.replace(/\s+/g, ' ') !== s.trim().replace(/\s+/g, ' ')) return enClair(this, s, p.X + pcs[0].dx, p.Y + pcs[0].dy, { ...opt, taille: pcs[0].taille, duree });
+            for (const q of pcs) enClair(this, q.s, p.X + q.dx, p.Y + q.dy, { ...opt, taille: q.taille, duree: duree * Math.max(1, q.s.length) / Math.max(1, tout.length) });
             return this;
           };
           c.repere = function (id, rx, ry, w, h, label) {
@@ -395,13 +403,13 @@
       const tete = `Vue « ${v.titre} », t = ${fr(t, 1)} s${S.running ? ' (la scène avance)' : S.fait ? ' (fin)' : t > 0 ? ' (arrêt sur image)' : ' (pas encore lancée)'}.`;
       return [tete, ...(v.voit ? v.voit(k()) : [])].filter(Boolean).join(' ');
     }
-    function start() { S.jusqua = null; S.vu = {}; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; scene.sale = true; bulle($('feedback'), (V().titre || '') + ' : observe…'); pont.noter('start'); pont.emettre(); }
+    function start() { S.jusqua = null; S.vu = {}; S.saut = null; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; scene.sale = true; bulle($('feedback'), (V().titre || '') + ' : observe…'); pont.noter('start'); pont.emettre(); }
     function reset() { start(); }
     function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
     function resume() { if (S.running) return; if (S.fait || S.t >= FIN()) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
     function poser(p, rejouer) {
       const cles = [];
-      if (p.vue && def.vues[p.vue] && p.vue !== S.vue) { S.vue = p.vue; cles.push('vue'); S.vu = {}; S.t = 0; S.fait = false; }
+      if (p.vue && def.vues[p.vue] && p.vue !== S.vue) { S.vue = p.vue; cles.push('vue'); S.vu = {}; S.saut = null; S.t = 0; S.fait = false; }
       for (const [n, d] of Object.entries(def.parametres || {})) {
         if (!(n in p)) continue;
         const v = d.lire ? d.lire(p[n], S) : p[n];
@@ -417,7 +425,7 @@
       const v = V(); let nom = p.moment;
       if (nom && !(nom in v.moments)) {   // un moment d’une autre vue : on change de vue
         const autre = noms.find(n => def.vues[n].moments && nom in def.vues[n].moments);
-        if (autre) { S.vue = autre; S.vu = {}; S.t = 0; S.fait = false; } else nom = null;
+        if (autre) { S.vue = autre; S.vu = {}; S.saut = null; S.t = 0; S.fait = false; } else nom = null;
       }
       const vv = V(), ok = nom && nom in vv.moments;
       let rejoue = false;
@@ -427,7 +435,7 @@
       const cible = ok ? vv.moments[nom] : +p.time_s;
       if (!Number.isFinite(cible)) return;
       rejoue = rejoue || S.fait || S.t >= cible - 1e-4;
-      if (rejoue) { S.vu = {}; S.t = 0; }
+      if (rejoue) { S.vu = {}; S.saut = null; S.t = 0; }
       S.jusqua = Math.min(FIN(), Math.max(.001, cible)); S.motif = ok ? ((vv.motifs && vv.motifs[nom]) || nom.replace(/_/g, ' ')) : '';
       S.running = true; S.fait = false; $('run').textContent = 'Pause'; scene.sale = true;
       bulle($('feedback'), rejoue ? 'On reprend depuis le début… observe.' : 'Observe…');
@@ -435,7 +443,13 @@
     }
     function setTime(p) {
       const t = +p.time_s; if (!Number.isFinite(t)) return;
-      S.running = false; S.jusqua = null; S.vu = {}; S.t = Math.min(FIN(), Math.max(0, t)); S.fait = S.t >= FIN();
+      // (17 novembre 2026) Un saut EN AVANT (ou sur place) garde ce qui est déjà écrit à la craie : deux diapositives qui se
+      // suivent sur la même page (l'iframe n'est pas rechargée) se raccrochent par un set_time sans tout réécrire ; seul un
+      // retour en arrière efface les écrits.
+      const nt = Math.min(FIN(), Math.max(0, t));
+      if (nt < S.t - 1e-6) S.vu = {};
+      S.saut = nt;
+      S.running = false; S.jusqua = null; S.t = nt; S.fait = S.t >= FIN();
       $('run').textContent = S.fait ? 'Rejouer' : 'Reprendre'; scene.sale = true;
       bulle($('feedback'), `Arrêt sur image : t = ${fr(S.t, 1)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
     }
@@ -445,7 +459,7 @@
       if (cles.length) {
         const v = V();
         if (v.surReglage) v.surReglage(k(), cles, { playUntil, start, setTime });
-        else if (S.t > 0 || S.fait) { S.vu = {}; S.t = 0; S.jusqua = null; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Nouveau réglage : on rejoue… observe.'); }
+        else if (S.t > 0 || S.fait) { S.vu = {}; S.saut = null; S.t = 0; S.jusqua = null; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Nouveau réglage : on rejoue… observe.'); }
       }
       pont.emettre();
     }

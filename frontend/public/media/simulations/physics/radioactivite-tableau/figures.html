@@ -171,10 +171,11 @@ function fraction(c, x, y, num, den, o = {}) {
 }
 /** Texte centré entouré d’un cadre de craie (le résultat à retenir). */
 function encadre(c, s, x, y, o = {}) {
-  const t = o.taille ?? 26, w = W(c, s, t) + 26;
+  // une fraction « ⟦num|dén⟧ » (deux étages, comme dans le cahier) : le cadre monte et descend davantage
+  const t = o.taille ?? 26, w = W(c, s, t) + 26, fr = String(s).includes('⟦'), haut = t * (fr ? 1.3 : .95), h = t * (fr ? 2 : 1.42);
   c.texte(s, x, y, { couleur: o.couleur ?? 'vert', taille: t, align: 'center' });
-  c.rect(x - w / 2, y - t * .95, w, t * 1.42, { couleur: o.cadre ?? 'jaune', arrondi: 8, largeur: 2 });
-  return { x: x - w / 2, y: y - t * .95, w, h: t * 1.42 };
+  c.rect(x - w / 2, y - haut, w, h, { couleur: o.cadre ?? 'jaune', arrondi: 8, largeur: 2 });
+  return { x: x - w / 2, y: y - haut, w, h };
 }
 /** Axes d’un graphe, graduations, noms et unités. Renvoie les fonctions de passage X(v), Y(v). */
 function graphe(c, g) {
@@ -216,9 +217,9 @@ const DESSINS = {
     c.repere('systeme', 28, 144, 360, 116, 'le système : 238 = 206 + 0·x + 4y ; 92 = 82 − x + 2y');
     marque(c, 'systeme');
     c.pause(.4);
-    c.texte('y = (238 − 206)/4 = 8', 420, 186, { couleur: 'vert', taille: 24, max: 320 });
-    c.texte('(A d’abord : β ne change pas A)', 420, 212, { couleur: 'orange', taille: 15, max: 320 });
-    c.repere('y', 412, 160, 330, 60, 'y = (238 − 206)/4 = 8');
+    c.texte('y = ⟦238 − 206|4⟧ = 8', 420, 186, { couleur: 'vert', taille: 24, max: 320 });
+    c.texte('(A d’abord : β ne change pas A)', 420, 216, { couleur: 'orange', taille: 15, max: 320 });
+    c.repere('y', 412, 156, 330, 68, 'y = (238 − 206)/4 = 8');
     marque(c, 'y');
     c.pause(.4);
     c.texte('x = 82 + 2y − 92', 420, 252, { couleur: 'vert', taille: 24, max: 320 });
@@ -260,17 +261,17 @@ const DESSINS = {
     c.repere('ln', 32, 176, 400, 42, 'ln(e^x) = x : « ln enlève e »');
     marque(c, 'ln');
     c.pause(.4);
-    c.texte('ln(1/2) = −ln2', 40, 274, { couleur: 'blanc', taille: 28 });
-    c.texte('car ln(1/x) = −ln x', 270, 274, { couleur: 'faible', taille: 18, max: 200 });
-    c.repere('ln_demi', 32, 244, 450, 42, 'ln(1/2) = −ln2');
+    c.texte('ln(⟦1|2⟧) = −ln2', 40, 274, { couleur: 'blanc', taille: 28 });
+    c.texte('car ln(⟦1|x⟧) = −ln x', 270, 274, { couleur: 'faible', taille: 18, max: 200 });
+    c.repere('ln_demi', 32, 240, 450, 54, 'ln(1/2) = −ln2');
     marque(c, 'ln_demi');
     c.pause(.4);
     encadre(c, 'ln2 ≈ 0,693', 140, 340, { taille: 28 });
     c.repere('valeur', 40, 306, 200, 46, 'ln2 ≈ 0,693');
     marque(c, 'valeur');
     c.pause(.3);
-    c.texte('On s’en sert pour : t½ = ln2/λ  et  t = (1/λ)·ln(a_0/a)', 40, 400, { couleur: 'vert', taille: 20, max: 690 });
-    c.repere('fin', 32, 376, 700, 32, 'à quoi ça sert : t½ et la datation');
+    c.texte('On s’en sert pour : t½ = ⟦ln2|λ⟧  et  t = ⟦1|λ⟧·ln(⟦a_0|a⟧)', 40, 400, { couleur: 'vert', taille: 20, max: 690 });
+    c.repere('fin', 32, 372, 700, 44, 'à quoi ça sert : t½ et la datation');
     marque(c, 'fin');
   },
 
@@ -294,8 +295,8 @@ const DESSINS = {
     marque(c, 'relation');
     c.pause(.4);
     c.texte('on divise par dt :', 40, 240, { couleur: 'faible', taille: 18 });
-    c.texte('dN/dt + λ·N = 0', 200, 242, { couleur: 'jaune', taille: 28 });
-    c.repere('equation', 32, 212, 460, 40, 'dN/dt + λ·N = 0');
+    c.texte('⟦dN|dt⟧ + λ·N = 0', 200, 242, { couleur: 'jaune', taille: 28 });
+    c.repere('equation', 32, 206, 460, 56, 'dN/dt + λ·N = 0');
     marque(c, 'equation');
     c.pause(.4);
     encadre(c, 'N(t) = N_0·e^{−λt}', 170, 304, { taille: 28 });
@@ -303,9 +304,9 @@ const DESSINS = {
     c.repere('solution', 32, 270, 700, 48, 'la solution : N(t) = N₀·e^(−λt)');
     marque(c, 'solution');
     c.pause(.4);
-    c.texte('vérification : dN/dt = −λ·N_0·e^{−λt} = −λ·N', 40, 358, { couleur: 'blanc', taille: 21, max: 470 });
-    c.texte('donc dN/dt + λ·N = 0', 530, 358, { couleur: 'vert', taille: 21, max: 210 });
-    c.repere('verification', 32, 332, 710, 36, 'vérification : dN/dt = −λ·N₀·e^(−λt) = −λ·N');
+    c.texte('vérification : ⟦dN|dt⟧ = −λ·N_0·e^{−λt} = −λ·N', 40, 358, { couleur: 'blanc', taille: 21, max: 470 });
+    c.texte('donc ⟦dN|dt⟧ + λ·N = 0', 530, 358, { couleur: 'vert', taille: 21, max: 210 });
+    c.repere('verification', 32, 330, 710, 44, 'vérification : dN/dt = −λ·N₀·e^(−λt) = −λ·N');
     marque(c, 'verification');
     c.pause(.3);
     c.texte('N(t) : le nombre de noyaux restants à la date t', 40, 402, { couleur: 'vert', taille: 20, max: 690 });
@@ -314,15 +315,15 @@ const DESSINS = {
   },
 
   fig_demo_t_demi(c) {
-    c.texte('Démontrer t½ = ln2/λ', 40, 30, { couleur: 'cyan', taille: 20 });
+    c.texte('Démontrer t½ = ⟦ln2|λ⟧', 40, 30, { couleur: 'cyan', taille: 20 });
     c.repere('figure', 16, 40, 728, 376, 'la démonstration de t½ = ln2/λ');
     c.texte('N(t) = N_0·e^{−λt}', 40, 82, { couleur: 'blanc', taille: 26 });
     c.repere('loi', 32, 54, 300, 40, 'la loi N(t) = N₀·e^(−λt)');
     marque(c, 'loi');
     c.pause(.4);
     c.texte('à t = t½ :', 40, 134, { couleur: 'cyan', taille: 22 });
-    c.texte('N(t½) = N_0/2', 150, 134, { couleur: 'jaune', taille: 26 });
-    c.repere('condition', 32, 106, 400, 40, 'à t = t½ : N(t½) = N₀/2');
+    c.texte('N(t½) = ⟦N_0|2⟧', 150, 134, { couleur: 'jaune', taille: 26 });
+    c.repere('condition', 32, 102, 400, 50, 'à t = t½ : N(t½) = N₀/2');
     marque(c, 'condition');
     c.pause(.4);
     const y = 200, t = 28, x0 = 40, wN = W(c, 'N_0', t) * .86;
@@ -334,18 +335,18 @@ const DESSINS = {
     c.ligne(x0 - 3, y + 5, x0 + wN + 3, y - 24, { couleur: 'rose', largeur: 2.4 });
     c.ligne(xf - wN / 2 - 3, y - 8, xf + wN / 2 + 3, y - 37, { couleur: 'rose', largeur: 2.4 });
     c.texte('⇒', xf + 50, y, { couleur: 'blanc', taille: t });
-    c.texte('e^{−λt½} = 1/2', xf + 92, y, { couleur: 'vert', taille: t });
+    c.texte('e^{−λt½} = ⟦1|2⟧', xf + 92, y, { couleur: 'vert', taille: t });
     c.texte('on barre N_0', 40, 246, { couleur: 'rose', taille: 16 });
     c.repere('egalite', 32, 156, 520, 98, 'N₀·e^(−λt½) = N₀/2 : on barre N₀, e^(−λt½) = 1/2');
     marque(c, 'egalite');
     c.pause(.4);
-    c.texte('on prend ln :  −λ·t½ = ln(1/2) = −ln2', 40, 294, { couleur: 'blanc', taille: 24, max: 690 });
-    c.repere('ln', 32, 266, 600, 40, '−λ·t½ = ln(1/2) = −ln2');
+    c.texte('on prend ln :  −λ·t½ = ln(⟦1|2⟧) = −ln2', 40, 294, { couleur: 'blanc', taille: 24, max: 690 });
+    c.repere('ln', 32, 262, 600, 50, '−λ·t½ = ln(1/2) = −ln2');
     marque(c, 'ln');
     c.pause(.4);
-    encadre(c, 't½ = ln2/λ', 140, 352, { taille: 30 });
-    c.texte('et τ = 1/λ  ⇒  t½ = τ·ln2', 290, 352, { couleur: 'blanc', taille: 24, max: 440 });
-    c.repere('resultat', 32, 318, 700, 50, 't½ = ln2/λ ; t½ = τ·ln2');
+    encadre(c, 't½ = ⟦ln2|λ⟧', 140, 352, { taille: 30 });
+    c.texte('et τ = ⟦1|λ⟧  ⇒  t½ = τ·ln2', 290, 352, { couleur: 'blanc', taille: 24, max: 440 });
+    c.repere('resultat', 32, 310, 700, 66, 't½ = ln2/λ ; t½ = τ·ln2');
     marque(c, 'resultat');
     c.pause(.3);
     c.texte('t½ ne dépend pas de N_0 : elle ne dépend que du noyau', 40, 404, { couleur: 'vert', taille: 20, max: 690 });
@@ -365,7 +366,7 @@ const DESSINS = {
       c.fleche(536, yy - 6, 576, yy - 6, { couleur: 'rose', largeur: 1.8 });
       c.texte(d, 590, yy, { couleur: 'vert', taille: 20 });
     });
-    c.texte('λ = ln2/t½ : l’unité suit celle de t½', 414, 204, { couleur: 'faible', taille: 15, max: 320 });
+    c.texte('λ = ⟦ln2|t½⟧ : l’unité suit celle de t½', 414, 204, { couleur: 'faible', taille: 15, max: 320 });
     c.repere('trace', 32, 50, 710, 164, 'les unités : s, min, h, jour, an ; λ en s⁻¹, jour⁻¹, an⁻¹');
     marque(c, 'trace');
     c.pause(.4);
@@ -378,8 +379,8 @@ const DESSINS = {
     marque(c, 'conversion');
     c.pause(.4);
     c.texte('a en Bq (désintégrations par seconde) : λ en s⁻¹', 40, 336, { couleur: 'jaune', taille: 21, max: 690 });
-    c.texte('λ = ln2/t½ = 0,693 / 1,19·10⁷ s = 5,8·10⁻⁸ s⁻¹', 40, 368, { couleur: 'blanc', taille: 21, max: 690 });
-    c.repere('bq', 32, 312, 700, 66, 'a en Bq : λ en s⁻¹ ; λ = 5,8·10⁻⁸ s⁻¹');
+    c.texte('λ = ⟦ln2|t½⟧ = ⟦0,693|1,19·10⁷ s⟧ = 5,8·10⁻⁸ s⁻¹', 40, 370, { couleur: 'blanc', taille: 21, max: 690 });
+    c.repere('bq', 32, 312, 700, 72, 'a en Bq : λ en s⁻¹ ; λ = 5,8·10⁻⁸ s⁻¹');
     marque(c, 'bq');
     c.pause(.3);
     c.texte('⚠ Dans a = λ·N : λ en s⁻¹, jamais en jour⁻¹', 40, 404, { couleur: 'orange', taille: 19, max: 690 });
@@ -390,15 +391,15 @@ const DESSINS = {
   fig_masse_N(c) {
     c.texte('De la masse au nombre de noyaux', 40, 30, { couleur: 'cyan', taille: 20 });
     c.repere('figure', 16, 40, 728, 376, 'de la masse m au nombre N de noyaux');
-    c.texte('quantité de matière :  n = m/M', 40, 80, { couleur: 'blanc', taille: 24 });
-    c.texte('(n en mol, m en g, M en g/mol)', 40, 106, { couleur: 'faible', taille: 16 });
-    c.repere('quantite', 32, 54, 440, 60, 'n = m/M');
+    c.texte('quantité de matière :  n = ⟦m|M⟧', 40, 80, { couleur: 'blanc', taille: 24 });
+    c.texte('(n en mol, m en g, M en g/mol)', 40, 110, { couleur: 'faible', taille: 16 });
+    c.repere('quantite', 32, 50, 440, 68, 'n = m/M');
     marque(c, 'quantite');
     c.pause(.4);
     c.texte('nombre de noyaux :', 40, 152, { couleur: 'blanc', taille: 22 });
-    encadre(c, 'N = n·N_A = (m/M)·N_A', 360, 154, { taille: 26 });
+    encadre(c, 'N = n·N_A = ⟦m|M⟧·N_A', 360, 154, { taille: 26 });
     c.texte('N_A = 6,02·10²³ mol⁻¹', 230, 192, { couleur: 'faible', taille: 17 });
-    c.repere('nombre', 32, 124, 520, 76, 'N = n·N_A = (m/M)·N_A');
+    c.repere('nombre', 32, 118, 520, 82, 'N = n·N_A = (m/M)·N_A');
     marque(c, 'nombre');
     c.pause(.4);
     peindre(c, ctx => {
@@ -410,7 +411,7 @@ const DESSINS = {
     c.texte('National 2023 N : le tritium', 40, 232, { couleur: 'cyan', taille: 20 });
     c.nucleide('H', 3, 1, x, 232, { taille: 22, couleur: 'cyan' });
     c.texte('m_0 = 2 µg = 2·10⁻⁶ g ;  M = 3 g/mol', 40, 266, { couleur: 'blanc', taille: 21, max: 560 });
-    c.texte('N_0 = (2·10⁻⁶ / 3) × 6,02·10²³ = 4,0·10¹⁷ noyaux', 40, 302, { couleur: 'vert', taille: 22, max: 580 });
+    c.texte('N_0 = ⟦2·10⁻⁶|3⟧ × 6,02·10²³ = 4,0·10¹⁷ noyaux', 40, 302, { couleur: 'vert', taille: 22, max: 580 });
     c.repere('exemple', 32, 206, 710, 108, 'tritium : m₀ = 2 µg, M = 3 g/mol, N₀ = 4,0·10¹⁷');
     marque(c, 'exemple');
     c.pause(.4);
@@ -418,21 +419,21 @@ const DESSINS = {
     c.repere('piege', 32, 326, 590, 34, 'le piège : m en g');
     marque(c, 'piege');
     c.pause(.3);
-    c.texte('Autre chemin, si on connaît a_0 : N_0 = a_0/λ (λ en s⁻¹)', 40, 400, { couleur: 'vert', taille: 20, max: 690 });
-    c.repere('fin', 32, 378, 700, 30, 'N₀ = a₀/λ');
+    c.texte('Autre chemin, si on connaît a_0 : N_0 = ⟦a_0|λ⟧ (λ en s⁻¹)', 40, 400, { couleur: 'vert', taille: 20, max: 690 });
+    c.repere('fin', 32, 374, 700, 40, 'N₀ = a₀/λ');
     marque(c, 'fin');
   },
 
   fig_activite_demo(c) {
     c.texte('L’activité : a = λ·N', 40, 30, { couleur: 'cyan', taille: 20 });
     c.repere('figure', 16, 40, 728, 376, 'de a = −dN/dt à a(t) = a₀·e^(−λt)');
-    encadre(c, 'a = −dN/dt', 120, 90, { taille: 28 });
+    encadre(c, 'a = −⟦dN|dt⟧', 120, 90, { taille: 28 });
     c.texte('a : nombre de désintégrations par seconde (Bq)', 236, 82, { couleur: 'blanc', taille: 18, max: 500 });
     c.texte('le signe − : N diminue, donc a > 0', 236, 108, { couleur: 'rose', taille: 18, max: 500 });
-    c.repere('definition', 32, 56, 710, 62, 'a = −dN/dt');
+    c.repere('definition', 32, 50, 710, 68, 'a = −dN/dt');
     marque(c, 'definition');
     c.pause(.4);
-    c.texte('a = −d(N_0·e^{−λt})/dt', 40, 168, { couleur: 'blanc', taille: 25, max: 690 });
+    c.texte('a = −⟦d(N_0·e^{−λt})|dt⟧', 40, 168, { couleur: 'blanc', taille: 25, max: 690 });
     c.texte('= −N_0 × (−λ)·e^{−λt} = λ·N_0·e^{−λt}', 64, 208, { couleur: 'blanc', taille: 25, max: 670 });
     c.repere('derivee', 32, 138, 710, 82, 'on dérive : a = λ·N₀·e^(−λt)');
     marque(c, 'derivee');
@@ -450,7 +451,7 @@ const DESSINS = {
   },
 
   fig_datation_demo(c) {
-    c.texte('Dater : t = (1/λ)·ln(a_0/a)', 40, 30, { couleur: 'cyan', taille: 20 });
+    c.texte('Dater : t = ⟦1|λ⟧·ln(⟦a_0|a⟧)', 40, 30, { couleur: 'cyan', taille: 20 });
     c.repere('figure', 16, 40, 728, 376, 'de a = a₀·e^(−λt) à t = (1/λ)·ln(a₀/a)');
     peindre(c, ctx => bois(ctx, 660, 112, 44, 40));
     c.texte('bois ancien : a', 646, 178, { couleur: 'blanc', taille: 15, align: 'center' });
@@ -460,22 +461,22 @@ const DESSINS = {
     marque(c, 'loi');
     c.pause(.4);
     c.texte('on divise par a_0 :', 40, 146, { couleur: 'faible', taille: 18 });
-    c.texte('a/a_0 = e^{−λt}', 200, 148, { couleur: 'blanc', taille: 28 });
-    c.repere('rapport', 32, 118, 420, 42, 'a/a₀ = e^(−λt)');
+    c.texte('⟦a|a_0⟧ = e^{−λt}', 200, 148, { couleur: 'blanc', taille: 28 });
+    c.repere('rapport', 32, 114, 420, 54, 'a/a₀ = e^(−λt)');
     marque(c, 'rapport');
     c.pause(.4);
     c.texte('on prend ln :', 40, 222, { couleur: 'faible', taille: 18 });
-    c.texte('ln(a/a_0) = −λ·t', 170, 224, { couleur: 'blanc', taille: 26 });
-    c.texte('donc  ln(a_0/a) = λ·t', 170, 264, { couleur: 'blanc', taille: 26 });
-    c.repere('ln', 32, 194, 480, 82, 'ln(a₀/a) = λ·t');
+    c.texte('ln(⟦a|a_0⟧) = −λ·t', 170, 224, { couleur: 'blanc', taille: 26 });
+    c.texte('donc  ln(⟦a_0|a⟧) = λ·t', 170, 272, { couleur: 'blanc', taille: 26 });
+    c.repere('ln', 32, 190, 480, 100, 'ln(a₀/a) = λ·t');
     marque(c, 'ln');
     c.pause(.4);
-    encadre(c, 't = (1/λ)·ln(a_0/a)', 200, 330, { taille: 30 });
-    c.repere('resultat', 32, 296, 360, 50, 't = (1/λ)·ln(a₀/a)');
+    encadre(c, 't = ⟦1|λ⟧·ln(⟦a_0|a⟧)', 200, 330, { taille: 30 });
+    c.repere('resultat', 32, 288, 360, 66, 't = (1/λ)·ln(a₀/a)');
     marque(c, 'resultat');
     c.pause(.3);
-    c.texte('avec λ = ln2/t½ :  t = (t½/ln2)·ln(a_0/a)', 40, 398, { couleur: 'vert', taille: 22, max: 690 });
-    c.repere('fin', 32, 372, 700, 34, 't = (t½/ln2)·ln(a₀/a)');
+    c.texte('avec λ = ⟦ln2|t½⟧ :  t = ⟦t½|ln2⟧·ln(⟦a_0|a⟧)', 40, 398, { couleur: 'vert', taille: 22, max: 690 });
+    c.repere('fin', 32, 368, 700, 46, 't = (t½/ln2)·ln(a₀/a)');
     marque(c, 'fin');
   },
 
@@ -505,7 +506,7 @@ const DESSINS = {
     c.repere('quatre_vingt_dix', 32, 210, 710, 42, '90 % désintégrés : N = 0,10·N₀');
     marque(c, 'quatre_vingt_dix');
     c.pause(.4);
-    c.texte('t = 2t½ :  N = N_0/4', 40, 298, { couleur: 'blanc', taille: 22 });
+    c.texte('t = 2t½ :  N = ⟦N_0|4⟧', 40, 298, { couleur: 'blanc', taille: 22 });
     c.fleche(234, 292, 262, 292, { couleur: 'rose', largeur: 1.8 });
     c.texte('75 % désintégrés', 270, 300, { couleur: 'vert', taille: 23, max: 190 });
     barre(292, 15);
@@ -536,9 +537,9 @@ const DESSINS = {
     c.repere('fils', 32, 148, 710, 66, 'les noyaux fils Th : N(Th) = N₀(1 − e^(−λt))');
     marque(c, 'fils');
     c.pause(.4);
-    c.texte('r = N(Th)/N(U) = N_0(1 − e^{−λt}) / (N_0·e^{−λt})', 40, 266, { couleur: 'blanc', taille: 24, max: 690 });
+    c.texte('r = ⟦N(Th)|N(U)⟧ = ⟦N_0(1 − e^{−λt})|N_0·e^{−λt}⟧', 40, 266, { couleur: 'blanc', taille: 24, max: 690 });
     encadre(c, 'r = e^{λt} − 1', 170, 330, { taille: 30 });
-    c.texte('(N_0 se simplifie ; 1/e^{−λt} = e^{λt})', 330, 330, { couleur: 'faible', taille: 17, max: 400 });
+    c.texte('(N_0 se simplifie ; ⟦1|e^{−λt}⟧ = e^{λt})', 330, 330, { couleur: 'faible', taille: 17, max: 400 });
     c.repere('rapport', 32, 238, 710, 108, 'r = N(Th)/N(U) = e^(λt) − 1');
     marque(c, 'rapport');
     c.pause(.3);
@@ -550,32 +551,35 @@ const DESSINS = {
   fig_cas_types(c) {
     c.texte('Le mot de la question → la méthode', 40, 26, { couleur: 'cyan', taille: 20 });
     c.repere('figure', 12, 34, 736, 380, 'le tableau des cas types');
-    const X0 = 14, XM = 318, X1 = 746, Y0 = 36, H0 = 32, RH = 36, N = 9, Yr = i => Y0 + H0 + RH * i;
-    c.rect(X0, Y0, X1 - X0, H0 + RH * N, { couleur: 'faible', arrondi: 6 });
+    const R = [['composition', '« composition du noyau »', 'Z protons ; N = A − Z neutrons'],
+      ['equation', '« écrire l’équation, identifier X »', 'Soddy : A puis Z ; le tableau des Z'],
+      ['type', '« type de désintégration »', null],
+      ['famille', '« nombre de α et de β⁻ »', 'système en x et y : A donne y, puis Z donne x'],
+      ['t_demi', '« demi-vie graphiquement »', 't à ⟦N_0|2⟧ (ou à ⟦a_0|2⟧) sur la courbe'],
+      ['lambda', '« constante radioactive »', 'λ = ⟦ln2|t½⟧ ; unité : s⁻¹, jour⁻¹, an⁻¹'],
+      ['nombre', '« nombre de noyaux »', 'N = ⟦m|M⟧·N_A  ou  N_0 = ⟦a_0|λ⟧ (λ en s⁻¹)'],
+      ['date', '« à quelle date », « âge »', 't = ⟦1|λ⟧·ln(⟦a_0|a⟧)'],
+      ['pourcentage', '« x % désintégrés »', 'N = (1 − x)·N_0']];
+    // Une rangée dont la méthode a une fraction (deux étages, comme dans le cahier) est plus haute (40), les rangées
+    // simples plus basses (32) : le tableau garde sa hauteur totale (9 × 36).
+    const HR = R.map(([, , m]) => (m && m.includes('⟦') ? 40 : m ? 32 : 36));
+    const X0 = 14, XM = 318, X1 = 746, Y0 = 36, H0 = 32, N = 9, Yr = i => Y0 + H0 + HR.slice(0, i).reduce((a, h) => a + h, 0);
+    c.rect(X0, Y0, X1 - X0, Yr(N) - Y0, { couleur: 'faible', arrondi: 6 });
     c.ligne(XM, Y0, XM, Yr(N), { couleur: 'faible', largeur: 1.6, duree: .2 });
     c.ligne(X0, Yr(0), X1, Yr(0), { couleur: 'faible', largeur: 1.6, duree: .2 });
     for (let i = 1; i < N; i++) c.ligne(X0, Yr(i), X1, Yr(i), { couleur: 'tresfaible', largeur: 1.1, duree: .08 });
     c.texte('le mot de la question', (X0 + XM) / 2, Y0 + 23, { couleur: 'cyan', align: 'center', taille: 17 });
     c.texte('la méthode', (XM + X1) / 2, Y0 + 23, { couleur: 'cyan', align: 'center', taille: 17 });
-    c.repere('trace', X0, Y0, X1 - X0, H0 + RH * N, 'le tableau : le mot de la question, la méthode');
+    c.repere('trace', X0, Y0, X1 - X0, Yr(N) - Y0, 'le tableau : le mot de la question, la méthode');
     marque(c, 'trace');
-    const R = [['composition', '« composition du noyau »', 'Z protons ; N = A − Z neutrons'],
-      ['equation', '« écrire l’équation, identifier X »', 'Soddy : A puis Z ; le tableau des Z'],
-      ['type', '« type de désintégration »', null],
-      ['famille', '« nombre de α et de β⁻ »', 'système en x et y : A donne y, puis Z donne x'],
-      ['t_demi', '« demi-vie graphiquement »', 't à N_0/2 (ou à a_0/2) sur la courbe'],
-      ['lambda', '« constante radioactive »', 'λ = ln2/t½ ; unité : s⁻¹, jour⁻¹, an⁻¹'],
-      ['nombre', '« nombre de noyaux »', 'N = (m/M)·N_A  ou  N_0 = a_0/λ (λ en s⁻¹)'],
-      ['date', '« à quelle date », « âge »', 't = (1/λ)·ln(a_0/a)'],
-      ['pourcentage', '« x % désintégrés »', 'N = (1 − x)·N_0']];
     R.forEach(([id, q, m], i) => {
       c.pause(.35);
-      const yy = Yr(i) + 25;
+      const yy = Yr(i) + (HR[i] === 40 ? 27 : HR[i] === 32 ? 22 : 25);   // la ligne de base, au milieu de sa rangée
       c.texte(q, X0 + 8, yy, { couleur: 'jaune', taille: 16, max: XM - X0 - 22 });
       c.fleche(XM - 4, yy - 6, XM + 14, yy - 6, { couleur: 'rose', largeur: 1.8 });
       if (m) c.texte(m, XM + 22, yy, { couleur: 'vert', taille: 18, max: X1 - XM - 32 });
       else c.noyaux('[4,2]He : α ;  [0,-1]e : β⁻ ;  [0,1]e : β⁺', XM + 22, yy, { couleur: 'vert', taille: 18 });
-      c.repere(id, X0, Yr(i), X1 - X0, RH, `${q} → ${m ? net(m) : 'la particule : ⁴₂He α ; ⁰₋₁e β⁻ ; ⁰₁e β⁺'}`);
+      c.repere(id, X0, Yr(i), X1 - X0, HR[i], `${q} → ${m ? net(window.Tableau.lisible(m)) : 'la particule : ⁴₂He α ; ⁰₋₁e β⁻ ; ⁰₁e β⁺'}`);
       marque(c, id);
     });
     c.pause(.3);
@@ -688,7 +692,8 @@ const DESSINS = {
  * dessinée avec sa transformation : les repères (`c.repere`, coordonnées de la figure) suivent donc d’eux-mêmes.
  * L < 1000 (grand écran, déjà haut) : rien ne change. */
 /** Largeur écrite d’une chaîne de craie (indices plus petits). */
-const largeurBloc = (c, s, t) => window.Tableau.Craie.segments(String(s)).reduce((w, seg) => w + c.largeurTexte(seg.t, seg.sub || seg.sup ? t * .62 : t), 0);
+// une fraction « ⟦num|dén⟧ » (deux étages) : mesurée par le kit
+const largeurBloc = (c, s, t) => String(s).includes('⟦') ? c.largeurTexte(String(s), t) : window.Tableau.Craie.segments(String(s)).reduce((w, seg) => w + c.largeurTexte(seg.t, seg.sub || seg.sup ? t * .62 : t), 0);
 const BLOC = {
   mesure: false, actif: false, idx: 0, boites: [], plan: null, cle: '', base: null,
   pt(x, y, m = 0) {
@@ -733,7 +738,8 @@ const BLOC = {
     c.texte = function (s, x, y, o = {}) {
       const t = Math.max(o.taille ?? 18, tMin); let l = largeurBloc(this, String(s), t); if (o.max && l > o.max) l = o.max;
       const x0 = o.align === 'center' ? x - l / 2 : o.align === 'right' ? x - l : x;
-      BLOC.pt(x0, y - t * .95); BLOC.pt(x0 + l, y + t * .35); return this;
+      const fr = String(s).includes('⟦');   // une fraction monte et descend plus qu’une ligne
+      BLOC.pt(x0, y - t * (fr ? 1.25 : .95)); BLOC.pt(x0 + l, y + t * (fr ? .7 : .35)); return this;
     };
     try { MM = {}; DESSINS[fig](c); } catch (e) { console.warn('[figures] mesure des étapes', e); }
     finally { for (const k of noms) { if (avant[k] === undefined) delete c[k]; else c[k] = avant[k]; } BLOC.mesure = false; }

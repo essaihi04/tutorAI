@@ -157,6 +157,10 @@ function montrer(cible, par, pasAPas) {
   pont.noter(par || 'play_until', { moment: NOEUDS[cible - 1]?.id || 'definition' }); pont.emettre();
 }
 function playUntil(p) { const M = moments(); const n = p.moment in M ? M[p.moment] : +p.time_s; if (Number.isFinite(n)) montrer(n, 'play_until'); }
+/* reset (17 novembre 2026) : la carte vierge (le centre seul), sans se dessiner toute seule ; la voix la dessine ensuite
+ * branche par branche (play_until). Avant, « start » la dessinait d'un bout à l'autre à son rythme et les play_until de la
+ * voix, arrivés après, étaient refusés (moment déjà passé). Le bouton Redessiner garde le dessin pas à pas. */
+function vierge() { S.n = 0; S.cible = 0; S.running = false; S.apparu = []; S.def = null; S.choisi = null; scene.reecrire(); bulle($('feedback'), 'Au centre : la libération de l’énergie.'); pont.noter('reset', {}); pont.emettre(); }
 function start() { S.n = 0; S.apparu = []; S.def = null; S.choisi = null; scene.reecrire(); montrer(NOEUDS.length, 'start', true); bulle($('feedback'), 'La carte se dessine…'); }
 function setParameters(p) {
   if (Array.isArray(p.lacunes)) S.lacunes = p.lacunes.map(l => ({ id: String(l.id || ''), label: String(l.label || ''), statut: String(l.statut || 'non_acquis') }));
@@ -197,7 +201,7 @@ const pont = protocole({ id: config.id, commandes, config,
   texte: 'Carte conceptuelle du chapitre « Libération de l’énergie » : la définition au centre, huit branches autour (ATP, glycolyse, mitochondrie, matrice et cycle de Krebs, chaîne respiratoire, bilans et rendements, fermentations, lire un document).',
   etat: () => ({ simulation_status: S.running ? 'running' : 'paused', ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'carte', time_s: S.n, parameters: { definition: S.def != null, branches: S.n, lacunes: S.lacunes ? S.lacunes.length : null }, moments: moments() }),
   progression: () => S.n / NOEUDS.length,
-  executer: (cmd, p) => ({ start, reset: start, play_until: () => playUntil(p), set_parameters: () => setParameters(p) })[cmd]?.() });
+  executer: (cmd, p) => ({ start, reset: vierge, play_until: () => playUntil(p), set_parameters: () => setParameters(p) })[cmd]?.() });
 bulle($('feedback'), 'Le professeur va dessiner la carte du chapitre.');
 window.__carte = { S, scene, NOEUDS, CENTRE };   // pour les vérifications automatiques
 </script>

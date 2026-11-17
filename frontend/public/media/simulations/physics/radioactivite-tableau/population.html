@@ -271,6 +271,15 @@ function peindreEchantillon(ctx, tj) {
   return volants;
 }
 
+/* Le tableau de la vue « proportion » : la case « ⟦33|400⟧ ≈ 0,083 » est une fraction sur deux étages (comme dans le
+ * cahier) ; l'en-tête monte (les rangées se sont effacées) et les lignes s'espacent de la hauteur d'une fraction. */
+const TAB = { tete: 236, trait: 244 };
+function rangY(c, k) {
+  const mn = c.tailleMin && c.echelle ? c.tailleMin / c.echelle : 0, T = Math.max(16, mn), tf = c._tailleEtage ? c._tailleEtage(T) : Math.max(.78 * T, mn);
+  const haut = .32 * T + 1.05 * tf, bas = 1.15 * tf - .32 * T;
+  return TAB.trait + 3 + haut + (k - 1) * Math.max(26, haut + bas + 3);
+}
+
 /* ── Écriture à un instant de la scène : un texte qui apparaît à un instant clé s’écrit pendant l’arrêt de l’horloge ── */
 function ecritA(c, nom, fn) {
   const e = ev(nom); if (!e) return;
@@ -353,7 +362,7 @@ function dessiner(c) {
       c.courbe(u => { const t = u * AX.max * .98; return [PX(t), PY(n0 * 2 ** (-t / T))]; }, 70, { couleur: 'cyan', largeur: 1.8, pointille: [6, 6], tremble: .2 });
       c.texte('N(t) = N_0·e^{−λt}', 520, 118, { couleur: 'cyan', taille: 21 });
       c.rect(510, 94, 170, 34, { couleur: 'cyan', largeur: 1.4, arrondi: 6 });
-      c.texte('la loi (pointillé) : λ = ln2/t½', 510, 150, { couleur: 'faible', taille: 14 });
+      c.texte('la loi (pointillé) : λ = ⟦ln2|t½⟧', 510, 152, { couleur: 'faible', taille: 14 });
     });
   }
   if (S.vue === 'proportion') {
@@ -376,24 +385,24 @@ function dessiner(c) {
     let tVol = Infinity;
     ecritA(c, 'tableau', () => {
       c.pause(.3);
-      c.texte('Δt = 1 jour', 330, 260, { couleur: 'cyan', taille: 16, duree: .15 });
-      [['N avant', 466], ['désintégrés', 572], ['proportion', 682]].forEach(([s, x]) => c.texte(s, x, 260, { couleur: 'blanc', taille: 15, align: 'center', duree: .15 }));
-      c.ligne(330, 268, 740, 268, { couleur: 'tresfaible', largeur: 1.4, duree: .2 });
-      for (let k = 1; k <= 3; k++) c.texte(`jour ${k}`, 334, 268 + 24 * k, { couleur: 'faible', taille: 14, duree: .1 });
+      c.texte('Δt = 1 jour', 330, TAB.tete, { couleur: 'cyan', taille: 16, duree: .15 });
+      [['N avant', 466], ['désintégrés', 572], ['proportion', 682]].forEach(([s, x]) => c.texte(s, x, TAB.tete, { couleur: 'blanc', taille: 15, align: 'center', duree: .15 }));
+      c.ligne(330, TAB.trait, 740, TAB.trait, { couleur: 'tresfaible', largeur: 1.4, duree: .2 });
+      for (let k = 1; k <= 3; k++) c.texte(`jour ${k}`, 334, rangY(c, k), { couleur: 'faible', taille: 14, duree: .1 });
       tVol = c.cur; c.pause(.9);
-      for (let k = 1; k <= 3; k++) { const av = avantJour(k - 1), d = av - avantJour(k); c.texte(`${d}/${av} ≈ ${fr(d / av, 3)}`, 682, 268 + 24 * k, { couleur: 'blanc', taille: 16, align: 'center', duree: .45 }); }
+      for (let k = 1; k <= 3; k++) { const av = avantJour(k - 1), d = av - avantJour(k); c.texte(`⟦${d}|${av}⟧ ≈ ${fr(d / av, 3)}`, 682, rangY(c, k), { couleur: 'blanc', taille: 16, align: 'center', duree: .45 }); }
     });
     const clampU = v => Math.min(1, Math.max(0, v));
     if (Number.isFinite(tVol) && S.t >= tVol) c.direct(() => {
       for (let k = 1; k <= 3; k++) {
-        const av = avantJour(k - 1), d = av - avantJour(k), yc = 268 + 24 * k, ya = PR.ys[k - 1] + 5, u = lisseP((S.t - tVol - .1 * (k - 1)) / .7);
+        const av = avantJour(k - 1), d = av - avantJour(k), yc = rangY(c, k), ya = PR.ys[k - 1] + 5, u = lisseP((S.t - tVol - .1 * (k - 1)) / .7);
         if (S.t < tVol + .1 * (k - 1)) continue;
         // Les nombres ne traversent pas l'en-tête du tableau (« Δt = 1 jour », « N avant », « proportion ») : le compteur orange
         // descend d'abord (à droite de « proportion »), puis glisse vers sa case ; le nombre violet de la 1re rangée (au-dessus de
         // l'en-tête) passe par le vide entre « N avant » et « désintégrés » (x = 513), les autres vont droit à leur case.
         const uy = Math.min(1, u / .4), ux = Math.max(0, (u - .3) / .7), yv = ya + (yc - ya) * uy;
         let xa = PR.nav - 12 + (466 - PR.nav + 12) * u, ya2 = ya + (yc - ya) * u;
-        if (ya < 266) {
+        if (ya < TAB.trait - 2) {
           const s1 = Math.min(1, u / .35), s2 = clampU((u - .35) / .3), s3 = clampU((u - .65) / .35);
           xa = s3 > 0 ? 513 + (466 - 513) * s3 : PR.nav - 12 + (513 - PR.nav + 12) * s1; ya2 = ya + (yc - ya) * s2;
         }
@@ -403,7 +412,7 @@ function dessiner(c) {
     });
     if (S.conclusions) ecritA(c, 'conclusion', () => {
       c.texte('la même proportion par unité de temps : λ', 334, 372, { couleur: 'vert', taille: 16, max: 400, duree: 1.6 });
-      c.texte(`proportion ≈ λ·Δt ; λ = ln2/t½ = ${fr(lambda(), 3)} jour⁻¹`, 334, 398, { couleur: 'vert', taille: 15, max: 400, duree: 1.6 });
+      c.texte(`proportion ≈ λ·Δt ; λ = ⟦ln2|t½⟧ = ${fr(lambda(), 3)} jour⁻¹`, 334, 400, { couleur: 'vert', taille: 15, max: 400, duree: 1.6 });
     });
   }
   if (S.vue === 'restants') {
@@ -442,13 +451,26 @@ function tracer(c, tj, f, couleur) {
   for (let t = 0; t <= tj + 1e-9; t += pas) c.point(PX(t), PY(f(restants(t))), 2.8, couleur);
   c.point(PX(tj), PY(f(n)), 4.6, couleur);
 }
+/* La cote « ⟦N_0|2ᵏ⟧ = … » (fraction sur deux étages, comme dans le cahier) est plus haute qu’une ligne : quand elle
+ * déborderait sur la cote du palier suivant (demi-vie courte, points rapprochés), elle monte au-dessus d’elle — au-dessus
+ * du point, à droite du pointillé vertical, il n’y a ni courbe ni pointillé. */
+function basePalier(c, k) {
+  const mn = c.tailleMin && c.echelle ? c.tailleMin / c.echelle : 0, T = Math.max(16, mn), tf = c._tailleEtage ? c._tailleEtage(T) : Math.max(.78 * T, mn);
+  const haut = .32 * T + 1.22 * tf, bas = 1.15 * tf - .32 * T;
+  let b = PY(vise(3)) - 12;
+  for (let j = 2; j >= k; j--) {
+    const x = PX(j * S.tdemi), w = c.largeurTexte(`⟦N_0|${2 ** j}⟧ = ${vise(j)}`, 16), xs = PX((j + 1) * S.tdemi);
+    b = x + 10 + w > xs + 6 ? Math.min(PY(vise(j)) - 12, b - haut - bas - 3) : PY(vise(j)) - 12;
+  }
+  return b;
+}
 /** Palier k (vue grand_nombre) : pointillés jusqu’au point (k·t½ ; N₀/2ᵏ), cote. */
 function palier(c, k) {
   const t = k * S.tdemi, Nk = vise(k), x = PX(t), y = PY(Nk);
   c.ligne(G.ox, y, x, y, { couleur: 'rose', largeur: 1.4, pointille: [5, 5] });
   c.ligne(x, y, x, G.oy, { couleur: 'rose', largeur: 1.4, pointille: [5, 5] });
   c.cercle(x, y, 7, { couleur: 'rose', largeur: 1.8 });
-  c.texte(`N_0/${2 ** k} = ${Nk}`, x + 10, y - 8, { couleur: 'rose', taille: 16 });
+  c.texte(`⟦N_0|${2 ** k}⟧ = ${Nk}`, x + 10, basePalier(c, k), { couleur: 'rose', taille: 16 });
   c.texte(k === 1 ? 't½' : `${k}t½`, x + 3, G.oy - 6, { couleur: 'rose', taille: 13 });
 }
 function reperes(c, tj) {
@@ -469,7 +491,7 @@ function reperes(c, tj) {
   c.repere('N0_sur_2', G.ox, PY(n0 / 2) - 10, Math.min(QX(T) - G.ox + 100, G.axl), 20, `N₀/2 = ${vise(1)} noyaux`);
   c.repere('t_demi', PX(Math.min(T, S.axe.max)) - 26, G.oy + 18, 52, 44, `t½ = ${T} jours (poignée : glisser pour changer t½)`);
   c.repere('loi', 506, 90, 180, 66, `la loi N(t) = N₀·e^(−λt), en pointillé${ici('grand_nombre')}`);
-  c.repere('tableau', 326, 244, 420, 164, `le tableau : Δt = 1 jour, N avant, désintégrés, proportion${ici('proportion')}`);
+  c.repere('tableau', 326, 220, 420, 188, `le tableau : Δt = 1 jour, N avant, désintégrés, proportion${ici('proportion')}`);
   c.repere('rangees', 320, 224, 420, 100, `les rangées du jour : présents (violet) et partis (gris)${ici('proportion')}`);
   c.repere('compteur_jour', PR.cpt - 22, 222, 44, 100, `les noyaux partis chaque jour : ${avantJour(0) - avantJour(1)}, ${avantJour(1) - avantJour(2)}, ${avantJour(2) - avantJour(3)}${ici('proportion')}`);
   c.repere('ligne_8', PR.bx + 250, 222, 60, 136, `la même part grise chaque jour : ≈ 8 %${ici('proportion')}`);

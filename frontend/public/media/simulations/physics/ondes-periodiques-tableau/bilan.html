@@ -32,19 +32,19 @@ const BLOCS = [
   { id: 'definition', titre: '1 · Onde progressive périodique', comps: ['C1'],
     def: "Une onde progressive est périodique si la perturbation se répète, identique à elle-même, à intervalles de temps égaux.",
     attention: "Chaque point vibre périodiquement, mais reste à sa place." },
-  { id: 'periode', titre: '2 · Période T et fréquence N', comps: ['C2'], formules: ['N = 1 / T', 'T = nombre de divisions × sensibilité'],
+  { id: 'periode', titre: '2 · Période T et fréquence N', comps: ['C2'], formules: ['N = ⟦1|T⟧', 'T = nombre de divisions × sensibilité'],
     def: "T (périodicité temporelle) : durée pour qu'un point revienne au même état.",
     attention: "Lire le préfixe : ms ou µs. T en s, N en Hz." },
-  { id: 'longueur_onde', titre: '3 · Longueur d’onde λ', comps: ['C3'], formules: ['λ = d / n'],
+  { id: 'longueur_onde', titre: '3 · Longueur d’onde λ', comps: ['C3'], formules: ['λ = ⟦d|n⟧'],
     def: "La plus petite distance séparant deux points du milieu dans le même état vibratoire (périodicité spatiale).",
     attention: "Compter les intervalles, pas les traits. Axe en temps → T, axe en distance → λ." },
   { id: 'celerite', titre: '4 · Célérité', comps: ['C4'], formules: ['λ = v · T', 'v = λ · N'],
     def: "λ est la distance parcourue par l'onde pendant une période T.",
     attention: "λ en m, T en s, v en m/s : convertir avant de calculer." },
-  { id: 'phase', titre: '5 · Deux points du milieu', comps: ['C5'], formules: ['d = k · λ', 'd = (2k + 1) · λ / 2'],
-    def: "d = k · λ : en phase (k = 1, 2, 3…). d = (2k + 1) · λ / 2 : en opposition de phase (k = 0, 1, 2…).",
-    attention: "Calculer d / λ : ni entier, ni entier et demi → ni l'un ni l'autre." },
-  { id: 'mesures', titre: '6 · Mesurer λ et v', comps: ['C6'], formules: ['λ = (d_2 − d_1) / n'],
+  { id: 'phase', titre: '5 · Deux points du milieu', comps: ['C5'], formules: ['d = k · λ', 'd = ⟦(2k + 1) · λ|2⟧'],
+    def: "d = k · λ : en phase (k = 1, 2, 3…). d = ⟦(2k+1)·λ|2⟧ : en opposition de phase (k = 0, 1, 2…).",
+    attention: "Calculer ⟦d|λ⟧ : ni entier, ni entier et demi → ni l'un ni l'autre." },
+  { id: 'mesures', titre: '6 · Mesurer λ et v', comps: ['C6'], formules: ['λ = ⟦d_2 − d_1|n⟧'],
     def: "Stroboscope à la fréquence du vibreur : immobilité apparente, on mesure λ. Deux récepteurs : n retours en phase.",
     attention: "Le déplacement d_2 − d_1, pas la distance totale." },
   { id: 'diffraction', titre: '7 · Diffraction', comps: ['C7'], formules: ['a ≤ λ', 'même N, λ, v'],
@@ -53,7 +53,7 @@ const BLOCS = [
   { id: 'dispersion', titre: '8 · Milieu dispersif', comps: ['C8'], formules: ['v dépend de N'],
     def: "Un milieu est dispersif si la célérité de l'onde dépend de sa fréquence.",
     attention: "Calculer v = λ · N pour deux fréquences, avec la λ mesurée pour chacune." },
-  { id: 'retard', titre: '9 · Le retard τ', comps: ['C9'], formules: ['τ = SM / v', 'y_M(t) = y_S(t − τ)'],
+  { id: 'retard', titre: '9 · Le retard τ', comps: ['C9'], formules: ['τ = ⟦SM|v⟧', 'y_M(t) = y_S(t − τ)'],
     def: "M refait le mouvement de la source S avec le retard τ. SM = d : la distance parcourue.",
     attention: "Moins, pas plus : y_S(t − τ). τ en secondes." },
 ];
@@ -97,42 +97,60 @@ let MARGE_X = 16, ECART = 16;
 const colonnes = nc => { const w = (scene.L - 2 * MARGE_X - (nc - 1) * (ECART + 12)) / nc; return Array.from({ length: nc }, (_, n) => ({ x: MARGE_X + 6 + n * (w + 12 + ECART), w })); };
 const place = i => { const F = FEUILLES[feuilleDe(i)], j = F.indexOf(i), col = colonnes(Math.ceil(F.length / RANGS))[Math.floor(j / RANGS)]; return { x: col.x, w: col.w, y0: HAUT + (j % RANGS) * HBLOC }; };
 const reelle = (c, t) => (c.echelle && c.tailleMin ? Math.max(t, c.tailleMin / c.echelle) : t);   // la taille que la craie écrira
-const largeur = (c, s, t) => { c.ctx.font = `${t}px ${window.Tableau.POLICE}`; return c.ctx.measureText(String(s).replace(/_/g, '')).width; };
+// une fraction « ⟦num|dén⟧ » (deux étages, comme dans le cahier) se mesure avec la craie
+const largeur = (c, s, t) => { if (String(s).includes('⟦')) return c.largeurTexte(String(s).replace(/_/g, ''), t); c.ctx.font = `${t}px ${window.Tableau.POLICE}`; return c.ctx.measureText(String(s).replace(/_/g, '')).width; };
 /* La mise en page d'un bloc de largeur w à la police k : une liste d'ordres (coordonnées relatives) et sa hauteur. */
 function composer(c, b, w, k, st) {
-  const tT = reelle(c, k * 1.08), tF = reelle(c, k * 0.98), tD = reelle(c, k), tA = reelle(c, k * 0.96), interF = tF * 1.5;
+  const tT = reelle(c, k * 1.08), tF = reelle(c, k * 0.98), tD = reelle(c, k), tA = reelle(c, k * 0.96);
+  // Une formule à fraction (« ⟦num|dén⟧ », sur deux étages comme dans le cahier) prend un cadre plus haut : seule sa
+  // rangée de formules grandit (les rangées sans fraction gardent leur hauteur).
+  // (hauteurs en tF : celles d'une fraction viennent de la taille réellement écrite de ses étages, OndesTableau.etages)
+  const eF = window.OndesTableau.etages(c, tF, (b.formules || []).join(' ')), frac = f => f.includes('⟦'), hautF = e => (e ? .9 + eF.haut / tF : .98), basF = e => (e ? .28 + eF.bas / tF : .34);
   const ops = []; let y = tT;
   const tag = st && STATUTS[st] ? (st === 'acquis' ? '✓' : STATUTS[st][0]) : '', lTag = tag ? largeur(c, tag, reelle(c, k * 0.8)) + 10 : 0;
   const lTitre = Math.min(w - lTag, largeur(c, b.titre, tT));
   ops.push({ t: 'texte', s: b.titre, x: 0, y, o: { couleur: 'jaune', taille: tT, max: w - lTag } });
+  let basRangee = 0;   // ce qui dépasse sous la ligne de base de la dernière rangée de formules, en plus de l'ordinaire
   if (b.formules) {
     const boites = b.formules.map(f => Math.min(w, largeur(c, f, tF) + tF * 0.9));
     const total = boites.reduce((a, l) => a + l + 8, 0);
-    let fx, fy;
-    if (lTitre + 14 + total <= w - lTag) { fx = lTitre + 14; fy = y; }       // sur la ligne du titre
-    else { fx = 0; fy = y + interF; y = fy; }
-    b.formules.forEach((f, n) => {
-      const l = boites[n];
-      if (fx > 0 && fx + l > w && fy !== tT) { fx = 0; fy += interF; y = fy; }
-      ops.push({ t: 'rect', x: fx, y: fy - tF * 0.98, w: l, h: tF * 1.32 });
-      ops.push({ t: 'texte', s: f, x: fx + tF * 0.45, y: fy, o: { couleur: 'jaune', taille: tF, max: l - tF * 0.6 } });
-      fx += l + 8;
-    });
+    // les rangées : sur la ligne du titre si tout tient, sinon des rangées pleines sous le titre
+    const rangees = [];
+    if (lTitre + 14 + total <= w - lTag) rangees.push({ x0: lTitre + 14, ids: b.formules.map((_, n) => n), titre: true });
+    else b.formules.forEach((f, n) => { const r = rangees[rangees.length - 1], fin = r ? r.ids.reduce((a, m) => a + boites[m] + 8, 0) : 0; if (r && fin + boites[n] <= w) r.ids.push(n); else rangees.push({ x0: 0, ids: [n] }); });
+    let prec = null;   // la rangée précédente (null : le titre)
+    for (const r of rangees) {
+      const e = r.ids.some(n => frac(b.formules[n]));
+      if (r.titre) { if (e) { y += Math.max(tF * .12, tF * hautF(true) - tT - 4); ops[0].y = y; } }   // le cadre de la fraction monte un peu au-dessus du titre, dans la marge du bloc
+      else y += prec == null ? (e ? Math.max(tF * 1.6, tF * hautF(true) + tT * .3) : tF * 1.5) : tF * (basF(prec) + hautF(e) + (prec || e ? .12 : .18));
+      let fx = r.x0;
+      for (const n of r.ids) {
+        ops.push({ t: 'rect', x: fx, y: y - tF * hautF(e), w: boites[n], h: tF * (hautF(e) + basF(e)) });
+        ops.push({ t: 'texte', s: b.formules[n], x: fx + tF * 0.45, y, o: { couleur: 'jaune', taille: tF, max: boites[n] - tF * 0.6 } });
+        fx += boites[n] + 8;
+      }
+      prec = e;
+    }
+    basRangee = prec ? tF * (basF(true) - basF(false)) : 0;
   }
-  y += tD * 1.3;
+  y += tD * 1.3 + basRangee;
   // Définition (blanc) puis piège (⚠ orange) dans le même flot, coupés à la ligne au mot près.
-  const mots = [...b.def.split(/\s+/).map(m => ({ m, coul: 'blanc', t: tD })), ...b.attention.split(/\s+/).map((m, n) => ({ m: n ? m : '⚠ ' + m, coul: 'orange', t: tA, sep: !n }))]   // ⚠ jamais seul en bout de ligne;
-  let x = 0, ligneH = 0;
+  // « d = ⟦…⟧ », « Calculer ⟦d|λ⟧ » restent d'un seul tenant : la fraction ne part jamais seule au début d'une ligne
+  const decoupe = t => t.split(/\s+/).reduce((a, m) => { const n = a.length; if (n >= 2 && a[n - 1] === '=' && m.includes('⟦')) a.splice(n - 2, 2, `${a[n - 2]} = ${m}`); else if (n && m.includes('⟦')) a[n - 1] += ' ' + m; else a.push(m); return a; }, []);
+  const mots = [...decoupe(b.def).map(m => ({ m, coul: 'blanc', t: tD })), ...decoupe(b.attention).map((m, n) => ({ m: n ? m : '⚠ ' + m, coul: 'orange', t: tA, sep: !n }))]   // ⚠ jamais seul en bout de ligne;
+  // Une fraction dans le texte (« ⟦d|λ⟧ ») : sa ligne descend d'un demi-étage et la suivante aussi (rien ne se touche).
+  let x = 0, ligneH = 0, debut = ops.length, fracLigne = false;
   for (const mo of mots) {
     const l = largeur(c, mo.m, mo.t), esp = largeur(c, ' ', mo.t) * (mo.sep ? 2.2 : 1);
-    if (x > 0 && x + esp + l > w) { x = 0; y += Math.max(ligneH, mo.t) * 1.22; ligneH = 0; }   // interligne 1,22 : accents et jambages de deux lignes ne se touchent plus
+    if (x > 0 && x + esp + l > w) { x = 0; y += Math.max(ligneH, mo.t) * 1.22 + (fracLigne ? Math.max(0, window.OndesTableau.etages(c, mo.t).bas - mo.t * .21) : 0); ligneH = 0; debut = ops.length; fracLigne = false; }   // interligne 1,22 : accents et jambages de deux lignes ne se touchent plus
     else if (x > 0) x += esp;
+    if (mo.m.includes('⟦') && !fracLigne) { const d = Math.max(0, window.OndesTableau.etages(c, mo.t, mo.m).haut - mo.t * .21); for (let n = debut; n < ops.length; n++) ops[n].y += d; y += d; fracLigne = true; }
     const der = ops[ops.length - 1];
     if (der && der.t === 'texte' && der.flot && der.y === y && der.o.couleur === mo.coul) der.s += ' ' + mo.m;
     else ops.push({ t: 'texte', s: mo.m, x, y, flot: true, o: { couleur: mo.coul, taille: mo.t, alpha: mo.coul === 'orange' ? .92 : .96 } });
     x += l; ligneH = Math.max(ligneH, mo.t);
   }
-  return { ops, h: y + tD * 0.35, tag, tTag: reelle(c, k * 0.8) };
+  return { ops, h: y + (fracLigne ? tD * .2 + window.OndesTableau.etages(c, tD).bas + 2 : tD * 0.35), tag, tTag: reelle(c, k * 0.8) };
 }
 /* Colonnes et police, recalculées quand la taille du tableau change. */
 function disposer(c) {
@@ -291,7 +309,7 @@ function ceQuiSeVoit() {
   const f = S.focus && BLOCS.find(b => b.id === S.focus);
   const ecrits = BLOCS.filter((b, i) => S.apparu[i] != null).length, nf = FEUILLES.length;
   const vus = nf > 1 ? `Feuille ${S.feuille + 1}/${nf} visible : ${FEUILLES[S.feuille].map(i => BLOCS[i].titre).join(', ')} (les autres blocs sur l'autre feuille, bouton « Suite → »). ` : '';
-  return `${vus}Page 1/2, la fiche du chapitre des ondes progressives périodiques : ${ecrits}/9 blocs écrits (définition, formule, piège)${f ? ` ; en lumière « ${f.titre} » : ${f.def}${f.formules ? ' Formules : ' + f.formules.join(' ; ') + '.' : ''} Piège : ${f.attention}` : '.'}${S.lacunes ? ` Blocs à reprendre : ${BLOCS.filter(b => statut(b) && statut(b) !== 'acquis').map(b => b.titre).join(', ') || 'aucun'}.` : ''}`;
+  return `${vus}Page 1/2, la fiche du chapitre des ondes progressives périodiques : ${ecrits}/9 blocs écrits (définition, formule, piège)${f ? ` ; en lumière « ${f.titre} » : ${window.Tableau.lisible(f.def)}${f.formules ? ' Formules : ' + f.formules.map(window.Tableau.lisible).join(' ; ') + '.' : ''} Piège : ${window.Tableau.lisible(f.attention)}` : '.'}${S.lacunes ? ` Blocs à reprendre : ${BLOCS.filter(b => statut(b) && statut(b) !== 'acquis').map(b => b.titre).join(', ') || 'aucun'}.` : ''}`;
 }
 $('suiv').onclick = () => (S.page === 1 ? suivant() : aller(1, 'previous', null, true));
 // Imprimer / PDF : la fiche entière et la page de l'élève, sur fond blanc (shared/tableau/imprimer.js).
@@ -310,11 +328,11 @@ canvas.addEventListener('pointerdown', e => {
   if (y < 42 && FEUILLES.length > 1) { if (S.feuille < FEUILLES.length - 1) suivant('touche_entete'); else { S.feuille = 0; S.focus = null; scene.sale = true; etiquettes(); pont.emettre(); } return; }
   const i = BLOCS.findIndex((b, k) => { const p = place(k); return S.apparu[k] != null && FEUILLES[S.feuille].includes(k) && x >= p.x - 6 && x <= p.x + p.w + 6 && y >= p.y0 - 6 && y <= p.y0 + HBLOC - 12; });
   if (i < 0) return;
-  S.focus = BLOCS[i].id; scene.sale = true; bulle($('feedback'), BLOCS[i].def);
+  S.focus = BLOCS[i].id; scene.sale = true; bulle($('feedback'), window.Tableau.lisible(BLOCS[i].def));
   pont.noter('touche', { moment: BLOCS[i].id }); pont.emettre();
 });
 
-window.Tableau.explication({ bilan: BLOCS.map(b => ({ repere: b.id, texte: b.def })) });
+window.Tableau.explication({ bilan: BLOCS.map(b => ({ repere: b.id, texte: window.Tableau.lisible(b.def) })) });
 const commandes = ['start', 'reset', 'play_until', 'set_parameters', 'next', 'previous'];
 const config = { id: 'ondes_periodiques_bilan', version: '1.0', title: 'Ce qu’il faut retenir — ondes périodiques', variants: [{ id: 'bilan', label: 'fiche' }], commands: commandes,
   command_schema: { play_until: { moment: Object.keys(moments()).join(' | ') + ' (écrit ce bloc de la fiche et le met en lumière ; fiche = toute la fiche ; lacunes = la page de l’élève)' },

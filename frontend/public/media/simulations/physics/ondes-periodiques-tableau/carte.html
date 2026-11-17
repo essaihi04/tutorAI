@@ -31,8 +31,8 @@ const CENTRE = { x: 380, y: 212, w: 212, h: 108, comps: ['C1'],
   phrase: "Une onde progressive est périodique si la perturbation se répète, identique à elle-même, à intervalles de temps égaux." };
 const NOEUDS = [
   { id: 'periode', x: 136, y: 76, w: 220, h: 64, couleur: 'cyan', comps: ['C2'], titre: 'Période T · fréquence N',
-    lignes: ['N = 1 / T', "lues sur le film d'un point"],
-    phrase: "La période T se lit sur le film d'un point (élongation en fonction du temps) ; la fréquence N = 1 / T, T en s, N en Hz." },
+    lignes: ['N = ⟦1|T⟧', "lues sur le film d'un point"],
+    phrase: "La période T se lit sur le film d'un point (élongation en fonction du temps) ; la fréquence N = 1/T, T en s, N en Hz." },
   { id: 'longueur_onde', x: 380, y: 62, w: 214, h: 64, couleur: 'cyan', comps: ['C3'], titre: 'Longueur d’onde λ',
     lignes: ['lue sur la photo du milieu', 'plus petite distance, même état'],
     phrase: "La longueur d'onde λ est la plus petite distance séparant deux points du milieu dans le même état vibratoire ; elle se lit sur l'aspect du milieu." },
@@ -40,10 +40,10 @@ const NOEUDS = [
     lignes: ['λ = v · T', 'v = λ · N'],
     phrase: "λ est la distance parcourue par l'onde pendant une période : λ = v · T, soit v = λ · N (λ en m)." },
   { id: 'phase', x: 640, y: 212, w: 222, h: 64, couleur: 'jaune', comps: ['C5'], titre: 'Deux points',
-    lignes: ['en phase : d = k · λ', 'opposition : d = (2k + 1) · λ / 2'],
-    phrase: "Deux points sont en phase si d = k · λ (k = 1, 2, 3…), en opposition de phase si d = (2k + 1) · λ / 2 (k = 0, 1, 2…)." },
+    lignes: ['en phase : d = k · λ', 'opposition : d = ⟦(2k + 1) · λ|2⟧'],
+    phrase: "Deux points sont en phase si d = k · λ (k = 1, 2, 3…), en opposition de phase si d = ((2k + 1) · λ)/2 (k = 0, 1, 2…)." },
   { id: 'mesures', x: 624, y: 350, w: 220, h: 64, couleur: 'orange', comps: ['C6'], titre: 'Mesures',
-    lignes: ['stroboscope : immobilité apparente', 'deux récepteurs : λ = (d_2 − d_1) / n'],
+    lignes: ['stroboscope : immobilité apparente', 'deux récepteurs : λ = ⟦d_2 − d_1|n⟧'],
     phrase: "Stroboscope à la fréquence du vibreur : le milieu paraît immobile, on mesure λ. Deux récepteurs : on recule l'un d'eux, le déplacement entre n retours en phase vaut n · λ." },
   { id: 'diffraction', x: 380, y: 362, w: 214, h: 64, couleur: 'vert', comps: ['C7'], titre: 'Diffraction',
     lignes: ['nette si a ≤ λ (ordre de λ)', 'même N, même λ, même v'],
@@ -52,15 +52,15 @@ const NOEUDS = [
     lignes: ['la célérité v dépend', 'de la fréquence N'],
     phrase: "Un milieu est dispersif si la célérité de l'onde dépend de sa fréquence : on calcule v = λ · N pour deux fréquences et on compare." },
   { id: 'retard', x: 122, y: 212, w: 200, h: 64, couleur: 'violet', comps: ['C9'], titre: 'Retard τ',
-    lignes: ['τ = SM / v', 'y_M(t) = y_S(t − τ)'],
-    phrase: "Le point M refait le mouvement de la source avec le retard τ = SM / v : y_M(t) = y_S(t − τ)." },
+    lignes: ['τ = ⟦SM|v⟧', 'y_M(t) = y_S(t − τ)'],
+    phrase: "Le point M refait le mouvement de la source avec le retard τ = SM/v : y_M(t) = y_S(t − τ)." },
 ];
 /* Tableau large (15 novembre 2026 : « la carte n'occupe qu'une bande au centre, textes minuscules ») : le cadre prend le
  * format du tableau (scene.L de 760 à 1292) ; les cadres s'écartent sur toute la largeur (x × L / 760), s'élargissent
  * et grandissent un peu, l'écriture passe de 13-16 à 18-21 (titre du centre 24). Cadre étroit : disposition d'origine. */
 const BASE = [CENTRE, ...NOEUDS].map(n => ({ n, x: n.x, y: n.y, w: n.w, h: n.h }));
 let GRAND = false;
-const TX = { titre: 16, ligne: 13, pas: 16, dy: 20, dl: 38, ct: 19, cd: 12, cpas: 14, cdy: 26, cdy2: 47, cdl: 68 };
+const TX = { titre: 16, ligne: 13, eh: 5, eb: 5, pas: 16, dy: 20, dl: 38, ct: 19, cd: 12, cpas: 14, cdy: 26, cdy2: 47, cdl: 68 };
 function disposer(c) {
   const k = scene.L / 760; GRAND = scene.L >= 1000;
   Object.assign(TX, GRAND ? { titre: 21, ligne: 18, ct: 24, cd: 17 } : { titre: 16, ligne: 13, ct: 19, cd: 12 });
@@ -70,7 +70,11 @@ function disposer(c) {
   if (GRAND) Object.assign(TX, { dy: t * 1.15, dl: t * 1.15 + l * 1.15, pas: l * 1.1, cdy: ct * 1.2, cdy2: ct * 2.3, cdl: ct * 2.3 + cd * 1.35, cpas: cd * 1.12 });
   else Object.assign(TX, { pas: 16, dy: 20, dl: 38, cpas: 14, cdy: 26, cdy2: 47, cdl: 68 });
   const hN = GRAND ? TX.dl + TX.pas + l * 0.55 : 0, hC = GRAND ? TX.cdl + 2 * TX.cpas + cd * 0.6 : 0;
-  for (const b of BASE) { b.n.x = b.x * k; b.n.w = b.w * (GRAND ? 1.5 : 1); b.n.h = GRAND ? Math.max(b.n === CENTRE ? 132 : 78, b.n === CENTRE ? hC : hN) : b.h; }
+  const ef = window.OndesTableau.etages(c, TX.ligne); TX.eh = ef.haut; TX.eb = ef.bas;
+  for (const b of BASE) {
+    b.n.x = b.x * k; b.n.w = b.w * (GRAND ? 1.5 : 1); b.n.h = GRAND ? Math.max(b.n === CENTRE ? 132 : 78, b.n === CENTRE ? hC : hN) : b.h;
+    b.n.h += (b.n.lignes || []).filter(s => s.includes('⟦')).reduce((h, s) => h + window.OndesTableau.etages(c, TX.ligne, s).haut + TX.eb, 0);   // place des fractions sur deux étages
+  }
   // L'étiquette « à revoir » s'écrit au-dessus du cadre : la rangée du haut descend un peu pour la laisser entière.
   for (const b of BASE) b.n.y = GRAND ? Math.max(b.y, b.n.h / 2 + 34) : b.y;
 }
@@ -111,7 +115,14 @@ function branche(c, n) {
   const x = n.x - n.w / 2, y = n.y - n.h / 2;
   c.rect(x, y, n.w, n.h, { couleur: n.couleur, arrondi: 14, largeur: 2.4 });
   c.texte(n.titre, n.x, y + TX.dy, { couleur: n.couleur, taille: TX.titre, align: 'center', max: n.w - 16, duree: .8 });
-  n.lignes.forEach((l, k) => c.texte(l, n.x, y + TX.dl + k * TX.pas, { couleur: 'blanc', taille: TX.ligne, align: 'center', max: n.w - 14, alpha: .92, duree: 1 }));
+  // une ligne à fraction (« ⟦num|dén⟧ », sur deux étages comme dans le cahier) s'écarte de ses voisines ; le cadre a grandi d'autant
+  let yl = y + TX.dl;
+  n.lignes.forEach(l => {
+    const etages = l.includes('⟦');
+    if (etages) yl += window.OndesTableau.etages(c, TX.ligne, l).haut;
+    c.texte(l, n.x, yl, { couleur: 'blanc', taille: TX.ligne, align: 'center', max: n.w - 14, alpha: .92, duree: 1 });
+    yl += TX.pas + (etages ? TX.eb : 0);
+  });
   c.repere(n.id, x - 6, y - 6, n.w + 12, n.h + 12, n.titre);
   etat(c, n.comps, x, y, n.w, n.h);
   if (S.choisi === n.id) c.direct(() => c.rect(x - 3, y - 3, n.w + 6, n.h + 6, { couleur: 'blanc', arrondi: 15, largeur: 1.2, alpha: .6 }));

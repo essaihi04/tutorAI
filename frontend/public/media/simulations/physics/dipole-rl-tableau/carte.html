@@ -36,28 +36,28 @@ const NOEUDS = [
     lignes: ['L en henry, r en ohm', 'noyau de fer : L augmente'],
     phrase: 'La bobine : un fil de cuivre enroulé, d’inductance L (en henry) et de résistance r ; un noyau de fer augmente L.' },
   { id: 'tension', x: 290, y: 80, w: 172, h: 62, couleur: 'cyan', comps: ['C1'], titre: 'Tension u_b',
-    lignes: ['u_b = L·di/dt + r·i', 'convention récepteur'],
+    lignes: ['u_b = L·⟦di|dt⟧ + r·i', 'convention récepteur'],
     phrase: 'La tension aux bornes de la bobine, en convention récepteur : u_b = L·di/dt + r·i.' },
   { id: 'echelon', x: 470, y: 80, w: 172, h: 62, couleur: 'vert', comps: ['C2', 'C3'], titre: 'Échelon de tension',
-    lignes: ['la bobine retarde i', 'i continu ; I_0 = E/(R + r)'],
+    lignes: ['la bobine retarde i', 'i continu ; I_0 = ⟦E|R + r⟧'],
     phrase: 'Un échelon de tension : la bobine retarde l’établissement du courant, i est continu et tend vers I₀ = E/(R + r).' },
   { id: 'equation', x: 660, y: 80, w: 180, h: 62, couleur: 'orange', comps: ['C4'], titre: 'Équation différentielle',
-    lignes: ['L·di/dt + (R + r)·i = E', 'di/dt + (1/τ)·i = E/L'],
+    lignes: ['L·⟦di|dt⟧ + (R + r)·i = E', '⟦di|dt⟧ + ⟦1|τ⟧·i = ⟦E|L⟧'],
     phrase: 'L’équation différentielle : L·di/dt + (R + r)·i = E, ou di/dt + (1/τ)·i = E/L.' },
   { id: 'solution', x: 660, y: 190, w: 180, h: 62, couleur: 'orange', comps: ['C5'], titre: 'Solution i(t)',
     lignes: ['i(t) = I_0(1 − e^{−t/τ})', 'on remplace : τ et A = I_0'],
     phrase: 'La solution : i(t) = I₀(1 − e^(−t/τ)) ; en la remplaçant dans l’équation on trouve τ et A = I₀.' },
-  { id: 'tau', x: 660, y: 298, w: 180, h: 62, couleur: 'violet', comps: ['C6'], titre: 'τ = L/(R + r)',
+  { id: 'tau', x: 660, y: 298, w: 180, h: 62, couleur: 'violet', comps: ['C6'], titre: 'τ = ⟦L|R + r⟧',
     lignes: ['un temps, en s', 'L plus grand : plus lent'],
     phrase: 'τ = L/(R + r) est la constante de temps, un temps en secondes ; plus L est grand, plus le courant s’établit lentement.' },
   { id: 'rupture', x: 470, y: 298, w: 172, h: 62, couleur: 'bleu', comps: ['C2', 'C4'], titre: 'Rupture',
     lignes: ['u_R + u_b = 0', 'i(t) = I_0·e^{−t/τ}'],
     phrase: 'La rupture : plus de générateur, u_R + u_b = 0 ; i part de I₀ et décroît : i(t) = I₀·e^(−t/τ).' },
   { id: 'courbes', x: 290, y: 298, w: 172, h: 62, couleur: 'violet', comps: ['C7'], titre: 'Lire les courbes',
-    lignes: ['tangente ; 0,63·I_0', 'r = E/I_0 − R ; L = τ·(R + r)'],
+    lignes: ['tangente ; 0,63·I_0', 'r = ⟦E|I_0⟧ − R ; L = τ·(R + r)'],
     phrase: 'Lire les courbes : τ par la tangente à l’origine ou 0,63·I₀ ; puis r = E/I₀ − R et L = τ·(R + r).' },
   { id: 'energie', x: 100, y: 298, w: 172, h: 62, couleur: 'rose', comps: ['C8'], titre: 'Énergie',
-    lignes: ['E_m = ½·L·i²', 'rendue à la rupture'],
+    lignes: ['E_m = ⟦1|2⟧·L·i²', 'rendue à la rupture'],
     phrase: 'L’énergie stockée dans la bobine : E_m = ½·L·i² ; elle est rendue à la rupture.' },
   { id: 'national', x: 100, y: 190, w: 172, h: 62, couleur: 'blanc', comps: [], titre: 'Au national', encadre: true,
     lignes: ['le RL : 10 sujets sur 20', 'toujours l’équation et L'],
@@ -69,18 +69,26 @@ const NOEUDS = [
  * minuscules »). Tableau large (scene.L ≥ 1000) : les quatre colonnes s'écartent sur toute la largeur, cadres et textes
  * plus grands ; sinon les positions d'origine (cadre 760 × 420). */
 NOEUDS.forEach(n => { n.o = { x: n.x, y: n.y, w: n.w, h: n.h }; });
+/* Une ligne (ou un titre) à fraction « ⟦num|dén⟧ », sur deux étages comme dans le cahier, prend plus de hauteur :
+ * la case grandit d'autant (17 novembre 2026). */
+const etages = (n, k) => (n.lignes || []).filter(l => l.includes('⟦')).length * k.ligne * .95 + (n.titre.includes('⟦') ? k.titre * .8 : 0);
+// la rangée du bas grandit vers le haut : son bord bas ne descend pas sur « vers le RLC »
+const ajuster = (n, k) => { if (n.h0 == null) return; const e = etages(n, k); n.h = n.h0 + e; n.y = n.y0 - (n.o.y === 298 ? e / 2 : 0); };
+const grandir = (n, k) => { n.h0 = n.h; n.y0 = n.y; ajuster(n, k); };
+NOEUDS.forEach(n => { if (!n.seul) grandir(n, { ligne: 14, titre: 17 }); });
 CENTRE.o = { x: CENTRE.x, y: CENTRE.y, w: CENTRE.w, h: CENTRE.h };
 let K = { large: false, L: 760, titre: 17, ligne: 14, pas: 18, haut: 21, centre: 28 };
 function disposer(L) {
   if (L === K.L) return;
   if (L < 1000) {
-    NOEUDS.forEach(n => { Object.assign(n, n.o); if (!n.seul) n.h = 70; }); Object.assign(CENTRE, CENTRE.o);   // 70 (et non 62) : la 2e ligne ne touche plus le bas du cadre
+    NOEUDS.forEach(n => { Object.assign(n, n.o); if (!n.seul) { n.h = 70; grandir(n, { ligne: 14, titre: 17 }); } }); Object.assign(CENTRE, CENTRE.o);   // 70 (et non 62) : la 2e ligne ne touche plus le bas du cadre
     K = { large: false, L, titre: 17, ligne: 14, pas: 18, haut: 23, centre: 28 }; return;
   }
   const g = 34, w = Math.floor((L - 28 - 3 * g) / 4), COLS = { 100: 0, 290: 1, 470: 2, 660: 3 }, RANGS = { 80: 62, 190: 198, 298: 334 };
   NOEUDS.forEach(n => {
     if (n.seul) { Object.assign(n, { x: L / 2, y: 404, w: 300, h: 26 }); return; }
-    Object.assign(n, { x: 14 + w / 2 + COLS[n.o.x] * (w + g), y: RANGS[n.o.y], w, h: 104 });   // 104 (et non 96) : la 2e ligne ne touche plus le bas du cadre
+    Object.assign(n, { x: 14 + w / 2 + COLS[n.o.x] * (w + g), y: RANGS[n.o.y], w, h: 104 });
+    grandir(n, { ligne: 20, titre: 24 });   // 104 (et non 96) : la 2e ligne ne touche plus le bas du cadre
   });
   Object.assign(CENTRE, { x: L / 2, y: 198, w: 320, h: 116 });
   K = { large: true, L, titre: 24, ligne: 20, pas: 24, haut: 29, centre: 36 };
@@ -94,7 +102,7 @@ const DUREE_BRANCHE = 2.6;   // s par branche quand la carte se dessine seule
 
 const BAS_U = { 0: '₀', 1: '₁', 2: '₂', 3: '₃', 4: '₄', 5: '₅', 6: '₆', 7: '₇', 8: '₈', 9: '₉', a: 'ₐ', e: 'ₑ', m: 'ₘ', x: 'ₓ' };
 /* Texte pour la bulle et ce_qui_se_voit : pas de « _ » ni d’accolades visibles. */
-const lisible = s => String(s).replace(/\^\{([^}]+)\}/g, '^($1)').replace(/_\{?([A-Za-z0-9]+)\}?/g, (m, g) => ([...g].every(ch => ch in BAS_U) ? [...g].map(ch => BAS_U[ch]).join('') : g));
+const lisible = s => window.Tableau.lisible(String(s)).replace(/\^\{([^}]+)\}/g, '^($1)').replace(/_\{?([A-Za-z0-9]+)\}?/g, (m, g) => ([...g].every(ch => ch in BAS_U) ? [...g].map(ch => BAS_U[ch]).join('') : g));
 
 function statut(comps) {
   if (!S.lacunes || !comps.length) return null;
@@ -116,6 +124,9 @@ function etat(c, comps, x, y, w, h) {
 }
 
 function branche(c, n) {
+  // taille réellement écrite (petit écran : le kit grossit les fractions jusqu'à sa taille minimale) : la case suit
+  const ef = t => Math.max(t, c.tailleMin && c.echelle ? c.tailleMin / c.echelle : 0);
+  if (!n.seul) ajuster(n, { ligne: ef(K.ligne), titre: ef(K.titre) });
   const x = n.x - n.w / 2, y = n.y - n.h / 2;
   if (!n.seul) {
     const dx = n.x - CENTRE.x, dy = n.y - CENTRE.y, L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L;
@@ -131,8 +142,16 @@ function branche(c, n) {
     c.texte('→ ' + n.titre, n.x, n.y + 6, { couleur: 'faible', taille: K.titre, align: 'center', max: n.w - 10, duree: .9 });
   } else {
     c.rect(x, y, n.w, n.h, { couleur: n.couleur, arrondi: n.encadre ? 4 : 14, largeur: n.encadre ? 1.6 : 2.4, pointille: n.encadre ? [6, 5] : undefined });
-    c.texte(n.titre, n.x, y + K.haut, { couleur: n.couleur, taille: K.titre, align: 'center', max: n.w - 16, duree: .8 });
-    n.lignes.forEach((l, k) => c.texte(l, n.x, y + K.haut * 2 + k * K.pas, { couleur: 'blanc', taille: K.ligne, align: 'center', max: n.w - 14, alpha: .92, duree: 1 }));
+    // un titre ou une ligne à fraction (deux étages) s'écarte de ses voisins ; la case a grandi d'autant
+    const et = n.titre.includes('⟦');
+    c.texte(n.titre, n.x, y + K.haut + (et ? ef(K.titre) * .38 : 0), { couleur: n.couleur, taille: K.titre, align: 'center', max: n.w - 16, duree: .8 });
+    let yl = y + K.haut * 2 + (et ? ef(K.titre) * .8 : 0);
+    n.lignes.forEach(l => {
+      const e = l.includes('⟦');
+      if (e) yl += ef(K.ligne) * .45;
+      c.texte(l, n.x, yl, { couleur: 'blanc', taille: K.ligne, align: 'center', max: n.w - 14, alpha: .92, duree: 1 });
+      yl += K.pas + (e ? ef(K.ligne) * .5 : 0);
+    });
   }
   c.repere(n.id, x - 5, y - 5, n.w + 10, n.h + 10, lisible(n.titre));
   etat(c, n.comps, x, y, n.w, n.h);

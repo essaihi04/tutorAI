@@ -234,7 +234,11 @@ function statut(b) {
   if (lac.length) return 'partiel';
   return (S.acquis_ids || []).some(a => b.comps.includes(a)) ? 'acquis' : null;
 }
-function moments() { const m = { fiche: 1 }; BLOCS.forEach(b => { m[b.id] = 1; }); m.lacunes = 2; return m; }
+/* (17 novembre 2026) Un instant par bloc, dans l'ordre de la fiche (avant : tous à 1, et la garde du kit, qui refuse un
+ * play_until vers un instant déjà atteint, refusait tous les blocs après le premier : la fiche ne s'écrivait plus). */
+function moments() { const m = {}; BLOCS.forEach((b, i) => { m[b.id] = i + 1; }); m.fiche = BLOCS.length + .5; m.lacunes = BLOCS.length + 1; return m; }
+const avance = () => (S.page === 2 ? BLOCS.length + 1 : S.apparu.reduce((a, v, i) => (v == null ? a : Math.max(a, i + 1)), 0));
+const PILOTE = new URLSearchParams(location.search).has('depart');   // diapositive pilotée : la fiche s'ouvre vierge
 function playUntil(p) {
   const nom = p.moment in moments() ? p.moment : null;
   if (!nom && !Number.isFinite(+p.time_s)) return;
@@ -280,11 +284,11 @@ const config = { id: 'svt_energie_bilan', version: '1.0', title: 'Ce qu’il fau
     set_parameters: { lacunes: '[{id: C1..C10, label, statut: non_acquis|partiel, reprendre_avec: [..]}] (bilan de l’élève)', acquis: '[labels acquis]', acquis_ids: '[C1, ..]' } } };
 const pont = protocole({ id: config.id, commandes, config,
   texte: 'Fiche « Ce qu’il faut retenir » du chapitre « Libération de l’énergie emmagasinée dans la matière organique », sur une page (neuf blocs : ATP, respirer ou fermenter, glycolyse, mitochondrie, matrice et cycle de Krebs, chaîne respiratoire, fermentations, bilans et rendements, lire un document ; chacun avec définition, formule, piège), puis la page de l’élève (ce qu’il lui reste à retravailler).',
-  etat: () => ({ simulation_status: 'paused', ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'bilan', time_s: S.page, parameters: { page: S.page, focus: S.focus, lacunes: S.lacunes ? S.lacunes.length : null }, moments: moments() }),
+  etat: () => ({ simulation_status: 'paused', ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'bilan', time_s: avance(), parameters: { page: S.page, focus: S.focus, lacunes: S.lacunes ? S.lacunes.length : null }, moments: moments() }),
   progression: () => S.page / 2,
-  executer: (cmd, p) => ({ start: () => aller(1, 'start', 'atp'), reset: () => aller(1, 'reset', 'atp'), play_until: () => playUntil(p), set_parameters: () => setParameters(p),
+  executer: (cmd, p) => ({ start: () => aller(1, 'start', 'atp'), reset: () => aller(1, 'reset', PILOTE ? null : 'atp'), play_until: () => playUntil(p), set_parameters: () => setParameters(p),
     next: () => aller(2, 'next'), previous: () => aller(1, 'previous', null, true) })[cmd]?.() });
-aller(1, 'start', 'atp');   // la voix commence par la définition : le premier bloc s'écrit et est en lumière
+aller(1, 'start', PILOTE ? null : 'atp');   // la voix commence par la définition : le premier bloc s'écrit et est en lumière (pilotée : vierge)
 window.__bilan = { S, scene, BLOCS };   // pour les vérifications automatiques
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>

@@ -117,7 +117,7 @@ const dessins = {
       }
       if (S.t >= t2) {
         c.cote(X(V * t1), 365, X(V * t2), 365, `d = ${fr(V * (t2 - t1))} m`, { taille: f(18), couleur: 'jaune' });
-        c.texte(`Δt = ${fr(t2, 1)} − ${fr(t1, 1)} = ${fr(t2 - t1)} s      v = d / Δt = ${fr(V * (t2 - t1))} / ${fr(t2 - t1)} = ${fr(V, 1)} m/s`, L / 2, 405, { couleur: 'vert', align: 'center', taille: f(17) });
+        c.texte(`Δt = ${fr(t2, 1)} − ${fr(t1, 1)} = ${fr(t2 - t1)} s      v = ⟦d|Δt⟧ = ⟦${fr(V * (t2 - t1))}|${fr(t2 - t1)}⟧ = ${fr(V, 1)} m/s`, L / 2, 405, { couleur: 'vert', align: 'center', taille: f(17) });
         c.repere('distance_d', X(V * t1), 345, X(V * t2) - X(V * t1), 30, 'd, de front à front');
       }
     });
@@ -136,8 +136,10 @@ const dessins = {
         c.cote(Tx(0), oy + 42, Tx(tau), oy + 42, `τ = ${fr(tau)} s`, { taille: f(18), couleur: 'jaune', dessous: true });
         c.repere('retard_tau', Tx(0), oy + 30, Tx(tau) - Tx(0), 40, 'le retard τ');
       }
-      c.texte(`τ = SM / v = ${fr(S.xM)} / ${fr(V, 1)} = ${fr(tau)} s`, GR ? L * 0.55 : 440, GR ? 203 : 190, { couleur: 'vert', taille: f(18) });
-      c.texte('y_M(t) = y_S(t − τ)', GR ? L * 0.55 : 440, GR ? 230 : 214, { couleur: 'vert', taille: f(18) });
+      // τ = SM/v en fraction (deux étages) : sous le texte « sens de propagation » (bas ≈ 166) et au-dessus de y_M(t)
+      const E = window.OndesTableau.etages(c, f(18)), yT = Math.max(GR ? 203 : 190, 168 + 0.75 * E.T + E.haut), yM = yT + 1.12 * E.T + E.bas;
+      c.texte(`τ = ⟦SM|v⟧ = ⟦${fr(S.xM)}|${fr(V, 1)}⟧ = ${fr(tau)} s`, GR ? L * 0.55 : 440, yT, { couleur: 'vert', taille: f(18) });
+      c.texte('y_M(t) = y_S(t − τ)', GR ? L * 0.55 : 440, yM, { couleur: 'vert', taille: f(18) });
     });
   },
 
@@ -286,8 +288,8 @@ function ceQuiSeVoit() {
 
 const MESSAGES = {
   point: 'M est revenu à sa place : il a monté puis descendu, sans voyager.',
-  front: 'On mesure d de front à front, puis v = d / Δt.',
-  retard: 'M refait le mouvement de S, en retard de τ = SM / v. Glisse M et rejoue.',
+  front: 'On mesure d de front à front, puis v = d/Δt.',
+  retard: 'M refait le mouvement de S, en retard de τ = SM/v. Glisse M et rejoue.',
   longueur: 'Sur la corde on lit L ; sur la courbe du temps on lit θ. L = v · θ.',
   aspect: 'Photo de la corde : front à droite. Film du point M : front à gauche.',
   sens: 'Devant le sommet, les points montent ; derrière, ils descendent.',
@@ -322,7 +324,7 @@ window.Tableau.glisser(canvas, {
 const EXPLICATIONS = {
   point: [{ repere: 'source', texte: 'La source S : on secoue une seule fois.' }, { repere: 'point_m', texte: 'Le point M monte, descend, puis revient à sa place.' }],
   front: [{ repere: 'source', texte: 'Deux photos de la même corde, à deux dates.' }, { repere: 'distance_d', texte: 'La distance se mesure de front à front.' }],
-  retard: [{ repere: 'point_m', texte: 'Le point M, à la distance SM de la source.' }, { repere: 'retard_tau', texte: 'Même courbe, décalée du retard τ = SM / v.' }],
+  retard: [{ repere: 'point_m', texte: 'Le point M, à la distance SM de la source.' }, { repere: 'retard_tau', texte: 'Même courbe, décalée du retard τ = SM/v.' }],
   longueur: [{ repere: 'longueur_l', texte: 'Sur la photo de la corde, on lit la longueur L.' }, { repere: 'duree_theta', texte: 'Sur la courbe du temps, on lit la durée θ.' }],
   aspect: [{ repere: 'axe_x', texte: 'En haut, l’axe porte la distance : c’est une photo, le front est à droite.' }, { repere: 'axe_t', texte: 'En bas, l’axe porte le temps : le front arrive en premier, à gauche.' }],
   sens: [{ repere: 'point_a', texte: 'A est devant le sommet : il va prendre sa place, donc il monte.' }],

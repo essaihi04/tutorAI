@@ -70,7 +70,12 @@ scene.cadre = function (graine) {
   const o = { trait: craie.trait, texte: craie.texte, point: craie.point, repere: craie.repere, rect: craie.rect, cercle: craie.cercle };
   const X = x => (brut ? x : x * KX);
   craie.trait = function (pts, opt) { return o.trait.call(this, brut || KX === 1 ? pts : pts.map(p => [p[0] * KX, p[1]]), opt); };
-  craie.texte = function (t, x, y, opt = {}) { return o.texte.call(this, t, X(x), y, opt.max && !brut ? { ...opt, max: opt.max * KX } : opt); };
+  craie.texte = function (t, x, y, opt = {}) {
+    const xx = X(x), oo = opt.max && !brut ? { ...opt, max: opt.max * KX } : opt;
+    // une fraction « ⟦num|dén⟧ » : le kit écrit ses morceaux (texte, étages, trait) à des abscisses déjà étirées
+    if (String(t).includes('⟦')) { brut++; try { return o.texte.call(this, t, xx, y, oo); } finally { brut--; } }
+    return o.texte.call(this, t, xx, y, oo);
+  };
   craie.point = function (x, y, r, coul) { return o.point.call(this, X(x), y, r, coul); };
   craie.repere = function (id, x, y, w, h, lib) { return o.repere.call(this, id, X(x), y, brut ? w : w * KX, h, lib); };
   craie.rect = function (x, y, w, h, opt) { const xx = X(x), ww = brut ? w : w * KX; brut++; try { return o.rect.call(this, xx, y, ww, h, opt); } finally { brut--; } };
@@ -206,8 +211,8 @@ const DESSINS = {
     c.texte('T = n × sensibilité', xt, 120, { couleur: 'blanc', taille: 18 });
     c.texte('T = 5 × 0,1 ms', xt, 160, { couleur: 'vert', taille: 18 });
     c.texte('T = 0,5 ms = 5×10⁻⁴ s', xt, 200, { couleur: 'vert', taille: 18, max: 225 });
-    c.texte('N = 1/T = 2000 Hz', xt, 250, { couleur: 'vert', taille: 18 });
-    c.repere('calcul', xt - 6, 100, 236, 160, 'T = 5 × 0,1 ms = 0,5 ms ; N = 2000 Hz');
+    c.texte('N = ⟦1|T⟧ = 2000 Hz', xt, 252, { couleur: 'vert', taille: 18 });
+    c.repere('calcul', xt - 6, 100, 236, 168, 'T = 5 × 0,1 ms = 0,5 ms ; N = 2000 Hz');
     marque(c, 'fin');
   },
 
@@ -280,9 +285,9 @@ const DESSINS = {
     c.repere('intervalles', xs, Y0 + 10, 5 * L, 28, 'les intervalles comptés depuis S');
     marque(c, 'intervalles');
     c.pause(.3);
-    c.texte('d couvre 4 intervalles : λ = 6 / 4 = 1,5 cm', 470, 382, { couleur: 'vert', taille: 16, max: 280 });
-    c.texte('depuis S : SM = 1 λ + 4 λ = 5 λ = 7,5 cm', 470, 406, { couleur: 'vert', taille: 16, max: 280 });
-    c.repere('calcul', 466, 364, 284, 50, 'λ = 1,5 cm ; SM = 5λ');
+    c.texte('d couvre 4 intervalles : λ = ⟦6|4⟧ = 1,5 cm', 470, 376, { couleur: 'vert', taille: 16, max: 280 });
+    c.texte('depuis S : SM = 1 λ + 4 λ = 5 λ = 7,5 cm', 470, 408, { couleur: 'vert', taille: 16, max: 280 });
+    c.repere('calcul', 466, 356, 284, 58, 'λ = 1,5 cm ; SM = 5λ');
     marque(c, 'fin');
   },
 
@@ -328,10 +333,10 @@ const DESSINS = {
     c.repere('front', xs, 288, xf - xs, 40, 'le front est à 6 cm de S');
     marque(c, 'front');
     c.pause(.3);
-    c.texte('v = λ·N = 4×10⁻² × 50 = 2 m/s', 40, 356, { couleur: 'vert', taille: 18, max: 330 });
-    c.texte('t = SM / v = 6×10⁻² / 2 = 0,03 s', 40, 390, { couleur: 'vert', taille: 18, max: 330 });
+    c.texte('v = λ·N = 4×10⁻² × 50 = 2 m/s', 40, 352, { couleur: 'vert', taille: 18, max: 330 });
+    c.texte('t = ⟦SM|v⟧ = ⟦6×10⁻²|2⟧ = 0,03 s', 40, 392, { couleur: 'vert', taille: 18, max: 330 });
     c.texte('y_M(t) = y_S(t − 0,03)', 430, 390, { couleur: 'vert', taille: 18 });
-    c.repere('calcul', 36, 336, 640, 62, 'v = 2 m/s ; t = 0,03 s');
+    c.repere('calcul', 36, 336, 640, 70, 'v = 2 m/s ; t = 0,03 s');
     marque(c, 'fin');
   },
 
@@ -379,8 +384,8 @@ const DESSINS = {
       marque(c, 'source');
     }
     c.pause(.3);
-    c.texte('N = 1/T = 50 Hz ; v = L/τ = 2,5×10⁻² / 10⁻² = 2,5 m/s ; λ = v·T = 5 cm', 40, 408, { couleur: 'vert', taille: 16, max: 690 });
-    c.repere('calcul', 36, 390, 694, 24, 'N = 50 Hz ; v = 2,5 m/s ; λ = 5 cm');
+    c.texte('N = ⟦1|T⟧ = 50 Hz ; v = ⟦L|τ⟧ = ⟦2,5×10⁻²|10⁻²⟧ = 2,5 m/s ; λ = v·T = 5 cm', 40, 402, { couleur: 'vert', taille: 16, max: 690 });
+    c.repere('calcul', 36, 380, 694, 34, 'N = 50 Hz ; v = 2,5 m/s ; λ = 5 cm');
     marque(c, 'fin');
   },
 
@@ -475,10 +480,10 @@ const DESSINS = {
     marque(c, 'lambda');
     c.pause(.3);
     c.texte('v = 0,25 m/s :', xt, 236, { couleur: 'blanc', taille: 18 });
-    c.texte('N = v / λ = 0,25 / (5×10⁻³)', xt, 270, { couleur: 'vert', taille: 18, max: 270 });
+    c.texte('N = ⟦v|λ⟧ = ⟦0,25|5×10⁻³⟧', xt, 270, { couleur: 'vert', taille: 18, max: 270 });
     c.texte('N = 50 Hz', xt, 304, { couleur: 'vert', taille: 18 });
-    c.texte('d = 5 cm : τ = d / v = 0,2 s', xt, 352, { couleur: 'vert', taille: 18, max: 270 });
-    c.repere('calcul_n', xt - 6, 216, 276, 146, 'N = 50 Hz ; τ = 0,2 s');
+    c.texte('d = 5 cm : τ = ⟦d|v⟧ = 0,2 s', xt, 342, { couleur: 'vert', taille: 18, max: 270 });
+    c.repere('calcul_n', xt - 6, 216, 276, 152, 'N = 50 Hz ; τ = 0,2 s');
     marque(c, 'fin');
     c.ctx.setTransform(T0); c.echelle = ech0;
   },

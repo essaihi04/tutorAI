@@ -174,6 +174,23 @@ const Peint = {
     ctx.fillText(affiche, ex + ew / 2, ey + eh / 2 + 1);
     ctx.restore();
   },
+  /** Armatures métalliques sous le symbole du condensateur ; f (0 → 1) : part de la charge finale, montrée par des charges
+   * rouges (+) sur l'armature du haut et bleues (−) sur celle du bas, qui apparaissent une à une en fondu. */
+  armatures(ctx, x, yA, yB, f, a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    for (const y of [yA, yB]) {
+      ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(x - 25, y - 1, 52, 6);
+      const g = ctx.createLinearGradient(0, y - 3, 0, y + 3); g.addColorStop(0, '#f1f5f9'); g.addColorStop(.5, '#94a3b8'); g.addColorStop(1, '#475569');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x - 26, y - 3, 52, 6, 2); ctx.fill();
+    }
+    ctx.restore();
+    const n = 6, nr = n * Math.min(1, f);
+    for (let k = 0; k < Math.ceil(nr - 1e-6); k++) {
+      const al = a * Math.min(1, nr - k), xx = x + [-22, -15, -8, 8, 15, 22][k];   // un passage au milieu pour le fil
+      Peint.sphere(ctx, xx, yA - 8, 3.4, ['#ffd0d0', '#ef4444', '#7f1d1d'], al);
+      Peint.sphere(ctx, xx, yB + 8, 3.4, ['#dbeafe', '#3b82f6', '#1e3a8a'], al);
+    }
+  },
   /** Borne ronde (rouge ou noire). */
   borne(ctx, x, y, rouge, a = 1) { Peint.sphere(ctx, x, y, 5, rouge ? ['#ffd0d0', '#e0393e', '#6d0f12'] : ['#9aa0a6', '#2b2f33', '#050607'], a); },
   /** Appareil à cadran (ampèremètre ou voltmètre) : boîtier, cadran crème, graduations, aiguille (f de 0 à 1). */
@@ -329,6 +346,8 @@ function appareils(c, a) {
     Peint.resistor(ctx, RES.x, RES.y, RES.w, RES.h, S2.R, a);
     Peint.chimique(ctx, 292, 166, 26, 44, a);
     Peint.plot(ctx, C1[0], C1[1], a); Peint.plot(ctx, C2[0], C2[1], a);
+    // Les armatures du symbole, en métal, et les charges qui s'y entassent au rythme de u_C (17 novembre 2026, pour l'œil).
+    Peint.armatures(ctx, XC, YA, YBP, Math.max(0, uC()) / Math.max(1e-9, S2.E), a);
     const a1 = Math.atan2(C1[1] - PV[1], C1[0] - PV[0]), a2 = Math.atan2(C2[1] - PV[1], C2[0] - PV[0]), an = a2 + (a1 - a2) * levier();
     if (a > .05) Peint.levier(ctx, PV[0], PV[1], PV[0] + LG * Math.cos(an), PV[1] + LG * Math.sin(an), a);
   });
@@ -476,7 +495,7 @@ function reperes(c, M) {
 function voir(M) {
   const v = M.S.vue, T = tau(), ax = axeT(), au = axeU();
   const m = [`Vue « ${v} » (${TITRES[v]}), ${M.etat()}. E = ${fx(S2.E, 1)} V, R = ${fR(S2.R)}, C = ${S2.C} µF (τ = R·C = ${fx(T, 4)} s, non écrit au tableau).`];
-  m.push(`Montage : générateur (boîtier peint) ; interrupteur K en position ${positionK()} (1 : charge avec E ; 2 : R et C seuls) ; résistor peint (bandes de couleur) ; condensateur (symbole à la craie et condensateur chimique bleu) ; à droite l’écran d’acquisition, axes t (s, 0 à ${fx(ax.max, 3)}, pas ${fx(ax.pas, 3)}) et u_C (V, 0 à ${fx(au.max, 1)}).`);
+  m.push(`Montage : générateur (boîtier peint) ; interrupteur K en position ${positionK()} (1 : charge avec E ; 2 : R et C seuls) ; résistor peint (bandes de couleur) ; condensateur (symbole à armatures de métal où des charges + rouges et − bleues s’entassent pendant la charge, et condensateur chimique bleu) ; à droite l’écran d’acquisition, axes t (s, 0 à ${fx(ax.max, 3)}, pas ${fx(ax.pas, 3)}) et u_C (V, 0 à ${fx(au.max, 1)}).`);
   const e = [];
   if (v === 'montage') {
     if (M.vu('montage')) e.push('le circuit, « 1 » et « 2 » aux deux positions de K, « position 1 : charge », « position 2 : R et C seuls (décharge) »');

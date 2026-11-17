@@ -55,9 +55,11 @@
       craie.point = function (x, y, r = 4, c) { pt(x, y, r); return point.call(this, x, y, r, c); };
       craie.texte = function (s, x, y, o = {}) {
         const t = o.taille ?? 18; this.ctx.font = `${o.gras ? '700 ' : ''}${t}px ${window.Tableau.POLICE}`;
-        let l = this.ctx.measureText(String(s).replace(/_/g, '')).width; if (o.max && l > o.max) l = o.max;
+        // une fraction « ⟦num|dén⟧ » : largeur du kit, et ses deux étages montent et descendent plus loin
+        const fr = String(s).includes('⟦');
+        let l = fr ? this.largeurTexte(s, t) : this.ctx.measureText(String(s).replace(/_/g, '')).width; if (o.max && l > o.max) l = o.max;
         const x0 = o.align === 'center' ? x - l / 2 : o.align === 'right' ? x - l : x;
-        pt(x0, y - t * 0.95); pt(x0 + l, y + t * 0.35);
+        pt(x0, y - t * (fr ? 1.25 : 0.95)); pt(x0 + l, y + t * (fr ? 0.65 : 0.35));
         return texte.call(this, s, x, y, o);
       };
       const t = scene.ouvert;

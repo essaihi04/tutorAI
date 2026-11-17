@@ -37,7 +37,7 @@ const CENTRE = { x: 380, y: 210, w: 230, h: 96, comps: [],
 const HAUT_Y = 60, BAS_Y = 352, W = 140, H = 72;   // 72 (et non 66) : la 2e ligne ne touche plus le bas du cadre
 const NOEUDS = [
   { id: 'depuis', x: 78, y: HAUT_Y, w: W, h: H, couleur: 'faible', comps: [], titre: 'Depuis le RC et le RL',
-    lignes: ['q = C·u_C', 'u_b = L·di/dt + r·i'],
+    lignes: ['q = C·u_C', 'u_b = L·⟦di|dt⟧ + r·i'],
     phrase: 'Depuis le RC et le RL : q = C·u_C et u_b = L·di/dt + r·i servent de nouveau.' },
   { id: 'decharge', x: 229, y: HAUT_Y, w: W, h: H, couleur: 'rouge', comps: ['C1'], titre: 'Décharge',
     lignes: ['u_C change de signe', 'u_b(0⁺) = −u_C(0)'],
@@ -46,10 +46,10 @@ const NOEUDS = [
     lignes: ['périodique, pseudo-', 'périodique, apériodique'],
     phrase: 'Trois régimes : périodique (R + r = 0), pseudo-périodique, apériodique ; l’amortissement augmente avec R + r.' },
   { id: 'equation', x: 531, y: HAUT_Y, w: W, h: H, couleur: 'orange', comps: ['C3'], titre: 'Équation',
-    lignes: ['L·d²q/dt² + (R + r)·dq/dt', '+ q/C = 0'],
+    lignes: ['L·⟦d²q|dt²⟧ + (R + r)·⟦dq|dt⟧', '+ ⟦q|C⟧ = 0'],
     phrase: 'L’équation différentielle : L·d²q/dt² + (R + r)·dq/dt + q/C = 0 (ou en u_C) ; LC idéal : d²u_C/dt² + u_C/(LC) = 0.' },
   { id: 'solution', x: 682, y: HAUT_Y, w: W, h: H, couleur: 'orange', comps: ['C4'], titre: 'Solution (LC)',
-    lignes: ['u_C = U_m·cos(2πt/T₀ + φ)', 'on dérive deux fois'],
+    lignes: ['u_C = U_m·cos(⟦2πt|T₀⟧ + φ)', 'on dérive deux fois'],
     phrase: 'La solution du circuit LC : u_C(t) = U_m·cos(2πt/T₀ + φ) ; on la dérive deux fois et on remplace.' },
   { id: 'periode', x: 682, y: 162, w: W, h: H, couleur: 'violet', comps: ['C4'], titre: 'T₀ = 2π√(LC)',
     lignes: ['période propre, en s', 'L ou C × 4 → T₀ × 2'],
@@ -58,13 +58,13 @@ const NOEUDS = [
     lignes: ['u_C(0) = U_m·cos φ', 'sens de départ → φ'],
     phrase: 'Les conditions initiales donnent U_m et φ : u_C(0) = U_m·cos φ, et le sens de départ choisit le signe de φ.' },
   { id: 'lecture', x: 682, y: BAS_Y, w: W, h: H, couleur: 'violet', comps: ['C5'], titre: 'Lire T',
-    lignes: ['T ≈ T₀ ; π² = 10', 'C = T₀²/(4π²·L)'],
+    lignes: ['T ≈ T₀ ; π² = 10', 'C = ⟦T₀²|4π²·L⟧'],
     phrase: 'Lire T sur l’oscillogramme, entre deux sommets : T ≈ T₀, puis L ou C avec T₀² = 4π²·L·C (π² = 10).' },
   { id: 'energie', x: 531, y: BAS_Y, w: W, h: H, couleur: 'blanc', comps: ['C6'], titre: 'Énergie',
     lignes: ['E = ½·C·u_C² + ½·L·i²', 'constante si R + r = 0'],
     phrase: 'L’énergie totale E = ½·C·u_C² + ½·L·i² passe du condensateur à la bobine ; elle reste constante si R + r = 0.' },
   { id: 'amortissement', x: 380, y: BAS_Y, w: W, h: H, couleur: 'rose', comps: ['C7'], titre: 'Amortissement',
-    lignes: ['dE/dt = −(R + r)·i²', 'effet Joule'],
+    lignes: ['⟦dE|dt⟧ = −(R + r)·i²', 'effet Joule'],
     phrase: 'L’amortissement : dE/dt = −(R + r)·i², l’énergie perdue devient de la chaleur (effet Joule) ; |ΔE| = ½·C·(U₁² − U₂²).' },
   { id: 'entretien', x: 229, y: BAS_Y, w: W, h: H, couleur: 'cyan', comps: ['C8'], titre: 'Entretien',
     lignes: ['u_G = k·i', 'k = R + r : période T₀'],
@@ -82,6 +82,7 @@ const NOEUDS = [
  * grand (D). Sinon : les tailles d'origine. */
 const COLS = { depuis: 0, decharge: 1, regimes: 2, equation: 3, solution: 4, periode: 4, conditions: 4, lecture: 4, energie: 3, amortissement: 2, entretien: 1, national: 0, suite: 0 };
 const Y0 = Object.fromEntries(NOEUDS.map(n => [n.id, n.y]));
+let TMIN = 0;   // taille minimale d'écriture (repère du dessin), mise à jour à chaque image
 let D = { k: 1, titre: 17, ligne: 14, pas: 18, haut: 23, bas: 45 }, LC = 760;
 function disposer(L) {
   LC = L; const large = L >= 1000;
@@ -91,8 +92,21 @@ function disposer(L) {
     n.w = w; n.h = h; n.x = m + COLS[n.id] * (L - 2 * m) / 4;
     n.y = large ? ({ periode: 162, conditions: 258 })[n.id] ?? Y0[n.id] : Y0[n.id];
     if (large && n.y === HAUT_Y) n.y = 56; else if (large && n.y === BAS_Y) n.y = 362;
+    // une ligne à fraction (« ⟦num|dén⟧ », sur deux étages comme dans le cahier) agrandit la branche : vers le bas pour
+    // la rangée du haut, des deux côtés pour celle du bas (le bas du cadre est proche) (17 novembre 2026)
+    const hf = lignesY(n, 0).bas;
+    if (hf > n.h) { if (n.y < 210) n.y += (hf - n.h) / 2; n.h = hf; }
   }
   Object.assign(CENTRE, { x: L / 2, w: large ? 320 : 230, h: large ? 124 : 96 });
+}
+/* Lignes de base des lignes d'une branche (cadre en haut à `y`) : une fraction prend de la place au-dessus et au-dessous ;
+ * `bas` = la hauteur de cadre qu'il faut. */
+function lignesY(n, y) {
+  const t = Math.max(D.ligne, TMIN), f = n.lignes.map(l => l.includes('⟦')), ys = [];   // la taille vraiment écrite (petit écran : minimum lisible)
+  let b = y + D.bas + (f[0] ? .4 * t : 0);
+  f.forEach((fr, k) => { if (k) b += D.pas + (f[k - 1] ? .3 * t : 0) + (fr ? .55 * t : 0); ys.push(b); });
+  const der = f[f.length - 1];
+  return { ys, bas: f.some(Boolean) ? ys[ys.length - 1] - y + (der ? .7 * t + 3 : .35 * t + 4) : 0 };
 }
 const ANNEAUX = { non_acquis: ['rouge', 'à reprendre'], partiel: ['orange', 'à revoir'] };
 const AVANT = -1e9;   // instant d'un élément déjà dit : écrit d'un coup
@@ -104,7 +118,7 @@ const DUREE_BRANCHE = 2.6;   // s par branche quand la carte se dessine seule
 
 const BAS_U = { 0: '₀', 1: '₁', 2: '₂', 3: '₃', 4: '₄', 5: '₅', 6: '₆', 7: '₇', 8: '₈', 9: '₉', a: 'ₐ', e: 'ₑ', m: 'ₘ', x: 'ₓ' };
 /* Texte pour la bulle et ce_qui_se_voit : pas de « _ » ni d’accolades visibles. */
-const lisible = s => String(s).replace(/\^\{([^}]+)\}/g, '^($1)').replace(/_\{?([A-Za-z0-9]+)\}?/g, (m, g) => ([...g].every(ch => ch in BAS_U) ? [...g].map(ch => BAS_U[ch]).join('') : g));
+const lisible = s => window.Tableau.lisible(String(s)).replace(/\^\{([^}]+)\}/g, '^($1)').replace(/_\{?([A-Za-z0-9]+)\}?/g, (m, g) => ([...g].every(ch => ch in BAS_U) ? [...g].map(ch => BAS_U[ch]).join('') : g));
 
 function statut(comps) {
   if (!S.lacunes || !comps.length) return null;
@@ -142,7 +156,8 @@ function branche(c, n) {
   } else {
     c.rect(x, y, n.w, n.h, { couleur: n.couleur, arrondi: n.encadre ? 4 : 14, largeur: n.encadre ? 1.6 : 2.4, pointille: n.encadre ? [6, 5] : undefined });
     c.texte(n.titre, n.x, y + D.haut, { couleur: n.couleur, taille: D.titre, align: 'center', max: n.w - 16, duree: .8 });
-    n.lignes.forEach((l, k) => c.texte(l, n.x, y + D.bas + k * D.pas, { couleur: 'blanc', taille: D.ligne, align: 'center', max: n.w - 14, alpha: .92, duree: 1 }));
+    const ys = lignesY(n, y).ys;
+    n.lignes.forEach((l, k) => c.texte(l, n.x, ys[k], { couleur: 'blanc', taille: D.ligne, align: 'center', max: n.w - 14, alpha: .92, duree: 1 }));
   }
   c.repere(n.id, x - 5, y - 5, n.w + 10, n.h + 10, lisible(n.titre));
   etat(c, n.comps, x, y, n.w, n.h);
@@ -200,7 +215,7 @@ function bobinePeinte(ctx, x, y, w = 44, h = 14) {
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(71); disposer(scene.L); dessiner(c); return c.fin(); }, { large: true });
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(71); TMIN = (c.tailleMin || 0) / (c.echelle || 1); disposer(scene.L); dessiner(c); return c.fin(); }, { large: true });
 const maintenant = () => (performance.now() - scene.ouvert) / 1000;
 let horloge = 0;
 scene.avancer = dt => {

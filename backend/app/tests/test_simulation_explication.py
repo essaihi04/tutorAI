@@ -133,3 +133,14 @@ def test_une_manip_aux_instants_cles_fait_montrer_chaque_phase_dite():
     assert "play_until {moment}" in bloc and "un arrêt par phase" in bloc
     sans = se.bloc_prompt({"capabilities": {"commands": ["start", "pause", "resume", "highlight"]}})
     assert "play_until" not in sans                # une manip sans instants clés : on ne le promet pas
+
+
+def test_la_baguette_va_sur_l_objet_nomme_et_chaque_processus_a_son_moment():
+    # 17 novembre 2026 : la baguette se posait sur un voisin ; l'oxydation de NADH,H+ était dite sans être montrée
+    manip = {"capabilities": {"commands": ["start", "pause", "resume", "play_until", "highlight"],
+                              "reperes": {"t1": "le transporteur T1", "taxi": "le taxi NADH,H+"}}}
+    bloc = se.bloc_prompt(manip)
+    assert "LA BAGUETTE SUR L'OBJET NOMMÉ" in bloc and "jamais un voisin" in bloc
+    assert "CHAQUE PROCESSUS NOMMÉ A SON MOMENT ANIMÉ" in bloc and "AVEC la phrase" in bloc
+    sans = se.bloc_prompt({"capabilities": {"commands": ["start", "highlight"], "reperes": {"a": "A"}}})
+    assert "LA BAGUETTE SUR L'OBJET NOMMÉ" in sans and "CHAQUE PROCESSUS" not in sans

@@ -383,7 +383,7 @@ const MOTIFS = { fin: 'fin' }; for (const e of ETAPES.equation) MOTIFS[e.nom] = 
 const X1 = 90, X2 = 330, Y1 = 80, Y2 = 290, YA = 175, YBp = 187;
 const KP = [[112, Y1], [150, Y1]], RES = { x: 190, y: 72, w: 60, h: 16 }, BOB = { x: 212, y: 170, w: 70, h: 20 }, CHIM = { x: 128, y: 148, w: 20, h: 32 };
 let XL = 396, WL = 356;   // colonne des lignes
-const YL = { add: 70, add2: 96, rempl: 128, der: 158, eqq: 194, uc1: 230, uc2: 258, uc3: 286, lc: 326 };
+const YL = { add: 70, add2: 96, rempl: 124, der: 155, eqq: 189, uc1: 222, uc2: 253, uc3: 284, lc: 329 };   // lignes à fractions (deux étages) : écart ≥ 31
 /* Agrandissement du 15 novembre 2026 (« la simulation n'occupe qu'une bande étroite, les textes sont minuscules »).
  * Scene en { large: true } : le cadre prend le format du tableau (scene.L de 760 à 1596, hauteur 420).
  * Tableau large (L ≥ 1000, écran d'ordinateur) : trois colonnes — à gauche la maille agrandie (zone ZC, × 1,12),
@@ -414,6 +414,9 @@ const POS = {};   // positions mesurées des morceaux (repères)
 /** Largeur d’un texte de craie (indices et exposants plus petits, comme le kit et exposants.js). */
 const CHIF = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
 function largeur(c, s, taille) {
+  // une fraction « ⟦num|dén⟧ » (deux étages, comme dans le cahier) : son plus long étage (78 %) et une marge
+  if (String(s).includes('⟦')) return String(s).split(/(⟦[^⟧]*⟧)/).filter(Boolean).reduce((w, p) => w + (p[0] !== '⟦' ? largeur(c, p, taille)
+    : Math.max(...p.slice(1, -1).split('|').map(e => largeur(c, e, taille * .78))) + Math.max(taille, (c.tailleMin || 0) / (c.echelle || 1)) * .36), 0);
   const t = Math.max(taille, (c.tailleMin || 0) / (c.echelle || 1));
   s = String(s).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => CHIF[ch]).join('') + '}');
   let w = 0;
@@ -428,7 +431,8 @@ function ligne(c, morceaux, x, y, o = {}) {
   for (const [s, col] of morceaux) { const w = largeur(c, s, t); c.texte(s, px, y, { couleur: col, taille: t }); pos.push([px, px + w]); px += w; }
   return pos;
 }
-const encadre = (c, p, y, col = 'blanc') => c.rect(p[0] - 7, y - 21 * KT, p[1] - p[0] + 14, 30 * KT, { arrondi: 6, largeur: 1.8, couleur: col });
+// le cadre d'une formule à fractions (deux étages) : plus haut
+const encadre = (c, p, y, col = 'blanc') => c.rect(p[0] - 7, y - 25 * KT, p[1] - p[0] + 14, 37 * KT, { arrondi: 6, largeur: 1.8, couleur: col });
 
 /* ── Peinture et craie du circuit ───────────────────────────────────── */
 function appareils(c, a) {
@@ -484,28 +488,28 @@ function dessiner(c, M) {
   });
   M.etape(c, 'remplacer', () => {
     zoneC(c, () => {
-      c.texte('u_C = q/C', 14, 262, { couleur: 'rouge', taille: 16 });
+      c.texte('u_C = ⟦q|C⟧', 14, 262, { couleur: 'rouge', taille: 16 });
       c.texte('u_R = R·i', 220, 108, { couleur: 'blanc', taille: 16, align: 'center' });
-      c.texte('u_b = L·di/dt + r·i', 318, 262, { couleur: 'vert', taille: 16, align: 'right' });
+      c.texte('u_b = L·⟦di|dt⟧ + r·i', 318, 262, { couleur: 'vert', taille: 16, align: 'right' });
     });
-    POS.rempl = ligne(c, [['q/C', 'rouge'], [' + R·i', 'blanc'], [' + L·di/dt + r·i', 'vert'], [' = 0', 'blanc']], XA, YL.rempl, { max: WA });
+    POS.rempl = ligne(c, [['⟦q|C⟧', 'rouge'], [' + R·i', 'blanc'], [' + L·⟦di|dt⟧ + r·i', 'vert'], [' = 0', 'blanc']], XA, YL.rempl, { max: WA });
   });
-  M.etape(c, 'deriver_deux_fois', () => { POS.der = ligne(c, [['i = dq/dt ; di/dt = d²q/dt²', 'vert']], XA, YL.der, { max: WA })[0]; });
+  M.etape(c, 'deriver_deux_fois', () => { POS.der = ligne(c, [['i = ⟦dq|dt⟧ ; ⟦di|dt⟧ = ⟦d²q|dt²⟧', 'vert']], XA, YL.der, { max: WA })[0]; });
   M.etape(c, 'equation_q', () => {
-    POS.eqq = ligne(c, [['L·d²q/dt² + (R + r)·dq/dt + q/C = 0', 'blanc']], XL + 8, YL.eqq, { max: WL - 16 })[0];
+    POS.eqq = ligne(c, [['L·⟦d²q|dt²⟧ + (R + r)·⟦dq|dt⟧ + ⟦q|C⟧ = 0', 'blanc']], XL + 8, YL.eqq, { max: WL - 16 })[0];
     encadre(c, POS.eqq, YL.eqq);
   });
   M.etape(c, 'equation_uc', () => {
-    POS.uc1 = ligne(c, [['q = C·u_C : i = C·du_C/dt ; di/dt = C·d²u_C/dt²', 'rouge']], XL, YL.uc1)[0];
-    POS.uc2 = ligne(c, [['LC·d²u_C/dt² + (R + r)·C·du_C/dt + u_C = 0', 'blanc']], XL, YL.uc2)[0];
-    POS.uc3 = ligne(c, [['÷ LC : d²u_C/dt² + ', 'blanc'], ['((R + r)/L)·du_C/dt', 'blanc'], [' + u_C/(LC) = 0', 'blanc']], XL, YL.uc3);
+    POS.uc1 = ligne(c, [['q = C·u_C : i = C·⟦du_C|dt⟧ ; ⟦di|dt⟧ = C·⟦d²u_C|dt²⟧', 'rouge']], XL, YL.uc1)[0];
+    POS.uc2 = ligne(c, [['LC·⟦d²u_C|dt²⟧ + (R + r)·C·⟦du_C|dt⟧ + u_C = 0', 'blanc']], XL, YL.uc2)[0];
+    POS.uc3 = ligne(c, [['÷ LC : ⟦d²u_C|dt²⟧ + ', 'blanc'], ['⟦R + r|L⟧·⟦du_C|dt⟧', 'blanc'], [' + ⟦u_C|LC⟧ = 0', 'blanc']], XL, YL.uc3);
   });
   M.etape(c, 'lc_ideal', () => {
     const m = POS.uc3 ? POS.uc3[1] : [XL + 120, XL + 240];
     c.ligne(m[0] - 2, YL.uc3 - 6, m[1] + 2, YL.uc3 - 6, { couleur: 'jaune', largeur: 2.6 });
-    c.ligne(m[0], YL.uc3 + 2, m[1], YL.uc3 - 14, { couleur: 'jaune', largeur: 2 });
-    c.texte('R + r = 0', (m[0] + m[1]) / 2, YL.uc3 + 18 * KT, { couleur: 'jaune', taille: 14 * KT, align: 'center' });
-    const p = ligne(c, [['d²u_C/dt² + u_C/(LC) = 0', 'blanc']], XL + 92 * KT, YL.lc + 6, { max: WL - 100 * KT })[0];
+    c.ligne(m[0], YL.uc3 + 8, m[1], YL.uc3 - 18, { couleur: 'jaune', largeur: 2 });   // le terme barré tient sur deux étages
+    c.texte('R + r = 0', (m[0] + m[1]) / 2, YL.uc3 + 20 * KT, { couleur: 'jaune', taille: 14 * KT, align: 'center' });
+    const p = ligne(c, [['⟦d²u_C|dt²⟧ + ⟦u_C|LC⟧ = 0', 'blanc']], XL + 92 * KT, YL.lc + 6, { max: WL - 100 * KT })[0];
     c.texte('LC idéal :', XL, YL.lc + 6, { couleur: 'blanc', taille: 16 * KT });
     encadre(c, p, YL.lc + 6); POS.lc = [XL, p[1]];
     // Petite courbe : u_C(t) à sommets égaux.

@@ -3,7 +3,7 @@
 <link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="lumiere.css"></head>
 <body>
 <div class="tableau">
-  <section class="scene"><canvas id="canvas" role="img" aria-label="Trois éclairs de lumière partent ensemble dans le vide, puis entrent dans l'air, l'eau et le verre : ils ralentissent, v et n = c / v s'écrivent à l'arrivée"></canvas></section>
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Trois éclairs de lumière partent ensemble dans le vide, puis entrent dans l'air, l'eau et le verre : ils ralentissent, v et n = c/v s'écrivent à l'arrivée"></canvas></section>
   <footer class="barre">
     <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Allumer</button>
     <span id="reglage" data-professor-control="set_parameters"></span>
@@ -135,13 +135,14 @@ function dessiner(c) {
         const v = 3e8 / n;
         c.point(XR, p.y, 5, p.couleur);
         c.texte(`v = ${sci(v)} m/s`, XR + 12, p.y - 2, { couleur: p.couleur, taille: 16 * KT });
-        if (vu('indice')) c.texte(`n = c / v ${n < 1.001 && n > 1 ? '≈ 1,00' : '= ' + fr(n, 2)}`, XR + 12, p.y + 22 * KT, { couleur: 'vert', taille: 16 * KT });
+        if (vu('indice')) c.texte(`n = ⟦c|v⟧ ${n < 1.001 && n > 1 ? '≈ 1,00' : '= ' + fr(n, 2)}`, XR + 12, p.y + 26 * KT,   // n = c/v en fraction (deux étages)
+          { couleur: 'vert', taille: 16 * KT });
       }
     }
     if (vu('celerite')) c.texte('v < c', (XV + XR) / 2, 62, { couleur: 'orange', taille: 16 * KT, align: 'center' });
     if (vu('indice')) {
       c.texte('n sans unité, n ≥ 1', XR + 12, 392, { couleur: 'vert', taille: 15 * KT });
-      c.repere('indices', XR + 6, 90, 190 * KT, 310, 'les indices n = c / v');
+      c.repere('indices', XR + 6, 90, 190 * KT, 310, 'les indices n = c/v');
     }
     if (S.running || S.pause) c.texte('(très ralenti)', scene.L - 12, 30, { couleur: 'faible', taille: 13 * KT, align: 'right' });
   });
@@ -156,12 +157,12 @@ scene.avancer = dt => {
   if (arreterSiInstantAtteint()) return true;
   if (S.t >= tfin()) {
     S.running = false; S.fait = true; $('run').textContent = 'Allumer';
-    bulle($('feedback'), 'Plus le milieu ralentit la lumière, plus son indice n = c / v est grand.', 'good');
+    bulle($('feedback'), 'Plus le milieu ralentit la lumière, plus son indice n = c/v est grand.', 'good');
     pont.noter('finished'); pont.emettre();
   } else if (performance.now() - S.emis > 400) { S.emis = performance.now(); pont.emettre(); }
   return true;
 };
-const MOTIFS = { trace: 'les trois éclairs avancent ensemble dans le vide, à c', celerite: 'dans les milieux ils ralentissent : v < c', indice: 'tous arrivés : v et n = c / v écrits au bout' };
+const MOTIFS = { trace: 'les trois éclairs avancent ensemble dans le vide, à c', celerite: 'dans les milieux ils ralentissent : v < c', indice: 'tous arrivés : v et n = c/v écrits au bout' };
 function playUntil(p) {
   const M = T(), nom = p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.progress * tfin();
   if (!Number.isFinite(cible)) return;
@@ -191,7 +192,7 @@ function reset() { S.t = 0; S.running = false; S.pause = false; S.fait = false; 
 function setParameters(p) {
   if (!Number.isFinite(+p.n)) return;
   P.n = Math.min(2.4, Math.max(1, Math.round(+p.n * 100) / 100)); regl.maj(P.n); reset();
-  bulle($('feedback'), `Indice ${fr(P.n, 2)} : v = c / n = ${fr(3 / P.n, 2)}·10⁸ m/s. Allume pour comparer.`);
+  bulle($('feedback'), `Indice ${fr(P.n, 2)} : v = c/n = ${fr(3 / P.n, 2)}·10⁸ m/s. Allume pour comparer.`);
   pont.noter('set_parameters', { n: P.n }); pont.emettre();
 }
 const regl = window.Tableau.curseur({ id: 'n', label: '3ᵉ bloc : n =', min: 1, max: 2.4, step: 0.05, valeur: 1.5, unite: '', commande: 'set_parameters', decimales: 2, onchange: x => setParameters({ n: x }) });
@@ -208,7 +209,7 @@ const commandes = ['start', 'pause', 'resume', 'reset', 'set_parameters', 'play_
 const config = { id: 'ondes_lumineuses_indice', version: '1.0', title: 'L’indice de réfraction', variants: [{ id: 'indice', label: 'indice' }], commands: commandes,
   command_schema: { set_parameters: { n: '1.00..2.40 (pas de 0,05), indice du troisième bloc (verre 1,5)' }, play_until: { moment: Object.keys(MOTIFS).join(' | ') + ' (rejoue et se fige à cet instant clé)' } } };
 const pont = protocole({ id: config.id, commandes, config,
-  texte: 'Trois éclairs : dans le vide à c = 3,00·10⁸ m/s, puis dans l’air (n ≈ 1,00), l’eau (n = 1,33) et le verre (n = 1,5, réglable 1,00–2,40). Dans le milieu ils ralentissent : v = c / n ; à l’arrivée v et n = c / v s’écrivent. n sans unité, n ≥ 1.',
+  texte: 'Trois éclairs : dans le vide à c = 3,00·10⁸ m/s, puis dans l’air (n ≈ 1,00), l’eau (n = 1,33) et le verre (n = 1,5, réglable 1,00–2,40). Dans le milieu ils ralentissent : v = c/n ; à l’arrivée v et n = c/v s’écrivent. n sans unité, n ≥ 1.',
   etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : (S.fait ? 'finished' : 'idle'), ce_qui_se_voit: ceQuiSeVoit(), moments: T(), parameters: { ...P }, time_s: +S.t.toFixed(2) }),
   progression: () => (S.fait ? 1 : clamp(S.t / tfin())),
   executer: (cmd, p) => ({ start, pause, resume, reset, set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });

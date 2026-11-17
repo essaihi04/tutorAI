@@ -17,8 +17,11 @@
  * Les fermentations lactique et alcoolique (cours SVT « Libération de l’énergie »), 10 novembre 2026.
  * Vues (?vue= ou set_parameters {voie}) : lactique (cellule musculaire ou bactérie du lait), alcoolique (levure).
  * Ce qui se voit (t en s de la scène) :
- *   lactique   : mitochondrie_a_l_arret (3), taxi_rend_2h (6), acide_lactique (8,5), taxi_reparti_vide (10,5), reaction_globale (13) ;
- *   alcoolique : mitochondrie_a_l_arret (3), co2_part (6), taxi_rend_2h (8,5), ethanol (10,5), taxi_reparti_vide (12,5), reaction_globale (15).
+ *   (17 novembre 2026 : un moment par chose dite, dans l’ordre où chaque diapositive les dit ; chaque écrit à son moment)
+ *   lactique   : mitochondrie_a_l_arret (3), manque_taxis (3,8), taxi_rend_2h (6), acide_lactique (8,5), taxi_reparti_vide (10,6),
+ *                deux_atp (11,6), reaction_globale (13), degradation_incomplete (14) ;
+ *   alcoolique : mitochondrie_a_l_arret (3), manque_taxis (3,8), co2_part (6), taxi_rend_2h (8,5), ethanol (10,5),
+ *                reaction_globale (12), degradation_incomplete (13,2), taxi_reparti_vide (15), deux_atp (16).
  * Les deux NADH,H+ (taxis chargés) viennent de la glycolyse ; sans dioxygène la mitochondrie ne les décharge plus :
  * le compteur « NAD+ disponibles » tombe à 0. Chaque NADH,H+ rend ses 2 H à un acide pyruvique (lactique) ou à la
  * molécule à 2 C qui reste après le départ du CO2 (alcoolique) ; les NAD+ repartent vers la glycolyse, qui continue :
@@ -34,9 +37,9 @@ const $ = id => document.getElementById(id);
 const VOIES = ['lactique', 'alcoolique'];
 const demande = new URLSearchParams(location.search).get('vue');
 let voie = VOIES.includes(demande) ? demande : 'lactique';
-const ML = { mitochondrie_a_l_arret: 3, taxi_rend_2h: 6, acide_lactique: 8.5, taxi_reparti_vide: 10.5, reaction_globale: 13 };
-const MA = { mitochondrie_a_l_arret: 3, co2_part: 6, taxi_rend_2h: 8.5, ethanol: 10.5, taxi_reparti_vide: 12.5, reaction_globale: 15 };
-const FINS = { lactique: 15, alcoolique: 17 };
+const ML = { mitochondrie_a_l_arret: 3, manque_taxis: 3.8, taxi_rend_2h: 6, acide_lactique: 8.5, taxi_reparti_vide: 10.6, deux_atp: 11.6, reaction_globale: 13, degradation_incomplete: 14 };
+const MA = { mitochondrie_a_l_arret: 3, manque_taxis: 3.8, co2_part: 6, taxi_rend_2h: 8.5, ethanol: 10.5, reaction_globale: 12, degradation_incomplete: 13.2, taxi_reparti_vide: 15, deux_atp: 16 };
+const FINS = { lactique: 14.5, alcoolique: 16.5 };
 const alc = () => voie === 'alcoolique';
 const Mv = () => (alc() ? MA : ML);
 const FIN = () => FINS[voie];
@@ -46,13 +49,16 @@ const MOTIFS = {
   taxi_rend_2h: 'chaque NADH,H+ rend ses deux H',
   acide_lactique: 'l’acide lactique, CH3-CHOH-COOH (3 C)',
   ethanol: 'l’éthanol, CH3-CH2-OH (2 C)',
+  manque_taxis: 'plus de NAD+ libres : la glycolyse va manquer de taxis vides',
   taxi_reparti_vide: 'les NAD+ retournent à la glycolyse, qui continue',
+  deux_atp: '2 ATP par glucose, ceux de la glycolyse',
   reaction_globale: 'la réaction globale de la fermentation',
+  degradation_incomplete: 'dégradation incomplète : il reste une molécule organique',
 };
 /* Les instants de chaque voie (en s) : [début, fin] des phases. */
 const PH = {
-  lactique:   { h: [4.5, 6], nom: [7.5, 8.5], retour: [9, 10.5], reac: 12 },
-  alcoolique: { co2: [4.5, 6], h: [7, 8.5], nom: [9.5, 10.5], retour: [11, 12.5], reac: 14 },
+  lactique:   { h: [4.5, 6], nom: [7.5, 8.5], retour: [9, 10.5], atp: 11.0, reac: 12, incompl: 13.2 },
+  alcoolique: { co2: [4.5, 6], h: [7, 8.5], nom: [9.5, 10.5], reac: 11, incompl: 12.4, retour: [13.4, 14.8], atp: 15.2 },
 };
 /* Mise en page du 16 novembre 2026 (cadre étroit, textes ≥ 15 px) : cellule agrandie, mitochondrie grande avec son nom à côté,
  * molécules espacées, aucune légende sur un objet ; le nom de la cellule passe au-dessus d'elle. */
@@ -122,7 +128,9 @@ function dessiner(c) {
   c.ligne(600, 92, 750, 92, { couleur: 'tresfaible', largeur: 1.2 });
   c.repere('cellule', CEL.x - CEL.rx, CEL.y - CEL.ry, 2 * CEL.rx, 2 * CEL.ry, alc() ? 'la levure' : 'la cellule (musculaire ou bactérie du lait)');
   c.repere('mitochondrie', MITO.x - MITO.rx - 4, MITO.y - MITO.ry - 4, 2 * MITO.rx + 8, 2 * MITO.ry + 8, 'la mitochondrie, à l’arrêt sans dioxygène');
-  c.repere('compteur_nad', 598, 66, 156, 186, 'le compteur des NAD+ disponibles');
+  c.repere('compteur_nad', 598, 66, 156, 120, 'le compteur des NAD+ disponibles');
+  c.repere('glycolyse', GLY.x - 47, GLY.y - 17, 94, 34, 'la glycolyse');
+  c.repere('type_cellule', CEL.x - 150, 24, 300, 22, alc() ? 'une levure' : 'cellule musculaire ou bactérie du lait');
 
   // la mitochondrie à l’arrêt
   if (t >= 2.3) ecrit.ecrire(c, 'arret', () => {
@@ -180,6 +188,7 @@ function dessiner(c) {
   }
   if (t >= 1) c.repere('pyruvique', G[0].x - 50, G[0].y - 28, G[1].x - G[0].x + 100, 92, 'les deux acides pyruviques (3 C)');
   if (nomProduit) c.repere('produit', G[0].x - 56, G[0].y - 30, G[1].x - G[0].x + 112, 94, alc() ? 'les deux éthanols (2 C)' : 'les deux acides lactiques (3 C)');
+  if (alc() && t >= ph.co2[1] && !nomProduit) c.repere('reste_2c', G[0].x - PAS / 2 - 44, G[0].y - 20, G[1].x - G[0].x + 88, 62, 'il reste 2 carbones');
   if (alc() && t >= ph.co2[1] - .2) {
     ecrit.ecrire(c, 'co2', () => { for (const g of G) c.texte('CO_{2}', g.x + PAS + 30, 115, { couleur: 'blanc', taille: 14 }); });
     c.repere('co2', G[0].x + 10, 92, G[1].x - G[0].x + 90, 34, 'le CO2 qui part');
@@ -197,34 +206,47 @@ function dessiner(c) {
       else c.rect(x - 23, y - 11, 46, 22, { couleur: 'tresfaible', largeur: 1.2, pointille: [4, 4] });
     }
   });
-  if (t >= 3 && t < ph.retour[1]) ecrit.ecrire(c, 'manque', () => { c.texte('la glycolyse va manquer', CPT.x, 204, { couleur: 'orange', taille: 14, align: 'center' }); c.texte('de taxis vides', CPT.x, 224, { couleur: 'orange', taille: 14, align: 'center' }); });
-  if (t >= ph.retour[1]) ecrit.ecrire(c, 'continue', () => {
-    c.texte('la glycolyse continue :', CPT.x, 204, { couleur: 'vert', taille: 14, align: 'center' });
-    c.texte('2 ATP par glucose,', CPT.x, 224, { couleur: 'jaune', taille: 14, align: 'center' });
-    c.texte('ceux de la glycolyse', CPT.x, 244, { couleur: 'jaune', taille: 14, align: 'center' });
-  });
+  if (t >= 3.1 && t < ph.retour[1]) ecrit.ecrire(c, 'manque', () => { c.texte('la glycolyse va manquer', CPT.x, 204, { couleur: 'orange', taille: 14, align: 'center' }); c.texte('de taxis vides', CPT.x, 224, { couleur: 'orange', taille: 14, align: 'center' }); });
+  if (t >= 3.1 && t < ph.retour[1]) c.repere('ecrit_manque', CPT.x - 80, 188, 160, 42, 'la glycolyse va manquer de taxis vides');
+  if (t >= ph.retour[1]) {
+    ecrit.ecrire(c, 'continue', () => c.texte('la glycolyse continue :', CPT.x, 204, { couleur: 'vert', taille: 14, align: 'center' }));
+    c.repere('ecrit_continue', CPT.x - 80, 188, 160, 22, 'la glycolyse continue');
+  }
+  if (t >= ph.atp) {
+    ecrit.ecrire(c, 'deuxatp', () => {
+      c.texte('2 ATP par glucose,', CPT.x, 224, { couleur: 'jaune', taille: 14, align: 'center' });
+      c.texte('ceux de la glycolyse', CPT.x, 244, { couleur: 'jaune', taille: 14, align: 'center' });
+    });
+    c.repere('ecrit_atp', CPT.x - 80, 210, 160, 40, '2 ATP par glucose, ceux de la glycolyse');
+  }
   // la réaction globale
   if (t >= ph.reac) {
-    ecrit.ecrire(c, 'reaction', () => {
-      c.texte(alc() ? 'C_{6}H_{12}O_{6} + 2 ADP + 2 Pi → 2 CH_3-CH_2-OH + 2 CO_{2} + 2 ATP' : 'C_{6}H_{12}O_{6} + 2 ADP + 2 Pi → 2 CH_3-CHOH-COOH + 2 ATP', 380, 392, { couleur: 'jaune', taille: 16, align: 'center', max: 740 });
-      c.texte('dégradation incomplète : il reste une molécule organique, donc de l’énergie', 380, 412, { couleur: 'faible', taille: 13, align: 'center', max: 740 });
-    });
-    c.repere('reaction', 14, 374, 732, 44, 'la réaction globale de la fermentation ' + voie);
+    ecrit.ecrire(c, 'reaction', () => c.texte(alc() ? 'C_{6}H_{12}O_{6} + 2 ADP + 2 Pi → 2 CH_3-CH_2-OH + 2 CO_{2} + 2 ATP' : 'C_{6}H_{12}O_{6} + 2 ADP + 2 Pi → 2 CH_3-CHOH-COOH + 2 ATP', 380, 392, { couleur: 'jaune', taille: 16, align: 'center', max: 740 }));
+    c.repere('reaction', 14, 376, 732, 22, 'la réaction globale de la fermentation ' + voie);
+  }
+  if (t >= ph.incompl) {
+    ecrit.ecrire(c, 'incomplete', () => c.texte('dégradation incomplète : il reste une molécule organique, donc de l’énergie', 380, 412, { couleur: 'faible', taille: 13, align: 'center', max: 740 }));
+    c.repere('ecrit_incomplete', 60, 400, 640, 18, 'dégradation incomplète : un résidu organique');
   }
 }
 
 function phase(t) {
   const ph = PH[voie];
   const debut = alc() ? 'Une levure peinte' : 'Une cellule peinte (cellule musculaire ou bactérie du lait)';
+  const avant = (a) => t < a;
   if (t < 2.3) return `${debut}, sans dioxygène. Dans le hyaloplasme, deux acides pyruviques (3 billes de carbone, CH3-CO-COOH) ; deux taxis chargés NADH,H+ arrivent de la glycolyse.`;
-  if (t < ph[alc() ? 'co2' : 'h'][0]) return 'La mitochondrie (grisée, barrée) est à l’arrêt : sans O2 elle ne décharge plus les NADH,H+. Compteur NAD+ disponibles : 0 ; « la glycolyse va manquer de taxis vides ».';
+  if (t < 3.1) return 'La mitochondrie (grisée, barrée) est à l’arrêt : sans O2 elle ne décharge plus les NADH,H+. Compteur NAD+ disponibles : 0.';
+  if (t < ph[alc() ? 'co2' : 'h'][0]) return 'Compteur NAD+ disponibles : 0 ; écrit : « la glycolyse va manquer de taxis vides ».';
   if (alc() && t < ph.h[0]) return 'Un carbone de chaque acide pyruvique part en CO2 (une bulle qui monte) ; il reste une molécule à 2 C.';
   if (t < ph.h[1]) return `Chaque NADH,H+ rend ses 2 H à ${alc() ? 'la molécule à 2 C' : 'un acide pyruvique'}.`;
-  if (t < ph.nom[0]) return `Chaque NADH,H+ a rendu ses 2 H à ${alc() ? 'la molécule à 2 C' : 'un acide pyruvique'} : les taxis sont redevenus NAD+ (vides).`;
-  if (t < ph.retour[0]) return alc() ? 'Les molécules à 2 C ont reçu les 2 H : éthanol, CH3-CH2-OH (2 C). Les taxis sont redevenus NAD+.' : 'Les acides pyruviques ont reçu les 2 H : acide lactique, CH3-CHOH-COOH (3 C). Les taxis sont redevenus NAD+.';
-  if (t < ph.retour[1]) return 'Les deux NAD+ repartent vides vers la glycolyse.';
-  if (t < ph.reac) return 'Compteur NAD+ disponibles : 2 ; la glycolyse continue : 2 ATP par glucose, ceux de la glycolyse.';
-  return 'Réaction globale écrite en bas : ' + (alc() ? 'C6H12O6 + 2 ADP + 2 Pi → 2 CH3-CH2-OH + 2 CO2 + 2 ATP' : 'C6H12O6 + 2 ADP + 2 Pi → 2 CH3-CHOH-COOH + 2 ATP') + ' ; « dégradation incomplète : il reste une molécule organique, donc de l’énergie ».';
+  if (t < ph.nom[0]) return 'Les taxis sont redevenus NAD+ (vides).';
+  const produit = alc() ? 'éthanol, CH3-CH2-OH (2 C), et CO2' : 'acide lactique, CH3-CHOH-COOH (3 C)';
+  const s = [`Produit : ${produit}.`];
+  if (!avant(ph.retour[0])) s.push(t < ph.retour[1] ? 'Les deux NAD+ repartent vides vers la glycolyse.' : 'Compteur NAD+ disponibles : 2 ; « la glycolyse continue ».');
+  if (!avant(ph.atp)) s.push('« 2 ATP par glucose, ceux de la glycolyse ».');
+  if (!avant(ph.reac)) s.push('Réaction globale écrite en bas : ' + (alc() ? 'C6H12O6 + 2 ADP + 2 Pi → 2 CH3-CH2-OH + 2 CO2 + 2 ATP.' : 'C6H12O6 + 2 ADP + 2 Pi → 2 CH3-CHOH-COOH + 2 ATP.'));
+  if (!avant(ph.incompl)) s.push('« dégradation incomplète : il reste une molécule organique, donc de l’énergie ».');
+  return s.join(' ');
 }
 function ceQuiSeVoit() {
   const t = chrono.t;
@@ -276,9 +298,9 @@ const pont = protocole({ id: config.id, commandes, config,
   texte: 'Les fermentations, dans le hyaloplasme, sans dioxygène (mitochondrie à l’arrêt). Les NADH,H+ de la glycolyse ne sont plus déchargés par la mitochondrie : la glycolyse manquerait de NAD+. Fermentation lactique (cellule musculaire, bactérie du lait) : chaque acide pyruvique reçoit 2 H d’un NADH,H+ et devient acide lactique CH3-CHOH-COOH ; C6H12O6 + 2 ADP + 2 Pi → 2 CH3-CHOH-COOH + 2 ATP. Fermentation alcoolique (levure) : chaque acide pyruvique perd un CO2 puis reçoit 2 H : éthanol CH3-CH2-OH ; C6H12O6 + 2 ADP + 2 Pi → 2 CH3-CH2-OH + 2 CO2 + 2 ATP. Les NAD+ retournent à la glycolyse ; 2 ATP par glucose ; dégradation incomplète (il reste une molécule organique, donc de l’énergie).',
   etat: () => ({ simulation_status: chrono.statut(), ce_qui_se_voit: ceQuiSeVoit(), current_variant: voie, time_s: +chrono.t.toFixed(2), parameters: { voie }, moments: Mv() }),
   progression: () => chrono.t / FIN(),
-  executer: (cmd, p) => ({ start: chrono.start, reset: chrono.start, pause: chrono.pause, resume: chrono.resume, set_time: () => chrono.setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+  executer: (cmd, p) => ({ start: chrono.start, reset: chrono.reset, pause: chrono.pause, resume: chrono.resume, set_time: () => chrono.setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
 bulle($('feedback'), alc() ? 'Une levure, sans dioxygène…' : 'Une cellule sans dioxygène…');
-setTimeout(() => { if (!chrono.running && chrono.t === 0) chrono.start(); }, 1600);
+setTimeout(() => { if (!chrono.pilote && !chrono.running && chrono.t === 0) chrono.start(); }, 1600);
 window.__sim = { chrono, scene, get M() { return Mv(); }, get voie() { return voie; }, setVoie };
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>

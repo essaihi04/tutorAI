@@ -156,6 +156,13 @@ function baril(ctx, x, y, w, h) {
 const SUPC = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
 /** Largeur écrite d’une chaîne de craie (indices et exposants plus petits, comme exposants.js). */
 function largeur(c, s, t) {
+  // une fraction « ⟦num|dén⟧ » (écrite sur deux étages par le kit) : son plus long étage, écrit à 78 %, plus une marge ;
+  // comme le kit, la taille ne descend pas sous le plancher du petit écran (tailleMin / echelle), étages compris
+  if (String(s).includes('⟦')) {
+    const mn = c.echelle && c.tailleMin ? c.tailleMin / c.echelle : 0, te = Math.max(t, mn);
+    return String(s).split(/(⟦[^⟧]*⟧)/).filter(Boolean).reduce((w, p) => w + (p[0] !== '⟦' ? largeur(c, p, t)
+      : Math.max(...p.slice(1, -1).split('|').map(e => largeur(c, e, Math.max(te * .78, mn)))) + te * .36), 0);
+  }
   s = String(s).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUPC[ch]).join('') + '}');
   return window.Tableau.Craie.segments(s).reduce((w, seg) => w + c.largeurTexte(seg.t, seg.sub || seg.sup ? t * .62 : t), 0);
 }
@@ -263,14 +270,14 @@ const DESSINS = {
     c.repere('figure', 20, 44, 720, 340, 'l’escalier des unités : u, eV, MeV, MeV/c²');
     const L = [['u', '1 u = 1,66·10⁻²⁷ kg : un douzième de la masse d’un atome de carbone 12', 'blanc'],
       ['eV', '1 eV = 1,6·10⁻¹⁹ J', 'blanc'], ['MeV', '1 MeV = 10⁶ eV = 1,6·10⁻¹³ J', 'blanc'],
-      ['MeV_c2', 'MeV/c² : une unité de masse, car m = E/c²', 'jaune']];
+      ['MeV_c2', 'MeV/c² : une unité de masse, car m = ⟦E|c²⟧', 'jaune']];
     const X = i => 30 + 60 * i, Y = i => 110 + 74 * i;
     L.forEach(([id, t, col], i) => {
       if (i) c.pause(.4);
       const pts = [[X(i), Y(i)], [X(i) + 60, Y(i)]]; if (i < L.length - 1) pts.push([X(i) + 60, Y(i + 1)]);
       c.trait(pts, { couleur: 'faible', largeur: 2 });
       c.texte(t, X(i) + 6, Y(i) - 12, { couleur: col, taille: i ? 21 : 18, max: 724 - X(i) });
-      c.repere(id, X(i), Y(i) - 40, 730 - X(i), 46, t);
+      c.repere(id, X(i), Y(i) - 40, 730 - X(i), 46, window.Tableau.lisible(t));
       marque(c, id);
     });
     c.pause(.3);
@@ -290,9 +297,9 @@ const DESSINS = {
     c.repere('joule', 40, 142, 680, 62, 'E = 1,66054·10⁻²⁷ × (2,99792·10⁸)² = 1,4924·10⁻¹⁰ J');
     marque(c, 'joule');
     c.pause(.4);
-    c.texte('E = 1,4924·10⁻¹⁰ / 1,60218·10⁻¹³ = 931,5 MeV', 50, 244, { couleur: 'blanc', taille: 24, max: 660 });
+    c.texte('E = ⟦1,4924·10⁻¹⁰|1,60218·10⁻¹³⟧ = 931,5 MeV', 50, 244, { couleur: 'blanc', taille: 24, max: 660 });
     c.texte('en MeV (1 MeV = 1,60218·10⁻¹³ J)', 712, 270, { couleur: 'faible', align: 'right', taille: 15 });
-    c.repere('mev', 40, 216, 680, 62, 'E = 1,4924·10⁻¹⁰ / 1,60218·10⁻¹³ = 931,5 MeV');
+    c.repere('mev', 40, 212, 680, 66, 'E = 1,4924·10⁻¹⁰/1,60218·10⁻¹³ = 931,5 MeV');
     marque(c, 'mev');
     c.pause(.4);
     c.texte('1 u·c² = 931,5 MeV ; donc 1 u = 931,5 MeV/c²', 380, 340, { couleur: 'vert', align: 'center', taille: 27, max: 640 });
@@ -375,8 +382,8 @@ const DESSINS = {
     c.repere('calcul', 30, 150, 700, 66, 'E_ℓ = 0,03038 u × 931,5 MeV/u = 28,30 MeV');
     marque(c, 'calcul');
     c.pause(.4);
-    c.texte('E_{ℓ}/A = 28,30 / 4 = 7,07 MeV/nucléon', 40, 266, { couleur: 'vert', taille: 24, max: 690 });
-    c.repere('par_nucleon', 30, 240, 700, 36, 'E_ℓ/A = 28,30 / 4 = 7,07 MeV/nucléon');
+    c.texte('⟦E_{ℓ}|A⟧ = ⟦28,30|4⟧ = 7,07 MeV/nucléon', 40, 266, { couleur: 'vert', taille: 24, max: 690 });
+    c.repere('par_nucleon', 30, 234, 700, 50, 'E_ℓ/A = 28,30/4 = 7,07 MeV/nucléon');
     marque(c, 'par_nucleon');
     c.pause(.4);
     c.texte('E_{ℓ} = 28,30 × 1,6·10⁻¹³ = 4,53·10⁻¹² J', 40, 326, { couleur: 'blanc', taille: 24, max: 690 });
@@ -405,8 +412,8 @@ const DESSINS = {
     marque(c, 'trace');
     c.pause(.4);
     c.texte('= 8,78', 578, Y[1] + 33, { couleur: 'jaune', taille: 21 });
-    c.texte('E_{ℓ}(⁶⁰Ni)/A = 526,8 / 60 = 8,78 MeV/nucléon', 40, 232, { couleur: 'jaune', taille: 23, max: 690 });
-    c.repere('calcul', 30, 206, 700, 36, 'E_ℓ(⁶⁰Ni)/A = 526,8 / 60 = 8,78 MeV/nucléon');
+    c.texte('⟦E_{ℓ}(⁶⁰Ni)|A⟧ = ⟦526,8|60⟧ = 8,78 MeV/nucléon', 40, 232, { couleur: 'jaune', taille: 23, max: 690 });
+    c.repere('calcul', 30, 200, 700, 50, 'E_ℓ(⁶⁰Ni)/A = 526,8/60 = 8,78 MeV/nucléon');
     marque(c, 'calcul');
     c.pause(.4);
     c.texte('8,78 > 8,64', 380, 282, { couleur: 'blanc', align: 'center', taille: 30 });
@@ -513,8 +520,8 @@ const DESSINS = {
     c.repere('formule', 76, 62, 608, 64, 'ΔE = Σ E_ℓ(réactifs) − Σ E_ℓ(produits)');
     marque(c, 'formule');
     c.pause(.4);
-    c.texte('E_{ℓ} = A·(E_{ℓ}/A) pour chaque noyau', 40, 170, { couleur: 'blanc', taille: 23, max: 690 });
-    c.repere('A_fois', 30, 144, 700, 36, 'E_ℓ = A·(E_ℓ/A) pour chaque noyau');
+    c.texte('E_{ℓ} = A·⟦E_{ℓ}|A⟧ pour chaque noyau', 40, 170, { couleur: 'blanc', taille: 23, max: 690 });
+    c.repere('A_fois', 30, 138, 700, 50, 'E_ℓ = A·(E_ℓ/A) pour chaque noyau');
     marque(c, 'A_fois');
     c.pause(.4);
     ligne(c, ['un nucléon seul (', NEUTRON, ', ', N(1, 1, 'p'), ') : E_{ℓ} = 0'], 40, 224, { taille: 23, couleur: 'blanc' });
@@ -537,9 +544,9 @@ const DESSINS = {
     c.repere('un_noyau', 30, 56, 700, 74, 'fission d’un noyau d’²³⁵U : E_lib ≈ 185 MeV');
     marque(c, 'un_noyau');
     c.pause(.4);
-    c.texte('dans m = 1 g : N = m·N_A/M = 1 × 6,02·10²³ / 235 = 2,56·10²¹ noyaux', 40, 162, { couleur: 'blanc', taille: 17, max: 600 });
-    c.texte('(m en g, M = 235 g/mol)', 40, 188, { couleur: 'faible', taille: 15 });
-    c.repere('nombre', 30, 136, 610, 58, 'dans m = 1 g : N = m·N_A/M = 1 × 6,02·10²³ / 235 = 2,56·10²¹ noyaux');
+    c.texte('dans m = 1 g : N = ⟦m·N_A|M⟧ = ⟦1 × 6,02·10²³|235⟧ = 2,56·10²¹ noyaux', 40, 160, { couleur: 'blanc', taille: 17, max: 600 });
+    c.texte('(m en g, M = 235 g/mol)', 40, 194, { couleur: 'faible', taille: 15 });
+    c.repere('nombre', 30, 134, 610, 66, 'dans m = 1 g : N = m·N_A/M = (1 × 6,02·10²³)/235 = 2,56·10²¹ noyaux');
     marque(c, 'nombre');
     c.pause(.4);
     c.texte('E = N·E_lib = 2,56·10²¹ × 185 = 4,7·10²³ MeV', 40, 236, { couleur: 'jaune', taille: 23, max: 600 });
@@ -584,9 +591,9 @@ const DESSINS = {
     c.repere('par_reaction', X[0], Y[1], X[3] - X[0], Y[2] - Y[1], 'par réaction : 185 MeV (fission) | 17,6 MeV (fusion)');
     marque(c, 'par_reaction');
     c.pause(.4);
-    c.texte('185 / 236 ≈ 0,78 MeV', cx(1), Y[2] + 40, { couleur: 'blanc', align: 'center', taille: 23, max: 240 });
-    c.texte('17,6 / 5 ≈ 3,5 MeV', cx(2), Y[2] + 40, { couleur: 'vert', align: 'center', taille: 23, max: 240 });
-    c.repere('par_nucleon', X[0], Y[2], X[3] - X[0], Y[3] - Y[2], 'par nucléon : 185 / 236 ≈ 0,78 MeV | 17,6 / 5 ≈ 3,5 MeV');
+    c.texte('⟦185|236⟧ ≈ 0,78 MeV', cx(1), Y[2] + 40, { couleur: 'blanc', align: 'center', taille: 23, max: 240 });
+    c.texte('⟦17,6|5⟧ ≈ 3,5 MeV', cx(2), Y[2] + 40, { couleur: 'vert', align: 'center', taille: 23, max: 240 });
+    c.repere('par_nucleon', X[0], Y[2], X[3] - X[0], Y[3] - Y[2], 'par nucléon : 185/236 ≈ 0,78 MeV | 17,6/5 ≈ 3,5 MeV');
     marque(c, 'par_nucleon');
     c.pause(.4);
     c.texte('à masse égale, la fusion libère plus d’énergie que la fission', 380, 352, { couleur: 'vert', align: 'center', taille: 23, max: 710 });
@@ -613,7 +620,7 @@ const DESSINS = {
       c.texte(q, X0 + 8, yy, { couleur: 'jaune', taille: 16, max: XM - X0 - 22 });
       c.fleche(XM - 4, yy - 6, XM + 14, yy - 6, { couleur: 'rose', largeur: 1.8, tete: 7 });
       c.texte(m, XM + 20, yy, { couleur: 'vert', taille: 17, max: X1 - XM - 28 });
-      c.repere(id, X0, Yr(i), X1 - X0, RH, `${q} → ${m.replace(/_\{?([^}\s]*)\}?/g, '$1')}`);
+      c.repere(id, X0, Yr(i), X1 - X0, RH, `${q} → ${window.Tableau.lisible(m).replace(/_\{?([^}\s]*)\}?/g, '$1')}`);
       marque(c, id);
     });
     marque(c, 'fin');
@@ -658,7 +665,7 @@ const DESSINS = {
     marque(c, 'trace');
     c.pause(.4);
     const bas = donnees(c, 478, 44, 266, ['m(Co) = 59,91901 u', 'm(Ni) = 59,91543 u', 'm(e) = 0,00055 u', 'm_p = 1,00728 u', 'm_n = 1,00866 u',
-      ['E_{ℓ}/A(', N(56, 28, 'Ni'), ') = 8,64 MeV/nucléon']], { pas: 30, taille: 17 });
+      ['⟦E_{ℓ}|A⟧(', N(56, 28, 'Ni'), ') = 8,64 MeV/nucléon']], { pas: 32, taille: 17 });
     c.repere('donnees', 478, 44, 266, bas - 44, 'les données : m(Co) = 59,91901 u ; m(Ni) = 59,91543 u ; m(e) = 0,00055 u ; m_p = 1,00728 u ; m_n = 1,00866 u ; E_ℓ/A(⁵⁶Ni) = 8,64 MeV/nucléon');
     marque(c, 'donnees');
     c.pause(.4);
@@ -724,7 +731,7 @@ const R_CAS = [
   ['masses', '« énergie libérée, masses données »', 'Δm = Σm(produits) − Σm(réactifs) ; E_lib = |ΔE|'],
   ['energies', '« tableau d’E_{ℓ} »', 'ΔE = Σ E_{ℓ}(réactifs) − Σ E_{ℓ}(produits)'],
   ['diagramme', '« diagramme d’énergie »', 'lire les paliers'],
-  ['echantillon', '« énergie d’un échantillon, de m grammes »', 'N = m·N_A/M ; E = N·E_lib'],
+  ['echantillon', '« énergie d’un échantillon, de m grammes »', 'N = ⟦m·N_A|M⟧ ; E = N·E_lib'],
   ['equation', '« déterminer A et Z, x neutrons »', 'lois de Soddy'],
 ];
 
@@ -765,7 +772,8 @@ const BLOC = {
     c.texte = function (s, x, y, o = {}) {
       const t = Math.max(o.taille ?? 18, tMin); let l = largeur(this, String(s), t); if (o.max && l > o.max) l = o.max;
       const x0 = o.align === 'center' ? x - l / 2 : o.align === 'right' ? x - l : x;
-      BLOC.pt(x0, y - t * .95); BLOC.pt(x0 + l, y + t * .35); return this;
+      const fr = String(s).includes('⟦');   // une fraction monte et descend plus qu’une ligne
+      BLOC.pt(x0, y - t * (fr ? 1.25 : .95)); BLOC.pt(x0 + l, y + t * (fr ? .7 : .35)); return this;
     };
     try { MM = {}; DESSINS[fig](c); } catch (e) { console.warn('[figures] mesure des étapes', e); }
     finally { for (const k of noms) { if (avant[k] === undefined) delete c[k]; else c[k] = avant[k]; } BLOC.mesure = false; }
@@ -904,7 +912,7 @@ const DESCRIPTIONS = {
   fig_931: {
     E: 'Ligne 1 : E = m·c² avec m = 1 u = 1,66054·10⁻²⁷ kg.',
     joule: 'Ligne 2 : E = 1,66054·10⁻²⁷ × (2,99792·10⁸)² = 1,4924·10⁻¹⁰ J.',
-    mev: 'Ligne 3 : E = 1,4924·10⁻¹⁰ / 1,60218·10⁻¹³ = 931,5 MeV.',
+    mev: 'Ligne 3 : E = 1,4924·10⁻¹⁰/1,60218·10⁻¹³ = 931,5 MeV.',
     resultat: 'Résultat encadré en vert : 1 u·c² = 931,5 MeV ; donc 1 u = 931,5 MeV/c².' },
   fig_composition: {
     noyau: 'Le noyau ᴬ_ZX écrit en grand (A en haut à gauche, Z en bas à gauche) ; flèches : « A : nombre de nucléons (nombre de masse) », « X : symbole de l’élément ».',
@@ -919,11 +927,11 @@ const DESCRIPTIONS = {
   fig_liaison: {
     formule: 'Formule encadrée : E_ℓ = Δm·c².',
     calcul: 'Pour ⁴₂He : E_ℓ = 0,03038 u × 931,5 MeV/u = 28,30 MeV.',
-    par_nucleon: 'E_ℓ/A = 28,30 / 4 = 7,07 MeV/nucléon.',
+    par_nucleon: 'E_ℓ/A = 28,30/4 = 7,07 MeV/nucléon.',
     joule: 'E_ℓ = 28,30 × 1,6·10⁻¹³ = 4,53·10⁻¹² J (1 MeV = 1,6·10⁻¹³ J).' },
   fig_stabilite: {
     trace: 'Tableau : ⁶⁰₂₈Ni : E_ℓ = 526,8 MeV, A = 60, E_ℓ/A = ? ; ⁵⁶₂₈Ni : A = 56, E_ℓ/A = 8,64 MeV/nucléon.',
-    calcul: 'Calcul (la case ? devient 8,78) : E_ℓ(⁶⁰Ni)/A = 526,8 / 60 = 8,78 MeV/nucléon.',
+    calcul: 'Calcul (la case ? devient 8,78) : E_ℓ(⁶⁰Ni)/A = 526,8/60 = 8,78 MeV/nucléon.',
     compare: 'Comparaison : 8,78 > 8,64.',
     conclusion: 'Conclusion : « ⁶⁰Ni est plus stable : la plus grande énergie de liaison par nucléon ».',
     piege: 'Piège en orange : « ⚠ comparer E_ℓ/A, jamais E_ℓ ».' },
@@ -948,14 +956,14 @@ const DESCRIPTIONS = {
     E_lib: 'E_lib = |ΔE| ; exemple : ΔE = (2,366 + 8,475) − (28,296 + 0) = −17,455 MeV ; E_lib ≈ 17,5 MeV.' },
   fig_echantillon: {
     un_noyau: 'Un noyau d’uranium 235 peint en sphères ; « fission d’un noyau d’²³⁵U : E_lib ≈ 185 MeV ».',
-    nombre: 'Dans m = 1 g : N = m·N_A/M = 1 × 6,02·10²³ / 235 = 2,56·10²¹ noyaux (m en g, M = 235 g/mol).',
+    nombre: 'Dans m = 1 g : N = m·N_A/M = (1 × 6,02·10²³)/235 = 2,56·10²¹ noyaux (m en g, M = 235 g/mol).',
     total: 'E = N·E_lib = 2,56·10²¹ × 185 = 4,7·10²³ MeV.',
     joule: 'E = 4,7·10²³ × 1,6·10⁻¹³ = 7,6·10¹⁰ J.',
     petrole: 'Un baril de pétrole peint ; « ≈ l’énergie de la combustion de 1,8 tonne de pétrole ».' },
   fig_comparaison: {
     trace: 'Tableau « Fission de l’²³⁵U » | « Fusion ²H + ³H », lignes « énergie libérée par réaction » et « par nucléon » ; dessous, un neutron qui arrive sur un gros noyau d’uranium et deux petits noyaux ²H et ³H qui s’approchent.',
     par_reaction: 'Par réaction : 185 MeV (fission) | 17,6 MeV (fusion).',
-    par_nucleon: 'Par nucléon : 185 / 236 ≈ 0,78 MeV (fission) | 17,6 / 5 ≈ 3,5 MeV (fusion).',
+    par_nucleon: 'Par nucléon : 185/236 ≈ 0,78 MeV (fission) | 17,6/5 ≈ 3,5 MeV (fusion).',
     conclusion: 'Conclusion : « à masse égale, la fusion libère plus d’énergie que la fission ».' },
   fig_cas_types: {
     trace: 'Tableau à deux colonnes : « le mot de la question » | « la méthode ».',

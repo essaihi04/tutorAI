@@ -19,7 +19,8 @@
  * agrandie : la membrane interne repliée, l’espace intermembranaire dans le repli, les sphères pédonculées têtes vers
  * la matrice. Les légendes s’écrivent une par une (t en s de la scène) :
  *   membrane_externe (2)  membrane_interne (4)  cretes (6)  espace_intermembranaire (8)  matrice (10)
- *   spheres_pedonculees (12,5)  lieux (16) : où se passe chaque étape.
+ *   spheres_pedonculees (12,5) ; puis où se passe chaque étape, une ligne quand le tuteur la dit (17 novembre 2026) :
+ *   lieux_matrice (16)  lieux_membrane (17,4)  lieux_hyaloplasme (18,8).
  * set_parameters {legendes: 'noms' | 'numeros'} (aussi ?legendes=numeros) : en « numeros », seuls les numéros 1 à 6.
  * Vue « construire » (?vue=construire, schéma à légender comme au bac, 15 novembre 2026) : la même mitochondrie sans ses
  * noms, six étiquettes à glisser au bout des flèches ; bien posée, une étiquette devient verte et s’aimante.
@@ -35,8 +36,9 @@ const $ = id => document.getElementById(id);
 const MI = { x: 270, y: 236, rx: 215, ry: 112, n: 12 };
 const MED = { x: 556, y: 64, w: 192, h: 252 };        // médaillon : une crête agrandie
 const ZOOM = { x: 336, y: 126, w: 40, h: 80 };         // cadre du zoom sur une crête de la grande mitochondrie
-const M = { membrane_externe: 2, membrane_interne: 4, cretes: 6, espace_intermembranaire: 8, matrice: 10, spheres_pedonculees: 12.5, lieux: 16 };
-const FIN = 18;
+const M = { membrane_externe: 2, membrane_interne: 4, cretes: 6, espace_intermembranaire: 8, matrice: 10, spheres_pedonculees: 12.5,
+  lieux_matrice: 16, lieux_membrane: 17.4, lieux_hyaloplasme: 18.8 };
+const FIN = 19.2;
 const MOTIFS = {
   membrane_externe: 'la membrane externe, qui limite la mitochondrie',
   membrane_interne: 'la membrane interne, sous la membrane externe',
@@ -44,7 +46,9 @@ const MOTIFS = {
   espace_intermembranaire: 'l’espace intermembranaire, entre les deux membranes',
   matrice: 'la matrice, à l’intérieur de la membrane interne',
   spheres_pedonculees: 'les sphères pédonculées, sur la membrane interne, têtes vers la matrice',
-  lieux: 'où se passe chaque étape de la respiration',
+  lieux_matrice: 'dans la matrice : formation de l’acétyl-CoA et cycle de Krebs',
+  lieux_membrane: 'dans la membrane interne : chaîne respiratoire et synthèse d’ATP',
+  lieux_hyaloplasme: 'dans le hyaloplasme, hors de la mitochondrie : la glycolyse',
 };
 const q = new URLSearchParams(location.search);
 const S = { legendes: q.get('legendes') === 'numeros' ? 'numeros' : 'noms', corrige: false };
@@ -122,7 +126,9 @@ function peindre(ctx) {
   medaillon(ctx);
 }
 
-function legende(c, l) {
+/* (17 novembre 2026) nommée legendeStructure : une seconde fonction « legende » (le compte de la vue construire), déclarée plus
+ * bas, la remplaçait et aucune légende ne s’écrivait. */
+function legendeStructure(c, l) {
   const num = S.legendes === 'numeros';
   c.fleche(l.de[0], l.de[1], l.a[0], l.a[1], { couleur: 'blanc', largeur: 1.5, tete: 9 });
   if (num) {
@@ -130,13 +136,12 @@ function legende(c, l) {
     c.cercle(cx, cy, 10, { couleur: 'blanc', largeur: 1.5 }); c.texte(String(l.n), cx, cy + 5, { couleur: 'blanc', taille: 15, align: 'center' });
   } else c.texte(l.nom, l.x, l.y, { couleur: l.couleur, taille: 15, align: l.align || 'left' });
 }
-function lieux(c) {
-  const num = S.legendes === 'numeros';
-  c.texte((num ? 'dans 5 : ' : '') + 'formation de l’acétyl-CoA, cycle de Krebs', num ? 282 : 282, 404, { couleur: 'vert', taille: 14, gras: true });
-  c.texte((num ? 'sur 2 : ' : '') + 'chaîne respiratoire, synthèse d’ATP', 30, 404, { couleur: 'vert', taille: 14, gras: true });
-  c.texte('hyaloplasme : glycolyse', 548, 384, { couleur: 'vert', taille: 14, gras: true });
-  c.texte('(hors de la mitochondrie)', 548, 404, { couleur: 'vert', taille: 14 });
-}
+/* Où se passe chaque étape : une ligne par lieu, chacune à son moment. */
+const LIEUX = {
+  matrice: (c, num) => c.texte((num ? 'dans 5 : ' : '') + 'formation de l’acétyl-CoA, cycle de Krebs', 282, 404, { couleur: 'vert', taille: 14, gras: true }),
+  membrane: (c, num) => c.texte((num ? 'sur 2 : ' : '') + 'chaîne respiratoire, synthèse d’ATP', 30, 404, { couleur: 'vert', taille: 14, gras: true }),
+  hyaloplasme: (c) => { c.texte('hyaloplasme : glycolyse', 548, 384, { couleur: 'vert', taille: 14, gras: true }); c.texte('(hors de la mitochondrie)', 548, 404, { couleur: 'vert', taille: 14 }); },
+};
 
 function dessiner(c) {
   if (CONSTRUIRE) return dessinerConstruire(c);
@@ -153,12 +158,17 @@ function dessiner(c) {
     if (t < l.t0) continue;
     // la structure qu’on légende brille un instant
     const u = t - l.t0; if (u < 2) c.direct(() => P.eclat(c.ctx, l.a[0], l.a[1], 18, Math.sin(Math.min(1, u / 2) * Math.PI) * .8));
-    ecrit.ecrire(c, l.id + S.legendes, () => legende(c, l));
+    ecrit.ecrire(c, l.id + S.legendes, () => legendeStructure(c, l));
   }
-  if (t >= M.lieux - 1.4) ecrit.ecrire(c, 'lieux' + S.legendes, () => lieux(c));
-  // repères
-  for (const l of LEG) c.repere(l.id, l.a[0] - 22, l.a[1] - 18, 44, 36, l.nom);
+  const num = S.legendes === 'numeros';
+  if (t >= M.lieux_matrice - 1.2) { ecrit.ecrire(c, 'lieuxM' + S.legendes, () => LIEUX.matrice(c, num)); c.repere('lieu_matrice', 278, 388, 270, 22, 'dans la matrice : acétyl-CoA et cycle de Krebs'); }
+  if (t >= M.lieux_membrane - 1.2) { ecrit.ecrire(c, 'lieuxN' + S.legendes, () => LIEUX.membrane(c, num)); c.repere('lieu_membrane', 26, 388, 246, 22, 'dans la membrane interne : chaîne respiratoire, ATP'); }
+  if (t >= M.lieux_hyaloplasme - 1.2) { ecrit.ecrire(c, 'lieuxH' + S.legendes, () => LIEUX.hyaloplasme(c)); c.repere('lieu_hyaloplasme', 544, 368, 200, 42, 'le hyaloplasme : glycolyse'); }
+  // repères : chaque structure seulement une fois légendée (avant, elle n’a pas encore de nom au tableau)
+  for (const l of LEG) if (t >= l.t0) c.repere(l.id, l.a[0] - 22, l.a[1] - 18, 44, 36, l.nom);
   c.repere('medaillon', MED.x, MED.y, MED.w, MED.h, 'une crête agrandie');
+  c.repere('mitochondrie', MI.x - MI.rx - 6, MI.y - MI.ry - 6, 2 * MI.rx + 12, 2 * MI.ry + 12, 'la mitochondrie en coupe');
+  if (MOS.actif()) c.repere('titre', 796, 8, 262, 90, 'un organite à deux membranes'); else c.repere('titre', 14, 10, 470, 26, 'un organite à deux membranes');
 }
 
 /* ── Vue construire : la même mitochondrie sans ses noms, six étiquettes à poser (schéma à légender, 15 novembre 2026) ── */
@@ -295,8 +305,11 @@ function ceQuiSeVoit() {
   let s = `t = ${fr(t, 1)} s${chrono.running ? ' (ça avance)' : chrono.fait ? ' (fin)' : ' (arrêté)'}. Légendes en ${num ? 'numéros seuls (1 à 6, sans les noms)' : 'noms'}. Une mitochondrie peinte en coupe dans le hyaloplasme (deux membranes, nombreuses crêtes, matrice) ; à droite, une crête agrandie : membrane interne repliée, sphères pédonculées têtes vers la matrice. `;
   s += ecrites.length ? `Légendes écrites : ${ecrites.join(', ')}.` : 'Aucune légende encore.';
   if (cours) s += ` En train d’écrire : ${num ? cours.n + ' (' + cours.nom + ')' : cours.nom}.`;
-  if (t >= M.lieux) s += num ? ' Lieux écrits : dans 5 formation de l’acétyl-CoA et cycle de Krebs ; sur 2 chaîne respiratoire et synthèse d’ATP ; hyaloplasme : glycolyse (hors de la mitochondrie).'
-    : ' Lieux écrits : matrice → formation de l’acétyl-CoA, cycle de Krebs ; membrane interne → chaîne respiratoire, synthèse d’ATP ; hyaloplasme : glycolyse (hors de la mitochondrie).';
+  const lx = [];
+  if (t >= M.lieux_matrice - 1.2) lx.push((num ? 'dans 5' : 'matrice') + ' → formation de l’acétyl-CoA, cycle de Krebs');
+  if (t >= M.lieux_membrane - 1.2) lx.push((num ? 'sur 2' : 'membrane interne') + ' → chaîne respiratoire, synthèse d’ATP');
+  if (t >= M.lieux_hyaloplasme - 1.2) lx.push('hyaloplasme : glycolyse (hors de la mitochondrie)');
+  if (lx.length) s += ' Lieux écrits : ' + lx.join(' ; ') + '.';
   return s;
 }
 
@@ -344,10 +357,10 @@ const pont = protocole({ id: config.id, commandes, config,
   texte: (CONSTRUIRE ? 'Schéma à légender : la mitochondrie sans ses noms, six étiquettes à glisser au bout des flèches (membrane externe, membrane interne, crêtes, espace intermembranaire, matrice, sphères pédonculées) ; bien posée, une étiquette devient verte et s’aimante ; corrige : toutes à leur place. ' : '') + 'L’ultrastructure de la mitochondrie en coupe : 1 membrane externe, 2 membrane interne, 3 crêtes (replis de la membrane interne), 4 espace intermembranaire, 5 matrice, 6 sphères pédonculées sur la membrane interne, têtes vers la matrice (crête agrandie à droite). Lieux : matrice → formation de l’acétyl-CoA et cycle de Krebs ; membrane interne → chaîne respiratoire et synthèse d’ATP ; hyaloplasme → glycolyse, hors de la mitochondrie.',
   etat: () => ({ simulation_status: chrono.statut(), ce_qui_se_voit: ceQuiSeVoit(), current_variant: CONSTRUIRE ? 'construire' : S.legendes, time_s: +chrono.t.toFixed(2), parameters: params(), moments: CONSTRUIRE ? MC : M }),
   progression: () => chrono.t / (CONSTRUIRE ? FIN_C : FIN),
-  executer: (cmd, p) => ({ start: chrono.start, reset: chrono.start, pause: chrono.pause, resume: chrono.resume, set_time: () => { chrono.setTime(p); scene.sale = true; },
+  executer: (cmd, p) => ({ start: chrono.start, reset: chrono.reset, pause: chrono.pause, resume: chrono.resume, set_time: () => { chrono.setTime(p); scene.sale = true; },
     set_parameters: () => setParameters(p || {}), play_until: () => chrono.playUntil(p) })[cmd]?.() });
 bulle($('feedback'), CONSTRUIRE ? 'La mitochondrie sans ses noms : à toi de la légender…' : 'Une mitochondrie en coupe, dans le hyaloplasme…');
-setTimeout(() => { if (!chrono.running && chrono.t === 0) chrono.start(); }, 1600);
+setTimeout(() => { if (!chrono.pilote && !chrono.running && chrono.t === 0) chrono.start(); }, 1600);
 window.__sim = { chrono, scene, M, S, ecrit, get ET() { return ET; }, SLOT, get COLS() { return COLS; }, legende, params };
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>

@@ -23,13 +23,21 @@
   };
   P.texte = function (s, x, y, o = {}) {
     s = String(s);
-    if (!SUP.test(s)) return texteKit.call(this, s, x, y, o);
+    // une fraction « ⟦num|dén⟧ » : le kit l'écrit sur deux étages et rappelle texte() pour chaque morceau (exposants compris)
+    if (!SUP.test(s) || s.includes('⟦')) return texteKit.call(this, s, x, y, o);
     s = s.replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, (g) => '^{' + [...g].map((ch) => CHIFFRES[ch]).join('') + '}');
     let taille = o.taille ?? 18;
     this.ctx.font = `${o.gras ? '700 ' : ''}${taille}px ${T.POLICE}`;
     this._verifierCadre(s.replace(/[_^{}]/g, ''), x, y, taille, o.align);
     if (this.echelle && this.tailleMin) taille = Math.max(taille, this.tailleMin / this.echelle);
     return this._texteIndices(s, x, y, o, taille);
+  };
+  /* Mesure d'un morceau (le kit s'en sert pour placer les fractions « ⟦num|dén⟧ » et pour largeurTexte) : un exposant
+   * est mesuré petit, comme il est écrit ; sinon un exposant avant une fraction laissait un trou devant elle. */
+  P._largeur = function (s, taille, gras) {
+    const c = this.ctx;
+    s = String(s).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, (g) => '^{' + [...g].map((ch) => CHIFFRES[ch]).join('') + '}');
+    return C.segments(s).reduce((w, seg) => { c.font = `${gras ? '700 ' : ''}${seg.sub || seg.sup ? taille * .62 : taille}px ${T.POLICE}`; return w + c.measureText(seg.t).width; }, 0);
   };
   /** Même écriture que le kit, avec en plus les exposants (plus petits, relevés). */
   P._texteIndices = function (s, x, y, o, taille) {

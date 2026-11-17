@@ -329,7 +329,7 @@ const dessins = {
       pointCorde(c, S.xM, 'M', 'rouge', true); pointCorde(c, S.xP, 'P', 'violet', true);
       const yc = G.y0 + G.K + 42;
       c.cote(X(Math.min(S.xM, S.xP)), yc, X(Math.max(S.xM, S.xP)), yc, `MP = ${fm(d)} m`, { couleur: 'jaune', dessous: true, taille: 16 });
-      c.texte(`MP / λ = ${fm(d)} / ${fr(LAMBDA)} = ${fn(q)}`, H(430), 312, { couleur: 'vert', align: 'center', taille: 18 });
+      c.texte(`⟦MP|λ⟧ = ⟦${fm(d)}|${fr(LAMBDA)}⟧ = ${fn(q)}`, H(430), 310, { couleur: 'vert', align: 'center', taille: 18 });
       // Figé avec M en haut : les creux qui suivent M sont numérotés 1, 2, 3 (0,5 λ ; 1,5 λ ; 2,5 λ de M).
       if (fige() && t >= S.xM / V && Math.sin(2 * Math.PI * (t - S.xM / V) / T) > 0.97) {
         const creux = sur(t, 3 * T / 4).filter(x => x > S.xM).slice(0, 3);
@@ -352,9 +352,10 @@ const dessins = {
       pointCorde(c, S.xM, 'M', 'rouge');
       courbeTemps(c, Tx, oy1, k2, yS, 0, Math.min(t, tmax), 'cyan');
       courbeTemps(c, Tx, oy2, k2, tt => yS(tt - tau), 0, Math.min(t, tmax), 'rouge');
-      c.texte(`τ = SM / v = ${fm(S.xM)} / ${fn(V)} = ${fm(tau)} s`, H(250), 162, { couleur: 'vert', taille: 17 });
-      c.texte(`SM = ${fn(S.xM / LAMBDA)} λ   donc   τ = ${fn(tau / T)} T`, H(250), 188, { couleur: 'vert', taille: 17 });
-      c.texte('y_M(t) = y_S(t − τ)', H(560), 188, { couleur: 'vert', taille: 17 });
+      const E = window.OndesTableau.etages(c, 17), y2 = Math.max(188, 158 + 1.1 * E.T + E.bas);   // la ligne suivante passe sous le dénominateur
+      c.texte(`τ = ⟦SM|v⟧ = ⟦${fm(S.xM)}|${fn(V)}⟧ = ${fm(tau)} s`, H(250), 158, { couleur: 'vert', taille: 17 });
+      c.texte(`SM = ${fn(S.xM / LAMBDA)} λ   donc   τ = ${fn(tau / T)} T`, H(250), y2, { couleur: 'vert', taille: 17 });
+      c.texte('y_M(t) = y_S(t − τ)', H(560), y2, { couleur: 'vert', taille: 17 });
       if (t >= tau) {
         c.ligne(Tx(tau), oy1 - k2 - 4, Tx(tau), oy2 + k2 + 4, { couleur: 'jaune', largeur: 1.2, pointille: [3, 4] });
         c.cote(Tx(0), 318, Tx(tau), 318, `τ = ${fm(tau)} s`, { couleur: 'jaune', taille: 16 });
@@ -494,9 +495,9 @@ function ceQuiSeVoit() {
   }
   if (vue === 'phase') {
     const d = Math.abs(S.xP - S.xM), q = d / LAMBDA, r = Math.abs(q - Math.round(q)) < 1e-6 ? 'entier : en phase' : Math.abs(q - Math.floor(q) - 0.5) < 1e-6 ? 'entier et demi : en opposition de phase' : 'ni entier ni entier et demi : ni en phase ni en opposition';
-    m.push(`Point P (violet, x = ${fm(S.xP)} m) : ${etatDuPoint(S.xP, t)}. MP = ${fm(d)} m, MP / λ = ${fn(q)} (${r}).`);
+    m.push(`Point P (violet, x = ${fm(S.xP)} m) : ${etatDuPoint(S.xP, t)}. MP = ${fm(d)} m, MP/λ = ${fn(q)} (${r}).`);
   }
-  if (vue === 'retard') m.push(`Graphes : y_S(t) en cyan en haut, y_M(t) en rouge en bas${t >= S.xM / V ? `, décalée de τ = SM / v = ${fm(S.xM / V)} s (= ${fn(S.xM / V / T)} T, cote jaune)` : ' ; la courbe de M est encore plate, M n’a pas commencé à bouger'}.`);
+  if (vue === 'retard') m.push(`Graphes : y_S(t) en cyan en haut, y_M(t) en rouge en bas${t >= S.xM / V ? `, décalée de τ = SM/v = ${fm(S.xM / V)} s (= ${fn(S.xM / V / T)} T, cote jaune)` : ' ; la courbe de M est encore plate, M n’a pas commencé à bouger'}.`);
   return m.join(' ');
 }
 
@@ -508,7 +509,7 @@ const MESSAGES = {
   double: 'Même dessin, deux axes : la photo donne λ, le film donne T.',
   avance: 'Pendant une période T, le front avance d’une longueur d’onde λ.',
   phase: 'Compare MP à λ : glisse P et rejoue.',
-  retard: 'M refait le mouvement de S, avec le retard τ = SM / v. Glisse M et rejoue.',
+  retard: 'M refait le mouvement de S, avec le retard τ = SM/v. Glisse M et rejoue.',
 };
 function start() { S.jusqua = null; S.nom = null; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('start'); pont.emettre(); }
 function reset() { start(); }

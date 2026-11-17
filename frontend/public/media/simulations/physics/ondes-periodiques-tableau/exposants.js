@@ -23,7 +23,8 @@
   };
   P.texte = function (s, x, y, o = {}) {
     s = String(s);
-    if (!SUP.test(s)) return texteKit.call(this, s, x, y, o);
+    // une fraction « ⟦num|dén⟧ » : le kit la découpe en morceaux (texte, numérateur, dénominateur), chacun repasse ici
+    if (!SUP.test(s) || s.includes('⟦')) return texteKit.call(this, s, x, y, o);
     s = s.replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, (g) => '^{' + [...g].map((ch) => CHIFFRES[ch]).join('') + '}');
     let taille = o.taille ?? 18;
     this.ctx.font = `${o.gras ? '700 ' : ''}${taille}px ${T.POLICE}`;

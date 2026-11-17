@@ -352,7 +352,7 @@ function zoneEcriture(c, M, liste, ys, o = {}) {
   liste.forEach((e, j) => {
     if (j > k) return;
     M.etape(c, e.nom, () => {
-      if (garde.has(j)) for (const [t, col] of e.lignes) { c.texte(t, x, ys[y++], { couleur: col, taille, max, alpha: cache(e.nom) ? 0 : undefined }); vues.push(t); }
+      if (garde.has(j)) for (const [t, col] of e.lignes) { c.texte(t, x, ys[y++], { couleur: col, taille, max, alpha: cache(e.nom) ? 0 : undefined }); vues.push(window.Tableau.lisible(t)); }
       e.plus && !cache(e.nom) && e.plus(c);
     });
   });
@@ -399,8 +399,9 @@ function colonneEcriture(c, M, liste) {
     M.etape(c, e.nom, () => {
       if (garde.has(j)) ecrire(() => {
         for (const [s, col] of e.lignes) {
-          for (const r of couper(c, s, COL.w, t)) { y += h; c.texte(r, COL.x, y, { couleur: col, taille: t, max: COL.w, alpha: cache(e.nom) ? 0 : undefined }); }
-          y += 7; vues.push(s);
+          // une fraction « ⟦num|dén⟧ » (deux étages, comme dans le cahier) : de la place au-dessus et au-dessous de sa ligne
+          for (const r of couper(c, s, COL.w, t)) { const fr = r.includes('⟦'); y += h + (fr ? t * .45 : 0); c.texte(r, COL.x, y, { couleur: col, taille: t, max: COL.w, alpha: cache(e.nom) ? 0 : undefined }); if (fr) y += t * .35; }
+          y += 7; vues.push(window.Tableau.lisible(s));
         }
       });
       e.plus && !cache(e.nom) && e.plus(c);
@@ -662,7 +663,7 @@ function dessiner(c, M) {
     vues = zoneEcriture(c, M, [
       { nom: 'montage', lignes: [['K ouvert. Position 1 : le générateur charge le condensateur ;', 'blanc'], ['position 2 : décharge dans R et la bobine, sans générateur', 'blanc']], plus: () => fils(c, v) },
       { nom: 'charge', lignes: [['K en 1 : des électrons quittent A ; « + » sur A, « − » sur B', 'rouge'], ['condensateur chargé : u_C = E = 6 V', 'rouge']] },
-      { nom: 'fleches', lignes: [['maille 2, convention récepteur : u_C, u_R, u_b opposées à i', 'blanc'], ['i = dq/dt ; q = C·u_C', 'vert']], plus: () => fleches(c, v) },
+      { nom: 'fleches', lignes: [['maille 2, convention récepteur : u_C, u_R, u_b opposées à i', 'blanc'], ['i = ⟦dq|dt⟧ ; q = C·u_C', 'vert']], plus: () => fleches(c, v) },
       { nom: 'oscillo', lignes: [['voie 1 aux bornes du condensateur : u_C ; masse en B', 'blanc']], plus: () => { filsOscillo(c, v); sensibilites(c); } },
     ], ZY);
     if (M.commence('charge')) { signes(c, st.u); electrons(c); }

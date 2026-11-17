@@ -102,14 +102,32 @@
     if (event.source !== window.parent) return;
     var data = event.data;
     if (!data || data.type !== 'simulation_locate') return;
+    var repondre = function (pointe, el) {
+      window.parent.postMessage({
+        type: 'simulation_control_rect',
+        sequence: data.sequence,
+        command: data.command,
+        rect: pointe || visible(el),
+        mode: pointe ? 'point' : 'press',
+      }, '*');
+    };
+    var cmd = String(data.command || '').replace(/[^a-z_]/g, '');
+    var id = cible(data.parameters);
+    // 17 novembre 2026 : un repère nommé (« le glucose », « T1 ») n'est parfois dessiné qu'un instant après le mot, le temps
+    // que la simulation atteigne son moment. On l'attend (jusqu'à 3 s) au lieu de viser un bouton ou un autre objet.
+    if (POINTAGE.indexOf(cmd) >= 0 && id) {
+      var debut = Date.now();
+      var essayer = function () {
+        var pointe = repere(data.command, data.parameters);
+        if (pointe) return repondre(pointe, null);
+        if (Date.now() - debut < 3000) return setTimeout(essayer, 120);
+        // seul un choix de variante (sélecteur, onglet) peut se montrer sans repère dessiné
+        var variante = data.parameters && (data.parameters.variant_id || data.parameters.variant);
+        repondre(null, variante ? find(data.command, data.parameters) : null);
+      };
+      return essayer();
+    }
     var pointe = repere(data.command, data.parameters);
-    var el = pointe ? null : find(data.command, data.parameters);
-    window.parent.postMessage({
-      type: 'simulation_control_rect',
-      sequence: data.sequence,
-      command: data.command,
-      rect: pointe || visible(el),
-      mode: pointe ? 'point' : 'press',
-    }, '*');
+    repondre(pointe, pointe ? null : find(data.command, data.parameters));
   });
 })();

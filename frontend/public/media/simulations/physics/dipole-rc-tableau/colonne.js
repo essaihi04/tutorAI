@@ -21,11 +21,13 @@
     const st = { on: false, z: 1, mx: 0, my: 0, dx: 0, dy: 0, ycol: 0, liste: [], o: opt, b: null };
     /** Coupe une phrase en lignes de largeur ≤ max (aux espaces ; indices et exposants comptés plus petits). */
     function largeur(c, s, t) {
+      if (String(s).includes('⟦')) return c.largeurTexte(s, t);   // fraction « ⟦num|dén⟧ » : mesurée par le kit
       const seg = window.Tableau.Craie.segments(String(s));
       return seg.reduce((w, g) => w + c.largeurTexte(g.t, g.sub || g.sup ? t * .62 : t), 0);
     }
     function couper(c, s, t, max) {
-      const mots = String(s).split(' '), out = []; let l = '';
+      // une fraction « ⟦num|dén⟧ » ne se coupe jamais (ses espaces internes restent dans le même mot)
+      const mots = String(s).match(/(?:⟦[^⟧]*⟧|[^ ⟦])+/g) || [], out = []; let l = '';
       for (const m of mots) { const e = l ? l + ' ' + m : m; if (l && largeur(c, e, t) > max) { out.push(l); l = m; } else l = e; }
       if (l) out.push(l);
       return out;
@@ -37,7 +39,8 @@
       const lignes = couper(this, s, t, cw), x0 = st.b.x0 - largeurColonne(O) + 6, y0 = st.ycol;
       const o2 = { ...o, taille: t, align: 'left' }; delete o2.max; delete o2.encadre;
       if (o.encadre) st.ycol += 6;
-      for (const l of lignes) { st.ycol += t * 1.22; texte.call(this, l, x0, st.ycol, o2); }
+      // une ligne à fraction (deux étages, comme dans le cahier) s'écarte de ses voisines
+      for (const l of lignes) { const fr = l.includes('⟦'); st.ycol += t * (fr ? 1.6 : 1.22); texte.call(this, l, x0, st.ycol, o2); if (fr) st.ycol += t * .42; }
       // { encadre: couleur } : le résultat garde son cadre dans la colonne.
       if (o.encadre) { const w = Math.max(...lignes.map(l => largeur(this, l, t))); this.rect(x0 - 7, y0 + 6 + t * .1, w + 14, st.ycol - y0 - 6 + t * .3, { couleur: o.encadre, largeur: 1.4, arrondi: 8 }); st.ycol += 6; }
       st.liste.push({ y, rect: { x: x0 - 4, y: y0 + t * .2, w: cw + 8, h: st.ycol - y0 + t * .2 } });

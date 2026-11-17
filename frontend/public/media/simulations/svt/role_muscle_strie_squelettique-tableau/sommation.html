@@ -117,7 +117,7 @@ const DEUX = {
       c.repere('stimulations', G.xa, 290, Math.max(60, x2 - G.xa + 30), 42, 'les deux stimulations S1 et S2');
       // la secousse de référence (S1 seule), en pointillé, puis le tracé réel
       if (te > 0) MG.courbe(c, G, MG.secousse, 0, Math.min(te, 0.11), { couleur: 'faible', largeur: 1.6, pointille: [4, 4] });
-      if (te > 0) MG.courbe(c, G, A.T.y, 0, te, { couleur: 'blanc', largeur: 2.6 });
+      if (te > 0) MG.courbe(c, G, A.T.y, 0, te, { couleur: 'blanc', largeur: 2.6, aire: true, aireAlpha: .2 });
       MG.courbe(c, G, () => 0, -0.009, 0, { couleur: 'blanc', largeur: 2.6 });
       c.repere('reference', MG.X(G, 0), MG.Y(G, 20) - 4, MG.X(G, 0.10) - MG.X(G, 0), G.y0 - MG.Y(G, 20) + 4, 'la 1re secousse seule (référence, en pointillé)');
       if (t > 0) c.repere('trace', MG.X(G, 0), MG.Y(G, 40), MG.X(G, Math.max(0.02, te)) - MG.X(G, 0), G.y0 - MG.Y(G, 40), 'le tracé obtenu');
@@ -203,7 +203,7 @@ const SERIE = {
       c.cercle(MG.X(G, st[1]) + 2, 316, 5, { couleur: 'jaune', largeur: 1.6 });
       c.repere('s2', MG.X(G, st[1]) - 8, 296, 20, 28, `S2 : la glisser vers S1 augmente la fréquence (${fmt(S.f, 1)} Hz)`);
       c.repere('stimulations', G.xa, 290, MG.X(G, st[11]) - G.xa + 20, 42, `12 stimulations à ${fmt(S.f, 1)} Hz`);
-      if (te > 0) MG.courbe(c, G, A.T.y, 0, te, { couleur: 'blanc', largeur: 2.4, pas: 1.2 });
+      if (te > 0) MG.courbe(c, G, A.T.y, 0, te, { couleur: 'blanc', largeur: 2.4, pas: 1.2, aire: true, aireAlpha: .2 });
       MG.courbe(c, G, () => 0, -0.02 * span / 0.4, 0, { couleur: 'blanc', largeur: 2.4 });
       if (t > 0) c.repere('trace', MG.X(G, 0), MG.Y(G, 62), MG.X(G, Math.max(0.03, te)) - MG.X(G, 0), G.y0 - MG.Y(G, 62), 'le tracé obtenu');
       const xp1 = MG.X(G, st[4]), xp2 = MG.X(G, st[11] + 0.04);
@@ -361,7 +361,7 @@ const NOM = {
       c.repere('stimulations', G.xa, 284, G.xb - G.xa, 40, 'les stimulations (créneaux du signal)');
       if (t >= M.phase_reperee - 0.05 && T.ph) bandePhase(c, G, T.ph, T.stims[1], 112);
       if (t >= M.phase_reperee - 0.05 && T.stims.length > 1) MG.courbe(c, G, MG.secousse, 0, 0.11, { couleur: 'faible', largeur: 1.6, pointille: [4, 4] });
-      if (tt > 0) MG.courbe(c, G, tr.y, 0, tt, { couleur: 'blanc', largeur: 2.4, pas: 1 });
+      if (tt > 0) MG.courbe(c, G, tr.y, 0, tt, { couleur: 'blanc', largeur: 2.4, pas: 1, aire: true, aireAlpha: .2 });
       MG.courbe(c, G, () => 0, -0.07 * span, 0, { couleur: 'blanc', largeur: 2.4 });
       c.repere('trace', MG.X(G, 0), MG.Y(G, 62), G.xb - MG.X(G, 0), G.y0 - MG.Y(G, 62), 'le tracé à nommer');
       if (t >= M.stimulations_comptees - 0.05) T.stims.forEach((s, i) => c.texte(String(i + 1), MG.X(G, s) + 2, 318, { couleur: 'jaune', taille: tk(12), align: 'center' }));
@@ -528,7 +528,10 @@ const pont = protocole({ id: config.id, commandes, config, texte: TEXTES[vue],
   progression: () => (S.fait ? 1 : 0),
   executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
 bulle($('feedback'), vue === 'nomme' ? 'Un tracé va s’écrire : à toi de le nommer.' : 'Le graphique s’écrit… puis les stimulations.');
-setTimeout(() => { if (!S.running && S.t === 0 && !S.fige) { if (vue === 'nomme') { lancer(NOM.moments().trace_affiche, 'le tracé est affiché : à toi de le nommer', true); bulle($('feedback'), 'Observe le tracé : comment s’appelle-t-il ?'); } else start(); } }, 3000);
+// ?attente=1 (17 novembre 2026) : dans le cours, la page attend le tuteur — c’est sa voix qui lance chaque moment
+// (play_until) ; un lancement tout seul jouait la scène avant lui et ses arrêts sur image étaient ignorés.
+const ATTENTE = new URLSearchParams(location.search).has('attente');
+setTimeout(() => { if (!ATTENTE && !S.running && S.t === 0 && !S.fige) { if (vue === 'nomme') { lancer(NOM.moments().trace_affiche, 'le tracé est affiché : à toi de le nommer', true); bulle($('feedback'), 'Observe le tracé : comment s’appelle-t-il ?'); } else start(); } }, 3000);
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>
 </body></html>

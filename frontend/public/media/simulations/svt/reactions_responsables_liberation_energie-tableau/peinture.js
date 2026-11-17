@@ -411,7 +411,12 @@
           return repere.call(this, id, x, y, w, h, label);
         };
         let kb = k; const e0 = c.echelle;   // le minimum lisible (15 px à l'écran) tient compte de l'échelle du bloc
-        c.texte = function (s, x, y, o = {}) { return kb === 1 ? texte.call(this, s, x, y, o) : texte.call(this, s, x, y, { ...o, taille: (o.taille ?? 18) * kb, max: o.max && o.max * kb }); };
+        // une fraction « ⟦num|dén⟧ » s'écrit en morceaux qui repassent par c.texte : déjà à la bonne taille, ils ne sont pas regrossis
+        c.texte = function (s, x, y, o = {}) {
+          if (kb === 1 || this._dansFraction) return texte.call(this, s, x, y, o);
+          const fr = String(s).includes('⟦'); if (fr) this._dansFraction = true;
+          try { return texte.call(this, s, x, y, { ...o, taille: (o.taille ?? 18) * kb, max: o.max && o.max * kb }); } finally { if (fr) this._dansFraction = false; }
+        };
         try { B.forEach((b, i) => {
           ici = b; kb = b.police ?? k; if (e0) c.echelle = e0 * b.s; c.cur = cur0; c.tip = null; c.complet = true; c.r = window.Tableau.graine(97 + 13 * i);
           ctx.save();

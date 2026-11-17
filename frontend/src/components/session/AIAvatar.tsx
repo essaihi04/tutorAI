@@ -111,12 +111,31 @@ function reachPosition(point: Point, writing: boolean, rigModele: ProfessorRig, 
     : clampFlight(point.x - reach * 0.92 - left.x, point.y - left.y + reach * 0.16);
 }
 
+/** Commandes où le professeur montre un élément de la simulation (même liste que le kit shared/tableau). */
+const POINTAGE_SIMULATION = ['highlight', 'point', 'montrer', 'show'];
+
+/**
+ * Sa place de repos par défaut, à la taille d'écran DU MOMENT : en bas de sa colonne à droite. Calculée une seule
+ * fois à l'ouverture, elle restait au milieu de l'écran quand la fenêtre grandissait ensuite (plein écran, téléphone
+ * tourné en paysage) et il revenait se poser sur l'écriture après chaque explication (17 novembre 2026).
+ */
+const reposParDefaut = (discret: boolean) => clampPosition(
+  window.innerWidth - largeur() - (discret ? 8 : 20), window.innerHeight - hauteur() - 100);
+
 export default function AIAvatar({ isSpeaking, isProcessing, processingStage, isListening = false, control, labControl, emotion, discret = false, mainOreille = false }: AIAvatarProps) {
-  const initial = useMemo(() => clampPosition(window.innerWidth - largeur() - 20, window.innerHeight - hauteur() - 100), []);
+  const initial = useMemo(() => reposParDefaut(discret), []); // eslint-disable-line react-hooks/exhaustive-deps
+  /** L'élève l'a déplacé lui-même (poignée ou flèches) : sa place est alors la sienne, seulement recalée à l'écran. */
+  const placeChoisie = useRef(false);
+  const repos = useCallback(() => {
+    home.current = placeChoisie.current ? clampPosition(home.current.x, home.current.y) : reposParDefaut(discret);
+    return home.current;
+  }, [discret]);
   const [minimized, setMinimized] = useState(false);
   const [animationFailed, setAnimationFailed] = useState(false);
   const onAnimationError = useCallback(() => setAnimationFailed(true), []);
   const [focus, setFocus] = useState<Focus | null>(null);
+  const focusRef = useRef<Focus | null>(null);
+  focusRef.current = focus;
   const [press, setPress] = useState<{ key: number; x: number; y: number } | null>(null);
   const deliveredLab = useRef(0);
   const [gesture, setGesture] = useState<{ kind: ProfessorGestureKind; key: number } | null>(null);
@@ -201,10 +220,12 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
   }, []);
 
   useEffect(() => {
-    const resize = () => { home.current = clampPosition(home.current.x, home.current.y); fly(clampFlight(goal.current.x, goal.current.y)); };
+    // l'écran change (rotation, plein écran) : sans rien à montrer, il regagne sa place recalculée, sinon il reste dans l'écran
+    const resize = () => { repos(); fly(focusRef.current ? clampFlight(goal.current.x, goal.current.y) : home.current); };
     window.addEventListener('resize', resize);
-    return () => window.removeEventListener('resize', resize);
-  }, [fly]);
+    document.addEventListener('fullscreenchange', resize);
+    return () => { window.removeEventListener('resize', resize); document.removeEventListener('fullscreenchange', resize); };
+  }, [fly, repos]);
 
   useEffect(() => {
     const update = () => setPortalRoot(document.fullscreenElement || document.body);
@@ -295,6 +316,10 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
       iframe?.contentWindow?.postMessage(labControl.message, '*');
     };
     if (!iframe?.contentWindow || minimized || animationFailed) { deliver(); return; }
+    // Dans le cours (discret), la baguette ne va jamais vers les boutons de la simulation (Lancer, Pause, Observe…) :
+    // ces commandes partent seules, et l'élève ne suit la baguette que vers les éléments de la simulation (17 novembre 2026).
+    const pointage = POINTAGE_SIMULATION.includes(String(labControl.command));
+    if (discret && !pointage) { deliver(); return; }
     let inner: { x: number; y: number; width: number; height: number } | null = null;
     const bounds = () => {
       const frame = iframe.getBoundingClientRect();
@@ -304,6 +329,9 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
         : frame;
     };
     const update = () => {
+      // Un repère se montre lui-même, jamais le milieu de la simulation à sa place (17 novembre 2026 : la baguette tombait
+      // sur un autre objet quand le repère n'était pas encore dessiné) : sans son rectangle, il ne bouge pas.
+      if (pointage && !inner) return;
       const rect = bounds();
       // le repère est caché sous les questions (ou une bulle) : pas de cadre vide ni de baguette vers rien (16 novembre 2026)
       const dessus = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
@@ -323,6 +351,9 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
         window.clearTimeout(pressTimer); window.clearTimeout(timer);
         deliver();
         timer = window.setTimeout(() => setFocus(null), PROFESSOR_POINT_HOLD_MS);
+      } else if (pointage) {
+        // repère introuvable (même après l'attente du laboratoire) : la commande part, la baguette ne vise rien d'autre
+        window.clearTimeout(pressTimer); deliver();
       }
     };
     window.addEventListener('message', onRect);
@@ -330,12 +361,15 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
     update();
     window.addEventListener('resize', update);
     window.addEventListener('scroll', update, true);
+    // Un pointage attend que le laboratoire ait dessiné le repère (il patiente jusqu'à ~3 s) ; il n'appuie jamais.
     pressTimer = window.setTimeout(() => {
-      const rect = bounds();
-      setPress({ key: -labControl.sequence, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+      if (!pointage) {
+        const rect = bounds();
+        setPress({ key: -labControl.sequence, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+      }
       deliver();
-    }, PROFESSOR_REACH_MS);
-    timer = window.setTimeout(() => { setFocus(null); setPress(null); }, PROFESSOR_REACH_MS + 2400);
+    }, pointage ? 3600 : PROFESSOR_REACH_MS);
+    timer = window.setTimeout(() => { setFocus(null); setPress(null); }, (pointage ? 3600 : PROFESSOR_REACH_MS) + 2400);
     return () => {
       window.clearTimeout(timer); window.clearTimeout(pressTimer);
       window.removeEventListener('message', onRect);
@@ -349,10 +383,11 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
   // Sans rien à montrer, il retourne à sa place (après un court délai, pour enchaîner deux lignes sans aller-retour).
   useEffect(() => {
     if (focus) return;
-    // sa place est recalée à l'écran du moment (la scène du cours n'existait pas encore quand elle a été choisie)
-    const timer = window.setTimeout(() => { home.current = clampPosition(home.current.x, home.current.y); fly(home.current); }, RETURN_HOME_MS);
+    // sa place est recalculée à l'écran du moment (la scène du cours n'existait pas encore quand elle a été choisie,
+    // et la fenêtre a pu grandir ou tourner depuis) : il revient dans sa colonne, jamais sur l'écriture
+    const timer = window.setTimeout(() => fly(repos()), RETURN_HOME_MS);
     return () => window.clearTimeout(timer);
-  }, [focus, fly]);
+  }, [focus, fly, repos]);
 
   const target = focus?.rect ?? null;
   const writing = !!focus?.writing;
@@ -390,6 +425,7 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
             }}
             onPointerMove={event => {
               if (!drag.current) return;
+              placeChoisie.current = true;
               home.current = clampPosition(drag.current.left + event.clientX - drag.current.x, drag.current.top + event.clientY - drag.current.y);
               fly(home.current, true);
             }}
@@ -405,6 +441,7 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
               const delta = directions[event.key];
               if (!delta) return;
               event.preventDefault();
+              placeChoisie.current = true;
               home.current = clampPosition(goal.current.x + delta[0], goal.current.y + delta[1]);
               fly(home.current);
             }}>⠿ Moalim</button>

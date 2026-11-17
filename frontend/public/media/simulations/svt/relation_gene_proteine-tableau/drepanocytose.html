@@ -106,7 +106,10 @@ function hemoglobine(x, cx, cy, r, S, a = 1, chaine = true) {
 }
 
 /* ── Vue sang ──────────────────────────────────────────────────────────── */
-const MS = { deux_personnes: 3.0, hematies_normales: 7.0, faucilles_bloquent: 12.0 };
+/* (17 novembre 2026) un moment par chose dite : la personne saine, puis la malade ; « échelle de l'organisme » puis
+ * « échelle de la cellule » s'écrivent ; faucilles, bouchon, « plus rien ne passe : douleurs », « vite détruites : anémie »
+ * ont chacun leur moment (la voix les nomme l'un après l'autre). */
+const MS = { personne_saine: 1.4, deux_personnes: 3.0, organisme: 3.4, vaisseau_sain: 4.6, hematies_normales: 7.0, faucilles: 10.4, bouchon: 11.0, faucilles_bloquent: 12.0, anemie: 13.0 };
 const VY = 292, VH = 32, VS = { x0: 22, x1: 360 }, VM = { x0: 402, x1: 740, ex: 642, eh: 9 };
 const PS = { cx: 104, sol: 200 }, PM = { cx: 468, sol: 200 };
 /** Hématie n° i du vaisseau sain à l’instant t (défilement continu, de gauche à droite). */
@@ -129,7 +132,7 @@ function dessinerSang(c, k) {
   const t = k.t;
   c.direct(() => {
     const x = c.ctx;
-    if (t >= .3) { personne(x, PS.cx, PS.sol, 128, false, rampe(t, .3, .6)); personne(x, PM.cx, PM.sol, 128, true, rampe(t, .8, .6)); }
+    if (t >= .3) { personne(x, PS.cx, PS.sol, 128, false, rampe(t, .3, .6)); personne(x, PM.cx, PM.sol, 128, true, rampe(t, 1.6, .6)); }
     if (t >= 3.6) {
       const a = rampe(t, 3.6, .5);
       Mo.vaisseau(x, VS.x0, VS.x1, VY, VH, { alpha: a });
@@ -149,14 +152,22 @@ function dessinerSang(c, k) {
   c.ligne(381, 40, 381, 384, { couleur: 'faible', largeur: 1.2, duree: .3 });
   if (k.ecrit(c, 'tetes', .2)) { T(k, c, 'personne saine', 190, 52, { couleur: 'vert', taille: 17, align: 'center' }); T(k, c, 'personne malade (drépanocytose)', 571, 52, { couleur: 'rouge', taille: 17, align: 'center' }); }
   if (k.ecrit(c, 'saine', 1.0)) { T(k, c, 'en bonne santé :', 176, 104, { couleur: 'vert', taille: 15 }); T(k, c, 'respire normalement,', 176, 126, { couleur: 'blanc', taille: 14 }); T(k, c, 'pas de douleurs', 176, 146, { couleur: 'blanc', taille: 14 }); }
-  if (k.ecrit(c, 'malade', 1.6)) { T(k, c, 'crises douloureuses,', 540, 104, { couleur: 'orange', taille: 15 }); T(k, c, 'anémie,', 540, 126, { couleur: 'orange', taille: 15 }); T(k, c, 'essoufflement', 540, 148, { couleur: 'orange', taille: 15 }); T(k, c, '(fatigue)', 540, 170, { couleur: 'faible', taille: 13 }); }
-  if (k.ecrit(c, 'vs', 3.6)) T(k, c, 'un vaisseau sanguin', VS.x0, VY - VH - 12, { couleur: 'faible', taille: 13 });
+  if (k.ecrit(c, 'malade', 2.4)) { T(k, c, 'crises douloureuses,', 540, 104, { couleur: 'orange', taille: 15 }); T(k, c, 'anémie,', 540, 126, { couleur: 'orange', taille: 15 }); T(k, c, 'essoufflement', 540, 148, { couleur: 'orange', taille: 15 }); T(k, c, '(fatigue)', 540, 170, { couleur: 'faible', taille: 13 }); }
+  if (k.ecrit(c, 'org', 3.1)) T(k, c, '→ échelle de l’organisme', 490, 24, { couleur: 'orange', taille: 16 });
+  if (k.ecrit(c, 'vs', 3.6)) { T(k, c, 'un vaisseau sanguin', VS.x0, VY - VH - 12, { couleur: 'faible', taille: 13 }); T(k, c, 'échelle de la cellule : le sang au microscope', 381, 228, { couleur: 'orange', taille: 15, align: 'center' }); }
   if (k.ecrit(c, 'rondes', 4.8)) { T(k, c, 'hématies rondes (disques biconcaves) :', VS.x0, 352, { couleur: 'blanc', taille: 14 }); T(k, c, 'elles passent librement', VS.x0, 372, { couleur: 'vert', taille: 14 }); c.fleche(VS.x1 - 70, VY + VH + 12, VS.x1 - 10, VY + VH + 12, { couleur: 'faible', largeur: 1.4, duree: .15 }); }
   if (k.ecrit(c, 'vm', 7.6)) T(k, c, 'un petit vaisseau sanguin', VM.x0, VY - VH - 12, { couleur: 'faible', taille: 13 });
   if (k.ecrit(c, 'faucilles', 10.0)) { T(k, c, 'hématies en faucille : elles s’accrochent', VM.x0, 352, { couleur: 'blanc', taille: 14 }); T(k, c, 'et bouchent le petit vaisseau', VM.x0, 372, { couleur: 'rouge', taille: 14 }); }
-  if (k.ecrit(c, 'bouchon', 10.6)) { T(k, c, 'bouchon', VM.ex - 30, 234, { couleur: 'rouge', taille: 16, align: 'center' }); c.fleche(VM.ex - 30, 240, VM.ex - 38, VY - 16, { couleur: 'rouge', largeur: 1.8, duree: .15 }); T(k, c, 'plus rien ne passe', VM.ex + 50, 342, { couleur: 'faible', taille: 13, align: 'center' }); }
+  if (k.ecrit(c, 'bouchon', 10.6)) { T(k, c, 'bouchon', VM.ex - 30, 234, { couleur: 'rouge', taille: 16, align: 'center' }); c.fleche(VM.ex - 30, 240, VM.ex - 38, VY - 16, { couleur: 'rouge', largeur: 1.8, duree: .15 }); }
+  if (k.ecrit(c, 'passe', 11.2)) { T(k, c, 'plus rien ne passe', VM.ex + 50, 342, { couleur: 'faible', taille: 13, align: 'center' }); T(k, c, '→ douleurs', VM.ex + 50, 236, { couleur: 'rouge', taille: 15, align: 'center' }); }
+  if (k.ecrit(c, 'anemie', 12.2)) T(k, c, 'vite détruites : anémie', VM.x0, 394, { couleur: 'orange', taille: 14 });
   // repères
-  if (t >= .3) { c.repere('personne_saine', PS.cx - 40, PS.sol - 132, 80, 136, 'la personne saine'); c.repere('personne_malade', PM.cx - 40, PM.sol - 132, 100, 136, 'la personne malade'); }
+  if (t >= .3) c.repere('personne_saine', PS.cx - 40, PS.sol - 132, 80, 136, 'la personne saine');
+  if (t >= 1.6) c.repere('personne_malade', PM.cx - 40, PM.sol - 132, 100, 136, 'la personne malade');
+  if (t >= 3.1) c.repere('echelle_organisme', 486, 8, 196, 22, 'l’échelle de l’organisme');
+  if (t >= 3.6) c.repere('echelle_cellule', 226, 212, 310, 22, 'l’échelle de la cellule');
+  if (t >= 11.2) c.repere('plus_rien', VM.ex + 4, VY - VH, VM.x1 - VM.ex - 4, 2 * VH, 'après le bouchon, plus rien ne passe');
+  if (t >= 12.2) c.repere('anemie', VM.x0, 380, 170, 20, 'vite détruites : anémie');
   if (t >= 3.6) {
     c.repere('vaisseau_sain', VS.x0, VY - VH - 4, VS.x1 - VS.x0, 2 * VH + 8, 'le vaisseau de la personne saine');
     let best = 0; for (let i = 1; i < 13; i++) if (Math.abs(hematieSaine(i, t).x - 190) < Math.abs(hematieSaine(best, t).x - 190)) best = i;
@@ -176,12 +187,19 @@ function voitSang(k) {
     const n = Array.from({ length: NF }, (_, i) => hematieMalade(i, t)).filter(h => h && h.collee).length;
     m.push(`En bas à droite, un petit vaisseau qui se rétrécit (étranglement) : des hématies en faucille (croissants pointus) y entrent ; deux passent, puis elles s’accrochent avant l’étranglement (${n} accrochées)` + (t >= 10.0 ? ' ; écrit « hématies en faucille : elles s’accrochent et bouchent le petit vaisseau ».' : '.'));
   }
-  if (t >= 10.6) m.push('Le mot « bouchon » écrit en rouge avec une flèche sur l’amas d’hématies ; après l’étranglement le vaisseau est vide : « plus rien ne passe ».');
+  if (t >= 3.1) m.push('À droite du titre, en orange : « → échelle de l’organisme ».');
+  if (t >= 3.6) m.push('Au milieu, en orange : « échelle de la cellule : le sang au microscope ».');
+  if (t >= 10.6) m.push('Le mot « bouchon » écrit en rouge avec une flèche sur l’amas d’hématies.');
+  if (t >= 11.2) m.push('Après l’étranglement le vaisseau est vide : « plus rien ne passe » ; écrit en rouge « → douleurs ».');
+  if (t >= 12.2) m.push('Écrit en bas à droite : « vite détruites : anémie ».');
   return m;
 }
 
 /* ── Vue molecule ─────────────────────────────────────────────────────── */
-const MM = { zoom_hemoglobine: 3.2, chaine_normale: 6.6, chaine_mutee: 9.8, gene_sous_la_chaine: 14.0 };
+/* (17 novembre 2026) la chaîne du malade s'écrit d'abord entière (chaine_mutee), le 6e acide aminé n'est marqué en rouge
+ * qu'au moment « sixieme » (la voix dit « sauf le sixième ») ; les deux gènes (genes) puis la colonne 6 (gene_sous_la_chaine). */
+const MM = { zoom_hemoglobine: 3.2, chaine_normale: 6.6, chaine_mutee: 8.8, sixieme: 9.8, genes: 12.6, gene_sous_la_chaine: 14.0 };
+const T6 = 9.0;   // le 6e acide aminé du malade marqué en rouge
 const COLX = j => 352 + j * 61, PB = 19;
 const BL = { A: 44, S: 220 };                        // haut de chaque bloc (étiquette)
 const ROW = by => ({ lab: by, num: by + 22, aa: by + 44, arn: by + 94, bt: by + 132 });
@@ -189,11 +207,11 @@ const HEM = { cx: 92, cy: 112, r: 40 }, HB = { cx: 92, cy: 262, r: 40 };
 const ETQ = { A: { x: 196, y: BL.A - 15, w: 52, h: 21 }, S: { x: 196, y: BL.S - 15, w: 52, h: 21 } };
 function dessinerMolecule(c, k) {
   const t = k.t, sel = k.P.allele === 'HbS' ? 'S' : 'A', RA = ROW(BL.A), RS = ROW(BL.S);
-  const tA = j => 3.8 + j * .3, tS = j => 7.2 + j * .3;
+  const tA = j => 3.8 + j * .3, tS = j => 7.2 + j * .25;
   c.direct(() => {
     const x = c.ctx;
     // mise en lumière de l’allèle choisi (paramètre allele)
-    const by = BL[sel]; x.save(); x.globalAlpha = .13 * rampe(t, sel === 'S' ? 7.0 : 3.6, .4); x.fillStyle = '#fde68a'; x.beginPath(); x.roundRect(190, by - 22, 568, 166, 12); x.fill(); x.restore();
+    const by = BL[sel]; x.save(); x.globalAlpha = .13 * rampe(t, sel === 'S' ? 7.0 : 3.6, .4); x.fillStyle = '#fde68a'; x.beginPath(); x.roundRect(190, by - 17, 568, 161, 12); x.fill(); x.restore();   // ne touche plus le titre (17 novembre 2026)
     // l’hématie (ronde pour HbA, faucille pour HbS) et l’hémoglobine
     if (t >= .3) hematie(x, HEM.cx, HEM.cy + (sel === 'S' ? 10 : 0), sel === 'S' ? 36 : HEM.r, sel === 'S' ? 1 : 0, 0, rampe(t, .3, .6));
     if (t >= 1.4) {
@@ -210,10 +228,10 @@ function dessinerMolecule(c, k) {
       x.restore();
       noms.forEach((n, j) => {
         if (vis[j] <= 0) return;
-        if (j === 5 && rouge) { x.save(); x.globalAlpha = vis[j]; const g = x.createRadialGradient(COLX(j), R.aa, 6, COLX(j), R.aa, 28); g.addColorStop(0, 'rgba(255,40,40,.55)'); g.addColorStop(1, 'rgba(255,40,40,0)'); x.fillStyle = g; x.beginPath(); x.arc(COLX(j), R.aa, 28, 0, TAU); x.fill(); x.restore(); }
+        if (j === 5 && rouge && t >= T6) { x.save(); x.globalAlpha = vis[j]; const g = x.createRadialGradient(COLX(j), R.aa, 6, COLX(j), R.aa, 28); g.addColorStop(0, 'rgba(255,40,40,.55)'); g.addColorStop(1, 'rgba(255,40,40,0)'); x.fillStyle = g; x.beginPath(); x.arc(COLX(j), R.aa, 28, 0, TAU); x.fill(); x.restore(); }
         Mo.perle(x, COLX(j), R.aa, 15, n, { texte: false, alpha: vis[j] });
         x.save(); x.globalAlpha = vis[j]; Mo.lettreSur(x, n, COLX(j), R.aa + .5, Mo.couleurAA(n), 12); x.restore();
-        if (j === 5 && t >= tj(5) + .2) { x.save(); x.globalAlpha = vis[j]; x.strokeStyle = '#ff2d2d'; x.lineWidth = rouge ? 3.2 : 2; x.setLineDash(rouge ? [] : [4, 3]); x.beginPath(); x.arc(COLX(j), R.aa, 20, 0, TAU); x.stroke(); x.restore(); }
+        if (j === 5 && t >= (rouge ? T6 : tj(5) + .2)) { x.save(); x.globalAlpha = vis[j]; x.strokeStyle = '#ff2d2d'; x.lineWidth = rouge ? 3.2 : 2; x.setLineDash(rouge ? [] : [4, 3]); x.beginPath(); x.arc(COLX(j), R.aa, 20, 0, TAU); x.stroke(); x.restore(); }
       });
     };
     if (t >= tA(0)) ligne(RA, AA_N, tA, false);
@@ -262,7 +280,7 @@ function dessinerMolecule(c, k) {
   if (t >= 1.4) c.repere('hemoglobine', HB.cx - HB.r, HB.cy - HB.r, 2 * HB.r, 2 * HB.r, 'l’hémoglobine');
   if (t >= 3.6) { c.repere('chaine_normale', COLX(0) - 18, RA.aa - 18, COLX(6) - COLX(0) + 36, 36, 'la chaîne β normale (personne saine)'); c.repere('etiquette_hba', ETQ.A.x, ETQ.A.y, ETQ.A.w, ETQ.A.h, 'l’étiquette HbA (à toucher)'); }
   if (t >= 7.0) { c.repere('chaine_mutee', COLX(0) - 18, RS.aa - 18, COLX(6) - COLX(0) + 36, 36, 'la chaîne β de la personne malade'); c.repere('etiquette_hbs', ETQ.S.x, ETQ.S.y, ETQ.S.w, ETQ.S.h, 'l’étiquette HbS (à toucher)'); }
-  if (t >= tS(5)) c.repere('acide_amine_6', COLX(5) - 22, RS.aa - 22, 44, 44, 'le 6e acide aminé : Val au lieu de Glu');
+  if (t >= T6) c.repere('acide_amine_6', COLX(5) - 22, RS.aa - 22, 44, 44, 'le 6e acide aminé : Val au lieu de Glu');
   if (t >= 10.2) { c.repere('triplet_6_normal', COLX(5) - 31, RA.arn - 26, 62, RA.bt - RA.arn + 32, 'le triplet 6 normal : codon GAG, triplet CTC'); c.repere('gene', COLX(0) - 34, RA.arn - 26, COLX(6) - COLX(0) + 68, RA.bt - RA.arn + 32, 'le gène sous la chaîne : codons de l’ARNm et triplets du brin transcrit'); }
   if (t >= 11.6) c.repere('triplet_6_mute', COLX(5) - 31, RS.arn - 26, 62, RS.bt - RS.arn + 32, 'le triplet 6 muté : codon GUG, triplet CAC');
 }
@@ -271,7 +289,7 @@ function voitMolecule(k) {
   if (t >= .3) m.push(`À gauche, ${S ? 'une hématie en faucille (allèle HbS)' : 'une hématie ronde (allèle HbA)'} peinte en rouge.`);
   if (t >= 1.4) m.push(`Zoom en pointillés vers l’hémoglobine en dessous : une sphère rouge sombre à quatre lobes, une chaîne β repliée en jaune${S ? ', une petite tache turquoise collante (hémoglobine S)' : ''} ; écrit « ${S ? 'hémoglobine S' : 'hémoglobine A'} », « 4 chaînes, dont 2 chaînes β (en jaune) ».`);
   if (t >= 3.6) m.push(`À droite en haut, l’étiquette HbA « allèle normal : personne saine » et la chaîne β normale en perles numérotées 1 à 7 : ${AA_N.join(' – ')}${t >= 3.8 + 5 * .3 + .2 ? ' (le 6e, Glu, entouré de pointillés rouges)' : ''}.`);
-  if (t >= 7.0) m.push(`En bas, l’étiquette HbS « allèle muté : personne malade » et sa chaîne β : ${AA_S.join(' – ')}${t >= 7.2 + 5 * .3 + .2 ? ' ; le 6e, Val, entouré de rouge vif avec un halo rouge' : ''}${t >= 9.1 ? ' ; écrit « 6e acide aminé : Glu → Val »' : ''}.`);
+  if (t >= 7.0) m.push(`En bas, l’étiquette HbS « allèle muté : personne malade » et sa chaîne β : ${AA_S.join(' – ')}${t >= T6 ? ' ; le 6e, Val, entouré de rouge vif avec un halo rouge' : ''}${t >= 9.1 ? ' ; écrit « 6e acide aminé : Glu → Val »' : ''}.`);
   if (t >= 10.2) m.push(`Sous la chaîne normale : ARNm 5′ ${ARN_N.join(' ')} 3′ et brin transcrit 3′ ${BT_N.join(' ')} 5′, chaque codon et chaque triplet aligné sous son acide aminé (numéros au-dessus).`);
   if (t >= 11.6) m.push(`Sous la chaîne mutée : ARNm 5′ ${ARN_S.join(' ')} 3′ et brin transcrit 3′ ${BT_S.join(' ')} 5′ ; le U du 6e codon et le A du 6e triplet entourés de rouge.`);
   if (t >= 12.8) m.push('La colonne 6 encadrée en rouge dans les deux blocs ; écrit en bas « triplet 6 : CTC → CAC (T remplacé par A) ; codon GAG → GUG ; Glu → Val ».');
@@ -279,7 +297,10 @@ function voitMolecule(k) {
 }
 
 /* ── Vue echelles ─────────────────────────────────────────────────────── */
-const ME = { niveau_gene: 2.0, niveau_proteine: 4.0, niveau_cellule: 6.0, niveau_organisme: 8.0, trois_echelles: 10.0 };
+/* (17 novembre 2026) les « trois maillons » dits par la voix s'écrivent : allèle normal → protéine fonctionnelle → caractère
+ * normal, puis allèle muté → protéine non fonctionnelle → caractère muté, puis « le gène détermine la protéine… » (avant :
+ * « allèle → protéine → caractère » à 10,4 s, après le dernier moment, jamais montré). */
+const ME = { niveau_gene: 2.0, niveau_proteine: 4.0, niveau_cellule: 6.0, niveau_organisme: 8.0, trois_echelles: 10.0, maillon_normal: 11.2, maillon_mute: 12.2, relation: 13.2 };
 const CS = 250, CM = 470;                 // x de la peinture de chaque colonne (le texte à droite)
 const NIV = { organisme: { y: 100, haut: 62, bas: 136, t: 7.0 }, cellule: { y: 172, haut: 148, bas: 196, t: 5.0 }, proteine: { y: 244, haut: 218, bas: 270, t: 3.0 }, gene: { y: 320, haut: 290, bas: 348, t: 1.0 } };
 function dessinerEchelles(c, k) {
@@ -317,7 +338,9 @@ function dessinerEchelles(c, k) {
     acc(NIV.cellule.haut, NIV.cellule.bas, 'échelle', 'cellulaire');
     acc(NIV.proteine.haut, NIV.gene.bas, 'échelle', 'moléculaire');
   }
-  if (k.ecrit(c, 'chaine', 10.4)) T(k, c, 'allèle → protéine → caractère', 380, 396, { couleur: 'vert', taille: 18, align: 'center', duree: .6 });
+  if (k.ecrit(c, 'm_normal', 10.4)) T(k, c, 'allèle normal → protéine fonctionnelle → caractère normal', 340, 372, { couleur: 'vert', taille: 16, align: 'center', duree: .6 });
+  if (k.ecrit(c, 'm_mute', 11.4)) T(k, c, 'allèle muté → protéine non fonctionnelle → caractère muté', 340, 394, { couleur: 'rouge', taille: 16, align: 'center', duree: .6 });
+  if (k.ecrit(c, 'chaine', 12.4)) T(k, c, 'le gène détermine la protéine, la protéine détermine le caractère', 340, 416, { couleur: 'jaune', taille: 16, align: 'center', duree: .6 });
   // repères
   const rang = (id, nom, lab) => { const N = NIV[nom]; if (t >= N.t) c.repere(id, 8, N.haut, 664, N.bas - N.haut, lab); };
   rang('echelle_gene', 'gene', 'le gène : allèles HbA et HbS');
@@ -325,7 +348,9 @@ function dessinerEchelles(c, k) {
   rang('echelle_cellule', 'cellule', 'la cellule : hématie ronde et faucille');
   rang('echelle_organisme', 'organisme', 'l’organisme : sain et malade');
   if (t >= 8.6) c.repere('trois_echelles', 672, NIV.organisme.haut, 86, NIV.gene.bas - NIV.organisme.haut, 'les trois échelles');
-  if (t >= 10.4) c.repere('relation', 220, 380, 320, 22, 'allèle → protéine → caractère');
+  if (t >= 10.4) c.repere('maillon_normal', 110, 356, 460, 22, 'allèle normal → protéine fonctionnelle → caractère normal');
+  if (t >= 11.4) c.repere('maillon_mute', 100, 378, 480, 22, 'allèle muté → protéine non fonctionnelle → caractère muté');
+  if (t >= 12.4) c.repere('relation', 90, 400, 500, 22, 'le gène détermine la protéine, qui détermine le caractère');
 }
 function voitEchelles(k) {
   const t = k.t, m = ['Deux colonnes : « personne saine » (gauche) et « personne malade » (droite) ; les niveaux s’empilent de bas en haut, nommés à gauche en jaune, reliés par des flèches jaunes du bas vers le haut.'];
@@ -334,7 +359,9 @@ function voitEchelles(k) {
   if (t >= NIV.cellule.t) m.push('Au-dessus, cellule : une hématie ronde « passe partout » ; une hématie en faucille « bouche les vaisseaux ».');
   if (t >= NIV.organisme.t) m.push('En haut, organisme : une personne debout « sain » ; une personne penchée, pâle, en sueur « malade : anémie, crises ».');
   if (t >= 8.6) m.push('À droite, trois accolades violettes : « échelle de l’organisme », « échelle cellulaire », « échelle moléculaire » (gène et protéine).');
-  if (t >= 10.4) m.push('Écrit en bas en vert : « allèle → protéine → caractère ».');
+  if (t >= 10.4) m.push('Écrit en bas en vert : « allèle normal → protéine fonctionnelle → caractère normal ».');
+  if (t >= 11.4) m.push('Dessous, en rouge : « allèle muté → protéine non fonctionnelle → caractère muté ».');
+  if (t >= 12.4) m.push('Dessous, en jaune : « le gène détermine la protéine, la protéine détermine le caractère ».');
   return m;
 }
 
@@ -348,18 +375,18 @@ window.Etapes.lancer({
     lacher: (id, k, api) => { api.poser({ allele: id }); window.Tableau.bulle(document.getElementById('feedback'), id === 'HbS' ? 'Allèle HbS : hématie en faucille, hémoglobine S, Val en 6e position.' : 'Allèle HbA : hématie ronde, hémoglobine A, Glu en 6e position.'); },
   },
   vues: {
-    sang: { titre: 'Personne saine, personne malade', fin: 14, moments: MS, dessiner: dessinerSang, voit: voitSang, surReglage: sansRejeu,
-      motifs: { deux_personnes: 'deux personnes : saine, et malade (crises douloureuses, anémie, essoufflement)', hematies_normales: 'des hématies rondes passent librement dans le vaisseau', faucilles_bloquent: 'des hématies en faucille s’accrochent et bouchent un petit vaisseau' },
+    sang: { titre: 'Personne saine, personne malade', fin: 14, moments: MS, autoDepart: false, dessiner: dessinerSang, voit: voitSang, surReglage: sansRejeu,
+      motifs: { personne_saine: 'la personne saine', deux_personnes: 'deux personnes : saine, et malade (crises douloureuses, anémie, essoufflement)', organisme: 'le caractère à l’échelle de l’organisme', vaisseau_sain: 'échelle de la cellule : le sang au microscope', faucilles: 'des hématies en faucille', bouchon: 'elles s’accrochent : un bouchon', anemie: 'les hématies en faucille, vite détruites : anémie', hematies_normales: 'des hématies rondes passent librement dans le vaisseau', faucilles_bloquent: 'des hématies en faucille s’accrochent et bouchent un petit vaisseau' },
       conclusion: 'Chez la personne malade, les hématies en faucille bouchent les petits vaisseaux : crises douloureuses, anémie.',
       texte: 'Drépanocytose : une personne saine (hématies rondes, biconcaves, qui passent librement) et une personne malade (crises douloureuses, anémie, essoufflement ; hématies en faucille qui s’accrochent et bouchent un petit vaisseau).',
       explication: [{ repere: 'personne_malade', texte: 'La personne malade : crises douloureuses, anémie, essoufflement.' }, { repere: 'hematie_ronde', texte: 'Chez la personne saine, les hématies sont rondes et passent librement.' }, { repere: 'faucille', texte: 'Chez la personne malade, des hématies en faucille.' }, { repere: 'bouchon', texte: 'Elles s’accrochent et bouchent les petits vaisseaux.' }] },
-    molecule: { titre: 'De l’hématie au gène', fin: 16, moments: MM, dessiner: dessinerMolecule, voit: voitMolecule, surReglage: sansRejeu,
-      motifs: { zoom_hemoglobine: 'dans l’hématie, l’hémoglobine et ses chaînes β', chaine_normale: 'la chaîne β normale : Val – His – Leu – Thr – Pro – Glu – Glu', chaine_mutee: 'la chaîne β de la personne malade : le 6e acide aminé est Val au lieu de Glu', gene_sous_la_chaine: 'sous la chaîne, le gène : le triplet 6 CTC devient CAC' },
+    molecule: { titre: 'De l’hématie au gène', fin: 16, moments: MM, autoDepart: false, dessiner: dessinerMolecule, voit: voitMolecule, surReglage: sansRejeu,
+      motifs: { zoom_hemoglobine: 'dans l’hématie, l’hémoglobine et ses chaînes β', chaine_normale: 'la chaîne β normale : Val – His – Leu – Thr – Pro – Glu – Glu', chaine_mutee: 'la chaîne β de la personne malade', sixieme: 'le 6e acide aminé est Val au lieu de Glu', genes: 'sous chaque chaîne, l’ARNm et le brin transcrit du gène', gene_sous_la_chaine: 'le triplet 6 CTC devient CAC' },
       conclusion: 'Une seule base du gène change (triplet 6 : T → A) : un seul acide aminé change (Glu → Val) : hémoglobine S.',
       texte: 'Hématie → hémoglobine → chaîne β (acides aminés 1 à 7) : normale Val – His – Leu – Thr – Pro – Glu – Glu, malade Val – His – Leu – Thr – Pro – Val – Glu ; ARNm GUG CAC CUG ACU CCU GAG GAG (muté : 6e codon GUG) ; brin transcrit CAC GTG GAC TGA GGA CTC CTC (muté : 6e triplet CAC, T → A). Toucher l’étiquette HbA ou HbS met cet allèle en lumière.',
       explication: [{ repere: 'hemoglobine', texte: 'Dans l’hématie, l’hémoglobine, faite de chaînes dont deux chaînes β.' }, { repere: 'acide_amine_6', texte: 'Le 6e acide aminé : Glu chez la personne saine, Val chez la personne malade.' }, { repere: 'triplet_6_normal', texte: 'Sous Glu, le codon GAG, copié sur le triplet CTC.' }, { repere: 'triplet_6_mute', texte: 'Chez le malade, le triplet CAC : T remplacé par A, codon GUG, Val.' }] },
-    echelles: { titre: 'Du gène au caractère : trois échelles', fin: 12, moments: ME, dessiner: dessinerEchelles, voit: voitEchelles, surReglage: sansRejeu,
-      motifs: { niveau_gene: 'le gène : allèle HbA ou HbS', niveau_proteine: 'la protéine : hémoglobine A ou S', niveau_cellule: 'la cellule : hématie ronde ou en faucille', niveau_organisme: 'l’organisme : sain ou malade', trois_echelles: 'trois échelles : moléculaire, cellulaire, organisme' },
+    echelles: { titre: 'Du gène au caractère : trois échelles', fin: 13.6, moments: ME, autoDepart: false, dessiner: dessinerEchelles, voit: voitEchelles, surReglage: sansRejeu,
+      motifs: { niveau_gene: 'le gène : allèle HbA ou HbS', niveau_proteine: 'la protéine : hémoglobine A ou S', niveau_cellule: 'la cellule : hématie ronde ou en faucille', niveau_organisme: 'l’organisme : sain ou malade', trois_echelles: 'trois échelles : moléculaire, cellulaire, organisme', maillon_normal: 'allèle normal → protéine fonctionnelle → caractère normal', maillon_mute: 'allèle muté → protéine non fonctionnelle → caractère muté', relation: 'le gène détermine la protéine, la protéine détermine le caractère' },
       conclusion: 'Allèle → protéine → caractère, aux trois échelles.',
       texte: 'Gène (allèle HbA / HbS) → protéine (hémoglobine A / S) → cellule (hématie ronde / faucille) → organisme (sain / malade) ; trois échelles : moléculaire, cellulaire, organisme ; allèle → protéine → caractère.',
       explication: [{ repere: 'echelle_gene', texte: 'Au départ, deux allèles du même gène.' }, { repere: 'echelle_proteine', texte: 'Ils donnent deux hémoglobines différentes.' }, { repere: 'echelle_cellule', texte: 'Donc deux formes d’hématies.' }, { repere: 'echelle_organisme', texte: 'Donc deux phénotypes : sain ou malade.' }] },

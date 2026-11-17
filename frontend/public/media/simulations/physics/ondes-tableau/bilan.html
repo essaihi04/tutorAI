@@ -32,10 +32,10 @@ const BLOCS = [
   { id: 'types', titre: '2 · Transversale ou longitudinale', comps: ['C2'],
     def: "Transversale : perturbation ⊥ à la propagation (corde, eau). Longitudinale : même direction (ressort, son).",
     attention: "Le son est longitudinal. Dimensions : corde 1, eau 2, son 3." },
-  { id: 'celerite', titre: '3 · La célérité', comps: ['C3'], formules: ['v = d / Δt'],
+  { id: 'celerite', titre: '3 · La célérité', comps: ['C3'], formules: ['v = ⟦d|Δt⟧'],
     def: "d (m) mesurée de front à front, Δt (s), v (m/s). Dépend du milieu, pas de la source ni de l'amplitude.",
     attention: "Son : ≈ 340 m/s dans l'air, ≈ 1500 m/s dans l'eau." },
-  { id: 'retard', titre: '4 · Le retard τ', comps: ['C4'], formules: ['τ = SM / v', 'y_M(t) = y_S(t − τ)'],
+  { id: 'retard', titre: '4 · Le retard τ', comps: ['C4'], formules: ['τ = ⟦SM|v⟧', 'y_M(t) = y_S(t − τ)'],
     def: "M refait le mouvement de S, avec le retard τ : même courbe, décalée de τ.",
     attention: "Convertir les ms et les cm avant de calculer." },
   { id: 'longueur', titre: '5 · Durée θ et longueur L', comps: ['C5'], formules: ['L = v · θ'],
@@ -44,8 +44,8 @@ const BLOCS = [
   { id: 'aspect', titre: '6 · Lire une onde', comps: ['C6'],
     def: "y(x) : l'aspect du milieu, une photo (front à droite). y(t) : le mouvement d'un point (front à gauche).",
     attention: "Lire l'axe avant la valeur. Devant le sommet, les points montent." },
-  { id: 'mesures', titre: '7 · Mesurer', comps: ['C7', 'C8'], formules: ['τ = divisions × sensibilité', 'v = d / τ', 'd = v · τ / 2'],
-    def: "Deux micros : τ lu sur l'oscilloscope, puis v = d / τ. Écho : aller-retour, 2d = v · τ.",
+  { id: 'mesures', titre: '7 · Mesurer', comps: ['C7', 'C8'], formules: ['τ = divisions × sensibilité', 'v = ⟦d|τ⟧', 'd = ⟦v·τ|2⟧'],
+    def: "Deux micros : τ lu sur l'oscilloscope (divisions × sensibilité). Écho : aller-retour, 2d = v·τ.",
     attention: "Début avec début ; ne pas oublier le 2 de l'aller-retour." },
   { id: 'methode', titre: '8 · Rédiger comme le barème', comps: ['C9'], formules: ['relation → A.N. → résultat → unité'],
     def: "Lire l'axe, reconnaître le cas (mot-code de l'énoncé), puis les quatre temps du calcul.",
@@ -120,15 +120,17 @@ function bloc(c, b, i, g) {
   y += GR ? eff(c, f(15)) + 4 : 17;
   if (b.formules) {
     let fx = x;
+    // une formule à fraction (« ⟦num|dén⟧ », écrite sur deux étages comme dans le cahier) prend un cadre plus haut
+    const etages = b.formules.some(fo => fo.includes('⟦')), t = GR ? eff(c, f(15)) : 15, haut = etages ? 1.45 : .9, bas = etages ? .62 : .4;
+    if (etages) y += t * .45;
     for (const fo of b.formules) {
-      c.ctx.font = `${eff(c, f(15))}px ${window.Tableau.POLICE}`;
-      const l = Math.min(col.w, c.ctx.measureText(fo.replace(/_/g, '')).width + 16);
-      if (fx > x && fx + l > x + col.w) { fx = x; y += GR ? eff(c, f(15)) + 9 : 22; }   // la formule suivante passe à la ligne
-      c.rect(fx, y - (GR ? eff(c, f(15)) * 0.9 : 13), l, GR ? eff(c, f(15)) * 1.3 : 20, { couleur: 'faible', arrondi: 6, largeur: 1.3 });
+      const l = Math.min(col.w, c.largeurTexte(fo.replace(/_/g, ''), t) + 16);
+      if (fx > x && fx + l > x + col.w) { fx = x; y += t * (haut + bas) + 6; }   // la formule suivante passe à la ligne
+      c.rect(fx, y - t * haut + 2, l, t * (haut + bas), { couleur: 'faible', arrondi: 6, largeur: 1.3 });
       c.texte(fo, fx + 8, y + 2, { couleur: 'jaune', taille: f(15), max: l - 12 });
       fx += l + 8;
     }
-    y += GR ? eff(c, f(15)) + 10 : 22;
+    y += t * bas + (GR ? 10 : 13);
   }
   y = paragraphe(c, b.def, x, y, f(12.5), col.w, { couleur: 'blanc' });
   c.texte('⚠', x, y, { couleur: 'orange', taille: f(12) });
@@ -223,7 +225,7 @@ function setParameters(p) {
 function ceQuiSeVoit() {
   if (S.page === 2) return `Page 2/2, la page de l'élève : ${!S.lacunes ? 'pas encore de bilan' : S.lacunes.length ? 'à retravailler : ' + S.lacunes.map(l => l.label).join(' ; ') : 'toutes les compétences évaluées sont acquises'}.`;
   const f = S.focus && BLOCS.find(b => b.id === S.focus);
-  return `Page 1/2, la fiche du chapitre : huit blocs (définition, formule, piège)${f ? ` ; en lumière « ${f.titre} » : ${f.def}${f.formules ? ' Formules : ' + f.formules.join(' ; ') + '.' : ''} Piège : ${f.attention}` : ''}${S.lacunes ? ` Blocs à reprendre : ${BLOCS.filter(b => statut(b) && statut(b) !== 'acquis').map(b => b.titre).join(', ') || 'aucun'}.` : ''}`;
+  return `Page 1/2, la fiche du chapitre : huit blocs (définition, formule, piège)${f ? ` ; en lumière « ${f.titre} » : ${f.def}${f.formules ? ' Formules : ' + f.formules.map(window.Tableau.lisible).join(' ; ') + '.' : ''} Piège : ${f.attention}` : ''}${S.lacunes ? ` Blocs à reprendre : ${BLOCS.filter(b => statut(b) && statut(b) !== 'acquis').map(b => b.titre).join(', ') || 'aucun'}.` : ''}`;
 }
 $('suiv').onclick = () => aller(S.page === 1 ? 2 : 1, 'next');
 // Imprimer / PDF : la fiche entière et la page de l'élève, sur fond blanc (shared/tableau/imprimer.js).

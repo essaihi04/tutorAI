@@ -17,11 +17,18 @@
  * La chaîne respiratoire et la phosphorylation oxydative, vues de près (cours SVT « Libération de l’énergie »,
  * 10 novembre 2026). Une bande de membrane interne peinte ; au-dessus l’espace intermembranaire, en dessous la matrice.
  * Quatre transporteurs anonymes T1…T4 et la sphère pédonculée (tête dans la matrice).
- * Ligne de temps (t en s de la scène, mode ordinaire) :
- *   membrane_seule (2)  taxi_arrive (4,5)  taxi_decharge (7)  electrons_passent (10,5)  o2_recoit (12,5)
- *   eau_formee (14)  protons_pompes (18)  espace_charge (20)  retour_par_la_sphere (23)  atp_forme (25)
- * Modes (set_parameters ou URL) : o2 (sans O2 : sans_o2_arret 12), entree fadh2 (entree_fadh2 7, dépôt sur T2),
- * poison cyanure (bloque 10, pas_d_atp 16), etiquettes examen (structures 2,5, reactions 25,5, solution 28,5).
+ * Ligne de temps (t en s de la scène, mode ordinaire) — un moment par chose que dit le tuteur (17 novembre 2026,
+ * « il parle de l’oxydation de NADH,H+ et on ne voit pas NADH,H+ céder ses électrons à T1 ») :
+ *   membrane_nommee (0,6)  matrice_nommee (1,1)  espace_nomme (1,6)  membrane_seule (2,2)
+ *   taxi_arrive (4,5)  taxi_decharge (6,2 : 2 e− sur T1, 2 H+ dans la matrice)  nad_repart (7,6)  equation_nadh (7,9)
+ *   e_t2 (9)  e_t3 (10)  electrons_passent (11 : sur T4)  relais_ecrit (11,2)
+ *   o2_arrive (12)  o2_recoit (13)  eau_formee (14,6)  equation_eau (14,9)  o2_accepteur (15,2)
+ *   protons_pompes (19)  espace_charge (21)  gradient_ecrit (21,4)  retour_par_la_sphere (23,4)  atp_forme (26)
+ * Modes (set_parameters ou URL) : o2 (sans O2 : sans_o2_arret 12,8), entree fadh2 (entree_fadh2 6,2, dépôt sur T2),
+ * poison cyanure (cyanure_pose 2,8, bloque 11,6, o2_non 12,9, pas_d_atp 15,4), etiquettes examen (structures 26,6,
+ * reactions 27,6, solution 30,5 : les numéros et les lettres viennent quand le tuteur les montre).
+ * ?depart=<moment> : la page s’ouvre figée sur ce moment (diapositive pilotée par la voix, voir commun.js).
+ * Pendant le premier relais, le transporteur qui porte les électrons est marqué « réduit », ceux qui les ont donnés « oxydé ».
  * Dans la première partie, les protons ne bougent pas ; le relais est rejoué ensuite avec le pompage.
  * Aucun nom de complexe appris, aucun nombre de protons pompés : la vue « examen » montre CI…CV comme un sujet.
  * Le rythme est celui d’une explication, pas une vitesse réelle.
@@ -99,14 +106,15 @@ function planifier() {
     }
     return out;
   };
-  /* Un taxi NADH,H+ (ou FADH2) : il arrive sous T(k0), rend 2 H+ à la matrice et 2 e− au transporteur. */
-  function taxi(ts, ta, tu, dur, reste, rapide) {
+  /* Un taxi NADH,H+ (ou FADH2) : il arrive sous T(k0), rend 2 H+ à la matrice et 2 e− au transporteur.
+   * `garer` : le taxi vidé (NAD+) repart à gauche et y reste visible jusqu’à `garer.a` (le tuteur le montre). */
+  function taxi(ts, ta, tu, dur, reste, rapide, garer) {
     const tx = TX[k0], ty = TY[k0];
     const v = piste(66, 300, ts, ts, .3); aller(v, ts, ta, tx, ty); v.tu = tu; v.reste = reste;
     if (reste) { TAXIS.push(v); return null; }
     const pl = libres(2, tx, ty); v.places = pl; TAXIS.push(v);
-    const t2 = rapide ? tu + .5 : tu + 1.2, t3 = rapide ? tu + 1.0 : tu + 2.4;
-    aller(v, t2, t3, tx - 22, ty + 16); v.a = t3; v.fo = .8;
+    if (garer) { aller(v, tu + 1.4, tu + 2.6, 96, 300); v.a = garer.a; v.fo = .5; }
+    else { const t2 = rapide ? tu + .5 : tu + 1.2, t3 = rapide ? tu + 1.0 : tu + 2.4; aller(v, t2, t3, tx - 22, ty + 16); v.a = t3; v.fo = .8; }
     const es = [205, 219].map((yy, i) => { const e = piste(tx + (i ? 9 : -9), ty - 4, tu, tu, .15); aller(e, tu, tu + dur, TX[k0] - 9, yy); E.push(e); return e; });
     const hs = pl.map(([x, y], i) => { const h = piste(tx + (i ? 10 : -10), ty, tu, tu, .15); aller(h, tu, tu + dur, x, y); H.push(h); return h; });
     return { es, hs };
@@ -121,18 +129,21 @@ function planifier() {
     POMPES.push({ k, h, place, t0: t0 - a, t1: t0 + b + c });
   }
 
-  const t1 = taxi(2.5, 4.5, 5.0, 1.0, false, false);
-  const fin = { moments: {}, FIN: 27 };
-  for (let k = k0; k < stop; k++) sauter(t1.es, k + 1, 7.5 + k, 8.5 + k);
+  // Premier passage, au rythme d’une explication : le taxi arrive (4,5), se vide (5-6), repart (6,4-7,6), puis le
+  // relais, un transporteur par seconde (T2 à 9, T3 à 10, T4 à 11).
+  const t1 = taxi(2.5, 4.5, 5.0, 1.0, false, false, bloque ? null : { a: 15.4 });
+  const fin = { moments: {}, FIN: 28 };
+  const NOMS = { membrane_nommee: .6, matrice_nommee: 1.1, espace_nomme: 1.6, membrane_seule: 2.2, taxi_arrive: 4.5 };
+  for (let k = k0; k < stop; k++) sauter(t1.es, k + 1, 8.0 + k, 9.0 + k);
   if (!bloque) {
-    // Premier passage : le dioxygène reçoit les électrons et deux H+ de la matrice : de l’eau.
-    const o = piste(500, 316, 10.5, 10.5, .5); aller(o, 10.5, 11.5, O2A.x, O2A.y); o.a = 12.6; O2.push(o);
-    t1.es.forEach((e, i) => { aller(e, 11.6, 11.95, 459, 250 + 9 * i); aller(e, 11.95, 12.5, O2A.x + (i ? 6 : -6), O2A.y - 6); e.a = 12.6; e.fo = .1; });
-    [pool[4], pool[5]].forEach((h, i) => { aller(h, 11.5, 12.5, O2A.x + (i ? 8 : -8), O2A.y + 7); h.a = 12.6; h.fo = .1; });
-    const w = piste(O2A.x, O2A.y, 12.6, 12.6, .3); aller(w, 13.0, 14.0, EAU1.x, EAU1.y); EAUX.push(w);
-    // Le relais rejoué, cette fois avec le pompage.
-    const t2 = taxi(14.5, 15.1, 15.1, .3, false, true);
-    const arr = k => 15.4 + .7 * (k - k0);
+    // Le dioxygène arrive près de T4, côté matrice (12), reçoit les électrons et deux H+ de la matrice (13) : de l’eau.
+    const o = piste(500, 316, 11.2, 11.2, .5); aller(o, 11.2, 12.0, O2A.x, O2A.y); o.a = 13.1; O2.push(o);
+    t1.es.forEach((e, i) => { aller(e, 12.1, 12.45, 459, 250 + 9 * i); aller(e, 12.45, 13.0, O2A.x + (i ? 6 : -6), O2A.y - 6); e.a = 13.1; e.fo = .1; });
+    [pool[4], pool[5]].forEach((h, i) => { aller(h, 12.0, 13.0, O2A.x + (i ? 8 : -8), O2A.y + 7); h.a = 13.1; h.fo = .1; });
+    const w = piste(O2A.x, O2A.y, 13.1, 13.1, .3); aller(w, 13.5, 14.5, EAU1.x, EAU1.y); EAUX.push(w);
+    // Le relais rejoué, cette fois avec le pompage (à partir de 15,5).
+    const t2 = taxi(15.5, 16.1, 16.1, .3, false, true);
+    const arr = k => 16.4 + .7 * (k - k0);
     for (let k = k0; k < 3; k++) sauter(t2.es, k + 1, arr(k), arr(k + 1));
     const A4 = arr(3);
     const o2 = piste(O2B.x, O2B.y, A4 - 1, A4 - 1, .6); o2.a = A4 + .9; O2.push(o2);
@@ -141,58 +152,79 @@ function planifier() {
     const w2 = piste(O2B.x, O2B.y, A4 + .9, A4 + .9, .3); aller(w2, A4 + 1.2, A4 + 1.9, EAU2.x, EAU2.y); EAUX.push(w2);
     const sources = { 0: [t1.hs[0], pool[0]], 2: [pool[2], pool[1]], 3: [pool[8], pool[3]] };
     const sites = [0, 2, 3].filter(k => k >= k0);
-    sites.forEach(k => pomper(sources[k][0], k, k === k0 ? 15.25 : arr(k), false));
-    sites.forEach((k, i) => pomper(sources[k][1], k, 18.5 + .3 * i, true));
+    sites.forEach(k => pomper(sources[k][0], k, k === k0 ? 16.25 : arr(k), false));
+    sites.forEach((k, i) => pomper(sources[k][1], k, 19.5 + .3 * i, true));
     // Retour des H+ par la sphère pédonculée seulement, et ATP à la tête.
     const pompe = (x, y) => (POMPES.find(p => p.place[0] === x && p.place[1] === y) || {}).h;
     const ordre = [pompe(464, 148), pompe(430, 168), esp[2], pompe(330, 168)].filter(Boolean);
     const nRet = fadh ? 3 : 4;
     ordre.slice(0, nRet).forEach((h, i) => {
-      const t0 = 20.6 + .7 * i, s = SORTIES[i];
+      const t0 = 21.6 + .7 * i, s = SORTIES[i];
       aller(h, t0, t0 + .4, SX, 176); aller(h, t0 + .4, t0 + .9, SX, TETE.y); aller(h, t0 + .9, t0 + 1.2, s[0], s[1]);
       RETOURS.push({ t0, t1: t0 + 1.2 });
     });
-    (fadh ? [23.0, 23.9] : [22.9, 23.6, 24.3]).forEach((t0, i) => ATP.push({ t0, i }));
-    Object.assign(fin.moments, { membrane_seule: 2, taxi_arrive: 4.5 }, fadh ? { entree_fadh2: 7 } : { taxi_decharge: 7 },
-      { electrons_passent: 10.5, o2_recoit: 12.5, eau_formee: 14, protons_pompes: 18, espace_charge: 20, retour_par_la_sphere: 23, atp_forme: 25 });
-    fin.FIN = 27;
-    if (examen) { Object.assign(fin.moments, { structures: 2.5, reactions: 25.5, solution: 28.5 }); fin.FIN = 30; }
-    fin.tEau = 12.6; fin.tEau2 = A4 + .9; fin.tA4 = A4;
+    (fadh ? [24.0, 24.9] : [23.9, 24.6, 25.3]).forEach((t0, i) => ATP.push({ t0, i }));
+    // Vue examen : un autre RH2 arrive et attend sous CI (le sujet le montre chargé).
+    if (examen) taxi(24.6, 25.6, Infinity, 0, true, true);
+    Object.assign(fin.moments, NOMS, fadh ? { entree_fadh2: 6.2, bilan_fadh2: 6.8 } : { taxi_decharge: 6.2, nad_repart: 7.6 }, { equation_nadh: 7.9 },
+      fadh ? { e_t3: 10 } : { e_t2: 9, e_t3: 10 },
+      { electrons_passent: 11, relais_ecrit: 11.2, o2_arrive: 12, o2_recoit: 13, eau_formee: 14.6, equation_eau: 14.9, o2_accepteur: 15.2,
+        protons_pompes: 19, espace_charge: 21, gradient_ecrit: 21.4, retour_par_la_sphere: 23.4, atp_forme: 26 });
+    fin.FIN = 28;
+    if (examen) { Object.assign(fin.moments, { structures: 26.6, reactions: 27.6, solution: 30.5 }); fin.FIN = 31; }
+    fin.tEau = 13.1; fin.tEau2 = A4 + .9; fin.tA4 = A4;
   } else {
     // Embouteillage : chaque nouveau taxi pousse ses électrons derrière les précédents, puis un taxi reste chargé.
-    if (cyan) { const o = piste(500, 316, 10.5, 10.5, .5); aller(o, 10.5, 11.5, O2A.x, O2A.y); O2.push(o); }
+    if (cyan) { const o = piste(500, 316, 11.6, 11.6, .5); aller(o, 11.6, 12.4, O2A.x, O2A.y); O2.push(o); }
+    let tFin = 0;
     for (let p = 1; ; p++) {
-      const ts = 7.6 + 1.2 * (p - 1), ta = ts + .8, cible = stop - p;
-      if (cible < k0) { taxi(ts, ta, ta, .4, true, true); break; }
+      const ts = 8.0 + 1.2 * (p - 1), ta = ts + .8, cible = stop - p;
+      if (cible < k0) { taxi(ts, ta, ta, .4, true, true); tFin = ta; break; }
       const tp = taxi(ts, ta, ta, .4, false, true);
       tp.hs.forEach(h => { h.a = ta + 1.6; h.fo = .6; });   // ces H+ rejoignent la matrice (ils se fondent dans la masse)
       for (let k = k0; k < cible; k++) sauter(tp.es, k + 1, ta + .6 + .6 * (k - k0), ta + 1.2 + .6 * (k - k0));
     }
-    Object.assign(fin.moments, { membrane_seule: 2, taxi_arrive: 4.5 }, fadh ? { entree_fadh2: 7 } : { taxi_decharge: 7 });
-    if (cyan) { Object.assign(fin.moments, { bloque: 10, pas_d_atp: 16 }); fin.FIN = 17.5; }
-    else { Object.assign(fin.moments, { electrons_passent: 10.5, sans_o2_arret: 12 }); fin.FIN = 14; }
+    Object.assign(fin.moments, NOMS, fadh ? { entree_fadh2: 6.2 } : { taxi_decharge: 6.2 }, { equation_nadh: 7.9 });
+    if (cyan) { Object.assign(fin.moments, { cyanure_pose: 2.8, bloque: Math.max(11.6, tFin + .4), o2_non: 12.9, pas_d_atp: 15.4 }); fin.FIN = 16.5; }
+    else { Object.assign(fin.moments, { electrons_passent: 11, sans_o2_arret: Math.max(12.8, tFin + .4) }); fin.FIN = 14.5; }
     if (examen) fin.moments.structures = 2.5;
   }
-  PL = { fadh, cyan, sansO2, bloque, examen, k0, stop, H, E, TAXIS, O2, EAUX, ATP, POMPES, RETOURS, ...fin };
+  const RELAIS = { es: t1.es, fin: bloque ? -1 : 15.4 };
+  PL = { fadh, cyan, sansO2, bloque, examen, k0, stop, H, E, TAXIS, O2, EAUX, ATP, POMPES, RETOURS, RELAIS, T1HS: t1.hs, ...fin };
   for (const k of Object.keys(M)) delete M[k];
   Object.assign(M, fin.moments);
 }
 planifier();
 
 const MOTIFS = {
-  membrane_seule: 'la membrane interne entre l’espace intermembranaire (en haut) et la matrice (en bas)',
-  taxi_arrive: 'le NADH,H+ arrive de la matrice jusqu’au premier transporteur',
-  taxi_decharge: 'NADH,H+ → NAD+ + 2 H+ + 2 e− : les électrons passent à T1',
+  membrane_nommee: 'la membrane interne, la bande entre les deux compartiments',
+  matrice_nommee: 'sous la membrane : la matrice',
+  espace_nomme: 'au-dessus : l’espace intermembranaire',
+  membrane_seule: 'la membrane interne entre l’espace intermembranaire (en haut) et la matrice (en bas), la sphère pédonculée à droite',
+  taxi_arrive: 'le NADH,H+ arrive de la matrice jusqu’au premier transporteur T1',
+  taxi_decharge: 'NADH,H+ → NAD+ + 2 H+ + 2 e− : 2 électrons sur T1, 2 H+ dans la matrice',
+  nad_repart: 'le NAD+ vidé (oxydé) repart chercher d’autres hydrogènes',
+  equation_nadh: 'écrit : NADH,H+ → NAD+ + 2 H+ + 2 e− (oxydation de NADH,H+)',
   entree_fadh2: 'FADH2 → FAD + 2 H+ + 2 e− : les électrons entrent plus loin, sur T2',
-  electrons_passent: 'les électrons passent de transporteur en transporteur : réactions d’oxydoréduction',
+  e_t2: 'les électrons passent de T1 à T2 : T1 oxydé, T2 réduit',
+  e_t3: 'les électrons passent à T3 : T3 réduit',
+  electrons_passent: 'les électrons arrivent sur T4 : chaque transporteur réduit puis oxydé, réactions d’oxydoréduction',
+  relais_ecrit: 'écrit : relais T1 → T2 → T3 → T4 : réactions d’oxydoréduction',
+  o2_arrive: 'le dioxygène arrive près de T4, côté matrice',
   o2_recoit: 'le dioxygène reçoit les deux électrons et deux H+ de la matrice',
-  eau_formee: 'de l’eau est formée : O2 est l’accepteur final d’électrons',
+  eau_formee: 'de l’eau est formée',
+  equation_eau: 'écrit : ½ O2 + 2 H+ + 2 e− → H2O',
+  o2_accepteur: 'écrit : O2 accepteur final d’électrons',
   protons_pompes: 'au passage des électrons, des H+ passent de la matrice vers l’espace intermembranaire',
-  espace_charge: 'beaucoup de H+ dans l’espace, peu dans la matrice : un gradient de protons',
+  espace_charge: 'beaucoup de H+ dans l’espace, peu dans la matrice',
+  gradient_ecrit: 'écrit : gradient de protons, [H+] élevée (pH bas) dans l’espace',
   retour_par_la_sphere: 'les H+ redescendent seulement par la sphère pédonculée',
   atp_forme: 'ADP + Pi + énergie → ATP : phosphorylation oxydative',
+  bilan_fadh2: 'écrit : 1 NADH,H+ → 3 ATP ; 1 FADH2 → 2 ATP (FADH2 entre sur T2 : moins de pompage)',
   sans_o2_arret: 'sans dioxygène, les électrons s’entassent : tout s’arrête',
+  cyanure_pose: 'le cyanure bloque T4',
   bloque: 'le cyanure bloque T4 : les électrons s’arrêtent derrière',
+  o2_non: 'le dioxygène n’est pas réduit : il n’est pas consommé',
   pas_d_atp: 'cyanure : pas de pompage, pas de gradient, pas d’ATP',
   structures: 'les structures numérotées 1, 2, 3',
   reactions: 'les réactions repérées A, B, C',
@@ -228,14 +260,14 @@ function ecrits() {
   add('titre_ex', .3, ex(), 'bandeau : document type, les noms des complexes sont donnés par le sujet', c =>
     (MOS.actif() ? ['document type : les noms', 'des complexes sont donnés', 'par le sujet, on ne les', 'apprend pas'].forEach((l, i) => c.texte(l, 800, 112 + i * 20, { couleur: 'faible', taille: 16 }))
       : c.texte('document type : les noms des complexes sont donnés par le sujet, on ne les apprend pas', 146, 54, { couleur: 'faible', taille: 12 })));
-  add('n_espace', .2, cours, 'espace intermembranaire', c => c.texte('espace intermembranaire', 20, 112, { couleur: 'orange', taille: 14 }));
-  add('n_membrane', .6, cours, 'membrane interne', c => c.texte('membrane interne', 20, 186, { couleur: 'jaune', taille: 14 }));
-  add('n_matrice', 1.0, true, 'matrice', c => c.texte('matrice', 20, 262, { couleur: 'bleu', taille: 14 }));
-  add('n_sphere', 1.3, true, ex() ? 'CV (ATP synthase)' : 'sphère pédonculée (ATP synthase)', c => {
+  add('n_espace', 1.2, cours, 'espace intermembranaire', c => c.texte('espace intermembranaire', 20, 112, { couleur: 'orange', taille: 14 }));
+  add('n_membrane', .2, cours, 'membrane interne', c => c.texte('membrane interne', 20, 186, { couleur: 'jaune', taille: 14 }));
+  add('n_matrice', .7, true, 'matrice', c => c.texte('matrice', 20, 262, { couleur: 'bleu', taille: 14 }));
+  add('n_sphere', 1.7, true, ex() ? 'CV (ATP synthase)' : 'sphère pédonculée (ATP synthase)', c => {
     c.texte(ex() ? 'CV (ATP synthase)' : 'sphère pédonculée (ATP synthase)', 745, 132, { couleur: 'jaune', taille: 14, align: 'right' });
     c.fleche(690, 138, 621, 256, { couleur: 'jaune', largeur: 1.5, tete: 9 });
   });
-  add('num', .8, ex(), 'numéros 1, 2, 3', c => {
+  add('num', ok ? 26.3 : .8, ex(), 'numéros 1, 2, 3', c => {
     for (const [n, x, y] of [[3, 28, 107], [1, 28, 181], [2, 634, 262]]) {
       c.cercle(x, y, 9, { couleur: 'blanc', largeur: 1.4 }); c.texte(String(n), x, y + 5, { couleur: 'blanc', taille: 14, align: 'center' });
     }
@@ -245,32 +277,32 @@ function ecrits() {
     c.ligne(x - 22, Y.mid - h, x + 22, Y.mid + h, { couleur: 'rouge', largeur: 3 }); c.ligne(x + 22, Y.mid - h, x - 22, Y.mid + h, { couleur: 'rouge', largeur: 3 });
     c.texte('cyanure', x, 170, { couleur: 'rouge', taille: 14, align: 'center' });
   });
-  add('taxi_eq', 5.2, true, eqTaxi(), c => c.texte(eqTaxi(), 20, R1, { couleur: 'cyan', taille: 15 }));
-  add('lettre_A', 6.2, ex(), 'lettre A (près du taxi)', c => { c.cercle(126, 268, 9, { couleur: 'rose', largeur: 1.4 }); c.texte('A', 126, 273, { couleur: 'rose', taille: 14, align: 'center' }); });
-  add('relais', 8.6, cours, relais() + ' : réactions d’oxydoréduction', c => {
+  add('taxi_eq', 7.7, true, eqTaxi(), c => c.texte(eqTaxi(), 20, R1, { couleur: 'cyan', taille: 15 }));
+  add('lettre_A', ok ? 26.8 : 6.2, ex(), 'lettre A (près du taxi)', c => { c.cercle(126, 268, 9, { couleur: 'rose', largeur: 1.4 }); c.texte('A', 126, 273, { couleur: 'rose', taille: 14, align: 'center' }); });
+  add('relais', 11.1, cours, relais() + ' : réactions d’oxydoréduction', c => {
     c.texte(relais() + ' :', 20, R2, { couleur: 'jaune', taille: 14 });
     c.texte('réactions d’oxydoréduction', 20, R3, { couleur: 'jaune', taille: 15 });
   });
-  add('sans_o2', 10.6, PL.sansO2 && !PL.cyan, 'sans dioxygène, tout s’arrête', c => c.texte('sans dioxygène, tout s’arrête', 415, R1, { couleur: 'rouge', taille: 15, align: 'center', duree: 1.3 }));
-  add('o2_non', 10.8, PL.cyan, 'O2 non réduit (non consommé)', c => c.texte('O_{2} non réduit (non consommé)', 415, R1, { couleur: 'rouge', taille: 14, align: 'center' }));
-  add('eau_eq', 12.4, ok && cours, '½ O2 + 2 H+ + 2 e− → H2O', c => c.texte('½ O_{2} + 2 H+ + 2 e− → H_{2}O', 415, R1, { couleur: 'bleu', taille: 15, align: 'center' }));
-  add('lettre_B', 13.0, ok && ex(), 'lettre B (près du dioxygène)', c => { c.cercle(426, 280, 9, { couleur: 'rose', largeur: 1.4 }); c.texte('B', 426, 285, { couleur: 'rose', taille: 14, align: 'center' }); });
-  add('accepteur', 13.2, ok && cours, 'O2 : accepteur final d’électrons', c => c.texte('O_{2} : accepteur final d’électrons', 415, R2, { couleur: 'bleu', taille: 14, align: 'center' }));
-  add('h2o', 13.6, ok, 'H2O', c => c.texte('H_{2}O', 456, 309, { couleur: 'bleu', taille: 14, align: 'right' }));
-  add('chaine_causale', 14.0, PL.cyan, 'transfert des e− arrêté → O2 non consommé → pas de pompage des H+ → pas de gradient → pas d’ATP', c =>
+  add('sans_o2', 11.4, PL.sansO2 && !PL.cyan, 'sans dioxygène, tout s’arrête', c => c.texte('sans dioxygène, tout s’arrête', 415, R1, { couleur: 'rouge', taille: 15, align: 'center', duree: 1.3 }));
+  add('o2_non', 12.5, PL.cyan, 'O2 non réduit (non consommé)', c => c.texte('O_{2} non réduit (non consommé)', 415, R1, { couleur: 'rouge', taille: 14, align: 'center' }));
+  add('eau_eq', 14.7, ok && cours, '½ O2 + 2 H+ + 2 e− → H2O', c => c.texte('½ O_{2} + 2 H+ + 2 e− → H_{2}O', 415, R1, { couleur: 'bleu', taille: 15, align: 'center' }));
+  add('lettre_B', 27.0, ok && ex(), 'lettre B (près du dioxygène)', c => { c.cercle(426, 280, 9, { couleur: 'rose', largeur: 1.4 }); c.texte('B', 426, 285, { couleur: 'rose', taille: 14, align: 'center' }); });
+  add('accepteur', 15.0, ok && cours, 'O2 : accepteur final d’électrons', c => c.texte('O_{2} : accepteur final d’électrons', 415, R2, { couleur: 'bleu', taille: 14, align: 'center' }));
+  add('h2o', 14.1, ok, 'H2O', c => c.texte('H_{2}O', 456, 309, { couleur: 'bleu', taille: 14, align: 'right' }));
+  add('chaine_causale', 13.2, PL.cyan, 'transfert des e− arrêté → O2 non consommé → pas de pompage des H+ → pas de gradient → pas d’ATP', c =>
     c.texte('transfert des e− arrêté → O_{2} non consommé → pas de pompage des H+ → pas de gradient → pas d’ATP', 380, R4, { couleur: 'rouge', taille: 14, align: 'center', max: 735, duree: 2 }));
-  add('gradient', 18.4, ok && cours, 'gradient de protons : [H+] élevée (pH bas) dans l’espace, faible dans la matrice', c =>
+  add('gradient', 21.1, ok && cours, 'gradient de protons : [H+] élevée (pH bas) dans l’espace, faible dans la matrice', c =>
     c.texte('gradient de protons : [H+] élevée (pH bas) dans l’espace, faible dans la matrice', 200, 112, { couleur: 'rouge', taille: 14, max: 540, duree: 1.8 }));
-  add('retour', 21.0, ok && cours, 'retour des H+ : seulement par la sphère', c => (MOS.actif()   // tableau large : sur deux lignes (le texte grossi ne touche pas « O2 : accepteur final »)
+  add('retour', 22.0, ok && cours, 'retour des H+ : seulement par la sphère', c => (MOS.actif()   // tableau large : sur deux lignes (le texte grossi ne touche pas « O2 : accepteur final »)
     ? (c.texte('retour des H+ :', 680, R1, { couleur: 'rouge', taille: 13, align: 'right' }), c.texte('seulement par la sphère', 745, R2, { couleur: 'rouge', taille: 13, align: 'right' }))
     : c.texte('retour des H+ : seulement par la sphère', 745, R2, { couleur: 'rouge', taille: 13, align: 'right' })));
-  add('lettre_C', 23.4, ok && ex(), 'lettre C (à la tête de la sphère)', c => { c.cercle(560, 244, 9, { couleur: 'rose', largeur: 1.4 }); c.texte('C', 560, 249, { couleur: 'rose', taille: 14, align: 'center' }); });
-  add('atp_eq', 23.4, ok && cours, 'ADP + Pi + énergie → ATP : phosphorylation oxydative', c => {
+  add('lettre_C', 27.2, ok && ex(), 'lettre C (à la tête de la sphère)', c => { c.cercle(560, 244, 9, { couleur: 'rose', largeur: 1.4 }); c.texte('C', 560, 249, { couleur: 'rose', taille: 14, align: 'center' }); });
+  add('atp_eq', 24.4, ok && cours, 'ADP + Pi + énergie → ATP : phosphorylation oxydative', c => {
     c.texte('ADP + Pi + énergie → ATP :', 640, R3, { couleur: 'jaune', taille: 15, align: 'center' });
     c.texte('phosphorylation oxydative', 640, R4, { couleur: 'jaune', taille: 15, align: 'center' });
   });
-  add('bilan_fadh', 23.6, ok && cours && PL.fadh, '1 NADH,H+ → 3 ATP ; 1 FADH2 → 2 ATP', c => c.texte('1 NADH,H+ → 3 ATP ; 1 FADH_{2} → 2 ATP', 20, R4, { couleur: 'vert', taille: 14 }));
-  add('solution', 26.4, ok && ex(), 'solution : 1 membrane interne, 2 sphère pédonculée, 3 espace intermembranaire ; A oxydation des transporteurs réduits, B réduction de O2 en H2O, C phosphorylation de l’ADP', c => {
+  add('bilan_fadh', 6.4, ok && cours && PL.fadh, '1 NADH,H+ → 3 ATP ; 1 FADH2 → 2 ATP', c => c.texte('1 NADH,H+ → 3 ATP ; 1 FADH_{2} → 2 ATP', 20, R4, { couleur: 'vert', taille: 14 }));
+  add('solution', 27.8, ok && ex(), 'solution : 1 membrane interne, 2 sphère pédonculée, 3 espace intermembranaire ; A oxydation des transporteurs réduits, B réduction de O2 en H2O, C phosphorylation de l’ADP', c => {
     c.texte('espace intermembranaire', 44, 112, { couleur: 'orange', taille: 14 });
     c.texte('membrane interne', 44, 186, { couleur: 'jaune', taille: 14 });
     c.texte('sphère pédonculée', 648, 267, { couleur: 'jaune', taille: 12 });
@@ -313,6 +345,21 @@ function capsule(c, x, y, w, h, coul, nom, a, taille = 12, coulTexte = ENCRE) {
 }
 function largeurTaxi(charge) { return ex() ? (charge ? 46 : 30) : PL.fadh ? (charge ? 68 : 44) : (charge ? 74 : 46); }
 
+/* L’état de chaque transporteur pendant le premier relais (vue cours, chaîne qui marche) : 'réduit', 'oxydé' ou ''. */
+function etatsTransporteurs(t) {
+  const out = ['', '', '', ''];
+  if (ex() || PL.bloque || t < 6.0 || t >= PL.RELAIS.fin) return out;
+  const e = PL.RELAIS.es[0], a = vis(e, t);
+  if (a <= 0) { for (let k = PL.k0; k <= PL.stop; k++) out[k] = 'oxydé'; return out; }
+  const [x, y] = ou(e, t), parti = y > Y.m1 + 8 && t > 9;   // les électrons ont quitté T4 vers le dioxygène
+  for (let k = PL.k0; k <= PL.stop; k++) {
+    const cx = TX[k] - 9;
+    if (parti || x > cx + 10) out[k] = 'oxydé';
+    else if (Math.abs(x - cx) <= 10 && y < Y.m1 + 8) out[k] = 'réduit';
+  }
+  return out;
+}
+
 function dessiner(c) {
   if (CONSTRUIRE) return dessinerConstruire(c);
   const t = chrono.t, L = ecrits();
@@ -338,9 +385,13 @@ function dessiner(c) {
 
   // pompes (flèches rouges) et retour par la sphère
   const pompesVues = new Set();
-  for (const p of PL.POMPES) if (t >= p.t0 && t < 20.5) pompesVues.add(p.k);
+  for (const p of PL.POMPES) if (t >= p.t0 && t < 21.5) pompesVues.add(p.k);
   for (const k of pompesVues) ecrit.ecrire(c, 'pompe' + k, () => c.fleche(TX[k] + 32, 262, TX[k] + 32, 166, { couleur: 'rouge', largeur: 2, tete: 9 }));
-  if (PL.RETOURS.length && t >= 20.4) ecrit.ecrire(c, 'retour_fleche', () => c.fleche(584, 172, 584, 250, { couleur: 'rouge', largeur: 2, tete: 9 }));
+  if (PL.RETOURS.length && t >= 21.4) ecrit.ecrire(c, 'retour_fleche', () => c.fleche(584, 172, 584, 250, { couleur: 'rouge', largeur: 2, tete: 9 }));
+
+  // Premier relais (vue cours) : le transporteur qui porte les électrons est « réduit », ceux qui les ont donnés « oxydé ».
+  const etats = etatsTransporteurs(t);
+  etats.forEach((e, k) => { if (e) c.direct(() => c.texte(e, TX[k], 172, { couleur: e === 'réduit' ? 'jaune' : 'blanc', taille: 13, align: 'center' })); });
 
   // taxis
   for (const v of PL.TAXIS) {
@@ -387,22 +438,37 @@ function dessiner(c) {
   c.repere('espace', 8, Y.esp, 744, Y.m0 - Y.esp, 'l’espace intermembranaire');
   c.repere('membrane', 8, Y.m0, 744, Y.m1 - Y.m0, 'la membrane interne');
   c.repere('matrice', 8, Y.m1 + 4, 744, 92, 'la matrice');
-  c.repere('t1', TX[0] - TW[0] / 2, Y.mid - TH[0] / 2, TW[0], TH[0], ex() ? 'T1 (CI)' : 'le transporteur T1');
-  c.repere('t4', TX[3] - TW[3] / 2, Y.mid - TH[3] / 2, TW[3], TH[3], ex() ? 'T4 (CIV)' : 'le transporteur T4');
+  // Chaque transporteur, et les quatre ensemble (17 novembre 2026 : « T1 quand il dit T1 », jamais le voisin).
+  for (let k = 0; k < 4; k++) c.repere('t' + (k + 1), TX[k] - TW[k] / 2, Y.mid - TH[k] / 2, TW[k], TH[k], ex() ? `T${k + 1} (${NOMS_C[k]})` : `le transporteur T${k + 1}`);
+  c.repere('transporteurs', TX[0] - TW[0] / 2 - 4, Y.mid - TH[0] / 2 - 4, TX[3] + TW[3] / 2 - TX[0] + TW[0] / 2 + 8, TH[0] + 8, ex() ? 'les transporteurs CI à CIV' : 'les transporteurs T1 à T4');
+  // Les objets qui bougent : la boîte serrée de ce qui est dessiné à cet instant (la baguette tombe dessus, pas à côté).
   const bb = (pts, d, def) => { if (!pts.length) return def; const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]); return [Math.min(...xs) - d, Math.min(...ys) - d, Math.max(...xs) - Math.min(...xs) + 2 * d, Math.max(...ys) - Math.min(...ys) + 2 * d]; };
-  const tv = PL.TAXIS.filter(v => vis(v, t) > 0).map(v => ou(v, t));
-  c.repere('taxi', ...bb(tv, 38, [TX[PL.k0] - 40, TY[PL.k0] - 14, 80, 28]), 'le taxi ' + nomTaxi(true).replace(/[_{}]/g, '') + ' / ' + nomTaxi(false));
-  const ev = PL.E.filter(e => vis(e, t) > 0).map(e => ou(e, t));
-  c.repere('electrons', ...bb(ev, 10, [TX[0] - 30, Y.mid - 20, TX[3] - TX[0] + 60, 40]), 'les électrons e−');
-  const ov = PL.O2.filter(o => vis(o, t) > 0).map(o => ou(o, t));
-  c.repere('o2', ...(ov.length ? bb(ov, 14, null) : [RAIL.x0 - 70, RAIL.y - 14, RAIL.x1 - RAIL.x0 + 140, 28]), ov.length ? 'le dioxygène' : 'la poignée du dioxygène (avec / sans O2)');
-  c.repere('eau', 420, 276, 96, 46, 'l’eau formée');
-  c.repere('protons', 20, 136, 580, 56, 'les protons H+ de l’espace intermembranaire');
+  const boites = (rs) => { if (!rs.length) return null; const x0 = Math.min(...rs.map(r => r[0])), y0 = Math.min(...rs.map(r => r[1])), x1 = Math.max(...rs.map(r => r[0] + r[2])), y1 = Math.max(...rs.map(r => r[1] + r[3])); return [x0, y0, x1 - x0, y1 - y0]; };
+  const taxis = PL.TAXIS.filter(v => vis(v, t) > .2).map(v => { const [x, y] = ou(v, t), w = largeurTaxi(v.reste || t < v.tu + .5); return [x - w / 2 - 4, y - 15, w + 8, 30]; });
+  const rt = boites(taxis);
+  if (rt) c.repere('taxi', ...rt, 'le taxi ' + nomTaxi(true).replace(/[_{}]/g, '') + ' / ' + nomTaxi(false));
+  const ev = PL.E.filter(e => vis(e, t) > .2).map(e => ou(e, t));
+  if (ev.length) c.repere('electrons', ...bb(ev, 10, null), 'les électrons e−');
+  const hv = PL.H.filter(h => vis(h, t) > .2).map(h => ou(h, t));
+  const haut = hv.filter(([, y]) => y < Y.m0 - 4), bas = hv.filter(([, y]) => y > Y.m1 + 4);
+  if (haut.length) c.repere('protons', ...bb(haut, 10, null), 'les protons H+ de l’espace intermembranaire');
+  // Les H+ de la matrice : ceux que le NADH,H+ vient de rendre s’ils sont là, sinon tous ceux de la matrice.
+  const rendus = PL.T1HS ? PL.T1HS.filter(h => vis(h, t) > .2 && t < 16).map(h => ou(h, t)).filter(([, y]) => y > Y.m1 + 4) : [];
+  if (rendus.length || bas.length) c.repere('protons_matrice', ...bb(rendus.length ? rendus : bas, 10, null), 'les protons H+ de la matrice');
+  const ov = PL.O2.filter(o => vis(o, t) > .2).map(o => ou(o, t));
+  if (ov.length) c.repere('o2', ...bb(ov, 14, null), 'le dioxygène');
+  else c.repere('o2', px - 13, RAIL.y - 13, 26, 26, 'le dioxygène (la bille O2 de la poignée)');
+  c.repere('poignee_o2', RAIL.x0 - 70, RAIL.y - 14, RAIL.x1 - RAIL.x0 + 140, 28, 'la poignée avec / sans dioxygène');
+  const wv = PL.EAUX.filter(w => vis(w, t) > .2).map(w => ou(w, t));
+  if (wv.length) c.repere('eau', ...boites(wv.map(([x, y]) => [x - 14, y - 14, 28, 28]).concat(t >= 14.1 && !PL.bloque ? [[420, 294, 40, 20]] : [])), 'l’eau formée');
   c.repere('sphere', SX - 22, Y.m0 - 4, 44, TETE.y + TETE.r - Y.m0 + 8, ex() ? 'CV (ATP synthase)' : 'la sphère pédonculée (ATP synthase)');
-  c.repere('atp', 588, 276, 146, 62, 'ADP + Pi → ATP à la tête de la sphère');
-  const eqs = L.filter(e => t >= e.t0 && ['taxi_eq', 'eau_eq', 'atp_eq', 'chaine_causale', 'gradient', 'sans_o2', 'solution'].includes(e.cle));
+  const atps = PL.ATP.filter(A => t >= A.t0 - .4).map(A => { const u = t - A.t0; if (u < .5) return [598, 288, 84, 24]; const v = doux((u - .7) / .5); return [mix(606, 712, v) - 21, mix(299, 286 + 20 * A.i, v) - 11, 42, 22]; });
+  c.repere('atp', ...(boites(atps) || [588, 276, 146, 62]), 'ADP + Pi → ATP à la tête de la sphère');
+  const eqs = L.filter(e => t >= e.t0 && ['taxi_eq', 'relais', 'eau_eq', 'accepteur', 'atp_eq', 'chaine_causale', 'gradient', 'sans_o2', 'o2_non', 'bilan_fadh', 'solution'].includes(e.cle));
   const der = eqs.length ? eqs[eqs.length - 1].cle : 'taxi_eq';
-  const RECT = { taxi_eq: [16, R1 - 16, 260, 22], eau_eq: [310, R1 - 16, 210, 46], atp_eq: [548, R3 - 16, 190, 44], chaine_causale: [14, R4 - 16, 732, 22], gradient: [196, 98, 550, 20], sans_o2: [310, R1 - 16, 210, 22], solution: [16, R2 - 16, 280, 70] };
+  const RECT = { taxi_eq: [16, R1 - 16, 262, 22], relais: [16, R2 - 16, 250, 46], eau_eq: [314, R1 - 16, 202, 22], accepteur: [320, R2 - 15, 190, 20], atp_eq: [548, R3 - 16, 190, 44],
+    chaine_causale: [14, R4 - 16, 732, 22], gradient: [196, 98, 550, 20], sans_o2: [310, R1 - 16, 210, 22], o2_non: [310, R1 - 16, 210, 22], bilan_fadh: [16, R4 - 16, 300, 22], solution: [16, R2 - 16, 280, 70] };
+  for (const e of eqs) c.repere('ecrit_' + e.cle, ...RECT[e.cle], 'écrit : ' + e.mot.replace(/_\{([^}]*)\}/g, '$1'));
   c.repere('equation', ...RECT[der], 'ce qui vient de s’écrire');
 }
 
@@ -579,25 +645,29 @@ function ouElectrons(t) {
   return l.length ? l.join(', ') : 'aucun électron visible';
 }
 function phase(t) {
-  const ent = PL.fadh ? 'FADH2' : 'NADH,H+', Tk = 'T' + (PL.k0 + 1);
+  const ent = PL.fadh ? 'FADH2' : 'NADH,H+', Tk = 'T' + (PL.k0 + 1), vide = PL.fadh ? 'FAD' : 'NAD+';
   if (t < 2.5) return 'La membrane interne peinte, l’espace intermembranaire au-dessus, la matrice en dessous, la sphère pédonculée (tête dans la matrice) ; quelques H+ de chaque côté, immobiles.';
   if (t < 4.5) return `Un taxi ${ent} vient de la matrice vers ${Tk}.`;
-  if (t < 7.5) return `Le taxi ${ent} est sous ${Tk} : il rend 2 H+ à la matrice et 2 e− à ${Tk}, puis repart vide (${PL.fadh ? 'FAD' : 'NAD+'}).`;
+  if (t < 5.0) return `Le taxi ${ent} est arrivé sous ${Tk}, encore chargé.`;
+  if (t < 6.4) return `Oxydation de ${ent} sous ${Tk} : il rend 2 H+ à la matrice et 2 e− à ${Tk} (${ent} → ${vide} + 2 H+ + 2 e−).`;
+  if (t < 8.0) return `Le ${vide} vidé (oxydé) repart chercher d’autres hydrogènes ; les 2 e− sont sur ${Tk} (réduit).`;
   if (PL.cyan) {
-    if (t < 10) return 'Les électrons passent de transporteur en transporteur et s’arrêtent devant T4, bloqué par le cyanure (croix rouge).';
-    if (t < 14) return 'Embouteillage : les électrons suivants s’arrêtent derrière (T3, T2, T1) ; un taxi reste chargé ; O2 n’est pas réduit ; aucun H+ ne passe.';
+    if (t < 11.6) return 'Les électrons passent de transporteur en transporteur et s’arrêtent devant T4, bloqué par le cyanure (croix rouge) ; les suivants s’entassent derrière (T3, T2, T1).';
+    if (t < 13.2) return 'Embouteillage : un taxi reste chargé ; O2 arrive près de T4 mais n’est pas réduit (non consommé) ; aucun H+ ne passe.';
     return 'Cyanure : transfert des e− arrêté → O2 non consommé → pas de pompage des H+ → pas de gradient → pas d’ATP.';
   }
   if (PL.sansO2) {
-    if (t < 10.5) return 'Les électrons passent de transporteur en transporteur jusqu’à T4 ; il n’y a pas de dioxygène pour les recevoir.';
+    if (t < 11) return 'Les électrons passent de transporteur en transporteur jusqu’à T4 ; il n’y a pas de dioxygène pour les recevoir.';
     return 'Sans dioxygène : les électrons restent sur T4, les suivants s’entassent derrière, un taxi reste chargé ; plus de relais, pas d’eau, pas de pompage, pas d’ATP.';
   }
-  if (t < 10.5) return `Les électrons sautent ${relais().replace('relais : ', '')} (le relais) : réactions d’oxydoréduction ; les H+ ne bougent pas encore.`;
-  if (t < 12.6) return 'À T4, côté matrice, ½ O2 reçoit les 2 e− et 2 H+ de la matrice.';
-  if (t < 14.5) return 'De l’eau H2O est formée : O2 est l’accepteur final d’électrons.';
-  if (t < 18.5) return 'Le relais est rejoué : cette fois, au passage des électrons, des H+ passent de la matrice vers l’espace intermembranaire à travers ' + (PL.fadh ? 'T3 et T4' : 'T1, T3 et T4') + ' (flèches rouges).';
-  if (t < 20.5) return 'Les H+ s’entassent dans l’espace intermembranaire : [H+] élevée (pH bas) dans l’espace, faible dans la matrice : gradient de protons.';
-  if (t < 22.9) return 'Des H+ redescendent vers la matrice, seulement par la sphère pédonculée.';
+  const etats = etatsTransporteurs(t).map((e, k) => (e ? `T${k + 1} ${e}` : '')).filter(Boolean).join(', ');
+  if (t < 11.2) return `Les électrons sautent ${relais().replace('relais : ', '')} (le relais) : réactions d’oxydoréduction${etats ? ' (' + etats + ')' : ''} ; les H+ ne bougent pas encore.`;
+  if (t < 12.1) return 'Le dioxygène arrive près de T4, côté matrice ; les électrons sont sur T4.';
+  if (t < 13.1) return 'À T4, côté matrice, ½ O2 reçoit les 2 e− et 2 H+ de la matrice.';
+  if (t < 15.5) return 'De l’eau H2O est formée : O2 est l’accepteur final d’électrons.';
+  if (t < 19.5) return 'Le relais est rejoué : cette fois, au passage des électrons, des H+ passent de la matrice vers l’espace intermembranaire à travers ' + (PL.fadh ? 'T3 et T4' : 'T1, T3 et T4') + ' (flèches rouges).';
+  if (t < 21.5) return 'Les H+ s’entassent dans l’espace intermembranaire : [H+] élevée (pH bas) dans l’espace, faible dans la matrice : gradient de protons.';
+  if (t < 23.9) return 'Des H+ redescendent vers la matrice, seulement par la sphère pédonculée.';
   return `À la tête de la sphère pédonculée, ADP + Pi + énergie → ATP : phosphorylation oxydative (${PL.ATP.length} ATP${PL.fadh ? ' pour un FADH2, 3 pour un NADH,H+' : ''}).`;
 }
 function modeTexte() {
@@ -641,9 +711,9 @@ function playUntil(p) {
   const m = p && p.moment;
   if (m && !(m in M)) {
     if (m === 'sans_o2_arret') { S.o2 = false; S.poison = 'aucun'; }
-    else if (m === 'bloque' || m === 'pas_d_atp') S.poison = 'cyanure';
-    else if (m === 'entree_fadh2') S.entree = 'fadh2';
-    else if (m === 'taxi_decharge') S.entree = 'nadh';
+    else if (['bloque', 'pas_d_atp', 'cyanure_pose', 'o2_non'].includes(m)) S.poison = 'cyanure';
+    else if (m === 'entree_fadh2' || m === 'bilan_fadh2') { S.entree = 'fadh2'; S.o2 = true; S.poison = 'aucun'; }
+    else if (['taxi_decharge', 'nad_repart', 'e_t2'].includes(m)) { S.entree = 'nadh'; S.o2 = true; S.poison = 'aucun'; }
     else if (['structures', 'reactions', 'solution'].includes(m)) { S.etiquettes = 'examen'; if (m !== 'structures') { S.o2 = true; S.poison = 'aucun'; } }
     else if (m in MOTIFS) { S.o2 = true; S.poison = 'aucun'; }
     arreter();
@@ -682,7 +752,8 @@ window.Tableau.explication({ normal: BASE,
   construire: [{ repere: 'etiquettes', texte: 'Glisse chaque étiquette en face de son numéro ou de sa lettre.' }, { repere: 'structures', texte: 'Les numéros : des structures.' }, { repere: 'reactions', texte: 'Les lettres : des réactions.' }, { repere: 'sphere', texte: 'Pour se repérer : la tête de la sphère est du côté de la matrice.' }],
   examen: [{ repere: 'membrane', texte: 'Dans un sujet, les structures portent des numéros : 1 la membrane interne.' }, { repere: 'sphere', texte: '2, la sphère pédonculée, appelée ici CV, c’est-à-dire C5.' }, { repere: 'espace', texte: '3, l’espace intermembranaire.' }, { repere: 'taxi', texte: 'A : l’oxydation des transporteurs réduits, écrits RH2.' }, { repere: 'o2', texte: 'B : la réduction de O2 en H2O.' }, { repere: 'atp', texte: 'C : la phosphorylation de l’ADP.' }] });
 const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
-const TOUS = 'membrane_seule | taxi_arrive | taxi_decharge | electrons_passent | o2_recoit | eau_formee | protons_pompes | espace_charge | retour_par_la_sphere | atp_forme | sans_o2_arret (règle o2 false) | entree_fadh2 (règle entree fadh2) | bloque | pas_d_atp (règlent poison cyanure) | structures | reactions | solution (règlent etiquettes examen)';
+const TOUS = Object.keys(MOTIFS).filter(k => !['structures', 'reactions', 'solution', 'sans_o2_arret', 'entree_fadh2', 'bilan_fadh2', 'cyanure_pose', 'bloque', 'o2_non', 'pas_d_atp'].includes(k)).join(' | ')
+  + ' | sans_o2_arret (règle o2 false) | entree_fadh2 | bilan_fadh2 (règlent entree fadh2) | cyanure_pose | bloque | o2_non | pas_d_atp (règlent poison cyanure) | structures | reactions | solution (règlent etiquettes examen)';
 const config = { id: 'svt_energie_chaine_respiratoire', version: '1.0', title: 'La chaîne respiratoire et la phosphorylation oxydative',
   variants: ['normal', 'fadh2', 'sans_o2', 'cyanure', 'examen', 'construire'].map(id => ({ id, label: id })), commands: commandes,
   command_schema: CONSTRUIRE ? {
@@ -690,18 +761,18 @@ const config = { id: 'svt_energie_chaine_respiratoire', version: '1.0', title: '
     set_time: { time_s: `0..${FIN_C} (arrêt sur cet instant)` },
     play_until: { moment: 'etiquettes | corrige (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' } } : {
     set_parameters: { o2: 'true | false (dioxygène présent)', entree: 'nadh | fadh2 (qui apporte les électrons)', poison: 'aucun | cyanure (bloque T4)', etiquettes: 'cours | examen (vue document type : CI…CV, numéros et lettres)' },
-    set_time: { time_s: '0..fin du mode (27 s ; 30 s en examen ; 14 s sans O2 ; 17,5 s avec cyanure)' },
-    play_until: { moment: TOUS + ' (un moment d’un autre mode règle ce mode, rejoue et se fige)', time_s: 'ou un instant en s (garde les réglages)' } } };
+    set_time: { time_s: '0..fin du mode (28 s ; 31 s en examen ; 14,5 s sans O2 ; 16,5 s avec cyanure)', moment: 'ou un moment (arrêt sur image, ce qui précède déjà au tableau)' },
+    play_until: { moment: TOUS + ' (un moment d’un autre mode règle ce mode, rejoue et se fige)', time_s: 'ou un instant en s (garde les réglages)', depuis: 'moment d’où partir (saut en avant)', duree_s: 'durée voulue de l’animation, pour tenir dans la phrase' } } };
 const pont = protocole({ id: config.id, commandes, config,
   texte: (CONSTRUIRE ? 'Schéma à légender, comme au national (2017) : 1 membrane interne, 2 sphère pédonculée, 3 espace intermembranaire, 4 matrice ; A oxydation de NADH,H+, B réduction de O2 en H2O, C phosphorylation de l’ADP ; l’élève glisse les sept étiquettes dans la légende, bien posée une étiquette devient verte et s’aimante ; corrige : toutes à leur place. ' : '') + 'Chaîne respiratoire et phosphorylation oxydative sur la membrane interne de la mitochondrie (vue de près d’une crête). Le NADH,H+ venu de la matrice cède 2 H+ à la matrice et 2 e− au premier transporteur (NADH,H+ → NAD+ + 2 H+ + 2 e−) ; les électrons passent de transporteur en transporteur (T1 → T2 → T3 → T4 : réactions d’oxydoréduction) jusqu’au dioxygène, accepteur final, qui forme de l’eau (½ O2 + 2 H+ + 2 e− → H2O). Au passage des électrons, des H+ sont pompés de la matrice vers l’espace intermembranaire (à travers T1, T3, T4) : gradient de protons ([H+] élevée, pH bas, dans l’espace). Les H+ redescendent seulement par la sphère pédonculée (ATP synthase) : ADP + Pi + énergie → ATP, phosphorylation oxydative. FADH2 dépose ses électrons sur T2 : moins de pompage (1 NADH,H+ → 3 ATP ; 1 FADH2 → 2 ATP). Sans dioxygène ou avec du cyanure (qui bloque T4), le transfert s’arrête : pas d’eau, pas de pompage, pas de gradient, pas d’ATP.',
   etat: () => ({ simulation_status: chrono.statut(), ce_qui_se_voit: ceQuiSeVoit(), current_variant: variante(), time_s: +chrono.t.toFixed(2),
     parameters: params(), moments: CONSTRUIRE ? { ...MC } : { ...M },
     valeurs: { h_espace: compter(chrono.t).haut, h_matrice: compter(chrono.t).bas, eau: nEau(chrono.t), atp: nATP(chrono.t), fin_s: PL.FIN } }),
   progression: () => chrono.t / (CONSTRUIRE ? FIN_C : PL.FIN),
-  executer: (cmd, p) => ({ start: chrono.start, reset: chrono.start, pause: chrono.pause, resume: chrono.resume, set_time: () => { chrono.setTime(p); scene.sale = true; },
+  executer: (cmd, p) => ({ start: chrono.start, reset: chrono.reset, pause: chrono.pause, resume: chrono.resume, set_time: () => { chrono.setTime(p); scene.sale = true; },
     set_parameters: () => setParameters(p || {}), play_until: () => playUntil(p || {}) })[cmd]?.() });
 bulle($('feedback'), CONSTRUIRE ? 'Un schéma comme au national : à toi de le légender…' : 'La membrane interne, vue de près : un NADH,H+ va arriver de la matrice…');
-setTimeout(() => { if (!chrono.running && chrono.t === 0) chrono.start(); }, 1600);
+setTimeout(() => { if (!chrono.pilote && !chrono.running && chrono.t === 0) chrono.start(); }, 1600);
 window.__sim = { chrono, scene, M, S, ecrit, get PL() { return PL; }, get ET() { return ET; }, SLOT, get COLS() { return COLS; }, legende, params };
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>
