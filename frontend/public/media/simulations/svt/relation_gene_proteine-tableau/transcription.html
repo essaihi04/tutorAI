@@ -106,7 +106,10 @@ const NT = 'ATGCGCAGTCAGTAG', TR = 'TACGCGTCAGTCATC', ARN = 'AUGCGCAGUCAGUAG';
 const X0 = 120, PAS = 30, N = 15, X1 = X0 + N * PAS;            // 120 → 570
 const YH = 140, YB = 190, LB = 25, YARN = 196, YLANE = 300, YPOL = 178;
 const FL_G = 'C', FL_D = 'A';                                       // une base de chaque côté du gène (pâle, sans lettre)
-const MT = { gene: 1.5, polymerase_se_fixe: 4.0, ouverture_oeil: 6.0, premier_nucleotide: 8.0, allongement: 11.0, regle_ecrite: 14.0, fin_du_gene: 19.0, liberation_arnm: 21.5, refermeture: 24.0 };
+/* (17 novembre 2026) moments au fil de la voix des quatre diapositives (t1 → t4, même page, l'iframe reste) : le A puis le U
+ * (premier_a, premier_nucleotide) ; « ce n'est pas la traduction » (pas_traduction) ; le sens s'écrit en deux temps, l'ARNm
+ * 5′ → 3′ (sens_arnm) puis la lecture 3′ → 5′ (sens) — il s'écrivait pendant l'allongement, avant d'être dit. */
+const MT = { gene: 1.5, polymerase_se_fixe: 4.0, ouverture_oeil: 6.0, premier_a: 7.2, premier_nucleotide: 8.0, allongement: 11.0, regle_ecrite: 13.2, pas_traduction: 14.2, sens_arnm: 15.2, sens: 16.4, fin_du_gene: 19.0, liberation_arnm: 21.5, refermeture: 24.0 };
 const xu = u => X0 + u * PAS;
 /** Nombre de nucléotides d’ARN posés (réel) : A en face de T (6,4 → 7,2 s), U en face de A (7,2 → 8,0 s), puis 13 bases jusqu’à 18,6 s. */
 function nbT(t) { if (t < 6.4) return 0; if (t < 8) return (t - 6.4) / .8; return Math.min(N, 2 + (t - 8) * 13 / 10.6); }
@@ -177,7 +180,11 @@ function dessinerTranscription(c, k) {
     for (let j = 0; j < 5; j++) { c.ligne(xu(3 * j) + 4, 98, xu(3 * j + 3) - 4, 98, { couleur: 'faible', largeur: 1.4, duree: .08 }); k.T(c, String(j + 1), xu(3 * j + 1.5), 92, { couleur: 'blanc', taille: 14, align: 'center', duree: .1 }); }
     k.T(c, 'dans le noyau (nucléoplasme)', 750, 50, { couleur: 'faible', taille: 13, align: 'right' });
   }
-  if (t < 9.4 && k.ecrit(c, 'rappel', .9)) k.T(c, 'rappel : A en face de T, C en face de G ; deux brins antiparallèles', X0, 46, { couleur: 'blanc', taille: 14 });
+  if (t >= .5) c.repere('dans_le_noyau', 560, 36, 194, 20, 'dans le noyau (nucléoplasme)');
+  if (t < 13.4 && k.ecrit(c, 'rappel', .9)) k.T(c, 'rappel : A en face de T, C en face de G ; deux brins antiparallèles', X0, 46, { couleur: 'blanc', taille: 14 });
+  if (t >= .9 && t < 13.4) c.repere('rappel', X0 - 4, 32, 470, 20, 'A en face de T, C en face de G ; deux brins antiparallèles');
+  if (t >= 13.4 && t < 14.6 && k.ecrit(c, 'langue', 13.4)) k.T(c, 'transcription ≠ traduction : des nucléotides donnent des nucléotides', X0, 46, { couleur: 'jaune', taille: 14 });
+  if (t >= 13.4 && t < 14.6) c.repere('langue', X0 - 4, 32, 470, 20, 'des nucléotides donnent des nucléotides (pas la traduction)');
   // ── la polymérase ──
   if (t >= 2.4) {
     const rx = 46 * E.ps, ry = 74 * E.ps;
@@ -201,6 +208,7 @@ function dessinerTranscription(c, k) {
     c.repere('extremite_5_arnm', X0 - 24, y0 - 8, 44, LB + 14, 'l’extrémité 5′ de l’ARNm');
     c.repere('extremite_3_arnm', xu(nA - 1) - 4, yN - 18, PAS + 22, LB + 22, 'l’extrémité 3′ de l’ARNm');
   }
+  if (t >= 7.0) c.repere('nucleotide_a', xu(0) + 2, E.yA(.5) - 4, PAS - 4, LB + 8, 'le A posé en face de T');
   if (t >= 7.2) c.repere('nucleotide_u', xu(1) + 2, E.yA(1.5) - 4, PAS - 4, LB + 8, 'le U posé en face de A');
   if (k.ecrit(c, 'arn5', 6.8)) {
     const y0 = E.yA(.5), nA = Math.max(1, E.nA), yN = E.yA(nA - .5), enLigne = E.d(nA - .5) > .5;
@@ -211,13 +219,16 @@ function dessinerTranscription(c, k) {
   }
   if (k.ecrit(c, 'prem', 7.4)) k.T(c, 'en face de T : A ; en face de A : U', 260, 388, { couleur: 'rose', taille: 14 });
   // ── le sens ──
-  if (k.ecrit(c, 'sens', 9.6)) {
-    k.T(c, 'l’ARN polymérase lit le brin transcrit de 3′ vers 5′', X0, 46, { couleur: 'jaune', taille: 14 });
-    c.fleche(450, 41, 530, 41, { couleur: 'jaune', largeur: 1.8 });
+  if (k.ecrit(c, 'sens_arnm', 14.6)) {
     k.T(c, 'l’ARNm s’allonge de 5′ vers 3′', X0, 68, { couleur: 'orange', taille: 14 });
     c.fleche(334, 63, 414, 63, { couleur: 'orange', largeur: 1.8 });
   }
-  if (t >= 9.6) c.repere('sens_lecture', X0, 30, 420, 42, 'le sens : lecture 3′ → 5′, allongement 5′ → 3′');
+  if (t >= 14.6) c.repere('sens_arnm', X0, 54, 300, 20, 'l’ARNm s’allonge de 5′ vers 3′');
+  if (k.ecrit(c, 'sens', 15.6)) {
+    k.T(c, 'l’ARN polymérase lit le brin transcrit de 3′ vers 5′', X0, 46, { couleur: 'jaune', taille: 14 });
+    c.fleche(450, 41, 530, 41, { couleur: 'jaune', largeur: 1.8 });
+  }
+  if (t >= 15.6) c.repere('sens_lecture', X0, 30, 420, 42, 'le sens : lecture 3′ → 5′, allongement 5′ → 3′');
   // ── la règle ──
   if (k.ecrit(c, 'regle', 12.4)) {
     k.T(c, 'brin transcrit', 615, 256, { couleur: 'blanc', taille: 14 });
@@ -227,8 +238,9 @@ function dessinerTranscription(c, k) {
   }
   if (t >= 12.4) c.repere('regle', 608, 240, 146, 150, 'la règle : A → U, T → A, C → G, G → C');
   // ── fin, libération, refermeture ──
-  if (k.ecrit(c, 'fin', 18.6)) k.T(c, 'fin du gène', 596, 84, { couleur: 'blanc', taille: 14 });
-  if (t >= 18.6) c.repere('fin_du_gene', 560, 70, 120, 30, 'la fin du gène');
+  // « fin du gène » (17 novembre 2026) : écrit à l'approche de la polymérase, quand la voix le dit
+  if (k.ecrit(c, 'fin', 17.8)) k.T(c, 'fin du gène', 596, 84, { couleur: 'blanc', taille: 14 });
+  if (t >= 17.8) c.repere('fin_du_gene', 560, 70, 120, 30, 'la fin du gène');
   if (k.ecrit(c, 'lib', 20.4)) k.T(c, 'l’ARNm se détache', X0 + 10, 408, { couleur: 'orange', taille: 14 });
   if (k.ecrit(c, 'ref', 23.0)) k.T(c, 'l’ADN se referme : il est inchangé', 300, 408, { couleur: 'vert', taille: 14 });
 }
@@ -247,7 +259,10 @@ function voitTranscription(k) {
   if (t >= 6.4 && t < 8) m.push(E.nA === 0 ? 'Un nucléotide A arrive en face du T, première base du triplet 1 (TAC) du brin transcrit.' : 'Le A est posé en face du T ; un nucléotide U arrive en face du A (deuxième base de TAC).');
   if (t >= 8 && t < 9.4) m.push('Écrit en rose : « en face de T : A ; en face de A : U » ; le U est posé en face du A.');
   if (t >= 8 && E.nb < N && t >= 9.4) m.push(`La polymérase avance de gauche à droite ; l’ARNm sort de l’œil derrière elle et pend sous l’ADN, qui se referme derrière la polymérase.`);
-  if (t >= 9.6) m.push('Écrit en haut : « l’ARN polymérase lit le brin transcrit de 3′ vers 5′ → » et « l’ARNm s’allonge de 5′ vers 3′ → ».');
+  if (t >= .9 && t < 13.4) m.push('Écrit en haut : « rappel : A en face de T, C en face de G ; deux brins antiparallèles ».');
+  if (t >= 13.4 && t < 14.6) m.push('Écrit en haut en jaune : « transcription ≠ traduction : des nucléotides donnent des nucléotides ».');
+  if (t >= 14.6) m.push('Écrit en haut : « l’ARNm s’allonge de 5′ vers 3′ → ».');
+  if (t >= 15.6) m.push('Au-dessus : « l’ARN polymérase lit le brin transcrit de 3′ vers 5′ → ».');
   if (t >= 12.4) m.push('À droite, la règle en colonne : brin transcrit → ARNm : A → U ; T → A ; C → G ; G → C.');
   if (t >= 18.6 && E.dep < 1) m.push('La polymérase est arrivée au bout du 5e triplet : écrit « fin du gène ».');
   if (E.nb >= N && E.o > .05) m.push('L’œil est encore ouvert au bout du gène, le brin transcrit écarté.');
@@ -260,7 +275,9 @@ function voitTranscription(k) {
 }
 
 /* ════════════════ Vue « brins » ════════════════ */
-const MB = { trois_lignes: 1.5, chemin_transcrit: 5.0, comparaison_non_transcrit: 7.5, t_devient_u: 10.0 };
+/* (17 novembre 2026) « pourquoi ? » : la phrase verte (même séquence que le brin non transcrit, complémentaire du brin
+ * transcrit) s'écrit à son moment, après « chaque T devient U ». */
+const MB = { trois_lignes: 1.5, chemin_transcrit: 5.0, comparaison_non_transcrit: 7.5, t_devient_u: 9.0, pourquoi: 10.4 };
 function seqBrins(P) {
   const nt = String(P.brin_non_transcrit).replace(/ /g, '');
   return { nt, tr: nt.split('').map(b => COMP[b]).join(''), arn: nt.replace(/T/g, 'U') };
@@ -324,9 +341,12 @@ function dessinerBrins(c, k) {
       c.cercle(bx(i), BYARN + BLB * .55, 11, { couleur: 'rose', largeur: 1.8, duree: .12 });
     }
     k.T(c, ts.length ? 'mêmes lettres, sauf T → U' : 'aucun T dans ce brin', BX0, 200, { couleur: 'rose', taille: 15 });
+  }
+  if (k.ecrit(c, 'pourquoi', 9.6)) {
     k.T(c, 'l’ARNm a la séquence du brin non transcrit, avec U à la place de T', BX0, 388, { couleur: 'vert', taille: 15 });
     k.T(c, 'et il est complémentaire du brin transcrit', BX0, 408, { couleur: 'vert', taille: 15 });
   }
+  if (t >= 9.6) c.repere('pourquoi', BX0 - 4, 372, 470, 42, 'l’ARNm et le brin non transcrit : tous deux complémentaires du brin transcrit');
   if (t >= 8.0) {
     const xa = ts.length ? bx(ts[0]) - 14 : BX0, xb = ts.length ? bx(ts[ts.length - 1]) + 14 : X1b;
     c.repere('t_entoures', xa, BYNT - 4, xb - xa, BYARN + BLB - BYNT + 8, 'les T du brin non transcrit, devenus U dans l’ARNm');
@@ -345,13 +365,17 @@ function voitBrins(k) {
   if (t >= 8.0) {
     const nt = [...S.nt].filter(b => b === 'T').length;
     m.push(nt ? `Les ${nt} T du brin non transcrit sont entourés en jaune, une flèche rose descend vers le U correspondant de l’ARNm, entouré en rose ; écrit « mêmes lettres, sauf T → U ».` : 'Le brin non transcrit n’a aucun T : écrit « aucun T dans ce brin ».');
-    m.push('En bas, en vert : « l’ARNm a la séquence du brin non transcrit, avec U à la place de T, et il est complémentaire du brin transcrit ».');
   }
+  if (t >= 9.6) m.push('En bas, en vert : « l’ARNm a la séquence du brin non transcrit, avec U à la place de T, et il est complémentaire du brin transcrit ».');
   return m;
 }
 
 /* ════════════════ Vue « noyau » ════════════════ */
-const MN = { arnm_dans_noyau: 2.5, sortie_pore: 5.5, arnm_cytoplasme: 8.5 };
+/* (17 novembre 2026) la voix donne d'abord la méthode du barème en trois gestes : elle s'écrit en haut, geste par geste
+ * (methode_1..3) ; la scène d'avant est décalée de DN = 1,5 s. « L'ADN ne sort jamais du noyau » vient à la fin (adn_reste),
+ * quand la voix le dit, et « l'ARNm sort par un pore » quand il le traverse. */
+const DN = 1.5;
+const MN = { methode_1: .5, methode_2: 1.0, methode_3: 1.5, arnm_dans_noyau: 2.5 + DN, sortie_pore: 5.5 + DN, arnm_cytoplasme: 8.5 + DN, adn_reste: 9.6 + DN };
 const NCX = 250, NCY = 228, NRX = 150, NRY = 125, PORE = [NCX + NRX + 2, NCY];
 const RIBOS = [[520, 140], [620, 118], [700, 178], [560, 318], [680, 302]];
 function arnNoyau(t) {
@@ -367,7 +391,7 @@ function adnHelice(x, x0, x1, y, amp, a = 1) {
   x.restore();
 }
 function dessinerNoyau(c, k) {
-  const t = k.t, A = arnNoyau(t);
+  const t = k.t - DN, A = arnNoyau(t);
   c.direct(() => {
     const x = c.ctx;
     M.cytoplasme(x, 400, 228, 352, 166);
@@ -389,30 +413,37 @@ function dessinerNoyau(c, k) {
   c.repere('cytoplasme', 430, 80, 300, 300, 'le cytoplasme');
   c.repere('ribosomes', 495, 95, 230, 240, 'les ribosomes');
   if (A.croit > 0) c.repere('arnm', A.x0 - 4, A.y - 14, A.long * A.croit + 8, 22, 'l’ARNm');
-  if (k.ecrit(c, 'leg', .4)) {
+  if (k.ecrit(c, 'm1', .1)) k.T(c, '1. le nom du brin', 52, 52, { couleur: 'jaune', taille: 14 });
+  if (k.t >= .1) c.repere('methode_1', 48, 38, 140, 20, 'geste 1 : lire le nom du brin donné');
+  if (k.ecrit(c, 'm2', .6)) k.T(c, '2. ARNm sous le brin : un codon sous chaque triplet', 210, 52, { couleur: 'jaune', taille: 14 });
+  if (k.t >= .6) c.repere('methode_2', 206, 38, 380, 20, 'geste 2 : l’ARNm sous le brin, codon sous triplet');
+  if (k.ecrit(c, 'm3', 1.1)) k.T(c, '3. plus aucun T', 610, 52, { couleur: 'jaune', taille: 14 });
+  if (k.t >= 1.1) c.repere('methode_3', 606, 38, 130, 20, 'geste 3 : vérifier qu’il ne reste aucun T');
+  if (k.ecrit(c, 'leg', .4 + DN)) {
     k.T(c, 'noyau', NCX, 340, { couleur: 'blanc', taille: 15, align: 'center' });
     etiq(c, k, 'ADN', 96, 142, { couleur: 'violet', taille: 15 }); c.ligne(124, 146, 158, 170, { couleur: 'violet', largeur: 1.4 });
     etiq(c, k, 'cytoplasme', 470, 380, { couleur: 'rose', taille: 15 });
     etiq(c, k, 'ribosomes', 620, 356, { couleur: 'cyan', taille: 14, align: 'center' });
     k.T(c, 'pore nucléaire', 410, 272, { couleur: 'blanc', taille: 14 }); c.fleche(418, 258, 405, 238, { couleur: 'blanc', largeur: 1.4, tete: 7 });
   }
-  if (A.croit > 0 && k.ecrit(c, 'arn', 1.0)) {
+  if (A.croit > 0 && k.ecrit(c, 'arn', 1.0 + DN)) {
     if (t < 2.6) k.T(c, 'ARNm formé dans le noyau', 230, 242, { couleur: 'orange', taille: 15, align: 'center' });
     else etiq(c, k, 'ARNm', A.x0 + A.long / 2, A.y + 24, { couleur: 'orange', taille: 14, align: 'center' });
   }
-  if (k.ecrit(c, 'adn_reste', 4.4)) k.T(c, 'l’ADN ne sort jamais du noyau', NCX, 412, { couleur: 'vert', taille: 15, align: 'center' });
-  if (k.ecrit(c, 'sort', 7.6)) k.T(c, 'l’ARNm sort par un pore nucléaire', 575, 412, { couleur: 'orange', taille: 15, align: 'center' });
+  if (k.ecrit(c, 'sort', 4.6 + DN)) k.T(c, 'l’ARNm sort par un pore nucléaire', 575, 412, { couleur: 'orange', taille: 15, align: 'center' });
+  if (k.ecrit(c, 'adn_reste', 8.8 + DN)) k.T(c, 'l’ADN ne sort jamais du noyau', NCX, 412, { couleur: 'vert', taille: 15, align: 'center' });
 }
 function voitNoyau(k) {
-  const t = k.t, A = arnNoyau(t);
+  const t = k.t - DN, A = arnNoyau(t);
   const m = ['Une cellule entière : cytoplasme rosé (ribosomes turquoise, à droite), noyau bleuté entouré d’une enveloppe percée de pores ; dans le noyau, l’ADN (double hélice bleu-violet et filaments).'];
+  if (k.t >= .1) m.push('En haut, la méthode écrite en jaune : « 1. le nom du brin »' + (k.t >= .6 ? ', « 2. ARNm sous le brin : un codon sous chaque triplet »' : '') + (k.t >= 1.1 ? ', « 3. plus aucun T »' : '') + '.');
   if (t < .6) m.push('Pas encore d’ARNm.');
   else if (t < 2.6) m.push('Un ARNm orange se forme le long de l’ADN, dans le noyau (écrit « ARNm formé dans le noyau »).');
   else if (A.x0 + A.long < PORE[0]) m.push('L’ARNm se dirige vers un pore nucléaire, à droite du noyau.');
   else if (A.x0 < PORE[0]) m.push('L’ARNm passe à travers le pore nucléaire : sa tête est déjà dans le cytoplasme, sa queue encore dans le noyau.');
   else m.push('L’ARNm est dans le cytoplasme, près des ribosomes qui l’attendent.');
-  if (t >= 4.4) m.push('Écrit en vert : « l’ADN ne sort jamais du noyau » ; l’ADN est resté dans le noyau.');
-  if (t >= 7.6) m.push('Écrit en orange : « l’ARNm sort par un pore nucléaire ».');
+  if (t >= 4.6) m.push('Écrit en orange : « l’ARNm sort par un pore nucléaire ».');
+  if (t >= 8.8) m.push('Écrit en vert : « l’ADN ne sort jamais du noyau » ; l’ADN est resté dans le noyau.');
   return m;
 }
 
@@ -427,7 +458,7 @@ const SLOT_T = { non_transcrit: [468, 88], transcrit: [470, 240], polymerase: [2
 const CIBLE_T = { non_transcrit: [452, 136], transcrit: [452, 194], polymerase: [352, 165], arnm: [80, 294], libres: [292, 368] };
 const ORDRE_T = ['transcrit', 'arnm', 'libres', 'non_transcrit', 'polymerase'];
 const COL_T = i => [672, 78 + 40 * i];
-const MLT = { etiquettes: 2.5, corrige: 6.5 };
+const MLT = { schema: 0.9, etiquettes: 2.5, corrige: 6.5 };   // schema (17 novembre 2026) : le schéma seul, avant les étiquettes
 const T_CORR_T = 4.6;
 let ETT = {}, dernierTT = 0, ERREURS_T = 0, MAL_T = new Set();
 function remiseT() { ETT = {}; ERREURS_T = 0; MAL_T = new Set(); ORDRE_T.forEach((id, i) => { const [x, y] = COL_T(i); ETT[id] = { x, y, ok: false }; }); }
@@ -562,26 +593,26 @@ window.Etapes.lancer({
     },
   },
   vues: {
-    transcription: { titre: 'La transcription', encre: [4, 34, 756, 418], fin: 26, moments: MT, dessiner: dessinerTranscription, voit: voitTranscription,
-      motifs: { gene: 'le gène : deux brins, A en face de T, C en face de G', polymerase_se_fixe: 'l’ARN polymérase se fixe au début du gène', ouverture_oeil: 'l’ADN s’ouvre sous la polymérase : l’œil de transcription', premier_nucleotide: 'en face de T, un A ; en face de A, un U', allongement: 'la polymérase lit le brin transcrit de 3′ vers 5′, l’ARNm s’allonge de 5′ vers 3′', regle_ecrite: 'la règle : A → U, T → A, C → G, G → C', fin_du_gene: 'la polymérase arrive à la fin du gène', liberation_arnm: 'l’ARNm se détache', refermeture: 'l’ADN se referme, inchangé' },
+    transcription: { titre: 'La transcription', encre: [4, 34, 756, 418], fin: 26, moments: MT, autoDepart: false, dessiner: dessinerTranscription, voit: voitTranscription,
+      motifs: { gene: 'le gène : deux brins, A en face de T, C en face de G', polymerase_se_fixe: 'l’ARN polymérase se fixe au début du gène', ouverture_oeil: 'l’ADN s’ouvre sous la polymérase : l’œil de transcription', premier_a: 'en face de T, un A', premier_nucleotide: 'en face de A, un U', allongement: 'l’ARNm s’allonge, base après base', regle_ecrite: 'la règle : A → U, T → A, C → G, G → C', pas_traduction: 'pas la traduction : des nucléotides donnent des nucléotides', sens_arnm: 'l’ARNm s’allonge de 5′ vers 3′', sens: 'la polymérase lit le brin transcrit de 3′ vers 5′', fin_du_gene: 'la polymérase arrive à la fin du gène', liberation_arnm: 'l’ARNm se détache', refermeture: 'l’ADN se referme, inchangé' },
       conclusion: 'L’ARNm 5′ AUG CGC AGU CAG UAG 3′ est complémentaire du brin transcrit ; l’ADN reste inchangé.',
       texte: 'Transcription : l’ARN polymérase se fixe sur le gène, ouvre l’ADN (œil), lit le brin transcrit 3′ TAC GCG TCA GTC ATC 5′ de 3′ vers 5′ et assemble l’ARNm 5′ AUG CGC AGU CAG UAG 3′ de 5′ vers 3′ (A → U, T → A, C → G, G → C) ; l’ARNm se détache, l’ADN se referme.',
       explication: [{ repere: 'brin_transcrit', texte: 'Le brin transcrit est lu par l’ARN polymérase.' }, { repere: 'polymerase', texte: 'L’ARN polymérase ouvre l’ADN et avance.' }, { repere: 'nucleotide_u', texte: 'En face de A, l’ARN reçoit un U : pas de T dans l’ARN.' }, { repere: 'sens_lecture', texte: 'Lecture de 3′ vers 5′, allongement de 5′ vers 3′.' }, { repere: 'regle', texte: 'La règle de complémentarité ADN → ARN.' }, { repere: 'arnm', texte: 'L’ARNm se détache ; l’ADN se referme.' }] },
-    brins: { titre: 'Brin transcrit ou brin non transcrit ?', encre: [4, 34, 756, 418], fin: 12, moments: MB, dessiner: dessinerBrins, voit: voitBrins,
-      motifs: { trois_lignes: 'trois lignes alignées par triplets', chemin_transcrit: 'chemin 1 : l’ARNm complémentaire du brin transcrit', comparaison_non_transcrit: 'l’ARNm posé sous le brin non transcrit', t_devient_u: 'mêmes lettres, chaque T devient U' },
+    brins: { titre: 'Brin transcrit ou brin non transcrit ?', encre: [4, 34, 756, 418], fin: 12, moments: MB, autoDepart: false, dessiner: dessinerBrins, voit: voitBrins,
+      motifs: { trois_lignes: 'trois lignes alignées par triplets', chemin_transcrit: 'chemin 1 : l’ARNm complémentaire du brin transcrit', comparaison_non_transcrit: 'l’ARNm posé sous le brin non transcrit', t_devient_u: 'mêmes lettres, chaque T devient U', pourquoi: 'les deux sont complémentaires du brin transcrit' },
       conclusion: 'L’ARNm = complémentaire du brin transcrit = brin non transcrit recopié avec U à la place de T.',
       surReglage: (k, cles, api) => { if (cles.includes('brin_non_transcrit') || cles.includes('brin_transcrit')) api.start(); },
       texte: 'Brin non transcrit 5′ ATG CGC AGT CAG TAG 3′, brin transcrit 3′ TAC GCG TCA GTC ATC 5′, ARNm 5′ AUG CGC AGU CAG UAG 3′ : chemin 1 complémentaire du brin transcrit, chemin 2 brin non transcrit recopié T → U.',
       explication: [{ repere: 'ligne_transcrit', texte: 'Chemin 1 : l’ARNm est complémentaire du brin transcrit.' }, { repere: 'ligne_non_transcrit', texte: 'Chemin 2 : on recopie le brin non transcrit.' }, { repere: 't_entoures', texte: 'Chaque T devient U.' }] },
-    noyau: { titre: 'Du noyau au cytoplasme', encre: [44, 58, 756, 398], fin: 10, moments: MN, dessiner: dessinerNoyau, voit: voitNoyau,
-      motifs: { arnm_dans_noyau: 'l’ARNm est formé dans le noyau', sortie_pore: 'l’ARNm sort par un pore nucléaire', arnm_cytoplasme: 'l’ARNm arrive dans le cytoplasme, près des ribosomes' },
+    noyau: { titre: 'Du noyau au cytoplasme', encre: [44, 36, 756, 398], fin: 11.5, moments: MN, autoDepart: false, dessiner: dessinerNoyau, voit: voitNoyau,
+      motifs: { methode_1: 'geste 1 : lire le nom du brin', methode_2: 'geste 2 : l’ARNm sous le brin, codon sous triplet', methode_3: 'geste 3 : plus aucun T', adn_reste: 'l’ADN ne sort jamais du noyau', arnm_dans_noyau: 'l’ARNm est formé dans le noyau', sortie_pore: 'l’ARNm sort par un pore nucléaire', arnm_cytoplasme: 'l’ARNm arrive dans le cytoplasme, près des ribosomes' },
       conclusion: 'L’ARNm porte l’information du noyau aux ribosomes du cytoplasme ; l’ADN reste dans le noyau.',
       texte: 'La cellule : l’ARNm formé dans le noyau sort par un pore vers le cytoplasme où attendent les ribosomes ; l’ADN ne sort jamais du noyau.',
       explication: [{ repere: 'adn', texte: 'L’ADN reste dans le noyau.' }, { repere: 'pore', texte: 'L’ARNm sort par un pore nucléaire.' }, { repere: 'ribosomes', texte: 'Dans le cytoplasme, les ribosomes l’attendent.' }] },
 
-    legender: { titre: 'Légende le schéma de la transcription', encre: [4, 34, 584, 418], fin: 8, moments: MLT, reglages: { etiquettes: { corrige: false }, corrige: { corrige: true } },
+    legender: { titre: 'Légende le schéma de la transcription', encre: [4, 34, 584, 418], fin: 8, moments: MLT, autoDepart: false, reglages: { etiquettes: { corrige: false }, corrige: { corrige: true } },
       dessiner: dessinerLegender, voit: voitLegender,
-      motifs: { etiquettes: 'pose chaque étiquette au bout de son trait', corrige: 'la correction : toutes les étiquettes à leur place' },
+      motifs: { schema: 'le schéma de la transcription, sans légende', etiquettes: 'pose chaque étiquette au bout de son trait', corrige: 'la correction : toutes les étiquettes à leur place' },
       conclusion: 'Pose les cinq étiquettes : brin transcrit, brin non transcrit, ARN polymérase, ARNm, nucléotides libres.',
       surReglage: (k, cles, api) => { if (cles.includes('corrige')) { if (k.P.corrige) api.playUntil({ moment: 'corrige' }); else api.start(); } },
       texte: 'Le schéma de la transcription en cours, sans légende ; cinq étiquettes à glisser au bout des traits de rappel (brin transcrit, brin non transcrit, ARN polymérase, ARNm, nucléotides libres) ; bien posée, une étiquette devient verte et s’aimante ; corrige : toutes à leur place.',

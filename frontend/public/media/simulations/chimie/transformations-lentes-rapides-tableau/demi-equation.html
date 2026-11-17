@@ -321,22 +321,54 @@ function etatBalance(M) {
   return { g: apres ? signe(d.qG - d.ne) : signe(d.qG), d: signe(d.qD), angle: penche * (pc - pv), apres,
     mot: pv >= 1 ? 'droite : charges égales' : pv > 0 ? 'qui se redresse' : pc >= 1 ? `penchée vers la ${penche > 0 ? 'gauche' : 'droite'}` : 'qui penche' };
 }
+/** Balance peinte : socle en bois, colonne et fléau en laiton, fils, plateaux en coupelle dorée ; `b.angle` l'incline. */
+function peindreBalance(ctx, b) {
+  const { x, y, l, pend, base } = BAL, ca = Math.cos(b.angle), sa = Math.sin(b.angle);
+  const lin = (x0, y0, x1, y1, arr) => { const g = ctx.createLinearGradient(x0, y0, x1, y1); arr.forEach(([o, col]) => g.addColorStop(o, col)); return g; };
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(x + 3, base + 6, 40, 5, 0, 0, Math.PI * 2); ctx.fill();   // ombre
+  ctx.fillStyle = lin(0, base - 4, 0, base + 6, [[0, '#c8894a'], [.5, '#8a5228'], [1, '#5a3216']]);
+  ctx.beginPath(); ctx.roundRect(x - 36, base - 4, 72, 10, 3); ctx.fill();                                           // socle en bois
+  ctx.fillStyle = lin(x - 3, 0, x + 3, 0, [[0, '#8a6a1c'], [.45, '#f6dc8a'], [1, '#7a5a12']]);
+  ctx.fillRect(x - 3, y + 2, 6, base - y - 4);                                                                      // colonne en laiton
+  ctx.save(); ctx.translate(x, y); ctx.rotate(-b.angle);                                                              // fléau
+  ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 4; ctx.shadowOffsetY = 2;
+  ctx.fillStyle = lin(0, -3, 0, 3, [[0, '#fbe7a1'], [.5, '#d4a73a'], [1, '#8a6414']]);
+  ctx.beginPath(); ctx.roundRect(-l - 2, -2.5, 2 * l + 4, 5, 2.5); ctx.fill(); ctx.restore();
+  ctx.fillStyle = lin(0, y - 6, 0, y + 8, [[0, '#fbe7a1'], [1, '#8a6414']]);
+  ctx.beginPath(); ctx.moveTo(x - 7, y + 9); ctx.lineTo(x, y - 4); ctx.lineTo(x + 7, y + 9); ctx.closePath(); ctx.fill();   // couteau
+  for (const [px, py] of [[x - l * ca, y + l * sa], [x + l * ca, y - l * sa]]) {
+    const yp = py + pend;
+    ctx.strokeStyle = 'rgba(220,200,150,.75)'; ctx.lineWidth = 1.1;
+    ctx.beginPath(); ctx.moveTo(px - 22, yp); ctx.lineTo(px, py); ctx.lineTo(px + 22, yp); ctx.stroke();               // fils
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(px + 2, yp + 12, 24, 3, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = lin(0, yp - 2, 0, yp + 10, [[0, '#fff1b8'], [.4, '#e0b545'], [1, '#8a6414']]);
+    ctx.beginPath(); ctx.moveTo(px - 27, yp); ctx.quadraticCurveTo(px, yp + 20, px + 27, yp); ctx.closePath(); ctx.fill();   // coupelle
+    ctx.fillStyle = 'rgba(255,248,220,.85)'; ctx.beginPath(); ctx.ellipse(px, yp, 27, 2.2, 0, 0, Math.PI * 2); ctx.fill();   // bord
+    ctx.fillStyle = lin(0, py - 3, 0, py + 3, [[0, '#fbe7a1'], [1, '#8a6414']]); ctx.beginPath(); ctx.arc(px, py, 3, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
 function balance(c, M) {
   const { x, y, l, pend, base } = BAL;
+  // La balance est PEINTE (laiton et bois, 17 novembre 2026) ; les traits de craie d'origine restent, transparents,
+  // pour garder leur durée d'écriture (les instants des moments ne bougent pas).
+  const INVISIBLE = 'rgba(0,0,0,0)';
+  c.direct(() => peindreBalance(c.ctx, etatBalance(M)));
   ecrit(c, 'balance des charges', x, 238, { couleur: 'cyan', taille: 15, align: 'center' });
-  c.ligne(x, y + 6, x, base, { largeur: 2.4 });
-  c.ligne(x - 34, base, x + 34, base, { largeur: 2.6 });
+  c.ligne(x, y + 6, x, base, { largeur: 2.4, couleur: INVISIBLE });
+  c.ligne(x - 34, base, x + 34, base, { largeur: 2.6, couleur: INVISIBLE });
   c.direct(() => {
     const b = etatBalance(M), ca = Math.cos(b.angle), sa = Math.sin(b.angle);
     const G = [x - l * ca, y + l * sa], Dr = [x + l * ca, y - l * sa];
-    c.ligne(G[0], G[1], Dr[0], Dr[1], { largeur: 3, couleur: 'blanc' });
-    c.trait([[x - 7, y + 10], [x, y - 2], [x + 7, y + 10]], { largeur: 2 });
+    c.ligne(G[0], G[1], Dr[0], Dr[1], { largeur: 3, couleur: INVISIBLE });
+    c.trait([[x - 7, y + 10], [x, y - 2], [x + 7, y + 10]], { largeur: 2, couleur: INVISIBLE });
     const egal = b.angle === 0 && b.g !== '?';
     for (const [[px, py], val, mot, coul] of [[G, b.g, 'gauche', b.apres ? 'vert' : 'rouge'], [Dr, b.d, 'droite', b.apres ? 'vert' : 'rouge']]) {
       const yp = py + pend;
-      c.ligne(px, py, px - 22, yp, { largeur: 1.4, couleur: 'faible' });
-      c.ligne(px, py, px + 22, yp, { largeur: 1.4, couleur: 'faible' });
-      c.courbe(u => [px - 26 + 52 * u, yp + Math.sin(u * Math.PI) * 9], 16, { largeur: 2.4 });
+      c.ligne(px, py, px - 22, yp, { largeur: 1.4, couleur: INVISIBLE });
+      c.ligne(px, py, px + 22, yp, { largeur: 1.4, couleur: INVISIBLE });
+      c.courbe(u => [px - 26 + 52 * u, yp + Math.sin(u * Math.PI) * 9], 16, { largeur: 2.4, couleur: INVISIBLE });
       ecrit(c, val, px, yp - 6, { couleur: b.g === '?' ? 'faible' : egal ? 'vert' : coul, taille: 19, align: 'center' });
       ecrit(c, mot, px, yp + 26, { couleur: 'faible', taille: 13, align: 'center' });
     }

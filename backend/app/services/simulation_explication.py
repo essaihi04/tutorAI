@@ -184,6 +184,12 @@ def regles_du_pilotage(manifest: dict) -> list[str]:
         "montre le repère utile, rejoue ou arrête-la sur l'instant qui répond à sa question, puis reviens au cours.",
         f"- Tu peux relancer la simulation ({commande_relance(manifest)}) autant de fois que l'explication le "
         "demande, ou que l'élève le demande.",
+        # Règle du professeur (17 novembre 2026) : « il parle de l'oxydation de NADH,H+ et on ne voit pas NADH,H+
+        # céder ses électrons à T1 » ; « la baguette se pose parfois sur un autre objet que celui qu'il nomme ».
+        "- LA BAGUETTE SUR L'OBJET NOMMÉ : highlight vise le repère de l'objet que ta phrase nomme (T1 quand tu dis "
+        "T1, la sphère pédonculée quand tu dis sphère, NADH,H+ quand tu dis NADH), jamais un voisin ni un repère "
+        "« à peu près » ; montre-le quand il est dessiné et immobile. Aucun repère pour cet objet : ne pointe rien "
+        "plutôt qu'autre chose.",
     ]
     if {"pause", "resume"} <= commandes:
         regles.append("- Pour expliquer un instant précis : pause, explique ce qui est figé à l'écran en pointant, "
@@ -195,6 +201,11 @@ def regles_du_pilotage(manifest: dict) -> list[str]:
                       "descend, M revient, le retard τ…), rejoue la scène et fige-la sur cet instant avec "
                       "play_until {moment} — les noms des instants clés sont dans « moments » de l'état — puis "
                       "pointe le repère. Plusieurs phases dites à la suite : un arrêt par phase, dans l'ordre.")
+        regles.append("- CHAQUE PROCESSUS NOMMÉ A SON MOMENT ANIMÉ (ex. l'oxydation de NADH,H+ : NADH,H+ arrive à T1 "
+                      "et ses électrons partent) : la commande play_until part AVEC la phrase qui le dit, pas avant "
+                      "ni après ; la scène qui a déjà dépassé l'instant ne se décrit pas comme si elle le montrait. "
+                      "Un processus sans moment qui le montre : ne dis pas « regarde » dessus, explique-le en mots "
+                      "et appuie-toi sur ce qui est réellement à l'écran (ce_qui_se_voit).")
     if "set_parameters" in commandes:
         regles.append("- set_parameters change un réglage (voir command_schema) pour montrer l'effet d'une grandeur, "
                       "puis relance : « et si M était deux fois plus loin ? ».")

@@ -328,58 +328,6 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const visuelRef = useRef<HTMLDivElement>(null);
   const lignesRef = useRef<(HTMLTableRowElement | null)[]>([]);
-
-  // L'élève clique dans la simulation (17 novembre 2026, « ne pas afficher le tuteur quand on clique sur la simulation,
-  // pour ne pas distraire ») : le tuteur s'efface (corps, baguette, appui) et la simulation tourne seule ; seuls ses
-  // cadres de focus sur les éléments de la simulation restent (AIAvatar.css, `body[data-simu-eleve]`). Il revient
-  // quand l'élève touche le tableau hors de la simulation, ou à la diapositive suivante. Le clic dans l'iframe ne
-  // remonte pas jusqu'ici : c'est la fenêtre qui perd le focus au profit de l'iframe.
-  const avecSimulation = slide.visual?.kind === 'simulation';
-  useEffect(() => {
-    if (!avecSimulation) return;
-    const poser = (oui: boolean) => {
-      if (oui) document.body.dataset.simuEleve = '';
-      else delete document.body.dataset.simuEleve;
-    };
-    let attente = 0;
-    const versLaSimu = () => {
-      window.clearTimeout(attente);
-      attente = window.setTimeout(() => { if (iframeRef.current && document.activeElement === iframeRef.current) poser(true); }, 0);
-    };
-    const ailleurs = (e: PointerEvent) => {
-      const cible = e.target as Element | null;
-      if (!cible || iframeRef.current?.contains(cible)) return;
-      if (cible.closest?.('[data-scene-cours] > main, [data-scene-cours] > header')) poser(false);
-    };
-    // Plus sûr que le focus (17 novembre 2026 : le tuteur restait visible) : la simulation est servie par le site, on
-    // écoute donc le toucher directement dans sa page, à chaque chargement de l'iframe.
-    const dedans = () => poser(true);
-    let fenetre: Window | null = null;
-    const brancher = () => {
-      try {
-        fenetre?.removeEventListener('pointerdown', dedans, true);
-        fenetre = iframeRef.current?.contentWindow || null;
-        fenetre?.addEventListener('pointerdown', dedans, true);
-      } catch { fenetre = null; }   // autre origine : le focus suffit
-    };
-    brancher();
-    const cadre = iframeRef.current;
-    const suivreCadre = new MutationObserver(() => { const f = iframeRef.current; if (f && f !== suivi) { suivi?.removeEventListener('load', brancher); suivi = f; f.addEventListener('load', brancher); brancher(); } });
-    let suivi = cadre;
-    cadre?.addEventListener('load', brancher);
-    if (visuelRef.current) suivreCadre.observe(visuelRef.current, { childList: true, subtree: true });
-    window.addEventListener('blur', versLaSimu);
-    window.addEventListener('pointerdown', ailleurs, true);
-    return () => {
-      window.clearTimeout(attente);
-      suivreCadre.disconnect();
-      suivi?.removeEventListener('load', brancher);
-      try { fenetre?.removeEventListener('pointerdown', dedans, true); } catch { /* cadre parti */ }
-      window.removeEventListener('blur', versLaSimu);
-      window.removeEventListener('pointerdown', ailleurs, true);
-      poser(false);
-    };
-  }, [slide.id, avecSimulation]);
   const centreRef = useRef<(HTMLDivElement | null)[]>([]);
 
   const [temps, setTemps] = useState(0);
@@ -389,6 +337,13 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   const [panneau, setPanneau] = useState<'cahier' | 'explication' | 'exercices' | 'questions' | 'question_eleve' | null>(null);
   const [labControl, setLabControl] = useState<LabControlCommand | null>(null);
   const [simPrete, setSimPrete] = useState(false);
+  /** L'URL de la simulation chargée dans l'iframe. L'iframe a pour clé son URL : deux diapositives de suite sur la même
+   *  simulation la gardent, sans rechargement ni `onLoad`, donc sans `simPrete`. Elle est pourtant prête : la variante,
+   *  `sim_avant` et la question d'observation en fin de voix partent aussi (17 novembre 2026 : sur i2, f3, f5, t3, c5, r6
+   *  du cours du muscle, la variante ne partait jamais). Le `demarrer`, lui, reste lié au seul chargement. */
+  const urlChargee = useRef<string | null>(null);
+  const simGardee = visuel?.kind === 'simulation' && !!visuel.url && urlChargee.current === visuel.url;
+  const simDispo = simPrete || simGardee;
   const sequence = useRef(0);
   const prochainGeste = useRef(0);
   const gestesEnAttente = useRef<number[]>([]);
@@ -575,6 +530,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   useEffect(() => {
     // Une prédiction à faire : le tableau des questions est là d'emblée, la voix attend.
     setTemps(0); setEnLecture(false); setFinie(!piste?.url); setPanneau(predictionEnCours ? 'questions' : null); setSimPrete(false);
+    if (visuel?.kind !== 'simulation' || visuel.url !== urlChargee.current) urlChargee.current = null;
     setIndexQuestion(0); setRelance(false); relanceFaite.current = false;
     setDuree((piste?.duration_ms || 0) / 1000);
     dejaFaits.current = new Set(); demarree.current = false;
@@ -660,10 +616,10 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   }, [conc.acquis, deckId, slide.id]);
   // …et donnés à la simulation dès qu'elle est prête : elle entoure ce qui est à reprendre, coche ce qui est acquis.
   useEffect(() => {
-    if (!bilan || !simPrete) return;
+    if (!bilan || !simDispo) return;
     const acquis = bilan.competences.filter(c => c.statut === 'acquis');
     envoyerASim('set_parameters', { lacunes: bilan.lacunes, acquis: acquis.map(c => c.label), acquis_ids: acquis.map(c => c.id) });
-  }, [bilan, simPrete, envoyerASim]);
+  }, [bilan, simDispo, envoyerASim]);
   /** À la fin de la voix du bilan : le tuteur nomme ce qu'il reste à retravailler et ouvre la page de l'élève. */
   const direLesLacunes = useCallback(() => {
     const b = bilanRef.current;
@@ -1566,7 +1522,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   // (après la question d'observation, s'il y en a une : la variante ne change pas la scène pendant que l'élève regarde).
   useEffect(() => {
     const v = conc.variante;
-    if (!finie || !v?.etapes?.length || varianteFaite.current || !simPrete || (observation && !obsClose)) return;
+    if (!finie || !v?.etapes?.length || varianteFaite.current || !simDispo || (observation && !obsClose)) return;
     // Un schéma à légender laisse à l'élève une minute sans le toucher avant que le tuteur pose les étiquettes.
     const debut = Date.now();
     let id = 0;
@@ -1584,7 +1540,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     };
     id = window.setTimeout(essayer, (v.apres_s ?? 5) * 1000);
     return () => window.clearTimeout(id);
-  }, [finie, conc.variante, simPrete, parTuteur, observation, obsClose]);
+  }, [finie, conc.variante, simDispo, parTuteur, observation, obsClose]);
 
   // ── La question d'observation ──
   /** L'instant où la voix s'arrête : juste après `apres_mot` (null : la question vient à la fin de la voix). */
@@ -1621,8 +1577,8 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   }, [questions, observation?.sim_apres, envoyerASim]);
   // La simulation se tait sur la réponse (`sim_avant`) dès qu'elle est prête, tant que la question n'est pas close.
   useEffect(() => {
-    if (simPrete && observation?.sim_avant && !obsClose) envoyerASim('set_parameters', observation.sim_avant);
-  }, [simPrete, observation?.sim_avant, obsClose, envoyerASim]);
+    if (simDispo && observation?.sim_avant && !obsClose) envoyerASim('set_parameters', observation.sim_avant);
+  }, [simDispo, observation?.sim_avant, obsClose, envoyerASim]);
   const finirObservation = useCallback(async (tour: number) => {
     if (tour !== tourObs.current) return;
     await attendre(1400);
@@ -1662,10 +1618,10 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   // Sans `apres_mot` (ou introuvable) : à la fin de la voix, une fois la simulation prête.
   useEffect(() => {
     if (!observation || obsFaite.current || tObservation !== null || !finie) return;
-    if (visuel?.kind === 'simulation' && !simPrete) return;
+    if (visuel?.kind === 'simulation' && !simDispo) return;
     const id = window.setTimeout(ouvrirObservation, 700);
     return () => window.clearTimeout(id);
-  }, [observation, tObservation, finie, simPrete, visuel?.kind, ouvrirObservation]);
+  }, [observation, tObservation, finie, simDispo, visuel?.kind, ouvrirObservation]);
   /** Un silence de plus : le prochain indice (le tuteur peut montrer un repère), puis les cartes. */
   const aiderObservation = useCallback(() => {
     const o = observation, e = obsRef.current;
@@ -2056,7 +2012,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
                 // les tableaux à la craie se redessinent à la taille du cadre : ils remplissent la zone ; les autres
                 // simulations (dessinées pour 760 × 470) gardent leur format
                 style={/-tableau\//.test(visuel.url) ? undefined : { aspectRatio: '760 / 470', maxHeight: '100%' }}
-                onLoad={() => window.setTimeout(() => setSimPrete(true), 700)}
+                onLoad={() => { const url = visuel.url || null; window.setTimeout(() => { urlChargee.current = url; setSimPrete(true); }, 700); }}
               />
             )}
             {visuel.kind === 'image' && visuel.url && (

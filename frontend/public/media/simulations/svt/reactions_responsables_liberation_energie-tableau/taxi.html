@@ -16,11 +16,19 @@
 /*
  * Oxydoréduction et transporteurs d’hydrogène (cours SVT « Libération de l’énergie »), 10 novembre 2026.
  * Ce qui se voit, dans l’ordre (t en s de la scène) :
- *   deux_h_arraches (2,5)  : une molécule organique (billes de carbone) perd deux hydrogènes, restés « en l’air » ;
- *   taxi_vide_arrive (5)   : le transporteur vide (NAD+ ou FAD) arrive sous eux ;
- *   taxi_charge (7,5)      : il prend les deux H : NADH,H+ (ou FADH2) ;
- *   ecriture (10,5)        : 2 H = 2 H+ + 2 e− ; NAD+ + 2 H+ + 2 e− → NADH,H+ ; il est RÉDUIT ; la molécule est OXYDÉE ;
- *   taxi_decharge (14)     : plus loin, il rend 2 H+ + 2 e− et redevient NAD+ : il est oxydé.
+ *   (17 novembre 2026 : un moment par chose dite ; chaque écrit quand le tuteur le dit)
+ *   molecule (0,9)          : une molécule organique (billes de carbone) avec deux hydrogènes ;
+ *   deux_h_arraches (2,5)   : elle perd deux hydrogènes, restés « en l’air » ;
+ *   qui_porte (3,3)         : « qui va les porter ? » ;
+ *   taxi_vide_arrive (6)    : le transporteur vide (NAD+ ou FAD) arrive sous eux ;
+ *   taxi_charge (8,3)       : il prend les deux H : NADH,H+ (ou FADH2) ;
+ *   deux_h_egal (9,3)       : 2 H = 2 H+ + 2 e− ;
+ *   reduit (11,3)           : NAD+ + 2 H+ + 2 e− → NADH,H+ ; il gagne des électrons : il est RÉDUIT ;
+ *   molecule_oxydee (12,4)  : la molécule est OXYDÉE ;
+ *   taxi_part (14,3)        : le transporteur chargé part plus loin ;
+ *   taxi_decharge (16)      : il rend 2 H+ + 2 e− et redevient NAD+ : il est oxydé ;
+ *   regle (17,6)            : la règle encadrée : prendre des électrons = réduction ; perdre = oxydation ;
+ *   fad_arrive (18,6), fad_charge (19,8) : un autre transporteur, FAD, prend deux hydrogènes : FADH2 (vue NAD+).
  * set_parameters {transporteur: 'nad' | 'fad'} (aussi ?transporteur=fad).
  */
 const { fr, bulle, protocole } = window.Tableau;
@@ -29,8 +37,11 @@ const P = window.SVTPeinture;
 const ENCRE = '#0b1f2a';   // (16 novembre 2026) texte sombre et gras sur les capsules et protéines claires : bien lisible
 const $ = id => document.getElementById(id);
 
-const M = { deux_h_arraches: 2.5, taxi_vide_arrive: 5, taxi_charge: 7.5, ecriture: 10.5, taxi_decharge: 14 };
-const FIN = 16;
+const M0 = { molecule: 0.9, deux_h_arraches: 2.5, qui_porte: 3.3, taxi_vide_arrive: 6, taxi_charge: 8.3, deux_h_egal: 9.3, reduit: 11.3,
+  molecule_oxydee: 12.4, taxi_part: 14.3, taxi_decharge: 16, regle: 17.6 };
+const MF = { fad_arrive: 18.6, fad_charge: 19.8 };   // le second transporteur (FAD), seulement quand le premier est NAD+
+const M = {}; const majM = () => { for (const k of Object.keys(M)) delete M[k]; Object.assign(M, M0, S.transporteur === 'nad' ? MF : {}); };
+const FIN = 20.2;
 const q = new URLSearchParams(location.search);
 const S = { transporteur: q.get('transporteur') === 'fad' ? 'fad' : 'nad' };
 const TR = {
@@ -40,12 +51,21 @@ const TR = {
     eq: 'FAD + 2 H+ + 2 e− → FADH_{2}', retour: 'FADH_{2} → FAD + 2 H+ + 2 e− : il est oxydé' },
 };
 const tr = () => TR[S.transporteur];
+majM();
 const MOTIFS = {
-  deux_h_arraches: 'deux hydrogènes arrachés à la molécule organique : qui va les porter ?',
+  molecule: 'une molécule organique',
+  deux_h_arraches: 'deux hydrogènes arrachés à la molécule organique',
+  qui_porte: 'qui va porter ces deux hydrogènes ?',
   taxi_vide_arrive: 'le transporteur vide arrive',
   taxi_charge: 'le transporteur a pris les deux hydrogènes',
-  ecriture: 'le transporteur est réduit, la molécule est oxydée',
+  deux_h_egal: '2 H = 2 protons + 2 électrons',
+  reduit: 'le transporteur gagne des électrons : il est réduit',
+  molecule_oxydee: 'la molécule a perdu ses hydrogènes : elle est oxydée',
+  taxi_part: 'le transporteur chargé part plus loin',
   taxi_decharge: 'plus loin, le transporteur rend 2 H+ et 2 e− : il est oxydé',
+  regle: 'prendre des électrons = réduction ; perdre des électrons = oxydation',
+  fad_arrive: 'un autre transporteur : FAD',
+  fad_charge: 'FAD prend deux hydrogènes : FADH2',
 };
 const CARBONE = [250, 204, 21], HYDRO = [235, 240, 245], ELEC = [96, 200, 250];
 /* la molécule organique : un amas de billes de carbone */
@@ -84,15 +104,17 @@ function taxi(c, x, y, plein, a = 1) {
   });
 }
 function posTaxi(t) {
-  if (t < 2.6) return null;
-  if (t < 11.5) { const u = doux(chrono.part(2.5, 5, t)); return [mix(TX.arrivee[0], TX.pose[0], u), mix(TX.arrivee[1], TX.pose[1], u)]; }
-  const u = doux(chrono.part(11.5, 13, t)); return [mix(TX.pose[0], TX.loin[0], u), mix(TX.pose[1], TX.loin[1], u)];
+  if (t < 3.4) return null;
+  if (t < 12.6) { const u = doux(chrono.part(3.4, 5.8, t)); return [mix(TX.arrivee[0], TX.pose[0], u), mix(TX.arrivee[1], TX.pose[1], u)]; }
+  const u = doux(chrono.part(12.6, 14.1, t)); return [mix(TX.pose[0], TX.loin[0], u), mix(TX.pose[1], TX.loin[1], u)];
 }
 function posH(i, t) {
   if (t < 1) return H0[i];
-  if (t < 5.5) { const u = doux(chrono.part(1, 2.4, t)); return [mix(H0[i][0], HAIR[i][0], u), mix(H0[i][1], HAIR[i][1], u)]; }
-  const u = doux(chrono.part(5.5, 7.2, t)); return [mix(HAIR[i][0], TX.pose[0] - 9 + 18 * i, u), mix(HAIR[i][1], TX.pose[1] - 4, u)];
+  if (t < 6.2) { const u = doux(chrono.part(1, 2.4, t)); return [mix(H0[i][0], HAIR[i][0], u), mix(H0[i][1], HAIR[i][1], u)]; }
+  const u = doux(chrono.part(6.2, 7.9, t)); return [mix(HAIR[i][0], TX.pose[0] - 9 + 18 * i, u), mix(HAIR[i][1], TX.pose[1] - 4, u)];
 }
+/* Le second transporteur (FAD) : il apparaît à droite, deux hydrogènes tombent sur lui. */
+const FADP = { x: 640, y: 284 };
 
 function dessiner(c) {
   const t = chrono.t, T = tr(), k = S.transporteur;
@@ -100,18 +122,25 @@ function dessiner(c) {
   if (MOS.actif()) {   // tableau large : le titre et la règle en colonne à gauche (bloc [790, 0, 260, 250] de la mosaïque)
     ['Oxydoréduction :', 'un transporteur', 'd’hydrogène'].forEach((l, i) => c.texte(l, 800, 30 + i * 26, { couleur: 'cyan', taille: 21 }));
     c.texte('hyaloplasme', 28, 142, { couleur: 'vert', taille: 15 });
-    c.rect(796, 112, 248, 124, { couleur: 'jaune', largeur: 1.5, arrondi: 8 });
-    c.texte('prendre des électrons', 810, 138, { couleur: 'blanc', taille: 17 }); c.texte('= réduction', 830, 162, { couleur: 'vert', taille: 17 });
-    c.texte('perdre des électrons', 810, 194, { couleur: 'blanc', taille: 17 }); c.texte('= oxydation', 830, 218, { couleur: 'orange', taille: 17 });
-    c.repere('regle', 796, 112, 248, 124, 'la règle : réduction, oxydation');
+    if (t >= 16.2) {   // la règle s’écrit quand le tuteur la dit (avant : au tableau dès l’ouverture)
+      ecrit.ecrire(c, 'regleL', () => {
+        c.rect(796, 112, 248, 124, { couleur: 'jaune', largeur: 1.5, arrondi: 8 });
+        c.texte('prendre des électrons', 810, 138, { couleur: 'blanc', taille: 17 }); c.texte('= réduction', 830, 162, { couleur: 'vert', taille: 17 });
+        c.texte('perdre des électrons', 810, 194, { couleur: 'blanc', taille: 17 }); c.texte('= oxydation', 830, 218, { couleur: 'orange', taille: 17 });
+      });
+      c.repere('regle', 796, 112, 248, 124, 'la règle : réduction, oxydation');
+    }
   } else {
     c.texte('Oxydoréduction : un transporteur d’hydrogène', 18, 30, { couleur: 'cyan', taille: 20 });
     c.texte('hyaloplasme', 28, 72, { couleur: 'vert', taille: 14 });
-    // la règle, encadrée
-    c.rect(498, 52, 242, 56, { couleur: 'jaune', largeur: 1.5, arrondi: 8 });
-    c.texte('prendre des électrons = réduction', 510, 74, { couleur: 'blanc', taille: 14 });
-    c.texte('perdre des électrons = oxydation', 510, 96, { couleur: 'blanc', taille: 14 });
-    c.repere('regle', 498, 52, 242, 56, 'la règle : réduction, oxydation');
+    if (t >= 16.2) {   // la règle, encadrée
+      ecrit.ecrire(c, 'regleE', () => {
+        c.rect(498, 52, 242, 56, { couleur: 'jaune', largeur: 1.5, arrondi: 8 });
+        c.texte('prendre des électrons = réduction', 510, 74, { couleur: 'blanc', taille: 14 });
+        c.texte('perdre des électrons = oxydation', 510, 96, { couleur: 'blanc', taille: 14 });
+      });
+      c.repere('regle', 498, 52, 242, 56, 'la règle : réduction, oxydation');
+    }
   }
 
   // la molécule organique
@@ -123,41 +152,48 @@ function dessiner(c) {
   });
   for (const [x, y] of MOL) c.direct(() => P.bille(c.ctx, x, y, 10, CARBONE, { alpha: Math.max(.05, a) }));
   c.texte('molécule organique', 140, 302, { couleur: 'jaune', taille: 15, align: 'center' });
-  c.repere('molecule', 88, 226, 104, 84, 'la molécule organique');
+  if (a > .3) c.repere('molecule', 94, 228, 92, 56, 'la molécule organique');
 
   // les deux hydrogènes
-  const charge = t >= 7.2 && t < 13.2;
-  if (t < 7.2) {
+  const charge = t >= 7.9 && t < 14.4;
+  if (t < 7.9) {
     for (let i = 0; i < 2; i++) { const [x, y] = posH(i, t); c.direct(() => P.bille(c.ctx, x, y, 6, HYDRO, { alpha: Math.max(.05, a) })); }
     if (t >= 1 && t < 1.8) c.direct(() => P.eclat(c.ctx, 140, 222, 18, 1 - chrono.part(1, 1.8, t)));
     const [x0, y0] = posH(0, t), [x1, y1] = posH(1, t);
-    c.repere('hydrogenes', Math.min(x0, x1) - 12, Math.min(y0, y1) - 12, Math.abs(x1 - x0) + 24, Math.abs(y1 - y0) + 24, 'les deux hydrogènes');
+    if (a > .3) c.repere('hydrogenes', Math.min(x0, x1) - 12, Math.min(y0, y1) - 12, Math.abs(x1 - x0) + 24, Math.abs(y1 - y0) + 24, 'les deux hydrogènes');
   }
-  if (t >= 1.6 && t < 7.5) ecrit.ecrire(c, 'porter', () => c.texte('qui va les porter ?', 199, 144, { couleur: 'blanc', taille: 15, align: 'center' }));
-  if (t >= 1.2 && t < 7.5) ecrit.ecrire(c, '2h', () => c.texte('2 H', 236, 174, { couleur: 'faible', taille: 13 }));
+  if (t >= 2.6 && t < 8.3) ecrit.ecrire(c, 'porter', () => c.texte('qui va les porter ?', 199, 144, { couleur: 'blanc', taille: 15, align: 'center' }));
+  if (t >= 1.2 && t < 8.3) ecrit.ecrire(c, '2h', () => c.texte('2 H', 236, 174, { couleur: 'faible', taille: 13 }));
 
   // le transporteur
   const p = posTaxi(t);
   if (p) {
-    taxi(c, p[0], p[1], charge, doux(chrono.part(2.6, 3.3, t)));
-    c.repere('taxi', p[0] - 42, p[1] - 14, 84, 28, `le transporteur : ${charge ? T.brut : T.vide}`);
+    const w = (charge ? T.wp : T.wv) / 2 + 3;
+    taxi(c, p[0], p[1], charge, doux(chrono.part(3.4, 4.1, t)));
+    if (t >= 3.8) c.repere('taxi', p[0] - w, p[1] - 14, 2 * w, 28, `le transporteur : ${charge ? T.brut : T.vide}`);
   }
-  // l’écriture : le transporteur est réduit, la molécule est oxydée
-  if (t >= 8.4) {
+  // l’écriture : chaque ligne quand le tuteur la dit
+  if (t >= 8.5) {
+    ecrit.ecrire(c, '2h' + k, () => c.texte('2 H = 2 H+ + 2 e−', 300, 150, { couleur: 'blanc', taille: 16 }));
+    c.repere('ecrit_2h', 296, 134, 150, 22, '2 H = 2 H+ + 2 e−');
+  }
+  if (t >= 9.5) {
     ecrit.ecrire(c, 'eq' + k, () => {
-      c.texte('2 H = 2 H+ + 2 e−', 300, 150, { couleur: 'blanc', taille: 16 });
       c.texte(T.eq, 300, 178, { couleur: 'cyan', taille: 16 });
       c.texte('il gagne des électrons : il est RÉDUIT (réduction)', 300, 204, { couleur: 'vert', taille: 15 });
       c.fleche(296, 198, 246, 200, { couleur: 'vert', largeur: 1.4, tete: 8 });
     });
+    c.repere('equation', 296, 160, 416, 52, 'la réduction du transporteur');
+  }
+  if (t >= 11.5) {
     ecrit.ecrire(c, 'oxyde' + k, () => c.texte('elle est OXYDÉE (oxydation)', 140, 324, { couleur: 'orange', taille: 15, align: 'center' }));
-    c.repere('equation', 292, 130, 420, 84, 'la réduction du transporteur');
+    c.repere('ecrit_oxydee', 40, 308, 200, 22, 'la molécule est oxydée');
   }
   // le sens retour, plus loin
-  if (t >= 11.3) ecrit.ecrire(c, 'chemin', () => c.fleche(250, 222, 512, 342, { couleur: 'tresfaible', largeur: 1.3, pointille: [6, 6], tete: 9 }));
-  if (t >= 12.6) ecrit.ecrire(c, 'loin', () => c.texte('plus loin', TX.loin[0], 322, { couleur: 'faible', taille: 13, align: 'center' }));
-  if (t >= 13.2) {
-    const u = doux(chrono.part(13.2, 14, t));
+  if (t >= 12.4) ecrit.ecrire(c, 'chemin', () => c.fleche(250, 222, 512, 342, { couleur: 'tresfaible', largeur: 1.3, pointille: [6, 6], tete: 9 }));
+  if (t >= 13.7) ecrit.ecrire(c, 'loin', () => c.texte('plus loin', TX.loin[0], 322, { couleur: 'faible', taille: 13, align: 'center' }));
+  if (t >= 14.4) {
+    const u = doux(chrono.part(14.4, 15.2, t));
     for (let i = 0; i < 2; i++) {
       c.direct(() => P.bille(c.ctx, mix(TX.loin[0] + 20, 636 + 18 * i, u), mix(TX.loin[1], 336, u), 5, HYDRO));
       c.direct(() => P.bille(c.ctx, mix(TX.loin[0] + 20, 636 + 18 * i, u), mix(TX.loin[1], 362, u), 3.5, ELEC));
@@ -167,27 +203,43 @@ function dessiner(c) {
     ecrit.ecrire(c, 'retour' + k, () => c.texte(T.retour, 300, 404, { couleur: 'orange', taille: 16 }));
     c.repere('equation_retour', 292, 386, 440, 26, 'le transporteur rend ses électrons : il est oxydé');
   }
+  // un autre transporteur : FAD (dans la vue NAD+), deux hydrogènes tombent sur lui
+  if (S.transporteur === 'nad' && t >= 17.8) {
+    const F = TR.fad, a = doux(chrono.part(17.8, 18.3, t)), plein = t >= 19.4, w = (plein ? F.wp : F.wv) / 2 + 3;
+    ecrit.ecrire(c, 'autre', () => c.texte('un autre transporteur :', FADP.x, 238, { couleur: 'faible', taille: 13, align: 'center' }));
+    c.direct(() => {
+      P.capsule(c.ctx, FADP.x, FADP.y, plein ? F.wp : F.wv, 24, F.couleur, { alpha: a, lueur: plein ? 1 : 0 });
+      c.texte(plein ? F.plein : F.vide, FADP.x, FADP.y + 5, { couleur: ENCRE, gras: true, taille: 14, align: 'center', alpha: a });
+      if (t >= 18.6 && !plein) { const u = doux(chrono.part(18.6, 19.4, t)); for (let i = 0; i < 2; i++) P.bille(c.ctx, FADP.x - 9 + 18 * i, mix(250, FADP.y - 4, u), 6, HYDRO); }
+    });
+    c.repere('fad', FADP.x - w, FADP.y - 14, 2 * w, 28, plein ? 'FADH2 : le transporteur chargé' : 'FAD : un autre transporteur');
+  }
 }
 
 function phase(t) {
   const T = tr();
   if (t < 1) return 'Une molécule organique (amas de billes de carbone) dans le hyaloplasme, deux hydrogènes (petites billes blanches) accrochés dessus.';
-  if (t < 2.5) return 'Deux hydrogènes se détachent de la molécule organique.';
-  if (t < 5) return `Les deux hydrogènes restent « en l’air » (écrit : qui va les porter ?) ; le transporteur vide ${T.vide} arrive.`;
-  if (t < 7.2) return `Le transporteur vide ${T.vide} est sous les deux hydrogènes ; ils descendent vers lui.`;
-  if (t < 8.4) return `Le transporteur a pris les deux hydrogènes : il est devenu ${T.brut}.`;
-  if (t < 11.5) return `Écrit : 2 H = 2 H+ + 2 e− ; ${T.eq.replace('_{2}', '2')} ; il gagne des électrons : il est RÉDUIT (réduction). Sous la molécule : elle est OXYDÉE (oxydation).`;
-  if (t < 13.2) return `Le transporteur chargé ${T.brut} part plus loin (flèche en pointillé).`;
-  return `Plus loin, ${T.brut} rend 2 H+ et 2 e− et redevient ${T.vide}. Écrit en bas : ${T.retour.replace('_{2}', '2')}.`;
+  if (t < 2.6) return 'Deux hydrogènes se détachent de la molécule organique.';
+  if (t < 3.4) return 'Les deux hydrogènes restent « en l’air » ; écrit : qui va les porter ?';
+  if (t < 6.2) return `Le transporteur vide ${T.vide} arrive sous les deux hydrogènes.`;
+  if (t < 7.9) return `Les deux hydrogènes descendent vers le transporteur ${T.vide}.`;
+  if (t < 8.5) return `Le transporteur a pris les deux hydrogènes : il est devenu ${T.brut}.`;
+  if (t < 9.5) return `Écrit : 2 H = 2 H+ + 2 e−.`;
+  if (t < 11.5) return `Écrit : ${T.eq.replace('_{2}', '2')} ; il gagne des électrons : il est RÉDUIT (réduction).`;
+  if (t < 12.6) return 'Sous la molécule : elle est OXYDÉE (oxydation).';
+  if (t < 14.4) return `Le transporteur chargé ${T.brut} part plus loin (flèche en pointillé).`;
+  if (t < 16.2) return `Plus loin, ${T.brut} rend 2 H+ et 2 e− et redevient ${T.vide}. Écrit en bas : ${T.retour.replace('_{2}', '2')}.`;
+  if (t < 17.8 || S.transporteur !== 'nad') return 'La règle est encadrée : prendre des électrons = réduction ; perdre des électrons = oxydation.';
+  return t < 19.4 ? 'Un autre transporteur, FAD, apparaît à droite ; deux hydrogènes tombent sur lui.' : 'FAD a pris deux hydrogènes : il est devenu FADH2.';
 }
 function ceQuiSeVoit() {
   const t = chrono.t, T = tr();
-  return `t = ${fr(t, 1)} s${chrono.running ? ' (ça avance)' : chrono.fait ? ' (fin)' : ' (arrêté)'}. Transporteur : ${T.vide} / ${T.brut}. ${phase(t)} Encadré fixe en haut à droite : prendre des électrons = réduction ; perdre des électrons = oxydation.`;
+  return `t = ${fr(t, 1)} s${chrono.running ? ' (ça avance)' : chrono.fait ? ' (fin)' : ' (arrêté)'}. Transporteur : ${T.vide} / ${T.brut}. ${phase(t)} ${t >= 16.2 ? 'Encadré : prendre des électrons = réduction ; perdre des électrons = oxydation.' : ''}`;
 }
 
 function setParameters(p) {
   if (p.transporteur !== 'nad' && p.transporteur !== 'fad') return;
-  S.transporteur = p.transporteur;
+  S.transporteur = p.transporteur; majM();
   chrono.running = false; chrono.jusqua = null; chrono.t = 0; chrono.fait = false; ecrit.oublier(); $('run').textContent = 'Lancer'; scene.sale = true;
   bulle($('feedback'), S.transporteur === 'fad' ? 'Le transporteur est maintenant FAD : il deviendra FADH2.' : 'Le transporteur est NAD+ : il deviendra NADH,H+.');
   pont.noter('set_parameters', { transporteur: S.transporteur }); pont.emettre();
@@ -214,10 +266,10 @@ const pont = protocole({ id: config.id, commandes, config,
   texte: 'Oxydoréduction : une molécule organique perd deux hydrogènes (2 H = 2 H+ + 2 e−) ; elle est oxydée. Le transporteur NAD+ les prend : NAD+ + 2 H+ + 2 e− → NADH,H+ ; il gagne des électrons, il est réduit. Plus loin, NADH,H+ → NAD+ + 2 H+ + 2 e− : il est oxydé. Avec FAD : FAD + 2 H+ + 2 e− → FADH2. Prendre des électrons = réduction ; perdre des électrons = oxydation.',
   etat: () => ({ simulation_status: chrono.statut(), ce_qui_se_voit: ceQuiSeVoit(), current_variant: S.transporteur, time_s: +chrono.t.toFixed(2), parameters: { transporteur: S.transporteur }, moments: M }),
   progression: () => chrono.t / FIN,
-  executer: (cmd, p) => ({ start: chrono.start, reset: chrono.start, pause: chrono.pause, resume: chrono.resume, set_time: () => { chrono.setTime(p); scene.sale = true; },
+  executer: (cmd, p) => ({ start: chrono.start, reset: chrono.reset, pause: chrono.pause, resume: chrono.resume, set_time: () => { chrono.setTime(p); scene.sale = true; },
     set_parameters: () => setParameters(p || {}), play_until: () => chrono.playUntil(p) })[cmd]?.() });
 bulle($('feedback'), 'Une molécule organique dans le hyaloplasme…');
-setTimeout(() => { if (!chrono.running && chrono.t === 0) chrono.start(); }, 1600);
+setTimeout(() => { if (!chrono.pilote && !chrono.running && chrono.t === 0) chrono.start(); }, 1600);
 window.__sim = { chrono, scene, M, S, ecrit };
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>

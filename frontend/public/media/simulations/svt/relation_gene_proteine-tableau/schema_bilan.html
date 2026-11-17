@@ -101,8 +101,8 @@ function dessinerSchema(c, k) {
   maillon(2);
   if (t >= 10.4 && k.ecrit(c, 'pore', 10.4)) { c.ligne(348, 292, PORE[0] + 1, PORE[1] + 8, { couleur: 'faible', largeur: 1.2 }); etiq(c, k, 'pore nucléaire', 362, 308, { couleur: 'blanc', taille: 15, align: 'center' }); }
   if (t >= 13.4) c.repere('ribosome', E.xr - 40, YS - 70, 80, 98, 'le ribosome');
-  if (t >= 13.8) c.repere('traduction', 380, 170, 140, 185, 'la traduction (ribosome)');
-  if (t >= 13.8 && k.ecrit(c, 'trad', 13.8)) { etiq(c, k, 'ribosome', 505, 306, { couleur: 'cyan', taille: 15, align: 'center' }); etiq(c, k, 'traduction', 420, 350, { couleur: 'jaune', taille: 16, align: 'center' }); }
+  if (t >= 13.6) c.repere('traduction', 380, 170, 140, 185, 'la traduction (ribosome)');   // 13,6 (17 novembre 2026) : prêt quand la voix dit « la traduction »
+  if (t >= 13.6 && k.ecrit(c, 'trad', 13.6)) { etiq(c, k, 'ribosome', 505, 306, { couleur: 'cyan', taille: 15, align: 'center' }); etiq(c, k, 'traduction', 420, 350, { couleur: 'jaune', taille: 16, align: 'center' }); }
   maillon(3);
   if (E.pts.length) { const xs = E.pts.map(p => p[0]), ys = E.pts.map(p => p[1]); c.repere('proteine', Math.min(...xs) - 9, Math.min(...ys) - 9, Math.max(...xs) - Math.min(...xs) + 18, Math.max(...ys) - Math.min(...ys) + 18, 'la protéine (chaîne d’acides aminés)'); }
   if (t >= 16.8 && k.ecrit(c, 'prot', 16.8)) etiq(c, k, 'protéine', 500, 106, { couleur: 'jaune', taille: 16, align: 'center' });
@@ -140,7 +140,7 @@ const NOMS = { gene: 'gène', arnm: 'ARNm', pore: 'pore', ribosome: 'ribosome', 
 const SLOT = { gene: [212, 124], transcription: [108, 190], arnm: [110, 236], pore: [362, 304], ribosome: [505, 300], proteine: [470, 100], traduction: [420, 345] };
 const ORDRE = ['ribosome', 'gene', 'traduction', 'pore', 'proteine', 'arnm', 'transcription'];
 const COL = i => [675, 78 + 38 * i];
-const MC = { etiquettes: 2.5, corrige: 6.5 };
+const MC = { schema: 0.9, etiquettes: 2.5, corrige: 6.5 };   // schema (17 novembre 2026) : le schéma seul, avant les étiquettes
 const T_CORR = 4.6;
 let ET = {}, dernierT = 0;
 /** Le travail de l'élève (schéma à légender, 15 novembre 2026) : étiquettes lâchées loin de leur place, et lesquelles. */
@@ -241,16 +241,16 @@ window.Etapes.lancer({
     },
   },
   vues: {
-    schema: { titre: 'Du gène au caractère', encre: [12, 36, 588, 394], fin: 22, moments: MS, dessiner: dessinerSchema, voit: voitSchema,
+    schema: { titre: 'Du gène au caractère', encre: [12, 36, 588, 394], fin: 22, moments: MS, autoDepart: false, dessiner: dessinerSchema, voit: voitSchema,
       motifs: { gene: 'le gène, une portion d’ADN dans le noyau', transcription: 'la transcription : l’ARN polymérase fabrique l’ARNm', arnm: 'l’ARNm se détache de l’ADN',
         pore: 'l’ARNm sort du noyau par un pore nucléaire', traduction: 'dans le cytoplasme, le ribosome traduit l’ARNm', proteine: 'la chaîne d’acides aminés : la protéine', caractere: 'la protéine détermine le caractère' },
       conclusion: 'Gène (ADN) → transcription → ARNm → traduction → protéine → caractère.',
       texte: 'Schéma bilan : dans le noyau, le gène (ADN) est transcrit par l’ARN polymérase en ARNm ; l’ARNm sort par un pore nucléaire ; dans le cytoplasme, le ribosome le traduit en une chaîne d’acides aminés (protéine) ; la protéine détermine le caractère (hématies rondes, phénotype).',
       explication: [{ repere: 'gene', texte: 'Le gène est une portion d’ADN, dans le noyau.' }, { repere: 'transcription', texte: 'La transcription fabrique l’ARNm.' }, { repere: 'pore', texte: 'L’ARNm sort par un pore nucléaire.' },
         { repere: 'traduction', texte: 'Le ribosome traduit l’ARNm en protéine.' }, { repere: 'caractere', texte: 'La protéine détermine le caractère.' }, { repere: 'chaine_ecrite', texte: 'Gène, transcription, ARNm, traduction, protéine, caractère.' }] },
-    construire: { titre: 'Construis le schéma', encre: [12, 36, 588, 394], fin: 8, moments: MC, reglages: { etiquettes: { corrige: false }, corrige: { corrige: true } },
+    construire: { titre: 'Construis le schéma', encre: [12, 36, 588, 394], fin: 8, moments: MC, autoDepart: false, reglages: { etiquettes: { corrige: false }, corrige: { corrige: true } },
       dessiner: dessinerConstruire, voit: voitConstruire,
-      motifs: { etiquettes: 'pose chaque étiquette à sa place', corrige: 'la correction : toutes les étiquettes à leur place' },
+      motifs: { schema: 'le schéma de la cellule, sans étiquettes', etiquettes: 'pose chaque étiquette à sa place', corrige: 'la correction : toutes les étiquettes à leur place' },
       conclusion: 'Pose les sept étiquettes : gène, transcription, ARNm, pore, ribosome, traduction, protéine.',
       surReglage: (k, cles, api) => { if (cles.includes('corrige')) { if (k.P.corrige) api.playUntil({ moment: 'corrige' }); else api.start(); } },
       texte: 'Le schéma sans étiquettes ; sept étiquettes à glisser (gène, ARNm, pore, ribosome, protéine, transcription, traduction) ; bien posée, une étiquette devient verte et s’aimante ; corrige : toutes à leur place.',

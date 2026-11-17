@@ -52,15 +52,16 @@ const EXPLICATION = {
   frequency: [
     { repere: 'stimulateur', texte: 'Le stimulateur envoie des impulsions électriques au nerf, à la fréquence choisie.' },
     { repere: 'muscle', texte: 'Le muscle isolé se contracte à chaque message nerveux reçu.' },
-    { repere: 'capteur', texte: 'Le capteur enregistre la tension développée : c’est le myogramme.' },
-    { repere: 'myogramme', texte: 'À basse fréquence, une secousse isolée ; en rapprochant les stimulations, les secousses se somment ; très rapprochées, la tension se maintient au maximum : tétanos.' },
+    { repere: 'capteur', texte: 'Le capteur mesure la tension développée par le muscle.' },
+    { repere: 'myogramme', texte: 'Cette tension s’inscrit ici en fonction du temps : c’est le myogramme ; chaque trait rose marque une stimulation.' },
   ],
   crossbridge: [
     { repere: 'actine', texte: 'Les filaments fins d’actine sont accrochés aux stries Z.' },
     { repere: 'myosine', texte: 'Les filaments épais de myosine portent des têtes qui s’accrochent à l’actine et tirent.' },
-    { repere: 'calcium', texte: 'Le Ca²⁺ libéré déplace la tropomyosine et dévoile les sites de fixation sur l’actine.' },
-    { repere: 'atp', texte: 'L’hydrolyse de l’ATP fait pivoter la tête puis la détache : sans ATP, les ponts restent fixés.' },
-    { repere: 'myogramme', texte: 'Le raccourcissement du sarcomère se lit sur le tracé : les stries Z se rapprochent.' },
+    { repere: 'tropomyosine', texte: 'Le Ca²⁺ (points jaunes) déplace la tropomyosine orange et dévoile les sites de fixation de l’actine.' },
+    { repere: 'ponts', texte: 'Pendant l’essai, les têtes de myosine forment des ponts jaunes avec l’actine : l’ATP les détache à chaque cycle ; sans ATP, les ponts restent fixés.' },
+    { repere: 'sarcomere', texte: 'Les ponts tirent l’actine vers le centre : les stries Z se rapprochent, le sarcomère raccourcit.' },
+    { repere: 'myogramme', texte: 'La tension développée s’inscrit sur le myogramme.' },
   ],
   energy: [
     { repere: 'atp_muscle', texte: 'Le muscle n’a que quelques secondes d’ATP en réserve : il doit le régénérer en continu.' },
@@ -140,6 +141,9 @@ function boitier(x,x0,y0,w,h,voyant,allume){
   x.restore();
 }
 const doux=v=>v<=0?0:v>=1?1:v*v*(3-2*v);
+const T={calcium:null,t0:0,anim:false};   // déplacement animé de la tropomyosine
+// Tropomyosine peinte le long d'un filament d'actine (de xa à xb, centrée sur y)
+function tropo(x,xa,xb,y){x.save();x.lineCap='round';const ch=()=>{x.beginPath();for(let px=xa;px<=xb;px+=3)x.lineTo(px,y+Math.sin((px-xa)/8)*1.8)};x.strokeStyle='#92400e';x.lineWidth=3.6;ch();x.stroke();x.strokeStyle='#fbbf24';x.lineWidth=2;ch();x.stroke();x.restore()}
 function draw(){
   const W=craie.W,H=craie.H;if(W<1||H<1)return true;const temps=scene();craie.debut(5,temps);Object.keys(window.Tableau.REPERES).forEach(k=>delete window.Tableau.REPERES[k]);   // seuls les repères de l'enquête affichée restent pointables
   const c=craie.ctx,s=Math.min(W/760,H/380);c.translate((W-760*s)/2,(H-380*s)/2);c.scale(s,s);craie.echelle=s;craie.tailleMin=15;
@@ -168,30 +172,41 @@ function draw(){
   } else if(S.variant==='crossbridge'){
     // Sarcomère : stries Z, actine fine (rose), myosine épaisse (violet) et ses têtes
     const short=r&&r.shortening_percent>8?p*18:0;const z1=70+short,z2=390-short;
-    craie.repere('sarcomere',z1,74,z2-z1,184,'sarcomère').repere('strie_z',z1-12,72,26,186,'strie Z').repere('actine',z1,94,122,22,'filament d’actine').repere('myosine',148,124,166,82,'myosine et ses têtes').repere('calcium',56,274,150,26,'Ca²⁺').repere('atp',226,274,150,26,'ATP');
+    if(S.calcium!==T.calcium){T.calcium=S.calcium;T.t0=performance.now()}
+    const uT=doux((performance.now()-T.t0)/600),dTropo=S.calcium?7*uT:0;T.anim=S.calcium&&uT<1;
+    craie.repere('sarcomere',z1-6,74,z2-z1+12,184,'sarcomère').repere('strie_z',z1-12,72,26,186,'strie Z').repere('actine',z1,94,122,22,'filament d’actine').repere('tropomyosine',z1+2,99-dTropo,114,10,'tropomyosine').repere('myosine',148,124,166,82,'myosine et ses têtes').repere('ponts',146,120,50,90,'ponts actine–myosine').repere('calcium',56,274,150,26,'Ca²⁺').repere('atp',226,274,150,26,'ATP');
     craie.direct(()=>{window.Filaments.strieZ(craie.ctx,z1,80,250);window.Filaments.strieZ(craie.ctx,z2,80,250)});craie.texte('Z',z1-4,70,{taille:14}).texte('Z',z2-4,70,{taille:14});
     craie.direct(()=>{const x=craie.ctx,F=window.Filaments;
       [105,165,225].forEach(y=>{F.actine(x,z1,z1+115,y);F.actine(x,z2,z2-115,y)});
       [135,195].forEach(y=>F.myosine(x,150,310,y));
+      // tropomyosine (orange) : posée sur les sites de l'actine ; avec Ca²⁺ elle s'écarte en 0,6 s et les dévoile
+      [105,165,225].forEach(y=>{tropo(x,z1+4,z1+113,y-dTropo);tropo(x,z2-113,z2-4,y-dTropo)});
+      // ponts actine–myosine pendant l'essai (Ca²⁺ présent) : avec ATP ils se font et se défont (cycles) puis se détachent ; sans ATP ils restent fixés
+      if(r&&r.calcium_present&&(S.running||(S.progress>=1&&!r.atp_present))){const t=performance.now()/1000;let n=0;
+        for(const ym of [135,195])for(const [xs,cote] of [[[158,172,186],-1],[[284,298],1]])for(const xb of xs){n++;const ya=cote<0?(n%2?ym-30:ym+30):(n%2?ym+30:ym-30);
+          if(xb<z1+6||xb>z2-6||(cote<0&&xb>z1+113)||(cote>0&&xb<z2-113))continue;
+          if(r.atp_present&&S.running&&Math.sin(t*9+n*1.7)<0)continue;
+          x.save();x.strokeStyle='#facc15';x.lineWidth=2.2;x.beginPath();x.moveTo(xb,ym+(ya>ym?4:-4));x.lineTo(xb+cote*5,ya+(ya>ym?-3:3));x.stroke();x.restore();SVTPeinture.bille(x,xb+cote*5,ya+(ya>ym?-3:3),3,[250,204,21])}}
       if(S.calcium)for(let i=0;i<10;i++)SVTPeinture.bille(x,90+(i*31)%280,90+(i*53)%150,3.4,[250,204,21]);});
     craie.texte('actine',80,86,{couleur:'rose',taille:13}).texte('myosine',230,128,{couleur:'violet',taille:13});
     craie.texte(`Ca²⁺ : ${S.calcium?'présent':'absent'}`,60,290,{couleur:'jaune',taille:16}).texte(`ATP : ${S.atp?'présent':'absent'}`,230,290,{couleur:'cyan',taille:16});
   } else {
     // Filières : trois réservoirs vers l'ATP du muscle
     craie.direct(()=>peindreMuscle(craie.ctx,60,220,62,20));craie.texte('muscle',140,68,{couleur:'blanc',taille:15,align:'center'});
-    craie.repere('muscle',56,36,170,54,'muscle').repere('atp_muscle',110,100,60,32,'ATP du muscle').repere('filiere_pcr',38,156,118,64,'ATP–phosphocréatine').repere('filiere_lactique',163,156,118,64,'glycolyse lactique').repere('filiere_respiration',288,156,118,64,'respiration').repere('conditions',246,44,232,50,'durée, intensité, O₂');
+    craie.repere('muscle',56,36,170,54,'muscle').repere('atp_muscle',110,100,60,32,'ATP du muscle').repere('filiere_pcr',38,146,118,64,'ATP–phosphocréatine').repere('filiere_lactique',163,146,118,64,'glycolyse lactique').repere('filiere_respiration',288,146,118,64,'respiration').repere('conditions',246,44,210,50,'durée, intensité, O₂');
     craie.texte('ATP',140,122,{couleur:'cyan',taille:20,align:'center'}).fleche(140,104,140,92,{couleur:'cyan'});
     const w=r&&r.weights?r.weights:null,tot=w?Object.values(w).reduce((a,b)=>a+b,0):1;
     [['phosphocréatine','PCr → ATP','jaune',40,'très vite, réserve faible'],['glycolyse lactique','glycogène → lactate','orange',165,'vite, sans O₂'],['respiration cellulaire','O₂ → mitochondrie','vert',290,'lent, durable']].forEach(([k,l,col,x,note],i)=>{
-      craie.rect(x,160,112,56,{couleur:col,arrondi:8}).texte(l,x+56,183,{couleur:col,taille:13,align:'center',max:104}).texte(note,x+56,205,{couleur:'faible',taille:11,align:'center',max:106});
-      craie.fleche(x+56,158,140+(i-1)*18,134,{couleur:col,largeur:1.4});
-      craie.direct(()=>{if(w){const f=w[k]/tot;craie.ctx.globalAlpha=.25;craie.ctx.fillStyle=craie.couleur(col);craie.ctx.fillRect(x+2,216-54*f*p,108,54*f*p);craie.ctx.globalAlpha=1}})});
-    craie.texte(`durée ${S.duration} s · intensité ${S.intensity} %`,250,62,{couleur:'jaune',taille:15,max:230}).texte(`O₂ ${S.oxygen?'normal':'limité'}`,250,86,{couleur:'jaune',taille:15});
+      // (17 novembre 2026) remontées de 10 : la console expérimentale (bas-gauche) mordait sur le bas des cadres
+      craie.rect(x,150,112,56,{couleur:col,arrondi:8}).texte(l,x+56,173,{couleur:col,taille:13,align:'center',max:104}).texte(note,x+56,195,{couleur:'faible',taille:11,align:'center',max:106});
+      craie.fleche(x+56,148,140+(i-1)*18,132,{couleur:col,largeur:1.4});
+      craie.direct(()=>{if(w){const f=w[k]/tot;craie.ctx.globalAlpha=.25;craie.ctx.fillStyle=craie.couleur(col);craie.ctx.fillRect(x+2,206-54*f*p,108,54*f*p);craie.ctx.globalAlpha=1}})});
+    craie.texte(`durée ${S.duration} s · intensité ${S.intensity} %`,250,62,{couleur:'jaune',taille:15,max:205}).texte(`O₂ ${S.oxygen?'normal':'limité'}`,250,86,{couleur:'jaune',taille:15});
   }
   // Myogramme (ou réponse enregistrée) à droite
-  const gx=430,gy=230,gw=290,gh=160;
-  craie.repere('myogramme',gx-10,gy-gh-14,gw+32,gh+34,'myogramme').repere('legende',gx,gy+8,250,22,'légende du tracé');
-  if(r)craie.repere('resultats',gx-4,gy+30,gw+20,48,'mesures de l’essai');if(S.trials.length)craie.repere('carnet',gx-4,gy+84,gw+20,60,'carnet');
+  const gx=430,gy=260,gw=290,gh=100;   // (17 novembre 2026) sous le panneau « Hypothèse », qui cachait le haut du tracé
+  craie.repere('myogramme',gx-10,gy-gh-12,gw+32,gh+36,'myogramme').repere('legende',gx,gy+8,250,22,'légende du tracé');
+  if(r)craie.repere('resultats',gx-4,gy+27,gw+20,36,'mesures de l’essai');if(S.trials.length)craie.repere('carnet',gx-4,gy+66,gw+20,54,'carnet');
   craie.axe(gx,gy,gx+gw,gy,[],{}).axe(gx,gy,gx,gy-gh,[],{}).texte('temps',gx+gw-6,gy+20,{couleur:'faible',taille:13,align:'right'}).texte('réponse relative',gx+6,gy-gh+2,{couleur:'faible',taille:13});
   [['tension','violet'],['stimulus','rose'],['chaleur','orange']].forEach(([l,col],i)=>{craie.ligne(gx+4+i*78,gy+16,gx+18+i*78,gy+16,{couleur:col,largeur:2.5}).texte(l,gx+22+i*78,gy+21,{couleur:col,taille:12})});
   craie.direct(()=>{if(!r)return;
@@ -199,10 +214,10 @@ function draw(){
     for(let i=0;i<=120;i++){const u=i/120;if(u<=p&&tension(u)[1])craie.ligne(gx+6+u*(gw-12),gy,gx+6+u*(gw-12),gy-40,{couleur:'rose',largeur:1.4,tremble:0})}
     craie.courbe(u=>u>p?null:[gx+6+u*(gw-12),gy-Math.min(r.heat_relative/100,u*1.2)*p*70],60,{couleur:'orange',largeur:1.8,tremble:.3})});
   if(S.resultAt!=null&&r){craie.depuis(S.resultAt);
-    craie.texte(`tension max : ${r.tension_relative} u.a. · ${shortType(r.response_type)} · chaleur ${r.heat_relative} · voie ${shortPath(r.pathway)}`,gx,gy+42,{couleur:'jaune',taille:14,max:300});
-    craie.texte(interpret(r),gx,gy+64,{couleur:'faible',taille:13,max:300});
-    if(S.trials.length){craie.texte('Carnet :',gx,gy+96,{couleur:'violet',taille:14});S.trials.slice(-3).forEach((t,i)=>craie.texte(`#${t.n} ${t.variant==='frequency'?t.frequency_hz+' Hz':t.variant==='crossbridge'?(t.calcium_present?'Ca+':'Ca−')+'/'+(t.atp_present?'ATP+':'ATP−'):t.duration_s+' s'} → ${shortType(t.response_type)} · ${t.tension_relative}`,gx+60,gy+96+i*18,{couleur:'faible',taille:12,max:230,duree:.3}))}}
-  return craie.fin();
+    craie.texte(`tension max : ${r.tension_relative} u.a. · ${shortType(r.response_type)} · chaleur ${r.heat_relative} · voie ${shortPath(r.pathway)}`,gx,gy+40,{couleur:'jaune',taille:14,max:300});
+    craie.texte(interpret(r),gx,gy+58,{couleur:'faible',taille:13,max:300});
+    if(S.trials.length){craie.texte('Carnet :',gx,gy+80,{couleur:'violet',taille:14});S.trials.slice(-3).forEach((t,i)=>craie.texte(`#${t.n} ${t.variant==='frequency'?t.frequency_hz+' Hz':t.variant==='crossbridge'?(t.calcium_present?'Ca+':'Ca−')+'/'+(t.atp_present?'ATP+':'ATP−'):t.duration_s+' s'} → ${shortType(t.response_type)} · ${t.tension_relative}`,gx+60,gy+80+i*16,{couleur:'faible',taille:12,max:230,duree:.3}))}}
+  return craie.fin()&&!T.anim;
 }
 function frame(){if(S.dirty||S.running)S.dirty=!draw();requestAnimationFrame(frame)}
 init();requestAnimationFrame(frame);

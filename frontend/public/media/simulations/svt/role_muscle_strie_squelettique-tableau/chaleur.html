@@ -243,7 +243,9 @@ function dessiner(c) {
   });
 
   // 4. Ce qui s'écrit quand ça arrive.
-  plusTard(c, 'lab_init', t >= 0.06, () => {
+  // Écrite au sommet de la bosse (T_HI_MAX), l’instant du moment « chaleur_initiale » : écrite à 0,06 s, elle manquait à
+  // l’arrêt sur image et la baguette ne trouvait pas son repère (17 novembre 2026).
+  plusTard(c, 'lab_init', t >= T_HI_MAX - 1e-6, () => {
     c.fleche(372 + OX, 233, 346 + OX, 240, { couleur: 'orange', largeur: 1.6, tete: 7 });
     c.texte('chaleur initiale', 376 + OX, 236, { couleur: 'orange', taille: tk(14) });
     c.repere('chaleur_initiale', XA, YC - H1 - 8, 90, H1 + 8, 'la chaleur initiale : brève et haute, pendant la secousse');
@@ -278,6 +280,10 @@ function dessiner(c) {
 
 const canvas = $('canvas');
 const scene = window.MuscleTableau.Scene(canvas, (c) => { scene.cadre(41); disposer(scene.L); dessiner(c); return c.fin(); }, { large: true });
+// ?deja=1 (17 novembre 2026) : diapo de rappel — le montage et les axes sont déjà au tableau quand la voix commence.
+// Écrits à la craie depuis zéro, ils prenaient ~15 s, et les origines dites dès la 3e seconde ne s’écrivaient qu’après.
+// Ce qui arrive ensuite (bosses, légendes, origines) s’écrit toujours en direct, à son moment.
+if (new URLSearchParams(location.search).has('deja')) scene.ouvert -= 60000;
 scene.avancer = dt => {
   if (!S.running) return false;
   S.t = Math.min(FIN, S.t + dt);
@@ -419,7 +425,10 @@ const pont = protocole({ id: config.id, commandes, config,
   progression: () => (S.fait ? 1 : 0),
   executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
 bulle($('feedback'), 'Le muscle va être excité…');
-setTimeout(() => { if (!S.running && S.t === 0) start(); }, 1600);
+// ?attente=1 (17 novembre 2026) : dans le cours, la page attend le tuteur — c’est sa voix qui lance chaque moment
+// (play_until) ; un lancement tout seul jouait la scène avant lui et ses arrêts sur image étaient ignorés.
+const ATTENTE = new URLSearchParams(location.search).has('attente');
+setTimeout(() => { if (!ATTENTE && !S.running && S.t === 0) start(); }, 1600);
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>
 </body></html>

@@ -45,8 +45,10 @@ const dY = d => 232 + (d - 1.710) / .014 * 72;            // densité → hauteu
 const TUBES = [{ id: 'tube_leger', x: 300, lib: 'léger', bandes: [[1.710, 1]] }, { id: 'tube_lourd', x: 350, lib: 'lourd', bandes: [[1.724, 1]] },
   { id: 'tube_g0', x: 410, lib: 'G0', bandes: [[1.724, 1]] }, { id: 'tube_g1', x: 460, lib: 'G1', bandes: [[1.717, 1]] },
   { id: 'tube_g2', x: 510, lib: 'G2', bandes: [[1.717, .5], [1.710, .5]] }, { id: 'tube_g3', x: 560, lib: 'G3', bandes: [[1.717, .25], [1.710, .75]] }];
-const ME = { hypotheses: 3.4, culture_15N: 6.0, transfert_14N: 8.4, centrifugation: 11.0, temoins: 13.4, g0: 15.0, g1_bande: 17.0, calcul_moyenne: 18.8, conservative_rejetee: 20.4, g2_bandes: 22.4, dispersive_rejetee: 24.0, g3: 26.0, arbre_g0_g3: 29.0 };
-const APP = { tube_leger: 12.0, tube_lourd: 12.0, tube_g0: 14.0, tube_g1: 16.0, tube_g2: 21.4, tube_g3: 25.0 };
+// (17 novembre 2026) Une hypothèse à la fois (moments conservative, semi, dispersive), au rythme d'ig_r1 ; les tubes
+// arrivent un peu plus tôt (la baguette « tube » tombait avant eux), le calcul aussi.
+const ME = { conservative: 1.0, semi: 1.8, dispersive: 2.6, hypotheses: 3.4, culture_15N: 6.0, transfert_14N: 8.4, centrifugation: 11.0, temoins: 13.4, g0: 15.0, g1_bande: 17.0, calcul_moyenne: 18.8, conservative_rejetee: 20.4, g2_bandes: 22.4, dispersive_rejetee: 24.0, g3: 26.0, arbre_g0_g3: 29.0 };
+const APP = { tube_leger: 11.4, tube_lourd: 11.4, tube_g0: 14.0, tube_g1: 16.0, tube_g2: 21.0, tube_g3: 24.6 };
 function tubeCentri(x, cx, bandes, a, choisi) {
   x.save(); x.globalAlpha = a;
   const y0 = 188, h = 172, w = 30;
@@ -94,20 +96,20 @@ function dessinerExperience(c, k) {
     c.repere(H.id, H.x - 4, 56, 180, 84, 'hypothèse ' + H.nom);
     if (k.ecrit(c, 'h' + i, .5 + i * .8)) { c.fleche(H.x + 40, 82, H.x + 78, 82, { couleur: 'faible', largeur: 1.4 }); k.T(c, H.nom, H.x + 80, 126, { couleur: 'blanc', taille: 15, align: 'center' }); }
   });
-  if (k.ecrit(c, 'leg', 2.6)) { k.T(c, 'bleu : brin ancien', 610, 20, { couleur: 'bleu', taille: 12 }); k.T(c, 'blanc : brin nouveau', 610, 36, { couleur: 'blanc', taille: 12 }); }
+  if (k.ecrit(c, 'leg', 3.0)) { k.T(c, 'bleu : brin ancien', 610, 20, { couleur: 'bleu', taille: 12 }); k.T(c, 'blanc : brin nouveau', 610, 36, { couleur: 'blanc', taille: 12 }); }
   if (t >= 4.0) c.repere('flacon', 50, 196, 100, 100, 'le flacon de bactéries');
   if (k.ecrit(c, 'cult', 4.4)) { k.T(c, 'bactéries sur ¹⁵N', 100, 176, { couleur: 'violet', taille: 14, align: 'center' }); k.T(c, '(azote lourd)', 100, 192, { couleur: 'violet', taille: 12, align: 'center' }); }
   if (k.ecrit(c, 'transf', 7.2)) k.T(c, 'puis sur ¹⁴N (léger)', 100, 312, { couleur: 'cyan', taille: 13, align: 'center' });
   if (t >= 9.0) c.repere('centrifugeuse', 70, 322, 60, 60, 'la centrifugeuse');
   if (k.ecrit(c, 'centri', 9.4)) k.T(c, 'centrifugation', 100, 400, { couleur: 'faible', taille: 13, align: 'center' });
-  if (k.ecrit(c, 'axe', 12.0)) {
+  if (k.ecrit(c, 'axe', 11.4)) {
     c.ligne(262, 196, 262, 350, { couleur: 'faible', largeur: 1.2 });
     for (const [d, lib] of [[1.710, '1,710'], [1.717, '1,717'], [1.724, '1,724']]) { c.ligne(258, dY(d), 266, dY(d), { couleur: 'faible', largeur: 1.2 }); k.T(c, lib, 254, dY(d) + 5, { couleur: 'faible', taille: 13, align: 'right' }); }
     k.T(c, 'densité', 230, 188, { couleur: 'faible', taille: 12, align: 'center' });
     c.repere('axe_densite', 210, 196, 60, 160, 'l’axe des densités (g·cm⁻³)');
   }
   for (const T of TUBES) if (t >= APP[T.id]) { c.repere(T.id, T.x - 16, 186, 32, 176, 'tube ' + T.lib); if (k.ecrit(c, 'l' + T.id, APP[T.id] + .2)) k.T(c, T.lib, T.x, 382, { couleur: T.lib[0] === 'G' ? 'jaune' : 'faible', taille: 13, align: 'center' }); }
-  if (k.ecrit(c, 'calc', ME.calcul_moyenne - .8)) { k.T(c, '(1,710 + 1,724) / 2 = 1,717 g·cm⁻³ : ADN hybride', 214, 166, { couleur: 'jaune', taille: 15 }); c.repere('calcul', 210, 150, 380, 22, 'le calcul de la moyenne'); }
+  if (k.ecrit(c, 'calc', ME.calcul_moyenne - 1.2)) { k.T(c, '(1,710 + 1,724) / 2 = 1,717 g·cm⁻³ : ADN hybride', 214, 166, { couleur: 'jaune', taille: 15 }); c.repere('calcul', 210, 150, 380, 22, 'le calcul de la moyenne'); }
   const barre = (H, txt) => { c.ligne(H.x - 4, 60, H.x + 168, 116, { couleur: 'rouge', largeur: 2.6 }); c.ligne(H.x - 4, 116, H.x + 168, 60, { couleur: 'rouge', largeur: 2.6 }); k.T(c, txt, H.x + 80, 144, { couleur: 'rouge', taille: 13, align: 'center' }); };
   if (k.ecrit(c, 'rejC', ME.conservative_rejetee - .8)) barre(HYP[0], 'elle prévoyait deux bandes');
   if (k.ecrit(c, 'rejD', ME.dispersive_rejetee - .8)) barre(HYP[2], 'elle prévoyait une seule bande');
@@ -119,7 +121,7 @@ function voitExperience(k) {
   const t = k.t, m = ['En haut, trois hypothèses dessinées (brins anciens bleus, brins nouveaux blancs) : conservative (une molécule toute bleue + une toute blanche), semi-conservative (deux molécules bleu-blanc), dispersive (deux molécules en mosaïque).'];
   if (t >= 4) m.push(t < 7 ? 'Un flacon de bactéries cultivées sur ¹⁵N (azote lourd, liquide violet).' : 'Les bactéries sont transférées sur ¹⁴N (azote léger, liquide bleu clair).');
   if (t >= 9) m.push('Une centrifugeuse' + (t < 10.8 ? ' qui tourne.' : '.'));
-  if (t >= 12) m.push('Tubes de centrifugation, axe des densités : 1,710 en haut, 1,717, 1,724 en bas (le plus lourd descend le plus bas). Témoins : ADN léger, bande à 1,710 ; ADN lourd, bande à 1,724.');
+  if (t >= 11.4) m.push('Tubes de centrifugation, axe des densités : 1,710 en haut, 1,717, 1,724 en bas (le plus lourd descend le plus bas). Témoins : ADN léger, bande à 1,710 ; ADN lourd, bande à 1,724.');
   if (t >= 14) m.push('G0 : une bande lourde à 1,724.');
   if (t >= 16) m.push('G1 : une seule bande, à 1,717 (hybride).');
   if (t >= ME.calcul_moyenne - .8) m.push('Écrit « (1,710 + 1,724) / 2 = 1,717 g·cm⁻³ : ADN hybride ».');
@@ -134,12 +136,14 @@ function voitExperience(k) {
 }
 
 /* ── Vue prédictions ─────────────────────────────────────────────── */
+// (17 novembre 2026) chaque ligne du tableau, puis la comparaison, arrivent 1 s plus tôt dans leur moment : la baguette
+// partait avant elles (REPÈRE ABSENT dans ig_r6).
 const PR = { tableau: 2.0, ligne_conservative: 4.4, ligne_semi: 6.8, ligne_dispersive: 9.2, observe: 11.6, comparaison: 14.2 };
 const LIGNES = [
-  { id: 'l_conservative', nom: 'conservative', y: 150, g1: [[1.724, .5], [1.710, .5]], g2: [[1.724, .25], [1.710, .75]], t: 3.4, ok: false },
-  { id: 'l_semi', nom: 'semi-conservative', y: 220, g1: [[1.717, 1]], g2: [[1.717, .5], [1.710, .5]], t: 5.8, ok: true },
-  { id: 'l_dispersive', nom: 'dispersive', y: 290, g1: [[1.717, 1]], g2: [[1.7135, 1]], t: 8.2, ok: false },
-  { id: 'observe', nom: 'observé', y: 360, g1: [[1.717, 1]], g2: [[1.717, .5], [1.710, .5]], t: 10.6, ok: null },
+  { id: 'l_conservative', nom: 'conservative', y: 150, g1: [[1.724, .5], [1.710, .5]], g2: [[1.724, .25], [1.710, .75]], t: 2.4, ok: false },
+  { id: 'l_semi', nom: 'semi-conservative', y: 220, g1: [[1.717, 1]], g2: [[1.717, .5], [1.710, .5]], t: 4.8, ok: true },
+  { id: 'l_dispersive', nom: 'dispersive', y: 290, g1: [[1.717, 1]], g2: [[1.7135, 1]], t: 7.2, ok: false },
+  { id: 'observe', nom: 'observé', y: 360, g1: [[1.717, 1]], g2: [[1.717, .5], [1.710, .5]], t: 9.6, ok: null },
 ];
 function miniTube(x, cx, cy, bandes, a) {
   x.save(); x.globalAlpha = a; const y0 = cy - 28, h = 56, w = 22;
@@ -159,7 +163,7 @@ function dessinerPredictions(c, k) {
     for (const L of LIGNES) k.T(c, L.nom, 40, L.y, { couleur: L.ok === null ? 'vert' : 'blanc', taille: 15 });
   }
   for (const L of LIGNES) if (t >= L.t) c.repere(L.id, 30, L.y - 36, 470, 64, L.nom);
-  if (k.ecrit(c, 'cmp', PR.comparaison - 1.2)) {
+  if (k.ecrit(c, 'cmp', PR.comparaison - 2.0)) {
     for (const L of LIGNES) if (L.ok !== null) k.T(c, L.ok ? '✓' : '✗', 486, L.y, { couleur: L.ok ? 'vert' : 'rouge', taille: 22, align: 'center' });
     k.T(c, 'Seule l’hypothèse', 520, 200, { couleur: 'jaune', taille: 16 }); k.T(c, 'semi-conservative', 520, 222, { couleur: 'jaune', taille: 16 }); k.T(c, 'explique les résultats.', 520, 244, { couleur: 'jaune', taille: 16 });
     c.repere('conclusion', 514, 182, 240, 70, 'la conclusion');
@@ -171,7 +175,7 @@ function voitPredictions(k) {
   if (t >= 5.8) m.push('Semi-conservative : G1 une bande hybride ; G2 hybride + légère.');
   if (t >= 8.2) m.push('Dispersive : G1 une bande hybride ; G2 une seule bande, entre hybride et légère.');
   if (t >= 10.6) m.push('Ligne « observé » (en vert) : G1 une bande hybride ; G2 hybride + légère.');
-  if (t >= PR.comparaison - 1.2) m.push('Coche verte devant semi-conservative, croix rouges devant les deux autres ; écrit « Seule l’hypothèse semi-conservative explique les résultats. »');
+  if (t >= PR.comparaison - 2.0) m.push('Coche verte devant semi-conservative, croix rouges devant les deux autres ; écrit « Seule l’hypothèse semi-conservative explique les résultats. »');
   return m;
 }
 
@@ -183,16 +187,16 @@ window.Etapes.lancer({
     /* Tableau large (deuxième passe, 15 novembre 2026, « agrandir les figures ») : pas de titre interne ; à gauche le
      * flacon et la centrifugeuse, au centre les trois hypothèses au-dessus des tubes et de l'arbre (pleine hauteur), à
      * droite la légende, le calcul de la moyenne et la conclusion récrits en colonne, à la ligne (etapes.js). */
-    experience: { titre: 'L’expérience de Meselson et Stahl', fin: 30, moments: ME, dessiner: dessinerExperience, voit: voitExperience,
+    experience: { titre: 'L’expérience de Meselson et Stahl', autoDepart: false, fin: 30, moments: ME, dessiner: dessinerExperience, voit: voitExperience,
       blocs: { flacon: [26, 150, 176, 410], hyp: [56, 44, 746, 150], tubes: [204, 174, 762, 392], leg: [600, 4, 760, 42], calc: [204, 152, 640, 173], conc: [200, 384, 680, 420] },
       disposition: { colonnes: [['flacon'], ['hyp', 'tubes'], { texte: ['leg', 'calc', 'conc'] }], partMax: .76, ecart: 18 },
-      motifs: { hypotheses: 'trois hypothèses : conservative, semi-conservative, dispersive', culture_15N: 'bactéries cultivées sur azote lourd ¹⁵N', transfert_14N: 'bactéries transférées sur azote léger ¹⁴N', centrifugation: 'l’ADN extrait est centrifugé', temoins: 'les témoins : ADN léger 1,710 en haut, ADN lourd 1,724 en bas', g0: 'G0 : une bande lourde', g1_bande: 'G1 : une seule bande, hybride', calcul_moyenne: '1,717 est la moyenne de 1,710 et 1,724', conservative_rejetee: 'la conservative est rejetée : elle prévoyait deux bandes', g2_bandes: 'G2 : deux bandes égales, hybride et légère', dispersive_rejetee: 'la dispersive est rejetée : elle prévoyait une seule bande', g3: 'G3 : 25 % hybride, 75 % léger', arbre_g0_g3: 'l’arbre des molécules : chaque molécule fille garde un brin de la mère' },
+      motifs: { conservative: 'hypothèse conservative : la molécule mère reste entière', semi: 'hypothèse semi-conservative : un brin ancien et un brin nouveau', dispersive: 'hypothèse dispersive : ancien et nouveau mélangés', hypotheses: 'trois hypothèses : conservative, semi-conservative, dispersive', culture_15N: 'bactéries cultivées sur azote lourd ¹⁵N', transfert_14N: 'bactéries transférées sur azote léger ¹⁴N', centrifugation: 'l’ADN extrait est centrifugé', temoins: 'les témoins : ADN léger 1,710 en haut, ADN lourd 1,724 en bas', g0: 'G0 : une bande lourde', g1_bande: 'G1 : une seule bande, hybride', calcul_moyenne: '1,717 est la moyenne de 1,710 et 1,724', conservative_rejetee: 'la conservative est rejetée : elle prévoyait deux bandes', g2_bandes: 'G2 : deux bandes égales, hybride et légère', dispersive_rejetee: 'la dispersive est rejetée : elle prévoyait une seule bande', g3: 'G3 : 25 % hybride, 75 % léger', arbre_g0_g3: 'l’arbre des molécules : chaque molécule fille garde un brin de la mère' },
       conclusion: 'La réplication est semi-conservative.',
       surReglage: (k, cles, api) => { if (cles.includes('generation')) api.playUntil({ moment: GEN[k.P.generation] }); },
       texte: 'Meselson et Stahl : bactéries sur ¹⁵N puis ¹⁴N, ADN centrifugé. Témoins 1,710 (léger) et 1,724 (lourd) g·cm⁻³. G1 : une bande à 1,717 (hybride) → conservative rejetée ; G2 : hybride + légère → dispersive rejetée ; G3 : 25 % hybride, 75 % léger. Réplication semi-conservative.',
       explication: [{ repere: 'tube_g1', texte: 'En G1, une seule bande à 1,717 : un brin lourd, un brin léger.' }, { repere: 'h_conservative', texte: 'La conservative prévoyait deux bandes : rejetée.' }, { repere: 'tube_g2', texte: 'En G2, deux bandes : hybride et légère.' }, { repere: 'arbre', texte: 'Chaque molécule fille garde un brin de la molécule mère.' }] },
     // Tableau large (15 novembre 2026) : le tableau à gauche, la conclusion à droite, agrandie (etapes.js).
-    predictions: { titre: 'Les prédictions de chaque hypothèse', fin: 15.4,
+    predictions: { titre: 'Les prédictions de chaque hypothèse', autoDepart: false, fin: 15.4,
       // deuxième passe : pas de titre interne, la conclusion récrite en colonne
       blocs: { tableau: [20, 68, 508, 410], concl: [512, 180, 724, 256] },
       disposition: { colonnes: [['tableau'], { texte: ['concl'] }] }, moments: PR, dessiner: dessinerPredictions, voit: voitPredictions,
