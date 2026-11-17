@@ -246,11 +246,15 @@ function statut(b) {
   if (lac.length) return 'partiel';
   return (S.acquis_ids || []).some(a => b.comps.includes(a)) ? 'acquis' : null;
 }
-function moments() { const m = { fiche: 1 }; BLOCS.forEach(b => { m[b.id] = 1; }); m.lacunes = 2; return m; }
+// (17 novembre 2026) Moments croissants (bloc n° i → i, fiche → 8, lacunes → 9) et time_s = dernier bloc écrit : le kit refuse
+// un play_until dont le moment est déjà passé (rien ne se rembobine) ; avec tous les moments à 1, il refusait chaque bloc
+// après le premier et la fiche restait figée sur « Le noyau commande » pendant toute la voix.
+function moments() { const m = {}; BLOCS.forEach((b, i) => { m[b.id] = i + 1; }); m.fiche = BLOCS.length; m.lacunes = BLOCS.length + 1; return m; }
+function rang() { if (S.page === 2) return BLOCS.length + 1; let n = 0; S.apparu.forEach((a, i) => { if (a != null) n = i + 1; }); return n; }
 function playUntil(p) {
   const nom = p.moment in moments() ? p.moment : null;
   if (!nom && !Number.isFinite(+p.time_s)) return;
-  if (nom === 'lacunes' || (!nom && +p.time_s === 2)) aller(2, 'play_until');
+  if (nom === 'lacunes' || (!nom && +p.time_s === BLOCS.length + 1)) aller(2, 'play_until');
   else if (nom === 'fiche' || !nom) aller(1, 'play_until', null, true);
   else aller(1, 'play_until', nom);
 }
@@ -292,11 +296,12 @@ const config = { id: 'genetique_bilan', version: '1.0', title: 'Ce qu’il faut 
     set_parameters: { lacunes: '[{id: C1..C9, label, statut: non_acquis|partiel, reprendre_avec: [..]}] (bilan de l’élève)', acquis: '[labels acquis]', acquis_ids: '[C1, ..]' } } };
 const pont = protocole({ id: config.id, commandes, config,
   texte: 'Fiche « Ce qu’il faut retenir » du chapitre de l’information génétique, sur une page (huit blocs : le noyau commande, chromatine et chromosome, cycle et quantité d’ADN, mitose, l’ADN support, la molécule d’ADN, la réplication, rédiger ; chacun avec définition, formule, piège), puis la page de l’élève.',
-  etat: () => ({ simulation_status: 'paused', ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'bilan', time_s: S.page, parameters: { page: S.page, focus: S.focus, lacunes: S.lacunes ? S.lacunes.length : null }, moments: moments() }),
+  etat: () => ({ simulation_status: 'paused', ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'bilan', time_s: rang(), parameters: { page: S.page, focus: S.focus, lacunes: S.lacunes ? S.lacunes.length : null }, moments: moments() }),
   progression: () => S.page / 2,
   executer: (cmd, p) => ({ start: () => aller(1, 'start', 'localisation'), reset: () => aller(1, 'reset', 'localisation'), play_until: () => playUntil(p), set_parameters: () => setParameters(p),
     next: () => aller(2, 'next'), previous: () => aller(1, 'previous', null, true) })[cmd]?.() });
-aller(1, 'start', 'localisation');   // la voix commence par la définition : le premier bloc s'écrit et est en lumière
+// (17 novembre 2026) Rien ne s'écrit avant la voix : le premier bloc s'écrit quand elle le dit (play_until {moment: 'localisation'}).
+aller(1, 'charge');
 window.__bilan = { S, scene, BLOCS };   // pour les vérifications automatiques
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>

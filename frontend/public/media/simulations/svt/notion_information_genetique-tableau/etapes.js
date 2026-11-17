@@ -35,7 +35,9 @@
     const V = () => def.vues[S.vue];
     let scene = null;
     const horloge = () => (performance.now() - scene.ouvert) / 1000;
-    function ecrit(c, nom, tEv) { if (S.t < tEv - 1e-6) return false; if (!(nom in S.vu)) S.vu[nom] = horloge(); c.depuis(S.vu[nom]); return true; }
+    // (17 novembre 2026) Après un saut (set_time), ce qui était déjà au tableau à l'instant du saut s'affiche d'un coup
+    // (déjà dit, à la diapositive d'avant) ; seul ce qui vient ensuite s'écrit trait par trait.
+    function ecrit(c, nom, tEv) { if (S.t < tEv - 1e-6) return false; if (!(nom in S.vu)) S.vu[nom] = S.saut != null && tEv <= S.saut + 1e-6 ? -1e9 : horloge(); c.depuis(S.vu[nom]); return true; }
     const dureeTexte = s => Math.min(1.2, Math.max(.3, String(s).length / 28));
     const T = (c, s, x, y, o = {}) => c.texte(s, x, y, { duree: dureeTexte(s), ...o });
     /* ── Tableau large (15 novembre 2026, « mieux exploiter tout le tableau, grands calibres de texte ») ──────────────
@@ -396,13 +398,13 @@
       const tete = `Vue « ${v.titre} », t = ${fr(t, 1)} s${S.running ? ' (la scène avance)' : S.fait ? ' (fin)' : t > 0 ? ' (arrêt sur image)' : ' (pas encore lancée)'}.`;
       return [tete, ...(v.voit ? v.voit(k()) : [])].filter(Boolean).join(' ');
     }
-    function start() { S.jusqua = null; S.vu = {}; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; scene.sale = true; bulle($('feedback'), (V().titre || '') + ' : observe…'); pont.noter('start'); pont.emettre(); }
+    function start() { S.jusqua = null; S.vu = {}; S.saut = null; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; scene.sale = true; bulle($('feedback'), (V().titre || '') + ' : observe…'); pont.noter('start'); pont.emettre(); }
     function reset() { start(); }
     function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
     function resume() { if (S.running) return; if (S.fait || S.t >= FIN()) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
     function poser(p, rejouer) {
       const cles = [];
-      if (p.vue && def.vues[p.vue] && p.vue !== S.vue) { S.vue = p.vue; cles.push('vue'); S.vu = {}; S.t = 0; S.fait = false; }
+      if (p.vue && def.vues[p.vue] && p.vue !== S.vue) { S.vue = p.vue; cles.push('vue'); S.vu = {}; S.saut = null; S.t = 0; S.fait = false; }
       for (const [n, d] of Object.entries(def.parametres || {})) {
         if (!(n in p)) continue;
         const v = d.lire ? d.lire(p[n], S) : p[n];
@@ -418,7 +420,7 @@
       const v = V(); let nom = p.moment;
       if (nom && !(nom in v.moments)) {   // un moment d’une autre vue : on change de vue
         const autre = noms.find(n => def.vues[n].moments && nom in def.vues[n].moments);
-        if (autre) { S.vue = autre; S.vu = {}; S.t = 0; S.fait = false; } else nom = null;
+        if (autre) { S.vue = autre; S.vu = {}; S.saut = null; S.t = 0; S.fait = false; } else nom = null;
       }
       const vv = V(), ok = nom && nom in vv.moments;
       let rejoue = false;
@@ -428,7 +430,7 @@
       const cible = ok ? vv.moments[nom] : +p.time_s;
       if (!Number.isFinite(cible)) return;
       rejoue = rejoue || S.fait || S.t >= cible - 1e-4;
-      if (rejoue) { S.vu = {}; S.t = 0; }
+      if (rejoue) { S.vu = {}; S.saut = null; S.t = 0; }
       S.jusqua = Math.min(FIN(), Math.max(.001, cible)); S.motif = ok ? ((vv.motifs && vv.motifs[nom]) || nom.replace(/_/g, ' ')) : '';
       S.running = true; S.fait = false; $('run').textContent = 'Pause'; scene.sale = true;
       bulle($('feedback'), rejoue ? 'On reprend depuis le début… observe.' : 'Observe…');
@@ -436,7 +438,13 @@
     }
     function setTime(p) {
       const t = +p.time_s; if (!Number.isFinite(t)) return;
-      S.running = false; S.jusqua = null; S.vu = {}; S.t = Math.min(FIN(), Math.max(0, t)); S.fait = S.t >= FIN();
+      // (17 novembre 2026) Un saut EN AVANT (ou sur place) garde ce qui est déjà écrit à la craie : deux diapositives qui se
+      // suivent sur la même page (l'iframe n'est pas rechargée) se raccrochent par un set_time sans tout réécrire ; seul un
+      // retour en arrière efface les écrits.
+      const nt = Math.min(FIN(), Math.max(0, t));
+      if (nt < S.t - 1e-6) S.vu = {};
+      S.saut = nt;
+      S.running = false; S.jusqua = null; S.t = nt; S.fait = S.t >= FIN();
       $('run').textContent = S.fait ? 'Rejouer' : 'Reprendre'; scene.sale = true;
       bulle($('feedback'), `Arrêt sur image : t = ${fr(S.t, 1)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
     }
@@ -446,7 +454,7 @@
       if (cles.length) {
         const v = V();
         if (v.surReglage) v.surReglage(k(), cles, { playUntil, start, setTime });
-        else if (S.t > 0 || S.fait) { S.vu = {}; S.t = 0; S.jusqua = null; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Nouveau réglage : on rejoue… observe.'); }
+        else if (S.t > 0 || S.fait) { S.vu = {}; S.saut = null; S.t = 0; S.jusqua = null; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Nouveau réglage : on rejoue… observe.'); }
       }
       pont.emettre();
     }

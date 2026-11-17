@@ -51,7 +51,8 @@ function lien(x, x1, y1, x2, y2, a = 1) { Peint.ruban(x, () => { x.beginPath(); 
 const SEQ = ['A', 'T', 'C', 'G', 'G', 'A'];
 const LD = { xP: 330, xS: 360, xB: 376, wB: 50, gap: 18, y0: 98, dy: 44 }, CYL = LD.y0 + 2.5 * LD.dy;
 LD.xB2 = LD.xB + LD.wB + LD.gap; LD.xS2 = LD.xB2 + LD.wB + 16; LD.xP2 = LD.xS2 + 30; LD.cx = (LD.xS + LD.xS2) / 2;
-const MC = { phosphate: 1.5, sucre: 3.0, base: 4.6, nucleotide: 5.8, chaine: 8.4, deux_brins: 10.2, tete_beche: 12.8, extremites_5_3: 14.4, appariement: 16.2, liaisons_hydrogene: 18.0, torsion_helice: 21.4 };
+// (17 novembre 2026) « brins antiparallèles » s'écrit à son propre moment, quand la voix le dit (avant : avec 5′ et 3′).
+const MC = { phosphate: 1.5, sucre: 3.0, base: 4.6, nucleotide: 5.8, chaine: 8.4, deux_brins: 10.2, tete_beche: 12.8, extremites_5_3: 14.4, antiparalleles: 14.7, appariement: 16.2, liaisons_hydrogene: 18.0, torsion_helice: 21.4 };
 const yRow = i => LD.y0 + i * LD.dy;
 function dessinerConstruire(c, k) {
   const t = k.t;
@@ -130,15 +131,15 @@ function dessinerConstruire(c, k) {
   if (k.ecrit(c, 'ex', 13.2)) {
     k.T(c, '5′', 300, 80, { couleur: 'vert', taille: 16, align: 'center' }); k.T(c, '3′', 300, 350, { couleur: 'vert', taille: 16, align: 'center' });
     k.T(c, '3′', 572, 80, { couleur: 'vert', taille: 16, align: 'center' }); k.T(c, '5′', 572, 350, { couleur: 'vert', taille: 16, align: 'center' });
-    k.T(c, 'brins antiparallèles', LD.cx, 62, { couleur: 'vert', taille: 16, align: 'center' });
     c.repere('extremite_5', 290, 64, 22, 22, 'l’extrémité 5′'); c.repere('extremite_3', 290, 334, 22, 22, 'l’extrémité 3′');
   }
+  if (k.ecrit(c, 'anti', MC.antiparalleles - .1)) k.T(c, 'brins antiparallèles', LD.cx, 62, { couleur: 'vert', taille: 16, align: 'center' });
   if (t >= 14.8) { c.repere('paire_at', LD.xB, yRow(0) - 12, 2 * LD.wB + LD.gap, 24, 'la paire A–T'); c.repere('paire_cg', LD.xB, yRow(2) - 12, 2 * LD.wB + LD.gap, 24, 'la paire C–G'); }
   if (k.ecrit(c, 'ap', 15.6)) { k.T(c, 'A en face de T', 640, 134, { couleur: 'blanc', taille: 14, align: 'center' }); k.T(c, 'C en face de G', 640, 156, { couleur: 'blanc', taille: 14, align: 'center' }); }
   if (k.ecrit(c, 'lh', 17.2)) {
     k.T(c, 'A = T : 2 liaisons hydrogène', 300, 392, { couleur: 'jaune', taille: 15 }); k.T(c, 'C ≡ G : 3 liaisons hydrogène', 300, 412, { couleur: 'jaune', taille: 15 });
-    c.repere('liaisons', LD.xB + LD.wB - 2, LD.y0 - 12, LD.gap + 4, 5 * LD.dy + 24, 'les liaisons hydrogène');
   }
+  if (t >= 16.6 && helice <= 0) c.repere('liaisons', LD.xB + LD.wB - 2, LD.y0 - 12, LD.gap + 4, 5 * LD.dy + 24, 'les liaisons hydrogène');   // dès que les pointillés sont là
   if (helice > 0) c.repere('helice', LD.xS - 20, LD.y0 - 16, LD.xS2 - LD.xS + 40, 5 * LD.dy + 32, 'la double hélice');
   if (k.ecrit(c, 'dh', 20.8)) { k.T(c, 'double hélice', 640, 280, { couleur: 'cyan', taille: 18, align: 'center' }); }
 }
@@ -412,6 +413,9 @@ function dessinerChargaff(c, k) {
     const Wr = (nom, tEv, s, xx, yy, o) => { if (fRap >= 1) { if (k.ecrit(c, nom, tEv)) k.T(c, s, xx, yy, o); } else if (t >= tEv) c.direct(() => c.texte(s, xx, yy, { ...o, alpha: .96 * fRap })); };
     Wr('rat', MCH.homme + .3, 'A/T = 30,9 / 29,4 ≈ 1,05', 380, 384, { couleur: 'orange', taille: 17, align: 'center' });
     Wr('rcg', MCH.rapport_at + .3, 'C/G = 19,8 / 19,9 ≈ 0,99', 580, 384, { couleur: 'cyan', taille: 17, align: 'center' });
+    // (17 novembre 2026) les deux rapports ont leur repère : la baguette les montre quand la voix les dit
+    if (t >= MCH.homme + .3) c.repere('rapport_at', 280, 364, 200, 28, 'le rapport A/T ≈ 1');
+    if (t >= MCH.rapport_at + .3) c.repere('rapport_cg', 480, 364, 200, 28, 'le rapport C/G ≈ 1');
   } else {
     W('aat', CPT[0].vers + .5, 'A ≈ T', 380, 384, { couleur: 'orange', taille: 18, align: 'center' });
     W('agc', CPT[0].vers + .7, 'G ≈ C', 580, 384, { couleur: 'cyan', taille: 18, align: 'center' });
@@ -539,22 +543,22 @@ const BLOCS_LARGES = {
     disposition: { colonnes: [['brins'], ['reserve'], { texte: ['resultat'] }], ecart: 18 } },
 };
 const VUES = {
-  construire: { titre: 'Construire la molécule d’ADN', fin: 24, moments: MC, dessiner: dessinerConstruire, voit: voitConstruire,
+  construire: { titre: 'Construire la molécule d’ADN', autoDepart: false, fin: 24, moments: MC, dessiner: dessinerConstruire, voit: voitConstruire,
     motifs: { phosphate: 'l’acide phosphorique', sucre: 'le désoxyribose, un sucre', base: 'une base azotée : A, T, C ou G', nucleotide: 'un nucléotide = acide phosphorique + désoxyribose + base', chaine: 'les nucléotides s’enchaînent : un brin', deux_brins: 'un second brin, d’abord dans le même sens', tete_beche: 'le second brin est retourné : tête-bêche', extremites_5_3: '5′ en face de 3′ : les brins sont antiparallèles', appariement: 'A en face de T, C en face de G', liaisons_hydrogene: '2 liaisons hydrogène entre A et T, 3 entre C et G', torsion_helice: 'l’échelle se tord : la double hélice' },
     conclusion: 'L’ADN : deux brins antiparallèles, complémentaires (A–T, C–G), enroulés en double hélice.',
     texte: 'Nucléotide = acide phosphorique + désoxyribose + base azotée (A, T, C, G). Deux brins antiparallèles (5′→3′ en face de 3′→5′), A en face de T (2 liaisons hydrogène), C en face de G (3 liaisons hydrogène), double hélice.',
     explication: [{ repere: 'nucleotide', texte: 'Le nucléotide : acide phosphorique, désoxyribose, base.' }, { repere: 'extremite_5', texte: 'Chaque brin a une extrémité 5′ et une extrémité 3′ ; les deux brins sont tête-bêche.' }, { repere: 'liaisons', texte: 'Deux liaisons hydrogène entre A et T, trois entre C et G.' }, { repere: 'helice', texte: 'Les deux brins s’enroulent en double hélice.' }] },
-  chargaff: { titre: 'Les résultats de Chargaff', fin: 23.8, moments: MCH, dessiner: dessinerChargaff, voit: voitChargaff,
+  chargaff: { titre: 'Les résultats de Chargaff', autoDepart: false, fin: 23.8, moments: MCH, dessiner: dessinerChargaff, voit: voitChargaff,
     motifs: { homme: 'les bases de l’ADN de l’homme sont comptées : A 30,9 %, T 29,4 %', rapport_at: 'A et T au même niveau : A/T ≈ 1', rapport_cg: 'G et C au même niveau : C/G ≈ 1', especes: 'mouton et poulet : encore A ≈ T et G ≈ C', tableau: 'les nombres rangés dans le tableau de Chargaff', conclusion: 'A s’associe à T, C s’associe à G' },
     conclusion: 'A/T ≈ 1 et C/G ≈ 1 : A s’associe à T, C à G.',
     texte: 'Chargaff : on compte les bases de l’ADN (une base peinte ≈ 1 %) ; homme A 30,9 %, T 29,4 %, G 19,9 %, C 19,8 % ; mouton et poulet ; les bocaux A et T se remplissent au même niveau, G et C aussi ; puis le tableau, A/T ≈ 1, C/G ≈ 1 : complémentarité des bases.',
     explication: [{ repere: 'bocaux', texte: 'On compte les bases de l’ADN de l’homme.' }, { repere: 'paire_at', texte: 'A et T se remplissent au même niveau.' }, { repere: 'paire_cg', texte: 'G et C aussi.' }, { repere: 'tableau', texte: 'Le tableau de Chargaff range ces nombres.' }, { repere: 'conclusion', texte: 'A s’associe à T, C s’associe à G.' }] },
-  complementaire: { titre: 'Écrire le brin complémentaire', fin: 12.2, moments: MCO, dessiner: dessinerComplementaire, voit: voitComplementaire,
+  complementaire: { titre: 'Écrire le brin complémentaire', autoDepart: false, fin: 12.2, moments: MCO, dessiner: dessinerComplementaire, voit: voitComplementaire,
     motifs: { brin_donne: 'le brin donné : 5′ … 3′', premiere_base: 'en face de A, on pose T', bases_posees: 'toutes les bases complémentaires sont posées', extremites: 'le brin complémentaire : 3′ à gauche, 5′ à droite' },
     conclusion: 'Le brin complémentaire est antiparallèle : 3′ en face de 5′.',
     surReglage: (k, cles, api) => { if (cles.includes('sequence')) { manuel.clear(); api.start(); } },
     texte: 'Brin donné 5′ ATCGGA 3′ ; brin complémentaire 3′ TAGCCT 5′ (A en face de T, C en face de G, extrémités inversées).',
-    explication: [{ repere: 'brin_donne', texte: 'Le brin donné, de 5′ à 3′.' }, { repere: 'reserve', texte: 'On prend en face de chaque base sa base complémentaire.' }, { repere: 'resultat', texte: 'Le brin complémentaire, de 3′ à 5′.' }] },  legender: { titre: 'Légende le fragment d’ADN', fin: 8, moments: MLG, reglages: { etiquettes: { corrige: false }, corrige: { corrige: true } },
+    explication: [{ repere: 'brin_donne', texte: 'Le brin donné, de 5′ à 3′.' }, { repere: 'reserve', texte: 'On prend en face de chaque base sa base complémentaire.' }, { repere: 'resultat', texte: 'Le brin complémentaire, de 3′ à 5′.' }] },  legender: { titre: 'Légende le fragment d’ADN', autoDepart: false, fin: 8, moments: MLG, reglages: { etiquettes: { corrige: false }, corrige: { corrige: true } },
     dessiner: dessinerLegender, voit: voitLegender,
     motifs: { etiquettes: 'pose chaque étiquette à sa place', corrige: 'la correction : toutes les étiquettes à leur place' },
     conclusion: 'Pose les cinq étiquettes : acide phosphorique, désoxyribose, base azotée, nucléotide, liaisons hydrogène.',
