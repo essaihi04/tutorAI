@@ -45,6 +45,8 @@ A course simulation is a small HTML page drawn with chalk ON the course board. I
    - Greek letters are written as symbols on the board and in every written text (λ, τ, θ, Δm), never « lambda », « tau », « delta m » — those words belong to the voice only.
    - **Check**: `python -I scripts/verifier_formules.py` lists the flat divisions left in the chalk strings of the simulations and in the written text of the courses; it must print nothing for the folder you touched.
 
+13. **What was transformed stays visible, marked** (user rule, 17 November 2026, on `carrefour.html` — the glucose slid away to become the pyruvic acids and the pointer then circled an empty spot; professeur rule 40). A reactant consumed or degraded stays at its place, faded and marked (« (dégradé) », « (oxydé) »); copies travel to become the products, linked by the process arrow carrying the process's name. Its landmark stays declared (on the faded source) as long as it is drawn.
+
 ## The tutor must be able to do everything
 
 The tutor explains with the simulation, answers a free question with it, relaunches it as often as needed, pauses on the right instant, moves an element, points at it, or brings another simulation of the lesson. So each simulation:

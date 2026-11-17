@@ -92,7 +92,11 @@ const chrono = Chrono({ fin: () => FIN, moments: () => M, motifs: MOTIFS, bouton
   fini: () => COMPLET ? 'Avec O2 : respiration, 38 ATP. Sans O2 : fermentation, 2 ATP.' : 'Avec O2 : la mitochondrie. Sans O2 : le hyaloplasme. Et les bilans ?' });
 scene.avancer = chrono.avancer;
 
-/* Les 6 carbones : glucose (deux rangées de 3), puis deux acides pyruviques au carrefour. */
+/* Les 6 carbones : glucose (deux rangées de 3), puis deux acides pyruviques au carrefour.
+ * 17 novembre 2026 (faciliter le suivi, règle 40 du professeur) : le glucose ne disparaît pas de sa place — il y reste,
+ * pâli et marqué « (dégradé) » ; ce sont ses 6 carbones (copies) qui glissent vers le carrefour et deviennent les deux
+ * acides pyruviques. La baguette qui montre « le glucose » tombe toujours sur un glucose, et l'élève voit d'où viennent
+ * les acides pyruviques. */
 function carbone(i, t) {
   const u = doux(chrono.part(1.6, 2.9, t));
   const x0 = GLU.x + (i % 3 - 1) * 18, y0 = GLU.y + (i < 3 ? -9 : 9);
@@ -116,8 +120,14 @@ function dessiner(c) {
     ctx.save(); if (o2 === false) ctx.globalAlpha = .7;
     P.mitochondrie(ctx, MITO.x, MITO.y, MITO.rx, MITO.ry, { cretes: 6, graine: 9 }); ctx.restore();
     const a = doux(chrono.part(.3, 1.3, t));
-    for (const i of [0, 1, 3, 4]) { const [x1, y1] = carbone(i, t), [x2, y2] = carbone(i + 1, t); P.liaison(ctx, x1, y1, x2, y2, { alpha: a, epaisseur: 3.6 }); }   // deux chaînes de 3 carbones
-    for (let i = 0; i < 6; i++) { const [x, y] = carbone(i, t); P.bille(ctx, x, y, 9, CARBONE, { alpha: a }); }
+    // le glucose reste à sa place : pâli dès que la glycolyse l'a coupé
+    const reste = a * mix(1, .32, doux(chrono.part(1.6, 2.9, t)));
+    const glu = (i) => [GLU.x + (i % 3 - 1) * 18, GLU.y + (i < 3 ? -9 : 9)];
+    for (const i of [0, 1, 3, 4]) { const [x1, y1] = glu(i), [x2, y2] = glu(i + 1); P.liaison(ctx, x1, y1, x2, y2, { alpha: reste, epaisseur: 3.6 }); }
+    for (let i = 0; i < 6; i++) { const [x, y] = glu(i); P.bille(ctx, x, y, 9, CARBONE, { alpha: reste }); }
+    // ses carbones (copies) qui deviennent les deux acides pyruviques : deux chaînes de 3 carbones
+    if (t > 1.6) for (const i of [0, 1, 3, 4]) { const [x1, y1] = carbone(i, t), [x2, y2] = carbone(i + 1, t); P.liaison(ctx, x1, y1, x2, y2, { alpha: a, epaisseur: 3.6 }); }
+    if (t > 1.6) for (let i = 0; i < 6; i++) { const [x, y] = carbone(i, t); P.bille(ctx, x, y, 9, CARBONE, { alpha: a }); }
     // les acides pyruviques qui entrent dans la matrice (copies, pour montrer le chemin)
     if (e > 0) for (let g = 0; g < 2; g++) for (let i = 0; i < 3; i++) {
       const x = mix(CAR.x + (i - 1) * 18, MITO.x - 30 + (i - 1) * 16, e), y = mix(CAR.y + (g ? 14 : -14), MITO.y + (g ? 12 : -12), e);
@@ -144,11 +154,12 @@ function dessiner(c) {
   if (t >= .6) ecrit.ecrire(c, 'glucose', () => c.texte('glucose', GLU.x, GLU.y - 22, { couleur: 'jaune', taille: 14, align: 'center' }));
   if (t >= 1.4) ecrit.ecrire(c, 'glycolyse', () => {
     c.fleche(GLU.x + 34, GLU.y + 18, CAR.x - 40, CAR.y - 22, { couleur: 'blanc', largeur: 1.6 });
-    c.texte('glycolyse', 30, 172, { couleur: 'blanc', taille: 14 });
+    c.texte('glycolyse', 142, 184, { couleur: 'blanc', taille: 14, align: 'center' });   // sous la flèche : le mot et le processus au même endroit
   });
-  if (t < 1.6) c.repere('glucose', GLU.x - 46, GLU.y - 38, 92, 60, 'le glucose');
+  if (t >= 2.9) ecrit.ecrire(c, 'degrade', () => c.texte('(dégradé)', GLU.x + 30, GLU.y - 22, { couleur: 'faible', taille: 13 }));
+  if (t >= .6) c.repere('glucose', GLU.x - 40, GLU.y - 40, 80, 64, t < 1.6 ? 'le glucose' : 'le glucose, dégradé par la glycolyse');
   c.repere('hyaloplasme', 14, 184, 96, 22, 'le hyaloplasme');
-  if (t >= 1.4) c.repere('glycolyse', 26, 128, CAR.x - 70, 52, 'la glycolyse, dans le hyaloplasme');
+  if (t >= 1.4) c.repere('glycolyse', 106, 128, 76, 64, 'la glycolyse, dans le hyaloplasme');   // la flèche et son nom, pas la place du glucose
   if (t >= 2.9) {
     ecrit.ecrire(c, 'pyruviques', () => c.texte('2 acides pyruviques', CAR.x, CAR.y + 60, { couleur: 'jaune', taille: 14, align: 'center' }));
     c.repere('carrefour', CAR.x - 52, CAR.y - 46, 104, 100, 'le carrefour : deux acides pyruviques');
@@ -223,7 +234,7 @@ function dessiner(c) {
 
 function phase(t) {
   if (t < 1.6) return 'Une cellule peinte : hyaloplasme et une mitochondrie ; un glucose (6 billes de carbone) dans le hyaloplasme.';
-  if (t < 3.4) return 'Glycolyse, dans le hyaloplasme : le glucose est coupé en 2 acides pyruviques.' + (COMPLET && t >= 3.1 ? ' Écrit : « + 2 ATP, 2 NADH,H+ ».' : '');
+  if (t < 3.4) return 'Glycolyse, dans le hyaloplasme : les 6 carbones du glucose forment 2 acides pyruviques ; le glucose reste à sa place, pâli, marqué « (dégradé) ».' + (COMPLET && t >= 3.1 ? ' Écrit : « + 2 ATP, 2 NADH,H+ ».' : '');
   if (t < 4.6) return 'Le carrefour est entouré : deux routes en pointillé partent des acides pyruviques.';
   if (t < 6) return 'Au carrefour : « avec ou sans dioxygène ? » ; l’interrupteur O2 attend (au milieu, « ? »).';
   const sansT = COMPLET ? 14 : 10;

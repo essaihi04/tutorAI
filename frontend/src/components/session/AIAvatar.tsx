@@ -318,7 +318,8 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
     if (!iframe?.contentWindow || minimized || animationFailed) { deliver(); return; }
     // Dans le cours (discret), la baguette ne va jamais vers les boutons de la simulation (Lancer, Pause, Observe…) :
     // ces commandes partent seules, et l'élève ne suit la baguette que vers les éléments de la simulation (17 novembre 2026).
-    if (discret && !POINTAGE_SIMULATION.includes(String(labControl.command))) { deliver(); return; }
+    const pointage = POINTAGE_SIMULATION.includes(String(labControl.command));
+    if (discret && !pointage) { deliver(); return; }
     let inner: { x: number; y: number; width: number; height: number } | null = null;
     const bounds = () => {
       const frame = iframe.getBoundingClientRect();
@@ -328,6 +329,9 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
         : frame;
     };
     const update = () => {
+      // Un repère se montre lui-même, jamais le milieu de la simulation à sa place (17 novembre 2026 : la baguette tombait
+      // sur un autre objet quand le repère n'était pas encore dessiné) : sans son rectangle, il ne bouge pas.
+      if (pointage && !inner) return;
       const rect = bounds();
       // le repère est caché sous les questions (ou une bulle) : pas de cadre vide ni de baguette vers rien (16 novembre 2026)
       const dessus = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
@@ -347,6 +351,9 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
         window.clearTimeout(pressTimer); window.clearTimeout(timer);
         deliver();
         timer = window.setTimeout(() => setFocus(null), PROFESSOR_POINT_HOLD_MS);
+      } else if (pointage) {
+        // repère introuvable (même après l'attente du laboratoire) : la commande part, la baguette ne vise rien d'autre
+        window.clearTimeout(pressTimer); deliver();
       }
     };
     window.addEventListener('message', onRect);
@@ -354,12 +361,15 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
     update();
     window.addEventListener('resize', update);
     window.addEventListener('scroll', update, true);
+    // Un pointage attend que le laboratoire ait dessiné le repère (il patiente jusqu'à ~3 s) ; il n'appuie jamais.
     pressTimer = window.setTimeout(() => {
-      const rect = bounds();
-      setPress({ key: -labControl.sequence, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+      if (!pointage) {
+        const rect = bounds();
+        setPress({ key: -labControl.sequence, x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+      }
       deliver();
-    }, PROFESSOR_REACH_MS);
-    timer = window.setTimeout(() => { setFocus(null); setPress(null); }, PROFESSOR_REACH_MS + 2400);
+    }, pointage ? 3600 : PROFESSOR_REACH_MS);
+    timer = window.setTimeout(() => { setFocus(null); setPress(null); }, (pointage ? 3600 : PROFESSOR_REACH_MS) + 2400);
     return () => {
       window.clearTimeout(timer); window.clearTimeout(pressTimer);
       window.removeEventListener('message', onRect);
