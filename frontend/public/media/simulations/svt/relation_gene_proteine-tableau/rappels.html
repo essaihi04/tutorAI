@@ -96,14 +96,21 @@ function dessinerProteine(c, k) {
   c.direct(() => {
     const x = c.ctx;
     // les perles en vrac (à gauche), puis enfilées en chaîne
-    CHAINE.forEach((ci, i) => {
+    const pos = CHAINE.map((ci, i) => {
       const vx = 70 + (i % 5) * 34, vy = 120 + Math.floor(i / 5) * 40;
       const cx0 = 260 + i * 44, cy0 = 150;
-      const an = i * .9, R = 60 - i * 3, fx = 520 + Math.cos(an) * R * .9, fy = 330 + Math.sin(an) * R * .6;   // la chaîne repliée
+      // la chaîne repliée (17 novembre 2026 : plus grande, et le fil reste visible : on voit que c'est la même chaîne, pliée)
+      const an = i * .9, R = 60 - i * 3, fx = 520 + Math.cos(an) * R * 1.25, fy = 326 + Math.sin(an) * R * .8;
       let px = entre(vx, cx0, enfile), py = entre(vy, cy0, enfile);
       if (plie > 0) { px = entre(cx0, fx, plie); py = entre(cy0, fy, plie); }
-      perle(x, px, py, 14, AA[ci], rampe(t, .3 + i * .08, .4));
+      return [px, py];
     });
+    if (plie > 0) {   // une forme : un halo doux autour de la chaîne repliée, et le fil qui relie les perles dans l'ordre
+      x.save(); x.globalAlpha = .5 * plie; const g = x.createRadialGradient(520, 326, 8, 520, 326, 92); g.addColorStop(0, 'rgba(250,204,21,.28)'); g.addColorStop(1, 'rgba(250,204,21,0)');
+      x.fillStyle = g; x.beginPath(); x.ellipse(520, 326, 96, 72, 0, 0, Math.PI * 2); x.fill(); x.restore();
+      x.save(); x.globalAlpha = .75 * plie; x.strokeStyle = '#e2e8f0'; x.lineWidth = 2; x.lineJoin = 'round'; x.beginPath(); pos.forEach(([a, b2], i) => (i ? x.lineTo(a, b2) : x.moveTo(a, b2))); x.stroke(); x.restore();
+    }
+    CHAINE.forEach((ci, i) => perle(x, pos[i][0], pos[i][1], 14, AA[ci], rampe(t, .3 + i * .08, .4)));
     if (enfile > .9) {   // le fil
       x.save(); x.globalAlpha = .7 * (1 - plie); x.strokeStyle = '#e2e8f0'; x.lineWidth = 2; x.beginPath(); x.moveTo(246, 150); x.lineTo(260 + 9 * 44 + 14, 150); x.stroke(); x.restore();
     }

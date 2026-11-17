@@ -29,6 +29,12 @@
 const { lisse, rampe, entre } = window.Etapes;
 const M = window.Molecules;
 /** (16 novembre 2026, règle 10) Légende écrite sur le fond peint (nucléoplasme bleu, cellule) : un fond sombre arrondi dessous. */
+/* Légende sur deux lignes : UN seul fond sombre pour les deux (17 novembre 2026 : deux fonds qui se chevauchaient,
+ * sortaient du noyau à gauche et touchaient le 5′ / 3′). */
+const etiq2 = (c, k, l1, l2, x, y, o) => {
+  c.direct(() => { const t = o.taille ?? 13, w = Math.max(l1.length, l2.length) * t * .5 + 12, ctx = c.ctx; ctx.save(); ctx.fillStyle = 'rgba(10,18,26,.72)'; ctx.beginPath(); ctx.roundRect(x - 6, y - t * .95, w, t * 2.5, 8); ctx.fill(); ctx.restore(); });
+  k.T(c, l1, x, y, o); return k.T(c, l2, x, y + 15, o);
+};
 const etiq = (c, k, s, x, y, o) => { c.direct(() => M.pastille(c.ctx, s, x, y, o.taille ?? 18, o.align || 'left')); return k.T(c, s, x, y, o); };
 const TAU = Math.PI * 2;
 const clamp = v => Math.max(0, Math.min(1, v));
@@ -163,8 +169,8 @@ function dessinerTranscription(c, k) {
   c.repere('brin_transcrit', X0, E.yB(7.5) - LB - 4, X1 - X0, LB + 8, 'le brin transcrit (3′ → 5′)');
   c.repere('triplets', X0, 78, X1 - X0, 24, 'les numéros des triplets');
   if (k.ecrit(c, 'adn', .5)) {
-    etiq(c, k, 'brin non', 6, 118, { couleur: 'bleu', taille: 13 }); etiq(c, k, 'transcrit', 6, 133, { couleur: 'bleu', taille: 13 });
-    etiq(c, k, 'brin', 6, 210, { couleur: 'violet', taille: 13 }); etiq(c, k, 'transcrit', 6, 225, { couleur: 'violet', taille: 13 });
+    etiq2(c, k, 'brin non', 'transcrit', 12, 112, { couleur: 'bleu', taille: 13 });
+    etiq2(c, k, 'brin', 'transcrit', 12, 215, { couleur: 'violet', taille: 13 });
     k.T(c, '5′', xu(-1.5) - 12, yT0 + 5, { couleur: 'vert', taille: 15, align: 'center' }); k.T(c, '3′', xu(N + 1.5) + 12, yT1 + 5, { couleur: 'vert', taille: 15, align: 'center' });
     k.T(c, '3′', xu(-1.5) - 12, yB0 + 5, { couleur: 'vert', taille: 15, align: 'center' }); k.T(c, '5′', xu(N + 1.5) + 12, yB1 + 5, { couleur: 'vert', taille: 15, align: 'center' });
     k.T(c, 'triplets', 104, 92, { couleur: 'faible', taille: 13, align: 'right' });
@@ -282,9 +288,9 @@ function dessinerBrins(c, k) {
   if (k.ecrit(c, 'lignes', .3)) {
     for (let j = 0; j < n / 3; j++) { const xa = BX0 + 3 * j * pas, xb = xa + 3 * pas; c.ligne(xa + 4, 64, xb - 4, 64, { couleur: 'faible', largeur: 1.4, duree: .08 }); k.T(c, String(j + 1), (xa + xb) / 2, 58, { couleur: 'blanc', taille: 14, align: 'center', duree: .1 }); }
     k.T(c, 'triplets', BX0 - 16, 58, { couleur: 'faible', taille: 13, align: 'right' });
-    etiq(c, k, 'brin non', 6, BYNT + 8, { couleur: 'bleu', taille: 13 }); etiq(c, k, 'transcrit', 6, BYNT + 23, { couleur: 'bleu', taille: 13 });
+    etiq2(c, k, 'brin non', 'transcrit', 12, BYNT + 8, { couleur: 'bleu', taille: 13 });
     k.T(c, '5′', BX0 - 14, BYNT + 6, { couleur: 'vert', taille: 15, align: 'center' }); k.T(c, '3′', X1b + 14, BYNT + 6, { couleur: 'vert', taille: 15, align: 'center' });
-    etiq(c, k, 'brin', 6, BYTR - 14, { couleur: 'violet', taille: 13 }); etiq(c, k, 'transcrit', 6, BYTR + 1, { couleur: 'violet', taille: 13 });
+    etiq2(c, k, 'brin', 'transcrit', 12, BYTR - 14, { couleur: 'violet', taille: 13 });
     k.T(c, '3′', BX0 - 14, BYTR + 6, { couleur: 'vert', taille: 15, align: 'center' }); k.T(c, '5′', X1b + 14, BYTR + 6, { couleur: 'vert', taille: 15, align: 'center' });
   }
   // la ligne de l’ARNm (vide au début : pointillés sous le brin non transcrit)
