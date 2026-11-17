@@ -1,8 +1,9 @@
-# Voix à enregistrer (17 novembre 2026)
+# Voix à enregistrer (17 novembre 2026, mise à jour du soir)
 
 Liste produite par `python -I backend/scripts/lister_voix_attente.py --en-ligne > docs/voix/voix_a_enregistrer.json`.
-Format : `{cours: [{id, type, texte}]}`. Les cours `en_ligne/…` sont déjà publiés, mais des pistes y manquent encore : les nouvelles réactions et démonstrations. Ils jouent en attendant avec la voix en direct.
-Types : `diapo` (voix de la diapo), `demonstration`, `reaction` (réaction préparée), `enonce` (énoncé lu ; sans piste, il est lu par la voix en direct).
+Format : `{cours: [{id, type, texte}]}`. Les cours `en_ligne/…` sont publiés, mais des pistes y manquent encore. En attendant, ils jouent avec la voix en direct.
+Types : `diapo`, `demonstration`, `reaction` (réaction préparée), `enonce` (énoncé lu ; sans piste, il est lu par la voix en direct).
+Ces fichiers JSON sont ajoutés de force (`git add -f`), car `.gitignore` exclut les `*.json`.
 
 | Cours | Pistes | Diapos | Démonstrations | Réactions | Énoncés | Caractères |
 |---|---|---|---|---|---|---|
@@ -17,36 +18,32 @@ Types : `diapo` (voix de la diapo), `demonstration`, `reaction` (réaction prép
 | phys_ch12_etat_equilibre | 288 | 0 | 32 | 213 | 43 | 103 147 |
 | phys_ch13_acides_bases | 462 | 0 | 44 | 348 | 70 | 159 700 |
 | phys_ch1_waves_exemple | 192 | 6 | 24 | 133 | 29 | 46 346 |
-| phys_ch2_ondes_periodiques | 134 | 5 | 20 | 70 | 39 | 35 733 |
-| phys_ch3_ondes_lumineuses | 167 | 13 | 16 | 99 | 39 | 48 474 |
-| phys_ch9_transformations_lentes_rapides | 290 | 9 | 19 | 217 | 45 | 89 409 |
 | svt_ch1_reactions_responsables_liberation_energie | 139 | 15 | 9 | 79 | 36 | 44 287 |
 | svt_ch2_role_muscle_strie_squelettique | 150 | 20 | 11 | 83 | 36 | 52 635 |
 | svt_ch3_notion_information_genetique | 155 | 15 | 29 | 72 | 39 | 41 110 |
 | svt_ch4_relation_gene_proteine | 126 | 12 | 20 | 50 | 44 | 25 655 |
-| en_ligne/phys_ch4_radioactivite | 146 | 0 | 20 | 90 | 36 | 40 241 |
-| en_ligne/phys_ch5_energie_nucleaire | 112 | 0 | 19 | 65 | 28 | 35 640 |
-| en_ligne/phys_ch6_dipole_RC | 342 | 0 | 45 | 239 | 58 | 96 842 |
-| en_ligne/phys_ch7_dipole_RL | 347 | 0 | 46 | 245 | 56 | 101 668 |
-| en_ligne/phys_ch8_circuit_RLC | 354 | 0 | 41 | 256 | 57 | 113 096 |
-| **Total** | **6624** | **95** | **717** | **4543** | **1269** | **1 881 065** |
+| en_ligne/phys_ch2_ondes_periodiques | 119 | 0 | 10 | 70 | 39 | 27 846 |
+| en_ligne/phys_ch3_ondes_lumineuses | 150 | 0 | 12 | 99 | 39 | 38 241 |
+| en_ligne/phys_ch4_radioactivite | 131 | 0 | 11 | 85 | 35 | 34 697 |
+| en_ligne/phys_ch5_energie_nucleaire | 94 | 0 | 6 | 60 | 28 | 27 172 |
+| en_ligne/phys_ch6_dipole_RC | 328 | 0 | 32 | 238 | 58 | 91 902 |
+| en_ligne/phys_ch7_dipole_RL | 331 | 0 | 30 | 245 | 56 | 96 379 |
+| en_ligne/phys_ch8_circuit_RLC | 344 | 0 | 31 | 256 | 57 | 108 471 |
+| en_ligne/phys_ch9_transformations_lentes_rapides | 276 | 0 | 16 | 215 | 45 | 78 699 |
+| **Total** | **6505** | **68** | **639** | **4530** | **1268** | **1 823 369** |
 
-## Ordre conseillé
+## Lot 1 : diapos et démonstrations — `lot_diapos_demos.json`
 
-1. Les diapos et les démonstrations : sans elles, une copie en attente ne peut pas remplacer le cours en ligne.
-2. Les réactions préparées des cours déjà en ligne (physique ch4 à ch8) : le lecteur les utilise tout de suite.
-3. Les réactions, puis les énoncés, des copies en attente.
+707 pistes, environ 308 000 caractères. Sans elles, une copie en attente ne peut pas remplacer le cours en ligne.
 
-Procédure : skill `voix-du-cours` §3 et `docs/audit-rythme/README.md`, pour le lot Bodi sur le VPS. Après la pose des voix, relancer la commande ci-dessus : la liste doit se vider.
+## Lot 2 : réactions de la physique ch4 à ch8, déjà en ligne — `lot_reactions_phys_ch4_ch8.json`
 
-## Lot 1 : diapos et démonstrations
+884 réactions, environ 263 000 caractères : radioactivité 85, noyaux 60, RC 238, RL 245, RLC 256. Poser avec `scripts/voix/poser_en_ligne.py`.
 
-`docs/voix/lot_diapos_demos.json` contient seulement les diapos et les démonstrations : 812 pistes, environ 361 000 caractères, soit 4 h 30 de GPU environ au rythme du lot du 14 novembre. Le lancement se fait sur le VPS, car le compte Kaggle et ses identifiants ne sont que là. Les étapes sont celles de `docs/audit-rythme/README.md`, « Pour passer en ligne » :
-1. `git pull` sur le VPS.
-2. Construire les dossiers `att_<deck>/` avec `scripts/voix/attente_construire.py`, en ne gardant que les ids de ce lot.
-3. Lancer le lot Bodi avec `VOIX_D_ABORD=att_`.
-4. Poser les voix avec `scripts/voix/attente_poser.py`. Pour les cours `en_ligne/…`, utiliser `scripts/voix/poser_en_ligne.py`.
+## Procédure
 
-## Lot 2 : réactions de la physique ch4 à ch8 (déjà en ligne)
-
-`docs/voix/lot_reactions_phys_ch4_ch8.json` contient 895 réactions préparées, environ 266 000 caractères, soit 3 h 30 de GPU environ. Il se répartit ainsi : radioactivité 90, noyaux 65, RC 239, RL 245, RLC 256. Ces cours sont publiés : il faut poser les voix avec `scripts/voix/poser_en_ligne.py`. En attendant, le lecteur dit ces réactions avec la voix en direct.
+Voir le skill `voix-du-cours` §3 et `docs/audit-rythme/README.md`, « Pour passer en ligne » :
+1. Construire les dossiers du lot avec `scripts/voix/attente_construire.py`.
+2. Générer les voix Bodi.
+3. Les poser avec `scripts/voix/attente_poser.py` (copies en attente) ou `scripts/voix/poser_en_ligne.py` (cours en ligne).
+4. Relancer la commande du haut : les pistes posées disparaissent de la liste.
