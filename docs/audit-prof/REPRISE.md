@@ -8,14 +8,14 @@ Ce fichier permet de reprendre le travail depuis un autre compte ou une autre se
 |---|---|---|---|
 | Maths ch1-ch6 | `maths.md`, `maths-autres-profs.md`, `maths-longueur.md` | faites (`corrections/maths-ch1..6.md`) | faites |
 | Physique ch1-ch8 | `physique.md` (111 manques) | faites (`corrections/physique-ch1..8.md`) | faites |
-| Physique ch9 + chimie ch10-ch13 | `chimie.md` (62 manques) | ch9, ch10, ch11 faites (`corrections/chimie-ch9..11.md`) ; **ch12 et ch13 en cours au moment de l'arrêt** | démonstrations reprises le matin (`corrections/demos-chimie.md`) |
+| Physique ch9 + chimie ch10-ch13 | `chimie.md` (62 manques) | faites (`corrections/chimie-ch9..13.md`) | démonstrations reprises le matin (`corrections/demos-chimie.md`) |
 | SVT ch1-ch4 | — | — | faites (`corrections/demos-svt.md`) |
 
 Règles ajoutées aux skills : `professeur` règles 37 (avec son volet physique-chimie) et 38, `cours-concentration` étape 9b.
 
 ## Ce qui reste
 
-1. **Chimie ch12 et ch13** : si `corrections/chimie-ch12.md` / `chimie-ch13.md` n'existent pas, relancer la correction de ces deux chapitres. Le script est `outils/audit-corrections-chimie.js`. Il faut adapter les chemins : l'ancien scratchpad est perdu, mais les audits sont dans `chimie.md`, sections 12 et 13. Le travail part de la copie en attente.
+1. **Chimie** : faite (ch9 à ch13). Les états physiques sont absents dans `attendu`, car le skill l'interdit dans ce champ. Il faut décider s'il faut les y ajouter, puisque l'attendu d'un « retrouver » s'affiche au tableau de correction.
 2. **Vérifier chaque copie** : `python3 -I docs/audit-prof/outils/verif_attente.py backend/data/courses/en_attente/<deck>.json`. Le résultat attendu est 0 mot absent et 0 diapo hors bloc. Pour les maths, lancer aussi `backend/scripts/verifier_figures_cahier.py`.
 3. **Voix** : `python -I backend/scripts/lister_voix_attente.py > voix_attente.json`, puis enregistrer avec la voix Bodi sur le VPS (procédure dans `docs/audit-rythme/README.md`). Ensuite, la copie en attente remplace le cours en ligne.
 4. **Décisions en suspens** (détail dans chaque rapport `corrections/`) :
