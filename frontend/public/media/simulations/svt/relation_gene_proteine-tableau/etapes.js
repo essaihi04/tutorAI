@@ -64,7 +64,7 @@
       const memo = POSES[S.vue]; if (memo && memo.L === L) return memo.map;
       const map = {}, B = v.blocs;
       const D = typeof v.disposition === 'function' ? v.disposition(L) : v.disposition;
-      const M = D.marge ?? 12, E = D.ecart ?? 22, HT = 420;
+      const M = D.marge ?? 12, E = D.ecart ?? 22, HT = 420, EV = D.ecartV ?? E;   // ecartV : écart vertical dans une colonne (0 : blocs jointifs)
       const dim = n => { const b = B[n]; return { w: b[2] - b[0], h: b[3] - b[1], zmax: b[4] || D.zmax || 1.7 }; };
       let y = M;
       if (D.haut) {   // bandeau du haut : les blocs en ligne, à gauche
@@ -76,7 +76,7 @@
       const cols = D.colonnes.map((col, i) => {
         const y0 = D.pleine && i > 0 ? M : y, Ha = HT - y0 - M;
         const ds = col.map(dim), w = Math.max(...ds.map(d => d.w)), h = ds.reduce((a, d) => a + d.h, 0);
-        return { col, ds, w, y0, Ha, z: Math.min(Math.min(...ds.map(d => d.zmax)), (Ha - E * (col.length - 1)) / h) };
+        return { col, ds, w, y0, Ha, z: Math.min(Math.min(...ds.map(d => d.zmax)), (Ha - EV * (col.length - 1)) / h) };
       });
       const gaps = E * (cols.length - 1), somme = cols.reduce((a, c) => a + c.w * c.z, 0);
       const f = Math.min(1, (L - 2 * M - gaps) / somme);
@@ -84,9 +84,9 @@
       const reste = L - 2 * M - cols.reduce((a, c) => a + c.w * c.z, 0), ecart = reste / Math.max(1, cols.length + 1);
       let x = M + ecart;
       for (const c of cols) {
-        const hz = c.ds.reduce((a, d) => a + d.h * c.z, 0) + E * (c.col.length - 1);
+        const hz = c.ds.reduce((a, d) => a + d.h * c.z, 0) + EV * (c.col.length - 1);
         let yy = c.y0 + Math.max(0, (c.Ha - hz) / 2);
-        c.col.forEach((n, i) => { const d = c.ds[i]; map[n] = { x0: B[n][0], y0: B[n][1], X: x + (c.w - d.w) * c.z / 2, Y: yy, z: c.z }; yy += d.h * c.z + E; });
+        c.col.forEach((n, i) => { const d = c.ds[i]; map[n] = { x0: B[n][0], y0: B[n][1], X: x + (D.gauche ? 0 : (c.w - d.w) * c.z / 2), Y: yy, z: c.z }; yy += d.h * c.z + EV; });   // gauche : blocs alignés à gauche (un dessin coupé en deux reste d'un seul tenant)
         x += c.w * c.z + ecart;
       }
       POSES[S.vue] = { L, map };
