@@ -1,0 +1,1460 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rôle de la faune du sol</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout : la paillasse occupe tout l'écran ; les consignes sont des étiquettes accrochées aux objets ; une fine barre en haut */
+:root{
+  --bg:#1a2230; --fg:#f1f4f8; --muted:#aab4c3; --glass:rgba(10,15,24,.72); --line:rgba(255,255,255,.14);
+  --accent:#ffc54d; --accent-ink:#1a1400; --good:#5fd39a; --bad:#ff7a6b;
+  --f-body:"Atkinson Hyperlegible","Segoe UI",system-ui,sans-serif; --f-mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+  color-scheme:dark;
+}
+html,body{height:100%}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:16px;line-height:1.4;overflow:hidden}
+#scene3d{position:fixed;inset:0;touch-action:none;cursor:grab}
+#scene3d canvas{display:block;width:100%!important;height:100%!important}
+#scene3d.hot{cursor:pointer}
+#scene3d.holding{cursor:grabbing}
+#top{position:fixed;top:env(safe-area-inset-top,0px);left:0;right:0;display:flex;align-items:center;gap:12px;padding:10px max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));background:linear-gradient(rgba(8,12,20,.85),rgba(8,12,20,0));pointer-events:none;z-index:5}
+#top>*{pointer-events:auto}
+#top>div:first-child{white-space:nowrap;flex:none}
+#top b{font-size:17px;letter-spacing:-.01em}
+#top .sub{font-size:12px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;font-weight:700}
+#stepbar{margin-left:auto;display:flex;align-items:center;gap:10px;background:var(--glass);border:1px solid var(--line);border-radius:999px;padding:6px 12px 6px 8px;max-width:60vw;backdrop-filter:blur(8px)}
+#stepno{font-family:var(--f-mono);font-size:12px;font-weight:700;background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:2px 8px;white-space:nowrap}
+#steptxt{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ib{background:var(--glass);border:1px solid var(--line);color:var(--fg);font:inherit;font-size:14px;border-radius:999px;padding:7px 12px;cursor:pointer;backdrop-filter:blur(8px)}
+.ib:hover{border-color:var(--accent)}
+#labels{position:fixed;inset:0;pointer-events:none;z-index:4}
+.ring{position:absolute;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;border:3px solid var(--accent);box-shadow:0 0 0 4px rgba(255,197,77,.18),0 0 18px rgba(255,197,77,.55);animation:pulse 1.4s ease-in-out infinite}
+.ring.target{border-color:var(--good);box-shadow:0 0 0 4px rgba(95,211,154,.18),0 0 18px rgba(95,211,154,.5)}
+@keyframes pulse{50%{transform:scale(1.25);opacity:.6}}
+.chip{position:absolute;transform:translate(-50%,calc(-100% - 24px));background:var(--glass);border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-family:var(--f-mono);font-size:12px;color:var(--accent);white-space:nowrap;backdrop-filter:blur(8px)}
+.chip .k{color:var(--fg);font-family:var(--f-body);font-weight:700}
+.chip.lvl{position:fixed;transform:translate(26px,-50%);border-color:#6fb3ff;color:#bfe0ff;pointer-events:none;z-index:4}
+.chip.lvl::before{content:"";position:absolute;left:-22px;top:50%;width:18px;height:2px;background:#6fb3ff}
+#showGuide{position:fixed;left:max(14px,env(safe-area-inset-left,0px));bottom:calc(14px + env(safe-area-inset-bottom,0px));z-index:6}
+#demo{position:fixed;left:max(14px,env(safe-area-inset-left,0px));bottom:calc(14px + env(safe-area-inset-bottom,0px));width:min(480px,calc(100vw - 28px));background:var(--glass);border:1px solid var(--line);border-left:4px solid var(--good);border-radius:14px;padding:12px 16px;backdrop-filter:blur(10px);box-shadow:0 12px 36px rgba(0,0,0,.4);z-index:6}
+#demo .dh{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+#demo .n{font-family:var(--f-mono);font-weight:700;font-size:13px;background:var(--good);color:#06200f;border-radius:999px;padding:3px 9px}
+#demo .k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
+#demo .t{font-size:16px;line-height:1.35}
+#demo .w{font-size:13.5px;color:var(--muted);margin-top:6px;line-height:1.4}
+#demo .w p{margin:3px 0} #demo .w .eq{font-family:var(--f-mono);font-size:12.5px;background:rgba(255,255,255,.06);padding:4px 8px;border-radius:6px;display:inline-block}
+#demo .b{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+#demo .b .sb.p{border-color:var(--good);color:var(--good);font-weight:700}
+#demo .bar{height:3px;background:rgba(255,255,255,.12);border-radius:2px;margin-top:10px;overflow:hidden}
+#demo .bar i{display:block;height:100%;background:var(--good);width:0;transition:width .3s}
+#instr{position:fixed;left:max(14px,env(safe-area-inset-left,0px));bottom:calc(14px + env(safe-area-inset-bottom,0px));width:min(430px,calc(100vw - 28px));display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 12px;align-items:center;background:var(--glass);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:14px;padding:10px 14px;backdrop-filter:blur(10px);box-shadow:0 12px 36px rgba(0,0,0,.4);z-index:5}
+#instr .n{grid-row:span 2;font-family:var(--f-mono);font-weight:700;font-size:13px;background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:3px 9px;align-self:start}
+#instr .k{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700}
+#instr .t{font-size:15px;line-height:1.3}
+#instr .v{grid-row:span 2;font-family:var(--f-mono);font-weight:700;font-size:20px;color:var(--accent);white-space:nowrap;text-align:right}
+#instr .v:empty{display:none}
+#instr .h{grid-column:2/4;font-size:12px;color:var(--muted)}
+#instr .h:empty{display:none}
+#instr .b{grid-column:2/4;display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.sb{background:transparent;border:1px solid var(--line);color:var(--fg);font:inherit;font-size:13px;border-radius:999px;padding:4px 10px;cursor:pointer}
+.sb:hover{border-color:var(--accent)}
+#panel{position:fixed;top:calc(58px + env(safe-area-inset-top,0px));right:max(12px,env(safe-area-inset-right,0px));bottom:calc(12px + env(safe-area-inset-bottom,0px));width:min(400px,calc(100vw - 24px));background:var(--glass);border:1px solid var(--line);border-radius:16px;backdrop-filter:blur(12px);box-shadow:0 20px 50px rgba(0,0,0,.45);z-index:7;display:flex;flex-direction:column;overflow:hidden}
+#panel header{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)}
+#panel header b{font-size:15px;flex:1}
+#panel .body{overflow:auto;padding:12px 14px 16px;display:flex;flex-direction:column;gap:14px}
+#panel h3{margin:0;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.diag{display:grid;grid-template-columns:1fr auto;gap:4px 12px;font-size:14px}
+.diag b{font-family:var(--f-mono);color:var(--accent);text-align:right}
+.ev{border-left:3px solid var(--line);padding:4px 10px;font-size:14px}
+.ev.warn{border-color:var(--bad)} .ev.good{border-color:var(--good)} .ev.info{border-color:var(--accent)}
+.ev .t{color:var(--muted);font-family:var(--f-mono);font-size:11px;margin-right:6px}
+.ev button{background:none;border:0;color:var(--accent);font:inherit;font-size:13px;cursor:pointer;padding:0 0 0 6px;text-decoration:underline}
+.ev .why{display:none;margin-top:6px;color:var(--muted);font-size:13px;line-height:1.4}
+.ev.open .why{display:block}
+.why p{margin:4px 0}
+.why .eq{font-family:var(--f-mono);font-size:12.5px;background:rgba(255,255,255,.06);padding:5px 8px;border-radius:6px;display:inline-block}
+.tool-list{display:flex;flex-direction:column;gap:6px}
+.tool-list details{border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:14px}
+.tool-list summary{cursor:pointer;font-weight:700}
+.tool-list p{margin:6px 0 0;color:var(--muted);font-size:13px;line-height:1.4}
+#menu{position:fixed;z-index:8;min-width:220px;max-width:min(320px,calc(100vw - 24px));background:var(--glass);border:1px solid var(--line);border-radius:14px;backdrop-filter:blur(12px);box-shadow:0 16px 40px rgba(0,0,0,.45);padding:6px;display:flex;flex-direction:column;gap:2px}
+#menu .mh{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px 6px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700}
+#menu .mh button{background:none;border:1px solid var(--line);color:var(--accent);border-radius:999px;font:inherit;font-size:12px;padding:1px 8px;cursor:pointer;text-transform:none;letter-spacing:0}
+#menu .mi{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:0;color:var(--fg);font:inherit;font-size:15px;padding:9px 10px;border-radius:9px;cursor:pointer}
+#menu .mi:hover,#menu .mi:focus-visible{background:rgba(255,255,255,.08)}
+#menu .mi.hold{background:rgba(255,197,77,.12)} #menu .mi.hold:active{background:rgba(255,197,77,.3)}
+#menu .mi .ic{width:22px;text-align:center;flex:none}
+#menu .mi small{color:var(--muted);font-size:12px;margin-left:auto;white-space:nowrap}
+#menu .mi.danger{color:var(--bad)}
+#exao{position:fixed;inset:0;display:grid;place-items:center;background:rgba(8,12,20,.6);backdrop-filter:blur(6px);z-index:9;padding:16px}
+#toast{position:fixed;left:50%;bottom:calc(130px + env(safe-area-inset-bottom,0px));transform:translate(-50%,16px);background:var(--glass);border:1px solid var(--line);border-radius:12px;padding:10px 16px;font-size:15px;max-width:min(520px,calc(100vw - 32px));opacity:0;transition:.25s;z-index:6;backdrop-filter:blur(8px)}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+#toast.good{border-color:var(--good)} #toast.bad{border-color:var(--bad)}
+#overlay{position:fixed;inset:0;display:grid;place-items:center;background:rgba(8,12,20,.55);backdrop-filter:blur(6px);z-index:10;padding:16px}
+.card{width:100%;max-width:520px;background:#121a27;border:1px solid var(--line);border-radius:18px;padding:22px 22px 18px;box-shadow:0 30px 70px rgba(0,0,0,.5)}
+.card h1{margin:0 0 6px;font-size:24px;line-height:1.15;letter-spacing:-.01em}
+.card p{margin:8px 0;color:var(--muted)}
+.card ul{margin:10px 0 0;padding-left:20px;color:var(--muted)}
+.card li{margin:3px 0}
+.card .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.btn{border:0;border-radius:12px;padding:12px 18px;font:inherit;font-weight:700;font-size:16px;cursor:pointer;background:var(--accent);color:var(--accent-ink)}
+.btn.ghost{background:transparent;color:var(--fg);border:1px solid var(--line)}
+.res{display:grid;grid-template-columns:1fr auto;gap:6px 14px;margin-top:10px;font-size:15px}
+.res b{font-family:var(--f-mono);color:var(--accent)}
+button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+@media (max-width:900px){#top .sub{display:none}#stepbar{display:none}}
+@media (max-width:640px){#top b{font-size:15px}#instr .t{font-size:14px}#instr .v{font-size:16px}#panel{top:auto;height:70vh;left:12px;right:12px;width:auto}}
+@media (prefers-reduced-motion:reduce){.ring{animation:none}}
+/* guide vertical à gauche, du haut vers le bas (nov. 2026) */
+#instr{top:calc(58px + env(safe-area-inset-top,0px));bottom:auto;width:min(250px,calc(100vw - 28px));display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:12px 14px;border-left:1px solid var(--line);border-top:4px solid var(--accent);max-height:calc(100vh - 84px);overflow:auto}#instr .n{align-self:flex-start}#instr .k{font-size:12px}#instr .v{text-align:left;font-size:22px}#instr .t{font-size:15px;line-height:1.42}#instr .b{margin-top:4px;flex-direction:column}#instr .b .sb{width:100%}#demo{top:calc(58px + env(safe-area-inset-top,0px));bottom:auto;width:min(290px,calc(100vw - 28px));display:flex;flex-direction:column;max-height:calc(100vh - 84px);overflow:auto;border-left:1px solid var(--line);border-top:4px solid var(--good)}#demo .dh{flex-direction:column;align-items:flex-start;gap:4px}#demo .b{flex-direction:column;margin-top:6px}#demo .b .sb{width:100%}#showGuide{top:calc(58px + env(safe-area-inset-top,0px));bottom:auto}@media (max-width:640px){#instr,#demo{width:calc(100vw - 28px);bottom:auto;max-height:38vh}#instr .b,#demo .b{flex-direction:row}#instr .b .sb,#demo .b .sb{width:auto}}#instr{left:max(14px,env(safe-area-inset-left,0px));transform:none}#instr.min{bottom:auto}
+.tip{position:fixed;z-index:9;max-width:300px;background:var(--glass);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:10px;padding:7px 10px;font-size:13px;line-height:1.35;pointer-events:none;backdrop-filter:blur(10px);box-shadow:0 10px 28px rgba(0,0,0,.4)}.tip b{color:var(--accent)}#menu .minfo{font-size:12.5px;line-height:1.35;color:var(--muted);padding:2px 8px 8px;border-bottom:1px solid var(--line);margin-bottom:4px}#menu .minfo b{color:var(--fg)}
+.mt{width:100%;border-collapse:collapse;font-size:13.5px;margin:6px 0 10px}.mt th,.mt td{border-bottom:1px solid var(--line);padding:6px 6px;text-align:left;vertical-align:top}.mt th{color:var(--muted);font-weight:700;font-size:12px}.card{max-height:92vh;overflow:auto}
+#instr{top:calc(58px + env(safe-area-inset-top,0px));bottom:auto;width:min(250px,calc(100vw - 28px));display:flex;flex-direction:column;align-items:stretch;gap:6px;padding:12px 14px;border-left:1px solid var(--line);border-top:4px solid var(--accent);max-height:calc(100vh - 84px);overflow:auto}#instr .n{align-self:flex-start}#instr .k{font-size:12px}#instr .v{text-align:left;font-size:22px}#instr .t{font-size:15px;line-height:1.42}#instr .b{margin-top:4px;flex-direction:column}#instr .b .sb{width:100%}#demo{top:calc(58px + env(safe-area-inset-top,0px));bottom:auto;width:min(290px,calc(100vw - 28px));display:flex;flex-direction:column;max-height:calc(100vh - 84px);overflow:auto;border-left:1px solid var(--line);border-top:4px solid var(--good)}#demo .dh{flex-direction:column;align-items:flex-start;gap:4px}#demo .b{flex-direction:column;margin-top:6px}#demo .b .sb{width:100%}#showGuide{top:calc(58px + env(safe-area-inset-top,0px));bottom:auto}@media (max-width:640px){#instr,#demo{width:calc(100vw - 28px);bottom:auto;max-height:38vh}#instr .b,#demo .b{flex-direction:row}#instr .b .sb,#demo .b .sb{width:auto}}
+#exao{inset:auto;top:calc(58px + env(safe-area-inset-top,0px));right:max(12px,env(safe-area-inset-right,0px));left:auto;bottom:auto;display:block;place-items:initial;background:none;backdrop-filter:none;padding:0;z-index:6;width:min(940px,calc(100vw - 24px))}
+#exao .tc{background:var(--glass);border:1px solid var(--line);border-top:3px solid var(--accent);border-radius:14px;padding:10px 12px;backdrop-filter:blur(12px);box-shadow:0 16px 40px rgba(0,0,0,.45);max-height:calc(100vh - 90px);overflow:auto}
+#exao .th{display:flex;align-items:center;gap:10px;flex-wrap:wrap}#exao .th span{flex:1;min-width:200px;font-size:12.5px;color:var(--muted)}#exao .tf{display:flex;align-items:center;gap:10px;justify-content:space-between;font-size:13px;color:var(--muted);font-family:var(--f-mono)}
+.mt.st{font-size:13px;margin:6px 0 8px}.mt.st th{font-size:11.5px;line-height:1.25}.mt.st th.c{color:var(--accent)}.mt.st td{vertical-align:middle;padding:5px}.mt.st td small{display:block;font-size:11px;color:var(--muted);font-family:var(--f-mono)}.mt.st td.au{font-family:var(--f-mono);color:var(--fg);white-space:nowrap}.mt.st td.na{color:var(--muted)}.mt.st td.so{font-size:12px;color:var(--muted);max-width:130px}.mt.st td.su{font-size:11.5px;line-height:1.3}
+.mt.st td.in{white-space:nowrap}.mt.st td.in input{width:84px;background:rgba(255,255,255,.06);border:1px dashed var(--accent);border-radius:8px;color:var(--fg);font:inherit;font-family:var(--f-mono);font-size:14px;padding:5px 7px;cursor:text}.mt.st td.in input:focus{outline:2px solid var(--accent);border-style:solid;background:rgba(255,197,77,.08)}.mt.st td.in input::placeholder{color:var(--muted);font-size:11.5px;font-family:var(--f-body)}.mt.st td.in button{margin-left:4px;background:transparent;border:1px solid var(--line);color:var(--fg);border-radius:8px;padding:4px 7px;cursor:pointer;font:inherit}
+.mt.st td.ok{color:var(--good);font-family:var(--f-mono);font-weight:700;font-size:14px;white-space:nowrap}.mt.st td.ok small{color:var(--good);font-family:var(--f-body);font-weight:700}
+.mt.st td.no small{color:var(--bad);font-family:var(--f-body);font-weight:700}.mt.st td.no input{border-color:var(--bad);border-style:solid;animation:shk .4s}@keyframes shk{0%,100%{transform:none}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+@media (max-width:640px){#exao{top:auto;bottom:calc(8px + env(safe-area-inset-bottom,0px));right:8px;width:calc(100vw - 16px)}#exao .tc{max-height:55vh}.mt.st td.in input{width:70px}}
+#btnZoom.on{border-color:var(--accent);color:var(--accent)}
+#zoom{position:fixed;right:max(12px,env(safe-area-inset-right,0px));bottom:calc(10px + env(safe-area-inset-bottom,0px));display:flex;gap:10px;z-index:5;pointer-events:none}
+#zoom .bub{pointer-events:auto;background:var(--glass);border:1px solid var(--line);border-top:3px solid #6fb3ff;border-radius:16px;padding:7px 10px 8px;backdrop-filter:blur(10px);width:270px;box-shadow:0 12px 30px rgba(0,0,0,.4);cursor:pointer}
+#zoom .bh{display:flex;justify-content:space-between;align-items:baseline;font-size:11.5px;color:var(--muted);font-weight:700;letter-spacing:.06em;text-transform:uppercase}#zoom .bh i{font-style:normal;color:var(--accent);text-transform:none;letter-spacing:0}
+#zoom canvas{display:block;width:250px;height:210px;margin:3px auto 2px}
+#zoom .bt{font-weight:700;font-size:14px;color:var(--fg)}#zoom .bt.grav{color:#9fd0ff}#zoom .bt.cap{color:#7fb6f5}#zoom .bt.hyg{color:#8fb0ff}
+#zoom .bd{font-size:12.5px;color:var(--muted);line-height:1.35;min-height:34px}
+#zoom .bub.flash{animation:zf 1.4s}@keyframes zf{25%{box-shadow:0 0 0 3px var(--accent),0 12px 30px rgba(0,0,0,.4)}}
+#zlines{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:4}#zlines line{stroke:rgba(159,208,255,.7);stroke-width:1.5;stroke-dasharray:5 4}
+body.zon #toast{left:calc(50% - 290px)}
+.wbars{margin:8px 0 12px}.wbar{display:flex;align-items:center;gap:10px;margin:6px 0}.wbar .wl{width:86px;font-size:13px;color:var(--muted)}.wbar .wt{flex:1;display:flex;height:22px;background:rgba(255,255,255,.05);border-radius:6px;overflow:hidden}.wbar i,.wleg i{display:inline-block;font-style:normal;font-family:var(--f-mono);font-size:11.5px;line-height:22px;text-align:center;color:#06142b;white-space:nowrap;overflow:hidden}.wbar i.h,.wleg i.h{background:#1c54c4;color:#fff}.wbar i.c,.wleg i.c{background:#488ee8}.wbar i.g,.wleg i.g{background:#9ccef9}.wleg{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}.wleg i{width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+@media (max-width:1100px){#zoom .bub{width:212px}#zoom canvas{width:192px;height:161px}#zoom .bd{display:none}body.zon #toast{left:50%;bottom:calc(250px + env(safe-area-inset-bottom,0px))}}
+@media (max-width:640px){#zoom{gap:6px;right:8px}#zoom .bub{width:46vw;padding:5px 6px}#zoom canvas{width:42vw;height:35vw}#zoom .bh i{display:none}}
+.mt.st td.in select,#tbl .cq select{background:rgba(255,255,255,.06);border:1px dashed var(--accent);border-radius:8px;color:var(--fg);font:inherit;font-size:13.5px;padding:5px 7px;cursor:pointer}.mt.st td.in select option,#tbl .cq select option{color:#111}.mt.st th[colspan]{font-size:12.5px;color:var(--fg)}#zoom .bt{color:#e8b8a8}
+</style>
+
+<div id="scene3d" aria-label="Paillasse en 3D. Glisse pour tourner, clique sur les objets pour manipuler."></div>
+<div id="labels"></div>
+<header id="top">
+  <div><b>Labo SVT</b> <span class="sub">· Tronc commun · BIOF · Facteurs édaphiques</span></div>
+  <div id="stepbar"><span id="stepno">·</span><span id="steptxt"></span></div>
+  <button class="ib" id="btnDemo" type="button">▶ Démonstration</button>
+  <button class="ib" id="btnZoom" type="button" title="Zoom : un lombric avale le sol et rejette ses turricules">🔍 Lombric</button>
+  <button class="ib" id="btnTable" type="button">Mesures</button>
+  <button class="ib" id="btnPanel" type="button">Carnet</button>
+  <button class="ib" id="btnEval" type="button" hidden>Évaluer</button>
+  <button class="ib" id="reset" type="button" title="Tout remettre en ordre">↺</button>
+</header>
+<div id="instr" hidden><span class="n"></span><span class="k"></span><span class="v"></span><span class="t"></span><span class="h"></span><span class="b"><button class="sb" id="btnWhy" type="button">Pourquoi ?</button><button class="sb" id="btnSkip" type="button" title="Le guide ne proposera plus cette étape">Passer l'étape ⏭</button><button class="sb" id="btnGuide" type="button">Masquer</button><button class="sb" id="btnUnskip" type="button" hidden>↺ Rétablir</button></span></div>
+<aside id="panel" hidden aria-label="Carnet de manipulation">
+  <header><b>Carnet de manip</b><button class="ib" id="closePanel" type="button">✕</button></header>
+  <div class="body">
+    <section><h3>État réel de la paillasse</h3><div class="diag" id="diag"></div></section>
+    <section><h3>Journal des gestes</h3><div id="events"></div></section>
+    <section><h3>Le matériel et son usage</h3><div class="tool-list" id="toolHelp"></div></section>
+  </div>
+</aside>
+<div id="demo" hidden><div class="dh"><span class="n">Démo 1/14</span><span class="k"></span></div><div class="t"></div><div class="w"></div><div class="b"><button class="sb p" id="dPause" type="button">⏸ Pause</button><button class="sb" id="dNext" type="button" title="Termine l'étape en cours en accéléré">Étape suivante ⏭</button><button class="sb" id="dSpeed" type="button" title="Vitesse de la démonstration">Vitesse ×1</button><button class="sb" id="dMin" type="button">Masquer</button><button class="sb" id="dQuit" type="button" title="Arrête la démo et garde la paillasse dans son état">✋ Continuer moi-même</button></div><div class="bar"><i></i></div></div>
+<button class="ib" id="showGuide" type="button" hidden>Afficher le guide ▸</button>
+<div id="menu" hidden role="menu"></div>
+<div id="toast" role="status"></div>
+<div id="exao" hidden><div class="tc"><div class="th"><b>Tableau des observations et des mesures</b><span>Choisis tes observations dans les listes · les teneurs s'écrivent seules · à toi de calculer les rapports (2 chiffres après la virgule, puis Entrée)</span><button class="sb" id="closeExao" type="button">Masquer</button></div><div id="tbl"></div><div class="tf"><span>rapport = teneur dans les turricules ÷ teneur dans le sol</span><button class="sb p" id="exaoEval" type="button">Évaluer</button></div></div></div>
+<div id="overlay">
+  <div class="card">
+    <p class="sub" style="margin:0;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--muted)">SVT · Tronc commun · Les facteurs édaphiques</p>
+    <h1>Rôle de la faune du sol : les lombrics</h1>
+    <p><b>A. Action mécanique</b> : dans un aquarium, des couches de sols différents (sable, terreau, argile) et la litière en surface ; on y met une dizaine de lombrics, dans l'obscurité, sol humide. Un mois plus tard, que sont devenues les couches et la litière ?</p>
+    <p><b>B. Action chimique</b> : les lombrics avalent le sol et rejettent des déjections, les <b>turricules</b>. On compare leur teneur en calcium, phosphore, azote et potassium à celle du sol prélevé à la même profondeur.</p>
+    <ul>
+      <li>Clique sur un objet : s'il n'a qu'un usage, le geste se fait aussitôt ; sinon un menu te laisse choisir. Tout est permis, dans l'ordre que tu veux.</li>
+      <li>Le temps est accéléré : une semaine passe en un clic sur le calendrier. Le zoom 🔍 montre un lombric au travail.</li>
+      <li>Le guide à gauche conseille la prochaine étape ; le <b>Carnet</b> explique chaque geste ; <b>Mesures</b> rassemble tes observations et tes calculs.</li>
+    </ul>
+    <div class="row"><button class="btn" id="start" type="button">Entrer au labo →</button><button class="btn ghost" id="startDemo" type="button">▶ Voir la démonstration</button></div>
+  </div>
+</div>
+
+<!--labnav--><style>
+.labnav{position:relative;display:flex;align-items:center;gap:6px;margin-left:6px}
+.labnav select{appearance:none;-webkit-appearance:none;background:var(--glass) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23ffc54d' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 10px center;border:1px solid var(--line);color:var(--fg);font:inherit;font-size:13.5px;border-radius:999px;padding:6px 28px 6px 12px;max-width:min(330px,42vw);cursor:pointer;backdrop-filter:blur(8px)}
+.labnav select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.labnav select optgroup{background:#121a27;color:var(--accent);font-style:normal}
+.labnav select option{background:#121a27;color:var(--fg)}
+.labnav{flex:none}.labnav select{max-width:250px}
+#top>*{flex:none}#top #stepbar{flex:1 1 0;min-width:0;max-width:none}#top #steptxt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+@media (max-width:1500px){#top .sub{display:none}}
+@media (max-width:640px){.labnav select{max-width:40vw;font-size:12.5px}}
+</style>
+<script>
+/* navigation entre les manips : une liste déroulante classée par matière et niveau, dans la barre du haut.
+   Pour une nouvelle manip : ajouter une ligne ici, relancer inject-nav.py, régénérer les manips des sols, republier toutes les manips. */
+(function () {
+  "use strict";
+  const LABS = [
+    { g: "Physique-Chimie · 2ᵉ Bac PC BIOF", t: "Labo Sciences 2BAC", n: "Préparer 100 mL de NaOH à 0,10 mol/L (conductimètre)", u: "solution-naoh.html" },
+    { g: "Physique-Chimie · 2ᵉ Bac PC BIOF", t: "Dosage acide-base 2BAC", n: "Dosage acide éthanoïque / soude (indicateur, pH-métrie)", u: "chimie-dosage-acide-base.html" },
+    { g: "SVT · 2ᵉ Bac PC BIOF", t: "Labo SVT ExAO 2BAC", n: "Respiration et fermentation des levures (ExAO)", u: "svt-exao-levures.html" },
+    { g: "Physique-Chimie · Tronc commun", t: "Synthèse de l'acétate de linalyle TC", n: "Synthèse de l'acétate de linalyle : reflux, ampoule à décanter, NaHCO₃, filtration", u: "chimie-linalyle.html" },
+    { g: "SVT · Tronc commun", t: "Rétention et perméabilité des sols", n: "Facteurs édaphiques (1) : rétention en eau et perméabilité", u: "svt-sol-retention.html" },
+    { g: "SVT · Tronc commun", t: "Le pH du sol", n: "Facteurs édaphiques (2) : pH du sol (papier pH, pH-mètre)", u: "svt-sol-ph.html" },
+    { g: "SVT · Tronc commun", t: "Le calcaire du sol", n: "Facteurs édaphiques (3) : calcaire du sol (test au HCl)", u: "svt-sol-calcaire.html" },
+    { g: "SVT · Tronc commun", t: "Le complexe argilo-humique", n: "Facteurs édaphiques (4) : complexe argilo-humique (floculation, électrophorèse)", u: "svt-sol-cah.html" },
+    { g: "SVT · Tronc commun", t: "Fixation des cations par le sol", n: "Facteurs édaphiques (5) : fixation des cations (bleu de méthylène, éosine)", u: "svt-sol-cations.html" },
+    { g: "SVT · Tronc commun", t: "Les trois formes d'eau du sol", n: "Facteurs édaphiques (6) : eau de gravité, capillaire, hygroscopique", u: "svt-sol-eau.html" },
+    { g: "SVT · Tronc commun", t: "Rôle de la faune du sol", n: "Facteurs édaphiques (7) : rôle de la faune du sol (lombrics)", u: "svt-sol-lombrics.html" },
+  ];
+  function mount() {
+    const top = document.getElementById("top"); if (!top || top.querySelector(".labnav")) return;
+    const wrap = document.createElement("label"); wrap.className = "labnav"; wrap.title = "Changer de manip";
+    const sel = document.createElement("select"); sel.setAttribute("aria-label", "Changer de manip");
+    const cur = LABS.findIndex((l) => l.t === document.title), head = document.createElement("option");
+    head.textContent = "📚 Manips…"; head.value = ""; if (cur < 0) head.selected = true; sel.append(head); const home = document.createElement("option"); home.value = "home"; home.textContent = "🏠 Toutes les manips"; sel.append(home);
+    const groups = {};
+    LABS.forEach((l, i) => { let og = groups[l.g]; if (!og) { og = groups[l.g] = document.createElement("optgroup"); og.label = l.g; sel.append(og); } const o = document.createElement("option"); o.value = String(i); o.textContent = (i === cur ? "✓ " : "") + l.n; if (i === cur) o.selected = true; og.append(o); });
+    sel.addEventListener("change", () => {
+      if (sel.value === "home") { location.href = "./"; return; } const l = LABS[+sel.value]; if (!l || +sel.value === cur) return;
+      location.href = l.u;
+      sel.value = cur >= 0 ? String(cur) : "";
+    });
+    wrap.append(sel); const first = top.firstElementChild; if (first) first.after(wrap); else top.prepend(wrap);
+  }
+  if (document.getElementById("top")) mount(); else document.addEventListener("DOMContentLoaded", mount);
+})();
+</script><!--/labnav-->
+<script src="vendor/three-r128.min.js"></script>
+<script src="vendor/OrbitControls-r128.js"></script>
+<script>
+/* secours : contrôle d'orbite minimal si aucun CDN n'a fourni OrbitControls */
+if (window.THREE && !THREE.OrbitControls) THREE.OrbitControls = class {
+  constructor(cam, el) { this.object = cam; this.el = el; this.target = new THREE.Vector3(); this.enabled = true; this.enableDamping = false; this.minDistance = 0.1; this.maxDistance = 10; this.maxPolarAngle = Math.PI; this.rotateSpeed = 1; this.panSpeed = 1;
+    let drag = null; el.addEventListener("pointerdown", (e) => { drag = { x: e.clientX, y: e.clientY, b: e.button }; el.setPointerCapture(e.pointerId); });
+    el.addEventListener("pointermove", (e) => { if (!drag || !this.enabled) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY; const o = this.object.position.clone().sub(this.target), s = new THREE.Spherical().setFromVector3(o); s.theta -= dx * 0.005 * this.rotateSpeed; s.phi = Math.max(0.05, Math.min(this.maxPolarAngle, s.phi - dy * 0.005 * this.rotateSpeed)); this.object.position.copy(this.target).add(o.setFromSpherical(s)); });
+    const up = () => (drag = null); el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up);
+    el.addEventListener("wheel", (e) => { if (!this.enabled) return; e.preventDefault(); const o = this.object.position.clone().sub(this.target), d = Math.max(this.minDistance, Math.min(this.maxDistance, o.length() * (e.deltaY > 0 ? 1.1 : 0.9))); this.object.position.copy(this.target).add(o.setLength(d)); }, { passive: false });
+  }
+  update() { this.object.lookAt(this.target); }
+};
+</script>
+<script>
+(function(){
+"use strict";
+const $ = (s) => document.querySelector(s);
+const fmt = (x, d = 2) => (Math.round(x * 10 ** d) / 10 ** d).toFixed(d).replace(".", ",");
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const BENCH = 0.92;
+const T3 = {}, M = {};
+
+/* ------------------------------------------------------------ briques 3D */
+const V3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
+function mesh(geo, mat, parent, x = 0, y = 0, z = 0) { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; if (parent) parent.add(m); return m; }
+function box(w, h, d, mat, parent, x, y, z) { return mesh(new THREE.BoxGeometry(w, h, d), mat, parent, x, y, z); }
+function cyl(rt, rb, h, mat, parent, x, y, z, seg = 28, open = false) { return mesh(new THREE.CylinderGeometry(rt, rb, h, seg, 1, open), mat, parent, x, y, z); }
+function sph(r, mat, parent, x, y, z) { return mesh(new THREE.SphereGeometry(r, 20, 14), mat, parent, x, y, z); }
+function rod(a, b, r, mat, parent) { const A = V3(a), B = V3(b), d = B.clone().sub(A), m = cyl(r, r, d.length(), mat, parent, 0, 0, 0, 16); m.position.copy(A).add(B).multiplyScalar(0.5); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); return m; }
+function std(color, rough = 0.5, metal = 0, extra = {}) { return new THREE.MeshStandardMaterial(Object.assign({ color, roughness: rough, metalness: metal }, extra)); }
+function canvasTex(w, h, draw, rep) { const c = document.createElement("canvas"); c.width = w; c.height = h; draw(c.getContext("2d"), w, h); const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 8; if (rep) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rep[0], rep[1]); } return t; }
+function grain(ctx, w, h, amp) { const d = ctx.getImageData(0, 0, w, h); for (let i = 0; i < d.data.length; i += 4) { const n = (Math.random() - 0.5) * amp; d.data[i] += n; d.data[i + 1] += n; d.data[i + 2] += n; } ctx.putImageData(d, 0, 0); }
+function wire(a, b, mat, parent, drop = 0.05, r = 0.0021) { const pts = []; for (let i = 0; i <= 8; i++) { const s = i / 8; pts.push(new THREE.Vector3(a[0] + (b[0] - a[0]) * s, Math.max(r + 0.001, a[1] + (b[1] - a[1]) * s - drop * Math.sin(Math.PI * s)), a[2] + (b[2] - a[2]) * s + 0.02 * Math.sin(Math.PI * s))); } return mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 64, r, 8, false), mat, parent); }
+function lcd(w, h, parent, x, y, z, fg = "#8ef58b", bg = "#07110a") {
+  const cw = 256, ch = Math.max(40, Math.round((cw * h) / w)), c = document.createElement("canvas"); c.width = cw; c.height = ch;
+  const ctx = c.getContext("2d"), t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffffff, emissiveMap: t, roughness: 0.2 }));
+  m.position.set(x, y, z); parent.add(m); let last = "";
+  m.set = (a, b = "") => {
+    const k = a + "|" + b; if (k === last) return; last = k;
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, cw, ch); ctx.fillStyle = fg; ctx.textBaseline = "middle";
+    const us = Math.min(ch * 0.32, 34), uw = b ? us * b.length * 0.62 + 10 : 0, fs = Math.min(ch * 0.62, (cw - 24 - uw) / (a.length * 0.62));
+    ctx.font = `700 ${Math.round(fs)}px "JetBrains Mono", Consolas, monospace`; ctx.textAlign = "right"; ctx.fillText(a, cw - 12 - uw, ch * 0.55);
+    if (b) { ctx.font = `700 ${Math.round(us)}px Arial, sans-serif`; ctx.textAlign = "left"; ctx.fillText(b, cw - uw - 2, ch * 0.6); }
+    t.needsUpdate = true;
+  };
+  return m;
+}
+function print(w, h, parent, x, y, z, lines, bg = null, fg = "#f1f1ee") {
+  const cw = 512, ch = Math.round((cw * h) / w), c = document.createElement("canvas"); c.width = cw; c.height = ch; const ctx = c.getContext("2d");
+  if (bg) { ctx.fillStyle = bg; ctx.fillRect(0, 0, cw, ch); } ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  lines.forEach((l, i) => { ctx.font = `${l.b ? 700 : 500} ${Math.round(ch * (l.s || 0.42))}px Arial, sans-serif`; ctx.fillStyle = l.c || fg; ctx.fillText(l.t, cw / 2, ch * (l.y != null ? l.y : (i + 0.5) / lines.length)); });
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 8;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: t, transparent: !bg, roughness: 0.6 })); m.position.set(x, y, z); m.receiveShadow = true; parent.add(m); return m;
+}
+function wrapLabel(r, h, parent, x, y, z, lines, bg) {
+  const c = document.createElement("canvas"); c.width = 512; c.height = Math.round(512 * h / (2.4 * r)); const ctx = c.getContext("2d");
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, c.width, c.height); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  lines.forEach((l, i) => { ctx.font = `${l.b ? 700 : 500} ${Math.round(c.height * (l.s || 0.2))}px Arial, sans-serif`; ctx.fillStyle = l.c || "#1b1b1b"; ctx.fillText(l.t, c.width / 2, c.height * (i + 0.5) / lines.length); });
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding;
+  return mesh(new THREE.CylinderGeometry(r, r, h, 32, 1, true, -1.2, 2.4), std(0xffffff, 0.7, 0, { map: t }), parent, x, y, z);
+}
+function knob(parent, x, y, z, r = 0.01, mat = M.black) { const k = cyl(r, r * 1.08, r * 1.2, mat, parent, x, y, z, 24); k.rotation.x = Math.PI / 2; box(r * 0.25, r * 0.9, 0.002, M.white, k, 0, r * 0.62, r * 0.55).rotation.x = -Math.PI / 2; return k; }
+function liquidMat(color, op = 0.42) { /*liquide-mat*/ const m = new THREE.MeshPhysicalMaterial({ color, roughness: 0.6, reflectivity: 0.05, envMapIntensity: 0.15, transparent: true, opacity: op, clearcoat: 0, depthWrite: false }); (window.__LIQS || (window.__LIQS = [])).push(m); return m; }
+
+function initMats() {
+  T3.epoxy = canvasTex(512, 512, (x, w, h) => { x.fillStyle = "#2a2d31"; x.fillRect(0, 0, w, h); grain(x, w, h, 22); for (let i = 0; i < 900; i++) { x.fillStyle = `rgba(255,255,255,${Math.random() * 0.08})`; x.fillRect(Math.random() * w, Math.random() * h, 1.5, 1.5); } }, [8, 1]);
+  T3.floor = canvasTex(512, 512, (x, w, h) => { x.fillStyle = "#9aa1a8"; x.fillRect(0, 0, w, h); for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) { x.fillStyle = `hsl(210,7%,${66 + Math.random() * 7}%)`; x.fillRect(i * 256 + 2, j * 256 + 2, 252, 252); } grain(x, w, h, 16); }, [24, 24]);
+  T3.tiles = canvasTex(512, 512, (x, w, h) => { x.fillStyle = "#1b1f24"; x.fillRect(0, 0, w, h); const s = w / 4; for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { x.fillStyle = `hsl(210,9%,${24 + Math.random() * 4}%)`; x.fillRect(i * s + 3, j * s + 3, s - 6, s - 6); } grain(x, w, h, 5); }, [30, 2.4]);
+  T3.sky = canvasTex(512, 320, (x, w, h) => {
+    const g = x.createLinearGradient(0, 0, 0, h); g.addColorStop(0, "#7fb0e6"); g.addColorStop(0.65, "#d8e8f6"); g.addColorStop(1, "#e9f0f5"); x.fillStyle = g; x.fillRect(0, 0, w, h);
+    for (let i = 0; i < 5; i++) { x.fillStyle = "rgba(255,255,255,.55)"; x.beginPath(); x.ellipse(Math.random() * w, 40 + Math.random() * 80, 50 + Math.random() * 40, 12, 0, 0, 7); x.fill(); }
+    x.fillStyle = "#9db7a1"; x.beginPath(); x.moveTo(0, h * 0.78); for (let i = 0; i <= 10; i++) x.lineTo((w * i) / 10, h * (0.7 + Math.random() * 0.06)); x.lineTo(w, h); x.lineTo(0, h); x.fill();
+    for (let i = 0; i < 14; i++) { x.fillStyle = `hsl(${120 + Math.random() * 25},30%,${30 + Math.random() * 12}%)`; x.beginPath(); x.ellipse(Math.random() * w, h * 0.78, 18 + Math.random() * 16, 30 + Math.random() * 20, 0, 0, 7); x.fill(); }
+    x.fillStyle = "#c9c2b5"; x.fillRect(0, h * 0.86, w, h * 0.14);
+  });
+  T3.beaker = canvasTex(256, 256, (x, w, h) => { x.clearRect(0, 0, w, h); x.fillStyle = "#1d2b3a"; x.strokeStyle = "rgba(255,255,255,.9)"; x.lineWidth = 5; x.lineJoin = "round"; x.font = "bold 22px Arial"; x.textAlign = "left"; for (let i = 1; i <= 5; i++) { const y = h - i * 40; x.fillRect(90, y, i % 2 ? 30 : 46, 3); x.strokeText(String(i * 50), 142, y + 8); x.fillText(String(i * 50), 142, y + 8); } x.font = "bold 20px Arial"; x.strokeText("250 mL", 92, 26); x.fillText("250 mL", 92, 26); });
+  T3.poster = canvasTex(1024, 640, (x, w, h) => {
+    x.fillStyle = "#fbfbf8"; x.fillRect(0, 0, w, h); x.fillStyle = "#1d2b44"; x.font = "bold 38px Arial"; x.textAlign = "center"; x.fillText("Tableau périodique des éléments", w / 2, 52);
+    const cols = ["#f4a7a3", "#f7cf8f", "#fdf1a2", "#b8e3b0", "#a9d4f2", "#cdbcf0", "#e6e6e6"], s = 50, ox = 62, oy = 90, shape = [[0, 17], [0, 1, 12, 13, 14, 15, 16, 17], [0, 1, 12, 13, 14, 15, 16, 17]];
+    for (let r = 0; r < 7; r++) for (let c = 0; c < 18; c++) { if (r < 3 && !shape[r].includes(c)) continue; x.fillStyle = cols[(c < 2 ? 0 : c < 12 ? 1 + (r % 2) : c < 17 ? 3 + (c % 2) : 5)]; x.fillRect(ox + c * s, oy + r * s, s - 4, s - 4); }
+    for (let r = 0; r < 2; r++) for (let c = 2; c < 17; c++) { x.fillStyle = cols[6]; x.fillRect(ox + c * s, oy + 380 + r * s, s - 4, s - 4); }
+  });
+  T3.safety = canvasTex(512, 640, (x, w, h) => {
+    x.fillStyle = "#fff4d6"; x.fillRect(0, 0, w, h); x.fillStyle = "#c8302b"; x.fillRect(0, 0, w, 70); x.fillStyle = "#fff"; x.font = "bold 40px Arial"; x.textAlign = "center"; x.fillText("SÉCURITÉ AU LABO", w / 2, 48);
+    x.fillStyle = "#222"; x.font = "bold 28px Arial"; x.textAlign = "left"; ["Lunettes et blouse obligatoires", "Sols et lombrics : se laver les mains", "Ne jamais pipeter à la bouche", "Rincer à l'eau en cas de projection", "Déchets dans le bac prévu"].forEach((t, i) => { x.fillStyle = "#c8302b"; x.beginPath(); x.arc(44, 130 + i * 90, 12, 0, 7); x.fill(); x.fillStyle = "#222"; x.fillText(t, 72, 140 + i * 90); });
+  });
+  M.epoxy = std(0xffffff, 0.55, 0, { map: T3.epoxy }); M.cabinet = std(0xeef1f4, 0.55); M.gap = std(0x8b939b, 0.7);
+  M.steel = std(0xd9dde2, 0.22, 1); M.alu = std(0xbcc3cb, 0.35, 0.9); M.chrome = std(0xffffff, 0.08, 1);
+  M.black = std(0x1b1d20, 0.42); M.dark = std(0x30353b, 0.5); M.grey = std(0x8a9199, 0.5); M.white = std(0xf3f3ef, 0.38); M.beige = std(0xdcd4c3, 0.5);
+  M.blue = std(0x2b59aa, 0.4); M.red = std(0xc42f29, 0.42); M.standPaint = std(0x3a4a57, 0.45, 0.2); M.wireB = std(0x161616, 0.5); M.ptfe = std(0xf4f4f0, 0.35);
+  M.glass = new THREE.MeshPhysicalMaterial({ color: 0xe6f4ff, roughness: 0.03, transparent: true, opacity: 0.17, clearcoat: 1, clearcoatRoughness: 0.02, side: THREE.DoubleSide, depthWrite: false, envMapIntensity: 1.8 });
+  M.pellet = std(0xf7f7f2, 0.55); M.plasticW = std(0xf4f6f8, 0.3, 0, { transparent: true, opacity: 0.9 });
+}
+function envScene() {
+  const s = new THREE.Scene(), bright = (r, g, b) => new THREE.MeshBasicMaterial({ color: new THREE.Color(r, g, b), side: THREE.DoubleSide });
+  const room = new THREE.Mesh(new THREE.BoxGeometry(14, 4, 10), new THREE.MeshBasicMaterial({ color: 0x9aa0a8, side: THREE.BackSide })); room.position.y = 1.6; s.add(room);
+  const fl = new THREE.Mesh(new THREE.PlaneGeometry(14, 10), new THREE.MeshBasicMaterial({ color: 0x4a4e54 })); fl.rotation.x = -Math.PI / 2; fl.position.y = -0.39; s.add(fl);
+  for (const x of [-4, -1.3, 1.3, 4]) for (const z of [-2, 1.5]) { const p = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.7), bright(7, 7, 6.6)); p.rotation.x = Math.PI / 2; p.position.set(x, 3.55, z); s.add(p); }
+  for (const x of [-2, 2]) { const w = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.4), bright(2.6, 3, 3.6)); w.position.set(x, 2, -4.95); s.add(w); }
+  return s;
+}
+function buildRoom(scene) {
+  const floor = mesh(new THREE.PlaneGeometry(24, 24), std(0xffffff, 0.72, 0, { map: T3.floor }), scene); floor.rotation.x = -Math.PI / 2; floor.castShadow = false;
+  const wz = -0.64;
+  mesh(new THREE.PlaneGeometry(18, 1.45), std(0xffffff, 0.35, 0, { map: T3.tiles }), scene, 0, 0.725, wz).castShadow = false;
+  mesh(new THREE.PlaneGeometry(18, 2.0), std(0x3e444b, 0.9), scene, 0, 2.45, wz).castShadow = false;
+  const ceil = mesh(new THREE.PlaneGeometry(24, 24), std(0xf2f3f4, 0.9), scene, 0, 3.4, 0); ceil.rotation.x = Math.PI / 2; ceil.castShadow = false;
+  for (const x of [-3.3, -1.1, 1.1, 3.3]) box(1.2, 0.02, 0.6, new THREE.MeshBasicMaterial({ color: 0xffffff }), scene, x, 3.39, 0.2).castShadow = false;
+  for (const wx of [-1.1, 1.1, 3.3, -3.3]) {
+    mesh(new THREE.PlaneGeometry(1.5, 1.05), new THREE.MeshBasicMaterial({ map: T3.sky }), scene, wx, 2.05, wz + 0.004).castShadow = false;
+    for (const [w, h, x, y] of [[1.6, 0.05, 0, 0.55], [1.6, 0.05, 0, -0.55], [0.05, 1.15, -0.78, 0], [0.05, 1.15, 0.78, 0], [0.035, 1.05, 0, 0]]) box(w, h, 0.05, M.white, scene, wx + x, 2.05 + y, wz + 0.02);
+    box(1.7, 0.035, 0.14, M.white, scene, wx, 1.47, wz + 0.06);
+  }
+  const bl = 7.6;
+  box(bl, 0.04, 0.84, M.epoxy, scene, 0, BENCH - 0.02, -0.22);
+  box(bl - 0.08, BENCH - 0.14, 0.74, M.cabinet, scene, 0, (BENCH - 0.14) / 2 + 0.1, -0.25);
+  box(bl - 0.1, 0.1, 0.7, M.dark, scene, 0, 0.05, -0.28);
+  for (let i = 0; i <= 12; i++) { const x = -bl / 2 + 0.05 + i * ((bl - 0.1) / 12); box(0.006, BENCH - 0.16, 0.004, M.gap, scene, x, (BENCH - 0.14) / 2 + 0.1, 0.122); if (i < 12) box(0.18, 0.014, 0.02, M.steel, scene, x + (bl - 0.1) / 24, BENCH - 0.14, 0.135); }
+  box(bl, 0.14, 0.05, std(0x3e444b, 0.5), scene, 0, BENCH + 0.07, -0.6);
+  for (let x = -3.4; x <= 3.4; x += 0.85) { box(0.08, 0.08, 0.012, M.white, scene, x, BENCH + 0.07, -0.57); for (const dx of [-0.012, 0.012]) cyl(0.004, 0.004, 0.004, M.black, scene, x + dx, BENCH + 0.07, -0.5635, 10).rotation.x = Math.PI / 2; }
+  mesh(new THREE.PlaneGeometry(1.5, 0.94), std(0xffffff, 0.7, 0, { map: T3.poster }), scene, -2.2, 2.25, wz + 0.006).castShadow = false;
+  mesh(new THREE.PlaneGeometry(0.5, 0.62), std(0xffffff, 0.7, 0, { map: T3.safety }), scene, 1.0, 2.15, wz + 0.006).castShadow = false;
+  // paillasse voisine : verrerie en attente, pour donner de la vie à la salle
+  for (const [x, r, h, m] of [[-1.6, 0.04, 0.11, M.glass], [-1.48, 0.03, 0.09, M.glass], [1.9, 0.035, 0.13, M.glass], [2.05, 0.02, 0.2, M.glass]]) cyl(r, r, h, m, scene, x, BENCH + h / 2, -0.35, 28, true).castShadow = false;
+}
+
+/* ------------------------------------------------------------ matériel de la manip (tout dans le groupe g, origine = dessus de la paillasse) */
+const TOOLS = {};
+function tool(name, obj, anchor = [0, 0, 0], grab = false) { obj.userData.tool = name; obj.traverse((o) => (o.userData.tool = name)); TOOLS[name] = { obj, anchor: V3(anchor), grab, home: obj.position.clone(), homeRot: obj.rotation.clone() }; return obj; }
+const X = {};
+function rboxGeo(w, h, d, r, seg = 3) {
+  r = Math.min(r, w / 2 - 1e-4, h / 2 - 1e-4, d / 2 - 1e-4);
+  const s = new THREE.Shape(), x = -w / 2 + r, y = -h / 2 + r, W = w - 2 * r, H = h - 2 * r, c = Math.min(r, W / 2, H / 2);
+  s.moveTo(x + c, y); s.lineTo(x + W - c, y); s.quadraticCurveTo(x + W, y, x + W, y + c); s.lineTo(x + W, y + H - c); s.quadraticCurveTo(x + W, y + H, x + W - c, y + H);
+  s.lineTo(x + c, y + H); s.quadraticCurveTo(x, y + H, x, y + H - c); s.lineTo(x, y + c); s.quadraticCurveTo(x, y, x + c, y);
+  const g = new THREE.ExtrudeGeometry(s, { depth: d - 2 * r, bevelEnabled: true, bevelThickness: r, bevelSize: r, bevelSegments: seg, curveSegments: 6 }); g.center(); return g;
+}
+function rbox(w, h, d, r, mat, parent, x, y, z) { return mesh(rboxGeo(w, h, d, r), mat, parent, x, y, z); }
+function knurlCap(parent, r, h, mat, x, y, z, n = 28) { const cap = cyl(r, r, h, mat, parent, x, y, z, 48); for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2, b = box(0.0024, h * 0.86, 0.0022, mat, cap, Math.cos(a) * r, 0, Math.sin(a) * r); b.rotation.y = -a; } cyl(r * 0.92, r * 0.92, 0.0015, mat, cap, 0, h / 2 + 0.0007, 0, 48); return cap; }
+function lathe(prof, mat, parent, x, y, z, seg = 48) { return mesh(new THREE.LatheGeometry(prof.map((p) => new THREE.Vector2(p[0], p[1])), seg), mat, parent, x, y, z); }
+function feet(parent, w, d, y = 0, r = 0.006) { for (const sx of [-1, 1]) for (const sz of [-1, 1]) cyl(r, r * 1.1, 0.006, M.rubber, parent, (sx * w) / 2, y + 0.003, (sz * d) / 2, 16); }
+function key(parent, w, h, x, y, z, label, mat = M.keyGrey, fg = "#f1f1ee") { const k = rbox(w, h, 0.006, 0.0015, mat, parent, x, y, z); if (label) print(w * 0.9, h * 0.6, k, 0, 0, 0.0032, [{ t: label, b: true, s: 0.95, c: fg }]); return k; }
+function knobDial(parent, x, y, z, r, mat = M.black) {
+  const k = cyl(r, r * 1.06, r * 1.1, mat, parent, x, y, z, 32); k.rotation.x = Math.PI / 2; box(r * 0.22, r * 0.85, 0.0015, M.white, k, 0, r * 0.5, r * 0.56).rotation.x = -Math.PI / 2;
+  const tex = canvasTex(256, 256, (c, w) => { c.clearRect(0, 0, w, w); c.strokeStyle = "#e9e9e4"; c.lineWidth = 6; for (let i = 0; i <= 10; i++) { const a = -Math.PI * 0.75 + (i / 10) * Math.PI * 1.5; c.beginPath(); c.moveTo(128 + Math.cos(a) * 92, 128 + Math.sin(a) * 92); c.lineTo(128 + Math.cos(a) * (i % 5 ? 104 : 114), 128 + Math.sin(a) * (i % 5 ? 104 : 114)); c.stroke(); } });
+  mesh(new THREE.PlaneGeometry(r * 3.2, r * 3.2), new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.6 }), parent, x, y, z + 0.0005).castShadow = false; return k;
+}
+function labelTex(title, lines, band = "#1e4f9c", w = 768, h = 384, ghs = false) {
+  return canvasTex(w, h, (x) => {
+    x.fillStyle = "#fbfbf8"; x.fillRect(0, 0, w, h); x.fillStyle = band; x.fillRect(0, 0, w, 54); x.fillRect(0, h - 26, w, 26);
+    x.fillStyle = "#fff"; x.font = "bold 28px Arial"; x.textAlign = "left"; x.fillText("LABOCHEM · réactif pour analyses", 24, 38);
+    x.fillStyle = "#111"; x.font = "bold 70px Arial"; x.fillText(title, 28, 140); x.font = "30px Arial"; x.fillStyle = "#333"; lines.forEach((l, i) => x.fillText(l, 28, 192 + i * 40));
+    if (ghs) { const cx = w - 120, cy = 200, s = 85; x.save(); x.translate(cx, cy); x.rotate(Math.PI / 4); x.fillStyle = "#d81e1e"; x.fillRect(-s, -s, 2 * s, 2 * s); x.fillStyle = "#fff"; x.fillRect(-s + 10, -s + 10, 2 * s - 20, 2 * s - 20); x.restore(); x.strokeStyle = "#111"; x.lineWidth = 7; x.lineCap = "round"; x.beginPath(); x.moveTo(cx - 55, cy - 35); x.lineTo(cx - 18, cy - 62); x.moveTo(cx - 55, cy - 35); x.lineTo(cx - 36, cy - 4); x.moveTo(cx + 18, cy - 62); x.lineTo(cx + 55, cy - 35); x.lineTo(cx + 36, cy - 4); x.stroke(); x.fillStyle = "#111"; x.fillRect(cx - 62, cy + 10, 52, 34); x.fillRect(cx + 10, cy + 10, 52, 34); }
+  });
+}
+function dropper(parent, x, z, color, name, zone, liq = 0xeef3f8) {
+  const d = new THREE.Group(); d.position.set(x, 0, z); parent.add(d);
+  lathe([[0, 0], [0.014, 0], [0.016, 0.003], [0.016, 0.05], [0.013, 0.056], [0.008, 0.06], [0.008, 0.066], [0, 0.066]], dropper.amber || (dropper.amber = new THREE.MeshPhysicalMaterial({ color: 0x7a3a0c, roughness: 0.08, transparent: true, opacity: 0.85, clearcoat: 1, clearcoatRoughness: 0.05 })), d, 0, 0, 0, 36).castShadow = false;
+  const dp = new THREE.Group(); d.add(dp); d.userData.dp = dp; dp.userData.liq = liq;
+  knurlCap(dp, 0.0095, 0.012, M.black, 0, 0.072, 0, 20); dp.userData.teat = lathe([[0, 0], [0.0052, 0], [0.006, 0.004], [0.0074, 0.012], [0.0077, 0.02], [0.0064, 0.027], [0.003, 0.031], [0, 0.032]], std(0x1c1c1e, 0.75), dp, 0, 0.077, 0, 24); // tétine
+  cyl(0.0026, 0.0013, 0.062, M.glass, dp, 0, 0.035, 0, 12).castShadow = false; cyl(0.0017, 0.0011, 0.02, liquidMat(liq, 0.85), dp, 0, 0.016, 0, 10).castShadow = false; // pipette compte-gouttes
+  mesh(new THREE.CylinderGeometry(0.0163, 0.0163, 0.03, 36, 1, true, -1.3, 2.6), std(0xffffff, 0.6, 0, { map: canvasTex(512, 200, (c, w, h) => { c.fillStyle = "#fff"; c.fillRect(0, 0, w, h); c.fillStyle = color; c.fillRect(0, 0, w, 36); c.fillStyle = "#111"; c.font = "bold 46px Arial"; c.textAlign = "center"; c.fillText(name, w / 2, 100); c.font = "30px Arial"; c.fillText("zone de virage " + zone, w / 2, 150); }) }), d, 0, 0.03, 0).castShadow = false;
+  return d;
+}
+
+// verre lisible : liseré sombre sur les bords vus en rasant (réfraction), comme une vraie paroi de verre
+// couleurs fidèles : les codes hexadécimaux des matériaux sont pensés en sRGB (comme sur une photo) ; three r128 les lit en linéaire, ce qui délave tout
+function linColors(root) {
+  const seen = new Set();
+  root.traverse((o) => { const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []; for (const m of ms) { if (seen.has(m) || m.isShaderMaterial || !m.color || m.userData.lin) continue; seen.add(m); m.userData.lin = true; m.color.convertSRGBToLinear(); if (m.sheenColor) m.sheenColor.convertSRGBToLinear(); } });
+}
+
+function glassEdges(root) {
+  const mat = new THREE.ShaderMaterial({ uniforms: { c: { value: new THREE.Color(0x3d5468) }, a: { value: 0.75 } }, transparent: true, depthWrite: false, side: THREE.DoubleSide,
+    vertexShader: "varying vec3 vN; varying vec3 vV; void main(){ vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }",
+    fragmentShader: "uniform vec3 c; uniform float a; varying vec3 vN; varying vec3 vV; void main(){ float r = 1.0 - abs(dot(normalize(vN), normalize(vV))); gl_FragColor = vec4(c, a * pow(r, 2.5)); }" });
+  const list = []; root.traverse((o) => { if (o.isMesh && o.material === M.glass) list.push(o); });
+  for (const o of list) { const e = new THREE.Mesh(o.geometry, mat); e.renderOrder = (o.renderOrder || 0) + 1; e.castShadow = false; e.raycast = () => {}; o.add(e); }
+}
+
+/* ============================================================ SVT · TC · Facteurs édaphiques : rôle de la faune du sol (les lombrics)
+   Protocole (manuel TC SVT BIOF, doc 1 « Rôle de la faune du sol ») :
+   A. Action mécanique : un aquarium étroit reçoit des couches successives de sols différents (sable, terreau, argile…) et la
+      litière (feuilles mortes) en surface ; on y introduit une dizaine de lombrics ; parois couvertes de papier noir (obscurité),
+      arrosage régulier (humidité), milieu aéré à 18–20 °C. Au bout d'un mois environ : couches mélangées, litière enfouie,
+      galeries, turricules en surface.
+   B. Action chimique : les lombrics avalent le sol et rejettent des déjections (turricules). On compare la composition du sol
+      et des turricules prélevés à la même profondeur (surface) — valeurs du document, g par kg de sol :
+      Ca²⁺ 1,99 / 2,79 · P 0,009 / 0,067 · N 0,004 / 0,022 · K 0,032 / 0,35.
+   Simplifications signalées dans les explications : un mois passe en quatre clics « +1 semaine » (≈ 2,5 s chacun) ; l'extrait
+   (sol + eau distillée, décanté) est réparti dans 4 tubes ; chaque réactif colore ou trouble son tube d'autant plus que l'élément
+   est abondant ; le colorimètre, étalonné pour le sol, affiche directement la teneur en g/kg.
+   Modèle de l'activité : a = (lombrics vivants / 10) × f(humidité) × f(obscurité) ; le brassage cumulé c croît de 0,45·a par
+   semaine, mélange = 1 − e^(−c) (≈ 0,8 après 4 semaines dans de bonnes conditions). Sol trop sec (< 15 %) ou gorgé d'eau
+   (> 90 %) : activité faible et lombrics qui meurent ; parois éclairées : les lombrics fuient la lumière et s'écartent des
+   parois (moins de galeries visibles, activité réduite). */
+const AQX = -0.15, AQZ = -0.2, AQW = 0.39, AQD = 0.1, AQ_H = 0.32, AQ_Y0 = 0.012, HMAX = 0.27; // aquarium d'observation (intérieur)
+const CW = 512, CH = Math.round((512 * HMAX) / AQW); // texture de la coupe vue à travers la vitre
+const LAY = { sable: { n: "sable", c: 0xd6a842 }, terreau: { n: "terreau", c: 0x22160d }, argile: { n: "argile", c: 0x8c5a38 }, litiere: { n: "litière enfouie", c: 0x5a3416 } };
+const JARS = ["sable", "terreau", "argile"];
+const EL = [ // teneurs (g/kg) : sol de surface (S), turricules (T), sol du fond de l'aquarium (D, plus pauvre) ; réactif et aspect
+  { k: "Ca", n: "calcium", ion: "Ca²⁺", S: 1.99, T: 2.79, D: 1.38, d: 2, col: 0xf4f4f0, turb: true, rg: "oxalate d'ammonium", look: "trouble blanc (oxalate de calcium)" },
+  { k: "P", n: "phosphore", ion: "PO₄³⁻", S: 0.009, T: 0.067, D: 0.005, d: 3, col: 0x2a5fd6, rg: "molybdate d'ammonium", look: "bleu (bleu de molybdène)" },
+  { k: "N", n: "azote", ion: "NH₄⁺", S: 0.004, T: 0.022, D: 0.002, d: 3, col: 0xe0841a, rg: "réactif de Nessler", look: "jaune-orangé" },
+  { k: "K", n: "potassium", ion: "K⁺", S: 0.032, T: 0.35, D: 0.02, d: 3, col: 0xf4f4f0, turb: true, rg: "tétraphénylborate de sodium", look: "trouble blanc" },
+];
+const BKP = { S: { x: 0.32, z: -0.04, t: "SOL", m: "sol prélevé" }, T: { x: 0.43, z: -0.04, t: "TURRICULES", m: "déjections" } };
+const BK_R = 0.029, RACK = { x: 0.62, z: -0.24 }, TUBE_R = 0.0072, TUBE_Y = 0.022, COLO = { x: 0.76, z: 0.05 };
+const tubeX = (i) => RACK.x + (i - 3.5) * 0.026; // tube i = 2 × élément + (0 : sol, 1 : turricules)
+const PIP_HOME = [0.37, 0.012, -0.13];
+const setCol = (mat, c) => { mat.color.copy(c instanceof THREE.Color ? c : new THREE.Color(c)).convertSRGBToLinear(); };
+const rgbOf = (hex) => [(hex >> 16) & 255, (hex >> 8) & 255, hex & 255];
+const cm = (m) => fmt(m * 100, 1);
+const fx = (v, d) => fmt(v, d);
+
+function soilMat(hex) { if (!T3.soil) T3.soil = canvasTex(256, 256, (x, w, h) => { x.fillStyle = "#e6e6e6"; x.fillRect(0, 0, w, h); for (let i = 0; i < 3200; i++) { const v = (170 + Math.random() * 85) | 0; x.fillStyle = `rgb(${v},${v},${v})`; x.beginPath(); x.arc(Math.random() * w, Math.random() * h, 0.6 + Math.random() * 1.5, 0, 7); x.fill(); } }, [3, 3]); return std(hex, 0.95, 0, { map: T3.soil }); }
+function leafShape() { if (T3.leafG) return T3.leafG; const s = new THREE.Shape(); s.moveTo(0, 0); s.bezierCurveTo(0.22, 0.45, 0.8, 0.4, 1, 0); s.bezierCurveTo(0.8, -0.4, 0.22, -0.45, 0, 0); const g = new THREE.ShapeGeometry(s, 8); g.rotateX(-Math.PI / 2); return (T3.leafG = g); }
+// lombric : tube ondulé rose-brun avec son clitellum (renflement plus clair)
+function wormMesh(parent, len, seed) {
+  const r = rng(seed), pts = []; for (let k = 0; k <= 10; k++) { const t = k / 10; pts.push(new THREE.Vector3(t * len - len / 2, 0.0028, Math.sin(t * 5 + r() * 6) * 0.012 * (0.5 + r()))); }
+  const w = new THREE.Group(); parent.add(w); const cur = new THREE.CatmullRomCurve3(pts);
+  mesh(new THREE.TubeGeometry(cur, 40, 0.0027, 10, false), std(0xb46a5c, 0.42), w); const cl = cur.getPoint(0.3); cyl(0.0034, 0.0034, 0.009, std(0xd29a8c, 0.45), w, cl.x, cl.y, cl.z, 12).rotation.z = Math.PI / 2;
+  sph(0.0026, std(0xa45a4c, 0.45), w, pts[0].x, pts[0].y, pts[0].z); sph(0.0024, std(0xa45a4c, 0.45), w, pts[10].x, pts[10].y, pts[10].z);
+  return w;
+}
+// flacon compte-gouttes (verre ambré, bouchon pipette + tétine) avec son étiquette
+function rDropper(parent, x, z, band, title, line) {
+  const d = new THREE.Group(); d.position.set(x, 0, z); parent.add(d);
+  lathe([[0, 0], [0.014, 0], [0.016, 0.003], [0.016, 0.05], [0.013, 0.056], [0.008, 0.06], [0.008, 0.066], [0, 0.066]], rDropper.amber || (rDropper.amber = new THREE.MeshPhysicalMaterial({ color: 0x7a3a0c, roughness: 0.08, transparent: true, opacity: 0.85, clearcoat: 1, clearcoatRoughness: 0.05 })), d, 0, 0, 0, 36).castShadow = false;
+  const dp = new THREE.Group(); d.add(dp); d.userData.dp = dp;
+  knurlCap(dp, 0.0095, 0.012, M.black, 0, 0.072, 0, 20); dp.userData.teat = lathe([[0, 0], [0.0052, 0], [0.006, 0.004], [0.0074, 0.012], [0.0077, 0.02], [0.0064, 0.027], [0.003, 0.031], [0, 0.032]], std(0x1c1c1e, 0.75), dp, 0, 0.077, 0, 24);
+  cyl(0.0026, 0.0013, 0.062, M.glass, dp, 0, 0.035, 0, 12).castShadow = false; cyl(0.0017, 0.0011, 0.02, liquidMat(0xeef3f8, 0.85), dp, 0, 0.016, 0, 10).castShadow = false;
+  mesh(new THREE.CylinderGeometry(0.0163, 0.0163, 0.03, 36, 1, true, -1.3, 2.6), std(0xffffff, 0.6, 0, { map: canvasTex(512, 200, (c, w, h) => { c.fillStyle = "#fff"; c.fillRect(0, 0, w, h); c.fillStyle = band; c.fillRect(0, 0, w, 40); c.fillStyle = "#111"; c.font = "bold 50px Arial"; c.textAlign = "center"; c.fillText(title, w / 2, 102); c.font = "28px Arial"; c.fillText(line, w / 2, 152); }) }), d, 0, 0.03, 0).castShadow = false;
+  return d;
+}
+function rng(seed) { let s = seed >>> 0; return () => (s = (s * 1664525 + 1013904223) >>> 0) / 4294967296; }
+
+function buildBench(g) {
+  M.rubber = std(0x15171a, 0.9); M.keyGrey = std(0x4b525b, 0.5); M.lcdBezel = std(0x111317, 0.35); M.brushed = std(0xcfd4d9, 0.32, 0.95);
+  const frame = std(0x22262b, 0.5);
+  // --- aquarium d'observation étroit (verre 4 mm, cadre noir), la coupe du sol se voit à travers la vitre
+  const A = new THREE.Group(); A.position.set(AQX, 0, AQZ); g.add(A); X.aq = A;
+  const W = AQW + 0.008, Dd = AQD + 0.008, gl = (w, h, d, x, y, z) => { const m = box(w, h, d, M.glass, A, x, y, z); m.castShadow = false; m.renderOrder = 3; return m; };
+  gl(W, AQ_H, 0.004, 0, AQ_H / 2 + 0.004, Dd / 2); gl(W, AQ_H, 0.004, 0, AQ_H / 2 + 0.004, -Dd / 2); gl(0.004, AQ_H, Dd, W / 2, AQ_H / 2 + 0.004, 0); gl(0.004, AQ_H, Dd, -W / 2, AQ_H / 2 + 0.004, 0);
+  rbox(W + 0.012, AQ_Y0, Dd + 0.012, 0.003, frame, A, 0, AQ_Y0 / 2, 0);
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) box(0.008, AQ_H, 0.008, frame, A, (sx * W) / 2, AQ_H / 2 + 0.006, (sz * Dd) / 2);
+  for (const sz of [-1, 1]) box(W + 0.008, 0.008, 0.008, frame, A, 0, AQ_H + 0.006, (sz * Dd) / 2);
+  for (const sx of [-1, 1]) box(0.008, 0.008, Dd + 0.008, frame, A, (sx * W) / 2, AQ_H + 0.006, 0);
+  // coupe du sol : texture dessinée d'après l'état (couches, mélange, galeries, lombrics), sur les 4 faces ; surface à part
+  const cv = document.createElement("canvas"); cv.width = CW; cv.height = CH; const tex = new THREE.CanvasTexture(cv); tex.encoding = THREE.sRGBEncoding; tex.anisotropy = 8;
+  X.soilTex = { cv, ctx: cv.getContext("2d"), tex, img: null, key: "" };
+  const sm = new THREE.MeshStandardMaterial({ map: tex, transparent: true, alphaTest: 0.5, roughness: 0.95 });
+  const face = (w, x, z, ry) => { const m = mesh(new THREE.PlaneGeometry(w, HMAX), sm, A, x, AQ_Y0 + HMAX / 2, z); m.rotation.y = ry; m.castShadow = false; return m; };
+  face(AQW, 0, AQD / 2 - 0.0006, 0); face(AQW, 0, -AQD / 2 + 0.0006, Math.PI); face(AQD, AQW / 2 - 0.0006, 0, Math.PI / 2); face(AQD, -AQW / 2 + 0.0006, 0, -Math.PI / 2);
+  X.soilTop = mesh(new THREE.PlaneGeometry(AQW - 0.001, AQD - 0.001), soilMat(0x3b2a1e), A, 0, AQ_Y0, 0); X.soilTop.rotation.x = -Math.PI / 2; X.soilTop.castShadow = false; X.soilTop.visible = false;
+  // litière en surface (feuilles mortes) et turricules (petits tas de boulettes)
+  const r = rng(7); X.leaves = []; const lc = [0x6b3d17, 0x8a4f1c, 0x4f3218, 0x9a6a25, 0x5a2a12];
+  for (let k = 0; k < 16; k++) { const m = mesh(leafShape(), std(lc[k % 5], 0.8, 0, { side: THREE.DoubleSide }), A, (r() - 0.5) * (AQW - 0.05), 0, (r() - 0.5) * (AQD - 0.03)); m.scale.setScalar(0.028 + r() * 0.014); m.rotation.y = r() * 6.28; m.rotation.x = (r() - 0.5) * 0.3; m.visible = false; m.castShadow = false; X.leaves.push(m); }
+  X.turr = []; const tm = std(0x3a2b1f, 0.95);
+  for (let k = 0; k < 16; k++) { const t = new THREE.Group(); t.position.set((r() - 0.5) * (AQW - 0.05), 0, (r() - 0.5) * (AQD - 0.035)); A.add(t); for (let q = 0; q < 7; q++) { const s = sph(0.0042 - (q % 4) * 0.0004, tm, t, (r() - 0.5) * 0.011, 0.0025 + Math.floor(q / 3) * 0.0042, (r() - 0.5) * 0.011); s.scale.set(1.25, 0.6, 0.9); s.rotation.y = r() * 3; } t.visible = false; X.turr.push(t); }
+  // lombrics posés en surface pendant l'introduction (ils s'enfoncent ensuite) ou qui remontent quand le sol est gorgé d'eau
+  X.wormsUp = []; for (let k = 0; k < 4; k++) { const w = wormMesh(A, 0.075, 30 + k); w.visible = false; X.wormsUp.push(w); }
+  // thermomètre adhésif sur la vitre
+  rbox(0.03, 0.07, 0.003, 0.003, std(0xf3f4f6, 0.4), A, AQW / 2 - 0.03, 0.26, Dd / 2 + 0.003); X.thLcd = lcd(0.024, 0.012, A, AQW / 2 - 0.03, 0.27, Dd / 2 + 0.0048, "#cfe0b0", "#101a10"); X.thLcd.set("19.0", "°C");
+  print(0.026, 0.01, A, AQW / 2 - 0.03, 0.248, Dd / 2 + 0.0048, [{ t: "18–20 °C", b: true, s: 0.8, c: "#1d2836" }]);
+  tool("aq", A, [0, AQ_H + 0.04, 0]);
+  // --- papier noir (deux feuilles, posées sur la paillasse ; on en recouvre les grandes parois)
+  X.paper = []; const pm = std(0x0e0f11, 0.9);
+  for (let k = 0; k < 2; k++) { const p = new THREE.Group(); p.position.set(-0.33, 0.0015 + k * 0.002, 0.18); p.rotation.x = -Math.PI / 2; g.add(p); box(W + 0.01, AQ_H - 0.01, 0.0012, pm, p, 0, 0, 0); if (!k) print(0.12, 0.03, p, 0, -0.1, 0.0008, [{ t: "PAPIER NOIR", b: true, s: 0.6, c: "#8a9099" }]); tool("paper", p, [0, 0, 0.02]); X.paper.push(p); }
+  // --- bocaux de sol à bouchon vissé
+  const jar = (name, x, z, title, lines, band, col) => {
+    const j = new THREE.Group(); j.position.set(x, 0, z); g.add(j);
+    lathe([[0, 0], [0.042, 0], [0.045, 0.004], [0.045, 0.1], [0.04, 0.106], [0.037, 0.108], [0.037, 0.12], [0, 0.12]], M.glass, j, 0, 0, 0, 48).castShadow = false;
+    cyl(0.0425, 0.0425, 0.082, soilMat(col), j, 0, 0.045, 0, 40).castShadow = false;
+    mesh(new THREE.CylinderGeometry(0.0452, 0.0452, 0.05, 48, 1, true, -1.25, 2.5), std(0xffffff, 0.6, 0, { map: labelTex(title, lines, band) }), j, 0, 0.05, 0).castShadow = false;
+    j.userData.cap = knurlCap(j, 0.04, 0.022, std(0x4a3a2a, 0.45), 0, 0.131, 0, 30);
+    tool(name, j, [0, 0.15, 0]); return j;
+  };
+  jar("sable", -0.64, -0.3, "Sable", ["grains 0,05 – 2 mm", "pauvre en matière organique"], "#b5832a", LAY.sable.c);
+  jar("terreau", -0.64, -0.16, "Terreau", ["riche en humus", "et débris végétaux"], "#3d2a1a", LAY.terreau.c);
+  jar("argile", -0.64, -0.02, "Argile", ["particules < 2 µm", "compacte"], "#7a5a42", LAY.argile.c);
+  // --- barquette de litière (feuilles mortes)
+  const tr = new THREE.Group(); tr.position.set(-0.66, 0, 0.15); g.add(tr);
+  lathe([[0, 0], [0.06, 0], [0.066, 0.003], [0.072, 0.03], [0.069, 0.03], [0.063, 0.004], [0, 0.004]], std(0x2f6b3a, 0.55), tr, 0, 0, 0, 32).scale.set(1.2, 1, 0.85);
+  for (let k = 0; k < 9; k++) { const m = mesh(leafShape(), std(lc[k % 5], 0.8, 0, { side: THREE.DoubleSide }), tr, (r() - 0.5) * 0.09, 0.012 + k * 0.0018, (r() - 0.5) * 0.06); m.scale.setScalar(0.032); m.rotation.y = r() * 6.28; m.castShadow = false; }
+  print(0.11, 0.016, tr, 0, 0.018, 0.064, [{ t: "litière : feuilles mortes", b: true, s: 0.55, c: "#e8ece6" }]);
+  tool("lit", tr, [0, 0.08, 0]);
+  // --- boîte de lombrics (terre humide, une dizaine de vers)
+  const bx = new THREE.Group(); bx.position.set(0.04, 0, 0.13); g.add(bx); X.box = bx;
+  rbox(0.13, 0.045, 0.09, 0.006, new THREE.MeshPhysicalMaterial({ color: 0xe9eef2, roughness: 0.35, transparent: true, opacity: 0.55, depthWrite: false }), bx, 0, 0.0225, 0).castShadow = false;
+  box(0.12, 0.02, 0.08, soilMat(0x3b2a1e), bx, 0, 0.012, 0).castShadow = false;
+  X.wormsBox = []; for (let k = 0; k < 4; k++) { const w = wormMesh(bx, 0.07, 10 + k); w.position.set(-0.03 + k * 0.02, 0.021, (k % 2 ? 1 : -1) * 0.012); w.rotation.y = k * 0.9; X.wormsBox.push(w); }
+  print(0.12, 0.018, bx, 0, 0.03, 0.0455, [{ t: "LOMBRICS · une dizaine", b: true, s: 0.6, c: "#1d2836" }], "#f6f3ea");
+  tool("box", bx, [0, 0.08, 0]);
+  // --- pulvérisateur d'eau
+  const sp = new THREE.Group(); sp.position.set(0.15, 0, -0.13); g.add(sp);
+  lathe([[0, 0], [0.03, 0], [0.033, 0.006], [0.033, 0.12], [0.026, 0.134], [0.014, 0.142], [0.014, 0.15], [0, 0.15]], new THREE.MeshPhysicalMaterial({ color: 0xf2f6fa, roughness: 0.4, transparent: true, opacity: 0.6, clearcoat: 0.3, depthWrite: false }), sp, 0, 0, 0, 40).castShadow = false;
+  cyl(0.03, 0.03, 0.1, liquidMat(0x9fc4ea, 0.6), sp, 0, 0.056, 0, 32).castShadow = false;
+  const hd = std(0x2a7fd4, 0.4); rbox(0.03, 0.035, 0.026, 0.006, hd, sp, 0.004, 0.168, 0); rbox(0.03, 0.012, 0.018, 0.004, hd, sp, 0.022, 0.18, 0); cyl(0.004, 0.004, 0.008, M.black, sp, 0.04, 0.18, 0, 12).rotation.z = Math.PI / 2;
+  const trg = rbox(0.008, 0.03, 0.012, 0.003, hd, sp, 0.02, 0.15, 0); trg.rotation.z = -0.3;
+  wrapLabel(0.0335, 0.045, sp, 0, 0.07, 0, [{ t: "EAU", b: true, s: 0.24 }, { t: "pulvérisateur", s: 0.15 }], "#dfeefb");
+  tool("spray", sp, [0, 0.21, 0]);
+  // --- calendrier de paillasse : semaine et jour de l'expérience
+  const cal = new THREE.Group(); cal.position.set(0.17, 0, 0.15); cal.rotation.x = -0.3; g.add(cal);
+  rbox(0.11, 0.05, 0.03, 0.007, std(0xf2f3f5, 0.4), cal, 0, 0.03, 0); rbox(0.094, 0.026, 0.003, 0.002, M.lcdBezel, cal, 0, 0.036, 0.0155);
+  X.calLcd = lcd(0.088, 0.02, cal, 0, 0.036, 0.0172, "#9fd0ff", "#0e1622");
+  key(cal, 0.06, 0.008, 0, 0.014, 0.0155, "☀ +1 SEMAINE", std(0xe0a12a, 0.45), "#1a1400");
+  tool("cal", cal, [0, 0.07, 0]);
+  // --- analyse : deux béchers d'eau distillée (sol, turricules), spatule, pipette Pasteur, portoir de 8 tubes, réactifs, colorimètre
+  X.bk = {};
+  for (const k of ["S", "T"]) {
+    const P = BKP[k], b = new THREE.Group(); b.position.set(P.x, 0, P.z); g.add(b);
+    const gb = lathe([[0, 0], [BK_R + 0.002, 0], [BK_R + 0.002, 0.075], [BK_R + 0.0035, 0.078], [BK_R + 0.001, 0.078], [BK_R, 0.074], [BK_R, 0.003], [0, 0.003]], M.glass, b, 0, 0, 0, 40); gb.castShadow = false; gb.renderOrder = 3;
+    mesh(new THREE.TorusGeometry(BK_R + 0.0018, 0.0012, 8, 40), M.glass, b, 0, 0.077, 0).rotation.x = Math.PI / 2;
+    const liq = cyl(BK_R - 0.0004, BK_R - 0.0004, 0.034, liquidMat(0x9fc4ea, 0.6), b, 0, 0.003 + 0.017, 0, 36); liq.castShadow = false; liq.renderOrder = 3.5;
+    const sed = cyl(BK_R - 0.002, BK_R - 0.002, 0.004, soilMat(0x3b2a1e), b, 0, 0.005, 0, 30); sed.visible = false; sed.castShadow = false;
+    print(0.044, 0.02, b, 0, 0.052, BK_R + 0.0025, [{ t: P.t, b: true, s: 0.42, c: "#1d2836" }, { t: "50 mL eau distillée", s: 0.28, c: "#1d2836" }], "#f4f4ef");
+    b.userData = { liq, sed }; X.bk[k] = b; tool("bk" + k, b, [0, 0.1, 0]);
+  }
+  const spa = new THREE.Group(); spa.position.set(0.25, 0.006, 0.06); g.add(spa);
+  const bowl = mesh(new THREE.SphereGeometry(0.011, 20, 10, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), M.steel, spa, 0, 0.005, 0); bowl.scale.set(1.25, 0.55, 1); bowl.material.side = THREE.DoubleSide;
+  rod([0.013, 0.005, 0], [0.17, 0.011, 0], 0.0026, M.steel, spa); rod([0.17, 0.011, 0], [0.195, 0.011, 0], 0.0042, std(0x1b1d21, 0.6), spa);
+  X.spLoad = sph(0.0095, soilMat(0x3b2a1e), spa, 0, 0.006, 0); X.spLoad.scale.set(1.2, 0.5, 0.9); X.spLoad.visible = false;
+  tool("spat", spa, [0.08, 0.03, 0]);
+  // pipette Pasteur dans son support
+  cyl(0.008, 0.009, 0.03, std(0x2b3036, 0.5), g, PIP_HOME[0], 0.015, PIP_HOME[2], 20);
+  const pip = new THREE.Group(); pip.position.set(PIP_HOME[0], PIP_HOME[1], PIP_HOME[2]); g.add(pip); X.pip = pip;
+  cyl(0.0035, 0.0012, 0.11, M.glass, pip, 0, 0.055, 0, 12).castShadow = false; lathe([[0, 0], [0.005, 0], [0.0062, 0.01], [0.0058, 0.022], [0, 0.026]], std(0xd23a2a, 0.6), pip, 0, 0.11, 0, 18);
+  X.pipLiq = cyl(0.0022, 0.001, 0.03, liquidMat(0xe8d79c, 0.85), pip, 0, 0.018, 0, 10); X.pipLiq.visible = false; X.pipLiq.castShadow = false;
+  // portoir et 8 tubes à essais : Ca²⁺, P, N, K × (sol, turricules)
+  const rk = new THREE.Group(); rk.position.set(RACK.x, 0, RACK.z); g.add(rk);
+  const rw = std(0xe8e2d4, 0.6); rbox(0.23, 0.008, 0.05, 0.003, rw, rk, 0, 0.004, 0); rbox(0.23, 0.008, 0.05, 0.003, rw, rk, 0, 0.06, 0);
+  for (const sx of [-1, 1]) rbox(0.008, 0.064, 0.05, 0.002, rw, rk, (sx * 0.23) / 2, 0.032, 0);
+  // carte blanche derrière les tubes : les couleurs se lisent mieux, et chaque colonne porte son nom (S = sol, T = turricules)
+  const card = mesh(new THREE.PlaneGeometry(0.23, 0.12), std(0xffffff, 0.7, 0, { map: canvasTex(920, 480, (x, w, h) => { x.fillStyle = "#fbfaf6"; x.fillRect(0, 0, w, h); x.textAlign = "center"; ["Ca²⁺", "P", "N", "K"].forEach((t, e) => { const cx = ((e * 2 + 1) / 8) * w; x.fillStyle = ["#5b6068", "#2a5fd6", "#d0700a", "#6a4a8a"][e]; x.font = "bold 58px Arial"; x.fillText(t, cx, 62); x.fillRect(cx - 82, 78, 164, 6); x.fillStyle = "#3a4250"; x.font = "bold 38px Arial"; x.fillText("S", cx - 52, 455); x.fillText("T", cx + 52, 455); }); x.fillStyle = "#6b7280"; x.font = "26px Arial"; x.fillText("S : extrait du sol · T : extrait des turricules", w / 2, 405); }) }), rk, 0, 0.066, -0.027); card.castShadow = false;
+  tool("rack", rk, [0, 0.16, 0]);
+  X.tube = [];
+  for (let i = 0; i < 8; i++) {
+    const t = new THREE.Group(); t.position.set(tubeX(i), TUBE_Y - 0.01, RACK.z); g.add(t);
+    const gt = lathe([[0, 0.002], [TUBE_R * 0.6, 0], [TUBE_R + 0.001, 0.006], [TUBE_R + 0.001, 0.1], [TUBE_R + 0.002, 0.102], [TUBE_R, 0.102], [TUBE_R - 0.0002, 0.006], [0, 0.003]], M.glass, t, 0, 0, 0, 24); gt.castShadow = false; gt.renderOrder = 3;
+    const lq = cyl(TUBE_R - 0.0006, TUBE_R - 0.0006, 1, liquidMat(0xe8d79c, 0.7), t, 0, 0.004, 0, 20); lq.visible = false; lq.castShadow = false; lq.renderOrder = 3.5;
+    t.userData = { liq: lq, home: t.position.clone() }; t.traverse((o) => (o.userData.tool = "rack")); t.userData.tool = "rack"; X.tube.push(t);
+  }
+  // flacons de réactifs (compte-gouttes)
+  EL.forEach((e, k) => { const d = rDropper(g, 0.395 + (k % 2) * 0.042, -0.31 + Math.floor(k / 2) * 0.05, ["#7a7f86", "#2a5fd6", "#e0841a", "#7a5a9a"][k], "Réactif " + e.k, e.rg); tool("r" + e.k, d, [0, 0.12, 0]); });
+  X.dropM = sph(0.0018, liquidMat(0xeef3f8, 0.9), g, 0, 0, 0); X.dropM.visible = false; X.dropM.castShadow = false;
+  // colorimètre (mode « sol », étalonné en g/kg)
+  const co = new THREE.Group(); co.position.set(COLO.x, 0, COLO.z); g.add(co);
+  rbox(0.13, 0.07, 0.12, 0.008, std(0xe6e9ed, 0.42), co, 0, 0.035, 0); feet(co, 0.1, 0.09);
+  cyl(0.011, 0.011, 0.002, std(0x0d0f12, 0.8), co, 0.03, 0.0705, -0.02, 24); mesh(new THREE.TorusGeometry(0.011, 0.002, 8, 24), std(0x2b3036, 0.5), co, 0.03, 0.071, -0.02).rotation.x = Math.PI / 2;
+  const fr = new THREE.Group(); fr.position.set(-0.012, 0.047, 0.061); fr.rotation.x = -0.35; co.add(fr);
+  rbox(0.085, 0.03, 0.004, 0.002, M.lcdBezel, fr, 0, 0, 0); X.coLcd = lcd(0.08, 0.024, fr, 0, 0, 0.0025, "#c7d6a8", "#1a2a1a"); X.coLcd.set("----", "");
+  print(0.09, 0.012, co, -0.01, 0.018, 0.0605, [{ t: "COLORIMÈTRE · analyse de sol", b: true, s: 0.62, c: "#3a4250" }]);
+  key(co, 0.022, 0.012, 0.05, 0.047, 0.0612, "MESURE", std(0x2a8a4a, 0.45)).rotation.x = -0.35;
+  tool("colo", co, [0, 0.11, 0]);
+  // --- bac à déchets
+  const bin = new THREE.Group(); bin.position.set(-0.82, 0, 0.15); g.add(bin);
+  lathe([[0, 0], [0.062, 0], [0.065, 0.004], [0.07, 0.115], [0.074, 0.118], [0.074, 0.122], [0.068, 0.122], [0.068, 0.118], [0.063, 0.006], [0, 0.006]], std(0x7d8791, 0.6), bin, 0, 0, 0, 40).castShadow = false;
+  mesh(new THREE.CylinderGeometry(0.0705, 0.067, 0.035, 40, 1, true, -1.2, 2.4), std(0xffffff, 0.6, 0, { map: canvasTex(512, 160, (x, w, h) => { x.fillStyle = "#f2b728"; x.fillRect(0, 0, w, h); x.fillStyle = "#111"; x.font = "bold 46px Arial"; x.textAlign = "center"; x.fillText("DÉCHETS", w / 2, 62); x.font = "bold 30px Arial"; x.fillText("sols, extraits, tubes", w / 2, 110); x.fillRect(0, 140, w, 8); }) }), bin, 0, 0.075, 0).castShadow = false;
+  tool("bin", bin, [0, 0.14, 0]);
+  // --- grains, gouttes et filets animés
+  X.fallP = new THREE.Group(); g.add(X.fallP); X.fallM = soilMat(0xd6bd88); for (let i = 0; i < 16; i++) { const p = sph(0.0026, X.fallM, X.fallP, 0, 0, 0); p.castShadow = false; } X.fallP.visible = false;
+  X.arcS = mesh(new THREE.BufferGeometry(), std(0xd6bd88, 0.95), g); X.arcS.visible = false; X.arcS.castShadow = false; X.arcS.renderOrder = 3;
+  // --- cahier de TP
+  const cah = rbox(0.21, 0.008, 0.27, 0.002, std(0x2f6b3a, 0.6), g, 0.52, 0.004, 0.21); cah.rotation.y = -0.08;
+  print(0.19, 0.25, cah, 0, 0.0045, 0, [{ t: "TP · Rôle de la faune du sol", b: true, s: 0.045, y: 0.08 }, { t: "A. Action mécanique des lombrics", b: true, s: 0.036, y: 0.17 }, { t: "couches de sol + litière, 10 lombrics", s: 0.032, y: 0.24 }, { t: "obscurité · humidité · 18–20 °C", s: 0.032, y: 0.31 }, { t: "B. Action chimique", b: true, s: 0.036, y: 0.42 }, { t: "sol / turricules, même profondeur", s: 0.032, y: 0.49 }, { t: "Ca²⁺ · P · N · K en g/kg", s: 0.032, y: 0.56 }, { t: "rapport = turricules / sol", s: 0.032, y: 0.65 }], "#f6f3ea", "#223").rotation.x = -Math.PI / 2;
+  glassEdges(g);
+}
+
+/* ------------------------------------------------------------ état physique */
+const ST = {};
+const hTot = () => ST.layers.reduce((a, l) => a + l.h, 0);
+const mixOf = () => 1 - Math.exp(-ST.cum);
+const litSurf = () => (ST.litTop ? Math.exp(-0.75 * ST.cum) : 0); // part de la litière encore visible en surface
+const galN = () => Math.min(9, Math.floor(ST.gal));
+const types = () => [...new Set(ST.layers.filter((l) => l.type !== "litiere" && l.h > 0.008).map((l) => l.type))];
+function activity() { if (ST.wIn <= 0) return 0; const h = ST.hum, fh = h < 0.15 ? 0.05 : h < 0.3 ? 0.45 : h <= 0.9 ? 1 : 0.3; return (ST.wIn / 10) * fh * (ST.dark ? 1 : 0.4); }
+const humTxt = () => (ST.hum < 0.15 ? "sec" : ST.hum < 0.3 ? "à peine humide" : ST.hum <= 0.9 ? "humide" : "gorgé d'eau");
+const weekTxt = () => "semaine " + fmt(Math.floor(ST.week + 1e-6), 0) + " · jour " + Math.round(ST.week * 7);
+const newTube = () => ({ ext: null, reag: false, dev: 0, meas: null });
+const conc = (src, e) => (src ? EL[e][src === "T" ? "T" : src === "deep" ? "D" : "S"] * ST.noise[src === "T" ? 1 : 0][e] : 0);
+const shownV = (e, j) => { const m = ST.tubes[e * 2 + j].meas; return m ? m.v : null; };
+function resetState() { /*fini-reset*/ ST.fini = false;
+  if (STEP) { STEP.skip.clear(); STEP.focus = null; }
+  if (X.aq) for (const k of JARS) { const cap = TOOLS[k].obj.userData.cap, u = cap.userData; if (u.off) { u.par.attach(cap); cap.position.copy(u.p); cap.rotation.copy(u.r); u.off = false; } }
+  if (X.aq) for (const r of EL) { const d = TOOLS["r" + r.k].obj, dp = d.userData.dp; if (dp.parent !== d) { d.attach(dp); dp.position.set(0, 0, 0); dp.rotation.set(0, 0, 0); } dp.userData.teat.scale.set(1, 1, 1); }
+  Object.assign(ST, { q: [], busy: false, ev: [], flags: {}, attempts: (ST.attempts || 0) + 1, demo: false, cur: null, guide: ST.guide == null ? true : ST.guide, zoomOn: ST.zoomOn == null ? true : ST.zoomOn,
+    layers: [], lit0: 0, litTop: false, litBuried: false, hum: 0, wIn: 0, dead: 0, death: 0, cum: 0, gal: 0, turr: 0, week: 0, weekRun: null, dark: false, lightW: 0, dryW: 0, wetW: 0, burrow: null,
+    sFlow: null, fall: null, mist: null, bk: { S: { smp: null, t: 9 }, T: { smp: null, t: 9 } }, tubes: Array.from({ length: 8 }, newTube), drop: null, colTxt: "", calTxt: "",
+    ansA: {}, missA: 0, ansR: {}, missR: 0, ansC: null, missC: 0, taken: new Set(), noise: [EL.map(() => 1 + (Math.random() - 0.5) * 0.04), EL.map(() => 1 + (Math.random() - 0.5) * 0.04)], camNext: null });
+  if (!X.aq) return;
+  for (const k in TOOLS) { const t = TOOLS[k]; if (!t || !t.home) continue; t.obj.position.copy(t.home); t.obj.rotation.copy(t.homeRot); t.obj.scale.set(1, 1, 1); }
+  X.paper.forEach((p, k) => { p.position.set(-0.33, 0.0015 + k * 0.002, 0.18); p.rotation.set(-Math.PI / 2, 0, 0); });
+  X.wormsBox.forEach((w) => (w.visible = true)); X.wormsUp.forEach((w) => (w.visible = false));
+  X.tube.forEach((t) => { t.position.copy(t.userData.home); t.rotation.set(0, 0, 0); t.userData.liq.visible = false; });
+  X.pip.position.set(...PIP_HOME); X.pip.rotation.set(0, 0, 0); X.pipLiq.visible = false; X.spLoad.visible = false; X.fallP.visible = false; X.arcS.visible = false; X.dropM.visible = false;
+  for (const k of ["S", "T"]) { const u = X.bk[k].userData; u.sed.visible = false; setCol(u.liq.material, 0x9fc4ea); u.liq.material.opacity = 0.6; }
+  X.coLcd.set("----", ""); if (L.ctl) L.ctl.enabled = true;
+  X.soilTex.key = ""; drawSoil();
+  $("#events").innerHTML = ""; renderTable();
+}
+
+/* ------------------------------------------------------------ explications */
+const WHY = {
+  layers: `<p>On remplit l'aquarium de <b>couches successives de sols différents</b> (sable clair, terreau noir, argile brune). Des couches bien distinctes au départ permettent de <b>voir</b> ensuite si les lombrics les mélangent. Grande quantité : on verse au bocal en maintenant le bouton, la couche monte à travers la vitre (≈ 4 cm par couche).</p>`,
+  oneType: `<p>Avec une seule nature de sol, le mélange ne se voit pas : il faut au moins deux couches de couleurs différentes.</p>`,
+  litter: `<p>La <b>litière</b> (feuilles mortes) est posée <b>en surface</b>, comme dans la nature. Les lombrics viennent la chercher la nuit et l'entraînent dans leurs galeries : c'est la preuve qu'ils enfouissent la matière organique.</p>`,
+  litBuried: `<p>La litière a été recouverte par une couche de sol : elle ne se voit plus en surface, on ne pourra pas observer son enfouissement par les lombrics.</p>`,
+  water: `<p>Les lombrics respirent par leur peau, qui doit rester humide : on <b>arrose régulièrement</b> (pulvérisateur) pour maintenir l'humidité du sol. Trop d'eau chasse l'air des pores : les lombrics s'asphyxient et remontent en surface.</p>`,
+  dry: `<p>Sol trop sec : la peau des lombrics se dessèche, ils ne peuvent plus respirer ; ils s'immobilisent en boule au fond puis meurent. Le mélange s'arrête.</p>`,
+  flood: `<p>Sol gorgé d'eau : l'eau a chassé l'air des pores, les lombrics manquent de dioxygène, remontent en surface et certains meurent. On arrose par pulvérisations, sans noyer le sol.</p>`,
+  worms: `<p>On introduit <b>une dizaine de lombrics</b> (vers de terre) en surface. Ils s'enfoncent aussitôt : ils fuient la lumière et la sécheresse.</p>`,
+  dark: `<p>Les lombrics <b>fuient la lumière</b> (ils vivent dans l'obscurité du sol). Le <b>papier noir</b> sur les parois recrée cette obscurité : ils creusent normalement, y compris contre la vitre, où l'on pourra voir leurs galeries. On le retire seulement pour observer.</p>`,
+  light: `<p>Parois laissées à la lumière : les lombrics s'écartent des vitres et travaillent moins. Le brassage est plus lent et on voit moins de galeries contre la vitre.</p>`,
+  week: `<p>Le temps passe en <b>accéléré</b> : une semaine en ≈ 2,5 s. Pendant ce temps, les lombrics creusent, avalent le sol et la litière, et rejettent leurs déjections. L'humidité baisse : <b>arrose avant chaque semaine</b>. Le milieu reste aéré et à 18–20 °C (thermomètre sur la vitre).</p>`,
+  observe: `<p>Au bout d'environ un mois, on retire le papier noir et on observe à travers la vitre : les <b>couches</b> sont-elles encore nettes ? La <b>litière</b> est-elle encore en surface ? Voit-on des <b>galeries</b> ? Et en surface, des <b>turricules</b> (petits tas de boulettes de terre) ?</p>`,
+  early: `<p>Observation trop tôt : les lombrics n'ont pas encore eu le temps de brasser le sol. Il faut environ un mois.</p>`,
+  mechanic: `<p><b>Action mécanique des lombrics</b> : en creusant leurs galeries et en avalant la terre, ils <b>brassent le sol</b> (les couches se mélangent), <b>enfouissent la litière</b> (la matière organique descend dans le sol) et <b>aèrent</b> le sol : les galeries laissent circuler l'air et l'eau (drainage) et les racines s'y enfoncent facilement.</p>`,
+  eat: `<p>Le lombric <b>avale la terre</b> devant lui avec les débris de feuilles (bouche), la <b>broie</b> dans son gésier, la <b>digère</b> dans son intestin (la matière organique est décomposée, les éléments minéraux libérés), y ajoute du mucus et du calcium (glandes calcifères), puis la <b>rejette par l'anus</b> en surface : ce sont les <b>turricules</b>.</p>`,
+  sample: `<p>On prélève à la spatule des <b>turricules</b> fraîchement rejetés en surface, et du <b>sol à la même profondeur</b> (en surface, entre les turricules). On compare ainsi deux échantillons qui ne diffèrent que par le passage dans le tube digestif du lombric.</p>`,
+  deep: `<p>Sol prélevé au fond de l'aquarium : ce n'est pas la même profondeur que les turricules. Le sol profond est plus pauvre (moins de matière organique) : l'écart avec les turricules est exagéré, la comparaison n'est pas valable. Le document compare le sol et les déjections <b>à la même profondeur</b>.</p>`,
+  extract: `<p>L'échantillon est mélangé à 50 mL d'eau distillée puis laissé décanter : les éléments minéraux solubles passent dans l'eau (<b>extrait</b>). La pipette Pasteur répartit l'extrait limpide dans 4 tubes, un par élément à rechercher.</p>`,
+  reag: `<p>Chaque réactif révèle un élément : <b>Ca²⁺</b> + oxalate d'ammonium → trouble blanc d'oxalate de calcium ; <b>phosphates</b> + molybdate d'ammonium → bleu ; <b>ammonium (azote)</b> + réactif de Nessler → jaune-orangé ; <b>K⁺</b> + tétraphénylborate → trouble blanc. Plus l'élément est abondant, plus la coloration ou le trouble est intense. On met le même nombre de gouttes dans le tube « sol » et dans le tube « turricules ».</p>`,
+  wait: `<p>La coloration se développe en quelques instants (accéléré) : on attend qu'elle soit <b>stable</b> avant de mesurer, sinon la teneur est sous-estimée.</p>`,
+  tooEarly: `<p>Mesure faite avant la fin du développement de la coloration : la teneur lue est trop faible.</p>`,
+  colo: `<p>Le <b>colorimètre</b> mesure la lumière absorbée ou diffusée par le tube. Il est étalonné pour l'analyse de sol : il affiche directement la teneur en <b>g d'élément par kg de sol</b>. Les deux valeurs s'inscrivent dans le tableau.</p>`,
+  ratio: `<p>Pour comparer, on calcule combien de fois les turricules sont plus riches que le sol :</p><p class="eq">rapport = teneur dans les turricules ÷ teneur dans le sol</p><p>Écris-le avec 2 chiffres après la virgule (ex. 2,79 ÷ 1,99 = 1,40).</p>`,
+  chemic: `<p><b>Action chimique des lombrics</b> : leurs déjections (turricules) sont <b>plus riches en éléments minéraux</b> que le sol voisin (Ca²⁺ ≈ 1,4 fois, N ≈ 5 fois, P ≈ 7 fois, K ≈ 11 fois). En digérant la matière organique, les lombrics libèrent des ions minéraux directement utilisables par les plantes ; leur mucus et leur calcium collent l'argile et l'humus en agrégats (complexe argilo-humique) : le sol devient plus fertile et mieux structuré.</p>`,
+  advantages: `<p><b>Les avantages des lombrics pour le sol</b> : ils mélangent les couches et enfouissent la matière organique (brassage) ; leurs galeries aèrent le sol et facilitent la circulation de l'eau et des racines ; leurs turricules enrichissent la surface en éléments minéraux (Ca, P, N, K) et améliorent la structure du sol. Ce sont des <b>agents de la fertilité du sol</b>.</p>`,
+  bin: `<p>Les sols, extraits et tubes usagés vont au bac à déchets ; les lombrics sont relâchés au jardin après l'expérience.</p>`,
+};
+const TOOL_HELP = [
+  ["Aquarium d'observation", "Aquarium étroit : on y verse des couches de sols différents, la litière en surface, puis les lombrics. Menu : observer de face ou la surface, zoom sur un lombric, vider."],
+  ["Bocaux de sol", "Sable, terreau, argile : « Verser une couche » en maintenant le bouton (la couche monte à travers la vitre)."],
+  ["Litière", "Feuilles mortes déposées en surface."],
+  ["Lombrics", "Une dizaine de vers de terre, introduits en surface."],
+  ["Pulvérisateur", "Maintient l'humidité du sol. Arroser abondamment noie le sol (piège)."],
+  ["Papier noir", "Recouvre les grandes parois (obscurité) ; on le retire pour observer."],
+  ["Calendrier", "+1 semaine (accéléré) ; arrose avant chaque semaine."],
+  ["Spatule", "Prélève des turricules ou du sol (surface ou fond) dans un bécher d'eau distillée ; l'extrait est réparti dans les tubes."],
+  ["Réactifs", "Ca²⁺ (oxalate), P (molybdate), N (Nessler), K (tétraphénylborate) : 3 gouttes dans le tube sol et 3 dans le tube turricules."],
+  ["Colorimètre", "Mesure les deux tubes d'un élément et affiche la teneur en g/kg ; les valeurs vont dans le tableau."],
+  ["Bac à déchets", "Vider un bécher, les tubes ou l'aquarium."],
+];
+function log(kind, txt, why) { const w = why ? WHY[why] : ""; ST.ev.push({ kind, txt }); const d = document.createElement("div"); d.className = "ev " + kind; d.innerHTML = `<span class="t">S${Math.floor(ST.week + 1e-6)} J${Math.round(ST.week * 7)}</span>${txt}${w ? '<button type="button">Pourquoi ?</button><div class="why">' + w + "</div>" : ""}`; if (w) d.querySelector("button").onclick = () => d.classList.toggle("open"); $("#events").prepend(d); }
+function once(flag, kind, txt, why) { if (ST.flags[flag]) return; ST.flags[flag] = true; log(kind, txt, why); }
+function toast(msg, kind = "") { const t = $("#toast"); t.textContent = msg; t.className = "show " + kind; clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 3400); }
+
+/* ------------------------------------------------------------ caméra, guide */
+const CAMS = { wide: { p: [-0.05, 0.85, 1.15], t: [-0.05, 0.2, -0.12] }, aq: { p: [AQX, 0.3, 0.42], t: [AQX, 0.15, AQZ] }, aqTop: { p: [AQX, 0.62, 0.2], t: [AQX, 0.22, AQZ] }, aqP: { p: [AQX - 0.12, 0.42, 0.5], t: [AQX - 0.06, 0.24, AQZ] },
+  jars: { p: [-0.48, 0.46, 0.46], t: [-0.42, 0.14, -0.14] }, box: { p: [0.0, 0.4, 0.5], t: [-0.04, 0.12, -0.04] }, cal: { p: [0.17, 0.36, 0.5], t: [0.17, 0.05, 0.14] }, bin: { p: [-0.6, 0.48, 0.62], t: [-0.78, 0.1, 0.14] },
+  ana: { p: [0.5, 0.42, 0.42], t: [0.5, 0.08, -0.1] }, bks: { p: [0.37, 0.3, 0.28], t: [0.37, 0.05, -0.04] }, rack: { p: [0.62, 0.24, 0.16], t: [0.62, 0.07, -0.22] }, colo: { p: [0.72, 0.3, 0.38], t: [0.74, 0.07, 0.03] } };
+let camFocus = null, camBusy = false; // dernière vue voulue (action ou guide), rétablie à la fin de chaque geste
+const look = (k) => { camFocus = k; const c = CAMS[k]; focusCam(typeof c === "function" ? c() : c); };
+/*legende*/ /* légende d'une vue d'observation : chaque objet ou résultat est nommé (étiquette + trait de rappel), sans donner la réponse attendue dans le tableau */
+const RESVIEW = {}; // expérience finie (bilan vu) : clic sur un objet → vue de son résultat, légendée (RESVIEW[outil] = clé de vue)
+const LEGS = {}; // LEGS[clé de vue] = [{ at: () => [x, y, z] (repère de la paillasse), t: "nom", m: "précision", c: "#couleur", on: () => vrai si affichée }]
+/*leg-btn*/ /* bouton « Masquer / Afficher la légende » (demande de l'enseignant, nov. 2026) : visible dès qu'une légende existe pour la vue ; le choix est gardé d'une manip à l'autre */
+function legBtn(avail) {
+  let b = document.getElementById("legBtn");
+  if (!b) {
+    try { window.__legOff = localStorage.getItem("labLegOff") === "1"; } catch (e) {}
+    const st = document.createElement("style"); st.textContent = '#legBtn{position:fixed;left:50%;top:100px;transform:translateX(-50%);z-index:6;font:700 13px "Atkinson Hyperlegible",Arial,sans-serif;padding:6px 14px;border-radius:999px;border:1px solid #c9d2dc;background:#fff;color:#1d2836;box-shadow:0 2px 8px rgba(0,0,0,.25);cursor:pointer}#legBtn:hover{background:#eef3f8}#legBtn.off{top:62px}#legBtn[hidden]{display:none}@media (max-width:640px){#legBtn,#legBtn.off{top:auto;bottom:86px}}'; document.head.appendChild(st);
+    b = document.createElement("button"); b.id = "legBtn"; b.type = "button"; document.body.appendChild(b);
+    b.onclick = (e) => { e.stopPropagation(); window.__legOff = !window.__legOff; try { localStorage.setItem("labLegOff", window.__legOff ? "1" : "0"); } catch (er) {} legBtn(true); };
+  }
+  if (b.hidden !== !avail) b.hidden = !avail;
+  const t = window.__legOff ? "🏷 Afficher la légende" : "🏷 Masquer la légende"; if (b.textContent !== t) { b.textContent = t; b.classList.toggle("off", !!window.__legOff); }
+}
+function legendTick() {
+  let el = document.getElementById("labLeg");
+  if (!el) {
+    el = document.createElement("div"); el.id = "labLeg"; el.innerHTML = '<svg></svg><div class="ttl">Légende</div><div class="tags"></div>'; document.body.appendChild(el);
+    const st = document.createElement("style"); st.textContent = '#labLeg{position:fixed;inset:0;pointer-events:none;z-index:4}#labLeg[hidden]{display:none}#labLeg svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}#labLeg .tag{position:absolute;transform:translateY(-50%);background:rgba(255,255,255,.96);color:#18202b;font:700 13px/1.25 "Atkinson Hyperlegible",Arial,sans-serif;padding:5px 9px;border-radius:7px;border-left:5px solid var(--c);box-shadow:0 2px 10px rgba(0,0,0,.28);max-width:min(280px,38vw)}#labLeg .tag small{display:block;font-weight:400;font-size:12px;color:#3c4652}#labLeg .tag.L{transform:translate(-100%,-50%);border-left:0;border-right:5px solid var(--c);text-align:right}#labLeg .ttl{position:absolute;left:50%;top:62px;transform:translateX(-50%);background:#1d2836;color:#fff;font:700 14px "Atkinson Hyperlegible",Arial,sans-serif;padding:6px 14px;border-radius:999px;box-shadow:0 2px 10px rgba(0,0,0,.3)}@media (max-width:640px){#labLeg .tag{font-size:11px;padding:3px 6px}#labLeg .tag small{font-size:10px}}';
+    document.head.appendChild(st);
+  }
+  const list = (LEGS[camFocus] || []).filter((i) => (!i.on || i.on()) && (!i.fin || ST.fini)), ov = document.getElementById("overlay"); // fin : résultat, montré seulement quand l'expérience est finie
+  const can = list.length > 0 && !L.tw && !ST.q.length && !(ov && ov.hidden === false); legBtn(can); const show = can && !window.__legOff;
+  el.hidden = !show; if (!show) return; el.querySelector(".ttl").textContent = list.some((i) => i.fin) ? "Résultat de l'expérience" : "Légende";
+  const W = window.innerWidth, H = window.innerHeight, P = (a) => { const v = L.g.localToWorld(new THREE.Vector3(a[0], a[1], a[2])).project(L.cam); return [((v.x + 1) / 2) * W, ((1 - v.y) / 2) * H, v.z]; };
+  const val = (v) => (typeof v === "function" ? v() : v), it = list.map((i) => { const a = P(i.at()); return { ...i, t: val(i.t), m: val(i.m), a, s: a[0] < W / 2 ? "L" : "R" }; }).filter((i) => i.a[2] < 1);
+  for (const side of ["L", "R"]) { const g = it.filter((i) => i.s === side).sort((a, b) => a.a[1] - b.a[1]); g.forEach((i, k) => { i.x = side === "L" ? Math.min(...g.map((j) => j.a[0])) - 60 : Math.max(...g.map((j) => j.a[0])) + 60; i.y = i.a[1]; if (k && i.y - g[k - 1].y < 46) i.y = g[k - 1].y + 46; }); }
+  const tags = el.querySelector(".tags"); tags.innerHTML = it.map((i) => `<div class="tag ${i.s}" style="--c:${i.c || "#5d6670"};left:${i.x}px;top:${i.y}px">${i.t}${i.m ? "<small>" + i.m + "</small>" : ""}</div>`).join("");
+  [...tags.children].forEach((t, k) => { const i = it[k], w = t.offsetWidth; if (i.s === "L" && i.x - w < 8) i.x = w + 8; if (i.s === "R" && i.x + w > W - 8) i.x = W - 8 - w; t.style.left = i.x + "px"; });
+  el.querySelector("svg").innerHTML = it.map((i) => `<line x1="${i.a[0]}" y1="${i.a[1]}" x2="${i.x}" y2="${i.y}" stroke="${i.c || "#5d6670"}" stroke-width="2"/><circle cx="${i.a[0]}" cy="${i.a[1]}" r="4" fill="none" stroke="${i.c || "#5d6670"}" stroke-width="2"/>`).join("");
+}
+/*camera-produit*/ /* produit utilisé : la caméra montre d'abord son étiquette (nom lisible), puis le geste en entier (flacon + récipient) */
+const CAM_FIX = new Set(["@lbl", "@pour", "@obs"]); // vues fixes : la caméra ne suit pas l'objet qui bouge
+function camLabel(obj, side = null, up = 0.55) { // side null : on essaie plusieurs côtés et on garde le premier d'où l'étiquette n'est pas cachée
+  const b = new THREE.Box3().setFromObject(obj), c = b.getCenter(new THREE.Vector3()), sz = b.getSize(new THREE.Vector3()); L.g.worldToLocal(c);
+  const d = Math.max(sz.y, sz.x) * 1.5 + 0.11; c.y -= sz.y * 0.1;
+  const at = (s) => ({ p: [c.x + Math.sin(s) * d * 0.9, c.y + d * up, c.z + Math.cos(s) * d * 0.9], t: [c.x, c.y, c.z] });
+  if (side != null) return at(side);
+  const mine = new Set(); obj.traverse((o) => mine.add(o)); const rc = new THREE.Raycaster(), W = (a) => L.g.localToWorld(new THREE.Vector3(a[0], a[1], a[2]));
+  for (const s of [0, 0.55, -0.55, 0.95, -0.95, 1.35, -1.35]) {
+    const k = at(s), p = W(k.p), t = W(k.t), dir = t.clone().sub(p), dist = dir.length(); rc.set(p, dir.normalize()); rc.far = dist - 0.01;
+    const hit = rc.intersectObjects(L.g.children, true).find((h) => { const o = h.object, m = o.material; if (mine.has(o) || !o.visible || !m || m.visible === false) return false; let q = o; while (q) { if (!q.visible) return false; q = q.parent; } return !(m.transparent && m.opacity < 0.5); });
+    if (!hit) return k;
+  }
+  return at(0);
+}
+const camPour = (N, k = 1) => ({ p: [N.x - 0.01, N.y + 0.12 - 0.07 * (k - 1), N.z + 0.44 * k], t: [N.x - 0.045, N.y - 0.03 - 0.07 * (k - 1), N.z] }); // N : point d'arrivée du liquide (bouche du récipient)
+function showProduct(obj, after, trigger, side, up, wait = 0.9) { CAMS["@lbl"] = camLabel(obj, side, up); look("@lbl"); if (wait > 0) ST.q.push({ obj: new THREE.Object3D(), to: [0, 0, 0], dur: wait, up: 0 }); ST.camNext = after ? { obj: trigger || obj, cam: after } : null; }
+function lookAt(key, cam) { CAMS[key] = cam; look(key); }
+const isBusy = () => ST.busy || ST.q.length > 0 || !!ST.weekRun || !!ST.sFlow;
+const busyToast = () => { toast(ST.weekRun ? "Attends la fin de la semaine." : "Attends la fin du geste."); return true; };
+/* ------------------------------------------------------------ étapes libres (demande de l'enseignant, nov. 2026)
+   L'élève peut passer une étape ou changer l'ordre. Le guide d'origine (suggestAll) est parcouru dans l'ordre conseillé :
+   la première étape qui n'est pas passée est proposée, les étapes passées sont franchies. « Passer l'étape » retire du
+   guide tout ce geste (ex. papier pH : la goutte et la lecture, pour tous les béchers) ; « Rétablir » le fait revenir.
+   Quand l'élève agit sur l'objet d'une étape plus loin (ex. le pH-mètre avant le papier pH), le guide le suit : il propose
+   les étapes de cet objet tant qu'il en reste, puis revient à l'ordre conseillé sans déplacer la caméra. La dernière étape
+   (bilan, Évaluer) ne se passe pas. */
+var STEP = { list: null, first: false, found: null, skip: new Set(), focus: null };
+const STEP_STOP = {}, stepKey = (g) => g.k + "|" + g.on, skipKey = (g) => g.why || g.k, stepSkipped = (g) => STEP.skip.has(skipKey(g));
+function __step(g) {
+  if (!g) return;
+  if (STEP.first) { if (!stepSkipped(g)) { STEP.found = g; throw STEP_STOP; } return; }
+  if (STEP.list && !STEP.list.some((h) => stepKey(h) === stepKey(g))) STEP.list.push(g);
+}
+function allSteps() { STEP.list = []; try { suggestAll(); } catch (e) { console.error(e); } const l = STEP.list; STEP.list = null; return l; }
+function firstStep() { STEP.first = true; STEP.found = null; try { suggestAll(); } catch (e) { if (e !== STEP_STOP) console.error(e); } STEP.first = false; return STEP.found; }
+function suggest() {
+  const all = allSteps(), last = all[all.length - 1]; let g = firstStep() || last;
+  if (STEP.focus) { const f = all.slice(0, -1).find((s) => s.on === STEP.focus && !stepSkipped(s)); if (f) g = f; else { STEP.focus = null; if (g) g = Object.assign({}, g, { cam: null }); } }
+  const u = $("#btnUnskip"); if (u) { u.hidden = !STEP.skip.size; u.textContent = "↺ Rétablir les étapes passées (" + STEP.skip.size + ")"; }
+  const sk = $("#btnSkip"); if (sk) sk.hidden = !g || !last || stepKey(g) === stepKey(last);
+  if (g && STEP.quiet > performance.now()) g = Object.assign({}, g, { cam: null }); // juste après un clic, la caméra reste sur l'objet cliqué
+  return g || { on: null, k: "Libre", t: "Manipule librement, puis clique sur Évaluer.", why: "" };
+}
+function stepFollow(name) {
+  if (!name || ST.demo) return; const g = firstStep(); if (g && g.on === name) { STEP.focus = null; return; }
+  STEP.focus = allSteps().slice(0, -1).some((s) => s.on === name && !stepSkipped(s)) ? name : null;
+}
+function stepButtons() {
+  const sk = $("#btnSkip"), u = $("#btnUnskip"); if (!sk || sk.dataset.on) return; sk.dataset.on = "1";
+  sk.onclick = () => { const g = ST.cur; if (!g || !g.on) return; STEP.skip.add(skipKey(g)); if (STEP.focus === g.on) STEP.focus = null; log("info", "Étape passée : « " + g.k + " ». Le guide ne la propose plus (« Rétablir » la fait revenir).", typeof WHY !== "undefined" && WHY[g.why] ? g.why : undefined); toast("Étape passée : " + g.k + ". Tu restes libre de la faire quand tu veux.", ""); };
+  u.onclick = () => { STEP.skip.clear(); STEP.focus = null; toast("Le guide reprend toutes les étapes.", ""); };
+}
+/* ------------------------------------------------------------ cadrages automatiques (demande de l'enseignant, nov. 2026)
+   Clic sur un instrument : la caméra cadre l'expérience où il sert (la vue de l'étape du guide qui l'utilise, sinon l'objet
+   lui-même, vu de la même direction). Mesure lancée : la caméra se place face à l'écran de l'appareil (CAMS.scr). */
+function frameOf(obj, k = 2.6) {
+  const b = new THREE.Box3(), bb = new THREE.Box3(); obj.updateWorldMatrix(true, true);
+  obj.traverseVisible((o) => { if (!o.isMesh || !o.geometry) return; if (!o.geometry.boundingBox) o.geometry.computeBoundingBox(); b.union(bb.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld)); });
+  if (b.isEmpty()) { obj.getWorldPosition(b.min); b.max.copy(b.min); }
+  const c = b.getCenter(new THREE.Vector3()), s = b.getSize(new THREE.Vector3()), d = clamp(Math.max(s.x, s.y, s.z) * k, 0.22, 0.8);
+  const dir = L.cam.position.clone().sub(L.ctl.target); dir.y = Math.max(dir.y, 0.5 * Math.hypot(dir.x, dir.z)); dir.normalize();
+  const p = c.clone().addScaledVector(dir, d); return { p: [p.x, p.y - BENCH, p.z], t: [c.x, c.y - BENCH, c.z] };
+}
+function frameScreen(m, d = 0.36) {
+  m.updateWorldMatrix(true, false); const c = m.getWorldPosition(new THREE.Vector3()), n = new THREE.Vector3(0, 0, 1).transformDirection(m.matrixWorld);
+  const p = c.clone().addScaledVector(n.multiplyScalar(0.9).add(new THREE.Vector3(0, 0.42, 0)).normalize(), d); return { p: [p.x, p.y - BENCH, p.z], t: [c.x, c.y - BENCH, c.z] };
+}
+function cadrages() { const m = X.lcdC || X.lcdPH; if (m) CAMS.scr = frameScreen(m); }
+function focusTool(name) {
+  /*resultat*/ if (ST.fini && typeof RESVIEW !== "undefined" && RESVIEW[name] && !ST.demo) { STEP.quiet = performance.now() + 4000; look(RESVIEW[name]); return; } // expérience finie : résultat légendé
+  if (typeof resolveName === "function") name = resolveName(name);
+  if (!name || ST.demo || !TOOLS[name]) return;
+  STEP.quiet = performance.now() + 1500; const s = allSteps().slice(0, -1).find((g) => g.on === name && g.cam && CAMS[g.cam]); if (s) { look(s.cam); return; }
+  CAMS.__obj = frameOf(TOOLS[name].obj); look("__obj");
+}
+function suggestAll() {
+  const hT = hTot(), ty = types(), V = { v: hT > 0 ? "sol : " + cm(hT) + " cm" : "" };
+  // A1) couches de sols différents (au moins 3 couches, deux natures)
+  if (!ST.wIn && ST.layers.filter((l) => l.type !== "litiere").length < 4 && hT < 0.2) {
+    const next = JARS.find((t) => !ty.includes(t)) || ["sable", "terreau", "argile", "terreau"][ST.layers.length % 4];
+    __step({ on: next, k: "Couches de sol", t: "Verse une couche de " + LAY[next].n + " (clique sur le bocal et maintiens le bouton ≈ 3 s, ≈ 4 cm). Alterne les sols : sable, terreau, argile…", why: "layers", cam: "aq", ...V });
+  }
+  if (!ST.lit0) __step({ on: "lit", k: "Litière", t: "Dépose la litière (feuilles mortes) en surface.", why: "litter", cam: "aq" });
+  if (!ST.wIn && !ST.dead && ST.hum < 0.4) __step({ on: "spray", k: "Humidité", t: "Humidifie le sol au pulvérisateur avant d'introduire les lombrics.", why: "water", cam: "aqTop", v: "sol " + humTxt() });
+  if (!ST.wIn && !ST.dead) __step({ on: "box", k: "Lombrics", t: "Introduis une dizaine de lombrics en surface.", why: "worms", cam: "aqTop" });
+  // A2) obscurité, arrosage, un mois
+  if (ST.week < 3.99) {
+    if (!ST.dark) __step({ on: "paper", k: "Obscurité", t: "Recouvre les parois de l'aquarium de papier noir : les lombrics fuient la lumière.", why: "dark", cam: "aq" });
+    if (ST.hum < 0.45) __step({ on: "spray", k: "Arrosage", t: "Arrose le sol (pulvérisateur) pour le garder humide.", why: "water", cam: "aqTop", v: "sol " + humTxt() });
+    __step({ on: "cal", k: "Semaine " + (Math.floor(ST.week) + 1), t: "Laisse passer une semaine (calendrier). Avant chaque semaine, arrose. Il faut environ un mois (4 semaines).", why: "week", cam: "aqTop", v: weekTxt() });
+  }
+  // A3) observer
+  if (ST.dark) __step({ on: "paper", k: "Observer", t: "Un mois est passé : retire le papier noir pour observer l'aquarium à travers la vitre.", why: "observe", cam: "aq" });
+  for (const [f, q] of [["couches", "les couches de sol"], ["litiere", "la litière"], ["galeries", "les galeries"]]) if (!ST.ansA[f]) { __step({ on: "aq", k: "Observation", t: "Dans le tableau Mesures (partie A), indique ce que tu vois : " + q + ". Le zoom 🔍 montre un lombric au travail.", why: "observe", cam: "aq" }); break; }
+  // B1) prélèvements à la même profondeur
+  if (!ST.bk.T.smp) __step({ on: "spat", k: "Turricules", t: "Prélève à la spatule des turricules en surface (dans le bécher « Turricules »).", why: "sample", cam: "aqTop" });
+  if (!ST.bk.S.smp) __step({ on: "spat", k: "Sol", t: "Prélève du sol à la même profondeur : en surface, entre les turricules (bécher « Sol »).", why: "sample", cam: "aqTop" });
+  // B2) réactifs, puis mesures au colorimètre
+  for (let e = 0; e < 4; e++) { const a = ST.tubes[e * 2], b = ST.tubes[e * 2 + 1]; if (a.ext && b.ext && (!a.reag || !b.reag)) { __step({ on: "r" + EL[e].k, k: "Réactif " + EL[e].k, t: "Ajoute le réactif du " + EL[e].n + " (" + EL[e].rg + ") dans les deux tubes " + EL[e].k + ".", why: "reag", cam: "rack" }); } }
+  for (let e = 0; e < 4; e++) { const a = ST.tubes[e * 2], b = ST.tubes[e * 2 + 1]; if (a.reag && b.reag && (!a.meas || !b.meas)) { const ready = Math.min(a.dev, b.dev) > 0.97; __step({ on: "colo", k: "Mesure " + EL[e].k, t: ready ? "Coloration stable : mesure les deux tubes " + EL[e].k + " au colorimètre." : "Attends que la coloration des tubes " + EL[e].k + " soit stable, puis mesure-les au colorimètre.", why: ready ? "colo" : "wait", cam: ready ? "colo" : "rack" }); } }
+  for (let e = 0; e < 4; e++) if (shownV(e, 0) != null && shownV(e, 1) != null && ST.ansR[e] == null) { __step({ on: "colo", k: "Rapport " + EL[e].k, t: "Dans le tableau (partie B), calcule le rapport turricules ÷ sol pour le " + EL[e].n + " (2 chiffres après la virgule).", why: "ratio", cam: "ana" }); break; }
+  if (EL.every((e, k) => ST.ansR[k] != null) && !ST.ansC) __step({ on: "colo", k: "Conclusion", t: "Dans le tableau, conclus : les turricules sont-ils plus riches, aussi riches ou moins riches que le sol ?", why: "chemic", cam: "ana" });
+  { __step({ on: "aq", k: "Bilan", t: "Clique sur Évaluer : quels sont les avantages des lombrics pour le sol ?", why: "advantages", cam: "wide" }); }
+}
+let lastKey = "";
+function updGuide() {
+  const g = suggest(), el = $("#instr"); ST.cur = g;
+  $("#instr .v").textContent = g.v || ""; $("#stepno").textContent = g.k; $("#steptxt").textContent = g.t;
+  $("#btnEval").hidden = !(ST.week > 0.5 || ST.tubes.some((t) => t.meas));
+  const key = g.on + g.t; if (key === lastKey) return; lastKey = key;
+  el.querySelector(".n").textContent = "Guide"; el.querySelector(".k").textContent = g.k; el.querySelector(".t").textContent = g.t; el.querySelector(".h").textContent = g.h || "";
+  /*guide-tient*/ if (g.cam && ST.guide && !ST.demo && !(CAM_FIX.has(camFocus) && (ST.busy || ST.q.length || ST.camNext || ST.pouring || ST.legend))) look(g.cam);
+}
+
+/* ------------------------------------------------------------ file de gestes et briques de versement */
+function go(obj, steps) { for (const s of steps) ST.q.push(Object.assign({ obj, dur: 0.5, up: 0.05 }, s)); }
+function runQueue(dt) {
+  const a = ST.q[0]; if (!a) { ST.busy = false; return; } ST.busy = true;
+  if (a.t === undefined) { if (a.pre) a.pre(); a.t = 0; a.p0 = a.obj.position.clone(); a.r0 = a.obj.rotation.clone(); const to = typeof a.to === "function" ? a.to() : a.to, rot = typeof a.rot === "function" ? a.rot() : a.rot; a.p1 = to ? V3(to) : a.p0.clone(); a.r1 = rot ? new THREE.Euler(rot[0], rot[1], rot[2]) : a.r0.clone(); }
+  a.t += window.__fast ? 9 : dt; const k = Math.min(1, a.t / a.dur), e = k * k * (3 - 2 * k);
+  a.obj.position.lerpVectors(a.p0, a.p1, e); a.obj.position.y += a.up * Math.sin(Math.PI * e); a.obj.rotation.set(lerp(a.r0.x, a.r1.x, e), lerp(a.r0.y, a.r1.y, e), lerp(a.r0.z, a.r1.z, e));
+  if (k >= 1) { ST.q.shift(); if (a.at) a.at(); }
+}
+const homeOf = (n) => { const t = TOOLS[n]; return { to: [t.home.x, t.home.y, t.home.z], rot: [t.homeRot.x, t.homeRot.y, t.homeRot.z] }; };
+function gpos(obj, local = [0, 0, 0]) { const v = obj.localToWorld(V3(local)); return L.g.worldToLocal(v); }
+function capOff(cap, spot) {
+  const u = cap.userData; if (u.off) return; u.off = true;
+  go(cap, [
+    { pre: () => { u.par = cap.parent; u.p = cap.position.clone(); u.r = cap.rotation.clone(); L.g.attach(cap); }, to: () => cap.position.clone().add(new THREE.Vector3(0, 0.026, 0)).toArray(), rot: () => [cap.rotation.x, cap.rotation.y - 4 * Math.PI, cap.rotation.z], dur: 0.7, up: 0 },
+    { to: spot, rot: () => [Math.PI, cap.rotation.y, 0], dur: 0.55, up: 0.05 },
+  ]);
+}
+function capOn(cap) {
+  const u = cap.userData; if (!u.off) return;
+  const target = (dy) => () => { const v = u.par.localToWorld(u.p.clone()); L.g.worldToLocal(v); v.y += dy; return v.toArray(); };
+  go(cap, [
+    { to: target(0.026), rot: () => [0, cap.rotation.y, 0], dur: 0.55, up: 0.05 },
+    { to: target(0), rot: () => [0, cap.rotation.y + 4 * Math.PI, 0], dur: 0.7, up: 0, at: () => { u.par.attach(cap); cap.position.copy(u.p); cap.rotation.copy(u.r); u.off = false; } },
+  ]);
+}
+function arcPour(m, a, b, r = 0.0016, k = 0.3, dir = null) {
+  const c = dir ? a.clone().add(dir.clone().multiplyScalar(a.distanceTo(b) * k)) : new THREE.Vector3(a.x + (b.x - a.x) * k, a.y, a.z + (b.z - a.z) * k);
+  if (m.geometry) m.geometry.dispose(); m.geometry = new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(a, c, b), 20, r, 8, false); m.visible = true;
+}
+function fall(a, b, col, n = 10, dur = 0.55) { ST.fall = { t: 0, a, b, n, dur }; setCol(X.fallM, col); }
+const soilTopY = () => AQ_Y0 + hTot();
+
+/* ------------------------------------------------------------ A. le dispositif : couches, litière, humidité, lombrics, obscurité */
+function addLayer(type, dh) {
+  if (ST.litTop) { ST.layers.push({ type: "litiere", h: 0.006 }); ST.litTop = false; ST.litBuried = true; once("litBur", "warn", "Une couche de sol recouvre maintenant la litière : elle n'est plus en surface.", "litBuried"); }
+  const top = ST.layers[ST.layers.length - 1]; if (top && top.type === type) top.h += dh; else ST.layers.push({ type, h: dh });
+  if (ST.hum < 0.25) ST.hum = 0.25; // sols du bocal à peine humides
+}
+// grande quantité : le bocal se dévisse, s'incline au-dessus de l'aquarium et verse tant qu'on maintient le bouton
+function startLayer(type) {
+  const F0 = ST.sFlow; if (F0) { if (F0.type === type && !F0.back) { F0.on = true; F0.idle = 0; L.ctl.enabled = false; } else busyToast(); return; }
+  if (isBusy()) return busyToast();
+  if (ST.wIn > 0 || ST.dead) return toast("Les lombrics sont déjà dans l'aquarium : on n'ajoute plus de sol.");
+  if (hTot() > HMAX - 0.03) return toast("L'aquarium est presque plein.");
+  const j = TOOLS[type].obj, px = AQX - 0.06 - 0.114; L.ctl.enabled = false;
+  ST.sFlow = { type, on: true, ready: false, back: false, idle: 0, k: 0, gT: 0, short: 0, h0: hTot() };
+  showProduct(j, CAMS.aqP, j, null, 0.55, 0);
+  capOff(j.userData.cap, [j.position.x + 0.085, 0.011, j.position.z + 0.03]);
+  go(j, [{ to: [px, 0.47, AQZ], dur: 0.8, up: 0.05 }, { to: [px, 0.45, AQZ], rot: [0, 0, -1.9], dur: 0.6, up: 0, at: () => { if (ST.sFlow) ST.sFlow.ready = true; } }]);
+}
+function stopLayer() { const F = ST.sFlow; if (!F || !F.on) return; F.on = false; F.idle = 1.2; L.ctl.enabled = true; if (!F.ready) { F.short = 0.5; toast("Garde le bouton appuyé : la couche monte tant que tu maintiens.", ""); } }
+function doLitter() {
+  if (isBusy()) return busyToast(); if (hTot() < 0.03) return toast("Verse d'abord les couches de sol."); if (ST.litTop) return toast("La litière est déjà en surface.");
+  const tr = TOOLS.lit.obj, p = [AQX - 0.04, 0.45, AQZ]; look("aqTop");
+  go(tr, [{ to: p, dur: 1.0, up: 0.05 }, { to: p, rot: [0, 0, -1.3], dur: 0.5, up: 0, at: () => fall(gpos(tr, [0.075, 0.02, 0]), new THREE.Vector3(AQX + 0.02, soilTopY(), AQZ), new THREE.Color(0x8a5a2b), 14, 0.7) },
+    { to: p, rot: [0, 0, -1.3], dur: 0.8, up: 0, at: () => { ST.lit0 = 1; ST.litTop = true; ST.cumLit = ST.cum; log("good", "Litière (feuilles mortes) déposée en surface.", "litter"); } }, { to: p, rot: [0, 0, 0], dur: 0.4, up: 0 }, Object.assign(homeOf("lit"), { dur: 0.9, up: 0.05 })]);
+}
+function doWorms() {
+  if (isBusy()) return busyToast(); if (ST.wIn || ST.dead) return toast("Les lombrics sont déjà dans l'aquarium."); if (hTot() < 0.06) return toast("Prépare d'abord le sol de l'aquarium (plusieurs couches).");
+  const b = X.box, p = [AQX + 0.02, 0.44, AQZ]; look("aqTop");
+  go(b, [{ to: p, dur: 1.0, up: 0.05 }, { to: p, rot: [0, 0, 1.15], dur: 0.6, up: 0, at: () => {
+    X.wormsBox.forEach((w) => (w.visible = false)); const r = rng(5);
+    X.wormsUp.forEach((w, k) => { w.visible = true; w.position.set(-0.11 + k * 0.07 + (r() - 0.5) * 0.02, soilTopY(), (r() - 0.5) * 0.04); w.rotation.set(0, r() * 6.28, 0); });
+    ST.wIn = 10; ST.burrow = { t: 0 }; log("good", "Une dizaine de lombrics introduits en surface : ils s'enfoncent aussitôt (ils fuient la lumière).", "worms"); if (ST.hum < 0.3) once("dryIn", "warn", "Sol presque sec au moment d'introduire les lombrics.", "dry"); } },
+    { to: p, dur: 0.6, up: 0 }, { to: p, rot: [0, 0, 0], dur: 0.4, up: 0 }, Object.assign(homeOf("box"), { dur: 0.9, up: 0.05 })]);
+}
+function doSpray(heavy) {
+  if (isBusy()) return busyToast(); if (hTot() < 0.02) return toast("L'aquarium est vide : verse d'abord le sol.");
+  const s = TOOLS.spray.obj, p = [AQX - 0.08, 0.46, AQZ + 0.015]; look("aqTop");
+  go(s, [{ to: p, dur: 0.9, up: 0.05 }, { to: p, rot: [0, 0, -0.85], dur: 0.5, up: 0, at: () => { ST.mist = { t: heavy ? 2.4 : 1.3 }; } }, { to: p, dur: heavy ? 2.4 : 1.3, up: 0, at: () => {
+    const h0 = ST.hum; ST.hum = Math.min(1.15, ST.hum + (heavy ? 0.55 : 0.22));
+    if (ST.hum > 0.9) log("bad", "Sol gorgé d'eau (" + humTxt() + ") : l'eau chasse l'air des pores.", "flood"); else log("good", "Sol arrosé au pulvérisateur : " + humTxt() + ".", "water"); if (h0 < 0.15 && ST.wIn) log("warn", "Le sol était sec avant l'arrosage.", "dry"); } },
+    { to: p, rot: [0, 0, 0], dur: 0.4, up: 0 }, Object.assign(homeOf("spray"), { dur: 0.9, up: 0.05 })]);
+}
+function doPaper() {
+  if (isBusy()) return busyToast(); const [f, b] = X.paper, zf = AQZ + AQD / 2 + 0.01, zb = AQZ - AQD / 2 - 0.01, y = AQ_H / 2 + 0.006;
+  if (!ST.dark) { look("aq");
+    go(f, [{ to: [-0.33, 0.24, 0.18], dur: 0.6, up: 0 }, { to: [AQX, y, zf + 0.06], rot: [0, 0, 0], dur: 1.0, up: 0.04 }, { to: [AQX, y, zf], dur: 0.4, up: 0 }]);
+    go(b, [{ to: [-0.33, 0.24, 0.18], dur: 0.5, up: 0 }, { to: [AQX, 0.53, zb], rot: [0, 0, 0], dur: 1.2, up: 0.03 }, { to: [AQX, y, zb], dur: 0.6, up: 0, at: () => { ST.dark = true; log("good", "Parois recouvertes de papier noir : les lombrics sont dans l'obscurité.", "dark"); } }]);
+  } else { look("aq");
+    go(b, [{ pre: () => { ST.dark = false; }, to: [AQX, 0.53, zb], dur: 0.6, up: 0 }, { to: [-0.33, 0.0035, 0.18], rot: [-Math.PI / 2, 0, 0], dur: 1.2, up: 0.05 }]);
+    go(f, [{ to: [AQX, y, zf + 0.07], dur: 0.4, up: 0 }, { to: [-0.33, 0.0015, 0.18], rot: [-Math.PI / 2, 0, 0], dur: 1.0, up: 0.05, at: () => { look("aq"); log("info", "Papier noir retiré : on observe à travers la vitre (" + weekTxt() + ").", "observe"); if (ST.wIn) toast("Observe les couches, la litière et les galeries, puis note-les dans le tableau.", ""); } }]);
+  }
+}
+function doWeek() {
+  if (isBusy()) return busyToast(); if (hTot() < 0.02) return toast("L'aquarium est vide : prépare d'abord le dispositif.");
+  if (!ST.wIn) toast(ST.dead ? "Tous les lombrics sont morts : rien ne bouge plus." : "Aucun lombric dans l'aquarium : c'est un témoin, rien ne devrait changer.");
+  else if (ST.hum < 0.3) toast("Le sol est presque sec : les lombrics vont souffrir. Arrose avant !", "bad");
+  if (ST.wIn && !ST.dark) once("light", "warn", "Semaine passée avec les parois à la lumière : les lombrics s'écartent des vitres.", "light");
+  ST.weekRun = { left: 1, w0: ST.wIn }; look(ST.dark ? "aqTop" : "aq"); log("info", "Une semaine passe (accéléré).", "week");
+}
+function weekStep(dw) {
+  const a = activity(); ST.cum += 0.45 * a * dw; ST.gal += 3 * a * dw * (ST.dark ? 1 : 0.3); ST.turr = Math.min(16, ST.turr + 6 * a * dw);
+  if (ST.wIn > 0) { if (ST.hum < 0.15) { ST.death += 3 * dw; ST.dryW += dw; } else if (ST.hum > 0.9) { ST.death += 2 * dw; ST.wetW += dw; } if (!ST.dark) ST.lightW += dw; while (ST.death >= 1 && ST.wIn > 0) { ST.death -= 1; ST.wIn--; ST.dead++; } }
+  ST.hum = Math.max(0, ST.hum - 0.3 * dw); ST.week += dw;
+}
+function emptyAq() {
+  if (isBusy()) return busyToast();
+  Object.assign(ST, { layers: [], lit0: 0, litTop: false, litBuried: false, hum: 0, wIn: 0, dead: 0, death: 0, cum: 0, gal: 0, turr: 0, week: 0, lightW: 0, dryW: 0, wetW: 0, burrow: null, taken: new Set(), ansA: {}, attempts: ST.attempts + 1 });
+  X.wormsBox.forEach((w) => (w.visible = true)); X.wormsUp.forEach((w) => (w.visible = false)); look("aq");
+  log("info", "Aquarium vidé aux déchets, lombrics relâchés au jardin. Essai nº " + ST.attempts + ".", "bin"); renderTable();
+}
+
+/* ------------------------------------------------------------ B. prélèvements, extraits, réactifs, colorimètre */
+const smpTxt = (s) => ({ T: "turricules (surface)", surf: "sol de surface", deep: "sol du fond de l'aquarium" }[s] || "—");
+function sampleCol(kind) { if (kind === "T") return 0x3a2b1f; const l = kind === "deep" ? ST.layers[0] : ST.layers[ST.layers.length - 1]; const c = new THREE.Color(l ? LAY[l.type].c : 0x3b2a1e); if (kind === "surf") c.lerp(new THREE.Color(0x3b2a1e), mixOf() * 0.6); return c.getHex(); }
+function doSample(kind) {
+  const tgt = kind === "T" ? "T" : "S", B = ST.bk[tgt];
+  if (isBusy()) return busyToast(); if (B.smp) return toast("Le bécher « " + BKP[tgt].t + " » contient déjà un prélèvement : vide-le d'abord (clic sur le bécher).");
+  if (hTot() < 0.02) return toast("L'aquarium est vide.");
+  const vis = X.turr.map((t, k) => k).filter((k) => X.turr[k].visible);
+  if (kind === "T" && !vis.length) return toast("Pas encore de turricules en surface : laisse les lombrics travailler une semaine ou plus.");
+  if (kind === "surf" && ST.turr < 1) once("surfNoT", "info", "Sol de surface prélevé avant l'apparition des turricules.", "sample");
+  const sp = TOOLS.spat.obj, ti = kind === "T" ? vis[0] : -1, at = kind === "T" ? gpos(X.turr[ti]) : kind === "surf" ? gpos(X.aq, [0.08, soilTopY(), 0]) : gpos(X.aq, [-0.15, AQ_Y0 + 0.016, 0]);
+  const bk = BKP[tgt], col = sampleCol(kind); look("aqTop");
+  go(sp, [
+    { to: [at.x, 0.45, at.z], rot: [0, 0, 1.1], dur: 0.8, up: 0.05 },
+    { to: [at.x, at.y + 0.004, at.z], dur: 0.6, up: 0, at: () => { X.spLoad.visible = true; setCol(X.spLoad.material, col); if (ti >= 0) ST.taken.add(ti); } },
+    { to: [at.x, 0.45, at.z], dur: 0.5, up: 0 },
+    { pre: () => look("bks"), to: [bk.x, 0.16, bk.z], dur: 0.9, up: 0.04 },
+    { to: [bk.x, 0.16, bk.z], rot: [0, 0, 2.4], dur: 0.4, up: 0, at: () => { X.spLoad.visible = false; fall(gpos(sp), new THREE.Vector3(bk.x, 0.038, bk.z), new THREE.Color(col), 8, 0.4); B.smp = kind; B.t = 0; B.col = col; log(kind === "deep" ? "warn" : "good", "Prélèvement : " + smpTxt(kind) + " dans le bécher « " + bk.t + " » (50 mL d'eau distillée). On laisse décanter.", kind === "deep" ? "deep" : "sample"); } },
+    { to: [bk.x, 0.16, bk.z], rot: [0, 0, 1.1], dur: 0.3, up: 0 },
+    Object.assign(homeOf("spat"), { dur: 0.7, up: 0.05 }),
+  ]);
+  ST.q.push({ obj: X.bk[tgt], to: () => X.bk[tgt].position.toArray(), dur: 2.6, up: 0 }); // décantation
+  distribute(tgt);
+}
+// la pipette Pasteur répartit l'extrait limpide dans les 4 tubes du sol (S) ou des turricules (T)
+function distribute(tgt) {
+  const j = tgt === "T" ? 1 : 0, bk = BKP[tgt], P = X.pip, steps = [{ pre: () => look("rack"), to: [PIP_HOME[0], 0.17, PIP_HOME[2]], dur: 0.4, up: 0 }];
+  for (let e = 0; e < 4; e++) { const i = e * 2 + j, tx = tubeX(i);
+    steps.push({ to: [bk.x, 0.16, bk.z], dur: 0.5, up: 0.02 }, { to: [bk.x, 0.03, bk.z], dur: 0.35, up: 0, at: () => { X.pipLiq.visible = true; } }, { to: [bk.x, 0.16, bk.z], dur: 0.3, up: 0 },
+      { to: [tx, 0.17, RACK.z], dur: 0.55, up: 0.02 }, { to: [tx, 0.125, RACK.z], dur: 0.25, up: 0, at: () => { X.pipLiq.visible = false; const T = ST.tubes[i]; T.ext = ST.bk[tgt].smp; T.dev = 0; T.meas = null; } }, { to: [tx, 0.17, RACK.z], dur: 0.25, up: 0 });
+  }
+  steps.push({ to: [PIP_HOME[0], 0.17, PIP_HOME[2]], dur: 0.6, up: 0.02 }, { to: PIP_HOME, dur: 0.35, up: 0, at: () => { log("info", "Extrait « " + bk.t.toLowerCase() + " » réparti dans les 4 tubes " + (j ? "T" : "S") + " (Ca, P, N, K).", "extract"); renderTable(); } });
+  go(P, steps);
+}
+function doReag(e) {
+  if (isBusy()) return busyToast(); const a = ST.tubes[e * 2], b = ST.tubes[e * 2 + 1];
+  if (a.reag && b.reag) return toast("Les deux tubes " + EL[e].k + " ont déjà reçu leur réactif.");
+  if (!a.ext && !b.ext) return toast("Les tubes " + EL[e].k + " sont vides : prélève d'abord à la spatule (l'extrait est réparti dans les tubes).");
+  const d = TOOLS["r" + EL[e].k].obj, dp = d.userData.dp; showProduct(d, CAMS.rack, dp);
+  const home = () => gpos(d).toArray(), up = (dy) => () => { const v = gpos(d); v.y += dy; return v.toArray(); }, over = (i) => [tubeX(i), 0.15, RACK.z];
+  go(dp, [
+    { pre: () => L.g.attach(dp), to: up(0.02), rot: () => [0, dp.rotation.y - 4 * Math.PI, 0], dur: 0.7, up: 0 },
+    { to: up(0.09), dur: 0.4, up: 0 },
+    ...[0, 1].flatMap((j) => { const i = e * 2 + j; return [{ to: over(i), rot: () => [0, dp.rotation.y, 0], dur: 0.6, up: 0.03, at: () => { ST.drop = { i, t: 0, n: 3, dp }; } }, { to: over(i), dur: 1.6, up: 0, at: () => { const T = ST.tubes[i]; if (!T.reag) { T.reag = true; T.dev = 0; T.meas = null; } } }]; }),
+    { to: up(0.09), dur: 0.7, up: 0.04 }, { to: up(0.02), dur: 0.4, up: 0 },
+    { to: home, rot: () => [0, dp.rotation.y + 4 * Math.PI, 0], dur: 0.7, up: 0, at: () => { d.attach(dp); dp.position.set(0, 0, 0); dp.rotation.set(0, 0, 0); log("info", "Réactif " + EL[e].k + " (" + EL[e].rg + ") : 3 gouttes dans le tube sol et 3 dans le tube turricules. Attends que la coloration soit stable.", "reag"); look("rack"); } },
+  ]);
+}
+const intens = (T, e) => clamp(conc(T.ext, e) / (EL[e].T * 1.15), 0, 1);
+function doMeasure(e) {
+  if (isBusy()) return busyToast(); const pair = [e * 2, e * 2 + 1];
+  if (pair.some((i) => !ST.tubes[i].ext)) return toast("Il manque l'extrait dans un tube " + EL[e].k + ".");
+  if (pair.some((i) => !ST.tubes[i].reag)) return toast("Ajoute d'abord le réactif " + EL[e].k + " dans les deux tubes.");
+  look("colo"); const well = [COLO.x + 0.03, 0.03, COLO.z - 0.02];
+  for (const i of pair) { const t = X.tube[i], h = t.userData.home;
+    go(t, [{ to: [h.x, 0.16, h.z], dur: 0.45, up: 0 }, { to: [well[0], 0.19, well[2]], dur: 0.9, up: 0.03 }, { to: well, dur: 0.5, up: 0, at: () => readTube(e, i) }, { to: well, dur: 1.3, up: 0 }, { to: [well[0], 0.19, well[2]], dur: 0.45, up: 0 }, { to: [h.x, 0.16, h.z], dur: 0.9, up: 0.03 }, { to: h.toArray(), dur: 0.45, up: 0 }]);
+  }
+}
+function readTube(e, i) {
+  const T = ST.tubes[i], E = EL[e], v = +(conc(T.ext, e) * Math.min(1, T.dev)).toFixed(E.d), j = i % 2;
+  T.meas = { v, dev: T.dev, src: T.ext }; delete ST.ansR[e]; ST.ansC = null;
+  X.coLcd.set(E.k + " " + v.toFixed(E.d), "g/kg");
+  const early = T.dev < 0.95;
+  log(early ? "warn" : "good", "Colorimètre, " + E.ion + " dans le tube " + (j ? "turricules" : "sol") + " : " + fx(v, E.d) + " g/kg, noté dans le tableau." + (early ? " La coloration n'était pas stable." : ""), early ? "tooEarly" : "colo");
+  toast(E.k + " (" + (j ? "turricules" : "sol") + ") : " + fx(v, E.d) + " g/kg", early ? "bad" : "good"); showTable(); renderTable();
+}
+function emptyBk(k) {
+  if (isBusy()) return busyToast(); const B = ST.bk[k]; if (!B.smp) return toast("Le bécher ne contient que de l'eau distillée.");
+  const b = X.bk[k], bin = TOOLS.bin.obj.position; look("bin");
+  go(b, [{ to: [b.position.x, 0.2, b.position.z], dur: 0.5, up: 0 }, { to: [bin.x + 0.08, 0.24, bin.z], dur: 1.3, up: 0.05 }, { to: [bin.x + 0.08, 0.24, bin.z], rot: [0, 0, 2.2], dur: 0.6, up: 0, at: () => fall(gpos(b, [-BK_R, 0.07, 0]), new THREE.Vector3(bin.x, 0.02, bin.z), new THREE.Color(0x7a5a3a), 10, 0.5) },
+    { to: [bin.x + 0.08, 0.24, bin.z], dur: 0.6, up: 0, at: () => { B.smp = null; B.t = 9; const u = b.userData; u.sed.visible = false; setCol(u.liq.material, 0x9fc4ea); u.liq.material.opacity = 0.6; } }, { to: [bin.x + 0.08, 0.24, bin.z], rot: [0, 0, 0], dur: 0.4, up: 0 },
+    Object.assign(homeOf("bk" + k), { dur: 1.3, up: 0.05, at: () => log("info", "Bécher « " + BKP[k].t + " » vidé, rincé et rempli de 50 mL d'eau distillée.", "bin") })]);
+}
+function emptyTubes() {
+  if (isBusy()) return busyToast(); const bin = TOOLS.bin.obj.position; look("bin");
+  X.tube.forEach((t, i) => { if (!ST.tubes[i].ext && !ST.tubes[i].reag) return; const h = t.userData.home;
+    go(t, [{ to: [h.x, 0.18, h.z], dur: 0.3, up: 0 }, { to: [bin.x + 0.03, 0.2, bin.z], dur: 0.6, up: 0.03 }, { to: [bin.x + 0.03, 0.2, bin.z], rot: [0, 0, 2.2], dur: 0.3, up: 0, at: () => { Object.assign(ST.tubes[i], newTube()); } }, { to: [bin.x + 0.03, 0.2, bin.z], rot: [0, 0, 0], dur: 0.25, up: 0 }, { to: [h.x, 0.18, h.z], dur: 0.6, up: 0.03 }, { to: h.toArray(), dur: 0.3, up: 0 }]); });
+  ST.q.push({ obj: new THREE.Object3D(), to: [0, 0, 0], dur: 0.05, up: 0, at: () => { ST.ansR = {}; ST.ansC = null; X.coLcd.set("----", ""); log("info", "Tubes vidés et rincés.", "bin"); renderTable(); } });
+}
+
+/* ------------------------------------------------------------ menus */
+function menuFor(name) {
+  const items = [], I = (ic, t, run, o = {}) => items.push(Object.assign({ ic, t, run }, o));
+  if (JARS.includes(name)) I("⏬", "Verser une couche de " + LAY[name].n + " dans l'aquarium", null, { hold: true, start: () => startLayer(name), stop: stopLayer, on: () => !!(ST.sFlow && ST.sFlow.on), s: "maintenir · ≈ 1,3 cm/s" });
+  if (name === "lit") I("🍂", "Déposer la litière en surface", doLitter);
+  if (name === "box") I("🪱", "Introduire une dizaine de lombrics", doWorms);
+  if (name === "spray") { I("💧", "Arroser (pulvériser)", () => doSpray(false), { s: "sol " + humTxt() }); I("🌊", "Arroser abondamment", () => doSpray(true), { d: true, s: "beaucoup d'eau" }); }
+  if (name === "paper") I("⬛", ST.dark ? "Retirer le papier noir (observer)" : "Recouvrir les parois de papier noir", doPaper);
+  if (name === "cal") I("☀", "Laisser passer une semaine", doWeek, { s: "accéléré · " + weekTxt() });
+  if (name === "aq") {
+    I("👁", "Observer de face (à travers la vitre)", () => { look("aq"); if (ST.dark) toast("Le papier noir cache la vitre : retire-le pour observer."); });
+    I("⬆", "Observer la surface", () => look("aqTop"));
+    if (ST.wIn || ST.dead) I("🔍", ST.zoomOn ? "Masquer le zoom sur un lombric" : "Zoom : un lombric mange le sol", () => { ST.zoomOn = !ST.zoomOn; if (ST.zoomOn) once("zoomH", "info", "Zoom : un lombric avale le sol et rejette ses turricules.", "eat"); });
+    I("📋", "Noter mes observations (tableau)", () => { showTable(); $("#exao").hidden = false; });
+    if (hTot() > 0) I("🗑", "Vider l'aquarium (recommencer)", emptyAq, { d: true });
+  }
+  if (name === "spat") { if (ST.turr >= 1) I("🟤", "Prélever des turricules en surface → bécher Turricules", () => doSample("T")); I("🥄", "Prélever du sol en surface, entre les turricules → bécher Sol", () => doSample("surf")); I("⬇", "Prélever du sol au fond de l'aquarium → bécher Sol", () => doSample("deep")); }
+  if (name === "bkS" || name === "bkT") { const k = name[2], B = ST.bk[k]; I("👁", "Regarder le bécher", () => look("bks"), { s: B.smp ? "contient : " + smpTxt(B.smp) : "eau distillée seule" }); if (B.smp) I("🗑", "Vider le bécher", () => emptyBk(k), { d: true }); }
+  EL.forEach((e, k) => { if (name === "r" + e.k) I("💧", "3 gouttes dans le tube sol et 3 dans le tube turricules (" + e.k + ")", () => doReag(k)); });
+  if (name === "rack" || name === "colo") {
+    EL.forEach((e, k) => { const a = ST.tubes[k * 2], b = ST.tubes[k * 2 + 1]; if (a.reag && b.reag && a.ext && b.ext) I("📈", "Mesurer " + e.ion + " : tube sol puis tube turricules", () => doMeasure(k), { s: Math.min(a.dev, b.dev) < 0.97 ? "coloration en cours…" : "coloration stable" }); });
+    if (!items.length) I("ℹ", "D'abord : extrait dans les tubes (spatule), puis un réactif", () => toast("Prélève à la spatule ; l'extrait est réparti dans les tubes ; ajoute ensuite les réactifs."));
+    if (name === "rack" && ST.tubes.some((t) => t.ext || t.reag)) I("🗑", "Vider et rincer les 8 tubes", emptyTubes, { d: true });
+    I("📋", "Voir le tableau des mesures", () => { showTable(); $("#exao").hidden = false; });
+  }
+  if (name === "bin") I("🗑", "Sols, extraits et tubes usés vont ici", () => toast("Clique sur un bécher, les tubes ou l'aquarium pour les vider."));
+  return items;
+}
+const NAMES = { sable: "Bocal de sable", terreau: "Bocal de terreau", argile: "Bocal d'argile", lit: "Litière", box: "Lombrics", spray: "Pulvérisateur", paper: "Papier noir", cal: "Calendrier", aq: "Aquarium d'observation", spat: "Spatule", bkS: "Bécher « Sol »", bkT: "Bécher « Turricules »", rack: "Tubes à essais", colo: "Colorimètre", bin: "Déchets" };
+const INFO = {
+  sable: "<b>Sable</b> : couche claire, gros grains, pauvre en matière organique. Une couche ≈ 4 cm en maintenant le bouton.",
+  terreau: "<b>Terreau</b> : couche noire, riche en humus et en débris végétaux.",
+  argile: "<b>Argile</b> : couche brune, particules très fines (< 2 µm), compacte.",
+  lit: "<b>Litière</b> : feuilles mortes déposées en surface ; on verra si les lombrics l'enfouissent.",
+  box: "<b>Lombrics</b> (vers de terre) : une dizaine, introduits en surface. Ils respirent par leur peau humide et fuient la lumière.",
+  spray: "<b>Pulvérisateur d'eau</b> : garde le sol humide (les lombrics respirent par la peau). Trop d'eau les asphyxie.",
+  paper: "<b>Papier noir</b> : recrée l'obscurité du sol sur les parois ; on le retire pour observer.",
+  cal: "<b>Calendrier</b> : fait passer une semaine (accéléré). Il faut environ un mois.",
+  aq: "<b>Aquarium d'observation</b> : couches de sols différents, litière en surface, lombrics ; à 18–20 °C (thermomètre sur la vitre).",
+  spat: "<b>Spatule</b> : prélève des turricules ou du sol, à la même profondeur (surface).",
+  bkS: "<b>Bécher « Sol »</b> : 50 mL d'eau distillée ; l'échantillon de sol y libère ses ions minéraux (extrait).",
+  bkT: "<b>Bécher « Turricules »</b> : 50 mL d'eau distillée pour l'extrait des déjections des lombrics.",
+  rack: "<b>Tubes à essais</b> : par élément (Ca²⁺, P, N, K), un tube d'extrait de sol (S) et un de turricules (T).",
+  colo: "<b>Colorimètre</b> (analyse de sol) : mesure la coloration ou le trouble d'un tube et affiche la teneur en g/kg de sol.",
+  bin: "<b>Bac à déchets</b> : sols, extraits et tubes usés.",
+  rCa: "<b>Réactif du calcium</b> (oxalate d'ammonium) : Ca²⁺ (2 charges +) précipite en oxalate de calcium blanc : trouble d'autant plus fort que Ca²⁺ est abondant.",
+  rP: "<b>Réactif du phosphore</b> (molybdate d'ammonium) : les ions phosphate PO₄³⁻ donnent une coloration bleue.",
+  rN: "<b>Réactif de l'azote</b> (Nessler) : les ions ammonium NH₄⁺ donnent une coloration jaune-orangé.",
+  rK: "<b>Réactif du potassium</b> (tétraphénylborate de sodium) : K⁺ (1 charge +) forme un précipité blanc.",
+};
+const HELP_KEY = { aq: 0, sable: 1, terreau: 1, argile: 1, lit: 2, box: 3, spray: 4, paper: 5, cal: 6, spat: 7, bkS: 7, bkT: 7, rCa: 8, rP: 8, rN: 8, rK: 8, rack: 9, colo: 9, bin: 10 };
+const resolveName = (n) => n;
+function showTip(name, x, y) {
+  let t = $("#tip"); if (!t) { t = document.createElement("div"); t.id = "tip"; t.className = "tip"; document.body.append(t); }
+  if (!name || !INFO[name] || !$("#menu").hidden || $("#overlay").hidden === false) { t.hidden = true; return; }
+  if (t.dataset.n !== name) { t.dataset.n = name; t.innerHTML = INFO[name]; }
+  t.hidden = false; const r = t.getBoundingClientRect(), lim = (v, a, b) => Math.max(a, Math.min(b, v));
+  t.style.left = lim(x + 16, 8, window.innerWidth - r.width - 8) + "px"; t.style.top = lim(y + 18, 8, window.innerHeight - r.height - 8) + "px";
+}
+function closeMenu() { $("#menu").hidden = true; }
+function openMenu(name, x, y) {
+  name = resolveName(name); const items = menuFor(name); if (!items.length) return;
+  if (items.length === 1 && !items[0].hold) { closeMenu(); stepFollow(name); items[0].run(); return; }
+  const m = $("#menu"); m.innerHTML = `<div class="mh"><span>${NAMES[name] || name}</span><button type="button" class="mq">? aide</button></div>${INFO[name] ? `<div class="minfo">${INFO[name]}</div>` : ""}`;
+  m.querySelector(".mq").onclick = () => { closeMenu(); openPanel(); const d = $("#toolHelp").children[HELP_KEY[name]]; if (d) { d.open = true; d.scrollIntoView({ block: "center" }); } };
+  for (const it of items) {
+    const b = document.createElement("button"); b.type = "button"; b.className = "mi" + (it.hold ? " hold" : "") + (it.d ? " danger" : ""); b.innerHTML = `<span class="ic">${it.ic}</span><span>${it.t}</span>${it.s ? "<small>" + it.s + "</small>" : ""}`;
+    if (it.hold) { const st = it.start || startPour, sp = it.stop || stopPour, on = it.on || (() => ST.pouring); b.addEventListener("pointerdown", (e) => { e.preventDefault(); stepFollow(name); st(); }); const stop = () => { if (on()) { sp(); closeMenu(); } }; b.addEventListener("pointerup", stop); b.addEventListener("pointerleave", stop); b.addEventListener("pointercancel", stop); }
+    else b.onclick = () => { closeMenu(); stepFollow(name); it.run(); };
+    m.append(b);
+  }
+  m.hidden = false; const r = m.getBoundingClientRect(); m.style.left = clamp(x + 12, 8, window.innerWidth - r.width - 8) + "px"; m.style.top = clamp(y - 20, 8, window.innerHeight - r.height - 8) + "px";
+}
+function onClick(name, x, y) { /*resultat-clic*/ if (name && ST.fini && typeof RESVIEW !== "undefined" && RESVIEW[name] && camFocus !== RESVIEW[name]) { focusTool(name); return; } /* expérience finie : 1er clic = résultat légendé, 2e clic = menu */ if (!name) return; focusTool(name); openMenu(name, x || window.innerWidth / 2, y || window.innerHeight / 2); }
+
+/* ------------------------------------------------------------ coupe du sol vue à travers la vitre : dessinée d'après l'état
+   Chaque pixel reprend la couche d'origine à une profondeur décalée par un champ de bruit lissé (amplitude ∝ mélange) :
+   les limites ondulent, s'interpénètrent puis se fondent ; la couleur tend vers la moyenne du sol. Galeries (contre la vitre),
+   lombrics dedans, fragments de litière entraînés, eau stagnante au fond si le sol est noyé. */
+let NF = null, NG = null, GAL = null;
+function soilNoise() {
+  NF = new Float32Array(CW * CH); NG = new Float32Array(CW * CH); const r = rng(11), waves = [];
+  for (let k = 0; k < 8; k++) { const f = k < 3 ? 0.008 + r() * 0.01 : 0.02 + r() * 0.06; const a = r() * 6.28; waves.push([Math.cos(a) * f, Math.sin(a) * f, r() * 6.28, k < 3 ? 1.4 : 0.6 + r() * 0.5]); }
+  for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) { let s = 0, w = 0; for (const q of waves) { s += Math.sin(x * q[0] + y * q[1] + q[2]) * q[3]; w += q[3]; } const i = y * CW + x; NF[i] = (s / w) * 1.7; NG[i] = r() * 2 - 1; }
+  GAL = []; for (let k = 0; k < 16; k++) { const pts = []; let x = 30 + r() * (CW - 60), f = 0; pts.push([x, 0]); while (f < 0.93) { f += 0.05 + r() * 0.07; x = clamp(x + (r() - 0.5) * 70, 10, CW - 10); pts.push([x, Math.min(f, 0.95)]); if (pts.length > 4 && r() < 0.1) break; } GAL.push(pts); }
+}
+function drawSoil() {
+  const S = X.soilTex; if (!S) return; if (!NF) soilNoise();
+  const m = mixOf(), lit = litSurf(), key = ST.layers.map((l) => l.type[0] + l.h.toFixed(3)).join() + "|" + m.toFixed(3) + "|" + galN() + "|" + Math.round(ST.hum * 10) + "|" + ST.wIn + "|" + lit.toFixed(2) + "|" + ST.lit0 + ST.litTop;
+  if (key === S.key) return; S.key = key;
+  const ctx = S.ctx; if (!S.img) S.img = ctx.createImageData(CW, CH); const d = S.img.data;
+  const B = []; let acc = 0; const mean = [0, 0, 0];
+  for (const l of ST.layers) { const c = rgbOf(LAY[l.type].c); B.push([acc, acc + l.h, c]); acc += l.h; for (let q = 0; q < 3; q++) mean[q] += c[q] * l.h; }
+  if (acc > 0) for (let q = 0; q < 3; q++) mean[q] = (mean[q] / acc) * 0.8; // le sol brassé, enrichi en humus, fonce
+  const amp = m * 0.075, hom = m * 0.55, wet = 1 - 0.22 * clamp(ST.hum, 0, 1), water = ST.hum > 0.9 ? Math.min(0.06, (ST.hum - 0.9) * 0.3) : 0;
+  for (let y = 0; y < CH; y++) { const yb = ((CH - 0.5 - y) / CH) * HMAX;
+    for (let x = 0; x < CW; x++) { const i = y * CW + x, o = i * 4;
+      if (acc <= 0 || yb > acc + 0.0012 * NG[i] - 0.0008) { d[o + 3] = 0; continue; }
+      const yq = clamp(yb + amp * NF[i] + 0.0015 * NG[i] * (0.4 + m), 0, acc - 1e-5); let c = B[0][2]; for (const b of B) if (yq >= b[0] && yq < b[1]) { c = b[2]; break; }
+      const gr = NG[i] * 16; let r = (c[0] + (mean[0] - c[0]) * hom + gr) * wet, g = (c[1] + (mean[1] - c[1]) * hom + gr) * wet, bl = (c[2] + (mean[2] - c[2]) * hom + gr) * wet;
+      if (yb < water) { r = r * 0.6 + 30; g = g * 0.6 + 55; bl = bl * 0.6 + 95; }
+      d[o] = r; d[o + 1] = g; d[o + 2] = bl; d[o + 3] = 255; } }
+  ctx.putImageData(S.img, 0, 0);
+  const topPx = CH * (1 - acc / HMAX), P = (p) => [p[0], topPx + p[1] * (CH - topPx)], nG = galN();
+  ctx.lineCap = "round"; ctx.lineJoin = "round";
+  const smooth = (pts) => { ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let q = 1; q < pts.length - 1; q++) ctx.quadraticCurveTo(pts[q][0], pts[q][1], (pts[q][0] + pts[q + 1][0]) / 2, (pts[q][1] + pts[q + 1][1]) / 2); const l = pts[pts.length - 1]; ctx.lineTo(l[0], l[1]); };
+  for (let k = 0; k < nG; k++) { const pts = GAL[k].map(P); smooth(pts); ctx.strokeStyle = "rgba(28,18,11,.85)"; ctx.lineWidth = 6; ctx.stroke(); smooth(pts); ctx.strokeStyle = "rgba(120,82,52,.5)"; ctx.lineWidth = 1.8; ctx.stroke(); }
+  const nW = Math.min(nG, Math.ceil(ST.wIn / 2));
+  for (let k = 0; k < nW; k++) { const pts = GAL[k].map(P), s0 = Math.floor(pts.length * 0.3), seg = pts.slice(s0, s0 + Math.max(3, Math.ceil(pts.length * 0.45))); if (seg.length < 3) continue; smooth(seg); ctx.strokeStyle = "#c27a69"; ctx.lineWidth = 4.6; ctx.stroke(); ctx.strokeStyle = "rgba(120,60,50,.65)"; ctx.lineWidth = 1; ctx.setLineDash([1.5, 3]); smooth(seg); ctx.stroke(); ctx.setLineDash([]); }
+  const r = rng(21), nb = Math.round((ST.litTop ? 1 - lit : 0) * 42);
+  for (let k = 0; k < nb; k++) { const gk = nG ? GAL[k % nG] : null, p = gk ? P(gk[Math.floor(r() * gk.length)]) : [r() * CW, topPx + r() * 22]; ctx.fillStyle = ["#7a4a22", "#9a6a30", "#5a3a1a"][k % 3]; ctx.beginPath(); ctx.ellipse(p[0] + (r() - 0.5) * 10, p[1] + (r() - 0.5) * 8, 3.6, 1.6, r() * 3, 0, 7); ctx.fill(); }
+  S.tex.needsUpdate = true;
+  // surface : couleur de la couche du dessus, qui fonce avec le brassage et l'humidité
+  const top = ST.layers[ST.layers.length - 1]; X.soilTop.visible = acc > 0.002;
+  if (top) { const c = new THREE.Color(LAY[top.type].c).lerp(new THREE.Color(0x2e2117), m * 0.7); c.multiplyScalar(wet); setCol(X.soilTop.material, c); }
+}
+
+/* ------------------------------------------------------------ zoom : un lombric avale le sol, le broie, le digère et rejette ses turricules */
+function buildZoom() {
+  const z = document.createElement("div"); z.id = "zoom"; z.hidden = true; const dpr = Math.min(2, window.devicePixelRatio || 1);
+  z.innerHTML = `<div class="bub" id="zb0" title="Clique pour masquer le zoom"><div class="bh"><span>Zoom · un lombric au travail</span><i>coupe du sol</i></div><canvas id="zc0" width="${Math.round(250 * dpr)}" height="${Math.round(210 * dpr)}"></canvas><div class="bt"></div><div class="bd"></div></div>`;
+  document.body.append(z); $("#zb0").onclick = () => { ST.zoomOn = false; toast("Zoom masqué : bouton 🔍 en haut ou menu de l'aquarium pour le revoir.", ""); };
+}
+const ZG = []; { const r = rng(3); for (let k = 0; k < 170; k++) ZG.push([r() * 250, 36 + r() * 174, 0.8 + r() * 1.8, ["#d9b45e", "#2c1e14", "#9c7a5e", "#5a4030", "#7a5a3a"][Math.floor(r() * 5)]]); }
+function drawWorm(now) {
+  const cv = $("#zc0"); if (!cv) return; const ctx = cv.getContext("2d"), dpr = cv.width / 250; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const t = now / 1000, a = activity(), act = a > 0.12, sy = 34, W = 250, H = 210, P0 = [40, 150], C = [150, 196], P2 = [196, sy + 1];
+  const Q = (s) => [(1 - s) * (1 - s) * P0[0] + 2 * (1 - s) * s * C[0] + s * s * P2[0], (1 - s) * (1 - s) * P0[1] + 2 * (1 - s) * s * C[1] + s * s * P2[1]];
+  ctx.fillStyle = "#cfe3f0"; ctx.fillRect(0, 0, W, sy);
+  const gd = ctx.createLinearGradient(0, sy, 0, H); gd.addColorStop(0, "#4a3426"); gd.addColorStop(1, "#6b4d36"); ctx.fillStyle = gd; ctx.fillRect(0, sy, W, H - sy);
+  for (const g of ZG) { ctx.fillStyle = g[3]; ctx.beginPath(); ctx.arc(g[0], g[1], g[2], 0, 7); ctx.fill(); }
+  if (ST.hum > 0.9) { ctx.fillStyle = "rgba(80,130,200,.28)"; ctx.fillRect(0, sy, W, H - sy); }
+  // feuilles mortes en surface (à gauche), turricules (à droite, au-dessus de l'anus)
+  ctx.fillStyle = "#9a6a30"; for (let k = 0; k < 4; k++) { ctx.beginPath(); ctx.ellipse(18 + k * 22, sy - 2, 9, 3, 0.2 * k, 0, 7); ctx.fill(); }
+  const pile = Math.min(7, 3 + Math.floor(ST.turr / 2)); for (let k = 0; k < pile; k++) { ctx.fillStyle = k % 2 ? "#3a2b1f" : "#2c2017"; ctx.strokeStyle = "rgba(120,90,60,.8)"; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(P2[0] + 6 + Math.sin(k * 2.3) * 6, sy - 3 - k * 3.6, 11 - k * 1.1, 3.6, 0, 0, 7); ctx.fill(); ctx.stroke(); }
+  // galerie et corps du lombric (anneaux, clitellum), tube digestif
+  const path = () => { ctx.beginPath(); ctx.moveTo(P0[0], P0[1]); ctx.quadraticCurveTo(C[0], C[1], P2[0], P2[1]); };
+  ctx.lineCap = "round"; path(); ctx.strokeStyle = "#20150d"; ctx.lineWidth = 30; ctx.stroke(); path(); ctx.strokeStyle = act ? "#c47c6a" : "#a9746a"; ctx.lineWidth = 21; ctx.stroke();
+  ctx.strokeStyle = "rgba(120,58,48,.55)"; ctx.lineWidth = 1.2; for (let s = 0.03; s < 0.99; s += 0.035) { const p = Q(s), p2 = Q(s + 0.01), dx = p2[0] - p[0], dy = p2[1] - p[1], n = Math.hypot(dx, dy) || 1; ctx.beginPath(); ctx.moveTo(p[0] - (dy / n) * 10, p[1] + (dx / n) * 10); ctx.lineTo(p[0] + (dy / n) * 10, p[1] - (dx / n) * 10); ctx.stroke(); }
+  { const p = Q(0.2); ctx.fillStyle = "rgba(225,160,140,.85)"; ctx.beginPath(); ctx.arc(p[0], p[1], 11.5, 0, 7); ctx.fill(); }
+  path(); ctx.strokeStyle = "rgba(150,92,70,.95)"; ctx.lineWidth = 8; ctx.stroke();
+  // particules : terre et débris avalés à la bouche → broyés (gésier) → digérés et enrichis (intestin) → turricule
+  const sp = act ? 0.07 * Math.min(1.4, a + 0.4) : 0, r = rng(9), elc = ["#ffffff", "#5b8cff", "#ffa43a", "#c58cff"];
+  for (let k = 0; k < 40; k++) { const s0 = r(), st = [6 + r() * 26, 118 + r() * 66], c0 = ["#e2bd5c", "#1c120b", "#a8714a", "#6fa040"][k % 4], s = ((t * sp + s0) % 1.2) - 0.2; let p, rad = 2.6, col = c0;
+    if (s < 0) { const f = (s + 0.2) / 0.2; p = [st[0] + (P0[0] - st[0]) * f, st[1] + (P0[1] - st[1]) * f]; }
+    else if (s <= 1) { p = Q(s); if (s > 0.3) rad = 1.9; if (s > 0.45) { col = "#3a2616"; rad = 2.2; } if (s > 0.6 && k % 3 === 0) { col = elc[k % 4]; rad = 2.3; } }
+    else { const f = (s - 1) / 0.2; p = [P2[0] + 6 + Math.sin(k) * 4, P2[1] - 6 - f * 16]; col = "#2c2017"; }
+    ctx.fillStyle = col; ctx.strokeStyle = "rgba(255,240,220,.55)"; ctx.lineWidth = 0.8; ctx.beginPath(); ctx.arc(p[0], p[1], rad, 0, 7); ctx.fill(); if (s >= 0) ctx.stroke(); }
+  // étiquettes
+  const pill = (txt, x, y) => { ctx.font = "700 9.5px Arial"; const w = ctx.measureText(txt).width + 10; ctx.fillStyle = "rgba(10,15,24,.8)"; ctx.fillRect(x - w / 2, y - 9, w, 13); ctx.fillStyle = "#f4f7fb"; ctx.textAlign = "center"; ctx.fillText(txt, x, y + 1); ctx.textAlign = "left"; };
+  pill("bouche : avale", 44, 186); { const p = Q(0.35); pill("gésier : broie", p[0], p[1] - 24); } { const p = Q(0.7); pill("intestin : digère, enrichit", p[0] - 72, p[1]); } pill("anus → turricule", P2[0] - 58, P2[1] + 24); pill("turricules", P2[0] - 52, 13);
+  if (!act) { ctx.fillStyle = "rgba(10,15,24,.55)"; ctx.fillRect(0, 84, W, 34); ctx.fillStyle = "#fff"; ctx.font = "700 11px Arial"; ctx.textAlign = "center"; ctx.fillText(!ST.wIn ? "aucun lombric vivant" : ST.hum < 0.15 ? "sol trop sec : le lombric est immobile" : ST.hum > 0.9 ? "sol noyé : le lombric manque d'air" : "le lombric se repose", W / 2, 105); ctx.textAlign = "left"; }
+  const box = $("#zb0"); if (box) { const bt = box.querySelector(".bt"), bd = box.querySelector(".bd"), k2 = act + "|" + humTxt(); if (box.dataset.k !== k2) { box.dataset.k = k2; bt.textContent = act ? "Le lombric mange le sol" : "Lombric au repos"; bd.textContent = act ? "Il avale la terre et les débris de feuilles, les broie, les digère et rejette en surface des turricules plus riches en éléments minéraux (Ca, P, N, K)." : "Il faut un sol humide et l'obscurité pour qu'il travaille."; } }
+}
+
+/* ------------------------------------------------------------ rendu, caméra, souris */
+/* ------------------------------------------------------------ rendu, caméra, souris */
+const L = {};
+/* ------------------------------------------------------------ rendu à la demande (performance)
+   L'image n'est redessinée que si quelque chose a changé à l'écran : caméra, taille de la fenêtre, position ou visibilité
+   d'un objet, couleur, opacité ou texture d'un matériau (afficheurs, liquides, indicateurs), géométrie modifiée (filets).
+   L'ombre portée n'est recalculée que si un objet qui projette une ombre a bougé ou changé de visibilité.
+   Paillasse immobile : le processeur graphique ne travaille plus ; une image de sécurité part toutes les 1,5 s.
+   Pour une capture en test, appeler R.render(scene, cam) directement reste possible. */
+const RD = { a: new Float64Array(8192), s: new Float64Array(4096), n: 0, ns: 0, np: -1, nsp: -1, ch: false, chS: false, last: 0 };
+function rdW(x) { if (RD.n >= RD.a.length) { const b = new Float64Array(RD.a.length * 2); b.set(RD.a); RD.a = b; } if (RD.a[RD.n] !== x) { RD.a[RD.n] = x; RD.ch = true; } RD.n++; }
+function rdS(x) { if (RD.ns >= RD.s.length) { const b = new Float64Array(RD.s.length * 2); b.set(RD.s); RD.s = b; } if (RD.s[RD.ns] !== x) { RD.s[RD.ns] = x; RD.chS = true; } RD.ns++; }
+function rdTex(t) { if (!t) return; rdW(t.id); rdW(t.version); rdW(t.offset.x); rdW(t.offset.y); rdW(t.rotation); }
+function rdMat(m) { if (!m) return; rdW(m.id); rdW(m.version); rdW(m.opacity); rdW(m.visible ? 1 : 0); if (m.color) { rdW(m.color.r); rdW(m.color.g); rdW(m.color.b); } if (m.emissive) { rdW(m.emissive.r); rdW(m.emissive.g); rdW(m.emissive.b); rdW(m.emissiveIntensity); } rdTex(m.map); rdTex(m.emissiveMap); rdTex(m.alphaMap); }
+function aRedessiner(R, scene, cam) {
+  RD.n = 0; RD.ns = 0; RD.ch = false; RD.chS = false;
+  scene.updateMatrixWorld(); cam.updateMatrixWorld();
+  const c = cam.matrixWorld.elements, pj = cam.projectionMatrix.elements; for (let i = 0; i < 16; i++) { rdW(c[i]); rdW(pj[i]); }
+  rdW(R.domElement.width); rdW(R.domElement.height);
+  scene.traverseVisible((o) => {
+    rdW(o.id); const e = o.matrixWorld.elements; for (let i = 0; i < 16; i++) rdW(e[i]);
+    if (o.isLight) { rdW(o.intensity); return; }
+    if (!o.material) return;
+    const g = o.geometry, p = g && g.attributes && g.attributes.position;
+    if (g) { rdW(g.id); if (p) { rdW(p.version); rdW(p.count); } if (g.index) rdW(g.index.version); rdW(g.drawRange.start); rdW(g.drawRange.count); }
+    if (Array.isArray(o.material)) o.material.forEach(rdMat); else rdMat(o.material);
+    if (o.castShadow) { rdS(o.id); for (let i = 0; i < 16; i++) rdS(e[i]); if (p) rdS(p.version); }
+  });
+  if (RD.n !== RD.np) RD.ch = true; if (RD.ns !== RD.nsp) RD.chS = true; RD.np = RD.n; RD.nsp = RD.ns;
+  if (RD.chS) R.shadowMap.needsUpdate = true;
+  const now = performance.now(); if (RD.ch || now - RD.last > 1500) { RD.last = now; return true; } return false;
+}
+function init3d() {
+  const el = $("#scene3d");
+  const R = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+  R.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5)); R.outputEncoding = THREE.sRGBEncoding; R.toneMapping = THREE.ACESFilmicToneMapping; R.toneMappingExposure = 1.05; R.shadowMap.enabled = true; R.shadowMap.type = THREE.PCFSoftShadowMap; R.shadowMap.autoUpdate = false; R.shadowMap.needsUpdate = true; el.append(R.domElement);
+  const scene = new THREE.Scene(); scene.background = new THREE.Color(0xd9dee4); const pm = new THREE.PMREMGenerator(R); scene.environment = pm.fromScene(envScene(), 0.04).texture; pm.dispose();
+  const cam = new THREE.PerspectiveCamera(40, 1.6, 0.02, 40); cam.position.set(0.0, BENCH + 0.9, 1.7);
+  const ctl = new THREE.OrbitControls(cam, R.domElement); Object.assign(ctl, { enableDamping: true, dampingFactor: 0.08, minDistance: 0.2, maxDistance: 2.8, maxPolarAngle: Math.PI * 0.48, enablePan: true, screenSpacePanning: true, panSpeed: 0.5, rotateSpeed: 0.6 }); ctl.target.set(0, BENCH + 0.15, -0.15);
+  scene.add(new THREE.HemisphereLight(0xf2f6ff, 0x6f6b66, 0.55));
+  const sun = new THREE.DirectionalLight(0xfff3e4, 1.25); sun.position.set(1.8, 4.4, 2.0); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -1.6, right: 1.6, top: 1.2, bottom: -1.2, near: 1, far: 9 }); sun.shadow.bias = -0.0003; sun.shadow.normalBias = 0.012; sun.shadow.radius = 4; sun.target.position.set(0, BENCH, -0.2); scene.add(sun, sun.target);
+  const back = new THREE.DirectionalLight(0xdbe7ff, 0.35); back.position.set(0, 2.6, -3); scene.add(back);
+  initMats(); buildRoom(scene); const g = new THREE.Group(); g.position.set(0, BENCH, 0); scene.add(g); buildBench(g); linColors(scene); g.updateMatrixWorld(true);
+  Object.assign(L, { R, scene, cam, ctl, el, g, tw: null, ray: new THREE.Raycaster(), ptr: new THREE.Vector2() });
+  const fit = () => { R.setSize(window.innerWidth, window.innerHeight, false); cam.aspect = window.innerWidth / window.innerHeight; cam.updateProjectionMatrix(); }; window.addEventListener("resize", fit); fit();
+  let down = null; const pick = (ev) => { L.ptr.set((ev.clientX / window.innerWidth) * 2 - 1, -(ev.clientY / window.innerHeight) * 2 + 1); L.ray.setFromCamera(L.ptr, cam); for (const h of L.ray.intersectObjects(g.children, true)) { let o = h.object, vis = true; while (o) { if (o.visible === false) { vis = false; break; } o = o.parent; } if (!vis) continue; if (h.object.userData.tool) return h.object.userData.tool; } return null; };
+  R.domElement.addEventListener("pointerdown", (ev) => { closeMenu(); showTip(null); down = { x: ev.clientX, y: ev.clientY, t: performance.now() }; });
+  R.domElement.addEventListener("pointermove", (ev) => { if (down) return; const n = resolveName(pick(ev)); el.classList.toggle("hot", !!n); showTip(n, ev.clientX, ev.clientY); });
+  R.domElement.addEventListener("pointerleave", () => showTip(null));
+  const up = (ev) => { if (!down) return; const short = Math.hypot(ev.clientX - down.x, ev.clientY - down.y) < 8 && performance.now() - down.t < 400; if (short) onClick(pick(ev), ev.clientX, ev.clientY); down = null; };
+  R.domElement.addEventListener("pointerup", up); R.domElement.addEventListener("pointercancel", () => { down = null; });
+  window.addEventListener("keydown", (e) => { if (e.key === "Escape") { closeMenu(); $("#exao").hidden = true; } });
+  R.domElement.addEventListener("dblclick", () => { if (ST.cur && ST.cur.cam) focusCam(CAMS[ST.cur.cam]); });
+  let pend = false; const raf = (f) => { if (pend) return; pend = true; requestAnimationFrame((t) => { pend = false; f(t); }); };
+  let prev = performance.now(); const loop = (now) => { raf(loop); const dt = Math.min(0.05, (now - prev) / 1000); prev = now; tick(dt * demoMul()); ctl.update(); if (aRedessiner(R, scene, cam)) R.render(scene, cam); placeLabels(now); }; raf(loop); setInterval(() => { if (performance.now() - prev > 250) loop(performance.now()); }, 120);
+}
+function focusCam(c) { if (!c) return; const p1 = new THREE.Vector3(c.p[0], BENCH + c.p[1], c.p[2]), q1 = new THREE.Vector3(c.t[0], BENCH + c.t[1], c.t[2]); if (L.cam.position.distanceTo(p1) < 0.03 && L.ctl.target.distanceTo(q1) < 0.03) return; L.tw = { t0: performance.now(), p0: L.cam.position.clone(), p1, q0: L.ctl.target.clone(), q1 }; }
+
+function tick(dt) {
+  /*maj-positions*/ L.g.updateMatrixWorld(); // positions à jour pour les filets, même sans nouvelle image
+  /*legende-tick*/ try { legendTick(); } catch (e) { console.error(e); }
+  /*liquide-vif*/ if (window.__LIQS) { for (const m of window.__LIQS) m.emissive.copy(m.color).multiplyScalar(0.45); if (!window.__liqRO) { window.__liqRO = 1; L.scene.traverse((o) => { if (o.material && window.__LIQS.includes(o.material) && o.renderOrder < 3.5) o.renderOrder = 3.5; }); } }
+  if ($("#overlay").hidden === false) return;
+  if (L.tw) { const k = Math.min(1, (performance.now() - L.tw.t0) / 1200), e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2; L.cam.position.lerpVectors(L.tw.p0, L.tw.p1, e); L.ctl.target.lerpVectors(L.tw.q0, L.tw.q1, e); if (k >= 1) L.tw = null; }
+  runQueue(dt);
+  /*camera-suivi*/ if (ST.camNext && ST.q[0] && ST.q[0].obj === ST.camNext.obj) { CAMS["@pour"] = ST.camNext.cam; ST.camNext = null; look("@pour"); } else if (ST.camNext && !ST.q.length) ST.camNext = null;
+  if (ST.q[0] && ST.q[0].obj && !L.tw && !CAM_FIX.has(camFocus)) { const wp = new THREE.Vector3(); ST.q[0].obj.getWorldPosition(wp); wp.y -= 0.03; const d = wp.sub(L.ctl.target).multiplyScalar(Math.min(1, dt * 3)); L.ctl.target.add(d); L.cam.position.add(d); } if (ST.q.length) camBusy = true; else if (camBusy) { camBusy = false; if (camFocus) look(camFocus); } // fin du geste : la caméra revient sur la vue de l'action en cours
+  // une semaine passe (accéléré, ≈ 2,5 s)
+  if (ST.weekRun) { const R = ST.weekRun, dw = Math.min(R.left, window.__fast ? R.left : dt / 2.5); weekStep(dw); R.left -= dw;
+    if (R.left <= 1e-6) { ST.weekRun = null; const w = Math.round(ST.week); if (ST.wIn < R.w0) log("bad", (R.w0 - ST.wIn) + " lombric(s) mort(s) cette semaine (sol " + humTxt() + ").", ST.hum > 0.9 ? "flood" : "dry"); toast("Semaine " + w + " : " + (ST.wIn ? ST.wIn + " lombrics vivants · sol " + humTxt() + (ST.hum < 0.45 ? " → arrose" : "") : "aucun lombric vivant") + ".", ST.wIn && ST.hum >= 0.3 ? "" : "bad"); } }
+  { const txt = "S" + Math.floor(ST.week + 1e-6) + "  J" + Math.round(ST.week * 7); if (txt !== ST.calTxt) { ST.calTxt = txt; X.calLcd.set(txt, ""); } }
+  // versement maintenu d'une couche de sol dans l'aquarium
+  if (ST.sFlow) { const F = ST.sFlow, j = TOOLS[F.type].obj, pour = F.ready && (F.on || F.short > 0);
+    if (!F.on && F.short > 0) F.short -= dt;
+    if (pour) { F.k = Math.min(1, F.k + dt * 2.5); const room = HMAX - 0.012 - hTot(); if (room <= 0) { F.on = false; F.short = 0; F.idle = 0.6; L.ctl.enabled = true; toast("L'aquarium est plein."); } else addLayer(F.type, Math.min(room, (window.__fast ? 0.05 : 0.013) * F.k * dt * (0.85 + Math.random() * 0.3)));
+      const mo = gpos(j, [0.03, 0.118, 0]), tp = gpos(X.aq, [-0.06, soilTopY(), 0]); setCol(X.arcS.material, LAY[F.type].c); arcPour(X.arcS, mo, tp, 0.0032 + 0.003 * F.k, 0.15);
+      F.gT -= dt; if (F.gT <= 0 && !ST.fall) { F.gT = 0.35; fall(mo, tp, new THREE.Color(LAY[F.type].c), 6, 0.35); } }
+    else { X.arcS.visible = false; F.k = 0; }
+    if (!F.on && !(F.short > 0) && F.ready && !F.back) { F.idle -= dt; if (F.idle <= 0 && !ST.q.length) { F.back = true; const dh = hTot() - F.h0; if (dh > 0.001) log("info", "Couche de " + LAY[F.type].n + " versée : " + cm(dh) + " cm (sol : " + cm(hTot()) + " cm).", "layers");
+      go(j, [{ to: () => [j.position.x, 0.47, AQZ], rot: [0, 0, 0], dur: 0.5, up: 0 }, Object.assign(homeOf(F.type), { dur: 0.9, up: 0.05, at: () => { ST.sFlow = null; capOn(j.userData.cap); } })]); } }
+    if (!F.on && !F.ready && !ST.q.length) { F.ready = true; F.idle = 0; }
+  } else X.arcS.visible = false;
+  // brume du pulvérisateur
+  if (ST.mist) { ST.mist.t -= dt; const s = TOOLS.spray.obj; if (!ST.fall) fall(gpos(s, [0.044, 0.18, 0]), gpos(X.aq, [(Math.random() - 0.5) * 0.3, soilTopY(), (Math.random() - 0.5) * 0.06]), new THREE.Color(0x9fc4ea), 8, 0.3); if (ST.mist.t <= 0) ST.mist = null; }
+  // lombrics qui s'enfoncent après l'introduction ; lombrics qui remontent quand le sol est noyé
+  if (ST.burrow) { const B = ST.burrow; B.t += window.__fast ? 9 : dt; const top = soilTopY(); X.wormsUp.forEach((w, k) => { const f = clamp((B.t - k * 0.5) / 2.6, 0, 1); w.position.y = top - 0.03 * f; w.rotation.y += Math.sin(B.t * 4 + k) * dt * 0.8; w.visible = f < 1; }); if (B.t > 5) ST.burrow = null; }
+  else X.wormsUp.forEach((w, k) => { const up = ST.hum > 0.9 && ST.wIn > 0 && k < 2; w.visible = up; if (up) w.position.y = soilTopY(); });
+  // aspect du sol (texture recalculée seulement si l'état a changé), litière et turricules en surface
+  drawSoil(); { const top = soilTopY(); X.soilTop.position.y = top + 0.0004; const nl = Math.round(16 * litSurf()); X.leaves.forEach((l, k) => { l.visible = k < nl; l.position.y = top + 0.0015 + (k % 3) * 0.0008; }); const nt = Math.floor(ST.turr); X.turr.forEach((t, k) => { t.visible = k < nt && !ST.taken.has(k); t.position.y = top; }); }
+  // béchers : l'échantillon trouble l'eau puis décante (extrait limpide, dépôt au fond)
+  for (const k of ["S", "T"]) { const B = ST.bk[k], u = X.bk[k].userData; if (B.smp && B.t < 3) { B.t += window.__fast ? 9 : dt; const f = clamp(B.t / 2.4, 0, 1); setCol(u.liq.material, new THREE.Color(0x6b4d33).lerp(new THREE.Color(0xe2cf96), f)); u.liq.material.opacity = 0.92 - 0.27 * f; u.sed.visible = f > 0.4; } }
+  // tubes : extrait, réactif, coloration qui se développe
+  ST.tubes.forEach((T, i) => { const t = X.tube[i], lq = t.userData.liq, e = i >> 1, E = EL[e]; if (T.ext && T.reag && T.dev < 1) T.dev = Math.min(1, T.dev + (window.__fast ? 1 : dt / 8)); // ≈ 8 s à l'écran (une minute accélérée)
+    const h = (T.ext ? 0.034 : 0) + (T.reag ? 0.005 : 0); lq.visible = h > 0; if (!lq.visible) return; lq.scale.y = h; lq.position.y = 0.004 + h / 2;
+    const k = T.ext && T.reag ? intens(T, e) * T.dev : 0, c = new THREE.Color(T.ext ? 0xe8d79c : 0xdfe9f4).lerp(new THREE.Color(E.col), E.turb ? k * 0.95 : k);
+    const key = c.getHex() + "|" + k.toFixed(2); if (lq.userData.k !== key) { lq.userData.k = key; setCol(lq.material, c); lq.material.opacity = E.turb ? 0.6 + 0.38 * k : 0.62 + 0.3 * k; } });
+  // gouttes de réactif
+  if (ST.drop) { const D = ST.drop, dp = D.dp; D.t += window.__fast ? 9 : dt; const ph = D.t / 0.5, i = Math.floor(ph), f = ph - i, sq = i < D.n ? 1 - 0.25 * Math.sin(Math.PI * Math.min(1, f * 2)) : 1; dp.userData.teat.scale.set(sq, 1, sq);
+    if (i < D.n) { const a = gpos(dp, [0, 0.003, 0]), sY = TUBE_Y + 0.03; X.dropM.visible = true; X.dropM.position.set(a.x, f < 0.35 ? a.y : lerp(a.y, sY, (f - 0.35) / 0.65), a.z); } else { X.dropM.visible = false; dp.userData.teat.scale.set(1, 1, 1); ST.drop = null; } }
+  // grains qui tombent
+  if (ST.fall) { const F = ST.fall; F.t += dt; X.fallP.visible = true; X.fallP.children.forEach((p, i) => { const tt = (F.t - (i * F.dur * 0.5) / F.n) / (F.dur * 0.6); p.visible = i < F.n && tt > 0 && tt < 1; if (p.visible) p.position.set(lerp(F.a.x, F.b.x + ((i % 3) - 1) * 0.008, tt) + Math.sin(i * 7) * 0.003, F.a.y - (F.a.y - F.b.y) * tt * tt, lerp(F.a.z, F.b.z + (((i * 5) % 3) - 1) * 0.008, tt)); }); if (F.t > F.dur * 1.2) { ST.fall = null; X.fallP.visible = false; } }
+  updGuide();
+}
+function placeLabels(now) {
+  const box = $("#labels"), g = ST.cur, overlayUp = $("#overlay").hidden === false, showMain = g && ST.guide && !ST.demo && !overlayUp;
+  const proj = (v) => { v.project(L.cam); return v.z > 1 ? null : [((v.x + 1) / 2) * window.innerWidth, ((1 - v.y) / 2) * window.innerHeight]; };
+  if (!showMain) box.innerHTML = "";
+  else {
+    if (!box.firstChild) box.innerHTML = '<div class="ring"></div><div class="chip"><span class="k"></span> <span class="v"></span></div>';
+    const [ring, chip] = box.children, t = TOOLS[g.on], v = t ? t.anchor.clone() : null; if (t) t.obj.localToWorld(v); const p = v ? proj(v) : null;
+    if (!p) ring.style.display = chip.style.display = "none";
+    else { ring.style.display = chip.style.display = ""; ring.style.left = chip.style.left = p[0] + "px"; ring.style.top = chip.style.top = p[1] + "px"; chip.querySelector(".k").textContent = g.k; chip.querySelector(".v").textContent = g.v ? "· " + g.v : ""; }
+  }
+  // repère de l'épaisseur de sol pendant le versement d'une couche
+  let lv = $("#lvl"); if (!lv) { lv = document.createElement("div"); lv.id = "lvl"; lv.className = "chip lvl"; box.after(lv); }
+  if (ST.sFlow && ST.sFlow.ready && !overlayUp) { const p = proj(X.aq.localToWorld(new THREE.Vector3(AQW / 2 + 0.01, soilTopY(), AQD / 2))); if (p) { lv.hidden = false; lv.style.left = p[0] + "px"; lv.style.top = p[1] + "px"; lv.innerHTML = '<span class="k">' + LAY[ST.sFlow.type].n + "</span> +" + cm(hTot() - ST.sFlow.h0) + " cm · sol " + cm(hTot()) + " cm"; } else lv.hidden = true; } else lv.hidden = true;
+  // zoom : un lombric au travail
+  const z = $("#zoom"), on = ST.zoomOn && (ST.wIn > 0 || ST.dead > 0) && !overlayUp && !ST.burrow;
+  if (z) { z.hidden = !on; document.body.classList.toggle("zon", on); const bz = $("#btnZoom"); if (bz) bz.classList.toggle("on", !!ST.zoomOn); }
+  if (on) drawWorm(now || performance.now());
+}
+function openPanel() {
+  const rows = [["Temps de l'expérience", weekTxt()], ["Sol de l'aquarium", ST.layers.length ? ST.layers.map((l) => LAY[l.type].n + " " + cm(l.h) + " cm").join(" / ") + " (du fond vers la surface)" : "vide"], ["Litière", ST.lit0 ? (ST.litTop ? Math.round(litSurf() * 100) + " % encore en surface" : "recouverte de sol") : "aucune"],
+    ["Humidité du sol", Math.round(ST.hum * 100) + " % (" + humTxt() + ")"], ["Lombrics", ST.wIn + " vivants" + (ST.dead ? ", " + ST.dead + " morts" : "")], ["Parois", ST.dark ? "papier noir (obscurité)" : "à la lumière"], ["Mélange des couches", Math.round(mixOf() * 100) + " %"], ["Galeries contre la vitre / turricules", galN() + " / " + Math.floor(ST.turr)],
+    ["Bécher Sol / Turricules", smpTxt(ST.bk.S.smp) + " / " + smpTxt(ST.bk.T.smp)], ["Essai nº", String(ST.attempts)]];
+  $("#diag").innerHTML = rows.map((r) => `<span>${r[0]}</span><b>${r[1]}</b>`).join(""); if (!$("#toolHelp").firstChild) $("#toolHelp").innerHTML = TOOL_HELP.map((t) => `<details><summary>${t[0]}</summary><p>${t[1]}</p></details>`).join(""); $("#panel").hidden = false;
+}
+
+/* ------------------------------------------------------------ tableau : observations (A), teneurs et rapports (B), conclusion */
+const OPT = { couches: [["nettes", "nettes, bien séparées"], ["melangees", "mélangées"]], litiere: [["surface", "encore en surface"], ["enfouie", "enfouie dans le sol"]], galeries: [["aucune", "aucune"], ["nombreuses", "nombreuses"]] };
+const OBS = { couches: "Les couches de sol", litiere: "La litière (feuilles mortes)", galeries: "Les galeries contre la vitre" };
+function truthA(f) {
+  if ((f === "couches" || f === "galeries") && ST.dark) return { err: "Le papier noir cache la vitre : retire-le pour observer." };
+  if (f === "couches") { if (types().length < 2) return { err: "Une seule nature de sol : on ne peut pas juger du mélange." }; const m = mixOf(); return m < 0.2 ? { v: "nettes" } : m > 0.5 ? { v: "melangees" } : { wait: "Le mélange commence à peine : laisse passer encore une ou deux semaines." }; }
+  if (f === "litiere") { if (!ST.lit0) return { err: "Il n'y a pas de litière dans l'aquarium." }; if (!ST.litTop) return { v: "enfouie" }; const l = litSurf(); return l > 0.6 ? { v: "surface" } : l < 0.35 ? { v: "enfouie" } : { wait: "La litière commence à disparaître : observe encore." }; }
+  const n = galN(); return n < 1 ? { v: "aucune" } : n >= 4 ? { v: "nombreuses" } : { wait: "Quelques galeries seulement : observe encore." };
+}
+function checkA(f, v) {
+  const tr = truthA(f), lab = OPT[f].find((o) => o[0] === v)[1];
+  if (tr.err || tr.wait) { toast(tr.err || tr.wait, tr.err ? "bad" : ""); renderTable(); return; }
+  if (tr.v === v) { ST.ansA[f] = { v, week: ST.week }; log("good", OBS[f] + " : « " + lab + " » (" + weekTxt() + "). Bien observé !", f === "galeries" ? "mechanic" : f === "litiere" ? "litter" : "observe"); toast("Bravo ! " + OBS[f] + " : " + lab, "good"); }
+  else { ST.missA++; log("warn", "Observation refusée : " + OBS[f].toLowerCase() + " ne sont pas « " + lab + " ». Regarde mieux.", "observe"); toast("Ce n'est pas ce qu'on voit, refusé : regarde à nouveau l'aquarium.", "bad"); }
+  renderTable();
+}
+const r2 = (x) => Math.round(x * 100) / 100;
+const ratioWant = (e) => { const s = shownV(e, 0), t = shownV(e, 1); return s != null && t != null && s > 0 ? r2(t / s) : null; };
+const numIn = (txt) => { const v = String(txt).replace(/\s/g, "").replace(",", "."); return /^[-+]?\d*\.?\d+$/.test(v) ? parseFloat(v) : NaN; };
+function checkR(e, txt) {
+  const want = ratioWant(e), v = numIn(txt), E = EL[e];
+  if (want == null) { toast("Il manque une mesure pour le " + E.n + ".", "bad"); return false; }
+  if (isNaN(v)) { toast("Écris un nombre, par exemple 1,40.", "bad"); return false; }
+  if (Math.abs(v - want) <= 0.011) { ST.ansR[e] = want; log("good", "Rapport juste : " + E.ion + " turricules ÷ sol = " + fx(shownV(e, 1), E.d) + " ÷ " + fx(shownV(e, 0), E.d) + " = " + fx(want, 2) + ". Bravo !", "ratio"); toast("Bravo ! " + E.k + " : " + fx(want, 2) + " fois plus dans les turricules", "good"); renderTable(); return true; }
+  ST.missR++; log("warn", "Rapport refusé (" + E.k + ") : " + String(txt).trim() + ". Recalcule turricules ÷ sol.", "ratio"); toast("Résultat faux, refusé : recalcule turricules ÷ sol (2 chiffres après la virgule).", "bad"); return false;
+}
+function checkC(v) {
+  if (EL.some((e, k) => ST.ansR[k] == null)) { toast("Calcule d'abord les quatre rapports.", "bad"); renderTable(); return; }
+  const n = EL.filter((e, k) => ST.ansR[k] > 1.1).length, want = n >= 3 ? "plus" : n === 0 ? "moins" : "aussi";
+  if (v === want) { ST.ansC = v; log("good", "Conclusion : les turricules sont " + (v === "plus" ? "plus riches" : v === "moins" ? "moins riches" : "aussi riches") + " en éléments minéraux que le sol.", "chemic"); toast("Bravo ! Conclusion juste.", "good"); }
+  else { ST.missC++; log("warn", "Conclusion refusée : relis tes rapports (plus grands ou plus petits que 1 ?).", "ratio"); toast("Conclusion refusée : regarde si tes rapports sont plus grands que 1.", "bad"); }
+  renderTable();
+}
+function renderTable() {
+  const box = $("#tbl"); if (!box || !ST.tubes) return;
+  const a = document.activeElement, keep = a && a.tagName === "INPUT" && box.contains(a) ? { e: a.dataset.e, v: a.value } : null;
+  const sel = (f) => ST.ansA[f] ? `<td class="ok">${OPT[f].find((o) => o[0] === ST.ansA[f].v)[1]}<small>✓ Bravo ! (semaine ${Math.round(ST.ansA[f].week)})</small></td>` : `<td class="in"><select data-f="${f}"><option value="">choisis…</option>${OPT[f].map((o) => `<option value="${o[0]}">${o[1]}</option>`).join("")}</select></td>`;
+  const rowsA = Object.keys(OBS).map((f) => `<tr><td><b>${OBS[f]}</b></td>${sel(f)}</tr>`).join("");
+  const auto = `<tr><td>Turricules en surface · lombrics vivants</td><td class="au">${Math.floor(ST.turr)} · ${ST.wIn}${ST.dead ? " (" + ST.dead + " morts)" : ""}<small>${weekTxt()}</small></td></tr>`;
+  const v = (e, j) => { const m = ST.tubes[e * 2 + j].meas; return m ? `<td class="au">${fx(m.v, EL[e].d)}${m.dev < 0.95 ? '<small style="color:var(--bad)">coloration pas stable</small>' : ""}</td>` : '<td class="na">—</td>'; };
+  const rc = (e) => ST.ansR[e] != null ? `<td class="ok">${fx(ST.ansR[e], 2)}<small>✓ Bravo !</small></td>` : ratioWant(e) == null ? '<td class="na">—</td>' : `<td class="in"><input type="text" inputmode="decimal" autocomplete="off" spellcheck="false" data-e="${e}" placeholder="T ÷ S"><button type="button" data-e="${e}" title="Valider">✓</button></td>`;
+  const rowsB = EL.map((E, e) => `<tr><td><b>${E.n[0].toUpperCase() + E.n.slice(1)}</b> (${E.ion})</td>${v(e, 0)}${v(e, 1)}${rc(e)}</tr>`).join("");
+  const concl = ST.ansC ? `<b style="color:var(--good)">${{ plus: "plus riches", aussi: "aussi riches", moins: "moins riches" }[ST.ansC]} ✓</b>` : `<select data-c="1"><option value="">choisis…</option><option value="plus">plus riches</option><option value="aussi">aussi riches</option><option value="moins">moins riches</option></select>`;
+  box.innerHTML = `<table class="mt st"><tr><th colspan="2">A. Action mécanique — ce que tu observes dans l'aquarium</th></tr>${rowsA}${auto}</table>
+  <table class="mt st"><tr><th>B. Élément minéral</th><th>Sol (g/kg)<br><small>${smpTxt(ST.bk.S.smp)}</small></th><th>Turricules (g/kg)</th><th class="c">Rapport<br>turricules ÷ sol</th></tr>${rowsB}</table>
+  <p class="cq" style="margin:4px 2px 2px;font-size:13.5px">Conclusion : les turricules sont ${concl} en éléments minéraux que le sol.</p>`;
+  box.querySelectorAll("select[data-f]").forEach((s) => (s.onchange = () => s.value && checkA(s.dataset.f, s.value)));
+  const sc = box.querySelector("select[data-c]"); if (sc) sc.onchange = () => sc.value && checkC(sc.value);
+  box.querySelectorAll("input").forEach((inp) => inp.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") submit(inp); }));
+  box.querySelectorAll("td.in button").forEach((b) => (b.onclick = () => submit(b.previousElementSibling)));
+  if (keep) { const inp = box.querySelector(`input[data-e="${keep.e}"]`); if (inp) { inp.value = keep.v; inp.focus(); } }
+}
+function submit(inp) { const e = +inp.dataset.e; if (!inp.value.trim()) return; if (!checkR(e, inp.value)) { inp.value = ""; const td = inp.parentElement; td.classList.remove("no"); void td.offsetWidth; td.classList.add("no"); let m = td.querySelector("small"); if (!m) { m = document.createElement("small"); td.append(m); } m.textContent = "✗ faux, refusé : recalcule"; inp.focus(); } }
+function showTable() { if (ST.tblShown) return; ST.tblShown = true; $("#exao").hidden = false; renderTable(); }
+function openTable() { const e = $("#exao"); e.hidden = !e.hidden; ST.tblShown = true; renderTable(); }
+
+/* ------------------------------------------------------------ bilan */
+function evaluate() { /*fini*/ ST.fini = true; setTimeout(() => toast("Expérience finie : clique sur l'aquarium ou les tubes pour voir leur résultat légendé.", "good"), 1200);
+  const pts = [], calc = [], m = mixOf();
+  if (!ST.layers.length) { toast("Prépare d'abord l'aquarium.", "bad"); ST.fini = false; return; }
+  if (types().length < 2) pts.push("Une seule nature de sol dans l'aquarium : le mélange des couches ne peut pas se voir.");
+  if (!ST.lit0) pts.push("Pas de litière en surface : on ne peut pas observer son enfouissement."); else if (ST.litBuried) pts.push("La litière a été recouverte par une couche de sol : ce ne sont pas les lombrics qui l'ont enfouie.");
+  if (!ST.wIn && !ST.dead) pts.push("Aucun lombric introduit : l'aquarium n'a été qu'un témoin.");
+  if (ST.dryW > 0.25) pts.push("Le sol est resté sec pendant " + fmt(ST.dryW * 7, 0) + " jour(s) : les lombrics ont cessé de travailler" + (ST.dead ? " et certains sont morts" : "") + ". Il faut arroser avant chaque semaine.");
+  if (ST.wetW > 0.25) pts.push("Le sol a été noyé pendant " + fmt(ST.wetW * 7, 0) + " jour(s) : manque d'air, lombrics en surface" + (ST.dead ? ", morts" : "") + ". On arrose par pulvérisations.");
+  if (ST.dead) pts.push(ST.dead + " lombric(s) mort(s) sur 10 : le brassage a été plus faible.");
+  if (ST.lightW > 0.4) pts.push("Parois laissées à la lumière pendant " + fmt(ST.lightW * 7, 0) + " jour(s) : les lombrics fuient la lumière, moins de galeries contre la vitre.");
+  if (ST.wIn && ST.week < 2.9) pts.push("Observation au bout de " + fmt(ST.week * 7, 0) + " jours seulement : le brassage n'est pas terminé (environ un mois).");
+  if (ST.bk.S.smp === "deep") pts.push("Le sol a été prélevé au fond de l'aquarium et non à la même profondeur que les turricules : la comparaison est faussée (le sol profond est plus pauvre).");
+  EL.forEach((E, e) => { [0, 1].forEach((j) => { const mm = ST.tubes[e * 2 + j].meas; if (mm && mm.dev < 0.95) pts.push(E.ion + " (" + (j ? "turricules" : "sol") + ") mesuré avant que la coloration soit stable : " + fx(mm.v, E.d) + " g/kg au lieu de " + fx(conc(mm.src, e), E.d) + "."); }); });
+  Object.keys(OBS).forEach((f) => { if (!ST.ansA[f]) calc.push("Observation à noter : " + OBS[f].toLowerCase() + "."); }); if (ST.missA) calc.push(ST.missA + " observation(s) refusée(s) avant la bonne.");
+  EL.forEach((E, e) => { if (ratioWant(e) != null && ST.ansR[e] == null) calc.push("Rapport à calculer : " + E.n + "."); else if (ratioWant(e) == null) calc.push("Mesures à faire : " + E.n + " (sol et turricules)."); }); if (ST.missR) calc.push(ST.missR + " rapport(s) refusé(s) avant le bon.");
+  if (!ST.ansC) calc.push("Conclusion à choisir dans le tableau."); if (ST.missC) calc.push(ST.missC + " conclusion(s) refusée(s).");
+  const ok = !pts.length, o = $("#overlay"); o.hidden = false;
+  const rowsB = EL.map((E, e) => { const s = shownV(e, 0), t = shownV(e, 1); return `<tr><td><b>${E.ion}</b> ${E.n}</td><td>${s == null ? "—" : fx(s, E.d)}</td><td>${t == null ? "—" : fx(t, E.d)}</td><td>${ST.ansR[e] != null ? fx(ST.ansR[e], 2) + " ✓" : ratioWant(e) != null ? "à calculer" : "—"}</td><td>${fx(E.S, E.d)} / ${fx(E.T, E.d)}</td></tr>`; }).join("");
+  o.innerHTML = `<div class="card" style="max-width:920px"><p class="sub" style="margin:0;font-size:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--muted)">Bilan · rôle de la faune du sol</p><h1>${ok ? "Les lombrics, agents de la fertilité du sol" : "Manipulations à revoir"}</h1>
+  <p><b>A. Action mécanique</b> (${weekTxt()}, ${ST.wIn} lombrics vivants) : couches mélangées à ${Math.round(m * 100)} %, ${galN()} galeries contre la vitre, ${ST.lit0 ? Math.round((1 - litSurf()) * 100) + " % de la litière enfouie" : "pas de litière"}, ${Math.floor(ST.turr)} turricules en surface.</p>
+  <table class="mt"><tr><th>B. Élément</th><th>Sol (g/kg)</th><th>Turricules (g/kg)</th><th>Rapport T ÷ S</th><th>Document (sol / turricules)</th></tr>${rowsB}</table>
+  ${calc.length ? "<p><b>Tableau :</b></p><ul>" + calc.map((p) => "<li>" + p + "</li>").join("") + "</ul>" : "<p><b>Tableau :</b> observations, rapports et conclusion justes. Bravo !</p>"}
+  ${WHY.mechanic}${WHY.chemic}${WHY.advantages}
+  ${pts.length ? "<p><b>Ce qui a influencé les résultats :</b></p><ul>" + [...new Set(pts)].map((p) => "<li>" + p + "</li>").join("") + "</ul>" : "<p>Aucune erreur de manipulation relevée : couches distinctes et litière en surface, sol humide sans être noyé, obscurité, un mois d'observation, sol et turricules prélevés à la même profondeur, colorations stables.</p>"}
+  <div class="row"><button class="btn" id="look" type="button">Continuer à explorer</button><button class="btn ghost" id="again" type="button">Tout remettre en ordre</button></div></div>`;
+  $("#look").onclick = () => { o.hidden = true; }; $("#again").onclick = () => { o.hidden = true; resetState(); setGuide(ST.guide); };
+}
+
+/* ------------------------------------------------------------ démonstration automatique */
+async function pourLayer(type, h) { while (ST.demo && isBusy()) await demoTick(); const h0 = hTot(); startLayer(type); while (ST.demo && hTot() < h0 + h) { await demoTick(); const F = ST.sFlow; if (F ? !F.on && !F.back : !isBusy()) startLayer(type); } stopLayer(); while (ST.demo && isBusy()) await demoTick(); }
+async function waterIf(h = 0.45) { while (ST.demo && ST.hum < h) { doSpray(false); await demoWait(0.3); } }
+async function weeksTo(n) { while (ST.demo && ST.week < n - 0.01) { await waterIf(); doWeek(); await demoWait(0.5); } }
+async function demoAnswerA() { $("#exao").hidden = false; ST.tblShown = true; for (const f of Object.keys(OBS)) { renderTable(); const tr = truthA(f), s = $(`#tbl select[data-f="${f}"]`); if (!s || !tr.v) continue; await demoWait(0.6); s.value = tr.v; checkA(f, tr.v); await demoWait(0.8); } }
+async function demoRatios() { $("#exao").hidden = false; ST.tblShown = true; for (let e = 0; e < 4; e++) { renderTable(); const w = ratioWant(e), q = () => $(`#tbl input[data-e="${e}"]`); if (w == null || !q()) continue; q().focus(); for (const ch of fx(w, 2)) { const el = q(); if (!el || !ST.demo) return; el.value += ch; await demoWait(0.1); } await demoWait(0.4); if (q()) submit(q()); await demoWait(0.7); } }
+async function measureAll() { for (let e = 0; e < 4; e++) { while (ST.demo && Math.min(ST.tubes[e * 2].dev, ST.tubes[e * 2 + 1].dev) < 0.99) await demoTick(); doMeasure(e); await demoWait(0.5); } }
+const DEMO = [
+  { k: "Couches", t: "On remplit l'aquarium de couches de sols différents, en maintenant le bouton du bocal : sable, terreau, argile, terreau.", why: "layers", cam: "aq", run: async () => { await pourLayer("sable", 0.05); await pourLayer("terreau", 0.045); await pourLayer("argile", 0.04); await pourLayer("terreau", 0.04); }, wait: 1 },
+  { k: "Litière", t: "On dépose la litière (feuilles mortes) en surface.", why: "litter", cam: "aqTop", run: doLitter, wait: 1 },
+  { k: "Humidité", t: "On humidifie le sol au pulvérisateur : les lombrics respirent par leur peau, qui doit rester humide.", why: "water", cam: "aqTop", run: () => waterIf(), wait: 0.6 },
+  { k: "Lombrics", t: "On introduit une dizaine de lombrics en surface : ils s'enfoncent aussitôt.", why: "worms", cam: "aqTop", run: doWorms, wait: 1.5 },
+  { k: "Obscurité", t: "On recouvre les parois de papier noir : les lombrics vivent dans l'obscurité.", why: "dark", cam: "aq", run: doPaper, wait: 0.8 },
+  { k: "Un mois", t: "Les semaines passent (accéléré). On arrose avant chaque semaine. Le zoom montre un lombric qui avale le sol et rejette ses turricules en surface.", why: "eat", cam: "aqTop", run: () => weeksTo(4), wait: 1 },
+  { k: "Observer", t: "On retire le papier noir : les couches sont mélangées, la litière a été entraînée dans le sol, des galeries longent la vitre.", why: "mechanic", cam: "aq", run: doPaper, wait: 2 },
+  { k: "Observations", t: "On note dans le tableau ce que l'on voit.", why: "observe", cam: "aq", run: demoAnswerA, wait: 1 },
+  { k: "Turricules", t: "On prélève des turricules en surface ; l'extrait (avec 50 mL d'eau distillée) décante puis est réparti dans 4 tubes.", why: "sample", cam: "aqTop", run: () => doSample("T"), wait: 0.5 },
+  { k: "Sol", t: "On prélève du sol à la même profondeur (en surface, entre les turricules), traité de la même façon.", why: "extract", cam: "aqTop", run: () => doSample("surf"), wait: 0.5 },
+  { k: "Réactifs", t: "Un réactif par élément, le même nombre de gouttes dans le tube sol et dans le tube turricules : regarde la différence de coloration.", why: "reag", cam: "rack", run: async () => { for (let e = 0; e < 4; e++) { doReag(e); await demoWait(0.3); } }, wait: 1.5 },
+  { k: "Colorimètre", t: "Coloration stable : le colorimètre mesure chaque tube et donne la teneur en g/kg de sol.", why: "colo", cam: "colo", run: measureAll, wait: 1 },
+  { k: "Rapports", t: "On calcule combien de fois les turricules sont plus riches que le sol : turricules ÷ sol.", why: "ratio", cam: "ana", run: demoRatios, wait: 1 },
+  { k: "Conclusion", t: "Tous les rapports dépassent 1 : les turricules sont plus riches en éléments minéraux que le sol.", why: "chemic", cam: "ana", run: async () => { renderTable(); await demoWait(0.6); checkC("plus"); }, wait: 1.5 },
+  { k: "Bilan", t: "Les lombrics brassent et aèrent le sol, enfouissent la matière organique et l'enrichissent en éléments minéraux.", why: "advantages", cam: "wide", run: evaluate, wait: 0.5 },
+];
+const demoTick = () => new Promise((r) => setTimeout(r, 100)).then(async () => { while (ST.demo && ST.demoPaused) await new Promise((r) => setTimeout(r, 100)); if (!ST.demo) throw DEMO_STOP; });
+async function demoWait(s) { const t0 = performance.now(); while (ST.demo && ((performance.now() - t0) * demoMul() < s * 1000 || isBusy())) { await demoTick(); if (ST.demoSkip) { ST.demoSkip = false; break; } } if (!ST.demo) throw DEMO_STOP; }
+/* ------------------------------------------------------------ démonstration pilotable (demande de l'enseignant, nov. 2026)
+   « Vitesse » : ×1, ×2 ou ×4 (gestes, temps de l'expérience et pauses de la démo). « Étape suivante » : l'étape en cours se
+   termine en accéléré (×12) pour que la paillasse reste cohérente, puis la démo reprend normalement. « Continuer moi-même » :
+   la démo s'arrête, la paillasse reste dans l'état où elle est et le guide reprend pour la suite. */
+const DEMO_STOP = {}; // levé par les attentes de la démo quand l'élève l'arrête
+function demoMul() { return ST.demo ? (ST.demoFF ? 12 : ST.demoSpeed || 1) : 1; }
+function demoButtons() {
+  const b = $("#dSpeed"); if (!b || b.dataset.on) return; b.dataset.on = "1"; b.textContent = "Vitesse ×" + (ST.demoSpeed || 1);
+  b.onclick = () => { const v = [1, 2, 4], k = (v.indexOf(ST.demoSpeed || 1) + 1) % v.length; ST.demoSpeed = v[k]; b.textContent = "Vitesse ×" + ST.demoSpeed; toast("Démonstration ×" + ST.demoSpeed + ".", ""); };
+}
+async function runDemo() {
+  resetState(); $("#overlay").hidden = true; $("#panel").hidden = true; closeMenu(); ST.demo = true; ST.demoPaused = false; const d = $("#demo"); setGuide(true);
+  try { for (let i = 0; i < DEMO.length && ST.demo; i++) {
+    ST.demoFF = false;
+    const s = DEMO[i]; d.querySelector(".n").textContent = "Démo " + (i + 1) + "/" + DEMO.length; d.querySelector(".k").textContent = s.k; d.querySelector(".t").textContent = s.t; d.querySelector(".w").innerHTML = s.why ? WHY[s.why] : ""; d.querySelector(".bar i").style.width = ((i + 1) / DEMO.length) * 100 + "%";
+    look(s.cam); await demoWait(1.6); if (!ST.demo) break;
+    await s.run(); if (!ST.demo) break; while (ST.demo && isBusy()) await demoTick(); await demoWait(s.wait);
+  } } catch (e) { if (e !== DEMO_STOP) console.error(e); } // démo arrêtée : l'étape en cours s'interrompt
+  if (ST.demo) { ST.demo = false; setGuide(ST.guide); }
+}
+function stopDemo() { ST.demo = false; ST.demoPaused = false; stopLayer(); setGuide(ST.guide); ST.demoFF = false; toast("Démo arrêtée : continue toi-même, la paillasse est dans l'état où la démo l'a laissée.", ""); }
+buildZoom();
+$("#btnDemo").onclick = () => { if (ST.demo) stopDemo(); else runDemo(); };
+$("#startDemo").onclick = runDemo;
+$("#dPause").onclick = () => { ST.demoPaused = !ST.demoPaused; if (ST.demoPaused) stopLayer(); $("#dPause").textContent = ST.demoPaused ? "▶ Lecture" : "⏸ Pause"; };
+$("#dNext").onclick = () => { ST.demoPaused = false; $("#dPause").textContent = "⏸ Pause"; ST.demoSkip = true; ST.demoFF = true; toast("Étape terminée en accéléré…", ""); };
+$("#dQuit").onclick = stopDemo;
+$("#start").onclick = () => { $("#overlay").hidden = true; setGuide(ST.guide); look("wide"); log("info", "Entrée au labo. Objectif : montrer l'action mécanique puis l'action chimique des lombrics sur le sol.", "mechanic"); };
+$("#reset").onclick = () => { resetState(); $("#panel").hidden = true; toast("Paillasse remise en ordre."); };
+$("#btnPanel").onclick = openPanel; $("#closePanel").onclick = () => ($("#panel").hidden = true); $("#btnEval").onclick = evaluate; $("#closeExao").onclick = () => ($("#exao").hidden = true); $("#exaoEval").onclick = () => { $("#exao").hidden = true; evaluate(); }; $("#btnTable").onclick = openTable;
+$("#btnZoom").onclick = () => { ST.zoomOn = !ST.zoomOn; if (ST.zoomOn) { once("zoomH", "info", "Zoom : un lombric avale le sol et rejette ses turricules.", "eat"); if (!ST.wIn && !ST.dead) toast("Le zoom apparaît quand les lombrics sont dans l'aquarium.", ""); } };
+$("#btnWhy").onclick = () => { if (!ST.cur) return; const w = WHY[ST.cur.why] || ""; openPanel(); const d = document.createElement("div"); d.className = "ev info open"; d.innerHTML = `<b>${ST.cur.k}</b><div class="why">${w}</div>`; $("#events").prepend(d); };
+function setGuide(on) { ST.guide = on; const demo = !!ST.demo; $("#instr").hidden = demo || !on; $("#demo").hidden = !demo || !on; $("#showGuide").hidden = on; $("#showGuide").textContent = demo ? "Afficher la démo ▸" : "Afficher le guide ▸"; }
+$("#btnGuide").onclick = () => setGuide(false); $("#dMin").onclick = () => setGuide(false); $("#showGuide").onclick = () => setGuide(true);
+init3d(); resetState(); stepButtons(); cadrages(); demoButtons();
+/*legendes-lombrics*/ // légendes : on nomme les couches, la litière, les galeries, les tubes ; les résultats seulement après le bilan
+{ const fr = (y) => [AQX - AQW / 2 + 0.02, y, AQZ + AQD / 2 + 0.004];
+  LEGS.aq = [0, 1, 2, 3, 4, 5].map((k) => ({ at: () => { let a = 0; for (let q = 0; q < k; q++) a += ST.layers[q].h; return fr(AQ_Y0 + a + ST.layers[k].h / 2); }, t: () => (ST.layers[k].type === "litiere" ? "Litière recouverte" : "Couche de " + LAY[ST.layers[k].type].n), m: () => cm(ST.layers[k].h) + " cm au départ", c: "#8a6a48", on: () => ST.layers[k] && ST.layers[k].h > 0.01 && !ST.dark && mixOf() < 0.45 }));
+  LEGS.aq.push({ at: () => { const p = GAL ? GAL[0][Math.floor(GAL[0].length / 2)] : [CW / 2, 0.5], topPx = CH * (1 - hTot() / HMAX); return [AQX - AQW / 2 + (p[0] / CW) * AQW, AQ_Y0 + HMAX * (1 - (topPx + p[1] * (CH - topPx)) / CH), AQZ + AQD / 2 + 0.004]; }, t: "Galerie de lombric", m: "creusée contre la vitre", c: "#3a2b1f", on: () => !ST.dark && galN() > 0 });
+  LEGS.aq.push({ at: () => [AQX + 0.1, soilTopY() + 0.01, AQZ + AQD / 2], t: "Litière (feuilles mortes)", m: "en surface", c: "#9a6a30", on: () => ST.litTop && litSurf() > 0.35 });
+  LEGS.aq.push({ fin: true, at: () => [AQX, AQ_Y0 + hTot() * 0.5, AQZ + AQD / 2 + 0.004], t: "Résultat (action mécanique)", m: () => "couches mélangées à " + Math.round(mixOf() * 100) + " %, " + galN() + " galeries, litière enfouie à " + Math.round((1 - litSurf()) * 100) + " %", c: "#1f7a4d", on: () => ST.week > 0 });
+  LEGS.aqTop = [{ at: () => { const k = X.turr.findIndex((t) => t.visible); return k >= 0 ? gpos(X.turr[k]).toArray() : [AQX, soilTopY(), AQZ]; }, t: "Turricules", m: "déjections des lombrics", c: "#3a2b1f", on: () => X.turr.some((t) => t.visible) }, { at: () => [AQX - 0.12, soilTopY() + 0.005, AQZ], t: "Litière", m: "feuilles mortes", c: "#9a6a30", on: () => ST.litTop && litSurf() > 0.2 }, { at: () => [AQX + 0.15, soilTopY() + 0.004, AQZ], t: "Lombrics", m: () => (ST.burrow ? "ils s'enfoncent dans le sol" : "remontés : sol noyé"), c: "#b46a5c", on: () => X.wormsUp.some((w) => w.visible) }];
+  LEGS.rack = EL.map((E, e) => ({ at: () => [(tubeX(e * 2) + tubeX(e * 2 + 1)) / 2, 0.12, RACK.z], t: E.ion + " · " + E.n, m: () => (ST.fini && shownV(e, 0) != null && shownV(e, 1) != null ? "sol " + fx(shownV(e, 0), E.d) + " · turricules " + fx(shownV(e, 1), E.d) + " g/kg" : "tube S (sol) · tube T (turricules)"), c: ["#7a7f86", "#2a5fd6", "#e0841a", "#7a5a9a"][e], on: () => ST.tubes[e * 2].ext || ST.tubes[e * 2 + 1].ext }));
+  LEGS.bks = ["S", "T"].map((k) => ({ at: () => [BKP[k].x, 0.06, BKP[k].z], t: "Bécher « " + BKP[k].t + " »", m: () => (ST.bk[k].smp ? smpTxt(ST.bk[k].smp) + " + eau distillée" : "eau distillée seule"), c: k === "T" ? "#3a2b1f" : "#8a6a48" }));
+  RESVIEW.aq = RESVIEW.paper = RESVIEW.cal = RESVIEW.box = "aq"; RESVIEW.rack = RESVIEW.colo = RESVIEW.rCa = RESVIEW.rP = RESVIEW.rN = RESVIEW.rK = RESVIEW.spat = "rack";
+}
+window.__lab = { /*lab-test*/ tick, CAMS, LEGS, RESVIEW, camKey: () => camFocus, onClick, ST, evaluate, TOOLS, X, suggest, L, look, menuFor, startLayer, stopLayer, doLitter, doWorms, doSpray, doPaper, doWeek, weekStep, doSample, doReag, doMeasure, emptyBk, emptyTubes, emptyAq, checkA, checkR, checkC, truthA, ratioWant, renderTable, runDemo, stopDemo, drawSoil, mixOf, hTot, activity, runQueue };
+/* pas de mains gantées (demande de l'enseignant, nov. 2026) */
+
+})();
+</script>

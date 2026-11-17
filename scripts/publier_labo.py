@@ -40,6 +40,7 @@ PAGES = {
     "svt-sol-cah.html": "svt-sol-cah.html",
     "svt-sol-cations.html": "svt-sol-cations.html",
     "svt-sol-eau.html": "svt-sol-eau.html",
+    "svt-sol-lombrics.html": "svt-sol-lombrics.html",
     "physique-5-stations.html": "physique-5-stations.html",
     "labo-3-manips.html": "labo-3-manips.html",
 }
