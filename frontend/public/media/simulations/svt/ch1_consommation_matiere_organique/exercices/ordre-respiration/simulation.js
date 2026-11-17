@@ -19,7 +19,9 @@
       { repere: 'carrefour_pyruvate', texte: 'Le pyruvate est un carrefour : son devenir dépend de l’O₂ et de la mitochondrie.' },
       { repere: 'porte_o2', texte: 'Avec du dioxygène et une mitochondrie active, la porte est ouverte.' },
       { repere: 'krebs', texte: 'Dans la matrice, le pyruvate est oxydé en acétyl-CoA, puis le cycle de Krebs libère du CO₂ et charge NADH et FADH₂.' },
-      { repere: 'chaine_respiratoire', texte: 'La chaîne respiratoire transfère leurs électrons à l’O₂, forme de l’eau et produit beaucoup d’ATP ; le NAD⁺ régénéré retourne à la glycolyse.' },
+      { repere: 'chaine_respiratoire', texte: 'La chaîne respiratoire transfère leurs électrons à l’O₂ et forme de l’eau.' },
+      { repere: 'atp_respiration', texte: 'Ce transfert d’électrons produit beaucoup d’ATP.' },
+      { repere: 'nad', texte: 'Les NADH doivent redevenir NAD⁺ : régénérés, ils retournent à la glycolyse.' },
     ],
     fermentation_lactique: [
       { repere: 'glycolyse', texte: 'La glycolyse a lieu quand même : 2 pyruvates, 2 ATP, et 2 NADH chargés.' },
@@ -35,7 +37,7 @@
       { repere: 'recyclage_nad', texte: 'Le NADH est réoxydé en NAD⁺ : la glycolyse repart, avec 2 ATP par glucose.' },
     ],
     mitochondrie_inactive: [
-      { repere: 'condition_mitochondrie', texte: 'Le dioxygène est présent, mais la mitochondrie est inactive.' },
+      { repere: 'mitochondrie', texte: 'Le dioxygène est présent, mais la mitochondrie est inactive.' },
       { repere: 'porte_o2', texte: 'L’O₂ seul ne suffit pas : sans chaîne respiratoire active, la porte reste fermée.' },
       { repere: 'fermentation', texte: 'Les pyruvates partent donc en fermentation, comme sans O₂.' },
       { repere: 'nad', texte: 'C’est la seule façon de régénérer le NAD⁺ et de continuer la glycolyse.' },
