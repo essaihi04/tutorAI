@@ -105,6 +105,11 @@ const ANIMATIONS = `
   [data-scene-cours] [data-bulle] .text-xl { font-size: 16px; line-height: 1.3 }
   [data-scene-cours] [data-bulle] .text-lg { font-size: 14px; line-height: 1.35 }
   [data-scene-cours] [data-bulle] .mt-3 { margin-top: 6px }
+  /* les formules de la diapositive, sous une simulation : à sa droite (le tableau est très large en paysage, sa droite
+     souvent vide), en plus petit ; la simulation garde toute la hauteur (17 novembre 2026, ch12 « Le quotient de réaction ») */
+  [data-scene-cours] > main:has(> [data-formules-centre]):not(:has([data-observation])) { flex-direction: row; align-items: stretch }
+  [data-scene-cours] [data-formules-centre] { flex-direction: column; flex-wrap: nowrap; width: auto; max-width: 36%; justify-content: center; gap: 4px }
+  [data-scene-cours] [data-formules-centre] > div { font-size: clamp(13px, 4.6vh, 18px) !important; padding: 2px 8px }
   /* la question d'observation, sous la figure : une bande fine, pour laisser la hauteur à la figure */
   [data-scene-cours] [data-observation] { padding: 3px 10px }
   [data-scene-cours] [data-observation] p { font-size: 14px; line-height: 1.25 }
@@ -2062,8 +2067,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
             13 novembre 2026 : « ces équations masquent les simulations ») ; la place est gardée dès le début, la figure
             ne saute pas quand une formule apparaît. */}
         {centre.length > 0 && (
-          <div className={`flex ${visuel ? 'pointer-events-none w-full shrink-0 flex-row flex-wrap justify-center gap-2' : table ? 'flex-row flex-wrap justify-center gap-3' : 'flex-col items-center gap-4'}`}
-            style={visuel && tuteur3D ? { paddingRight: COLONNE_TUTEUR } : undefined}>
+          <div data-formules-centre={visuel ? '' : undefined} className={`flex ${visuel ? 'pointer-events-none w-full shrink-0 flex-row flex-wrap justify-center gap-2' : table ? 'flex-row flex-wrap justify-center gap-3' : 'flex-col items-center gap-4'}`}>
             {centre.map((c, i) => {
               const vu = toutVisible || temps >= c.t;
               return (
@@ -2292,6 +2296,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
           </Bulle>
         )}
         <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          <BoutonPleinEcran />
           {deckControls}
           {/* Le seul bouton qui fait avancer le cours : mis en avant quand l'étape est finie ; il clignote à la relance. */}
           <button onClick={faireSuite} disabled={etapeSuite.quoi === 'rien'} data-suite={etapeSuite.quoi}
@@ -3025,6 +3030,23 @@ function useCourt() {
     return () => m.removeEventListener('change', suivre);
   }, []);
   return court;
+}
+
+/** Téléphone en paysage, pas en plein écran : « ⛶ » cache la barre du navigateur et rend sa hauteur au tableau
+ *  (17 novembre 2026 : la barre d'adresse prenait un quart de l'écran ; Android seulement, l'iPhone n'a pas cette API). */
+function BoutonPleinEcran() {
+  const court = useCourt();
+  const [plein, setPlein] = useState(() => typeof document !== 'undefined' && !!document.fullscreenElement);
+  useEffect(() => {
+    const suivre = () => setPlein(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', suivre);
+    return () => document.removeEventListener('fullscreenchange', suivre);
+  }, []);
+  if (!court || plein || !document.fullscreenEnabled) return null;
+  return (
+    <button type="button" onClick={() => void document.body.requestFullscreen?.().catch(() => {})} title="Plein écran" aria-label="Plein écran"
+      className="h-9 shrink-0 rounded-full bg-cyan-400/20 px-3 text-sm text-cyan-100 hover:bg-cyan-400/30">⛶</button>
+  );
 }
 
 /** Sur téléphone en paysage, la question (énoncé, choix, retour) grandit jusqu'à remplir sa carte (16 novembre 2026 :
