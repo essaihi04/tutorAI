@@ -114,12 +114,28 @@ function reachPosition(point: Point, writing: boolean, rigModele: ProfessorRig, 
 /** Commandes où le professeur montre un élément de la simulation (même liste que le kit shared/tableau). */
 const POINTAGE_SIMULATION = ['highlight', 'point', 'montrer', 'show'];
 
+/**
+ * Sa place de repos par défaut, à la taille d'écran DU MOMENT : en bas de sa colonne à droite. Calculée une seule
+ * fois à l'ouverture, elle restait au milieu de l'écran quand la fenêtre grandissait ensuite (plein écran, téléphone
+ * tourné en paysage) et il revenait se poser sur l'écriture après chaque explication (17 novembre 2026).
+ */
+const reposParDefaut = (discret: boolean) => clampPosition(
+  window.innerWidth - largeur() - (discret ? 8 : 20), window.innerHeight - hauteur() - 100);
+
 export default function AIAvatar({ isSpeaking, isProcessing, processingStage, isListening = false, control, labControl, emotion, discret = false, mainOreille = false }: AIAvatarProps) {
-  const initial = useMemo(() => clampPosition(window.innerWidth - largeur() - 20, window.innerHeight - hauteur() - 100), []);
+  const initial = useMemo(() => reposParDefaut(discret), []); // eslint-disable-line react-hooks/exhaustive-deps
+  /** L'élève l'a déplacé lui-même (poignée ou flèches) : sa place est alors la sienne, seulement recalée à l'écran. */
+  const placeChoisie = useRef(false);
+  const repos = useCallback(() => {
+    home.current = placeChoisie.current ? clampPosition(home.current.x, home.current.y) : reposParDefaut(discret);
+    return home.current;
+  }, [discret]);
   const [minimized, setMinimized] = useState(false);
   const [animationFailed, setAnimationFailed] = useState(false);
   const onAnimationError = useCallback(() => setAnimationFailed(true), []);
   const [focus, setFocus] = useState<Focus | null>(null);
+  const focusRef = useRef<Focus | null>(null);
+  focusRef.current = focus;
   const [press, setPress] = useState<{ key: number; x: number; y: number } | null>(null);
   const deliveredLab = useRef(0);
   const [gesture, setGesture] = useState<{ kind: ProfessorGestureKind; key: number } | null>(null);
@@ -204,10 +220,12 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
   }, []);
 
   useEffect(() => {
-    const resize = () => { home.current = clampPosition(home.current.x, home.current.y); fly(clampFlight(goal.current.x, goal.current.y)); };
+    // l'écran change (rotation, plein écran) : sans rien à montrer, il regagne sa place recalculée, sinon il reste dans l'écran
+    const resize = () => { repos(); fly(focusRef.current ? clampFlight(goal.current.x, goal.current.y) : home.current); };
     window.addEventListener('resize', resize);
-    return () => window.removeEventListener('resize', resize);
-  }, [fly]);
+    document.addEventListener('fullscreenchange', resize);
+    return () => { window.removeEventListener('resize', resize); document.removeEventListener('fullscreenchange', resize); };
+  }, [fly, repos]);
 
   useEffect(() => {
     const update = () => setPortalRoot(document.fullscreenElement || document.body);
@@ -355,10 +373,11 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
   // Sans rien à montrer, il retourne à sa place (après un court délai, pour enchaîner deux lignes sans aller-retour).
   useEffect(() => {
     if (focus) return;
-    // sa place est recalée à l'écran du moment (la scène du cours n'existait pas encore quand elle a été choisie)
-    const timer = window.setTimeout(() => { home.current = clampPosition(home.current.x, home.current.y); fly(home.current); }, RETURN_HOME_MS);
+    // sa place est recalculée à l'écran du moment (la scène du cours n'existait pas encore quand elle a été choisie,
+    // et la fenêtre a pu grandir ou tourner depuis) : il revient dans sa colonne, jamais sur l'écriture
+    const timer = window.setTimeout(() => fly(repos()), RETURN_HOME_MS);
     return () => window.clearTimeout(timer);
-  }, [focus, fly]);
+  }, [focus, fly, repos]);
 
   const target = focus?.rect ?? null;
   const writing = !!focus?.writing;
@@ -396,6 +415,7 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
             }}
             onPointerMove={event => {
               if (!drag.current) return;
+              placeChoisie.current = true;
               home.current = clampPosition(drag.current.left + event.clientX - drag.current.x, drag.current.top + event.clientY - drag.current.y);
               fly(home.current, true);
             }}
@@ -411,6 +431,7 @@ export default function AIAvatar({ isSpeaking, isProcessing, processingStage, is
               const delta = directions[event.key];
               if (!delta) return;
               event.preventDefault();
+              placeChoisie.current = true;
               home.current = clampPosition(goal.current.x + delta[0], goal.current.y + delta[1]);
               fly(home.current);
             }}>⠿ Moalim</button>
