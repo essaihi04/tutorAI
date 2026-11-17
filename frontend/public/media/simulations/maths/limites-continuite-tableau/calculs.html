@@ -57,12 +57,26 @@ function dessinerCalcul(c, K, V) {
   const x2 = kk > 1 ? Math.min(400 * kk, Math.max(400, 24 + w1 + 50)) : 400;
   const deux = cols[1].length > 0, X = [24, x2], LARG = deux ? [x2 - 38, K.L - x2 - 16] : [712 * kk, 0];
   const echelle = cols.map((ls) => { if (!ls.length) return 1; const H = (ls.slice(0, -1).reduce((s, l) => s + hauteur(l), 0) + (ls[0].frac ? 14 : 0)) * f; return Math.min(1, 270 / Math.max(1, H)); });
+  /* (16 novembre 2026, règle 9) une seule colonne, longue et étroite, dans un tableau large et bas : elle est coupée en deux
+   * colonnes côte à côte quand l'écriture y gagne (MathsTableau.colonnes) ; mêmes lignes, mêmes moments, mêmes repères. */
+  let dec = V.lignes.map(() => [0, 0]);
+  if (!deux) {
+    const yy = [76], bx = [];
+    for (const l of V.lignes) {
+      const e = echelle[0], t = Math.round((l.taille || 19) * f * Math.min(1, Math.max(0.78, e)));
+      if (l.frac && yy[0] === 76) yy[0] += 14 * e * f;
+      const w = mes(c, texteLigne(l), t) + (l.lim ? 24 : 0) + (l.marge ? 30 + mes(c, l.marge, t - 4) : 0) + 16;
+      bx.push({ x: X[0] + (l.dx || 0) - 8, y: yy[0], w, t: l.frac ? t * 1.9 : t * 1.15 });
+      yy[0] += hauteur(l) * e * f;
+    }
+    dec = MathsTableau.colonnes(bx, LC.L(c), { haut: 11, gauche: 20 });
+  }
   const y = [76, 76];
-  for (const l of V.lignes) {
+  V.lignes.forEach((l, il) => {
     const k = (l.col || 1) - 1, e = echelle[k], t = Math.round((l.taille || 19) * f * Math.min(1, Math.max(0.78, e)));
     if (l.frac && y[k] === 76) y[k] += 14 * e * f;
     if (l.pause) c.pause(l.pause);
-    const coul = l.couleur || 'blanc', x0 = X[k] + (l.dx || 0), base = y[k];
+    const coul = l.couleur || 'blanc', x0 = X[k] + (l.dx || 0) + dec[il][0], base = y[k] + dec[il][1];
     let x = x0;
     const pieces = [];
     if (l.lim) x = LC.limite(c, x, base, l.lim, null, { couleur: coul, taille: t }) + 2;
@@ -87,7 +101,7 @@ function dessinerCalcul(c, K, V) {
     if (l.repere) c.repere(l.repere, x0 - 6, base - t - 6, x - x0 + 12, t * 1.6, l.label || l.t || l.repere);
     if (l.moment) K.marque(l.moment);
     y[k] += hauteur(l) * e * f;
-  }
+  });
 }
 
 const vues = {};
@@ -107,6 +121,9 @@ LC.page({ net: true,
   texte: 'Calculs et rédactions du cours Limites et continuité, écrits à la craie ligne après ligne comme au tableau',
   vues,
 });
+/* La coupure en colonnes dépend de la largeur des lignes (police du tableau) : police chargée, la boîte de l'encre est
+ * remesurée depuis zéro (16 novembre 2026). */
+if (document.fonts) document.fonts.load(`20px ${Tableau.POLICE.split(',')[0]}`).then(() => document.fonts.ready).then(() => { const m = window.__maths; if (m) { m.scene.boite = null; m.scene.sale = true; } });
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>
 </body></html>

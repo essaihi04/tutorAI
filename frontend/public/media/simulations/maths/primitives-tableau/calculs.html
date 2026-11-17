@@ -43,6 +43,8 @@ function disposer(c, d) {
     const taille = l.taille || d.taille || 19;
     return { l, taille, w: (l.dx || 0) + SU.larg(c, l.t, taille), inter: l.inter ? Math.round(l.inter * .88) : Math.round(taille * 1.6) };
   });
+  // une ligne encadrée : un peu d'air au-dessus, le cadre ne touche pas la ligne d'avant (16 novembre 2026)
+  L.forEach((e, i) => { if (i + 1 < L.length && L[i + 1].l.cadre) e.inter += 8; if (e.l.cadre) e.inter += 4; });
   const y0 = d.y0 || 78, n = L.length;
   let coupe = 0;
   if (n >= 6 && L.every(e => e.w <= DEMI)) {
@@ -51,6 +53,16 @@ function disposer(c, d) {
       const score = (d.lignes[i - 1].inter || 0) - 4 * Math.abs(i - n / 2);
       if (score > mieux || !coupe) { mieux = score; coupe = i; }
     }
+  }
+  /* (16 novembre 2026, règle 9 « remplir le tableau, écrire grand ») : deux colonnes donnent un bloc large et bas, que le
+   * cadre ne peut pas agrandir (il touche déjà les bords à gauche et à droite, avec du vide en haut et en bas). On garde
+   * les deux colonnes seulement si elles laissent écrire plus grand qu'une seule colonne, au format du tableau (scene.L × 420). */
+  if (coupe) {
+    const H = 420, Lc = c.W > 1 && c.H > 1 ? H * c.W / c.H : 760;   // le format réel du tableau : le cadre s'ajuste à l'encre dans tout le canvas
+    const haut = (a, b) => (y0 - 20) + L.slice(a, b).reduce((h, e) => h + e.inter, 0);   // le titre et l'espace au-dessus des lignes comptent aussi
+    const w1 = Math.max(...L.map(e => e.w)) + COL[0], h1 = haut(0, n);
+    const w2 = COL[1] + Math.max(...L.slice(coupe).map(e => e.w)), h2 = Math.max(haut(0, coupe), haut(coupe, n));
+    if (Math.min(Lc / w1, H / h1) >= 1.05 * Math.min(Lc / w2, H / h2)) coupe = 0;   // à égalité, les deux colonnes : elles remplissent la largeur
   }
   let y = y0;
   return L.map((e, i) => {
