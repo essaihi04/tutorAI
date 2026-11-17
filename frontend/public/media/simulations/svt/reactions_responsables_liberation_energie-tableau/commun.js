@@ -29,6 +29,33 @@
     // `scene` existe avant la craie : le premier redimensionnement la marque déjà « à redessiner ».
     const scene = { sale: true, boite: null, mesurant: false, L: VW };
     const craie = new window.Tableau.Craie(canvas, { onresize: () => { scene.sale = true; } });
+    /* Courbes nettes et lumineuses (17 novembre 2026, « plus agréable, couleurs vives ») — sur demande seulement :
+     * craie.courbe(fn, n, { net: true, … }) garde l'écriture progressive et la durée d'une courbe de craie, sans tremblé,
+     * avec un halo doux de sa couleur. Option `aire: yBase` : aire en dégradé entre la courbe et la ligne yBase, qui se
+     * remplit au rythme du tracé (aireAlpha : opacité du haut, .28 par défaut). Sans `net`, rien ne change. */
+    const courbeCraie = craie.courbe;
+    craie.courbe = function (fn, n, o = {}) {
+      if (o.net !== true) return courbeCraie.call(this, fn, n, o);
+      const ctx = this.ctx, teinte = this.couleur(o.couleur);
+      if (o.aire !== undefined && !scene.mesurant) {
+        const pts = []; for (let i = 0; i <= n; i++) { const p = fn(i / n); if (p) pts.push(p); }
+        let L = 0; const cum = [0]; for (let i = 1; i < pts.length; i++) { L += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); cum.push(L); }
+        const duree = Math.max(.02, o.duree ?? Math.max(.08, L / 650));
+        const part = !Number.isFinite(this.t) || this.t >= this.cur + duree ? 1 : this.t <= this.cur ? 0 : (this.t - this.cur) / duree;
+        const vus = pts.filter((_, i) => cum[i] <= L * part + 1e-9);
+        if (vus.length > 1) {
+          let haut = Infinity; for (const p of vus) haut = Math.min(haut, p[1]);
+          const rgb = /^#[0-9a-f]{6}$/i.test(teinte) ? [1, 3, 5].map(k => parseInt(teinte.slice(k, k + 2), 16)).join(',') : '226,232,240';
+          const g = ctx.createLinearGradient(0, Math.min(haut, o.aire - 1), 0, o.aire);
+          g.addColorStop(0, `rgba(${rgb},${o.aireAlpha ?? .28})`); g.addColorStop(1, `rgba(${rgb},.02)`);
+          ctx.save(); ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(vus[0][0], o.aire);
+          for (const p of vus) ctx.lineTo(p[0], p[1]);
+          ctx.lineTo(vus[vus.length - 1][0], o.aire); ctx.closePath(); ctx.fill(); ctx.restore();
+        }
+      }
+      ctx.save(); ctx.shadowColor = teinte; ctx.shadowBlur = o.pointille ? 5 : 10;
+      try { return courbeCraie.call(this, fn, n, { ...o, tremble: 0 }); } finally { ctx.restore(); }
+    };
     /* La boîte de l'encre (coordonnées du cadre) : l'image complète dessinée une fois, traits et textes relevés. */
     function mesurer() {
       const b = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
