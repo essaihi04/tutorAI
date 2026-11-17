@@ -323,7 +323,7 @@ window.CALCULS = {
    },
    {
     "t": "ex. u_{n+1} = ¼ u_n + 12",
-    "c": "faible",
+    "c": "blanc",
     "dx": 30,
     "taille": 17,
     "inter": 44
@@ -339,7 +339,7 @@ window.CALCULS = {
    },
    {
     "t": "ex. u_{n+1} = (4u_n + 3)/(3u_n + 4)",
-    "c": "faible",
+    "c": "blanc",
     "dx": 30,
     "taille": 17,
     "inter": 44
@@ -576,7 +576,7 @@ window.CALCULS = {
    },
    {
     "t": "v_n = u_n − 1 et u_{n+1} = (1/16) u_n + 15/16",
-    "c": "faible",
+    "c": "blanc",
     "taille": 17
    },
    {
@@ -612,7 +612,7 @@ window.CALCULS = {
   "lignes": [
    {
     "t": "u_{n+1} = (3 + u_n)/(5 − u_n)   et   v_n = (u_n − 1)/(3 − u_n)",
-    "c": "faible",
+    "c": "blanc",
     "m": "enonce",
     "taille": 17
    },
@@ -714,7 +714,7 @@ window.CALCULS = {
    },
    {
     "t": "national 2021 R :  v_n = 1/(1 − u_n)",
-    "c": "faible",
+    "c": "blanc",
     "taille": 17
    },
    {
@@ -874,7 +874,7 @@ window.CALCULS = {
   "lignes": [
    {
     "t": "w_n géométrique, w_0 = 1, raison 1/2",
-    "c": "faible",
+    "c": "blanc",
     "taille": 17
    },
    {

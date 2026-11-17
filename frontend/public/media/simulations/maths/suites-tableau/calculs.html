@@ -37,20 +37,27 @@ for (const [id, d] of Object.entries(window.CALCULS || {})) {
       // tableau large : interlignes serrés, le calcul est moins haut et le kit l'agrandit sur toute la largeur
       const lg = SU.large(c), ki = lg ? .76 : 1;
       let y = Math.round((d.y0 || 82) * (lg ? .85 : 1)), yPrec = y, xPrec = 30;
+      // 1) les places des lignes (une colonne), 2) deux colonnes si elles remplissent mieux le tableau (règle 9), 3) l'écriture
+      const pl = [];
       for (const l of d.lignes) {
-        c.pause(l.p ?? .25);
         const taille = l.taille || d.taille || 19;
         if (l.meme) y = yPrec;
         const x = l.x ?? (l.meme ? xPrec : 30 + (l.dx || 0));
         const w = Math.min(740 - x, SU.larg(c, l.t, taille));
-        c.texte(l.t, x, y, { couleur: l.c || 'blanc', taille, max: 740 - x });
+        pl.push({ l, x, y, w, t: taille });
+        yPrec = y; xPrec = x + w + 14;
+        y += l.inter ? Math.round(l.inter * ki) : Math.round(taille * (lg ? 1.4 : 1.8));
+      }
+      const dec = MathsTableau.colonnes(pl, (window.__maths && window.__maths.scene.L) || 760, { haut: 11, gauche: 20 });
+      pl.forEach(({ l, x: x0, y: y0, w, t: taille }, i) => {
+        const x = x0 + dec[i][0], y = y0 + dec[i][1];
+        c.pause(l.p ?? .25);
+        c.texte(l.t, x, y, { couleur: l.c || 'blanc', taille, max: 740 - x0 });
         if (l.cadre) c.rect(x - 8, y - taille - 4, w + 16, taille + 14, { couleur: l.cadre, arrondi: 7, largeur: 1.6 });
         if (l.barre) SU.barre(c, x, y - 4, w, { couleur: 'rouge' });
         if (l.r) c.repere(l.r[0], x - 6, y - taille - 6, w + 12, taille + 16, l.r[1]);
         if (l.m) K.marque(l.m);
-        yPrec = y; xPrec = x + w + 14;
-        y += l.inter ? Math.round(l.inter * ki) : Math.round(taille * (lg ? 1.4 : 1.8));
-      }
+      });
     },
     decrire(K) {
       const D = {}; let acc = [];
@@ -60,11 +67,14 @@ for (const [id, d] of Object.entries(window.CALCULS || {})) {
     explication: (d.lignes.filter(l => l.r).map(l => ({ repere: l.r[0], texte: lisible(l.r[1]) }))),
   };
 }
-MathsTableau.page({ net: true,
+MathsTableau.page({ net: true, large: true,   // (16 novembre 2026) le cadre prend le format du tableau : deux colonnes y tiennent (MathsTableau.colonnes)
   id: 'su_calculs', titre: 'Calculs au tableau',
   texte: 'Calculs et démonstrations du cours Suites numériques écrits à la craie, ligne après ligne, rédigés comme au barème du national',
   vues,
 });
+/* La coupure en colonnes dépend de la largeur des lignes, mesurée avec la police du tableau : police chargée, la boîte de
+ * l'encre est remesurée depuis zéro (sinon une colonne mesurée avec la police de secours sortirait du cadre). */
+if (document.fonts) document.fonts.load(`20px ${Tableau.POLICE.split(',')[0]}`).then(() => document.fonts.ready).then(() => { const m = window.__maths; if (m) { m.scene.boite = null; m.scene.sale = true; } });
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>
 </body></html>
