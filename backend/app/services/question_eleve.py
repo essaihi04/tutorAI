@@ -17,6 +17,13 @@ Le tuteur classe d'abord la question par rapport au COURS (user rule, 9 novembre
 
 Tout le contexte est donné : le titre, ce qu'il vient d'expliquer, ce que la simulation montre (`ce_qui_se_voit`), ses
 instants clés et ses repères (pour montrer en parlant), et le plan du cours (diapositives d'avant et d'après).
+
+Sur la diapositive elle-même (user rule, 17 novembre 2026 : « mets les étiquettes » ouvrait un autre tableau qui
+donnait les réponses à côté du schéma) : quand une simulation est affichée et que la réponse s'y voit, le tuteur
+répond SUR elle (« sur » = "simulation") — il parle pendant que ses gestes agissent sur la simulation de la diapositive :
+ses réglages (`set_parameters`, avec les noms et valeurs de son `command_schema`, ex. `corrige: true` pose toutes les
+étiquettes d'un schéma à légender), ses instants (`play_until`) et ses repères (`highlight`). Son tableau à lui
+(« sur » = "tableau") ne s'ouvre que pour écrire une démonstration ou un calcul que la simulation ne montre pas.
 """
 from __future__ import annotations
 
@@ -115,15 +122,34 @@ def valider_exercice(e) -> Optional[dict]:
     return None
 
 
+def reglages_de(ctx: dict) -> dict:
+    """Les réglages de la simulation affichée ({nom: description}, son command_schema.set_parameters)."""
+    r = ctx.get("reglages") or {}
+    return {str(k)[:40]: str(v)[:160] for k, v in r.items()} if isinstance(r, dict) else {}
+
+
+def avec_simulation(ctx: dict) -> bool:
+    return bool(ctx.get("moments") or ctx.get("reperes") or reglages_de(ctx))
+
+
 def prompt_question(ctx: dict, compris: dict, plan: Optional[list[dict]] = None, idx: int = -1, cours: str = "") -> str:
     moments = ctx.get("moments") or {}
     reperes = ctx.get("reperes") or {}
+    reglages = reglages_de(ctx)
     plan = plan or []
     sim = ""
-    if moments or reperes:
-        sim = f"""La simulation affichée sait se figer sur ces instants (play_until) : {', '.join(f'{k} ({v})' for k, v in moments.items()) or 'aucun'}.
-Repères qu'on peut montrer du doigt (highlight) : {', '.join(f'{k} ({v})' for k, v in reperes.items()) or 'aucun'}.
-Si ta réponse s'appuie sur la figure, fais 1 à 4 gestes dans l'ordre de ton explication, avec ces noms seulement."""
+    if avec_simulation(ctx):
+        sim = f"""LA SIMULATION DE LA DIAPOSITIVE — tu peux agir dessus pendant que tu parles (« gestes », 1 à 4, dans l'ordre de ta parole) :
+- se figer sur ces instants (play_until) : {', '.join(f'{k} ({v})' for k, v in moments.items()) or 'aucun'} ;
+- montrer du doigt ces repères (highlight) : {', '.join(f'{k} ({v})' for k, v in reperes.items()) or 'aucun'} ;
+- changer ses réglages (set_parameters, ces noms seulement, valeurs comme décrit) : {'; '.join(f'{k} = {v}' for k, v in reglages.items()) or 'aucun'}.
+OÙ TU RÉPONDS (« sur ») :
+- "simulation" (le cas normal ici) : la réponse se voit sur CETTE simulation → tu la fais agir pendant que tu parles,
+  sans ouvrir ton tableau (« tableau » vide, pas d'exercice). Exemples : « mets les étiquettes », « donne la
+  correction du schéma » → set_parameters {{"corrige": true}} si ce réglage existe, puis tu dis pourquoi chaque
+  étiquette va là ; « et si on augmente … ? » → set_parameters avec la nouvelle valeur, puis tu commentes ce qui
+  change ; « montre-moi … » → highlight ou play_until. Tu dis ce que la simulation montre au moment où elle le montre.
+- "tableau" : seulement s'il faut écrire une démonstration ou un calcul que la simulation ne montre pas → ton tableau."""
     if plan and idx >= 0:
         avant = "\n".join(f"  - {s['title']}" for s in plan[:idx]) or "  (aucune)"
         apres = "\n".join(f"  - [{s['id']}] {s['title']} — {s['lead']}" for s in plan[idx + 1:]) or "  (aucune : c'est la dernière)"
@@ -168,7 +194,7 @@ laisse « parole », « tableau », « ecrit » et « gestes » vides (sauf « p
 {REGLES_VOIX}
 
 Réponds UNIQUEMENT par ce JSON :
-{{"categorie": "diapo|suivante|prerequis|hors_cours", "notion": "...", "diapo_id": "", "parole": "ta réponse dite (règles de la voix)", "tableau": ["ligne 1", "ligne 2"], "ecrit": "l'essentiel en français écrit, deux phrases au plus, avec les relations", "gestes": [{{"commande": "play_until", "parametres": {{"moment": "..."}}}}, {{"repere": "..."}}], {FORMAT_EXERCICE}}}"""
+{{"categorie": "diapo|suivante|prerequis|hors_cours", "notion": "...", "diapo_id": "", "sur": "{'simulation|tableau' if avec_simulation(ctx) else 'tableau'}", "parole": "ta réponse dite (règles de la voix)", "tableau": ["ligne 1", "ligne 2"], "ecrit": "l'essentiel en français écrit, deux phrases au plus, avec les relations", "gestes": [{{"commande": "set_parameters", "parametres": {{"...": "..."}}}}, {{"commande": "play_until", "parametres": {{"moment": "..."}}}}, {{"repere": "..."}}], {FORMAT_EXERCICE}}}"""
 
 
 def prompt_prerequis(ctx: dict, question: str, notion: str) -> str:
@@ -223,13 +249,31 @@ def reponse_depuis(texte_llm: str, ctx: dict, plan: Optional[list[dict]] = None,
     return _avec_reponse(base, d, ctx)
 
 
+def gestes_sur_simulation(gestes, ctx: dict) -> list[dict]:
+    """Les gestes valides, dans l'ordre : instants et repères connus, et réglages (set_parameters) de la simulation."""
+    reglages = reglages_de(ctx)
+    out = []
+    for g in gestes or []:
+        if isinstance(g, dict) and g.get("commande") == "set_parameters" and isinstance(g.get("parametres"), dict):
+            p = {k: v for k, v in g["parametres"].items() if k in reglages and isinstance(v, (bool, int, float, str))}
+            if p:
+                out.append({"commande": "set_parameters", "parametres": p})
+        else:
+            out += valider_gestes([g], ctx.get("moments") or {}, ctx.get("reperes") or {})
+    return out[:4]
+
+
 def _avec_reponse(base: dict, d: dict, ctx: dict) -> Optional[dict]:
     parole = parole_propre(d.get("parole"))
     if not parole:
         return None
-    return {**base, "parole": parole, "ecrit": str(d.get("ecrit") or "").strip()[:500], "tableau": _tableau(d.get("tableau")),
-            "gestes": valider_gestes(d.get("gestes"), ctx.get("moments") or {}, ctx.get("reperes") or {})[:4],
-            "exercice": valider_exercice(d.get("exercice"))}
+    gestes = gestes_sur_simulation(d.get("gestes"), ctx)
+    # Sur la simulation : la voix et les gestes, sans tableau ni exercice (17 novembre 2026). Il faut au moins un geste,
+    # sinon rien ne montrerait ce qu'il dit : c'est alors son tableau.
+    sur = "simulation" if str(d.get("sur") or "").strip().lower() == "simulation" and avec_simulation(ctx) and gestes else "tableau"
+    return {**base, "sur": sur, "parole": parole, "ecrit": str(d.get("ecrit") or "").strip()[:500],
+            "tableau": [] if sur == "simulation" else _tableau(d.get("tableau")), "gestes": gestes,
+            "exercice": None if sur == "simulation" else valider_exercice(d.get("exercice"))}
 
 
 def explication_depuis(texte_llm: str) -> Optional[dict]:

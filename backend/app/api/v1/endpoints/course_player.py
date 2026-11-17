@@ -386,6 +386,7 @@ class QuestionEleveRequest(BaseModel):
     image_mime: str = "image/png"
     moments: dict = Field(default_factory=dict)
     reperes: dict = Field(default_factory=dict)
+    reglages: dict = Field(default_factory=dict)       # command_schema.set_parameters de la simulation affichée
 
 
 @router.post("/question-eleve")
