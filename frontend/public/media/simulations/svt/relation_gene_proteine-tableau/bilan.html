@@ -272,7 +272,11 @@ function statut(b) {
   if (lac.length) return 'partiel';
   return (S.acquis_ids || []).some(a => b.comps.includes(a)) ? 'acquis' : null;
 }
-function moments() { const m = { fiche: 1 }; BLOCS.forEach(b => { m[b.id] = 1; }); m.lacunes = 2; return m; }
+/* (17 novembre 2026) moments croissants (bloc n° k → k ; la fiche entière → 8 ; la page de l'élève → 10) et time_s = le
+ * dernier bloc écrit : le kit refuse un play_until vers un moment déjà atteint ; avec tous les moments à 1, il refusait
+ * chaque bloc après le premier (la voix nommait « 2 · Caractère et protéine », la fiche n'écrivait rien). */
+function moments() { const m = {}; BLOCS.forEach((b, i) => { m[b.id] = i + 1; }); m.fiche = BLOCS.length; m.lacunes = BLOCS.length + 2; return m; }
+const avancee = () => (S.page === 2 ? BLOCS.length + 2 : S.apparu.reduce((n, a, i) => (a != null ? i + 1 : n), 0));
 function playUntil(p) {
   const nom = p.moment in moments() ? p.moment : null;
   if (!nom && !Number.isFinite(+p.time_s)) return;
@@ -323,7 +327,7 @@ const config = { id: 'expression_bilan', version: '1.0', title: 'Ce qu’il faut
     set_parameters: { lacunes: '[{id: C1..C9, label, statut: non_acquis|partiel, reprendre_avec: [..]}] (bilan de l’élève)', acquis: '[labels acquis]', acquis_ids: '[C1, ..]' } } };
 const pont = protocole({ id: config.id, commandes, config,
   texte: 'Fiche « Ce qu’il faut retenir » du chapitre de l’expression de l’information génétique, sur une page (huit blocs : gène, allèle, mutation ; caractère et protéine ; l’ARN ; la transcription ; le code génétique ; la traduction ; les mutations ; rédiger ; chacun avec définition, formule, piège), puis la page de l’élève.',
-  etat: () => ({ simulation_status: 'paused', ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'bilan', time_s: S.page, parameters: { page: S.page, focus: S.focus, lacunes: S.lacunes ? S.lacunes.length : null }, moments: moments() }),
+  etat: () => ({ simulation_status: 'paused', ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'bilan', time_s: avancee(), parameters: { page: S.page, focus: S.focus, lacunes: S.lacunes ? S.lacunes.length : null }, moments: moments() }),
   progression: () => S.page / 2,
   executer: (cmd, p) => ({ start: () => aller(1, 'start', 'gene'), reset: () => aller(1, 'reset', 'gene'), play_until: () => playUntil(p), set_parameters: () => setParameters(p),
     next: () => aller(2, 'next'), previous: () => aller(1, 'previous', null, true) })[cmd]?.() });
