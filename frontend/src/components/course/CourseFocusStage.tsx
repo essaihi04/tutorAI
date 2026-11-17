@@ -199,6 +199,8 @@ type ReponseLibre = {
   categorie: 'diapo' | 'suivante' | 'prerequis' | 'hors_cours' | 'conversation'; notion: string; diapo_suivante: { id: string; title: string } | null;
   parole: string; ecrit: string; tableau: string[]; question_comprise: string;
   gestes: { commande?: string; parametres?: Record<string, unknown>; repere?: string }[]; exercice?: Exercice | null;
+  /** « simulation » : il répond sur la simulation de la diapositive (réglages, instants, repères), sans son tableau. */
+  sur?: 'simulation' | 'tableau';
 };
 /** Le tableau du professeur : il y explique la question à la voix ; le texte n'est montré qu'à la demande. */
 type TableauProf = {
@@ -437,6 +439,8 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   const finies = useRef<Record<string, boolean | 'passee'>>({});
   const fausses = useRef<Record<string, string[]>>({});
   const reperesRef = useRef<Record<string, string>>({});
+  /** Les réglages de la simulation (command_schema.set_parameters) : le tuteur peut les changer pour répondre. */
+  const reglagesRef = useRef<Record<string, string>>({});
   // ── La diapositive du bilan : le lecteur va chercher les acquis de l'élève et les donne à la simulation ──
   const [bilan, setBilan] = useState<Bilan | null>(null);
   const bilanRef = useRef<Bilan | null>(null);
@@ -935,6 +939,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
         deck_id: deckId, slide_id: slide.id, title: slide.title, speech: parole, ce_qui_se_voit: String(dernierEtat.current?.ce_qui_se_voit || ''),
         texte: libre.texte.trim(), audio_b64: libre.audio, image_b64: libre.image?.b64, image_mime: libre.image?.mime || 'image/png',
         moments: dernierEtat.current?.moments || {}, reperes: reperesRef.current,
+        reglages: visuel?.kind === 'simulation' ? reglagesRef.current : {},
       });
     } catch (e) {
       const m = (e as Error).message;
@@ -1010,6 +1015,28 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
       return;
     }
 
+    if (r.sur === 'simulation' && visuel?.kind === 'simulation') {
+      // Sur la diapositive elle-même (17 novembre 2026 : « mets les étiquettes » ouvrait un autre tableau qui donnait
+      // les réponses à côté du schéma) : il parle pendant que ses gestes agissent sur CETTE simulation — un réglage
+      // (poser les étiquettes, changer une valeur) part tout de suite, puis instants et repères au fil de la voix.
+      ressentir('encourage');
+      const urls = preparerMorceaux(r.parole);
+      let i = 0;
+      for (const g of r.gestes || []) {
+        const quand = g.commande === 'set_parameters' && i === 0 ? 0 : 1200 + i * 3500;
+        window.setTimeout(() => {
+          if (!encore()) return;
+          if (g.commande) parTuteur(g.commande, g.parametres || {});
+          else if (g.repere) parTuteur('highlight', { target: g.repere });
+        }, quand);
+        i += 1;
+      }
+      // à la fin de sa voix, le cours reprend là où il était (sans voix : après un temps de lecture des gestes)
+      const dit = await direMorceaux(urls, encore, () => { if (encore()) avancerLeCours(); });
+      if (!dit && encore()) window.setTimeout(() => { if (encore()) avancerLeCours(); }, 1500 + i * 3500);
+      return;
+    }
+
     // La notion de la diapositive : expliquée au tableau, à la voix, avec la figure.
     ressentir('encourage');
     setTableauProf({ mode: 'diapo', etape: 'prepare', lignes: r.tableau || [], vues: 0, parole: r.parole, ecrit: r.ecrit, notion: r.notion, question, texte: false, debut: 0, exercice: r.exercice });
@@ -1023,7 +1050,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
       if (g.commande) parTuteur(g.commande, g.parametres || {});
       else if (g.repere) parTuteur('highlight', { target: g.repere });
     }, 1200 + i * 3500));
-  }, [libre, deckId, slide.id, slide.title, parole, visuel?.kind, preparerMorceaux, dire, jouerEtAttendre, parTuteur, ressentir, envoyerASim, lancerExplication, avancerLeCours]);
+  }, [libre, deckId, slide.id, slide.title, parole, visuel?.kind, preparerMorceaux, dire, direMorceaux, jouerEtAttendre, parTuteur, ressentir, envoyerASim, lancerExplication, avancerLeCours]);
 
   const reprendreApresQuestion = useCallback(() => {
     tourQuestion.current += 1; voixExplication.current = false; fileVoix.current = [];
@@ -1486,9 +1513,16 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   // Ce que la simulation renvoie : un nouveau résultat obtenu par l'élève lui-même fait clignoter « 🔎 Ton résultat ».
   useEffect(() => {
     const ecouter = (event: MessageEvent) => {
-      const d = event.data as { type?: string; current_state?: EtatSim; capabilities?: { reperes?: Record<string, string> } } | null;
+      const d = event.data as { type?: string; current_state?: EtatSim; capabilities?: { reperes?: Record<string, string>; command_schema?: { set_parameters?: unknown } } } | null;
       if (!iframeRef.current || event.source !== iframeRef.current.contentWindow || !d) return;
-      if (d.type === 'simulation_manifest') { reperesRef.current = { ...reperesRef.current, ...(d.capabilities?.reperes || {}) }; return; }
+      if (d.type === 'simulation_manifest') {
+        reperesRef.current = { ...reperesRef.current, ...(d.capabilities?.reperes || {}) };
+        const sp = d.capabilities?.command_schema?.set_parameters;
+        if (sp && typeof sp === 'object') reglagesRef.current = Object.fromEntries(Object.entries(sp as Record<string, unknown>)
+          .map(([k, v]) => [k, typeof v === 'string' ? v : JSON.stringify(v)])
+          .filter(([, v]) => !/^lecture seule/i.test(v)));   // ce que la simulation dit d'elle-même ne se règle pas
+        return;
+      }
       if (d.type !== 'simulation_state' || !d.current_state) return;
       const etat = d.current_state;
       const avant = dernierEtat.current;
