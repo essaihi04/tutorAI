@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from app.services.simulation_reaction import REGLES_VOIX, lire_json, parole_propre
+from app.services.simulation_reaction import REGLES_VOIX, cle_attendue, lire_json, parole_propre
 
 
 # Ton du professeur (voix Bodi, choisie le 2026-11-10 pour ses encouragements) : chaleureux, jamais de reproche.
@@ -33,7 +33,7 @@ def prompt_reponse(diapo: dict, question: dict, reponse: Any, tentative: int, ve
     if isinstance(bonne, int) and 0 <= bonne < len(choix):
         cle = f"Bonne réponse : {chr(65 + bonne)}. {choix[bonne]}"
     elif question.get("attendu"):
-        cle = f"Réponse attendue : {question['attendu']}"
+        cle = cle_attendue(question['attendu'])
     impose = "" if verdict is None else (
         f"VERDICT IMPOSÉ (la clé est connue) : la réponse est {'JUSTE' if verdict else 'FAUSSE'}. Ne le rejuge pas, explique-le.")
     if verdict is None:

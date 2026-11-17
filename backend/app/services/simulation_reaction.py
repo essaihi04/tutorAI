@@ -47,6 +47,19 @@ RÈGLES DE TOUT CE QUI EST ÉCRIT À L'ÉCRAN (« ecrit », « enonce », « cho
 
 RETOUR = '{"ecrit": "...", "parole": "..."}'
 
+# Une réponse attendue écrit les états physiques comme au bac (« H₂O(l) », « (aq) ») ; l'élève qui les oublie n'est pas
+# compté faux (règle du 17 novembre 2026) : on juge l'équation, et on lui rappelle les états en une courte phrase.
+ETATS_TOLERES = ("Les états physiques (aq), (l), (s), (g) de la réponse attendue ne sont PAS exigés : une équation juste "
+                 "sans ses états est juste ; rappelle-les seulement en une courte phrase de l'écrit.")
+
+
+def cle_attendue(attendu: Any) -> str:
+    """« Réponse attendue : … », avec la tolérance des états physiques quand elle en porte."""
+    a = str(attendu or "").strip()
+    if not a:
+        return ""
+    return f"Réponse attendue : {a}" + (f"\n{ETATS_TOLERES}" if re.search(r"\((?:aq|l|s|g)\)", a) else "")
+
 
 def type_de_question(historique: list[dict]) -> str:
     """Le type de question suit la compréhension montrée sur cette diapositive."""
@@ -111,7 +124,7 @@ Réponds UNIQUEMENT par ce JSON :
 def prompt_correction(diapo: dict, question: dict, reponse: str) -> str:
     return f"""Tu es le professeur de physique d'un élève de 2e Bac PC BIOF. Diapositive « {diapo.get('title', '')} ».
 Question posée : {question.get('enonce', '')}
-Réponse attendue : {question.get('attendu', '')}
+{cle_attendue(question.get('attendu'))}
 Réponse de l'élève : {reponse[:500]}
 
 Juge la réponse (le fond compte, pas l'orthographe). Si elle est juste, dis précisément ce qui est juste. Sinon, nomme ce qui

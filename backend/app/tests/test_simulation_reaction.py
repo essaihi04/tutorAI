@@ -94,3 +94,12 @@ def test_un_vrai_faux_porte_un_retour_pour_vrai_et_un_pour_faux_par_affirmation(
     a0, a1 = r["question"]["affirmations"]
     assert [x["ecrit"] for x in a0["retours"]] == ["Oui, τ double.", "Si : τ = d / v double."]
     assert "retours" not in a1 and a1["vrai"] is False
+
+
+def test_cle_attendue_tolere_les_etats_physiques():
+    from app.services.simulation_reaction import cle_attendue, ETATS_TOLERES
+    avec = cle_attendue("HCOOH(aq) + H₂O(l) ⇌ HCOO⁻(aq) + H₃O⁺(aq)")
+    assert avec.startswith("Réponse attendue : HCOOH(aq)")
+    assert ETATS_TOLERES in avec
+    assert cle_attendue("x = 2") == "Réponse attendue : x = 2"
+    assert cle_attendue(None) == ""

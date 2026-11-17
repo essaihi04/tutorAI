@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 from typing import Any, Optional
 
-from app.services.simulation_reaction import REGLES_VOIX, lire_json, parole_propre, valider_question
+from app.services.simulation_reaction import REGLES_VOIX, cle_attendue, lire_json, parole_propre, valider_question
 
 MAX_CYCLES = 3
 ENTREES = {
@@ -30,7 +30,7 @@ def prompt_reexplication(ctx: dict) -> tuple[str, int]:
     q = ctx.get("question") or {}
     choix = q.get("choix") or []
     bonne = q.get("bonne")
-    cle = f"Bonne réponse : {choix[bonne]}" if isinstance(bonne, int) and 0 <= bonne < len(choix) else (f"Réponse attendue : {q['attendu']}" if q.get("attendu") else "")
+    cle = f"Bonne réponse : {choix[bonne]}" if isinstance(bonne, int) and 0 <= bonne < len(choix) else cle_attendue(q.get("attendu"))
     moments = ctx.get("moments") or {}
     reperes = ctx.get("reperes") or {}
     marchent = ctx.get("methodes_qui_marchent") or []
