@@ -38,3 +38,11 @@ Types : `diapo` (voix de la diapo), `demonstration`, `reaction` (réaction prép
 3. Les réactions, puis les énoncés, des copies en attente.
 
 Procédure : skill `voix-du-cours` §3 et `docs/audit-rythme/README.md`, pour le lot Bodi sur le VPS. Après la pose des voix, relancer la commande ci-dessus : la liste doit se vider.
+
+## Lot 1 : diapos et démonstrations
+
+`docs/voix/lot_diapos_demos.json` contient seulement les diapos et les démonstrations : 812 pistes, environ 361 000 caractères, soit 4 h 30 de GPU environ au rythme du lot du 14 novembre. Le lancement se fait sur le VPS, car le compte Kaggle et ses identifiants ne sont que là. Les étapes sont celles de `docs/audit-rythme/README.md`, « Pour passer en ligne » :
+1. `git pull` sur le VPS.
+2. Construire les dossiers `att_<deck>/` avec `scripts/voix/attente_construire.py`, en ne gardant que les ids de ce lot.
+3. Lancer le lot Bodi avec `VOIX_D_ABORD=att_`.
+4. Poser les voix avec `scripts/voix/attente_poser.py`. Pour les cours `en_ligne/…`, utiliser `scripts/voix/poser_en_ligne.py`.
