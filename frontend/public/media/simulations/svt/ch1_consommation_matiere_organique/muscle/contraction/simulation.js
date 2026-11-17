@@ -82,7 +82,7 @@ function draw(){
  const ut=ease(Math.min(1,(performance.now()-T.tropo0)/800)),dt=libre?10*ut:0;T.tropoAnim=libre&&ut<1;
  // Repères fixes (sarcomère entre y = 95 et 310, cote en dessous)
  craie.ligne(450,80,450,300,{couleur:'tresfaible',largeur:1.2,pointille:[4,6],duree:.2}).texte('centre du sarcomère',462,62,{couleur:'faible',taille:14});
- craie.texte('━ actine (fine)',400,32,{couleur:'rose',taille:14}).texte('━ myosine (épaisse)',530,32,{couleur:'bleu',taille:14}).texte('┃ stries Z : limites',690,32,{couleur:'blanc',taille:14});
+ craie.texte('━ actine (fine)',432,32,{couleur:'rose',taille:14}).texte('━ myosine (épaisse)',556,32,{couleur:'bleu',taille:14}).texte('┃ stries Z : limites',708,32,{couleur:'blanc',taille:14});   // (17 novembre 2026) décalée à droite : l'encadré d'étape ne coupe plus « actine »
  craie.pause(.1);
  craie.direct(()=>peindreMyosine(craie.ctx,270,630,190));   // (16 novembre 2026) filament épais peint (avant : un trait de craie)
  craie.texte('myosine',450,177,{couleur:'bleu',taille:13,align:'center'});
