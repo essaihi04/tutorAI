@@ -44,6 +44,12 @@ encore plus tard, pas à sa beauté.
    l'animation pour ce qui change et doit se comprendre, le tableau pour ce que l'examen donne en tableau ou ce qui se
    compare d'un coup d'œil (skill professeur, règle 42 ; exemple : le glucose marqué au ¹⁴C de SVT ch1, 18/11).
    Toujours vérifié à la taille d'un téléphone en paysage (~724 × 350) : rien sous la barre du lecteur.
+   **Un exercice du national commence par son énoncé tel qu'il est dans l'examen** (choix de l'utilisateur, 18/11/2026) : la
+   page scannée du sujet (`backend/data/exams/<matière>/<année>-<session>/pages/sujet_pN.jpg`, en-tête de l'examen visible,
+   aspect papier), lue par le tuteur avec ses données, puis l'explication. **La démonstration se joue sur la figure de
+   l'examen** : chaque étape allume ce qu'elle utilise sur le dessin, ses lignes s'écrivent à côté, le texte écrit avant
+   est effacé, seules les données de l'exercice servent ; pas de panneau de texte ni de tableau à part (skill professeur,
+   règles 45-46 ; simulations-au-tableau, règle 17).
 6. **Départ de zéro.** Les notions des années d'avant (mitose, mole, vecteur, dérivée…) sont enseignées au moment
    où elles servent, jamais supposées connues ; chaque notion difficile est expliquée deux fois, de deux façons.
 7. **La limite de l'élève.** Mémoire de travail ≈ 4 éléments : une idée nouvelle par diapositive ; quand la limite
