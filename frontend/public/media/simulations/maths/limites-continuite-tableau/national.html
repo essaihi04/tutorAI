@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le problème national, question par question — limites et continuité</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Le problème national sur f(x) = x³ + x − 1 joué à la craie, une question à la fois : signe de f’, tableau de variations, solution unique α, encadrement de α, ensemble J, courbe de f⁻¹"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/limites-continuite-tableau/lc-outils.js"></script>
+<script>
+/*
+ * Cours « Limites et continuité » (math_ch1_limites_continuite), séance 7 : le problème national sur f(x) = x³ + x − 1,
+ * joué question par question (2ᵉ passe, 18 novembre 2026 : « la réponse de l’élève avant chaque correction »).
+ * Chaque vue s’écrit jusqu’au moment de la question (la diapositive s’y arrête par play_until) ; ce qui suit est la
+ * correction animée, rejouée après la réponse de l’élève (section « Rejeu » de l’architecture).
+ *   ?vue=q2_signe        enonce, derivee, carre | parabole, signe, conclusion            (lc_e1_probleme_b)
+ *   ?vue=q2_tableau      cadre, ligne_x, ligne_signe, fleche | limite_moins, limite_plus, courbe   (lc_e1_probleme_b2)
+ *   ?vue=q3_unique       enonce, courbe, continue, croissante, limites | image, zero, alpha, conclusion   (lc_e1_probleme_unique)
+ *   ?vue=q3_encadrement  rappel, f_demi, f_un | produit, courbe, alpha, encadrement       (lc_e1_probleme_tvi)
+ *   ?vue=q4_J            enonce, conditions, limite_moins, limite_plus | J, conclusion    (lc_e1_probleme_c)
+ *   ?vue=q5_courbe       enonce, courbe_f, droite, points | reflet_a, reflet_b, courbe_reciproque, conclusion   (lc_e1_probleme_d)
+ * (« | » : la question est posée ici.)
+ */
+const f = x => x * x * x + x - 1;
+const fp = x => 3 * x * x + 1;
+const ALPHA = 0.6823;
+/* f⁻¹ par dichotomie (f strictement croissante) : sert seulement à tracer la courbe symétrique. */
+const finv = (y) => { let a = -4, b = 4; for (let i = 0; i < 50; i++) { const m = (a + b) / 2; if (f(m) < y) a = m; else b = m; } return (a + b) / 2; };
+const T = (K, t) => LC.t(K, t);
+/* Lignes de texte à droite de la figure : K.lignes, interligne plus grand pour une ligne avec une fraction. */
+const colonne = (c, K, x, y, liste, inter = 34) => K.lignes(x, y, liste.map(l => ({ taille: 18, ...l })), inter);
+/* Repère « tout ℝ » (questions 3 et 4) : la courbe sort en bas à gauche et en haut à droite. */
+const OPT_R = (K) => ({ x0: 70, y0: 62, w: LC.gw(K, 300), h: 280, xmin: -2.2, xmax: 2.2, ymin: -7, ymax: 7, gx: [[1, '1']], gy: [] });
+
+LC.page({ net: true,
+  id: 'lc_national', titre: 'Le problème national, question par question',
+  texte: 'Problème type national sur f(x) = x³ + x − 1, joué à la craie une question à la fois ; chaque vue s’arrête avant la réponse demandée, la correction suit',
+  vues: {
+    /* ── Question 2 : le signe de f’(x) ── */
+    q2_signe: {
+      titre: 'Question 2 : le signe de f’(x)',
+      dessiner(c, K) {
+        K.titre('Question 2 : le signe de f’(x)');
+        let y = colonne(c, K, 30, 92, [
+          { t: 'f(x) = x³ + x − 1', couleur: 'cyan', taille: 21, repere: 'enonce', label: 'f(x) = x³ + x − 1', moment: 'enonce' },
+          { t: 'f’(x) = 3x² + 1', couleur: 'blanc', taille: 22, pause: .3, repere: 'derivee', label: 'f’(x) = 3x² + 1', moment: 'derivee' },
+          { t: 'Pour tout x ∈ ℝ : x² ≥ 0', couleur: 'jaune', taille: 20, pause: .3, repere: 'carre', label: 'x² ≥ 0', moment: 'carre' },
+        ], 44);
+        // correction : la courbe de f’ (une parabole) reste au-dessus de l’axe, son point le plus bas est (0 ; 1)
+        c.pause(.5);
+        const G = K.axes({ x0: LC.col(K, 470), y0: 70, w: 230, h: 260, xmin: -1.7, xmax: 1.7, ymin: -1.2, ymax: 8, gx: [[1, '1'], [-1, '−1']], gy: [[1, '']], nomy: '' });
+        K.anime(1.6, p => K.courbePart(G, fp, -1.6, 1.6, p, { couleur: 'vert' }));
+        K.rond(G, 0, 1, true, 'jaune');
+        c.texte('1', G.X(0) - 18, G.Y(1) + 6, { couleur: 'faible', taille: 15, align: 'right' });
+        c.texte('y = f’(x)', G.X(0.55), G.Y(6.6), { couleur: 'vert', taille: T(K, 17) });
+        K.zone(G, fp, 0, -1.6, 1.6, { couleur: 'vert', alpha: .14 * K.apparait(.8, -.3) });
+        c.repere('parabole', G.X(-1.6), G.Y(8), G.X(1.6) - G.X(-1.6), G.Y(0) - G.Y(8), 'la courbe de f’, au-dessus de l’axe');
+        K.marque('parabole');
+        y = colonne(c, K, 30, y, [
+          { t: 'donc 3x² ≥ 0', couleur: 'blanc', pause: .3 },
+          { t: 'donc f’(x) = 3x² + 1 ≥ 1 > 0', couleur: 'vert', taille: 20, repere: 'signe', label: 'f’(x) > 0', moment: 'signe' },
+        ], 44);
+        colonne(c, K, 30, y + 6, [
+          { t: 'f’(x) > 0 sur ℝ, donc f est', couleur: 'vert', pause: .4 },
+          { t: 'strictement croissante sur ℝ.', couleur: 'vert', cadre: 'vert', repere: 'conclusion', label: 'f strictement croissante sur ℝ', moment: 'conclusion' },
+        ], 36);
+      },
+      decrire: {
+        enonce: 'Écrit : f(x) = x³ + x − 1.',
+        derivee: 'Écrit : f’(x) = 3x² + 1.',
+        carre: 'Écrit en jaune : pour tout x ∈ ℝ, x² ≥ 0. Le signe de f’(x) n’est pas encore écrit.',
+        parabole: 'À droite, la courbe de f’ (une parabole verte) est tracée : elle reste au-dessus de l’axe, son point le plus bas est (0 ; 1).',
+        signe: 'Écrit : donc 3x² ≥ 0, donc f’(x) = 3x² + 1 ≥ 1 > 0.',
+        conclusion: 'Écrit et encadré : f’(x) > 0 sur ℝ, donc f est strictement croissante sur ℝ.',
+      },
+      motifs: { enonce: 'la fonction f', derivee: 'la dérivée', carre: 'x² ≥ 0', parabole: 'la courbe de f’', signe: 'f’(x) > 0', conclusion: 'f strictement croissante' },
+      explication: [{ repere: 'derivee', texte: 'La dérivée de x³ + x − 1.' }, { repere: 'carre', texte: 'Un carré n’est jamais négatif.' }, { repere: 'parabole', texte: 'La courbe de f’ ne descend jamais sous 1.' }],
+    },
+
+    /* ── Question 2, suite : le tableau de variations, ligne par ligne ── */
+    q2_tableau: {
+      titre: 'Question 2 : le tableau de variations',
+      dessiner(c, K) {
+        K.titre('Question 2 : le tableau de variations');
+        const X0 = 30, Y0 = 70, W = 400 + LC.e(K) * 0.45, g = 84, hx = 46, hs = 46, hf = 128, tt = T(K, 23);
+        const xa = X0 + g + 40, xb = X0 + W - 40, yx = Y0 + hx / 2 + 8, ys = Y0 + hx + hs / 2 + 8, yH = Y0 + hx + hs + 34, yB = Y0 + hx + hs + hf - 16;
+        // le cadre vide
+        c.rect(X0, Y0, W, hx + hs + hf, { couleur: 'faible', arrondi: 4, largeur: 1.5 });
+        c.ligne(X0, Y0 + hx, X0 + W, Y0 + hx, { couleur: 'faible', largeur: 1.3 });
+        c.ligne(X0, Y0 + hx + hs, X0 + W, Y0 + hx + hs, { couleur: 'faible', largeur: 1.3 });
+        c.ligne(X0 + g, Y0, X0 + g, Y0 + hx + hs + hf, { couleur: 'faible', largeur: 1.3 });
+        c.repere('tableau', X0, Y0, W, hx + hs + hf, 'le tableau de variations');
+        K.marque('cadre');
+        // ligne 1 : x
+        c.pause(.3);
+        c.texte('x', X0 + g / 2, yx, { couleur: 'blanc', taille: tt, align: 'center' });
+        c.texte('−∞', xa, yx, { couleur: 'blanc', taille: tt, align: 'center' });
+        c.texte('+∞', xb, yx, { couleur: 'blanc', taille: tt, align: 'center' });
+        c.repere('ligne_x', X0, Y0, W, hx, 'la ligne de x');
+        K.marque('ligne_x');
+        // ligne 2 : le signe de f’(x)
+        c.pause(.3);
+        c.texte('f’(x)', X0 + g / 2, ys, { couleur: 'blanc', taille: tt, align: 'center' });
+        c.texte('+', (xa + xb) / 2, ys, { couleur: 'vert', taille: T(K, 28), align: 'center' });
+        c.repere('ligne_signe', X0, Y0 + hx, W, hs, 'la ligne du signe de f’(x)');
+        K.marque('ligne_signe');
+        // ligne 3 : f, une flèche qui monte (les deux bouts restent vides : c’est la question)
+        c.pause(.3);
+        c.texte('f', X0 + g / 2, Y0 + hx + hs + hf / 2 + 8, { couleur: 'blanc', taille: tt, align: 'center' });
+        c.fleche(xa + 30, yB - 14, xb - 30, yH + 4, { couleur: 'cyan', largeur: 2.4, tete: 13 });
+        c.repere('fleche', xa + 24, yH - 6, xb - xa - 48, yB - yH, 'la flèche : f croissante');
+        K.marque('fleche');
+        // correction : les deux bouts de la flèche
+        c.pause(.6);
+        c.texte('−∞', xa, yB, { couleur: 'orange', taille: tt, align: 'center' });
+        c.repere('bout_moins', xa - 26, yB - tt, 52, tt + 10, '−∞ au bout gauche');
+        K.marque('limite_moins');
+        c.pause(.4);
+        c.texte('+∞', xb, yH, { couleur: 'orange', taille: tt, align: 'center' });
+        c.repere('bout_plus', xb - 26, yH - tt, 52, tt + 10, '+∞ au bout droit');
+        K.marque('limite_plus');
+        // la courbe qui va avec le tableau : elle monte d’en bas à gauche jusqu’en haut à droite
+        c.pause(.5);
+        const G = K.axes({ x0: X0 + W + 60, y0: 66, w: 200 + LC.e(K) * 0.2, h: 270, xmin: -1.7, xmax: 1.7, ymin: -5, ymax: 5, gx: [[1, '1']], gy: [] });
+        K.anime(1.8, p => K.courbePart(G, f, -1.6, 1.6, p, { couleur: 'cyan' }));
+        c.texte('(C_f)', G.X(0.9), G.Y(4.4), { couleur: 'cyan', taille: T(K, 17) });
+        c.repere('courbe', G.x0, G.y0, G.w, G.h, 'la courbe de f');
+        K.marque('courbe');
+      },
+      decrire: {
+        cadre: 'Le cadre vide du tableau de variations : trois lignes.',
+        ligne_x: 'Ligne 1 écrite : x, de −∞ à +∞.',
+        ligne_signe: 'Ligne 2 écrite : f’(x), signe +.',
+        fleche: 'Ligne 3 : f, une flèche qui monte ; ses deux bouts sont encore vides.',
+        limite_moins: 'Au bout gauche de la flèche, en bas : −∞.',
+        limite_plus: 'Au bout droit de la flèche, en haut : +∞.',
+        courbe: 'À droite, la courbe de f est tracée : elle monte d’en bas à gauche jusqu’en haut à droite.',
+      },
+      motifs: { cadre: 'le cadre du tableau', ligne_x: 'la ligne de x', ligne_signe: 'le signe de f’', fleche: 'la flèche de f', limite_moins: '−∞ à gauche', limite_plus: '+∞ à droite', courbe: 'la courbe de f' },
+      explication: [{ repere: 'ligne_x', texte: 'x parcourt ℝ.' }, { repere: 'ligne_signe', texte: 'f’(x) > 0.' }, { repere: 'fleche', texte: 'f croissante : la flèche monte.' }],
+    },
+
+    /* ── Question 3 : la solution unique dans ℝ ── */
+    q3_unique: {
+      titre: 'Question 3 : une solution unique dans ℝ',
+      dessiner(c, K) {
+        K.titre('Question 3 : f(x) = 0, une solution unique dans ℝ ?');
+        const COL = LC.col(K, 460);
+        const G = K.axes(OPT_R(K));
+        K.marque('enonce');
+        K.anime(1.8, p => K.courbePart(G, f, -1.75, 1.75, p, { couleur: 'cyan' }));
+        c.texte('(C_f)', G.X(-0.4), G.Y(-4.5), { couleur: 'cyan', taille: T(K, 17) });
+        c.repere('courbe', G.x0, G.y0, G.w, G.h, 'la courbe de f');
+        K.marque('courbe');
+        let y = colonne(c, K, COL, 96, [
+          { t: 'f continue sur ℝ (polynôme)', couleur: 'cyan', pause: .3, repere: 'continue', label: 'f continue sur ℝ', moment: 'continue' },
+          { t: 'f strictement croissante sur ℝ', couleur: 'cyan', pause: .3, repere: 'croissante', label: 'f strictement croissante', moment: 'croissante' },
+        ], 38);
+        c.pause(.3);
+        c.fleche(G.X(-1.6), G.Y(f(-1.6)) - 30, G.X(-1.78), G.y0 + G.h - 2, { couleur: 'orange', largeur: 1.6 });
+        c.fleche(G.X(1.6), G.Y(f(1.6)) + 30, G.X(1.78), G.y0 + 2, { couleur: 'orange', largeur: 1.6 });
+        LC.limite(c, COL, y + 4, 'x → −∞', 'f(x) = −∞', { couleur: 'orange', taille: T(K, 18) });
+        LC.limite(c, COL, y + 50, 'x → +∞', 'f(x) = +∞', { couleur: 'orange', taille: T(K, 18) });
+        c.repere('limites', COL - 4, y - 18, 260, 80, 'les deux limites');
+        K.marque('limites');
+        y += 104;
+        // correction : f(ℝ) sur l’axe des ordonnées, 0 dedans, le point α
+        c.pause(.6);
+        LC.segment(c, G, -6.9, 6.9, { vertical: true, couleur: 'vert', largeur: 6, alpha: .6 });
+        y = colonne(c, K, COL, y, [{ t: 'f(ℝ) = ]−∞ ; +∞[ = ℝ', couleur: 'vert', repere: 'image', label: 'f(ℝ) = ℝ', moment: 'image' }], 38);
+        c.pause(.4);
+        c.cercle(G.X(0), G.Y(0), 13, { couleur: 'jaune', largeur: 2 });
+        c.texte('0', G.X(0) - 24, G.Y(0) - 8, { couleur: 'jaune', taille: T(K, 17) });
+        y = colonne(c, K, COL, y, [{ t: '0 ∈ f(ℝ)', couleur: 'jaune', repere: 'zero', label: '0 appartient à f(ℝ)', moment: 'zero' }], 40);
+        c.pause(.4);
+        K.rond(G, ALPHA, 0, true, 'jaune');
+        c.texte('α', G.X(ALPHA) + 2, G.Y(0) + 30, { couleur: 'jaune', taille: T(K, 22) });
+        c.repere('alpha', G.X(ALPHA) - 14, G.Y(0) - 14, 28, 50, 'la solution unique α');
+        K.marque('alpha');
+        colonne(c, K, COL, y, [
+          { t: 'donc f(x) = 0 admet une', couleur: 'vert', pause: .3 },
+          { t: 'solution unique α dans ℝ.', couleur: 'vert', cadre: 'vert', repere: 'conclusion', label: 'solution unique α dans ℝ', moment: 'conclusion' },
+        ], 34);
+      },
+      decrire: {
+        enonce: 'Un repère.',
+        courbe: 'La courbe de f(x) = x³ + x − 1 est tracée d’un trait, d’en bas à gauche jusqu’en haut à droite.',
+        continue: 'Écrit : f continue sur ℝ (polynôme).',
+        croissante: 'Écrit : f strictement croissante sur ℝ.',
+        limites: 'Deux flèches orange aux bouts de la courbe ; écrit : lim f(x) = −∞ quand x → −∞, lim f(x) = +∞ quand x → +∞. L’argument qui conclut n’est pas encore écrit.',
+        image: 'L’axe des ordonnées est colorié en vert ; écrit : f(ℝ) = ]−∞ ; +∞[ = ℝ.',
+        zero: '0 est entouré sur l’axe des ordonnées ; écrit : 0 ∈ f(ℝ).',
+        alpha: 'Le point où la courbe coupe l’axe des abscisses est marqué α.',
+        conclusion: 'Écrit et encadré : donc f(x) = 0 admet une solution unique α dans ℝ.',
+      },
+      motifs: { courbe: 'la courbe de f', continue: 'f continue', croissante: 'f strictement croissante', limites: 'les limites aux bornes', image: 'f(ℝ) = ℝ', zero: '0 ∈ f(ℝ)', alpha: 'le point α', conclusion: 'solution unique' },
+      explication: [{ repere: 'continue', texte: 'Un polynôme est continu sur ℝ.' }, { repere: 'croissante', texte: 'Question 2 : f’ > 0.' }, { repere: 'limites', texte: 'Les limites donnent f(ℝ).' }],
+    },
+
+    /* ── Question 3, suite : l’encadrement de α ── */
+    q3_encadrement: {
+      titre: 'Question 3 : où est α ?',
+      dessiner(c, K) {
+        K.titre('Question 3 : où est α ?');
+        const COL = LC.col(K, 476);
+        const G = K.axes({ x0: 70, y0: 62, w: LC.gw(K, 340), h: 280, xmin: -0.25, xmax: 1.35, ymin: -1.4, ymax: 1.6, gx: [[0.5, ''], [1, '1']], gy: [[1, '1']] });
+        let y = colonne(c, K, COL, 96, [
+          { t: 'f continue et strictement', couleur: 'cyan' },
+          { t: 'croissante sur [⟦1|2⟧ ; 1]', couleur: 'cyan', repere: 'rappel', label: 'f continue et strictement croissante', moment: 'rappel' },
+        ], 44);
+        // f(1/2) = −3/8 : un point sous l’axe
+        c.pause(.4);
+        c.texte('⟦1|2⟧', G.X(0.5), G.Y(0) - 30, { couleur: 'rouge', taille: T(K, 17), align: 'center' });
+        K.proj(G, 0.5, f(0.5), { versY: false, couleur: 'rouge' });
+        K.rond(G, 0.5, f(0.5), true, 'rouge');
+        c.texte('f(⟦1|2⟧) = −⟦3|8⟧ < 0', G.X(0.5) - 30, G.Y(f(0.5)) + 48, { couleur: 'rouge', taille: T(K, 17) });
+        c.repere('f_demi', G.X(0.5) - 12, G.Y(f(0.5)) - 12, 24, 24, 'f(1/2), sous l’axe');
+        K.marque('f_demi');
+        // f(1) = 1 : un point au-dessus de l’axe
+        c.pause(.4);
+        K.proj(G, 1, 1, { versY: false, couleur: 'vert' });
+        K.rond(G, 1, 1, true, 'vert');
+        c.texte('f(1) = 1 > 0', G.X(1) - 132, G.Y(1) - 14, { couleur: 'vert', taille: T(K, 17) });
+        c.repere('f_un', G.X(1) - 12, G.Y(1) - 12, 24, 24, 'f(1), au-dessus de l’axe');
+        K.marque('f_un');
+        // correction : le produit, la courbe qui joint les deux points, α entre les deux
+        c.pause(.6);
+        y = colonne(c, K, COL, y + 8, [{ t: 'f(⟦1|2⟧) × f(1) < 0', couleur: 'jaune', repere: 'produit', label: 'f(1/2) × f(1) < 0', moment: 'produit' }], 54);
+        c.pause(.3);
+        K.anime(1.6, p => K.courbePart(G, f, -0.15, 1.2, p, { couleur: 'cyan' }));
+        c.repere('courbe', G.X(0.5), G.Y(1), G.X(1) - G.X(0.5), G.Y(f(0.5)) - G.Y(1), 'la courbe entre 1/2 et 1');
+        K.marque('courbe');
+        c.pause(.3);
+        K.rond(G, ALPHA, 0, true, 'jaune');
+        c.texte('α', G.X(ALPHA) - 4, G.Y(0) + 30, { couleur: 'jaune', taille: T(K, 22) });
+        c.repere('alpha', G.X(ALPHA) - 14, G.Y(0) - 14, 28, 50, 'α, entre 1/2 et 1');
+        K.marque('alpha');
+        c.pause(.3);
+        LC.segment(c, G, 0.5, 1, { couleur: 'jaune', largeur: 7, alpha: .55 });
+        colonne(c, K, COL, y + 6, [{ t: 'donc ⟦1|2⟧ < α < 1', couleur: 'vert', taille: 21, cadre: 'vert', repere: 'encadrement', label: '1/2 < α < 1', moment: 'encadrement' }], 50);
+      },
+      decrire: {
+        rappel: 'Écrit : f continue et strictement croissante sur [1/2 ; 1].',
+        f_demi: 'Le point (1/2 ; −3/8) est marqué en rouge, sous l’axe : f(1/2) = −3/8 < 0.',
+        f_un: 'Le point (1 ; 1) est marqué en vert, au-dessus de l’axe : f(1) = 1 > 0. La courbe et α ne sont pas encore dessinés.',
+        produit: 'Écrit : f(1/2) × f(1) < 0.',
+        courbe: 'La courbe de f est tracée : elle passe du point rouge au point vert sans lever la craie.',
+        alpha: 'Elle coupe l’axe des abscisses entre 1/2 et 1, au point α.',
+        encadrement: 'Le segment [1/2 ; 1] est colorié sur l’axe ; écrit et encadré : donc 1/2 < α < 1.',
+      },
+      motifs: { rappel: 'les deux conditions', f_demi: 'f(1/2) sous l’axe', f_un: 'f(1) au-dessus', produit: 'le produit négatif', courbe: 'la courbe entre les deux points', alpha: 'α entre 1/2 et 1', encadrement: '1/2 < α < 1' },
+      explication: [{ repere: 'f_demi', texte: 'f(1/2) < 0 : sous l’axe.' }, { repere: 'f_un', texte: 'f(1) > 0 : au-dessus.' }, { repere: 'alpha', texte: 'La courbe passe d’un côté à l’autre entre 1/2 et 1.' }],
+    },
+
+    /* ── Question 4 : l’ensemble J où f⁻¹ est définie ── */
+    q4_J: {
+      titre: 'Question 4 : l’ensemble J',
+      dessiner(c, K) {
+        K.titre('Question 4 : f⁻¹ est définie sur J = ?');
+        const COL = LC.col(K, 460);
+        const G = K.axes(OPT_R(K));
+        K.marque('enonce');
+        let y = colonne(c, K, COL, 96, [
+          { t: 'f continue sur ℝ', couleur: 'cyan', pause: .3 },
+          { t: 'f strictement croissante sur ℝ', couleur: 'cyan', repere: 'conditions', label: 'les deux conditions', moment: 'conditions' },
+        ], 38);
+        c.pause(.3);
+        K.anime(1.0, p => K.courbePart(G, f, 0, -1.75, p, { couleur: 'cyan' }));
+        c.fleche(G.X(-1.6), G.Y(f(-1.6)) - 30, G.X(-1.78), G.y0 + G.h - 2, { couleur: 'orange', largeur: 1.6 });
+        LC.limite(c, COL, y + 6, 'x → −∞', 'f(x) = −∞', { couleur: 'orange', taille: T(K, 18) });
+        c.repere('limite_moins', COL - 4, y - 16, 200, 40, 'la limite en −∞');
+        K.marque('limite_moins');
+        c.pause(.3);
+        K.anime(1.0, p => K.courbePart(G, f, 0, 1.75, p, { couleur: 'cyan' }));
+        c.fleche(G.X(1.6), G.Y(f(1.6)) + 30, G.X(1.78), G.y0 + 2, { couleur: 'orange', largeur: 1.6 });
+        LC.limite(c, COL, y + 52, 'x → +∞', 'f(x) = +∞', { couleur: 'orange', taille: T(K, 18) });
+        c.repere('limite_plus', COL - 4, y + 30, 200, 40, 'la limite en +∞');
+        K.marque('limite_plus');
+        y += 108;
+        // correction : J = f(ℝ) colorié sur l’axe des ordonnées
+        c.pause(.6);
+        LC.segment(c, G, -6.9, 6.9, { vertical: true, couleur: 'vert', largeur: 7, alpha: .6 });
+        c.texte('J', G.X(0) + 12, G.Y(5.6), { couleur: 'vert', taille: T(K, 22) });
+        y = colonne(c, K, COL, y, [{ t: 'J = f(ℝ) = ]−∞ ; +∞[ = ℝ', couleur: 'vert', taille: 19, cadre: 'vert', repere: 'J', label: 'J = ℝ', moment: 'J' }], 42);
+        colonne(c, K, COL, y, [
+          { t: 'f⁻¹ est définie sur ℝ', couleur: 'vert', pause: .3, repere: 'conclusion', label: 'f⁻¹ définie sur ℝ', moment: 'conclusion' },
+        ], 34);
+      },
+      decrire: {
+        enonce: 'Un repère.',
+        conditions: 'Écrit : f continue sur ℝ, f strictement croissante sur ℝ.',
+        limite_moins: 'La branche gauche de la courbe descend vers le bas (flèche orange) ; écrit : lim f(x) = −∞ quand x → −∞.',
+        limite_plus: 'La branche droite monte vers le haut (flèche orange) ; écrit : lim f(x) = +∞ quand x → +∞. J n’est pas encore écrit.',
+        J: 'L’axe des ordonnées est colorié en vert et marqué J ; écrit et encadré : J = f(ℝ) = ]−∞ ; +∞[ = ℝ.',
+        conclusion: 'Écrit : f⁻¹ est définie sur ℝ.',
+      },
+      motifs: { conditions: 'continue et strictement croissante', limite_moins: 'la limite en −∞', limite_plus: 'la limite en +∞', J: 'J = ℝ', conclusion: 'f⁻¹ définie sur ℝ' },
+      explication: [{ repere: 'conditions', texte: 'Les deux conditions de la réciproque.' }, { repere: 'J', texte: 'J = f(ℝ) : toutes les hauteurs atteintes.' }],
+    },
+
+    /* ── Question 4, suite : la courbe de f⁻¹ par symétrie (repère orthonormé : même unité sur les deux axes) ── */
+    q5_courbe: {
+      titre: 'Question 4 : la courbe de f⁻¹',
+      dessiner(c, K) {
+        K.titre('Question 4 : construire (C_f⁻¹)');
+        const COL = LC.col(K, 430), u = 300;
+        const G = K.axes({ x0: 80, y0: 56, w: u, h: u, xmin: -2.5, xmax: 2.5, ymin: -2.5, ymax: 2.5, gx: [[1, '1'], [-1, '−1']], gy: [[1, '1'], [-1, '−1']] });
+        colonne(c, K, COL, 92, [{ t: 'repère orthonormé', couleur: 'faible', taille: 17, moment: 'enonce' }], 30);
+        c.pause(.3);
+        K.anime(1.6, p => K.courbePart(G, f, -0.92, 1.3, p, { couleur: 'cyan' }));
+        c.texte('(C_f)', G.X(1.32) + 6, G.Y(2.2), { couleur: 'cyan', taille: T(K, 18) });
+        c.repere('courbe_f', G.X(-0.92), G.Y(2.5), G.X(1.3) - G.X(-0.92), G.h, 'la courbe de f');
+        K.marque('courbe_f');
+        c.pause(.3);
+        c.ligne(G.X(-2.4), G.Y(-2.4), G.X(2.4), G.Y(2.4), { couleur: 'jaune', largeur: 1.6, pointille: [8, 6] });
+        c.texte('y = x', G.X(2.4) + 8, G.Y(2.1), { couleur: 'jaune', taille: T(K, 17) });
+        c.repere('droite', G.X(1.6), G.Y(2.4), G.X(2.4) - G.X(1.6), G.Y(1.6) - G.Y(2.4), 'la droite y = x');
+        K.marque('droite');
+        c.pause(.3);
+        K.rond(G, 0, -1, true, 'rouge');
+        c.texte('A(0 ; −1)', G.X(0) + 12, G.Y(-1) + 22, { couleur: 'rouge', taille: T(K, 17) });
+        c.repere('point_a', G.X(0) - 12, G.Y(-1) - 12, 24, 24, 'le point A(0 ; −1)');
+        K.rond(G, 1, 1, true, 'vert');
+        c.texte('B(1 ; 1)', G.X(1) - 14, G.Y(1) - 12, { couleur: 'vert', taille: T(K, 17), align: 'right' });
+        c.repere('point_b', G.X(1) - 12, G.Y(1) - 12, 24, 24, 'le point B(1 ; 1)');
+        K.marque('points');
+        // correction : on échange les coordonnées, puis la courbe symétrique
+        c.pause(.6);
+        c.ligne(G.X(0), G.Y(-1), G.X(-1), G.Y(0), { couleur: 'rouge', largeur: 1.4, pointille: [4, 5] });
+        K.rond(G, -1, 0, true, 'orange');
+        c.texte('A’(−1 ; 0)', G.X(-1) - 8, G.Y(0) - 14, { couleur: 'orange', taille: T(K, 17), align: 'right' });
+        c.repere('point_a2', G.X(-1) - 12, G.Y(0) - 12, 24, 24, 'le point A’(−1 ; 0)');
+        let y = colonne(c, K, COL, 132, [{ t: 'A(0 ; −1) → A’(−1 ; 0)', couleur: 'orange', repere: 'echange_a', label: 'on échange les coordonnées', moment: 'reflet_a' }], 36);
+        c.pause(.3);
+        c.cercle(G.X(1), G.Y(1), 15, { couleur: 'vert', largeur: 1.6 });
+        y = colonne(c, K, COL, y, [{ t: 'B(1 ; 1) est sur y = x : B’ = B', couleur: 'vert', moment: 'reflet_b' }], 40);
+        c.pause(.3);
+        K.anime(1.8, p => K.courbePart(G, finv, -2.4, 2.4, p, { couleur: 'orange' }));
+        c.texte('(C_f⁻¹)', G.X(1.65), G.Y(0.5), { couleur: 'orange', taille: T(K, 18) });
+        c.repere('courbe_reciproque', G.X(-2.4), G.Y(1.4), G.X(2.4) - G.X(-2.4), G.Y(-1.4) - G.Y(1.4), 'la courbe de f⁻¹');
+        K.marque('courbe_reciproque');
+        colonne(c, K, COL, y + 4, [
+          { t: '(C_f⁻¹) est la symétrique de (C_f)', couleur: 'blanc', pause: .3 },
+          { t: 'par rapport à la droite y = x.', couleur: 'blanc', repere: 'conclusion', label: 'la symétrie par rapport à y = x', moment: 'conclusion' },
+        ], 32);
+      },
+      decrire: {
+        enonce: 'Un repère orthonormé.',
+        courbe_f: 'La courbe de f (cyan) est tracée.',
+        droite: 'La droite y = x est tracée en pointillés jaunes.',
+        points: 'Deux points de (C_f) sont marqués : A(0 ; −1) en rouge, B(1 ; 1) en vert. Leurs symétriques ne sont pas encore dessinés.',
+        reflet_a: 'A’(−1 ; 0) est marqué en orange, relié à A par un pointillé qui traverse y = x ; écrit : A(0 ; −1) → A’(−1 ; 0).',
+        reflet_b: 'B est entouré : il est sur y = x, il reste à sa place ; écrit : B’ = B.',
+        courbe_reciproque: 'La courbe de f⁻¹ (orange) est tracée, symétrique de (C_f) par rapport à y = x.',
+        conclusion: 'Écrit : (C_f⁻¹) est la symétrique de (C_f) par rapport à la droite y = x.',
+      },
+      motifs: { courbe_f: 'la courbe de f', droite: 'la droite y = x', points: 'les points A et B', reflet_a: 'A devient A’', reflet_b: 'B reste à sa place', courbe_reciproque: 'la courbe de f⁻¹', conclusion: 'la symétrie' },
+      explication: [{ repere: 'droite', texte: 'Le miroir : la droite y = x.' }, { repere: 'point_a', texte: 'A(0 ; −1) sur (C_f).' }, { repere: 'courbe_reciproque', texte: 'Le reflet de (C_f).' }],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

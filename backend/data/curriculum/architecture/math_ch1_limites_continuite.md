@@ -60,7 +60,7 @@ techniques de devoir (comparer deux racines, équation ∛(2x³ + 11) = 3, a³ �
 
 ## L'architecture, diapositive par diapositive
 
-73 diapositives, 7 séances, 24 blocs, durée prévue 219 min. « ✏️ » : la diapositive porte le « À toi » du bloc ; « 🔊 » : sa voix est gardée ; « 🆕 voix » : à enregistrer.
+77 diapositives (73 + 4 ajoutées par la 2ᵉ passe), 7 séances, 24 blocs, durée prévue 227 min. « ✏️ » : la diapositive porte le « À toi » du bloc ; « 🔊 » : sa voix est gardée ; « 🆕 voix » : à enregistrer.
 
 ### Séance 1 — Calculer une limite : remplacer, nommer la forme, choisir l'outil
 
@@ -138,7 +138,8 @@ techniques de devoir (comparer deux racines, équation ∛(2x³ + 11) = 3, a³ �
 |---|---|---|---|
 | `lc_c4_parametre` | Quelle valeur de m soude la courbe ? | 🔊 | Trouver m pour souder : même fonction, l'élève voit le saut puis la condition. |
 | `lc_c4b_droite_gauche` | Continue à droite, continue à gauche | 🔊 | Continue à droite / à gauche nommés (manque relevé par l'audit Fayssal), sur la même fonction. |
-| `lc_c5_redaction` | La rédaction : f(a), ①, ②, conclusion | 🔊 | La rédaction ① ② qui prend les points, après avoir compris ; dernier geste de la partie. |
+| `lc_c5_redaction` | La rédaction : f(a), ①, ②, conclusion | 🔊 | La rédaction ① ② qui prend les points, après avoir compris. |
+| `lc_c5b_parametre` | À toi : la valeur de m | ✏️ 🆕 voix | NOUVELLE (2ᵉ passe) : le cas type « trouver m » (devoirs, Ghazouani) n'était que dit d'un trait en c4 (la voix donne m = 1). Ici l'élève le fait sur une autre fonction (x² + 1 / 3x + m en 2) : `calculs.html?vue=c5b_parametre` écrit f(2), la limite à gauche, la limite à droite (6 + m) et s'arrête ; la condition 6 + m = 5 et m = −1 seulement après la réponse. Le bloc n'avait pas de « À toi ». |
 
 **Les fonctions usuelles, les opérations, √u** (`lc_s3_b1`)
 
@@ -255,12 +256,23 @@ techniques de devoir (comparer deux racines, équation ∛(2x³ + 11) = 3, a³ �
 
 **Le problème national : quatre questions, ta réponse avant la correction** (`lc_s7_b1`)
 
+2ᵉ passe : chaque question (et chaque sous-question) a sa diapositive, sa vue animée de `national.html` arrêtée juste
+avant la réponse, sa question et sa démonstration écrite comme le barème. L'énoncé (`lc_e1_probleme`) annonce toujours
+quatre questions : 2 et 3 ont deux temps, 4 aussi (J, puis la courbe).
+
 | Diapositive | Titre | | Pourquoi ici |
 |---|---|---|---|
-| `lc_e1_probleme` | Un problème national : ce chapitre dedans | ✏️ 🔊 | Problème type national sur x³ + x − 1 : l'énoncé, puis la question 1 (limites) posée avant sa correction. Son ancien exercice (encadrement de α) passe à la question 3, à sa place. |
-| `lc_e1_probleme_b` | Question 2 : le sens de variation | ✏️ 🆕 voix | RÉÉCRIT : la question 2 seule (f′ et son signe) ; la voix s'arrête avant la réponse ; le tableau f : −∞ ↗ +∞ dans la correction. Avant, les questions 1, 2 et 3 étaient dites d'un trait avec leurs réponses. |
-| `lc_e1_probleme_tvi` | Question 3 : la solution unique α, et sa place | ✏️ 🆕 voix | NOUVELLE : la question 3 (solution unique et encadrement) jouée sur la courbe qui traverse l'axe une fois ; l'élève place α (question reprise de l'ancien exercice, ses réactions et sa démonstration gardent leur voix). |
-| `lc_e1_probleme_c` | Question 4 : la fonction réciproque | ✏️ 🆕 voix | RÉÉCRIT : la question 4 (J = f(ℝ)) posée à l'élève ; avant, la voix donnait la réponse. Question reprise de la réserve, réactions gardées. |
+| `lc_e1_probleme` | Un problème national : ce chapitre dedans | ✏️ 🔊 | Problème type national sur x³ + x − 1 : l'énoncé, puis la question 1 (limite en +∞) posée avant sa correction. |
+| `lc_e1_probleme_b` | Question 2 : le signe de f′(x) | ✏️ 🆕 voix | Vue changée : `national.html?vue=q2_signe` (f, f′, x² ≥ 0, arrêt) ; la courbe de f′ au-dessus de l'axe et « f′(x) ≥ 1 > 0 » seulement après la réponse. Premier `play_until` sur le premier mot (sinon la scène courait jusqu'au signe). Réactions préparées écrites (besoin noté à la 1ʳᵉ passe). Texte dit inchangé. |
+| `lc_e1_probleme_b2` | Question 2 : le tableau de variations | ✏️ 🆕 voix | NOUVELLE : le tableau se construit ligne par ligne (x, signe de f′, flèche) ; ses deux bouts restent vides : l'élève trouve lui-même −∞ et +∞ (la limite en −∞ n'était demandée nulle part). Après la réponse : −∞, +∞, puis la courbe de f à côté du tableau. |
+| `lc_e1_probleme_unique` | Question 3 : une solution unique dans ℝ | ✏️ 🆕 voix | NOUVELLE : le cas « solution unique sur ℝ » (2021 R, 2025 N, 2025 R). Avant, la voix le disait sans question. La courbe, « continue », « strictement croissante » et les deux limites s'écrivent ; l'élève donne l'argument qui manque (0 ∈ f(ℝ) = ℝ) ; f(ℝ), le zéro entouré et α après la réponse. |
+| `lc_e1_probleme_tvi` | Question 3 : où est α ? | ✏️ 🆕 voix | RÉÉCRITE : seulement l'encadrement. Avant, `traversee.html?vue=alpha` dessinait la courbe et α (vers 0,68) avant la question « où est α ? ». Maintenant `q3_encadrement` place seulement les deux points donnés (f(1/2) sous l'axe, f(1) au-dessus) ; la courbe qui les joint, α et 1/2 < α < 1 après la réponse. Question, réactions et démonstration inchangées (voix gardées). |
+| `lc_e1_probleme_c` | Question 4 : la fonction réciproque | ✏️ 🆕 voix | Vue changée : `national.html?vue=q4_J` (les deux conditions, la branche gauche qui descend, la droite qui monte, leurs limites) ; J colorié sur l'axe des ordonnées après la réponse. Texte dit inchangé. |
+| `lc_e1_probleme_d` | Question 4 : construire la courbe de f⁻¹ | ✏️ 🆕 voix | NOUVELLE : « construire (C_f⁻¹) dans le même repère » (2020 N, 2021 N, 2021 R, 2025 N) joué pas à pas : (C_f), la droite y = x, A(0 ; −1) et B(1 ; 1) ; l'élève donne A′ ; puis A′(−1 ; 0), B fixe, la courbe symétrique tracée. |
+
+Exception écrite à « un seul À toi par bloc » (déjà décidée à la 1ʳᵉ passe) : la règle du 18 novembre (« la réponse de
+l'élève avant la correction ») et la règle 41 (national joué pas à pas) priment pour ce bloc. Le bloc passe de 4 à 7
+diapositives (environ 15 min) ; la séance 7 reste sous 50 min avec le bilan.
 
 **Ce qu'il faut retenir, la carte** (`lc_s7_b4`)
 
@@ -286,16 +298,94 @@ exercice : lim ∛(x + 8) en +∞). Le rappel de compétence « factorise a³ �
 
 ## Animations et exercices animés
 
-- Question 3 du problème : `traversee.html?vue=alpha` (la courbe de x³ + x − 1 se trace, monte, coupe l'axe une fois
-  en α), arrêtée sur α avant la question.
-- Questions 2 et 4 : deux vues nouvelles de `calculs.html` (`e1_q2`, `e1_q4`, ajoutées à la main dans
-  `calculs-donnees.js` : le build du cours n'est pas dans le dépôt ; à reporter dans ses sources).
+- **2ᵉ passe, nouvelle page `national.html`** (le problème national, une vue par question ; chaque vue s'écrit jusqu'au
+  moment de la question, la correction animée suit) :
+
+  | Vue | Diapositive | Moments avant la question | Moments de la correction (rejeu) |
+  |---|---|---|---|
+  | `q2_signe` | `lc_e1_probleme_b` | enonce, derivee, carre | parabole, signe, conclusion |
+  | `q2_tableau` | `lc_e1_probleme_b2` | cadre, ligne_x, ligne_signe, fleche | limite_moins, limite_plus, courbe |
+  | `q3_unique` | `lc_e1_probleme_unique` | enonce, courbe, continue, croissante, limites | image, zero, alpha, conclusion |
+  | `q3_encadrement` | `lc_e1_probleme_tvi` | rappel, f_demi, f_un | produit, courbe, alpha, encadrement |
+  | `q4_J` | `lc_e1_probleme_c` | enonce, conditions, limite_moins, limite_plus | J, conclusion |
+  | `q5_courbe` | `lc_e1_probleme_d` | enonce, courbe_f, droite, points | reflet_a, reflet_b, courbe_reciproque, conclusion |
+
+  Un repère par objet nommé (enonce, derivee, carre, parabole, signe, tableau, ligne_x, ligne_signe, fleche, bout_moins,
+  bout_plus, courbe, continue, croissante, limites, image, zero, alpha, f_demi, f_un, produit, encadrement, conditions,
+  limite_moins, limite_plus, J, courbe_f, droite, point_a, point_b, point_a2, echange_a, courbe_reciproque, conclusion).
+  Fractions au tableau en ⟦num|dén⟧ ; prime écrite « ’ » (la police de craie n'a pas « ′ »). Vérifiée dans Chromium à
+  1280 × 640 et 724 × 350 (début, arrêt de la question, fin), sans erreur console.
+- **Vue de calcul ajoutée** `c5b_parametre` (dans `calculs-donnees.js`, à la main : à reporter dans les sources du build
+  `maths_build/limites_continuite/build.py`) : enonce, image, gauche, droite | condition, resultat.
+- Les vues `calculs.html?vue=e1_q2` et `e1_q4` (1ʳᵉ passe) ne servent plus ; laissées dans `calculs-donnees.js` (aucune
+  vue du cours en ligne n'est modifiée).
 - Toutes les autres animations sont gardées (elles servent chacune une étape : courbe à trou, deux côtés, raccord,
   projections, traversée, miroir, racine).
 
+## Inventaire des cas types (2ᵉ passe)
+
+| Cas type (fréquence) | Diapositive(s) qui le jouent | Avant → après |
+|---|---|---|
+| limite sans indétermination, k/0 et signe (20/20) | `lc_l1_chemin`, `lc_l2_remplacer`, `lc_l9_deux_cotes` (observation), `lc_l10_signe`, `lc_l11_interpreter` | inchangé (questions déjà avant la réponse) |
+| 0/0 polynômes (devoirs ; 2021 N) | `lc_z5_racine_facteur` (question), `lc_l5_facteur` (exemple joué ligne par ligne) | inchangé |
+| 0/0 et ∞ − ∞ avec racine, conjugué (devoirs) | `lc_l6_conjugue`, `lc_l8_racine_infini(_b)` (exemples joués) | inchangé ; pas de « À toi » (le bloc a déjà le sien, `lc_l7`) |
+| à l'infini, terme le plus lourd (20/20) | `lc_l7_plus_lourd` (question), `lc_lr4_infini` (question), `lc_e1_probleme` (Q1) | + `lc_e1_probleme_b2` : la limite en −∞ demandée dans le tableau |
+| sin(ax)/x (devoirs) | `lc_l12_sinus`, `lc_l12_sinus_b` | inchangé |
+| continuité en un point (2021 N, 2022 R) | `lc_c1_soudee`, `lc_c2_limite_image`, `lc_c5_redaction` | inchangé |
+| deux expressions, à droite / à gauche (2 sujets) | `lc_c3_deux_branches` (question), `lc_c4b_droite_gauche`, `lc_c5_redaction` | inchangé |
+| trouver m (devoirs) | `lc_c4_parametre` (dit, sans question) | + `lc_c5b_parametre` : À toi, arrêt avant m |
+| continuité sur un intervalle (1ʳᵉ ligne du TVI) | `lc_i1_usuelles` (question), `lc_i2`, `lc_i3`, `lc_e1_probleme_unique` | + écrite comme 1ʳᵉ ligne de la question 3 |
+| image d'un intervalle (8/20) | `lc_j1` à `lc_j5` (`lc_j3` question), `lc_t8` | + `lc_e1_probleme_c` animé (J sur l'axe après la réponse) |
+| TVI au moins une solution (2021 N) | `lc_t1` à `lc_t4` (`lc_t2` question) | inchangé |
+| solution unique sur [a ; b] (6/20) | `lc_t5_unique` (question), `lc_t6_rediger` | inchangé |
+| solution unique sur ℝ, puis encadrement (3 sujets) | `lc_t8_intervalle_ouvert` ; `lc_e1_probleme_tvi` (encadrement, α déjà dessiné) | + `lc_e1_probleme_unique` (question) ; `lc_e1_probleme_tvi` ne montre plus α avant la réponse |
+| se servir de f(α) = 0 (3 sujets) | `lc_t9_f_alpha` (question) | inchangé |
+| f(x) = k (2 sujets) | `lc_t7_valeur_k` | inchangé |
+| dichotomie (devoirs, jamais au national) | — | non ajoutée : retirée le 15 novembre à la demande de l'utilisateur, « méthode de dichotomie » hors programme dans `perimetre.json` ; l'encadrement par deux images de signes contraires est joué en `lc_e1_probleme_tvi` |
+| réciproque : existence et J (8/20) | `lc_r3_J`, `lc_r4_deux_lignes` (question), `lc_e1_probleme_c` | `lc_e1_probleme_c` : vue animée au lieu d'un calcul écrit |
+| courbe de f⁻¹ (4 sujets) | `lc_r6_miroir`, `lc_r7_construire` (question) | + `lc_e1_probleme_d` : construction pas à pas dans le problème |
+| expression de f⁻¹ (devoirs) | `lc_r8_expression`, `lc_r9_valeur_absolue(_b)` | inchangé |
+| racines n-ièmes, puissances rationnelles (devoirs) | `lc_n1` à `lc_n6_b`, `lc_p1` à `lc_p3`, `lc_lr1`, `lc_lr4` | inchangé |
+
+## Questions dont la vue montrait la réponse (2ᵉ passe)
+
+- `lc_e1_probleme_tvi` : la courbe et α (≈ 0,68, à droite de 1/2) étaient dessinés avant « où est α ? » → la vue ne
+  place plus que les deux points donnés.
+- `lc_e1_probleme_b` : la diapositive démarrait en `start` avec son premier `play_until` au milieu de la phrase ; sur la
+  nouvelle vue la scène aurait écrit le signe avant l'arrêt → `play_until enonce` sur le premier mot.
+- Revus et laissés : `lc_l13_devoir`, `lc_lr4_infini`, `lc_i4_composee`, `lc_l7_plus_lourd`, `lc_l1_chemin` s'arrêtent
+  déjà avant le résultat ; `lc_l4_formes_b`, `lc_l10_signe`, `lc_j3_decroissante`, `lc_r7_construire`, `lc_n1_defaire`,
+  `lc_n4_simplifier`, `lc_p3_regles_puissances` posent un exemple jumeau (autres nombres) de celui joué ; `lc_i1_usuelles`,
+  `lc_t2_continue`, `lc_t5_unique`, `lc_r4_deux_lignes` sont des questions de rappel immédiat de ce qui vient d'être
+  montré et dit (la voix dit déjà la réponse : les changer demanderait de refaire leur voix).
+
+## Rejeu après la réponse (pour le lecteur)
+
+`diapositive — URL de la vue — moment(s) à rejouer`
+
+- `lc_e1_probleme_b` — `national.html?vue=q2_signe` — parabole, signe, conclusion
+- `lc_e1_probleme_b2` — `national.html?vue=q2_tableau` — limite_moins, limite_plus, courbe
+- `lc_e1_probleme_unique` — `national.html?vue=q3_unique` — image, zero, alpha, conclusion
+- `lc_e1_probleme_tvi` — `national.html?vue=q3_encadrement` — produit, courbe, alpha, encadrement
+- `lc_e1_probleme_c` — `national.html?vue=q4_J` — J, conclusion
+- `lc_e1_probleme_d` — `national.html?vue=q5_courbe` — reflet_a, reflet_b, courbe_reciproque, conclusion
+- `lc_c5b_parametre` — `calculs.html?vue=c5b_parametre` — condition, resultat
+- `lc_l13_devoir` — `calculs.html?vue=l13_devoir` — simplifie, resultat
+- `lc_lr4_infini` — `calculs.html?vue=lr4_lourd` — resultat
+- `lc_l7_plus_lourd` — `lourd.html?vue=lourd` — resultat
+- `lc_i4_composee` — `composee.html?vue=limite` — racine_limite
+- `lc_l1_chemin` — `approche.html?vue=trou` — limite_lue
+
 ## Ce qui reste à faire
 
-- Voix : `math_ch1_limites_continuite_voix.json` (8 pistes : 4 diapositives, 2 démonstrations, 2 énoncés).
-- Réactions préparées à écrire pour `lc_e1_probleme_b` (question nouvelle) ; `lc_l4_formes_b/e0` n'en avait déjà pas.
-- Les écarts du contrôle `verifier_pointage_simulations.py` sont ceux d'avant (moments des vues de calcul lus dans
-  `calculs-donnees.js`, que le contrôle ne lit pas) ; aucun écart nouveau hormis les temps estimés des pistes sans voix.
+- Voix : `math_ch1_limites_continuite_voix.json` (52 pistes : 8 de la 1ʳᵉ passe, dont `lc_e1_probleme_tvi` réécrite ;
+  44 ajoutées par la 2ᵉ passe : 4 diapositives nouvelles, 4 démonstrations, 4 énoncés, 32 réactions préparées).
+- Réactions préparées : écrites pour `lc_e1_probleme_b` et pour les quatre diapositives nouvelles ; reste
+  `lc_l4_formes_b/e0`.
+- Mots gardés, à écouter (termes du programme) : « orthonormé » (0 fois à l'entraînement), « symétrique » (2 fois) dans
+  `lc_e1_probleme_d` et sa démonstration et ses réactions.
+- `calculs-donnees.js` : la vue `c5b_parametre` est ajoutée à la main ; à reporter dans les sources du build.
+- Non fait : un « À toi » sur le conjugué (le bloc `lc_s1_b4` a déjà le sien) ; refaire la voix de `lc_t2_continue`,
+  `lc_t5_unique`, `lc_r4_deux_lignes`, `lc_c4_parametre` pour qu'elles ne disent plus la réponse avant la question.
+- Le contrôle `verifier_pointage_simulations.py --ecarts` : aucune ligne MOMENT ni REPERE. Les lignes DEPART (toutes les
+  diapositives en `start`) et GESTE des diapositives sans voix (temps estimé à 0 tant que la voix n'existe pas) restent.
