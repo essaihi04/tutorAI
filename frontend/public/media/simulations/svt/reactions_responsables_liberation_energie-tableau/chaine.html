@@ -11,6 +11,7 @@
 </div>
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
+<script src="/media/simulations/shared/lexique/lexique.js"></script>
 <script src="peinture.js"></script>
 <script>
 /*
@@ -52,8 +53,7 @@ const SX = 600, TETE = { x: 600, y: 270, r: 18 };
 const NOMS_C = ['CI', 'CII', 'CIII', 'CIV'];
 const R1 = 336, R2 = 360, R3 = 382, R4 = 404;          // lignes d’écriture dans la matrice
 const RAIL = { x0: 572, x1: 668, y: 74 };              // poignée du dioxygène
-const JAUNE = [250, 204, 21], ROUGE = [225, 62, 62], TAXI = [34, 190, 220], VIOLET = [176, 120, 228], OXY = [196, 228, 250],
-  EAU = [60, 130, 200], CARTE = [250, 190, 60], VIDE = [150, 150, 150], PHOS = [240, 140, 60];
+const TAXI = [34, 190, 220], CARTE = [250, 190, 60], VIDE = [150, 150, 150];   // (les autres teintes : window.Lexique.C)
 const O2A = { x: 480, y: 288 }, O2B = { x: 484, y: 284 }, EAU1 = { x: 464, y: 304 }, EAU2 = { x: 490, y: 310 };
 /* Protons de départ : dans la matrice (POOL) et dans l’espace intermembranaire (ESP0). */
 const POOL = [[232, 262], [250, 302], [318, 284], [336, 306], [372, 272], [410, 302], [448, 262], [540, 312], [560, 262]];
@@ -306,10 +306,10 @@ function ecrits() {
   add('chaine_causale', 13.2, PL.cyan && !MAILLONS, 'transfert des e− arrêté → O2 non consommé → pas de pompage des H+ → pas de gradient → pas d’ATP', c =>
     c.texte('transfert des e− arrêté → O_{2} non consommé → pas de pompage des H+ → pas de gradient → pas d’ATP', 380, R4, { couleur: 'rouge', taille: 14, align: 'center', max: 735, duree: 2 }));
   add('gradient', 21.1, ok && cours, 'gradient de protons : [H+] élevée (pH bas) dans l’espace, faible dans la matrice', c =>
-    c.texte('gradient de protons : [H+] élevée (pH bas) dans l’espace, faible dans la matrice', 200, 112, { couleur: 'rouge', taille: 14, max: 540, duree: 1.8 }));
+    c.texte('gradient de protons : [H+] élevée (pH bas) dans l’espace, faible dans la matrice', 200, 112, { couleur: 'rose', taille: 14, max: 540, duree: 1.8 }));
   add('retour', 22.0, ok && cours, 'retour des H+ : seulement par la sphère', c => (MOS.actif()   // tableau large : sur deux lignes (le texte grossi ne touche pas « O2 : accepteur final »)
-    ? (c.texte('retour des H+ :', 680, R1, { couleur: 'rouge', taille: 13, align: 'right' }), c.texte('seulement par la sphère', 745, R2, { couleur: 'rouge', taille: 13, align: 'right' }))
-    : c.texte('retour des H+ : seulement par la sphère', 745, R2, { couleur: 'rouge', taille: 13, align: 'right' })));
+    ? (c.texte('retour des H+ :', 680, R1, { couleur: 'rose', taille: 13, align: 'right' }), c.texte('seulement par la sphère', 745, R2, { couleur: 'rose', taille: 13, align: 'right' }))
+    : c.texte('retour des H+ : seulement par la sphère', 745, R2, { couleur: 'rose', taille: 13, align: 'right' })));
   add('lettre_C', 27.2, ok && ex(), 'lettre C (à la tête de la sphère)', c => { c.cercle(560, 244, 9, { couleur: 'rose', largeur: 1.4 }); c.texte('C', 560, 249, { couleur: 'rose', taille: 14, align: 'center' }); });
   add('atp_eq', 24.4, ok && cours, 'ADP + Pi + énergie → ATP : phosphorylation oxydative', c => {
     c.texte('ADP + Pi + énergie → ATP :', 640, R3, { couleur: 'jaune', taille: 15, align: 'center' });
@@ -352,8 +352,11 @@ function medaillon(c) {
 }
 
 /* ── Les billes ────────────────────────────────────────────────────────────────────────────── */
-function proton(c, x, y, a) { c.direct(() => { P.bille(c.ctx, x, y, 7, ROUGE, { alpha: a }); c.texte('H+', x, y + 3.5, { couleur: '#fff', taille: 9, align: 'center', alpha: a }); }); }
-function electron(c, x, y, a) { c.direct(() => { P.bille(c.ctx, x, y, 6, JAUNE, { alpha: a }); c.texte('e−', x, y + 3.5, { couleur: '#3a2600', taille: 9, align: 'center', alpha: a }); }); }
+/* Lexique visuel commun (18 novembre 2026, règle 15) : le proton H+ est la bille rose du lexique, l'électron la bille bleu ciel
+ * (il était jaune ici, la couleur des carbones du glucose) ; O₂ et H₂O ont leurs atomes (O rouge, H blanc). */
+const Lx = window.Lexique;
+function proton(c, x, y, a) { c.direct(() => Lx.proton(c.ctx, x, y, { alpha: a })); }
+function electron(c, x, y, a) { c.direct(() => Lx.electron(c.ctx, x, y, { alpha: a })); }
 function capsule(c, x, y, w, h, coul, nom, a, taille = 12, coulTexte = ENCRE) {
   c.direct(() => { P.proteine(c.ctx, x, y, w, h, { couleur: coul, alpha: .88 * a }); c.texte(nom, x, y + 4.5, { couleur: coulTexte, gras: true, taille, align: 'center', alpha: a }); });
 }
@@ -395,13 +398,13 @@ function dessiner(c) {
   c.texte('avec O_{2}', RAIL.x0 - 10, RAIL.y + 5, { couleur: S.o2 ? 'blanc' : 'faible', taille: 13, align: 'right' });
   c.texte('sans O_{2}', RAIL.x1 + 15, RAIL.y + 5, { couleur: S.o2 ? 'faible' : 'rouge', taille: 13 });
   c.ligne(RAIL.x0, RAIL.y, RAIL.x1, RAIL.y, { couleur: 'tresfaible', largeur: 2 });
-  c.direct(() => { P.bille(c.ctx, px, RAIL.y, 10, OXY); c.texte('O_{2}', px, RAIL.y + 4, { couleur: '#123', taille: 10, align: 'center' }); });
+  c.direct(() => Lx.o2(c.ctx, px, RAIL.y, { echelle: .9 }));
 
-  // pompes (flèches rouges) et retour par la sphère
+  // pompes (flèches roses, la couleur des H+) et retour par la sphère
   const pompesVues = new Set();
   for (const p of PL.POMPES) if (t >= p.t0 && t < 21.5) pompesVues.add(p.k);
-  for (const k of pompesVues) ecrit.ecrire(c, 'pompe' + k, () => c.fleche(TX[k] + 32, 262, TX[k] + 32, 166, { couleur: 'rouge', largeur: 2, tete: 9 }));
-  if (PL.RETOURS.length && t >= 21.4) ecrit.ecrire(c, 'retour_fleche', () => c.fleche(584, 172, 584, 250, { couleur: 'rouge', largeur: 2, tete: 9 }));
+  for (const k of pompesVues) ecrit.ecrire(c, 'pompe' + k, () => c.fleche(TX[k] + 32, 262, TX[k] + 32, 166, { couleur: 'rose', largeur: 2, tete: 9 }));
+  if (PL.RETOURS.length && t >= 21.4) ecrit.ecrire(c, 'retour_fleche', () => c.fleche(584, 172, 584, 250, { couleur: 'rose', largeur: 2, tete: 9 }));
 
   // Premier relais (vue cours) : le transporteur qui porte les électrons est « réduit », ceux qui les ont donnés « oxydé ».
   const etats = etatsTransporteurs(t);
@@ -411,7 +414,7 @@ function dessiner(c) {
   for (const v of PL.TAXIS) {
     const a = vis(v, t); if (a <= 0) continue;
     const [x, y] = ou(v, t), charge = v.reste || t < v.tu + .5;
-    capsule(c, x, y, largeurTaxi(charge), 22, PL.fadh && !ex() ? VIOLET : TAXI, nomTaxi(charge), a, 13);
+    capsule(c, x, y, largeurTaxi(charge), 22, PL.fadh && !ex() ? Lx.C.fad : TAXI, nomTaxi(charge), a, 13);
   }
   // dioxygène et eau
   for (const o of PL.O2) {
@@ -420,12 +423,12 @@ function dessiner(c) {
     let d = Infinity;
     for (const p of PL.H.concat(PL.E)) if (vis(p, t) > 0) { const [px, py] = ou(p, t); d = Math.min(d, Math.hypot(px - (droite ? x + 30 : x - 30), py - y)); }
     const aE = a * Math.max(0, Math.min(1, (d - 26) / 14));
-    c.direct(() => { P.bille(c.ctx, x, y, 9, OXY, { alpha: a }); if (aE > .02) c.texte(PL.cyan ? 'O_{2}' : '½ O_{2}', droite ? x + 13 : x - 13, y + 4, { couleur: 'blanc', taille: 12, align: droite ? 'left' : 'right', alpha: aE }); });
+    c.direct(() => { Lx.o2(c.ctx, x, y, { alpha: a, demi: !PL.cyan }); if (aE > .02) c.texte(PL.cyan ? 'O_{2}' : '½ O_{2}', droite ? x + 13 : x - 13, y + 4, { couleur: 'blanc', taille: 12, align: droite ? 'left' : 'right', alpha: aE }); });
   }
   for (const w of PL.EAUX) {
     const a = vis(w, t); if (a <= 0) continue; const [x, y] = ou(w, t);
     if (t < w.de + .5) c.direct(() => P.eclat(c.ctx, x, y, 22, 1 - (t - w.de) / .5));
-    c.direct(() => P.bille(c.ctx, x, y, 10, EAU, { alpha: a }));
+    c.direct(() => Lx.h2o(c.ctx, x, y, { alpha: a, echelle: 1.1 }));
   }
   // protons, électrons
   for (const h of PL.H) { const a = vis(h, t); if (a > 0) { const [x, y] = ou(h, t); proton(c, x, y, a); } }
@@ -437,7 +440,7 @@ function dessiner(c) {
     if (u < .5) {
       const a = Math.min(1, (u + .4) / .4), v = doux(Math.max(0, u) / .5);
       capsule(c, mix(636, 606, v), mix(304, 299, v), 34, 16, VIDE, 'ADP', a, 11);
-      c.direct(() => { P.bille(c.ctx, mix(664, 620, v), mix(304, 299, v), 8, PHOS, { alpha: a }); c.texte('Pi', mix(664, 620, v), mix(304, 299, v) + 3.5, { couleur: '#2a1400', taille: 9, align: 'center', alpha: a }); });
+      c.direct(() => Lx.pi(c.ctx, mix(664, 620, v), mix(304, 299, v), { alpha: a }));
     } else {
       if (u < 1) c.direct(() => P.eclat(c.ctx, 606, 296, 22, 1 - (u - .5) / .5));
       const v = doux((u - .7) / .5);
@@ -553,7 +556,7 @@ function dessinerConstruire0(c) {
   dernierT = t;
   // le document : la membrane interne peinte (transporteurs, sphère pédonculée), des H+ dans l’espace
   ctx.save(); ctx.translate(FX, FY); ctx.scale(FS, FS);
-  c.direct(() => { peindre(ctx); for (const [x, y] of HE) P.bille(ctx, x, y, 8, ROUGE); });
+  c.direct(() => { peindre(ctx); for (const [x, y] of HE) Lx.proton(ctx, x, y, { r: 8 }); });
   ctx.restore();
   c.direct(() => {
     for (const [x, y] of HE.slice(1, 6).filter((_, i) => i % 2 === 0)) c.texte('H+', ...tr(x + 14, y + 4), { couleur: 'rouge', taille: 15 });

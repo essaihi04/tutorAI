@@ -445,6 +445,28 @@ LEXIQUE["bilan.html"] = {}
 PROCESSUS["bilan.html"] = []
 LEXIQUE["carte.html"] = {}
 PROCESSUS["carte.html"] = []
+# Le glucose marqué au ¹⁴C (18 novembre 2026) : la diapositive le_m3a_glucose_marque n'est plus un tableau à lire.
+LEXIQUE["glucose-marque.html"] = {
+    "cellule": r"cellules?",
+    "compteurs": r"tableau|les plus|radioactives?",
+    "points": r"marqué|carbone quatorze|radioactif|balise|boules|molécules radioactives",
+    "milieu": r"milieu",
+    "hyaloplasme": r"hyaloplasme",
+    "mitochondrie": r"mitochondrie",
+    "matrice": r"matrice",
+    "horloge": r"(?<![A-Za-z])T (zéro|un|deux|trois|quatre)\b",
+    "compteur_milieu": r"milieu",
+    "compteur_hyaloplasme": r"hyaloplasme",
+    "compteur_mitochondrie": r"mitochondrie",
+    "conclusion_glycolyse": r"glycolyse",
+    "conclusion_matrice": r"matrice|C O deux",
+    "tableau": r"conclusion|tableau|تستنتج",
+}
+PROCESSUS["glucose-marque.html"] = [
+    (r"فT zéro", ["t0"]), (r"فT un", ["t1"]), (r"فT deux", ["t2"]), (r"فT trois", ["t3"]), (r"فT quatre", ["t4"]),
+    (r"le glucose تحول ?ل ?acide pyruvique فle hyaloplasme", ["glycolyse"]),
+    (r"وكيتفكك فla matrice", ["matrice"]),
+]
 FIN_PHRASE = re.compile(r"[.!?؟]")
 
 

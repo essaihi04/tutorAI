@@ -16,6 +16,7 @@ import FiguresCahier from './FigureCahier';
 import { inscrireVoix } from './voixUnique';
 import { basculerPleinEcran, usePleinEcran } from './pleinEcran';
 import { taire as taireMemoire } from './memoire/voix';
+import { commandeReservee, dureeDuRejeuMs, momentsReserves, questionClose, rejeuxDe } from './parcours';
 
 /**
  * Le mode CONCENTRATION d'une diapositive (8 novembre 2026, demande de l'utilisateur).
@@ -123,6 +124,9 @@ const ANIMATIONS = `
 @keyframes tableau-descend { from { transform: translateY(-108%); opacity: .5 } 60% { transform: translateY(1.5%) } to { transform: none; opacity: 1 } }
 @keyframes question-apparait { from { opacity: 0; transform: translateY(-10px) } to { opacity: 1; transform: none } }
 .tableau-questions { animation: tableau-descend .7s cubic-bezier(.2,.8,.2,1) both }
+/* le rejeu de la simulation après la réponse (\`apres_reponse\`) : le tableau remonte, puis redescend (même animation) */
+@keyframes tableau-remonte { from { transform: none; opacity: 1 } to { transform: translateY(-108%); opacity: 0 } }
+.tableau-questions.tableau-replie { animation: tableau-remonte .4s ease-in both; pointer-events: none }
 .question-apparait { opacity: 0; animation: question-apparait .45s ease-out both }
 @keyframes craie-ecrit { from { clip-path: inset(0 100% 0 0) } to { clip-path: inset(0 0 0 0) } }
 .craie-ecrit { animation: craie-ecrit 1.4s steps(28) both }
@@ -464,6 +468,17 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   const obsRec = useRef<MediaRecorder | null>(null);
   const obsDebut = useRef(0);
   const obsLimite = useRef<number | undefined>(undefined);
+  // ── Rejouer la simulation après la réponse (`concentration.apres_reponse`, 18 novembre 2026, `parcours.js`) ──
+  const rejeux = useMemo(() => rejeuxDe(slide), [slide]);
+  /** Les questions dont le rejeu a eu lieu : leurs moments ne sont plus réservés. */
+  const rejeuxFaits = useRef<Set<string>>(new Set());
+  /** Le rejeu se joue : le tableau des questions remonte (sans se démonter) pour laisser voir la simulation. */
+  const [rejeuEnCours, setRejeuEnCours] = useState(false);
+  const tourRejeu = useRef(0);
+  /** Une commande du tuteur qui jouerait un moment réservé avant la réponse : sautée (ni le pointage, ni la variante,
+   *  ni l'observation ne jouent le résultat avant la réponse à sa question). */
+  const reservee = useCallback((commande?: string, parametres?: Record<string, unknown>) =>
+    rejeux.length > 0 && commandeReservee(commande, parametres, momentsReserves(slide, rejeuxFaits.current)), [rejeux, slide]);
 
   /** L'instant d'un mot : sa place dans le texte parlé, rapportée à la durée de la piste. */
   const instant = useCallback((mot: string) => {
@@ -548,6 +563,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     setTableauProf(null); setAnnonce(null); tourQuestion.current += 1;
     setObs(null); setObsClose(false); obsFaite.current = false; obsPause.current = false; tourObs.current += 1;
     obsAppui.current = false; if (obsRec.current?.state === 'recording') obsRec.current.stop();
+    rejeuxFaits.current = new Set(); setRejeuEnCours(false); tourRejeu.current += 1;
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `predictionEnCours` est lu au changement de diapositive seulement
   }, [slide.id, piste?.url, piste?.duration_ms]);
 
@@ -649,6 +665,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     pointage.forEach((p, i) => {
       if (dejaFaits.current.has(i) || temps < p.t || temps > p.t + 4) return;
       dejaFaits.current.add(i);
+      if (p.commande && reservee(p.commande, p.parametres)) return;   // le résultat attend la réponse (`apres_reponse`)
       if (p.commande) { parTuteur(p.commande, p.parametres || {}); demarree.current = true; return; }
       if (p.repere) { parTuteur('highlight', { target: p.repere }); return; }
       const [type, n] = (p.cible || 'visuel').split(':');
@@ -657,7 +674,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
         : visuelRef.current;
       if (element && tuteur3D) focusProfessor(element);
     });
-  }, [temps, enLecture, pointage, parTuteur, tuteur3D]);
+  }, [temps, enLecture, pointage, parTuteur, tuteur3D, reservee]);
 
   /** La voix du tuteur, générée à l'instant (même voix que le cours). Sans voix, le texte reste affiché. */
   /** La voix d'un texte, calculée d'avance (URL du son) : on la joue quand le tableau est prêt. */
@@ -1140,6 +1157,54 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     setCycle({ ...c, phase: 'question' }); setPanneau('questions');
   }, [voixParle]);
 
+  /** La réaction à la réponse est dite jusqu'au bout avant que la démonstration commence. */
+  const attendreVoix = useCallback(() => new Promise<void>(ok => {
+    const tic = () => { const v = voixRef.current; if (v && !v.paused && !v.ended) { window.setTimeout(tic, 250); return; } ok(); };
+    window.setTimeout(tic, 300);
+  }), []);
+  /**
+   * Le rejeu après la réponse (`concentration.apres_reponse`) : une fois, pour la question visée, quand elle se ferme
+   * (juste, fausse après ses essais, ou passée). La réaction dite, le tableau des questions remonte, le tuteur fait
+   * les étapes (le résultat se joue), puis, `duree_s` plus tard, le tableau redescend : démonstration ou suite.
+   */
+  const jouerRejeu = useCallback(async (cle: string) => {
+    const rejeu = rejeux.find(r => r.question === cle);
+    if (!rejeu || rejeuxFaits.current.has(cle)) return;
+    rejeuxFaits.current.add(cle);
+    const tour = tourRejeu.current;
+    await attendreVoix();
+    if (tour !== tourRejeu.current) return;
+    setRejeuEnCours(true);
+    await attendre(450);                                   // le tableau finit de remonter
+    if (tour !== tourRejeu.current) return;
+    rejeu.etapes.forEach(e => {
+      if (e.commande) { parTuteur(e.commande, e.parametres || {}); demarree.current = true; }
+      else if (e.repere) parTuteur('highlight', { target: e.repere });
+    });
+    await attendre(dureeDuRejeuMs(rejeu));
+    if (tour === tourRejeu.current) setRejeuEnCours(false);
+  }, [rejeux, attendreVoix, parTuteur]);
+  /** Une question visée par un rejeu qui n'a pas encore eu lieu. */
+  const rejeuAttendu = useCallback((cle: string) => rejeux.some(r => r.question === cle) && !rejeuxFaits.current.has(cle), [rejeux]);
+  // La simulation se tait sur le résultat (`apres_reponse.sim_avant`) tant que sa question n'a pas sa réponse.
+  useEffect(() => {
+    if (!simDispo) return;
+    rejeux.forEach(r => { if (r.sim_avant && !rejeuxFaits.current.has(r.question)) envoyerASim('set_parameters', r.sim_avant); });
+  }, [simDispo, rejeux, envoyerASim]);
+  // Retour sur une diapositive dont les questions sont déjà closes (réponses gardées) : la voix finie, les résultats se
+  // jouent dans l'ordre, sans replier le tableau (il n'y a plus de réponse à attendre).
+  useEffect(() => {
+    if (!finie || !simDispo || !rejeux.length) return;
+    rejeux.forEach(r => {
+      if (rejeuxFaits.current.has(r.question) || !questionClose(lireEtatQuestion(`reponse:${memoireDiapo}:${r.question}`))) return;
+      rejeuxFaits.current.add(r.question);
+      r.etapes.forEach(e => {
+        if (e.commande) parTuteur(e.commande, e.parametres || {});
+        else if (e.repere) parTuteur('highlight', { target: e.repere });
+      });
+    });
+  }, [finie, simDispo, rejeux, memoireDiapo, parTuteur]);
+
   /**
    * Le passage seul après une réponse (user rule, 12 novembre 2026) : l'élève a répondu (ou passé), la réaction du
    * tuteur est dite (et la démonstration, son tableau fermé) → ~1,5 s plus tard le cours passe à la question suivante
@@ -1188,14 +1253,17 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     setVersionFinies(v => v + 1);
     // après la démonstration (son tableau fermé), la réaction est dite depuis longtemps : rien à attendre.
     // Une question ratée ne passe pas seule : la correction reste à l'écran jusqu'à « Suite → » (15 novembre 2026).
-    if (fraiche && correct && !cle.startsWith('cycle')) programmerSuite(apresDemo);
+    // le rejeu de la simulation (`apres_reponse`) d'abord, s'il n'a pas eu lieu avant la démonstration ; puis la suite
+    if (fraiche && rejeuAttendu(cle)) {
+      void jouerRejeu(cle).then(() => { if (correct) programmerSuite(true); });
+    } else if (fraiche && correct && !cle.startsWith('cycle')) programmerSuite(apresDemo);
     const c = cycleRef.current;
     if (!c || !cle.startsWith('cycle') || !fraiche || c.n < MAX_CYCLES) return;
     const liste = jumellesRef.current;
     if (!liste.every(q => q.cle in finies.current) || liste.every(q => finies.current[q.cle])) return;
     setCycle({ ...c, phase: 'final' });
     if (c.data?.reponse_finale) void dire(c.data.reponse_finale);
-  }, [dire, programmerSuite]);
+  }, [dire, programmerSuite, rejeuAttendu, jouerRejeu]);
 
   /** L'élève passe une question (12 novembre 2026) : elle compte comme close pour « Suite → », sans erreur ni reprise ;
    *  il peut y revenir avec les petites flèches et y répondre (sa réponse remplace alors le passage). */
@@ -1203,8 +1271,10 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     if (finies.current[cle] === true || finies.current[cle] === false) return;
     finies.current[cle] = 'passee';
     setVersionFinies(v => v + 1);
-    if (fraiche) programmerSuite(true);   // passée : pas de réaction à attendre
-  }, [programmerSuite]);
+    // passée : pas de réaction à attendre ; le résultat est rejoué d'abord (`apres_reponse`)
+    if (fraiche && rejeuAttendu(cle)) void jouerRejeu(cle).then(() => programmerSuite(true));
+    else if (fraiche) programmerSuite(true);
+  }, [programmerSuite, rejeuAttendu, jouerRejeu]);
   /** La question de prédiction est finie (réaction dite) : la voix qui montre la réponse part seule ensuite. */
   const surPredictionFinie = useCallback((_cle?: string, correct?: boolean | null, fraiche?: boolean) => {
     setPredictionRepondue(slide.id);
@@ -1504,11 +1574,6 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
       },
     };
   }, [direMorceaux, preparerTextes]);
-  /** La réaction à la réponse est dite jusqu'au bout avant que la démonstration commence. */
-  const attendreVoix = useCallback(() => new Promise<void>(ok => {
-    const tic = () => { const v = voixRef.current; if (v && !v.paused && !v.ended) { window.setTimeout(tic, 250); return; } ok(); };
-    window.setTimeout(tic, 300);
-  }), []);
 
   // Ce que la simulation renvoie : un nouveau résultat obtenu par l'élève lui-même fait clignoter « 🔎 Ton résultat ».
   useEffect(() => {
@@ -1567,6 +1632,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
       if (L && Date.now() - debut < LEGENDE_AIDE_MS) { id = window.setTimeout(essayer, 1000); return; }
       varianteFaite.current = true;
       v.etapes.forEach(e => {
+        if (e.commande && reservee(e.commande, e.parametres)) return;
         if (e.commande) parTuteur(e.commande, e.parametres || {});
         else if (e.repere) parTuteur('highlight', { target: e.repere });
       });
@@ -1574,7 +1640,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     };
     id = window.setTimeout(essayer, (v.apres_s ?? 5) * 1000);
     return () => window.clearTimeout(id);
-  }, [finie, conc.variante, simDispo, parTuteur, observation, obsClose]);
+  }, [finie, conc.variante, simDispo, parTuteur, observation, obsClose, reservee]);
 
   // ── La question d'observation ──
   /** L'instant où la voix s'arrête : juste après `apres_mot` (null : la question vient à la fin de la voix). */
@@ -1630,6 +1696,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
       // la même commande déjà prévue dans le pointage : faite une seule fois (ici, ou déjà faite juste avant l'arrêt)
       const k = pointage.findIndex(p => !!g.commande && p.commande === g.commande && JSON.stringify(p.parametres || {}) === JSON.stringify(g.parametres || {}));
       if (k >= 0) { const fait = dejaFaits.current.has(k); dejaFaits.current.add(k); if (fait) return; }
+      if (g.commande && reservee(g.commande, g.parametres)) return;
       if (g.commande) { parTuteur(g.commande, g.parametres || {}); demarree.current = true; }
       else if (g.repere) parTuteur('highlight', { target: g.repere });
       delai = 1100;
@@ -1641,7 +1708,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
       if (o.enonce_audio) jouer(o.enonce_audio);
       else void dire(o.enonce_dit || o.enonce);
     }, delai);
-  }, [observation, pointage, parTuteur, ressentir, jouer, dire]);
+  }, [observation, pointage, parTuteur, ressentir, jouer, dire, reservee]);
   // Au milieu de la voix : elle s'arrête juste après `apres_mot` (la simulation, elle, continue : l'élève regarde).
   useEffect(() => {
     if (!observation || obsFaite.current || tObservation === null || !enLecture || temps < tObservation) return;
@@ -1994,9 +2061,11 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
         style={tuteur3D ? { paddingRight: COLONNE_TUTEUR } : undefined}>   {/* la colonne de droite est au tuteur 3D */}
         {/* ── Le deuxième tableau : les questions descendent du haut et couvrent la scène, tout tient sans défiler ── */}
         {panneau === 'questions' && (
-          <section className="tableau-questions absolute inset-y-0 left-3 z-30 flex flex-col overflow-hidden rounded-2xl border-2 border-amber-200/40 bg-[#0f2219] shadow-2xl"
+          <section className={`tableau-questions${rejeuEnCours ? ' tableau-replie' : ''} absolute inset-y-0 left-3 z-30 flex flex-col overflow-hidden rounded-2xl border-2 border-amber-200/40 bg-[#0f2219] shadow-2xl`}
             // sur téléphone, le tableau prend toute la largeur (la colonne du tuteur lui laissait 150 px)
-            style={{ right: (tuteur3D && !etroit ? COLONNE_TUTEUR + 4 : 12) + placeClavier, bottom: basClavier, transition: 'right .25s ease, bottom .25s ease' }}>
+            style={{ right: (tuteur3D && !etroit ? COLONNE_TUTEUR + 4 : 12) + placeClavier, bottom: basClavier, transition: 'right .25s ease, bottom .25s ease' }}
+            // le rejeu de la simulation (`apres_reponse`) : le tableau remonte sans se démonter (sa démonstration attend)
+            aria-hidden={rejeuEnCours || undefined}>
             <div className="flex shrink-0 items-center justify-between border-b border-amber-200/20 px-4 py-2">
               <div className="text-base font-semibold text-emerald-200" style={{ fontFamily: CRAIE }}>
                 {predictionEnCours ? '🔮 Avant d’expliquer : que prévois-tu ?' : cycle?.phase === 'final' ? `📓 La réponse · reprise ${cycle.n}/${MAX_CYCLES}` : enReprise ? `↻ Reprise ${cycle!.n}/${MAX_CYCLES} · ${jumelles.questions.length > 1 ? 'vrai ou faux' : 'nouvelle question'}` : `✏️ À toi · ${questions.length} question${questions.length > 1 ? 's' : ''}`}
@@ -2022,7 +2091,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
                 contexte={contexteOcr} {...outilsEnonce} />
             ) : (
               <QuestionsDeLaDiapo key={slide.id} questions={questions} index={indexQuestion} onIndex={setIndexQuestion} diapo={{ title: slide.title, speech: parole, memoire: memoireDiapo }} dire={dire} jouer={jouer} reponses={conc.reponses} onReponse={enregistrerReponse} onFinie={surFinie} onPasser={surPassee}
-                contexte={contexteOcr} lireDemo={lireDemonstration} preparerDemo={preparerDemo} attendreVoix={attendreVoix} {...outilsEnonce} />
+                contexte={contexteOcr} lireDemo={lireDemonstration} preparerDemo={preparerDemo} attendreVoix={attendreVoix} avantDemo={rejeux.length ? jouerRejeu : undefined} {...outilsEnonce} />
             )}
           </section>
         )}
@@ -2425,6 +2494,8 @@ export type ReponseNotee = { cle: string; type: QuestionDiapo['type'] | 'predict
 type OutilsQuestions = {
   contexte?: ContexteOcr; attendreVoix?: () => Promise<void>;
   lireDemo?: (d: Demonstration, prete?: VoixDemo | null) => LectureDemo; preparerDemo?: (d: Demonstration) => VoixDemo | null;
+  /** juste avant la démonstration : le rejeu de la simulation (`apres_reponse`), si cette question l'appelle */
+  avantDemo?: (cle: string) => Promise<void>;
   /** le tuteur lit l'énoncé ; la lecture s'arrête quand l'élève répond ou passe */
   lireEnonce?: (q: QuestionDiapo) => void; arreterEnonce?: () => void;
   /** la diapositive (les suggestions du clavier sont cherchées par diapositive et question) */
@@ -2492,7 +2563,7 @@ function QuestionsDeLaDiapo({ questions, index, onIndex, diapo, dire, jouer, rep
   );
 }
 
-function UneQuestion({ q, diapo, dire, jouer, preparees, compact = false, onReponse, onFinie, essaisMax = 2, actif = true, contexte, lireDemo, preparerDemo, attendreVoix,
+function UneQuestion({ q, diapo, dire, jouer, preparees, compact = false, onReponse, onFinie, essaisMax = 2, actif = true, contexte, lireDemo, preparerDemo, attendreVoix, avantDemo,
   lireEnonce, arreterEnonce, slideId, onPasser }: {
   q: QuestionDiapo; diapo: { title: string; speech: string; memoire?: string }; dire: (texte: string) => Promise<boolean>;
   jouer: (url: string, secours?: string) => void; preparees?: Record<string, Partial<Record<'juste' | '1' | '2', ReactionPreparee>>>;
@@ -2567,11 +2638,13 @@ function UneQuestion({ q, diapo, dire, jouer, preparees, compact = false, onRepo
     const prete = demoAnnulee.current ? null : preparerDemo?.(q.demonstration!) ?? null;
     await attendreVoix?.();
     if (demoAnnulee.current) return;
+    await avantDemo?.(q.cle);                              // le résultat se joue dans la simulation, puis on le démontre
+    if (demoAnnulee.current) return;
     const l = lireDemo!(q.demonstration!, prete);
     lecture.current = l; setLectureVue(l); setDemo('ecrit');
     await l.fin;
     if (lecture.current === l) { lecture.current = null; setDemo(x => (x === 'ecrit' ? 'dite' : x)); }
-  }, [attendreVoix, lireDemo, preparerDemo, q.demonstration]);
+  }, [attendreVoix, avantDemo, lireDemo, preparerDemo, q.demonstration, q.cle]);
   const passerDemo = useCallback(() => {
     demoAnnulee.current = true;
     lecture.current?.arreter(); lecture.current = null;

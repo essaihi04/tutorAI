@@ -194,17 +194,18 @@
     pts.forEach((p, i) => perle(x, p[0], p[1], r, noms[i], o));
   }
 
-  /** Nucléoplasme bleuté (disque ou rectangle arrondi) avec enveloppe double et pores (o.pores = nombre). */
+  /** Nucléoplasme VIOLET (comme le noyau de tous les cours : lexique visuel commun, 18/11/2026 — il était bleu ici et violet
+   *  dans Etapes.Peint.noyau du même cours), enveloppe double et pores (o.pores = nombre). */
   function noyau(x, cx, cy, rx, ry, o = {}) {
     x.save(); x.globalAlpha *= (o.alpha ?? 1);
     const g = x.createRadialGradient(cx - rx * .3, cy - ry * .3, 4, cx, cy, Math.max(rx, ry));
-    g.addColorStop(0, 'rgba(191,225,255,.85)'); g.addColorStop(.55, 'rgba(96,170,255,.72)'); g.addColorStop(1, 'rgba(37,99,235,.74)');   // (17 novembre 2026) bleu franc
+    g.addColorStop(0, 'rgba(240,214,255,.85)'); g.addColorStop(.55, 'rgba(190,132,246,.72)'); g.addColorStop(1, 'rgba(124,58,216,.74)');
     x.fillStyle = g; x.beginPath(); x.ellipse(cx, cy, rx, ry, 0, 0, TAU); x.fill();
-    x.strokeStyle = 'rgba(30,64,175,.95)'; x.lineWidth = 2.2; x.beginPath(); x.ellipse(cx, cy, rx, ry, 0, 0, TAU); x.stroke();
+    x.strokeStyle = 'rgba(76,29,149,.95)'; x.lineWidth = 2.2; x.beginPath(); x.ellipse(cx, cy, rx, ry, 0, 0, TAU); x.stroke();
     x.strokeStyle = 'rgba(255,255,255,.3)'; x.lineWidth = 1.6; x.beginPath(); x.ellipse(cx, cy, rx * .86, ry * .86, 0, Math.PI * 1.08, Math.PI * 1.45); x.stroke();   // reflet
-    x.strokeStyle = 'rgba(96,165,250,.8)'; x.lineWidth = 1.3; x.beginPath(); x.ellipse(cx, cy, rx + 4, ry + 4, 0, 0, TAU); x.stroke();
+    x.strokeStyle = 'rgba(192,132,252,.8)'; x.lineWidth = 1.3; x.beginPath(); x.ellipse(cx, cy, rx + 4, ry + 4, 0, 0, TAU); x.stroke();
     const np = o.pores ?? 10;
-    for (let i = 0; i < np; i++) { const t = i / np * TAU + (o.phase ?? .3), px = cx + Math.cos(t) * (rx + 2), py = cy + Math.sin(t) * (ry + 2); x.fillStyle = 'rgba(255,255,255,.95)'; x.beginPath(); x.arc(px, py, 3.2, 0, TAU); x.fill(); x.strokeStyle = 'rgba(37,99,235,.9)'; x.lineWidth = 1; x.stroke(); }
+    for (let i = 0; i < np; i++) { const t = i / np * TAU + (o.phase ?? .3), px = cx + Math.cos(t) * (rx + 2), py = cy + Math.sin(t) * (ry + 2); x.fillStyle = 'rgba(255,255,255,.95)'; x.beginPath(); x.arc(px, py, 3.2, 0, TAU); x.fill(); x.strokeStyle = 'rgba(124,58,216,.9)'; x.lineWidth = 1; x.stroke(); }
     x.restore();
   }
   /** Position du pore n° i (mêmes réglages que noyau()). */
@@ -221,26 +222,26 @@
     for (let i = 0; i < 40; i++) { const a2 = i * 2.39996, r = .3 + .62 * ((i * 37) % 23) / 23; x.beginPath(); x.arc(cx + Math.cos(a2) * rx * r, cy + Math.sin(a2) * ry * r, 1.2, 0, TAU); x.fill(); }
     x.restore();
   }
-  /** Un fond rectangulaire arrondi peint (cadre d’une vue) : 'noyau' bleuté ou 'cytoplasme' rosé. */
+  /** Un fond rectangulaire arrondi peint (cadre d’une vue) : 'noyau' violet (lexique visuel commun, 18/11/2026 ; il était bleu) ou 'cytoplasme' rosé. */
   function milieu(x, x0, y0, w, h, type, a = 1) {
     x.save(); x.globalAlpha *= a;
     const g = x.createLinearGradient(x0, y0, x0, y0 + h);
     // (17 novembre 2026) teintes franches au lieu d’un gris délavé : nucléoplasme bleu, cytoplasme rose pêche ; un halo clair
     // en haut à gauche et un liseré donnent un milieu « éclairé », les écritures à la craie restent bien lisibles dessus
     const noy = type === 'noyau';
-    if (noy) { g.addColorStop(0, 'rgba(56,150,255,.34)'); g.addColorStop(1, 'rgba(29,78,216,.30)'); }
+    if (noy) { g.addColorStop(0, 'rgba(168,110,240,.32)'); g.addColorStop(1, 'rgba(109,40,217,.28)'); }
     else { g.addColorStop(0, 'rgba(255,130,150,.22)'); g.addColorStop(1, 'rgba(236,60,140,.20)'); }   // (règle 10) un peu plus sombre : les craies colorées s'y lisent
     const forme = () => { x.beginPath(); x.roundRect ? x.roundRect(x0, y0, w, h, 14) : x.rect(x0, y0, w, h); };
-    x.fillStyle = noy ? 'rgba(8,20,60,.55)' : 'rgba(52,10,32,.64)'; forme(); x.fill();   // base sombre : la teinte ne vire pas au gris-brun sur le vert du tableau
+    x.fillStyle = noy ? 'rgba(24,10,56,.58)' : 'rgba(52,10,32,.64)'; forme(); x.fill();   // base sombre : la teinte ne vire pas au gris-brun sur le vert du tableau
     x.fillStyle = g; forme(); x.fill();
     x.save(); forme(); x.clip();
     const hl = x.createRadialGradient(x0 + w * .22, y0 + h * .12, 4, x0 + w * .22, y0 + h * .12, Math.max(w, h) * .7);
-    hl.addColorStop(0, noy ? 'rgba(170,215,255,.20)' : 'rgba(255,215,190,.20)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
+    hl.addColorStop(0, noy ? 'rgba(225,200,255,.20)' : 'rgba(255,215,190,.20)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
     x.fillStyle = hl; x.fillRect(x0, y0, w, h);
-    x.fillStyle = noy ? 'rgba(190,225,255,.16)' : 'rgba(255,220,225,.16)';
+    x.fillStyle = noy ? 'rgba(235,215,255,.16)' : 'rgba(255,220,225,.16)';
     for (let i = 0; i < 46; i++) { x.beginPath(); x.arc(x0 + (i * 61.7 + 23) % w, y0 + (i * 139.3 + 11) % h, 1 + (i % 3) * .5, 0, TAU); x.fill(); }   // granulations fixes
     x.restore();
-    x.strokeStyle = noy ? 'rgba(96,165,250,.55)' : 'rgba(251,113,133,.5)'; x.lineWidth = 1.4; forme(); x.stroke();
+    x.strokeStyle = noy ? 'rgba(192,132,252,.55)' : 'rgba(251,113,133,.5)'; x.lineWidth = 1.4; forme(); x.stroke();
     x.restore();
   }
 

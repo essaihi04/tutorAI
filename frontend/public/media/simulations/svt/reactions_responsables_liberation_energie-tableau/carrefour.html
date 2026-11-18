@@ -11,6 +11,7 @@
 </div>
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
+<script src="/media/simulations/shared/lexique/lexique.js"></script>
 <script src="peinture.js"></script>
 <script>
 /*
@@ -67,8 +68,8 @@ const o2At = (t) => (dans(AVEC, t) ? true : dans(SANS, t) ? false : null);
 /* Mise en page du 16 novembre 2026 (cadre étroit, textes ≥ 15 px) : cellule agrandie ; la mitochondrie en bas à droite, son nom
  * juste au-dessus, les trois lignes de la respiration au-dessus encore ; la fermentation en bas à gauche ; rien ne se recouvre. */
 const CEL = { x: 300, y: 182, rx: 294, ry: 160 }, MITO = { x: 425, y: 262, rx: 105, ry: 46 };
-const GLU = { x: 110, y: 125 }, CAR = { x: 215, y: 165 }, RAIL = { x0: 640, x1: 724, y: 112 };
-const CARBONE = [250, 204, 21];
+const GLU = { x: 100, y: 125 }, CAR = { x: 215, y: 165 }, RAIL = { x0: 640, x1: 724, y: 112 };
+const Lx = window.Lexique, GLU_E = .7, GLU_PTS = Lx.positionsChaine(6, GLU.x, GLU.y, { echelle: GLU_E });
 let poigneeX = null;   // position de l’interrupteur pendant qu’on le glisse
 
 const canvas = $('canvas');
@@ -92,14 +93,16 @@ const chrono = Chrono({ fin: () => FIN, moments: () => M, motifs: MOTIFS, bouton
   fini: () => COMPLET ? 'Avec O2 : respiration, 38 ATP. Sans O2 : fermentation, 2 ATP.' : 'Avec O2 : la mitochondrie. Sans O2 : le hyaloplasme. Et les bilans ?' });
 scene.avancer = chrono.avancer;
 
-/* Les 6 carbones : glucose (deux rangées de 3), puis deux acides pyruviques au carrefour.
+/* Les 6 carbones : glucose (chaîne droite de 6 billes jaunes, lexique visuel commun — 18 novembre 2026, règle 15 : il était
+ * dessiné en deux rangées de 3 ici, en chaîne droite dans « La glycolyse »), puis deux acides pyruviques au carrefour
+ * (2 × 3 billes, les deux moitiés de la chaîne).
  * 17 novembre 2026 (faciliter le suivi, règle 40 du professeur) : le glucose ne disparaît pas de sa place — il y reste,
  * pâli et marqué « (dégradé) » ; ce sont ses 6 carbones (copies) qui glissent vers le carrefour et deviennent les deux
  * acides pyruviques. La baguette qui montre « le glucose » tombe toujours sur un glucose, et l'élève voit d'où viennent
  * les acides pyruviques. */
 function carbone(i, t) {
   const u = doux(chrono.part(1.6, 2.9, t));
-  const x0 = GLU.x + (i % 3 - 1) * 18, y0 = GLU.y + (i < 3 ? -9 : 9);
+  const [x0, y0] = GLU_PTS[i];
   const x1 = CAR.x + (i % 3 - 1) * 18, y1 = CAR.y + (i < 3 ? -14 : 14);
   return [mix(x0, x1, u), mix(y0, y1, u)];
 }
@@ -122,16 +125,13 @@ function dessiner(c) {
     const a = doux(chrono.part(.3, 1.3, t));
     // le glucose reste à sa place : pâli dès que la glycolyse l'a coupé
     const reste = a * mix(1, .32, doux(chrono.part(1.6, 2.9, t)));
-    const glu = (i) => [GLU.x + (i % 3 - 1) * 18, GLU.y + (i < 3 ? -9 : 9)];
-    for (const i of [0, 1, 3, 4]) { const [x1, y1] = glu(i), [x2, y2] = glu(i + 1); P.liaison(ctx, x1, y1, x2, y2, { alpha: reste, epaisseur: 3.6 }); }
-    for (let i = 0; i < 6; i++) { const [x, y] = glu(i); P.bille(ctx, x, y, 9, CARBONE, { alpha: reste }); }
-    // ses carbones (copies) qui deviennent les deux acides pyruviques : deux chaînes de 3 carbones
-    if (t > 1.6) for (const i of [0, 1, 3, 4]) { const [x1, y1] = carbone(i, t), [x2, y2] = carbone(i + 1, t); P.liaison(ctx, x1, y1, x2, y2, { alpha: a, epaisseur: 3.6 }); }
-    if (t > 1.6) for (let i = 0; i < 6; i++) { const [x, y] = carbone(i, t); P.bille(ctx, x, y, 9, CARBONE, { alpha: a }); }
+    Lx.glucose(ctx, GLU.x, GLU.y, { echelle: GLU_E, alpha: reste });
+    // ses carbones (copies) qui deviennent les deux acides pyruviques : la chaîne coupée au milieu, deux chaînes de 3
+    if (t > 1.6) Lx.chaine(ctx, [0, 1, 2, 3, 4, 5].map(i => carbone(i, t)), { echelle: GLU_E, alpha: a, liaisons: [1, 1, 0, 1, 1] });
     // les acides pyruviques qui entrent dans la matrice (copies, pour montrer le chemin)
     if (e > 0) for (let g = 0; g < 2; g++) for (let i = 0; i < 3; i++) {
       const x = mix(CAR.x + (i - 1) * 18, MITO.x - 30 + (i - 1) * 16, e), y = mix(CAR.y + (g ? 14 : -14), MITO.y + (g ? 12 : -12), e);
-      P.bille(ctx, x, y, 8, CARBONE, { alpha: .95 });
+      Lx.atome(ctx, x, y, 'C', { echelle: GLU_E * .9, alpha: .95 });
     }
     // l’interrupteur O2 (peint : un rail et un bouton)
     const kx = poigneeX ?? (o2 === true ? RAIL.x1 : o2 === false ? RAIL.x0 : (RAIL.x0 + RAIL.x1) / 2);
@@ -157,7 +157,7 @@ function dessiner(c) {
     c.texte('glycolyse', 142, 184, { couleur: 'blanc', taille: 14, align: 'center' });   // sous la flèche : le mot et le processus au même endroit
   });
   if (t >= 2.9) ecrit.ecrire(c, 'degrade', () => c.texte('(dégradé)', GLU.x + 30, GLU.y - 22, { couleur: 'faible', taille: 13 }));
-  if (t >= .6) c.repere('glucose', GLU.x - 40, GLU.y - 40, 80, 64, t < 1.6 ? 'le glucose' : 'le glucose, dégradé par la glycolyse');
+  if (t >= .6) c.repere('glucose', GLU.x - 64, GLU.y - 40, 128, 58, t < 1.6 ? 'le glucose' : 'le glucose, dégradé par la glycolyse');
   c.repere('hyaloplasme', 14, 184, 96, 22, 'le hyaloplasme');
   if (t >= 1.4) c.repere('glycolyse', 106, 128, 76, 64, 'la glycolyse, dans le hyaloplasme');   // la flèche et son nom, pas la place du glucose
   if (t >= 2.9) {

@@ -22,6 +22,10 @@ encore plus tard, pas à sa beauté.
    joué seul, arrêté, avec un temps pour regarder → le cas décisif posé en question → le résultat et la conclusion
    seulement après la réponse de l'élève (skill professeur, règles 33-34). Le bilan de toutes les expériences vient
    après la dernière, pas avant.
+   **Une démonstration que l'élève écrit lui-même a une question par ligne** (choix de l'utilisateur, 18/11/2026,
+   sur l'équation différentielle de RC, RL et RLC) : chaque ligne (loi des tensions, relation, équation) est une
+   question au tableau, la correction de cette ligne vient après sa réponse, puis la ligne suivante. C'est une
+   exception voulue à « une seule question par bloc » ; l'écrire avec sa raison dans l'architecture du cours.
 4. **L'expérience avant le mécanisme qu'elle prouve.** L'élève tire le résultat du document ; on ne lui affirme pas
    un résultat qu'une expérience montrera plus loin (au national, près de 75 % des points sont du raisonnement sur
    documents).
@@ -31,6 +35,15 @@ encore plus tard, pas à sa beauté.
    d'un paramètre, une suite d'étapes → petite animation au tableau que l'élève manipule (≤ 2 curseurs), pas un
    tableau à lire ; un tableau de données naît de l'animation qui produit ses valeurs (skill professeur, règles 28 et
    35). Un vivant ou un objet réel est peint en couleur, réaliste (règle 32).
+   **Pour expliquer une activité dont le résultat change** (dans le temps, d'un compartiment à l'autre, avant /
+   après, avec / sans), **l'animation autant que possible**, pas un tableau de résultats suivi d'encadrés de texte :
+   ce qui bouge se voit bouger, chaque temps est un moment arrêté, la conclusion s'écrit après la réponse de l'élève.
+   **Mais pas « jamais de tableau »** : quand le bac donne ce genre de résultats en tableau, l'animation se change
+   ensuite en ce tableau, à la manière de l'examen, et l'élève apprend à le lire lui-même. **Combiner texte, tableau
+   et animation selon le besoin, avec une raison écrite** : le texte pour ce qui se dit une fois et se recopie,
+   l'animation pour ce qui change et doit se comprendre, le tableau pour ce que l'examen donne en tableau ou ce qui se
+   compare d'un coup d'œil (skill professeur, règle 42 ; exemple : le glucose marqué au ¹⁴C de SVT ch1, 18/11).
+   Toujours vérifié à la taille d'un téléphone en paysage (~724 × 350) : rien sous la barre du lecteur.
 6. **Départ de zéro.** Les notions des années d'avant (mitose, mole, vecteur, dérivée…) sont enseignées au moment
    où elles servent, jamais supposées connues ; chaque notion difficile est expliquée deux fois, de deux façons.
 7. **La limite de l'élève.** Mémoire de travail ≈ 4 éléments : une idée nouvelle par diapositive ; quand la limite
@@ -40,6 +53,15 @@ encore plus tard, pas à sa beauté.
    partie « pour les devoirs » ; ne jamais élargir le cadre pour faire passer un contenu.
 9. **L'écran.** Formules écrites en notation à l'écran (« v = d/Δt »), les mots seulement dans la voix ; aucun texte
    sous 15 px ; tout tient dans un écran sans défilement, y compris sur téléphone en paysage (~724 × 350 px).
+
+10. **Un objet, un seul dessin, dans tout le cours.** Une molécule, un organite, un ion, un composant gardent la même
+   forme, la même couleur et la même étiquette sur toutes les diapositives et dans toutes les simulations (le glucose
+   de SVT ch1 : une chaîne droite de 6 billes jaunes, jamais deux rangées de 3) ; ce qu'il devient se dessine à partir
+   de lui. **Le même dessin dans tous les cours et toutes les matières, y compris les prochains** : le lexique visuel
+   commun est `docs/lexique-visuel/` (une fiche par élément avec toutes ses formes : brute, développée,
+   semi-développée, cyclique, forme simplifiée des animations ; la forme se choisit selon le besoin), et chaque objet
+   se dessine par la fonction du module partagé `frontend/public/media/simulations/shared/lexique/` ; un nouveau
+   cours va d'abord au lexique (skill simulations-au-tableau, règle 15 ; skill professeur, règle 43).
 
 ## La procédure
 

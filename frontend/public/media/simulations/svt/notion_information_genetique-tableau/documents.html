@@ -91,6 +91,9 @@ const REP = [['decrire_g1', '• de 0 à 8 h : la quantité d’ADN reste consta
 function dessinerCourbe(c, k) {
   const t = k.t, hMax = 30 * rampe(t, .3, 2.0);
   const seulM = k.P.focus === 'm', garde = nom => !seulM || nom === 'decrire_m';
+  // (18 novembre 2026, 2ᵉ passe) ?reponse=rien : la courbe seule, l'élève décrit ; ?reponse=decrire : la description
+  // écrite, l'explication attend la réponse de l'élève. Par défaut (tout) : comme avant.
+  const decrit = k.P.reponse !== 'rien', explique = k.P.reponse === 'tout';
   c.texte('Document 1 : quantité d’ADN dans une cellule', 14, 26, { couleur: 'cyan', taille: 18 });
   c.axe(GC.x0, GC.y0, gx(31.5), GC.y0, [0, 4, 8, 12, 16, 20, 24, 28].map(h => [h * GC.ux / (gx(31.5) - GC.x0), String(h)]), { taille: 12 });
   c.axe(GC.x0, GC.y0, GC.x0, gy(7.3), [1, 2, 3, 4, 5, 6, 7].map(v => [v * GC.uy / (GC.y0 - gy(7.3)), String(v)]), { vertical: true, taille: 12 });
@@ -114,23 +117,25 @@ function dessinerCourbe(c, k) {
     k.T(c, 'q = 3 UA', gx(31) + 6, gy(3) + 5, { couleur: 'jaune', taille: 14 }); k.T(c, '2q = 6 UA', gx(31) + 6, gy(6) + 5, { couleur: 'jaune', taille: 14 });
     k.T(c, '1 graduation = 4 h', 560, 160, { couleur: 'faible', taille: 13 });
   }
-  if (k.ecrit(c, 'desc', (seulM ? MCB.decrire_m : MCB.decrire_g1) - 1.0)) k.T(c, 'Description :', 30, 262, { couleur: 'cyan', taille: 15 });
-  for (const [nom, txt, y] of REP) if (garde(nom) && k.ecrit(c, nom, MCB[nom] - 1.0)) k.T(c, txt, 40, y, { couleur: 'blanc', taille: 14 });
-  if (k.ecrit(c, 'expl', MCB.expliquer - 1.6)) {
+  if (decrit && k.ecrit(c, 'desc', (seulM ? MCB.decrire_m : MCB.decrire_g1) - 1.0)) k.T(c, 'Description :', 30, 262, { couleur: 'cyan', taille: 15 });
+  for (const [nom, txt, y] of REP) if (decrit && garde(nom) && k.ecrit(c, nom, MCB[nom] - 1.0)) k.T(c, txt, 40, y, { couleur: 'blanc', taille: 14 });
+  if (explique && k.ecrit(c, 'expl', MCB.expliquer - 1.6)) {
     k.T(c, 'Explication :', 30, 370, { couleur: 'cyan', taille: 15 });
     if (!seulM) k.T(c, '8 à 14 h : réplication de l’ADN (phase S) ;', 140, 370, { couleur: 'vert', taille: 14 });
     k.T(c, '19 à 20 h : répartition égale de l’ADN entre deux cellules filles (mitose).', 40, 392, { couleur: 'vert', taille: 14 });
   }
-  if (t >= MCB.decrire_g1 - 1) c.repere('reponse', 24, 246, 700, 156, 'la réponse rédigée');
+  if (decrit && t >= MCB.decrire_g1 - 1) c.repere('reponse', 24, 246, 700, 156, 'la réponse rédigée');
 }
 function voitCourbe(k) {
   const t = k.t, m = ['Document d’examen : courbe « quantité d’ADN (UA) en fonction du temps (h) », de 0 à 30 h : 3 UA de 0 à 8 h, montée de 3 à 6 UA de 8 à 14 h, 6 UA de 14 à 19 h, chute à 3 UA entre 19 et 20 h, puis 3 UA jusqu’à 28 h et nouvelle montée.'];
   if (t >= MCB.lecture_axes - 1) m.push('Écrit : « q = 3 UA », « 2q = 6 UA », « 1 graduation = 4 h ».');
   const seulM = k.P.focus === 'm', garde = nom => !seulM || nom === 'decrire_m';
-  const d = REP.filter(([n]) => garde(n) && t >= MCB[n] - 1).map(([, s]) => s.replace('• ', ''));
+  const d = k.P.reponse === 'rien' ? [] : REP.filter(([n]) => garde(n) && t >= MCB[n] - 1).map(([, s]) => s.replace('• ', ''));
+  if (k.P.reponse === 'rien') m.push('Aucune réponse écrite sous la courbe : c’est à l’élève de décrire.');
   if (d.length) m.push('Réponse écrite sous la courbe : « Description : ' + d.join(' ') + ' »');
   for (const [nom, [a, b]] of Object.entries(SEGS)) if (garde(nom) && t >= MCB[nom] - 1.2 && t < MCB[nom] + 1.6) m.push(`Le segment de ${a} à ${b} h est surligné en jaune.`);
-  if (t >= MCB.expliquer - 1.6) m.push('« Explication : ' + (seulM ? '' : '8 à 14 h : réplication de l’ADN (phase S) ; ') + '19 à 20 h : répartition égale de l’ADN entre deux cellules filles (mitose). »');
+  if (k.P.reponse === 'decrire' && t >= MCB.expliquer - 1.6) m.push('L’explication n’est pas encore écrite : c’est à l’élève d’expliquer.');
+  if (k.P.reponse === 'tout' && t >= MCB.expliquer - 1.6) m.push('« Explication : ' + (seulM ? '' : '8 à 14 h : réplication de l’ADN (phase S) ; ') + '19 à 20 h : répartition égale de l’ADN entre deux cellules filles (mitose). »');
   return m;
 }
 
@@ -367,8 +372,16 @@ function voitDurees(k) {
 
 /* ── Vue restitution ────────────────────────────────────────────── */
 const MRS = { carte: 3.0, elimine_a: 5.0, elimine_c: 7.0, elimine_d: 9.0, reponse: 11.0 };
+/* (18 novembre 2026, 2ᵉ passe) Vue metaphase : le QCM du national 2018 R (« durant la métaphase de la mitose, chaque
+ * chromosome est formé… », réponse c), posé d'abord (moment carte, ig_x1c), corrigé leurre par leurre ensuite. */
+const MMT = { carte: 3.0, elimine_a: 5.0, elimine_b: 7.0, elimine_d: 9.0, reponse: 11.0 };
+const QCM_MET = { question: 'Durant la métaphase de la mitose, chaque chromosome est formé :', bonne: 2, moments: MMT,
+  opts: [['a', 'd’une seule chromatide de deux brins d’ADN', 'une chromatide : en G1 ou en anaphase'], ['b', 'de deux chromatides d’un brin d’ADN chacune', 'un seul brin : jamais, l’ADN a deux brins'],
+    ['c', 'de deux chromatides de deux brins d’ADN chacune', ''], ['d', 'de deux chromatides, l’une d’un brin, l’autre de deux', 'les deux chromatides sont identiques']],
+  juste: 'après S : chaque chromatide = une molécule d’ADN' };
 const OPTS = [['a', 'à une chromatide et condensé', 'condensé : c’est en mitose'], ['b', 'à une chromatide et non condensé', ''], ['c', 'à deux chromatides et non condensé', 'deux chromatides : après la phase S'], ['d', 'à deux chromatides et condensé', 'en prophase ou en métaphase']];
 function dessinerRestitution(c, k) {
+  if (k.vue === 'metaphase') return dessinerQcm(c, k, QCM_MET);
   const t = k.t;
   c.texte('Restitution : un QCM, leurre par leurre', 14, 26, { couleur: 'cyan', taille: 19 });
   c.repere('carte', 30, 64, 700, 300, 'la carte du QCM');
@@ -381,7 +394,26 @@ function dessinerRestitution(c, k) {
   });
   if (k.ecrit(c, 'rep', MRS.reponse - 1.0)) { const y = 154 + 50; c.rect(56, y - 24, largeur(c, `b) ${OPTS[1][1]}`, 17) + 26, 34, { couleur: 'vert', largeur: 2.2, arrondi: 14 }); k.T(c, 'G1 : avant la réplication, ADN déroulé', 450, y + 6, { couleur: 'vert', taille: 14 }); k.T(c, 'Réponse : b', 380, 392, { couleur: 'vert', taille: 18, align: 'center' }); }
 }
+function dessinerQcm(c, k, Q) {
+  const M = Q.moments, ok = Q.opts[Q.bonne];
+  c.repere('carte', 30, 64, 700, 300, 'la carte du QCM');
+  if (k.ecrit(c, 'carte', .4)) { c.rect(30, 64, 700, 300, { couleur: 'faible', largeur: 1.4, arrondi: 10 }); k.T(c, Q.question, 50, 104, { couleur: 'jaune', taille: 18 }); Q.opts.forEach(([l, s], i) => k.T(c, `${l}) ${s}`, 70, 154 + i * 50, { couleur: 'blanc', taille: 17 })); }
+  Q.opts.forEach(([l], i) => c.repere(l, 60, 134 + i * 50, 420, 28, 'la proposition ' + l));
+  Q.opts.forEach(([l, s, why], i) => {
+    if (i === Q.bonne) return;
+    if (k.ecrit(c, 'el' + l, M['elimine_' + l] - 1.0)) { const y = 148 + i * 50, w = largeur(c, `${l}) ${s}`, 17); c.ligne(64, y, 74 + w, y, { couleur: 'rouge', largeur: 2.4 }); k.T(c, why, 724, y + 26, { couleur: 'rouge', taille: 14, align: 'right' }); }
+  });
+  if (k.ecrit(c, 'rep', M.reponse - 1.0)) { const y = 154 + Q.bonne * 50; c.rect(56, y - 24, largeur(c, `${ok[0]}) ${ok[1]}`, 17) + 26, 34, { couleur: 'vert', largeur: 2.2, arrondi: 14 }); k.T(c, Q.juste, 724, y + 26, { couleur: 'vert', taille: 14, align: 'right' }); k.T(c, 'Réponse : ' + ok[0], 380, 392, { couleur: 'vert', taille: 18, align: 'center' }); }
+}
+function voitQcm(k, Q) {
+  const t = k.t, M = Q.moments, m = ['Carte de QCM : « ' + Q.question + ' ' + Q.opts.map(([l, s]) => `${l}) ${s}`).join(' ; ') + ' ».'];
+  Q.opts.forEach(([l, , why], i) => { if (i !== Q.bonne && t >= M['elimine_' + l] - 1) m.push(`${l}) barrée en rouge : « ${why} ».`); });
+  if (t >= M.reponse - 1) m.push(`${Q.opts[Q.bonne][0]}) entourée en vert : « ${Q.juste} » ; écrit « Réponse : ${Q.opts[Q.bonne][0]} ».`);
+  else if (t < M[Object.keys(M)[1]] - 1) m.push('Aucune proposition barrée : la question attend la réponse de l’élève.');
+  return m;
+}
 function voitRestitution(k) {
+  if (k.vue === 'metaphase') return voitQcm(k, QCM_MET);
   const t = k.t, m = ['Carte de QCM : « Au cours de la phase G1, chaque chromosome est : a) à une chromatide et condensé ; b) à une chromatide et non condensé ; c) à deux chromatides et non condensé ; d) à deux chromatides et condensé ».'];
   if (t >= MRS.elimine_a - 1) m.push('a) barrée en rouge : « condensé : c’est en mitose ».');
   if (t >= MRS.elimine_c - 1) m.push('c) barrée : « deux chromatides : après la phase S ».');
@@ -393,8 +425,10 @@ function voitRestitution(k) {
 window.Etapes.lancer({
   id: 'genetique_documents', titre: 'Documents du chapitre', graine: 53,
   // (17 novembre 2026) ?focus=m (ig_x2) : seul le segment de 19 à 20 h est décrit et expliqué ; la voix n'y décrit pas G1, S, G2.
-  parametres: { focus: { defaut: '', schema: "'' | 'm' (vue courbe : ne décrire et n’expliquer que la mitose, de 19 à 20 h)", lire: v => (v === 'm' ? 'm' : '') } },
-  auDepart: (P) => { const q = new URLSearchParams(location.search); if (q.get('focus') === 'm') P.focus = 'm'; },
+  parametres: { focus: { defaut: '', schema: "'' | 'm' (vue courbe : ne décrire et n’expliquer que la mitose, de 19 à 20 h)", lire: v => (v === 'm' ? 'm' : '') },
+    // (18 novembre 2026, 2ᵉ passe) exercice joué : la réponse rédigée attend l'élève (ig_x2, ig_x2b)
+    reponse: { defaut: 'tout', schema: "'tout' | 'decrire' | 'rien' (vue courbe : rien = la courbe seule ; decrire = la description sans l’explication)", lire: v => (['tout', 'decrire', 'rien'].includes(v) ? v : undefined) } },
+  auDepart: (P) => { const q = new URLSearchParams(location.search); if (q.get('focus') === 'm') P.focus = 'm'; if (['decrire', 'rien'].includes(q.get('reponse'))) P.reponse = q.get('reponse'); },
   vues: {
     // Tableau large (15 novembre 2026) : le dessin d'origine découpé en blocs, posés côte à côte et agrandis (etapes.js).
     ouverture: { titre: 'Pourquoi ressembles-tu à tes parents ?', autoDepart: false, fin: 13.6,
@@ -427,6 +461,12 @@ window.Etapes.lancer({
       motifs: { carte: 'la question : en G1, le chromosome est…', elimine_a: 'a est faux : condensé, c’est en mitose', elimine_c: 'c est faux : deux chromatides, c’est après la phase S', elimine_d: 'd est faux : prophase ou métaphase', reponse: 'la réponse : b, une chromatide et non condensé' },
       conclusion: 'G1 : chromosome à une chromatide, non condensé.', texte: 'QCM : en G1, chaque chromosome est à une chromatide et non condensé (b) ; a, c, d éliminés avec leur raison.',
       explication: [{ repere: 'a', texte: 'Condensé : c’est en mitose, pas en G1.' }, { repere: 'c', texte: 'Deux chromatides : seulement après la phase S.' }, { repere: 'b', texte: 'En G1 : une chromatide, ADN déroulé.' }] },
+    // (18 novembre 2026, 2ᵉ passe) le QCM du national 2018 R : posé (carte), puis corrigé leurre par leurre
+    metaphase: { titre: 'QCM : le chromosome en métaphase', autoDepart: false, fin: 12, moments: MMT,
+      blocs: { carte: [26, 60, 736, 370] }, disposition: { colonnes: [['carte']], zmax: 1.5 }, dessiner: dessinerRestitution, voit: voitRestitution,
+      motifs: { carte: 'la question du national 2018 R : en métaphase, le chromosome est formé…', elimine_a: 'a est faux : une seule chromatide, c’est en G1 ou en anaphase', elimine_b: 'b est faux : une molécule d’ADN a toujours deux brins', elimine_d: 'd est faux : les deux chromatides sont identiques', reponse: 'la réponse : c, deux chromatides de deux brins chacune' },
+      conclusion: 'En métaphase : deux chromatides, chacune une molécule d’ADN à deux brins.', texte: 'QCM du national 2018 R : en métaphase, chaque chromosome est formé de deux chromatides de deux brins d’ADN chacune (c) ; a, b, d éliminés avec leur raison.',
+      explication: [{ repere: 'a', texte: 'Une seule chromatide : en G1 ou en anaphase, pas en métaphase.' }, { repere: 'b', texte: 'Une molécule d’ADN a toujours deux brins.' }, { repere: 'c', texte: 'Après la phase S : deux chromatides, chacune une molécule d’ADN à deux brins.' }] },
   },
 });
 </script>

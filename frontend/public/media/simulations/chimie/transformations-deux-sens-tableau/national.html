@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>National 2021 R joué pas à pas — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="tds.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Le national 2021 rattrapage joué question par question : le pH-mètre dans l’acide méthanoïque, l’équation avec l’eau, le tableau d’avancement, τ = 10^(−pH)/C, la courbe τ(pH) lue, puis C et l’effet de la dilution"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume reset play_until set_time set_parameters">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script src="deroule.js"></script>
+<script>
+/*
+ * National 2021 rattrapage, exercice 1 (acide méthanoïque), JOUÉ pas à pas (2ᵉ passe du 18 novembre 2026, professeur règle 41,
+ * logique-de-cours règle 5). Cours phys_ch11_transformations_deux_sens, une diapositive par question du sujet :
+ *   ?vue=q1  question 5 : l’équation avec l’eau (td_n1a_equation) — le pH-mètre lit 2,38 dans S_a (C_a = 1,0·10⁻¹ mol/L) ;
+ *            si la réaction était totale, pH = 1,0 : on mesure plus, elle est limitée → ⇌.
+ *   ?vue=q2  question 9 : montrer que τ = 10^(−pH)/C (td_n1b_montrer) — tableau, x_max = C·V, x_f = 10^(−pH)·V, τ ; S_a : τ = 0,042.
+ *   ?vue=q3  question 10 : lire τ sur la courbe (td_n1c_courbe) — le pH-mètre lit 2,8 (S₁) puis 3,6 (S₂) ; la courbe τ(pH) se trace ;
+ *            lectures τ₁ ≈ 0,10 puis τ₂ ≈ 0,45 ; le tableau du sujet se remplit.
+ *   ?vue=q4  questions 10-11 : C = 10^(−pH)/τ puis l’effet de la dilution (td_n1d_dilution) — C₁ = 1,58·10⁻², C₂ = 5,58·10⁻⁴ mol/L ;
+ *            C₂ < C₁ et τ₂ > τ₁ : la dilution augmente τ.
+ * Chaque vue a une étape QUESTION (celle où la voix s’arrête et l’élève répond) : avec { conclusions: false } (sim_avant de la
+ * question d’observation), tout ce qui vient après elle est tu (et la valeur lue de q3 s’écrit « ? ») ; { conclusions: true }
+ * (sim_apres, défaut) l’écrit. La courbe du sujet est redessinée par τ = 1/(1 + 10^(1,084·(3,68 − pH))) : elle passe par les
+ * deux lectures du corrigé (2,8 ; 0,10) et (3,6 ; 0,45) — tracé seulement, jamais écrit (la constante d’acidité est au ch13).
+ */
+const T = window.Tableau, { fr } = T, sci = window.Deroule.sci;
+/* Fractions « ⟦num|dén⟧ » (simulations-au-tableau règle 12) avec des exposants dedans (« ⟦10^{−pH}|C⟧ ») : dans ce dossier,
+ * exposants.js prend tout texte qui a un exposant et ne connaît pas les fractions ; on découpe donc ici la phrase en morceaux,
+ * chaque morceau passant par l’écriture habituelle (exposants, indices, états), le trait de fraction dessiné à la craie. */
+(function () {
+  const P = T.Craie.prototype, avant = P.texte;
+  P.texte = function (s, x, y, o = {}) {
+    s = String(s);
+    if (!s.includes('⟦')) return avant.call(this, s, x, y, o);
+    const t0 = o.taille ?? 18, t = this.echelle && this.tailleMin ? Math.max(t0, this.tailleMin / this.echelle) : t0, tf = this.echelle && this.tailleMin ? Math.max(t * .85, this.tailleMin / this.echelle) : t * .85, L = (q, k) => this._largeur(q, k, o.gras);
+    const m = s.split(/(⟦[^⟧]*⟧)/).filter(Boolean).map(p => {
+      if (p[0] !== '⟦') return { t: p, w: L(p, t) };
+      const [n, d = ''] = p.slice(1, -1).split('|'), wn = L(n, tf), wd = L(d, tf);
+      return { n, d, wn, wd, w: Math.max(wn, wd) + t * .4 };
+    });
+    const total = m.reduce((w, q) => w + q.w, 0);
+    let px = o.align === 'center' ? x - total / 2 : o.align === 'right' ? x - total : x;
+    const st = { couleur: o.couleur, gras: o.gras };
+    for (const q of m) {
+      if (q.t != null) avant.call(this, q.t, px, y, { ...st, taille: t });
+      else {
+        const xc = px + q.w / 2, yb = y - t * .32;
+        avant.call(this, q.n, xc - q.wn / 2, yb - tf * .32, { ...st, taille: tf });
+        this.trait([[px + t * .12, yb], [px + q.w - t * .12, yb]], { couleur: o.couleur || 'blanc', largeur: Math.max(1.3, t * .085), tremble: .25, duree: .12 });
+        avant.call(this, q.d, xc - q.wd / 2, yb + tf * 1.02, { ...st, taille: tf });
+      }
+      px += q.w;
+    }
+    return this;
+  };
+})();
+const VUES = ['q1', 'q2', 'q3', 'q4'];
+const P = { conclusions: true };
+const QUESTION = { q1: 'equation', q2: 'xmax', q3: 'lecture_2', q4: 'compare' };   // la voix s’arrête après cette étape
+const tauDe = pH => 1 / (1 + 10 ** (1.084 * (3.68 - pH)));
+
+function etapes(v) {
+  return ({
+    q1: [
+      { nom: 'solution', duree: 1.2, motif: 'S_a : acide méthanoïque, C_a = 1,0·10⁻¹ mol/L', bulle: () => 'Une solution d’acide méthanoïque.' },
+      { nom: 'mesure', duree: 2.6, motif: 'le pH-mètre se stabilise à 2,38', bulle: () => 'On plonge la sonde du pH-mètre…' },
+      { nom: 'equation', duree: 1.6, motif: 'question 5 : l’équation, quelle flèche ?', bulle: () => 'Question 5 : l’équation avec l’eau.' },
+      { nom: 'si_totale', duree: 1.4, motif: 'si elle était totale : [H₃O⁺] = C_a, pH = 1,0' },
+      { nom: 'compare', duree: 1.2, motif: 'pH mesuré 2,38 > 1,0 : réaction limitée' },
+      { nom: 'fleche', duree: 1.4, motif: 'l’équation avec ⇌, comme le barème la lit' },
+    ],
+    q2: [
+      { nom: 'enonce', duree: 1, motif: 'question 9 : montrer que τ = 10^(−pH)/C' },
+      { nom: 'tableau', duree: 2.6, motif: 'le tableau d’avancement' },
+      { nom: 'xmax', duree: 1.4, motif: 'HCOOH limitant : x_max = C·V' },
+      { nom: 'xf', duree: 1.4, motif: 'x_f = [H₃O⁺]·V = 10^(−pH)·V' },
+      { nom: 'taux', duree: 1.6, motif: 'τ = x_f/x_max = 10^(−pH)/C' },
+      { nom: 'application', duree: 1.4, motif: 'S_a : τ = 0,042 < 1' },
+    ],
+    q3: [
+      { nom: 'solutions', duree: 1.2, motif: 'deux solutions S₁ et S₂', bulle: () => 'Deux solutions d’acide méthanoïque.' },
+      { nom: 'mesure_1', duree: 2.4, motif: 'S₁ : pH = 2,8', bulle: () => 'Le pH-mètre dans S₁…' },
+      { nom: 'mesure_2', duree: 2.4, motif: 'S₂ : pH = 3,6', bulle: () => 'Le pH-mètre dans S₂…' },
+      { nom: 'courbe', duree: 2.2, motif: 'la courbe τ en fonction du pH (figure 3 du sujet)' },
+      { nom: 'lecture_1', duree: 1.8, motif: 'S₁ : pH = 2,8 → τ₁ ≈ 0,10' },
+      { nom: 'lecture_2', duree: 1.8, motif: 'S₂ : pH = 3,6 → τ₂ ?' },
+      { nom: 'tableau', duree: 1.2, motif: 'τ₂ ≈ 0,45 dans le tableau du sujet' },
+    ],
+    q4: [
+      { nom: 'rappel', duree: 1.2, motif: 'le tableau : pH et τ de S₁ et S₂' },
+      { nom: 'relation', duree: 1.4, motif: 'C = 10^(−pH)/τ' },
+      { nom: 'c1', duree: 1.6, motif: 'C₁ = 1,58·10⁻² mol/L' },
+      { nom: 'c2', duree: 1.6, motif: 'C₂ = 5,58·10⁻⁴ mol/L' },
+      { nom: 'compare', duree: 1.6, motif: 'C₂ < C₁ : S₂ est plus diluée' },
+      { nom: 'bareme', duree: 1.6, motif: 'la dilution augmente τ' },
+    ],
+  })[v];
+}
+/** Une étape après la question est tue tant que la question n’est pas close (conclusions: false). */
+function permis(D, nom) {
+  if (P.conclusions) return true;
+  const noms = etapes(D.S.vue).map(e => e.nom), q = noms.indexOf(QUESTION[D.S.vue]);
+  return noms.indexOf(nom) <= q;
+}
+const montre = (D, nom) => D.commence(nom) && permis(D, nom);
+
+/* ── Mise en page serrée (téléphone en paysage, 724 × 350 : le texte reste ≥ 15 px à l'écran) ─────────────────────
+ * Tout le dessin tient dans le rectangle CADRE (700 × 270 du cadre 760 × 420) ; deux points invisibles à ses coins fixent la
+ * boîte d'encre mesurée par la scène (`ajuster`), qui agrandit donc ce rectangle sur tout le tableau : ≈ 0,97 sur un téléphone
+ * (canvas ≈ 705 × 299), ≈ 1,38 à 1024 × 560. Écriture de 17 à 22 ; le plancher du kit (15 px écran, que le kit réduit sous
+ * 900 × 400) est tenu à 15 px dans cette page seule. */
+const CADRE = { x0: 20, y0: 20, x1: 720, y1: 290 };
+
+/* ── Le matériel peint ──────────────────────────────────────────── */
+function becher(c, B, alpha = .3) {
+  c.direct(() => window.Peinture.becher(c.ctx, B.x, B.y, B.w, B.h, { surface: B.y + 20, liquide: [140, 200, 245, alpha] }));
+}
+/** pH-mètre : sa sonde descend dans le bécher pendant `p` (0 → .35), la valeur hésite puis se fixe (p ≥ .8). */
+function phmetre(c, E, B, p, valeur, id, label) {
+  const dip = Math.min(1, p / .35), off = (1 - dip) * 60;
+  c.direct(() => window.Peinture.phmetre(c.ctx, E, { x: B.x + B.w * .62, yHaut: B.y - 30 - off, yBas: B.y + B.h - 16 - off }));
+  const ecrit = p >= .8 ? valeur : p > .35 ? fr(+valeur.replace(',', '.') + (1 - p) * 1.6 * Math.sin(p * 31), 2) : '- - -';
+  c.direct(() => c.texte(ecrit, E.x + E.w / 2, E.y + E.h / 2 + 7, { couleur: p >= .8 ? 'vert' : 'faible', taille: 21, align: 'center' }));
+  c.repere(id, E.x - 6, E.y - 6, E.w + 12, E.h + 14, label);
+}
+
+/* ── q1 : l’équation avec l’eau ─────────────────────────────────── */
+const B1 = { x: 40, y: 104, w: 104, h: 104 }, E1 = { x: 40, y: 24, w: 104, h: 44 };
+function vueQ1(c, D) {
+  if (D.commence('solution')) {
+    becher(c, B1);
+    D.ecrire(c, 'solution');
+    c.texte('S_a (acide méthanoïque)', 92, 246, { couleur: 'cyan', taille: 17, align: 'center' });
+    c.texte('C_a = 1,0·10⁻¹ mol/L', 92, 276, { couleur: 'cyan', taille: 17, align: 'center' });
+    c.repere('becher', B1.x - 10, B1.y - 10, B1.w + 20, B1.h + 20, 'le bécher de S_a');
+  }
+  if (D.commence('solution')) phmetre(c, E1, B1, D.commence('mesure') ? D.p('mesure') : 0, '2,38', 'phmetre', 'le pH-mètre : pH = 2,38');
+  const X = 222;
+  if (montre(D, 'equation')) {
+    D.ecrire(c, 'equation');
+    const [g, d] = window.Etats.cotes('HCOOH + H₂O', 'HCOO⁻ + H₃O⁺');
+    const t = 21, wg = c.largeurTexte(g, t);
+    c.texte(g, X, 56, { taille: t });
+    c.rect(X + wg + 10, 32, 42, 34, { couleur: 'orange', largeur: 1.8, arrondi: 6 });
+    if (!(montre(D, 'fleche') && D.vu('fleche'))) c.texte('?', X + wg + 31, 58, { couleur: 'orange', taille: 23, align: 'center' });
+    else c.texte('⇌', X + wg + 31, 58, { couleur: 'jaune', taille: 23, align: 'center' });
+    c.texte(d, X + wg + 62, 56, { taille: t });
+    c.repere('equation', X - 6, 24, 496, 50, 'l’équation et la flèche à trouver');
+  }
+  if (montre(D, 'si_totale')) {
+    D.ecrire(c, 'si_totale');
+    c.texte('Si elle était totale : [H₃O⁺] = C_a = 1,0·10⁻¹ mol/L', X, 110, { taille: 18 });
+    c.texte('et pH = −log(1,0·10⁻¹) = 1,0', X, 142, { taille: 18 });
+    c.repere('si_totale', X - 6, 90, 490, 62, 'le pH si la réaction était totale');
+  }
+  if (montre(D, 'compare')) {
+    D.ecrire(c, 'compare');
+    c.texte('On mesure 2,38 > 1,0 : la réaction est limitée.', X, 184, { couleur: 'orange', taille: 19 });
+    c.repere('compare', X - 6, 164, 490, 30, 'pH mesuré 2,38 > 1,0');
+  }
+  if (montre(D, 'fleche')) {
+    D.ecrire(c, 'fleche');
+    c.texte('HCOOH + H₂O ⇌ HCOO⁻ + H₃O⁺', X + 8, 240, { couleur: 'jaune', taille: 21 });
+    c.rect(X - 6, 210, 498, 46, { couleur: 'jaune', largeur: 1.8, arrondi: 8 });
+    c.texte('(0,5 pt)', CADRE.x1, 282, { couleur: 'jaune', taille: 16, align: 'right' });
+    c.repere('fleche', X - 6, 210, 498, 46, 'l’équation avec la double flèche');
+  }
+}
+
+/* ── q2 : montrer que τ = 10^(−pH)/C ─────────────────────────────── */
+const COLS = [20, 128, 176, 316, 424, 572, 720];
+const LIGNES = [22, 56, 90, 124];
+function vueQ2(c, D) {
+  if (D.commence('tableau')) {
+    D.ecrire(c, 'tableau');
+    for (const y of LIGNES) c.ligne(COLS[0], y, COLS[6], y, { couleur: 'faible', largeur: 1.3 });
+    for (const x of COLS) c.ligne(x, LIGNES[0], x, LIGNES[3], { couleur: 'faible', largeur: 1.3 });
+    const cel = (i, j, s, o = {}) => c.texte(s, (COLS[j] + COLS[j + 1]) / 2, LIGNES[i] + 24, { taille: 17, align: 'center', ...o });
+    cel(0, 0, 'équation'); cel(0, 1, 'x');
+    ['HCOOH', '+ H₂O', '⇌ HCOO⁻', '+ H₃O⁺'].forEach((s, j) => cel(0, j + 2, s, { couleur: 'cyan' }));
+    ['initial', '0', 'C·V', 'en excès', '0', '0'].forEach((s, j) => cel(1, j, s));
+    ['final', 'x_f', 'C·V − x_f', 'en excès', 'x_f', 'x_f'].forEach((s, j) => cel(2, j, s));
+    c.repere('tableau', COLS[0], LIGNES[0], COLS[6] - COLS[0], LIGNES[3] - LIGNES[0], 'le tableau d’avancement');
+    c.repere('colonne_h3o', COLS[5], LIGNES[0], COLS[6] - COLS[5], LIGNES[3] - LIGNES[0], 'la colonne des ions H₃O⁺');
+  }
+  if (montre(D, 'xmax')) {
+    D.ecrire(c, 'xmax');
+    c.texte('Eau en excès : HCOOH limitant ; C·V − x_max = 0 ⇒ x_max = C·V', 20, 156, { taille: 18 });
+    c.repere('xmax', 14, 138, 600, 28, 'x_max = C·V');
+  }
+  if (montre(D, 'xf')) {
+    D.ecrire(c, 'xf');
+    c.rect(COLS[5] + 4, LIGNES[2] + 3, COLS[6] - COLS[5] - 8, 28, { couleur: 'jaune', largeur: 1.8, arrondi: 5 });
+    c.texte('x_f = n_f(H₃O⁺) = [H₃O⁺]_{f}·V = 10^{−pH}·V', 20, 190, { taille: 18 });
+    c.repere('xf', 14, 172, 440, 28, 'x_f = 10^(−pH)·V');
+  }
+  if (montre(D, 'taux')) {
+    D.ecrire(c, 'taux');
+    c.texte('τ = ⟦x_f|x_max⟧ = ⟦10^{−pH}·V|C·V⟧ = ⟦10^{−pH}|C⟧', 30, 250, { couleur: 'jaune', taille: 21 });
+    c.rect(20, 212, 316, 72, { couleur: 'jaune', largeur: 1.8, arrondi: 8 });
+    c.repere('taux', 20, 212, 316, 72, 'τ = 10^(−pH)/C');
+  }
+  if (montre(D, 'application')) {
+    D.ecrire(c, 'application');
+    c.texte('S_a : τ = ⟦10^{−2,38}|1,0·10⁻¹⟧ = 0,042', 356, 246, { couleur: 'cyan', taille: 19 });
+    c.texte('τ < 1 : réaction limitée', 356, 282, { couleur: 'cyan', taille: 18 });
+    c.repere('application', 350, 214, 370, 76, 'τ = 0,042 pour S_a');
+  }
+}
+
+/* ── q3 : lire τ sur la courbe ──────────────────────────────────── */
+const S1 = { x: 22, y: 112, w: 76, h: 84 }, S2 = { x: 116, y: 112, w: 76, h: 84 };
+const F1 = { x: 20, y: 26, w: 80, h: 40 }, F2 = { x: 114, y: 26, w: 80, h: 40 };
+const G = { x0: 258, y0: 232, kx: 34, ky: 186 };   // pH 0..7 → x 258..496 ; τ 0..1 → y 232..46
+const gx = pH => G.x0 + pH * G.kx, gy = t => G.y0 - t * G.ky;
+const TB = { col: [536, 596, 658, 720], lig: [46, 82, 118, 154] };
+function axes(c) {
+  c.fleche(G.x0, G.y0, gx(7.3), G.y0, { couleur: 'blanc', largeur: 1.8 });
+  c.fleche(G.x0, G.y0, G.x0, gy(1.1), { couleur: 'blanc', largeur: 1.8 });
+  c.texte('pH', gx(7.3), G.y0 - 12, { taille: 17, align: 'center' });
+  c.texte('τ', G.x0 - 22, gy(1.06), { taille: 20 });
+  for (let k = 1; k <= 7; k++) { c.ligne(gx(k), G.y0 - 4, gx(k), G.y0 + 4, { couleur: 'blanc', largeur: 1.4 }); if (k % 2 === 0) c.texte(String(k), gx(k), G.y0 + 21, { taille: 16, align: 'center' }); }
+  for (const t of [.5, 1]) { c.ligne(G.x0 - 4, gy(t), G.x0 + 4, gy(t), { couleur: 'blanc', largeur: 1.4 }); c.texte(fr(t, t === 1 ? 0 : 1), G.x0 - 8, gy(t) + 6, { taille: 16, align: 'right' }); }
+}
+function lecture(c, pH, p, ecrit, couleur, idTau) {
+  const t = tauDe(pH), a = Math.min(1, p / .5), b = Math.max(0, Math.min(1, (p - .5) / .5));
+  c.direct(() => {
+    c.ligne(gx(pH), G.y0, gx(pH), G.y0 - (G.y0 - gy(t)) * a, { couleur, largeur: 1.6, pointille: [6, 5] });
+    if (b > 0) c.ligne(gx(pH), gy(t), gx(pH) - (gx(pH) - G.x0) * b, gy(t), { couleur, largeur: 1.6, pointille: [6, 5] });
+    if (a >= 1) c.point(gx(pH), gy(t), 4, couleur);
+  });
+  if (b >= 1) c.texte(ecrit, G.x0 + 8, gy(t) - 8, { couleur, taille: 17 });
+  c.repere(idTau, gx(pH) - 10, gy(t) - 26, 40, G.y0 - gy(t) + 30, `la lecture à pH = ${fr(pH, 1)}`);
+}
+function tableauSujet(c, D, vals) {
+  const L = TB.lig, C = TB.col;
+  for (const y of L) c.ligne(C[0], y, C[3], y, { couleur: 'faible', largeur: 1.3 });
+  for (const x of C) c.ligne(x, L[0], x, L[3], { couleur: 'faible', largeur: 1.3 });
+  const cel = (i, j, s, o = {}) => s && c.texte(s, (C[j] + C[j + 1]) / 2, L[i] + 25, { taille: 18, align: 'center', ...o });
+  cel(0, 1, 'S₁', { couleur: 'jaune' }); cel(0, 2, 'S₂', { couleur: 'orange' });
+  cel(1, 0, 'pH'); cel(2, 0, 'τ');
+  cel(1, 1, vals.pH1); cel(1, 2, vals.pH2); cel(2, 1, vals.t1); cel(2, 2, vals.t2);
+  c.repere('tableau', C[0] - 4, L[0] - 4, C[3] - C[0] + 8, L[3] - L[0] + 8, 'le tableau du sujet');
+}
+function vueQ3(c, D) {
+  if (D.commence('solutions')) {
+    becher(c, S1, .34); becher(c, S2, .2);
+    D.ecrire(c, 'solutions');
+    c.texte('S₁', S1.x + S1.w / 2, 226, { couleur: 'jaune', taille: 19, align: 'center' });
+    c.texte('S₂', S2.x + S2.w / 2, 226, { couleur: 'orange', taille: 19, align: 'center' });
+    c.repere('bechers', S1.x - 8, S1.y - 8, S2.x + S2.w - S1.x + 16, S1.h + 40, 'les deux solutions S₁ et S₂');
+    phmetre(c, F1, S1, D.commence('mesure_1') ? D.p('mesure_1') : 0, '2,8', 'phmetre_1', 'le pH-mètre de S₁ : 2,8');
+    phmetre(c, F2, S2, D.commence('mesure_2') ? D.p('mesure_2') : 0, '3,6', 'phmetre_2', 'le pH-mètre de S₂ : 3,6');
+  }
+  if (D.commence('courbe')) {
+    D.ecrire(c, 'courbe');
+    axes(c);
+    c.courbe(u => [gx(u * 7), gy(tauDe(u * 7))], 120, { couleur: 'cyan', largeur: 2.6, net: true });
+    c.repere('courbe', G.x0, gy(1), gx(7) - G.x0, G.y0 - gy(1), 'la courbe τ en fonction du pH');
+    c.repere('axe_ph', G.x0, G.y0 - 8, gx(7.3) - G.x0, 36, 'l’axe horizontal : le pH');
+    c.repere('axe_tau', G.x0 - 40, gy(1.1), 50, G.y0 - gy(1.1), 'l’axe vertical : τ, de 0 à 1');
+  }
+  if (D.commence('lecture_1')) lecture(c, 2.8, D.p('lecture_1'), 'τ₁ ≈ 0,10', 'jaune', 'lecture_1');
+  if (D.commence('lecture_2')) lecture(c, 3.6, D.p('lecture_2'), P.conclusions ? 'τ₂ ≈ 0,45' : 'τ₂ = ?', 'orange', 'lecture_2');
+  // les pH lus, sous l’axe : 2,8 à gauche de son trait, 3,6 à droite (ils sont proches)
+  if (D.p('lecture_1') >= .5) c.texte('2,8', gx(2.8) - 3, G.y0 + 44, { couleur: 'jaune', taille: 17, align: 'right' });
+  if (D.p('lecture_2') >= .5) c.texte('3,6', gx(3.6) + 3, G.y0 + 44, { couleur: 'orange', taille: 17 });
+  const v = {
+    pH1: D.vu('mesure_1') ? '2,8' : '', pH2: D.vu('mesure_2') ? '3,6' : '',
+    t1: D.vu('lecture_1') ? '0,10' : '', t2: montre(D, 'tableau') && D.vu('lecture_2') ? '0,45' : '',
+  };
+  tableauSujet(c, D, v);
+}
+
+/* ── q4 : C, puis l’effet de la dilution ────────────────────────── */
+const R4 = { col: [20, 66, 162, 258], lig: [22, 54, 86, 118, 150] };
+const D1 = { x: 34, y: 196, w: 80, h: 64 }, D2 = { x: 160, y: 196, w: 80, h: 64 };
+function molecules(c, B, n, graine) {
+  c.direct(() => {
+    let s = graine; const r = () => (s = (s * 9301 + 49297) % 233280) / 233280;
+    for (let i = 0; i < n; i++) window.Rendu.molecule(c.ctx, 'HCOOH', B.x + 16 + r() * (B.w - 32), B.y + 30 + r() * (B.h - 40), .55, r() * 2);
+  });
+}
+function vueQ4(c, D) {
+  const L = R4.lig, C = R4.col;
+  if (D.commence('rappel')) {
+    D.ecrire(c, 'rappel');
+    for (const y of L) c.ligne(C[0], y, C[3], y, { couleur: 'faible', largeur: 1.3 });
+    for (const x of C) c.ligne(x, L[0], x, L[4], { couleur: 'faible', largeur: 1.3 });
+    const cel = (i, j, s, o = {}) => c.texte(s, (C[j] + C[j + 1]) / 2, L[i] + 24, { taille: 17, align: 'center', ...o });
+    cel(0, 1, 'S₁', { couleur: 'jaune' }); cel(0, 2, 'S₂', { couleur: 'orange' });
+    cel(1, 0, 'pH'); cel(1, 1, '2,8'); cel(1, 2, '3,6');
+    cel(2, 0, 'τ'); cel(2, 1, '0,10'); cel(2, 2, '0,45');
+    cel(3, 0, 'C');
+    if (D.commence('c1')) cel(3, 1, '1,58·10⁻²', { couleur: 'cyan' });
+    if (D.commence('c2')) cel(3, 2, '5,58·10⁻⁴', { couleur: 'cyan' });
+    c.texte('(C en mol/L)', C[0], L[4] + 22, { couleur: 'blanc', taille: 16 });
+    c.repere('rappel', C[0], L[0], C[3] - C[0], L[4] - L[0], 'le tableau : pH, τ et C de S₁ et S₂');
+  }
+  const X = 296;
+  if (D.commence('relation')) {
+    D.ecrire(c, 'relation');
+    c.texte('τ = ⟦10^{−pH}|C⟧ ⇒ C = ⟦10^{−pH}|τ⟧', X, 50, { couleur: 'jaune', taille: 21 });
+    c.repere('relation', X - 6, 20, 330, 48, 'C = 10^(−pH)/τ');
+  }
+  if (D.commence('c1')) {
+    D.ecrire(c, 'c1');
+    c.texte('C₁ = ⟦10^{−2,8}|0,10⟧ = 1,58·10⁻² mol/L', X, 110, { taille: 19 });
+    c.repere('c1', X - 6, 82, 400, 46, 'C₁ = 1,58·10⁻² mol/L');
+  }
+  if (D.commence('c2')) {
+    D.ecrire(c, 'c2');
+    c.texte('C₂ = ⟦10^{−3,6}|0,45⟧ = 5,58·10⁻⁴ mol/L', X, 168, { taille: 19 });
+    c.repere('c2', X - 6, 140, 400, 46, 'C₂ = 5,58·10⁻⁴ mol/L');
+  }
+  if (montre(D, 'compare')) {
+    becher(c, D1, .34); becher(c, D2, .18);
+    molecules(c, D1, 9, 7); molecules(c, D2, 2, 11);
+    D.ecrire(c, 'compare');
+    c.texte('S₁', D1.x + D1.w / 2, 284, { couleur: 'jaune', taille: 18, align: 'center' });
+    c.texte('S₂, plus diluée', D2.x + D2.w / 2, 284, { couleur: 'orange', taille: 18, align: 'center' });
+    c.texte('C₂ < C₁ : S₂ est plus diluée.', X, 214, { couleur: 'orange', taille: 19 });
+    c.repere('compare', D1.x - 8, D1.y - 10, D2.x + D2.w - D1.x + 16, 104, 'S₂ est plus diluée que S₁');
+  }
+  if (montre(D, 'bareme')) {
+    D.ecrire(c, 'bareme');
+    c.texte('C₂ < C₁ et τ₂ > τ₁ : la dilution augmente τ.', X + 10, 266, { couleur: 'jaune', taille: 19 });
+    c.rect(X - 4, 238, 424, 44, { couleur: 'jaune', largeur: 1.8, arrondi: 8 });
+    c.repere('bareme', X - 4, 238, 424, 44, 'la conclusion du barème');
+  }
+}
+
+function dessiner(c, D) {
+  D.scene.cadre(43);
+  if (!c.__plancher) {   // plancher propre à la page : 15 px à l’écran, même sous 900 × 400 (le kit le réduirait jusqu’à 45 %)
+    Object.defineProperty(c, 'tailleMin', { configurable: true, get: () => (D.scene.mesurant ? 0 : 15), set() {} });
+    c.__plancher = true;
+  }
+  // les coins du rectangle CADRE (invisibles) : la boîte d’encre de la scène, donc l’agrandissement
+  c.direct(() => { c.point(CADRE.x0, CADRE.y0, .01, 'rgba(0,0,0,0)'); c.point(CADRE.x1, CADRE.y1, .01, 'rgba(0,0,0,0)'); });
+  ({ q1: vueQ1, q2: vueQ2, q3: vueQ3, q4: vueQ4 })[D.S.vue](c, D);
+  return c.fin();
+}
+
+function voir(D) {
+  const v = D.S.vue, s = [];
+  const vu = n => montre(D, n);
+  if (v === 'q1') {
+    if (vu('solution')) s.push('Un bécher : S_a, acide méthanoïque, C_a = 1,0·10⁻¹ mol/L.');
+    if (vu('mesure')) s.push(D.p('mesure') >= .8 ? 'Le pH-mètre est stabilisé : pH = 2,38.' : 'La sonde du pH-mètre descend dans S_a ; la valeur n’est pas encore stable.');
+    if (vu('equation')) s.push('Écrit : question 5, HCOOH(aq) + H₂O(l) ? HCOO⁻(aq) + H₃O⁺(aq), la flèche est à trouver.');
+    if (vu('si_totale')) s.push('Si la réaction était totale : [H₃O⁺] = C_a, pH = 1,0.');
+    if (vu('compare')) s.push('pH mesuré 2,38 > 1,0 : la réaction est limitée.');
+    if (vu('fleche')) s.push('L’équation avec la double flèche, encadrée (barème).');
+  } else if (v === 'q2') {
+    if (vu('enonce')) s.push('Question 9 : montrer que τ = 10^(−pH)/C ; S_a : C = 1,0·10⁻¹ mol/L, pH = 2,38.');
+    if (vu('tableau')) s.push('Tableau d’avancement : initial C·V, en excès, 0, 0 ; final C·V − x_f, en excès, x_f, x_f.');
+    if (vu('xmax')) s.push('HCOOH limitant : x_max = C·V.');
+    if (vu('xf')) s.push('x_f = [H₃O⁺]·V = 10^(−pH)·V (case H₃O⁺ encadrée).');
+    if (vu('taux')) s.push('τ = x_f/x_max = (10^(−pH)·V)/(C·V) = 10^(−pH)/C, encadré.');
+    if (vu('application')) s.push('S_a : τ = 10^(−2,38)/(1,0·10⁻¹) = 0,042 < 1 : limitée.');
+  } else if (v === 'q3') {
+    if (vu('solutions')) s.push('Deux béchers S₁ et S₂, chacun avec un pH-mètre.');
+    if (D.vu('mesure_1')) s.push('pH-mètre de S₁ : 2,8.');
+    if (D.vu('mesure_2')) s.push('pH-mètre de S₂ : 3,6.');
+    if (vu('courbe')) s.push('La courbe τ en fonction du pH (τ de 0 à 1, pH de 0 à 7).');
+    if (D.vu('lecture_1')) s.push('Lecture S₁ : pH = 2,8 → τ₁ ≈ 0,10.');
+    if (D.commence('lecture_2')) s.push(P.conclusions ? 'Lecture S₂ : pH = 3,6 → τ₂ ≈ 0,45.' : 'Lecture S₂ : pH = 3,6 → τ₂ = ? (la valeur est tue pendant la question).');
+  } else {
+    if (vu('rappel')) s.push('Tableau : S₁ pH 2,8, τ 0,10 ; S₂ pH 3,6, τ 0,45.');
+    if (vu('relation')) s.push('C = 10^(−pH)/τ.');
+    if (vu('c1')) s.push('C₁ = 1,58·10⁻² mol/L.');
+    if (vu('c2')) s.push('C₂ = 5,58·10⁻⁴ mol/L.');
+    if (vu('compare')) s.push('Deux béchers : S₂ a moins de molécules d’acide par litre, C₂ < C₁ : S₂ est plus diluée.');
+    if (vu('bareme')) s.push('Encadré : C₂ < C₁ et τ₂ > τ₁, la dilution augmente τ.');
+  }
+  if (!P.conclusions) s.push('(Question en cours : la suite est tue.)');
+  return s.join(' ') || 'Le tableau attend.';
+}
+
+window.Deroule({
+  scene: { ajuster: true },
+  vues: VUES,
+  id: 'transformations_deux_sens_national_2021R', titre: 'National 2021 R joué pas à pas : acide méthanoïque, τ et dilution',
+  etapes,
+  dessiner, voir,
+  params: () => ({ conclusions: P.conclusions }),
+  appliquer: p => { if (typeof p.conclusions !== 'boolean') return false; P.conclusions = p.conclusions; return true; },
+  schema: { conclusions: 'true | false (question d’observation : false tait tout ce qui suit l’étape de la question, et la valeur τ₂ en q3 ; true par défaut)' },
+  depart: () => 'National 2021, rattrapage : l’acide méthanoïque.',
+  accueil: () => 'National 2021 R, une question à la fois.',
+  apresReglage: () => (P.conclusions ? 'La suite s’écrit.' : 'Ta réponse d’abord.'),
+  messageFin: () => 'La question est corrigée comme le barème la lit.',
+  texte: 'National 2021 rattrapage, acide méthanoïque. Q5 : pH(S_a) = 2,38 pour C_a = 1,0·10⁻¹ mol/L ; si totale pH = 1,0 ; limitée → HCOOH + H₂O ⇌ HCOO⁻ + H₃O⁺. Q9 : x_max = C·V, x_f = 10^(−pH)·V, τ = 10^(−pH)/C ; S_a : τ = 0,042. Q10 : S₁ pH 2,8 → τ₁ ≈ 0,10 ; S₂ pH 3,6 → τ₂ ≈ 0,45 ; C = 10^(−pH)/τ : C₁ = 1,58·10⁻², C₂ = 5,58·10⁻⁴ mol/L. Q11 : C₂ < C₁ et τ₂ > τ₁ : la dilution augmente τ.',
+  explication: [
+    { repere: 'phmetre', texte: 'Le pH-mètre donne la valeur : on la lit quand elle ne bouge plus.' },
+    { repere: 'tableau', texte: 'Le tableau d’avancement donne x_max et x_f.' },
+    { repere: 'courbe', texte: 'On part du pH sur l’axe horizontal, on monte jusqu’à la courbe, puis on lit τ sur l’axe vertical.' },
+    { repere: 'bareme', texte: 'La conclusion s’écrit avec les deux comparaisons : C₂ < C₁ et τ₂ > τ₁.' },
+  ],
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

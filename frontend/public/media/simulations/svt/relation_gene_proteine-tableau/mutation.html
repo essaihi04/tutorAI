@@ -207,6 +207,9 @@ function dessiner(c, k) {
   const g = segment(k), t = g.local, tN = g.tN, Mu = mutante(k.P, g), A = analyser(Mu), lN = NORMAL.length, lM = Mu.length, pas = pasDe(Math.max(lN, lM));
   const E = (nom, ph) => k.ecrit(c, nom + g.suf, g.i < 0 ? ph : G(g.i, ph));   // groupes de l'allèle muté : réécrits à chaque segment
   const LN = A.LN, LM = A.LM, uEvt = rampe(t, PH.evt, PH.evtFin - PH.evt);
+  // (18 novembre 2026, 2ᵉ passe) conclusions = false : l’allèle muté s’arrête à son ARNm (acides aminés, type, conséquence
+  // cachés) tant que l’élève n’a pas répondu à la question d’observation ; true (défaut) : comme avant.
+  const cache = k.P.conclusions === false && !g.bilan;
   const T = (s, x, y, o = {}) => k.T(c, s, x, y, { duree: Math.min(.2, Math.max(.08, String(s).length / 60)), ...o });   // écriture rapide : la craie suit la timeline
   const jRouges = A.decalage ? LM.cod.filter(cd => cd.lu && cd.j >= A.j).map(cd => cd.j) : (A.genre !== 'aucune' && A.diffs.length === 1 && LM.cod[A.j] && LM.cod[A.j].lu ? [A.j] : []);
   c.direct(() => {
@@ -214,7 +217,7 @@ function dessiner(c, k) {
     // allèle normal
     if (tN >= PH.brinN) Mo.brin(x, X0, RN.brin, pas, NORMAL, 'adn', -1, { lb: LB, alpha: rampe(tN, PH.brinN, .4) });
     if (tN >= PH.arnN) Mo.brin(x, X0, RN.arn, pas, arn(NORMAL), 'arn', -1, { lb: LB, alpha: rampe(tN, PH.arnN, .4) });
-    if (tN >= PH.aaN) perles(x, LN, RN.aa, pas, PH.aaN, tN, [], t >= PH.aaM ? A.perdus : []);
+    if (tN >= PH.aaN) perles(x, LN, RN.aa, pas, PH.aaN, tN, [], t >= PH.aaM && !cache ? A.perdus : []);
     // base(s) retirée(s) : entourée(s) en rouge sur l’allèle normal
     if (A.del.length && uEvt > 0) { x.save(); x.globalAlpha = uEvt; x.strokeStyle = '#ff2d2d'; x.lineWidth = 2.4; for (let i = A.p; i < lN - A.s; i++) { x.beginPath(); x.ellipse(X0 + (i + .5) * pas, RN.brin - LB / 2, pas * .5, LB * .78, 0, 0, TAU); x.stroke(); } x.restore(); }
     // allèle muté
@@ -223,7 +226,7 @@ function dessiner(c, k) {
       const rouge = new Set(); for (let i = A.p; i < lM - A.s; i++) rouge.add(i);
       Mo.brin(x, X0, RM.arn, pas, arn(Mu), 'arn', -1, { lb: LB, alpha: rampe(t, PH.arnM, .4), rouge });
     }
-    if (t >= PH.aaM) perles(x, LM, RM.aa, pas, PH.aaM, t, A.changes);
+    if (t >= PH.aaM && !cache) perles(x, LM, RM.aa, pas, PH.aaM, t, A.changes);
   });
   c.texte('Mutation : allèle normal et allèle muté', 10, 24, { couleur: 'cyan', taille: 19, duree: .8 });
   const titres = (R, nom, coul) => {
@@ -246,7 +249,7 @@ function dessiner(c, k) {
   if (E('m_num', PH.evtFin)) for (let j = nCommun; j * 3 < lM; j++) T(String(j + 1), xc(j, pas), RM.num, { couleur: 'faible', taille: 13, align: 'center', duree: .03 });
   if (E('m_arn', PH.arnM)) { T('ARNm', 6, RM.arn - 4, { couleur: 'orange', taille: 13 }); T('5′', X0 - 11, RM.arn + 4, { couleur: 'vert', taille: 13, align: 'center' }); T('3′', X0 + lM * pas + 11, RM.arn + 4, { couleur: 'vert', taille: 13, align: 'center' }); }
   if (E('m_arcs', PH.arcsM)) arcs(RM, LM, lM, 'faible', 1.6);
-  if (E('m_aa', PH.aaM)) {
+  if (!cache && E('m_aa', PH.aaM)) {
     T('acides aminés', 6, RM.aa + 4, { couleur: 'vert', taille: 13 });
     if (LM.stop >= 0) T('arrêt', xc(LM.stop, pas), RM.aa + 5, { couleur: 'rouge', taille: 13, align: 'center' });
     else if (LM.init) T('…', xc(LM.aas.length, pas), RM.aa + 5, { couleur: 'faible', taille: 15, align: 'center' });
@@ -260,7 +263,7 @@ function dessiner(c, k) {
       if (k.ecrit(c, 'bilan' + n, TB + tb)) lignes.forEach((l, q) => T(l, CADRE.x + 10, y0 + q * 18, { couleur: n === 3 ? 'vert' : 'blanc', taille: 13, max: CADRE.w - 16 }));
       if (g.tb >= tb) c.repere('bilan_' + (n + 1), CADRE.x + 4, y0 - 14, CADRE.w - 8, 40, lignes.join(' '));
     });
-  } else if (E('m_cadre', PH.cadre)) {
+  } else if (!cache && E('m_cadre', PH.cadre)) {
     c.rect(CADRE.x, CADRE.y, CADRE.w, CADRE.h, { couleur: 'faible', largeur: 1.4, duree: .25 });
     let y = CADRE.y + 24; const xg = CADRE.x + 10;
     T('type de mutation :', xg, y, { couleur: 'jaune', taille: 14 }); y += 21;
@@ -270,7 +273,7 @@ function dessiner(c, k) {
   }
   // ── l’accent : décalage du cadre de lecture (ou non)
   const xT = X0 + A.p * pas;
-  if (A.genre !== 'aucune' && E('m_accent', PH.accent)) {
+  if (A.genre !== 'aucune' && !cache && E('m_accent', PH.accent)) {
     if (A.decalage) {
       c.ligne(xT, RM.num - 12, xT, RM.aa + 18, { couleur: 'rouge', largeur: 2.6, duree: .25 });
       arcs(RM, LM, lM, 'rouge', 2.6, jRouges);
@@ -279,7 +282,7 @@ function dessiner(c, k) {
       arcs(RM, LM, lM, 'rouge', 2.6, jRouges); T('un seul triplet touché : pas de décalage du cadre de lecture', X0 - 130, 398, { couleur: 'vert', taille: 15, max: 540 });
     } else if (lM !== lN) T('pas de décalage du cadre de lecture : un nombre de nucléotides multiple de 3', X0 - 130, 398, { couleur: 'vert', taille: 15, max: 540 });
   }
-  if (A.genre !== 'aucune' && t >= PH.accent) c.repere('accent_texte', A.decalage ? Math.max(X0, xT - 30) - 4 : X0 - 134, 382, A.decalage ? 260 : 548, 22, 'la conséquence sur le cadre de lecture');
+  if (A.genre !== 'aucune' && t >= PH.accent && !cache) c.repere('accent_texte', A.decalage ? Math.max(X0, xT - 30) - 4 : X0 - 134, 382, A.decalage ? 260 : 548, 22, 'la conséquence sur le cadre de lecture');
   // ── repères
   c.repere('allele_normal', 4, 36, 556, 154, 'l’allèle normal');
   c.repere('brin_normal', X0, RN.brin - LB - 2, lN * pas, LB + 8, 'le brin non transcrit de l’allèle normal');
@@ -288,13 +291,13 @@ function dessiner(c, k) {
   if (tN >= PH.aaN) c.repere('aa_normal', X0, RN.aa - RP - 3, lN * pas, 2 * RP + 6, 'les acides aminés de l’allèle normal');
   if (t >= PH.brinM) { c.repere('allele_mute', 4, 220, 556, 160, 'l’allèle muté'); c.repere('brin_mute', X0, RM.brin - LB - 2, Math.max(lN, lM) * pas, LB + 8, 'le brin non transcrit de l’allèle muté'); }
   if (t >= PH.arnM) c.repere('arnm_mute', X0, RM.arn - LB - 2, lM * pas, LB + 8, 'l’ARNm de l’allèle muté');
-  if (t >= PH.aaM) c.repere('aa_mute', X0, RM.aa - RP - 3, lM * pas, 2 * RP + 6, 'les acides aminés de l’allèle muté');
+  if (t >= PH.aaM && !cache) c.repere('aa_mute', X0, RM.aa - RP - 3, lM * pas, 2 * RP + 6, 'les acides aminés de l’allèle muté');
   if (A.genre !== 'aucune' && t >= PH.evt) {
     if (A.ins.length) c.repere('base_mutee', X0 + A.p * pas - 2, RM.brin - LB - 6, (lM - A.s - A.p) * pas + 4, LB + 12, 'la base mutée (en rouge)');
     else c.repere('base_mutee', X0 + A.p * pas - 2, RN.brin - LB - 6, (lN - A.s - A.p) * pas + 4, LB + 12, 'la base retirée (entourée en rouge)');
   }
   if (A.genre !== 'aucune' && t >= PH.arnM && LM.cod[A.j]) c.repere('codon_mute', X0 + 3 * A.j * pas, RM.arn - LB - 4, Math.min(3, lM - 3 * A.j) * pas, LB + 10, `le codon touché (${LM.cod[A.j].arn})`);
-  if (A.genre !== 'aucune' && t >= PH.aaM) {
+  if (A.genre !== 'aucune' && t >= PH.aaM && !cache) {
     if (A.changes.length) c.repere('acide_amine_change', xc(A.changes[0], pas) - RP - 4, RM.aa - RP - 4, (A.changes.length - 1) * 3 * pas + 2 * RP + 8, 2 * RP + 8, 'l’acide aminé changé');
     // (17 novembre 2026) délétion d'un triplet : l'acide aminé en moins (et non un « codon stop prématuré » : la chaîne est juste plus courte)
     else if (A.genre === 'deletion_de_trois' && A.perdus.length) c.repere('acide_amine_change', xc(A.perdus[0], pas) - RP - 4, RN.aa - RP - 4, 2 * RP + 8, 2 * RP + 8, 'l’acide aminé en moins');
@@ -302,17 +305,17 @@ function dessiner(c, k) {
     else if (A.perdus.length) c.repere('acide_amine_change', xc(A.perdus[0], pas) - RP - 4, RN.aa - RP - 4, 2 * RP + 8, 2 * RP + 8, 'l’acide aminé en moins');
     else c.repere('acide_amine_change', xc(Math.min(A.j, Math.max(0, LM.aas.length - 1)), pas) - RP - 4, RM.aa - RP - 4, 2 * RP + 8, 2 * RP + 8, 'l’acide aminé du triplet muté (inchangé)');
   }
-  if (A.decalage && t >= PH.accent) c.repere('trait_decalage', xT - 8, RM.num - 14, 16, RM.aa + 20 - RM.num + 14, 'le point de décalage du cadre de lecture');
+  if (A.decalage && t >= PH.accent && !cache) c.repere('trait_decalage', xT - 8, RM.num - 14, 16, RM.aa + 20 - RM.num + 14, 'le point de décalage du cadre de lecture');
   if (t >= PH.arcsM) c.repere('arcs_lecture', X0, RM.arc - 2, lM * pas, 16, 'les arcs de lecture, trois par trois');
   else if (tN >= PH.arcsN) c.repere('arcs_lecture', X0, RN.arc - 2, lN * pas, 16, 'les arcs de lecture, trois par trois');
-  if (t >= PH.aaM && LM.stop >= 0) c.repere('codon_stop', X0 + 3 * LM.stop * pas, RM.arn - LB - 4, 3 * pas, LB + 10, `le codon stop ${LM.cod[LM.stop].arn} de l’allèle muté`);
+  if (t >= PH.aaM && LM.stop >= 0 && !cache) c.repere('codon_stop', X0 + 3 * LM.stop * pas, RM.arn - LB - 4, 3 * pas, LB + 10, `le codon stop ${LM.cod[LM.stop].arn} de l’allèle muté`);
   else if (tN >= PH.aaN) c.repere('codon_stop', X0 + 3 * LN.stop * pas, RN.arn - LB - 4, 3 * pas, LB + 10, 'le codon stop UAA de l’allèle normal');
-  if (t >= PH.cadre && !g.bilan) c.repere('type_mutation', CADRE.x, CADRE.y, CADRE.w, CADRE.h, 'le type de mutation et sa conséquence');
+  if (t >= PH.cadre && !g.bilan && !cache) c.repere('type_mutation', CADRE.x, CADRE.y, CADRE.w, CADRE.h, 'le type de mutation et sa conséquence');
   if (g.bilan) c.repere('bilan', CADRE.x, CADRE.y, CADRE.w, CADRE.h, 'le bilan des types de mutation');
 }
 
 function voit(k) {
-  const g = segment(k), t = g.local, Mu = mutante(k.P, g), A = analyser(Mu), LN = A.LN, LM = A.LM, m = [];
+  const g = segment(k), t = g.local, Mu = mutante(k.P, g), A = analyser(Mu), LN = A.LN, LM = A.LM, m = [], cache = k.P.conclusions === false && !g.bilan;
   m.push('Deux allèles l’un sous l’autre, chacun en trois lignes alignées titrées à gauche (brin non transcrit peint en bleu-violet, ARNm orange, acides aminés en perles), numéros des triplets au-dessus.');
   let s = `En haut, l’allèle normal : brin non transcrit 5′ ${grp(NORMAL)} 3′ (triplets 1 à 6)`;
   if (t >= PH.arnN) s += `, ARNm 5′ ${grp(arn(NORMAL))} 3′`;
@@ -323,13 +326,14 @@ function voit(k) {
   else if (t < PH.evtFin) m.push(`En bas, l’allèle muté : la mutation se fait sous les yeux (${A.evt}) : ${A.del.length ? `le${A.del.length > 1 ? 's' : ''} nucléotide${A.del.length > 1 ? 's' : ''} ${A.del} tombe${A.del.length > 1 ? 'nt' : ''}` : ''}${A.del.length && A.ins.length ? ', ' : ''}${A.ins.length ? `${A.ins} descend en rouge` : ''}${A.s && (A.del.length !== A.ins.length) ? ', les bases suivantes glissent' : ''}.`);
   else m.push(`En bas, l’allèle muté : brin non transcrit 5′ ${grp(Mu)} 3′ ; écrit en rouge « ${A.evt} » ; ${A.ins.length ? `la base mutée ${A.ins} est entourée en rouge` : `le nucléotide retiré ${A.del} est entouré en rouge sur l’allèle normal, une encoche rouge marque sa place sur l’allèle muté`}.`);
   if (t >= PH.arnM) m.push(`ARNm muté : 5′ ${grp(arn(Mu))} 3′${A.genre !== 'aucune' && A.ins.length ? ' (la base changée entourée de rouge)' : ''}, arcs de lecture par trois dessous.`);
-  if (t >= PH.aaM) {
+  if (cache && t >= PH.aaM) m.push('Les acides aminés de l’allèle muté, le type de mutation et sa conséquence restent cachés (conclusions : false) : c’est à l’élève de les trouver.');
+  else if (t >= PH.aaM) {
     if (!LM.init) m.push('Acides aminés de l’allèle muté : aucun, le premier codon n’est plus AUG.');
     else m.push(`Acides aminés de l’allèle muté : ${LM.aas.join(' – ')}${LM.stop >= 0 ? ` puis « arrêt » sous le codon stop ${LM.cod[LM.stop].arn} (triplet ${LM.stop + 1})` : ' … (pas de codon stop dans le fragment)'}${A.changes.length ? ` ; ${A.changes.map(i => LM.aas[i]).join(', ')} entouré${A.changes.length > 1 ? 's' : ''} de rouge (changé${A.changes.length > 1 ? 's' : ''})` : ''}${A.perdus.length ? ` ; sur l’allèle normal, ${A.perdus.map(i => LN.aas[i]).join(', ')} entouré${A.perdus.length > 1 ? 's' : ''} de pointillés rouges (perdu${A.perdus.length > 1 ? 's' : ''})` : ''}.`);
   }
   if (g.bilan) { const vus = BILAN.filter(([tb]) => g.tb >= tb).map(([, l]) => '« ' + l.join(' ') + ' »'); m.push('Le cadre à droite devient le bilan' + (vus.length ? ' : ' + vus.join(' ; ') : '') + '.'); }
-  else if (t >= PH.cadre) m.push(`Cadre à droite${t < PH.cadre + 1.8 ? ' (en train de s’écrire)' : ''} : « type de mutation : ${A.type.join(' ')} » ; « conséquence : ${A.csq.join(' ')} ».`);
-  if (t >= PH.accent && A.genre !== 'aucune') {
+  else if (t >= PH.cadre && !cache) m.push(`Cadre à droite${t < PH.cadre + 1.8 ? ' (en train de s’écrire)' : ''} : « type de mutation : ${A.type.join(' ')} » ; « conséquence : ${A.csq.join(' ')} ».`);
+  if (t >= PH.accent && A.genre !== 'aucune' && !cache) {
     if (A.decalage) m.push(`Trait rouge vertical au point de décalage (après le nucléotide n° ${A.p}) ; les arcs de lecture de l’allèle muté redessinés en rouge à partir du triplet ${A.j + 1} ; écrit en bas en rouge « décalage du cadre de lecture ».`);
     else if (A.diffs.length === 1 && Mu.length === NORMAL.length && LM.cod[A.j] && LM.cod[A.j].lu) m.push(`L’arc de lecture du triplet ${A.j + 1} redessiné en rouge ; écrit en bas en vert « un seul triplet touché : pas de décalage du cadre de lecture ».`);
     else if (Mu.length !== NORMAL.length) m.push('Écrit en bas en vert « pas de décalage du cadre de lecture : un nombre de nucléotides multiple de 3 ».');
@@ -343,6 +347,8 @@ window.Etapes.lancer({
     type: { defaut: 'auto', schema: '\'auto\' (la chronologie du cours, tous les types à la suite) | \'aucune\' | \'silencieuse\' | \'faux_sens\' | \'non_sens\' | \'deletion\' | \'insertion\' | \'deletion_de_trois\' (le moteur rejoue)', lire: v => (v === 'auto' || TYPES.includes(v) ? v : undefined) },
     sequence: { defaut: '', schema: 'allèle muté libre : brin non transcrit 5′→3′, 6 à 27 lettres A T C G, avec ou sans espaces (ex. \'ATG CTG GTG TGG CAA TAA\') ; la simulation le compare à l’allèle normal ATG CTG GAG TGG CAA TAA et juge la mutation',
       lire: v => { const s = String(v ?? '').toUpperCase().replace(/[^ATCG]/g, ''); return s.length >= 6 && s.length <= 27 ? s : undefined; } },
+    conclusions: { defaut: new URLSearchParams(location.search).get('conclusions') !== 'false', schema: 'true | false (false : les acides aminés de l’allèle muté, le type et la conséquence restent cachés jusqu’à la réponse ; changer ce réglage ne rejoue pas la scène)',
+      lire: v => !(v === false || v === 'false' || v === 0 || v === '0') },
   },
   apresReglage: (k, cles) => { if (cles.includes('sequence')) k.P.type = 'libre'; else if (cles.includes('type')) k.P.sequence = ''; },
   // Poignée : toucher une base de l’allèle muté la fait tourner A → T → C → G (substitution) ; la page juge aussitôt.
@@ -365,6 +371,8 @@ window.Etapes.lancer({
   },
   vues: {
     mutation: { titre: 'Les mutations : allèle normal et allèle muté', fin: FIN_AUTO, moments: MT, autoDepart: false, dessiner, voit,
+      // conclusions seul : la scène reste où elle est (la réponse s’écrit sur place) ; tout autre réglage rejoue comme avant.
+      surReglage: (k, cles, api) => { if (cles.every(n => n === 'conclusions')) return; if (k.t > 0 || k.S.fait) api.start(); },
       motifs: { identiques: 'aucune mutation : les deux allèles sont identiques', codon_change: 'un seul codon de l’ARNm change', faux_sens_evt: 'GAG devient GTG : le codon GUG, Val', non_sens_evt: 'TGG devient TAG : le codon UAG, un codon stop', deletion_de_trois_evt: 'le triplet 3 entier, GAG, disparaît', sans_decalage: 'pas de décalage : trois nucléotides, un codon entier', bilan: 'le bilan', bilan_substitution: 'substitution : silencieuse, faux-sens ou non-sens', bilan_decalage: 'délétion ou insertion d’un nucléotide : décalage', bilan_trois: 'trois nucléotides : un acide aminé en moins ou en plus', bilan_caractere: 'le caractère ne change pas toujours', sequences_alignees: 'les deux allèles alignés, encore identiques', substitution: 'substitution : une seule lettre change, avant la traduction', silencieuse: 'mutation silencieuse : CUA donne toujours Leu', faux_sens: 'mutation faux-sens : GUG donne Val au lieu de Glu', non_sens: 'mutation non-sens : UAG, codon stop prématuré', deletion: 'délétion d’un nucléotide : tout change après le triplet 2', decalage: 'décalage du cadre de lecture', insertion: 'insertion d’un nucléotide : décalage du cadre de lecture', deletion_de_trois: 'délétion de trois nucléotides : un acide aminé en moins, pas de décalage' },
       get conclusion() { const e = window.__etapes, A = analyser(e ? mutante(e.P, segment({ t: e.S.t, P: e.P })) : NORMAL); return `Type de mutation : ${A.nom}. Conséquence : ${A.csq.join(' ')}.`; },
       texte: 'Allèle normal ATG CTG GAG TGG CAA TAA (brin non transcrit) → ARNm AUG CUG GAG UGG CAA UAA → Met – Leu – Glu – Trp – Gln. Allèle muté en dessous ; types : substitution silencieuse (CTG → CTA, Leu), faux-sens (GAG → GTG, Val), non-sens (TGG → TAG, stop), délétion d’un nucléotide ou insertion (décalage du cadre de lecture), délétion de trois nucléotides (un acide aminé en moins, pas de décalage). Toucher une base de l’allèle muté la change (A → T → C → G) et la page juge la mutation.',

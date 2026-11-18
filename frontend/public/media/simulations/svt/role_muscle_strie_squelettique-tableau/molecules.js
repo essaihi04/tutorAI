@@ -109,10 +109,11 @@
     return g;
   }
 
-  /** Ion Ca²⁺ : petite bille jaune brillante. */
+  /** Ion Ca²⁺ : petite bille blanc nacré brillante (lexique visuel commun, docs/lexique-visuel/calcium.md, 18 novembre 2026 :
+   *  elle était jaune, la couleur des carbones du glucose dans tout le site). */
   function ca(ctx, x, y, r = 4.2, alpha = 1) {
-    ctx.save(); ctx.globalAlpha *= alpha; ctx.shadowColor = 'rgba(250,204,21,.85)'; ctx.shadowBlur = 7;
-    perle(ctx, x, y, r, '#fffbe0', '#facc15', '#a16207'); ctx.restore();
+    ctx.save(); ctx.globalAlpha *= alpha; ctx.shadowColor = 'rgba(224,242,254,.9)'; ctx.shadowBlur = 7;
+    perle(ctx, x, y, r, '#ffffff', '#cfdbe8', '#5b6b80'); ctx.restore();
   }
 
   /** Filament épais : faisceau de molécules de myosine (bâtonnet bleu). */
@@ -157,18 +158,20 @@
   /** Le creux du site de l'ATP (petite poche sombre) et le site de l'actine (pointe claire). */
   function sitesTete(ctx, T, o = {}) {
     ctx.save(); ctx.globalAlpha *= o.alpha ?? 1;
-    perle(ctx, T.siteAtp.x, T.siteAtp.y, o.r ?? 4, '#bbf7d0', '#15803d', '#052e16');
+    perle(ctx, T.siteAtp.x, T.siteAtp.y, o.r ?? 4, '#fff1c2', '#fabe3c', '#8a5a06');   // le site de l’ATP, doré comme l’ATP
     perle(ctx, T.pointe.x, T.pointe.y, o.r ?? 4, '#ecfeff', '#22d3ee', '#0e7490');
     ctx.restore();
   }
 
-  /** Pastille ATP (verte, étiquetée) ; « ADP », « Pi » en pastilles plus pâles. */
+  /** Pastille ATP (DORÉE, étiquetée) ; « ADP » grise, « Pi » orange — les couleurs du lexique visuel commun du site
+   *  (docs/lexique-visuel/atp.md, 18 novembre 2026 ; l'ATP était vert ici, doré dans le cours sur l'énergie). */
+  const TEINTES_ENERGIE = { ATP: ['#fff1c2', '#fabe3c', '#8a5a06', '#3c2800'], ADP: ['#eef0f3', '#9a9a9a', '#3f3f46', '#111827'], Pi: ['#ffe2c4', '#f08c3c', '#7c2d12', '#2a1400'] };
   function pastille(ctx, x, y, texte = 'ATP', o = {}) {
-    const r = o.r ?? 11, pale = texte !== 'ATP';
+    const r = o.r ?? 11, atp = texte === 'ATP', [cl, mi, fo, encre] = TEINTES_ENERGIE[texte] || TEINTES_ENERGIE.ADP;
     ctx.save(); ctx.globalAlpha *= o.alpha ?? 1;
-    ctx.shadowColor = pale ? 'rgba(0,0,0,0)' : 'rgba(74,222,128,.7)'; ctx.shadowBlur = pale ? 0 : 6;
-    perle(ctx, x, y, r, pale ? '#ecfccb' : '#dcfce7', pale ? '#a3c96b' : '#22c55e', pale ? '#4d6b1f' : '#14532d');
-    ctx.shadowBlur = 0; ctx.fillStyle = pale ? '#1a2e05' : '#052e16';
+    ctx.shadowColor = atp ? 'rgba(250,190,60,.75)' : 'rgba(0,0,0,0)'; ctx.shadowBlur = atp ? 6 : 0;
+    perle(ctx, x, y, r, cl, mi, fo);
+    ctx.shadowBlur = 0; ctx.fillStyle = encre;
     ctx.font = `700 ${Math.round(r * (texte.length > 2 ? .82 : 1))}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(texte, x, y + .5); ctx.restore();
   }

@@ -122,8 +122,57 @@ function voit(k) {
   return m;
 }
 
+
+/* ── Vue document (18 novembre 2026, 2ᵉ passe : l’exercice du national 2017 R joué pas à pas) ──────────────────────
+ * Le DOCUMENT du sujet, sans son explication : la plantule de fève dans le milieu à thymidine radioactive pendant un
+ * cycle, le chromosome métaphasique (autoradiographie : les deux chromatides couvertes de grains noirs) ; puis la même
+ * plantule transférée dans un milieu normal pendant un 2e cycle, le chromosome métaphasique (une chromatide marquée sur
+ * deux). Ni molécules, ni brins : c’est à l’élève de les expliquer (diapositives ig_x3…). `conclusions: false` (ou
+ * ?conclusions=false) tait la légende du 2e résultat : l’élève le décrit lui-même avant qu’elle s’écrive.
+ * Moments : cycle_1 2,4 ; metaphase_1 5,2 ; transfert 7,6 ; metaphase_2 10,4. */
+const MDOC = { cycle_1: 2.4, metaphase_1: 5.2, transfert: 7.6, metaphase_2: 10.4 };
+function dessinerDocument(c, k) {
+  const t = k.t, radio = t < 6.6 ? rampe(t, .3, .8) : 1 - rampe(t, 6.6, 1.0);
+  const m1 = rampe(t, 3.6, 1.2), m2 = rampe(t, 8.8, 1.2);
+  const X1 = 360, X2 = 600, CY = 205;
+  c.direct(() => {
+    const x = c.ctx;
+    plantule(x, rampe(t, .1, .5), radio);
+    if (m1 > 0) { chromatide(x, X1 - 9, CY, 132, true, m1, -9); chromatide(x, X1 + 9, CY, 132, true, m1, 9); x.save(); x.globalAlpha = m1; x.fillStyle = '#2e1065'; x.beginPath(); x.arc(X1, CY, 5, 0, TAU); x.fill(); x.restore(); }
+    if (m2 > 0) { chromatide(x, X2 - 9, CY, 132, false, m2, -9); chromatide(x, X2 + 9, CY, 132, true, m2, 9); x.save(); x.globalAlpha = m2; x.fillStyle = '#2e1065'; x.beginPath(); x.arc(X2, CY, 5, 0, TAU); x.fill(); x.restore(); }
+  });
+  c.repere('plantule', 40, 140, 106, 192, 'la plantule de fève'); c.repere('milieu', 42, 236, 100, 92, 'le milieu de culture');
+  if (k.ecrit(c, 'tete', .3)) k.T(c, 'cellules de racine de fève', 92, 120, { couleur: 'blanc', taille: 15, align: 'center' });
+  if (t < 6.6 && k.ecrit(c, 'radio', .8)) { k.T(c, 'milieu à thymidine', 92, 356, { couleur: 'vert', taille: 15, align: 'center' }); k.T(c, 'radioactive', 92, 374, { couleur: 'vert', taille: 15, align: 'center' }); }
+  if (t >= 6.6 && k.ecrit(c, 'norm', 6.6)) { k.T(c, 'milieu normal', 92, 356, { couleur: 'cyan', taille: 15, align: 'center' }); k.T(c, '(non radioactif)', 92, 374, { couleur: 'cyan', taille: 15, align: 'center' }); }
+  if (k.ecrit(c, 'c1', 1.2)) {
+    k.T(c, '1er cycle', X1, 90, { couleur: 'vert', taille: 17, align: 'center' }); k.T(c, 'milieu radioactif', X1, 110, { couleur: 'vert', taille: 15, align: 'center' });
+    c.fleche(160, 220, X1 - 60, 205, { couleur: 'faible', largeur: 1.5 });
+  }
+  if (m1 > 0) c.repere('chromosome_1', X1 - 50, CY - 74, 100, 148, 'le chromosome métaphasique après le 1er cycle');
+  if (k.ecrit(c, 'r1', MDOC.metaphase_1 - .4)) { k.T(c, 'chromosome métaphasique', X1, 300, { couleur: 'blanc', taille: 15, align: 'center' }); k.T(c, 'les deux chromatides marquées', X1, 320, { couleur: 'vert', taille: 15, align: 'center' }); }
+  if (k.ecrit(c, 'c2', MDOC.transfert - .8)) {
+    k.T(c, '2e cycle', X2, 90, { couleur: 'cyan', taille: 17, align: 'center' }); k.T(c, 'milieu normal', X2, 110, { couleur: 'cyan', taille: 15, align: 'center' });
+    c.fleche(X1 + 60, 205, X2 - 60, 205, { couleur: 'faible', largeur: 1.5 });
+  }
+  if (m2 > 0) c.repere('chromosome_2', X2 - 50, CY - 74, 100, 148, 'le chromosome métaphasique après le 2e cycle');
+  if (m2 > 0) { c.repere('chromatide_marquee', X2 + 2, CY - 68, 32, 136, 'la chromatide marquée'); c.repere('chromatide_non_marquee', X2 - 34, CY - 68, 32, 136, 'la chromatide non marquée'); }
+  if (k.ecrit(c, 'r2a', MDOC.metaphase_2 - .4)) k.T(c, 'chromosome métaphasique', X2, 300, { couleur: 'blanc', taille: 15, align: 'center' });
+  if (k.P.conclusions && k.ecrit(c, 'r2b', MDOC.metaphase_2 - .3)) k.T(c, 'une chromatide marquée sur deux', X2, 320, { couleur: 'orange', taille: 15, align: 'center' });
+  if (k.ecrit(c, 'grains', 1.6)) k.T(c, 'grains noirs = radioactivité (autoradiographie)', 480, 396, { couleur: 'blanc', taille: 15, align: 'center' });
+}
+function voitDocument(k) {
+  const t = k.t, m = ['Document d’examen (national 2017 R) : à gauche une plantule de fève, ses racines dans un bécher' + (t < 6.6 ? ' de milieu à thymidine radioactive.' : ' de milieu normal, non radioactif.')];
+  if (t >= 3.8) m.push('1er cycle en milieu radioactif : chromosome métaphasique, ses deux chromatides couvertes de grains noirs (écrit « les deux chromatides marquées »).');
+  if (t >= 6.8) m.push('Transfert dans un milieu normal pour un 2e cycle.');
+  if (t >= 9) m.push('2e cycle : chromosome métaphasique, une seule de ses deux chromatides couverte de grains noirs' + (k.P.conclusions && t >= MDOC.metaphase_2 - .3 ? ' (écrit « une chromatide marquée sur deux »).' : ' (rien d’écrit dessous : l’élève doit le décrire).'));
+  return m;
+}
 window.Etapes.lancer({
   id: 'genetique_thymidine', titre: 'La thymidine radioactive', graine: 43,
+  // (18 novembre 2026) false : la légende du 2e résultat se tait (vue document) jusqu'à la réponse de l'élève
+  parametres: { conclusions: { defaut: true, schema: 'true | false (vue document : false tait « une chromatide marquée sur deux »)', lire: v => (typeof v === 'string' ? !/^(false|0|non|no|off)$/i.test(v.trim()) : !!v) } },
+  auDepart: (P) => { const q = new URLSearchParams(location.search); if (q.has('conclusions')) P.conclusions = !/^(false|0|non|no|off)$/i.test(q.get('conclusions').trim()); },
   vues: {
     /* Tableau large (deuxième passe, 15 novembre 2026, « agrandir les figures ») : pas de titre interne ; le bécher, le
      * chromosome et le schéma des brins agrandis côte à côte, la règle et la conclusion récrites en colonne (etapes.js). */
@@ -134,6 +183,14 @@ window.Etapes.lancer({
       conclusion: 'Une chromatide marquée sur deux après le 2e cycle : la réplication est semi-conservative.',
       texte: 'Thymidine radioactive (national 2017 R) : 1er cycle en milieu radioactif → les deux chromatides marquées ; 2e cycle en milieu normal → une chromatide marquée sur deux : réplication semi-conservative.',
       explication: [{ repere: 'milieu', texte: 'La thymidine radioactive n’entre que dans l’ADN, à la réplication.' }, { repere: 'chromosome', texte: 'Après le premier cycle, les deux chromatides sont marquées.' }, { repere: 'molecules', texte: 'Au second cycle, chaque brin sert de modèle à un brin non radioactif.' }, { repere: 'chromatide_marquee', texte: 'Une seule chromatide sur deux reste marquée.' }] },
+    // (18 novembre 2026, 2ᵉ passe) le document seul, pour l’exercice joué pas à pas (ig_x3…) ; la vue experience est inchangée
+    document: { titre: 'Le document du national 2017 R', autoDepart: false, fin: 11.0, moments: MDOC, dessiner: dessinerDocument, voit: voitDocument,
+      surReglage: (k) => { k.S.vu = { ...k.S.vu }; },
+      motifs: { cycle_1: '1er cycle : la plantule dans un milieu à thymidine radioactive', metaphase_1: 'après le 1er cycle : les deux chromatides marquées', transfert: 'la plantule passe dans un milieu normal pour un 2e cycle', metaphase_2: 'après le 2e cycle : le chromosome métaphasique' },
+      conclusion: 'Après le 2e cycle en milieu normal, une chromatide marquée sur deux.',
+      texte: 'Document du national 2017 R, sans son explication : 1er cycle en milieu à thymidine radioactive → chromosome métaphasique aux deux chromatides marquées ; 2e cycle en milieu normal → une chromatide marquée sur deux.',
+      explication: [{ repere: 'milieu', texte: 'Un cycle en milieu radioactif, puis un cycle en milieu normal.' }, { repere: 'chromosome_1', texte: 'Après le 1er cycle : les deux chromatides marquées.' }, { repere: 'chromosome_2', texte: 'Après le 2e cycle : une chromatide marquée sur deux.' }] },
+
   },
 });
 </script>

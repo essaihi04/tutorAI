@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Exercices du national joués — ondes lumineuses</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="lumiere.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un exercice du national rejoué au tableau : le montage de l’énoncé s’allume, les mesures apparaissent une par une"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Exercices du national JOUÉS pas à pas (cours phys_ch3_ondes_lumineuses, 2ᵉ passe du 18 novembre 2026 ; professeur
+ * règle 41, simulations-au-tableau règle 14). La figure de l’énoncé est redessinée puis animée avec les valeurs de
+ * l’examen ; chaque étape du raisonnement a son moment ; un résultat que l’élève doit trouver n’est JAMAIS écrit avant
+ * sa réponse : `?conclusions=0` (ou set_parameters {conclusions:false}) le garde caché, et il n’est écrit qu’à un
+ * moment à part (pente_valeur, vitesses, indice) que la diapositive suivante joue, après la question.
+ *
+ * Vues (?vue=) :
+ *  - 2023  : national 2023 R. Laser jaune λ₀ = 580 nm, fente HORIZONTALE (taches sur une ligne verticale), D = 1,4 m,
+ *            L = 2,7 cm ; puis source rouge, mêmes a et D : L_R = 3,4 cm. (a = 2λ₀D/L ≈ 60 µm ; λ₀R ≈ 730 nm : jamais écrits.)
+ *  - 2021p : national 2021 N, partie prisme. Lumière blanche → spectre ; radiation jaune (λ₀j = 589 nm dans le vide,
+ *            λ_j = 355 nm dans le prisme), radiation rouge (λ_r = 474 nm, ν_r = 3,91·10¹⁴ Hz) ; les deux trains d’onde
+ *            dans le verre, chacun à sa célérité exacte (v = λ·ν : 1,81·10⁸ et 1,85·10⁸ m/s).
+ *  - 2021c : national 2021 N, la courbe L = f(D) : fente a = 0,06 mm, λ = 600 nm ; l’écran recule (50, 100, 150, 200 cm),
+ *            chaque mesure donne un point (L = 2λD/a = 0,02·D) ; la droite ; la pente (ΔL = 4 cm, ΔD = 200 cm) ; puis le
+ *            cheveu à D₁ = 2 m : L₁ = 3 cm (d = 80 µm, jamais écrit).
+ *  - 2025  : national 2025 R. Dans l’air L = 2,4 cm ; même expérience dans un liquide : L’ = 1,8 cm (n = L/L’ ≈ 1,33).
+ * ?depart=<moment> : la page s’ouvre figée sur cet instant (la diapositive reprend où la précédente s’est arrêtée) ;
+ * `reset` y revient. Le schéma de côté exagère l’angle (c’est écrit) ; l’écran vu de face est à l’échelle (règle en cm).
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const Q = new URLSearchParams(location.search);
+const VUES = ['2023', '2021p', '2021c', '2025'];
+const vue = VUES.includes(Q.get('vue')) ? Q.get('vue') : '2023';
+
+const SUITES = {
+  '2023': [['montage', 1.6, 'le montage de l’énoncé : laser jaune, fente horizontale, écran à 1,4 m'], ['lumiere', 3.4, 'le laser éclaire la fente : taches sur une ligne verticale'],
+    ['mesure_L', 5.2, 'la largeur de la tache centrale : L = 2,7 cm'], ['triangle', 7.0, 'le triangle : θ, L/2 et D'],
+    ['rouge', 9.2, 'source rouge, mêmes a et D : la tache s’élargit'], ['mesure_LR', 10.8, 'la nouvelle largeur, en rouge : 3,4 cm'], ['fin', 12.0, 'fin']],
+  '2021p': [['blanche', 2.0, 'la lumière blanche traverse le prisme : un spectre sur l’écran'], ['spectre', 3.6, 'le spectre : le rouge le moins dévié, le violet le plus dévié'],
+    ['jaune', 5.8, 'la radiation jaune seule : λ₀j = 589 nm dans le vide, λ_j = 355 nm dans le prisme'], ['rouge', 7.8, 'la radiation rouge : λ_r = 474 nm dans le prisme, ν_r = 3,91·10¹⁴ Hz'],
+    ['course', 10.6, 'les deux ondes avancent dans le verre : le front rouge est un peu devant'], ['vitesses', 12.4, 'les deux célérités'], ['fin', 13.4, 'fin']],
+  '2021c': [['axes', 1.6, 'les axes : D en cm en bas, L en cm à gauche'], ['d1', 3.4, 'écran à 50 cm : L = 1 cm, premier point'], ['d2', 5.0, 'écran à 100 cm : L = 2 cm'],
+    ['d3', 6.6, 'écran à 150 cm : L = 3 cm'], ['d4', 8.2, 'écran à 200 cm : L = 4 cm'], ['droite', 9.8, 'les points sont sur une droite qui passe par l’origine'],
+    ['pente', 11.6, 'deux points de la droite : l’origine et (200 cm ; 4 cm)'], ['pente_valeur', 13.4, 'la pente k'], ['cheveu', 15.4, 'un cheveu à la place de la fente : D₁ = 2 m, L₁ = 3 cm'], ['fin', 16.6, 'fin']],
+  '2025': [['montage', 1.6, 'le montage : laser, fente, cuve vide, écran'], ['air', 3.4, 'dans l’air : la figure de diffraction'], ['mesure_L', 5.2, 'dans l’air : L = 2,4 cm'],
+    ['liquide', 7.0, 'la cuve se remplit du liquide'], ['resserre', 8.6, 'dans le liquide, la tache se resserre'], ['mesure_Lp', 10.2, 'dans le liquide : L’ = 1,8 cm'],
+    ['indice', 12.0, 'le rapport des deux largeurs'], ['fin', 13.2, 'fin']],
+};
+const SUITE = SUITES[vue];
+const M = {}; for (const [n, t] of SUITE) M[n] = t;
+const FIN = M.fin, AV = 1.4;                            // une annotation s’écrit pendant les 1,4 s qui précèdent son instant
+const moments = () => ({ ...M });
+const depart = Q.get('depart') in M ? Q.get('depart') : null;
+const S = { t: depart ? M[depart] : 0, running: false, jusqua: null, motif: '', fait: false, emis: 0,
+  conclusions: !['0', 'false'].includes(Q.get('conclusions')) };
+const T0 = () => (depart ? M[depart] : 0);
+
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lisse = u => { u = clamp(u, 0, 1); return u * u * (3 - 2 * u); };
+const avant = n => (n in M ? M[n] - AV : Infinity);
+const vu = n => n in M && S.t >= avant(n) - 1e-6;
+/** Écrit `fn` à la craie au rythme de la scène, à partir du début d’écriture du moment `nom`. */
+function ecrit(c, nom, fn) {
+  if (!vu(nom)) return;
+  const t = c.t, cur = c.cur, comp = c.complet;
+  c.t = S.fait || S.t >= FIN ? Infinity : S.t; c.cur = avant(nom);
+  try { fn(); } finally { c.t = t; c.cur = cur; c.complet = comp; }
+}
+const TX = (c, s, x, y, o = {}) => c.texte(s, x, y, { taille: 18, duree: .35, ...o });
+/** Une puissance de dix écrite en trois morceaux (« 1,81·10 », « 8 » plus haut, « m/s ») : l’exposant garde lui aussi
+ *  15 px à l’écran au moins (l’exposant du kit fait 62 % de la ligne). */
+function TXP(c, avant, exp, apres, x, y, o = {}) {
+  const e = c.echelle || 1, t = Math.max(o.taille || 18, 15 / e), te = Math.max(t * .62, 15 / e); o = { duree: .18, ...o };
+  TX(c, avant, x, y, { ...o, taille: t }); const w = c.largeurTexte(avant, t);
+  TX(c, exp, x + w + 1, y - t * .42, { ...o, taille: te }); const we = c.largeurTexte(exp, te);
+  return TX(c, apres, x + w + we + 3, y, { ...o, taille: t });
+}
+/* Tableau large (téléphone en paysage, lecteur large : 18 novembre 2026, professeur règle 42) : les lignes écrites sous la
+ * figure passent dans une colonne à droite, plus grandes ; la figure garde sa place. Sinon elles restent en bas. */
+const XCOL = 784;
+const LARGE = () => scene.L >= 960;
+const B = (k, x, y) => (LARGE() ? [XCOL, 60 + k * 58] : [x, y]);
+function TB(c, k, s, x, y, o = {}) {
+  const [bx, by] = B(k, x, y);
+  if (!LARGE()) return TX(c, s, bx, by, o);
+  const t = (o.taille || 18) + 2, dispo = scene.L - XCOL - 8, oo = { ...o, align: 'left', taille: t };
+  if (c.largeurTexte(s, t) <= dispo) return TX(c, s, bx, by, oo);
+  // trop long pour la colonne : coupé en deux lignes au séparateur le plus proche du milieu (jamais dans une fraction)
+  let best = -1;
+  for (const sep of [' ; ', ', ', ' : ', ' = ', ' ']) {
+    let i = -1;
+    while ((i = s.indexOf(sep, i + 1)) >= 0) { const av = s.slice(0, i); if ((av.split('⟦').length === av.split('⟧').length) && (best < 0 || Math.abs(i - s.length / 2) < Math.abs(best - s.length / 2))) best = i; }
+    if (best >= 0) { const l1 = s.slice(0, best + (sep === ' = ' ? 0 : sep.trimEnd().length)).trim(), l2 = (sep === ' = ' ? s.slice(best + 1) : s.slice(best + sep.length)).trim();
+      const h = s.includes('⟦') ? t * 1.6 : t * 1.15;
+      TX(c, l1, bx, by, { ...oo, max: dispo }); return TX(c, l2, bx + (sep === ' = ' ? 12 : 0), by + h, { ...oo, max: dispo }); }
+  }
+  return TX(c, s, bx, by, { ...oo, max: dispo });
+}
+
+/* ── Couleurs des radiations ─────────────────────────────────────────────────────────────── */
+const JAUNE = [255, 214, 40], ROUGE = [255, 50, 40], ORANGE_R = [255, 90, 30];
+const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+const SPECTRE = [[255, 40, 40], [255, 130, 20], [255, 225, 40], [60, 220, 80], [60, 160, 255], [80, 60, 255], [170, 70, 255]];
+
+/* ── Peinture : objets réels (règle 7) ───────────────────────────────────────────────────── */
+function chemin(ctx, x, y, w, h, r = 6) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
+/* Un objet, un dessin (simulations-au-tableau règle 15) : le laser, la fente, l’écran, la cuve et le prisme ont ici
+ * les couleurs et les formes de diffraction.html et prisme-dispersion.html, vus plus tôt dans le cours. */
+function laser(ctx, x, y, coul, allume) {                 // boîtier ombré, ouverture qui brille de la couleur de la source
+  const g = ctx.createLinearGradient(0, y - 15, 0, y + 15);
+  g.addColorStop(0, '#6b7280'); g.addColorStop(.35, '#374151'); g.addColorStop(1, '#111827');
+  ctx.fillStyle = g; chemin(ctx, x, y - 15, 76, 30, 5); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(x + 4, y - 13, 68, 2);
+  const o = ctx.createRadialGradient(x + 76, y, 0, x + 76, y, 9);
+  o.addColorStop(0, allume > 0 ? rgba(coul.map(v => Math.min(255, v + 90)), allume) : '#0b0f14'); o.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = o; ctx.beginPath(); ctx.arc(x + 76, y, 9, 0, 7); ctx.fill();
+}
+function faisceau(ctx, pts, coul, a, l = 3) {             // un rayon de lumière : halo + cœur
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  for (const [w, al] of [[l * 4, .12], [l * 2, .25], [l, .9]]) {
+    ctx.strokeStyle = rgba(coul, al * a); ctx.lineWidth = w; ctx.beginPath(); pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py))); ctx.stroke();
+  }
+  ctx.restore();
+}
+function cone(ctx, x0, y0, x1, h, coul, a, vertical = true) {   // lumière qui s’étale après la fente
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const g = ctx.createLinearGradient(x0, 0, x1, 0); g.addColorStop(0, rgba(coul, .55 * a)); g.addColorStop(1, rgba(coul, .22 * a));
+  ctx.fillStyle = g; ctx.beginPath();
+  if (vertical) { ctx.moveTo(x0, y0 - 1.5); ctx.lineTo(x1, y0 - h / 2); ctx.lineTo(x1, y0 + h / 2); ctx.lineTo(x0, y0 + 1.5); }
+  ctx.closePath(); ctx.fill(); ctx.restore();
+}
+function plaque(ctx, x, y0, y1, yc, fente = true, label) {        // plaque opaque percée d’une fente (vue de côté)
+  const g = ctx.createLinearGradient(x - 4, 0, x + 4, 0); g.addColorStop(0, '#9ca3af'); g.addColorStop(.4, '#4b5563'); g.addColorStop(1, '#1f2937');
+  ctx.fillStyle = g;
+  if (fente) { ctx.fillRect(x - 4, y0, 8, yc - 3 - y0); ctx.fillRect(x - 4, yc + 3, 8, y1 - yc - 3); }
+  else { ctx.fillRect(x - 4, y0, 8, y1 - y0); }
+  void label;
+}
+function ecranCote(ctx, x, y0, y1) {                      // écran vu par la tranche (comme diffraction.html)
+  const g = ctx.createLinearGradient(x, 0, x + 7, 0); g.addColorStop(0, '#5b6472'); g.addColorStop(.5, '#3b414c'); g.addColorStop(1, '#22262e');
+  ctx.fillStyle = g; ctx.fillRect(x, y0, 7, y1 - y0);
+}
+/** Figure de diffraction peinte sur l’écran vu de face : [sin u / u]², éclat √I (pour l’œil), extinctions exactes. */
+function figure(ctx, cx, cy, Lpx, coul, a, vertical, long = 260, epais = 34) {
+  if (a <= 0) return;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const pas = 1.5, demi = long / 2;
+  for (let s = -demi; s <= demi; s += pas) {
+    const u = Math.PI * s / (Lpx / 2), I = Math.abs(u) < 1e-6 ? 1 : (Math.sin(u) / u) ** 2;
+    const al = Math.sqrt(I) * a; if (al < .02) continue;
+    ctx.fillStyle = rgba(coul, al);
+    if (vertical) ctx.fillRect(cx - epais / 2, cy + s, epais, pas + .3); else ctx.fillRect(cx + s, cy - epais / 2, pas + .3, epais);
+  }
+  ctx.restore();
+}
+function panneau(ctx, x, y, w, h) {                       // l’écran vu de face : une surface sombre et mate
+  const g = ctx.createLinearGradient(x, y, x, y + h); g.addColorStop(0, '#20242c'); g.addColorStop(.5, '#262a33'); g.addColorStop(1, '#1a1d24');
+  ctx.fillStyle = g; chemin(ctx, x, y, w, h, 8); ctx.fill();
+}
+function prisme(ctx, P) {                                 // verre : dégradé bleuté, reflet sur une arête
+  const g = ctx.createLinearGradient(P[0][0], P[0][1], P[2][0], P[2][1]);
+  g.addColorStop(0, 'rgba(190,225,255,.20)'); g.addColorStop(1, 'rgba(110,160,210,.10)');
+  ctx.fillStyle = g; ctx.beginPath(); P.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(230,245,255,.75)'; ctx.lineWidth = 1.6; ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(P[0][0] - 3, P[0][1] + 10); ctx.lineTo(P[1][0] + 6, P[1][1] - 18); ctx.stroke();
+}
+function verre(ctx, x, y, w, h) {                         // une barre de verre (le prisme « déplié » pour voir l’onde dedans)
+  const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, 'rgba(200,230,255,.30)'); g.addColorStop(.5, 'rgba(120,170,220,.16)'); g.addColorStop(1, 'rgba(200,230,255,.28)');
+  ctx.fillStyle = g; chemin(ctx, x, y, w, h, 5); ctx.fill(); ctx.strokeStyle = 'rgba(230,245,255,.55)'; ctx.lineWidth = 1.2; ctx.stroke();
+}
+function cuve(ctx, x, y, w, h, rempli) {                  // cuve de verre, liquide qui monte
+  if (rempli > 0) {
+    const hh = h * rempli, g = ctx.createLinearGradient(0, y + h - hh, 0, y + h);
+    g.addColorStop(0, 'rgba(56,132,196,.30)'); g.addColorStop(1, 'rgba(56,132,196,.34)');
+    ctx.fillStyle = g; ctx.fillRect(x + 2, y + h - hh, w - 4, hh - 2);
+    ctx.strokeStyle = 'rgba(200,235,255,.7)'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(x + 2, y + h - hh); ctx.lineTo(x + w - 2, y + h - hh); ctx.stroke();
+  }
+  ctx.strokeStyle = 'rgba(200,230,255,.55)'; ctx.lineWidth = 2.5; ctx.strokeRect(x, y, w, h);
+  ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1; ctx.strokeRect(x + 3, y + 3, w - 6, h - 6);
+  ctx.fillStyle = 'rgba(255,255,255,.10)'; ctx.fillRect(x + 6, y + 6, 5, h - 12);
+}
+
+/* ── Vue 2023 : fente horizontale, puis source rouge ─────────────────────────────────────── */
+const K23 = 26;                                           // px par cm sur l’écran vu de face (règle à l’échelle)
+function L2023() {                                        // largeur de la tache (cm) à l’instant : 2,7 puis 3,4
+  const u = lisse((S.t - (M.rouge - 1.5)) / 1.0);
+  return 2.7 + (3.4 - 2.7) * u;
+}
+function couleur2023() { const u = lisse((S.t - (M.rouge - 1.7)) / .4); return JAUNE.map((v, i) => Math.round(v + (ROUGE[i] - v) * u)); }
+function dessiner2023(c) {
+  const ctx = c.ctx, YC = 190, XL = 26, XF = 190, XE = 450, lum = lisse((S.t - (M.lumiere - 1.6)) / .6), L = L2023(), coul = couleur2023();
+  const montre = vu('montage');
+  // peinture (avant la craie)
+  c.direct(() => {
+    if (montre) {
+      laser(ctx, XL, YC, coul, lum);
+      if (lum > 0) { faisceau(ctx, [[XL + 78, YC], [XF - 4, YC]], coul, lum, 2.4); cone(ctx, XF + 4, YC, XE, L * 34, coul, lum); }
+      plaque(ctx, XF, 92, 288, YC); ecranCote(ctx, XE, 70, 310);
+      panneau(ctx, 520, 46, 168, 300);
+      figure(ctx, 590, YC, L * K23, coul, lum, true, 290, 36);
+    }
+  });
+  ecrit(c, 'montage', () => {
+    TX(c, 'Vue de côté (angle exagéré)', 26, 40, { couleur: 'faible', taille: 16 });
+    TX(c, 'Écran vu de face', 604, 36, { couleur: 'faible', taille: 16, align: 'center' });
+    TX(c, 'laser', XL + 2, YC - 26, { couleur: 'blanc', taille: 17 });
+    TX(c, 'fente horizontale', XF - 60, 82, { couleur: 'blanc', taille: 17 });
+    TX(c, 'écran', XE - 18, 62, { couleur: 'blanc', taille: 17 });
+    c.cote(XF, 330, XE, 330, 'D = 1,4 m', { couleur: 'jaune', taille: 18 });
+  });
+  // la règle graduée (cm) le long de l’écran de face
+  ecrit(c, 'montage', () => {
+    c.ligne(668, YC - 5 * K23, 668, YC + 5 * K23, { couleur: 'faible', largeur: 1.4 });
+    for (let k = -5; k <= 5; k++) c.ligne(663, YC + k * K23, 673, YC + k * K23, { couleur: 'faible', largeur: 1.2, duree: .02 });
+    TX(c, 'cm', 676, YC - 5 * K23 + 6, { couleur: 'faible', taille: 15 });
+  });
+  ecrit(c, 'montage', () => {
+    TB(c, 0, 'λ₀ = 580 nm (jaune)', 26, 372, { couleur: 'jaune', taille: 18 });
+    TB(c, 1, 'a = ?', 26, 400, { couleur: 'rose', taille: 18 });
+  });
+  ecrit(c, 'mesure_L', () => { const h = 2.7 * K23 / 2; c.cote(640, YC - h, 640, YC + h, '', { couleur: 'vert' }); TB(c, 2, 'L = 2,7 cm', 604, 372, { couleur: 'vert', taille: 19, align: 'center' }); });
+  ecrit(c, 'triangle', () => {
+    const h = 2.7 * 17;                                   // demi-tache dans la vue de côté (exagérée)
+    c.ligne(XF, YC, XE, YC, { couleur: 'faible', largeur: 1.3, pointille: [6, 6] });
+    c.ligne(XF, YC, XE, YC - h, { couleur: 'jaune', largeur: 2 });
+    c.ligne(XE - 8, YC, XE - 8, YC - h, { couleur: 'vert', largeur: 2 });
+    TX(c, 'L/2', XE - 50, YC - h / 2 + 6, { couleur: 'vert', taille: 18 });
+    c.trait([[XF + 52, YC], [XF + 51, YC - 6], [XF + 49, YC - 11]], { couleur: 'rose', largeur: 2 });
+    TX(c, 'θ', XF + 58, YC - 6, { couleur: 'rose', taille: 20 });
+  });
+  ecrit(c, 'rouge', () => { TB(c, 3, 'source rouge : λ₀ = ?', 230, 372, { couleur: 'rouge', taille: 18 }); TB(c, 4, 'même a, même D', 230, 400, { couleur: 'faible', taille: 17 }); });
+  ecrit(c, 'mesure_LR', () => { const h = 3.4 * K23 / 2; c.cote(654, YC - h, 654, YC + h, '', { couleur: 'orange' }); TB(c, 5, 'L (rouge) = 3,4 cm', 604, 402, { couleur: 'orange', taille: 19, align: 'center' }); });
+  // repères
+  c.direct(() => {
+    if (!montre) return;
+    c.repere('laser', XL, YC - 18, 80, 36, 'le laser'); c.repere('fente', XF - 10, 92, 20, 196, 'la fente horizontale');
+    c.repere('ecran', XE - 4, 70, 16, 240, 'l’écran'); c.repere('vue_cote', 20, 24, 450, 300, 'la vue de côté'); c.repere('vue_face', 520, 46, 168, 300, 'l’écran vu de face');
+    c.repere('D', XF, 312, XE - XF, 28, 'la distance D'); c.repere('lambda0', ...(()=>{ const [rx, ry] = B(0, 26, 372); return [rx - 4, ry - 22, 200, 28]; })(), 'λ₀ = 580 nm');
+    if (vu('rouge')) c.repere('source_rouge', ...(()=>{ const [rx, ry] = B(3, 230, 372); return [rx - 4, ry - 22, 230, 28]; })(), 'la source rouge');
+    if (vu('lumiere')) c.repere('taches', 570, YC - 140, 40, 280, 'les taches');
+    if (vu('mesure_L')) { c.repere('L', 620, YC - 2.7 * K23 / 2 - 4, 40, 2.7 * K23 + 8, 'la largeur L'); c.repere('valeur_L', ...(()=>{ const [rx, ry] = B(2, 544, 372); return [rx - 4, ry - 22, 130, 28]; })(), 'L = 2,7 cm'); }
+    if (vu('triangle')) { c.repere('triangle', XF, YC - 50, XE - XF, 54, 'le triangle'); c.repere('theta', XF + 40, YC - 24, 36, 26, 'l’angle θ'); }
+    if (vu('mesure_LR')) c.repere('LR', 630, YC - 3.4 * K23 / 2 - 4, 40, 3.4 * K23 + 8, 'la largeur L_R');
+  });
+}
+
+/* ── Vue 2021p : le prisme, puis les deux radiations dans le verre ───────────────────────── */
+const PR = [[250, 46], [190, 210], [310, 210]];
+const ECR = 600, BV = 400;            // BV : longueur des barres de verre (px)
+const C21 = { j: { lam: 355, nu: 5.093e14, coul: JAUNE, y: 272, nom: 'jaune' }, r: { lam: 474, nu: 3.91e14, coul: ROUGE, y: 362, nom: 'rouge' } };
+const v21 = k => C21[k].lam * 1e-9 * C21[k].nu;           // v = λ·ν (m/s), exact
+function rayonsPrisme(ctx, liste, a) {
+  // faisceau incident horizontal sur la face gauche, rayons déviés vers le bas après la face droite ; le violet le plus dévié
+  const xe = 222, ye = 128, xs = 286, ys = 140;
+  faisceau(ctx, [[80, 128], [xe, ye]], liste.length > 1 ? [255, 255, 255] : liste[0][1], a, 2.6);
+  for (const [k, coul] of liste) {
+    const dev = .12 + .02 * k;                           // k = rang dans le spectre (0 rouge … 6 violet)
+    faisceau(ctx, [[xe, ye], [xs, ys + k * .8]], coul, a * .8, 1.6);
+    faisceau(ctx, [[xs, ys + k * .8], [ECR, ys + k * .8 + (ECR - xs) * Math.tan(dev)]], coul, a, 2);
+  }
+}
+const yEcran = k => 140 + k * .8 + (ECR - 286) * Math.tan(.12 + .02 * k);
+function dessiner2021p(c) {
+  const ctx = c.ctx;
+  const blanc = lisse((S.t - (M.blanche - 1.6)) / .6) * (1 - lisse((S.t - (M.jaune - 1.7)) / .4));
+  const jaune = lisse((S.t - (M.jaune - 1.5)) / .4) * (1 - lisse((S.t - (M.rouge - 1.7)) / .4));
+  const rouge = lisse((S.t - (M.rouge - 1.5)) / .4);
+  c.direct(() => {
+    prisme(ctx, PR); ecranCote(ctx, ECR, 120, 236);
+    laser(ctx, 2, 128, [255, 255, 255], Math.max(blanc, jaune, rouge));
+    if (blanc > 0) rayonsPrisme(ctx, SPECTRE.map((col, k) => [k, col]), blanc);
+    if (jaune > 0) rayonsPrisme(ctx, [[2, JAUNE]], jaune);
+    if (rouge > 0) rayonsPrisme(ctx, [[0, ROUGE]], rouge);
+    if (vu('jaune')) { verre(ctx, 70, C21.j.y - 20, BV, 40); verre(ctx, 70, C21.r.y - 20, BV, 40); }
+  });
+  ecrit(c, 'blanche', () => { TX(c, 'source S', 6, 104, { couleur: 'blanc', taille: 17 }); TX(c, 'prisme (verre)', 318, 214, { couleur: 'blanc', taille: 17 }); TX(c, 'écran', ECR - 20, 112, { couleur: 'blanc', taille: 17 }); if (!vu('jaune')) TX(c, 'lumière blanche', 90, 120, { couleur: 'faible', taille: 16 }); });
+  if (!vu('jaune')) ecrit(c, 'spectre', () => { TX(c, 'rouge', ECR + 14, yEcran(0) + 6, { couleur: 'rouge', taille: 17 }); TX(c, 'violet', ECR + 14, yEcran(6) + 6, { couleur: 'violet', taille: 17 }); TX(c, 'spectre', ECR + 14, (yEcran(0) + yEcran(6)) / 2 + 6, { couleur: 'blanc', taille: 17 }); });
+  ecrit(c, 'jaune', () => {
+    if (!vu('course')) TX(c, 'dans le verre du prisme :', 70, 240, { couleur: 'faible', taille: 16 });
+    TX(c, 'jaune : λ₀ = 589 nm (vide)', 484, C21.j.y - 12, { couleur: 'jaune', taille: 16 });
+    TX(c, 'dans le verre : λ = 355 nm', 484, C21.j.y + 16, { couleur: 'jaune', taille: 16 });
+  });
+  ecrit(c, 'rouge', () => { TXP(c, 'rouge : ν = 3,91·10', '14', ' Hz', 484, C21.r.y - 12, { couleur: 'rouge', taille: 16 }); TX(c, 'dans le verre : λ = 474 nm', 484, C21.r.y + 16, { couleur: 'rouge', taille: 16 }); });
+  // les trains d’onde dans les barres de verre : crêtes espacées de λ (à l’échelle : 0,1 px par nm), fronts à la célérité exacte
+  const tC = M.course - 2.0, DUREE = 1.6, ech = (BV - 20) / (1.85e8 * DUREE);  // le rouge parcourt la barre en 1,6 s
+  for (const k of ['j', 'r']) {
+    const C = C21[k], nom = k === 'j' ? 'jaune' : 'rouge'; if (!vu(nom)) continue;
+    const front = 70 + clamp(S.t - tC, 0, DUREE) * v21(k) * ech, dx = C.lam * .1;
+    c.direct(() => {
+      ctx.save(); ctx.beginPath(); ctx.rect(70, C.y - 20, BV, 40); ctx.clip();
+      const xa = S.t < tC ? 70 + 4 * dx : front;
+      for (let x = xa; x > 70; x -= dx) { ctx.strokeStyle = rgba(C.coul, .85); ctx.lineWidth = 2.4; ctx.beginPath(); ctx.moveTo(x, C.y - 15); ctx.lineTo(x, C.y + 15); ctx.stroke(); }
+      ctx.restore();
+    });
+    ecrit(c, nom, () => c.cote(70 + 4 * dx - dx, C.y + 30, 70 + 4 * dx, C.y + 30, '', { couleur: k === 'j' ? 'jaune' : 'rouge' }));
+    if (vu('course')) c.direct(() => { c.ligne(front, C.y - 22, front, C.y + 22, { couleur: k === 'j' ? 'jaune' : 'rouge', largeur: 2.2, pointille: [4, 4] }); });
+  }
+  ecrit(c, 'course', () => {
+    const xj = 70 + DUREE * v21('j') * ech, xr = 70 + DUREE * v21('r') * ech;
+    c.ligne(xj, C21.j.y - 22, xj, C21.r.y + 22, { couleur: 'jaune', largeur: 1.2, pointille: [3, 5] });
+    c.ligne(xr, C21.j.y - 22, xr, C21.r.y + 22, { couleur: 'rouge', largeur: 1.2, pointille: [3, 5] });
+    TX(c, 'même durée : le front rouge est devant', 70, 240, { couleur: 'blanc', taille: 17 });
+  });
+  if (S.conclusions) ecrit(c, 'vitesses', () => {
+    TXP(c, `v ≈ ${fr(v21('j') / 1e8, 2)}·10`, '8', ' m/s', 484, C21.j.y + 44, { couleur: 'vert', taille: 16 });
+    TXP(c, `v ≈ ${fr(v21('r') / 1e8, 2)}·10`, '8', ' m/s', 484, C21.r.y + 44, { couleur: 'vert', taille: 16 });
+  });
+  c.direct(() => {
+    c.repere('source', 2, 110, 80, 36, 'la source S'); c.repere('prisme', 186, 44, 128, 170, 'le prisme'); c.repere('ecran', ECR - 4, 116, 16, 124, 'l’écran');
+    if (vu('spectre')) c.repere('spectre', ECR, yEcran(0) - 8, 70, yEcran(6) - yEcran(0) + 16, 'le spectre');
+    if (vu('jaune')) c.repere('jaune', 70, C21.j.y - 20, BV, 40, 'la radiation jaune dans le verre');
+    if (vu('rouge')) c.repere('rouge', 70, C21.r.y - 20, BV, 40, 'la radiation rouge dans le verre');
+    if (vu('course')) c.repere('fronts', BV - 30, C21.j.y - 24, 60, C21.r.y - C21.j.y + 48, 'les deux fronts');
+  });
+}
+
+/* ── Vue 2021c : la courbe L = f(D), puis le cheveu ──────────────────────────────────────── */
+const G = { x0: 400, y0: 330, kx: 1.36, ky: 56 };          // origine du graphe, px par cm (D) et par cm (L)
+const gx = D => G.x0 + D * G.kx, gy = L => G.y0 - L * G.ky;
+const MES = [['d1', 50], ['d2', 100], ['d3', 150], ['d4', 200]];
+function D2021() {                                        // position de l’écran (cm) : il recule d’une mesure à l’autre
+  let D = 50;
+  for (let i = 0; i < MES.length; i++) { const [n, d] = MES[i], d0 = i ? MES[i - 1][1] : 50; D = Math.max(D, d0 + (d - d0) * lisse((S.t - (M[n] - 1.6)) / .7)); }
+  return D;
+}
+function dessiner2021c(c) {
+  const ctx = c.ctx, YC = 170, XL = 14, XF = 110, cheveu = vu('cheveu'), lum = lisse((S.t - (M.d1 - 2.2)) / .5);
+  const D = cheveu ? 200 : D2021(), XE = XF + D * .9, L = cheveu ? 3 : .02 * D;
+  c.direct(() => {
+    laser(ctx, XL, YC, [255, 150, 40], lum);
+    if (lum > 0) { faisceau(ctx, [[XL + 78, YC], [XF - 4, YC]], [255, 150, 40], lum, 2.2); cone(ctx, XF + 4, YC, XE, L * 20, [255, 150, 40], lum); }
+    if (cheveu) {
+      ctx.strokeStyle = 'rgba(148,163,184,.5)'; ctx.lineWidth = 3; ctx.strokeRect(XF - 10, YC - 80, 20, 160);
+      const g = ctx.createRadialGradient(XF - 1, YC - 1, .2, XF, YC, 2.6); g.addColorStop(0, '#e5e7eb'); g.addColorStop(.5, '#6b7280'); g.addColorStop(1, '#1f2937');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(XF, YC, 2.6, 0, 7); ctx.fill();
+    }
+    else plaque(ctx, XF, 90, 250, YC);
+    ecranCote(ctx, XE, 60, 280);
+  });
+  ecrit(c, 'axes', () => {
+    TX(c, 'Vue de côté (angle exagéré)', 14, 40, { couleur: 'faible', taille: 16 });
+    TX(c, cheveu ? 'cheveu' : 'fente : a = 0,06 mm', XF - 40, 82, { couleur: 'blanc', taille: 16 });
+    c.fleche(G.x0, G.y0, G.x0 + 250 * G.kx, G.y0, { couleur: 'blanc', largeur: 1.8 });
+    c.fleche(G.x0, G.y0, G.x0, G.y0 - 5.2 * G.ky, { couleur: 'blanc', largeur: 1.8 });
+    for (const d of [50, 100, 150, 200]) { c.ligne(gx(d), G.y0 - 4, gx(d), G.y0 + 4, { couleur: 'blanc', duree: .02 }); TX(c, String(d), gx(d), G.y0 + 22, { couleur: 'blanc', taille: 16, align: 'center', duree: .1 }); }
+    for (const l of [1, 2, 3, 4]) { c.ligne(G.x0 - 4, gy(l), G.x0 + 4, gy(l), { couleur: 'blanc', duree: .02 }); TX(c, String(l), G.x0 - 10, gy(l) + 6, { couleur: 'blanc', taille: 16, align: 'right', duree: .1 }); }
+    TX(c, 'D (cm)', gx(250) - 10, G.y0 + 46, { couleur: 'jaune', taille: 17, align: 'right' });
+    TX(c, 'L (cm)', G.x0 + 10, gy(5.2) + 4, { couleur: 'jaune', taille: 17 });
+    TX(c, '0', G.x0 - 10, G.y0 + 20, { couleur: 'blanc', taille: 16, align: 'right' });
+  });
+  for (const [n, d] of MES) ecrit(c, n, () => { c.point(gx(d), gy(.02 * d), 5.5, 'cyan'); TX(c, `(${d} ; ${fr(.02 * d, 0)})`, gx(d) + 8, gy(.02 * d) + 22, { couleur: 'cyan', taille: 15, duree: .3 }); });
+  if (!cheveu && vu('d1')) c.direct(() => TB(c, 0, `D = ${fr(D, 0)} cm ;  L = ${fr(L, 1)} cm`, 14, 318, { couleur: 'cyan', taille: 18 }));
+  ecrit(c, 'droite', () => { c.ligne(G.x0, G.y0, gx(240), gy(4.8), { couleur: 'vert', largeur: 2.2 }); TB(c, 1, 'droite par l’origine : L = k·D', 14, 360, { couleur: 'vert', taille: 18 }); });
+  ecrit(c, 'pente', () => {
+    c.ligne(gx(200), gy(4), gx(200), G.y0, { couleur: 'orange', largeur: 1.6, pointille: [5, 5] });
+    c.ligne(gx(200), gy(4), G.x0, gy(4), { couleur: 'orange', largeur: 1.6, pointille: [5, 5] });
+    TX(c, 'ΔL = 4 cm', G.x0 + 8, gy(4) - 8, { couleur: 'orange', taille: 16 });
+    TX(c, 'ΔD = 200 cm', gx(185), G.y0 - 10, { couleur: 'orange', taille: 16, align: 'right' });
+  });
+  if (S.conclusions) ecrit(c, 'pente_valeur', () => TB(c, 2.2, 'k = ⟦ΔL|ΔD⟧ = ⟦4 cm|200 cm⟧ = 0,02 (sans unité)', 14, 404, { couleur: 'rose', taille: 18 }));
+  ecrit(c, 'cheveu', () => { TB(c, 3.6, 'cheveu : D = 2 m ;  L = 3 cm ;  d = ?', 14, 318, { couleur: 'cyan', taille: 18 }); });
+  c.direct(() => {
+    c.repere('laser', XL, YC - 18, 80, 36, 'le laser'); c.repere('fente', XF - 10, 88, 20, 166, cheveu ? 'le cheveu' : 'la fente');
+    c.repere('ecran', XE - 4, 60, 16, 222, 'l’écran');
+    if (cheveu) c.repere('cheveu', XF - 10, 88, 20, 166, 'le cheveu');
+    if (vu('axes')) { c.repere('axe_D', G.x0, G.y0 - 6, 250 * G.kx, 56, 'l’axe des D'); c.repere('axe_L', G.x0 - 40, gy(5.2), 46, 5.2 * G.ky, 'l’axe des L'); c.repere('courbe', G.x0, gy(5), 250 * G.kx, 5 * G.ky, 'le graphe L = f(D)'); }
+    if (vu('d1')) c.repere('points', gx(40), gy(4.4), 175 * G.kx, 3.8 * G.ky, 'les points mesurés');
+    if (vu('droite')) c.repere('droite', G.x0, gy(4.8), 240 * G.kx, 4.8 * G.ky, 'la droite');
+    if (vu('pente')) c.repere('pente', G.x0, gy(4) - 26, 200 * G.kx + 6, 4 * G.ky + 30, 'ΔL et ΔD');
+  });
+}
+
+/* ── Vue 2025 : air, puis liquide ────────────────────────────────────────────────────────── */
+const K25 = 34;                                           // px par cm sur l’écran de face
+function dessiner2025(c) {
+  const ctx = c.ctx, YC = 170, XL = 14, XF = 176, XE = 440, lum = lisse((S.t - (M.air - 1.6)) / .6);
+  const rempli = lisse((S.t - (M.liquide - 1.5)) / 1.2), serre = lisse((S.t - (M.resserre - 1.4)) / .8);
+  const L = 2.4 + (1.8 - 2.4) * serre, coul = [255, 60, 50];
+  c.direct(() => {
+    cuve(ctx, XF - 22, 74, XE - XF + 40, 200, rempli);
+    laser(ctx, XL, YC, coul, lum);
+    if (lum > 0) { faisceau(ctx, [[XL + 78, YC], [XF - 4, YC]], coul, lum, 2.4); cone(ctx, XF + 4, YC, XE, L * 26, coul, lum); }
+    plaque(ctx, XF, 90, 250, YC); ecranCote(ctx, XE, 80, 262);
+    panneau(ctx, 492, 90, 258, 160);
+    figure(ctx, 621, 170, L * K25, coul, lum, false, 250, 40);
+    if (serre > 0) { ctx.save(); ctx.setLineDash([5, 5]); ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 1.5; ctx.strokeRect(621 - 1.2 * K25, 148, 2.4 * K25, 44); ctx.restore(); }
+  });
+  ecrit(c, 'montage', () => {
+    TX(c, 'Vue de dessus (angle exagéré)', 14, 40, { couleur: 'faible', taille: 16 });
+    TX(c, 'Écran vu de face', 621, 80, { couleur: 'faible', taille: 16, align: 'center' });
+    TX(c, 'laser', XL, YC - 26, { couleur: 'blanc', taille: 17 }); TX(c, 'fente', XF - 22, 300, { couleur: 'blanc', taille: 17 });
+    TX(c, 'cuve', XE - 60, 66, { couleur: 'bleu', taille: 17 }); TX(c, 'écran', XE - 18, 300, { couleur: 'blanc', taille: 17 });
+    c.ligne(504, 214, 738, 214, { couleur: 'faible', largeur: 1.3 });
+    for (let k = -3; k <= 3; k++) c.ligne(621 + k * K25, 209, 621 + k * K25, 219, { couleur: 'faible', largeur: 1.2, duree: .02 });
+    TX(c, 'cm', 742, 220, { couleur: 'faible', taille: 15 });
+  });
+  ecrit(c, 'mesure_L', () => { c.cote(621 - 1.2 * K25, 236, 621 + 1.2 * K25, 236, '', { couleur: 'vert' }); TB(c, 0, 'dans l’air : L = 2,4 cm', 14, 344, { couleur: 'vert', taille: 19 }); });
+  ecrit(c, 'liquide', () => TB(c, 1, 'même fente, même D, dans le liquide', 14, 372, { couleur: 'bleu', taille: 18 }));
+  ecrit(c, 'mesure_Lp', () => { c.cote(621 - .9 * K25, 132, 621 + .9 * K25, 132, '', { couleur: 'orange' }); TB(c, 2, 'dans le liquide : L’ = 1,8 cm', 14, 400, { couleur: 'orange', taille: 19 }); });
+  if (S.conclusions) ecrit(c, 'indice', () => TB(c, 3.3, 'n = ⟦L|L’⟧ = ⟦2,4|1,8⟧ ≈ 1,33', 470, 372, { couleur: 'rose', taille: 20 }));
+  c.direct(() => {
+    c.repere('laser', XL, YC - 18, 80, 36, 'le laser'); c.repere('fente', XF - 10, 90, 20, 160, 'la fente'); c.repere('ecran', XE - 4, 80, 16, 182, 'l’écran');
+    c.repere('cuve', XF - 22, 74, XE - XF + 40, 200, 'la cuve'); c.repere('vue_face', 492, 90, 258, 160, 'l’écran vu de face');
+    if (vu('air')) c.repere('tache_centrale', 621 - L * K25 / 2, 150, L * K25, 40, 'la tache centrale');
+    if (vu('mesure_L')) c.repere('L', ...(()=>{ const [rx, ry] = B(0, 14, 344); return [rx - 4, ry - 22, 280, 28]; })(), 'L = 2,4 cm');
+    if (vu('mesure_Lp')) c.repere('Lp', ...(()=>{ const [rx, ry] = B(2, 14, 400); return [rx - 4, ry - 22, 330, 28]; })(), 'L’ = 1,8 cm');
+  });
+}
+
+const DESSIN = { '2023': dessiner2023, '2021p': dessiner2021p, '2021c': dessiner2021c, '2025': dessiner2025 };
+function dessiner(c) {
+  DESSIN[vue](c);
+  c.direct(() => { if (S.t > 0) c.texte(S.fait ? 'fin' : `t = ${fr(S.t, 1)} s`, scene.L - 12, 22, { couleur: 'faible', taille: 13, align: 'right' }); });
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(41); dessiner(c); return c.fin(); }, {
+  ajuster: true, large: true,
+  complet: fn => { const t = S.t, f = S.fait, k = S.conclusions; S.t = FIN; S.fait = true; S.conclusions = true; try { fn(); } finally { S.t = t; S.fait = f; S.conclusions = k; } },
+});
+/* Texte jamais sous 15 px à l'écran, même sur un téléphone en paysage (18 novembre 2026) : le kit baisse son plancher
+ * sur un petit tableau ; cette page garde 15 px (sa propre craie, rien de partagé n'est changé) et se met en page
+ * pour que ça tienne (colonne à droite, étiquettes secondaires en moins sur un tableau étroit). */
+Object.defineProperty(scene.craie, 'tailleMin', { get: () => 15, set: () => {}, configurable: true });
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(FIN, S.t + dt);
+  if (S.jusqua != null && S.t >= S.jusqua && S.jusqua < FIN) {
+    S.t = S.jusqua; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 2)} s`) + '.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre();
+    return true;
+  }
+  if (S.t >= FIN) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), 'Fin : relis les mesures sur le tableau.', 'good'); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+
+function phase() { let d = null; for (const [n, t, m] of SUITE) if (S.t >= t - 1e-6) d = [n, m]; return d ? d[1] : 'le montage va apparaître'; }
+function ceQuiSeVoit() {
+  const m = [`Vue « ${vue} », t = ${fr(S.t, 2)} s (${S.running ? 'en cours' : S.fait ? 'fin' : 'arrêtée'}). Phase : ${phase()}.`];
+  if (vue === '2023') {
+    m.push('Exercice du national 2023 R. Deux vues : la vue de côté (laser, fente horizontale, écran à D = 1,4 m ; angle exagéré) et l’écran vu de face (règle en cm).');
+    if (vu('lumiere')) m.push(`Sur l’écran : des taches sur une ligne verticale (la fente est horizontale) ; tache centrale de ${fr(L2023(), 1)} cm.`);
+    if (vu('mesure_L')) m.push('Écrit : L = 2,7 cm (radiation jaune, λ₀ = 580 nm).');
+    if (vu('triangle')) m.push('Dans la vue de côté : le triangle rectangle, angle θ, côté L/2 sur l’écran, côté D.');
+    if (vu('rouge')) m.push('La source est rouge (λ₀R inconnue), a et D n’ont pas changé : la tache s’élargit.');
+    if (vu('mesure_LR')) m.push('Écrit : L_R = 3,4 cm.');
+    m.push('Ni a ni λ₀R ne sont écrits : l’élève les calcule.');
+  } else if (vue === '2021p') {
+    m.push('Exercice du national 2021 N, le prisme.');
+    if (vu('blanche') && !vu('jaune')) m.push('La lumière blanche traverse le prisme ; sur l’écran, un spectre : le rouge en haut (le moins dévié), le violet en bas (le plus dévié).');
+    if (vu('jaune')) m.push('Deux barres de verre montrent l’onde DANS le prisme. Jaune : λ₀j = 589 nm dans le vide, λ_j = 355 nm dans le verre (crêtes serrées).');
+    if (vu('rouge')) m.push('Rouge : λ_r = 474 nm dans le verre, ν_r = 3,91·10¹⁴ Hz.');
+    if (vu('course')) m.push('Les deux ondes avancent dans le même verre pendant le même temps : le front rouge est un peu devant le front jaune.');
+    if (vu('vitesses') && S.conclusions) m.push('Écrit : v_j ≈ 1,81·10⁸ m/s, v_r ≈ 1,85·10⁸ m/s.'); else m.push('Les célérités ne sont pas écrites : l’élève les calcule (v = λ·ν).');
+  } else if (vue === '2021c') {
+    m.push('Exercice du national 2021 N, la courbe L = f(D) ; fente a = 0,06 mm.');
+    const pts = MES.filter(([n]) => vu(n)).map(([, d]) => `(${d} cm ; ${fr(.02 * d, 0)} cm)`);
+    if (pts.length) m.push('Points placés : ' + pts.join(', ') + '.');
+    if (vu('droite')) m.push('Une droite qui passe par l’origine : L = k·D.');
+    if (vu('pente')) m.push('Pointillés : ΔL = 4 cm et ΔD = 200 cm (de l’origine au point (200 ; 4)).');
+    if (vu('pente_valeur') && S.conclusions) m.push('Écrit : k = ΔL/ΔD = 4 cm/(200 cm) = 2·10⁻² (sans unité).'); else m.push('La valeur de k n’est pas écrite : l’élève la calcule.');
+    if (vu('cheveu')) m.push('Un cheveu remplace la fente ; D₁ = 2 m, L₁ = 3 cm ; d inconnu.');
+  } else {
+    m.push('Exercice du national 2025 R. Vue de dessus (laser, fente, cuve, écran ; angle exagéré) et écran vu de face (règle en cm).');
+    if (vu('mesure_L')) m.push('Dans l’air : L = 2,4 cm.');
+    if (vu('liquide')) m.push('La cuve se remplit du liquide ; même fente, même D.');
+    if (vu('resserre')) m.push('Dans le liquide la tache se resserre (l’ancienne largeur reste en pointillé).');
+    if (vu('mesure_Lp')) m.push('Dans le liquide : L’ = 1,8 cm.');
+    if (vu('indice') && S.conclusions) m.push('Écrit : n = L/L’ = 2,4/1,8 ≈ 1,33.'); else m.push('L’indice n’est pas écrit : l’élève le calcule.');
+  }
+  return m.join(' ');
+}
+
+function playUntil(p) {
+  const nom = p && p.moment in M ? p.moment : null, cible = nom ? M[nom] : +(p && p.time_s);
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-4) S.t = cible >= T0() ? T0() : 0;
+  S.jusqua = Math.min(FIN, Math.max(0.001, cible));
+  S.motif = nom ? SUITE.find(s => s[0] === nom)[2] : '';
+  S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+function start() { S.jusqua = null; S.t = T0(); S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('start'); pont.emettre(); }
+function reset() { S.jusqua = null; S.t = T0(); S.running = false; S.fait = false; $('run').textContent = 'Lancer'; scene.sale = true; bulle($('feedback'), depart ? 'On reprend où on s’était arrêté.' : 'Le montage de l’énoncé.'); pont.noter('reset'); pont.emettre(); }
+function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait || S.t >= FIN) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  const t = +(p && p.time_s); if (!Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = clamp(t, 0, FIN); S.fait = S.t >= FIN;
+  $('run').textContent = S.fait ? 'Rejouer' : 'Reprendre'; scene.sale = true;
+  bulle($('feedback'), `Arrêt sur image : t = ${fr(S.t, 2)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function setParameters(p) {
+  p = p || {};
+  if ('conclusions' in p) S.conclusions = p.conclusions === true || p.conclusions === 'true' || p.conclusions === 1;
+  scene.sale = true; pont.noter('set_parameters', { conclusions: S.conclusions }); pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : (S.t > T0() && S.t < FIN && !S.fait ? resume() : start()));
+
+const EXPLICATIONS = {
+  '2023': [{ repere: 'vue_cote', texte: 'La vue de côté : le laser, la fente horizontale, l’écran.' }, { repere: 'vue_face', texte: 'L’écran vu de face : les taches sur une ligne verticale.' },
+    { repere: 'L', texte: 'L = 2,7 cm : de la première extinction à l’autre.' }, { repere: 'triangle', texte: 'Le triangle : tan θ = (L/2)/D.' }, { repere: 'LR', texte: 'Source rouge : L_R = 3,4 cm.' }],
+  '2021p': [{ repere: 'prisme', texte: 'Le prisme décompose la lumière blanche.' }, { repere: 'spectre', texte: 'Le spectre : du rouge au violet.' },
+    { repere: 'jaune', texte: 'Dans le verre, λ_j = 355 nm.' }, { repere: 'rouge', texte: 'Dans le verre, λ_r = 474 nm.' }, { repere: 'fronts', texte: 'Le front rouge avance un peu plus vite.' }],
+  '2021c': [{ repere: 'axe_D', texte: 'En bas, D en cm.' }, { repere: 'axe_L', texte: 'À gauche, L en cm.' }, { repere: 'points', texte: 'Chaque position de l’écran donne un point.' },
+    { repere: 'droite', texte: 'Une droite qui passe par l’origine : L = k·D.' }, { repere: 'pente', texte: 'ΔL = 4 cm, ΔD = 200 cm.' }],
+  '2025': [{ repere: 'L', texte: 'Dans l’air, L = 2,4 cm.' }, { repere: 'cuve', texte: 'On remplit la cuve du liquide.' }, { repere: 'tache_centrale', texte: 'La tache se resserre.' }, { repere: 'Lp', texte: 'Dans le liquide, L’ = 1,8 cm.' }],
+};
+window.Tableau.explication({ [vue]: EXPLICATIONS[vue] });
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'ondes_lumineuses_national', version: '1.0', title: 'Exercice du national joué — ' + vue, variants: [{ id: vue, label: vue }], commands: commandes,
+  command_schema: {
+    set_parameters: { conclusions: 'true | false (false : les résultats que l’élève doit calculer ne s’écrivent pas)' },
+    set_time: { time_s: `0..${fr(FIN, 1)} (arrêt sur cet instant, s)` },
+    play_until: { moment: Object.keys(M).join(' | ') + ' (rejoue et se fige à cet instant)', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Exercice du national rejoué au tableau, étape par étape, avec les valeurs de l’énoncé. Les résultats que l’élève doit calculer ne sont écrits qu’après sa réponse.',
+  etat: () => ({ simulation_status: S.running ? 'running' : (S.fait ? 'finished' : (S.t > 0 ? 'paused' : 'idle')), ce_qui_se_voit: ceQuiSeVoit(), current_variant: vue,
+    time_s: +S.t.toFixed(3), parameters: { conclusions: S.conclusions, depart }, moments: moments() }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), depart ? 'On reprend où on s’était arrêté.' : 'Le montage de l’énoncé.');
+if (depart) $('run').textContent = 'Reprendre';
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

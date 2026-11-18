@@ -40,7 +40,7 @@ qu'elle fonde, une seule synthèse ferme le chapitre.
 |---|---|---|
 | s1_b1 « De l'énergie, tout le temps : d'où vient-elle ? » | `le_o1_trois_vivants` (gardée) | Le problème d'abord (tous les profs ouvrent sur le besoin d'énergie). |
 | | `le_o2_acquis` (déplacée, gardée) | Le diagnostic « d'où vient la matière organique ? » passe AVANT les rappels : il dit ce que l'élève sait déjà (photosynthèse, amidon) ; les rappels qui suivent ne servent qu'à celui qui a oublié (règle 6). |
-| | `le_p1_cellule`, `le_p2_glucose` (gardées) | Rappels de zéro (cellule, organites, glucose, énergie chimique) juste avant que l'ATP et les levures s'en servent. **Besoin noté** : le lecteur ne sait pas encore sauter un rappel quand le diagnostic est réussi ; à faire dans `frontend/src/` (fichier partagé, hors de cette session). |
+| | `le_p1_cellule`, `le_p2_glucose` (gardées) | Rappels de zéro (cellule, organites, glucose, énergie chimique) juste avant que l'ATP et les levures s'en servent. **Fait le 18 novembre 2026** (format `concentration.rappel`) : `le_o2_acquis` porte le diagnostic (vrai/faux en trois affirmations : photosynthèse, cellule et noyau, énergie du glucose) ; `le_p1_cellule` et `le_p2_glucose` sont sautés quand les trois sont justes du premier coup (le cahier du bloc vient quand même). Voix à faire : énoncés et réactions du diagnostic. |
 | s1_b2 « L'ATP, puis les levures avec et sans dioxygène » | `le_a1_monnaie` (**fusion** de `le_a1_monnaie` + `le_a2_recharge`, réécrite) | **Une seule diapo de rappel** : la monnaie (le glucose est un gros billet), l'hydrolyse ATP + H₂O → ADP + Pi + énergie, la carte de recharge ADP + Pi + énergie → ATP, le cycle. Sortent : la structure (adénine, ribose), l'ATPase et les 30,5 kJ : ils ne servent qu'au rendement (`le_r2_rendement` les donne) et au chapitre du muscle (SVT ch2, qui les traite déjà). On n'affirme plus « respiration ou fermentation » : l'énergie vient « de la dégradation de la matière organique, comme le glucose » ; la diapo finit sur la question du chapitre, à laquelle les expériences vont répondre (règle 4). La simulation `atp.html` reçoit `?rappel` (ni adénosine nommée, ni 30,5 kJ, « dégradation du glucose » au lieu de « respiration ou fermentation ») ; sans ce paramètre, le cours en ligne la voit comme avant. |
 | | `le_e1_mesurer`, `le_e2_decrire`, `le_e3_sans_o2` (gardées) | L'expérience ExAO avec puis sans dioxygène. **La méthode décrire → déduire commence ici, dès la première courbe** (`le_e2_decrire` : « je dis ce que je vois avec les valeurs, puis j'écris donc »), et non au bloc des cas du bac ; `le_e3_sans_o2` garde sa question d'observation (l'élève voit seul la courbe d'éthanol). |
 | s1_b3 « Deux voies : respiration et fermentation » | `le_e3b_masse_levures` (gardée) | Deuxième preuve, sans ExAO : la masse de levures (2,3 fois plus avec O₂) dit que la respiration libère plus d'énergie. |
@@ -103,9 +103,8 @@ cadre, aucune « pour les devoirs »).
   de la chaîne causale écrite à son moment.
 - `exao.html?vue=levures&depart=anaerobie` pour `le_e5_definitions` (les deux phases, l'éthanol, aérobie / anaérobie).
 - Questions d'observation : 2 dans le cours (`le_e3_sans_o2`, `le_c9_poison`), le maximum de la règle 30.
-- **Non fait, noté comme besoin** : `le_x1_restitution` et `le_x2_qui_respire` n'ont pas d'animation (tableau à lire).
-  Une petite scène où le tableau des deux sportifs naît de l'effort (consommation d'O₂, acide lactique qui monte) et où
-  chaque consigne (comparer, puis conclure) vient l'une après l'autre serait la suite logique (règle 5, règle 35).
+- ~~Non fait~~ → fait en 2ᵉ passe (voir la section « 2ᵉ passe » en fin de fichier) : `le_x1_restitution` et
+  `le_x2_qui_respire` sont joués pas à pas sur `national.html`.
 
 ## Ce qui change, ce qui reste
 
@@ -142,3 +141,83 @@ glycolyse, vésicules avant le schéma du national. 5. Exercices pas à pas : po
 noté). 6. Départ de zéro : rappels cellule et glucose, taxi avant la glycolyse. 7. Une idée par diapositive : l'ATP
 réduite à son rôle. 8. Rien hors cadre : CI…CV seulement lus sur un document. 9. Écran : formules en notation à
 l'écran, mots dans la voix ; les simulations modifiées gardent leurs tailles (≥ 15 px pour les ajouts).
+
+## 2ᵉ passe (18 novembre 2026) : chaque cas type du national joué pas à pas
+
+Demande : « simple, animé, expliqué ; ne pas tout donner au départ ; laisser à l'élève le temps de trouver seul ; une
+raison derrière chaque choix ». Script reproductible : `python3 scripts/logique/deuxieme_passe_svt_ch1.py` (relit la
+version en attente, idempotent, contrôle chaque `mot`), puis `python3 -X utf8 scripts/logique/lister_voix.py <deck>`.
+
+### Le schéma d'un exercice joué (le même pour les trois)
+
+Une diapositive = **une consigne** du sujet. La voix fait apparaître le document par l'animation (les valeurs naissent
+de ce qu'on voit, puis le tableau : règle 35), pose la consigne et se tait ; la question (QCM) vient après la voix, avec
+une réaction préparée pour chaque option (juste / indice / réponse) ; la **correction écrite comme le barème** la lit
+(`question.demonstration.lignes`) n'apparaît qu'après la réponse. La diapositive suivante **rejoue la correction au
+tableau** (la simulation l'écrit à son moment) avant la consigne suivante. Dans la simulation, tout ce qui appartient à
+la correction reste caché tant que l'élève n'a pas répondu (`?cacher=<moment>` dans `national.html`,
+`?conclusions=false` dans `exao.html`). Raison : règles 3, 5 et 33 (le résultat après la réponse de l'élève) et la
+méthode du barème (décrire → déduire → expliquer / vérifier).
+
+### Ce qui a été ajouté, par cas type
+
+| Cas type (exploration) | Diapositives | Ce qui est joué, et pourquoi |
+|---|---|---|
+| `definition`, `sens_protons`, `qcm_vrai_faux` (restitution, chaque année) | `le_x1_restitution` (réécrite), `le_x1b_protons`, `le_x1c_qcm` (nouvelles) | **2024 R** « définir la fermentation lactique » : trois cadres vides (nature, lieu et conditions, produits), l'élève choisit la définition à 0,5 pt ; puis les cadres se remplissent (correction) et la membrane interne est refaite de mémoire (peinte) pour le **sens des H⁺** ; puis les flèches (correction) et le **QCM 2022 N** (1, b) : la méthode « chercher le mot faux » est montrée sur a (rayée : le sens), l'élève tranche b, c, d ; la démonstration raye c et d (« externe ») et écrit « (1, b) ». Avant : une diapositive de texte qui disait la méthode sans la faire. |
+| `voie_dominante` (7 sujets sur 20) | `le_x2_qui_respire` (réécrite), `le_x2b_fatigue` (nouvelle) | **2016 N, documents 1 et 2** (valeurs du sujet ; avant : des valeurs inventées, 3,5 / 2,0 L/min) : deux muscles peints font le même effort, les jauges d'O₂ (5,5 / 2,5 L/min) et d'acide lactique (6 / 12 mmol/L) montent, la coupe des fibres montre les mitochondries (11 % / 5 %, enzymes importante / faible), puis le tableau. Consigne 1 : comparer (la comparaison du barème, critère par critère avec les valeurs). Consigne 2 (diapositive suivante, après la comparaison écrite au tableau) : expliquer la fatigabilité (fermentation lactique → 2 ATP → fatigue). |
+| `mitochondries_isolees` (5/20), `hypothese` (8/20), `inhibiteur` | `le_x3_chaine_en_panne` (réécrite), `le_x3b_deduire`, `le_x3c_hypothese` (nouvelles) | Avant, une seule diapositive DISAIT la description, la déduction, l'hypothèse et sa vérification d'un coup, sans question. Maintenant trois consignes : **décrire** (la courbe se trace ajout par ajout, sans note écrite ; QCM « après ADP + Pi ») → **déduire** (pyruvate, pas glucose ; O₂ couplé à l'ATP) → **hypothèse au conditionnel** puis vérification en flèches (démonstration). `exao.html` reçoit `?conclusions=false` : les notes sous le graphique, l'hypothèse écrite, la bulle d'arrêt (« [O₂] reste à 40 % ») et le message de fin se taisent ; sans ce paramètre, le cours en ligne voit la page comme avant. |
+| `levures` (2019 R) | `le_e3b_masse_levures` (texte et voix gardés) | Le tableau naît de l'animation : deux béchers peints (culture aérée / fermée), les levures se multiplient, les compteurs (glucose consommé, levures formées) montent, l'éthanol s'écrit ; puis le tableau et le rapport par gramme de glucose en vraies fractions (≈ 2,3 fois plus avec O₂). Seul le `pointage` change (les mots déjà dits) : la voix reste. |
+| (localisation, document du bac) | `le_m3a_glucose_marque` (deux phrases retouchées, déjà sans voix) | Le tableau T0 → T4 devient une cellule peinte où les molécules radioactives (billes) passent du milieu au hyaloplasme puis à la mitochondrie ; les « + » s'écrivent à droite à chaque temps, puis le tableau. Aucune conclusion écrite : l'élève déduit le lieu de la glycolyse (question gardée). |
+| `pulse_o2` | `le_c1_pulse` (inchangée) | Déjà joué : la courbe se trace, la description seulement ; l'explication vient à `le_c6_protons` (règle 4). |
+| `legender` | `le_c8_national`, `le_c8b_construire` (inchangées) | Déjà joué (schéma à légender du national). |
+| `calcul`, `tableau_comparatif` | `le_r1_compteur`, `le_r2_rendement`, `le_r3_comparer` (inchangées) | Déjà joués (compteur d'ATP, rendement calculé au tableau, comparaison animée). |
+| `equation` | `le_g3_bilan`, `le_k5_fois_deux`, `le_f1_lactique`, `le_f2_alcoolique` (inchangées) | Les réactions globales sont écrites au tableau à leur moment et redemandées au « retrouver » des blocs. Pas d'exercice d'appariement joué (2020 R) : reste à faire si l'on veut (voir plus bas). |
+
+Simulation nouvelle : `reactions_responsables_liberation_energie-tableau/national.html` (vues `sportifs`,
+`restitution`, `levures`, `marquage`), sur le kit du dossier (`commun.js`, `peinture.js`) : moments nommés,
+`ce_qui_se_voit`, repères, `?depart=`, `?cacher=` et `set_parameters {conclusions}`. Contrôlée dans Chromium à
+1280 × 640, 1024 × 560 et 724 × 350 (aucune erreur, chaque moment atteint par `play_until`, rien de coupé).
+
+### Séances
+
+Les cas du bac deviennent une **séance 6** (« Les cas du national joués pas à pas, puis la synthèse »), quatre blocs :
+restitution (`le_x1…`), voie dominante (`le_x2…`), document des mitochondries (`le_x3…`), schéma de synthèse
+(`le_x4_synthese`, `le_b1_bilan`). Raison : huit diapositives à question ne tiennent pas dans un bloc de la séance 5
+(règle 7, 40 à 50 min) ; un exercice du national a plusieurs consignes, donc plusieurs « À toi » dans son bloc (c'est
+voulu : une consigne, une réponse, une correction). La séance 5 garde fermentations, bilans et rendements. Chaque
+nouveau bloc a son cahier, son « retrouver » et un exercice jumeau (vrai/faux 2023 R ; fibres B ; canal des sphères
+bouché, 2023 N) ; l'ancien exercice de bloc qui reprenait `le_x2_qui_respire/e0` (supprimé) est remplacé.
+Durée estimée : 275 min.
+
+### Mots
+
+Les nouveaux textes passent par la règle de `verifier_mots.py` (via `lister_voix.py`, qui lit la version en attente ;
+`verifier_mots.py` lit le cours en ligne). Remplacés : critère → واحد بواحد ; barème → la correction ديال الامتحان ;
+la note → النقطة ; restitution → أسئلة الدرس ; fatigabilité (consigne lue) → la fatigue كتجي بالزربة ; كتعيا, متعود,
+نشطبو, مشطبة, كيسد, كيوقفو, كتربط, كتجاوب, كتستعملش, كنقيسو, كنوصفو, كيضويو, balise, كنتبعوه… par des mots courants
+vérifiés (نحيدوها, سد, ما بقاش كيدوزو, كتعطي السبب, نقيسو, نوصفو, العلامة, نتبعو…). **Restent, à écouter** : *bloquerait*
+(la phrase d'hypothèse à écrire), *conditionnel* (méthode du bac), *quatre-vingt-seize* (valeur du document), *marqué*
+(glucose marqué) — et ceux de la 1ʳᵉ passe (*photosynthèse*, *poison*, *vésicules*, *carrefour*).
+
+### Voix
+
+`svt_ch1_reactions_responsables_liberation_energie_voix.json` : 101 pistes (15 diapositives, 60 réactions, 8
+démonstrations, 11 énoncés, 7 pistes d'observation). Nouvelles de cette passe : 8 diapositives d'exercice et leurs
+réactions, énoncés et démonstrations ; `le_m3a_glucose_marque` retouchée. `le_e3b_masse_levures` garde sa voix.
+
+### Contrôles
+
+`verifier_pointage_simulations.py --ecarts` : aucune ligne « introuvable » (en attente et en ligne) ; les seuls écarts
+nouveaux sont des « gestes trop serrés » sur les diapositives sans voix (durée inconnue, ils disparaîtront avec elle).
+`verifier_mots_pointes.py` : 0 mot introuvable. `verifier_formules.py` : rien pour le dossier.
+
+### Ce qui reste, et pourquoi
+
+- Les voix (VPS, voix Bodi) : quota Kaggle épuisé dans cette session.
+- `le_e3b_masse_levures` dit encore « شوف le tableau » au moment où la scène montre les deux béchers (le tableau vient
+  ensuite) : la voix enregistrée est gardée ; à corriger quand la diapositive sera de nouveau mise en voix.
+- Appariement des réactions globales (2020 R) : pas d'exercice joué ; les équations sont écrites au tableau dans le
+  cours (glycolyse, Krebs, fermentations). Une vue « relier chaque réaction à sa voie » serait la suite.
+- Le lecteur ne sait pas encore enchaîner une correction « au tableau » sur la même diapositive que la question : la
+  correction animée est donc au début de la diapositive suivante (besoin noté pour `frontend/src/`, hors de cette session).
+

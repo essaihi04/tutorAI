@@ -4,7 +4,7 @@ Logique refaite le 18 novembre 2026, avec la skill `logique-de-cours`. Elle est 
 
 J'ai ajouté une vue de simulation : `frontend/public/media/simulations/chimie/acides-bases-tableau/eau.html?vue=ke_mesures`. Les autres vues de la page ne changent pas.
 
-Les pistes à mettre en voix sont dans `phys_ch13_acides_bases_voix.json` : 64 pistes, soit 1 diapo et 63 champs de questions d'observation.
+Les pistes à mettre en voix sont dans `phys_ch13_acides_bases_voix.json` : 126 pistes (64 de la logique, 62 de la 2ᵉ passe, § 6).
 
 ## 1. Sources
 
@@ -287,8 +287,51 @@ Pour `ab_n4_2024r` et `ab_n5_2023r`, l'écart avec l'arrêt suffisait déjà. Le
 
 ## 5. Ce qui n'a pas pu être fait, et les besoins
 
-- **`ab_p3_distribution` et `ab_p2_domaines`, curseur.** Une observation « à quel pH se croisent les courbes ? » demanderait que `predominance.html` accepte `conclusions: false` : la vue écrit « 50 % : pH = pKa » dès le moment `croisement`, qui part avec le début de la phrase. Même chose pour le curseur à 3,41 de `ab_p2`, qui affiche le nom de l'espèce qui prédomine.
-- **`ab_b2_taux`.** Une observation sur « x_éq = [HO⁻]_éq·V » aurait la même limite : la vue écrit l'expression au moment `x_eq`.
-- **Les voix.** Les 64 pistes sont à faire sur le VPS (voix Bodi), avec `scripts/voix/attente_construire.py` puis `attente_poser.py`.
-- **Les questions d'observation.** Elles sont 10 dans le cours (9 nouvelles et celle de `ab_e1_phe`), au-delà du « rare » de la règle 30, à la demande de l'utilisateur du 18 novembre : dosage, Ka, pKa et prédominance « joués pas à pas, l'élève fait chaque étape avant la correction ». Aucune ne demande de calcul. Chacune porte sur une lecture de courbe, la comparaison d'un tableau, un réactif limitant ou une espèce qui prédomine. Les calculs restent sur l'ardoise du bloc, avec leur démonstration.
-- **Fichiers partagés.** Aucun n'a été modifié (`shared/`, lecteur `frontend/src/`).
+- **Fait à la 2ᵉ passe (§ 6)** : les observations de `ab_b2_taux` (x_éq) et de `ab_p3_distribution` (le croisement), et le curseur de `ab_p2_domaines`, grâce au paramètre `conclusions` ajouté à `base.html` et `predominance.html`.
+- **Les voix.** Les 126 pistes sont à faire sur le VPS (voix Bodi), avec `scripts/voix/attente_construire.py` puis `attente_poser.py`. Les diapos nouvelles n'ont pas de durée de voix : le contrôle de pointage les signale « GESTE » (tous les gestes à 0 s) tant qu'elles ne sont pas enregistrées. Avec une durée estimée (66 ms par caractère, médiane du cours), il ne reste aucun écart.
+- **Mots à changer à la prochaine voix** (diapos déjà enregistrées, non réécrites pour garder leur voix) : « l'afficheur » (`ab_o2_trois_ph`, `ab_w5_soude`, `ab_a3_mesure` et ses réactions) → « l'écran du pH-mètre » ou « le pH-mètre كيعطي » ; « béchers » (`ab_o2_trois_ph`) → « trois solutions » ; « محدودة » (`ab_w1`, `ab_w1b`, `ab_b1`, `ab_b2`) → « ماشي كاملة » ; « كتذوب » (`ab_w5_soude`) ; « كتتبدل » (`ab_r2_constante`). Termes du programme gardés : autoprotolyse, éthanoate, méthylamine, soude, loupe.
+- **Les questions d'observation.** Elles sont 18 dans le cours (10 de la logique, 8 de la 2ᵉ passe), à la demande de l'utilisateur du 18 novembre (« laisser à l'élève le temps de trouver seul »). Aucune ne demande de calcul : lecture de courbe, relation à choisir, espèce qui prédomine, indicateur. Les calculs s'écrivent ensuite comme le barème les lit.
+- **Taille des indices.** Dans la nouvelle page `national.html`, tout texte fait au moins 15 px à l'écran en 724 × 350 (mesuré) ; les indices, exposants et états physiques (« _A », « ⁻² », « (aq) ») sont écrits par le kit à environ 62 % de la ligne (≈ 9 px). C'est le kit partagé (`shared/tableau/tableau.js`) ; besoin noté, non modifié.
+- **Fichiers partagés.** Aucun n'a été modifié (`shared/`, lecteur `frontend/src/`), ni `commun.js`, `deroule.js`, `exploiter.html`, `figures.html` de ce dossier.
+
+## 6. 2ᵉ passe du 18 novembre : un national joué pas à pas, rien de décisif avant la réponse
+
+Demande de l'utilisateur : « simple, animé, expliqué, ne pas tout donner au départ, laisser à l'élève le temps de trouver seul, une raison derrière chaque choix ».
+
+### Le sujet choisi : national 2018, session normale (exercice 1, partie 2)
+
+L'acide lactique AH (V_A = 15 mL) dosé par la soude (C_B = 3·10⁻² mol/L) ; K_A = 10^(−3,9) ; trois indicateurs (hélianthine 3 – 4,4 ; BBT 6 – 7,6 ; rouge de crésol 7,2 – 8,8). **Pourquoi lui** : ses cinq questions couvrent, sur une seule courbe, l'équation de dosage, l'équivalence par les tangentes, C_A par la relation d'équivalence, le choix de l'indicateur et l'espèce qui prédomine (rapport [A⁻]/[AH]) ; il n'était pas encore dans le cours (2016 N, 2022 R/N, 2023 R, 2024 R, 2025 R y sont déjà) ; sa courbe se calcule exactement (pH 2,82 au départ, 3,91 à 5 mL, 7,99 à 10 mL), donc la figure animée est celle du sujet. Une 6ᵉ diapo, « en plus », lit le pKa à la demi-équivalence sur la même courbe (Ka / pKa, cas de 16 sujets sur 20) et retrouve la donnée K_A = 10^(−3,9).
+
+### La page `acides-bases-tableau/national.html?ex=2018N&vue=q1 … q6` (nouvelle)
+
+Une vue par question, une URL par diapo (pas d'écart IFRAME). À gauche, le montage peint (potence, burette graduée dont le niveau descend, bécher sur l'agitateur, pH-mètre qui affiche le pH du mélange) ; au centre, le graphe ; à droite, la question, « Déjà trouvé » (la seule réponse d'avant dont la question a besoin) puis la correction écrite comme le barème la lit. Les valeurs naissent du montage : en q2, la burette verse millilitre par millilitre, le pH-mètre lit, chaque mesure devient un point, puis la courbe passe par les points ; ensuite les deux tangentes, la parallèle, E. `set_parameters {conclusions: false}` cache la réponse et la correction de la question (et la bulle « Arrêt sur image » ne la dit pas) ; `true` (défaut) les écrit. Aucun départ seul : la première commande de la voix lance la scène. Cadre large, toutes les tailles ≥ 21 dans le cadre : plus petit texte 15 px en 724 × 350, 25 px en 1024 × 560 (mesuré dans Chromium) ; captures regardées à 724 × 350 et 1024 × 560, sans chevauchement.
+
+### Les diapos nouvelles (activité `ab_partie12`, séance 7)
+
+| Diapo | Question | Ce que l'élève fait avant la correction (observation) | Correction (barème) |
+|---|---|---|---|
+| `ab_x1_equation` | 1.1 | La soude coule ; à la loupe HO⁻ s'approche de AH : il choisit l'équation (pièges : AH + H₂O, Na⁺). | AH + HO⁻ → A⁻ + H₂O, totale. |
+| `ab_x2_tangentes` | 1.2 | La courbe naît des mesures, les tangentes donnent E : il lit les coordonnées (pièges : inversées, 12 = fin). | V_BE = 10 mL ; pH_E ≈ 8. |
+| `ab_x3_concentration` | 1.3 | Deux barres, n(AH)₀ et n(HO⁻) versé, s'égalisent en E : il choisit la relation (piège : volumes croisés). | C_A = C_B·V_BE/V_A = 2·10⁻² mol/L. |
+| `ab_x4_indicateur` | 1.4 | Les trois zones de virage debout sur le graphe, la droite pH = 8 partie de E : il choisit. | Rouge de crésol, 8 ∈ [7,2 ; 8,8] ; il vire au labo. |
+| `ab_x5_predominance` | 1.5 | pH ≈ 8 à 10 mL, pKa = 3,9 : il dit qui prédomine. | [A⁻]/[AH] = 10^(8 − 3,9) ≈ 1,26·10⁴ > 1 : A⁻ ; diagramme de prédominance. |
+| `ab_x6_pka` | en plus | Verticale à V_BE/2 = 5 mL : il lit le pKa (pièges : 8 = pH_E, 2,8 = départ). | pH = pKa = 3,9 ; K_A = 10^(−3,9). |
+
+**Pourquoi après le bilan des nationaux et avant la fiche** : l'exercice reprend toutes les notions du dosage ; il vient quand chacune a été vue seule, et il prépare la fiche « Ce qu'il faut retenir ». Les nationaux existants (`ab_n1` … `ab_n5`, `ab_b3`, `ab_a3`, `ab_k4`, `ab_p4`) restent tels quels, avec leurs observations.
+
+**Les séances.** Séance 6 : `ab_b16`, `ab_b17`, `ab_b18` (`ab_n4`, `ab_n5`, avec leur cahier). Séance 7 (nouvelle) : `ab_b19` (x1 – x3), `ab_b20` (x4 – x6), `ab_b21` (la fiche et la carte, avec les deux lignes de cahier de bilan qui étaient dans `ab_b18`). Les blocs `ab_b19` et `ab_b20` n'ont pas d'ardoise : leurs six observations la remplacent. Compétences : x1, x3 → C7 ; x2, x6 → C8 ; x4, x5 → C6.
+
+### Rien de décisif avant la réponse (besoins du § 5 de la logique)
+
+- **`ab_b2_taux`** : nouvelle observation « à l'équilibre, comment s'écrit x_éq ? » après « ولكن فالتوازن: » ; `base.html?vue=taux` accepte `conclusions` (défaut `true`, rendu du cours en ligne inchangé) : `false` tait x_éq, τ, l'application et « limitée », et la bulle d'arrêt.
+- **`ab_p3_distribution`** : nouvelle observation « à quel pH les deux courbes se croisent-elles ? » ; `predominance.html` tait le croisement « 50 % : pH = pKa » avec `conclusions: false`.
+- **`ab_p2_domaines`** : son observation reçoit `sim_avant`/`sim_apres` : les barres [CH₃COOH] / [CH₃COO⁻] du curseur à 3,41, leurs pourcentages et « … prédomine » sont tus pendant la question (ils donnaient la réponse).
+- Relu par script : aucune ligne `centre` ne s'affiche avant l'arrêt avec la bonne réponse ; les autres observations du cours étaient déjà protégées (commandes déplacées à la logique).
+
+### Mots
+
+Toutes les pistes nouvelles passent `verifier_mots.py` sans mot rare (0 sur 62) : « le bécher », « la burette », « le p H mètre » au lieu de « l'afficheur » ; « كتطيح نقطة ب نقطة » ; « prédomine » (terme du programme) plutôt qu'un verbe darija rare. Les diapos voicées non réécrites gardent leurs mots ; la liste à changer est au § 5.
+
+> Fusion (18 novembre, soir) : une autre session avait poussé en parallèle le même besoin (`bd37fa2d` :
+> `predominance.html` accepte `conclusions`, observation sur `ab_p3_distribution`). La version gardée est celle de
+> cette 2ᵉ passe, qui couvre aussi la bulle d'arrêt et `base.html` ; les pistes en double de `ab_p3` sont retirées.

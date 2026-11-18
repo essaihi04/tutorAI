@@ -125,3 +125,99 @@ une question d'observation ajoutée.
 - `tl_cr_carte` : `demarrer = start`. Il faudrait passer en `reset` avec `?depart=`, ce qui demande le même ajout au kit.
 - `facteurs.html` : à vérifier dans le navigateur que `conclusions: false` cache bien la conclusion de la vue
   `concentration` (`f5`) jusqu'à la réponse.
+
+<!-- 2e passe : début -->
+## 2ᵉ passe (18 novembre 2026) : le national joué pas à pas
+
+### Ce qui manquait (évaluation de la 1ʳᵉ passe)
+Le tableau d'avancement n'était qu'un rappel dit par la voix (`tl_rp5_avancement`, sans visuel) ; aucun exercice ne faisait
+construire le tableau ligne par ligne, ni exploiter une grandeur suivie au cours du temps ; les deux nationaux (`tl_n1`,
+`tl_n2`) portent sur les courbes et la trempe, sans les couples ni l'équation.
+
+### Ce qui est ajouté : un exercice type national, joué pas à pas (11 diapositives)
+Les sujets 2016-2025 ne posent pas un exercice de ch9 entier : les questions de ce chapitre tombent dans des exercices de
+piles, d'électrolyse ou de cinétique. L'exercice réunit donc leurs cas types sur la réaction du cours (eau oxygénée et ions
+iodure, valeurs de `tl_rp5_avancement` et `tl_f7_palier`) : demi-équations et équation (piles, électrolyse : 12 à 15
+sessions), tableau d'avancement ligne par ligne et réactif limitant, la grandeur suivie n(I₂) = x, la température facteur
+cinétique et le même état final (2018 N, 2023 N, 2024 N, 2025 N), la trempe (2017 R). Il est appelé « exercice type
+national » à l'écran, jamais « national 20xx ». Rien hors du cadre : ni vitesse, ni t½ (ch10).
+Placé après la trempe et le catalyseur, avant les deux nationaux.
+
+### Le chiffre de la carte (`tl_o1_carte`), vérifié
+« Facteurs cinétiques dans dix sessions » ne tenait pas : relevé sur les 20 sujets (exam.json, questions et corrigés), des
+questions sur les facteurs cinétiques, le catalyseur ou la trempe tombent dans **8 sessions** (2016 R, 2017 N, 2017 R,
+2018 N, 2018 R, 2023 N, 2024 N, 2025 N). La voix (fr et darija) et la puce disent maintenant « huit », et la carte l'écrit
+(`carte.html?sessions=8` ; sans paramètre, la carte garde 10 pour le cours en ligne, dont la voix dit « dix »). Sa voix est à
+refaire. Les « quatorze sessions » des demi-équations restent : notre relevé donne 12 à 15 selon ce qu'on compte.
+
+### `facteurs.html` : `conclusions: false` vérifié dans le navigateur
+Vue `concentration` (observation de `tl_f5_concentre`) : avec `conclusions: false`, la ligne « le plus concentré brunit
+plus vite » n'est pas écrite et la bulle demande « Lequel brunit le plus vite ? » ; après `conclusions: true`, la ligne
+s'écrit et la bulle dit « le plus concentré est en avance ». Rien de décisif avant la réponse.
+
+**La règle suivie à chaque étape** (demande du 18 novembre : « simple, animé, expliqué ; ne pas tout donner au départ ; laisser
+à l'élève le temps de trouver seul ») :
+1. la voix confirme la correction de l'étape d'avant pendant qu'elle se construit au tableau (moment `rappel` : la tangente
+   se trace, la ligne du tableau d'avancement s'écrit, la réponse s'ajoute dans « Ta copie ») ;
+2. elle pose UNE question (moment `question`) en nommant l'outil, jamais le résultat ; la simulation écrit la question
+   et « … à toi d'abord » : la réponse reste cachée (`conclusions` faux par défaut) ;
+3. l'élève répond (question ouverte jugée sur l'`attendu`, ou QCM avec ses réactions préparées) ;
+4. la démonstration écrit la correction ligne par ligne, comme le barème la lit (relation, conversion, application
+   numérique, résultat avec son unité) ; la diapositive suivante la redessine au tableau (étape 1).
+Une diapositive par étape (`?etape=k`) : l'iframe se recharge et s'ouvre sur son état (règle 39). Les formules sont écrites
+en notation (fractions superposées au tableau), les unités dites en mots dans la voix.
+
+**Règle « un tableau par bloc ».** Dans cette partie, chaque étape porte sa question : c'est la demande du 18 novembre
+(« la réponse de l'élève avant la correction »), plus récente que la règle du 13 novembre. Ailleurs, elle ne change pas.
+Les questions ouvertes n'ont pas de réaction préparée : elles sont jugées en direct sur l'`attendu`, comme `rc_e2a`.
+
+**La simulation** `national-pas-a-pas.html` (nouvelle, dans le dossier du cours) et son moteur `pas-a-pas.js` (une copie
+par dossier de cours, aucun fichier partagé modifié) : figure du sujet à gauche (circuit peint avec les flèches de la
+convention récepteur, courbes tracées à la craie, tableau d'avancement), « Ta copie » à droite. Moments : `enonce`,
+`courbe`, `rappel`, `question`, `correction` ; vue `sujet` : `donnees`, `questions` ; `?etape=fin` : la copie complète.
+Vérifiée dans Chromium à 1280 × 640 et 724 × 350 (téléphone en paysage) : aucune erreur, aucun texte hors cadre, texte ≥ 15 px
+(plancher du kit), fractions sans chevauchement.
+
+#### IX. Un exercice type national, joué pas à pas
+
+| Diapositive | Titre | Visuel | À toi | Pourquoi ici |
+|---|---|---|---|---|
+| `tl_np0_sujet` | Un exercice type national : lire le sujet deux fois | national-pas-a-pas.html?sujet=iodure&etape=sujet |  | Règle 6 du professeur : le sujet lu deux fois (de quoi parle-t-il ? puis les données et ce qu'on cherche) avant tout calcul ; aucune question notée. |
+| `tl_np1_demi` | Étape 1 : les deux demi-équations | national-pas-a-pas.html?sujet=iodure&etape=1 | écrit | Couples et demi-équations (TLR2) : la question la plus fréquente du chapitre au national. |
+| `tl_np2_equation` | Étape 2 : l'équation de la réaction | national-pas-a-pas.html?sujet=iodure&etape=2 | écrit | L'équation à partir des deux demi-équations (TLR3) : un couple donne les électrons, l'autre les reçoit. |
+| `tl_np3_initial` | Étape 3 : le tableau, l'état initial | national-pas-a-pas.html?sujet=iodure&etape=3 | écrit | Le tableau construit ligne par ligne (demande du 18/11) : l'état initial seul, n₀(I⁻) = [I⁻]₀·V calculé. |
+| `tl_np4_encours` | Étape 4 : le tableau, en cours | national-pas-a-pas.html?sujet=iodure&etape=4 | écrit | La ligne « en cours » seule : les coefficients disent combien part et se forme. |
+| `tl_np5_limitant` | Étape 5 : x_max et le réactif limitant | national-pas-a-pas.html?sujet=iodure&etape=5 | écrit | L'état final : x_max pour chaque réactif, la plus petite valeur, le réactif limitant (TLR6 : le palier). |
+| `tl_np6_suivi` | Étape 6 : suivre la transformation par n(I₂) | national-pas-a-pas.html?sujet=iodure&etape=6 | écrit | La grandeur suivie : n(I₂) = x ; la courbe se trace avant la question ; sa valeur finale vient du tableau. |
+| `tl_np7_temperature` | Étape 7 : quelle courbe à 40 °C ? | national-pas-a-pas.html?sujet=iodure&etape=7 | QCM | La température facteur cinétique sur deux courbes (2023 N, 2025 N) : QCM avec réactions préparées. |
+| `tl_np8_final` | Étape 8 : le même état final | national-pas-a-pas.html?sujet=iodure&etape=8 | écrit | Le même état final (2024 N, 2025 N : vrai/faux) : la température change la durée, pas x_max. |
+| `tl_np9_trempe` | Étape 9 : arrêter la transformation | national-pas-a-pas.html?sujet=iodure&etape=9 | écrit | La trempe (2017 R) : froid et dilution, deux facteurs cinétiques qui diminuent. |
+| `tl_np10_copie` | La copie complète | national-pas-a-pas.html?sujet=iodure&etape=fin |  | Règle 33 : la copie complète vient après la dernière étape, jamais avant ; chaque réponse se relit comme le barème la lit (relation, application numérique, résultat et unité). |
+
+### Les mots
+`python -X utf8 scripts/voix/verifier_mots.py en_attente/phys_ch9_transformations_lentes_rapides` sur chaque piste nouvelle ou réécrite : plus aucun mot
+rare évitable. Remplacés : « milliampères » (0 fois dans le corpus de la voix) → « milliampère » ; « kiloohm(s) » (0) →
+« mille ohm » ; « microfarads » (0) → « micro farad » ; « millijoules » (1) → « millijoule » ; « palier » (0) → « la valeur
+finale » ; « sommets » (0) → « l'amplitude » ; « quarante-huit », « cinquante-six », « trente-neuf » écrits sans trait
+d'union (« quarante huit ») ; en darija, « فارغ » → « خاوي », « نرتبو » → « نكتبو l'équation », « كتوافق » → « كيكون عند »,
+« ضاعت » → « dissipée », « كيصحح / كيقراها » → « فالتصحيح » ; au ch9, les réactions de `tl_r6_classer` (« portail », « الراسب »,
+« كنحكمو »…) et de `tl_f8_variable` (« تقلقش », « فالتابلو », « quelles »…) sont réécrites. Restent, parce que ce sont des
+termes du programme : chlorure (AgCl, nom d'espèce), diiode, glacée, iodure, précipitation (nom du choix écrit), trempe (liste `a_ecouter` du fichier des voix).
+Pistes à mettre en voix : 69, dont 47 de la 2ᵉ passe (`phys_ch9_transformations_lentes_rapides_voix.json`, champ « passe »).
+
+### Vérifications faites (2ᵉ passe)
+- Les copies en attente se chargent ; chaque `mot` du pointage et des démonstrations est un extrait exact de sa voix
+  (`scripts/logique/outils.py`, `verifier_mots`) ; les blocs suivent l'ordre du cours.
+- `python backend/scripts/verifier_pointage_simulations.py <cours> --ecarts` : aucune erreur « introuvable », ni sur la copie
+  en attente ni sur le cours en ligne. Les seuls avertissements des nouvelles diapositives sont des « GESTE » : sans piste,
+  la durée vaut 0 et tous les gestes tombent au même instant ; à relancer après la voix.
+- `cd backend && python -m pytest -q app/tests -k "course or cours or concentration"` (résultat dans le rapport du commit).
+- Simulations : Chromium, 1280 × 640 et 724 × 350, chaque étape à `question` puis `correction` : pas d'erreur console,
+  aucun texte hors cadre (`__horsCadre` vide), la réponse invisible avant `correction`.
+
+### Ce qui reste à faire (hors de cette session)
+- Les voix (Bodi, VPS, quota Kaggle épuisé aujourd'hui) des pistes du fichier `_voix.json`, puis relancer le contrôle du
+  pointage avec les vraies durées.
+- Les questions ouvertes de l'exercice joué n'ont pas de réaction préparée (jugées en direct sur l'`attendu`).
+- Aucun fichier partagé n'a été modifié (`shared/`, `frontend/src/`).
+<!-- 2e passe : fin -->

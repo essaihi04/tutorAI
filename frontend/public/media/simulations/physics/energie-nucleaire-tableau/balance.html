@@ -37,6 +37,9 @@ if (P.vue === 'helium') P.noyau = 'helium';
 if (q.get('noyau') && LISTE_NOYAUX.includes(q.get('noyau')) && q.get('noyau') !== 'helium' && !q.get('vue')) P.vue = 'noyau';
 // conclusions : false pendant une question d'observation du tuteur (14 novembre 2026) : le fléau penche, mais la conclusion n'est pas écrite.
 const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0, conclusions: !['0', 'false'].includes(q.get('conclusions')) };
+// somme=0 (2ᵉ passe, 18 novembre 2026, exercice du national joué) : la colonne pose Z·m_p + N·m_n avec les valeurs,
+// mais n'écrit pas la somme : c'est l'élève qui la calcule. Absent : comme avant.
+S.somme = !['0', 'false'].includes(q.get('somme'));
 
 /* ── Données (valeurs de référence du cours) ─────────────────────────────────────────────── */
 const NOYAUX = {
@@ -126,7 +129,7 @@ function crochets() {
 const assiette = cote => { const [x, y] = crochets()[cote]; return [x, y + FIL]; };   // centre du dessus du plateau
 
 /* ── Peinture : nucléons (sphères ombrées), amas, balance en métal, éclair ─────────────────── */
-const TEINTES = { p: ['#f6b6b0', '#d9534f', '#6e1d1a'], n: ['#e3ebf3', '#8fa3b8', '#3a4757'] };
+const TEINTES = { p: ['#fde2ef', '#f472b6', '#9d174d'], n: ['#e3ebf3', '#8fa3b8', '#3a4757'] };
 function sphere(ctx, x, y, r, k) {
   const [cl, cb, cf] = TEINTES[k];
   const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .08, x, y, r);
@@ -322,7 +325,7 @@ function groupes() {
   }
   const N = NUC(), Nn = N.A - N.Z;
   const g = [
-    ['nucleons_poses', [[['nucléons séparés :'], 'faible'], [[`${N.Z} m_p + ${Nn} m_n`], 'blanc'], [[`= ${N.Z} × 1,00728 + ${Nn} × 1,00866`], 'blanc'], [[`= ${N.somme} u`], 'jaune']]],
+    ['nucleons_poses', [[['nucléons séparés :'], 'faible'], [[`${N.Z} m_p + ${Nn} m_n`], 'blanc'], [[`= ${N.Z} × 1,00728 + ${Nn} × 1,00866`], 'blanc'], ...(S.somme ? [[[`= ${N.somme} u`], 'jaune']] : [[['= ? (à toi)'], 'rose']])]],
     ['noyau_pose', [[['noyau : m(', NOY(N), `) = ${N.m} u`], 'jaune']]],
     ['delta_m', [[[`Δm = ${N.somme} − ${N.m}`], 'blanc'], [[{ t: `= ${N.dm} u`, couleur: 'orange' }, { t: '  défaut de masse', couleur: 'orange' }], 'orange']]],
     ['energie', [[[`E_{ℓ} = Δm·c² = ${N.dm} × 931,5`], 'blanc'], [[`= ${N.El} MeV`], 'vert']]],
@@ -498,8 +501,8 @@ function contenuMots(cote) {
     return n < tot ? `${liste} (en cours)` : `${liste}, masse totale ${cote === 'g' ? rx.mR : rx.mP} u`;
   }
   if (cote === 'd') return `le noyau ${uni(N.A, N.Z, N.X)} (amas compact), m = ${N.m} u`;
-  if (N.A <= 4) { const p = Math.ceil(n / 2), ne = Math.floor(n / 2); return n < tot ? `${p} proton(s) et ${ne} neutron(s) séparés (en cours)` : `${N.Z} protons + ${N.A - N.Z} neutrons séparés, ${N.Z} m_p + ${N.A - N.Z} m_n = ${N.somme} u`; }
-  return n < tot ? `le tas de ${N.Z} protons (en cours)` : `deux tas : ${N.Z} protons et ${N.A - N.Z} neutrons séparés (leur nombre est écrit), ${N.Z} m_p + ${N.A - N.Z} m_n = ${N.somme} u`;
+  if (N.A <= 4) { const p = Math.ceil(n / 2), ne = Math.floor(n / 2); return n < tot ? `${p} proton(s) et ${ne} neutron(s) séparés (en cours)` : `${N.Z} protons + ${N.A - N.Z} neutrons séparés, ${N.Z} m_p + ${N.A - N.Z} m_n${S.somme ? ` = ${N.somme} u` : ' (somme à calculer par l’élève)'}`; }
+  return n < tot ? `le tas de ${N.Z} protons (en cours)` : `deux tas : ${N.Z} protons et ${N.A - N.Z} neutrons séparés (leur nombre est écrit), ${N.Z} m_p + ${N.A - N.Z} m_n${S.somme ? ` = ${N.somme} u` : ' (somme à calculer par l’élève)'}`;
 }
 function phase() {
   let dernier = null; for (const [n, t, m] of SUITE) if (S.t >= t - 1e-6) dernier = [n, m];
@@ -527,7 +530,7 @@ function ceQuiSeVoit() {
     if (fini('delta_m')) ecrits.push(`Δm = Σm(produits) − Σm(réactifs) = ${rx.mP} − ${rx.mR} = ${rx.dm} u (cote Δm entre les plateaux)`);
     if (fini('energie')) ecrits.push(`ΔE = Δm·c² = ${rx.dm} × 931,5 ${rx.egal} ${rx.dE} MeV ; E_lib = |ΔE| ${rx.egal} ${rx.lib} MeV (éclair peint sur le plateau des produits)`);
   } else {
-    if (fini('nucleons_poses')) ecrits.push(`${N.Z} m_p + ${N.A - N.Z} m_n = ${N.Z} × 1,00728 + ${N.A - N.Z} × 1,00866 = ${N.somme} u`);
+    if (fini('nucleons_poses')) ecrits.push(`${N.Z} m_p + ${N.A - N.Z} m_n = ${N.Z} × 1,00728 + ${N.A - N.Z} × 1,00866${S.somme ? ` = ${N.somme} u` : ' = ? (à calculer par l’élève)'}`);
     if (fini('noyau_pose')) ecrits.push(`m(${uni(N.A, N.Z, N.X)}) = ${N.m} u`);
     if (fini('balance_penche') && S.conclusions) ecrits.push('« m(noyau) < masse des nucléons séparés »');
     if (fini('delta_m')) ecrits.push(`Δm = ${N.somme} − ${N.m} = ${N.dm} u, « défaut de masse » (cote Δm entre les plateaux)`);
@@ -558,7 +561,11 @@ function playUntil(p) {
   pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
 }
 function start() { S.jusqua = null; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'On pose les masses sur la balance…'); pont.noter('start', params()); pont.emettre(); }
-function reset() { start(); }
+// Diapositive pilotée (18 novembre 2026, professeur 39) : `reset` FIGE la scène — sur ?depart=<moment> (tout ce qui
+// précède déjà écrit) ou sur zéro — et rien ne court seul ; la voix avance ensuite par play_until. Avant, reset = start.
+const DEPART = new URLSearchParams(location.search).get('depart');
+let FIGE = false;
+function reset() { FIGE = true; S.t = DEPART && M[DEPART] !== undefined ? M[DEPART] : 0; S.jusqua = null; S.motif = ''; S.running = false; S.fait = false; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Observe…'); pont.noter('reset', { time_s: +S.t.toFixed(3) }); pont.emettre(); }
 function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre(); }
 function resume() { if (S.running) return; if (S.fait || S.t >= FIN()) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
 function setTime(p) {
@@ -656,7 +663,7 @@ const pont = protocole({ id: config.id, commandes, config,
   progression: () => (S.fait ? 1 : 0),
   executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
 bulle($('feedback'), 'On va comparer des masses sur la balance…');
-setTimeout(() => { if (!S.running && S.t === 0) start(); }, 1600);
+setTimeout(() => { if (DEPART) reset(); else if (!FIGE && !S.running && S.t === 0) start(); }, 1600);
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>
 </body></html>

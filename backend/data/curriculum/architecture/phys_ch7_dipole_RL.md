@@ -84,7 +84,7 @@ Les trois scènes « ce qu'on règle » ont la même allure : le circuit peint �
 
 **L'élève écrit chaque ligne de l'équation.** La voix nomme l'outil (additivité ; loi d'Ohm et relation du dipôle ; on range). L'élève écrit la ligne dans son cahier, puis au tableau. C'est une question libre, jugée sur l'`attendu`. La démonstration corrige ensuite ligne par ligne. Puis vient la diapositive qui existait déjà et qui explique la même ligne autrement. Dans le RC, c'est la rédaction complète `rc_e2_etablir`. Dans le RL et le RLC, ce sont `e1`, `e2` et `e3`.
 
-**Règle « un tableau par bloc ».** Dans ce seul bloc de l'équation, chaque ligne a son tableau. C'est la demande du 18 novembre (« l'élève écrit chaque étape avant la correction »), plus récente que la règle du 13 novembre (« un tableau par bloc »). Ailleurs, la règle ne change pas.
+**Exception à la règle « un tableau par bloc », validée par l'utilisateur le 18 novembre 2026 (« une question par ligne »).** Dans le bloc de l'équation différentielle, chaque ligne que l'élève écrit lui-même garde sa propre question au tableau : `rl_e0a_additivite`, `rl_e0b_remplacer`, `rl_e0c_ranger`. Raison : laisser l'élève trouver seul, une étape à la fois, sa réponse avant la correction (demande du 18/11, plus récente que la règle du 13 novembre). Ailleurs dans le cours, la règle « un tableau par bloc » ne change pas.
 
 **Rien de ce qui vient plus tard n'est écrit avant l'équation** (règle 27) :
 - `tau-rc.html?avant=1` n'écrit ni τ, ni les 63 %, ni 5τ. Il dit seulement « charge plus lente / plus rapide, même E ».
@@ -131,7 +131,8 @@ Les trois scènes « ce qu'on règle » ont la même allure : le circuit peint �
 | Séance 3 — Ranger l’équation, ses formes, u_R, u_b, deux nationaux | **Ranger l’équation et la reconnaître dans les énoncés** (e0c_ranger, e3_equation, e4_formes) ; **L’équation en u_R, u_b au début et à la fin** (e5_uR, e6_ub) ; **Deux questions du national** (e7_2021R, e8_2019R) |
 | Séance 4 — L’exponentielle, la solution, τ : le calculer et le lire | **L’exponentielle, la forme de la solution, sa dérivée, τ** (rp4_exponentielle, s1_forme, s2_deriver, s3_tau) ; **A = I₀, l’autre écriture A + B·e^(−t/τ) et la condition initiale** (s4_A, s4b_forme, s4c_condition) ; **τ est un temps ; 63 % ; le lire par la tangente et les 63 %** (s5_dimension, s6_pourcent, l1_tangente, l2_pourcent) |
 | Séance 5 — L et R, trouver r et L, les courbes, puis la rupture | **L puis R ; trouver r et L** (s7_L, s8_R, l3_r, l4_L) ; **La droite di/dt = f(i) et la courbe u_b(t)** (l5_droite, l6_ub) ; **La rupture : la voir, l’écrire, la résoudre** (t1_rupture, t2a_verifier, t2_descente) |
-| Séance 6 — Étincelle et diode, l’énergie, deux nationaux, le bilan | **Étincelle, diode et le national 2025 R** (t3_diode, t4_national) ; **L’énergie magnétique** (l7_energie, l8_double) ; **Deux sujets du national, puis le bilan** (n1_2022R, n2_2024N, bl_fiche, cr_carte) |
+| Séance 6 — Étincelle et diode, l’énergie, puis le national 2023 N joué pas à pas | **Étincelle, diode et le national 2025 R** (t3_diode, t4_national) ; **L’énergie magnétique** (l7_energie, l8_double) ; **2023 N : le sujet, l’équation, la solution** (np0_sujet, np1_equation, np2_remplacer, np3_constantes) |
+| Séance 7 — La fin du 2023 N, deux sujets complets, le bilan | **2023 N : I₀, puis τ par la tangente et par les 63 %, L** (np4_lire, np5_tangente, np6_pourcent, np7_L) ; **2023 N : u_b(t), l’énergie, la copie complète** (np8_ub, np9_energie, np10_copie) ; **Deux sujets du national, puis le bilan** (n1_2022R, n2_2024N, bl_fiche, cr_carte) |
 
 
 ## Diapositive par diapositive
@@ -257,3 +258,84 @@ Les trois scènes « ce qu'on règle » ont la même allure : le circuit peint �
 - **Les voix**, sur le VPS (voix Bodi), une fois le quota Kaggle revenu : les pistes `pistes` du fichier `_voix.json`. Ensuite, poser les pistes, relancer le contrôle du pointage avec les vraies durées, puis remplacer le cours en ligne par la copie en attente.
 - **Les réactions préparées** des questions écrites : aucune. Une réponse libre est jugée en direct, sur l'`attendu`.
 - **Aucun fichier partagé n'a été modifié** (ni `shared/`, ni `frontend/src/`). Il n'y a aucun besoin côté lecteur.
+
+<!-- 2e passe : début -->
+## 2ᵉ passe (18 novembre 2026) : le national joué pas à pas
+
+### Ce qui manquait (évaluation de la 1ʳᵉ passe)
+Les sujets du national (`rl_n1_2022R`, `rl_n2_2024N`, `rl_e7`, `rl_e8`, `rl_t4`) se jouaient avec la voix qui donnait
+chaque réponse ; aucun n'était fait par l'élève étape par étape, en particulier « vérifier la solution, trouver A, B et τ »
+(4 sessions) et la lecture de τ (9 sessions).
+
+### Ce qui est ajouté : le national 2023 N, partie 1, joué pas à pas (11 diapositives)
+Corrigé lu le 18/11 : E = 24 V, r négligeable, I₀ = 48 mA, τ = 2 ms, R = 500 Ω, L = 1 H, u_L(t) = 24·e^(−500·t)
+(écrite u_b, la notation du cours, « notée u_L dans le sujet »). Le cours ne l'utilisait pas (le RLC n'en garde que la
+partie LC, `lc_l4_2023`). Mêmes étapes, dans le même ordre, que le RC 2022 N ; deux questions ajoutées : les 63 % et
+l'énergie ½·L·I₀² ≈ 1,2 mJ. Placé après l'énergie magnétique, avant les deux sujets complets.
+
+**La règle suivie à chaque étape** (demande du 18 novembre : « simple, animé, expliqué ; ne pas tout donner au départ ; laisser
+à l'élève le temps de trouver seul ») :
+1. la voix confirme la correction de l'étape d'avant pendant qu'elle se construit au tableau (moment `rappel` : la tangente
+   se trace, la ligne du tableau d'avancement s'écrit, la réponse s'ajoute dans « Ta copie ») ;
+2. elle pose UNE question (moment `question`) en nommant l'outil, jamais le résultat ; la simulation écrit la question
+   et « … à toi d'abord » : la réponse reste cachée (`conclusions` faux par défaut) ;
+3. l'élève répond (question ouverte jugée sur l'`attendu`, ou QCM avec ses réactions préparées) ;
+4. la démonstration écrit la correction ligne par ligne, comme le barème la lit (relation, conversion, application
+   numérique, résultat avec son unité) ; la diapositive suivante la redessine au tableau (étape 1).
+Une diapositive par étape (`?etape=k`) : l'iframe se recharge et s'ouvre sur son état (règle 39). Les formules sont écrites
+en notation (fractions superposées au tableau), les unités dites en mots dans la voix.
+
+**Règle « un tableau par bloc ».** Dans cette partie, chaque étape porte sa question : c'est la demande du 18 novembre
+(« la réponse de l'élève avant la correction »), plus récente que la règle du 13 novembre. Ailleurs, elle ne change pas.
+Les questions ouvertes n'ont pas de réaction préparée : elles sont jugées en direct sur l'`attendu`, comme `rc_e2a`.
+
+**La simulation** `national-pas-a-pas.html` (nouvelle, dans le dossier du cours) et son moteur `pas-a-pas.js` (une copie
+par dossier de cours, aucun fichier partagé modifié) : figure du sujet à gauche (circuit peint avec les flèches de la
+convention récepteur, courbes tracées à la craie, tableau d'avancement), « Ta copie » à droite. Moments : `enonce`,
+`courbe`, `rappel`, `question`, `correction` ; vue `sujet` : `donnees`, `questions` ; `?etape=fin` : la copie complète.
+Vérifiée dans Chromium à 1280 × 640 et 724 × 350 (téléphone en paysage) : aucune erreur, aucun texte hors cadre, texte ≥ 15 px
+(plancher du kit), fractions sans chevauchement.
+
+#### IX. Le national 2023 N, joué pas à pas
+
+| Diapositive | Titre | Visuel | À toi | Pourquoi ici |
+|---|---|---|---|---|
+| `rl_np0_sujet` | Le national 2023 N : lire le sujet deux fois | national-pas-a-pas.html?sujet=rl2023n&etape=sujet |  | Règle 6 du professeur : le sujet lu deux fois (de quoi parle-t-il ? puis les données et ce qu'on cherche) avant tout calcul ; aucune question notée. |
+| `rl_np1_equation` | 2023 N, étape 1 : l'équation différentielle | national-pas-a-pas.html?sujet=rl2023n&etape=1 | écrit | Cas type « établir l'équation en i » (6 sessions), la démarche de `rl_e0a`–`rl_e0c` sur un sujet. |
+| `rl_np2_remplacer` | 2023 N, étape 2 : dériver et remplacer | national-pas-a-pas.html?sujet=rl2023n&etape=2 | écrit | Cas type « vérifier la solution » (4 sessions) : dériver, remplacer, regrouper — une étape seule. |
+| `rl_np3_constantes` | 2023 N, étape 3 : τ, A et B | national-pas-a-pas.html?sujet=rl2023n&etape=3 | écrit | Identifier « pour tout t », puis la condition initiale : B séparé de A (corrigé du sujet, règle 37). |
+| `rl_np4_lire` | 2023 N, étape 4 : lire I₀ | national-pas-a-pas.html?sujet=rl2023n&etape=4 | écrit | Régime permanent I₀ (6 sessions), lu seul avant le calcul de L. |
+| `rl_np5_tangente` | 2023 N, étape 5 : τ par la tangente | national-pas-a-pas.html?sujet=rl2023n&etape=5 | écrit | τ graphiquement (9 sessions) : la tangente (T) du sujet, comme dans le RC. |
+| `rl_np6_pourcent` | 2023 N, étape 6 : τ par les 63 % | national-pas-a-pas.html?sujet=rl2023n&etape=6 | écrit | Seconde méthode, comme dans le RC (règle 11). |
+| `rl_np7_L` | 2023 N, étape 7 : montrer que L = 1 H | national-pas-a-pas.html?sujet=rl2023n&etape=7 | écrit | Trouver L à partir de τ (9 sessions) : L = τ·E/I₀. |
+| `rl_np8_ub` | 2023 N, étape 8 : l'expression de u_b(t) | national-pas-a-pas.html?sujet=rl2023n&etape=8 | écrit | Question 1-3 du sujet (u_b(t), « u_L » dans le sujet) : dériver, simplifier L/(R·τ) = 1, écrire en SI. |
+| `rl_np9_energie` | 2023 N, étape 9 : l'énergie de la bobine | national-pas-a-pas.html?sujet=rl2023n&etape=9 | écrit | Question ajoutée (énergie : 4 sessions, cadre RL8), parallèle au RC. |
+| `rl_np10_copie` | 2023 N : la copie complète | national-pas-a-pas.html?sujet=rl2023n&etape=fin |  | Règle 33 : la copie complète vient après la dernière étape, jamais avant ; chaque réponse se relit comme le barème la lit (relation, application numérique, résultat et unité). |
+
+### Les mots
+`python -X utf8 scripts/voix/verifier_mots.py en_attente/phys_ch7_dipole_RL` sur chaque piste nouvelle ou réécrite : plus aucun mot
+rare évitable. Remplacés : « milliampères » (0 fois dans le corpus de la voix) → « milliampère » ; « kiloohm(s) » (0) →
+« mille ohm » ; « microfarads » (0) → « micro farad » ; « millijoules » (1) → « millijoule » ; « palier » (0) → « la valeur
+finale » ; « sommets » (0) → « l'amplitude » ; « quarante-huit », « cinquante-six », « trente-neuf » écrits sans trait
+d'union (« quarante huit ») ; en darija, « فارغ » → « خاوي », « نرتبو » → « نكتبو l'équation », « كتوافق » → « كيكون عند »,
+« ضاعت » → « dissipée », « كيصحح / كيقراها » → « فالتصحيح » ; au ch9, les réactions de `tl_r6_classer` (« portail », « الراسب »,
+« كنحكمو »…) et de `tl_f8_variable` (« تقلقش », « فالتابلو », « quelles »…) sont réécrites. Restent, parce que ce sont des
+termes du programme : anri (henry, règle de prononciation : unité du programme), henry (lu « anri » par la règle de prononciation), milliampères, ohms, palier (liste `a_ecouter` du fichier des voix).
+Pistes à mettre en voix : 39, dont 30 de la 2ᵉ passe (`phys_ch7_dipole_RL_voix.json`, champ « passe »).
+
+### Vérifications faites (2ᵉ passe)
+- Les copies en attente se chargent ; chaque `mot` du pointage et des démonstrations est un extrait exact de sa voix
+  (`scripts/logique/outils.py`, `verifier_mots`) ; les blocs suivent l'ordre du cours.
+- `python backend/scripts/verifier_pointage_simulations.py <cours> --ecarts` : aucune erreur « introuvable », ni sur la copie
+  en attente ni sur le cours en ligne. Les seuls avertissements des nouvelles diapositives sont des « GESTE » : sans piste,
+  la durée vaut 0 et tous les gestes tombent au même instant ; à relancer après la voix.
+- `cd backend && python -m pytest -q app/tests -k "course or cours or concentration"` (résultat dans le rapport du commit).
+- Simulations : Chromium, 1280 × 640 et 724 × 350, chaque étape à `question` puis `correction` : pas d'erreur console,
+  aucun texte hors cadre (`__horsCadre` vide), la réponse invisible avant `correction`.
+
+### Ce qui reste à faire (hors de cette session)
+- Les voix (Bodi, VPS, quota Kaggle épuisé aujourd'hui) des pistes du fichier `_voix.json`, puis relancer le contrôle du
+  pointage avec les vraies durées.
+- Les questions ouvertes de l'exercice joué n'ont pas de réaction préparée (jugées en direct sur l'`attendu`).
+- Aucun fichier partagé n'a été modifié (`shared/`, `frontend/src/`).
+<!-- 2e passe : fin -->

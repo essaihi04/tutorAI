@@ -309,7 +309,7 @@ let MO = null;
   };
 })();
 const ZY = [352, 376, 400];
-const NA = ['#f1e1ff', '#a855f7', '#4c1d95'], HO = ['#ffd4d4', '#e04848', '#6a1010'], AC = ['#d6ffe0', '#3fbf62', '#0f5a23'], CL = ['#d9f7ff', '#22b8d6', '#0b4a5a'];
+const NA = ['#f1e1ff', '#a855f7', '#4c1d95'], HO = ['#e0f2fe', '#60c8fa', '#0c4a6e'], AC = ['#d6ffe0', '#3fbf62', '#0f5a23'], CL = ['#d9f7ff', '#22b8d6', '#0b4a5a'];
 /** Appareil de mesure peint (conductimètre, manomètre) : boîtier sombre, écran vert, valeur affichée. */
 function appareil(c, A, texte, o = {}) {
   c.direct(() => {
@@ -428,7 +428,7 @@ function eqn2(c, x, y, gauche, droite, o = {}) {
   return { x: x0, w: tot };
 }
 const ACIDE = [112, 194, 248, .36];                      // solutions acides : incolores : peintes comme une eau claire un peu bleutée (16 nov. 2026, couleurs plus vives)
-const H3O = ['#ffe1c7', '#f97316', '#7c2d12'], MOL = ['#eef1f4', '#9aa3ab', '#4b535b'];
+const H3O = ['#fde2ef', '#f472b6', '#9d174d'], MOL = ['#eef1f4', '#9aa3ab', '#4b535b'];
 const MODELE_ION = new Map([[H3O, ['H3O', .62]], [AC, ['CH3COO', .5]], [MOL, ['CH3COOH', .5]], [CL, ['Cl', .7]], [NA, ['Na', .7]], [HO, ['HO', .7]]]);
 /** pH-mètre peint : boîtier gris, afficheur vert (pH à 0,1 près). */
 function phmetre(c, A, texte) {
@@ -721,20 +721,20 @@ function vueNational(c, M) {
   });
   M.etape(c, 'conversion', () => {
     attention(c, 30, 280, { h: 18 });
-    c.texte('C = 1,0·10⁻³ mol/L = 1,0 mol/m³', 58, 280, { couleur: 'orange', taille: 21 });
+    c.texte(CONCL ? 'C = 1,0·10⁻³ mol/L = 1,0 mol/m³' : 'C = 1,0·10⁻³ mol/L = ? mol/m³', 58, 280, { couleur: 'orange', taille: 21 });
     c.texte('(σ en S/m et λ en S·m²·mol⁻¹ : C en mol/m³)', 58, 304, { couleur: 'orange', taille: 16 });
   });
-  M.etape(c, 'application', () => {
+  if (CONCL) M.etape(c, 'application', () => {
     c.texte('τ = 8,6·10⁻³/(1,0 × 38,23·10⁻³)', 30, 344, { taille: 22 });
     c.texte('(λ₁ + λ₂ = 38,23·10⁻³ S·m²·mol⁻¹)', 372, 344, { couleur: 'faible', taille: 16 });
   });
-  M.etape(c, 'resultat', () => {
+  if (CONCL) M.etape(c, 'resultat', () => {
     c.texte('τ = 0,22 < 1 : réaction limitée', 44, 394, { couleur: 'jaune', taille: 24 }); c.rect(32, 364, 330, 42, { couleur: 'jaune', largeur: 1.8, arrondi: 8 });
   });
   const vues = [];
   for (const [n, t] of [['donnees', 'acide benzoïque C₆H₅COOH + H₂O ⇌ C₆H₅COO⁻ + H₃O⁺ ; C = 1,0·10⁻³ mol/L ; σ = 8,6·10⁻³ S/m ; λ₁ = 35·10⁻³ et λ₂ = 3,23·10⁻³ S·m²·mol⁻¹'],
     ['relation', 'σ = (λ₁ + λ₂)·[H₃O⁺] et [H₃O⁺] = x_f/V = τ·C, donc τ = σ/(C·(λ(H₃O⁺) + λ(A⁻)))'], ['conversion', '⚠ C = 1,0·10⁻³ mol/L = 1,0 mol/m³'],
-    ['application', 'τ = 8,6·10⁻³/(1,0 × 38,23·10⁻³)'], ['resultat', 'τ = 0,22 < 1 : réaction limitée']]) if (M.commence(n)) vues.push(t);
+    ['application', 'τ = 8,6·10⁻³/(1,0 × 38,23·10⁻³)'], ['resultat', 'τ = 0,22 < 1 : réaction limitée']]) if (M.commence(n) && (CONCL || !['application', 'resultat'].includes(n))) vues.push(CONCL || n !== 'conversion' ? t : '⚠ C = 1,0·10⁻³ mol/L = ? mol/m³ (question en cours)');
   return vues;
 }
 
@@ -780,7 +780,10 @@ function voir(M) {
   if (M.vues && M.vues.length) m.push(`Écrit : ${M.vues.map(s => `« ${s} »`).join(' ; ')}.`);
   return m.join(' ');
 }
-const params = M => ({ vue: M.S.vue });
+/* conclusions (2ᵉ passe du 18 novembre 2026, question d'observation de td_n2_conductivite) : false tait la valeur de C en mol/m³
+ * (« ? ») et la suite du calcul, vue national ; true (défaut) : comme avant. */
+let CONCL = true;
+const params = M => ({ vue: M.S.vue, conclusions: CONCL });
 const MOT = Moteur({
   id: 'tds_conductimetrie', titre: 'Conductimétrie et taux d’avancement final : σ vient des ions, σ = (λ(H₃O⁺) + λ(A⁻))·[H₃O⁺], calcul de τ, national 2019 N', vues: VUES, titres: TITRES,
   etapes: ETAPES, motifs: MOTIFS, dessiner, voir, params,
@@ -788,8 +791,8 @@ const MOT = Moteur({
     national: 'Un exercice du national 2019.' })[M.S.vue],
   messageFin: M => ({ ions: 'Moins d’ions : σ plus petite ; la réaction de l’acide éthanoïque est limitée.', relation: 'σ = (λ(H₃O⁺) + λ(A⁻))·[H₃O⁺].',
     calcul: '[H₃O⁺] = 3,99·10⁻⁴ mol/L et τ = 0,040.', national: 'τ = 0,22 : la réaction est limitée.' })[M.S.vue],
-  appliquer: (p, M) => { const r = {}; if (VUES.includes(p.vue)) r.vue = p.vue; r.change = !!(r.vue && r.vue !== M.S.vue); return r; },
-  schema: { vue: VUES.join(' | ') + ' (change la vue et relance)' },
+  appliquer: (p, M) => { const r = {}; if (typeof p.conclusions === 'boolean') CONCL = p.conclusions; if (VUES.includes(p.vue)) r.vue = p.vue; r.change = !!(r.vue && r.vue !== M.S.vue); return r; },
+  schema: { vue: VUES.join(' | ') + ' (change la vue et relance)', conclusions: 'true | false (vue national, question d’observation : false tait C en mol/m³ et la suite du calcul ; true par défaut)' },
   texte: 'Conductimétrie (σ = Σ λᵢ·[Xᵢ]). Exemple C : même C = 1,0·10⁻² mol/L ; acide éthanoïque σ = 15,6 mS/m = 1,56·10⁻² S/m ; acide chlorhydrique σ = 426 mS/m. λ(H₃O⁺) = 35,0 ; λ(CH₃COO⁻) = 4,09 ; λ(Cl⁻) = 7,63 mS·m²·mol⁻¹ ; ions HO⁻ négligés. Tableau : [CH₃COO⁻] = [H₃O⁺], d’où σ = (λ(H₃O⁺) + λ(A⁻))·[H₃O⁺] ; [H₃O⁺] = 1,56·10⁻²/(39,09·10⁻³) = 0,399 mol/m³ = 3,99·10⁻⁴ mol/L (⚠ 1 mol/L = 10³ mol/m³) ; τ = 3,99·10⁻⁴/1,0·10⁻² = 0,040, comme avec le pH. National 2019 N : acide benzoïque, C = 1,0·10⁻³ mol/L = 1,0 mol/m³, σ = 8,6·10⁻³ S/m, λ₁ = 35·10⁻³, λ₂ = 3,23·10⁻³ S·m²·mol⁻¹ ; τ = σ/(C·(λ₁ + λ₂)) = 8,6·10⁻³/(1,0 × 38,23·10⁻³) = 0,22.',
   explications: {
     ions: [{ repere: 'becher_ethanoique', texte: 'Même concentration…' }, { repere: 'afficheur_1', texte: 'Ici, 15,6 millisiemens par mètre.' },

@@ -47,6 +47,8 @@ export function useMemoireDuCours({ deck, deckId, slideId, actif, onAvancer, onQ
   const avancer = useRef(onAvancer); avancer.current = onAvancer;
   const quitter = useRef(onQuitter); quitter.current = onQuitter;
   const place = useMemo(() => (slideId && avecSeances ? placeDansLesSeances(seances, slideId) : null), [seances, slideId, avecSeances]);
+  /** Un rappel sauté fermait un bloc (`fermerBlocDe`) : son cahier bouclé, le cours avance quelle que soit la diapositive affichée. */
+  const avancerApresCycle = useRef(false);
 
   const commencerSeance = useCallback((seance: number) => {
     debutMs.current = Date.now();
@@ -75,14 +77,16 @@ export function useMemoireDuCours({ deck, deckId, slideId, actif, onAvancer, onQ
 
   const finDuCycle = useCallback((e: Extract<Ecran, { genre: 'cycle' }>) => {
     blocsFaits.current.add(seances[e.seance]?.blocs[e.bloc]?.id || '');
+    const force = avancerApresCycle.current;
+    avancerApresCycle.current = false;
     detecteur.current.remettreAZero();
     taire();
     if (e.puis === 'pause') { setEcran({ genre: 'fin', seance: e.seance, raison: 'saturation' }); return; }
     if (e.bloc >= (seances[e.seance]?.blocs.length || 0) - 1) { setEcran({ genre: 'fin', seance: e.seance, raison: 'fin' }); return; }
     setEcran(null);
     // le cycle repris au début de la séance n'est pas forcément celui de la diapositive affichée : on avance seulement
-    // si la diapositive affichée est bien la dernière du bloc bouclé
-    if (place && place.seance === e.seance && place.bloc === e.bloc) avancer.current();
+    // si la diapositive affichée est bien la dernière du bloc bouclé (ou si un rappel sauté fermait ce bloc)
+    if (force || (place && place.seance === e.seance && place.bloc === e.bloc)) avancer.current();
   }, [seances, place]);
 
   const blocAFermer = !!(avecSeances && place?.derniereDuBloc && !blocsFaits.current.has(place.blocCours.id));
@@ -90,6 +94,19 @@ export function useMemoireDuCours({ deck, deckId, slideId, actif, onAvancer, onQ
     if (!place) { avancer.current(); return; }
     setEcran({ genre: 'cycle', seance: place.seance, bloc: place.bloc, etape: 'cahier', puis: 'suite' });
   }, [place]);
+
+  /**
+   * Un rappel SAUTÉ (`concentration.rappel`, 18 novembre 2026) est la dernière diapositive d'un bloc pas encore bouclé :
+   * le cahier de ce bloc vient quand même (ses lignes valent pour tous), puis le cours avance. Vrai si le cycle s'ouvre.
+   */
+  const fermerBlocDe = useCallback((idDiapo: string): boolean => {
+    if (!avecSeances) return false;
+    const p = placeDansLesSeances(seances, idDiapo);
+    if (!p?.derniereDuBloc || blocsFaits.current.has(p.blocCours.id)) return false;
+    avancerApresCycle.current = true;
+    setEcran({ genre: 'cycle', seance: p.seance, bloc: p.bloc, etape: 'cahier', puis: 'suite' });
+    return true;
+  }, [avecSeances, seances]);
 
   const saturer = useCallback((cause: CauseSaturation) => {
     if (!avecSeances || !place || ecran) return;
@@ -130,5 +147,5 @@ export function useMemoireDuCours({ deck, deckId, slideId, actif, onAvancer, onQ
       onContinuer={() => { setEcran(null); commencerSeance(e.seance + 1); avancer.current(); }} />;
   }
 
-  return { avecSeances, place, nbSeances: seances.length, ecran: rendu, blocAFermer, fermerBloc, signalerReponse };
+  return { avecSeances, place, nbSeances: seances.length, ecran: rendu, blocAFermer, fermerBloc, fermerBlocDe, signalerReponse };
 }

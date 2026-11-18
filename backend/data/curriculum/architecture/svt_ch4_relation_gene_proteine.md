@@ -164,33 +164,120 @@ début), 57. `rg_b1_bilan`, 58. `rg_b2_carte`.
 
 Questions d'observation : 4 (1 en ligne + 3 nouvelles), sur des voix **inchangées** pour `rg_r3`, `rg_m2`, `rg_m3`.
 
-## 5. Animations et besoins notés (fichiers non modifiés)
+## 5. Animations et besoins notés
 
-- `rg_p4b_albinisme`, `rg_p5_beadle_tatum`, `rg_a5_in_vitro`, `rg_t2b_arbre_noel`, `rg_c1b_nirenberg` sont encore
-  des tableaux de document sans animation (`visual.kind: none`). Règle 35 : leurs données devraient **naître d'une
-  animation** — boîtes de culture des mutants de Neurospora qui poussent ou non selon le milieu (un curseur : la
-  substance ajoutée), tube in vitro dont le compteur d'acides aminés incorporés monte après chaque injection d'ARNm,
-  ARNm poly-U lu par trois et qui sort Phe – Phe – Phe. À faire dans `svt/relation_gene_proteine-tableau/` (nouvelles
-  vues), puis remplacer `visual` et le `pointage` sur les mots déjà dits.
-- `mutation.html` : pour les observations de `rg_m2` et `rg_m3`, la simulation devrait accepter
-  `{conclusions: false}` pour masquer « silencieuse » / « stop » tant que l'élève n'a pas répondu.
-- `adn_arnm_proteine.png` (ouverture) : une version sans légendes ni flèches suffirait comme « image à expliquer ».
+- **Fait en 2ᵉ passe** (voir § 8) : les cinq documents lus en tableau naissent d'une animation (`documents.html`) ;
+  `mutation.html` accepte `{conclusions: false}` et les observations de `rg_m2`, `rg_m3` s'en servent.
+- `adn_arnm_proteine.png` (ouverture) : une version sans légendes ni flèches suffirait comme « image à expliquer »
+  (image, pas une simulation : non fait).
+- `traduction.html` (observation de `rg_r3`) : relue — au moment `elongation` où la voix s'arrête, l'ARNt GCG n'est pas
+  encore arrivé (moment `arnt_2_arrive`, plus loin) ; rien à cacher. `marquage.html` (`rg_a4`) tait déjà sa conclusion.
 
 ## 6. Voix
 
-`svt_ch4_relation_gene_proteine_voix.json` : 24 pistes — 3 diapositives réécrites (`rg_o1_caracteres`, `rg_a2_usine`,
-`rg_a1_arn`) et 21 champs des 3 nouvelles questions d'observation. Les 55 autres diapositives gardent leur id et leur
-texte : leur voix reste.
+`svt_ch4_relation_gene_proteine_voix.json` (régénéré après la 2ᵉ passe) : **80 pistes** — 10 diapositives (les 3 de la
+1re passe, `rg_e5_national` réécrite, 6 nouvelles `rg_e5a`, `rg_e7`, `rg_e7b`, `rg_e7c`, `rg_e8`, `rg_e8b`), 35 réactions,
+7 démonstrations, 7 énoncés, 21 champs d'observation (1re passe). Les cinq documents animés (`rg_p4b`, `rg_p5`, `rg_a5`,
+`rg_t2b`, `rg_c1b`) et `rg_m2`, `rg_m3` gardent leur texte, donc leur voix ; la question et l'exercice de
+`rg_e5_national` gardent les leurs (même texte).
 
-Mots vérifiés (même règle que `verifier_mots.py`) ; darija rare remplacé (تشرحها, كنخرجوش, تبدلاتش, كتحبس, كورات,
-وكتنتقل, البرتقالي). Restent, mots du programme à écouter : anticodon, redondance, redondant, silencieuse, faux-sens,
-méthionine, observables, ribose, l'uracile, marquage (« hématies » est déjà réécrit par une règle de prononciation).
+Mots vérifiés (même règle que `verifier_mots.py`, lancé sur `en_attente/svt_ch4_relation_gene_proteine`). 1re passe :
+darija rare remplacé (تشرحها, كنخرجوش, تبدلاتش, كتحبس, كورات, وكتنتقل, البرتقالي). 2ᵉ passe : السنان → الأسنان,
+كيفرزو → كيخرجو, كتموت / كتبداش / تموت → « la mortalité كتوصل cent pour cent », ما بقاتش كتخدم → كتوقف, تبدلاتش →
+ثابتة, كتتكتب → كنكتبو, كيحددها → هو اللي كيحدد, كتفسر → كتبين, سطور → سطر, كنساليو → ف اللخر, صحيحين → مزيانين,
+ضاع → مشى, يدخلش → ما بقاش كيدخل, الموستيك → les moustiques, كيخدموش → ما كيديرو والو ; les abréviations Ile, Phe,
+Gly ne sont plus lues (« la glycine », « la sérine »). Aucun mot darija rare dans les pistes nouvelles.
+Restent, mots du programme ou des sujets à écouter (skill prononciation) : anticodon, redondance, redondant,
+silencieuse, faux-sens, méthionine, observables, ribose, l'uracile, marquage ; et en 2ᵉ passe : amélogénèse,
+acétylcholinestérase, acétylcholine, carbamate, Culex, synapses, insecticide, moustiques, mortalité, milligrammes,
+résistants, conditionnel, Blackfan-Diamond, anémie, globules, hémoglobine, sous-unité(s), fonctionnels, complémentarité,
+barème, quarante-trois, quarante-sept.
 
 ## 7. Reproduire
 
 `python3 scripts/logique/refaire_svt_ch4.py` (relit le cours en ligne, écrit la version en attente, contrôle chaque
-`mot` et chaque `apres_mot`), puis `python3 -X utf8 scripts/logique/lister_voix.py svt_ch4_relation_gene_proteine`.
+`mot` et chaque `apres_mot`), puis `python3 scripts/logique/passe2_svt_ch4.py` (2ᵉ passe, sur la version en attente), puis `python3 -X utf8 scripts/logique/lister_voix.py svt_ch4_relation_gene_proteine`.
 Vérifications : `cd backend && python -m pytest -q app/tests -k "course or cours or concentration"`,
 `python backend/scripts/verifier_figures_cahier.py backend/data/courses/en_attente/svt_ch4_relation_gene_proteine.json`
 (0 erreur), `python backend/scripts/verifier_pointage_simulations.py backend/data/courses/en_attente/svt_ch4_relation_gene_proteine.json --ecarts`
 (aucun écart nouveau ; les « gestes trop serrés » des 3 diapositives sans voix disparaîtront avec leur durée réelle).
+
+## 8. 2ᵉ passe (18 novembre 2026) — chaque cas type du national joué pas à pas
+
+Demande : « simple, animé, expliqué ; ne pas tout donner au départ ; laisser à l'élève le temps de trouver seul ; une
+raison derrière chaque choix ». Script : `scripts/logique/passe2_svt_ch4.py`.
+
+### Les cas types du national (exploration `relation_gene_proteine.json`, `cas_types`) et où ils sont joués
+
+| Cas type (fréquence) | Déjà joué en animation, pas à pas | Ajouté en 2ᵉ passe |
+|---|---|---|
+| `arn_aa` (17/20) | `rg_t6_bareme`, `rg_c4_traduire` (tableau du code animé), `rg_e3_lignes` (méthode) | la consigne 2 du 2024 N (`rg_e5_national`) : les deux brins seuls, l'élève écrit l'ARNm et l'acide aminé avant la correction ; le triplet 247 du 2020 N (`rg_e7c_verifier`) |
+| `origine_genetique` (17/20) | `rg_e4_phrase` (la phrase maillon par maillon) | l'exercice de `rg_e5_national` (consigne 3, après la consigne 2) ; la vérification du 2020 N (`rg_e7c_verifier`, exercice) |
+| `proteine_caractere` (14) | `rg_p4_document` (2023 N, LDL, `examen.html?vue=document_ldl`, maillon par maillon) | la consigne 1 du 2024 N (`rg_e5a_document`) : le document d'abord, la réponse de l'élève, puis la correction en deux lignes |
+| `relation_gpc` | `rg_s1_gpc`, `rg_e6_drepanocytose` | — (elle termine chaque phrase d'origine génétique) |
+| `hypothese_verification` (2020 N, 2020 R) | aucun | **2020 N, moustiques résistants** : `rg_e7_moustiques` (documents 1 et 2 animés → relation), `rg_e7b_hypothese` (proposer, au conditionnel), `rg_e7c_verifier` (document 3 → ARNm, acide aminé → vérifier) |
+| `etapes_traduction` (2018 R) | `rg_r2`…`rg_r4` (initiation, élongation, terminaison jouées), `rg_s5_etapes` (`traduction.html?vue=trois_schemas`) | — |
+| `restitution` | `rg_e1_restitution` (cartes écrites une à une, QCM, vrai / faux) | — |
+| `ribosome_document` (2022 N) | aucun | **2022 N, Blackfan-Diamond** : `rg_e8_ribosomes` (histogramme qui pousse → comparer), `rg_e8b_hemoglobine` (assemblage des ribosomes → expliquer) |
+
+**Pourquoi rejouer le 2024 N** : `rg_e5_national` lisait les trois réponses dans la voix, puis posait la question 2 dont
+la réponse venait d'être dite (règle 3 : ne pas tout donner au départ). Il devient deux diapositives sur une nouvelle vue
+`examen.html?vue=amelogenine_pas` qui écrit une consigne à la fois et sa réponse seulement au moment suivant :
+`rg_e5a_document` (document → consigne 1 → QCM, la correction en deux lignes comme le barème) puis `rg_e5_national`
+(la réponse 1 écrite, les deux brins seuls → consigne 2 → QCM ; puis l'exercice de la consigne 3, dont la démonstration
+écrit la phrase du barème). La question et l'exercice gardent leur texte et leur voix.
+
+**Pourquoi ces deux sujets** : `hypothese_verification` et `ribosome_document` étaient les deux cas types sans aucun
+exercice dans le cours. 2020 N (moustiques) est le seul sujet qui enchaîne relation → hypothèse → vérification par les
+séquences, la démarche entière ; 2022 N (Blackfan-Diamond) est le seul document du national sur le ribosome. Valeurs
+lues sur les figures des sujets (`backend/data/exams/svt/2020-normale/assets/doc2p6.png`, `doc3p6.png` ; corrigé 2022 N) :
+activité de l'AChE S 97, 8, 0 % et R 32, 32, 28 % (0, 10⁻², 1 mg/L) ; mortalité S 0 → 100 % de 0,1 à 1 mg/L, R de
+2·10² à environ 1,2·10³ mg/L ; triplets 243 à 251, GGC → AGC au triplet 247 ; sous-unités 46 / 46 UA (sain), 46 / 23 UA
+(malade). Chaque consigne a sa diapositive, sa question posée après la voix, une réaction préparée pour chaque option
+(juste ; 1er essai : un indice ; 2e essai : la réponse et pourquoi), et la correction écrite comme le barème la lit
+(`question.demonstration.lignes`). Rien de la réponse n'est au tableau avant la question : `moustiques_seq` n'écrit
+l'ARNm et les acides aminés qu'aux moments `arnm` / `acides_amines`, que les diapositives n'atteignent pas.
+
+### Les documents lus en tableau naissent d'une animation (règle 35) — voix gardées
+
+Nouveau fichier `svt/relation_gene_proteine-tableau/documents.html`, une vue par document ; la diapositive garde son texte
+(et donc sa voix), seuls `visual` et `pointage` changent, sur des mots déjà dits :
+- `rg_p4b_albinisme` → `?vue=albinisme` : deux cellules de la peau peintes ; la tyrosine (billes jaunes) devient mélanine
+  (grains bruns) chez la personne saine, s'entasse devant la tyrosinase déformée chez l'albinos ; peau et cheveux peints ;
+  le tableau s'écrit ligne par ligne sur « السطر اللول / الثاني / الثالث ».
+- `rg_p5_beadle_tatum` → `?vue=beadle` : la chaîne précurseur → ornithine → citrulline → arginine, puis seize boîtes de
+  culture où Neurospora (feutrage orangé) pousse ou non ; « E1 bloquée », « E2 bloquée » écrits quand la voix les déduit ;
+  **rien pour le mutant 3** : c'est la question de la diapositive.
+- `rg_a5_in_vitro` → `?vue=in_vitro` : le tube peint (ribosomes, acides aminés radioactifs, ni ADN ni ARNm), la seringue
+  d'ARNm, les deux courbes tracées au fil du temps, puis les trois lignes du tableau.
+- `rg_t2b_arbre_noel` → `?vue=arbre_noel` : l'électronographie se développe, puis tronc, branches et points sont teintés
+  et nommés une ligne à la fois ; « début du gène » et le glissement des polymérases ne viennent qu'au moment `sens`,
+  après la question (« où est le début du gène ? »).
+- `rg_c1b_nirenberg` → `?vue=nirenberg` : le ribosome lit l'ARNm poly-U puis UG répété par trois (codons entourés), la
+  chaîne sort ; « lu par deux » barré ; pour le poly-C, ni codon entouré ni « CCC → Pro » : c'est la question.
+
+### Rien de décisif avant la réponse
+
+`mutation.html` : nouveau réglage `conclusions` (défaut `true` : le cours en ligne voit la page comme avant ; aussi
+`?conclusions=false`). À `false`, l'allèle muté s'arrête à son ARNm : acides aminés, « arrêt », type de mutation,
+conséquence et décalage restent cachés ; repasser à `true` ne rejoue pas la scène (la réponse s'écrit sur place).
+Branché sur les observations de `rg_m2_substitution` (« CUA donne quel acide aminé ? ») et `rg_m3_non_sens`
+(« que se passe-t-il à ce codon ? ») : `sim_avant {conclusions: false}`, `sim_apres {conclusions: true}`.
+
+### Séances
+
+Séance 7 : b1, b2 inchangés ; b3 « Le sujet 2024 N, une consigne à la fois » (`rg_e5a`, `rg_e5`). Nouvelle séance 8 :
+b1 « 2020 N : la relation, l'hypothèse, la vérification » (`rg_e7`, `rg_e7b`, `rg_e7c`), b2 « 2022 N : un document sur le
+ribosome » (`rg_e8`, `rg_e8b`), b3 « Retour à la drépanocytose, et le bilan » (`rg_e6`, `rg_b1`, `rg_b2`, cahier,
+« retrouver » et exercice repris de l'ancien bloc). Partie IX : 75 min ; cours : 395 min.
+
+### Ce qui reste, et pourquoi
+
+- Voix : 80 pistes à faire sur le VPS (quota Kaggle épuisé ici).
+- Les diapositives nouvelles ont des « gestes trop serrés » au contrôle de pointage : leur durée n'est connue qu'avec la
+  voix ; à revoir quand elle sera faite.
+- La vue `blackfan` montre l'hémoglobine produite pendant la consigne « expliquez » : c'est la figure b du sujet
+  elle-même (le document donné), l'élève doit écrire la chaîne causale ; le QCM porte sur cette chaîne.
+- Le test `test_pointage_simulations.py::test_le_cours_de_svt_liberation_de_l_energie_est_sans_ecart` échoue : il porte
+  sur le cours SVT ch1, que cette session n'a pas touché.
+

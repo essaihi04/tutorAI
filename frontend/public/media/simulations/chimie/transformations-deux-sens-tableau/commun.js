@@ -134,11 +134,13 @@
   const rgba = (c, a) => `rgba(${Math.round(c[0])},${Math.round(c[1])},${Math.round(c[2])},${a})`;
   const clair = (c, k) => c.map(v => v + (255 - v) * k);
   const fonce = (c, k) => c.map(v => v * k);
-  /* Couleurs habituelles des modèles moléculaires, un peu adoucies pour le tableau noir. */
+  /* Couleurs des atomes : celles du lexique visuel commun du site (docs/lexique-visuel/, 18 novembre 2026) — C jaune (le
+   * carbone du glucose, dans toutes les matières), H blanc, O rouge, H⁺ rose (le proton) ; le soufre en ocre, pour ne pas
+   * prendre le jaune du carbone. */
   const EL = {
-    H: { c: [236, 240, 244], r: 3.3 }, Hp: { c: [250, 204, 21], r: 3.5 }, O: { c: [222, 52, 52], r: 5.2 }, C: { c: [88, 93, 102], r: 5.4 },
+    H: { c: [235, 240, 245], r: 3.3 }, Hp: { c: [244, 114, 182], r: 3.5 }, O: { c: [235, 85, 70], r: 5.2 }, C: { c: [250, 204, 21], r: 5.4 },
     N: { c: [59, 102, 236], r: 5.3 }, I: { c: [134, 72, 228], r: 7.4 }, Na: { c: [171, 120, 242], r: 6 }, Cl: { c: [74, 196, 98], r: 6.6 },
-    Cu: { c: [205, 112, 52], r: 6 }, Zn: { c: [168, 178, 190], r: 6 }, S: { c: [234, 196, 52], r: 6.2 }, Fe: { c: [224, 130, 60], r: 6 }, Mn: { c: [156, 84, 190], r: 6 },
+    Cu: { c: [205, 112, 52], r: 6 }, Zn: { c: [168, 178, 190], r: 6 }, S: { c: [196, 156, 70], r: 6.2 }, Fe: { c: [224, 130, 60], r: 6 }, Mn: { c: [156, 84, 190], r: 6 },
     Al: { c: [190, 196, 206], r: 6 }, K: { c: [143, 64, 212], r: 7 },
   };
   /** Une sphère ombrée : reflet net en haut à gauche, cœur coloré, bord sombre, petite ombre portée. */
@@ -162,7 +164,7 @@
     Na: [['Na', 0, 0, 0]], Cl: [['Cl', 0, 0, 0]], Cu: [['Cu', 0, 0, 0]], Zn: [['Zn', 0, 0, 0]], Hp: [['Hp', 0, 0, 0]],
     NH3: [['N', 0, 0, 0], ['H', -5.8, 3.2, 1], ['H', 5.8, 3.2, 1], ['H', 0, -6.2, -1]],
     NH4: [['N', 0, 0, 0], ['H', -5.8, 3.6, 1], ['H', 5.8, 3.6, 1], ['H', -3, -5.6, -1], ['H', 3.4, -5.4, 1]],
-    /* L'acide éthanoïque : CH₃ à gauche, C du groupe carboxyle, =O en haut, –O–H à droite (le H acide en jaune : c'est lui qui part). */
+    /* L'acide éthanoïque : CH₃ à gauche, C du groupe carboxyle, =O en haut, –O–H à droite (le H acide en rose, la couleur du H⁺ : c'est lui qui part). */
     CH3COOH: [['H', -12.6, -3.6, -1], ['H', -12.2, 4.6, 1], ['H', -8.2, -6.6, -1], ['C', -6.6, .4, 0], ['C', 2.6, .4, 0], ['O', 6.4, -6.8, 1], ['O', 8.6, 4.6, 1], ['Hp', 13.6, 3.2, 2]],
     CH3COO: [['H', -12.6, -3.6, -1], ['H', -12.2, 4.6, 1], ['H', -8.2, -6.6, -1], ['C', -6.6, .4, 0], ['C', 2.6, .4, 0], ['O', 6.4, -6.8, 1], ['O', 8.6, 4.6, 1]],
     HCOOH: [['H', -6.6, 2.8, -1], ['C', -1.6, .4, 0], ['O', 2.2, -6.8, 1], ['O', 4.4, 4.6, 1], ['Hp', 9.4, 3.2, 2]],

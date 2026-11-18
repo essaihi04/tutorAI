@@ -13,6 +13,9 @@ Une question de PRÉDICTION (`type: "prediction"`, posée avant l'explication, 1
 trajet mais n'entre ni dans le score ni dans les méthodes : se tromper en prévoyant n'est pas une erreur de compétence.
 Une question PASSÉE (bouton « Passer », `passee: true` et `correct: null`, 12 novembre 2026) est notée « passee » : ni
 réussie ni une erreur, hors score et hors méthodes, jamais acquise, sans reprise ; la compétence compte ses `passees`.
+Un RAPPEL de prérequis sauté (`type: "rappel_saute"`, `concentration.rappel`, 18 novembre 2026 : son diagnostic a été
+réussi du premier coup) ou rouvert à la demande (`type: "rappel_revu"`, bouton « 🔁 Revoir le rappel ») n'est pas une
+réponse : hors score et hors méthodes, il est gardé dans le trajet et dans `rappels` de la compétence.
 Le bilan nourrit le mode libre (`bloc_prompt`) et la préparation du cours suivant (`lacunes`).
 
 Stockage : un fichier JSONL par élève dans `data/suivi_acquis/` (aucune table avant la validation de
@@ -30,6 +33,8 @@ from typing import Any, Iterable, Optional
 DOSSIER = Path(__file__).resolve().parents[2] / "data" / "suivi_acquis"
 
 SEUIL_ACQUIS, SEUIL_PARTIEL = 0.8, 0.4
+#: les événements d'un rappel de prérequis (sauté car déjà su, ou revu à la demande) : ni une réponse, ni un score
+TYPES_RAPPEL = ("rappel_saute", "rappel_revu")
 
 #: Comment on nomme chaque méthode à l'élève et au tuteur.
 NOMS_METHODES = {
@@ -161,11 +166,17 @@ def bilan(evenements: Iterable[dict], deck: dict) -> dict:
     # question → tentatives
     questions: dict[tuple[str, str], list[dict]] = defaultdict(list)
     predictions: dict[tuple[str, str], list[dict]] = defaultdict(list)
+    rappels: dict[str, dict] = {}
     for e in evenements:
+        if e.get("type") in TYPES_RAPPEL:
+            r = rappels.setdefault(e.get("slide_id", ""), {"slide_id": e.get("slide_id", ""), "slide_title": e.get("slide_title", ""),
+                                                          "saute": False, "revu": False, "competence_ids": e.get("competence_ids") or []})
+            r["saute" if e["type"] == "rappel_saute" else "revu"] = True
+            continue
         cible = predictions if e.get("type") == "prediction" else questions
         cible[(e.get("slide_id", ""), e.get("cle", "q"))].append(e)
     # `dit` : le nom de la compétence tel que la voix le dit (sans symbole), pour que le tuteur nomme les lacunes à voix haute
-    par_comp: dict[str, dict] = {c["id"]: {"id": c["id"], "label": labels[c["id"]], "dit": c.get("dit") or "", "questions": [], "predictions": [], "trajet": []} for c in comps}
+    par_comp: dict[str, dict] = {c["id"]: {"id": c["id"], "label": labels[c["id"]], "dit": c.get("dit") or "", "questions": [], "predictions": [], "rappels": [], "trajet": []} for c in comps}
     reussites: dict[str, list[float]] = defaultdict(list)
     for (slide_id, cle), tent in questions.items():
         sc = score_question(tent)
@@ -195,6 +206,13 @@ def bilan(evenements: Iterable[dict], deck: dict) -> dict:
                 par_comp[cid]["predictions"].append(p)
                 verdict = "juste" if juste else "fausse" if juste is False else "non jugée"
                 par_comp[cid]["trajet"].append(f"{p['slide_title'] or slide_id} : prédiction {verdict} (avant l'explication, non notée)")
+    # Les rappels de prérequis sautés ou revus : dans le trajet, jamais dans le score.
+    for slide_id, r in rappels.items():
+        etat = "sauté puis revu à la demande" if r["saute"] and r["revu"] else "sauté (diagnostic réussi du premier coup)" if r["saute"] else "revu à la demande"
+        for cid in (r["competence_ids"] or par_diapo.get(slide_id) or []):
+            if cid in par_comp:
+                par_comp[cid]["rappels"].append({k: r[k] for k in ("slide_id", "slide_title", "saute", "revu")})
+                par_comp[cid]["trajet"].append(f"Rappel {r['slide_title'] or slide_id} : {etat} (non noté)")
     taux = {m: round(sum(v) / len(v), 2) for m, v in reussites.items() if v}
     marchent = [m for m, _ in sorted(taux.items(), key=lambda kv: -kv[1]) if taux[m] >= SEUIL_ACQUIS]
     for c in par_comp.values():

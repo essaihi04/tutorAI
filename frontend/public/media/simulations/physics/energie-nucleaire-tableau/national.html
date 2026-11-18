@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Exercices du national — noyaux, masse et énergie</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="nucleaire.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un exercice du national joué au tableau : l’équation, les noyaux qui réagissent, les données posées sous chaque noyau, puis les étapes du calcul avec un point d’interrogation à la place de chaque résultat"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume reset play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * Exercices du national joués pas à pas (2ᵉ passe du cours phys_ch5_energie_nucleaire, 18 novembre 2026 ; professeur
+ * règles 33, 37 et 41 ; simulations-au-tableau règle 14). L’énoncé n’est plus lu sur une figure fixe : l’équation s’écrit,
+ * les noyaux réagissent sous les yeux de l’élève (les réactifs restent à leur place, pâlis : simulations-au-tableau
+ * règle 13), chaque donnée se pose SOUS le noyau qu’elle décrit, puis les étapes du calcul s’écrivent avec un « ? » rose
+ * à la place de chaque résultat. Le résultat d’une étape ne s’écrit qu’au moment rep_<k>, que le tuteur ne joue
+ * qu’après la réponse de l’élève (cycle de reprise) : le bouton Lancer s’arrête sur `etapes`, jamais sur un résultat.
+ * Une vue par sujet, valeurs du sujet : ?vue=
+ *   fusion_2016   ²H + ³H → ⁴He + n (2016 N) : Δm = −0,01889 u ; ΔE ≈ −17,6 MeV ; E_lib ≈ 17,6 MeV
+ *   cobalt_2017   ⁶⁰Co → ⁶⁰Ni + e⁻ (2017 R) : Δm = −0,00303 u ; E_lib ≈ 2,82 MeV (sans l’électron : 3,33 MeV, faux)
+ *   liaison_2023  ³H + ²H → ⁴He + n, énergies de liaison (2023 N) : ΔE ≈ −17,46 MeV ; E_lib ≈ 17,5 MeV
+ *   radon_2019    ²²²Rn → ²¹⁸Po + ⁴He, E_ℓ/A (2019 N) : E_ℓ(Rn) = 1707,18 MeV ; E_lib = 6,24 MeV
+ *   cadmium_2025  ¹⁰⁷Cd → ¹⁰⁷Ag + e⁺ puis l’échantillon (2025 N) : Δm = −4,314·10⁻⁴ u ; 0,402 MeV ; 2,26·10¹⁵ MeV
+ * Moments (fin de chaque étape) : equation | noyaux | reaction | donnees | echantillon (cadmium) | etapes | rep_1 | rep_2 | rep_3.
+ * Repères : equation, reactifs, produits, reaction, donnees, unite, echantillon, etape1, etape2, etape3.
+ */
+const { bulle, protocole, lisible } = window.Tableau;
+const $ = id => document.getElementById(id);
+const VW = 900, VH = 420;
+
+/* ── Peinture (pour l’œil ; la physique est dans la craie) : mêmes sphères que figures.html et balance.html ── */
+const TEINTES = { p: ['#fde2ef', '#f472b6', '#9d174d'], n: ['#e3ebf3', '#8fa3b8', '#3a4757'], em: ['#e0f2fe', '#60c8fa', '#0c4a6e'], ep: ['#fff7cc', '#fbbf24', '#a8520a'],
+  pere: ['#f5ebff', '#b06cf0', '#43186f'], fils: ['#f1f4f8', '#97a6b8', '#38434f'] };
+/* Un objet, un dessin (professeur règle 43) : l’électron bleu et le positon ambré de desintegration.html (chapitre 4),
+ * l’échantillon comme population.html (chapitre 4) : noyau père violet, noyau fils gris, petit éclair ; protons et
+ * neutrons comme balance.html et figures.html de ce cours. */
+function sphere(ctx, x, y, r, k) {
+  const [cl, cb, cf] = TEINTES[k];
+  const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .08, x, y, r);
+  g.addColorStop(0, cl); g.addColorStop(.42, cb); g.addColorStop(1, cf);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  if (r > 3.5) { ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.beginPath(); ctx.ellipse(x - r * .38, y - r * .42, r * .22, r * .14, -.6, 0, Math.PI * 2); ctx.fill(); }
+}
+function ombre(ctx, x, y, rx) { ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(x, y, rx, Math.max(2, rx * .18), 0, 0, Math.PI * 2); ctx.fill(); }
+const MELANGE = {};
+function estProton(i, Z, A) {
+  if (A <= 4) return Math.floor((i + 1) * Z / A) > Math.floor(i * Z / A);
+  const h = k => { let x = (k + 1) * 2654435761 % 4294967296; x ^= x >>> 15; x = Math.imul(x, 2246822519) >>> 0; return x / 4294967296; };
+  const cle = A + '/' + Z;
+  if (!MELANGE[cle]) { const rang = Array.from({ length: A }, (_, k) => k).sort((a, b) => h(a) - h(b)); MELANGE[cle] = new Set(rang.slice(0, Z)); }
+  return MELANGE[cle].has(i);
+}
+function positionsAmas(A, r) {
+  const d = 1.7 * r;
+  if (A === 1) return [[0, 0]];
+  if (A === 2) return [[-.5 * d, 0], [.5 * d, 0]];
+  if (A === 3) return [[-.5 * d, .29 * d], [.5 * d, .29 * d], [0, -.58 * d]];
+  if (A === 4) return [[-.5 * d, .25 * d], [.5 * d, .25 * d], [0, -.6 * d], [0, .05 * d]];
+  const pts = []; for (let i = 0; i < A; i++) { const rho = r * 1.05 * Math.sqrt(i), th = i * 2.39996; pts.push([rho * Math.cos(th), rho * Math.sin(th)]); }
+  return pts;
+}
+const rayonAmas = (A, r) => Math.max(...positionsAmas(A, r).map(([x, y]) => Math.hypot(x, y))) + r;
+/** Une particule ou un noyau peint en (cx, cy) ; alpha pour le noyau pâli (réactif consommé). */
+function peindreNoyau(ctx, o, cx, cy, alpha = 1) {
+  ctx.save(); ctx.globalAlpha = alpha;
+  if (o.X === 'e') { ombre(ctx, cx + 1, cy + 9, 7); sphere(ctx, cx, cy, 7, o.Z < 0 ? 'em' : 'ep'); ctx.restore(); return; }
+  if (o.A === 1) { ombre(ctx, cx + 1, cy + o.r + 1, o.r * .9); sphere(ctx, cx, cy, o.r, o.Z ? 'p' : 'n'); ctx.restore(); return; }
+  const R = rayonAmas(o.A, o.r), pts = positionsAmas(o.A, o.r).map(([x, y], i) => [x, y, i]);
+  if (o.A > 4) pts.sort((a, b) => Math.hypot(b[0], b[1]) - Math.hypot(a[0], a[1]));
+  ombre(ctx, cx + 2, cy + R + 1, R * .9);
+  for (const [x, y, i] of pts) sphere(ctx, cx + x, cy + y, o.r, estProton(i, o.Z, o.A) ? 'p' : 'n');
+  ctx.restore();
+}
+const rayon = o => (o.X === 'e' ? 8 : o.A === 1 ? o.r : rayonAmas(o.A, o.r));
+/** L’éclair de la réaction (pour l’œil) : un disque lumineux qui grandit puis s’éteint. */
+function eclair(ctx, x, y, k) {
+  if (k <= 0) return;
+  const r = 20 + 50 * k, a = Math.sin(Math.PI * Math.min(1, k));
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, `rgba(255,251,232,${.95 * a})`); g.addColorStop(.35, `rgba(253,224,71,${.6 * a})`); g.addColorStop(1, 'rgba(251,146,60,0)');
+  ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+}
+
+/* ── Morceaux de craie (comme figures.html) : un noyau ᴬ_ZX s’écrit A en haut, Z en bas, à gauche du symbole ── */
+const SUPC = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+function largeur(c, s, t) {
+  s = String(s).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUPC[ch]).join('') + '}');
+  return window.Tableau.Craie.segments(s).reduce((w, seg) => w + c.largeurTexte(seg.t, seg.sub || seg.sup ? t * .62 : t), 0);
+}
+function noyauTexte(c, A, Z, X, x, y, o = {}) {
+  const t = o.taille ?? 18, tn = t * .6, wN = Math.max(c.largeurTexte(String(A), tn), c.largeurTexte(String(Z), tn));
+  const w = wN + 1 + c.largeurTexte(X, t);
+  if (o.mesure) return w;
+  const d = s => Math.max(.06, String(s).length / 16);
+  c.texte(String(A), x + wN, y - .45 * t, { couleur: o.couleur, taille: tn, align: 'right', duree: d(A) });
+  c.texte(String(Z), x + wN, y + .3 * t, { couleur: o.couleur, taille: tn, align: 'right', duree: d(Z) });
+  c.texte(X, x + wN + 1, y, { couleur: o.couleur, taille: t, duree: d(X) });
+  return w;
+}
+const N = (A, Z, X) => ({ A, Z, X });
+function ligne(c, parts, x, y, o = {}) {
+  const taille = o.taille ?? 20;
+  const larg = p => (typeof p === 'string' ? largeur(c, p, taille) : noyauTexte(c, p.A, p.Z, p.X, 0, 0, { taille, mesure: true }));
+  const tot = parts.reduce((s, p) => s + larg(p), 0);
+  let px = o.align === 'center' ? x - tot / 2 : x;
+  for (const p of parts) {
+    if (typeof p === 'string') c.texte(p, px, y, { couleur: o.couleur, taille });
+    else noyauTexte(c, p.A, p.Z, p.X, px, y, { taille, couleur: o.couleur });
+    px += larg(p);
+  }
+  return tot;
+}
+
+/* ══ Les sujets ═══════════════════════════════════════════════════════════════════════════════ */
+const H2 = { A: 2, Z: 1, X: 'H', r: 17 }, H3 = { A: 3, Z: 1, X: 'H', r: 17 }, HE = { A: 4, Z: 2, X: 'He', r: 17 }, NN = { A: 1, Z: 0, X: 'n', r: 17 };
+const VUES = {
+  fusion_2016: {
+    titre: 'National 2016 N : la fusion du deutérium et du tritium (par les masses)', tag: 'National 2016 N',
+    eq: [N(2, 1, 'H'), ' + ', N(3, 1, 'H'), ' → ', N(4, 2, 'He'), ' + ', N(1, 0, 'n')],
+    reactifs: [{ ...H2, nom: 'deutérium', val: 'm = 2,01355 u' }, { ...H3, nom: 'tritium', val: 'm = 3,01550 u' }],
+    produits: [{ ...HE, nom: 'hélium', val: 'm = 4,00150 u' }, { ...NN, nom: 'neutron', val: 'm = 1,00866 u' }],
+    unite: '1 u = 931,5 MeV/c²',
+    etapes: [
+      { q: 'Étape 1 : Δm = [m(⁴He) + m(n)] − [m(²H) + m(³H)] = ', r: '−0,01889 u', dit: 'Δm = Σm(produits) − Σm(réactifs)' },
+      { q: 'Étape 2 : ΔE = Δm·c² ≈ ', r: '−17,6 MeV', dit: 'ΔE = Δm·c², avec 1 u·c² = 931,5 MeV' },
+      { q: 'Étape 3 : E_{lib} = |ΔE| ≈ ', r: '17,6 MeV', dit: 'E_lib = |ΔE|' },
+    ],
+  },
+  cobalt_2017: {
+    titre: 'National 2017 R : la désintégration β⁻ du cobalt 60 (par les masses)', tag: 'National 2017 R',
+    eq: [N(60, 27, 'Co'), ' → ', N(60, 28, 'Ni'), ' + ', N(0, -1, 'e')],
+    reactifs: [{ A: 60, Z: 27, X: 'Co', r: 4.6, nom: 'cobalt 60', val: 'm = 59,91901 u' }],
+    produits: [{ A: 60, Z: 28, X: 'Ni', r: 4.6, nom: 'nickel 60', val: 'm = 59,91543 u' }, { A: 0, Z: -1, X: 'e', nom: 'électron', val: 'm = 0,00055 u' }],
+    unite: '1 u = 931,5 MeV/c²',
+    etapes: [
+      { q: 'Étape 1 : Δm = m(Ni) + m(e) − m(Co) = ', r: '−0,00303 u', dit: 'Δm = m(Ni) + m(e) − m(Co) : l’électron est un produit' },
+      { q: 'Étape 2 : E_{lib} = |Δm|·c² ≈ ', r: '2,82 MeV', dit: 'E_lib = |ΔE| = |Δm|·c²' },
+    ],
+  },
+  liaison_2023: {
+    titre: 'National 2023 N : la même fusion, par les énergies de liaison', tag: 'National 2023 N',
+    eq: [N(3, 1, 'H'), ' + ', N(2, 1, 'H'), ' → ', N(4, 2, 'He'), ' + ', N(1, 0, 'n')],
+    reactifs: [{ ...H3, nom: 'tritium', val: 'E_{ℓ} = 8,475 MeV' }, { ...H2, nom: 'deutérium', val: 'E_{ℓ} = 2,366 MeV' }],
+    produits: [{ ...HE, nom: 'hélium', val: 'E_{ℓ} = 28,296 MeV' }, { ...NN, nom: 'neutron', val: 'E_{ℓ} = 0 (seul)' }],
+    etapes: [
+      { q: 'Étape 1 : ΔE = [E_{ℓ}(³H) + E_{ℓ}(²H)] − [E_{ℓ}(⁴He) + E_{ℓ}(n)] ≈ ', r: '−17,46 MeV', dit: 'ΔE = ΣE_ℓ(réactifs) − ΣE_ℓ(produits)' },
+      { q: 'Étape 2 : E_{lib} = |ΔE| ≈ ', r: '17,5 MeV', dit: 'E_lib = |ΔE|' },
+    ],
+  },
+  radon_2019: {
+    titre: 'National 2019 N : le radon 222, à partir de E_ℓ/A', tag: 'National 2019 N',
+    eq: [N(222, 86, 'Rn'), ' → ', N(218, 84, 'Po'), ' + ', N(4, 2, 'He')],
+    reactifs: [{ A: 222, Z: 86, X: 'Rn', r: 3.1, nom: 'radon 222', val: '⟦E_{ℓ}|A⟧ = 7,69' }],
+    produits: [{ A: 218, Z: 84, X: 'Po', r: 3.1, nom: 'polonium 218', val: '⟦E_{ℓ}|A⟧ = 7,73' }, { ...HE, r: 11, nom: 'hélium 4', val: '⟦E_{ℓ}|A⟧ = 7,07' }],
+    unite: '⟦E_{ℓ}|A⟧ en MeV/nucléon',
+    etapes: [
+      { q: 'Étape 1 : E_{ℓ}(Rn) = A × (E_{ℓ} par nucléon) = 222 × 7,69 = ', r: '1707,18 MeV', dit: 'E_ℓ = A·(E_ℓ/A)' },
+      { q: 'Étape 2 : ΔE = E_{ℓ}(Rn) − [E_{ℓ}(Po) + E_{ℓ}(He)] ;  E_{lib} = ', r: '6,24 MeV', dit: 'ΔE = ΣE_ℓ(réactifs) − ΣE_ℓ(produits), E_lib = |ΔE|' },
+    ],
+  },
+  cadmium_2025: {
+    titre: 'National 2025 N : le cadmium 107, un noyau puis l’échantillon', tag: 'National 2025 N',
+    eq: [N(107, 48, 'Cd'), ' → ', N(107, 47, 'Ag'), ' + ', N(0, 1, 'e')],
+    reactifs: [{ A: 107, Z: 48, X: 'Cd', r: 3.2, nom: 'cadmium 107', val: 'm = 106,88045 u' }],
+    produits: [{ A: 107, Z: 47, X: 'Ag', r: 3.2, nom: 'argent 107', val: 'm = 106,87947 u' }, { A: 0, Z: 1, X: 'e', nom: 'positon', val: 'm = 5,486·10⁻⁴ u' }],
+    unite: '1 u = 931,49 MeV/c²',
+    echantillon: 'N_d ≈ 5,62·10¹⁵',
+    etapes: [
+      { q: 'Étape 1 : Δm = m(Ag) + m(e) − m(Cd) = ', r: '−4,314·10⁻⁴ u', dit: 'Δm = m(Ag) + m(e) − m(Cd) : le positon est un produit' },
+      { q: 'Étape 2 : E_{lib} (un noyau) = |Δm|·c² ≈ ', r: '0,402 MeV', dit: 'E_lib = |Δm|·c²' },
+      { q: 'Étape 3 : E = N_d · E_{lib} ≈ ', r: '2,26·10¹⁵ MeV', dit: 'E = N_d·E_lib' },
+    ],
+  },
+};
+const VUE_ID = (() => { const v = (new URLSearchParams(location.search).get('vue') || '').trim(); return v in VUES ? v : 'fusion_2016'; })();
+const VUE = VUES[VUE_ID];
+
+/* ── Les étapes (phases) : la fin de chaque phase est un moment ─────────────────────────────── */
+const PH = [
+  { id: 'equation', d: 2.2, motif: 'l’équation de l’énoncé s’écrit' },
+  { id: 'noyaux', d: 1.2, motif: VUE.reactifs.length > 1 ? 'les réactifs, peints, avec leur nom' : 'le noyau de départ, peint, avec son nom' },
+  { id: 'reaction', d: 3.2, motif: 'la réaction a lieu : les produits apparaissent, le départ reste pâli à sa place' },
+  { id: 'donnees', d: 1.6 + 1.0 * (VUE.reactifs.length + VUE.produits.length), motif: 'chaque donnée de l’énoncé se pose sous son noyau' },
+];
+if (VUE.echantillon) PH.push({ id: 'echantillon', d: 3.2, motif: 'l’échantillon : N_d noyaux se désintègrent' });
+PH.push({ id: 'etapes', d: 1.6 * VUE.etapes.length + .6, motif: 'les étapes du calcul, avec un « ? » à la place de chaque résultat' });
+VUE.etapes.forEach((e, k) => PH.push({ id: 'rep_' + (k + 1), d: 1.4, motif: `résultat de l’étape ${k + 1} (après la réponse de l’élève)`, reponse: true }));
+{ let acc = 0; for (const p of PH) { p.debut = acc; acc += p.d; } }
+const TOTAL = PH[PH.length - 1].debut + PH[PH.length - 1].d;
+const FIN_JEU = PH.find(p => p.id === 'etapes').debut + PH.find(p => p.id === 'etapes').d;   // Lancer s’arrête ici : aucun résultat
+const ph = id => PH.find(p => p.id === id);
+const S = { a: 0, running: false, pause: false, fait: false, jusqua: null, motif: '', emis: 0 };
+const part = id => { const p = ph(id); return p ? Math.max(0, Math.min(1, (S.a - p.debut) / p.d)) : 0; };
+const vu = id => part(id) >= 0.999;
+const lisse = u => u * u * (3 - 2 * u);
+
+/* ── Placement ──────────────────────────────────────────────────────────────────────────────── */
+const YN = 150, XC = 450;
+/* Les lignes, sous le plus gros noyau : noms, données, unité, étapes. */
+const RMAX = Math.max(...[...VUE.reactifs, ...VUE.produits].map(o => rayon(o)));
+const Y_NOM = YN + RMAX + 28, Y_VAL = Y_NOM + 34, Y_UNI = Y_VAL + 42, Y_ETP = Y_UNI + (VUE.unite ? 42 : 0), PAS_E = 37;
+function places() {
+  const R = VUE.reactifs, P = VUE.produits;
+  const xr = R.length === 1 ? [190] : [120, 290], xp = P.length === 1 ? [690] : [620, 790];
+  return { r: R.map((o, i) => [xr[i], YN]), p: P.map((o, i) => [xp[i], YN]) };
+}
+
+function dessiner(c) {
+  scene.cadre(13);
+  const pl = places(), pr = part('reaction');
+  // le sujet, en petit en haut à gauche (le titre de la diapositive dit déjà le reste)
+  c.depuis(0);
+  c.texte(VUE.tag, 22, 30, { couleur: 'cyan', taille: 19, duree: .4 });
+  ligne(c, VUE.eq, XC, 76, { taille: 36, couleur: 'jaune', align: 'center' });
+  c.repere('equation', 250, 36, 400, 58, 'l’équation de la réaction');
+
+  // les noyaux peints : réactifs (pâlis après la réaction), copies qui se rejoignent, éclair, produits qui s’éloignent
+  c.direct(() => {
+    const ctx = c.ctx;
+    if (!vu('equation') && S.a < ph('noyaux').debut) return;
+    const kN = Math.min(1, part('noyaux') * 1.6);
+    VUE.reactifs.forEach((o, i) => peindreNoyau(ctx, o, pl.r[i][0], pl.r[i][1], kN * (pr > .05 ? .32 : 1)));
+    if (pr > 0 && pr < 1) {
+      const u1 = lisse(Math.min(1, pr / .42));
+      if (pr < .5) VUE.reactifs.forEach((o, i) => peindreNoyau(ctx, o, pl.r[i][0] + (XC - pl.r[i][0]) * u1 + (VUE.reactifs.length > 1 ? (i ? 1 : -1) * 16 * (1 - u1) : 0), YN));
+      eclair(ctx, XC, YN, (pr - .36) / .3);
+    }
+    if (pr > .5) {
+      const u2 = lisse(Math.min(1, (pr - .5) / .5));
+      VUE.produits.forEach((o, i) => peindreNoyau(ctx, o, XC + (pl.p[i][0] - XC) * u2, YN + (o.X === 'e' ? -26 * Math.sin(Math.PI * u2) : 0), Math.min(1, .3 + u2)));
+    }
+  });
+  // les noms, écrits quand le noyau est là
+  c.depuis(ph('noyaux').debut + .2);
+  VUE.reactifs.forEach((o, i) => c.texte(o.nom, pl.r[i][0], Y_NOM, { couleur: 'blanc', taille: 19, align: 'center', duree: .35 }));
+  c.depuis(ph('reaction').debut + ph('reaction').d - .4);
+  VUE.produits.forEach((o, i) => c.texte(o.nom, pl.p[i][0], Y_NOM, { couleur: 'blanc', taille: 19, align: 'center', duree: .35 }));
+  const xs = [...pl.r, ...pl.p].map(p => p[0]), haut = YN - RMAX - 8;
+  if (S.a >= ph('noyaux').debut) c.repere('reactifs', Math.min(...pl.r.map(p => p[0])) - 70, haut, Math.max(...pl.r.map(p => p[0])) - Math.min(...pl.r.map(p => p[0])) + 140, 2 * RMAX + 50, 'les réactifs (le départ)');
+  if (vu('reaction')) c.repere('produits', Math.min(...pl.p.map(p => p[0])) - 70, haut, Math.max(...pl.p.map(p => p[0])) - Math.min(...pl.p.map(p => p[0])) + 140, 2 * RMAX + 50, 'les produits');
+  if (pr > 0) c.repere('reaction', XC - 60, YN - 60, 120, 120, 'la réaction : les noyaux se transforment');
+
+  // les données, chacune sous son noyau
+  c.depuis(ph('donnees').debut + .3);
+  const yV = Y_VAL, objets = [...VUE.reactifs.map((o, i) => [o, pl.r[i][0]]), ...VUE.produits.map((o, i) => [o, pl.p[i][0]])];
+  for (const [o, x] of objets) { c.texte(o.val, x, yV + (o.val.includes('⟦') ? 6 : 0), { couleur: 'jaune', taille: 20, align: 'center', duree: .6 }); c.pause(.4); }
+  if (VUE.unite) c.texte(VUE.unite, XC, Y_UNI + (VUE.unite.includes('⟦') ? 4 : 0), { couleur: 'cyan', taille: 20, align: 'center', duree: .6 });
+  if (S.a >= ph('donnees').debut) {
+    c.repere('donnees', Math.min(...xs) - 80, yV - 26, Math.max(...xs) - Math.min(...xs) + 160, 40, 'les données de l’énoncé, sous chaque noyau');
+    if (VUE.unite) c.repere('unite', XC - 150, Y_UNI - 26, 300, 36, lisible(VUE.unite));
+  }
+
+  // l’échantillon (2025 N) : des noyaux de cadmium, N_d se désintègrent (chacun lâche un positon)
+  if (VUE.echantillon) {
+    const pe = part('echantillon'), x0 = 704, y0 = Y_UNI + 16, nx = 7, ny = 3, pas = 24;
+    c.direct(() => {
+      if (S.a < ph('echantillon').debut) return;
+      const ctx = c.ctx;
+      ctx.save(); ctx.fillStyle = 'rgba(148,163,184,.10)'; ctx.strokeStyle = 'rgba(226,232,240,.45)'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.roundRect(x0 - 18, y0 - 20, nx * pas + 12, ny * pas + 16, 10); ctx.fill(); ctx.stroke(); ctx.restore();
+      for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+        const k = j * nx + i, seuil = ((k * 7) % 21) / 21, desint = (k % 3 === 1) && pe > seuil * .8;
+        const x = x0 + i * pas, y = y0 + j * pas;
+        sphere(ctx, x, y, 9, desint ? 'fils' : 'pere');
+        if (desint && pe < 1) { const v = Math.min(1, (pe - seuil * .8) * 4); if (v < 1) { eclair(ctx, x, y, v * .5); sphere(ctx, x + 14 * v, y - 18 * v, 4, 'ep'); } }
+      }
+    });
+    c.depuis(ph('echantillon').debut + 1.4);
+    c.texte('l’échantillon : Cd → Ag', x0 + 72, y0 - 30, { couleur: 'blanc', taille: 18, align: 'center', duree: .3 });
+    c.texte(VUE.echantillon + ' désintégrés', x0 + 72, y0 + ny * pas + 22, { couleur: 'jaune', taille: 19, align: 'center', duree: .6 });
+    if (S.a >= ph('echantillon').debut) c.repere('echantillon', x0 - 40, y0 - 52, nx * pas + 60, ny * pas + 84, 'l’échantillon : N_d noyaux désintégrés');
+  }
+
+  // les étapes du calcul : la consigne s’écrit ; un « ? » rose tient la place du résultat jusqu’à rep_k
+  const xE = 30, maxE = VUE.echantillon ? 650 : 860, larg = [];
+  VUE.etapes.forEach((e, k) => {
+    const y = Y_ETP + PAS_E * k;
+    c.depuis(ph('etapes').debut + 1.6 * k + .2);
+    c.texte(e.q, xE, y, { couleur: 'blanc', taille: 21, duree: 1.1 });
+    larg[k] = largeur(c, e.q, 21);
+    if (S.a >= ph('etapes').debut + 1.6 * k) c.repere('etape' + (k + 1), xE - 6, y - 26, maxE - xE + 6, 34, `étape ${k + 1} : ${lisible(e.dit)}`);
+  });
+  VUE.etapes.forEach((e, k) => {
+    const y = Y_ETP + PAS_E * k;
+    if (!vu('rep_' + (k + 1))) {
+      if (S.a >= ph('etapes').debut + 1.6 * k + 1.3) c.direct(() => c.texte('?', xE + larg[k] + 6, y, { couleur: 'rose', taille: 26 }));
+    } else {
+      c.depuis(ph('rep_' + (k + 1)).debut);
+      c.texte(e.r, xE + larg[k] + 4, y, { couleur: 'vert', taille: 22, duree: .8 });
+    }
+  });
+  return c.fin();
+}
+
+/* ── Le cadre : 900 × 420, mis à l’échelle sans rien couper ; l’écriture suit l’horloge de l’exercice (S.a) ── */
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+const craie = scene.craie;
+scene.cadre = function (graine) {
+  const W = craie.W, H = craie.H;
+  craie.debut(graine, S.a);
+  const s = Math.min(W / VW, H / VH);
+  scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
+  craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
+  craie.echelle = s; craie.tailleMin = 15; craie.cadre = { w: VW, h: VH, haut: 0 };
+  return craie;
+};
+scene.image = function () { const a = S.a; S.a = TOTAL; try { dessiner(craie); return canvas.toDataURL('image/png'); } finally { S.a = a; scene.sale = true; } };
+
+/* ── Horloge, commandes, pont avec le tuteur ───────────────────────────────────────────────── */
+function moments() { const m = {}; for (const p of PH) m[p.id] = +((p.debut + p.d) / TOTAL).toFixed(4); return m; }
+const MOTIFS = Object.fromEntries(PH.map(p => [p.id, p.motif]));
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.a = Math.min(TOTAL, S.a + dt);
+  if (S.jusqua != null && S.a >= S.jusqua - 1e-6) {
+    S.a = S.jusqua; S.jusqua = null; S.running = false; S.pause = true; $('run').textContent = 'Reprendre';
+    if (S.a >= FIN_JEU - 1e-6) { S.pause = false; S.fait = true; $('run').textContent = 'Rejouer'; }
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || 'instant choisi') + '.'); pont.noter('pause'); pont.emettre();
+    return true;
+  }
+  if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function lancer(cible, motif) { S.jusqua = cible; S.motif = motif; S.running = true; S.pause = false; S.fait = false; $('run').textContent = 'Pause'; }
+function start() { S.a = 0; lancer(FIN_JEU, 'les étapes sont posées : à toi de calculer'); bulle($('feedback'), PH[0].motif + '…'); pont.noter('start'); pont.emettre(); }
+function pause() { if (!S.running) return; S.jusqua = null; S.running = false; S.pause = true; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running) return; if (!S.pause) return start(); lancer(S.a < FIN_JEU ? FIN_JEU : TOTAL, 'les étapes sont posées : à toi de calculer'); pont.noter('resume'); pont.emettre(); }
+function reset() { S.a = 0; S.running = false; S.pause = false; S.fait = false; S.jusqua = null; $('run').textContent = 'Lancer'; scene.sale = true; bulle($('feedback'), 'Lance l’exercice : l’énoncé s’écrit, la réaction se joue, puis les étapes.'); pont.noter('reset'); pont.emettre(); }
+/** Joue (ou continue) jusqu’à la fin d’une étape, puis se fige. Une étape déjà passée : on revient à elle, figé. */
+function playUntil(p) {
+  const M = moments(), nom = p.moment in M ? p.moment : null, cible = nom ? M[nom] * TOTAL : +p.progress * TOTAL;
+  if (!Number.isFinite(cible)) return;
+  if (cible < S.a - 1e-6) {
+    S.a = cible; S.running = false; S.pause = true; S.fait = false; S.jusqua = null; scene.sale = true; $('run').textContent = 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (nom ? MOTIFS[nom] : 'instant choisi') + '.'); pont.noter('play_until', { moment: nom }); pont.emettre(); return;
+  }
+  lancer(cible, nom ? MOTIFS[nom] : '');
+  pont.noter('play_until', { moment: nom }); pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+
+function ceQuiSeVoit() {
+  const m = [`${VUE.titre}.`];
+  if (S.a <= 0) return m.concat('Rien d’écrit encore.').join(' ');
+  m.push('Équation écrite.');
+  const pr = part('reaction');
+  if (pr <= 0) m.push(vu('noyaux') ? 'Les réactifs sont peints, la réaction n’a pas encore eu lieu.' : '');
+  else if (pr < 1) m.push('La réaction se joue : les réactifs se rejoignent, éclair, les produits sortent.');
+  else m.push(`Réaction faite : les réactifs restent pâlis à gauche, les produits (${VUE.produits.map(o => o.nom).join(', ')}) à droite.`);
+  if (vu('donnees')) m.push('Données sous chaque noyau : ' + [...VUE.reactifs, ...VUE.produits].map(o => `${o.nom} ${o.val}`).join(' ; ') + (VUE.unite ? ` ; ${VUE.unite}` : '') + '.');
+  if (VUE.echantillon && vu('echantillon')) m.push(`L’échantillon : ${VUE.echantillon} noyaux désintégrés.`);
+  VUE.etapes.forEach((e, k) => {
+    if (S.a < ph('etapes').debut + 1.6 * k + 1.3) return;
+    m.push(vu('rep_' + (k + 1)) ? `${e.q}${e.r} (résultat écrit).` : `${e.q}? (résultat caché : l’élève le calcule).`);
+  });
+  return m.join(' ');
+}
+function etat() {
+  return { simulation_status: S.running ? 'running' : S.pause ? 'paused' : (S.fait ? 'finished' : 'idle'), vue: VUE_ID, progress: +(S.a / TOTAL).toFixed(4),
+    moments: moments(), etape: (PH.find(p => S.a < p.debut + p.d - 1e-6) || PH[PH.length - 1]).id, ce_qui_se_voit: lisible(ceQuiSeVoit()) };
+}
+window.Tableau.explication({ [VUE_ID]: PH.filter(p => !p.reponse).map(p => ({ texte: p.motif })) });
+const commandes = ['start', 'pause', 'resume', 'reset', 'play_until'];
+const config = { id: 'energie_nucleaire_national', version: '1.0', title: 'Exercices du national joués au tableau (noyaux, masse et énergie)',
+  variants: Object.keys(VUES).map(id => ({ id, label: VUES[id].titre })), commands: commandes,
+  command_schema: { play_until: { moment: PH.map(p => p.id).join(' | ') + ' (joue et se fige à la fin de cette étape ; rep_<k> écrit le résultat de l’étape k : seulement après la réponse de l’élève)' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: `${VUE.titre}. Étapes : ${PH.map(p => p.motif).join(' ; ')}. Les résultats restent cachés (« ? ») tant que le tuteur ne joue pas rep_<k>.`,
+  etat, progression: () => S.a / TOTAL,
+  executer: (cmd, p) => ({ start, pause, resume, reset, play_until: () => playUntil(p || {}) })[cmd]?.() });
+bulle($('feedback'), 'Lance l’exercice, ou laisse le professeur le jouer étape par étape.');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

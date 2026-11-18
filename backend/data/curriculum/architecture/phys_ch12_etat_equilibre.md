@@ -142,7 +142,7 @@ Il y a 4 séances de 3 blocs (40 à 50 min par séance). Notation : **[Q]** = l'
 | `ee_e3_expression` [Q] | Qr,éq = 10^(−2pH)/(C − 10^(−pH)), la forme demandée au national. Elle reste avant K : `ee_k1_trois` et `ee_k2_produits` calculent leurs Qr,éq avec elle (« نفس l'expression »). |
 | `ee_n1_national` **(déplacée)** [OBS] | National 2017 N : la même expression, appliquée juste après (acide butanoïque). **Observation** : « que vaut [AH]_éq ? » (C − 10^(−pH)) avant la voix. La commande « relation » est déplacée sur « Q r à l'équilibre égale dix puissance moins deux p H… » pour que l'expression ne s'écrive pas avant la réponse. |
 
-### Séance 3 — La constante d'équilibre K : la voir, l'écrire, la mesurer
+### Séance 3 — La constante d'équilibre K : la voir, l'écrire, la mesurer (2ᵉ passe : séances 3 et 4, voir § 6)
 
 **Bloc ee_b07 — Un même Qr,éq : la constante d'équilibre K**
 
@@ -167,8 +167,9 @@ Il y a 4 séances de 3 blocs (40 à 50 min par séance). Notation : **[Q]** = l'
 |---|---|
 | `ee_m2a_conductance` | Rappel de zéro : le conductimètre, G = k·σ, juste avant son usage. « Siemens » est dit « si mènsse » (règle de prononciation en place). |
 | `ee_m2_conductimetrie` | σ = (λ₁ + λ₂)·[H₃O⁺]. C'est l'outil des profs (El Goufifa, Moutamadris, la fiche). |
-| `ee_m3_calcul` | De σ à K, ligne par ligne, avec la conversion mol/m³ → mol/L. Pas d'observation : la simulation écrit « 0,118 mol/m³ » au moment où la voix commence le calcul ; un arrêt dessus donnerait la réponse (voir § 5). |
-| `ee_m4_national` [Q] | National 2019 N (acide benzoïque) : K par la conductivité, avec la démonstration. |
+| `ee_m3_calcul` [OBS, 2ᵉ passe] | De σ à K, ligne par ligne, avec la conversion mol/m³ → mol/L. **Observation** (2ᵉ passe) : « dans quelle unité sort [H₃O⁺]éq ? » (mol/m³), avant que la voix le dise ; la vue tait le résultat pendant la question (`conclusions: false`, voir § 6). |
+
+*(2ᵉ passe : `ee_m4_national`, la version lue du même sujet, est remplacée par le sujet 2019 N joué question par question, séance 4 ci-dessous, § 6.)*
 
 ### Séance 4 — De quoi dépend τ ; national et bilan
 
@@ -228,7 +229,104 @@ Le lecteur lance une commande 0,9 s avant son mot. Un script a vérifié, avec l
 
 ## 5. Ce qui n'a pas pu être fait, et les besoins
 
-- **`ee_m3_calcul`.** Une question « dans quelle unité sort [H₃O⁺] ? » aurait fixé le piège mol/m³. Mais la vue `conductimetrie.html?vue=calcul` écrit « 0,118 mol/m³ » dès le moment `concentration`. Il faudrait que cette vue accepte `conclusions: false`, comme `constante.html`, pour taire l'unité pendant la question.
-- **Les voix.** Les 49 pistes sont à faire sur le VPS (voix Bodi), avec `scripts/voix/attente_construire.py` puis `attente_poser.py`. Les ids sont ceux de `attente_construire.py` (`enonce_obs_<diapo>_q|i0|i1|r0..r2|s`).
+- ~~**`ee_m3_calcul`.** La vue `conductimetrie.html?vue=calcul` écrivait « 0,118 mol/m³ » dès le moment `concentration`.~~ **Fait à la 2ᵉ passe** (§ 6) : la vue accepte `conclusions: false`, et la question sur l'unité est posée.
+- **Les voix.** Les 49 pistes de la 1ʳᵉ passe (et les 47 de la 2ᵉ passe, § 6) sont à faire sur le VPS (voix Bodi), avec `scripts/voix/attente_construire.py` puis `attente_poser.py`. Les ids sont ceux de `attente_construire.py` (`enonce_obs_<diapo>_q|i0|i1|r0..r2|s`).
 - **Les questions d'observation.** La skill professeur (règle 30) les veut rares, 0 à 2 par cours, et jamais sur un calcul. Ici elles sont 8 (7 nouvelles), à la demande de l'utilisateur du 18 novembre : l'élève doit faire chaque étape avant la correction. Aucune ne demande de calcul. Chacune porte sur une lecture (palier), un choix de méthode (par quoi commencer, quel volume, quelles espèces) ou une expression à reconnaître. Les calculs restent sur l'ardoise du bloc, avec leur démonstration.
 - **Fichiers partagés.** Aucun n'a été modifié (`shared/`, lecteur `frontend/src/`).
+
+## 6. 2ᵉ passe du 18 novembre 2026 : un national joué question par question, rien de décisif avant la réponse
+
+Demande de l'utilisateur : « simple, animé, expliqué ; ne pas tout donner au départ ; laisser à l'élève le temps de
+trouver seul ; une raison derrière chaque choix ». L'évaluation de la 1ʳᵉ passe avait relevé que les nationaux du
+ch12 restaient des corrigés lus (une diapositive par sujet, la voix faisait tout), et que `ee_m3_calcul` montrait
+l'unité avant la question.
+
+### 6.1 Le sujet joué : national 2019 N, partie 2 (acide benzoïque)
+
+**Pourquoi ce sujet.** Il couvre, en un seul exercice, les cas types du chapitre (§ 1, national) : Qr,éq à partir
+d'une mesure (σ, au conductimètre), K = Qr,éq, K = C·τ²/(1 − τ) (4/20) et K par la conductimétrie (3/20). Ses
+questions 2.1 → 2.4 se suivent comme le barème : l'équation, le tableau, σ en fonction de [H₃O⁺]éq, τ (avec le piège
+mol/m³), K en fonction de C et τ, puis la valeur. Les questions 2.5 → 2.7 (Ka, pKa, espèce qui prédomine) sont du
+ch13 : elles ne sont pas jouées ici (règle 8, rien hors du cadre). Valeurs du sujet (`backend/data/exams/physique/2019-normale`) :
+C = 1,0·10⁻³ mol/L, V = 1 L, σ = 8,6·10⁻³ S/m, λ₁ = 35·10⁻³, λ₂ = 3,23·10⁻³ S·m²·mol⁻¹ ; τ ≈ 0,22, K ≈ 6,2·10⁻⁵.
+
+**Pourquoi il remplace `ee_m4_national`.** C'était la version lue de ce même sujet (3.2-3.3 : la voix calculait τ et
+K d'un trait). Garder les deux ferait dire deux fois la même correction. L'ardoise de `ee_m4_national` (QCM « calcule
+K ») et ses exercices passent sur la dernière question jouée, `ee_x5_constante`, avec leurs voix déjà enregistrées
+(mêmes textes) : l'élève refait seul le calcul juste après l'avoir vu.
+
+**La simulation.** Nouvelle page `frontend/public/media/simulations/chimie/etat-equilibre-tableau/national.html`,
+une vue par question (`?vue=q1` … `q5`, une URL différente par diapositive : pas d'écart IFRAME), ouverte figée
+(`&depart=debut` : la scène attend la voix, pas de départ seul ; `demarrer: reset` la remet à zéro sans la lancer).
+Chaque vue : un bandeau vert « Déjà trouvé » (ce que les questions d'avant ont donné), puis une étape à la fois.
+Les valeurs naissent d'un objet avant d'aller dans un calcul : la fiole jaugée de 1 L se remplit de solution S (q1),
+la cellule descend dans le bécher et le conductimètre monte jusqu'à 8,6 mS/m (q3). Le paramètre `conclusions`
+(false pendant la question d'observation) tait l'étape décisive, tout ce qui suit et la bulle qui le dirait ; la
+place de la réponse montre « ? » en orange. Vérifiée dans Chromium (sans erreur, `play_until` sur chaque moment,
+`conclusions` false puis true, captures 1024 × 560 et 724 × 350 relues : rien de coupé, rien sur rien).
+
+| Diapo (vue) | Question du sujet | Ce qui est joué | Observation (avant la correction) |
+|---|---|---|---|
+| `ee_x1_equation` (q1) | 2.1 l'équation avec l'eau | La fiole se remplit, les couples, la question | « Quelle équation écris-tu ? » : → / ⇌ / ⇌ HO⁻. Réponse : la double flèche, puis pourquoi (non totale, eau en excès). |
+| `ee_x2_tableau` (q2) | 2.2 le tableau d'avancement | Le tableau se dessine, ligne initiale | « En cours, combien reste-t-il d'acide ? » : C·V + x / C·V − x / x. Puis l'équilibre et x_max = C·V. |
+| `ee_x3_sigma` (q3) | 2.3.1 σ en fonction de [H₃O⁺]éq | La mesure au conductimètre, λ₁ et λ₂, σ = λ₁·[H₃O⁺] + λ₂·[C₆H₅COO⁻] | « Compare [C₆H₅COO⁻]éq et [H₃O⁺]éq » (< / = / >). Puis σ = (λ₁ + λ₂)·[H₃O⁺]éq. |
+| `ee_x4_taux` (q4) | 2.3.2 montrer τ = σ/(C·(λ₁ + λ₂)), calculer τ | La démonstration, ligne par ligne | « Quelle valeur de C mets-tu ? » (1,0·10⁻³ / 1,0 mol/m³ / 10³) : le piège du sujet. Puis τ ≈ 0,22. |
+| `ee_x5_constante` (q5) [Q] | 2.4 K en fonction de C et τ | K = Qr,éq, les deux ions = τ·C | « [C₆H₅COOH]éq ? » (τ·C / C·(1 − τ) / C). Puis K = C·τ²/(1 − τ) ≈ 6,2·10⁻⁵ (C en mol/L). Ardoise : calculer K. |
+
+Aucune observation ne demande un calcul : chacune porte sur un choix (équation, valeur de C) ou une lecture du
+tableau ; les calculs restent à l'ardoise, avec leur démonstration. Les mots des commandes décisives sont placés
+au moins une demi-phrase après l'arrêt de la voix (contrôlé par script : aucune commande décisive avant l'arrêt).
+
+**Séances.** La séance 3 garde K (blocs `ee_b07`, `ee_b08`). Une nouvelle **séance 4** (`ee_s3b`) : `ee_b09`
+(conductimétrie : `m2a`, `m2`, `m3`), `ee_b09b` (2019 N joué : `x1`, `x2`, `x3`), `ee_b09c` (`x4`, `x5`). L'ancienne
+séance 4 devient la séance 5. Raison : 5 diapositives jouées de plus ne tiennent pas dans 50 min avec K ; la
+mesure de K et son national vont ensemble. Nouvelle partie `ee_partie6b` dans `activities`. Compétence C5 :
+`ee_m4_national` est remplacée par `ee_x1` → `ee_x5`.
+
+### 6.2 Rien de décisif avant la réponse
+
+- **`ee_m3_calcul`** : besoin de la 1ʳᵉ passe traité. `conductimetrie.html?vue=calcul` accepte `conclusions`
+  (défaut true : le cours en ligne, qui ne l'envoie pas, voit la même scène qu'avant). À false, la ligne s'arrête à
+  « [H₃O⁺]éq = 4,6·10⁻³/(39,09·10⁻³) = … ? » et la suite du calcul n'est pas écrite. L'observation « dans quelle unité
+  sort [H₃O⁺]éq ? » (mol/L / mol/m³ / S/m) s'arrête après « sur trente-neuf virgule zéro neuf fois dix puissance moins
+  trois. ». Texte dit inchangé : la voix de la diapositive reste.
+- **`ee_r1_taux`** : la ligne `centre` « τ = 0,039 < 1 : réaction limitée » s'affichait sur « le résultat: tau », avant
+  la question « totale ou limitée ? ». Elle est coupée en « τ = 0,039 » (même mot) et « τ < 1 : réaction limitée »
+  (sur « tau plus petit que un », après la réponse). Texte dit inchangé.
+- Relu pour les autres observations (`ee_n1` … `ee_n6`, `ee_k1`) : aucune ligne ni commande avant l'arrêt n'écrit la
+  réponse (`ee_n5_courbe` trace la courbe avant la question, mais la lecture du palier — 0,2 mol — vient au moment
+  `lecture`, après).
+
+### 6.3 Mots
+
+- Pistes nouvelles passées par `verifier_mots` (fonctions du script, sur la copie en attente). Remplacés : « فليشات »
+  (0) → « double flèche » ; « نلعبو » → « نديرو » ; « la fiole » (0) → « شوف هنا » (la fiole se voit, le mot ne sert pas) ;
+  « le solvant » enlevé de la voix (il reste écrit) ; « millisiemens » (0) évité : la voix dit directement « huit virgule six
+  fois dix puissance moins trois siemens par mètre » ; « ما كنحسبوهمش » (0) → « ماشي مهمين هنا » ; « كيتحيدو », « les moles »
+  → « كيمشيو », « la mole ».
+- Gardés, à écouter (termes du programme ou du sujet) : « benzoïque », « benzoate », « conductimètre », « siemens »
+  (dit « si mènsse » par la règle en place). Ils sont notés dans `mots_a_ecouter` de `_voix.json`.
+- À changer à la prochaine voix des diapositives déjà voicées (non réécrites ici pour garder leur voix) : « l'afficheur »
+  (`ee_o2_flacons`, `ee_r2_equilibre`, `ee_e1_concentrations`, `ee_m2_conductimetrie`) → « l'écran » ou « l'appareil
+  كيعطي » ; « béchers » (`ee_n4_pile`, `ee_k1_trois`) → « trois كيسان » ou « trois ديال les solutions » ; « millisiemens »
+  (`ee_m2_conductimetrie`, `ee_m3_calcul`) → la valeur en siemens directement ; « fiole » (`ee_z3_dilution`) se garde
+  (geste de la dilution, programme).
+
+### 6.4 Pistes à mettre en voix
+
+47 pistes ajoutées à `phys_ch12_etat_equilibre_voix.json` (origine « deuxieme_passe_18_11 ») : 5 diapositives
+(`ee_x1` → `ee_x5`) et 6 × 7 champs d'observation (`ee_x1` → `ee_x5`, `ee_m3_calcul`). Total du fichier : 96.
+
+### 6.5 Ce qui n'a pas pu être fait
+
+- **Les voix** : aucune ne peut être faite ici (quota Kaggle épuisé, VPS hors d'atteinte). Les 5 nouvelles diapositives
+  n'ont pas d'`audio` : le lecteur les dira avec la voix en direct jusqu'à l'enregistrement.
+- **Les autres nationaux lus** (`ee_n1` 2017 N, `ee_n6` 2021 N, `ee_n2` 2022 R, `ee_n3` 2020 R, `ee_n4` 2017 N, `ee_n5`
+  2017 R) restent d'une seule diapositive avec une question d'observation chacun (1ʳᵉ passe) ; seul 2019 N, qui
+  couvre tous les cas types, est joué question par question. Les jouer tous coûterait ~25 diapositives sans voix.
+- **Le vérificateur de pointage** ne connaît pas encore `national.html` dans son lexique (`verifier_pointage_simulations.py`,
+  fichier partagé non modifié) : il ne contrôle pas les mots des repères de ces 5 diapositives ; ses écarts GESTE sur
+  elles viennent de l'absence de voix (durée 0).
+- **Les exercices de fin de bloc** de `ee_b09` (repris du vrai/faux de `ee_m3_calcul`) et de `ee_b09b` (QCM nouveau) n'ont
+  pas de réactions préparées : le lecteur les génère en direct (règle 20 du professeur) jusqu'à la prochaine voix.
+

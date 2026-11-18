@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le national joué pas à pas : dipôle RC — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="rc.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Le national 2022 N du dipôle RC, une étape à la fois : à gauche le circuit peint ou les courbes u_C(t) et i(t) tracées à la craie ; à droite « Ta copie » avec la question de l'étape, puis sa correction écrite comme le barème la lit"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until set_parameters">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script src="pas-a-pas.js"></script>
+<script>
+/*
+ * National 2022 N, exercice 3, partie 1 (dipôle RC), joué pas à pas (2ᵉ passe de la logique du cours, 18 novembre 2026).
+ * Valeurs du sujet et de son corrigé : E = 12 V, C initialement déchargé ; i(0) = 12 mA ; τ = 50 ms (tangente (T)) ;
+ * R = E/i(0) = 1 kΩ ; C = τ/R = 50 µF. Étape 6 (63 %) et étape 8 (énergie) : questions ajoutées, même méthode que les
+ * nationaux qui les posent (lecture de τ : 8 sujets sur 20 ; énergie : 2023 R). Une diapositive par étape :
+ * ?sujet=rc2022n&etape=sujet | 1 … 8 | fin.
+ * Moments (pas-a-pas.js, play_until) : enonce, courbe, rappel, question, correction ; vue « sujet » : donnees, questions.
+ * Repères : 'circuit', 'fleche_i', 'fleche_uR', 'fleche_uC', 'graphe_uc', 'graphe_i', 'C1', 'C2', 'droite_T',
+ * 'asymptote', 'i0', 'tangente', 'niveau', 'copie', 'question', 'questions', 'donnees'.
+ */
+const E = 12, TAU = 50;
+window.PasAPas({ id: 'rc_tableau_national_pas_a_pas', titre: 'Le national joué pas à pas : dipôle RC', sujets: {
+  rc2022n: {
+    titre: 'National 2022 N · dipôle RC',
+    circuit: { R: true, K: true, droite: 'C', affiche: '12V' },
+    donnees: ['E = 12 V ; condensateur initialement déchargé.', 'À t = 0, K en position (1) : la charge commence.', 'Figure : (C₁) = u_C(t) et (C₂) = i(t) ; (T) tangente à (C₁) en t = 0.'],
+    graphes: {
+      fig2: { tmax: 300, tgrad: [50, 100, 150, 200, 250], tlabel: 't (ms)', panneaux: [
+        { id: 'uc', label: 'u_C (V)', ymin: 0, ymax: 14, grad: [4, 8, 12], courbes: [{ id: 'C1', nom: '(C₁)', couleur: 'rouge', f: t => E * (1 - Math.exp(-t / TAU)), etiquette: [220, -14] }],
+          droites: [{ id: 'droite_T', de: [0, 0], a: [56, 13.4], nom: '(T)' }] },
+        { id: 'i', label: 'i (mA)', ymin: 0, ymax: 14, grad: [4, 8, 12], courbes: [{ id: 'C2', nom: '(C₂)', couleur: 'vert', f: t => 12 * Math.exp(-t / TAU), etiquette: [120, -12] }] },
+      ] },
+    },
+    etapes: [
+      { titre: 'Établir l’équation différentielle de u_C', court: 'L’équation différentielle', vue: 'circuit',
+        question: 'Montre que : ⟦du_C|dt⟧ + ⟦1|RC⟧·u_C = ⟦E|RC⟧.',
+        copie: ['Additivité : u_R + u_C = E', 'u_R = R·i et i = C·⟦du_C|dt⟧', 'RC·⟦du_C|dt⟧ + u_C = E, donc ⟦du_C|dt⟧ + ⟦1|RC⟧·u_C = ⟦E|RC⟧'] },
+      { titre: 'L’expression de i(t)', court: 'i(t)', vue: 'graphe', graphe: 'fig2', trace: true,
+        question: 'u_C(t) = E(1 − e^(−t/RC)). Établis i(t) en fonction de E, R, C et t.',
+        copie: ['i = C·⟦du_C|dt⟧ = C·E·⟦1|RC⟧·e^(−t/RC)', 'i(t) = ⟦E|R⟧·e^(−t/RC)'] },
+      { titre: 'Lire E et i(0) sur les courbes', court: 'Lecture de E et de i(0)', vue: 'graphe', graphe: 'fig2',
+        question: 'Lis E sur (C₁), puis i(0) sur (C₂).',
+        copie: ['Régime permanent : u_C = E = 12 V', 'À t = 0 : i(0) = 12 mA'],
+        construit: [{ type: 'asymptote', id: 'asymptote', panneau: 'uc', y: 12, label: 'E = 12 V' }, { type: 'point', id: 'i0', panneau: 'i', t: 0, y: 12, label: 'i(0) = 12 mA', decalage: [12, 4] }] },
+      { titre: 'Calculer R', court: 'R', vue: 'graphe', graphe: 'fig2',
+        question: 'Déduis la valeur de R.',
+        copie: ['i(0) = ⟦E|R⟧·e⁰ = ⟦E|R⟧, donc R = ⟦E|i(0)⟧', 'R = ⟦12|12·10⁻³⟧ = 1,0·10³ Ω = 1 kΩ'] },
+      { titre: 'τ par la tangente (T)', court: 'τ par la tangente', vue: 'graphe', graphe: 'fig2',
+        question: 'Lis τ avec la tangente (T) à l’origine.',
+        copie: ['(T) coupe l’asymptote u_C = E à t = τ', 'τ = 50 ms'],
+        construit: [{ type: 'tangente', id: 'tangente', panneau: 'uc', t0: 0, y0: 0, t1: TAU, y1: E, label: 'τ = 50 ms' }] },
+      { titre: 'Vérifier τ par les 63 %', court: 'τ par les 63 %', vue: 'graphe', graphe: 'fig2',
+        question: 'Vérifie τ avec la méthode des 63 %.',
+        copie: ['u_C(τ) = E(1 − e⁻¹) ≈ 0,63·E', '0,63 × 12 = 7,56 V : on lit t = 50 ms = τ'],
+        construit: [{ type: 'niveau', id: 'niveau', panneau: 'uc', y: 0.632 * E, t: TAU, labelY: '0,63·E ≈ 7,6 V', labelT: 't = 50 ms' }] },
+      { titre: 'Montrer que C = 50 µF', court: 'C', vue: 'graphe', graphe: 'fig2',
+        question: 'Montre que C = 50 µF.',
+        copie: ['τ = R·C, donc C = ⟦τ|R⟧', 'C = ⟦50·10⁻³|10³⟧ = 5,0·10⁻⁵ F = 50 µF'] },
+      { titre: 'L’énergie du condensateur chargé', court: 'L’énergie', vue: 'graphe', graphe: 'fig2',
+        question: 'Calcule l’énergie emmagasinée en régime permanent.',
+        copie: ['E_e = ½·C·u_C², avec u_C = E', 'E_e = ½ × 50·10⁻⁶ × 12² = 3,6·10⁻³ J = 3,6 mJ'],
+        construit: [{ type: 'point', id: 'point_E', panneau: 'uc', t: 250, y: 12, label: 'u_C = E', decalage: [-10, 24], couleur: 'cyan' }] },
+    ],
+  },
+} });
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

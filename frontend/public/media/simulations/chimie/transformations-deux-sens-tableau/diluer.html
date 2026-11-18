@@ -29,7 +29,9 @@ const { fr } = window.Tableau;
 const sci = window.Deroule.sci;
 const KA = 1.6e-5;
 const LISTE = [1e-1, 5e-2, 2e-2, 1e-2, 5e-3, 2e-3, 1e-3, 5e-4, 2e-4, 1e-4, 5e-5, 2e-5, 1e-5];
-const P = { libre: null };            // la solution de l'élève (curseur), null tant qu'il n'a pas touché
+const P = { libre: null, conclusions: true };   // libre : la solution de l'élève (curseur), null tant qu'il n'a pas touché ;
+// conclusions : false tait la flèche des barres et la conclusion pendant la question d'observation (td_d2_taux, 2ᵉ passe du 18 novembre 2026)
+const LIGNES = ['ligne_1', 'ligne_2', 'ligne_3'];   // repères des lignes de calcul
 const ETAPESC = [{ nom: 'taux_1', C: 1e-2 }, { nom: 'taux_2', C: 1e-3 }, { nom: 'taux_3', C: 1e-4 }];
 function mesure(C) {
   const h = (-KA + Math.sqrt(KA * KA + 4 * KA * C)) / 2, pH = Math.round(-Math.log10(h) * 10) / 10, tau = 10 ** -pH / C;
@@ -40,7 +42,7 @@ const fC = C => sci(C, 1);
 // Loupe : 25 places sur une grille 5 × 5 ; celles qui ont réagi sont prises dans cet ordre (mélangé, fixe).
 const ORDRE = [12, 3, 21, 8, 16, 0, 24, 6, 18, 10, 14, 2, 22, 5, 19, 9, 1, 23, 7, 15, 11, 4, 20, 13, 17];
 const LP = { x: 280, y: 200, r: 80, pas: 25 };
-const COUL = { acide: [236, 236, 230], base: [139, 92, 246], oxonium: [250, 204, 21] };   // blanc, violet, jaune de la légende
+const COUL = { acide: [236, 236, 230], base: [139, 92, 246], oxonium: [244, 114, 182] };   // blanc, violet, rose (H₃O⁺ porte le H⁺ rose du lexique)
 const BE = { x: 40, y: 150, w: 110, h: 120 };
 const R = { x: 372, ligne0: 112, dy: 32, base: 336, ech: 150, bx: [420, 500, 580, 660], lb: 40 };
 
@@ -107,7 +109,7 @@ function dessinerVue(c, D, large) {
     const reagi = new Set(ORDRE.slice(0, n)), sph = window.Peinture.sphere, ctx = c.ctx;
     for (let i = 0; i < 25; i++) {
       const gx = LP.x + (i % 5 - 2) * LP.pas, gy = LP.y + (Math.floor(i / 5) - 2) * LP.pas;
-      // Vraies molécules (C noir, O rouge, H blanc ; le H⁺ échangé en jaune) : CH₃COOH entière, ou CH₃COO⁻ + H₃O⁺ après réaction.
+      // Vraies molécules (C jaune, O rouge, H blanc ; le H⁺ échangé en rose) : CH₃COOH entière, ou CH₃COO⁻ + H₃O⁺ après réaction.
       const R = window.Rendu, ang = Math.sin(i * 2.3) * .25;
       if (reagi.has(i)) { R.molecule(ctx, 'CH3COO', gx - 4, gy - 1, .5, ang); R.molecule(ctx, 'H3O', gx + 8, gy + 4, .5); } else R.molecule(ctx, 'CH3COOH', gx - 1, gy, .55, ang);
     }
@@ -132,7 +134,7 @@ function dessinerVue(c, D, large) {
     if (fini) {
       D.ecrire(c, e.nom);
       c.texte(`${fC(e.C)} : pH = ${fr(mm.pH, 1)} → τ = 10^{−${fr(mm.pH, 1)}} / ${fC(e.C)} = ${ftau(mm.tau)}`, R.x, y, { couleur: 'cyan', taille: 15, max: 380 });
-      c.repere('ligne_' + (i + 1), R.x - 6, y - 20, 386, 28, `la ligne ${i + 1}`);
+      c.repere(LIGNES[i], R.x - 6, y - 20, 386, 28, `la ligne ${i + 1}`);
     }
     barre(c, R.bx[i], fini ? Math.min(1, (D.p(e.nom) - .75) / .25) * mm.tau : 0, e.C, mm.tau, 'cyan', fini);
   });
@@ -143,13 +145,13 @@ function dessinerVue(c, D, large) {
       barre(c, R.bx[3], mm.tau, mm.C, mm.tau, 'blanc', true);
     });
   }
-  if (D.commence('barres')) {
+  if (D.commence('barres') && P.conclusions) {
     D.ecrire(c, 'barres');
     // la flèche part au-dessus de la valeur « 0,040 » écrite sur la première barre (elle la barrait)
     c.direct(() => c.fleche(R.bx[0] + 20, R.base - mesure(1e-2).tau * R.ech - 32, R.bx[2] + 20, R.base - mesure(1e-4).tau * R.ech - 26, { couleur: 'jaune', largeur: 2 }));
   }
   c.repere('barres', R.bx[0] - 14, R.base - 140, 300, 164, 'les barres de τ');
-  if (D.commence('conclusion')) {
+  if (D.commence('conclusion') && P.conclusions) {
     D.ecrire(c, 'conclusion');
     c.texte('Plus la solution est diluée, plus τ est grand.', R.x + 10, 386, { couleur: 'jaune', taille: 18 });
     c.texte('⚠ Le pH monte aussi : moins d’ions H₃O⁺ par litre, mais une plus grande part de l’acide a réagi.', 380, 412, { couleur: 'orange', taille: 15, align: 'center', max: 740 });
@@ -170,8 +172,9 @@ function voir(D) {
   const cu = courante(D), m = cu.m, n = cu.mes > 0 ? Math.round(25 * m.tau) : 0;
   const s = [`Bécher : C = ${fC(m.C)} mol/L${cu.libre ? ' (choisie par l’élève)' : ''} ; pH-mètre ${cu.mes >= 1 ? 'stabilisé à ' + fr(m.pH, 1) : 'pas encore stabilisé'} ; loupe : ${n} molécules sur 25 ont cédé leur proton à l’eau.`];
   ETAPESC.forEach((e, i) => { if (D.p(e.nom) > .75) { const mm = mesure(e.C); s.push(`Ligne ${i + 1} : ${fC(e.C)} mol/L, pH ${fr(mm.pH, 1)}, τ = ${ftau(mm.tau)}.`); } });
-  if (D.commence('barres')) s.push('Flèche sur les barres : τ monte quand C baisse.');
-  if (D.commence('conclusion')) s.push('Écrit : plus la solution est diluée, plus τ est grand ; le pH monte aussi.');
+  if (!P.conclusions) s.push('Question en cours : la flèche et la conclusion sont tues.');
+  if (D.commence('barres') && P.conclusions) s.push('Flèche sur les barres : τ monte quand C baisse.');
+  if (D.commence('conclusion') && P.conclusions) s.push('Écrit : plus la solution est diluée, plus τ est grand ; le pH monte aussi.');
   return s.join(' ');
 }
 
@@ -185,16 +188,17 @@ document.getElementById('reglage').replaceChildren(regl);
 const DER = window.Deroule({
   scene: { large: true },
   id: 'transformations_deux_sens_diluer', titre: 'La dilution augmente τ', etapes, dessiner, voir,
-  params: () => ({ concentration_mol_l: P.libre }),
+  params: () => ({ concentration_mol_l: P.libre, conclusions: P.conclusions }),
   appliquer: p => {
+    if (typeof p.conclusions === 'boolean') { P.conclusions = p.conclusions; if (p.concentration_mol_l == null) return true; }
     const v = +p.concentration_mol_l; if (!(v > 0)) return false;
     let i = 0; LISTE.forEach((c, j) => { if (Math.abs(Math.log10(c / v)) < Math.abs(Math.log10(LISTE[i] / v))) i = j; });
     P.libre = LISTE[i]; regl.input.value = String(i); lireC(); return true;
   },
-  schema: { concentration_mol_l: '1e-1 .. 1e-5 mol/L (crans : 1, 2, 5 × puissance de dix) : la solution de l’élève, mesurée et calculée' },
+  schema: { concentration_mol_l: '1e-1 .. 1e-5 mol/L (crans : 1, 2, 5 × puissance de dix) : la solution de l’élève, mesurée et calculée', conclusions: 'true | false (question d’observation : false tait la flèche des barres et la conclusion ; true par défaut)' },
   depart: () => 'On part de l’acide éthanoïque à 1,0·10⁻² mol/L.',
   accueil: () => 'Lance : on dilue deux fois, et la loupe montre la part de l’acide qui a réagi.',
-  apresReglage: () => { const m = mesure(P.libre); return `Ta solution : C = ${fC(m.C)} mol/L, pH = ${fr(m.pH, 1)}, τ = ${ftau(m.tau)} : ${Math.round(25 * m.tau)} molécules sur 25 ont réagi.`; },
+  apresReglage: () => { if (P.libre == null) return P.conclusions ? 'La conclusion s’écrit.' : 'Regarde les barres.'; const m = mesure(P.libre); return `Ta solution : C = ${fC(m.C)} mol/L, pH = ${fr(m.pH, 1)}, τ = ${ftau(m.tau)} : ${Math.round(25 * m.tau)} molécules sur 25 ont réagi.`; },
   messageFin: () => 'Diluée, la solution a moins d’ions H₃O⁺ par litre, mais une plus grande part de l’acide a réagi : τ augmente.',
   texte: 'Acide éthanoïque dilué : C = 1,0·10⁻² mol/L, pH 3,4, τ = 0,040 ; 1,0·10⁻³ mol/L, pH 3,9, τ = 0,13 ; 1,0·10⁻⁴ mol/L, pH 4,5, τ = 0,32 (τ = 10^(−pH)/C). La loupe montre 25 molécules d’acide versées : 1, puis 3, puis 8 ont cédé leur proton à l’eau. Plus la solution est diluée, plus τ est grand ; le pH monte aussi (moins d’ions H₃O⁺ par litre). Le curseur C (1,0·10⁻¹ à 1,0·10⁻⁵ mol/L) prépare une autre solution.',
   explication: [

@@ -236,20 +236,85 @@ réponse de l'élève ») porte précisément sur ces cas, et que chacune est po
 s'arrête après `apres_mot` et la phrase suivante confirme) : elles ne coûtent aucune voix de diapositive.
 Les « À toi » restent à une question par bloc au plus.
 
-## 5. Animations et besoins notés (fichiers non modifiés)
+## 5. Animations et besoins notés
 
-- `noyau.html?vue=gurdon` sert aussi à `ig_l6_definition` (arrêt sur `adulte_albinos`) ; une vue « trois expériences
-  côte à côte » (amibe, chapeau greffé, grenouille) serait meilleure : à faire dans la simulation du cours.
-- `meselson.html` : pour les observations de G1 et G2, la simulation devrait accepter `{conclusions: false}` pour
-  masquer « conservative rejetée » / « dispersive rejetée » tant que l'élève n'a pas répondu (comme
-  `bacteries.html?conclusions=false`). En attendant, ces mentions apparaissent sur leurs moments, après la question.
-- `documents.html?vue=durees` : `ig_c6b_phases` démarre au moment `duree_cycle` ; si la simulation repart de zéro,
-  ajouter `&diapo=c6b_phases` à son départ.
+Faits à la 2ᵉ passe (18 novembre 2026, détail en § 5 bis) : la vue « trois expériences côte à côte »
+(`noyau.html?vue=trois`), `meselson.html {conclusions: false}`, le départ d'`ig_c6b_phases`.
+
 - `mitose.html?vue=animale&diapo=m4_anaphase` sert aux deux diapositives `ig_m4` et `ig_m4b` (départ à 13,2 s).
+- `ig_c6b_phases` : la page est rechargée (`&diapo=c6b_phases`) ; son premier geste est maintenant un `set_time` sur
+  `duree_cycle` (19,6 s), écrit d'un coup (déjà vu en `ig_c6_durees`), au lieu de rejouer 20 s d'animation sous la voix.
+
+## 5 bis. 2ᵉ passe (18 novembre 2026) : les cas types joués pas à pas, rien de décisif avant la réponse
+
+Demande : « simple, animé, expliqué, ne pas tout donner au départ, laisser à l'élève le temps de trouver seul ». Script :
+`python3 scripts/logique/passe2_svt_ch3.py` (idempotent, sur la copie en attente).
+
+### Les cas types de l'exploration, un par un
+
+| Cas type (fréquence) | Où il est joué | État après la 2ᵉ passe |
+|---|---|---|
+| `localisation` (contrôles) | `ig_l1` → `ig_l5` (chaque expérience jouée seule, résultat en question d'observation), puis `ig_l6` | déjà joué ; **ajouté** : la vue « trois expériences côte à côte » pour `ig_l6_definition` (règle 33 : le récapitulatif après la dernière). Texte inchangé : la voix reste ; le pointage suit les mots déjà dits. |
+| `nature_chimique` (contrôles) | Griffith `ig_t1` → `ig_t1f` (la souris 4 en observation, `conclusions=false`), Avery `ig_t2`, `ig_t2b` | déjà joué, rien à refaire |
+| `meselson` (QCM 2018 R sur les modèles) | `ig_r1` → `ig_r6` | déjà joué ; **corrigé** : pendant les observations de G1 et G2, « conservative / dispersive rejetée » et la conclusion se taisent (`sim_avant {conclusions: false}`, `sim_apres {conclusions: true}`) ; en G2, la conservative (rejetée en G1) reste barrée |
+| `chargaff` (contrôles) | `ig_s2_chargaff` (bases comptées en animation, puis le tableau ; observation sur A/T et C/G) | déjà joué |
+| `duree_cycle` (agronomie 2015 R) | `ig_c6_durees` (question), `ig_c6b_phases` (observation sur la phase S) | déjà joué ; départ d'`ig_c6b` réglé (§ 5) |
+| `identifier_phase` (contrôles) | `ig_m6_photo` : une cellule rédigée par la voix (méthode), la suivante laissée à l'élève | déjà joué |
+| `schematiser` (contrôles, 2016 N) | `ig_m7_schema` (question 2n = 4 avant la démonstration), `ig_m7b_legender` (légender soi-même) | déjà joué |
+| `caracteriser_phase` (2018 R, 0,5 pt) | `ig_m4_anaphase` : la question vient avant la réponse | **ajouté** : la phrase du barème (deux caractéristiques : une chromatide par chromosome après la division du centromère ; les chromatides vers les pôles opposés) en démonstration de la question |
+| `qcm_cycle` (2018 R, 2024 N/R) | `ig_x1_restitution` | **refait** : avant, la voix barrait elle-même a, c, d puis donnait b — l'élève n'avait rien à trouver. Maintenant `ig_x1_restitution` pose le QCM de 2024 R (G1) et s'arrête ; l'élève répond (une réaction préparée par option) ; **puis** `ig_x1b_corrige` joue le corrigé leurre par leurre (l'ancien texte et sa voix, déplacés). Même schéma pour le QCM du national 2018 R (« durant la métaphase, chaque chromosome est formé… », réponse c) : `ig_x1c_metaphase` (posé), `ig_x1d_corrige_metaphase` (corrigé joué, nouvelle vue `documents.html?vue=metaphase`). |
+| `courbe_adn` (très fréquente aux contrôles) | `ig_c5_decrire` (la méthode montrée une fois), `ig_x2…` | **refait** : avant, `ig_x2_exercice` expliquait la chute de 2q à q puis posait la question dont il venait de donner la réponse. Maintenant une consigne par diapositive : `ig_x2_exercice` = **décrire** (la courbe seule, `?reponse=rien` ; question « de 8 à 14 h, la description comme le barème » : la réponse sans valeurs et l'explication donnée à la place de la description sont les deux pièges, chacun avec sa réaction) ; `ig_x2b_expliquer` = **expliquer** (la description écrite, l'explication cachée, `?reponse=decrire` ; l'ancienne question 2q → q, ses réactions et sa démonstration gardent leurs voix). |
+| `thymidine` (2017 R, 1,5 pt) | `ig_r7`, `ig_r8` (la leçon) | **ajouté** : l'exercice du national joué en quatre temps sur une nouvelle vue `thymidine.html?vue=document` (le document seul : plantule, chromosome métaphasique après chaque cycle, ni molécules ni brins) : `ig_x3_thymidine_doc` **décrire** le 2ᵉ résultat (sa légende se tait, `conclusions=false`) ; `ig_x3b_cycle1` **expliquer** le 1er cycle (question, puis la chaîne en flèches du barème) ; `ig_x3c_cycle2` **expliquer** le 2ᵉ (idem) ; `ig_x3d_schema` le **schéma** demandé (vue `experience`, brins en couleur, arrêtée avant la conclusion écrite) puis la **conclusion** demandée à l'élève (semi-conservative). |
+| `definir` (2024 N, association) | — | **reste** : l'association de 2024 N (ADN polymérase, centromère, nucléosome, ribosome) n'a pas de diapositive jouée ; le ribosome est du chapitre 4. Le vrai/faux du bloc (`ig_s8_b3`) reprend le nucléosome. À faire si l'on veut la jouer : une vue « associer » (étiquettes à poser, comme `?vue=legender`). |
+
+### Simulations : ce qui a été ajouté (le cours en ligne voit tout comme avant)
+
+- `noyau.html?vue=trois` : nouvelle vue (amibe, acétabulaire greffée, grenouille de Gurdon peintes ; moments `amibe`,
+  `acetabulaire`, `gurdon`, `commun` ; repères `exp_amibe`, `exp_acetabulaire`, `exp_gurdon`, `commun`).
+- `meselson.html` : paramètre `conclusions` (défaut `true`, aussi `?conclusions=false`) ; `false` tait l'hypothèse
+  rejetée à la génération en cours et la conclusion finale ; ne relance pas la scène.
+- `thymidine.html?vue=document` : nouvelle vue (moments `cycle_1`, `metaphase_1`, `transfert`, `metaphase_2`) ;
+  paramètre `conclusions` (défaut `true`) qui tait « une chromatide marquée sur deux ». La vue `experience` est inchangée.
+- `documents.html` : paramètre `reponse` de la vue `courbe` (`tout` par défaut ; `rien` = la courbe seule ;
+  `decrire` = la description sans l'explication) ; nouvelle vue `metaphase` (QCM 2018 R, moments `carte`, `elimine_a`,
+  `elimine_b`, `elimine_d`, `reponse`).
+- `etapes.js` : **`Peint.courbe` manquait** — `documents.html?vue=courbe` et `cycle.html?vue=courbe` l'appelaient et
+  s'arrêtaient sur une erreur (« Peint.courbe is not a function ») : la courbe de l'ADN ne se dessinait pas, ni ses
+  légendes (cours en ligne compris, `ig_c3`, `ig_c4`, `ig_c5`, `ig_x2`). Ajoutée (morceaux colorés par phase, aire douce).
+- Vérifié dans Chromium à 1024 × 560, 724 × 350 et 1366 × 613 : aucune erreur console, chaque moment atteint par
+  `postMessage {simulation_control, play_until}`, `ce_qui_se_voit` conforme, textes ≥ 15 px (le kit agrandit).
+
+### Séances
+
+La séance 7 finit par la restitution (`ig_s7_b3` : `ig_x1`, `ig_x1b`, `ig_x1c`, `ig_x1d`). Une **séance 8** « Les
+exercices du national pas à pas, et le bilan » : `ig_s8_b1` la courbe (décrire, expliquer), `ig_s8_b2` la thymidine
+(quatre temps), `ig_s8_b3` le bilan (`ig_b1`, `ig_b2`). Partie VIII : 50 min ; cours : 345 min. Compétences : C3
+(courbe), C7 (thymidine) et C8 (toutes les diapositives d'examen).
+
+### Ce qui reste, et pourquoi
+
+- `definir` (association 2024 N) : voir le tableau.
+- Les questions d'observation du cours sont déjà nombreuses (8) ; les nouveaux exercices utilisent des **questions**
+  (posées après la voix), jamais une observation de plus.
+- Les écarts « gestes trop serrés » des diapositives nouvelles ou réécrites viennent de l'absence de voix (durée
+  inconnue) ; les 20 « introuvable » du contrôle de pointage existent déjà, identiques, dans le cours en ligne (repères
+  et moments calculés de `bacteries.html` et `mitose.html`, que le contrôle ne lit pas).
 
 ## 6. Voix
 
-`svt_ch3_notion_information_genetique_voix.json` : 64 pistes — 9 diapositives réécrites ou nouvelles (`ig_l5`,
+**2ᵉ passe** : `svt_ch3_notion_information_genetique_voix.json` compte maintenant **123 pistes** (59 de plus) : les
+diapositives réécrites `ig_x1_restitution`, `ig_x2_exercice` et les nouvelles `ig_x1c`, `ig_x1d`, `ig_x2b`, `ig_x3`,
+`ig_x3b`, `ig_x3c`, `ig_x3d` ; leurs réactions préparées (une par option, deux essais) ; leurs énoncés ; trois
+démonstrations du barème (`ig_m4_anaphase`, `ig_x3b`, `ig_x3c`) et celle d'`ig_x2_exercice`. Gardent leur voix :
+`ig_x1b_corrige` (l'ancien texte d'`ig_x1`), l'ancienne question d'`ig_x2` passée sur `ig_x2b` (énoncé, réactions,
+démonstration), `ig_l6_definition` (texte inchangé). Mots vérifiés (`verifier_mots.py`) : darija rare remplacé
+(الجيهتين → بيناتهم, تجاوبش → خود الوقت ديالك, تهدم → مشا, قديمة → القدام, كتحتفظ → كيبقى فيها, كتضاعف → كتولي جوج
+مرات, كتمشيش/كيمشيش → كتبقى/كيبقى, كنكتبوه → نكتبو هادشي, كيتفرقو → كل وحدة كتمشي ل pôle, كيتكثف → كيولي condensé,
+consigne → سؤال, le bleu / le rouge / le blanc → الزرق / الأحمر / الأبيض, montée → augmentation). Restent, mots du
+programme ou du sujet **à écouter** : barème, thymidine, plantule, fève, marquée(s), métaphasique, molécule fille,
+conservative, dispersive, semi-conservative, condensé, formé.
+
+1re passe : 64 pistes — 9 diapositives réécrites ou nouvelles (`ig_l5`,
 `ig_l6`, `ig_p1`, `ig_c6`, `ig_c6b`, `ig_m4`, `ig_m4b`, `ig_t1f`, `ig_r4`), 5 réactions et 1 énoncé (question de
 `ig_l6`), 49 champs des 7 nouvelles questions d'observation. Les 54 autres diapositives gardent leur id et leur texte :
 leur voix reste.
@@ -263,8 +328,9 @@ dispersive, semi-conservative, léger/légères.
 
 ## 7. Reproduire
 
-`python3 scripts/logique/refaire_svt_ch3.py` (relit le cours en ligne, écrit la version en attente : déplacements,
+`python3 scripts/logique/refaire_svt_ch3.py` (1re passe ; relit le cours en ligne, écrit la version en attente : déplacements,
 réécritures, observations, séances recoupées, contrôle de chaque `mot` de pointage et de chaque `apres_mot`), puis
+`python3 scripts/logique/passe2_svt_ch3.py` (2ᵉ passe, sur la copie en attente, idempotent), puis
 `python3 -X utf8 scripts/logique/lister_voix.py svt_ch3_notion_information_genetique` (liste des voix et mots rares).
 Vérifications : `cd backend && python -m pytest -q app/tests -k "course or cours or concentration"`,
 `python backend/scripts/verifier_figures_cahier.py backend/data/courses/en_attente/svt_ch3_notion_information_genetique.json`

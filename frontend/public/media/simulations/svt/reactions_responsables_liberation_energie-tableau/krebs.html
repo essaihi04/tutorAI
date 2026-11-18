@@ -11,6 +11,7 @@
 </div>
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
+<script src="/media/simulations/shared/lexique/lexique.js"></script>
 <script src="peinture.js"></script>
 <script>
 /*
@@ -57,7 +58,7 @@ const MOTIFS = {
   dix_nadh: '10 NADH,H+ : 2 de la glycolyse, 2 de l’acétyl-CoA, 6 du cycle',
   energie_transporteurs: 'l’énergie est portée par les transporteurs NADH,H+ et FADH2',
 };
-const CARBONE = [250, 204, 21], NADC = [34, 190, 220], FADC = [230, 140, 60], ATPC = [250, 190, 60], COA = [168, 110, 220];
+const CARBONE = [250, 204, 21], NADC = [34, 190, 220], FADC = window.Lexique.C.fad, ATPC = [250, 190, 60], COA = window.Lexique.C.coa;
 const RO = { x: 250, y: 178, r: 84 };                      // la roue (16 novembre 2026 : à gauche, le compteur en carte à droite)
 const DEG = Math.PI / 180, HAUT = -90;
 /* Les crans du cycle : angle sur la roue (sens horaire depuis la droite), sortie, carbones qui restent. */
@@ -104,7 +105,9 @@ scene.avancer = chrono.avancer;
  * une carte (en-tête doré, une ligne par produit avec son pictogramme, chiffres gras qui tombent en place) ; l'équation
  * et le bilan pour un glucose ont leur bande en bas, en entier. Disposition du cadre 760 × 420 :
  *   roue à gauche (centre 250, 178), compteur à droite (500 → 752, 40 → 318), bande des équations en bas (330 → 418). */
-const COUL = { co2: [150, 160, 175], oxy: [235, 85, 70], nadh: NADC, fadh2: [176, 120, 236], atp: [250, 196, 60] };
+/* Lexique visuel commun (18 novembre 2026, règle 15) : CO₂ = O = C = O à carbone JAUNE (il vient du glucose ; il était gris),
+ * FADH₂ = capsule VERTE (elle était violette ici, orange ailleurs), ATP doré du lexique. */
+const Lx = window.Lexique, COUL = { nadh: NADC, fadh2: Lx.C.fad, atp: Lx.C.atp };
 const CRAIE_DE = { co2: 'blanc', nadh: 'cyan', fadh2: 'violet', atp: 'jaune' };
 /* Où s'écrit le nom de chaque sortie (le cadre est étroit à gauche : NAD+ → NADH,H+ sur deux lignes). */
 const ETIQ = {
@@ -169,8 +172,7 @@ function capsule(c, x, y, w, couleur, nom, a = 1) {
 function picto(ctx, s, x, y, a = 1, k = 1) {
   if (a <= 0) return;
   if (s === 'co2') {   // O = C = O
-    P.liaison(ctx, x - 9 * k, y, x + 9 * k, y, { alpha: a, epaisseur: 3 * k });
-    P.bille(ctx, x - 10 * k, y, 5 * k, COUL.oxy, { alpha: a }); P.bille(ctx, x + 10 * k, y, 5 * k, COUL.oxy, { alpha: a }); P.bille(ctx, x, y, 6 * k, COUL.co2, { alpha: a });
+    Lx.co2(ctx, x, y, { echelle: k, alpha: a });
   } else if (s === 'nadh') P.capsule(ctx, x, y, 30 * k, 14 * k, COUL.nadh, { alpha: a, lueur: .6 });
   else if (s === 'fadh2') P.capsule(ctx, x, y, 30 * k, 14 * k, COUL.fadh2, { alpha: a, lueur: .6 });
   else { P.bille(ctx, x, y, 8 * k, COUL.atp, { alpha: a }); P.eclat(ctx, x, y, 12 * k, .35 * a); }

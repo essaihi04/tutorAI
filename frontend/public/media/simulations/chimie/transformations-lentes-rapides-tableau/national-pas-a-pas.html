@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le national joué pas à pas : transformations lentes — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="tlr.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un exercice type national, une étape à la fois : les demi-équations, l'équation, le tableau d'avancement rempli ligne par ligne, puis les courbes n(I₂) à deux températures ; à droite « Ta copie » avec la question de l'étape, puis sa correction"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until set_parameters">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script src="pas-a-pas.js"></script>
+<script>
+/*
+ * Exercice type national du chapitre, joué pas à pas (2ᵉ passe de la logique du cours, 18 novembre 2026). Il réunit
+ * les cas types des sujets 2016-2025 : couples et équation (piles, électrolyse : 12 à 15 sessions sur 20), tableau
+ * d'avancement et réactif limitant, une grandeur qui suit la transformation, la température facteur cinétique et le
+ * même état final (2018 N, 2023 N, 2024 N, 2025 N), la trempe (2017 R). Valeurs du cours (tl_rp5_avancement,
+ * tl_f7_palier) : V = 100 mL, n₀(H₂O₂) = 2 mmol, [I⁻]₀ = 0,1 mol/L donc n₀(I⁻) = 10 mmol, H⁺ en excès ; x_max = 2 mmol.
+ * Courbes n(I₂)(t) : (a) à 40 °C, 2(1 − e^(−t/3)) ; (b) à 20 °C, 2(1 − e^(−t/10)) (t en min) : même palier.
+ * Les équations s'écrivent sans états : commun.js (window.Etats) les ajoute au tableau.
+ * ?sujet=iodure&etape=sujet | 1 … 9 | fin.
+ * Moments (pas-a-pas.js, play_until) : enonce, courbe, rappel, question, correction ; vue « sujet » : donnees, questions.
+ * Repères : 'donnees', 'tableau', 'equation', 'ligne_1', 'ligne_2', 'ligne_3', 'graphe_n', 'courbe_a', 'courbe_b',
+ * 'asymptote', 'point_a', 'copie', 'question', 'questions'.
+ */
+window.PasAPas({ id: 'tlr_tableau_national_pas_a_pas', titre: 'Le national joué pas à pas : transformations lentes', sujets: {
+  iodure: {
+    titre: 'Exercice type national · eau oxygénée et ions iodure',
+    sansCircuit: true, largeurCopie: .5,
+    donnees: ['On mélange V = 100 mL d’une solution acidifiée : n₀(H₂O₂) = 2 mmol et [I⁻]₀ = 0,1 mol/L ; H⁺ en excès.', 'Couples : H₂O₂/H₂O et I₂/I⁻.', 'Le diiode I₂ formé colore la solution en brun : on suit n(I₂) au cours du temps.', 'Deux expériences : même mélange, à 20 °C et à 40 °C.'],
+    tableau: {
+      equation: 'H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O',
+      colonnes: ['n(H₂O₂)', 'n(I⁻)', 'n(I₂)'],
+      lignes: [
+        { etat: 'initial', etape: 2, cases: ['0', '2', '10', '0'] },
+        { etat: 'en cours', etape: 3, cases: ['x', '2 − x', '10 − 2x', 'x'] },
+        { etat: 'final', etape: 4, cases: ['x_max', '2 − x_max', '10 − 2x_max', 'x_max'] },
+      ],
+    },
+    graphes: {
+      suivi: { tmax: 40, tgrad: [10, 20, 30], tlabel: 't (min)', panneaux: [
+        { id: 'n', nom: 'n(I₂) en fonction du temps', label: 'n(I₂) (mmol)', ymin: 0, ymax: 2.6, grad: [1, 2], toutesGrad: true, courbes: [
+          { id: 'courbe_a', nom: '(a)', couleur: 'orange', f: t => 2 * (1 - Math.exp(-t / 3)), etiquette: [4, -8] },
+          { id: 'courbe_b', nom: '(b)', couleur: 'jaune', f: t => 2 * (1 - Math.exp(-t / 10)), etiquette: [14, 26] },
+        ] },
+      ] },
+    },
+    etapes: [
+      { titre: 'Les deux demi-équations', court: 'Les demi-équations', vue: 'donnees',
+        question: 'Écris la demi-équation de chaque couple, en milieu acide.',
+        copie: ['H₂O₂ + 2H⁺ + 2e⁻ ⇌ 2H₂O', 'I₂ + 2e⁻ ⇌ 2I⁻'] },
+      { titre: 'L’équation de la réaction', court: 'L’équation', vue: 'donnees',
+        question: 'H₂O₂ gagne des électrons, I⁻ en perd. Écris l’équation de la réaction.',
+        copie: ['Les ions iodure cèdent les électrons : 2I⁻ → I₂ + 2e⁻', 'On additionne les deux demi-équations :', 'H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O'] },
+      { titre: 'Le tableau : l’état initial', court: 'L’état initial', vue: 'tableau',
+        question: 'Remplis la ligne de l’état initial, en mmol.',
+        copie: ['n₀(I⁻) = [I⁻]₀·V = 0,1 × 0,100 = 10·10⁻³ mol = 10 mmol', 'x = 0 : 2 mmol de H₂O₂, 10 mmol de I⁻, 0 de I₂'] },
+      { titre: 'Le tableau : en cours', court: 'En cours', vue: 'tableau',
+        question: 'Remplis la ligne « en cours », avec l’avancement x.',
+        copie: ['Les coefficients disent combien part ou se forme :', 'n(H₂O₂) = 2 − x ; n(I⁻) = 10 − 2x ; n(I₂) = x'] },
+      { titre: 'L’état final et le réactif limitant', court: 'x_max et le réactif limitant', vue: 'tableau',
+        question: 'Trouve x_max et le réactif limitant.',
+        copie: ['2 − x_max = 0 donne 2 mmol ; 10 − 2x_max = 0 donne 5 mmol', 'x_max = 2 mmol : H₂O₂ est le réactif limitant'] },
+      { titre: 'Suivre la transformation par n(I₂)', court: 'Le suivi par n(I₂)', vue: 'graphe', graphe: 'suivi', trace: true,
+        question: 'On suit n(I₂). Quelle valeur atteint la courbe à la fin ? Pourquoi ?',
+        copie: ['n(I₂) = x : la courbe suit l’avancement', 'Palier : n(I₂)f = x_max = 2 mmol'],
+        construit: [{ type: 'asymptote', id: 'asymptote', panneau: 'n', y: 2, label: 'x_max = 2 mmol' }] },
+      { titre: 'Quelle courbe à 40 °C ?', court: 'La température', vue: 'graphe', graphe: 'suivi',
+        question: 'Seule la température change. Quelle courbe est à 40 °C ?',
+        copie: ['(a) atteint son palier plus tôt : la transformation est plus rapide', '(a) est à 40 °C : la température est un facteur cinétique'],
+        construit: [{ type: 'point', id: 'point_a', panneau: 'n', t: 10, y: 2 * (1 - Math.exp(-10 / 3)), label: '(a) presque finie', decalage: [8, 30] }] },
+      { titre: 'Le même palier', court: 'Le même état final', vue: 'graphe', graphe: 'suivi',
+        question: 'Pourquoi les deux courbes ont-elles le même palier ?',
+        copie: ['La température change la durée, pas l’état final', 'Même réactif limitant H₂O₂ : même x_max = 2 mmol'] },
+      { titre: 'Arrêter la transformation : la trempe', court: 'La trempe', vue: 'graphe', graphe: 'suivi',
+        question: 'Pour doser I₂ à un instant t, comment arrêter la transformation ?',
+        copie: ['On verse le prélèvement dans de l’eau glacée : c’est la trempe', 'Froid et dilution : la transformation devient très lente'] },
+    ],
+  },
+} });
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

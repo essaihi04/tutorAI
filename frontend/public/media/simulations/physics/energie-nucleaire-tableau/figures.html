@@ -21,7 +21,7 @@
  * fig_enonce_2023 | fig_enonce_2025. Même architecture que ondes-lumineuses-tableau/figures.html.
  * Chaque figure : des étapes nommées (les moments), puis `fin`. Le tuteur fige l’écriture sur une étape (`play_until {moment}`)
  * et montre chaque élément (`highlight {target}`) : le repère `figure`, et un repère par étape (même nom que l’étape).
- * Rendu « réel » (règle 7) : le Soleil, les nucléons (sphères ombrées : proton rouge #d9534f, neutron gris-bleu #8fa3b8,
+ * Rendu « réel » (règle 7) : le Soleil, les nucléons (sphères ombrées : proton rose #f472b6, neutron gris-bleu #8fa3b8,
  * comme balance.html), le baril de pétrole sont peints ; la craie écrit le reste. Les valeurs sont celles du cours.
  * Les énoncés d’examen sont des paraphrases courtes, données exactes (nationaux 2016 N, 2017 R, 2023 N, 2025 N).
  */
@@ -81,8 +81,8 @@ const peindre = (c, fn) => { if (BLOC.mesure) return BLOC.peinture(fn); if (c.t 
 const vu = nom => M[nom] !== undefined && S.tw >= M[nom] - 1e-6;
 
 // ───────────────────────── Le rendu « réel » (peint, pour l’œil ; la physique reste dans la craie) ─────────────────────────
-/* Les nucléons : mêmes sphères ombrées que balance.html (proton rouge, neutron gris-bleu). */
-const TEINTES = { p: ['#f6b6b0', '#d9534f', '#6e1d1a'], n: ['#e3ebf3', '#8fa3b8', '#3a4757'] };
+/* Les nucléons : mêmes sphères ombrées que balance.html (proton rose, neutron gris-bleu). */
+const TEINTES = { p: ['#fde2ef', '#f472b6', '#9d174d'], n: ['#e3ebf3', '#8fa3b8', '#3a4757'] };
 function sphere(ctx, x, y, r, k) {
   const [cl, cb, cf] = TEINTES[k];
   const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .08, x, y, r);
@@ -338,7 +338,7 @@ const DESSINS = {
       amas(ctx, 512, 344, 235, 92, 3.3);
     });
     ligne(c, [N(4, 2, 'He'), ' : 2 p, 2 n'], 108, 358, { taille: 22, couleur: 'blanc' });
-    c.texte('proton', 284, 323, { couleur: 'rouge', taille: 16 }).texte('neutron', 284, 361, { couleur: 'bleu', taille: 16 });
+    c.texte('proton', 284, 323, { couleur: 'rose', taille: 16 }).texte('neutron', 284, 361, { couleur: 'bleu', taille: 16 });
     ligne(c, [N(235, 92, 'U'), ' : 92 p, 143 n'], 578, 352, { taille: 22, couleur: 'blanc', max: 162 });
     c.repere('exemples', 30, 286, 710, 120, 'exemples : ⁴₂He (2 p, 2 n) ; ²³⁵₉₂U (92 p, 143 n)');
     marque(c, 'exemples');
@@ -918,7 +918,7 @@ const DESCRIPTIONS = {
     noyau: 'Le noyau ᴬ_ZX écrit en grand (A en haut à gauche, Z en bas à gauche) ; flèches : « A : nombre de nucléons (nombre de masse) », « X : symbole de l’élément ».',
     protons: 'Flèche vers Z : « Z : nombre de protons (nombre de charge) ».',
     neutrons: 'Encadré vert : « N = A − Z : nombre de neutrons ».',
-    exemples: 'Exemples peints en sphères (protons rouges, neutrons gris-bleu) : ⁴₂He : 2 p, 2 n ; ²³⁵₉₂U : 92 p, 143 n (gros amas).' },
+    exemples: 'Exemples peints en sphères (protons roses, neutrons gris-bleu) : ⁴₂He : 2 p, 2 n ; ²³⁵₉₂U : 92 p, 143 n (gros amas).' },
   fig_defaut: {
     formule: 'Formule encadrée : Δm = Z·m_p + (A − Z)·m_n − m(ᴬ_ZX).',
     signe: 'Phrase : « Δm > 0 : le noyau est plus léger que ses nucléons séparés ».',
@@ -1011,6 +1011,11 @@ scene.avancer = dt => {
   return true;
 };
 function calculer() { if (M.fin === undefined) { const t = S.tw; S.tw = 1e6; dessiner(craie); S.tw = t; scene.sale = true; } }
+// Diapositive pilotée (18 novembre 2026, professeur 39) : `reset` FIGE la scène — sur ?depart=<moment> (tout ce qui
+// précède déjà écrit) ou sur zéro — et rien ne court seul ; la voix avance ensuite par play_until. Avant, reset = start.
+const DEPART = new URLSearchParams(location.search).get('depart');
+function reset() { calculer(); S.tw = DEPART && M[DEPART] !== undefined ? M[DEPART] : 0; S.jusqua = null; S.motif = ''; S.running = false; S.pause = true; S.fait = false; scene.sale = true; etiquette(); bulle($('feedback'), ''); pont.noter('reset', { time_s: +S.tw.toFixed(2) }); pont.emettre(); }
+if (DEPART) setTimeout(reset, 0);
 function start() { S.tw = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; scene.sale = true; etiquette(); bulle($('feedback'), ''); pont.noter('start', { figure: fig }); pont.emettre(); }
 function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); bulle($('feedback'), 'Pause.'); pont.noter('pause'); pont.emettre(); }
 function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); bulle($('feedback'), ''); pont.noter('resume'); pont.emettre(); }
@@ -1057,7 +1062,7 @@ const pont = protocole({ id: config.id, commandes, config,
     time_s: +S.tw.toFixed(2), parameters: { fig },
     moments: Object.fromEntries(etapes().filter(n => M[n] !== undefined).map(n => [n, +M[n].toFixed(2)])), etapes_ecrites: etapes().filter(n => vu(n)) }),
   progression: () => (S.fait ? 1 : 0),
-  executer: (cmd, p) => ({ start, reset: start, pause, resume, play_until: () => playUntil(p), set_time: () => setTime(p), set_parameters: () => setParameters(p) })[cmd]?.() });
+  executer: (cmd, p) => ({ start, reset, pause, resume, play_until: () => playUntil(p), set_time: () => setTime(p), set_parameters: () => setParameters(p) })[cmd]?.() });
 etiquette();
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>

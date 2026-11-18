@@ -11,6 +11,7 @@
 </div>
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
+<script src="/media/simulations/shared/lexique/lexique.js"></script>
 <script src="peinture.js"></script>
 <script>
 /*
@@ -36,6 +37,10 @@ const fr = (v, d = 1) => frK(v, d);
 const VUES = ['levures', 'mitochondries', 'pulse_o2'];
 const demande = new URLSearchParams(location.search).get('vue');
 const vue = VUES.includes(demande) ? demande : 'levures';
+/* (18 novembre 2026, 2ᵉ passe) ?conclusions=false (vue mitochondries) : les notes écrites sous le graphique (description de
+ * chaque période, hypothèse) restent cachées — l’élève décrit et propose lui-même ; set_parameters {conclusions: true} les
+ * montre. Sans ce paramètre : inchangé. */
+const NOTES = { montrer: new URLSearchParams(location.search).get('conclusions') !== 'false' };
 
 /* Le graphique : axes, zone tracée (coordonnées du cadre 760 × 420). */
 const G = { X0: 402, X1: 700, Y0: 330, Y1: 128, YT: 114 };
@@ -143,7 +148,10 @@ const FIN = X.tmax;
 const xT = t => G.X0 + (t / X.tmax) * (G.X1 - G.X0);
 const yG = (v, max) => G.Y0 - (v / max) * (G.Y0 - G.Y1);
 const MOTIFS = {};
-const majMotifs = () => { for (const k of Object.keys(MOTIFS)) delete MOTIFS[k]; Object.assign(MOTIFS, X.motifs()); };
+const NEUTRES = { palier: 'avant les ajouts', glucose_ajoute: 'on ajoute du glucose', ajout_glucose_rien: 'après le glucose', pyruvate_ajoute: 'on ajoute de l’acide pyruvique',
+  ajout_pyruvate: 'après l’acide pyruvique', ajout_adp_pi: 'on ajoute ADP + Pi', o2_baisse_atp_monte: 'après ADP + Pi', ajout_cyanure: 'on ajoute du cyanure', palier_final: 'après le cyanure', hypothese: 'après le cyanure' };
+/* conclusions=false (mitochondries) : la bulle nomme seulement l’ajout, sans dire ce que font les courbes (l’élève le décrit). */
+const majMotifs = () => { for (const k of Object.keys(MOTIFS)) delete MOTIFS[k]; Object.assign(MOTIFS, X.motifs(), vue === 'mitochondries' && !NOTES.montrer && !MT.sans_o2 ? NEUTRES : {}); };
 majMotifs();
 
 const canvas = $('canvas');
@@ -155,7 +163,7 @@ const MOS = window.SVTLarge.Mosaique(scene, (L) => (ample(L) ? { police: 1.12, b
   : L >= 1000 ? { police: 1.12, blocs: [{ src: [0, 0, L, 420], X: 0, Y: 0, s: 1 }] } : null));
 const ecrit = Apparitions(scene);
 const chrono = Chrono({ fin: () => FIN, moments: () => X.moments(), motifs: MOTIFS, bouton: $('run'), bulle: $('feedback'), pont: () => pont,
-  vitesse: X.vitesse || 1, depart: 'L’expérience démarre (temps accéléré)…', reinit: () => ecrit.oublier(), fini: () => X.fini() });
+  vitesse: X.vitesse || 1, depart: 'L’expérience démarre (temps accéléré)…', reinit: () => ecrit.oublier(), fini: () => (vue === 'mitochondries' && !NOTES.montrer ? 'Fin de l’expérience : à toi de décrire.' : X.fini()) });
 /* pulse_o2 : le temps défile plus lentement autour de l'injection et du pic (pour voir la montée), plus vite ailleurs. */
 scene.avancer = vue === 'pulse_o2' ? (dt) => chrono.avancer(dt * (chrono.t >= 55 && chrono.t < 80 ? 5 : 24)) : chrono.avancer;
 
@@ -314,12 +322,12 @@ function encart(c) {
     P.spherePedonculee(ctx, 300, EN_M + EN_EP / 2, EN_EP, -1, { r: 12 });
     // les H+ de la solution : plus nombreux quand [H+] est plus grande
     const n = Math.round(h / 3.2);
-    for (let k = 0; k < 16; k++) { const x = EN.x + 8 + r() * (EN.w - 16), y = EN_M + EN_EP + 12 + r() * 52; if (k < n) P.bille(ctx, x, y, 3.6, [240, 80, 80]); }
-    for (const [x, y] of [[200, 200], [254, 198], [266, 208], [278, 198]]) P.bille(ctx, x, y, 3.6, [240, 80, 80]);
+    for (let k = 0; k < 16; k++) { const x = EN.x + 8 + r() * (EN.w - 16), y = EN_M + EN_EP + 12 + r() * 52; if (k < n) P.bille(ctx, x, y, 3.6, window.Lexique.C.proton); }
+    for (const [x, y] of [[200, 200], [254, 198], [266, 208], [278, 198]]) P.bille(ctx, x, y, 3.6, window.Lexique.C.proton);
     // H+ en mouvement
     const ph = performance.now() / 1000;
-    if (pompe > 0) for (let k = 0; k < 3; k++) { const u = (ph * .8 + k / 3) % 1; P.bille(ctx, 222, mix(EN.y + 46, EN_M + EN_EP + 40, u), 4, [240, 80, 80], { alpha: pompe }); }
-    if (retour > 0) for (let k = 0; k < 3; k++) { const u = (ph * .6 + k / 3) % 1; P.bille(ctx, 300, mix(EN_M + EN_EP + 44, EN.y + 30, u), 4, [240, 80, 80], { alpha: retour }); }
+    if (pompe > 0) for (let k = 0; k < 3; k++) { const u = (ph * .8 + k / 3) % 1; P.bille(ctx, 222, mix(EN.y + 46, EN_M + EN_EP + 40, u), 4, window.Lexique.C.proton, { alpha: pompe }); }
+    if (retour > 0) for (let k = 0; k < 3; k++) { const u = (ph * .6 + k / 3) % 1; P.bille(ctx, 300, mix(EN_M + EN_EP + 44, EN.y + 30, u), 4, window.Lexique.C.proton, { alpha: retour }); }
     ctx.restore();
   });
   c.rect(EN.x, EN.y, EN.w, EN.h, { couleur: 'faible', arrondi: 6, largeur: 1.6 });
@@ -452,7 +460,7 @@ function dessiner(c) {
       c.repere('anaerobie', x - 2, 398, larg('— milieu anaérobie', 15) + 4, 22, 'milieu anaérobie'); }
   } else if (vue === 'mitochondries') {
     rep('courbe_o2', boites.o2, 'la courbe de [O2] (%)'); rep('courbe_atp', boites.atp, 'la courbe de l’ATP (UA)');
-    const note = noteMito(t);
+    const note = NOTES.montrer ? noteMito(t) : null;
     if (note) ecrit.ecrire(c, 'note_' + note.cle, () => c.texte(note.texte, G.X0 - 30, note.y || 394, { couleur: note.couleur || 'vert', taille: 14, max: 388 }));
     if (note && note.y2) ecrit.ecrire(c, 'note2_' + note.cle, () => c.texte(note.texte2, G.X0 - 30, note.y2, { couleur: note.couleur2 || note.couleur || 'vert', taille: 14, max: 388 }));
     // repères des notes : 'note_glu' 'note_pyr' 'note_adp' 'note_cya' 'note_sans' (la note écrite à cet instant)
@@ -526,11 +534,12 @@ function ceQuiSeVoit() {
 /* ── Réglages ─────────────────────────────────────────────────────────────────────────────────── */
 function params() {
   if (vue === 'levures') return { injection_min: LV.T, o2_epuise_min: +lvEp().toFixed(2) };
-  if (vue === 'mitochondries') return { sans_o2: MT.sans_o2, cyanure: MT.cyanure };
+  if (vue === 'mitochondries') return { sans_o2: MT.sans_o2, cyanure: MT.cyanure, conclusions: NOTES.montrer };
   return {};
 }
 const bool = (v) => (v === true || v === 'true' || v === 1 || v === '1');
 function setParameters(p) {
+  if (vue === 'mitochondries' && 'conclusions' in p) { NOTES.montrer = bool(p.conclusions); majMotifs(); scene.sale = true; pont.noter('set_parameters', params()); pont.emettre(); if (!('sans_o2' in p) && !('cyanure' in p)) return; }
   let ok = false;
   if (vue === 'levures' && Number.isFinite(+p.injection_min)) { LV.T = Math.min(4, Math.max(1, Math.round(+p.injection_min * 2) / 2)); ok = true; }
   if (vue === 'mitochondries') {
@@ -579,7 +588,7 @@ $('run').onclick = chrono.clic;
 window.Tableau.explication({ [vue]: EXPLICATIONS[vue] });
 const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'play_until'].concat(vue === 'pulse_o2' ? [] : ['set_parameters']);
 const schemaParams = vue === 'levures' ? { injection_min: '1..4 (instant de l’injection de glucose, en min, pas de 0,5)' }
-  : vue === 'mitochondries' ? { sans_o2: 'true | false (milieu sans dioxygène)', cyanure: 'true | false (4ᵉ ajout à 8 min ; true par défaut)' } : null;
+  : vue === 'mitochondries' ? { sans_o2: 'true | false (milieu sans dioxygène)', cyanure: 'true | false (4ᵉ ajout à 8 min ; true par défaut)', conclusions: 'true | false (false : notes et hypothèse cachées)' } : null;
 const config = { id: 'svt_energie_exao_' + vue, version: '1.0', title: 'ExAO — ' + vue, variants: [{ id: vue, label: vue }], commands: commandes,
   command_schema: Object.assign({
     set_time: { time_s: `0..${FIN} (instant de l’EXPÉRIENCE, en ${X.unite} ; arrêt sur cet instant)` },

@@ -12,6 +12,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="/media/simulations/svt/notion_information_genetique-tableau/commun.js"></script>
 <script src="/media/simulations/svt/notion_information_genetique-tableau/etapes.js"></script>
+<script src="/media/simulations/shared/lexique/lexique.js"></script>
 <script src="peinture.js"></script>
 <script>
 /*
@@ -103,7 +104,6 @@ function voitCellule(k) {
 /* ── Vue glucose ─────────────────────────────────────────────────────────── */
 /* (17 novembre 2026) la bûche, puis le feu (« quand il brûle »), puis la cellule pas à pas : chacun à son moment. */
 const MG = { g_pain: 1.8, g_sang: 4.4, g_molecule: 7.2, g_liaisons: 9.4, g_casser: 11.8, g_buche: 13.0, g_feu: 14.2, g_pas_a_pas: 16.2 };
-const CYCLE = Array.from({ length: 6 }, (_, i) => { const a = -Math.PI / 2 + i * TAU / 6; return [Math.cos(a), Math.sin(a)]; });
 function pain(x, cx, cy, a) {
   x.save(); x.globalAlpha = a;
   const g = x.createRadialGradient(cx - 14, cy - 14, 4, cx, cy, 52); g.addColorStop(0, '#fcd34d'); g.addColorStop(.7, '#d97706'); g.addColorStop(1, '#92400e');
@@ -111,14 +111,11 @@ function pain(x, cx, cy, a) {
   x.strokeStyle = 'rgba(120,53,15,.8)'; x.lineWidth = 2; for (let i = -1; i <= 1; i++) { x.beginPath(); x.moveTo(cx + i * 22 - 8, cy - 14); x.lineTo(cx + i * 22 + 8, cy + 6); x.stroke(); }
   x.restore();
 }
-function hexa(x, cx, cy, r, a, casse) {
-  // (16 novembre 2026) atomes de carbone en billes jaunes (comme dans tout le cours) reliés par des liaisons peintes
-  const Pn = window.SVTPeinture, ec = casse * 20;
-  CYCLE.forEach(([u, v], i) => {
-    const [u2, v2] = CYCLE[(i + 1) % 6], dx = u * ec, dy = v * ec;
-    if (!casse || i % 2) Pn.liaison(x, cx + u * r + dx, cy + v * r + dy, cx + u2 * r + dx, cy + v2 * r + dy, { alpha: a, epaisseur: 5 });
-  });
-  CYCLE.forEach(([u, v]) => Pn.bille(x, cx + u * (r + ec), cy + v * (r + ec), 11, [250, 204, 21], { alpha: a }));
+/* Le glucose du lexique visuel commun (18 novembre 2026, règle 15) : la chaîne DROITE de 6 billes jaunes, comme dans
+ * toutes les simulations du site (il était un anneau ici). Quand les liaisons cassent, les carbones se séparent. */
+function chaineGlucose(x, cx, cy, a, casse) {
+  const L = window.Lexique, pts = L.positionsChaine(6, cx, cy).map(([px, py], i) => [px + (i - 2.5) * casse * 6, py + (i % 2 ? 1 : -1) * casse * 16]);
+  L.chaine(x, pts, { alpha: a, liaisons: [0, 1, 2, 3, 4].map(() => 1 - casse) });
 }
 function eclairs(x, cx, cy, a, n = 7, R = 70) {
   x.save(); x.globalAlpha = a; x.strokeStyle = '#facc15'; x.lineWidth = 3; x.lineCap = 'round';
@@ -141,11 +138,11 @@ function dessinerGlucose(c, k) {
     if (t >= 2.4) { // le vaisseau sanguin, avec des petits glucoses qui passent
       const a = rampe(t, 2.4, .6), g = x.createLinearGradient(0, 112, 0, 152); g.addColorStop(0, '#7f1d1d'); g.addColorStop(.5, '#dc2626'); g.addColorStop(1, '#7f1d1d');
       x.save(); x.globalAlpha = a; x.fillStyle = g; x.beginPath(); x.moveTo(190, 112); x.lineTo(470, 112); x.lineTo(470, 152); x.lineTo(190, 152); x.fill();
-      for (let i = 0; i < 5; i++) { const px = 200 + ((t * 40 + i * 58) % 260); x.strokeStyle = '#fde68a'; x.lineWidth = 1.6; x.beginPath(); CYCLE.forEach(([u, v], j) => x[j ? 'lineTo' : 'moveTo'](px + u * 7, 132 + v * 7)); x.closePath(); x.stroke(); }
+      for (let i = 0; i < 4; i++) { const px = 214 + ((t * 40 + i * 52) % 224); window.Lexique.glucose(x, px, 132, { echelle: .26, alpha: a }); }
       x.restore();
     }
-    if (t >= 5.6) hexa(x, 230, 296, 46, rampe(t, 5.6, .6), casse);
-    if (t >= 8.2 && t < 10.2) { x.save(); x.globalAlpha = .5 * rampe(t, 8.2, .5); x.strokeStyle = '#facc15'; x.lineWidth = 8; x.beginPath(); CYCLE.forEach(([u, v], j) => x[j ? 'lineTo' : 'moveTo'](230 + u * 46, 296 + v * 46)); x.closePath(); x.stroke(); x.restore(); }
+    if (t >= 5.6) chaineGlucose(x, 230, 296, rampe(t, 5.6, .6), casse);
+    if (t >= 8.2 && t < 10.2) { x.save(); x.globalAlpha = .5 * rampe(t, 8.2, .5); x.strokeStyle = '#facc15'; x.lineWidth = 10; x.lineCap = 'round'; x.beginPath(); x.moveTo(230 - 70, 296); x.lineTo(230 + 70, 296); x.stroke(); x.restore(); }
     if (casse > 0) eclairs(x, 230, 296, casse * (1 - rampe(t, 12.6, 1.2) * .5), 8, 64);
     if (t >= 12.0) { const a = rampe(t, 12.0, .6); buche(x, 620, 300, a, rampe(t, 13.2, .6)); }
     if (t >= 14.4) {   // la cellule, elle, descend l’escalier : une petite étincelle à chaque marche
@@ -160,9 +157,9 @@ function dessinerGlucose(c, k) {
   if (k.ecrit(c, 'pain', .6)) k.T(c, 'le pain : de l’amidon', 90, 184, { couleur: 'blanc', taille: 13, align: 'center' });
   if (t >= 2.4) c.repere('sang', 190, 108, 280, 48, 'le glucose dans le sang');
   if (k.ecrit(c, 'sang', 2.8)) { c.fleche(150, 132, 186, 132, { couleur: 'faible', largeur: 1.4 }); k.T(c, 'digestion → du glucose dans le sang', 330, 98, { couleur: 'blanc', taille: 13, align: 'center' }); c.fleche(474, 132, 520, 132, { couleur: 'faible', largeur: 1.4 }); k.T(c, '→ les cellules', 590, 136, { couleur: 'blanc', taille: 13, align: 'center' }); }
-  if (t >= 5.6) c.repere('molecule', 160, 226, 140, 140, 'une molécule de glucose');
-  if (k.ecrit(c, 'mol', 6.0)) { k.T(c, 'glucose : C₆H₁₂O₆', 230, 196, { couleur: 'jaune', taille: 16, align: 'center' }); k.T(c, 'six carbones en anneau', 230, 392, { couleur: 'faible', taille: 13, align: 'center' }); }
-  if (t >= 8.2) c.repere('liaisons', 170, 236, 120, 120, 'les liaisons entre les atomes');
+  if (t >= 5.6) c.repere('molecule', 144, 266, 172, 60, 'une molécule de glucose');
+  if (k.ecrit(c, 'mol', 6.0)) { k.T(c, 'glucose : C₆H₁₂O₆', 230, 196, { couleur: 'jaune', taille: 16, align: 'center' }); k.T(c, 'six carbones en chaîne', 230, 392, { couleur: 'faible', taille: 13, align: 'center' }); }
+  if (t >= 8.2) c.repere('liaisons', 150, 276, 160, 40, 'les liaisons entre les atomes');
   if (k.ecrit(c, 'lia', 8.4)) { k.T(c, 'l’énergie est rangée', 352, 262, { couleur: 'jaune', taille: 14 }); k.T(c, 'dans les liaisons :', 352, 284, { couleur: 'jaune', taille: 14 }); k.T(c, 'énergie chimique', 352, 306, { couleur: 'orange', taille: 15 }); }
   if (k.ecrit(c, 'cas', 10.6)) k.T(c, 'liaisons cassées → énergie libérée', 230, 415, { couleur: 'vert', taille: 14, align: 'center' });
   if (t >= 12.0) c.repere('buche', 556, 282, 132, 34, 'une bûche');
@@ -175,9 +172,9 @@ function dessinerGlucose(c, k) {
 function voitGlucose(k) {
   const t = k.t, m = ['En haut à gauche, du pain peint (de l’amidon).'];
   if (t >= 2.8) m.push('Un vaisseau sanguin rouge où passent de petits hexagones jaunes : la digestion donne du glucose dans le sang, qui va aux cellules.');
-  if (t >= 6.0) m.push('Une molécule de glucose en grand : un anneau de six carbones ; écrit « glucose : C₆H₁₂O₆ ».');
+  if (t >= 6.0) m.push('Une molécule de glucose en grand : une chaîne droite de six carbones (billes jaunes) ; écrit « glucose : C₆H₁₂O₆ ».');
   if (t >= 8.4) m.push('Les liaisons brillent : « l’énergie est rangée dans les liaisons : énergie chimique ».');
-  if (t >= 10.6) m.push('L’anneau se casse, des éclairs jaunes en sortent : « liaisons cassées → énergie libérée ».');
+  if (t >= 10.6) m.push('La chaîne se casse, des éclairs jaunes en sortent : « liaisons cassées → énergie libérée ».');
   if (t >= 12.3) m.push('À droite, une bûche de bois peinte.');
   if (t >= 13.4) m.push('La bûche brûle, de grandes flammes : « elle brûle : la chaleur sort d’un coup ».');
   if (t >= 14.4) m.push('En dessous, un petit escalier, une étincelle à chaque marche : « la cellule, elle, avance pas à pas ».');
@@ -209,7 +206,7 @@ window.Etapes.lancer({
       motifs: { g_pain: 'du pain : de l’amidon', g_sang: 'du glucose dans le sang', g_molecule: 'une molécule de glucose, six carbones', g_liaisons: 'l’énergie chimique, dans les liaisons', g_casser: 'liaisons cassées : énergie libérée', g_buche: 'une bûche de bois', g_feu: 'la bûche brûle : la chaleur d’un coup', g_pas_a_pas: 'la cellule avance pas à pas' },
       conclusion: 'Le glucose contient de l’énergie chimique, rangée dans ses liaisons ; la cellule la libère pas à pas.',
       texte: 'Du pain (amidon) au glucose du sang ; la molécule C₆H₁₂O₆ (six carbones) ; énergie chimique dans les liaisons, libérée quand elles se cassent ; comme une bûche qui brûle, mais pas à pas.',
-      explication: [{ repere: 'molecule', texte: 'Le glucose : six carbones en anneau.' }, { repere: 'liaisons', texte: 'L’énergie est rangée dans les liaisons.' }, { repere: 'buche', texte: 'Comme une bûche qui brûle, mais la cellule avance pas à pas.' }] },
+      explication: [{ repere: 'molecule', texte: 'Le glucose : six carbones en chaîne.' }, { repere: 'liaisons', texte: 'L’énergie est rangée dans les liaisons.' }, { repere: 'buche', texte: 'Comme une bûche qui brûle, mais la cellule avance pas à pas.' }] },
   },
 });
 </script>

@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le glucose marqué au ¹⁴C — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="svt.css">
+<style>
+  /* Téléphone en paysage (18 novembre 2026, ~724 × 350 : l'iframe fait ~577 × 255) : la barre du lecteur est SOUS l'iframe,
+   * pas par-dessus ; la bande vide de 4.5em mangeait le tiers de la hauteur. Sur un tableau bas, on la réduit. */
+  @media (max-height: 340px) { .scene { padding-bottom: .5em; } .tableau { padding: .2em .5em; } }
+</style></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Une cellule peinte dans son milieu : membrane, hyaloplasme, une mitochondrie avec ses crêtes. Des molécules de glucose marquées au ¹⁴C (chaînes de 6 carbones qui brillent) partent du milieu (T0), entrent dans le hyaloplasme (T1), s’y coupent en deux acides pyruviques (T2), entrent dans la mitochondrie où apparaissent les composés du cycle de Krebs (T3), puis sortent en CO₂ (T4). Une horloge T0 → T4 et un compteur de radioactivité par compartiment ; à la fin, un tableau récapitulatif."></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="peinture.js"></script>
+<script>
+/*
+ * Le glucose marqué au ¹⁴C (cours SVT ch1, diapositive le_m3a_glucose_marque), 18 novembre 2026.
+ * Règle de l'utilisateur (professeur, règle 42) : une activité dont le résultat change dans le temps et d'un compartiment
+ * à l'autre se JOUE au tableau, elle ne se lit pas dans un tableau suivi d'encadrés de conclusion.
+ *
+ * Ce qui se voit (t en s de la scène) — un moment par temps de l'expérience, chacun joué seul et figé :
+ *   t0 (2,2)        : 6 glucoses ¹⁴C (chaînes de 6 carbones, lueur jaune) apparaissent dans le milieu ; horloge sur T0 ; milieu +++.
+ *   t1 (5,5)        : 4 glucoses entrent dans le hyaloplasme ; milieu +, hyaloplasme ++.
+ *   t2 (9,8)        : les 2 derniers entrent, chaque glucose se coupe en deux acides pyruviques (chaînes de 3, lueur orange), 4 passent dans
+ *                     la mitochondrie ; milieu —, hyaloplasme ++, mitochondrie +. Rien n'est conclu : la question
+ *                     « où se fait la glycolyse ? » est à l'élève (question d'observation du lecteur).
+ *   glycolyse (10,4): la conclusion s'écrit : glycolyse (glucose → acide pyruvique) dans le hyaloplasme.
+ *   t3 (14,2)       : tout l'acide pyruvique entre dans la mitochondrie (+++), les composés du cycle de Krebs apparaissent (+, roses).
+ *   t4 (18,4)       : l'acide pyruvique devient composés de Krebs (+++) ; du CO₂ ¹⁴C (bleu clair) sort dans le milieu (+).
+ *   matrice (19)    : la conclusion s'écrit : acide pyruvique → mitochondrie, dégradé dans la matrice jusqu'au CO₂.
+ *   tableau (23,6)  : la cellule s'efface, les valeurs de T0 à T4 volent des compteurs vers un petit tableau récapitulatif.
+ * Réglage : conclusions (true par défaut ; ?conclusions=0 ou set_parameters {conclusions: false}) — false : la scène montre,
+ * elle n'écrit ni les conclusions ni « matrice » (version en attente : l'élève conclut lui-même au QCM).
+ * Les compteurs comptent les carbones ¹⁴C : 12 C = « + » ; les valeurs retombent sur le tableau de l'exercice du bac.
+ * Mise en page : cadre large (scene.L × 420) ; F = taille du texte dans le cadre, ≥ 15 px à l'écran sur un téléphone en paysage.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const { Scene, Chrono, Apparitions, doux, mix } = window.SVTTableau;
+const P = window.SVTPeinture;
+const $ = id => document.getElementById(id);
+
+const Q = new URLSearchParams(location.search);
+const S = { conclusions: !/^(0|false|non)$/i.test(Q.get('conclusions') || '') };
+
+const M = { t0: 2.2, t1: 5.5, t2: 9.8, glycolyse: 10.4, t3: 14.2, t4: 18.4, matrice: 19, tableau: 23.6 };
+const FIN = 23.8;
+const MOTIFS = {
+  t0: 'T0 : le glucose ¹⁴C est dans le milieu extracellulaire (+++)',
+  t1: 'T1 : le glucose ¹⁴C entre dans le hyaloplasme (milieu +, hyaloplasme ++)',
+  t2: 'T2 : le glucose a disparu ; acide pyruvique ¹⁴C dans le hyaloplasme (++), un peu dans la mitochondrie (+)',
+  glycolyse: 'glycolyse : le glucose devient acide pyruvique dans le hyaloplasme',
+  t3: 'T3 : acide pyruvique ¹⁴C dans la mitochondrie (+++) ; composés du cycle de Krebs (+)',
+  t4: 'T4 : composés du cycle de Krebs (+++) ; CO₂ ¹⁴C rejeté dans le milieu (+)',
+  matrice: 'l’acide pyruvique entre dans la mitochondrie, il est dégradé dans la matrice jusqu’au CO₂',
+  tableau: 'le tableau récapitulatif de T0 à T4',
+};
+const motifs = () => (S.conclusions ? MOTIFS : { ...MOTIFS, glycolyse: 'T2 : regarde où est l’acide pyruvique', matrice: 'T4 : regarde où est passée la radioactivité' });
+
+/* ── Les molécules marquées : couleur peinte et couleur de craie ── */
+const MOL = {
+  glucose: { rgb: [250, 204, 21], craie: 'jaune', nom: 'glucose', court: 'glucose' },
+  pyruvate: { rgb: [251, 146, 60], craie: 'orange', nom: 'acide pyruvique', court: 'ac. pyruvique' },
+  krebs: { rgb: [244, 114, 182], craie: 'rose', nom: 'composés de Krebs', court: 'Krebs' },
+  co2: { rgb: [125, 211, 252], craie: 'cyan', nom: 'CO₂', court: 'CO₂' },
+};
+const COMP = [
+  { id: 'milieu', nom: 'Milieu', long: 'milieu extracellulaire', craie: 'bleu' },
+  { id: 'hyaloplasme', nom: 'Hyaloplasme', long: 'hyaloplasme', craie: 'vert' },
+  { id: 'mitochondrie', nom: 'Mitochondrie', long: 'mitochondrie', craie: 'rouge' },
+];
+/* Les valeurs du tableau de l'exercice (en nombre de « + »), par temps et par compartiment. */
+const TABLE = [
+  { t: 'T0', v: [[['glucose', 3]], [], []] },
+  { t: 'T1', v: [[['glucose', 1]], [['glucose', 2]], []] },
+  { t: 'T2', v: [[], [['pyruvate', 2]], [['pyruvate', 1]]] },
+  { t: 'T3', v: [[], [], [['pyruvate', 3], ['krebs', 1]]] },
+  { t: 'T4', v: [[['co2', 1]], [], [['krebs', 3]]] },
+];
+
+/* ── Géométrie (cadre 420 de haut ; la partie gauche est la scène, la droite le panneau) ── */
+const SC = { x0: 10, y0: 8, x1: 562, y1: 412 };                 // le milieu peint
+const CEL = { cx: 286, cy: 240, rx: 246, ry: 162 };              // la cellule
+const MIT = { cx: 330, cy: 245, rx: 166, ry: 78 };               // la mitochondrie
+const PX = 586;                                                  // début du panneau
+const dansEll = (x, y, e, dx = 0, dy = 0) => ((x - e.cx) / (e.rx + dx)) ** 2 + ((y - e.cy) / (e.ry + dy)) ** 2 <= 1;
+const dansBoite = (x, y, b) => x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3];
+/* Zones sans molécules : les noms écrits dans la scène. */
+const LIBRES = [[70, 150, 232, 200], [226, 314, 434, 372], [288, 110, 402, 166], [10, 8, 562, 64]];
+
+/* Les molécules marquées sont dessinées comme partout dans le cours (règle 15 du skill, « un objet, un seul dessin ») :
+ * un carbone = une bille jaune ; le glucose = une chaîne droite de 6 carbones ; elle se coupe en deux chaînes de 3
+ * (les deux acides pyruviques) ; un acide pyruvique dans la matrice se replie en amas de 3 carbones (composés du cycle de
+ * Krebs, comme l'amas de krebs.html) ; un carbone qui sort = O = C = O (P.co2). Le marquage ¹⁴C se voit : chaque
+ * molécule BRILLE, et la couleur de sa lueur change avec la molécule (jaune → orange → rose → bleu clair) ; les carbones
+ * restent jaunes. Les compteurs comptent les carbones ¹⁴C : 12 C = « + » (6 glucoses au départ = 36 C = +++).
+ * Places tirées une fois (générateur déterministe : l'image ne change pas d'une fois à l'autre). */
+const R = P.graine(1414);
+const RB = 5, PAS_C = 10.5;                                     // rayon d'une bille de carbone, écart entre deux carbones
+const CHAINE = (n) => Array.from({ length: n }, (_, i) => [(i - (n - 1) / 2) * PAS_C, 0]);
+const AMAS = [[-6.5, -5.5], [6.5, -5.5], [0, 6]];
+/* n places bien réparties dans une zone : grille de candidats (chaque molécule entière dans la zone, hors des noms),
+ * puis à chaque fois le candidat le plus loin des places déjà prises (distance mesurée en largeurs w et hauteurs h). */
+function tirer(n, ok, w, h, depart = [SC.x0, SC.y1]) {
+  const cand = [];
+  for (let y = SC.y0 + 10; y < SC.y1 - 6; y += 5) for (let x = SC.x0 + 10; x < SC.x1 - 6; x += 5) {
+    const coins = [[x - w / 2, y - h / 2], [x + w / 2, y - h / 2], [x - w / 2, y + h / 2], [x + w / 2, y + h / 2], [x, y]];
+    if (coins.every(([u, v]) => ok(u, v) && !LIBRES.some(b => dansBoite(u, v, b)))) cand.push([x, y]);
+  }
+  const out = [];
+  if (!cand.length) return Array.from({ length: n }, () => [60, 380]);
+  const d = (p, q) => ((p[0] - q[0]) / w) ** 2 + ((p[1] - q[1]) / h) ** 2;
+  out.push(cand.reduce((m, c) => (Math.hypot(c[0] - depart[0], c[1] - depart[1]) < Math.hypot(m[0] - depart[0], m[1] - depart[1]) ? c : m)));
+  while (out.length < n) out.push(cand.reduce((m, c) => (Math.min(...out.map(o => d(o, c))) > Math.min(...out.map(o => d(o, m))) ? c : m)));
+  return out;
+}
+const dansMilieu = (x, y) => x > SC.x0 + 6 && x < SC.x1 - 6 && y > 66 && y < SC.y1 - 6 && !dansEll(x, y, CEL, 10, 10);
+const dansHyalo = (x, y) => dansEll(x, y, CEL, -14, -14) && !dansEll(x, y, MIT, 10, 10);
+const dansMatrice = (x, y) => dansEll(x, y, MIT, -24, -20);
+const MG = tirer(6, dansMilieu, 70, 24);                         // glucoses dans le milieu
+const HG = tirer(6, dansHyalo, 70, 22, [60, 240]);                          // glucoses dans le hyaloplasme (place pour la coupure)
+const HP = tirer(12, dansHyalo, 42, 20, [60, 240]);              // les acides pyruviques (chaque glucose se coupe, ses deux moitiés s'écartent)
+const MP = tirer(12, dansMatrice, 40, 18, [MIT.cx - MIT.rx, MIT.cy]);                       // acides pyruviques puis composés de Krebs, dans la matrice
+const MC = tirer(6, dansMilieu, 34, 20, [SC.x1, SC.y1]);                         // CO₂ rejeté dans le milieu
+
+const part = (a, b, t) => Math.max(0, Math.min(1, (t - a) / Math.max(1e-6, b - a)));
+const lerp2 = (p, q, u) => [mix(p[0], q[0], u), mix(p[1], q[1], u)];
+const pic = (a, b, t) => Math.sin(Math.PI * part(a, b, t));
+const teinte = (m1, m2, u) => MOL[m1].rgb.map((v, k) => mix(v, MOL[m2].rgb[k], u));
+const G_T1 = [2, 3, 4, 5], G_T2 = [0, 1];                       // T1 : 4 glucoses entrent ; T2 : les 2 derniers
+const P_T2 = [4, 5, 6, 7];                                       // T2 : 4 acides pyruviques déjà dans la mitochondrie
+const P_T3 = [0, 1, 2, 3, 8, 9, 10, 11];                         // T3 : tous les autres y entrent
+const K_T3 = [4, 5];                                             // T3 : 2 deviennent composés de Krebs ; T4 : ils partent en 6 CO₂
+const COUPE = [7.6, 8.4];                                        // T2 : le glucose se coupe en deux acides pyruviques
+
+/* La liste des molécules à l'instant t : { forme: billes [[dx, dy]…] | 'co2', p, a, mol, rgb, eclat, carbones }. */
+function molecules(t) {
+  const out = [];
+  if (t < COUPE[0]) {
+    for (let g = 0; g < 6; g++) {
+      let p = MG[g]; const j1 = G_T1.indexOf(g), j2 = G_T2.indexOf(g);
+      if (j1 >= 0) p = lerp2(p, HG[g], doux(part(2.6 + j1 * .25, 4.4 + j1 * .25, t)));
+      if (j2 >= 0) p = lerp2(p, HG[g], doux(part(5.9 + j2 * .3, 7.0 + j2 * .3, t)));
+      out.push({ forme: CHAINE(6), p, a: doux(part(.4 + g * .12, 1.3 + g * .12, t)), mol: 'glucose', rgb: MOL.glucose.rgb, eclat: 0, carbones: 6 });
+    }
+    return out;
+  }
+  for (let i = 0; i < 12; i++) {
+    const g = i >> 1, cote = i & 1 ? 1 : -1;
+    const u = doux(part(COUPE[0], COUPE[1], t));
+    let p = lerp2([HG[g][0] + cote * 1.5 * PAS_C, HG[g][1]], HP[i], u);
+    const j2 = P_T2.indexOf(i), j3 = P_T3.indexOf(i), jk = K_T3.indexOf(i);
+    if (j2 >= 0) p = lerp2(p, MP[i], doux(part(8.5 + j2 * .15, 9.3 + j2 * .15, t)));
+    if (j3 >= 0) p = lerp2(p, MP[i], doux(part(10.8 + j3 * .15, 12.2 + j3 * .15, t)));
+    const krebs = jk >= 0 ? [12.9 + jk * .2, 13.6 + jk * .2] : [14.8, 15.6];
+    const v = doux(part(krebs[0], krebs[1], t));
+    const forme = CHAINE(3).map((q, k) => lerp2(q, AMAS[k], v));
+    const rgb = v > 0 ? teinte('pyruvate', 'krebs', v) : teinte('glucose', 'pyruvate', u);
+    const eclat = Math.max(pic(COUPE[0], COUPE[1], t), pic(krebs[0], krebs[1], t));
+    if (jk < 0) { out.push({ forme, p, a: 1, mol: v > .5 ? 'krebs' : 'pyruvate', rgb, eclat, carbones: 3 }); continue; }
+    // les composés de Krebs de T3 : à T4, chacun de leurs carbones sort en CO₂ (O = C = O) vers le milieu
+    const w = doux(part(15.6, 16.1, t));
+    if (w < 1) out.push({ forme, p, a: 1 - w, mol: v > .5 ? 'krebs' : 'pyruvate', rgb, eclat, carbones: 3 * (1 - w) > 1.5 ? 3 : 0 });
+    for (let k = 0; k < 3 && w > 0; k++) {
+      const c = jk * 3 + k, d = [p[0] + forme[k][0], p[1] + forme[k][1]];
+      out.push({ forme: 'co2', p: lerp2(d, MC[c], doux(part(16 + c * .12, 17.6 + c * .12, t))), a: w, mol: 'co2', rgb: teinte('krebs', 'co2', w), eclat: pic(15.6, 16.1, t), carbones: w > .5 ? 1 : 0 });
+    }
+  }
+  return out;
+}
+const compartiment = (p) => (dansEll(p[0], p[1], MIT, -6, -6) ? 2 : dansEll(p[0], p[1], CEL, -3, -3) ? 1 : 0);
+const NC = 36;                                                   // carbones ¹⁴C en tout
+/* Les compteurs : carbones ¹⁴C par compartiment et par molécule. */
+function compter(t) {
+  const n = [{}, {}, {}];
+  for (const m of molecules(t)) { if (m.a < .5 || !m.carbones) continue; const c = compartiment(m.p); n[c][m.mol] = (n[c][m.mol] || 0) + m.carbones; }
+  return n;
+}
+const plus = (k) => (k > 0 ? '+'.repeat(k) : '');
+const contenu = (n) => ['glucose', 'pyruvate', 'krebs', 'co2'].map(m => [m, Math.round((n[m] || 0) / 12)]).filter(([, k]) => k > 0);
+
+/* ── La scène ── */
+const canvas = $('canvas');
+const scene = Scene(canvas, (c) => { scene.cadre(53); dessiner(c); return c.fin(); }, { large: true });
+const ecrit = Apparitions(scene);
+const chrono = Chrono({ fin: () => FIN, moments: () => M, motifs: new Proxy({}, { get: (_, k) => motifs()[k] }), bouton: $('run'), bulle: $('feedback'), pont: () => pont,
+  depart: 'Le glucose marqué au ¹⁴C : suis les molécules qui brillent…', reinit: () => ecrit.oublier(),
+  fini: () => (S.conclusions ? 'Glycolyse dans le hyaloplasme ; l’acide pyruvique est dégradé dans la matrice jusqu’au CO₂.' : 'Le tableau récapitulatif : à toi de conclure.') });
+scene.avancer = chrono.avancer;
+
+/* F : taille du texte dans le cadre, pour qu'il fasse au moins 15 px à l'écran (téléphone : F ≈ 30, ordinateur : 20). */
+const taille = () => Math.max(20, Math.min(31, 15.6 / Math.max(.05, scene.s || 1)));
+/* Si le tableau est plus étroit que ce qu'il faut (portrait), tout le dessin est réduit dans la largeur disponible. */
+function geometrie() {
+  const F = taille(), besoin = PX + 16.6 * F + 12;
+  const k = scene.L >= besoin ? 1 : scene.L / besoin;
+  return { F, k, PW: (scene.L >= besoin ? scene.L - PX - 12 : 16.6 * F) };
+}
+
+function peindreScene(ctx, alpha) {
+  ctx.save(); ctx.globalAlpha = alpha;
+  // le milieu extracellulaire : une eau claire, quelques reflets
+  const g = ctx.createLinearGradient(SC.x0, SC.y0, SC.x1, SC.y1);
+  g.addColorStop(0, 'rgba(96,170,220,.30)'); g.addColorStop(1, 'rgba(40,110,170,.20)');
+  ctx.fillStyle = g; ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(SC.x0, SC.y0, SC.x1 - SC.x0, SC.y1 - SC.y0, 18); else ctx.rect(SC.x0, SC.y0, SC.x1 - SC.x0, SC.y1 - SC.y0); ctx.fill();
+  ctx.strokeStyle = 'rgba(147,197,253,.35)'; ctx.lineWidth = 1.5; ctx.stroke();
+  const r = P.graine(5);
+  ctx.fillStyle = 'rgba(220,240,255,.16)';
+  for (let i = 0; i < 70; i++) { const x = SC.x0 + r() * (SC.x1 - SC.x0), y = SC.y0 + r() * (SC.y1 - SC.y0); if (!dansEll(x, y, CEL, 4, 4)) { ctx.beginPath(); ctx.arc(x, y, .8 + r() * 1.4, 0, Math.PI * 2); ctx.fill(); } }
+  P.cellule(ctx, CEL.cx, CEL.cy, CEL.rx, CEL.ry, { grains: 140, graine: 23 });
+  P.mitochondrie(ctx, MIT.cx, MIT.cy, MIT.rx, MIT.ry, { cretes: 7, graine: 9 });
+  ctx.restore();
+}
+/* Une molécule marquée : sa lueur (couleur de la molécule), ses liaisons, ses carbones jaunes ; ou O = C = O. */
+function peindreMolecule(ctx, m, alpha) {
+  const a = m.a * alpha; if (a <= .02) return;
+  const [x, y] = m.p, rgb = m.rgb.map(Math.round).join(',');
+  const pts = m.forme === 'co2' ? [[-10, 0], [10, 0]] : m.forme;
+  const ray = Math.max(...pts.map(q => Math.hypot(q[0], q[1]))) + 15 + 8 * m.eclat;
+  const g = ctx.createRadialGradient(x, y, 0, x, y, ray);
+  g.addColorStop(0, `rgba(${rgb},${.7 * a})`); g.addColorStop(.6, `rgba(${rgb},${.32 * a})`); g.addColorStop(1, `rgba(${rgb},0)`);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, ray, 0, Math.PI * 2); ctx.fill();
+  if (m.forme === 'co2') P.co2(ctx, x, y, .62, a);
+  else {
+    const f = m.forme, liens = f.length === 3 && Math.hypot(f[0][0] - f[2][0], f[0][1] - f[2][1]) < PAS_C * 1.6 ? [[0, 1], [1, 2], [2, 0]] : f.slice(1).map((_, k) => [k, k + 1]);
+    for (const [i, j] of liens) P.liaison(ctx, x + f[i][0], y + f[i][1], x + f[j][0], y + f[j][1], { alpha: a, epaisseur: 2.6 });
+    for (const q of f) P.bille(ctx, x + q[0], y + q[1], RB, MOL.glucose.rgb, { alpha: a });
+  }
+  if (m.eclat > .05) P.eclat(ctx, x, y, 14 + 16 * m.eclat, m.eclat * a);
+}
+
+/* L'horloge : T0 … T4 sur une piste, le curseur glisse d'un temps au suivant. */
+const HORLOGE = [[0, .3, 1.2], [1, 2.4, 3.2], [2, 5.7, 6.5], [3, 10.6, 11.4], [4, 14.4, 15.2]];
+function curseur(t) {
+  let p = -1;
+  for (const [k, a, b] of HORLOGE) if (t >= a) p = k - 1 + doux(part(a, b, t));
+  return p;
+}
+
+/* Vue compacte (18 novembre 2026, téléphone en paysage) : quand la bande de la question d'observation passe sous la figure,
+ * le tableau ne fait plus que ~85 px de haut ; le dessin entier y serait illisible. On garde la cellule peinte et ses
+ * molécules, et à côté, en gros (≥ 15 px), l'heure et les trois compteurs : de quoi répondre à la question. */
+const compacte = () => 15.6 / Math.max(.05, scene.s || 1) > 34;
+function dessinerCompacte(c) {
+  const t = chrono.t, F = 15.4 / Math.max(.05, scene.s), n = compter(t), cur = curseur(t);
+  c.direct(() => peindreScene(c.ctx, 1));
+  const mols = molecules(t);
+  c.direct(() => mols.forEach(m => peindreMolecule(c.ctx, m, 1)));
+  c.repere('cellule', CEL.cx - CEL.rx, CEL.cy - CEL.ry, 2 * CEL.rx, 2 * CEL.ry, 'la cellule');
+  c.repere('hyaloplasme', 70, 120, 200, 240, 'le hyaloplasme');
+  c.repere('mitochondrie', MIT.cx - MIT.rx, MIT.cy - MIT.ry, 2 * MIT.rx, 2 * MIT.ry, 'la mitochondrie');
+  c.repere('points', SC.x0, SC.y0, SC.x1 - SC.x0, SC.y1 - SC.y0, 'les molécules marquées au ¹⁴C (elles brillent)');
+  const x0 = PX, W = scene.L - PX - 10, pasL = Math.min(F * 1.12, 410 / 4);
+  let y = 8 + pasL * .82;
+  c.direct(() => c.texte(cur < 0 ? 'avant T0' : 'T' + Math.round(cur), x0, y, { couleur: 'jaune', taille: F, gras: true, max: W }));
+  c.repere('horloge', x0, y - F, W, F * 1.1, 'l’horloge : T0 → T4');
+  const debut = y + pasL * .2;
+  COMP.forEach((o, ci) => {
+    y += pasL;
+    const items = contenu(n[ci]);
+    c.direct(() => {
+      c.texte(o.nom, x0, y, { couleur: o.craie, taille: F, gras: true });
+      let x = x0 + c.largeurTexte(o.nom, F) * 1.08 + F * .45;
+      if (!items.length) { c.texte('—', x, y, { couleur: 'blanc', taille: F, alpha: .6 }); return; }
+      for (const [m, kk] of items) { const s = `${MOL[m].court} ${plus(kk)}`; c.texte(s, x, y, { couleur: MOL[m].craie, taille: F, gras: true, max: Math.max(F * 2, x0 + W - x) }); x += c.largeurTexte(s, F) * 1.08 + F * .45; }
+    });
+    c.repere('compteur_' + o.id, x0, y - F, W, F * 1.1, 'le compteur du ' + o.long);
+  });
+  c.repere('compteurs', x0, debut, W, y - debut + F * .3, 'les compteurs de radioactivité ¹⁴C (les « + »)');
+}
+
+function dessiner(c) {
+  if (compacte()) return dessinerCompacte(c);
+  const t = chrono.t, { F, k, PW } = geometrie();
+  if (k < 1) c.ctx.scale(k, k);
+  const fondu = doux(part(19.3, 20.1, t)), vis = 1 - .86 * fondu;   // au tableau final, la cellule s'efface
+  const n = compter(t);
+
+  /* 1. la scène peinte et les molécules marquées */
+  c.direct(() => peindreScene(c.ctx, vis));
+  const mols = molecules(t);
+  c.direct(() => mols.forEach(m => peindreMolecule(c.ctx, m, vis)));
+
+  /* 2. les noms (craie), dans les zones laissées libres */
+  c.texte('milieu extracellulaire', 20, 14 + F * .95, { couleur: 'bleu', taille: F, gras: true, alpha: vis, max: 290 });
+  c.texte('hyaloplasme', 82, 186, { couleur: 'vert', taille: F, gras: true, alpha: vis, max: 146 });
+  c.texte('mitochondrie', MIT.cx, 352, { couleur: 'rouge', taille: F, gras: true, align: 'center', alpha: vis, max: 160 });
+  c.repere('milieu', SC.x0, SC.y0, SC.x1 - SC.x0, 64, 'le milieu extracellulaire');
+  c.repere('cellule', CEL.cx - CEL.rx, CEL.cy - CEL.ry, 2 * CEL.rx, 2 * CEL.ry, 'la cellule');
+  c.repere('hyaloplasme', 70, 120, 200, 240, 'le hyaloplasme');
+  c.repere('mitochondrie', MIT.cx - MIT.rx, MIT.cy - MIT.ry, 2 * MIT.rx, 2 * MIT.ry + 50, 'la mitochondrie');
+  c.repere('points', SC.x0, SC.y0 + 56, SC.x1 - SC.x0, SC.y1 - SC.y0 - 56, 'les molécules marquées au ¹⁴C (elles brillent)');
+
+  /* 3. l'horloge, en haut à droite du milieu */
+  const hx0 = 322, hx1 = 530, hy = 46, pas = (hx1 - hx0 - 28) / 4, cur = curseur(t);
+  c.direct(() => {
+    const ctx = c.ctx; ctx.save(); ctx.globalAlpha = vis;
+    // le cadran : un petit chronomètre peint, l'aiguille tourne avec le temps
+    const cx = hx0, cy = hy - 6, r = 13;
+    const g = ctx.createRadialGradient(cx - 4, cy - 4, 1, cx, cy, r); g.addColorStop(0, '#fff7d6'); g.addColorStop(1, '#e7c76a');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#7a5a12'; ctx.lineWidth = 2; ctx.stroke(); ctx.fillStyle = '#7a5a12'; ctx.fillRect(cx - 2.5, cy - r - 5, 5, 5);
+    const ang = -Math.PI / 2 + Math.max(0, cur + 1) / 5 * Math.PI * 2;
+    ctx.strokeStyle = '#0b1f2a'; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(ang) * (r - 3), cy + Math.sin(ang) * (r - 3)); ctx.stroke();
+    // la piste
+    ctx.strokeStyle = 'rgba(226,232,240,.45)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(hx0 + 28, hy + 8); ctx.lineTo(hx1, hy + 8); ctx.stroke();
+    if (cur >= 0) {
+      const x = hx0 + 28 + cur * pas;
+      ctx.strokeStyle = '#facc15'; ctx.lineWidth = 3.5; ctx.beginPath(); ctx.moveTo(hx0 + 28, hy + 8); ctx.lineTo(x, hy + 8); ctx.stroke();
+      const gl = ctx.createRadialGradient(x, hy + 8, 0, x, hy + 8, 13); gl.addColorStop(0, 'rgba(250,204,21,.9)'); gl.addColorStop(1, 'rgba(250,204,21,0)');
+      ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(x, hy + 8, 13, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fff7d6'; ctx.beginPath(); ctx.arc(x, hy + 8, 5, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  });
+  const actif = Math.round(cur);
+  for (let i = 0; i < 5; i++) {
+    const x = hx0 + 28 + i * pas, ici = cur >= 0 && i === actif && Math.abs(cur - actif) < .2;
+    c.direct(() => c.texte('T' + i, x, hy - 4, { couleur: ici ? 'jaune' : 'blanc', taille: F, gras: ici, align: 'center', alpha: vis * (cur >= i - .2 ? 1 : .55) }));
+  }
+  c.repere('horloge', hx0 - 16, 6, hx1 - hx0 + 22, 58, 'l’horloge : T0 → T4');
+
+  /* 4. le panneau : radioactivité ¹⁴C par compartiment (le « + » se voit monter et descendre) */
+  const L1 = F * 1.0, L2 = F * 1.1;
+  let y = 12 + F;                                   // ligne de base du titre
+  c.texte('Radioactivité ¹⁴C', PX, y, { couleur: 'blanc', taille: F, gras: true, max: PW });
+  c.direct(() => { const ctx = c.ctx; const x = PX + Math.min(PW - 14, c.largeurTexte('Radioactivité ¹⁴C', F) * 1.08 + 18); P.eclat(ctx, x, y - F * .32, 14, .9); P.bille(ctx, x, y - F * .32, 6, [250, 204, 21]); });
+  y += F * .3;                                      // haut de la première rangée
+  const sources = [];
+  const cNom = Math.max(...COMP.map(o => c.largeurTexte(o.nom, F))) * 1.06 + 12, barW = PW - cNom - 4;
+  COMP.forEach((o, ci) => {
+    const yN = y + L1, yC = yN + L2;               // le nom (et sa jauge), puis ce qu'il contient
+    c.texte(o.nom, PX, yN, { couleur: o.craie, taille: F, gras: true, max: cNom - 8 });
+    // la jauge : un segment coloré par molécule, longueur = nombre de carbones ¹⁴C
+    const bx = PX + cNom, by = yN - F * .62, bh = F * .5;
+    c.direct(() => {
+      const ctx = c.ctx; ctx.save();
+      ctx.fillStyle = 'rgba(226,232,240,.10)'; ctx.strokeStyle = 'rgba(226,232,240,.35)'; ctx.lineWidth = 1.2;
+      ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(bx, by, barW, bh, bh / 2); else ctx.rect(bx, by, barW, bh); ctx.fill(); ctx.stroke();
+      let x = bx;
+      for (const m of ['glucose', 'pyruvate', 'krebs', 'co2']) {
+        const w = (n[ci][m] || 0) / NC * barW; if (w <= 0) continue;
+        const g = ctx.createLinearGradient(0, by, 0, by + bh); const cc = MOL[m].rgb;
+        g.addColorStop(0, `rgb(${cc.map(v => Math.min(255, v + 70)).join(',')})`); g.addColorStop(1, `rgb(${cc.map(v => Math.round(v * .7)).join(',')})`);
+        ctx.fillStyle = g; ctx.shadowColor = `rgba(${cc.join(',')},.8)`; ctx.shadowBlur = 8;
+        ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(x, by + 1, w, bh - 2, (bh - 2) / 2); else ctx.rect(x, by + 1, w, bh - 2); ctx.fill();
+        x += w;
+      }
+      ctx.restore();
+    });
+    // ce qu'il y a : « glucose +++ », « ac. pyruvique ++ » … ou « — » (noms courts : deux molécules tiennent sur la ligne)
+    const items = contenu(n[ci]);
+    c.direct(() => {
+      if (!items.length) { c.texte('—', PX + 14, yC, { couleur: 'blanc', taille: F, alpha: .6 }); return; }
+      let x = PX + 14;
+      for (const [m, kk] of items) {
+        const s = `${MOL[m].court} ${plus(kk)}`;
+        c.texte(s, x, yC, { couleur: MOL[m].craie, taille: F, gras: true });
+        x += c.largeurTexte(s, F) * 1.08 + F * .55;
+      }
+    });
+    sources.push([PX + 14, yC]);
+    c.repere('compteur_' + o.id, PX - 4, yN - L1 + 2, PW + 8, L1 + L2 + 6, 'le compteur du ' + o.long);
+    y = yC + F * .38;
+  });
+  c.repere('compteurs', PX - 6, 10, PW + 12, y - 4, 'les compteurs de radioactivité ¹⁴C (les « + »)');
+
+  /* 5. les conclusions, chacune à son moment, après la réponse de l'élève */
+  const yC1 = y + F * 1.02;
+  if (S.conclusions && t >= 9.9) {
+    ecrit.ecrire(c, 'glycolyse', () => {
+      c.texte('Glycolyse : glucose → acide pyruvique,', PX, yC1, { couleur: 'jaune', taille: F, gras: true, max: PW });
+      c.texte('dans le hyaloplasme.', PX, yC1 + F * 1.12, { couleur: 'jaune', taille: F, gras: true, max: PW });
+    });
+    c.repere('conclusion_glycolyse', PX - 4, yC1 - F, PW + 8, F * 2.3, 'la glycolyse se fait dans le hyaloplasme');
+  }
+  if (S.conclusions && t >= 18.8) {
+    const y2 = yC1 + F * 2.22;
+    ecrit.ecrire(c, 'matrice', () => {
+      c.texte('Acide pyruvique → mitochondrie :', PX, y2, { couleur: 'rose', taille: F, gras: true, max: PW });
+      c.texte('dégradé dans la matrice → CO₂.', PX, y2 + F * 1.12, { couleur: 'rose', taille: F, gras: true, max: PW });
+    });
+    c.repere('conclusion_matrice', PX - 4, y2 - F, PW + 8, F * 2.3, 'l’acide pyruvique est dégradé dans la matrice jusqu’au CO₂');
+    if (vis > .5) {
+      ecrit.ecrire(c, 'nom_matrice', () => {
+        c.texte('matrice', 298, 150, { couleur: 'cyan', taille: F, gras: true, max: 100 });
+        c.fleche(346, 156, 352, 214, { couleur: 'cyan', largeur: 2, tete: 8 });
+      });
+      c.repere('matrice', 290, 120, 120, 120, 'la matrice de la mitochondrie');
+    }
+  }
+
+  /* 6. le tableau récapitulatif : les valeurs volent des compteurs vers leurs cases (règle 35) */
+  if (t >= 19.6) {
+    const tx0 = SC.x0 + 6, tx1 = SC.x1 - 6, tTop = 14, rh = Math.max(F * 1.24, Math.min(F * 2, (394 - 2.7 * F) / 6));   // rangées hautes quand il y a la place
+    const tetes = ['Temps', ...COMP.map(o => o.nom)];
+    const lg = tetes.map(s => c.largeurTexte(s, F) + 22), somme = lg.reduce((a, b) => a + b, 0), kx = (tx1 - tx0) / somme;
+    const xs = [tx0]; lg.forEach(w => xs.push(xs[xs.length - 1] + w * kx));
+    const yB = tTop + rh * 6;
+    c.direct(() => { const ctx = c.ctx; ctx.save(); ctx.globalAlpha = doux(part(19.6, 20.2, t)); P.carte(ctx, tx0 - 4, tTop - 4, tx1 - tx0 + 8, yB - tTop + 8, { entete: rh + 2, alpha: .9 }); ctx.restore(); });
+    ecrit.ecrire(c, 'grille', () => {
+      for (let r = 2; r <= 5; r++) c.ligne(tx0 + 4, tTop + r * rh, tx1 - 4, tTop + r * rh, { couleur: 'tresfaible', largeur: 1.2, duree: .08 });
+      for (let i = 1; i < 4; i++) c.ligne(xs[i], tTop + 4, xs[i], yB - 4, { couleur: 'tresfaible', largeur: 1.2, duree: .08 });
+    });
+    // en-tête : sombre et gras sur l'en-tête doré de la carte
+    tetes.forEach((s, i) => c.direct(() => c.texte(s, (xs[i] + xs[i + 1]) / 2, tTop + rh * .74, { couleur: '#0b1f2a', taille: F, gras: true, align: 'center', alpha: doux(part(19.8, 20.2, t)), max: xs[i + 1] - xs[i] - 6 })));
+    TABLE.forEach((ligne, r) => {
+      const a0 = 20.3 + r * .55, u = doux(part(a0, a0 + .6, t));
+      if (t < a0) return;
+      const yy = tTop + rh * (r + 1) + rh * .74;
+      c.direct(() => c.texte(ligne.t, (xs[0] + xs[1]) / 2, yy, { couleur: 'blanc', taille: F, gras: true, align: 'center', alpha: u }));
+      ligne.v.forEach((items, ci) => {
+        const cx = (xs[ci + 1] + xs[ci + 2]) / 2;
+        if (!items.length) { if (u > .9) c.direct(() => c.texte('—', cx, yy, { couleur: 'faible', taille: F, align: 'center' })); return; }
+        const morceaux = items.map(([m, kk]) => [MOL[m].craie, plus(kk)]);
+        const largeurs = morceaux.map(([, s]) => c.largeurTexte(s, F) * 1.1), tot = largeurs.reduce((a, b) => a + b, 0) + (morceaux.length - 1) * F * .5;
+        let x = cx - tot / 2;
+        morceaux.forEach(([coul, s], j) => {
+          const [sx, sy] = sources[ci], px = mix(sx + j * F, x, u), py = mix(sy, yy, u);
+          c.direct(() => c.texte(s, px, py, { couleur: coul, taille: F, gras: true }));
+          x += largeurs[j] + F * .5;
+        });
+      });
+    });
+    // la légende, sous le tableau : chaque molécule dans sa forme du cours, avec sa lueur
+    if (t >= 22.8) {
+      const al = doux(part(22.8, 23.3, t)), yl = yB + F * 1.55, rangs = [['glucose', 'pyruvate'], ['krebs', 'co2']];
+      const ICONE = { glucose: CHAINE(6), pyruvate: CHAINE(3), krebs: AMAS, co2: 'co2' }, LARG = { glucose: 64, pyruvate: 42, krebs: 26, co2: 34 };
+      rangs.forEach((rang, ri) => {
+        let x = tx0 + 8;
+        const yy = yl + ri * F * 1.2;
+        rang.forEach(m => {
+          const xi = x + LARG[m] / 2;
+          c.direct(() => { peindreMolecule(c.ctx, { forme: ICONE[m], p: [xi, yy - F * .32], a: al, rgb: MOL[m].rgb, eclat: 0 }, 1); c.texte(MOL[m].nom, x + LARG[m] + 8, yy, { couleur: MOL[m].craie, taille: F, gras: true, alpha: al }); });
+          x += LARG[m] + 8 + c.largeurTexte(MOL[m].nom, F) * 1.06 + F * .9;
+        });
+      });
+    }
+    c.repere('tableau', tx0 - 4, tTop - 4, tx1 - tx0 + 8, yB - tTop + 8, 'le tableau récapitulatif de T0 à T4');
+  }
+}
+
+/* ── Ce que voit le tuteur ── */
+function ceQuiSeVoit() {
+  const t = chrono.t, n = compter(t), cur = curseur(t);
+  const temps = cur < 0 ? 'avant T0 (aucun point ¹⁴C)' : `horloge sur T${Math.round(cur)}`;
+  const comp = COMP.map((o, ci) => { const it = contenu(n[ci]); return `${o.long} : ${it.length ? it.map(([m, k]) => MOL[m].nom + ' ' + plus(k)).join(', ') : '—'}`; }).join(' ; ');
+  const ecrits = [];
+  if (S.conclusions && t >= 9.9) ecrits.push('« Glycolyse : glucose → acide pyruvique, dans le hyaloplasme »');
+  if (S.conclusions && t >= 18.8) ecrits.push('« Acide pyruvique → mitochondrie : dégradé dans la matrice → CO₂ »');
+  const tab = t >= 19.6 ? ` La cellule s’efface : tableau récapitulatif T0…T4 (${t >= 23 ? 'rempli' : 'en train de se remplir'}).` : '';
+  return `${temps}${chrono.running ? ' (ça avance)' : chrono.fait ? ' (fin)' : ' (arrêté)'}. Une cellule peinte (membrane, hyaloplasme, une mitochondrie avec ses crêtes) dans le milieu extracellulaire ; les molécules marquées au ¹⁴C brillent (carbones = billes jaunes) : glucose = chaîne de 6 carbones, lueur jaune ; acide pyruvique = chaîne de 3, lueur orange ; composés du cycle de Krebs = amas de 3 carbones, lueur rose ; CO₂ = O = C = O, lueur bleu clair. Compteurs de radioactivité (12 carbones ¹⁴C = +) : ${comp}.${ecrits.length ? ' Écrit : ' + ecrits.join(' ; ') + '.' : ''}${!S.conclusions ? ' (Conclusions masquées : l’élève conclut.)' : ''}${tab}`;
+}
+
+$('run').onclick = chrono.clic;
+window.Tableau.explication({ glucose_marque: [
+  { repere: 'points', texte: 'Chaque molécule qui brille est marquée au ¹⁴C, radioactive : une balise.' },
+  { repere: 'compteurs', texte: 'Les compteurs montrent la radioactivité de chaque compartiment : + , ++ , +++.' },
+  { repere: 'milieu', texte: 'À T0, le glucose ¹⁴C est dans le milieu extracellulaire.' },
+  { repere: 'hyaloplasme', texte: 'À T1, il entre dans le hyaloplasme ; à T2, il y devient acide pyruvique.' },
+  { repere: 'conclusion_glycolyse', texte: 'La glycolyse se fait donc dans le hyaloplasme.' },
+  { repere: 'mitochondrie', texte: 'À T3, l’acide pyruvique entre dans la mitochondrie : composés du cycle de Krebs ; à T4, du CO₂ ¹⁴C sort.' },
+  { repere: 'conclusion_matrice', texte: 'L’acide pyruvique est dégradé dans la matrice jusqu’au CO₂.' },
+  { repere: 'tableau', texte: 'Le tableau récapitulatif de T0 à T4.' } ] });
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'play_until', 'set_parameters'];
+const config = { id: 'svt_energie_glucose_marque', version: '1.0', title: 'Le glucose marqué au ¹⁴C : où va la radioactivité ?', variants: [{ id: 'glucose_marque', label: 'glucose marqué au ¹⁴C, T0 → T4' }], commands: commandes,
+  command_schema: { set_time: { time_s: `0..${FIN} (arrêt sur cet instant)`, moment: Object.keys(M).join(' | ') },
+    play_until: { moment: Object.keys(M).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' },
+    set_parameters: { conclusions: 'true | false (false : ni conclusion ni « matrice » écrites, pour une question d’observation)' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Glucose marqué au ¹⁴C : T0 milieu +++ ; T1 milieu +, hyaloplasme ++ (glucose) ; T2 acide pyruvique hyaloplasme ++, mitochondrie + ; T3 mitochondrie : acide pyruvique +++, composés du cycle de Krebs + ; T4 mitochondrie : composés de Krebs +++, CO₂ + dans le milieu. Glycolyse dans le hyaloplasme ; acide pyruvique dégradé dans la matrice jusqu’au CO₂.',
+  etat: () => ({ simulation_status: chrono.statut(), ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'glucose_marque', time_s: +chrono.t.toFixed(2), parameters: { conclusions: S.conclusions }, moments: M }),
+  progression: () => chrono.t / FIN,
+  executer: (cmd, p) => ({ start: chrono.start, reset: chrono.reset, pause: chrono.pause, resume: chrono.resume,
+    set_time: () => { chrono.setTime(p); scene.sale = true; }, play_until: () => chrono.playUntil(p),
+    set_parameters: () => {
+      if (p && 'conclusions' in p) {
+        const v = p.conclusions === true || p.conclusions === 'true' || p.conclusions === 1;
+        if (v !== S.conclusions) {
+          S.conclusions = v; scene.sale = true;
+          // la bulle suit : elle ne donne pas la réponse pendant la question, elle la redit après
+          const vise = chrono.running && chrono.jusqua != null ? chrono.jusqua : chrono.t, nom = Object.keys(M).find(k => Math.abs(M[k] - vise) < 1e-6);
+          if (nom) { if (chrono.running) chrono.motif = motifs()[nom]; else bulle($('feedback'), 'Arrêt sur image : ' + motifs()[nom] + '.'); }
+          pont.noter('set_parameters', { conclusions: v }); pont.emettre();
+        }
+      }
+    } })[cmd]?.() });
+bulle($('feedback'), 'Le glucose marqué au ¹⁴C : suis les molécules qui brillent…');
+setTimeout(() => { if (!chrono.pilote && !chrono.running && chrono.t === 0) chrono.start(); }, 1600);
+window.__sim = { chrono, scene, M, S, ecrit, compter, molecules };
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

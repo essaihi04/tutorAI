@@ -3,7 +3,7 @@
 Refaite le 18 novembre 2026 avec la skill `logique-de-cours`. Version en attente :
 `backend/data/courses/en_attente/phys_ch5_energie_nucleaire.json`, construite par
 `scripts/voix/logique_ch5_energie_nucleaire.py` à partir du cours en ligne (inchangé). Pistes à mettre en voix :
-`phys_ch5_energie_nucleaire_voix.json` (54 pistes).
+`phys_ch5_energie_nucleaire_voix.json` (77 pistes après la 2ᵉ passe, § 8).
 
 ## 1. La logique d'avant, et ce qui n'allait pas
 
@@ -68,8 +68,7 @@ L'ordre des notions suivait déjà l'ordre commun. Les défauts étaient dans la
      (énergie libérée ; le piège 7,11 MeV reste dans les choix).
 3. **Les scènes s'ouvrent figées** (`demarrer: reset`) sur ces huit diapositives : la voix pilote, rien n'est écrit
    avant son mot ni avant la réponse de l'élève (professeur 39 ; le vérificateur de pointage ne signale plus de
-   « DEPART » sur ces huit diapositives ; les autres diapositives du chapitre, non touchées, en gardent 36 : à
-   reprendre quand leurs voix seront refaites, chaque changement de `demarrer` demandant de rejouer la diapositive).
+   « DEPART » sur ces huit diapositives ; les 36 autres sont corrigées au § 9).
 4. **`en_d1_composition` ouvre la séance 2**, juste avant la balance qui compte protons et neutrons (logique 6).
 5. **`en_r3b_applications_dangers` va après l'échantillon** (`en_n3_2025`), au début du bloc des cas types :
    fission → réaction en chaîne → charges → fusion → équation se suivent sans coupure ; les dangers et la protection
@@ -127,3 +126,82 @@ corpus de la voix ; c'est l'unité que l'élève doit entendre, « méga électr
   posées (sans piste, le vérificateur estime les instants et signale des gestes « trop serrés » qui viennent de
   l'absence d'audio).
 - Les voix : sur le VPS (quota Kaggle épuisé jusqu'à samedi).
+
+## 8. 2ᵉ passe (18 novembre 2026) : les exercices du national joués, rien de décisif avant la réponse
+
+**Ce que l'évaluation de la 1ʳᵉ passe a relevé.** Les questions étaient bien coupées en étapes, mais cinq exercices du
+national restaient des **énoncés fixes** lus sur `figures.html?fig=fig_enonce_*` (2016 N, 2017 R, 2023 N, 2025 N) ou sur
+la fiche de méthode (`fig_methode_liaison`, 2019 N) : rien ne bougeait, l'élève lisait un tableau. Au 2025 N, la voix
+donnait encore le résultat d'un noyau (0,402 MeV) et l'élève ne faisait que la dernière multiplication ; au 2022 R
+(`en_d4_carbone`), la balance écrivait la somme 14,11296 u puis Δm = 0,11301 u **avant** la question.
+
+**Nouvelle page `energie-nucleaire-tableau/national.html`** (une vue par sujet, valeurs du sujet) — pourquoi : professeur
+règles 33, 37, 41, 42 ; simulations-au-tableau règle 14. Pour chaque sujet : l'équation s'écrit (`equation`), les noyaux
+peints réagissent sous les yeux de l'élève (`noyaux`, `reaction` : les réactifs restent à leur place, pâlis, règle 13),
+chaque donnée se pose **sous le noyau qu'elle décrit** (`donnees` : la masse, l'énergie de liaison ou E_ℓ/A là où elle
+sert, au lieu d'un encadré « Données » à lire), puis les étapes s'écrivent avec un « ? » rose à la place de chaque
+résultat (`etapes`). Les résultats n'existent qu'aux moments `rep_1…rep_3`, que la voix de la diapositive ne joue jamais :
+ils servent au cycle de reprise, après la réponse de l'élève ; le bouton Lancer s'arrête aussi sur `etapes`. Vues :
+`fusion_2016`, `cobalt_2017`, `liaison_2023`, `radon_2019`, `cadmium_2025` (l'échantillon : N_d noyaux pères violets
+deviennent fils gris avec un petit éclair, comme `population.html` du chapitre 4).
+Un objet, un dessin (professeur 43) : protons rouges et neutrons gris-bleu de `balance.html` / `figures.html`, électron bleu
+et positon ambré de `desintegration.html` (chapitre 4). Vérifié dans Chromium à 724 × 350, 1024 × 560 et 1280 × 560 :
+aucune erreur, chaque moment atteint, « ? » tant que `rep_k` n'est pas joué, rien sous la barre du lecteur.
+
+| Diapositive | Avant | Après (et pourquoi) |
+|---|---|---|
+| `en_b3_fusion_calcul` (2016 N) | énoncé fixe | `national.html?vue=fusion_2016` ; voix réécrite sur les quatre moments ; les trois étapes au tableau inchangées |
+| `en_b5_beta` (2017 R) | énoncé fixe ; une seule question (E_lib) faisait tout le calcul | vue `cobalt_2017` ; **étape 1 nouvelle** Δm (pièges : oublier l'électron −0,00358 u, le signe) puis étape 2 E_lib (l'ancienne question, ses réactions voisées gardées) ; l'iode 131 (2022 N) va en `exercices_fin_de_cours` (une ardoise par bloc) |
+| `en_e3_2023` (2023 N) | tableau d'E_ℓ fixe | vue `liaison_2023` : chaque E_ℓ sous son noyau, « le neutron seul : 0 » ; étapes inchangées |
+| `en_c2_qcm2019` (2019 N) | fiche de méthode générale | vue `radon_2019` : E_ℓ/A sous chaque noyau, étape 1 « 222 × 7,69 = ? » |
+| `en_n3_2025` (2025 N) | la voix donnait 0,402 MeV ; une étape pour l'élève ; « combien » dans l'énoncé dit | vue `cadmium_2025` ; voix réécrite sans aucun résultat ; **trois étapes** : Δm avec le positon (nouvelle), E_lib d'un noyau (nouvelle, pièges 0,913 MeV sans positon et 4,314·10⁻⁴ MeV sans × 931,49), E = N_d·E_lib (l'ancienne question, réactions voisées gardées, énoncé dit réécrit) ; l'uranium en joule va en fin de cours |
+| `en_d4_carbone` (2022 R) | la balance écrivait la somme puis Δm avant la question | `balance.html?…&somme=0` (paramètre nouveau, absent = comme avant : le cours en ligne ne change pas) : la colonne pose « 6 × 1,00728 + 8 × 1,00866 = ? » ; le pointage s'arrête sur `balance_penche` au lieu de `delta_m`. **Voix gardée** (le texte ne change pas) |
+
+Le `centre` des cinq diapositives jouées est retiré : la simulation écrit déjà la relation de chaque étape (l'écran ne
+répète pas ce que l'animation montre, professeur 42). Toutes les réactions des étapes nouvelles sont écrites (juste /
+indice / réponse), chaque étape a sa démonstration écrite comme le barème la lit (relation, application numérique,
+résultat avec l'unité dite en mots).
+
+**Mots** (`verifier_mots.py en_attente/phys_ch5_energie_nucleaire <pistes>`) : remplacés « نسيتيش » → « حسبتي حتى »,
+« légers » → « la masse des produits أصغر من… », « عطاش » → « ما فيهش… فيه », « استعملتي » → « ديالك », « combien » →
+« شحال ». Gardés (termes du programme ou des énoncés, à écouter en priorité) : méga, positon, deutérium, tritium,
+neutron, polonium, radon, et les nombres des sujets (soixante-deux, quatre-vingt-seize…).
+
+**Vérifications** : JSON chargé ; chaque `mot` de pointage et de démonstration trouvé ; chaque réaction couvre toutes les
+options ; `verifier_pointage_simulations.py` : aucun « introuvable » (copie en attente et cours en ligne ; le cours en
+ligne donne exactement le même rapport qu'avant) ; il signale 11 « GESTE trop serrés » nouveaux, faux écarts dus à
+l'absence de piste (sans durée, tous les gestes tombent à 0 s) ; un « DEPART » en moins (`en_n3_2025` ouvre figée) ;
+`verifier_formules.py` : rien sur le cours, rien sur `national.html` ; pytest « course or cours or concentration » :
+88 passés, 1 échec SVT préexistant.
+
+**Ce qui reste.** Les voix (77 pistes, VPS) ; rejouer les cinq diapositives dans le lecteur avec leur voix
+(`verifier-pointage-navigateur.mjs`) ; les anciennes figures `fig_enonce_2016/2017/2023/2025` restent dans `figures.html`
+(le cours en ligne s'en sert) et seront retirées quand la copie en attente le remplacera. Le lexique visuel commun
+(`docs/lexique-visuel/`, `shared/lexique/`) n'existe pas encore dans le dépôt : proton, neutron, électron et positon y
+seront à inscrire (fichiers partagés, hors de cette passe) ; les teintes du proton diffèrent légèrement entre ce cours
+(`#d9534f`) et `population.html` du chapitre 4 (`#f06a3a`) : à unifier par le lexique.
+
+## 9. Toutes les scènes s'ouvrent figées (18 novembre 2026, demande de l'utilisateur)
+
+- **Le défaut trouvé** : dans les pages du chapitre (`figures`, `rappels`, `aston`, `balance`, `diagramme`, `liaison`,
+  `reactions` de `energie-nucleaire-tableau/`), `reset` n'était qu'un autre nom de `start`, et chaque page démarrait
+  seule au chargement. Une diapositive en `demarrer: reset` courait donc quand même seule, devant la voix — y compris
+  les huit du § 3. Écrire `reset` dans le cours ne suffisait pas.
+- **La correction des pages** : `reset` fige maintenant la scène, à zéro ou sur `?depart=<moment>` (tout ce qui
+  précède déjà écrit) ; une page ouverte avec `?depart=` se fige dès son chargement ; ensuite seule la voix la fait
+  avancer (`play_until`). `start` ne change pas : les cours en ligne, tous en `start`, gardent leur comportement.
+  Vérifié dans Chromium (10 cas : figée 1,5 s sans bouger, puis arrêtée sur le moment demandé, aucune erreur JS).
+- **Le cours** : les 36 diapositives restées en `demarrer: start` passent en `reset` (leurs textes et voix ne changent
+  pas). Six reprenaient la page de la diapositive précédente (même URL : la scène n'était pas rechargée) ; elles
+  s'ouvrent maintenant figées là où la précédente s'est arrêtée : `en_m2b_un_gramme` (`&depart=termes`),
+  `en_m3b_electronvolt` (`u`), `en_a2_zones` (`plus_stable`), `en_a2b_fission` (`zone_fusion`), `en_b2b_energie`
+  (`delta_m`), `en_n1b_energie_totale` (`nombre`).
+- **Résultat** : `verifier_pointage_simulations.py` ne signale plus aucun « DEPART » ni « IFRAME » sur ce chapitre
+  (il reste 14 « gestes trop serrés », dus aux pistes pas encore enregistrées, plus un sur `en_n2_comparaison`).
+  Rejouées avec la minuterie du lecteur (`verifier-pointage-navigateur.mjs`) : chaque moment des diapositives reprises
+  est atteint sur son mot. L'écart de `en_r2_fission` (la voix dit sept étapes plus vite que la scène) existait déjà
+  dans le cours en ligne.
+- **À savoir** : quatre diapositives ont leur premier `play_until` après le premier quart de la voix (`en_d4_carbone`,
+  `en_l1_separer`, `en_l4_par_nucleon`, `en_e4_polonium`) ; d'ici là la scène montre son état de départ (balance vide,
+  noyau au repos, paliers vides).
+

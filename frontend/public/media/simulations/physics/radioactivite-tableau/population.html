@@ -211,8 +211,8 @@ function craieRangees(c) {
 }
 
 /* ── Peinture : noyaux (sphères ombrées, grappes), éclairs, électrons ── */
-const COUL = { pere: ['#f5ebff', '#b06cf0', '#43186f'], fils: ['#f1f4f8', '#97a6b8', '#38434f'], proton: ['#ffd9bd', '#f06a3a', '#8a2508'],
-  neutron: ['#f0f7ff', '#a8c0d8', '#4b6480'], electron: ['#e3f3ff', '#3b9cff', '#0a3a8c'] };
+const COUL = { pere: ['#f5ebff', '#b06cf0', '#43186f'], fils: ['#f1f4f8', '#97a6b8', '#38434f'], proton: ['#fde2ef', '#f472b6', '#9d174d'],
+  neutron: ['#e3ebf3', '#8fa3b8', '#3a4757'], electron: ['#e0f2fe', '#60c8fa', '#0c4a6e'] };   /* nucléons et électron : les teintes de l'énergie nucléaire et du lexique visuel commun (18/11/2026) */
 function sphere(ctx, x, y, r, [clair, milieu, sombre]) {
   const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r); g.addColorStop(0, clair); g.addColorStop(.45, milieu); g.addColorStop(1, sombre);
   ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
@@ -628,7 +628,10 @@ const DEPARTS = {
   restants: 'On suit les noyaux restants et les noyaux désintégrés…',
 };
 function start() { S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire(DEPARTS[S.vue]); pont.noter('start', params()); pont.emettre(); }
-function reset() { start(); }
+// Diapositive pilotée (18 novembre 2026, professeur 39) : `reset` FIGE la scène — sur ?depart=<moment> (tout ce qui
+// précède déjà écrit) ou sur zéro — et rien ne court seul ; la voix avance ensuite par play_until. Avant, reset = start.
+const DEPART = new URLSearchParams(location.search).get('depart');
+function reset() { calculer(); S.t = DEPART && TL.M[DEPART] !== undefined ? TL.M[DEPART] : 0; S.jusqua = null; S.motif = ''; S.running = false; S.pause = true; S.fait = false; etiquette(); dire('Observe…'); pont.noter('reset', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
 function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
 function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('Le temps repart…'); pont.noter('resume'); pont.emettre(); }
 function setTime(p) {
@@ -715,7 +718,7 @@ const pont = protocole({ id: config.id, commandes, config,
   progression: () => (S.fait ? 1 : 0),
   executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
 dire(DEPARTS[S.vue]);
-setTimeout(() => { if (!S.running && S.t === 0 && !S.pause) start(); }, 900);
+setTimeout(() => { if (DEPART) reset(); else if (!S.running && S.t === 0 && !S.pause) start(); }, 900);
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>
 </body></html>

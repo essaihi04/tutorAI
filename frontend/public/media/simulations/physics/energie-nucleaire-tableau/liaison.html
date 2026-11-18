@@ -15,7 +15,7 @@
 <script>
 /*
  * L’énergie de liaison (cours « Noyaux, masse et énergie », 2e Bac PC BIOF, novembre 2026).
- * Vue « Le noyau » : un noyau en sphères ombrées (proton rouge, neutron gris-bleu).
+ * Vue « Le noyau » : un noyau en sphères ombrées (proton rose, neutron gris-bleu).
  * Vue « L’énergie » : une barre de niveaux — en bas « noyau au repos », en haut « nucléons séparés au repos », la flèche E_ℓ.
  * Paramètres : sens = separer (défaut) | former ; noyau = helium (défaut) | deuterium | tritium (?sens=, ?noyau=,
  * set_parameters). Une touche sur le noyau (ou un nucléon) = noyau suivant.
@@ -118,7 +118,7 @@ function nucleons() {
 }
 
 /* ── Peinture ──────────────────────────────────────────────────────────────────────────────── */
-const TEINTES = { p: ['#f6b6b0', '#d9534f', '#6e1d1a'], n: ['#e3ebf3', '#8fa3b8', '#3a4757'] };
+const TEINTES = { p: ['#fde2ef', '#f472b6', '#9d174d'], n: ['#e3ebf3', '#8fa3b8', '#3a4757'] };
 function sphere(ctx, x, y, r, k) {
   const [cl, cb, cf] = TEINTES[k];
   ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(x + r * .3, y + r * 1.05, r * .85, r * .2, 0, 0, Math.PI * 2); ctx.fill();
@@ -388,7 +388,11 @@ function playUntil(p) {
   pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
 }
 function start() { S.jusqua = null; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), SEP() ? 'On fournit de l’énergie au noyau…' : 'Les nucléons vont se rapprocher…'); pont.noter('start', params()); pont.emettre(); }
-function reset() { start(); }
+// Diapositive pilotée (18 novembre 2026, professeur 39) : `reset` FIGE la scène — sur ?depart=<moment> (tout ce qui
+// précède déjà écrit) ou sur zéro — et rien ne court seul ; la voix avance ensuite par play_until. Avant, reset = start.
+const DEPART = new URLSearchParams(location.search).get('depart');
+let FIGE = false;
+function reset() { FIGE = true; S.t = DEPART && M[DEPART] !== undefined ? M[DEPART] : 0; S.jusqua = null; S.motif = ''; S.running = false; S.fait = false; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Observe…'); pont.noter('reset', { time_s: +S.t.toFixed(3) }); pont.emettre(); }
 function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre(); }
 function resume() { if (S.running) return; if (S.fait || S.t >= FIN()) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
 function setTime(p) {
@@ -454,7 +458,7 @@ const pont = protocole({ id: config.id, commandes, config,
   progression: () => (S.fait ? 1 : 0),
   executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
 bulle($('feedback'), SEP() ? 'Un noyau au repos…' : 'Des nucléons séparés, au repos…');
-setTimeout(() => { if (!S.running && S.t === 0) start(); }, 1600);
+setTimeout(() => { if (DEPART) reset(); else if (!FIGE && !S.running && S.t === 0) start(); }, 1600);
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>
 </body></html>

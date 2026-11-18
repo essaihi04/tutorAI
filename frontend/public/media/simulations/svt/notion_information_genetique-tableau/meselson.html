@@ -111,11 +111,14 @@ function dessinerExperience(c, k) {
   for (const T of TUBES) if (t >= APP[T.id]) { c.repere(T.id, T.x - 16, 186, 32, 176, 'tube ' + T.lib); if (k.ecrit(c, 'l' + T.id, APP[T.id] + .2)) k.T(c, T.lib, T.x, 382, { couleur: T.lib[0] === 'G' ? 'jaune' : 'faible', taille: 13, align: 'center' }); }
   if (k.ecrit(c, 'calc', ME.calcul_moyenne - 1.2)) { k.T(c, '⟦1,710 + 1,724|2⟧ = 1,717 g·cm⁻³ : ADN hybride', 214, 166, { couleur: 'jaune', taille: 15 }); c.repere('calcul', 210, 146, 380, 32, 'le calcul de la moyenne'); }
   const barre = (H, txt) => { c.ligne(H.x - 4, 60, H.x + 168, 116, { couleur: 'rouge', largeur: 2.6 }); c.ligne(H.x - 4, 116, H.x + 168, 60, { couleur: 'rouge', largeur: 2.6 }); k.T(c, txt, H.x + 80, 144, { couleur: 'rouge', taille: 13, align: 'center' }); };
-  if (k.ecrit(c, 'rejC', ME.conservative_rejetee - .8)) barre(HYP[0], 'elle prévoyait deux bandes');
-  if (k.ecrit(c, 'rejD', ME.dispersive_rejetee - .8)) barre(HYP[2], 'elle prévoyait une seule bande');
+  // (18 novembre 2026, 2ᵉ passe) `conclusions: false` (question d'observation de G1 ou G2) : l'hypothèse rejetée à cette
+  // génération n'est pas barrée tant que l'élève n'a pas répondu ; la conservative, déjà rejetée en G1, reste barrée en G2.
+  const montreC = k.P.conclusions || t >= ME.conservative_rejetee, montreD = k.P.conclusions;
+  if (montreC && k.ecrit(c, 'rejC', ME.conservative_rejetee - .8)) barre(HYP[0], 'elle prévoyait deux bandes');
+  if (montreD && k.ecrit(c, 'rejD', ME.dispersive_rejetee - .8)) barre(HYP[2], 'elle prévoyait une seule bande');
   if (t >= 26.4) c.repere('arbre', 610, 186, 150, 180, 'l’arbre des molécules G0 → G3');
   if (k.ecrit(c, 'arbre', 26.4)) ['G0', 'G1', 'G2', 'G3'].forEach((g, i) => k.T(c, g, 604, 212 + i * 46, { couleur: 'jaune', taille: 13 }));
-  if (k.ecrit(c, 'conc', ME.arbre_g0_g3 - .6)) { k.T(c, 'Réplication semi-conservative : chaque molécule fille', 440, 398, { couleur: 'vert', taille: 15, align: 'center' }); k.T(c, 'garde un brin de la molécule mère.', 440, 414, { couleur: 'vert', taille: 15, align: 'center' }); }
+  if (k.P.conclusions && k.ecrit(c, 'conc', ME.arbre_g0_g3 - .6)) { k.T(c, 'Réplication semi-conservative : chaque molécule fille', 440, 398, { couleur: 'vert', taille: 15, align: 'center' }); k.T(c, 'garde un brin de la molécule mère.', 440, 414, { couleur: 'vert', taille: 15, align: 'center' }); }
 }
 function voitExperience(k) {
   const t = k.t, m = ['En haut, trois hypothèses dessinées (brins anciens bleus, brins nouveaux blancs) : conservative (une molécule toute bleue + une toute blanche), semi-conservative (deux molécules bleu-blanc), dispersive (deux molécules en mosaïque).'];
@@ -125,12 +128,13 @@ function voitExperience(k) {
   if (t >= 14) m.push('G0 : une bande lourde à 1,724.');
   if (t >= 16) m.push('G1 : une seule bande, à 1,717 (hybride).');
   if (t >= ME.calcul_moyenne - .8) m.push('Écrit « (1,710 + 1,724)/2 = 1,717 g·cm⁻³ : ADN hybride ».');
-  if (t >= ME.conservative_rejetee - .8) m.push('L’hypothèse conservative est barrée en rouge : « elle prévoyait deux bandes ».');
+  if (t >= ME.conservative_rejetee - .8 && (k.P.conclusions || t >= ME.conservative_rejetee)) m.push('L’hypothèse conservative est barrée en rouge : « elle prévoyait deux bandes ».');
   if (t >= 21.4) m.push('G2 : deux bandes de même épaisseur, hybride (1,717) et légère (1,710), 50 % / 50 %.');
-  if (t >= ME.dispersive_rejetee - .8) m.push('L’hypothèse dispersive est barrée : « elle prévoyait une seule bande ».');
+  if (t >= ME.dispersive_rejetee - .8 && k.P.conclusions) m.push('L’hypothèse dispersive est barrée : « elle prévoyait une seule bande ».');
+  if (!k.P.conclusions) m.push('Conclusions cachées (question en cours) : l’hypothèse rejetée à cette génération n’est pas encore barrée.');
   if (t >= 25) m.push('G3 : bande légère épaisse (75 %), bande hybride mince (25 %), qui ne disparaît pas.');
   if (t >= 26.4) m.push('À droite, l’arbre des molécules G0 → G3 : 1, 2, 4, 8 molécules ; il reste toujours 2 molécules avec un brin bleu ancien.');
-  if (t >= ME.arbre_g0_g3 - .6) m.push('Écrit : « Réplication semi-conservative : chaque molécule fille garde un brin de la molécule mère. »');
+  if (t >= ME.arbre_g0_g3 - .6 && k.P.conclusions) m.push('Écrit : « Réplication semi-conservative : chaque molécule fille garde un brin de la molécule mère. »');
   if (k.P.generation != null) m.push(`Le tube G${k.P.generation} est entouré en jaune.`);
   return m;
 }
@@ -182,7 +186,10 @@ function voitPredictions(k) {
 const GEN = ['g0', 'g1_bande', 'g2_bandes', 'g3'];
 window.Etapes.lancer({
   id: 'genetique_meselson', titre: 'Meselson et Stahl', graine: 41,
-  parametres: { generation: { defaut: null, schema: '0..3 (vue experience : la génération montrée et entourée)', lire: v => Math.min(3, Math.max(0, Math.round(+v))) } },
+  parametres: { generation: { defaut: null, schema: '0..3 (vue experience : la génération montrée et entourée)', lire: v => Math.min(3, Math.max(0, Math.round(+v))) },
+    // (18 novembre 2026) false : « conservative / dispersive rejetée » et la conclusion se taisent jusqu'à la réponse de l'élève
+    conclusions: { defaut: true, schema: 'true | false (vue experience : false tait l’hypothèse rejetée et la conclusion pendant une question)', lire: v => (typeof v === 'string' ? !/^(false|0|non|no|off)$/i.test(v.trim()) : !!v) } },
+  auDepart: (P) => { const q = new URLSearchParams(location.search); if (q.has('conclusions')) P.conclusions = !/^(false|0|non|no|off)$/i.test(q.get('conclusions').trim()); },
   vues: {
     /* Tableau large (deuxième passe, 15 novembre 2026, « agrandir les figures ») : pas de titre interne ; à gauche le
      * flacon et la centrifugeuse, au centre les trois hypothèses au-dessus des tubes et de l'arbre (pleine hauteur), à
@@ -192,7 +199,7 @@ window.Etapes.lancer({
       disposition: { colonnes: [['flacon'], ['hyp', 'tubes'], { texte: ['leg', 'calc', 'conc'] }], partMax: .76, ecart: 18 },
       motifs: { conservative: 'hypothèse conservative : la molécule mère reste entière', semi: 'hypothèse semi-conservative : un brin ancien et un brin nouveau', dispersive: 'hypothèse dispersive : ancien et nouveau mélangés', hypotheses: 'trois hypothèses : conservative, semi-conservative, dispersive', culture_15N: 'bactéries cultivées sur azote lourd ¹⁵N', transfert_14N: 'bactéries transférées sur azote léger ¹⁴N', centrifugation: 'l’ADN extrait est centrifugé', temoins: 'les témoins : ADN léger 1,710 en haut, ADN lourd 1,724 en bas', g0: 'G0 : une bande lourde', g1_bande: 'G1 : une seule bande, hybride', calcul_moyenne: '1,717 est la moyenne de 1,710 et 1,724', conservative_rejetee: 'la conservative est rejetée : elle prévoyait deux bandes', g2_bandes: 'G2 : deux bandes égales, hybride et légère', dispersive_rejetee: 'la dispersive est rejetée : elle prévoyait une seule bande', g3: 'G3 : 25 % hybride, 75 % léger', arbre_g0_g3: 'l’arbre des molécules : chaque molécule fille garde un brin de la mère' },
       conclusion: 'La réplication est semi-conservative.',
-      surReglage: (k, cles, api) => { if (cles.includes('generation')) api.playUntil({ moment: GEN[k.P.generation] }); },
+      surReglage: (k, cles, api) => { if (cles.includes('generation')) api.playUntil({ moment: GEN[k.P.generation] }); else k.S.vu = { ...k.S.vu }; },
       texte: 'Meselson et Stahl : bactéries sur ¹⁵N puis ¹⁴N, ADN centrifugé. Témoins 1,710 (léger) et 1,724 (lourd) g·cm⁻³. G1 : une bande à 1,717 (hybride) → conservative rejetée ; G2 : hybride + légère → dispersive rejetée ; G3 : 25 % hybride, 75 % léger. Réplication semi-conservative.',
       explication: [{ repere: 'tube_g1', texte: 'En G1, une seule bande à 1,717 : un brin lourd, un brin léger.' }, { repere: 'h_conservative', texte: 'La conservative prévoyait deux bandes : rejetée.' }, { repere: 'tube_g2', texte: 'En G2, deux bandes : hybride et légère.' }, { repere: 'arbre', texte: 'Chaque molécule fille garde un brin de la molécule mère.' }] },
     // Tableau large (15 novembre 2026) : le tableau à gauche, la conclusion à droite, agrandie (etapes.js).

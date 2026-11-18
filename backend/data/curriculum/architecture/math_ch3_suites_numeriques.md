@@ -326,6 +326,8 @@ auxiliaire géométrique 8/20, limite par qⁿ 10/20), était lu et non joué.
 
 ## Ce qui reste à faire
 
+- Fusion du 18 novembre 2026 : une autre session (commit `e8d20fdd`, `scripts/logique/ch3_suites.py`) avait coupé `su_f7_national` en `su_f7_national` + `su_f7_national_b` sur `escalier`. La 2ᵉ passe fait la même coupure avec une vue dédiée (`national.html?vue=g_signe` puis `g_limite`, `su_f7b_limite`) et des réactions préparées ; elle est gardée, `su_f7_national_b` n'existe donc pas. Le script `ch3_suites.py` ne la réapplique pas (sa garde teste l'ancien énoncé « croissante, puis… »).
+
 - Voix : `math_ch3_suites_numeriques_voix.json` (52 pistes : diapositives, démonstrations, énoncés et les réactions
   écrites à la main en 2ᵉ passe pour `su_e1_complet`, `su_e1_q2`, `su_e1_q3`, `su_f7_national`, `su_f7b_limite`,
   `su_e1_q5a`).

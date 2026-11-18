@@ -106,7 +106,7 @@ Bloc de deux diapositives seulement : le cours de l'aspect est court chez tous l
 | `wx_m2b_formule` | 2d = v·τ, d = v·τ/2 | La relation après le phénomène. |
 | `wx_b1_redaction` [q] | Relation → application numérique → résultat → unité | Juste avant les exercices du national, pour que chacun soit rédigé ainsi. |
 
-**Bloc `wx_s4_b1` — National : lire l'oscillogramme, dater un aspect** [chaque diapo q + ex]
+**Bloc `wx_s4_b1` — National : lire l'oscillogramme, dater un aspect** [chaque diapo q + ex] — *refait en 2ᵉ passe : un bloc par exercice, voir la section « 2ᵉ passe »*
 `wx_n1_national_2022n`, `wx_n2_national_2024r`, `wx_n3_national_2024n` : la figure de l'examen redessinée et jouée
 (`national.html`, 5 arrêts chacune : signal émis, son qui avance, signal reçu, écran complet, débuts), la question avant
 le résultat, la démonstration ligne par ligne. **Déplacé en séance 3** : la séance 3 n'avait qu'un bloc et demi (l'écho
@@ -144,7 +144,47 @@ exercices (ce sont des corrections jouées une par une, pas des explications).
 
 - Aucun. `son.html` est un fichier du cours (`ondes-tableau/`), pas un fichier partagé.
 
+## 2ᵉ passe (18 novembre 2026) — les exercices du national joués pas à pas
+
+**Ce qui n'allait pas encore.** Les six exercices du national avaient leur figure animée (`national.html`), mais :
+1. **la voix donnait la méthode avant la réponse** : « la méthode : on marque les débuts, delta t égale n fois la
+   sensibilité, puis v égale L sur delta t », et au 2024 R tout le raisonnement des deux chemins (τ = (d − ℓ)/v − ℓ/v),
+   écrits au centre avant que l'élève ait rien fait (règle 3 : ne pas tout donner au départ). La diapositive VII.8
+   « reconnaître le cas » demandait ensuite de reconnaître seul ce qu'on lui avait toujours annoncé ;
+2. **la correction n'était jamais jouée** : les étapes de lecture et de calcul de `national.html` (divisions, retard,
+   chemins, pente, trajets, relation, célérité…) existaient, mais aucune diapositive ne les jouait ; rien n'empêchait
+   non plus l'élève d'appuyer sur « Reprendre » pendant sa réponse et de voir la réponse s'écrire ;
+3. **trois ardoises « À toi » par bloc** (blocs `wx_s4_b1`, `wx_s4_b2`) contre une seule (règle 27 du professeur) ;
+4. **un cas type fréquent manquait** : le retard lu sur la courbe y_M(t) (2017 N, 2019 N, 2020 N, 2022 R ; troisième
+   cas du national après l'oscillogramme et l'aspect), travaillé en cours (`wx_r1b_elongation`) mais jamais en exercice.
+
+**Ce qui est fait.**
+| Changement | Raison |
+|---|---|
+| Chaque exercice du national = **un bloc de deux diapositives** : l'énoncé joué (le phénomène, les données, **une** consigne), son ardoise (question puis exercice, une consigne à la fois), puis la **correction jouée** sur la figure | Règles 3 et 5 : la réponse de l'élève avant la correction ; la correction écrite comme le barème (relation, application numérique, résultat, unité dite en mots) et vue sur la figure du sujet. Une ardoise par bloc. |
+| Voix des six énoncés réécrite : la méthode retirée (voix, centre, puce « Méthode »), la consigne dite seule à la fin (« قرا delta t », « حسب v »…) ; la puce dit « la méthode et la correction viennent après ta réponse » | Ne pas donner la méthode : l'élève reconnaît le cas (préparation de VII.8). La démonstration de l'ardoise et la réaction préparée de la 1ʳᵉ erreur (indice) restent l'aide. |
+| 7 diapositives de correction `wx_n1c…`, `wx_n2c…`, `wx_n3c…`, `wx_n7c…`, `wx_n4c…`, `wx_n5c…`, `wx_n6c…` : un `play_until` par étape déjà écrite dans `national.html` (débuts → divisions → τ → chemins → ℓ, etc.), un repère par objet nommé | Professeur règle 41 et simulations-au-tableau règle 14 : chaque lecture et chaque calcul a son arrêt sur image ; ouvertes figées où l'énoncé s'est arrêté (`&depart=`, `demarrer: reset`, règle 39). |
+| `national.html` : deux paramètres d'adresse, `&arret=<étape>` (l'énoncé ne joue pas au-delà, bouton compris : « La suite s'écrit après ta réponse ») et `&depart=<étape>` (la correction s'ouvre figée là) | Rien de décisif montré avant la réponse. Sans paramètre, la page fait exactement ce qu'elle faisait : le cours en ligne n'est pas touché (vérifié). |
+| Nouvelle vue `national_2022_rattrapage` et nouvel exercice `wx_n7_national_2022r` (VII.4) : la surface de l'eau vue de côté (la ride va de S à M) et la courbe y_M(t) du sujet tracée en même temps ; M reste sur l'axe jusqu'à 10 ms ; la date, τ et v ne s'écrivent qu'à la correction | Cas type manquant ; valeurs du sujet (L = 2,5 cm, amplitude 6 mm, M démarre à 10 ms, v = 2,5 m/s). Les questions du sujet sur N et λ sont du ch2 : dites « au chapitre suivant », non posées. Réactions préparées écrites à la main pour les 6 choix (erreurs réelles : date où la courbe recoupe l'axe, 10 ms = 0,1 s, 1 cm = 10⁻³ m, 2,5 cm = 0,25 m). |
+| Ordre : 2022 N, 2024 R, 2024 N, **2022 R (y_M(t))**, 2021 R, 2020 R, 2018 N, puis VII.8 | Le nouveau cas vient après l'aspect (même famille : le retard et le front). |
+| VII.8 : « sept exercices », une ligne de plus dans la table des mots-codes (courbe y_M(t) → τ = date où M démarre), voix réécrite | Le regroupement couvre tous les cas joués. |
+| Séances : 3 = écho et rédaction, 2022 N, 2024 R ; 4 = 2024 N, 2022 R, 2021 R ; **5 (nouvelle)** = 2020 R, 2018 N, reconnaître le cas, bilan | Blocs de 8 à 10 min (énoncé + ardoise + correction) ; trois blocs par séance, la dernière garde le bilan court. Les ids des anciens blocs sont gardés (`wx_s4_b1` = 2022 N, `wx_s4_b2` = 2021 R) ; les lignes de cahier suivent leur exercice. |
+| Mots : « كيصيفط », « متأخر », « معقولة », « نعلمو », « فالحافة », « كيقطع », « التابلو », « كتبعد », « الفيتوس », « spot », « vue », « كيستقبلو », « reprend » remplacés (« كيعطي », « من بعد », « نحددو », « فالبداية ديال الشاشة », « كيمشي », « الجدول », « الجنين », « الضو », « les récepteurs »…) | `verifier_mots.py` : mots vus moins de 3 fois. Gardés : les nombres dits (quatre-vingt-cinq, soixante-huit…), « ell » (le symbole ℓ, déjà dit sans défaut dans l'ancienne voix), « micros », « salve », « écho », « microsecondes » (termes du programme et des sujets). |
+
+**Vérifié.** JSON chargé ; `node --check` et Chromium (Playwright) sur les sept vues avec `arret` / `depart` : aucune
+erreur, l'énoncé s'arrête à son étape même si l'élève appuie, chaque correction atteint sa dernière étape ;
+`verifier_pointage_simulations.py --ecarts` : aucun nouvel écart (avec des durées de voix estimées, les pistes n'étant pas
+faites), cours en ligne identique ; `verifier_formules.py` vide ; pytest « course or cours or concentration » : seul
+l'échec SVT préexistant.
+
+**Ce qui reste.** Les voix (29 pistes, ci-dessous) ; les réactions préparées de `wx_n7_national_2022r` sont écrites à
+la main (à relire, puis voix) ; rejouer les diapositives dans le lecteur avec la voix posée
+(`verifier-pointage-navigateur.mjs`) ; deux repères annoncés par la voix et absents de `types.html` (`dim_corde`,
+`dim_son`, sur `wx_i3b_longitudinale`) et les moments `mesure_1`/`mesure_5` que le vérificateur ne voit pas (créés par
+une boucle) : déjà là avant cette passe.
+
 ## Voix à faire
 
-Une piste : `mixed/wx_b2_national` (liste : `phys_ch1_waves_exemple_voix.json`). Mots rares gardés : « l'écho »,
-« micros » (termes du programme, déjà dans l'ancienne voix enregistrée sans défaut).
+29 pistes (liste : `phys_ch1_waves_exemple_voix.json`) : 15 diapositives (`mixed/` : les sept énoncés du national
+réécrits ou nouveaux, les sept corrections jouées, `wx_b2_national`), et pour `wx_n7_national_2022r` les deux énoncés,
+les deux démonstrations et les dix réactions préparées. Mots rares gardés : voir le tableau ci-dessus.

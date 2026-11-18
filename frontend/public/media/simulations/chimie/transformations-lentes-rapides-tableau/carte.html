@@ -15,6 +15,10 @@
 <script src="exposants.js"></script>
 <script src="/media/simulations/shared/tableau/imprimer.js"></script>
 <script>
+/* Le nombre de sessions du national qui posent les facteurs cinétiques (catalyseur et trempe compris). Relevé du
+ * 18 novembre 2026 sur les 20 sujets 2016-2025 : 8 (2016 R, 2017 N, 2017 R, 2018 N, 2018 R, 2023 N, 2024 N, 2025 N).
+ * ?sessions=8 dans la copie en attente du cours ; sans paramètre, 10 comme le dit la voix déjà enregistrée du cours en ligne. */
+const SESSIONS = Math.max(1, Math.min(20, parseInt(new URLSearchParams(location.search).get('sessions') || '10', 10) || 10));
 /*
  * La carte du chapitre « Transformations lentes et transformations rapides » (phys_ch9_transformations_lentes_rapides), ouverture
  * et fin du cours ; même forme et même protocole que physics/circuit-rlc-tableau/carte.html (contrat
@@ -111,8 +115,8 @@ const NOEUDS = [
     lignes: ['eau glacée + dilution', 'bloque avant le dosage'],
     phrase: 'La trempe : refroidir brusquement (eau glacée) et diluer pour bloquer la transformation avant un dosage.' },
   { id: 'national', x: 229, y: BAS_Y, w: W, h: H, couleur: 'blanc', comps: [], titre: 'Au national', encadre: true,
-    lignes: ['facteurs : 10 sessions', 'sur 20 ; catalyseur 5 fois'],
-    phrase: 'Au national : les facteurs cinétiques tombent dans 10 sessions sur 20, le catalyseur 5 fois ; on choisit la courbe la plus rapide, pas le palier le plus haut.' },
+    lignes: [`facteurs : ${SESSIONS} sessions`, 'sur 20 ; catalyseur 5 fois'],
+    phrase: `Au national : les facteurs cinétiques tombent dans ${SESSIONS} sessions sur 20, le catalyseur 5 fois ; on choisit la courbe la plus rapide, pas le palier le plus haut.` },
   { id: 'suite', x: 78, y: 210, w: W, h: H, couleur: 'faible', comps: [], titre: 'La suite', encadre: true,
     lignes: ['chapitre suivant :', 'suivre l’avancement x(t)'],
     phrase: 'Chapitre suivant : suivre l’avancement x(t) d’une transformation au cours du temps.' },
@@ -310,7 +314,7 @@ const config = { id: 'transformations_lentes_rapides_carte', version: '1.0', tit
   command_schema: { play_until: { moment: Object.keys(moments()).join(' | ') + ' (centre = le centre ; sinon dessine la carte jusqu’à cet élément ; complete = toutes les branches, entourées une à une ; fin = la carte complète d’un coup)' },
     set_parameters: { lacunes: '[{id: C1..C7, statut: non_acquis|partiel}] (bilan de l’élève)', acquis_ids: '[C1, ..] compétences acquises' } } };
 const pont = protocole({ id: config.id, commandes, config,
-  texte: 'Carte du chapitre « Transformations lentes et transformations rapides » : au centre « Transformations lentes et rapides », puis les branches : le couple Ox/Red (Ox + n e⁻ ⇌ Red) ; la demi-équation (éléments, O avec H₂O, H avec H⁺, charges avec e⁻) ; l’équation bilan (même nombre d’électrons, on additionne) ; rapide (achevée aussitôt) ; lente (secondes → heures) ; température ; concentration ; catalyseur ; trempe ; au national : facteurs 10 sessions sur 20, catalyseur 5 fois ; la suite : chapitre suivant, suivre l’avancement x(t).',
+  texte: `Carte du chapitre « Transformations lentes et transformations rapides » : au centre « Transformations lentes et rapides », puis les branches : le couple Ox/Red (Ox + n e⁻ ⇌ Red) ; la demi-équation (éléments, O avec H₂O, H avec H⁺, charges avec e⁻) ; l’équation bilan (même nombre d’électrons, on additionne) ; rapide (achevée aussitôt) ; lente (secondes → heures) ; température ; concentration ; catalyseur ; trempe ; au national : facteurs ${SESSIONS} sessions sur 20, catalyseur 5 fois ; la suite : chapitre suivant, suivre l’avancement x(t).`,
   etat: () => ({ simulation_status: S.running ? 'running' : 'paused', ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'carte', time_s: S.n, parameters: { centre: S.def != null, branches: S.n, complete: S.entoure != null, lacunes: S.lacunes ? S.lacunes.length : null }, moments: moments() }),
   progression: () => (S.entoure != null ? 1 : S.n / NOEUDS.length),
   executer: (cmd, p) => ({ start, reset: start, play_until: () => playUntil(p), set_parameters: () => setParameters(p) })[cmd]?.() });

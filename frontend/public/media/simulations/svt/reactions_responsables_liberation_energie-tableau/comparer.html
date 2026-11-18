@@ -12,6 +12,7 @@
 </div>
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
+<script src="/media/simulations/shared/lexique/lexique.js"></script>
 <script src="peinture.js"></script>
 <script>
 /*
@@ -87,8 +88,6 @@ const ROWS = { lieu: 120, degradation: 162, produits: 200, atp: 244, r: 282 };
 /* ── Peinture (règle 32 : le vivant et les molécules sont peints, la craie garde légendes et valeurs) ── */
 const P = window.SVTPeinture;
 const ENCRE = '#0b1f2a';   // texte sombre et gras sur les en-têtes dorés
-const TEINTE = { blanc: [228, 226, 214], jaune: [250, 204, 21], orange: [240, 140, 50] };
-const OXYGENE = [214, 64, 58], HYDROGENE = [236, 236, 236], EAU = [70, 150, 210];
 
 /** La cellule en coupe : membrane plasmique (double trait), hyaloplasme granuleux, contour arrondi du cadre CELL. */
 function peindreCellule(ctx) {
@@ -108,34 +107,19 @@ function peindreCellule(ctx) {
   ctx.lineWidth = 1; ctx.strokeStyle = P.rgba(P.T.membrane, .42); chemin(4); ctx.stroke();
   ctx.restore();
 }
-/** Le carbone : une bille ombrée (blanc = glucose, jaune = acide pyruvique, orange = acide lactique). */
-function carbone(c, x, y, couleur, halo) {
+/* Lexique visuel commun (18 novembre 2026, règle 15) : le carbone est TOUJOURS une bille jaune (le glucose était blanc ici et
+ * le jaune servait à l'acide pyruvique) ; l'acide lactique = les 3 carbones de l'acide pyruvique + 2 hydrogènes blancs
+ * (il était orange) ; CO₂, H₂O et ATP sont ceux du lexique. Échelle 0,5 : billes de 6 px, pas de 14 px. */
+const Lx = window.Lexique, E = .5;
+function carbone(c, x, y, halo) {
   const g = c.ctx;
   if (halo) { g.globalAlpha = .22; g.fillStyle = c.couleur('orange'); g.beginPath(); g.arc(x, y, 11, 0, Math.PI * 2); g.fill(); g.globalAlpha = 1; }
-  P.bille(g, x, y, 6, TEINTE[couleur] || TEINTE.blanc);
+  Lx.atome(g, x, y, 'C', { echelle: E });
 }
-/** Une liaison entre deux carbones voisins (bâtonnet clair, sous les billes). */
-function liaison(ctx, [x1, y1], [x2, y2]) {
-  ctx.save(); ctx.strokeStyle = 'rgba(225,225,210,.7)'; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.restore();
-}
-/** Une molécule de CO₂ (O = C = O) dans sa bulle de gaz. */
-function peindreCO2(ctx, x, y) {
-  P.bille(ctx, x - 7.5, y, 4.2, OXYGENE); P.bille(ctx, x + 7.5, y, 4.2, OXYGENE);
-  P.bille(ctx, x, y, 5, TEINTE.jaune);
-  P.bulleGaz(ctx, x, y, 12);
-}
-/** Une molécule d'eau : l'oxygène et ses deux hydrogènes en V. */
-function peindreH2O(ctx, x, y) {
-  P.bille(ctx, x - 4.5, y + 3.5, 2.6, HYDROGENE); P.bille(ctx, x + 4.5, y + 3.5, 2.6, HYDROGENE);
-  P.bille(ctx, x, y, 4.6, EAU);
-}
-/** Un ATP du compteur : une petite capsule dorée et brillante. */
-function peindreATP(ctx, x, y, w, h) {
-  const g = ctx.createLinearGradient(x, 0, x + w, 0);
-  g.addColorStop(0, '#a87d08'); g.addColorStop(.35, '#ffe680'); g.addColorStop(.6, '#f5c518'); g.addColorStop(1, '#8f6a05');
-  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, w / 2); ctx.fill();
-}
+function liaison(ctx, [x1, y1], [x2, y2]) { Lx.liaison(ctx, x1, y1, x2, y2, { epaisseur: 4.5 * E }); }
+function peindreCO2(ctx, x, y) { Lx.co2(ctx, x, y, { echelle: .8, bulle: true }); }
+function peindreH2O(ctx, x, y) { Lx.h2o(ctx, x, y, { echelle: .75 }); }
+function peindreATP(ctx, x, y) { Lx.atp(ctx, x, y, { forme: 'bille', echelle: .5, eclat: false }); }
 
 function dessiner(c) {
   const t = chrono.t, p = chrono.part, M = moments();
@@ -179,14 +163,15 @@ function dessiner(c) {
     });
     groupes.flat().forEach(([x, y], i) => {
       if (S.o2 && t >= M.mitochondrie + i * 0.42) return;
-      carbone(c, x, y, lactique ? 'orange' : u < 1 ? 'blanc' : 'jaune', lactique && t >= M.residu - 0.6);
+      carbone(c, x, y, lactique && t >= M.residu - 0.6);
+      if (lactique && i % 3 === 1) { Lx.liaison(c.ctx, x, y, x - 5, y - 9, { epaisseur: 1.4 }); Lx.liaison(c.ctx, x, y, x + 5, y - 9, { epaisseur: 1.4 }); Lx.hydrogene(c.ctx, x - 5, y - 9, { echelle: .6 }); Lx.hydrogene(c.ctx, x + 5, y - 9, { echelle: .6 }); }
     });
     if (t < 0.4) c.texte('glucose (6 C)', 48, 128, { couleur: 'blanc', taille: 14 });
     c.repere('glucose', 36, 110, 130, 110, 'le glucose');
     // Le compteur d'ATP : 2 par la glycolyse, puis jusqu'à 38 avec la mitochondrie.
     let nATP = Math.round(2 * p(1.4, 2.1));
     if (S.o2) nATP += Math.round(36 * p(M.mitochondrie, M.mineraux));
-    for (let i = 0; i < nATP; i++) peindreATP(c.ctx, 84 + i * 8.2, 306, 6.6, 18);
+    for (let i = 0; i < nATP; i++) peindreATP(c.ctx, 87.3 + i * 8.2, 315);
     if (nATP) c.texte(String(nATP), 84 + nATP * 8.2 + 4, 322, { couleur: 'jaune', taille: 16 });
     // Avec O₂ : les carbones sortent en CO₂, l'eau se forme.
     if (S.o2) {
