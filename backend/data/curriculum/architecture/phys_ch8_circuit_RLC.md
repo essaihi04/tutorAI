@@ -341,3 +341,21 @@ Pistes à mettre en voix : 51, dont 42 de la 2ᵉ passe (`phys_ch8_circuit_RLC_v
 - Les questions ouvertes de l'exercice joué n'ont pas de réaction préparée (jugées en direct sur l'`attendu`).
 - Aucun fichier partagé n'a été modifié (`shared/`, `frontend/src/`).
 <!-- 2e passe : fin -->
+
+## Fiche bilan lisible au téléphone (18 novembre 2026)
+
+**Défaut ancien corrigé : la fiche « Ce qu’il faut retenir » (`circuit-rlc-tableau/bilan.html`, `lc_bl_fiche`).** Sur un
+téléphone en paysage, le texte tombait à 5,7 px (568 × 300) et 7 px (724 × 350), les indices et exposants à 9 px même sur
+ordinateur, des blocs sortaient du cadre : le kit (`shared/tableau/tableau.js`) baisse son plancher jusqu’à 45 % sur un
+petit tableau et écrit indices et exposants à 62 %. La page garde maintenant son propre plancher de 15 px (sa craie seule :
+`tailleMin`, `_largeur`, `_texteIndices`, `_texteFractions`), indices, exposants et étages des fractions compris, sauf à
+l’impression (la fiche entière sur la feuille). Les étages d’une fraction se placent selon leur encre (le ² de « dt² » ne
+monte plus sur le « q » de « d²q »). Sur un petit écran, la fiche se coupe en parties (autant qu’il faut, 1 à 4 colonnes,
+chacune grossit son texte pour remplir le tableau), compteur « partie n sur N · touche : la suite » ; toucher le tableau
+passe à la suite ; `play_until` vers un bloc ouvre sa partie et l’éclaire. Sur ordinateur, une page en 4 colonnes comme avant.
+**Défaut des moments** : tous les blocs valaient 1 et `time_s` vaut 1 sur la fiche ; le kit ignore un `play_until` vers un
+moment ≤ `time_s`, donc la voix n’éclairait aucun bloc (vérifié dans Chromium : le bloc 1 restait en lumière). Valeurs
+maintenant : `fiche` 1,01, blocs 1,1 à 1,8, `fin` 1,95 (la fiche entière, sa dernière partie), `lacunes` 2 (noms inchangés).
+Mesuré dans Chromium (568 × 300, 724 × 350, 1024 × 560, 1280 × 640, 1596 × 700), chaque bloc, `fin`, `set_parameters`,
+page 2 : aucun texte sous 15 px, aucun chevauchement, rien hors du cadre, les 11 blocs éclairés ; pointage et formules :
+rien de nouveau.
