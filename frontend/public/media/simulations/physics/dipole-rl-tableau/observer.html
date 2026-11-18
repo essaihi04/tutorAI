@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>L’établissement du courant : régler L et R — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="rl.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="À gauche, le circuit E, K, R et la bobine dessiné à la craie avec les valeurs de L et de R ; à droite, la courbe i(t) de l’établissement du courant tracée en vert ; la courbe précédente reste en pointillés pour comparer"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Fermer K</button>
+    <span id="reglage" data-professor-control="set_parameters"></span>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script src="/media/simulations/physics/dipole-rc-tableau/zones.js"></script>
+<script>
+/*
+ * L’établissement du courant, AVANT l’équation (18 novembre 2026, logique du cours « Dipôle RL » : la courbe se voit et
+ * se manipule avant d’être mise en équation, comme tau-rc.html?avant=1 au dipôle RC).
+ * E = 6 V et r = 10 Ω fixes. Deux curseurs : L (0,06 → 0,24 H) et R (20 → 110 Ω). « Fermer K » trace
+ * i(t) = I₀(1 − e^(−t(R + r)/L)) au ralenti, I₀ = E/(R + r) (vue en rl_m4) écrite sur le palier. La courbe précédente reste
+ * en pointillés : une L plus grande donne un établissement plus lent vers le même palier ; une R plus grande, un palier
+ * plus bas atteint plus vite. τ n’est PAS encore défini : rien de τ ne s’écrit (ni 63 %, ni 5τ, ni L/(R + r)).
+ * Moments (play_until) : courbe (référence L = 0,12 H, R = 50 Ω), L_double (L = 0,24 H, la référence en pointillés),
+ * R_double (R = 110 Ω, R + r = 120 Ω, la référence en pointillés). Un curseur relâché relance avec la nouvelle valeur.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');
+const E = 6, r = 10, TMAX = 20, VITESSE = 3.5;                 // TMAX en ms ; 3,5 ms de courbe par seconde : ralenti
+const AX = 285, AX1 = 735, AY = 360, YH = 120, IMAX = 200;    // i de 0 à 200 mA
+const X = t => AX + t / TMAX * (AX1 - 20 - AX);
+const Y = i => AY - i / IMAX * (AY - YH);
+const P = { L: 0.12, R: 50 };
+const I0De = p => E / (p.R + r) * 1000;                        // mA
+const tauDe = p => p.L / (p.R + r) * 1000;                     // ms (calcul interne seulement : jamais écrit)
+const iDe = (t, p) => I0De(p) * (1 - Math.exp(-t / tauDe(p)));
+const S = { t: 0, running: false, pause: false, fait: false, trace: null, fantome: null, jusqua: null, motif: '', emis: 0 };
+
+const Peint = {
+  sphere(ctx, x, y, rr, [clair, milieu, sombre]) {
+    const g = ctx.createRadialGradient(x - rr * .35, y - rr * .4, rr * .1, x, y, rr); g.addColorStop(0, clair); g.addColorStop(.45, milieu); g.addColorStop(1, sombre);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI * 2); ctx.fill();
+  },
+  generateur(ctx, x, y, w, h, affiche) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.roundRect(x + 3, y + 4, w, h, 6); ctx.fill();
+    const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#5b6670'); g.addColorStop(.5, '#3b444c'); g.addColorStop(1, '#262c32');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 6); ctx.fill();
+    const ex = x + w * .12, ey = y + h * .34, ew = w * .76, eh = h * .3;
+    ctx.fillStyle = '#0d1a10'; ctx.beginPath(); ctx.roundRect(ex, ey, ew, eh, 3); ctx.fill();
+    ctx.fillStyle = '#7dfc8a'; ctx.font = `600 ${Math.round(eh * .72)}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(affiche, ex + ew / 2, ey + eh / 2 + 1);
+    Peint.sphere(ctx, x + w / 2, y, 4.2, ['#ffd0d0', '#e0393e', '#6d0f12']);
+    Peint.sphere(ctx, x + w / 2, y + h, 4.2, ['#9aa0a6', '#2b2f33', '#050607']);
+    ctx.restore();
+  },
+  resistor(ctx, x, y, w, h) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.roundRect(x + 2, y + 3, w, h, h / 2.2); ctx.fill();
+    const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#f3e1bf'); g.addColorStop(.45, '#d9bf8f'); g.addColorStop(1, '#9c8358');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, h / 2.2); ctx.fill();
+    [[.24, '#2e7d32'], [.38, '#111'], [.52, '#111'], [.78, '#c9a227']].forEach(([f, k]) => { ctx.fillStyle = k; ctx.fillRect(x + w * f, y + 1, w * .07, h - 2); });
+    ctx.restore();
+  },
+  /** Bobine : spires de cuivre sur un cylindre gris (noyau), vues de face. */
+  bobine(ctx, x, y, w, h, n) {
+    ctx.save();
+    const g = ctx.createLinearGradient(x, y, x + w, y); g.addColorStop(0, '#3d4247'); g.addColorStop(.5, '#7a8187'); g.addColorStop(1, '#2f3337');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x + w * .18, y - 4, w * .64, h + 8, 4); ctx.fill();
+    for (let k = 0; k < n; k++) {
+      const yy = y + (k + .5) * h / n, gc = ctx.createLinearGradient(x, 0, x + w, 0);
+      gc.addColorStop(0, '#7a3d12'); gc.addColorStop(.35, '#e59a52'); gc.addColorStop(.6, '#c4672a'); gc.addColorStop(1, '#5e2c0b');
+      ctx.strokeStyle = gc; ctx.lineWidth = h / n * .8; ctx.beginPath(); ctx.ellipse(x + w / 2, yy, w / 2, h / n * .42, 0, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.restore();
+  },
+  levier(ctx, px, py, bx, by, qx, qy) {
+    ctx.save(); ctx.lineCap = 'round';
+    Peint.sphere(ctx, qx, qy, 4.2, ['#fff1c9', '#cfa046', '#5e4210']);
+    ctx.strokeStyle = '#4a4f55'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(bx, by); ctx.stroke();
+    ctx.strokeStyle = '#c8ccd2'; ctx.lineWidth = 3.4; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(bx, by); ctx.stroke();
+    Peint.sphere(ctx, px, py, 4.4, ['#fff1c9', '#cfa046', '#5e4210']);
+    ctx.restore();
+  },
+};
+
+function dessiner(c) {
+  scene.cadre(13);
+  c.direct(() => {
+    const ctx = c.ctx, ferme = S.t > 0 || S.running;
+    Peint.generateur(ctx, 37, 121, 46, 58, '6V');
+    Peint.levier(ctx, 82, 70, ferme ? 112 : 108, ferme ? 70 : 54, 112, 70);
+    Peint.resistor(ctx, 130, 61, 52, 18);
+    Peint.bobine(ctx, 207, 112, 30, 70, 7);
+  });
+  c.texte('Établissement du courant sous E = 6 V', 380, 24, { couleur: 'blanc', taille: 17, align: 'center' });
+  c.ligne(60, 70, 60, 120); c.ligne(60, 180, 60, 230);
+  c.texte('E', 92, 157, { couleur: 'blanc', taille: 17, align: 'center' });
+  c.ligne(60, 70, 78, 70); c.ligne(116, 70, 130, 70); c.ligne(182, 70, 222, 70);
+  c.ligne(222, 70, 222, 108); c.ligne(222, 186, 222, 230); c.ligne(60, 230, 222, 230);
+  c.texte('R', 156, 52, { couleur: 'orange', taille: 17, align: 'center' });
+  c.texte('(L, r)', 248, 152, { couleur: 'cyan', taille: 15 });
+  c.texte('K', 97, 92, { couleur: 'faible', taille: 15, align: 'center' });
+  c.repere('circuit', 36, 44, 230, 196, 'le circuit : E, K, R et la bobine (L, r) en série');
+  c.fleche(AX, AY, AX1, AY, { couleur: 'faible', largeur: 1.6 }); c.fleche(AX, AY, AX, 78, { couleur: 'faible', largeur: 1.6 });
+  for (let k = 1; k <= 4; k++) { const x = X(5 * k); c.ligne(x, AY - 4, x, AY + 4, { couleur: 'faible', largeur: 1.3, duree: .03 }); c.texte(String(5 * k), x, AY + 19, { couleur: 'faible', taille: 13, align: 'center', duree: .1 }); }
+  c.texte('t (ms)', AX1, AY - 10, { couleur: 'faible', taille: 14, align: 'right' });
+  c.texte('i (mA)', AX + 8, 86, { couleur: 'faible', taille: 14 });
+  for (const v of [50, 100, 150, 200]) { c.ligne(AX - 4, Y(v), AX + 4, Y(v), { couleur: 'faible', largeur: 1.3, duree: .03 }); c.texte(String(v), AX - 8, Y(v) + 5, { couleur: 'faible', taille: 13, align: 'right', duree: .1 }); }
+  c.direct(() => {
+    c.texte(`L = ${fx(P.L)} H`, 30, 262, { couleur: 'cyan', taille: 17 });
+    c.texte(`R = ${P.R} Ω`, 140, 262, { couleur: 'orange', taille: 17 });
+    c.texte('r = 10 Ω', 30, 290, { couleur: 'faible', taille: 15 });
+    c.repere('R', 124, 40, 64, 46, 'la résistance R'); c.repere('L', 196, 104, 70, 90, 'la bobine (L, r)');
+    c.repere('reglages', 24, 244, 220, 52, 'les valeurs de L et de R');
+    if (S.fantome) {
+      c.courbe(u => [X(u * TMAX), Y(iDe(u * TMAX, S.fantome))], 140, { couleur: 'faible', largeur: 2, pointille: [5, 5], tremble: 0 });
+      c.repere('courbe_1', AX, Y(I0De(S.fantome)) - 14, AX1 - AX, AY - Y(I0De(S.fantome)) + 14, `la courbe d’avant : L = ${fx(S.fantome.L)} H, R = ${S.fantome.R} Ω`);
+    }
+    if (S.trace) {
+      const tt = Math.min(S.t, TMAX), I0 = I0De(S.trace), yP = Y(I0);
+      c.ligne(AX, yP, AX1 - 10, yP, { couleur: 'faible', largeur: 1.2, pointille: [6, 6], tremble: 0 });
+      c.texte(`I₀ = ${fx(I0, 0)} mA`, AX1 - 12, yP - 8, { couleur: 'blanc', taille: 15, align: 'right' });
+      c.repere('palier', AX, yP - 26, AX1 - AX, 36, `le palier I₀ = E/(R + r) = ${fx(I0, 0)} mA : la valeur finale`);
+      if (tt > 0) c.courbe(u => [X(u * tt), Y(iDe(u * tt, S.trace))], 160, { couleur: 'vert', largeur: 2.8, tremble: 0, aire: Y(0) });
+      const zone = [AX, yP - 4, AX1 - AX, AY - yP + 4];
+      c.repere(S.fantome ? 'courbe_2' : 'courbe', ...zone, `la courbe i(t) : L = ${fx(S.trace.L)} H, R = ${S.trace.R} Ω`);
+      if (S.fantome) c.repere('courbe', ...zone, 'la courbe i(t)');
+      if (S.fantome && S.fait) {
+        const k = tauDe(S.trace) / tauDe(S.fantome), kI = I0De(S.trace) / I0De(S.fantome);
+        const vit = Math.abs(k - 1) < 0.02 ? 'même durée' : k > 1 ? 'établissement plus lent' : 'établissement plus rapide';
+        const pal = Math.abs(kI - 1) < 0.02 ? 'même palier' : kI > 1 ? 'palier plus haut' : 'palier plus bas';
+        c.texte(`${vit}, ${pal}`, 138, 340, { couleur: k > 1.02 ? 'orange' : 'vert', taille: 16, align: 'center', max: 250 });
+        c.repere('comparaison', 14, 320, 250, 30, `${vit}, ${pal}`);
+      }
+    }
+    c.texte(`t = ${fx(Math.min(S.t, TMAX), 1)} ms`, AX1, 26, { couleur: 'vert', taille: 16, align: 'right' });
+    if (S.running || S.pause) c.texte('(ralenti)', AX1, 46, { couleur: 'faible', taille: 13, align: 'right' });
+  });
+  return c.fin();
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+if (window.RCZones) scene.cadre = RCZones(scene, () => (performance.now() - scene.ouvert) / 1000, RCZones.gaucheFixe(255, { axMax: 2.4 }));
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(TMAX, S.t + dt * VITESSE);
+  if (S.jusqua != null && S.t >= S.jusqua) { S.t = S.jusqua; S.jusqua = null; S.running = false; S.pause = true; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || 'instant choisi') + '.'); pont.noter('pause'); pont.emettre(); return true; }
+  if (S.t >= TMAX) {
+    S.running = false; S.fait = true; $('run').textContent = 'Fermer K';
+    bulle($('feedback'), `Le courant a atteint son palier I₀ = ${fx(I0De(S.trace), 0)} mA. Change L ou R : la nouvelle courbe se trace, l’ancienne reste en pointillés.`, 'good');
+    pont.noter('finished'); pont.emettre();
+  } else if (performance.now() - S.emis > 400) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function lancer(motif) {
+  if (S.trace && (S.fait || S.t > 0) && (S.trace.L !== P.L || S.trace.R !== P.R)) S.fantome = { ...S.trace };
+  S.trace = { ...P }; S.t = 0; S.running = true; S.pause = false; S.fait = false; S.jusqua = null;
+  $('run').textContent = 'Pause'; bulle($('feedback'), motif || 'K fermé : le courant s’établit…'); pont.noter('start', { L_H: P.L, R_ohm: P.R }); pont.emettre();
+}
+const PRESETS = {
+  courbe: { p: { L: 0.12, R: 50 }, fantome: null, motif: 'la courbe de référence : L = 0,12 H, R = 50 Ω' },
+  L_double: { p: { L: 0.24, R: 50 }, fantome: { L: 0.12, R: 50 }, motif: 'L doublée (0,24 H) : établissement plus lent, même palier' },
+  R_double: { p: { L: 0.12, R: 110 }, fantome: { L: 0.12, R: 50 }, motif: 'R = 110 Ω (R + r doublée) : palier plus bas, atteint plus vite' },
+};
+function moments() { const m = {}; for (const k of Object.keys(PRESETS)) m[k] = TMAX; return m; }
+let CONCL = new URLSearchParams(location.search).get('conclusions') !== '0';
+function playUntil(p) {
+  const pr = PRESETS[p.moment]; if (!pr) return;
+  P.L = pr.p.L; P.R = pr.p.R; rL.maj(P.L); rR.maj(P.R);
+  S.trace = null; S.fantome = pr.fantome ? { ...pr.fantome } : null;
+  const mo = CONCL ? pr.motif : pr.motif.split(' : ')[0];
+  lancer('Je trace ' + mo + '…'); S.motif = mo;
+  pont.noter('play_until', { moment: p.moment }); pont.emettre();
+}
+function ceQuiSeVoit() {
+  const m = [`Circuit E = 6 V, K, R = ${P.R} Ω, bobine L = ${fx(P.L)} H et r = 10 Ω (générateur, interrupteur, résistor et bobine de cuivre peints) ; graphe i(t) de 0 à 20 ms, i de 0 à 200 mA.`];
+  if (S.fantome) m.push(`En pointillés, la courbe d’avant (L = ${fx(S.fantome.L)} H, R = ${S.fantome.R} Ω, palier ${fx(I0De(S.fantome), 0)} mA).`);
+  if (!S.trace || (S.t <= 0 && !S.running)) m.push('K ouvert : pas encore de courant.');
+  else {
+    m.push(`Courbe verte tracée jusqu’à t = ${fx(Math.min(S.t, TMAX), 1)} ms, i = ${fx(iDe(Math.min(S.t, TMAX), S.trace), 0)} mA ; palier I₀ = ${fx(I0De(S.trace), 0)} mA écrit.`);
+    if (S.fait && S.fantome && CONCL) {
+      const k = tauDe(S.trace) / tauDe(S.fantome), kI = I0De(S.trace) / I0De(S.fantome);
+      m.push(`La nouvelle courbe s’établit ${Math.abs(k - 1) < .02 ? 'à la même vitesse' : k > 1 ? 'plus lentement' : 'plus vite'}, ${Math.abs(kI - 1) < .02 ? 'vers le même palier' : kI > 1 ? 'vers un palier plus haut' : 'vers un palier plus bas'}.`);
+    }
+  }
+  m.push('Avant l’équation : la constante de temps n’est pas encore définie, rien n’en est écrit.');
+  return m.join(' ');
+}
+function start() { lancer(); }
+function pause() { if (!S.running) return; S.jusqua = null; S.running = false; S.pause = true; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running || !S.pause) return start(); S.running = true; S.pause = false; $('run').textContent = 'Pause'; pont.noter('resume'); pont.emettre(); }
+function reset() { S.t = 0; S.running = false; S.pause = false; S.fait = false; S.trace = null; S.fantome = null; S.jusqua = null; scene.sale = true; $('run').textContent = 'Fermer K'; bulle($('feedback'), 'Ferme K, puis change L ou R et compare les deux courbes.'); pont.emettre(); }
+function setParameters(p) {
+  if (p && p.conclusions !== undefined) { CONCL = !(p.conclusions === false || p.conclusions === 0 || /^(false|0|non)$/i.test(String(p.conclusions))); scene.sale = true; pont.noter('set_parameters', { conclusions: CONCL }); pont.emettre(); }
+  let change = false;
+  if (Number.isFinite(+p.L_H)) { P.L = Math.min(.24, Math.max(.06, Math.round(+p.L_H * 50) / 50)); rL.maj(P.L); change = true; }
+  if (Number.isFinite(+p.R_ohm)) { P.R = Math.min(110, Math.max(20, Math.round(+p.R_ohm / 10) * 10)); rR.maj(P.R); change = true; }
+  if (!change) return;
+  pont.noter('set_parameters', { L_H: P.L, R_ohm: P.R });
+  lancer(`L = ${fx(P.L)} H, R = ${P.R} Ω : nouvel établissement…`);
+}
+const rL = window.Tableau.curseur({ id: 'L', label: 'L =', min: 0.06, max: 0.24, step: 0.02, valeur: 0.12, unite: 'H', commande: 'set_parameters', onchange: v => setParameters({ L_H: v }) });
+const rR = window.Tableau.curseur({ id: 'R', label: 'R =', min: 20, max: 110, step: 10, valeur: 50, unite: 'Ω', commande: 'set_parameters', onchange: v => setParameters({ R_ohm: v }) });
+$('reglage').replaceChildren(rL, rR);
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+window.Tableau.explication({ observer: [
+  { repere: 'courbe', texte: 'Le courant ne saute pas à sa valeur finale : il monte vite, puis de plus en plus lentement vers le palier.' },
+  { repere: 'palier', texte: 'Le palier est I₀ = E/(R + r) : la bobine se comporte alors comme sa résistance r.' },
+  { repere: 'L', texte: 'Une bobine de plus grande inductance L freine plus : l’établissement est plus lent, le palier ne change pas.' },
+  { repere: 'R', texte: 'Une résistance R plus grande abaisse le palier, et le courant l’atteint plus vite.' },
+] });
+const commandes = ['start', 'pause', 'resume', 'reset', 'set_parameters', 'play_until'];
+const config = { id: 'rl_tableau_observer', version: '1.0', title: 'L’établissement du courant : régler L et R', variants: [{ id: 'observer', label: 'avant l’équation' }], commands: commandes,
+  command_schema: { set_parameters: { L_H: '0,06..0,24 (pas de 0,02 H)', R_ohm: '20..110 (pas de 10 Ω)', conclusions: 'true | false (false tait la comparaison écrite)' }, play_until: { moment: Object.keys(PRESETS).join(' | ') + ' (règle L et R, garde la référence en pointillés, trace)' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Établissement du courant dans un dipôle RL sous E = 6 V (r = 10 Ω), avant l’équation. Curseurs L (0,06 à 0,24 H) et R (20 à 110 Ω). La courbe i(t) se trace au ralenti vers le palier I₀ = E/(R + r) ; la courbe précédente reste en pointillés. Référence L = 0,12 H, R = 50 Ω : palier 100 mA. L double : plus lent, même palier. R = 110 Ω : palier 50 mA, atteint plus vite.',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : (S.fait ? 'finished' : 'idle'), ce_qui_se_voit: ceQuiSeVoit(), moments: moments(),
+    parameters: { L_H: P.L, R_ohm: P.R }, I0_mA: +I0De(P).toFixed(1), courbe_precedente: S.fantome ? { L_H: S.fantome.L, R_ohm: S.fantome.R } : null, time_ms: +S.t.toFixed(2) }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, pause, resume, reset, set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Ferme K, puis change L ou R et compare les deux courbes.');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

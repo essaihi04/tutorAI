@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Les oscillations : régler L et C — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="rlc.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="À gauche, le circuit de décharge : le condensateur chargé, la résistance et la bobine, avec les valeurs de L et de C ; à droite, la courbe u_C(t) tracée en rouge après la bascule ; la courbe précédente reste en pointillés pour comparer"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Basculer K</button>
+    <span id="reglage" data-professor-control="set_parameters"></span>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="/media/simulations/physics/dipole-rc-tableau/zones.js"></script>
+<script>
+/*
+ * Les oscillations libres, AVANT l’équation (18 novembre 2026, logique du cours « Circuit RLC » : comme au RC et au RL,
+ * la courbe se voit et se manipule avant d’être mise en équation ; regimes.html fait déjà varier R + r).
+ * Condensateur chargé sous E = 6 V, basculé dans la bobine ; R + r = 20 Ω fixe (régime pseudo-périodique). Deux curseurs :
+ * L (0,025 → 0,4 H) et C (1 → 16 µF). « Basculer K » trace u_C(t) = E·e^(−(R + r)t/(2L))·cos(2πt/T) au ralenti,
+ * T = 2π√(LC) (la formule n’est PAS écrite : elle vient plus tard, lc_e8_T0) ; la durée T entre deux sommets (la
+ * pseudo-période, définie en lc_r1_pseudo) est cotée et lue. La courbe précédente reste en pointillés : L ou C plus grande
+ * → oscillations plus lentes ; la tension de départ ne change pas.
+ * Moments (play_until) : courbe (référence L = 0,1 H, C = 4 µF, T ≈ 4 ms), C_fois_4 (C = 16 µF, T ≈ 8 ms), L_fois_4 (L = 0,4 H).
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');
+const E = 6, RT = 20, TMAX = 20, VITESSE = 2.5;               // TMAX en ms ; 2,5 ms de courbe par seconde : ralenti
+const AX = 285, AX1 = 735, AY0 = 240, KU = 16;                 // axe des temps au milieu ; 16 px par volt
+const X = t => AX + t / TMAX * (AX1 - 20 - AX);
+const Y = u => AY0 - u * KU;
+const P = { L: 0.1, C: 4 };
+const TDe = p => 2 * Math.PI * Math.sqrt(p.L * p.C * 1e-6) * 1000;       // ms
+const uDe = (t, p) => E * Math.exp(-RT * t / 1000 / (2 * p.L)) * Math.cos(2 * Math.PI * t / TDe(p));
+const S = { t: 0, running: false, pause: false, fait: false, trace: null, fantome: null, jusqua: null, motif: '', emis: 0 };
+
+const Peint = {
+  sphere(ctx, x, y, rr, [clair, milieu, sombre]) {
+    const g = ctx.createRadialGradient(x - rr * .35, y - rr * .4, rr * .1, x, y, rr); g.addColorStop(0, clair); g.addColorStop(.45, milieu); g.addColorStop(1, sombre);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI * 2); ctx.fill();
+  },
+  resistor(ctx, x, y, w, h) {
+    ctx.save();
+    const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#f3e1bf'); g.addColorStop(.45, '#d9bf8f'); g.addColorStop(1, '#9c8358');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, h / 2.2); ctx.fill();
+    [[.24, '#d32f2f'], [.38, '#111'], [.52, '#111'], [.78, '#c9a227']].forEach(([f, k]) => { ctx.fillStyle = k; ctx.fillRect(x + w * f, y + 1, w * .07, h - 2); });
+    ctx.restore();
+  },
+  chimique(ctx, x, y, w, h) {
+    ctx.save();
+    const g = ctx.createLinearGradient(x, 0, x + w, 0); g.addColorStop(0, '#0b2a6b'); g.addColorStop(.35, '#2f6fe0'); g.addColorStop(.6, '#1d4fb8'); g.addColorStop(1, '#091f52');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, [w * .25, w * .25, 4, 4]); ctx.fill();
+    ctx.fillStyle = 'rgba(210,225,255,.75)'; ctx.fillRect(x + w * .7, y + 4, w * .16, h - 8);
+    ctx.restore();
+  },
+  bobine(ctx, x, y, w, h, n) {
+    ctx.save();
+    const g = ctx.createLinearGradient(x, y, x + w, y); g.addColorStop(0, '#3d4247'); g.addColorStop(.5, '#7a8187'); g.addColorStop(1, '#2f3337');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x + w * .18, y - 4, w * .64, h + 8, 4); ctx.fill();
+    for (let k = 0; k < n; k++) {
+      const yy = y + (k + .5) * h / n, gc = ctx.createLinearGradient(x, 0, x + w, 0);
+      gc.addColorStop(0, '#7a3d12'); gc.addColorStop(.35, '#e59a52'); gc.addColorStop(.6, '#c4672a'); gc.addColorStop(1, '#5e2c0b');
+      ctx.strokeStyle = gc; ctx.lineWidth = h / n * .8; ctx.beginPath(); ctx.ellipse(x + w / 2, yy, w / 2, h / n * .42, 0, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.restore();
+  },
+};
+
+function dessiner(c) {
+  scene.cadre(13);
+  c.direct(() => {
+    const ctx = c.ctx;
+    Peint.chimique(ctx, 96, 150, 19, 34);
+    Peint.resistor(ctx, 120, 61, 52, 18);
+    Peint.bobine(ctx, 207, 112, 30, 70, 7);
+  });
+  c.texte('Le condensateur chargé se vide dans la bobine', 380, 24, { couleur: 'blanc', taille: 17, align: 'center' });
+  c.ligne(60, 70, 60, 131); c.ligne(40, 131, 80, 131, { largeur: 3.4, couleur: 'cyan' }); c.ligne(40, 143, 80, 143, { largeur: 3.4, couleur: 'cyan' }); c.ligne(60, 143, 60, 230);
+  c.texte('C', 92, 128, { couleur: 'cyan', taille: 17 });
+  c.ligne(60, 70, 120, 70); c.ligne(172, 70, 222, 70);
+  c.ligne(222, 70, 222, 108); c.ligne(222, 186, 222, 230); c.ligne(60, 230, 222, 230);
+  c.texte('R', 146, 52, { couleur: 'orange', taille: 17, align: 'center' });
+  c.texte('L', 248, 152, { couleur: 'vert', taille: 17 });
+  c.repere('circuit', 26, 44, 240, 196, 'la maille de décharge : le condensateur C, la résistance R et la bobine L');
+  c.fleche(AX, AY0, AX1, AY0, { couleur: 'faible', largeur: 1.6 }); c.fleche(AX, 360, AX, 78, { couleur: 'faible', largeur: 1.6 });
+  for (let k = 1; k <= 4; k++) { const x = X(5 * k); c.ligne(x, AY0 - 4, x, AY0 + 4, { couleur: 'faible', largeur: 1.3, duree: .03 }); c.texte(String(5 * k), x, AY0 + 19, { couleur: 'faible', taille: 13, align: 'center', duree: .1 }); }
+  c.texte('t (ms)', AX1, AY0 - 10, { couleur: 'faible', taille: 14, align: 'right' });
+  c.texte('u_C (V)', AX + 8, 86, { couleur: 'faible', taille: 14 });
+  for (const v of [-6, 6]) { c.ligne(AX - 4, Y(v), AX + 4, Y(v), { couleur: 'faible', largeur: 1.3, duree: .03 }); c.texte(v < 0 ? '−6' : '6', AX - 8, Y(v) + 5, { couleur: 'faible', taille: 13, align: 'right', duree: .1 }); }
+  c.direct(() => {
+    c.texte(`L = ${fx(P.L, 3)} H`, 24, 262, { couleur: 'vert', taille: 17 });
+    c.texte(`C = ${fx(P.C, 1)} µF`, 140, 262, { couleur: 'cyan', taille: 17 });
+    c.texte('R + r = 20 Ω ; E = 6 V', 24, 290, { couleur: 'faible', taille: 15 });
+    c.repere('L', 196, 104, 70, 90, 'la bobine L'); c.repere('C', 30, 116, 80, 50, 'le condensateur C');
+    c.repere('reglages', 18, 244, 236, 52, 'les valeurs de L et de C');
+    if (S.fantome) {
+      c.courbe(u => [X(u * TMAX), Y(uDe(u * TMAX, S.fantome))], 260, { couleur: 'faible', largeur: 2, pointille: [5, 5], tremble: 0 });
+      c.repere('courbe_1', AX, Y(E) - 6, AX1 - AX, 2 * E * KU + 12, `la courbe d’avant : L = ${fx(S.fantome.L, 3)} H, C = ${fx(S.fantome.C, 1)} µF`);
+    }
+    if (S.trace) {
+      const tt = Math.min(S.t, TMAX), T = TDe(S.trace);
+      if (tt > 0) c.courbe(u => [X(u * tt), Y(uDe(u * tt, S.trace))], 280, { couleur: 'rouge', largeur: 2.8, tremble: 0 });
+      const zone = [AX, Y(E) - 6, AX1 - AX, 2 * E * KU + 12];
+      c.repere(S.fantome ? 'courbe_2' : 'courbe', ...zone, `la courbe u_C(t) : L = ${fx(S.trace.L, 3)} H, C = ${fx(S.trace.C, 1)} µF`);
+      if (S.fantome) c.repere('courbe', ...zone, 'la courbe u_C(t)');
+      if (tt >= T && T <= TMAX) {
+        const y = Y(E) - 14;
+        c.ligne(X(0), y, X(T), y, { couleur: 'jaune', largeur: 1.6, tremble: 0 });
+        c.ligne(X(0), y - 5, X(0), y + 5, { couleur: 'jaune', largeur: 1.6, tremble: 0 }); c.ligne(X(T), y - 5, X(T), y + 5, { couleur: 'jaune', largeur: 1.6, tremble: 0 });
+        c.texte(`T ≈ ${fx(T, 1)} ms`, X(T) + 8, y + 5, { couleur: 'jaune', taille: 16 });
+        c.repere('T', X(0), y - 14, Math.max(60, X(T) - X(0) + 90), 28, `T ≈ ${fx(T, 1)} ms, la durée entre deux sommets`);
+      }
+      if (S.fantome && S.fait && CONCL) {
+        const k = T / TDe(S.fantome);
+        const msg = Math.abs(k - 1) < 0.02 ? 'même rythme' : k > 1 ? `T × ${fx(k, 1)} : oscillations plus lentes` : `T ÷ ${fx(1 / k, 1)} : oscillations plus rapides`;
+        c.texte(msg, 138, 340, { couleur: k > 1.02 ? 'orange' : 'vert', taille: 16, align: 'center', max: 250 });
+        c.repere('comparaison', 14, 320, 250, 30, msg);
+      }
+    }
+    c.texte(`t = ${fx(Math.min(S.t, TMAX), 1)} ms`, AX1, 26, { couleur: 'vert', taille: 16, align: 'right' });
+    if (S.running || S.pause) c.texte('(ralenti)', AX1, 46, { couleur: 'faible', taille: 13, align: 'right' });
+  });
+  return c.fin();
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, dessiner);
+if (window.RCZones) scene.cadre = RCZones(scene, () => (performance.now() - scene.ouvert) / 1000, RCZones.gaucheFixe(255, { axMax: 2.4 }));
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(TMAX, S.t + dt * VITESSE);
+  if (S.jusqua != null && S.t >= S.jusqua) { S.t = S.jusqua; S.jusqua = null; S.running = false; S.pause = true; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || 'instant choisi') + '.'); pont.noter('pause'); pont.emettre(); return true; }
+  if (S.t >= TMAX) {
+    S.running = false; S.fait = true; $('run').textContent = 'Basculer K';
+    bulle($('feedback'), `T ≈ ${fx(TDe(S.trace), 1)} ms entre deux sommets. Change L ou C : la nouvelle courbe se trace, l’ancienne reste en pointillés.`, 'good');
+    pont.noter('finished'); pont.emettre();
+  } else if (performance.now() - S.emis > 400) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function lancer(motif) {
+  if (S.trace && (S.fait || S.t > 0) && (S.trace.L !== P.L || S.trace.C !== P.C)) S.fantome = { ...S.trace };
+  S.trace = { ...P }; S.t = 0; S.running = true; S.pause = false; S.fait = false; S.jusqua = null;
+  $('run').textContent = 'Pause'; bulle($('feedback'), motif || 'K basculé : le condensateur se vide dans la bobine…'); pont.noter('start', { L_H: P.L, C_uF: P.C }); pont.emettre();
+}
+const PRESETS = {
+  courbe: { p: { L: 0.1, C: 4 }, fantome: null, motif: 'la courbe de référence : L = 0,1 H, C = 4 µF, T ≈ 4 ms' },
+  C_fois_4: { p: { L: 0.1, C: 16 }, fantome: { L: 0.1, C: 4 }, motif: 'C × 4 (16 µF) : T ≈ 8 ms, oscillations plus lentes' },
+  L_fois_4: { p: { L: 0.4, C: 4 }, fantome: { L: 0.1, C: 4 }, motif: 'L × 4 (0,4 H) : T ≈ 8 ms, oscillations plus lentes' },
+};
+function moments() { const m = {}; for (const k of Object.keys(PRESETS)) m[k] = TMAX; return m; }
+let CONCL = new URLSearchParams(location.search).get('conclusions') !== '0';
+function playUntil(p) {
+  const pr = PRESETS[p.moment]; if (!pr) return;
+  P.L = pr.p.L; P.C = pr.p.C; rL.maj(P.L); rC.maj(P.C);
+  S.trace = null; S.fantome = pr.fantome ? { ...pr.fantome } : null;
+  const mo = CONCL ? pr.motif : pr.motif.split(' : ')[0];
+  lancer('Je trace ' + mo + '…'); S.motif = mo;
+  pont.noter('play_until', { moment: p.moment }); pont.emettre();
+}
+function ceQuiSeVoit() {
+  const m = [`Maille de décharge : condensateur C = ${fx(P.C, 1)} µF chargé sous 6 V, résistance (R + r = 20 Ω), bobine L = ${fx(P.L, 3)} H (peints) ; graphe u_C(t) de 0 à 20 ms, u_C de −6 à 6 V.`];
+  if (S.fantome) m.push(`En pointillés, la courbe d’avant (L = ${fx(S.fantome.L, 3)} H, C = ${fx(S.fantome.C, 1)} µF, T ≈ ${fx(TDe(S.fantome), 1)} ms).`);
+  if (!S.trace || (S.t <= 0 && !S.running)) m.push('K pas encore basculé.');
+  else {
+    const T = TDe(S.trace);
+    m.push(`Courbe rouge tracée jusqu’à t = ${fx(Math.min(S.t, TMAX), 1)} ms : u_C oscille, ses sommets baissent un peu.${S.t >= T ? ` T ≈ ${fx(T, 1)} ms est cotée entre deux sommets.` : ''}`);
+    if (S.fait && S.fantome && CONCL) m.push(T > TDe(S.fantome) + .02 ? 'La nouvelle courbe oscille plus lentement.' : T < TDe(S.fantome) - .02 ? 'La nouvelle courbe oscille plus vite.' : 'Même rythme.');
+  }
+  m.push('La formule de la période n’est pas écrite : elle vient après l’équation.');
+  return m.join(' ');
+}
+function start() { lancer(); }
+function pause() { if (!S.running) return; S.jusqua = null; S.running = false; S.pause = true; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running || !S.pause) return start(); S.running = true; S.pause = false; $('run').textContent = 'Pause'; pont.noter('resume'); pont.emettre(); }
+function reset() { S.t = 0; S.running = false; S.pause = false; S.fait = false; S.trace = null; S.fantome = null; S.jusqua = null; scene.sale = true; $('run').textContent = 'Basculer K'; bulle($('feedback'), 'Bascule K, puis change L ou C et compare les deux courbes.'); pont.emettre(); }
+function setParameters(p) {
+  if (p && p.conclusions !== undefined) { CONCL = !(p.conclusions === false || p.conclusions === 0 || /^(false|0|non)$/i.test(String(p.conclusions))); scene.sale = true; pont.noter('set_parameters', { conclusions: CONCL }); pont.emettre(); }
+  let change = false;
+  if (Number.isFinite(+p.L_H)) { P.L = Math.min(.4, Math.max(.025, Math.round(+p.L_H * 40) / 40)); rL.maj(P.L); change = true; }
+  if (Number.isFinite(+p.C_uF)) { P.C = Math.min(16, Math.max(1, Math.round(+p.C_uF))); rC.maj(P.C); change = true; }
+  if (!change) return;
+  pont.noter('set_parameters', { L_H: P.L, C_uF: P.C });
+  lancer(`L = ${fx(P.L, 3)} H, C = ${fx(P.C, 1)} µF : nouvelle décharge…`);
+}
+const rL = window.Tableau.curseur({ id: 'L', label: 'L =', min: 0.025, max: 0.4, step: 0.025, valeur: 0.1, unite: 'H', commande: 'set_parameters', onchange: v => setParameters({ L_H: v }) });
+const rC = window.Tableau.curseur({ id: 'C', label: 'C =', min: 1, max: 16, step: 1, valeur: 4, unite: 'µF', commande: 'set_parameters', onchange: v => setParameters({ C_uF: v }) });
+$('reglage').replaceChildren(rL, rC);
+$('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+window.Tableau.explication({ observer: [
+  { repere: 'courbe', texte: 'Après la bascule, u_C oscille : elle passe par zéro, change de signe, revient ; les sommets baissent un peu.' },
+  { repere: 'T', texte: 'T est la durée entre deux sommets successifs : la pseudo-période.' },
+  { repere: 'C', texte: 'Un condensateur de plus grande capacité : les oscillations sont plus lentes.' },
+  { repere: 'L', texte: 'Une bobine de plus grande inductance : les oscillations sont plus lentes aussi.' },
+] });
+const commandes = ['start', 'pause', 'resume', 'reset', 'set_parameters', 'play_until'];
+const config = { id: 'rlc_tableau_observer', version: '1.0', title: 'Les oscillations : régler L et C', variants: [{ id: 'observer', label: 'avant l’équation' }], commands: commandes,
+  command_schema: { set_parameters: { L_H: '0,025..0,4 (pas de 0,025 H)', C_uF: '1..16 (pas de 1 µF)', conclusions: 'true | false (false tait la comparaison écrite)' }, play_until: { moment: Object.keys(PRESETS).join(' | ') + ' (règle L et C, garde la référence en pointillés, trace)' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Décharge d’un condensateur chargé sous 6 V dans une bobine (R + r = 20 Ω), avant l’équation. Curseurs L (0,025 à 0,4 H) et C (1 à 16 µF). La courbe u_C(t) se trace au ralenti ; T, la durée entre deux sommets, est cotée ; la courbe précédente reste en pointillés. Référence L = 0,1 H, C = 4 µF : T ≈ 4 ms ; C × 4 ou L × 4 : T ≈ 8 ms.',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : (S.fait ? 'finished' : 'idle'), ce_qui_se_voit: ceQuiSeVoit(), moments: moments(),
+    parameters: { L_H: P.L, C_uF: P.C }, T_ms: +TDe(P).toFixed(2), courbe_precedente: S.fantome ? { L_H: S.fantome.L, C_uF: S.fantome.C } : null, time_ms: +S.t.toFixed(2) }),
+  progression: () => (S.fait ? 1 : 0),
+  executer: (cmd, p) => ({ start, pause, resume, reset, set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Bascule K, puis change L ou C et compare les deux courbes.');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

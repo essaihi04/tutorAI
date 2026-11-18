@@ -39,7 +39,11 @@ const S = { t: 0, running: false, pause: false, fait: false, trace: null, fantom
  * (set_parameters, ou ?conclusions=0) tait ce que l’élève doit trouver lui-même : les phrases écrites des étapes de CACHE
  * et le motif de leur arrêt sur image. `conclusions: true` les rend. Par défaut : true (comportement inchangé). */
 const lireConclusions = p => (!p || p.conclusions === undefined || p.conclusions === null || p.conclusions === '' ? null : !(p.conclusions === false || p.conclusions === 0 || /^(false|0|non)$/i.test(String(p.conclusions))));
-let CONCL = new URLSearchParams(location.search).get('conclusions') !== '0';   // false : ni « τ × 2 : charge plus lente » ni motif qui le dit
+let CONCL = new URLSearchParams(location.search).get('conclusions') !== '0';
+/* « Avant l'équation » (?avant=1, 18 novembre 2026, logique du cours : la courbe se voit et se manipule AVANT d'être
+ * mise en équation) : τ n'est pas encore défini, rien de τ ne s'écrit (ni « τ = R·C », ni 63 %, ni 5τ) ; la comparaison
+ * reste qualitative : « charge plus lente / plus rapide », « même valeur finale E ». */
+const AVANT = new URLSearchParams(location.search).get('avant') === '1';   // false : ni « τ × 2 : charge plus lente » ni motif qui le dit
 
 /* ── Appareils peints (règle 32 : ils ressemblent aux vrais, comme dans circuit-rc.html ; la craie garde fils et lettres) ── */
 const Peint = {
@@ -125,7 +129,7 @@ function dessiner(c) {
   c.ligne(AX, YE, AX1 - 10, YE, { couleur: 'faible', largeur: 1.2, pointille: [6, 6] });
   c.texte('E = 12 V', AX1 - 12, YE - 8, { couleur: 'faible', taille: 14, align: 'right' });
   c.repere('asymptote', AX, YE - 26, AX1 - AX, 36, 'l’asymptote u_C = E : la valeur finale');
-  c.texte('τ = R·C', 130, 300, { couleur: 'jaune', taille: 20, align: 'center' });
+  if (!AVANT) c.texte('τ = R·C', 130, 300, { couleur: 'jaune', taille: 20, align: 'center' });
   c.direct(() => {
     // K fermé dès que la charge a commencé.
     // (K est peint : levier fermé dès que la charge a commencé.)
@@ -137,8 +141,10 @@ function dessiner(c) {
     if (S.fantome) {
       const tf = tauDe(S.fantome);
       c.courbe(u => [X(u * TMAX), Y(uc(u * TMAX, tf))], 140, { couleur: 'faible', largeur: 2, pointille: [5, 5], tremble: 0 });
-      c.point(X(tf), Y(0.632 * E), 3.5, 'faible');
-      c.texte(`τ = ${fx(tf)} s`, X(tf) + 8, Y(0.632 * E) + 20, { couleur: 'blanc', taille: 13 });
+      if (!AVANT) {
+        c.point(X(tf), Y(0.632 * E), 3.5, 'faible');
+        c.texte(`τ = ${fx(tf)} s`, X(tf) + 8, Y(0.632 * E) + 20, { couleur: 'blanc', taille: 13 });
+      }
       c.repere('courbe_1', AX, YE - 4, Math.max(60, X(Math.min(TMAX, 3 * tf)) - AX), AY - YE + 4, `la courbe d’avant : R = ${fx(S.fantome.R)} kΩ, C = ${S.fantome.C} µF`);
     }
     if (S.trace) {
@@ -147,7 +153,7 @@ function dessiner(c) {
       const zone = [AX, YE - 4, Math.max(60, X(Math.min(TMAX, 3 * tau)) - AX), AY - YE + 4];
       c.repere(S.fantome ? 'courbe_2' : 'courbe', ...zone, `la courbe de charge : R = ${fx(S.trace.R)} kΩ, C = ${S.trace.C} µF`);
       if (S.fantome) c.repere('courbe', ...zone, 'la courbe de charge');
-      if (S.t >= tau) {
+      if (S.t >= tau && !AVANT) {
         const y63 = Y(0.632 * E);
         c.ligne(AX, y63, X(tau), y63, { couleur: 'jaune', largeur: 1.4, pointille: [4, 5], tremble: 0 });
         c.ligne(X(tau), y63, X(tau), AY, { couleur: 'jaune', largeur: 1.4, pointille: [4, 5], tremble: 0 });
@@ -158,11 +164,13 @@ function dessiner(c) {
         c.texte(`τ = ${fx(S.trace.R * 1000, 0)} × ${S.trace.C}·10⁻⁶ = ${fx(tau)} s`, 130, 334, { couleur: 'blanc', taille: 16, align: 'center', max: 240 });
         c.repere('formule', 20, 280, 230, 64, 'τ = R·C, calculée avec les valeurs');
       }
-      if (S.t >= 5 * tau) c.texte(`5τ = ${fx(5 * tau)} s : chargé`, 130, 364, { couleur: 'vert', taille: 16, align: 'center', max: 240 });
+      if (AVANT) { /* pas de 5τ avant l'équation */ }
+      else if (S.t >= 5 * tau) c.texte(`5τ = ${fx(5 * tau)} s : chargé`, 130, 364, { couleur: 'vert', taille: 16, align: 'center', max: 240 });
       else if (5 * tau > TMAX && S.t >= TMAX) c.texte(`5τ = ${fx(5 * tau)} s : pas encore chargé`, 130, 364, { couleur: 'orange', taille: 15, align: 'center', max: 240 });
       if (S.fantome && S.fait && CONCL) {
         const tf = tauDe(S.fantome), k = tau / tf;
-        const msg = Math.abs(k - 1) < 0.02 ? 'même τ : la même charge' : k > 1 ? `τ × ${fx(k, 1)} : charge plus lente` : `τ ÷ ${fx(1 / k, 1)} : charge plus rapide`;
+        const msg = AVANT ? (Math.abs(k - 1) < 0.02 ? 'la même charge' : k > 1 ? 'charge plus lente, même E' : 'charge plus rapide, même E')
+          : Math.abs(k - 1) < 0.02 ? 'même τ : la même charge' : k > 1 ? `τ × ${fx(k, 1)} : charge plus lente` : `τ ÷ ${fx(1 / k, 1)} : charge plus rapide`;
         c.texte(msg, 130, 394, { couleur: k > 1.02 ? 'orange' : 'vert', taille: 16, align: 'center', max: 240 });
       }
     }
@@ -184,7 +192,7 @@ scene.avancer = dt => {
   if (S.t >= TMAX) {
     S.running = false; S.fait = true; $('run').textContent = 'Fermer K';
     const tau = tauDe(S.trace);
-    bulle($('feedback'), `τ = R·C = ${fx(tau)} s. Change R ou C : la nouvelle charge se trace, l’ancienne reste en pointillés.`, 'good');
+    bulle($('feedback'), AVANT ? 'Chargé : u_C est arrivée à E. Change R ou C : la nouvelle charge se trace, l’ancienne reste en pointillés.' : `τ = R·C = ${fx(tau)} s. Change R ou C : la nouvelle charge se trace, l’ancienne reste en pointillés.`, 'good');
     pont.noter('finished'); pont.emettre();
   } else if (performance.now() - S.emis > 400) { S.emis = performance.now(); pont.emettre(); }
   return true;
@@ -205,19 +213,20 @@ function playUntil(p) {
   const pr = PRESETS[p.moment]; if (!pr) return;
   P.R = pr.p.R; P.C = pr.p.C; rR.maj(P.R); rC.maj(P.C);
   S.trace = null; S.fantome = pr.fantome ? { ...pr.fantome } : null;
-  const mo = CONCL ? pr.motif : pr.motif.split(' : ')[0];
+  const mo = CONCL && !AVANT ? pr.motif : pr.motif.split(' : ')[0];
   lancer('Je trace ' + mo + '…'); S.motif = mo;
   pont.noter('play_until', { moment: p.moment }); pont.emettre();
 }
 function ceQuiSeVoit() {
   const m = [`Circuit E = 12 V, R = ${fx(P.R)} kΩ, C = ${P.C} µF (générateur, interrupteur K et résistor à bandes peints ; symbole du condensateur à la craie avec un condensateur chimique bleu peint à côté) ; graphe u_C(t) de 0 à 2,5 s, asymptote E = 12 V.`];
-  if (S.fantome) m.push(`En pointillés, la courbe d’avant (R = ${fx(S.fantome.R)} kΩ, C = ${S.fantome.C} µF, τ = ${fx(tauDe(S.fantome))} s).`);
+  if (S.fantome) m.push(`En pointillés, la courbe d’avant (R = ${fx(S.fantome.R)} kΩ, C = ${S.fantome.C} µF${AVANT ? '' : `, τ = ${fx(tauDe(S.fantome))} s`}).`);
   if (!S.trace || (S.t <= 0 && !S.running)) m.push('K ouvert : pas encore de charge.');
   else {
     const tau = tauDe(S.trace);
     m.push(`Courbe rouge tracée jusqu’à t = ${fx(Math.min(S.t, TMAX))} s, u_C = ${fx(uc(Math.min(S.t, TMAX), tau), 1)} V.`);
-    if (S.t >= tau) m.push(`τ = ${fx(tau)} s est marqué à 0,63·E et écrit : τ = R·C.`);
-    if (S.fait && S.fantome) m.push(tau > tauDe(S.fantome) + 1e-6 ? 'La nouvelle courbe monte plus lentement vers le même E.' : tau < tauDe(S.fantome) - 1e-6 ? 'La nouvelle courbe monte plus vite vers le même E.' : 'Les deux courbes se superposent : même τ.');
+    if (S.t >= tau && !AVANT) m.push(`τ = ${fx(tau)} s est marqué à 0,63·E et écrit : τ = R·C.`);
+    if (S.fait && S.fantome) m.push(tau > tauDe(S.fantome) + 1e-6 ? 'La nouvelle courbe monte plus lentement vers le même E.' : tau < tauDe(S.fantome) - 1e-6 ? 'La nouvelle courbe monte plus vite vers le même E.' : AVANT ? 'Les deux courbes se superposent : la même charge.' : 'Les deux courbes se superposent : même τ.');
+    if (AVANT) m.push('Mode « avant l’équation » : τ n’est pas encore défini, rien de τ n’est écrit.');
   }
   return m.join(' ');
 }
@@ -240,7 +249,7 @@ $('reglage').replaceChildren(rR, rC);
 $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
 window.Tableau.explication({ tau_rc: [
   { repere: 'courbe', texte: 'La courbe de charge monte vite, puis de plus en plus lentement vers E.' },
-  { repere: 'tau', texte: 'τ se lit là où la courbe atteint 63 % de E.' },
+  ...(AVANT ? [] : [{ repere: 'tau', texte: 'τ se lit là où la courbe atteint 63 % de E.' }]),
   { repere: 'R', texte: 'Une résistance plus grande freine le courant : la charge est plus lente.' },
   { repere: 'C', texte: 'Un condensateur de plus grande capacité met plus de temps à se remplir.' },
   { repere: 'asymptote', texte: 'R et C changent la durée, pas la valeur finale E.' },
@@ -249,7 +258,7 @@ const commandes = ['start', 'pause', 'resume', 'reset', 'set_parameters', 'play_
 const config = { id: 'rc_tableau_tau_rc', version: '1.0', title: 'τ = R·C : régler R et C', variants: [{ id: 'tau_rc', label: 'τ = R·C' }], commands: commandes,
   command_schema: { set_parameters: { R_kohm: '0,5..3 (pas de 0,5 kΩ)', C_uF: '100..470 (pas de 10 µF)', conclusions: 'true | false (question d’observation : false tait la comparaison écrite)' }, play_until: { moment: Object.keys(PRESETS).join(' | ') + ' (règle R et C, garde la référence en pointillés, trace la charge)' } } };
 const pont = protocole({ id: config.id, commandes, config,
-  texte: 'Charge d’un condensateur sous E = 12 V. Curseurs R (0,5 à 3 kΩ) et C (100 à 470 µF). La courbe u_C(t) se trace au ralenti, τ = R·C est marqué à 0,63·E ; la courbe précédente reste en pointillés. Référence R = 1 kΩ, C = 220 µF : τ = 0,22 s ; R doublée : τ = 0,44 s. E change la valeur finale, pas τ.',
+  texte: AVANT ? 'Charge d’un condensateur sous E = 12 V, avant l’équation : curseurs R (0,5 à 3 kΩ) et C (100 à 470 µF). La courbe u_C(t) se trace au ralenti ; la courbe précédente reste en pointillés. Une R ou une C plus grande donne une charge plus lente vers la même valeur finale E.' : 'Charge d’un condensateur sous E = 12 V. Curseurs R (0,5 à 3 kΩ) et C (100 à 470 µF). La courbe u_C(t) se trace au ralenti, τ = R·C est marqué à 0,63·E ; la courbe précédente reste en pointillés. Référence R = 1 kΩ, C = 220 µF : τ = 0,22 s ; R doublée : τ = 0,44 s. E change la valeur finale, pas τ.',
   etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : (S.fait ? 'finished' : 'idle'), ce_qui_se_voit: ceQuiSeVoit(), moments: moments(),
     parameters: { R_kohm: P.R, C_uF: P.C }, tau_s: +tauDe(P).toFixed(4), courbe_precedente: S.fantome ? { R_kohm: S.fantome.R, C_uF: S.fantome.C, tau_s: +tauDe(S.fantome).toFixed(4) } : null, time_s: +S.t.toFixed(3) }),
   progression: () => (S.fait ? 1 : 0),
