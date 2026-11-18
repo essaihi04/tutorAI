@@ -266,3 +266,8 @@ pistes du cours existent et sont gardées (questions inchangées, même texte).
   time_s de la fiche, donc le kit jetait chaque `play_until {moment: <bloc>}` ; ils valent maintenant 1,1 à 1,9 (fiche
   1,05, `fin` 1,95, lacunes 2, noms inchangés). La page garde son propre plancher de 15 px (indices compris) et, sur un
   petit écran, se partage en parties (« partie n sur N · touche : la suite ») ; à l'impression, toute la fiche.
+- **`op_s1_frequence`, passage à 30 Hz** : dans `cuve.html` (vue `frequence`), `set_parameters {frequence_hz: 30}` plaçait
+  la scène sur la mesure finie (`nouvelle_mesure`) ; le `play_until frequence_changee` dit juste après tombait dans le
+  passé et était refusé, et le résultat à 30 Hz était à l'écran avant que la voix le montre. Demandé avant la bascule, le
+  réglage place maintenant la scène sur l'instant de la bascule : la voix montre les rides se resserrer, puis la nouvelle
+  mesure. Vérifié dans Chromium (0,8 s → 1,0 s → 1,15 s → 1,79 s). Corrige aussi le cours en ligne (même page, mêmes moments).

@@ -431,7 +431,11 @@ function setParameters(p) {
   const N = +p.frequence_hz < 25 ? 20 : 30;
   if (vue === 'frequence') {
     // Les deux réglages font partie du déroulé : on se place sur la mesure correspondante.
-    setTime({ time_s: N === 20 ? moments().regle_posee : moments().nouvelle_mesure });
+    // 30 Hz demandé AVANT la bascule (la voix : « on passe à 30 Hz », puis « regarde : les crêtes se resserrent ») : la
+    // scène se place sur l’instant de la bascule, pas sur la mesure finie — sinon frequence_changee, déjà dépassé, était
+    // refusé et l’élève voyait le résultat avant que la voix le montre (op_s1, 18 novembre 2026).
+    const P = plan();
+    setTime({ time_s: N === 20 ? moments().regle_posee : S.t < P.tc ? P.tc : moments().nouvelle_mesure });
   } else {
     S.N = N; S.regle = null; scene.sale = true;
     const fin = plan().fin; if (S.t >= fin) { S.t = fin; S.fait = true; S.running = false; $('run').textContent = 'Rejouer'; }
