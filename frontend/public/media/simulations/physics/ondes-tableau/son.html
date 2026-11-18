@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le son : deux expériences — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ondes.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Deux expériences sur le son : une bougie devant un haut-parleur, puis une sonnerie sous une cloche en verre dont on retire l'air"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Le son : deux expériences jouées l'une après l'autre (cours des ondes, diapo I.5 `wx_i3c_son`, 18 novembre 2026 :
+ * « chaque phénomène vu en animation avant sa conclusion »).
+ *  1. Haut-parleur et bougie : les couches d'air avancent et reculent dans la direction de propagation, la flamme
+ *     aussi → onde longitudinale (écrit seulement au moment `longitudinale`, ou jamais si conclusions: false).
+ *  2. Sonnerie sous une cloche en verre : la pompe retire l'air, les arcs de son qui sortent faiblissent puis
+ *     disparaissent, alors que la sonnerie vibre toujours → pas de son dans le vide.
+ * Une poignée sur la jauge « air » (à droite de la cloche) : l'élève remet ou retire l'air lui-même
+ * (set_parameters {air_pct: 0..100}). Instants : hp_marche, flamme_bouge, longitudinale, cloche_sonne, pompe,
+ * son_faiblit, vide, conclusion_vide.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const { P } = window.OndesTableau;
+const $ = id => document.getElementById(id);
+const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0, airManuel: null, conclusions: true };
+const M = { hp_marche: 0.6, flamme_bouge: 2.6, longitudinale: 5.0, cloche_sonne: 6.6, pompe: 8.4, son_faiblit: 10.9, vide: 13.4, conclusion_vide: 15.0 };
+const MOTIFS = { hp_marche: 'le haut-parleur fonctionne : les couches d’air avancent et reculent', flamme_bouge: 'le son arrive à la bougie : la flamme avance et recule',
+  longitudinale: 'même direction pour l’air et pour la propagation : onde longitudinale', cloche_sonne: 'la sonnerie sonne sous la cloche pleine d’air : on l’entend',
+  pompe: 'la pompe commence à retirer l’air', son_faiblit: 'moins d’air : le son faiblit', vide: 'plus d’air : on n’entend plus rien, la sonnerie vibre toujours',
+  conclusion_vide: 'le son ne se propage pas dans le vide' };
+const DUREE = 16;
+const vu = m => S.t >= M[m] - 1e-3;
+/** Fraction d'air dans la cloche (1 = pleine). La pompe la vide de `pompe` à `vide` ; l'élève peut la régler. */
+function air() {
+  if (S.airManuel != null) return S.airManuel;
+  if (S.t < M.pompe) return 1;
+  return Math.max(0, 1 - (S.t - M.pompe) / (M.vide - M.pompe));
+}
+
+/* ── Expérience 1 : haut-parleur, couches d'air, bougie ── */
+const HP = { x: 46, y: 200 }, XB = 312, V_VIS = 140, LAMBDA = 46, AMP = 7, FREQ = 3;
+function deplacement(x, t) {                       // déplacement horizontal d'une couche d'air (px), nul avant le front
+  const t0 = M.hp_marche, front = HP.x + 30 + V_VIS * (t - t0);
+  if (t < t0 || x > front) return 0;
+  return AMP * Math.sin(2 * Math.PI * (FREQ * (t - t0) - (x - HP.x - 30) / LAMBDA));
+}
+function peindreHautParleur(ctx, x, y, dx) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; P.rr(ctx, x - 30 + 4, y - 48 + 6, 40, 96, 6); ctx.fill();
+  ctx.fillStyle = P.lin(ctx, x - 30, 0, x + 10, 0, [[0, '#1f2937'], [.5, '#4b5563'], [1, '#111827']]); P.rr(ctx, x - 30, y - 48, 40, 96, 6); ctx.fill();
+  ctx.fillStyle = P.lin(ctx, x + 6 + dx, 0, x + 26 + dx, 0, [[0, '#6b7280'], [1, '#d1d5db']]);       // la membrane (cône) qui avance et recule
+  ctx.beginPath(); ctx.moveTo(x + 8, y - 14); ctx.lineTo(x + 24 + dx, y - 40); ctx.lineTo(x + 24 + dx, y + 40); ctx.lineTo(x + 8, y + 14); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#111827'; ctx.beginPath(); ctx.ellipse(x + 10 + dx * .4, y, 5, 12, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+function peindreBougie(ctx, x, y, dx, allumee) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(x + 3, y + 76, 22, 5, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = P.lin(ctx, x - 14, 0, x + 14, 0, [[0, '#d6c7a1'], [.4, '#fffbea'], [1, '#bfae84']]); P.rr(ctx, x - 14, y + 10, 28, 66, 4); ctx.fill();
+  ctx.strokeStyle = '#111827'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, y + 10); ctx.lineTo(x, y + 2); ctx.stroke();      // la mèche
+  if (allumee) {
+    const fx = x + dx * 1.6;
+    const g = ctx.createRadialGradient(fx, y - 10, 2, fx, y - 12, 26); g.addColorStop(0, 'rgba(255,247,200,.95)'); g.addColorStop(.5, 'rgba(251,191,36,.55)'); g.addColorStop(1, 'rgba(251,146,60,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(fx, y - 12, 26, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fbbf24'; ctx.beginPath(); ctx.moveTo(x - 6, y + 2); ctx.quadraticCurveTo(fx - 10, y - 14, fx, y - 32); ctx.quadraticCurveTo(fx + 10, y - 14, x + 6, y + 2); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#fff7d6'; ctx.beginPath(); ctx.ellipse(x + dx * .8, y - 6, 3.5, 8, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+function dessinerExperience1(c) {
+  c.texte('1. Haut-parleur et bougie', 14, 34, { couleur: 'cyan', taille: 18 });
+  c.direct(() => {
+    const ctx = c.ctx, t = S.t, marche = t >= M.hp_marche;
+    // L'air : des couches verticales de grains qui avancent et reculent (zones serrées = compressions).
+    const xs = []; for (let x = HP.x + 34; x <= XB - 26; x += 9) xs.push(x);
+    ctx.save();
+    for (const x0 of xs) {
+      const x = x0 + deplacement(x0, t);
+      for (let y = 150; y <= 250; y += 10) { ctx.fillStyle = 'rgba(186,230,253,.75)'; ctx.beginPath(); ctx.arc(x, y + ((x0 * 7) % 5) - 2, 2.1, 0, Math.PI * 2); ctx.fill(); }
+    }
+    ctx.restore();
+    peindreHautParleur(ctx, HP.x, HP.y, marche ? 4 * Math.sin(2 * Math.PI * FREQ * (t - M.hp_marche)) : 0);
+    c.repere('haut_parleur', HP.x - 32, HP.y - 52, 64, 104, 'le haut-parleur');
+    c.repere('air', HP.x + 34, 140, XB - HP.x - 60, 120, 'les couches d’air');
+    const dxB = deplacement(XB - 28, t);
+    peindreBougie(ctx, XB, 200, dxB, true);
+    c.repere('bougie', XB - 30, 160, 60, 120, 'la flamme de la bougie');
+    c.texte('bougie', XB, 300, { couleur: 'faible', taille: 15, align: 'center' });
+    c.texte('haut-parleur', HP.x - 10, 272, { couleur: 'faible', taille: 15, align: 'center' });
+    if (marche) {
+      c.fleche(HP.x + 40, 128, XB - 20, 128, { couleur: 'jaune', largeur: 2.2, duree: 0 });
+      c.texte('propagation du son', (HP.x + XB) / 2 + 10, 118, { couleur: 'jaune', taille: 16, align: 'center' });
+      c.repere('propagation', HP.x + 40, 104, XB - HP.x - 60, 30, 'la direction de propagation');
+    }
+    if (vu('flamme_bouge')) {
+      c.cote(XB - 26, 330, XB + 26, 330, '', { couleur: 'orange', largeur: 2 });
+      c.texte('la flamme : ↔', XB, 356, { couleur: 'orange', taille: 16, align: 'center' });
+      c.repere('flamme', XB - 40, 318, 80, 46, 'la flamme avance et recule');
+    }
+    if (vu('longitudinale') && S.conclusions) {
+      c.texte('même direction → onde longitudinale', 22, 392, { couleur: 'vert', taille: 18, max: 350 });
+      c.repere('conclusion_longi', 16, 372, 356, 28, 'le son est une onde longitudinale');
+    }
+  });
+}
+
+/* ── Expérience 2 : la sonnerie sous la cloche en verre ── */
+const CL = { x: 560, y: 300, r: 104 };
+const GRAINS = (() => { let g = 11; const h = () => (g = (g * 16807) % 2147483647) / 2147483647;     // tirage fixe : mêmes grains à chaque image
+  return Array.from({ length: 70 }, () => { const a = Math.PI * (0.06 + 0.88 * h()), r = CL.r * (0.22 + 0.7 * Math.sqrt(h())); return [CL.x + Math.cos(a) * r, CL.y - 8 - Math.sin(a) * r * 0.95]; }); })();
+const JAUGE = { x: 720, y0: 120, y1: 290 };
+function peindreCloche(ctx) {
+  ctx.save();
+  ctx.fillStyle = P.lin(ctx, 0, CL.y, 0, CL.y + 18, [[0, '#9ca3af'], [1, '#374151']]); P.rr(ctx, CL.x - CL.r - 22, CL.y, 2 * CL.r + 44, 16, 4); ctx.fill();   // le plateau
+  const g = ctx.createRadialGradient(CL.x - 40, CL.y - 70, 10, CL.x, CL.y - 30, CL.r + 10); g.addColorStop(0, 'rgba(224,242,254,.20)'); g.addColorStop(1, 'rgba(125,211,252,.07)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(CL.x - CL.r, CL.y); ctx.arc(CL.x, CL.y, CL.r, Math.PI, 0); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(224,242,254,.75)'; ctx.lineWidth = 2.4; ctx.beginPath(); ctx.arc(CL.x, CL.y, CL.r, Math.PI, 0); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = 5; ctx.beginPath(); ctx.arc(CL.x, CL.y, CL.r - 12, Math.PI * 1.15, Math.PI * 1.35); ctx.stroke();   // reflet du verre
+  ctx.fillStyle = '#cbd5e1'; ctx.beginPath(); ctx.arc(CL.x, CL.y - CL.r - 6, 7, 0, Math.PI * 2); ctx.fill();                                                  // le bouton
+  ctx.restore();
+}
+function peindreSonnerie(ctx, vibre, t) {
+  const x = CL.x, y = CL.y - 34, k = vibre ? Math.sin(2 * Math.PI * 7 * t) : 0;
+  ctx.save();
+  ctx.fillStyle = '#374151'; ctx.fillRect(x - 3, y + 8, 6, 26);                                         // le pied
+  const g = ctx.createRadialGradient(x - 8, y - 10, 2, x, y, 24); g.addColorStop(0, '#fef3c7'); g.addColorStop(.5, '#f59e0b'); g.addColorStop(1, '#78350f');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y - 4, 22, Math.PI, 0); ctx.lineTo(x + 24, y + 8); ctx.lineTo(x - 24, y + 8); ctx.closePath(); ctx.fill();   // le timbre
+  ctx.strokeStyle = '#9ca3af'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x + 40, y + 30); ctx.lineTo(x + 28 + 6 * k, y + 2); ctx.stroke();       // le marteau
+  ctx.fillStyle = '#e5e7eb'; ctx.beginPath(); ctx.arc(x + 27 + 6 * k, y, 5, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+function peindrePompe(ctx, marche, t) {
+  ctx.save();
+  ctx.strokeStyle = '#64748b'; ctx.lineWidth = 7; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(CL.x + 40, CL.y + 16); ctx.lineTo(CL.x + 40, CL.y + 44); ctx.lineTo(668, CL.y + 44); ctx.stroke();   // le tuyau
+  ctx.fillStyle = P.lin(ctx, 668, 0, 712, 0, [[0, '#1e3a8a'], [.5, '#3b82f6'], [1, '#1e3a8a']]); P.rr(ctx, 668, CL.y + 22, 44, 50, 6); ctx.fill();   // la pompe
+  const p = marche ? 8 * Math.sin(2 * Math.PI * 1.5 * t) : 0;
+  ctx.fillStyle = '#cbd5e1'; ctx.fillRect(686, CL.y + 2 + p, 8, 22);
+  ctx.restore();
+}
+function dessinerExperience2(c) {
+  c.texte('2. Sonnerie sous une cloche en verre', 400, 34, { couleur: 'cyan', taille: 18 });
+  if (!vu('cloche_sonne') && S.airManuel == null) return;
+  c.direct(() => {
+    const ctx = c.ctx, t = S.t, a = air();
+    peindreCloche(ctx);
+    ctx.save();
+    for (let i = 0; i < Math.round(GRAINS.length * a); i++) { const [x, y] = GRAINS[i]; ctx.fillStyle = 'rgba(186,230,253,.75)'; ctx.beginPath(); ctx.arc(x + Math.sin(t * 3 + i) * 1.5, y, 2.1, 0, Math.PI * 2); ctx.fill(); }
+    ctx.restore();
+    peindreSonnerie(ctx, true, t);
+    // Les arcs de son qui sortent de la cloche : leur éclat suit l'air qui reste (rien dans le vide).
+    if (a > 0.02) for (let k = 0; k < 3; k++) { const r = CL.r + 12 + ((t * 40 + k * 22) % 66); P.front(ctx, CL.x, CL.y - 34, r, Math.PI * 1.08, Math.PI * 1.92, '250,204,21', a * (1 - (r - CL.r - 12) / 66)); }
+    peindrePompe(ctx, vu('pompe') && a > 0 && S.airManuel == null, t);
+    c.repere('cloche', CL.x - CL.r, CL.y - CL.r - 14, 2 * CL.r, CL.r + 30, 'la cloche en verre');
+    c.repere('sonnerie', CL.x - 30, CL.y - 70, 76, 70, 'la sonnerie, qui vibre toujours');
+    c.repere('pompe', 664, CL.y + 18, 52, 58, 'la pompe qui retire l’air');
+    // La jauge de l'air, avec sa poignée (l'élève la tire).
+    c.ligne(JAUGE.x, JAUGE.y0, JAUGE.x, JAUGE.y1, { couleur: 'faible', largeur: 2, duree: 0 });
+    const yP = JAUGE.y1 - a * (JAUGE.y1 - JAUGE.y0);
+    c.ligne(JAUGE.x, JAUGE.y1, JAUGE.x, yP, { couleur: 'cyan', largeur: 6, duree: 0 });
+    P.perle(ctx, JAUGE.x, yP, 9, 'cyan');
+    c.texte('air', JAUGE.x, JAUGE.y0 - 26, { couleur: 'cyan', taille: 16, align: 'center' });
+    c.texte(`${fr(a * 100, 0)} %`, JAUGE.x, JAUGE.y0 - 8, { couleur: 'cyan', taille: 16, align: 'center' });
+    c.repere('jauge_air', JAUGE.x - 22, JAUGE.y0 - 44, 44, JAUGE.y1 - JAUGE.y0 + 54, 'la quantité d’air dans la cloche');
+    const entendu = a > 0.66 ? 'on entend : fort' : a > 0.02 ? 'on entend : faible' : 'on n’entend plus rien';
+    c.texte(entendu, CL.x, 360, { couleur: a > 0.02 ? 'jaune' : 'rose', taille: 17, align: 'center' });
+    c.repere('entendu', CL.x - 120, 340, 240, 28, 'ce qu’on entend');
+    if (vu('conclusion_vide') && S.conclusions && a <= 0.02) {
+      c.texte('sans air (le vide) : pas de son', 412, 392, { couleur: 'vert', taille: 18, max: 340 });
+      c.repere('conclusion_vide', 404, 372, 346, 28, 'le son ne se propage pas dans le vide');
+    }
+  });
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(23); c.ligne(380, 50, 380, 400, { couleur: 'tresfaible', largeur: 1, duree: 0 }); dessinerExperience1(c); dessinerExperience2(c); return c.fin(); });
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(DUREE, S.t + dt);
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.jusqua = null; S.running = false; $('run').textContent = 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || 'instant choisi') + '.'); pont.noter('pause'); pont.emettre();
+    return true;
+  }
+  if (S.t >= DUREE) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), 'La flamme bouge dans la direction de propagation ; sans air, plus de son.', 'good'); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function playUntil(p) {
+  const nom = p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.airManuel = null; }
+  S.jusqua = Math.min(DUREE, Math.max(0.01, cible)); S.motif = nom ? MOTIFS[nom] : '';
+  S.running = true; S.fait = false; $('run').textContent = 'Pause'; scene.sale = true;
+  pont.noter('play_until', { moment: nom }); pont.emettre();
+}
+function start() { S.jusqua = null; S.t = 0; S.airManuel = null; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Le haut-parleur fonctionne…'); pont.noter('start'); pont.emettre(); }
+function pause() { if (!S.running) return; S.jusqua = null; S.running = false; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait) return start(); S.running = true; $('run').textContent = 'Pause'; pont.noter('resume'); pont.emettre(); }
+function reset() { S.t = 0; S.running = false; S.fait = false; S.jusqua = null; S.airManuel = null; scene.sale = true; $('run').textContent = 'Lancer'; bulle($('feedback'), 'Prêt.'); pont.emettre(); }
+function setTime(p) { const t = +p.time_s; if (!Number.isFinite(t)) return; S.running = false; S.jusqua = null; S.t = Math.min(DUREE, Math.max(0, t)); S.fait = S.t >= DUREE; scene.sale = true; pont.emettre(); }
+function setParameters(p) {
+  if (p.air_pct != null && Number.isFinite(+p.air_pct)) { S.airManuel = Math.min(1, Math.max(0, Math.round(+p.air_pct / 5) * 5 / 100)); if (S.t < M.cloche_sonne) S.t = M.cloche_sonne; }
+  if (p.conclusions != null) S.conclusions = p.conclusions !== false && p.conclusions !== 'false';
+  scene.sale = true; pont.noter('set_parameters', { air_pct: S.airManuel == null ? null : S.airManuel * 100, conclusions: S.conclusions }); pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : (S.t > 0 && !S.fait) ? resume() : start());
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => { const [x, y] = scene.local(px, py); return vu('cloche_sonne') && Math.abs(x - JAUGE.x) < 24 && y > JAUGE.y0 - 16 && y < JAUGE.y1 + 16 ? 'air' : null; },
+  bouger: (id, px, py) => { const [, y] = scene.local(px, py); setParameters({ air_pct: 100 * (JAUGE.y1 - y) / (JAUGE.y1 - JAUGE.y0) }); },
+  lacher: () => bulle($('feedback'), air() > 0.02 ? `Air : ${fr(air() * 100, 0)} % — le son sort de la cloche.` : 'Plus d’air : la sonnerie vibre, mais on n’entend rien.'),
+});
+
+function ceQuiSeVoit() {
+  const m = ['Deux expériences côte à côte.'];
+  if (S.t < M.hp_marche) m.push('À gauche : un haut-parleur éteint, des grains d’air au repos, une bougie allumée.');
+  else m.push('À gauche : le haut-parleur fonctionne, les couches d’air avancent et reculent ; flèche jaune « propagation du son » vers la bougie.');
+  if (vu('flamme_bouge')) m.push('La flamme de la bougie avance et recule, dans la même direction que la propagation (flèche orange ↔).');
+  if (vu('longitudinale') && S.conclusions) m.push('Écrit en vert : même direction → onde longitudinale.');
+  if (vu('cloche_sonne') || S.airManuel != null) {
+    const a = air();
+    m.push(`À droite : une sonnerie qui vibre sous une cloche en verre ; jauge d’air à ${fr(a * 100, 0)} %.`);
+    m.push(a > 0.66 ? 'Des arcs de son jaunes sortent de la cloche : on entend fort.' : a > 0.02 ? 'Les arcs de son sont pâles : on entend faiblement.' : 'Aucun arc de son ne sort : on n’entend plus rien, alors que la sonnerie vibre toujours.');
+    if (vu('pompe') && S.airManuel == null && a > 0) m.push('La pompe retire l’air.');
+  }
+  if (vu('conclusion_vide') && S.conclusions && air() <= 0.02) m.push('Écrit en vert : sans air (le vide), pas de son.');
+  return m.join(' ');
+}
+window.Tableau.explication({ son: [
+  { repere: 'air', texte: 'Les couches d’air avancent et reculent, dans la direction où va le son.' },
+  { repere: 'flamme', texte: 'La flamme bouge dans la même direction : le son est une onde longitudinale.' },
+  { repere: 'jauge_air', texte: 'Moins il reste d’air dans la cloche, plus le son est faible.' },
+  { repere: 'sonnerie', texte: 'Sans air, la sonnerie vibre toujours mais on n’entend rien : le son a besoin d’un milieu matériel.' },
+] });
+const commandes = ['start', 'pause', 'resume', 'reset', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'ondes_tableau_son', version: '1.0', title: 'Le son : deux expériences', variants: [{ id: 'son', label: 'son' }], commands: commandes,
+  command_schema: { play_until: { moment: Object.keys(MOTIFS).join(' | ') + ' (rejoue et se fige à cet instant clé)' }, set_parameters: { air_pct: '0..100 (pas de 5) : air restant dans la cloche', conclusions: 'true | false (false : les conclusions vertes ne s’écrivent pas)' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Le son : 1) une bougie devant un haut-parleur, la flamme avance et recule dans la direction de propagation (onde longitudinale) ; 2) une sonnerie sous une cloche dont on retire l’air : le son faiblit puis disparaît (pas de son dans le vide).',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : (S.t > 0 ? 'paused' : 'idle'), ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'son', moments: M, parameters: { air_pct: Math.round(air() * 100), conclusions: S.conclusions }, time_s: +S.t.toFixed(2) }),
+  progression: () => S.t / DUREE,
+  executer: (cmd, p) => ({ start, pause, resume, reset, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Lance : d’abord la bougie, puis la cloche.');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
