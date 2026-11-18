@@ -492,11 +492,22 @@ def fichier_sim(url: str) -> str:
 
 
 def source_sim(url: str) -> str:
+    """Le code de la page, suivi des scripts de SON dossier qu'elle charge (18 novembre 2026, maths : les vues de
+    calculs.html / etapes.html lisent leurs lignes, moments et repères dans calculs-vues.js ou calculs-donnees.js ;
+    sans eux, chaque moment de ces vues était signalé « introuvable » à tort)."""
     chemin = PUBLIC / urlparse(url).path.lstrip("/")
     try:
-        return chemin.read_text(encoding="utf-8")
+        code = chemin.read_text(encoding="utf-8")
     except OSError:
         return ""
+    for src in re.findall(r"<script[^>]*\bsrc=\"([^\"]+)\"", code):
+        voisin = PUBLIC / urlparse(src).path.lstrip("/")
+        if voisin.parent == chemin.parent and voisin.suffix == ".js":
+            try:
+                code += "\n" + voisin.read_text(encoding="utf-8")
+            except OSError:
+                pass
+    return code
 
 
 def nommes_dans(texte: str, lexique: dict[str, str]) -> list[str]:
