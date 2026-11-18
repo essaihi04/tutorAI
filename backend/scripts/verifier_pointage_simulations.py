@@ -95,7 +95,8 @@ PROCESSUS: dict[str, list[tuple[str, list[str]]]] = {
         (r"N A D H, H plus est oxydé", ["equation_nadh"]),
         (r"سد T quatre", ["cyanure_pose", "bloque"]),
         (r"ما بقاش كياخد les électrons", ["o2_non"]),
-        (r"ما بقاش le pompage", ["pas_d_atp"]),
+        (r"ما بقاش le pompage", ["pas_d_atp", "pas_pompage"]),     # pas_pompage : ?maillons (18 novembre 2026)
+        (r"إذن ما بقاش le gradient", ["pas_d_atp", "pas_gradient"]),
         (r"شوف الأرقام", ["structures"]),
         (r"وشوف الحروف", ["reactions"]),
         (r"دابا les réponses", ["solution"]),

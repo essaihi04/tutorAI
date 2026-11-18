@@ -30,7 +30,12 @@
  *   cycle_hydrolyse (19,4), cycle_phosphorylation (20,8) : le petit cycle, un arc puis l’autre ;
  *   regenere (22,2)         : « l’ATP ne se stocke presque pas : il est régénéré en permanence ».
  * Aucune enzyme nommée. Le rythme est celui d’une explication.
+ * ?rappel (18 novembre 2026, logique du cours) : la diapositive de rappel du début du chapitre. On n’y nomme ni
+ * l’adénosine ni les 30,5 kJ (ils servent au rendement et au chapitre du muscle), et la recharge vient de « la
+ * dégradation du glucose » : respiration et fermentation ne sont pas encore prouvées. Sans ?rappel : inchangé.
  */
+const RAPPEL = new URLSearchParams(location.search).has('rappel');
+if (RAPPEL) document.getElementById('canvas').setAttribute('aria-label', 'Une molécule d’ATP peinte : trois phosphates ; la dernière liaison se rompt, l’énergie libérée fait contracter une fibre musculaire, il reste ADP + Pi ; puis l’énergie de la dégradation du glucose raccroche le Pi : l’ATP est reformé ; le petit cycle hydrolyse / phosphorylation s’écrit en bas');
 const { bulle, protocole } = window.Tableau;
 const { Scene, Chrono, Apparitions, doux, mix, fr } = window.SVTTableau;
 const P = window.SVTPeinture;
@@ -47,7 +52,7 @@ const MOTIFS = {
   adp_pi: 'il reste ADP + Pi',
   hydrolyse: 'ATP + H2O → ADP + Pi + énergie : l’hydrolyse de l’ATP',
   kj: '30,5 kJ par mole d’ATP',
-  recharge: 'l’énergie de la respiration ou de la fermentation arrive',
+  recharge: RAPPEL ? 'l’énergie de la dégradation du glucose arrive' : 'l’énergie de la respiration ou de la fermentation arrive',
   atp_reforme: 'le Pi se raccroche : l’ATP est reformé',
   phosphorylation: 'ADP + Pi + énergie → ATP : la phosphorylation',
   cycle_hydrolyse: 'le cycle : l’hydrolyse d’un côté',
@@ -155,24 +160,24 @@ function dessiner(c) {
     c.texte('fibre musculaire', FIB.x, 108, { couleur: 'orange', taille: 16, gras: true, align: 'center' });
   });
   if (a0 > 0) {
-    ecrit.ecrire(c, 'adenosine', () => c.texte('adénosine', AD.x, 186, { couleur: 'violet', taille: 16, gras: true, align: 'center' }));
+    if (!RAPPEL) ecrit.ecrire(c, 'adenosine', () => c.texte('adénosine', AD.x, 186, { couleur: 'violet', taille: 16, gras: true, align: 'center' }));
     ecrit.ecrire(c, 'lettresP', () => { for (const x of PX.slice(0, 2)) c.texte('P', x, PY + 6, { couleur: '#3a1600', gras: true, taille: 15, align: 'center', duree: .1 }); });
     c.direct(() => c.texte('P', x3, y3 + 6, { couleur: '#3a1600', gras: true, taille: 15, align: 'center' }));
   }
   if (t >= 1.2 && t < 4.5) ecrit.ecrire(c, 'accATP1', () => accolade(c, 85, 414, 'ATP', 'jaune'));
   if ((t >= 1.2 && t < 4.5) || t >= 16.4) ecrit.ecrire(c, t < 4.5 ? 'trois1' : 'trois2', () => c.texte('3 phosphates', PX[1], 186, { couleur: 'orange', taille: 16, gras: true, align: 'center' }));
-  if (t >= 2) ecrit.ecrire(c, 'atp_entier', () => c.texte('ATP : adénosine + 3 phosphates', 250, 228, { couleur: 'cyan', taille: 18, gras: true, align: 'center' }));
+  if (t >= 2) ecrit.ecrire(c, 'atp_entier', () => c.texte(RAPPEL ? 'ATP : 3 phosphates' : 'ATP : adénosine + 3 phosphates', 250, 228, { couleur: 'cyan', taille: 18, gras: true, align: 'center' }));
   if (t >= 3 && t < 4.5) ecrit.ecrire(c, 'brille', () => c.texte('la dernière liaison', 360, 112, { couleur: 'jaune', taille: 15, gras: true, align: 'center' }));
   if (t >= 7.2) ecrit.ecrire(c, 'energie', () => { c.fleche(424, 120, 530, 124, { couleur: 'jaune', largeur: 1.8 }); c.texte('énergie', 476, 108, { couleur: 'jaune', taille: 16, gras: true, align: 'center' }); });
   if (t >= 7.3) ecrit.ecrire(c, 'contracte', () => c.texte('elle se contracte', FIB.x, 186, { couleur: 'orange', taille: 16, align: 'center' }));
-  if (t >= 10.6) ecrit.ecrire(c, 'kj', () => c.texte('30,5 kJ par mole d’ATP', FIB.x, 210, { couleur: 'jaune', taille: 17, gras: true, align: 'center' }));
+  if (t >= 10.6 && !RAPPEL) ecrit.ecrire(c, 'kj', () => c.texte('30,5 kJ par mole d’ATP', FIB.x, 210, { couleur: 'jaune', taille: 17, gras: true, align: 'center' }));
   if (t >= 8.2 && t < 16.4) {
     ecrit.ecrire(c, 'accADP', () => accolade(c, 85, 346, 'ADP', 'blanc'));
     if (t < 15.0) ecrit.ecrire(c, 'pi', () => c.texte('Pi', LIBRE.x + 26, LIBRE.y + 6, { couleur: 'orange', taille: 16 }));
   }
   if (t >= 9.2) c.direct(() => P.carte(c.ctx, 12, 243, 436, t >= 16.8 ? 52 : 28, { alpha: .82, arrondi: 12 }));   // (16 novembre 2026) les deux équations sur une carte
   if (t >= 9.2) ecrit.ecrire(c, 'hydrolyse', () => c.texte('ATP + H_{2}O → ADP + Pi + énergie : hydrolyse', 24, 262, { couleur: 'blanc', taille: 17, gras: true }));
-  if (t >= 12.6) ecrit.ecrire(c, 'source', () => c.texte('respiration ou fermentation (glucose)', 628, 300, { couleur: 'vert', taille: 15, align: 'center' }));
+  if (t >= 12.6) ecrit.ecrire(c, 'source', () => c.texte(RAPPEL ? 'dégradation du glucose' : 'respiration ou fermentation (glucose)', 628, 300, { couleur: 'vert', taille: 15, align: 'center' }));
   if (t >= 13.2) ecrit.ecrire(c, 'fl_recharge', () => c.fleche(606, 254, 490, 212, { couleur: 'vert', largeur: 1.8 }));
   if (t >= 16.4) ecrit.ecrire(c, 'accATP2', () => accolade(c, 85, 414, 'ATP', 'jaune'));
   if (t >= 16.8) ecrit.ecrire(c, 'phospho', () => c.texte('ADP + Pi + énergie → ATP : phosphorylation', 24, 286, { couleur: 'blanc', taille: 17, gras: true }));
@@ -192,7 +197,7 @@ function dessiner(c) {
   });
   // ── repères ──
   // (17 novembre 2026) un repère n’existe que quand son objet est dessiné, serré sur lui
-  if (a0 > 0) c.repere('adenosine', AD.x - 66, AD.y - 34, 130, 68, 'l’adénosine');
+  if (a0 > 0 && !RAPPEL) c.repere('adenosine', AD.x - 66, AD.y - 34, 130, 68, 'l’adénosine');
   if (a0 > 0 && lie3(t)) c.repere('phosphates', PX[0] - PR - 2, PY - PR - 2, PX[2] - PX[0] + 2 * PR + 4, 2 * PR + 4, 'les trois phosphates');
   if (a0 > 0 && lie3(t)) c.repere('atp', 80, 60, 340, 136, 'une molécule d’ATP');
   if (a0 > 0 && t < 4.5) c.repere('liaison', PX[1] + PR - 4, PY - 12, PX[2] - PX[1] - 2 * PR + 8, 24, 'la dernière liaison, celle qui se rompt');
@@ -200,8 +205,8 @@ function dessiner(c) {
   if (t >= 8.2 && t < 16.4) c.repere('adp', 80, 60, 272, 136, 'l’ADP : adénosine + 2 phosphates');
   if (t >= 7.2) c.repere('energie', 424, 92, 108, 36, 'l’énergie libérée');
   if (t >= 5.6) c.repere('travail', 534, 76, 214, 120, 'le travail : une fibre musculaire qui se contracte');
-  if (t >= 10.6) c.repere('kj', 540, 194, 200, 22, '30,5 kJ par mole d’ATP');
-  if (t >= 12.4) c.repere('recharge', 486, 226, 264, 82, 'la recharge : énergie de la respiration ou de la fermentation');
+  if (t >= 10.6 && !RAPPEL) c.repere('kj', 540, 194, 200, 22, '30,5 kJ par mole d’ATP');
+  if (t >= 12.4) c.repere('recharge', 486, 226, 264, 82, RAPPEL ? 'la recharge : énergie de la dégradation du glucose' : 'la recharge : énergie de la respiration ou de la fermentation');
   if (t >= 9.2) c.repere('ecrit_hydrolyse', 16, 246, 428, 22, 'ATP + H2O → ADP + Pi + énergie : hydrolyse');
   if (t >= 16.8) c.repere('ecrit_phosphorylation', 16, 270, 428, 22, 'ADP + Pi + énergie → ATP : phosphorylation');
   if (t >= 9.2) c.repere('equation', 14, 242, 432, t >= 16.8 ? 54 : 30, 'les équations : hydrolyse et phosphorylation');
@@ -217,8 +222,8 @@ function phase(t) {
   if (t < 8.2) return 'L’énergie libérée part vers une fibre musculaire (« un travail de la cellule »), qui se contracte.';
   if (t < 9.2) return 'Il reste ADP (adénosine + 2 phosphates) et Pi.';
   if (t < 10.6) return 'Écrit sur la carte : ATP + H2O → ADP + Pi + énergie : hydrolyse.';
-  if (t < 12.4) return 'Écrit sous la fibre : 30,5 kJ par mole d’ATP.';
-  if (t < 15) return 'Un glucose dégradé (« respiration ou fermentation (glucose) ») envoie de l’énergie vers le Pi.';
+  if (t < 12.4) return RAPPEL ? 'La fibre se relâche ; l’équation de l’hydrolyse reste écrite.' : 'Écrit sous la fibre : 30,5 kJ par mole d’ATP.';
+  if (t < 15) return RAPPEL ? 'Un glucose dégradé (« dégradation du glucose ») envoie de l’énergie vers le Pi.' : 'Un glucose dégradé (« respiration ou fermentation (glucose) ») envoie de l’énergie vers le Pi.';
   if (t < 16.4) return 'Le Pi revient se raccrocher à l’ADP, grâce à cette énergie.';
   if (t < 18.2) return 'L’ATP est reformé (3 phosphates) ; écrit : ADP + Pi + énergie → ATP : phosphorylation.';
   if (t < 19.6) return 'Le cycle à la craie : ATP → ADP + Pi, flèche orange « hydrolyse : énergie libérée ».';
@@ -232,18 +237,18 @@ function ceQuiSeVoit() {
 
 $('run').onclick = chrono.clic;
 window.Tableau.explication({ atp: [
-  { repere: 'adenosine', texte: 'L’ATP, c’est une adénosine…' },
-  { repere: 'phosphates', texte: '… et trois phosphates reliés par deux liaisons.' },
+  ...(RAPPEL ? [{ repere: 'phosphates', texte: 'L’ATP porte trois phosphates.' }] : [{ repere: 'adenosine', texte: 'L’ATP, c’est une adénosine…' },
+  { repere: 'phosphates', texte: '… et trois phosphates reliés par deux liaisons.' }]),
   { repere: 'liaison', texte: 'Quand la dernière liaison se rompt, de l’énergie est libérée.' },
-  { repere: 'travail', texte: 'Cette énergie sert à un travail de la cellule, ici une contraction : 30,5 kJ par mole d’ATP.' },
+  { repere: 'travail', texte: RAPPEL ? 'Cette énergie sert à un travail de la cellule, ici une contraction.' : 'Cette énergie sert à un travail de la cellule, ici une contraction : 30,5 kJ par mole d’ATP.' },
   { repere: 'equation', texte: 'ATP + H2O donne ADP + Pi + énergie : c’est l’hydrolyse.' },
-  { repere: 'recharge', texte: 'L’énergie de la respiration ou de la fermentation raccroche le Pi : c’est la phosphorylation.' },
+  { repere: 'recharge', texte: RAPPEL ? 'L’énergie de la dégradation du glucose raccroche le Pi : c’est la phosphorylation.' : 'L’énergie de la respiration ou de la fermentation raccroche le Pi : c’est la phosphorylation.' },
   { repere: 'cycle', texte: 'L’ATP ne se stocke presque pas : il est régénéré en permanence.' } ] });
 const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'play_until'];
 const config = { id: 'svt_energie_atp', version: '1.0', title: 'L’ATP, la petite monnaie de la cellule', variants: [{ id: 'atp', label: 'ATP' }], commands: commandes,
   command_schema: { set_time: { time_s: `0..${FIN} (arrêt sur cet instant)` }, play_until: { moment: Object.keys(M).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' } } };
 const pont = protocole({ id: config.id, commandes, config,
-  texte: 'L’ATP, petite monnaie de la cellule : adénosine + 3 phosphates. La rupture de la dernière liaison libère de l’énergie utilisée pour un travail de la cellule (contraction musculaire) : 30,5 kJ par mole d’ATP. ATP + H2O → ADP + Pi + énergie : hydrolyse. L’énergie de la respiration ou de la fermentation (dégradation du glucose) régénère l’ATP : ADP + Pi + énergie → ATP : phosphorylation. L’ATP ne se stocke presque pas : il est régénéré en permanence.',
+  texte: RAPPEL ? 'L’ATP, petite monnaie de la cellule : 3 phosphates. La rupture de la dernière liaison libère de l’énergie utilisée pour un travail de la cellule (contraction musculaire). ATP + H2O → ADP + Pi + énergie : hydrolyse. L’énergie de la dégradation du glucose régénère l’ATP : ADP + Pi + énergie → ATP : phosphorylation. L’ATP ne se stocke presque pas : il est régénéré en permanence. (Comment le glucose est dégradé : la suite du chapitre.)' : 'L’ATP, petite monnaie de la cellule : adénosine + 3 phosphates. La rupture de la dernière liaison libère de l’énergie utilisée pour un travail de la cellule (contraction musculaire) : 30,5 kJ par mole d’ATP. ATP + H2O → ADP + Pi + énergie : hydrolyse. L’énergie de la respiration ou de la fermentation (dégradation du glucose) régénère l’ATP : ADP + Pi + énergie → ATP : phosphorylation. L’ATP ne se stocke presque pas : il est régénéré en permanence.',
   etat: () => ({ simulation_status: chrono.statut(), ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'atp', time_s: +chrono.t.toFixed(2), parameters: {}, moments: M }),
   progression: () => chrono.t / FIN,
   executer: (cmd, p) => ({ start: chrono.start, reset: chrono.reset, pause: chrono.pause, resume: chrono.resume, set_time: () => chrono.setTime(p), play_until: () => chrono.playUntil(p) })[cmd]?.() });
