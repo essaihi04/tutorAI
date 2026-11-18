@@ -330,7 +330,7 @@ Une vue par question, une URL par diapo (pas d'écart IFRAME). À gauche, le mon
 
 ### Mots
 
-Toutes les pistes nouvelles passent `verifier_mots.py` sans mot rare (0 sur 62) : « le bécher », « la burette », « le p H mètre » au lieu de « l'afficheur » ; « كتطيح نقطة ب نقطة » ; « prédomine » (terme du programme) plutôt qu'un verbe darija rare. Les diapos voicées non réécrites gardent leurs mots ; la liste à changer est au § 5.
+Mots des pistes nouvelles, vérifiés sur la copie en attente (`verifier_mots.py en_attente/phys_ch13_acides_bases <ids>` : sans le préfixe `en_attente/`, le script lit le cours en ligne et ne voit pas les pistes nouvelles). Mots darija rares remplacés : « فوقو » → « الفوق »، « الخليط » → « المحلول »، « كتطيح » → « كنزيدو »، « بالloupe » → « من قريب »، « ما كيتفاعلوش » → « ما كيديرو والو »، « كتصب » → « كتزيد »، « قياس » → « mesure »، « مستوية » → « ثابتة »، « le barème » → « خاصك تكتب فالامتحان »، « ما خاصناش » → « ما كاين علاش »، « المناسب » → « اللي مزيان »، « نجرو » → « نرسمو »، « زيادة على » → « سؤال زايد »، « قلبتيهم » → « بدلتي البلاصة »، « صبعك » → « شوف فين » ; « trois béchers » → « trois solutions » (`ab_w2a_mesures`, pas encore en voix). Restent des termes du programme, à écouter : soude, saut, tangentes, indicateur coloré, virage, hélianthine, crésol, demi-équivalence, autoprotolyse. Les diapos voicées non réécrites gardent leurs mots ; la liste à changer est au § 5.
 
 > Fusion (18 novembre, soir) : une autre session avait poussé en parallèle le même besoin (`bd37fa2d` :
 > `predominance.html` accepte `conclusions`, observation sur `ab_p3_distribution`). La version gardée est celle de
