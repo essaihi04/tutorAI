@@ -246,3 +246,19 @@ démonstrations nouvelles. (Les mots rares qui restent sont dans des réactions 
 questions d'observation (7 × énoncé, 2 indices, 3 retours, solution), 15 réactions préparées (ardoises nouvelles de
 `op_x1` et `op_x2`), 3 démonstrations, 6 énoncés (dont 3 « retrouver » de bloc, pas joués pour le moment). Les autres
 pistes du cours existent et sont gardées (questions inchangées, même texte).
+
+## Défauts anciens corrigés (18 novembre 2026, après la 2ᵉ passe)
+- **26 diapositives pilotées par la voix démarraient en `start`** (la scène courait seule, devant ou derrière la voix).
+  Elles passent en `reset`. Dans `corde`, `cuve`, `fente`, `stroboscope`, `recepteurs`, `air` et `figures`, `reset` était
+  un autre nom de `start` : il fige maintenant la scène, sur zéro ou sur `?depart=<moment>` ; les `play_until` repartent
+  de l'instant figé. `bilan.html` n'a pas changé (son `reset` ne lance rien).
+- **Huit scènes reprises** sans rechargement s'ouvrent figées : `op_o2b` (`vibreur_demarre`), `op_t2` (`vibreur_demarre`),
+  `op_t3` (`m_premier_sommet`), `op_l2` (`photo`, et `reset` : la photo de `op_l1` reste, sans rejouer), `op_c2`
+  (`vibreur_demarre`), `op_p2` (`front_atteint_p`), `op_r2` (`vibreur_demarre`), `op_m6` (`opposition`) ; chaque moment
+  de départ est avant le premier `play_until` de la diapositive.
+- `recepteurs`, `air` et `figures` n'ont pas `set_time` : le kit fige `?depart=` par un `play_until` vers ce moment ; déjà
+  figée dessus, la page y reste au lieu de tout rejouer depuis zéro.
+- Le cours en ligne ne change pas : sans `?depart=` les pages démarrent comme avant, et aucune diapositive en ligne n'envoie
+  `reset` à ces pages. Vérifié dans Chromium (figée, puis arrêtée sur le moment suivant, sans erreur).
+- Vérificateur de pointage, copie en attente : 0 « introuvable », 0 DEPART, 0 IFRAME (avant : 0, 26, 8) ; cours en ligne :
+  rapport identique.
