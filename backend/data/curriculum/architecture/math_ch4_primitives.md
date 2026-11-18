@@ -52,7 +52,9 @@ Les 51 autres diapositives gardent leur id, leur texte et leur voix : elles sont
 ## 5. Animations
 Aucune simulation n'est modifiée. Les diapositives réécrites gardent leurs vues (`calculs.html?vue=x1`, `x2`, `d4`) ; seul le pointage est raccourci jusqu'au moment où la voix s'arrête. La suite est écrite par la démonstration de la question.
 
-Besoin noté, pas fait car hors de ce lot : une vue `x1` qui s'arrête avant le moment `calcul` et le rejoue après la réponse. Le lecteur ne le fait pas encore (fichier partagé `frontend/src/`).
+Fait le 18 novembre 2026 (format `concentration.apres_reponse`, skill `cours-concentration`) : `pr_x1` s'arrête après `derivable` ; la réponse à q rejoue `derivee`, la réponse à e0 rejoue `calcul` puis `conclusion`.
+
+Rappel déjà su (format `concentration.rappel`) : `pr_o1` porte un diagnostic (vrai/faux : f′(a) est la pente ; (5)′ = 5), et `pr_z1_pente` est sauté quand les deux affirmations sont justes du premier coup. Les autres rappels (z2, z3, z5, z4, c1) n'ont pas de diagnostic avant eux qui teste leur notion : ils se jouent toujours. Voix à faire : les énoncés et les 4 réactions du diagnostic de `pr_o1` (voix en direct en attendant).
 
 ## 6. Mots et voix
 Chaque texte réécrit a été vérifié par `scripts/voix/verifier_mots.py`.
