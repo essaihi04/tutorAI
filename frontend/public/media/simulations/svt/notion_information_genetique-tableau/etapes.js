@@ -613,6 +613,27 @@
       else Peint.chromatide(x, ligne(0), couleur, e, al);
       x.save(); x.globalAlpha = al; x.fillStyle = 'rgba(40,10,60,.85)'; x.beginPath(); x.arc(cx + ux * (c - .5) * L, cy + uy * (c - .5) * L, e * .42, 0, Math.PI * 2); x.fill(); x.restore();
     },
+    /**
+     * (18 novembre 2026) Une courbe en morceaux colorés (une couleur par phase) : `morceaux` = [{pts: [[x, y]…], couleur}] ;
+     * o.aire = ordonnée de l’axe : aire douce sous chaque morceau ; o.largeur = épaisseur du trait (halo puis trait net).
+     * documents.html (vue courbe) et cycle.html l’appelaient sans qu’elle existe : la courbe ne se dessinait pas.
+     */
+    courbe(x, morceaux, o = {}) {
+      const lw = o.largeur || 2.8;
+      x.save(); x.lineJoin = 'round'; x.lineCap = 'round';
+      for (const { pts, couleur } of morceaux) {
+        if (!pts || pts.length < 2) continue;
+        if (o.aire != null) {
+          const [r, g, b] = rgb(couleur), gr = x.createLinearGradient(0, Math.min(...pts.map(p => p[1])), 0, o.aire);
+          gr.addColorStop(0, `rgba(${r},${g},${b},.28)`); gr.addColorStop(1, `rgba(${r},${g},${b},.04)`);
+          x.fillStyle = gr; x.beginPath(); x.moveTo(pts[0][0], o.aire); for (const [px, py] of pts) x.lineTo(px, py); x.lineTo(pts[pts.length - 1][0], o.aire); x.closePath(); x.fill();
+        }
+        const trace = () => { x.beginPath(); pts.forEach(([px, py], i) => (i ? x.lineTo(px, py) : x.moveTo(px, py))); };
+        x.strokeStyle = couleur; x.globalAlpha = .3; x.lineWidth = lw * 3; trace(); x.stroke();
+        x.globalAlpha = 1; x.lineWidth = lw; trace(); x.stroke();
+      }
+      x.restore();
+    },
     /** Bulle lumineuse (UV, radioactivité). */
     halo(x, cx, cy, r, couleur, a = 1) { x.save(); x.globalAlpha = a; const g = x.createRadialGradient(cx, cy, 0, cx, cy, r); g.addColorStop(0, couleur); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill(); x.restore(); },
     /** Souris simple ombrée ; `morte` = couchée sur le dos, pattes en l’air. */
