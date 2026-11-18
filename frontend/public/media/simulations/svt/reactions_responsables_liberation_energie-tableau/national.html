@@ -401,14 +401,16 @@ V.marquage = (() => {
         P.mitochondrie(g, mx, my, 80, 40, { cretes: 6, graine: 9 });
         // les molécules radioactives : billes avec un halo (la radioactivité), placées dans leur compartiment
         const zone = (z, i, n) => {
-          if (z === 0) return [cx + rx * .15 + i * 36, cy - ry - 16 - (i % 2) * 16];   // au-dessus de la cellule, à droite de son nom
-          if (z === 1) return [cx - rx * .55 + i * 36, cy - ry * .35 + (i % 2) * 28];
+          if (z === 0) return [cx + rx * .15 + i * 58, cy - ry - 16 - (i % 2) * 16];   // au-dessus de la cellule, à droite de son nom (pas de 58 : la chaîne du glucose)
+          if (z === 1) return [cx - rx * .55 + i * 58, cy - ry * .35 + (i % 2) * 28];
           return [mx - 46 + i * 30, my + (i % 2 ? 10 : -10)];
         };
         const peindreEtat = (E, a) => E.forEach((liste, z) => { let i = 0; liste.forEach(([ty, n]) => { for (let j = 0; j < n; j++, i++) {
           const [x, y] = zone(z, i, n), m = MOL[ty];
-          const h = g.createRadialGradient(x, y, 2, x, y, 18); h.addColorStop(0, `rgba(255,255,160,${.35 * a})`); h.addColorStop(1, 'rgba(255,255,160,0)'); g.fillStyle = h; g.beginPath(); g.arc(x, y, 18, 0, TAU); g.fill();
-          if (ty === 'co2') P.co2(g, x, y, 1.1, a); else P.bille(g, x, y, ty === 'g' ? 10 : ty === 'p' ? 8 : 7, m.c, { alpha: a });
+          const R = ty === 'g' ? 30 : 20, h = g.createRadialGradient(x, y, 2, x, y, R); h.addColorStop(0, `rgba(255,255,160,${.35 * a})`); h.addColorStop(1, 'rgba(255,255,160,0)'); g.fillStyle = h; g.beginPath(); g.ellipse(x, y, R, 16, 0, 0, TAU); g.fill();
+          // lexique visuel commun (18/11/2026) : glucose = chaîne de 6 carbones jaunes, acide pyruvique = 3, composés du cycle = 4 ; CO₂ à carbone jaune
+          const Lx = window.Lexique, o = { echelle: .32, alpha: a };
+          if (ty === 'co2') Lx.co2(g, x, y, { echelle: 1.1, alpha: a }); else if (ty === 'g') Lx.glucose(g, x, y, o); else if (ty === 'p') Lx.acidePyruvique(g, x, y, o); else Lx.moleculeOrganique(g, x, y, { ...o, n: 4 });
         } }); });
         if (k > 0 && u < 1) peindreEtat(ETATS[k - 1], 1 - u);
         peindreEtat(ETATS[k], k === 0 ? doux(chrono.part(.6, 1.8, t)) : u);

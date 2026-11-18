@@ -13,9 +13,15 @@
   /* 18 novembre 2026 (règle 15 du skill, lexique visuel commun) : la peinture de base (billes, liaisons, capsules, cellule,
    * mitochondrie, membrane, protéine, sphère pédonculée, bécher, levure, bulle, éclat) vient du module partagé
    * /media/simulations/shared/lexique/lexique.js, chargé AVANT ce fichier ; ici ne restent que les fonds et cartes du cours. */
-  const L = window.Lexique;
-  if (!L) throw new Error('Lexique manquant : charger /media/simulations/shared/lexique/lexique.js avant peinture.js');
-  const TAU = Math.PI * 2, { T, graine, rgba, cellule, mitochondrie, cheminCretes, membrane, proteine, bille, liaison, capsule, spherePedonculee, becher, levure, bulleGaz, eclat } = L;
+  // Une page qui charge peinture.js sans le lexique le reçoit quand même : le script est inséré juste après celui-ci
+  // (avant les scripts de la page) ; les fonctions ci-dessous vont chercher window.Lexique au moment de dessiner.
+  if (!window.Lexique && document.readyState === 'loading') document.write('<script src="/media/simulations/shared/lexique/lexique.js"><\/script>');
+  const L = () => window.Lexique, via = (nom) => (...a) => L()[nom](...a);
+  const TAU = Math.PI * 2;
+  function graine(seed) { let s = (seed >>> 0) || 1; return () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; }; }
+  const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+  const [cellule, mitochondrie, cheminCretes, membrane, proteine, bille, liaison, capsule, spherePedonculee, becher, levure, bulleGaz, eclat] =
+    ['cellule', 'mitochondrie', 'cheminCretes', 'membrane', 'proteine', 'bille', 'liaison', 'capsule', 'spherePedonculee', 'becher', 'levure', 'bulleGaz', 'eclat'].map(via);
 
   /* ── Fonds et cartes communs (16 novembre 2026, refonte « un seul style agréable ») ── */
   const GR = (() => { const r = graine(77), out = []; for (let i = 0; i < 400; i++) out.push([r(), r(), .7 + r() * 1.6, r()]); return out; })();
@@ -36,7 +42,7 @@
   /** Le hyaloplasme peint : vert d'eau lumineux, granules. */
   function fondHyalo(ctx, x, y, w, h, o = {}) {
     ctx.save(); ctx.beginPath(); if (o.arrondi && ctx.roundRect) ctx.roundRect(x, y, w, h, o.arrondi); else ctx.rect(x, y, w, h); ctx.clip();
-    const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, rgba(T.hyalo, .40)); g.addColorStop(1, rgba(T.hyalo, .22));
+    const g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, rgba(L().T.hyalo, .40)); g.addColorStop(1, rgba(L().T.hyalo, .22));
     ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
     const n = Math.round(w * h / 1600);
     for (let i = 0; i < Math.min(n, GR.length); i++) { const [u, v, r] = GR[GR.length - 1 - i]; ctx.fillStyle = 'rgba(210,240,200,.20)'; ctx.beginPath(); ctx.arc(x + u * w, y + v * h, r, 0, TAU); ctx.fill(); }
@@ -59,9 +65,9 @@
     ctx.restore();
   }
   /** Le CO₂ du lexique (O = C = O, carbone jaune) ; ancienne signature co2(ctx, x, y, k, a) gardée. */
-  const co2 = (ctx, x, y, k = 1, a = 1) => L.co2(ctx, x, y, { echelle: k, alpha: a });
+  const co2 = (ctx, x, y, k = 1, a = 1) => L().co2(ctx, x, y, { echelle: k, alpha: a });
 
-  window.SVTPeinture = { T, graine, rgba, cellule, mitochondrie, cheminCretes, membrane, proteine, bille, liaison, capsule, spherePedonculee, becher, levure, bulleGaz, eclat,
+  window.SVTPeinture = { get T() { return L().T; }, graine, rgba, cellule, mitochondrie, cheminCretes, membrane, proteine, bille, liaison, capsule, spherePedonculee, becher, levure, bulleGaz, eclat,
     fondMatrice, fondHyalo, carte, co2 };
 })();
 
