@@ -37,6 +37,7 @@ const VUES = ['ouverture', 'figure', 'reglage', 'mesure', 'fil', 'cuve', 'blanch
 const demande = new URLSearchParams(location.search).get('vue');
 const vue = VUES.includes(demande) ? demande : 'ouverture';
 const N_EAU = 1.33;
+const SANS_INDICE = new URLSearchParams(location.search).get('indice') === '0';   // vue cuve AVANT la diapo de l'indice : ni n, ni λ₀/n, ni n = L/L' écrits (18 novembre 2026)
 const PRESETS = {
   ouverture: { a: 0.05, D: 2.0, lam: 650, objet: 'fente', milieu: 'air', orientation: 'verticale', source: 'laser' },
   figure: { a: 0.10, D: 2.0, lam: 650, objet: 'fente', milieu: 'air', orientation: 'verticale', source: 'laser' },
@@ -351,8 +352,8 @@ function dessinerDessus(c) {
     c.repere('D', XF, YC + 90, xe - XF, 28, `D = ${fr(P.D, 1)} m`);
     if (P.milieu === 'eau') {
       const f = remplissage();
-      if (f > 0) c.texte(`eau (n = ${fr(N_EAU, 2)})`, XF + 26, R1.y + 46, { couleur: 'bleu', taille: 14 });
-      c.repere('cuve', XF - 18, YC - 100, xe + 14 - (XF - 18), 204, `la cuve d’eau (n = ${fr(N_EAU, 2)})`);
+      if (f > 0) c.texte(SANS_INDICE ? 'eau' : `eau (n = ${fr(N_EAU, 2)})`, XF + 26, R1.y + 46, { couleur: 'bleu', taille: 14 });
+      c.repere('cuve', XF - 18, YC - 100, xe + 14 - (XF - 18), 204, SANS_INDICE ? 'la cuve d’eau' : `la cuve d’eau (n = ${fr(N_EAU, 2)})`);
     }
   });
   // θ : du centre de la tache au bord de la tache centrale (première extinction), angle exagéré.
@@ -507,7 +508,7 @@ function dessinerValeurs(c) {
   const E = [];   // { k : case, nom : moment où elle s'écrit (aucun = tout de suite), l : [[texte, couleur, taille, durée]] }
   const src = P.source === 'blanche' ? 'lumière blanche' : `λ₀ = ${P.lam} nm (${nomCouleur(P.lam)})`;
   const obj = !objetPresent() ? 'pas encore de fente' : `${nomObjet()} : ${lettreA()} = ${fr(a, 2)} mm`;
-  const mil = P.milieu === 'eau' ? (remplissage() > 0 ? `eau (n = ${fr(N_EAU, 2)})` : 'air (la cuve est vide)') : 'air';
+  const mil = P.milieu === 'eau' ? (remplissage() > 0 ? (SANS_INDICE ? 'eau' : `eau (n = ${fr(N_EAU, 2)})`) : 'air (la cuve est vide)') : 'air';
   E.push({ k: 0, direct: true, l: Z.large ? [[`${obj} ;  D = ${fr(P.D, 1)} m ;`, 'jaune', 17], [`${src} ;  ${mil}`, 'jaune', 17]] : [[`${obj} ;  D = ${fr(P.D, 1)} m ;  ${src} ;  ${mil}`, 'jaune', 17]] });
   const lA = lettreA();
   if (S.conclusions) {
@@ -530,9 +531,10 @@ function dessinerValeurs(c) {
   if (quantitatif()) E.push({ k: 4, nom: 'extinctions', l: [['taches secondaires : plus pâles et deux fois plus étroites que la tache centrale', 'blanc', 15, 1.1]] });
   E.push({ k: 4, nom: 'bords_colores', l: [['centre blanc : toutes les couleurs s’y superposent ; bords colorés : le violet s’étale le moins, le rouge le plus', 'vert', 15, 1.1]] });
   if (CUVE && P.milieu === 'eau') {
-    E.push({ k: 2, nom: 'cuve_se_remplit', l: [['la cuve se remplit d’eau : n = 1,33', 'bleu', 16, .7]] });
+    E.push({ k: 2, nom: 'cuve_se_remplit', l: [[SANS_INDICE ? 'la cuve se remplit d’eau' : 'la cuve se remplit d’eau : n = 1,33', 'bleu', 16, .7]] });
     const v1 = valeurs(1), v2 = valeurs(N_EAU);
-    E.push({ k: 4, nom: 'mesure_L_prime', l: Z.large
+    if (SANS_INDICE) E.push({ k: 4, nom: 'mesure_L_prime', l: [[`dans l’eau : L’ = ${fr(v2.L * 100, 2)} cm : la tache s’est resserrée`, 'vert', 16, .8]] });
+    else E.push({ k: 4, nom: 'mesure_L_prime', l: Z.large
       ? [[`dans l’eau : λ = ⟦λ_0|n⟧ = ${Math.round(v2.lam * 1e9)} nm ;  L’ = ${fr(v2.L * 100, 2)} cm`, 'vert', 16, .8], [`n = ⟦L|L’⟧ = ⟦${fr(v1.L * 100, 2)}|${fr(v2.L * 100, 2)}⟧ = ${fr(v1.L / v2.L, 2)}`, 'vert', 16, .6]]
       : [[`dans l’eau : λ = ⟦λ_0|n⟧ = ${Math.round(v2.lam * 1e9)} nm ;  L’ = ${fr(v2.L * 100, 2)} cm ;  n = ⟦L|L’⟧ = ⟦${fr(v1.L * 100, 2)}|${fr(v2.L * 100, 2)}⟧ = ${fr(v1.L / v2.L, 2)}`, 'vert', 16, 1.1]] });
   }
@@ -613,14 +615,14 @@ function ceQuiSeVoit() {
   if (!objetPresent()) m.push(OUV && S.t >= 2.0 ? 'La fente descend sur le faisceau.' : 'Pas encore de fente : le faisceau va tout droit et fait un point net sur l’écran.');
   else m.push(P.objet === 'fil' ? `Objet : un fil de diamètre d = ${fr(a, 2)} mm (même figure qu’une fente de largeur a = d).` : P.objet === 'trou' ? `Objet : un petit trou rond de diamètre ${fr(a, 2)} mm.` : `Objet : une fente ${VERT() ? 'horizontale' : 'verticale'} de largeur a = ${fr(a, 2)} mm.`);
   m.push(`Écran à D = ${fr(P.D, 1)} m.`);
-  if (P.milieu === 'eau') m.push(CUVE && remplissage() < 1 ? (remplissage() > 0 ? 'La cuve entre la fente et l’écran se remplit d’eau.' : 'La cuve (fente et écran dedans) est encore vide : air, n = 1.') : `Milieu : eau, n = 1,33 ; λ = λ₀/n = ${Math.round(P.lam / N_EAU)} nm (la couleur ne change pas).`);
+  if (P.milieu === 'eau') m.push(CUVE && remplissage() < 1 ? (remplissage() > 0 ? 'La cuve entre la fente et l’écran se remplit d’eau.' : 'La cuve (fente et écran dedans) est encore vide : air' + (SANS_INDICE ? '.' : ', n = 1.')) : (SANS_INDICE ? 'Milieu : eau (la couleur ne change pas).' : `Milieu : eau, n = 1,33 ; λ = λ₀/n = ${Math.round(P.lam / N_EAU)} nm (la couleur ne change pas).`));
   else m.push('Milieu : air (n = 1).');
   if (objetPresent() && lumiere() > 0) {
     if (P.objet === 'trou') m.push('Sur l’écran : une tache ronde très lumineuse entourée d’anneaux sombres et clairs (qualitatif, aucune valeur).');
     else if (P.source === 'blanche') m.push(`Sur l’écran : des taches sur une ligne ${VERT() ? 'verticale' : 'horizontale'} ; centre blanc (toutes les couleurs s’y superposent), bords colorés (le violet s’étale le moins, le rouge le plus) ; qualitatif.`);
     else {
       m.push(`Sur l’écran : la figure s’étale ${VERT() ? 'verticalement' : 'horizontalement'}, perpendiculairement ${P.objet === 'fil' ? 'au fil' : 'à la fente'} : tache centrale très lumineuse de largeur L = 2λD/${lA} = ${fr(v.L * 100, 2)} cm, extinctions (noires) à ${fr(v.L * 50, 2)} cm, ${fr(v.L * 100, 2)} cm… du centre, taches secondaires plus pâles et deux fois plus étroites. θ = λ/${lA} = ${sci(v.theta)} rad.`);
-      if (CUVE && P.milieu === 'eau') { const v1 = valeurs(1), v2 = valeurs(N_EAU); m.push(`Dans l’air : L = ${fr(v1.L * 100, 2)} cm ; dans l’eau : L’ = L/n = ${fr(v2.L * 100, 2)} cm ; n = L/L’ = ${fr(v1.L / v2.L, 2)}.`); }
+      if (CUVE && P.milieu === 'eau') { const v1 = valeurs(1), v2 = valeurs(N_EAU); m.push(SANS_INDICE ? `Dans l’air : L = ${fr(v1.L * 100, 2)} cm ; dans l’eau : L’ = ${fr(v2.L * 100, 2)} cm, la tache s’est resserrée.` : `Dans l’air : L = ${fr(v1.L * 100, 2)} cm ; dans l’eau : L’ = L/n = ${fr(v2.L * 100, 2)} cm ; n = L/L’ = ${fr(v1.L / v2.L, 2)}.`); }
     }
   }
   const ecrits = [];
@@ -628,7 +630,7 @@ function ceQuiSeVoit() {
   if (vu('extinctions') && quantitatif()) ecrits.push('les extinctions marquées');
   if (vu('mesure_L') && quantitatif()) ecrits.push(`la cote L = ${fr((CUVE ? valeurs(1) : v).L * 100, 2)} cm sur la règle et les valeurs de L et θ`);
   if (vu('theta') || (vu('tache_centrale') && quantitatif())) ecrits.push('l’angle θ (du centre au bord de la tache centrale) dans la vue de dessus');
-  if (vu('mesure_L_prime')) ecrits.push(`la cote L’ = ${fr(valeurs(N_EAU).L * 100, 2)} cm et n = L/L’ = 1,33`);
+  if (vu('mesure_L_prime')) ecrits.push(SANS_INDICE ? `la cote L’ = ${fr(valeurs(N_EAU).L * 100, 2)} cm` : `la cote L’ = ${fr(valeurs(N_EAU).L * 100, 2)} cm et n = L/L’ = 1,33`);
   if (vu('bords_colores')) ecrits.push('« bords colorés »');
   if (ecrits.length) m.push('Écrit à la craie : ' + ecrits.join(' ; ') + '.');
   m.push(`Phase : ${phase()}.`);
@@ -744,7 +746,8 @@ const EXPLICATIONS = {
   reglage: [{ repere: 'poignee_a', texte: 'On diminue a : la tache s’élargit.' }, { repere: 'pastille_couleur', texte: 'On change la couleur : le bleu donne une tache plus étroite que le rouge.' }, { repere: 'L', texte: 'L = 2λD/a.' }],
   mesure: [{ repere: 'regle', texte: 'On lit L sur la règle, d’une extinction à l’autre.' }, { repere: 'L', texte: 'Ici L = 2,60 cm.' }, { repere: 'theta', texte: 'θ = λ/a = 6,5·10⁻³ rad.' }, { repere: 'D', texte: 'D = 2,0 m, a = 0,10 mm, λ = 650 nm.' }],
   fil: [{ repere: 'fente', texte: 'Un fil fin de diamètre d donne la même figure qu’une fente de largeur d.' }, { repere: 'L', texte: 'L = 2λD/d = 3,00 cm.' }, { repere: 'vue_ecran', texte: 'La figure s’étale perpendiculairement au fil.' }],
-  cuve: [{ repere: 'L', texte: 'Dans l’air, L = 2,40 cm.' }, { repere: 'cuve', texte: 'On remplit la cuve d’eau : n = 1,33, λ = λ₀/n.' }, { repere: 'tache_centrale', texte: 'La tache se resserre : L’ = 1,80 cm.' }, { repere: 'L', texte: 'n = L/L’ = 1,33.' }],
+  cuve: SANS_INDICE ? [{ repere: 'L', texte: 'Dans l’air, L = 2,40 cm.' }, { repere: 'cuve', texte: 'On remplit la cuve d’eau.' }, { repere: 'tache_centrale', texte: 'La tache se resserre : L’ = 1,80 cm.' }]
+    : [{ repere: 'L', texte: 'Dans l’air, L = 2,40 cm.' }, { repere: 'cuve', texte: 'On remplit la cuve d’eau : n = 1,33, λ = λ₀/n.' }, { repere: 'tache_centrale', texte: 'La tache se resserre : L’ = 1,80 cm.' }, { repere: 'L', texte: 'n = L/L’ = 1,33.' }],
   blanche: [{ repere: 'laser', texte: 'Une lampe de lumière blanche remplace le laser.' }, { repere: 'tache_centrale', texte: 'Le centre est blanc : toutes les couleurs s’y superposent.' }, { repere: 'vue_ecran', texte: 'Les bords sont colorés : chaque couleur a sa propre tache.' }],
 };
 window.Tableau.explication({ [vue]: EXPLICATIONS[vue] });
