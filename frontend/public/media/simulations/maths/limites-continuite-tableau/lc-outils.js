@@ -79,7 +79,7 @@
     const L = LC.L(c), large = L >= 1000;
     K.L = L; K.large = large;
     if (!large) return K;
-    K.titre = (s) => { c.texte(s, 20, 34, { couleur: 'cyan', taille: 26, max: L - 40 }); return K; };
+    K.titre = (s) => { if (window.MathsTableau.titreRepete(s)) { c.pause(window.MathsTableau.tempsTitre(s)); return K; } c.texte(s, 20, 34, { couleur: 'cyan', taille: 26, max: L - 40 }); return K; };
     K.lignes = (x, y, liste, inter = 30) => {
       for (const l of liste) {
         const t = Math.round((l.taille || 19) * 1.45);
