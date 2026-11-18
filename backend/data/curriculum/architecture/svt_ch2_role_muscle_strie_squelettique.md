@@ -3,7 +3,7 @@
 Skill `logique-de-cours`, 18 novembre 2026. Cours en ligne : `backend/data/courses/svt_ch2_role_muscle_strie_squelettique.json`
 (non modifié). Nouvelle version : `backend/data/courses/en_attente/svt_ch2_role_muscle_strie_squelettique.json`
 (construite à partir du cours en ligne, aucune copie en attente plus récente n'existait). Pistes à mettre en voix :
-`svt_ch2_role_muscle_strie_squelettique_voix.json` (36 pistes).
+`svt_ch2_role_muscle_strie_squelettique_voix.json` (72 pistes après la 2ᵉ passe, § 8).
 
 ## 1. Sources consultées
 
@@ -151,3 +151,61 @@ au type de fibres. Les rappels existants n'ont pas changé.
 
 « A T P ase » (déjà dit dans `ms_c4_rotation`), « glycolytiques », « oxydatives » (lus dans le document 2020 N),
 « quatre-vingt-cinq », « quatre-vingt-treize », « protides » (déjà dit dans `ms_t4a_sang`), « tubes ».
+
+## 8. 2ᵉ passe (18 novembre 2026) : chaque cas type du national joué pas à pas
+
+Demande de l'utilisateur : simple, animé, expliqué ; ne pas tout donner au départ ; laisser à l'élève le temps de
+trouver ; une raison derrière chaque choix. Règle appliquée (skill `logique-de-cours`, règle 5) : le document apparaît
+par une animation qui produit ses valeurs, **une consigne par diapositive** (comparer → déduire → expliquer), la
+réponse de l'élève (question) avant la correction, la correction écrite comme le barème la lit.
+
+### Ce qui a été ajouté, et pourquoi
+
+| Cas type (exploration) | Diapositives | Ce qui change, et pourquoi |
+|---|---|---|
+| `entrainement_maladie` (8 sujets sur 20, le plus fréquent) | `ms_x1_decrire_comparer`, `ms_x2_deduire_expliquer` (réécrites), **`ms_x2b_expliquer`**, **`ms_x2c_rediger`** (nouvelles) | x1/x2 étaient deux textes de méthode sur un tableau « reconstitué ». Ils deviennent l'exercice du **2016 N** (documents 1 et 2, valeurs du sujet : mitochondries 11 % / 5 %, O₂ 5,5 / 2,5 L/min, acide lactique 6 / 12 mmol/L) joué en quatre consignes sur `national.html?vue=entraine` : x1 lit les documents (fibres peintes et leurs mitochondries, puis les barres) et **demande** la comparaison (QCM « rédigée comme le barème ») ; x2 écrit la comparaison, puis demande la déduction (quelle voie domine) ; x2b écrit la déduction, puis demande la chaîne qui explique la fatigabilité ; x2c écrit la réponse du barème, une flèche par moment. Chaque diapositive repart du moment où la précédente s'est arrêtée (`depart=`) et cache la suite (`cacher=`) : rien de décisif au tableau avant la réponse. Les fourchettes reconstituées (« 4 à 6 / 12 à 16 ») sont remplacées par les valeurs du sujet. |
+| `tableau_metabolites`, `hypothese` | `ms_x3_hypothese` (inchangée) | Déjà jouée : `?vue=nageurs` (2017 R, doc. 1) fait naître le tableau, la question vient après. |
+| (même famille) | `ms_n1_voies`, `ms_n2_fibres`, `ms_n3_chaine` (inchangées) | Déjà jouées (barres, fibres I/II, chaîne), l'observation ou la question avant la conclusion. |
+| Effort d'intensité croissante (MSS11, document des manuels) | `ms_r6b_intensite` (réécrite) | Avant : un tableau lu et la conclusion dite. Après : `?vue=intensite` — un muscle qui travaille plus vite, trois compteurs (intensité, O₂, acide lactique), un point par mesure, le **palier** du O₂, puis le tableau (règle 35). La voix décrit seulement ; la déduction est la **question**, puis la démonstration l'écrit comme le barème ; la conclusion de la simulation reste cachée (`cacher=conclusion`). |
+| `tableau_comparatif` des voies (2022 R) | `ms_r7_tableau` (voix gardée) | Avant : un tableau sans animation. Après : `?vue=trois_voies` — la part de chaque voie au cours de l'effort (phosphocréatine, puis fermentation, puis respiration), une courbe et sa fiche par voie au mot de la voix, puis « à l'examen : le nom + l'équation avec ADP et Pi ». Seuls `visual` et `pointage` changent (mots déjà dits) : la voix reste. |
+| `definir`, `qcm_sarcomere` (restitution) | `ms_x4_restitution` (voix gardée), **`ms_x4b_eliminer`** (nouvelle) | x4 écrit son QCM au tableau (`?vue=restitution`, propositions seules). x4b le corrige par la méthode : se redire le cours, puis chaque proposition rayée avec sa raison (b, c), a entourée ; puis un vrai ou faux du sarcomère (« la bande sombre raccourcit ») avec son mot qui décide souligné, posé en question ; la règle et le verdict ne s'écrivent qu'après (`cacher=verdict2`) et la démonstration les écrit. |
+| `ordre_etapes` | `ms_c7_ordre` (inchangée) | Déjà joué (`cycle.html?vue=etapes`). |
+| `nommer_myogrammes`, `myogramme_document` | `ms_f1` → `ms_f7`, `ms_f6_nomme` (inchangées) | Les tracés se construisent excitation par excitation (`sommation.html`) ; nommer est la question. |
+| `legender` | `ms_u6_legender`, `ms_u8_legender_molecules` (inchangées) | Schéma à légender déjà interactif. |
+| `inhibiteurs` | `ms_r8_inhibiteurs` (inchangée) | L'expérience est jouée (`inhibiteurs.html`), la voix décrit muscle par muscle, la déduction est la question ; la simulation n'écrit pas la conclusion. |
+| `associer_roles`, `voies_equations` | série de fin de `ms_x4_restitution`, `ms_r1`…`ms_r5` | Restitution couverte par la série de fin et par les diapositives des voies (équations écrites). |
+
+### La simulation
+
+`national.html` reçoit quatre vues nouvelles — `entraine`, `intensite`, `trois_voies`, `restitution` — et un paramètre
+`?cacher=<moment>` qui tait tout ce qui s'écrit à partir de ce moment jusqu'à `set_parameters {conclusions: true}`.
+Les vues `nageurs`, `voies`, `fibres`, `chaine` et le cours en ligne ne changent pas (sans `cacher`, rien n'est caché).
+Peinture (règle 32) : fibres musculaires striées, mitochondries à deux membranes et crêtes, muscle qui se contracte.
+Vérifiée dans Chromium à 1280 × 640, 1024 × 560 et 724 × 350 : chaque moment atteint par `play_until`, aucune erreur,
+aucun texte hors cadre ; `ce_qui_se_voit` suit ce qui est caché ou montré ; `node --check` et
+`scripts/verifier_formules.py` sans remarque pour ce fichier.
+
+### Questions par bloc
+
+Les blocs `ms_s5_b1` (r4, r6b), `ms_s6_b2` (x1, x2, x2b) et `ms_s7_b2` (x4, x4b) ont maintenant plusieurs questions :
+voulu, un exercice du national joué pas à pas pose **une question par consigne** au lieu de donner la réponse. Aucune
+observation ajoutée (le cours en garde deux, la limite de la règle 30).
+
+### Voix et mots
+
+36 → 72 pistes (`_voix.json`) : 6 diapositives (`ms_r6b`, `ms_x1`, `ms_x2`, `ms_x2b`, `ms_x2c`, `ms_x4b`), leurs
+réactions, énoncés et 2 démonstrations ; `ms_r7_tableau` et `ms_x4_restitution` gardent leur voix (texte inchangé).
+`verifier_mots.py` (même règle, appliquée à la copie en attente) : darija rare remplacé (كنقيسو → كنشوفو شحال,
+مستوية → ثابتة, كتستنتج → نقدرو نقولو, كتعوضهاش → ماشي بلاصتها, كتشارك → كتعطي أكثر, كتعيا → la fatigue كتجي بالزربة,
+نلعبو → نديرو, غالبة → اللي كتعطي كثر, كتجدد → كتصاوب, كتحسم → المهمة, نشطبوها → نحيدوها, كيقصرو → كيوليو قصار…).
+Restent, **à écouter** (termes du sujet ou du programme) : « barème », « fatigabilité », « palier », « traces »,
+« raccourcit », « aérobies », et les nombres des données (quarante-quatre, soixante-huit, soixante-dix-neuf,
+quatre-vingt-cinq).
+
+### Ce qui reste
+
+- Les voix des pistes nouvelles (VPS, voix Bodi) : rien ne peut être enregistré ici.
+- `ms_e2_atpase` : sa question demande la conclusion que la voix vient de dire (`atpase.html` sait la cacher,
+  `conclusions: false`) ; la reformuler demande de réécrire une voix déjà faite : laissé pour une prochaine passe.
+- Le contrôle de pointage garde ses 5 « introuvable » d'avant (`ms_u6_legender`, `ms_r8_inhibiteurs`), déjà présents
+  en ligne ; aucun nouveau.
