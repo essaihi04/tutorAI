@@ -961,6 +961,23 @@ window.CALCULS = {
    }
   ]
  },
+ "e1_q2": {
+  "titre": "Question 2 : le sens de variation",
+  "lignes": [
+   {"t": "f(x) = x³ + x − 1", "moment": "enonce"},
+   {"t": "f′(x) = 3x² + 1", "couleur": "cyan", "moment": "derivee"},
+   {"t": "x² ≥ 0 pour tout x  →  signe de 3x² + 1 ?", "souligne": ["x² ≥ 0"], "couleur": "jaune", "moment": "carre"}
+  ]
+ },
+ "e1_q4": {
+  "titre": "Question 4 : la fonction réciproque",
+  "lignes": [
+   {"t": "f continue sur ℝ (polynôme)", "couleur": "cyan", "moment": "conditions"},
+   {"t": "f strictement croissante sur ℝ (f′ > 0)", "couleur": "cyan"},
+   {"t": "lim f(x) = −∞ (x → −∞) ;  lim f(x) = +∞ (x → +∞)", "moment": "limites"},
+   {"t": "J = f(ℝ) = ?", "couleur": "jaune", "moment": "question"}
+  ]
+ },
  "e1_probleme": {
   "titre": "f(x) = x³ + x − 1 : le problème",
   "lignes": [
