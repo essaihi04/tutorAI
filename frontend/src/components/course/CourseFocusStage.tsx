@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import AIAvatar, { useColonneTuteur, type LabControlCommand } from '../session/AIAvatar';
 import { observeAvatarMedia } from '../../services/avatarAudio';
 import { audioUnlock } from '../../services/audioUnlock';
@@ -107,20 +107,47 @@ const ANIMATIONS = `
   [data-scene-cours] [data-bulle] .text-xl { font-size: 16px; line-height: 1.3 }
   [data-scene-cours] [data-bulle] .text-lg { font-size: 14px; line-height: 1.35 }
   [data-scene-cours] [data-bulle] .mt-3 { margin-top: 6px }
-  /* les formules de la diapositive, sous une simulation : à sa droite (le tableau est très large en paysage, sa droite
-     souvent vide), en plus petit ; la simulation garde toute la hauteur (17 novembre 2026, ch12 « Le quotient de réaction ») */
-  [data-scene-cours] > main:has(> [data-formules-centre]):not(:has([data-observation])) { flex-direction: row; align-items: stretch }
-  [data-scene-cours] [data-formules-centre] { flex-direction: column; flex-wrap: nowrap; width: auto; max-width: 36%; justify-content: center; gap: 4px }
-  [data-scene-cours] [data-formules-centre] > div { font-size: clamp(13px, 4.6vh, 18px) !important; padding: 2px 8px }
-  /* la question d'observation, sous la figure : une bande fine, pour laisser la hauteur à la figure */
+  /* la question d'observation, sous la figure : une bande encore plus fine (le texte reste à 15 px au moins) */
   [data-scene-cours] [data-observation] { padding: 3px 10px }
-  [data-scene-cours] [data-observation] p { font-size: 14px; line-height: 1.25 }
-  [data-scene-cours] [data-observation] button { padding-top: 4px; padding-bottom: 4px; font-size: 13px }
+  [data-scene-cours] [data-observation] p { font-size: 15px; line-height: 1.25 }
+  [data-scene-cours] [data-observation] button[data-micro-reponse] { padding-top: 3px; padding-bottom: 3px }
   [data-scene-cours] [data-bulle] textarea { min-height: 0; height: 40px; padding-top: 6px; padding-bottom: 6px }
   [data-scene-cours] [data-bulle] .py-2 { padding-top: 3px; padding-bottom: 3px }
   [data-scene-cours] [data-bulle] .mt-2 { margin-top: 4px }
   [data-scene-cours] [data-bulle] .gap-3 { gap: 6px }
 }
+/* ── La simulation d'abord (18 novembre 2026, demande de l'utilisateur, skill simulations-au-tableau) ──
+   Sur un écran de bureau peu haut, le texte de la diapositive était plus grand que la simulation : trois rangées de cartes
+   en 20 px sous elle, le cadre « Observe » plus haut qu'elle. Désormais la figure prend la plus grande place ; les cartes
+   de formules vont dans une colonne étroite à sa droite (écran large) ou une seule rangée fine sous elle (écran étroit),
+   à 15-18 px ; la question d'observation est une bande fine sous la figure. La taille des cartes est ajustée (15 px au
+   moins) pour que tout tienne : useTailleQuiTient. */
+[data-scene-cours] > main[data-avec-visuel] { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto auto;
+  justify-items: center; align-items: center; row-gap: 6px; column-gap: 10px }
+[data-scene-cours] > main[data-avec-visuel] > [data-cadre-visuel] { grid-column: 1; grid-row: 1; align-self: stretch; height: 100%; min-height: 0 }
+[data-scene-cours] > main[data-avec-visuel] > [data-observation] { grid-column: 1; grid-row: 2 }
+[data-scene-cours] > main[data-avec-visuel] > [data-formules-centre] { grid-column: 1; grid-row: 3; max-height: 24vh; overflow: hidden;
+  flex-direction: row; flex-wrap: wrap; justify-content: center; align-content: center; gap: 6px }
+[data-scene-cours] [data-formules-centre] > div { line-height: 1.25 }
+[data-scene-cours] > main[data-avec-visuel] > [data-formules-centre] > div { padding: 3px 10px }
+/* écran large (bureau, téléphone en paysage) : la droite de la figure est libre ; les cartes y vont, en colonne */
+@media (min-aspect-ratio: 8/5) {
+  [data-scene-cours] > main[data-avec-visuel] { grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: minmax(0, 1fr) auto }
+  [data-scene-cours] > main[data-avec-visuel] > [data-formules-centre] { grid-column: 2; grid-row: 1; align-self: stretch; max-height: none;
+    width: auto; max-width: clamp(150px, 19vw, 270px); flex-direction: column; flex-wrap: nowrap; align-items: stretch; justify-content: safe center }
+  /* à 15 px, la colonne ne tenait pas (téléphone en paysage) : useTailleQuiTient l'élargit pas à pas (34vw au plus) */
+  /* la question d'observation : toute la largeur sous la figure et la colonne, donc deux lignes au plus */
+  [data-scene-cours] > main[data-avec-visuel] > [data-observation] { grid-column: 1 / -1 }
+}
+/* téléphone en paysage : les cartes à droite de la figure sont serrées (la place est comptée) */
+@media (max-height: 520px) and (orientation: landscape) {
+  [data-scene-cours] > main[data-avec-visuel] > [data-formules-centre] { gap: 3px }
+  [data-scene-cours] > main[data-avec-visuel] > [data-formules-centre] > div { padding: 1px 8px; border-radius: 8px; line-height: 1.15 }
+  [data-scene-cours] > main[data-avec-visuel] { row-gap: 3px }
+}
+/* sans figure : à 15 px, la liste ne tenait pas en une colonne ; les cartes se rangent côte à côte */
+[data-scene-cours] [data-formules-centre][data-serre] { flex-direction: row !important; flex-wrap: wrap; justify-content: center; align-content: safe center }
+[data-scene-cours] > main[data-avec-visuel] > [data-formules-centre] { justify-content: safe center; align-content: safe center }
 @keyframes tableau-descend { from { transform: translateY(-108%); opacity: .5 } 60% { transform: translateY(1.5%) } to { transform: none; opacity: 1 } }
 @keyframes question-apparait { from { opacity: 0; transform: translateY(-10px) } to { opacity: 1; transform: none } }
 .tableau-questions { animation: tableau-descend .7s cubic-bezier(.2,.8,.2,1) both }
@@ -335,6 +362,8 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   const visuelRef = useRef<HTMLDivElement>(null);
   const lignesRef = useRef<(HTMLTableRowElement | null)[]>([]);
   const centreRef = useRef<(HTMLDivElement | null)[]>([]);
+  /** La liste des formules du centre : sa taille est ajustée pour qu'elle tienne (useTailleQuiTient). */
+  const formulesRef = useRef<HTMLDivElement>(null);
 
   const [temps, setTemps] = useState(0);
   const [duree, setDuree] = useState((piste?.duration_ms || 0) / 1000);
@@ -2016,6 +2045,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   const cahier = (conc.cahier || contenu.student_trace || contenu.essential_text || '').trim();
   const exercices = slide.exercises || [];
   const surSim = visuel?.kind === 'simulation';
+  useTailleQuiTient(formulesRef, `${slide.id}:${centre.length}:${visuel ? 1 : 0}:${obs ? 1 : 0}`);
 
   return (
     <div data-scene-cours className="relative h-full w-full flex flex-col text-white" style={{ background: '#12241c' }}>
@@ -2047,17 +2077,21 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
       {/* ── Le titre et le sous-titre, seulement ── */}
       {/* Avec une simulation, titre et sous-titre tiennent sur une seule ligne (15 novembre 2026 : « la simulation n'occupe
           qu'une bande étroite ») : la hauteur gagnée va au tableau de la simulation. */}
-      <header className={`shrink-0 text-center ${surSim ? 'flex flex-wrap items-baseline justify-center gap-x-4 px-4 pt-1 pb-0.5' : 'px-6 pt-2 pb-1'}`}
+      {/* 18 novembre 2026 : une seule ligne, toujours (le sous-titre se coupe d'une ellipse ; il est entier au cahier). */}
+      <header className={`shrink-0 text-center ${surSim ? 'flex flex-nowrap items-baseline justify-center gap-x-4 overflow-hidden px-4 pt-1 pb-0.5' : 'px-6 pt-2 pb-1'}`}
         style={tuteur3D ? { paddingRight: COLONNE_TUTEUR } : undefined}>
-        <h1 className="text-xl leading-tight md:text-[26px]" style={{ fontFamily: CRAIE, color: '#fef3c7' }}><Formule t={slide.title} /></h1>
+        <h1 className={`text-xl leading-tight md:text-[26px] ${surSim ? 'shrink-0 whitespace-nowrap' : ''}`} style={{ fontFamily: CRAIE, color: '#fef3c7' }}><Formule t={slide.title} /></h1>
         {/* pendant une question d'observation, le sous-titre se tait : il dit souvent la réponse (« la lumière s'étale ») */}
         {contenu.lead && (
-          <p className="text-sm leading-snug md:text-base text-white/70 transition-opacity" style={{ fontFamily: CRAIE, opacity: obs && obs.etape !== 'fini' ? 0 : 1 }}><Formule t={contenu.lead} /></p>
+          <p className={`text-[15px] leading-snug md:text-base text-white/70 transition-opacity ${surSim ? 'min-w-0 truncate' : ''}`} title={surSim ? contenu.lead : undefined}
+            style={{ fontFamily: CRAIE, opacity: obs && obs.etape !== 'fini' ? 0 : 1 }}><Formule t={contenu.lead} /></p>
         )}
       </header>
 
       {/* ── Au centre : ce qu'on regarde ── */}
-      <main className="relative flex-1 min-h-0 flex flex-col items-center justify-center gap-2 px-3 pb-1"
+      {/* avec une figure, la scène est une grille : la figure d'abord (toute la place), la question d'observation en bande
+          fine sous elle, les formules à sa droite (écran large) ou en une rangée fine dessous (CSS « La simulation d'abord ») */}
+      <main data-avec-visuel={visuel ? '' : undefined} className="relative flex-1 min-h-0 flex flex-col items-center justify-center gap-2 px-3 pb-1"
         style={tuteur3D ? { paddingRight: COLONNE_TUTEUR } : undefined}>   {/* la colonne de droite est au tuteur 3D */}
         {/* ── Le deuxième tableau : les questions descendent du haut et couvrent la scène, tout tient sans défiler ── */}
         {panneau === 'questions' && (
@@ -2098,6 +2132,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
         {visuel && (
           <div
             ref={visuelRef}
+            data-cadre-visuel
             className="relative w-full flex-1 min-h-0 flex items-center justify-center"
             // la simulation prend toute la place (12 novembre 2026) ; une image garde sa largeur de lecture
             style={{ maxWidth: surSim ? undefined : 900 }}
@@ -2175,11 +2210,14 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
           </table>
         )}
 
-        {/* Avec une figure, les formules du centre vont dans une bande SOUS la figure, jamais par-dessus (user rule,
-            13 novembre 2026 : « ces équations masquent les simulations ») ; la place est gardée dès le début, la figure
-            ne saute pas quand une formule apparaît. */}
+        {/* Avec une figure, les formules du centre ne la couvrent jamais (user rule, 13 novembre 2026 : « ces équations
+            masquent les simulations ») : colonne étroite à sa droite ou rangée fine dessous, 15-18 px (18 novembre 2026,
+            « la simulation d'abord ») ; la place est gardée dès le début, la figure ne saute pas quand une formule apparaît.
+            Sans figure, la liste s'ajuste à la hauteur entre le titre et la barre (30 px au plus, 15 px au moins). */}
         {centre.length > 0 && (
-          <div data-formules-centre={visuel ? '' : undefined} className={`flex ${visuel ? 'pointer-events-none w-full shrink-0 flex-row flex-wrap justify-center gap-2' : table ? 'flex-row flex-wrap justify-center gap-3' : 'flex-col items-center gap-4'}`}>
+          <div ref={formulesRef} data-formules-centre=""
+            className={`flex ${visuel ? 'pointer-events-none w-full shrink-0 flex-row flex-wrap justify-center gap-2' : table ? 'flex-row flex-wrap justify-center gap-3' : 'max-h-full min-h-0 w-full overflow-hidden flex-col items-center justify-center gap-3'}`}
+            style={{ '--taille-max': `${visuel ? 18 : table ? 22 : 30}px` } as CSSProperties}>
             {centre.map((c, i) => {
               const vu = toutVisible || temps >= c.t;
               return (
@@ -2189,12 +2227,13 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
                   className="rounded-xl px-4 py-2 transition-all duration-700"
                   style={{
                     fontFamily: CRAIE,
-                    fontSize: visuel ? 20 : table ? 22 : 30,
+                    fontSize: `var(--taille-formules, ${visuel ? 18 : table ? 22 : 30}px)`,
                     color: '#fef9c3',
                     border: '1px dashed rgba(254,249,195,0.35)',
                     background: visuel ? 'rgba(15,34,25,0.92)' : undefined,
                     opacity: vu ? 1 : 0,
-                    transform: vu ? 'none' : 'translateY(8px)',
+                    // (une échelle, pas un décalage vers le bas : la carte cachée ne déborde pas de la liste mesurée)
+                    transform: vu ? 'none' : 'scale(0.96)',
                   }}
                 >
                   <Formule t={c.texte} />
@@ -3057,16 +3096,18 @@ function BandeObservation({ o, e, etroit, onCarte, onCartes, onMicro, onMicroFin
   onCarte: (i: number) => void; onCartes: () => void; onMicro: () => void; onMicroFin: () => void; onPasser: () => void;
 }) {
   const indices = (o.indices || []).slice(0, e.indices);
+  const court = useCourt();   // téléphone en paysage : le bouton dit « Réponds », la bande reste fine
   const occupe = e.etape === 'transcrit' || e.etape === 'juge' || e.etape === 'fini';
   const v = e.verdict;
   return (
-    <section data-observation className="question-apparait relative z-20 w-full max-w-4xl shrink-0 rounded-2xl border-2 border-amber-200/45 bg-[#0f2219]/95 px-4 py-2.5 shadow-2xl"
+    // Une bande fine sous la figure (18 novembre 2026, « la simulation d'abord ») : l'énoncé en 15-17 px sur deux lignes
+    // au plus, le micro compact ; la figure reste grande et visible pendant la question.
+    <section data-observation className="question-apparait relative z-20 w-full max-w-4xl shrink-0 rounded-xl border-2 border-amber-200/45 bg-[#0f2219]/95 px-3 py-1 shadow-2xl"
       style={{ fontFamily: CRAIE }}>
-      <div className="flex items-center gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="text-xs font-semibold uppercase tracking-wide text-emerald-200/80">👀 Observe</div>
-          <p className="text-lg leading-snug text-amber-100 md:text-xl"><Formule t={o.enonce} /></p>
-        </div>
+      <div className="flex items-center gap-2">
+        <p className="min-w-0 flex-1 text-[clamp(15px,2.6vh,17px)] leading-snug text-amber-100" title="Observe la simulation, puis réponds">
+          <span className="mr-1.5 font-semibold text-emerald-200/90">👀 Observe :</span><Formule t={o.enonce} />
+        </p>
         <button
           type="button" data-micro-reponse disabled={occupe}
           // maintenir pour répondre, relâcher pour finir (souris, doigt, ou barre d'espace)
@@ -3077,40 +3118,41 @@ function BandeObservation({ o, e, etroit, onCarte, onCartes, onMicro, onMicroFin
           onContextMenu={ev => ev.preventDefault()}
           style={{ touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}
           title="Maintiens le bouton et dis ta réponse"
-          className={`shrink-0 rounded-full px-4 py-2.5 text-base font-semibold transition-colors disabled:opacity-40 ${e.etape === 'ecoute'
+          className={`shrink-0 rounded-full px-3 py-1.5 text-[15px] font-semibold transition-colors disabled:opacity-40 ${e.etape === 'ecoute'
             ? 'bg-rose-500/60 ring-2 ring-rose-200 animate-pulse' : 'bg-emerald-500/30 ring-1 ring-emerald-300/60 hover:bg-emerald-500/45'}`}>
-          {e.etape === 'ecoute' ? '● Je t’écoute… relâche' : etroit ? '🎙️ Réponds' : '🎙️ Maintiens pour répondre'}
+          {e.etape === 'ecoute' ? '● Je t’écoute… relâche' : etroit || court ? '🎙️ Réponds' : '🎙️ Maintiens pour répondre'}
         </button>
         {e.etape !== 'fini' && (
-          <button type="button" onClick={onPasser} className="shrink-0 self-end text-xs text-white/35 hover:text-white/80" title="Passer : la voix reprend">Passer ⏭</button>
+          <div className="flex shrink-0 flex-col items-end text-[15px] leading-tight">
+            {e.etape === 'observe' && !v && !e.cartes && (
+              <button type="button" onClick={onCartes} className="text-white/55 underline decoration-dotted hover:text-white" title="Regarde bien la simulation, prends ton temps… ou vois des propositions">propositions</button>
+            )}
+            <button type="button" onClick={onPasser} className="text-white/40 hover:text-white/80" title="Passer : la voix reprend">Passer ⏭</button>
+          </div>
         )}
       </div>
       {/* les indices se remplacent : seul le dernier reste écrit (la figure garde sa place) */}
       {indices.length > 0 && !v?.correct && (
-        <p key={indices.length} className="craie-ecrit mt-0.5 text-lg leading-snug text-cyan-200">
-          💡 <Formule t={indices[indices.length - 1].texte} />{(o.indices || []).length > 1 && <span className="ml-2 text-xs text-cyan-200/50">{indices.length}/{(o.indices || []).length}</span>}
+        <p key={indices.length} className="craie-ecrit mt-0.5 text-[clamp(15px,2.6vh,17px)] leading-snug text-cyan-200">
+          💡 <Formule t={indices[indices.length - 1].texte} />{(o.indices || []).length > 1 && <span className="ml-2 text-[15px] text-cyan-200/50">{indices.length}/{(o.indices || []).length}</span>}
         </p>
       )}
-      {e.etape === 'observe' && !v && !e.cartes && (
-        <p className="mt-0.5 text-sm text-white/55">Regarde bien la simulation, prends ton temps…
-          <button type="button" onClick={onCartes} className="ml-2 underline decoration-dotted hover:text-white">voir des propositions</button></p>
-      )}
-      {e.etape === 'transcrit' && <p className="mt-0.5 animate-pulse text-sm text-sky-200">✍️ J’écris ce que tu as dit…</p>}
-      {e.etape === 'juge' && <p dir="auto" className="mt-0.5 animate-pulse text-sm text-amber-200">🎙️ « {e.entendu} » — le professeur réfléchit…</p>}
+      {e.etape === 'transcrit' && <p className="mt-0.5 animate-pulse text-[15px] text-sky-200">✍️ J’écris ce que tu as dit…</p>}
+      {e.etape === 'juge' && <p dir="auto" className="mt-0.5 animate-pulse text-[15px] text-amber-200">🎙️ « {e.entendu} » — le professeur réfléchit…</p>}
       {v && (
-        <p className={`craie-ecrit mt-0.5 text-lg leading-snug ${v.correct ? 'text-emerald-300' : v.correct === false ? 'text-rose-200' : 'text-amber-200'}`}>
-          {e.entendu && e.etape !== 'juge' && <span dir="auto" className="mr-2 text-sm text-sky-200/80">🎙️ « {e.entendu} »</span>}
+        <p className={`craie-ecrit mt-0.5 text-[clamp(15px,2.6vh,17px)] leading-snug ${v.correct ? 'text-emerald-300' : v.correct === false ? 'text-rose-200' : 'text-amber-200'}`}>
+          {e.entendu && e.etape !== 'juge' && <span dir="auto" className="mr-2 text-[15px] text-sky-200/80">🎙️ « {e.entendu} »</span>}
           {v.correct ? '✔ ' : v.correct === false ? '✘ ' : '? '}<Formule t={v.ecrit} />
         </p>
       )}
-      {e.erreur && <p className="mt-1 text-sm text-rose-200">{e.erreur}</p>}
+      {e.erreur && <p className="mt-0.5 text-[15px] text-rose-200">{e.erreur}</p>}
       {e.cartes && (
-        <div className="question-apparait mt-1.5 grid gap-2" style={{ gridTemplateColumns: `repeat(${etroit && o.choix.length > 2 ? 1 : o.choix.length}, minmax(0, 1fr))` }}>
+        <div className="question-apparait mt-1 grid gap-1.5" style={{ gridTemplateColumns: `repeat(${etroit && o.choix.length > 2 ? 1 : o.choix.length}, minmax(0, 1fr))` }}>
           {o.choix.map((c, i) => {
             const barree = e.exclus.includes(i), bonne = e.bonneMontree && i === o.bonne;
             return (
               <button key={i} type="button" data-carte={i} onClick={() => onCarte(i)} disabled={barree || e.etape !== 'observe'}
-                className={`rounded-xl border px-3 py-1.5 text-left text-lg leading-snug transition-colors ${bonne ? 'border-emerald-300 bg-emerald-500/25 text-emerald-100'
+                className={`rounded-lg border px-2.5 py-1 text-left text-[clamp(15px,2.6vh,17px)] leading-snug transition-colors ${bonne ? 'border-emerald-300 bg-emerald-500/25 text-emerald-100'
                   : barree ? 'border-rose-300/30 bg-rose-500/10 text-white/40 line-through' : 'border-white/25 bg-white/5 hover:border-amber-200/70 hover:bg-white/10'} disabled:cursor-default`}>
                 <Formule t={c} />
               </button>
@@ -3134,6 +3176,52 @@ function BoutonResultat({ onClick, className = '' }: { onClick: () => void; clas
 /** Le texte d'un bouton de la barre : l'icône toujours, le mot sur grand écran (et au survol, `title`). */
 function Libelle({ icone, texte }: { icone: string; texte: string }) {
   return <span title={texte} aria-label={texte}>{icone}<span className="hidden 2xl:inline"> {texte}</span></span>;
+}
+
+/**
+ * La liste des formules tient toujours dans sa place (18 novembre 2026, demande de l'utilisateur : six cartes en 30 px
+ * couvraient le titre et passaient sous la barre). La plus grande taille qui tient, de `--taille-max` à 15 px, est posée
+ * en `--taille-formules` ; à 15 px sans tenir, les cartes se rangent côte à côte (`data-serre`), ou la colonne à droite de la figure s'élargit pas à pas, puis, en dernier
+ * recours, la liste défile. Recalculé quand la scène change de taille.
+ */
+function useTailleQuiTient(ref: RefObject<HTMLDivElement | null>, cle: string) {
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let frame = 0;
+    const ajuster = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const max = parseFloat(getComputedStyle(el).getPropertyValue('--taille-max')) || 30;
+        const deborde = () => el.scrollHeight > el.clientHeight + 1 || el.scrollWidth > el.clientWidth + 1;
+        const essayer = () => {
+          let t = max;
+          el.style.setProperty('--taille-formules', `${t}px`);
+          while (t > 15 && deborde()) { t -= 1; el.style.setProperty('--taille-formules', `${t}px`); }
+          return !deborde();
+        };
+        delete el.dataset.serre;
+        el.style.overflowY = '';
+        el.style.maxWidth = '';
+        if (essayer()) return;
+        // la colonne à droite de la figure (écran large) : elle s'élargit pas à pas, juste ce qu'il faut
+        if (el.parentElement?.hasAttribute('data-avec-visuel') && getComputedStyle(el).flexDirection === 'column') {
+          // (à 15 px : la place gagnée sert à faire tenir les cartes, pas à les grossir aux dépens de la figure)
+          for (const vw of [22, 25, 28, 31, 34]) { el.style.maxWidth = `max(150px, ${vw}vw)`; if (!deborde()) return; }
+          el.style.overflowY = 'auto';
+          return;
+        }
+        el.dataset.serre = '';
+        if (essayer()) return;
+        el.style.overflowY = 'auto';   // rare : trop de cartes même à 15 px
+      });
+    };
+    ajuster();
+    const ro = new ResizeObserver(ajuster);
+    ro.observe(el);
+    if (el.parentElement) ro.observe(el.parentElement);
+    return () => { ro.disconnect(); cancelAnimationFrame(frame); };
+  }, [ref, cle]);
 }
 
 /** Téléphone en paysage (hauteur < 520 px) : vrai tant que l'écran garde cette forme. */
