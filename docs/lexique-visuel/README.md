@@ -134,7 +134,7 @@ est le carbone (règle de l'utilisateur : le glucose est une chaîne de billes j
 est rose. Passer la chimie au code du lexique (C jaune, H⁺ rose, H₃O⁺ à H⁺ rose) demande de **réécrire et
 réenregistrer cette phrase de la voix** (« petite boule rose ») : à faire avec la 2ᵉ passe des cours. En attendant, la
 chimie garde C gris et H⁺ jaune (commentaire dans chaque `commun.js`). La physique nucléaire (proton rouge) suit la même
-décision : la voix ne nomme pas la couleur du proton (vérifié pour ch4, ch5 à faire au moment du passage).
+décision : la voix de ch5 (énergie nucléaire) dit « Z, le nombre de protons, les sphères rouges » et « les sphères grises » (neutrons). **Trois voix, trois couleurs pour le même objet** (SVT : aucune, chimie : jaune, physique : rouge) : choisir la couleur du proton/H⁺ du site, puis réenregistrer les deux phrases concernées.
 
 ## Fait en chimie (18 novembre 2026)
 
@@ -142,6 +142,13 @@ décision : la voix ne nomme pas la couleur du proton (vérifié pour ch4, ch5 �
 - HO⁻ : une seule couleur, bleu ciel (charge −) — il était rouge dans cin/conductimetrie, cin/pression,
   tds/conductimetrie, tds/dilution et bleu foncé dans ab/exploiter, ab/figures ; nom écrit en bleu.
 - Électron de tlr/transfert : vert → bleu ciel.
+
+## Fait en physique nucléaire (18 novembre 2026)
+
+- Proton : une seule teinte dans les deux cours, le rouge #d9534f de l'énergie nucléaire (la radioactivité avait un
+  rouge-orangé #f2683a / #f06a3a / [228,96,54]) ; étiquette « proton » rouge (était orange) ; textes « rouge-orangé » → « rouge ».
+- Neutron : gris-bleu #8fa3b8 partout (la radioactivité en avait 4 plus clairs) ; électron : bleu ciel du lexique.
+- Le rose du lexique n'est pas appliqué : la voix de ch5 dit « les protons, les sphères rouges » (voir la décision ci-dessus).
 
 ## Reste à faire
 
