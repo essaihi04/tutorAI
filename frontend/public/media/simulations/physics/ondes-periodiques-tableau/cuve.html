@@ -411,7 +411,12 @@ const MESSAGES = {
   frequence: 'La célérité dépend de la fréquence : la surface de l’eau est un milieu dispersif.',
 };
 function start() { S.jusqua = null; S.t = 0; S.regle = null; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Le vibreur démarre… (mouvement ralenti 10 fois)'); pont.noter('start', { frequence_hz: Nactuel() }); pont.emettre(); }
-function reset() { start(); }
+// Diapositive pilotée (professeur 39) : `reset` FIGE la scène — sur ?depart=<moment> (tout ce qui précède déjà
+// écrit) ou sur zéro — et rien ne court seul ; la voix avance ensuite par play_until. Avant, reset = start.
+const DEPART = new URLSearchParams(location.search).get('depart');
+let FIGE = false;
+function reset() { FIGE = true; const M = moments(); S.t = DEPART && M[DEPART] !== undefined ? M[DEPART] : 0; S.jusqua = null; S.motif = ''; S.regle = null; S.running = false; S.fait = false; scene.sale = true; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Observe… (mouvement ralenti 10 fois)'); pont.noter('reset', { time_s: +S.t.toFixed(3) }); pont.emettre(); }
+if (DEPART) setTimeout(reset, 0);
 function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre(); }
 function resume() { if (S.running) return; if (S.fait || S.t >= plan().fin) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe… (ralenti 10 fois)'); pont.noter('resume'); pont.emettre(); }
 function setTime(p) {
@@ -496,7 +501,7 @@ const pont = protocole({ id: config.id, commandes, config,
   progression: () => (S.fait ? 1 : 0),
   executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
 bulle($('feedback'), 'Le vibreur va démarrer…');
-setTimeout(() => { if (!S.running && S.t === 0) start(); }, 1600);
+setTimeout(() => { if (DEPART) { if (!FIGE) reset(); } else if (!FIGE && !S.running && S.t === 0) start(); }, 1600);
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>
 </body></html>

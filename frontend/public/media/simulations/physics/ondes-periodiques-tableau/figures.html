@@ -518,6 +518,11 @@ function calculer() { if (M.fin === undefined) { const t = S.tw; S.tw = 1e6; des
 function start() { S.tw = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); bulle($('feedback'), ''); pont.noter('start', { figure: fig }); pont.emettre(); }
 function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); pont.noter('pause'); pont.emettre(); }
 function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); pont.noter('resume'); pont.emettre(); }
+// Diapositive pilotée (professeur 39) : `reset` FIGE la scène — sur ?depart=<moment> (tout ce qui précède déjà
+// écrit) ou sur zéro — et rien ne court seul ; la voix avance ensuite par play_until. Avant, reset = start.
+const DEPART = P.get('depart');
+function reset() { calculer(); S.tw = DEPART && M[DEPART] !== undefined ? M[DEPART] : 0; S.jusqua = null; S.motif = ''; S.running = false; S.pause = true; S.fait = false; scene.sale = true; etiquette(); bulle($('feedback'), ''); pont.noter('reset', { time_s: +S.tw.toFixed(2) }); pont.emettre(); }
+if (DEPART) setTimeout(reset, 0);
 const MOTIFS = { trace: 'la figure seule', fin: 'figure complète', durees: 'les durées égales', exemples: 'les exemples convertis', periode: 'la période', unites: 'les unités des axes',
   lecture: 'les deux lectures', intervalles: 'les intervalles comptés depuis S', lambda: 'la longueur d’onde', front: 'le front à 6 cm de S', retard: 'le retard τ',
   amplitude: 'l’amplitude', source: 'la courbe de la source', arcs: 'les arcs de l’onde diffractée' };
@@ -526,6 +531,8 @@ function playUntil(p) {
   calculer();
   const nom = p.moment in M && etapes().includes(p.moment) ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
   if (!Number.isFinite(cible)) return;
+  // Déjà figée sur ce moment (ouverture ?depart=, que le kit rejoue par play_until faute de set_time) : on y reste.
+  if (S.pause && !S.running && !S.fait && Math.abs(S.tw - cible) < 1e-3) { pont.emettre(); return; }
   if (S.fait || !(S.running || S.pause) || S.tw >= cible - 1e-3) { S.tw = 0; S.fait = false; }
   S.jusqua = cible; S.motif = nom ? MOTIFS[nom] : ''; S.running = true; S.pause = false; etiquette(); bulle($('feedback'), '');
   pont.noter('play_until', { moment: nom }); pont.emettre();
@@ -559,7 +566,7 @@ const pont = protocole({ id: config.id, commandes, config,
   etat: () => ({ simulation_status: S.running ? 'running' : S.pause ? 'paused' : 'finished', ce_qui_se_voit: ceQuiSeVoit(), current_variant: fig,
     moments: Object.fromEntries(etapes().filter(n => M[n] !== undefined).map(n => [n, +M[n].toFixed(2)])), etapes_ecrites: etapes().filter(n => vu(n)) }),
   progression: () => (S.fait ? 1 : 0),
-  executer: (cmd, p) => ({ start, reset: start, pause, resume, play_until: () => playUntil(p) })[cmd]?.() });
+  executer: (cmd, p) => ({ start, reset, pause, resume, play_until: () => playUntil(p) })[cmd]?.() });
 etiquette();
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>

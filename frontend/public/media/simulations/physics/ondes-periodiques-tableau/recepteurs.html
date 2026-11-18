@@ -332,10 +332,20 @@ function start(garder) {
 }
 function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
 function resume() { if (S.running) return; if (!S.pause) return start(true); S.running = true; S.pause = false; etiquette(); pont.noter('resume'); pont.emettre(); }
-function reset() { start(false); }
+// Diapositive pilotée (professeur 39) : `reset` FIGE la scène — sur ?depart=<moment> (tout ce qui précède déjà
+// écrit) ou sur zéro — et rien ne court seul ; la voix avance ensuite par play_until. Avant, reset = start(false).
+const DEPART = new URLSearchParams(location.search).get('depart');
+function reset() {
+  const M = moments(); S.t = DEPART && M[DEPART] !== undefined ? M[DEPART] : 0; S.jusqua = null; S.motif = ''; S.ecrit = null; S.running = false; S.pause = true; S.fait = false;
+  S.manuel = false; S.d = RECUL ? dScript(S.t) : D0;
+  scene.sale = true; etiquette(); bulle($('feedback'), 'Observe…'); pont.noter('reset', { time_s: +S.t.toFixed(2), d_mm: S.d }); pont.emettre();
+}
+if (DEPART) setTimeout(reset, 0);
 function playUntil(p) {
   const M = moments(), nom = p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
   if (!Number.isFinite(cible)) return;
+  // Déjà figée sur ce moment (ouverture ?depart=, que le kit rejoue par play_until faute de set_time) : on y reste.
+  if (S.pause && !S.running && !S.fait && !S.manuel && Math.abs(S.t - cible) < 1e-3) { pont.emettre(); return; }
   if (S.fait || S.manuel || !(S.running || S.pause) || S.t >= cible - 1e-3) start(false);
   S.jusqua = Math.min(FIN(), cible); S.motif = nom ? MOTIFS[nom] : '';
   S.running = true; S.pause = false; etiquette(); bulle($('feedback'), 'Observe…');
@@ -427,7 +437,7 @@ const pont = protocole({ id: config.id, commandes, config,
   executer: (cmd, p) => (achever(), { start: () => start(true), reset, pause, resume, set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
 bulle($('feedback'), 'L’émetteur va émettre…');
 // Le banc est d’abord dessiné à la craie, puis l’émetteur s’allume (au plus tard 6 s après l’ouverture).
-(function allumer(n) { if (S.running || S.pause || S.fait || S.t > 0) return; if ((n > 1 && scene.craie.complet) || n >= 20) return start(true); setTimeout(() => allumer(n + 1), 300); })(0);
+(function allumer(n) { if (DEPART || S.running || S.pause || S.fait || S.t > 0) return; if ((n > 1 && scene.craie.complet) || n >= 20) return start(true); setTimeout(() => allumer(n + 1), 300); })(0);
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>
 </body></html>
