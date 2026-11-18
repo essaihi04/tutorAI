@@ -159,3 +159,85 @@ mais la mettre avec le national aurait donné une séance de 11 diapositives, do
 
 Une piste : `mixed/ol_c5_cuve` (liste : `phys_ch3_ondes_lumineuses_voix.json`). Mot rare gardé : « largeurs »
 (terme du chapitre, déjà dans l'ancienne voix).
+
+
+## 2ᵉ passe (18 novembre 2026) : le national joué pas à pas
+
+Demande : simple, animé, expliqué ; ne pas tout donner au départ ; laisser l'élève trouver seul ; une raison derrière
+chaque choix. Ce qui n'allait pas après la 1ʳᵉ passe : `ol_x2_national_2023` faisait tout le calcul de a à la voix
+(l'élève n'avait rien à faire) ; `ol_x3_national_2021` lisait la pente k à la voix avant toute question ; les trois
+nationaux étaient des énoncés écrits (`figures.html`), pas des montages animés ; la voix de `ol_c5_cuve` disait la
+conclusion (« la longueur d'onde diminue ») avant que l'élève voie la tache se resserrer.
+
+### Une nouvelle simulation : `national.html` (dossier du cours)
+Une page neuve plutôt qu'une page modifiée : le cours en ligne ne la voit pas, rien n'y change. Quatre vues, les
+valeurs des énoncés, un moment par étape du raisonnement (professeur règle 41, simulations-au-tableau règle 14) :
+- `?vue=2023` : laser jaune, fente horizontale (taches sur une ligne verticale), D = 1,4 m, L = 2,7 cm, le triangle
+  θ, L/2, D ; puis la source rouge (la tache s'élargit à 3,4 cm). a et λ₀R ne sont jamais écrits.
+- `?vue=2021p` : la lumière blanche → spectre ; la radiation jaune, puis la rouge, dans deux barres de verre (λ dans
+  le prisme à l'échelle) ; les deux fronts avancent à leur célérité exacte (v = λ·ν), le rouge un peu devant. Les
+  célérités ne s'écrivent qu'au moment `vitesses`, jamais joué avant la réponse (`conclusions=0`).
+- `?vue=2021c` : l'écran recule (50, 100, 150, 200 cm), chaque mesure pose son point ; la droite par l'origine ; ΔL et
+  ΔD en pointillés ; k ne s'écrit qu'au moment `pente_valeur`, joué par la diapositive SUIVANTE (après la réponse) ;
+  puis le cheveu (D₁ = 2 m, L₁ = 3 cm).
+- `?vue=2025` : la tache dans l'air (2,4 cm), la cuve se remplit, la tache se resserre (1,8 cm, l'ancienne en
+  pointillé) ; n n'est écrit qu'au moment `indice`.
+`?depart=<moment>` ouvre la scène figée là où la diapositive précédente s'est arrêtée ; `reset` y revient. Dessins
+repris de `diffraction.html` et `prisme-dispersion.html` (même boîtier de laser, même fente, même écran, même cuve,
+même prisme, le cheveu comme le fil : règle « un objet, un dessin »). Tableau large (téléphone en paysage, lecteur
+large) : les lignes écrites sous la figure passent dans une colonne à droite, plus grandes, coupées en deux si besoin.
+Texte jamais sous 15 px à l'écran, même à 724 × 350 : la page garde son plancher de 15 px (le kit le baisserait sur un
+petit tableau), les puissances de dix sont écrites en trois morceaux (l'exposant garde 15 px), les indices évités
+quand la couleur suffit (« λ = 355 nm » sous « jaune »), k écrit 0,02. Vérifiée dans Chromium : aucune erreur, encre
+présente, chaque moment atteint, rien hors cadre, chaque texte mesuré ≥ 15 px à tous les moments des quatre vues à
+724 × 350 ; captures aussi à 1024 × 560, 1280 × 640 et 1596 × 700, sans chevauchement.
+
+**Réactions préparées** des 7 nouvelles questions (`concentration.reponses.q`) écrites à la main, une par option
+(`juste` pour la bonne, `1` indice sans réponse et `2` réponse justifiée pour chaque mauvaise), clés vérifiées contre
+`correct` ; chaque mauvaise réaction nomme l'erreur qui donne vraiment ce nombre (L en cm, le 2 oublié, rapport à
+l'envers, λ en nm, λ/c, c au lieu de v, ΔD/ΔL, cm sur m, 2·a·k, a en mm, différence au lieu d'un rapport, L'/L).
+
+### Les diapositives : une consigne par bloc, la réponse avant la correction
+Chaque exercice du national est coupé en étapes ; chaque étape a sa diapositive, son animation et UNE ardoise « À toi »
+(sa question + au plus un exercice), donc son bloc. La correction (`demonstration`) est écrite comme le barème la lit :
+relation avec les symboles de l'énoncé, conversion sur sa ligne, une seule application numérique, résultat et unité ;
+les unités sont dites en mots. Les distracteurs sont les erreurs réelles (L laissée en cm, le 2 oublié, rapport à
+l'envers, λ en nm, ΔD/ΔL à l'envers, unités mélangées, a en mm, L'/L, une différence au lieu d'un rapport).
+
+| Diapo | Animation | L'élève fait | Pourquoi |
+|---|---|---|---|
+| `ol_x2_national_2023` (réécrite) | montage 2023, mesure de L, triangle | calcule a (60 µm) | la voix ne fait plus le calcul : première lecture, données, figure, puis la consigne |
+| `ol_x2b_2023_rouge` (nouvelle) | source rouge : la tache s'élargit, L_R = 3,4 cm | λ₀R par le rapport (730 nm), puis λ dans le milieu (387 nm, exercice repris de la fin de cours) | cas « rapport » (2023 R) et « milieu » joués après le calcul de a |
+| `ol_x3_national_2021` (réécrite) | prisme : spectre, puis la radiation jaune | calcule ν_j (5,09·10¹⁴ Hz) | la 1ʳᵉ partie du sujet (prisme, fréquence) n'était pas jouée |
+| `ol_x3b_2021_prisme` (nouvelle) | les deux ondes dans le verre, le front rouge devant | calcule v_j et v_r, puis nomme la dispersion (exercice repris) | le cas « dispersion » : la conclusion vient de ses deux calculs, pas d'une phrase |
+| `ol_x3c_2021_courbe` (nouvelle) | la courbe L = f(D) se construit point par point | calcule la pente k (2·10⁻²) | la courbe n'est plus un dessin fini : chaque point vient d'une mesure ; k n'est plus dit |
+| `ol_x3d_2021_lambda` (nouvelle) | k s'écrit (après la réponse), puis le cheveu | identifie et calcule λ (600 nm), puis d (80 µm, exercice repris) | identification puis fil/cheveu, deux cas types |
+| `ol_x4_national_2025` (voix gardée) | air, cuve, liquide, la tache se resserre | QCM 1 et « nommer » (inchangés) | seule la figure change : le montage animé remplace l'énoncé écrit |
+| `ol_x4b_2025_indice` (nouvelle) | les deux taches | montre n = L/L' et calcule n (1,33), puis v (exercice repris) | le cas « indice par diffraction » était en fin de cours, non joué |
+
+`ol_c5_cuve` : voix revue (besoin noté à la 1ʳᵉ passe). La voix montre d'abord (« شوف la tache مزيان »), la tache se
+resserre sous les yeux de l'élève, puis le chiffre, puis le pourquoi (λ diminue, a et D ne changent pas) ; mots rares
+remplacés (« كنعمرو », « صغرات », « ما تبدلاتش » → « كنحطو الما », « ولات صغيرة », « هي هي »).
+
+Séance 7 de la 1ʳᵉ passe coupée en deux (7 : 2023 R et le prisme de 2021 N ; 8 : la courbe de 2021 N, 2025 R, le
+bilan) : un bloc par étape, chaque bloc avec son cahier (les lignes du barème) et un `retrouver`. Le cahier de la
+diapositive donne la méthode, sans le résultat (il s'ouvre à la demande, avant la réponse) ; le cahier du bloc, montré
+après l'ardoise, donne le résultat. 60 diapositives, 26 blocs, 8 séances. Compétences mises à jour (C3–C8).
+
+Les réactions préparées des exercices repris de la fin de cours ont été relues : celles de 2.3 (dispersion) et 3.3
+(cheveu) disaient les nombres en arabe, avaient des mots rares (« تقلقش », « فيرجيل », « ميكرومتر ») et un verdict
+mal placé ; elles sont réécrites (darija simple, nombres en français, écrit = parole).
+
+### Ce qui avait déjà été fait
+Les voix qui invitaient à un exercice absent (`ol_l6`, `ol_c3`, `ol_g3`, notées plus haut) ne finissent plus sur une
+consigne dans la copie en attente : rien à faire.
+
+### Ce qui reste
+- **Voix** : 75 pistes (8 diapositives, 11 démonstrations, 56 énoncés et réactions, dont les 35 réactions
+  préparées des 7 nouvelles questions), liste dans
+  `phys_ch3_ondes_lumineuses_voix.json` ; 5 réactions déplacées gardent leur voix. Voix à écouter : les nombres de
+  l'énoncé (« quatre-vingt-neuf », « quatre-vingt-onze », « quatre-vingt-cinq », « quatre-vingt-un »,
+  « quatre-vingt-sept ») et « violet », « radiations », termes gardés.
+- Rejouer les diapositives dans le lecteur avec leur voix (`verifier-pointage-navigateur.mjs`) : quand les voix
+  existeront. Sans durée de piste, le contrôle de pointage signale des gestes « trop serrés » (toutes les phrases à
+  t = 0) ; avec une durée estimée, aucun écart sur les diapositives nationales.
