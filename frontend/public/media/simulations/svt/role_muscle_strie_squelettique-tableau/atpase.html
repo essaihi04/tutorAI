@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Qui hydrolyse l’ATP ? — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="muscle.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Trois tubes avec de l’ATP et des ions calcium : actine seule, myosine seule, actine et myosine ; un compteur mesure le phosphate libéré dans chaque tube, un tube après l’autre"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="recit.js"></script>
+<script>
+/*
+ * Qui hydrolyse l’ATP ? (18 novembre 2026, logique du cours : « l’expérience avant le mécanisme qu’elle prouve »).
+ * Diapositive ms_e2_atpase, document reconstitué d’après les manuels (activité ATPasique, valeurs relatives).
+ * Trois tubes, chacun avec de l’ATP et des ions Ca²⁺ ; on mesure le phosphate Pi libéré (= ATP hydrolysé) :
+ *   tube 1 : actine seule          → 0 (pas d’hydrolyse) ;
+ *   tube 2 : myosine seule         → faible (4 unités arbitraires) ;
+ *   tube 3 : actine + myosine      → forte (40 unités arbitraires), et vite.
+ * Règle 33 du professeur : le principe d’abord, puis chaque tube seul, son résultat écrit à son instant ; la conclusion
+ * en dernier (cachée tant que `conclusions` vaut false).
+ * Moments : principe 2 ; tube1 5,2 ; tube2 8,6 ; tube3 12 ; conclusion 14,6 ; fin 15.
+ */
+const { bulle, protocole } = window.Tableau;
+const { Chrono, Apparitions, fr, doux } = window.MuscleRecit;
+const $ = id => document.getElementById(id);
+const M = { principe: 2, tube1: 5.2, tube2: 8.6, tube3: 12, conclusion: 14.6 };
+const FIN = 15;
+const MOTIFS = { principe: 'trois tubes avec de l’ATP et du Ca²⁺ ; on mesure le Pi libéré', tube1: 'tube 1, actine seule : pas de Pi, pas d’hydrolyse',
+  tube2: 'tube 2, myosine seule : un peu de Pi, hydrolyse faible', tube3: 'tube 3, actine + myosine : beaucoup de Pi, hydrolyse forte',
+  conclusion: 'la myosine hydrolyse l’ATP ; liée à l’actine, beaucoup plus' };
+const TUBES = [
+  { id: 'tube1', nom: 'actine', debut: 2, finMesure: 5, valeur: 0, mot: '0 : pas d’hydrolyse', couleur: 'rouge', actine: true, myosine: false },
+  { id: 'tube2', nom: 'myosine', debut: 5.4, finMesure: 8.4, valeur: 4, mot: '4 : hydrolyse faible', couleur: 'orange', actine: false, myosine: true },
+  { id: 'tube3', nom: 'actine + myosine', debut: 8.8, finMesure: 11.8, valeur: 40, mot: '40 : hydrolyse forte', couleur: 'vert', actine: true, myosine: true },
+];
+const R = { conclusions: true };
+let TK = 1;
+const tk = v => Math.round(v * TK);
+const valeur = (T, t) => T.valeur * doux(chrono.part(T.debut + 0.3, T.finMesure, t));
+
+/* Un tube de verre peint (règle 32) : verre, liquide, ménisque, reflets ; dedans, l’actine (perles orange), la myosine
+ * (bâtonnets violets à deux têtes) et le Pi libéré (petits points jaunes), autant que le compteur. */
+function peindreTube(ctx, x, y, w, h, T, n, actif) {
+  ctx.save();
+  const yl = y + h * 0.28;
+  const forme = () => { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + h - w / 2); ctx.arc(x + w / 2, y + h - w / 2, w / 2, Math.PI, 0, true); ctx.lineTo(x + w, y); };
+  const liq = ctx.createLinearGradient(x, 0, x + w, 0);
+  liq.addColorStop(0, 'rgba(96,165,250,.35)'); liq.addColorStop(.5, 'rgba(186,230,253,.55)'); liq.addColorStop(1, 'rgba(59,130,246,.35)');
+  ctx.save(); forme(); ctx.closePath(); ctx.clip(); ctx.fillStyle = liq; ctx.fillRect(x, yl, w, h);
+  // actine et myosine en suspension
+  const graine = window.Tableau.graine(T.id.length * 97 + 11);
+  for (let k = 0; k < 7; k++) {
+    const px = x + 10 + graine() * (w - 20), py = yl + 16 + graine() * (h * 0.62 - 20);
+    if (T.actine && k % (T.myosine ? 2 : 1) === 0) { ctx.fillStyle = '#fb923c'; for (let b = 0; b < 4; b++) { ctx.beginPath(); ctx.arc(px - 9 + b * 6, py, 3.2, 0, 7); ctx.fill(); } }
+    if (T.myosine && (k % 2 === 1 || !T.actine)) { ctx.strokeStyle = '#a855f7'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(px - 10, py + 6); ctx.lineTo(px + 8, py + 6); ctx.stroke(); ctx.fillStyle = '#c084fc'; ctx.beginPath(); ctx.arc(px + 11, py + 3, 3.4, 0, 7); ctx.arc(px + 11, py + 10, 3.4, 0, 7); ctx.fill(); }
+  }
+  // Pi libéré : un point par unité (au plus 40), qui apparaît pendant la mesure
+  const g2 = window.Tableau.graine(T.id.length * 31 + 5);
+  for (let k = 0; k < Math.round(n); k++) { const px = x + 8 + g2() * (w - 16), py = yl + 8 + g2() * (h * 0.7 - 12); ctx.fillStyle = '#facc15'; ctx.beginPath(); ctx.arc(px, py, 2.6, 0, 7); ctx.fill(); }
+  ctx.restore();
+  // verre : contour, reflet, ménisque
+  ctx.lineWidth = 2.2; ctx.strokeStyle = actif ? 'rgba(255,255,255,.95)' : 'rgba(226,232,240,.7)'; forme(); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x + 6, y + 10); ctx.lineTo(x + 6, y + h - w * 0.7); ctx.stroke();
+  ctx.strokeStyle = 'rgba(224,242,254,.9)'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.ellipse(x + w / 2, yl, w / 2 - 1, 3, 0, 0, 7); ctx.stroke();
+  ctx.restore();
+}
+
+function dessiner(c) {
+  scene.cadre(23);
+  const L = scene.L, lg = L >= 1000; TK = lg ? 1.25 : 1;
+  const tw = tk(60), th = tk(150), y0 = 92, pas = (L - 120) / 3;
+  const xs = TUBES.map((_, i) => 60 + pas * i + pas / 2 - tw / 2);
+  ecrit.ecrire(c, 'entete', () => {
+    c.texte('Dans chaque tube : ATP + ions Ca²⁺', L / 2, 30, { couleur: 'jaune', taille: tk(20), align: 'center' });
+    c.texte('on mesure le phosphate libéré (Pi) : il dit combien d’ATP a été hydrolysé', L / 2, 58, { couleur: 'blanc', taille: tk(16), align: 'center', max: L - 40 });
+  });
+  c.repere('entete', 40, 8, L - 80, 58, 'le principe : ATP et Ca²⁺ dans chaque tube, on mesure le Pi');
+  c.direct(() => TUBES.forEach((T, i) => {
+    const actif = chrono.t >= T.debut && chrono.t <= T.finMesure + 0.4;
+    peindreTube(c.ctx, xs[i], y0, tw, th, T, valeur(T, chrono.t), actif);
+  }));
+  TUBES.forEach((T, i) => {
+    const xc = xs[i] + tw / 2;
+    ecrit.ecrire(c, 'nom' + i, () => {
+      c.texte(`${i + 1}`, xc, y0 - 8, { couleur: 'blanc', taille: tk(18), align: 'center', gras: true });
+      c.texte(T.nom, xc, y0 + th + tk(26), { couleur: T.actine && T.myosine ? 'vert' : T.actine ? 'orange' : 'violet', taille: tk(18), align: 'center' });
+    });
+    c.repere(T.id, xc - tw / 2 - 16, y0 - 26, tw + 32, th + 60, `le tube ${i + 1} : ${T.nom}`);
+    if (chrono.t >= T.debut) {
+      const v = valeur(T, chrono.t);
+      c.direct(() => c.texte(`Pi : ${fr(v, 0)}`, xc, y0 + th + tk(54), { couleur: 'jaune', taille: tk(20), align: 'center', gras: true }));
+      c.repere('compteur' + (i + 1), xc - 60, y0 + th + tk(34), 120, tk(28), `le Pi libéré dans le tube ${i + 1}`);
+    }
+    if (chrono.t >= T.finMesure && (R.conclusions || i < 2)) ecrit.ecrire(c, 'res' + i, () =>
+      c.texte(T.mot, xc, y0 + th + tk(82), { couleur: T.couleur, taille: tk(17), align: 'center', max: pas - 10 }));
+  });
+  if (chrono.t >= 12.2 && R.conclusions) {
+    ecrit.ecrire(c, 'conclusion', () => {
+      c.texte('La myosine hydrolyse l’ATP : c’est une ATPase.', L / 2, 368, { couleur: 'vert', taille: tk(19), align: 'center', max: L - 40 });
+      c.texte('Liée à l’actine, elle l’hydrolyse beaucoup plus. L’actine seule ne l’hydrolyse pas.', L / 2, 396, { couleur: 'blanc', taille: tk(16), align: 'center', max: L - 40 });
+    });
+    c.repere('conclusion', 30, 346, L - 60, 56, 'la conclusion : la myosine est une ATPase, activée par l’actine');
+  }
+  return c.fin();
+}
+
+const canvas = $('canvas');
+const scene = window.MuscleTableau.Scene(canvas, dessiner, { large: true });
+const ecrit = Apparitions(scene);
+const chrono = Chrono({ fin: () => FIN, moments: () => M, motifs: MOTIFS, bouton: $('run'), bulle: $('feedback'), pont: () => pont,
+  depart: 'Trois tubes, un après l’autre…', reinit: () => ecrit.oublier(),
+  fini: () => 'Actine seule : 0 ; myosine seule : faible ; actine + myosine : forte.' });
+scene.avancer = (dt) => { const a = chrono.avancer(dt); if (a) scene.sale = true; return a; };
+function ceQuiSeVoit() {
+  const m = ['Trois tubes avec ATP et ions Ca²⁺ : 1 actine seule, 2 myosine seule, 3 actine + myosine ; un compteur de Pi sous chaque tube.'];
+  if (chrono.t <= 0) { m.push('Rien n’est encore mesuré.'); return m.join(' '); }
+  TUBES.forEach((T, i) => { if (chrono.t >= T.debut) m.push(`Tube ${i + 1} : Pi = ${fr(valeur(T, chrono.t), 0)}${chrono.t >= T.finMesure ? ' (' + T.mot + ')' : ' (mesure en cours)'}.`); });
+  if (chrono.t >= 12.2 && R.conclusions) m.push('Conclusion écrite : la myosine est une ATPase, beaucoup plus active liée à l’actine.');
+  return m.join(' ');
+}
+$('run').onclick = chrono.clic;
+window.Tableau.explication({ atpase: [
+  { repere: 'entete', texte: 'Le principe : de l’ATP et du Ca²⁺ dans chaque tube ; le Pi libéré mesure l’hydrolyse.' },
+  { repere: 'tube1', texte: 'Actine seule : pas de Pi.' },
+  { repere: 'tube2', texte: 'Myosine seule : un peu de Pi.' },
+  { repere: 'tube3', texte: 'Actine + myosine : beaucoup de Pi.' } ] });
+const commandes = ['start', 'pause', 'resume', 'reset', 'set_time', 'play_until', 'set_parameters'];
+const config = { id: 'muscle_tableau_atpase', version: '1.0', title: 'Qui hydrolyse l’ATP ?', variants: [{ id: 'atpase', label: 'trois tubes' }], commands: commandes,
+  command_schema: { play_until: { moment: Object.keys(M).join(' | ') }, set_parameters: { conclusions: 'true | false (false : le résultat du tube 3 et la conclusion restent cachés)' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Document reconstitué d’après les manuels. Trois tubes avec ATP et Ca²⁺ ; on mesure le Pi libéré. Actine seule : 0. Myosine seule : faible. Actine + myosine : forte. La myosine est une ATPase, beaucoup plus active quand elle est liée à l’actine.',
+  etat: () => ({ simulation_status: chrono.statut(), ce_qui_se_voit: ceQuiSeVoit(), moments: M, time_s: +chrono.t.toFixed(2), parameters: { ...R } }),
+  progression: () => (chrono.statut() === 'finished' ? 1 : chrono.t / FIN),
+  executer: (cmd, p) => ({ start: chrono.start, pause: chrono.pause, resume: chrono.resume, reset: chrono.reset,
+    set_time: () => chrono.setTime(p), play_until: () => chrono.playUntil(p),
+    set_parameters: () => { if (p && 'conclusions' in p) R.conclusions = p.conclusions !== false && p.conclusions !== 'false'; scene.sale = true; } })[cmd]?.() });
+bulle($('feedback'), 'Trois tubes : on mesure le phosphate libéré.');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

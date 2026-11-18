@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le national au tableau — muscle</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="muscle.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un document d’examen national rejoué au tableau, étape par étape"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="recit.js"></script>
+<script>
+/*
+ * Le national joué au tableau (18 novembre 2026, logique du cours ; règles 35 et 41 du professeur) : un document
+ * d’examen n’est pas montré fini ; ses valeurs naissent de l’animation, une étape par moment, puis le tableau.
+ *   ?vue=nageurs : examen 2017 R, document 1 — métabolites du muscle (10⁻⁶ mol/g) au repos, après 100 m (1 min),
+ *                  après 1500 m (15 min) ; les jauges bougent, les nombres s’écrivent, puis le tableau du sujet.
+ *                  Moments : repos 2,4 ; cent_m 6,2 ; mille5 10,2 ; tableau 13,2.
+ *   ?vue=voies   : examen 2017 R, document 2 — part de chaque voie dans la consommation des métabolites ;
+ *                  la barre du 1500 m d’abord, puis celle du 100 m. Moments : axes 1,6 ; barre_1500 5,2 ; barre_100 8,8 ;
+ *                  conclusion 11,2 (cachée tant que conclusions = false : c’est l’élève qui la trouve).
+ *   ?vue=fibres  : examen 2020 N (BPCO), document 2 — % de fibres de type I et II (personne saine, personne atteinte),
+ *                  puis les caractéristiques des deux types, une ligne à la fois. Moments : saine 4,2 ; malade 7,2 ;
+ *                  fatigue 9,6 ; mitochondries 11 ; oxydatives 12,2 ; glycolytiques 13,2 ; ldh 14,4.
+ *   ?vue=chaine  : examen 2020 N, question 3 — la chaîne de l’explication, une case par moment : fibres2 2 ;
+ *                  mito 4 ; respiration 6 ; fermentation 8 ; peu_atp 10 ; fatigue 12.
+ * Les valeurs sont celles des sujets (lues sur leurs figures, backend/data/exams/svt).
+ */
+const { bulle, protocole } = window.Tableau;
+const { Chrono, Apparitions, fr, doux } = window.MuscleRecit;
+const $ = id => document.getElementById(id);
+const VUE = (new URLSearchParams(location.search).get('vue') || 'nageurs');
+const R = { conclusions: true };
+let TK = 1;
+const tk = v => Math.round(v * TK);
+
+/* ── Vues : moments, fin, motifs, dessin, ce qui se voit ── */
+const V = {};
+
+/* Petit muscle peint (règle 32, même peinture que inhibiteurs.html et chaleur.html). */
+function peindreMuscle(ctx, x, yc, H, W, f) {
+  const L = (H - 20) * (1 - 0.12 * f), Wd = W * (1 + 0.14 * f), y1 = yc - L / 2, y2 = yc + L / 2;
+  const tendon = (ya, yb) => { const g = ctx.createLinearGradient(x - 4, 0, x + 4, 0); g.addColorStop(0, '#bdb8ae'); g.addColorStop(.5, '#ffffff'); g.addColorStop(1, '#cbc5ba'); ctx.fillStyle = g; ctx.fillRect(x - 3, Math.min(ya, yb), 6, Math.abs(yb - ya)); };
+  tendon(yc - H / 2, y1 + 3); tendon(y2 - 3, yc + H / 2);
+  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 5; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 2;
+  const g = ctx.createLinearGradient(x - Wd / 2, 0, x + Wd / 2, 0);
+  g.addColorStop(0, '#7a1626'); g.addColorStop(.3, '#c23a4a'); g.addColorStop(.45, '#e0707a'); g.addColorStop(.7, '#b83242'); g.addColorStop(1, '#6d1220');
+  ctx.beginPath(); ctx.moveTo(x - 4, y1); ctx.bezierCurveTo(x - Wd * .62, y1 + L * .25, x - Wd * .58, y1 + L * .7, x - 4, y2); ctx.lineTo(x + 4, y2);
+  ctx.bezierCurveTo(x + Wd * .58, y1 + L * .7, x + Wd * .62, y1 + L * .25, x + 4, y1); ctx.closePath(); ctx.fillStyle = g; ctx.fill(); ctx.restore();
+}
+
+/* ─── 2017 R, document 1 : les métabolites, l’animation puis le tableau ─── */
+/* Repères déclarés par cette vue (ids calculés ci-dessous) : 'lactique_100', 'pc_100', 'glycogene_100', 'atp_100',
+ * 'lactique_1500', 'pc_1500', 'glycogene_1500', 'atp_1500', 'col_repos', 'col_100', 'col_1500'. */
+V.nageurs = (() => {
+  const M = { repos: 2.4, cent_m: 6.2, mille5: 10.2, tableau: 13.2 }, FIN = 13.6;
+  const MOTIFS = { repos: 'au repos', cent_m: 'après 100 m nage libre (1 min)', mille5: 'après 1500 m nage libre (15 min)', tableau: 'le tableau du sujet' };
+  const MET = [
+    { id: 'lactique', nom: 'acide lactique', couleur: 'orange', max: 32, v: [1.1, 30.5, 3] },
+    { id: 'glycogene', nom: 'glycogène', couleur: 'cyan', max: 80, v: [80, 60, 38] },
+    { id: 'pc', nom: 'phosphocréatine', couleur: 'rose', max: 17, v: [17, 10, 16] },
+    { id: 'atp', nom: 'ATP', couleur: 'jaune', max: 5, v: [4.6, 3.4, 4.7] },
+  ];
+  const COLS = [{ id: 'col_repos', nom: 'au repos', a: 0, b: 2 }, { id: 'col_100', nom: 'après 100 m (1 min)', a: 2.8, b: 6 }, { id: 'col_1500', nom: 'après 1500 m (15 min)', a: 6.6, b: 10 }];
+  const val = (m, k, t) => { if (k === 0) return m.v[0]; const C = COLS[k]; return m.v[0] + (m.v[k] - m.v[0]) * doux(chrono.part(C.a, C.b, t)); };
+  function dessiner(c) {
+    const L = scene.L, t = chrono.t;
+    if (t < 10.6) {
+      const pas = (L - 40) / 3;
+      COLS.forEach((C, k) => {
+        if (t < C.a && k > 0) return;
+        const x0 = 20 + pas * k, xc = x0 + pas / 2;
+        ecrit.ecrire(c, 'tete' + k, () => c.texte(C.nom, xc, 30, { couleur: k === 0 ? 'blanc' : k === 1 ? 'orange' : 'cyan', taille: tk(18), align: 'center', max: pas - 10 }));
+        const f = k === 0 ? 0 : Math.sin(Math.min(1, chrono.part(C.a, C.b, t)) * Math.PI * 6) ** 2 * (t < C.b ? 1 : 0);
+        c.direct(() => peindreMuscle(c.ctx, x0 + 26, 210, 120, 26, f));
+        const gw = Math.min(30, (pas - 70) / 4 - 10), gx0 = x0 + 56, gh = 210, gy = 300;
+        MET.forEach((m, i) => {
+          const gx = gx0 + i * ((pas - 66) / 4) + 4, v = val(m, k, t), h = gh * Math.min(1, v / m.max);
+          c.direct(() => { const g = c.ctx; g.globalAlpha = .65; g.fillStyle = c.couleur(m.couleur); g.fillRect(gx, gy - h, gw, h); g.globalAlpha = 1; });
+          c.rect(gx - 2, gy - gh - 2, gw + 4, gh + 4, { couleur: 'tresfaible', arrondi: 4, duree: .2 });
+          c.direct(() => c.texte(fr(v, 1), gx + gw / 2, gy - h - 8, { couleur: m.couleur, taille: tk(16), align: 'center', gras: true }));
+          ecrit.ecrire(c, `n${k}${i}`, () => c.texte(m.id === 'lactique' ? 'ac. lact.' : m.id === 'glycogene' ? 'glyc.' : m.id === 'pc' ? 'PC' : 'ATP', gx + gw / 2, gy + tk(20), { couleur: m.couleur, taille: tk(15), align: 'center' }));
+          if (k > 0) c.repere(`${m.id}_${k === 1 ? '100' : '1500'}`, gx - 8, gy - gh - 24, gw + 16, gh + 50, `${m.nom} ${C.nom}`);
+        });
+        c.repere(C.id, x0, 8, pas, 330, C.nom);
+      });
+      ecrit.ecrire(c, 'unite', () => c.texte('concentrations en 10⁻⁶ mol/g de muscle', L / 2, 360, { couleur: 'faible', taille: tk(15), align: 'center' }));
+    } else {
+      const x0 = Math.max(20, L / 2 - 330), w = Math.min(L - 40, 660), cw = [w * .34, w * .17, w * .17, w * .17, w * .15];
+      const xs = cw.reduce((a, v, i) => (a.push(i ? a[i - 1] + cw[i - 1] : x0), a), []);
+      const lignes = [['', 'ac. lactique', 'glycogène', 'PC', 'ATP'], ['repos', ...MET.map(m => fr(m.v[0], 1))], ['100 m (1 min)', ...MET.map(m => fr(m.v[1], 1))], ['1500 m (15 min)', ...MET.map(m => fr(m.v[2], 1))]];
+      ecrit.ecrire(c, 'tab', () => {
+        c.texte('Document 1 (examen 2017 R) — 10⁻⁶ mol/g de muscle', L / 2, 40, { couleur: 'jaune', taille: tk(18), align: 'center', max: L - 40 });
+        lignes.forEach((ln, r) => {
+          const y = 96 + r * 62;
+          c.ligne(x0, y + 22, x0 + w, y + 22, { couleur: 'tresfaible', largeur: 1.2, duree: .15 });
+          ln.forEach((s, j) => c.texte(s, xs[j] + cw[j] / 2, y, { couleur: r === 0 ? 'faible' : j === 0 ? 'blanc' : MET[j - 1].couleur, taille: tk(r === 0 ? 16 : 19), align: 'center', max: cw[j] - 6 }));
+        });
+      });
+      c.repere('tableau', x0, 60, w, 270, 'le tableau du document 1');
+      c.repere('ligne_100', x0, 166, w, 52, 'la ligne du 100 m');
+      c.repere('ligne_1500', x0, 228, w, 52, 'la ligne du 1500 m');
+    }
+  }
+  function voit() {
+    const t = chrono.t, k = t >= COLS[2].a ? 2 : t >= COLS[1].a ? 1 : 0;
+    if (t >= 10.6) return 'Le tableau du document 1 : repos ' + MET.map(m => `${m.nom} ${fr(m.v[0], 1)}`).join(', ') + ' ; 100 m ' + MET.map(m => `${m.nom} ${fr(m.v[1], 1)}`).join(', ') + ' ; 1500 m ' + MET.map(m => `${m.nom} ${fr(m.v[2], 1)}`).join(', ') + '.';
+    return `Colonnes visibles jusqu’à « ${COLS[k].nom} » ; ` + MET.map(m => `${m.nom} ${fr(val(m, k, t), 1)}`).join(', ') + ' (10⁻⁶ mol/g).';
+  }
+  return { M, FIN, MOTIFS, dessiner, voit, titre: 'Deux nageurs : les métabolites (2017 R)', depart: 'Au repos, puis après chaque course…' };
+})();
+
+/* ─── 2017 R, document 2 : la part de chaque voie ─── */
+V.voies = (() => {
+  const M = { axes: 1.6, barre_1500: 5.2, barre_100: 8.8, conclusion: 11.2 }, FIN = 11.6;
+  const MOTIFS = { axes: 'l’axe : pourcentage de la consommation des métabolites', barre_1500: 'le 1500 m : 93 % aérobie', barre_100: 'le 100 m : 85 % phosphocréatine', conclusion: 'la voie dominante selon l’effort' };
+  const SEG = { aero: { nom: 'aérobie du glucose (respiration)', couleur: 'cyan' }, pc: { nom: 'anaérobie de la phosphocréatine', couleur: 'rose' }, lact: { nom: 'anaérobie du glucose (fermentation lactique)', couleur: 'orange' } };
+  const BARRES = [
+    { id: 'barre_100', nom: '100 m', a: 5.6, b: 8.6, segs: [['pc', 85], ['lact', 10], ['aero', 5]] },
+    { id: 'barre_1500', nom: '1500 m', a: 2, b: 5, segs: [['lact', 7], ['aero', 93]] },
+  ];
+  function dessiner(c) {
+    const L = scene.L, t = chrono.t, x0 = 90, yb = 350, H = 290, bw = tk(86), lg = L >= 1000;
+    const xb = [x0 + 90, x0 + 90 + bw + tk(90)];
+    ecrit.ecrire(c, 'axes', () => {
+      c.fleche(x0, yb, x0, yb - H - 24, { couleur: 'faible', largeur: 1.6 });
+      c.ligne(x0, yb, xb[1] + bw + 40, yb, { couleur: 'faible', largeur: 1.6 });
+      [0, 50, 100].forEach(p => c.texte(p + ' %', x0 - 10, yb - H * p / 100 + 6, { couleur: 'faible', taille: tk(15), align: 'right' }));
+      c.texte('consommation des métabolites (%)', x0 - 20, 30, { couleur: 'blanc', taille: tk(16) });
+    });
+    c.repere('axes', x0 - 70, 14, 280, yb - 10, 'l’axe des pourcentages');
+    BARRES.forEach((B, i) => {
+      if (t < B.a) return;
+      const x = xb[i], u = doux(chrono.part(B.a, B.b, t));
+      let y = yb;
+      B.segs.forEach(([k, p], j) => {
+        const S = SEG[k], h = H * p / 100 * Math.min(1, Math.max(0, u * B.segs.length - j));
+        c.direct(() => { const g = c.ctx; g.globalAlpha = .7; g.fillStyle = c.couleur(S.couleur); g.fillRect(x, y - h, bw, h); g.globalAlpha = 1; });
+        if (u >= (j + 1) / B.segs.length - 1e-3 && p >= 7) ecrit.ecrire(c, `p${i}${j}`, () => c.texte(p + ' %', x + bw / 2, y - h / 2 + 7, { couleur: '#0b1f2a', taille: tk(18), align: 'center', gras: true }));
+        if (i === 0 && k === 'pc') c.repere('seg_pc_100', x - 4, y - h - 4, bw + 8, h + 8, 'la phosphocréatine au 100 m');
+        if (i === 1 && k === 'aero') c.repere('seg_aero_1500', x - 4, y - h - 4, bw + 8, h + 8, 'la respiration au 1500 m');
+        y -= H * p / 100;
+      });
+      ecrit.ecrire(c, 'nom' + i, () => c.texte(B.nom, x + bw / 2, yb + tk(26), { couleur: 'blanc', taille: tk(19), align: 'center', gras: true }));
+      c.repere(B.id, x - 10, yb - H - 10, bw + 20, H + 50, 'la barre du ' + B.nom);
+    });
+    const xl = xb[1] + bw + tk(60);
+    ecrit.ecrire(c, 'legende', () => Object.values(SEG).forEach((S, j) => {
+      const y = 80 + j * tk(52);
+      c.rect(xl, y - 16, 22, 22, { couleur: S.couleur, fond: S.couleur, fondAlpha: .7, arrondi: 3, duree: .1 });
+      c.texte(S.nom, xl + 32, y, { couleur: S.couleur, taille: tk(16), max: L - xl - 44 });
+    }));
+    c.repere('legende', xl - 6, 52, L - xl, 3 * tk(52) + 10, 'la légende des trois voies');
+    if (t >= 9.2 && R.conclusions) {
+      ecrit.ecrire(c, 'conclusion', () => {
+        c.texte('100 m (court, intense) : surtout la phosphocréatine', xl, 300, { couleur: 'rose', taille: tk(17), max: L - xl - 10 });
+        c.texte('1500 m (long) : surtout la respiration', xl, 300 + tk(30), { couleur: 'cyan', taille: tk(17), max: L - xl - 10 });
+      });
+      c.repere('conclusion', xl - 6, 276, L - xl, tk(70), 'la voie dominante selon l’effort');
+    }
+    if (!lg) {} // le cadre étroit garde la même disposition (la légende passe sous 760 px en se réduisant)
+  }
+  function voit() {
+    const t = chrono.t, m = ['Document 2 (2017 R) : part des voies dans la consommation des métabolites.'];
+    if (t >= 5) m.push('1500 m : 7 % anaérobie du glucose, 93 % aérobie.');
+    if (t >= 8.6) m.push('100 m : 85 % phosphocréatine, 10 % anaérobie du glucose, 5 % aérobie.');
+    if (t >= 9.2 && R.conclusions) m.push('Conclusion écrite : 100 m surtout la phosphocréatine ; 1500 m surtout la respiration.');
+    return m.join(' ');
+  }
+  return { M, FIN, MOTIFS, dessiner, voit, titre: 'Quelle voie domine ? (2017 R)', depart: 'Le 1500 m d’abord…' };
+})();
+
+/* ─── 2020 N (BPCO), document 2 : les fibres de type I et II ─── */
+/* Repères déclarés par cette vue : 'type1_saine', 'type2_saine', 'type1_malade', 'type2_malade', 'graphe', 'tableau_fibres',
+ * 'ligne_fatigue', 'ligne_mito', 'ligne_oxy', 'ligne_glyco', 'ligne_ldh'. */
+V.fibres = (() => {
+  const M = { saine: 4.2, malade: 7.2, fatigue: 9.6, mitochondries: 11, oxydatives: 12.2, glycolytiques: 13.2, ldh: 14.4 }, FIN = 14.8;
+  const MOTIFS = { saine: 'personne saine : 58 % de type I, 30 % de type II', malade: 'personne atteinte : 30 % de type I, 45 % de type II',
+    fatigue: 'résistance à la fatigue : I +++, II +', mitochondries: 'mitochondries : I +++, II +', oxydatives: 'enzymes oxydatives : I +++, II +',
+    glycolytiques: 'enzymes glycolytiques : I +, II +++', ldh: 'enzyme LDH (acide lactique) : I +, II +++' };
+  const B = [ // [type, qui, valeur, début, fin]
+    ['I', 'saine', 58, 1.4, 4], ['II', 'saine', 30, 1.4, 4], ['I', 'malade', 30, 4.6, 7], ['II', 'malade', 45, 4.6, 7] ];
+  const LIG = [['taille', 'petite', 'grosse', 8.2], ['résistance à la fatigue', '+++', '+', 9.4, 'ligne_fatigue'], ['nombre de mitochondries', '+++', '+', 10.8, 'ligne_mito'],
+    ['enzymes oxydatives', '+++', '+', 12, 'ligne_oxy'], ['enzymes glycolytiques', '+', '+++', 13, 'ligne_glyco'], ['enzyme LDH (acide lactique)', '+', '+++', 14.2, 'ligne_ldh']];
+  function dessiner(c) {
+    const L = scene.L, t = chrono.t, lg = L >= 1000, x0 = 60, yb = 320, H = 240, bw = tk(40);
+    const gx = { I: x0 + 50, II: x0 + 50 + 2 * bw + tk(60) };
+    ecrit.ecrire(c, 'axes', () => {
+      c.fleche(x0, yb, x0, yb - H - 26, { couleur: 'faible', largeur: 1.6 });
+      c.ligne(x0, yb, gx.II + 2 * bw + 30, yb, { couleur: 'faible', largeur: 1.6 });
+      [0, 30, 60].forEach(p => c.texte(String(p), x0 - 8, yb - H * p / 60 + 6, { couleur: 'faible', taille: tk(15), align: 'right' }));
+      c.texte('% de fibres', x0 - 30, 34, { couleur: 'blanc', taille: tk(16) });
+      c.texte('type I', gx.I + bw, yb + tk(26), { couleur: 'blanc', taille: tk(17), align: 'center' });
+      c.texte('type II', gx.II + bw, yb + tk(26), { couleur: 'blanc', taille: tk(17), align: 'center' });
+      c.rect(x0, yb + tk(44), 18, 18, { couleur: 'blanc', fond: 'blanc', fondAlpha: .7, duree: .1 }); c.texte('saine', x0 + 26, yb + tk(44) + 15, { couleur: 'blanc', taille: tk(15) });
+      c.rect(x0 + 110, yb + tk(44), 18, 18, { couleur: 'rose', fond: 'rose', fondAlpha: .7, duree: .1 }); c.texte('atteinte', x0 + 136, yb + tk(44) + 15, { couleur: 'rose', taille: tk(15) });
+    });
+    B.forEach(([ty, qui, v, a, b]) => {
+      if (t < a) return;
+      const x = gx[ty] + (qui === 'malade' ? bw : 0), h = H * v / 60 * doux(chrono.part(a, b, t));
+      c.direct(() => { const g = c.ctx; g.globalAlpha = .7; g.fillStyle = c.couleur(qui === 'saine' ? 'blanc' : 'rose'); g.fillRect(x + 2, yb - h, bw - 4, h); g.globalAlpha = 1; });
+      if (t >= b) ecrit.ecrire(c, `v${ty}${qui}`, () => c.texte(v + ' %', x + bw / 2, yb - h - 8, { couleur: qui === 'saine' ? 'blanc' : 'rose', taille: tk(16), align: 'center', gras: true }));
+      c.repere(`type${ty === 'I' ? 1 : 2}_${qui}`, x - 2, yb - H - 6, bw + 4, H + 10, `fibres de type ${ty}, personne ${qui === 'saine' ? 'saine' : 'atteinte'}`);
+    });
+    c.repere('graphe', x0 - 40, 14, gx.II + 2 * bw + 40 - x0 + 40, yb + 60, 'le graphique : % de fibres de type I et II');
+    if (t >= 7.2) ecrit.ecrire(c, 'compare', () => c.texte('atteinte : type I ↓, type II ↑', x0 + 40, 400, { couleur: 'rose', taille: tk(16) }));
+    // le tableau des caractéristiques, une ligne à la fois
+    const tx0 = Math.max(gx.II + 2 * bw + tk(70), lg ? L * .44 : 380), tw = L - tx0 - 14, c1 = tw * .56, c2 = tw * .22;
+    if (t >= 7.6) {
+      ecrit.ecrire(c, 'ttete', () => { c.texte('fibres', tx0 + c1 / 2, 40, { couleur: 'faible', taille: tk(15), align: 'center' }); c.texte('type I', tx0 + c1 + c2 / 2, 40, { couleur: 'blanc', taille: tk(16), align: 'center' }); c.texte('type II', tx0 + c1 + c2 * 1.5, 40, { couleur: 'rose', taille: tk(16), align: 'center' }); });
+      c.repere('tableau_fibres', tx0, 16, tw, 6 * tk(50) + 44, 'les caractéristiques des fibres de type I et II');
+    }
+    LIG.forEach(([nom, i1, i2, quand, rep], r) => {
+      if (t < quand) return;
+      const y = 84 + r * tk(48);
+      ecrit.ecrire(c, 'l' + r, () => {
+        c.ligne(tx0, y + 14, tx0 + tw, y + 14, { couleur: 'tresfaible', largeur: 1, duree: .1 });
+        c.texte(nom, tx0 + 4, y, { couleur: 'blanc', taille: tk(16), max: c1 - 8 });
+        c.texte(i1, tx0 + c1 + c2 / 2, y, { couleur: 'blanc', taille: tk(17), align: 'center', gras: true });
+        c.texte(i2, tx0 + c1 + c2 * 1.5, y, { couleur: 'rose', taille: tk(17), align: 'center', gras: true });
+      });
+      if (rep) c.repere(rep, tx0, y - 20, tw, 36, 'la ligne : ' + nom);
+    });
+  }
+  function voit() {
+    const t = chrono.t, m = ['Document 2 (2020 N, BPCO) : % de fibres de type I et II, personne saine et personne atteinte ; puis les caractéristiques des fibres.'];
+    if (t >= 4) m.push('Saine : type I 58 %, type II 30 %.');
+    if (t >= 7) m.push('Atteinte : type I 30 %, type II 45 %.');
+    LIG.forEach(([nom, i1, i2, q]) => { if (t >= q) m.push(`${nom} : type I ${i1}, type II ${i2}.`); });
+    return m.join(' ');
+  }
+  return { M, FIN, MOTIFS, dessiner, voit, titre: 'Fibres de type I et II (2020 N)', depart: 'La personne saine d’abord…' };
+})();
+
+/* ─── 2020 N, question 3 : la chaîne de l’explication ─── */
+V.chaine = (() => {
+  const M = { fibres2: 2, mito: 4, respiration: 6, fermentation: 8, peu_atp: 10, fatigue: 12 }, FIN = 12.4;
+  const CASES = [
+    ['fibres2', 'plus de fibres de type II', 'rose'], ['mito', 'peu de mitochondries', 'violet'], ['respiration', 'peu de respiration (36 ou 38 ATP par glucose)', 'cyan'],
+    ['fermentation', 'surtout la fermentation lactique', 'orange'], ['peu_atp', '2 ATP par glucose et de l’acide lactique', 'jaune'], ['fatigue', 'peu d’ATP : fatigue rapide, faible activité du muscle', 'rouge'] ];
+  const MOTIFS = Object.fromEntries(CASES.map(([k, s]) => [k, s]));
+  function dessiner(c) {
+    const L = scene.L, t = chrono.t, lg = L >= 1000;
+    const n = CASES.length, parLigne = 3, w = (L - 80) / parLigne - 30, h = tk(78);
+    const pos = CASES.map((_, i) => { const r = Math.floor(i / parLigne), k = r % 2 ? parLigne - 1 - (i % parLigne) : i % parLigne; return [40 + k * (w + 30), 70 + r * (h + 110)]; });
+    ecrit.ecrire(c, 'titre', () => c.texte('Personne atteinte de BPCO : expliquer la faible activité du muscle', L / 2, 34, { couleur: 'blanc', taille: tk(17), align: 'center', max: L - 30 }));
+    CASES.forEach(([k, s, col], i) => {
+      if (t < M[k] - 1.4) return;
+      const [x, y] = pos[i];
+      ecrit.ecrire(c, 'c' + i, () => {
+        c.rect(x, y, w, h, { couleur: col, fond: col, fondAlpha: .2, arrondi: 10 });
+        const mots = s.split(' '), lignes = []; let cur = '';
+        c.ctx.font = `${tk(18)}px ${window.Tableau.POLICE}`;
+        for (const m of mots) { const e = cur ? cur + ' ' + m : m; if (c.largeurTexte(e, tk(18)) > w - 20 && cur) { lignes.push(cur); cur = m; } else cur = e; }
+        lignes.push(cur);
+        lignes.forEach((l, j) => c.texte(l, x + w / 2, y + h / 2 + (j - (lignes.length - 1) / 2) * tk(22) + 6, { couleur: col, taille: tk(18), align: 'center', max: w - 12, gras: true }));
+        if (i > 0) {
+          const [xp, yp] = pos[i - 1];
+          if (yp === y) { const d = x > xp; c.fleche(d ? xp + w + 4 : xp - 4, y + h / 2, d ? x - 4 : x + w + 4, y + h / 2, { couleur: 'blanc', largeur: 2.4 }); }
+          else c.fleche(xp + w / 2, yp + h + 6, x + w / 2, y - 8, { couleur: 'blanc', largeur: 2.4 });
+        }
+      });
+      c.repere(k, x - 4, y - 4, w + 8, h + 8, s);
+    });
+    if (!lg) {} // même disposition en cadre étroit : deux lignes de trois cases
+  }
+  function voit() { const vus = CASES.filter(([k]) => chrono.t >= M[k] - 1.4).map(([, s]) => s); return vus.length ? 'La chaîne écrite : ' + vus.join(' → ') + '.' : 'Rien d’écrit encore.'; }
+  return { M, FIN, MOTIFS, dessiner, voit, titre: 'Expliquer la faible activité (2020 N)', depart: 'Une cause après l’autre…' };
+})();
+
+const VU = V[VUE] || V.nageurs;
+function dessiner(c) {
+  scene.cadre(29);
+  TK = scene.L >= 1000 ? 1.25 : 1;
+  VU.dessiner(c);
+  return c.fin();
+}
+const canvas = $('canvas');
+const scene = window.MuscleTableau.Scene(canvas, dessiner, { large: true });
+const ecrit = Apparitions(scene);
+const chrono = Chrono({ fin: () => VU.FIN, moments: () => VU.M, motifs: VU.MOTIFS, bouton: $('run'), bulle: $('feedback'), pont: () => pont,
+  depart: VU.depart, reinit: () => ecrit.oublier(), fini: () => VU.titre + ' : tout est au tableau.' });
+scene.avancer = (dt) => { const a = chrono.avancer(dt); if (a) scene.sale = true; return a; };
+$('run').onclick = chrono.clic;
+window.Tableau.explication({ [VUE]: Object.keys(VU.M).map(k => ({ repere: k, texte: VU.MOTIFS[k] })) });
+const commandes = ['start', 'pause', 'resume', 'reset', 'set_time', 'play_until', 'set_parameters'];
+const config = { id: 'muscle_tableau_national', version: '1.0', title: 'Le national au tableau', variants: Object.keys(V).map(id => ({ id, label: V[id].titre })), commands: commandes,
+  command_schema: { play_until: { moment: Object.keys(VU.M).join(' | ') }, set_parameters: { conclusions: 'true | false (false : la conclusion reste cachée)' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: VU.titre + '. Document d’examen national rejoué étape par étape ; valeurs du sujet.',
+  etat: () => ({ simulation_status: chrono.statut(), current_variant: VUE, ce_qui_se_voit: VU.voit(), moments: VU.M, time_s: +chrono.t.toFixed(2), parameters: { ...R } }),
+  progression: () => (chrono.statut() === 'finished' ? 1 : chrono.t / VU.FIN),
+  executer: (cmd, p) => ({ start: chrono.start, pause: chrono.pause, resume: chrono.resume, reset: chrono.reset,
+    set_time: () => chrono.setTime(p), play_until: () => chrono.playUntil(p),
+    set_parameters: () => { if (p && 'conclusions' in p) R.conclusions = p.conclusions !== false && p.conclusions !== 'false'; scene.sale = true; } })[cmd]?.() });
+bulle($('feedback'), VU.titre);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
