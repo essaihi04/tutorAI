@@ -1,4 +1,6 @@
-/* Écrit par maths_build/derivation_etude_fonctions/build.py depuis les p*.py du cours math_ch2_derivation_etude_fonctions : ne pas modifier à la main. */
+/* Écrit par maths_build/derivation_etude_fonctions/build.py depuis les p*.py du cours math_ch2_derivation_etude_fonctions : ne pas modifier à la main.
+ * EXCEPTION (18 novembre 2026, 2ᵉ passe) : les vues aux_g et aux_f (fonction auxiliaire jouée pas à pas) sont ajoutées à la main ;
+ * à reporter dans les sources du build (le build n'est pas dans le dépôt). */
 window.CALCULS = {
  "carte": {
   "titre": "Cinq questions sur une courbe",
@@ -1243,6 +1245,233 @@ window.CALCULS = {
     "m": "conclusion",
     "cadre": "vert",
     "taille": 18
+   }
+  ]
+ },
+ "aux_g": {
+  "titre": "Partie I : le signe de g, lu dans son tableau",
+  "lignes": [
+   {
+    "t": "g(x) = 2x³ − 3x² + 2   sur ]0 ; +∞[",
+    "c": "jaune",
+    "m": "enonce",
+    "r": [
+     "enonce",
+     "la fonction g"
+    ]
+   },
+   {
+    "t": "g′(x) = 6x² − 6x = 6x(x − 1)",
+    "c": "cyan",
+    "m": "derivee",
+    "r": [
+     "derivee",
+     "la dérivée g′(x) factorisée"
+    ]
+   },
+   {
+    "t": "x > 0 : 6x > 0, donc g′(x) a le signe de x − 1",
+    "c": "cyan",
+    "m": "phrase",
+    "r": [
+     "phrase",
+     "le signe de g′(x) est le signe de x − 1"
+    ]
+   },
+   {
+    "t": "",
+    "tab": {
+     "w": 560,
+     "m0": "ligne_x",
+     "cols": [
+      "0",
+      "1",
+      "+∞"
+     ],
+     "rows": [
+      {
+       "nom": "g′(x)",
+       "cells": [
+        [
+         0.5,
+         "−",
+         "rouge"
+        ],
+        [
+         1,
+         "0",
+         "jaune"
+        ],
+        [
+         1.5,
+         "+",
+         "vert"
+        ]
+       ],
+       "m": "ligne_signe",
+       "r": [
+        "ligne_signe",
+        "la ligne de g′(x) : −, 0, +"
+       ]
+      },
+      {
+       "nom": "g(x)",
+       "var": [
+        [
+         0,
+         "2",
+         "h"
+        ],
+        [
+         1,
+         "g(1)",
+         "b"
+        ],
+        [
+         2,
+         "+∞",
+         "h"
+        ]
+       ],
+       "m": "ligne_fleches",
+       "r": [
+        "ligne_g",
+        "la ligne de g(x) : décroissante puis croissante"
+       ]
+      }
+     ],
+     "r": [
+      "tableau_g",
+      "le tableau de variations de g"
+     ]
+    }
+   },
+   {
+    "t": "g(1) = 2 − 3 + 2 = 1",
+    "c": "jaune",
+    "m": "valeur_min",
+    "r": [
+     "valeur_min",
+     "g(1) = 1, le minimum"
+    ]
+   },
+   {
+    "t": "g(1) = 1 est le minimum de g : pour tout x > 0, g(x) ≥ 1 > 0",
+    "c": "vert",
+    "cadre": "vert",
+    "m": "conclusion_g",
+    "taille": 18,
+    "r": [
+     "conclusion_g",
+     "g(x) > 0 sur ]0 ; +∞["
+    ]
+   }
+  ]
+ },
+ "aux_f": {
+  "titre": "Partie II : f′(x) avec g(x), puis le tableau de f",
+  "lignes": [
+   {
+    "t": "f(x) = x² − 3x − ⟦2|x⟧   sur ]0 ; +∞[",
+    "c": "jaune",
+    "m": "enonce",
+    "inter": 46,
+    "r": [
+     "enonce",
+     "la fonction f"
+    ]
+   },
+   {
+    "t": "f est dérivable sur ]0 ; +∞[ :  f′(x) = 2x − 3 + ⟦2|x²⟧",
+    "c": "cyan",
+    "m": "derivee",
+    "inter": 48,
+    "r": [
+     "derivee",
+     "f′(x) = 2x − 3 + 2/x²"
+    ]
+   },
+   {
+    "t": "f′(x) = ⟦2x³ − 3x² + 2|x²⟧ = ⟦g(x)|x²⟧",
+    "c": "vert",
+    "m": "forme",
+    "inter": 42,
+    "r": [
+     "forme",
+     "f′(x) = g(x)/x²"
+    ]
+   },
+   {
+    "t": "x² > 0 : f′(x) a le signe de g(x), et g(x) > 0 (partie I)",
+    "c": "cyan",
+    "m": "lien",
+    "taille": 18,
+    "r": [
+     "lien",
+     "le signe de f′(x) est le signe de g(x)"
+    ]
+   },
+   {
+    "t": "",
+    "tab": {
+     "w": 480,
+     "m0": "ligne_x_f",
+     "cols": [
+      "0",
+      "+∞"
+     ],
+     "rows": [
+      {
+       "nom": "f′(x)",
+       "cells": [
+        [
+         0.5,
+         "+",
+         "vert"
+        ]
+       ],
+       "m": "ligne_signe_f",
+       "r": [
+        "ligne_signe_f",
+        "la ligne de f′(x) : +"
+       ]
+      },
+      {
+       "nom": "f(x)",
+       "var": [
+        [
+         0,
+         "−∞",
+         "b"
+        ],
+        [
+         1,
+         "+∞",
+         "h"
+        ]
+       ],
+       "m": "ligne_fleches_f",
+       "r": [
+        "ligne_f",
+        "la ligne de f(x) : de −∞ à +∞"
+       ]
+      }
+     ],
+     "r": [
+      "tableau_f",
+      "le tableau de variations de f"
+     ]
+    }
+   },
+   {
+    "t": "f est strictement croissante sur ]0 ; +∞[",
+    "c": "vert",
+    "cadre": "vert",
+    "m": "conclusion_f",
+    "r": [
+     "conclusion_f",
+     "f strictement croissante"
+    ]
    }
   ]
  }

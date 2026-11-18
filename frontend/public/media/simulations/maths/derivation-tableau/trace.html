@@ -11,6 +11,7 @@
 </div>
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/derivation-tableau/fractions.js"></script>
 <script src="/media/simulations/maths/commun/maths-tableau.js"></script>
 <script src="/media/simulations/maths/derivation-tableau/large.js"></script>
 <script>
@@ -151,8 +152,31 @@ function tableauE(c) {
   c.texte('+∞', CE.p, TE.yh, { couleur: 'blanc', taille: 17, align: 'center' });
 }
 
+/* ---------- vue etude_pas (18 novembre 2026, 2ᵉ passe) ----------
+ * La même étude de x√(x + 1), jouée une question à la fois (diapositives df_ec3_etude → df_ec3_etude_e) : chaque
+ * résultat a son moment, écrit APRÈS la question qui le demande ; le tableau de variations se construit ligne par
+ * ligne (x, puis f′(x), puis f(x)) ; la courbe se construit ensuite pas à pas dans le repère (repère, A et sa
+ * demi-tangente, minimum, O, B, tangente au minimum, la courbe d’un trait, la branche). La vue `etude` (cours en
+ * ligne) n’est pas touchée. Avec ?depart=<moment> (depart.js), la page s’ouvre figée sur ce moment. */
+const OPT4 = { x0: 478, y0: 50, w: 248, h: 312, xmin: -1.5, xmax: 2.4, ymin: -1, ymax: 4.5, origine: false,
+  gx: [[-1, ''], [1, '1'], [2, '2']], gy: [[1, '1'], [2, '2'], [3, '3'], [4, '4']] };
+const TP = { g: 12, lab: 74, d: 440, haut: 94, l1: 140, l2: 170, bas: 248, yx: 122, yfp: 160, yh: 188, yb: 232 };
+const CP = { a: 118, m: 262, p: 410 };
+const NP = { x: 16, y: [278, 308, 342, 0, 386, 414] };
+const NO = { x: 490, y: 410 };   // la note f(0) = 0, sous le repère
+const TF = 22;   // fractions : étages ≥ 15 px de haut à 1280 × 640 (relecture du 18 novembre 2026)
+const XB = 1, YB = Math.SQRT2;                           // B(1 ; √2) : un point de plus pour le tracé
+function cadreTableauP(c) {
+  const o = { couleur: 'faible', largeur: 1.4 };
+  c.ligne(TP.g, TP.haut, TP.d, TP.haut, o); c.ligne(TP.g, TP.l1, TP.d, TP.l1, o); c.ligne(TP.g, TP.l2, TP.d, TP.l2, o);
+  c.ligne(TP.g, TP.bas, TP.d, TP.bas, o); c.ligne(TP.lab, TP.haut, TP.lab, TP.bas, o);
+  c.texte('x', 43, TP.yx, { couleur: 'blanc', taille: 17, align: 'center' });
+  c.texte('f′(x)', 43, TP.yfp, { couleur: 'blanc', taille: 17, align: 'center' });
+  c.texte('f(x)', 43, (TP.yh + TP.yb) / 2 + 4, { couleur: 'blanc', taille: 17, align: 'center' });
+}
+
 // Tableau large (écran 1366 × 613) : repère sur toute la hauteur, phrases en colonnes à droite, plan automatique (large.js).
-Large.config({ etapes: { col: 350 }, lecture: true, etude: true });
+Large.config({ etapes: { col: 350 }, lecture: true, etude: true, etude_pas: true });
 MathsTableau.page({ net: true,
   id: 'de_trace', titre: 'Tracer la courbe d’une fonction',
   texte: 'Construction à la craie du cours Dérivation et étude des fonctions : la courbe de f(x) = x + 1/x tracée à partir de son tableau de variations (asymptotes, tangentes horizontales, points, puis la courbe, la branche x < 0 par symétrie de centre O) ; lecture du nombre de solutions de f(x) = m ; étude complète de x√(x + 1)',
@@ -416,6 +440,157 @@ MathsTableau.page({ net: true,
         { repere: 'branche', texte: 'f(x)/x = √(x + 1) tend vers +∞ : branche parabolique de direction l’axe des ordonnées.' },
       ],
     },
+    etude_pas: {
+      titre: 'Étude de f(x) = x√(x + 1), une question à la fois',
+      dessiner(c, K) {
+        primes(c);
+        const Lu = lumieres(c);
+        K.titre('Étude de f(x) = x√(x + 1)');
+        c.repere('enonce', 14, 8, 300, 30, 'la fonction étudiée');
+        K.marque('enonce');
+        // 1. L’ensemble de définition, puis le cadre du tableau et la ligne x (bornes seulement)
+        c.pause(.4);
+        c.texte('x + 1 ≥ 0 :  D_f = [−1 ; +∞[', 16, 74, { couleur: 'jaune', taille: 17 });
+        c.repere('domaine', 10, 52, c.largeurTexte('x + 1 ≥ 0 :  D_f = [−1 ; +∞[', 17) + 12, 30, 'l’ensemble de définition D_f = [−1 ; +∞[');
+        c.pause(.2);
+        cadreTableauP(c);
+        c.texte('−1', CP.a, TP.yx, { couleur: 'blanc', taille: 17, align: 'center' });
+        c.texte('+∞', CP.p, TP.yx, { couleur: 'blanc', taille: 17, align: 'center' });
+        c.repere('tableau', TP.g, TP.haut, TP.d - TP.g, TP.bas - TP.haut, 'le tableau de variations');
+        K.marque('domaine');
+        // 2. Le bord −1 : le taux, puis la conclusion (double barre, demi-tangente)
+        c.pause(.4);
+        c.texte('taux en −1 :  ⟦x|√(x + 1)⟧ → −∞  (x → −1⁺)', NP.x, NP.y[0], { couleur: 'orange', taille: TF, max: 425 });
+        c.repere('taux', NP.x - 6, NP.y[0] - 31, 430, 47, 'le taux en −1 à droite, qui tend vers −∞');
+        K.marque('taux');
+        c.pause(.4);
+        c.ligne(CP.a - 2, TP.l1, CP.a - 2, TP.l2, { couleur: 'orange', largeur: 1.8 });
+        c.ligne(CP.a + 2, TP.l1, CP.a + 2, TP.l2, { couleur: 'orange', largeur: 1.8 });
+        c.texte('f non dérivable à droite en −1 : demi-tangente verticale en A(−1 ; 0)', NP.x, NP.y[1], { couleur: 'orange', taille: 15, max: 425 });
+        c.repere('demi_tangente', NP.x - 6, NP.y[1] - 18, 430, 26, 'f n’est pas dérivable à droite en −1 : demi-tangente verticale en A(−1 ; 0)');
+        K.marque('demi_tangente');
+        // 3. La dérivée, puis la phrase du signe (et −2/3 dans la ligne x)
+        c.pause(.4);
+        c.texte('f′(x) = ⟦3x + 2|2√(x + 1)⟧', 250, 76, { couleur: 'cyan', taille: TF });
+        c.repere('derivee', 244, 44, 200, 48, 'la dérivée f′(x) = (3x + 2)/(2√(x + 1))');
+        K.marque('derivee');
+        c.pause(.4);
+        c.texte('2√(x + 1) > 0 : f′(x) a le signe de 3x + 2', NP.x, NP.y[2], { couleur: 'cyan', taille: 17 });
+        c.texte('−⟦2|3⟧', CP.m, TP.yx + 6, { couleur: 'blanc', taille: TF, align: 'center' });
+        c.repere('signe_phrase', NP.x - 6, NP.y[2] - 31, 430, 47, 'le signe de f′(x) est le signe de 3x + 2');
+        K.marque('signe_phrase');
+        // 4. La ligne f′(x), puis la ligne f(x)
+        c.pause(.4);
+        c.texte('−', (CP.a + CP.m) / 2 + 6, TP.yfp, { couleur: 'rouge', taille: 21, align: 'center' });
+        c.texte('0', CP.m, TP.yfp, { couleur: 'jaune', taille: 18, align: 'center' });
+        c.texte('+', (CP.m + CP.p) / 2, TP.yfp, { couleur: 'vert', taille: 21, align: 'center' });
+        c.repere('ligne_signe', TP.lab, TP.l1, TP.d - TP.lab, TP.l2 - TP.l1, 'la ligne de f′(x) : −, 0, +');
+        K.marque('ligne_signe');
+        c.pause(.4);
+        c.texte('0', CP.a, TP.yh, { couleur: 'blanc', taille: 17, align: 'center' });
+        c.fleche(CP.a + 14, TP.yh + 6, CP.m - 44, TP.yb - 26, { couleur: 'rouge', largeur: 2, tete: 8 });
+        c.texte('−⟦2√3|9⟧', CP.m, TP.yb, { couleur: 'jaune', taille: TF, align: 'center' });
+        c.fleche(CP.m + 44, TP.yb - 26, CP.p - 16, TP.yh + 6, { couleur: 'vert', largeur: 2, tete: 8 });
+        c.texte('+∞', CP.p, TP.yh, { couleur: 'blanc', taille: 17, align: 'center' });
+        c.repere('minimum_tab', CP.m - 42, TP.yb - 34, 84, 50, 'le minimum f(−2/3) = −2√3/9');
+        K.marque('fleches');
+        // 5. f(0) = 0, la limite de f(x)/x, puis la branche
+        c.pause(.4);
+        c.texte('f(0) = 0 : (C_f) passe par O', NO.x, NO.y, { couleur: 'cyan', taille: 15 });
+        c.repere('point_o_note', NO.x - 6, NO.y - 19, 230, 25, 'f(0) = 0 : la courbe passe par O');
+        K.marque('point_o');
+        c.pause(.4);
+        c.texte('en +∞ :  ⟦f(x)|x⟧ = √(x + 1) → +∞', NP.x, NP.y[4], { couleur: 'vert', taille: TF });
+        c.repere('limite', NP.x - 6, NP.y[4] - 31, 330, 47, 'la limite de f(x)/x en +∞');
+        K.marque('limite_f_sur_x');
+        c.pause(.4);
+        c.texte('branche parabolique de direction (Oy) au voisinage de +∞', NP.x, NP.y[5], { couleur: 'vert', taille: 15, max: 425 });
+        c.repere('branche', NP.x - 6, NP.y[5] - 19, 430, 25, 'la branche parabolique de direction l’axe des ordonnées');
+        K.marque('branche');
+        // 6. La construction, pas à pas : le repère, puis les éléments un par un (la case du tableau s’allume)
+        c.pause(.5);
+        const G = K.axes(OPT4);
+        c.texte('−1', G.X(-1) - 6, G.Y(0) - 7, { couleur: 'faible', taille: 15, align: 'right' });
+        c.repere('repere', G.x0, G.y0, G.w, G.h, 'le repère');
+        K.marque('repere_pose');
+        c.pause(.4);
+        let e = Lu.debut([[CP.a - 8, TP.l1 + 2, 16, TP.l2 - TP.l1 - 4], [CP.a - 14, TP.yh - 19, 28, 25]], 'orange');
+        K.rond(G, -1, 0, true, 'orange');
+        c.fleche(G.X(-1), G.Y(0), G.X(-1), G.Y(0) + 42, { couleur: 'orange', largeur: 2.4, tete: 9 });
+        c.texte('A', G.X(-1) - 18, G.Y(0) + 22, { couleur: 'orange', taille: 16 });
+        c.repere('point_a', G.X(-1) - 16, G.Y(0) - 10, 32, 56, 'A(−1 ; 0) et sa demi-tangente verticale');
+        Lu.fin(e); K.marque('trace_a');
+        c.pause(.4);
+        e = Lu.debut([[CP.m - 42, TP.yb - 34, 84, 50]], 'jaune');
+        K.proj(G, XM, YM, { couleur: 'jaune' });
+        K.rond(G, XM, YM, true, 'jaune');
+        c.texte('min', G.X(XM) + 10, G.Y(YM) + 30, { couleur: 'jaune', taille: 15 });
+        c.repere('minimum', G.X(XM) - 16, G.Y(YM) - 16, 32, 32, 'le minimum (−2/3 ; −2√3/9)');
+        Lu.fin(e); K.marque('trace_minimum');
+        c.pause(.4);
+        e = Lu.debut([[NO.x - 6, NO.y - 19, 230, 25]], 'cyan');
+        K.rond(G, 0, 0, true, 'cyan'); c.texte('O', G.X(0) + 6, G.Y(0) + 20, { couleur: 'cyan', taille: 16 });
+        c.repere('point_o', G.X(0) - 14, G.Y(0) - 14, 28, 28, 'le point O');
+        Lu.fin(e); K.marque('trace_o');
+        c.pause(.4);
+        K.proj(G, XB, YB, { couleur: 'blanc' });
+        K.rond(G, XB, YB, true, 'blanc'); c.texte('B(1 ; √2)', G.X(XB) + 10, G.Y(YB) + 6, { couleur: 'blanc', taille: 15 });
+        c.repere('point_b', G.X(XB) - 14, G.Y(YB) - 14, 28, 28, 'le point B(1 ; √2)');
+        K.marque('points_places');
+        // 7. La tangente horizontale au minimum, puis la courbe d’un trait, puis la branche
+        c.pause(.4);
+        e = Lu.debut([[CP.m - 12, TP.l1 + 3, 24, TP.l2 - TP.l1 - 6]], 'orange');
+        c.ligne(G.X(XM - 0.3), G.Y(YM), G.X(XM + 0.3), G.Y(YM), { couleur: 'orange', largeur: 2.6 });
+        c.repere('tangente_min', G.X(XM - 0.3) - 4, G.Y(YM) - 10, G.X(XM + 0.3) - G.X(XM - 0.3) + 8, 20, 'la tangente horizontale au minimum');
+        Lu.fin(e); K.marque('tangente_min');
+        c.pause(.4);
+        e = Lu.debut([[TP.lab + 2, TP.l2 + 2, TP.d - TP.lab - 4, TP.bas - TP.l2 - 4]], 'cyan');
+        K.anime(3, p => K.courbePart(G, g, -1, 2.38, p, { couleur: 'cyan' }));
+        c.repere('courbe', G.X(-1), G.Y(4.5), G.X(2.4) - G.X(-1), G.Y(YM) - G.Y(4.5) + 8, 'la courbe (Cf)');
+        Lu.fin(e); K.marque('courbe_tracee');
+        c.pause(.4);
+        e = Lu.debut([[CP.p - 18, TP.yh - 19, 36, 25], [NP.x - 6, NP.y[5] - 19, 430, 25]], 'vert');
+        c.fleche(G.X(2.32) + 14, G.Y(3.4), G.X(2.32) + 14, G.Y(4.4), { couleur: 'vert', largeur: 2, tete: 8 });
+        c.texte('(C_f)', G.X(1.25), G.Y(3.6), { couleur: 'cyan', taille: 19 });
+        c.repere('branche_trace', G.X(1.9), G.Y(4.5), G.X(2.4) - G.X(1.9) + 24, G.Y(2.6) - G.Y(4.5), 'la branche vers le haut');
+        Lu.fin(e); K.marque('courbe_finie');
+        Lu.dessiner();
+      },
+      decrire: {
+        enonce: 'Titre : étude de f(x) = x√(x + 1). Rien d’autre n’est écrit.',
+        domaine: 'Écrit : x + 1 ≥ 0 : D_f = [−1 ; +∞[. Le cadre du tableau de variations (lignes x, f′(x), f(x)) avec seulement −1 et +∞ dans la ligne x.',
+        taux: 'Écrit : taux en −1 : x/√(x + 1) → −∞ quand x → −1⁺. La conclusion n’est pas encore écrite.',
+        demi_tangente: 'Une double barre orange en −1 dans la ligne f′(x) ; écrit : f non dérivable à droite en −1 : demi-tangente verticale en A(−1 ; 0).',
+        derivee: 'Écrit en haut : f′(x) = (3x + 2)/(2√(x + 1)).',
+        signe_phrase: 'Écrit : 2√(x + 1) > 0 : f′(x) a le signe de 3x + 2 ; −2/3 (où 3x + 2 s’annule) est ajouté dans la ligne x.',
+        ligne_signe: 'La ligne f′(x) est remplie : −, 0 en −2/3, +. La ligne f(x) est encore vide.',
+        fleches: 'La ligne f(x) est remplie : 0 en −1, flèche qui descend jusqu’à −2√3/9 en −2/3 (le minimum), flèche qui monte vers +∞.',
+        point_o: 'Écrit : f(0) = 0 : (C_f) passe par O.',
+        limite_f_sur_x: 'Écrit : en +∞, f(x)/x = √(x + 1) → +∞. L’interprétation n’est pas encore écrite.',
+        branche: 'Écrit : branche parabolique de direction (Oy) au voisinage de +∞.',
+        repere_pose: 'À droite, le repère est tracé : x de −1,5 à 2,4, y de −1 à 4,5. Il est vide.',
+        trace_a: 'Les cases de −1 s’allument : le point A(−1 ; 0) avec une flèche orange verticale vers le bas (la demi-tangente).',
+        trace_minimum: 'La valeur −2√3/9 s’allume : le point minimum (−2/3 ; −0,38) est placé avec ses pointillés vers les axes, sans tangente encore.',
+        trace_o: 'La note f(0) = 0 s’allume : le point O est placé.',
+        points_places: 'Le point B(1 ; √2 ≈ 1,41) est placé avec ses pointillés. Les quatre points A, minimum, O, B sont au repère ; la courbe n’est pas tracée.',
+        tangente_min: 'Le 0 de la ligne f′(x) s’allume : un petit trait horizontal orange au minimum, la tangente horizontale.',
+        courbe_tracee: 'La ligne f(x) s’allume : la courbe est tracée d’un seul trait, de A vers le bas, jusqu’au minimum où elle est plate, puis elle monte par O et B, de plus en plus raide.',
+        courbe_finie: 'La case +∞ et la note de la branche s’allument : une flèche verte vers le haut au bout de la courbe, nommée (C_f) : branche parabolique de direction l’axe des ordonnées.',
+      },
+      motifs: { enonce: 'l’énoncé', domaine: 'l’ensemble de définition', taux: 'le taux en −1', demi_tangente: 'la demi-tangente en −1', derivee: 'la dérivée', signe_phrase: 'le signe de f′', ligne_signe: 'la ligne de f′', fleches: 'les flèches', point_o: 'f(0) = 0', limite_f_sur_x: 'la limite de f(x)/x', branche: 'la branche parabolique', repere_pose: 'le repère', trace_a: 'le point A', trace_minimum: 'le minimum placé', trace_o: 'le point O', points_places: 'les points placés', tangente_min: 'la tangente au minimum', courbe_tracee: 'la courbe tracée', courbe_finie: 'la courbe finie' },
+      explication: [
+        { repere: 'domaine', texte: 'Sous la racine, positif ou nul : x ≥ −1.' },
+        { repere: 'taux', texte: 'Le taux en −1 à droite tend vers −∞.' },
+        { repere: 'demi_tangente', texte: 'Pas dérivable à droite en −1 : demi-tangente verticale.' },
+        { repere: 'signe_phrase', texte: 'Le bas est positif : f′ a le signe de 3x + 2.' },
+        { repere: 'ligne_signe', texte: 'f′ négative avant −2/3, positive après.' },
+        { repere: 'minimum_tab', texte: 'f′ s’annule en changeant de signe : minimum en −2/3.' },
+        { repere: 'branche', texte: 'f(x)/x tend vers +∞ : direction l’axe des ordonnées.' },
+        { repere: 'point_a', texte: 'On commence par A et sa demi-tangente verticale.' },
+        { repere: 'tangente_min', texte: 'Au minimum, f′ = 0 : tangente horizontale.' },
+        { repere: 'courbe', texte: 'La courbe d’un seul trait, en suivant le tableau.' },
+      ],
+    },
   },
 });
 </script>
@@ -424,5 +599,6 @@ MathsTableau.page({ net: true,
  * mesurée avec la police de secours est jetée et refaite avec Patrick Hand (le kit ne la refait pas seul). */
 if (document.fonts) document.fonts.addEventListener('loadingdone', () => { const m = window.__maths; if (m) { m.scene.boite = null; m.scene.sale = true; } });
 </script>
+<script src="/media/simulations/maths/derivation-tableau/depart.js"></script>
 <script src="/media/simulations/professor-locate.js" defer></script>
 </body></html>
