@@ -376,29 +376,33 @@ function courbe(c) {
     c.texte(V.g.ynom, g.x0 + 8, g.y1 - 8, { taille: 16, couleur: 'blanc', duree: .2 });
     window.OndesTableau.Net.courbe(c, u => [xT(u * V.g.tmax), yA(aDe(u * V.g.tmax))], 90, { couleur: 'cyan', largeur: 2.6, duree: 1.6 }, { base: g.y0, rgb: '34,211,238', alpha: .18 });
   });
-  const h = (a, t, coul, lab, t0, eti) => ecrit(c, t0, () => {   // lecture : horizontale de a vers la courbe, point, verticale vers t
+  // lab : à droite du point, au-dessus de l'horizontale (droite = true : la courbe y descend sous la ligne, la place est
+  // libre) ; à gauche sous la ligne (droite = 'dessous' : la courbe y passe au-dessus) ; sinon à gauche au-dessus. Jamais sur les pointillés.
+  const h = (a, t, coul, lab, t0, eti, droite = false) => ecrit(c, t0, () => {   // lecture : horizontale de a vers la courbe, point, verticale vers t
     c.ligne(g.x0, yA(a), xT(t), yA(a), { couleur: coul, largeur: 1.8, pointille: [7, 6], duree: .5 });
     c.point(xT(t), yA(a), 5, coul);
-    if (lab) c.texte(lab, g.x0 + 8, yA(a) - 7, { taille: 16, couleur: coul, duree: .3 });
+    if (lab) c.texte(lab, droite === true ? xT(t) + 10 : g.x0 + 8, droite === 'dessous' ? yA(a) + 21 : yA(a) - 11, { taille: 16, couleur: coul, duree: .3 });
     if (eti != null) {
       c.ligne(xT(t), yA(a), xT(t), g.y0, { couleur: coul, largeur: 1.8, pointille: [7, 6], duree: .5 });
-      c.texte(eti, xT(t) + 6, g.y0 - 8, { taille: 17, couleur: coul, duree: .4 });
+      // près de l'axe (a petit) la courbe longe l'axe : la date s'écrit au-dessus du point, pas sur la courbe.
+      const bas = g.y0 - yA(a) < 30;
+      c.texte(eti, xT(t) + (bas ? 10 : 6), bas ? yA(a) - 30 : g.y0 - 8, { taille: 17, couleur: coul, duree: .4 });
     }
   });
   if (VUE === 'datation') {
-    if (commence('inconnue')) { h(318, tDe(318), 'jaune', 'a_1 = 318 Bq', D.inconnue, null); c.repere('inconnue', xT(tDe(318)) - 14, yA(318) - 14, 28, g.y0 - yA(318) + 18, 'le point d’abscisse t₁ (l’âge cherché)'); }
+    if (commence('inconnue')) { h(318, tDe(318), 'jaune', 'a_1 = 318 Bq', D.inconnue, null, 'dessous'); c.repere('inconnue', xT(tDe(318)) - 14, yA(318) - 14, 28, g.y0 - yA(318) + 18, 'le point d’abscisse t₁ (l’âge cherché)'); }
     if (commence('inconnue')) ecrit(c, D.inconnue + 1.0, () => {
       c.ligne(xT(tDe(318)), yA(318), xT(tDe(318)), g.y0, { couleur: 'jaune', largeur: 1.8, pointille: [7, 6], duree: .5 });
       if (!commence('etape3')) c.texte('t_1 = ?', xT(tDe(318)) + 6, g.y0 - 8, { taille: 18, couleur: 'rose', duree: .3 });
     });
     quand(c, 'etape3', () => c.texte('t_1 ≈ 2,26·10³ ans', xT(tDe(318)) + 6, g.y0 - 8, { taille: 17, couleur: 'vert', duree: .5 }), 3.6);
-    if (commence('verif')) { h(209, 5730, 'orange', '0,5·a_0 = 209 Bq', D.verif, 't½'); c.repere('t_demi', xT(5730) - 14, yA(209) - 14, 28, g.y0 - yA(209) + 18, 't½ = 5730 ans sur la courbe'); }
+    if (commence('verif')) { h(209, 5730, 'orange', '0,5·a_0 = 209 Bq', D.verif, 't½', true); c.repere('t_demi', xT(5730) - 14, yA(209) - 14, 28, g.y0 - yA(209) + 18, 't½ = 5730 ans sur la courbe'); }
   } else if (VUE === 'pu2021') {
     if (commence('a0')) { ecrit(c, D.a0, () => { c.point(xT(0), yA(10), 6, 'jaune'); }); c.repere('a0', xT(0) - 14, yA(10) - 16, 40, 30, 'a₀ = 1,0·10¹¹ Bq à t = 0'); }
-    if (commence('moitie')) { h(5, 88, 'orange', '0,5·a_0', D.moitie, null); c.repere('moitie', g.x0, yA(5) - 14, xT(88) - g.x0 + 12, 28, 'a₀/2 = 5,0·10¹⁰ Bq jusqu’à la courbe'); }
+    if (commence('moitie')) { h(5, 88, 'orange', '0,5·a_0', D.moitie, null, true); c.repere('moitie', g.x0, yA(5) - 14, xT(88) - g.x0 + 12, 28, 'a₀/2 = 5,0·10¹⁰ Bq jusqu’à la courbe'); }
     if (commence('t_demi')) { ecrit(c, D.t_demi, () => { c.ligne(xT(88), yA(5), xT(88), g.y0, { couleur: 'orange', largeur: 1.8, pointille: [7, 6], duree: .6 }); c.texte('t½ = 88 ans', xT(88) + 6, g.y0 - 8, { taille: 17, couleur: 'orange', duree: .5 }); }); c.repere('t_demi', xT(88) - 14, yA(5), 28, g.y0 - yA(5) + 6, 't½ = 88 ans sur l’axe des temps'); }
     if (commence('pourcent')) ecrit(c, D.pourcent, () => { if (!commence('t_max')) c.texte('t_max = ?', xT(200), yA(8.4), { taille: 19, couleur: 'rose', duree: .4 }); });
-    if (commence('t_max')) { h(7, tDe(7), 'vert', '0,70·a_0', D.t_max + 3.4, '45 ans'); c.repere('t_max', xT(tDe(7)) - 14, yA(7) - 14, 28, g.y0 - yA(7) + 18, 't_max ≈ 45 ans'); }
+    if (commence('t_max')) { h(7, tDe(7), 'vert', '0,70·a_0', D.t_max + 3.4, '45 ans', true); c.repere('t_max', xT(tDe(7)) - 14, yA(7) - 14, 28, g.y0 - yA(7) + 18, 't_max ≈ 45 ans'); }
   } else if (VUE === 'iode2022') {
     if (commence('trace')) { ecrit(c, D.trace + 2.2, () => { c.ligne(xT(8), yA(2), xT(8), g.y0, { couleur: 'orange', largeur: 1.6, pointille: [5, 6], duree: .4 }); c.texte('t½', xT(8) + 5, g.y0 - 8, { taille: 16, couleur: 'orange', duree: .2 }); }); }
     if (commence('pourcent')) ecrit(c, D.pourcent, () => { if (!commence('t1')) c.texte('t_1 = ?', xT(30), yA(2.6), { taille: 19, couleur: 'rose', duree: .4 }); });

@@ -346,7 +346,10 @@ function ceQuiSeVoit() {
 
 /* ── Commandes ────────────────────────────────────────────────────────── */
 function start() { S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire('On trace les axes, la courbe, puis on lit…'); pont.noter('start', { courbe: S.courbe }); pont.emettre(); }
-function reset() { start(); }
+// Diapositive pilotée (professeur 39) : `reset` FIGE la scène — sur ?depart=<moment> (tout ce qui précède déjà
+// écrit) ou sur zéro — et rien ne court seul ; la voix avance ensuite par play_until. Avant, reset = start.
+const DEPART = new URLSearchParams(location.search).get('depart');
+function reset() { calculer(); S.t = DEPART && M[DEPART] !== undefined ? M[DEPART] : 0; S.jusqua = null; S.motif = ''; S.running = false; S.pause = true; S.fait = false; scene.sale = true; etiquette(); dire('Observe…'); pont.noter('reset', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
 function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
 function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('La craie continue…'); pont.noter('resume'); pont.emettre(); }
 function setTime(p) {
@@ -435,7 +438,7 @@ const pont = protocole({ id: config.id, commandes, config,
   progression: () => (S.fait ? 1 : 0),
   executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
 dire('La courbe va s’écrire…');
-setTimeout(() => { if (!S.running && S.t === 0 && !S.pause) start(); }, 900);
+setTimeout(() => { if (DEPART) reset(); else if (!S.running && S.t === 0 && !S.pause) start(); }, 900);
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>
 </body></html>

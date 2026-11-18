@@ -232,3 +232,19 @@ encre sur le canvas, aucune erreur console, aucun texte hors cadre. **15 px part
 - `ra_d6_type` (2018 R) reste un exemple dit par la voix (leçon de méthode), et `ra_f3_famille2024` (Segrè, 2024 R)
   garde sa forme (flèches jouées, question finale) ; `ra_x1_cas_types`, `ra_z1_bilan`, `ra_z2_carte` démarrent encore
   avec `start` (pages non pilotées par `?depart=`).
+
+## 10. Défauts anciens corrigés (18 novembre 2026, après la 2ᵉ passe)
+- **54 diapositives pilotées par la voix démarraient en `start`** (la scène courait seule, devant ou derrière la voix).
+  Elles passent en `reset` (les deux de `carte.html` n'envoient plus rien : la voix construit la carte branche par branche,
+  comme au ch5). Dans `noyau`, `desintegration`, `chauffer`, `rappels`, `activite`, `courbe` et `figures`, `reset` était un
+  autre nom de `start` : il fige maintenant la scène, sur zéro ou sur `?depart=<moment>`.
+- **Neuf scènes reprises** sans rechargement s'ouvrent figées : `ra_n3` (`zoom_noyau`), `ra_n5` (`formule_N`), `ra_s2`
+  (`droite_N_egal_Z`), `ra_s4b` (`zone_alpha`), `ra_l7b` (`axes`), `ra_a2` (`une_seconde`), `ra_a3b` (`derivee`),
+  `ra_a5b` (`quantite`), `ra_c4b` (`fils`) ; chaque moment de départ est avant le premier `play_until` de la diapositive.
+- **`lambda_carbone`** (`lambda.html`) était fabriqué par le code (`'lambda_' + e.id`) : écrit en entier.
+- **`national.html` au téléphone** : les étiquettes des lectures (0,70·a₀, 0,5·a₀, a₁ = 318 Bq, 34,6 j) ne touchent plus
+  ni les pointillés ni la courbe : à droite du point ou sous la ligne selon la place.
+- `segre.html`, vue famille : « désintégration n sur 14 » en 15 px et en blanc (était 14 px, gris pâle).
+- Le cours en ligne ne change pas : sans `?depart=` les pages démarrent comme avant, et aucune diapositive en ligne n'envoie
+  `reset` à ces pages. Vérifié dans Chromium (figée, puis arrêtée sur le moment suivant, sans erreur).
+- Vérificateur de pointage, copie en attente : 0 « introuvable », 0 DEPART, 0 IFRAME (avant : 1, 54, 9).
