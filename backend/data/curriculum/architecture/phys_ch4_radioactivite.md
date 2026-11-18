@@ -61,6 +61,9 @@ Défauts relevés diapositive par diapositive :
 3. **La simulation ne donne plus la réponse.** `population.html` accepte `conclusions=0` dans l'URL : la vue
    `grand_nombre` écrit seulement « N = 200 » et « 8 j » (pas « N₀/2 », pas « t½ », pas la loi en pointillé).
    `ra_l1_echantillon` et `ra_l1b_moitie` l'utilisent (URL distinctes, `demarrer: reset` pour la nouvelle).
+   `ra_s3_zones`, qui suit maintenant `ra_s4b_alpha` sur la même page `segre.html?vue=zones` (déjà arrivée à
+   « fleches »), reçoit une URL distincte (`&synthese=1`) et `demarrer: reset` : la scène se recharge et ses
+   play_until repartent de la vallée (professeur 39).
 4. **Chaque prérequis juste avant son usage** (logique 6) : `ra_p3_puissances` ouvre la partie « beaucoup de noyaux »
    (premier grand nombre : la courbe en 10²⁰) ; `ra_l4a_exp` et `ra_l4_rappel` restent juste avant la loi (6/7
    profs) ; `ra_p4_mole` reste juste avant N = (m/M)·N_A.

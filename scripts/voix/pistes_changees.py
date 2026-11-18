@@ -17,9 +17,10 @@ def main():
     en_ligne = charger(os.path.join(RACINE, "backend/data/courses", deck + ".json"))
     attente = charger(os.path.join(RACINE, "backend/data/courses/en_attente", deck + ".json"))
     avant = {(d, i): t for d, i, t, _ in pistes(en_ligne)}
+    textes_avant = set(avant.values())      # une piste déplacée (autre id, même texte) garde sa voix dans son objet
     sortie = []
     for d, i, t, _ in pistes(attente):
-        if avant.get((d, i)) == t:
+        if avant.get((d, i)) == t or t in textes_avant:
             continue
         typ = {"mixed": "diapositive", "demos": "demonstration"}.get(d, "reaction_ou_enonce")
         sortie.append({"type": typ, "dossier": d, "id": i, "texte": t,
@@ -33,8 +34,9 @@ def main():
         open(chemin, "a", encoding="utf-8").write("\n")
     from collections import Counter
     print(len(sortie), "pistes", dict(Counter(p["type"] for p in sortie)))
-    for p in sortie:
-        print(" ", p["dossier"], p["id"], p["raison"])
+    if "-v" in sys.argv:
+        for p in sortie:
+            print(" ", p["dossier"], p["id"], p["raison"])
 
 
 if __name__ == "__main__":

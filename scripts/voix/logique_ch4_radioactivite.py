@@ -336,6 +336,12 @@ def main():
     s = S["ra_l1_echantillon"]
     s["visual"]["url"] = SIM + "population.html?vue=grand_nombre&conclusions=0"
 
+    # ra_s3_zones vient maintenant après ra_s4_fleches et ra_s4b_alpha (même page, déjà arrivée à « fleches ») :
+    # URL distincte pour recharger la scène, ouverte figée (professeur 39), ses play_until repartent de la vallée.
+    s = S["ra_s3_zones"]
+    s["visual"]["url"] = SIM + "segre.html?vue=zones&synthese=1"
+    s["concentration"]["demarrer"] = "reset"
+
     # ra_s5_isotopes_ligne : β⁻ n'est pas encore enseigné → « instable », annonce de la partie suivante.
     s = S["ra_s5_isotopes_ligne"]
     s["speech_text"]["mixed"] = S5_TEXTE
