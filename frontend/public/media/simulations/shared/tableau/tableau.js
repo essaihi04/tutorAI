@@ -631,7 +631,34 @@
       if (!cmd) { emettre(); return; }
       if (!pointage) appuyer(cmd);
       executer(cmd, p);
+      // « Réécouter » sur une page ouverte figée : on revient au moment de départ, pas à une scène vide.
+      if (cmd === 'reset' && depart) figerAuDepart();
     };
+    /*
+     * Ouverture figée : `?depart=<moment>` (ou `?depart=<secondes>`), 18 novembre 2026 — professeur, règle 39.
+     * Une diapositive qui continue la scène de la précédente ouvre la même page avec une URL distincte, déjà figée sur
+     * le moment où la précédente s'est arrêtée (tout ce qui le précède est dessiné, rien après). La diapositive démarre
+     * avec `reset` (jamais `start`) ; ses `play_until` vers les moments suivants repartent de là, ceux d'avant sont
+     * ignorés (sansRetourArriere). Une page qui sait `set_time` s'y fige d'un coup ; sinon elle joue jusqu'au moment.
+     */
+    const depart = (() => { try { return new URLSearchParams(location.search).get('depart') || ''; } catch (_) { return ''; } })();
+    function figerAuDepart(essai = 0) {
+      let e = {};
+      try { e = etat() || {}; } catch (_) { /* page pas encore prête */ }
+      const moments = e.moments || {};
+      const t = depart in moments ? +moments[depart] : (/^\d+(\.\d+)?$/.test(depart) ? +depart : NaN);
+      if (!Number.isFinite(t)) {
+        // Les moments sont calculés au premier dessin : on les attend jusqu'à 3 s, puis on le dit (moment inconnu).
+        if (essai < 30) setTimeout(() => figerAuDepart(essai + 1), 100);
+        else console.warn(`Tableau : ?depart=${depart} — moment inconnu (${Object.keys(moments).join(', ') || 'aucun'})`);
+        return;
+      }
+      if (commandes.includes('set_time')) executer('set_time', { time_s: t });
+      else if (commandes.includes('play_until')) executer('play_until', depart in moments ? { moment: depart } : { time_s: t });
+      emettre({ depart });
+    }
+    if (depart) setTimeout(figerAuDepart, 0);
+    window.__departTableau = depart;
     window.addEventListener('message', (e) => {
       if (e.source !== parent) return; const d = e.data;
       if (d && d.type === 'simulation_control' && (!d.simulation_id || d.simulation_id === id)) window.executeAICommand(d.command, d.parameters || {});
