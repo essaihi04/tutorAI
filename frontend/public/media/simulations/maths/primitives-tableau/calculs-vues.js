@@ -495,6 +495,7 @@ window.CALCULS = {
    {
     "t": "forme u’uⁿ, n = 3",
     "c": "vert",
+    "m": "forme",
     "dx": 30,
     "taille": 18
    },

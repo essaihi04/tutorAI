@@ -296,11 +296,13 @@ Légende : ↕✎ déplacée, première phrase réécrite (voix à refaire) · �
 - `triangle` : moments `distance`, `exemple1`, `cotes`, `equilateral`, `exemple2`, `isocele`, `droit`, `nature` (+ repère `quotient`).
 - `?depart=<moment>` (vues n2023 et n2023_arg) : ce qui précède ce moment s'écrit en moins d'une seconde ; c'est ainsi que `nc_n1_b` (`depart=question2`) et `nc_n1_alignes` (`depart=question3`) s'ouvrent là où la diapositive précédente s'est arrêtée, avec une URL distincte et `demarrer: reset` (plus de ligne IFRAME/DEPART pour ces diapositives ni pour `nc_i4`). `calculs.html?vue=n1` reste en place pour le cours en ligne.
 
-### Rejeu après la réponse (pour le lecteur)
+### Rejeu après la réponse
 - `nc_n1` — `alignement.html?vue=n2023` — `b_moins_d` (la correction de la question 2 ; elle est aussi jouée au début de `nc_n1_b`).
 - `nc_n1_b` — `alignement.html?vue=n2023&depart=question2` — `quotient`, `droite`, `alignes` (aussi joués par `nc_n1_alignes`).
 - `nc_n1_c` — `alignement.html?vue=n2023_arg` — `produit`, `egalite` (depuis OA, reculer de arg b ramène sur OB), `conclusion`.
 - `nc_i4` — `alignement.html?vue=triangle` — rien encore : le cas 2i (AC = 2AB, angle droit) n'est pas dessiné (reste à faire).
+
+**Écrit dans le cours (18 novembre 2026)** : chaque diapositive de cette liste porte `concentration.apres_reponse` (une étape `play_until` par moment, dans l'ordre), débloqué par sa première question (`q`). Le lecteur ne joue ces moments qu'après la réponse, même si un pointage les demandait ; contrôle : `python -I backend/scripts/verifier_parcours.py` (rien d'imprimé). Chaque moment a été vérifié dans Chromium : présent dans la vue de la diapositive, après le dernier moment de son pointage.
 
 ### Mots (2ᵉ passe)
 Remplacés : « وكتطيح على C » → « وكتوصل لـ C » ; « كتدوز من A » → « كتمشي من A ». Gardés, à écouter : « symétrique » (programme, 2 fois), « colinéaires » (programme, 1 fois), « bleu » (déjà là), « arguments », « modulo » (déjà notés).

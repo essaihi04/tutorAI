@@ -359,7 +359,7 @@ exercice : lim ∛(x + 8) en +∞). Le rappel de compétence « factorise a³ �
   `lc_t2_continue`, `lc_t5_unique`, `lc_r4_deux_lignes` sont des questions de rappel immédiat de ce qui vient d'être
   montré et dit (la voix dit déjà la réponse : les changer demanderait de refaire leur voix).
 
-## Rejeu après la réponse (pour le lecteur)
+## Rejeu après la réponse
 
 `diapositive — URL de la vue — moment(s) à rejouer`
 
@@ -375,6 +375,8 @@ exercice : lim ∛(x + 8) en +∞). Le rappel de compétence « factorise a³ �
 - `lc_l7_plus_lourd` — `lourd.html?vue=lourd` — resultat
 - `lc_i4_composee` — `composee.html?vue=limite` — racine_limite
 - `lc_l1_chemin` — `approche.html?vue=trou` — limite_lue
+
+**Écrit dans le cours (18 novembre 2026)** : chaque diapositive de cette liste porte `concentration.apres_reponse` (une étape `play_until` par moment, dans l'ordre), débloqué par sa première question (`q`). Le lecteur ne joue ces moments qu'après la réponse, même si un pointage les demandait ; contrôle : `python -I backend/scripts/verifier_parcours.py` (rien d'imprimé). Chaque moment a été vérifié dans Chromium : présent dans la vue de la diapositive, après le dernier moment de son pointage.
 
 ## Ce qui reste à faire
 

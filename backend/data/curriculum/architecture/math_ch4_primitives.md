@@ -55,7 +55,7 @@ Aucune simulation n'est modifiée. Les diapositives réécrites gardent leurs vu
 Fait le 18 novembre 2026 (format `concentration.apres_reponse`, skill `cours-concentration`) : `pr_x1` (vue `calculs.html?vue=x1`) s'arrête après `derivable` ; la réponse à q rejoue `derivee`. En 2ᵉ passe, l'exercice e0 de `pr_x1` est devenu la question de `pr_x1_b` (vue `calculs.html?vue=x1&etape=b`, URL distincte pour recharger la scène) : sa réponse rejoue `calcul` puis `conclusion`. Les vues coupées `etapes.html?vue=x1_derivable` / `x1_derivee` restent disponibles mais ne servent plus à ces deux diapositives, puisque le lecteur réserve les moments de `apres_reponse`.
 
 Rappel déjà su (format `concentration.rappel`) : `pr_o1` porte un diagnostic (vrai/faux : f′(a) est la pente ; (5)′ = 5), et `pr_z1_pente` est sauté quand les deux affirmations sont justes du premier coup. Les autres rappels (z2, z3, z5, z4, c1) n'ont pas de diagnostic avant eux qui teste leur notion : ils se jouent toujours. Voix à faire : les énoncés et les 4 réactions du diagnostic de `pr_o1` (voix en direct en attendant).
-Besoin noté, pas fait car hors de ce lot : une vue `x1` qui s'arrête avant le moment `calcul` et le rejoue après la réponse. Le lecteur ne le fait pas encore (fichier partagé `frontend/src/`). **Fait en 2ᵉ passe** pour la vue : `etapes.html?vue=x1_derivable` et `?vue=x1_derivee` (§ 8) ; le rejeu reste au lecteur (§ 8, « Rejeu après la réponse »).
+Besoin noté, pas fait car hors de ce lot : une vue `x1` qui s'arrête avant le moment `calcul` et le rejoue après la réponse. Le lecteur ne le fait pas encore (fichier partagé `frontend/src/`). **Fait en 2ᵉ passe** pour la vue : `etapes.html?vue=x1_derivable` et `?vue=x1_derivee` (§ 8) ; le rejeu est écrit dans `apres_reponse` (§ 8, « Rejeu après la réponse »).
 
 ## 6. Mots et voix
 Chaque texte réécrit a été vérifié par `scripts/voix/verifier_mots.py`.
@@ -263,7 +263,7 @@ national (modèle `nc_n1` → `nc_n1_b` → `nc_n1_c`), la vue arrêtée avant l
 - `variations.html` (nouvelle page, `large`, `net`) : `?vue=signe` (moments `enonce`, `derivee`, `droite`, `zero`, `ligne_x`, `ligne_signe` ; repères `derivee`, `droite`, `zero`, `tableau`, `ligne_signe`, `ligne_F`) et `?vue=complet` (+ `ligne_F`, `maximum` ; repères `fleches_F`, `conclusion`). La droite de f se trace verte au-dessus de l'axe, orange en dessous (comme `pente.html`), le point jaune en x = 3, puis le tableau ligne par ligne. Vérifiée dans Chromium (1280 × 640 et 724 × 350, début, milieu, fin) : pas d'erreur console.
 - Aucune vue utilisée par le cours en ligne n'est modifiée.
 
-### Rejeu après la réponse (pour le lecteur)
+### Rejeu après la réponse
 `diapositive — URL de la vue complète — moment(s) à rejouer après la réponse de l'élève`
 - `pr_x1` — `/media/simulations/maths/primitives-tableau/calculs.html?vue=x1` — `derivee`
 - `pr_x1_b` — `/media/simulations/maths/primitives-tableau/calculs.html?vue=x1` — `calcul`, `conclusion`
@@ -274,6 +274,8 @@ national (modèle `nc_n1` → `nc_n1_b` → `nc_n1_c`), la vue arrêtée avant l
 - `pr_r1` — `/media/simulations/maths/primitives-tableau/calculs.html?vue=r1` — `primitive`
 - `pr_g3` — `/media/simulations/maths/primitives-tableau/variations.html?vue=complet` — `ligne_F`, `maximum`
 - (déjà coupées en 1ʳᵉ passe) `pr_e7` — `calculs.html?vue=e7` — `resoudre`, `resultat` ; `pr_u3` — `calculs.html?vue=u3` — `primitive`, `verification` ; `pr_c4` — `calculs.html?vue=c4` — `primitive` ; `pr_c7` — `calculs.html?vue=c7` — `primitive`.
+
+**Écrit dans le cours (18 novembre 2026)** : chaque diapositive de cette liste porte `concentration.apres_reponse` (débloqué par `q`). Les vues coupées d'`etapes.html` ne contenaient pas les moments à rejouer : ces diapositives passent sur la vue complète de `calculs.html` (ou `variations.html?vue=complet`) avec `&arret=<moment>` (nouveau `arret.js` du dossier : la construction ne court que jusqu'à ce moment au chargement, au `start` et au `reset` ; sans le paramètre, rien ne change pour le cours en ligne). Arrêts : x1 `derivable`, x1_b `derivee`, x2 `bulle`, x2_b `primitives`, x3 `continuite`, x3_b `primitives`, r1 `forme`, g3 `ligne_signe`, e7 `remplacer`, u3 `devant`, c4 `forme` (moment ajouté à la ligne « forme u′uⁿ, n = 3 » de la vue c4 : à reporter dans les sources du build), c7 `reecrire`. Les vues `etapes.html` restent (cours en ligne). Contrôle : `verifier_parcours.py` n'imprime rien ; arrêt et rejeu vérifiés dans Chromium.
 
 ### Blocs, compétences
 - `pr_s5_b1` : x1, x1_b, x2, x2_b, x3, x3_b (une question par diapositive, comme les sujets entiers des autres cours) ; cahier : 4 lignes (rédaction du vérifier, forme u′u², condition, forme u′/u²). Retrouver et exercice de bloc inchangés.
@@ -286,7 +288,6 @@ Chaque piste nouvelle ou réécrite passée par `scripts/voix/verifier_mots.py`.
 - `math_ch4_primitives_voix.json` recalculé : 52 pistes (28 nouvelles : 7 diapositives — pr_r1, pr_g2, pr_g3, pr_x1_b, pr_x2_b, pr_x3, pr_x3_b ; pr_x2 était déjà listée — et leurs réactions, démonstrations, énoncés ; 7 pistes de l'ancien exercice de pr_x1 partent : elles reviennent sous les ids `pr_x1_b__q_*`). Les réactions déplacées avec leur question (pr_g2 → pr_g3, pr_x3 → pr_x3_b) gardent leur voix.
 
 ### Reste à faire
-- Le rejeu après la réponse (liste ci-dessus) : lecteur (`frontend/src/`), autre session.
 - `calculs-vues.js` : reporter la vue `r1` dans les sources du build.
 - Le kit maths n'a pas de `?depart=` : les nouvelles diapositives démarrent en `start` comme tout le cours (lignes DEPART du vérificateur) ; les vues coupées font qu'aucune n'écrit la réponse en courant seule.
 - Les lignes GESTE des diapositives nouvelles ou réécrites viennent de la durée inconnue (pas encore de voix : toutes les commandes tombent à 0 s) ; avec une durée estimée (13,9 caractères par seconde, médiane du cours), aucune ne reste.
