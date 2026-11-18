@@ -525,7 +525,7 @@ function ETAPES(v) {
     taux: [
       { nom: 'tableau', anim: .3, motif: 'tableau d’avancement : NH₃ · H₂O · NH₄⁺ · HO⁻ ; initial C·V, excès, 0, 0 ; équilibre C·V − x_éq, excès, x_éq, x_éq', bulle: () => 'Le tableau d’avancement de la réaction.' },
       { nom: 'x_max', anim: .3, motif: '« x_max = C·V »', bulle: () => 'L’avancement maximal.' },
-      { nom: 'x_eq', anim: .3, motif: '« x_éq = [HO⁻]éq·V »', bulle: () => 'L’avancement à l’équilibre, avec HO⁻.' },
+      { nom: 'x_eq', anim: .3, motif: '« x_éq = [HO⁻]éq·V »', bulle: () => (CONCL_TAUX ? 'L’avancement à l’équilibre, avec HO⁻.' : 'L’avancement à l’équilibre…') },
       { nom: 'relation', anim: .3, motif: '« τ = x_éq/x_max = [HO⁻]éq/C »', bulle: () => 'Le taux d’avancement final.' },
       { nom: 'application', anim: .3, motif: '« τ = 3,98·10⁻⁴/1,0·10⁻² = 0,040 »', bulle: () => 'Le calcul.' },
       { nom: 'limitee', anim: .3, motif: '« τ < 1 : réaction limitée » ; ⚠ pour une base, τ passe par [HO⁻], donc par Ke', bulle: () => 'Que dit ce nombre ?' },
@@ -539,7 +539,10 @@ function ETAPES(v) {
     ],
   })[v] || [];
 }
-const MOTIFS = MOTIFS_DE(ETAPES);
+/* Pendant une question d’observation (CONCL_TAUX = false), l’arrêt sur image ne dit pas la réponse dans la bulle. */
+const MOTIFS_REPONSE = ['x_eq', 'relation', 'application', 'limitee'];
+const MOTIFS_TOUS = MOTIFS_DE(ETAPES);
+const MOTIFS = new Proxy({}, { get: (_, nom) => (typeof CONCL_TAUX !== 'undefined' && !CONCL_TAUX && MOTIFS_REPONSE.includes(nom) ? 'avant la réponse' : MOTIFS_TOUS[nom]) });
 
 /* ── Tableau à la craie (en-tête équation, deux lignes) ───────────────────────────────────────────────────────────────── */
 function grille(x, y, wl, cols, h) {
@@ -674,6 +677,10 @@ function vueAmmoniac(c, M) {
 /* ── Vue taux : tableau d’avancement de l’exemple D ───────────────────────────────────────────────────────────────────── */
 const TG = grille(20, 44, 176, [176, 104, 136, 136], 40);
 const YT = { x_max: 210, x_eq: 252, relation: 312, limitee: 384 };
+/* Question d’observation de ab_b2_taux (2ᵉ passe, 18 novembre 2026) : set_parameters {conclusions: false} tait
+ * « x_éq = [HO⁻]éq·V » et ce qui en découle (τ, application, « limitée ») tant que l’élève n’a pas répondu ;
+ * {conclusions: true} (défaut, comportement d’avant) les écrit. */
+let CONCL_TAUX = true;
 function vueTaux(c, M) {
   M.etape(c, 'tableau', () => tableau(c, TG, ['NH₃', 'H₂O', 'NH₄⁺', 'HO⁻'], ['+', '⇌', '+'],
     [{ nom: 'état initial', v: ['C·V', 'excès', '0', '0'] }, { nom: 'état d’équilibre', v: ['C·V − x_{éq}', 'excès', 'x_{éq}', 'x_{éq}'] }], '(mol)'));
@@ -682,12 +689,13 @@ function vueTaux(c, M) {
     c.texte('(si NH₃ était entièrement consommé)', 200, YT.x_max, { couleur: 'faible', taille: 16 });
   });
   M.etape(c, 'x_eq', () => {
+    if (!CONCL_TAUX) return;
     c.texte('x_{éq} = n(HO⁻)_{éq} = [HO⁻]_{éq}·V', 30, YT.x_eq, { taille: 22 });
     c.texte('(HO⁻ vient seulement de la réaction)', 410, YT.x_eq, { couleur: 'faible', taille: 16, max: 330 });
   });
-  M.etape(c, 'relation', () => ligneM(c, 30, YT.relation, ['τ =', { frac: ['x_{éq}', 'x_max'] }, '=', { frac: ['[HO⁻]_{éq}', 'C'] }], { taille: 22 }));
-  M.etape(c, 'application', () => ligneM(c, 300, YT.relation, ['=', { frac: ['3,98·10⁻⁴', '1,0·10⁻²'] }, '=', '0,040'], { taille: 22, cols: [0, 0, 0, 'jaune'] }));
-  M.etape(c, 'limitee', () => {
+  if (CONCL_TAUX) M.etape(c, 'relation', () => ligneM(c, 30, YT.relation, ['τ =', { frac: ['x_{éq}', 'x_max'] }, '=', { frac: ['[HO⁻]_{éq}', 'C'] }], { taille: 22 }));
+  if (CONCL_TAUX) M.etape(c, 'application', () => ligneM(c, 300, YT.relation, ['=', { frac: ['3,98·10⁻⁴', '1,0·10⁻²'] }, '=', '0,040'], { taille: 22, cols: [0, 0, 0, 'jaune'] }));
+  if (CONCL_TAUX) M.etape(c, 'limitee', () => {
     c.rect(22, YT.limitee - 26, 280, 38, { couleur: 'jaune', largeur: 2, arrondi: 8 });
     c.texte('τ < 1 : réaction limitée', 36, YT.limitee, { couleur: 'jaune', taille: 22 });
     attention(c, 320, YT.limitee - 4, { h: 17 });
@@ -697,10 +705,10 @@ function vueTaux(c, M) {
   const vues = [];
   if (M.commence('tableau')) vues.push('tableau d’avancement : NH₃ + H₂O ⇌ NH₄⁺ + HO⁻ ; état initial C·V, excès, 0, 0 ; état d’équilibre C·V − x_éq, excès, x_éq, x_éq (mol)');
   if (M.commence('x_max')) vues.push('x_max = C·V (si NH₃ était entièrement consommé)');
-  if (M.commence('x_eq')) vues.push('x_éq = n(HO⁻)éq = [HO⁻]éq·V (HO⁻ vient seulement de la réaction)');
-  if (M.commence('relation')) vues.push('τ = x_éq/x_max = [HO⁻]éq/C (barres de fraction dessinées)');
-  if (M.commence('application')) vues.push('= 3,98·10⁻⁴/1,0·10⁻² = 0,040');
-  if (M.commence('limitee')) vues.push('τ < 1 : réaction limitée (encadré jaune)', '⚠ pour une base, τ passe par [HO⁻], donc par Ke ([HO⁻]éq = Ke/[H₃O⁺]éq)');
+  if (CONCL_TAUX && M.commence('x_eq')) vues.push('x_éq = n(HO⁻)éq = [HO⁻]éq·V (HO⁻ vient seulement de la réaction)');
+  if (CONCL_TAUX && M.commence('relation')) vues.push('τ = x_éq/x_max = [HO⁻]éq/C (barres de fraction dessinées)');
+  if (CONCL_TAUX && M.commence('application')) vues.push('= 3,98·10⁻⁴/1,0·10⁻² = 0,040');
+  if (CONCL_TAUX && M.commence('limitee')) vues.push('τ < 1 : réaction limitée (encadré jaune)', '⚠ pour une base, τ passe par [HO⁻], donc par Ke ([HO⁻]éq = Ke/[H₃O⁺]éq)');
   return vues;
 }
 
@@ -803,7 +811,7 @@ function voir(M) {
   if (M.vues && M.vues.length) m.push(`Écrit : ${M.vues.map(s => `« ${s} »`).join(' ; ')}.`);
   return m.join(' ');
 }
-const params = M => ({ vue: M.S.vue });
+const params = M => (M.S.vue === 'taux' ? { vue: 'taux', conclusions: CONCL_TAUX } : { vue: M.S.vue });
 const MOT = Moteur({
   id: 'ab_base', titre: 'Une base dans l’eau : rappel K = C·τ²/(1 − τ), ammoniac (pH 10,60, [HO⁻] = Ke/[H₃O⁺]), τ d’une base, national 2022 R (méthylamine)', vues: VUES, titres: TITRES,
   etapes: ETAPES, motifs: MOTIFS, dessiner, voir, params,
@@ -811,8 +819,8 @@ const MOT = Moteur({
   messageFin: M => ({ constante: 'K = C·τ²/(1 − τ) = 1,6·10⁻⁵ pour l’acide éthanoïque. Et une base dans l’eau ?',
     ammoniac: 'pH = 10,60 : [H₃O⁺]éq = 2,51·10⁻¹¹ mol/L et [HO⁻]éq = 3,98·10⁻⁴ mol/L.', taux: 'τ = [HO⁻]éq/C = 0,040 < 1 : réaction limitée.',
     national: '[HO⁻]éq = 2,0·10⁻³ mol/L, τ = 0,20, Qr,éq = 5,0·10⁻⁴.' })[M.S.vue],
-  appliquer: (p, M) => { const r = {}; if (VUES.includes(p.vue)) r.vue = p.vue; r.change = !!(r.vue && r.vue !== M.S.vue); return r; },
-  schema: { vue: VUES.join(' | ') + ' (change la vue et relance)' },
+  appliquer: (p, M) => { const r = {}; if (typeof p.conclusions === 'boolean') { CONCL_TAUX = p.conclusions; r.garder = true; } if (VUES.includes(p.vue)) r.vue = p.vue; r.change = !!(r.vue && r.vue !== M.S.vue); return r; },
+  schema: { vue: VUES.join(' | ') + ' (change la vue et relance)', conclusions: 'true | false (vue taux, question d’observation : false tait x_éq = [HO⁻]éq·V et la suite ; true par défaut)' },
   texte: 'Une base dans l’eau (exemple D, 25 °C). Rappel : acide AH dans l’eau, AH + H₂O ⇌ A⁻ + H₃O⁺ ; [A⁻]éq = [H₃O⁺]éq = C·τ, [AH]éq = C·(1 − τ) ; K = C·τ²/(1 − τ) ; K = Qr,éq ne dépend que de la température ; acide éthanoïque K = 1,6·10⁻⁵ ; et une base dans l’eau ? Ammoniac C = 1,0·10⁻² mol/L : pH = 10,60 ; NH₃ + H₂O ⇌ NH₄⁺ + HO⁻ (l’eau joue l’acide, NH₃ capte un H⁺ de H₂O) ; [H₃O⁺]éq = 10^(−10,60) = 2,51·10⁻¹¹ mol/L ; [HO⁻]éq = Ke/[H₃O⁺]éq = 3,98·10⁻⁴ mol/L. Tableau d’avancement : état initial C·V, excès, 0, 0 ; équilibre C·V − x_éq, excès, x_éq, x_éq ; x_max = C·V ; x_éq = [HO⁻]éq·V ; τ = [HO⁻]éq/C = 3,98·10⁻⁴/1,0·10⁻² = 0,040 ; τ < 1 : réaction limitée ; pour une base, τ passe par [HO⁻], donc par Ke. National 2022 R : méthylamine C_b = 1,0·10⁻² mol/L, pH = 11,30 ; CH₃NH₂ + H₂O ⇌ CH₃NH₃⁺ + HO⁻ ; [HO⁻]éq = 10^(pH − 14) = 2,0·10⁻³ mol/L ; τ = 0,20 ; Qr,éq = C·τ²/(1 − τ) = 5,0·10⁻⁴.',
   explications: {
     constante: [{ repere: 'tableau', texte: 'Le tableau en concentrations, avec τ.' }, { repere: 'relation', texte: 'K s’écrit avec C et τ.' }, { repere: 'constante', texte: 'K ne dépend que de la température.' },
