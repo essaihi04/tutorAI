@@ -285,6 +285,37 @@ déploiement.** Tout ce qui était « pas encore en ligne » au § 3 septies est
 - Les autres branches d'origin n'ont rien à récupérer (`deploy-figures-chimie` est dépassée par `main`,
   `claude/tts-api-access-951ccc` date d'août).
 
+## 3 octies. Reprise du 18 novembre 2026 (soir, 19 h 30 UTC) — à faire avec l'autre compte
+
+**État** : la logique des 23 cours a été refaite par des sessions cloud (skills `logique-de-cours`,
+`cahier-de-l-eleve`, règles 42-43 du professeur, lexique visuel `docs/lexique-visuel/`) ; les cours refaits
+attendent dans `backend/data/courses/en_attente/` (rien n'est en ligne). Sessions cloud encore possibles en cours :
+cahier de l'élève (SVT, maths, physique, chimie), 2ᵉ passe maths / physique ch6-ch9, lexique visuel. Elles poussent
+sur `main` sans déployer.
+
+**Lot de voix en cours sur le VPS** : 1 226 voix des copies en attente, compte Kaggle 3 (`miftahi`), voix Bodi,
+lancé à 18 h 58 UTC (`/srv/corpus_v4/voix_lot/lancer_lot5.sh`, journal `voix_lot5.log`), ~2,6 voix/min →
+fin vers 02 h 45 UTC le 19/11. 65 anciennes voix dont le texte avait changé ont été renommées `*.wav.ancien`.
+
+**Une fois fini, dans l'ordre :**
+1. Ramener le travail cloud en local (sans pull) : `git fetch` puis
+   `python -X utf8 scripts/recuperer_cloud.py 07c02e93 --appliquer` (0 conflit attendu).
+2. Vérifier la fin du lot : `ssh moalim-vps tail -3 /srv/corpus_v4/voix_lot/voix_lot5.log` (ligne `FIN`).
+3. Poser les voix prêtes : `python -X utf8 scripts/voix/attente_poser.py 17` (ne pose que si le hash du texte est le
+   même ; 26 voix avaient été posées en local le 18/11 mais pas poussées, la commande les reprend).
+4. Lot complémentaire : les sessions ont changé des textes après la liste. Refaire `live_hash.json`
+   (voir la fin de ce point), `python -X utf8 scripts/voix/attente_construire.py`, copier les `att_*` sur le VPS, et
+   AVANT de relancer, renommer en `.ancien` chaque WAV de `att_<deck>/` dont le hash de `cours.json` diffère du
+   nouveau texte (le lanceur saute un fichier qui existe, même si son texte a changé). Puis `lancer_lot5.sh`
+   (compte 3 ; `ferdaous04` reste réservé à la voix en direct ; compte 2 épuisé jusqu'au ~21/11).
+5. Écoute automatique (skill `prononciation`, `scripts/voix/refaire_verifie.py`), puis commit sur `main` par index
+   temporaire (cours en attente + mp3 v17), essai dans le navigateur, mise en ligne avec l'accord de l'utilisateur.
+
+`live_hash.json` : sur le VPS, pour chaque dossier de `/srv/corpus_v4/voix_lot/` (sauf `att_*` et `_*`, mais avec
+`_observations`), `{dossier: {"<sous>/<id>": hash}}` des WAV présents ; à placer dans
+`%TEMP%/moalim-voix-attente/live_hash.json`.
+Environnement cloud « Default » : script corrigé le 18/11 (YOUTUBE-CHANNEL-2 et tutorAI, num2words à part).
+
 ## 4. Ce qui attend une décision
 - Repeindre aussi ballon, milieux, types, carte et bilan du chapitre des ondes, si l'utilisateur le veut (§ 3 octies).
 - Déployer la correction des questions de reprise (formules écrites) — commit prêt, pas encore déployé.
