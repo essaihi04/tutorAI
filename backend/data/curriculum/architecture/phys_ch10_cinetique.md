@@ -3,7 +3,7 @@
 Revue de la logique du 18 novembre 2026 (skill `logique-de-cours`). Le travail part de la copie en attente, plus
 récente que le cours en ligne : mêmes textes, mais des corrections écrites et les réactions des exercices de bloc.
 La nouvelle version est dans `backend/data/courses/en_attente/phys_ch10_cinetique.json`. Les pistes à mettre en voix
-sont dans `phys_ch10_cinetique_voix.json` : 23 pistes, dont 2 diapositives.
+sont dans `phys_ch10_cinetique_voix.json` : 23 pistes, dont 2 diapositives (68 après la 2ᵉ passe, § 5).
 
 ## 1. Sources et constats
 
@@ -137,3 +137,81 @@ est gardée), **R** quand son texte est réécrit (sa voix est à refaire). **Ob
 - `ci_cr_carte` : `demarrer = start`. Même ajout au kit nécessaire.
 - Correction faite au passage : une réaction écrite d'un exercice de bloc (`ci_s2_b1`) écrivait « lambda » en
   lettres ; elle écrit maintenant le symbole λ (`verifier_formules.py` : 0).
+
+## 5. 2ᵉ passe du 18 novembre : le national joué pas à pas, rien de décisif avant la réponse
+
+Demande de l'utilisateur : « simple, animé, expliqué ; ne pas tout donner au départ ; laisser à l'élève le temps de
+trouver seul ; une raison derrière chaque choix ».
+
+### Le national 2021 N joué en quatre diapositives (nouvelle séance 7)
+
+**Pourquoi ce sujet.** 2021 N (exercice 1, partie 1 : un savon, l'ester en excès et les ions hydroxyde) est le seul
+sujet récent qui réunit, dans un même exercice, les quatre cas types du cours : le tableau d'avancement et x_f, le
+suivi par conductimétrie (σ = 0,25 − 160·x donnée), t½ (9 sessions) et la vitesse par la tangente (5 sessions), avec
+le « montrer que » de v (piège du signe et de V₀ en m³). Avant, `ci_n6_sigma` le lisait d'un trait : la voix
+faisait toutes les étapes. Il est **remplacé** par quatre diapositives, une par question du sujet, chacune sur sa vue
+de la nouvelle page `cinetique-tableau/national.html?vue=2021N_q1…q4` (URL différente : la scène se recharge).
+
+| Diapo | Ce que l'élève voit, puis fait | Question d'observation (la voix s'arrête) |
+|---|---|---|
+| `ci_n6a_tableau` | On verse l'ester (flacon peint) sur 10⁻³ mol d'ions HO⁻ ; l'équation avec les états ; le tableau s'écrit ligne par ligne (initial, en cours, final). | « L'ester est en excès : quel est le réactif limitant ? » (HO⁻ / l'ester / les deux). Puis HO⁻ entouré et x_f = 10⁻³ mol. |
+| `ci_n6b_demi` | Rappel Q1 en haut. Le conductimètre plongé dans le mélange affiche σ qui baisse ; à chaque date la valeur va dans un tableau, puis devient un point du graphe ; la courbe passe par les points (les valeurs naissent de l'appareil, règle 35). x(t½) = x_f/2. | « Que vaut σ à t½ ? » (0,25 − 160 × 5·10⁻⁴ = 0,17 / σ₀/2 = 0,125 / 0,08). Puis σ₁/₂ = 0,17 S·m⁻¹ et la lecture t½ = 4 min. |
+| `ci_n6c_montrer` | Rappels Q1-Q2. La définition de v, la relation du sujet, deux barres liées (x monte, σ baisse). | « Que vaut dσ/dt ? » (−160·dx/dt / 0,25 − 160·dx/dt / 160·dx/dt). Puis dx/dt, puis v = −(1/(160·V₀))·dσ/dt encadré. |
+| `ci_n6d_vitesse` | Rappels Q2-Q3. La courbe, le point de date 4 min, la tangente (T). | « (T) coupe l'axe σ à quelle valeur ? » (0,22 / 0,25 départ de la courbe / 0,17 point de contact). Puis la pente −0,0125, V₀ = 10⁻⁴ m³, v₁ ≈ 0,78 mol·m⁻³·min⁻¹. |
+
+Chaque observation porte sur une lecture ou un choix de méthode, jamais sur un long calcul ; la correction s'écrit
+ensuite comme le barème la lit (lignes `centre` et craie). Pendant la question, `sim_avant: {conclusions: false}` tait
+tout ce qui répond (étapes `limitant`, `x_f`, `sigma_demi`, `lecture`, `derivee`, `dxdt`, `resultat`, `points_lus`,
+`pente`, `volume`, `calcul`) ; `sim_apres` l'écrit pendant que la voix confirme.
+
+**Où.** Une séance à part, après les nationaux de lecture de courbe (séance 6) et avant les pièges et le bilan : un
+exercice complet ne se joue qu'après toutes ses notions (tableau, conductimétrie, vitesse, t½), et il sert de
+répétition générale avant la fiche. Séance 6 (« lire la courbe ») : `ci_s4_b1` (n1-n4), `ci_s4_b2` (n5, n7, n8) ;
+séance 7 : `ci_s6_b1` (les quatre questions de 2021 N), puis `ci_s4_b3` (pièges, fiche, carte).
+- L'exercice de bloc de `ci_s4_b2` portait sur 2021 N (σ₁/₂) : posé avant la diapositive jouée, il donnait la réponse de
+  sa question d'observation. Il passe au nouveau bloc `ci_s6_b1` (`reprend: ci_n6d_vitesse/e0`, réactions gardées) ;
+  `ci_s4_b2` prend l'exercice 2018 R de `ci_n7_conductance` (sa notion), avec ses réactions.
+- Compétences : `ci_n6a` → C2, `ci_n6b` → C7 et C3, `ci_n6c` et `ci_n6d` → C5.
+- Les exercices de fin de cours de `ci_n6_sigma` (2.2 et 2.3) et leurs réactions passent sur `ci_n6d_vitesse`.
+
+### Rien de décisif avant la réponse, sur les nationaux déjà voicés
+
+- `figures.html` reçoit un paramètre `conclusions` (true par défaut : le cours en ligne, qui ne l'envoie jamais, voit
+  la même chose qu'avant) et un `masque` par figure.
+- `ci_n1_aspirine` (2019 R) : le panneau écrivait « x_max = 2,8 mmol » dès les axes, avant que la voix pose la
+  question. Observation ajoutée après « … ولا cinq moins x max égale zéro. » : « x_max = 2,8 ou 5 mmol ? » ; la ligne
+  se tait jusqu'à la réponse. Voix de la diapositive gardée (elle s'arrête au mot, puis reprend « ناخدو الصغيرة »).
+- `ci_n2_diminue` (2025 R) : la phrase du bas « la pente de la tangente diminue » s'écrivait avec la courbe, avant
+  « واش la vitesse كتنقص؟ ». Observation vrai/faux ajoutée à ce mot ; la phrase et « v diminue » se taisent jusqu'à la
+  réponse. Voix gardée.
+- Relu sans changement : `ci_a1b`, `ci_a2` (déjà `conclusions: false`), `ci_g2`, `ci_v5`, `ci_n3` (la lecture ne joue
+  qu'après la réponse).
+
+### Mots
+
+- Pistes nouvelles passées à `verifier_mots.py en_attente/phys_ch10_cinetique …` (⚠ sans le préfixe `en_attente/`, le
+  script lit le cours **en ligne** et ne trouve pas les pistes nouvelles). Remplacés : « نلعبو » → « نديرو »,
+  « كتدوز » → « دايزة », « وكنكتبوها » → « نكتبو القيمة », « jauges » → « barres », « كنعزلو » → « نحسبو »,
+  « كيسالا » → « كيسالي », « ما كنجمعوش » → « ماشي نجمعو », « ما تقراش » → « ماشي ».
+- `ci_m1_mesures` (déjà sans voix) : « le chronomètre كيدور » → « الوقت كيمشي » (et « le temps passe »).
+- Gardés, termes du programme ou nombres : « conductimètre », « siemens » (dit « si mènsse »), « soixante-dix-huit ».
+- À changer à la prochaine voix de ces diapositives voicées (non réécrites ici pour ne pas perdre leur voix) :
+  « l'afficheur » (`ci_o2`, `ci_g1`, `ci_g2`, `ci_g4`, `ci_p1`, `ci_p5` → « l'écran »), « chronomètre » (`ci_g4`),
+  « béchers » (`ci_g2`).
+
+### Voix
+
+`phys_ch10_cinetique_voix.json` : 68 pistes (45 ajoutées : 4 diapositives, 41 champs d'observation ; la piste de
+`ci_m1_mesures` mise à jour).
+
+### Ce qui reste
+
+- `demarrer: start` des nouvelles diapositives (écart DEPART, comme tout le cours) : il faut `?depart=` dans le kit
+  partagé.
+- Les autres nationaux (n3, n4, n5, n7, n8, p4, p6) restent des figures lues ; ils ont chacun un cas déjà joué
+  ailleurs (t½ lu, courbe de réactif, conductance). Un deuxième exercice joué complet (dosage après trempe, 2024 N ou
+  2017 R) serait le suivant à faire.
+- `verifier_formules.py` signale encore des fractions à plat dans `bilan.html`, `carte.html`, `prerequis.html`,
+  `pression.html`, `suivi.html`, `vitesse.html` (antérieures ; rien dans `national.html` ni `figures.html`).
+- Texte à 15 px en téléphone paysage : `national.html` relève le plancher que le kit abaisse sur un petit tableau
+  (× 0,75 sous 900 × 400 px) ; les pages existantes gardent leur rendu.

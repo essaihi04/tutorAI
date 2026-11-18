@@ -1,0 +1,894 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>National 2021 N pas à pas — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="cin.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Le national 2021 N joué question par question à la craie : le mélange et le tableau d’avancement, le conductimètre qui lit σ, le tableau des mesures et la courbe σ(t), t½, la dérivée, la tangente et la vitesse v₁"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time set_parameters">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script>
+/*
+ * national.html : un sujet du national joué pas à pas (cours phys_ch10_cinetique, 2e Bac PC BIOF, 18 novembre 2026).
+ * Outils (moteur, tableau large, peints, appareil, cellule, chrono, graphes) : copie de conductimetrie.html (lignes 23-508).
+ */
+/* ── Formules chimiques à la craie : indices ₂ et charges ⁺ ⁻ ²⁻ rendus (sans modifier exposants.js ni le kit) ──────────
+ * « MnO₄⁻ » devient « MnO_{4}^{−} » ; le découpage « _{…} » accepte tout caractère avant (« [I⁻]₀ »). */
+(function () {
+  const C = window.Tableau.Craie, P = C.prototype, texteAvant = P.texte, segAvant = C.segments;
+  const SUP = { '⁺': '+', '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+  const SUB = { '₀': '0', '₁': '1', '₂': '2', '₃': '3', '₄': '4', '₅': '5', '₆': '6', '₇': '7', '₈': '8', '₉': '9' };
+  const chim = s => String(s).replace(/[⁺⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUP[ch]).join('') + '}')
+    .replace(/[₀₁₂₃₄₅₆₇₈₉]+/g, g => '_{' + [...g].map(ch => SUB[ch]).join('') + '}');
+  C.segments = function (s) {
+    const out = [], re = /_\{([^}]+)\}/g; let i = 0, m;
+    while ((m = re.exec(s))) { if (m.index > i) out.push(...segAvant(s.slice(i, m.index))); out.push({ t: m[1], sub: true }); i = re.lastIndex; }
+    if (i < s.length) out.push(...segAvant(s.slice(i)));
+    return out;
+  };
+  P.texte = function (s, x, y, o) { return texteAvant.call(this, chim(s), x, y, o); };
+  window.chim = chim;
+})();
+
+/* ── Moteur du déroulé (copie de physics/circuit-rlc-tableau/circuit-lc.html, + M.evs) ─────────────────────────────────── */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const lisse = p => p * p * (3 - 2 * p);
+const lerp = (a, b, f) => a + (b - a) * f;
+const fx = (v, d = 2) => fr(v, d).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');
+const ECRITURE = 2.5;
+function Moteur(o) {
+  const q = new URLSearchParams(location.search);
+  const S = { vue: o.vues.includes(q.get('vue')) ? q.get('vue') : o.vues[0], t: 0, running: false, pause: false, fait: false,
+    jusqua: null, motif: '', emis: 0, dit: '', mesure: false };
+  const V = o.vitesse ?? 1.7, T0 = o.T0 ?? .8, HOLD = {};
+  let TL = null;
+  function construire() {
+    let s = T0; const ev = [];
+    for (const e of o.etapes(S.vue)) {
+      const anim = e.anim || 0, d = { ...e, anim, debut: s, ecrit: s + (e.ecritDes ?? anim) };
+      d.fin = Math.max(s + anim, d.ecrit + (HOLD[e.nom] ?? 1.5)) + .35;
+      s = d.fin; ev.push(d);
+    }
+    const mom = {}; for (const e of ev) mom[e.nom] = e.fin; mom.fin = s + (o.queue ?? .6);
+    TL = { ev, M: mom };
+  }
+  const ev = nom => TL.ev.find(e => e.nom === nom);
+  const M = {
+    S, ev, evs: () => TL.ev, Moments: () => TL.M,
+    p(nom) { const e = ev(nom); if (!e) return 0; return e.anim > 0 ? clamp((S.t - e.debut) / e.anim, 0, 1) : (S.t >= e.debut - 1e-6 ? 1 : 0); },
+    commence(nom) { const e = ev(nom); return !!e && S.t > e.debut + 1e-6; },
+    vu(nom) { if (nom === 'fin') return S.t >= TL.M.fin - 1e-6; const e = ev(nom); return !!e && S.t >= e.fin - 1e-6; },
+    etape(c, nom, fn) {
+      const e = ev(nom); if (!e) return;
+      const t = c.t, cur = c.cur, comp = c.complet, w0 = e.ecrit;
+      c.t = S.t > 1e5 ? 1e9 : w0 + (S.t - w0) * V; c.cur = w0;
+      try { fn(); } finally { if (S.mesure) HOLD[nom] = Math.max(HOLD[nom] || 0, (c.cur - w0) / V); c.t = t; c.cur = cur; if (!S.running) c.complet = comp; }
+    },
+    etat() { return S.running ? 'en cours' : S.fait ? 'fin' : S.pause ? 'arrêt sur image' : 'pas encore lancée'; },
+  };
+  const scene = window.OndesTableau.Scene($('canvas'), (c) => o.dessiner(c, M), { large: true });
+  const cadreBase = scene.cadre;
+  scene.cadre = function (g) { const k = cadreBase.call(scene, g); if (Number.isFinite(k.t)) k.t *= ECRITURE; return k; };
+  M.scene = scene; M.craie = scene.craie;
+  const local = scene.local;   // tableau large : la figure est agrandie, les poignées suivent
+  scene.local = (x, y) => { const [a, b] = local(x, y); return [(a - LARGE.dx) / LARGE.k, (b - LARGE.dy) / LARGE.k]; };
+  function calculer() {
+    construire();
+    const t = S.t, r = S.running; S.t = 1e6; S.running = false; S.mesure = true;
+    for (const k of Object.keys(HOLD)) delete HOLD[k];   // une étape dessinée en plusieurs morceaux garde le plus long (max ci-dessus)
+    try { o.dessiner(scene.craie, M); } finally { S.t = t; S.running = r; S.mesure = false; }
+    construire(); scene.sale = true;
+  }
+  const sansSouligne = s => String(s).replace(/([A-Za-zΔτθ])_\{?([A-Za-z0-9]+)\}?/g, (m, a, i) => a + (/^\d+$/.test(i) ? [...i].map(d => '₀₁₂₃₄₅₆₇₈₉'[d]).join('') : i));
+  const dire = (texte, kind = '') => { texte = sansSouligne(texte); S.dit = texte; bulle($('feedback'), texte, kind); };
+  const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Rejouer' : 'Lancer'; };
+  let pont = null;
+  const emettre = () => pont && pont.emettre();
+  const noter = (a, d) => pont && pont.noter(a, d);
+  scene.avancer = dt => {
+    if (!S.running) return !!(o.anime && o.anime());
+    const avant = S.t; S.t += dt;
+    for (const e of TL.ev) if (avant < e.debut && S.t >= e.debut && e.bulle) dire(e.bulle());
+    if (S.jusqua != null && S.t >= S.jusqua) {
+      S.t = S.jusqua; S.jusqua = null; S.running = false;
+      if (S.t >= TL.M.fin - 1e-6) { finir(); return true; }
+      S.pause = true; etiquette(); dire('Arrêt sur image : ' + (S.motif || `t = ${fx(S.t, 1)} s`) + '.');
+      noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); return true;
+    }
+    if (S.t >= TL.M.fin) { S.t = TL.M.fin; finir(); return true; }
+    if (performance.now() - S.emis > 500) { S.emis = performance.now(); emettre(); }
+    return true;
+  };
+  function finir() { S.running = false; S.fait = true; S.pause = false; S.jusqua = null; etiquette(); dire(o.messageFin(M), 'good'); noter('measurement', o.params(M)); emettre(); }
+  function start() { o.reprise && o.reprise(); S.t = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; etiquette(); dire(o.depart(M)); noter('start', o.params(M)); emettre(); }
+  function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); dire('Arrêt sur image.'); noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); }
+  function resume() { if (S.running) return; o.reprise && o.reprise(); if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); dire('Ça repart…'); noter('resume'); emettre(); }
+  function setTime(p) {
+    const t = +p.time_s; if (p.time_s === null || p.time_s === '' || !Number.isFinite(t)) return;
+    o.reprise && o.reprise(); S.running = false; S.jusqua = null; S.t = clamp(t, 0, TL.M.fin); S.fait = S.t >= TL.M.fin - 1e-6; S.pause = !S.fait && S.t > 0;
+    etiquette(); scene.sale = true; dire(`Arrêt sur image : t = ${fx(S.t, 1)} s.`); noter('set_time', { time_s: S.t }); emettre();
+  }
+  function playUntil(p) {
+    const noms = o.etapes(S.vue).map(e => e.nom).concat('fin');
+    const nom = noms.includes(p.moment) ? p.moment : null, cible = nom ? TL.M[nom] : +p.time_s;
+    if (!Number.isFinite(cible) || (p.moment && !nom && (p.time_s == null || p.time_s === ''))) { dire(`Moment inconnu : ${p.moment}.`, 'bad'); emettre(); return; }
+    o.reprise && o.reprise();
+    if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.fait = false; }
+    S.jusqua = clamp(cible, .01, TL.M.fin); S.motif = nom ? (o.motifs[nom] || nom) : ''; S.running = true; S.pause = false; etiquette(); dire('Observe…');
+    noter('play_until', { moment: nom, time_s: S.jusqua }); emettre();
+  }
+  function setParameters(p) {
+    p = p || {};
+    const r = o.appliquer(p, M) || {};
+    if (r.vue && o.vues.includes(r.vue) && r.vue !== S.vue) { S.vue = r.vue; r.change = true; r.vueChange = true; }
+    if (r.change) { calculer(); if (r.vueChange) scene.reecrire(); }
+    noter('set_parameters', o.params(M));
+    if (r.apres) r.apres();
+    else if (r.change && !r.garder) start();
+    else { scene.sale = true; emettre(); }
+  }
+  Object.assign(M, { noter, calculer, dire, start, pause, resume, setTime, playUntil, setParameters, emettre, etiquette });
+  $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+  window.Tableau.explication(o.explications);
+  const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+  M.lancer = () => {
+    calculer();
+    const listeMoments = o.vues.map(v => `${o.vues.length > 1 ? v + ' : ' : ''}${o.etapes(v).map(e => e.nom).concat('fin').join(' | ')}`).join(' ; ');
+    const config = { id: o.id, version: '1.0', title: o.titre, variants: o.vues.length > 1 ? o.vues.map(id => ({ id, label: o.titres[id] })) : [], commands: commandes,
+      command_schema: { set_parameters: o.schema, set_time: { time_s: '0..fin (arrêt sur cet instant de la scène, en s ; voir moments)' },
+        play_until: { moment: listeMoments, time_s: 'ou un instant en s' } } };
+    pont = protocole({ id: o.id, commandes, config, texte: o.texte,
+      etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle',
+        ce_qui_se_voit: o.voir(M) + (S.dit ? ` La bulle dit : « ${S.dit} »` : ''), current_variant: S.vue, time_s: +S.t.toFixed(2),
+        parameters: o.params(M), moments: Object.fromEntries(Object.entries(TL.M).map(([k, v]) => [k, +v.toFixed(2)])) }),
+      progression: () => (S.fait ? 1 : 0),
+      executer: (cmd, p) => ({ start, reset: start, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+    dire(o.depart(M));
+    setTimeout(() => { if (!S.running && S.t === 0 && !S.pause && !S.fait) start(); }, 900);
+  };
+  return M;
+}
+/** Zone d’écriture du bas : le professeur efface les plus vieilles lignes (copie du modèle). */
+/* ── Tableau large (15 novembre 2026, demande de l'utilisateur : « mieux exploiter tout le tableau, grands calibres de
+ * texte, simulations agrandies » ; « le texte du bas mieux à gauche de l'écran, le diagramme plus étendu ») ─────────────
+ * Quand le tableau est large (scene.L ≥ 1000 : écran d'ordinateur portable), la figure (tout le dessin sauf les phrases
+ * écrites en bas) est agrandie d'un facteur k et posée à droite sur toute la hauteur ; les phrases écrites au fil du
+ * déroulé passent dans une colonne à gauche, coupées à la ligne et plus grosses. Les repères pointés par le professeur
+ * suivent tout seuls (ils sont pris dans la transformation du dessin), les poignées aussi (scene.local).
+ * Sinon (grand écran, scene.L < 1000) : la disposition d'origine 760 × 420, centrée. */
+const LARGE = { actif: false, k: 1, dx: 0, dy: 0, base: null, echelle: 1, gauche: 0, taille: 20, ys: [] };
+const HAUT_FIGURE = 340;                            // bas de la figure tant que sa boîte n'est pas relevée
+const BOITES = {};   // par vue : la boîte de l'encre de la figure (sans les phrases écrites), relevée pendant la passe de mesure du moteur
+let RELEVE = null;
+/** Pendant la passe de mesure du moteur (image finale) : relève l'encre de la figure, hors colonne de gauche. */
+function relever(c, M) {
+  if (M.S.mesure && !RELEVE) {
+    const b = { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity }, f = { trait: c.trait, texte: c.texte, point: c.point, repere: c.repere };
+    const pt = (x, y) => { if (!LARGE.dansGauche && Number.isFinite(x) && Number.isFinite(y)) { b.x0 = Math.min(b.x0, x); b.x1 = Math.max(b.x1, x); b.y0 = Math.min(b.y0, y); b.y1 = Math.max(b.y1, y); } };
+    c.trait = function (pts, o) { for (const p of pts || []) pt(p[0], p[1]); return f.trait.call(this, pts, o); };
+    // les objets peints (bécher, appareil…) ne passent pas par la craie : leurs repères donnent leur place
+    c.repere = function (id, x, y, w, h, l) { if (w < 600 && h < 400) { pt(x, y); pt(x + w, y + h); } return f.repere.call(this, id, x, y, w, h, l); };
+    c.point = function (x, y, r = 4, col) { pt(x - r, y - r); pt(x + r, y + r); return f.point.call(this, x, y, r, col); };
+    c.texte = function (s, x, y, o = {}) {
+      const t = o.taille ?? 18; let l = larg(this, String(s), t); if (o.max && l > o.max) l = o.max;
+      const a = o.align === 'center' ? x - l / 2 : o.align === 'right' ? x - l : x; pt(a, y + t * .3); pt(a + l, y - t * .8);
+      return f.texte.call(this, s, x, y, o);
+    };
+    RELEVE = { b, vue: M.S.vue, gauche: false };
+  } else if (!M.S.mesure && RELEVE) {
+    delete c.trait; delete c.texte; delete c.point; delete c.repere;
+    const b = RELEVE.b; b.gauche = RELEVE.gauche; if (b.x1 > b.x0) BOITES[RELEVE.vue] = b;
+    RELEVE = null;
+  }
+}
+/* Deuxième passe (15 novembre 2026, « agrandir les figures elles-mêmes, pas seulement le texte autour ») : sur un tableau
+ * large, les tailles sont choisies en PIXELS À L'ÉCRAN (u(px) = px / échelle). La boîte de la figure (haut ET bas relevés)
+ * prend toute la hauteur ; la colonne de gauche s'écrit en 20 px à l'écran et ne prend que la largeur que la figure laisse
+ * (entre 28 % et 45 % du tableau) ; le titre interne est retiré (le titre de la diapositive le dit déjà) ; aucun texte de la
+ * figure sous 17 px à l'écran. Même idée que figures.html (disposer). */
+function agrandir(c, scene, M) {
+  const L = scene.L;
+  relever(c, M);
+  LARGE.actif = L >= 1000;
+  if (typeof AVANT_LARGE === 'function') AVANT_LARGE(L, LARGE.actif);   // la page adapte sa géométrie au tableau large
+  if (!LARGE.actif) {   // grand écran : la figure d'origine, centrée sur la largeur du tableau
+    Object.assign(LARGE, { k: 1, dx: Math.max(0, (L - 760) / 2), dy: 0 }); c.ctx.translate(LARGE.dx, 0);
+    if (c.cadre) c.cadre = { ...c.cadre, w: 760 };
+    return;
+  }
+  const s0 = c.echelle || 1, u = px => px / s0;
+  const b = BOITES[M.S.vue] || { x0: 0, x1: 760, y0: 40, y1: HAUT_FIGURE, gauche: true };
+  const AJ = (typeof AJUSTE_LARGE !== 'undefined' && AJUSTE_LARGE[M.S.vue]) || {};
+  const x0 = b.x0 - 10, x1 = Math.max(b.x1 + 10, x0 + 300), y0 = Math.max(0, (b.y0 ?? 40) - 8), y1 = Math.max(b.y1 + 8, y0 + 160);
+  const HMAX = 420 - 8, kH = HMAX / (y1 - y0), KMAX = AJ.kmax ?? 2;
+  LARGE.taille = u(AJ.px ?? 20);
+  let reserve = 8;
+  if (b.gauche) {
+    const mini = Math.max(u(AJ.colMin ?? 280), L * (AJ.partMin ?? .28)), maxi = L * .45;
+    const kNat = Math.min(kH, KMAX), wNat = (x1 - x0) * kNat;
+    reserve = Math.min(maxi, Math.max(mini, L - wNat - u(16)));
+  }
+  const k = Math.min(kH, (L - reserve - u(8)) / (x1 - x0), KMAX);
+  const hFig = (y1 - y0) * k, dy = Math.max(2, (420 - hFig) / 2) - y0 * k;
+  const dx = b.gauche ? L - u(6) - x1 * k : (L - (x1 - x0) * k) / 2 - x0 * k;
+  Object.assign(LARGE, { k, dx, dy, base: c.ctx.getTransform(), echelle: c.echelle, gauche: dx + x0 * k - u(10), ys: [] });
+  const pas = Math.round(LARGE.taille * 1.3);
+  for (let y = Math.round(LARGE.taille + u(10)); y <= 420 - u(6); y += pas) LARGE.ys.push(y);
+  c.ctx.translate(dx, dy); c.ctx.scale(k, k); if (c.echelle) c.echelle *= k;
+  c.tailleMin = AJ.min ?? 18;   // aucun texte de la figure sous 18 px à l’écran
+  if (c.cadre) c.cadre = { ...c.cadre, w: (L - dx) / k, h: (420 - dy) / k, haut: -dy / k };
+}
+/** Le titre interne de la figure : seulement hors tableau large (le titre de la diapositive le dit déjà), hors boîte. */
+function titreFigure(c, t, o) {
+  if (LARGE.actif) return;
+  const g = LARGE.dansGauche; LARGE.dansGauche = true;
+  try { c.texte(t, 14, 26, o); } finally { LARGE.dansGauche = g; }
+}
+/** Dessine `fn` dans la colonne de gauche (coordonnées du tableau entier, sans l'agrandissement de la figure). */
+function aGauche(c, fn) {
+  LARGE.dansGauche = true; if (RELEVE) RELEVE.gauche = true;
+  if (!LARGE.actif) { try { return fn(); } finally { LARGE.dansGauche = false; } }
+  const ctx = c.ctx, m = ctx.getTransform(), e = c.echelle, k = c.cadre, t0 = c.tip;
+  ctx.setTransform(LARGE.base); c.echelle = LARGE.echelle; if (k) c.cadre = { ...k, w: LARGE.gauche, h: 420 };
+  try { return fn(); } finally {
+    LARGE.dansGauche = false;
+    ctx.setTransform(m); c.echelle = e; c.cadre = k;
+    if (c.tip && c.tip !== t0) c.tip = [(c.tip[0] - LARGE.dx) / LARGE.k, (c.tip[1] - LARGE.dy) / LARGE.k];
+  }
+}
+/** Une phrase coupée en lignes qui tiennent dans `max` (mesurée à la craie) ; une formule « a = b » ne se coupe pas. */
+function couper(c, t, max, taille) {
+  const mots = String(t).replace(/ ([=≈×→<>≤≥]) /g, '\u00a0$1\u00a0').replace(/\([^()]{1,18}\)/g, m => m.replace(/ /g, '\u00a0'))
+    .replace(/(\d) (?=(mmol|mol|min|mL|L|s|h|K|Pa|g|mS|S|°C)\b)/g, '$1\u00a0').split(' ')
+    .flatMap(m => (larg(c, m.replace(/\u00a0/g, ' '), taille) > max ? m.split('\u00a0') : [m])), out = []; let l = '';
+  for (const m of mots) { const e = l ? l + ' ' + m : m; if (l && larg(c, e, taille) > max) { out.push(l); l = m; } else l = e; }
+  if (l) out.push(l);
+  return out.map(s => s.replace(/\u00a0/g, ' '));
+}
+function zoneEcriture(c, M, liste, ys, o = {}) {
+  const S = M.S; let x = o.x ?? 14, max = o.max ?? 730, taille = o.taille ?? 17;
+  if (LARGE.actif) {   // tableau large : la colonne de gauche, chaque phrase à la ligne (le tuteur garde la phrase entière)
+    x = 14; max = LARGE.gauche - 18; taille = LARGE.taille; ys = LARGE.ys;
+    liste = liste.map(e => ({ ...e, lignes: aGauche(c, () => e.lignes.flatMap(([t, col]) => couper(c, t, max, taille).map((l, i) => [l, col, i ? false : t]))) }));
+  }
+  const n = ys.length, vues = [], ecr = (t, col, y) => aGauche(c, () => c.texte(t, x, y, { couleur: col, taille, max }));
+  if (S.mesure) {
+    for (const e of liste) M.etape(c, e.nom, () => { for (const [t, col] of e.lignes) ecr(t, col, ys[0]); e.plus && e.plus(c); });
+    return vues;
+  }
+  let k = -1;
+  liste.forEach((e, j) => { const ev = M.ev(e.nom); if (ev && S.t > ev.ecrit + .05) k = j; });
+  const garde = new Set(); let nb = 0;
+  for (let j = k; j >= 0; j--) { const l = liste[j].lignes.length; if (nb + l > n) break; garde.add(j); nb += l; }
+  let y = 0;
+  liste.forEach((e, j) => {
+    if (j > k) return;
+    M.etape(c, e.nom, () => {
+      if (garde.has(j)) for (const [t, col, phrase] of e.lignes) { ecr(t, col, ys[y++]); if (phrase !== false) vues.push(phrase ?? t); }
+      e.plus && e.plus(c);
+    });
+  });
+  return vues;
+}
+/** Largeur (cadre) d’une formule écrite à la craie, indices et charges compris. */
+function larg(c, s, taille = 17) {
+  const T = window.Tableau, ctx = c.ctx; if (c.echelle && c.tailleMin) taille = Math.max(taille, c.tailleMin / c.echelle);
+  return T.Craie.segments(window.chim(s)).reduce((w, g) => { ctx.font = `${(g.sub || g.sup) ? taille * .62 : taille}px ${T.POLICE}`; return w + ctx.measureText(g.t).width; }, 0);
+}
+/** Équation « gauche → droite » : la flèche est DESSINÉE (la police n’a pas toutes les flèches). Renvoie { x, w }. */
+function eqn(c, x, y, gauche, droite, o = {}) {
+  if (window.Etats) { [gauche, droite] = window.Etats.cotes(gauche, droite); o = window.Etats.ajuste(c, x, gauche, droite, o); }   // états physiques (aq), (l), (s), (g)
+  const t = o.taille ?? 17, w1 = larg(c, gauche, t), w2 = larg(c, droite, t), fl = 30, tot = w1 + fl + 16 + w2;
+  const x0 = o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x, col = o.couleur ?? 'blanc';
+  c.texte(gauche, x0, y, { couleur: col, taille: t });
+  c.fleche(x0 + w1 + 8, y - t * .3, x0 + w1 + 8 + fl, y - t * .3, { couleur: col, largeur: 1.8, tete: 7 });
+  c.texte(droite, x0 + w1 + 16 + fl, y, { couleur: col, taille: t });
+  return { x: x0, w: tot };
+}
+/** Petit triangle « attention » à la craie (orange), le « ! » dedans. */
+function attention(c, x, y, o = {}) {
+  const col = o.couleur ?? 'orange', h = o.h ?? 16;
+  c.trait([[x, y], [x + h * .58, y - h], [x + h * 1.16, y]], { couleur: col, largeur: 1.8, ferme: true });
+  c.texte('!', x + h * .58, y - 3, { couleur: col, taille: h * .8, align: 'center' });
+}
+
+/* ── Peint (copie de facteurs.html) ── */
+const rgba = ([r, g, b, a], k = 1) => `rgba(${Math.round(r)},${Math.round(g)},${Math.round(b)},${(a * k).toFixed(3)})`;
+const melange = (c1, c2, f) => c1.map((v, i) => lerp(v, c2[i], clamp(f, 0, 1)));
+const eclair = (c, k) => [lerp(c[0], 255, k), lerp(c[1], 255, k), lerp(c[2], 255, k), c[3]];
+const sombre = (c, k) => [c[0] * (1 - k), c[1] * (1 - k), c[2] * (1 - k), Math.min(1, c[3] * (1 + k * .4))];
+const EAU = [112, 194, 248, .34];
+const Peint = {
+  sphere(ctx, x, y, r, [clair, milieu, foncé], a = 1) {
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r); g.addColorStop(0, clair); g.addColorStop(.45, milieu); g.addColorStop(1, foncé);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  },
+  /** Bécher vu de face : verre, solution (dégradé, ménisque, reflet), bec, graduations. niveau 0 → 1. */
+  becher(ctx, B, niveau, col, a = 1) {
+    // Bécher repeint (16 novembre 2026, « plus réaliste, couleurs vives ») : verre net à bord ourlé, eau claire et lumineuse
+    // (une solution incolore se voit comme de l'eau légèrement bleutée, plus un voile gris), ménisque, reflets francs.
+    const { x, y, w, h } = B, ep = 3, fond = y + h, yS = fond - ep - niveau * (h - 16);
+    // Solution incolore (ou presque) : peinte comme une eau claire un peu bleutée ; le bleu s'efface en douceur dès qu'une teinte apparaît.
+    const pale = Math.min(col[0], col[1], col[2]) >= 180 ? Math.min(1, Math.max(0, (.27 - col[3]) / .1)) : 0;
+    const c3 = pale > 0 ? [col[0] + (112 - col[0]) * pale, col[1] + (194 - col[1]) * pale, col[2] + (248 - col[2]) * pale, col[3] + (.36 - col[3]) * pale] : col;
+    ctx.save(); ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(0,0,0,.26)'; ctx.beginPath(); ctx.ellipse(x + w / 2 + 3, fond + 4, w / 2, 4.5, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = 'rgba(200,228,250,.07)'; ctx.beginPath(); ctx.roundRect(x, y, w, h, [2, 2, 10, 10]); ctx.fill();
+    if (niveau > .004) {
+      ctx.save(); ctx.beginPath(); ctx.roundRect(x + ep, y, w - 2 * ep, h - ep, [0, 0, 8, 8]); ctx.clip();
+      const g = ctx.createLinearGradient(x, 0, x + w, 0);
+      g.addColorStop(0, rgba(sombre(c3, .3))); g.addColorStop(.3, rgba(eclair(c3, .12))); g.addColorStop(.62, rgba(eclair(c3, .3))); g.addColorStop(1, rgba(sombre(c3, .28)));
+      ctx.fillStyle = g; ctx.fillRect(x, yS, w, fond - yS);
+      const v = ctx.createLinearGradient(0, yS, 0, fond); v.addColorStop(0, 'rgba(255,255,255,.1)'); v.addColorStop(.5, 'rgba(255,255,255,0)'); v.addColorStop(1, 'rgba(0,0,0,.16)');
+      ctx.fillStyle = v; ctx.fillRect(x, yS, w, fond - yS);
+      ctx.fillStyle = 'rgba(255,255,255,.1)'; ctx.fillRect(x + w * .64, yS + 5, w * .08, Math.max(0, fond - yS - 10));
+      ctx.restore();
+      ctx.fillStyle = rgba(eclair(c3, .45), 1.25); ctx.beginPath(); ctx.ellipse(x + w / 2, yS, w / 2 - ep, 3.2, 0, 0, 7); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(x + w / 2, yS, w / 2 - ep - 1, 3.2, 0, Math.PI * 1.05, Math.PI * 1.95); ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(220,238,250,.3)'; ctx.fillRect(x + 8, fond - 3, w - 16, 3);
+    ctx.strokeStyle = 'rgba(232,243,252,.9)'; ctx.lineWidth = 2.2; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(x - 6, y - 4); ctx.quadraticCurveTo(x - 1, y - 2, x, y + 5); ctx.lineTo(x, fond - 10); ctx.quadraticCurveTo(x, fond, x + 10, fond);
+    ctx.lineTo(x + w - 10, fond); ctx.quadraticCurveTo(x + w, fond, x + w, fond - 10); ctx.lineTo(x + w, y); ctx.stroke();
+    ctx.strokeStyle = 'rgba(240,248,255,.55)'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.ellipse(x + w / 2, y + 1, w / 2, 2.4, 0, 0, Math.PI); ctx.stroke();
+    const gl = ctx.createLinearGradient(x + w * .09, 0, x + w * .2, 0); gl.addColorStop(0, 'rgba(255,255,255,.34)'); gl.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = gl; ctx.fillRect(x + w * .09, y + 12, w * .11, h - 28);
+    ctx.strokeStyle = 'rgba(232,243,252,.5)'; ctx.lineWidth = 1;
+    for (let k = 1; k <= 4; k++) { const gy = fond - 8 - k * (h - 24) / 5; ctx.beginPath(); ctx.moveTo(x + w - (k % 2 ? 12 : 16), gy); ctx.lineTo(x + w - 4, gy); ctx.stroke(); }
+    ctx.restore();
+    return yS;
+  },
+  /** Eau d’un bain (cristallisoir) peinte PAR-DESSUS le bécher : il paraît plongé dedans. */
+  bain(ctx, B, ySurf, col, a = 1) {
+    const { x, y, w, h } = B, fond = y + h;
+    ctx.save(); ctx.globalAlpha = a;
+    const g = ctx.createLinearGradient(0, ySurf, 0, fond); g.addColorStop(0, rgba(eclair(col, .2))); g.addColorStop(1, rgba(sombre(col, .3)));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x + 3, ySurf, w - 6, fond - ySurf - 3, [0, 0, 12, 12]); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.3)'; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(x + 5, ySurf); ctx.lineTo(x + w - 5, ySurf); ctx.stroke();
+    ctx.strokeStyle = 'rgba(225,238,250,.7)'; ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, fond - 14); ctx.quadraticCurveTo(x, fond, x + 14, fond); ctx.lineTo(x + w - 14, fond); ctx.quadraticCurveTo(x + w, fond, x + w, fond - 14); ctx.lineTo(x + w, y); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.1)'; ctx.fillRect(x + 7, y + 8, 4, h - 22);
+    ctx.restore();
+  },
+  goutte(ctx, x, y, col, a = 1) {
+    ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = rgba(col, 1.5);
+    ctx.beginPath(); ctx.moveTo(x, y - 6); ctx.quadraticCurveTo(x + 4, y, x, y + 3.5); ctx.quadraticCurveTo(x - 4, y, x, y - 6); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.fillRect(x - 1.2, y - 1, 1.2, 1.6); ctx.restore();
+  },
+  /** Filet de liquide qui coule (versement). */
+  filet(ctx, x, y1, y2, col, a = 1) { ctx.save(); ctx.globalAlpha = a; ctx.fillStyle = rgba(col, 2.2); ctx.fillRect(x - 1.6, y1, 3.2, y2 - y1); ctx.restore(); },
+};
+/** Temps simulé (min) : il avance pendant l’animation des étapes qui ont `sim: [début, fin]`, pas pendant l’écriture. */
+function tSim(M = MO) {
+  let t = 0;
+  for (const e of M.evs()) {
+    if (!e.sim) continue; if (!M.commence(e.nom)) break;
+    t = e.sim[0] + (e.sim[1] - e.sim[0]) * (e.anim > 0 ? clamp((M.S.t - e.debut) / e.anim, 0, 1) : 1);
+  }
+  return t;
+}
+
+
+/* ── Pièces peintes et graphes de ce dossier (appareils, cellule, bulles, ions, chrono, axes) ─────────────────────────── */
+let MO = null;
+/* « σ_f », « σ_{0} » : la lettre σ n’est pas dans la liste des lettres à indice du kit ; on écrit alors l’indice nous-mêmes. */
+(function () {
+  const T = window.Tableau, P = T.Craie.prototype, avant = P.texte;
+  P.texte = function (s, x, y, o = {}) {
+    s = window.chim(String(s)).replace(/σ_([A-Za-z0-9]+)/g, 'σ_{$1}');
+    if (/σ_\{/.test(s) && !/\^|[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]/.test(s)) {
+      let taille = o.taille ?? 18; this.ctx.font = `${o.gras ? '700 ' : ''}${taille}px ${T.POLICE}`;
+      this._verifierCadre(s.replace(/[_^{}]/g, ''), x, y, taille, o.align);
+      if (this.echelle && this.tailleMin) taille = Math.max(taille, this.tailleMin / this.echelle);
+      return this._texteIndices(s, x, y, o, taille);
+    }
+    return avant.call(this, s, x, y, o);
+  };
+})();
+const ZY = [352, 376, 400];
+const NA = ['#f1e1ff', '#a855f7', '#4c1d95'], HO = ['#ffd4d4', '#e04848', '#6a1010'], AC = ['#d6ffe0', '#3fbf62', '#0f5a23'], CL = ['#d9f7ff', '#22b8d6', '#0b4a5a'];
+const MODELE_ION = new Map([[NA, 'Na'], [HO, 'HO'], [AC, 'CH3COO'], [CL, 'Cl']]);
+/** Icône de légende : l'ion peint comme dans les béchers et la loupe. */
+const icone = (ctx, col, x, y) => { const n = MODELE_ION.get(col); window.Rendu.molecule(ctx, n, x, y, n === 'CH3COO' ? .5 : .78); };
+/** Appareil de mesure peint (conductimètre, manomètre) : boîtier sombre, écran vert, valeur affichée. */
+function appareil(c, A, texte, o = {}) {
+  c.direct(() => {
+    const ctx = c.ctx, { x, y, w, h } = A; ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.roundRect(x + 4, y + 5, w, h, 9); ctx.fill();
+    const g = ctx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, '#4d565f'); g.addColorStop(1, '#22272d');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(x, y, w, h, 9); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 1.2; ctx.stroke();
+    const e = ecran(A), ge = ctx.createLinearGradient(0, e.y, 0, e.y + e.h); ge.addColorStop(0, '#c2e0ae'); ge.addColorStop(1, '#8fb47c');
+    ctx.fillStyle = ge; ctx.beginPath(); ctx.roundRect(e.x, e.y, e.w, e.h, 4); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.fillRect(e.x + 3, e.y + 3, e.w - 6, 3);
+    ctx.fillStyle = '#16260f'; ctx.font = `700 ${o.taille ?? 21}px "Courier New", monospace`; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillText(texte, e.x + e.w - 7, e.y + e.h / 2 + 1);
+    for (let i = 0; i < 2; i++) Peint.sphere(ctx, x + 18 + i * 22, y + h - 13, 6, ['#e5e9ec', '#9aa3ab', '#4a5158']);
+    ctx.restore();
+  });
+}
+const ecran = A => ({ x: A.x + 10, y: A.y + 10, w: A.w - 20, h: 38 });
+/** Fil électrique peint (courbe de Bézier) entre deux points. */
+function fil(ctx, x1, y1, x2, y2, col = '#2b2f35', creux = 40) {
+  ctx.save(); ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.bezierCurveTo(x1, y1 - creux, x2 - creux, y2, x2, y2); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.lineWidth = 1; ctx.stroke(); ctx.restore();
+}
+/** Cellule de conductimétrie : corps en plastique de (cx, yH) à yP, deux plaques métalliques en bas (écart L px). */
+function cellule(ctx, cx, yH, yP, L = 26, hp = 46) {
+  ctx.save();
+  const g = ctx.createLinearGradient(cx - 12, 0, cx + 12, 0); g.addColorStop(0, '#2c3238'); g.addColorStop(.4, '#6b747d'); g.addColorStop(1, '#22272c');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(cx - 9, yH, 18, yP - yH, 3); ctx.fill();
+  for (const s of [-1, 1]) {
+    const px = cx + s * L / 2 - (s < 0 ? 5 : 0), gp = ctx.createLinearGradient(px, 0, px + 5, 0);
+    gp.addColorStop(0, '#8e979f'); gp.addColorStop(.5, '#eef2f5'); gp.addColorStop(1, '#7b848c');
+    ctx.fillStyle = gp; ctx.fillRect(px, yP, 5, hp);
+    ctx.fillStyle = '#3a4046'; ctx.fillRect(cx + s * 6 - 1.5, yP - 2, 3, 6);
+    ctx.fillRect(Math.min(cx + s * 6, px + 2.5) - 1, yP, Math.abs(px + 2.5 - (cx + s * 6)) + 2, 3);
+  }
+  ctx.restore();
+}
+/** Bulles de gaz qui montent de yb à ys entre x0 et x1 (temps de la scène ; k : 0 → 1 = quantité). */
+function bulles(ctx, x0, x1, yb, ys, t, k, n = 10) {
+  if (k <= 0) return;
+  ctx.save();
+  for (let i = 0; i < n; i++) {
+    if (i / n > k) break;
+    const ph = ((t * (.5 + (i * 37 % 10) / 20) + i * .29) % 1 + 1) % 1, y = yb - ph * (yb - ys), x = x0 + ((i * 53 % 17) / 17) * (x1 - x0) + Math.sin(t * 3 + i) * 2.5, r = 1.6 + ph * 2.2;
+    ctx.strokeStyle = 'rgba(240,248,255,.75)'; ctx.lineWidth = 1; ctx.fillStyle = 'rgba(220,240,255,.18)';
+    ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.fillRect(x - r * .45, y - r * .5, 1, 1);
+  }
+  ctx.restore();
+}
+/** Ions qui s’agitent dans une zone (liste [{ col, r, v, hl }]) ; le temps est celui de la scène : tout se fige à l’arrêt. */
+function ions(ctx, Z, liste, t, a = 1) {
+  const tri = u => { const m = ((u % 2) + 2) % 2; return m < 1 ? m : 2 - m; };
+  ctx.save(); ctx.globalAlpha = a;
+  liste.forEach((o, i) => {
+    const h1 = ((i * 7919 + 3) % 97) / 97, h2 = ((i * 104729 + 13) % 89) / 89, h3 = ((i * 31337 + 7) % 83) / 83;
+    const vx = o.v * (.55 + .9 * h3) / (Z.x1 - Z.x0), vy = o.v * (.5 + .9 * h1) / (Z.y1 - Z.y0);
+    const x = Z.x0 + tri(h1 * 2 + vx * t * (h2 > .5 ? 1 : -1)) * (Z.x1 - Z.x0), y = Z.y0 + tri(h2 * 2 + vy * t) * (Z.y1 - Z.y0);
+    // Vrais ions peints (Na⁺ violet, Cl⁻ vert, HO⁻ : O rouge + H blanc, CH₃COO⁻ en modèle moléculaire) ; un ion qui se
+    // transforme (HO⁻ remplacé par CH₃COO⁻) passe en fondu de l'un à l'autre (o.mod = [avant, après, f]).
+    const rot = (i * 1.3 + t * .7 * (i % 2 ? 1 : -1)) % 6.3, mod = o.mod || (MODELE_ION.get(o.col) && [MODELE_ION.get(o.col), null, 0]);
+    if (mod) {
+      const k = n => (n === 'CH3COO' ? .55 : n === 'HO' ? .85 : .78);
+      if (mod[2] < 1) window.Rendu.molecule(ctx, mod[0], x, y, k(mod[0]), rot, 1 - mod[2]);
+      if (mod[1] && mod[2] > 0) window.Rendu.molecule(ctx, mod[1], x, y, k(mod[1]), rot, mod[2]);
+    } else Peint.sphere(ctx, x, y, o.r ?? 5, o.col);
+    if (o.hl) { ctx.strokeStyle = '#facc15'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, (o.r ?? 5) + 5, 0, 7); ctx.stroke(); }
+    o.pos = [x, y];
+  });
+  ctx.restore();
+}
+/** Chronomètre à la craie, aiguille et valeur en direct. */
+function chrono(c, x, y, r, texte, t) {
+  c.cercle(x, y, r, { largeur: 2 }); c.ligne(x, y - r, x, y - r - 6, { largeur: 3 });
+  c.direct(() => {
+    const a = t / 60 * Math.PI * 2;
+    c.ligne(x, y, x + Math.sin(a) * (r - 6), y - Math.cos(a) * (r - 6), { couleur: 'jaune', largeur: 2.2 });
+    c.texte(texte, x + r + 10, y + 7, { couleur: 'jaune', taille: 19 });
+  });
+}
+/** Graphe : { x0, y0, w, h, xmax, dx, ymax, dy, decx, decy, nomx, nomy }. */
+function Graphe(o) { return Object.assign(o, { X: v => o.x0 + v / o.xmax * o.w, Y: v => o.y0 - v / o.ymax * o.h }); }
+function axesG(c, g, taille = 15) {
+  c.fleche(g.x0, g.y0, g.x0 + g.w + 14, g.y0, { largeur: 1.8 });
+  c.fleche(g.x0, g.y0, g.x0, g.y0 - g.h - 14, { largeur: 1.8 });
+  for (let v = g.dx; v <= g.xmax + 1e-9; v += g.dx) { c.ligne(g.X(v), g.y0 - 4, g.X(v), g.y0 + 4, { largeur: 1.4, duree: .03 }); c.texte(fr(v, g.decx), g.X(v), g.y0 + 20, { couleur: 'faible', taille, align: 'center', duree: .1 }); }
+  c.texte('0', g.x0 - 7, g.y0 + 17, { couleur: 'faible', taille, align: 'right', duree: .05 });
+  for (let v = g.dy; v <= g.ymax + 1e-9; v += g.dy) { c.ligne(g.x0 - 4, g.Y(v), g.x0 + 4, g.Y(v), { largeur: 1.4, duree: .03 }); c.texte(fr(v, g.decy), g.x0 - 8, g.Y(v) + 5, { couleur: 'faible', taille, align: 'right', duree: .1 }); }
+  if (g.x0 + g.w + 70 < 760) c.texte(g.nomx, g.x0 + g.w + 18, g.y0 + 5, { couleur: 'blanc', taille: 16 });
+  else c.texte(g.nomx, g.x0 + g.w + 4, g.y0 - 10, { couleur: 'blanc', taille: 16, align: 'right' });
+  c.texte(g.nomy, g.x0 + 10, g.y0 - g.h - 4, { couleur: 'blanc', taille: 16 });
+}
+function quad(c, g, a = 1) {
+  c.direct(() => {
+    const ctx = c.ctx; ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = 'rgba(226,232,240,.09)'; ctx.lineWidth = 1;
+    for (let v = g.dx / 2; v <= g.xmax + 1e-9; v += g.dx / 2) { ctx.beginPath(); ctx.moveTo(g.X(v), g.y0); ctx.lineTo(g.X(v), g.y0 - g.h); ctx.stroke(); }
+    for (let v = g.dy / 2; v <= g.ymax + 1e-9; v += g.dy / 2) { ctx.beginPath(); ctx.moveTo(g.x0, g.Y(v)); ctx.lineTo(g.x0 + g.w, g.Y(v)); ctx.stroke(); }
+    ctx.restore();
+  });
+}
+/** Étape en cours (la dernière commencée). */
+function etapeEnCours(M) { let n = 'avant le début'; for (const e of M.evs()) if (M.commence(e.nom)) n = e.nom; return n; }
+/** Le moteur commun, avec les moments, motifs et repères de la page. */
+const MOTIFS_DE = ETAPES => new Proxy({}, { get: (_, nom) => (nom === 'fin' ? 'fin' : ((ETAPES(MO ? MO.S.vue : '') || []).find(e => e.nom === nom) || {}).motif) });
+
+
+/* ══ National 2021 N joué pas à pas (2ᵉ passe du 18 novembre 2026, professeur règles 33, 35 et 41) ═══════════════════════
+ * Sujet : backend/data/exams/physique/2021-normale, exercice 1, partie 1 (savon : éthanoate d’éthyle + ions hydroxyde).
+ * Données du sujet : n₀(HO⁻) = 10⁻³ mol, ester en excès, V₀ = 100 mL, σ = 0,25 − 160·x (σ en S·m⁻¹, x en mol),
+ * tangente (T) à t₁ = 4 min par (0 ; 0,22) et (4 ; 0,17). Corrigé : x_f = 10⁻³ mol, σ₁/₂ = 0,17 S·m⁻¹, t₁/₂ = 4 min,
+ * v = −(1/(160·V₀))·dσ/dt, v₁ ≈ 0,78 mol·m⁻³·min⁻¹.
+ * Une vue par question (une diapositive chacune, URL différente) :
+ *   2021N_q1  le mélange, l’équation, le tableau d’avancement ligne par ligne ; puis HO⁻ limitant et x_f (après la réponse)
+ *   2021N_q2  le conductimètre lit σ à chaque date, les valeurs vont dans un tableau puis sur le graphe, la courbe ;
+ *             x(t₁/₂) = x_f/2 ; puis σ₁/₂ = 0,17 S·m⁻¹ et la lecture t₁/₂ = 4 min (après la réponse)
+ *   2021N_q3  v = (1/V₀)·dx/dt, σ = 0,25 − 160·x, deux jauges liées (x monte, σ baisse) ; puis la dérivée, dx/dt et v
+ *   2021N_q4  la courbe, le point de date 4 min, la tangente (T) ; puis ses deux points lus, la pente, V₀ en m³ et v₁
+ * Chaque vue rappelle en haut, en petit, ce qui a été trouvé aux questions d’avant.
+ * Paramètre `conclusions` (true par défaut) : false tait ce qui répond à la question d’observation de la diapositive
+ * (étapes marquées `concl`) tant que l’élève n’a pas répondu ; true l’écrit (la voix confirme).
+ * Les valeurs du tableau de la vue q2 sont lues sur la courbe du sujet (figure 1), au centième.
+ */
+/* Fractions « ⟦num|dén⟧ » : les surcouches de la page (exposants.js, indices chimiques) passent avant le kit et écrivaient
+ * les crochets tels quels dès qu’un exposant ou un indice était dans la ligne. On donne la ligne au kit d’abord ; chaque
+ * étage repasse ensuite par toutes les surcouches (exposants et indices bien écrits dans la fraction). */
+(function () {
+  const P = window.Tableau.Craie.prototype, avant = P.texte;
+  P.texte = function (s, x, y, o = {}) { s = String(s); return s.includes('⟦') ? this._texteFractions(s, x, y, o) : avant.call(this, s, x, y, o); };
+})();
+const VUES = ['2021N_q1', '2021N_q2', '2021N_q3', '2021N_q4'];
+const TITRES = { '2021N_q1': 'question 1 : tableau d’avancement et x_f', '2021N_q2': 'question 2 : suivi par conductimétrie et t₁/₂',
+  '2021N_q3': 'question 3 : montrer l’expression de v', '2021N_q4': 'question 4 : v₁ par la tangente' };
+const q0 = new URLSearchParams(location.search);
+const PAR = { conclusions: q0.get('conclusions') !== 'false' };
+const SOUDE = [112, 194, 248, .38], ESTER = [235, 240, 220, .3];
+/** Courbe lisse qui passe par des points lus (Hermite monotone ; copie de figures.html). */
+function lissee(pts, pentes = {}) {
+  const n = pts.length, t = pts.map(p => p[0]), y = pts.map(p => p[1]), d = [], m = [];
+  for (let i = 0; i < n - 1; i++) d.push((y[i + 1] - y[i]) / (t[i + 1] - t[i]));
+  m[0] = d[0]; m[n - 1] = d[n - 2];
+  for (let i = 1; i < n - 1; i++) m[i] = d[i - 1] * d[i] <= 0 ? 0 : 2 / (1 / d[i - 1] + 1 / d[i]);
+  for (const [k, s] of Object.entries(pentes)) { const i = t.indexOf(+k); if (i >= 0) m[i] = s; }
+  return u => {
+    if (u <= t[0]) return y[0] + m[0] * (u - t[0]);
+    if (u >= t[n - 1]) return y[n - 1];
+    let i = 0; while (u > t[i + 1]) i++;
+    const h = t[i + 1] - t[i], s = (u - t[i]) / h, s2 = s * s, s3 = s2 * s;
+    return (2 * s3 - 3 * s2 + 1) * y[i] + (s3 - 2 * s2 + s) * h * m[i] + (-2 * s3 + 3 * s2) * y[i + 1] + (s3 - s2) * h * m[i + 1];
+  };
+}
+/* La courbe de la figure 1 du sujet (mêmes points que figures.html, fig_2021N) : pente −0,0125 S·m⁻¹·min⁻¹ à 4 min. */
+const MESURES = [[0, .25], [2, .2], [4, .17], [8, .13], [12, .11], [16, .1], [24, .093]];
+const SIG = lissee([[0, .25], [2, .2], [4, .17], [8, .13], [12, .11], [16, .1], [20, .095], [24, .093]], { 4: -.0125 });
+const TMAX = 24;
+const xDeSigma = s => (.25 - s) / 160;                       // mol
+const RT = .3;                                               // 1 min simulée dure 0,3 s
+
+/* ── Les étapes (moments) de chaque vue ; `concl` : tue par conclusions = false ─────────────────────────────────── */
+function ETAPES(v) {
+  return ({
+    '2021N_q1': [
+      { nom: 'melange', anim: 2, motif: 'le mélange : 10⁻³ mol d’ions HO⁻, l’ester versé en excès, V₀ = 100 mL', bulle: () => 'On verse l’ester (en excès) sur les ions hydroxyde.' },
+      { nom: 'equation', anim: .3, motif: 'l’équation de la réaction', bulle: () => 'L’équation de la réaction.' },
+      { nom: 'etat_initial', anim: .3, motif: 'la ligne de l’état initial', bulle: () => 'État initial : x = 0.' },
+      { nom: 'en_cours', anim: .3, motif: 'la ligne « en cours »', bulle: () => 'En cours : l’avancement x.' },
+      { nom: 'etat_final', anim: .3, motif: 'la ligne de l’état final', bulle: () => 'État final : x_f.' },
+      { nom: 'limitant', anim: .3, concl: true, motif: 'l’ester est en excès : HO⁻ est le réactif limitant', bulle: () => 'Quel réactif est limitant ?' },
+      { nom: 'x_f', anim: .3, concl: true, motif: 'réaction totale : x_f = x_max = 10⁻³ mol', bulle: () => 'La réaction est totale.' },
+    ],
+    '2021N_q2': [
+      { nom: 'montage', anim: 1, motif: 'le montage : le mélange, la cellule et le conductimètre', bulle: () => 'Le conductimètre plonge dans le mélange.' },
+      { nom: 'mesures', anim: RT * TMAX, sim: [0, TMAX], motif: 'le conductimètre lit σ à chaque date ; les valeurs vont dans le tableau et sur le graphe', bulle: () => 'On lit σ à chaque date (temps accéléré).' },
+      { nom: 'courbe', anim: 2, motif: 'la courbe σ(t) passe par les points', bulle: () => 'On trace la courbe par les points.' },
+      { nom: 'definition', anim: .3, motif: 'à t₁/₂ : x = x_f/2 = 5·10⁻⁴ mol', bulle: () => 'À t₁/₂, x = x_f/2.' },
+      { nom: 'sigma_demi', anim: .3, concl: true, motif: 'σ₁/₂ = 0,25 − 160 × 5·10⁻⁴ = 0,17 S·m⁻¹', bulle: () => 'On remplace x dans la relation.' },
+      { nom: 'lecture', anim: 1.8, concl: true, motif: 'lecture sur la courbe : σ = 0,17 S·m⁻¹ à t₁/₂ = 4 min', bulle: () => 'On lit sur la courbe.' },
+    ],
+    '2021N_q3': [
+      { nom: 'rappel', anim: .3, motif: 'la définition : v = (1/V₀)·dx/dt', bulle: () => 'La définition de la vitesse volumique.' },
+      { nom: 'relation', anim: .3, motif: 'la relation du sujet : σ = 0,25 − 160·x', bulle: () => 'La relation donnée par le sujet.' },
+      { nom: 'liees', anim: 3.2, motif: 'les deux jauges : quand x monte, σ baisse (160 fois plus)', bulle: () => 'Quand x monte, σ baisse.' },
+      { nom: 'derivee', anim: .3, concl: true, motif: 'dσ/dt = 0 − 160·dx/dt (0,25 est une constante)', bulle: () => 'On dérive par rapport au temps.' },
+      { nom: 'dxdt', anim: .3, concl: true, motif: 'dx/dt = −(1/160)·dσ/dt', bulle: () => 'On isole dx/dt.' },
+      { nom: 'resultat', anim: .3, concl: true, motif: 'v = −(1/(160·V₀))·dσ/dt', bulle: () => 'On remplace dans v.' },
+    ],
+    '2021N_q4': [
+      { nom: 'courbe', anim: 2.4, motif: 'la courbe σ(t) de la figure 1', bulle: () => 'La courbe σ(t) du sujet.' },
+      { nom: 'point', anim: .6, motif: 'le point de la courbe de date t₁ = 4 min', bulle: () => 'Le point de date t₁ = 4 min.' },
+      { nom: 'tangente', anim: 1.4, motif: 'la tangente (T) en ce point', bulle: () => 'La tangente (T) en ce point.' },
+      { nom: 'points_lus', anim: 1.2, concl: true, motif: 'deux points de (T) : (0 ; 0,22) et (4 ; 0,17)', bulle: () => 'Deux points de la tangente.' },
+      { nom: 'pente', anim: .3, concl: true, motif: 'la pente : (0,17 − 0,22)/(4 − 0) = −0,0125 S·m⁻¹·min⁻¹', bulle: () => 'La pente de (T).' },
+      { nom: 'volume', anim: .3, concl: true, motif: 'V₀ = 100 mL = 10⁻⁴ m³', bulle: () => 'V₀ en mètre cube.' },
+      { nom: 'calcul', anim: .3, concl: true, motif: 'v₁ = −(1/(160 × 10⁻⁴)) × (−0,0125) ≈ 0,78 mol·m⁻³·min⁻¹', bulle: () => 'Le calcul de v₁.' },
+    ],
+  })[v] || [];
+}
+const MOTIFS = MOTIFS_DE(ETAPES);
+const CONCL = new Set(VUES.flatMap(v => ETAPES(v).filter(e => e.concl).map(e => e.nom)));
+/** Une étape de conclusion se voit seulement si conclusions = true (et si elle a commencé). */
+const voit = (M, nom) => M.commence(nom) && (PAR.conclusions || !CONCL.has(nom));
+
+/* ── Rappel des questions d’avant (en haut, en petit) ────────────────────────────────────────────── */
+const RAPPELS = { '2021N_q1': '', '2021N_q2': 'Q1 : x_f = 10⁻³ mol', '2021N_q3': 'Q1 : x_f = 10⁻³ mol ; Q2 : t₁/₂ = 4 min',
+  '2021N_q4': 'Q2 : t₁/₂ = 4 min ; Q3 : v = −⟦1|160·V₀⟧·⟦dσ|dt⟧' };
+function rappel(c, v) {
+  const r = RAPPELS[v]; if (!r) return;
+  const frac = r.includes('⟦'), h = frac ? 46 : 30, tt = Math.max(17, c.echelle && c.tailleMin ? c.tailleMin / c.echelle : 0);
+  const w = c.largeurTexte(r, tt) * 1.04 + 20, x = 750 - w;   // mesurée à la taille vraiment écrite (plancher du petit écran)
+  c.rect(x, 8, w, h, { couleur: 'faible', largeur: 1.4, arrondi: 6, duree: .1 });
+  c.texte(r, x + 10, frac ? 38 : 29, { couleur: 'cyan', taille: 17, duree: .4 });
+  c.repere('rappel', x, 8, w, h, `le rappel des questions d’avant : ${window.Tableau.lisible(r)}`);
+}
+
+/* ── Q1 : le mélange et le tableau d’avancement ─────────────────────────────────────────────────── */
+const B1 = { x: 36, y: 168, w: 140, h: 140 };
+const TB = { x: 196, y: 100, cols: [96, 46, 104, 108, 98, 98], h: 40 };
+const colX = i => TB.x + TB.cols.slice(0, i).reduce((a, b) => a + b, 0);
+function cellule1(c, i, j, s, o = {}) {
+  const x = colX(i) + TB.cols[i] / 2, y = TB.y + (j + 1) * TB.h - 13;
+  c.texte(s, x, y, { couleur: o.couleur ?? 'blanc', taille: o.taille ?? 17, align: 'center', max: TB.cols[i] - 6 });
+}
+function vueQ1(c, M) {
+  const pm = M.p('melange');
+  c.direct(() => {
+    const ctx = c.ctx, niv = .32 + .3 * lisse(clamp((pm - .25) * 1.6, 0, 1));
+    const ys = Peint.becher(ctx, B1, M.commence('melange') ? niv : .32, SOUDE);
+    if (M.commence('melange') && pm > .2 && pm < .85) Peint.filet(ctx, B1.x + 46, 70, ys, ESTER);
+    if (M.commence('melange') && pm < .85) {   // le flacon d’ester penché au-dessus du bécher
+      ctx.save(); ctx.translate(B1.x + 30, 62); ctx.rotate(-.9 * lisse(clamp(pm * 3, 0, 1)) - .2);
+      const g = ctx.createLinearGradient(-12, 0, 12, 0); g.addColorStop(0, 'rgba(200,220,235,.35)'); g.addColorStop(.5, 'rgba(240,248,255,.6)'); g.addColorStop(1, 'rgba(180,200,215,.35)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(-12, -40, 24, 46, 5); ctx.fill(); ctx.restore();
+    }
+  });
+  c.texte('n₀(HO⁻) = 10⁻³ mol', B1.x + B1.w / 2, B1.y + B1.h + 24, { couleur: 'rouge', taille: 16, align: 'center' });
+  if (M.commence('melange')) {
+    c.texte('ester (en excès)', B1.x + 64, 44, { couleur: 'blanc', taille: 16 });
+    c.texte('V₀ = 100 mL', B1.x + B1.w / 2, B1.y - 14, { couleur: 'jaune', taille: 17, align: 'center' });
+  }
+  const W = TB.cols.reduce((a, b) => a + b, 0);
+  const lignes = [
+    { nom: 'equation', plus: () => {
+      eqn(c, TB.x + W / 2, 70, 'CH₃COOC₂H₅ + HO⁻', 'CH₃COO⁻ + C₂H₅OH', { taille: 18, align: 'center', couleur: 'cyan' });
+      c.rect(TB.x, TB.y, W, TB.h, { largeur: 1.4 });
+      ['état', 'x', 'ester', 'HO⁻', 'CH₃COO⁻', 'C₂H₅OH'].forEach((s, i) => cellule1(c, i, 0, s, { couleur: 'faible', taille: 16 }));
+    } },
+    { nom: 'etat_initial', plus: () => { c.rect(TB.x, TB.y + TB.h, W, TB.h, { largeur: 1.4 });
+      ['initial', '0', 'en excès', '10⁻³', '0', '0'].forEach((s, i) => cellule1(c, i, 1, s, { taille: i === 2 ? 15 : 17 })); } },
+    { nom: 'en_cours', plus: () => { c.rect(TB.x, TB.y + 2 * TB.h, W, TB.h, { largeur: 1.4 });
+      ['en cours', 'x', 'en excès', '10⁻³ − x', 'x', 'x'].forEach((s, i) => cellule1(c, i, 2, s, { taille: i === 2 ? 15 : 17 })); } },
+    { nom: 'etat_final', plus: () => { c.rect(TB.x, TB.y + 3 * TB.h, W, TB.h, { largeur: 1.4 });
+      ['final', 'x_f', 'en excès', '10⁻³ − x_f', 'x_f', 'x_f'].forEach((s, i) => cellule1(c, i, 3, s, { taille: i === 2 ? 15 : 17 }));
+      for (let i = 1; i < TB.cols.length; i++) c.ligne(colX(i), TB.y, colX(i), TB.y + 4 * TB.h, { largeur: 1.2, duree: .05 }); } },
+  ];
+  if (PAR.conclusions) lignes.push(
+    { nom: 'limitant', plus: () => {
+      c.rect(colX(3) + 3, TB.y + 3, TB.cols[3] - 6, 4 * TB.h - 6, { couleur: 'jaune', largeur: 2.2, arrondi: 8 });
+      c.texte('ester en excès : HO⁻ est limitant', TB.x, TB.y + 4 * TB.h + 30, { couleur: 'jaune', taille: 18 });
+    } },
+    { nom: 'x_f', plus: () => {
+      c.texte('10⁻³ − x_max = 0 ; réaction totale : x_f = x_max = 10⁻³ mol', TB.x, TB.y + 4 * TB.h + 60, { couleur: 'jaune', taille: 18, max: W });
+    } });
+  c.repere('melange', B1.x - 10, B1.y - 34, B1.w + 20, B1.h + 86, 'le bécher : 10⁻³ mol d’ions HO⁻ et l’ester versé en excès, V₀ = 100 mL');
+  c.repere('tableau', TB.x, TB.y, W, 4 * TB.h, 'le tableau d’avancement (état initial, en cours, état final)');
+  c.repere('ligne_initial', TB.x, TB.y + TB.h, W, TB.h, 'la ligne de l’état initial');
+  c.repere('ligne_en_cours', TB.x, TB.y + 2 * TB.h, W, TB.h, 'la ligne « en cours »');
+  c.repere('ligne_final', TB.x, TB.y + 3 * TB.h, W, TB.h, 'la ligne de l’état final');
+  c.repere('colonne_ho', colX(3), TB.y, TB.cols[3], 4 * TB.h, 'la colonne des ions HO⁻');
+  c.repere('colonne_ester', colX(2), TB.y, TB.cols[2], 4 * TB.h, 'la colonne de l’ester, en excès');
+  c.repere('x_f', TB.x, TB.y + 4 * TB.h + 8, W, 62, `la conclusion : HO⁻ limitant, x_f = 10⁻³ mol${voit(M, 'x_f') ? '' : ' (pas encore écrite)'}`);
+  return zoneEcriture(c, M, [
+    { nom: 'melange', lignes: [['on verse l’ester (en excès) sur 10⁻³ mol d’ions HO⁻ : V₀ = 100 mL', 'blanc']] },
+    ...lignes.map(l => ({ ...l, lignes: ({ equation: [['l’équation de la réaction, avec les états', 'cyan']],
+      etat_initial: [['état initial : x = 0 ; n₀(HO⁻) = 10⁻³ mol ; l’ester est en excès', 'blanc']],
+      en_cours: [['en cours : il reste 10⁻³ − x mol de HO⁻ ; x mol de chaque produit', 'blanc']],
+      etat_final: [['état final : on remplace x par x_f', 'blanc']],
+      limitant: [['l’ester est en excès : le réactif limitant est HO⁻', 'jaune']],
+      x_f: [['la réaction est totale : 10⁻³ − x_max = 0, x_f = x_max = 10⁻³ mol', 'jaune']] })[l.nom] })),
+  ], ZY);
+}
+
+/* ── Q2 : le conductimètre, le tableau des mesures, la courbe, t₁/₂ ──────────────────────────────────── */
+const B2 = { x: 40, y: 196, w: 124, h: 112 }, A2 = { x: 24, y: 50, w: 156, h: 72 }, CH2 = { x: 222, y: 92, r: 20 };
+const T2 = { x: 198, y: 168, w1: 60, w2: 86, h: 22 };
+const G2 = Graphe({ x0: 400, y0: 300, w: 320, h: 220, xmax: 24, dx: 4, ymax: .25, dy: .05, decx: 0, decy: 2, nomx: 't (min)', nomy: 'σ (S·m⁻¹)' });
+function vueQ2(c, M) {
+  const t = M.commence('mesures') ? tSim(M) : 0, s = SIG(t), cx = B2.x + B2.w / 2;
+  if (M.commence('montage')) {
+    c.direct(() => {
+      const ctx = c.ctx; Peint.becher(ctx, B2, .62 * lisse(M.p('montage')), SOUDE);
+      cellule(ctx, cx, B2.y - 34, B2.y + B2.h - 56, 24, 40);
+      fil(ctx, cx, B2.y - 34, A2.x + 20, A2.y + A2.h, '#2b2f35', 30);
+    });
+    appareil(c, A2, M.p('montage') >= 1 ? `${fr(s, 3)} S/m` : '- - -', { taille: 20 });
+    c.texte('σ', A2.x + A2.w + 8, A2.y + 34, { couleur: 'jaune', taille: 20 });
+    chrono(c, CH2.x, CH2.y + 30, CH2.r, `t = ${fr(t, 0)} min`, t);
+  }
+  const vus = MESURES.filter(([d]) => M.commence('mesures') && t >= d - 1e-6);
+  if (M.commence('mesures')) {
+    c.texte('t (min)', T2.x + T2.w1 / 2, T2.y - 6, { couleur: 'faible', taille: 15, align: 'center', duree: .1 });
+    c.texte('σ (S/m)', T2.x + T2.w1 + T2.w2 / 2 + 4, T2.y - 6, { couleur: 'faible', taille: 15, align: 'center', duree: .1 });
+    c.ligne(T2.x, T2.y, T2.x + T2.w1 + T2.w2, T2.y, { largeur: 1.2, duree: .05 });
+    c.ligne(T2.x + T2.w1, T2.y - 20, T2.x + T2.w1, T2.y + MESURES.length * T2.h, { largeur: 1.2, duree: .05 });
+    c.direct(() => vus.forEach(([d, v], i) => {
+      const y = T2.y + (i + 1) * T2.h - 5;
+      c.texte(String(d), T2.x + T2.w1 / 2, y, { couleur: 'blanc', taille: 16, align: 'center' });
+      c.texte(fr(v, 3), T2.x + T2.w1 + T2.w2 / 2 + 4, y, { couleur: 'jaune', taille: 16, align: 'center' });
+    }));
+    axesG(c, G2, 15); quad(c, G2, .8);
+    c.direct(() => vus.forEach(([d, v]) => c.point(G2.X(d), G2.Y(v), 4.5, 'jaune')));
+  }
+  if (M.commence('courbe')) c.direct(() => { const p = M.p('courbe'), tm = TMAX * p; if (p > 0) c.courbe(u => [G2.X(u * tm), G2.Y(SIG(u * tm))], Math.max(16, Math.round(140 * p)), { net: true, couleur: 'bleu', largeur: 2.6 }); });
+  if (voit(M, 'lecture')) {
+    const p = M.p('lecture'), y = G2.Y(.17), x = G2.X(4);
+    c.direct(() => {
+      const a = clamp(p * 2, 0, 1); c.ligne(G2.x0, y, G2.x0 + (x - G2.x0) * a, y, { couleur: 'jaune', largeur: 1.8, pointille: [5, 5] });
+      if (p > .5) { const b = clamp(p * 2 - 1, 0, 1); c.ligne(x, y, x, y + (G2.y0 - y) * b, { couleur: 'jaune', largeur: 1.8, pointille: [5, 5] }); c.point(x, y, 5, 'jaune'); }
+      if (p >= 1) { c.point(x, G2.y0, 4.5, 'jaune'); c.texte('0,17', G2.x0 + 6, y + 20, { couleur: 'jaune', taille: 17 }); c.texte('t₁/₂ = 4 min', x + 8, G2.y0 - 12, { couleur: 'jaune', taille: 18 }); }
+    });
+  }
+  c.repere('conductimetre', A2.x, A2.y, A2.w, A2.h, `le conductimètre : il affiche σ = ${fr(s, 3)} S/m`);
+  c.repere('melange', B2.x - 6, B2.y - 40, B2.w + 12, B2.h + 46, 'le mélange avec la cellule de mesure');
+  c.repere('tableau', T2.x - 4, T2.y - 24, T2.w1 + T2.w2 + 10, MESURES.length * T2.h + 30, `le tableau des mesures (${vus.length} lignes écrites)`);
+  c.repere('courbe', G2.x0, G2.y0 - G2.h, G2.w, G2.h, 'le graphe σ(t) : les points, puis la courbe');
+  c.repere('lecture', G2.X(4) - 16, G2.Y(.17) - 16, 32, 32, `le point σ = 0,17 S·m⁻¹, t = 4 min${voit(M, 'lecture') ? '' : ' (pas encore lu)'}`);
+  return zoneEcriture(c, M, [
+    { nom: 'montage', lignes: [['le conductimètre mesure σ dans le mélange', 'blanc']] },
+    { nom: 'mesures', lignes: [['à chaque date, σ lue va dans le tableau, puis sur le graphe : σ diminue', 'blanc']] },
+    { nom: 'courbe', lignes: [['la courbe σ(t) passe par les points (figure 1 du sujet)', 'bleu']] },
+    { nom: 'definition', lignes: [['à t₁/₂ : x = x_f/2 = 10⁻³/2 = 5·10⁻⁴ mol', 'cyan']] },
+    { nom: 'sigma_demi', lignes: PAR.conclusions ? [['σ₁/₂ = 0,25 − 160 × 5·10⁻⁴ = 0,25 − 0,08 = 0,17 S·m⁻¹', 'jaune']] : [] },
+    { nom: 'lecture', lignes: PAR.conclusions ? [['sur la courbe, σ = 0,17 S·m⁻¹ à t₁/₂ = 4 min', 'jaune']] : [] },
+  ], ZY);
+}
+
+/* ── Q3 : montrer v = −(1/(160·V₀))·dσ/dt ────────────────────────────────────────────────────── */
+const J = { x1: 54, x2: 158, y0: 300, h: 190, w: 40 };
+function vueQ3(c, M) {
+  const p = M.commence('liees') ? lisse(M.p('liees')) : 0, x = 1e-3 * (1 - Math.pow(2, -p * 3)) / (1 - 1 / 8), sg = .25 - 160 * x;
+  if (M.commence('relation')) {
+    c.direct(() => {
+      const ctx = c.ctx, bar = (bx, f, col) => {
+        ctx.fillStyle = 'rgba(255,255,255,.06)'; ctx.fillRect(bx, J.y0 - J.h, J.w, J.h);
+        const g = ctx.createLinearGradient(bx, 0, bx + J.w, 0); g.addColorStop(0, col[0]); g.addColorStop(.5, col[1]); g.addColorStop(1, col[0]);
+        ctx.fillStyle = g; ctx.fillRect(bx, J.y0 - J.h * f, J.w, J.h * f);
+      };
+      bar(J.x1, x / 1e-3, ['#0f766e', '#5eead4']); bar(J.x2, sg / .25, ['#1e3a8a', '#93c5fd']);
+    });
+    c.rect(J.x1, J.y0 - J.h, J.w, J.h, { largeur: 1.6 }); c.rect(J.x2, J.y0 - J.h, J.w, J.h, { largeur: 1.6 });
+    c.texte('x', J.x1 + J.w / 2, J.y0 + 24, { couleur: 'cyan', taille: 19, align: 'center' });
+    c.texte('σ', J.x2 + J.w / 2, J.y0 + 24, { couleur: 'bleu', taille: 19, align: 'center' });
+    c.direct(() => {
+      c.texte(`${fr(x * 1e4, 1)}·10⁻⁴ mol`, J.x1 + J.w / 2, J.y0 - J.h - 12, { couleur: 'cyan', taille: 15, align: 'center' });
+      c.texte(`${fr(sg, 3)} S/m`, J.x2 + J.w / 2, J.y0 - J.h - 12, { couleur: 'bleu', taille: 15, align: 'center' });
+    });
+    if (M.vu('liees')) { c.fleche(J.x1 + J.w / 2, J.y0 - 70, J.x1 + J.w / 2, J.y0 - 120, { couleur: 'cyan', largeur: 2.4, tete: 8 });
+      c.fleche(J.x2 + J.w / 2, J.y0 - 120, J.x2 + J.w / 2, J.y0 - 70, { couleur: 'bleu', largeur: 2.4, tete: 8 }); }
+  }
+  const X0 = 260;
+  const lignes = [
+    { nom: 'rappel', plus: () => { c.texte('v = ⟦1|V₀⟧·⟦dx|dt⟧', X0 + 10, 74, { couleur: 'cyan', taille: 22 }); c.texte('(définition)', X0 + 170, 74, { couleur: 'faible', taille: 16 }); } },
+    { nom: 'relation', plus: () => { c.texte('σ = 0,25 − 160·x', X0 + 10, 126, { couleur: 'blanc', taille: 22 }); c.texte('(sujet)', X0 + 230, 126, { couleur: 'faible', taille: 16 }); } },
+  ];
+  if (PAR.conclusions) lignes.push(
+    { nom: 'derivee', plus: () => { c.texte('⟦dσ|dt⟧ = 0 − 160·⟦dx|dt⟧', X0 + 10, 180, { couleur: 'jaune', taille: 22 }); c.texte('(0,25 : constante)', X0 + 270, 180, { couleur: 'faible', taille: 16 }); } },
+    { nom: 'dxdt', plus: () => c.texte('⟦dx|dt⟧ = −⟦1|160⟧·⟦dσ|dt⟧', X0 + 10, 236, { couleur: 'jaune', taille: 22 }) },
+    { nom: 'resultat', plus: () => { c.texte('v = −⟦1|160·V₀⟧·⟦dσ|dt⟧', X0 + 22, 298, { couleur: 'jaune', taille: 24 }); c.rect(X0 + 6, 264, 300, 54, { couleur: 'jaune', largeur: 2, arrondi: 8 }); } });
+  c.repere('jauges', J.x1 - 10, J.y0 - J.h - 30, J.x2 + J.w - J.x1 + 20, J.h + 60, `les deux jauges : x = ${fr(x * 1e4, 1)}·10⁻⁴ mol, σ = ${fr(sg, 3)} S/m`);
+  c.repere('definition', X0, 46, 330, 46, 'la définition v = (1/V₀)·dx/dt');
+  c.repere('relation', X0, 106, 330, 32, 'la relation σ = 0,25 − 160·x');
+  c.repere('derivee', X0, 154, 480, 46, `la dérivée dσ/dt = −160·dx/dt${voit(M, 'derivee') ? '' : ' (pas encore écrite)'}`);
+  c.repere('resultat', X0, 210, 330, 110, `dx/dt puis v = −(1/(160·V₀))·dσ/dt${voit(M, 'resultat') ? '' : ' (pas encore écrit)'}`);
+  return zoneEcriture(c, M, [
+    ...lignes.map(l => ({ ...l, lignes: ({ rappel: [['on part de la définition de la vitesse volumique', 'cyan']],
+      relation: [['et de la relation donnée : σ = 0,25 − 160·x', 'blanc']],
+      derivee: [['on dérive par rapport au temps : la dérivée de 0,25 est nulle', 'jaune']],
+      dxdt: [['on isole dx/dt', 'jaune']], resultat: [['on remplace dans v : c’est l’expression demandée', 'jaune']] })[l.nom] })),
+    { nom: 'liees', lignes: [['x augmente, σ diminue : σ change 160 fois plus vite que x, dans l’autre sens', 'bleu']] },
+  ].sort((a, b) => ETAPES('2021N_q3').findIndex(e => e.nom === a.nom) - ETAPES('2021N_q3').findIndex(e => e.nom === b.nom)), ZY);
+}
+
+/* ── Q4 : la tangente à t₁ = 4 min et v₁ ───────────────────────────────────────────────────────── */
+const G4 = Graphe({ x0: 64, y0: 300, w: 380, h: 236, xmax: 24, dx: 4, ymax: .25, dy: .05, decx: 0, decy: 2, nomx: '', nomy: 'σ (S·m⁻¹)' });   // « t (min) » écrit au-dessus de la flèche (vueQ4)
+const tanT = t => .22 - .0125 * t;
+function vueQ4(c, M) {
+  if (M.commence('courbe')) {
+    axesG(c, G4, 15); quad(c, G4, .8);
+    c.texte('t (min)', G4.x0 + G4.w + 14, G4.y0 - 12, { couleur: 'blanc', taille: 16, align: 'right' });
+    c.direct(() => { const p = M.p('courbe'), tm = TMAX * p; if (p > 0) c.courbe(u => [G4.X(u * tm), G4.Y(SIG(u * tm))], Math.max(16, Math.round(160 * p)), { net: true, couleur: 'bleu', largeur: 2.6 }); });
+  }
+  if (M.commence('point')) {
+    c.direct(() => { const ctx = c.ctx; ctx.save(); ctx.strokeStyle = '#facc15'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(G4.X(4), G4.Y(.17), 8 + 4 * (1 - M.p('point')), 0, 7); ctx.stroke(); ctx.restore(); });
+    c.texte('t₁ = 4 min', G4.X(4) + 12, G4.Y(.17) - 12, { couleur: 'blanc', taille: 17 });
+  }
+  if (M.commence('tangente')) {
+    c.direct(() => { const a = 17.6 * M.p('tangente'); c.ligne(G4.X(0), G4.Y(tanT(0)), G4.X(a), G4.Y(tanT(a)), { couleur: 'vert', largeur: 2.2, pointille: [8, 5] }); });
+    c.texte('(T)', G4.X(14.4), G4.Y(tanT(14.4)) + 26, { couleur: 'vert', taille: 19 });
+  }
+  if (voit(M, 'points_lus')) {
+    const p = M.p('points_lus');
+    c.direct(() => {
+      c.point(G4.X(0), G4.Y(.22), 5, 'vert');
+      if (p > .4) { c.ligne(G4.X(4), G4.Y(.17), G4.X(4), G4.y0, { couleur: 'jaune', largeur: 1.6, pointille: [5, 5] }); c.ligne(G4.x0, G4.Y(.17), G4.X(4), G4.Y(.17), { couleur: 'jaune', largeur: 1.6, pointille: [5, 5] }); c.point(G4.X(4), G4.Y(.17), 5, 'vert'); }
+    });
+    c.texte('0,22', G4.x0 + 10, G4.Y(.22) - 10, { couleur: 'vert', taille: 17 });
+    c.texte('0,17', G4.x0 + 10, G4.Y(.17) + 22, { couleur: 'jaune', taille: 17 });
+  }
+  const X0 = 470;
+  const lignes = [];
+  if (PAR.conclusions) lignes.push(
+    { nom: 'points_lus', plus: () => { c.texte('(T) passe par (0 ; 0,22)', X0, 84, { couleur: 'vert', taille: 18 }); c.texte('et (4 ; 0,17)', X0 + 74, 108, { couleur: 'vert', taille: 18 }); } },
+    { nom: 'pente', plus: () => { c.texte('(⟦dσ|dt⟧)₁ = ⟦0,17 − 0,22|4 − 0⟧', X0, 160, { couleur: 'jaune', taille: 19 }); c.texte('= −0,0125 S·m⁻¹·min⁻¹', X0 + 40, 200, { couleur: 'jaune', taille: 18 }); } },
+    { nom: 'volume', plus: () => c.texte('V₀ = 100 mL = 10⁻⁴ m³', X0, 238, { couleur: 'blanc', taille: 18 }) },
+    { nom: 'calcul', plus: () => { c.texte('v₁ = −⟦1|160 × 10⁻⁴⟧ × (−0,0125)', X0, 282, { couleur: 'blanc', taille: 18 });
+      c.texte('v₁ ≈ 0,78 mol·m⁻³·min⁻¹', X0 + 8, 330, { couleur: 'jaune', taille: 20 }); c.rect(X0 - 4, 306, 262, 34, { couleur: 'jaune', largeur: 2, arrondi: 8 }); } });
+  c.repere('courbe', G4.x0, G4.y0 - G4.h, G4.w, G4.h, 'la courbe σ(t) de la figure 1');
+  c.repere('point', G4.X(4) - 14, G4.Y(.17) - 14, 28, 28, 'le point de la courbe de date t₁ = 4 min');
+  c.repere('tangente', G4.X(0), G4.Y(.22) - 8, G4.X(17.6) - G4.X(0), G4.Y(0) - G4.Y(.22) + 16, 'la tangente (T) verte au point de date 4 min');
+  c.repere('point_axe', G4.x0 - 12, G4.Y(.22) - 14, 28, 28, `le point où (T) coupe l’axe σ, à t = 0${voit(M, 'points_lus') ? ' : 0,22 S·m⁻¹' : ' (valeur pas encore écrite)'}`);
+  c.repere('pente', X0 - 6, 132, 280, 76, `la pente de (T)${voit(M, 'pente') ? ' : −0,0125 S·m⁻¹·min⁻¹' : ' (pas encore écrite)'}`);
+  c.repere('calcul', X0 - 6, 220, 280, 124, `V₀ en m³ et le calcul de v₁${voit(M, 'calcul') ? ' : 0,78 mol·m⁻³·min⁻¹' : ' (pas encore écrit)'}`);
+  return zoneEcriture(c, M, [
+    { nom: 'courbe', lignes: [['la courbe σ(t) du sujet (figure 1)', 'bleu']] },
+    { nom: 'point', lignes: [['le point de la courbe de date t₁ = 4 min', 'blanc']] },
+    { nom: 'tangente', lignes: [['la tangente (T) en ce point : sa pente vaut (dσ/dt) à t₁', 'vert']] },
+    ...lignes.map(l => ({ ...l, lignes: ({ points_lus: [['on lit deux points de (T), loin l’un de l’autre', 'vert']],
+      pente: [['la pente est négative (σ diminue), mais v₁ sera positive', 'jaune']],
+      volume: [['v en mol·m⁻³·min⁻¹ : V₀ en m³', 'blanc']],
+      calcul: [['v₁ = −(1/(160·V₀))·(dσ/dt)₁ ≈ 0,78 mol·m⁻³·min⁻¹', 'jaune']] })[l.nom] })),
+  ], ZY);
+}
+
+/* ── Dessin, ce que voit le tuteur, moteur ─────────────────────────────────────────────────────── */
+function dessiner(c, M) {
+  MO = M; M.scene.cadre(67);
+  // Téléphone en paysage (724 × 350) : le kit y abaisse le plancher (× 0,75) ; cette page le relève pour garder 15 px à l’écran (règle de l’écran).
+  if (c.tailleMin) c.tailleMin = 15 / Math.min(1, Math.max(.45, Math.min((c.W || 900) / 900, (c.H || 400) / 400)));
+  agrandir(c, M.scene, M);
+  const v = M.S.vue;
+  rappel(c, v);
+  M.vues = ({ '2021N_q1': vueQ1, '2021N_q2': vueQ2, '2021N_q3': vueQ3, '2021N_q4': vueQ4 })[v](c, M) || [];
+  return c.fin();
+}
+function voir(M) {
+  const v = M.S.vue, m = [`National 2021 N, ${TITRES[v]}, ${M.etat()}. Étape en cours : ${etapeEnCours(M)}.`];
+  if (RAPPELS[v]) m.push(`Rappel en haut : « ${window.Tableau.lisible(RAPPELS[v])} ».`);
+  if (!PAR.conclusions) m.push('Question d’observation en cours : la réponse n’est pas écrite (conclusions = false).');
+  if (v === '2021N_q1') m.push('Bécher : 10⁻³ mol d’ions HO⁻, l’ester versé en excès, V₀ = 100 mL. Tableau d’avancement : '
+    + ['etat_initial', 'en_cours', 'etat_final'].filter(n => M.commence(n)).map(n => ({ etat_initial: 'état initial (0 ; en excès ; 10⁻³ ; 0 ; 0)', en_cours: 'en cours (x ; en excès ; 10⁻³ − x ; x ; x)', etat_final: 'état final (x_f ; en excès ; 10⁻³ − x_f ; x_f ; x_f)' })[n]).join(', ') + '.'
+    + (voit(M, 'limitant') ? ' Colonne HO⁻ entourée : HO⁻ limitant.' : '') + (voit(M, 'x_f') ? ' Écrit : x_f = x_max = 10⁻³ mol.' : ''));
+  if (v === '2021N_q2') { const t = M.commence('mesures') ? tSim(M) : 0; m.push(`Conductimètre : σ = ${fr(SIG(t), 3)} S/m à t = ${fr(t, 0)} min (temps accéléré). Tableau des mesures : ${MESURES.filter(([d]) => M.commence('mesures') && t >= d).map(([d, s]) => `${d} min → ${fr(s, 3)}`).join(' ; ') || 'vide'}.`
+    + (M.commence('courbe') ? ' Courbe σ(t) bleue tracée par les points, de 0,25 vers 0,09 S/m.' : '') + (M.commence('definition') ? ' Écrit : x = x_f/2 = 5·10⁻⁴ mol.' : '')
+    + (voit(M, 'sigma_demi') ? ' Écrit : σ₁/₂ = 0,17 S·m⁻¹.' : '') + (voit(M, 'lecture') ? ' Lecture jaune : 0,17 → t₁/₂ = 4 min.' : '')); }
+  if (v === '2021N_q3') m.push(`Jauges : x = ${fr((M.commence('liees') ? 1e-3 * (1 - Math.pow(2, -lisse(M.p('liees')) * 3)) / (7 / 8) : 0) * 1e4, 1)}·10⁻⁴ mol (monte), σ (baisse).`
+    + (M.commence('rappel') ? ' Écrit : v = (1/V₀)·dx/dt.' : '') + (M.commence('relation') ? ' Écrit : σ = 0,25 − 160·x.' : '')
+    + (voit(M, 'derivee') ? ' Écrit : dσ/dt = 0 − 160·dx/dt.' : '') + (voit(M, 'dxdt') ? ' Écrit : dx/dt = −(1/160)·dσ/dt.' : '') + (voit(M, 'resultat') ? ' Encadré : v = −(1/(160·V₀))·dσ/dt.' : ''));
+  if (v === '2021N_q4') m.push((M.commence('courbe') ? 'Courbe σ(t) de 0,25 vers 0,09 S/m.' : '') + (M.commence('point') ? ' Point de date 4 min entouré.' : '') + (M.commence('tangente') ? ' Tangente (T) verte en pointillés.' : '')
+    + (voit(M, 'points_lus') ? ' Points de (T) : (0 ; 0,22) et (4 ; 0,17).' : '') + (voit(M, 'pente') ? ' Pente = −0,0125 S·m⁻¹·min⁻¹.' : '') + (voit(M, 'volume') ? ' V₀ = 10⁻⁴ m³.' : '') + (voit(M, 'calcul') ? ' v₁ ≈ 0,78 mol·m⁻³·min⁻¹ encadré.' : ''));
+  if (M.vues && M.vues.length) m.push(`Écrit à gauche ou en bas : ${M.vues.map(s => `« ${s} »`).join(' ; ')}.`);
+  return m.join(' ');
+}
+const params = M => ({ vue: M.S.vue, conclusions: PAR.conclusions, sujet: '2021 N', n0_HO_mol: 1e-3, V0_mL: 100, relation: 'σ = 0,25 − 160·x' });
+const MOT = Moteur({
+  id: 'cin_national_2021N', titre: 'National 2021 N joué pas à pas : tableau, conductimétrie, t₁/₂, vitesse par la tangente', vues: VUES, titres: TITRES,
+  etapes: ETAPES, motifs: MOTIFS, dessiner, voir, params,
+  depart: M => `National 2021 N, ${TITRES[M.S.vue]}.`,
+  messageFin: M => ({ '2021N_q1': 'HO⁻ limitant : x_f = 10⁻³ mol.', '2021N_q2': 'σ₁/₂ = 0,17 S·m⁻¹ : t₁/₂ = 4 min.', '2021N_q3': 'v = −(1/(160·V₀))·dσ/dt.', '2021N_q4': 'v₁ ≈ 0,78 mol·m⁻³·min⁻¹.' })[M.S.vue],
+  appliquer: (p, M) => {
+    const r = {};
+    if (VUES.includes(p.vue)) r.vue = p.vue;
+    if (typeof p.conclusions === 'boolean') { PAR.conclusions = p.conclusions; M.scene.sale = true; }
+    r.change = !!(r.vue && r.vue !== M.S.vue);
+    return r;
+  },
+  schema: { vue: VUES.join(' | ') + ' (change de question et relance)', conclusions: 'true | false : false tait la réponse de la question d’observation (étapes ' + [...CONCL].join(', ') + ') ; true par défaut' },
+  texte: 'National 2021 N (exercice 1, partie 1), joué question par question. Ester (éthanoate d’éthyle) en excès + 10⁻³ mol d’ions HO⁻, V₀ = 100 mL, réaction totale. '
+    + 'Q1 : tableau d’avancement, HO⁻ limitant, x_f = 10⁻³ mol. Q2 : le conductimètre lit σ à 0, 2, 4, 8, 12, 16 et 24 min (0,25 ; 0,20 ; 0,17 ; 0,13 ; 0,11 ; 0,10 ; 0,093 S/m), tableau puis graphe ; '
+    + 'x(t₁/₂) = x_f/2 = 5·10⁻⁴ mol, σ₁/₂ = 0,25 − 160 × 5·10⁻⁴ = 0,17 S·m⁻¹, t₁/₂ = 4 min. Q3 : σ = 0,25 − 160·x, dσ/dt = −160·dx/dt, v = −(1/(160·V₀))·dσ/dt. '
+    + 'Q4 : tangente (T) à 4 min par (0 ; 0,22) et (4 ; 0,17), pente −0,0125 S·m⁻¹·min⁻¹, V₀ = 10⁻⁴ m³, v₁ ≈ 0,78 mol·m⁻³·min⁻¹.',
+  explications: {
+    '2021N_q1': [{ repere: 'melange', texte: 'Les ions hydroxyde, et l’ester en excès.' }, { repere: 'tableau', texte: 'Le tableau, ligne par ligne.' },
+      { repere: 'colonne_ester', texte: 'L’ester est en excès : il ne finit pas.' }, { repere: 'colonne_ho', texte: 'Les ions hydroxyde finissent : réactif limitant.' }, { repere: 'x_f', texte: 'x_f = 10⁻³ mol.' }],
+    '2021N_q2': [{ repere: 'conductimetre', texte: 'Le conductimètre lit σ.' }, { repere: 'tableau', texte: 'Chaque valeur va dans le tableau.' },
+      { repere: 'courbe', texte: 'Puis sur le graphe, et la courbe passe par les points.' }, { repere: 'lecture', texte: 'σ = 0,17 S/m à t₁/₂ = 4 min.' }],
+    '2021N_q3': [{ repere: 'definition', texte: 'La définition de v.' }, { repere: 'relation', texte: 'La relation du sujet.' }, { repere: 'jauges', texte: 'x monte, σ baisse.' },
+      { repere: 'derivee', texte: 'On dérive : la dérivée de 0,25 est nulle.' }, { repere: 'resultat', texte: 'On remplace dans v.' }],
+    '2021N_q4': [{ repere: 'point', texte: 'Le point de date 4 min.' }, { repere: 'tangente', texte: 'La tangente en ce point.' }, { repere: 'point_axe', texte: 'Elle coupe l’axe à 0,22.' },
+      { repere: 'pente', texte: 'Sa pente, négative.' }, { repere: 'calcul', texte: 'V₀ en m³, puis v₁.' }],
+  },
+});
+MOT.lancer();
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

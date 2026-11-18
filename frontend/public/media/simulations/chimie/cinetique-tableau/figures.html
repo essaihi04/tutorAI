@@ -213,7 +213,16 @@ let ZY = [352, 376, 400];                           // lignes écrites en bas
  * Modèle : chimie/transformations-deux-sens-tableau/figures.html. */
 let D = null;
 const GROUPES = ['axes', 'courbe', 'tangente', 'lecture'];
-const groupes = () => GROUPES.filter(n => F.panneau[n] && (n !== 'tangente' || F.tangente));
+/* Question d’observation (2ᵉ passe du 18 novembre 2026) : `conclusions: false` tait, pour les figures qui ont un `masque`,
+ * les lignes du panneau et les phrases du bas qui donnent la réponse attendue de l’élève ; true (défaut) : tout s’écrit,
+ * comme avant (le cours en ligne n’envoie jamais ce paramètre). */
+let CONCL = new URLSearchParams(location.search).get('conclusions') !== 'false';
+const PAN = () => {
+  const m = !CONCL && F.masque && F.masque.panneau; if (!m) return F.panneau;
+  return Object.fromEntries(Object.entries(F.panneau).map(([k, l]) => [k, l.filter((_, i) => !(m[k] || []).includes(i))]));
+};
+const BAS = nom => (!CONCL && F.masque && F.masque.bas && F.masque.bas[nom] != null ? F.masque.bas[nom] : F.bas[nom]);
+const groupes = () => GROUPES.filter(n => PAN()[n] && PAN()[n].length && (n !== 'tangente' || F.tangente));
 /* Deuxième passe (15 novembre 2026, « agrandir les graphes eux-mêmes, pas seulement le texte autour ») : sur un tableau
  * large, les tailles sont choisies en PIXELS À L'ÉCRAN (u(px) = px / échelle), le graphe prend 50 à 62 % de la largeur
  * et toute la hauteur, les deux colonnes de texte se resserrent autour et leurs phrases vont à la ligne. On prend la
@@ -223,7 +232,7 @@ function decouperPanneau(c, cote, t) {
   const place = {}; let n = 0;
   for (const nom of groupes()) {
     const l2 = [];
-    for (const [txt, col, tl] of F.panneau[nom]) for (const m of couper(c, txt.trim(), cote, tl ? t * .93 : t)) l2.push([m, col, tl]);
+    for (const [txt, col, tl] of PAN()[nom]) for (const m of couper(c, txt.trim(), cote, tl ? t * .93 : t)) l2.push([m, col, tl]);
     place[nom] = { lignes: l2 }; n += l2.length;
   }
   return { place, n };
@@ -266,12 +275,12 @@ function placeDe(nom) {
   let y = D.y0;
   for (const n of groupes()) {
     if (n === nom) return [PX, y, PW];
-    y += F.panneau[n].length * D.pas + D.ecart;
+    y += PAN()[n].length * D.pas + D.ecart;
   }
   return [PX, y, PW];
 }
 /** Les lignes d'un groupe du panneau, coupées à la ligne sur un tableau large. */
-const lignesDe = nom => (D.large && D.place[nom] ? D.place[nom].lignes : (F.panneau[nom] || []));
+const lignesDe = nom => (D.large && D.place[nom] ? D.place[nom].lignes : (PAN()[nom] || []));
 /** Une phrase coupée en lignes qui tiennent dans `max` (mesurée à la craie). */
 function couper(c, t, max, taille) {
   const mots = String(t).replace(/ ([=≈×→<>≤≥]) /g, '\u00a0$1\u00a0').replace(/\([^()]{1,18}\)/g, m => m.replace(/ /g, '\u00a0'))
@@ -372,6 +381,7 @@ const FIGS = {
       tangente: 'tangente (T) à la courbe à la date t = 100 s',
       lecture: 'v(100 s) = 1,0·10⁻³ mol·L⁻¹·s⁻¹ (mmol → mol, V = 10·10⁻³ L) ; t₁/₂ = 70 s',
     },
+    masque: { panneau: { axes: [3] }, bas: { axes: 'x en mmol, t en SECONDES' } },   // ci_n1_aspirine : « x_max ? » se tait (conclusions: false)
     valeur: 'v(100 s) = 1,0·10⁻³ mol·L⁻¹·s⁻¹ ; x_f/2 = 1,4 mmol ; t₁/₂ = 70 s',
     resume: 'x(t) de la réaction de l’aspirine avec HCO₃⁻ : x monte de 0 vers 2,8 mmol en 500 s.',
   },
@@ -393,6 +403,7 @@ const FIGS = {
       tangente: 'tangente (T) au point × de date t = 3 min',
       lecture: 'v(3 min) = 1,6 mmol·L⁻¹·min⁻¹ (V = 0,050 L) ; x_f/2 = 0,4 mmol : t₁/₂ = 4 min',
     },
+    masque: { panneau: { lecture: [4] }, bas: { courbe: 'la courbe x(t) du sujet, de 0 à 8 min' } },   // ci_n2_diminue : « v diminue-t-elle ? » se tait
     valeur: 'v(3 min) = 1,6 mmol·L⁻¹·min⁻¹ ; x_f/2 = 0,4 mmol ; t₁/₂ = 4 min',
     resume: 'x(t) d’un ester avec les ions hydroxyde : x monte de 0 à 0,6 mmol en 8 min (le palier 0,8 mmol n’est pas sur la figure).',
   },
@@ -630,7 +641,7 @@ function dessiner(c, M) {
   };
   const ecrites = [], panneau = {};
   for (const nom of ['axes', 'courbe', 'tangente', 'lecture']) {
-    const lignes = F.panneau[nom]; if (!lignes || !M.ev(nom)) continue;
+    const lignes = PAN()[nom]; if (!lignes || !lignes.length || !M.ev(nom)) continue;
     const [x0, y0, mx] = placeDe(nom), vues = lignesDe(nom);
     panneau[nom] = () => vues.forEach(([t, col, tl], i) => c.texte(t, x0, y0 + i * D.pas, { couleur: col, taille: tl ? (D.large ? D.pt * .93 : tl) : D.pt, max: mx }));
     if (M.commence(nom)) ecrites.push(...lignes.map(l => l[0]));
@@ -638,7 +649,7 @@ function dessiner(c, M) {
   M.panneau = ecrites;
   // tableau large : chaque phrase va à la ligne dans la colonne de gauche ; sinon une ligne en bas
   const lignesBas = t => (D.large ? couper(c, t, D.maxBas, D.bas) : [t]);
-  M.vues = zoneEcriture(c, M, etapesDe(M.S.vue).map(e => ({ nom: e.nom, lignes: lignesBas(F.bas[e.nom]).map(t => [t, e.nom === 'lecture' ? 'jaune' : e.nom === 'tangente' ? 'vert' : 'blanc']),
+  M.vues = zoneEcriture(c, M, etapesDe(M.S.vue).map(e => ({ nom: e.nom, lignes: lignesBas(BAS(e.nom)).map(t => [t, e.nom === 'lecture' ? 'jaune' : e.nom === 'tangente' ? 'vert' : 'blanc']),
     plus: () => { if (e.nom === 'axes') axes(c); etiquettes[e.nom] && etiquettes[e.nom](); panneau[e.nom] && panneau[e.nom](); } })), ZY,
     { x: D.xBas, max: D.maxBas, taille: D.bas });
   reperes(c, M);
@@ -678,7 +689,7 @@ function voir(M) {
 }
 const params = M => {
   const f = FIGS[M.S.vue];
-  return { fig: M.S.vue, session: f.session, diapositive: f.diapo, tangente: !!f.tangente, valeurs: f.valeur,
+  return { fig: M.S.vue, conclusions: CONCL, session: f.session, diapositive: f.diapo, tangente: !!f.tangente, valeurs: f.valeur,
     lectures: f.lectures.map(l => l.k === 'palier' ? { palier: l.y } : { y: l.y, t: +l.t.toFixed(2) }) };
 };
 const MOT = Moteur({
@@ -687,8 +698,8 @@ const MOT = Moteur({
   etapes: etapesDe, motifs: MOTIFS, dessiner, voir, params,
   depart: M => `Figure du national ${FIGS[M.S.vue].session}.`,
   messageFin: M => `Figure du national ${FIGS[M.S.vue].session} lue : les valeurs sont écrites à droite.`,
-  appliquer: (p, M) => { const r = {}; if (CLES.includes(p.fig)) r.vue = p.fig; else if (CLES.includes(p.vue)) r.vue = p.vue; r.change = !!(r.vue && r.vue !== M.S.vue); return r; },
-  schema: { fig: CLES.join(' | ') + ' (change de figure et relance)' },
+  appliquer: (p, M) => { const r = {}; if (typeof p.conclusions === 'boolean') { CONCL = p.conclusions; M.scene.sale = true; } if (CLES.includes(p.fig)) r.vue = p.fig; else if (CLES.includes(p.vue)) r.vue = p.vue; r.change = !!(r.vue && r.vue !== M.S.vue); return r; },
+  schema: { fig: CLES.join(' | ') + ' (change de figure et relance)', conclusions: 'true | false : false tait la réponse d’une question d’observation (fig_2019R : x_max ; fig_2025R : « v diminue ») ; true par défaut' },
   texte: 'Figures des examens nationaux (2016-2025) du suivi temporel, dessinées comme les sujets : ' + CLES.map(k => `${k} (${FIGS[k].session}) : ${FIGS[k].resume} Lecture : ${FIGS[k].valeur}.`).join(' '),
   explications: Object.fromEntries(CLES.map(k => [k, [
     { repere: 'axe_y', texte: `En ordonnée : ${FIGS[k].yNom}.` },
