@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Diapason et guitare — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ondes.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Oscilloscope : le son d'un diapason donne une sinusoïde, celui d'une guitare un motif qui se répète ; on compte les divisions d'un motif pour lire la période"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Périodique, mais pas sinusoïdale (diapo `op_t8_non_sinusoidale`, 18 novembre 2026 : la diapo n'avait aucun visuel ;
+ * « lecture de l'oscilloscope jouée pas à pas »).
+ * Un diapason peint (voie 1, cyan) puis une guitare peinte (voie 2, orange) devant un micro : le spot de l'oscilloscope
+ * trace chaque son. Diapason : une sinusoïde. Guitare : un motif qui se répète, qui n'est pas une sinusoïde.
+ * Puis deux motifs voisins sont marqués, les divisions d'un motif comptées une à une, et T = n × S_H écrit.
+ * Les deux sons ont la même période T = 2 ms (N = 500 Hz). Le bouton « S_H » sous l'écran (ou set_parameters
+ * {sh_ms: 0.25 | 0.5 | 1}) change la sensibilité horizontale : le nombre de divisions change, T reste 2 ms.
+ * Instants : diapason, guitare, motifs, divisions, calcul.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const TP = 2;                                              // période des deux sons (ms)
+const E = { x: 250, y: 64, w: 480, h: 288, nx: 10, ny: 6 };   // écran : 10 × 6 divisions de 48 px
+const DX = E.w / E.nx;
+const Y1 = E.y + E.h * 0.27, Y2 = E.y + E.h * 0.73, A = 38;
+const M = { diapason: 2.9, guitare: 5.6, motifs: 6.6, divisions: 8.4, calcul: 9.6 };
+const MOTIFS = { diapason: 'voie 1 : le diapason donne une sinusoïde', guitare: 'voie 2 : la guitare donne un motif qui se répète, pas une sinusoïde',
+  motifs: 'deux motifs identiques voisins', divisions: 'on compte les divisions d’un motif', calcul: 'T = nombre de divisions × S_H' };
+const DUREE = 10.4;
+const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0, sh: 0.5 };
+const vu = m => S.t >= M[m] - 1e-3;
+const nDiv = () => TP / S.sh;                              // divisions d'une période
+const sin1 = u => Math.sin(2 * Math.PI * u);
+const guit = u => (Math.sin(2 * Math.PI * u) + 0.55 * Math.sin(4 * Math.PI * u + 0.9) + 0.32 * Math.sin(6 * Math.PI * u + 2.1)) / 1.55;
+/** Avancement (0..1) du balayage d'une voie : diapason de 0,4 à 2,8 s, guitare de 3,2 à 5,5 s. */
+const balayage = (t0, t1) => Math.max(0, Math.min(1, (S.t - t0) / (t1 - t0)));
+
+/* ── Peinture (règle 32) ── */
+function peindreDiapason(ctx, x, y, vibre) {
+  const k = vibre ? Math.sin(performance.now() / 18) * 1.6 : 0;
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(x + 3, y + 64, 34, 6, 0, 0, Math.PI * 2); ctx.fill();
+  const g = ctx.createLinearGradient(x - 30, 0, x + 30, 0); g.addColorStop(0, '#5a3216'); g.addColorStop(.5, '#b0733b'); g.addColorStop(1, '#4a2810');
+  ctx.fillStyle = g; ctx.fillRect(x - 32, y + 44, 64, 18);                                  // caisse en bois
+  const m = ctx.createLinearGradient(x - 14, 0, x + 14, 0); m.addColorStop(0, '#6b7280'); m.addColorStop(.5, '#f1f5f9'); m.addColorStop(1, '#4b5563');
+  ctx.strokeStyle = m; ctx.lineWidth = 6; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x, y + 44); ctx.lineTo(x, y + 26); ctx.stroke();               // manche
+  ctx.beginPath(); ctx.moveTo(x - 10 - k, y - 44); ctx.lineTo(x - 10, y + 16); ctx.quadraticCurveTo(x - 10, y + 26, x, y + 26);
+  ctx.quadraticCurveTo(x + 10, y + 26, x + 10, y + 16); ctx.lineTo(x + 10 + k, y - 44); ctx.stroke();   // les deux branches
+  ctx.restore();
+}
+function peindreGuitare(ctx, x, y) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(-0.5);
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(4, 30, 30, 22, 0, 0, Math.PI * 2); ctx.fill();
+  const g = ctx.createRadialGradient(-6, 6, 4, 0, 14, 40); g.addColorStop(0, '#fbbf72'); g.addColorStop(.6, '#c2410c'); g.addColorStop(1, '#5b1d06');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(0, 26, 28, 22, 0, 0, Math.PI * 2); ctx.ellipse(0, -6, 21, 17, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#1c1917'; ctx.beginPath(); ctx.arc(0, 8, 7, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#78350f'; ctx.fillRect(-4, -78, 8, 64); ctx.fillStyle = '#292524'; ctx.fillRect(-6, -92, 12, 16);
+  ctx.strokeStyle = 'rgba(241,245,249,.7)'; ctx.lineWidth = .8; for (const d of [-2.5, 0, 2.5]) { ctx.beginPath(); ctx.moveTo(d, -88); ctx.lineTo(d, 30); ctx.stroke(); }
+  ctx.restore();
+}
+function peindreMicro(ctx, x, y) {
+  ctx.save();
+  ctx.fillStyle = '#374151'; ctx.fillRect(x - 2, y + 10, 4, 30); ctx.fillRect(x - 12, y + 38, 24, 4);
+  const g = ctx.createRadialGradient(x - 3, y - 3, 1, x, y, 11); g.addColorStop(0, '#6b7280'); g.addColorStop(1, '#0b0f14');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, 10, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+function peindreEcran(ctx) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(E.x - 6, E.y - 4, E.w + 20, E.h + 22);
+  const b = ctx.createLinearGradient(0, E.y - 12, 0, E.y + E.h + 12); b.addColorStop(0, '#6b7480'); b.addColorStop(1, '#22282e');
+  ctx.fillStyle = b; ctx.fillRect(E.x - 12, E.y - 12, E.w + 24, E.h + 24);
+  const g = ctx.createRadialGradient(E.x + E.w / 2, E.y + E.h / 2, 10, E.x + E.w / 2, E.y + E.h / 2, E.w * .7); g.addColorStop(0, '#12382a'); g.addColorStop(1, '#06180f');
+  ctx.fillStyle = g; ctx.fillRect(E.x, E.y, E.w, E.h);
+  ctx.strokeStyle = 'rgba(134,239,172,.18)'; ctx.lineWidth = 1;
+  for (let i = 1; i < E.nx; i++) { ctx.beginPath(); ctx.moveTo(E.x + i * DX, E.y); ctx.lineTo(E.x + i * DX, E.y + E.h); ctx.stroke(); }
+  for (let j = 1; j < E.ny; j++) { ctx.beginPath(); ctx.moveTo(E.x, E.y + j * E.h / E.ny); ctx.lineTo(E.x + E.w, E.y + j * E.h / E.ny); ctx.stroke(); }
+  ctx.restore();
+}
+function trace(ctx, f, y0, avance, couleur) {
+  if (avance <= 0) return;
+  const pts = [];
+  for (let x = 0; x <= E.w * avance; x += 2) pts.push([E.x + x, y0 - A * f((x / DX) * S.sh / TP)]);
+  ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.shadowColor = couleur; ctx.shadowBlur = 8; ctx.strokeStyle = couleur; ctx.lineWidth = 2.4;
+  ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke();
+  ctx.shadowBlur = 0; ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = .9; ctx.stroke();
+  if (avance < 1) { const [x, y] = pts[pts.length - 1]; ctx.fillStyle = '#ecfeff'; ctx.beginPath(); ctx.arc(x, y, 3.2, 0, Math.PI * 2); ctx.fill(); }   // le spot
+  ctx.restore();
+}
+
+function dessiner(c) {
+  c.direct(() => {
+    const ctx = c.ctx, b1 = balayage(0.4, 2.8), b2 = balayage(3.2, 5.5);
+    peindreEcran(ctx);
+    peindreDiapason(ctx, 90, 120, S.running && S.t > 0.3 && S.t < 3);
+    peindreGuitare(ctx, 92, 296);
+    peindreMicro(ctx, 186, 118); peindreMicro(ctx, 186, 280);
+    c.texte('diapason : voie 1', 110, 214, { couleur: 'cyan', taille: 16, align: 'center' });
+    c.texte('guitare : voie 2', 110, 372, { couleur: 'orange', taille: 16, align: 'center' });
+    c.repere('diapason', 50, 60, 90, 160, 'le diapason');
+    c.repere('guitare', 30, 200, 120, 200, 'la guitare');
+    trace(ctx, sin1, Y1, b1, '#22d3ee');
+    trace(ctx, guit, Y2, b2, '#fb923c');
+    c.repere('ecran', E.x, E.y, E.w, E.h, 'l’écran de l’oscilloscope');
+    c.repere('voie_1', E.x, E.y, E.w, E.h / 2, 'voie 1 : le son du diapason');
+    c.repere('voie_2', E.x, E.y + E.h / 2, E.w, E.h / 2, 'voie 2 : le son de la guitare');
+    // Le bouton de la sensibilité horizontale, sous l'écran (toucher : la valeur suivante).
+    c.rect(E.x + E.w - 190, E.y + E.h + 18, 190, 34, { couleur: 'jaune', largeur: 1.6, fond: 'jaune', fondAlpha: .08, duree: 0 });
+    c.texte(`S_H = ${fr(S.sh, 2).replace(/0$/, '')} ms/div`, E.x + E.w - 95, E.y + E.h + 42, { couleur: 'jaune', taille: 17, align: 'center' });
+    c.repere('sensibilite', E.x + E.w - 190, E.y + E.h + 18, 190, 34, 'la sensibilité horizontale');
+    if (vu('diapason')) c.texte('sinusoïde', E.x + E.w - 8, Y1 - A - 8, { couleur: 'cyan', taille: 16, align: 'right' });
+    if (vu('guitare')) c.texte('pas une sinusoïde, mais elle se répète', E.x + E.w - 8, Y2 - A - 14, { couleur: 'orange', taille: 16, align: 'right' });
+    const p = nDiv() * DX;                                 // largeur d'un motif (px)
+    if (vu('motifs')) {
+      for (let k = 0; k < 2 && (k + 1) * p <= E.w + 1; k++) {
+        ctx.save(); ctx.fillStyle = k ? 'rgba(250,204,21,.10)' : 'rgba(250,204,21,.18)'; ctx.fillRect(E.x + k * p, Y2 - A - 6, p, 2 * A + 12); ctx.restore();
+      }
+      c.texte('un motif', E.x + Math.min(p, E.w) / 2, Y2 - A - 12, { couleur: 'jaune', taille: 16, align: 'center' });
+      c.repere('motif', E.x, Y2 - A - 6, Math.min(p, E.w), 2 * A + 12, 'un motif : il se répète, identique');
+    }
+    if (vu('divisions')) {
+      const n = Math.round(nDiv());
+      for (let k = 0; k <= Math.min(n, E.nx); k++) c.ligne(E.x + k * DX, E.y + 4, E.x + k * DX, E.y + E.h - 4, { couleur: 'jaune', largeur: k === 0 || k === n ? 2 : .8, duree: 0 });
+      for (let k = 1; k <= Math.min(n, E.nx); k++) c.texte(String(k), E.x + (k - .5) * DX, E.y + E.h - 10, { couleur: 'jaune', taille: 16, align: 'center' });
+      c.repere('divisions', E.x, E.y, Math.min(n, E.nx) * DX, E.h, `${n} divisions pour un motif`);
+    }
+    if (vu('calcul')) {
+      const n = Math.round(nDiv());
+      c.texte(`T = ${n} × ${fr(S.sh, 2).replace(/0$/, '')} ms = ${TP} ms`, E.x, E.y + E.h + 42, { couleur: 'vert', taille: 20 });
+      c.repere('calcul', E.x, E.y + E.h + 20, 260, 30, 'T = nombre de divisions × S_H');
+    }
+  });
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(31); dessiner(c); return c.fin(); });
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(DUREE, S.t + dt);
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.jusqua = null; S.running = false; $('run').textContent = 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || 'instant choisi') + '.'); pont.noter('pause'); pont.emettre();
+    return true;
+  }
+  if (S.t >= DUREE) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), `Un motif = ${Math.round(nDiv())} divisions : T = ${TP} ms, pour les deux sons.`, 'good'); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function playUntil(p) {
+  const nom = p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-3) S.t = 0;
+  S.jusqua = Math.min(DUREE, Math.max(0.01, cible)); S.motif = nom ? MOTIFS[nom] : '';
+  S.running = true; S.fait = false; $('run').textContent = 'Pause'; scene.sale = true;
+  pont.noter('play_until', { moment: nom }); pont.emettre();
+}
+function start() { S.jusqua = null; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Le diapason sonne…'); pont.noter('start'); pont.emettre(); }
+function pause() { if (!S.running) return; S.jusqua = null; S.running = false; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait) return start(); S.running = true; $('run').textContent = 'Pause'; pont.noter('resume'); pont.emettre(); }
+function reset() { S.t = 0; S.running = false; S.fait = false; S.jusqua = null; scene.sale = true; $('run').textContent = 'Lancer'; bulle($('feedback'), 'Prêt.'); pont.emettre(); }
+function setTime(p) { const t = +p.time_s; if (!Number.isFinite(t)) return; S.running = false; S.jusqua = null; S.t = Math.min(DUREE, Math.max(0, t)); S.fait = S.t >= DUREE; scene.sale = true; pont.emettre(); }
+function setParameters(p) {
+  if ([0.25, 0.5, 1].includes(+p.sh_ms)) S.sh = +p.sh_ms;
+  scene.sale = true; pont.noter('set_parameters', { sh_ms: S.sh }); pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : (S.t > 0 && !S.fait) ? resume() : start());
+canvas.addEventListener('pointerdown', (e) => {
+  const r = canvas.getBoundingClientRect(), [x, y] = scene.local(e.clientX - r.left, e.clientY - r.top);
+  if (x > E.x + E.w - 200 && x < E.x + E.w + 10 && y > E.y + E.h + 10 && y < E.y + E.h + 60) {
+    const v = [0.25, 0.5, 1], s = v[(v.indexOf(S.sh) + 1) % v.length]; setParameters({ sh_ms: s });
+    bulle($('feedback'), `Sensibilité ${fr(s, 2).replace(/0$/, '')} ms/div : un motif couvre ${Math.round(TP / s)} divisions, T reste ${TP} ms.`);
+  }
+});
+function ceQuiSeVoit() {
+  const m = [`Un écran d’oscilloscope (10 × 6 divisions), sensibilité horizontale ${fr(S.sh, 2)} ms/div. À gauche, un diapason et une guitare peints, chacun devant un micro.`];
+  const b1 = balayage(0.4, 2.8), b2 = balayage(3.2, 5.5);
+  if (b1 > 0 && b1 < 1) m.push('Le spot trace la voie 1 (le diapason).');
+  if (b1 >= 1) m.push('Voie 1 (cyan) : une sinusoïde.');
+  if (b2 > 0 && b2 < 1) m.push('Le spot trace la voie 2 (la guitare).');
+  if (b2 >= 1) m.push('Voie 2 (orange) : un motif qui se répète, qui n’est pas une sinusoïde.');
+  if (vu('motifs')) m.push('Deux motifs voisins de la voie 2 sont colorés en jaune.');
+  if (vu('divisions')) m.push(`Les divisions d’un motif sont numérotées : ${Math.round(nDiv())}.`);
+  if (vu('calcul')) m.push(`Écrit : T = ${Math.round(nDiv())} × ${fr(S.sh, 2)} ms = ${TP} ms.`);
+  return m.join(' ');
+}
+window.Tableau.explication({ sons: [
+  { repere: 'voie_1', texte: 'Le diapason donne une sinusoïde : onde sinusoïdale.' },
+  { repere: 'voie_2', texte: 'La guitare donne un motif qui se répète : onde périodique, mais pas sinusoïdale.' },
+  { repere: 'motif', texte: 'T se lit entre deux motifs identiques voisins.' },
+  { repere: 'divisions', texte: 'On compte les divisions d’un motif, puis T = nombre de divisions × S_H.' },
+  { repere: 'sensibilite', texte: 'Si on change S_H, le nombre de divisions change, mais T reste la même.' },
+] });
+const commandes = ['start', 'pause', 'resume', 'reset', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'ondes_periodiques_sons', version: '1.0', title: 'Diapason et guitare à l’oscilloscope', variants: [{ id: 'sons', label: 'sons' }], commands: commandes,
+  command_schema: { play_until: { moment: Object.keys(MOTIFS).join(' | ') + ' (rejoue et se fige à cet instant clé)' }, set_parameters: { sh_ms: '0.25 | 0.5 | 1 (sensibilité horizontale en ms/div)' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Oscilloscope : le diapason donne une sinusoïde, la guitare un motif périodique non sinusoïdal ; même période T = 2 ms ; T = nombre de divisions × sensibilité horizontale.',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : (S.t > 0 ? 'paused' : 'idle'), ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'sons', moments: M, parameters: { sh_ms: S.sh }, divisions: Math.round(nDiv()), T_ms: TP, time_s: +S.t.toFixed(2) }),
+  progression: () => S.t / DUREE,
+  executer: (cmd, p) => ({ start, pause, resume, reset, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Lance : le diapason, puis la guitare.');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

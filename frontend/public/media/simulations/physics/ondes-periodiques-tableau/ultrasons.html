@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ultrasons et fente — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ondes.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un émetteur d'ultrasons, une plaque percée d'une fente de largeur a, un récepteur qu'on déplace sur un arc de cercle centré sur la fente, et l'oscilloscope qui montre le signal reçu"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Les ultrasons se diffractent aussi (diapo `op_d4_ultrasons`, 18 novembre 2026 : la diapo n'avait aucun visuel).
+ * Émetteur d'ultrasons N = 40 kHz dans l'air (v = 340 m/s, λ = v/N = 8,5 mm), plaque percée d'une fente de largeur a
+ * (5 mm au départ), récepteur R sur un arc de cercle centré sur la fente, relié à un petit oscilloscope.
+ * Le signal reçu suit la figure de diffraction d'une fente (amplitude ∝ |sinc(π·a·sin φ/λ)|) : pour a < λ, R reçoit dans
+ * toutes les directions ; pour a ≫ λ, seulement près de l'axe. Deux poignées sur le dessin : le bord de la fente (a, de 2 à
+ * 30 mm) et le récepteur (angle φ, de −70° à 70°) ; set_parameters {a_mm, angle_deg, conclusions}.
+ * Instants : montage, recepteur_axe, recepteur_cote, lambda, comparaison.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const V = 340, N = 40e3, LAM = V / N * 1000;              // λ en mm (8,5)
+const PX = 3;                                             // px par mm sur le dessin
+const F = { x: 290, y: 230 }, R0 = 190;                   // centre de la fente, rayon de l'arc du récepteur
+const EM = { x: 70, y: 230 };
+const M = { montage: 1.0, recepteur_axe: 3.0, recepteur_cote: 6.0, lambda: 7.2, comparaison: 8.6 };
+const MOTIFS = { montage: 'l’émetteur, la fente de largeur a, le récepteur sur l’arc', recepteur_axe: 'le récepteur dans l’axe : il reçoit le signal',
+  recepteur_cote: 'le récepteur sort de l’axe : reçoit-il encore ?', lambda: 'λ = v/N = 8,5 mm', comparaison: 'a = 5 mm est plus petite que λ : diffraction' };
+const DUREE = 9.6;
+const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0, a: 5, phiManuel: null, conclusions: true };
+const vu = m => S.t >= M[m] - 1e-3;
+const rad = d => d * Math.PI / 180;
+/** Angle du récepteur (degrés) : dans l'axe, puis il glisse sur l'arc jusqu'à 50° (de 4,0 à 6,0 s), sauf réglage. */
+function phi() { if (S.phiManuel != null) return S.phiManuel; return S.t < 4 ? 0 : 50 * Math.min(1, (S.t - 4) / 2); }
+/** Amplitude reçue (0..1) : figure de diffraction d'une fente. */
+function ampl(phiDeg = phi()) { const u = Math.PI * S.a * Math.sin(rad(phiDeg)) / LAM; return Math.abs(u) < 1e-6 ? 1 : Math.abs(Math.sin(u) / u); }
+const posR = () => [F.x + R0 * Math.cos(rad(phi())), F.y - R0 * Math.sin(rad(phi()))];
+
+function peindreEmetteur(ctx, x, y) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(x - 24 + 4, y - 26 + 5, 48, 52);
+  const g = ctx.createLinearGradient(0, y - 26, 0, y + 26); g.addColorStop(0, '#94a3b8'); g.addColorStop(1, '#334155');
+  ctx.fillStyle = g; ctx.fillRect(x - 24, y - 26, 48, 52);
+  const c = ctx.createRadialGradient(x + 18, y - 4, 2, x + 22, y, 16); c.addColorStop(0, '#e2e8f0'); c.addColorStop(1, '#1f2937');
+  ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x + 22, y, 14, -Math.PI / 2, Math.PI / 2); ctx.fill();
+  ctx.restore();
+}
+function peindreRecepteur(ctx, x, y, a) {
+  ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(-6 + 3, -16 + 4, 34, 32);
+  const g = ctx.createLinearGradient(0, -16, 0, 16); g.addColorStop(0, '#fcd34d'); g.addColorStop(1, '#92400e');
+  ctx.fillStyle = g; ctx.fillRect(-6, -16, 34, 32);
+  ctx.fillStyle = '#1f2937'; ctx.beginPath(); ctx.arc(-6, 0, 11, Math.PI / 2, -Math.PI / 2); ctx.fill();
+  ctx.restore();
+}
+function peindrePlaque(ctx) {
+  const h = S.a * PX / 2;
+  ctx.save();
+  const g = ctx.createLinearGradient(F.x - 7, 0, F.x + 7, 0); g.addColorStop(0, '#475569'); g.addColorStop(.5, '#cbd5e1'); g.addColorStop(1, '#334155');
+  ctx.fillStyle = g; ctx.fillRect(F.x - 6, 60, 12, F.y - h - 60); ctx.fillRect(F.x - 6, F.y + h, 12, 400 - F.y - h);
+  ctx.restore();
+}
+function peindreOscillo(ctx, x, y, w, h, A) {
+  ctx.save();
+  ctx.fillStyle = '#3b434c'; ctx.fillRect(x - 8, y - 8, w + 16, h + 16);
+  const g = ctx.createRadialGradient(x + w / 2, y + h / 2, 5, x + w / 2, y + h / 2, w); g.addColorStop(0, '#12382a'); g.addColorStop(1, '#06180f');
+  ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = 'rgba(134,239,172,.16)'; ctx.lineWidth = 1;
+  for (let i = 1; i < 8; i++) { ctx.beginPath(); ctx.moveTo(x + i * w / 8, y); ctx.lineTo(x + i * w / 8, y + h); ctx.stroke(); }
+  for (let j = 1; j < 4; j++) { ctx.beginPath(); ctx.moveTo(x, y + j * h / 4); ctx.lineTo(x + w, y + j * h / 4); ctx.stroke(); }
+  ctx.shadowColor = '#facc15'; ctx.shadowBlur = 8; ctx.strokeStyle = '#facc15'; ctx.lineWidth = 2.2; ctx.beginPath();
+  for (let k = 0; k <= w; k += 2) { const yy = y + h / 2 - A * (h * 0.42) * Math.sin(2 * Math.PI * k / (w / 4)); k ? ctx.lineTo(x + k, yy) : ctx.moveTo(x + k, yy); }
+  ctx.stroke(); ctx.restore();
+}
+
+function dessiner(c) {
+  c.direct(() => {
+    const ctx = c.ctx, t = S.t, lamPx = LAM * PX, actif = t >= 0.4;
+    // Ondes incidentes (fronts rectilignes) entre l'émetteur et la plaque, puis ondes après la fente.
+    if (actif) {
+      const dec = (t * 28) % lamPx;
+      ctx.save();
+      for (let x = EM.x + 40 + dec; x < F.x - 8; x += lamPx) { ctx.strokeStyle = 'rgba(250,204,21,.55)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x, F.y - 70); ctx.lineTo(x, F.y + 70); ctx.stroke(); }
+      // Après la fente : arcs centrés sur la fente ; leur éclat suit l'amplitude dans chaque direction.
+      for (let r = dec + 6; r < R0 + 40; r += lamPx) {
+        for (let d = -88; d < 88; d += 4) {
+          const A = ampl(d + 2); if (A < 0.04) continue;
+          ctx.strokeStyle = `rgba(250,204,21,${(0.85 * Math.pow(A, 0.6) * (1 - r / (R0 + 70))).toFixed(3)})`; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(F.x, F.y, r, -rad(d + 4), -rad(d), false); ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+    peindreEmetteur(ctx, EM.x, EM.y);
+    peindrePlaque(ctx);
+    c.repere('emetteur', EM.x - 26, EM.y - 30, 70, 60, 'l’émetteur d’ultrasons (40 kHz)');
+    c.repere('fente', F.x - 14, F.y - 40, 28, 80, 'la fente de largeur a');
+    c.texte('émetteur', EM.x, EM.y + 52, { couleur: 'faible', taille: 15, align: 'center' });
+    c.texte('N = 40 kHz', EM.x, EM.y - 40, { couleur: 'cyan', taille: 16, align: 'center' });
+    c.texte(`a = ${fr(S.a, 0)} mm`, F.x - 12, 50, { couleur: 'orange', taille: 17, align: 'right' });
+    // L'arc où l'on promène le récepteur.
+    if (vu('montage') || S.phiManuel != null) {
+      ctx.save(); ctx.setLineDash([5, 7]); ctx.strokeStyle = 'rgba(226,232,240,.35)'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(F.x, F.y, R0, -rad(75), rad(75)); ctx.stroke(); ctx.restore();
+      ctx.save(); ctx.setLineDash([3, 6]); ctx.strokeStyle = 'rgba(226,232,240,.3)'; ctx.beginPath(); ctx.moveTo(EM.x + 30, F.y); ctx.lineTo(F.x + R0 + 30, F.y); ctx.stroke(); ctx.restore();
+      const [rx, ry] = posR();
+      peindreRecepteur(ctx, rx, ry, -rad(phi()));
+      c.texte('R', rx + 26, ry - 20, { couleur: 'jaune', taille: 18 });
+      c.repere('recepteur', rx - 20, ry - 22, 50, 44, 'le récepteur R, sur l’arc centré sur la fente');
+      if (Math.abs(phi()) > 2) c.texte(`φ = ${fr(Math.abs(phi()), 0)}°`, F.x + 70, F.y - 14, { couleur: 'faible', taille: 15 });
+      const A = actif ? ampl() : 0;
+      peindreOscillo(ctx, 590, 70, 150, 92, A);
+      c.texte('signal reçu par R', 665, 186, { couleur: 'jaune', taille: 15, align: 'center' });
+      c.texte(A > 0.25 ? 'R reçoit le signal' : 'R ne reçoit presque rien', 665, 210, { couleur: A > 0.25 ? 'vert' : 'rose', taille: 16, align: 'center' });
+      c.repere('oscillo', 582, 62, 166, 156, 'l’oscilloscope : le signal reçu par R');
+    }
+    if (vu('lambda')) {
+      c.texte(`λ = ⟦v|N⟧ = ⟦340|40 × 10³⟧ = 8,5 mm`, 470, 300, { couleur: 'cyan', taille: 20 });
+      c.repere('lambda', 460, 270, 290, 54, 'λ = v/N = 8,5 mm');
+    }
+    if (vu('comparaison') && S.conclusions) {
+      const dif = S.a <= LAM * 1.6;
+      c.texte(`a = ${fr(S.a, 0)} mm ${S.a < LAM ? '<' : S.a > LAM ? '>' : '='} λ = 8,5 mm`, 470, 352, { couleur: 'orange', taille: 19 });
+      c.texte(dif ? '→ diffraction : R reçoit dans toutes les directions' : '→ l’onde passe presque tout droit', 470, 384, { couleur: dif ? 'vert' : 'rose', taille: 17, max: 290 });
+      c.repere('ondes_diffractees', F.x, F.y - R0, R0, 2 * R0, 'les ondes après la fente');
+      c.repere('comparaison', 460, 330, 290, 64, 'on compare a et λ');
+    }
+  });
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(37); dessiner(c); return c.fin(); });
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(DUREE, S.t + dt);
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.jusqua = null; S.running = false; $('run').textContent = 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || 'instant choisi') + '.'); pont.noter('pause'); pont.emettre();
+    return true;
+  }
+  if (S.t >= DUREE) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), 'Tire le bord de la fente ou le récepteur R : compare a et λ.', 'good'); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function playUntil(p) {
+  const nom = p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-3) { S.t = 0; S.phiManuel = null; }
+  S.jusqua = Math.min(DUREE, Math.max(0.01, cible)); S.motif = nom ? MOTIFS[nom] : '';
+  S.running = true; S.fait = false; $('run').textContent = 'Pause';
+  pont.noter('play_until', { moment: nom }); pont.emettre();
+}
+function start() { S.jusqua = null; S.t = 0; S.phiManuel = null; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'L’émetteur envoie des ultrasons…'); pont.noter('start'); pont.emettre(); }
+function pause() { if (!S.running) return; S.jusqua = null; S.running = false; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait) return start(); S.running = true; $('run').textContent = 'Pause'; pont.noter('resume'); pont.emettre(); }
+function reset() { scene.sale = true; S.t = 0; S.running = false; S.fait = false; S.jusqua = null; S.phiManuel = null; S.a = 5; $('run').textContent = 'Lancer'; bulle($('feedback'), 'Prêt.'); pont.emettre(); }
+function setTime(p) { const t = +p.time_s; if (!Number.isFinite(t)) return; scene.sale = true; S.running = false; S.jusqua = null; S.t = Math.min(DUREE, Math.max(0, t)); S.fait = S.t >= DUREE; pont.emettre(); }
+function setParameters(p) {
+  scene.sale = true;
+  if (p.a_mm != null && Number.isFinite(+p.a_mm)) S.a = Math.min(30, Math.max(2, Math.round(+p.a_mm)));
+  if (p.angle_deg != null && Number.isFinite(+p.angle_deg)) { S.phiManuel = Math.min(70, Math.max(-70, Math.round(+p.angle_deg))); if (S.t < M.montage) S.t = M.montage; }
+  if (p.conclusions != null) S.conclusions = p.conclusions !== false && p.conclusions !== 'false';
+  pont.noter('set_parameters', { a_mm: S.a, angle_deg: Math.round(phi()), conclusions: S.conclusions }); pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : (S.t > 0 && !S.fait) ? resume() : start());
+window.Tableau.glisser(canvas, {
+  toucher: (px, py) => {
+    const [x, y] = scene.local(px, py), [rx, ry] = posR();
+    if (Math.hypot(x - rx, y - ry) < 30 && (vu('montage') || S.phiManuel != null)) return 'recepteur';
+    return Math.abs(x - F.x) < 18 && Math.abs(y - F.y) < S.a * PX / 2 + 40 ? 'fente' : null;
+  },
+  bouger: (id, px, py) => {
+    const [x, y] = scene.local(px, py);
+    if (id === 'fente') setParameters({ a_mm: 2 * Math.abs(y - F.y) / PX });
+    else setParameters({ angle_deg: Math.atan2(F.y - y, Math.max(1, x - F.x)) * 180 / Math.PI });
+  },
+  lacher: () => bulle($('feedback'), `a = ${fr(S.a, 0)} mm, λ = 8,5 mm, R à ${fr(Math.abs(phi()), 0)}° : ${ampl() > 0.25 ? 'R reçoit le signal.' : 'R ne reçoit presque rien.'}`),
+});
+function ceQuiSeVoit() {
+  const A = ampl(), m = [`Un émetteur d’ultrasons (40 kHz), une plaque percée d’une fente de largeur a = ${fr(S.a, 0)} mm, λ = 8,5 mm.`];
+  if (S.t > 0.4) m.push(`Des fronts rectilignes arrivent sur la fente ; après elle, des arcs centrés sur la fente ${S.a <= LAM * 1.6 ? 'qui partent dans toutes les directions' : 'surtout dans l’axe'}.`);
+  if (vu('montage') || S.phiManuel != null) m.push(`Le récepteur R est sur l’arc, à ${fr(Math.abs(phi()), 0)}° de l’axe ; l’oscilloscope montre ${A > 0.25 ? 'un signal net' : 'presque rien'}.`);
+  if (vu('lambda')) m.push('Écrit : λ = v/N = 340/(40 × 10³) = 8,5 mm.');
+  if (vu('comparaison') && S.conclusions) m.push(`Écrit : a = ${fr(S.a, 0)} mm comparée à λ = 8,5 mm, ${S.a <= LAM * 1.6 ? 'diffraction' : 'l’onde passe presque tout droit'}.`);
+  return m.join(' ');
+}
+window.Tableau.explication({ ultrasons: [
+  { repere: 'fente', texte: 'La fente a une largeur a comparable à λ.' },
+  { repere: 'recepteur', texte: 'On déplace le récepteur sur un arc centré sur la fente.' },
+  { repere: 'oscillo', texte: 'Hors de l’axe, il reçoit encore le signal : l’onde est diffractée.' },
+  { repere: 'comparaison', texte: 'Diffraction nette quand a est de l’ordre de λ ou plus petite.' },
+] });
+const commandes = ['start', 'pause', 'resume', 'reset', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'ondes_periodiques_ultrasons', version: '1.0', title: 'Ultrasons et fente', variants: [{ id: 'ultrasons', label: 'ultrasons' }], commands: commandes,
+  command_schema: { play_until: { moment: Object.keys(MOTIFS).join(' | ') + ' (rejoue et se fige à cet instant clé)' }, set_parameters: { a_mm: '2..30 (largeur de la fente, mm)', angle_deg: '-70..70 (position du récepteur sur l’arc)', conclusions: 'true | false' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Ultrasons de 40 kHz dans l’air, λ = v/N = 8,5 mm ; une fente de largeur a ; un récepteur sur un arc centré sur la fente : pour a ≤ λ il reçoit dans toutes les directions (diffraction).',
+  etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : (S.t > 0 ? 'paused' : 'idle'), ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'ultrasons', moments: M, parameters: { a_mm: S.a, angle_deg: Math.round(phi()), conclusions: S.conclusions }, amplitude_recue: +ampl().toFixed(2), time_s: +S.t.toFixed(2) }),
+  progression: () => S.t / DUREE,
+  executer: (cmd, p) => ({ start, pause, resume, reset, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+bulle($('feedback'), 'Lance : l’émetteur envoie des ultrasons vers la fente.');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
