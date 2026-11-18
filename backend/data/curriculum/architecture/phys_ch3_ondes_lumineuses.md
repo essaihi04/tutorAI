@@ -140,14 +140,16 @@ mais la mettre avec le national aurait donné une séance de 11 diapositives, do
 | `ol_c5_cuve` après `ol_n3_resserre` (partie VII), voix réécrite, simulation `&indice=0` | Plus de relation ni de mot affirmés avant leur preuve ; le phénomène vient juste après ce qui l'explique. |
 | `diffraction.html` : réglage `indice=0` pour la vue cuve | La simulation ne doit pas écrire ce que la voix ne dit pas encore. Par défaut rien ne change (`ol_n6_cuve` et le cours en ligne). |
 | Blocs recoupés : courbes en deux blocs (`ol_s3_b2`, `ol_s3_b2b`), `ol_n1` avec le milieu, l'indice séparé du prisme, la dispersion en deux blocs (`ol_s4_b3`, `ol_s4_b4`) ; 7 séances | Au plus quatre diapositives et une idée par bloc. Ids des anciens blocs gardés. |
+| Explications écrites de `ol_l6_isoler`, `ol_c3_rapport`, `ol_g3_pente` sans consigne finale | Une explication n'invite jamais à un exercice absent du tableau ; la voix ne le disait pas. |
 | Réaction écrite de `ol_c2b_en_bas` : « lambda » → λ, « L = 2 lambda D/a » → L = 2λD/a | Lettres grecques et fraction à l'écrit (`verifier_formules.py`). |
 
 ## Ce qui reste, et ce qui n'a pas été fait
 
-- Plusieurs voix finissent par une consigne sans question au tableau (« isole λ » `ol_l6`, « calcule λ₂ » `ol_c3`,
-  « calcule k en mètre carré » `ol_g3`). La règle dit qu'une voix n'invite jamais à un exercice absent du
-  tableau. Les corriger demande de réécrire ces voix (3 pistes) ou d'ajouter des questions avec leurs réactions. Ce
-  n'est pas fait ici : c'est noté pour la prochaine passe de voix.
+- Trois explications écrites finissaient par une consigne sans question au tableau (« Isole lambda. » `ol_l6_isoler`,
+  « … calcule lambda deux. » `ol_c3_rapport`, « … calcule k en mètre carré. » `ol_g3_pente`). Ces phrases n'étaient que
+  dans `speech_text.fr` (« 📖 Explication écrite ») : la voix enregistrée (`speech_text.mixed`) ne les dit pas. **Corrigé** :
+  la consigne est retirée du texte écrit, qui suit maintenant ce que dit la voix ; l'écran donne déjà le résultat
+  (λ₂ ≈ 730 nm, k = 2,6·10⁻⁶ m², les quatre formes isolées). Aucune piste à refaire.
 - `ol_l8_ordre_grandeur` utilise le domaine visible (400–800 nm) avant la partie VI qui l'enseigne. Il est dit comme
   valeur repère avec le spectre animé (`spectre.html`), et repris en `ol_r4_spectre`. C'est gardé : c'est la
   vérification que 8 profs sur 10 font dès le premier calcul de λ.
