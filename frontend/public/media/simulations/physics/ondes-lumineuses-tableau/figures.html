@@ -1005,6 +1005,11 @@ scene.avancer = dt => {
 };
 function calculer() { if (M.fin === undefined) { const t = S.tw; S.tw = 1e6; dessiner(craie); S.tw = t; scene.sale = true; } }
 function start() { S.tw = 0; S.jusqua = null; S.motif = ''; S.running = true; S.pause = false; S.fait = false; scene.sale = true; etiquette(); bulle($('feedback'), ''); pont.noter('start', { figure: fig }); pont.emettre(); }
+// Diapositive pilotée (professeur 39) : `reset` FIGE la scène — sur ?depart=<moment> (tout ce qui précède déjà
+// écrit) ou sur zéro — et rien ne court seul ; la voix avance ensuite par play_until. Avant, reset = start.
+const DEPART = new URLSearchParams(location.search).get('depart');
+let FIGE = false;
+function reset() { calculer(); FIGE = true; S.tw = DEPART && M[DEPART] !== undefined ? M[DEPART] : 0; S.jusqua = null; S.motif = ''; S.running = false; S.pause = true; S.fait = false; scene.sale = true; etiquette(); bulle($('feedback'), ''); pont.noter('reset', { time_s: +S.tw.toFixed(2) }); pont.emettre(); }
 function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); bulle($('feedback'), 'Pause.'); pont.noter('pause'); pont.emettre(); }
 function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); bulle($('feedback'), ''); pont.noter('resume'); pont.emettre(); }
 function playUntil(p) {
@@ -1049,8 +1054,9 @@ const pont = protocole({ id: config.id, commandes, config,
     time_s: +S.tw.toFixed(2), parameters: { fig },
     moments: Object.fromEntries(etapes().filter(n => M[n] !== undefined).map(n => [n, +M[n].toFixed(2)])), etapes_ecrites: etapes().filter(n => vu(n)) }),
   progression: () => (S.fait ? 1 : 0),
-  executer: (cmd, p) => ({ start, reset: start, pause, resume, play_until: () => playUntil(p), set_time: () => setTime(p), set_parameters: () => setParameters(p) })[cmd]?.() });
+  executer: (cmd, p) => ({ start, reset, pause, resume, play_until: () => playUntil(p), set_time: () => setTime(p), set_parameters: () => setParameters(p) })[cmd]?.() });
 etiquette();
+if (DEPART) setTimeout(() => { if (!FIGE) reset(); }, 0);
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>
 </body></html>

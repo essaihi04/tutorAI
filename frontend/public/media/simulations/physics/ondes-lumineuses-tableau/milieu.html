@@ -417,6 +417,11 @@ function start() {
   S.t = 0; S.jusqua = null; S.motif = ''; S.ecrit = {}; S.running = true; S.pause = false; S.fait = false; etiquette();
   bulle($('feedback'), 'Le laser s’allume… (mouvement ralenti énormément)'); pont.noter('start', { vue, n: S.n, lambda0_nm: S.lam0 }); pont.emettre();
 }
+// Diapositive pilotée (professeur 39) : `reset` FIGE la scène — sur ?depart=<moment> (tout ce qui précède déjà
+// écrit) ou sur zéro — et rien ne court seul ; la voix avance ensuite par play_until. Avant, reset = start.
+const DEPART = new URLSearchParams(location.search).get('depart');
+let FIGE = false;
+function reset() { const M = moments(); FIGE = true; S.t = DEPART && M[DEPART] !== undefined ? M[DEPART] : 0; S.jusqua = null; S.motif = ''; S.ecrit = {}; S.running = false; S.pause = true; S.fait = false; scene.sale = true; etiquette(); bulle($('feedback'), 'Observe… (mouvement ralenti énormément)'); pont.noter('reset', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
 function pause() { if (!S.running) return; S.running = false; S.pause = true; S.jusqua = null; etiquette(); bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
 function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
 function playUntil(p) {
@@ -538,9 +543,9 @@ const pont = protocole({ id: config.id, commandes, config,
     parameters: DEUX() ? { vue, radiations: [{ couleur: 'rouge', lambda0_nm: 767, n: 1.62 }, { couleur: 'jaune', lambda0_nm: 589, n: 1.66 }] } : { vue, n: S.n, lambda0_nm: S.lam0 },
     valeurs: mesure() }),
   progression: () => (S.fait ? 1 : 0),
-  executer: (cmd, p) => (achever(), { start, reset: start, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+  executer: (cmd, p) => (achever(), { start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
 bulle($('feedback'), 'Le laser va s’allumer…');
-setTimeout(() => { if (!S.running && !S.pause && !S.fait && S.t === 0) start(); }, 1500);
+setTimeout(() => { if (DEPART) { if (!FIGE && !S.running) reset(); } else if (!FIGE && !S.running && !S.pause && !S.fait && S.t === 0) start(); }, 1500);
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>
 </body></html>

@@ -241,3 +241,22 @@ consigne dans la copie en attente : rien à faire.
 - Rejouer les diapositives dans le lecteur avec leur voix (`verifier-pointage-navigateur.mjs`) : quand les voix
   existeront. Sans durée de piste, le contrôle de pointage signale des gestes « trop serrés » (toutes les phrases à
   t = 0) ; avec une durée estimée, aucun écart sur les diapositives nationales.
+
+## Défauts anciens corrigés (18 novembre 2026, après la 2ᵉ passe)
+- **50 diapositives démarraient en `start`** (49 pilotées par `play_until` : la scène courait seule, devant ou derrière
+  la voix ; plus `ol_t4_relation`). Elles passent en `reset`. Dans `diffraction`, `figures`, `rappels`, `ecart-angulaire`,
+  `courbe`, `spectre`, `prisme-dispersion` et `milieu`, `reset` était un autre nom de `start` : il fige maintenant la
+  scène, sur zéro ou sur `?depart=<moment>`, et `play_until` repart de là. `indice`, `bilan` et `national` figeaient déjà.
+- **Huit scènes reprises** sans rechargement (même adresse que la diapositive d'avant) s'ouvrent figées, chaque moment
+  de départ avant le premier `play_until` de la diapositive : `ol_d2_fente_fine` (`point_sur_ecran`), `ol_t4_relation`
+  (`mesure_L`, sans `play_until` : la mesure reste à l'écran), `ol_c2_haut_bas` (`tache_centrale`), `ol_c2b_en_bas`
+  (`extinctions`), `ol_g4_identifier` (`droite`), `ol_n2_frequence` (`front_entre`), `ol_n3_resserre` (`onde_dans_air`),
+  `ol_p2_violet` (`spectre_sur_ecran`). En plus, la vue triangle d'`ecart-angulaire` reprend où la diapositive d'avant
+  s'est arrêtée au lieu de tout réécrire depuis zéro : `ol_l3_tan` (`triangle_isole`), `ol_l5_egalite` (`petit_angle`).
+- Fractions écrites à plat dans le cahier et les légendes (7) : `k = (26 mm)/(10 mm⁻¹)`, `k = (4 cm)/(200 cm)`,
+  `θ = (6,5·10⁻⁷)/(1,0·10⁻⁴)`. La voix ne change pas.
+- Le cours en ligne ne change pas : sans `?depart=` les pages démarrent comme avant, et aucune diapositive en ligne n'envoie
+  `reset` à ces pages (seul « réécouter » l'envoie, suivi de `start`). Vérifié dans Chromium (figée, puis arrêtée sur le
+  moment suivant, sans erreur).
+- Vérificateur de pointage, copie en attente : 0 « introuvable », 0 DEPART, 0 IFRAME (avant : 0, 49, 8) ; cours en
+  ligne inchangé (52 DEPART, 8 IFRAME, 3 GESTE avant comme après). Vérificateur de formules : 0 (avant : 7).
