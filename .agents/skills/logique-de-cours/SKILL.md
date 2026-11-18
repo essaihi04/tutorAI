@@ -31,10 +31,14 @@ encore plus tard, pas à sa beauté.
    d'un paramètre, une suite d'étapes → petite animation au tableau que l'élève manipule (≤ 2 curseurs), pas un
    tableau à lire ; un tableau de données naît de l'animation qui produit ses valeurs (skill professeur, règles 28 et
    35). Un vivant ou un objet réel est peint en couleur, réaliste (règle 32).
-   **Toute activité dont le résultat change** (dans le temps, d'un compartiment à l'autre, avant / après, avec / sans)
-   **est une animation, jamais un tableau de résultats suivi d'encadrés de conclusion en texte** : ce qui bouge se
-   voit bouger, chaque temps est un moment arrêté, la conclusion s'écrit après la réponse de l'élève, le tableau vient
-   en dernier (skill professeur, règle 42 ; exemple corrigé le 18/11 : le glucose marqué au ¹⁴C de SVT ch1).
+   **Pour expliquer une activité dont le résultat change** (dans le temps, d'un compartiment à l'autre, avant /
+   après, avec / sans), **l'animation autant que possible**, pas un tableau de résultats suivi d'encadrés de texte :
+   ce qui bouge se voit bouger, chaque temps est un moment arrêté, la conclusion s'écrit après la réponse de l'élève.
+   **Mais pas « jamais de tableau »** : quand le bac donne ce genre de résultats en tableau, l'animation se change
+   ensuite en ce tableau, à la manière de l'examen, et l'élève apprend à le lire lui-même. **Combiner texte, tableau
+   et animation selon le besoin, avec une raison écrite** : le texte pour ce qui se dit une fois et se recopie,
+   l'animation pour ce qui change et doit se comprendre, le tableau pour ce que l'examen donne en tableau ou ce qui se
+   compare d'un coup d'œil (skill professeur, règle 42 ; exemple : le glucose marqué au ¹⁴C de SVT ch1, 18/11).
    Toujours vérifié à la taille d'un téléphone en paysage (~724 × 350) : rien sous la barre du lecteur.
 6. **Départ de zéro.** Les notions des années d'avant (mitose, mole, vecteur, dérivée…) sont enseignées au moment
    où elles servent, jamais supposées connues ; chaque notion difficile est expliquée deux fois, de deux façons.
