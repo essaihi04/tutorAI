@@ -1038,5 +1038,17 @@ window.CALCULS = {
     "t": "réciproque f⁻¹ définie sur J = ℝ"
    }
   ]
+ },
+ "c5b_parametre": {
+  "titre": "À toi : la valeur de m",
+  "_note": "Ajouté à la main (2e passe, 18 novembre 2026) : à reporter dans les sources du build (maths_build/limites_continuite/build.py).",
+  "lignes": [
+   {"t": "f(x) = x² + 1 si x ≤ 2 ;  f(x) = 3x + m si x > 2", "couleur": "cyan", "taille": 18, "moment": "enonce", "repere": "enonce", "label": "les deux branches"},
+   {"t": "f(2) = 2² + 1 = 5", "couleur": "jaune", "marge": "branche x ≤ 2", "moment": "image", "repere": "image", "label": "f(2) = 5"},
+   {"lim": "x → 2⁻", "t": "(x² + 1) = 5 = f(2)", "couleur": "blanc", "moment": "gauche", "repere": "gauche", "label": "la limite à gauche"},
+   {"lim": "x → 2⁺", "t": "(3x + m) = 6 + m", "couleur": "blanc", "moment": "droite", "repere": "droite", "label": "la limite à droite"},
+   {"t": "continue en 2  ⇔  6 + m = 5", "couleur": "orange", "pause": 0.6, "moment": "condition", "repere": "condition", "label": "la condition"},
+   {"t": "m = 5 − 6 = −1", "couleur": "vert", "cadre": "vert", "moment": "resultat", "repere": "resultat", "label": "m = −1"}
+  ]
  }
 };
