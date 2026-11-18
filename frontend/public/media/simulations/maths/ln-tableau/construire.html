@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Construire la courbe pas à pas</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="La construction d’une courbe du national à la craie, pas à pas : asymptote, droite, points remarquables, tangentes, branche infinie, puis la courbe tracée"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/ln-tableau/large.js"></script>
+<script>
+/*
+ * Cours « Fonctions logarithmiques » (math_ch5_fonctions_ln), 2ᵉ passe (18 novembre 2026) : « construire la courbe »
+ * du national, joué pas à pas comme au tableau — chaque élément de la construction est placé à son moment, la courbe
+ * n’est tracée qu’à la fin, en suivant ce qui a été placé.
+ * Vues : ?vue=c19 (2019 N, f(x) = x + ½ − ln x + ½(ln x)²) ; moments repere, asymptote, delta, minimum, contact,
+ *        tangente_e, inflexion, branche, courbe ; repères asymptote, delta, minimum, contact, tangente_e, inflexion,
+ *        branche, courbe.
+ *        ?vue=c21 (2021 N, f(x) = 2x ln x − 2x, f(0) = 0) ; moments repere, origine, minimum, zero, droite, branche,
+ *        courbe ; repères origine, minimum, zero, droite, branche, courbe.
+ * La colonne de droite numérote les étapes (①, ②…) au moment où elles sont placées.
+ */
+const E = Math.E, E2 = E * E, E32 = Math.exp(1.5);
+const f1 = x => x + 0.5 - Math.log(x) + 0.5 * Math.log(x) ** 2;
+const f2 = x => (x <= 0 ? 0 : 2 * x * Math.log(x) - 2 * x);
+const OPT1 = { x0: 50, y0: 46, w: 380, h: 330, xmin: 0, xmax: 8.8, ymin: 0, ymax: 9.4,
+  gx: [[1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5'], [6, '6'], [7, '7'], [8, '8']],
+  gy: [[1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5'], [6, '6'], [7, '7'], [8, '8'], [9, '9']], nomx: 'x', nomy: 'y' };
+const OPT2 = { x0: 50, y0: 46, w: 380, h: 330, xmin: -0.4, xmax: 5.2, ymin: -2.6, ymax: 5.8,
+  gx: [[1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5']], gy: [[-2, '−2'], [-1, '−1'], [1, '1'], [2, '2'], [3, '3'], [4, '4'], [5, '5']], nomx: 'x', nomy: 'y' };
+const XR = 452;
+/* Tableau large : même disposition que etude.html (repère étiré, colonne de droite reportée et agrandie). */
+const LARGE = () => LnLarge.L >= 1000;
+const SOUS_TITRE = 66, sousTitre = o => (o.y0 >= SOUS_TITRE ? o : { ...o, y0: SOUS_TITRE, h: o.h - (SOUS_TITRE - o.y0) });
+const GW = (o, w = 680) => sousTitre(LARGE() ? { ...o, w: LnLarge.t(o.w, w) } : o);
+const Z = (c, x0, y0, k, nx, ny, fn) => LnLarge.colonne(c, x0, y0, LARGE() ? LnLarge.t(1, k) : 1, LARGE() ? LnLarge.t(x0, nx) : x0, LARGE() ? LnLarge.t(y0, ny) : y0, fn);
+/** Une ligne de la colonne de droite (étape numérotée), avec son repère. */
+const etape = (c, y, s, couleur, rep, label) => Z(c, XR - 8, 56, 1.42, 800, 52, () => {
+  c.texte(s, XR, y, { couleur, taille: 18, max: 296 });
+  if (rep) c.repere(rep, XR - 6, y - 20, Math.min(300, c.largeurTexte(s, 18) + 12), 28, label || s);
+});
+/** Un petit segment de tangente de pente m au point (a ; b), de demi-longueur d (unités du repère, en x). */
+const tangente = (c, G, a, b, m, d, couleur) => c.ligne(G.X(a - d), G.Y(b - m * d), G.X(a + d), G.Y(b + m * d), { couleur, largeur: 2.2 });
+
+MathsTableau.page({ net: true,
+  ajuster: !LnLarge.actif,
+  id: 'ln_construire', titre: 'Fonctions logarithmiques',
+  texte: 'Construction pas à pas des courbes de deux problèmes du national : 2019 (asymptote x = 0, (Δ) : y = x, minimum (1 ; 3/2), contact et tangente (Δ) en (e ; e), inflexion I(e² ; e² + ½), branche parabolique de direction (Δ), puis la courbe) et 2021 (O et sa demi-tangente verticale, minimum (1 ; −2), (e ; 0), (e^(3/2) ; e^(3/2)) sur y = x, branche parabolique de direction (Oy), puis la courbe)',
+  vues: {
+    c19: {
+      titre: 'Construire (C) pas à pas (2019)',
+      dessiner(c, K) {
+        LnLarge.ouvrir(c);
+        LnLarge.titre(c, K, 'Construire (C) pas à pas (2019)');
+        const G = K.axes(GW(OPT1, 640));
+        K.marque('repere');
+        c.pause(.3);
+        c.ligne(G.X(0), G.y0, G.X(0), G.y0 + G.h, { couleur: 'orange', largeur: 2, pointille: [7, 6] });
+        c.repere('asymptote', G.X(0) - 10, G.y0, 20, G.h, 'l’asymptote x = 0');
+        etape(c, 82, '① x = 0 : asymptote verticale', 'orange');
+        K.marque('asymptote');
+        c.pause(.3);
+        K.anime(1, p => K.courbePart(G, x => x, 0, 8.8, p, { couleur: 'jaune', largeur: 2 }));
+        c.texte('(Δ)', G.X(8.1) + 4, G.Y(8.1) + 24, { couleur: 'jaune', taille: 17 });
+        c.repere('delta', G.X(5) - 20, G.Y(5) - 20, 40, 40, '(Δ) : y = x');
+        etape(c, 114, '② (Δ) : y = x', 'jaune');
+        K.marque('delta');
+        c.pause(.3);
+        K.rond(G, 1, 1.5, true, 'blanc');
+        tangente(c, G, 1, 1.5, 0, 0.55, 'blanc');
+        c.texte('(1 ; ⟦3|2⟧)', G.X(1.6), G.Y(1.5) - 30, { couleur: 'blanc', taille: 15, align: 'center' });
+        c.repere('minimum', G.X(1) - 16, G.Y(1.5) - 16, 32, 32, 'le minimum (1 ; 3/2)');
+        etape(c, 146, '③ min (1 ; ⟦3|2⟧) : tangente horizontale', 'blanc');
+        K.marque('minimum');
+        c.pause(.3);
+        K.rond(G, E, E, true, 'vert');
+        c.texte('(e ; e)', G.X(E) + 12, G.Y(E) + 20, { couleur: 'vert', taille: 16 });
+        c.repere('contact', G.X(E) - 14, G.Y(E) - 14, 28, 28, 'le point (e ; e)');
+        etape(c, 186, '④ (C) touche (Δ) en (e ; e)', 'vert');
+        K.marque('contact');
+        c.pause(.3);
+        tangente(c, G, E, E, 1, 0.9, 'vert');
+        c.repere('tangente_e', G.X(E - 0.9), G.Y(E + 0.9), G.X(E + 0.9) - G.X(E - 0.9), G.Y(E - 0.9) - G.Y(E + 0.9), 'la tangente en (e ; e) : c’est (Δ)');
+        etape(c, 218, '⑤ f’(e) = 1 : (Δ) tangente en (e ; e)', 'vert');
+        K.marque('tangente_e');
+        c.pause(.3);
+        K.rond(G, E2, f1(E2), true, 'rose');
+        c.texte('I', G.X(E2) - 16, G.Y(f1(E2)) + 4, { couleur: 'rose', taille: 18 });
+        c.repere('inflexion', G.X(E2) - 14, G.Y(f1(E2)) - 14, 28, 28, 'le point d’inflexion I');
+        etape(c, 250, '⑥ I(e² ; e² + ½) : inflexion', 'rose');
+        K.marque('inflexion');
+        c.pause(.3);
+        c.fleche(G.X(7.6), G.Y(8.75), G.X(8.5), G.Y(9.75), { couleur: 'cyan', largeur: 2, tete: 9 });
+        c.repere('branche', G.X(7.5) - 6, G.Y(9.8) - 6, G.X(8.6) - G.X(7.5) + 12, G.Y(8.7) - G.Y(9.8) + 12, 'la branche parabolique');
+        etape(c, 282, '⑦ branche parabolique de direction (Δ)', 'cyan');
+        K.marque('branche');
+        c.pause(.3);
+        K.anime(1.8, p => K.courbePart(G, f1, 0.045, 8.55, p, { couleur: 'cyan' }));
+        c.texte('(C)', G.X(0.45), G.Y(5.2), { couleur: 'cyan', taille: 18 });
+        c.repere('courbe', G.x0, G.y0, G.w, G.h, 'la courbe (C)');
+        K.marque('courbe');
+      },
+      decrire: {
+        repere: 'Un repère, x de 0 à 8, y de 0 à 9.',
+        asymptote: 'La droite x = 0 en pointillés orange ; à droite « ① x = 0 : asymptote verticale ».',
+        delta: 'La droite (Δ) : y = x en jaune ; « ② (Δ) : y = x ».',
+        minimum: 'Le point (1 ; 3/2) en blanc avec un petit segment horizontal ; « ③ min (1 ; 3/2) : tangente horizontale ».',
+        contact: 'Le point (e ; e) en vert, sur (Δ) ; « ④ (C) touche (Δ) en (e ; e) ».',
+        tangente_e: 'Un segment vert le long de (Δ) en (e ; e) ; « ⑤ f′(e) = 1 : (Δ) tangente en (e ; e) ».',
+        inflexion: 'Le point I(e² ; e² + ½) en rose, vers (7,4 ; 7,9) ; « ⑥ I(e² ; e² + ½) : inflexion ».',
+        branche: 'Une flèche cyan en haut à droite, dans la direction de (Δ) ; « ⑦ branche parabolique de direction (Δ) ».',
+        courbe: 'La courbe (C) en cyan : descend du haut de l’axe des ordonnées jusqu’au minimum (1 ; 3/2), remonte au-dessus de (Δ), la touche en (e ; e), passe par I et monte vers la droite.',
+      },
+      motifs: { repere: 'le repère', asymptote: 'l’asymptote x = 0', delta: 'la droite (Δ)', minimum: 'le minimum', contact: 'le point (e ; e)', tangente_e: 'la tangente en (e ; e)', inflexion: 'le point d’inflexion', branche: 'la branche infinie', courbe: 'la courbe' },
+      explication: [
+        { repere: 'asymptote', texte: 'lim f(x) = +∞ en 0 à droite : x = 0 est asymptote verticale.' },
+        { repere: 'minimum', texte: 'f′(1) = 0 : tangente horizontale au minimum (1 ; 3/2).' },
+        { repere: 'contact', texte: 'f(x) − x = ½(ln x − 1)² s’annule en x = e : (C) touche (Δ) en (e ; e).' },
+        { repere: 'tangente_e', texte: 'f′(e) = (e − 1 + 1)/e = 1 : la tangente en (e ; e) a la pente de (Δ), c’est (Δ).' },
+        { repere: 'inflexion', texte: 'f″ s’annule en e² en changeant de signe : I(e² ; e² + ½).' },
+        { repere: 'branche', texte: 'f(x)/x → 1 et f(x) − x → +∞ : branche parabolique de direction (Δ).' },
+        { repere: 'courbe', texte: 'La courbe suit tout ce qui a été placé.' },
+      ],
+    },
+    c21: {
+      titre: 'Construire (C) pas à pas (2021)',
+      dessiner(c, K) {
+        LnLarge.ouvrir(c);
+        LnLarge.titre(c, K, 'Construire (C) pas à pas (2021)');
+        const G = K.axes(GW(OPT2, 640));
+        etape(c, 82, 'f(x) = 2x ln x − 2x ; f(0) = 0', 'blanc');
+        K.marque('repere');
+        c.pause(.3);
+        K.rond(G, 0, 0, true, 'blanc');
+        c.ligne(G.X(0), G.Y(0) - 26, G.X(0), G.Y(0) + 26, { couleur: 'blanc', largeur: 2.2 });
+        c.repere('origine', G.X(0) - 14, G.Y(0) - 28, 28, 56, 'O et la demi-tangente verticale');
+        etape(c, 114, '① O : demi-tangente verticale', 'blanc');
+        K.marque('origine');
+        c.pause(.3);
+        K.proj(G, 1, -2, { lx: '1', ly: '−2' });
+        K.rond(G, 1, -2, true, 'jaune');
+        tangente(c, G, 1, -2, 0, 0.45, 'jaune');
+        c.repere('minimum', G.X(1) - 16, G.Y(-2) - 16, 32, 32, 'le minimum (1 ; −2)');
+        etape(c, 146, '② min (1 ; −2) : tangente horizontale', 'jaune');
+        K.marque('minimum');
+        c.pause(.3);
+        K.rond(G, E, 0, true, 'vert');
+        c.texte('e', G.X(E) - 4, G.Y(0) - 10, { couleur: 'vert', taille: 17 });
+        c.repere('zero', G.X(E) - 14, G.Y(0) - 14, 28, 28, 'le point (e ; 0)');
+        etape(c, 178, '③ f(e) = 0 : (C) coupe l’axe en e', 'vert');
+        K.marque('zero');
+        c.pause(.3);
+        K.anime(1, p => K.courbePart(G, x => x, -0.4, 5.15, p, { couleur: 'orange', largeur: 1.8 }));
+        c.texte('y = x', G.X(1.7) - 6, G.Y(1.7) - 10, { couleur: 'orange', taille: 16, align: 'right' });
+        K.rond(G, E32, E32, true, 'orange');
+        c.repere('droite', G.X(E32) - 14, G.Y(E32) - 14, 28, 28, 'le point (e^(3/2) ; e^(3/2))');
+        etape(c, 214, '④ f(x) = x ⇔ x = e^{3/2} ≈ 4,5', 'orange');
+        K.marque('droite');
+        c.pause(.3);
+        c.fleche(G.X(4.95), G.Y(4.3), G.X(5.05), G.Y(5.6), { couleur: 'cyan', largeur: 2, tete: 9 });
+        c.repere('branche', G.X(4.8), G.Y(5.7), G.X(5.2) - G.X(4.8), G.Y(4.2) - G.Y(5.7), 'la branche parabolique');
+        etape(c, 246, '⑤ branche parabolique de direction (Oy)', 'cyan');
+        K.marque('branche');
+        c.pause(.3);
+        K.anime(1.8, p => K.courbePart(G, f2, 0, 4.82, p, { couleur: 'cyan' }));
+        c.texte('(C)', G.X(3.6) + 10, G.Y(f2(3.6)) + 18, { couleur: 'cyan', taille: 18 });
+        c.repere('courbe', G.x0, G.y0, G.w, G.h, 'la courbe (C)');
+        K.marque('courbe');
+      },
+      decrire: {
+        repere: 'Un repère ; à droite « f(x) = 2x ln x − 2x ; f(0) = 0 ».',
+        origine: 'Le point O avec un petit trait vertical ; « ① O : demi-tangente verticale ».',
+        minimum: 'Le point (1 ; −2) en jaune avec ses pointillés et un petit segment horizontal ; « ② min (1 ; −2) : tangente horizontale ».',
+        zero: 'Le point (e ; 0) en vert sur l’axe ; « ③ f(e) = 0 : (C) coupe l’axe en e ».',
+        droite: 'La droite y = x en orange et le point (e^(3/2) ; e^(3/2)) ≈ (4,5 ; 4,5) ; « ④ f(x) = x ⇔ x = e^(3/2) ≈ 4,5 ».',
+        branche: 'Une flèche cyan presque verticale en haut à droite ; « ⑤ branche parabolique de direction (Oy) ».',
+        courbe: 'La courbe (C) en cyan : part de O verticalement, descend jusqu’à (1 ; −2), remonte, coupe l’axe en e, croise y = x en e^(3/2) et monte de plus en plus raide.',
+      },
+      motifs: { repere: 'le repère', origine: 'le point O', minimum: 'le minimum', zero: 'le point (e ; 0)', droite: 'la droite y = x', branche: 'la branche infinie', courbe: 'la courbe' },
+      explication: [
+        { repere: 'origine', texte: '(f(x) − f(0))/x = 2 ln x − 2 → −∞ : demi-tangente verticale en O.' },
+        { repere: 'minimum', texte: 'f′(x) = 2 ln x s’annule en 1 : minimum f(1) = −2.' },
+        { repere: 'zero', texte: 'f(x) = 0 ⇔ 2x(ln x − 1) = 0 ⇔ x = e.' },
+        { repere: 'droite', texte: 'f(x) = x ⇔ x(2 ln x − 3) = 0 ⇔ x = e^(3/2).' },
+        { repere: 'branche', texte: 'f(x)/x = 2 ln x − 2 → +∞ : branche parabolique de direction l’axe des ordonnées.' },
+        { repere: 'courbe', texte: 'La courbe suit tout ce qui a été placé.' },
+      ],
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

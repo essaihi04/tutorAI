@@ -1,6 +1,6 @@
 # Architecture — `math_ch5_fonctions_ln` (Fonction logarithme népérien, 2e Bac PC BIOF)
 
-Refonte de la logique du 18 novembre 2026 (skill `logique-de-cours`). Cours en ligne inchangé ; nouvelle version dans `backend/data/courses/en_attente/math_ch5_fonctions_ln.json` (partie de la version en attente, plus récente). Pistes à mettre en voix : `math_ch5_fonctions_ln_voix.json` (19 pistes).
+Refonte de la logique du 18 novembre 2026 (skill `logique-de-cours`). Cours en ligne inchangé ; nouvelle version dans `backend/data/courses/en_attente/math_ch5_fonctions_ln.json` (partie de la version en attente, plus récente). Pistes à mettre en voix : `math_ch5_fonctions_ln_voix.json` (51 pistes, dont 32 ajoutées et 4 mises à jour par la 2ᵉ passe). Légende supplémentaire du plan : ✎² réécrite et ＋² nouvelle à la 2ᵉ passe (§ 8).
 
 ## 1. La logique avant
 
@@ -78,7 +78,7 @@ Légende : ↕ déplacée (texte et voix gardés) · ✎ réécrite (voix à ref
 | # | Diapositive | Partie | Ce qu'elle apprend · élève | Pourquoi ici (source) |
 |---|---|---|---|---|
 |  | `ln_n1` La règle des puissances bute sur 1/x | I. La naissance de ln : la primitive de 1/x qui s'annule en 1 | — | Construire plutôt que donner : la règle xⁿ → xⁿ⁺¹/(n + 1) donne une division par zéro pour 1/x ; l'élève voit pourquoi il faut une fonction nouvelle. |
-|  | `ln_n2` 1/x a quand même des primitives | I. La naissance de ln : la primitive de 1/x qui s'annule en 1 | ❓ x ↦ 1/x est continue sur ]0 ; +∞[ : que peut-on en déduire ? · ✏️ Vrai ou faux ? | 1/x est continue, donc elle a des primitives (chapitre précédent) : la famille F + k se voit. Question : que peut-on déduire ? |
+| ✎² | `ln_n2` 1/x a quand même des primitives | I. La naissance de ln : la primitive de 1/x qui s'annule en 1 | ❓ x ↦ 1/x est continue sur ]0 ; +∞[ : que peut-on en déduire ? | 2ᵉ PASSE : la voix et la vue s'arrêtent sur la courbe continue (`inverse`) ; « continue ⇒ des primitives » (moment `existe`) et la famille ne sont plus montrés avant la réponse ; `variante` retirée (elle rejouait `existe` pendant la question). |
 
 **Bloc `ln_s1_b2` — ln 1 = 0, (ln x)′ = 1/x ; croissance et signe** · fin de bloc : cahier (4 lignes, 1 figure(s)), retrouver « Cahier fermé : écris ln 1 et la dérivée de ln. », exercice « La pente de la tangente à la courbe de ln au point d'abscisse 4 est : »
 
@@ -162,6 +162,7 @@ Légende : ↕ déplacée (texte et voix gardés) · ✎ réécrite (voix à ref
 |---|---|---|---|---|
 |  | `ln_q2` ln x = r ⇔ x = eʳ | V. Équations, inéquations, systèmes | — | ln x = r ⇔ x = eʳ sur un exemple, puis la règle. |
 |  | `ln_q3` Inéquation : ln garde le sens | V. Équations, inéquations, systèmes | — | Inéquation : ln garde le sens ; croiser avec le domaine. |
+| ＋² | `ln_q3_b` À toi : une inéquation avec deux ln | V. Équations, inéquations, systèmes | ❓ Résous ln(x − 2) ≤ ln(4 − x). | 2ᵉ PASSE (cas type inéquation) : conditions → règle ln a ≤ ln b ⇔ a ≤ b, vue `calculs.html?vue=q3b` arrêtée sur `regle` ; l'élève résout et croise avec le domaine. |
 |  | `ln_q4` Second degré en ln x : poser X = ln x | V. Équations, inéquations, systèmes | — | Second degré en ln x : poser X = ln x. |
 |  | `ln_q5` Produit nul avec ln (national 2021) | V. Équations, inéquations, systèmes | ❓ Résous dans ]0 ; +∞[ : 2x ln x − 2x = 0. · ✏️ National 2017 : résous dans ]0 ; +∞[ : (1 − 2/x) ln x = 0. | Produit nul (national 2021) : l'élève trie. |
 
@@ -171,6 +172,7 @@ Légende : ↕ déplacée (texte et voix gardés) · ✎ réécrite (voix à ref
 |---|---|---|---|---|
 |  | `ln_q6` Un système : changer d'inconnues | V. Équations, inéquations, systèmes | — | Système : changer d'inconnues (LN4). |
 |  | `ln_q7` Le plus petit entier n : passer au ln | V. Équations, inéquations, systèmes | — | Plus petit entier n (suites avec ln, 7 sujets) : diviser par un négatif. |
+| ＋² | `ln_q7_b` À toi : le plus petit entier n | V. Équations, inéquations, systèmes | ❓ Plus petit entier n tel que (1/3)ⁿ < 10⁻² | 2ᵉ PASSE (cas type plus petit n) : passer au ln, la puissance descend ; vue `calculs.html?vue=q7b` arrêtée sur `descendre`, avant la division par un négatif. |
 |  | `ln_l1` ln x → +∞, mais lentement | VI. Les limites de base | — | ln x → +∞ vu en reculant (10, 100, 1000) ; branche parabolique. |
 |  | `ln_l2` En 0 à droite : ln x → −∞, asymptote verticale | VI. Les limites de base | ❓ La courbe de ln coupe-t-elle l'axe des ordonnées ? · ✏️ lim_{x→0⁺} (x + ln x) = ? | En 0⁺ : asymptote verticale (7 sujets). |
 
@@ -200,11 +202,11 @@ Légende : ↕ déplacée (texte et voix gardés) · ✎ réécrite (voix à ref
 | # | Diapositive | Partie | Ce qu'elle apprend · élève | Pourquoi ici (source) |
 |---|---|---|---|---|
 |  | `ln_v2` Dériver (ln x)² et x ln x | VII. La dérivée de ln u | — | (ln x)² et x ln x : les dérivées des problèmes. |
-|  | `ln_v2_b` Au national 2019 : dériver terme par terme | VII. La dérivée de ln u | — | National 2019 : dériver terme par terme. |
+| ✎² | `ln_v2_b` Au national 2019 : dériver terme par terme | VII. La dérivée de ln u | ❓ f′(x) = ? (2019 N) | 2ᵉ PASSE (cas type dérivée, 13 sujets) : la voix ne donne plus f′ ; vue arrêtée sur `enonce` ; l'élève dérive, la correction écrit les lignes du barème. |
 |  | `ln_v3` Le signe de f' : celui de ln x, de 1 − ln x | VII. La dérivée de ln u | — | Le signe de f′ : celui de 1 − ln x. |
 |  | `ln_p1` À l'envers : u'/u a pour primitive ln u | VIII. Les primitives u'/u | ❓ Une primitive de f(x) = 2x/(x² + 1) sur ℝ est : · ✏️ Une primitive de 3x²/(x³ + 1) sur ]−1 ; +∞[ est : | u′/u → ln u : la ligne qui manquait au tableau du chapitre précédent ; l'élève finit. |
 
-### Séance 6 — Primitives u′/u, ln x ≤ x − 1, le problème de 2019 pas à pas
+### Séance 6 — Primitives u′/u, ln x ≤ x − 1, le problème de 2019 : tableau et limites
 
 
 **Bloc `ln_s4_b3` — ln|u| ; vérifier une primitive ; ln x ≤ x − 1** · fin de bloc : cahier (3 lignes), retrouver « Cahier fermé : écris l'inégalité entre ln x et x − 1. », exercice « Une primitive de f(x) = x/(x² + 4) sur ℝ est : »
@@ -213,33 +215,48 @@ Légende : ↕ déplacée (texte et voix gardés) · ✎ réécrite (voix à ref
 |---|---|---|---|---|
 |  | `ln_p2` Faire apparaître u' ; ln|u| si u < 0 | VIII. Les primitives u'/u | — | Faire apparaître u′ ; ln|u| (miroir de la courbe). |
 |  | `ln_p3` Vérifier une primitive avec ln | VIII. Les primitives u'/u | — | Vérifier une primitive avec ln (5 sujets). |
-|  | `ln_e1` Prouver ln x ≤ x − 1 par une fonction auxiliaire | IX. Étude de fonction et inégalités, type national | ❓ Pour montrer que ln x ≤ x − 1 pour tout x > 0, on étudie g(x) = x − 1 − ln x. Quelle concl · ✏️ g(x) = x − 1 − ln x. Que vaut g′(x) ? | ln x ≤ x − 1 par une fonction auxiliaire (11 sujets lisent g, 4 inégalités). |
+| ✎² | `ln_e1` Prouver ln x ≤ x − 1 par une fonction auxiliaire | IX. Étude de fonction et inégalités, type national | ❓ Quelle conclusion est juste ? | 2ᵉ PASSE (cas type fonction auxiliaire) : la voix s'arrête après les variations de g ; la vue s'arrête sur `tableau` (le moment `minimum` écrivait « g(1) = 0 minimum ⇒ g(x) ≥ 0 ⇒ ln x ≤ x − 1 ») ; l'encadré central qui donnait l'inégalité est retiré. |
 
-**Bloc `ln_s5_b1` — Le problème 2019 : g donne f′, le tableau, le minimum, les bornes** · fin de bloc : cahier (2 lignes, 1 figure(s)), retrouver « Cahier fermé : écris l'équation de la tangente à la courbe de ln au point d'abscisse 1. », exercice « f′(x) = g(x)/x et g(x) > 0 sur ]0 ; +∞[. Alors f est sur ]0 ; +∞[ : »
+**Bloc `ln_s5_b1` — Le problème 2019 : g donne f′, le tableau, le minimum, les limites aux bornes** · cahier (3 lignes, 1 figure), retrouver et exercice inchangés
 
 | # | Diapositive | Partie | Ce qu'elle apprend · élève | Pourquoi ici (source) |
 |---|---|---|---|---|
 |  | `ln_e2` La partie I donne le signe de f′ | IX. Étude de fonction et inégalités, type national | — | La partie I donne le signe de f′ : la logique du problème du national. |
-| ✎ | `ln_e3` Le tableau de variations, puis le minimum | IX. Étude de fonction et inégalités, type national | ❓ f(x) = x + ½ − ln x + ½(ln x)² : que vaut le minimum f(1) ? | RÉÉCRITE : national 2019 — le tableau et les flèches sont dits, puis l'élève calcule le minimum f(1) (question + réactions déjà écrites) ; avant, la voix le donnait. |
-|  | `ln_e3_b` Les limites aux bornes, et ce qu'elles disent | IX. Étude de fonction et inégalités, type national | — | Les limites aux bornes et leur phrase (asymptote). |
+| ✎² | `ln_e3` Le tableau de variations, puis le minimum | IX. Étude de fonction et inégalités, type national | ❓ f(1) = ? | 2ᵉ PASSE : nouvelle vue `signe.html?vue=variations_pas` : les flèches (`fleches`) puis, après la réponse, la valeur (`minimum`) ; l'ancienne vue écrivait « f(1) = 3/2 » au moment `fleches`, juste avant la question. |
+| ✎² | `ln_e3_b` La limite en 0 à droite et son interprétation (2019, 1.a) | IX. Étude de fonction et inégalités, type national | ❓ lim_{x→0⁺} f(x) et interprétation | 2ᵉ PASSE (cas type limite en 0⁺, 7 sujets) : la vue s'arrête au minimum ; l'élève trouve +∞ et la phrase « x = 0 asymptote verticale ». |
+| ＋² | `ln_e3_c` La limite en +∞ : l'écriture donnée (2019, 1.b) | IX. Étude de fonction et inégalités, type national | ❓ lim_{x→+∞} f(x) | 2ᵉ PASSE (cas type limite en +∞, 9 sujets) : forme indéterminée, puis l'écriture du sujet (½ ln x − 1) ln x ; vue arrêtée sur `asymptote`, borne +∞ vide. |
 
-**Bloc `ln_s5_b1d` — Le problème 2019 : f(x) − x, la position, le tracé** · fin de bloc : cahier (2 lignes, 1 figure(s)), retrouver « Cahier fermé : comment trouve-t-on la position de (C) par rapport à la droite (Δ) : y = x ? », exercice « f(x) − x = (ln x)² sur ]0 ; +∞[. Par rapport à (Δ) : y = x, la courbe (C) est : »
+### Séance 7 — Le problème de 2019 : inflexion, position, construction pas à pas (NOUVELLE séance, 2ᵉ passe)
+
+Pourquoi : la séance 6 aurait compté 12 diapositives ; le problème de 2019 joué question par question se partage en deux séances de 40 à 50 min (règle 7).
+
+**Bloc `ln_s5_b1e` — Le problème 2019 : le point d'inflexion, puis la position (NOUVEAU)** · cahier (3 lignes, 1 figure), retrouver et exercice repris de l'ancien `ln_s5_b1d` (position)
 
 | # | Diapositive | Partie | Ce qu'elle apprend · élève | Pourquoi ici (source) |
 |---|---|---|---|---|
-| ✎ | `ln_e4` Position par rapport à y = x : le signe de f(x) − x | IX. Étude de fonction et inégalités, type national | ❓ f(x) = x + ½ − ln x + ½(ln x)² : f(x) − x est égal à : | RÉÉCRITE : la position commence par la question « que vaut f(x) − x ? » (l'élève l'écrit comme un carré) ; la suite passe en e4_b. |
-| ＋ | `ln_e4_b` Au-dessus de y = x, puis construire la courbe | IX. Étude de fonction et inégalités, type national | — | NOUVELLE (suite de e4) : le carré ≥ 0, la courbe au-dessus, le contact en e, puis la construction ; sur les mêmes moments de l'animation (ecart, contact, courbe). |
+| ＋² | `ln_e3_d` Le point d'inflexion (2019, 3.b) | IX. Étude de fonction et inégalités, type national | ❓ Coordonnées de I | 2ᵉ PASSE (cas type inflexion, 4 sujets) : f″ donnée → signe de 2 − ln x → s'annule en e² en changeant de signe, ligne par ligne (`calculs.html?vue=e3d`), arrêt sur `change` ; l'élève calcule f(e²) = e² + ½. |
+| ✎ | `ln_e4` Position par rapport à y = x : le signe de f(x) − x | IX. Étude de fonction et inégalités, type national | ❓ f(x) − x = ? | Inchangée (coquille « la signe » → « le signe », voix pas encore faite). |
+| ✎² | `ln_e4_b` La position par rapport à y = x (2019, 4.a) | IX. Étude de fonction et inégalités, type national | ❓ Position de (C) par rapport à (Δ) | 2ᵉ PASSE (cas type position) : la voix ne donne plus « au-dessus, contact en e » ; vue arrêtée sur `droite` (le moment `ecart` écrivait « ≥ 0 : (C) au-dessus de (Δ) »). La construction part en e4_c/e4_d. |
 
-### Séance 7 — Le problème de 2021 pas à pas, ln(u(x)), log et bilan
+**Bloc `ln_s5_b1d` — Le problème 2019 : construire la courbe pas à pas** · cahier (2 lignes), retrouver « Cahier fermé : que place-t-on dans le repère avant de tracer la courbe ? », exercice « f′(2) = 0 et f(2) = 3 : la tangente au point d'abscisse 2 ? » (nouveaux)
+
+| # | Diapositive | Partie | Ce qu'elle apprend · élève | Pourquoi ici (source) |
+|---|---|---|---|---|
+| ＋² | `ln_e4_c` Construire (C) pas à pas : ce qu'on place d'abord (2019, 4.b) | IX. Étude de fonction et inégalités, type national | ❓ La tangente en A(e ; e) | 2ᵉ PASSE (cas types construction, 10 sujets, et tangente) : nouvelle vue `construire.html?vue=c19` ; ① asymptote ② (Δ) ③ minimum et sa tangente horizontale ④ A(e ; e), un `play_until` chacun ; arrêt sur `contact` ; l'élève trouve f′(e) = 1, donc la tangente est (Δ). |
+| ＋² | `ln_e4_d` Construire (C) : l'inflexion, la branche, puis la courbe | IX. Étude de fonction et inégalités, type national | — | 2ᵉ PASSE : ⑤ (Δ) tangente ⑥ I ⑦ branche parabolique, puis la courbe tracée EN DERNIER, en suivant tout ce qui est placé (règle 41 : jamais une courbe finie d'emblée). |
 
 
-**Bloc `ln_s5_b1b` — Un problème du national, pas à pas** · fin de bloc : cahier (2 lignes), retrouver « Cahier fermé : pour f(x) = 2x ln x − 2x, écris f′(x). », exercice « Avec f′(x) = 2 ln x et f(1) = −2 minimum, on déduit pour x > 0 : »
+### Séance 8 — Le problème de 2021 pas à pas, ln(u(x)), log et bilan
+
+
+**Bloc `ln_s5_b1b` — Le problème 2021 pas à pas : f′, les variations, f(x) = x, la courbe, l'inégalité** · cahier (2 lignes), retrouver « Cahier fermé : pour f(x) = 2x ln x − 2x, écris f′(x). », exercice « Avec f′(x) = 2 ln x et f(1) = −2 minimum, on déduit pour x > 0 : »
 
 | # | Diapositive | Partie | Ce qu'elle apprend · élève | Pourquoi ici (source) |
 |---|---|---|---|---|
 |  | `ln_e5` Un problème du national : f et sa dérivée | IX. Étude de fonction et inégalités, type national | ❓ f(x) = 2x ln x − 2x sur ]0 ; +∞[. Que vaut f′(x) ? | National 2021 pas à pas : O, puis l'élève dérive (question). L'exercice sur l'inégalité, posé ici trop tôt (avant le minimum), part en e5_c. |
-|  | `ln_e5_b` Le signe de f′ et le minimum | IX. Étude de fonction et inégalités, type national | — | Correction de f′, le signe, le minimum −2, f(e) = 0. |
-| ✎ | `ln_e5_c` Tracer, puis l'inégalité | IX. Étude de fonction et inégalités, type national | ❓ Avec f′(x) = 2 ln x et f(1) = −2 minimum, on déduit pour x > 0 : | RÉÉCRITE : la courbe tracée, puis l'élève tire l'inégalité ln x ≥ (x − 1)/x (question) ; avant, la voix la donnait. |
+| ✎² | `ln_e5_b` Le signe de f′ et les variations (2021, 3.c) | IX. Étude de fonction et inégalités, type national | ❓ Les variations de f | 2ᵉ PASSE (cas type variations, 10 sujets) : correction de f′ = 2 ln x, puis l'élève tire les variations et le minimum ; vue `etude.html?vue=national&etape=2` arrêtée sur `origine` (le minimum était écrit avant). |
+| ＋² | `ln_e5_q` f(x) = 0 et f(x) = x : des équations avec ln (2021, 4.a) | IX. Étude de fonction et inégalités, type national | ❓ Résous f(x) = x | 2ᵉ PASSE (cas type équation) : rappel f(x) = 0 ⇔ x = e (q5), puis f(x) = x ramenée à x(2 ln x − 3) = 0 (`calculs.html?vue=e5q`, arrêt sur `factoriser`) ; l'élève écarte x = 0 et trouve e^(3/2). |
+| ✎² | `ln_e5_c` Construire (C) pas à pas, puis l'inégalité (2021, 4.b et 6) | IX. Étude de fonction et inégalités, type national | ❓ L'inégalité déduite du minimum | 2ᵉ PASSE : nouvelle vue `construire.html?vue=c21` : O, minimum, (e ; 0), y = x et e^(3/2), branche (Oy), puis la courbe ; l'inégalité n'est pas écrite par la vue. |
 
 **Bloc `ln_s5_b1c` — Étude complète d'une fonction ln(u(x))** · fin de bloc : cahier (3 lignes, 2 figure(s)), retrouver « Cahier fermé : comment lit-on la concavité de (C_f) avec f″ ? », exercice « g(x) = ln((x + 1)/(3 − x)) : quel est D_g ? »
 
@@ -257,3 +274,74 @@ Légende : ↕ déplacée (texte et voix gardés) · ✎ réécrite (voix à ref
 |  | `ln_g2` 10ˣ = a ⇔ x = log a ; le pH | X. Le logarithme décimal | — | 10ˣ = a et le pH. |
 |  | `ln_b1` Ce qu'il faut retenir | XI. Bilan et carte du chapitre | — | Ce qu'il faut retenir. |
 |  | `ln_b2` La carte du chapitre | XI. Bilan et carte du chapitre | ❓ Par quel point passe toujours la courbe de ln ? | La carte du chapitre. |
+
+## 8. Deuxième passe (18 novembre 2026) : les exercices du national joués pas à pas
+
+Demande : « simple, animé, expliqué, ne pas tout donner au départ, laisser à l'élève le temps de trouver seul ». Chaque cas type du national (exploration, `cas_types`) a maintenant un exercice où une seule question est posée, la vue arrêtée AVANT la réponse, la correction écrite comme le barème dans `question.demonstration`.
+
+### 8.1 Inventaire : cas type → diapositive(s)
+
+| Cas type (fréquence) | Avant | Après |
+|---|---|---|
+| domaine (1 + tous les exercices) | d1 (question, vue arrêtée sur `entoure`) | inchangé |
+| équation (5) | q1_b, q5 (questions) | + `ln_e5_q` (2021 4.a, f(x) = x) |
+| inéquation (signe de f′ dans 12) | q3 lu d'un bloc | + `ln_q3_b` (question, arrêt sur `regle`) |
+| limite en 0⁺ (7) | e3_b lu | `ln_e3_b` question (2019 1.a) |
+| limite en +∞ (9) | e3_b lu | `ln_e3_c` nouvelle (2019 1.b) |
+| dérivée et forme donnée (13) | v1 (question), v2_b lu | `ln_v2_b` question (2019 2.b), e5 (2021 3.b) |
+| signe de f′, variations (10) | e3 (question mais réponse écrite par la vue), e5_b lu | e3 vue `variations_pas` ; `ln_e5_b` question |
+| fonction auxiliaire et inégalité (11) | e1 (la voix donnait la conclusion), e5_c | e1 arrêtée avant la conclusion ; e5_c inchangée (question) |
+| position (5) | e4 (question), e4_b lu | `ln_e4_b` question (2019 4.a) |
+| point d'inflexion (4) | e6_c (autre fonction, lu) | + `ln_e3_d` (2019 3.b, question) |
+| tangente (3) | c5 lu | + question de `ln_e4_c` (tangente en A(e ; e) = (Δ)) |
+| construction (10) | e4_b et e5_c : courbe tracée d'un coup | `ln_e4_c` + `ln_e4_d` (2019) et `ln_e5_c` (2021) : vue `construire.html`, un moment par élément, la courbe en dernier |
+| primitive u′/u (2) | p1 (question) | inchangé |
+| plus petit n (1) | q7 lu | + `ln_q7_b` (question, arrêt avant la division par un négatif) |
+| suite uₙ₊₁ = f(uₙ) (7) | — (chapitre des suites) | reste à faire, hors de ce chapitre |
+
+Problèmes nationaux joués une question à la fois :
+- **2019** (séances 6 et 7) : v2_b (2.b) → e2 → e3 (2.c, minimum) → e3_b (1.a) → e3_c (1.b) → e3_d (3.b) → e4 (4.a, f(x) − x) → e4_b (4.a, position) → e4_c (4.b, tangente en A) → e4_d (4.b, fin du tracé).
+- **2021** (séance 8) : e5 (3.b, f′ ; 1 et 3.a faits en l8) → e5_b (3.c et 6.a) → e5_q (4.a) → e5_c (4.b, puis 6.b).
+
+### 8.2 Questions dont la vue (ou la voix) donnait la réponse
+- `ln_n2` : `existe` écrivait « continue sur un intervalle ⇒ des primitives existent » et la voix le disait ; arrêt sur `inverse`, `variante` retirée.
+- `ln_e1` : `minimum` écrivait la conclusion encadrée, la voix et l'encadré central la disaient ; arrêt sur `tableau`.
+- `ln_e3` : `fleches` écrivait « f(1) = 3/2 » ; nouvelle vue `variations_pas` où la valeur a son propre moment `minimum`.
+- `ln_e4_b`, `ln_e5_b` : la voix donnait le résultat ; les vues s'arrêtent sur `droite` / `origine`.
+- Contrôlées et laissées : c2, z4_sens, d1, a1, a5, q1_b et q5 (les racines sont posées, le tri reste à l'élève), l2, l6, v1, p1, e4, e5, e5_c, e6_c, b2.
+
+### 8.3 Animations ajoutées (le cours en ligne n'est pas touché : vues AJOUTÉES)
+- `signe.html?vue=variations_pas` : moments tableau_vide, fleches, minimum, limite_0, asymptote, limite_inf ; repères fprime, fleches, minimum, limite_0, asymptote, limite_inf. La vue `variations` (en ligne) est inchangée.
+- `construire.html` (NOUVEAU fichier, mode large `LnLarge` comme `etude.html`) : `?vue=c19` — repere, asymptote, delta, minimum, contact, tangente_e, inflexion, branche, courbe ; `?vue=c21` — repere, origine, minimum, zero, droite, branche, courbe ; un repère par élément nommé, colonne de droite numérotée ① à ⑦.
+- `calculs-vues.js` : vues `e3d` (enonce, signe, racine, tableau, change, image, resultat), `e5q` (zero, enonce, ramener, factoriser, tri, ln, resoudre, resultat), `q3b` (enonce, domaine, regle, resoudre, croiser, resultat), `q7b` (enonce, passer, descendre, sens, calcul, resultat). **Ajoutées à la main : à reporter dans les sources du build** (`maths_build/fonctions_ln/p*.py`).
+- `calculs.html` : la description pour le tuteur passe une fraction `⟦num|dén⟧` par `Tableau.lisible` (aucune vue en ligne n'en contient : rendu inchangé).
+- Pour que l'iframe se recharge entre deux diapositives de la même vue, les URL suivantes portent `&etape=2`/`&etape=3` (paramètre ignoré par le kit).
+- Vérifié : `node --check`, Chromium sans erreur console, captures 1280 × 640 et 724 × 350 au début, à l'arrêt et à la fin.
+
+### 8.4 Rejeu après la réponse (pour le lecteur)
+- `ln_n2` — `naissance.html?vue=famille` — existe, famille, glisse
+- `ln_v2_b` — `calculs.html?vue=v2` — deriver, resultat
+- `ln_e1` — `inegalite.html?vue=ecart` — minimum
+- `ln_e3` — `signe.html?vue=variations_pas` — minimum
+- `ln_e3_b` — `signe.html?vue=variations_pas&etape=2` — limite_0, asymptote
+- `ln_e3_c` — `signe.html?vue=variations_pas&etape=3` — limite_inf
+- `ln_e3_d` — `calculs.html?vue=e3d` — image, resultat
+- `ln_e4` — `etude.html?vue=position` — (la réponse est écrite par `ecart`) ecart
+- `ln_e4_b` — `etude.html?vue=position&etape=2` — ecart, contact
+- `ln_e4_c` — `construire.html?vue=c19` — tangente_e
+- `ln_e5_b` — `etude.html?vue=national&etape=2` — minimum
+- `ln_e5_q` — `calculs.html?vue=e5q` — tri, ln, resoudre, resultat
+- `ln_q3_b` — `calculs.html?vue=q3b` — resoudre, croiser, resultat
+- `ln_q7_b` — `calculs.html?vue=q7b` — sens, calcul, resultat
+
+### 8.5 Mots
+`verifier_mots.py` passé sur les 16 pistes de diapositives, les 10 démonstrations et les 10 énoncés nouveaux.
+- Remplacés : « الطباشير » → « نرسموها بلا ما نحبسو » ; « كنقيسو » → « كنحسبو » ; « construire » → « نرسمو » ; « كنرسموش » (phrase refaite) ; « كتحترمها », « كتلمسها », « كتدوز », « حطيناها » → « كتمشي مع كل شي حطينا », « كتلاقى delta », « كتوصل لـ I » ; « كتتبدل » → « كتبدل » ; « حليناها » → « درناها » ; « كنقاطعو » → « كناخدو الجزء المشترك » ; « dérivables » → « كل terme dérivable » ; « كنوحدو المقام » → « كنديرو نفس المقام » ; « كنحلو القوس » → « كنحيدو القوس » ; « وكتلاقاها » → « وكتلاقى معاها ».
+- Gardés (termes du programme), **à écouter** : « d'inflexion » (e3_d, e4_d), « entier » (q7_b), « demi-tangente » et « inégalité » (e5_c).
+
+### 8.6 Ce qui reste à faire
+- **Voix** : 16 diapositives, 10 démonstrations, 10 énoncés (`_voix.json`) ; **réactions des 10 nouvelles questions** (`concentration.reponses.q`) à générer (`preparer_reponses.py`), ainsi que celles de l'exercice nouveau du bloc `ln_s5_b1d`.
+- Le vérificateur de pointage signale des lignes GESTE sur les diapositives sans voix (durée 0 : tous les gestes à 0 s) : elles disparaîtront avec les pistes.
+- Kit commun (`maths/commun/exposants.js`, à ne pas toucher ici) : une chaîne qui contient un exposant n'écrit pas les fractions `⟦num|dén⟧` ; les lignes concernées (f″(x) = (2 − ln x)/x², (1/3)ⁿ) restent en barre sans espaces.
+- 2021 : les limites en +∞ (2.a, 2.b) sont dites dans la construction, pas posées en question ; 2021 1 et 3.a sont faits en l8 (exemple lu).
+- Report des vues `e3d`, `e5q`, `q3b`, `q7b` dans les sources du build de `calculs-vues.js`.
