@@ -346,3 +346,18 @@ Pistes à mettre en voix : 36, dont 27 de la 2ᵉ passe (`phys_ch6_dipole_RC_voi
 - Les questions ouvertes de l'exercice joué n'ont pas de réaction préparée (jugées en direct sur l'`attendu`).
 - Aucun fichier partagé n'a été modifié (`shared/`, `frontend/src/`).
 <!-- 2e passe : fin -->
+
+### Fiche bilan lisible au téléphone (18 novembre 2026)
+- `dipole-rc-tableau/bilan.html` (diapositive `rc_b1_bilan`, cours en ligne et copie en attente) : la page garde son propre
+  plancher de 15 px à l’écran (le kit le baissait jusqu’à 45 % ; 0 à l’impression), y compris pour les indices, les
+  exposants et les étages des fractions, et mesure chaque bloc à la taille vraiment écrite (cadres des formules et
+  interlignes à l’avenant). Sur ordinateur, la fiche d’origine (quatre colonnes de deux) ; si elle ne tient plus, toute la
+  largeur et toute la hauteur ; sur un petit écran, elle se partage en parties (« partie n sur N · touche : la suite »,
+  jusqu’à un bloc par écran), toucher le tableau passe à la suivante, et `play_until {moment: <bloc>}` ouvre la partie du
+  bloc et l’allume.
+- Moments : `fiche` 1,01, blocs 1,1 à 1,8, `fin` 1,95, `lacunes` 2 (noms inchangés) ; time_s suit le dernier bloc dit.
+  Avant, tous les blocs valaient 1 avec time_s = 1 : le kit jetait chaque `play_until` vers un bloc, la voix n’en allumait
+  aucun après le condensateur.
+- Mesuré dans Chromium à 568 × 300, 724 × 350, 1024 × 560, 1280 × 640, 1596 × 700 (chaque bloc, `fin`, la page de l’élève) :
+  15 px au moins, 0 chevauchement, rien hors du cadre (avant : 4,4 à 12,6 px, jusqu’à 60 chevauchements). À l’impression,
+  la fiche entière sur une image. `next`, `previous`, `start`, `reset`, `set_parameters` et les repères inchangés.
