@@ -3,9 +3,9 @@
 Revue de logique du 18 novembre 2026 (skill `logique-de-cours`). Point de départ : le cours en ligne
 `backend/data/courses/phys_ch2_ondes_periodiques.json` (53 diapositives, audit rythme du 14 novembre et avis du prof
 d'ondes du 17 novembre déjà intégrés, toutes les voix faites). Il n'y avait pas de copie en attente. La nouvelle
-version est dans `backend/data/courses/en_attente/phys_ch2_ondes_periodiques.json`. **Aucune diapositive n'a besoin
-d'une voix nouvelle** : tout ce qui change est l'ordre, les blocs, les animations et leurs arrêts, posés sur les mots
-déjà dits.
+version est dans `backend/data/courses/en_attente/phys_ch2_ondes_periodiques.json`. À la 1ʳᵉ passe, aucune
+diapositive n'avait besoin d'une voix nouvelle (ordre, blocs, animations posés sur les mots déjà dits). **La 2ᵉ passe
+(section « 2ᵉ passe » plus bas) réécrit 11 voix et ajoute 4 diapositives** : 88 pistes à faire.
 
 ## Sources consultées
 
@@ -152,7 +152,97 @@ dans tous les devoirs), les trois cas types, le bilan.
 
 - Aucun. `sons.html` et `ultrasons.html` sont des fichiers du cours (`ondes-periodiques-tableau/`).
 
+## 2ᵉ passe (18 novembre 2026) : chaque cas type joué pas à pas, l'élève répond avant la correction
+
+**Ce qui n'allait pas.** La 1ʳᵉ passe avait surtout réordonné. Dans presque toutes les diapositives de méthode et de cas
+type, la voix faisait elle-même la lecture et le calcul, puis posait la question dont elle venait de donner la réponse
+(`op_t7`, `op_l6`, `op_c4`, `op_p4`, `op_m6b`, `op_d3`, `op_r3b`, `op_x2`, `op_x3`) ; `op_x1` (national 2017) faisait les
+quatre questions sans rien demander ; les figures du national (`figures.html`) étaient des figures finies qui
+s'écrivaient, pas le phénomène (professeur règle 41) ; les calculs étaient écrits au tableau avant la réponse.
+
+**La règle appliquée partout** (logique-de-cours règles 3 et 5, professeur règles 30, 33, 37, 41) : la voix pose la
+situation et la méthode, s'arrête avant le résultat (« دابا نتا : … »), l'élève répond (ardoise « À toi » avec sa
+démonstration écrite comme le barème, ou question d'observation quand c'est une lecture sur la simulation), puis la
+correction. Une seule consigne à la fois. La scène se fige avant tout résultat : les valeurs et les conclusions ont
+chacune leur moment, jamais joué avant la réponse, et la page accepte `conclusions: false` pendant une observation.
+Une seule ardoise par bloc : quand un exercice a plus de deux calculs, les lectures passent en question d'observation.
+
+### Nouvelle simulation `ondes-periodiques-tableau/national.html` (fichier du cours, aucun fichier partagé touché)
+Quatre vues, avec les valeurs de l'examen, ouvrables figées sur un instant (`?depart=<moment>`, `reset` y revient) :
+| Vue | Le phénomène d'abord | Moments (un par étape du raisonnement) |
+|---|---|---|
+| `oscillo` | le spot trace la voie 1 puis la voie 2 (0,1 ms/div) | `trace`, `cretes`, `divisions` (comptées une à une), `relation`, `periode`, `frequence` |
+| `2017` | S vibre, l'onde part des deux côtés, puis la photo ; ensuite M bouge et y_S(t), y_M(t) se tracent | `onde_part`, `photo`, `regle`, `cretes` (« λ = ? »), `lambda`, `front`, `v`, `t`, `graphes`, `m_demarre`, `m_suit`, `relation` |
+| `2020` | les rides circulaires partent de S, puis la photo ; ensuite une ouverture a ≈ λ, l'onde la traverse | `onde_part`, `photo`, `intervalles`, `lambda`, `n`, `retard`, `obstacle`, `ouverture_atteinte`, `diffractee`, `meme_lambda` |
+| `2022` | l'onde part de S, atteint M (L = 2,5 cm) ; le spot trace y_M(t) en même temps | `depart`, `m_demarre`, `trace`, `retard`, `cretes` (« T = ? »), `periode`, `amplitude`, `n`, `v`, `lambda` |
+
+Vérifiée dans Chromium (Playwright) : chaque moment atteint à sa date, aucune erreur de console, encre sur le canevas,
+captures à 1024 × 560 et 724 × 350 (téléphone en paysage) sans chevauchement après corrections (étiquettes des voies
+dans l'écran, « 1 cm » sous la cuve, règle peinte sans texte peint de 11 px : ses nombres sont écrits à la craie).
+**Un objet, un dessin** (logique-de-cours règle 10, simulations-au-tableau règle 15) : l'eau, la pointe, la paroi, la
+tige sont peintes par `eau.js` comme dans `cuve.html` et `fente.html` ; l'écran d'oscilloscope et le spot sont ceux de
+`sons.html`. Le lexique visuel partagé (`docs/lexique-visuel/`, `shared/lexique/`) n'existe pas encore dans le dépôt :
+ces objets (eau en coupe et vue de dessus, oscilloscope, spot) sont à y verser quand il sera créé (fichiers partagés,
+hors de cette passe).
+
+### Diapositives
+| Diapositive | Changement | Pourquoi |
+|---|---|---|
+| `op_t7_oscillo` | `national.html?vue=oscillo` : le spot trace, deux crêtes, les 5 divisions comptées, la relation ; la voix s'arrête avant T (« احسب T ») ; N retiré de la voix | La voix donnait T et N avant la question ; lecture d'oscilloscope animée (cas type `periode_elongation`). |
+| `op_l6_source` | La voix donne la méthode et s'arrête avant « SM = 5λ » ; la figure reste à `trace` (les intervalles numérotés étaient la réponse) | Ne pas donner la réponse. |
+| `op_c4_photo_datee` | La voix s'arrête à « t = 2,5 T » ; « T = 20 ms » retiré du tableau | L'élève fait la division. |
+| `op_p4_troisieme` | La voix fait k = 0 et k = 1, demande k du 3ᵉ point ; la formule générale au tableau au lieu de « k = 2, SM = 5 cm » | Le piège (k commence à 0) est trouvé par l'élève. |
+| `op_m6b_deja_ecartes` | Arrêt sur `en_phase_2` (le moment `mesure` écrivait λ) ; la voix donne d = d₂ − d₁ et d = 2λ, l'élève calcule | Idem. |
+| `op_d3_justifier` | Figée sur `ouverture_atteinte` (les arcs étaient la réponse) ; la condition « a ≤ λ » est la méthode, l'élève compare 10 mm et 15 mm | Cas type `diffraction_justifier`. |
+| `op_r3_trois_lectures` | National 2022 R rejoué (`national.html?vue=2022`) : l'onde atteint M, la courbe se trace ; **observation** : « à quelle date M démarre ? » (τ) | Lecture faite par l'élève avant d'être dite. |
+| `op_r3c_periode` **nouvelle** | Même courbe (`&depart=retard`) : **observation** « que vaut T ? » entre deux crêtes marquées « T = ? » ; puis l'amplitude ; τ ≠ T redit | Une lecture par diapositive ; T et τ confondus = l'erreur la plus fréquente du cas. |
+| `op_r3b_calculs` | (`&depart=amplitude`) La voix donne les relations, l'élève calcule N (question) puis v (exercice) ; λ = v·T reste en fin de cours | La voix faisait les trois calculs. |
+| `op_x1_national_2017` | `national.html?vue=2017` : l'onde part de S, la photo ; **observation** λ sur la règle ; ardoise **nouvelle** : v (QCM aux distracteurs du sujet : 200 m/s = λ en cm, 8 × 10⁻⁴ = λ/N) puis t = SM/v (3 s, 0,3 s) ; réactions préparées écrites | Les quatre questions étaient dites sans que l'élève réponde. |
+| `op_x1b_national_2017_retard` **nouvelle** | (`&depart=t`) La 4ᵉ question du sujet : y_S(t) et y_M(t) se tracent, M ne bouge qu'à 30 ms ; **observation** y_M(t) = y_S(t ∓ …) | C'est la vraie 4ᵉ question du national 2017 (l'ancienne voix comparait les phases, ce que le sujet ne demande pas). |
+| `op_x2_national_2020` | `national.html?vue=2020` : les rides partent, la photo ; **observation** « combien de λ dans 1 cm ? » (le piège : compter les cercles) ; ardoise : N (nouvelle QCM, réactions écrites) puis τ (exercice gardé avec sa voix) | La voix faisait tout puis demandait λ et N. |
+| `op_x2b_national_2020_diffraction` **nouvelle** | (`&depart=retard`) La paroi et l'ouverture a ≈ λ, l'onde la traverse ; **observation** = la QCM du sujet (« N, λ, v ne sont pas modifiées ») ; puis les λ égales avant et après | Cas type diffraction du national, vu se produire. |
+| `op_x3_devoir` | Arrêt sur `regle_posee` (v n'est pas encore écrite) ; la voix donne la méthode, l'élève calcule v puis compare A et B (ardoise gardée avec ses voix) | Idem. |
+| `op_x3b_dispersif` **nouvelle** | `cuve.html?vue=frequence&etape=30` (paramètre ignoré par la page : il ne sert qu'à recharger l'iframe) : passage à 30 Hz, nouvelle mesure ; **observation** « l'eau est-elle dispersive ? » avant la conclusion (le moment `conclusion` de la page n'est pas joué) | Cas type `dispersif`, la conclusion trouvée par l'élève. |
+
+Observations : 2 → 9 dans le cours. C'est plus que « 0 à 2 » de la règle 30 ; c'est voulu par cette passe (chaque
+lecture d'un cas type du national est faite par l'élève avant la correction), comme la chimie ch13 (10). Aucune n'est
+sur une définition ; deux (`op_x1b`, `op_x3b`) portent sur une petite comparaison que la simulation montre.
+
+### Blocs et séances
+- `op_s5_b1` (séance 3) = `op_r1`, `op_r2`, `op_r3` ; **nouveau `op_s5_b1b`** = `op_r3c`, `op_r3b` (ardoise sur `op_r3b`).
+  La séance 3 a quatre blocs, mais le dernier ne fait que deux diapositives : ≈ 45 min.
+- `op_s5_b2` = `op_r4_source`, `op_x1`, `op_x1b` (ardoise sur `op_x1`) ; `op_s5_b3` = `op_x2`, `op_x2b` (ardoise sur `op_x2`).
+- **Nouvelle séance 6** : `op_s6_b1` = `op_x3`, `op_x3b` ; `op_s6_b2` = le bilan et la carte (leur cahier, leur retrouver).
+- Une ardoise au plus par bloc (vérifié) ; l'ordre des diapositives suit l'ordre des blocs (vérifié).
+
+### Mots (scripts/voix/verifier_mots.py + même contrôle sur les observations, réactions et démonstrations nouvelles)
+Remplacés : « spot » (0) → « la courbe … كتبان بشوية » ; كتتحرك (0) → كتحرك ; كيرسم (0) ; كنختارو (1) → ناخدو ; للجهتين (1)
+→ « لليمين، وكتمشي حتى لليسار » ; « la pointe » (0) → النقطة S ; ما كتبدلش (0) → كتبقى هي هي ; ثالثا (2) → التالتة ;
+طلعة (0) → قيمة ; تقربو (0) → ولاو قراب ; تحكم (1) → تجاوب ; فراغات (0) → les intervalles ; creux (0), معلمين, متأخرة retirés.
+Résultat : 0 mot rare dans les 15 pistes de diapositive réécrites ou nouvelles, 0 dans les observations, réactions et
+démonstrations nouvelles. (Les mots rares qui restent sont dans des réactions déjà enregistrées, non modifiées.)
+
+### Vérifications
+- JSON chargé ; `pytest -k "course or cours or concentration"` : 88 passés, 1 échec préexistant (cours SVT ch1).
+- `verifier_pointage_simulations.py --ecarts` : 0 « introuvable » (copie en attente et cours en ligne, avant comme après) ;
+  DEPART 34 → 26, IFRAME 9 → 8 ; les GESTE nouveaux viennent des diapositives sans voix (durée 0 : tous les gestes à
+  0 s) — avec une durée estimée (75 ms par caractère), il n'en reste aucun sur les diapositives réécrites sauf un
+  préexistant (`op_c4`, 0,8 s).
+- `verifier_formules.py` (cours et dossier) : rien ; `verifier_figures_cahier.py` : 0 erreur.
+- Cours en ligne et pages existantes non modifiés (`national.html` est un fichier nouveau).
+
+### Ce qui reste
+- Les voix (88 pistes, `phys_ch2_ondes_periodiques_voix.json`) ; d'ici là les observations sont dites par la voix en direct.
+- Rejouer les diapositives dans le lecteur avec leur voix (`verifier-pointage-navigateur.mjs`) quand les pistes existeront.
+- `op_r4_source` (dessiner y_S(t)) reste une démonstration sans réponse de l'élève : à transformer en exercice à la
+  prochaine passe (l'élève dit où commence la courbe de S avant qu'elle se trace).
+- `op_s3_dispersif` garde sa question de définition après la voix ; la décision « dispersif » est maintenant trouvée par
+  l'élève sur `op_x3b`.
+- Verser l'eau, l'oscilloscope et le spot dans le lexique visuel partagé quand il existera.
+
 ## Voix à faire
 
-Aucune (liste vide : `phys_ch2_ondes_periodiques_voix.json`). La copie en attente peut remplacer le cours en ligne
-dès qu'elle est validée : toutes ses pistes existent déjà.
+88 pistes dans `phys_ch2_ondes_periodiques_voix.json` : 15 diapositives (11 réécrites, 4 nouvelles), 49 morceaux de
+questions d'observation (7 × énoncé, 2 indices, 3 retours, solution), 15 réactions préparées (ardoises nouvelles de
+`op_x1` et `op_x2`), 3 démonstrations, 6 énoncés (dont 3 « retrouver » de bloc, pas joués pour le moment). Les autres
+pistes du cours existent et sont gardées (questions inchangées, même texte).

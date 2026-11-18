@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Exercices du national joués pas à pas — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="ondes.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Exercice du national rejoué : le phénomène se produit, puis chaque lecture et chaque calcul apparaît à son étape"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="eau.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Les exercices du national du chapitre « Ondes mécaniques progressives périodiques », joués pas à pas
+ * (2ᵉ passe du 18 novembre 2026, professeur règle 41, simulations-au-tableau règle 14) : la figure de l’examen n’est
+ * plus montrée finie ; le phénomène se produit d’abord (l’onde part de S, le spot de l’oscilloscope trace la courbe),
+ * puis chaque lecture et chaque calcul s’écrit à SON instant. Rien d’une étape n’est écrit avant elle : le tuteur fige la
+ * scène juste avant le résultat (`play_until`), l’élève répond, puis la scène continue.
+ *
+ * Vues (?vue=) — valeurs de l’examen :
+ *   oscillo : oscillogramme à deux voies, S_H = 0,1 ms/div, une période = 5 divisions (T = 0,5 ms, N = 2000 Hz).
+ *   2017    : national 2017 N, coupe de la surface de l’eau, N = 50 Hz, λ = 4 cm, v = 2 m/s, front à 6 cm à t = 0,03 s,
+ *             puis M reprend le mouvement de S avec 30 ms de retard : y_M(t) = y_S(t − 0,03).
+ *   2020    : national 2020 N, rides circulaires, 1 cm couvre 2 λ, v = 0,25 m/s → λ = 0,5 cm, N = 50 Hz,
+ *             d = 5 cm → τ = 0,2 s ; puis une ouverture de largeur voisine de λ : l’onde diffractée garde N, λ et v.
+ *   2022    : national 2022 R, M à L = 2,5 cm de S : l’onde part de S, atteint M, le spot trace y_M(t) ;
+ *             τ = 10 ms, T = 20 ms, a = 6 mm, N = 50 Hz, v = 2,5 m/s, λ = 5 cm.
+ * ?depart=<moment> : la page s’ouvre figée sur cet instant (une diapositive qui continue l’exercice), `reset` y revient.
+ * set_parameters {conclusions: false} : aucune valeur ni conclusion écrite (question d’observation), true les rend.
+ * Le temps de la scène est un ralenti : quelques millisecondes réelles par seconde d’écran (dit dans la bulle).
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const Q = new URLSearchParams(location.search);
+const VUES = ['oscillo', '2017', '2020', '2022'];
+const vue = VUES.includes(Q.get('vue')) ? Q.get('vue') : '2017';
+const E = window.EauPeinte;
+const S = { t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0, conclusions: true };
+const borne = (x, a, b) => Math.max(a, Math.min(b, x));
+const lin = (t, t0, t1, v0, v1) => v0 + (v1 - v0) * borne((t - t0) / (t1 - t0), 0, 1);
+
+/* ─────────────────────────── Les vues ─────────────────────────── */
+const V = {
+  /* ── Oscillogramme : le spot trace les deux voies, puis on compte, puis on calcule ── */
+  oscillo: {
+    titre: 'Oscillogramme à deux voies (0,1 ms/div)',
+    M: { trace: 5.3, cretes: 6.1, divisions: 7.4, relation: 8.1, periode: 8.9, frequence: 9.7 }, fin: 9.9,
+    motifs: { trace: 'les deux courbes sont tracées', cretes: 'deux crêtes voisines de la voie 1', divisions: 'les divisions d’une période, comptées',
+      relation: 'la relation T = n × S_H', periode: 'T calculée', frequence: 'N calculée' },
+    resultats: ['periode', 'frequence'],
+    dessiner(c) {
+      const O = { x: 50, y: 60, w: 480, h: 288, nx: 10, ny: 8 }, DX = O.w / O.nx, DY = O.h / O.ny, yc = O.y + O.h / 2;
+      const f1 = d => yc - 2.5 * DY * Math.sin(2 * Math.PI * d / 5), f2 = d => yc - 1.5 * DY * Math.sin(2 * Math.PI * (d - 1) / 5);
+      const b1 = borne((S.t - 0.4) / 2.4, 0, 1), b2 = borne((S.t - 3.0) / 2.2, 0, 1);
+      c.direct(() => {
+        const ctx = c.ctx;
+        peindreEcran(ctx, O, DX, DY);
+        c.repere('ecran', O.x, O.y, O.w, O.h, 'l’écran de l’oscilloscope');
+        c.texte('S_H = 0,1 ms/div', O.x + O.w + 24, O.y + 18, { couleur: 'jaune', taille: 19 });
+        c.repere('sensibilite', O.x + O.w + 18, O.y - 2, 190, 28, 'la sensibilité horizontale : 0,1 ms par division');
+        c.texte('t', O.x + O.w + 8, O.y + O.h + 22, { couleur: 'blanc', taille: 17 });
+        spot(ctx, d => f1(d), O, DX, b1, '#22d3ee');
+        spot(ctx, d => f2(d), O, DX, b2, '#fb923c');
+        if (b1 > 0) c.texte('voie 1', O.x + 8, O.y + 22, { couleur: 'cyan', taille: 17 });
+        if (b2 > 0) c.texte('voie 2', O.x + 8, O.y + O.h - 10, { couleur: 'orange', taille: 17 });
+        c.repere('courbe_1', O.x, yc - 2.5 * DY - 6, O.w, 5 * DY + 12, 'la courbe de la voie 1');
+        const xa = O.x + 1.25 * DX, xb = O.x + 6.25 * DX;
+        if (vu('cretes')) {
+          for (const x of [xa, xb]) c.ligne(x, yc - 2.5 * DY - 4, x, O.y + O.h + 4, { couleur: 'jaune', largeur: 1.6, pointille: [5, 4] });
+          c.repere('cretes', xa - 8, O.y, xb - xa + 16, O.h, 'deux crêtes voisines : une période');
+        }
+        if (S.t >= M().cretes + 0.2) {   // les divisions se comptent une à une, de cretes à divisions
+          const n = Math.min(5, Math.floor(lin(S.t, M().cretes + 0.2, M().divisions, 0, 5.999)));
+          for (let k = 1; k <= n; k++) c.texte(String(k), xa + (k - 0.5) * DX, O.y + O.h + 24, { couleur: 'jaune', taille: 18, align: 'center' });
+          if (vu('divisions')) {
+            c.texte('une période : 5 div', (xa + xb) / 2, O.y + O.h + 50, { couleur: 'jaune', taille: 18, align: 'center' });
+            c.repere('periode', xa, O.y, xb - xa, O.h + 56, 'une période : 5 divisions');
+          }
+        }
+        const xt = O.x + O.w + 24;
+        if (vu('relation')) { c.texte('T = n × S_H', xt, 160, { couleur: 'blanc', taille: 20 }); c.repere('relation', xt - 6, 140, 200, 28, 'T = n × S_H'); }
+        if (montre('periode')) {
+          c.texte('T = 5 × 0,1 ms', xt, 204, { couleur: 'vert', taille: 20 });
+          c.texte('T = 0,5 ms', xt, 244, { couleur: 'vert', taille: 20 });
+          c.texte('T = 5×10⁻⁴ s', xt, 282, { couleur: 'vert', taille: 20 });
+          c.repere('calcul', xt - 6, 184, 200, 108, 'T = 5 × 0,1 ms = 0,5 ms');
+        }
+        if (montre('frequence')) { c.texte('N = ⟦1|T⟧ = 2000 Hz', xt, 336, { couleur: 'vert', taille: 20 }); c.repere('frequence', xt - 6, 306, 200, 46, 'N = 1/T = 2000 Hz'); }
+      });
+    },
+    voir() {
+      const m = ['Écran d’oscilloscope 10 × 8 divisions, sensibilité horizontale 0,1 ms/div.'];
+      const b1 = borne((S.t - 0.4) / 2.4, 0, 1), b2 = borne((S.t - 3.0) / 2.2, 0, 1);
+      if (b1 > 0 && b1 < 1) m.push('Le spot trace la voie 1.'); if (b1 >= 1) m.push('Voie 1 (cyan) : une sinusoïde, 5 divisions par période.');
+      if (b2 > 0 && b2 < 1) m.push('Le spot trace la voie 2.'); if (b2 >= 1) m.push('Voie 2 (orange) : plus petite, décalée d’une division.');
+      if (vu('cretes')) m.push('Pointillés jaunes sur deux crêtes voisines de la voie 1.');
+      if (vu('divisions')) m.push('Divisions numérotées 1 à 5 : une période = 5 divisions.');
+      if (vu('relation')) m.push('Écrit : T = n × S_H.');
+      if (montre('periode')) m.push('Écrit : T = 5 × 0,1 ms = 0,5 ms = 5×10⁻⁴ s.');
+      if (montre('frequence')) m.push('Écrit : N = 1/T = 2000 Hz.');
+      return m;
+    },
+    ralenti: 'balayage du spot ralenti',
+  },
+
+  /* ── National 2017 N : la coupe de l’eau ── */
+  '2017': {
+    titre: 'Coupe de la surface de l’eau (national 2017 N)',
+    M: { onde_part: 0.9, photo: 4.6, regle: 5.5, cretes: 6.4, lambda: 7.2, front: 8.1, v: 9.0, t: 9.9, graphes: 10.6, m_demarre: 11.2, m_suit: 14.8, relation: 15.5 }, fin: 15.7,
+    motifs: { onde_part: 'S commence à vibrer, l’onde part des deux côtés', photo: 'la photo : l’onde arrêtée à l’instant t', regle: 'la règle et l’échelle',
+      cretes: 'deux crêtes voisines marquées', lambda: 'λ lue sur la règle', front: 'le front, à 6 cm de S', v: 'v calculée', t: 'l’instant t calculé',
+      graphes: 'les élongations de S et de M en fonction du temps', m_demarre: 'M commence à bouger', m_suit: 'M refait le mouvement de S, en retard', relation: 'y_M(t) = y_S(t − 0,03)' },
+    resultats: ['lambda', 'v', 't', 'relation'],
+    // temps de l’onde (ms) : 0 → 30 ms pendant la propagation, arrêt (la photo), puis 30 → 52 ms quand M bouge
+    tau() { return S.t < 10.8 ? lin(S.t, 0.5, 4.5, 0, 30) : lin(S.t, 10.8, 14.8, 30, 52); },
+    dessiner(c) {
+      const xs = 380, k = 34, ys = 150, A = 24, xg = 9.3, bas = 212, tau = this.tau();
+      const yS = t => (t <= 0 ? 0 : Math.sin(2 * Math.PI * t / 20));
+      const f = x => yS(tau - Math.abs(x) / 0.2);             // x en cm, v = 0,2 cm/ms, T = 20 ms
+      c.direct(() => {
+        const ctx = c.ctx;
+        c.texte('Coupe verticale de la surface de l’eau', 40, 34, { couleur: 'cyan', taille: 18 });
+        E.cote(ctx, { x0: xs - xg * k, x1: xs + xg * k, y: ys, bas, k: A }, px => f((px - xs) / k), 380);
+        E.tige(ctx, xs, ys - 70, ys - A * f(0), 5);
+        c.texte('S', xs + 10, ys - 52, { couleur: 'blanc', taille: 19 });
+        c.repere('point_s', xs - 14, ys - 72, 34, 80, 'la source S');
+        c.repere('surface', xs - xg * k, ys - A - 8, 2 * xg * k, 2 * A + 16, 'la surface de l’eau');
+        if (vu('photo') && !vu('graphes')) c.texte('photo à l’instant t', xs + xg * k, 34, { couleur: 'jaune', taille: 17, align: 'right' });
+        const yr = bas + 6;
+        if (vu('regle')) {
+          regleBois(ctx, xs - 9 * k - 6, xs + 9 * k + 6, yr, k, xs - 9 * k);
+          for (let i = 0; i <= 18; i++) c.texte(String(i), xs + (i - 9) * k, yr + 40, { couleur: 'blanc', taille: 15, align: 'center' });
+          c.repere('regle', xs - 9 * k, yr, 18 * k, 24, 'la règle graduée');
+          c.repere('echelle', xs + 7 * k - 4, yr - 2, k + 8, 28, 'l’échelle : 1 cm entre deux nombres de la règle');
+        }
+        const xa = xs + 1 * k, xb = xs + 5 * k;
+        if (vu('cretes')) {
+          for (const x of [xa, xb]) c.ligne(x, ys - A - 2, x, ys - A - 40, { couleur: 'jaune', largeur: 1.5, pointille: [4, 4] });
+          c.cote(xa, ys - A - 32, xb, ys - A - 32, '', { couleur: 'jaune' });
+          c.texte(montre('lambda') ? 'λ = 4 cm' : 'λ = ?', (xa + xb) / 2, ys - A - 42, { couleur: 'jaune', taille: 19, align: 'center' });
+          c.repere('cretes', xa - 10, ys - A - 62, xb - xa + 20, 64, 'deux crêtes voisines');
+          if (montre('lambda')) c.repere('lambda', xa, ys - A - 62, xb - xa, 34, 'λ = 4 cm');
+        }
+        const xf = xs + 6 * k, yb = yr + 58;
+        if (vu('front')) {
+          c.point(xf, ys - A * f(6), 5, 'orange').texte('M', xf + 8, ys - 14, { couleur: 'orange', taille: 18 });
+          c.ligne(xf, ys + 4, xf, yb + 4, { couleur: 'orange', largeur: 1.2, pointille: [4, 4] });
+          c.cote(xs, yb, xf, yb, 'SM = 6 cm', { couleur: 'orange', taille: 17, dessous: true });
+          c.repere('point_m', xf - 10, ys - 34, 60, 44, 'M, au front de l’onde');
+          c.repere('front', xs, yb - 12, xf - xs, 40, 'le front est à 6 cm de S');
+        }
+        if (montre('v')) { c.texte('v = λ·N = 4×10⁻² × 50 = 2 m/s', 30, 340, { couleur: 'vert', taille: 18, max: 340 }); c.repere('calcul_v', 26, 320, 344, 28, 'v = 2 m/s'); }
+        if (montre('t')) { c.texte('t = ⟦SM|v⟧ = ⟦6×10⁻²|2⟧ = 0,03 s', 30, 392, { couleur: 'vert', taille: 18, max: 340 }); c.repere('calcul_t', 26, 364, 344, 46, 't = 0,03 s'); }
+        if (vu('graphes')) graphesSM(c, tau, montre('relation'));
+      });
+    },
+    voir() {
+      const tau = this.tau(), m = [`Coupe de la surface de l’eau, S au milieu ; l’onde part de S des deux côtés (temps de l’onde : ${fr(tau, 0)} ms, front à ${fr(Math.min(9.3, 0.2 * tau), 1)} cm de S).`];
+      if (vu('photo')) m.push('Arrêt : la photo à l’instant t.');
+      if (vu('regle')) m.push('Une règle graduée en cm sous l’eau, échelle 1 cm.');
+      if (vu('cretes')) m.push(`Deux crêtes voisines marquées en jaune : ${montre('lambda') ? 'λ = 4 cm' : 'λ = ? (pas encore lue)'}.`);
+      if (vu('front')) m.push('M au front de l’onde, cote SM = 6 cm.');
+      if (montre('v')) m.push('Écrit : v = λ·N = 2 m/s.');
+      if (montre('t')) m.push('Écrit : t = SM/v = 0,03 s.');
+      if (vu('graphes')) m.push(`En bas à droite, y_S(t) (orange) et y_M(t) (cyan) jusqu’à ${fr(tau, 0)} ms : M reste au repos jusqu’à 30 ms, puis fait le même mouvement que S.`);
+      if (montre('relation')) m.push('Écrit : y_M(t) = y_S(t − 0,03).');
+      return m;
+    },
+    ralenti: 'ralenti : environ 7 ms par seconde',
+  },
+
+  /* ── National 2020 N : rides circulaires, puis une ouverture ── */
+  '2020': {
+    titre: 'Rides circulaires, puis une ouverture (national 2020 N)',
+    M: { onde_part: 0.9, photo: 4.6, intervalles: 5.6, lambda: 6.4, n: 7.3, retard: 8.2, obstacle: 9.1, ouverture_atteinte: 11.3, diffractee: 14.3, meme_lambda: 15.1 }, fin: 15.3,
+    motifs: { onde_part: 'S vibre, les rides partent en cercles', photo: 'la photo des rides et l’échelle 1 cm', intervalles: 'les intervalles dans 1 cm', lambda: 'λ calculée',
+      n: 'N calculée', retard: 'le retard τ calculé', obstacle: 'une ouverture de largeur voisine de λ', ouverture_atteinte: 'l’onde atteint l’ouverture',
+      diffractee: 'l’onde après l’ouverture', meme_lambda: 'même λ avant et après l’ouverture' },
+    resultats: ['lambda', 'n', 'retard', 'meme_lambda'],
+    dessiner(c) {
+      const xs = 205, ys = 196, L = 36, phi = lin(S.t, 0.5, 4.5, 0, 4);
+      c.direct(() => {
+        const ctx = c.ctx;
+        const r = { x: xs - 4 * L - 26, y: ys - 4 * L - 26, w: 8 * L + 52, h: 8 * L + 52 };
+        ctx.save(); E.chemin(ctx, r); ctx.clip(); E.fond(ctx, r, { reflets: false });
+        if (phi > 0) E.rides(ctx, { forme: 'radial', x: xs, y: ys, umax: 4.6 * L, pas: 2, zone: r, onde: u => (u > phi * L ? null : { h: Math.cos(2 * Math.PI * (phi - u / L)), s: Math.cos(2 * Math.PI * (phi - u / L)) * .9 }) });
+        ctx.restore();
+        ctx.save(); ctx.strokeStyle = '#3d4a54'; ctx.lineWidth = 6; E.chemin(ctx, r); ctx.stroke(); ctx.restore();
+        E.pointe(ctx, xs, ys, 6);
+        c.texte('S', xs, ys - 12, { couleur: 'blanc', taille: 18, align: 'center' });
+        c.repere('point_s', xs - 14, ys - 30, 28, 40, 'la source S');
+        c.repere('cuve', r.x, r.y, r.w, r.h, 'la cuve vue de dessus');
+        if (vu('photo')) {
+          for (let k = 1; k <= 4; k++) c.cercle(xs, ys, k * L, { couleur: 'blanc', largeur: 2 });
+          const yb = r.y + r.h + 12;
+          c.ligne(xs + 2 * L, ys, xs + 2 * L, yb + 6, { couleur: 'faible', largeur: 1.2, pointille: [5, 5] }).ligne(xs + 4 * L, ys, xs + 4 * L, yb + 6, { couleur: 'faible', largeur: 1.2, pointille: [5, 5] });
+          c.cote(xs + 2 * L, yb, xs + 4 * L, yb, '1 cm', { couleur: 'blanc', taille: 17, dessous: true });
+          c.repere('cercles', xs - 4 * L, ys - 4 * L, 8 * L, 8 * L, 'les rides : des crêtes circulaires');
+          c.repere('echelle', xs + 2 * L - 6, yb - 12, 2 * L + 12, 40, '1 cm');
+        }
+        if (vu('intervalles')) {
+          c.texte('1', xs + 2.5 * L, ys - 8, { couleur: 'cyan', taille: 18, align: 'center' }).texte('2', xs + 3.5 * L, ys - 8, { couleur: 'cyan', taille: 18, align: 'center' });
+          c.repere('intervalles', xs + 2 * L, ys - 28, 2 * L, 28, 'deux intervalles dans 1 cm');
+        }
+        const xt = 446;
+        c.texte('Donnée : v = 0,25 m/s', xt, 40, { couleur: 'cyan', taille: 18 });
+        if (montre('lambda')) { c.texte('1 cm = 2λ → λ = 0,5 cm = 5×10⁻³ m', xt, 76, { couleur: 'vert', taille: 17, max: 300 }); c.repere('calcul_lambda', xt - 6, 58, 306, 26, 'λ = 0,5 cm'); }
+        if (montre('n')) { c.texte('N = ⟦v|λ⟧ = ⟦0,25|5×10⁻³⟧ = 50 Hz', xt, 122, { couleur: 'vert', taille: 17, max: 300 }); c.repere('calcul_n', xt - 6, 96, 306, 44, 'N = 50 Hz'); }
+        if (montre('retard')) { c.texte('d = 5 cm : τ = ⟦d|v⟧ = ⟦5×10⁻²|0,25⟧ = 0,2 s', xt, 178, { couleur: 'vert', taille: 17, max: 300 }); c.repere('calcul_tau', xt - 6, 152, 306, 44, 'τ = 0,2 s'); }
+        if (vu('obstacle')) diffraction(c, L);
+      });
+    },
+    voir() {
+      const phi = lin(S.t, 0.5, 4.5, 0, 4), m = [`Cuve vue de dessus, S à gauche : ${phi > 0 ? `${fr(Math.min(4, phi), 1)} rides circulaires sont parties de S` : 'l’eau est calme'}. Écrit : v = 0,25 m/s.`];
+      if (vu('photo')) m.push('Quatre cercles de craie sur les crêtes ; une cote « 1 cm » du 2e au 4e cercle.');
+      if (vu('intervalles')) m.push('Les deux intervalles de la cote sont numérotés 1 et 2.');
+      if (montre('lambda')) m.push('Écrit : 1 cm = 2λ, λ = 0,5 cm = 5×10⁻³ m.');
+      if (montre('n')) m.push('Écrit : N = v/λ = 50 Hz.');
+      if (montre('retard')) m.push('Écrit : d = 5 cm, τ = d/v = 0,2 s.');
+      if (vu('obstacle')) m.push(`À droite, en bas : des rides droites (même λ) arrivent sur une paroi percée d’une ouverture de largeur a voisine de λ${S.t >= M().ouverture_atteinte ? (S.t >= M().ouverture_atteinte + 0.4 ? ' ; après l’ouverture, des arcs de cercle centrés sur l’ouverture' : ' ; l’onde atteint l’ouverture') : ''}.`);
+      if (montre('meme_lambda')) m.push('Écrit : même λ avant et après ; même N, même v (même milieu).');
+      return m;
+    },
+    ralenti: 'mouvement ralenti',
+  },
+
+  /* ── National 2022 R : l’onde atteint M, le spot trace y_M(t) ── */
+  '2022': {
+    titre: 'Élongation y_M(t), M à 2,5 cm de S (national 2022 R)',
+    M: { depart: 0.7, m_demarre: 2.1, trace: 8.6, retard: 9.4, cretes: 10.2, periode: 11.0, amplitude: 11.7, n: 12.5, v: 13.3, lambda: 14.1 }, fin: 14.3,
+    motifs: { depart: 'S commence à vibrer, M est encore au repos', m_demarre: 'l’onde atteint M : M commence à bouger', trace: 'la courbe y_M(t) est tracée',
+      retard: 'le retard τ lu', cretes: 'deux crêtes voisines', periode: 'T lue', amplitude: 'l’amplitude', n: 'N calculée', v: 'v calculée', lambda: 'λ calculée' },
+    resultats: ['retard', 'periode', 'amplitude', 'n', 'v', 'lambda'],
+    tau() { return lin(S.t, 0.5, 8.5, 0, 50); },
+    dessiner(c) {
+      const tau = this.tau(), x0e = 60, kc = 50, ye = 78, Ae = 15, bas = 116;     // l’eau : 50 px par cm
+      const yS = t => (t <= 0 ? 0 : Math.sin(2 * Math.PI * t / 20));
+      const f = x => yS(tau - x / 0.25);                                          // x en cm, v = 0,25 cm/ms
+      const yM = t => yS(t - 10);
+      const g = { x0: 80, kx: 8, yc: 278, ky: 12 }, X = t => g.x0 + t * g.kx, Y = y => g.yc - y * g.ky;
+      c.direct(() => {
+        const ctx = c.ctx, xM = x0e + 2.5 * kc;
+        E.cote(ctx, { x0: x0e, x1: 740, y: ye, bas, k: Ae }, px => f((px - x0e) / kc), 360);
+        E.tige(ctx, x0e + 3, ye - 52, ye - Ae * f(0), 5);
+        c.texte('S', x0e + 12, ye - 34, { couleur: 'blanc', taille: 18 });
+        c.repere('point_s', x0e - 10, ye - 54, 34, 70, 'la source S');
+        c.texte('surface de l’eau (vue de côté)', 740, 30, { couleur: 'cyan', taille: 16, align: 'right' });
+        c.repere('surface', x0e, ye - Ae - 8, 740 - x0e, 2 * Ae + 16, 'la surface de l’eau');
+        c.point(xM, ye - Ae * f(2.5), 6, 'cyan').texte('M', xM + 9, ye - 20, { couleur: 'cyan', taille: 18 });
+        c.cote(x0e + 3, bas + 14, xM, bas + 14, 'L = 2,5 cm', { couleur: 'blanc', taille: 16, dessous: true });
+        c.repere('point_m', xM - 14, ye - 36, 50, 50, 'le point M, à 2,5 cm de S');
+        // Le graphe y_M(t), tracé par le spot en même temps que M bouge.
+        ctx.save(); ctx.strokeStyle = 'rgba(96,165,250,.16)'; ctx.lineWidth = 1; ctx.beginPath();
+        for (let t = 0; t <= 50; t += 5) { ctx.moveTo(X(t), Y(7)); ctx.lineTo(X(t), Y(-7)); }
+        for (let y = -6; y <= 6; y += 3) { ctx.moveTo(X(0), Y(y)); ctx.lineTo(X(50), Y(y)); } ctx.stroke(); ctx.restore();
+        c.fleche(X(0), g.yc, X(50) + 26, g.yc, { couleur: 'blanc', largeur: 2 });
+        c.fleche(X(0), Y(-7.2), X(0), Y(7) - 14, { couleur: 'blanc', largeur: 2 });
+        c.texte('y_M (mm)', X(0) + 10, Y(7) - 2, { couleur: 'blanc', taille: 17 });
+        c.texte('t (ms)', X(50) + 4, g.yc + 22, { couleur: 'blanc', taille: 17 });
+        for (const t of [10, 25, 35, 45]) c.texte(String(t), X(t), g.yc + 20, { couleur: 'blanc', taille: 15, align: 'center' });
+        for (const y of [3, -3, -6]) c.texte(String(y).replace('-', '−'), X(0) - 8, Y(y) + 5, { couleur: 'blanc', taille: 15, align: 'right' });
+        c.repere('axe', X(0), g.yc - 12, X(50) - X(0) + 30, 40, 'l’axe des temps, en ms');
+        if (tau > 0) {
+          const pts = []; for (let t = 0; t <= tau; t += 0.25) pts.push([X(t), Y(6 * yM(t))]);
+          ctx.save(); ctx.lineJoin = 'round'; ctx.shadowColor = '#22d3ee'; ctx.shadowBlur = 7; ctx.strokeStyle = '#7ff0ff'; ctx.lineWidth = 2.6;
+          ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke(); ctx.restore();
+          if (tau < 50) { const [x, y] = pts[pts.length - 1]; ctx.save(); ctx.fillStyle = '#ecfeff'; ctx.beginPath(); ctx.arc(x, y, 3.4, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+          c.repere('courbe', X(0), Y(6) - 6, X(Math.max(1, tau)) - X(0), Y(-6) - Y(6) + 12, 'la courbe y_M(t)');
+        }
+        if (montre('retard')) {
+          c.cote(X(0), g.yc + 40, X(10), g.yc + 40, '', { couleur: 'jaune' });
+          c.texte('τ = 10 ms', X(5), g.yc + 64, { couleur: 'jaune', taille: 18, align: 'center' });
+          c.repere('retard', X(0), g.yc - 20, X(10) - X(0) + 10, 92, 'le retard τ = 10 ms : M commence à bouger');
+        }
+        if (vu('cretes')) {
+          for (const t of [15, 35]) c.ligne(X(t), Y(6), X(t), Y(7) - 18, { couleur: 'jaune', largeur: 1.4, pointille: [4, 4] });
+          c.cote(X(15), Y(7) - 12, X(35), Y(7) - 12, '', { couleur: 'jaune' });
+          c.texte(montre('periode') ? 'T = 35 − 15 = 20 ms' : 'T = ?', X(25), Y(7) - 20, { couleur: 'jaune', taille: 18, align: 'center' });
+          c.repere('periode', X(15) - 6, Y(7) - 40, X(35) - X(15) + 12, 44, 'deux crêtes voisines : une période');
+        }
+        if (montre('amplitude')) { c.cote(X(47.5), g.yc, X(47.5), Y(6), '', { couleur: 'jaune' }); c.texte('6 mm', X(48.5), Y(3.4), { couleur: 'jaune', taille: 16 }); c.repere('amplitude', X(46), Y(6) - 6, 70, 6 * g.ky + 12, 'l’amplitude : 6 mm'); }
+        const xt = 510;
+        if (montre('n')) { c.texte('N = ⟦1|T⟧ = ⟦1|20×10⁻³⟧ = 50 Hz', xt, 214, { couleur: 'vert', taille: 17, max: 240 }); c.repere('calcul_n', xt - 6, 186, 246, 44, 'N = 50 Hz'); }
+        if (montre('v')) { c.texte('v = ⟦L|τ⟧ = ⟦2,5×10⁻²|10×10⁻³⟧ = 2,5 m/s', xt, 284, { couleur: 'vert', taille: 17, max: 240 }); c.repere('calcul_v', xt - 6, 256, 246, 44, 'v = 2,5 m/s'); }
+        if (montre('lambda')) { c.texte('λ = v·T = 2,5 × 20×10⁻³', xt, 346, { couleur: 'vert', taille: 17, max: 240 }); c.texte('λ = 5×10⁻² m = 5 cm', xt, 378, { couleur: 'vert', taille: 17, max: 240 }); c.repere('calcul_lambda', xt - 6, 326, 246, 60, 'λ = 5 cm'); }
+      });
+    },
+    voir() {
+      const tau = this.tau(), m = [`Vue de côté de l’eau : S à gauche, M à L = 2,5 cm. Temps de l’onde : ${fr(tau, 0)} ms ; ${tau < 10 ? 'l’onde n’a pas encore atteint M, M est au repos' : 'M bouge'}.`,
+        `Graphe y_M (mm) en fonction de t (ms), graduations 10, 25, 35, 45 ; la courbe est tracée jusqu’à ${fr(tau, 0)} ms (plate jusqu’à 10 ms).`];
+      if (montre('retard')) m.push('Cote jaune : τ = 10 ms.');
+      if (vu('cretes')) m.push(`Pointillés sur deux crêtes voisines (15 et 35 ms) : ${montre('periode') ? 'T = 20 ms' : 'T = ? (pas encore lue)'}.`);
+      if (montre('amplitude')) m.push('Amplitude 6 mm.');
+      if (montre('n')) m.push('Écrit : N = 1/T = 50 Hz.');
+      if (montre('v')) m.push('Écrit : v = L/τ = 2,5 m/s.');
+      if (montre('lambda')) m.push('Écrit : λ = v·T = 5 cm.');
+      return m;
+    },
+    ralenti: 'ralenti : environ 6 ms par seconde',
+  },
+};
+
+/* ─────────────────────────── Peintures et morceaux communs ─────────────────────────── */
+function peindreEcran(ctx, O, DX, DY) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(O.x - 6, O.y - 4, O.w + 20, O.h + 22);
+  const b = ctx.createLinearGradient(0, O.y - 12, 0, O.y + O.h + 12); b.addColorStop(0, '#6b7480'); b.addColorStop(1, '#22282e');
+  ctx.fillStyle = b; ctx.fillRect(O.x - 12, O.y - 12, O.w + 24, O.h + 24);
+  const g = ctx.createRadialGradient(O.x + O.w / 2, O.y + O.h / 2, 10, O.x + O.w / 2, O.y + O.h / 2, O.w * .7); g.addColorStop(0, '#12382a'); g.addColorStop(1, '#06180f');
+  ctx.fillStyle = g; ctx.fillRect(O.x, O.y, O.w, O.h);
+  ctx.strokeStyle = 'rgba(134,239,172,.2)'; ctx.lineWidth = 1;
+  for (let i = 1; i < O.nx; i++) { ctx.beginPath(); ctx.moveTo(O.x + i * DX, O.y); ctx.lineTo(O.x + i * DX, O.y + O.h); ctx.stroke(); }
+  for (let j = 1; j < O.ny; j++) { ctx.beginPath(); ctx.moveTo(O.x, O.y + j * DY); ctx.lineTo(O.x + O.w, O.y + j * DY); ctx.stroke(); }
+  ctx.restore();
+}
+/** Une règle claire posée sous l’eau (graduée en mm et en cm), sans texte peint : les nombres sont écrits à la craie. */
+function regleBois(ctx, x0, x1, y, k, xZero) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,10,16,.3)'; ctx.fillRect(x0 + 3, y + 3, x1 - x0, 22);
+  const g = ctx.createLinearGradient(0, y, 0, y + 22); g.addColorStop(0, 'rgba(250,246,225,.9)'); g.addColorStop(1, 'rgba(222,214,186,.85)');
+  ctx.fillStyle = g; ctx.fillRect(x0, y, x1 - x0, 22);
+  ctx.strokeStyle = 'rgba(60,50,30,.9)'; ctx.lineWidth = 1; ctx.beginPath();
+  for (let i = 0; xZero + i * k / 10 <= x1 - 2; i++) { const x = xZero + i * k / 10, l = i % 10 === 0 ? 14 : i % 5 === 0 ? 9 : 5; ctx.moveTo(x, y); ctx.lineTo(x, y + l); }
+  ctx.stroke(); ctx.restore();
+}
+/** Le spot trace une voie de gauche à droite : `y(d)` (d en divisions), `avance` de 0 à 1. */
+function spot(ctx, y, O, DX, avance, couleur) {
+  if (avance <= 0) return;
+  const pts = []; for (let x = 0; x <= O.w * avance; x += 2) pts.push([O.x + x, y(x / DX)]);
+  ctx.save(); ctx.lineJoin = 'round'; ctx.shadowColor = couleur; ctx.shadowBlur = 8; ctx.strokeStyle = couleur; ctx.lineWidth = 2.4;
+  ctx.beginPath(); pts.forEach(([a, b], i) => (i ? ctx.lineTo(a, b) : ctx.moveTo(a, b))); ctx.stroke();
+  if (avance < 1) { const [a, b] = pts[pts.length - 1]; ctx.shadowBlur = 0; ctx.fillStyle = '#ecfeff'; ctx.beginPath(); ctx.arc(a, b, 3.4, 0, Math.PI * 2); ctx.fill(); }
+  ctx.restore();
+}
+/** 2017 : y_S(t) et y_M(t) l’une sous l’autre, jusqu’au temps de l’onde `tau` (ms) ; M reste au repos 30 ms. */
+function graphesSM(c, tau, relation) {
+  const x0 = 430, kx = 5.6, A = 12, ctx = c.ctx, X = t => x0 + t * kx;
+  const yS = t => (t <= 0 ? 0 : Math.sin(2 * Math.PI * t / 20));
+  for (const [nom, y0, decale, coul, clair] of [['y_S', 340, 0, 'orange', '#ffc08a'], ['y_M', 390, 30, 'cyan', '#7ff0ff']]) {
+    c.fleche(X(0), y0, X(52) + 16, y0, { couleur: 'faible', largeur: 1.4, duree: 0 });
+    c.texte(nom, x0 - 8, y0 + 5, { couleur: coul, taille: 17, align: 'right' });
+    const pts = []; for (let t = 0; t <= tau; t += 0.25) pts.push([X(t), y0 - A * yS(t - decale)]);
+    ctx.save(); ctx.strokeStyle = clair; ctx.lineWidth = 2.2; ctx.beginPath(); pts.forEach(([a, b], i) => (i ? ctx.lineTo(a, b) : ctx.moveTo(a, b))); ctx.stroke(); ctx.restore();
+  }
+  c.texte('t (ms)', X(52) + 4, 410, { couleur: 'faible', taille: 15 });
+  c.ligne(X(30), 322, X(30), 404, { couleur: 'jaune', largeur: 1.2, pointille: [3, 4], duree: 0 });
+  c.texte('30', X(30), 418, { couleur: 'jaune', taille: 15, align: 'center' });
+  c.repere('graphes', x0 - 40, 322, 340, 98, 'y_S(t) et y_M(t) : M refait le mouvement de S, 30 ms plus tard');
+  if (relation) { c.texte('y_M(t) = y_S(t − 0,03)', 740, 40, { couleur: 'vert', taille: 20, align: 'right' }); c.repere('relation', 510, 18, 232, 30, 'y_M(t) = y_S(t − 0,03)'); }
+}
+/** 2020 : des rides droites (λ = 0,5 cm) arrivent sur une paroi percée d’une ouverture a ≈ λ, puis repartent en arcs. */
+function diffraction(c, L) {
+  const ctx = c.ctx, r = { x: 446, y: 216, w: 300, h: 176 }, xw = r.x + 150, yo = r.y + r.h / 2, a = L, x0 = r.x;
+  const n0 = (xw - x0) / L, t0 = M().obstacle + 0.2, ta = M().ouverture_atteinte;     // l’onde atteint la paroi à `ouverture_atteinte`
+  const phi = S.t < ta ? lin(S.t, t0, ta, 0, n0) : lin(S.t, ta, M().diffractee, n0, n0 + 3.2);   // en périodes, depuis le bord gauche
+  const p1 = phi - (xw - x0) / L;                                                         // rides passées par l’ouverture
+  ctx.save(); E.chemin(ctx, r); ctx.clip(); E.fond(ctx, r, { reflets: false });
+  if (phi > 0) {
+    ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, xw - r.x, r.h); ctx.clip();
+    E.rides(ctx, { forme: 'lineaire', x: x0, umax: xw - x0 + 2, pas: 2, zone: { x: r.x, y: r.y, w: xw - r.x, h: r.h }, onde: u => (u > phi * L ? null : { h: Math.cos(2 * Math.PI * (phi - u / L)), s: Math.cos(2 * Math.PI * (phi - u / L)) * .9 }) });
+    ctx.restore();
+  }
+  if (p1 > 0) {
+    ctx.save(); ctx.beginPath(); ctx.rect(xw, r.y, r.x + r.w - xw, r.h); ctx.clip();
+    E.rides(ctx, { forme: 'radial', x: xw, y: yo, umax: 4.4 * L, pas: 2, zone: { x: xw, y: r.y, w: r.x + r.w - xw, h: r.h }, onde: u => (u > p1 * L ? null : { h: Math.cos(2 * Math.PI * (p1 - u / L)), s: Math.cos(2 * Math.PI * (p1 - u / L)) * .9, amp: .8 }) });
+    ctx.restore();
+  }
+  ctx.restore();
+  ctx.save(); ctx.strokeStyle = '#3d4a54'; ctx.lineWidth = 5; E.chemin(ctx, r); ctx.stroke(); ctx.restore();
+  E.paroi(ctx, xw - 5, r.y, yo - a / 2, 10); E.paroi(ctx, xw - 5, yo + a / 2, r.y + r.h, 10);
+  c.texte('ouverture a ≈ λ', xw + 8, r.y + 20, { couleur: 'jaune', taille: 16 });
+  c.repere('ouverture', xw - 10, yo - a / 2 - 6, 24, a + 12, 'l’ouverture, de largeur voisine de λ');
+  c.repere('onde_incidente', r.x, r.y, xw - r.x, r.h, 'l’onde qui arrive sur l’ouverture');
+  if (S.t >= M().ouverture_atteinte + 0.4) c.repere('onde_diffractee', xw + 6, r.y, r.x + r.w - xw - 6, r.h, 'l’onde après l’ouverture : des arcs centrés sur l’ouverture');
+  if (vu('meme_lambda')) {
+    const yy = r.y + r.h - 18;
+    c.cote(xw - 2 * L, yy, xw - L, yy, '', { couleur: 'jaune' }).cote(xw + 2 * L, yy, xw + 3 * L, yy, '', { couleur: 'jaune' });
+    c.texte('λ', xw - 1.5 * L, yy - 8, { couleur: 'jaune', taille: 17, align: 'center' }).texte('λ', xw + 2.5 * L, yy - 8, { couleur: 'jaune', taille: 17, align: 'center' });
+    if (S.conclusions) { c.texte('même N, même λ, même v', r.x + r.w / 2, r.y + r.h + 22, { couleur: 'vert', taille: 18, align: 'center' }); c.repere('conclusion', r.x, r.y + r.h + 4, r.w, 26, 'même N, même λ, même v après l’ouverture'); }
+  }
+}
+
+/* ─────────────────────────── Horloge, commandes, état ─────────────────────────── */
+const VU = V[vue];
+const M = () => VU.M;
+const vu = m => VU.M[m] !== undefined && S.t >= VU.M[m] - 1e-3;
+const montre = m => vu(m) && (S.conclusions || !VU.resultats.includes(m));
+const DEPART = VU.M[Q.get('depart')] !== undefined ? VU.M[Q.get('depart')] : 0;
+S.t = DEPART;
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(23); VU.dessiner(c); return c.fin(); });
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(VU.fin, S.t + dt);
+  if (S.jusqua != null && S.t >= S.jusqua) {
+    S.t = S.jusqua; S.jusqua = null; S.running = false; $('run').textContent = 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || 'instant choisi') + '.'); pont.noter('pause'); pont.emettre();
+    return true;
+  }
+  if (S.t >= VU.fin) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), 'Exercice rejoué jusqu’au bout.', 'good'); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+function playUntil(p) {
+  const nom = p.moment in VU.M ? p.moment : null, cible = nom ? VU.M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-3) S.t = DEPART < cible - 1e-3 ? DEPART : 0;
+  S.jusqua = Math.min(VU.fin, Math.max(0.01, cible)); S.motif = nom ? VU.motifs[nom] : '';
+  S.running = true; S.fait = false; $('run').textContent = 'Pause'; scene.sale = true;
+  bulle($('feedback'), VU.ralenti + '…');
+  pont.noter('play_until', { moment: nom }); pont.emettre();
+}
+function start() { S.jusqua = null; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), VU.ralenti + '…'); pont.noter('start'); pont.emettre(); }
+function pause() { if (!S.running) return; S.jusqua = null; S.running = false; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause'); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait) return start(); S.running = true; $('run').textContent = 'Pause'; pont.noter('resume'); pont.emettre(); }
+function reset() { S.t = DEPART; S.running = false; S.fait = false; S.jusqua = null; scene.sale = true; $('run').textContent = DEPART ? 'Reprendre' : 'Lancer'; bulle($('feedback'), DEPART ? 'On reprend l’exercice ici.' : 'Prêt.'); pont.noter('reset'); pont.emettre(); }
+function setTime(p) { const t = +p.time_s; if (!Number.isFinite(t)) return; S.running = false; S.jusqua = null; S.t = borne(t, 0, VU.fin); S.fait = S.t >= VU.fin; scene.sale = true; pont.emettre(); }
+function setParameters(p) {
+  if ('conclusions' in p) S.conclusions = p.conclusions === true || p.conclusions === 'true' || p.conclusions === 1;
+  scene.sale = true; pont.noter('set_parameters', { conclusions: S.conclusions }); pont.emettre();
+}
+$('run').onclick = () => (S.running ? pause() : (!S.fait && (S.t > 0)) ? resume() : start());
+
+function ceQuiSeVoit() {
+  const m = VU.voir();
+  m.push(S.running ? 'La scène avance.' : S.fait ? 'Exercice fini.' : 'Scène arrêtée.');
+  if (!S.conclusions) m.push('Les valeurs et la conclusion sont cachées (question en cours).');
+  return m.join(' ');
+}
+const EXPLICATIONS = {
+  oscillo: [{ repere: 'sensibilite', texte: 'Lire d’abord la sensibilité horizontale.' }, { repere: 'periode', texte: 'Compter les divisions d’une période, entre deux crêtes voisines.' }, { repere: 'relation', texte: 'T = nombre de divisions × sensibilité, puis convertir en s.' }],
+  '2017': [{ repere: 'cretes', texte: 'λ : de crête à crête, sur la règle.' }, { repere: 'front', texte: 'Le front est à 6 cm de S : la source a démarré à t = 0, donc t = SM/v.' }, { repere: 'graphes', texte: 'M refait le mouvement de S, 30 ms plus tard : y_M(t) = y_S(t − 0,03).' }],
+  '2020': [{ repere: 'intervalles', texte: 'Compter les intervalles dans 1 cm : 1 cm = 2λ.' }, { repere: 'ouverture', texte: 'Ouverture voisine de λ : diffraction.' }, { repere: 'onde_diffractee', texte: 'L’onde diffractée garde N, λ et v : le milieu est le même.' }],
+  '2022': [{ repere: 'point_m', texte: 'M ne bouge que quand l’onde l’atteint.' }, { repere: 'retard', texte: 'τ : la date où M commence à bouger.' }, { repere: 'periode', texte: 'T : entre deux crêtes voisines. Ne pas confondre avec τ.' }],
+};
+window.Tableau.explication({ [vue]: EXPLICATIONS[vue] });
+const commandes = ['start', 'pause', 'resume', 'reset', 'set_time', 'set_parameters', 'play_until'];
+const config = { id: 'ondes_periodiques_national', version: '1.0', title: VU.titre, variants: VUES.map(v => ({ id: v, label: V[v].titre })), commands: commandes,
+  command_schema: { play_until: { moment: Object.keys(VU.M).join(' | ') + ' (rejoue et se fige à cet instant)' }, set_parameters: { conclusions: 'true | false (false : valeurs et conclusions cachées pendant une question)' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: `Exercice du national joué pas à pas : ${VU.titre}. Étapes : ${Object.keys(VU.M).join(', ')}.`,
+  etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : (S.t > 0 ? 'paused' : 'idle'), ce_qui_se_voit: ceQuiSeVoit(), current_variant: vue,
+    moments: VU.M, parameters: { conclusions: S.conclusions }, time_s: +S.t.toFixed(2), etapes_vues: Object.keys(VU.M).filter(vu) }),
+  progression: () => S.t / VU.fin,
+  executer: (cmd, p) => ({ start, pause, resume, reset, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+$('run').textContent = DEPART ? 'Reprendre' : 'Lancer';
+bulle($('feedback'), DEPART ? 'On reprend l’exercice ici.' : 'Lance : le phénomène d’abord.');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
