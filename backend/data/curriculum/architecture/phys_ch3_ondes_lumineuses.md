@@ -260,3 +260,8 @@ consigne dans la copie en attente : rien à faire.
   moment suivant, sans erreur).
 - Vérificateur de pointage, copie en attente : 0 « introuvable », 0 DEPART, 0 IFRAME (avant : 0, 49, 8) ; cours en
   ligne inchangé (52 DEPART, 8 IFRAME, 3 GESTE avant comme après). Vérificateur de formules : 0 (avant : 7).
+- **Fiche « Ce qu’il faut retenir » (`bilan.html`) sur téléphone en paysage** : texte à 6 px, la page suivait le plancher
+  du kit (abaissé jusqu’à 45 %). Elle garde son plancher de 15 px (indices et exposants compris) et se coupe en parties
+  (« partie n sur N · touche : la suite », la voix montre la partie du bloc qu’elle dit) ; ordinateur : une page, comme
+  avant ; impression : la fiche entière. Les `play_until {moment: <bloc>}` étaient ignorés par le kit (tous les moments
+  à 1 = time_s) : moments 1,01 à 2, noms inchangés. Mesuré : 15 px au moins, 0 chevauchement, de 568 × 300 à 1596 × 700.
