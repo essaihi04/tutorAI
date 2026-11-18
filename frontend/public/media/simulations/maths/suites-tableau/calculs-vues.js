@@ -904,6 +904,41 @@ window.CALCULS = {
    }
   ]
  },
+ "e1_q1": {
+  "titre": "National 2024 — question 1",
+  "lignes": [
+   {"t": "u_0 = 4,   u_{n+1} = (4u_n − 2)/(u_n + 1)", "c": "cyan", "m": "enonce"},
+   {"t": "Montrer : 2 ≤ u_n ≤ 4 pour tout n", "c": "jaune", "m": "q1"},
+   {"t": "Initialisation : u_0 = 4, donc 2 ≤ u_0 ≤ 4", "c": "blanc", "m": "init"},
+   {"t": "Hérédité : on suppose 2 ≤ u_n ≤ 4", "c": "blanc", "m": "hyp"},
+   {"t": "u_{n+1} − 2 = 2(u_n − 2)/(u_n + 1)   signe ?", "c": "jaune", "m": "calcul"}
+  ]
+ },
+ "e1_q2": {
+  "titre": "National 2024 — question 2",
+  "lignes": [
+   {"t": "u_{n+1} − u_n = (4u_n − 2 − u_n(u_n + 1))/(u_n + 1)", "c": "cyan", "m": "difference"},
+   {"t": "= −(u_n − 1)(u_n − 2)/(u_n + 1)", "c": "cyan", "m": "calcul", "dx": 30},
+   {"t": "2 ≤ u_n ≤ 4 (question 1)   →   signe ?", "c": "jaune", "m": "question"}
+  ]
+ },
+ "e1_q4": {
+  "titre": "National 2024 — question 4",
+  "lignes": [
+   {"t": "v_n = (u_n − 2)/(u_n − 1)", "c": "cyan", "m": "pose"},
+   {"t": "u_{n+1} − 2 = 2(u_n − 2)/(u_n + 1)", "c": "blanc", "m": "donnees"},
+   {"t": "u_{n+1} − 1 = 3(u_n − 1)/(u_n + 1)", "c": "blanc"},
+   {"t": "v_{n+1} = ?", "c": "jaune", "m": "question"}
+  ]
+ },
+ "e1_q5": {
+  "titre": "National 2024 — question 5",
+  "lignes": [
+   {"t": "v_0 = (4 − 2)/(4 − 1) = 2/3", "c": "cyan", "m": "v0"},
+   {"t": "v_n = v_0 × (2/3)^{n} = (2/3)^{n+1}", "c": "cyan", "m": "vn"},
+   {"t": "u_n en fonction de v_n, puis lim u_n = ?", "c": "jaune", "m": "question"}
+  ]
+ },
  "e1": {
   "titre": "Un exercice complet (national 2024)",
   "lignes": [
