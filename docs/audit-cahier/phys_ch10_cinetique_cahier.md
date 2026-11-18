@@ -171,14 +171,21 @@ Tableau d'avancement modèle (exemple A, en mmol) :
 - Donc t₁/₂ se lit à n_A = 0,9 − 0,3 = 0,6 mol (Attention : ni 0,45 ni 0,3 mol) → 3,5 h.
 - **Dessin : t₁/₂ sur une courbe de réactif** — n_A = n₀ − x descend vers le palier 0,3 mol ; x_f = 0,6 mol, donc à t₁/₂ : n_A = 0,9 − 0,3 = 0,6 mol → t₁/₂ ≈ 3,5 h (C₂).
 
-*(ci_s4_b2 — National : même x_f, σ(t), G(t), trempe)*
+*(ci_s4_b2 — National : même x_f, G(t), trempe)*
 
 - 2025 N : même x_f = 133 mmol pour 3 courbes : T et catalyseur changent la durée, pas x_f.
-- Méthode (relation σ(x) donnée, 2021 N) : σ = 0,25 − 160·x, on dérive : dσ/dt = −160·dx/dt.
-- Donc v = −(1/(160·V₀))·dσ/dt = 0,0125/(1,6·10⁻²) = 0,78 mol·m⁻³·min⁻¹ (V₀ en m³).
 - 2018 R : x_f/2 = 5·10⁻⁴ mol → G₁/₂ = 1,07·10⁻³/(6,3·10⁻²) = 0,017 S = 17 mS → t₁/₂ ≈ 17 min.
-- Attention : G lue en mS mais relation en S ; dσ/dt < 0 mais v > 0.
+- Attention : G (conductance) lue en mS, relation en S ; G = k·σ, σ en S/m.
 - 2017 R : trempe = refroidir brusquement pour bloquer la réaction (écrire « bloquer »).
+
+*(ci_s6_b1 — Le national 2021 N joué pas à pas : tableau, σ(t), t₁/₂, vitesse)*
+
+- 2021 N, Q1 : ester en excès, HO⁻ limitant : x_f = x_max = n₀(HO⁻) = 10⁻³ mol.
+- Q2 : x(t₁/₂) = 5·10⁻⁴ mol → σ₁/₂ = 0,25 − 160 × 5·10⁻⁴ = 0,17 S·m⁻¹ → t₁/₂ = 4 min.
+- Attention : σ₁/₂ ≠ σ₀/2 : on passe toujours par x_f/2 et la relation σ(x).
+- Q3 (méthode) : σ = 0,25 − 160·x, on dérive : dσ/dt = −160·dx/dt, v = −(1/(160·V₀))·dσ/dt.
+- Q4 : tangente en 4 min : dσ/dt = (0,17 − 0,22)/4 = −0,0125 S·m⁻¹·min⁻¹ ; V₀ = 10⁻⁴ m³.
+- v₁ = 0,0125/(1,6·10⁻²) ≈ 0,78 mol·m⁻³·min⁻¹ (Attention : dσ/dt < 0 mais v₁ > 0).
 
 ## X. Pièges de rédaction
 
@@ -216,7 +223,8 @@ Tableau d'avancement modèle (exemple A, en mmol) :
 | `ci_s3_b2` | v5_diminue, v6_epuisement, v7_nulle, v8_temperature | 5 (« Tangentes de plus en plus plates : v(0… ») | Des tangentes de plus en plus plates ; Plus concentré, plus vite |
 | `ci_s3_b3` | h1_definition, h2_lecture, h3_pieges, h4_comparer | 5 (« Définition : t₁/₂ est la durée au bout… ») | Lire t₁/₂ ; Comparer deux t₁/₂ |
 | `ci_s4_b1` | n1_aspirine, n2_diminue, n3_deux, n4_reactif | 5 (« 2019 R : pente (1,5 − 0,75)/75 = 1,0·1… ») | t₁/₂ sur une courbe de réactif |
-| `ci_s4_b2` | n5_trois, n6_sigma, n7_conductance, n8_trempe | 6 (« 2025 N : même x_f = 133 mmol pour 3 co… ») | — |
+| `ci_s4_b2` | n5_trois, n7_conductance, n8_trempe | 4 (« 2025 N : même x_f = 133 mmol pour 3 co… ») | — |
+| `ci_s6_b1` | n6a_tableau, n6b_demi, n6c_montrer, n6d_vitesse | 6 (« 2021 N, Q1 : ester en excès, HO⁻ limit… ») | — |
 | `ci_s4_b3` | r1_litres, r2_unites, bl_fiche, cr_carte | 5 (« Méthode (rédiger v) : relation ; pente… ») | — |
 
 | Diapo → bulle | Figure |
@@ -275,9 +283,12 @@ Tableau d'avancement modèle (exemple A, en mmol) :
 | `ci_n3_deux` : 2017 N : x_f/2 de chaque courbe : (1) 0,1 mol → 8 min ; (2) 0,15 mol → 2 min. (2) est la plus rapide. Attention : x_f/2, pas x_max/2. | — |
 | `ci_n4_reactif` : 2023 N : n_A = n₀ − x ; x_f = 0,6 mol ; à t₁/₂, n_A = 0,6 mol → t₁/₂ ≈ 3,5 h. C₁ : même palier atteint plus tôt (catalyseur). | t₁/₂ sur une courbe de réactif |
 | `ci_n5_trois` : 2025 N : même x_f = 133 mmol : les facteurs cinétiques changent la durée, pas l'état final. (b) : x_f/2 = 66,5 mmol → t₁/₂ ≈ 90 min. | — |
-| `ci_n6_sigma` : 2021 N : σ = 0,25 − 160·x → v = −(1/(160·V₀))·dσ/dt = 0,78 mol·m⁻³·min⁻¹. σ₁/₂ = 0,25 − 160 × 5·10⁻⁴ = 0,17 S·m⁻¹ → t₁/₂ = 4 min. | — |
 | `ci_n7_conductance` : 2018 R : G₁/₂ = (1,57·10⁻³ − 5·10⁻⁴)/(6,3·10⁻²) = 0,017 S = 17 mS → t₁/₂ ≈ 17 min. Attention : G lue en mS, relation en S. | — |
 | `ci_n8_trempe` : 2017 R : trempe : le refroidissement brusque bloque la réaction ; on dose l'acide restant. Palier n(acide) = 0,2 mol → x_f = 0,6 − 0,2 = 0,4 mol. | — |
+| `ci_n6a_tableau` : 2021 N, Q1 : ester en excès, HO⁻ limitant ; 10⁻³ − x_max = 0 ⇒ x_f = x_max = 10⁻³ mol. | — |
+| `ci_n6b_demi` : Q2 : x(t₁/₂) = 5·10⁻⁴ mol ; σ₁/₂ = 0,25 − 160 × 5·10⁻⁴ = 0,17 S·m⁻¹ → t₁/₂ = 4 min. Attention : σ₁/₂ ≠ σ₀/2. | — |
+| `ci_n6c_montrer` : Q3 : σ = 0,25 − 160·x ⇒ dσ/dt = −160·dx/dt (0,25 est une constante). Donc v = (1/V₀)·dx/dt = −(1/(160·V₀))·dσ/dt. | — |
+| `ci_n6d_vitesse` : Q4 : pente de (T) = (0,17 − 0,22)/4 = −0,0125 S·m⁻¹·min⁻¹ ; V₀ = 10⁻⁴ m³. v₁ = 0,0125/(1,6·10⁻²) ≈ 0,78 mol·m⁻³·min⁻¹ (dσ/dt < 0 mais v₁ > 0). | — |
 | `ci_r1_litres` : V = 100 mL = 0,100 L : v(0) = (1/0,100) × 0,25 = 2,5 mmol·L⁻¹·min⁻¹ = 2,5 mol·m⁻³·min⁻¹. | — |
 | `ci_r2_unites` : 10⁻² mol/L = 10 mol/m³ ; 19,9 mS·m²·mol⁻¹ = 19,9·10⁻³ S·m²·mol⁻¹. Attention : σ lue en mS/m → S/m (250 mS/m = 0,250 S/m). | — |
 | `ci_bl_fiche` : n(I₂) = C·V_E/2 ; x = x_max·(σ₀ − σ)/(σ₀ − σ_f) ; x = (P − P₀)·V/(R·T). v = (1/V)·dx/dt (tangente, V en L) ; v diminue ; x(t₁/₂) = x_f/2. | — |
