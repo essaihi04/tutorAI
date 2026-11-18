@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le national joué pas à pas — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="genetique.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Deux sujets nationaux joués au tableau, une consigne à la fois : les moustiques résistants (2020 N) et l’anémie de Blackfan-Diamond (2022 N)"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="etapes.js"></script>
+<script src="molecules.js"></script>
+<script>
+/*
+ * Le national joué pas à pas (cours « Expression de l’information génétique », 18 novembre 2026, 2ᵉ passe ; règles 33,
+ * 35 et 41 du professeur, règle 14 de simulations-au-tableau). Les figures des sujets redessinées et animées avec leurs
+ * valeurs (backend/data/exams/svt), une étape par moment ; ce qui répond à une consigne n’est pas écrit avant elle.
+ *   ?vue=moustiques     (2020 N, documents 1 et 2) : l’acétylcholinestérase (AChE) hydrolyse l’acétylcholine ; le
+ *                       carbamate occupe son site actif ; activité de l’AChE des souches S et R (97, 8, 0 % ; 32, 32, 28 %)
+ *                       pour 0, 10⁻² et 1 mg/L ; mortalité des souches S et R en fonction de la concentration.
+ *   ?vue=moustiques_seq (2020 N, document 3) : triplets 243 à 251 des allèles Ace-S et Ace-R (brin non transcrit) ;
+ *                       la différence au triplet 247 ; l’ARNm et les acides aminés seulement aux moments « arnm » et
+ *                       « acides_amines » (après la réponse de l’élève).
+ *   ?vue=blackfan       (2022 N, document 1) : grandes et petites sous-unités des ribosomes (46 / 46 UA chez le sain,
+ *                       46 / 23 UA chez le malade), puis l’assemblage des ribosomes et l’hémoglobine produite.
+ */
+const { rampe, entre, Peint } = window.Etapes;
+const M = window.Molecules;
+const TAU = Math.PI * 2;
+const hasard = (i, j = 0) => { const v = Math.sin(i * 127.1 + j * 311.7) * 43758.5453; return v - Math.floor(v); };
+
+/* ════════ 2020 N : les moustiques (documents 1 et 2) ════════ */
+const MMO = { enzyme: 3.0, carbamate: 5.6, activite: 9.0, mortalite_s: 11.6, mortalite_r: 14.2 };
+function ache(x, cx, cy, a = 1) {   // l’enzyme : une protéine globuleuse violette, son site actif en creux en haut
+  if (a <= 0) return;
+  x.save(); x.globalAlpha *= a;
+  const g = x.createRadialGradient(cx - 18, cy - 14, 4, cx, cy, 60); g.addColorStop(0, '#ddd6fe'); g.addColorStop(.55, '#7c3aed'); g.addColorStop(1, '#3b0f7a');
+  x.fillStyle = g; x.shadowColor = 'rgba(0,0,0,.45)'; x.shadowBlur = 8; x.shadowOffsetY = 3;
+  x.beginPath(); x.moveTo(cx - 56, cy - 6);
+  x.bezierCurveTo(cx - 60, cy - 40, cx - 30, cy - 46, cx - 16, cy - 34); x.quadraticCurveTo(cx, cy - 6, cx + 16, cy - 34);   // le creux du site actif
+  x.bezierCurveTo(cx + 30, cy - 46, cx + 60, cy - 40, cx + 56, cy - 6); x.bezierCurveTo(cx + 52, cy + 36, cx - 52, cy + 36, cx - 56, cy - 6); x.fill();
+  x.restore();
+}
+function moustique(x, cx, cy, s = 1) {   // Culex, peint simplement : corps brun, ailes translucides, pattes fines
+  x.save(); x.translate(cx, cy); x.scale(s, s);
+  x.strokeStyle = '#3f2a1d'; x.lineWidth = 1.2; x.lineCap = 'round';
+  for (const [dx, dy] of [[-8, 14], [0, 16], [8, 14]]) { x.beginPath(); x.moveTo(dx * .3, 2); x.quadraticCurveTo(dx, 6, dx * 1.8, dy); x.moveTo(dx * .3, 2); x.quadraticCurveTo(-dx, 6, -dx * 1.8, dy); x.stroke(); }
+  x.fillStyle = 'rgba(220,235,255,.45)'; x.strokeStyle = 'rgba(200,220,240,.7)';
+  x.beginPath(); x.ellipse(-10, -8, 14, 5, -.5, 0, TAU); x.fill(); x.stroke(); x.beginPath(); x.ellipse(10, -8, 14, 5, .5, 0, TAU); x.fill(); x.stroke();
+  const g = x.createLinearGradient(-20, 0, 24, 0); g.addColorStop(0, '#6b4a2f'); g.addColorStop(1, '#2d1d12');
+  x.fillStyle = g; x.beginPath(); x.ellipse(8, 0, 16, 3.6, 0, 0, TAU); x.fill();
+  x.beginPath(); x.arc(-10, 0, 4.2, 0, TAU); x.fill();
+  x.strokeStyle = '#2d1d12'; x.lineWidth = 1.4; x.beginPath(); x.moveTo(-14, 0); x.lineTo(-26, 3); x.stroke();   // la trompe
+  x.restore();
+}
+const CONC = ['0', '10⁻²', '1'], ACT = { S: [97, 8, 0], R: [32, 32, 28] };
+const LX = c => 400 + (Math.log10(c) + 1) / 5 * 330, LY = p => 340 - p / 100 * 220;
+function dessinerMoustiques(c, k) {
+  const t = k.t;
+  // document 1 : l’AChE hydrolyse l’acétylcholine, puis le carbamate occupe le site actif
+  c.direct(() => {
+    const x = c.ctx, cx = 170, cy = 128;
+    ache(x, cx, cy, rampe(t, .2, .6));
+    if (t >= .8 && t < 4.0) {
+      const u = Math.min(1, (t - .8) / 1.4), v = rampe(t, 2.3, .9);
+      if (v <= 0) M.sphere(x, entre(cx - 110, cx, u), entre(cy - 70, cy - 30, u), 10, '#38bdf8');
+      else { M.sphere(x, cx - 60 * v, cy - 30 - 40 * v, 7, '#22d3ee'); M.sphere(x, cx + 60 * v, cy - 30 - 40 * v, 7, '#fde047'); }
+    }
+    if (t >= 4.0) {
+      const u = Math.min(1, (t - 4.0) / 1.2);
+      M.sphere(x, entre(cx + 110, cx, u), entre(cy - 70, cy - 28, u), 10, '#ef4444');      // le carbamate entre et reste
+      M.sphere(x, cx - 92, cy - 64, 10, '#38bdf8', rampe(t, 4.6, .5));                    // l’acétylcholine reste dehors
+    }
+  });
+  if (k.ecrit(c, 'nom_ache', .6)) k.T(c, 'acétylcholinestérase (AChE)', 170, 190, { couleur: 'violet', taille: 15, align: 'center' });
+  if (k.ecrit(c, 'hydrolyse', 2.4)) { k.T(c, 'acétylcholine', 60, 44, { couleur: 'cyan', taille: 15, align: 'center' }); k.T(c, 'choline + acétate', 170, 32, { couleur: 'jaune', taille: 15, align: 'center' }); }
+  if (k.ecrit(c, 'carba', 4.8)) { k.T(c, 'carbamate', 286, 44, { couleur: 'rouge', taille: 15, align: 'center' }); k.T(c, 'site actif occupé : plus d’hydrolyse', 170, 212, { couleur: 'rouge', taille: 15, align: 'center' }); }
+  c.repere('enzyme', 108, 80, 124, 84, 'l’acétylcholinestérase et son site actif');
+  if (t >= 4.8) c.repere('site_actif', 140, 84, 60, 40, 'le carbamate dans le site actif');
+  // figure a : activité de l’AChE, une concentration après l’autre
+  const BX = [70, 170, 270];
+  if (k.ecrit(c, 'axe_a', 6.0)) {
+    c.ligne(30, 390, 320, 390, { couleur: 'faible', largeur: 1.4, duree: .2 });
+    k.T(c, 'activité de l’AChE (%)', 30, 248, { couleur: 'blanc', taille: 15 });
+    CONC.forEach((s, i) => k.T(c, s + ' mg/L', BX[i] + 22, 410, { couleur: 'faible', taille: 15, align: 'center' }));
+    k.T(c, 'S', 300, 266, { couleur: 'blanc', taille: 15, gras: true }); k.T(c, 'R', 300, 286, { couleur: 'rose', taille: 15, gras: true });
+  }
+  CONC.forEach((_, i) => {
+    const q = 6.4 + i * .8, u = rampe(t, q, .7);
+    if (u > 0) c.direct(() => { const x = c.ctx; [['S', '#f8fafc', 0], ['R', '#f9a8d4', 24]].forEach(([s, col, dx]) => { const h = ACT[s][i] * 1.1 * u; x.globalAlpha = .8; x.fillStyle = col; x.fillRect(BX[i] + dx, 390 - h, 20, h); x.globalAlpha = 1; }); });
+    if (k.ecrit(c, 'va' + i, q + .7)) ['S', 'R'].forEach((s, j) => k.T(c, String(ACT[s][i]), BX[i] + 10 + 24 * j, 384 - ACT[s][i] * 1.1, { couleur: j ? 'rose' : 'blanc', taille: 15, align: 'center', gras: true }));
+  });
+  if (t >= 6.0) c.repere('activite', 24, 236, 300, 184, 'l’activité de l’AChE des souches S et R');
+  // figure b : la mortalité en fonction de la concentration (échelle logarithmique)
+  if (k.ecrit(c, 'axe_b', 9.2)) {
+    c.fleche(LX(.1), LY(0), LX(.1), LY(100) - 18, { couleur: 'faible', largeur: 1.5 }); c.fleche(LX(.1), LY(0), LX(1e4) + 12, LY(0), { couleur: 'faible', largeur: 1.5 });
+    ['0,1', '1', '10', '10²', '10³', '10⁴'].forEach((s, i) => k.T(c, s, LX(10 ** (i - 1)), LY(0) + 20, { couleur: 'faible', taille: 15, align: 'center' }));
+    k.T(c, 'concentration en insecticide (mg/L)', LX(10), LY(0) + 44, { couleur: 'faible', taille: 15, align: 'center' });
+    [0, 50, 100].forEach(p => k.T(c, String(p), LX(.1) - 8, LY(p) + 5, { couleur: 'faible', taille: 15, align: 'right' }));
+    k.T(c, 'mortalité (%)', LX(.1) - 10, LY(100) - 26, { couleur: 'blanc', taille: 15 });
+  }
+  const trace = (c0, c1, a, d, col) => { const u = rampe(t, a, d); if (u <= 0) return; c.direct(() => { const x = c.ctx; x.strokeStyle = col; x.lineWidth = 3; x.lineCap = 'round'; x.beginPath(); x.moveTo(LX(c0), LY(0)); const lc = Math.log10(c0) + u * (Math.log10(c1) - Math.log10(c0)); x.lineTo(LX(10 ** lc), LY(100 * u)); x.stroke(); }); };
+  trace(.1, 1, 9.8, 1.4, '#f8fafc'); trace(200, 1200, 12.4, 1.4, '#f9a8d4');
+  if (k.ecrit(c, 'nom_s', 11.2)) k.T(c, 'souche S', LX(1) + 10, LY(80), { couleur: 'blanc', taille: 15, gras: true });
+  if (k.ecrit(c, 'nom_r', 13.8)) k.T(c, 'souche R', LX(1200) + 8, LY(60), { couleur: 'rose', taille: 15, gras: true });
+  if (t >= 9.8) c.repere('courbe_s', LX(.1) - 6, LY(100) - 6, LX(1) - LX(.1) + 70, 232, 'la mortalité de la souche S');
+  if (t >= 12.4) c.repere('courbe_r', LX(200) - 6, LY(100) - 6, LX(1200) - LX(200) + 80, 232, 'la mortalité de la souche R');
+  c.direct(() => moustique(c.ctx, 680, 52, 1.3));
+  if (k.ecrit(c, 'titre', .2)) k.T(c, 'Culex : souches S (sensibles) et R (résistantes)', 470, 44, { couleur: 'jaune', taille: 15, align: 'center' });
+}
+function voitMoustiques(k) {
+  const t = k.t, m = ['Document 1 : l’acétylcholinestérase (AChE, violette) ; l’acétylcholine (bleue) entre dans son site actif et est coupée en choline + acétate.'];
+  if (t >= 4.8) m.push('Le carbamate (rouge) occupe le site actif : l’acétylcholine reste dehors, « plus d’hydrolyse ».');
+  CONC.forEach((s, i) => { if (t >= 7.1 + i * .8) m.push(`Activité de l’AChE à ${s} mg/L : souche S ${ACT.S[i]} %, souche R ${ACT.R[i]} %.`); });
+  if (t >= 11.2) m.push('Mortalité de la souche S : de 0 % à 0,1 mg/L à 100 % à 1 mg/L.');
+  if (t >= 13.8) m.push('Mortalité de la souche R : nulle jusqu’à 2·10² mg/L environ, 100 % vers 10³ mg/L.');
+  return m;
+}
+
+/* ════════ 2020 N : les séquences (document 3) ════════ */
+const MSQ = { triplets: 1.6, allele_s: 3.6, allele_r: 5.6, difference: 7.0, arnm: 9.0, acides_amines: 11.0 };
+const SQ_S = 'ATC TTC GGG GGT GGC TTC TAC TCC GGG'.split(' '), SQ_R = 'ATC TTC GGG GGT AGC TTC TAC TCC GGG'.split(' ');
+const QX = i => 196 + i * 62;
+function dessinerSequences(c, k) {
+  const t = k.t;
+  const ligne = (nom, cases, y, q, col, coul, rouge) => {
+    if (!k.ecrit(c, nom, q)) return;
+    k.T(c, nom, 16, y, { couleur: col, taille: 16, gras: true });
+    cases.forEach((s, i) => k.T(c, s, QX(i), y, { couleur: rouge && i === 4 ? 'rouge' : coul, taille: 17, align: 'center', gras: rouge && i === 4, duree: .1 }));
+  };
+  if (k.ecrit(c, 'sens', .3)) { c.fleche(QX(3), 32, QX(6), 32, { couleur: 'faible', largeur: 1.6 }); k.T(c, 'sens de lecture', QX(7), 38, { couleur: 'faible', taille: 15 }); }
+  ligne('N° des triplets', SQ_S.map((_, i) => String(243 + i)), 76, .6, 'faible', 'faible', false);
+  // les brins peints sous les lettres (bleu-violet : ADN, orange : ARNm)
+  c.direct(() => {
+    const x = c.ctx;
+    [[124, 2.4], [174, 4.4]].forEach(([y, q]) => { const a = rampe(t, q, .5); if (a > 0) Peint.ruban(x, () => { x.beginPath(); x.moveTo(QX(0) - 26, y); x.lineTo(QX(8) + 26, y); }, '#6366f1', 5, a); });
+    [[244, 8.2], [284, 8.2]].forEach(([y, q]) => { const a = rampe(t, q, .5); if (a > 0) Peint.ruban(x, () => { x.beginPath(); x.moveTo(QX(0) - 26, y); x.lineTo(QX(8) + 26, y); }, '#ea580c', 5, a); });
+  });
+  ligne('allèle Ace-S', SQ_S, 114, 2.6, 'blanc', 'blanc', false);
+  ligne('allèle Ace-R', SQ_R, 164, 4.6, 'rose', 'blanc', true);
+  if (k.ecrit(c, 'diff', 6.2)) { c.rect(QX(4) - 30, 92, 60, 92, { couleur: 'rouge', largeur: 2.2, arrondi: 8, duree: .3 }); k.T(c, 'GGC → AGC', QX(4), 206, { couleur: 'rouge', taille: 16, align: 'center', gras: true }); }
+  if (t >= 2.6) c.repere('allele_s', 10, 96, 740, 30, 'l’allèle Ace-S (brin non transcrit)');
+  if (t >= 4.6) c.repere('allele_r', 10, 146, 740, 30, 'l’allèle Ace-R (brin non transcrit)');
+  if (t >= 6.2) c.repere('triplet_247', QX(4) - 32, 90, 64, 124, 'le triplet 247 : GGC chez S, AGC chez R');
+  // après la réponse de l’élève seulement : l’ARNm et les acides aminés
+  const arn = s => s.replace(/T/g, 'U');
+  ligne('ARNm S', SQ_S.map(arn), 234, 8.2, 'orange', 'orange', false);
+  ligne('ARNm R', SQ_R.map(arn), 274, 8.4, 'orange', 'orange', true);
+  ligne('acides aminés S', SQ_S.map(s => M.traduire(arn(s))), 330, 10.0, 'vert', 'vert', false);
+  ligne('acides aminés R', SQ_R.map(s => M.traduire(arn(s))), 370, 10.2, 'vert', 'vert', true);
+  if (t >= 8.2) c.repere('arnm', 10, 216, 740, 76, 'les ARNm des deux allèles');
+  if (t >= 10.0) c.repere('acides_amines', 10, 312, 740, 76, 'les séquences d’acides aminés : Gly chez S, Ser chez R au triplet 247');
+}
+function voitSequences(k) {
+  const t = k.t, m = ['Document 3 (2020 N) : triplets 243 à 251, brin non transcrit, flèche « sens de lecture ».'];
+  if (t >= 2.6) m.push('Allèle Ace-S : ' + SQ_S.join(' ') + '.');
+  if (t >= 4.6) m.push('Allèle Ace-R : ' + SQ_R.join(' ') + ' (triplet 247 en rouge).');
+  if (t >= 6.2) m.push('Le triplet 247 encadré : GGC → AGC.');
+  if (t < 8.2) m.push('Ni l’ARNm ni les acides aminés ne sont encore écrits.');
+  else m.push('ARNm S : ' + SQ_S.map(s => s.replace(/T/g, 'U')).join(' ') + ' ; ARNm R : ' + SQ_R.map(s => s.replace(/T/g, 'U')).join(' ') + '.');
+  if (t >= 10.0) m.push('Acides aminés S : Ile – Phe – Gly – Gly – Gly – Phe – Tyr – Ser – Gly ; R : Ile – Phe – Gly – Gly – Ser – Phe – Tyr – Ser – Gly.');
+  return m;
+}
+
+/* ════════ 2022 N : Blackfan-Diamond (document 1) ════════ */
+const MBF = { axes: 1.8, saine: 4.6, malade: 7.4, assemblage: 11.6, hemoglobine: 14.6 };
+const HX = [70, 120, 210, 260], HV = [46, 46, 46, 23], HY0 = 370, HK = 5.2;
+function sousUnite(x, cx, cy, grande, s = .5, a = 1) { M.ribosome(x, cx, cy, s, { grande: grande ? a : 0, petite: grande ? 0 : a, dyg: grande ? 0 : 0, dyp: 0 }); }
+function hemoglobine(x, cx, cy, a = 1) {   // une molécule d’hémoglobine : quatre globules rouges serrés
+  for (const [dx, dy] of [[-5, -5], [5, -5], [-5, 5], [5, 5]]) M.sphere(x, cx + dx, cy + dy, 6, '#dc2626', a);
+}
+function dessinerBlackfan(c, k) {
+  const t = k.t;
+  // figure a : l’histogramme
+  if (k.ecrit(c, 'axes', .3)) {
+    c.fleche(40, HY0, 40, HY0 - 50 * HK - 24, { couleur: 'faible', largeur: 1.5 }); c.ligne(40, HY0, 320, HY0, { couleur: 'faible', largeur: 1.5, duree: .2 });
+    [0, 23, 46].forEach(v => k.T(c, String(v), 32, HY0 - v * HK + 5, { couleur: 'faible', taille: 15, align: 'right' }));
+    k.T(c, 'quantité (UA)', 30, HY0 - 50 * HK - 32, { couleur: 'blanc', taille: 15 });
+    k.T(c, 'individu sain', 95, HY0 + 22, { couleur: 'vert', taille: 15, align: 'center' }); k.T(c, 'individu malade', 235, HY0 + 22, { couleur: 'rouge', taille: 15, align: 'center' });
+  }
+  c.direct(() => {
+    const x = c.ctx;
+    HV.forEach((v, i) => {
+      const q = i < 2 ? 2.2 : 5.0, u = rampe(t, q, 1.6), h = v * HK * u; if (u <= 0) return;
+      const g = x.createLinearGradient(HX[i], 0, HX[i] + 40, 0); const fonce = i % 2 === 0;
+      g.addColorStop(0, fonce ? '#0f766e' : '#5eead4'); g.addColorStop(.5, fonce ? '#14b8a6' : '#99f6e4'); g.addColorStop(1, fonce ? '#0f766e' : '#5eead4');
+      x.fillStyle = g; x.fillRect(HX[i], HY0 - h, 40, h);
+    });
+    // la légende : les deux sous-unités peintes
+    sousUnite(x, 214, 44, true, .42, rampe(t, .5, .5)); sousUnite(x, 214, 62, false, .42, rampe(t, .5, .5));
+  });
+  if (k.ecrit(c, 'leg', .8)) { k.T(c, 'grande sous-unité', 244, 36, { couleur: 'cyan', taille: 15 }); k.T(c, 'petite sous-unité', 244, 74, { couleur: 'cyan', taille: 15 }); }
+  HV.forEach((v, i) => { if (k.ecrit(c, 'v' + i, (i < 2 ? 2.2 : 5.0) + 1.6)) k.T(c, String(v), HX[i] + 20, HY0 - v * HK - 8, { couleur: i === 3 ? 'rouge' : 'blanc', taille: 17, align: 'center', gras: true }); });
+  c.repere('histogramme', 20, 90, 310, 310, 'la figure a : les sous-unités des ribosomes');
+  if (t >= 3.8) c.repere('barres_sain', HX[0] - 4, HY0 - 46 * HK - 26, 98, 46 * HK + 30, 'individu sain : 46 UA et 46 UA');
+  if (t >= 6.6) c.repere('barres_malade', HX[2] - 4, HY0 - 46 * HK - 26, 98, 46 * HK + 30, 'individu malade : 46 UA de grandes, 23 UA de petites');
+  // figure b : l’assemblage des ribosomes sur l’ARNm de l’hémoglobine
+  const P = [{ y: 150, nom: 'cellule précurseur, sain', n: 4, col: 'vert' }, { y: 330, nom: 'cellule précurseur, malade', n: 2, col: 'rouge' }];
+  c.direct(() => {
+    const x = c.ctx;
+    P.forEach((R, r) => {
+      const a = rampe(t, 8.0, .6); if (a <= 0) return;
+      M.milieu(x, 380, R.y - 92, 370, 156, 'cytoplasme', a);
+      x.save(); x.globalAlpha = a; x.strokeStyle = '#ea580c'; x.lineWidth = 4; x.beginPath(); x.moveTo(400, R.y + 18); x.lineTo(730, R.y + 18); x.stroke(); x.restore();   // l’ARNm de l’hémoglobine
+      const u = rampe(t, 9.0, 2.2);
+      for (let j = 0; j < 4; j++) {          // les quatre grandes sous-unités
+        const forme = j < R.n, xf = 420 + j * 82;
+        const xg = forme ? entre(404 + j * 46, xf, u) : 660 + (j - 2) * 56, yg = forme ? entre(R.y - 40, R.y + 18, u) : R.y - 36;
+        if (forme) M.ribosome(x, xg, yg, .5, { grande: a, petite: 0, dyg: 0 });
+        else M.ribosome(x, xg, yg, .5, { grande: a * .55, petite: 0 });
+      }
+      for (let j = 0; j < R.n; j++) M.ribosome(x, entre(560 + j * 40, 420 + j * 82, u), entre(R.y + 52, R.y + 18, u), .5, { grande: 0, petite: a });
+      // l’hémoglobine produite, après l’assemblage
+      const h = rampe(t, 12.0, 2.0), nh = Math.round(R.n * 2 * h);
+      for (let j = 0; j < nh; j++) hemoglobine(x, 410 + (j % 8) * 40, R.y - 74 + Math.floor(j / 8) * 22 + (r ? 0 : 0), 1);
+    });
+  });
+  P.forEach((R, r) => {
+    if (k.ecrit(c, 'p' + r, 8.2)) k.T(c, R.nom, 390, R.y + 54, { couleur: R.col, taille: 15 });
+    if (k.ecrit(c, 'arnm' + r, 8.6)) k.T(c, 'ARNm de l’hémoglobine', 740, R.y + 40, { couleur: 'orange', taille: 15, align: 'right' });
+    if (k.ecrit(c, 'h' + r, 14.0)) k.T(c, r ? 'faible quantité d’hémoglobine' : 'quantité normale d’hémoglobine', 740, R.y - 98, { couleur: r ? 'rouge' : 'vert', taille: 15, align: 'right', gras: true });
+    if (t >= 8.2) c.repere(r ? 'cellule_malade' : 'cellule_saine', 376, R.y - 96, 378, 164, R.nom);
+  });
+  if (t >= 11.2) c.repere('ribosomes_malade', 400, P[1].y - 40, 330, 80, 'deux ribosomes seulement ; des grandes sous-unités restent seules');
+  if (t >= 14.0) c.repere('hemoglobine', 400, P[1].y - 110, 340, 40, 'peu d’hémoglobine chez le malade');
+}
+function voitBlackfan(k) {
+  const t = k.t, m = ['Figure a : histogramme de la quantité (UA) des grandes (barres foncées) et petites (barres claires) sous-unités des ribosomes.'];
+  if (t >= 3.8) m.push('Individu sain : grandes 46 UA, petites 46 UA.');
+  if (t >= 6.6) m.push('Individu malade : grandes 46 UA, petites 23 UA (la moitié).');
+  if (t >= 8.2) m.push('Figure b : deux cellules précurseurs des globules rouges ; un ARNm de l’hémoglobine dans chacune.');
+  if (t >= 11.2) m.push('Les sous-unités s’assemblent sur l’ARNm : 4 ribosomes chez le sain ; chez le malade 2 ribosomes, deux grandes sous-unités restent seules (pâles).');
+  if (t >= 14.0) m.push('L’hémoglobine produite (molécules rouges) : quantité normale chez le sain, faible chez le malade.');
+  return m;
+}
+
+/* ════════ Lancement ════════ */
+window.Etapes.lancer({
+  id: 'genetique_national_pas', titre: 'Le national joué pas à pas', graine: 67,
+  vues: {
+    moustiques: { titre: 'Sujet 2020 N : des moustiques résistants', fin: 14.4, moments: MMO, autoDepart: false, encre: [14, 10, 750, 414], dessiner: dessinerMoustiques, voit: voitMoustiques,
+      motifs: { enzyme: 'l’AChE hydrolyse l’acétylcholine', carbamate: 'le carbamate occupe le site actif', activite: 'l’activité de l’AChE des souches S et R', mortalite_s: 'la mortalité de la souche S', mortalite_r: 'la mortalité de la souche R' },
+      conclusion: 'Les documents 1 et 2 sont au tableau : à toi de lire la relation.',
+      texte: 'Sujet 2020 N : l’AChE hydrolyse l’acétylcholine ; le carbamate occupe son site actif. Activité de l’AChE (%) pour 0, 10⁻², 1 mg/L : souche S 97, 8, 0 ; souche R 32, 32, 28. Mortalité : S de 0 à 100 % entre 0,1 et 1 mg/L ; R de 0 à 100 % entre 2·10² et 10³ mg/L environ.',
+      explication: [{ repere: 'enzyme', texte: 'L’AChE coupe l’acétylcholine.' }, { repere: 'site_actif', texte: 'Le carbamate bloque le site actif.' }, { repere: 'activite', texte: 'L’activité de l’AChE selon la concentration.' }, { repere: 'courbe_s', texte: 'La souche S meurt dès 1 mg/L.' }, { repere: 'courbe_r', texte: 'La souche R résiste jusqu’à 10² mg/L.' }] },
+    moustiques_seq: { titre: 'Sujet 2020 N : les allèles Ace-S et Ace-R', fin: 11.4, moments: MSQ, autoDepart: false, encre: [10, 10, 750, 400], dessiner: dessinerSequences, voit: voitSequences,
+      motifs: { triplets: 'les numéros des triplets, 243 à 251', allele_s: 'l’allèle Ace-S', allele_r: 'l’allèle Ace-R', difference: 'la différence : triplet 247', arnm: 'les ARNm', acides_amines: 'les acides aminés : Gly chez S, Ser chez R' },
+      conclusion: 'Triplet 247 : GGC → AGC, GGC (Gly) → AGC (Ser).',
+      texte: 'Document 3 (2020 N), brin non transcrit, triplets 243 à 251 : Ace-S ATC TTC GGG GGT GGC TTC TAC TCC GGG ; Ace-R ATC TTC GGG GGT AGC TTC TAC TCC GGG ; ARNm et acides aminés écrits seulement aux moments arnm et acides_amines.',
+      explication: [{ repere: 'allele_s', texte: 'L’allèle de la souche sensible.' }, { repere: 'allele_r', texte: 'L’allèle de la souche résistante.' }, { repere: 'triplet_247', texte: 'Une seule différence : le triplet 247.' }, { repere: 'acides_amines', texte: 'Gly devient Ser.' }] },
+    blackfan: { titre: 'Sujet 2022 N : les ribosomes et l’hémoglobine', fin: 15, moments: MBF, autoDepart: false, encre: [14, 10, 752, 404], dessiner: dessinerBlackfan, voit: voitBlackfan,
+      motifs: { axes: 'la figure a : les deux sous-unités', saine: 'individu sain : 46 et 46 UA', malade: 'individu malade : 46 et 23 UA', assemblage: 'les sous-unités s’assemblent en ribosomes', hemoglobine: 'l’hémoglobine produite' },
+      conclusion: 'Moitié moins de petites sous-unités → moins de ribosomes → peu d’hémoglobine.',
+      texte: 'Anémie de Blackfan-Diamond (2022 N) : sous-unités des ribosomes, sain 46 / 46 UA, malade 46 / 23 UA ; assemblage : 4 ribosomes chez le sain, 2 chez le malade ; hémoglobine normale ou faible.',
+      explication: [{ repere: 'barres_sain', texte: 'Chez le sain, autant de petites que de grandes.' }, { repere: 'barres_malade', texte: 'Chez le malade, deux fois moins de petites.' }, { repere: 'ribosomes_malade', texte: 'Moins de ribosomes complets.' }, { repere: 'hemoglobine', texte: 'Moins d’hémoglobine.' }] },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

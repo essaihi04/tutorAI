@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Les documents du cours — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="genetique.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Les documents du cours joués au tableau : l’albinisme, Beadle et Tatum, la synthèse in vitro, l’arbre de Noël, Nirenberg et Matthaei ; les valeurs naissent de l’animation, puis le tableau"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="etapes.js"></script>
+<script src="molecules.js"></script>
+<script>
+/*
+ * Les documents du cours « Expression de l’information génétique » joués au tableau (18 novembre 2026, 2ᵉ passe de la
+ * logique ; règles 33 et 35 du professeur). Ces documents étaient des tableaux à lire : ici leurs données NAISSENT de
+ * l’animation (le vivant peint, la craie pour les légendes), une ligne à la fois, puis la ligne du tableau s’écrit.
+ * Rien de décisif n’est écrit avant la question de la diapositive (la case mutant 3 de Beadle, le début du gène de
+ * l’arbre de Noël, le codon de la proline restent à trouver).
+ *   ?vue=albinisme  (rg_p4b) : mélanocyte sain / albinos ; la tyrosine devient mélanine ou s’accumule ; peau et cheveux.
+ *   ?vue=beadle     (rg_p5)  : Neurospora sur milieu minimum (MM) et MM + ornithine / citrulline / arginine.
+ *   ?vue=in_vitro   (rg_a5)  : le tube (extrait sans ADN ni ARNm), deux injections d’ARNm, les deux courbes.
+ *   ?vue=arbre_noel (rg_t2b) : l’électronographie se développe, puis chaque objet est nommé ; le sens n’est montré
+ *                              qu’au moment « sens », après la question.
+ *   ?vue=nirenberg  (rg_c1b) : ARNm poly-U, UG répété, poly-C ; le ribosome lit par trois, la chaîne sort.
+ */
+const { rampe, entre, Peint } = window.Etapes;
+const M = window.Molecules;
+const TAU = Math.PI * 2;
+const eff = (c, t) => Math.max(t, c.tailleMin && c.echelle ? c.tailleMin / c.echelle : 0);
+function couper(c, s, max, t) {
+  const mots = String(s).split(' '), out = []; let cur = '';
+  for (const m of mots) { const e = cur ? cur + ' ' + m : m; if (cur && c.largeurTexte(e, eff(c, t)) > max) { out.push(cur); cur = m; } else cur = e; }
+  if (cur) out.push(cur);
+  return out;
+}
+/** Un texte coupé en lignes, centré sur cx (ou à gauche si align = 'left'). */
+function bloc(c, k, s, x, y, max, t, o = {}) {
+  const L = couper(c, s, max, t), dy = t * 1.2, y0 = y - (L.length - 1) * dy / 2;
+  L.forEach((l, i) => k.T(c, l, x, y0 + i * dy, { taille: t, align: o.align || 'center', couleur: o.couleur || 'blanc', gras: o.gras, max }));
+}
+/* Un nombre pseudo-aléatoire stable (les grains, les filaments) */
+const hasard = (i, j = 0) => { const v = Math.sin(i * 127.1 + j * 311.7) * 43758.5453; return v - Math.floor(v); };
+
+/* ════════ Albinisme ════════ */
+const MALB = { cellules: 2.6, reaction: 5.0, ligne_enzyme: 7.4, ligne_pigment: 10.0, ligne_phenotype: 12.6, tableau: 13.6 };
+const ALB_RANGS = [{ y: 120, saine: true, nom: 'personne saine' }, { y: 302, saine: false, nom: 'personne albinos' }];
+function enzyme(x, cx, cy, ok, a = 1) {
+  if (a <= 0) return;
+  x.save(); x.globalAlpha *= a;
+  const g = x.createRadialGradient(cx - 8, cy - 8, 2, cx, cy, 30);
+  g.addColorStop(0, ok ? '#e9d5ff' : '#d6d3d1'); g.addColorStop(.5, ok ? '#9333ea' : '#8b7f99'); g.addColorStop(1, ok ? '#4c1d95' : '#4b4453');
+  x.fillStyle = g; x.shadowColor = 'rgba(0,0,0,.4)'; x.shadowBlur = 6; x.shadowOffsetY = 2;
+  x.beginPath();
+  if (ok) { x.moveTo(cx, cy); x.arc(cx, cy, 26, Math.PI + .5, Math.PI - .5); x.closePath(); }            // le site actif : une encoche ouverte vers la tyrosine
+  else { for (let i = 0; i <= 30; i++) { const t = i / 30 * TAU, r = 24 + 5 * Math.sin(t * 4 + 1); const px = cx + Math.cos(t) * r * 1.1, py = cy + Math.sin(t) * r * .8; i ? x.lineTo(px, py) : x.moveTo(px, py); } x.closePath(); }   // déformée, site fermé
+  x.fill(); x.shadowColor = 'transparent';
+  x.strokeStyle = ok ? 'rgba(60,10,90,.8)' : 'rgba(40,30,50,.8)'; x.lineWidth = 1.2; x.stroke();
+  x.restore();
+}
+function peau(x, x0, y0, w, h, colore, a = 1) {
+  if (a <= 0) return;
+  x.save(); x.globalAlpha *= a;
+  const g = x.createLinearGradient(x0, y0, x0, y0 + h);
+  if (colore) { g.addColorStop(0, '#c58a5a'); g.addColorStop(1, '#8a5530'); } else { g.addColorStop(0, '#fbe9e4'); g.addColorStop(1, '#f2cfc6'); }
+  x.fillStyle = g; x.beginPath(); x.roundRect ? x.roundRect(x0, y0 + h * .35, w, h * .65, 8) : x.rect(x0, y0 + h * .35, w, h * .65); x.fill();
+  // les cheveux : des mèches peintes au-dessus de la peau
+  x.lineCap = 'round';
+  for (let i = 0; i < 26; i++) {
+    const px = x0 + 6 + (w - 12) * i / 25, hh = h * (.3 + .1 * hasard(i, 3));
+    x.strokeStyle = colore ? (i % 2 ? '#2b1a10' : '#3d2516') : (i % 2 ? '#fffdf5' : '#f1ead8'); x.lineWidth = 2.2;
+    x.beginPath(); x.moveTo(px, y0 + h * .38); x.quadraticCurveTo(px + 6 * Math.sin(i), y0 + h * .38 - hh * .6, px + 4 * Math.cos(i), y0 + h * .38 - hh); x.stroke();
+  }
+  x.restore();
+}
+function dessinerAlbinisme(c, k) {
+  const t = k.t, a = rampe(t, .1, 1.2);
+  c.direct(() => {
+    const x = c.ctx;
+    ALB_RANGS.forEach(R => {
+      Peint.cellule(x, 130, R.y, 100, 58, a, ['rgba(255,226,206,.6)', 'rgba(236,190,160,.5)', 'rgba(200,140,110,.55)']);
+      enzyme(x, 140, R.y + 4, R.saine, rampe(t, 1.6, .6));
+      // la tyrosine arrive par la gauche
+      if (t >= 3) {
+        for (let i = 0; i < 6; i++) { const p = ((t - 3) * .32 + i / 6) % 1, px = 46 + p * 70, py = R.y + 4 + 16 * Math.sin(i * 2.1 + p * 3); M.sphere(x, px, py, 5, '#facc15', Math.min(1, (t - 3) * 2)); }
+        if (R.saine) {   // la mélanine s’accumule à droite : des grains brun foncé
+          const n = Math.min(26, Math.floor((t - 3.4) * 3));
+          for (let i = 0; i < n; i++) { const px = 178 + 40 * hasard(i, 1), py = R.y - 30 + 62 * hasard(i, 2); M.sphere(x, px, py, 4.2, '#3b2414'); }
+        } else {          // sans enzyme fonctionnelle, la tyrosine reste : elle s’entasse devant l’enzyme
+          const n = Math.min(14, Math.floor((t - 3.4) * 1.8));
+          for (let i = 0; i < n; i++) M.sphere(x, 96 + 14 * hasard(i, 4), R.y - 24 + 50 * hasard(i, 5), 5, '#facc15');
+        }
+      }
+      peau(x, 262, R.y - 62, 120, 120, R.saine, rampe(t, 10.6, 1));
+    });
+  });
+  ALB_RANGS.forEach((R, r) => {
+    if (k.ecrit(c, 'nom' + r, .4)) k.T(c, R.nom, 30, R.y - 88, { couleur: R.saine ? 'vert' : 'rouge', taille: 17, gras: true });
+    if (k.ecrit(c, 'enz' + r, 2.0)) k.T(c, 'tyrosinase', 140, R.y + 78, { couleur: 'violet', taille: 15, align: 'center' });
+    c.repere(R.saine ? 'enzyme_saine' : 'enzyme_albinos', 108, R.y - 26, 66, 60, R.saine ? 'la tyrosinase de la personne saine' : 'la tyrosinase de la personne albinos');
+    if (k.ecrit(c, 'tyr' + r, 3.4)) k.T(c, 'tyrosine', 80, R.y - 64, { couleur: 'jaune', taille: 15, align: 'center' });
+    if (R.saine && k.ecrit(c, 'mel', 4.2)) k.T(c, 'mélanine', 196, R.y - 64, { couleur: 'orange', taille: 15, align: 'center' });
+    if (t >= 10.6) c.repere(R.saine ? 'peau_saine' : 'peau_albinos', 258, R.y - 66, 128, 128, R.saine ? 'peau et cheveux colorés' : 'peau et cheveux très clairs');
+  });
+  if (t >= 3) c.repere('melanine', 172, ALB_RANGS[0].y - 34, 52, 70, 'la mélanine produite');
+  // le tableau, une ligne à la fois
+  const X = [400, 504, 628, 752], LIG = [['Tyrosinase (enzyme)', 'fonctionnelle', 'non fonctionnelle', 6.4], ['Mélanine (pigment)', 'produite', 'non produite', 9.0], ['Phénotype', 'peau, cheveux colorés', 'peau, cheveux très clairs', 11.6]];
+  if (k.ecrit(c, 'tete', 5.4)) {
+    k.T(c, 'saine', (X[1] + X[2]) / 2, 62, { couleur: 'vert', taille: 17, align: 'center', gras: true });
+    k.T(c, 'albinos', (X[2] + X[3]) / 2, 62, { couleur: 'rouge', taille: 17, align: 'center', gras: true });
+    c.ligne(X[0], 76, X[3], 76, { couleur: 'faible', largeur: 1.4, duree: .2 });
+  }
+  if (t >= 5.4) c.repere('tableau', X[0] - 4, 40, X[3] - X[0] + 6, 300, 'le tableau du document');
+  LIG.forEach(([n, s, m, q], r) => {
+    const y = 122 + r * 84;
+    if (k.ecrit(c, 'l' + r, q)) {
+      bloc(c, k, n, (X[0] + X[1]) / 2, y, X[1] - X[0] - 8, 15, { couleur: 'jaune' });
+      bloc(c, k, s, (X[1] + X[2]) / 2, y, X[2] - X[1] - 8, 15, { couleur: 'vert' });
+      bloc(c, k, m, (X[2] + X[3]) / 2, y, X[3] - X[2] - 8, 15, { couleur: 'rouge' });
+      c.ligne(X[0], y + 38, X[3], y + 38, { couleur: 'tresfaible', largeur: 1, duree: .15 });
+    }
+    if (t >= q) c.repere(['ligne_enzyme', 'ligne_pigment', 'ligne_phenotype'][r], X[0] - 4, y - 34, X[3] - X[0] + 6, 70, 'la ligne : ' + n);
+  });
+}
+function voitAlbinisme(k) {
+  const t = k.t, m = ['Deux cellules de la peau peintes, personne saine en haut, personne albinos en bas ; dans chacune, l’enzyme tyrosinase (violette ; déformée chez l’albinos).'];
+  if (t >= 3) m.push('La tyrosine (billes jaunes) arrive : chez la personne saine elle devient de la mélanine (grains brun foncé qui s’accumulent) ; chez l’albinos elle s’entasse devant l’enzyme, aucune mélanine.');
+  if (t >= 10.6) m.push('À droite des cellules : peau et cheveux colorés (saine), très clairs (albinos).');
+  const L = ['Tyrosinase : fonctionnelle / non fonctionnelle', 'Mélanine : produite / non produite', 'Phénotype : peau, cheveux colorés / très clairs'];
+  [6.4, 9.0, 11.6].forEach((q, i) => { if (t >= q) m.push('Tableau, ligne ' + (i + 1) + ' : ' + L[i] + '.'); });
+  return m;
+}
+
+/* ════════ Beadle et Tatum ════════ */
+const MBT = { chaine: 3.2, milieux: 5.4, sauvage: 7.6, mutant1: 9.6, e1: 10.6, mutant2: 12.6, e2: 13.6, mutant3: 15.6 };
+const BT_COL = [215, 345, 475, 605], BT_LIG = [158, 226, 294, 362];
+const BT_RES = [[1, 1, 1, 1], [0, 1, 1, 1], [0, 0, 1, 1], [0, 0, 0, 1]], BT_T0 = [5.8, 8.0, 11.0, 14.0];
+function boite(x, cx, cy, a = 1) {
+  x.save(); x.globalAlpha *= a;
+  x.fillStyle = 'rgba(0,0,0,.3)'; x.beginPath(); x.ellipse(cx + 3, cy + 5, 36, 22, 0, 0, TAU); x.fill();
+  const g = x.createRadialGradient(cx - 10, cy - 8, 2, cx, cy, 36); g.addColorStop(0, '#fff8d6'); g.addColorStop(1, '#e7d48a');
+  x.fillStyle = g; x.beginPath(); x.ellipse(cx, cy, 33, 20, 0, 0, TAU); x.fill();                 // la gélose
+  x.strokeStyle = 'rgba(230,245,255,.85)'; x.lineWidth = 2; x.beginPath(); x.ellipse(cx, cy, 35, 22, 0, 0, TAU); x.stroke();   // le bord en verre
+  x.strokeStyle = 'rgba(255,255,255,.55)'; x.lineWidth = 1.2; x.beginPath(); x.ellipse(cx, cy, 35, 22, 0, Math.PI * 1.1, Math.PI * 1.5); x.stroke();
+  x.restore();
+}
+function mycelium(x, cx, cy, u, graine) {   // Neurospora : un feutrage orangé qui s’étend
+  if (u <= 0) return;
+  x.save(); x.beginPath(); x.ellipse(cx, cy, 32, 19, 0, 0, TAU); x.clip();
+  for (let i = 0; i < 34; i++) {
+    const ang = hasard(i, graine) * TAU, d = Math.sqrt(hasard(i, graine + 1)) * u, px = cx + Math.cos(ang) * 30 * d, py = cy + Math.sin(ang) * 17 * d, r = 3 + 4 * hasard(i, graine + 2) * u;
+    const g = x.createRadialGradient(px - 1, py - 1, .5, px, py, r); g.addColorStop(0, 'rgba(255,214,160,.95)'); g.addColorStop(1, 'rgba(234,110,40,.55)');
+    x.fillStyle = g; x.beginPath(); x.arc(px, py, r, 0, TAU); x.fill();
+  }
+  x.restore();
+}
+function dessinerBeadle(c, k) {
+  const t = k.t;
+  // la chaîne de synthèse, un maillon à la fois
+  const MOTS = [['précurseur', 70, .4], ['ornithine', 260, 1.2], ['citrulline', 450, 2.0], ['arginine', 640, 2.8]];
+  MOTS.forEach(([s, x, q], i) => {
+    if (k.ecrit(c, 'm' + i, q)) {
+      k.T(c, s, x, 44, { couleur: i === 3 ? 'vert' : 'blanc', taille: 17, align: 'center', gras: true });
+      if (i) { c.fleche(MOTS[i - 1][1] + 58, 38, x - 58, 38, { couleur: 'jaune', largeur: 2, duree: .2 }); k.T(c, 'E' + i, (MOTS[i - 1][1] + x) / 2, 26, { couleur: 'jaune', taille: 15, align: 'center' }); }
+    }
+  });
+  if (t >= .4) c.repere('chaine', 20, 10, 720, 46, 'la chaîne de synthèse de l’arginine : E1, E2, E3');
+  if (k.ecrit(c, 'cols', 4.2)) ['MM seul', 'MM + ornithine', 'MM + citrulline', 'MM + arginine'].forEach((s, j) => k.T(c, s, BT_COL[j], 104, { couleur: j ? 'cyan' : 'blanc', taille: 15, align: 'center' }));
+  c.direct(() => {
+    const x = c.ctx, a = rampe(t, 4.4, .8);
+    BT_LIG.forEach((y, r) => BT_COL.forEach((cx, j) => { boite(x, cx, y, a); if (BT_RES[r][j]) mycelium(x, cx, y, rampe(t, BT_T0[r], 1.2), r * 7 + j); }));
+  });
+  ['souche sauvage', 'mutant 1', 'mutant 2', 'mutant 3'].forEach((s, r) => {
+    if (k.ecrit(c, 'n' + r, r ? BT_T0[r] - .4 : 4.6)) k.T(c, s, 22, BT_LIG[r] + 6, { couleur: r ? 'orange' : 'vert', taille: 16, gras: true });
+    if (k.ecrit(c, 's' + r, BT_T0[r] + 1.2)) BT_RES[r].forEach((v, j) => k.T(c, v ? '+' : '−', BT_COL[j] + 50, BT_LIG[r] + 8, { couleur: v ? 'vert' : 'rouge', taille: 22, align: 'center', gras: true }));
+    if (t >= BT_T0[r]) c.repere(['ligne_sauvage', 'ligne_mutant1', 'ligne_mutant2', 'ligne_mutant3'][r], 14, BT_LIG[r] - 28, 650, 56, 'la ligne : ' + s);
+  });
+  if (t >= 4.4) c.repere('grille', 160, 86, 520, 304, 'les boîtes de culture : le tableau du document');
+  // ce qui manque, déduit pour les mutants 1 et 2 (le mutant 3 est la question de la diapositive)
+  if (k.ecrit(c, 'd1', 10.0)) k.T(c, 'E1 bloquée', 706, BT_LIG[1] + 6, { couleur: 'rouge', taille: 15, align: 'center', gras: true });
+  if (k.ecrit(c, 'd2', 13.0)) k.T(c, 'E2 bloquée', 706, BT_LIG[2] + 6, { couleur: 'rouge', taille: 15, align: 'center', gras: true });
+  if (t >= 10.0) c.repere('deduction1', 664, BT_LIG[1] - 16, 86, 30, 'E1 non fonctionnelle chez le mutant 1');
+  if (t >= 13.0) c.repere('deduction2', 664, BT_LIG[2] - 16, 86, 30, 'E2 non fonctionnelle chez le mutant 2');
+}
+function voitBeadle(k) {
+  const t = k.t, m = ['En haut, la chaîne : précurseur →E1→ ornithine →E2→ citrulline →E3→ arginine.'];
+  if (t >= 4.4) m.push('Seize boîtes de culture peintes : quatre colonnes (MM seul, MM + ornithine, MM + citrulline, MM + arginine), quatre lignes (souche sauvage, mutants 1, 2, 3).');
+  const N = ['souche sauvage', 'mutant 1', 'mutant 2', 'mutant 3'];
+  BT_T0.forEach((q, r) => { if (t >= q + 1.2) m.push(`${N[r]} : ${BT_RES[r].map(v => (v ? '+' : '−')).join(' ')} (le champignon orangé pousse ou non).`); });
+  if (t >= 10.0) m.push('Écrit : mutant 1 → « E1 bloquée ».');
+  if (t >= 13.0) m.push('Écrit : mutant 2 → « E2 bloquée ». Rien n’est écrit pour le mutant 3 : c’est la question.');
+  return m;
+}
+
+/* ════════ Synthèse in vitro ════════ */
+const MIV = { tube: 3.0, avant: 5.6, injection1: 9.6, injection2: 13.6 };
+const GX0 = 340, GX1 = 730, GY0 = 70, GY1 = 280;
+const gt = t => (t < 3.4 ? 0 : t < 5.6 ? .3 * (t - 3.4) / 2.2 : t < 6.0 ? .3 : t < 9.4 ? .3 + .35 * (t - 6) / 3.4 : t < 10 ? .65 : Math.min(1, .65 + .35 * (t - 10) / 3.4));
+const incorpore = g => (g < .3 ? 0 : g < .65 ? .5 * (1 - Math.exp(-(g - .3) / .12)) : .5 * (1 - Math.exp(-.35 / .12)) + .42 * (1 - Math.exp(-(g - .65) / .12)));
+const arnmMilieu = g => (g < .3 ? 0 : g < .65 ? .8 * Math.exp(-(g - .3) / .2) : .85 * Math.exp(-(g - .65) / .2));
+function seringue(x, cx, cy, a) {
+  if (a <= 0) return;
+  x.save(); x.globalAlpha *= a;
+  const g = x.createLinearGradient(cx - 9, 0, cx + 9, 0); g.addColorStop(0, 'rgba(210,230,245,.5)'); g.addColorStop(.5, 'rgba(255,255,255,.85)'); g.addColorStop(1, 'rgba(180,205,225,.5)');
+  x.fillStyle = g; x.fillRect(cx - 9, cy - 70, 18, 60);
+  x.fillStyle = 'rgba(249,115,22,.75)'; x.fillRect(cx - 7, cy - 40, 14, 30);                         // l’ARNm (orange)
+  x.fillStyle = '#9ca3af'; x.fillRect(cx - 3, cy - 100, 6, 32); x.fillRect(cx - 14, cy - 104, 28, 5);  // le piston
+  x.strokeStyle = '#d1d5db'; x.lineWidth = 2; x.beginPath(); x.moveTo(cx, cy - 10); x.lineTo(cx, cy + 14); x.stroke();   // l’aiguille
+  x.restore();
+}
+function dessinerInVitro(c, k) {
+  const t = k.t, g = gt(t);
+  c.direct(() => {
+    const x = c.ctx;
+    Peint.tube(x, 110, 120, 270, 80, ['rgba(250,232,200,.55)', 'rgba(255,248,230,.75)'], rampe(t, .1, .8), .62);
+    // dans le tube : des ribosomes (turquoise) et des acides aminés radioactifs (verts, lumineux)
+    const a = rampe(t, .6, .8);
+    for (let i = 0; i < 9; i++) M.ribosome(x, 86 + 48 * hasard(i, 9), 248 + 110 * hasard(i, 10), .16, { petite: a, grande: a });
+    for (let i = 0; i < 14; i++) { const px = 82 + 56 * hasard(i, 11), py = 240 + 120 * hasard(i, 12); Peint.halo(x, px, py, 9, 'rgba(120,255,140,.5)', a); M.sphere(x, px, py, 3.4, '#22c55e', a); }
+    // l’ARNm injecté : des brins orange dans le tube, qui disparaissent peu à peu
+    const am = arnmMilieu(g);
+    for (let i = 0; i < 10; i++) { if (am < (i + 1) / 12) continue; const px = 82 + 52 * hasard(i, 13), py = 250 + 100 * hasard(i, 14); x.strokeStyle = 'rgba(234,88,12,.9)'; x.lineWidth = 2.4; x.beginPath(); x.moveTo(px - 10, py); x.quadraticCurveTo(px, py - 8, px + 10, py); x.stroke(); }
+    seringue(x, 110, 108, Math.max(rampe(t, 5.8, .3) * (1 - rampe(t, 7.0, .4)), rampe(t, 9.8, .3) * (1 - rampe(t, 11.0, .4))));
+  });
+  if (k.ecrit(c, 'contenu', .8)) {
+    k.T(c, 'extrait de cellules :', 168, 230, { couleur: 'jaune', taille: 15 });
+    k.T(c, 'ribosomes, ARNt,', 168, 252, { couleur: 'cyan', taille: 15 });
+    k.T(c, 'enzymes, ATP', 168, 272, { couleur: 'cyan', taille: 15 });
+    k.T(c, 'acides aminés', 168, 304, { couleur: 'vert', taille: 15 });
+    k.T(c, 'radioactifs', 168, 324, { couleur: 'vert', taille: 15 });
+    k.T(c, 'ni ADN, ni ARNm', 168, 360, { couleur: 'rouge', taille: 15, gras: true });
+  }
+  c.repere('tube', 64, 112, 92, 290, 'le tube : extrait de cellules sans ADN ni ARNm');
+  // les deux courbes, tracées au fil du temps
+  if (k.ecrit(c, 'axes', 3.0)) {
+    c.fleche(GX0, GY1, GX0, GY0 - 16, { couleur: 'faible', largeur: 1.6 }); c.fleche(GX0, GY1, GX1 + 10, GY1, { couleur: 'faible', largeur: 1.6 });
+    k.T(c, 'temps', GX1, GY1 + 22, { couleur: 'faible', taille: 15, align: 'right' });
+    k.T(c, 'acides aminés incorporés', GX0 + 10, GY0 - 22, { couleur: 'vert', taille: 15 });
+    k.T(c, 'ARNm dans le milieu', GX0 + 240, GY0 - 22, { couleur: 'orange', taille: 15 });
+  }
+  if (t >= 3.0) c.repere('graphe', GX0 - 10, GY0 - 40, GX1 - GX0 + 24, GY1 - GY0 + 70, 'les deux courbes');
+  if (g > 0) c.direct(() => {
+    const x = c.ctx, X = u => GX0 + u * (GX1 - GX0), Y = v => GY1 - v * (GY1 - GY0);
+    [[incorpore, '#22c55e'], [arnmMilieu, '#f97316']].forEach(([f, col]) => {
+      x.strokeStyle = col; x.lineWidth = 3; x.lineCap = 'round'; x.beginPath();
+      for (let i = 0; i <= 200; i++) { const u = g * i / 200; let v = f(u); const px = X(u), py = Y(v); i ? x.lineTo(px, py) : x.moveTo(px, py); }
+      x.stroke();
+    });
+  });
+  [[.3, 6.0, 'injection1', '1re injection'], [.65, 10.0, 'injection2', '2e injection']].forEach(([u, q, id, s]) => {
+    const px = GX0 + u * (GX1 - GX0);
+    if (k.ecrit(c, id, q)) { c.ligne(px, GY0, px, GY1, { couleur: 'orange', largeur: 1.2, duree: .3 }); k.T(c, s, px, GY1 + 22, { couleur: 'orange', taille: 15, align: 'center' }); }
+    if (t >= q) c.repere('fleche_' + id, px - 40, GY0, 80, GY1 - GY0 + 30, s + ' d’ARNm');
+  });
+  // les lignes du tableau
+  const LT = [['avant toute injection : ARNm absent → aucun acide aminé incorporé', 5.0], ['après la 1re injection : l’ARNm diminue, les acides aminés incorporés augmentent', 9.0], ['après la 2e injection : de nouveau, l’ARNm diminue, l’incorporation augmente', 13.0]];
+  LT.forEach(([s, q], i) => { if (k.ecrit(c, 'lt' + i, q)) k.T(c, s, 300, 330 + i * 30, { couleur: i ? 'blanc' : 'rouge', taille: 15, max: 452 }); if (t >= q) c.repere(['ligne_avant', 'ligne_injection1', 'ligne_injection2'][i], 296, 314 + i * 30, 456, 26, s); });
+}
+function voitInVitro(k) {
+  const t = k.t, g = gt(t), m = ['À gauche, le tube peint : extrait de cellules (ribosomes, ARNt, enzymes, ATP), acides aminés radioactifs (verts), ni ADN ni ARNm.'];
+  if (t >= 3.4) m.push(`À droite, deux courbes en fonction du temps : acides aminés incorporés dans des protéines (vert, ${Math.round(incorpore(g) * 100)} % du maximum), ARNm dans le milieu (orange, ${Math.round(arnmMilieu(g) * 100)} %).`);
+  if (t >= 6) m.push('1re injection d’ARNm (seringue) : l’incorporation monte, l’ARNm baisse.');
+  if (t >= 10) m.push('2e injection : de nouveau l’incorporation monte, l’ARNm baisse.');
+  return m;
+}
+
+/* ════════ L’arbre de Noël ════════ */
+const MAN = { image: 3.2, adn: 5.0, arn: 7.0, polymerase: 9.0, longueurs: 11.0, sens: 16.0 };
+const BR = Array.from({ length: 14 }, (_, i) => ({ x: 72 + i * 24.5, L: 14 + i * 8.2, s: i % 2 ? 1 : -1, w: hasard(i, 21) }));
+const troncY = px => 188 + 6 * Math.sin(px / 60);
+function dessinerArbre(c, k) {
+  const t = k.t, a = rampe(t, .1, 2.6), sens = rampe(t, 12.4, 3.2);   // sens : les polymérases glissent vers la droite (après la question)
+  c.direct(() => {
+    const x = c.ctx;
+    x.save(); x.globalAlpha = a;
+    const g = x.createRadialGradient(230, 190, 20, 230, 190, 280); g.addColorStop(0, '#6b6b6b'); g.addColorStop(1, '#2f2f2f');
+    x.fillStyle = g; x.fillRect(20, 40, 420, 300);
+    for (let i = 0; i < 420; i++) { x.fillStyle = `rgba(${hasard(i, 30) > .5 ? '255,255,255' : '0,0,0'},.12)`; x.fillRect(20 + 418 * hasard(i, 31), 40 + 298 * hasard(i, 32), 1.6, 1.6); }   // le grain de l’électronographie
+    const cA = rampe(t, 4.0, .6), cR = rampe(t, 6.0, .6), cP = rampe(t, 8.0, .6);
+    // les branches (ARN), de plus en plus longues
+    BR.forEach((b, i) => {
+      const bx = b.x + sens * 26, L = b.L + sens * 14, by = troncY(bx);
+      x.strokeStyle = cR > 0 ? `rgba(${Math.round(225 + 24 * cR)},${Math.round(225 - 80 * cR)},${Math.round(225 - 200 * cR)},.95)` : 'rgba(225,225,225,.9)';
+      x.lineWidth = 2.6; x.lineCap = 'round'; x.beginPath(); x.moveTo(bx, by);
+      for (let j = 1; j <= 10; j++) { const u = j / 10; x.lineTo(bx + 7 * Math.sin(u * 5 + b.w * 6) * u, by + b.s * L * u); }
+      x.stroke();
+    });
+    // le tronc (ADN)
+    x.strokeStyle = cA > 0 ? `rgba(${Math.round(230 - 120 * cA)},${Math.round(230 - 100 * cA)},${Math.round(230 + 20 * cA)},1)` : 'rgba(235,235,235,1)';
+    x.lineWidth = 4.2; x.beginPath(); for (let px = 40; px <= 424; px += 4) { px === 40 ? x.moveTo(px, troncY(px)) : x.lineTo(px, troncY(px)); } x.stroke();
+    // les ARN polymérases : un point sombre à la base de chaque branche
+    BR.forEach(b => { const bx = b.x + sens * 26; M.sphere(x, bx, troncY(bx), 5.2, cP > 0 ? '#14b8a6' : '#1f1f1f'); });
+    x.restore();
+    x.strokeStyle = 'rgba(220,220,220,.6)'; x.lineWidth = 1.4; x.strokeRect(20, 40, 420, 300);
+  });
+  if (t >= .2) c.repere('image', 20, 40, 420, 300, 'l’électronographie : l’arbre de Noël');
+  if (t >= 4.0) c.repere('adn', 40, troncY(232) - 10, 384, 20, 'le tronc : l’ADN du gène');
+  if (t >= 6.0) c.repere('arn', BR[11].x - 10, troncY(BR[11].x) - BR[11].L - 6, 30, BR[11].L + 8, 'une branche : un ARN en formation');
+  if (t >= 8.0) c.repere('polymerase', BR[6].x - 10, troncY(BR[6].x) - 10, 20, 20, 'une ARN polymérase');
+  if (t >= 10.0) { c.repere('courtes', 50, 120, 100, 140, 'les branches courtes'); c.repere('longues', 330, 40, 110, 300, 'les branches longues'); }
+  if (k.ecrit(c, 'echelle', 2.6)) k.T(c, 'électronographie (microscope électronique)', 230, 362, { couleur: 'faible', taille: 15, align: 'center' });
+  // le tableau, une ligne à la fois
+  const X = [458, 604, 752], LIG = [['un long filament central', 'l’ADN du gène (le tronc)', 4.2, 'cyan'], ['des filaments latéraux', 'des ARN en formation (les branches)', 6.2, 'orange'], ['un point sombre à la base de chaque branche', 'une ARN polymérase', 8.2, 'vert'], ['branches courtes d’un côté, longues de l’autre', '?', 10.2, 'jaune']];
+  if (k.ecrit(c, 'tete', 3.4)) { k.T(c, 'on voit', (X[0] + X[1]) / 2, 54, { couleur: 'jaune', taille: 16, align: 'center', gras: true }); k.T(c, 'interprétation', (X[1] + X[2]) / 2, 54, { couleur: 'jaune', taille: 16, align: 'center', gras: true }); c.ligne(X[0], 66, X[2], 66, { couleur: 'faible', largeur: 1.4, duree: .2 }); }
+  if (t >= 3.4) c.repere('tableau', X[0] - 4, 34, X[2] - X[0] + 6, 330, 'le tableau du document');
+  LIG.forEach(([v, s, q, col], r) => {
+    const y = 108 + r * 76;
+    if (k.ecrit(c, 'l' + r, q)) { bloc(c, k, v, (X[0] + X[1]) / 2, y, X[1] - X[0] - 8, 15); bloc(c, k, s, (X[1] + X[2]) / 2, y, X[2] - X[1] - 8, 15, { couleur: col, gras: s === '?' }); c.ligne(X[0], y + 34, X[2], y + 34, { couleur: 'tresfaible', largeur: 1, duree: .15 }); }
+    if (t >= q) c.repere(['ligne_tronc', 'ligne_branches', 'ligne_points', 'ligne_longueurs'][r], X[0] - 4, y - 32, X[2] - X[0] + 6, 66, 'la ligne : ' + v);
+  });
+  // après la question seulement (moment « sens ») : le début du gène et le sens de la transcription
+  if (k.ecrit(c, 'debut', 15.0)) {
+    k.T(c, 'début du gène', 86, 70, { couleur: 'vert', taille: 16, align: 'center', gras: true });
+    c.fleche(140, 318, 400, 318, { couleur: 'vert', largeur: 2.6, duree: .4 }); k.T(c, 'sens de la transcription', 270, 308, { couleur: 'vert', taille: 15, align: 'center' });
+  }
+  if (t >= 15.0) c.repere('sens', 40, 56, 400, 270, 'le début du gène (ARN courts) et le sens de la transcription');
+}
+function voitArbre(k) {
+  const t = k.t, m = ['À gauche, une électronographie (grise, granuleuse) qui se développe : un long filament central, des filaments latéraux de plus en plus longs de gauche à droite, un point sombre à la base de chaque filament.'];
+  if (t >= 4.2) m.push('Le tronc teinté et nommé : l’ADN du gène.');
+  if (t >= 6.2) m.push('Les branches teintées en orange : des ARN en formation.');
+  if (t >= 8.2) m.push('Les points teintés en vert : des ARN polymérases.');
+  if (t >= 10.2) m.push('Dernière ligne : « branches courtes d’un côté, longues de l’autre » → « ? ».');
+  if (t >= 12.4) m.push('Les polymérases glissent vers la droite, les branches s’allongent.');
+  if (t >= 15) m.push('Écrit : « début du gène » à gauche (ARN courts), flèche « sens de la transcription » vers la droite.');
+  return m;
+}
+
+/* ════════ Nirenberg et Matthaei ════════ */
+const MNI = { poly_u: 4.4, ug: 8.8, par_deux: 10.6, poly_c: 14.6 };
+const NI = [{ y: 92, seq: 'UUUUUUUUUUUU', nom: 'ARNm UUUUUU… (poly-U)', t0: .6, codons: true }, { y: 212, seq: 'UGUGUGUGUGUG', nom: 'ARNm UGUGUG… (UG répété)', t0: 5.0, codons: true }, { y: 332, seq: 'CCCCCCCCCCCC', nom: 'ARNm CCCCCC… (poly-C)', t0: 11.2, codons: false }];
+const PAS = 22, SX = 30, lu = (R, t) => Math.max(0, Math.min(4, Math.floor((t - R.t0 - .6) / .7) + 1));   // codons déjà lus
+function dessinerNirenberg(c, k) {
+  const t = k.t;
+  c.direct(() => {
+    const x = c.ctx;
+    NI.forEach(R => {
+      const a = rampe(t, R.t0 - .4, .4); if (a <= 0) return;
+      M.brin(x, SX, R.y, PAS, R.seq, 'arn', -1, { lb: 22, alpha: a });
+      const n = lu(R, t), u = Math.min(4, Math.max(0, (t - R.t0 - .6) / .7 + .4));
+      if (t >= R.t0 + .2 && t < R.t0 + 4) M.ribosome(x, SX + PAS * 1.5 + PAS * 3 * Math.min(3, Math.floor(u)), R.y - 4, .42);
+      const noms = []; for (let j = 0; j < n; j++) noms.push(M.traduire(R.seq.slice(3 * j, 3 * j + 3)));
+      if (noms.length) M.chaine(x, noms.map((_, j) => [344 + j * 44, R.y - 8]), noms, 15);
+    });
+  });
+  NI.forEach((R, r) => {
+    if (k.ecrit(c, 'nom' + r, R.t0 - .4)) k.T(c, R.nom, SX, R.y - 40, { couleur: 'orange', taille: 16, gras: true });
+    if (t >= R.t0) c.repere(['rangee_u', 'rangee_ug', 'rangee_c'][r], SX - 6, R.y - 58, 720, 76, R.nom);
+    // les codons lus, entourés à la craie (pas pour la poly-C : le codon de la proline est la question)
+    if (R.codons) for (let j = 0; j < 4; j++) if (k.ecrit(c, `cod${r}_${j}`, R.t0 + .6 + j * .7)) c.rect(SX + 3 * j * PAS + 2, R.y - 26, 3 * PAS - 4, 30, { couleur: 'jaune', largeur: 1.6, arrondi: 6, duree: .15 });
+    const fin = R.t0 + .6 + 3 * .7 + .4;
+    if (k.ecrit(c, 'res' + r, fin)) {
+      const ch = [0, 1, 2, 3].map(j => M.traduire(R.seq.slice(3 * j, 3 * j + 3)));
+      k.T(c, ch.join(' – ') + '…', 520, R.y - 2, { couleur: 'vert', taille: 16, max: 230 });
+      if (r === 0) k.T(c, 'UUU → Phe', 520, R.y + 22, { couleur: 'jaune', taille: 16, gras: true });
+      if (r === 1) k.T(c, 'UGU → Cys ; GUG → Val', 520, R.y + 22, { couleur: 'jaune', taille: 16, gras: true });
+    }
+    if (t >= fin) c.repere(['chaine_u', 'chaine_ug', 'chaine_c'][r], 330, R.y - 30, 420, 60, 'la chaîne obtenue');
+  });
+  if (k.ecrit(c, 'par2', 9.6)) k.T(c, 'lu par deux : UG UG UG… → un seul acide aminé répété : ce n’est pas ce qu’on obtient', SX, NI[1].y + 46, { couleur: 'rouge', taille: 15, max: 720 });
+  if (t >= 9.6) c.repere('par_deux', SX - 4, NI[1].y + 30, 724, 24, 'la lecture par deux ne marche pas');
+}
+function voitNirenberg(k) {
+  const t = k.t, m = [];
+  NI.forEach((R, r) => {
+    if (t < R.t0) return;
+    const n = lu(R, t), ch = []; for (let j = 0; j < n; j++) ch.push(M.traduire(R.seq.slice(3 * j, 3 * j + 3)));
+    m.push(`${R.nom} : le ribosome lit par trois${R.codons ? ' (codons entourés)' : ''} ; chaîne sortie : ${ch.join(' – ') || 'rien encore'}.`);
+  });
+  if (t >= 9.6) m.push('Écrit en rouge : « lu par deux : UG UG UG… → un seul acide aminé répété : ce n’est pas ce qu’on obtient ».');
+  return m;
+}
+
+/* ════════ Lancement ════════ */
+window.Etapes.lancer({
+  id: 'genetique_documents', titre: 'Les documents du cours, joués au tableau', graine: 61,
+  vues: {
+    albinisme: { titre: 'L’albinisme : une enzyme et un pigment', fin: 14, moments: MALB, autoDepart: false, encre: [14, 14, 750, 404], dessiner: dessinerAlbinisme, voit: voitAlbinisme,
+      motifs: { cellules: 'deux cellules de la peau, chacune avec sa tyrosinase', reaction: 'la tyrosine devient mélanine… ou pas', ligne_enzyme: 'ligne 1 : la tyrosinase', ligne_pigment: 'ligne 2 : la mélanine', ligne_phenotype: 'ligne 3 : la peau et les cheveux', tableau: 'le tableau complet' },
+      conclusion: 'Tyrosinase fonctionnelle → mélanine → peau colorée ; non fonctionnelle → pas de mélanine → albinisme.',
+      texte: 'Albinisme : cellule saine, la tyrosinase (enzyme) transforme la tyrosine en mélanine ; cellule albinos, tyrosinase non fonctionnelle, pas de mélanine ; puis le tableau enzyme / pigment / phénotype.',
+      explication: [{ repere: 'enzyme_saine', texte: 'La tyrosinase, une enzyme : une protéine.' }, { repere: 'melanine', texte: 'La mélanine produite.' }, { repere: 'enzyme_albinos', texte: 'Chez l’albinos, la tyrosinase est non fonctionnelle.' }, { repere: 'peau_albinos', texte: 'Pas de mélanine : peau et cheveux très clairs.' }, { repere: 'tableau', texte: 'Le tableau du document.' }] },
+    beadle: { titre: 'Beadle et Tatum : un gène, une enzyme', fin: 16, moments: MBT, autoDepart: false, encre: [14, 14, 750, 404], dessiner: dessinerBeadle, voit: voitBeadle,
+      motifs: { chaine: 'la chaîne : précurseur → ornithine → citrulline → arginine', milieux: 'les milieux : MM seul ou avec un produit de la chaîne', sauvage: 'la souche sauvage pousse partout', mutant1: 'le mutant 1 : pas sur MM seul', e1: 'mutant 1 : E1 bloquée', mutant2: 'le mutant 2 : seulement avec citrulline ou arginine', e2: 'mutant 2 : E2 bloquée', mutant3: 'le mutant 3 : seulement avec l’arginine' },
+      conclusion: 'Chaque mutant a une seule enzyme non fonctionnelle : un gène → une enzyme.',
+      texte: 'Beadle et Tatum (Neurospora) : chaîne précurseur → ornithine → citrulline → arginine (E1, E2, E3) ; souche sauvage + + + + ; mutant 1 − + + + ; mutant 2 − − + + ; mutant 3 − − − +.',
+      explication: [{ repere: 'chaine', texte: 'Trois réactions, trois enzymes.' }, { repere: 'grille', texte: 'Les boîtes : le champignon pousse ou non.' }, { repere: 'ligne_mutant1', texte: 'Le mutant 1 pousse dès qu’on lui donne l’ornithine.' }, { repere: 'ligne_mutant3', texte: 'Le mutant 3 ne pousse qu’avec l’arginine.' }] },
+    in_vitro: { titre: 'Synthèse in vitro : sans ARNm, pas de protéine', fin: 14, moments: MIV, autoDepart: false, encre: [14, 14, 750, 404], dessiner: dessinerInVitro, voit: voitInVitro,
+      motifs: { tube: 'le tube : extrait de cellules, sans ADN ni ARNm', avant: 'avant toute injection : rien n’est incorporé', injection1: '1re injection d’ARNm', injection2: '2e injection d’ARNm' },
+      conclusion: 'Après chaque injection d’ARNm, des protéines se forment pendant que l’ARNm diminue.',
+      texte: 'Synthèse in vitro : extrait de cellules (ribosomes, ARNt, enzymes, ATP) sans ADN ni ARNm, acides aminés radioactifs ; avant injection, aucune incorporation ; après chaque injection d’ARNm, l’incorporation augmente et l’ARNm diminue.',
+      explication: [{ repere: 'tube', texte: 'Le tube : tout sauf l’ADN et l’ARNm.' }, { repere: 'graphe', texte: 'Les deux courbes.' }, { repere: 'fleche_injection1', texte: 'On injecte de l’ARNm.' }] },
+    arbre_noel: { titre: 'L’arbre de Noël : la transcription au microscope', fin: 16.2, moments: MAN, autoDepart: false, encre: [14, 14, 750, 404], dessiner: dessinerArbre, voit: voitArbre,
+      motifs: { image: 'l’électronographie', adn: 'le tronc : l’ADN du gène', arn: 'les branches : des ARN en formation', polymerase: 'les points : des ARN polymérases', longueurs: 'des branches courtes aux branches longues', sens: 'le début du gène et le sens de la transcription' },
+      conclusion: 'Plusieurs ARN polymérases transcrivent le même gène ; le début du gène est du côté des ARN courts.',
+      texte: 'Électronographie d’un gène en transcription (« arbre de Noël ») : tronc = ADN, branches = ARN en formation, points = ARN polymérases ; branches courtes d’un côté, longues de l’autre ; au moment « sens » seulement : début du gène côté ARN courts.',
+      explication: [{ repere: 'adn', texte: 'Le tronc : l’ADN du gène.' }, { repere: 'arn', texte: 'Une branche : un ARN en formation.' }, { repere: 'polymerase', texte: 'Le point : une ARN polymérase.' }, { repere: 'courtes', texte: 'Les ARN courts.' }, { repere: 'longues', texte: 'Les ARN longs.' }] },
+    nirenberg: { titre: 'Nirenberg et Matthaei : déchiffrer les codons', fin: 15, moments: MNI, autoDepart: false, encre: [14, 14, 750, 404], dessiner: dessinerNirenberg, voit: voitNirenberg,
+      motifs: { poly_u: 'poly-U : Phe – Phe – Phe', ug: 'UG répété : Cys – Val – Cys – Val', par_deux: 'lu par deux, un seul acide aminé : faux', poly_c: 'poly-C : Pro – Pro – Pro' },
+      conclusion: 'Le code se lit par codons de trois nucléotides.',
+      texte: 'Nirenberg et Matthaei : ARNm de synthèse lus in vitro ; UUUUUU… → Phe – Phe… ; UGUGUG… → Cys – Val – Cys – Val ; CCCCCC… → Pro – Pro…',
+      explication: [{ repere: 'rangee_u', texte: 'Un ARNm fait de U seulement.' }, { repere: 'chaine_u', texte: 'Que de la phénylalanine.' }, { repere: 'chaine_ug', texte: 'Deux acides aminés qui alternent.' }, { repere: 'par_deux', texte: 'Par deux, ça ne marche pas.' }, { repere: 'chaine_c', texte: 'Que de la proline.' }] },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

@@ -23,6 +23,7 @@
  *   phrase        (paramètre type) : la phrase de l’origine génétique, puis les versions à trous ;
  *   restitution   : six cartes de définitions, mot pour mot ;
  *   amelogenine   (2024 N) : le document 1 redessiné et les trois questions résolues l’une après l’autre.
+ *   amelogenine_pas (2024 N, 18 novembre 2026) : le même sujet joué une consigne à la fois, chaque réponse après celle de l’élève.
  * Le vivant est peint (cellules, récepteurs, LDL, améloblastes, dents) ; la craie écrit les textes et les flèches.
  */
 const { rampe, entre } = window.Etapes;
@@ -582,6 +583,77 @@ function voitAmelogenine(k) {
   return m;
 }
 
+/* ════════ Vue amelogenine_pas (2024 N joué pas à pas — 18 novembre 2026, 2ᵉ passe) ════════
+ * Le même sujet que la vue amelogenine, mais UNE consigne à la fois et la réponse après celle de l’élève :
+ * le document, puis la consigne 1 seule (q1), sa réponse (q1_reponse) ; les deux brins seuls (q2), puis l’ARNm et les
+ * acides aminés (q2_reponse) ; la consigne 3 (q3), puis la phrase de l’origine génétique (q3_reponse).
+ * Une diapositive s’arrête sur la consigne (q1, q2) : la réponse ne s’écrit qu’à la diapositive suivante ou à la demande. */
+const MAP = { document: 4.0, q1: 5.4, q1_reponse: 8.8, q2: 10.6, q2_reponse: 13.4, q3: 14.8, q3_reponse: 17.6 };
+function dessinerAmeloPas(c, k) {
+  const t = k.t, a = rampe(t, .2, .7), T = 13;
+  c.direct(() => { const x = c.ctx; RANGS.forEach(R => { ameloblastes(x, 24, R.y + 34, 5, 48, R.normale, a); dent(x, 296, R.y + 24, !R.normale, a); }); });
+  c.texte('Sujet 2024 N : l’amélogénèse imparfaite', 380, 24, { couleur: 'cyan', taille: 19, align: 'center' });
+  if (t >= .2) {
+    c.repere('document', 10, 36, 328, 314, 'le document 1 redessiné');
+    c.repere('dent_saine', 266, RANGS[0].y + 20, 60, 82, 'la dent saine'); c.repere('dent_atteinte', 266, RANGS[1].y + 20, 60, 82, 'la dent atteinte');
+  }
+  if (k.ecrit(c, 'doc', .3)) {
+    c.rect(10, 36, 328, 314, { couleur: 'faible', largeur: 1.5, duree: .25 });
+    k.T(c, 'Document 1', 174, 54, { couleur: 'jaune', taille: 14, align: 'center', duree: .25 });
+    RANGS.forEach(R => {
+      k.T(c, R.titre, 20, R.y + 10, { couleur: R.normale ? 'vert' : 'rouge', taille: 14, duree: .3 });
+      k.T(c, 'améloblastes', 69, R.y + 28, { couleur: 'faible', taille: 13, align: 'center', duree: .25 });
+      k.T(c, R.prot, 72, R.y + 118, { couleur: 'blanc', taille: 13, align: 'center', duree: .35 });
+      c.fleche(124, R.y + 62, 148, R.y + 62, { couleur: 'faible', largeur: 1.4, tete: 6, duree: .1 });
+      k.T(c, R.min[0], 202, R.y + 58, { couleur: 'blanc', taille: 13, align: 'center', duree: .25 });
+      k.T(c, R.min[1], 202, R.y + 75, { couleur: R.normale ? 'vert' : 'rouge', taille: 13, align: 'center', duree: .2 });
+      c.fleche(250, R.y + 62, 268, R.y + 62, { couleur: 'faible', largeur: 1.4, tete: 6, duree: .1 });
+      k.T(c, R.email, 296, R.y + 118, { couleur: R.normale ? 'vert' : 'rouge', taille: 13, align: 'center', duree: .25 });
+    });
+  }
+  // Consigne 1, puis sa réponse
+  const L1 = flux(c, REL_A[0], XQ + 4, 72, XQM, T, 17), y2 = Math.max(...L1.map(o => o.y)) + 20, L2 = flux(c, REL_A[1], XQ + 4, y2, XQM, T, 17);
+  const yRel = Math.max(...L2.map(o => o.y)) + 19;
+  if (k.ecrit(c, 'q1', 4.6)) k.T(c, '1. Montrez la relation protéine – caractère.', XQ, 52, { couleur: 'jaune', taille: 14, duree: .5 });
+  if (t >= 4.6) c.repere('consigne_q1', XQ - 4, 36, XQM - XQ + 2, 24, 'la consigne 1');
+  if (k.ecrit(c, 'q1r', 6.2)) {
+    [...L1, ...L2].forEach(it => ecrireItem(c, k, it, T, .3));
+    k.T(c, 'd’où la relation protéine – caractère.', XQ + 4, yRel, { couleur: 'vert', taille: T, duree: .4 });
+  }
+  if (t >= 6.2) c.repere('relation', XQ - 4, 60, XQM - XQ + 2, yRel - 50, 'la relation protéine – caractère, écrite comme le barème');
+  // Consigne 2 : les deux brins d’abord, l’ARNm et les acides aminés ensuite
+  const yQ2 = yRel + 26, lx = XQ + 70, cw = (XQM - lx) / 5, cx = i => lx + (i + .5) * cw;
+  const tn = SEQ_A.normal.split(' '), tm = SEQ_A.mute.split(' '), an = tn.map(s => s.replace(/T/g, 'U')), am = tm.map(s => s.replace(/T/g, 'U'));
+  const pn = an.map(M.traduire), pm = am.map(M.traduire);
+  const rangee = (y0, cases, coul, mute) => cases.forEach((s, i) => k.T(c, s, cx(i), y0, { couleur: i === 2 && mute ? 'rouge' : coul, taille: T, align: 'center', duree: .08 }));
+  if (k.ecrit(c, 'q2', 9.2)) {
+    k.T(c, '2. Donnez l’ARNm et les acides aminés.', XQ, yQ2, { couleur: 'jaune', taille: 14, duree: .4 });
+    k.T(c, 'normal :', XQ + 4, yQ2 + 20, { couleur: 'vert', taille: T, duree: .2 }); rangee(yQ2 + 20, tn, 'blanc', false);
+    k.T(c, 'muté :', XQ + 4, yQ2 + 76, { couleur: 'rouge', taille: T, duree: .2 }); rangee(yQ2 + 76, tm, 'blanc', true);
+  }
+  if (t >= 9.2) { c.repere('brins', XQ - 4, yQ2 - 16, XQM - XQ + 2, 112, 'les brins non transcrits, normal et muté'); c.repere('triplet3', cx(2) - cw / 2 + 2, yQ2 + 62, cw - 4, 22, 'le triplet 3 de l’allèle muté'); }
+  if (k.ecrit(c, 'q2r', 11.6)) {
+    rangee(yQ2 + 37, an, 'orange', false); rangee(yQ2 + 93, am, 'orange', true);
+    [[yQ2 + 54, pn, false], [yQ2 + 110, pm, true]].forEach(([y, aa, mute]) => aa.forEach((s, i) => { if (i) k.T(c, '–', lx + i * cw, y, { couleur: 'faible', taille: T, align: 'center', duree: .04 }); k.T(c, s, cx(i), y, { couleur: i === 2 && mute ? 'rouge' : 'vert', taille: T, align: 'center', duree: .08 }); }));
+    c.rect(cx(2) - cw / 2 + 2, yQ2 + 64, cw - 4, 54, { couleur: 'rouge', largeur: 1.8, duree: .25 });
+  }
+  if (t >= 11.6) c.repere('sequences', XQ - 4, yQ2 - 16, XQM - XQ + 2, 136, 'les séquences normale et mutée');
+  // Consigne 3, puis la phrase
+  const yQ3 = yQ2 + 144, LO = couper(c, ORIGINE_A, XQM - XQ - 8, T);
+  if (k.ecrit(c, 'q3', 14.0)) k.T(c, '3. Expliquez l’origine génétique.', XQ, yQ3, { couleur: 'jaune', taille: 14, duree: .3 });
+  if (t >= 14.0) c.repere('consigne_q3', XQ - 4, yQ3 - 16, XQM - XQ + 2, 22, 'la consigne 3');
+  if (k.ecrit(c, 'q3r', 15.2)) LO.forEach((l, i) => k.T(c, l, XQ + 4, yQ3 + 19 + i * 17, { couleur: 'blanc', taille: T, duree: .6 }));
+  if (t >= 15.2) c.repere('origine', XQ - 4, yQ3 - 16, XQM - XQ + 2, 24 + LO.length * 17, 'l’origine génétique');
+}
+function voitAmeloPas(k) {
+  const t = k.t, m = [];
+  if (t >= .2) m.push('À gauche, le document 1 redessiné : personne saine, améloblastes → amélogénine normale → minéralisation normale → émail normal ; personne malade, amélogénine anormale → minéralisation faible → émail atteint.');
+  if (t >= 4.6) m.push('À droite, la consigne 1 : « Montrez la relation protéine – caractère. »' + (t < 6.2 ? ' Pas encore de réponse écrite.' : ' Réponse : « saine : amélogénine normale → minéralisation normale → émail normal ; malade : amélogénine anormale → minéralisation faible → émail atteint ; d’où la relation protéine – caractère ».'));
+  if (t >= 9.2) m.push('Consigne 2 : « Donnez l’ARNm et les acides aminés. » Brins non transcrits (triplets 1 à 5) : normal AAT CAT CCC CGT GCT ; muté AAT CAT CTC CGT GCT (triplet 3 en rouge).' + (t < 11.6 ? ' L’ARNm et les acides aminés ne sont pas encore écrits.' : ' ARNm normal AAU CAU CCC CGU GCU → Asn – His – Pro – Arg – Ala ; muté AAU CAU CUC CGU GCU → Asn – His – Leu – Arg – Ala ; triplet 3 encadré.'));
+  if (t >= 14.0) m.push('Consigne 3 : « Expliquez l’origine génétique. »' + (t < 15.2 ? ' Pas encore de réponse.' : ` Réponse : « ${ORIGINE_A} ».`));
+  return m;
+}
+
 /* ════════ Lancement ════════ */
 window.Etapes.lancer({
   id: 'genetique_examen', titre: 'Préparer l’examen : expression de l’information génétique', graine: 59,
@@ -637,6 +709,11 @@ window.Etapes.lancer({
       conclusion: 'Le sujet 2024 N résolu : relation protéine – caractère, séquences, origine génétique.',
       texte: 'Amélogénèse imparfaite (2024 N) : amélogénine normale → minéralisation normale → émail normal ; amélogénine anormale → minéralisation faible → émail atteint. Allèle normal AAT CAT CCC CGT GCT → Asn – His – Pro – Arg – Ala ; muté AAT CAT CTC CGT GCT → Asn – His – Leu – Arg – Ala. Origine : substitution C → T au triplet 3 (gène AMELX).',
       explication: [{ repere: 'document', texte: 'Le document 1, redessiné.' }, { repere: 'dent_saine', texte: 'La dent saine : émail normal.' }, { repere: 'dent_atteinte', texte: 'La dent atteinte : émail mal minéralisé.' }, { repere: 'relation', texte: 'Question 1 : la relation protéine – caractère.' }, { repere: 'sequences', texte: 'Question 2 : les séquences.' }, { repere: 'origine', texte: 'Question 3 : l’origine génétique.' }] },
+    amelogenine_pas: { titre: 'Sujet 2024 N, une consigne à la fois', fin: 18, moments: MAP, autoDepart: false, dessiner: dessinerAmeloPas, voit: voitAmeloPas,
+      motifs: { document: 'le document 1 : améloblastes, amélogénine, émail', q1: 'consigne 1 : montrez la relation protéine – caractère', q1_reponse: 'la réponse 1, comme le barème', q2: 'consigne 2 : les deux brins non transcrits', q2_reponse: 'l’ARNm et les acides aminés ; le triplet 3 encadré', q3: 'consigne 3 : l’origine génétique', q3_reponse: 'la phrase de l’origine génétique' },
+      conclusion: 'Le sujet 2024 N joué consigne par consigne.',
+      texte: 'Amélogénèse imparfaite (2024 N), une consigne à la fois : le document, la consigne 1 puis sa réponse ; les brins normal et muté, puis l’ARNm et les acides aminés ; la consigne 3 puis la phrase de l’origine génétique.',
+      explication: [{ repere: 'document', texte: 'Le document 1, redessiné.' }, { repere: 'consigne_q1', texte: 'Consigne 1 : la relation protéine – caractère.' }, { repere: 'relation', texte: 'La réponse 1, comme le barème.' }, { repere: 'brins', texte: 'Les deux brins non transcrits.' }, { repere: 'triplet3', texte: 'Le triplet 3 : une lettre change.' }, { repere: 'sequences', texte: 'L’ARNm et les acides aminés.' }, { repere: 'origine', texte: 'L’origine génétique.' }] },
   },
 });
 </script>
