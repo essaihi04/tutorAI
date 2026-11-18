@@ -50,6 +50,12 @@ encore plus tard, pas à sa beauté.
 9. **L'écran.** Formules écrites en notation à l'écran (« v = d/Δt »), les mots seulement dans la voix ; aucun texte
    sous 15 px ; tout tient dans un écran sans défilement, y compris sur téléphone en paysage (~724 × 350 px).
 
+10. **Un objet, un seul dessin, dans tout le cours.** Une molécule, un organite, un ion, un composant gardent la même
+   forme, la même couleur et la même étiquette sur toutes les diapositives et dans toutes les simulations (le glucose
+   de SVT ch1 : une chaîne droite de 6 billes jaunes, jamais deux rangées de 3) ; ce qu'il devient se dessine à partir
+   de lui. Écrire le « Lexique visuel » du cours dans son architecture et dessiner chaque objet par une seule fonction
+   du script commun du cours (skill simulations-au-tableau, règle 15 ; skill professeur, règle 43).
+
 ## La procédure
 
 ### 1. Lire
