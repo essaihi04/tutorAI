@@ -4,7 +4,7 @@ Logique refaite le 18 novembre 2026, avec la skill `logique-de-cours`. Elle est 
 
 J'ai ajouté une vue de simulation : `frontend/public/media/simulations/chimie/acides-bases-tableau/eau.html?vue=ke_mesures`. Les autres vues de la page ne changent pas.
 
-Les pistes à mettre en voix sont dans `phys_ch13_acides_bases_voix.json` : 64 pistes, soit 1 diapo et 63 champs de questions d'observation.
+Les pistes à mettre en voix sont dans `phys_ch13_acides_bases_voix.json` : 71 pistes, soit 1 diapo et 70 champs de questions d'observation.
 
 ## 1. Sources
 
@@ -183,8 +183,8 @@ Pourquoi ces mesures-là :
 | Diapo | Pourquoi ici |
 |---|---|
 | `ab_p1_relation` | pH = pKa + log([A⁻]/[AH]), établi juste avant son usage (écart 2). |
-| `ab_p2_domaines` [OBS] | Les domaines sur l'axe des pH. **Observation** : « à gauche du pKa (pH < pKa), qui prédomine ? ». L'élève utilise la relation de la diapo d'avant ; la voix confirme (« log négatif, donc AH »). La commande « domaine_acide » est déplacée sur « هنا l'acide éthanoïque prédomine ». Le nom de l'espèce ne s'écrit donc qu'après la réponse. |
-| `ab_p3_distribution` | Les pourcentages, et le croisement à pKa. Pas d'observation : la simulation écrit « 50 % : pH = pKa » au moment même où la voix commence la phrase. Il faudrait `conclusions: false` dans `predominance.html` (voir § 5). |
+| `ab_p2_domaines` [OBS] | Les domaines sur l'axe des pH. **Observation** : « à gauche du pKa (pH < pKa), qui prédomine ? ». L'élève utilise la relation de la diapo d'avant ; la voix confirme (« log négatif, donc AH »). La commande « domaine_acide » est déplacée sur « هنا l'acide éthanoïque prédomine ». Le nom de l'espèce ne s'écrit donc qu'après la réponse. `sim_avant: {conclusions: false}` cache aussi les barres et pourcentages de la poignée (96 % de CH₃COOH les donneraient). |
+| `ab_p3_distribution` [OBS] | Les pourcentages des deux formes. **Observation** (ajoutée le 18 novembre, 2e passe) : « à quel pH les deux courbes se croisent-elles ? » (4,8 = pKa ; pièges : 3,8 et 7). Pendant la question, `predominance.html` reçoit `conclusions: false` : au croisement, seul un anneau blanc « ? », sans pointillés ni « 50 % : pH = pKa ». La voix confirme ensuite « cinquante pour cent… pH = pKa ». |
 | `ab_p4_national` [Q] | National 2025 R, juste après la distribution. |
 
 **Bloc ab_b12 — Les indicateurs colorés**
@@ -260,7 +260,7 @@ Pourquoi ces mesures-là :
 **Les nouveaux textes à dire.**
 
 - Une seule diapo à enregistrer : `ab_w2a_mesures`. Sa voix en darija passe `verifier_mots` ; restent trois termes du programme à écouter : « béchers », « soude », « autoprotolyse ».
-- Les champs des 9 nouvelles questions d'observation (`ab_w2a_mesures`, `ab_c1_acides`, `ab_p2_domaines`, `ab_d3_equivalence`, `ab_d5_tangentes`, `ab_e2_demi`, `ab_n1_2016n`, `ab_n4_2024r`, `ab_n5_2023r`) : 63 pistes.
+- Les champs des 10 nouvelles questions d'observation (`ab_w2a_mesures`, `ab_c1_acides`, `ab_p2_domaines`, `ab_p3_distribution`, `ab_d3_equivalence`, `ab_d5_tangentes`, `ab_e2_demi`, `ab_n1_2016n`, `ab_n4_2024r`, `ab_n5_2023r`) : 70 pistes.
 - Des mots darija peu connus de la voix ont été remplacés : « كتذوب » → « كتعطي كاع… », « طيحنا » → « زدنا », « كيساليو » → « ما بقاوش ».
 - Termes du programme gardés, à écouter : « méthanoïque », « demi-équivalence », « quatre-vingt-huit ».
 
@@ -287,8 +287,8 @@ Pour `ab_n4_2024r` et `ab_n5_2023r`, l'écart avec l'arrêt suffisait déjà. Le
 
 ## 5. Ce qui n'a pas pu être fait, et les besoins
 
-- **`ab_p3_distribution` et `ab_p2_domaines`, curseur.** Une observation « à quel pH se croisent les courbes ? » demanderait que `predominance.html` accepte `conclusions: false` : la vue écrit « 50 % : pH = pKa » dès le moment `croisement`, qui part avec le début de la phrase. Même chose pour le curseur à 3,41 de `ab_p2`, qui affiche le nom de l'espèce qui prédomine.
+- **Fait en 2e passe** : `predominance.html` accepte `conclusions` (vues domaines et distribution ; défaut `true`, rien ne change pour le cours en ligne). `false` tait l'espèce qui prédomine, les barres de la poignée, la règle, la lecture du croisement et la bulle d'arrêt qui les dirait. `ab_p2_domaines` et `ab_p3_distribution` l'utilisent.
 - **`ab_b2_taux`.** Une observation sur « x_éq = [HO⁻]_éq·V » aurait la même limite : la vue écrit l'expression au moment `x_eq`.
-- **Les voix.** Les 64 pistes sont à faire sur le VPS (voix Bodi), avec `scripts/voix/attente_construire.py` puis `attente_poser.py`.
-- **Les questions d'observation.** Elles sont 10 dans le cours (9 nouvelles et celle de `ab_e1_phe`), au-delà du « rare » de la règle 30, à la demande de l'utilisateur du 18 novembre : dosage, Ka, pKa et prédominance « joués pas à pas, l'élève fait chaque étape avant la correction ». Aucune ne demande de calcul. Chacune porte sur une lecture de courbe, la comparaison d'un tableau, un réactif limitant ou une espèce qui prédomine. Les calculs restent sur l'ardoise du bloc, avec leur démonstration.
+- **Les voix.** Les 71 pistes sont à faire sur le VPS (voix Bodi), avec `scripts/voix/attente_construire.py` puis `attente_poser.py`.
+- **Les questions d'observation.** Elles sont 11 dans le cours (10 nouvelles et celle de `ab_e1_phe`), au-delà du « rare » de la règle 30, à la demande de l'utilisateur du 18 novembre : dosage, Ka, pKa et prédominance « joués pas à pas, l'élève fait chaque étape avant la correction ». Aucune ne demande de calcul. Chacune porte sur une lecture de courbe, la comparaison d'un tableau, un réactif limitant ou une espèce qui prédomine. Les calculs restent sur l'ardoise du bloc, avec leur démonstration.
 - **Fichiers partagés.** Aucun n'a été modifié (`shared/`, lecteur `frontend/src/`).

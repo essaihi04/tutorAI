@@ -16,6 +16,10 @@
 /*
  * predominance.html (contrat acides_bases § 5) — cours « Transformations liées aux réactions acide-base » (phys_ch13_acides_bases, 2e Bac PC BIOF, novembre 2026).
  * Vues (?vue=) : relation (défaut) | domaines | distribution | indicateur | virage. Poignée pH (vues domaines et distribution).
+ * Question d’observation (18 novembre 2026, règle 30) : set_parameters {conclusions: false} tait ce que l’élève doit trouver —
+ *   domaines : le nom de l’espèce qui prédomine (domaines, poignée), les barres et pourcentages de la poignée, la règle ;
+ *   distribution : au croisement, seul un anneau blanc « ? » (ni pointillés vers les axes, ni « 50 % : pH = pKa = 4,8 »).
+ *   {conclusions: true} (défaut) remet tout ; la bulle d’arrêt ne dit pas non plus la réponse.
  * Contrat : outils/cours/notes/cours/acides_bases_contrat_simulations.md. Kit (commun.js, exposants.js, ab.css) non modifié :
  * les aides (formules, flèches dessinées, moteur, peinture) sont copiées dans la page.
  */
@@ -501,7 +505,11 @@ function ETAPES(v) {
     ],
   })[v] || [];
 }
-const MOTIFS = MOTIFS_DE(ETAPES);
+/** Pendant la question d’observation (`conclusions: false`), la bulle d’arrêt ne dit pas ce que l’élève doit trouver. */
+let CONCL = true;
+const MOTIFS_TUS = { domaine_acide: 'à gauche du pKa (rose)', domaine_base: 'à droite du pKa (vert)', regle: 'la règle (cachée : à toi)', croisement: 'les deux courbes se croisent : lis le pH' };
+const MOTIFS_VUS = MOTIFS_DE(ETAPES);
+const MOTIFS = new Proxy({}, { get: (_, nom) => (!CONCL && MOTIFS_TUS[nom]) || MOTIFS_VUS[nom] });
 
 /* ── Vue relation (exemples E, H) ───────────────────────────────────────────────────────────────────────────────────── */
 const FR_AH = { frac: ['[A⁻]_{éq}', '[AH]_{éq}'] };
@@ -571,10 +579,12 @@ function vueDomaines(c, M) {
     c.texte('pKa = 4,8', xK, BD.y - 24, { couleur: 'jaune', taille: 19, align: 'center' });
   });
   M.etape(c, 'domaine_acide', () => {
+    if (!CONCL) return;   // question d’observation : l’élève trouve qui prédomine
     c.texte('CH₃COOH prédomine', (AXD.x0 + xK) / 2, BD.y + 25, { couleur: 'rose', taille: 18, align: 'center', max: xK - AXD.x0 - 10 });
     c.texte('(forme acide AH)', (AXD.x0 + xK) / 2, BD.y + 45, { couleur: 'faible', taille: 14, align: 'center' });
   });
   M.etape(c, 'domaine_base', () => {
+    if (!CONCL) return;
     c.texte('CH₃COO⁻ prédomine', (xK + AXD.x1) / 2, BD.y + 25, { couleur: 'vert', taille: 18, align: 'center' });
     c.texte('(forme basique A⁻)', (xK + AXD.x1) / 2, BD.y + 45, { couleur: 'faible', taille: 14, align: 'center' });
   });
@@ -584,6 +594,7 @@ function vueDomaines(c, M) {
       anneau(c.ctx, xP, AXD.y);
       c.texte(`pH = ${phTxt(pH)}`, clamp(xP, 64, 690), AXD.y + 46, { couleur: VIOLET, taille: 18, align: 'center' });
       const ctx = c.ctx;
+      if (!CONCL) return;   // les barres et les pourcentages diraient qui prédomine
       [[pAH, ROSE], [100 - pAH, VERT]].forEach(([v, col], i) => {
         const y = BARD.ys[i];
         ctx.save(); ctx.strokeStyle = 'rgba(226,232,240,.35)'; ctx.lineWidth = 1; ctx.strokeRect(BARD.x, y - 17, BARD.w, 20); ctx.restore();
@@ -602,6 +613,7 @@ function vueDomaines(c, M) {
     });
   }
   M.etape(c, 'regle', () => {
+    if (!CONCL) return;
     c.rect(130, 362, 500, 40, { couleur: 'jaune', largeur: 2, arrondi: 10 });
     c.texte('pH < pKa : AH ;  pH > pKa : A⁻ ;  pH = pKa : [AH] = [A⁻]', 380, 389, { couleur: 'jaune', taille: 20, align: 'center', max: 480 });
   });
@@ -609,9 +621,9 @@ function vueDomaines(c, M) {
   const vues = [];
   if (M.commence('axe')) vues.push('axe des pH de 0 à 14');
   if (M.commence('pka')) vues.push('trait jaune à pKa = 4,8');
-  if (M.commence('domaine_acide')) vues.push('à gauche (rose) : CH₃COOH prédomine (forme acide AH)');
-  if (M.commence('domaine_base')) vues.push('à droite (vert) : CH₃COO⁻ prédomine (forme basique A⁻)');
-  if (M.commence('regle')) vues.push('pH < pKa : AH ; pH > pKa : A⁻ ; pH = pKa : [AH] = [A⁻]');
+  if (M.commence('domaine_acide')) vues.push(CONCL ? 'à gauche (rose) : CH₃COOH prédomine (forme acide AH)' : 'à gauche du pKa : domaine rose, sans nom (question à l’élève)');
+  if (M.commence('domaine_base')) vues.push(CONCL ? 'à droite (vert) : CH₃COO⁻ prédomine (forme basique A⁻)' : 'à droite du pKa : domaine vert, sans nom');
+  if (M.commence('regle') && CONCL) vues.push('pH < pKa : AH ; pH > pKa : A⁻ ; pH = pKa : [AH] = [A⁻]');
   return vues;
 }
 
@@ -650,6 +662,11 @@ function vueDistribution(c, M) {
     });
   });
   M.etape(c, 'croisement', () => {
+    if (!CONCL) {   // question d’observation : le croisement est montré, sa lecture est à l’élève
+      c.cercle(XG(PKA), YG(50), 11, { couleur: 'blanc', largeur: 2.2 });
+      c.texte('?', XG(PKA) + 18, YG(50) + 6, { couleur: 'blanc', taille: 20 });
+      return;
+    }
     c.ligne(g.x0, YG(50), XG(PKA), YG(50), { couleur: 'jaune', largeur: 1.4, pointille: [5, 5] });
     c.ligne(XG(PKA), YG(50), XG(PKA), g.y0, { couleur: 'jaune', largeur: 1.4, pointille: [5, 5] });
     c.point(XG(PKA), YG(50), 6, 'jaune');
@@ -683,7 +700,7 @@ function vueDistribution(c, M) {
   if (M.commence('axes')) vues.push('axes : % de 0 à 100 (vertical) ; pH de 0 à 14 (horizontal)');
   if (M.commence('courbe_acide')) vues.push('courbe rose « % CH₃COOH » qui décroît : 99,0 % (pH 2,8) ; 90,9 % (3,8) ; 50 % (4,8) ; 9,1 % (5,8) ; 1,0 % (6,8)');
   if (M.commence('courbe_base')) vues.push('courbe verte « % CH₃COO⁻ » qui croît : 1,0 % (pH 2,8) ; 9,1 % (3,8) ; 50 % (4,8) ; 90,9 % (5,8) ; 99,0 % (6,8)');
-  if (M.commence('croisement')) vues.push('croisement marqué en jaune : 50 % : pH = pKa = 4,8');
+  if (M.commence('croisement')) vues.push(CONCL ? 'croisement marqué en jaune : 50 % : pH = pKa = 4,8' : 'croisement entouré d’un anneau blanc « ? » (rien d’écrit : l’élève lit le pH sur l’axe)');
   if (M.commence('lecture')) vues.push(`lecture à pH = ${phTxt(pH)} : CH₃COOH ${pctTxt(pAH)} %, CH₃COO⁻ ${pctTxt(100 - pAH)} %`);
   if (M.commence('phrase')) vues.push('diagramme de distribution : les courbes se croisent à pH = pKa');
   return vues;
@@ -934,7 +951,7 @@ function voir(M) {
   const v = M.S.vue, m = [`Vue « ${v} » (${TITRES[v]}), ${M.etat()}. Étape en cours : ${etapeEnCours(M)}.`];
   if (v === 'domaines' && M.dom && M.vu('axe')) {
     const d = predomine(M.dom.pH);
-    m.push(`Poignée (anneau violet) à pH = ${phTxt(M.dom.pH)} ; barres : [CH₃COOH] ${pctTxt(M.dom.pAH)} %, [CH₃COO⁻] ${pctTxt(100 - M.dom.pAH)} %${M.vu('domaine_base') ? ` ; affiché : ${d === 'egal' ? 'aucune ne prédomine, [AH] = [A⁻]' : (d === 'AH' ? 'CH₃COOH' : 'CH₃COO⁻') + ' prédomine'}` : ''}.`);
+    m.push(`Poignée (anneau violet) à pH = ${phTxt(M.dom.pH)} ; ${CONCL ? `barres : [CH₃COOH] ${pctTxt(M.dom.pAH)} %, [CH₃COO⁻] ${pctTxt(100 - M.dom.pAH)} %` : 'barres cachées (question à l’élève)'}${CONCL && M.vu('domaine_base') ? ` ; affiché : ${d === 'egal' ? 'aucune ne prédomine, [AH] = [A⁻]' : (d === 'AH' ? 'CH₃COOH' : 'CH₃COO⁻') + ' prédomine'}` : ''}.`);
   }
   if (v === 'distribution' && M.dis) m.push(`Poignée (anneau violet) à pH = ${phTxt(M.dis.pH)}${M.commence('lecture') ? ` : CH₃COOH ${pctTxt(M.dis.pAH)} %, CH₃COO⁻ ${pctTxt(100 - M.dis.pAH)} %` : ' (lue au moment « lecture »)'}.`);
   if (v === 'indicateur' && M.ind) m.push(M.ind.pc > 0 ? `Béchers colorés par le BBT : jaune (3,41), vert (7,00), bleu (10,60)${M.ind.pc < 1 ? ' (la couleur se répand)' : ''}.` : M.ind.nb ? `Goutte de BBT tombée dans ${M.ind.nb} bécher(s).` : 'Béchers encore incolores.');
@@ -943,6 +960,7 @@ function voir(M) {
 }
 const params = M => {
   const p = { vue: M.S.vue };
+  if (M.S.vue === 'domaines' || M.S.vue === 'distribution') p.conclusions = CONCL;
   if (M.S.vue === 'domaines') { const pH = PAR.pH_dom, a = pctAH(pH); Object.assign(p, { pH, pourcent_AH: +a.toFixed(1), pourcent_A: +(100 - a).toFixed(1) }); }
   if (M.S.vue === 'distribution') { const pH = PAR.pH_dis, a = pctAH(pH); Object.assign(p, { pH, pourcent_AH: +a.toFixed(1), pourcent_A: +(100 - a).toFixed(1) }); }
   return p;
@@ -953,10 +971,11 @@ const MOT = Moteur({
   etapes: ETAPES, motifs: MOTIFS, dessiner, voir, params,
   depart: M => ({ relation: 'Que devient l’expression de Ka quand on prend le logarithme ?', domaines: 'Quelle forme du couple domine à un pH donné ?', distribution: 'Les pourcentages des deux formes selon le pH…',
     indicateur: 'Une goutte de BBT dans trois solutions incolores…', virage: 'Où le BBT change-t-il de couleur ?' })[M.S.vue],
-  messageFin: M => ({ relation: 'pH = pKa + log([A⁻]_éq/[AH]_éq) ; [A⁻] = [AH] → pH = pKa = 4,8.', domaines: lecturePH(PAR.pH_dom), distribution: lecturePH(PAR.pH_dis),
+  messageFin: M => ({ relation: 'pH = pKa + log([A⁻]_éq/[AH]_éq) ; [A⁻] = [AH] → pH = pKa = 4,8.', domaines: CONCL ? lecturePH(PAR.pH_dom) : 'À toi : quelle espèce prédomine ?', distribution: CONCL ? lecturePH(PAR.pH_dis) : 'À toi : à quel pH les deux courbes se croisent-elles ?',
     indicateur: 'BBT : jaune (3,41), vert (7,00), bleu (10,60) ; HInd jaune, Ind⁻ bleu.', virage: 'BBT : zone de virage 6,0 – 7,6, elle encadre pKa ≈ 7,0.' })[M.S.vue],
   appliquer: (p, M) => {
     const r = {};
+    if (typeof p.conclusions === 'boolean' && p.conclusions !== CONCL) { CONCL = p.conclusions; M.scene.sale = true; }
     if (VUES.includes(p.vue)) r.vue = p.vue;
     const pH = lirePH(p.pH);
     const cible = r.vue || M.S.vue;
@@ -964,11 +983,11 @@ const MOT = Moteur({
       DRAG = null;
       if (cible === 'domaines') PAR.pH_dom = pH; else PAR.pH_dis = pH;
       if (r.vue && r.vue !== M.S.vue) r.change = true;
-      else { r.garder = true; r.apres = () => { M.scene.sale = true; M.dire(lecturePH(pH), 'good'); M.emettre(); }; }
+      else { r.garder = true; r.apres = () => { M.scene.sale = true; M.dire(CONCL ? lecturePH(pH) : `pH = ${phTxt(pH)}`, CONCL ? 'good' : ''); M.emettre(); }; }
     } else r.change = !!(r.vue && r.vue !== M.S.vue);
     return r;
   },
-  schema: { vue: VUES.join(' | ') + ' (change la vue et relance)', pH: '0..14 (vues domaines, défaut 3.41, et distribution, défaut 3.8 ; au centième)' },
+  schema: { conclusions: 'true | false (vues domaines et distribution, question d’observation : false tait l’espèce qui prédomine, les barres de la poignée, la règle et la lecture du croisement ; true par défaut)', vue: VUES.join(' | ') + ' (change la vue et relance)', pH: '0..14 (vues domaines, défaut 3.41, et distribution, défaut 3.8 ; au centième)' },
   texte: 'Prédominance et indicateurs (exemples B, H, I ; acide éthanoïque CH₃COOH/CH₃COO⁻, pKa = 4,8). Relation : Ka = [A⁻]_éq·[H₃O⁺]_éq/[AH]_éq ; on prend −log : −log Ka = −log[H₃O⁺]_éq − log([A⁻]_éq/[AH]_éq) ; pH = pKa + log([A⁻]_éq/[AH]_éq) ; [A⁻] = [AH] → pH = pKa = 4,8 ; [A⁻]/[AH] = 10 → pH = 5,8 ; [A⁻]/[AH] = 0,1 → pH = 3,8. Domaines : axe des pH, pKa = 4,8 ; pH < pKa : CH₃COOH (AH) prédomine ; pH > pKa : CH₃COO⁻ (A⁻) prédomine ; pH = pKa : [AH] = [A⁻] ; poignée pH (défaut 3,41 : 96,1 % de CH₃COOH). Distribution : % CH₃COOH / % CH₃COO⁻ : pH 2,8 → 99,0 / 1,0 ; 3,8 → 90,9 / 9,1 ; 4,8 → 50 / 50 ; 5,8 → 9,1 / 90,9 ; 6,8 → 1,0 / 99,0 ; croisement à 50 % : pH = pKa = 4,8 ; poignée pH (défaut 3,8). Indicateur : BBT, couple HInd/Ind⁻, HInd jaune, Ind⁻ bleu ; acide éthanoïque (pH 3,41) jaune, eau pure (7,00) vert, ammoniac (10,60) bleu. Zone de virage : BBT 6,0 – 7,6 (vert), pKa ≈ 7,0 ; la zone de virage encadre le pKa de l’indicateur ; hélianthine 3,1 – 4,4 (rouge / jaune) ; rouge de méthyle 4,2 – 6,2 (rouge / jaune) ; BBT 6,0 – 7,6 (jaune / bleu) ; rouge de crésol 7,2 – 8,8 (jaune / rouge).',
   explications: {
     relation: [{ repere: 'ka', texte: 'On part de l’expression de Ka.' }, { repere: 'log', texte: 'On prend moins le logarithme des deux côtés.' }, { repere: 'relation', texte: 'pH égale pKa plus log du rapport base sur acide.' },
