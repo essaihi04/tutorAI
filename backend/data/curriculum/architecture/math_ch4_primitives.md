@@ -1,6 +1,6 @@
 # Architecture — `math_ch4_primitives` (Fonctions primitives, 2e Bac PC BIOF)
 
-Refonte de la logique du 18 novembre 2026 (skill `logique-de-cours`). Cours en ligne `backend/data/courses/math_ch4_primitives.json` **inchangé** ; nouvelle version dans `backend/data/courses/en_attente/math_ch4_primitives.json` (partie de la version en attente, plus récente que la version en ligne). Pistes à mettre en voix : `math_ch4_primitives_voix.json` (31 pistes).
+Refonte de la logique du 18 novembre 2026 (skill `logique-de-cours`). Cours en ligne `backend/data/courses/math_ch4_primitives.json` **inchangé** ; nouvelle version dans `backend/data/courses/en_attente/math_ch4_primitives.json` (partie de la version en attente, plus récente que la version en ligne). Pistes à mettre en voix : `math_ch4_primitives_voix.json` (31 pistes après la 1ʳᵉ passe ; 52 après la 2ᵉ passe, voir § 8).
 
 ## 1. La logique avant
 
@@ -52,7 +52,7 @@ Les 51 autres diapositives gardent leur id, leur texte et leur voix : elles sont
 ## 5. Animations
 Aucune simulation n'est modifiée. Les diapositives réécrites gardent leurs vues (`calculs.html?vue=x1`, `x2`, `d4`) ; seul le pointage est raccourci jusqu'au moment où la voix s'arrête. La suite est écrite par la démonstration de la question.
 
-Besoin noté, pas fait car hors de ce lot : une vue `x1` qui s'arrête avant le moment `calcul` et le rejoue après la réponse. Le lecteur ne le fait pas encore (fichier partagé `frontend/src/`).
+Besoin noté, pas fait car hors de ce lot : une vue `x1` qui s'arrête avant le moment `calcul` et le rejoue après la réponse. Le lecteur ne le fait pas encore (fichier partagé `frontend/src/`). **Fait en 2ᵉ passe** pour la vue : `etapes.html?vue=x1_derivable` et `?vue=x1_derivee` (§ 8) ; le rejeu reste au lecteur (§ 8, « Rejeu après la réponse »).
 
 ## 6. Mots et voix
 Chaque texte réécrit a été vérifié par `scripts/voix/verifier_mots.py`.
@@ -195,7 +195,7 @@ Légende : ↕ déplacée (texte et voix gardés) · ✎ réécrite (voix à ref
 |---|---|---|---|---|
 |  | `pr_c8` Même numérateur, trois dénominateurs | V. Les formes composées u′uⁿ, u′/u², u′/√u, u′cos u | — | Même numérateur, trois dénominateurs : choisir la forme (une seule prof, Prof fati ; difficulté des élèves). |
 |  | `pr_c9` u′·cos u et u′·sin u | V. Les formes composées u′uⁿ, u′/u², u′/√u, u′cos u | — | u′cos u (commentaire : « quelle propriété pour πx·cos(πx² + 3) ? »). |
-|  | `pr_r1` Reconnaître la dérivée d'un produit | VI. Reconnaître une dérivée ; choisir la méthode | ❓ Les primitives de f(x) = sin x + x cos x sur ℝ sont les fonctions : · ✏️ Une primitive de f(x) = 2x·cos x − x²·sin x sur ℝ est : | Reconnaître (uv)′ : réponse au piège de l2 ; l'élève donne les primitives. |
+| ✎ | `pr_r1` Reconnaître la dérivée d'un produit | VI. Reconnaître une dérivée ; choisir la méthode | ❓ Les primitives de f(x) = sin x + x cos x sur ℝ sont les fonctions : · ✏️ Une primitive de f(x) = 2x·cos x − x²·sin x sur ℝ est : | RÉÉCRITE en 2ᵉ passe : l'exemple n'est plus dit sur l'organigramme mais écrit pas à pas (`etapes.html?vue=r1_forme` : la règle, f, chaque terme lu comme u′v puis uv′, la forme) ; la vue s'arrête avant la primitive, que l'élève donne. |
 
 **Bloc `pr_s4_b3` — Quotient reconnu, organigramme, f pente de F** · fin de bloc : cahier (4 lignes, 1 figure(s)), retrouver « Cahier fermé : que dit le signe de f sur les primitives de f ? », exercice « Pour f(x) = x²(x³ + 1)⁴ sur ℝ, une primitive est : »
 
@@ -204,18 +204,22 @@ Légende : ↕ déplacée (texte et voix gardés) · ✎ réécrite (voix à ref
 |  | `pr_r2` Reconnaître la dérivée d'un quotient | VI. Reconnaître une dérivée ; choisir la méthode | — | (u′v − uv′)/v² → u/v : dans le cadre (1.2.15), une seule diapositive. |
 |  | `pr_r3` Choisir la méthode : l'organigramme | VI. Reconnaître une dérivée ; choisir la méthode | — | L'organigramme : par quoi commencer (synthèse des méthodes, avant les exercices du national). |
 |  | `pr_g1` La courbe de f est la pente de F | VII. La courbe de f est la pente de F | — | f est la pente de F (PR8) : prépare l'intégrale ; animation à deux repères. |
-|  | `pr_g2` Signe de f, variations de F | VII. La courbe de f est la pente de F | ❓ f(x) = x² − 1 et F est une primitive de f sur ℝ. F est décroissante sur : · ✏️ f(x) = 3 − x et F est une primitive de f sur ℝ. F est croissante sur : · 👀 observation | Signe de f → variations de F (PR8) ; l'élève trouve par l'observation, puis la question. |
+| ✎ | `pr_g2` Signe de f, variations de F | VII. La courbe de f est la pente de F | 👀 observation | 2ᵉ passe : la question (f = x² − 1, F décroissante sur ?) est retirée — la vue `pente` montrait déjà la réponse (x² − 1 est la fonction dessinée, orange sur [−1 ; 1]). Elle part dans les exercices de fin de cours ; l'observation reste. La voix finit sur l'annonce de pr_g3. |
+| ＋ | `pr_g3` Type devoir : le tableau de variations de F | VII. La courbe de f est la pente de F | ❓ f(x) = 3 − x et F est une primitive de f sur ℝ. F est croissante sur : | NOUVELLE (cas type « variations d'une primitive », classique des devoirs) : nouvelle page `variations.html?vue=signe` — F′ = f, la droite de f colorée selon son signe, 3 − x = 0, puis le tableau ligne par ligne (x, signe de f) ; la ligne de F reste vide : c'est la question (l'ancien exercice de pr_g2, avec ses réactions et sa démonstration déjà voisées). |
 
 ### Séance 6 — Types national, bilan et carte
 
 
-**Bloc `pr_s5_b1` — Trois exercices type national** · fin de bloc : cahier (3 lignes), retrouver « Cahier fermé : comment justifies-tu que f admet des primitives sur I ? », exercice « Montre que G(x) = (x − 1)√x est une primitive de g(x) = (3x − 1)/(2√x) sur ]0 ; +∞[. Quelle expression de G′(x) écris-tu d'abord ? »
+**Bloc `pr_s5_b1` — Trois exercices type national, une question à la fois** (2ᵉ passe : 6 diapositives, cahier de 4 lignes) · fin de bloc : cahier (3 lignes), retrouver « Cahier fermé : comment justifies-tu que f admet des primitives sur I ? », exercice « Montre que G(x) = (x − 1)√x est une primitive de g(x) = (3x − 1)/(2√x) sur ]0 ; +∞[. Quelle expression de G′(x) écris-tu d'abord ? »
 
 | # | Diapositive | Partie | Ce qu'elle apprend · élève | Pourquoi ici (source) |
 |---|---|---|---|---|
-| ✎ | `pr_x1` Type national : montrer que H est une primitive de h | VIII. Exercices type national | ❓ H(x) = (x² + 1)√x sur ]0 ; +∞[ : que vaut H′(x) ? · ✏️ Sur le dénominateur 2√x : 2x√x + (x² + 1)/(2√x) = ? | RÉÉCRITE : le « vérifier » du national joué pas à pas — la voix dit l'énoncé et la ligne « dérivable », puis l'élève calcule H′(x) (question), puis met au même dénominateur (exercice) ; chaque correction est la démonstration écrite comme le barème. Avant : tout était dit d'un bloc. |
-| ✎ | `pr_x2` Type national : forme u′uⁿ et condition | VIII. Exercices type national | ❓ F(x) = (x² + x + 1)³/3 + k et F(0) = 1. Alors : | RÉÉCRITE : forme u′u² puis condition ; la voix s'arrête avant k, l'élève le trouve (question + démonstration). |
-|  | `pr_x3` Exercice bilan | VIII. Exercices type national | ❓ Pour une somme de deux termes, combien de constantes k écrit-on dans les primitives ? · ✏️ f(x) = x/(x² + 1)² + cos(2x) : la primitive F de f sur ℝ telle que F(0 | Exercice bilan (existence, forme, cos(2x), condition) ; question sur la seule constante. |
+| ✎ | `pr_x1` Type national : montrer que H est une primitive de h | VIII. Exercices type national | ❓ H(x) = (x² + 1)√x sur ]0 ; +∞[ : que vaut H′(x) ? | 1ʳᵉ passe : joué pas à pas. 2ᵉ passe : la vue devient `etapes.html?vue=x1_derivable` (énoncé + « dérivable », rien d'autre ; `calculs.html?vue=x1` s'écrivait seule jusqu'à « = h(x) » avant le premier play_until). L'exercice « même dénominateur » passe à pr_x1_b (une question par diapositive). Voix inchangée. |
+| ＋ | `pr_x1_b` Type national : tout sur le même dénominateur | VIII. Exercices type national | ❓ Sur le dénominateur 2√x : 2x√x + (x² + 1)/(2√x) = ? | NOUVELLE : ligne 2 du national affichée (`etapes.html?vue=x1_derivee`, H′(x)), l'élève fait la ligne 3 ; la démonstration finit sur la conclusion avec l'intervalle. Question et réactions = l'ancien exercice de pr_x1. |
+| ✎ | `pr_x2` Type national : reconnaître la forme u′uⁿ | VIII. Exercices type national | ❓ f(x) = (2x + 1)(x² + x + 1)² sur ℝ. Une primitive de f est : | RÉÉCRITE en 2ᵉ passe : la voix s'arrête après la bulle ; l'élève reconnaît u′u² et donne une primitive (nouvelle question, réactions et démonstration écrites). Vue `etapes.html?vue=x2_bulle` (`calculs.html?vue=x2` s'écrivait seule jusqu'à « F(x) = … + 2/3 », la réponse de k). |
+| ＋ | `pr_x2_b` Type national : la condition F(0) = 1 | VIII. Exercices type national | ❓ F(x) = (x² + x + 1)³/3 + k et F(0) = 1. Alors : | NOUVELLE : la forme et toutes les primitives affichées (`etapes.html?vue=x2_primitives`), l'élève trouve k. Question et réactions = l'ancienne question de pr_x2. |
+| ✎ | `pr_x3` Exercice bilan : l'existence, puis la forme u′/u² | VIII. Exercices type national | ❓ Une primitive de x/(x² + 1)² sur ℝ est : | RÉÉCRITE en 2ᵉ passe : la voix disait tout, jusqu'à k = 1/2, puis demandait « combien de constantes ». Maintenant : l'existence dite, puis l'élève reconnaît u′/u² (u′ à ½ près) — seul exercice du cours qui fait trouver u′/u² (cas type des devoirs). Vue `etapes.html?vue=x3_continuite`. L'ancienne question part dans les exercices de fin de cours. |
+| ＋ | `pr_x3_b` Exercice bilan : une seule constante, puis la condition | VIII. Exercices type national | ❓ f(x) = x/(x² + 1)² + cos(2x) : la primitive F de f sur ℝ telle que F(0) = 0 est : | NOUVELLE : les deux primitives et la seule k affichées (`etapes.html?vue=x3_primitives`), l'élève écrit F complète. Question et réactions = l'ancien exercice de pr_x3. |
 
 **Bloc `pr_s5_b2` — Ce qui viendra ; ce qu'il faut retenir ; la carte** · fin de bloc : cahier (4 lignes), retrouver « Cahier fermé : écris une primitive de sin x (attention au signe). », exercice « Vrai ou faux ? »
 
@@ -224,3 +228,65 @@ Légende : ↕ déplacée (texte et voix gardés) · ✎ réécrite (voix à ref
 |  | `pr_x4` Ce qui viendra : ln, exp et l'intégrale | VIII. Exercices type national | — | Ce qui viendra (ln, exp, intégrale) : annoncé, pas enseigné (hors cadre du chapitre pour l'instant). |
 |  | `pr_b1` Ce qu'il faut retenir | IX. Bilan et carte du chapitre | — | Ce qu'il faut retenir (fiche, une page) — règle du bilan. |
 |  | `pr_b2` La carte du chapitre | IX. Bilan et carte du chapitre | ❓ Pour vérifier que F est une primitive de f sur I, la première chose à faire est : | La carte du chapitre — règle du bilan. |
+
+## 8. 2ᵉ passe (18 novembre 2026) : chaque cas type joué pas à pas, rien de décisif avant la réponse
+
+Demande : simple, animé, expliqué ; ne pas tout donner au départ ; une question par diapositive pour les exercices du
+national (modèle `nc_n1` → `nc_n1_b` → `nc_n1_c`), la vue arrêtée avant la réponse, la correction dans la démonstration.
+
+### Inventaire : cas type → diapositive(s)
+
+| Cas type (exploration) | Fréquence | Avant | Après (joué pas à pas) |
+|---|---|---|---|
+| Vérifier que H est une primitive de h | 11/20 | d3, d4 ; x1 : question + exercice sur la même diapositive, vue `x1` complète (s'écrivait seule jusqu'à « = h(x) ») | d3, d4 (méthode montrée) ; **x1** (ligne 1 dite → l'élève calcule H′, vue `x1_derivable`) → **x1_b** (H′ affichée → l'élève met au même dénominateur, conclusion dans la démonstration, vue `x1_derivee`) |
+| Primitive usuelle dans un calcul | 20/20 (sem. 2) | u1–u8, l1 (questions u2, u3, u6, l1) | inchangé (vues déjà coupées : u3_devant ; tableau lu à l'envers) |
+| u′uⁿ (u′ à une constante près) | 2 sujets, devoirs 10/10 | c1_b–c4 (c4 coupée), x2 lu d'un bloc jusqu'à k | c4 ; **x2** (bulle dite → l'élève reconnaît u′u² et primitive, vue `x2_bulle`) |
+| u′/u², u′/√u | devoirs (8 profs) | c6 sans question, c7 (coupée) ; x3 disait la forme u′/u² | c7 ; **x3** (existence dite → l'élève reconnaît u′/u², ½ devant, vue `x3_continuite`) |
+| Ensemble des primitives (+ k) | devoirs (10 profs) | e3, e4, l1 ; x3 | e3, l1 ; **x2_b** et **x3_b** écrivent « + k, k ∈ ℝ » avant la condition |
+| Primitive avec condition F(x₀) = y₀ | devoirs | e6, e7 (coupée) ; x2 (k demandé mais vue complète) ; x3 (k dit par la voix) | e7 ; **x2_b** (k, vue `x2_primitives`) ; **x3_b** (F complète, vue `x3_primitives`) |
+| Reconnaître une dérivée de produit | devoirs | r1 : exemple dit sur l'organigramme, rien au tableau | **r1** : règle, f, chaque terme lu u′v puis uv′, la forme — écrits pas à pas (`r1_forme`), la primitive demandée |
+| Variations d'une primitive (signe de f) | devoirs, 0 au national | g2 : question sur x² − 1, la fonction même que la vue dessinait (réponse à l'écran) | g2 garde l'observation ; **g3** : nouvelle page `variations.html?vue=signe`, tableau construit ligne par ligne, la ligne de F demandée |
+
+### Questions dont la vue montrait la réponse, et ce qui a changé
+- `pr_x1` : `calculs.html?vue=x1` démarrait en `start` et s'écrivait jusqu'à « (5x² + 1)/(2√x) = h(x) » avant le premier play_until (au 4ᵉ mot-clé) → vue coupée `x1_derivable`.
+- `pr_x2` : `calculs.html?vue=x2` s'écrivait jusqu'à « k = 2/3 » et « F(x) = … + 2/3 » avant le play_until « bulle » → vues coupées `x2_bulle` / `x2_primitives` ; le centre « u′uⁿ → uⁿ⁺¹/(n + 1) » passe à pr_x2_b (il donnait la règle à appliquer).
+- `pr_x3` : la voix disait k = 1/2 et le centre écrivait « F(0) = 0 ⇔ k = 1/2 » → retirés ; vues coupées.
+- `pr_g2` : la question portait sur la fonction dessinée → retirée (exercices de fin de cours), remplacée par pr_g3.
+- Non changé, et pourquoi : `pr_u6` (la flèche verte du cercle est l'outil à lire, pas la réponse d'un calcul) ; `pr_b2` (question de rappel sur la carte, diapositive de bilan : la question elle-même est à revoir — voir « reste à faire »).
+
+### Animations et vues ajoutées
+- `etapes.html` (table COUPES, vues ajoutées, les anciennes inchangées) : `x1_derivable`, `x1_derivee`, `x2_bulle`, `x2_primitives`, `x3_continuite`, `x3_primitives`, `r1_forme`. Moments = ceux des lignes gardées (`derivable`, `derivee` ; `bulle`, `primitives` ; `continuite`, `forme`, `primitives` ; `regle`, `expression`, `premier`, `second`, `forme`).
+- `calculs-vues.js` : nouvelle vue `r1` (moments `regle`, `expression`, `premier`, `second`, `forme`, `primitive` ; un repère par ligne) **ajoutée à la main — à reporter dans les sources du build** (`maths_build/primitives/p*.py`). Visible aussi en `calculs.html?vue=r1` (rejeu).
+- `variations.html` (nouvelle page, `large`, `net`) : `?vue=signe` (moments `enonce`, `derivee`, `droite`, `zero`, `ligne_x`, `ligne_signe` ; repères `derivee`, `droite`, `zero`, `tableau`, `ligne_signe`, `ligne_F`) et `?vue=complet` (+ `ligne_F`, `maximum` ; repères `fleches_F`, `conclusion`). La droite de f se trace verte au-dessus de l'axe, orange en dessous (comme `pente.html`), le point jaune en x = 3, puis le tableau ligne par ligne. Vérifiée dans Chromium (1280 × 640 et 724 × 350, début, milieu, fin) : pas d'erreur console.
+- Aucune vue utilisée par le cours en ligne n'est modifiée.
+
+### Rejeu après la réponse (pour le lecteur)
+`diapositive — URL de la vue complète — moment(s) à rejouer après la réponse de l'élève`
+- `pr_x1` — `/media/simulations/maths/primitives-tableau/calculs.html?vue=x1` — `derivee`
+- `pr_x1_b` — `/media/simulations/maths/primitives-tableau/calculs.html?vue=x1` — `calcul`, `conclusion`
+- `pr_x2` — `/media/simulations/maths/primitives-tableau/calculs.html?vue=x2` — `primitives`
+- `pr_x2_b` — `/media/simulations/maths/primitives-tableau/calculs.html?vue=x2` — `condition`, `resultat`
+- `pr_x3` — `/media/simulations/maths/primitives-tableau/calculs.html?vue=x3` — `forme`
+- `pr_x3_b` — `/media/simulations/maths/primitives-tableau/calculs.html?vue=x3` — `condition`, `resultat`
+- `pr_r1` — `/media/simulations/maths/primitives-tableau/calculs.html?vue=r1` — `primitive`
+- `pr_g3` — `/media/simulations/maths/primitives-tableau/variations.html?vue=complet` — `ligne_F`, `maximum`
+- (déjà coupées en 1ʳᵉ passe) `pr_e7` — `calculs.html?vue=e7` — `resoudre`, `resultat` ; `pr_u3` — `calculs.html?vue=u3` — `primitive`, `verification` ; `pr_c4` — `calculs.html?vue=c4` — `primitive` ; `pr_c7` — `calculs.html?vue=c7` — `primitive`.
+
+### Blocs, compétences
+- `pr_s5_b1` : x1, x1_b, x2, x2_b, x3, x3_b (une question par diapositive, comme les sujets entiers des autres cours) ; cahier : 4 lignes (rédaction du vérifier, forme u′u², condition, forme u′/u²). Retrouver et exercice de bloc inchangés.
+- `pr_s4_b3` : + pr_g3. Compétences : x1_b → K1 ; x2_b, x3_b → K3 ; x3 → K6 (sa question est u′/u²) ; g3 → K8. Durées : partie VIII + 8 min, partie VII + 4 min (174 min en tout).
+
+### Mots
+Chaque piste nouvelle ou réécrite passée par `scripts/voix/verifier_mots.py`.
+- Remplacés : « مقروية بالمقلوب » → « بالمقلوب » ; « ما كتنفعش » → « ماشي فـ le tableau » ; « كنلونو » → « كنزيدو الألوان » ; « الطرفات … بالبرتقالي » → « الجزء … بلون orange » ; « وحفرة » → « وأصغر نقطة » ; « les tangentes … horizontales » → « la tangente … horizontale » ; « l'existence » (0) → retiré de la voix de pr_x3 ; « طلعتيه » → « طلع » ; « ما كتبقاش » → « واش كيبقى قدام ؟ » / « ماكاينش » ; « سطر بسطر » retiré.
+- Gardés, à écouter : « bulle », « telle » (termes du cours, déjà dits ailleurs).
+- `math_ch4_primitives_voix.json` recalculé : 52 pistes (28 nouvelles : 7 diapositives — pr_r1, pr_g2, pr_g3, pr_x1_b, pr_x2_b, pr_x3, pr_x3_b ; pr_x2 était déjà listée — et leurs réactions, démonstrations, énoncés ; 7 pistes de l'ancien exercice de pr_x1 partent : elles reviennent sous les ids `pr_x1_b__q_*`). Les réactions déplacées avec leur question (pr_g2 → pr_g3, pr_x3 → pr_x3_b) gardent leur voix.
+
+### Reste à faire
+- Le rejeu après la réponse (liste ci-dessus) : lecteur (`frontend/src/`), autre session.
+- `calculs-vues.js` : reporter la vue `r1` dans les sources du build.
+- Le kit maths n'a pas de `?depart=` : les nouvelles diapositives démarrent en `start` comme tout le cours (lignes DEPART du vérificateur) ; les vues coupées font qu'aucune n'écrit la réponse en courant seule.
+- Les lignes GESTE des diapositives nouvelles ou réécrites viennent de la durée inconnue (pas encore de voix : toutes les commandes tombent à 0 s) ; avec une durée estimée (13,9 caractères par seconde, médiane du cours), aucune ne reste.
+- `pr_b2` : la question de rappel est posée après la carte qui l'écrit (« vérifier : dériver F ») ; la déplacer avant la branche ou la remplacer, à voir avec le bilan.
+- `pr_c6` (u′/u²) n'a pas de question propre ; pr_x3 la fait trouver.
+- Réactions préparées écrites à la main pour les 2 questions nouvelles (pr_x2, pr_x3) : à faire relire / régénérer au besoin (`preparer_reponses.py`).
