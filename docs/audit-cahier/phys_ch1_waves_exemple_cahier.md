@@ -54,6 +54,8 @@ sa partie VI « Méthode bac et bilan » rassemble la rédaction, la reconnaissa
 
 ## Le cahier complet — copie en attente (le cours à venir)
 
+> Rendu vérifié dans frontend/src/components/course/memoire/CycleBloc.tsx : le lecteur affiche lui-même le titre de la partie (I., II.…) ; les titres de diapositive ne s'affichent que si un bloc a autant de lignes que de diapositives, ce qu'aucun bloc n'a ici. Les lignes ne répètent donc pas le titre de partie : elles portent seulement le numéro de sous-partie (I.1, I.2…).
+
 ### Séance 1 — L’onde, ses deux types et sa célérité
 
 **Ouverture — un ballon sur la vague**
@@ -137,7 +139,7 @@ Bloc `wx_s2_b1b` — L’écho, puis rédiger comme le barème (diapositives : `
 - V.3 Ultrasons : fréquence au-delà de 20 kHz (inaudibles) ; sonar, échographie.
 - Écho : l'onde va jusqu'à l'obstacle, se réfléchit et revient : elle parcourt 2d.
 - V.4 Pendant τ (aller-retour) : 2d = v·τ, donc d = v·τ/2. Attention : diviser par 2.
-- VI. Rédiger : 1) la relation ; 2) l'application numérique en unités SI ; 3) le résultat ; 4) l'unité.
+- Rédiger comme le barème : 1) la relation ; 2) l'application numérique en unités SI ; 3) le résultat ; 4) l'unité.
 - Attention : un calcul sans relation ou sans unité ne rapporte pas tous les points.
 
 **VII. Exercices du national, joués pas à pas**
@@ -206,7 +208,7 @@ Bloc `wx_s2_b2` — Reconnaître le cas type : les sept cas du national revus (d
 
 Bloc `wx_s4_b3` — Le bilan du chapitre (diapositives : `wx_b3_bilan`, `wx_b4_carte`)
 
-- VIII. Bilan : onde = perturbation qui se propage, avec transport d'énergie, sans transport de matière.
+- Onde = perturbation qui se propage, avec transport d'énergie, sans transport de matière.
 - Transversale (⊥) ou longitudinale (∥) ; le son est longitudinal et ne passe pas dans le vide.
 - v = d/Δt dépend du milieu ; τ = SM/v ; y_M(t) = y_S(t − τ) (non amortie) ; L = v·θ.
 - Mesurer : τ = n × S_H, v = d/τ ; écho 2d = v·τ. Rédiger : relation → application numérique → résultat → unité.
