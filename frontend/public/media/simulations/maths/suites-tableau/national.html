@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Exercices du national — suites numériques</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un exercice du national joué au tableau, une question à la fois : la figure se construit, le calcul s’écrit, et la construction s’arrête avant la réponse"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script src="/media/simulations/maths/suites-tableau/su-outils.js"></script>
+<script>
+/*
+ * Cours « Suites numériques » (math_ch3_suites_numeriques), 18 novembre 2026 (2ᵉ passe : « simple, animé, ne pas tout
+ * donner au départ ») : les exercices du national joués QUESTION PAR QUESTION. Chaque vue s’arrête sur le moment de la
+ * question (play_until), AVANT la réponse ; ce qui vient après dans la vue est la correction, que le lecteur rejoue une
+ * fois que l’élève a répondu (section « Rejeu après la réponse » de l’architecture du cours).
+ *
+ * Vues :
+ *   ?vue=g_signe     problème : uₙ₊₁ = g(uₙ), g(x) = (4x + 3)/(x + 2), u₀ = 1, 1 ≤ uₙ ≤ 3. Étape 1, le sens de variation.
+ *                    courbe_et_droite, difference, factorise, tableau [QUESTION] | signe_3mx, signe_xp1, signe_xp2,
+ *                    signe_g, zone, escalier, conclusion
+ *   ?vue=g_limite    étape 2, la limite : courbe_et_droite, converge, continue, stable, u0, equation [QUESTION] |
+ *                    resoudre, choix, escalier
+ *   ?vue=n24_points  national 2024 (u₀ = 4, uₙ₊₁ = (4uₙ − 2)/(uₙ + 1)), question 3 : enonce, points, plancher,
+ *                    question [QUESTION] | converge
+ *   ?vue=n24_un      question 5, vₙ puis uₙ en fonction de n : donnees, v0, vn, isoler [QUESTION] | croix, regrouper,
+ *                    factoriser, un
+ *   ?vue=n24_limite  question 5, la limite par qⁿ : un, vn, condition, question [QUESTION] | qn, limite
+ *
+ * Mode large : le cadre prend le format du tableau (scene.L) ; la figure à gauche, l’écriture à droite ; les fractions
+ * à la craie en ⟦num|dén⟧ (règle 12). Les débuts de vue sont lents (la correction vient tard dans l’écriture) : la scène
+ * s’écrit seule au chargement, le premier play_until part sur les premiers mots de la voix.
+ */
+const { fr } = MathsTableau;
+const g = x => (4 * x + 3) / (x + 2);
+const h24 = x => (4 * x - 2) / (x + 1);
+const U24 = SU.suite(4, h24, 8);                       // 4 ; 2,8 ; 2,42 ; 2,25 ; 2,15 …
+const V24 = U24.map((_, n) => Math.pow(2 / 3, n + 1)); // vₙ = (2/3)ⁿ⁺¹
+const largeur = () => (window.__maths && window.__maths.scene.L) || 760;
+
+/* Une ligne écrite à droite : pause, texte (rétréci s’il dépasse le cadre), cadre, repère, rature, moment. */
+function ligne(c, K, x, y, t, o = {}) {
+  const L = largeur(), taille = o.taille || 19, max = L - x - 16;
+  c.pause(o.p ?? .3);
+  // une ligne avec fraction passe directement par le kit des fractions : sans cela, le module des exposants (x², q^{n})
+  // reprendrait la ligne entière et écrirait « ⟦…|…⟧ » à plat (les étages, eux, gardent leurs exposants)
+  if (t.includes('⟦')) c._texteFractions(t, x, y, { couleur: o.c || 'blanc', taille, max });
+  else c.texte(t, x, y, { couleur: o.c || 'blanc', taille, max });
+  const w = Math.min(max, t.includes('⟦') ? c.largeurTexte(t, taille) : SU.larg(c, t, taille));
+  const frac = t.includes('⟦'), haut = frac ? taille * 1.2 : taille, bas = frac ? taille * .7 : taille * .4;
+  if (o.cadre) c.rect(x - 8, y - haut - 5, w + 16, haut + bas + 10, { couleur: o.cadre, arrondi: 7, largeur: 1.6 });
+  if (o.barre) SU.barre(c, x, y - 4, Math.min(w, o.barre === true ? w : o.barre), { couleur: 'rouge' });
+  if (o.r) c.repere(o.r[0], x - 6, y - haut - 7, w + 12, haut + bas + 14, o.r[1]);
+  if (o.m) K.marque(o.m);
+  return w;
+}
+
+/* Le repère du problème : x et y de −1,6 à 4,3 (on y voit les deux points (−1 ; −1) et (3 ; 3)). */
+const OPTG = { x0: 50, y0: 64, w: 290, h: 290, xmin: -1.6, xmax: 4.3, ymin: -1.6, ymax: 4.3,
+  gx: [[-1, '−1'], [1, '1'], [2, '2'], [3, '3']], gy: [[-1, '−1'], [1, '1'], [2, '2'], [3, '3']] };
+const XT = 400;   // début de la colonne écrite, à droite de la figure
+
+function courbeEtDroite(c, K, G) {
+  K.anime(1.4, p => K.courbePart(G, g, -1.09, 4.25, p, { couleur: 'cyan' }));
+  c.texte('C_g', G.X(4.0) - 6, G.Y(g(4.0)) - 14, { couleur: 'cyan', taille: 17 });
+  c.repere('courbe', G.X(-1.09), G.Y(3.2), G.X(4.25) - G.X(-1.09), G.Y(-1.6) - G.Y(3.2), 'la courbe de g');
+  K.anime(.9, p => c.ligne(G.X(-1.6), G.Y(-1.6), G.X(-1.6 + 5.85 * p), G.Y(-1.6 + 5.85 * p), { couleur: 'blanc', largeur: 1.8 }));
+  c.texte('y = x', G.X(3.6) - 58, G.Y(3.6) - 8, { couleur: 'blanc', taille: 17 });
+  c.repere('droite', G.X(-1.6), G.Y(4.25), G.X(4.25) - G.X(-1.6), G.Y(-1.6) - G.Y(4.25), 'la droite y = x');
+}
+/* L’escalier de uₙ₊₁ = g(uₙ) depuis u₀ = 1 : chaque marche brille doucement (tableau net). */
+function escalier(c, K, G, n = 6) {
+  const U = SU.suite(1, g, n), coul = 'jaune';
+  c.point(G.X(1), G.Y(0), 6, 'orange');
+  c.texte('u_0', G.X(1) + 9, G.Y(0) + 24, { couleur: 'orange', taille: 16 });   // à droite de la graduation « 1 »
+  for (let i = 0; i < n; i++) {
+    const a = U[i], b = U[i + 1];
+    c.pause(i ? .08 : .2);
+    MathsTableau.lueur(c, coul, () => c.ligne(G.X(a), G.Y(i ? a : 0), G.X(a), G.Y(b), { couleur: coul, largeur: 2 }), .7);
+    MathsTableau.lueur(c, coul, () => c.ligne(G.X(a), G.Y(b), G.X(b), G.Y(b), { couleur: coul, largeur: 2 }), .7);
+  }
+  c.repere('escalier', G.X(1) - 6, G.Y(3) - 6, G.X(3) - G.X(1) + 12, G.Y(0) - G.Y(3) + 12, 'l’escalier depuis u₀ = 1');
+  return U;
+}
+
+/* Le repère de la suite du national 2024 : n de 0 à 8, uₙ de 0 à 4,6. */
+const OPTN = { x0: 56, y0: 48, w: 310, h: 290, xmin: -0.4, xmax: 8.6, ymin: -0.25, ymax: 4.6, nomx: 'n', nomy: 'u_n',
+  gx: [[1, '1'], [2, '2'], [4, '4'], [6, '6'], [8, '8']], gy: [[1, '1'], [2, '2'], [3, '3'], [4, '4']] };
+
+let LG = false;
+MathsTableau.page({ net: true, large: true,
+  id: 'su_national', titre: 'Exercices du national',
+  texte: 'Exercices du national joués question par question au tableau : la figure se construit, le calcul s’écrit, la construction s’arrête sur la question avant la réponse ; la correction vient après',
+  vues: {
+    g_signe: {
+      titre: 'Étape 1 : le signe de g(x) − x',
+      dessiner(c, K) { LG = SU.large(c);
+        K.titre('u_0 = 1,  u_{n+1} = g(u_n),  g(x) = ⟦4x + 3|x + 2⟧,  1 ≤ u_n ≤ 3');
+        const G = K.axes(OPTG);
+        courbeEtDroite(c, K, G);
+        K.marque('courbe_et_droite');
+        c.pause(.6);
+        ligne(c, K, XT, 96, 'g(x) − x = ⟦4x + 3 − x(x + 2)|x + 2⟧ = ⟦−x² + 2x + 3|x + 2⟧', { c: 'cyan', m: 'difference', r: ['difference', 'g(x) − x au même dénominateur'] });
+        ligne(c, K, XT + 70, 152, '= ⟦(3 − x)(x + 1)|x + 2⟧', { c: 'cyan', cadre: 'cyan', m: 'factorise', r: ['factorise', 'g(x) − x factorisé'] });
+        // le tableau de signes : d’abord vide (la question), puis rempli ligne par ligne (la correction)
+        const L = largeur(), x0 = XT, w = Math.min(330, L - XT - 16), lc = 112, xa = x0 + lc, xb = x0 + w, y0 = 186, rh = 31;
+        const x1 = xa + 20, x3 = xb - 20, xm = (x1 + x3) / 2, base = r => y0 + r * rh + 22;
+        c.pause(.4);
+        c.rect(x0, y0, w, 5 * rh, { couleur: 'faible', arrondi: 3, largeur: 1.4 });
+        for (let r = 1; r < 5; r++) c.ligne(x0, y0 + r * rh, xb, y0 + r * rh, { couleur: 'faible', largeur: r === 1 || r === 4 ? 1.4 : 1, duree: .05 });
+        c.ligne(xa, y0, xa, y0 + 5 * rh, { couleur: 'faible', largeur: 1.4, duree: .06 });
+        c.texte('x', x0 + 12, base(0), { couleur: 'blanc', taille: 18 });
+        c.texte('1', x1, base(0), { couleur: 'blanc', taille: 18, align: 'center' });
+        c.texte('3', x3, base(0), { couleur: 'blanc', taille: 18, align: 'center' });
+        ['3 − x', 'x + 1', 'x + 2'].forEach((t, i) => c.texte(t, x0 + 12, base(i + 1), { couleur: 'blanc', taille: 18 }));
+        c.texte('g(x) − x', x0 + 12, base(4), { couleur: 'jaune', taille: 18 });
+        if (!K.vu('signe_g')) c.texte('?', xm, base(4), { couleur: 'jaune', taille: 22, align: 'center' });
+        c.repere('tableau', x0 - 4, y0 - 4, w + 8, 5 * rh + 8, 'le tableau de signes sur [1 ; 3]');
+        K.marque('tableau');
+        // ── après la réponse de l’élève ──
+        c.pause(1.2);
+        c.texte('+', xm, base(1), { couleur: 'vert', taille: 20, align: 'center' }); c.texte('0', x3, base(1), { couleur: 'vert', taille: 18, align: 'center' });
+        K.marque('signe_3mx');
+        c.pause(.4); c.texte('+', xm, base(2), { couleur: 'vert', taille: 20, align: 'center' }); K.marque('signe_xp1');
+        c.pause(.4); c.texte('+', xm, base(3), { couleur: 'vert', taille: 20, align: 'center' }); K.marque('signe_xp2');
+        c.pause(.4); c.texte('+', xm, base(4), { couleur: 'jaune', taille: 20, align: 'center' }); c.texte('0', x3, base(4), { couleur: 'jaune', taille: 18, align: 'center' });
+        K.marque('signe_g');
+        c.pause(.5);
+        K.anime(.9, p => K.zone(G, g, x => x, 1, 3, { couleur: 'vert', alpha: .32, part: p }));
+        c.texte('sur [1 ; 3] : g(x) ≥ x', G.X(1.45), G.Y(0.45), { couleur: 'vert', taille: 17 });
+        c.repere('zone', G.X(1), G.Y(3), G.X(3) - G.X(1), G.Y(1) - G.Y(3), 'sur [1 ; 3], la courbe est au-dessus de la droite');
+        K.marque('zone');
+        c.pause(.4);
+        escalier(c, K, G);
+        K.marque('escalier');
+        ligne(c, K, XT, 366, 'u_n ∈ [1 ; 3] ⇒ u_{n+1} − u_n = g(u_n) − u_n ≥ 0', { c: 'jaune', taille: 18 });
+        ligne(c, K, XT, 396, '(u_n) est croissante', { c: 'jaune', taille: 20, cadre: 'jaune', m: 'conclusion', r: ['conclusion', '(uₙ) est croissante'] });
+      },
+      decrire: K => ({
+        courbe_et_droite: 'Un repère ; la courbe de g(x) = (4x + 3)/(x + 2) en cyan et la droite y = x en blanc ; titre : u₀ = 1, uₙ₊₁ = g(uₙ), 1 ≤ uₙ ≤ 3.',
+        difference: 'Écrit : g(x) − x = (4x + 3 − x(x + 2))/(x + 2) = (−x² + 2x + 3)/(x + 2).',
+        factorise: 'Écrit et encadré : = (3 − x)(x + 1)/(x + 2).',
+        tableau: K.vu('signe_g') ? 'Le tableau de signes sur [1 ; 3] : lignes 3 − x, x + 1, x + 2, g(x) − x.' : 'Le tableau de signes sur [1 ; 3] est tracé, encore vide : lignes 3 − x, x + 1, x + 2, et g(x) − x avec un « ? » jaune (la question).',
+        signe_3mx: '3 − x : + sur [1 ; 3], 0 en 3.',
+        signe_xp1: 'x + 1 : +.',
+        signe_xp2: 'x + 2 : +.',
+        signe_g: 'g(x) − x : + sur [1 ; 3], 0 en 3.',
+        zone: 'Au-dessus de [1 ; 3], la bande entre la droite et la courbe est coloriée en vert : la courbe est au-dessus de la droite, g(x) ≥ x.',
+        escalier: 'L’escalier part de u₀ = 1 et monte marche après marche : u₁ = 7/3, u₂ ≈ 2,85…',
+        conclusion: 'Écrit : uₙ ∈ [1 ; 3] ⇒ uₙ₊₁ − uₙ = g(uₙ) − uₙ ≥ 0 ; encadré : (uₙ) est croissante.',
+      }),
+      motifs: { tableau: 'la question : le signe de g(x) − x', signe_g: 'le signe de g(x) − x', conclusion: 'la conclusion' },
+      explication: [{ repere: 'factorise', texte: 'g(x) − x factorisé : trois facteurs, un signe chacun.' }, { repere: 'tableau', texte: 'Le signe de chaque facteur sur [1 ; 3], puis celui de g(x) − x.' }, { repere: 'escalier', texte: 'Courbe au-dessus de la droite : chaque marche monte.' }],
+    },
+    g_limite: {
+      titre: 'Étape 2 : la limite, par ℓ = g(ℓ)',
+      dessiner(c, K) { LG = SU.large(c);
+        K.titre('u_0 = 1,  u_{n+1} = g(u_n),  g(x) = ⟦4x + 3|x + 2⟧,  (u_n) croissante');
+        const G = K.axes(OPTG);
+        courbeEtDroite(c, K, G);
+        c.pause(.5);
+        ligne(c, K, XT, 70, '(u_n) croissante et majorée par 3', { c: 'cyan', taille: 18 });
+        ligne(c, K, XT, 96, '⇒ convergente ; ℓ = lim u_n', { c: 'cyan', taille: 18, m: 'converge', r: ['converge', '(uₙ) convergente'] });
+        ligne(c, K, XT, 128, 'g continue sur I = [1 ; 3]', { taille: 18, p: .5 });
+        ligne(c, K, XT, 152, '(dérivable sur I, car x + 2 ≠ 0)', { c: 'faible', taille: 17, m: 'continue', r: ['continue', 'g continue sur I'] });
+        ligne(c, K, XT, 192, "g'(x) = ⟦5|(x + 2)²⟧ > 0 : g croissante", { taille: 18, p: .5 });
+        ligne(c, K, XT, 232, 'g(I) = [g(1) ; g(3)] = [⟦7|3⟧ ; 3] ⊂ I', { taille: 18, m: 'stable', r: ['stable', 'g(I) ⊂ I'] });
+        ligne(c, K, XT, 266, 'u_0 = 1 ∈ I', { taille: 18, m: 'u0', p: .5 });
+        ligne(c, K, XT, 302, 'donc ℓ = g(ℓ),  ℓ ∈ [1 ; 3]', { c: 'jaune', taille: 19, cadre: 'jaune', p: .5, r: ['equation', 'ℓ = g(ℓ), ℓ ∈ I'] });
+        if (!K.vu('resoudre')) c.texte('ℓ = ?', XT + 290, 302, { couleur: 'jaune', taille: 22 });
+        K.marque('equation');
+        // ── après la réponse de l’élève ──
+        c.pause(1.2);
+        c.cercle(G.X(3), G.Y(3), 13, { couleur: 'vert', largeur: 2 });
+        c.cercle(G.X(-1), G.Y(-1), 13, { couleur: 'rouge', largeur: 2 });
+        c.texte('(3 ; 3)', G.X(3) + 12, G.Y(3) + 32, { couleur: 'vert', taille: 16 });
+        c.texte('(−1 ; −1)', G.X(0) + 12, G.Y(-1) + 6, { couleur: 'rouge', taille: 16 });   // à droite de l’axe : la graduation « −1 » est à gauche
+        c.repere('point_trois', G.X(3) - 16, G.Y(3) - 16, 32, 32, 'le point (3 ; 3)');
+        c.repere('point_moins_un', G.X(-1) - 16, G.Y(-1) - 16, 32, 32, 'le point (−1 ; −1)');
+        ligne(c, K, XT, 342, 'g(x) = x ⇔ (3 − x)(x + 1) = 0 ⇔ x = 3 ou x = −1', { taille: 17, m: 'resoudre', r: ['resoudre', 'les solutions de g(x) = x'] });
+        const w = ligne(c, K, XT, 378, '−1 ∉ [1 ; 3]', { c: 'rouge', taille: 18, p: .5 });
+        ligne(c, K, XT + w + 30, 378, 'ℓ = 3', { c: 'jaune', taille: 22, cadre: 'jaune', p: .3, m: 'choix', r: ['choix', 'ℓ = 3'] });
+        c.pause(.4);
+        escalier(c, K, G);
+        K.marque('escalier');
+      },
+      decrire: K => ({
+        converge: 'Écrit : (uₙ) croissante et majorée par 3 ⇒ convergente ; ℓ = lim uₙ. La courbe de g et la droite y = x sont tracées.',
+        continue: 'Écrit : g continue sur I = [1 ; 3] (dérivable sur I, car x + 2 ≠ 0).',
+        stable: 'Écrit : g′(x) = 5/(x + 2)² > 0 : g croissante ; g(I) = [g(1) ; g(3)] = [7/3 ; 3] ⊂ I.',
+        u0: 'Écrit : u₀ = 1 ∈ I.',
+        equation: K.vu('resoudre') ? 'Encadré : donc ℓ = g(ℓ), ℓ ∈ [1 ; 3].' : 'Encadré : donc ℓ = g(ℓ), ℓ ∈ [1 ; 3] ; à côté « ℓ = ? » en jaune (la question).',
+        resoudre: 'Les points (3 ; 3) en vert et (−1 ; −1) en rouge sont entourés ; écrit : g(x) = x ⇔ (3 − x)(x + 1) = 0 ⇔ x = 3 ou x = −1.',
+        choix: 'Écrit : −1 ∉ [1 ; 3] ; encadré : ℓ = 3.',
+        escalier: 'L’escalier part de u₀ = 1 et monte vers le point (3 ; 3).',
+      }),
+      motifs: { equation: 'la question : ℓ = ?', choix: 'ℓ = 3' },
+      explication: [{ repere: 'stable', texte: 'Les conditions avant ℓ = g(ℓ), une à une.' }, { repere: 'point_moins_un', texte: '−1 est une solution, mais pas dans I.' }, { repere: 'point_trois', texte: 'La limite est 3, la solution qui est dans I.' }],
+    },
+    n24_points: {
+      titre: 'Question 3 : la convergence',
+      dessiner(c, K) { LG = SU.large(c);
+        K.titre('National 2024 :  u_0 = 4,  u_{n+1} = ⟦4u_n − 2|u_n + 1⟧');
+        const G = K.axes(OPTN);
+        K.marque('enonce');
+        c.pause(.3);
+        SU.points(c, G, U24.map((v, n) => [n, v]), { couleur: 'cyan', pas: .2, etiq: i => (i === 0 ? 'u_0 = 4' : i === 1 ? 'u_1' : ''), taille: 16 });
+        c.repere('points', G.X(0) - 8, G.Y(4) - 20, G.X(8) - G.X(0) + 16, G.Y(2) - G.Y(4) + 30, 'les termes de la suite');
+        ligne(c, K, XT + 10, 110, 'les termes descendent :', { taille: 18 });
+        ligne(c, K, XT + 10, 140, '(u_n) décroissante  (question 2)', { c: 'cyan', taille: 19, m: 'points' });
+        c.pause(.6);
+        K.anime(.8, p => SU.hligne(c, G, 2, { couleur: 'vert', x0: -0.3, x1: -0.3 + 8.8 * p, plein: true }));
+        c.texte('y = 2', G.X(8.5), G.Y(2) + 22, { couleur: 'vert', taille: 16, align: 'right' });
+        c.repere('plancher', G.X(-0.3), G.Y(2) - 10, G.X(8.5) - G.X(-0.3), 20, 'la droite y = 2');
+        ligne(c, K, XT + 10, 196, 'tous au-dessus de y = 2 :', { taille: 18 });
+        ligne(c, K, XT + 10, 226, 'u_n ≥ 2  (question 1)', { c: 'vert', taille: 19, m: 'plancher' });
+        ligne(c, K, XT + 10, 286, 'décroissante + minorée  ⇒  ?', { c: 'jaune', taille: 21, p: .5, m: 'question', r: ['question', 'la question'] });
+        // ── après la réponse de l’élève ──
+        c.pause(1.2);
+        ligne(c, K, XT + 10, 340, '(u_n) est convergente', { c: 'jaune', taille: 21, cadre: 'jaune', m: 'converge', r: ['converge', '(uₙ) est convergente'] });
+        ligne(c, K, XT + 10, 376, 'sa limite : à la question 5', { c: 'faible', taille: 17 });
+      },
+      decrire: {
+        enonce: 'Titre : national 2024, u₀ = 4, uₙ₊₁ = (4uₙ − 2)/(uₙ + 1) ; un repère n de 0 à 8, uₙ de 0 à 4.',
+        points: 'Les points (n ; uₙ) descendent : 4 ; 2,8 ; 2,42 ; 2,25 ; 2,15… Écrit : les termes descendent : (uₙ) décroissante (question 2).',
+        plancher: 'Une droite verte y = 2 sous tous les points. Écrit : tous au-dessus de y = 2 : uₙ ≥ 2 (question 1).',
+        question: 'Écrit en jaune : décroissante + minorée ⇒ ? (la question).',
+        converge: 'Encadré : (uₙ) est convergente ; sa limite : à la question 5.',
+      },
+      motifs: { question: 'la question : que peut-on dire ?' },
+      explication: [{ repere: 'points', texte: 'Chaque point est plus bas que le précédent.' }, { repere: 'plancher', texte: 'Aucun point ne passe sous la droite y = 2.' }],
+    },
+    n24_un: {
+      titre: 'Question 5 : vₙ, puis uₙ en fonction de n',
+      dessiner(c, K) { LG = SU.large(c);
+        K.titre('National 2024, question 5');
+        const L = largeur(), xr = Math.max(470, Math.round(L * .56));
+        ligne(c, K, 40, 84, 'u_0 = 4,   v_n = ⟦u_n − 2|u_n − 1⟧', { c: 'cyan', p: .2 });
+        ligne(c, K, 40, 132, '(v_n) géométrique de raison q = ⟦2|3⟧', { c: 'cyan', m: 'donnees', r: ['donnees', 'les données'] });
+        ligne(c, K, 40, 196, 'v_0 = ⟦u_0 − 2|u_0 − 1⟧ = ⟦4 − 2|4 − 1⟧ = ⟦2|3⟧', { p: .8, m: 'v0', r: ['v0', 'v₀'] });
+        ligne(c, K, 40, 258, 'v_n = v_0 × q^{n} = ⟦2|3⟧ × (⟦2|3⟧)^{n} = (⟦2|3⟧)^{n+1}', { p: .8, cadre: 'cyan', m: 'vn', r: ['vn', 'vₙ en fonction de n'] });
+        ligne(c, K, 40, 326, 'v_n = ⟦u_n − 2|u_n − 1⟧   ⇒   u_n = ?', { c: 'jaune', taille: 20, p: .8, m: 'isoler', r: ['isoler', 'uₙ à isoler'] });
+        // ── après la réponse de l’élève ──
+        c.pause(1.2);
+        ligne(c, K, xr, 180, 'v_n (u_n − 1) = u_n − 2', { m: 'croix', r: ['croix', 'le produit en croix'] });
+        ligne(c, K, xr, 218, 'v_n u_n − u_n = v_n − 2', { m: 'regrouper' });
+        ligne(c, K, xr, 256, 'u_n (v_n − 1) = v_n − 2', { m: 'factoriser' });
+        ligne(c, K, xr, 314, 'u_n = ⟦v_n − 2|v_n − 1⟧ = ⟦2 − v_n|1 − v_n⟧', { c: 'jaune', taille: 20, cadre: 'jaune', m: 'un', r: ['un', 'uₙ en fonction de vₙ'] });
+        ligne(c, K, xr, 362, 'avec v_n = (⟦2|3⟧)^{n+1}', { c: 'jaune', taille: 18 });
+      },
+      decrire: K => ({
+        donnees: 'Écrit : u₀ = 4, vₙ = (uₙ − 2)/(uₙ − 1), (vₙ) géométrique de raison q = 2/3.',
+        v0: 'Écrit : v₀ = (u₀ − 2)/(u₀ − 1) = (4 − 2)/(4 − 1) = 2/3.',
+        vn: 'Écrit et encadré : vₙ = v₀ × qⁿ = (2/3) × (2/3)ⁿ = (2/3)ⁿ⁺¹.',
+        isoler: K.vu('croix') ? 'Écrit : vₙ = (uₙ − 2)/(uₙ − 1) ⇒ uₙ = ?' : 'Écrit en jaune : vₙ = (uₙ − 2)/(uₙ − 1) ⇒ uₙ = ? (la question).',
+        croix: 'À droite : vₙ(uₙ − 1) = uₙ − 2 (produit en croix).',
+        regrouper: 'Écrit : vₙuₙ − uₙ = vₙ − 2.',
+        factoriser: 'Écrit : uₙ(vₙ − 1) = vₙ − 2.',
+        un: 'Encadré : uₙ = (vₙ − 2)/(vₙ − 1) = (2 − vₙ)/(1 − vₙ), avec vₙ = (2/3)ⁿ⁺¹.',
+      }),
+      motifs: { isoler: 'la question : uₙ = ?', un: 'uₙ en fonction de n' },
+      explication: [{ repere: 'vn', texte: 'vₙ en fonction de n : v₀ × qⁿ.' }, { repere: 'isoler', texte: 'Pour revenir à uₙ : produit en croix, puis les uₙ d’un côté.' }],
+    },
+    n24_limite: {
+      titre: 'Question 5 : la limite par qⁿ',
+      dessiner(c, K) { LG = SU.large(c);
+        K.titre('National 2024, question 5 : la limite');
+        const G = K.axes(OPTN);
+        c.pause(.3);
+        ligne(c, K, XT + 10, 96, 'u_n = ⟦2 − v_n|1 − v_n⟧', { c: 'cyan', taille: 20, m: 'un', r: ['un', 'uₙ en fonction de vₙ'] });
+        ligne(c, K, XT + 10, 156, 'v_n = (⟦2|3⟧)^{n+1}', { c: 'orange', taille: 20, p: .6 });
+        SU.points(c, G, V24.map((v, n) => [n, v]), { couleur: 'orange', pas: .14, r: 4 });
+        c.repere('vn', G.X(0) - 8, G.Y(0.8) - 8, G.X(8) - G.X(0) + 16, G.Y(0) - G.Y(0.8) + 12, 'les termes vₙ');
+        c.texte('v_n', G.X(0.35), G.Y(V24[0]) - 12, { couleur: 'orange', taille: 16 });
+        K.marque('vn');
+        ligne(c, K, XT + 10, 214, '−1 < ⟦2|3⟧ < 1', { c: 'vert', taille: 20, p: .6, m: 'condition', r: ['condition', 'la condition sur la raison'] });
+        ligne(c, K, XT + 10, 266, 'lim u_n = ?', { c: 'jaune', taille: 22, p: .5, m: 'question', r: ['question', 'la question'] });
+        // ── après la réponse de l’élève ──
+        c.pause(1.2);
+        ligne(c, K, XT + 10, 316, 'donc lim_{n→+∞} v_n = 0', { c: 'orange', taille: 19, m: 'qn', r: ['qn', 'lim vₙ = 0'] });
+        c.pause(.3);
+        K.anime(.7, p => SU.hligne(c, G, 2, { couleur: 'jaune', x0: -0.3, x1: -0.3 + 8.8 * p, pointille: [6, 5] }));
+        SU.points(c, G, U24.map((v, n) => [n, v]), { couleur: 'cyan', pas: .14, r: 4 });
+        c.texte('u_n', G.X(0.35), G.Y(U24[0]) + 4, { couleur: 'cyan', taille: 16 });
+        c.repere('un_points', G.X(0) - 8, G.Y(4) - 12, G.X(8) - G.X(0) + 16, G.Y(2) - G.Y(4) + 24, 'les termes uₙ, qui se serrent vers 2');
+        ligne(c, K, XT + 10, 372, 'lim_{n→+∞} u_n = ⟦2 − 0|1 − 0⟧ = 2', { c: 'jaune', taille: 20, cadre: 'jaune', m: 'limite', r: ['limite', 'lim uₙ = 2'] });
+      },
+      decrire: {
+        un: 'Écrit : uₙ = (2 − vₙ)/(1 − vₙ) ; un repère n de 0 à 8.',
+        vn: 'Écrit : vₙ = (2/3)ⁿ⁺¹ ; les points orange (n ; vₙ) descendent vers l’axe : 0,67 ; 0,44 ; 0,30…',
+        condition: 'Écrit en vert : −1 < 2/3 < 1.',
+        question: 'Écrit en jaune : lim uₙ = ? (la question).',
+        qn: 'Écrit : donc lim vₙ = 0 (n → +∞).',
+        limite: 'Les points cyan (n ; uₙ) descendent et se serrent sur les pointillés y = 2 ; encadré : lim uₙ = (2 − 0)/(1 − 0) = 2.',
+      },
+      motifs: { question: 'la question : lim uₙ = ?', limite: 'lim uₙ = 2' },
+      explication: [{ repere: 'condition', texte: 'La raison est entre −1 et 1 : qⁿ⁺¹ tend vers 0.' }, { repere: 'limite', texte: 'On remplace vₙ par sa limite 0.' }],
+    },
+  },
+});
+/* Police chargée : la boîte de l’encre est remesurée (une ligne mesurée avec la police de secours sortirait du cadre). */
+if (document.fonts) document.fonts.load(`20px ${Tableau.POLICE.split(',')[0]}`).then(() => document.fonts.ready).then(() => { const m = window.__maths; if (m) { m.scene.boite = null; m.scene.sale = true; } });
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
