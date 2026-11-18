@@ -141,6 +141,9 @@ const ANIMATIONS = `
 }
 /* téléphone en paysage : les cartes à droite de la figure sont serrées (la place est comptée) */
 @media (max-height: 520px) and (orientation: landscape) {
+  /* le tableau d'une diapositive sans figure : serré, il laisse la place à ses formules (sous lui) */
+  [data-scene-cours] [data-tableau-diapo] { font-size: 15px; line-height: 1.2 }
+  [data-scene-cours] [data-tableau-diapo] th, [data-scene-cours] [data-tableau-diapo] td { padding-top: 2px; padding-bottom: 2px }
   [data-scene-cours] > main[data-avec-visuel] > [data-formules-centre] { gap: 3px }
   [data-scene-cours] > main[data-avec-visuel] > [data-formules-centre] > div { padding: 1px 8px; border-radius: 8px; line-height: 1.15 }
   [data-scene-cours] > main[data-avec-visuel] { row-gap: 3px }
@@ -2194,7 +2197,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
         )}
 
         {!visuel && table && (
-          <table className="w-full max-w-4xl border-collapse text-base md:text-lg" style={{ fontFamily: CRAIE }}>
+          <table data-tableau-diapo className="w-full max-w-4xl shrink-0 border-collapse text-base md:text-lg" style={{ fontFamily: CRAIE }}>
             <thead>
               <tr>{table.headers.map((h, i) => (
                 <th key={i} className="border border-white/25 px-3 py-2 text-left" style={{ color: '#a5f3fc' }}>{h}</th>
@@ -2216,7 +2219,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
             Sans figure, la liste s'ajuste à la hauteur entre le titre et la barre (30 px au plus, 15 px au moins). */}
         {centre.length > 0 && (
           <div ref={formulesRef} data-formules-centre=""
-            className={`flex ${visuel ? 'pointer-events-none w-full shrink-0 flex-row flex-wrap justify-center gap-2' : table ? 'flex-row flex-wrap justify-center gap-3' : 'max-h-full min-h-0 w-full overflow-hidden flex-col items-center justify-center gap-3'}`}
+            className={`flex ${visuel ? 'pointer-events-none w-full shrink-0 flex-row flex-wrap justify-center gap-2' : table ? 'min-h-0 w-full shrink overflow-hidden flex-row flex-wrap justify-center gap-3' : 'max-h-full min-h-0 w-full overflow-hidden flex-col items-center justify-center gap-3'}`}
             style={{ '--taille-max': `${visuel ? 18 : table ? 22 : 30}px` } as CSSProperties}>
             {centre.map((c, i) => {
               const vu = toutVisible || temps >= c.t;
@@ -2224,7 +2227,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
                 <div
                   key={i}
                   ref={el => { centreRef.current[i] = el; }}
-                  className="rounded-xl px-4 py-2 transition-all duration-700"
+                  className="rounded-xl px-4 py-2 transition-[opacity,transform] duration-700"  // pas la taille : elle est mesurée (useTailleQuiTient)
                   style={{
                     fontFamily: CRAIE,
                     fontSize: `var(--taille-formules, ${visuel ? 18 : table ? 22 : 30}px)`,
