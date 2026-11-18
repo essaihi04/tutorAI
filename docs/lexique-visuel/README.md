@@ -126,16 +126,20 @@ Relevé dans les 23 cours (`frontend/public/media/simulations/**/*-tableau/`). �
 - Asymptote **rouge** (branches, trace) / **orange** (lc/approche, ln/limites, ln/signe) / `faible` (symetrie, lc/miroir).
 - Zone f < 0 rouge / orange ; flèches de variation vert-rouge / cyan ; point M jaune (K.rond) mais vert, cyan, rouge ou orange ailleurs.
 
-## Décision à prendre (bloque la chimie)
+## Décision du 18 novembre 2026 : le proton est rose partout
 
-La voix enregistrée de chimie ch11 (`phys_ch11_transformations_deux_sens.json`, diapositive des acides, `acides.html`)
-dit « Regarde cette petite boule jaune : c'est le proton, H plus » (et en darija « الكورة الصفرا ») ; ses textes `alt`
-aussi (« une petite boule jaune, le proton H⁺ »). En chimie le H⁺ est jaune et le carbone gris ; en SVT ch1 le jaune
-est le carbone (règle de l'utilisateur : le glucose est une chaîne de billes jaunes dans toutes les matières) et le H⁺
-est rose. Passer la chimie au code du lexique (C jaune, H⁺ rose, H₃O⁺ à H⁺ rose) demande de **réécrire et
-réenregistrer cette phrase de la voix** (« petite boule rose ») : à faire avec la 2ᵉ passe des cours. En attendant, la
-chimie garde C gris et H⁺ jaune (commentaire dans chaque `commun.js`). La physique nucléaire (proton rouge) suit la même
-décision : la voix de ch5 (énergie nucléaire) dit « Z, le nombre de protons, les sphères rouges » et « les sphères grises » (neutrons). **Trois voix, trois couleurs pour le même objet** (SVT : aucune, chimie : jaune, physique : rouge) : choisir la couleur du proton/H⁺ du site, puis réenregistrer les deux phrases concernées.
+Règle de l'utilisateur : « le proton en rose partout ». Un ion H⁺ est un proton : bille rose `[244,114,182]` en SVT, en
+chimie (H⁺, H acide, H₃O⁺, flèches de transfert du proton) et en physique (proton du noyau). Le carbone est jaune dans
+toutes les matières (la chimie l'avait gris).
+
+Les deux phrases de voix qui nommaient l'ancienne couleur sont réécrites (cours en ligne ET copie en attente) :
+- chimie ch11, diapositive `td_b1_acide` : « Regarde cette petite boule rose : c'est le proton, H plus » /
+  « شوف هاد الكورة الصغيرة اللي باللون rose » ; et la réaction préparée `q/1/1` (« رجع للكورة اللي باللون rose ») ;
+- physique ch5, diapositive `en_d1_composition` : « Z, c'est le nombre de protons, les sphères roses » /
+  « الكورات اللي باللون rose ».
+Leurs pistes enregistrées (qui disaient « jaune » / « rouges ») sont retirées : `python -I backend/scripts/lister_voix_attente.py
+phys_ch11_transformations_deux_sens phys_ch5_energie_nucleaire` les liste pour le lot Bodi (skill voix-du-cours §3) ; d'ici
+là le lecteur lit ces textes avec la voix en direct. Textes `alt` mis à jour.
 
 ## Fait en chimie (18 novembre 2026)
 

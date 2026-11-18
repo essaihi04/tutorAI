@@ -16,9 +16,14 @@ SVT ch1 : chaine, exao, vesicules. Chimie : `Rendu.EL.Hp` (JAUNE), PROTON des pa
 
 Il avait trois couleurs : rouge (= l'oxygène), jaune (= le carbone), rouge-orangé. Le rose n'est pris par aucun atome ; c'est déjà la craie « rose ».
 
+## Partout (décision du 18 novembre 2026)
+
+SVT (H⁺ de la chaîne respiratoire), chimie (H⁺, H acide des modèles, H₃O⁺, flèches de transfert du proton en craie rose), physique (proton du noyau : radioactivité, énergie nucléaire). Les voix de chimie ch11 et de physique ch5 sont réécrites (« boule rose », « sphères roses »).
+
 ## Dessins remplacés (inventaire du 18 novembre 2026)
 
 - `chaine.html`, `exao.html`, `vesicules.html` : rouge [225,62,62] / [240,80,80] → rose ; flèches de pompage et textes « H+ » rouges → roses ;
-- reste à faire : chimie (H⁺ jaune) et physique nucléaire (proton rouge).
+- chimie : H⁺ jaune → rose (`Rendu.EL.Hp`, PROTON des pages, ATOME.P), H₃O⁺ orange/jaune → rose, carbone gris → jaune ;
+- physique nucléaire : proton rouge #d9534f / rouge-orangé #f2683a → rose ; étiquettes « proton » roses.
 
 Module : `frontend/public/media/simulations/shared/lexique/lexique.js` (`window.Lexique`). Index et code des couleurs : [README](README.md).
