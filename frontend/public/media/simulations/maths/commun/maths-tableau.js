@@ -41,6 +41,10 @@
  *   K.titre('texte')            titre de la vue en haut à gauche
  *   K.fr(v, d)                  nombre à la française (virgule), sans zéros inutiles
  */
+/* Lexique visuel commun (18 novembre 2026) : les couleurs des rôles (courbe cyan, point jaune, tangente orange, asymptote en
+ * pointillé blanc, + vert, − rouge) sont dans /media/simulations/shared/lexique/lexique-maths.js, chargé ici pour toutes les pages. */
+if (!(window.Lexique && window.Lexique.maths) && document.readyState === 'loading') document.write('<script src="/media/simulations/shared/lexique/lexique-maths.js"><\/script>');
+
 (function () {
   'use strict';
   const T = window.Tableau;
