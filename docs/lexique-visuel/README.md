@@ -15,6 +15,21 @@ dans les prochains cours, le glucose doit garder la même forme et les mêmes co
 - **Un nouveau cours va d'abord au lexique** : il prend les formes qui existent ; un élément ou une forme qui manque est
   ajouté à sa fiche ET au module avant sa première utilisation, jamais dessiné localement.
 
+## Les modules (un par matière, tous dans `frontend/public/media/simulations/shared/lexique/`)
+
+| Module | Objet global | Contenu | Branché sur |
+|---|---|---|---|
+| `lexique.js` | `window.Lexique` | atomes et molécules (glucose, acides pyruvique et lactique, éthanol, CO₂, H₂O, O₂, H₃O⁺, HO⁻), proton, électron, neutron, Ca²⁺, ATP/ADP/Pi, NAD, FAD, CoA, cellule, mitochondrie, membrane, protéine, levure, bécher simple | SVT ch1 (via `peinture.js`) |
+| `lexique-physique.js` | `Lexique.physique` | générateur, bornes, condensateur (réaliste, armatures, symbole), résistor, interrupteur, bobine (réaliste, symbole), noyau de fer, lampe, ampèremètre/voltmètre, ohmmètre, oscilloscope, GBF, cordons ; ondes (corde, perle, poignée, micro, écran, trace, front) ; `lumiere.couleurDe(λ)` ; `GRANDEURS` | RC, RL, RLC (15 pages) |
+| `lexique-chimie.js` | `Lexique.chimie` | bécher, bain, goutte, filet, pipette, compte-gouttes, glaçon, pH-mètre et sonde, conductimètre et cellule, bulles ; `SOLUTIONS`, `BBT` | chimie ch9 à ch13 (25 pages) |
+| `lexique-genetique.js` | `window.Molecules` = `Lexique.genetique` | ADN, ARN, bases, nucléotides, ribosome, ARNt, acides aminés, protéine, noyau, cytoplasme, hématie | SVT ch4 (12 pages) |
+| `lexique-muscle.js` | `window.MoleculesPeintes` = `Lexique.muscle` | actine, myosine, tropomyosine, troponine, Ca²⁺, pastille ATP, réticulum, cuve, fibre | SVT ch2 (4 pages) |
+| `lexique-maths.js` | `Lexique.maths` | `ROLES` (courbe cyan, point jaune, tangente orange, asymptote pointillé blanc, + vert, − rouge), `tangente()`, `asymptote()`, `couleurSigne()` | les six cours de maths (chargé par `maths-tableau.js`) |
+
+Un dessin de module est le plus répandu dans les cours, copié mot pour mot : les pages branchées ne changent pas
+d'aspect, seules les variantes minoritaires prennent le dessin commun. Dans une page, la copie locale devient
+`  nom(...a) { return window.Lexique.<matière>.nom(...a); }` (même nom, même signature).
+
 ## Le code des couleurs (une couleur garde son sens partout)
 
 | Couleur | Valeur | Sens (et seulement celui-là) |
@@ -63,6 +78,29 @@ Texte écrit SUR un objet clair : sombre et gras (`#0b1f2a`, `Lexique.etiquette`
 | Protéine | [proteine.md](proteine.md) | `proteine` |
 | Levure | [levure.md](levure.md) | `levure` |
 | Bécher | [becher.md](becher.md) | `becher` |
+| **Physique** | | |
+| Générateur, GBF | [generateur.md](generateur.md) | `physique.generateur`, `gbf`, `borne` |
+| Condensateur | [condensateur.md](condensateur.md) | `physique.condensateur`, `armatures`, `symboleCondo` |
+| Bobine | [bobine.md](bobine.md) | `physique.bobine`, `noyau`, `symboleBobine` |
+| Résistor | [resistor.md](resistor.md) | `physique.resistor` |
+| Interrupteur | [interrupteur.md](interrupteur.md) | `physique.interrupteur`, `plot` |
+| Lampe | [lampe.md](lampe.md) | `physique.lampe` |
+| Ampèremètre, voltmètre, ohmmètre | [appareils-de-mesure.md](appareils-de-mesure.md) | `physique.cadran`, `ohmmetre` |
+| Oscilloscope | [oscilloscope.md](oscilloscope.md) | `physique.oscillo`, `ondes.oscillo`, `ondes.trace` |
+| Couleurs des grandeurs (u_C, i, u_R, u_b, E) | [grandeurs-electriques.md](grandeurs-electriques.md) | `physique.GRANDEURS` |
+| Corde, perle, point M | [corde.md](corde.md) | `physique.ondes.corde`, `perle` |
+| Micro | [micro.md](micro.md) | `physique.ondes.micro` |
+| Lumière (λ → couleur) | [lumiere.md](lumiere.md) | `physique.lumiere.couleurDe` |
+| **Chimie** | | |
+| Verrerie | [verrerie.md](verrerie.md) | `chimie.becher`, `bain`, `goutte`, `pipette`… |
+| pH-mètre | [ph-metre.md](ph-metre.md) | `chimie.phmetre`, `sonde` |
+| Conductimètre | [conductimetre.md](conductimetre.md) | `chimie.conductimetre`, `cellule` |
+| Teintes des solutions | [solutions.md](solutions.md) | `chimie.SOLUTIONS`, `BBT` |
+| **SVT** | | |
+| Génétique (ADN, ARN…) | [genetique.md](genetique.md) | `Molecules.*` |
+| Muscle (actine, myosine…) | [muscle.md](muscle.md) | `MoleculesPeintes.*` |
+| **Maths** | | |
+| Rôles (courbe, point, tangente, asymptote, signes) | [maths.md](maths.md) | `Lexique.maths` |
 
 Primitives : `bille`, `liaison`, `capsule`, `eclat`, `bulleGaz`, `etiquette`, `formule`. Les atomes : C r 12, H r 5,
 O r 9 à l'échelle 1 ; pas d'une chaîne 28 px.
@@ -157,11 +195,10 @@ là le lecteur lit ces textes avec la voix en direct. Textes `alt` mis à jour.
 
 ## Reste à faire
 
-Ordre conseillé : d'abord les objets qui ont plusieurs dessins dans un même cours.
+Les modules existent pour toutes les matières ; ce qui reste, ce sont des pages qui gardent encore un dessin à elles :
 
-0. **SVT ch1, `national.html?vue=marquage`** (glucose marqué au ¹⁴C, ajouté le 18/11 par la 2ᵉ passe) : ✅ molécules passées au lexique (glucose en chaîne de 6, acide pyruvique 3, composés du cycle 4, CO₂ à carbone jaune) ; reste : au téléphone en paysage la vue entière est petite (textes < 15 px) — mise en page à agrandir par la session qui l'a créée.
-1. **SVT ch2 (muscle)** : ✅ ATP doré (pastille, site de l'ATP sur la tête, jauge de voies), ADP gris, Pi orange ; ✅ Ca²⁺ blanc nacré (était jaune) et son nom à la craie blanche ; ✅ atpase.html : myosine bleue (était violette), actine en perles du cours, Pi orange (était jaune comme le Ca²⁺) ; ✅ métabolites : phosphocréatine rose et acide lactique orange partout (voies les avait inversés), glycogène vert (national l'avait en cyan). Reste : une seule palette pour muscle, tendon, os (`peindreMuscle` recopié 4 fois, structure.html, myogramme.js), fibre musculaire en 2 versions ; dans le tube 3 d'atpase.html, le Pi orange se distingue mal de l'actine orange.
-2. **SVT ch3/ch4 (génétique)** : ✅ bases de RGP/rappels.html remises au code du site (A rouge #dc2626, T jaune #ca8a04, C bleu #2563eb, G vert #16a34a — elles étaient permutées) et squelette de l'ADN indigo (était violet) ; ✅ noyau VIOLET partout (`Molecules.noyau`, `Molecules.milieu('noyau')`, améloblastes d'examen.html, fond de transcription.html étaient bleus ; textes « noyau bleuté » corrigés). Reste : ajouter au lexique ADN, ARN (orange), nucléotide, ribosome (turquoise), ARNt, acide aminé, chromosome, hématie, et une seule version d'`Etapes.Peint` (NIG et RGP divergent). **Gardé exprès** : la voix de ch3 nomme les couleurs des expériences de réplication (brin ancien bleu ; brin nouveau orange dans replication.html, blanc dans meselson.html, rouge radioactif dans thymidine.html) — ce sont des codes d'expérience dits à voix haute ; le brin nouveau orange croise l'orange de l'ARN de ch4 : à reprendre avec une nouvelle voix.
-3. **Chimie** : après la décision ci-dessus, `Rendu.EL` / `MODELES` / `Peinture.CPK` → C jaune, H⁺ rose ; H₃O⁺ (sphère orange d'ab/exploiter, ab/figures, tds/conductimetrie, tds/dilution) → `Lexique.h3o` ; Cl⁻ vert / cyan → une couleur ; H₃O⁺, HO⁻, électron → `Lexique.h3o`, `ho`, `electron` ; un seul bécher, pH-mètre, conductimètre, burette, thermomètre au lexique, à la place des `const Peint` recopiés dans 27 pages.
-4. **Physique** : nucléons → `Lexique.proton` / `neutron` (12 `sphere()`), électron → `Lexique.electron` ; ajouter au lexique condensateur (réaliste + symbole), bobine, résistor, générateur, interrupteur, lampe, oscilloscope, ampèremètre/voltmètre (à partir de `Peint` des circuits) ; une couleur par grandeur (i, u_C, u_R, u_b) ; haut-parleur, micro, laser, écran, λ → couleur (une seule fonction).
-5. **Maths** : une aide commune (tangente, asymptote, tableau de variations) avec une seule couleur par rôle.
+1. **SVT** : une seule palette pour muscle, tendon, os (`peindreMuscle` recopié 4 fois, structure.html, myogramme.js) ; SVT ch3 : `Etapes.Peint` de NIG (cellule, noyau, chromosomes) à aligner sur `lexique-genetique.js` (RGP/etapes.js en a une 2ᵉ version) ; brins de réplication dits par la voix (bleu / orange / blanc / rouge) : à reprendre avec une nouvelle voix si l'on veut l'orange réservé à l'ARN.
+2. **Chimie** : pH-mètres minoritaires (anthracite de deroule.js, tds/acides, tds/ph, tds/avancement, `Peint.phmetre` de 5 pages), burettes (5 versions), thermomètres (3), loupes (6), fioles, `Peinture.*` de deroule.js ; solutions « incolores », BBT et diiode encore écrits en dur ; Cl⁻ vert / cyan.
+3. **Physique** : condensateurs, bobines, résistors, générateurs et lampes peints localement dans carte, figures, energie, rupture, energie-carre (fonctions `condensateurPeint`, `bobinePeinte`, `peindreBobine`, `peindreResistor`, `generateurPeint`…) ; bobine à spires empilées d'observer ; écran bleu-noir de circuit-rc ; couleurs des grandeurs qui s'écartent du code (i blanc / bleu / rose, u_C jaune de circuit-rc) ; ondes : corde torsadée (types, methode-phase), point M rouge / jaune, haut-parleurs (4), micros (3), lasers (4), écrans clair / sombre, 6 copies de `couleurDe` ; nucléons : les 12 fonctions `sphere()` locales (même teinte maintenant, pas encore le module).
+4. **Maths** : les autres tangentes, asymptotes et signes passent par `Lexique.maths` au prochain passage sur chaque page ; la courbe de ln reste rouge (objet nommé du cours ln).
+5. **Voix** : réenregistrer `td_b1_acide` (+ réaction `q/1/1`) en chimie ch11 et `en_d1_composition` en physique ch5 (`lister_voix_attente.py`).
