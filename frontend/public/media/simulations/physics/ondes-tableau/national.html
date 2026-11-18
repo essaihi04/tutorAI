@@ -23,6 +23,12 @@
  *   national_2021_rattrapage  barre métallique, droite Δt = f(d) (pente 2 × 10⁻⁴ s/m, v = 5000 m/s, aluminium)
  *   national_2020_rattrapage  échographie, t₁ = 100 µs, t₂ = 180 µs, v = 1540 m/s (d₂ ≈ 6,16 cm)
  *   national_2018_normale     air et pétrole, L = 1,84 m, 2 ms/div (τ = 2 div = 4 ms, V_p ≈ 1303 m/s)
+ *   national_2022_rattrapage  S vibre à t = 0, M à L = 2,5 cm ; y_M(t) nulle jusqu’à 10 ms (τ = 0,01 s, v = 2,5 m/s)
+ * Deux paramètres d’adresse (2ᵉ passe, 18 novembre 2026), absents = comportement d’avant :
+ *   &arret=<étape>   la page ne joue pas au-delà de cette étape (bouton compris) : la lecture et le calcul restent
+ *                    cachés pendant que l’élève répond ; seul un play_until explicite du tuteur va plus loin.
+ *   &depart=<étape>  la page s’ouvre figée à la fin de cette étape (diapositive de correction qui suit l’énoncé) ;
+ *                    reset y revient.
  * Chaque vue est une suite d’étapes (phases) ; la fin de chaque étape est un moment (`play_until {moment}`).
  * Les étapes de lecture et de calcul viennent APRÈS le phénomène : leurs résultats restent cachés jusqu’à leur moment.
  */
@@ -564,10 +570,111 @@ VUES.national_2018_normale = {
   },
 };
 
+/* ── National 2022, rattrapage : S vibre à t = 0, M à L = 2,5 cm ; la courbe y_M(t) est nulle jusqu’à τ = 10 ms ──
+ * 2ᵉ passe (18 novembre 2026) : cas type « retard lu sur y_M(t) ». La surface de l’eau vue de côté (la ride part de S
+ * et atteint M) et la courbe y_M(t) tracée EN MÊME TEMPS ; la date où M démarre, τ et v ne s’écrivent qu’à leurs
+ * étapes (debut_m, retard, celerite), jouées après la réponse de l’élève. Valeurs du sujet : y_M en mm (amplitude
+ * 6 mm), t en ms, M démarre à 10 ms, v = L/τ = 2,5 m/s (2,5 mm par ms). */
+const L22 = 25, V22 = 2.5, T0_22 = 10, A22 = 6, P22 = 20;   // mm, mm/ms, ms, mm, ms (la forme du sujet)
+const yS22 = t => (t <= 0 ? 0 : A22 * Math.sin(2 * Math.PI * t / P22));   // le mouvement de S (mm), t en ms
+VUES.national_2022_rattrapage = {
+  titre: 'National 2022 rattrapage : lire le retard sur la courbe de M',
+  phases: [
+    { id: 'source_part', d: 1.4, t: [0, 1.5], motif: 'à t = 0, S commence à vibrer ; M est encore au repos' },
+    { id: 'front_avance', d: 3, t: [1.5, 6], motif: 'le front avance de S vers M ; la courbe y_M reste sur l’axe' },
+    { id: 'm_atteint', d: 1.6, t: [6, 10], motif: 'le front atteint M : M commence à bouger' },
+    { id: 'courbe_complete', d: 5, t: [10, 50], motif: 'M refait le mouvement de S : sa courbe est tracée' },
+    { id: 'debut_m', d: 1, motif: 'la date où M commence à bouger est marquée' },
+    { id: 'retard', d: 1, motif: 'S part à t = 0, donc τ = 10 ms = 0,01 s' },
+    { id: 'celerite', d: 1.2, motif: 'v = L/τ' },
+  ],
+  dessin(c) {
+    const t = tPhys(), wx0 = 70, k = 10, wy = 92, ka = 2.4, xM = wx0 + L22 * k, wlarg = 420;   // px par mm (côté), px par mm d’élongation
+    const yAt = x => { const tt = t - x / V22; return tt > 0 ? yS22(tt) : 0; };   // élongation (mm) du point d’abscisse x (mm)
+    // ── La surface de l’eau vue de côté (peinte), S à gauche, M à L = 2,5 cm
+    c.texte('Vue de côté', wx0 + 24, 30, { couleur: 'cyan', taille: 18 });
+    c.direct(() => {
+      const ctx = c.ctx, N = 160, bas = wy + 46;
+      ctx.save(); ctx.beginPath(); ctx.moveTo(wx0, bas);
+      for (let i = 0; i <= N; i++) { const x = wlarg / k * i / N; ctx.lineTo(wx0 + x * k, wy - ka * yAt(x)); }
+      ctx.lineTo(wx0 + wlarg, bas); ctx.closePath();
+      const g = ctx.createLinearGradient(0, wy - 16, 0, bas);
+      g.addColorStop(0, 'rgba(110,225,245,.92)'); g.addColorStop(.35, 'rgba(28,150,195,.92)'); g.addColorStop(1, 'rgba(8,58,96,.96)');
+      ctx.fillStyle = g; ctx.fill();
+      ctx.beginPath();
+      for (let i = 0; i <= N; i++) { const x = wlarg / k * i / N, px = wx0 + x * k, py = wy - ka * yAt(x); i ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }
+      ctx.strokeStyle = 'rgba(225,250,255,.95)'; ctx.lineWidth = 2.4; ctx.shadowColor = 'rgba(160,235,255,.8)'; ctx.shadowBlur = 6; ctx.stroke();
+      ctx.restore();
+      // la pointe du vibreur en S (elle monte et descend avec la surface)
+      const yS = wy - ka * yS22(t);
+      ctx.save(); ctx.fillStyle = P.lin(ctx, wx0 - 4, 0, wx0 + 4, 0, [[0, '#4b5563'], [.5, '#d1d5db'], [1, '#374151']]);
+      P.rr(ctx, wx0 - 4, yS - 46, 8, 46, 2); ctx.fill(); ctx.restore();
+      P.perle(ctx, xM, wy - ka * yAt(L22) - 6, 6, 'orange');   // le point M, posé sur la surface
+    });
+    c.texte('S', wx0 - 14, wy - 50, { couleur: 'blanc', align: 'right', taille: 19 });
+    c.texte('M', xM, wy - 34, { couleur: 'orange', align: 'center', taille: 19 });
+    c.cote(wx0, wy + 62, xM, wy + 62, 'L = 2,5 cm', { couleur: 'jaune', dessous: true, taille: 18 });
+    c.repere('cuve', wx0, wy - 40, wlarg, 90, 'la surface de l’eau, vue de côté');
+    c.repere('source', wx0 - 20, wy - 56, 40, 70, 'la source S (la pointe du vibreur)');
+    c.repere('point_m', xM - 18, wy - 50, 36, 64, 'le point M, à L = 2,5 cm de S');
+    c.direct(() => {   // le front : là où la ride est arrivée
+      const xf = Math.min(wlarg / k, V22 * t);
+      if (t > 0 && xf < wlarg / k) c.fleche(wx0 + xf * k, wy + 30, wx0 + xf * k, wy + 8, { couleur: 'vert', largeur: 1.6 });
+    });
+    // ── Le graphe y_M(t) du sujet, tracé en même temps que la ride avance
+    const gx = 70, gy = 300, kx = 8, ky = 11, X = tt => gx + tt * kx, Y = y => gy - y * ky, tmax = 50;
+    c.direct(() => {
+      const ctx = c.ctx; ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,.13)'; ctx.lineWidth = 1;
+      for (let tt = 5; tt <= tmax; tt += 5) { ctx.beginPath(); ctx.moveTo(X(tt), Y(6.6)); ctx.lineTo(X(tt), Y(-6.6)); ctx.stroke(); }
+      for (const y of [-6, -3, 3, 6]) { ctx.beginPath(); ctx.moveTo(X(0), Y(y)); ctx.lineTo(X(tmax), Y(y)); ctx.stroke(); }
+      ctx.restore();
+    });
+    c.fleche(X(0), gy, X(tmax) + 22, gy, { couleur: 'faible', largeur: 1.4 });
+    c.fleche(X(0), Y(-7), X(0), Y(7.6), { couleur: 'faible', largeur: 1.4 });
+    c.texte('y_M (mm)', X(0) + 8, Y(7.6) + 4, { couleur: 'jaune', taille: 17 });
+    c.texte('t (ms)', X(tmax) + 22, gy - 10, { couleur: 'jaune', align: 'right', taille: 17 });
+    for (const tt of [25, 35, 45]) c.texte(String(tt), X(tt), gy + 20, { couleur: 'blanc', align: 'center', taille: 16 });
+    for (const y of [6, 3, -3, -6]) c.texte(String(y), X(0) - 8, Y(y) + 6, { couleur: 'blanc', align: 'right', taille: 16 });
+    c.texte('0', X(0) - 8, gy + 6, { couleur: 'blanc', align: 'right', taille: 16 });
+    c.repere('graphe', X(0) - 30, Y(7.6) - 16, tmax * kx + 60, 15.4 * ky + 30, 'la courbe y_M(t) du point M');
+    c.direct(() => {
+      const tf = Math.min(Math.max(0, t), tmax);
+      if (tf <= 0) return;
+      const pts = []; for (let i = 0; i <= 500; i++) { const tt = tf * i / 500; pts.push([X(tt), Y(yS22(tt - T0_22))]); }
+      P.trace(c.ctx, pts, c.couleur('orange'), 2.2);
+      if (tf < tmax) { const ctx = c.ctx, [x, y] = pts[pts.length - 1]; ctx.save(); ctx.fillStyle = '#fff'; ctx.shadowColor = c.couleur('orange'); ctx.shadowBlur = 10; ctx.beginPath(); ctx.arc(x, y, 3.5, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+      if (vu('debut_m')) {
+        c.ligne(X(T0_22), Y(-6.6), X(T0_22), gy + 4, { couleur: 'jaune', largeur: 1.6, pointille: [4, 4] });
+        c.texte('10', X(T0_22), gy + 20, { couleur: 'jaune', align: 'center', taille: 17 });
+        c.texte('M démarre', X(T0_22) - 6, Y(-4.6), { couleur: 'jaune', align: 'right', taille: 16 });
+      } else c.texte('10', X(T0_22), gy + 20, { couleur: 'blanc', align: 'center', taille: 16 });
+    });
+    if (vu('debut_m')) c.repere('debut_m', X(T0_22) - 14, Y(1.5), 28, 3 * ky + 22, 'la date où M commence à bouger : t = 10 ms');
+    calculs(c, 520, 64, [
+      { id: 'retard', texte: 'S part à t = 0 :' }, { id: 'retard', texte: 'τ = 10 ms = 0,01 s' },
+      { id: 'celerite', texte: 'v = ⟦L|τ⟧' }, { id: 'celerite', texte: 'v = ⟦2,5 × 10⁻²|0,01⟧' }, { id: 'celerite', texte: 'v = 2,5 m/s', couleur: 'jaune' },
+    ], { taille: 19, max: 5, largeur: 220 });
+  },
+  vu() {
+    const t = tPhys(), m = ['Vue de côté : S vibre, M est à L = 2,5 cm. En bas, la courbe y_M(t) du sujet (y en mm, t en ms).'];
+    m.push(t <= 0 ? 'Rien ne bouge encore.' : t < T0_22 ? `La ride s’éloigne de S (front à ${fr(V22 * t, 1)} mm) ; M est au repos : la courbe y_M reste sur l’axe.`
+      : t < 50 ? 'M bouge : il refait le mouvement de S ; la courbe y_M(t) monte et descend, le spot la trace.' : 'La courbe y_M(t) est tracée jusqu’à 50 ms : nulle au début, puis M oscille.');
+    if (vu('debut_m')) m.push('Marqué en jaune : M commence à bouger à t = 10 ms.');
+    if (vu('retard')) m.push('Écrit : S part à t = 0, donc τ = 10 ms = 0,01 s.');
+    if (vu('celerite')) m.push('Écrit : v = L/τ = 2,5 × 10⁻²/0,01 = 2,5 m/s.');
+    return m.join(' ');
+  },
+};
+
 /* ── Choix de la vue, boucle et pont avec le tuteur ───────────────────────────────────────── */
 const VUE_ID = (new URLSearchParams(location.search).get('vue') || '').trim() in VUES ? new URLSearchParams(location.search).get('vue').trim() : 'national_2022_normale';
 VUE = VUES[VUE_ID]; PH = VUE.phases;
 { let acc = 0; for (const p of PH) { p.debut = acc; acc += p.d; } TOTAL = acc; }
+const QS = new URLSearchParams(location.search);
+const finEtape = id => { const p = ph(String(id || '').trim()); return p ? p.debut + p.d : null; };
+let LIMITE = finEtape(QS.get('arret'));          // null : aucune limite
+const A0 = finEtape(QS.get('depart')) ?? 0;      // 0 : la page s’ouvre au début
+const borner = () => { if (LIMITE != null && S.jusqua == null && LIMITE < TOTAL - 1e-6) S.jusqua = LIMITE; };
 
 function dessiner(c) { scene.cadre(11); VUE.dessin(c); return c.fin(); }
 const canvas = $('canvas');
@@ -589,16 +696,20 @@ scene.avancer = dt => {
   } else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
   return true;
 };
-function start() { S.jusqua = null; S.a = 0; S.running = true; S.pause = false; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), PH[0].motif + '…'); pont.noter('start'); pont.emettre(); }
+function start() { S.jusqua = null; S.a = 0; borner(); S.running = true; S.pause = false; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), PH[0].motif + '…'); pont.noter('start'); pont.emettre(); }
 function pause() { if (!S.running) return; S.jusqua = null; S.running = false; S.pause = true; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause'); pont.emettre(); }
-function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; $('run').textContent = 'Pause'; pont.noter('resume'); pont.emettre(); }
-function reset() { S.a = 0; S.running = false; S.pause = false; S.fait = false; S.jusqua = null; $('run').textContent = 'Lancer'; scene.sale = true; bulle($('feedback'), 'Lance l’exercice.'); pont.noter('reset'); pont.emettre(); }
+function resume() {
+  if (S.running) return; if (!S.pause) return start();
+  if (LIMITE != null && S.a >= LIMITE - 1e-6) { bulle($('feedback'), 'La suite s’écrit après ta réponse.'); return; }
+  borner(); S.running = true; S.pause = false; $('run').textContent = 'Pause'; pont.noter('resume'); pont.emettre(); }
+function reset() { S.a = A0; S.running = false; S.pause = A0 > 0; S.fait = false; S.jusqua = null; $('run').textContent = A0 > 0 ? 'Reprendre' : 'Lancer'; scene.sale = true; bulle($('feedback'), A0 > 0 ? 'Arrêt sur image : ' + MOTIFS[QS.get('depart').trim()] + '.' : 'Lance l’exercice.'); pont.noter('reset'); pont.emettre(); }
 /** Joue (ou continue) jusqu’à la fin d’une étape, puis se fige. Une étape déjà passée : on revient à elle, figé. */
 function playUntil(p) {
   const M = moments(), nom = p.moment in M ? p.moment : null, cible = nom ? M[nom] * TOTAL : +p.progress * TOTAL;
   if (!Number.isFinite(cible)) return;
   S.motif = nom ? MOTIFS[nom] : '';
   if (cible < S.a - 1e-6) { S.a = cible; S.running = false; S.pause = true; S.fait = false; S.jusqua = null; scene.sale = true; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || 'instant choisi') + '.'); pont.noter('play_until', { moment: nom }); pont.emettre(); return; }
+  if (LIMITE != null && cible > LIMITE + 1e-6) LIMITE = null;   // le tuteur va plus loin : la limite tombe
   if (cible >= TOTAL - 1e-6) { S.jusqua = null; } else S.jusqua = cible;
   if (S.fait) { S.a = 0; S.fait = false; }
   S.running = true; S.pause = false; $('run').textContent = 'Pause';
@@ -618,7 +729,8 @@ const pont = protocole({ id: config.id, commandes, config,
   texte: `${VUE.titre}. Étapes : ${PH.map(p => p.motif).join(' ; ')}.`,
   etat, progression: () => S.a / TOTAL,
   executer: (cmd, p) => ({ start, pause, resume, reset, play_until: () => playUntil(p) })[cmd]?.() });
-bulle($('feedback'), 'Lance l’exercice, ou laisse le professeur le jouer étape par étape.');
+if (A0 > 0) { S.a = A0; S.pause = true; $('run').textContent = 'Reprendre'; scene.sale = true; bulle($('feedback'), 'Arrêt sur image : ' + MOTIFS[QS.get('depart').trim()] + '.'); pont.emettre(); }
+else bulle($('feedback'), 'Lance l’exercice, ou laisse le professeur le jouer étape par étape.');
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>
 </body></html>
