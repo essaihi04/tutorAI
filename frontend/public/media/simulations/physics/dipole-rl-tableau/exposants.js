@@ -42,7 +42,9 @@
   /** Même écriture que le kit, avec en plus les exposants (plus petits, relevés). */
   P._texteIndices = function (s, x, y, o, taille) {
     const c = this.ctx, segs = C.segments(s), police = (t) => `${o.gras ? '700 ' : ''}${t}px ${T.POLICE}`;
-    const petit = taille * .62, tailleDe = (seg) => (seg.sub || seg.sup ? petit : taille);
+    // un indice ou un exposant reste lisible (18 novembre 2026) : jamais sous 0,8 × le plancher du texte (12 px à l'écran)
+    const plancherPetit = this.echelle && this.tailleMin ? .8 * this.tailleMin / this.echelle : 0;
+    const petit = Math.max(taille * .62, Math.min(taille, plancherPetit)), tailleDe = (seg) => (seg.sub || seg.sup ? petit : taille);
     const largeur = (seg) => { c.font = police(tailleDe(seg)); return c.measureText(seg.t).width; };
     const total = segs.reduce((w, seg) => w + largeur(seg), 0);
     if (o.max && total > o.max) return this._texteIndices(s, x, y, { ...o, max: 0 }, Math.max(10, taille * o.max / total));

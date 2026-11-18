@@ -17,6 +17,8 @@
   function RCZones(scene, horloge, disposition) {
     const craie = scene.craie, P = Object.getPrototypeOf(craie);
     const st = { on: false, zones: [], panneau: null };
+    // le texte d'avant (commun.js : deux lignes plutôt qu'écrasé, phrases tues sur un téléphone ; 18 novembre 2026)
+    const texteAvant = craie.texte;
     const dans = (r, x, y) => x >= r.x - 1e-6 && x <= r.x + r.w + 1e-6 && y >= r.y - 1e-6 && y <= r.y + r.h + 1e-6;
     function zoneDe(x, y) {
       let best = null, d = Infinity;
@@ -78,10 +80,10 @@
       try { return P.cercle.call(this, X, Y, r * Math.min(z.ax, z.ay), o); } finally { brut = false; }
     };
     craie.texte = function (s, x, y, o = {}) {
-      if (!st.on || brut) return P.texte.call(this, s, x, y, o);
+      if (!st.on || brut) return texteAvant.call(this, s, x, y, o);
       const z = zoneDe(x, y), [X, Y] = map(z, x, y), o2 = { ...o, taille: (o.taille ?? 18) * z.kt };
       if (o.max) o2.max = o.max * z.ax;
-      return P.texte.call(this, s, X, Y, o2);
+      return texteAvant.call(this, s, X, Y, o2);
     };
     craie.point = function (x, y, r = 4, c) {
       if (!st.on || brut) return P.point.call(this, x, y, r, c);
@@ -94,6 +96,7 @@
       return P.repere.call(this, id, X, Y, w * z.ax, h * z.ay, label);
     };
     scene.local = function (px, py) {
+      if (scene.camera) [px, py] = scene.camera.versPage(px, py);   // la caméra de commun.js (18 novembre 2026)
       const fx = (px - scene.ox) / scene.s, fy = (py - scene.oy) / scene.s;
       if (!st.on) return [fx, fy];
       const z = st.zones.find(q => dans(q.dst, fx, fy)) || st.zones[0];
