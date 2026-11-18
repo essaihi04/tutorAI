@@ -87,7 +87,7 @@ Les trois scènes « ce qu'on règle » ont la même allure : le circuit peint �
 
 **L'élève écrit chaque ligne de l'équation.** La voix nomme l'outil (additivité ; loi d'Ohm et relation du dipôle ; on range). L'élève écrit la ligne dans son cahier, puis au tableau. C'est une question libre, jugée sur l'`attendu`. La démonstration corrige ensuite ligne par ligne. Puis vient la diapositive qui existait déjà et qui explique la même ligne autrement. Dans le RC, c'est la rédaction complète `rc_e2_etablir`. Dans le RL et le RLC, ce sont `e1`, `e2` et `e3`.
 
-**Règle « un tableau par bloc ».** Dans ce seul bloc de l'équation, chaque ligne a son tableau. C'est la demande du 18 novembre (« l'élève écrit chaque étape avant la correction »), plus récente que la règle du 13 novembre (« un tableau par bloc »). Ailleurs, la règle ne change pas.
+**Exception à la règle « un tableau par bloc », validée par l'utilisateur le 18 novembre 2026 (« une question par ligne »).** Dans le bloc de l'équation différentielle, chaque ligne que l'élève écrit lui-même garde sa propre question au tableau : `rc_e2a_additivite`, `rc_e2b_uR`, `rc_e2c_equation`. Raison : laisser l'élève trouver seul, une étape à la fois, sa réponse avant la correction (demande du 18/11, plus récente que la règle du 13 novembre). Ailleurs dans le cours, la règle « un tableau par bloc » ne change pas.
 
 **Rien de ce qui vient plus tard n'est écrit avant l'équation** (règle 27) :
 - `tau-rc.html?avant=1` n'écrit ni τ, ni les 63 %, ni 5τ. Il dit seulement « charge plus lente / plus rapide, même E ».
