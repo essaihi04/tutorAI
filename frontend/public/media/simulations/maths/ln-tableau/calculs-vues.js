@@ -890,5 +890,253 @@ window.CALCULS = {
     ]
    }
   ]
+ },
+ "e3d": {
+  "titre": "Le point d’inflexion (2019 N, question 3)",
+  "lignes": [
+   {
+    "t": "f″(x) = (2 − ln x)/x² sur ]0 ; +∞[ (donné)",
+    "c": "blanc",
+    "m": "enonce",
+    "taille": 19,
+    "inter": 46
+   },
+   {
+    "t": "x² > 0 : f″(x) a le signe de 2 − ln x",
+    "c": "cyan",
+    "m": "signe",
+    "taille": 18,
+    "r": [
+     "signe",
+     "le signe de f″ : celui de 2 − ln x"
+    ]
+   },
+   {
+    "t": "2 − ln x = 0 ⇔ ln x = 2 ⇔ x = e²",
+    "c": "cyan",
+    "m": "racine",
+    "taille": 18
+   },
+   {
+    "t": "f″ > 0 sur ]0 ; e²[ et f″ < 0 sur ]e² ; +∞[",
+    "c": "cyan",
+    "m": "tableau",
+    "taille": 18
+   },
+   {
+    "t": "f″ s’annule en e² en changeant de signe",
+    "c": "orange",
+    "m": "change",
+    "taille": 18,
+    "r": [
+     "change",
+     "f″ change de signe en e²"
+    ]
+   },
+   {
+    "t": "f(e²) = e² + ½ − 2 + ½ × 2² = e² + ½",
+    "c": "jaune",
+    "m": "image",
+    "taille": 18
+   },
+   {
+    "t": "I(e² ; e² + ½) : point d’inflexion de (C)",
+    "c": "vert",
+    "m": "resultat",
+    "taille": 19,
+    "cadre": "vert",
+    "r": [
+     "resultat",
+     "le point d’inflexion"
+    ]
+   }
+  ]
+ },
+ "e5q": {
+  "titre": "f(x) = 0 et f(x) = x (2021 N, question 4.a)",
+  "lignes": [
+   {
+    "t": "f(x) = 0 ⇔ 2x(ln x − 1) = 0 ⇔ x = e (déjà résolue)",
+    "c": "blanc",
+    "m": "zero",
+    "taille": 18,
+    "inter": 44
+   },
+   {
+    "t": "f(x) = x, avec x ∈ ]0 ; +∞[",
+    "c": "blanc",
+    "m": "enonce",
+    "taille": 19
+   },
+   {
+    "t": "⇔ 2x ln x − 2x = x ⇔ 2x ln x − 3x = 0",
+    "c": "cyan",
+    "m": "ramener",
+    "taille": 18
+   },
+   {
+    "t": "⇔ x(2 ln x − 3) = 0",
+    "c": "cyan",
+    "m": "factoriser",
+    "taille": 19,
+    "r": [
+     "factoriser",
+     "on factorise par x"
+    ]
+   },
+   {
+    "t": "x > 0, donc x ≠ 0 : 2 ln x − 3 = 0",
+    "c": "orange",
+    "m": "tri",
+    "taille": 18,
+    "r": [
+     "tri",
+     "x = 0 n’est pas dans le domaine"
+    ]
+   },
+   {
+    "t": "⇔ ln x = ⟦3|2⟧",
+    "c": "jaune",
+    "m": "ln",
+    "taille": 18,
+    "inter": 50
+   },
+   {
+    "t": "⇔ x = e^{3/2} ≈ 4,5",
+    "c": "jaune",
+    "m": "resoudre",
+    "taille": 18
+   },
+   {
+    "t": "S = {e^{3/2}}",
+    "c": "vert",
+    "m": "resultat",
+    "taille": 19,
+    "cadre": "vert",
+    "r": [
+     "resultat",
+     "l’ensemble des solutions"
+    ]
+   }
+  ]
+ },
+ "q3b": {
+  "titre": "Une inéquation : ln(x − 2) ≤ ln(4 − x)",
+  "lignes": [
+   {
+    "t": "ln(x − 2) ≤ ln(4 − x)",
+    "c": "blanc",
+    "m": "enonce",
+    "taille": 19,
+    "inter": 46
+   },
+   {
+    "t": "Domaine : x − 2 > 0 et 4 − x > 0 ⇔ 2 < x < 4",
+    "c": "cyan",
+    "m": "domaine",
+    "taille": 18,
+    "r": [
+     "domaine",
+     "d’abord les conditions"
+    ]
+   },
+   {
+    "t": "ln est strictement croissante : ln a ≤ ln b ⇔ a ≤ b",
+    "c": "cyan",
+    "m": "regle",
+    "taille": 18,
+    "r": [
+     "regle",
+     "ln garde le sens"
+    ]
+   },
+   {
+    "t": "x − 2 ≤ 4 − x ⇔ 2x ≤ 6 ⇔ x ≤ 3",
+    "c": "jaune",
+    "m": "resoudre",
+    "taille": 18
+   },
+   {
+    "t": "On croise avec le domaine : 2 < x ≤ 3",
+    "c": "orange",
+    "m": "croiser",
+    "taille": 18,
+    "r": [
+     "croiser",
+     "x ≤ 3 et 2 < x < 4"
+    ]
+   },
+   {
+    "t": "S = ]2 ; 3]",
+    "c": "vert",
+    "m": "resultat",
+    "taille": 19,
+    "cadre": "vert",
+    "r": [
+     "resultat",
+     "l’ensemble des solutions"
+    ]
+   }
+  ]
+ },
+ "q7b": {
+  "titre": "Le plus petit entier n : (⅓)ⁿ < 10⁻²",
+  "lignes": [
+   {
+    "t": "Plus petit entier n tel que (1/3)ⁿ < 10⁻²",
+    "c": "blanc",
+    "m": "enonce",
+    "taille": 19,
+    "inter": 46
+   },
+   {
+    "t": "ln est strictement croissante : n ln(1/3) < ln(10⁻²)",
+    "c": "cyan",
+    "m": "passer",
+    "taille": 18,
+    "r": [
+     "passer",
+     "on passe au ln"
+    ]
+   },
+   {
+    "t": "⇔ −n ln 3 < −2 ln 10",
+    "c": "cyan",
+    "m": "descendre",
+    "taille": 18,
+    "r": [
+     "descendre",
+     "ln(⅓) = −ln 3"
+    ]
+   },
+   {
+    "t": "−ln 3 < 0 : on divise, le sens change",
+    "c": "orange",
+    "m": "sens",
+    "taille": 18,
+    "r": [
+     "sens",
+     "diviser par un négatif renverse"
+    ]
+   },
+   {
+    "t": "⇔ n > ⟦2 ln 10|ln 3⟧ ≈ 4,19",
+    "c": "jaune",
+    "m": "calcul",
+    "taille": 18,
+    "inter": 50
+   },
+   {
+    "t": "Le plus petit entier : n = 5",
+    "c": "vert",
+    "m": "resultat",
+    "taille": 18,
+    "cadre": "vert",
+    "r": [
+     "resultat",
+     "la réponse"
+    ]
+   }
+  ]
  }
 };
