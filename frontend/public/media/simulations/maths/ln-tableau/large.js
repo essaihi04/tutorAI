@@ -46,7 +46,7 @@
     },
     /** Le titre de la vue : celui du kit, plus grand sur le tableau large. */
     titre(c, K, s) {
-      if (!actif || LnLarge.L < 1000) return K.titre(s);
+      if (!actif || LnLarge.L < 1000 || window.MathsTableau.titreRepete(s)) return K.titre(s);
       c.texte(s, 22, 36, { couleur: 'cyan', taille: 26, max: LnLarge.L - 40 });
       return K;
     },
