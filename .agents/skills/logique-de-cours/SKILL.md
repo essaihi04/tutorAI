@@ -54,8 +54,10 @@ encore plus tard, pas à sa beauté.
    forme, la même couleur et la même étiquette sur toutes les diapositives et dans toutes les simulations (le glucose
    de SVT ch1 : une chaîne droite de 6 billes jaunes, jamais deux rangées de 3) ; ce qu'il devient se dessine à partir
    de lui. **Le même dessin dans tous les cours et toutes les matières, y compris les prochains** : le lexique visuel
-   commun est `docs/lexique-visuel.md`, et chaque objet se dessine par la fonction du module partagé de
-   `frontend/public/media/simulations/shared/` (skill simulations-au-tableau, règle 15 ; skill professeur, règle 43).
+   commun est `docs/lexique-visuel/` (une fiche par élément avec toutes ses formes : brute, développée,
+   semi-développée, cyclique, forme simplifiée des animations ; la forme se choisit selon le besoin), et chaque objet
+   se dessine par la fonction du module partagé `frontend/public/media/simulations/shared/lexique/` ; un nouveau
+   cours va d'abord au lexique (skill simulations-au-tableau, règle 15 ; skill professeur, règle 43).
 
 ## La procédure
 
