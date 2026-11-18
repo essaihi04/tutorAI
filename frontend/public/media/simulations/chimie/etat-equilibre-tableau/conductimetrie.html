@@ -419,6 +419,7 @@ const ACIDE = [112, 194, 248, .36];                      // solutions acides : i
 
 /* ── Conductimétrie et constante d’équilibre : exemple D et national 2019 N (contrat etat_equilibre_contrat_simulations.md, § 5) ── */
 const VUES = ['relation', 'calcul', 'national'];
+let CONCL_CALC = true;   // vue calcul : false tait le résultat de [H₃O⁺]éq, son unité et la suite (question d’observation)
 const TITRES = { relation: '[H₃O⁺]éq = σ/(λ(H₃O⁺) + λ(A⁻))', calcul: 'de σ mesurée à K', national: 'national 2019 N : acide benzoïque' };
 const TITRE_TABLEAU = { relation: 'Conductimétrie : de σ à [H₃O⁺]_{éq}', calcul: 'Conductimétrie : de σ mesurée à la constante K',
   national: 'Conductimétrie : national 2019 N (3.2-3.3)' };
@@ -530,9 +531,14 @@ function vueCalcul(c, M) {
     c.texte('Acide éthanoïque : C = 1,0·10⁻³ mol/L = 1,0 mol/m³ ; σ = 4,6 mS/m = 4,6·10⁻³ S/m', 24, 62, { couleur: 'cyan', taille: 17 });
     c.texte('λ(H₃O⁺) + λ(CH₃COO⁻) = 35,0 + 4,09 = 39,09 mS·m²·mol⁻¹ = 39,09·10⁻³ S·m²·mol⁻¹', 24, 88, { couleur: 'faible', taille: 16 });
   });
+  // Question d’observation de ee_m3_calcul (2ᵉ passe, 18 novembre 2026) : « dans quelle unité sort [H₃O⁺] ? » ; tant que
+  // `conclusions` vaut false, le résultat et son unité (et la suite du calcul) ne sont pas écrits.
+  const tu = !CONCL_CALC && !M.S.mesure;
   M.etape(c, 'concentration', () => {
-    LIGNES.concentration = ligneM(c, 24, 148, ['[H₃O⁺]_{éq} =', { frac: ['4,6·10⁻³', '39,09·10⁻³'] }, '= 0,118 mol/m³'], { taille: 21 }).tot;
+    LIGNES.concentration = ligneM(c, 24, 148, ['[H₃O⁺]_{éq} =', { frac: ['4,6·10⁻³', '39,09·10⁻³'] }, tu ? '= … ?' : '= 0,118 mol/m³'], { taille: 21, cols: tu ? [null, null, 'orange'] : null }).tot;
   });
+  if (tu) return ecrits(M, [['donnees', 'acide éthanoïque : C = 1,0·10⁻³ mol/L = 1,0 mol/m³ ; σ = 4,6 mS/m = 4,6·10⁻³ S/m ; λ(H₃O⁺) + λ(CH₃COO⁻) = 35,0 + 4,09 = 39,09 mS·m²·mol⁻¹ = 39,09·10⁻³ S·m²·mol⁻¹'],
+    ['concentration', '[H₃O⁺]éq = 4,6·10⁻³ divisé par 39,09·10⁻³ = … ? (question en cours : le résultat et son unité ne sont pas encore écrits)']]);
   M.etape(c, 'conversion', () => {
     attention(c, 24, 202, { h: 18 });
     const t = '÷ 10³ : [H₃O⁺]_{éq} = 1,18·10⁻⁴ mol/L';
@@ -634,15 +640,23 @@ function voir(M) {
   if (M.vues && M.vues.length) m.push(`Écrit : ${M.vues.map(s => `« ${s} »`).join(' ; ')}.`);
   return m.join(' ');
 }
-const params = M => ({ vue: M.S.vue });
+const params = M => (M.S.vue === 'calcul' ? { vue: 'calcul', conclusions: CONCL_CALC } : { vue: M.S.vue });
 const MOT = Moteur({
   id: 'ee_conductimetrie', titre: 'Conductimétrie et constante d’équilibre : [H₃O⁺]éq = σ/(λ(H₃O⁺) + λ(A⁻)), de σ à τ et K, national 2019 N', vues: VUES, titres: TITRES,
   etapes: ETAPES, motifs: MOTIFS, dessiner, voir, params,
   depart: M => ({ relation: 'Relier σ à la concentration des ions H₃O⁺.', calcul: 'De σ mesurée à la constante K.', national: 'Un exercice du national 2019.' })[M.S.vue],
-  messageFin: M => ({ relation: '[H₃O⁺]éq s’obtient en divisant σ par (λ(H₃O⁺) + λ(A⁻)).', calcul: 'τ = 0,118 et K = 1,58·10⁻⁵ ≈ 1,6·10⁻⁵ : même K que par le pH.',
-    national: 'τ = 0,22 et K = 6,2·10⁻⁵.' })[M.S.vue],
-  appliquer: (p, M) => { const r = {}; if (VUES.includes(p.vue)) r.vue = p.vue; r.change = !!(r.vue && r.vue !== M.S.vue); return r; },
-  schema: { vue: VUES.join(' | ') + ' (change la vue et relance)' },
+  messageFin: M => (M.S.vue === 'calcul' && !CONCL_CALC ? 'À toi : dans quelle unité sort [H₃O⁺]éq ?' : { relation: '[H₃O⁺]éq s’obtient en divisant σ par (λ(H₃O⁺) + λ(A⁻)).', calcul: 'τ = 0,118 et K = 1,58·10⁻⁵ ≈ 1,6·10⁻⁵ : même K que par le pH.',
+    national: 'τ = 0,22 et K = 6,2·10⁻⁵.' }[M.S.vue]),
+  appliquer: (p, M) => {
+    const r = {};
+    if (typeof p.conclusions === 'boolean' && p.conclusions !== CONCL_CALC) {
+      CONCL_CALC = p.conclusions; M.scene.sale = true;
+      if (M.S.fait && M.S.vue === 'calcul') M.dire(CONCL_CALC ? 'τ = 0,118 et K = 1,58·10⁻⁵ ≈ 1,6·10⁻⁵ : même K que par le pH.' : 'À toi : dans quelle unité sort [H₃O⁺]éq ?', CONCL_CALC ? 'good' : '');
+      r.apres = () => requestAnimationFrame(() => requestAnimationFrame(() => M.emettre()));
+    }
+    if (VUES.includes(p.vue)) r.vue = p.vue; r.change = !!(r.vue && r.vue !== M.S.vue); return r;
+  },
+  schema: { vue: VUES.join(' | ') + ' (change la vue et relance)', conclusions: 'true | false (vue calcul, question d’observation : false tait « = 0,118 mol/m³ » et la suite du calcul ; true par défaut)' },
   texte: 'Conductimétrie et constante d’équilibre. Exemple D : acide éthanoïque C = 1,0·10⁻³ mol/L = 1,0 mol/m³ ; σ = 4,6 mS/m = 4,6·10⁻³ S/m ; λ(H₃O⁺) = 35,0 et λ(CH₃COO⁻) = 4,09 mS·m²·mol⁻¹ ; ions HO⁻ négligés. σ = λ(H₃O⁺)·[H₃O⁺] + λ(CH₃COO⁻)·[CH₃COO⁻] ; [CH₃COO⁻] = [H₃O⁺] ; σ = (λ(H₃O⁺) + λ(A⁻))·[H₃O⁺] ; [H₃O⁺]éq = σ/(λ(H₃O⁺) + λ(A⁻)) = 4,6·10⁻³/(39,09·10⁻³) = 0,118 mol/m³ = 1,18·10⁻⁴ mol/L (⚠ 1 mol/L = 10³ mol/m³) ; τ = 1,18·10⁻⁴/1,0·10⁻³ = 0,118 ; K = C·τ²/(1 − τ) = 1,0·10⁻³ × 0,118²/(1 − 0,118) = 1,58·10⁻⁵ ≈ 1,6·10⁻⁵, même K que par le pH. National 2019 N : acide benzoïque C₆H₅COOH, C = 1,0·10⁻³ mol/L = 1,0 mol/m³, σ = 8,6·10⁻³ S/m, λ₁ = 35·10⁻³, λ₂ = 3,23·10⁻³ S·m²·mol⁻¹ ; τ = σ/(C·(λ₁ + λ₂)) = 0,22 ; K = C·τ²/(1 − τ) = 1,0·10⁻³ × 0,22²/(1 − 0,22) = 6,2·10⁻⁵ ; ⚠ dans K, C en mol/L. Les fractions sont écrites avec une barre dessinée.',
   explications: {
     relation: [{ repere: 'cellule', texte: 'La cellule plonge dans l’acide.' }, { repere: 'afficheur', texte: '4,6 millisiemens par mètre.' },
