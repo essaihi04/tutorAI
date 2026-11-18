@@ -42,7 +42,7 @@
     carbone: [250, 204, 21], hydrogene: [235, 240, 245], oxygene: [235, 85, 70], azote: [96, 130, 240], phosphore: [240, 140, 60],
     proton: [244, 114, 182], electron: [96, 200, 250], neutron: [160, 168, 180],
     atp: [250, 190, 60], adp: [150, 150, 150], pi: [240, 140, 60], adenosine: [150, 120, 200],
-    nad: [34, 190, 220], fad: [110, 200, 90], coa: [110, 120, 230], proteine: T.proteine,
+    nad: [34, 190, 220], fad: [110, 200, 90], coa: [110, 120, 230], proteine: T.proteine, calcium: [207, 219, 232],
   };
 
   function cellule(ctx, cx, cy, rx, ry, o = {}) {
@@ -485,6 +485,12 @@
     return { boite: { x: x - 14 * k, y: y - 12 * k, w: 26 * k, h: 24 * k } };
   }
 
+  /** L'ion CALCIUM Ca²⁺ : petite bille blanc nacré qui brille (jamais jaune : le jaune est le carbone). */
+  function calcium(ctx, x, y, o = {}) {
+    const r = (o.r ?? 4.4) * (o.echelle ?? 1), a = o.alpha ?? 1;
+    ctx.save(); ctx.shadowColor = 'rgba(224,242,254,.9)'; ctx.shadowBlur = 7; bille(ctx, x, y, r, C.calcium, { alpha: a }); ctx.restore();
+  }
+
   /* ───────────────────────── Énergie : ATP, ADP, Pi ───────────────────────── */
   /**
    * L'ATP : une CARTE d'énergie dorée marquée « ATP » (forme 'carte', défaut, 50 × 22 à l'échelle 1) ; o.etat 'adp' : carte
@@ -544,7 +550,7 @@
     cellule, mitochondrie, cheminCretes, membrane, proteine, spherePedonculee, becher, levure,
     // atomes et molécules
     atome, positionsChaine, chaine, glucose, acidePyruvique, acideLactique, ethanol, moleculeOrganique,
-    co2, h2o, o2, hydrogene, proton, electron, neutron, h3o, ho,
+    co2, h2o, o2, hydrogene, proton, electron, neutron, h3o, ho, calcium,
     atp, pi, nad, fad, coa,
   };
 })();

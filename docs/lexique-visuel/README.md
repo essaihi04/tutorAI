@@ -56,6 +56,7 @@ Texte écrit SUR un objet clair : sombre et gras (`#0b1f2a`, `Lexique.etiquette`
 | Neutron | [neutron.md](neutron.md) | `neutron` |
 | H₃O⁺ | [h3o.md](h3o.md) | `h3o` |
 | HO⁻ | [ho.md](ho.md) | `ho` |
+| Ca²⁺ | [calcium.md](calcium.md) | `calcium` |
 | Atome (C, H, O, N, P) | ci-dessous | `atome(ctx, x, y, 'C')`, `chaine`, `positionsChaine` |
 | Cellule, hyaloplasme, noyau | [cellule.md](cellule.md) | `cellule` |
 | Mitochondrie, membrane interne, sphère pédonculée | [mitochondrie.md](mitochondrie.md) | `mitochondrie`, `membrane`, `spherePedonculee` |
@@ -155,7 +156,7 @@ décision : la voix de ch5 (énergie nucléaire) dit « Z, le nombre de protons,
 Ordre conseillé : d'abord les objets qui ont plusieurs dessins dans un même cours.
 
 0. **SVT ch1, `national.html?vue=marquage`** (glucose marqué au ¹⁴C, ajouté le 18/11 par la 2ᵉ passe) : ✅ molécules passées au lexique (glucose en chaîne de 6, acide pyruvique 3, composés du cycle 4, CO₂ à carbone jaune) ; reste : au téléphone en paysage la vue entière est petite (textes < 15 px) — mise en page à agrandir par la session qui l'a créée.
-1. **SVT ch2 (muscle)** : ATP → `Lexique.atp` (doré) dans `MoleculesPeintes.pastille`, voies, consommation, national ; Ca²⁺ → une couleur à lui (pas le jaune du carbone) ajoutée au lexique ; myosine/actine d'atpase.html → `MoleculesPeintes` ; une seule palette pour muscle, tendon, os (`peindreMuscle` dans `myogramme.js`) ; couleurs des métabolites dans les jauges.
+1. **SVT ch2 (muscle)** : ✅ ATP doré (pastille, site de l'ATP sur la tête, jauge de voies), ADP gris, Pi orange ; ✅ Ca²⁺ blanc nacré (était jaune) et son nom à la craie blanche ; ✅ atpase.html : myosine bleue (était violette), actine en perles du cours, Pi orange (était jaune comme le Ca²⁺) ; ✅ métabolites : phosphocréatine rose et acide lactique orange partout (voies les avait inversés), glycogène vert (national l'avait en cyan). Reste : une seule palette pour muscle, tendon, os (`peindreMuscle` recopié 4 fois, structure.html, myogramme.js), fibre musculaire en 2 versions ; dans le tube 3 d'atpase.html, le Pi orange se distingue mal de l'actine orange.
 2. **SVT ch3/ch4 (génétique)** : ajouter au lexique ADN (squelette, bases A rouge / T jaune / C bleu / G vert), ARN (orange), nucléotide, ribosome, ARNt, acide aminé, chromosome, noyau (violet), hématie ; brancher `Molecules`, `Etapes.Peint` (une seule version) ; corriger rappels.html (bases permutées) et le brin neuf orange de replication.html.
 3. **Chimie** : après la décision ci-dessus, `Rendu.EL` / `MODELES` / `Peinture.CPK` → C jaune, H⁺ rose ; H₃O⁺ (sphère orange d'ab/exploiter, ab/figures, tds/conductimetrie, tds/dilution) → `Lexique.h3o` ; Cl⁻ vert / cyan → une couleur ; H₃O⁺, HO⁻, électron → `Lexique.h3o`, `ho`, `electron` ; un seul bécher, pH-mètre, conductimètre, burette, thermomètre au lexique, à la place des `const Peint` recopiés dans 27 pages.
 4. **Physique** : nucléons → `Lexique.proton` / `neutron` (12 `sphere()`), électron → `Lexique.electron` ; ajouter au lexique condensateur (réaliste + symbole), bobine, résistor, générateur, interrupteur, lampe, oscilloscope, ampèremètre/voltmètre (à partir de `Peint` des circuits) ; une couleur par grandeur (i, u_C, u_R, u_b) ; haut-parleur, micro, laser, écran, λ → couleur (une seule fonction).
