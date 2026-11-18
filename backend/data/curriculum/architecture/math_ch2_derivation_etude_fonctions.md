@@ -315,7 +315,7 @@ tableau → arrêt sur le titre seul) ; `df_ec3_etude_c` (la vue traçait déjà
 avant « quelle branche ? » → la courbe vient après, arrêt sur la limite) ; `df_va7_auxiliaire` (la voix disait « f est croissante »
 → phrase retirée, arrêt sur `lien`) ; `df_ec3_etude_b` (`start` sans `play_until` → la vue écrit jusqu'à la ligne f′ seulement).
 
-### Rejeu après la réponse (pour le lecteur)
+### Rejeu après la réponse
 
 | Diapositive | URL de la vue | Moment(s) à rejouer |
 |---|---|---|
@@ -330,6 +330,8 @@ avant « quelle branche ? » → la courbe vient après, arrêt sur la limite) ;
 | `df_ec3_etude_c` | `trace.html?vue=etude_pas&depart=ligne_signe` | `branche` |
 | `df_ec3_etude_d` | `trace.html?vue=etude_pas&depart=branche` | `tangente_min` |
 
+**Écrit dans le cours (18 novembre 2026)** : chaque diapositive de cette liste porte `concentration.apres_reponse` (une étape `play_until` par moment, dans l'ordre), débloqué par sa première question (`q`). Le lecteur ne joue ces moments qu'après la réponse, même si un pointage les demandait ; contrôle : `python -I backend/scripts/verifier_parcours.py` (rien d'imprimé). Chaque moment a été vérifié dans Chromium : présent dans la vue de la diapositive, après le dernier moment de son pointage.
+
 ### Mots (2ᵉ passe)
 
 Remplacés : « dérivables » (0) → « un polynôme, et un sur x dérivable » ; « معطي » (1) → « كاين » ; « الأطراف » (0) →
@@ -341,7 +343,7 @@ les points et la tangente » ; « مستوية » (0) → « la tangente horizon
 
 - 2ᵉ passe : voix de 8 diapositives (`df_va7_auxiliaire`, `df_va8_aux_a` → `_d`, `df_ec3_etude_a2`, `_d`, `_e`), 6
   démonstrations et 6 énoncés (`_voix.json`, 31 pistes en tout) ; réactions préparées des 6 nouvelles questions
-  (`reactions_a_preparer`). Le rejeu après la réponse (tableau ci-dessus) est à brancher dans le lecteur.
+  (`reactions_a_preparer`). Le rejeu après la réponse (tableau ci-dessus) est écrit dans `apres_reponse`.
 - Questions de rappel dont la VOIX dit la réponse juste avant (pas touchées, voix enregistrées) : `df_nd1_secante`,
   `df_tg3_verifier`, `df_dt6_morceaux`, `df_va4_tableau`, `df_tr3_points`, `df_tr6_lire`. À reprendre si on refait leurs voix.
 - Sur téléphone en paysage (724 × 350), les notes de `etude_pas` (comme celles de `etude`) sont plus petites que 15 px :

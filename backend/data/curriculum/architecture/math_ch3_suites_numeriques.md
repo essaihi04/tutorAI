@@ -304,7 +304,7 @@ auxiliaire géométrique 8/20, limite par qⁿ 10/20), était lu et non joué.
 - Revues sans changement : `su_x3_fraction` (« cible : vₙ₊₁ = (1/2)vₙ » est donné par l'énoncé du national), `su_p3`
   (exemple raison 1/2, question raison 1/3), `su_c4`, `su_r4b`, `su_r8`, `su_e1_complet`, `su_e1_q2`, `su_e1_q4`.
 
-### Rejeu après la réponse (pour le lecteur)
+### Rejeu après la réponse
 
 | Diapositive | URL de la vue | Moment(s) à rejouer |
 |---|---|---|
@@ -314,6 +314,8 @@ auxiliaire géométrique 8/20, limite par qⁿ 10/20), était lu et non joué.
 | `su_e1_q3` | `national.html?vue=n24_points` | `converge` |
 | `su_e1_q5a` | `national.html?vue=n24_un` | `croix`, `regrouper`, `factoriser`, `un` |
 | `su_e1_q5` | `national.html?vue=n24_limite` | `qn`, `limite` |
+
+**Écrit dans le cours (18 novembre 2026)** : chaque diapositive de cette liste porte `concentration.apres_reponse` (une étape `play_until` par moment, dans l'ordre), débloqué par sa première question (`q`). Le lecteur ne joue ces moments qu'après la réponse, même si un pointage les demandait ; contrôle : `python -I backend/scripts/verifier_parcours.py` (rien d'imprimé). Chaque moment a été vérifié dans Chromium : présent dans la vue de la diapositive, après le dernier moment de son pointage.
 
 ### Mots
 

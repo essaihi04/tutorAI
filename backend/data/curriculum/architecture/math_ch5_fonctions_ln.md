@@ -318,7 +318,7 @@ Problèmes nationaux joués une question à la fois :
 - Pour que l'iframe se recharge entre deux diapositives de la même vue, les URL suivantes portent `&etape=2`/`&etape=3` (paramètre ignoré par le kit).
 - Vérifié : `node --check`, Chromium sans erreur console, captures 1280 × 640 et 724 × 350 au début, à l'arrêt et à la fin.
 
-### 8.4 Rejeu après la réponse (pour le lecteur)
+### 8.4 Rejeu après la réponse
 - `ln_n2` — `naissance.html?vue=famille` — existe, famille, glisse
 - `ln_v2_b` — `calculs.html?vue=v2` — deriver, resultat
 - `ln_e1` — `inegalite.html?vue=ecart` — minimum
@@ -333,6 +333,8 @@ Problèmes nationaux joués une question à la fois :
 - `ln_e5_q` — `calculs.html?vue=e5q` — tri, ln, resoudre, resultat
 - `ln_q3_b` — `calculs.html?vue=q3b` — resoudre, croiser, resultat
 - `ln_q7_b` — `calculs.html?vue=q7b` — sens, calcul, resultat
+
+**Écrit dans le cours (18 novembre 2026)** : chaque diapositive de cette liste porte `concentration.apres_reponse` (une étape `play_until` par moment, dans l'ordre), débloqué par sa première question (`q`). Le lecteur ne joue ces moments qu'après la réponse, même si un pointage les demandait ; contrôle : `python -I backend/scripts/verifier_parcours.py` (rien d'imprimé). Chaque moment a été vérifié dans Chromium : présent dans la vue de la diapositive, après le dernier moment de son pointage.
 
 ### 8.5 Mots
 `verifier_mots.py` passé sur les 16 pistes de diapositives, les 10 démonstrations et les 10 énoncés nouveaux.
