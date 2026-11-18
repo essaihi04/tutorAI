@@ -181,6 +181,22 @@ l'absence de piste (sans durée, tous les gestes tombent à 0 s) ; un « DEPART 
 seront à inscrire (fichiers partagés, hors de cette passe) ; les teintes du proton diffèrent légèrement entre ce cours
 (`#d9534f`) et `population.html` du chapitre 4 (`#f06a3a`) : à unifier par le lexique.
 
+**Défaut ancien corrigé : la fiche « Ce qu’il faut retenir » (`energie-nucleaire-tableau/bilan.html`, `en_z1_bilan`).**
+Sur un téléphone en paysage, elle se lisait par « partie 1 sur 3 », un seul bloc dans un tableau presque vide, textes
+autour de 10 px : le kit (`shared/tableau/tableau.js`) baisse son plancher jusqu'à 45 % sur un petit tableau. La page
+garde maintenant son propre plancher de 15 px, indices et exposants compris (E_ℓ, m_p, 10⁸ restaient à 6–12 px, même
+sur ordinateur), sauf à l'impression (la fiche entière sur la feuille). Sur un petit écran, les blocs se rangent par
+parties (autant qu'il faut, 1 à 4 colonnes), chaque partie grossit son texte pour remplir le tableau, et le compteur
+« partie n sur N · touche : la suite » (15 px) est dans l'en-tête ; `play_until` vers un bloc ouvre la partie qui le
+contient et l'éclaire. Sur ordinateur, si la répartition 3 + 2 + 3 ne tient plus, les blocs (dans l'ordre) sont
+répartis sur 3 ou 4 colonnes. Les cadres des formules, les interlignes et le noyau ᴬ_ZX suivent la taille écrite.
+**Défaut des moments** : tous les blocs valaient 1 et `time_s` vaut 1 sur la fiche ; le kit ignore un `play_until` vers
+un moment ≤ `time_s`, donc la voix n'écrivait ni n'éclairait plus aucun bloc. Valeurs maintenant : `fiche` 1,01, blocs
+1,1 à 1,8, `fin` 1,9, `lacunes` 2 (noms inchangés). Les autres `*/bilan.html` utilisent les mêmes valeurs et ont
+probablement le même défaut (pas vérifié dans le navigateur). Mesuré dans Chromium (568 × 300, 724 × 350,
+1024 × 560, 1280 × 640, 1596 × 700) : aucun texte sous 15 px, aucun chevauchement, rien hors du cadre ; pointage et
+formules : rien de nouveau.
+
 ## 9. Toutes les scènes s'ouvrent figées (18 novembre 2026, demande de l'utilisateur)
 
 - **Le défaut trouvé** : dans les pages du chapitre (`figures`, `rappels`, `aston`, `balance`, `diagramme`, `liaison`,

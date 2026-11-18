@@ -300,7 +300,7 @@ Légende : ↕✎ déplacée, première phrase réécrite (voix à refaire) · �
 - `nc_n1` — `alignement.html?vue=n2023` — `b_moins_d` (la correction de la question 2 ; elle est aussi jouée au début de `nc_n1_b`).
 - `nc_n1_b` — `alignement.html?vue=n2023&depart=question2` — `quotient`, `droite`, `alignes` (aussi joués par `nc_n1_alignes`).
 - `nc_n1_c` — `alignement.html?vue=n2023_arg` — `produit`, `egalite` (depuis OA, reculer de arg b ramène sur OB), `conclusion`.
-- `nc_i4` — `alignement.html?vue=triangle` — rien encore : le cas 2i (AC = 2AB, angle droit) n'est pas dessiné (reste à faire).
+- `nc_i4` — `alignement.html?vue=triangle` — `cas_2i`, `module_2i`, `nature_2i` (écrit dans `apres_reponse`, 18 novembre 2026) : le cas de la question se dessine en orange sur la figure de l'exemple 2, avec les mêmes A et B : C′ = a + 2i(b − a) sur la demi-droite [AC), deux fois plus loin (AC′ = 2AB, même angle droit), BC′ en pointillés, « (c′ − a)/(b − a) = 2i », puis « |2i| = 2 ⇒ AC′ = 2AB ; arg 2i ≡ π/2 » et l'encadré « ABC′ rectangle en A, pas isocèle ». Pour que C′ tienne dans le plan, l'exemple 2 est redessiné plus petit : A(1,6 + 0,6i), B(3 + i), C(1,2 + 2i) (toujours (c − a)/(b − a) = i ; la voix ne cite pas ces coordonnées). La vue n'est utilisée que par la copie en attente (le cours en ligne prend `module.html?vue=triangle`). Le pointage s'arrête à `nature` : rien du cas 2i n'est montré avant la réponse.
 
 **Écrit dans le cours (18 novembre 2026)** : chaque diapositive de cette liste porte `concentration.apres_reponse` (une étape `play_until` par moment, dans l'ordre), débloqué par sa première question (`q`). Le lecteur ne joue ces moments qu'après la réponse, même si un pointage les demandait ; contrôle : `python -I backend/scripts/verifier_parcours.py` (rien d'imprimé). Chaque moment a été vérifié dans Chromium : présent dans la vue de la diapositive, après le dernier moment de son pointage.
 
@@ -312,7 +312,7 @@ Remplacés : « وكتطيح على C » → « وكتوصل لـ C » ; « كت
 
 ### Reste à faire
 - `calculs-vues.js` n'est pas touché (les vues nouvelles sont dans `alignement.html`, rien à reporter dans les sources du build).
-- `nc_i4` : dessiner le cas de la question (2i : AC = 2AB, angle droit, pas isocèle) comme moment de rejeu.
+- `alignement.html?vue=triangle` (`elargir: false`, deux figures côte à côte) : sur téléphone en paysage (724 × 350) le texte descend sous 15 px ; à agrandir en même temps que les figures.
 - `nc_j5` (équation avec z̄) et `nc_m5` (médiatrice |z − a| = |z − b|) : pas encore joués pas à pas en figure.
 - Une figure de cahier (`cahier_figures`) pour l'alignement 2023 N.
 

@@ -203,3 +203,10 @@ les deux démonstrations et les dix réactions préparées. Mots rares gardés :
 - Le cours en ligne ne change pas : sans `?depart=` les pages démarrent comme avant, et aucune diapositive en ligne n'envoie
   `reset` à ces pages. Vérifié dans Chromium (figée, puis arrêtée sur le moment suivant, sans erreur).
 - Vérificateur de pointage, copie en attente : 0 « introuvable », 0 DEPART, 0 IFRAME (avant : 4, 4, 6).
+- **Fiche « Ce qu’il faut retenir » sur téléphone** (`ondes-tableau/bilan.html`, 18 novembre 2026) : la page garde son propre
+  plancher de 15 px à l’écran (le kit le baissait jusqu’à 45 %) et mesure chaque bloc à la taille vraiment écrite ; quand la
+  fiche ne tient pas, elle se partage en parties (« partie n sur N · touche : la suite », jusqu’à un bloc par écran) et
+  `play_until {moment: <bloc>}` montre la partie du bloc. Les moments des blocs valent 1,1 à 1,8 (`fin` 1,9) : avant, le kit
+  jetait ces `play_until` (time_s = 1), le bloc n’était jamais allumé. Le tableau large (1596 px), vide à cause d’une erreur
+  (`largeurTexte`), s’affiche de nouveau. Mesuré dans Chromium : 15 px au moins, 0 chevauchement, à 568 × 300, 724 × 350,
+  1024 × 560, 1280 × 640 et 1596 × 700 ; à l’impression, la fiche entière sur une page.

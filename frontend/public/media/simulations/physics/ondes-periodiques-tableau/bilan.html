@@ -17,7 +17,8 @@
 <script>
 /*
  * « Ce qu'il faut retenir » du cours des ondes mécaniques progressives périodiques (diapositive op_b1_bilan), adapté de
- * ondes-tableau/bilan.html. TOUTE la fiche tient sur UNE page : neuf blocs en trois colonnes (un par partie du cours),
+ * ondes-tableau/bilan.html. Sur un écran de bureau, la fiche tient sur une ou deux parties ; au téléphone, en autant de
+ * parties qu'il faut (texte jamais sous 15 px, voir « Disposition ») : neuf blocs en colonnes (un par partie du cours),
  * chacun avec la définition à savoir par cœur (français, comme le cadre l'écrit), la formule encadrée (indices rendus)
  * et le piège en orange (⚠). La voix la parcourt bloc par bloc : play_until {moment: <bloc>} écrit ce bloc à cet
  * instant et le met en lumière ; les blocs déjà dits (ou sautés) sont écrits d'un coup ; ceux pas encore dits
@@ -63,9 +64,12 @@ const AVANT = -1e9;   // instant d'un bloc déjà dit : il est écrit d'un coup
 const S = { page: 1, feuille: 0, focus: null, lacunes: null, acquis: null, acquis_ids: null, apparu: [] };
 window.__debordeBlocs = [];   // vérification : un bloc dont le texte dépasse son cadre
 
-/* Coupe un texte en lignes qui tiennent dans `max` px (mesure sans les « _ » des indices). */
+/* La taille vraiment écrite à l'écran : jamais sous le plancher de la page (15 px, voir après la scène). */
+const reelle = (c, t) => (c.echelle && c.tailleMin ? Math.max(t, c.tailleMin / c.echelle) : t);
+let TROP = false;   // mesure : un titre, une formule ou un mot plus large que sa colonne (la disposition est refusée)
+/* Coupe un texte en lignes qui tiennent dans `max` px (mesure sans les « _ » des indices, à la taille vraiment écrite). */
 function lignes(c, texte, taille, max) {
-  const ctx = c.ctx; ctx.font = `${taille}px ${window.Tableau.POLICE}`;
+  const ctx = c.ctx; ctx.font = `${reelle(c, taille)}px ${window.Tableau.POLICE}`;
   const out = []; let ligne = '';
   for (const mot of String(texte).split(/\s+/)) {
     const essai = ligne ? ligne + ' ' + mot : mot;
@@ -75,28 +79,31 @@ function lignes(c, texte, taille, max) {
   return out;
 }
 function paragraphe(c, texte, x, y, taille, max, o = {}) {
-  for (const l of lignes(c, texte, taille, max)) { c.texte(l, x, y, { taille, ...o }); y += taille * 1.2; }
+  for (const l of lignes(c, texte, taille, max)) { c.texte(l, x, y, { taille, ...o }); y += reelle(c, taille) * 1.22; }
   return y;
 }
 
 /* Trois colonnes de trois blocs sur toute la largeur du tableau (15 novembre 2026 : « cases serrées, petits textes qui
  * se chevauchent ») : le cadre prend le format du tableau (scene.L, 760 à 1292) ; la police est la plus grande qui
  * fait tenir les neuf blocs (mesurée à la taille réellement écrite, jamais moins de 15 px à l'écran) ; titre et
- * formules partagent la première ligne quand ils tiennent ; le piège (⚠, orange) suit la définition dans le flot. */
-let COL = [{ x: 18, w: 228 }, { x: 264, w: 228 }, { x: 510, w: 228 }], HAUT = 48, HBLOC = 122, K = 12, CLE = '', RANGS = 3;
-/* Règle de l'utilisateur (15 novembre 2026) : la fiche ne cache jamais rien et n'écrit jamais sous 15 px à l'écran.
- * Si les neuf blocs complets ne tiennent pas sur une feuille (tableau bas : bande de formules sous la fiche), la fiche se
- * partage en FEUILLES successives, dans l'ordre : 3 rangées (une feuille), 2 rangées (blocs 1 à 6, puis 7 à 9), ou
- * 1 rangée (trois feuilles de trois blocs). La feuille montrée est celle du bloc que dit la voix ; « Suite → » ou un clic
- * sur l'en-tête passe à la suivante, puis à la page de l'élève. L'impression sort toutes les feuilles. */
-let FEUILLES = [BLOCS.map((_, i) => i)];
+ * formules partagent la première ligne quand ils tiennent ; le piège (⚠, orange) suit la définition dans le flot.
+ * Règle de l'utilisateur (15 novembre 2026) : la fiche ne cache jamais rien et n'écrit jamais sous 15 px à l'écran.
+ * Bureau (comme avant) : 3 rangées sur une partie, sinon 2 rangées (blocs 1 à 5, puis 6 à 9), police commune.
+ * Téléphone en paysage (18 novembre 2026, « textes de 9 px ») : la page garde SON plancher de 15 px (le kit le baisse
+ * jusqu'à 45 % sur un petit tableau, voir après la scène) et la fiche se partage en PARTIES, autant qu'il faut (jusqu'à
+ * un bloc par écran) ; chaque partie remplit le tableau (sa police est la plus grande qui y tient) et l'en-tête dit
+ * « partie n sur N · touche : la suite ». La partie montrée est celle du bloc que dit la voix ; « Suite → », un toucher
+ * sur l'en-tête ou hors d'un bloc passe à la suivante, puis à la page de l'élève. L'impression sort toute la fiche. */
+let HAUT = 47, CLE = '';
+// PARTIES[f] : ses blocs (indices), ses rangées, ses colonnes, sa police k et la hauteur hb d'une case
+let PARTIES = [{ blocs: BLOCS.map((_, i) => i), rangs: 3, cols: 3, k: 12, hb: 122 }];
+let FEUILLES = [BLOCS.map((_, i) => i)];   // les blocs de chaque partie (S.feuille : la partie montrée)
 const feuilleDe = i => Math.max(0, FEUILLES.findIndex(f => f.includes(i)));
 const VH = window.OndesTableau.VH;
 let MARGE_X = 16, ECART = 16;
-/* Les colonnes d'une feuille : autant qu'il en faut pour ses blocs (une feuille de 4 blocs sur 2 rangées en a 2, plus larges). */
+/* Les colonnes d'une partie : autant qu'il en faut pour ses blocs (une partie de 4 blocs sur 2 rangées en a 2, plus larges). */
 const colonnes = nc => { const w = (scene.L - 2 * MARGE_X - (nc - 1) * (ECART + 12)) / nc; return Array.from({ length: nc }, (_, n) => ({ x: MARGE_X + 6 + n * (w + 12 + ECART), w })); };
-const place = i => { const F = FEUILLES[feuilleDe(i)], j = F.indexOf(i), col = colonnes(Math.ceil(F.length / RANGS))[Math.floor(j / RANGS)]; return { x: col.x, w: col.w, y0: HAUT + (j % RANGS) * HBLOC }; };
-const reelle = (c, t) => (c.echelle && c.tailleMin ? Math.max(t, c.tailleMin / c.echelle) : t);   // la taille que la craie écrira
+const place = i => { const P = PARTIES[feuilleDe(i)] || PARTIES[0], j = Math.max(0, P.blocs.indexOf(i)), col = colonnes(P.cols)[Math.floor(j / P.rangs)]; return { x: col.x, w: col.w, y0: HAUT + (j % P.rangs) * P.hb, hb: P.hb, k: P.k }; };
 // une fraction « ⟦num|dén⟧ » (deux étages, comme dans le cahier) se mesure avec la craie
 const largeur = (c, s, t) => { if (String(s).includes('⟦')) return c.largeurTexte(String(s).replace(/_/g, ''), t); c.ctx.font = `${t}px ${window.Tableau.POLICE}`; return c.ctx.measureText(String(s).replace(/_/g, '')).width; };
 /* La mise en page d'un bloc de largeur w à la police k : une liste d'ordres (coordonnées relatives) et sa hauteur. */
@@ -106,17 +113,20 @@ function composer(c, b, w, k, st) {
   // rangée de formules grandit (les rangées sans fraction gardent leur hauteur).
   // (hauteurs en tF : celles d'une fraction viennent de la taille réellement écrite de ses étages, OndesTableau.etages)
   const eF = window.OndesTableau.etages(c, tF, (b.formules || []).join(' ')), frac = f => f.includes('⟦'), hautF = e => (e ? .9 + eF.haut / tF : .98), basF = e => (e ? .28 + eF.bas / tF : .34);
-  const ops = []; let y = tT;
-  const tag = st && STATUTS[st] ? (st === 'acquis' ? '✓' : STATUTS[st][0]) : '', lTag = tag ? largeur(c, tag, reelle(c, k * 0.8)) + 10 : 0;
-  const lTitre = Math.min(w - lTag, largeur(c, b.titre, tT));
-  ops.push({ t: 'texte', s: b.titre, x: 0, y, o: { couleur: 'jaune', taille: tT, max: w - lTag } });
+  const ops = [];
+  const tag = st && STATUTS[st] ? (st === 'acquis' ? '✓' : STATUTS[st][0]) : '', tTag = reelle(c, k * 0.8), lTag = tag ? largeur(c, tag, tTag) + 10 : 0;
+  const lT = largeur(c, b.titre, tT); if (lT > w) TROP = true;
+  // l'état de l'élève (« à reprendre ») à droite du titre ; s'il n'y a pas la place, sur sa ligne au-dessus du titre
+  const aCote = !tag || lT + lTag <= w, pris = aCote ? lTag : 0, lTitre = Math.min(w - pris, lT);
+  let y = aCote ? tT : tTag * 1.25 + tT * .9;
+  ops.push({ t: 'texte', s: b.titre, x: 0, y, o: { couleur: 'jaune', taille: tT, max: w - pris } });
   let basRangee = 0;   // ce qui dépasse sous la ligne de base de la dernière rangée de formules, en plus de l'ordinaire
   if (b.formules) {
-    const boites = b.formules.map(f => Math.min(w, largeur(c, f, tF) + tF * 0.9));
+    const boites = b.formules.map(f => { const l = largeur(c, f, tF) + tF * 0.9; if (l > w + .5) TROP = true; return Math.min(w, l); });
     const total = boites.reduce((a, l) => a + l + 8, 0);
     // les rangées : sur la ligne du titre si tout tient, sinon des rangées pleines sous le titre
     const rangees = [];
-    if (lTitre + 14 + total <= w - lTag) rangees.push({ x0: lTitre + 14, ids: b.formules.map((_, n) => n), titre: true });
+    if (lTitre + 14 + total <= w - pris) rangees.push({ x0: lTitre + 14, ids: b.formules.map((_, n) => n), titre: true });
     else b.formules.forEach((f, n) => { const r = rangees[rangees.length - 1], fin = r ? r.ids.reduce((a, m) => a + boites[m] + 8, 0) : 0; if (r && fin + boites[n] <= w) r.ids.push(n); else rangees.push({ x0: 0, ids: [n] }); });
     let prec = null;   // la rangée précédente (null : le titre)
     for (const r of rangees) {
@@ -142,6 +152,7 @@ function composer(c, b, w, k, st) {
   let x = 0, ligneH = 0, debut = ops.length, fracLigne = false;
   for (const mo of mots) {
     const l = largeur(c, mo.m, mo.t), esp = largeur(c, ' ', mo.t) * (mo.sep ? 2.2 : 1);
+    if (l > w + .5) TROP = true;
     if (x > 0 && x + esp + l > w) { x = 0; y += Math.max(ligneH, mo.t) * 1.22 + (fracLigne ? Math.max(0, window.OndesTableau.etages(c, mo.t).bas - mo.t * .21) : 0); ligneH = 0; debut = ops.length; fracLigne = false; }   // interligne 1,22 : accents et jambages de deux lignes ne se touchent plus
     else if (x > 0) x += esp;
     if (mo.m.includes('⟦') && !fracLigne) { const d = Math.max(0, window.OndesTableau.etages(c, mo.t, mo.m).haut - mo.t * .21); for (let n = debut; n < ops.length; n++) ops[n].y += d; y += d; fracLigne = true; }
@@ -150,35 +161,54 @@ function composer(c, b, w, k, st) {
     else ops.push({ t: 'texte', s: mo.m, x, y, flot: true, o: { couleur: mo.coul, taille: mo.t, alpha: mo.coul === 'orange' ? .92 : .96 } });
     x += l; ligneH = Math.max(ligneH, mo.t);
   }
-  return { ops, h: y + (fracLigne ? tD * .2 + window.OndesTableau.etages(c, tD).bas + 2 : tD * 0.35), tag, tTag: reelle(c, k * 0.8) };
+  return { ops, h: y + (fracLigne ? tD * .2 + window.OndesTableau.etages(c, tD).bas + 2 : tD * 0.35), tag, tTag, yTag: aCote ? tTag : 2 + tTag };
 }
-/* Colonnes et police, recalculées quand la taille du tableau change. */
+/* Parties, colonnes et police, recalculées quand la taille du tableau (ou l'état de l'élève) change. */
 function disposer(c) {
-  const L = scene.L, cle = `${L}|${c.echelle}|${!!S.lacunes}`;
+  const L = scene.L, cle = `${L}|${c.echelle}|${c.tailleMin}|${BLOCS.map(statut).join()}|${document.fonts ? document.fonts.status : ''}`;
   if (cle === CLE) return; CLE = cle;
   window.__debordeBlocs.length = 0;   // la vérification repart à chaque nouvelle disposition
-  MARGE_X = 16; ECART = L >= 1000 ? 16 : 14;
-  COL = colonnes(3); const w = COL[0].w;   // la police se choisit sur trois colonnes (le cas le plus étroit)
-  HAUT = 47;
-  // La plus grande police qui fait tenir chaque bloc ENTIER dans sa case ; moins de feuilles d'abord.
-  const essai = r => { const h = Math.floor((VH - HAUT - 4) / r); for (let k = 26; k >= 9; k -= 0.5) if (BLOCS.every(b => composer(c, b, w, k, statut(b)).h <= h - 16)) return k; return null; };
-  let k = null, r = 3;
-  for (r of [3, 2, 1]) { k = essai(r); if (k != null) break; }
-  RANGS = r; K = k ?? 9; HBLOC = Math.floor((VH - HAUT - 4) / r);
-  const nf = Math.ceil(BLOCS.length / (3 * r)), n = Math.ceil(BLOCS.length / nf); FEUILLES = [];   // feuilles équilibrées (5 + 4, 3 + 3 + 3)
-  for (let i = 0; i < BLOCS.length; i += n) FEUILLES.push(BLOCS.map((_, j) => j).slice(i, i + n));
+  MARGE_X = 16; ECART = L >= 1000 ? 16 : 14; HAUT = 47;
+  const tous = BLOCS.map((_, i) => i), plancher = c.echelle && c.tailleMin ? c.tailleMin / c.echelle : 0;
+  // chaque bloc ENTIER dans sa case, aucun titre, formule ou mot plus large que la colonne
+  const tient = (ids, w, hb, k) => ids.every(i => { TROP = false; const h = composer(c, BLOCS[i], w, k, statut(BLOCS[i])).h; return !TROP && h <= hb - 16; });
+  // la plus grande police, de kmax à 9 ; sous le plancher, une police plus petite s'écrit pareil : inutile d'essayer
+  const police = (ids, w, hb, kmax) => { for (let k = kmax; k >= 9; k -= 0.5) { if (tient(ids, w, hb, k)) return k; if (k * 1.08 <= plancher) break; } return null; };
+  // Le moins de parties d'abord ; à égalité, trois colonnes (la disposition du bureau, inchangée).
+  const essais = [];
+  for (const nc of [3, 2, 1]) for (const r of [3, 2, 1]) essais.push({ nc, r, nf: Math.ceil(BLOCS.length / (nc * r)) });
+  essais.sort((a, b) => a.nf - b.nf || b.nc - a.nc);
+  let choix = null;
+  for (const { nc, r, nf } of essais) {
+    const n = Math.ceil(BLOCS.length / nf), parts = [];   // parties équilibrées (5 + 4, 3 + 3 + 3, 2 + 2 + 2 + 2 + 1)
+    for (let i = 0; i < BLOCS.length; i += n) parts.push(tous.slice(i, i + n));
+    if (nc === 3) {   // comme avant : une police pour toute la fiche, choisie sur trois colonnes (le cas le plus étroit)
+      const hb = Math.floor((VH - HAUT - 4) / r), k = police(tous, colonnes(3)[0].w, hb, 26);
+      if (k == null) continue;
+      choix = parts.map(blocs => ({ blocs, rangs: r, cols: Math.ceil(blocs.length / r), k, hb }));
+    } else {          // petit écran : chaque partie remplit le tableau, avec sa propre police
+      const ps = parts.map(blocs => { const rangs = Math.min(r, blocs.length), cols = Math.ceil(blocs.length / rangs), hb = Math.floor((VH - HAUT - 4) / rangs);
+        return { blocs, rangs, cols, hb, k: police(blocs, colonnes(cols)[0].w, hb, 34) }; });
+      if (ps.some(p => p.k == null)) continue;
+      choix = ps;
+    }
+    break;
+  }
+  // dernier recours (tableau minuscule) : un bloc par partie
+  PARTIES = choix || tous.map(i => ({ blocs: [i], rangs: 1, cols: 1, k: 9, hb: VH - HAUT - 4 }));
+  FEUILLES = PARTIES.map(p => p.blocs);
   if (S.feuille >= FEUILLES.length) S.feuille = FEUILLES.length - 1;
   etiquettes();
 }
 function bloc(c, b, i) {
-  const { x, w, y0 } = place(i), enLumiere = S.focus === b.id, st = statut(b);
-  const cx = x - 6, cy = y0 - 6, cw = w + 12, ch = HBLOC - 6;
-  const { ops, h, tag, tTag } = composer(c, b, w, K, st);
+  const { x, w, y0, hb, k } = place(i), enLumiere = S.focus === b.id, st = statut(b);
+  const cx = x - 6, cy = y0 - 6, cw = w + 12, ch = hb - 6;
+  const { ops, h, tag, tTag, yTag } = composer(c, b, w, k, st);
   // Le cadre de lumière et l'état de l'élève apparaissent d'un coup : ils ne décalent pas l'écriture du bloc.
   c.direct(() => {
     if (enLumiere) c.rect(cx, cy, cw, ch, { couleur: 'jaune', arrondi: 10, largeur: 1.6, alpha: .7 });
     else if (st && STATUTS[st] && st !== 'acquis') c.rect(cx, cy, cw, ch, { couleur: STATUTS[st][1], arrondi: 10, largeur: 1.4, pointille: [5, 6], alpha: .8 });
-    if (tag) c.texte(tag, x + w, y0 + tTag, { couleur: STATUTS[st][1], taille: tTag, align: 'right' });
+    if (tag) c.texte(tag, x + w, y0 + yTag, { couleur: STATUTS[st][1], taille: tTag, align: 'right' });
   });
   const y = y0 + 2;
   for (const o of ops) {
@@ -195,9 +225,11 @@ function dessinerFiche(c) {
   const L = scene.L, nf = FEUILLES.length;
   if (S.focus) S.feuille = feuilleDe(BLOCS.findIndex(b => b.id === S.focus));   // la feuille du bloc que dit la voix
   etiquettes();
-  c.texte('Ce qu’il faut retenir' + (nf > 1 ? ` (feuille ${S.feuille + 1}/${nf})` : ''), 18, 32, { couleur: 'jaune', taille: 26 });
-  if (nf > 1) c.repere('feuille', 14, 6, L / 2, 40, `la feuille ${S.feuille + 1} sur ${nf} de la fiche`);
-  c.texte('définition · formule · ⚠ piège', L - 18, 30, { couleur: 'faible', taille: 15, align: 'right' });
+  c.texte('Ce qu’il faut retenir', 18, 32, { couleur: 'jaune', taille: 26 });
+  if (nf > 1) {   // la fiche en parties : le compteur (15 px au moins) dit comment passer à la suite
+    c.texte(`partie ${S.feuille + 1} sur ${nf} · touche : la suite`, L - 18, 30, { couleur: 'cyan', taille: 15, align: 'right' });
+    c.repere('feuille', L / 2, 6, L / 2 - 14, 36, `la partie ${S.feuille + 1} sur ${nf} de la fiche (touche : la suite)`);
+  } else c.texte('définition · formule · ⚠ piège', L - 18, 30, { couleur: 'faible', taille: 15, align: 'right' });
   c.ligne(18, 40, L - 18, 40, { couleur: 'tresfaible', largeur: 1.4 });
   const debut = c.cur;
   let fin = c.cur;
@@ -210,33 +242,38 @@ function dessinerFiche(c) {
 }
 
 function dessinerLacunes(c) {
-  const L = scene.L, W = L - 44;
+  // interlignes à la taille vraiment écrite (plancher de 15 px) ; ce qui ne tient pas devient « … et n autre(s) »
+  const L = scene.L, W = L - 44, e = t => reelle(c, t), pas = (t, m) => Math.max(m, e(t) * 1.4);
   c.texte('Ta page : ce qu’il te reste à retravailler', 22, 32, { couleur: 'jaune', taille: 26 });
   c.ligne(22, 40, L - 22, 40, { couleur: 'tresfaible', largeur: 1.4 });
-  let y = 70;
+  let y = Math.max(70, 44 + e(18));
   const lac = S.lacunes, acq = S.acquis || [];
   if (!lac) {
-    c.texte('Pas encore de réponses notées.', 22, y, { couleur: 'faible', taille: 18 }); y += 28;
+    c.texte('Pas encore de réponses notées.', 22, y, { couleur: 'faible', taille: 18 }); y += pas(18, 28);
     paragraphe(c, 'Réponds aux questions du cours : ton bilan par compétence s’écrira ici, et le professeur y reviendra en mode libre.', 22, y, 18, W, { couleur: 'faible' });
     return;
   }
+  const hAcquis = acq.length ? 6 + pas(15, 20) + lignes(c, acq.join(' · '), 16, W).length * e(16) * 1.22 : 0;
   if (!lac.length) {
-    c.texte('✓ Toutes les compétences évaluées sont acquises. Bravo !', 22, y, { couleur: 'vert', taille: 20 }); y += 30;
+    c.texte('✓ Toutes les compétences évaluées sont acquises. Bravo !', 22, y, { couleur: 'vert', taille: 20 }); y += pas(20, 30);
   } else {
-    c.texte('À reprendre en mode libre, avec le professeur :', 22, y, { couleur: 'orange', taille: 15 }); y += 24;
-    const y0 = y - 18;
+    c.texte('À reprendre en mode libre, avec le professeur :', 22, y, { couleur: 'orange', taille: 15 }); y += pas(15, 24);
+    const y0 = y - Math.max(18, e(18)), hLac = l => (lignes(c, `${l.label} — x`, 18, W - 20).length * e(18) + (l.reprendre_avec.length ? lignes(c, 'reprendre avec ' + l.reprendre_avec.join(', puis '), 15, W - 20).length * e(15) : 0)) * 1.22 + 4;
+    let montres = 0;
     for (const l of lac.slice(0, 5)) {
+      const reste = lac.length - montres - 1;
+      if (montres && y - e(18) + hLac(l) + hAcquis + (reste ? pas(13, 18) : 0) > VH - 4) break;
       const [etiq, coul] = STATUTS[l.statut] || STATUTS.non_acquis;
       c.texte(l.statut === 'partiel' ? '⟳' : '✗', 22, y, { couleur: coul, taille: 17 });
       y = paragraphe(c, `${l.label} — ${etiq}`, 42, y, 18, W - 20, { couleur: 'blanc' });
       if (l.reprendre_avec && l.reprendre_avec.length) y = paragraphe(c, 'reprendre avec ' + l.reprendre_avec.join(', puis '), 42, y, 15, W - 20, { couleur: coul, alpha: .85 });
-      y += 4;
+      y += 4; montres++;
     }
-    if (lac.length > 5) { c.texte(`… et ${lac.length - 5} autre(s)`, 42, y, { couleur: 'faible', taille: 13 }); y += 18; }
+    if (lac.length > montres) { c.texte(`… et ${lac.length - montres} autre(s)`, 42, y, { couleur: 'faible', taille: 13 }); y += pas(13, 18); }
     c.repere('lacunes', 18, y0, L - 36, y - y0, 'ce qu’il reste à retravailler');
   }
   if (acq.length) {
-    y += 6; c.texte('✓ Acquis', 22, y, { couleur: 'vert', taille: 15 }); y += 20;
+    y += 6; c.texte('✓ Acquis', 22, y, { couleur: 'vert', taille: 15 }); y += pas(15, 20);
     paragraphe(c, acq.join(' · '), 22, y, 16, W, { couleur: 'vert', alpha: .85 });
   }
 }
@@ -244,6 +281,28 @@ function dessinerLacunes(c) {
 const canvas = $('canvas');
 const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(41 + S.page); if (S.page === 1) dessinerFiche(c); else dessinerLacunes(c); return c.fin(); }, { large: true });
 const maintenant = () => (performance.now() - scene.ouvert) / 1000;
+/* Texte jamais sous 15 px à l'écran, même sur un téléphone en paysage (18 novembre 2026) : le kit baisse son plancher
+ * sur un petit tableau (jusqu'à 45 %) ; cette page garde 15 px sur SA craie (rien de partagé n'est changé) et se met
+ * en parties pour que tout tienne. Les indices (« d_2 », « y_M ») s'écrivent à 62 % de la ligne mais jamais sous ce
+ * plancher (le kit les écrirait à 62 % du plancher, 9 px) : mesure et écriture de cette craie seulement. */
+const craie = scene.craie, POLICE = window.Tableau.POLICE, segments = window.Tableau.Craie.segments;
+Object.defineProperty(craie, 'tailleMin', { get: () => 15, set: () => {}, configurable: true });
+const tailleIndice = t => Math.max(t * .62, craie.echelle && craie.tailleMin ? craie.tailleMin / craie.echelle : 0);
+craie._largeur = function (s, taille, gras) {
+  const c = this.ctx;
+  return segments(String(s)).reduce((w, g) => { c.font = `${gras ? '700 ' : ''}${g.sub ? tailleIndice(taille) : taille}px ${POLICE}`; return w + c.measureText(g.t).width; }, 0);
+};
+craie._texteIndices = function (s, x, y, o, taille) {
+  const segs = segments(s), larg = g => { this.ctx.font = `${o.gras ? '700 ' : ''}${g.sub ? tailleIndice(taille) : taille}px ${POLICE}`; return this.ctx.measureText(g.t).width; };
+  const total = segs.reduce((w, g) => w + larg(g), 0);
+  let px = o.align === 'center' ? x - total / 2 : o.align === 'right' ? x - total : x;
+  for (const g of segs) {
+    const l = larg(g);
+    this.texte(g.t, px, y + (g.sub ? taille * .28 : 0), { ...o, taille: g.sub ? tailleIndice(taille) : taille, align: 'left', max: 0, duree: o.duree && o.duree * g.t.length / s.length });
+    px += l;
+  }
+  return this;
+};
 
 /* Page n ; `focus` = le bloc que la voix dit maintenant ; `tout` = toute la fiche d'un coup. */
 function aller(n, par, focus, tout) {
@@ -268,17 +327,17 @@ function aller(n, par, focus, tout) {
   bulle($('feedback'), n === 2 ? 'Ta page à toi.' : focus ? BLOCS.find(b => b.id === focus).titre.replace(/^\d+ · /, '') : 'La fiche du chapitre.');
   pont.noter(par || 'page', { page: n, moment: focus || (n === 2 ? 'lacunes' : 'fiche') }); pont.emettre();
 }
-/** Bouton et numéro de page : « Suite → » tant qu'il reste une feuille de la fiche, puis « Ma page → ». */
+/** Bouton et numéro de page : « Suite → » tant qu'il reste une partie de la fiche, puis « Ma page → ». */
 function etiquettes() {
   const nf = FEUILLES.length, fiche = S.page === 1;
   $('suiv').textContent = fiche ? (S.feuille < nf - 1 ? 'Suite →' : 'Ma page →') : '← La fiche';
   $('page').textContent = fiche ? `${S.feuille + 1} / ${nf + 1}` : `${nf + 1} / ${nf + 1}`;
 }
-/** Suivant : la feuille suivante de la fiche, puis la page de l'élève. */
+/** Suivant : la partie suivante de la fiche, puis la page de l'élève. */
 function suivant(par = 'next') {
   if (S.page === 1 && S.feuille < FEUILLES.length - 1) {
     S.feuille++; S.focus = null; scene.sale = true; etiquettes();
-    bulle($('feedback'), `Feuille ${S.feuille + 1}/${FEUILLES.length} de la fiche.`);
+    bulle($('feedback'), `Partie ${S.feuille + 1} sur ${FEUILLES.length} de la fiche.`);
     pont.noter(par, { page: 1, feuille: S.feuille + 1 }); pont.emettre(); return;
   }
   aller(2, par);
@@ -290,11 +349,16 @@ function statut(b) {
   if (lac.length) return 'partiel';
   return (S.acquis_ids || []).some(a => b.comps.includes(a)) ? 'acquis' : null;
 }
-function moments() { const m = { fiche: 1 }; BLOCS.forEach(b => { m[b.id] = 1; }); m.lacunes = 2; return m; }
+/* Moments (18 novembre 2026) : chaque bloc a son instant entre la fiche et la page de l'élève (2). Ils valaient tous 1,
+ * le time_s de la fiche : le kit (tableau.js, « pas de retour en arrière ») jetait alors tout play_until {moment: <bloc>}
+ * — le bloc n'était ni écrit ni allumé, et sur un petit écran sa partie ne venait jamais. « fin » : toute la fiche
+ * écrite, sans bloc en lumière, sa dernière partie montrée. */
+function moments() { const m = { fiche: 1.05 }; BLOCS.forEach((b, i) => { m[b.id] = +(1 + (i + 1) / 10).toFixed(2); }); m.fin = 1.95; m.lacunes = 2; return m; }
 function playUntil(p) {
   const nom = p.moment in moments() ? p.moment : null;
   if (!nom && !Number.isFinite(+p.time_s)) return;
   if (nom === 'lacunes' || (!nom && +p.time_s === 2)) aller(2, 'play_until');
+  else if (nom === 'fin') { aller(1, 'play_until', null, true); S.feuille = FEUILLES.length - 1; etiquettes(); pont.emettre(); }
   else if (nom === 'fiche' || !nom) aller(1, 'play_until', null, true);
   else aller(1, 'play_until', nom);
 }
@@ -308,26 +372,32 @@ function ceQuiSeVoit() {
   if (S.page === 2) return `Page 2/2, la page de l'élève : ${!S.lacunes ? 'pas encore de bilan' : S.lacunes.length ? 'à retravailler : ' + S.lacunes.map(l => l.label).join(' ; ') : 'toutes les compétences évaluées sont acquises'}.`;
   const f = S.focus && BLOCS.find(b => b.id === S.focus);
   const ecrits = BLOCS.filter((b, i) => S.apparu[i] != null).length, nf = FEUILLES.length;
-  const vus = nf > 1 ? `Feuille ${S.feuille + 1}/${nf} visible : ${FEUILLES[S.feuille].map(i => BLOCS[i].titre).join(', ')} (les autres blocs sur l'autre feuille, bouton « Suite → »). ` : '';
+  const vus = nf > 1 ? `La fiche en ${nf} parties, partie ${S.feuille + 1} visible : ${FEUILLES[S.feuille].map(i => BLOCS[i].titre).join(', ')} (les autres blocs sur les autres parties, bouton « Suite → » ou toucher le tableau). ` : '';
   return `${vus}Page 1/2, la fiche du chapitre des ondes progressives périodiques : ${ecrits}/9 blocs écrits (définition, formule, piège)${f ? ` ; en lumière « ${f.titre} » : ${window.Tableau.lisible(f.def)}${f.formules ? ' Formules : ' + f.formules.map(window.Tableau.lisible).join(' ; ') + '.' : ''} Piège : ${window.Tableau.lisible(f.attention)}` : '.'}${S.lacunes ? ` Blocs à reprendre : ${BLOCS.filter(b => statut(b) && statut(b) !== 'acquis').map(b => b.titre).join(', ') || 'aucun'}.` : ''}`;
 }
 $('suiv').onclick = () => (S.page === 1 ? suivant() : aller(1, 'previous', null, true));
 // Imprimer / PDF : la fiche entière et la page de l'élève, sur fond blanc (shared/tableau/imprimer.js).
+// Sur un petit écran, le temps de l'impression, la craie écrit sur un tableau de bureau (1280 × 600) : la fiche sort en
+// une ou deux pages lisibles, pas en autant de parties qu'au téléphone et à sa résolution.
 $('imprimer').onclick = () => {
+  if (document.querySelector('.impression')) return;
   const avant = { page: S.page, feuille: S.feuille, focus: S.focus, apparu: S.apparu.slice() };
+  const petit = craie.W < 1200 || craie.H < 540;
+  if (petit) { canvas.style.width = '1280px'; canvas.style.height = '600px'; craie.resize(); }
+  scene.cadre(42); disposer(craie);   // les parties de ce tableau-là (le nombre de pages en dépend)
   window.Tableau.imprimer({ titre: 'Ce qu’il faut retenir — ondes mécaniques progressives périodiques', scene,
     pages: [...FEUILLES.map((f, k) => ({ nom: FEUILLES.length > 1 ? `la fiche (${k + 1}/${FEUILLES.length})` : 'la fiche', preparer: () => { S.page = 1; S.feuille = k; S.focus = null; S.apparu = BLOCS.map(() => AVANT); } })),
             { nom: 'ta page : à retravailler', preparer: () => { S.page = 2; S.focus = null; } }],
-    restaurer: () => { Object.assign(S, avant); scene.sale = true; etiquettes(); } });
+    restaurer: () => { if (petit) { canvas.style.width = ''; canvas.style.height = ''; craie.resize(); } Object.assign(S, avant); CLE = ''; scene.sale = true; etiquettes(); } });
   pont.noter('imprimer', { pages: FEUILLES.length + 1 }); pont.emettre();
 };
 canvas.addEventListener('pointerdown', e => {
   if (S.page !== 1) return;
   const r = canvas.getBoundingClientRect(), [x, y] = scene.local(e.clientX - r.left, e.clientY - r.top);
-  // Clic sur l'en-tête : la feuille suivante (après la dernière, retour à la première).
-  if (y < 42 && FEUILLES.length > 1) { if (S.feuille < FEUILLES.length - 1) suivant('touche_entete'); else { S.feuille = 0; S.focus = null; scene.sale = true; etiquettes(); pont.emettre(); } return; }
-  const i = BLOCS.findIndex((b, k) => { const p = place(k); return S.apparu[k] != null && FEUILLES[S.feuille].includes(k) && x >= p.x - 6 && x <= p.x + p.w + 6 && y >= p.y0 - 6 && y <= p.y0 + HBLOC - 12; });
-  if (i < 0) return;
+  // Fiche en parties : toucher l'en-tête ou le tableau hors d'un bloc, c'est la suite (après la dernière : ta page).
+  if (y < 42 && FEUILLES.length > 1) { suivant('touche_entete'); return; }
+  const i = BLOCS.findIndex((b, k) => { const p = place(k); return S.apparu[k] != null && FEUILLES[S.feuille].includes(k) && x >= p.x - 6 && x <= p.x + p.w + 6 && y >= p.y0 - 6 && y <= p.y0 + p.hb - 12; });
+  if (i < 0) { if (FEUILLES.length > 1) suivant('touche'); return; }
   S.focus = BLOCS[i].id; scene.sale = true; bulle($('feedback'), window.Tableau.lisible(BLOCS[i].def));
   pont.noter('touche', { moment: BLOCS[i].id }); pont.emettre();
 });
@@ -335,7 +405,7 @@ canvas.addEventListener('pointerdown', e => {
 window.Tableau.explication({ bilan: BLOCS.map(b => ({ repere: b.id, texte: window.Tableau.lisible(b.def) })) });
 const commandes = ['start', 'reset', 'play_until', 'set_parameters', 'next', 'previous'];
 const config = { id: 'ondes_periodiques_bilan', version: '1.0', title: 'Ce qu’il faut retenir — ondes périodiques', variants: [{ id: 'bilan', label: 'fiche' }], commands: commandes,
-  command_schema: { play_until: { moment: Object.keys(moments()).join(' | ') + ' (écrit ce bloc de la fiche et le met en lumière ; fiche = toute la fiche ; lacunes = la page de l’élève)' },
+  command_schema: { play_until: { moment: Object.keys(moments()).join(' | ') + ' (écrit ce bloc de la fiche et le met en lumière, sur un petit écran sa partie ; fiche = toute la fiche ; fin = toute la fiche, sa dernière partie ; lacunes = la page de l’élève)' },
     set_parameters: { lacunes: '[{id: C1..C9, label, statut: non_acquis|partiel, reprendre_avec: [..]}] (bilan de l’élève)', acquis: '[labels acquis]', acquis_ids: '[C1, ..]' } } };
 const pont = protocole({ id: config.id, commandes, config,
   texte: 'Fiche « Ce qu’il faut retenir » du chapitre des ondes mécaniques progressives périodiques, sur une page (neuf blocs : définition, période et fréquence, longueur d’onde, célérité, deux points en phase ou en opposition, mesures, diffraction, milieu dispersif, retard ; chacun avec définition, formule, piège), puis la page de l’élève (ce qu’il lui reste à retravailler).',
