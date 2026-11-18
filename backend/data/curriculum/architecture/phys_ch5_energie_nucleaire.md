@@ -68,8 +68,7 @@ L'ordre des notions suivait déjà l'ordre commun. Les défauts étaient dans la
      (énergie libérée ; le piège 7,11 MeV reste dans les choix).
 3. **Les scènes s'ouvrent figées** (`demarrer: reset`) sur ces huit diapositives : la voix pilote, rien n'est écrit
    avant son mot ni avant la réponse de l'élève (professeur 39 ; le vérificateur de pointage ne signale plus de
-   « DEPART » sur ces huit diapositives ; les autres diapositives du chapitre, non touchées, en gardent 36 : à
-   reprendre quand leurs voix seront refaites, chaque changement de `demarrer` demandant de rejouer la diapositive).
+   « DEPART » sur ces huit diapositives ; les 36 autres sont corrigées au § 9).
 4. **`en_d1_composition` ouvre la séance 2**, juste avant la balance qui compte protons et neutrons (logique 6).
 5. **`en_r3b_applications_dangers` va après l'échantillon** (`en_n3_2025`), au début du bloc des cas types :
    fission → réaction en chaîne → charges → fusion → équation se suivent sans coupure ; les dangers et la protection
@@ -181,3 +180,28 @@ l'absence de piste (sans durée, tous les gestes tombent à 0 s) ; un « DEPART 
 (`docs/lexique-visuel/`, `shared/lexique/`) n'existe pas encore dans le dépôt : proton, neutron, électron et positon y
 seront à inscrire (fichiers partagés, hors de cette passe) ; les teintes du proton diffèrent légèrement entre ce cours
 (`#d9534f`) et `population.html` du chapitre 4 (`#f06a3a`) : à unifier par le lexique.
+
+## 9. Toutes les scènes s'ouvrent figées (18 novembre 2026, demande de l'utilisateur)
+
+- **Le défaut trouvé** : dans les pages du chapitre (`figures`, `rappels`, `aston`, `balance`, `diagramme`, `liaison`,
+  `reactions` de `energie-nucleaire-tableau/`), `reset` n'était qu'un autre nom de `start`, et chaque page démarrait
+  seule au chargement. Une diapositive en `demarrer: reset` courait donc quand même seule, devant la voix — y compris
+  les huit du § 3. Écrire `reset` dans le cours ne suffisait pas.
+- **La correction des pages** : `reset` fige maintenant la scène, à zéro ou sur `?depart=<moment>` (tout ce qui
+  précède déjà écrit) ; une page ouverte avec `?depart=` se fige dès son chargement ; ensuite seule la voix la fait
+  avancer (`play_until`). `start` ne change pas : les cours en ligne, tous en `start`, gardent leur comportement.
+  Vérifié dans Chromium (10 cas : figée 1,5 s sans bouger, puis arrêtée sur le moment demandé, aucune erreur JS).
+- **Le cours** : les 36 diapositives restées en `demarrer: start` passent en `reset` (leurs textes et voix ne changent
+  pas). Six reprenaient la page de la diapositive précédente (même URL : la scène n'était pas rechargée) ; elles
+  s'ouvrent maintenant figées là où la précédente s'est arrêtée : `en_m2b_un_gramme` (`&depart=termes`),
+  `en_m3b_electronvolt` (`u`), `en_a2_zones` (`plus_stable`), `en_a2b_fission` (`zone_fusion`), `en_b2b_energie`
+  (`delta_m`), `en_n1b_energie_totale` (`nombre`).
+- **Résultat** : `verifier_pointage_simulations.py` ne signale plus aucun « DEPART » ni « IFRAME » sur ce chapitre
+  (il reste 14 « gestes trop serrés », dus aux pistes pas encore enregistrées, plus un sur `en_n2_comparaison`).
+  Rejouées avec la minuterie du lecteur (`verifier-pointage-navigateur.mjs`) : chaque moment des diapositives reprises
+  est atteint sur son mot. L'écart de `en_r2_fission` (la voix dit sept étapes plus vite que la scène) existait déjà
+  dans le cours en ligne.
+- **À savoir** : quatre diapositives ont leur premier `play_until` après le premier quart de la voix (`en_d4_carbone`,
+  `en_l1_separer`, `en_l4_par_nucleon`, `en_e4_polonium`) ; d'ici là la scène montre son état de départ (balance vide,
+  noyau au repos, paliers vides).
+

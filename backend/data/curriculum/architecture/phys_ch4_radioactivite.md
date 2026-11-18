@@ -160,3 +160,10 @@ remises en mots). Mots rares gardés exprès (`verifier_mots.py`) : « vallée �
 - Les voix (quota Kaggle épuisé jusqu'à samedi) : sur le VPS, avec la liste.
 - `test_pointage_simulations.py::test_le_cours_de_svt_liberation_de_l_energie_est_sans_ecart` échoue déjà sur `main`
   sans ces changements (cours SVT d'une autre session).
+
+## 8. Scènes figées pour de vrai (18 novembre 2026)
+Dans `population.html`, `datation.html` et `segre.html`, `reset` n'était qu'un autre nom de `start` : `ra_l1b_moitie`,
+`ra_c3_calcul` et `ra_s3_zones` (en `demarrer: reset`) auraient couru seules devant la voix. `reset` fige maintenant
+la scène (à zéro ou sur `?depart=<moment>`), seule la voix la fait avancer ; `start` ne change pas (cours en ligne
+inchangés). Vérifié dans Chromium : figées, puis arrêtées sur `un_t_demi`, `mesure`, `vallee`, sans erreur JS.
+
