@@ -46,7 +46,7 @@ l'étude complète, cœur du national (Analyse 55 %), ne laisse répondre l'él�
 
 ## L'architecture, diapositive par diapositive
 
-77 diapositives, 7 séances, 24 blocs, durée prévue 223 min. « ✏️ » : la diapositive porte le « À toi » du bloc ; « 🔊 » : sa voix est gardée ; « 🆕 voix » : à enregistrer.
+83 diapositives, 7 séances, 26 blocs, durée prévue 236 min (2ᵉ passe : + 6 diapositives, + 2 blocs). « ✏️ » : la diapositive porte le « À toi » du bloc ; « 🔊 » : sa voix est gardée ; « 🆕 voix » : à enregistrer.
 
 ### Séance 1 — Du taux d'accroissement à la tangente
 
@@ -149,7 +149,16 @@ l'étude complète, cœur du national (Analyse 55 %), ne laisse répondre l'él�
 | Diapositive | Titre | | Pourquoi ici |
 |---|---|---|---|
 | `df_va6_extremum` | Lire un extremum, un signe, une inégalité | 🔊 | Lire un extremum, un signe, une inégalité dans le tableau (2021 N, 2021 R). |
-| `df_va7_auxiliaire` | Quand le signe vient d'une autre fonction | ✏️ 🔊 | La fonction auxiliaire g (9 sujets sur 20) ; l'élève répond. |
+| `df_va7_auxiliaire` | Quand le signe vient d'une autre fonction | ✏️ 🆕 voix | La fonction auxiliaire g (9 sujets sur 20) : le principe. 2ᵉ PASSE : la voix ne dit plus « donc f est croissante » avant la question (la phrase est retirée, la vue s'arrête sur `lien`, plus sur `conclusion`). |
+
+**Exercice : la fonction auxiliaire, une question à la fois** (`df_n3_b5`, 2ᵉ passe)
+
+| Diapositive | Titre | | Pourquoi ici |
+|---|---|---|---|
+| `df_va8_aux_a` | Exercice, partie I : le signe de g′ | ✏️ 🆕 voix | NOUVELLE. Le cas type « fonction auxiliaire » (9/20) joué comme au national, juste après son principe : g(x) = 2x³ − 3x² + 2 sur ]0 ; +∞[, g′(x) = 6x(x − 1) ; la vue `calculs.html?vue=aux_g` s'arrête sur le cadre du tableau (ligne x) : l'élève donne le signe de g′ sur ]0 ; 1[. |
+| `df_va8_aux_b` | Exercice, partie I : le signe de g, lu dans son tableau | ✏️ 🆕 voix | NOUVELLE. La ligne de g′ puis les flèches se construisent ; g(1) = 1 calculé ; la conclusion « g(x) > 0 » est cachée : l'élève la déduit du minimum (méthode de l'exploration : lire le minimum dans le tableau de g). |
+| `df_va8_aux_c` | Exercice, partie II : montrer que f′(x) = g(x)/x² | ✏️ 🆕 voix | NOUVELLE. « Montrer que f′(x) = … » (20/20) sur f(x) = x² − 3x − 2/x : « f est dérivable sur … car … », la dérivée, puis l'élève trouve le numérateur au même dénominateur (la vue `aux_f` s'arrête avant `forme`). |
+| `df_va8_aux_d` | Exercice, partie II : le tableau de variations de f | ✏️ 🆕 voix | NOUVELLE. f′ a le signe de g (partie I) : la ligne f′(x) « + » s'écrit ; l'élève donne la limite en 0⁺ avant que les flèches et −∞, +∞ s'écrivent. |
 
 ### Séance 4 — Concavité et branches infinies
 
@@ -241,16 +250,23 @@ l'étude complète, cœur du national (Analyse 55 %), ne laisse répondre l'él�
 |---|---|---|---|
 | `df_ec1_ordre` | L'ordre d'un problème d'analyse | 🔊 | L'ordre du problème d'analyse au national. |
 | `df_ec2_forme` | Lire la forme demandée | 🔊 | Lire la forme demandée (« montrer que » donne le chemin). |
-| `df_ec3_etude` | Une étude complète, pas à pas : l'ensemble de définition | ✏️ 🆕 voix | RÉÉCRIT : l'étude complète commence par l'étape 1 seule ; l'élève donne l'ensemble de définition avant la correction (question reprise de la réserve, réactions et démonstration gardent leur voix). Avant, la voix donnait les étapes 1 et 2 avec leurs résultats. |
+| `df_ec3_etude` | Une étude complète, pas à pas : l'ensemble de définition | ✏️ 🆕 voix | 2ᵉ PASSE : vue `trace.html?vue=etude_pas`, arrêtée sur le titre seul (l'ancienne vue écrivait « sur [−1 ; +∞[ » dans son titre et −1 dans le tableau : la réponse avant la question). RÉÉCRIT : l'étude complète commence par l'étape 1 seule ; l'élève donne l'ensemble de définition avant la correction (question reprise de la réserve, réactions et démonstration gardent leur voix). Avant, la voix donnait les étapes 1 et 2 avec leurs résultats. |
 
-**Le bord, le signe de f′, la branche ; une solution unique** (`df_n7_b2`)
+**Le bord, le signe de f′, la branche infinie** (`df_n7_b2`)
 
 | Diapositive | Titre | | Pourquoi ici |
 |---|---|---|---|
-| `df_ec3_etude_a2` | Une étude complète, pas à pas : le bord −1 | 🆕 voix | NOUVELLE (texte repris de l'ancienne ec3) : l'étape 2, le bord −1 et la demi-tangente verticale, montrée par le professeur sur la courbe animée. |
-| `df_ec3_etude_b` | Une étude complète, pas à pas : le signe de f′ | ✏️ 🔊 | Étape 3, le signe de f′ : l'élève trouve le minimum (inchangée). |
-| `df_ec3_etude_c` | Une étude complète, pas à pas : le minimum, O, la branche infinie | ✏️ 🆕 voix | RÉÉCRIT : le minimum confirmé, f(0) = 0, puis l'étape 5 posée à l'élève (lim f(x)/x = +∞ : quelle branche ?) avant la correction ; la courbe se trace avec l'animation. Avant, la réponse était dite. |
-| `df_ec4_unique` | Rappel : une solution unique au milieu de l'étude | ✏️ 🔊 | La solution unique au milieu de l'étude (7/20), rappel du ch1 au moment où il sert. |
+| `df_ec3_etude_a2` | Une étude complète, pas à pas : le bord −1 | ✏️ 🆕 voix | 2ᵉ PASSE, RÉÉCRITE en question (dérivabilité à droite + interprétation, cas types 2021 N, 2022 R, 2023 R) : la voix calcule le taux jusqu'à −∞, la vue s'arrête sur `taux` ; l'élève conclut (pas dérivable, demi-tangente verticale) avant que la double barre et la phrase s'écrivent. |
+| `df_ec3_etude_b` | Une étude complète, pas à pas : le signe de f′ | ✏️ 🔊 | Étape 3, le signe de f′ : l'élève trouve le minimum. Voix gardée ; 2ᵉ PASSE : la vue `etude_pas&depart=demi_tangente` écrit la dérivée, la phrase du signe et la ligne f′ (− 0 +) à leurs mots, et s'arrête avant les flèches et le minimum. |
+| `df_ec3_etude_c` | Une étude complète, pas à pas : le minimum, O, la branche infinie | ✏️ 🆕 voix | 2ᵉ PASSE : `etude_pas&depart=ligne_signe` : les flèches et le minimum, f(0) = 0, puis f(x)/x → +∞ ; l'interprétation (branche) n'est écrite qu'après la réponse ; la courbe n'est plus tracée ici (elle se construit en d et e). RÉÉCRIT : le minimum confirmé, f(0) = 0, puis l'étape 5 posée à l'élève (lim f(x)/x = +∞ : quelle branche ?) avant la correction ; la courbe se trace avec l'animation. Avant, la réponse était dite. |
+
+**Construire la courbe de l'étude, pas à pas ; une solution unique** (`df_n7_b2c`, 2ᵉ passe)
+
+| Diapositive | Titre | | Pourquoi ici |
+|---|---|---|---|
+| `df_ec3_etude_d` | Construire la courbe, pas à pas : les points | ✏️ 🆕 voix | NOUVELLE. Le tracé (17/20) joué sur l'étude qu'on vient de finir : le repère, A et sa demi-tangente, le minimum, O, B(1 ; √2), chacun sur son moment, la case du tableau qui l'annonce s'allume ; l'élève dit comment est la tangente au minimum avant qu'elle soit tracée. |
+| `df_ec3_etude_e` | Construire la courbe, pas à pas : d'un seul trait | 🆕 voix | NOUVELLE. La tangente horizontale, puis la courbe d'un trait en suivant le tableau, puis la branche ; l'ordre à retenir. Pas de question (une par bloc suffit). |
+| `df_ec4_unique` | Rappel : une solution unique au milieu de l'étude | ✏️ 🔊 | La solution unique au milieu de l'étude (7/20), rappel du ch1 au moment où il sert. Passe dans le bloc `df_n7_b2c` avec son « retrouver » et son exercice ; `df_n7_b2` reçoit un « retrouver » et un exercice sur la demi-tangente verticale. |
 
 **Le bilan et la carte** (`df_s7_b3`)
 
@@ -261,15 +277,79 @@ l'étude complète, cœur du national (Analyse 55 %), ne laisse répondre l'él�
 
 ## Animations et exercices animés
 
-- Étude complète : `trace.html?vue=etude&conclusions=0` (tableau de variations et courbe qui se construisent, les
-  conclusions cachées tant que l'élève n'a pas répondu), puis `?vue=etude` pour finir le tracé.
+- Étude complète (2ᵉ passe) : `trace.html?vue=etude_pas` (NOUVELLE vue ; `etude` reste pour le cours en ligne). Moments, dans
+  l'ordre : `enonce`, `domaine` (D_f et le cadre du tableau, bornes seules), `taux`, `demi_tangente` (double barre, phrase),
+  `derivee`, `signe_phrase` (et −2/3 dans la ligne x), `ligne_signe`, `fleches` (minimum −2√3/9), `point_o`, `limite_f_sur_x`,
+  `branche`, puis la construction : `repere_pose`, `trace_a`, `trace_minimum`, `trace_o`, `points_places` (B(1 ; √2)),
+  `tangente_min`, `courbe_tracee`, `courbe_finie`. Chaque diapositive l'ouvre figée là où la précédente s'est arrêtée
+  (`&depart=<moment>`, `depart.js`, `demarrer: reset`) : l'étude continue sur le même tableau, sans tout réécrire.
+- Fonction auxiliaire (2ᵉ passe) : `calculs.html?vue=aux_g` (moments `enonce`, `derivee`, `phrase`, `ligne_x`, `ligne_signe`,
+  `ligne_fleches`, `valeur_min`, `conclusion_g`) et `calculs.html?vue=aux_f` (`enonce`, `derivee`, `forme`, `lien`, `ligne_x_f`,
+  `ligne_signe_f`, `ligne_fleches_f`, `conclusion_f`) : le tableau de variations se construit ligne par ligne (une ligne =
+  un moment). Ajoutées À LA MAIN dans `calculs-vues.js` : à reporter dans les sources du build (`maths_build/…`, hors dépôt).
+- Fichiers ajoutés au dossier : `depart.js` (ouvrir figé sur un moment ; sans `depart` rien ne change) et `fractions.js`
+  (une phrase avec ⟦num|dén⟧ ET un exposant : `exposants.js` du commun écrivait les crochets ; sans ⟦ rien ne change) ;
+  chargés par `trace.html` et `calculs.html`. Vues du cours en ligne vérifiées sans erreur (va5, dv6, etapes, etude, lecture).
 - Les autres animations sont gardées : sécante qui glisse, demi-tangentes, rectangle du produit, tangente qui glisse et
   qui roule, branches, position, symétrie, tracé, miroir.
 
+## 2ᵉ passe (18 novembre 2026) : les cas types joués pas à pas
+
+| Cas type (fréquence) | Avant | Après |
+|---|---|---|
+| Dérivabilité en un point (3/20) | `df_nd4_calcul`, `df_nd4_calcul_b` (calculs joués ligne par ligne) | inchangé |
+| Droite / gauche, interprétation (2021 N, 2022 R, 2023 R) | `df_dt1`…`df_dt6_morceaux` ; `df_ec3_etude_a2` montré | `df_ec3_etude_a2` devient une question : le taux est joué, l'élève conclut avant la phrase |
+| Tangente (4 sujets) | `df_tg1`…`df_tg3_verifier` | inchangé ; tangente au minimum demandée en `df_ec3_etude_d` |
+| Montrer f′(x) = … (20/20) | `df_dv6_montrer` (question de méthode) | + `df_va8_aux_c` : l'élève fait l'étape du même dénominateur |
+| Signe de f′, tableau qui se construit (18/20) | `df_va3`…`df_va5`, `df_ec3_etude_b` (tableau écrit d'un coup) | `etude_pas` : ligne x, puis f′, puis f(x), chacune à son moment ; `aux_g`, `aux_f` de même |
+| Fonction auxiliaire (9/20) | `df_va7_auxiliaire` lu d'un bloc, réponse dite avant la question | `df_va7` (principe, réponse retirée) + `df_va8_aux_a` → `_d` (quatre questions, un tableau par partie) |
+| Extremum → inégalité (2021 N, R) | `df_va6_extremum` + exercice du bloc `df_n3_b4` | inchangé |
+| Asymptotes, branche parabolique (8/20, 16/20) | `df_bi1`…`df_bi7` ; `df_ec3_etude_c` | `df_ec3_etude_c` : l'interprétation n'est plus écrite avant la réponse |
+| Position relative (10/20) | `df_pr1`…`df_pr3_tableau` | inchangé |
+| Construire la courbe (17/20) | `df_tr1`…`df_tr5` (x + 1/x, montré) ; courbe de l'étude tracée d'un coup en `df_ec3_etude_c` | + `df_ec3_etude_d` (points un par un, question) et `df_ec3_etude_e` (tangente, trait, branche) |
+| Point d'inflexion (11/20) | `df_co1`…`df_co4_changeant` | inchangé |
+| Réciproque : J, (f⁻¹)′, courbe (8, 6, 4 sujets) | `df_rec1`…`df_rec6_courbe` | inchangé |
+
+**Questions dont la vue ou la voix montrait la réponse** : `df_ec3_etude` (titre de la vue « sur [−1 ; +∞[ » et −1 au
+tableau → arrêt sur le titre seul) ; `df_ec3_etude_c` (la vue traçait déjà la courbe qui monte à la verticale
+avant « quelle branche ? » → la courbe vient après, arrêt sur la limite) ; `df_va7_auxiliaire` (la voix disait « f est croissante »
+→ phrase retirée, arrêt sur `lien`) ; `df_ec3_etude_b` (`start` sans `play_until` → la vue écrit jusqu'à la ligne f′ seulement).
+
+### Rejeu après la réponse (pour le lecteur)
+
+| Diapositive | URL de la vue | Moment(s) à rejouer |
+|---|---|---|
+| `df_va7_auxiliaire` | `calculs.html?vue=va7` | `conclusion` |
+| `df_va8_aux_a` | `calculs.html?vue=aux_g` | `ligne_signe` |
+| `df_va8_aux_b` | `calculs.html?vue=aux_g&depart=ligne_x` | `conclusion_g` |
+| `df_va8_aux_c` | `calculs.html?vue=aux_f` | `forme` |
+| `df_va8_aux_d` | `calculs.html?vue=aux_f&depart=derivee` | `ligne_fleches_f`, `conclusion_f` |
+| `df_ec3_etude` | `trace.html?vue=etude_pas` | `domaine` |
+| `df_ec3_etude_a2` | `trace.html?vue=etude_pas&depart=domaine` | `demi_tangente` |
+| `df_ec3_etude_b` | `trace.html?vue=etude_pas&depart=demi_tangente` | `fleches` |
+| `df_ec3_etude_c` | `trace.html?vue=etude_pas&depart=ligne_signe` | `branche` |
+| `df_ec3_etude_d` | `trace.html?vue=etude_pas&depart=branche` | `tangente_min` |
+
+### Mots (2ᵉ passe)
+
+Remplacés : « dérivables » (0) → « un polynôme, et un sur x dérivable » ; « معطي » (1) → « كاين » ; « الأطراف » (0) →
+« les bornes » ; « lim » (1) → « la limite » ; « trait » (0) → « خط صغير » ; « droites », « tangentes » (1) → « le repère,
+les points et la tangente » ; « مستوية » (0) → « la tangente horizontale » ; « conclure » (2) → « نستنتجو » ;
+« trace-t-on » (0) → « كيفاش كتكون ». Gardé, à écouter : « demi-tangente » (2, terme du programme).
+
 ## Ce qui reste à faire
 
-- Voix : `math_ch2_derivation_etude_fonctions_voix.json` (12 pistes, dont 5 diapositives).
+- 2ᵉ passe : voix de 8 diapositives (`df_va7_auxiliaire`, `df_va8_aux_a` → `_d`, `df_ec3_etude_a2`, `_d`, `_e`), 6
+  démonstrations et 6 énoncés (`_voix.json`, 31 pistes en tout) ; réactions préparées des 6 nouvelles questions
+  (`reactions_a_preparer`). Le rejeu après la réponse (tableau ci-dessus) est à brancher dans le lecteur.
+- Questions de rappel dont la VOIX dit la réponse juste avant (pas touchées, voix enregistrées) : `df_nd1_secante`,
+  `df_tg3_verifier`, `df_dt6_morceaux`, `df_va4_tableau`, `df_tr3_points`, `df_tr6_lire`. À reprendre si on refait leurs voix.
+- Sur téléphone en paysage (724 × 350), les notes de `etude_pas` (comme celles de `etude`) sont plus petites que 15 px :
+  le plan de `large.js` donne la moitié du cadre au repère. À revoir dans `large.js` pour toutes les vues « repère à droite ».
+
+- Voix (1ʳᵉ passe) : `math_ch2_derivation_etude_fonctions_voix.json` (12 pistes, dont 5 diapositives ; 31 après la 2ᵉ passe).
 - Réactions préparées : la question d'étape 5 (`df_ec3_etude_c`) reprend des réactions de la réserve ; celles qui n'ont
   pas de voix sont dans la liste. `df_tg3_verifier/e0` n'avait déjà pas de réactions.
-- Le contrôle `verifier_pointage_simulations.py` ne signale rien de nouveau sauf : `df_ec3_etude_a2` garde la même
-  scène que `df_ec3_etude` (voulu : l'étude continue sur le même tableau) et les temps estimés des pistes sans voix.
+- Le contrôle `verifier_pointage_simulations.py` : aucune ligne MOMENT ni REPERE ; les lignes IFRAME/DEPART de l'étude
+  complète ont disparu (URL distinctes avec `depart`, `demarrer: reset`) ; restent des GESTE « trop serrés » calculés sur
+  les pistes sans voix (durée inconnue), à revoir une fois les voix faites.
