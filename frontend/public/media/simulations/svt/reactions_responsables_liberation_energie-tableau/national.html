@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le national joué au tableau — énergie</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="svt.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un document d’examen national rejoué au tableau, étape par étape : les valeurs naissent de l’animation, puis le tableau"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="peinture.js"></script>
+<script>
+/*
+ * Le national joué au tableau, cours SVT « Libération de l’énergie » (2ᵉ passe, 18 novembre 2026 ; règles 33, 35 et 41
+ * du professeur, règle 14 de simulations-au-tableau). Un exercice d’examen n’est pas montré fini : le document naît de
+ * l’animation, une étape par moment, puis le tableau ; la correction de chaque consigne reste cachée tant que l’élève
+ * n’a pas répondu.
+ *   ?vue=sportifs    : examen 2016 N, documents 1 et 2 — personne entraînée / non entraînée, même effort :
+ *                      O₂ consommé 5,5 / 2,5 L/min, acide lactique 6 / 12 mmol/L, mitochondries 11 % / 5 % du volume
+ *                      de la cellule, enzymes mitochondriales importante / faible ; puis le tableau, la comparaison du
+ *                      barème, l’explication de la fatigabilité.
+ *                      Moments : effort 2,6 ; o2 6 ; lactique 9,4 ; mitochondries 12,8 ; tableau 16 ; comparaison 19,6 ;
+ *                      explication 24.
+ *   ?vue=restitution : examen 2024 R (définir la fermentation lactique ; sens des protons) et 2022 N (QCM 1).
+ *                      Moments : cadres 2,4 ; nature 4,6 ; lieu 6,6 ; produit 8,6 ; phrase 10,6 ; membrane 13,6 ;
+ *                      fleche_chaine 16 ; fleche_sphere 18,4 ; qcm 21,4 ; elimine_a 23,6 ; elimine_c 25,4 ;
+ *                      elimine_d 27 ; bonne 28,6.
+ *   ?vue=levures     : deux cultures de levures avec et sans O₂ : glucose consommé 150 g / 45 g, levures formées
+ *                      1,970 g / 0,255 g, éthanol absent / présent ; puis le tableau et le rapport par gramme de glucose.
+ *                      Moments : flacons 2,4 ; aerobie 7 ; anaerobie 11 ; tableau 14,6 ; rapport 18.
+ *   ?vue=marquage    : glucose marqué au ¹⁴C suivi de T0 à T4 (milieu extracellulaire, hyaloplasme, mitochondrie) ;
+ *                      les molécules radioactives bougent, les « + » s’écrivent, puis le tableau.
+ *                      Moments : t0 2,4 ; t1 5 ; t2 7,6 ; t3 10,2 ; t4 12,8 ; tableau 16.
+ * Options : ?depart=<moment> (la page s’ouvre figée sur ce moment, ce qui précède déjà au tableau) ;
+ *           ?cacher=<moment> : ce moment et tout ce qui le suit ne s’écrivent pas (la correction attend la réponse de
+ *           l’élève) ; set_parameters {conclusions: true} les montre, {conclusions: false} les cache de nouveau.
+ * Page nouvelle : aucune diapositive du cours en ligne ne l’utilise.
+ * Repères calculés (déclarés ici en toutes lettres pour le contrôle voix ↔ simulation) : sportifs 'muscle_A', 'muscle_B',
+ * 'o2_A', 'o2_B', 'lac_A', 'lac_B', 'fibre_A', 'fibre_B', 'tableau', 'ligne_mito', 'ligne_enz', 'ligne_o2', 'ligne_lact',
+ * 'comparaison', 'explication' ; restitution 'enonce', 'cadre_nature', 'cadre_lieu', 'cadre_produit', 'phrase', 'membrane',
+ * 'chaine', 'sphere', 'fleche_chaine', 'fleche_sphere', 'prop_a', 'prop_b', 'prop_c', 'prop_d', 'qcm' ; levures
+ * 'flacon_aero', 'flacon_anaero', 'mesures_aero', 'mesures_anaero', 'ethanol', 'tableau', 'rapport' ; marquage 'milieu',
+ * 'hyaloplasme', 'mitochondrie', 'lecture', 'tableau'.
+ */
+const { bulle, protocole } = window.Tableau;
+const { Scene, Chrono, Apparitions, fr, doux, mix } = window.SVTTableau;
+const P = window.SVTPeinture, TAU = Math.PI * 2;
+const $ = id => document.getElementById(id);
+const Q = new URLSearchParams(location.search);
+const VUE = Q.get('vue') || 'sportifs';
+const CACHER = Q.get('cacher');
+const R = { conclusions: !CACHER };
+let TK = 1;
+const tk = v => Math.round(v * TK);
+
+/* Le découpage d’un texte en lignes qui tiennent dans une largeur (mesuré avec le kit). */
+function couper(c, s, w, taille) {
+  const mots = s.split(' '), lignes = []; let cur = '';
+  for (const m of mots) { const e = cur ? cur + ' ' + m : m; if (c.largeurTexte(e, taille) > w && cur) { lignes.push(cur); cur = m; } else cur = e; }
+  if (cur) lignes.push(cur);
+  return lignes;
+}
+
+/* Petit muscle peint (règle 32 ; même peinture que le cours du muscle). f : 0 au repos, 1 contracté. */
+function peindreMuscle(ctx, x, yc, H, W, f) {
+  const L = (H - 20) * (1 - 0.12 * f), Wd = W * (1 + 0.14 * f), y1 = yc - L / 2, y2 = yc + L / 2;
+  const tendon = (ya, yb) => { const g = ctx.createLinearGradient(x - 4, 0, x + 4, 0); g.addColorStop(0, '#bdb8ae'); g.addColorStop(.5, '#ffffff'); g.addColorStop(1, '#cbc5ba'); ctx.fillStyle = g; ctx.fillRect(x - 3, Math.min(ya, yb), 6, Math.abs(yb - ya)); };
+  tendon(yc - H / 2, y1 + 3); tendon(y2 - 3, yc + H / 2);
+  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.35)'; ctx.shadowBlur = 5; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 2;
+  const g = ctx.createLinearGradient(x - Wd / 2, 0, x + Wd / 2, 0);
+  g.addColorStop(0, '#7a1626'); g.addColorStop(.3, '#c23a4a'); g.addColorStop(.45, '#e0707a'); g.addColorStop(.7, '#b83242'); g.addColorStop(1, '#6d1220');
+  ctx.beginPath(); ctx.moveTo(x - 4, y1); ctx.bezierCurveTo(x - Wd * .62, y1 + L * .25, x - Wd * .58, y1 + L * .7, x - 4, y2); ctx.lineTo(x + 4, y2);
+  ctx.bezierCurveTo(x + Wd * .58, y1 + L * .7, x + Wd * .62, y1 + L * .25, x + 4, y1); ctx.closePath(); ctx.fillStyle = g; ctx.fill();
+  ctx.strokeStyle = 'rgba(255,200,205,.25)'; ctx.lineWidth = 1;   // les fibres
+  for (let k = -2; k <= 2; k++) { ctx.beginPath(); ctx.moveTo(x + k * Wd * .08, y1 + 6); ctx.quadraticCurveTo(x + k * Wd * .16, yc, x + k * Wd * .08, y2 - 6); ctx.stroke(); }
+  ctx.restore();
+}
+
+/* Un tableau écrit à la craie, une ligne à la fois. lignes[0] = en-têtes ; quand[r] = instant d’apparition de la ligne r. */
+function tableau(c, ecrit, cle, x0, y0, cw, hl, lignes, quand, t, couleurs) {
+  const w = cw.reduce((a, b) => a + b, 0), xs = cw.reduce((a, v, i) => (a.push(i ? a[i - 1] + cw[i - 1] : x0), a), []);
+  lignes.forEach((ln, r) => {
+    if (t < quand[r]) return;
+    const y = y0 + r * hl;
+    ecrit.ecrire(c, cle + r, () => {
+      c.ligne(x0, y + hl - 4, x0 + w, y + hl - 4, { couleur: 'tresfaible', largeur: 1.2, duree: .15 });
+      ln.forEach((s, j) => {
+        const taille = tk(r === 0 ? 17 : 18), morceaux = String(s).split('\n');
+        morceaux.forEach((m, k) => c.texte(m, xs[j] + cw[j] / 2, y + hl / 2 + 6 + (k - (morceaux.length - 1) / 2) * tk(21), { couleur: r === 0 ? 'blanc' : (couleurs ? couleurs(r, j) : 'blanc'), taille, align: 'center', max: cw[j] - 8, gras: r > 0 && j > 0 }));
+      });
+    });
+  });
+  return { x0, y0, w, xs };
+}
+
+/* ── Vues ── */
+const V = {};
+
+/* ─── 2016 N, documents 1 et 2 : entraînée / non entraînée ─── */
+V.sportifs = (() => {
+  const M = { effort: 2.6, o2: 6, lactique: 9.4, mitochondries: 12.8, tableau: 16, comparaison: 19.6, explication: 24 }, FIN = 24.4;
+  const MOTIFS = { effort: 'deux personnes, le même effort', o2: 'O₂ consommé : 5,5 L/min (entraînée), 2,5 L/min (non entraînée)',
+    lactique: 'acide lactique : 6 mmol/L (entraînée), 12 mmol/L (non entraînée)', mitochondries: 'mitochondries : 11 % du volume (entraînée), 5 % (non entraînée)',
+    tableau: 'le tableau des documents 1 et 2', comparaison: 'la comparaison, comme au barème', explication: 'l’explication de la fatigabilité' };
+  const P2 = [
+    { id: 'A', nom: 'Personne entraînée', couleur: 'cyan', o2: 5.5, lac: 6, mito: 11, enz: 'importante', nmito: 7 },
+    { id: 'B', nom: 'Personne non entraînée', couleur: 'orange', o2: 2.5, lac: 12, mito: 5, enz: 'faible', nmito: 3 },
+  ];
+  const PH = { o2: [3.2, 6], lac: [6.6, 9.4], mito: [10, 12.8] }, T_TAB = 13.4;
+  function dessiner(c) {
+    const L = scene.L, t = chrono.t;
+    if (t < T_TAB) {
+      const cw = (L - 40) / 2, u = cw / 360;
+      P2.forEach((p, k) => {
+        const x0 = 20 + cw * k, xc = x0 + cw / 2;
+        ecrit.ecrire(c, 'nom' + k, () => c.texte(p.nom, xc, 34, { couleur: p.couleur, taille: tk(20), align: 'center', gras: true, max: cw - 10 }));
+        if (k === 1) ecrit.ecrire(c, 'sep', () => c.ligne(x0 - 4, 20, x0 - 4, 400, { couleur: 'tresfaible', largeur: 1.2, pointille: [6, 6] }));
+        // le muscle peint, qui se contracte au même rythme chez les deux (le même effort)
+        const f = t > 0.6 ? Math.sin((t - 0.6) * Math.PI * 1.6) ** 2 : 0;
+        const xm = x0 + 34 * u;
+        c.direct(() => peindreMuscle(c.ctx, xm, 205, 230, 34 * Math.min(1.2, u), f));
+        c.repere('muscle_' + p.id, xm - 30, 84, 60, 250, 'le muscle de la ' + p.nom.toLowerCase());
+        // les deux jauges : O₂ consommé, acide lactique
+        const yb = 330, H = 200, bw = 38 * Math.min(1.25, u);
+        [['o2', p.o2, 6, 'O₂', '(L/min)', 'cyan', 86], ['lac', p.lac, 14, 'ac. lactique', '(mmol/L)', 'rose', 156]].forEach(([id, v, max, n1, n2, col, px]) => {
+          const [a, b] = PH[id], bx = x0 + px * u;
+          if (t < a) return;
+          const h = H * v / max * doux(chrono.part(a, b, t)), val = v * doux(chrono.part(a, b, t));
+          c.direct(() => { const g = c.ctx, gr = g.createLinearGradient(bx, yb - h, bx + bw, yb); gr.addColorStop(0, c.couleur(col)); gr.addColorStop(1, 'rgba(255,255,255,.25)'); g.globalAlpha = .8; g.fillStyle = gr; g.fillRect(bx, yb - h, bw, h); g.globalAlpha = 1; });
+          c.rect(bx - 2, yb - H - 2, bw + 4, H + 4, { couleur: 'tresfaible', arrondi: 4, duree: .2 });
+          c.direct(() => c.texte(fr(val, 1), bx + bw / 2, yb - h - 8, { couleur: col, taille: tk(19), align: 'center', gras: true }));
+          ecrit.ecrire(c, `lab${id}${k}`, () => { c.texte(n1, bx + bw / 2, yb + tk(24), { couleur: col, taille: tk(16), align: 'center' }); c.texte(n2, bx + bw / 2, yb + tk(44), { couleur: col, taille: tk(16), align: 'center' }); });
+          c.repere(`${id}_${p.id}`, bx - 10, yb - H - 26, bw + 20, H + 76, `${id === 'o2' ? 'le dioxygène consommé' : 'l’acide lactique'}, ${p.nom.toLowerCase()}`);
+        });
+        // la coupe d’une fibre : ses mitochondries (part du volume de la cellule)
+        const [a, b] = PH.mito;
+        if (t >= a) {
+          const fx = x0 + cw - 70 * u, fy = 168, fr0 = 62 * Math.min(1.2, u), al = doux(chrono.part(a, a + 1.2, t));
+          c.direct(() => {
+            const g = c.ctx; g.save(); g.globalAlpha = al;
+            P.cellule(g, fx, fy, fr0, fr0 * .92, { graine: 31 + k, grains: 40 });
+            const n = Math.round(p.nmito * doux(chrono.part(a + .4, b - .4, t)));
+            for (let i = 0; i < n; i++) { const an = i * TAU / p.nmito + .4, d = fr0 * (i % 2 ? .52 : .6); P.mitochondrie(g, fx + Math.cos(an) * d, fy + Math.sin(an) * d * .9, 17, 9, { angle: an, cretes: 4, grains: 4, graine: 7 + i }); }
+            g.restore();
+          });
+          if (t >= b - .6) ecrit.ecrire(c, 'mito' + k, () => {
+            c.texte(`mitochondries : ${p.mito} %`, fx, fy + fr0 + tk(28), { couleur: p.couleur, taille: tk(17), align: 'center', gras: true, max: 180 * u });
+            c.texte('du volume de la cellule', fx, fy + fr0 + tk(50), { couleur: p.couleur, taille: tk(15), align: 'center', max: 180 * u });
+            c.texte(`enzymes : ${p.enz}`, fx, fy + fr0 + tk(74), { couleur: p.couleur, taille: tk(16), align: 'center', max: 180 * u });
+          });
+          c.repere('fibre_' + p.id, fx - fr0 - 6, fy - fr0 - 6, 2 * fr0 + 12, 2 * fr0 + 90, 'les mitochondries de la ' + p.nom.toLowerCase());
+        }
+      });
+      if (t >= 0.8 && t < PH.o2[0] + 1) ecrit.ecrire(c, 'effort', () => c.texte('même effort physique', L / 2, 404, { couleur: 'jaune', taille: tk(18), align: 'center' }));
+      return;
+    }
+    // le tableau des documents 1 et 2 : les valeurs viennent de l’animation
+    const w = Math.min(L - 40, 760), x0 = (L - w) / 2, cw = [w * .46, w * .27, w * .27];
+    ecrit.ecrire(c, 'titre_tab', () => c.texte('Documents 1 et 2 (examen 2016 N), même effort', L / 2, 30, { couleur: 'jaune', taille: tk(18), align: 'center', max: L - 30 }));
+    const lignes = [['', 'entraînée', 'non entraînée'], ['volume des mitochondries (%)', '11', '5'], ['activité des enzymes mitochondriales', 'importante', 'faible'],
+      ['consommation de O₂ (L/min)', '5,5', '2,5'], ['acide lactique produit (mmol/L)', '6', '12']];
+    const T0 = 13.6, tb = tableau(c, ecrit, 'tab', x0, 42, cw, tk(36), lignes, [T0, T0 + .5, T0 + 1, T0 + 1.5, T0 + 2], t, (r, j) => (j === 0 ? 'blanc' : j === 1 ? 'cyan' : 'orange'));
+    c.repere('tableau', x0, 42, w, 5 * tk(36), 'le tableau des documents 1 et 2');
+    ['ligne_mito', 'ligne_enz', 'ligne_o2', 'ligne_lact'].forEach((id, r) => c.repere(id, x0, 42 + (r + 1) * tk(36), w, tk(36), lignes[r + 1][0]));
+    const ok = k => t >= M[k] - 2.4 && permis(k);
+    const yC = 42 + 5 * tk(36) + tk(24);
+    if (ok('comparaison')) {
+      const L3 = ['Chez la personne non entraînée, par rapport à l’entraînée :', '• volume des mitochondries plus faible (5 % contre 11 %), enzymes mitochondriales peu actives ;',
+        '• consommation de O₂ plus faible (2,5 L/min contre 5,5 L/min) ;', '• acide lactique plus élevé (12 mmol/L contre 6 mmol/L).'];
+      L3.forEach((s, i) => { if (t >= M.comparaison - 2.4 + i * .6) ecrit.ecrire(c, 'cmp' + i, () => c.texte(s, 24, yC + i * tk(24), { couleur: i ? 'blanc' : 'cyan', taille: tk(16), max: L - 40 })); });
+      c.repere('comparaison', 20, yC - tk(18), L - 40, 4 * tk(24) + 6, 'la comparaison écrite comme le barème');
+    }
+    if (ok('explication')) {
+      const yE = yC + 4 * tk(24) + tk(8);
+      const E = ['Explication : la personne non entraînée renouvelle son ATP surtout par la fermentation lactique', '→ peu d’ATP produit (2 ATP par glucose) → fatigabilité élevée.'];
+      E.forEach((s, i) => { if (t >= M.explication - 2.4 + i * 1.2) ecrit.ecrire(c, 'exp' + i, () => c.texte(s, 24, yE + i * tk(24), { couleur: 'rose', taille: tk(16), max: L - 40, gras: true })); });
+      c.repere('explication', 20, yE - tk(18), L - 40, 2 * tk(24) + 6, 'l’explication de la fatigabilité');
+    }
+  }
+  function voit() {
+    const t = chrono.t, m = ['Examen 2016 N, documents 1 et 2 : personne entraînée et non entraînée, même effort.'];
+    if (t >= PH.o2[1]) m.push('O₂ consommé : 5,5 L/min (entraînée), 2,5 L/min (non entraînée).');
+    if (t >= PH.lac[1]) m.push('Acide lactique : 6 mmol/L (entraînée), 12 mmol/L (non entraînée).');
+    if (t >= PH.mito[1]) m.push('Mitochondries : 11 % du volume (entraînée), 5 % (non entraînée) ; enzymes mitochondriales : importante, faible.');
+    if (t >= T_TAB) m.push('Les valeurs sont maintenant dans le tableau.');
+    if (t >= M.comparaison - 2.4 && permis('comparaison')) m.push('La comparaison du barème est écrite.');
+    if (t >= M.explication - 2.4 && permis('explication')) m.push('L’explication est écrite : fermentation lactique, peu d’ATP, fatigabilité élevée.');
+    else if (!R.conclusions) m.push('(La correction reste cachée jusqu’à la réponse de l’élève.)');
+    return m.join(' ');
+  }
+  return { M, FIN, MOTIFS, dessiner, voit, titre: 'Qui respire, qui fermente ? (2016 N)', depart: 'Deux personnes, le même effort…' };
+})();
+
+/* ─── Restitution : 2024 R (définir, sens des protons) et 2022 N (QCM 1) ─── */
+V.restitution = (() => {
+  const M = { cadres: 2.4, nature: 4.6, lieu: 6.6, produit: 8.6, phrase: 10.6, membrane: 13.6, fleche_chaine: 16, fleche_sphere: 18.4,
+    qcm: 21.4, elimine_a: 23.6, elimine_c: 25.4, elimine_d: 27, bonne: 28.6 }, FIN = 29;
+  const MOTIFS = { cadres: 'définir : nature, lieu et conditions, produits', nature: 'nature : dégradation incomplète du glucose', lieu: 'lieu : hyaloplasme, sans dioxygène',
+    produit: 'produits : acide lactique et peu d’énergie', phrase: 'la définition en une phrase', membrane: 'la membrane interne, refaite de mémoire',
+    fleche_chaine: 'chaîne respiratoire : matrice → espace intermembranaire', fleche_sphere: 'sphère pédonculée : espace intermembranaire → matrice',
+    qcm: 'le QCM 2022 N', elimine_a: 'a : le sens est faux', elimine_c: 'c : membrane externe, faux', elimine_d: 'd : membrane externe, faux', bonne: 'la réponse : (1, b)' };
+  const T_PROT = 12.4;
+  const CADRES = [['1. nature', ['dégradation', 'incomplète', 'du glucose'], 'nature'], ['2. lieu et conditions', ['dans le hyaloplasme,', 'en absence', 'de dioxygène'], 'lieu'],
+    ['3. produits', ['acide lactique', '+ faible quantité', 'd’énergie (2 ATP)'], 'produit']];
+  const PROPS = [['a', 'la sphère pédonculée transporte H⁺ vers l’espace intermembranaire ;', 'elimine_a', 'le sens'],
+    ['b', 'la sphère pédonculée est responsable de la phosphorylation de l’ADP ;', 'bonne', ''],
+    ['c', 'la membrane externe contient des protéines qui transportent les électrons vers le dioxygène ;', 'elimine_c', 'externe'],
+    ['d', 'la membrane externe contient des enzymes d’oxydoréduction.', 'elimine_d', 'externe']];
+  const ok = (k, avance = 0) => chrono.t >= M[k] - avance && permis(k);
+  function dessiner(c) {
+    const L = scene.L, t = chrono.t;
+    if (t < T_PROT) {
+      ecrit.ecrire(c, 'enonce', () => c.texte('Définir la fermentation lactique. (2024 R, 0,5 pt)', L / 2, 36, { couleur: 'jaune', taille: tk(20), align: 'center', max: L - 30 }));
+      c.repere('enonce', 20, 14, L - 40, 32, 'la consigne : définir la fermentation lactique');
+      const w = (L - 80) / 3;
+      CADRES.forEach(([titre, lignes, k], i) => {
+        if (t < 0.8 + i * .5) return;
+        const x = 20 + i * (w + 20), y = 70, h = 170;
+        ecrit.ecrire(c, 'cadre' + i, () => { c.rect(x, y, w, h, { couleur: 'cyan', fond: 'cyan', fondAlpha: .08, arrondi: 10 }); c.texte(titre, x + w / 2, y + tk(28), { couleur: 'cyan', taille: tk(18), align: 'center', gras: true, max: w - 12 }); });
+        c.repere('cadre_' + k, x, y, w, h, titre);
+        if (ok(k, 1.2)) lignes.forEach((s, j) => ecrit.ecrire(c, `c${i}${j}`, () => c.texte(s, x + w / 2, y + tk(70) + j * tk(30), { couleur: 'blanc', taille: tk(19), align: 'center', max: w - 12 })));
+      });
+      if (ok('phrase', 1.6)) {
+        const s = 'La fermentation lactique est une dégradation incomplète du glucose dans le hyaloplasme, en absence de dioxygène, avec production d’acide lactique et d’une faible quantité d’énergie.';
+        const ls = couper(c, s, L - 60, tk(18));
+        ecrit.ecrire(c, 'phrase', () => ls.forEach((l, j) => c.texte(l, 30, 282 + j * tk(26), { couleur: 'vert', taille: tk(18), max: L - 50 })));
+        c.repere('phrase', 24, 262, L - 48, ls.length * tk(26) + 8, 'la définition en une phrase');
+      }
+      return;
+    }
+    // le sens des protons, sur la membrane interne refaite de mémoire (à gauche) ; le QCM 2022 N (à droite)
+    const xs = 20, ws = Math.max(300, L * .42), yM = 200, ep = 30;
+    ecrit.ecrire(c, 'enonce2', () => c.texte('Sens des protons H⁺ (2024 R)', xs + ws / 2, 30, { couleur: 'jaune', taille: tk(19), align: 'center', max: ws }));
+    if (t >= M.membrane - 1.4) {
+      c.direct(() => {
+        const g = c.ctx;
+        g.save(); g.fillStyle = P.rgba(P.T.mitoEsp, .22); g.fillRect(xs, 52, ws, yM - ep / 2 - 52); g.fillStyle = P.rgba(P.T.matrice, .25); g.fillRect(xs, yM + ep / 2, ws, 330 - yM - ep / 2); g.restore();
+        P.membrane(g, xs, yM - ep / 2, ws, ep);
+        P.proteine(g, xs + ws * .3, yM, 46, ep + 22);
+        P.spherePedonculee(g, xs + ws * .74, yM, ep, 1, { r: 17 });
+      });
+      ecrit.ecrire(c, 'compart', () => {
+        c.texte('espace intermembranaire', xs + ws / 2, 80, { couleur: 'orange', taille: tk(18), align: 'center', max: ws - 10 });
+        c.texte('matrice', xs + ws / 2, 318, { couleur: 'cyan', taille: tk(18), align: 'center' });
+        c.texte('chaîne', xs + ws * .3, yM - ep / 2 - 34, { couleur: 'violet', taille: tk(17), align: 'center' });
+        c.texte('sphère', xs + ws * .74 + 30, yM + 64, { couleur: 'jaune', taille: tk(17) });
+      });
+      c.repere('membrane', xs, yM - ep / 2 - 4, ws, ep + 8, 'la membrane interne');
+      c.repere('chaine', xs + ws * .3 - 30, yM - 30, 60, 60, 'une protéine de la chaîne respiratoire');
+      c.repere('sphere', xs + ws * .74 - 24, yM - 20, 48, 76, 'la sphère pédonculée');
+    }
+    if (ok('fleche_chaine', 1.4)) {
+      const x = xs + ws * .3;   // la flèche traverse la protéine de la chaîne
+      ecrit.ecrire(c, 'fch', () => { c.fleche(x, 286, x, 112, { couleur: 'rouge', largeur: 3.4 }); c.texte('H⁺', x + 14, 272, { couleur: 'rouge', taille: tk(19), gras: true }); });
+      ecrit.ecrire(c, 'fch_t', () => c.texte('chaîne : matrice → espace intermembranaire', xs + 4, 356, { couleur: 'rouge', taille: tk(17), max: ws }));
+      c.repere('fleche_chaine', x - 16, 108, 50, 182, 'les H⁺ pompés de la matrice vers l’espace intermembranaire');
+    }
+    if (ok('fleche_sphere', 1.4)) {
+      const x = xs + ws * .74;   // la flèche traverse la sphère pédonculée
+      ecrit.ecrire(c, 'fsp', () => { c.fleche(x, 112, x, 290, { couleur: 'vert', largeur: 3.4 }); c.texte('H⁺', x - 40, 130, { couleur: 'vert', taille: tk(19), gras: true }); });
+      ecrit.ecrire(c, 'fsp_t', () => c.texte('sphère : espace intermembranaire → matrice', xs + 4, 384, { couleur: 'vert', taille: tk(17), max: ws }));
+      c.repere('fleche_sphere', x - 16, 108, 32, 186, 'les H⁺ qui reviennent par la sphère pédonculée');
+    }
+    if (t >= M.qcm - 1.6) {
+      const xq = xs + ws + 30, wq = L - xq - 16, tq = tk(17);
+      ecrit.ecrire(c, 'qcm_t', () => c.texte('QCM (2022 N) — 1. Dans la mitochondrie :', xq, 30, { couleur: 'jaune', taille: tk(18), max: wq }));
+      let y = 66;
+      PROPS.forEach(([l, s, k, raison], i) => {
+        const ls = couper(c, s, wq - 64, tq), y0 = y;
+        if (t >= M.qcm - 1.4 + i * .3) ecrit.ecrire(c, 'p' + i, () => { c.texte(l + '.', xq, y0, { couleur: 'blanc', taille: tk(19), gras: true }); ls.forEach((m, j) => c.texte(m, xq + 60, y0 + j * tk(22), { couleur: 'blanc', taille: tq, max: wq - 64 })); });
+        c.repere('prop_' + l, xq - 4, y0 - tk(18), wq, ls.length * tk(22) + 6, 'la proposition ' + l);
+        if (k !== 'bonne' && ok(k, 1.2)) ecrit.ecrire(c, 'x' + i, () => {
+          ls.forEach((m, j) => { const yy = y0 + j * tk(22) - tq * .3; c.ligne(xq + 58, yy, xq + 62 + Math.min(wq - 64, c.largeurTexte(m, tq)), yy, { couleur: 'rouge', largeur: 2.2 }); });
+          c.texte('✗', xq + 26, y0, { couleur: 'rouge', taille: tk(19), gras: true });
+          c.texte(raison, xq, y0 + tk(22), { couleur: 'rouge', taille: tk(15), max: 58 });
+        });
+        if (k === 'bonne' && ok('bonne', 1)) ecrit.ecrire(c, 'ok', () => { c.rect(xq - 8, y0 - tk(22), wq, ls.length * tk(22) + 12, { couleur: 'vert', arrondi: 8, largeur: 2.4 }); });
+        y += ls.length * tk(22) + tk(18);
+      });
+      if (ok('bonne', 1)) ecrit.ecrire(c, 'couple', () => c.texte('Réponse : (1, b)', xq, Math.min(408, y + tk(10)), { couleur: 'vert', taille: tk(21), gras: true }));
+      c.repere('qcm', xq - 8, 10, wq + 8, y - 10, 'le QCM de 2022 N');
+    }
+  }
+  function voit() {
+    const t = chrono.t, m = [];
+    if (t < T_PROT) {
+      m.push('Consigne 2024 R : définir la fermentation lactique ; trois cadres : nature, lieu et conditions, produits.');
+      if (ok('nature', 1.2)) m.push('Nature : dégradation incomplète du glucose.');
+      if (ok('lieu', 1.2)) m.push('Lieu : hyaloplasme, en absence de dioxygène.');
+      if (ok('produit', 1.2)) m.push('Produits : acide lactique et faible quantité d’énergie (2 ATP).');
+      if (ok('phrase', 1.6)) m.push('La définition complète est écrite en une phrase.');
+    } else {
+      m.push('La membrane interne : espace intermembranaire en haut, matrice en bas, une protéine de la chaîne et une sphère pédonculée.');
+      if (ok('fleche_chaine', 1.4)) m.push('Flèche : chaîne respiratoire, H⁺ de la matrice vers l’espace intermembranaire.');
+      if (ok('fleche_sphere', 1.4)) m.push('Flèche : sphère pédonculée, H⁺ de l’espace intermembranaire vers la matrice.');
+      if (t >= M.qcm - 1.6) m.push('QCM 2022 N, quatre propositions a, b, c, d.');
+      PROPS.forEach(([l, , k]) => { if (k !== 'bonne' && ok(k, 1.2)) m.push(`Proposition ${l} rayée.`); });
+      if (ok('bonne', 1)) m.push('Réponse entourée : (1, b).');
+    }
+    if (!R.conclusions) m.push('(La correction reste cachée jusqu’à la réponse de l’élève.)');
+    return m.join(' ');
+  }
+  return { M, FIN, MOTIFS, dessiner, voit, titre: 'Restitution comme au national', depart: 'La consigne d’abord…' };
+})();
+
+/* ─── Les levures avec et sans O₂ : masses, puis tableau et rapport ─── */
+V.levures = (() => {
+  const M = { flacons: 2.4, aerobie: 7, anaerobie: 11, tableau: 14.6, rapport: 18 }, FIN = 18.4;
+  const MOTIFS = { flacons: 'deux cultures : avec O₂ et sans O₂', aerobie: 'avec O₂ : 150 g de glucose, 1,970 g de levures', anaerobie: 'sans O₂ : 45 g de glucose, 0,255 g de levures, éthanol',
+    tableau: 'le tableau des résultats', rapport: 'par gramme de glucose : environ 2,3 fois plus de levures avec O₂' };
+  const C2 = [{ id: 'aero', nom: 'avec O₂ (aérobiose)', couleur: 'cyan', glu: 150, lev: 1.970, eth: 'absent', a: 3, b: 7, n: 16 },
+    { id: 'anaero', nom: 'sans O₂ (anaérobiose)', couleur: 'orange', glu: 45, lev: 0.255, eth: 'présent', a: 7.6, b: 11, n: 5 }];
+  const T_TAB = 12;
+  function dessiner(c) {
+    const L = scene.L, t = chrono.t;
+    if (t < T_TAB) {
+      const cw = (L - 40) / 2;
+      C2.forEach((f, k) => {
+        const x0 = 20 + cw * k, bx = x0 + 24, bw = Math.min(170, cw * .44), by = 96, bh = 230, u = doux(chrono.part(f.a, f.b, t));
+        ecrit.ecrire(c, 'nom' + k, () => c.texte(f.nom, x0 + cw / 2, 34, { couleur: f.couleur, taille: tk(20), align: 'center', gras: true, max: cw - 10 }));
+        c.direct(() => {
+          const g = c.ctx, s = P.becher(g, bx, by, bw, bh, { niveau: .78, teinte: [230, 200, 120], alpha: .38 }).surface;
+          const n = Math.round(4 + (f.n - 4) * u), rr = P.graine(5 + k);
+          for (let i = 0; i < n; i++) P.levure(g, bx + 18 + rr() * (bw - 36), s + 18 + rr() * (by + bh - s - 34), 7, { graine: 40 + i * 7 + k, mitos: k ? 0 : 2 });
+          if (k === 0) { // l’air bulle dans la culture
+            g.save(); g.strokeStyle = 'rgba(220,235,245,.7)'; g.lineWidth = 3; g.beginPath(); g.moveTo(bx + bw - 22, by - 30); g.lineTo(bx + bw - 22, by + bh - 20); g.stroke(); g.restore();
+            for (let i = 0; i < 6; i++) { const yy = by + bh - 24 - ((t * 60 + i * 37) % (by + bh - 24 - s)); P.bulleGaz(g, bx + bw - 22 + Math.sin(i + t * 3) * 4, yy, 3.5); }
+          } else { g.save(); g.fillStyle = 'rgba(150,120,90,.9)'; g.fillRect(bx - 6, by - 10, bw + 12, 12); g.restore(); }   // bouchon : pas d’air
+        });
+        ecrit.ecrire(c, 'lab' + k, () => c.texte(k === 0 ? 'air : O₂' : 'fermé : sans O₂', bx + bw / 2, by + bh + tk(26), { couleur: f.couleur, taille: tk(17), align: 'center' }));
+        c.repere('flacon_' + f.id, bx - 8, by - 12, bw + 16, bh + 20, 'la culture ' + f.nom);
+        // les compteurs, écrits là où se fait la mesure
+        if (t >= f.a) {
+          const tx = bx + bw + 22, tw = x0 + cw - tx - 6;
+          c.direct(() => {
+            c.texte('glucose consommé', tx, 120, { couleur: 'blanc', taille: tk(16), max: tw });
+            c.texte(fr(f.glu * u, 0) + ' g', tx, 120 + tk(28), { couleur: 'jaune', taille: tk(22), gras: true, max: tw });
+            c.texte('levures formées', tx, 200, { couleur: 'blanc', taille: tk(16), max: tw });
+            c.texte(fr(f.lev * u, 3) + ' g', tx, 200 + tk(28), { couleur: f.couleur, taille: tk(22), gras: true, max: tw });
+          });
+          if (t >= f.b) ecrit.ecrire(c, 'eth' + k, () => { c.texte('éthanol (test)', tx, 280, { couleur: 'blanc', taille: tk(16), max: tw }); c.texte(f.eth, tx, 280 + tk(26), { couleur: k ? 'rose' : 'faible', taille: tk(20), gras: true, max: tw }); });
+          c.repere('mesures_' + f.id, tx - 4, 100, tw, 210, 'les mesures ' + f.nom);
+          if (k === 1) c.repere('ethanol', tx - 4, 262, tw, 50, 'l’éthanol, présent sans O₂');
+        }
+      });
+      return;
+    }
+    const w = Math.min(L - 40, 700), x0 = (L - w) / 2, cw = [w * .4, w * .3, w * .3];
+    const lignes = [['', 'avec O₂', 'sans O₂'], ['glucose consommé (g)', '150', '45'], ['levures formées (g)', '1,970', '0,255'], ['éthanol (test)', 'absent', 'présent']];
+    tableau(c, ecrit, 'tab', x0, 20, cw, tk(40), lignes, [12.2, 12.8, 13.4, 14], t, (r, j) => (j === 0 ? 'blanc' : j === 1 ? 'cyan' : 'orange'));
+    c.repere('tableau', x0, 20, w, 4 * tk(40), 'le tableau des résultats');
+    if (t >= 15.2) {
+      const y = 20 + 4 * tk(40) + tk(46);
+      ecrit.ecrire(c, 'r1', () => c.texte('avec O₂ : ⟦1,970|150⟧ ≈ 0,013 g de levures par g de glucose', 30, y, { couleur: 'cyan', taille: tk(18), max: L - 50 }));
+      if (t >= 16.2) ecrit.ecrire(c, 'r2', () => c.texte('sans O₂ : ⟦0,255|45⟧ ≈ 0,0057 g de levures par g de glucose', 30, y + tk(54), { couleur: 'orange', taille: tk(18), max: L - 50 }));
+      if (t >= 17.2) ecrit.ecrire(c, 'r3', () => c.texte('⟦0,013|0,0057⟧ ≈ 2,3 : avec O₂, environ 2,3 fois plus de levures', 30, y + tk(108), { couleur: 'jaune', taille: tk(18), gras: true, max: L - 50 }));
+      c.repere('rapport', 24, y - tk(30), L - 48, tk(150), 'la masse de levures par gramme de glucose');
+    }
+  }
+  function voit() {
+    const t = chrono.t, m = ['Deux cultures de levures avec du glucose : avec O₂ (aérée) et sans O₂ (fermée).'];
+    if (t >= 7) m.push('Avec O₂ : 150 g de glucose consommés, 1,970 g de levures formées, éthanol absent.');
+    if (t >= 11) m.push('Sans O₂ : 45 g de glucose, 0,255 g de levures, éthanol présent.');
+    if (t >= 14) m.push('Le tableau des résultats est écrit.');
+    if (t >= 17.2) m.push('Rapport : 0,013 g contre 0,0057 g de levures par gramme de glucose, environ 2,3 fois plus avec O₂.');
+    return m.join(' ');
+  }
+  return { M, FIN, MOTIFS, dessiner, voit, titre: 'Levures avec et sans O₂', depart: 'Deux cultures de levures…' };
+})();
+
+/* ─── Le glucose marqué au ¹⁴C, de T0 à T4 ─── */
+V.marquage = (() => {
+  const M = { t0: 2.4, t1: 5, t2: 7.6, t3: 10.2, t4: 12.8, tableau: 16 }, FIN = 16.4;
+  const MOTIFS = { t0: 'T0 : glucose radioactif dans le milieu', t1: 'T1 : le glucose entre dans le hyaloplasme', t2: 'T2 : acide pyruvique radioactif dans le hyaloplasme',
+    t3: 'T3 : acide pyruvique et composés nouveaux dans la mitochondrie', t4: 'T4 : CO₂ radioactif dans le milieu', tableau: 'le tableau des résultats' };
+  const MOL = { g: { nom: 'glucose', c: [250, 214, 60], col: 'jaune' }, p: { nom: 'acide pyruvique', c: [250, 140, 50], col: 'orange' },
+    k: { nom: 'composés du cycle de Krebs', c: [240, 110, 190], col: 'rose' }, co2: { nom: 'CO₂', c: [170, 180, 195], col: 'blanc' } };
+  // [milieu, hyaloplasme, mitochondrie] : liste [type, nombre de +]
+  const ETATS = [
+    [[['g', 3]], [], []],
+    [[['g', 1]], [['g', 2]], []],
+    [[], [['p', 2]], [['p', 1]]],
+    [[], [], [['p', 3], ['k', 1]]],
+    [[['co2', 1]], [], [['k', 3]]],
+  ];
+  const TS = [M.t0, M.t1, M.t2, M.t3, M.t4], T_TAB = 14;
+  const plus = n => '+'.repeat(n);
+  function dessiner(c) {
+    const L = scene.L, t = chrono.t;
+    if (t < T_TAB) {
+      const k = TS.reduce((a, v, i) => (t >= v - 1.6 ? i : a), 0), u = doux(chrono.part(TS[k] - 1.6, TS[k] - .4, t));
+      const cx = Math.min(L * .36, 300), cy = 220, rx = Math.min(250, L * .3), ry = 150;
+      const mx = cx + rx * .28, my = cy + 30;
+      c.direct(() => {
+        const g = c.ctx;
+        P.cellule(g, cx, cy, rx, ry, { graine: 21, grains: 70 });
+        P.mitochondrie(g, mx, my, 80, 40, { cretes: 6, graine: 9 });
+        // les molécules radioactives : billes avec un halo (la radioactivité), placées dans leur compartiment
+        const zone = (z, i, n) => {
+          if (z === 0) return [cx + rx * .15 + i * 36, cy - ry - 16 - (i % 2) * 16];   // au-dessus de la cellule, à droite de son nom
+          if (z === 1) return [cx - rx * .55 + i * 36, cy - ry * .35 + (i % 2) * 28];
+          return [mx - 46 + i * 30, my + (i % 2 ? 10 : -10)];
+        };
+        const peindreEtat = (E, a) => E.forEach((liste, z) => { let i = 0; liste.forEach(([ty, n]) => { for (let j = 0; j < n; j++, i++) {
+          const [x, y] = zone(z, i, n), m = MOL[ty];
+          const h = g.createRadialGradient(x, y, 2, x, y, 18); h.addColorStop(0, `rgba(255,255,160,${.35 * a})`); h.addColorStop(1, 'rgba(255,255,160,0)'); g.fillStyle = h; g.beginPath(); g.arc(x, y, 18, 0, TAU); g.fill();
+          if (ty === 'co2') P.co2(g, x, y, 1.1, a); else P.bille(g, x, y, ty === 'g' ? 10 : ty === 'p' ? 8 : 7, m.c, { alpha: a });
+        } }); });
+        if (k > 0 && u < 1) peindreEtat(ETATS[k - 1], 1 - u);
+        peindreEtat(ETATS[k], k === 0 ? doux(chrono.part(.6, 1.8, t)) : u);
+      });
+      ecrit.ecrire(c, 'zones', () => {
+        c.texte('milieu extracellulaire', cx - rx, 40, { couleur: 'blanc', taille: tk(17) });
+        c.texte('hyaloplasme', cx - rx * .55, cy + ry * .5, { couleur: 'vert', taille: tk(17) });
+        c.texte('mitochondrie', mx, my + 62, { couleur: 'orange', taille: tk(17), align: 'center' });
+      });
+      c.repere('milieu', cx - rx, 14, rx * 1.4, 50, 'le milieu extracellulaire');
+      c.repere('hyaloplasme', cx - rx * .8, cy - ry * .6, rx * .7, ry * 1.1, 'le hyaloplasme');
+      c.repere('mitochondrie', mx - 84, my - 44, 168, 88, 'la mitochondrie');
+      // à droite : le temps et les « + » de chaque compartiment, écrits à l’instant où ils se voient
+      const xd = cx + rx + 30, wd = L - xd - 12;
+      if (t >= TS[k] - .6) {
+        c.direct(() => {
+          c.texte('T' + k, xd, 50, { couleur: 'jaune', taille: tk(30), gras: true });
+          ['milieu', 'hyaloplasme', 'mitochondrie'].forEach((nz, z) => {
+            const y = 100 + z * tk(90);
+            c.texte(nz, xd, y, { couleur: 'faible', taille: tk(16), max: wd });
+            const liste = ETATS[k][z];
+            if (!liste.length) c.texte('—', xd, y + tk(28), { couleur: 'faible', taille: tk(18) });
+            liste.forEach(([ty, n], j) => c.texte(`${MOL[ty].nom} ${plus(n)}`, xd, y + tk(28) + j * tk(24), { couleur: MOL[ty].col, taille: tk(18), gras: true, max: wd }));
+          });
+        });
+        c.repere('lecture', xd - 4, 20, wd, 300, 'ce qui est radioactif à T' + k);
+      }
+      ecrit.ecrire(c, 'legende', () => c.texte('+ = quantité de molécules radioactives (¹⁴C)', 20, 408, { couleur: 'faible', taille: tk(15), max: L - 30 }));
+      return;
+    }
+    const w = Math.min(L - 30, 800), x0 = (L - w) / 2, cw = [w * .1, w * .26, w * .3, w * .34];
+    const z = (E, i) => (E[i].length ? E[i].map(([ty, n]) => `${ty === 'k' ? 'cycle de Krebs' : MOL[ty].nom} ${plus(n)}`).join('\n') : '—');
+    const lignes = [['', 'milieu extracellulaire', 'hyaloplasme', 'mitochondrie']].concat(ETATS.map((E, i) => ['T' + i, z(E, 0), z(E, 1), z(E, 2)]));
+    tableau(c, ecrit, 'tab', x0, 10, cw, tk(62), lignes, [14.2, 14.5, 14.8, 15.1, 15.4, 15.7], t, (r, j) => (j === 0 ? 'jaune' : 'blanc'));
+    c.repere('tableau', x0, 10, w, 6 * tk(62), 'le tableau des résultats');
+  }
+  function voit() {
+    const t = chrono.t;
+    if (t >= T_TAB) return 'Le tableau des résultats T0 à T4 est écrit (milieu extracellulaire, hyaloplasme, mitochondrie).';
+    const k = TS.reduce((a, v, i) => (t >= v - 1.6 ? i : a), 0), E = ETATS[k];
+    return `Glucose marqué au ¹⁴C. T${k} : ` + ['milieu', 'hyaloplasme', 'mitochondrie'].map((n, i) => `${n} : ${E[i].length ? E[i].map(([ty, q]) => MOL[ty].nom + ' ' + plus(q)).join(', ') : 'rien'}`).join(' ; ') + '.';
+  }
+  return { M, FIN, MOTIFS, dessiner, voit, titre: 'Le glucose marqué, de T0 à T4', depart: 'Le glucose radioactif est dans le milieu…' };
+})();
+
+const VU = V[VUE] || V.sportifs;
+/* Ce qui appartient à la correction d’une consigne (moment ≥ cacher) n’est montré qu’après la réponse. */
+function permis(k) { return R.conclusions || !(CACHER in VU.M) || VU.M[k] < VU.M[CACHER]; }
+
+function dessiner(c) {
+  scene.cadre(41);
+  TK = scene.L >= 1000 ? 1.15 : 1;
+  VU.dessiner(c);
+  return c.fin();
+}
+const canvas = $('canvas');
+const scene = Scene(canvas, dessiner, { large: true });
+const ecrit = Apparitions(scene);
+const chrono = Chrono({ fin: () => VU.FIN, moments: () => VU.M, motifs: VU.MOTIFS, bouton: $('run'), bulle: $('feedback'), pont: () => pont,
+  depart: VU.depart, reinit: () => ecrit.oublier(), fini: () => VU.titre + ' : tout est au tableau.' });
+scene.avancer = (dt) => { const a = chrono.avancer(dt); if (a) scene.sale = true; return a || VUE === 'sportifs' && chrono.t > 0 && chrono.t < 13.4 && chrono.running; };
+$('run').onclick = chrono.clic;
+window.Tableau.explication({ [VUE]: Object.keys(VU.M).map(k => ({ repere: k, texte: VU.MOTIFS[k] })) });
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'play_until', 'set_parameters'];
+const config = { id: 'svt_energie_national', version: '1.0', title: 'Le national joué au tableau', variants: Object.keys(V).map(id => ({ id, label: V[id].titre })), commands: commandes,
+  command_schema: { play_until: { moment: Object.keys(VU.M).join(' | ') }, set_time: { moment: Object.keys(VU.M).join(' | ') },
+    set_parameters: { conclusions: 'true | false (false : la correction de la consigne reste cachée)' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: VU.titre + '. Document d’examen rejoué étape par étape ; la correction attend la réponse de l’élève.',
+  etat: () => ({ simulation_status: chrono.statut(), current_variant: VUE, ce_qui_se_voit: VU.voit(), moments: VU.M, time_s: +chrono.t.toFixed(2), parameters: { ...R } }),
+  progression: () => (chrono.statut() === 'finished' ? 1 : chrono.t / VU.FIN),
+  executer: (cmd, p) => ({ start: chrono.start, pause: chrono.pause, resume: chrono.resume, reset: chrono.reset,
+    set_time: () => { chrono.setTime(p); scene.sale = true; }, play_until: () => chrono.playUntil(p),
+    set_parameters: () => { if (p && 'conclusions' in p) R.conclusions = p.conclusions !== false && p.conclusions !== 'false'; scene.sale = true; pont.noter('set_parameters', { ...R }); pont.emettre(); } })[cmd]?.() });
+bulle($('feedback'), VU.titre);
+window.__sim = { chrono, scene, VU, R };
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
