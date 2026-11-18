@@ -10,6 +10,7 @@ import ClavierFlottant, { clavier, hauteurClavierTelephone, largeurClavier, useC
 import { matiereDuClavier } from './ClavierScientifique';
 import { enteteDuCahier } from './cahier';
 import { entrerPleinEcran } from './pleinEcran';
+import { diagnosticsDuRappel, diapoSuivante, type EtatGarde } from './parcours';
 
 /**
  * Les questions posées à l'élève sur chaque diapositive sont suspendues pour
@@ -84,6 +85,20 @@ interface FlatSlide {
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
+/** Le rappel sauté (ou revu) part au suivi des acquis : hors score, gardé dans le trajet (skill `suivi-des-acquis`). */
+function noterRappel(deckId: string, slide: CourseSlide, type: 'rappel_saute' | 'rappel_revu') {
+  let jeton = '';
+  try { jeton = localStorage.getItem('token') || ''; } catch { /* sans jeton */ }
+  void fetch('/api/v1/course-player/acquis', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jeton}` },
+    body: JSON.stringify({
+      deck_id: deckId, slide_id: slide.id, slide_title: slide.title || '', cle: 'rappel', type, correct: null, tentative: 1,
+      reponse: type === 'rappel_saute' ? `diagnostic réussi du premier coup : ${diagnosticsDuRappel(slide).join(', ')}`.slice(0, 500) : 'revu à la demande',
+      methodes: {},
+    }),
+  }).catch(() => { /* le suivi ne doit jamais gêner l'élève */ });
+}
+
 export default function CoursePlayer({
   deck,
   progress,
@@ -146,6 +161,18 @@ export default function CoursePlayer({
   const [pleinEcranVoulu, setPleinEcranVoulu] = useState(false);
   const completedSlideIdsRef = useRef(completedSlideIds);
   const current = flatSlides[index];
+  /**
+   * Les rappels déjà sus (`concentration.rappel`, 18 novembre 2026) : en concentration, « Suite → » saute un rappel
+   * dont le diagnostic a été réussi du premier coup. `sautes` : où l'élève est arrivé et ce qui a été sauté (le bouton
+   * « 🔁 Revoir le rappel » y reste) ; `revus` : les rappels rouverts à la demande, jamais resautés.
+   */
+  const deckIdSuivi = deck.stable_id || deck.id;
+  const [sautes, setSautes] = useState<{ arrivee: number; ids: string[] } | null>(null);
+  const revus = useRef<Set<string>>(new Set());
+  const memoireRef = useRef<{ fermerBlocDe: (id: string) => boolean } | null>(null);
+  const lireEtatGarde = useCallback((slideId: string, cle: string): EtatGarde => {
+    try { return JSON.parse(localStorage.getItem(`reponse:${deckIdSuivi}:${slideId}:${cle}`) || 'null') as EtatGarde; } catch { return null; }
+  }, [deckIdSuivi]);
 
   useEffect(() => {
     completedSlideIdsRef.current = completedSlideIds;
@@ -256,10 +283,39 @@ export default function CoursePlayer({
       onComplete?.();
       return;
     }
-    const next = index + 1;
+    let next = index + 1;
+    if (mode === 'concentration') {
+      const r = diapoSuivante(flatSlides.map(f => f.slide), index, lireEtatGarde, revus.current);
+      // un rappel sauté fermait un bloc : le cahier de ce bloc d'abord, puis le cours revient ici (et saute)
+      if (r.sautes.some(id => memoireRef.current?.fermerBlocDe(id))) return;
+      next = r.index;
+      if (r.sautes.length) {
+        r.sautes.forEach(id => { const f = flatSlides.find(x => x.slide.id === id); if (f) noterRappel(deckIdSuivi, f.slide, 'rappel_saute'); });
+        setSautes({ arrivee: next, ids: r.sautes });
+      }
+      if (next >= flatSlides.length) {
+        persist(flatSlides.length - 1, 0, 'completed', nextCompleted);
+        setCourseCompleted(true);
+        onComplete?.();
+        return;
+      }
+    }
     persist(next, 0, 'in_progress', nextCompleted);
     setIndex(next);
-  }, [completedSlideIds, current, flatSlides.length, index, onComplete, persist]);
+  }, [completedSlideIds, current, flatSlides, index, onComplete, persist, mode, lireEtatGarde, deckIdSuivi]);
+
+  /** « 🔁 Revoir le rappel » : le premier rappel sauté s'ouvre ; « Suite → » repasse par les autres, puis revient. */
+  const revoirRappel = useCallback(() => {
+    if (!sautes) return;
+    const i = flatSlides.findIndex(f => f.slide.id === sautes.ids[0]);
+    if (i < 0) return;
+    sautes.ids.forEach(id => revus.current.add(id));
+    noterRappel(deckIdSuivi, flatSlides[i].slide, 'rappel_revu');
+    setSautes(null);
+    setCourseCompleted(false);
+    setIndex(i);
+    persist(i, 0, 'in_progress');
+  }, [sautes, flatSlides, deckIdSuivi, persist]);
 
   const goToPrevious = useCallback(() => {
     if (index <= 0) return;
@@ -311,6 +367,7 @@ export default function CoursePlayer({
     onAvancer: goToNext,
     onQuitter: (avancer) => { if (avancer) goToNext(); setStarted(false); },
   });
+  memoireRef.current = memoire;
   // fenêtre de fin de bloc ouverte : sur téléphone, le tuteur 3D (qui n'y a pas de colonne) se cache au lieu de la
   // couvrir (AIAvatar.css, `body[data-fenetre-bloc]`) ; sa voix continue (14 novembre 2026)
   const fenetreBloc = started && !!memoire.ecran;
@@ -348,6 +405,15 @@ export default function CoursePlayer({
   const commandesDuDeck = !courseCompleted ? (
     <>
       {ouEnEstOn}
+      {sautes && sautes.arrivee === index && (
+        // discret : le rappel sauté (diagnostic réussi du premier coup) reste à portée de main
+        <button onClick={revoirRappel} data-revoir-rappel
+          className="h-9 shrink-0 whitespace-nowrap rounded-full px-3 text-xs text-amber-100/90 hover:bg-white/10"
+          style={{ background: 'rgba(13,27,21,0.9)', border: '1px solid rgba(253,230,138,0.35)' }}
+          title={`Tu as réussi le diagnostic du premier coup : ${sautes.ids.length > 1 ? `${sautes.ids.length} rappels sautés` : 'rappel sauté'}. Le revoir quand même ?`}>
+          🔁<span className="court:hidden"> Revoir le rappel</span>
+        </button>
+      )}
       <span
         className="px-1 text-[11px] tabular-nums text-white/40 hidden lg:inline"
         title={`${current.activity.title} — partie ${current.activityIndex + 1}/${deck.activities.length}, diapositive ${current.slideIndex + 1}/${activitySlideCount}`}

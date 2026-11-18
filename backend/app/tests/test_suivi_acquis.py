@@ -83,3 +83,22 @@ def test_une_reussite_au_deuxieme_essai_n_est_jamais_acquise():
     assert c1["id"] in {l["id"] for l in sa.lacunes(sa.bilan(evs, DECK))}
     # tout juste du premier coup : acquise
     assert sa.bilan(evs[:3], DECK)["competences"][0]["statut"] == "acquis"
+
+
+def test_rappel_saute_ou_revu_hors_score_mais_dans_le_trajet():
+    """Un rappel de prérequis sauté (diagnostic réussi du premier coup) ou revu n'est pas une réponse (18 novembre 2026)."""
+    evs = [ev("s1", "q", 1, True),
+           {"deck_id": "d1", "slide_id": "s2", "slide_title": "Rappel", "cle": "rappel", "type": "rappel_saute", "tentative": 1, "correct": None},
+           {"deck_id": "d1", "slide_id": "s2", "slide_title": "Rappel", "cle": "rappel", "type": "rappel_revu", "tentative": 1, "correct": None}]
+    b = sa.bilan(evs, DECK)
+    c1 = b["competences"][0]
+    assert c1["statut"] == "acquis" and c1["score"] == 1.0
+    assert [q["slide_id"] for q in c1["questions"]] == ["s1"], "le rappel n'est pas une question"
+    assert c1["rappels"] == [{"slide_id": "s2", "slide_title": "Rappel", "saute": True, "revu": True}]
+    assert any("Rappel Rappel : sauté puis revu" in t for t in c1["trajet"])
+    assert "rappel_saute" not in b["taux_par_methode"] and not sa.lacunes(b)
+
+
+def test_sans_rappel_le_bilan_ne_change_pas():
+    b = sa.bilan([ev("s1", "q", 1, True)], DECK)
+    assert all(c["rappels"] == [] for c in b["competences"])

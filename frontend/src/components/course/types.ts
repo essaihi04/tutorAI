@@ -214,6 +214,30 @@ export interface SlideConcentration {
    * au plus, quelques-unes par cours.
    */
   observation?: QuestionObservation;
+  /**
+   * Rejouer la simulation APRÈS la réponse (18 novembre 2026, `parcours.js`) : la simulation s'arrête avant le moment
+   * décisif, la question est posée, puis, la réponse donnée (juste, fausse après ses essais, ou passée), le tableau des
+   * questions se replie et le tuteur fait `etapes` (en général `play_until` du moment du résultat) ; `duree_s` plus
+   * tard (défaut 6), la démonstration ou la suite vient. Les moments `play_until` des étapes ne sont jamais joués avant.
+   * Une liste : un rejeu par question (le premier vise par défaut la première question, les autres nomment la leur).
+   */
+  apres_reponse?: RejeuApresReponse | RejeuApresReponse[];
+  /**
+   * La diapositive est un RAPPEL de prérequis (18 novembre 2026) : sauté en avançant quand toutes les questions de la
+   * (des) diapositive(s) diagnostic `si_reussi` ont été justes du premier coup ; « 🔁 Revoir le rappel » le rouvre.
+   */
+  rappel?: { si_reussi: string | string[] };
+}
+
+/** Un rejeu de la simulation après la réponse à UNE question (`concentration.apres_reponse`). */
+export interface RejeuApresReponse {
+  /** la question attendue : `q`, `e{i}`, `e{i}s{j}` (défaut, pour le premier rejeu : la première question de la diapositive) */
+  question?: string;
+  etapes: { commande?: string; parametres?: Record<string, unknown>; repere?: string }[];
+  /** réglages envoyés à la simulation tant que la question est ouverte (ex. `{conclusions: false}`) */
+  sim_avant?: Record<string, unknown>;
+  /** le temps laissé pour regarder, en secondes (défaut 6) */
+  duree_s?: number;
 }
 
 /**
