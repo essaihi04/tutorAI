@@ -22,6 +22,10 @@ encore plus tard, pas à sa beauté.
    joué seul, arrêté, avec un temps pour regarder → le cas décisif posé en question → le résultat et la conclusion
    seulement après la réponse de l'élève (skill professeur, règles 33-34). Le bilan de toutes les expériences vient
    après la dernière, pas avant.
+   **Une démonstration que l'élève écrit lui-même a une question par ligne** (choix de l'utilisateur, 18/11/2026,
+   sur l'équation différentielle de RC, RL et RLC) : chaque ligne (loi des tensions, relation, équation) est une
+   question au tableau, la correction de cette ligne vient après sa réponse, puis la ligne suivante. C'est une
+   exception voulue à « une seule question par bloc » ; l'écrire avec sa raison dans l'architecture du cours.
 4. **L'expérience avant le mécanisme qu'elle prouve.** L'élève tire le résultat du document ; on ne lui affirme pas
    un résultat qu'une expérience montrera plus loin (au national, près de 75 % des points sont du raisonnement sur
    documents).
