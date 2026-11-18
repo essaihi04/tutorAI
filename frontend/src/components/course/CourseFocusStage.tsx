@@ -126,7 +126,7 @@ const ANIMATIONS = `
   justify-items: center; align-items: center; row-gap: 6px; column-gap: 10px }
 [data-scene-cours] > main[data-avec-visuel] > [data-cadre-visuel] { grid-column: 1; grid-row: 1; align-self: stretch; height: 100%; min-height: 0 }
 [data-scene-cours] > main[data-avec-visuel] > [data-observation] { grid-column: 1; grid-row: 2 }
-[data-scene-cours] > main[data-avec-visuel] > [data-formules-centre] { grid-column: 1; grid-row: 3; max-height: 24vh; overflow: hidden;
+[data-scene-cours] > main[data-avec-visuel] > [data-formules-centre] { grid-column: 1; grid-row: 3; max-height: 30vh; overflow: hidden;
   flex-direction: row; flex-wrap: wrap; justify-content: center; align-content: center; gap: 6px }
 [data-scene-cours] [data-formules-centre] > div { line-height: 1.25 }
 [data-scene-cours] > main[data-avec-visuel] > [data-formules-centre] > div { padding: 3px 10px }
