@@ -339,3 +339,24 @@ Pistes à mettre en voix : 39, dont 30 de la 2ᵉ passe (`phys_ch7_dipole_RL_voi
 - Les questions ouvertes de l'exercice joué n'ont pas de réaction préparée (jugées en direct sur l'`attendu`).
 - Aucun fichier partagé n'a été modifié (`shared/`, `frontend/src/`).
 <!-- 2e passe : fin -->
+
+## Fiche bilan lisible au téléphone (18 novembre 2026)
+
+**Défaut ancien corrigé : la fiche « Ce qu’il faut retenir » (`dipole-rl-tableau/bilan.html`, `rl_bl_fiche`).** Sur un
+téléphone en paysage, les neuf blocs restaient sur une page en trois colonnes, textes à 4–9 px et blocs les uns sur les
+autres : le kit (`shared/tableau/tableau.js`) baisse son plancher jusqu'à 45 % sur un petit tableau et écrit indices et
+exposants à 62 % (u_b, I_0, e^{−t/τ} restaient à 9 px même sur ordinateur). La page garde maintenant son propre plancher
+de 15 px (sa craie : `tailleMin` à 15, 0 à l'impression ; `_largeur` et `_texteIndices` pour indices et exposants) et se
+mesure à la taille vraiment écrite (cadres des formules, interlignes, fractions). Bureau : la disposition d'avant (3 + 3 + 3,
+sur toute la largeur), ou toute la hauteur, ou 4 colonnes ; sinon la fiche se partage en parties (autant qu'il faut,
+1 à 4 colonnes, chaque partie grossit son texte pour remplir le tableau), compteur « partie n sur N · touche : la suite »
+(15 px) ; toucher le tableau passe à la suite, puis à la page de l'élève ; `play_until` vers un bloc ouvre sa partie et
+l'éclaire. La page de l'élève montre moins de lignes « à reprendre » (« … et n autre(s) ») si elle ne tient pas.
+L'impression passe le canvas en 1280 × 600 le temps des images : la fiche entière sur une feuille.
+**Défaut des moments** : tous les blocs valaient 1 et `time_s` vaut 1 sur la fiche ; le kit ignore un `play_until` vers
+un moment ≤ `time_s`, donc la voix n'écrivait ni n'éclairait aucun bloc après `start` (vérifié dans Chromium). Valeurs :
+`fiche` 1,01, blocs 1,1 à 1,9, `fin` 1,95 (sa dernière partie), `lacunes` 2 (noms, repères, `set_parameters` inchangés).
+Mesuré dans Chromium (568 × 300, 724 × 350, 1024 × 560, 1280 × 640, 1596 × 700 ; chaque bloc, `fin`, des lacunes,
+la page 2) : avant 4,2 / 4,8 / 9,3 / 9,3 / 16,4 px au plus petit et 104 / 198 / 34 / 0 / 28 chevauchements ; après
+15 px au moins partout, aucun chevauchement, rien hors du cadre, chaque bloc s'allume. Parties : 3 (5 avec l'état de
+l'élève) à 568, 3 à 724, 2 à 1024, 1 à 1280, 2 à 1596. Pointage et formules : rien de nouveau.
