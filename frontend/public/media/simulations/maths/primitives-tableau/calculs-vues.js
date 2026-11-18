@@ -1,4 +1,5 @@
 /* Écrit par maths_build/primitives/build.py depuis les p*.py du cours math_ch4_primitives : ne pas modifier à la main. */
+/* 18 novembre 2026 (2ᵉ passe, diapositive pr_r1) : la vue « r1 » est ajoutée À LA MAIN, à la fin — à reporter dans les sources du build (p*.py). */
 window.CALCULS = {
  "d3": {
   "titre": "Vérifier une primitive : trois lignes",
@@ -1004,6 +1005,77 @@ window.CALCULS = {
     "r": [
      "resultat",
      "la primitive cherchée"
+    ]
+   }
+  ]
+ },
+ "r1": {
+  "titre": "u’v + uv’ : la dérivée d’un produit, lue à l’envers",
+  "lignes": [
+   {
+    "t": "(uv)’ = u’v + uv’   donc   u’v + uv’ → uv",
+    "c": "jaune",
+    "m": "regle",
+    "cadre": "jaune",
+    "taille": 20,
+    "inter": 50,
+    "r": [
+     "regle",
+     "(uv)’ = u’v + uv’ : lue à l’envers, u’v + uv’ → uv"
+    ]
+   },
+   {
+    "t": "f(x) = sin x + x cos x   sur ℝ",
+    "c": "blanc",
+    "m": "expression",
+    "taille": 20,
+    "inter": 44,
+    "r": [
+     "expression",
+     "f(x) = sin x + x cos x"
+    ]
+   },
+   {
+    "t": "sin x = (x)’ · sin x",
+    "c": "cyan",
+    "m": "premier",
+    "taille": 20,
+    "r": [
+     "premier",
+     "premier terme : sin x = (x)’ · sin x"
+    ]
+   },
+   {
+    "t": "x cos x = x · (sin x)’",
+    "c": "cyan",
+    "m": "second",
+    "taille": 20,
+    "inter": 46,
+    "r": [
+     "second",
+     "deuxième terme : x cos x = x · (sin x)’"
+    ]
+   },
+   {
+    "t": "f(x) = u’v + uv’   avec   u(x) = x  et  v(x) = sin x",
+    "c": "orange",
+    "m": "forme",
+    "taille": 20,
+    "inter": 46,
+    "r": [
+     "forme",
+     "f = u’v + uv’ avec u = x, v = sin x"
+    ]
+   },
+   {
+    "t": "Les primitives de f sur ℝ : F(x) = x sin x + k, k ∈ ℝ",
+    "c": "vert",
+    "m": "primitive",
+    "cadre": "vert",
+    "taille": 20,
+    "r": [
+     "primitive",
+     "F(x) = x sin x + k, k ∈ ℝ"
     ]
    }
   ]

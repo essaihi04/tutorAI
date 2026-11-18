@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Signe de f, variations de F — tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/maths/commun/maths.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="À la craie : f(x) = 3 − x, sa droite colorée selon le signe, puis le tableau de variations d’une primitive F qui se construit ligne par ligne"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Pause</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/maths/commun/exposants.js"></script>
+<script src="/media/simulations/maths/commun/maths-tableau.js"></script>
+<script>
+/*
+ * Cours « Fonctions primitives » (math_ch4_primitives), 2ᵉ passe (18 novembre 2026) : le cas type « sens de variation
+ * d’une primitive à partir du signe de f », joué pas à pas (diapositive pr_g3).
+ * f(x) = 3 − x sur ℝ ; F une primitive de f : F’ = f ; 3 − x = 0 ⇔ x = 3 ; f ≥ 0 sur ]−∞ ; 3], f ≤ 0 sur [3 ; +∞[ ;
+ * F croissante sur ]−∞ ; 3], décroissante sur [3 ; +∞[, maximum en x = 3.
+ * À gauche les lignes du calcul, à droite la droite de f (vert au-dessus de l’axe, orange en dessous), en bas le
+ * tableau qui se remplit ligne par ligne.
+ * Vues : ?vue=signe   — S’ARRÊTE après la ligne du signe de f (la question « F croissante sur ? » est posée là) ;
+ *        ?vue=complet — la même construction, puis la ligne des variations de F et la conclusion (rejeu après la réponse).
+ * Moments : enonce, derivee, droite, zero, ligne_x, ligne_signe ; (complet) ligne_F, maximum ; `fin`.
+ * Repères : derivee, droite, zero, tableau, ligne_signe, ligne_F ; (complet) fleches_F, conclusion.
+ */
+const f = x => 3 - x;
+const OPT = { x0: 506, y0: 52, w: 222, h: 172, xmin: -1, xmax: 6.4, ymin: -3.4, ymax: 4.4, gx: [[3, '3']], gy: [], origine: false };
+// Le tableau : trois lignes (x ; signe de f(x) ; variations de F), sous les lignes du calcul.
+const TB = { g: 30, lab: 172, d: 476, haut: 186, l1: 224, l2: 264, bas: 344 };
+const X3 = (TB.lab + TB.d) / 2, XG = TB.lab + 32, XD = TB.d - 32;
+
+function dessin(complet) {
+  return (c, K) => {
+    K.titre('Signe de f, variations de F');
+    c.texte('f(x) = 3 − x  sur ℝ ;  F est une primitive de f', 30, 74, { couleur: 'blanc', taille: 20, max: 460 });
+    K.marque('enonce');
+    c.pause(.3);
+    c.texte('F’(x) = f(x) = 3 − x', 30, 110, { couleur: 'cyan', taille: 22 });
+    c.repere('derivee', 22, 88, 236, 30, 'F’(x) = f(x) = 3 − x');
+    K.marque('derivee');
+    // La droite de f : verte au-dessus de l’axe (f > 0), orange en dessous (f < 0).
+    c.pause(.3);
+    const G = K.axes(OPT);
+    K.zone(G, u => Math.max(0, f(u)), 0, OPT.xmin, OPT.xmax, { couleur: 'vert', alpha: .2 * K.apparait(1, .9) });
+    K.zone(G, u => Math.min(0, f(u)), 0, OPT.xmin, OPT.xmax, { couleur: 'orange', alpha: .22 * K.apparait(1, .9) });
+    K.anime(1.4, p => {
+      const b = OPT.xmin + (6.2 - OPT.xmin) * p;
+      K.courbePart(G, f, OPT.xmin, Math.min(3, b), 1, { couleur: 'vert', largeur: 3.2 });
+      if (b > 3) K.courbePart(G, f, 3, b, 1, { couleur: 'orange', largeur: 3.2 });
+    });
+    c.texte('f', G.X(0.6) + 6, G.Y(f(0.6)) - 12, { couleur: 'vert', taille: 22 });
+    c.texte('+', G.X(1.2), G.Y(0.6), { couleur: 'vert', taille: 24, align: 'center' });
+    c.texte('−', G.X(4.9), G.Y(-0.4), { couleur: 'orange', taille: 24, align: 'center' });
+    c.repere('droite', G.x0 - 4, G.y0 - 6, G.w + 18, G.h + 12, 'la droite de f : verte au-dessus de l’axe, orange en dessous');
+    K.marque('droite');
+    // f s’annule en 3
+    c.pause(.3);
+    c.texte('3 − x = 0  ⇔  x = 3', 30, 148, { couleur: 'cyan', taille: 22 });
+    K.rond(G, 3, 0, true, 'jaune');
+    c.repere('zero', 22, 126, 220, 30, '3 − x = 0 ⇔ x = 3');
+    K.marque('zero');
+    // Le tableau, ligne par ligne. Ligne 1 : x.
+    c.pause(.4);
+    const o = { couleur: 'faible', largeur: 1.4 };
+    for (const y of [TB.haut, TB.l1, TB.l2, TB.bas]) c.ligne(TB.g, y, TB.d, y, o);
+    c.ligne(TB.g, TB.haut, TB.g, TB.bas, o); c.ligne(TB.lab, TB.haut, TB.lab, TB.bas, o); c.ligne(TB.d, TB.haut, TB.d, TB.bas, o);
+    c.texte('x', (TB.g + TB.lab) / 2, TB.l1 - 12, { couleur: 'blanc', taille: 20, align: 'center' });
+    c.texte('f(x) = F’(x)', (TB.g + TB.lab) / 2, TB.l2 - 13, { couleur: 'blanc', taille: 19, align: 'center' });
+    c.texte('F', (TB.g + TB.lab) / 2, (TB.l2 + TB.bas) / 2 + 7, { couleur: 'blanc', taille: 21, align: 'center' });
+    c.repere('tableau', TB.g, TB.haut, TB.d - TB.g, TB.bas - TB.haut, 'le tableau de variations de F');
+    c.repere('ligne_F', TB.g, TB.l2, TB.d - TB.g, TB.bas - TB.l2, 'la ligne des variations de F');
+    c.pause(.2);
+    c.texte('−∞', XG, TB.l1 - 12, { couleur: 'blanc', taille: 20, align: 'center' });
+    c.texte('3', X3, TB.l1 - 12, { couleur: 'jaune', taille: 20, align: 'center' });
+    c.texte('+∞', XD, TB.l1 - 12, { couleur: 'blanc', taille: 20, align: 'center' });
+    K.marque('ligne_x');
+    // Ligne 2 : le signe de f(x).
+    c.pause(.4);
+    c.ligne(X3, TB.l1, X3, TB.bas, { couleur: 'tresfaible', largeur: 1.2, pointille: [4, 5] });
+    c.texte('+', (XG + X3) / 2, TB.l2 - 12, { couleur: 'vert', taille: 24, align: 'center' });
+    c.pause(.15);
+    c.texte('0', X3, TB.l2 - 12, { couleur: 'jaune', taille: 20, align: 'center' });
+    c.pause(.15);
+    c.texte('−', (X3 + XD) / 2, TB.l2 - 12, { couleur: 'orange', taille: 24, align: 'center' });
+    c.repere('ligne_signe', TB.g, TB.l1, TB.d - TB.g, TB.l2 - TB.l1, 'le signe de f(x) : + avant 3, − après');
+    K.marque('ligne_signe');
+    if (!complet) return;
+    // Ligne 3 : les variations de F (rejeu après la réponse de l’élève).
+    c.pause(.5);
+    c.fleche(XG - 4, TB.bas - 12, X3 - 30, TB.l2 + 20, { couleur: 'vert', largeur: 2.4, tete: 10 });
+    c.pause(.15);
+    c.texte('F(3)', X3, TB.l2 + 22, { couleur: 'jaune', taille: 19, align: 'center' });
+    c.pause(.15);
+    c.fleche(X3 + 30, TB.l2 + 20, XD + 4, TB.bas - 12, { couleur: 'orange', largeur: 2.4, tete: 10 });
+    c.repere('fleches_F', TB.lab + 4, TB.l2 + 2, TB.d - TB.lab - 8, TB.bas - TB.l2 - 4, 'F monte jusqu’à F(3), puis descend');
+    K.marque('ligne_F');
+    // La conclusion, écrite comme au barème.
+    c.pause(.4);
+    K.lignes(500, 262, [
+      { t: 'f ≥ 0 sur ]−∞ ; 3] :', couleur: 'vert', taille: 19 },
+      { t: 'F croissante sur ]−∞ ; 3]', couleur: 'vert', taille: 19, pause: .1 },
+      { t: 'f ≤ 0 sur [3 ; +∞[ :', couleur: 'orange', taille: 19, pause: .2 },
+      { t: 'F décroissante sur [3 ; +∞[', couleur: 'orange', taille: 19, pause: .1 },
+      { t: 'maximum de F en x = 3', couleur: 'jaune', taille: 19, pause: .2 },
+    ], 27);
+    c.repere('conclusion', 494, 242, 250, 140, 'F croissante sur ]−∞ ; 3], décroissante sur [3 ; +∞[, maximum en 3');
+    K.marque('maximum');
+  };
+}
+
+const DEBUT = {
+  enonce: 'En haut : « f(x) = 3 − x sur ℝ ; F est une primitive de f ».',
+  derivee: 'Ligne en cyan : « F’(x) = f(x) = 3 − x ».',
+  droite: 'À droite, un repère : la droite de f, qui descend ; verte au-dessus de l’axe (avant x = 3, signe +), orange en dessous (après 3, signe −).',
+  zero: 'Ligne en cyan : « 3 − x = 0 ⇔ x = 3 » ; sur la droite, le point jaune où elle coupe l’axe, en x = 3.',
+  ligne_x: 'En bas, un tableau à trois lignes (x ; f(x) = F’(x) ; F) ; la première ligne est écrite : −∞, 3, +∞. La ligne de F est encore vide.',
+  ligne_signe: 'Deuxième ligne du tableau : + (vert) avant 3, 0 en 3, − (orange) après 3. La ligne de F est encore vide.',
+};
+const FIN = {
+  ligne_F: 'Troisième ligne : une flèche verte qui monte jusqu’à F(3), puis une flèche orange qui descend.',
+  maximum: 'À droite, la conclusion : f ≥ 0 sur ]−∞ ; 3], F croissante sur ]−∞ ; 3] ; f ≤ 0 sur [3 ; +∞[, F décroissante sur [3 ; +∞[ ; maximum de F en x = 3.',
+};
+const MOTIFS = { enonce: 'l’énoncé', derivee: 'F’ = f', droite: 'la droite de f', zero: 'f s’annule en 3', ligne_x: 'la ligne de x',
+  ligne_signe: 'le signe de f', ligne_F: 'les variations de F', maximum: 'la conclusion' };
+const EXPL = [
+  { repere: 'derivee', texte: 'F’ = f : le signe de f donne le sens de variation de F.' },
+  { repere: 'droite', texte: 'La droite de f est au-dessus de l’axe avant 3 (f > 0), en dessous après 3 (f < 0).' },
+  { repere: 'zero', texte: 'f s’annule en x = 3 : c’est la valeur qui partage le tableau.' },
+  { repere: 'ligne_signe', texte: 'Le signe de f(x) : + avant 3, − après.' },
+];
+
+MathsTableau.page({ net: true, large: true,
+  id: 'pr_variations', titre: 'Signe de f, variations de F',
+  texte: 'Construction à la craie du cours Fonctions primitives : f(x) = 3 − x et F une primitive de f ; F’ = f ; la droite de f colorée selon son signe ; le tableau de variations de F construit ligne par ligne (x, signe de f(x), variations de F)',
+  vues: {
+    signe: {
+      titre: 'Du signe de f aux variations de F (jusqu’au signe)',
+      dessiner: dessin(false),
+      decrire: DEBUT,
+      motifs: MOTIFS,
+      explication: EXPL.concat([{ repere: 'ligne_F', texte: 'La ligne des variations de F : à remplir avec le signe de f.' }]),
+    },
+    complet: {
+      titre: 'Du signe de f aux variations de F',
+      dessiner: dessin(true),
+      decrire: { ...DEBUT, ...FIN },
+      motifs: MOTIFS,
+      explication: EXPL.concat([
+        { repere: 'fleches_F', texte: 'f ≥ 0 : F monte ; f ≤ 0 : F descend ; f change de signe en 3 : maximum de F.' },
+        { repere: 'conclusion', texte: 'La conclusion écrite avec les intervalles, comme au barème.' },
+      ]),
+    },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
