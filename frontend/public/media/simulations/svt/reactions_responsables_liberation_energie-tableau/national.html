@@ -35,6 +35,11 @@
  *   ?vue=marquage    : glucose marqué au ¹⁴C suivi de T0 à T4 (milieu extracellulaire, hyaloplasme, mitochondrie) ;
  *                      les molécules radioactives bougent, les « + » s’écrivent, puis le tableau.
  *                      Moments : t0 2,4 ; t1 5 ; t2 7,6 ; t3 10,2 ; t4 12,8 ; tableau 16.
+ *   ?vue=reactions   : examen 2020 R, restitution III — relier la glycolyse, le cycle de Krebs, la fermentation lactique et
+ *                      la fermentation alcoolique aux réactions bilans a à e (d est l’intrus) ; ce que donne chaque réaction
+ *                      est souligné, puis le lien est tracé ; la réponse comme le barème.
+ *                      Moments : enonce 2 ; phenomenes 4 ; reactions 7,6 ; a_produit 10 ; a_lien 12 ; b_produit 14 ;
+ *                      b_lien 16 ; c_produit 18 ; c_lien 20 ; de_produit 22,4 ; e_lien 24,6 ; couples 27.
  * Options : ?depart=<moment> (la page s’ouvre figée sur ce moment, ce qui précède déjà au tableau) ;
  *           ?cacher=<moment> : ce moment et tout ce qui le suit ne s’écrivent pas (la correction attend la réponse de
  *           l’élève) ; set_parameters {conclusions: true} les montre, {conclusions: false} les cache de nouveau.
@@ -44,7 +49,9 @@
  * 'comparaison', 'explication' ; restitution 'enonce', 'cadre_nature', 'cadre_lieu', 'cadre_produit', 'phrase', 'membrane',
  * 'chaine', 'sphere', 'fleche_chaine', 'fleche_sphere', 'prop_a', 'prop_b', 'prop_c', 'prop_d', 'qcm' ; levures
  * 'flacon_aero', 'flacon_anaero', 'mesures_aero', 'mesures_anaero', 'ethanol', 'tableau', 'rapport' ; marquage 'milieu',
- * 'hyaloplasme', 'mitochondrie', 'lecture', 'tableau'.
+ * 'hyaloplasme', 'mitochondrie', 'lecture', 'tableau' ; reactions 'enonce', 'phenomenes', 'phen_1', 'phen_2', 'phen_3',
+ * 'phen_4', 'reactions', 'reac_a', 'reac_b', 'reac_c', 'reac_d', 'reac_e', 'produit_a', 'produit_b', 'produit_c', 'produit_d',
+ * 'produit_e', 'lien_a', 'lien_b', 'lien_c', 'lien_d', 'lien_e', 'couples'.
  */
 const { bulle, protocole } = window.Tableau;
 const { Scene, Chrono, Apparitions, fr, doux, mix } = window.SVTTableau;
@@ -454,6 +461,91 @@ V.marquage = (() => {
     return `Glucose marqué au ¹⁴C. T${k} : ` + ['milieu', 'hyaloplasme', 'mitochondrie'].map((n, i) => `${n} : ${E[i].length ? E[i].map(([ty, q]) => MOL[ty].nom + ' ' + plus(q)).join(', ') : 'rien'}`).join(' ; ') + '.';
   }
   return { M, FIN, MOTIFS, dessiner, voit, titre: 'Le glucose marqué, de T0 à T4', depart: 'Le glucose radioactif est dans le milieu…' };
+})();
+
+/* ─── 2020 R, restitution III : relier chaque phénomène à sa réaction bilan ─── */
+V.reactions = (() => {
+  const M = { enonce: 2, phenomenes: 4, reactions: 7.6, a_produit: 10, a_lien: 12, b_produit: 14, b_lien: 16, c_produit: 18, c_lien: 20,
+    de_produit: 22.4, e_lien: 24.6, couples: 27 }, FIN = 27.6;
+  const MOTIFS = { enonce: 'la consigne : relier chaque phénomène à sa réaction bilan', phenomenes: 'quatre phénomènes, numérotés de 1 à 4',
+    reactions: 'cinq réactions, a à e : une de trop', a_produit: 'a : ce qu’elle donne, éthanol + CO₂', a_lien: 'a → fermentation alcoolique : (4 ; a)',
+    b_produit: 'b : regarder ce qu’elle donne', b_lien: 'b → acide lactique, fermentation lactique : (3 ; b)',
+    c_produit: 'c : regarder ce qu’elle donne', c_lien: 'c → acide pyruvique + NADH,H⁺, glycolyse : (1 ; c)',
+    de_produit: 'd et e : il reste le cycle de Krebs', e_lien: 'e → cycle de Krebs : (2 ; e) ; d est l’intrus',
+    couples: 'la réponse comme le barème : (1 ; c) ; (2 ; e) ; (3 ; b) ; (4 ; a)' };
+  const PHEN = [['1', 'La glycolyse', 'vert'], ['2', 'Le cycle de Krebs', 'cyan'], ['3', 'La fermentation lactique', 'orange'], ['4', 'La fermentation alcoolique', 'rose']];
+  // [lettre, réactifs, produits, phénomène (index) ou -1, moment du produit, moment du lien, note du produit, note du lien]
+  const REAC = [
+    ['a', 'C₆H₁₂O₆ + 2 ADP + 2 Pi', '2 CH₃CH₂OH + 2 CO₂ + 2 ATP', 3, 'a_produit', 'a_lien', 'donne : éthanol (CH₃CH₂OH) + CO₂', 'éthanol + CO₂ → fermentation alcoolique → (4 ; a)'],
+    ['b', 'C₆H₁₂O₆ + 2 ADP + 2 Pi', '2 CH₃CHOHCOOH + 2 ATP', 2, 'b_produit', 'b_lien', 'donne : ?', 'CH₃CHOHCOOH = acide lactique → (3 ; b)'],
+    ['c', 'C₆H₁₂O₆ + 2 ADP + 2 Pi + 2 NAD⁺', '2 CH₃COCOOH + 2 ATP + 2 NADH,H⁺', 0, 'c_produit', 'c_lien', 'donne : ?', 'glucose → 2 acides pyruviques + 2 NADH,H⁺ → (1 ; c)'],
+    ['d', 'CH₃COCOOH + 2 ATP', 'CH₃COOH + 2 ADP + 2 Pi', -1, 'de_produit', 'e_lien', 'elle part de quoi ? elle donne quoi ?', 'intrus : aucun des quatre phénomènes'],
+    ['e', 'CH₃CO-SCoA + 3 NAD⁺ + 3 H₂O + FAD + GDP + Pi', '2 CO₂ + HSCoA + 3 NADH,H⁺ + FADH₂ + GTP', 1, 'de_produit', 'e_lien', 'elle part de quoi ? elle donne quoi ?', 'acétyl-CoA → 2 CO₂ + 3 NADH,H⁺ + FADH₂ → (2 ; e)'],
+  ];
+  const ok = (k, avance = 0) => chrono.t >= M[k] - avance && permis(k);
+  function dessiner(c) {
+    const L = scene.L, t = chrono.t, te = tk(18), ti = tk(24);
+    ecrit.ecrire(c, 'enonce', () => c.texte('Reliez chaque phénomène à la réaction bilan qui lui convient. (2020 R, 1 pt)', L / 2, 30, { couleur: 'jaune', taille: tk(19), align: 'center', max: L - 30 }));
+    c.repere('enonce', 20, 10, L - 40, 30, 'la consigne de 2020 R');
+    // les quatre phénomènes, à gauche
+    const wp = Math.min(260, Math.max(180, L * .22)), hp = tk(50), xp = 16;
+    const yP = PHEN.map((_, i) => 62 + i * (hp + tk(16)));
+    PHEN.forEach(([n, nom, col], i) => {
+      if (t < M.phenomenes - 1.6 + i * .3) return;
+      ecrit.ecrire(c, 'ph' + i, () => { c.rect(xp, yP[i], wp, hp, { couleur: col, fond: col, fondAlpha: .14, arrondi: 10 }); c.texte(n + '- ' + nom, xp + 10, yP[i] + hp / 2 + 6, { couleur: col, taille: tk(18), gras: true, max: wp - 16 }); });
+      c.repere('phen_' + n, xp, yP[i], wp, hp, 'le phénomène ' + n + ' : ' + nom);
+    });
+    if (t >= M.phenomenes - 1.6) c.repere('phenomenes', xp - 4, 56, wp + 8, 4 * (hp + tk(16)), 'les quatre phénomènes');
+    // les cinq réactions, à droite : une ligne (ou deux), puis la note de ce qu’elle donne
+    const xr = xp + wp + tk(46), wr = L - xr - 14;
+    let y = 66;
+    const lignesDe = (R0) => {
+      const [l, g, d] = R0, plein = l + '- ' + g + ' → ' + d;
+      return c.largeurTexte(plein, te) <= wr - 4 ? [[l + '- ' + g + ' → ', d]] : [[l + '- ' + g, ''], ['      → ', d]];
+    };
+    const yR = [];
+    REAC.forEach((R0, i) => {
+      const [l, , , ph, kp, kl, noteP, noteL] = R0, lignes = lignesDe(R0), y0 = y;
+      yR.push(y0);
+      if (t >= M.reactions - 2.4 + i * .45) ecrit.ecrire(c, 'r' + i, () => lignes.forEach(([g, d], j) => {
+        c.texte(g, xr, y0 + j * ti, { couleur: 'blanc', taille: te, max: wr });
+        if (d) c.texte(d, xr + c.largeurTexte(g, te), y0 + j * ti, { couleur: 'blanc', taille: te, max: wr - c.largeurTexte(g, te) });
+      }));
+      c.repere('reac_' + l, xr - 6, y0 - te, wr + 6, lignes.length * ti + 4, 'la réaction ' + l);
+      const yn = y0 + (lignes.length - 1) * ti + tk(24);
+      // ce que donne la réaction : souligné (où regarder), puis sa note
+      if (t >= M[kp] - 1.2) {
+        const [g, d] = lignes[lignes.length - 1], x1 = xr + c.largeurTexte(g, te), yb = y0 + (lignes.length - 1) * ti + 5;
+        ecrit.ecrire(c, 'sou' + i, () => { c.ligne(x1, yb, x1 + Math.min(wr - (x1 - xr), c.largeurTexte(d, te)), yb, { couleur: 'jaune', largeur: 2.6 });
+          if (!(ok(kl, 1) && noteL)) c.texte(noteP, xr + 26, yn, { couleur: 'jaune', taille: tk(16), max: wr - 30 }); });
+        c.repere('produit_' + l, x1 - 4, yb - te - 2, Math.min(wr - (x1 - xr), c.largeurTexte(d, te)) + 8, te + 10, 'ce que donne la réaction ' + l);
+      }
+      if (ok(kl, 1)) {
+        const col = ph >= 0 ? PHEN[ph][2] : 'rouge';
+        ecrit.ecrire(c, 'lien' + i, () => {
+          if (ph >= 0) c.fleche(xp + wp + 4, yP[ph] + hp / 2, xr - 8, y0 - te * .35, { couleur: col, largeur: 2.6 });
+          else lignes.forEach(([g, d], j) => { const yy = y0 + j * ti - te * .32; c.ligne(xr, yy, xr + Math.min(wr, c.largeurTexte(g + d, te)), yy, { couleur: 'rouge', largeur: 2 }); });
+        });
+        ecrit.ecrire(c, 'note' + i, () => c.texte(noteL, xr + 26, yn, { couleur: col, taille: tk(16), gras: true, max: wr - 30 }));
+        c.repere('lien_' + l, xr - 6, y0 - te, wr + 6, yn - y0 + te + 6, noteL);
+      }
+      y = yn + tk(32);
+    });
+    if (t >= M.reactions - 2.4) c.repere('reactions', xr - 8, 44, wr + 8, y - 44, 'les cinq réactions');
+    if (ok('couples', 1)) {
+      ecrit.ecrire(c, 'couples', () => c.texte('Réponse : (1 ; c) ; (2 ; e) ; (3 ; b) ; (4 ; a)', xp, Math.min(406, Math.max(yP[3] + hp + tk(40), y + 4)), { couleur: 'vert', taille: tk(21), gras: true, max: L - 30 }));
+      c.repere('couples', xp, 370, L - 30, 44, 'la réponse comme le barème');
+    }
+  }
+  function voit() {
+    const t = chrono.t, m = ['Consigne 2020 R : relier les phénomènes 1 à 4 (glycolyse, cycle de Krebs, fermentation lactique, fermentation alcoolique) aux réactions bilans a à e.'];
+    if (t >= M.reactions) m.push('Les cinq réactions a, b, c, d, e sont écrites.');
+    REAC.forEach(([l, , , , kp, kl, noteP, noteL]) => { if (t >= M[kp] - 1.2) m.push(`Réaction ${l} : ce qu’elle donne est souligné.`); if (ok(kl, 1)) m.push(`Réaction ${l} : ${noteL}.`); });
+    if (ok('couples', 1)) m.push('Réponse écrite : (1 ; c) ; (2 ; e) ; (3 ; b) ; (4 ; a).');
+    if (!R.conclusions) m.push('(La correction reste cachée jusqu’à la réponse de l’élève.)');
+    return m.join(' ');
+  }
+  return { M, FIN, MOTIFS, dessiner, voit, titre: 'Relier phénomènes et réactions (2020 R)', depart: 'La consigne d’abord…' };
 })();
 
 const VU = V[VUE] || V.sportifs;
