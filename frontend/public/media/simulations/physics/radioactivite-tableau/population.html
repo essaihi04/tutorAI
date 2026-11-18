@@ -59,6 +59,9 @@ const S = { vue: VUES.includes(q.get('vue')) ? q.get('vue') : 'hasard', tdemi: 8
   jusqua: null, motif: '', emis: 0, dit: '', glisse: false, axe: { max: 48, pas: 8 },
   // conclusions : false pendant une question d'observation (14 novembre 2026) : le tableau se remplit, la phrase « même proportion » attend la réponse.
   conclusions: true };
+// conclusions=0 dans l'URL (18 novembre 2026, ra_l1_echantillon et ra_l1b_moitie) : l'élève compte les noyaux restants
+// (400, 200, 100, 50) et trouve seul « divisé par deux tous les 8 jours » : ni N₀/2, ni t½, ni la loi avant sa réponse.
+if (q.get('conclusions') === '0' || q.get('conclusions') === 'false') S.conclusions = false;
 { const v = Math.round(+q.get('t_demi_j')); if (v >= 2 && v <= 20) S.tdemi = v; const g = q.get('graine'); if (g !== null && g !== '' && Number.isFinite(+g)) S.graine = Math.round(+g); }
 const vj = () => (S.vue === 'proportion' ? 1 : 4);   // jours simulés par seconde réelle (1 jour = 0,25 s ; 1 s en vue « proportion », on compte)
 const T0 = 1.0;        // on montre d’abord les N₀ noyaux intacts ; l’horloge part à T0 (moment « depart »)
@@ -358,7 +361,7 @@ function dessiner(c) {
   }
   if (S.vue === 'grand_nombre') {
     for (let k = 1; k <= 3; k++) ecritA(c, ['un_t_demi', 'deux_t_demi', 'trois_t_demi'][k - 1], () => palier(c, k, true));
-    ecritA(c, 'loi', () => {
+    if (S.conclusions) ecritA(c, 'loi', () => {
       c.courbe(u => { const t = u * AX.max * .98; return [PX(t), PY(n0 * 2 ** (-t / T))]; }, 70, { couleur: 'cyan', largeur: 1.8, pointille: [6, 6], tremble: .2 });
       c.texte('N(t) = N_0·e^{−λt}', 520, 118, { couleur: 'cyan', taille: 21 });
       c.rect(510, 94, 170, 34, { couleur: 'cyan', largeur: 1.4, arrondi: 6 });
@@ -470,8 +473,13 @@ function palier(c, k) {
   c.ligne(G.ox, y, x, y, { couleur: 'rose', largeur: 1.4, pointille: [5, 5] });
   c.ligne(x, y, x, G.oy, { couleur: 'rose', largeur: 1.4, pointille: [5, 5] });
   c.cercle(x, y, 7, { couleur: 'rose', largeur: 1.8 });
-  c.texte(`⟦N_0|${2 ** k}⟧ = ${Nk}`, x + 10, basePalier(c, k), { couleur: 'rose', taille: 16 });
-  c.texte(k === 1 ? 't½' : `${k}t½`, x + 3, G.oy - 6, { couleur: 'rose', taille: 13 });
+  if (S.conclusions) {
+    c.texte(`⟦N_0|${2 ** k}⟧ = ${Nk}`, x + 10, basePalier(c, k), { couleur: 'rose', taille: 16 });
+    c.texte(k === 1 ? 't½' : `${k}t½`, x + 3, G.oy - 6, { couleur: 'rose', taille: 15 });
+  } else {                         // on compte seulement : le nombre restant et le jour (18 novembre 2026)
+    c.texte(`N = ${Nk}`, x + 10, basePalier(c, k), { couleur: 'rose', taille: 16 });
+    c.texte(`${t} j`, x + 3, G.oy - 6, { couleur: 'rose', taille: 15 });
+  }
 }
 function reperes(c, tj) {
   const n0 = N0(), T = S.tdemi, [xa, ya] = posNoyau(0), [xb, yb] = posNoyau(n0 - 1), m = n0 === 12 ? 30 : 7;
@@ -519,9 +527,9 @@ function message(nom) {
     premier: `Le premier qui se désintègre : le n° ${ORDRE[0] + 1}, à t = ${fx(TRI[0], 1)} ${jourS(TRI[0])} — pas forcément celui qu’on attendait : c’est le hasard.`,
     deuxieme: `Puis le n° ${ORDRE[1] + 1}, à t = ${fx(TRI[1], 1)} ${jourS(TRI[1])}. Impossible de prévoir lequel part, ni quand.`,
     plusieurs: `6 noyaux sur 12 sont partis à t = ${fx(TRI[5], 1)} jours (t½ = ${T} jours). Un noyau : le hasard ; beaucoup de noyaux : une loi.`,
-    un_t_demi: `t = t½ = ${T} jours : il reste N₀/2 = ${vise(1)} noyaux.`,
-    deux_t_demi: S.vue === 'restants' ? `t = 2t½ = ${2 * T} jours : ${vise(2)} restants, ${n0 - vise(2)} désintégrés : 75 % désintégrés.` : `t = 2t½ = ${2 * T} jours : il reste N₀/4 = ${vise(2)} noyaux.`,
-    trois_t_demi: `t = 3t½ = ${3 * T} jours : il reste N₀/8 = ${vise(3)} noyaux.`,
+    un_t_demi: S.conclusions ? `t = t½ = ${T} jours : il reste N₀/2 = ${vise(1)} noyaux.` : `t = ${T} jours : il reste ${vise(1)} noyaux.`,
+    deux_t_demi: S.vue === 'restants' ? `t = 2t½ = ${2 * T} jours : ${vise(2)} restants, ${n0 - vise(2)} désintégrés : 75 % désintégrés.` : S.conclusions ? `t = 2t½ = ${2 * T} jours : il reste N₀/4 = ${vise(2)} noyaux.` : `t = ${2 * T} jours : il reste ${vise(2)} noyaux.`,
+    trois_t_demi: S.conclusions ? `t = 3t½ = ${3 * T} jours : il reste N₀/8 = ${vise(3)} noyaux.` : `t = ${3 * T} jours : il reste ${vise(3)} noyaux.`,
     loi: 'Les points suivent la loi de décroissance N(t) = N₀·e^(−λt) (pointillé).',
     ligne_1: ligne(1), ligne_2: ligne(2), ligne_3: ligne(3),
     rapport: 'Même longueur pour les trois rangées : la part grise est la même, ≈ 8 % des noyaux présents chaque jour.',
@@ -563,7 +571,7 @@ function ceQuiSeVoit() {
     if (vu('plusieurs')) ecrits.push(`« 6 sur 12 partis à t = ${fx(TRI[5], 1)} jours ; un noyau : au hasard ; beaucoup de noyaux : une loi »`);
   }
   if (S.vue === 'grand_nombre') {
-    let k = 0; ['un_t_demi', 'deux_t_demi', 'trois_t_demi'].forEach((nom, i) => { if (vu(nom)) { k = i + 1; ecrits.push(`palier ${i + 1} : t = ${i + 1 === 1 ? '' : i + 1}t½ = ${(i + 1) * T} jours, N = N₀/${2 ** (i + 1)} = ${vise(i + 1)} (pointillés roses)`); } });
+    let k = 0; ['un_t_demi', 'deux_t_demi', 'trois_t_demi'].forEach((nom, i) => { if (vu(nom)) { k = i + 1; ecrits.push(S.conclusions ? `palier ${i + 1} : t = ${i + 1 === 1 ? '' : i + 1}t½ = ${(i + 1) * T} jours, N = N₀/${2 ** (i + 1)} = ${vise(i + 1)} (pointillés roses)` : `palier ${i + 1} : t = ${(i + 1) * T} jours, N = ${vise(i + 1)} (pointillés roses ; ni N₀/2ⁿ ni t½ écrits : l'élève doit trouver seul)`); } });
     m.push(k ? `Palier atteint : ${k}.` : 'Aucun palier encore.');
     if (vu('loi')) ecrits.push('la loi N(t) = N₀·e^(−λt) en pointillé cyan, encadrée');
   }
