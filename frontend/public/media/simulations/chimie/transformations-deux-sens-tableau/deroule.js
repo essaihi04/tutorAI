@@ -151,7 +151,7 @@
     ctx.lineTo(x + w - r, y + h); ctx.quadraticCurveTo(x + w, y + h, x + w, y + h - r); ctx.lineTo(x + w, y);
   }
   const Peinture = {
-    CPK: { O: [220, 38, 38], H: [240, 240, 240], C: [72, 72, 78], I: [124, 58, 237], N: [59, 90, 246] },
+    CPK: { O: [235, 85, 70], H: [235, 240, 245], C: [72, 72, 78],   /* O et H : valeurs du lexique visuel commun (18/11/2026) */ I: [124, 58, 237], N: [59, 90, 246] },
     sphere(ctx, x, y, r, c) {
       const g = ctx.createRadialGradient(x - r * .38, y - r * .4, r * .12, x, y, r);
       g.addColorStop(0, rgba(clair(c, .75), 1)); g.addColorStop(.45, rgba(c, 1)); g.addColorStop(1, rgba(fonce(c, .45), 1));

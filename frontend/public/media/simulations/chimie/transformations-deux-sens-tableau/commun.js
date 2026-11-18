@@ -134,9 +134,10 @@
   const rgba = (c, a) => `rgba(${Math.round(c[0])},${Math.round(c[1])},${Math.round(c[2])},${a})`;
   const clair = (c, k) => c.map(v => v + (255 - v) * k);
   const fonce = (c, k) => c.map(v => v * k);
-  /* Couleurs habituelles des modèles moléculaires, un peu adoucies pour le tableau noir. */
+  /* Couleurs des atomes (O et H : valeurs du lexique visuel commun, docs/lexique-visuel/, 18 novembre 2026). Le carbone gris et
+   * le H⁺ jaune restent tant que la voix du cours ch11 dit « la petite boule jaune, c'est le proton » : à trancher (README du lexique). */
   const EL = {
-    H: { c: [236, 240, 244], r: 3.3 }, Hp: { c: [250, 204, 21], r: 3.5 }, O: { c: [222, 52, 52], r: 5.2 }, C: { c: [88, 93, 102], r: 5.4 },
+    H: { c: [235, 240, 245], r: 3.3 }, Hp: { c: [250, 204, 21], r: 3.5 }, O: { c: [235, 85, 70], r: 5.2 }, C: { c: [88, 93, 102], r: 5.4 },
     N: { c: [59, 102, 236], r: 5.3 }, I: { c: [134, 72, 228], r: 7.4 }, Na: { c: [171, 120, 242], r: 6 }, Cl: { c: [74, 196, 98], r: 6.6 },
     Cu: { c: [205, 112, 52], r: 6 }, Zn: { c: [168, 178, 190], r: 6 }, S: { c: [234, 196, 52], r: 6.2 }, Fe: { c: [224, 130, 60], r: 6 }, Mn: { c: [156, 84, 190], r: 6 },
     Al: { c: [190, 196, 206], r: 6 }, K: { c: [143, 64, 212], r: 7 },

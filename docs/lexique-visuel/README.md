@@ -125,12 +125,30 @@ Relevé dans les 23 cours (`frontend/public/media/simulations/**/*-tableau/`). �
 - Asymptote **rouge** (branches, trace) / **orange** (lc/approche, ln/limites, ln/signe) / `faible` (symetrie, lc/miroir).
 - Zone f < 0 rouge / orange ; flèches de variation vert-rouge / cyan ; point M jaune (K.rond) mais vert, cyan, rouge ou orange ailleurs.
 
+## Décision à prendre (bloque la chimie)
+
+La voix enregistrée de chimie ch11 (`phys_ch11_transformations_deux_sens.json`, diapositive des acides, `acides.html`)
+dit « Regarde cette petite boule jaune : c'est le proton, H plus » (et en darija « الكورة الصفرا ») ; ses textes `alt`
+aussi (« une petite boule jaune, le proton H⁺ »). En chimie le H⁺ est jaune et le carbone gris ; en SVT ch1 le jaune
+est le carbone (règle de l'utilisateur : le glucose est une chaîne de billes jaunes dans toutes les matières) et le H⁺
+est rose. Passer la chimie au code du lexique (C jaune, H⁺ rose, H₃O⁺ à H⁺ rose) demande de **réécrire et
+réenregistrer cette phrase de la voix** (« petite boule rose ») : à faire avec la 2ᵉ passe des cours. En attendant, la
+chimie garde C gris et H⁺ jaune (commentaire dans chaque `commun.js`). La physique nucléaire (proton rouge) suit la même
+décision : la voix ne nomme pas la couleur du proton (vérifié pour ch4, ch5 à faire au moment du passage).
+
+## Fait en chimie (18 novembre 2026)
+
+- O et H des modèles (`Rendu.EL` des 5 `commun.js`, `Peinture.CPK` des 4 `deroule.js`) : valeurs du lexique.
+- HO⁻ : une seule couleur, bleu ciel (charge −) — il était rouge dans cin/conductimetrie, cin/pression,
+  tds/conductimetrie, tds/dilution et bleu foncé dans ab/exploiter, ab/figures ; nom écrit en bleu.
+- Électron de tlr/transfert : vert → bleu ciel.
+
 ## Reste à faire
 
 Ordre conseillé : d'abord les objets qui ont plusieurs dessins dans un même cours.
 
 1. **SVT ch2 (muscle)** : ATP → `Lexique.atp` (doré) dans `MoleculesPeintes.pastille`, voies, consommation, national ; Ca²⁺ → une couleur à lui (pas le jaune du carbone) ajoutée au lexique ; myosine/actine d'atpase.html → `MoleculesPeintes` ; une seule palette pour muscle, tendon, os (`peindreMuscle` dans `myogramme.js`) ; couleurs des métabolites dans les jauges.
 2. **SVT ch3/ch4 (génétique)** : ajouter au lexique ADN (squelette, bases A rouge / T jaune / C bleu / G vert), ARN (orange), nucléotide, ribosome, ARNt, acide aminé, chromosome, noyau (violet), hématie ; brancher `Molecules`, `Etapes.Peint` (une seule version) ; corriger rappels.html (bases permutées) et le brin neuf orange de replication.html.
-3. **Chimie** : `Rendu.EL` / `MODELES` / `Peinture.CPK` → couleurs du lexique (C jaune, H⁺ rose) ; H₃O⁺, HO⁻, électron → `Lexique.h3o`, `ho`, `electron` ; un seul bécher, pH-mètre, conductimètre, burette, thermomètre au lexique, à la place des `const Peint` recopiés dans 27 pages.
+3. **Chimie** : après la décision ci-dessus, `Rendu.EL` / `MODELES` / `Peinture.CPK` → C jaune, H⁺ rose ; H₃O⁺ (sphère orange d'ab/exploiter, ab/figures, tds/conductimetrie, tds/dilution) → `Lexique.h3o` ; Cl⁻ vert / cyan → une couleur ; H₃O⁺, HO⁻, électron → `Lexique.h3o`, `ho`, `electron` ; un seul bécher, pH-mètre, conductimètre, burette, thermomètre au lexique, à la place des `const Peint` recopiés dans 27 pages.
 4. **Physique** : nucléons → `Lexique.proton` / `neutron` (12 `sphere()`), électron → `Lexique.electron` ; ajouter au lexique condensateur (réaliste + symbole), bobine, résistor, générateur, interrupteur, lampe, oscilloscope, ampèremètre/voltmètre (à partir de `Peint` des circuits) ; une couleur par grandeur (i, u_C, u_R, u_b) ; haut-parleur, micro, laser, écran, λ → couleur (une seule fonction).
 5. **Maths** : une aide commune (tangente, asymptote, tableau de variations) avec une seule couleur par rôle.
