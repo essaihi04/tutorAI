@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le national joué pas à pas : dipôle RL — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="rl.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Le national 2023 N du dipôle RL, une étape à la fois : à gauche le circuit peint ou la courbe i(t) tracée à la craie ; à droite « Ta copie » avec la question de l'étape, puis sa correction écrite comme le barème la lit"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until set_parameters">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script src="pas-a-pas.js"></script>
+<script>
+/*
+ * National 2023 N, exercice 3, partie 1 (dipôle RL), joué pas à pas (2ᵉ passe de la logique du cours, 18 novembre 2026).
+ * Même démarche, dans le même ordre, que le RC (dipole-rc-tableau/national-pas-a-pas.html) : l'élève reconnaît les étapes.
+ * Valeurs du sujet et de son corrigé : E = 24 V, bobine de résistance négligeable ; I₀ = 48 mA ; τ = 2 ms (tangente (T)) ;
+ * R = E/I₀ = 500 Ω ; L = τ·R = 1 H ; u_L(t) = 24·e^(−500·t) (écrite u_b, la notation du cours). Étape 6 (63 %) et étape 9 (énergie) : questions ajoutées,
+ * même méthode que les nationaux qui les posent (τ : 9 sessions RL ; énergie : 4). ?sujet=rl2023n&etape=sujet | 1 … 9 | fin.
+ * Moments (pas-a-pas.js, play_until) : enonce, courbe, rappel, question, correction ; vue « sujet » : donnees, questions.
+ * Repères : 'circuit', 'fleche_i', 'fleche_uR', 'fleche_uL' (flèche de u_b), 'graphe_i', 'courbe_i', 'droite_T', 'asymptote', 'tangente',
+ * 'niveau', 'copie', 'question', 'questions', 'donnees'.
+ */
+const I0 = 48, TAU = 2;
+window.PasAPas({ id: 'rl_tableau_national_pas_a_pas', titre: 'Le national joué pas à pas : dipôle RL', sujets: {
+  rl2023n: {
+    titre: 'National 2023 N · dipôle RL',
+    circuit: { R: true, K: true, droite: 'L', affiche: '24V', nomDroite: '(L, r ≈ 0)', uL: 'u_b' },
+    donnees: ['E = 24 V ; bobine d’inductance L, de résistance négligeable.', 'On ferme K à t = 0.', 'Figure : la courbe i(t) et (T), sa tangente en t = 0.'],
+    graphes: {
+      fig2: { tmax: 12, tgrad: [2, 4, 6, 8, 10], tlabel: 't (ms)', panneaux: [
+        { id: 'i', label: 'i (mA)', ymin: 0, ymax: 58, grad: [16, 32, 48], toutesGrad: true,
+          courbes: [{ id: 'courbe_i', nom: 'i(t)', couleur: 'vert', f: t => I0 * (1 - Math.exp(-t / TAU)), etiquette: [9, 26] }],
+          droites: [{ id: 'droite_T', de: [0, 0], a: [2.3, 55.2], nom: '(T)' }] },
+      ] },
+    },
+    etapes: [
+      { titre: 'Établir l’équation différentielle de i', court: 'L’équation différentielle', vue: 'circuit',
+        question: 'Établis l’équation différentielle vérifiée par i(t).',
+        copie: ['Additivité : u_b + u_R = E', 'u_b = L·⟦di|dt⟧ (r négligeable) et u_R = R·i', 'L·⟦di|dt⟧ + R·i = E, donc ⟦di|dt⟧ + ⟦R|L⟧·i = ⟦E|L⟧'] },
+      { titre: 'Remplacer la solution dans l’équation', court: 'Dériver, remplacer', vue: 'graphe', graphe: 'fig2', trace: true,
+        question: 'i(t) = A + B·e^(−t/τ). Dérive i, puis remplace dans l’équation.',
+        copie: ['⟦di|dt⟧ = −⟦B|τ⟧·e^(−t/τ)', 'B·e^(−t/τ)·(⟦R|L⟧ − ⟦1|τ⟧) + ⟦R|L⟧·A − ⟦E|L⟧ = 0'] },
+      { titre: 'Trouver τ, A et B', court: 'τ, A et B', vue: 'graphe', graphe: 'fig2',
+        question: 'L’égalité est vraie pour tout t : déduis τ et A, puis B avec i(0) = 0.',
+        copie: ['⟦R|L⟧ − ⟦1|τ⟧ = 0, donc τ = ⟦L|R⟧ ; R·A = E, donc A = ⟦E|R⟧', 'i(0) = A + B = 0, donc B = −⟦E|R⟧'] },
+      { titre: 'Lire I₀ en régime permanent', court: 'Lecture de I₀', vue: 'graphe', graphe: 'fig2',
+        question: 'Lis l’intensité I₀ du régime permanent.',
+        copie: ['i tend vers I₀ = A = ⟦E|R⟧', 'I₀ = 48 mA'],
+        construit: [{ type: 'asymptote', id: 'asymptote', panneau: 'i', y: I0, label: 'I₀ = 48 mA' }] },
+      { titre: 'τ par la tangente (T)', court: 'τ par la tangente', vue: 'graphe', graphe: 'fig2',
+        question: 'Lis τ avec la tangente (T) à l’origine.',
+        copie: ['(T) coupe l’asymptote i = I₀ à t = τ', 'τ = 2 ms'],
+        construit: [{ type: 'tangente', id: 'tangente', panneau: 'i', t0: 0, y0: 0, t1: TAU, y1: I0, label: 'τ = 2 ms' }] },
+      { titre: 'Vérifier τ par les 63 %', court: 'τ par les 63 %', vue: 'graphe', graphe: 'fig2',
+        question: 'Vérifie τ avec la méthode des 63 %.',
+        copie: ['i(τ) = I₀(1 − e⁻¹) ≈ 0,63·I₀', '0,63 × 48 ≈ 30 mA : on lit t = 2 ms = τ'],
+        construit: [{ type: 'niveau', id: 'niveau', panneau: 'i', y: 0.632 * I0, t: TAU, labelY: '0,63·I₀ ≈ 30 mA', labelT: 't = 2 ms' }] },
+      { titre: 'Montrer que L = 1 H', court: 'L', vue: 'graphe', graphe: 'fig2',
+        question: 'Montre que L = 1 H.',
+        copie: ['τ = ⟦L|R⟧ et R = ⟦E|I₀⟧, donc L = τ·⟦E|I₀⟧', 'L = 2·10⁻³ × ⟦24|48·10⁻³⟧ = 1 H'] },
+      { titre: 'L’expression de u_b(t)', court: 'u_b(t)', vue: 'graphe', graphe: 'fig2',
+        question: 'Donne, en unités SI, l’expression numérique de u_b(t) (notée u_L dans le sujet).',
+        copie: ['u_b = L·⟦di|dt⟧ = L·⟦E|R⟧·⟦1|τ⟧·e^(−t/τ) = E·e^(−t/τ)', 'u_b(t) = 24·e^(−500·t)'] },
+      { titre: 'L’énergie de la bobine', court: 'L’énergie', vue: 'graphe', graphe: 'fig2',
+        question: 'Calcule l’énergie emmagasinée dans la bobine en régime permanent.',
+        copie: ['E_m = ½·L·I₀²', 'E_m = ½ × 1 × (48·10⁻³)² ≈ 1,2·10⁻³ J'],
+        construit: [{ type: 'point', id: 'point_I0', panneau: 'i', t: 10, y: I0, label: 'i = I₀', decalage: [-10, 26], couleur: 'cyan' }] },
+    ],
+  },
+} });
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

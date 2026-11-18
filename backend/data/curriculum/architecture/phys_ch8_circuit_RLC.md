@@ -130,7 +130,8 @@ Les trois scènes « ce qu'on règle » ont la même allure : le circuit peint �
 | Séance 4 — Ce qui fixe T₀ : L et C, pas E | **T₀ est un temps ; la tension de charge ne change pas T₀** (p1_unites, p2_charge) ; **Si C ou L est multipliée par 4 ; le national 2022** (p3_influence, p4_national) |
 | Séance 5 — U_m et φ, q(t) et i(t) ; lire un oscillogramme | **Trouver U_m et φ** (c1_depart, c2_amplitude, c3_angles) ; **Le sens de départ ; q(t) et i(t)** (c4_sens, c5_courant) ; **Lire T et trouver L ou C** (l1_mesure, l2_voisine, l3_carre, l4_2023) |
 | Séance 6 — Échange d’énergie, amortissement, entretien | **L’échange d’énergie dans le circuit LC** (en1_reservoirs, en2_depart, en3_echange, en4_somme) ; **L’énergie diminue : effet Joule et dE/dt** (a1_joule, a2_derivee, a3_dEdt, a4_perdue) ; **Lire les courbes d’énergie, puis entretenir les oscillations** (a5_courbes, k1_entretien, k2_k, k3_T0) |
-| Séance 7 — Deux sujets du national, puis le bilan | **Deux sujets du national** (n1_2020N, n2_2025N) ; **Le bilan et la carte** (bl_fiche, cr_carte) |
+| Séance 7 — Le national 2022 N, joué pas à pas | **2022 N : le sujet, l’équation, le choix de la courbe** (np0_sujet, np1_equation, np2_choix) ; **2022 N : T₀, sa lecture, L** (np3_T0, np4_lire, np5_L) ; **2022 N : l’énergie totale, les lectures, l’énergie dissipée** (np6_energie, np7_lectures, np8_dissipee) |
+| Séance 8 — L’entretien, la copie, deux sujets complets, le bilan | **2022 N : l’entretien, la copie complète** (np9_entretien, np10_copie) ; **Deux sujets du national** (n1_2020N, n2_2025N) ; **Le bilan et la carte** (bl_fiche, cr_carte) |
 
 
 ## Diapositive par diapositive
@@ -258,3 +259,85 @@ Les trois scènes « ce qu'on règle » ont la même allure : le circuit peint �
 - **Les voix**, sur le VPS (voix Bodi), une fois le quota Kaggle revenu : les pistes `pistes` du fichier `_voix.json`. Ensuite, poser les pistes, relancer le contrôle du pointage avec les vraies durées, puis remplacer le cours en ligne par la copie en attente.
 - **Les réactions préparées** des questions écrites : aucune. Une réponse libre est jugée en direct, sur l'`attendu`.
 - **Aucun fichier partagé n'a été modifié** (ni `shared/`, ni `frontend/src/`). Il n'y a aucun besoin côté lecteur.
+
+<!-- 2e passe : début -->
+## 2ᵉ passe (18 novembre 2026) : le national joué pas à pas
+
+### Ce qui manquait (évaluation de la 1ʳᵉ passe)
+Les huit nationaux du cours se jouaient par `figures.html`, `oscillogramme.html` et `energie.html`, mais la voix donnait
+les réponses ; l'élève ne cherchait seul ni le choix de la courbe, ni T₀ et L, ni l'énergie dissipée entre deux instants
+(14 sessions calculent une énergie, 13 lisent la période).
+
+### Ce qui est ajouté : le national 2022 N, partie 2, joué pas à pas (11 diapositives)
+Corrigé lu le 18/11 : C = 50 µF chargé sous 12 V ; r = 0 : courbe (C₁), T₀ = 10 ms, L = 0,05 H (π² = 10) ; r ≠ 0 : à t₀ = 0,
+u_C = 12 V et i = 0 ; à t₁ = 9 ms, u_C = 6 V et i = 140 mA ; ΔE ≈ −2,2 mJ. La figure 4 est un modèle amorti ajusté pour
+redonner exactement ces lectures (T = 10,1 ms, θ = 20,9 ms). (C₂) et (C₃) de la figure 3 sont redessinées comme les deux
+pièges de la question (amortie ; partant de 0). Question ajoutée : l'entretien (2018 N, 2020 N), placé après la partie IX
+qui l'enseigne. C'est la suite du RC 2022 N : le même condensateur, la même énergie de départ 3,6 mJ.
+
+**La règle suivie à chaque étape** (demande du 18 novembre : « simple, animé, expliqué ; ne pas tout donner au départ ; laisser
+à l'élève le temps de trouver seul ») :
+1. la voix confirme la correction de l'étape d'avant pendant qu'elle se construit au tableau (moment `rappel` : la tangente
+   se trace, la ligne du tableau d'avancement s'écrit, la réponse s'ajoute dans « Ta copie ») ;
+2. elle pose UNE question (moment `question`) en nommant l'outil, jamais le résultat ; la simulation écrit la question
+   et « … à toi d'abord » : la réponse reste cachée (`conclusions` faux par défaut) ;
+3. l'élève répond (question ouverte jugée sur l'`attendu`, ou QCM avec ses réactions préparées) ;
+4. la démonstration écrit la correction ligne par ligne, comme le barème la lit (relation, conversion, application
+   numérique, résultat avec son unité) ; la diapositive suivante la redessine au tableau (étape 1).
+Une diapositive par étape (`?etape=k`) : l'iframe se recharge et s'ouvre sur son état (règle 39). Les formules sont écrites
+en notation (fractions superposées au tableau), les unités dites en mots dans la voix.
+
+**Règle « un tableau par bloc ».** Dans cette partie, chaque étape porte sa question : c'est la demande du 18 novembre
+(« la réponse de l'élève avant la correction »), plus récente que la règle du 13 novembre. Ailleurs, elle ne change pas.
+Les questions ouvertes n'ont pas de réaction préparée : elles sont jugées en direct sur l'`attendu`, comme `rc_e2a`.
+
+**La simulation** `national-pas-a-pas.html` (nouvelle, dans le dossier du cours) et son moteur `pas-a-pas.js` (une copie
+par dossier de cours, aucun fichier partagé modifié) : figure du sujet à gauche (circuit peint avec les flèches de la
+convention récepteur, courbes tracées à la craie, tableau d'avancement), « Ta copie » à droite. Moments : `enonce`,
+`courbe`, `rappel`, `question`, `correction` ; vue `sujet` : `donnees`, `questions` ; `?etape=fin` : la copie complète.
+Vérifiée dans Chromium à 1280 × 640 et 724 × 350 (téléphone en paysage) : aucune erreur, aucun texte hors cadre, texte ≥ 15 px
+(plancher du kit), fractions sans chevauchement.
+
+#### X. Le national 2022 N, joué pas à pas
+
+| Diapositive | Titre | Visuel | À toi | Pourquoi ici |
+|---|---|---|---|---|
+| `lc_np0_sujet` | Le national 2022 N : lire le sujet deux fois | national-pas-a-pas.html?sujet=rlc2022n&etape=sujet |  | Règle 6 du professeur : le sujet lu deux fois (de quoi parle-t-il ? puis les données et ce qu'on cherche) avant tout calcul ; aucune question notée. |
+| `lc_np1_equation` | 2022 N, étape 1 : l'équation différentielle (r = 0) | national-pas-a-pas.html?sujet=rlc2022n&etape=1 | écrit | Cas type « établir l'équation » (très fréquent) : la démarche de `lc_e0a`–`lc_e0c`, en LC idéal (r = 0). |
+| `lc_np2_choix` | 2022 N, étape 2 : choisir la courbe | national-pas-a-pas.html?sujet=rlc2022n&etape=2 | QCM | Reconnaître la courbe : deux critères (pas de perte ; u_C(0) = 12 V), chacun élimine un piège. QCM avec réactions préparées. |
+| `lc_np3_T0` | 2022 N, étape 3 : l'expression de T₀ | national-pas-a-pas.html?sujet=rlc2022n&etape=3 | écrit | Dériver deux fois un cosinus et identifier T₀ = 2π√(LC) (cadre RLC4), une étape seule. |
+| `lc_np4_lire` | 2022 N, étape 4 : lire T₀ | national-pas-a-pas.html?sujet=rlc2022n&etape=4 | écrit | Lire la période sur deux périodes (13 sessions) : règle 12, l'axe avant la courbe. |
+| `lc_np5_L` | 2022 N, étape 5 : montrer que L = 0,05 H | national-pas-a-pas.html?sujet=rlc2022n&etape=5 | écrit | Trouver L (13 sessions) : le carré d'abord, π² = 10. |
+| `lc_np6_energie` | 2022 N, étape 6 : l'énergie totale (r ≠ 0) | national-pas-a-pas.html?sujet=rlc2022n&etape=6 | écrit | Énergie totale (cadre RLC6) : deux réservoirs ; la figure 4 se trace avant la question. |
+| `lc_np7_lectures` | 2022 N, étape 7 : lire u_C et i à t₀ et à t₁ | national-pas-a-pas.html?sujet=rlc2022n&etape=7 | écrit | Les quatre lectures seules, avant le calcul (une idée à la fois). |
+| `lc_np8_dissipee` | 2022 N, étape 8 : l'énergie dissipée | national-pas-a-pas.html?sujet=rlc2022n&etape=8 | écrit | Énergie dissipée entre deux instants (14 sessions calculent une énergie) : E₀, E₁, la différence et son signe. |
+| `lc_np9_entretien` | 2022 N, étape 9 : entretenir les oscillations | national-pas-a-pas.html?sujet=rlc2022n&etape=9 | écrit | Question ajoutée (2018 N, 2020 N) : u_G = k·i, k = résistance totale, période T₀. |
+| `lc_np10_copie` | 2022 N : la copie complète | national-pas-a-pas.html?sujet=rlc2022n&etape=fin |  | Règle 33 : la copie complète vient après la dernière étape, jamais avant ; chaque réponse se relit comme le barème la lit (relation, application numérique, résultat et unité). |
+
+### Les mots
+`python -X utf8 scripts/voix/verifier_mots.py en_attente/phys_ch8_circuit_RLC` sur chaque piste nouvelle ou réécrite : plus aucun mot
+rare évitable. Remplacés : « milliampères » (0 fois dans le corpus de la voix) → « milliampère » ; « kiloohm(s) » (0) →
+« mille ohm » ; « microfarads » (0) → « micro farad » ; « millijoules » (1) → « millijoule » ; « palier » (0) → « la valeur
+finale » ; « sommets » (0) → « l'amplitude » ; « quarante-huit », « cinquante-six », « trente-neuf » écrits sans trait
+d'union (« quarante huit ») ; en darija, « فارغ » → « خاوي », « نرتبو » → « نكتبو l'équation », « كتوافق » → « كيكون عند »,
+« ضاعت » → « dissipée », « كيصحح / كيقراها » → « فالتصحيح » ; au ch9, les réactions de `tl_r6_classer` (« portail », « الراسب »,
+« كنحكمو »…) et de `tl_f8_variable` (« تقلقش », « فالتابلو », « quelles »…) sont réécrites. Restent, parce que ce sont des
+termes du programme : anri (henry), henry (lu « anri »), microfarads, pseudo-période, pseudo-période (terme du programme), sommets (liste `a_ecouter` du fichier des voix).
+Pistes à mettre en voix : 51, dont 42 de la 2ᵉ passe (`phys_ch8_circuit_RLC_voix.json`, champ « passe »).
+
+### Vérifications faites (2ᵉ passe)
+- Les copies en attente se chargent ; chaque `mot` du pointage et des démonstrations est un extrait exact de sa voix
+  (`scripts/logique/outils.py`, `verifier_mots`) ; les blocs suivent l'ordre du cours.
+- `python backend/scripts/verifier_pointage_simulations.py <cours> --ecarts` : aucune erreur « introuvable », ni sur la copie
+  en attente ni sur le cours en ligne. Les seuls avertissements des nouvelles diapositives sont des « GESTE » : sans piste,
+  la durée vaut 0 et tous les gestes tombent au même instant ; à relancer après la voix.
+- `cd backend && python -m pytest -q app/tests -k "course or cours or concentration"` (résultat dans le rapport du commit).
+- Simulations : Chromium, 1280 × 640 et 724 × 350, chaque étape à `question` puis `correction` : pas d'erreur console,
+  aucun texte hors cadre (`__horsCadre` vide), la réponse invisible avant `correction`.
+
+### Ce qui reste à faire (hors de cette session)
+- Les voix (Bodi, VPS, quota Kaggle épuisé aujourd'hui) des pistes du fichier `_voix.json`, puis relancer le contrôle du
+  pointage avec les vraies durées.
+- Les questions ouvertes de l'exercice joué n'ont pas de réaction préparée (jugées en direct sur l'`attendu`).
+- Aucun fichier partagé n'a été modifié (`shared/`, `frontend/src/`).
+<!-- 2e passe : fin -->
