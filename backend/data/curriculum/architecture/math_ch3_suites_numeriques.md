@@ -36,11 +36,13 @@ auxiliaire géométrique 8/20, limite par qⁿ 10/20), était lu et non joué.
 3. **L'exercice du national 2024 joué question par question** : cinq diapositives, chacune une question posée avant
    sa correction, chacune écrite à la craie ligne par ligne, la convergence sur l'animation des deux bons couples.
    Exception écrite à « un seul À toi par bloc » pour ce bloc (règle 41, demande du 18 novembre).
-4. **Rien retiré** : aucune diapositive hors cadre.
+4. **La suite du problème uₙ₊₁ = g(uₙ) en deux étapes** (10 sujets sur 20 : signe de f(x) − x et ℓ = f(ℓ)) :
+   le sens de variation, puis la convergence et la limite, chacune avant sa correction, sur l'escalier animé.
+5. **Rien retiré** : aucune diapositive hors cadre.
 
 ## L'architecture, diapositive par diapositive
 
-75 diapositives, 7 séances, 22 blocs, durée prévue 209 min. « ✏️ » : la diapositive porte le « À toi » du bloc ; « 🔊 » : sa voix est gardée ; « 🆕 voix » : à enregistrer.
+76 diapositives, 7 séances, 23 blocs, durée prévue 210 min. « ✏️ » : la diapositive porte le « À toi » du bloc ; « 🔊 » : sa voix est gardée ; « 🆕 voix » : à enregistrer.
 
 ### Séance 1 — Une suite ; arithmétique et géométrique
 
@@ -205,14 +207,20 @@ auxiliaire géométrique 8/20, limite par qⁿ 10/20), était lu et non joué.
 | `su_f2_place_u0` | La place de u₀ change l'escalier | 🔊 | La place de u₀ change l'escalier. |
 | `su_f3_encadrement_f` | L'encadrement vient des variations de f | ✏️ 🔊 | L'encadrement vient des variations de f ; l'élève répond. |
 
-**Sens de variation, conditions, puis ℓ = f(ℓ)** (`su_s5_b3`)
+**Sens de variation par f(x) − x ; les conditions ; choisir ℓ** (`su_n6_b2`)
 
 | Diapositive | Titre | | Pourquoi ici |
 |---|---|---|---|
 | `su_f4_sens_f` | Le sens de variation vient de f(x) − x | 🔊 | Le sens de variation vient de f(x) − x. |
 | `su_f5_conditions` | Les conditions avant ℓ = f(ℓ) | 🔊 | Les conditions avant ℓ = f(ℓ). |
 | `su_f6_choisir` | Choisir la bonne solution | 🔊 | Choisir la bonne solution. |
-| `su_f7_national` | À toi : la suite du problème du national | ✏️ 🔊 | La suite du problème d'analyse ; l'élève enchaîne (reste d'un trait : voir « Ce qui reste à faire »). |
+
+**La suite du problème, en deux étapes : ta réponse avant la correction** (`su_n6_b3`)
+
+| Diapositive | Titre | | Pourquoi ici |
+|---|---|---|---|
+| `su_f7_national` | À toi : la suite du problème, étape 1 — le sens de variation | ✏️ 🆕 voix | RÉÉCRIT : la suite du problème coupée en deux étapes. Étape 1 seule : le sens de variation par le signe de g(x) − x, sur l'escalier animé ; l'élève répond avant la correction. Avant, une seule question demandait « croissante, puis la limite ». |
+| `su_f7_national_b` | À toi : la suite du problème, étape 2 — convergente, puis ℓ = g(ℓ) | ✏️ 🆕 voix | NOUVELLE : étape 2, convergente (croissante et majorée), les conditions de ℓ = g(ℓ) (g continue car dérivable, g(I) ⊂ I, u₀ ∈ I), puis l'élève donne la limite ; même scène que l'étape 1 (le professeur montre les deux points d'intersection). |
 
 **Plus petit rang, somme et sa limite** (`su_s6_b1`)
 
@@ -256,7 +264,10 @@ auxiliaire géométrique 8/20, limite par qⁿ 10/20), était lu et non joué.
 
 ## Ce qui reste à faire
 
-- Voix : `math_ch3_suites_numeriques_voix.json` (12 pistes, dont 6 diapositives).
-- Réactions préparées pour les trois questions nouvelles (`su_e1_complet`, `su_e1_q2`, `su_e1_q3`).
-- `su_f7_national` demande encore « croissante, puis la limite » en une seule question : à couper en deux étapes
-  (signe de g(x) − x, puis ℓ = g(ℓ)) dans une passe suivante.
+- Voix : `math_ch3_suites_numeriques_voix.json` (18 pistes, dont 8 diapositives).
+- Réactions préparées pour les cinq questions nouvelles (`su_e1_complet`, `su_e1_q2`, `su_e1_q3`, `su_f7_national`,
+  `su_f7_national_b`).
+- La suite du problème (`su_f7_national`, `su_f7_national_b`) est coupée en deux étapes, chacune posée avant sa
+  correction ; ses deux questions sont nouvelles et attendent leurs réactions préparées (les anciennes réactions
+  répondaient aux deux étapes à la fois). Bloc `su_n6_b3` : deux « À toi » à la suite, même exception que l'exercice
+  national.

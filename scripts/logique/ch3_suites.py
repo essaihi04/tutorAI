@@ -186,6 +186,79 @@ if e1.get("exercises"):
              "من v indice n. سؤال: شنو هي la limite ديال u indice n؟",
              q_lim, [pt("v zéro égale", "v0"), pt("إذن v indice n", "vn"), pt("ومن بعد كنخرجو", "question")],
              ["K4", "K5"], {"q": rep_lim})
+# 3. La suite du problème (uₙ₊₁ = g(uₙ)) en deux étapes : le sens de variation, puis la convergence et la limite.
+f7 = S["su_f7_national"]
+if "su_f7_national_b" not in S and f7["question"]["prompt"].startswith("Montre que (uₙ) est croissante, puis"):
+    ancienne = f7["question"]["demonstration"]["lignes"]
+    base7 = copy.deepcopy(f7)
+    f7["title"] = "À toi : la suite du problème, étape 1 — le sens de variation"
+    f7["screen_content"] = {
+        "lead": "Étape 1 : le signe de g(x) − x.",
+        "bullets": ["g(x) = (4x + 3)/(x + 2), u₀ = 1, uₙ₊₁ = g(uₙ) ; on a montré 1 ≤ uₙ ≤ 3.",
+                    "uₙ₊₁ − uₙ = g(uₙ) − uₙ : le signe de g(x) − x sur [1 ; 3] ?"],
+        "student_trace": "g(x) − x = (3 − x)(x + 1)/(x + 2) ≥ 0 sur [1 ; 3] et uₙ ∈ [1 ; 3], donc uₙ₊₁ − uₙ ≥ 0 : "
+                         "(uₙ) est croissante."}
+    texte(f7,
+          "À toi, avec une suite de problème. g de x égale quatre x plus trois, sur x plus deux. u zéro égale un, et u "
+          "indice n plus un égale g de u indice n. On a déjà montré que tous les termes sont entre un et trois. "
+          "Regarde l'escalier : il part de un. Étape un, le sens de variation : u indice n plus un moins u indice n, "
+          "c'est g de u indice n moins u indice n. On étudie donc le signe de g de x moins x, entre un et trois. "
+          "Question : la suite est-elle croissante ou décroissante ?",
+          "دابا نتا، مع suite ديال problème. g de x égale quatre x plus trois، sur x plus deux. u zéro égale un، "
+          "وu indice n plus un égale g de u indice n. ديجا بينا بلي كاع les termes بين un وtrois. "
+          "شوف الخطوط: كيبداو من un. الخطوة اللولة، le sens de variation: u indice n plus un moins u indice n، "
+          "هي g de u indice n moins u indice n. إذن كنقراو le signe ديال g de x moins x، بين un وtrois. "
+          "سؤال: واش la suite croissante ولا décroissante؟")
+    f7["question"] = qcm(
+        "g(x) − x = (3 − x)(x + 1)/(x + 2) et 1 ≤ uₙ ≤ 3. La suite (uₙ) est :",
+        ["décroissante", "croissante", "constante"], 1,
+        "شوف هاد السؤال: g de x moins x égale trois moins x، fois x plus un، sur x plus deux. واش la suite croissante ولا décroissante؟",
+        "g de x moins x، كنديرو نفس المقام: moins x carré plus deux x plus trois، sur x plus deux. "
+        "كنديرو la factorisation ديال الفوق: trois moins x، fois x plus un. بين un وtrois: trois moins x positif، "
+        "x plus un وx plus deux positifs، إذن g de x moins x positif. u indice n بين un وtrois، "
+        "إذن u indice n plus un moins u indice n positif: la suite croissante.",
+        [(ancienne[0]["texte"], "g de x moins x، كنديرو"), (ancienne[1]["texte"], "كنديرو la factorisation"),
+         (ancienne[2]["texte"], "بين un وtrois:"), (ancienne[3]["texte"], "u indice n بين un")])
+    f7["concentration"] = {
+        "demarrer": "start",
+        "pointage": [pt("شوف الخطوط: كيبداو", "escalier")],
+        "cahier": f7["screen_content"]["student_trace"], "reponses": {}}
+
+    b7 = base7
+    b7["id"] = "su_f7_national_b"
+    b7["title"] = "À toi : la suite du problème, étape 2 — convergente, puis ℓ = g(ℓ)"
+    b7["screen_content"] = {
+        "lead": "Étape 2 : convergente, puis la limite.",
+        "bullets": ["(uₙ) est croissante (étape 1) et majorée par 3.",
+                    "g est continue sur I = [1 ; 3] car dérivable ; g(I) = [7/3 ; 3] ⊂ I ; u₀ ∈ I.",
+                    "ℓ = g(ℓ) dans I : ℓ = ?"],
+        "student_trace": "(uₙ) croissante et majorée par 3 : convergente ; g continue sur I (car dérivable), "
+                         "g(I) = [g(1) ; g(3)] ⊂ I, u₀ ∈ I : ℓ = g(ℓ), ℓ ∈ I, donc ℓ = 3."}
+    texte(b7,
+          "Étape deux. La suite est croissante, et majorée par trois : elle est convergente. Regarde la courbe : elle "
+          "coupe la droite y égale x en deux points. Pour la limite l, on vérifie les conditions : g est continue sur "
+          "l'intervalle, l'image de l'intervalle est dans l'intervalle, et u zéro est dedans. Alors l égale g de l. "
+          "Question : quelle est la limite de la suite ?",
+          "الخطوة الثانية. la suite croissante، وmajorée par trois: إذن convergente. شوف la courbe: كتقطع la droite "
+          "y égale x فجوج ديال النقط. باش نلقاو la limite l، كنشوفو les conditions: g continue sur l'intervalle، "
+          "l'image ديال l'intervalle داخل l'intervalle، وu zéro داخل حتى هو. إذن l égale g de l. "
+          "سؤال: شنو هي la limite ديال la suite؟")
+    b7["question"] = qcm(
+        "ℓ = g(ℓ) et ℓ ∈ [1 ; 3]. lim uₙ = ?", ["−1", "1", "3"], 2,
+        "شوف هاد السؤال: l égale g de l، وl بين un وtrois. شنو هي la limite ديال u indice n؟",
+        "la suite croissante وmajorée par trois، إذن convergente. g continue sur l'intervalle، حيت dérivable. "
+        "وg prime de x égale cinq، sur x plus deux au carré، positif. إذن l'image ديال l'intervalle، "
+        "من g de un حتى g de trois، من sept tiers حتى trois، داخل l'intervalle. وu zéro égale un، داخل حتى هو. "
+        "إذن l solution ديال g de x égale x: trois moins x، fois x plus un، égale zéro، x égale trois ولا moins un. "
+        "moins un ماشي فl'intervalle، إذن la limite هي trois.",
+        [(ancienne[4]["texte"], "la suite croissante وmajorée"), (ancienne[5]["texte"], "g continue sur"),
+         (ancienne[6]["texte"], "إذن l'image ديال"), (ancienne[7]["texte"], "إذن l solution"),
+         (ancienne[8]["texte"], "moins un ماشي")])
+    b7["concentration"] = {
+        "demarrer": "start",
+        "pointage": [pt("شوف la courbe:", "courbe_et_droite"), {"mot": "فجوج ديال النقط.", "repere": "point_trois"}],
+        "cahier": b7["screen_content"]["student_trace"], "reponses": {}}
+    NOUVELLES["su_f7_national_b"] = b7
 open(CH, "w", encoding="utf-8").write(json.dumps(d, ensure_ascii=False, indent=2) + "\n")
 
 PARTIES = [
@@ -200,7 +273,10 @@ PARTIES = [
 d2 = json.load(open(CH, encoding="utf-8"))
 for a in d2["activities"]:
     if a["id"] not in ("su_partie1", "su_partie2", "su_partie8"):
-        PARTIES.append((a["id"], a["title"], a["phase"], [s["id"] for s in a["slides"]]))
+        ids = [s["id"] for s in a["slides"]]
+        if "su_f7_national" in ids and "su_f7_national_b" not in ids:
+            ids.insert(ids.index("su_f7_national") + 1, "su_f7_national_b")
+        PARTIES.append((a["id"], a["title"], a["phase"], ids))
 PARTIES.sort(key=lambda p: int(p[0].replace("su_partie", "").replace("su_bilan", "99")))
 PARTIES.insert(-1, ("su_partie8", "VIII. Problèmes : rang, somme ; un exercice national question par question", "evaluation",
                     P("p1_rang", "p2_somme_mixte", "p3_limite_somme", "e1_complet", "e1_q2", "e1_q3", "e1_q4", "e1_q5")))
@@ -236,7 +312,14 @@ for k, (sid, st) in enumerate([("su_s4", "Séance 4 — La suite auxiliaire ; le
                                 ("su_s6", "Séance 6 — La suite uₙ₊₁ = f(uₙ) ; rang et somme")]):
     blocs = suite[3 * k:3 * k + 3]
     if blocs:
-        SEANCES.append((sid, st, [(b, titres[b], anciens[b]) for b in blocs]))
+        lignes = []
+        for b in blocs:
+            if b == "su_s5_b3":
+                lignes.append(("su_n6_b2", "Sens de variation par f(x) − x ; les conditions ; choisir ℓ", P("f4_sens_f", "f5_conditions", "f6_choisir")))
+                lignes.append(("su_n6_b3", "La suite du problème, en deux étapes : ta réponse avant la correction", P("f7_national", "f7_national_b")))
+            else:
+                lignes.append((b, titres[b], [i for i in anciens[b] if i != "su_f7_national_b"]))
+        SEANCES.append((sid, st, lignes))
 SEANCES.append(("su_s7", "Séance 7 — Un exercice national, question par question ; le bilan", [
     ("su_n8_b1", "National 2024 : cinq questions, ta réponse avant la correction", P("e1_complet", "e1_q2", "e1_q3", "e1_q4", "e1_q5")),
     ("su_n8_b2", "Ce qu'il faut retenir ; la carte", P("e2_bilan", "e3_carte"))]))
