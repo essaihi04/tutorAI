@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Exercices du national joués pas à pas — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="radio.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un exercice du national joué étape par étape : le document peint, la courbe de l’activité tracée dans le temps, puis chaque étape écrite seulement à son moment"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until set_time">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="exposants.js"></script>
+<script src="noyaux.js"></script>
+<script>
+/*
+ * Exercices du national joués pas à pas (cours « Décroissance radioactive », 2e Bac PC BIOF, 2ᵉ passe du 18 novembre 2026 ;
+ * professeur règles 33, 37, 41 ; simulations-au-tableau règle 14). Une vue par exercice (?vue=…), avec les valeurs du sujet :
+ *   datation  — national 2022 R : bois ancien a₁ = 318 Bq, bois récent a₀ = 418 Bq, t½ = 5730 ans → t₁ ≈ 2,26·10³ ans ;
+ *   pu2021    — national 2021 N : stimulateur cardiaque au plutonium 238 (α), a₀ = 1,0·10¹¹ Bq, t½ lue = 88 ans,
+ *               λ ≈ 2,49·10⁻¹⁰ s⁻¹, N₀ ≈ 4,0·10²⁰, 30 % désintégrés → t_max ≈ 45 ans ;
+ *   iode2022  — national 2022 N : iode 131 (β⁻) → xénon 131, t½ = 8 jours, 95 % désintégrés → t₁ ≈ 34,6 jours ;
+ *   cd2025    — national 2025 N : cadmium 107 → argent 107 + positon (β⁺), t½ = 6,93 h, a₀ = 1,25·10¹² Bq,
+ *               N₀ ≈ 4,5·10¹⁶, entre 2t½ et 3t½ : N_d = N₀/8 ≈ 5,6·10¹⁵.
+ * Rien de décisif avant son moment : la question de l’élève se pose quand la scène est figée sur la consigne (« ? »),
+ * la correction n’est écrite qu’au moment suivant (la diapositive suivante la rejoue sur la voix). À gauche : le document
+ * peint (objet réel, éclairs pour l’œil), l’équation et les données, puis la liste des résultats déjà trouvés ; à droite
+ * en haut : la courbe tracée dans le temps ; à droite en bas : l’étape en cours, écrite comme le barème la lit.
+ * ?depart=<moment> : la page s’ouvre figée sur ce moment (tout ce qui précède est écrit) ; `reset` y revient, figé.
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+const lisse = u => { u = clamp(u); return u * u * (3 - 2 * u); };
+const Q = new URLSearchParams(location.search);
+const LN2 = 0.693;
+
+/* ── Les quatre exercices : déroulé (nom, durée, ce qu’on voit), courbe, étapes ─────────────────────────────── */
+const VUES = {
+  datation: {
+    titre: 'National 2022 R : dater un bois ancien',
+    suite: [['bois', 1.6, 'deux morceaux de bois : un bois ancien et un bois récent de même masse'],
+      ['mesure', 2.6, 'le compteur mesure chaque bois : a₁ = 318 Bq (ancien), a₀ = 418 Bq (récent) ; t½ = 5730 ans'],
+      ['courbe', 3.2, 'la courbe a(t) du carbone 14 se trace depuis a₀ = 418 Bq'],
+      ['inconnue', 2.2, 'a₁ = 318 Bq rejoint la courbe : son abscisse est l’âge t₁ cherché (t₁ = ?)'],
+      ['etape1', 5.2, 'étape 1 : la relation, de a₁ = a₀·e^(−λt₁) à t₁ = (1/λ)·ln(a₀/a₁)'],
+      ['etape2', 4.4, 'étape 2 : λ = ln2/t½ = 0,693/5730 ≈ 1,21·10⁻⁴ an⁻¹'],
+      ['etape3', 4.8, 'étape 3 : t₁ = (1/λ)·ln(418/318) ≈ 2,26·10³ ans, marqué sur l’axe'],
+      ['verif', 4.4, 'vérification : a₁ > a₀/2, donc t₁ < t½ = 5730 ans, cohérent'], ['fin', .4, 'fin']],
+    g: { a0: 418, td: 5730, tmax: 12000, ymax: 460, xnom: 't (ans)', ynom: 'a (Bq)',
+      xt: [[0, '0'], [2000, '2000'], [4000, '4000'], [6000, '6000'], [8000, '8000'], [10000, '10 000']], yt: [[100, '100'], [200, '200'], [300, '300'], [400, '400']] },
+    etapes: [
+      { nom: 'etape1', titre: 'Étape 1 — la relation', res: '① t_1 = ⟦1|λ⟧·ln(⟦a_0|a_1⟧)', lignes: ['a_1 = a_0·e^{−λ·t₁}  donc  ⟦a_0|a_1⟧ = e^{λ·t₁}', 'ln(⟦a_0|a_1⟧) = λ·t_1', 't_1 = ⟦1|λ⟧·ln(⟦a_0|a_1⟧)'] },
+      { nom: 'etape2', titre: 'Étape 2 — la constante λ', res: '② λ ≈ 1,21·10⁻⁴ an⁻¹', lignes: ['λ = ⟦ln2|t½⟧', 'λ = ⟦0,693|5730 ans⟧', 'λ ≈ 1,21·10⁻⁴ an⁻¹'] },
+      { nom: 'etape3', titre: 'Étape 3 — l’âge t₁', res: '③ t_1 ≈ 2,26·10³ ans', lignes: ['t_1 = ⟦1|λ⟧·ln(⟦a_0|a_1⟧)', '⟦1|λ⟧ ≈ 8,26·10³ ans ;  ln(⟦418|318⟧) ≈ 0,273', 't_1 ≈ 8,26·10³ × 0,273 ≈ 2,26·10³ ans'] },
+      { nom: 'verif', titre: 'On vérifie', lignes: ['a_1 = 318 Bq > ⟦a_0|2⟧ = 209 Bq', 'donc t_1 < t½ = 5730 ans', '2,26·10³ ans < 5730 ans : cohérent ✓'] }],
+  },
+  pu2021: {
+    titre: 'National 2021 N : le stimulateur cardiaque au plutonium 238',
+    suite: [['document', 1.8, 'un stimulateur cardiaque : sa pile contient du plutonium 238, radioactif α'],
+      ['equation', 3.4, 'l’équation à compléter : ²³⁸₉₄Pu → ᴬ_Z X + ⁴₂He, et le tableau Pa 91, U 92, Np 93, Pu 94'],
+      ['soddy', 5.4, 'correction : Soddy donne A = 234, Z = 92 : le noyau fils est l’uranium 234'],
+      ['trace', 3.4, 'la courbe a(t) se trace (axe des temps en ans, a en 10¹⁰ Bq)'],
+      ['a0', 1.6, 'a₀ = 1,0·10¹¹ Bq lu à t = 0'],
+      ['moitie', 2.0, 'a₀/2 = 5,0·10¹⁰ Bq : horizontale jusqu’à la courbe'],
+      ['t_demi', 2.4, 'on descend sur l’axe des temps : t½ = 88 ans'],
+      ['lambda', 5.6, 'λ en s⁻¹ : t½ = 88 × 365 × 24 × 3600 s ≈ 2,78·10⁹ s, λ ≈ 2,49·10⁻¹⁰ s⁻¹'],
+      ['n0', 4.6, 'N₀ = a₀/λ ≈ 4,0·10²⁰ noyaux'],
+      ['pourcent', 2.2, '30 % des noyaux désintégrés : t_max = ?'],
+      ['t_max', 6.4, 'il reste 70 % : 0,70 = e^(−λ·t_max), t_max ≈ 45 ans, marqué sur la courbe'],
+      ['verif', 4.0, 'vérification : 70 % restent, plus que la moitié, donc t_max < t½ = 88 ans'], ['fin', .4, 'fin']],
+    g: { a0: 10, td: 88, tmax: 400, ymax: 11, xnom: 't (ans)', ynom: 'a (10¹⁰ Bq)',
+      xt: [[0, '0'], [100, '100'], [200, '200'], [300, '300'], [400, '400']], yt: [[2, '2'], [4, '4'], [6, '6'], [8, '8'], [10, '10']] },
+    eq: { pere: ['Pu', 238, 94], fils: ['U', 234, 92], inconnu: ['X', 'A', 'Z'], part: '[4,2]He', tab: 'Pa : 91   U : 92   Np : 93   Pu : 94' },
+    etapes: [
+      { nom: 'soddy', titre: 'Lois de Soddy', lignes: ['A : 238 = A + 4  ⇒  A = 234', 'Z : 94 = Z + 2  ⇒  Z = 92', 'Z = 92 : uranium'] },
+      { nom: 't_demi', titre: 'Lire t½ sur la courbe', res: 't½ = 88 ans', lignes: ['a_0 = 1,0·10¹¹ Bq', '⟦a_0|2⟧ = 5,0·10¹⁰ Bq → t½ = 88 ans'] },
+      { nom: 'lambda', titre: 'La constante λ (a en Bq)', res: 'λ ≈ 2,49·10⁻¹⁰ s⁻¹', lignes: ['t½ = 88 × 365 × 24 × 3600 s', 't½ ≈ 2,78·10⁹ s', 'λ = ⟦ln2|t½⟧ = ⟦0,693|2,78·10⁹ s⟧', 'λ ≈ 2,49·10⁻¹⁰ s⁻¹'] },
+      { nom: 'n0', titre: 'Le nombre N₀', res: 'N_0 ≈ 4,0·10²⁰ noyaux', lignes: ['a_0 = λ·N_0  donc  N_0 = ⟦a_0|λ⟧', 'N_0 = ⟦1,0·10¹¹|2,49·10⁻¹⁰⟧', 'N_0 ≈ 4,0·10²⁰ noyaux'] },
+      { nom: 't_max', titre: '30 % désintégrés', res: 't_max ≈ 45 ans', lignes: ['il reste 70 % : N = 0,70·N_0', 'ln(0,70) = −λ·t_max', 't_max = ⟦t½|ln2⟧·ln(⟦1|0,70⟧) = ⟦88|0,693⟧ × 0,357', 't_max ≈ 45 ans'] },
+      { nom: 'verif', titre: 'On vérifie', lignes: ['70 % restent : plus que la moitié', 'donc t_max < t½ = 88 ans', '45 ans < 88 ans : cohérent ✓'] }],
+  },
+  iode2022: {
+    titre: 'National 2022 N : l’iode 131',
+    suite: [['document', 1.8, 'une dose d’iode 131, radioactif β⁻, injectée à un patient'],
+      ['equation', 3.4, 'l’équation à compléter : ¹³¹₅₃I → ᴬ_Z X + ⁰₋₁e, et le tableau Te 52, Xe 54, Cs 55'],
+      ['soddy', 5.4, 'correction : Soddy donne A = 131, Z = 54 : le noyau fils est le xénon 131'],
+      ['trace', 3.4, 'la courbe a(t) se trace ; t½ = 8 jours (lue sur cette courbe dans le cours)'],
+      ['pourcent', 2.2, '95 % des noyaux désintégrés : t₁ = ?'],
+      ['t1', 6.4, 'il reste 5 % : 0,05 = e^(−λ·t₁), t₁ ≈ 34,6 jours, marqué sur la courbe'],
+      ['verif', 4.4, 'vérification : à 4t½ = 32 j il reste 6,25 %, à 5t½ = 40 j 3,1 % : 5 % tombe entre les deux'], ['fin', .4, 'fin']],
+    g: { a0: 4, td: 8, tmax: 48, ymax: 4.4, xnom: 't (jours)', ynom: 'a (10⁶ Bq)',
+      xt: [[0, '0'], [8, '8'], [16, '16'], [24, '24'], [32, '32'], [40, '40'], [48, '48']], yt: [[1, '1'], [2, '2'], [3, '3'], [4, '4']] },
+    eq: { pere: ['I', 131, 53], fils: ['Xe', 131, 54], inconnu: ['X', 'A', 'Z'], part: '[0,-1]e', tab: 'Te : 52   Xe : 54   Cs : 55' },
+    etapes: [
+      { nom: 'soddy', titre: 'Lois de Soddy', lignes: ['A : 131 = A + 0  ⇒  A = 131', 'Z : 53 = Z − 1  ⇒  Z = 54', 'Z = 54 : xénon'] },
+      { nom: 't1', titre: '95 % désintégrés', res: 't_1 ≈ 34,6 jours', lignes: ['il reste 5 % : N = 0,05·N_0', 'ln(0,05) = −λ·t_1', 't_1 = ⟦t½|ln2⟧·ln(⟦1|0,05⟧) = ⟦8|0,693⟧ × ln 20', 't_1 ≈ 34,6 jours'] },
+      { nom: 'verif', titre: 'On vérifie', lignes: ['4·t½ = 32 j : il reste 6,25 %', '5·t½ = 40 j : il reste 3,1 %', '32 j < 34,6 j < 40 j : cohérent ✓'] }],
+  },
+  cd2025: {
+    titre: 'National 2025 N : le cadmium 107',
+    suite: [['document', 1.8, 'un échantillon de cadmium 107 ; il se désintègre en argent 107 et émet une particule et un rayonnement γ'],
+      ['equation', 3.4, 'l’équation à compléter : ¹⁰⁷₄₈Cd → ¹⁰⁷₄₇Ag + ᴬ_Z e + γ'],
+      ['soddy', 5.0, 'correction : Soddy donne A = 0, Z = 1 : un positon, la désintégration est β⁺'],
+      ['trace', 3.4, 'la courbe N(t) se trace, l’axe des temps gradué en demi-vies ; t½ = 6,93 h, a₀ = 1,25·10¹² Bq'],
+      ['n0', 5.4, 'N₀ = a₀/λ = a₀·t½/ln2 ≈ 4,5·10¹⁶ noyaux'],
+      ['nd', 6.0, 'à 2t½ il reste N₀/4, à 3t½ N₀/8 : entre les deux, N_d = N₀/8 ≈ 5,6·10¹⁵ noyaux'], ['fin', .4, 'fin']],
+    g: { a0: 1, td: 6.93, tmax: 27.72, ymax: 1.1, xnom: 't', ynom: 'N', N: true,
+      xt: [[0, '0'], [6.93, 't½'], [13.86, '2t½'], [20.79, '3t½'], [27.72, '4t½']], yt: [[1, 'N_0'], [.5, '0,5·N_0'], [.25, '0,25·N_0']] },
+    eq: { pere: ['Cd', 107, 48], fils: ['Ag', 107, 47], inconnu: ['e', 'A', 'Z'], part: null, fixe: true, tab: ['t½ = 6,93 h', 'a_0 = 1,25·10¹² Bq'] },
+    etapes: [
+      { nom: 'soddy', titre: 'Lois de Soddy', lignes: ['A : 107 = 107 + A  ⇒  A = 0', 'Z : 48 = 47 + Z  ⇒  Z = 1', '⁰₁e : un positon → β⁺'] },
+      { nom: 'n0', titre: 'Le nombre N₀', res: 'N_0 ≈ 4,5·10¹⁶ noyaux', lignes: ['t½ = 6,93 × 3600 s ≈ 2,49·10⁴ s', 'N_0 = ⟦a_0|λ⟧ = ⟦a_0·t½|ln2⟧', 'N_0 = ⟦1,25·10¹² × 2,49·10⁴|0,693⟧ ≈ 4,5·10¹⁶'] },
+      { nom: 'nd', titre: 'Entre 2t½ et 3t½', res: 'N_d ≈ 5,6·10¹⁵ noyaux', lignes: ['à 2t½ : N_1 = ⟦N_0|4⟧ ; à 3t½ : N_2 = ⟦N_0|8⟧', 'N_d = N_1 − N_2 = ⟦N_0|4⟧ − ⟦N_0|8⟧ = ⟦N_0|8⟧', 'N_d ≈ ⟦4,5·10¹⁶|8⟧ ≈ 5,6·10¹⁵ noyaux'] }],
+  },
+};
+/* Chaque étape dure au moins le temps de l’écrire (titre, puis chaque ligne à la vitesse de la craie) : figée sur la fin
+ * d’une étape, la scène montre l’étape entière. */
+for (const v of Object.values(VUES)) for (const e of v.etapes) {
+  const besoin = .9 + e.lignes.reduce((t, l) => t + Math.max(.5, l.length / 14) + .3, 0), s = v.suite.find(x => x[0] === e.nom);
+  if (s && s[1] < besoin) s[1] = +besoin.toFixed(2);
+}
+const VUE = VUES[Q.get('vue')] ? Q.get('vue') : 'datation';
+const V = VUES[VUE];
+const D = {}, M = {}; { let t = 0; for (const [n, d] of V.suite) { D[n] = t; t += d; M[n] = t; } }
+const FIN = M.fin;
+const MOTIF = Object.fromEntries(V.suite.map(s => [s[0], s[2]]));
+const DEPART = Q.get('depart') in M ? M[Q.get('depart')] : 0;
+const S = { t: DEPART, running: false, jusqua: null, motif: '', fait: false, emis: 0 };
+const commence = nom => S.fait || S.t > D[nom] + 1e-4;       // le moment a commencé (figé sur la fin du moment d’avant : pas encore)
+const vu = nom => S.fait || S.t >= M[nom] - 1e-6;           // le moment est fini
+const apparait = (t0, d = .6) => (S.fait ? 1 : clamp((S.t - t0) / d));
+
+/* ── Géométrie (cadre de hauteur 420, largeur scene.L ≥ 760) ─────────────────────────────────────────────── */
+const GA = { x: 12, w: 292 };                       // colonne de gauche : document, équation, données, résultats
+let L = 760;
+const G = () => ({ x0: 386, x1: L - 30, y0: 190, y1: 46 });   // la courbe
+const SX = () => 332;
+const YE = 236;                                     // ligne de base de l’équation (A et Z au-dessus et au-dessous)                                // l’étape en cours (sous la courbe)
+const xT = t => { const g = G(); return g.x0 + t / V.g.tmax * (g.x1 - g.x0); };
+const yA = a => { const g = G(); return g.y0 - a / V.g.ymax * (g.y0 - g.y1); };
+const aDe = t => V.g.a0 * Math.exp(-LN2 / V.g.td * t);
+const tDe = a => V.g.td / LN2 * Math.log(V.g.a0 / a);
+
+/* ── Peinture (pour l’œil : les valeurs écrites restent exactes) ─────────────────────────────────────────── */
+/* Mêmes dessins que dans le reste du cours (professeur règle 43, simulations-au-tableau règle 15) : l’éclair d’une
+ * désintégration, le noyau en grappe, la sphère du positon et l’onde γ, le stimulateur sont ceux de figures.html ;
+ * la fiole d’iode 131 (liquide et noyaux violets, bouchon brun) celle d’activite.html ; le compteur Geiger (boîtier
+ * sombre, afficheur vert, tube gris à fenêtre brune) et le bois ancien ceux de datation.html. Copiés ici parce
+ * qu’aucun module commun n’existe encore pour la radioactivité (fichiers partagés non modifiés). */
+const hasard = k => { const x = Math.sin(k * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+const rgba = (k, a) => `rgba(${k[0]},${k[1]},${k[2]},${a})`;
+const PROTON = ['#fde2ef', '#f472b6', '#9d174d'], NEUTRON = ['#e3ebf3', '#8fa3b8', '#3a4757'], POSITON = [246, 162, 44];   // lexique visuel (docs/lexique-visuel/README.md : proton rose, neutron gris-bleu, 18 novembre 2026)
+function eclair(ctx, x, y, r) {
+  ctx.globalCompositeOperation = 'lighter';
+  const g = ctx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, 'rgba(255,255,240,.95)'); g.addColorStop(.3, 'rgba(253,224,71,.6)'); g.addColorStop(1, 'rgba(253,224,71,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,250,210,.7)'; ctx.lineWidth = 1.2; ctx.beginPath();
+  for (let i = 0; i < 4; i++) { const a = i * Math.PI / 4; ctx.moveTo(x - r * Math.cos(a), y - r * Math.sin(a)); ctx.lineTo(x + r * Math.cos(a), y + r * Math.sin(a)); }
+  ctx.stroke(); ctx.globalCompositeOperation = 'source-over';
+}
+/** Quelques éclairs au hasard dans une zone (pour l’œil : des noyaux se désintègrent). */
+function eclairs(ctx, x, y, w, h, n, graine) {
+  const k = Math.floor(S.t / .14);
+  for (let i = 0; i < n; i++) {
+    const p = hasard(k * 17 + i * 5 + graine); if (p > .6) continue;
+    eclair(ctx, x + hasard(k * 3 + i + graine) * w, y + hasard(k * 11 + i * 7 + graine) * h, 5 + 8 * (1 - p));
+  }
+}
+function sphere(ctx, x, y, r, k) {
+  const g = ctx.createRadialGradient(x - r * .38, y - r * .42, r * .08, x, y, r);
+  if (typeof k[0] === 'string') { g.addColorStop(0, k[0]); g.addColorStop(.45, k[1]); g.addColorStop(1, k[2]); }   // palette du lexique : clair, couleur, ombre
+  else { g.addColorStop(0, 'rgba(255,255,255,.95)'); g.addColorStop(.3, rgba(k, 1)); g.addColorStop(1, rgba(k.map(v => Math.round(v * .3)), 1)); }
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
+}
+function grappe(ctx, cx, cy, nP, nN, r, kP = PROTON, kN = NEUTRON) {
+  const n = nP + nN, pts = [];
+  for (let i = 0; i < n; i++) {
+    const rr = r * .95 * Math.sqrt(i + .4), a = i * 2.39996;
+    pts.push({ x: cx + rr * Math.cos(a), y: cy + rr * Math.sin(a), p: Math.floor((i + 1) * nP / n) > Math.floor(i * nP / n), d: rr });
+  }
+  ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.beginPath(); ctx.ellipse(cx + 2, cy + r * Math.sqrt(n) + 3, r * Math.sqrt(n), r * .9, 0, 0, 7); ctx.fill();
+  pts.sort((u, v) => v.d - u.d).forEach(q => sphere(ctx, q.x, q.y, r, q.p ? kP : kN));
+}
+function ondeGamma(ctx, x1, y1, x2, y2, amp = 6, lam = 14) {
+  const Lg = Math.hypot(x2 - x1, y2 - y1), ux = (x2 - x1) / Lg, uy = (y2 - y1) / Lg;
+  const chemin = () => { ctx.beginPath(); for (let s = 0; s <= Lg; s += 2) { const w = amp * Math.sin(2 * Math.PI * s / lam), x = x1 + ux * s - uy * w, y = y1 + uy * s + ux * w; s ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } };
+  ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  for (const [lw, a] of [[9, .1], [4.5, .26], [2, .95]]) { ctx.strokeStyle = `rgba(186,116,255,${a})`; ctx.lineWidth = lw; chemin(); ctx.stroke(); }
+  ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = .8; chemin(); ctx.stroke();
+  ctx.globalCompositeOperation = 'source-over';
+}
+function arrondi(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+function stimulateur(ctx, x, y, w, h) {
+  ctx.strokeStyle = 'rgba(203,213,225,.7)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x + w * .3, y + 4); ctx.bezierCurveTo(x + w * .2, y - 26, x - 14, y - 22, x - 10, y + 12); ctx.stroke();
+  arrondi(ctx, x, y, w, h, h * .38);
+  let g = ctx.createLinearGradient(x, y, x + w, y + h); g.addColorStop(0, '#e5e7eb'); g.addColorStop(.45, '#9ca3af'); g.addColorStop(1, '#374151');
+  ctx.fillStyle = g; ctx.fill(); ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1.2; ctx.stroke();
+  g = ctx.createRadialGradient(x + w * .5, y + h * .55, 2, x + w * .5, y + h * .55, h * .4); g.addColorStop(0, 'rgba(253,224,71,.85)'); g.addColorStop(1, 'rgba(234,88,12,.35)');
+  ctx.fillStyle = g; arrondi(ctx, x + w * .25, y + h * .3, w * .5, h * .5, 5); ctx.fill();
+}
+/** La fiole d’iode 131 d’activite.html (verre, liquide violet, noyaux d’iode violets, bouchon brun). */
+const FIOLE = { x: 118, y: 46, w: 64, h: 120 };
+const PTS_I = (() => { const r = window.Tableau.graine(53), p = []; for (let i = 0; i < 40; i++) p.push([FIOLE.x + 10 + r() * (FIOLE.w - 20), FIOLE.y + 56 + r() * (FIOLE.h - 66)]); return p; })();
+function fiole(ctx) {
+  const { x, y, w, h } = FIOLE;
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(x + w / 2 + 6, y + h + 4, w * .62, 6, 0, 0, Math.PI * 2); ctx.fill();
+  const liq = ctx.createLinearGradient(x, 0, x + w, 0);
+  liq.addColorStop(0, 'rgba(120,64,140,.55)'); liq.addColorStop(.5, 'rgba(176,112,196,.42)'); liq.addColorStop(1, 'rgba(90,40,110,.6)');
+  ctx.fillStyle = liq; ctx.beginPath(); ctx.roundRect(x + 3, y + 48, w - 6, h - 51, [4, 4, 12, 12]); ctx.fill();
+  ctx.fillStyle = 'rgba(230,200,255,.35)'; ctx.fillRect(x + 4, y + 48, w - 8, 2);
+  ctx.strokeStyle = 'rgba(210,235,255,.7)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(x + 18, y); ctx.lineTo(x + 18, y + 24); ctx.quadraticCurveTo(x, y + 28, x, y + 42); ctx.lineTo(x, y + h - 12);
+  ctx.quadraticCurveTo(x, y + h, x + 12, y + h); ctx.lineTo(x + w - 12, y + h); ctx.quadraticCurveTo(x + w, y + h, x + w, y + h - 12);
+  ctx.lineTo(x + w, y + 42); ctx.quadraticCurveTo(x + w, y + 28, x + w - 18, y + 24); ctx.lineTo(x + w - 18, y); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.14)'; ctx.fillRect(x + 6, y + 46, 6, h - 58);
+  const bo = ctx.createLinearGradient(x + 14, 0, x + w - 14, 0); bo.addColorStop(0, '#78350f'); bo.addColorStop(.5, '#b45309'); bo.addColorStop(1, '#451a03');
+  ctx.fillStyle = bo; ctx.beginPath(); ctx.roundRect(x + 14, y - 12, w - 28, 16, 3); ctx.fill();
+  for (const [px, py] of PTS_I) {
+    const g = ctx.createRadialGradient(px - 1, py - 1, .3, px, py, 3.2);
+    g.addColorStop(0, '#fdf4ff'); g.addColorStop(.5, '#e879f9'); g.addColorStop(1, '#86198f');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(px, py, 3.2, 0, Math.PI * 2); ctx.fill();
+  }
+}
+/** Le compteur Geiger de datation.html : boîtier sombre et afficheur vert, tube gris à fenêtre brune (ici tourné vers le bas). */
+function compteur(ctx, x, y, valeur) {
+  const gb = ctx.createLinearGradient(0, y, 0, y + 54); gb.addColorStop(0, '#4b5563'); gb.addColorStop(1, '#111827');
+  ctx.fillStyle = gb; ctx.beginPath(); ctx.roundRect(x, y, 88, 54, 6); ctx.fill();
+  ctx.fillStyle = '#05140c'; ctx.beginPath(); ctx.roundRect(x + 8, y + 8, 72, 28, 3); ctx.fill();
+  ctx.font = '600 22px Consolas, "Courier New", monospace'; ctx.textAlign = 'right';
+  ctx.fillStyle = 'rgba(134,239,172,.12)'; ctx.fillText('888', x + 74, y + 30);
+  ctx.fillStyle = '#86efac'; ctx.shadowColor = '#22c55e'; ctx.shadowBlur = 7; ctx.fillText(String(valeur), x + 74, y + 30); ctx.shadowBlur = 0;
+  const gt = ctx.createLinearGradient(x + 36, 0, x + 52, 0); gt.addColorStop(0, '#d1d5db'); gt.addColorStop(.35, '#9ca3af'); gt.addColorStop(1, '#1f2937');
+  ctx.fillStyle = gt; ctx.beginPath(); ctx.roundRect(x + 36, y + 54, 16, 22, 3); ctx.fill();
+  ctx.fillStyle = '#a16207'; ctx.beginPath(); ctx.ellipse(x + 44, y + 76, 7, 3, 0, 0, Math.PI * 2); ctx.fill();
+}
+/** Le bois de datation.html (morceau de bois, fibres) ; le bois récent un peu plus clair. */
+function buche(ctx, x, y, w, h, clair) {
+  const b = ctx.createLinearGradient(0, y, 0, y + h);
+  if (clair) { b.addColorStop(0, '#9a6a3a'); b.addColorStop(.5, '#6b4423'); b.addColorStop(1, '#3b2412'); } else { b.addColorStop(0, '#7a5a3a'); b.addColorStop(.5, '#5a3e24'); b.addColorStop(1, '#2e1d0f'); }
+  ctx.fillStyle = b; ctx.beginPath(); ctx.roundRect(x, y, w, h, 3); ctx.fill();
+  ctx.strokeStyle = 'rgba(30,18,8,.6)'; ctx.lineWidth = 1;
+  for (const dy of [.25, .5, .75]) { ctx.beginPath(); ctx.moveTo(x + 3, y + h * dy); ctx.bezierCurveTo(x + w * .3, y + h * dy - 3, x + w * .6, y + h * dy + 3, x + w - 3, y + h * dy); ctx.stroke(); }
+}
+function peindre(ctx) {
+  const a = apparait(D[V.suite[0][0]] + .1, .8); if (a <= 0) return;
+  ctx.save(); ctx.globalAlpha = a;
+  if (VUE === 'datation') {
+    buche(ctx, 22, 124, 104, 38, false); buche(ctx, 162, 124, 104, 38, true);
+    if (commence('mesure')) {
+      const m = lisse((S.t - D.mesure) / 1.6);
+      compteur(ctx, 30, 40, S.fait ? 318 : Math.round(318 * m)); compteur(ctx, 170, 40, S.fait ? 418 : Math.round(418 * m));
+    }
+    eclairs(ctx, 26, 126, 96, 34, 2, 1); eclairs(ctx, 166, 126, 96, 34, 3, 2);
+  } else if (VUE === 'pu2021') {
+    stimulateur(ctx, 60, 76, 150, 92);
+    eclairs(ctx, 104, 110, 66, 40, 3, 3);
+  } else if (VUE === 'iode2022') {
+    fiole(ctx); eclairs(ctx, FIOLE.x + 6, FIOLE.y + 56, FIOLE.w - 12, FIOLE.h - 64, 3, 5);
+  } else {
+    grappe(ctx, 92, 112, 14, 17, 4.6); eclair(ctx, 132, 98, 16);
+    const ok = commence('soddy') && (S.fait || S.t >= M.soddy - 1.6);
+    sphere(ctx, 232, 66, 8, ok ? POSITON : [226, 232, 240]);
+    ondeGamma(ctx, 132, 124, 270, 158, 6, 15);
+  }
+  ctx.restore();
+}
+
+/* ── Craie ─────────────────────────────────────────────────────────────────────────────────────────────── */
+function ecrit(c, t0, fn) {
+  const t = c.t, cur = c.cur, comp = c.complet;
+  c.t = S.fait ? Infinity : S.t; c.cur = t0;
+  try { fn(); } finally { c.t = t; c.cur = cur; c.complet = comp; }
+}
+const quand = (c, nom, fn, retard = 0) => { if (commence(nom)) ecrit(c, D[nom] + retard, fn); };
+const RE_N = /\[([^,\]]+),([^\]]+)\]([A-Za-z]+)/g;
+function formule(c, s, x, y, o = {}) {      // texte avec des noyaux « [A,Z]X » écrits comme au tableau
+  if (!/\[[^,\]]+,[^\]]+\][A-Za-z]/.test(s)) { c.texte(s, x, y, o); return x + c.largeurTexte(s, o.taille ?? 18); }
+  const taille = o.taille ?? 18, ms = []; let i = 0, m; RE_N.lastIndex = 0;
+  while ((m = RE_N.exec(s))) { if (m.index > i) ms.push({ t: s.slice(i, m.index) }); ms.push({ A: m[1], Z: m[2], X: m[3] }); i = RE_N.lastIndex; }
+  if (i < s.length) ms.push({ t: s.slice(i) });
+  let px = x;
+  for (const q of ms) {
+    if (q.t != null) { c.texte(q.t, px, y, o); px += c.largeurTexte(q.t, taille); }
+    else px = c.nucleide(q.X, q.A, q.Z, px, y, o);
+  }
+  return px;
+}
+/* Hauteurs réelles d’une ligne (au-dessus et au-dessous de la ligne de base), avec les tailles qui s’écriront vraiment :
+ * 15 px à l’écran au moins, étages de fraction compris. */
+const effTaille = t => Math.max(t, 15 / (scene.s || 1));
+const SUPS = /[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]|\^\{/;
+const haut = (s, t) => { const ts = effTaille(t), tf = effTaille(t * .78), h = s.includes('⟦') ? .32 * ts + 1.05 * tf + 2 : .78 * ts; return SUPS.test(s) ? Math.max(h, .42 * ts + .8 * effTaille(ts * .62)) : h; };
+const bas = (s, t) => { const ts = effTaille(t), tf = effTaille(t * .78); return s.includes('⟦') ? 1.18 * tf - .32 * ts + 2 : .26 * ts + (/_/.test(s) ? .2 * ts : 0); };
+const ecart = (avant, l, t) => (avant ? bas(avant, t) : 0) + haut(l, t) + 4;
+
+function gauche(c) {
+  const x = GA.x;
+  quand(c, V.suite[0][0], () => {
+    if (VUE === 'datation') {
+      c.texte('bois ancien', 74, 184, { taille: 17, align: 'center', couleur: 'blanc', duree: .4 });
+      c.texte('bois récent', 214, 184, { taille: 17, align: 'center', couleur: 'blanc', duree: .4 });
+      c.texte('(même masse)', 214, 202, { taille: 15, align: 'center', couleur: 'faible', duree: .3 });
+    } else {
+      const nom = { pu2021: 'stimulateur cardiaque', iode2022: 'iode 131 (dose injectée)', cd2025: 'cadmium 107' }[VUE];
+      c.texte(nom, VUE === 'cd2025' ? 90 : 150, 34, { taille: 17, align: 'center', couleur: 'cyan', duree: .5 });
+      if (VUE === 'pu2021') c.texte('plutonium 238 : α', 135, 186, { taille: 16, align: 'center', couleur: 'orange', duree: .4 });
+      if (VUE === 'iode2022') c.texte('radioactif β⁻', 150, 186, { taille: 16, align: 'center', couleur: 'bleu', duree: .4 });
+    }
+  });
+  c.repere('document', 10, 30, 290, 150, MOTIF[V.suite[0][0]]);
+  if (VUE === 'datation') {
+    if (commence('mesure')) {
+      c.repere('compteurs', 26, 36, 230, 70, 'les compteurs Geiger');
+      c.repere('donnees', x - 4, 204, 290, 84, 'les données : a₁ = 318 Bq, a₀ = 418 Bq, t½ = 5730 ans');
+    }
+    quand(c, 'mesure', () => {
+      c.texte('Bq', 122, 70, { taille: 18, couleur: 'vert', duree: .2 }); c.texte('Bq', 262, 70, { taille: 18, couleur: 'vert', duree: .2 });
+      c.texte('a_1 = 318 Bq (bois ancien)', x, 226, { taille: 20, couleur: 'jaune', duree: .6 });
+      c.texte('a_0 = 418 Bq (bois récent)', x, 252, { taille: 20, couleur: 'jaune', duree: .6 });
+      c.texte('t½ = 5730 ans', x, 278, { taille: 20, couleur: 'jaune', duree: .4 });
+    }, 1.0);
+  } else {
+    const E = V.eq, ok = commence('soddy') && (S.fait || S.t >= M.soddy - 1.6);
+    if (commence('equation')) c.repere('equation', x - 4, 192, 292, 40, ok ? 'l’équation complète' : 'l’équation à compléter');
+    quand(c, 'equation', () => {
+      const [X, A, Z] = E.pere;
+      let px = c.nucleide(X, A, Z, x, YE, { taille: 22, duree: .4 });
+      c.texte(' → ', px, YE, { taille: 22, duree: .2 }); px += c.largeurTexte(' → ', 22);
+      if (E.fixe) { const [Xf, Af, Zf] = E.fils; px = c.nucleide(Xf, Af, Zf, px, YE, { taille: 22, duree: .4 }); c.texte(' + ', px, YE, { taille: 22, duree: .1 }); px += c.largeurTexte(' + ', 22); }
+      if (!ok) {
+        const [Xi, Ai, Zi] = E.inconnu;
+        px = c.nucleide(Xi, Ai, Zi, px, YE, { taille: 22, couleur: 'rose', duree: .4 });
+      } else {
+        const [Xr, Ar, Zr] = E.fixe ? ['e', 0, 1] : E.fils;
+        px = c.nucleide(Xr, Ar, Zr, px, YE, { taille: 22, couleur: 'vert', duree: .4 });
+      }
+      if (E.part) { c.texte(' + ', px, YE, { taille: 22, duree: .1 }); px += c.largeurTexte(' + ', 22); px = formule(c, E.part, px, YE, { taille: 22, duree: .4 }); }
+      if (E.fixe) { c.texte(' + γ', px, YE, { taille: 22, duree: .2 }); }
+      [].concat(E.tab).forEach((l, i) => c.texte(l, x, 270 + 27 * i, { taille: 18, couleur: 'blanc', duree: .6 }));
+    });
+    if (commence('equation')) c.repere('tableau_donnees', x - 4, 240, 292, 24, VUE === 'cd2025' ? 'les données : t½ et a₀' : 'le tableau des numéros atomiques Z');
+    if (VUE === 'cd2025') {
+      if (!ok) quand(c, 'document', () => c.texte('particule ?', 232, 40, { align: 'center', taille: 16, couleur: 'rose', duree: .3 }));
+      else quand(c, 'soddy', () => c.texte('e⁺ : β⁺', 232, 40, { align: 'center', taille: 18, couleur: 'vert', duree: .3 }), M.soddy - 1.6 - D.soddy + .5);
+      quand(c, 'document', () => { c.texte('Cd', 92, 172, { taille: 16, align: 'center', duree: .2 }); c.texte('γ', 278, 176, { taille: 18, couleur: 'violet', duree: .2 }); });
+    }
+  }
+  // Les résultats déjà trouvés (une ligne par étape finie), en bas à gauche.
+  const tab = [].concat(V.eq ? V.eq.tab : ['t½ = 5730 ans']);
+  let y = VUE === 'datation' ? 278 : 270 + 27 * (tab.length - 1), n = 0, prec = tab[tab.length - 1];
+  const y00 = y;
+  const etapes = V.etapes;
+  for (let k = 0; k < etapes.length; k++) {
+    const e = etapes[k], suivante = etapes[k + 1];
+    if (!e.res || !suivante || !commence(suivante.nom)) continue;
+    y += ecart(prec, e.res, 20); prec = e.res;
+    const yy = y; ecrit(c, D[suivante.nom], () => formule(c, e.res, x, yy, { taille: 20, couleur: 'vert', duree: .7 }));
+    n++;
+  }
+  if (n) c.repere('resultats', x - 4, y00 + 8, 292, y - y00 + 4, 'les résultats déjà trouvés');
+}
+
+function courbe(c) {
+  const g = G(), nomTrace = VUE === 'datation' ? 'courbe' : 'trace';
+  if (!commence(nomTrace)) return;
+  c.repere('courbe', g.x0 - 40, g.y1 - 18, g.x1 - g.x0 + 56, g.y0 - g.y1 + 44, `la courbe ${V.g.N ? 'N(t)' : 'a(t)'}`);
+  ecrit(c, D[nomTrace], () => {
+    c.fleche(g.x0, g.y0, g.x1 + 14, g.y0, { couleur: 'faible', largeur: 1.6, duree: .3 });
+    c.fleche(g.x0, g.y0, g.x0, g.y1 - 16, { couleur: 'faible', largeur: 1.6, duree: .3 });
+    for (const [t, lib] of V.g.xt) { const x = xT(t); c.ligne(x, g.y0 - 4, x, g.y0 + 4, { couleur: 'faible', largeur: 1.3, duree: .03 }); c.texte(lib, x, g.y0 + 21, { taille: 17, couleur: 'faible', align: 'center', duree: .1 }); }
+    for (const [a, lib] of V.g.yt) { const y = yA(a); c.ligne(g.x0 - 4, y, g.x0 + 4, y, { couleur: 'faible', largeur: 1.3, duree: .03 }); c.texte(lib, g.x0 - 8, y + (lib.includes('⟦') ? 10 : 5), { taille: 17, couleur: 'faible', align: 'right', duree: .1 }); }
+    c.texte(V.g.xnom, g.x1 + 10, g.y0 - 10, { taille: 16, couleur: 'blanc', align: 'right', duree: .2 });
+    c.texte(V.g.ynom, g.x0 + 8, g.y1 - 8, { taille: 16, couleur: 'blanc', duree: .2 });
+    window.OndesTableau.Net.courbe(c, u => [xT(u * V.g.tmax), yA(aDe(u * V.g.tmax))], 90, { couleur: 'cyan', largeur: 2.6, duree: 1.6 }, { base: g.y0, rgb: '34,211,238', alpha: .18 });
+  });
+  // lab : à droite du point, au-dessus de l'horizontale (droite = true : la courbe y descend sous la ligne, la place est
+  // libre) ; à gauche sous la ligne (droite = 'dessous' : la courbe y passe au-dessus) ; sinon à gauche au-dessus. Jamais sur les pointillés.
+  const h = (a, t, coul, lab, t0, eti, droite = false) => ecrit(c, t0, () => {   // lecture : horizontale de a vers la courbe, point, verticale vers t
+    c.ligne(g.x0, yA(a), xT(t), yA(a), { couleur: coul, largeur: 1.8, pointille: [7, 6], duree: .5 });
+    c.point(xT(t), yA(a), 5, coul);
+    if (lab) c.texte(lab, droite === true ? xT(t) + 10 : g.x0 + 8, droite === 'dessous' ? yA(a) + 21 : yA(a) - 11, { taille: 16, couleur: coul, duree: .3 });
+    if (eti != null) {
+      c.ligne(xT(t), yA(a), xT(t), g.y0, { couleur: coul, largeur: 1.8, pointille: [7, 6], duree: .5 });
+      // près de l'axe (a petit) la courbe longe l'axe : la date s'écrit au-dessus du point, pas sur la courbe.
+      const bas = g.y0 - yA(a) < 30;
+      c.texte(eti, xT(t) + (bas ? 10 : 6), bas ? yA(a) - 30 : g.y0 - 8, { taille: 17, couleur: coul, duree: .4 });
+    }
+  });
+  if (VUE === 'datation') {
+    if (commence('inconnue')) { h(318, tDe(318), 'jaune', 'a_1 = 318 Bq', D.inconnue, null, 'dessous'); c.repere('inconnue', xT(tDe(318)) - 14, yA(318) - 14, 28, g.y0 - yA(318) + 18, 'le point d’abscisse t₁ (l’âge cherché)'); }
+    if (commence('inconnue')) ecrit(c, D.inconnue + 1.0, () => {
+      c.ligne(xT(tDe(318)), yA(318), xT(tDe(318)), g.y0, { couleur: 'jaune', largeur: 1.8, pointille: [7, 6], duree: .5 });
+      if (!commence('etape3')) c.texte('t_1 = ?', xT(tDe(318)) + 6, g.y0 - 8, { taille: 18, couleur: 'rose', duree: .3 });
+    });
+    quand(c, 'etape3', () => c.texte('t_1 ≈ 2,26·10³ ans', xT(tDe(318)) + 6, g.y0 - 8, { taille: 17, couleur: 'vert', duree: .5 }), 3.6);
+    if (commence('verif')) { h(209, 5730, 'orange', '0,5·a_0 = 209 Bq', D.verif, 't½', true); c.repere('t_demi', xT(5730) - 14, yA(209) - 14, 28, g.y0 - yA(209) + 18, 't½ = 5730 ans sur la courbe'); }
+  } else if (VUE === 'pu2021') {
+    if (commence('a0')) { ecrit(c, D.a0, () => { c.point(xT(0), yA(10), 6, 'jaune'); }); c.repere('a0', xT(0) - 14, yA(10) - 16, 40, 30, 'a₀ = 1,0·10¹¹ Bq à t = 0'); }
+    if (commence('moitie')) { h(5, 88, 'orange', '0,5·a_0', D.moitie, null, true); c.repere('moitie', g.x0, yA(5) - 14, xT(88) - g.x0 + 12, 28, 'a₀/2 = 5,0·10¹⁰ Bq jusqu’à la courbe'); }
+    if (commence('t_demi')) { ecrit(c, D.t_demi, () => { c.ligne(xT(88), yA(5), xT(88), g.y0, { couleur: 'orange', largeur: 1.8, pointille: [7, 6], duree: .6 }); c.texte('t½ = 88 ans', xT(88) + 6, g.y0 - 8, { taille: 17, couleur: 'orange', duree: .5 }); }); c.repere('t_demi', xT(88) - 14, yA(5), 28, g.y0 - yA(5) + 6, 't½ = 88 ans sur l’axe des temps'); }
+    if (commence('pourcent')) ecrit(c, D.pourcent, () => { if (!commence('t_max')) c.texte('t_max = ?', xT(200), yA(8.4), { taille: 19, couleur: 'rose', duree: .4 }); });
+    if (commence('t_max')) { h(7, tDe(7), 'vert', '0,70·a_0', D.t_max + 3.4, '45 ans', true); c.repere('t_max', xT(tDe(7)) - 14, yA(7) - 14, 28, g.y0 - yA(7) + 18, 't_max ≈ 45 ans'); }
+  } else if (VUE === 'iode2022') {
+    if (commence('trace')) { ecrit(c, D.trace + 2.2, () => { c.ligne(xT(8), yA(2), xT(8), g.y0, { couleur: 'orange', largeur: 1.6, pointille: [5, 6], duree: .4 }); c.texte('t½', xT(8) + 5, g.y0 - 8, { taille: 16, couleur: 'orange', duree: .2 }); }); }
+    if (commence('pourcent')) ecrit(c, D.pourcent, () => { if (!commence('t1')) c.texte('t_1 = ?', xT(30), yA(2.6), { taille: 19, couleur: 'rose', duree: .4 }); });
+    if (commence('t1')) { h(.2, tDe(.2), 'vert', '0,05·a_0', D.t1 + 3.4, '34,6 j'); c.repere('t1', xT(tDe(.2)) - 14, yA(.2) - 14, 28, 30, 't₁ ≈ 34,6 jours'); }
+    if (commence('verif')) { ecrit(c, D.verif, () => { const y = g.y0 + 36; c.ligne(xT(32), y - 6, xT(32), y + 4, { couleur: 'orange', largeur: 2, duree: .1 }); c.ligne(xT(40), y - 6, xT(40), y + 4, { couleur: 'orange', largeur: 2, duree: .1 }); c.ligne(xT(32), y, xT(40), y, { couleur: 'orange', largeur: 2, duree: .3 }); c.texte('entre 4t½ et 5t½', xT(36), y + 22, { taille: 16, couleur: 'orange', align: 'center', duree: .4 }); }); c.repere('encadrement', xT(32) - 6, g.y0 + 24, xT(40) - xT(32) + 12, 40, 'entre 4t½ = 32 j et 5t½ = 40 j'); }
+  } else {
+    if (commence('n0')) { ecrit(c, D.n0 + 3.2, () => { c.point(xT(0), yA(1), 6, 'jaune'); }); }
+    if (commence('nd')) {
+      ecrit(c, D.nd, () => {
+        c.point(xT(13.86), yA(.25), 6, 'orange'); c.point(xT(20.79), yA(.125), 6, 'orange');
+        c.ligne(xT(13.86), yA(.25), xT(13.86), g.y0, { couleur: 'orange', largeur: 1.5, pointille: [5, 6], duree: .3 });
+        c.ligne(xT(20.79), yA(.125), xT(20.79), g.y0, { couleur: 'orange', largeur: 1.5, pointille: [5, 6], duree: .3 });
+      });
+      ecrit(c, D.nd + 3.0, () => {
+        const x = xT(20.79); c.cote(x, yA(.25), x, yA(.125), '', { couleur: 'vert', largeur: 2 });
+        c.ligne(xT(13.86), yA(.25), x, yA(.25), { couleur: 'vert', largeur: 1.2, pointille: [4, 5], duree: .2 });
+        c.texte('N_d', x - 10, (yA(.25) + yA(.125)) / 2 + 7, { taille: 19, couleur: 'vert', align: 'right', duree: .2 });
+        c.texte('0,125·N_0', x + 10, yA(.125) + 4, { taille: 17, couleur: 'orange', duree: .3 });
+      });
+      c.repere('nd', xT(13.86) - 12, yA(.25) - 14, xT(20.79) - xT(13.86) + 70, yA(.125) - yA(.25) + 28, 'N_d : les noyaux désintégrés entre 2t½ et 3t½');
+    }
+  }
+}
+
+function etapeCourante() {
+  let e = null; for (const x of V.etapes) if (commence(x.nom)) e = x;
+  return e;
+}
+function etape(c) {
+  const e = etapeCourante(); if (!e) return;
+  const x = SX(), y0 = 230;
+  c.repere('etape', x - 6, y0 - 22, L - x - 6, 150, `${e.titre} : ${e.lignes.map(window.Tableau.lisible || (s => s)).join(' ; ')}`);
+  ecrit(c, D[e.nom], () => {
+    c.texte(e.titre, x, y0, { taille: 20, couleur: 'cyan', duree: .5 });
+    let y = y0, k = 0, avant = e.titre;
+    for (const l of e.lignes) {
+      const der = ++k === e.lignes.length && e.nom !== 'verif' && e.nom !== 'soddy';
+      y += ecart(avant, l, 22) + (der ? 4 : 0); avant = l;            // place des étages de fraction et du cadre
+      if (der) c.rect(x - 6, y - haut(l, 22) - 3, Math.min(L - x - 10, c.largeurTexte(l, 22) + 18), haut(l, 22) + bas(l, 22) + 6, { couleur: 'vert', arrondi: 8, largeur: 1.8, duree: .2 });
+      c.texte(l, x + (der ? 4 : 0), y, { taille: 22, couleur: der ? 'vert' : 'blanc', duree: Math.max(.5, l.length / 14) });
+      c.pause(.25);
+    }
+  });
+}
+
+function dessiner(c) {
+  c.direct(() => peindre(c.ctx));
+  gauche(c); courbe(c); etape(c);
+}
+
+const canvas = $('canvas');
+const scene = window.OndesTableau.Scene(canvas, () => {
+  const c = scene.cadre(53); L = scene.L;
+  dessiner(c);
+  return c.fin();
+}, { large: true });
+/* Texte jamais sous 15 px à l’écran, même sur un téléphone en paysage (724 × 350, 18 novembre 2026), comme
+ * ondes-lumineuses-tableau/national.html : le kit baisse son plancher sur un petit tableau et écrit indices et exposants
+ * à 62 % de la ligne ; cette page garde 15 px pour tout, indices et exposants compris, sur SA craie (rien de partagé
+ * n’est changé), et se met en page pour que ça tienne (TROIT : graduations espacées, étiquettes plus courtes). */
+Object.defineProperty(scene.craie, 'tailleMin', { get: () => 15, set: () => {}, configurable: true });
+{
+  const k = scene.craie, ind = k._texteIndices, larg = k._largeur;
+  const petitMin = taille => (k.echelle ? Math.max(.62, 15 / k.echelle / taille) : .62);
+  // indices et exposants : la même écriture, avec un « petit » qui ne descend pas sous 15 px à l’écran
+  k._texteIndices = function (s, x, y, o, taille) {
+    const c = this.ctx, segs = window.Tableau.Craie.segments(s), police = t => `${o.gras ? '700 ' : ''}${t}px ${window.Tableau.POLICE}`;
+    const petit = taille * petitMin(taille), tailleDe = seg => (seg.sub || seg.sup ? petit : taille);
+    const largeur = seg => { c.font = police(tailleDe(seg)); return c.measureText(seg.t).width; };
+    const total = segs.reduce((w, seg) => w + largeur(seg), 0);
+    const plain = segs.map(seg => seg.t).join('');
+    const part = this._part(o.duree ?? Math.max(.1, plain.length / 16));
+    if (part <= 0) return this;
+    let reste = part < 1 ? Math.max(1, Math.ceil(part * plain.length)) : plain.length;
+    c.fillStyle = this.couleur(o.couleur); c.globalAlpha = o.alpha ?? .96; c.textBaseline = o.base || 'alphabetic';
+    c.shadowColor = 'rgba(255,255,255,.25)'; c.shadowBlur = 1; c.textAlign = 'left';
+    let px = (o.align === 'center') ? x - total / 2 : (o.align === 'right') ? x - total : x;
+    for (const seg of segs) {
+      if (reste <= 0) break;
+      const t = seg.t.slice(0, reste); reste -= seg.t.length;
+      c.font = police(tailleDe(seg));
+      c.fillText(t, px, y + (seg.sub ? taille * .28 : seg.sup ? -taille * .42 : 0));
+      px += c.measureText(t).width;
+      if (t.length < seg.t.length) break;
+    }
+    if (part < 1) this.tip = [px, y - taille * .3];
+    c.shadowBlur = 0; c.globalAlpha = 1;
+    return this;
+  };
+  k._largeur = function (s, taille, gras) {
+    const c = this.ctx, CH = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+    s = String(s).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => CH[ch]).join('') + '}');
+    const t0 = Math.max(taille, k.echelle ? 15 / k.echelle : 0);
+    return window.Tableau.Craie.segments(s).reduce((w, seg) => { c.font = `${gras ? '700 ' : ''}${seg.sub || seg.sup ? t0 * petitMin(t0) : t0}px ${window.Tableau.POLICE}`; return w + c.measureText(seg.t).width; }, 0);
+  };
+  void ind; void larg;
+  // ᴬ_Z X : A et Z gardent 15 px, et s’écartent d’autant (sinon A et Z, agrandis, se chevauchent)
+  const azT = taille => Math.max(taille * .6, k.echelle ? 15 / k.echelle : 0);
+  const lg = (s, t) => { k.ctx.font = `${t}px ${window.Tableau.POLICE}`; return k.ctx.measureText(String(s).replace('-', '−')).width; };
+  k.largeurNucleide = function (X, A, Z, taille = 18) { const p = azT(taille); return Math.max(lg(A, p), lg(Z, p)) + 1.5 + lg(X, taille); };
+  k.nucleide = function (X, A, Z, x, y, o = {}) {
+    const taille = o.taille ?? 18, p = azT(taille), plus = p - taille * .6;
+    const wAZ = Math.max(lg(A, p), lg(Z, p)), xs = x + wAZ + 1.5, cAZ = o.couleurAZ || o.couleur, d = o.duree != null ? o.duree / 3 : undefined;
+    this.texte(String(A).replace('-', '−'), xs - 1, y - taille * .42 - plus * .9, { taille: p, couleur: cAZ, align: 'right', duree: d, gras: o.gras });
+    this.texte(String(Z).replace('-', '−'), xs - 1, y + taille * .22 + plus * .5, { taille: p, couleur: cAZ, align: 'right', duree: d, gras: o.gras });
+    this.texte(X, xs, y, { taille, couleur: o.couleur, duree: d, gras: o.gras });
+    return xs + lg(X, taille);
+  };
+}
+scene.avancer = dt => {
+  if (!S.running) return false;
+  S.t = Math.min(FIN, S.t + dt);
+  if (S.jusqua != null && S.t >= S.jusqua && S.jusqua < FIN) {
+    S.t = S.jusqua; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre';
+    bulle($('feedback'), 'Arrêt sur image : ' + (S.motif || `t = ${fr(S.t, 2)} s`) + '.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre();
+    return true;
+  }
+  if (S.t >= FIN) { S.running = false; S.fait = true; $('run').textContent = 'Rejouer'; bulle($('feedback'), 'Fin de l’exercice : chaque étape est écrite.', 'good'); pont.emettre(); }
+  else if (performance.now() - S.emis > 500) { S.emis = performance.now(); pont.emettre(); }
+  return true;
+};
+
+/* ── Ce que voit le tuteur ──────────────────────────────────────────────────────────────────────────────── */
+function ceQuiSeVoit() {
+  const etat = S.running ? 'la scène se déroule' : S.fait ? 'fin de la scène' : S.t > 0 ? 'scène arrêtée' : 'scène pas encore lancée';
+  const m = [`${V.titre}. t (scène) = ${fr(S.t, 2)} s (${etat}).`];
+  const vus = V.suite.filter(([n]) => n !== 'fin' && commence(n)).map(([n, , d]) => d);
+  m.push(vus.length ? 'Au tableau, dans l’ordre : ' + vus.join(' ; ') + '.' : 'Le tableau est encore vide.');
+  const e = etapeCourante(); if (e) m.push(`Étape écrite en bas à droite : « ${e.titre} » — ${e.lignes.map(window.Tableau.lisible || (s => s)).join(' ; ')}.`);
+  return m.join(' ');
+}
+
+/* ── Commandes ──────────────────────────────────────────────────────────────────────────────────────────── */
+function playUntil(p) {
+  const nom = p && p.moment in M ? p.moment : null, cible = nom ? M[nom] : +p.time_s;
+  if (!Number.isFinite(cible)) return;
+  if (S.fait || S.t >= cible - 1e-4) S.t = DEPART < cible ? DEPART : 0;   // déjà passé : on rejoue depuis le départ de la diapositive
+  S.jusqua = Math.min(FIN, Math.max(0.001, cible));
+  S.motif = nom ? MOTIF[nom] : '';
+  S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…');
+  pont.noter('play_until', { moment: nom, time_s: S.jusqua }); pont.emettre();
+}
+function start() { S.jusqua = null; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), V.titre + '…'); pont.noter('start', params()); pont.emettre(); }
+/* reset : revient au départ de la diapositive (?depart=…), FIGÉ — la voix fait avancer la scène par ses play_until. */
+function reset() { S.jusqua = null; S.running = false; S.fait = false; S.t = DEPART; scene.sale = true; $('run').textContent = DEPART > 0 ? 'Reprendre' : 'Lancer'; bulle($('feedback'), V.titre + '.'); pont.noter('reset', params()); pont.emettre(); }
+function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(3) }); pont.emettre(); }
+function resume() { if (S.running) return; if (S.fait || S.t >= FIN) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
+function setTime(p) {
+  const t = +p.time_s; if (!Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = clamp(t, 0, FIN); S.fait = S.t >= FIN;
+  $('run').textContent = S.fait ? 'Rejouer' : 'Reprendre'; scene.sale = true;
+  bulle($('feedback'), `Arrêt sur image : t = ${fr(S.t, 2)} s.`); pont.noter('set_time', { time_s: S.t }); pont.emettre();
+}
+function params() { return { vue: VUE, depart: Q.get('depart') || null }; }
+$('run').onclick = () => (S.running ? pause() : (S.t < FIN && !S.fait && (S.t > 0) ? resume() : start()));
+
+window.Tableau.explication({ [VUE]: V.etapes.map(e => ({ repere: 'etape', texte: `${e.titre} : ${e.lignes.map(window.Tableau.lisible || (s => s)).join(' ; ')}` })) });
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'play_until'];
+const config = { id: 'radioactivite_national_' + VUE, version: '1.0', title: V.titre, variants: Object.keys(VUES).map(id => ({ id, label: VUES[id].titre })), commands: commandes,
+  command_schema: {
+    set_time: { time_s: `0..${fr(FIN, 1)} (arrêt sur cet instant, s)` },
+    play_until: { moment: Object.keys(M).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: V.titre + ' : ' + V.suite.filter(s => s[0] !== 'fin').map(s => s[2]).join(' ; ') + '.',
+  etat: () => ({ simulation_status: S.running ? 'running' : (S.fait ? 'finished' : (S.t > 0 ? 'paused' : 'idle')), ce_qui_se_voit: ceQuiSeVoit(), current_variant: VUE,
+    time_s: +S.t.toFixed(3), parameters: params(), moments: { ...M } }),
+  progression: () => (S.fait ? 1 : S.t / FIN),
+  executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), play_until: () => playUntil(p) })[cmd]?.() });
+if (DEPART > 0) $('run').textContent = 'Reprendre';
+bulle($('feedback'), V.titre + '.');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

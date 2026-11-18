@@ -265,7 +265,7 @@ Demande : « simple, animé, expliqué, ne pas tout donner au départ, laisser �
 | `qcm_cycle` (2018 R, 2024 N/R) | `ig_x1_restitution` | **refait** : avant, la voix barrait elle-même a, c, d puis donnait b — l'élève n'avait rien à trouver. Maintenant `ig_x1_restitution` pose le QCM de 2024 R (G1) et s'arrête ; l'élève répond (une réaction préparée par option) ; **puis** `ig_x1b_corrige` joue le corrigé leurre par leurre (l'ancien texte et sa voix, déplacés). Même schéma pour le QCM du national 2018 R (« durant la métaphase, chaque chromosome est formé… », réponse c) : `ig_x1c_metaphase` (posé), `ig_x1d_corrige_metaphase` (corrigé joué, nouvelle vue `documents.html?vue=metaphase`). |
 | `courbe_adn` (très fréquente aux contrôles) | `ig_c5_decrire` (la méthode montrée une fois), `ig_x2…` | **refait** : avant, `ig_x2_exercice` expliquait la chute de 2q à q puis posait la question dont il venait de donner la réponse. Maintenant une consigne par diapositive : `ig_x2_exercice` = **décrire** (la courbe seule, `?reponse=rien` ; question « de 8 à 14 h, la description comme le barème » : la réponse sans valeurs et l'explication donnée à la place de la description sont les deux pièges, chacun avec sa réaction) ; `ig_x2b_expliquer` = **expliquer** (la description écrite, l'explication cachée, `?reponse=decrire` ; l'ancienne question 2q → q, ses réactions et sa démonstration gardent leurs voix). |
 | `thymidine` (2017 R, 1,5 pt) | `ig_r7`, `ig_r8` (la leçon) | **ajouté** : l'exercice du national joué en quatre temps sur une nouvelle vue `thymidine.html?vue=document` (le document seul : plantule, chromosome métaphasique après chaque cycle, ni molécules ni brins) : `ig_x3_thymidine_doc` **décrire** le 2ᵉ résultat (sa légende se tait, `conclusions=false`) ; `ig_x3b_cycle1` **expliquer** le 1er cycle (question, puis la chaîne en flèches du barème) ; `ig_x3c_cycle2` **expliquer** le 2ᵉ (idem) ; `ig_x3d_schema` le **schéma** demandé (vue `experience`, brins en couleur, arrêtée avant la conclusion écrite) puis la **conclusion** demandée à l'élève (semi-conservative). |
-| `definir` (2024 N, association) | — | **reste** : l'association de 2024 N (ADN polymérase, centromère, nucléosome, ribosome) n'a pas de diapositive jouée ; le ribosome est du chapitre 4. Le vrai/faux du bloc (`ig_s8_b3`) reprend le nucléosome. À faire si l'on veut la jouer : une vue « associer » (étiquettes à poser, comme `?vue=legender`). |
+| `definir` (2024 N, association) | `ig_x1e_associer`, `ig_x1f_associer_couples` (fin de `ig_s7_b3`) | **ajouté** (suite de la 2ᵉ passe) : l'association du national 2024 N jouée en deux consignes sur la nouvelle vue `documents.html?vue=associer`. `ig_x1e` : les trois éléments de l'ensemble A peints l'un après l'autre (l'ADN polymérase qui avance sur une fourche et allonge le brin nouveau, un chromosome à deux chromatides dont le centromère s'éclaire, un fil de nucléosomes), puis les propositions a, d, e ; consigne 1 : le numéro 1 ; le lien (1, e) ne se trace qu'après la réponse (`apres_reponse`, `{conclusions: false}` tant que la question est ouverte). `ig_x1f` : (1, e) au tableau ; consigne 2 : les couples de 2 et 3 (le leurre « e » rappelle qu'une lettre ne sert qu'une fois) ; après la réponse, (2, d), (3, a) puis « Réponse : (1, e) ; (2, d) ; (3, a) » se tracent, et la démonstration écrit les couples comme le barème. Les trois notions sont enseignées avant (`ig_n1_noyau` : nucléosome ; `ig_n3_chromatides` : centromère ; `ig_r10_polymerase`). Le ribosome (4, b) et la proposition c (synthèse de l'ARNm) sont du chapitre 4 : ni joués ni écrits (règle 27) ; leurs lettres d'origine sont gardées pour que les couples soient ceux du corrigé. Script : `scripts/logique/passe2b_svt_ch3_associer.py`. |
 
 ### Simulations : ce qui a été ajouté (le cours en ligne voit tout comme avant)
 
@@ -275,6 +275,11 @@ Demande : « simple, animé, expliqué, ne pas tout donner au départ, laisser �
   rejetée à la génération en cours et la conclusion finale ; ne relance pas la scène.
 - `thymidine.html?vue=document` : nouvelle vue (moments `cycle_1`, `metaphase_1`, `transfert`, `metaphase_2`) ;
   paramètre `conclusions` (défaut `true`) qui tait « une chromatide marquée sur deux ». La vue `experience` est inchangée.
+- `documents.html?vue=associer` (suite de la 2ᵉ passe) : nouvelle vue, l'association 2024 N (moments `ensembles`, `polymerase`,
+  `centromere`, `nucleosome`, `propositions`, `lien_1`, `lien_2`, `lien_3`, `couples` ; repères `structure_1..3`, `a`, `d`, `e`,
+  `lien_1..3`, `reponse`) ; paramètre `conclusions` (défaut `true`, aussi `?conclusions=false`) qui tait les liens et la réponse,
+  sans rejouer. Ce qui était déjà au tableau avant un `set_time` s'écrit d'un coup (diapositive suivante). Les autres vues ne
+  changent pas.
 - `documents.html` : paramètre `reponse` de la vue `courbe` (`tout` par défaut ; `rien` = la courbe seule ;
   `decrire` = la description sans l'explication) ; nouvelle vue `metaphase` (QCM 2018 R, moments `carte`, `elimine_a`,
   `elimine_b`, `elimine_d`, `reponse`).
@@ -286,14 +291,14 @@ Demande : « simple, animé, expliqué, ne pas tout donner au départ, laisser �
 
 ### Séances
 
-La séance 7 finit par la restitution (`ig_s7_b3` : `ig_x1`, `ig_x1b`, `ig_x1c`, `ig_x1d`). Une **séance 8** « Les
+La séance 7 finit par la restitution (`ig_s7_b3` : `ig_x1`, `ig_x1b`, `ig_x1c`, `ig_x1d`, puis l'association `ig_x1e`, `ig_x1f`). Une **séance 8** « Les
 exercices du national pas à pas, et le bilan » : `ig_s8_b1` la courbe (décrire, expliquer), `ig_s8_b2` la thymidine
-(quatre temps), `ig_s8_b3` le bilan (`ig_b1`, `ig_b2`). Partie VIII : 50 min ; cours : 345 min. Compétences : C3
+(quatre temps), `ig_s8_b3` le bilan (`ig_b1`, `ig_b2`). Partie VIII : 55 min ; cours : 350 min (l'association ajoutée). Compétences : C3
 (courbe), C7 (thymidine) et C8 (toutes les diapositives d'examen).
 
 ### Ce qui reste, et pourquoi
 
-- `definir` (association 2024 N) : voir le tableau.
+- L'association 2024 N est jouée sans le ribosome (4, b) : il sera repris au chapitre 4 (relation gène – protéine).
 - Les questions d'observation du cours sont déjà nombreuses (8) ; les nouveaux exercices utilisent des **questions**
   (posées après la voix), jamais une observation de plus.
 - Les écarts « gestes trop serrés » des diapositives nouvelles ou réécrites viennent de l'absence de voix (durée
@@ -302,7 +307,9 @@ exercices du national pas à pas, et le bilan » : `ig_s8_b1` la courbe (décrir
 
 ## 6. Voix
 
-**2ᵉ passe** : `svt_ch3_notion_information_genetique_voix.json` compte maintenant **123 pistes** (59 de plus) : les
+**2ᵉ passe** : `svt_ch3_notion_information_genetique_voix.json` compte maintenant **138 pistes** (123, puis 15 pour
+l'association : 2 diapositives, 10 réactions, 2 énoncés, 1 démonstration ; mots darija rares remplacés : الصفرا, كتربط,
+كيربطهم, قلبتيهم, numéros ; à écouter : associer, fourche, nucléosome, barème) : les
 diapositives réécrites `ig_x1_restitution`, `ig_x2_exercice` et les nouvelles `ig_x1c`, `ig_x1d`, `ig_x2b`, `ig_x3`,
 `ig_x3b`, `ig_x3c`, `ig_x3d` ; leurs réactions préparées (une par option, deux essais) ; leurs énoncés ; trois
 démonstrations du barème (`ig_m4_anaphase`, `ig_x3b`, `ig_x3c`) et celle d'`ig_x2_exercice`. Gardent leur voix :

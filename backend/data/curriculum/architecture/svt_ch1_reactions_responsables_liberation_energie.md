@@ -171,10 +171,10 @@ méthode du barème (décrire → déduire → expliquer / vérifier).
 | `pulse_o2` | `le_c1_pulse` (inchangée) | Déjà joué : la courbe se trace, la description seulement ; l'explication vient à `le_c6_protons` (règle 4). |
 | `legender` | `le_c8_national`, `le_c8b_construire` (inchangées) | Déjà joué (schéma à légender du national). |
 | `calcul`, `tableau_comparatif` | `le_r1_compteur`, `le_r2_rendement`, `le_r3_comparer` (inchangées) | Déjà joués (compteur d'ATP, rendement calculé au tableau, comparaison animée). |
-| `equation` | `le_g3_bilan`, `le_k5_fois_deux`, `le_f1_lactique`, `le_f2_alcoolique` (inchangées) | Les réactions globales sont écrites au tableau à leur moment et redemandées au « retrouver » des blocs. Pas d'exercice d'appariement joué (2020 R) : reste à faire si l'on veut (voir plus bas). |
+| `equation` (2017 N, 2020 R, 2021 N, 2022 N) | `le_x1d_reactions`, `le_x1e_reactions_c`, `le_x1f_reactions_krebs` (nouvelles, ajoutées après la 2ᵉ passe) ; `le_g3_bilan`, `le_k5_fois_deux`, `le_f1_lactique`, `le_f2_alcoolique` (inchangées) | **2020 R, restitution III** « reliez chaque phénomène à la réaction bilan qui lui convient » (1 pt, cinq réactions pour quatre phénomènes : d est l'intrus). Vue `national.html?vue=reactions` : les phénomènes puis les réactions s'écrivent ; une réaction à la fois, ce qu'elle donne est **souligné** (où regarder), puis le lien est tracé. Trois consignes : (1) le tuteur montre la méthode sur a (éthanol + CO₂ → (4 ; a)), l'élève fait b ; (2) l'élève fait c (d'où elle part, ce qu'elle donne) ; (3) l'élève départage d et e (cycle de Krebs). Le nom du produit et le lien restent cachés (`?cacher=`) jusqu'à la réponse ; `concentration.apres_reponse` (format du lecteur, commit b4a6a36c) les joue au tableau juste après la réponse (`set_parameters {conclusions: true}` puis `play_until`), puis la démonstration au barème ; la diapositive suivante part de là (`?depart=`). Avant : les équations étaient seulement écrites au tableau dans le cours, jamais reliées comme le demande le sujet. Bloc à part `le_s6_b1b` (cahier : le produit qui signe chaque voie ; « retrouver » ; exercice jumeau). |
 
 Simulation nouvelle : `reactions_responsables_liberation_energie-tableau/national.html` (vues `sportifs`,
-`restitution`, `levures`, `marquage`), sur le kit du dossier (`commun.js`, `peinture.js`) : moments nommés,
+`restitution`, `levures`, `marquage`, puis `reactions`), sur le kit du dossier (`commun.js`, `peinture.js`) : moments nommés,
 `ce_qui_se_voit`, repères, `?depart=`, `?cacher=` et `set_parameters {conclusions}`. Contrôlée dans Chromium à
 1280 × 640, 1024 × 560 et 724 × 350 (aucune erreur, chaque moment atteint par `play_until`, rien de coupé).
 
@@ -187,7 +187,8 @@ restitution (`le_x1…`), voie dominante (`le_x2…`), document des mitochondrie
 voulu : une consigne, une réponse, une correction). La séance 5 garde fermentations, bilans et rendements. Chaque
 nouveau bloc a son cahier, son « retrouver » et un exercice jumeau (vrai/faux 2023 R ; fibres B ; canal des sphères
 bouché, 2023 N) ; l'ancien exercice de bloc qui reprenait `le_x2_qui_respire/e0` (supprimé) est remplacé.
-Durée estimée : 275 min.
+Durée estimée : 275 min, puis 285 min avec le bloc `le_s6_b1b` (appariement 2020 R, trois diapositives, inséré après
+`le_s6_b1` : un bloc de restitution à six diapositives dépasserait la limite de quatre éléments nouveaux).
 
 ### Mots
 
@@ -197,12 +198,17 @@ la note → النقطة ; restitution → أسئلة الدرس ; fatigabilité
 نشطبو, مشطبة, كيسد, كيوقفو, كتربط, كتجاوب, كتستعملش, كنقيسو, كنوصفو, كيضويو, balise, كنتبعوه… par des mots courants
 vérifiés (نحيدوها, سد, ما بقاش كيدوزو, كتعطي السبب, نقيسو, نوصفو, العلامة, نتبعو…). **Restent, à écouter** : *bloquerait*
 (la phrase d'hypothèse à écrire), *conditionnel* (méthode du bac), *quatre-vingt-seize* (valeur du document), *marqué*
-(glucose marqué) — et ceux de la 1ʳᵉ passe (*photosynthèse*, *poison*, *vésicules*, *carrefour*).
+(glucose marqué) — et ceux de la 1ʳᵉ passe. Appariement 2020 R : *relier* → نربطو, كثر من اللازم → زايدة, نقراوش →
+ما غاديش نقراو, كتعطيش / كتعطيهم → ما فيهاش / فيها, كيتقطع → كيولي ; les formules ne sont pas lues (« CH trois CHOH
+COOH » → « l'acide lactique ») ; les lettres des réactions dites en majuscules (A, B…), comme `le_x1c_qcm` ; plus aucun
+mot rare dans ces pistes (*photosynthèse*, *poison*, *vésicules*, *carrefour*).
 
 ### Voix
 
 `svt_ch1_reactions_responsables_liberation_energie_voix.json` : 101 pistes (15 diapositives, 60 réactions, 8
-démonstrations, 11 énoncés, 7 pistes d'observation). Nouvelles de cette passe : 8 diapositives d'exercice et leurs
+démonstrations, 11 énoncés, 7 pistes d'observation) à la fin de la 2ᵉ passe ; **134** après l'appariement 2020 R
+(+ 24 : 3 diapositives, 15 réactions, 3 démonstrations, 3 énoncés ; + 9 réactions de `le_o2_acquis`, ajoutées entre-temps
+par le commit 5bc776f0, sans voix). Nouvelles de cette passe : 8 diapositives d'exercice et leurs
 réactions, énoncés et démonstrations ; `le_m3a_glucose_marque` retouchée. `le_e3b_masse_levures` garde sa voix.
 
 ### Contrôles
@@ -216,8 +222,10 @@ nouveaux sont des « gestes trop serrés » sur les diapositives sans voix (dur�
 - Les voix (VPS, voix Bodi) : quota Kaggle épuisé dans cette session.
 - `le_e3b_masse_levures` dit encore « شوف le tableau » au moment où la scène montre les deux béchers (le tableau vient
   ensuite) : la voix enregistrée est gardée ; à corriger quand la diapositive sera de nouveau mise en voix.
-- Appariement des réactions globales (2020 R) : pas d'exercice joué ; les équations sont écrites au tableau dans le
-  cours (glycolyse, Krebs, fermentations). Une vue « relier chaque réaction à sa voie » serait la suite.
-- Le lecteur ne sait pas encore enchaîner une correction « au tableau » sur la même diapositive que la question : la
-  correction animée est donc au début de la diapositive suivante (besoin noté pour `frontend/src/`, hors de cette session).
+- Le lecteur ne savait pas enchaîner une correction « au tableau » sur la même diapositive que la question : la
+  correction animée est donc au début de la diapositive suivante. Le lecteur a depuis reçu `concentration.apres_reponse`
+  (commit b4a6a36c) ; seules les trois diapositives de l'appariement 2020 R l'utilisent. Les huit autres exercices
+  joués pourraient y passer (leur correction se jouerait sur la même diapositive).
 
+
+Appariement 2020 R : `python3 scripts/logique/svt_ch1_appariement.py` (idempotent ; à relancer après `deuxieme_passe_svt_ch1.py`), puis `python3 -X utf8 scripts/logique/lister_voix.py svt_ch1_reactions_responsables_liberation_energie`.

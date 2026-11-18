@@ -188,3 +188,18 @@ une boucle) : déjà là avant cette passe.
 29 pistes (liste : `phys_ch1_waves_exemple_voix.json`) : 15 diapositives (`mixed/` : les sept énoncés du national
 réécrits ou nouveaux, les sept corrections jouées, `wx_b2_national`), et pour `wx_n7_national_2022r` les deux énoncés,
 les deux démonstrations et les dix réactions préparées. Mots rares gardés : voir le tableau ci-dessus.
+
+## Défauts anciens corrigés (18 novembre 2026, après la 2ᵉ passe)
+- **Scènes qui couraient seules** : `wx_i1_corde`, `wx_r1_retard`, `wx_r2_duree_longueur`, `wx_b3_bilan` démarraient en
+  `start`. Elles passent en `reset`, et dans `corde.html` `reset` fige maintenant la scène (avant, c'était un autre nom de
+  `start`) : seule la voix la fait avancer.
+- **Scènes reprises d'une diapositive à l'autre** (même adresse, l'iframe n'était pas rechargée et la scène restait finie) :
+  `types`, `milieux`, `corde`, `micros` et `sonar` acceptent `?depart=<moment>` et s'ouvrent figées sur ce moment.
+  `wx_i3b_longitudinale` (`depart=corde`), `wx_c2b_temperature` (`depart=depart`), `wx_r1b_elongation` (`m_atteint`),
+  `wx_r2b_dates` (`source_monte`), `wx_m1b_lecture` (`m2_atteint`), `wx_m2b_formule` (`salve_remonte`).
+- **Repères et moments écrits en entier** : `dim_corde`, `dim_son` (`types.html`) et `mesure_1` à `mesure_5`
+  (`national.html`) étaient fabriqués par le code (`'dim_' + id`), invisibles pour le vérificateur ; ils sont écrits tels quels.
+- Légende de la figure du cahier 2021 R : la fraction écrite à plat devient `k = (8×10⁻⁵ s)/(0,4 m)`.
+- Le cours en ligne ne change pas : sans `?depart=` les pages démarrent comme avant, et aucune diapositive en ligne n'envoie
+  `reset` à ces pages. Vérifié dans Chromium (figée, puis arrêtée sur le moment suivant, sans erreur).
+- Vérificateur de pointage, copie en attente : 0 « introuvable », 0 DEPART, 0 IFRAME (avant : 4, 4, 6).

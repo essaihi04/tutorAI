@@ -3,7 +3,7 @@
 Refaite le 18 novembre 2026 avec la skill `logique-de-cours`. Version en attente :
 `backend/data/courses/en_attente/phys_ch4_radioactivite.json`, construite par
 `scripts/voix/logique_ch4_radioactivite.py` à partir du cours en ligne (qui ne change pas). Pistes à mettre en voix :
-`phys_ch4_radioactivite_voix.json` (63 pistes).
+`phys_ch4_radioactivite_voix.json` (107 pistes après la 2ᵉ passe, section 9).
 
 ## 1. La logique d'avant, et ce qui n'allait pas
 
@@ -138,7 +138,7 @@ Légende : ✏️ tableau « À toi » ; 👀 question d'observation ; 🆕 nouv
 - **B2** `ra_c1_principe` 👀 (l'arbre coupé : la jauge baisse, l'élève le voit) → `ra_c2_demo` (t = (1/λ)·ln(a₀/a), établie ligne à ligne).
 - **B3** `ra_c4_fils_pere` → `ra_c4b_rapport` ✏️ (roche : r = e^(λt) − 1, 2020 R).
 
-### Séance 7 — Exercices du national joués, bilan et carte
+### Séance 7 — Exercices du national joués, bilan et carte (remplacée par la 2ᵉ passe : séances 7 et 8, section 9)
 - **B1** `ra_x1_cas_types` (le mot de la question donne la méthode) → `ra_c3_calcul` ✍️ ↕ ✏️ (datation 2022 R en 3 étapes, datation.html arrêtée sur la mesure) → `ra_x2_2021N` ✏️ (stimulateur cardiaque en 3 étapes).
 - **B2** `ra_x3_2022N` ✏️ (95 %) → `ra_x4_2025N` ✏️ (β⁺, entre 2t½ et 3t½, vrai/faux).
 - **B3** `ra_z1_bilan` → `ra_z2_carte`.
@@ -167,3 +167,84 @@ Dans `population.html`, `datation.html` et `segre.html`, `reset` n'était qu'un 
 la scène (à zéro ou sur `?depart=<moment>`), seule la voix la fait avancer ; `start` ne change pas (cours en ligne
 inchangés). Vérifié dans Chromium : figées, puis arrêtées sur `un_t_demi`, `mesure`, `vallee`, sans erreur JS.
 
+## 9. 2ᵉ passe (18 novembre 2026) : les exercices du national joués pas à pas
+
+**Ce qui n'allait pas après la 1ʳᵉ passe.** Les quatre exercices du national (`ra_c3_calcul`, `ra_x2_2021N`,
+`ra_x3_2022N`, `ra_x4_2025N`) étaient une seule diapositive chacun, sur une figure fixe (`figures.html?fig=fig_enonce_*`,
+`datation.html` qui écrit tout le calcul), avec deux ou trois étapes dans le carrousel « À toi » : la correction n'était
+qu'écrite sur l'ardoise de démonstration, jamais rejouée dans l'animation. `ra_x3_2022N` disait même dans sa voix le
+type et le noyau fils (« كيدير bêta moins وكيعطي le xénon ») que son exercice demandait ; `ra_x4_2025N` disait « N₀/4 »
+et « N₀/8 » avant la question (règles logique 3 et 5, professeur 33, 37, 41). Les quatre pages démarraient avec `start`
+(la scène courait seule, sans la voix).
+
+**Ce qui est fait.**
+- **Nouvelle page `radioactivite-tableau/national.html`**, une vue par exercice, avec les valeurs du sujet :
+  `datation` (2022 R), `pu2021` (2021 N), `iode2022` (2022 N), `cd2025` (2025 N). À gauche le document peint (mêmes
+  dessins que le reste du cours, règle 43 : compteur Geiger et bois de `datation.html`, fiole d'iode violette
+  d'`activite.html`, stimulateur, noyau en grappe, positon et onde γ de `figures.html`), l'équation à compléter (« ᴬ_Z X »
+  en rose) et le tableau des Z, puis la liste des résultats déjà trouvés ; en haut à droite la courbe a(t) ou N(t)
+  **tracée dans le temps** ; en bas à droite l'étape en cours, écrite comme le barème (relation, application numérique,
+  résultat encadré avec l'unité). Un moment nommé par étape (`play_until`), une correction **n'apparaît qu'à son moment** ;
+  `?depart=<moment>` ouvre la page figée sur ce moment et `reset` y revient figé (plus de scène qui court seule).
+  Les lectures se font sur la courbe : a₀/2 puis la verticale (t½ = 88 ans), 0,70·a₀ (t_max ≈ 45 ans), 0,05·a₀
+  (t₁ ≈ 34,6 j), N₀/4 et N₀/8 avec l'écart N_d, l'abscisse du point a₁ = 318 Bq (t₁ ≈ 2,26·10³ ans).
+- **Une diapositive par étape** (15 diapositives au lieu de 4) : chaque diapositive rejoue d'abord, sur la voix, la
+  correction de l'étape d'avant dans l'animation, puis donne **une seule consigne** ; la question (QCM, réaction
+  préparée par option, démonstration ligne à ligne) vient à la fin de la voix, avant toute correction.
+  - Datation 2022 R : `ra_c3_calcul` ✍️ (document, point d'abscisse « t₁ = ? » ; ① la relation) → `ra_c3b_lambda` 🆕
+    (correction ① ; ② λ en an⁻¹) → `ra_c3c_age` 🆕 (correction ② ; ③ t₁) → `ra_c3d_verif` 🆕 (correction ③ et
+    **vérification** : a₁ > a₀/2 donc t₁ < t½, professeur 11). La voix ne fait plus aucun calcul avant la réponse de l'élève.
+  - 2021 N : `ra_x2_2021N` ✍️ (① noyau fils, Soddy — question nouvelle, cas « équation » 13/13) → `ra_x2b_2021N` 🆕
+    (② **lire t½** sur la courbe : la droite a₀/2 n'est tracée qu'après) → `ra_x2c_2021N` 🆕 (③ λ en s⁻¹ avec
+    « 1 an = 365 jours » comme le sujet, puis N₀) → `ra_x2d_2021N` 🆕 (④ t_max pour 30 %) → `ra_x2e_2021N` 🆕
+    (correction et vérification t_max < t½).
+  - 2022 N : `ra_x3_2022N` ✍️ (① noyau fils ; la voix ne le dit plus) → `ra_x3b_2022N` 🆕 (② 95 % désintégrés ; t½ = 8 j
+    déjà lue en `ra_a6_courbe_a`) → `ra_x3c_2022N` 🆕 (correction et encadrement 4t½ < t₁ < 5t½).
+  - 2025 N : `ra_x4_2025N` ✍️ (① la particule et le type, β⁺ — question nouvelle ; la voix ne le dit plus) →
+    `ra_x4b_2025N` 🆕 (② N₀ — question nouvelle —, ③ N_d entre 2t½ et 3t½) → `ra_x4c_2025N` 🆕 (corrections sur la
+    courbe, puis le vrai/faux de cours du même sujet, dont « isotopes sur une perpendiculaire à l'axe des Z » : Segrè).
+- **Séances** : la séance 7 devient « National joué pas à pas : datation 2022 R, stimulateur 2021 N » (3 blocs) et une
+  séance 8 « iode 2022 N, cadmium 2025 N ; bilan » (3 blocs, le bilan et la carte à la fin). Comme en 1ʳᵉ passe, dans
+  ces deux séances plusieurs tableaux « À toi » se suivent : chaque diapositive y est une étape d'examen.
+- **Mots** (`verifier_mots.py` appliqué à la copie en attente) : « becquerels » → « becquerel » (corpus 3, pluriel 0) ;
+  « خشب » → « le bois » ; « stimulateur cardiaque » dit « جهاز صغير كيعاون القلب » (le nom reste écrit) ; « demi-vies »
+  dit « t un demi » (« quatre t un demi ») ; « numéro atomique » → « Z égale … » ; « فالطب » → « ف la médecine » ;
+  « كيفوتوش », « باقيين », « كنتأكدو », « مشاش » remplacés ; l'énoncé français « au bout de combien … sont-ils » réécrit
+  en darija. Gardés exprès (termes du programme ou des sujets, à écouter) : plutonium, uranium, iode, xénon, tellure,
+  césium, positon, rayonnement ; les nombres composés (« quatre-vingt-huit »…) sont des nombres.
+
+**Vérifications.** JSON chargé ; `verifier_pointage_simulations.py` : aucune nouvelle erreur « introuvable » (seule
+`lambda_carbone` de `lambda.html`, déjà là, sur la copie et sur le cours en ligne) ; les trois écarts DEPART de x2-x4
+ont disparu ; les écarts GESTE des nouvelles diapositives viennent de l'absence de piste (durée 0) et disparaissent avec
+une durée estimée (13 caractères/s) ; `verifier_formules.py` : 0 sur le cours, rien sur `national.html` ;
+`verifier_figures_cahier.py` : 0 erreur ; pytest « course or cours or concentration » : 88 passés, 1 échec SVT déjà là.
+`national.html` : `node --check`, Chromium à 1280 × 640 et 724 × 350 (téléphone paysage) : chaque moment atteint,
+encre sur le canvas, aucune erreur console, aucun texte hors cadre. **15 px partout, même au téléphone** : la page garde son propre plancher de 15 px à l'écran (comme `ondes-lumineuses-tableau/national.html`), indices, exposants, étages de fraction et A/Z des noyaux compris, sur sa craie seulement ; les hauteurs de ligne se calculent sur les tailles réellement écrites, l'étape 1 de la datation tient en trois lignes, les étiquettes de la courbe sont « 0,5·a₀ », « 0,25·N₀ »… Contrôle Playwright à chaque moment des quatre vues, à 724 × 350, 1024 × 560 et 1280 × 640 (taille de chaque texte dessiné, chevauchements, sorties de cadre) : 0 problème. Proton rose et neutron gris-bleu du lexique (`docs/lexique-visuel/README.md`, palettes clair / couleur / ombre) ; positon orange de `figures.html`.
+
+**Ce qui reste.**
+- Les voix : `phys_ch4_radioactivite_voix.json` (107 pistes, régénéré par `pistes_changees.py`) — dont 15 diapositives
+  du national, leurs réactions préparées et démonstrations, les énoncés.
+- Les réactions des quatre questions nouvelles sont écrites ici (règle 20), pas générées sur le VPS : à relire à l'écoute.
+- `figures.html` (`fig_enonce_2021/2022/2025`) et l'ancienne vue de `datation.html` restent pour le cours en ligne ;
+  `fig_enonce_2022` peint l'iode en jaune alors que le reste du cours (et `national.html`) le peint violet
+  (`activite.html`) : à aligner quand la copie en attente remplacera le cours en ligne (règle 43). Aucun module commun
+  `shared/lexique/` n'existe encore pour la radioactivité : les dessins sont copiés page à page.
+- `ra_d6_type` (2018 R) reste un exemple dit par la voix (leçon de méthode), et `ra_f3_famille2024` (Segrè, 2024 R)
+  garde sa forme (flèches jouées, question finale) ; `ra_x1_cas_types`, `ra_z1_bilan`, `ra_z2_carte` démarrent encore
+  avec `start` (pages non pilotées par `?depart=`).
+
+## 10. Défauts anciens corrigés (18 novembre 2026, après la 2ᵉ passe)
+- **54 diapositives pilotées par la voix démarraient en `start`** (la scène courait seule, devant ou derrière la voix).
+  Elles passent en `reset` (les deux de `carte.html` n'envoient plus rien : la voix construit la carte branche par branche,
+  comme au ch5). Dans `noyau`, `desintegration`, `chauffer`, `rappels`, `activite`, `courbe` et `figures`, `reset` était un
+  autre nom de `start` : il fige maintenant la scène, sur zéro ou sur `?depart=<moment>`.
+- **Neuf scènes reprises** sans rechargement s'ouvrent figées : `ra_n3` (`zoom_noyau`), `ra_n5` (`formule_N`), `ra_s2`
+  (`droite_N_egal_Z`), `ra_s4b` (`zone_alpha`), `ra_l7b` (`axes`), `ra_a2` (`une_seconde`), `ra_a3b` (`derivee`),
+  `ra_a5b` (`quantite`), `ra_c4b` (`fils`) ; chaque moment de départ est avant le premier `play_until` de la diapositive.
+- **`lambda_carbone`** (`lambda.html`) était fabriqué par le code (`'lambda_' + e.id`) : écrit en entier.
+- **`national.html` au téléphone** : les étiquettes des lectures (0,70·a₀, 0,5·a₀, a₁ = 318 Bq, 34,6 j) ne touchent plus
+  ni les pointillés ni la courbe : à droite du point ou sous la ligne selon la place.
+- `segre.html`, vue famille : « désintégration n sur 14 » en 15 px et en blanc (était 14 px, gris pâle).
+- Le cours en ligne ne change pas : sans `?depart=` les pages démarrent comme avant, et aucune diapositive en ligne n'envoie
+  `reset` à ces pages. Vérifié dans Chromium (figée, puis arrêtée sur le moment suivant, sans erreur).
+- Vérificateur de pointage, copie en attente : 0 « introuvable », 0 DEPART, 0 IFRAME (avant : 1, 54, 9).

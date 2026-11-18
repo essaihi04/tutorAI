@@ -296,7 +296,13 @@ const MESSAGES = {
 };
 function finir() { bulle($('feedback'), MESSAGES[vue], 'good'); }
 function start() { S.jusqua = null; S.t = 0; S.trace = []; S.running = true; S.fait = false; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('start'); pont.emettre(); }
-function reset() { start(); }
+// Diapositive pilotée (professeur 39) : `reset` FIGE la scène — sur ?depart=<moment> (tout ce qui précède déjà
+// écrit) ou sur zéro — et rien ne court seul ; la voix avance ensuite par play_until.
+const URL_DEPART = new URLSearchParams(location.search).get('depart');
+let FIGEE = false;
+function reset() { FIGEE = true; const M = moments(); S.t = URL_DEPART && M[URL_DEPART] != null ? M[URL_DEPART] : 0; S.jusqua = null; S.motif = ''; S.running = false; S.fait = false; S.trace = [];
+  if (vue === 'point') for (let k = 0; k <= 60; k++) S.trace.push(y(S.xM, S.t * k / 60));
+  scene.sale = true; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Observe…'); pont.noter('reset', { time_s: +S.t.toFixed(3) }); pont.emettre(); }
 function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
 function resume() { if (S.running) return; if (S.t >= ARRET) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
 /* Arrêt sur un instant précis : le tuteur montre la scène à la date qu’il explique. */
@@ -340,7 +346,7 @@ const pont = protocole({ id: config.id, commandes, config,
   progression: () => (S.fait ? 1 : 0),
   executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
 // La perturbation part d’elle-même une fois le montage écrit à la craie.
-setTimeout(start, 1600);
+setTimeout(() => { if (URL_DEPART) reset(); else if (!FIGEE && !S.running && S.t === 0) start(); }, 1600);
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>
 </body></html>
