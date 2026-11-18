@@ -262,3 +262,7 @@ pistes du cours existent et sont gardées (questions inchangées, même texte).
   `reset` à ces pages. Vérifié dans Chromium (figée, puis arrêtée sur le moment suivant, sans erreur).
 - Vérificateur de pointage, copie en attente : 0 « introuvable », 0 DEPART, 0 IFRAME (avant : 0, 26, 8) ; cours en ligne :
   rapport identique.
+- **Fiche `bilan.html` illisible au téléphone et sourde à la voix** (18 novembre 2026) : tous ses moments valaient 1, le
+  time_s de la fiche, donc le kit jetait chaque `play_until {moment: <bloc>}` ; ils valent maintenant 1,1 à 1,9 (fiche
+  1,05, `fin` 1,95, lacunes 2, noms inchangés). La page garde son propre plancher de 15 px (indices compris) et, sur un
+  petit écran, se partage en parties (« partie n sur N · touche : la suite ») ; à l'impression, toute la fiche.
