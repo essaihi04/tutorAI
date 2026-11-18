@@ -16,8 +16,12 @@
 <script>
 /*
  * Cours « Nombres complexes (première partie) » (math_ch6_nombres_complexes) : l’alignement par un quotient réel.
- * Vues : ?vue=alignes (params cx, cy : le point C) | national.
+ * Vues : ?vue=alignes (params cx, cy : le point C) | national | n2023 | n2023_arg | triangle (18 novembre 2026).
  * alignes : vecteurs, alignes, sort, revient (en plus).   national : points, vecteurs, quotient, conclusion.
+ * n2023 (sujet 2023 N, questions 1 à 3) : donnees, q1, question2, b_moins_d, question3, quotient, droite, alignes.
+ * n2023_arg (question 4) : donnees, angle_a, angle_c, question4, produit, egalite, conclusion.
+ * triangle (nature d’un triangle) : distance, exemple1, cotes, equilateral, exemple2, isocele, droit, nature.
+ * ?depart=<moment> (n2023, n2023_arg) : ce qui précède ce moment s’écrit d’un coup (diapositive qui suit la précédente).
  * Chaque moment est aussi un repère du même nom.
  */
 const fr = MathsTableau.fr;
@@ -130,6 +134,44 @@ const tire = C => (C[0] - .5 >= -4 && C[1] + 1 <= 3 ? [C[0] - .5, C[1] + 1] : [C
 const borneQ = (Q, [x, y]) => [Math.min(Q.xmax - .15, Math.max(Q.xmin + .1, x)), Math.min(Q.ymax - .15, Math.max(Q.ymin + .1, y))];
 /* --- vue national (2021 R) --- */
 const PN_ = { ox: 200, oy: 165, u: 34, xmin: -4.3, xmax: 4.4, ymin: -4.9, ymax: 3.1, grad: true };
+
+/* --- 18 novembre 2026 (2ᵉ passe) : vues n2023, n2023_arg (sujet 2023 N joué dans le plan) et triangle (nature d’un triangle) --- */
+/** ?depart=<moment> : la diapositive s’ouvre là où la précédente s’est arrêtée. Ce qui précède ce moment s’écrit presque
+ *  d’un coup (traits et textes en 0,02 s, pauses sautées) ; les moments restent tous marqués, dans le même ordre. */
+const DEPART = new URLSearchParams(location.search).get('depart');
+function rapide(c, K) {
+  let on = !!DEPART;
+  const PR = ['trait', 'texte', 'pause'], d = {};
+  if (on) {
+    for (const k of PR) d[k] = Object.getOwnPropertyDescriptor(c, k);
+    const tr = c.trait, tx = c.texte;
+    c.trait = function (p, o = {}) { return tr.call(this, p, { ...o, duree: .02 }); };
+    c.texte = function (s, x, y, o = {}) { return tx.call(this, s, x, y, { ...o, duree: .02 }); };
+    c.pause = function () { return this; };
+  }
+  const fin = () => { if (!on) return; on = false; for (const k of PR) { if (d[k]) Object.defineProperty(c, k, d[k]); else delete c[k]; } };
+  return { m: nom => { K.marque(nom); if (nom === DEPART) fin(); }, a: (t, f) => K.anime(on ? .02 : t, f), fin };
+}
+/** n petits traits au milieu d’un segment : les longueurs égales (codage). */
+function codage(c, x1, y1, x2, y2, n = 1, couleur = 'jaune') {
+  const mx = (x1 + x2) / 2, my = (y1 + y2) / 2, a = Math.atan2(y2 - y1, x2 - x1), nx = -Math.sin(a) * 7, ny = Math.cos(a) * 7;
+  for (let k = 0; k < n; k++) { const o = (k - (n - 1) / 2) * 6; c.ligne(mx + o * Math.cos(a) - nx, my + o * Math.sin(a) - ny, mx + o * Math.cos(a) + nx, my + o * Math.sin(a) + ny, { couleur, largeur: 1.8, duree: .05 }); }
+}
+/** Le petit carré de l’angle droit en P, entre les directions de P vers Q1 et vers Q2 (pixels). */
+function angleDroit(c, P, Q1, Q2, s = 15, couleur = 'jaune') {
+  const u = (Q) => { const dx = Q[0] - P[0], dy = Q[1] - P[1], l = Math.hypot(dx, dy); return [dx / l, dy / l]; };
+  const [a, b] = [u(Q1), u(Q2)];
+  c.trait([[P[0] + s * a[0], P[1] + s * a[1]], [P[0] + s * (a[0] + b[0]), P[1] + s * (a[1] + b[1])], [P[0] + s * b[0], P[1] + s * b[1]]], { couleur, largeur: 1.8, duree: .15 });
+}
+const R2_1 = R2 - 1;
+/* vue n2023 : a = √2 + i√2, b = 1 + √2 + i, c = b̄, d = 2i (2023 N) */
+const P23 = { ox: 92, oy: 266, u: 76, xmin: -0.9, xmax: 3.6, ymin: -1.5, ymax: 2.7, grad: true };
+const P23A = { ox: 80, oy: 250, u: 82, xmin: -0.7, xmax: 3.4, ymin: -1.5, ymax: 2.3, grad: true };
+const N23 = { A: [R2, R2], B: [1 + R2, 1], C: [1 + R2, -1], D: [0, 2] };
+const droiteAB = x => 2 - R2_1 * x;   // la droite (AB) : y = 2 − (√2 − 1)x, elle passe par D(0 ; 2)
+/* vue triangle : exemple 1 a = 2, b = 1 + i√3, c = 3 + i√3 ; exemple 2 a = 1 + i, b = 3 + 2i, c = 3i ((c − a)/(b − a) = i) */
+const PT1 = { ox: 70, oy: 290, u: 74, xmin: -0.4, xmax: 3.6, ymin: -0.4, ymax: 2.4, grad: true };
+const PT2 = { ox: 470, oy: 286, u: 56, xmin: -0.6, xmax: 3.7, ymin: -0.4, ymax: 3.4, grad: true };
 
 MathsTableau.page({ net: true,
   id: 'nc_alignement', titre: 'Nombres complexes : l’alignement',
@@ -271,6 +313,256 @@ MathsTableau.page({ net: true,
         { repere: 'vecteurs', texte: 'c − a = −4 − 4i et d − a = −6 − 6i : le second est 3/2 fois le premier.' },
         { repere: 'quotient', texte: 'Le quotient (d − a)/(c − a) vaut 3/2 : c’est un réel.' },
         { repere: 'conclusion', texte: 'Quotient réel : A, C et D sont alignés.' },
+      ],
+    },
+
+    n2023: {
+      titre: '2023 N : A, B et D dans le plan',
+      elargir: { xr: 425 },
+      dessiner(c, K) {
+        const R = rapide(c, K);
+        K.titre('2023 N : A, B et D dans le plan');
+        try {
+          const G = plan(c, P23), XR = 440, { A, B, C, D } = N23;
+          c.pause(.2);
+          // les données : A, B, D placés avec leurs affixes
+          pt(c, G, A[0], A[1], 'cyan'); c.texte('A(√2 + i√2)', G.X(A[0]) + 8, G.Y(A[1]) - 12, { couleur: 'cyan', taille: 16 });
+          pt(c, G, B[0], B[1], 'cyan'); c.texte('B(1 + √2 + i)', G.X(B[0]) + 8, G.Y(B[1]) - 10, { couleur: 'cyan', taille: 16 });
+          pt(c, G, D[0], D[1], 'cyan'); c.texte('D(2i)', G.ox - 10, G.Y(2) + 22, { couleur: 'cyan', taille: 16, align: 'right' });
+          ecrire(c, 'a = √2 + i√2 ; b = 1 + √2 + i', XR, 70, { couleur: 'blanc', taille: 18 });
+          ecrire(c, 'c = b¯ ; d = 2i', XR, 98, { couleur: 'blanc', taille: 18 });
+          c.repere('donnees', XR - 6, 50, 280, 58, 'les données : a, b, c = b̄, d');
+          c.repere('points', G.X(-.8), G.Y(2.45), G.X(3.5) - G.X(-.8), G.Y(.75) - G.Y(2.45), 'les points A, B et D');
+          R.m('donnees');
+          c.pause(.4);
+          // question 1 (déjà faite) : OA = 2, angle π/4
+          c.ligne(G.ox, G.oy, G.X(A[0]), G.Y(A[1]), { couleur: 'cyan', largeur: 2.2 });
+          arc(c, G.ox, G.oy, 34, 0, PI / 4, { couleur: 'cyan' });
+          auBout(c, 'π/4', G, PI / 8, 56, { couleur: 'cyan', taille: 15 });
+          c.texte('OA = 2', G.X(.95), G.Y(.55), { couleur: 'cyan', taille: 15 });
+          c.texte('1) a = 2(cos π/4 + i sin π/4)', XR, 134, { couleur: 'cyan', taille: 18 });
+          c.repere('oa', G.ox - 6, G.Y(A[1]) - 8, G.X(A[0]) - G.ox + 14, G.oy - G.Y(A[1]) + 14, 'OA = 2 et l’angle π/4');
+          c.repere('q1', XR - 6, 114, 280, 28, 'la forme trigonométrique de a');
+          R.m('q1');
+          c.pause(.4);
+          // question 2 posée
+          c.texte('2) b − d = ?', XR, 172, { couleur: 'jaune', taille: 18 });
+          c.repere('question2', XR - 6, 152, 120, 28, 'question 2 : b − d');
+          R.m('question2');
+          c.pause(.4);
+          // b − d : B descend de 2 (on retire d = 2i) et tombe sur C, le reflet de B
+          R.a(1.4, p => c.fleche(G.X(B[0]), G.Y(B[1]), G.X(B[0]), G.Y(B[1] - 2 * p), { couleur: 'jaune', largeur: 2.4, tete: p > .15 ? 9 : 0 }));
+          c.texte('− 2i', G.X(B[0]) - 8, G.Y(-.5), { couleur: 'jaune', taille: 16, align: 'right' });
+          pt(c, G, C[0], C[1], 'jaune'); c.texte('C(1 + √2 − i)', G.X(C[0]) + 10, G.Y(C[1]) + 6, { couleur: 'jaune', taille: 16 });
+          c.texte('b − d = 1 + √2 + i − 2i', XR + 20, 204, { couleur: 'blanc', taille: 17 });
+          const r2 = encadre(c, '= 1 + √2 − i = c', XR + 59, 234, 18, 'jaune');
+          c.repere('vecteur', G.X(B[0]) - 40, G.Y(B[1]) - 4, 56, G.Y(-1) - G.Y(1) + 10, 'b − d : B descend de 2i');
+          c.repere('point_c', G.X(C[0]) - 10, G.Y(C[1]) - 14, 120, 26, 'C(1 + √2 − i), le reflet de B');
+          c.repere('b_moins_d', XR + 14, 186, 230, r2[1] + r2[3] - 186, 'b − d = 1 + √2 − i = c');
+          R.m('b_moins_d');
+          c.pause(.4);
+          // question 3 posée
+          c.texte('3) (√2 + 1)(b − a) = b − d', XR, 276, { couleur: 'blanc', taille: 18 });
+          c.repere('question3', XR - 6, 256, 250, 28, 'question 3 : (√2 + 1)(b − a) = b − d');
+          R.m('question3');
+          c.pause(.4);
+          // après la réponse : le quotient réel, les vecteurs AB et DB
+          c.fleche(G.X(D[0]), G.Y(D[1]), G.X(B[0]) - 4, G.Y(B[1]) - 2, { couleur: 'jaune', largeur: 2, tete: 10 });
+          c.fleche(G.X(A[0]), G.Y(A[1]), G.X(B[0]) - 4, G.Y(B[1]) - 2, { couleur: 'cyan', largeur: 3.4, tete: 10 });
+          c.texte('⟦b − d|b − a⟧ = √2 + 1 ∈ ℝ', XR + 20, 324, { couleur: 'vert', taille: 20 });
+          c.repere('quotient', XR + 14, 290, 240, 48, '(b − d)/(b − a) = √2 + 1, un réel');
+          R.m('quotient');
+          c.pause(.4);
+          // la droite (AB) se trace : elle passe par D
+          R.a(1.8, p => { const x1 = 3.5 - 4.3 * p; c.ligne(G.X(3.5), G.Y(droiteAB(3.5)), G.X(x1), G.Y(droiteAB(x1)), { couleur: 'vert', largeur: 1.8, pointille: [8, 6] }); });
+          c.cercle(G.X(0), G.Y(2), 12, { couleur: 'vert', largeur: 2 });
+          c.texte('(AB)', G.X(3.3), G.Y(droiteAB(3.3)) - 12, { couleur: 'vert', taille: 16, align: 'center' });
+          c.repere('droite', G.X(-.85), G.Y(2.5), G.X(3.55) - G.X(-.85), G.Y(.45) - G.Y(2.5), 'la droite (AB) passe par D');
+          R.m('droite');
+          c.pause(.4);
+          const b = encadre(c, 'A, B et D sont alignés', XR + 9, 368, 20, 'jaune');
+          c.repere('alignes', b[0], b[1], b[2], b[3], 'A, B et D sont alignés');
+          R.m('alignes');
+        } finally { R.fin(); }
+      },
+      decrire: {
+        donnees: 'Un plan complexe gradué ; les points A(√2 + i√2), B(1 + √2 + i) et D(2i) en cyan ; à droite les données « a = √2 + i√2 ; b = 1 + √2 + i », « c = b̄ ; d = 2i ».',
+        q1: 'Le segment OA en cyan, « OA = 2 », l’angle π/4 entre l’axe réel et OA ; à droite « 1) a = 2(cos π/4 + i sin π/4) ».',
+        question2: 'À droite, en jaune, la question « 2) b − d = ? ». Rien d’autre n’est écrit.',
+        b_moins_d: 'Une flèche jaune part de B et descend de 2 (« − 2i ») : elle tombe sur le point C(1 + √2 − i), le reflet de B par l’axe réel ; à droite « b − d = 1 + √2 + i − 2i » et l’encadré « = 1 + √2 − i = c ».',
+        question3: 'À droite, la question « 3) (√2 + 1)(b − a) = b − d ». Pas encore de conclusion.',
+        quotient: 'Les vecteurs AB (cyan) et DB (jaune) arrivent en B ; à droite, en vert, « (b − d)/(b − a) = √2 + 1 ∈ ℝ ».',
+        droite: 'La droite (AB) se trace en pointillé vert depuis B, passe par A et arrive sur D, entouré en vert.',
+        alignes: 'L’encadré jaune « A, B et D sont alignés ».',
+      },
+      motifs: { donnees: 'les données', q1: 'la question 1', question2: 'la question 2 posée', b_moins_d: 'b − d = c', question3: 'la question 3 posée', quotient: 'le quotient réel', droite: 'la droite (AB) passe par D', alignes: 'A, B et D alignés' },
+      explication: [
+        { repere: 'points', texte: 'Les points A(√2 + i√2), B(1 + √2 + i) et D(2i) du sujet 2023.' },
+        { repere: 'q1', texte: 'OA = |a| = 2 et l’angle de OA est π/4 : a = 2(cos π/4 + i sin π/4).' },
+        { repere: 'vecteur', texte: 'Retirer d = 2i, c’est descendre de 2 : B arrive sur C, le reflet de B ; donc b − d = c.' },
+        { repere: 'quotient', texte: 'On divise par b − a ≠ 0 : (b − d)/(b − a) = √2 + 1, un réel ; les vecteurs AB et DB sont colinéaires.' },
+        { repere: 'droite', texte: 'La droite (AB) passe par D.' },
+        { repere: 'alignes', texte: 'Conclusion : A, B et D sont alignés.' },
+      ],
+    },
+
+    n2023_arg: {
+      titre: '2023 N : ac = 2b, les arguments',
+      elargir: { xr: 400 },
+      dessiner(c, K) {
+        const R = rapide(c, K);
+        K.titre('2023 N : ac = 2b, les arguments');
+        try {
+          const G = plan(c, P23A), XR = 420, { A, B, C } = N23, O = [G.ox, G.oy];
+          const tA = PI / 4, tB = PI / 8;
+          c.pause(.2);
+          for (const [P, coul] of [[A, 'cyan'], [B, 'jaune'], [C, 'orange']]) { c.ligne(O[0], O[1], G.X(P[0]), G.Y(P[1]), { couleur: coul, largeur: 1.8 }); pt(c, G, P[0], P[1], coul); }
+          c.texte('A', G.X(A[0]) - 8, G.Y(A[1]) - 8, { couleur: 'cyan', taille: 18, align: 'right' });
+          c.texte('B', G.X(B[0]) + 10, G.Y(B[1]) + 6, { couleur: 'jaune', taille: 18 });
+          c.texte('C', G.X(C[0]) + 10, G.Y(C[1]) + 6, { couleur: 'orange', taille: 18 });
+          ecrire(c, 'ac = 2b ; c = b¯', XR, 70, { couleur: 'blanc', taille: 18 });
+          c.repere('donnees', XR - 6, 50, 170, 28, 'ac = 2b ; c = b̄');
+          c.repere('points', G.X(-.2), G.Y(1.75), G.X(2.9) - G.X(-.2), G.Y(-1.3) - G.Y(1.75), 'les points A, B et C');
+          R.m('donnees');
+          c.pause(.4);
+          arc(c, O[0], O[1], 62, 0, tA, { couleur: 'cyan' });
+          auBout(c, 'π/4', G, 3 * PI / 16, 104, { couleur: 'cyan', taille: 16 });
+          c.texte('arg a ≡ π/4 [2π]', XR, 108, { couleur: 'cyan', taille: 18 });
+          c.repere('angle_a', XR - 6, 88, 170, 28, 'arg a ≡ π/4 [2π]');
+          R.m('angle_a');
+          c.pause(.4);
+          arc(c, O[0], O[1], 118, 0, tB, { couleur: 'jaune' });
+          auBout(c, 'arg b', G, PI / 16, 150, { couleur: 'jaune', taille: 16 });
+          arc(c, O[0], O[1], 118, 0, -tB, { couleur: 'orange' });
+          auBout(c, 'arg c = −arg b', G, -PI / 16, 158, { couleur: 'orange', taille: 15 });
+          ecrire(c, 'c = b¯ : arg c ≡ −arg b [2π]', XR, 146, { couleur: 'orange', taille: 18 });
+          c.repere('angle_c', XR - 6, 126, 250, 28, 'arg c ≡ −arg b : C est le reflet de B');
+          R.m('angle_c');
+          c.pause(.4);
+          c.texte('4) 2 arg b ≡ ? [2π]', XR, 192, { couleur: 'jaune', taille: 19 });
+          c.repere('question4', XR - 6, 170, 190, 30, 'question 4 : 2 arg b');
+          R.m('question4');
+          c.pause(.4);
+          // après la réponse : on passe aux arguments
+          c.texte('arg a + arg c ≡ arg 2 + arg b [2π]', XR, 236, { couleur: 'blanc', taille: 17 });
+          c.texte('avec arg 2 ≡ 0 (2 est un réel > 0)', XR + 20, 262, { couleur: 'blanc', taille: 16 });
+          c.repere('produit', XR - 6, 218, 300, 52, 'arg a + arg c ≡ arg 2 + arg b');
+          R.m('produit');
+          c.pause(.4);
+          // depuis OA, on recule de arg b : on tombe sur OB
+          R.a(1.6, p => arc(c, O[0], O[1], 150, tA, tA - tB * p, { couleur: 'vert', tete: p > .3 ? 8 : 0 }));
+          auBout(c, '− arg b', G, 3 * PI / 16, 178, { couleur: 'vert', taille: 15 });
+          c.texte('π/4 − arg b ≡ arg b [2π]', XR, 300, { couleur: 'vert', taille: 18 });
+          c.repere('egalite', XR - 6, 280, 220, 28, 'π/4 − arg b ≡ arg b');
+          R.m('egalite');
+          c.pause(.4);
+          const b = encadre(c, '2 arg b ≡ π/4 [2π]', XR + 9, 348, 21, 'jaune');
+          c.repere('conclusion', b[0], b[1], b[2], b[3], '2 arg b ≡ π/4 [2π]');
+          R.m('conclusion');
+        } finally { R.fin(); }
+      },
+      decrire: {
+        donnees: 'Un plan complexe gradué ; depuis O, les segments vers A (cyan), B (jaune) et C (orange), C reflet de B par l’axe réel ; à droite « ac = 2b ; c = b̄ ».',
+        angle_a: 'L’angle π/4 de l’axe réel à OA (arc cyan) ; à droite « arg a ≡ π/4 [2π] ».',
+        angle_c: 'Deux arcs de même ouverture : arg b (jaune, vers le haut) et arg c = −arg b (orange, vers le bas) ; à droite « c = b̄ : arg c ≡ −arg b [2π] ».',
+        question4: 'À droite, la question « 4) 2 arg b ≡ ? [2π] ». La valeur n’est pas écrite.',
+        produit: 'À droite « arg a + arg c ≡ arg 2 + arg b [2π] », « avec arg 2 ≡ 0 (2 est un réel > 0) ».',
+        egalite: 'Un arc vert part de OA et recule de arg b (« − arg b ») : il arrive sur OB ; à droite « π/4 − arg b ≡ arg b [2π] ».',
+        conclusion: 'L’encadré jaune « 2 arg b ≡ π/4 [2π] ».',
+      },
+      motifs: { donnees: 'les données', angle_a: 'arg a = π/4', angle_c: 'arg c = −arg b', question4: 'la question 4 posée', produit: 'le passage aux arguments', egalite: 'π/4 − arg b = arg b', conclusion: '2 arg b ≡ π/4' },
+      explication: [
+        { repere: 'points', texte: 'A, B et C : C est le reflet de B (c = b̄).' },
+        { repere: 'angle_a', texte: 'arg a ≡ π/4 [2π] (question 1).' },
+        { repere: 'angle_c', texte: 'Le conjugué change le signe de l’argument : arg c ≡ −arg b [2π].' },
+        { repere: 'produit', texte: 'ac = 2b : l’argument d’un produit est la somme des arguments ; arg 2 ≡ 0.' },
+        { repere: 'egalite', texte: 'π/4 − arg b ≡ arg b : depuis OA, reculer de arg b ramène sur OB.' },
+        { repere: 'conclusion', texte: 'Donc 2 arg b ≡ π/4 [2π].' },
+      ],
+    },
+
+    triangle: {
+      titre: 'La nature d’un triangle',
+      elargir: false,   // deux figures côte à côte : elles remplissent déjà la largeur
+      dessiner(c, K) {
+        K.titre('La nature d’un triangle');
+        c.texte('AB = |b − a| : un côté est une distance', 300, 34, { couleur: 'blanc', taille: 18 });
+        c.repere('distance', 294, 14, 340, 28, 'AB = |b − a|');
+        K.marque('distance');
+        c.pause(.4);
+        // exemple 1 : équilatéral
+        const G = plan(c, PT1), S3 = Math.sqrt(3);
+        const A1 = [G.X(2), G.Y(0)], B1 = [G.X(1), G.Y(S3)], C1 = [G.X(3), G.Y(S3)];
+        for (const P of [A1, B1, C1]) c.point(P[0], P[1], 5, 'cyan');
+        c.texte('A(2)', A1[0] + 8, A1[1] + 22, { couleur: 'cyan', taille: 16 });
+        c.texte('B(1 + i√3)', B1[0], B1[1] - 12, { couleur: 'cyan', taille: 16, align: 'center' });
+        c.texte('C(3 + i√3)', C1[0], C1[1] - 12, { couleur: 'cyan', taille: 16, align: 'center' });
+        c.trait([A1, B1, C1, A1], { couleur: 'cyan', largeur: 2.2 });
+        c.repere('exemple1', B1[0] - 50, B1[1] - 34, C1[0] - B1[0] + 100, A1[1] - B1[1] + 60, 'exemple 1 : a = 2, b = 1 + i√3, c = 3 + i√3');
+        K.marque('exemple1');
+        c.pause(.4);
+        for (const [P, Q, dx, dy] of [[A1, B1, -16, 0], [A1, C1, 16, 0], [B1, C1, 0, 22]]) {
+          codage(c, P[0], P[1], Q[0], Q[1], 1, 'jaune');
+          c.texte('2', (P[0] + Q[0]) / 2 + dx, (P[1] + Q[1]) / 2 + dy + 5, { couleur: 'jaune', taille: 17, align: 'center' });
+          c.pause(.3);
+        }
+        c.repere('cotes', B1[0] - 20, B1[1] - 8, C1[0] - B1[0] + 40, A1[1] - B1[1] + 16, 'AB = AC = BC = 2');
+        K.marque('cotes');
+        c.pause(.4);
+        c.texte('AB = AC = BC = 2 : équilatéral', 40, 336, { couleur: 'jaune', taille: 18 });
+        c.repere('equilateral', 34, 316, 280, 28, 'ABC équilatéral');
+        K.marque('equilateral');
+        c.pause(.5);
+        // exemple 2 : (c − a)/(b − a) = i
+        const H = plan(c, PT2);
+        const A2 = [H.X(1), H.Y(1)], B2 = [H.X(3), H.Y(2)], C2 = [H.X(0), H.Y(3)];
+        for (const P of [A2, B2, C2]) c.point(P[0], P[1], 5, 'cyan');
+        c.texte('A', A2[0] - 4, A2[1] + 22, { couleur: 'cyan', taille: 17, align: 'right' });
+        c.texte('B', B2[0] + 10, B2[1] + 6, { couleur: 'cyan', taille: 17 });
+        c.texte('C', C2[0] - 10, C2[1] + 4, { couleur: 'cyan', taille: 17, align: 'right' });
+        c.fleche(A2[0], A2[1], B2[0], B2[1], { couleur: 'cyan', largeur: 2.2, tete: 10 });
+        c.fleche(A2[0], A2[1], C2[0], C2[1], { couleur: 'cyan', largeur: 2.2, tete: 10 });
+        c.ligne(B2[0], B2[1], C2[0], C2[1], { couleur: 'faible', largeur: 1.6 });
+        c.texte('⟦c − a|b − a⟧ = i', 600, 104, { couleur: 'blanc', taille: 19 });
+        c.repere('quotient', 592, 74, 120, 46, '(c − a)/(b − a) = i');
+        c.repere('exemple2', C2[0] - 30, C2[1] - 16, B2[0] - C2[0] + 50, A2[1] - C2[1] + 44, 'exemple 2 : (c − a)/(b − a) = i');
+        K.marque('exemple2');
+        c.pause(.4);
+        codage(c, A2[0], A2[1], B2[0], B2[1], 2, 'jaune');
+        codage(c, A2[0], A2[1], C2[0], C2[1], 2, 'jaune');
+        c.texte('|i| = 1 ⇒ AC = AB', 420, 336, { couleur: 'jaune', taille: 18 });
+        c.repere('isocele', 414, 316, 190, 28, '|i| = 1 : AC = AB');
+        K.marque('isocele');
+        c.pause(.4);
+        angleDroit(c, A2, B2, C2, 15, 'vert');
+        c.texte('arg i ≡ π/2 [2π] ⇒ (AB) ⊥ (AC)', 420, 366, { couleur: 'vert', taille: 18 });
+        c.repere('droit', 414, 346, 300, 28, 'arg i ≡ π/2 : l’angle en A est droit');
+        K.marque('droit');
+        c.pause(.4);
+        const b = encadre(c, 'isocèle et rectangle en A', 429, 404, 19, 'jaune');
+        c.repere('nature', b[0], b[1], b[2], b[3], 'ABC isocèle et rectangle en A');
+        K.marque('nature');
+      },
+      decrire: {
+        distance: 'En haut « AB = |b − a| : un côté est une distance ».',
+        exemple1: 'À gauche, un plan gradué : le triangle A(2), B(1 + i√3), C(3 + i√3) en cyan.',
+        cotes: 'Chaque côté du triangle de gauche est marqué « 2 » avec le même petit trait.',
+        equilateral: 'Sous la figure de gauche : « AB = AC = BC = 2 : équilatéral ».',
+        exemple2: 'À droite, un second plan : A(1 + i), B(3 + 2i), C(3i), les flèches AB et AC partent de A ; « (c − a)/(b − a) = i ».',
+        isocele: 'AB et AC portent le même double trait ; « |i| = 1 ⇒ AC = AB ».',
+        droit: 'Le petit carré de l’angle droit en A ; « arg i ≡ π/2 [2π] ⇒ (AB) ⊥ (AC) ».',
+        nature: 'L’encadré jaune « isocèle et rectangle en A ».',
+      },
+      motifs: { distance: 'AB = |b − a|', exemple1: 'l’exemple 1', cotes: 'les trois côtés', equilateral: 'équilatéral', exemple2: 'l’exemple 2', isocele: 'AC = AB', droit: 'l’angle droit en A', nature: 'isocèle et rectangle en A' },
+      explication: [
+        { repere: 'distance', texte: 'Chaque côté est une distance : AB = |b − a|.' },
+        { repere: 'exemple1', texte: 'a = 2, b = 1 + i√3, c = 3 + i√3.' },
+        { repere: 'cotes', texte: 'AB = |−1 + i√3| = 2, AC = |1 + i√3| = 2, BC = |2| = 2.' },
+        { repere: 'equilateral', texte: 'Trois côtés égaux : ABC est équilatéral.' },
+        { repere: 'quotient', texte: 'Le quotient (c − a)/(b − a) compare AC à AB : son module donne le rapport des longueurs, son argument l’angle (AB, AC).' },
+        { repere: 'isocele', texte: '|i| = 1 : AC = AB.' },
+        { repere: 'droit', texte: 'arg i ≡ π/2 : l’angle en A est droit.' },
+        { repere: 'nature', texte: 'ABC est isocèle et rectangle en A.' },
       ],
     },
   },

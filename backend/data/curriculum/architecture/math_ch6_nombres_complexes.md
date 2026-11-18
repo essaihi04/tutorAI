@@ -1,6 +1,6 @@
 # Architecture — `math_ch6_nombres_complexes` (Nombres complexes, partie 1 : opérations et formes, 2e Bac PC BIOF)
 
-Refonte de la logique du 18 novembre 2026 (skill `logique-de-cours`). Cours en ligne inchangé ; nouvelle version dans `backend/data/courses/en_attente/math_ch6_nombres_complexes.json` (partie de la version en attente, plus récente). Pistes à mettre en voix : `math_ch6_nombres_complexes_voix.json` (51 pistes).
+Refonte de la logique du 18 novembre 2026 (skill `logique-de-cours`). Cours en ligne inchangé ; nouvelle version dans `backend/data/courses/en_attente/math_ch6_nombres_complexes.json` (partie de la version en attente, plus récente). Pistes à mettre en voix : `math_ch6_nombres_complexes_voix.json` (52 pistes après la 2ᵉ passe du 18 novembre 2026, voir § 8).
 
 ## 1. La logique avant
 
@@ -49,7 +49,7 @@ Ce qui n'allait pas :
 ## 5. Animations
 Aucun fichier de simulation n'est modifié. Les nouvelles diapositives n1_b et n1_c rejouent `calculs.html?vue=n1` jusqu'aux moments utiles. Les moments `conclusion` et `partie2`, qui écrivaient la réponse de la question 4, ne sont plus joués avant la réponse.
 
-Besoin noté pour plus tard : `n1` gagnerait une vue en figure (A, B, D placés, la droite qui se trace quand le quotient est réel), comme `alignement.html`.
+Besoin noté à la 1ʳᵉ passe (`n1` en figure) : FAIT à la 2ᵉ passe, voir § 8.
 
 ## 6. Mots et voix
 Chaque texte réécrit a été vérifié par `scripts/voix/verifier_mots.py`.
@@ -249,15 +249,16 @@ Légende : ↕✎ déplacée, première phrase réécrite (voix à refaire) · �
 | # | Diapositive | Partie | Ce qu'elle apprend · élève | Pourquoi ici (source) |
 |---|---|---|---|---|
 |  | `nc_i3` L'angle de deux vecteurs : l'argument du quotient | IX. Géométrie : alignement, distances, angles, nature d'un triangle | — | L'angle de deux vecteurs : l'argument du quotient (NC11). |
-|  | `nc_i4` La nature d'un triangle | IX. Géométrie : alignement, distances, angles, nature d'un triangle | ❓ (c − a)/(b − a) = 2i : quelle est la nature du triangle ABC ? | La nature d'un triangle (NC10–NC11). |
+| ⟳ | `nc_i4` La nature d'un triangle | IX. Géométrie : alignement, distances, angles, nature d'un triangle | ❓ (c − a)/(b − a) = 2i : quelle est la nature du triangle ABC ? | La nature d'un triangle (NC10–NC11). 2ᵉ passe : voix gardée, nouvelle vue `alignement.html?vue=triangle` (avant : la figure de la distance AB, sans triangle) : l'exemple 1 se dessine et ses trois côtés se marquent « 2 », puis l'exemple 2 (c − a)/(b − a) = i : AB et AC codés égaux, l'angle droit en A, la conclusion, chaque moment au mot qui le dit. Le cas 2i (la question) n'est pas dessiné. |
 
-**Bloc `nc_s4_b3` — Le sujet 2023 N, une question à la fois** · fin de bloc : cahier (3 lignes), retrouver « Cahier fermé : (b − d)/(b − a) est un réel : que peut-on dire de A, B et D ? », exercice « (c − a)/(b − a) = −3 : les points A, B, C sont : »
+**Bloc `nc_s4_b3` — Le sujet 2023 N, une question à la fois** (4 diapositives depuis la 2ᵉ passe) · fin de bloc : cahier (3 lignes), retrouver « Cahier fermé : (b − d)/(b − a) est un réel : que peut-on dire de A, B et D ? », exercice « (c − a)/(b − a) = −3 : les points A, B, C sont : »
 
 | # | Diapositive | Partie | Ce qu'elle apprend · élève | Pourquoi ici (source) |
 |---|---|---|---|---|
-| ✎ | `nc_n1` Un sujet entier pas à pas : 2023 N (questions 1 et 2) | X. Deux sujets nationaux, une question à la fois | ❓ 2023 N : b = 1 + √2 + i et d = 2i. Que vaut b − d ? | RÉÉCRITE : 2023 N, une question à la fois — les données, la question 1 (déjà faite en t2), puis l'élève calcule b − d (question 2). |
-| ＋ | `nc_n1_b` Un sujet entier pas à pas : 2023 N (question 3, l'alignement) | X. Deux sujets nationaux, une question à la fois | ❓ 2023 N : (√2 + 1)(b − a) = b − d. Que peut-on conclure ? | NOUVELLE : correction de la question 2 (b − d = c), puis l'élève conclut de (√2 + 1)(b − a) = b − d que A, B et D sont alignés (question 3, réactions déjà écrites). |
-| ＋ | `nc_n1_c` Un sujet entier pas à pas : 2023 N (question 4, les arguments) | X. Deux sujets nationaux, une question à la fois | ❓ 2023 N : ac = 2b, c = b̄ et arg a ≡ π/4 [2π]. Alors 2 arg b ≡ | NOUVELLE : correction de la question 3, puis l'élève passe aux arguments pour ac = 2b (question 4, réactions déjà écrites) ; la rotation renvoyée à la partie 2. |
+| ✎ | `nc_n1` Un sujet entier pas à pas : 2023 N (questions 1 et 2) | X. Deux sujets nationaux, une question à la fois | ❓ 2023 N : b = 1 + √2 + i et d = 2i. Que vaut b − d ? | RÉÉCRITE (2ᵉ passe) : `alignement.html?vue=n2023` — A, B, D placés avec leurs affixes, la question 1 relue sur la figure (OA = 2, angle π/4), puis « 2) b − d = ? » ; la vue s'arrête là (`question2`). |
+| ＋ | `nc_n1_b` Un sujet entier pas à pas : 2023 N (question 3, l'alignement) | X. Deux sujets nationaux, une question à la fois | ❓ 2023 N : (√2 + 1)(b − a) = b − d. Que peut-on conclure ? | 2ᵉ passe : `?vue=n2023&depart=question2` — correction de la question 2 sur la figure (retirer 2i, c'est descendre de 2 : B tombe sur C = b̄), puis la question 3 posée ; la vue s'arrête sur `question3` (AVANT : le moment `q3` de `calculs.html?vue=n1` écrivait déjà le quotient réel, la moitié de la réponse). |
+| ＋ | `nc_n1_alignes` Un sujet entier pas à pas : 2023 N (question 3 corrigée, la droite) | X. Deux sujets nationaux, une question à la fois | — | NOUVELLE (2ᵉ passe) : la correction de la question 3, seulement après la réponse : le quotient (b − d)/(b − a) = √2 + 1 réel (`quotient`), la droite (AB) qui se trace et passe par D (`droite`), la conclusion (`alignes`). Moments séparés (règle 33). |
+| ✎ | `nc_n1_c` Un sujet entier pas à pas : 2023 N (question 4, les arguments) | X. Deux sujets nationaux, une question à la fois | ❓ 2023 N : ac = 2b, c = b̄ et arg a ≡ π/4 [2π]. Alors 2 arg b ≡ | 2ᵉ passe : la correction de la question 3 part dans `nc_n1_alignes` ; ici seulement la question 4, sur `?vue=n2023_arg` : arg a = π/4 lu sur la figure, C reflet de B donc arg c = −arg b, « 4) 2 arg b ≡ ? [2π] » ; la vue s'arrête sur `question4` (AVANT : le moment `q4` écrivait déjà « arg a + arg c ≡ arg 2 + arg b », la 1ʳᵉ ligne de la réponse). Les puces d'écran ne donnent plus que les deux propriétés (argument d'un produit, du conjugué). La réaction « π/2 » (`q_0_2`), confuse (« trois arg b »), est réécrite. |
 
 **Bloc `nc_s4_b4` — 2024 N ; ce qu'il faut retenir ; la carte** · fin de bloc : cahier (3 lignes), retrouver « Cahier fermé : comment écrit-on un quotient sous forme algébrique ? », exercice « Même b : b¹² = ? »
 
@@ -266,3 +267,50 @@ Légende : ↕✎ déplacée, première phrase réécrite (voix à refaire) · �
 |  | `nc_n2` Un sujet entier : 2024 N (puissance) | X. Deux sujets nationaux, une question à la fois | — | 2024 N : une puissance réelle en deux lignes. |
 |  | `nc_b1_bilan` Ce qu'il faut retenir | XI. Bilan et carte du chapitre | — | Ce qu'il faut retenir. |
 |  | `nc_b2_carte` La carte du chapitre et la suite | XI. Bilan et carte du chapitre | ❓ Pour multiplier deux complexes, quelle écriture est la plus rapide ? · ✏️ Vrai ou faux ? | La carte du chapitre et la suite (partie 2 : exponentielle, second degré, rotations). |
+
+## 8. Deuxième passe (18 novembre 2026) : le national joué pas à pas, rien de décisif avant la réponse
+
+### Inventaire cas type → diapositive (fréquence au national 2016-2025)
+| Cas type | Fréquence | Avant | Après |
+|---|---|---|---|
+| Forme trigonométrique | 17/20 | `nc_t1` (figure `trig.html?vue=passage`), `nc_t2` (2023 N, question, vue arrêtée sur `module`), `nc_t6` | inchangé (déjà joué, la vue s'arrête avant la forme) |
+| Forme algébrique (produit, carré) | 13/20 | `nc_c1`, `nc_c2` (calcul ligne à ligne) | inchangé |
+| Quotient | 10/20 | `nc_c4` (question ; la vue calcule un autre exemple) | inchangé |
+| Conjugué | 10/20 | `nc_j1` (reflet), `nc_j4` (question, vue arrêtée sur `donnees_c`) | inchangé ; c = b̄ revu en figure dans `nc_n1_b` (B descend sur son reflet) |
+| Distance, égalité de distances | 10/20 | `nc_m4` (question, vue arrêtée avant `module`), `nc_i2` (2025 N) | inchangé |
+| Alignement | 9/20 | `nc_i1` (figure + 2021 R en question), `nc_n1_b` (texte seul, le moment `q3` écrivait le quotient) | `nc_n1` → `nc_n1_b` → `nc_n1_alignes` en figure (`n2023`) : points, b − d = c, question 3, puis seulement après : quotient, droite (AB) qui passe par D, conclusion |
+| Arguments d'un produit / du conjugué | 6/20 | `nc_r4`, `nc_n1_c` (texte, le moment `q4` écrivait la 1ʳᵉ ligne de la réponse) | `nc_n1_c` en figure (`n2023_arg`) : arcs arg a, arg b, arg c = −arg b ; la vue s'arrête sur la question |
+| Puissance, Moivre | 6/20 | `nc_r6` (spirale, question), `nc_r7`, `nc_r8`, `nc_n2` | inchangé |
+| Nature d'un triangle (angle, quotient) | (NC10–NC11) | `nc_i4` lu sur la figure de la distance AB | `nc_i4` sur `?vue=triangle` (voix gardée) |
+| Milieu | 3/20 | `nc_p4` (question, vue arrêtée avant `milieu`) | inchangé |
+| Équation avec z̄, ensembles de points | 0/20 et NC12 | `nc_j5` (`calculs.html?vue=a5`, seul le moment `regle`), `nc_m5` (cercle seul) | NON FAIT (voir « reste à faire ») |
+
+### Questions dont la vue montrait la réponse (revue de chaque diapositive à question)
+- `nc_n1_b` : `play_until q3` écrivait « (b − d)/(b − a) = √2 + 1 ∈ ℝ » → maintenant arrêt sur `question3` (seulement la relation donnée).
+- `nc_n1_c` : `play_until q4` écrivait « arg a + arg c ≡ arg 2 + arg b [2π] » → arrêt sur `question4` (« 2 arg b ≡ ? [2π] ») ; les puces d'écran donnaient aussi les deux premières lignes : remplacées par les propriétés générales.
+- Les autres (a2, a6, c4, p4, j4, m4, m6, g4_b, t2, t4, r2, r6, i1, i2, i4) s'arrêtent avant le résultat demandé ou montrent un autre exemple. `nc_g4_b` montre le tableau des angles (la question demande d'y lire π/4 : c'est l'outil, gardé). `nc_i2` : la vue écrit « B reflet de A » et « ω réel », que la voix dit aussi ; la question demande de les relier (gardé).
+
+### Vues ajoutées (fichier `frontend/public/media/simulations/maths/operations-formes-tableau/alignement.html`, vues existantes `alignes` et `national` inchangées)
+- `n2023` : moments `donnees`, `q1`, `question2`, `b_moins_d`, `question3`, `quotient`, `droite`, `alignes` ; repères `points`, `donnees`, `oa`, `q1`, `question2`, `vecteur`, `point_c`, `b_moins_d`, `question3`, `quotient`, `droite`, `alignes`.
+- `n2023_arg` : moments `donnees`, `angle_a`, `angle_c`, `question4`, `produit`, `egalite`, `conclusion` (même nom de repère, plus `points`).
+- `triangle` : moments `distance`, `exemple1`, `cotes`, `equilateral`, `exemple2`, `isocele`, `droit`, `nature` (+ repère `quotient`).
+- `?depart=<moment>` (vues n2023 et n2023_arg) : ce qui précède ce moment s'écrit en moins d'une seconde ; c'est ainsi que `nc_n1_b` (`depart=question2`) et `nc_n1_alignes` (`depart=question3`) s'ouvrent là où la diapositive précédente s'est arrêtée, avec une URL distincte et `demarrer: reset` (plus de ligne IFRAME/DEPART pour ces diapositives ni pour `nc_i4`). `calculs.html?vue=n1` reste en place pour le cours en ligne.
+
+### Rejeu après la réponse (pour le lecteur)
+- `nc_n1` — `alignement.html?vue=n2023` — `b_moins_d` (la correction de la question 2 ; elle est aussi jouée au début de `nc_n1_b`).
+- `nc_n1_b` — `alignement.html?vue=n2023&depart=question2` — `quotient`, `droite`, `alignes` (aussi joués par `nc_n1_alignes`).
+- `nc_n1_c` — `alignement.html?vue=n2023_arg` — `produit`, `egalite` (depuis OA, reculer de arg b ramène sur OB), `conclusion`.
+- `nc_i4` — `alignement.html?vue=triangle` — rien encore : le cas 2i (AC = 2AB, angle droit) n'est pas dessiné (reste à faire).
+
+### Mots (2ᵉ passe)
+Remplacés : « وكتطيح على C » → « وكتوصل لـ C » ; « كتدوز من A » → « كتمشي من A ». Gardés, à écouter : « symétrique » (programme, 2 fois), « colinéaires » (programme, 1 fois), « bleu » (déjà là), « arguments », « modulo » (déjà notés).
+
+### Voix
+`math_ch6_nombres_complexes_voix.json` : 52 pistes. Réécrites : `nc_n1`, `nc_n1_b`, `nc_n1_c`, la réaction `nc_n1_c__q_0_2` ; ajoutée : `nc_n1_alignes`. `nc_i4` garde sa voix (seul le pointage change). Les lignes GESTE de ces diapositives viennent de l'absence de piste (durée 0) ; avec une durée estimée (13 caractères/s), le vérificateur ne signale aucun écart.
+
+### Reste à faire
+- `calculs-vues.js` n'est pas touché (les vues nouvelles sont dans `alignement.html`, rien à reporter dans les sources du build).
+- `nc_i4` : dessiner le cas de la question (2i : AC = 2AB, angle droit, pas isocèle) comme moment de rejeu.
+- `nc_j5` (équation avec z̄) et `nc_m5` (médiatrice |z − a| = |z − b|) : pas encore joués pas à pas en figure.
+- Une figure de cahier (`cahier_figures`) pour l'alignement 2023 N.
+
