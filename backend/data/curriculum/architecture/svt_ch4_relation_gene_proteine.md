@@ -148,7 +148,7 @@ de l'ouverture est maintenant expliquée par l'élève).
 ### Séance 7 — Rédiger comme le barème, l'exercice national et le bilan (C8)
 
 **Bloc 1** — 49. `rg_s4_trans_trad` ▶, 50. `rg_s5_etapes` ▶ (2018 R), 51. `rg_e1_restitution` ▶ ✏️.
-**Bloc 2** — 52. `rg_e2_reperages` ▶, 53. `rg_e3_lignes` ▶, 54. `rg_e4_phrase` ▶ ✏️.
+**Bloc 2** — `rg_e2a_enonce` 📄 (l’énoncé 2025 N, feuille d’examen), 52. `rg_e2_reperages` ▶, 53. `rg_e3_lignes` ▶, 54. `rg_e4_phrase` ▶ ✏️.
 **Bloc 3** — 55. `rg_e5_national` ▶ ✏️ (national 2024), 56. `rg_e6_drepanocytose` ▶ ✏️ (retour à l'exemple du
 début), 57. `rg_b1_bilan`, 58. `rg_b2_carte`.
 
@@ -281,3 +281,10 @@ ribosome » (`rg_e8`, `rg_e8b`), b3 « Retour à la drépanocytose, et le bilan 
 - Le test `test_pointage_simulations.py::test_le_cours_de_svt_liberation_de_l_energie_est_sans_ecart` échoue : il porte
   sur le cours SVT ch1, que cette session n'a pas touché.
 
+### L’énoncé d’abord (19 novembre 2026, professeur règle 46)
+
+Avant chaque exercice du national joué, une diapositive montre la feuille de l’examen reproduite en code (gabarit
+`shared/examen/feuille.js` : en-tête officiel, titre encadré, barème, documents redessinés) et le tuteur la lit :
+`rg_e2a_enonce` (2025 N, `enonce_2025N.html`) avant `rg_e2_reperages` ; `rg_e5_enonce` (2024 N, `enonce_2024N.html`)
+avant `rg_e5a_document` ; `rg_e7_enonce` (2020 N, `enonce_2020N.html`) avant `rg_e7_moustiques` ; `rg_e8_enonce`
+(2022 N, `enonce_2022N.html`) avant `rg_e8_ribosomes`. Voix nouvelles : 4 pistes dans `svt_ch4_relation_gene_proteine_voix.json`.

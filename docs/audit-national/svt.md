@@ -204,9 +204,13 @@ Audit du 19 novembre 2026.
 
 ### (a) Exercices du national joués dans le cours
 
-Les diapositives « énoncé d'abord » ne sont **pas encore faites** : d'après l'addendum du 19/11, l'énoncé est la feuille
-d'examen refaite en code (`shared/examen/feuille.html?sujet=…&exercice=…`), gabarit qui n'est pas encore sur main.
-Aucune diapositive ne montre de scan. Ce qui suit prépare ce travail.
+**Énoncé d'abord : fait** (19/11, après l'arrivée du gabarit `shared/examen/feuille.js`) — une feuille d'examen
+reproduite en code par exercice, dans le dossier du cours (le sujet SVT n'a pas de `/media/examens/svt/<sujet>.json`,
+le mode direct `feuille.html?sujet=…` ne marche pas pour lui) : `enonce_2025N.html` → `rg_e2a_enonce`,
+`enonce_2024N.html` → `rg_e5_enonce`, `enonce_2020N.html` → `rg_e7_enonce`, `enonce_2022N.html` → `rg_e8_enonce`
+(outils communs `feuille_svt.js` : code génétique complet, tableaux de séquences, SVG). Aucun scan montré.
+Limites : 2025 N et 2022 N s'arrêtent aux questions jouées (partie I de l'exercice) ; le document 1 du 2020 N a ses
+formules chimiques simplifiées ; la case « page » de l'en-tête porte la page de la 1re question.
 
 | Sujet | `exam.json` | Pages modèles (scan) | Questions jouées (points) | Diapositives du cours |
 |---|---|---|---|---|
@@ -288,9 +292,9 @@ traduction, 2018 R — pas de scan pour 2018 R), `rg_e1_restitution` (définitio
   `rg_a5_in_vitro`, `rg_t2b_arbre_noel`, `rg_t6_bareme`, `rg_c1b_nirenberg`, `rg_e5a_document`, `rg_e5_national` q et e0,
   `rg_e7_moustiques`, `rg_e7b_hypothese`, `rg_e7c_verifier` q et e0, `rg_e8_ribosomes`, `rg_e8b_hemoglobine`,
   `rg_e6_drepanocytose`).
-- **Pistes ajoutées au `_voix.json` : 0** (aucun texte dit n'a changé ; les pointages ajoutés utilisent des fragments
-  existants).
-- **Pas fait** : les diapositives « énoncé d'abord » (gabarit `feuille.html` absent de main) ; le canevas écrit encore
+- **Pistes ajoutées au `_voix.json` : 4** (`rg_e2a_enonce`, `rg_e5_enonce`, `rg_e7_enonce`, `rg_e8_enonce`, voix
+  nouvelles des énoncés) ; aucun texte dit existant n'a changé.
+- **Pas fait** : le canevas écrit encore
   certaines réponses que la colonne de démonstration écrit aussi (`amelogenine_pas` q2_reponse, `moustiques_seq` arnm —
   ces moments ne sont pas joués pendant la démonstration, mais le seraient sur demande) ; les comptages « à faire » ci-dessus.
 <!-- ch4 : fin -->
