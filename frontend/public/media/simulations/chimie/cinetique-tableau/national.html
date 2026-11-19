@@ -254,6 +254,13 @@ function couper(c, t, max, taille) {
 }
 function zoneEcriture(c, M, liste, ys, o = {}) {
   const S = M.S; let x = o.x ?? 14, max = o.max ?? 730, taille = o.taille ?? 17;
+  /* La démonstration se joue sur la figure (19 novembre 2026, simulations-au-tableau règle 17) : à partir de l’étape
+   * `o.efface`, les phrases écrites avant sont effacées, et les étapes de la démonstration n’écrivent pas de phrase
+   * (leurs lignes sont les cartes de la diapositive, chacune liée au repère allumé sur la figure). Les `plus` restent. */
+  if (o.efface) {
+    const noms = ETAPES(S.vue).map(e => e.nom), d = noms.indexOf(o.efface), tout = !S.mesure && M.commence(o.efface);
+    liste = liste.map(e => (tout || noms.indexOf(e.nom) >= d ? { ...e, lignes: [] } : e));
+  }
   if (LARGE.actif) {   // tableau large : la colonne de gauche, chaque phrase à la ligne (le tuteur garde la phrase entière)
     x = 14; max = LARGE.gauche - 18; taille = LARGE.taille; ys = LARGE.ys;
     liste = liste.map(e => ({ ...e, lignes: aGauche(c, () => e.lignes.flatMap(([t, col]) => couper(c, t, max, taille).map((l, i) => [l, col, i ? false : t]))) }));
@@ -481,12 +488,12 @@ function chrono(c, x, y, r, texte, t) {
 }
 /** Graphe : { x0, y0, w, h, xmax, dx, ymax, dy, decx, decy, nomx, nomy }. */
 function Graphe(o) { return Object.assign(o, { X: v => o.x0 + v / o.xmax * o.w, Y: v => o.y0 - v / o.ymax * o.h }); }
-function axesG(c, g, taille = 15) {
+function axesG(c, g, taille = 15, sauf = []) {
   c.fleche(g.x0, g.y0, g.x0 + g.w + 14, g.y0, { largeur: 1.8 });
   c.fleche(g.x0, g.y0, g.x0, g.y0 - g.h - 14, { largeur: 1.8 });
   for (let v = g.dx; v <= g.xmax + 1e-9; v += g.dx) { c.ligne(g.X(v), g.y0 - 4, g.X(v), g.y0 + 4, { largeur: 1.4, duree: .03 }); c.texte(fr(v, g.decx), g.X(v), g.y0 + 20, { couleur: 'faible', taille, align: 'center', duree: .1 }); }
   c.texte('0', g.x0 - 7, g.y0 + 17, { couleur: 'faible', taille, align: 'right', duree: .05 });
-  for (let v = g.dy; v <= g.ymax + 1e-9; v += g.dy) { c.ligne(g.x0 - 4, g.Y(v), g.x0 + 4, g.Y(v), { largeur: 1.4, duree: .03 }); c.texte(fr(v, g.decy), g.x0 - 8, g.Y(v) + 5, { couleur: 'faible', taille, align: 'right', duree: .1 }); }
+  for (let v = g.dy; v <= g.ymax + 1e-9; v += g.dy) { c.ligne(g.x0 - 4, g.Y(v), g.x0 + 4, g.Y(v), { largeur: 1.4, duree: .03 }); if (!sauf.some(u => Math.abs(u - v) < 1e-9)) c.texte(fr(v, g.decy), g.x0 - 8, g.Y(v) + 5, { couleur: 'faible', taille, align: 'right', duree: .1 }); }
   if (g.x0 + g.w + 70 < 760) c.texte(g.nomx, g.x0 + g.w + 18, g.y0 + 5, { couleur: 'blanc', taille: 16 });
   else c.texte(g.nomx, g.x0 + g.w + 4, g.y0 - 10, { couleur: 'blanc', taille: 16, align: 'right' });
   c.texte(g.nomy, g.x0 + 10, g.y0 - g.h - 4, { couleur: 'blanc', taille: 16 });
@@ -599,22 +606,47 @@ const MOTIFS = MOTIFS_DE(ETAPES);
 const CONCL = new Set(VUES.flatMap(v => ETAPES(v).filter(e => e.concl).map(e => e.nom)));
 /** Une étape de conclusion se voit seulement si conclusions = true (et si elle a commencé). */
 const voit = (M, nom) => M.commence(nom) && (PAR.conclusions || !CONCL.has(nom));
+/** Première étape de la démonstration de chaque vue : à partir d’elle, le texte écrit avant est effacé (règle 17). */
+const DEMO = { '2021N_q1': 'limitant', '2021N_q2': 'definition', '2021N_q3': 'derivee', '2021N_q4': 'points_lus' };
+/** L’étape en cours (la dernière commencée) : c’est elle qu’on allume fort ; les précédentes restent allumées doucement. */
+const enCours = (M, nom) => etapeEnCours(M) === nom && !M.S.fait;
+/** Allume un rectangle (halo jaune) : fort pour l’étape en cours, doux ensuite. */
+function allume(c, x, y, w, h, fort = true, r = 8) {
+  c.direct(() => {
+    const ctx = c.ctx; ctx.save();
+    ctx.fillStyle = fort ? 'rgba(250,204,21,.2)' : 'rgba(250,204,21,.07)'; ctx.strokeStyle = fort ? 'rgba(250,204,21,.95)' : 'rgba(250,204,21,.35)';
+    ctx.lineWidth = fort ? 2.4 : 1.2; ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fill(); ctx.stroke(); ctx.restore();
+  });
+}
+/** Allume un point (halo rond). */
+function allumePoint(c, x, y, fort = true, r = 11) {
+  c.direct(() => {
+    const ctx = c.ctx; ctx.save();
+    ctx.fillStyle = fort ? 'rgba(250,204,21,.3)' : 'rgba(250,204,21,.12)'; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
+    ctx.strokeStyle = 'rgba(250,204,21,.9)'; ctx.lineWidth = fort ? 2 : 1; ctx.stroke(); ctx.restore();
+  });
+}
 
 /* ── Rappel des questions d’avant (en haut, en petit) ────────────────────────────────────────────── */
 const RAPPELS = { '2021N_q1': '', '2021N_q2': 'Q1 : x_f = 10⁻³ mol', '2021N_q3': 'Q1 : x_f = 10⁻³ mol ; Q2 : t₁/₂ = 4 min',
   '2021N_q4': 'Q2 : t₁/₂ = 4 min ; Q3 : v = −⟦1|160·V₀⟧·⟦dσ|dt⟧' };
+let RAPPEL_R = null;   // le cadre du rappel (allumé quand la démonstration s’en sert)
 function rappel(c, v) {
-  const r = RAPPELS[v]; if (!r) return;
+  const r = RAPPELS[v]; RAPPEL_R = null; if (!r) return;
   const frac = r.includes('⟦'), h = frac ? 46 : 30, tt = Math.max(17, c.echelle && c.tailleMin ? c.tailleMin / c.echelle : 0);
   const w = c.largeurTexte(r, tt) * 1.04 + 20, x = 750 - w;   // mesurée à la taille vraiment écrite (plancher du petit écran)
   c.rect(x, 8, w, h, { couleur: 'faible', largeur: 1.4, arrondi: 6, duree: .1 });
   c.texte(r, x + 10, frac ? 38 : 29, { couleur: 'cyan', taille: 17, duree: .4 });
+  RAPPEL_R = [x - 3, 5, w + 6, h + 6];
   c.repere('rappel', x, 8, w, h, `le rappel des questions d’avant : ${window.Tableau.lisible(r)}`);
 }
 
 /* ── Q1 : le mélange et le tableau d’avancement ─────────────────────────────────────────────────── */
 const B1 = { x: 36, y: 168, w: 140, h: 140 };
-const TB = { x: 196, y: 100, cols: [96, 46, 104, 108, 98, 98], h: 40 };
+const TB = { x: 208, y: 100, cols: [96, 46, 104, 108, 98, 98], h: 40 };
+/* Les trois lignes du tableau se comptent en s’allumant (19 novembre 2026, règle 16) : chaque ligne s’allume à son tour,
+ * son numéro « 1, 2, 3 » écrit à sa gauche, elle reste allumée ; le total « 3 lignes » s’écrit une fois à la fin. */
+const LIGNES_Q1 = ['etat_initial', 'en_cours', 'etat_final'];
 const colX = i => TB.x + TB.cols.slice(0, i).reduce((a, b) => a + b, 0);
 function cellule1(c, i, j, s, o = {}) {
   const x = colX(i) + TB.cols[i] / 2, y = TB.y + (j + 1) * TB.h - 13;
@@ -638,27 +670,42 @@ function vueQ1(c, M) {
     c.texte('V₀ = 100 mL', B1.x + B1.w / 2, B1.y - 14, { couleur: 'jaune', taille: 17, align: 'center' });
   }
   const W = TB.cols.reduce((a, b) => a + b, 0);
+  const numero = n => c.texte(String(n), TB.x - 14, TB.y + (n + .5) * TB.h + 6, { couleur: 'jaune', taille: 18, align: 'center' });
   const lignes = [
     { nom: 'equation', plus: () => {
       eqn(c, TB.x + W / 2, 70, 'CH₃COOC₂H₅ + HO⁻', 'CH₃COO⁻ + C₂H₅OH', { taille: 18, align: 'center', couleur: 'cyan' });
       c.rect(TB.x, TB.y, W, TB.h, { largeur: 1.4 });
       ['état', 'x', 'ester', 'HO⁻', 'CH₃COO⁻', 'C₂H₅OH'].forEach((s, i) => cellule1(c, i, 0, s, { couleur: 'faible', taille: 16 }));
     } },
-    { nom: 'etat_initial', plus: () => { c.rect(TB.x, TB.y + TB.h, W, TB.h, { largeur: 1.4 });
+    { nom: 'etat_initial', plus: () => { c.rect(TB.x, TB.y + TB.h, W, TB.h, { largeur: 1.4 }); numero(1);
       ['initial', '0', 'en excès', '10⁻³', '0', '0'].forEach((s, i) => cellule1(c, i, 1, s, { taille: i === 2 ? 15 : 17 })); } },
-    { nom: 'en_cours', plus: () => { c.rect(TB.x, TB.y + 2 * TB.h, W, TB.h, { largeur: 1.4 });
+    { nom: 'en_cours', plus: () => { c.rect(TB.x, TB.y + 2 * TB.h, W, TB.h, { largeur: 1.4 }); numero(2);
       ['en cours', 'x', 'en excès', '10⁻³ − x', 'x', 'x'].forEach((s, i) => cellule1(c, i, 2, s, { taille: i === 2 ? 15 : 17 })); } },
-    { nom: 'etat_final', plus: () => { c.rect(TB.x, TB.y + 3 * TB.h, W, TB.h, { largeur: 1.4 });
+    { nom: 'etat_final', plus: () => { c.rect(TB.x, TB.y + 3 * TB.h, W, TB.h, { largeur: 1.4 }); numero(3);
       ['final', 'x_f', 'en excès', '10⁻³ − x_f', 'x_f', 'x_f'].forEach((s, i) => cellule1(c, i, 3, s, { taille: i === 2 ? 15 : 17 }));
-      for (let i = 1; i < TB.cols.length; i++) c.ligne(colX(i), TB.y, colX(i), TB.y + 4 * TB.h, { largeur: 1.2, duree: .05 }); } },
+      for (let i = 1; i < TB.cols.length; i++) c.ligne(colX(i), TB.y, colX(i), TB.y + 4 * TB.h, { largeur: 1.2, duree: .05 });
+      c.texte('3 lignes', TB.x - 14, TB.y + 4 * TB.h + 24, { couleur: 'jaune', taille: 17, align: 'left' }); } },
   ];
+  // Le compte des lignes : halo fort sur la ligne en cours, doux sur les lignes déjà comptées ; numéro à gauche.
+  LIGNES_Q1.forEach((nom, i) => {
+    if (!M.commence(nom)) return;
+    allume(c, TB.x + 2, TB.y + (i + 1) * TB.h + 2, W - 4, TB.h - 4, enCours(M, nom), 6);
+    c.direct(() => { const ctx = c.ctx, cx = TB.x - 14, cy = TB.y + (i + 1.5) * TB.h; ctx.save(); ctx.strokeStyle = 'rgba(250,204,21,.9)'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(cx, cy, 10, 0, 7); ctx.stroke(); ctx.restore(); });
+  });
+  // La démonstration sur le tableau : la colonne de l’ester (en excès), puis celle de HO⁻ (limitant), puis sa case finale.
+  if (voit(M, 'limitant')) {
+    if (enCours(M, 'limitant')) allume(c, colX(2) + 3, TB.y + 3, TB.cols[2] - 6, 4 * TB.h - 6, false);
+    allume(c, colX(3) + 3, TB.y + 3, TB.cols[3] - 6, 4 * TB.h - 6, enCours(M, 'limitant'));
+  }
+  if (voit(M, 'x_f')) allume(c, colX(3) + 3, TB.y + 3 * TB.h + 3, TB.cols[3] - 6, TB.h - 6, enCours(M, 'x_f'), 6);
   if (PAR.conclusions) lignes.push(
     { nom: 'limitant', plus: () => {
       c.rect(colX(3) + 3, TB.y + 3, TB.cols[3] - 6, 4 * TB.h - 6, { couleur: 'jaune', largeur: 2.2, arrondi: 8 });
-      c.texte('ester en excès : HO⁻ est limitant', TB.x, TB.y + 4 * TB.h + 30, { couleur: 'jaune', taille: 18 });
+      c.texte('limitant', colX(3) + TB.cols[3] / 2, TB.y - 8, { couleur: 'jaune', taille: 18, align: 'center' });
     } },
     { nom: 'x_f', plus: () => {
-      c.texte('10⁻³ − x_max = 0 ; réaction totale : x_f = x_max = 10⁻³ mol', TB.x, TB.y + 4 * TB.h + 60, { couleur: 'jaune', taille: 18, max: W });
+      c.texte('= 0', colX(3) + TB.cols[3] / 2, TB.y + 4 * TB.h + 24, { couleur: 'jaune', taille: 18, align: 'center' });
+      c.texte('x_f = x_max = 10⁻³ mol', colX(3) + TB.cols[3] / 2, TB.y + 4 * TB.h + 56, { couleur: 'jaune', taille: 20, align: 'center' });
     } });
   c.repere('melange', B1.x - 10, B1.y - 34, B1.w + 20, B1.h + 86, 'le bécher : 10⁻³ mol d’ions HO⁻ et l’ester versé en excès, V₀ = 100 mL');
   c.repere('tableau', TB.x, TB.y, W, 4 * TB.h, 'le tableau d’avancement (état initial, en cours, état final)');
@@ -676,7 +723,7 @@ function vueQ1(c, M) {
       etat_final: [['état final : on remplace x par x_f', 'blanc']],
       limitant: [['l’ester est en excès : le réactif limitant est HO⁻', 'jaune']],
       x_f: [['la réaction est totale : 10⁻³ − x_max = 0, x_f = x_max = 10⁻³ mol', 'jaune']] })[l.nom] })),
-  ], ZY);
+  ], ZY, { efface: DEMO[M.S.vue] });
 }
 
 /* ── Q2 : le conductimètre, le tableau des mesures, la courbe, t₁/₂ ──────────────────────────────────── */
@@ -696,7 +743,10 @@ function vueQ2(c, M) {
     chrono(c, CH2.x, CH2.y + 30, CH2.r, `t = ${fr(t, 0)} min`, t);
   }
   const vus = MESURES.filter(([d]) => M.commence('mesures') && t >= d - 1e-6);
-  if (M.commence('mesures')) {
+  // Le tableau des mesures sert à remplir le graphe ; il est effacé quand la démonstration commence (règle 17).
+  const tableauVu = M.commence('mesures') && !M.commence('definition');
+  if (M.commence('mesures')) { axesG(c, G2, 15); quad(c, G2, .8); }
+  if (tableauVu) {
     c.texte('t (min)', T2.x + T2.w1 / 2, T2.y - 6, { couleur: 'faible', taille: 15, align: 'center', duree: .1 });
     c.texte('σ (S/m)', T2.x + T2.w1 + T2.w2 / 2 + 4, T2.y - 6, { couleur: 'faible', taille: 15, align: 'center', duree: .1 });
     c.ligne(T2.x, T2.y, T2.x + T2.w1 + T2.w2, T2.y, { largeur: 1.2, duree: .05 });
@@ -706,8 +756,13 @@ function vueQ2(c, M) {
       c.texte(String(d), T2.x + T2.w1 / 2, y, { couleur: 'blanc', taille: 16, align: 'center' });
       c.texte(fr(v, 3), T2.x + T2.w1 + T2.w2 / 2 + 4, y, { couleur: 'jaune', taille: 16, align: 'center' });
     }));
-    axesG(c, G2, 15); quad(c, G2, .8);
-    c.direct(() => vus.forEach(([d, v]) => c.point(G2.X(d), G2.Y(v), 4.5, 'jaune')));
+  }
+  if (M.commence('mesures')) c.direct(() => vus.forEach(([d, v]) => c.point(G2.X(d), G2.Y(v), 4.5, 'jaune')));
+  // La démonstration sur la figure : x_f (rappel de Q1) allumé, puis σ₁/₂ sur l’axe, puis la lecture de t₁/₂.
+  if (M.commence('definition') && RAPPEL_R) allume(c, ...RAPPEL_R, enCours(M, 'definition'), 6);
+  if (voit(M, 'sigma_demi')) {
+    const y = G2.Y(.17);
+    allumePoint(c, G2.x0, y, enCours(M, 'sigma_demi'));
   }
   if (M.commence('courbe')) c.direct(() => { const p = M.p('courbe'), tm = TMAX * p; if (p > 0) c.courbe(u => [G2.X(u * tm), G2.Y(SIG(u * tm))], Math.max(16, Math.round(140 * p)), { net: true, couleur: 'bleu', largeur: 2.6 }); });
   if (voit(M, 'lecture')) {
@@ -715,12 +770,14 @@ function vueQ2(c, M) {
     c.direct(() => {
       const a = clamp(p * 2, 0, 1); c.ligne(G2.x0, y, G2.x0 + (x - G2.x0) * a, y, { couleur: 'jaune', largeur: 1.8, pointille: [5, 5] });
       if (p > .5) { const b = clamp(p * 2 - 1, 0, 1); c.ligne(x, y, x, y + (G2.y0 - y) * b, { couleur: 'jaune', largeur: 1.8, pointille: [5, 5] }); c.point(x, y, 5, 'jaune'); }
-      if (p >= 1) { c.point(x, G2.y0, 4.5, 'jaune'); c.texte('0,17', G2.x0 + 6, y + 20, { couleur: 'jaune', taille: 17 }); c.texte('t₁/₂ = 4 min', x + 8, G2.y0 - 12, { couleur: 'jaune', taille: 18 }); }
+      if (p >= 1) c.point(x, G2.y0, 4.5, 'jaune');
     });
+    if (M.p('lecture') >= 1) allumePoint(c, x, G2.y0, enCours(M, 'lecture'));
   }
   c.repere('conductimetre', A2.x, A2.y, A2.w, A2.h, `le conductimètre : il affiche σ = ${fr(s, 3)} S/m`);
   c.repere('melange', B2.x - 6, B2.y - 40, B2.w + 12, B2.h + 46, 'le mélange avec la cellule de mesure');
-  c.repere('tableau', T2.x - 4, T2.y - 24, T2.w1 + T2.w2 + 10, MESURES.length * T2.h + 30, `le tableau des mesures (${vus.length} lignes écrites)`);
+  c.repere('tableau', T2.x - 4, T2.y - 24, T2.w1 + T2.w2 + 10, MESURES.length * T2.h + 30, `le tableau des mesures (${vus.length} lignes écrites${M.commence('definition') ? ', effacé pour la démonstration' : ''})`);
+  c.repere('sigma_demi', G2.x0 - 14, G2.Y(.17) - 30, 150, 44, `σ₁/₂ = 0,17 S·m⁻¹, sur l’axe de σ${voit(M, 'sigma_demi') ? '' : ' (pas encore écrit)'}`);
   c.repere('courbe', G2.x0, G2.y0 - G2.h, G2.w, G2.h, 'le graphe σ(t) : les points, puis la courbe');
   c.repere('lecture', G2.X(4) - 16, G2.Y(.17) - 16, 32, 32, `le point σ = 0,17 S·m⁻¹, t = 4 min${voit(M, 'lecture') ? '' : ' (pas encore lu)'}`);
   return zoneEcriture(c, M, [
@@ -728,9 +785,9 @@ function vueQ2(c, M) {
     { nom: 'mesures', lignes: [['à chaque date, σ lue va dans le tableau, puis sur le graphe : σ diminue', 'blanc']] },
     { nom: 'courbe', lignes: [['la courbe σ(t) passe par les points (figure 1 du sujet)', 'bleu']] },
     { nom: 'definition', lignes: [['à t₁/₂ : x = x_f/2 = 10⁻³/2 = 5·10⁻⁴ mol', 'cyan']] },
-    { nom: 'sigma_demi', lignes: PAR.conclusions ? [['σ₁/₂ = 0,25 − 160 × 5·10⁻⁴ = 0,25 − 0,08 = 0,17 S·m⁻¹', 'jaune']] : [] },
-    { nom: 'lecture', lignes: PAR.conclusions ? [['sur la courbe, σ = 0,17 S·m⁻¹ à t₁/₂ = 4 min', 'jaune']] : [] },
-  ], ZY);
+    { nom: 'sigma_demi', lignes: [], plus: () => { if (voit(M, 'sigma_demi')) c.texte('σ₁/₂ = 0,17', G2.X(4) + 14, G2.Y(.17) - 10, { couleur: 'jaune', taille: 19 }); } },
+    { nom: 'lecture', lignes: [], plus: () => { if (voit(M, 'lecture')) c.texte('t₁/₂ = 4 min', G2.X(4) + 12, G2.y0 - 12, { couleur: 'jaune', taille: 20 }); } },
+  ], ZY, { efface: DEMO[M.S.vue] });
 }
 
 /* ── Q3 : montrer v = −(1/(160·V₀))·dσ/dt ────────────────────────────────────────────────────── */
@@ -765,69 +822,108 @@ function vueQ3(c, M) {
     { nom: 'derivee', plus: () => { c.texte('⟦dσ|dt⟧ = 0 − 160·⟦dx|dt⟧', X0 + 10, 180, { couleur: 'jaune', taille: 22 }); c.texte('(0,25 : constante)', X0 + 270, 180, { couleur: 'faible', taille: 16 }); } },
     { nom: 'dxdt', plus: () => c.texte('⟦dx|dt⟧ = −⟦1|160⟧·⟦dσ|dt⟧', X0 + 10, 236, { couleur: 'jaune', taille: 22 }) },
     { nom: 'resultat', plus: () => { c.texte('v = −⟦1|160·V₀⟧·⟦dσ|dt⟧', X0 + 22, 298, { couleur: 'jaune', taille: 24 }); c.rect(X0 + 6, 264, 300, 54, { couleur: 'jaune', largeur: 2, arrondi: 8 }); } });
+  // La démonstration sur la figure : chaque ligne s’allume à son moment ; à la dérivée, le « 0,25 » de la relation s’allume aussi.
+  if (voit(M, 'derivee')) {
+    const x25 = X0 + 10 + c.largeurTexte('σ = ', 22);
+    if (enCours(M, 'derivee')) allume(c, x25 - 4, 104, c.largeurTexte('0,25', 22) + 8, 30, true, 6);
+    allume(c, X0, 154, 480, 46, enCours(M, 'derivee'));
+  }
+  if (voit(M, 'dxdt')) allume(c, X0, 210, 330, 46, enCours(M, 'dxdt'));
+  if (voit(M, 'resultat') && enCours(M, 'resultat')) allume(c, X0 + 2, 260, 308, 62, true);
   c.repere('jauges', J.x1 - 10, J.y0 - J.h - 30, J.x2 + J.w - J.x1 + 20, J.h + 60, `les deux jauges : x = ${fr(x * 1e4, 1)}·10⁻⁴ mol, σ = ${fr(sg, 3)} S/m`);
   c.repere('definition', X0, 46, 330, 46, 'la définition v = (1/V₀)·dx/dt');
   c.repere('relation', X0, 106, 330, 32, 'la relation σ = 0,25 − 160·x');
   c.repere('derivee', X0, 154, 480, 46, `la dérivée dσ/dt = −160·dx/dt${voit(M, 'derivee') ? '' : ' (pas encore écrite)'}`);
-  c.repere('resultat', X0, 210, 330, 110, `dx/dt puis v = −(1/(160·V₀))·dσ/dt${voit(M, 'resultat') ? '' : ' (pas encore écrit)'}`);
+  c.repere('dxdt', X0, 210, 330, 46, `dx/dt = −(1/160)·dσ/dt${voit(M, 'dxdt') ? '' : ' (pas encore écrit)'}`);
+  c.repere('resultat', X0, 262, 330, 60, `v = −(1/(160·V₀))·dσ/dt, encadré${voit(M, 'resultat') ? '' : ' (pas encore écrit)'}`);
   return zoneEcriture(c, M, [
     ...lignes.map(l => ({ ...l, lignes: ({ rappel: [['on part de la définition de la vitesse volumique', 'cyan']],
       relation: [['et de la relation donnée : σ = 0,25 − 160·x', 'blanc']],
       derivee: [['on dérive par rapport au temps : la dérivée de 0,25 est nulle', 'jaune']],
       dxdt: [['on isole dx/dt', 'jaune']], resultat: [['on remplace dans v : c’est l’expression demandée', 'jaune']] })[l.nom] })),
     { nom: 'liees', lignes: [['x augmente, σ diminue : σ change 160 fois plus vite que x, dans l’autre sens', 'bleu']] },
-  ].sort((a, b) => ETAPES('2021N_q3').findIndex(e => e.nom === a.nom) - ETAPES('2021N_q3').findIndex(e => e.nom === b.nom)), ZY);
+  ].sort((a, b) => ETAPES('2021N_q3').findIndex(e => e.nom === a.nom) - ETAPES('2021N_q3').findIndex(e => e.nom === b.nom)), ZY, { efface: DEMO[M.S.vue] });
 }
 
 /* ── Q4 : la tangente à t₁ = 4 min et v₁ ───────────────────────────────────────────────────────── */
-const G4 = Graphe({ x0: 64, y0: 300, w: 380, h: 236, xmax: 24, dx: 4, ymax: .25, dy: .05, decx: 0, decy: 2, nomx: '', nomy: 'σ (S·m⁻¹)' });   // « t (min) » écrit au-dessus de la flèche (vueQ4)
+/* 19 novembre 2026 (règle 17) : la démonstration se joue SUR la figure, qui prend tout le tableau : les deux points de (T)
+ * s’allument avec leurs coordonnées, puis le triangle de la pente (Δt et Δσ écrits sur ses côtés), puis V₀ et v₁ écrits
+ * dans le coin libre du graphe. Les lignes du calcul sont les cartes de la diapositive (chacune liée à son repère). */
+const G4 = Graphe({ x0: 64, y0: 300, w: 630, h: 236, xmax: 24, dx: 4, ymax: .25, dy: .05, decx: 0, decy: 2, nomx: '', nomy: 'σ (S·m⁻¹)' });   // « t (min) » écrit au-dessus de la flèche (vueQ4)
 const tanT = t => .22 - .0125 * t;
+const CADRE_V = { x: 440, y: 70, w: 252, h: 92 };     // le coin libre du graphe (en haut à droite) : V₀ puis v₁
 function vueQ4(c, M) {
   if (M.commence('courbe')) {
-    axesG(c, G4, 15); quad(c, G4, .8);
+    axesG(c, G4, 15, voit(M, 'points_lus') ? [.15, .2] : []); quad(c, G4, .8);   // pendant la lecture, l’axe garde les valeurs lues (0,22 et 0,17)
     c.texte('t (min)', G4.x0 + G4.w + 14, G4.y0 - 12, { couleur: 'blanc', taille: 16, align: 'right' });
     c.direct(() => { const p = M.p('courbe'), tm = TMAX * p; if (p > 0) c.courbe(u => [G4.X(u * tm), G4.Y(SIG(u * tm))], Math.max(16, Math.round(160 * p)), { net: true, couleur: 'bleu', largeur: 2.6 }); });
   }
   if (M.commence('point')) {
     c.direct(() => { const ctx = c.ctx; ctx.save(); ctx.strokeStyle = '#facc15'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(G4.X(4), G4.Y(.17), 8 + 4 * (1 - M.p('point')), 0, 7); ctx.stroke(); ctx.restore(); });
-    c.texte('t₁ = 4 min', G4.X(4) + 12, G4.Y(.17) - 12, { couleur: 'blanc', taille: 17 });
+    if (!M.commence('points_lus')) c.texte('t₁ = 4 min', G4.X(4) + 12, G4.Y(.17) - 12, { couleur: 'blanc', taille: 17 });
   }
   if (M.commence('tangente')) {
-    c.direct(() => { const a = 17.6 * M.p('tangente'); c.ligne(G4.X(0), G4.Y(tanT(0)), G4.X(a), G4.Y(tanT(a)), { couleur: 'vert', largeur: 2.2, pointille: [8, 5] }); });
+    c.direct(() => {
+      const a = 17.6 * M.p('tangente');
+      if (enCours(M, 'tangente') && a > 0) { const ctx = c.ctx; ctx.save(); ctx.strokeStyle = 'rgba(250,204,21,.3)'; ctx.lineWidth = 9; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(G4.X(0), G4.Y(tanT(0))); ctx.lineTo(G4.X(a), G4.Y(tanT(a))); ctx.stroke(); ctx.restore(); }
+      c.ligne(G4.X(0), G4.Y(tanT(0)), G4.X(a), G4.Y(tanT(a)), { couleur: 'vert', largeur: 2.2, pointille: [8, 5] });
+    });
     c.texte('(T)', G4.X(14.4), G4.Y(tanT(14.4)) + 26, { couleur: 'vert', taille: 19 });
   }
+  // Étape 1 : deux points de (T), loin l’un de l’autre, avec leurs coordonnées écrites à côté.
   if (voit(M, 'points_lus')) {
-    const p = M.p('points_lus');
+    const p = M.p('points_lus'), fort = enCours(M, 'points_lus');
+    allumePoint(c, G4.X(0), G4.Y(.22), fort);
     c.direct(() => {
       c.point(G4.X(0), G4.Y(.22), 5, 'vert');
       if (p > .4) { c.ligne(G4.X(4), G4.Y(.17), G4.X(4), G4.y0, { couleur: 'jaune', largeur: 1.6, pointille: [5, 5] }); c.ligne(G4.x0, G4.Y(.17), G4.X(4), G4.Y(.17), { couleur: 'jaune', largeur: 1.6, pointille: [5, 5] }); c.point(G4.X(4), G4.Y(.17), 5, 'vert'); }
     });
-    c.texte('0,22', G4.x0 + 10, G4.Y(.22) - 10, { couleur: 'vert', taille: 17 });
-    c.texte('0,17', G4.x0 + 10, G4.Y(.17) + 22, { couleur: 'jaune', taille: 17 });
+    if (p > .4) allumePoint(c, G4.X(4), G4.Y(.17), fort);
   }
-  const X0 = 470;
-  const lignes = [];
-  if (PAR.conclusions) lignes.push(
-    { nom: 'points_lus', plus: () => { c.texte('(T) passe par (0 ; 0,22)', X0, 84, { couleur: 'vert', taille: 18 }); c.texte('et (4 ; 0,17)', X0 + 74, 108, { couleur: 'vert', taille: 18 }); } },
-    { nom: 'pente', plus: () => { c.texte('(⟦dσ|dt⟧)₁ = ⟦0,17 − 0,22|4 − 0⟧', X0, 160, { couleur: 'jaune', taille: 19 }); c.texte('= −0,0125 S·m⁻¹·min⁻¹', X0 + 40, 200, { couleur: 'jaune', taille: 18 }); } },
-    { nom: 'volume', plus: () => c.texte('V₀ = 100 mL = 10⁻⁴ m³', X0, 238, { couleur: 'blanc', taille: 18 }) },
-    { nom: 'calcul', plus: () => { c.texte('v₁ = −⟦1|160 × 10⁻⁴⟧ × (−0,0125)', X0, 282, { couleur: 'blanc', taille: 18 });
-      c.texte('v₁ ≈ 0,78 mol·m⁻³·min⁻¹', X0 + 8, 330, { couleur: 'jaune', taille: 20 }); c.rect(X0 - 4, 306, 262, 34, { couleur: 'jaune', largeur: 2, arrondi: 8 }); } });
+  // Étape 2 : le triangle de la pente, Δt et Δσ écrits sur ses côtés, la pente le long de (T).
+  if (voit(M, 'pente')) {
+    const fort = enCours(M, 'pente'), xa = G4.X(0), ya = G4.Y(.22), xb = G4.X(4), yb = G4.Y(.17);
+    c.direct(() => {
+      const ctx = c.ctx; ctx.save();
+      ctx.fillStyle = fort ? 'rgba(250,204,21,.22)' : 'rgba(250,204,21,.08)';
+      ctx.beginPath(); ctx.moveTo(xa, ya); ctx.lineTo(xb, ya); ctx.lineTo(xb, yb); ctx.closePath(); ctx.fill(); ctx.restore();
+      c.ligne(xa, ya, xb, ya, { couleur: 'jaune', largeur: 2.2 }); c.ligne(xb, ya, xb, yb, { couleur: 'jaune', largeur: 2.2 });
+    });
+  }
+  // Étapes 3 et 4 : V₀ en m³, puis v₁, écrits dans le coin libre du graphe.
+  if (voit(M, 'volume')) {
+    if (enCours(M, 'volume')) allume(c, CADRE_V.x, CADRE_V.y + 4, CADRE_V.w, 34, true, 6);
+  }
+  if (voit(M, 'calcul')) {
+    if (enCours(M, 'calcul')) allume(c, CADRE_V.x, CADRE_V.y + 46, CADRE_V.w, 42, true, 8);
+  }
   c.repere('courbe', G4.x0, G4.y0 - G4.h, G4.w, G4.h, 'la courbe σ(t) de la figure 1');
   c.repere('point', G4.X(4) - 14, G4.Y(.17) - 14, 28, 28, 'le point de la courbe de date t₁ = 4 min');
   c.repere('tangente', G4.X(0), G4.Y(.22) - 8, G4.X(17.6) - G4.X(0), G4.Y(0) - G4.Y(.22) + 16, 'la tangente (T) verte au point de date 4 min');
   c.repere('point_axe', G4.x0 - 12, G4.Y(.22) - 14, 28, 28, `le point où (T) coupe l’axe σ, à t = 0${voit(M, 'points_lus') ? ' : 0,22 S·m⁻¹' : ' (valeur pas encore écrite)'}`);
-  c.repere('pente', X0 - 6, 132, 280, 76, `la pente de (T)${voit(M, 'pente') ? ' : −0,0125 S·m⁻¹·min⁻¹' : ' (pas encore écrite)'}`);
-  c.repere('calcul', X0 - 6, 220, 280, 124, `V₀ en m³ et le calcul de v₁${voit(M, 'calcul') ? ' : 0,78 mol·m⁻³·min⁻¹' : ' (pas encore écrit)'}`);
+  c.repere('points_lus', G4.x0 - 12, G4.Y(.22) - 30, G4.X(4) - G4.x0 + 110, G4.Y(.17) - G4.Y(.22) + 44, `les deux points de (T) : (0 ; 0,22) et (4 ; 0,17)${voit(M, 'points_lus') ? '' : ' (pas encore lus)'}`);
+  c.repere('pente', G4.x0, G4.Y(.22) - 30, G4.X(4) - G4.x0 + 110, G4.Y(.17) - G4.Y(.22) + 60, `le triangle de la pente : Δt = 4 min, Δσ = −0,05 S·m⁻¹, pente −0,0125 S·m⁻¹·min⁻¹${voit(M, 'pente') ? '' : ' (pas encore tracé)'}`);
+  c.repere('volume', CADRE_V.x, CADRE_V.y + 4, CADRE_V.w, 34, `V₀ = 100 mL = 10⁻⁴ m³${voit(M, 'volume') ? '' : ' (pas encore écrit)'}`);
+  c.repere('calcul', CADRE_V.x, CADRE_V.y + 46, CADRE_V.w, 42, `v₁ ≈ 0,78 mol·m⁻³·min⁻¹, encadré${voit(M, 'calcul') ? '' : ' (pas encore écrit)'}`);
   return zoneEcriture(c, M, [
     { nom: 'courbe', lignes: [['la courbe σ(t) du sujet (figure 1)', 'bleu']] },
     { nom: 'point', lignes: [['le point de la courbe de date t₁ = 4 min', 'blanc']] },
     { nom: 'tangente', lignes: [['la tangente (T) en ce point : sa pente vaut (dσ/dt) à t₁', 'vert']] },
-    ...lignes.map(l => ({ ...l, lignes: ({ points_lus: [['on lit deux points de (T), loin l’un de l’autre', 'vert']],
-      pente: [['la pente est négative (σ diminue), mais v₁ sera positive', 'jaune']],
-      volume: [['v en mol·m⁻³·min⁻¹ : V₀ en m³', 'blanc']],
-      calcul: [['v₁ = −(1/(160·V₀))·(dσ/dt)₁ ≈ 0,78 mol·m⁻³·min⁻¹', 'jaune']] })[l.nom] })),
-  ], ZY);
+    // Les valeurs de la démonstration, écrites sur la figure à leur étape (la craie les écrit au rythme de l’étape).
+    { nom: 'points_lus', lignes: [], plus: () => { if (!voit(M, 'points_lus')) return;
+      // les ordonnées lues sur l’axe (l’abscisse 4 est déjà une graduation)
+      c.texte('0,22', G4.x0 - 8, G4.Y(.22) + 5, { couleur: 'vert', taille: 17, align: 'right' });
+      c.texte('0,17', G4.x0 - 8, G4.Y(.17) + 5, { couleur: 'jaune', taille: 17, align: 'right' }); } },
+    { nom: 'pente', lignes: [], plus: () => { if (!voit(M, 'pente')) return;
+      const ya = G4.Y(.22), yb = G4.Y(.17), xb = G4.X(4);
+      c.texte('Δt = 4 min', (G4.X(0) + xb) / 2, ya - 10, { couleur: 'jaune', taille: 18, align: 'center' });
+      c.texte('Δσ = −0,05', xb + 10, (ya + yb) / 2 + 6, { couleur: 'jaune', taille: 18 });
+      c.texte('pente = −0,0125 S·m⁻¹·min⁻¹', G4.X(6.2), G4.Y(.25) + 14, { couleur: 'jaune', taille: 18 }); } },
+    { nom: 'volume', lignes: [], plus: () => { if (voit(M, 'volume')) c.texte('V₀ = 100 mL = 10⁻⁴ m³', CADRE_V.x + 10, CADRE_V.y + 28, { couleur: 'blanc', taille: 19 }); } },
+    { nom: 'calcul', lignes: [], plus: () => { if (!voit(M, 'calcul')) return;
+      c.texte('v₁ ≈ 0,78 mol·m⁻³·min⁻¹', CADRE_V.x + 10, CADRE_V.y + 74, { couleur: 'jaune', taille: 20 });
+      c.rect(CADRE_V.x + 2, CADRE_V.y + 48, CADRE_V.w - 4, 38, { couleur: 'jaune', largeur: 2, arrondi: 8 }); } },
+  ], ZY, { efface: DEMO[M.S.vue] });
 }
 
 /* ── Dessin, ce que voit le tuteur, moteur ─────────────────────────────────────────────────────── */
