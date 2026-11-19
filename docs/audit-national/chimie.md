@@ -7,12 +7,13 @@ démonstration se joue sur la figure de l'examen ou la simulation. Règles : ski
 
 ## Comment l'énoncé est montré
 
-Une page commune : `frontend/public/media/simulations/chimie/shared/enonce-examen.html?cours=<deck>&ex=<clé>`.
-Elle affiche le vrai scan `/static/exams/physique/<année>-<session>/pages/sujet_pN.jpg`, l'en-tête de l'examen
-épinglé en haut, l'exercice dessous (recadré, sur son papier) ; chaque donnée lue par le tuteur s'allume (halo
-jaune) et la page défile pour la garder sous les yeux. Moments : `page`, `entete`, puis un par donnée, `fin` ;
-un repère par donnée. Configuration par cours : `chimie/shared/enonces/<deck>.json` (bandes en fractions de la
-page, repérées avec `scripts/examens/lignes_page.py`).
+Précision de l'utilisateur du 19/11/2026 (skill `professeur` règle 46, commit af73de66) : l'énoncé n'est PAS la
+photo du sujet. Il est reproduit en code comme la vraie feuille d'examen (fond blanc, en-tête officiel, questions
+numérotées, barème à droite, textes, données et figures redessinés), avec le gabarit commun
+`frontend/public/media/simulations/shared/examen/feuille.html?sujet=physique/<année>-<session>&exercice=<n>`
+(fait par la session « feuille-examen »). Le texte et les points viennent de `exam.json` ; les scans
+`pages/sujet_pN.jpg` ne servent que de modèle. La première page « scan » (`chimie/shared/enonce-examen.html`,
+commit d19b81e3) est retirée. `scripts/examens/lignes_page.py` reste un outil pour relire les scans.
 
 ## Exercices du national joués et moments où l'on compte (relevé de départ)
 
