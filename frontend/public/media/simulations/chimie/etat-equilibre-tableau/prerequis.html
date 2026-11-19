@@ -23,6 +23,7 @@ body { background-image: none !important; }
 </div>
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
+<script src="allume.js"></script>
 <script src="exposants.js"></script>
 <script src="deroule.js"></script>
 <script src="blocs.js"></script>
@@ -201,6 +202,11 @@ const ETAPES = {
   ],
   puissance: [
     { nom: 'dix', duree: 1.2, motif: '10¹ = 10, 10² = 100, 10³ = 1000' },
+    // (19 nov. 2026, règle 16) les zéros de 1 000 comptés en allumant, un par un, puis « 3 zéros » = l’exposant 3
+    { nom: 'zero_1', duree: .7, motif: 'le premier zéro de 1 000 : 1' },
+    { nom: 'zero_2', duree: .7, motif: 'le deuxième zéro : 2' },
+    { nom: 'zero_3', duree: .7, motif: 'le troisième zéro : 3' },
+    { nom: 'trois_zeros', duree: .9, motif: '3 zéros : l’exposant de 10³ est 3' },
     { nom: 'negatif', duree: 1.6, motif: 'puissance négative : chaque pas divise par dix' },
     { nom: 'ecriture', duree: 1.2, motif: '4,0·10⁻⁴ = 0,00040' },
     { nom: 'log', duree: 1.2, motif: 'log(10⁻³) = −3 : le log donne l’exposant' },
@@ -473,9 +479,12 @@ function decimal(e) { if (e >= 0) return fr(10 ** e, 0); const n = -e; return '0
 function vuePuissance(c, D) {
   const ctx = c.ctx, e = R.exposant;
   ecrire(c, D, 'dix', () => {
-    c.texte('10¹ = 10      10² = 100      10³ = 1 000', 380, 70, { couleur: 'blanc', taille: 19, align: 'center' });
-    c.texte('l’exposant compte les zéros', 380, 94, { couleur: 'faible', taille: 15, align: 'center' });
-    c.repere('dix', 160, 50, 440, 52, 'puissances positives');
+    // (19 nov. 2026) les zéros de 1 000 espacés : on les compte en allumant (allume.js), un repère chacun.
+    const L = '10¹ = 10      10² = 100      10³ = 1  0  0  0', T = 22, W = c.largeurTexte(L, T), x0 = 380 - W / 2, w0 = c.largeurTexte('0', T);
+    c.texte(L, 380, 86, { couleur: 'blanc', taille: T, align: 'center' });
+    c.texte('l’exposant compte les zéros', 380, 112, { couleur: 'faible', taille: 15, align: 'center' });
+    c.repere('dix', 130, 62, 500, 58, 'puissances positives');
+    [7, 4, 1].forEach((k, j) => { const xk = x0 + c.largeurTexte(L.slice(0, L.length - k), T); c.repere(`zero_${j + 1}`, xk - 2, 68, w0 + 4, 22, `le ${['premier', 'deuxième', 'troisième'][j]} zéro de 1 000`); });
   });
   ecrire(c, D, 'negatif', () => {
     c.direct(() => regle(ctx, RG.x, RG.y, RG.w));
@@ -604,6 +613,12 @@ const EXPLICATIONS = {
   dilution: [{ repere: 'pipette', texte: 'On prélève V₀.' }, { repere: 'fiole', texte: 'On complète jusqu’au trait.' }, { repere: 'meme_quantite', texte: 'C₀·V₀ = C₁·V₁.' }],
 };
 
+/* ── Compter en allumant (19 novembre 2026 ; simulations-au-tableau règle 16) : vue puissance, les zéros de 1 000
+ * s’allument un à un, « 1, 2, 3 » au-dessus, puis « 3 zéros » : c’est l’exposant de 10³. ── */
+var allumes = () => (DER && DER.S.vue === 'puissance' ? window.Allume.standard({ S: DER.S, commence: n => DER.commence(n), evs: () => ETAPES.puissance },
+  { puissance: { dix: ['dix*'], trois_zeros: ['dix'], negatif: ['regle*'], ecriture: ['ecriture*'], log: ['log*'], moins_log: ['log', 'moins_log*'] } },
+  { puissance: { cote: 'haut', items: [1, 2, 3].map(k => [`zero_${k}`, `zero_${k}`]), total: { apres: 'trois_zeros', id: 'zero_3', texte: '3 zéros', cote: 'droite' } } }) : []);
+window.Allume.regle(() => { try { return allumes(); } catch (e) { return []; } });
 const DER = window.Deroule({
   id: 'chimie_tableau_prerequis', titre: 'Les bases, depuis zéro', vues: VUES, etapes, dessiner, voir,
   anime: D => (D.S.vue === 'gaz' && D.commence('chocs')) || (D.S.vue === 'ion' && D.commence('solution')),

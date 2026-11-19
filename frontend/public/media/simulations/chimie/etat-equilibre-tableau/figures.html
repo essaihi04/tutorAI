@@ -11,6 +11,7 @@
 </div>
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
+<script src="allume.js"></script>
 <script src="exposants.js"></script>
 <script>
 /*
@@ -546,6 +547,7 @@ function voir(M) {
   if (M.commence('calcul')) m.push(`Calcul écrit : ${f.calc}.`);
   if (M.panneau && M.panneau.length) m.push(`Écrit à droite : ${M.panneau.map(s => `« ${s} »`).join(' ; ')}.`);
   if (M.vues && M.vues.length) m.push(`Lignes écrites en bas : ${M.vues.map(s => `« ${s} »`).join(' ; ')}.`);
+  try { const al = window.Allume && typeof allumes === 'function' ? window.Allume.decrire(allumes(M)) : ''; if (al) m.push(al.charAt(0).toUpperCase() + al.slice(1) + '.'); } catch (e) { /* allumages pas encore prêts */ }
   return m.join(' ').replace(/_\{([^}]+)\}/g, '$1');   // « n_{éq} » écrit « néq » pour le tuteur
 }
 const params = M => { const k = M.S.vue, f = FIGS[k]; return { fig: k, session: f.session, diapositive: f.diapo, n_eq_acide_mol: .2, x_eq_mol: .4, K: 4 }; };
@@ -569,6 +571,12 @@ const MOT = Moteur({
   ]])),
 });
 MOT.lancer();
+
+/* ── Allumages (19 novembre 2026 ; simulations-au-tableau règle 17) : la lecture sur la figure allume le point du
+ * palier et la valeur lue ; le calcul allume ce dont il se sert (le point, la valeur) et sa ligne. ── */
+const ETAPE_ALLUME = { axes: ['axe_x*', 'axe_y*'], courbe: ['courbe*'], lecture: ['point*', 'valeur*'], calcul: ['point', 'valeur', 'calcul*'] };
+var allumes = M => window.Allume.standard(M, { [M.S.vue]: ETAPE_ALLUME });
+window.Allume.regle(() => (MO ? allumes(MO) : []));
 
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>

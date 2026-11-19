@@ -11,6 +11,7 @@
 </div>
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
+<script src="allume.js"></script>
 <script src="exposants.js"></script>
 <script src="blocs.js"></script>
 <script>
@@ -471,6 +472,9 @@ function ETAPES(v) {
     ],
     national: [
       { nom: 'donnees', anim: 1, motif: 'HCOOH + CH₃COO⁻ ⇌ HCOO⁻ + CH₃COOH ; quatre flacons de 100 mL à 0,1 mol/L', bulle: () => 'Les données de l’exercice.', vu: 'Écrit : « HCOOH + CH₃COO⁻ ⇌ HCOO⁻ + CH₃COOH » ; quatre flacons peints : (1) HCOOH, (2) CH₃COO⁻, (3) CH₃COOH, (4) HCOO⁻ ; « chacun : V = 100 mL ; C = 0,1 mol/L ».' },
+      // (19 nov. 2026, règle 16) les quatre flacons comptés en allumant, un par un, avant V_T = 4 × 100 mL
+      ...FN_NOM.map((nom, i) => ({ nom: `flacon_${i + 1}`, anim: .3, motif: `le flacon ${i + 1} : ${nom.replace(/^\(\d\) /, '')}, 100 mL à 0,1 mol/L`, bulle: () => `${i + 1}`,
+        vu: `Le flacon ${i + 1} (${nom.replace(/^\(\d\) /, '')}) s’allume, son numéro « ${i + 1} » écrit à côté.` })),
       { nom: 'volume_total', anim: .3, motif: 'V_T = 400 mL ; [X]ᵢ = C·V/V_T', bulle: () => 'Le volume du mélange.', vu: 'Écrit : « V_T = 4 × 100 mL = 400 mL » et « [X]ᵢ = C·V / V_T (après mélange) ».' },
       { nom: 'quotient', anim: .3, motif: 'Qr,i = (C₃V₃·C₄V₄)/(C₁V₁·C₂V₂)', bulle: () => 'On écrit Qr,i, puis on remplace.', vu: 'Écrit : « Qr,i = [HCOO⁻]ᵢ·[CH₃COOH]ᵢ / ([HCOOH]ᵢ·[CH₃COO⁻]ᵢ) = (C₃V₃·C₄V₄) / (C₁V₁·C₂V₂) » ; « V_T se simplifie ».' },
       { nom: 'resultat', anim: .3, motif: 'Qr,i = 1', bulle: () => 'Le résultat…', vu: 'Écrit et encadré : « = 1 » (les quatre C·V valent 1,0·10⁻² mol).' },
@@ -949,6 +953,7 @@ function reperes(c, M) {
     D('phrase', LG ? TA.x - 4 : 30, LG ? 334 : 370, LG ? 296 : 700, LG ? 74 : 34, `« Qr augmente de Qr,i = 0 jusqu’à Qr,éq = 1,57·10⁻⁵, puis ne bouge plus »${quand('phrase')}`);
   } else if (v === 'national') {
     D('donnees', 14, 40, 340, 176, `les données : quatre flacons de 100 mL à 0,1 mol/L${quand('donnees')}`);
+    FN.forEach((f, i) => D(`flacon_${i + 1}`, f.x - f.w / 2 - 6, f.y - f.h - 8, f.w + 12, f.h + 14, `le flacon ${i + 1} : ${FN_NOM[i].replace(/^\(\d\) /, '')}, 100 mL à 0,1 mol/L${quand('flacon_' + (i + 1))}`));
     DR('volume_total', R.vt, `« V_T = 400 mL »${quand('volume_total')}`);
     DR('quotient', R.quotient, `« Qr,i = (C₃V₃·C₄V₄) / (C₁V₁·C₂V₂) »${quand('quotient')}`);
     DR('resultat', R.res, `« = 1 »${quand('resultat')}`);
@@ -958,7 +963,10 @@ function reperes(c, M) {
     D('becher_aluminium', BA.x - 6, 52, BA.w + 12, BA.h + 40, `le bécher de Al³⁺ (incolore) et la lame d’aluminium${quand('bechers')}`);
     DR('equation', R.equation, `« 3Cu²⁺ + 2Al(s) ⇌ 3Cu(s) + 2Al³⁺ »${quand('equation')}`);
     DR('quotient', R.quotient, `« Qr,i = [Al³⁺]ᵢ² / [Cu²⁺]ᵢ³ »${quand('quotient')}`);
+    DR('application', R.application, `« Qr,i = (6,5·10⁻¹)² / (6,5·10⁻¹)³ »${quand('application')}`);
     DR('resultat', R.res, `« = 1,5 »${quand('application')}`);
+    D('conc_cuivre', BC.x - 14, BC.y + BC.h + 36, BC.w + 28, 22, `« [Cu²⁺]ᵢ = 6,5·10⁻¹ mol/L »${quand('bechers')}`);
+    D('conc_aluminium', BA.x - 14, BA.y + BA.h + 36, BA.w + 28, 22, `« [Al³⁺]ᵢ = 6,5·10⁻¹ mol/L »${quand('bechers')}`);
     D('renvoi', 420, 290, 300, 50, `« la suite (piles) : au semestre 2 »${quand('renvoi')}`);
   }
 }
@@ -974,6 +982,7 @@ function voir(M) {
     const x = xVu(), h = hDe(x), q = qrDe(h);
     m.push(`Poignée x = ${fr(x, 2)} (point violet sur la courbe) : [H₃O⁺] = ${h ? sci(h) : '0'} mol/L ; Qr = ${q ? sci(q) : '0'}${x >= 1 ? ' = Qr,éq' : ''}.`);
   }
+  try { const al = window.Allume && typeof allumes === 'function' ? window.Allume.decrire(allumes(M)) : ''; if (al) m.push(al.charAt(0).toUpperCase() + al.slice(1) + '.'); } catch (e) { /* allumages pas encore prêts */ }
   return m.join(' ');
 }
 const params = M => {
@@ -1086,6 +1095,19 @@ const MOT = Moteur({
   },
 });
 MOT.lancer();
+
+/* ── Allumages (19 novembre 2026 ; simulations-au-tableau règles 16-17) : chaque étape du national allume ce qu’elle
+ * utilise (« * » fort : ce qu’elle écrit ; doux : ce dont elle se sert) ; 2020 R : les quatre flacons comptés en
+ * allumant, « 1, 2, 3, 4 », puis « 4 flacons » et V_T = 4 × 100 mL. ── */
+const UTILISE = {
+  national: { donnees: ['donnees*'], volume_total: ['volume_total*'], quotient: ['volume_total', 'quotient*'],
+    resultat: ['donnees', 'quotient', 'resultat*'], phrase: ['volume_total', 'phrase*'] },
+  pile: { bechers: ['becher_cuivre*', 'becher_aluminium*'], equation: ['equation*'], quotient: ['equation', 'quotient*'],
+    application: ['conc_cuivre', 'conc_aluminium', 'quotient', 'application*'], renvoi: ['renvoi*'] },
+};
+const COMPTE = { national: { items: [1, 2, 3, 4].map(i => [`flacon_${i}`, `flacon_${i}`]), total: { apres: 'volume_total', id: 'donnees', texte: '4 flacons', cote: 'bas' } } };
+var allumes = M => window.Allume.standard(M, UTILISE, COMPTE);
+window.Allume.regle(() => (MO ? allumes(MO) : []));
 window.Tableau.glisser(MOT.scene.craie.canvas, {
   toucher: (px, py) => {
     if (MOT.S.vue !== 'au_cours' || !MOT.commence('depart')) return null;

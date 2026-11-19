@@ -12,6 +12,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="/media/simulations/shared/lexique/lexique-chimie.js"></script>
 <script src="commun.js"></script>
+<script src="allume.js"></script>
 <script src="exposants.js"></script>
 <script src="blocs.js"></script>
 <script>
@@ -850,6 +851,8 @@ function reperes(c, M) {
     const { B, G, XD } = V3, E = etatTrois(M);
     TROIS.forEach((d, i) => R(`becher_${i + 1}`, [B[i].x - 8, B[i].y - 8, B[i].w + 16, 128], `le bécher ${i + 1} : acide éthanoïque ${d.C} mol/L ; pH = ${ph2(d.pH)}${E.mesure >= i || M.vu('mesures') ? '' : ' (mesuré au moment « mesures »)'}`));
     R('tableau', [G.x - 4, G.y - 4, 508, 4 * G.h + 8], `le tableau C · pH · τ · Qr,éq, rempli ligne à ligne${q('ligne_3')}`);
+    [1, 2, 3].forEach(k => R(`ligne_${k}`, [G.x - 4, G.y + k * G.h, 508, G.h], `la ligne ${k} du tableau : C = ${TROIS[k - 1].C} mol/L ; pH = ${ph2(TROIS[k - 1].pH)}${q('ligne_' + k)}`));
+    R('entete_tableau', [G.x - 4, G.y, 508, G.h], `la ligne d’en-tête du tableau : C · pH · τ · Qr,éq${q('ligne_1')}`);
     R('colonne_taux', [gx3(2), G.y, G.ws[2], 4 * G.h], `la colonne τ : 0,039 ; 0,055 ; 0,117 (elle change)${q('ligne_3')}`);
     R('colonne_qr', [gx3(3), G.y, G.ws[3], 4 * G.h], `la colonne Qr,éq : 1,57·10⁻⁵ ; 1,61·10⁻⁵ ; 1,56·10⁻⁵ (surlignée en jaune au moment « comparer »)${q('ligne_3')}`);
     R('conclusion', [XD - 10, 192, 272, 40], `« Qr,éq ne dépend pas de C »${q('conclusion')}`);
@@ -902,6 +905,7 @@ function voir(M) {
   if (v === 'produits') { const E = etatProduits(M); m.push(`Afficheur du pH-mètre : ${E.txt === '- -,- -' ? '« - -,- - »' : 'pH = ' + E.txt} ; bécher à ${E.niv > .69 ? '100' : E.niv > .36 ? 'entre 50 et 100' : '50'} mL.`); }
   if (v === 'autre_acide') { const E = etatAutre(M); m.push(`Afficheur du pH-mètre : ${E.txt === '- -,- -' ? '« - -,- - » (pas de mesure)' : 'pH = ' + E.txt}.`); }
   for (const e of ETAPES[v]) if (M.commence(e.nom)) m.push(e.vu);
+  try { const al = window.Allume && typeof allumes === 'function' ? window.Allume.decrire(allumes(M)) : ''; if (al) m.push(al.charAt(0).toUpperCase() + al.slice(1) + '.'); } catch (e) { /* allumages pas encore prêts */ }
   return m.join(' ');
 }
 /** Question d'observation (14 novembre 2026, règle 30) : `conclusions: false` tait, dans trois_c, la colonne surlignée et « ne change pas ». */
@@ -980,6 +984,14 @@ const MOT = Moteur({
   },
 });
 MOT.lancer();
+
+/* ── Compter en allumant (19 novembre 2026 ; simulations-au-tableau règle 16) : trois_c, les trois lignes du tableau
+ * s’allument une à une avec leur numéro « 1, 2, 3 » (à gauche), restent allumées ; « 3 lignes » s’écrit à la fin ;
+ * comparer allume les deux colonnes, la conclusion s’en sert. ── */
+const UTILISE = { trois_c: { bechers: ['becher_1*', 'becher_2*', 'becher_3*'], comparer: ['colonne_taux*', 'colonne_qr*'], conclusion: ['colonne_qr', 'conclusion*'] } };
+const COMPTE = { trois_c: { cote: 'gauche', items: [1, 2, 3].map(k => [`ligne_${k}`, `ligne_${k}`]), total: { apres: 'comparer', id: 'entete_tableau', texte: '3 lignes', cote: 'gauche' } } };
+var allumes = M => window.Allume.standard(M, UTILISE, COMPTE);
+window.Allume.regle(() => (MO ? allumes(MO) : []));
 
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>

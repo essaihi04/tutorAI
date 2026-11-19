@@ -12,6 +12,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="/media/simulations/shared/lexique/lexique-chimie.js"></script>
 <script src="commun.js"></script>
+<script src="allume.js"></script>
 <script src="exposants.js"></script>
 <script src="blocs.js"></script>
 <script>
@@ -537,7 +538,7 @@ function vueQ1(c, M) {
 }
 
 /* q2 — le tableau d’avancement, ligne par ligne */
-const TB = { x: 14, y: 42, ws: [104, 66, 150, 86, 150, 100], h: 42 };
+const TB = { x: 14, y: 42, ws: [100, 62, 146, 82, 146, 96], h: 42 };   // (19 nov. 2026) une marge à droite pour le numéro de chaque ligne comptée
 function cellules(c, ligne, rang, cols) {
   let x = TB.x; const y = TB.y + rang * TB.h + TB.h / 2 + 8;
   ligne.forEach((t, i) => { if (t != null) c.texte(t, x + TB.ws[i] / 2, y, { taille: T, align: 'center', couleur: (cols && cols[i]) || 'blanc' }); x += TB.ws[i]; });
@@ -724,6 +725,7 @@ function voir(M) {
   if (!CONCL) m.push('Question d’observation en cours : la réponse et la suite ne sont pas écrites.');
   if (M.vues && M.vues.length) m.push(`Au tableau : ${M.vues.join(' ; ')}.`);
   else m.push('Le tableau est encore vide.');
+  try { const al = window.Allume ? window.Allume.decrire(allumes(M)) : ''; if (al) m.push(al.charAt(0).toUpperCase() + al.slice(1) + '.'); } catch (e) { /* allumages pas encore prêts */ }
   return m.join(' ');
 }
 const params = M => ({ vue: M.S.vue, conclusions: CONCL });
@@ -756,6 +758,38 @@ const MOT = Moteur({
   },
 });
 MOT.lancer();
+
+/* ── Allumages (19 novembre 2026 ; simulations-au-tableau règles 16-17) : chaque étape allume ce qu’elle utilise
+ * (« * » : ce qu’elle écrit, allumé fort ; sans « * » : ce dont elle se sert, allumé doucement). q2 : les lignes du
+ * tableau d’avancement sont comptées en allumant, « 1, 2, 3 », puis le total « 3 lignes ». ── */
+const UTILISE = {
+  q1: { sujet: ['fiole*', 'donnees*'], couples: ['couples*'], question: ['question*'], equation: ['couples', 'equation*'], sens: ['equation', 'sens*'] },
+  q2: { rappel: ['rappel*'], grille: ['tableau*'], x_max: ['ligne_initial', 'x_max*'], en_cours: ['acide_en_cours*'] },
+  q3: { rappel: ['rappel*'], mesure: ['conductimetre*', 'mesure*'], lambdas: ['lambdas*'], somme: ['lambdas', 'somme*'], egalite_q: ['rappel*'],
+        egalite: ['rappel', 'egalite*'], factoriser: ['somme', 'egalite', 'relation*'] },
+  q4: { rappel: ['rappel*'], question: ['question*'], definition: ['definition*'], x_eq: ['rappel', 'x_eq*'], expression: ['definition', 'x_eq', 'expression*'],
+        unite_q: ['unite*'], conversion: ['unite*'], application: ['rappel', 'unite', 'application*'] },
+  q5: { rappel: ['rappel*'], question: ['question*'], quotient: ['quotient*'], produits: ['rappel', 'produits*'], acide_q: ['acide*'], acide: ['acide*'],
+        expression: ['quotient', 'produits', 'acide', 'expression*'], application: ['rappel', 'expression', 'application*'], resultat: ['application', 'resultat*'] },
+};
+const LIGNES_Q2 = [['ligne_initial', 'initial'], ['ligne_en_cours', 'en_cours_q'], ['ligne_equilibre', 'equilibre']];
+function allumes(M) {
+  const v = M.S.vue, noms = ETAPES(v).map(e => e.nom).filter(n => permis(M, n));
+  const cur = window.Allume.enCours(noms, n => M.commence(n));
+  if (!cur) return [];
+  const l = ((UTILISE[v] || {})[cur] || []).map(x => ({ id: x.replace('*', ''), fort: x.endsWith('*') }));
+  if (v === 'q2') {
+    const iCur = noms.indexOf(cur);
+    LIGNES_Q2.forEach(([id, debut], k) => {
+      if (!M.commence(debut) || !permis(M, debut)) return;
+      const suivant = LIGNES_Q2[k + 1] && M.commence(LIGNES_Q2[k + 1][1]);
+      l.push({ id, num: k + 1, fort: !suivant && iCur <= noms.indexOf('equilibre') && cur !== 'en_cours' });
+    });
+    if (M.commence('x_max')) l.push({ id: 'tableau', total: '3 lignes', cote: 'basd', halo: false });
+  }
+  return M.S.fait ? l.map(it => ({ ...it, fort: false })) : l;
+}
+window.Allume.regle(() => (MO ? allumes(MO) : []));
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>
 </body></html>

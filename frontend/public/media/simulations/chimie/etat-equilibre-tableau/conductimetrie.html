@@ -12,6 +12,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="/media/simulations/shared/lexique/lexique-chimie.js"></script>
 <script src="commun.js"></script>
+<script src="allume.js"></script>
 <script src="exposants.js"></script>
 <script src="blocs.js"></script>
 <script>
@@ -558,6 +559,7 @@ function voir(M) {
   if (v === 'calcul' && M.commence('donnees')) m.push(`À droite : conductimètre qui affiche ${M.p('donnees') > .5 ? '4,6 mS/m' : 'rien encore'}.`);
   if (v === 'national' && M.commence('donnees')) m.push(`En haut à droite : conductimètre qui affiche ${M.p('donnees') > .5 ? '8,6 mS/m (σ = 8,6·10⁻³ S/m)' : 'rien encore'}.`);
   if (M.vues && M.vues.length) m.push(`Écrit : ${M.vues.map(s => `« ${s} »`).join(' ; ')}.`);
+  try { const al = window.Allume && typeof allumes === 'function' ? window.Allume.decrire(allumes(M)) : ''; if (al) m.push(al.charAt(0).toUpperCase() + al.slice(1) + '.'); } catch (e) { /* allumages pas encore prêts */ }
   return m.join(' ');
 }
 const params = M => (M.S.vue === 'calcul' ? { vue: 'calcul', conclusions: CONCL_CALC } : { vue: M.S.vue });
@@ -588,6 +590,17 @@ const MOT = Moteur({
   },
 });
 MOT.lancer();
+
+/* ── Allumages (19 novembre 2026 ; simulations-au-tableau règles 16-17) : vue calcul, le calcul « ligne par ligne »
+ * s’allume ligne après ligne avec son numéro « 1, 2, 3, 4, 5 » (à gauche), chaque ligne allume doucement celles dont
+ * elle se sert ; « 5 lignes » à la fin. Vue national : chaque étape allume ce qu’elle utilise. ── */
+const UTILISE = {
+  calcul: { concentration: ['donnees'], conversion: ['concentration'], taux: ['donnees', 'conversion'], constante: ['donnees', 'taux'], comparer: ['constante', 'comparer*'] },
+  national: { donnees: ['donnees*'], taux: ['donnees', 'taux*'], relation: ['relation*'], application: ['donnees', 'taux', 'relation', 'application*'], resultat: ['application', 'resultat*'] },
+};
+const COMPTE = { calcul: { cote: 'gauche', items: ['donnees', 'concentration', 'conversion', 'taux', 'constante'].map(n => [n, n]), total: { apres: 'comparer', id: 'comparer', texte: '5 lignes', cote: 'gauche' } } };
+var allumes = M => window.Allume.standard(M, UTILISE, COMPTE);
+window.Allume.regle(() => (MO ? allumes(MO) : []));
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>
 </body></html>

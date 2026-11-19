@@ -12,6 +12,7 @@
 </div>
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
+<script src="allume.js"></script>
 <script src="exposants.js"></script>
 <script src="deroule.js"></script>
 <script src="blocs.js"></script>
@@ -132,6 +133,7 @@ function voir(D) {
   if (D.commence('ligne_taux')) s.push(`Ligne τ : ${ftau(m0.tau)} → ${ftau(m1.tau)} (augmente), deux barres orange.`);
   if (D.commence('ligne_k')) s.push(`Ligne K, dans un cadre jaune : ${sci(m0.K, 1)} → ${sci(m1.K, 1)}, ne change pas.`);
   if (D.commence('piege')) s.push('Écrit en orange : τ dépend de l’état initial ; K ne dépend que de la température.');
+  try { const al = window.Allume && typeof allumes === 'function' ? window.Allume.decrire(allumes()) : ''; if (al) s.push(al.charAt(0).toUpperCase() + al.slice(1) + '.'); } catch (e) { /* allumages pas encore prêts */ }
   return s.join(' ');
 }
 
@@ -161,6 +163,15 @@ const DER = window.Deroule({
     { repere: 'ligne_k', texte: 'La constante d’équilibre reste la même : seule la température la change.' },
   ],
 });
+
+/* ── Compter en allumant (19 novembre 2026 ; simulations-au-tableau règle 16) : les quatre lignes du tableau
+ * « quand on dilue » s’allument une à une avec leur numéro « 1, 2, 3, 4 » (à gauche) et restent allumées ;
+ * « 4 lignes » s’écrit à la fin ; le piège allume les lignes τ et K dont il parle. ── */
+const LIGNES_F4 = ['ligne_c', 'ligne_ph', 'ligne_taux', 'ligne_k'];
+const MDER = { S: DER.S, commence: n => DER.commence(n), evs: () => etapes().map(e => ({ nom: e.nom })) };
+var allumes = () => window.Allume.standard(MDER, { '': { titre: ['becher*'], ligne_c: ['becher'], piege: ['ligne_taux', 'ligne_k', 'piege*'] } },
+  { '': { cote: 'gauche', items: LIGNES_F4.map(n => [n, n]), total: { apres: 'piege', id: 'piege', texte: '4 lignes', cote: 'gauche' } } });
+window.Allume.regle(allumes);
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>
 </body></html>

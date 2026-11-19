@@ -12,6 +12,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="/media/simulations/shared/lexique/lexique-chimie.js"></script>
 <script src="commun.js"></script>
+<script src="allume.js"></script>
 <script src="exposants.js"></script>
 <script src="blocs.js"></script>
 <script>
@@ -787,6 +788,7 @@ function voir(M) {
     m.push(`Bécher d’acide éthanoïque incolore (C = 1,0·10⁻² mol/L, V = 100 mL) ; sonde du pH-mètre ${E.syB > 240 ? 'dans la solution' : 'au-dessus du bécher'} ; afficheur : ${E.txt === '- -,- -' ? '« - -,- - » (pas de mesure)' : 'pH = ' + E.txt}.`);
   } else if (v === 'qr_eq') m.push('En haut, en gris : l’équation CH₃COOH + H₂O ⇌ CH₃COO⁻ + H₃O⁺ et les concentrations de l’exemple A ([CH₃COO⁻]éq = [H₃O⁺]éq = 3,89·10⁻⁴ mol/L ; [CH₃COOH]éq = 9,61·10⁻³ mol/L).');
   for (const e of ETAPES[v]) if (M.commence(e.nom)) m.push(e.vu);
+  try { const al = window.Allume && typeof allumes === 'function' ? window.Allume.decrire(allumes(M)) : ''; if (al) m.push(al.charAt(0).toUpperCase() + al.slice(1) + '.'); } catch (e) { /* allumages pas encore prêts */ }
   return m.join(' ');
 }
 const params = M => {
@@ -857,6 +859,16 @@ const MOT = Moteur({
   },
 });
 MOT.lancer();
+
+/* ── Allumages (19 novembre 2026 ; simulations-au-tableau règle 17) : chaque étape du national allume ce qu’elle
+ * utilise (« * » : la ligne qu’elle écrit, fort ; sans « * » : les données et relations dont elle se sert, doux). ── */
+const UTILISE = {
+  national_2017: { donnees: ['donnees*'], relation: ['donnees', 'relation*'], application: ['donnees', 'relation', 'application*'], resultat: ['application', 'resultat*'] },
+  base: { donnees: ['donnees*'], equation: ['equation*'], tableau: ['equation', 'donnees', 'tableau*'], relation: ['tableau', 'relation*'], resultat: ['donnees', 'relation', 'resultat*'] },
+  national_2021: { donnees: ['donnees*'], taux: ['donnees', 'taux*'], relation: ['taux', 'relation*'], application: ['donnees', 'taux', 'relation', 'application*'], resultat: ['application', 'resultat*'] },
+};
+var allumes = M => window.Allume.standard(M, UTILISE);
+window.Allume.regle(() => (MO ? allumes(MO) : []));
 
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>

@@ -12,6 +12,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="/media/simulations/shared/lexique/lexique-chimie.js"></script>
 <script src="commun.js"></script>
+<script src="allume.js"></script>
 <script src="exposants.js"></script>
 <script src="blocs.js"></script>
 <script>
@@ -410,7 +411,11 @@ function ETAPES(v) {
       { nom: 'question', anim: .3, motif: '« τ change avec C… un nombre ne change-t-il pas ? »', bulle: () => 'Une question pour ce chapitre.' },
     ],
     taux: [
-      { nom: 'tableau', anim: .3, motif: 'le tableau d’avancement : état initial C·V, excès, 0, 0 ; état d’équilibre C·V − x_éq, excès, x_éq, x_éq', bulle: () => 'Le tableau d’avancement du chapitre précédent.' },
+      { nom: 'tableau', anim: .3, motif: 'le tableau d’avancement : l’équation CH₃COOH + H₂O ⇌ CH₃COO⁻ + H₃O⁺ et trois lignes vides', bulle: () => 'Le tableau d’avancement du chapitre précédent.' },
+      // (19 nov. 2026, règle 16) les trois lignes comptées en allumant, une à une
+      { nom: 'ligne_initial', anim: .2, motif: 'ligne 1, état initial : C·V, excès, 0, 0', bulle: () => '1 : l’état initial.' },
+      { nom: 'ligne_en_cours', anim: .2, motif: 'ligne 2, en cours : C·V − x, excès, x, x', bulle: () => '2 : en cours.' },
+      { nom: 'ligne_equilibre', anim: .2, motif: 'ligne 3, état d’équilibre : C·V − x_éq, excès, x_éq, x_éq', bulle: () => '3 : l’état d’équilibre.' },
       { nom: 'x_max', anim: .3, motif: 'x_max = C·V = 1,0·10⁻³ mol', bulle: () => 'L’avancement maximal.' },
       { nom: 'x_eq', anim: .3, motif: 'x_éq = [H₃O⁺]éq·V = 3,89·10⁻⁵ mol', bulle: () => 'L’avancement à l’équilibre.' },
       { nom: 'taux', anim: .3, motif: 'τ = 10^(−pH)/C = 10^(−3,41)/1,0·10⁻² = 0,039', bulle: () => 'Le taux d’avancement final.' },
@@ -517,11 +522,12 @@ function vueOuverture(c, M) {
 
 /* ── Vue taux : tableau d’avancement de l’exemple A, x_max, x_éq, τ ─────────────────────────────────────────────────── */
 const ESP = ['CH₃COOH', 'H₂O', 'CH₃COO⁻', 'H₃O⁺'], SIGNES = ['+', '⇌', '+'];
-const LIGNES = [{ nom: 'état initial', v: ['C·V', 'excès', '0', '0'] }, { nom: 'état d’équilibre', v: ['C·V − x_{éq}', 'excès', 'x_{éq}', 'x_{éq}'] }];
+const LIGNES = [{ nom: 'état initial', etape: 'ligne_initial', v: ['C·V', 'excès', '0', '0'] }, { nom: 'en cours', etape: 'ligne_en_cours', v: ['C·V − x', 'excès', 'x', 'x'] },
+  { nom: 'état d’équilibre', etape: 'ligne_equilibre', v: ['C·V − x_{éq}', 'excès', 'x_{éq}', 'x_{éq}'] }];
 const TG = (() => {
-  const g = { x: 20, y: 44, wl: 176, cols: [176, 104, 136, 136], h: 40, taille: 19 };
+  const g = { x: 20, y: 40, wl: 176, cols: [176, 104, 136, 136], h: 36, taille: 19 };
   g.xs = []; let x = g.x + g.wl; for (const w of g.cols) { g.xs.push(x); x += w; } g.xf = x;
-  g.yl = [g.y + g.h, g.y + 2 * g.h]; g.yf = g.y + 3 * g.h; g.cx = k => g.xs[k] + g.cols[k] / 2;
+  g.yl = [1, 2, 3].map(k => g.y + k * g.h); g.yf = g.y + 4 * g.h; g.cx = k => g.xs[k] + g.cols[k] / 2;
   return g;
 })();
 const YT = { x_max: 214, x_eq: 256, taux: 326, limitee: 392 };
@@ -538,13 +544,13 @@ function vueTaux(c, M) {
       c.texte(s, g.cx(k), yb, { taille: t, align: 'center' });
       if (k < 3) { const xb = g.xs[k + 1]; if (SIGNES[k] === '⇌') flecheDouble(c, xb - 15, yb - t * .32, 30); else c.texte('+', xb, yb, { taille: t, align: 'center' }); }
     });
-    LIGNES.forEach((L, i) => {
-      const y = g.yl[i] + g.h * .68;
-      c.texte(L.nom, g.x + 8, y, { taille: g.taille, max: g.wl - 14 });
-      L.v.forEach((s, k) => c.texte(s, g.cx(k), y, { taille: g.taille, align: 'center', max: g.cols[k] - 8, couleur: k === 1 ? 'faible' : i === 1 && k !== 0 ? 'jaune' : 'blanc' }));
-    });
     c.texte('(mol)', g.xf, g.yf + 18, { couleur: 'faible', taille: 15, align: 'right' });
   });
+  LIGNES.forEach((L, i) => M.etape(c, L.etape, () => {
+    const y = g.yl[i] + g.h * .68;
+    c.texte(L.nom, g.x + 8, y, { taille: g.taille, max: g.wl - 14 });
+    L.v.forEach((s, k) => c.texte(s, g.cx(k), y, { taille: g.taille, align: 'center', max: g.cols[k] - 8, couleur: k === 1 ? 'faible' : i === 2 && k !== 0 ? 'jaune' : 'blanc' }));
+  }));
   M.etape(c, 'x_max', () => {
     c.texte('x_max = C·V = 1,0·10⁻² × 0,100 = 1,0·10⁻³ mol', 30, YT.x_max, { taille: 20 });
     c.texte('(si CH₃COOH était entièrement consommé)', 456, YT.x_max, { couleur: 'faible', taille: 15, max: 290 });
@@ -566,7 +572,8 @@ function vueTaux(c, M) {
     } else c.texte('x_{éq} < x_max : il reste du CH₃COOH à l’équilibre', 330, YT.limitee, { couleur: 'faible', taille: 16, max: 420 });
   }));
   const vues = [];
-  if (M.commence('tableau')) vues.push('tableau d’avancement : CH₃COOH + H₂O ⇌ CH₃COO⁻ + H₃O⁺ ; état initial : C·V, excès, 0, 0 ; état d’équilibre : C·V − x_éq, excès, x_éq, x_éq');
+  if (M.commence('tableau')) vues.push('tableau d’avancement : CH₃COOH + H₂O ⇌ CH₃COO⁻ + H₃O⁺, trois lignes');
+  LIGNES.forEach((L, i) => { if (M.commence(L.etape)) vues.push(`ligne ${i + 1}, ${L.nom} : ${L.v.join(', ').replace(/_\{éq\}/g, '_éq')}`); });
   if (M.commence('x_max')) vues.push('x_max = C·V = 1,0·10⁻² × 0,100 = 1,0·10⁻³ mol');
   if (M.commence('x_eq')) vues.push('x_éq = [H₃O⁺]éq·V = 3,89·10⁻⁴ × 0,100 = 3,89·10⁻⁵ mol');
   if (M.commence('taux')) vues.push('τ = x_éq/x_max = 10^(−pH)/C = 10^(−3,41)/1,0·10⁻² = 0,039 (fractions à barre dessinée)');
@@ -730,7 +737,9 @@ function reperes(c, M) {
     R('question', 236, 258, 288, 64, `« τ change avec C… un nombre ne change-t-il pas ? »${q('question')}`);
   } else if (v === 'taux') {
     const g = TG;
-    R('tableau', g.x, g.y, g.xf - g.x, g.yf - g.y, `le tableau d’avancement de l’exemple A (état initial, état d’équilibre)${q('tableau')}`);
+    R('tableau', g.x, g.y, g.xf - g.x, g.yf - g.y, `le tableau d’avancement de l’exemple A (état initial, en cours, état d’équilibre)${q('tableau')}`);
+    R('entete_tableau', g.x, g.y, g.xf - g.x, g.h, `la ligne de l’équation, en tête du tableau${q('tableau')}`);
+    LIGNES.forEach((L, i) => R(L.etape, g.x, g.yl[i], g.xf - g.x, g.h, `la ligne ${i + 1}, ${L.nom} : ${L.v.join(', ').replace(/_\{éq\}/g, '_éq')}${q(L.etape)}`));
     R('x_max', 24, YT.x_max - 22, 420, 30, `« x_max = C·V = 1,0·10⁻³ mol »${q('x_max')}`);
     R('x_eq', 24, YT.x_eq - 22, 560, 30, `« x_éq = [H₃O⁺]éq·V = 3,89·10⁻⁵ mol »${q('x_eq')}`);
     R('taux', 24, YT.taux - 40, 440, 62, `« τ = 10^(−pH)/C = 10^(−3,41)/1,0·10⁻² = 0,039 »${q('taux')}`);
@@ -760,6 +769,7 @@ function voir(M) {
     if (M.eq.E.vu) m.push(`Loupe : des CH₃COOH, H₂O, CH₃COO⁻ et H₃O⁺ ; un proton passe dans le sens 1 (vert) et un autre dans le sens 2 (rose) en même temps ; compteurs sens 1 = ${M.eq.E.n}, sens 2 = ${M.eq.E.n}.`);
   }
   if (M.vues && M.vues.length) m.push(`Écrit : ${M.vues.map(s => `« ${s} »`).join(' ; ')}.`);
+  try { const al = window.Allume && typeof allumes === 'function' ? window.Allume.decrire(allumes(M)) : ''; if (al) m.push(al.charAt(0).toUpperCase() + al.slice(1) + '.'); } catch (e) { /* allumages pas encore prêts */ }
   return m.join(' ');
 }
 const params = M => ({ vue: M.S.vue });
@@ -784,6 +794,14 @@ const MOT = Moteur({
   },
 });
 MOT.lancer();
+
+/* ── Compter en allumant (19 novembre 2026 ; simulations-au-tableau règles 16-17) : vue taux, les trois lignes du
+ * tableau d’avancement s’allument une à une avec leur numéro « 1, 2, 3 » (à droite) ; « 3 lignes » à la fin ; x_max,
+ * x_éq et τ allument ce dont ils se servent. ── */
+const UTILISE = { taux: { tableau: ['tableau*'], x_max: ['ligne_initial', 'x_max*'], x_eq: ['ligne_equilibre', 'x_eq*'], taux: ['x_max', 'x_eq', 'taux*'], limitee: ['taux', 'limitee*'] } };
+const COMPTE = { taux: { items: LIGNES.map(L => [L.etape, L.etape]), total: { apres: 'x_max', id: 'entete_tableau', texte: '3 lignes', cote: 'droite' } } };
+var allumes = M => window.Allume.standard(M, UTILISE, COMPTE);
+window.Allume.regle(() => (MO ? allumes(MO) : []));
 
 </script>
 <script src="/media/simulations/professor-locate.js" defer></script>
