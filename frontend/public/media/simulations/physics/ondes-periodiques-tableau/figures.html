@@ -44,6 +44,8 @@ let M = {};                                       // étape → instant d’écr
 
 const canvas = $('canvas');
 const scene = window.OndesTableau.Scene(canvas, dessiner);
+/* Taille de texte RÉELLE : au moins 15,5 px à l’écran (18 novembre 2026, « la simulation d’abord »). */
+const TX = n => Math.max(n, 15.5 / (scene.s || 1));
 const craie = scene.craie;
 /* Même cadre que commun.js, mais l’écriture suit l’horloge de la figure (S.tw) : le tuteur peut la figer sur une étape.
  * Tableau large (15 novembre 2026 : « la figure n’occupe qu’une bande au centre ») : quand le tableau est plus large
@@ -252,7 +254,7 @@ const DESSINS = {
 
   fig_enonce_cuve(c) {
     c.texte('Cuve à ondes vue de dessus', 40, 30, { couleur: 'cyan', taille: 20 });
-    const X0 = 60, Y0 = 52, W = 650, H = 270, xs = 92, L = 72;
+    const X0 = 60, Y0 = 52, W = 650, H = 210, xs = 92, L = 72;   // cuve moins haute : les deux lignes de calcul passent dessous, en grand (18 novembre 2026)
     peindre(c, ctx => {   // eau peinte : fond bleu-vert, rides claires et sombres, liseré sur chaque crête, réglette de métal
       const r = { x: X0, y: Y0, w: W, h: H };
       ctx.save(); E.chemin(ctx, r); ctx.clip(); E.fond(ctx, r, { reflets: false });
@@ -273,11 +275,12 @@ const DESSINS = {
     const xm = xs + 5 * L, xn = xs + 3 * L;
     c.point(xm, Y0 + 80, 5, 'jaune').texte('M', xm + 10, Y0 + 76, { couleur: 'jaune', taille: 19 });
     c.repere('point_m', xm - 14, Y0 + 58, 40, 36, 'le point M');
-    c.point(xn, Y0 + 190, 5, 'jaune').texte('N', xn + 10, Y0 + 186, { couleur: 'jaune', taille: 19 });
-    c.repere('point_n', xn - 14, Y0 + 168, 40, 36, 'le point N');
-    const yd = Y0 + H + 34, x2 = xs + L;
+    c.point(xn, Y0 + H - 44, 5, 'jaune').texte('N', xn + 10, Y0 + H - 48, { couleur: 'jaune', taille: 19 });
+    c.repere('point_n', xn - 14, Y0 + H - 66, 40, 36, 'le point N');
+    const yd = Y0 + H + 20, x2 = xs + L, t = TX(17);
     c.ligne(x2, Y0 + H - 10, x2, yd + 6, { couleur: 'faible', largeur: 1.2, pointille: [4, 4] }).ligne(xm, Y0 + 92, xm, yd + 6, { couleur: 'faible', largeur: 1.2, pointille: [4, 4] });
-    c.cote(x2, yd, xm, yd, 'd = 6 cm', { couleur: 'jaune', taille: 17, dessous: true });
+    c.cote(x2, yd, xm, yd, '', { couleur: 'jaune' });
+    c.texte('d = 6 cm', xm + 12, yd + 0.35 * t, { couleur: 'jaune', taille: t });
     c.repere('cote_d', x2, yd - 12, xm - x2, 40, 'la cote d = 6 cm');
     marque(c, 'trace');
     c.pause(.4);
@@ -285,9 +288,11 @@ const DESSINS = {
     c.repere('intervalles', xs, Y0 + 10, 5 * L, 28, 'les intervalles comptés depuis S');
     marque(c, 'intervalles');
     c.pause(.3);
-    c.texte('d couvre 4 intervalles : λ = ⟦6|4⟧ = 1,5 cm', 470, 376, { couleur: 'vert', taille: 16, max: 280 });
-    c.texte('depuis S : SM = 1 λ + 4 λ = 5 λ = 7,5 cm', 470, 408, { couleur: 'vert', taille: 16, max: 280 });
-    c.repere('calcul', 466, 356, 284, 58, 'λ = 1,5 cm ; SM = 5λ');
+    // les deux lignes du calcul sous la cote, sur toute la largeur, espacées selon leur hauteur réelle
+    const tf = TX(19), Ef = window.OndesTableau.etages(c, tf), y1 = yd + 14 + Ef.haut + 0.95 * Ef.T, y2 = y1 + Ef.bas + 1.35 * tf;
+    c.texte('d couvre 4 intervalles : λ = ⟦6|4⟧ = 1,5 cm', 40, y1, { couleur: 'vert', taille: tf, garder: true });
+    c.texte('depuis S : SM = 1 λ + 4 λ = 5 λ = 7,5 cm', 40, y2, { couleur: 'vert', taille: tf, garder: true });
+    c.repere('calcul', 36, yd + 10, 640, y2 - yd, 'λ = 1,5 cm ; SM = 5λ');
     marque(c, 'fin');
   },
 

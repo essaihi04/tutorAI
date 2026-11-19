@@ -78,6 +78,12 @@ function dessiner(c) {
   scene.cadre(17);
   LL = scene.L; X0 = LL >= 1000 ? 185 : 140; X1 = 470 + Math.max(0, LL - 760) * 0.7; KZ = (X1 - X0) / 330;
   if (LL >= 1000 && c.echelle >= 0.8) c.tailleMin = 18;   // tableau bas : 15 px suffit
+  /* La simulation d’abord (18 novembre 2026) : sur un cadre de téléphone (texte ≥ 15,5 px à l’écran, donc grand dans le
+   * cadre), λ et v s’écrivent sur UNE ligne par onde, la colonne prend la largeur de cette ligne et les ondes le reste ;
+   * les deux verdicts s’écrivent en notation (« v′ ≠ v »), leurs cadres à la taille du texte. */
+  const COMPACT = c.W < 700 || c.H < 250, T17 = Math.max(17, 15.5 / (scene.s || 1));
+  X0 = Math.max(X0, 14 + c.largeurTexte('N′ = 2000 Hz', Math.max(17, 15.5 / (scene.s || 1))) + 34); KZ = (X1 - X0) / 330;   // les ondes commencent après leur nom
+  if (COMPACT) { X1 = Math.max(X0 + 200, LL - c.largeurTexte('λ′ = 1,1 cm ; v′ = 0,33 m/s', T17) - 34); KZ = (X1 - X0) / 330; }
   const XC = X1 + 18, XV = (X0 + X1) / 2;
   c.texte('Surface de l’eau (cuve à ondes)', 14, 34, { couleur: 'cyan', taille: 18 });
   c.texte('Air (le son)', 14, 232, { couleur: 'cyan', taille: 18 });
@@ -106,25 +112,32 @@ function dessiner(c) {
       const xr = X1 - 24 - lp;
       c.cote(xr, r.y + (r.milieu === 'eau' ? 26 : 34), xr + lp, r.y + (r.milieu === 'eau' ? 26 : 34), '', { couleur: 'vert', largeur: 1.8 });
       const lam = lamCm(r), vt = v(r);
-      c.texte(`${r.prime ? 'λ′' : 'λ'} = ${fr(lam, lam < 10 ? 1 : 0)} cm`, XC, r.y - 4, { couleur: 'vert', taille: 17 });
-      if (S.t >= T[r.id] - 0.5) c.texte(`${r.prime ? 'v′' : 'v'} = λ·N = ${r.milieu === 'eau' ? fr(vt, 2) : fr(vt, 0)} m/s`, XC, r.y + 22, { couleur: 'blanc', taille: 17 });
+      const sL = `${r.prime ? 'λ′' : 'λ'} = ${fr(lam, lam < 10 ? 1 : 0)} cm`, sV = `${r.prime ? 'v′' : 'v'} = ${r.milieu === 'eau' ? fr(vt, 2) : fr(vt, 0)} m/s`;
+      if (COMPACT) c.texte(S.t >= T[r.id] - 0.5 ? `${sL} ; ${sV}` : sL, XC, r.y + 0.35 * T17, { couleur: 'vert', taille: T17 });
+      else {
+        c.texte(sL, XC, r.y - 4, { couleur: 'vert', taille: 17 });
+        if (S.t >= T[r.id] - 0.5) c.texte(`${r.prime ? 'v′' : 'v'} = λ·N = ${r.milieu === 'eau' ? fr(vt, 2) : fr(vt, 0)} m/s`, XC, r.y + 22, { couleur: 'blanc', taille: 17 });
+      }
     }
     // Ce que disent les deux mesures de chaque milieu.
     if (vu('eau_2')) {
-      c.texte('v′ ≠ v : la célérité change avec N', XC, 196, { couleur: 'orange', taille: 16 });
+      c.texte(COMPACT ? 'v′ ≠ v' : 'v′ ≠ v : la célérité change avec N', XC, COMPACT ? 200 : 203, { couleur: 'orange', taille: 16 });
       c.repere('v_eau', XC - 6, 60, LL - XC, 144, 'les deux célérités dans l’eau');
     }
     if (vu('air_2')) {
-      c.texte('v′ = v : la célérité ne change pas', XC, 396, { couleur: 'vert', taille: 16 });
+      c.texte(COMPACT ? 'v′ = v' : 'v′ = v : la célérité ne change pas', XC, COMPACT ? 404 : 403, { couleur: 'vert', taille: 16 });
       c.repere('v_air', XC - 6, 258, LL - XC, 146, 'les deux célérités dans l’air');
     }
     if (vu('verdict')) {
-      c.rect(XV - 125, 16, 250, 32, { couleur: 'orange', largeur: 1.6, fond: 'orange', fondAlpha: .08 });
-      c.texte('eau : milieu dispersif', XV, 39, { couleur: 'orange', taille: 17, align: 'center' });
-      c.repere('verdict_eau', XV - 125, 16, 250, 32, 'l’eau : milieu dispersif');
-      c.rect(XV - 125, 212, 250, 32, { couleur: 'vert', largeur: 1.6, fond: 'vert', fondAlpha: .08 });
-      c.texte('air : non dispersif', XV, 235, { couleur: 'vert', taille: 17, align: 'center' });
-      c.repere('verdict_air', XV - 125, 212, 250, 32, 'l’air : non dispersif pour le son');
+      const wb = Math.max(250, c.largeurTexte('eau : milieu dispersif', T17) + 24), hb = Math.max(32, 1.3 * T17), yt = (y0, h) => y0 + h / 2 + 0.35 * T17;
+      // chaque cadre à droite du nom de son milieu (jamais dessus)
+      const xe = Math.max(XV - wb / 2, COMPACT ? 0 : 30 + c.largeurTexte('Surface de l’eau (cuve à ondes)', Math.max(18, 15.5 / (scene.s || 1)))), xa = Math.max(XV - wb / 2, 30 + c.largeurTexte('Air (le son)', Math.max(18, 15.5 / (scene.s || 1))));
+      c.rect(xe, 16, wb, hb, { couleur: 'orange', largeur: 1.6, fond: 'orange', fondAlpha: .08 });
+      c.texte('eau : milieu dispersif', xe + wb / 2, yt(16, hb), { couleur: 'orange', taille: T17, align: 'center' });
+      c.repere('verdict_eau', xe, 16, wb, hb, 'l’eau : milieu dispersif');
+      c.rect(xa, 212, wb, hb, { couleur: 'vert', largeur: 1.6, fond: 'vert', fondAlpha: .08 });
+      c.texte('air : non dispersif', xa + wb / 2, yt(212, hb), { couleur: 'vert', taille: T17, align: 'center' });
+      c.repere('verdict_air', xa, 212, wb, hb, 'l’air : non dispersif pour le son');
     }
     if (S.running || S.pause) c.texte(`t = ${fr(S.t, 1)} s`, LL - 12, 34, { couleur: 'faible', taille: 14, align: 'right' });
   });

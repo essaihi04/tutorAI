@@ -38,13 +38,30 @@ const LAMPE = { x: 640, y: 118 }, KNOB = { x: 700, y: 118 };
 /* Tableau large (15 novembre 2026) : le cadre prend le format du tableau (scene.L de 760 à 1596). La cuve s'allonge
  * (même échelle, 20 px pour 1 cm), la colonne de droite (lampe, molette, ce que l'on voit, mesures) glisse avec elle et
  * s'écrit plus grand (≥ 18 px à l'écran quand le tableau est haut). */
-let COL = 500, LL = 760;
+let COL = 500, LL = 760, COMPACT = false, CLE = '', Y = {};
+/* La simulation d’abord (18 novembre 2026) : la colonne de droite est large comme son texte écrit à sa taille RÉELLE
+ * (au moins 15,5 px à l’écran, au plus 24), la cuve prend le reste ; ses rangées s’empilent selon leur hauteur réelle.
+ * Sur un cadre de téléphone, les phrases se disent en plus court (la voix dit la phrase entière). */
+const TX = n => Math.max(15.5 / (scene.s || 1), Math.min(1.2 * n, 24 / (scene.s || 1)));
+const TEXTES = () => COMPACT
+  ? { mesure: ['d = 4,5 cm : λ = 1,5 cm', 'N = 20 Hz (éclairs)', 'v = λ·N = 0,30 m/s'], eclair: ['Une période plus tard :', 'la ride a avancé de λ.'] }
+  : { mesure: [`d = 4,5 cm, n = 3 : λ = 1,5 cm`, 'N = fréquence des éclairs = 20 Hz', 'v = λ·N = 1,5×10⁻² × 20 = 0,30 m/s'],
+      eclair: ['Une période plus tard :', 'une ride est de nouveau', 'sous la croix ; la ride', 'marquée a avancé de λ.'] };
 function adapter(c) {
-  if (scene.L !== LL) {
-    LL = scene.L; const plus = Math.max(0, LL - 760) * 0.62;
-    R.w = 420 + plus; LC = (R.x + R.w - SX) / PXM; COL = 500 + plus; LAMPE.x = 640 + plus; KNOB.x = 700 + plus;
-  }
-  if (LL >= 1000 && c.echelle >= 0.8) c.tailleMin = 18;
+  COMPACT = c.W < 700 || c.H < 250;
+  const cle = `${scene.L}|${(scene.s || 1).toFixed(3)}`;
+  if (cle === CLE) return; CLE = cle; LL = scene.L;
+  const w = (s, n) => c.largeurTexte(s, TX(n)), X = TEXTES();
+  const wc = Math.max(w('vibreur : N = 20 Hz', 18), w('Immobilité apparente :', 17), w('les rides défilent.', 17), w('Une croix marque une ride.', 15), ...X.mesure.map(m => w(m, 16)), ...X.eclair.map(m => w(m, 15)), 190);
+  COL = Math.max(360, LL - wc - 12); R.w = COL - 30 - R.x; LC = (R.x + R.w - SX) / PXM;
+  LAMPE.x = COL + 70; KNOB.x = COL + 150;
+  // les rangées de la colonne, du haut vers le bas
+  let y = Math.max(76, 50 + 0.95 * TX(18)); Y.vibreur = y;
+  LAMPE.y = KNOB.y = y + 0.3 * TX(18) + 28; Y.lampeNom = LAMPE.y + 24 + 0.95 * TX(14);
+  y = Y.lampeNom + 0.4 * TX(14);
+  const pas = n => { y += 1.3 * TX(n); return y - 0.35 * TX(n); };
+  Y.eclairs = pas(18); Y.molette = COMPACT ? Y.eclairs : pas(13); Y.l1 = pas(17); Y.l2 = pas(17);
+  Y.bas = [pas(16), pas(16), pas(16), pas(16)];
 }
 const T0 = 1.0;                                       // le vibreur tourne depuis 1 s : les rides couvrent déjà la cuve
 const STROBE = vue === 'immobile' || vue === 'ralenti';
@@ -124,33 +141,34 @@ function dessiner(c) {
   c.texte('Pièce sombre : la cuve vue de dessus', 14, 32, { couleur: 'cyan', taille: 17 });
   c.rect(R.x, R.y, R.w, R.h, { couleur: 'tresfaible', arrondi: 8 });
   c.texte('S (réglette)', SX + 8, R.y + 22, { couleur: 'cyan', taille: 15 });
-  c.texte('vibreur : N = 20 Hz', COL, 76, { couleur: 'jaune', taille: 18 });
-  c.texte('stroboscope', LAMPE.x - 6, 160, { couleur: 'faible', align: 'center', taille: 14 });
+  c.texte('vibreur : N = 20 Hz', COL, Y.vibreur, { couleur: 'jaune', taille: TX(18) });
+  c.texte('stroboscope', LAMPE.x - 6, Y.lampeNom, { couleur: 'faible', align: 'center', taille: TX(14) });
   c.repere('vibreur', 6, SY - 22, 44, 44, 'le vibreur (N = 20 Hz)');
   c.repere('source', SX - 8, R.y + 6, 16, R.h - 12, 'la source : la réglette');
   c.repere('stroboscope', LAMPE.x - 40, LAMPE.y - 22, 80, 44, 'le stroboscope : une lampe qui envoie des éclairs');
-  c.texte('Mouvement ralenti pour l’œil.', R.x, 382, { couleur: 'faible', taille: 13 });
+  c.texte('Mouvement ralenti pour l’œil.', R.x, R.y + R.h + 6 + 0.95 * TX(13), { couleur: 'faible', taille: TX(13) });
   c.direct(() => {
     const col = COL;
     if (STROBE) {
-      c.texte(`éclairs : ${S.ne} Hz`, col, 196, { couleur: 'jaune', taille: 18 }).texte('⇅ molette : 15 à 25 Hz', col, 216, { couleur: 'faible', taille: 13 });
-      c.repere('frequence_eclairs', col - 4, 178, 250, 44, 'la fréquence des éclairs (molette)');
+      c.texte(`éclairs : ${S.ne} Hz`, col, Y.eclairs, { couleur: 'jaune', taille: TX(18) });
+      if (!COMPACT) c.texte('⇅ molette : 15 à 25 Hz', col, Y.molette, { couleur: 'faible', taille: TX(13) });
+      c.repere('frequence_eclairs', col - 4, Y.eclairs - TX(18), 250, Y.molette - Y.eclairs + TX(18) + 6, 'la fréquence des éclairs (molette)');
     }
     // L'état de ce qu'on voit.
     let l1 = '', l2 = '', coul = 'vert';
     if (L.mode === 'continu') { l1 = 'Lumière continue :'; l2 = 'les rides défilent.'; coul = 'rose'; }
     else if (L.mode === 'noir') { l1 = 'Lumière éteinte :'; l2 = 'on ne voit presque rien.'; coul = 'faible'; }
-    else if (L.mode === 'eclair') { l1 = `Éclair n° ${L.n} :`; l2 = 'les rides figées un instant.'; }
-    else if (immobile()) { l1 = L.n >= 3 ? 'Immobilité apparente :' : `Éclair n° ${L.n}…`; l2 = L.n >= 3 ? 'les rides semblent arrêtées.' : ''; }
+    else if (L.mode === 'eclair') { l1 = `Éclair n° ${L.n} :`; l2 = COMPACT ? 'rides figées' : 'les rides figées un instant.'; }
+    else if (immobile()) { l1 = L.n >= 3 ? 'Immobilité apparente :' : `Éclair n° ${L.n}…`; l2 = L.n >= 3 ? (COMPACT ? 'rides arrêtées' : 'les rides semblent arrêtées.') : ''; }
     else { const d = decalage(); l1 = L.n >= 3 ? `Les rides semblent ${d > 0 ? 'avancer' : 'reculer'}` : `Éclair n° ${L.n}…`; l2 = L.n >= 3 ? (Math.abs(d) < 0.15 ? 'lentement (montré seulement).' : '(image qui saute).') : ''; coul = 'orange'; }
-    c.texte(l1, col, 256, { couleur: coul, taille: 17 }); if (l2) c.texte(l2, col, 280, { couleur: coul, taille: 17 });
-    c.repere('etat_eclairage', col - 4, 238, 250, 50, 'ce que l’on voit');
+    c.texte(l1, col, Y.l1, { couleur: coul, taille: TX(17) }); if (l2) c.texte(l2, col, Y.l2, { couleur: coul, taille: TX(17) });
+    c.repere('etat_eclairage', col - 4, Y.l1 - TX(17), 250, Y.l2 - Y.l1 + TX(17) + 6, 'ce que l’on voit');
 
     // Vue sans : la règle posée sur les rides qui défilent, sans pouvoir lire λ.
     if (vue === 'sans') {
       E.regle(c.ctx, SX + 0.05 * PXM, SX + 0.095 * PXM, YR, PXCM, 1);
       c.repere('regle', SX + 0.05 * PXM - 14, YR, 0.045 * PXM + 28, 22, 'la règle posée sur l’eau');
-      c.texte('La règle est posée,', col, 320, { couleur: 'faible', taille: 15 }).texte('mais les rides glissent dessous.', col, 340, { couleur: 'faible', taille: 15 });
+      c.texte('La règle est posée,', col, Y.bas[0], { couleur: 'faible', taille: TX(15) }).texte('mais les rides glissent dessous.', col, Y.bas[1], { couleur: 'faible', taille: TX(15) });
     }
     // Vue eclair : une croix sur une ride au premier éclair ; au second, la ride marquée a avancé de λ.
     if (vue === 'eclair' && S.t >= P.t1) {
@@ -161,9 +179,8 @@ function dessiner(c) {
         const x2 = x + LAM * PXM;
         c.cercle(x2, y, 9, { couleur: 'orange', largeur: 2.2 });
         c.fleche(x + 10, y - 22, x2 - 2, y - 22, { couleur: 'orange', largeur: 2, tete: 7 }).texte('+ λ', (x + x2) / 2, y - 30, { couleur: 'orange', align: 'center', taille: 15 });
-        c.texte('Une période plus tard :', col, 320, { couleur: 'vert', taille: 15 });
-        c.texte('une ride est de nouveau', col, 340, { couleur: 'vert', taille: 15 }).texte('sous la croix ; la ride', col, 360, { couleur: 'vert', taille: 15 }).texte('marquée a avancé de λ.', col, 380, { couleur: 'vert', taille: 15 });
-      } else c.texte('Une croix marque une ride.', col, 320, { couleur: 'jaune', taille: 15 });
+        TEXTES().eclair.forEach((l, i) => c.texte(l, col, Y.bas[i], { couleur: 'vert', taille: TX(15), garder: true }));
+      } else c.texte('Une croix marque une ride.', col, Y.bas[0], { couleur: 'jaune', taille: TX(15), garder: true });
     }
     // Vue immobile : la règle sur l'image immobile, puis λ, N et v.
     const Rg = regleActuelle();
@@ -175,12 +192,14 @@ function dessiner(c) {
         for (let i = 0; i <= Rg.n; i++) { const x = xa + i * LAM * PXM; c.ligne(x, y - 14, x, y + 1, { couleur: 'jaune', largeur: 2.2, tremble: .3 }); }
         for (let i = 0; i < Rg.n; i++) { const x1 = xa + i * LAM * PXM, x2 = x1 + LAM * PXM; c.courbe(u => [x1 + (x2 - x1) * u, y - 16 - 7 * Math.sin(Math.PI * u)], 12, { couleur: 'orange', largeur: 1.8 }); c.texte(String(i + 1), (x1 + x2) / 2, y - 27, { couleur: 'orange', align: 'center', taille: 15 }); }
         const d = Rg.n * LAM * 100, q = S.t - P.regle;
-        if (q >= -1e-4 || Rg.manuel) c.texte(`d = ${fr(d, 1)} cm, n = ${Rg.n} : λ = ${fr(LAM * 100, 1)} cm`, col, 320, { couleur: 'jaune', taille: 16 });
-        if (q >= 0.08 || Rg.manuel) c.texte('N = fréquence des éclairs = 20 Hz', col, 344, { couleur: 'jaune', taille: 15 });
-        if (q >= 0.16 || Rg.manuel) c.texte(`v = λ·N = ${fr(LAM * 100, 1)}×10⁻² × 20 = ${fr(V, 2)} m/s`, col, 372, { couleur: 'vert', taille: 16 });
+        const Xm = COMPACT ? [`d = ${fr(d, 1)} cm : λ = ${fr(LAM * 100, 1)} cm`, 'N = 20 Hz (éclairs)', `v = λ·N = ${fr(V, 2)} m/s`]
+          : [`d = ${fr(d, 1)} cm, n = ${Rg.n} : λ = ${fr(LAM * 100, 1)} cm`, 'N = fréquence des éclairs = 20 Hz', `v = λ·N = ${fr(LAM * 100, 1)}×10⁻² × 20 = ${fr(V, 2)} m/s`];
+        if (q >= -1e-4 || Rg.manuel) c.texte(Xm[0], col, Y.bas[0], { couleur: 'jaune', taille: TX(16), garder: true });
+        if (q >= 0.08 || Rg.manuel) c.texte(Xm[1], col, Y.bas[1], { couleur: 'jaune', taille: TX(16), garder: true });
+        if (q >= 0.16 || Rg.manuel) c.texte(Xm[2], col, Y.bas[2], { couleur: 'vert', taille: TX(16), garder: true });
       }
     }
-    if (vue === 'ralenti' && L.n >= 3) c.texte('On ne calcule rien avec ce mouvement.', col, 320, { couleur: 'faible', taille: 14 });
+    if (vue === 'ralenti' && L.n >= 3) c.texte('On ne calcule rien avec ce mouvement.', col, Y.bas[0], { couleur: 'faible', taille: TX(14) });
   });
 }
 

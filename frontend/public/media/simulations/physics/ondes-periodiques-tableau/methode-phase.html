@@ -93,18 +93,24 @@ function dessiner(c) {
       for (let k = 1; XM + k * LAM * PX <= XP() + 1e-6; k++) {
         const x = XM + k * LAM * PX;
         c.ligne(x, 262, x, 282, { couleur: 'cyan', largeur: 1.8 });
-        c.texte(`${k} λ`, x, 300, { couleur: 'cyan', taille: 15, align: 'center' });
+        c.texte(`${k} λ`, x + 5, 284, { couleur: 'cyan', taille: 15 });   // à droite de sa marque : la ligne du calcul passe dessous
       }
-      c.texte(`⟦d|λ⟧ = ⟦${nb(P.d_cm)}|4⟧ = ${nb(rapport())}`, H(120), 346, { couleur: 'blanc', taille: 19 });
-      c.repere('calcul', H(112), 318, H(360), 46, 'le calcul de d/λ');
+    }
+    // La simulation d’abord (18 novembre 2026) : le calcul et sa lecture sur UNE ligne, la conclusion dessous, espacées
+    // selon la hauteur réelle du texte (au moins 15,5 px à l’écran) — rien ne monte sur les marques λ.
+    const TX = n => Math.max(n, 15.5 / (scene.s || 1)), tf = Math.max(19, 15.5 / 0.78 / (scene.s || 1)), Ef = window.OndesTableau.etages(c, tf);
+    const yV = 412, yC = yV - 1.3 * TX(19) - Ef.bas, fr1 = `⟦d|λ⟧ = ⟦${nb(P.d_cm)}|4⟧ = ${nb(rapport())}`, xD = H(120) + c.largeurTexte(fr1, tf) + 24;
+    if (vu('calcul')) {
+      c.texte(fr1, H(120), yC, { couleur: 'blanc', taille: tf });
+      c.repere('calcul', H(112), yC - Ef.haut - tf, xD - H(112), Ef.haut + tf + Ef.bas + 8, 'le calcul de d/λ');
     }
     if (vu('verdict')) {
       const v = verdict();
-      c.texte(v.detail, H(120), 380, { couleur: v.couleur, taille: 17 });
-      c.texte(`→ M et P vibrent ${v.mot}`, H(120), 408, { couleur: v.couleur, taille: 19 });
-      c.repere('verdict', H(112), 360, H(520), 56, 'la conclusion');
+      c.texte(v.detail, xD, yC, { couleur: v.couleur, taille: TX(17), garder: true, max: scene.L - xD - 8 });
+      c.texte(`→ M et P vibrent ${v.mot}`, H(120), yV, { couleur: v.couleur, taille: TX(19), garder: true });
+      c.repere('verdict', H(112), yC - TX(17), scene.L - H(112) - 8, yV - yC + TX(17) + 8, 'la conclusion');
     }
-    c.texte('Les flèches : le sens où va chaque point', H(748), 30, { couleur: 'faible', taille: 14, align: 'right' });
+    c.texte('Les flèches : le sens où va chaque point', scene.L - 10, 6 + 0.95 * Math.max(14, 15.5 / (scene.s || 1)), { couleur: 'faible', taille: 14, align: 'right' });
   });
   return c.fin();
 }

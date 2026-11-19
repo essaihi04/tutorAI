@@ -44,9 +44,16 @@ const SRC = CIRC ? { x: 112, y: YC } : { x: 78, y: YC };                        
  * tableau (scene.L de 760 à 1292). En grand (L ≥ 1000), la cuve occupe toute la hauteur et s'allonge vers la droite
  * (même échelle, 20 px pour 1 cm), et ce qui s'écrivait dessous passe dans une colonne à droite, plus grand. */
 let GRAND = false, LL = 760;
-function adapter(L) {
-  if (L === LL) return; LL = L; GRAND = L >= 1000;
-  Object.assign(R, GRAND ? { y: 46, w: L - 58 - 318, h: 360 } : { y: 50, w: 672, h: 290 });
+/* La simulation d’abord (18 novembre 2026) : toujours la mise en page « en grand » — la cuve sur toute la hauteur, la
+ * colonne à droite large comme son texte écrit à sa taille RÉELLE (au moins 15,5 px à l’écran), la cuve prend le reste.
+ * Sur un cadre de téléphone, la phrase sur le régime se tait (la voix la dit) : a et λ, les deux λ et la conclusion restent. */
+let COMPACT = false, CLE = '';
+function adapter(L, c) {
+  COMPACT = c.W < 700 || c.H < 250;
+  const cle = `${L}|${(scene.s || 1).toFixed(3)}`;
+  if (cle === CLE) return; CLE = cle; LL = L; GRAND = true;
+  const t = Math.max(19, 15.5 / (scene.s || 1)), wc = Math.min(330, Math.max(240, c.largeurTexte(`λ avant : ⟦4,5|3⟧ = 1,5 cm`, t) + 8));
+  Object.assign(R, { y: 46, w: Math.max(420, L - 58 - wc - 34), h: 360 });
   YC = R.y + R.h / 2; SRC.y = YC;
 }
 /* Une phrase coupée à la ligne dans la colonne de droite (mesurée à la taille réellement écrite). */
@@ -183,14 +190,15 @@ function dessiner(c) {
   c.direct(() => peindreEau(c.ctx, tau));
   c.texte(CIRC ? 'Cuve vue de dessus : onde circulaire et ouverture' : 'Cuve vue de dessus : onde rectiligne et ouverture', 12, 32, { couleur: 'cyan', taille: 17 });
   c.rect(R.x, R.y, R.w, R.h, { couleur: 'tresfaible', arrondi: 8 });
-  c.texte('onde incidente', CIRC ? 150 : 130, R.y + 22, { couleur: 'blanc', taille: 15 });
+  const yE = R.y + 6 + 0.95 * Math.max(15, 15.5 / (scene.s || 1));   // première ligne dans la cuve, à la taille réelle
+  c.texte('onde incidente', (R.x + XW) / 2 + (CIRC ? 20 : 0), yE, { couleur: 'blanc', taille: 15, align: 'center' });
   c.repere('onde_incidente', R.x + 4, R.y + 4, XW - R.x - 10, R.h - 8, 'l’onde incidente');
   c.texte(CIRC ? 'S' : 'S (réglette)', CIRC ? SRC.x - 8 : SRC.x + 8, CIRC ? SRC.y - 12 : R.y + R.h - 12, { couleur: 'cyan', taille: 15, align: CIRC ? 'right' : 'left' });
-  c.texte('paroi', XW + 10, R.y + 22, { couleur: 'faible', taille: 14 });
+  c.texte('paroi', XW + 10, R.y + R.h - 12, { couleur: 'faible', taille: 14 });   // en bas : en haut s’écrit le nom de l’onde après l’ouverture
   c.direct(() => {
     if (S.conclusions && tau >= P.tw + T) {
       const nom = reg.nom === 'diaphragmee' ? 'onde diaphragmée' : 'onde diffractée';
-      c.texte(nom, GRAND ? (XW + R.x + R.w) / 2 : 560, R.y + 22, { couleur: 'blanc', taille: 15, align: 'center' });
+      c.texte(nom, GRAND ? (XW + R.x + R.w) / 2 : 560, R.y + 6 + 0.95 * Math.max(15, 15.5 / (scene.s || 1)), { couleur: 'blanc', taille: 15, align: 'center' });
     }
     c.repere('onde_diffractee', XW + 10, R.y + 4, R.x + R.w - XW - 14, R.h - 8, 'l’onde après l’ouverture');
     if (S.t > P.tP) c.texte('photo : image arrêtée', LL - 12, 32, { couleur: 'cyan', align: 'right', taille: 15 });
@@ -205,9 +213,9 @@ function dessiner(c) {
     if (GRAND) {
       // À droite de la cuve : a et λ, ce que fait l'onde, puis les deux mesures de λ.
       const xc = R.x + R.w + 22, mx = LL - 12 - xc;
-      let y = colonne(c, `a = ${fr(S.a, 1)} cm ;  λ = ${fr(LAM * 100, 1)} cm`, xc, 84, 21, mx, { couleur: 'jaune' }) + 14;
-      if (S.conclusions && S.t >= M.premier_arc) y = colonne(c, reg.l1 + ' ' + reg.l2, xc, y, 18, mx, { couleur: 'vert' });
-      y = Math.max(y + 18, 252);
+      let y = colonne(c, `a = ${fr(S.a, 1)} cm ;  λ = ${fr(LAM * 100, 1)} cm`, xc, R.y + Math.max(21, 15.5 / (scene.s || 1)), 21, mx, { couleur: 'jaune' }) + 8;
+      if (!COMPACT && S.conclusions && S.t >= M.premier_arc) y = colonne(c, reg.l1 + ' ' + reg.l2, xc, y, 18, mx, { couleur: 'vert' });
+      y = COMPACT ? y + 6 : Math.max(y + 18, 252);
       if (Rg.avant) { dessinerRegle(c, Rg.avant, 'regle_avant', 'orange'); if (Rg.avant.p >= 1) y = colonne(c, `λ avant : ⟦${fr(3 * LAM * 100, 1)}|3⟧ = ${fr(LAM * 100, 1)} cm`, xc, y, 19, mx, { couleur: 'orange' }) + 4; }
       if (Rg.apres) { dessinerRegle(c, Rg.apres, 'regle_apres', 'rose'); if (Rg.apres.p >= 1) y = colonne(c, `λ après : ⟦${fr(3 * LAM * 100, 1)}|3⟧ = ${fr(LAM * 100, 1)} cm`, xc, y, 19, mx, { couleur: 'rose' }) + 4; }
       if (S.t >= P.fin - 0.04) colonne(c, 'même N = 20 Hz, même λ, même v', xc, y + 6, 19, mx, { couleur: 'vert' });
@@ -227,7 +235,7 @@ function dessiner(c) {
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(29); adapter(scene.L); if (GRAND && c.echelle >= 0.8) c.tailleMin = 18; dessiner(c); return c.fin(); }, { large: true });
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(29); adapter(scene.L, c); dessiner(c); return c.fin(); }, { large: true });
 scene.avancer = dt => {
   if (!S.running) return false;
   const fin = plan().fin;

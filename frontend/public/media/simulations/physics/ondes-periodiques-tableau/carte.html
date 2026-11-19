@@ -77,6 +77,27 @@ function disposer(c) {
   }
   // L'étiquette « à revoir » s'écrit au-dessus du cadre : la rangée du haut descend un peu pour la laisser entière.
   for (const b of BASE) b.n.y = GRAND ? Math.max(b.y, b.n.h / 2 + 34) : b.y;
+  /* La simulation d'abord (18 novembre 2026) : sur un cadre de téléphone (CP, le texte à 15 px y est deux fois plus grand
+   * dans le dessin) les cases se chevauchaient. Elles forment alors une grille 3 × 3 qui remplit le cadre, titres courts,
+   * une seule ligne par case (la première qui tient sur une ligne), le centre sans sa phrase (la voix la dit). */
+  CP = 15.5 / (scene.s || 1) > 24;
+  if (CP) {
+    const cw = (scene.L - 16) / 3, rh = (420 - 8) / 3, T = 15.5 / (scene.s || 1);
+    Object.assign(TX, { dy: 8 + T, dl: 14 + T * 2.1, pas: T * 1.15, cdy: rh / 2 - 12 - T * .1, cdy2: rh / 2 - 12 + T * 1.05 });
+    for (const b of BASE) {
+      const n = b.n, i = Math.sign(b.x - 380) + 1, j = Math.sign(b.y - 212) + 1;
+      n.x = 8 + cw * (i + .5); n.y = 4 + rh * (j + .5); n.w = cw - 18;
+      n.h = n === CENTRE ? rh - 12 : Math.min(rh - 12, 30 + T * 1.1 + lignesDe(n).reduce((h, l) => h + TX.pas + (l.includes('⟦') ? TX.eh + TX.eb : 0), 0));
+    }
+  }
+}
+let CP = false;
+const COURT = { periode: 'T et N', longueur_onde: 'Longueur λ', celerite: 'Célérité v', phase: 'Deux points', mesures: 'Mesures', diffraction: 'Diffraction', dispersion: 'Dispersif', retard: 'Retard τ' };
+function lignesDe(n) {
+  if (!CP) return n.lignes || [];
+  if (n.id === 'dispersion') return [];   // ses deux lignes ne forment qu'une phrase : la moitié tromperait
+  const c = scene.craie, T = 15.5 / (scene.s || 1);
+  return (n.lignes || []).filter(l => c.largeurTexte(l, T) <= n.w - 14).slice(0, 1);
 }
 const ANNEAUX = { non_acquis: ['rouge', 'à reprendre'], partiel: ['orange', 'à revoir'] };
 const AVANT = -1e9;   // instant d'un élément déjà dit : écrit d'un coup
@@ -114,10 +135,10 @@ function branche(c, n) {
   c.courbe(u => [(1 - u) * (1 - u) * a[0] + 2 * (1 - u) * u * m[0] + u * u * b[0], (1 - u) * (1 - u) * a[1] + 2 * (1 - u) * u * m[1] + u * u * b[1]], 24, { couleur: 'faible', largeur: 2 });
   const x = n.x - n.w / 2, y = n.y - n.h / 2;
   c.rect(x, y, n.w, n.h, { couleur: n.couleur, arrondi: 14, largeur: 2.4 });
-  c.texte(n.titre, n.x, y + TX.dy, { couleur: n.couleur, taille: TX.titre, align: 'center', max: n.w - 16, duree: .8 });
+  c.texte(CP ? COURT[n.id] || n.titre : n.titre, n.x, y + TX.dy, { couleur: n.couleur, taille: TX.titre, align: 'center', max: n.w - 16, duree: .8 });
   // une ligne à fraction (« ⟦num|dén⟧ », sur deux étages comme dans le cahier) s'écarte de ses voisines ; le cadre a grandi d'autant
   let yl = y + TX.dl;
-  n.lignes.forEach(l => {
+  lignesDe(n).forEach(l => {
     const etages = l.includes('⟦');
     if (etages) yl += window.OndesTableau.etages(c, TX.ligne, l).haut;
     c.texte(l, n.x, yl, { couleur: 'blanc', taille: TX.ligne, align: 'center', max: n.w - 14, alpha: .92, duree: 1 });
@@ -139,7 +160,7 @@ function dessiner(c) {
   const apres = c.cur;   // fin du titre du centre
   if (S.def != null) {
     c.depuis(S.def);
-    ['la perturbation se répète,', 'identique à elle-même,', 'à intervalles de temps égaux'].forEach((l, k) =>
+    if (!CP) ['la perturbation se répète,', 'identique à elle-même,', 'à intervalles de temps égaux'].forEach((l, k) =>
       c.texte(l, CENTRE.x, y + TX.cdl + k * TX.cpas, { couleur: 'blanc', taille: TX.cd, align: 'center', max: CENTRE.w - 16, alpha: .92, duree: 1.1 }));
     etat(c, CENTRE.comps, x, y, CENTRE.w, CENTRE.h);
     if (S.choisi === 'centre') c.direct(() => c.rect(x - 3, y - 3, CENTRE.w + 6, CENTRE.h + 6, { couleur: 'blanc', arrondi: 19, largeur: 1.2, alpha: .6 }));
