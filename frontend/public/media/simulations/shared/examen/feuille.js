@@ -47,6 +47,7 @@
  *   Messages reçus (postMessage du lecteur) :
  *     { type:'simulation_control', command:'surligner', parameters:{ id:'q-2.1', garder:false } }  surligne et amène
  *     { … command:'highlight', parameters:{ target:'q-2.1' } }                                    même chose
+ *     { … command:'allume', parameters:{ cible } } / { … command:'eteins' }                       démonstration (règle 17)
  *     { … command:'effacer' }                                                                     retire les surlignages
  *     { … command:'defiler', parameters:{ id } | { fraction: 0..1 } }                            défilement doux
  *     { type:'simulation_manifest_request' }                                                      renvoie le manifeste
@@ -299,8 +300,8 @@
     envoyer({
       type: 'simulation_manifest',
       capabilities: {
-        commands: ['surligner', 'highlight', 'effacer', 'defiler'], globals: ['executeAICommand'],
-        command_schema: { surligner: { id: Object.keys(r).join(' | '), garder: 'bool' }, highlight: { target: Object.keys(r).join(' | ') }, effacer: {}, defiler: { id: 'repère', fraction: '0..1' } },
+        commands: ['surligner', 'highlight', 'allume', 'eteins', 'effacer', 'defiler'], globals: ['executeAICommand'],
+        command_schema: { surligner: { id: Object.keys(r).join(' | '), garder: 'bool' }, highlight: { target: Object.keys(r).join(' | ') }, allume: { cible: Object.keys(r).join(' | ') }, eteins: {}, effacer: {}, defiler: { id: 'repère', fraction: '0..1' } },
         reperes: r, state_schema: { surligne: 'ids', defilement: '0..1' },
       },
       page_text: texteALire(),
@@ -353,8 +354,8 @@
   }
   window.executeAICommand = (cmd, p = {}) => {
     p = p || {};
-    if (cmd === 'surligner' || cmd === 'highlight' || cmd === 'montrer' || cmd === 'point' || cmd === 'show') surligner(p.id || p.target || p.repere, !!p.garder);
-    else if (cmd === 'effacer' || cmd === 'reset') effacer();
+    if (cmd === 'surligner' || cmd === 'highlight' || cmd === 'montrer' || cmd === 'point' || cmd === 'show' || cmd === 'allume') surligner(p.id || p.target || p.cible || p.repere, !!p.garder);
+    else if (cmd === 'effacer' || cmd === 'eteins' || cmd === 'reset') effacer();
     else if (cmd === 'defiler') {
       if (p.id) { const el = document.querySelector(`[data-repere="${CSS.escape(p.id)}"]`); if (el) amener(el); }
       else if (p.fraction != null) scrollTo({ top: (document.documentElement.scrollHeight - innerHeight) * +p.fraction, behavior: 'smooth' });
