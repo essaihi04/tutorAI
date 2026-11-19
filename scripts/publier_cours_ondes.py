@@ -36,7 +36,10 @@ DEST = "/var/www/moalim/cours-ondes"
 #: Dossiers copiés en entier : les pages s'y servent de chemins relatifs (ondes.css, commun.js…).
 #: `media/audio/reactions` entier (14 novembre 2026) : le lecteur compose certains noms (`cahier-${n}.mp3`), que la
 #: recherche des chemins cités ne peut pas trouver.
-DOSSIERS = ["media/simulations/physics/ondes-tableau", "media/simulations/shared/tableau", "media/audio/reactions"]
+#: `media/examens` entier (19 novembre 2026) : la feuille d'examen (`shared/examen/feuille.js`) compose le chemin du
+#: sujet (`/media/examens/<matière>/<année>-<session>.json`), que la recherche des chemins cités ne peut pas trouver.
+DOSSIERS = ["media/simulations/physics/ondes-tableau", "media/simulations/shared/tableau", "media/audio/reactions",
+            "media/examens"]
 FICHIERS = ["media/simulations/professor-locate.js", "media/avatar/moalim-professeur.glb", "media/avatar/moalim-professeur.png",
             "media/audio/reactions/manifest.json"]
 TEXTE = {".js", ".html", ".css", ".json", ".mjs"}
