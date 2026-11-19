@@ -52,8 +52,14 @@ for ligne in noms:
         print('supprimer', chemin)
         if appliquer and p.exists(): p.unlink()
     else:
-        contenu = norm(git('show', f'origin/main:{chemin}').stdout)
-        if p.exists() and b'\r\n' in p.read_bytes(): contenu = contenu.replace(b'\n', b'\r\n')
+        brut = git('show', f'origin/main:{chemin}').stdout
+        # Un fichier binaire (image, son) est copié tel quel : le 19/11/2026, la normalisation des fins de ligne a abîmé
+        # 394 images et mp3 locaux (réparés depuis origin). Un texte garde les fins de ligne du fichier local.
+        if b'\0' in brut[:8000]:
+            contenu = brut
+        else:
+            contenu = norm(brut)
+            if p.exists() and b'\r\n' in p.read_bytes(): contenu = contenu.replace(b'\n', b'\r\n')
         print('mettre à jour' if p.exists() else 'créer', chemin)
         if appliquer:
             p.parent.mkdir(parents=True, exist_ok=True); p.write_bytes(contenu)
