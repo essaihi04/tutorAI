@@ -245,5 +245,11 @@ Appariement 2020 R : `python3 scripts/logique/svt_ch1_appariement.py` (idempoten
   « نجمعو… ») ; `le_g2_six_carbones` (les 6 carbones du glucose, `compte_carbones`, avant la coupure) ; `le_k4_sorties` (les
   5 sorties d'un tour numérotées à leur cran, « un tour : 5 sorties » écrit une fois). Les moments qui suivaient un compte
   sont décalés dans la page (mêmes noms).
-- **L'énoncé du national d'abord** : en attente du gabarit commun `shared/examen/feuille.html` (feuille d'examen refaite en
-  code) ; la préparation (sujets, questions, points, figures à redessiner) est dans `docs/audit-national/svt.md`, section ch1.
+- **L'énoncé du national d'abord** (professeur règle 46) : une diapositive avant chaque exercice joué montre la feuille
+  d'examen refaite en code (`enonce.html?n=…`, gabarit commun `shared/examen/feuille.js` : en-tête officiel, titre, barème,
+  figures redessinées en SVG), lue par le tuteur (texte de l'examen en français, liaisons en darija), chaque phrase surlignée
+  sur la feuille (`pointage` → repère) : `le_x0_enonce_2024r` (avant `le_x1_restitution`), `le_x1c0_enonce_2022n` (avant
+  `le_x1c_qcm`), `le_x1d0_enonce_2020r` (avant `le_x1d_reactions`), `le_x20_enonce_2016n` (avant `le_x2_qui_respire` ;
+  documents 1 et 2 redessinés), `le_c8a_enonce_2017n` (avant `le_c8_national` ; schéma de la chaîne redessiné). Cinq voix
+  nouvelles dans le `_voix.json`. La feuille lit `/media/examens/svt/<sujet>.json`, produit par
+  `python scripts/examens/copier_sujets.py` (ignoré par git : à lancer au déploiement).

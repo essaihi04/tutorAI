@@ -20,9 +20,12 @@ Pour chaque cours : (a) les exercices du national joués (sujet, année, session
 
 ### (a) Exercices du national joués — préparation de « l'énoncé d'abord » (feuille refaite en code)
 
-Aucune diapositive « énoncé » n'est créée : selon l'addendum du 19/11, l'énoncé sera une feuille d'examen refaite en code avec le
-gabarit commun `shared/examen/feuille.html`, qui n'est pas encore sur main. Les scans `pages/` et `assets/` ci-dessous servent
-seulement de modèle. Les fractions de page ont été mesurées sur le scan (profil des lignes sombres).
+**Fait** : une diapositive « l'énoncé d'abord » avant chaque exercice joué, sur la feuille d'examen refaite en code
+(`reactions_responsables_liberation_energie-tableau/enonce.html?n=2024r|2022n|2020r|2016n|2017n`, gabarit commun
+`shared/examen/feuille.js`) : ids `le_x0_enonce_2024r`, `le_x1c0_enonce_2022n`, `le_x1d0_enonce_2020r`, `le_x20_enonce_2016n`,
+`le_c8a_enonce_2017n` ; le texte de l'examen dans l'ordre du scan, les figures de 2016 N (tableau, barres) et 2017 N (schéma
+de la chaîne) redessinées en SVG ; chaque phrase lue est surlignée (repères `q-…`, `prop-…`, `phen-…`, `reac-…`, `fig-…`).
+Les scans `pages/` et `assets/` ci-dessous ont servi de modèle (fractions mesurées par profil des lignes sombres).
 
 | Sujet | Où dans `exam.json` | Modèle (scan) | Questions et points | Figures à redessiner | Déjà dessiné dans le cours ? | Diapositives (insérer l'énoncé avant) |
 |---|---|---|---|---|---|---|
@@ -68,8 +71,8 @@ seulement de modèle. Les fractions de page ont été mesurées sur le scan (pro
   `compteur.html`, `glycolyse.html`, `krebs.html`. `allume` posé sur les lignes de démonstration de `le_x1_restitution`,
   `le_x1b_protons`, `le_x1c_qcm`, `le_x1d_reactions`, `le_x1e_reactions_c`, `le_x1f_reactions_krebs`, `le_x2_qui_respire`,
   `le_x2b_fatigue`, `le_x3_chaine_en_panne`, `le_x3b_deduire`, `le_x3c_hypothese`, `le_g3_bilan`. Comptes en allumant : r1, g2, k4.
-- **Pistes ajoutées au `_voix.json` : 0** (aucun texte dit n'a changé ; seuls des pointages et des `allume`).
-- **Reste à faire** : l'énoncé d'abord (attend `shared/examen/feuille.html`) ; `allume` des démonstrations de `le_t2_reduit`
+- **Pistes ajoutées au `_voix.json` : 5** (les cinq diapositives d'énoncé ; aucun texte dit existant n'a changé).
+- **Reste à faire** : `allume` des démonstrations de `le_t2_reduit`
   (`taxi.html`), `le_r2_rendement` (`rendement.html`), `le_c10b_vesicules_cas` (`vesicules.html`) ; les comptes de k5, c4, m2, m3a ;
   aligner `le_c8b_construire` sur les 3 structures du sujet 2017 N ; décider du sort de `le_x3*` (vrai 2020 R ou document type).
 <!-- ch1 : fin -->
