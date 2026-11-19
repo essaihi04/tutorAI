@@ -257,3 +257,23 @@ Moments où l’on compte (relevé automatique sur le texte dit et l’écrit �
 | `lc_bl_fiche` | Ce qu'il faut retenir | à faire : comptage à allumer élément par élément (non traité dans cette passe) |
 
 
+
+## Bilan de la passe du 19/11/2026
+
+| cours | énoncés posés | pistes nouvelles (énoncés + voix recomptées) | pistes en attente dans le _voix.json |
+|---|---|---|---|
+| `phys_ch1_waves_exemple` | 7 | 10 | 36 |
+| `phys_ch2_ondes_periodiques` | 3 | 3 | 91 |
+| `phys_ch3_ondes_lumineuses` | 3 | 3 | 78 |
+| `phys_ch4_radioactivite` | 8 | 8 | 115 |
+| `phys_ch5_energie_nucleaire` | 8 | 8 | 85 |
+| `phys_ch6_dipole_RC` | 4 | 4 | 40 |
+| `phys_ch7_dipole_RL` | 7 | 7 | 46 |
+| `phys_ch8_circuit_RLC` | 6 | 6 | 57 |
+
+Fait en plus dans ch1 : divisions comptées en s'allumant (VII.1 b, VII.2 b, VII.7 b, voix réécrites), VII.3 joué sur la figure
+(plus de tableau à part, r₁, r₂, Δr allumés), lignes `allume` sur les démonstrations des 7 questions, commandes `allume`/`eteins`
+dans `ondes-tableau/national.html`.
+
+Reste à faire : les moments de comptage marqués « à faire » ci-dessus (ch1 hors nationaux, ch2 à ch8) et la démonstration allumée
+sur la figure pour les exercices du national de ch2 à ch8 (simulations `national.html`, `figures.html`, `national-pas-a-pas.html`).
