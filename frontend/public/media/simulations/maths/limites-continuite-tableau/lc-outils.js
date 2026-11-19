@@ -23,12 +23,14 @@
   };
   LC.limite = function (c, x, y, sous, suite, o = {}) {
     const t = o.taille || 19, ts = Math.max(11, Math.round(t * 0.62)), coul = o.couleur || 'blanc';
+    // tailles vraiment écrites (plancher du petit tableau) : « x → a » reste SOUS « lim », sans le toucher
+    const te = window.MathsTableau.tailleEcrite(c, t), tse = window.MathsTableau.tailleEcrite(c, ts);
     c.texte('lim', x, y, { couleur: coul, taille: t, duree: o.duree });
-    const wl = c.largeurTexte('lim', t), ws = c.largeurTexte(sous.replace(/[_^{}]/g, ''), ts);
-    c.texte(sous, x + wl / 2, y + t * 0.8, { couleur: coul, taille: ts, align: 'center', duree: .2 });
+    const wl = c.largeurTexte('lim', te), ws = c.largeurTexte(sous.replace(/[_^{}]/g, ''), tse);
+    c.texte(sous, x + wl / 2, y + Math.max(t * 0.8, te * .3 + tse * .95), { couleur: coul, taille: ts, align: 'center', duree: .2 });
     const x2 = x + wl / 2 + Math.max(wl / 2, ws / 2) + 7;
     if (suite) c.texte(suite, x2, y, { couleur: coul, taille: t, max: o.max, duree: o.duree });
-    return x2 + (suite ? c.largeurTexte(suite.replace(/[_^{}]/g, ''), t) : 0);
+    return x2 + (suite ? c.largeurTexte(suite.replace(/[_^{}]/g, ''), te) : 0);
   };
   LC.tabVar = function (c, x, y, w, nom, xs, vals, o = {}) {
     const h1 = o.h1 || 28, h2 = o.h2 || 64, g = o.gauche || 50, coul = o.couleur || 'cyan', tl = o.taille || 15;
@@ -79,7 +81,7 @@
     const L = LC.L(c), large = L >= 1000;
     K.L = L; K.large = large;
     if (!large) return K;
-    K.titre = (s) => { c.texte(s, 20, 34, { couleur: 'cyan', taille: 26, max: L - 40 }); return K; };
+    K.titre = (s) => { if (window.MathsTableau.titreRepete(s)) { c.pause(window.MathsTableau.tempsTitre(s)); return K; } c.texte(s, 20, 34, { couleur: 'cyan', taille: 26, max: L - 40 }); return K; };
     K.lignes = (x, y, liste, inter = 30) => {
       for (const l of liste) {
         const t = Math.round((l.taille || 19) * 1.45);
