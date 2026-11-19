@@ -129,9 +129,9 @@
     ? 'Ministère de l’Éducation nationale, du Préscolaire et des Sports'
     : 'Ministère de l’Éducation nationale, de la Formation professionnelle, de l’Enseignement supérieur et de la Recherche scientifique');
   const nbFr = (v) => (v == null || v === '' ? '' : String(+v === +v ? +v : v).replace('.', ','));
-  const EMBLEME = '<svg class="emb" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="21" r="16" fill="#c1272d" stroke="#b8902f" stroke-width="2.4"/>' +
-    '<path d="M20 10.5l3.1 9.4h-9.9l8-5.8-3.1 9.4L20 10.5z" transform="translate(0 3)" fill="none" stroke="#006233" stroke-width="1.7" stroke-linejoin="round"/>' +
-    '<path d="M13 6l3 3 4-4 4 4 3-3v4H13z" fill="#b8902f"/></svg>';
+  // Pas de blason dessiné (19/11/2026, l'utilisateur : « le drapeau est mal fait ; l'annuler si on ne le met pas comme le
+  // vrai ») : un dessin approximatif des armoiries du Royaume est pire que rien.
+  const EMBLEME = '';
 
   function infos(exam, cfg) {
     const sujet = cfg.sujet || exam.sujet || '';
