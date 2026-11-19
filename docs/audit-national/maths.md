@@ -3,7 +3,7 @@
 Demandes de l'utilisateur du 18/11/2026 : (1) compter ou parcourir en allumant chaque élément tour à tour (termes d'une
 suite, points, carreaux, lignes d'un tableau…), jamais de chiffres griffonnés ; (2) un exercice du national commence par
 la page du sujet telle qu'à l'examen (feuille reproduite en code, en-tête officiel, barème), lue par le tuteur, puis l'explication ;
-papier visibles), lue par le tuteur, puis l'explication ; (3) la démonstration se joue sur la figure (courbe, tableau de
+(3) la démonstration se joue sur la figure (courbe, tableau de
 variations, plan complexe) : chaque ligne allume ce qu'elle utilise (contrat du lecteur, skill `simulations-au-tableau`
 règle 17), seulement les données de l'exercice.
 
