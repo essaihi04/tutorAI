@@ -140,6 +140,63 @@ Moments où l’on compte ou parcourt un à un (mots de la voix) :
 - `ab_z1_puissance` Rappel : les puissances de dix et le log — compte 
 - `ab_w2a_mesures` Mesurer [H₃O⁺] et [HO⁻] dans trois solutions — colonne, deuxième ligne, première ligne
 
-## Ce qui a été fait
+## Ce qui a été fait (19/11/2026)
 
-(à compléter cours par cours)
+Dans chaque cours : une diapositive d'énoncé avant chaque exercice du national (visuel
+`/media/simulations/shared/examen/feuille.html?sujet=physique/<année>-<session>&exercice=1`, la chimie est toujours
+l'exercice 1 de `exam.json` ; `demarrer: reset`, pointage réduit à `start` tant que le gabarit n'existe pas ; voix :
+liaison en darija, énoncé lu en français tel qu'à l'examen, « دابا نفهمو السؤال خطوة بخطوة »), la démonstration
+allumée sur la figure (un moment et un repère par étape, valeurs écrites sur la figure, texte d'avant effacé), le
+champ `repere` sur les cartes `concentration.centre[]` de démonstration, et les comptages allumés. Les deux copies
+(en ligne, `en_attente/`) sont identiques. Tests `-k "course or cours or concentration"` : 88 passent, 1 échec hors
+chimie (SVT ch1, déjà là avant).
+
+| Cours | Commits | Énoncés ajoutés | Pistes `_voix.json` |
+|---|---|---|---|
+| ch9 | 6ca4979f | `tl_n1_enonce` (2025 N), `tl_n2_enonce` (2017 R) | 2 nouvelles |
+| ch10 | 94a1e4ed, ae6069cc | `ci_p4_enonce` (2016 R), `ci_p6_enonce` (2024 N), `ci_n1_enonce` (2019 R), `ci_n2_enonce` (2025 R), `ci_n3_enonce` (2017 N), `ci_n4_enonce` (2023 N), `ci_n5_enonce` (2025 N), `ci_n7_enonce` (2018 R), `ci_n8_enonce` (2017 R), `ci_n6_enonce` (2021 N) | 10 nouvelles |
+| ch11 | 18b5aed7 | `td_e6_enonce` (2017 N), `td_n1_enonce` (2021 R), `td_n2_enonce` (2019 N), `td_n3_enonce` (2023 N), `td_n4_enonce` (2024 R) | 5 nouvelles + 1 réécrite (`td_z3_puissance`) |
+| ch12 | 1fc62e99 | `ee_n4_enonce` (2017 N partie I), `ee_n1_enonce` (2017 N partie II), `ee_n3_enonce` (2020 R), `ee_n6_enonce` (2021 N), `ee_n2_enonce` (2022 R), `ee_x_enonce` (2019 N), `ee_n5_enonce` (2017 R) | 7 nouvelles + 2 réécrites (`ee_z2_puissance`, `ee_n3_melange`) |
+| ch13 | e2638657 | `ab_b3_enonce` et `ab_n2_enonce` (2022 R, deux sous-parties loin l'une de l'autre), `ab_k4_enonce` (2020 R), `ab_p4_enonce` (2025 R), `ab_n1_enonce` (2016 N), `ab_n3_enonce` (2022 N), `ab_n4_enonce` (2024 R), `ab_n5_enonce` (2023 R), `ab_x0_enonce` (2018 N) | 9 nouvelles + 2 réécrites (`ab_z1_puissance`, `ab_w2a_mesures`) |
+
+Total : 33 énoncés, 38 pistes à mettre en voix (33 nouvelles, 5 réécrites dont l'ancien `audio` est retiré).
+
+### Comptages allumés
+- ch9 : `tl_rp2_conservation` (atomes et charges), `tl_x10_verifier` (H, O, I, charges terme par terme), `tl_rp3_mole` (12 œufs), `tl_f1_facteur` (lignes 1-2), `tl_np4_encours` / `tl_np5_limitant` (cases du tableau, sans numéro : il se confondrait avec les valeurs).
+- ch10 : `ci_n6a_tableau` (3 lignes), `ci_z1_mole` (12 œufs), `ci_a1_tableau` / `ci_a1b_en_cours` (3 lignes), `ci_m1_mesures` (10 mesures), `ci_g3_formule` (2 termes de σ), `ci_r1_litres` (4 lignes du barème).
+- ch11 : `td_z3_puissance` (3 zéros), `td_c2_relation` (2 ions), `td_a1_tableau`, `td_d2_taux` (3 lignes), `td_n4b_calcul` (7 lignes du calcul, vue `avancement.html?vue=calcul_dosage`).
+- ch12 : `ee_z2_puissance`, `ee_k1_trois`, `ee_m3_calcul` (5 lignes), `ee_f4_bilan` (4 lignes), `ee_x2_tableau`, `ee_r1_taux` (ligne « en cours » ajoutée : la voix disait trois lignes), `ee_n3_melange` (4 flacons).
+- ch13 : `ab_z1_puissance` (3 zéros), `ab_w2a_mesures` (3 lignes, puis 3 produits Ke).
+
+### Figures à redessiner sur la feuille d'examen (valeurs lues sur les scans)
+- 2016 R : σ(t) en mS·m⁻¹ (0 à 250), t 0 à 65 min, tangente à l'origine (0 ; 250) → (18 ; 100), σ final ≈ 90.
+- 2016 N : pH(V_B), V_B 0 à 12 mL, pH 3 à 12, tangentes, E (6 mL ; 8,7) ; tableau des indicateurs (hélianthine 3–4,4, BBT 6–7,6, bleu de thymol 8–9,6).
+- 2017 N : courbes x(t) (1) et (2), x 0 à 0,3 mol, t 20 / 40 min, paliers 0,2 et 0,3 mol.
+- 2017 R : n(acide)(t), 0,2 / 0,4 mol, t 0 à 160 h, départ 0,6, palier 0,2 ; montage de dosage (burette, bécher, agitateur, pH-mètre 4.74).
+- 2018 R : G(t) en mS (5 à 25), t 15 / 30 min, G final ≈ 9 mS ; trois montages (a), (b), (c).
+- 2018 N : pH(V_B), 0 à 16 mL, pH 2 à 12, E (10 mL ; ≈ 8) ; tableau des indicateurs.
+- 2019 R : x(t) en mmol (palier 2,8), t 100 / 200 s, tangente en 100 s par (0 ; 0,75) et (75 ; 1,5).
+- 2019 N : pas de figure jouée (données λ₁, λ₂, C, σ) ; le schéma d'électrolyse de la partie 1 n'est pas joué.
+- 2020 R : pas de figure (4 solutions, 100 mL, 0,1 mol/L, pK_A 4,8 et 3,8).
+- 2021 N : σ(t) en S·m⁻¹ (0,05 à 0,25), t 4 à 20 min, tangente en 4 min par (0 ; 0,22) et (4 ; 0,17) ; partie 2 : pH(V_b) 0 à 25 mL, E ≈ (20 ; 8,5).
+- 2021 R : figure 3 τ(pH) en S, pH 0 à 7 ; tableau S₁/S₂ (pH 2,8 et 3,6).
+- 2022 R : pH(V_a) 0 à 24 mL, pH 11,3 → 2,6, E (15 ; 6,6) ; tableau des indicateurs.
+- 2022 N : pH et dpH/dV_b (0 à 30 mL), pic à 20 mL.
+- 2023 N : n_a(t) (départ 0,9, palier 0,3 mol ; 5 / 10 h), courbes C₁ et C₂.
+- 2023 R : pas de courbe dans le sujet (points Q (10 ; 9,9), E (20 ; 5,8)) ; tableau des indicateurs.
+- 2024 N : x(t) en mmol (palier 0,5), t 40 / 80 h, tangente en 60 h par (0 ; 0,25).
+- 2024 R : distribution forme acide / basique, croisement à pH 10,8.
+- 2025 N : courbes (a), (b), (c), x gradué 26,6 / 53,2 mmol, t 30 / 60 min, palier ≈ 133.
+- 2025 R : x(t) (0,10 / 0,20 mmol, t 1 à 8 min), tangente en 3 min ; partie 1 : distribution, croisement à pH 4,8.
+
+### Ce qui reste
+- Le gabarit `shared/examen/feuille.html` (session « feuille-examen ») n'est pas encore sur main : les 33 énoncés
+  n'affichent rien ; leur pointage (moments, repères des données) est à brancher quand il arrivera.
+- ch9 `tl_n2_glacee` annonce une « question 2.2 : deux facteurs cinétiques » qui n'existe pas dans le sujet
+  2017 R : texte dit, QCM et puces à corriger, puis la voix.
+- ch9 : l'exercice pas à pas H₂O₂ / iodure (`tl_np*`) n'est pas un vrai sujet : pas d'énoncé de feuille.
+- Écritures petites déjà présentes et non reprises : ~10 px à 724×350 (`avancement.html`, `suivi.html`,
+  `national.html` 2021 N Q4 de ch10), ~12-14 px à 850×400 (`exploiter.html` 2023 R, `eau.html` de ch13).
+- Le tube à essai de `transformations-lentes-rapides-tableau/facteurs.html` est à verser au lexique partagé (règle 15).
+- Le lecteur complet (`cours-ondes.html`) n'a pas été ouvert ; les simulations ont été vérifiées directement à
+  850×400 et 560×260 (le cadre du lecteur à 1366×560 et 724×350).
