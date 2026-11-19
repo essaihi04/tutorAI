@@ -53,15 +53,20 @@ const craie = scene.craie;
  * sa place, mais sur un tableau large (L ≥ 1000) ses textes grossissent (G) ; les largeurs `max` les gardent dans leur
  * colonne. */
 let G = 1;
+const BOITES = { energie: [14, 40, 750, 398], puissances: [24, 52, 746, 390], charges: [20, 64, 746, 330] };
 scene.cadre = function (graine) {             // l'écriture suit l'horloge de la figure (S.tw) : le tuteur la fige sur une étape
   const W = craie.W, H = craie.H, VW = 760, VH = 420;
   const L = Math.round(Math.min(VW * 2.1, Math.max(VW, VH * W / Math.max(1, H))));
   G = L >= 1000 ? 1.25 : 1;
   craie.debut(graine, S.tw);
-  const s = Math.min(W / VW, H / VH);
-  scene.s = s; scene.ox = (W - VW * s) / 2; scene.oy = (H - VH * s) / 2;
+  // 18 novembre 2026 (« la simulation remplit son cadre ») : plus de titre interne (il répétait le titre de la diapositive) ;
+  // le cadre se cale sur la boîte du dessin de la vue (BOITES, tout état compris : pomme à 3 m, curseur de n), pas sur
+  // 760 × 420 entier ; agrandissement borné à 1,7 × le cadre entier.
+  const [x0, y0, x1, y1] = BOITES[vue], bw = x1 - x0, bh = y1 - y0;
+  const s = Math.min(W / bw, H / bh, 1.7 * Math.min(W / VW, H / VH));
+  scene.s = s; scene.ox = (W - bw * s) / 2 - x0 * s; scene.oy = (H - bh * s) / 2 - y0 * s;
   craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
-  craie.echelle = s; craie.tailleMin = 15; craie.cadre = { w: VW, h: VH, haut: 0 };
+  craie.echelle = s; craie.tailleMin = 15; craie.cadre = null;
   return craie;
 };
 const marque = (c, nom) => { MM[nom] = c.cur; };
@@ -144,7 +149,6 @@ function pendule(ctx, xa, ya, L, angle, signe) {                 // fil de soie 
 // ───────── Les trois vues ─────────
 const DESSINS = {
   energie(c) {
-    c.texte('L’énergie : ce qui permet d’agir', 30, 30, { couleur: 'cyan', taille: 20 * G });
     c.repere('figure', 20, 44, 720, 360, 'l’énergie, ses formes et le joule');
     debutEtape(c, 'pile');
     peindre(c, ctx => pile(ctx, 40, 150));
@@ -169,7 +173,7 @@ const DESSINS = {
     // La pomme levée d'un mètre (règle verticale à droite) ; la main la soulève.
     const XR = 560, Y0 = 330, PXM = 70;           // sol de la pomme ; px par mètre (3 m tiennent sous les légendes)
     debutEtape(c, 'pomme');
-    c.ligne(470, Y0 + 22, 740, Y0 + 22, { couleur: 'faible', largeur: 2 });
+    c.ligne(470, Y0 + 22, XR + 70, Y0 + 22, { couleur: 'faible', largeur: 2 });   // le sol s’arrête à la règle : « 0 m » ne se pose plus sur lui
     c.ligne(XR + 70, Y0 + 20, XR + 70, Y0 - 3 * PXM - 4, { couleur: 'faible', largeur: 1.6 });
     for (let k = 0; k <= 3; k++) c.texte(k + ' m', XR + 78, Y0 + 24 - k * PXM, { couleur: 'faible', taille: 13 * G, duree: .05 });
     c.direct(() => {
@@ -194,7 +198,6 @@ const DESSINS = {
   },
 
   puissances(c) {
-    c.texte('Les puissances de dix', 30, 30, { couleur: 'cyan', taille: 20 * G });
     c.repere('figure', 20, 44, 720, 360, 'les puissances de dix et la notation scientifique');
     const L = [['10', '10¹'], ['100', '10²'], ['1 000', '10³']];
     L.forEach(([a, b], i) => { c.texte(a + ' = ' + b, 40, 80 + 32 * i, { couleur: 'blanc', taille: 20 * G }); });
@@ -255,7 +258,6 @@ const DESSINS = {
   },
 
   charges(c) {
-    c.texte('Deux charges : attirer ou repousser', 30, 30, { couleur: 'cyan', taille: 20 * G });
     c.repere('figure', 20, 44, 720, 360, 'des charges électriques qui s’attirent ou se repoussent');
     const YA = 80, LF = 120;
     peindre(c, ctx => potence(ctx, 60, 370, YA));

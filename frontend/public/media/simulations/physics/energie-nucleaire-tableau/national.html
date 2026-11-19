@@ -89,16 +89,19 @@ function eclair(ctx, x, y, k) {
 /* ── Morceaux de craie (comme figures.html) : un noyau ᴬ_ZX s’écrit A en haut, Z en bas, à gauche du symbole ── */
 const SUPC = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
 function largeur(c, s, t) {
+  t = Math.max(t, c.echelle && c.tailleMin ? c.tailleMin / c.echelle : 0);   // la taille vraiment écrite (plancher du kit)
   s = String(s).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUPC[ch]).join('') + '}');
   return window.Tableau.Craie.segments(s).reduce((w, seg) => w + c.largeurTexte(seg.t, seg.sub || seg.sup ? t * .62 : t), 0);
 }
 function noyauTexte(c, A, Z, X, x, y, o = {}) {
-  const t = o.taille ?? 18, tn = t * .6, wN = Math.max(c.largeurTexte(String(A), tn), c.largeurTexte(String(Z), tn));
+  // tailles vraiment écrites (18 novembre 2026) : le symbole jamais sous le plancher du kit, A et Z comme des indices
+  // (62 % du plancher au moins, sans plancher plein) ; mesure = écriture, « noyau ⁴₂He » ne se chevauche plus
+  const pl = (c.echelle && c.tailleMin ? c.tailleMin / c.echelle : 0), t = Math.max(o.taille ?? 18, pl), tn = Math.max(t * .6, pl * .62), wN = Math.max(c.largeurTexte(String(A), tn), c.largeurTexte(String(Z), tn));
   const w = wN + 1 + c.largeurTexte(X, t);
   if (o.mesure) return w;
   const d = s => Math.max(.06, String(s).length / 16);
-  c.texte(String(A), x + wN, y - .45 * t, { couleur: o.couleur, taille: tn, align: 'right', duree: d(A) });
-  c.texte(String(Z), x + wN, y + .3 * t, { couleur: o.couleur, taille: tn, align: 'right', duree: d(Z) });
+  c.texte(String(A), x + wN, y - .45 * t, { couleur: o.couleur, taille: tn, plancher: false, align: 'right', duree: d(A) });
+  c.texte(String(Z), x + wN, y + .3 * t, { couleur: o.couleur, taille: tn, plancher: false, align: 'right', duree: d(Z) });
   c.texte(X, x + wN + 1, y, { couleur: o.couleur, taille: t, duree: d(X) });
   return w;
 }

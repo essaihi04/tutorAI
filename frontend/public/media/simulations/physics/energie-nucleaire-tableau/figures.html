@@ -36,7 +36,7 @@ const FIGS = {
   fig_composition: { titre: 'La composition d’un noyau', etapes: ['noyau', 'protons', 'neutrons', 'exemples', 'fin'] },
   fig_defaut: { titre: 'Le défaut de masse Δm', etapes: ['formule', 'signe', 'calcul', 'kg', 'fin'] },
   fig_liaison: { titre: 'L’énergie de liaison E_ℓ', etapes: ['formule', 'calcul', 'par_nucleon', 'joule', 'fin'] },
-  fig_stabilite: { titre: 'Le plus stable : ⁶⁰Ni ou ⁵⁶Ni (national 2017 R)', etapes: ['trace', 'calcul', 'compare', 'conclusion', 'piege', 'fin'] },
+  fig_stabilite: { titre: 'Le plus stable : ⁶⁰Ni ou ⁵⁶Ni (national 2017 R)', titre_interne: true, etapes: ['trace', 'calcul', 'compare', 'conclusion', 'piege', 'fin'] },
   fig_spontanee_provoquee: { titre: 'Réaction spontanée, réaction provoquée', etapes: ['trace', 'spontanee', 'provoquee', 'soddy', 'fin'] },
   fig_soddy: { titre: 'Trouver x neutrons : les lois de Soddy', etapes: ['equation', 'A', 'Z', 'fin'] },
   fig_methode_masses: { titre: 'Énergie libérée à partir des masses', etapes: ['equation', 'delta_m', 'delta_E', 'E_lib', 'fin'] },
@@ -61,17 +61,19 @@ const craie = scene.craie;
  * Tableau large (15 novembre 2026, « la figure n’occupe qu’une bande étroite au centre, textes minuscules ») : le cadre
  * prend le format du tableau (L de 760 à 1596, hauteur 420, comme Scene({ large: true })) et, si L ≥ 1000, chaque étape
  * de la figure est replacée et agrandie (BLOC, plus bas). */
-const L_MAX = 2.1;
+const L_MAX = 2.1, HAUT = 34;
 scene.cadre = function (graine) {
   const W = craie.W, H = craie.H, VW = 760, VH = 420;
   const L = Math.round(Math.min(VW * L_MAX, Math.max(VW, VH * W / Math.max(1, H))));
   scene.L = L;
   craie.debut(graine, S.tw);
   const large = L >= 1000, LL = large ? L : VW;
-  const s = Math.min(W / LL, H / VH);
-  scene.s = s; scene.ox = (W - LL * s) / 2; scene.oy = (H - VH * s) / 2;
+  // Sans titre interne (18 novembre 2026), la bande du haut (y < HAUT) reste vide : hors tableau large, le cadre la saute.
+  const Y0 = large || FIGS[fig].titre_interne ? 0 : HAUT;
+  const s = Math.min(W / LL, H / (VH - Y0));
+  scene.s = s; scene.ox = (W - LL * s) / 2; scene.oy = (H - (VH - Y0) * s) / 2 - Y0 * s;
   craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
-  craie.echelle = s; craie.tailleMin = 15; craie.cadre = large ? null : { w: VW, h: VH, haut: 0 };
+  craie.echelle = s; craie.tailleMin = 15; craie.cadre = large ? null : { w: VW, h: VH, haut: Y0 };
   return craie;
 };
 let MM = {};
@@ -163,18 +165,21 @@ function largeur(c, s, t) {
     return String(s).split(/(⟦[^⟧]*⟧)/).filter(Boolean).reduce((w, p) => w + (p[0] !== '⟦' ? largeur(c, p, t)
       : Math.max(...p.slice(1, -1).split('|').map(e => largeur(c, e, Math.max(te * .78, mn)))) + te * .36), 0);
   }
+  t = Math.max(t, c.echelle && c.tailleMin ? c.tailleMin / c.echelle : 0);   // la taille vraiment écrite (plancher du kit)
   s = String(s).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => SUPC[ch]).join('') + '}');
   return window.Tableau.Craie.segments(s).reduce((w, seg) => w + c.largeurTexte(seg.t, seg.sub || seg.sup ? t * .62 : t), 0);
 }
 /** Écrit un noyau ᴬ_ZX : A en haut à gauche, Z en bas à gauche, alignés à droite contre le symbole. Renvoie la largeur. */
 function noyauTexte(c, A, Z, X, x, y, o = {}) {
-  const t = o.taille ?? 18, tn = t * .6, wN = Math.max(c.largeurTexte(String(A), tn), c.largeurTexte(String(Z), tn));
+  // tailles vraiment écrites (18 novembre 2026) : le symbole jamais sous le plancher du kit, A et Z comme des indices
+  // (62 % du plancher au moins, sans plancher plein) ; mesure = écriture, « noyau ⁴₂He » ne se chevauche plus
+  const pl = (c.echelle && c.tailleMin ? c.tailleMin / c.echelle : 0), t = Math.max(o.taille ?? 18, pl), tn = Math.max(t * .6, pl * .62), wN = Math.max(c.largeurTexte(String(A), tn), c.largeurTexte(String(Z), tn));
   const w = wN + 1 + c.largeurTexte(X, t);
   const x0 = o.align === 'center' ? x - w / 2 : o.align === 'right' ? x - w : x;
   if (o.mesure) return w;
   const d = s => Math.max(.06, String(s).length / 16);
-  c.texte(String(A), x0 + wN, y - .45 * t, { couleur: o.couleur, taille: tn, align: 'right', duree: d(A) });
-  c.texte(String(Z), x0 + wN, y + .3 * t, { couleur: o.couleur, taille: tn, align: 'right', duree: d(Z) });
+  c.texte(String(A), x0 + wN, y - .45 * t, { couleur: o.couleur, taille: tn, plancher: false, align: 'right', duree: d(A) });
+  c.texte(String(Z), x0 + wN, y + .3 * t, { couleur: o.couleur, taille: tn, plancher: false, align: 'right', duree: d(Z) });
   c.texte(X, x0 + wN + 1, y, { couleur: o.couleur, taille: t, duree: d(X) });
   return w;
 }
@@ -217,7 +222,6 @@ function cherche(c, x, y, lignes, w) {
 // ───────────────────────── Les figures ─────────────────────────
 const DESSINS = {
   fig_soleil(c) {
-    c.texte('Le Soleil et son énergie', 40, 30, { couleur: 'cyan', taille: 20 });
     c.repere('figure', 20, 44, 720, 360, 'le Soleil qui rayonne et la question : d’où vient cette énergie ?');
     const xs = 190, ys = 214, r = 60;
     peindre(c, ctx => soleil(ctx, xs, ys, r));
@@ -240,7 +244,6 @@ const DESSINS = {
   },
 
   fig_einstein(c) {
-    c.texte('La relation d’Einstein', 40, 30, { couleur: 'cyan', taille: 20 });
     c.repere('figure', 20, 44, 720, 340, 'la relation E = m·c², ses unités, un exemple et son sens');
     c.texte('E = m·c²', 380, 118, { couleur: 'jaune', align: 'center', taille: 56 });
     c.rect(256, 64, 248, 74, { couleur: 'jaune', arrondi: 10 });
@@ -266,7 +269,6 @@ const DESSINS = {
   },
 
   fig_unites(c) {
-    c.texte('L’escalier des unités', 40, 30, { couleur: 'cyan', taille: 20 });
     c.repere('figure', 20, 44, 720, 340, 'l’escalier des unités : u, eV, MeV, MeV/c²');
     const L = [['u', '1 u = 1,66·10⁻²⁷ kg : un douzième de la masse d’un atome de carbone 12', 'blanc'],
       ['eV', '1 eV = 1,6·10⁻¹⁹ J', 'blanc'], ['MeV', '1 MeV = 10⁶ eV = 1,6·10⁻¹³ J', 'blanc'],
@@ -286,7 +288,6 @@ const DESSINS = {
   },
 
   fig_931(c) {
-    c.texte('Démonstration : 1 u = 931,5 MeV/c²', 40, 30, { couleur: 'cyan', taille: 20 });
     c.repere('figure', 20, 44, 720, 340, 'la démonstration de 1 u = 931,5 MeV/c²');
     c.texte('E = m·c² avec m = 1 u = 1,66054·10⁻²⁷ kg', 50, 104, { couleur: 'blanc', taille: 24, max: 660 });
     c.repere('E', 40, 76, 680, 38, 'E = m·c² avec m = 1 u = 1,66054·10⁻²⁷ kg');
@@ -310,7 +311,6 @@ const DESSINS = {
   },
 
   fig_composition(c) {
-    c.texte('La composition d’un noyau', 40, 30, { couleur: 'cyan', taille: 20 });
     c.repere('figure', 20, 44, 720, 366, 'le noyau ᴬ_ZX : Z protons, N = A − Z neutrons, A nucléons ; exemples ⁴₂He et ²³⁵₉₂U');
     const t = 84, x0 = 120, y0 = 172, w = noyauTexte(c, 'A', 'Z', 'X', x0, y0, { taille: t, couleur: 'jaune', mesure: true });
     noyauTexte(c, 'A', 'Z', 'X', x0, y0, { taille: t, couleur: 'jaune' });
@@ -346,7 +346,6 @@ const DESSINS = {
   },
 
   fig_defaut(c) {
-    c.texte('Le défaut de masse', 40, 30, { couleur: 'cyan', taille: 20 });
     c.repere('figure', 20, 44, 720, 340, 'le défaut de masse : formule, signe, calcul pour ⁴₂He, conversion en kg');
     ligne(c, ['Δm = Z·m_p + (A − Z)·m_n − m(', N('A', 'Z', 'X'), ')'], 380, 104, { taille: 28, couleur: 'jaune', align: 'center' });
     c.rect(150, 66, 460, 56, { couleur: 'jaune', arrondi: 10 });
@@ -370,7 +369,6 @@ const DESSINS = {
   },
 
   fig_liaison(c) {
-    c.texte('L’énergie de liaison', 40, 30, { couleur: 'cyan', taille: 20 });
     c.repere('figure', 20, 44, 720, 340, 'l’énergie de liaison de ⁴₂He : formule, calcul, par nucléon, en joule');
     c.texte('E_{ℓ} = Δm·c²', 380, 110, { couleur: 'jaune', align: 'center', taille: 40 });
     c.rect(270, 68, 220, 60, { couleur: 'jaune', arrondi: 10 });
@@ -431,7 +429,6 @@ const DESSINS = {
   },
 
   fig_spontanee_provoquee(c) {
-    c.texte('Deux sortes de réactions nucléaires', 40, 28, { couleur: 'cyan', taille: 20 });
     c.repere('figure', 16, 40, 728, 364, 'le tableau réaction spontanée | réaction provoquée, et les lois de Soddy');
     const X0 = 20, XM = 380, X1 = 740, Y0 = 44, YH = 92, YB = 300;
     c.rect(X0, Y0, X1 - X0, YB - Y0, { couleur: 'faible', arrondi: 6 });
@@ -467,7 +464,6 @@ const DESSINS = {
   },
 
   fig_soddy(c) {
-    c.texte('Trouver x neutrons : les lois de Soddy', 40, 30, { couleur: 'cyan', taille: 20 });
     c.repere('figure', 20, 44, 720, 340, 'l’équation de fission avec x neutrons, conservation de A puis de Z');
     ligne(c, [N(235, 92, 'U'), ' + ', NEUTRON, ' → ', N(94, 38, 'Sr'), ' + ', N(140, 54, 'Xe'), ' + x ', NEUTRON], 380, 116, { taille: 34, align: 'center', couleur: 'blanc', max: 690 });
     c.repere('equation', 40, 66, 680, 72, '²³⁵₉₂U + ¹₀n → ⁹⁴₃₈Sr + ¹⁴⁰₅₄Xe + x ¹₀n');
@@ -486,7 +482,6 @@ const DESSINS = {
   },
 
   fig_methode_masses(c) {
-    c.texte('Énergie libérée : la méthode des masses', 40, 30, { couleur: 'cyan', taille: 20 });
     c.texte('exemple : la fusion', 724, 30, { couleur: 'faible', align: 'right', taille: 15 });   // avant le repère : reste à côté du titre
     c.repere('figure', 20, 44, 720, 360, 'la méthode des masses en quatre lignes, avec l’exemple de la fusion ²₁H + ³₁H');
     const Y = [78, 166, 254, 342];
@@ -513,7 +508,6 @@ const DESSINS = {
   },
 
   fig_methode_liaison(c) {
-    c.texte('Énergie libérée : la méthode des énergies de liaison', 40, 30, { couleur: 'cyan', taille: 20, max: 690 });
     c.repere('figure', 20, 44, 720, 360, 'la méthode des énergies de liaison et l’exemple du national 2023 N');
     c.texte('ΔE = Σ E_{ℓ}(réactifs) − Σ E_{ℓ}(produits)', 380, 104, { couleur: 'jaune', align: 'center', taille: 28, max: 640 });
     c.rect(80, 66, 600, 56, { couleur: 'jaune', arrondi: 10 });
@@ -537,7 +531,6 @@ const DESSINS = {
   },
 
   fig_echantillon(c) {
-    c.texte('L’énergie libérée par un échantillon d’uranium 235', 40, 30, { couleur: 'cyan', taille: 20, max: 690 });
     c.repere('figure', 20, 44, 720, 360, 'd’un noyau à 1 g d’uranium 235 : nombre de noyaux, énergie totale, en joule, en pétrole');
     peindre(c, ctx => amas(ctx, 680, 96, 235, 92, 2.6));
     c.texte('fission d’un noyau d’²³⁵U : E_lib ≈ 185 MeV', 40, 84, { couleur: 'blanc', taille: 23, max: 580 });
@@ -566,7 +559,6 @@ const DESSINS = {
   },
 
   fig_comparaison(c) {
-    c.texte('Fission ou fusion : laquelle libère le plus ?', 40, 28, { couleur: 'cyan', taille: 20 });
     c.repere('figure', 16, 40, 728, 366, 'le tableau fission de l’²³⁵U | fusion ²H + ³H, par réaction et par nucléon');
     const X = [20, 230, 485, 740], Y = [44, 92, 154, 216], cx = i => (X[i] + X[i + 1]) / 2;
     grille(c, X, Y);
@@ -603,7 +595,6 @@ const DESSINS = {
   },
 
   fig_cas_types(c) {
-    c.texte('Le mot de la question → la méthode', 40, 28, { couleur: 'cyan', taille: 20 });
     c.repere('figure', 16, 40, 728, 362, 'le tableau des cas types');
     const X0 = 20, XM = 316, X1 = 740, Y0 = 40, H0 = 36, RH = 46, NL = 7, Yr = i => Y0 + H0 + RH * i;
     c.rect(X0, Y0, X1 - X0, H0 + RH * NL, { couleur: 'faible', arrondi: 6 });
@@ -781,9 +772,11 @@ const BLOC = {
   /** Range les blocs sur la largeur L. */
   planifier(L) {
     const B = BLOC.boites, CAP = 1.75, GAP = 14, GCOL = 36;
-    const titre = B[0] || { x0: 40, y0: 12, x1: 400, y1: 36 };
-    const kt = Math.min(1.3, (L - 40) / Math.max(1, titre.x1 - titre.x0));
-    const top = 8 + (titre.y1 - titre.y0) * kt + 12, bas = 410, gauche = 16, WA = L - 32, HA = bas - top;
+    // 18 novembre 2026 : les figures n’écrivent plus de titre interne (il répétait le titre de la diapositive) ; sans
+    // titre, les blocs prennent toute la hauteur.
+    const aTitre = !!(B[0] && B[0].x1 > B[0].x0), titre = aTitre ? B[0] : { x0: 0, y0: 0, x1: 1, y1: 1 };
+    const kt = aTitre ? Math.min(1.3, (L - 40) / Math.max(1, titre.x1 - titre.x0)) : 1;
+    const top = aTitre ? 8 + (titre.y1 - titre.y0) * kt + 12 : 8, bas = 412, gauche = 16, WA = L - 32, HA = bas - top;
     let g = [];
     for (let i = 1; i < B.length; i++) if (B[i] && B[i].x1 > B[i].x0) g.push({ i0: i, i1: i, ...B[i] });
     const inter = (a, b) => Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0) > 4 && Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0) > 4;

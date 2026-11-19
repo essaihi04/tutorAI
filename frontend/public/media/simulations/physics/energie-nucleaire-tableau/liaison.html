@@ -87,13 +87,15 @@ const AXE = 512, YB = 300, YT = 100;
 let XF = 562, LVX = 604, G = 1, LT = 760, DEF = null;
 function disposer(L) {
   LT = L;
-  if (L < 1000) { VE.w = 272; XF = 562; LVX = 604; G = 1; DEF = null; return; }
+  // 18 novembre 2026 : la définition à droite demande 300 de large (L ≥ 1274) ; plus étroit (téléphone en paysage, L ≈ 1100),
+  // elle s’écrasait à 5 px : on garde alors la disposition d’origine, définition en bande sous le noyau.
+  if (L < 1274) { VE.w = 272; XF = 562; LVX = 604; G = 1; DEF = null; return; }
   VE.w = L - 488; G = 1.35; LVX = 770; XF = 610;
   const x = 960; DEF = { x, y: 90, w: L - 14 - x, h: 230 };
 }
 function cadreLarge(graine) {
   scene.cadre(graine);
-  if (scene.L < 1000 && scene.L > 760) { const d = (scene.L - 760) / 2; scene.craie.ctx.translate(d, 0); scene.ox += d * scene.s; }
+  if (scene.L < 1274 && scene.L > 760) { const d = (scene.L - 760) / 2; scene.craie.ctx.translate(d, 0); scene.ox += d * scene.s; }
   if (scene.L !== LT) disposer(scene.L);
 }
 function positionsLiees(A) {
@@ -183,19 +185,22 @@ function ecrit(c, nom, fn) {
 const T = (c, s, x, y, o = {}) => c.texte(s, x, y, { duree: Math.max(.12, String(s).length / VIT), ...o });
 /** Écrit un noyau ᴬ_ZX : A en haut à gauche, Z en bas à gauche, alignés à droite contre le symbole. Renvoie la largeur. */
 function noyauTexte(c, A, Z, X, x, y, o = {}) {
-  const t = o.taille ?? 18, tn = t * .6, wN = Math.max(c.largeurTexte(String(A), tn), c.largeurTexte(String(Z), tn));
+  // tailles vraiment écrites (18 novembre 2026) : le symbole jamais sous le plancher du kit, A et Z comme des indices
+  // (62 % du plancher au moins, sans plancher plein) ; mesure = écriture, « noyau ⁴₂He » ne se chevauche plus
+  const pl = (c.echelle && c.tailleMin ? c.tailleMin / c.echelle : 0), t = Math.max(o.taille ?? 18, pl), tn = Math.max(t * .6, pl * .62), wN = Math.max(c.largeurTexte(String(A), tn), c.largeurTexte(String(Z), tn));
   const w = wN + 1 + c.largeurTexte(X, t);
   const x0 = o.align === 'center' ? x - w / 2 : o.align === 'right' ? x - w : x;
   if (o.mesure) return w;
   const d = s => Math.max(.06, String(s).length / VIT);
-  c.texte(String(A), x0 + wN, y - .45 * t, { couleur: o.couleur, taille: tn, align: 'right', duree: d(A) });
-  c.texte(String(Z), x0 + wN, y + .3 * t, { couleur: o.couleur, taille: tn, align: 'right', duree: d(Z) });
+  c.texte(String(A), x0 + wN, y - .45 * t, { couleur: o.couleur, taille: tn, plancher: false, align: 'right', duree: d(A) });
+  c.texte(String(Z), x0 + wN, y + .3 * t, { couleur: o.couleur, taille: tn, plancher: false, align: 'right', duree: d(Z) });
   c.texte(X, x0 + wN + 1, y, { couleur: o.couleur, taille: t, duree: d(X) });
   return w;
 }
 function ligne(c, parts, x, y, o = {}) {
   const taille = o.taille ?? 16;
-  const larg = p => (typeof p === 'string' ? c.largeurTexte(p.replace(/[_{}]/g, ''), taille) : noyauTexte(c, p.A, p.Z, p.X, 0, 0, { taille, mesure: true }));
+  const te = Math.max(taille, (c.echelle && c.tailleMin ? c.tailleMin / c.echelle : 0));   // taille vraiment écrite (plancher du kit)
+  const larg = p => (typeof p === 'string' ? c.largeurTexte(p.replace(/[_{}]/g, ''), te) : noyauTexte(c, p.A, p.Z, p.X, 0, 0, { taille, mesure: true }));
   const tot = parts.reduce((s, p) => s + larg(p), 0);
   let px = o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x;
   for (const p of parts) {
@@ -212,10 +217,14 @@ function dessinerNoyau(c) {
   c.texte('Le noyau', 14, 24, { couleur: 'cyan', taille: 17 * G });
   c.rect(VN.x, VN.y, VN.w, VN.h, { couleur: 'tresfaible', arrondi: 8, duree: .5 });
   c.repere('vue_noyau', VN.x, VN.y, VN.w, VN.h, 'le noyau');
-  c.direct(() => { const ctx = c.ctx; sphere(ctx, 22, 48, 6, 'p'); sphere(ctx, 84, 48, 6, 'n'); });
-  c.texte('proton', 32, 53, { couleur: 'faible', taille: 13 * G });
-  c.texte('neutron', 94, 53, { couleur: 'faible', taille: 13 * G });
-  c.texte('(touche le noyau : noyau suivant)', VN.x + VN.w - 8, 53, { couleur: 'faible', taille: 12 * G, align: 'right' });
+  { // légende : la seconde sphère se place après « proton » écrit à sa taille vraie (18 novembre 2026 : à l’étroit, les deux mots se chevauchaient)
+    const tl = Math.max(13 * G, (c.echelle && c.tailleMin ? c.tailleMin / c.echelle : 0)), xn = 0 + 32 + c.largeurTexte('proton', tl) + 14;
+    c.direct(() => { sphere(c.ctx, 0 + 22, 48, 6, 'p'); sphere(c.ctx, xn, 48, 6, 'n'); });
+    c.texte('proton', 0 + 32, 53, { couleur: 'faible', taille: 13 * G });
+    c.texte('neutron', xn + 10, 53, { couleur: 'faible', taille: 13 * G });
+  }
+  // l’indication « touche le noyau » seulement sur un tableau large : à l’étroit (téléphone), elle chevauchait la légende
+  if (DEF) c.texte('(touche le noyau : noyau suivant)', VN.x + VN.w - 8, 53, { couleur: 'faible', taille: 12 * G, align: 'right' });
   c.direct(() => {
     const ctx = c.ctx;
     peindreFaisceau(ctx); peindreEclair(ctx); peindreNoyau(ctx);
@@ -317,12 +326,11 @@ function dessinerEnergie(c) {
 
 function dessiner(c) {
   dessinerNoyau(c); dessinerEnergie(c);
-  // le chrono : bord droit du cadre (760 de large et décalé au centre quand 760 < L < 1000 : x = 748, pas L − 12, sinon il sort du tableau)
-  c.direct(() => { if (S.running || S.t > 0) c.texte(S.fait ? 'fin' : `t = ${fr(S.t, 1)} s`, scene.L >= 1000 ? LT - 12 : 748, 24, { couleur: 'faible', taille: 13 * G, align: 'right' }); });
+  // (18 novembre 2026) plus de chrono « t = … s / fin » écrit en haut à droite : une note secondaire, que l’état donne au tuteur.
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, (c) => { cadreLarge(43); dessiner(c); return c.fin(); }, { large: true });
+const scene = window.OndesTableau.Scene(canvas, (c) => { cadreLarge(43); dessiner(c); return c.fin(); }, { large: true, plancherRef: [760, 300], plancherBas: .55 });   // deux vues denses : au téléphone, le plancher baisse (sinon les étiquettes se chevauchent)
 scene.avancer = dt => {
   if (!S.running) return false;
   S.t = Math.min(FIN(), S.t + dt);

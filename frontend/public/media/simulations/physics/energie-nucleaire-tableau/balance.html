@@ -22,7 +22,7 @@
  *   fusion          : ²₁H + ³₁H à gauche, ⁴₂He + ¹₀n à droite ;
  *   fission         : ²³⁵₉₂U + ¹₀n à gauche, ⁹⁴₃₈Sr + ¹⁴⁰₅₄Xe + 2 ¹₀n à droite.
  * Physique : les masses sont celles de la liste du cours (u), exactes sur la craie et dans ce_qui_se_voit.
- * Pour l’œil seulement (et c’est écrit au tableau) : l’inclinaison du fléau est exagérée (la différence de masse est
+ * Pour l’œil seulement (dit au tuteur dans l’état, plus écrit au tableau depuis le 18 novembre 2026) : l’inclinaison du fléau est exagérée (la différence de masse est
  * inférieure à 1 %) ; les nucléons des gros noyaux sont dessinés plus petits, et les tas « Z protons / N neutrons » ne
  * montrent pas tous les nucléons (leur nombre est écrit).
  */
@@ -281,20 +281,23 @@ function ecrit(c, nom, fn) {
 const T = (c, s, x, y, o = {}) => c.texte(s, x, y, { duree: Math.max(.12, String(s).length / VIT), ...o });
 /** Écrit un noyau ᴬ_ZX : A en haut à gauche, Z en bas à gauche, alignés à droite contre le symbole. Renvoie la largeur. */
 function noyauTexte(c, A, Z, X, x, y, o = {}) {
-  const t = o.taille ?? 18, tn = t * .6, wN = Math.max(c.largeurTexte(String(A), tn), c.largeurTexte(String(Z), tn));
+  // tailles vraiment écrites (18 novembre 2026) : le symbole jamais sous le plancher du kit, A et Z comme des indices
+  // (62 % du plancher au moins, sans plancher plein) ; mesure = écriture, « noyau ⁴₂He » ne se chevauche plus
+  const pl = (c.echelle && c.tailleMin ? c.tailleMin / c.echelle : 0), t = Math.max(o.taille ?? 18, pl), tn = Math.max(t * .6, pl * .62), wN = Math.max(c.largeurTexte(String(A), tn), c.largeurTexte(String(Z), tn));
   const w = wN + 1 + c.largeurTexte(X, t);
   const x0 = o.align === 'center' ? x - w / 2 : o.align === 'right' ? x - w : x;
   if (o.mesure) return w;
   const d = s => Math.max(.06, String(s).length / VIT);
-  c.texte(String(A), x0 + wN, y - .45 * t, { couleur: o.couleur, taille: tn, align: 'right', duree: d(A) });
-  c.texte(String(Z), x0 + wN, y + .3 * t, { couleur: o.couleur, taille: tn, align: 'right', duree: d(Z) });
+  c.texte(String(A), x0 + wN, y - .45 * t, { couleur: o.couleur, taille: tn, plancher: false, align: 'right', duree: d(A) });
+  c.texte(String(Z), x0 + wN, y + .3 * t, { couleur: o.couleur, taille: tn, plancher: false, align: 'right', duree: d(Z) });
   c.texte(X, x0 + wN + 1, y, { couleur: o.couleur, taille: t, duree: d(X) });
   return w;
 }
 /** Une ligne faite de morceaux : texte (chaîne ou {t, couleur}) ou noyau {A, Z, X}. Renvoie la largeur. */
 function ligne(c, parts, x, y, o = {}) {
   const taille = o.taille ?? 16;
-  const larg = p => (typeof p === 'string' || p.t != null ? c.largeurTexte(String(p.t ?? p).replace(/[_{}]/g, ''), taille) : noyauTexte(c, p.A, p.Z, p.X, 0, 0, { taille, mesure: true }));
+  const te = Math.max(taille, (c.echelle && c.tailleMin ? c.tailleMin / c.echelle : 0));   // taille vraiment écrite (plancher du kit)
+  const larg = p => (typeof p === 'string' || p.t != null ? c.largeurTexte(String(p.t ?? p).replace(/[_{}]/g, ''), te) : noyauTexte(c, p.A, p.Z, p.X, 0, 0, { taille, mesure: true }));
   const tot = parts.reduce((s, p) => s + larg(p), 0);
   let px = o.align === 'center' ? x - tot / 2 : o.align === 'right' ? x - tot : x;
   for (const p of parts) {
@@ -374,9 +377,12 @@ function dessinerBalance(c) {
   c.rect(VB.x, VB.y, VB.w, VB.h, { couleur: 'tresfaible', arrondi: 8, duree: .5 });
   c.repere('vue_balance', VB.x, VB.y, VB.w, VB.h, 'la balance');
   // Légende des couleurs.
-  c.direct(() => { sphere(c.ctx, 22, 47, 6, 'p'); sphere(c.ctx, 84, 47, 6, 'n'); });
-  c.texte('proton', 32, 52, { couleur: 'faible', taille: 13 });
-  c.texte('neutron', 94, 52, { couleur: 'faible', taille: 13 });
+  { // légende : la seconde sphère se place après « proton » écrit à sa taille vraie (18 novembre 2026 : à l’étroit, les deux mots se chevauchaient)
+    const tl = Math.max(13, (c.echelle && c.tailleMin ? c.tailleMin / c.echelle : 0)), xn = 0 + 32 + c.largeurTexte('proton', tl) + 14;
+    c.direct(() => { sphere(c.ctx, 0 + 22, 47, 6, 'p'); sphere(c.ctx, xn, 47, 6, 'n'); });
+    c.texte('proton', 0 + 32, 52, { couleur: 'faible', taille: 13 });
+    c.texte('neutron', xn + 10, 52, { couleur: 'faible', taille: 13 });
+  }
   // Les étiquettes des plateaux (écrites à l’ouverture, elles ne bougent pas).
   c.texte(R ? 'réactifs' : 'nucléons séparés', PX - BRAS, 392, { couleur: 'blanc', taille: 16, align: 'center' });
   if (R) c.texte('produits', PX + BRAS, 392, { couleur: 'blanc', taille: 16, align: 'center' });
@@ -384,7 +390,7 @@ function dessinerBalance(c) {
     const w = ligne(c, ['noyau ', NOY(N)], PX + BRAS, 392, { taille: 16, couleur: 'blanc', align: 'center' });
     if (P.vue === 'noyau') {
       c.rect(PX + BRAS - w / 2 - 8, 372, w + 16, 28, { couleur: 'jaune', arrondi: 6, largeur: 1.6 });
-      c.texte('(touche : noyau suivant)', PX + BRAS, 412, { couleur: 'faible', taille: 12, align: 'center' });
+      // (18 novembre 2026) l’indication « (touche : noyau suivant) » n’est plus écrite : à 15 px elle sortait du panneau ; le cadre jaune de l’étiquette reste
       c.repere('etiquette_noyau', PX + BRAS - w / 2 - 10, 368, w + 20, 34, `l’étiquette du noyau (${N.nom}) : touche = noyau suivant`);
     }
   }
@@ -431,9 +437,9 @@ function dessinerBalance(c) {
   // Les annotations, au rythme de la scène.
   if (vu('plateaux_vides') && !S.fait && S.t < chutes()[0][2] + .3) ecrit(c, 'plateaux_vides', () => T(c, 'deux plateaux vides : équilibre', 300, 56, { couleur: 'vert', taille: 15, align: 'center' }));
   if (vu('balance_penche')) ecrit(c, 'balance_penche', () => {
-    if (S.conclusions) T(c, R ? 'les produits sont plus légers : la masse diminue' : 'm(noyau) < masse des nucléons séparés', 306, 52, { couleur: 'jaune', taille: 16, align: 'center', max: 300 });
+    if (S.conclusions) T(c, R ? 'produits plus légers : la masse diminue' : 'm(noyau) < masse des nucléons séparés', 318, 52, { couleur: 'jaune', taille: 16, align: 'center', max: 280 });
     c.fleche(PX - 62, 186, PX - 62, 216, { couleur: 'jaune', largeur: 1.6, tete: 8 });
-    T(c, 'inclinaison exagérée pour l’œil', 14, 412, { couleur: 'faible', taille: 13 });
+    // (18 novembre 2026) la note « inclinaison exagérée pour l’œil » n’est plus écrite (secondaire) : l’inclinaison reste exagérée pour l’œil.
   });
   if (vu('delta_m')) ecrit(c, 'delta_m', () => {
     const yg = PY + BRAS * Math.sin(PHI_MAX) + FIL, yd = PY - BRAS * Math.sin(PHI_MAX) + FIL;
@@ -474,11 +480,11 @@ function dessinerMasses(c) {
 
 function dessiner(c) {
   dessinerBalance(c); dessinerMasses(c);
-  c.direct(() => { if (S.running || S.t > 0) c.texte(S.fait ? 'fin' : `t = ${fr(S.t, 1)} s`, LT >= 1000 ? LT - 12 : 748, 24, { couleur: 'faible', taille: 13, align: 'right' }); });
+  // (18 novembre 2026) plus de chrono « t = … s / fin » en haut à droite : note secondaire, l’état la donne au tuteur.
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, (c) => { cadreLarge(41); dessiner(c); return c.fin(); }, { large: true });
+const scene = window.OndesTableau.Scene(canvas, (c) => { cadreLarge(41); dessiner(c); return c.fin(); }, { large: true, plancherRef: [760, 300], plancherBas: .55 });   // deux vues denses : au téléphone, le plancher baisse (sinon les noyaux se chevauchent)
 scene.avancer = dt => {
   if (!S.running) return false;
   S.t = Math.min(FIN(), S.t + dt);
@@ -521,7 +527,7 @@ function ceQuiSeVoit() {
   m.push(`Plateau gauche (${R ? 'réactifs' : 'nucléons séparés'}) : ${contenuMots('g')}. Plateau droit (${R ? 'produits' : 'noyau'}) : ${contenuMots('d')}.`);
   if (bloque()) m.push('Le fléau est bloqué, horizontal.');
   else if (!S.conclusions) m.push('Le fléau penche du côté gauche (inclinaison exagérée pour l’œil) ; aucune conclusion écrite : question d’observation en cours.');
-  else m.push(`Le fléau penche du côté gauche (${R ? 'les réactifs, plus lourds : les produits sont plus légers, la masse diminue' : 'les nucléons séparés, plus lourds : m(noyau) < masse des nucléons séparés'}) ; inclinaison exagérée pour l’œil (écrit au tableau).`);
+  else m.push(`Le fléau penche du côté gauche (${R ? 'les réactifs, plus lourds : les produits sont plus légers, la masse diminue' : 'les nucléons séparés, plus lourds : m(noyau) < masse des nucléons séparés'}) ; inclinaison exagérée pour l’œil (non écrit au tableau).`);
   const ecrits = [];
   if (R) {
     const rx = RX();
@@ -537,7 +543,7 @@ function ceQuiSeVoit() {
     if (fini('energie')) ecrits.push(`E_ℓ = Δm·c² = ${N.dm} × 931,5 = ${N.El} MeV`);
     if (fini('par_nucleon')) ecrits.push(`E_ℓ/A = ${N.El}/${N.A} = ${N.ElA} MeV/nucléon`);
   }
-  if (R && fini('balance_penche') && S.conclusions) ecrits.unshift('« les produits sont plus légers : la masse diminue »');
+  if (R && fini('balance_penche') && S.conclusions) ecrits.unshift('« produits plus légers : la masse diminue »');
   m.push(ecrits.length ? 'Écrit à la craie : ' + ecrits.join(' ; ') + '.' : 'Rien d’écrit encore dans la colonne des masses.');
   if (fini('delta_m')) m.push(`Δm = ${R ? RX().dm : N.dm} u.`);
   if (fini('energie')) m.push(R ? `Énergie : ΔE ${RX().egal} ${RX().dE} MeV, E_lib ${RX().egal} ${RX().lib} MeV.` : `Énergie de liaison : E_ℓ = ${N.El} MeV.`);

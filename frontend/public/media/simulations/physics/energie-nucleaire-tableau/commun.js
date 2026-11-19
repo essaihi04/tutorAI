@@ -1,5 +1,5 @@
 /*
- * Commun aux simulations des ondes lumineuses (copie de ondes-periodiques-tableau/commun.js) : cadre virtuel 760 × 420 mis à l'échelle sans
+ * Commun aux simulations du cours « Noyaux, masse et énergie » (copie de ondes-periodiques-tableau/commun.js) : cadre virtuel 760 × 420 mis à l’échelle sans
  * rien couper, texte jamais plus petit que 15 px à l'écran, boucle d'image qui
  * ne redessine que lorsqu'il le faut.
  */
@@ -14,11 +14,29 @@
    *  - { ajuster: true } : la boîte de l'encre de l'image complète (dessinée une fois, `complet(fn)` met la page à
    *    son état final le temps de fn) remplit le tableau, l'agrandissement est borné à ZOOM_MAX × le cadre entier ;
    *    scene.remesurer() après un changement de vue (la boîte ne fait que grandir). */
-  const TAILLE_MIN = 15, L_MAX = 2.1, MARGE = 14, ZOOM_MAX = 2;
+  const TAILLE_MIN = 15, L_MAX = 2.1, MARGE = 14, ZOOM_MAX = 2, PLANCHER_BAS = .7;
   function Scene(canvas, dessiner, options = {}) {
     // `scene` existe avant la craie : le premier redimensionnement la marque déjà « à redessiner ».
     const scene = { sale: true, boite: null, mesurant: false, L: VW };
     const craie = new window.Tableau.Craie(canvas, { onresize: () => { scene.sale = true; } });
+    /* Plancher du texte (18 novembre 2026, « le texte est plus grand que la simulation », écran de bureau peu haut) :
+     * le kit baisse le plancher dès que le canvas fait moins de 900 × 400 px (à 1113 × 351 px dans le lecteur, il tombait
+     * à 13 px, et à 9 px sous une bande de formules). Ici il reste à 15 px tant que le canvas fait au moins 540 × 210 px
+     * (écran de bureau, et téléphone en paysage sans bande de formules : 573 × 219 px) et ne baisse, en dessous, que jusqu’à 70 % (téléphone en paysage). Même astuce que le kit :
+     * relire puis remettre la valeur ne la réduit pas deux fois. Une page très dense (deux vues côte à côte) peut demander
+     * Scene(…, { plancherRef: [w, h], plancherBas }) : au-dessous de w × h px, son plancher baisse comme celui du kit. */
+    Object.defineProperty(craie, 'tailleMin', {
+      configurable: true,
+      get() {
+        const brut = this._plancherBrut || 0;
+        if (!brut) return brut;
+        const [w0, h0] = options.plancherRef || [540, 210], bas = options.plancherBas ?? PLANCHER_BAS;
+        const f = Math.min(1, Math.max(bas, Math.min((this.W || w0) / w0, (this.H || h0) / h0)));
+        this._plancherLu = [brut, brut * f];
+        return brut * f;
+      },
+      set(v) { const lu = this._plancherLu; this._plancherBrut = lu && v === lu[1] ? lu[0] : v; },
+    });
     /* La boîte de l'encre (coordonnées du cadre) : l'image complète dessinée une fois, traits et textes relevés. */
     function mesurer() {
       const b = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
