@@ -141,8 +141,8 @@
   /*
    * Un texte trop long pour sa largeur `max` (18 novembre 2026) : le kit le rétrécissait, jusqu'à 10 unités du dessin
    * (8 px à l'écran sur un téléphone). Il passe plutôt sur DEUX lignes, coupé à un « ; », un « : », une virgule ou un
-   * espace près du milieu, centrées sur la ligne d'origine ; s'il ne tient même pas en deux lignes, il garde le plancher
-   * et dépasse un peu sa largeur plutôt que de devenir illisible.
+   * espace près du milieu, centrées sur la ligne d'origine ; un texte à peine trop long (≤ 15 %, ≤ 30 % pour une ligne à
+   * fraction, qui ne se coupe jamais) dépasse un peu sa largeur ; sans coupure possible, il garde le plancher.
    */
   /** Un cadre de téléphone en paysage (≈ 560 × 210 px) : à 15 px, il n'y a pas la place d'écrire des phrases. */
   const compact = c => c.tailleMin > 0 && (c.W < 700 || c.H < 250);
@@ -161,6 +161,9 @@
       if (!o.max || o.plancher === false || o.__ligne || !this.echelle || !this.tailleMin) return texte.call(this, s, x, y, o);
       const t = Math.max(o.taille ?? 18, this.tailleMin / this.echelle), w = largeur(this, s, t);
       if (w <= o.max * 1.04) return texte.call(this, s, x, y, o);
+      // un peu trop long : il dépasse légèrement sa largeur plutôt que de rétrécir ; une ligne à fraction ne se coupe pas
+      if (w <= o.max * 1.15 || (s.includes('⟦') && w <= o.max * 1.3)) return texte.call(this, s, x, y, { ...o, max: w + 1 });
+      if (s.includes('⟦')) return texte.call(this, s, x, y, o);
       // les coupures possibles : hors d'une fraction ⟦…⟧ et d'un exposant ^(…) / indice _{…}
       let prof = 0, best = null;
       for (let i = 1; i < s.length - 1; i++) {
