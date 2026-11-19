@@ -19,6 +19,21 @@
     // `scene` existe avant la craie : le premier redimensionnement la marque déjà « à redessiner ».
     const scene = { sale: true, boite: null, mesurant: false, L: VW };
     const craie = new window.Tableau.Craie(canvas, { onresize: () => { scene.sale = true; } });
+    /* Plancher du texte (19 novembre 2026, « la simulation d'abord ») : le kit baisse le plancher dès que le tableau fait
+     * moins de 900 × 400 px — or le lecteur donne ici à la simulation un tableau d'environ 850 × 355 px sur un écran de
+     * bureau peu haut (1366 × 560), et le texte tombait à 13 px. Sur un tableau de bureau (au moins 700 × 300 px), le
+     * plancher reste donc 15 px plein ; en dessous (téléphone), la réduction du kit s'applique comme avant.
+     * Relire puis remettre la valeur (`const t = c.tailleMin; … c.tailleMin = t`) ne la réduit pas deux fois. */
+    Object.defineProperty(craie, 'tailleMin', {
+      configurable: true,
+      get() {
+        const brut = this._tailleMinBrut || 0; if (!brut) return brut;
+        const W = this.W || 900, H = this.H || 400;
+        const f = W >= 700 && H >= 300 ? 1 : Math.min(1, Math.max(.45, Math.min(W / 900, H / 400)));
+        const rendu = brut * f; this._tailleMinLu = [brut, rendu]; return rendu;
+      },
+      set(v) { const lu = this._tailleMinLu; this._tailleMinBrut = lu && v === lu[1] ? lu[0] : v; },
+    });
     /* Courbes de graphe nettes et lumineuses (17 novembre 2026, « couleurs vives, facile à lire ») : une courbe tracée
      * par craie.courbe avec `net: true` garde son écriture progressive et sa durée (même longueur), mais sans tremblé,
      * avec un halo doux de sa couleur. Les autres courbes (flèches, cartes) restent à la craie. */
