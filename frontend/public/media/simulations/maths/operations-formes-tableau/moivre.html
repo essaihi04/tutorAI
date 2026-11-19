@@ -279,14 +279,19 @@ MathsTableau.page({ net: true,
         K.marque('angle');
         c.pause(.4);
         for (let k = 0; k < 24; k++) { const t = k * PI / 12; c.ligne(G.ox + 70 * Math.cos(t), G.oy - 70 * Math.sin(t), G.ox + 78 * Math.cos(t), G.oy - 78 * Math.sin(t), { couleur: 'faible', largeur: 1.2, duree: .03 }); }
-        K.anime(2.6, p => {
-          const pts = [], fin = 2 * PI * p;
-          for (let i = 0; i <= 120 * p; i++) { const t = 2 * PI * i / 120; pts.push([G.ox + (48 + t * 2.4) * Math.cos(t), G.oy - (48 + t * 2.4) * Math.sin(t)]); }
-          if (pts.length > 1) c.trait(pts, { couleur: 'jaune', largeur: 2 });
-          c.ligne(G.ox, G.oy, G.ox + 84 * Math.cos(fin), G.oy - 84 * Math.sin(fin), { couleur: 'faible', largeur: 1.4, pointille: [4, 4] });
-          if (p >= 1) { const r = 48 + 2 * PI * 2.4, ex = G.ox + r, ey = G.oy; c.trait([[ex - 6, ey + 7], [ex, ey], [ex + 6, ey + 7]], { couleur: 'jaune', largeur: 2 }); }
+        // les 24 pas de π/12 comptés en s’allumant un à un (règle 16) : chaque pas allume sa graduation, le compteur
+        // « k × π/12 » avance avec lui, l’arc jaune suit ; au 24ᵉ pas, l’arc revient sur l’axe réel
+        K.anime(4.8, p => {
+          const k = Math.min(24, Math.floor(p * 24 + 1e-6));
+          for (let i = 1; i <= k; i++) {
+            const t = i * PI / 12, x = G.ox + 74 * Math.cos(t), y = G.oy - 74 * Math.sin(t);
+            if (MathsTableau.halo) MathsTableau.halo(c, x, y, i === k ? 5 : 3.5, 'jaune');
+            c.ctx.save(); c.ctx.fillStyle = i === k ? '#fde047' : 'rgba(253,224,71,.75)'; c.ctx.beginPath(); c.ctx.arc(x, y, i === k ? 5 : 3.5, 0, 2 * PI); c.ctx.fill(); c.ctx.restore();
+          }
+          if (k > 0) { const pts = []; for (let i = 0; i <= 8 * k; i++) { const t = i * PI / 96; pts.push([G.ox + 60 * Math.cos(t), G.oy - 60 * Math.sin(t)]); } c.trait(pts, { couleur: 'jaune', largeur: 2 }); }
+          if (k > 0) c.texte(`${k} × π/12`, 20, 350, { couleur: 'jaune', taille: 18 });
         });
-        c.texte('24 pas de π/12', 20, 350, { couleur: 'jaune', taille: 16 });
+        c.texte('24 pas de π/12', 150, 350, { couleur: 'jaune', taille: 16 });
         K.lignes(XR, 176, [
           { t: 'Moivre : arg(b²⁴) ≡ 24 × π/12 [2π]', couleur: 'blanc', taille: 17 },
           { t: '24 × π/12 = 2π : un tour complet', couleur: 'jaune', taille: 17 },
