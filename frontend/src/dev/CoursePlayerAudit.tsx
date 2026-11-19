@@ -6,7 +6,7 @@
  * rejouer tout le parcours. Cette page le monte seul, avec un deck factice et
  * un chat simulé à gauche, pour vérifier d'un coup d'œil ce que l'élève voit.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import CoursePlayer from '../components/course/CoursePlayer';
 import type { CourseDeck } from '../components/course/types';
 import energyManifestSource from '../../../backend/data/courses/svt_ch1_energy_course_v1.json?raw';
@@ -20,6 +20,9 @@ const ENERGY_MANIFEST = JSON.parse(energyManifestSource) as CourseDeck;
 const MUSCLE_MANIFEST = JSON.parse(muscleManifestSource) as CourseDeck;
 const ONDES_MANIFEST_EXEMPLE = JSON.parse(ondesManifestSource) as CourseDeck;
 const PERIODIQUES_MANIFEST = JSON.parse(periodiquesManifestSource) as CourseDeck;
+
+/** N'importe quel deck du dossier des cours, chargé à la demande : ?deck=phys_ch4_radioactivite&diapo=ra_c3_calcul */
+const TOUS_LES_DECKS = import.meta.glob('../../../backend/data/courses/*.json', { query: '?raw', import: 'default' }) as Record<string, () => Promise<string>>;
 
 const DECK: CourseDeck = {
   id: 'deck-demo-glycolyse-v4',
@@ -166,8 +169,14 @@ export default function CoursePlayerAudit() {
     .find(slide => slide.id === previewId);
   // &diapo=ID ouvre le cours exemple directement sur une diapositive (et les suivantes).
   const diapo = new URLSearchParams(window.location.search).get('diapo');
-  const ONDES_MANIFEST = scene === 'ondes-periodiques' ? PERIODIQUES_MANIFEST : ONDES_MANIFEST_EXEMPLE;
-  const enConcentration = scene === 'ondes' || scene === 'ondes-periodiques';
+  const nomDeck = new URLSearchParams(window.location.search).get('deck');
+  const [deckCharge, setDeckCharge] = useState<CourseDeck | null>(null);
+  useEffect(() => {
+    const charger = nomDeck && TOUS_LES_DECKS[`../../../backend/data/courses/${nomDeck}.json`];
+    if (charger) void charger().then(texte => setDeckCharge(JSON.parse(texte) as CourseDeck));
+  }, [nomDeck]);
+  const ONDES_MANIFEST = deckCharge || (scene === 'ondes-periodiques' ? PERIODIQUES_MANIFEST : ONDES_MANIFEST_EXEMPLE);
+  const enConcentration = scene === 'ondes' || scene === 'ondes-periodiques' || !!deckCharge;
   const ondes = diapo
     ? { ...ONDES_MANIFEST, id: `${ONDES_MANIFEST.id}-${diapo}`, activities: ONDES_MANIFEST.activities
       .map(activite => ({ ...activite, slides: activite.slides.filter((_, i, tout) => tout.slice(0, i + 1).some(sl => sl.id === diapo)
