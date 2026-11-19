@@ -108,7 +108,7 @@ def _reveiller_essai():
                 if motif in ligne and cle not in etapes:
                     etapes[cle] = time.time() - t0
                     print(f"  +{etapes[cle]:6.1f} s  {ligne.strip()[:150]}")
-            m = re.search(r"https://[a-z0-9-]+\.trycloudflare\.com", ligne)
+            m = re.search(r"https://(?!api\.)[a-z0-9-]+\.trycloudflare\.com", ligne)   # api.trycloudflare.com = tunnel refusé
             if m and not url:
                 url = m.group(0)
             if "Traceback" in ligne or "Error:" in ligne:

@@ -176,13 +176,20 @@ def ouvrir_tunnel():
         local = f"{WORK}/cloudflared-x"
         sh(f"cp '{binaire}' {local} && chmod +x {local}")
         binaire = local
-    p = subprocess.Popen([binaire, "tunnel", "--no-autoupdate", "--url", "http://127.0.0.1:8000"],
-                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-    for ligne in p.stdout:
-        m = re.search(r"https://[a-z0-9-]+\.trycloudflare\.com", ligne)
-        if m and not URL["v"]:
-            URL["v"] = m.group(0)
-            say("tunnel", URL["v"])
+    # (19 nov. 2026) Quand Cloudflare refuse un tunnel rapide (trop de demandes), cloudflared écrit l'adresse de son API
+    # (« api.trycloudflare.com ») dans son erreur : ce n'est pas notre tunnel. On l'ignore et on redemande, 6 fois au plus.
+    for essai in range(6):
+        p = subprocess.Popen([binaire, "tunnel", "--no-autoupdate", "--url", "http://127.0.0.1:8000"],
+                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        for ligne in p.stdout:
+            m = re.search(r"https://(?!api\.)[a-z0-9-]+\.trycloudflare\.com", ligne)
+            if m and not URL["v"]:
+                URL["v"] = m.group(0)
+                say("tunnel", URL["v"])
+        if URL["v"]:
+            break
+        say(f"tunnel refusé par Cloudflare (essai {essai + 1}), nouvelle demande dans {20 * (essai + 1)} s")
+        time.sleep(20 * (essai + 1))
     say("cloudflared s'est arrêté")
 
 
