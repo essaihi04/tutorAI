@@ -87,8 +87,8 @@ sa pastille porte son numéro courant, il reste allumé ; un moment et un repèr
   `nc_m3`, `nc_r4`, `nc_r7`, `nc_r8`, `nc_t6`, `nc_n1_alignes`, `nc_n2`.
 - Certaines simulations écrivent encore dans la figure ce que la colonne de démonstration écrit (ex. `national.html
   ?vue=n24_points` : « (uₙ) décroissante (question 2) ») : la figure devrait seulement allumer.
-- Les copies `frontend/public/media/examens/mathematiques/*.json` sont ignorées par git : le déploiement doit lancer
-  `python scripts/examens/copier_sujets.py` (elles portent les corrections d'`exam.json` ci-dessus).
+- Les copies `frontend/public/media/examens/mathematiques/*.json` (lues par la feuille) sont suivies par git ; celles de
+  2016 N, 2019 N, 2022 R et 2023 R ont été recopiées après la correction d'`exam.json` (`scripts/examens/copier_sujets.py`).
 - ch3 2021 N : la feuille montre et la voix lit la question 4.b (ln) avant le chapitre ln (tel qu'à l'examen).
 - Énoncés lus en entier sauf la fin des problèmes 2019 N et 2021 N et la question 3 de 2024 N ex. 3 / 2023 R ex. 3
   (« on la lira plus tard ») ; la feuille, elle, montre tout l'exercice.
