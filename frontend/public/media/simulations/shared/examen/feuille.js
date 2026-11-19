@@ -453,7 +453,7 @@
     if (ec) ec.style.display = PAGE === 1 ? '' : 'none';
     if (ek) ek.style.display = PAGE === 1 || !NPAGES || NPAGES === 1 ? 'none' : '';
     const zone = document.querySelector('.feuille-zone');
-    const z = BESOIN[PAGE] > DISPO[PAGE] ? Math.max(0.72, DISPO[PAGE] / BESOIN[PAGE]) : 1;
+    const z = BESOIN[PAGE] > DISPO[PAGE] ? Math.max(0.5, DISPO[PAGE] / BESOIN[PAGE]) : 1;
     if (zone) zone.style.zoom = z < 1 ? z.toFixed(3) : '';
     const nav = document.querySelector('.pages-nav');
     if (nav) {
@@ -485,26 +485,49 @@
     const hC = ec ? hauteur(ec) : 0, hK = ek ? hauteur(ek) : 0;
     const dispo = (p) => innerHeight - fixe - (p === 1 ? hC : hK);
     BESOIN = {}; DISPO = {};
-    let page = 1, reste = dispo(1), dejaContenu = false;
-    blocs.forEach((el, k) => {
-      const h = hauteur(el), titre = el.classList.contains('titre-exo');
-      // page 1 : le titre et le premier texte restent avec l'en-tête, même s'il faut réduire un peu la page
-      const force = page === 1 && !dejaContenu;
-      if (!force && h > reste && reste < dispo(page)) {
-        page += 1; reste = dispo(page);
-        const avant = blocs[k - 1];
-        if (avant && avant.classList.contains('titre-exo') && +avant.dataset.page === page - 1 && page - 1 > 1) {
-          avant.dataset.page = page; reste -= hauteur(avant);                 // le titre suit son bloc
-        }
-      }
-      el.dataset.page = page; reste -= h;
-      if (!titre) dejaContenu = true;
-    });
-    NPAGES = page;
-    for (let p = 1; p <= NPAGES; p++) {
-      DISPO[p] = dispo(p);
-      BESOIN[p] = blocs.filter((el) => +el.dataset.page === p).reduce((s, el) => s + hauteur(el), 0);
+    // Positions réelles (une figure flottante est à côté du texte, pas en dessous) : haut et bas de chaque bloc.
+    const y0 = corps.getBoundingClientRect().top;
+    const haut = (el) => el.getBoundingClientRect().top - y0 - (parseFloat(getComputedStyle(el).marginTop) || 0);
+    const bas = (el) => el.getBoundingClientRect().bottom - y0 + (parseFloat(getComputedStyle(el).marginBottom) || 0);
+    const visibles = blocs.filter((el) => el.offsetHeight > 0);
+    const total = visibles.length ? Math.max(...visibles.map(bas)) - Math.min(...visibles.map(haut)) : 0;
+    // 1. Tout tient sur UNE page en réduisant (≥ 0,6) : une seule page, sans passer à une autre (19/11/2026,
+    //    l'utilisateur : « tout mettre dans une seule vue, une seule page suffit »).
+    if (total * 0.6 <= dispo(1)) {
+      blocs.forEach((el) => { el.dataset.page = 1; });
+      NPAGES = 1; DISPO[1] = dispo(1); BESOIN[1] = total;
+      montrerPage(1);
+      return;
     }
+    // 2. Sinon, des pages faites d'« unités » qu'on ne coupe jamais (19/11/2026, l'utilisateur : « mettre tous les
+    //    documents dans une seule page avec leur question ») : le titre et le texte d'ouverture ; puis chaque question
+    //    avec tous les documents et textes qui la précèdent (ou, pour la question d'exam.json, la suivent : sa figure).
+    //    Chaque page se remplit d'unités et se réduit au besoin (jusqu'à 0,62 ; 0,5 pour une unité seule très haute).
+    const unites = []; let u = [];
+    const fin = () => { if (u.length) unites.push(u); u = []; };
+    const estQ = (b) => b.classList.contains('q');
+    // un document : une figure, ou un texte qui est un document (id « doc… », ou un tableau de données)
+    const estFig = (b) => b.classList.contains('fig') || /^doc/i.test(b.id || '') || (b.classList.contains('contexte') && !!b.querySelector('table'));
+    blocs.forEach((el, k) => {
+      const q = estQ(el), fig = estFig(el);
+      if (!unites.length && u.length && (q || fig) && !u.some((b) => estQ(b) || estFig(b))) fin();   // l'ouverture
+      u.push(el);
+      const suivFig = blocs[k + 1] && estFig(blocs[k + 1]);
+      if (q && !suivFig) fin();                              // une question ferme son unité…
+      else if (fig && u.some(estQ) && !suivFig) fin();       // …ou la figure d'exam.json qui la suit
+    });
+    fin();
+    const hU = (un) => { const v = un.filter((el) => el.offsetHeight > 0); return v.length ? Math.max(...v.map(bas)) - Math.min(...v.map(haut)) : 0; };
+    let page = 1, plein = 0;
+    unites.forEach((un, i) => {
+      const h = hU(un);
+      if (i > 0 && plein > 0 && plein + h > dispo(page) / 0.62) { BESOIN[page] = plein; page += 1; plein = 0; }
+      un.forEach((el) => { el.dataset.page = page; });
+      plein += h;
+    });
+    BESOIN[page] = plein;
+    NPAGES = page;
+    for (let p = 1; p <= NPAGES; p++) DISPO[p] = dispo(p);
     if (NPAGES === 1) document.documentElement.classList.remove('en-pages');
     montrerPage(Math.min(PAGE, NPAGES));
   }
