@@ -64,3 +64,30 @@ Les transcriptions se font sur le VPS avec MoulSot v4 (kernel d'essai, `/stt`) :
 Régénération vérifiée : chaque morceau est généré, transcrit et refait (3 essais au plus) tant qu'il boucle ou que
 sa fin manque ; on garde le meilleur essai, on assemble avec 0,3 s de silence, puis on pose en montant la version
 du fichier (`_v<N>.mp3`) pour que le navigateur ne rejoue pas l'ancienne voix en cache.
+
+## 4. Générer avec le bon script : tout le texte passe par `texte_parle.parle`
+
+Demande de l'utilisateur (19/11/2026) : « les voix doivent être générées avec le script correct, qui donne le meilleur
+résultat : micros est lu avec le s à la fin, écho est lu parfois avec ch ; vérifier et régénérer, aussi pour les
+unités avec du texte (micro seconde…) ». Le modèle n'a appris que des phrases écrites **comme le prof les dit** : des
+nombres en lettres, aucun symbole, aucune unité en symbole. Donc :
+
+- **Chaque voix** (diapositive, réaction, démonstration, énoncé, réponse en direct du tuteur) est générée à partir de
+  `parle(texte)` de `backend/kaggle_tts/texte_parle.py`. Le serveur du kernel l'applique (`serveur.py`, embarqué au
+  push) ; un script qui appelle `/tts` lui-même avec un texte déjà travaillé applique la version du **dépôt** avant
+  d'envoyer (le kernel peut tourner avec une version plus ancienne). Jamais de texte brut envoyé sans `parle`.
+- **Ce que `parle` écrit en mots** (19/11/2026, `nombres_symboles_unites`) :
+  - tous les nombres, entiers et décimaux (« 1,15 » → « un virgule quinze », « 2024 » → « deux mille vingt-quatre ») ;
+  - les unités en symbole après un nombre, au singulier (« 20 Hz » → « vingt hertz », « 47 µF » → « quarante-sept
+    micro farad », « 0,5 ms » → « zéro virgule cinq milliseconde ») ;
+  - les mots « micro / nano / pico + unité » collés, jamais entendus à l'entraînement, en deux mots connus
+    (« microfarads » → « micro farad », « microsecondes » → « micro seconde » ; « nanomètre » est gardé) ;
+  - les symboles : Δ delta, λ lambda, α, β, π, ω oméga, σ, τ, θ, √ racine de, = égale, × fois, / sur, % pour cent,
+    ≈ environ, ≤ ≥ < >, « x → +∞ » tend vers plus l'infini, « A → B » donne ;
+  - mots signalés : « micros » → « micro » (le s s'entendait), « écho » → « éko » (lu avec « ch »).
+- **En écrivant un texte parlé**, écrire déjà les unités en mots au singulier quand c'est possible ; `parle` rattrape
+  le reste.
+- **Après chaque nouvelle règle** : lister les pistes dont `parle(texte)` change (comparer l'ancienne et la nouvelle
+  version de `texte_parle.py` sur toutes les pistes de `pistes_cours.py`), les régénérer avec
+  `refaire_verifie.py` (clés `deck/type/id`, contrôle MoulSot des boucles et des fins), poser en montant la version
+  du mp3, puis déployer pour que le kernel en direct reprenne les règles.

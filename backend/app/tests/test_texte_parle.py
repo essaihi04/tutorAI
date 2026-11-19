@@ -29,3 +29,40 @@ def test_mot_ecrit_comme_il_se_dit(ecrit, dit):
 
 def test_le_texte_sans_mot_corrige_ne_change_pas():
     assert tp.prononciation("la célérité de l'onde") == "la célérité de l'onde"
+
+
+@pytest.mark.parametrize("ecrit, dit", [
+    # 19/11/2026 : « micros est lu avec s à la fin », « écho est lu avec ch », « les unités avec du texte (micro seconde) »
+    ("les micros M un", "les micro M un"),
+    ("le premier écho", "le premier éko"),
+    ("cent microsecondes", "cent micro seconde"),
+    ("dix microfarads", "dix micro farad"),
+    ("vingt microcoulombs", "vingt micro coulomb"),
+    ("les nanomètres", "les nanomètres"),
+    ("20 Hz", "vingt hertz"),
+    ("6,3 V", "six virgule trois volt"),
+    ("0,001 s", "zéro virgule zéro zéro un seconde"),
+    ("47 µF", "quarante-sept micro farad"),
+    ("Δt = 5 × 0,5 ms", "delta t égale cinq fois zéro virgule cinq milliseconde"),
+    ("v = d/Δt", "v égale d sur delta t"),
+    ("x → +∞", "x tend vers plus l'infini"),
+    ("Zn²⁺ → Zn", "Zn deux plus donne Zn"),
+    ("√2", "racine de deux"),
+    ("12,5 %", "douze virgule cinq pour cent"),
+])
+def test_nombres_symboles_unites(ecrit, dit):
+    assert tp.parle(ecrit) == dit
+
+
+@pytest.mark.parametrize("n, dit", [
+    (17, "dix-sept"), (21, "vingt et un"), (71, "soixante et onze"), (80, "quatre-vingts"), (81, "quatre-vingt-un"),
+    (91, "quatre-vingt-onze"), (200, "deux cents"), (201, "deux cent un"), (1000, "mille"),
+    (2024, "deux mille vingt-quatre"), (80000, "quatre-vingt mille"),
+])
+def test_nombre_fr(n, dit):
+    assert tp.nombre_fr(n) == dit
+
+
+def test_aucun_caractere_invisible_dans_les_regles():
+    # un « \b » mal échappé devient 0x08 et la règle ne s'applique jamais (16/11 et 19/11/2026)
+    assert chr(8) not in _f.read_text(encoding="utf-8")

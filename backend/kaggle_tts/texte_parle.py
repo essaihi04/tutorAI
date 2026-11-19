@@ -59,9 +59,103 @@ def parle(p):
     p = re.sub(r"\b(NADP|NAD)\s*[+⁺]", r"\1 plus", p)
     p = re.sub(r"(?<=[A-Za-z])-([0-9]{1,2})-(?=[A-Za-z])", r" \1 ", p)          # glucose-6-phosphate
     p = re.sub(r"(?<!\w)(?<![0-9][,.])[0-9]{1,2}(?!\w)(?![,.][0-9])", lambda mt: _nombre(p, mt), p)   # pas les décimaux (1,70)
+    p = nombres_symboles_unites(p)                 # 19/11/2026 : grands nombres, décimaux, symboles, unités
     p = re.sub(r"\b(complexe)\s+I\b", r"\1 un", p)
     p = re.sub(r"\b(IV|III|II)\b", lambda mt: {"II": "deux", "III": "trois", "IV": "quatre"}[mt.group(1)], p)
     return prononciation(p)
+
+
+# ── Nombres, symboles et unités (19 novembre 2026) ─────────────────────────────────────────────────────────────────
+# Demande de l'utilisateur : « micros est lu avec s à la fin, écho est lu parfois avec ch ; les unités avec du texte,
+# par exemple micro seconde ». Le corpus d'entraînement n'a que des nombres en lettres, aucun symbole (Δ, λ, √, =…),
+# aucune unité en symbole (Hz, V, J) et presque aucun mot « micro… » collé (microfarad 0 fois, microcoulomb 0,
+# microseconde 5) : on écrit tout comme le prof le dit, avec des mots que le modèle connaît.
+_DIZ = {2: "vingt", 3: "trente", 4: "quarante", 5: "cinquante", 6: "soixante"}
+
+
+def _cent_fr(n):
+    """0..99 en français (soixante-dix, quatre-vingts, vingt et un…)."""
+    if n < len(FR):
+        return FR[n]
+    if n < 20:
+        return "dix-" + FR[n - 10]
+    d, u = divmod(n, 10)
+    if d == 7:
+        return "soixante" + (" et " if u == 1 else "-") + _cent_fr(10 + u)
+    if d == 9:
+        return "quatre-vingt-" + _cent_fr(10 + u)
+    if d == 8:
+        return "quatre-vingts" if u == 0 else "quatre-vingt-" + FR[u]
+    return _DIZ[d] + ("" if u == 0 else " et un" if u == 1 else "-" + FR[u])
+
+
+def nombre_fr(n):
+    """Entier 0..999 999 999 en lettres françaises."""
+    if n < 100:
+        return _cent_fr(n)
+    if n < 1000:
+        c, r = divmod(n, 100)
+        tete = "cent" if c == 1 else FR[c] + (" cents" if r == 0 else " cent")
+        return tete + (" " + _cent_fr(r) if r else "")
+    if n < 1_000_000:
+        m, r = divmod(n, 1000)
+        tete = "mille" if m == 1 else re.sub(r"(cent|vingt)s$", r"\1", nombre_fr(m)) + " mille"
+        return tete + (" " + nombre_fr(r) if r else "")
+    m, r = divmod(n, 1_000_000)
+    return nombre_fr(m) + (" million" if m == 1 else " millions") + (" " + nombre_fr(r) if r else "")
+
+
+def _decimal_fr(mt):
+    entier, dec = mt.group(1), mt.group(2)
+    reste = dec.lstrip("0")
+    zeros = len(dec) - len(reste)
+    return nombre_fr(int(entier)) + " virgule" + " zéro" * zeros + (" " + nombre_fr(int(reste)) if reste else "")
+
+
+# Unité écrite en symbole juste après un nombre -> le mot, au singulier (le « s » ne s'entend pas, et le modèle, qui
+# ne l'a presque jamais vu écrit, le prononçait).
+UNITES = {
+    "Hz": "hertz", "kHz": "kilohertz", "MHz": "méga hertz", "V": "volt", "mV": "millivolt", "kV": "kilo volt",
+    "J": "joule", "kJ": "kilojoule", "mJ": "millijoule", "µJ": "micro joule", "μJ": "micro joule",
+    "A": "ampère", "mA": "milliampère", "µA": "micro ampère", "μA": "micro ampère",
+    "Ω": "ohm", "kΩ": "kilo ohm", "W": "watt", "ms": "milliseconde", "µs": "micro seconde", "μs": "micro seconde",
+    "s": "seconde", "min": "minute", "km": "kilomètre", "cm": "centimètre", "mm": "millimètre", "nm": "nanomètre",
+    "µm": "micro mètre", "μm": "micro mètre", "m": "mètre", "kg": "kilogramme", "mg": "milligramme",
+    "µg": "micro gramme", "μg": "micro gramme", "g": "gramme", "mol": "mole", "mL": "millilitre", "L": "litre",
+    "µF": "micro farad", "μF": "micro farad", "nF": "nano farad", "pF": "pico farad", "F": "farad",
+    "mH": "millianri", "H": "anri", "°C": "degré Celsius", "%": "pour cent", "eV": "électron volt",
+}
+_UNITE_RE = re.compile(r"(?<![\w,.])(\d+(?:[,.]\d+)?)\s?("
+                       + "|".join(sorted(map(re.escape, UNITES), key=len, reverse=True))
+                       + r")(?![\wµμΩ°%])")
+SYMBOLES = [
+    (re.compile(r"Δ\s?"), "delta "), (re.compile(r"λ"), "lambda"), (re.compile(r"β"), "bêta"),
+    (re.compile(r"α"), "alpha"), (re.compile(r"π"), "pi"), (re.compile(r"ω"), "oméga"), (re.compile(r"σ"), "sigma"),
+    (re.compile(r"τ"), "tau"), (re.compile(r"θ"), "theta"), (re.compile(r"(?<!\w)[µμ](?!\w)"), "mu"),
+    (re.compile(r"(?<=\b[a-z])\s?→\s?|\s?→\s?(?=[+\-−]?\s?∞)"), " tend vers "),    # limites : x → +∞, n → 0
+    (re.compile(r"\+\s?∞"), "plus l'infini"), (re.compile(r"[\-−]\s?∞"), "moins l'infini"),
+    (re.compile(r"\s?∞"), " l'infini"), (re.compile(r"√\s?"), "racine de "), (re.compile(r"\s?≈\s?"), " environ "),
+    (re.compile(r"\s?≤\s?"), " inférieur ou égal à "), (re.compile(r"\s?≥\s?"), " supérieur ou égal à "),
+    (re.compile(r"\s<\s"), " inférieur à "), (re.compile(r"\s>\s"), " supérieur à "),
+    (re.compile(r"\s?=\s?"), " égale "), (re.compile(r"\s?×\s?"), " fois "), (re.compile(r"\s?→\s?"), " donne "),
+    (re.compile(r"\s?[−–]\s?(?=\w)"), " moins "),
+    (re.compile(r"(?<=\w)\s?/\s?(?=\w)"), " sur "),
+]
+# Mot « micro / nano / pico + unité » collé (jamais entendu à l'entraînement) -> deux mots connus, au singulier.
+# « nanomètre(s) » est gardé : le corpus le dit 41 fois.
+_PREFIXE_UNITE = re.compile(
+    r"\b(micro|nano|pico)(farad|coulomb|seconde|joule|gramme|mètre|ampère|volt|watt|litre|mole)s?\b", re.I)
+
+
+def nombres_symboles_unites(p):
+    p = _UNITE_RE.sub(lambda mt: mt.group(1) + " " + UNITES[mt.group(2)], p)
+    for motif, dit in SYMBOLES:
+        p = motif.sub(dit, p)
+    p = _PREFIXE_UNITE.sub(lambda mt: mt.group(0) if mt.group(0).lower().startswith("nanomètre")
+                           else mt.group(1) + " " + mt.group(2), p)
+    p = re.sub(r"(?<![\w,.])(\d+)[,.](\d+)(?!\w)(?![,.]\d)", _decimal_fr, p)      # 1,15 -> un virgule quinze
+    p = re.sub(r"(?<![\w,.])\d{1,9}(?!\w)(?![,.]\d)", lambda mt: nombre_fr(int(mt.group(0))), p)
+    return re.sub(r"[ \t]{2,}", " ", p)
 
 
 # Mots que le modèle n'a jamais entendus (absents des 38 852 transcriptions d'entraînement) et dont l'orthographe le
@@ -72,6 +166,9 @@ PRONONCIATION = [
     (re.compile(r"\bcliqu(?:er|ez|é|ée|és|ées)\b", re.I), "kliké"),     # jamais « cliquer » au corpus
     (re.compile(r"\bcliques?\b", re.I), "klik"),
     (re.compile(r"\bMeV\b"), "méga électron-volts"),
+    # 19/11/2026 (signalé par l'utilisateur) : « micros » lu avec le s final ; « écho » lu parfois avec « ch »
+    (re.compile(r"\bmicros\b", re.I), "micro"),
+    (re.compile(r"\b[ée]chos?\b", re.I), "éko"),
     # « siemens » (vu une fois à l'entraînement) sortait « milliseconde » ; « si mènsse » choisi à l'écoute (16/11/2026)
     (re.compile(r"\b(milli|micro)?siemens\b", re.I), lambda mt: (mt.group(1) or "") + "si mènsse"),
     (re.compile(r"\b(milli)?henrys?\b"), lambda mt: (mt.group(1) or "") + "anri"),   # unité (H, mH) ; pas le nom propre
