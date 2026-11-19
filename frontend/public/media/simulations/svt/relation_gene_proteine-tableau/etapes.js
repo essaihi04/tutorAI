@@ -59,7 +59,47 @@
       }
       finally { S.t = t; S.vu = vu; S.saut = saut; }
     }
-    scene = window.GenetiqueTableau.Scene(canvas, (c) => { scene.cadre(def.graine || 17); dessinerVue(c); return c.fin(); }, { large: true, ajuster: true, complet });
+    /* Allumages (19 novembre 2026, règles 16 et 17 de simulations-au-tableau) : `allume {cible}` allume le repère (ou le
+     * moment) de ce nom — une lueur jaune douce qui RESTE, la dernière plus vive ; `eteins` et `reset` éteignent tout.
+     * Pendant le dessin, les repères allumés sont relevés (rectangle + transformation) puis entourés de leur lueur.
+     * Compter (règle 16) : un repère `<groupe>_<n>` dont le groupe est déclaré dans `comptes` de la vue porte son numéro
+     * courant écrit proprement à la craie (1, 2, 3… dans l'ordre où il s'allume) ; une liste de repères d'un même
+     * groupe s'allume un à un (`PAS_COMPTE` s entre deux), jamais tous d'un coup. */
+    S.allumes = []; S.attente = []; S.dernier = null; S.ordre = 0;
+    const PAS_COMPTE = .6;
+    const groupeDe = id => { const m = /^(.*)_(\d+)$/.exec(id); return m && (V().comptes || []).includes(m[1]) ? m[1] : null; };
+    function dessinerAllumes(c, vus) {
+      if (!S.allumes.length) return;
+      const x = c.ctx, d = devicePixelRatio || 1, POL = window.Tableau.POLICE || 'sans-serif', rang = {};
+      S.allumes.forEach((id, i) => {
+        const g = groupeDe(id); if (g) rang[id] = (rang[g] = (rang[g] || 0) + 1);
+        const r = vus[id]; if (!r) return;
+        const dernier = id === S.dernier, [rx, ry, rw, rh] = r.rect;
+        x.save(); x.setTransform(r.m);
+        x.shadowColor = 'rgba(253,224,71,.85)'; x.shadowBlur = dernier ? 16 : 9;
+        x.fillStyle = dernier ? 'rgba(250,204,21,.20)' : 'rgba(250,204,21,.10)';
+        x.strokeStyle = dernier ? 'rgba(253,224,71,.95)' : 'rgba(253,224,71,.55)'; x.lineWidth = dernier ? 3 : 2;
+        x.beginPath(); x.roundRect(rx - 3, ry - 3, rw + 6, rh + 6, 7); x.fill(); x.stroke();
+        if (g) {   // le numéro courant, à la craie, dans une pastille au coin haut-droit de l'élément compté
+          const ech = Math.hypot(r.m.a, r.m.b) / d || 1, taille = 16 / ech;
+          x.shadowBlur = 0; x.font = `700 ${taille}px ${POL}`; x.textAlign = 'center'; x.textBaseline = 'middle';
+          const n = String(rang[id]), w = Math.max(taille * 1.15, x.measureText(n).width + taille * .55), h = taille * 1.15;
+          const bx = rx + rw - w * .35, by = ry - h * .3;
+          x.fillStyle = 'rgba(12,22,28,.9)'; x.strokeStyle = 'rgba(253,224,71,.9)'; x.lineWidth = 1.4;
+          x.beginPath(); x.roundRect(bx - w / 2, by - h / 2, w, h, h / 2); x.fill(); x.stroke();
+          x.fillStyle = '#fde047'; x.fillText(n, bx, by + taille * .05);
+        }
+        x.restore();
+      });
+    }
+    scene = window.GenetiqueTableau.Scene(canvas, (c) => {
+      scene.cadre(def.graine || 17);
+      const rep = c.repere, vus = {}, lit = new Set(S.allumes);
+      if (!scene.mesurant && lit.size) c.repere = function (id, rx, ry, rw, rh, label) { if (lit.has(id) && !vus[id]) vus[id] = { rect: [rx, ry, rw, rh], m: this.ctx.getTransform() }; return rep.call(this, id, rx, ry, rw, rh, label); };
+      try { dessinerVue(c); } finally { c.repere = rep; }
+      if (!scene.mesurant) dessinerAllumes(c, vus);
+      return c.fin();
+    }, { large: true, ajuster: true, complet });
     /* Tableau large (L ≥ 1000) : une vue qui déclare `blocs` { nom: [x0, y0, x1, y1, zmax?] } et `disposition`
      * { haut: [noms], colonnes: [[noms empilés], …], zmax, zhaut, pleine } (même format que le moteur du cours « Notion
      * de l'information génétique ») voit chaque morceau de son dessin d'origine redessiné (découpé) à sa nouvelle place,
@@ -156,7 +196,8 @@
     function ceQuiSeVoit() {
       const v = V(), t = S.t;
       const tete = `Vue « ${v.titre} », t = ${fr(t, 1)} s${S.running ? ' (la scène avance)' : S.fait ? ' (fin)' : t > 0 ? ' (arrêt sur image)' : ' (pas encore lancée)'}.`;
-      return [tete, ...(v.voit ? v.voit(k()) : [])].filter(Boolean).join(' ');
+      const lum = S.allumes.length ? `Allumé (lueur jaune, le dernier plus vif) : ${S.allumes.join(', ')}.` : '';
+      return [tete, ...(v.voit ? v.voit(k()) : []), lum].filter(Boolean).join(' ');
     }
     function start() { S.jusqua = null; S.vu = {}; S.saut = null; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; scene.sale = true; bulle($('feedback'), (V().titre || '') + ' : observe…'); pont.noter('start'); pont.emettre(); }
     function reset() { start(); }
@@ -216,6 +257,22 @@
       }
       pont.emettre();
     }
+    function eteins() { S.attente.forEach(clearTimeout); S.attente = []; S.allumes = []; S.dernier = null; scene.sale = true; }
+    /* `no` : le numéro de l'ordre reçu ; un élément compté d'un ordre plus ancien, allumé en différé, ne vole pas la lueur vive. */
+    function allumer(id, no) { S.allumes = S.allumes.filter(a => a !== id).concat(id); if (no === S.ordre) S.dernier = id; scene.sale = true; pont.emettre(); }
+    function allume(p) {
+      const ids = [].concat(p.cible ?? p.target ?? []).map(String).filter(Boolean); if (!ids.length) return;
+      // un moment nommé : la scène joue jusque-là s'il n'est pas passé (jamais en arrière)
+      const mo = V().moments || {}, futurs = ids.filter(id => id in mo && mo[id] > S.t + 1e-4);
+      if (futurs.length) playUntil({ moment: futurs.reduce((a, b) => (mo[b] > mo[a] ? b : a)) });
+      // les éléments d'un même groupe compté s'allument un à un ; les autres d'un coup
+      let n = 0; const no = ++S.ordre;
+      ids.forEach(id => {
+        if (groupeDe(id) && n > 0) S.attente.push(setTimeout(() => allumer(id, no), n * PAS_COMPTE * 1000)); else allumer(id, no);
+        if (groupeDe(id)) n++;
+      });
+      pont.noter('allume', { cible: ids });
+    }
     $('run').onclick = () => (S.running ? pause() : (S.t > 0 && S.t < FIN() && !S.fait ? resume() : start()));
 
     if (def.poignees) {
@@ -229,7 +286,7 @@
 
     const expl = {}; for (const n of noms) expl[n] = def.vues[n].explication || [];
     window.Tableau.explication(expl);
-    const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+    const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until', 'allume', 'eteins'];
     const schemaParams = { vue: noms.join(' | ') };
     for (const [n, d] of Object.entries(def.parametres || {})) schemaParams[n] = d.schema || String(d.defaut);
     const tousMoments = noms.map(n => `${n} : ${Object.keys(def.vues[n].moments).join(', ')}`).join(' ; ');
@@ -237,19 +294,21 @@
       command_schema: {
         set_parameters: schemaParams,
         set_time: { time_s: '0..fin de la vue (arrêt sur cet instant, en s de la scène)' },
-        play_until: { moment: tousMoments + ' (rejoue et se fige à cet instant ; un moment d’une autre vue change de vue)', time_s: 'ou un instant en s' } } };
+        play_until: { moment: tousMoments + ' (rejoue et se fige à cet instant ; un moment d’une autre vue change de vue)', time_s: 'ou un instant en s' },
+        allume: { cible: 'un id de repère ou de moment de la vue, ou une liste (lueur qui reste ; un groupe compté s’allume un à un avec son numéro) : ' + noms.map(n => `${n} : ${Object.keys(def.vues[n].moments).join(', ')}${def.vues[n].comptes ? ' ; comptés : ' + def.vues[n].comptes.map(g => g + '_1, ' + g + '_2…').join(', ') : ''}`).join(' ; ') },
+        eteins: {} } };
     const pont = protocole({ id: def.id, commandes, config,
       texte: noms.map(n => def.vues[n].texte || def.vues[n].titre).join(' | '),
       etat: () => ({ simulation_status: statut(), ce_qui_se_voit: ceQuiSeVoit(), current_variant: S.vue,
-        time_s: +S.t.toFixed(2), parameters: { vue: S.vue, ...P }, moments: { ...V().moments } }),
+        time_s: +S.t.toFixed(2), parameters: { vue: S.vue, ...P }, moments: { ...V().moments }, allumes: [...S.allumes] }),
       progression: () => (S.fait ? 1 : Math.min(1, S.t / FIN())),
-      executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+      executer: (cmd, p) => ({ start: () => { eteins(); start(); }, reset: () => { eteins(); reset(); }, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p), allume: () => allume(p || {}), eteins: () => { eteins(); pont.noter('eteins'); pont.emettre(); } })[cmd]?.() });
     bulle($('feedback'), (V().titre || def.titre) + '…');
     // Une vue peut attendre le tuteur (`autoDepart: false`, 17 novembre 2026, comme le moteur du cours « Notion de
     // l'information génétique ») : rien ne se joue avant son premier play_until, sinon la scène défilerait seule et
     // montrerait tout avant que le professeur le dise. Par défaut : départ seul.
     setTimeout(() => { if (!S.running && S.t === 0 && V().autoDepart !== false) start(); }, 1600);
-    window.__etapes = { S, P, scene, localDessin, playUntil, setTime, setParameters, etat: () => ({ ce_qui_se_voit: ceQuiSeVoit(), moments: V().moments, statut: statut() }) };
+    window.__etapes = { S, P, scene, localDessin, playUntil, setTime, setParameters, allume, eteins, etat: () => ({ ce_qui_se_voit: ceQuiSeVoit(), moments: V().moments, statut: statut() }) };
     return window.__etapes;
   }
 

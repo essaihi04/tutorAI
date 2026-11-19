@@ -153,6 +153,14 @@ function dessinerSequences(c, k) {
   ligne('acides aminés R', SQ_R.map(s => M.traduire(arn(s))), 370, 10.2, 'vert', 'vert', true);
   if (t >= 8.2) c.repere('arnm', 10, 216, 740, 76, 'les ARNm des deux allèles');
   if (t >= 10.0) c.repere('acides_amines', 10, 312, 740, 76, 'les séquences d’acides aminés : Gly chez S, Ser chez R au triplet 247');
+  /* Compter en allumant (19 novembre 2026, règle 16) : num_i (numéro), tripletS_i / tripletR_i (brins des deux allèles) ;
+   * le tuteur les parcourt un à un, triplet par triplet, le moteur écrit le numéro courant. */
+  SQ_S.forEach((s, i) => {
+    const r = (id, y, lab) => c.repere(id, QX(i) - 29, y - 19, 58, 26, lab);
+    if (t >= .6) r('num_' + (i + 1), 76, 'le triplet ' + (243 + i));
+    if (t >= 2.6) r('tripletS_' + (i + 1), 114, 'le triplet ' + (243 + i) + ' de l’allèle Ace-S : ' + s);
+    if (t >= 4.6) r('tripletR_' + (i + 1), 164, 'le triplet ' + (243 + i) + ' de l’allèle Ace-R : ' + SQ_R[i]);
+  });
 }
 function voitSequences(k) {
   const t = k.t, m = ['Document 3 (2020 N) : triplets 243 à 251, brin non transcrit, flèche « sens de lecture ».'];
@@ -198,7 +206,7 @@ function dessinerBlackfan(c, k) {
   if (t >= 3.8) c.repere('barres_sain', HX[0] - 4, HY0 - 46 * HK - 26, 98, 46 * HK + 30, 'individu sain : 46 UA et 46 UA');
   if (t >= 6.6) c.repere('barres_malade', HX[2] - 4, HY0 - 46 * HK - 26, 98, 46 * HK + 30, 'individu malade : 46 UA de grandes, 23 UA de petites');
   // figure b : l’assemblage des ribosomes sur l’ARNm de l’hémoglobine
-  const P = [{ y: 150, nom: 'cellule précurseur, sain', n: 4, col: 'vert' }, { y: 330, nom: 'cellule précurseur, malade', n: 2, col: 'rouge' }];
+  const P = [{ y: 150, nom: 'cellule précurseur, sain', n: 5, col: 'vert' }, { y: 330, nom: 'cellule précurseur, malade', n: 2, col: 'rouge' }];
   c.direct(() => {
     const x = c.ctx;
     P.forEach((R, r) => {
@@ -206,15 +214,15 @@ function dessinerBlackfan(c, k) {
       M.milieu(x, 380, R.y - 92, 370, 156, 'cytoplasme', a);
       x.save(); x.globalAlpha = a; x.strokeStyle = '#ea580c'; x.lineWidth = 4; x.beginPath(); x.moveTo(400, R.y + 18); x.lineTo(730, R.y + 18); x.stroke(); x.restore();   // l’ARNm de l’hémoglobine
       const u = rampe(t, 9.0, 2.2);
-      for (let j = 0; j < 4; j++) {          // les quatre grandes sous-unités
-        const forme = j < R.n, xf = 420 + j * 82;
-        const xg = forme ? entre(404 + j * 46, xf, u) : 660 + (j - 2) * 56, yg = forme ? entre(R.y - 40, R.y + 18, u) : R.y - 36;
+      for (let j = 0; j < 5; j++) {          // les cinq grandes sous-unités (document 1, figure b : 5 ribosomes chez le sain, 2 chez le malade)
+        const forme = j < R.n, xf = 418 + j * 66;
+        const xg = forme ? entre(404 + j * 46, xf, u) : 560 + (j - R.n) * 56, yg = forme ? entre(R.y - 40, R.y + 18, u) : R.y - 36;
         if (forme) M.ribosome(x, xg, yg, .5, { grande: a, petite: 0, dyg: 0 });
         else M.ribosome(x, xg, yg, .5, { grande: a * .55, petite: 0 });
       }
-      for (let j = 0; j < R.n; j++) M.ribosome(x, entre(560 + j * 40, 420 + j * 82, u), entre(R.y + 52, R.y + 18, u), .5, { grande: 0, petite: a });
+      for (let j = 0; j < R.n; j++) M.ribosome(x, entre(560 + j * 34, 418 + j * 66, u), entre(R.y + 52, R.y + 18, u), .5, { grande: 0, petite: a });
       // l’hémoglobine produite, après l’assemblage
-      const h = rampe(t, 12.0, 2.0), nh = Math.round(R.n * 2 * h);
+      const h = rampe(t, 12.0, 2.0), nh = Math.round(R.n * h);   // comme le document : 5 molécules chez le sain, 2 chez le malade
       for (let j = 0; j < nh; j++) hemoglobine(x, 410 + (j % 8) * 40, R.y - 74 + Math.floor(j / 8) * 22 + (r ? 0 : 0), 1);
     });
   });
@@ -226,13 +234,15 @@ function dessinerBlackfan(c, k) {
   });
   if (t >= 11.2) c.repere('ribosomes_malade', 400, P[1].y - 40, 330, 80, 'deux ribosomes seulement ; des grandes sous-unités restent seules');
   if (t >= 14.0) c.repere('hemoglobine', 400, P[1].y - 110, 340, 40, 'peu d’hémoglobine chez le malade');
+  /* Compter les ribosomes complets (19 novembre 2026, règle 16) : ribosain_1..4, ribomalade_1..2, allumés un à un. */
+  if (t >= 11.2) P.forEach((R, r) => { for (let j = 0; j < R.n; j++) c.repere((r ? 'ribomalade_' : 'ribosain_') + (j + 1), 418 + j * 66 - 26, R.y - 16, 52, 60, 'un ribosome complet (' + (r ? 'malade' : 'sain') + ')'); });
 }
 function voitBlackfan(k) {
   const t = k.t, m = ['Figure a : histogramme de la quantité (UA) des grandes (barres foncées) et petites (barres claires) sous-unités des ribosomes.'];
   if (t >= 3.8) m.push('Individu sain : grandes 46 UA, petites 46 UA.');
   if (t >= 6.6) m.push('Individu malade : grandes 46 UA, petites 23 UA (la moitié).');
   if (t >= 8.2) m.push('Figure b : deux cellules précurseurs des globules rouges ; un ARNm de l’hémoglobine dans chacune.');
-  if (t >= 11.2) m.push('Les sous-unités s’assemblent sur l’ARNm : 4 ribosomes chez le sain ; chez le malade 2 ribosomes, deux grandes sous-unités restent seules (pâles).');
+  if (t >= 11.2) m.push('Les sous-unités s’assemblent sur l’ARNm : 5 ribosomes chez le sain ; chez le malade 2 ribosomes, trois grandes sous-unités restent seules (pâles).');
   if (t >= 14.0) m.push('L’hémoglobine produite (molécules rouges) : quantité normale chez le sain, faible chez le malade.');
   return m;
 }
@@ -246,15 +256,15 @@ window.Etapes.lancer({
       conclusion: 'Les documents 1 et 2 sont au tableau : à toi de lire la relation.',
       texte: 'Sujet 2020 N : l’AChE hydrolyse l’acétylcholine ; le carbamate occupe son site actif. Activité de l’AChE (%) pour 0, 10⁻², 1 mg/L : souche S 97, 8, 0 ; souche R 32, 32, 28. Mortalité : S de 0 à 100 % entre 0,1 et 1 mg/L ; R de 0 à 100 % entre 2·10² et 10³ mg/L environ.',
       explication: [{ repere: 'enzyme', texte: 'L’AChE coupe l’acétylcholine.' }, { repere: 'site_actif', texte: 'Le carbamate bloque le site actif.' }, { repere: 'activite', texte: 'L’activité de l’AChE selon la concentration.' }, { repere: 'courbe_s', texte: 'La souche S meurt dès 1 mg/L.' }, { repere: 'courbe_r', texte: 'La souche R résiste jusqu’à 10² mg/L.' }] },
-    moustiques_seq: { titre: 'Sujet 2020 N : les allèles Ace-S et Ace-R', fin: 11.4, moments: MSQ, autoDepart: false, encre: [10, 10, 750, 400], dessiner: dessinerSequences, voit: voitSequences,
+    moustiques_seq: { titre: 'Sujet 2020 N : les allèles Ace-S et Ace-R', fin: 11.4, moments: MSQ, comptes: ['num', 'tripletS', 'tripletR'], autoDepart: false, encre: [10, 10, 750, 400], dessiner: dessinerSequences, voit: voitSequences,
       motifs: { triplets: 'les numéros des triplets, 243 à 251', allele_s: 'l’allèle Ace-S', allele_r: 'l’allèle Ace-R', difference: 'la différence : triplet 247', arnm: 'les ARNm', acides_amines: 'les acides aminés : Gly chez S, Ser chez R' },
       conclusion: 'Triplet 247 : GGC → AGC, GGC (Gly) → AGC (Ser).',
       texte: 'Document 3 (2020 N), brin non transcrit, triplets 243 à 251 : Ace-S ATC TTC GGG GGT GGC TTC TAC TCC GGG ; Ace-R ATC TTC GGG GGT AGC TTC TAC TCC GGG ; ARNm et acides aminés écrits seulement aux moments arnm et acides_amines.',
       explication: [{ repere: 'allele_s', texte: 'L’allèle de la souche sensible.' }, { repere: 'allele_r', texte: 'L’allèle de la souche résistante.' }, { repere: 'triplet_247', texte: 'Une seule différence : le triplet 247.' }, { repere: 'acides_amines', texte: 'Gly devient Ser.' }] },
-    blackfan: { titre: 'Sujet 2022 N : les ribosomes et l’hémoglobine', fin: 15, moments: MBF, autoDepart: false, encre: [14, 10, 752, 404], dessiner: dessinerBlackfan, voit: voitBlackfan,
+    blackfan: { titre: 'Sujet 2022 N : les ribosomes et l’hémoglobine', fin: 15, moments: MBF, comptes: ['ribosain', 'ribomalade'], autoDepart: false, encre: [14, 10, 752, 404], dessiner: dessinerBlackfan, voit: voitBlackfan,
       motifs: { axes: 'la figure a : les deux sous-unités', saine: 'individu sain : 46 et 46 UA', malade: 'individu malade : 46 et 23 UA', assemblage: 'les sous-unités s’assemblent en ribosomes', hemoglobine: 'l’hémoglobine produite' },
       conclusion: 'Moitié moins de petites sous-unités → moins de ribosomes → peu d’hémoglobine.',
-      texte: 'Anémie de Blackfan-Diamond (2022 N) : sous-unités des ribosomes, sain 46 / 46 UA, malade 46 / 23 UA ; assemblage : 4 ribosomes chez le sain, 2 chez le malade ; hémoglobine normale ou faible.',
+      texte: 'Anémie de Blackfan-Diamond (2022 N) : sous-unités des ribosomes, sain 46 / 46 UA, malade 46 / 23 UA ; assemblage : 5 ribosomes chez le sain, 2 chez le malade ; hémoglobine normale ou faible.',
       explication: [{ repere: 'barres_sain', texte: 'Chez le sain, autant de petites que de grandes.' }, { repere: 'barres_malade', texte: 'Chez le malade, deux fois moins de petites.' }, { repere: 'ribosomes_malade', texte: 'Moins de ribosomes complets.' }, { repere: 'hemoglobine', texte: 'Moins d’hémoglobine.' }] },
   },
 });

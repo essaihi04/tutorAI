@@ -388,6 +388,17 @@ function dessinerLignes(c, k) {
     }
   }
   if (t >= 12.5) c.repere('difference', xd, RY.mb - T - 3, wd, RY.mp - RY.mb + T + 11, 'ce qui diffère');
+  /* Compter en allumant (19 novembre 2026, règle 16) : chaque case a son repère — triplet_i (numéro), codon_i / aa_i
+   * (allèle normal), codonm_i / aam_i (allèle muté) ; le tuteur les allume une à une, le moteur écrit le numéro courant. */
+  const cas = (id, y, i, h, lab) => c.repere(id, LX + i * cw + 2, y - h - 3, cw - 4, h + 9, lab);
+  for (let i = 0; i < n; i++) {
+    const no = A.S.n0 + i;
+    if (t >= .3) cas('triplet_' + (i + 1), RY.tri, i, TT, 'le triplet ' + no);
+    if (t >= 4.5) cas('codon_' + (i + 1), RY.na, i, T, 'le codon ' + A.an[i] + ' (triplet ' + no + ')');
+    if (t >= 7.0 && A.pn[i] != null) cas('aa_' + (i + 1), RY.np, i, T, 'l’acide aminé ' + A.pn[i] + ' (triplet ' + no + ')');
+    if (t >= 10.2) cas('codonm_' + (i + 1), RY.ma, i, T, 'le codon muté ' + A.am[i] + ' (triplet ' + no + ')');
+    if (t >= 11.0 && A.pm[i] != null) cas('aam_' + (i + 1), RY.mp, i, T, 'l’acide aminé muté ' + A.pm[i] + ' (triplet ' + no + ')');
+  }
 }
 function voitLignes(k) {
   const t = k.t, A = analyser(k.P.sujet), m = [`Sujet ${A.S.nom}, écrit sous le titre.`], tr = A.tn.map((s, i) => A.S.n0 + i);
@@ -632,6 +643,13 @@ function dessinerAmeloPas(c, k) {
     k.T(c, 'muté :', XQ + 4, yQ2 + 76, { couleur: 'rouge', taille: T, duree: .2 }); rangee(yQ2 + 76, tm, 'blanc', true);
   }
   if (t >= 9.2) { c.repere('brins', XQ - 4, yQ2 - 16, XQM - XQ + 2, 112, 'les brins non transcrits, normal et muté'); c.repere('triplet3', cx(2) - cw / 2 + 2, yQ2 + 62, cw - 4, 22, 'le triplet 3 de l’allèle muté'); }
+  /* Allumages de la démonstration (19 novembre 2026, règles 16-17) : les deux rangées du document, les deux brins, et chaque
+   * triplet (brin_i normal, brinm_i muté) compté un à un avec son numéro. */
+  if (t >= .2) { c.repere('rang_sain', 14, RANGS[0].y - 8, 320, 132, 'la personne saine : amélogénine normale → émail normal'); c.repere('rang_malade', 14, RANGS[1].y - 8, 320, 132, 'la personne malade : amélogénine anormale → émail atteint'); }
+  if (t >= 9.2) {
+    c.repere('brin_normal', XQ, yQ2 + 6, XQM - XQ, 20, 'le brin non transcrit de l’allèle normal'); c.repere('brin_mute', XQ, yQ2 + 62, XQM - XQ, 20, 'le brin non transcrit de l’allèle muté');
+    tn.forEach((s, i) => { c.repere('brin_' + (i + 1), cx(i) - cw / 2 + 3, yQ2 + 6, cw - 6, 19, 'le triplet ' + (i + 1) + ' : ' + s); c.repere('brinm_' + (i + 1), cx(i) - cw / 2 + 3, yQ2 + 62, cw - 6, 19, 'le triplet ' + (i + 1) + ' muté : ' + tm[i]); });
+  }
   if (k.ecrit(c, 'q2r', 11.6)) {
     rangee(yQ2 + 37, an, 'orange', false); rangee(yQ2 + 93, am, 'orange', true);
     [[yQ2 + 54, pn, false], [yQ2 + 110, pm, true]].forEach(([y, aa, mute]) => aa.forEach((s, i) => { if (i) k.T(c, '–', lx + i * cw, y, { couleur: 'faible', taille: T, align: 'center', duree: .04 }); k.T(c, s, cx(i), y, { couleur: i === 2 && mute ? 'rouge' : 'vert', taille: T, align: 'center', duree: .08 }); }));
@@ -688,7 +706,7 @@ window.Etapes.lancer({
       conclusion: 'Maladie, protéine, brin donné, type de mutation : repérés avant d’écrire.',
       texte: 'Quatre repérages sur l’énoncé 2025 N : maladie = ALD ; protéine = ALDP (transport des AGLC dans le peroxysome) ; brin donné = brin NON transcrit ; type de mutation = substitution (triplet 149).',
       explication: [{ repere: 'enonce', texte: 'L’énoncé, résumé.' }, { repere: 'case_maladie', texte: 'La maladie.' }, { repere: 'case_proteine', texte: 'La protéine en cause.' }, { repere: 'mot_non', texte: 'Le mot « non » : on te donne le brin NON transcrit.' }, { repere: 'case_mutation', texte: 'Le type de mutation : une substitution.' }] },
-    lignes: { titre: 'Les lignes du barème', fin: 16, moments: ML, autoDepart: false, dessiner: dessinerLignes, voit: voitLignes,
+    lignes: { titre: 'Les lignes du barème', fin: 16, moments: ML, comptes: ['triplet', 'codon', 'aa', 'codonm', 'aam'], autoDepart: false, dessiner: dessinerLignes, voit: voitLignes,
       motifs: { triplets: 'la ligne des numéros de triplets', t_brin: 'le titre : brin non transcrit', t_arnm: 'le titre : ARNm', t_aa: 'le titre : séquence d’acides aminés', brin_normal: 'le brin non transcrit de l’allèle normal', arnm_normal: 'l’ARNm normal : on recopie, T devient U', aa_normal: 'la séquence d’acides aminés normale', allele_mute: 'les trois lignes de l’allèle muté', difference: 'ce qui diffère, encadré en rouge' },
       conclusion: 'Les lignes alignées pour les deux allèles : la différence saute aux yeux.',
       texte: 'Lignes du barème (N° des triplets, brin non transcrit, ARNm, séquence d’acides aminés) pour l’allèle normal et l’allèle muté ; sujets 2025N (ALD, triplet 149 AGT → AGA, Ser → Arg), 2024N (AMELX, triplet 3 CCC → CTC, Pro → Leu), 2023N (LDLR, triplet 33 CAG → TAG, codon stop).',
@@ -709,7 +727,7 @@ window.Etapes.lancer({
       conclusion: 'Le sujet 2024 N résolu : relation protéine – caractère, séquences, origine génétique.',
       texte: 'Amélogénèse imparfaite (2024 N) : amélogénine normale → minéralisation normale → émail normal ; amélogénine anormale → minéralisation faible → émail atteint. Allèle normal AAT CAT CCC CGT GCT → Asn – His – Pro – Arg – Ala ; muté AAT CAT CTC CGT GCT → Asn – His – Leu – Arg – Ala. Origine : substitution C → T au triplet 3 (gène AMELX).',
       explication: [{ repere: 'document', texte: 'Le document 1, redessiné.' }, { repere: 'dent_saine', texte: 'La dent saine : émail normal.' }, { repere: 'dent_atteinte', texte: 'La dent atteinte : émail mal minéralisé.' }, { repere: 'relation', texte: 'Question 1 : la relation protéine – caractère.' }, { repere: 'sequences', texte: 'Question 2 : les séquences.' }, { repere: 'origine', texte: 'Question 3 : l’origine génétique.' }] },
-    amelogenine_pas: { titre: 'Sujet 2024 N, une consigne à la fois', fin: 18, moments: MAP, autoDepart: false, dessiner: dessinerAmeloPas, voit: voitAmeloPas,
+    amelogenine_pas: { titre: 'Sujet 2024 N, une consigne à la fois', fin: 18, moments: MAP, comptes: ['brin', 'brinm'], autoDepart: false, dessiner: dessinerAmeloPas, voit: voitAmeloPas,
       motifs: { document: 'le document 1 : améloblastes, amélogénine, émail', q1: 'consigne 1 : montrez la relation protéine – caractère', q1_reponse: 'la réponse 1, comme le barème', q2: 'consigne 2 : les deux brins non transcrits', q2_reponse: 'l’ARNm et les acides aminés ; le triplet 3 encadré', q3: 'consigne 3 : l’origine génétique', q3_reponse: 'la phrase de l’origine génétique' },
       conclusion: 'Le sujet 2024 N joué consigne par consigne.',
       texte: 'Amélogénèse imparfaite (2024 N), une consigne à la fois : le document, la consigne 1 puis sa réponse ; les brins normal et muté, puis l’ARNm et les acides aminés ; la consigne 3 puis la phrase de l’origine génétique.',

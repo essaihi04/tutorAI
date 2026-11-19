@@ -82,13 +82,6 @@ export function slideVersScript(slide: CourseSlide, langue: LangueSeance): LiveS
         image: { url: visuel.url, alt: visuel.alt || contenu.alt, caption: visuel.caption || contenu.caption },
         say: legende(visuel.caption),
       });
-    } else if (visuel.kind === 'examen' && visuel.examen?.page) {
-      // ailleurs que dans le lecteur de cours, la page du sujet est une image (la page entière)
-      steps.push({
-        action: 'figure',
-        image: { url: visuel.examen.page, alt: visuel.alt || 'La page du sujet', caption: visuel.caption || visuel.examen.source },
-        say: legende(visuel.caption),
-      });
     } else if (visuel.kind === 'simulation' && visuel.url) {
       steps.push({
         action: 'figure',
