@@ -94,8 +94,60 @@ function tPhys() {
   }
   return dernier ?? 0;
 }
+/**
+ * Compter en allumant (simulations-au-tableau règle 16, 19 novembre 2026) : la division k s’allume à la fin de l’étape
+ * ids[k−1] — bande douce sur l’écran, trait jaune sous la grille, son numéro écrit proprement dessous — et reste allumée ;
+ * le total s’écrit une seule fois à l’étape `total`. Un repère par division (`div_k`) et un pour le total.
+ */
+function compterDivisions(c, o, x0, ids, total, texteTotal) {
+  const ybas = o.y + o.ny * o.dy;
+  ids.forEach((id, k) => {
+    if (!vu(id)) return;
+    const x = x0 + k * o.dx, recente = !ids[k + 1] || !vu(ids[k + 1]);
+    c.direct(() => {
+      const ctx = c.ctx; ctx.save();
+      ctx.fillStyle = recente && !vu(total) ? 'rgba(250,204,21,.24)' : 'rgba(250,204,21,.13)'; ctx.fillRect(x + 1, o.y + 1, o.dx - 2, o.ny * o.dy - 2);
+      ctx.strokeStyle = c.couleur('jaune'); ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.shadowColor = 'rgba(250,204,21,.9)'; ctx.shadowBlur = 8;
+      ctx.beginPath(); ctx.moveTo(x + 3, ybas + 9); ctx.lineTo(x + o.dx - 3, ybas + 9); ctx.stroke(); ctx.restore();
+      c.texte(String(k + 1), x + o.dx / 2, ybas + 30, { couleur: 'jaune', align: 'center', taille: 18 });
+    });
+    c.repere(id, x, o.y, o.dx, o.ny * o.dy + 36, `la division ${k + 1}`);
+  });
+  if (vu(total)) {
+    const xm = x0 + ids.length * o.dx / 2;
+    c.direct(() => c.texte(texteTotal, xm, ybas + 56, { couleur: 'jaune', align: 'center', taille: 19 }));
+    c.repere(total, x0, ybas + 4, ids.length * o.dx, 58, `le total : ${texteTotal}`);
+  }
+}
+/** Ce que le comptage montre, pour le tuteur. */
+function comptees() {
+  const ids = PH.filter(p => /^div_\d+$/.test(p.id)).map(p => p.id), n = ids.filter(vu).length;
+  return !n ? '' : vu('divisions') ? `Total écrit : ${ids.length} divisions.` : `Comptage en cours : ${n} division${n > 1 ? 's' : ''} allumée${n > 1 ? 's' : ''} (numérotées 1 à ${n}).`;
+}
+/*
+ * Allumages (règle 17, contrat du lecteur : ligne de démonstration `allume`) : la commande `allume {target}` (un repère ou
+ * une liste) fait paraître l’étape qui dessine ce repère si elle n’est pas encore jouée, puis l’entoure d’une lueur douce
+ * qui reste jusqu’à `eteins`. Les rectangles des repères sont relevés à chaque dessin (coordonnées du dessin).
+ */
+const LUM = new Set(), RECTS = {};
+const lum = id => LUM.has(id);
+function lueurs(c) {
+  c.direct(() => {
+    const ctx = c.ctx;
+    for (const id of LUM) {
+      const r = RECTS[id]; if (!r) continue;
+      const [x, y, w, h] = r;
+      ctx.save(); ctx.shadowColor = 'rgba(250,204,21,.95)'; ctx.shadowBlur = 16; ctx.strokeStyle = 'rgba(250,204,21,.9)'; ctx.lineWidth = 2.4;
+      ctx.beginPath(); ctx.roundRect(x - 5, y - 4, w + 10, h + 8, 8); ctx.stroke();
+      ctx.shadowBlur = 0; ctx.fillStyle = 'rgba(250,204,21,.07)'; ctx.fill(); ctx.restore();
+    }
+  });
+}
+/** `&calculs=0` : la page n’écrit pas ses lignes de calcul (la démonstration est écrite par le lecteur à côté de la figure). */
+const CALCULS = new URLSearchParams(location.search).get('calculs') !== '0';
 /** Les lignes de calcul : chaque ligne paraît à la fin de son étape ; on garde les `max` dernières. */
 function calculs(c, x, y, lignes, o = {}) {
+  if (!CALCULS) return;
   const vues = lignes.filter(l => vu(l.id)).slice(-(o.max || 6));
   let yy = y;
   c.direct(() => {
@@ -121,7 +173,12 @@ VUES.national_2022_normale = {
     { id: 'signal_recu', d: 1.2, t: [3.0, 3.45], motif: 'le signal (b) reçu apparaît, plus tard' },
     { id: 'ecran_complet', d: 1.4, t: [3.45, 5.0], motif: 'le spot a balayé tout l’écran' },
     { id: 'debuts', d: 1, motif: 'le début de chaque signal est marqué' },
-    { id: 'divisions', d: 1, motif: 'on compte les divisions entre les deux débuts' },
+    { id: 'div_1', d: 0.5, motif: 'on compte : la 1ʳᵉ division s’allume' },
+    { id: 'div_2', d: 0.5, motif: 'on compte : la 2ᵉ division s’allume' },
+    { id: 'div_3', d: 0.5, motif: 'on compte : la 3ᵉ division s’allume' },
+    { id: 'div_4', d: 0.5, motif: 'on compte : la 4ᵉ division s’allume' },
+    { id: 'div_5', d: 0.5, motif: 'on compte : la 5ᵉ division s’allume' },
+    { id: 'divisions', d: 0.6, motif: 'le total : 5 divisions entre les deux débuts' },
     { id: 'retard', d: 1, motif: 'Δt = divisions × sensibilité' },
     { id: 'celerite', d: 1, motif: 'v = L/Δt' },
   ],
@@ -148,8 +205,8 @@ VUES.national_2022_normale = {
         c.ligne(xa, o.y + 1.6 * o.dy, xa, ybas + 8, { couleur: 'jaune', largeur: 1.5, pointille: [4, 4] });
         c.ligne(xb, o.y + 3.6 * o.dy, xb, ybas + 8, { couleur: 'jaune', largeur: 1.5, pointille: [4, 4] });
       }
-      if (vu('divisions')) c.cote(xa, ybas + 16, xb, ybas + 16, '5 divisions', { couleur: 'jaune', dessous: true, taille: 19 });
     });
+    compterDivisions(c, o, xa, ['div_1', 'div_2', 'div_3', 'div_4', 'div_5'], 'divisions', '5 divisions');
     if (vu('debuts')) { c.repere('debut_a', xa - 12, o.y + 0.6 * o.dy, 24, 2 * o.dy, 'début du signal (a)'); c.repere('debut_b', xb - 12, o.y + 2.6 * o.dy, 24, 2 * o.dy, 'début du signal (b)'); }
     if (vu('divisions')) c.repere('retard', xa, ybas + 4, xb - xa, 36, 'Δt : du début de (a) au début de (b)');
     calculs(c, 548, 214, [
@@ -162,7 +219,8 @@ VUES.national_2022_normale = {
     m.push(t <= 0 ? 'Le spot n’est pas encore parti.' : t < 3 ? `Le spot balaie l’écran (${fr(t / 0.5, 1)} div) ; le signal (a) émis est tracé à partir de 1 div ; le front sonore n’a pas encore atteint R.`
       : `Le signal (a) commence à 1 div, le signal (b) reçu à 6 div${t < 5 ? ' ; le spot balaie encore' : ''}.`);
     if (vu('debuts')) m.push('Les débuts des deux signaux sont marqués en pointillés.');
-    if (vu('divisions')) m.push('Cote : 5 divisions entre les deux débuts.');
+    m.push(comptees());
+    if (vu('divisions')) m.push('Divisions comptées une à une, allumées et numérotées 1 à 5 : 5 divisions entre les deux débuts.');
     if (vu('retard')) m.push('Écrit : Δt = 5 × 0,5 ms = 2,5 ms.');
     if (vu('celerite')) m.push('Écrit : v = L/Δt = 0,85/(2,5 × 10⁻³) = 340 m/s.');
     return m.join(' ');
@@ -181,7 +239,11 @@ VUES.national_2024_rattrapage = {
     { id: 'm2_enregistre', d: 1.2, t: [T2_24, T2_24 + 0.5], motif: 'le signal de M₂ est tracé sur la voie B' },
     { id: 'ecran_complet', d: 1.4, t: [T2_24 + 0.5, T1_24 + 5], motif: 'le spot a balayé tout l’écran' },
     { id: 'debuts', d: 1, motif: 'le début de chaque signal est marqué' },
-    { id: 'divisions', d: 1, motif: 'on compte les divisions entre les deux débuts' },
+    { id: 'div_1', d: 0.5, motif: 'on compte : la 1ʳᵉ division s’allume' },
+    { id: 'div_2', d: 0.5, motif: 'on compte : la 2ᵉ division s’allume' },
+    { id: 'div_3', d: 0.5, motif: 'on compte : la 3ᵉ division s’allume' },
+    { id: 'div_4', d: 0.5, motif: 'on compte : la 4ᵉ division s’allume' },
+    { id: 'divisions', d: 0.6, motif: 'le total : 4 divisions entre les deux débuts' },
     { id: 'retard', d: 1, motif: 'τ = divisions × sensibilité' },
     { id: 'chemins', d: 1.4, motif: 'les deux chemins : ℓ vers M₁, d − ℓ vers M₂' },
     { id: 'longueur', d: 1, motif: 'ℓ = (d − v·τ)/2' },
@@ -216,7 +278,6 @@ VUES.national_2024_rattrapage = {
         c.ligne(xa + 1, o.y + 1.5 * o.dy, xa + 1, ybas + 8, { couleur: 'jaune', largeur: 1.5, pointille: [4, 4] });
         c.ligne(xb, o.y + 4 * o.dy, xb, ybas + 8, { couleur: 'jaune', largeur: 1.5, pointille: [4, 4] });
       }
-      if (vu('divisions')) c.cote(xa + 1, ybas + 16, xb, ybas + 16, '4 divisions', { couleur: 'jaune', dessous: true, taille: 19 });
       if (vu('chemins')) {
         const xm = xE + L24 * PX;   // à ℓ de l’émetteur, côté M₂ : là, les deux salves ont fait le même chemin
         c.ligne(xm, yM - 10, xm, yM + 26, { couleur: 'vert', largeur: 1.5, pointille: [4, 4] });
@@ -224,6 +285,7 @@ VUES.national_2024_rattrapage = {
         c.cote(xm, yM + 14, x2, yM + 14, 'd − 2ℓ', { couleur: 'vert', taille: 18 });
       }
     });
+    compterDivisions(c, o, xa, ['div_1', 'div_2', 'div_3', 'div_4'], 'divisions', '4 divisions');
     if (vu('debuts')) { c.repere('debut_a', xa - 8, o.y + 0.5 * o.dy, 24, 2 * o.dy, 'début du signal de M₁'); c.repere('debut_b', xb - 12, o.y + 3 * o.dy, 24, 2 * o.dy, 'début du signal de M₂'); }
     if (vu('divisions')) c.repere('retard', xa, ybas + 4, xb - xa, 36, 'τ : du début de A au début de B');
     if (vu('chemins')) c.repere('chemins', xE, yM - 14, x2 - xE, 40, 'le chemin en plus vers M₂ : d − 2ℓ');
@@ -238,7 +300,8 @@ VUES.national_2024_rattrapage = {
     m.push(t <= 0 ? 'Aucune salve encore.' : t < T1_24 ? 'La salve part dans les deux sens ; elle n’a encore atteint aucun micro ; l’écran est vide.'
       : t < T2_24 ? 'La salve a atteint M₁ (voie A tracée dès le bord gauche) ; elle va encore vers M₂.' : 'M₁ puis M₂ atteints : le signal B commence 4 divisions après le signal A.');
     if (vu('debuts')) m.push('Les débuts des deux signaux sont marqués.');
-    if (vu('divisions')) m.push('Cote : 4 divisions.');
+    m.push(comptees());
+    if (vu('divisions')) m.push('Divisions comptées une à une, allumées et numérotées 1 à 4 : 4 divisions.');
     if (vu('retard')) m.push('Écrit : τ = 4 × 0,5 ms = 2 ms.');
     if (vu('chemins')) m.push('Sur le montage : ℓ de chaque côté de l’émetteur, puis d − 2ℓ en plus vers M₂ ; τ = (d − 2ℓ)/v.');
     if (vu('longueur')) m.push('Écrit : ℓ = (d − v·τ)/2 = (2,85 − 0,68)/2 ≈ 1,09 m.');
@@ -249,16 +312,22 @@ VUES.national_2024_rattrapage = {
 /* ── National 2024, normale : le caillou en O, aspects de la surface à t₁ et t₂ = t₁ + 1,5 s ── */
 VUES.national_2024_normale = {
   titre: 'National 2024 normale : une onde circulaire à la surface de l’eau',
+  /* 19 novembre 2026 (règle 17) : plus de tableau à part. Les données du sujet s’écrivent sur la figure, là où on les lit
+   * (r₁ = 14 cm au front de t₁, r₂ = 56 cm au front de t₂, t₂ = t₁ + 1,5 s sur l’aspect à t₂) ; la démonstration allume
+   * ce qu’elle utilise : le rayon r₁, le rayon r₂, puis Δr = r₂ − r₁ surligné entre les deux fronts, les deux aspects (Δt),
+   * la flèche de la célérité, puis r₁ à nouveau pour t₁ et l’aspect à t₂ pour t₂. Ses lignes s’écrivent à droite. */
   phases: [
     { id: 'caillou', d: 1.2, t: [0, 0], motif: 'le caillou tombe en O' },
     { id: 'onde_t1', d: 2, t: [0, 0.5], motif: 'l’onde circulaire s’éloigne de O' },
     { id: 'aspect_t1', d: 1, motif: 'aspect à t₁ : front à r₁ = 14 cm' },
     { id: 'onde_t2', d: 3.5, t: [0.5, 2.0], motif: 'le front continue d’avancer' },
-    { id: 'aspect_t2', d: 1, motif: 'aspect à t₂ : front à r₂ = 56 cm' },
-    { id: 'distance', d: 1, motif: 'Δr = r₂ − r₁' },
+    { id: 'aspect_t2', d: 1, motif: 'aspect à t₂ = t₁ + 1,5 s : front à r₂ = 56 cm' },
+    { id: 'r1', d: 0.8, motif: 'le rayon r₁ = 14 cm s’allume' },
+    { id: 'r2', d: 0.8, motif: 'le rayon r₂ = 56 cm s’allume' },
+    { id: 'distance', d: 1, motif: 'Δr = r₂ − r₁, surligné entre les deux fronts' },
     { id: 'duree', d: 1, motif: 'Δt = t₂ − t₁ = 1,5 s' },
     { id: 'celerite', d: 1, motif: 'v = Δr/Δt' },
-    { id: 'date_t1', d: 1, motif: 't₁ = r₁/v' },
+    { id: 'date_t1', d: 1, motif: 't₁ = r₁/v (le front part de O à t = 0)' },
     { id: 'date_t2', d: 1, motif: 't₂ = t₁ + 1,5 s' },
   ],
   dessin(c) {
@@ -274,45 +343,67 @@ VUES.national_2024_normale = {
     c.rect(ox - 14, 14, 254, 400, { couleur: 'tresfaible', largeur: 1.2, arrondi: 3 });   // le bord de la cuve
     c.ligne(ox, 18, ox, 410, { couleur: 'faible', largeur: 1.4 });
     c.fleche(ox, oy, ox + 250, oy, { couleur: 'faible', largeur: 1.4 });
-    c.texte('r (cm)', ox + 250, oy + 44, { couleur: 'jaune', align: 'right', taille: 16 });
-    c.texte('O', ox - 8, oy + 22, { couleur: 'blanc', align: 'right', taille: 19 });
+    c.texte('r (cm)', ox + 250, oy - 12, { couleur: 'jaune', align: 'right', taille: 16 });
+    c.texte('O', ox - 18, oy + 8, { couleur: 'blanc', align: 'right', taille: 19 });
     c.repere('cuve', ox - 14, 14, 254, 400, 'la surface de l’eau vue de dessus');
+    c.repere('origine', ox - 26, oy - 14, 30, 40, 'O, là où tombe le caillou (r = 0 à t = 0)');
+    /** Un rayon allumé : trait épais lumineux de O au front, sous l’axe. */
+    const rayon = (r, dy, coul) => c.direct(() => {
+      const ctx = c.ctx; ctx.save(); ctx.strokeStyle = c.couleur(coul); ctx.lineWidth = 5; ctx.lineCap = 'round';
+      ctx.shadowColor = c.couleur(coul); ctx.shadowBlur = 12; ctx.beginPath(); ctx.moveTo(ox + 2, oy + dy); ctx.lineTo(ox + r, oy + dy); ctx.stroke(); ctx.restore();
+    });
     c.direct(() => {
       const ctx = c.ctx, u = part('caillou');
       if (u < 1 && (S.running || S.pause || S.fait)) P.perle(ctx, ox, oy - 50 * (1 - u), 5 + 4 * u, 'gris');
       const r = Math.min(r2, v * t * k);
       if (t > 0) { P.front(ctx, ox, oy, r, -Math.PI / 2, Math.PI / 2, '186,230,253', 1); if (r > 26) P.front(ctx, ox, oy, r - 18, -Math.PI / 2, Math.PI / 2, '186,230,253', .4); }
       P.perle(ctx, ox, oy, 3.5, 'gris');
-      if (vu('aspect_t1')) { arcCraie(c, ox, oy, r1, -Math.PI / 2, Math.PI / 2, { couleur: 'cyan', largeur: 2.2 }); c.texte('aspect à t₁', ox + r1 + 10, oy - r1 - 4, { couleur: 'cyan', taille: 17 }); c.texte('r₁', ox + r1 - 2, oy + 22, { couleur: 'cyan', taille: 18 }); }
-      if (vu('aspect_t2')) { arcCraie(c, ox, oy, r2, -Math.PI / 2, Math.PI / 2, { couleur: 'orange', largeur: 2.2 }); c.texte('aspect à t₂', ox + 120, 34, { couleur: 'orange', taille: 17 }); c.texte('r₂', ox + r2 + 6, oy + 22, { couleur: 'orange', taille: 18 }); }
-      if (vu('distance')) c.cote(ox + r1, oy + 76, ox + r2, oy + 76, 'Δr', { couleur: 'jaune', taille: 19 });
+      // Les données du sujet, écrites là où on les lit
+      if (vu('aspect_t1')) { arcCraie(c, ox, oy, r1, -Math.PI / 2, Math.PI / 2, { couleur: 'cyan', largeur: 2.2 }); c.texte('à t₁', ox + r1 + 8, oy - r1 - 2, { couleur: 'cyan', taille: 17 }); c.texte('r₁ = 14 cm', ox + r1 + 6, oy + 30, { couleur: 'cyan', taille: 17 }); }
+      if (vu('aspect_t2')) { arcCraie(c, ox, oy, r2, -Math.PI / 2, Math.PI / 2, { couleur: 'orange', largeur: 2.2 }); c.texte('à t₂ = t₁ + 1,5 s', ox + 104, 40, { couleur: 'orange', taille: 17 }); c.texte('r₂ = 56 cm', ox + r2 - 4, oy + 72, { couleur: 'orange', align: 'right', taille: 17 }); }
+      // La démonstration allume ce qu’elle utilise
+      if (vu('r1') && !vu('distance') || vu('date_t1') && !vu('date_t2')) rayon(r1, 8, 'cyan');
+      else if (vu('r1')) c.ligne(ox + 2, oy + 8, ox + r1, oy + 8, { couleur: 'cyan', largeur: 2 });
+      if (vu('r2') && !vu('distance')) rayon(r2, 48, 'orange');
+      else if (vu('r2')) c.ligne(ox + 2, oy + 48, ox + r2, oy + 48, { couleur: 'orange', largeur: 2 });
+      if (vu('distance')) {
+        const ctx = c.ctx; ctx.save(); ctx.strokeStyle = c.couleur('jaune'); ctx.lineWidth = 6; ctx.lineCap = 'round';
+        ctx.shadowColor = c.couleur('jaune'); ctx.shadowBlur = vu('celerite') ? 6 : 14; ctx.beginPath(); ctx.moveTo(ox + r1, oy + 100); ctx.lineTo(ox + r2, oy + 100); ctx.stroke(); ctx.restore();
+        c.ligne(ox + r1, oy, ox + r1, oy + 108, { couleur: 'jaune', largeur: 1.3, pointille: [4, 4] });
+        c.ligne(ox + r2, oy, ox + r2, oy + 108, { couleur: 'jaune', largeur: 1.3, pointille: [4, 4] });
+        c.texte('Δr = r₂ − r₁', (2 * ox + r1 + r2) / 2, oy + 130, { couleur: 'jaune', align: 'center', taille: 18 });
+      }
+      if (vu('duree')) c.texte('1,5 s', ox + (r1 + r2) / 2 - 6, oy - (r1 + r2) / 2 + 6, { couleur: 'jaune', align: 'center', taille: 18 });
+      if (vu('celerite')) c.fleche(ox + r2 * 0.72, oy - r2 * 0.72, ox + r2 * 0.72 + 30, oy - r2 * 0.72 - 30, { couleur: 'vert', largeur: 2.4 });
+      if (vu('celerite')) c.texte('v', ox + r2 * 0.72 + 34, oy - r2 * 0.72 - 32, { couleur: 'vert', taille: 20 });
     });
     if (vu('aspect_t1')) c.repere('aspect_t1', ox, oy - r1, r1 + 10, 2 * r1, 'l’aspect à t₁ (r₁ = 14 cm)');
-    if (vu('aspect_t2')) c.repere('aspect_t2', ox, oy - r2, r2 + 10, 2 * r2, 'l’aspect à t₂ (r₂ = 56 cm)');
-    // Le tableau du sujet
-    const tx = 346, ty = 30, cw = [92, 60, 70, 150], h = 38;
-    const cols = cw.reduce((a, w) => (a.push(a[a.length - 1] + w), a), [tx]);
-    const lignes = [['t (s)', '0', 't₁', 't₂ = t₁ + 1,5'], ['r (cm)', '0', '14', '56']];
-    c.rect(tx, ty, cols[4] - tx, 2 * h, { couleur: 'faible', largeur: 1.4, arrondi: 4 });
-    c.ligne(tx, ty + h, cols[4], ty + h, { couleur: 'faible', largeur: 1.2 });
-    for (let j = 1; j < 4; j++) c.ligne(cols[j], ty, cols[j], ty + 2 * h, { couleur: 'faible', largeur: 1.2 });
-    lignes.forEach((l, i) => l.forEach((s, j) => c.texte(s, (cols[j] + cols[j + 1]) / 2, ty + i * h + 26, { couleur: j ? 'blanc' : 'cyan', align: 'center', taille: 18 })));
-    c.repere('tableau', tx, ty, cols[4] - tx, 2 * h, 'le tableau du sujet : r en fonction de t');
-    calculs(c, 356, 150, [
-      { id: 'distance', texte: 'Δr = r₂ − r₁ = 56 − 14 = 42 cm' }, { id: 'distance', texte: 'Δr = 0,42 m' },
+    if (vu('aspect_t2')) c.repere('aspect_t2', ox, oy - r2, r2 + 10, 2 * r2, 'l’aspect à t₂ = t₁ + 1,5 s (r₂ = 56 cm)');
+    if (vu('r1')) c.repere('r1', ox, oy + 1, r1 + 84, 34, 'le rayon r₁ = 14 cm');
+    if (vu('r2')) c.repere('r2', ox, oy + 40, r2 + 4, 36, 'le rayon r₂ = 56 cm');
+    if (vu('distance')) c.repere('distance', ox + r1 - 4, oy + 90, r2 - r1 + 8, 48, 'Δr = r₂ − r₁ entre les deux fronts');
+    if (vu('duree')) c.repere('duree', ox + (r1 + r2) / 2 - 30, oy - (r1 + r2) / 2 - 14, 60, 26, 'Δt = t₂ − t₁ = 1,5 s');
+    if (vu('celerite')) c.repere('celerite', ox + r2 * 0.72 - 4, oy - r2 * 0.72 - 54, 54, 56, 'la célérité v du front');
+    if (vu('date_t1')) c.repere('date_t1', ox, oy - r1, r1 + 30, r1 + 46, 't₁ : le front a parcouru r₁ depuis O');
+    if (vu('date_t2')) c.repere('date_t2', ox, oy - r2, r2 + 10, 2 * r2, 't₂ = t₁ + 1,5 s');
+    calculs(c, 340, 54, [
+      { id: 'distance', texte: 'Δr = 56 − 14 = 42 cm = 0,42 m' },
       { id: 'duree', texte: 'Δt = t₂ − t₁ = 1,5 s' },
-      { id: 'celerite', texte: 'v = ⟦Δr|Δt⟧ = ⟦0,42|1,5⟧ = 0,28 m/s', couleur: 'jaune' },
+      { id: 'celerite', texte: 'v = ⟦Δr|Δt⟧ = ⟦0,42|1,5⟧' }, { id: 'celerite', texte: 'v = 0,28 m/s', couleur: 'jaune' },
       { id: 'date_t1', texte: 't₁ = ⟦r₁|v⟧ = ⟦0,14|0,28⟧ = 0,5 s' },
       { id: 'date_t2', texte: 't₂ = t₁ + 1,5 = 2,0 s', couleur: 'jaune' },
-    ], { taille: 19, max: 6, largeur: 380 });
+    ], { taille: 19, max: 6, largeur: 330 });
   },
   vu() {
-    const t = tPhys(), m = ['Surface de l’eau vue de dessus ; le caillou tombe en O ; tableau du sujet : r₁ = 14 cm à t₁, r₂ = 56 cm à t₂ = t₁ + 1,5 s.'];
+    const t = tPhys(), m = ['Surface de l’eau vue de dessus ; le caillou tombe en O. Données du sujet écrites sur la figure : r₁ = 14 cm à t₁, r₂ = 56 cm à t₂ = t₁ + 1,5 s.'];
     m.push(t <= 0 ? 'Pas encore d’onde.' : t < 2 ? `Un front circulaire s’éloigne de O (rayon ${fr(28 * t, 0)} cm).` : 'Le front est à 56 cm de O.');
     if (vu('aspect_t1')) m.push('Aspect à t₁ dessiné (cyan), front à r₁ = 14 cm.');
     if (vu('aspect_t2')) m.push('Aspect à t₂ dessiné (orange), front à r₂ = 56 cm.');
-    if (vu('distance')) m.push('Cote Δr = 42 cm entre les deux fronts.');
-    if (vu('celerite')) m.push('Écrit : v = 0,42/1,5 = 0,28 m/s.');
+    if (vu('r1')) m.push('Le rayon r₁ allumé de O au front de t₁.');
+    if (vu('r2')) m.push('Le rayon r₂ allumé de O au front de t₂.');
+    if (vu('distance')) m.push('Δr = r₂ − r₁ surligné en jaune entre les deux fronts (42 cm).');
+    if (vu('duree')) m.push('1,5 s écrit entre les deux aspects.');
+    if (vu('celerite')) m.push('Flèche v sur le front ; écrit : v = 0,42/1,5 = 0,28 m/s.');
     if (vu('date_t2')) m.push('Écrit : t₁ = 0,5 s et t₂ = 2,0 s.');
     return m.join(' ');
   },
@@ -506,7 +597,9 @@ VUES.national_2018_normale = {
     { id: 'air_recu', d: 3.2, t: [6.0, 10.0], motif: 'l’onde de l’air arrive à R₁, plus tard : la voie A démarre' },
     { id: 'ecran_complet', d: 1.4, t: [10.0, 20.0], motif: 'le spot a balayé tout l’écran' },
     { id: 'debuts', d: 1, motif: 'le début de chaque signal est marqué' },
-    { id: 'divisions', d: 1, motif: 'on compte les divisions entre les deux débuts' },
+    { id: 'div_1', d: 0.5, motif: 'on compte : la 1ʳᵉ division s’allume' },
+    { id: 'div_2', d: 0.5, motif: 'on compte : la 2ᵉ division s’allume' },
+    { id: 'divisions', d: 0.6, motif: 'le total : 2 divisions entre les deux débuts' },
     { id: 'retard', d: 1, motif: 'τ = divisions × sensibilité' },
     { id: 'durees', d: 1, motif: 'chaque onde met L/v' },
     { id: 'relation', d: 1, motif: 'τ = L·(1/V_air − 1/V_p)' },
@@ -548,8 +641,8 @@ VUES.national_2018_normale = {
         c.ligne(xa, o.y + 1.3 * o.dy, xa, ybas + 8, { couleur: 'jaune', largeur: 1.5, pointille: [4, 4] });
         c.ligne(xb, o.y + 3.6 * o.dy, xb, ybas + 8, { couleur: 'jaune', largeur: 1.5, pointille: [4, 4] });
       }
-      if (vu('divisions')) c.cote(xb, ybas + 16, xa, ybas + 16, '2 divisions', { couleur: 'jaune', dessous: true, taille: 18 });
     });
+    compterDivisions(c, o, xb, ['div_1', 'div_2'], 'divisions', '2 divisions');
     if (vu('debuts')) { c.repere('debut_b', xb - 12, o.y + 2.6 * o.dy, 24, 2 * o.dy, 'début du signal B (pétrole)'); c.repere('debut_a', xa - 12, o.y + 0.3 * o.dy, 24, 2 * o.dy, 'début du signal A (air)'); }
     if (vu('divisions')) c.repere('retard', xb, ybas + 4, xa - xb, 36, 'τ : du début de B au début de A');
     calculs(c, 524, 246, [
@@ -564,7 +657,8 @@ VUES.national_2018_normale = {
     m.push(t < SE18 ? 'Le spot balaie ; rien n’est encore émis.' : t < 6 ? 'E₁ et E₂ ont émis ensemble ; les deux fronts avancent, celui du pétrole plus vite.'
       : t < 10 ? 'Le pétrole a déjà livré son onde à R₂ (voie B à 3 div) ; celle de l’air avance encore.' : 'Voie B commence à 3 div, voie A à 5 div.');
     if (vu('debuts')) m.push('Débuts marqués.');
-    if (vu('divisions')) m.push('Cote : 2 divisions.');
+    m.push(comptees());
+    if (vu('divisions')) m.push('Divisions comptées une à une, allumées et numérotées 1 et 2 : 2 divisions.');
     if (vu('retard')) m.push('Écrit : τ = 2 × 2 ms = 4 ms.');
     if (vu('relation')) m.push('Écrit : τ = L·(1/V_air − 1/V_p).');
     if (vu('celerite')) m.push('Écrit : V_p ≈ 1303 m/s.');
@@ -678,7 +772,12 @@ let LIMITE = finEtape(QS.get('arret'));          // null : aucune limite
 const A0 = finEtape(QS.get('depart')) ?? 0;      // 0 : la page s’ouvre au début
 const borner = () => { if (LIMITE != null && S.jusqua == null && LIMITE < TOTAL - 1e-6) S.jusqua = LIMITE; };
 
-function dessiner(c) { scene.cadre(11); VUE.dessin(c); return c.fin(); }
+function dessiner(c) {
+  scene.cadre(11);
+  for (const k in RECTS) delete RECTS[k];
+  if (!c.__releve) { const r0 = c.repere; c.repere = function (id, x, y, w, h, l) { RECTS[id] = [x, y, w, h]; return r0.call(this, id, x, y, w, h, l); }; c.__releve = true; }
+  VUE.dessin(c); lueurs(c); return c.fin();
+}
 const canvas = $('canvas');
 const scene = window.OndesTableau.Scene(canvas, dessiner, { ajuster: true, complet: fn => { const a = S.a, f = S.fait; S.a = TOTAL; S.fait = true; try { fn(); } finally { S.a = a; S.fait = f; } } });
 
@@ -704,7 +803,7 @@ function resume() {
   if (S.running) return; if (!S.pause) return start();
   if (LIMITE != null && S.a >= LIMITE - 1e-6) { bulle($('feedback'), 'La suite s’écrit après ta réponse.'); return; }
   borner(); S.running = true; S.pause = false; $('run').textContent = 'Pause'; pont.noter('resume'); pont.emettre(); }
-function reset() { S.a = A0; S.running = false; S.pause = A0 > 0; S.fait = false; S.jusqua = null; $('run').textContent = A0 > 0 ? 'Reprendre' : 'Lancer'; scene.sale = true; bulle($('feedback'), A0 > 0 ? 'Arrêt sur image : ' + MOTIFS[QS.get('depart').trim()] + '.' : 'Lance l’exercice.'); pont.noter('reset'); pont.emettre(); }
+function reset() { LUM.clear(); S.a = A0; S.running = false; S.pause = A0 > 0; S.fait = false; S.jusqua = null; $('run').textContent = A0 > 0 ? 'Reprendre' : 'Lancer'; scene.sale = true; bulle($('feedback'), A0 > 0 ? 'Arrêt sur image : ' + MOTIFS[QS.get('depart').trim()] + '.' : 'Lance l’exercice.'); pont.noter('reset'); pont.emettre(); }
 /** Joue (ou continue) jusqu’à la fin d’une étape, puis se fige. Une étape déjà passée : on revient à elle, figé. */
 function playUntil(p) {
   const M = moments(), nom = p.moment in M ? p.moment : null, cible = nom ? M[nom] * TOTAL : +p.progress * TOTAL;
@@ -717,20 +816,42 @@ function playUntil(p) {
   S.running = true; S.pause = false; $('run').textContent = 'Pause';
   pont.noter('play_until', { moment: nom }); pont.emettre();
 }
+/** `allume {target}` : l’étape qui dessine le repère est jouée d’un coup si elle ne l’est pas encore, puis il s’allume. */
+function allumer(p) {
+  const ids = [].concat(p.targets || p.target || p.cible || p.repere || p.id || []).map(String).filter(Boolean);
+  for (const id of ids) {
+    const etape = (VUE.etapeDe && VUE.etapeDe[id]) || (ph(id) ? id : null);
+    if (etape && !vu(etape)) {
+      const fin = finEtape(etape);
+      if (LIMITE != null && fin > LIMITE + 1e-6) LIMITE = null;
+      S.a = fin; S.running = false; S.pause = true; S.fait = false; S.jusqua = null; $('run').textContent = 'Reprendre';
+      bulle($('feedback'), 'Arrêt sur image : ' + MOTIFS[etape] + '.');
+    }
+    LUM.add(id);
+  }
+  scene.sale = true; pont.noter('allume', { target: ids }); pont.emettre();
+}
+function eteindre(p) {
+  const ids = [].concat(p.targets || p.target || p.cible || p.repere || []).map(String).filter(Boolean);
+  if (ids.length) ids.forEach(id => LUM.delete(id)); else LUM.clear();
+  scene.sale = true; pont.noter('eteins', { target: ids }); pont.emettre();
+}
 $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
 
 function etat() {
   return { simulation_status: S.running ? 'running' : S.pause ? 'paused' : (S.fait ? 'finished' : 'idle'), vue: VUE_ID, progress: +(S.a / TOTAL).toFixed(4),
-    moments: moments(), etape: (PH.find(p => S.a < p.debut + p.d - 1e-6) || PH[PH.length - 1]).id, ce_qui_se_voit: lisible(VUE.vu()) };
+    moments: moments(), etape: (PH.find(p => S.a < p.debut + p.d - 1e-6) || PH[PH.length - 1]).id, allumes: [...LUM],
+    ce_qui_se_voit: lisible(VUE.vu()) + (LUM.size ? ` Allumé sur la figure : ${[...LUM].join(', ')}.` : '') };
 }
 window.Tableau.explication({ [VUE_ID]: PH.map(p => ({ texte: p.motif })) });
-const commandes = ['start', 'pause', 'resume', 'reset', 'play_until'];
+const commandes = ['start', 'pause', 'resume', 'reset', 'play_until', 'allume', 'eteins'];
 const config = { id: 'ondes_tableau_national', version: '1.0', title: 'Exercices du national joués au tableau', variants: Object.keys(VUES).map(id => ({ id, label: VUES[id].titre })), commands: commandes,
-  command_schema: { play_until: { moment: PH.map(p => p.id).join(' | ') + ' (joue et se fige à la fin de cette étape)' } } };
+  command_schema: { play_until: { moment: PH.map(p => p.id).join(' | ') + ' (joue et se fige à la fin de cette étape)' },
+    allume: { target: 'un repère ou une liste (l’étape qui le dessine est jouée, il reste allumé)' }, eteins: { target: 'un repère, ou rien pour tout éteindre' } } };
 const pont = protocole({ id: config.id, commandes, config,
   texte: `${VUE.titre}. Étapes : ${PH.map(p => p.motif).join(' ; ')}.`,
   etat, progression: () => S.a / TOTAL,
-  executer: (cmd, p) => ({ start, pause, resume, reset, play_until: () => playUntil(p) })[cmd]?.() });
+  executer: (cmd, p) => ({ start, pause, resume, reset, play_until: () => playUntil(p), allume: () => allumer(p), eteins: () => eteindre(p) })[cmd]?.() });
 if (A0 > 0) { S.a = A0; S.pause = true; $('run').textContent = 'Reprendre'; scene.sale = true; bulle($('feedback'), 'Arrêt sur image : ' + MOTIFS[QS.get('depart').trim()] + '.'); pont.emettre(); }
 else bulle($('feedback'), 'Lance l’exercice, ou laisse le professeur le jouer étape par étape.');
 </script>
