@@ -344,3 +344,14 @@ Vérifications : `cd backend && python -m pytest -q app/tests -k "course or cour
 (0 erreur), `python backend/scripts/verifier_pointage_simulations.py backend/data/courses/en_attente/svt_ch3_notion_information_genetique.json --ecarts`
 (aucun écart nouveau par rapport au cours en ligne ; les « gestes trop serrés » des 9 diapositives sans voix
 disparaîtront avec leur durée réelle).
+
+## 7. Démonstration sur le document (19 novembre 2026)
+
+- `etapes.js` : commandes `allume {cible, ligne, texte}` et `eteins` (règle 17 de la skill simulations-au-tableau) pour
+  toutes les pages du dossier : un moment cible fait jouer la scène jusqu'à lui (jamais en arrière), un repère cible prend
+  une lueur jaune qui reste (la dernière plus vive) ; `eteins`, `start`, `reset` éteignent ; état `allumes`.
+- `thymidine.html?vue=document` : à l'allumage seulement, la molécule d'ADN de chaque chromatide (`brins_1`, `brins_2`,
+  `molecule_marquee`, `molecule_non_marquee`), mêmes couleurs que la vue `experience`.
+- Les lignes des 15 démonstrations portent `allume` (`ig_x1f`, `ig_x3b`, `ig_x3c` pour les exercices du national).
+- L'énoncé du national d'abord : en attente du gabarit commun `shared/examen/feuille.html` ; ce qu'il faudra reproduire
+  est listé dans `docs/audit-national/svt.md` (section ch3).

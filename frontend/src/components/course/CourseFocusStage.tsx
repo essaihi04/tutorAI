@@ -8,7 +8,8 @@ import type { CourseSlide, Demonstration, EnonceLu, QuestionObservation, Reactio
 import ClavierScientifique, { BoutonSymboles } from './ClavierScientifique';
 import { clavier, hauteurClavierTelephone, largeurClavier, useChampClavier, useClavier } from './ClavierFlottant';
 import { Formule } from './Formule';
-import DemonstrationPleine, { type LectureDemo } from './DemonstrationPleine';
+import DemonstrationPleine, { type FigureDemo, type LectureDemo } from './DemonstrationPleine';
+import PageExamenVue from './PageExamen';
 import type { EnteteCahier } from './cahier';
 import ChampReponse, { BoutonPhoto, type ContexteOcr } from './SaisieReponse';
 import SansDefilement from './SansDefilement';
@@ -73,6 +74,9 @@ const premier = <T,>(champ: Record<string, T> | undefined, langue: Langue): T | 
 const CRAIE = "'Patrick Hand', 'Caveat', cursive";
 
 /** Le deuxième tableau descend du haut ; chaque question s'y écrit l'une après l'autre. */
+/** La colonne de la démonstration jouée sur la figure (règle 17) : la figure garde au moins ~60 % de la scène. */
+const COLONNE_DEMO = 'clamp(230px, 36%, 470px)';
+
 const ANIMATIONS = `
 /* Téléphone en paysage (16 novembre 2026) : la hauteur manque ; titre, barre du bas et boutons se font plus petits
    pour laisser la place au tableau, et tout tient dans un seul écran. */
@@ -156,6 +160,9 @@ const ANIMATIONS = `
 .tableau-questions { animation: tableau-descend .7s cubic-bezier(.2,.8,.2,1) both }
 /* le rejeu de la simulation après la réponse (\`apres_reponse\`) : le tableau remonte, puis redescend (même animation) */
 @keyframes tableau-remonte { from { transform: none; opacity: 1 } to { transform: translateY(-108%); opacity: 0 } }
+/* la démonstration jouée sur la figure (règle 17) : la colonne est toute à elle, sans l'en-tête ni le carrousel des questions */
+.tableau-questions:has([data-demonstration='cote']) [data-entete-questions],
+.tableau-questions:has([data-demonstration='cote']) [data-carrousel] { display: none }
 .tableau-questions.tableau-replie { animation: tableau-remonte .4s ease-in both; pointer-events: none }
 .question-apparait { opacity: 0; animation: question-apparait .45s ease-out both }
 @keyframes craie-ecrit { from { clip-path: inset(0 100% 0 0) } to { clip-path: inset(0 0 0 0) } }
@@ -2029,7 +2036,27 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
   /** Ce que l'OCR d'une photo doit savoir : la diapositive et le cours (symboles, unités, notation du chapitre). */
   const contexteOcr: ContexteOcr = { deck_id: deckId, title: slide.title, lead: contenu.lead || '' };
   /** La voix de l'énoncé et la diapositive (suggestions du clavier), pour chaque tableau de questions. */
-  const outilsEnonce = { lireEnonce, arreterEnonce, slideId: slide.id };
+  // ── La démonstration jouée SUR la figure (18 novembre 2026, simulations-au-tableau règle 17) ──
+  // Une diapositive avec une simulation, une image ou une page d'examen : la figure reste en grand, le tableau des
+  // questions devient une colonne à sa droite pendant la démonstration ; les cartes, le tableau de la diapositive et la
+  // bande d'observation s'effacent ; chaque ligne qui a une cible (`lignes[].allume`) l'allume dans la simulation.
+  // Écran en portrait (la colonne n'aurait pas la place) : le tableau à part, par-dessus, comme sans figure.
+  const paysage = useRequete('(min-aspect-ratio: 6/5)');
+  const [demoOuverte, setDemoOuverte] = useState(false);
+  useEffect(() => { setDemoOuverte(false); }, [slide.id]);
+  const figureDemo = useMemo<FigureDemo | null>(() => {
+    if (!visuel || !['simulation', 'image', 'examen'].includes(visuel.kind || '')) return null;
+    return {
+      cote: paysage,
+      ouverte: oui => {
+        setDemoOuverte(oui);
+        if (oui) envoyerASim('eteins');
+      },
+      allumer: (cible, ligne, texte) => envoyerASim('allume', { cible, ligne, texte }),
+    };
+  }, [visuel, paysage, envoyerASim]);
+  const demoSurFigure = demoOuverte && paysage && !!figureDemo;
+  const outilsEnonce = { lireEnonce, arreterEnonce, slideId: slide.id, figureDemo };
   /** Le panneau « Ton résultat » : ce qui est déjà dit (donc écrit), au fil de la voix. */
   const vuDuResultat = (() => {
     const r = reaction;
@@ -2094,16 +2121,21 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
       {/* ── Au centre : ce qu'on regarde ── */}
       {/* avec une figure, la scène est une grille : la figure d'abord (toute la place), la question d'observation en bande
           fine sous elle, les formules à sa droite (écran large) ou en une rangée fine dessous (CSS « La simulation d'abord ») */}
-      <main data-avec-visuel={visuel ? '' : undefined} className="relative flex-1 min-h-0 flex flex-col items-center justify-center gap-2 px-3 pb-1"
-        style={tuteur3D ? { paddingRight: COLONNE_TUTEUR } : undefined}>   {/* la colonne de droite est au tuteur 3D */}
+      <main data-avec-visuel={visuel ? '' : undefined} data-demo-figure={demoSurFigure ? '' : undefined} className="relative flex-1 min-h-0 flex flex-col items-center justify-center gap-2 px-3 pb-1"
+        // la colonne de droite est au tuteur 3D ; pendant une démonstration sur la figure, la colonne de la démonstration
+        // s'y ajoute : la figure se redessine dans ce qui reste, en grand (sans rien sous la colonne)
+        style={{ ...(tuteur3D ? { paddingRight: COLONNE_TUTEUR } : {}),
+          ...(demoSurFigure ? { paddingRight: `calc(${COLONNE_DEMO} + ${(tuteur3D && !etroit ? COLONNE_TUTEUR + 4 : 12) + placeClavier + 8}px)` } : {}) } as CSSProperties}>
         {/* ── Le deuxième tableau : les questions descendent du haut et couvrent la scène, tout tient sans défiler ── */}
         {panneau === 'questions' && (
           <section className={`tableau-questions${rejeuEnCours ? ' tableau-replie' : ''} absolute inset-y-0 left-3 z-30 flex flex-col overflow-hidden rounded-2xl border-2 border-amber-200/40 bg-[#0f2219] shadow-2xl`}
             // sur téléphone, le tableau prend toute la largeur (la colonne du tuteur lui laissait 150 px)
-            style={{ right: (tuteur3D && !etroit ? COLONNE_TUTEUR + 4 : 12) + placeClavier, bottom: basClavier, transition: 'right .25s ease, bottom .25s ease' }}
+            style={{ right: (tuteur3D && !etroit ? COLONNE_TUTEUR + 4 : 12) + placeClavier, bottom: basClavier, transition: 'right .25s ease, bottom .25s ease',
+              // la démonstration sur la figure : une colonne à droite, la figure reste visible à sa gauche
+              ...(demoSurFigure ? { left: 'auto', width: COLONNE_DEMO } : {}) }}
             // le rejeu de la simulation (`apres_reponse`) : le tableau remonte sans se démonter (sa démonstration attend)
             aria-hidden={rejeuEnCours || undefined}>
-            <div className="flex shrink-0 items-center justify-between border-b border-amber-200/20 px-4 py-2">
+            <div data-entete-questions className="flex shrink-0 items-center justify-between border-b border-amber-200/20 px-4 py-2">
               <div className="text-base font-semibold text-emerald-200" style={{ fontFamily: CRAIE }}>
                 {predictionEnCours ? '🔮 Avant d’expliquer : que prévois-tu ?' : cycle?.phase === 'final' ? `📓 La réponse · reprise ${cycle.n}/${MAX_CYCLES}` : enReprise ? `↻ Reprise ${cycle!.n}/${MAX_CYCLES} · ${jumelles.questions.length > 1 ? 'vrai ou faux' : 'nouvelle question'}` : `✏️ À toi · ${questions.length} question${questions.length > 1 ? 's' : ''}`}
               </div>
@@ -2138,7 +2170,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
             data-cadre-visuel
             className="relative w-full flex-1 min-h-0 flex items-center justify-center"
             // la simulation prend toute la place (12 novembre 2026) ; une image garde sa largeur de lecture
-            style={{ maxWidth: surSim ? undefined : 900 }}
+            style={{ maxWidth: surSim || visuel.kind === 'examen' ? undefined : 900 }}
           >
             {surSim && visuel.url && (
               <iframe
@@ -2159,11 +2191,15 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
             {visuel.kind === 'image' && visuel.url && (
               <img src={visuel.url} alt={visuel.alt || contenu.alt || ''} className="max-h-full max-w-full object-contain" />
             )}
+            {/* la page du sujet du national, telle qu'à l'examen, lue par le tuteur (18 novembre 2026) */}
+            {visuel.kind === 'examen' && (visuel.examen?.page || visuel.url) && (
+              <PageExamenVue e={visuel.examen || { page: visuel.url! }} temps={temps} instant={instant} lecture={enLecture} />
+            )}
           </div>
         )}
 
         {/* ── La question d'observation : sous la figure, sans la couvrir ; ses cartes et son micro dans la même bande ── */}
-        {obs && observation && (
+        {obs && observation && !demoSurFigure && (
           <BandeObservation o={observation} e={obs} etroit={etroit} onCarte={repondreCarte} onCartes={() => setObs(x => x && { ...x, cartes: true })}
             onMicro={() => void demarrerMicroReponse()} onMicroFin={arreterMicroReponse} onPasser={fermerObservation} />
         )}
@@ -2196,7 +2232,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
           </div>
         )}
 
-        {!visuel && table && (
+        {!visuel && table && !demoSurFigure && (
           <table data-tableau-diapo className="w-full max-w-4xl shrink-0 border-collapse text-base md:text-lg" style={{ fontFamily: CRAIE }}>
             <thead>
               <tr>{table.headers.map((h, i) => (
@@ -2217,7 +2253,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
             masquent les simulations ») : colonne étroite à sa droite ou rangée fine dessous, 15-18 px (18 novembre 2026,
             « la simulation d'abord ») ; la place est gardée dès le début, la figure ne saute pas quand une formule apparaît.
             Sans figure, la liste s'ajuste à la hauteur entre le titre et la barre (30 px au plus, 15 px au moins). */}
-        {centre.length > 0 && (
+        {centre.length > 0 && !demoSurFigure && (
           <div ref={formulesRef} data-formules-centre=""
             className={`flex ${visuel ? 'pointer-events-none w-full shrink-0 flex-row flex-wrap justify-center gap-2' : table ? 'min-h-0 w-full shrink overflow-hidden flex-row flex-wrap justify-center gap-3' : 'max-h-full min-h-0 w-full overflow-hidden flex-col items-center justify-center gap-3'}`}
             style={{ '--taille-max': `${visuel ? 18 : table ? 22 : 30}px` } as CSSProperties}>
@@ -2247,7 +2283,7 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
         )}
 
         {/* ── Le schéma légendé : le commentaire écrit du tuteur, en bas du tableau, sans couvrir le schéma ── */}
-        {legendeMot && panneau !== 'questions' && (
+        {legendeMot && panneau !== 'questions' && !demoSurFigure && (
           <p className={`absolute bottom-2 left-1/2 z-20 max-w-[80%] -translate-x-1/2 rounded-xl border px-4 py-2 text-center text-lg ${
             legendeMot.correct === true ? 'border-emerald-400/60 bg-emerald-950/85 text-emerald-100' : legendeMot.correct === false ? 'border-rose-400/60 bg-rose-950/85 text-rose-100' : 'border-amber-300/50 bg-slate-900/85 text-amber-100'}`}
             style={{ fontFamily: CRAIE }}>
@@ -2542,6 +2578,8 @@ type OutilsQuestions = {
   lireEnonce?: (q: QuestionDiapo) => void; arreterEnonce?: () => void;
   /** la diapositive (les suggestions du clavier sont cherchées par diapositive et question) */
   slideId?: string;
+  /** la diapositive a une figure : ses démonstrations se jouent dessus (colonne à côté, allumages) */
+  figureDemo?: FigureDemo | null;
 };
 
 function QuestionsDeLaDiapo({ questions, index, onIndex, diapo, dire, jouer, reponses, onReponse, onFinie, onPasser, essaisMax, ...outils }: {
@@ -2586,7 +2624,7 @@ function QuestionsDeLaDiapo({ questions, index, onIndex, diapo, dire, jouer, rep
         ))}
       </div>
       {n > 1 && (
-        <div className="mt-3 flex shrink-0 items-center justify-between">
+        <div data-carrousel className="mt-3 flex shrink-0 items-center justify-between">
           <button onClick={() => onIndex(Math.max(0, courante - 1))} disabled={courante === 0} aria-label="Question précédente"
             className="rounded-full bg-white/10 px-4 py-2 text-sm hover:bg-white/20 disabled:opacity-30">←</button>
           <div className="flex items-center gap-2">
@@ -2606,7 +2644,7 @@ function QuestionsDeLaDiapo({ questions, index, onIndex, diapo, dire, jouer, rep
 }
 
 function UneQuestion({ q, diapo, dire, jouer, preparees, compact = false, onReponse, onFinie, essaisMax = 2, actif = true, contexte, lireDemo, preparerDemo, attendreVoix, avantDemo,
-  lireEnonce, arreterEnonce, slideId, onPasser }: {
+  lireEnonce, arreterEnonce, slideId, onPasser, figureDemo }: {
   q: QuestionDiapo; diapo: { title: string; speech: string; memoire?: string }; dire: (texte: string) => Promise<boolean>;
   jouer: (url: string, secours?: string) => void; preparees?: Record<string, Partial<Record<'juste' | '1' | '2', ReactionPreparee>>>;
   compact?: boolean; onReponse?: (r: ReponseNotee) => void;
@@ -2819,10 +2857,12 @@ function UneQuestion({ q, diapo, dire, jouer, preparees, compact = false, onRepo
       ) : null}
       {/* La démonstration sur un tableau à part, par-dessus le tableau de la question (12 novembre 2026). */}
       {q.demonstration?.lignes?.length && finie && (demo === 'attente' || demo === 'ecrit' || demo === 'dite') ? (
-        <DemonstrationPleine d={q.demonstration} lecture={demo === 'attente' ? null : lectureVue} complet={false} enonce={q.enonce} onFermer={fermerDemo} />
+        <DemonstrationPleine d={q.demonstration} lecture={demo === 'attente' ? null : lectureVue} complet={false} enonce={q.enonce} onFermer={fermerDemo}
+          figure={q.demonstration.sur_figure === false ? null : figureDemo} />
       ) : null}
       {q.demonstration?.lignes?.length && revoir ? (
-        <DemonstrationPleine d={q.demonstration} lecture={null} complet enonce={q.enonce} onFermer={() => setRevoir(false)} />
+        <DemonstrationPleine d={q.demonstration} lecture={null} complet enonce={q.enonce} onFermer={() => setRevoir(false)}
+          figure={q.demonstration.sur_figure === false ? null : figureDemo} />
       ) : null}
       </RemplirSiCourt>
     </div>
@@ -3225,6 +3265,18 @@ function useTailleQuiTient(ref: RefObject<HTMLDivElement | null>, cle: string) {
     if (el.parentElement) ro.observe(el.parentElement);
     return () => { ro.disconnect(); cancelAnimationFrame(frame); };
   }, [ref, cle]);
+}
+
+/** Vrai tant que l'écran répond à la requête média. */
+function useRequete(requete: string) {
+  const [oui, setOui] = useState(() => typeof window !== 'undefined' && window.matchMedia(requete).matches);
+  useEffect(() => {
+    const m = window.matchMedia(requete), suivre = () => setOui(m.matches);
+    suivre();
+    m.addEventListener('change', suivre);
+    return () => m.removeEventListener('change', suivre);
+  }, [requete]);
+  return oui;
 }
 
 /** Téléphone en paysage (hauteur < 520 px) : vrai tant que l'écran garde cette forme. */

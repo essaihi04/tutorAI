@@ -57,10 +57,39 @@ export interface Demonstration {
   /** Le texte dit (règles de la voix : darija simple, nombres et unités en mots, aucun symbole). */
   parole: string;
   /** Les lignes écrites comme le barème les lit : relation, substitution, résultat avec unité (`y_M` → M en indice). */
-  lignes: { texte: string; mot: string }[];
+  lignes: LigneDemonstration[];
   /** La piste de `parole` (voix du cours), si elle est déjà calculée. */
   audio?: string;
+  /**
+   * `false` : la démonstration garde son tableau à part même quand la diapositive a une figure. Par défaut (18 novembre
+   * 2026, simulations-au-tableau règle 17), une diapositive avec une simulation ou une image joue la démonstration SUR
+   * la figure : la figure reste en grand, les lignes s'écrivent dans une colonne à côté.
+   */
+  sur_figure?: boolean;
 }
+
+/**
+ * Une ligne de démonstration. `allume` (18 novembre 2026, règle 17) : ce que la ligne utilise sur la figure — l'id d'un
+ * repère (`craie.repere`) ou d'un moment (`moments`) de la simulation, ou plusieurs. Quand la ligne s'écrit, le lecteur
+ * envoie à la simulation `{ type: 'simulation_control', command: 'allume', parameters: { cible, ligne, texte } }`
+ * (`cible` : une chaîne, ou la liste) ; avant la première ligne, `eteins` (rien d'allumé). Voir `CommandeAllumage`.
+ */
+export interface LigneDemonstration {
+  texte: string;
+  mot: string;
+  allume?: string | string[];
+}
+
+/**
+ * Les ordres d'allumage envoyés à l'iframe de la simulation pendant une démonstration jouée sur la figure (le message
+ * est un `simulation_control` ordinaire). Le kit `shared/tableau/tableau.js` les comprend pour toute page qui déclare
+ * `Tableau.protocole` : `allume` joue jusqu'au moment de ce nom (s'il existe et n'est pas passé) et allume le repère de
+ * ce nom (une lueur qui reste, la dernière plus vive) ; `eteins` éteint tout. Une page qui veut mieux (tracer Δr entre
+ * les deux fronts, compter les divisions une à une) met `allume`/`eteins` dans ses `commandes` et les exécute elle-même.
+ */
+export type CommandeAllumage =
+  | { type: 'simulation_control'; command: 'allume'; parameters: { cible: string | string[]; ligne: number; texte: string } }
+  | { type: 'simulation_control'; command: 'eteins'; parameters: Record<string, never> };
 
 /** Réaction du tuteur préparée d'avance pour une réponse possible (texte dit, texte écrit, piste audio). */
 export interface ReactionPreparee { parole: string; ecrit: string; audio?: string }
@@ -102,8 +131,10 @@ export interface CourseVisual {
    * mécanique 2D (Matter). Mêmes moteurs que le tableau du tuteur — une
    * diapositive n'a donc plus à choisir entre une image figée et rien.
    */
-  kind?: 'none' | 'image' | 'schema' | 'simulation' | 'scientific';
+  kind?: 'none' | 'image' | 'schema' | 'simulation' | 'scientific' | 'examen';
   url?: string;
+  /** `kind: 'examen'` : la page du sujet du national, telle qu'à l'examen (voir `PageExamen`). */
+  examen?: PageExamen;
   schema_id?: string;
   scientific?: ScientificVisualSpec;
   caption?: string;
@@ -115,6 +146,66 @@ export interface CourseVisual {
    */
   placement?: 'side' | 'inline';
 }
+
+/**
+ * La page d'un sujet du national (18 novembre 2026, professeur règles 44-46) : le scan tel qu'à l'examen, en grand comme
+ * une feuille (papier, ombre), recadré sur l'exercice, l'en-tête gardé au-dessus. Le tuteur le lit avant d'expliquer.
+ * Les fractions sont comptées en hauteur de page (0 = le haut, 1 = le bas).
+ */
+export interface PageExamen {
+  /** Le scan de la page : `/static/exams/<matière>/<année>-<session>/pages/sujet_pN.jpg`. */
+  page: string;
+  /** La zone de l'exercice sur cette page ; absente : toute la page. */
+  recadrage?: { haut: number; bas: number };
+  /** La suite de l'exercice sur les pages suivantes, dans l'ordre (ex. `{ page: '…/sujet_p4.jpg', haut: 0.10, bas: 0.147 }`). */
+  suite?: { page: string; haut: number; bas: number }[];
+  /**
+   * La bande d'en-tête gardée visible au-dessus de la zone. Par défaut : l'en-tête officiel de la page elle-même
+   * (`{ haut: 0, bas: 0.115 }`) ; `page` pour prendre celui d'une autre page (la première : `sujet_p1.jpg`, `bas: 0.25`) ;
+   * `false` : pas de bande (la zone commence déjà en haut de page).
+   */
+  entete?: { page?: string; haut?: number; bas: number } | false;
+  /** Ce qui est rogné à gauche et à droite (marges blanches du scan), en fraction de la largeur : 0.04 par défaut. */
+  marge?: number;
+  /**
+   * Les phrases lues par le tuteur, dans l'ordre : chacune se surligne quand la voix atteint son `mot` (extrait exact
+   * du texte parlé). `zone` : sa bande sur la page (fraction de hauteur ; `page` si ce n'est pas `page`, pour une phrase
+   * de la `suite`) — surlignée au feutre jaune sur le scan ; sans `zone`, la phrase s'écrit sous la feuille. Tout
+   * l'exercice reste visible (une feuille, ou deux côte à côte sur écran large) : la vue ne défile jamais.
+   */
+  phrases?: { texte: string; mot: string; zone?: { haut: number; bas: number; page?: string } }[];
+  /** Source (exercice et questions) dans `exam.json` : « physique/2024-normale, exercice 2 ». Pour le cahier et le tuteur. */
+  source?: string;
+  /**
+   * L'exercice REPRODUIT en code (19 novembre 2026, demande de l'utilisateur : « si l'exercice est divisé en deux pages,
+   * c'est mieux de le lire et de le reproduire avec le code, comme un vrai examen avec en-tête et tout »). Quand il est
+   * fourni, il remplace les morceaux de scan : une seule feuille de papier, l'en-tête de l'examen, puis tout l'exercice
+   * (titre grisé, énoncé, questions, propositions, tableau, figure du sujet) écrit en police d'examen, à la plus grande
+   * taille qui fait tout tenir (en deux colonnes sur écran large s'il le faut, jamais sous 15 px). Le texte vient de
+   * l'`exam.json` du sujet, tel qu'écrit à l'examen. Chaque bloc qui a un `mot` se surligne quand la voix l'atteint.
+   */
+  reproduction?: ReproductionExamen;
+}
+
+/** L'exercice d'un sujet réécrit en code, comme sur la feuille d'examen. */
+export interface ReproductionExamen {
+  /**
+   * L'en-tête écrit en code, comme celui du sujet : ses lignes (arabe ou français, dans l'ordre), le code du sujet
+   * (« NS 28F ») et la page (« 3/6 »). Absent : la bande d'en-tête du scan (`entete` / `page` du visuel).
+   */
+  entete?: { lignes: string[]; code?: string; page?: string };
+  blocs: BlocExamen[];
+}
+
+/** Un bloc de l'exercice reproduit. Le texte s'écrit en Unicode (t₁, r₂, v = √(g·h)), comme les cartes du tableau. */
+export type BlocExamen =
+  | { type: 'titre'; texte: string; mot?: string }
+  | { type: 'texte'; texte: string; mot?: string }
+  | { type: 'question'; numero: string; texte: string; points?: string; mot?: string }
+  | { type: 'choix'; options: { lettre: string; texte: string }[]; mot?: string }
+  | { type: 'tableau'; lignes: string[][]; mot?: string }
+  /** une figure du sujet (`/static/exams/…/assets/fig….png`) ; `hauteur` en em (8 par défaut) */
+  | { type: 'figure'; src: string; alt?: string; hauteur?: number; mot?: string };
 
 export interface PublishedSlideAudio {
   url: string;

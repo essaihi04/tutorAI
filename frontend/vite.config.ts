@@ -40,6 +40,8 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': 'http://127.0.0.1:8000',
+      // les scans des sujets du national (pages d'examen du lecteur de cours) : servis par le backend, comme en production
+      '/static': 'http://127.0.0.1:8000',
       '/ws': {
         target: 'ws://127.0.0.1:8000',
         ws: true,

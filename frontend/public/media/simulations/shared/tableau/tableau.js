@@ -491,6 +491,41 @@
     setTimeout(() => el.remove(), duree);
     return true;
   }
+  /*
+   * L'allumage (18 novembre 2026, simulations-au-tableau règle 17) : la démonstration se joue SUR la figure. Pour chaque
+   * ligne écrite à côté, le lecteur envoie `allume {cible}` au même instant ; ce qu'elle désigne s'allume (lueur douce,
+   * sans pulsation) et RESTE allumé jusqu'à `eteins` (début d'une démonstration) ou `reset`. Le dernier allumé est le
+   * plus vif. Une page qui sait mieux faire (tracer Δr, compter les divisions) déclare `allume` dans ses commandes et
+   * l'exécute elle-même ; sinon le kit joue jusqu'au moment de ce nom et allume le repère de ce nom.
+   */
+  const ALLUMES = new Map();    // id du repère → anneau allumé
+  function placerAllume(id, el) {
+    const rect = rectRepere(id);
+    if (!rect) { el.style.display = 'none'; return false; }
+    const m = 6;
+    Object.assign(el.style, { display: '', left: (rect.x - m + scrollX) + 'px', top: (rect.y - m + scrollY) + 'px', width: (rect.width + 2 * m) + 'px', height: (rect.height + 2 * m) + 'px' });
+    return true;
+  }
+  /** Les anneaux suivent la figure (taille du cadre, animation) ; le dernier allumé qui se voit est le plus vif. */
+  function replacerAllumes() {
+    let dernier = null;
+    ALLUMES.forEach((el, id) => { if (placerAllume(id, el)) dernier = el; });
+    ALLUMES.forEach((el) => el.classList.toggle('dernier', el === dernier));
+  }
+  /** Allume un repère ; pas encore dessiné (la scène court vers son moment), il s'allumera dès qu'il paraît. */
+  function allumer(id) {
+    id = String(id || ''); if (!id) return false;
+    let el = ALLUMES.get(id);
+    if (el) ALLUMES.delete(id);                // rallumé : il redevient le dernier
+    else { el = document.createElement('div'); el.className = 'repere-allume'; el.setAttribute('aria-hidden', 'true'); el.dataset.repere = id; el.style.display = 'none'; document.body.append(el); }
+    ALLUMES.set(id, el);
+    replacerAllumes();
+    return el.style.display !== 'none';
+  }
+  function eteindre() { ALLUMES.forEach((el) => el.remove()); ALLUMES.clear(); }
+  setInterval(replacerAllumes, 250);
+  addEventListener('resize', replacerAllumes);
+
   const COMMANDES_POINTAGE = ['highlight', 'point', 'montrer', 'show'];
   const cibleDe = (p) => p && (p.target || p.repere || p.element || p.id || p.variant_id);
 
@@ -586,9 +621,14 @@
     };
     const manifeste = () => {
       window.__SIMULATION_MANIFEST_SENT__ = true;
-      const toutes = commandes.includes('highlight') ? commandes : commandes.concat(['highlight']);
+      const toutes = commandes.concat(['highlight', 'allume', 'eteins'].filter((c) => !commandes.includes(c)));
       const schema = { ...(config.command_schema || {}) };
       if (Object.keys(REPERES).length) schema.highlight = { target: Object.keys(REPERES).join(' | ') };
+      let moments = {};
+      try { moments = (etat() || {}).moments || {}; } catch (_) { /* page pas encore prête */ }
+      const cibles = [...new Set(Object.keys(moments).concat(Object.keys(listeReperes())))];
+      if (!schema.allume && cibles.length) schema.allume = { cible: cibles.join(' | '), ligne: 'numéro de la ligne de la démonstration (lecture seule)' };
+      if (!schema.eteins) schema.eteins = {};
       try { parent.postMessage({ type: 'simulation_manifest', simulation_id: id, capabilities: { commands: toutes, config, globals: ['executeAICommand'], command_schema: schema, state_schema: config.state_schema || {}, reperes: listeReperes(), explication: EXPLICATION || undefined }, page_text: texte }, '*'); } catch (_) { /* hors iframe */ }
     };
     window.SIMULATION_CONFIG = config;
@@ -623,6 +663,7 @@
         setTimeout(guetter, 120);
         pointage = true;
       }
+      if (cmd === 'allume' || cmd === 'eteins') { allumage(cmd, p); return; }
       if (!commandes.includes(cmd)) { if (pointage) noter('highlight', { target: cibleDe(p) }); return; }
       // Ce qui est dessiné reste au tableau jusqu'à la diapositive suivante (17 novembre 2026 : « une fois affichés, les
       // éléments sont supprimés puis relancés ») : un « start », un « resume » ou un « play_until » reçu après coup ne
@@ -632,8 +673,25 @@
       if (!pointage) appuyer(cmd);
       executer(cmd, p);
       // « Réécouter » sur une page ouverte figée : on revient au moment de départ, pas à une scène vide.
+      if (cmd === 'reset') eteindre();
       if (cmd === 'reset' && depart) figerAuDepart();
     };
+    /** `allume {cible}` / `eteins` : la page les exécute si elle les déclare, sinon le kit (moment joué + repère allumé). */
+    function allumage(cmd, p) {
+      if (cmd === 'eteins') eteindre();
+      if (commandes.includes(cmd)) { executer(cmd, p); noter(cmd, p); emettre({ allumes: [...ALLUMES.keys()] }); return; }
+      if (cmd === 'allume') {
+        for (const id of [].concat(p.cible ?? p.target ?? []).map(String).filter(Boolean)) {
+          let moments = {};
+          try { moments = (etat() || {}).moments || {}; } catch (_) { /* page pas encore prête */ }
+          if (id in moments && commandes.includes('play_until') && sansRetourArriere('play_until', { moment: id })) executer('play_until', { moment: id });
+          // le repère du même nom, tout de suite ou dès qu'il paraît (la scène court vers son moment) ; un id qui n'est
+          // qu'un moment (rien à entourer : la page dessine elle-même ce qu'il montre) reste un anneau caché, sans effet
+          allumer(id);
+        }
+      }
+      noter(cmd, p); emettre({ allumes: [...ALLUMES.keys()] });
+    }
     /*
      * Ouverture figée : `?depart=<moment>` (ou `?depart=<secondes>`), 18 novembre 2026 — professeur, règle 39.
      * Une diapositive qui continue la scène de la précédente ouvre la même page avec une URL distincte, déjà figée sur
@@ -673,7 +731,7 @@
   function bulle(el, texte, kind = '') { if (kind) el.dataset.kind = kind; else delete el.dataset.kind; ecrire(el, texte); }
 
   window.Tableau = { Craie, COULEURS, POLICE, ecrire, bouton, boutons, onglets, curseur, glisser, appuyer, protocole, bulle, fr, nombre, graine,
-    reperes, rectRepere, listeReperes, explication, surligner, REPERES,
+    reperes, rectRepere, listeReperes, explication, surligner, REPERES, allumer, eteindre,
     /** Une formule du tableau en texte d'une ligne (descriptions pour le tuteur, aria, bulles) : « ⟦d|Δt⟧ » → « d/Δt ». */
     lisible: s => String(s).replace(/⟦([^|⟧]*)\|([^⟧]*)⟧/g, (m, n, d) => `${/[\s+−-]/.test(n.trim()) ? `(${n})` : n}/${/[\s+−·×-]/.test(d.trim()) ? `(${d})` : d}`) };
 })();
