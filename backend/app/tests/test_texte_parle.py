@@ -88,3 +88,25 @@ def test_foetus(ecrit, dit):
 ])
 def test_ecritures_sures(ecrit, dit):
     assert tp.parle(ecrit) == dit
+
+
+@pytest.mark.parametrize("ecrit, dit", [
+    # 19/11/2026 (l'utilisateur : « parfois il dit L N, pas ln rassemblé ; appliquer aux autres symboles et fonctions »)
+    ("ln2", "ln deux"),
+    ("lnx", "ln x"),
+    ("la courbe de l n", "la courbe de ln"),
+    ("Ln(x)", "ln de (x)"),
+    ("ln(e^x) = x", "ln de (e puissance x) égale x"),
+    ("ln(1/2) = -ln2", "ln de (un sur deux) égale moins ln deux"),
+    ("uₙ₊₁ على uₙ", "u n plus un على u n"),
+    ("6x²", "six x au carré"),
+    ("f⁻¹", "f moins un"),
+    ("u′/u²", "u prime sur u au carré"),
+    ("f'(x) = 2x + 1", "f prime de (x) égale deux x plus un"),
+    ("deux√x", "deux racine de x"),
+    ("L n'y est pas", "L n'y est pas"),
+    ("le 3e", "le 3e"),
+    ("H₂O", "H deux O"),
+])
+def test_notation_maths(ecrit, dit):
+    assert tp.parle(ecrit) == dit

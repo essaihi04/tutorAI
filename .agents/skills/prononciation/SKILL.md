@@ -141,3 +141,28 @@ Comment : `python -X utf8 scripts/voix/ecritures_sures.py` liste les écritures 
 choisis à l'écoute dans `PRONONCIATION` passent avant). **À relancer à chaque nouveau cours ou texte changé, avant de
 générer ses voix**, puis régénérer les pistes dont le texte parlé change (§ 4). Seuls les mots rares pour lesquels
 aucun cas ne s'applique, ou dont l'écriture sûre reste douteuse, passent à l'écoute de l'utilisateur (§ 5).
+
+## 7. Les notations : symboles, fonctions, indices et exposants
+
+Règle de l'utilisateur (19 novembre 2026, sur « Rappel : ln enlève e » du ch4 : « parfois il dit L N, pas ln
+rassemblé ; vérifier tous les cas, et l'appliquer pour toutes les générations, et aux autres symboles ou fonctions »).
+Une notation n'est jamais envoyée telle quelle à la voix : elle est écrite comme le prof la dit, d'un seul bloc.
+`notation_maths()` et `_FONCTIONS` dans `backend/kaggle_tts/texte_parle.py` (appelés par `parle()`, donc par toute
+génération) font :
+- **fonctions notées en lettres** : `ln`, `exp`, `sin`, `cos`, `tan` toujours détachées (« ln2 » → « ln deux »,
+  « lnx » → « ln x ») ; « l n », « Ln », « LN » → « ln » (l'écriture « ln » est celle choisie à l'écoute,
+  `_ecoute_ln/ecoute_1_ln.mp3`) ; appel de fonction « f(x) », « ln(x) », « F(x₀) » → « f de (x) » ;
+- **prime** : « u′ », « f'(x) » → « u prime », « f prime de (x) » ;
+- **indices** : « uₙ₊₁ » → « u n plus un », « x₀ » → « x zéro » (les formules chimiques H₂O gardent leur règle) ;
+- **exposants** : « x² » → « x au carré », « x³ » → « x au cube », « x⁴ » → « x puissance quatre », « qⁿ » →
+  « q puissance n », « f⁻¹ » → « f moins un » ; « ^ » → « puissance » ;
+- **nombre collé à une lettre** : « 6x » → « six x » (pas « 3e ») ; « deux√x » → « deux racine de x » ;
+- **signes** : « + » entre espaces → « plus », « -ln » après une espace → « moins ln » (les autres : § 4, `SYMBOLES`).
+
+Avant de générer un cours, inventorier ce qui reste après `parle()` : tout caractère hors lettres, chiffres et
+ponctuation simple (indices, exposants, ′, |, [ ], ^) et toute suite de lettres qui n'est pas un mot (pH, pKa, Qr,
+Ka, lim, arg, max) ; une notation nouvelle reçoit sa règle et son test (`test_notation_maths`) avant la génération.
+Une notation dont la lecture est douteuse passe à l'écoute (§ 5). Après un changement de règle, la liste des pistes
+dont le texte parlé change se calcule en comparant l'ancien et le nouveau `parle()` sur toutes les pistes
+(`scripts/voix/pistes_cours.py`), et ces pistes sont régénérées (le 19/11/2026 : 49 pistes). Sur le VPS, la copie
+`_stt_tous/texte_parle_depot.py` (lue par `refaire_verifie.py`) est remplacée par le nouveau fichier à chaque fois.

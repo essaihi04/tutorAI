@@ -56,6 +56,7 @@ def parle(p):
     p = re.sub(r"NADH\s*,\s*H\s*(?:[+⁺]|plus\b)", "NADH H plus", p)
     p = re.sub(r"\b([A-Z][a-z]?)([+⁺⁻])(?!\w)", lambda mt: mt.group(1) + (" plus" if mt.group(2) in "+⁺" else " moins"), p)   # H⁺ -> H plus
     p = FORMULE.sub(_formule, p)
+    p = notation_maths(p)                          # 19/11/2026 : uₙ₊₁, x², f⁻¹, u′, ln2, deuxracine…
     p = re.sub(r"\b(NADP|NAD)\s*[+⁺]", r"\1 plus", p)
     p = re.sub(r"(?<=[A-Za-z])-([0-9]{1,2})-(?=[A-Za-z])", r" \1 ", p)          # glucose-6-phosphate
     p = re.sub(r"(?<!\w)(?<![0-9][,.])[0-9]{1,2}(?!\w)(?![,.][0-9])", lambda mt: _nombre(p, mt), p)   # pas les décimaux (1,70)
@@ -63,6 +64,43 @@ def parle(p):
     p = re.sub(r"\b(complexe)\s+I\b", r"\1 un", p)
     p = re.sub(r"\b(IV|III|II)\b", lambda mt: {"II": "deux", "III": "trois", "IV": "quatre"}[mt.group(1)], p)
     return prononciation(p)
+
+
+# ── Notations des maths (19 novembre 2026) ─────────────────────────────────────────────────────────────────────────
+# Demande de l'utilisateur : « parfois il dit L N, pas ln rassemblé ; appliquer pour toutes les générations, et autres
+# symboles ou fonctions ». Inventaire des textes lus après parle() : indices et exposants (uₙ₊₁ 10 fois, uₙ 50, x² …),
+# f⁻¹, le prime « ′ », « deuxracine » collé. Chacun est écrit comme le prof le dit.
+_SUP = str.maketrans("⁰¹²³⁴⁵⁶⁷⁸⁹ⁿ⁻⁺", "0123456789n-+")
+_SUB = str.maketrans({"₀": "0", "₁": "1", "₂": "2", "₃": "3", "₄": "4", "₅": "5", "₆": "6", "₇": "7", "₈": "8",
+                      "₉": "9", "ₙ": "n", "ₖ": "k", "ₚ": "p", "ₘ": "m", "ₓ": "x", "₊": " plus ", "₋": " moins "})
+
+
+def _exposant(mt):
+    e = mt.group(2).translate(_SUP)
+    if e == "2":
+        return mt.group(1) + " au carré"
+    if e == "3":
+        return mt.group(1) + " au cube"
+    if e == "-1" and mt.group(1) in "fgh":
+        return mt.group(1) + " moins un"
+    return mt.group(1) + " puissance " + e.replace("-", "moins ").replace("+", "plus ")
+
+
+def notation_maths(p):
+    for motif, dit in _FONCTIONS:                  # ln2, Ln, l n -> « ln » détaché (avant les nombres en lettres)
+        p = motif.sub(dit, p)
+    # indice collé à une lettre minuscule (uₙ, uₙ₊₁, x₀, y₀ ; les formules chimiques H₂O sont déjà traitées) -> « u n plus un »
+    p = re.sub(r"(?<=[a-zα-ω])([₀-₉ₙₖₚₘₓ₊₋]+)", lambda mt: " " + re.sub(r"\s+", " ", mt.group(1).translate(_SUB)).strip(), p)
+    # exposant collé (x², x³, x⁴, qⁿ, f⁻¹, e⁻¹) ; les unités (m², s⁻¹) sont traitées plus loin par UNITES
+    p = re.sub(r"(?<![^\W\d_])([a-zα-ω)])([⁰¹²³⁴⁵⁶⁷⁸⁹ⁿ⁻⁺]+)", _exposant, p)
+    p = re.sub(r"(?<![\w,.])(\d+)(?=[a-df-zA-Z](?![a-zA-Z]))", r"\1 ", p)      # 6x -> 6 x (puis six x) ; pas « 3e »
+    p = re.sub(r"(?<=\w)′", " prime ", p)                                      # u′ -> u prime
+    p = re.sub(r"(?<![^\W\d_])([a-zA-Z])'(?=\s?\()", r"\1 prime ", p)           # f'(x) -> f prime (x)
+    p = re.sub(r"(?<=[^\W\d_])(?=racine)", " ", p)
+    p = re.sub(r"(?:(?<=\s)|^)-(?=[a-zA-Zα-ω√(])", "moins ", p)               # = -ln 2 : moins devant une lettre
+    # f(x), ln(x), F(x₀), f prime (x) -> « f de (x) » : le prof dit « f de x »
+    p = re.sub(r"(?<![^\W\d_])([a-zA-Z]|ln|exp|sin|cos|tan|prime)\s?\((?=[^()]{1,25}\))", r"\1 de (", p)                             # deuxracine, وracine -> deux racine
+    return re.sub(r"[ \t]{2,}", " ", p)
 
 
 # ── Nombres, symboles et unités (19 novembre 2026) ─────────────────────────────────────────────────────────────────
@@ -134,10 +172,10 @@ SYMBOLES = [
     (re.compile(r"τ"), "tau"), (re.compile(r"θ"), "theta"), (re.compile(r"(?<!\w)[µμ](?!\w)"), "mu"),
     (re.compile(r"(?<=\b[a-z])\s?→\s?|\s?→\s?(?=[+\-−]?\s?∞)"), " tend vers "),    # limites : x → +∞, n → 0
     (re.compile(r"\+\s?∞"), "plus l'infini"), (re.compile(r"[\-−]\s?∞"), "moins l'infini"),
-    (re.compile(r"\s?∞"), " l'infini"), (re.compile(r"√\s?"), "racine de "), (re.compile(r"\s?≈\s?"), " environ "),
+    (re.compile(r"\s?∞"), " l'infini"), (re.compile(r"(?<=\w)\s?√\s?"), " racine de "), (re.compile(r"√\s?"), "racine de "), (re.compile(r"\s?≈\s?"), " environ "),
     (re.compile(r"\s?≤\s?"), " inférieur ou égal à "), (re.compile(r"\s?≥\s?"), " supérieur ou égal à "),
     (re.compile(r"\s<\s"), " inférieur à "), (re.compile(r"\s>\s"), " supérieur à "),
-    (re.compile(r"\s?=\s?"), " égale "), (re.compile(r"\s?×\s?"), " fois "), (re.compile(r"\s?→\s?"), " donne "),
+    (re.compile(r"\s?=\s?"), " égale "), (re.compile(r"\s\+\s"), " plus "), (re.compile(r"\s?\^\s?"), " puissance "), (re.compile(r"\s?×\s?"), " fois "), (re.compile(r"\s?→\s?"), " donne "),
     (re.compile(r"\s?[−–]\s?(?=\w)"), " moins "),
     (re.compile(r"(?<=\w)\s?/\s?(?=\w)"), " sur "),
 ]
@@ -417,8 +455,20 @@ def _sures(p):
     return rx.sub(lambda mt: ECRITURES_SURES.get(mt.group(1).lower(), mt.group(1)), p)
 
 
+# « ln » se dit d'un bloc, comme dans l'extrait choisi par l'utilisateur (19/11/2026, ecoute_1_ln) ; collé à un chiffre,
+# une lettre ou une parenthèse (« ln2 », « lnx », « ln(x) »), écrit « l n », « Ln » ou « LN », la voix l'épelait « L N ».
+# On le ramène toujours à « ln » suivi d'une espace. Même règle pour les fonctions notées en lettres (exp, sin, cos, tan).
+_FONCTIONS = [
+    (re.compile(r"(?<![^\W\d_])l n(?![^\W\d_]|['’])"), "ln"),
+    (re.compile(r"(?<![^\W\d_])(?:Ln|LN)(?![^\W\d_]|['’])"), "ln"),
+    (re.compile(r"(?<![^\W\d_])(ln|exp|sin|cos|tan)(?=[(|\d√]|[a-zA-Zα-ωπ](?![^\W\d_]))"), r"\1 "),
+]
+
+
 def prononciation(p):
     for motif, dit in PRONONCIATION:
+        p = motif.sub(dit, p)
+    for motif, dit in _FONCTIONS:
         p = motif.sub(dit, p)
     return _sures(p)
 
