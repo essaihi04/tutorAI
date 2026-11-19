@@ -156,7 +156,9 @@ const iode = (ctx, x, y, s = 1) => P.sphere(ctx, x, y, 9 * s, CPK.I);
 const ETAPES = {
   mole: [
     { nom: 'entites', duree: 1.4, motif: 'des entités trop nombreuses pour les compter une à une' },
-    { nom: 'douzaine', duree: 1.2, motif: 'on compte les œufs par douzaine : 12' },
+    { nom: 'douzaine', duree: 1.2, motif: 'une boîte d’œufs' },
+    // Compter en allumant (19 novembre 2026, règle 16) : les 12 œufs s’allument un à un, numérotés ; « 12 » s’écrit à la fin.
+    ...Array.from({ length: 12 }, (_, k) => ({ nom: `oeuf_${k + 1}`, duree: .32, motif: `l’œuf ${k + 1}${k === 11 ? ' : 1 douzaine = 12 œufs' : ''}` })),
     { nom: 'paquet', duree: 1.6, motif: 'la mole : un paquet de 6,02·10²³ entités' },
     { nom: 'millimole', duree: 1, motif: '1 mmol = 10⁻³ mol' },
     { nom: 'masse', duree: 1.4, motif: 'n = m / M : la balance donne m, le tableau donne M' },
@@ -230,9 +232,21 @@ function vueMole(c, D) {
   });
   ecrire(c, D, 'douzaine', () => {
     c.direct(() => oeufs(ctx, 262, 120));
-    c.texte('1 douzaine = 12 œufs', 360, 222, { couleur: 'jaune', taille: 18, align: 'center' });
-    c.texte('on compte par paquets', 360, 246, { couleur: 'faible', taille: 15, align: 'center' });
     c.repere('douzaine', 256, 110, 210, 145, 'la douzaine : 12 œufs');
+  });
+  // Les œufs comptés un à un : halo fort sur l’œuf en cours, doux sur les œufs déjà comptés ; son numéro à côté.
+  let dernier = 0; for (let k = 1; k <= 12; k++) if (D.commence(`oeuf_${k}`)) dernier = k;
+  for (let k = 0; k < 12; k++) {
+    const ex = 262 + 18 + (k % 6) * 32, ey = 120 + (k < 6 ? 30 : 50) - 8, nom = `oeuf_${k + 1}`, fort = k + 1 === dernier && !D.vu('oeuf_12');
+    if (D.commence(nom)) c.direct(() => { ctx.save(); ctx.strokeStyle = fort ? 'rgba(250,204,21,.95)' : 'rgba(250,204,21,.45)'; ctx.lineWidth = fort ? 2.6 : 1.4;
+      if (fort) { ctx.fillStyle = 'rgba(250,204,21,.25)'; ctx.beginPath(); ctx.ellipse(ex, ey, 14, 17, 0, 0, 7); ctx.fill(); }
+      ctx.beginPath(); ctx.ellipse(ex, ey, 13, 16, 0, 0, 7); ctx.stroke(); ctx.restore(); });
+    ecrire(c, D, nom, () => c.texte(String(k + 1), ex, k < 6 ? 116 : 204, { couleur: 'jaune', taille: 15, align: 'center' }));
+    c.repere(nom, ex - 13, ey - 16, 26, 32, `l’œuf numéro ${k + 1}${D.commence(nom) ? '' : ' (pas encore compté)'}`);
+  }
+  ecrire(c, D, 'oeuf_12', () => {
+    c.texte('1 douzaine = 12 œufs', 360, 226, { couleur: 'jaune', taille: 18, align: 'center' });
+    c.texte('on compte par paquets', 360, 248, { couleur: 'faible', taille: 15, align: 'center' });
   });
   ecrire(c, D, 'paquet', () => {
     const p = D.p('paquet');

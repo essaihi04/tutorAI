@@ -440,16 +440,31 @@ function dessiner(c, M) {
   reperes(c, M);
   return c.fin();
 }
+/* Compter en allumant (19 novembre 2026, simulations-au-tableau règle 16) : chaque ligne du tableau s’allume à son tour,
+ * son numéro « 1, 2, 3 » écrit à sa droite, elle reste allumée (plus doucement) ; le total « 3 lignes » s’écrit une fois. */
+const enCoursA = (M, nom) => { let n = ''; for (const e of M.evs()) if (M.commence(e.nom)) n = e.nom; return n === nom && !M.S.fait; };
+function allumeA(c, x, y, w, h, fort) {
+  c.direct(() => { const ctx = c.ctx; ctx.save(); ctx.fillStyle = fort ? 'rgba(250,204,21,.2)' : 'rgba(250,204,21,.07)'; ctx.strokeStyle = fort ? 'rgba(250,204,21,.95)' : 'rgba(250,204,21,.35)';
+    ctx.lineWidth = fort ? 2.4 : 1.2; ctx.beginPath(); ctx.roundRect(x, y, w, h, 6); ctx.fill(); ctx.stroke(); ctx.restore(); });
+}
+const RANGS = [['etat_initial', 'initial'], ['en_cours', 'en_cours'], ['etat_final', 'final']];
 function vueTableau(c, M) {
   const g = TB(), yA = g.yf + 30;
+  RANGS.forEach(([nom, id], i) => {
+    if (!M.commence(nom)) return;
+    const hh = id === 'en_cours' ? g.hc : g.h, cy = g.ys[id] + hh / 2;
+    allumeA(c, g.x + 2, g.ys[id] + 2, g.xf - g.x - 4, hh - 4, enCoursA(M, nom));
+    c.direct(() => { const ctx = c.ctx; ctx.save(); ctx.strokeStyle = 'rgba(250,204,21,.9)'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(g.xf + 18, cy, 12, 0, 7); ctx.stroke(); ctx.restore(); });
+  });
+  const numero = (id, n) => { const hh = id === 'en_cours' ? g.hc : g.h; c.texte(String(n), g.xf + 18, g.ys[id] + hh / 2 + 7, { couleur: 'jaune', taille: 19, align: 'center' }); };
   M.etape(c, 'equation', () => { grille(c, g); entete(c, g); c.texte('quantités de matière en mmol (V = 100 mL de mélange)', g.x, g.yf + 64, { couleur: 'faible', taille: 16 }); });
-  M.etape(c, 'etat_initial', () => ligne(c, g, 'initial'));
+  M.etape(c, 'etat_initial', () => { ligne(c, g, 'initial'); numero('initial', 1); });
   M.etape(c, 'en_cours', () => {
-    ligne(c, g, 'en_cours');
+    ligne(c, g, 'en_cours'); numero('en_cours', 2);
     c.texte('au cours de la réaction :', g.x + 8, yA, { couleur: 'jaune', taille: 16 });
     [[0, '− x'], [1, '− 2x'], [3, '+ x']].forEach(([k, s]) => c.texte(s, g.cx(k), yA, { couleur: 'jaune', taille: 18, align: 'center' }));
   });
-  M.etape(c, 'etat_final', () => ligne(c, g, 'final'));
+  M.etape(c, 'etat_final', () => { ligne(c, g, 'final'); numero('final', 3); c.texte('3 lignes', g.xf - 4, g.yf + 30, { couleur: 'jaune', taille: 18, align: 'right' }); });
   return zoneEcriture(c, M, [
     { nom: 'equation', lignes: [['en tête : l’équation ; une colonne par espèce ; H⁺ en excès, H₂O solvant', 'blanc']] },
     { nom: 'etat_initial', lignes: [['état initial : n₀(H₂O₂) = 2,0 mmol, n₀(I⁻) = 10,0 mmol, pas encore de I₂', 'blanc']] },

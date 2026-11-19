@@ -712,8 +712,20 @@ function vueMesures(c, M) {
     { nom: 'mesure_8', lignes: [['les tubes foncent : de plus en plus de diiode, x augmente', 'blanc']] },
     { nom: 'mesures', lignes: [] },
     { nom: 'tableau_fini', lignes: [['x augmente vite au début, puis de moins en moins : x ≈ 2,0 mmol à la fin', 'jaune']],
-      plus: () => c.rect(TBM.xs + 4, TBM.y + TBM.hT + 3, TBM.x + TBM.w - TBM.xs - 8, TBM.h - TBM.hT - 6, { couleur: 'jaune', largeur: 2, arrondi: 6 }) },
+      plus: () => { c.texte('10 mesures', TBM.x + TBM.w / 2, TBM.y + TBM.h + 22, { couleur: 'jaune', taille: 18, align: 'center' }); c.rect(TBM.xs + 4, TBM.y + TBM.hT + 3, TBM.x + TBM.w - TBM.xs - 8, TBM.h - TBM.hT - 6, { couleur: 'jaune', largeur: 2, arrondi: 6 }); } },
   ], ZY);
+  /* Compter en allumant (19 novembre 2026, règle 16) : chaque mesure écrite s’allume à son tour, son numéro « 1, 2, 3… »
+   * écrit au début de sa ligne, elle reste allumée (plus doucement) ; le total « 10 mesures » s’écrit une fois à la fin. */
+  const derniere = finis.size ? Math.max(...finis) : -1, fini = M.commence('tableau_fini') || M.S.fait;
+  c.direct(() => {
+    const ctx = c.ctx; ctx.save();
+    for (const k of finis) {
+      const fort = k === derniere && !fini;
+      ctx.fillStyle = fort ? 'rgba(250,204,21,.22)' : 'rgba(250,204,21,.07)'; ctx.strokeStyle = fort ? 'rgba(250,204,21,.95)' : 'rgba(250,204,21,.3)';
+      ctx.lineWidth = fort ? 2 : 1; ctx.beginPath(); ctx.roundRect(TBM.x + 3, yLigne(k) - 15, TBM.w - 6, TBM.hL - 1, 4); ctx.fill(); ctx.stroke();
+    }
+    ctx.restore();
+  });
   // la ligne k s’écrit à la craie quand les nombres arrivent dans les cases
   for (const e of M.evs()) {
     if (!e.mes) continue;
@@ -723,6 +735,7 @@ function vueMesures(c, M) {
         c.depuis(w0 + (d + e.trip) * V);
         c.texte(String(MESURES[k][0]), xColT, yLigne(k), { couleur: 'blanc', taille: 15, align: 'center', duree: .05 });
         c.texte(MESURES[k][1], xColX, yLigne(k), { couleur: k === 9 ? 'jaune' : 'blanc', taille: 15, align: 'center', duree: .08 });
+        c.texte(String(k + 1), TBM.x + 6, yLigne(k), { couleur: 'jaune', taille: 14, duree: .05 });
       }
     });
   }

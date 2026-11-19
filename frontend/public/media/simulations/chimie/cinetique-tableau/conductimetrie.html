@@ -456,6 +456,8 @@ function ETAPES(v) {
     formule: [
       { nom: 'formule', anim: .2, motif: 'σ = Σ λᵢ·[Xᵢ]', bulle: () => 'Chaque ion apporte sa part à σ.' },
       { nom: 'exemple', anim: .2, motif: 'exemple : la soude, σ₀ = λ(Na⁺)·[Na⁺] + λ(HO⁻)·[HO⁻]', bulle: () => 'Exemple : la soude.' },
+      { nom: 'terme_na', anim: .5, motif: 'terme 1 : l’ion sodium, λ(Na⁺)·[Na⁺]', bulle: () => 'Premier ion : le sodium.' },
+      { nom: 'terme_ho', anim: .5, motif: 'terme 2 : l’ion hydroxyde, λ(HO⁻)·[HO⁻] ; 2 ions, 2 termes', bulle: () => 'Deuxième ion : l’hydroxyde.' },
       { nom: 'unites', anim: .2, motif: 'les unités : λ en S·m²·mol⁻¹, [X] en mol/m³', bulle: () => 'Attention aux unités.' },
       { nom: 'piege', anim: .2, motif: '⚠ 1 mol/L = 10³ mol/m³ : σ₀ = 0,249 S/m', bulle: () => 'Le piège classique…' },
     ],
@@ -587,7 +589,21 @@ function vueFormule(c, M) {
   M.etape(c, 'exemple', () => {
     c.texte('Exemple : la soude (Na⁺ + HO⁻), C₀ = 1,0·10⁻² mol/L', 40, 128, { couleur: 'cyan', taille: 18 });
     c.texte('σ₀ = λ(Na⁺)·[Na⁺] + λ(HO⁻)·[HO⁻]', 40, 160, { taille: 22 });
-    c.texte('λ(Na⁺) = 5,01 mS·m²·mol⁻¹ ; λ(HO⁻) = 19,9 mS·m²·mol⁻¹', 40, 190, { couleur: 'faible', taille: 17 });
+    c.texte('λ(Na⁺) = 5,01 mS·m²·mol⁻¹ ; λ(HO⁻) = 19,9 mS·m²·mol⁻¹', 40, 208, { couleur: 'faible', taille: 17 });
+  });
+  /* Compter en allumant (19 novembre 2026, règle 16) : chaque ion de la solution est un terme de la somme ; les termes
+   * s’allument l’un après l’autre, numérotés « 1, 2 », restent allumés ; le total « 2 ions : 2 termes » s’écrit à la fin. */
+  const TERMES = [['terme_na', 'σ₀ = ', 'λ(Na⁺)·[Na⁺]'], ['terme_ho', 'σ₀ = λ(Na⁺)·[Na⁺] + ', 'λ(HO⁻)·[HO⁻]']];
+  const derT = (() => { let n = ''; for (const e of M.evs()) if (M.commence(e.nom)) n = e.nom; return M.S.fait ? '' : n; })();
+  TERMES.forEach(([nom, avant, terme], i) => {
+    const x = 40 + c.largeurTexte(avant, 22), w = c.largeurTexte(terme, 22), fort = derT === nom;
+    if (M.commence(nom)) c.direct(() => { const ctx = c.ctx; ctx.save(); ctx.fillStyle = fort ? 'rgba(250,204,21,.22)' : 'rgba(250,204,21,.08)'; ctx.strokeStyle = fort ? 'rgba(250,204,21,.95)' : 'rgba(250,204,21,.35)';
+      ctx.lineWidth = fort ? 2.2 : 1.1; ctx.beginPath(); ctx.roundRect(x - 4, 140, w + 8, 28, 6); ctx.fill(); ctx.stroke(); ctx.restore(); });
+    M.etape(c, nom, () => {
+      c.texte(String(i + 1), x + w / 2, 186, { couleur: 'jaune', taille: 16, align: 'center' });
+      if (i === 1) c.texte('2 ions : 2 termes', 40 + c.largeurTexte(avant + terme, 22) + 26, 160, { couleur: 'jaune', taille: 18 });
+    });
+    c.repere(nom, x - 4, 140, w + 8, 28, `le terme ${i + 1} de la somme : ${terme}${M.commence(nom) ? '' : ' (pas encore allumé)'}`);
   });
   M.etape(c, 'unites', () => {
     c.texte('Unités : σ en S/m ; λ en S·m²·mol⁻¹ ; [X] en mol/m³', 40, 232, { couleur: 'blanc', taille: 19 });
