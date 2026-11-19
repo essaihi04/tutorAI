@@ -525,7 +525,11 @@
     if (ec && ek && pleine(1, total) * 0.9 > innerHeight) { COURTE1 = true; hC = hK; }
     // Jamais plus petit que 0,75 : une partie trop longue pour une page passe à deux pages (règle 48 : la diapo d'énoncé
     // ne montre que les 1 à 3 questions traitées juste après, ce qui tient d'habitude sur une page).
-    const ZMIN = 0.75;
+    // Une PARTIE (questions= ou partie=, règle 48) se rassemble toujours sur une seule page, quitte à réduire jusqu'à
+    // 0,5 (19/11/2026, l'utilisateur, capture 2022 N ex. 2 « 3-2 » seule en page 2/2 : « veuillez rassembler à une
+    // seule page » ; le cadre réel du lecteur fait ~1126×460 à 1366 px de large).
+    const enPartie = !!(CFG.questions ?? P.get('questions')) || !!(CFG.partie ?? P.get('partie'));
+    const ZMIN = enPartie ? 0.5 : 0.75;
     if (pleine(1, total) * ZMIN <= innerHeight) {
       blocs.forEach((el) => { el.dataset.page = 1; });
       NPAGES = 1; DISPO[1] = innerHeight; BESOIN[1] = pleine(1, total);
