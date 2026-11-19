@@ -12,6 +12,7 @@
 <script src="/media/simulations/shared/tableau/tableau.js"></script>
 <script src="commun.js"></script>
 <script src="etapes.js"></script>
+<script src="/media/simulations/shared/lexique/lexique-genetique.js"></script>
 <script>
 /*
  * La molécule d’ADN (cours « Notion de l’information génétique », 2 Bac PC BIOF, 11 novembre 2026). Capacités NIG7, NIG8.
@@ -28,10 +29,14 @@ const COUL = { A: ['#fca5a5', '#dc2626'], T: ['#fef08a', '#ca8a04'], C: ['#93c5f
 const COMP = { A: 'T', T: 'A', C: 'G', G: 'C' };
 
 /* ── Peinture des molécules ────────────────────────────────────────── */
+/* (19 novembre 2026, règle 18) les lettres peintes font au moins 15 px à l'écran (Molecules.taillePeinte, lexique génétique) ;
+ * le phosphate et la molécule de base grandissent juste assez pour que leur lettre y tienne. */
+const tp = (x, t) => window.Molecules.taillePeinte(x, t);
 function phosphate(x, cx, cy, r = 10, a = 1) {
+  const t = tp(x, Math.round(r * 1.1)); r = Math.max(r, t * .52 + 1);
   x.save(); x.globalAlpha = a; const g = x.createRadialGradient(cx - 3, cy - 3, 1, cx, cy, r); g.addColorStop(0, '#fde2c4'); g.addColorStop(1, '#c2410c');
   x.fillStyle = g; x.beginPath(); x.arc(cx, cy, r, 0, TAU); x.fill();
-  x.fillStyle = '#431407'; x.font = `700 ${Math.round(r * 1.1)}px sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('P', cx, cy + .5); x.restore();
+  x.fillStyle = '#431407'; x.font = `700 ${t}px sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('P', cx, cy + .5); x.restore();
 }
 function sucre(x, cx, cy, r = 12, a = 1) {
   x.save(); x.globalAlpha = a; const g = x.createRadialGradient(cx - 3, cy - 4, 1, cx, cy, r + 2); g.addColorStop(0, '#e2e8f0'); g.addColorStop(1, '#64748b');
@@ -42,7 +47,7 @@ function base(x, x0, y0, w, h, L, a = 1, lettre = true) {
   if (h < .5) return;
   x.save(); x.globalAlpha = a; const g = x.createLinearGradient(x0, y0, x0, y0 + h); g.addColorStop(0, COUL[L][0]); g.addColorStop(1, COUL[L][1]);
   x.fillStyle = g; x.beginPath(); x.roundRect(x0, y0, w, h, Math.min(4, h / 2)); x.fill();
-  if (lettre && h > 10) { x.fillStyle = '#111827'; x.font = `700 ${Math.round(Math.min(16, h * .7))}px sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(L, x0 + w / 2, y0 + h / 2 + .5); }
+  if (lettre && h > 10) { x.fillStyle = '#111827'; x.font = `700 ${tp(x, Math.round(Math.min(16, h * .7)))}px sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(L, x0 + w / 2, y0 + h / 2 + .5); }
   x.restore();
 }
 function lien(x, x1, y1, x2, y2, a = 1) { Peint.ruban(x, () => { x.beginPath(); x.moveTo(x1, y1); x.lineTo(x2, y2); }, '#cbd5e1', 4.5, a, { ombre: false }); }
@@ -306,6 +311,7 @@ const ligneY = i => (grandTableau() ? 154 + i * 72 : 160 + i * 46);
 const posCase = (i, j) => [COLS[j + 1], ligneY(i)];
 
 function molecule(x, cx, cy, L, s = 1, a = 1, lettre = false) {
+  const tl = lettre ? tp(x, Math.round(6 * s * 1.05)) : 0; if (lettre) s = Math.max(s, tl * .8 / 6);   // la lettre tient dans le cycle
   // pyrimidine (T, C) : un cycle à six ; purine (A, G) : un cycle à six accolé à un cycle à cinq (deux cycles)
   const r = 6 * s, h = r * Math.cos(Math.PI / 6), purine = L === 'A' || L === 'G';
   const R = r / (2 * Math.sin(Math.PI / 5)), ap = r / (2 * Math.tan(Math.PI / 5)), pcx = h + ap;
@@ -320,7 +326,7 @@ function molecule(x, cx, cy, L, s = 1, a = 1, lettre = false) {
   chemin(); x.fillStyle = g; x.fill('nonzero'); x.shadowColor = 'transparent';
   x.strokeStyle = 'rgba(17,24,39,.55)'; x.lineWidth = Math.max(.7, .8 * s); chemin(); x.stroke();
   x.fillStyle = 'rgba(255,255,255,.35)'; x.beginPath(); x.ellipse(-r * .3, -r * .38, r * .32, r * .18, -.4, 0, TAU); x.fill();
-  if (lettre) { x.fillStyle = '#111827'; x.font = `700 ${Math.round(r * 1.05)}px sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(L, 0, .5); }
+  if (lettre) { x.fillStyle = '#111827'; x.font = `700 ${tl}px sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(L, 0, .5); }
   x.restore();
 }
 function tubeADN(x, cx, top, a, lueur) {

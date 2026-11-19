@@ -50,9 +50,27 @@
   }
   // encre sombre si elle contraste nettement mieux que le blanc (le blanc garde l'avantage sur les rouges et les bleus saturés)
   const encre = c => { if (!(typeof c === 'string' && c[0] === '#' && c.length === 7)) return '#fff'; const L = clarte(c); return (L + .05) / .063 > 1.25 * 1.05 / (L + .05) ? ENCRE : '#fff'; };
-  /** Écrit s centré en (px, py) sur une peinture de couleur `fond`, police grasse de `taille` px, encre choisie par encre(). */
+  /* Plancher des lettres peintes (19 novembre 2026, règle 18 du skill : tout texte d'une simulation fait au moins 15 px une
+   * fois affiché dans le lecteur, aussi à 1366 × 560 et sur un téléphone en paysage 724 × 350). Une lettre peinte SUR un
+   * objet (base, anticodon, acide aminé) prend au moins PLANCHER px à l'écran, d'après l'échelle réelle du contexte
+   * (`ctx.getTransform()` ÷ devicePixelRatio ; pendant la mesure de la boîte de l'encre, `ctx.__echelle`, posé par le
+   * commun.js du cours). L'objet grandit avec sa lettre (règle 10 : le texte tient dans sa forme) : bâtonnet de base plus
+   * large et plus long, anticodon plus grand, perle d'acide aminé de rayon plus grand. Les dimensions sont calculées ici
+   * (`gabarit`, `perleRayon`, `arntHauteur`) pour que les pages placent leurs objets d'après elles (règle 15 : un même
+   * objet, un même dessin et les mêmes proportions dans tous les cours). */
+  const PLANCHER = 15;
+  /** Échelle écran du contexte : px CSS à l'écran pour 1 unité du dessin. */
+  function echelleEcran(x) {
+    if (x && x.__echelle) return x.__echelle;
+    if (!x || !x.getTransform) return 1;
+    const m = x.getTransform(), k = Math.hypot(m.a, m.b) / (window.devicePixelRatio || 1);
+    return k > 1e-6 ? k : 1;
+  }
+  /** Taille d'une lettre peinte (unités du dessin) : la taille voulue, jamais sous PLANCHER px à l'écran. */
+  const taillePeinte = (x, t) => Math.max(t, PLANCHER / echelleEcran(x));
+  /** Écrit s centré en (px, py) sur une peinture de couleur `fond`, police grasse de `taille` (jamais sous 15 px à l'écran), encre choisie par encre(). */
   function lettreSur(x, s, px, py, fond, taille) {
-    x.save(); const e = encre(fond); x.fillStyle = e; x.font = `700 ${taille}px sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.save(); const e = encre(fond); x.fillStyle = e; x.font = `700 ${taillePeinte(x, taille)}px sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle';
     if (e === '#fff') { x.shadowColor = 'rgba(0,0,0,.6)'; x.shadowBlur = 2; }
     x.fillText(s, px, py); x.restore();
   }
@@ -81,6 +99,33 @@
   }
 
   /**
+   * Dimensions d'une base portant sa lettre, au pas `pas` et à la longueur voulue `lb` (unités du dessin) :
+   * t = taille de la lettre, w = demi-largeur du bâtonnet, lb = longueur réelle (la lettre y tient), yl = distance du
+   * squelette au centre de la lettre. Sans lettre, la base garde ses dimensions d'origine.
+   */
+  function gabarit(x, pas, lb = 20, lettre = true) {
+    const w0 = Math.min(6, pas * .32);
+    if (!lettre) return { t: 0, w: w0, lb, yl: lb * .55 };
+    const t = taillePeinte(x, Math.min(13, pas * .62));
+    const w = Math.max(w0, Math.min(t * .44, pas * .47)), l = Math.max(lb, t * .72 + 6.5);   // hauteur des capitales ≈ 0,72 em, le squelette couvre 3,5
+    return { t, w, lb: l, yl: l === lb ? lb * .55 : (3.5 + l) / 2 };
+  }
+  /** Une base : bâtonnet coloré qui part du squelette (px, y) vers `sens` (+1 bas, −1 haut), sa lettre dedans.
+   *  o.lettre (vrai), o.rouge (base entourée de rouge : mutation), o.alpha. Même dessin dans brin() et dans les pages. */
+  function base(x, px, y, L, sens, pas, lb = 20, o = {}) {
+    const col = BASE[L]; if (!col || (o.alpha ?? 1) <= 0) return;
+    const G = gabarit(x, pas, lb, o.lettre !== false), w = G.w, l = G.lb;
+    x.save(); x.globalAlpha *= (o.alpha ?? 1);
+    const g = x.createLinearGradient(px - w, 0, px + w, 0); g.addColorStop(0, ombre(col, .75)); g.addColorStop(.45, col); g.addColorStop(1, ombre(col, .6));
+    x.fillStyle = g; const y1 = y, y2 = y + sens * l;
+    x.beginPath(); x.roundRect ? x.roundRect(px - w, Math.min(y1, y2), 2 * w, l, 3) : x.rect(px - w, Math.min(y1, y2), 2 * w, l); x.fill();
+    x.fillStyle = 'rgba(255,255,255,.28)'; x.fillRect(px - w + 1.5, Math.min(y1, y2) + 2, 1.6, Math.max(0, l - 4));
+    if (o.lettre !== false) lettreSur(x, L, px, y + sens * G.yl, col, G.t);
+    if (o.rouge) { x.strokeStyle = '#ff2d2d'; x.lineWidth = 2.4; x.beginPath(); x.ellipse(px, y + sens * l * .5, Math.max(pas * .5, w + 3), l * .75, 0, 0, TAU); x.stroke(); }
+    x.restore();
+  }
+
+  /**
    * Un brin d’acide nucléique horizontal : squelette ombré (type 'adn' ou 'arn') de x0 à x0 + n·pas, à la hauteur y ;
    * chaque base est un bâtonnet coloré qui part du squelette vers `sens` (+1 vers le bas, −1 vers le haut), longueur `lb`,
    * avec sa lettre écrite dedans. `lettres` = chaîne ; un caractère ' ' ou '-' laisse la place vide. `de`/`a` : bases visibles.
@@ -91,18 +136,7 @@
     if (a <= de || al <= 0) return;
     x.save(); x.globalAlpha *= al;
     // bases
-    for (let i = de; i < a; i++) {
-      const L = lettres[i]; if (!BASE[L]) continue;
-      const px = x0 + (i + .5) * pas;
-      const g = x.createLinearGradient(px - 5, 0, px + 5, 0); g.addColorStop(0, ombre(BASE[L], .75)); g.addColorStop(.45, BASE[L]); g.addColorStop(1, ombre(BASE[L], .6));
-      x.fillStyle = g; const y1 = y, y2 = y + sens * lb;
-      x.beginPath(); x.roundRect ? x.roundRect(px - Math.min(6, pas * .32), Math.min(y1, y2), 2 * Math.min(6, pas * .32), Math.abs(y2 - y1), 3) : x.rect(px - 6, Math.min(y1, y2), 12, Math.abs(y2 - y1)); x.fill();
-      x.fillStyle = 'rgba(255,255,255,.28)'; x.fillRect(px - Math.min(6, pas * .32) + 1.5, Math.min(y1, y2) + 2, 1.6, Math.max(0, Math.abs(y2 - y1) - 4));
-      if (o.lettres !== false) {
-        lettreSur(x, L, px, y + sens * lb * .55, BASE[L], Math.round(Math.min(13, pas * .62)));
-      }
-      if (o.rouge && o.rouge.has(i)) { x.strokeStyle = '#ff2d2d'; x.lineWidth = 2.4; x.beginPath(); x.ellipse(px, y + sens * lb * .5, pas * .5, lb * .75, 0, 0, TAU); x.stroke(); }
-    }
+    for (let i = de; i < a; i++) base(x, x0 + (i + .5) * pas, y, lettres[i], sens, pas, lb, { lettre: o.lettres !== false, rouge: o.rouge && o.rouge.has(i) });
     // squelette (sucre-phosphate) : un ruban ombré
     const [cl, cf] = SQUELETTE[type] || SQUELETTE.adn, xa = x0 + de * pas, xb = x0 + a * pas;
     const gs = x.createLinearGradient(0, y - 5, 0, y + 5); gs.addColorStop(0, cl); gs.addColorStop(.5, cf); gs.addColorStop(1, ombre(cf.length === 7 ? cf : '#4f46e5', .55));
@@ -117,12 +151,15 @@
 
   /** Nucléotide libre (petit rond-squelette + bâtonnet de base), pour l’ARN : rond orange ; pour l’ADN : rond violet. */
   function nucleotide(x, px, py, L, type = 'arn', ang = -Math.PI / 2, a = 1) {
+    const N = gabaritNucleotide(x);
     x.save(); x.globalAlpha *= a; x.translate(px, py); x.rotate(ang + Math.PI / 2);
-    x.fillStyle = BASE[L] || '#999'; x.beginPath(); x.rect(-4, -16, 8, 14); x.fill();
+    x.fillStyle = BASE[L] || '#999'; x.beginPath(); x.rect(-N.w, -N.l - 2, 2 * N.w, N.l); x.fill();
     sphere(x, 0, 2, 5, (SQUELETTE[type] || SQUELETTE.arn)[1]);
-    x.translate(0, -9); x.rotate(-(ang + Math.PI / 2)); lettreSur(x, L, 0, .5, BASE[L], 10);
+    x.translate(0, -2 - N.l / 2); x.rotate(-(ang + Math.PI / 2)); lettreSur(x, L, 0, .5, BASE[L], N.t);
     x.restore();
   }
+  /** Dimensions d'un nucléotide libre : t lettre, w demi-largeur, l longueur de la base (sans la sphère). */
+  function gabaritNucleotide(x, t0 = 10) { const t = taillePeinte(x, t0); return { t, w: Math.max(4, t * .44), l: Math.max(14, t * .72 + 5) }; }
 
   /**
    * Ribosome posé sur un ARNm horizontal à la hauteur y : la grande sous-unité au-dessus, la petite au-dessous.
@@ -154,14 +191,15 @@
   /**
    * ARNt simplifié (programme : un acide aminé en haut, un anticodon en bas — pas de trèfle).
    * (cx, yb) = milieu du bas de l’anticodon (les bases pointent vers le bas, sur le codon) ; `aa` : nom de l’acide aminé ou null.
+   * o.lettres = false : l’anticodon sans ses lettres (petite icône, comme brin(…, { lettres: false })).
    */
   function arnt(x, cx, yb, anticodon, aa, o = {}) {
     const a = o.alpha ?? 1; if (a <= 0) return;
     x.save(); x.globalAlpha *= a;
-    const pas = o.pas ?? 16, w = pas * 3 + 8, h = 46;
+    const pas = o.pas ?? 16, w = pas * 3 + 8, A = o.lettres === false ? { t: 0, bw: 5.5, bh: 18, h: 46 } : gabaritAnticodon(x, pas), h = A.h;
     // corps (17 novembre 2026) : une silhouette arrondie d’un seul tenant — tige fine en haut (porte l’acide aminé),
     // base large en bas (porte l’anticodon) — vert vif, ombre posée, reflet : on la reconnaît d’un coup d’œil
-    const yt = yb - h - 26, ye = yb - h + 4, yl = yb - 16, r = 6;
+    const yt = yb - h - 26, ye = yb - h + 4, yl = yb - A.bh + 2, r = 6;
     const forme = () => {
       x.beginPath(); x.moveTo(cx - 5, yt + 3); x.quadraticCurveTo(cx - 5, yt, cx, yt); x.quadraticCurveTo(cx + 5, yt, cx + 5, yt + 3);
       x.lineTo(cx + 5, ye - 12); x.bezierCurveTo(cx + 5, ye, cx + w / 2, ye - 4, cx + w / 2, ye + 12);
@@ -176,17 +214,34 @@
     // anticodon : trois bases tournées vers le bas
     for (let i = 0; i < 3; i++) {
       const L = anticodon[i], px = cx + (i - 1) * pas;
-      x.fillStyle = BASE[L] || '#888'; x.beginPath(); x.roundRect ? x.roundRect(px - 5.5, yb - 18, 11, 18, [0, 0, 3, 3]) : x.rect(px - 5, yb - 18, 10, 18); x.fill();
-      x.fillStyle = 'rgba(255,255,255,.28)'; x.fillRect(px - 4, yb - 17, 1.6, 14);
-      lettreSur(x, L, px, yb - 8, BASE[L] || '#888888', 10);
+      x.fillStyle = BASE[L] || '#888'; x.beginPath(); x.roundRect ? x.roundRect(px - A.bw, yb - A.bh, 2 * A.bw, A.bh, [0, 0, 3, 3]) : x.rect(px - A.bw, yb - A.bh, 2 * A.bw, A.bh); x.fill();
+      x.fillStyle = 'rgba(255,255,255,.28)'; x.fillRect(px - A.bw + 1.5, yb - A.bh + 1, 1.6, A.bh - 4);
+      if (o.lettres !== false) lettreSur(x, L, px, yb - (A.bh - 2) / 2, BASE[L] || '#888888', A.t);
     }
     if (aa) sphere(x, cx, yb - h - 36, o.r ?? 11, couleurAA(aa));
     x.restore();
   }
 
+  /** Dimensions de l'anticodon d'un ARNt au pas `pas` : t lettre, bw demi-largeur et bh hauteur d'une base,
+   *  h hauteur du corps (46 au dessin d'origine ; l'acide aminé porté est à yb − h − 36). */
+  function gabaritAnticodon(x, pas = 16) {
+    const t = taillePeinte(x, 10), bw = Math.max(5.5, Math.min(t * .44, pas * .47)), bh = Math.max(18, t * .72 + 6);
+    return { t, bw, bh, h: Math.max(46, bh + 28) };
+  }
+  const arntHauteur = (x, pas = 16) => gabaritAnticodon(x, pas).h;
+
+  /** Rayon réel d'une perle d'acide aminé qui porte son nom (le nom tient dedans) ; r sans nom. */
+  function perleRayon(x, r, nom, texte = true) {
+    if (!texte || r < 9 || !nom) return r;
+    const t = taillePeinte(x, Math.round(r * .72));
+    if (t <= Math.round(r * .72)) return r;
+    x.save(); x.font = `700 ${t}px sans-serif`; const lw = x.measureText(nom).width; x.restore();
+    return Math.max(r, lw / 2 + 3, t * .62);
+  }
   /** Une perle d’acide aminé avec son abréviation (peinte, petite) ; o.noir : texte sombre. */
   function perle(x, cx, cy, r, nom, o = {}) {
-    sphere(x, cx, cy, r, couleurAA(nom), o.alpha ?? 1);
+    const R = perleRayon(x, r, nom, o.texte !== false);
+    sphere(x, cx, cy, R, couleurAA(nom), o.alpha ?? 1);
     if (o.texte !== false && r >= 9) {
       x.save(); x.globalAlpha *= (o.alpha ?? 1); lettreSur(x, nom, cx, cy + .5, couleurAA(nom), Math.round(r * .72)); x.restore();
     }
@@ -288,7 +343,7 @@
   /** Point noir d’autoradiographie (grain d’argent) — quelques pixels sombres et flous. */
   function grain(x, px, py, a = 1) { x.save(); x.globalAlpha *= a; x.fillStyle = 'rgba(10,10,10,.9)'; x.beginPath(); x.arc(px, py, 2.1, 0, TAU); x.fill(); x.fillStyle = 'rgba(10,10,10,.35)'; x.beginPath(); x.arc(px + .8, py - .6, 3.4, 0, TAU); x.fill(); x.restore(); }
 
-  window.Molecules = { pastille, encre, lettreSur, ENCRE, BASE, COMP_ADN, COMP_ARN, AA, CODE, traduire, couleurAA, sphere, ombre, brin, nucleotide, ribosome, arnt, perle, chaine,
+  window.Molecules = { PLANCHER, echelleEcran, taillePeinte, gabarit, base, gabaritNucleotide, gabaritAnticodon, arntHauteur, perleRayon, pastille, encre, lettreSur, ENCRE, BASE, COMP_ADN, COMP_ARN, AA, CODE, traduire, couleurAA, sphere, ombre, brin, nucleotide, ribosome, arnt, perle, chaine,
     noyau, pore, cytoplasme, milieu, hematie, vaisseau, grain };
   window.Lexique = window.Lexique || {}; window.Lexique.genetique = window.Molecules;
 })();

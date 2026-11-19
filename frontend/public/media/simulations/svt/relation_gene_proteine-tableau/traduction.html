@@ -63,8 +63,16 @@ function sousUnites(t) {
     petite: { x: entre(120, rc, up) + 30 * dis, y: entre(200, YP, up) + 30 * dis },
     grande: { x: entre(120, rc, ug) + 30 * dis, y: entre(100, YG, ug) - 60 * dis } };
 }
-function haut(i, t) { const p = kf(ARNT[i].K, t); return p ? { x: p.x, y: p.y - HAA, a: p.a } : null; }
+function haut(i, t) { const p = kf(ARNT[i].K, t); return p ? { x: p.x, y: p.y - HAA - DAA, a: p.a } : null; }
 const DX = -32, DY = -14;
+/* (19 novembre 2026) les perles portent leur nom à 15 px au moins à l'écran : elles grandissent (Molecules.perleRayon) et la
+ * chaîne s'espace d'autant (E = écart entre deux centres), sinon les perles se couvraient. */
+let E = Math.hypot(DX, DY);
+const ecartPerles = x => { E = Math.max(Math.hypot(DX, DY), 2 * Math.max(...AAS.map(n => M.perleRayon(x, RP, n))) + 3); gabarits(x); return E; };
+/* Les bases du codon s'allongent quand leur lettre grandit (Molecules.gabarit) : l'ARNt monte d'autant (DA), et son acide aminé
+ * aussi, avec la hauteur réelle du corps de l'ARNt (DAA). Même décalage à toutes les images clés. */
+let DA = 0, DAA = 0;
+function gabarits(x) { DA = M.gabarit(x, PAS, 20).lb - 20; DAA = DA + M.arntHauteur(x, PAS) - 46; }
 /** Les acides aminés : groupes de perles reliées (la chaîne) ou seules (sur leur ARNt). */
 function perles(t) {
   let k = 0; for (const [a] of TR) if (t >= a) k++;
@@ -74,9 +82,9 @@ function perles(t) {
   const [a, b] = TR[k - 1], u = lisse((t - a) / (b - a)), A = haut(k - 1, t), B = haut(k, t);
   r.u = u;
   const pts = [];
-  for (let m = 0; m < k; m++) { const io = k - 1 - m, inw = k - m; pts.push([entre(A.x + io * DX, B.x + inw * DX, u), entre(A.y + io * DY, B.y + inw * DY, u)]); }
+  for (let m = 0; m < k; m++) { const io = k - 1 - m, inw = k - m; const ex = DX * E / Math.hypot(DX, DY), ey = DY * E / Math.hypot(DX, DY); pts.push([entre(A.x + io * ex, B.x + inw * ex, u), entre(A.y + io * ey, B.y + inw * ey, u)]); }
   pts.push([B.x, B.y]);
-  if (t >= LIB) { const v = rampe(t, LIB, 1.4); pts.forEach((p, j) => { p[0] = entre(p[0], 284 + 34 * j, v); p[1] = entre(p[1], 118, v); }); }
+  if (t >= LIB) { const v = rampe(t, LIB, 1.4); pts.forEach((p, j) => { p[0] = entre(p[0], 335 + Math.max(34, E) * (j - 1.5), v); p[1] = entre(p[1], 118, v); }); }
   const noms = AAS.slice(0, k + 1);
   if (u > .85) r.groupes.push({ noms, pts, a: 1 });
   else { r.groupes.push({ noms: noms.slice(0, k), pts: pts.slice(0, k), a: 1 }); r.groupes.push({ noms: [noms[k]], pts: [pts[k]], a: B.a }); }
@@ -90,6 +98,7 @@ function grande(x, X, Yc, a) { if (a > 0) M.ribosome(x, X, Yc + 30 * SR, SR, { p
 function petite(x, X, Yc, a) { if (a > 0) M.ribosome(x, X, Yc - 16 * SR, SR, { petite: a, grande: 0 }); }
 
 function dessinerTraduction(c, k) {
+  ecartPerles(c.ctx);
   const t = k.t, su = sousUnites(t), P = perles(t);
   const aLibres = rampe(t, 3.8, .5) * (1 - rampe(t, 7.0, .6));
   c.direct(() => {
@@ -99,7 +108,7 @@ function dessinerTraduction(c, k) {
     petite(x, su.petite.x, su.petite.y, su.a);
     M.brin(x, X0, Y, PAS, LET, 'arn', -1, { lb: 20, alpha: rampe(t, .3, .6) });
     grande(x, su.grande.x, su.grande.y, su.a * .92);
-    ARNT.forEach(r => { const p = kf(r.K, t); if (p && p.a > .01) M.arnt(x, p.x, p.y, r.ac, null, { alpha: p.a, pas: 28 }); });
+    ARNT.forEach(r => { const p = kf(r.K, t); if (p && p.a > .01) M.arnt(x, p.x, p.y - DA, r.ac, null, { alpha: p.a, pas: PAS }); });
     for (const g of P.groupes) {
       if (g.pts.length > 1) M.chaine(x, g.pts, g.noms, RP, { alpha: g.a });
       else M.perle(x, g.pts[0][0], g.pts[0][1], RP, g.noms[0], { alpha: g.a });
@@ -108,7 +117,7 @@ function dessinerTraduction(c, k) {
     if (P.k >= 1 && P.u > .85 && t >= 15.0 && t < 17.2) {
       const [p0, p1] = P.chaine, d = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]), ux = (p1[0] - p0[0]) / d, uy = (p1[1] - p0[1]) / d;
       x.save(); x.globalAlpha = .55 + .45 * Math.cos((t - 16) * 9); x.strokeStyle = '#fde047'; x.lineWidth = 5; x.lineCap = 'round';
-      x.shadowColor = '#fde047'; x.shadowBlur = 8; x.beginPath(); x.moveTo(p0[0] + ux * RP, p0[1] + uy * RP); x.lineTo(p1[0] - ux * RP, p1[1] - uy * RP); x.stroke(); x.restore();
+      x.shadowColor = '#fde047'; x.shadowBlur = 8; x.beginPath(); x.moveTo(p0[0] + ux * M.perleRayon(x, RP, 'Met'), p0[1] + uy * M.perleRayon(x, RP, 'Met')); x.lineTo(p1[0] - ux * M.perleRayon(x, RP, 'Arg'), p1[1] - uy * M.perleRayon(x, RP, 'Arg')); x.stroke(); x.restore();
     }
   });
   // ── craie ──
@@ -303,25 +312,29 @@ function dessinerTrois(c, k) {
   c.direct(() => {
     const x = c.ctx;
     M.milieu(x, 8, 38, 744, 374, 'cytoplasme');
+    // (19 novembre 2026) lettres ≥ 15 px à l'écran : l'anticodon au pas des codons, posé au bout réel des bases du codon,
+    // et les perles (agrandies pour que leur nom y tienne) espacées de leur diamètre
+    const yb = YS - M.gabarit(x, PS3, 20).lb, R = Math.max(...['Met', 'Arg', 'Ser', 'Gln'].map(n => M.perleRayon(x, 12, n))), e = 2 * R + 3;
+    const yaa = yb - Math.max(HAA, M.arntHauteur(x, PS3) + 36);
     // 1 : petite + ARNt-Met sur AUG + grande
     if (a[0] > 0) {
       const x0 = PAN[0] - 90; x.save(); x.globalAlpha = a[0];
       rib3(x, x0 + 54, 1); M.brin(x, x0, YS, PS3, 'AUGCGCAGUC', 'arn', -1, { lb: 20 });
-      M.arnt(x, x0 + 27, YS - 20, 'UAC', null, { pas: 16 }); M.perle(x, x0 + 27, YS - 20 - HAA, 12, 'Met'); x.restore();
+      M.arnt(x, x0 + 27, yb, 'UAC', null, { pas: PS3 }); M.perle(x, x0 + 27, yaa, 12, 'Met'); x.restore();
     }
     // 2 : deux ARNt, une chaîne courte, ribosome au milieu de l’ARNm
     if (a[1] > 0) {
       const x0 = PAN[1] - 108; x.save(); x.globalAlpha = a[1];
       rib3(x, x0 + 108, 1); M.brin(x, x0, YS, PS3, 'AUGCGCAGUCAG', 'arn', -1, { lb: 20 });
-      M.arnt(x, x0 + 81, YS - 20, 'GCG', null, { pas: 16 }); M.arnt(x, x0 + 135, YS - 20, 'UCA', null, { pas: 16 });
-      M.chaine(x, [[x0 + 59, YS - 20 - HAA - 10], [x0 + 81, YS - 20 - HAA]], ['Met', 'Arg'], 12); M.perle(x, x0 + 135, YS - 20 - HAA, 12, 'Ser'); x.restore();
+      M.arnt(x, x0 + 81, yb, 'GCG', null, { pas: PS3 }); M.arnt(x, x0 + 135, yb, 'UCA', null, { pas: PS3 });
+      M.chaine(x, [[x0 + 81 - e * .8, yaa - e * .6], [x0 + 81, yaa]], ['Met', 'Arg'], 12); M.perle(x, x0 + 135, yaa, 12, 'Ser'); x.restore();
     }
     // 3 : ribosome sur le codon stop, sous-unités séparées, chaîne qui part
     if (a[2] > 0) {
       const x0 = PAN[2] - 99; x.save(); x.globalAlpha = a[2];
       M.ribosome(x, x0 + 130, YS, S3, { petite: 0, grande: 1, dyg: -27 - 36 }); M.ribosome(x, x0 + 108 + 8, YS, S3, { petite: 1, grande: 0, dyp: 16 });
       M.brin(x, x0, YS, PS3, 'AGUCAGUAGCA', 'arn', -1, { lb: 20 });
-      M.chaine(x, [[x0 + 14, 168], [x0 + 38, 156], [x0 + 62, 146], [x0 + 86, 138]], ['Met', 'Arg', 'Ser', 'Gln'], 12); x.restore();
+      M.chaine(x, [0, 1, 2, 3].map(j => [PAN[2] - 112 + R + 8 + j * e * .9, 176 - j * e * .42]), ['Met', 'Arg', 'Ser', 'Gln'], 12); x.restore();   // dans le cadre du schéma 3
     }
   });
   c.texte('Trois schémas : que se passe-t-il ?', 20, 28, { couleur: 'cyan', taille: 19 });
@@ -354,7 +367,7 @@ function voitTrois(k) {
  * Coordonnées propres à la vue (le dessin est décalé de 85 px vers la gauche pour laisser la colonne des étiquettes). */
 const LG = { dx: -85 };
 const lcx = j => cx(j) + LG.dx;                       // centres des codons : 115, 205, 295, 385, 475
-const L_RC = lcx(0) + 45, L_MET = [173, 184], L_ARG = [lcx(1), YB - HAA];
+const L_RC = lcx(0) + 45, L_MET = [165, 180], L_ARG = [lcx(1), YB - HAA];
 const NOMS_L = { arnm: 'ARNm', codon: 'codon', anticodon: 'anticodon', arnt: 'ARNt', acide_amine: 'acide aminé',
   liaison: 'liaison peptidique', grande: 'grande sous-unité', petite: 'petite sous-unité' };
 /* place de chaque étiquette (centre) et le point qu’elle désigne (bout du trait de rappel) */
@@ -387,19 +400,20 @@ function dessinerLegender(c, k) {
   dernierTL = t;
   if (!k.P.legende_total) noterL(k.P);   // la vue légender est un schéma à légender
   c.direct(() => {
-    const x = c.ctx;
+    const x = c.ctx; ecartPerles(x);
     M.milieu(x, 8, 38, 576, 374, 'cytoplasme', a);
     x.save(); x.globalAlpha *= a;
     petite(x, L_RC, YP, 1);
     M.brin(x, lcx(0) - 45 - PAS, Y, PAS, ' AUGCGCAGUCAGUAG ', 'arn', -1, { lb: 20 });
     grande(x, L_RC, YG, .92);
-    M.arnt(x, lcx(0), YB, 'UAC', null, { pas: 28 });
-    M.arnt(x, lcx(1), YB, 'GCG', null, { pas: 28 });
-    M.chaine(x, [L_MET, L_ARG], ['Met', 'Arg'], RP);
+    M.arnt(x, lcx(0), YB - DA, 'UAC', null, { pas: PAS });
+    M.arnt(x, lcx(1), YB - DA, 'GCG', null, { pas: PAS });
+    const [p0, p1] = [[L_MET[0], L_MET[1] - DAA], [L_ARG[0], L_ARG[1] - DAA]];
+    M.chaine(x, [p0, p1], ['Met', 'Arg'], RP);
     // la liaison peptidique Met – Arg : un trait jaune (fixe)
-    const [p0, p1] = [L_MET, L_ARG], d = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]), ux = (p1[0] - p0[0]) / d, uy = (p1[1] - p0[1]) / d;
+    const d = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]), ux = (p1[0] - p0[0]) / d, uy = (p1[1] - p0[1]) / d;
     x.strokeStyle = '#fde047'; x.lineWidth = 5; x.lineCap = 'round'; x.shadowColor = '#fde047'; x.shadowBlur = 6;
-    x.beginPath(); x.moveTo(p0[0] + ux * RP, p0[1] + uy * RP); x.lineTo(p1[0] - ux * RP, p1[1] - uy * RP); x.stroke();
+    x.beginPath(); x.moveTo(p0[0] + ux * M.perleRayon(x, RP, 'Met'), p0[1] + uy * M.perleRayon(x, RP, 'Met')); x.lineTo(p1[0] - ux * M.perleRayon(x, RP, 'Arg'), p1[1] - uy * M.perleRayon(x, RP, 'Arg')); x.stroke();
     x.restore();
   });
   c.texte('Légende le schéma de la traduction', 20, 28, { couleur: 'cyan', taille: 19 });

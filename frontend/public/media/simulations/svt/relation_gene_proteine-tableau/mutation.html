@@ -160,14 +160,9 @@ function squelette(x, xa, xb, y, type) {
 /** Une base du brin (bâtonnet coloré vers le haut, lettre blanche), même aspect que Molecules.brin ; `rouge` : la base mutée. */
 function base(x, px, y, L, a, pas, rouge) {
   if (!Mo.BASE[L] || a <= 0) return;
-  const larg = Math.min(6, pas * .32), font = Math.round(Math.min(13, pas * .62));
-  x.save(); x.globalAlpha *= a;
-  if (rouge) { const h = x.createRadialGradient(px, y - LB / 2, 2, px, y - LB / 2, LB); h.addColorStop(0, 'rgba(255,45,45,.55)'); h.addColorStop(1, 'rgba(255,45,45,0)'); x.fillStyle = h; x.beginPath(); x.arc(px, y - LB / 2, LB, 0, TAU); x.fill(); }
-  const g = x.createLinearGradient(px - larg, 0, px + larg, 0); g.addColorStop(0, Mo.ombre(Mo.BASE[L], .75)); g.addColorStop(.45, Mo.BASE[L]); g.addColorStop(1, Mo.ombre(Mo.BASE[L], .6));
-  x.fillStyle = g; x.beginPath(); x.roundRect(px - larg, y - LB, 2 * larg, LB, 3); x.fill();
-  Mo.lettreSur(x, L, px, y - LB * .55, Mo.BASE[L], font);
-  if (rouge) { x.strokeStyle = '#ff2d2d'; x.lineWidth = 2.4; x.beginPath(); x.ellipse(px, y - LB / 2, pas * .5, LB * .78, 0, 0, TAU); x.stroke(); }
-  x.restore();
+  const G = Mo.gabarit(x, pas, LB);
+  if (rouge) { x.save(); x.globalAlpha *= a; const h = x.createRadialGradient(px, y - G.lb / 2, 2, px, y - G.lb / 2, G.lb); h.addColorStop(0, 'rgba(255,45,45,.55)'); h.addColorStop(1, 'rgba(255,45,45,0)'); x.fillStyle = h; x.beginPath(); x.arc(px, y - G.lb / 2, G.lb, 0, TAU); x.fill(); x.restore(); }
+  Mo.base(x, px, y, L, -1, pas, LB, { alpha: a, rouge });   // la base du lexique (même dessin que Molecules.brin)
 }
 /** Le brin non transcrit de l’allèle muté, à l’instant t : avant la mutation il recopie l’allèle normal ; pendant, la (les) base(s)
  * enlevée(s) tombent, la (les) nouvelle(s) descendent en rouge, les bases suivantes glissent ; après, l’allèle muté. */
@@ -185,20 +180,19 @@ function brinMute(x, A, t, pas, a) {
   if (!A.ins.length && A.del.length && u > .5) { const px = X0 + A.p * pas; x.fillStyle = '#ff2d2d'; x.globalAlpha *= rampe(u, .5, .5); x.beginPath(); x.moveTo(px - 6, y - LB - 10); x.lineTo(px + 6, y - LB - 10); x.lineTo(px, y - LB - 1); x.closePath(); x.fill(); }
   x.restore();
   // 3′ en craie peinte, qui suit le bout du brin
-  x.save(); x.globalAlpha *= a * .95; x.fillStyle = COUL.vert; x.font = `13px ${POLICE}`; x.textAlign = 'center'; x.fillText('3′', X0 + entre(lN, lM, u) * pas + 11, y + 4); x.restore();
+  x.save(); x.globalAlpha *= a * .95; x.fillStyle = COUL.vert; x.font = `${Math.max(13, Mo.PLANCHER / Mo.echelleEcran(x))}px ${POLICE}`; x.textAlign = 'center'; x.fillText('3′', X0 + entre(lN, lM, u) * pas + 11, y + 4); x.restore();
 }
 /** Une ligne d’acides aminés en perles reliées (abréviation écrite dans la perle) ; `rouges` : perles changées (anneau rouge), `pointilles` : perles perdues. */
 function perles(x, L, y, pas, t0, t, rouges = [], pointilles = []) {
   const n = L.aas.length, vis = i => rampe(t, t0 + i * .07, .2);
   x.save(); x.strokeStyle = 'rgba(255,255,255,.7)'; x.lineWidth = 2.4;
-  for (let i = 1; i < n; i++) { const a = vis(i); if (a <= 0) continue; x.globalAlpha = a; x.beginPath(); x.moveTo(xc(i - 1, pas) + RP - 2, y); x.lineTo(xc(i, pas) - RP + 2, y); x.stroke(); }
+  for (let i = 1; i < n; i++) { const a = vis(i); if (a <= 0) continue; x.globalAlpha = a; x.beginPath(); x.moveTo(xc(i - 1, pas) + Mo.perleRayon(x, RP, L.aas[i - 1]) - 2, y); x.lineTo(xc(i, pas) - Mo.perleRayon(x, RP, L.aas[i]) + 2, y); x.stroke(); }
   x.restore();
   for (let i = 0; i < n; i++) {
     const a = vis(i); if (a <= 0) continue;
     const px = xc(i, pas);
-    Mo.perle(x, px, y, RP, L.aas[i], { texte: false, alpha: a });
-    x.save(); x.globalAlpha *= a; Mo.lettreSur(x, L.aas[i], px, y + .5, Mo.couleurAA(L.aas[i]), 12); x.restore();
-    if (rouges.includes(i) || pointilles.includes(i)) { x.save(); x.globalAlpha *= a; x.strokeStyle = '#ff2d2d'; x.lineWidth = 2.4; x.setLineDash(pointilles.includes(i) ? [4, 3] : []); x.beginPath(); x.arc(px, y, RP + 4, 0, TAU); x.stroke(); x.restore(); }
+    Mo.perle(x, px, y, RP, L.aas[i], { alpha: a });   // (19 novembre 2026) le nom dans la perle du lexique, ≥ 15 px à l'écran
+    if (rouges.includes(i) || pointilles.includes(i)) { x.save(); x.globalAlpha *= a; x.strokeStyle = '#ff2d2d'; x.lineWidth = 2.4; x.setLineDash(pointilles.includes(i) ? [4, 3] : []); x.beginPath(); x.arc(px, y, Mo.perleRayon(x, RP, L.aas[i]) + 4, 0, TAU); x.stroke(); x.restore(); }
   }
 }
 

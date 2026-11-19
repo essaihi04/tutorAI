@@ -36,7 +36,7 @@
       scene.sMesure = sEst || 1;
       const off = document.createElement('canvas');
       off.width = Math.round(scene.L + 2 * PX); off.height = VH + 2 * PY;
-      const g = off.getContext('2d'); g.clearRect = function () { return this; };
+      const g = off.getContext('2d'); g.clearRect = function () { return this; }; g.__echelle = scene.sMesure;   // les lettres peintes du lexique suivent l'échelle réelle
       // un point de rayon nul (`encre` d'une vue, boîte d'un bloc) ne peint rien : il est relevé à part
       const pts = [], point = craie.point;
       craie.point = function (x, y, r = 4, c) { if (!r) { const m = this.ctx.getTransform(); pts.push([m.a * x + m.c * y + m.e, m.b * x + m.d * y + m.f]); } return point.call(this, x, y, r, c); };

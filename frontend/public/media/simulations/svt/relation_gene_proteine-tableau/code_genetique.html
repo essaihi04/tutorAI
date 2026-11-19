@@ -96,19 +96,22 @@ const VINGT = Object.keys(M.AA);    // les 20 acides aminés
 const CA = { x0: 140, y: 330, pas: 32 };
 function dessinerCodons(c, k) {
   const t = k.t;
+  // (19 novembre 2026) chaque perle porte son nom à 15 px au moins à l'écran : elle grandit, la grille s'espace d'autant
+  const R = Math.max(...VINGT.map(n => M.perleRayon(c.ctx, 13, n))), e = Math.max(32, 2 * R + 3), gx = Math.min(436, 744 - R - 9 * e), gy = 74, yVingt = Math.max(140, gy + e + R + 22);
+  const pv = i => [gx + (i % 10) * e, gy + Math.floor(i / 10) * e];
   c.direct(() => {
     const x = c.ctx;
     if (t >= .3) { x.save(); x.globalAlpha = rampe(t, .3, .5); [...L4].forEach((L, i) => puce(x, 60 + i * 48, 92, L)); x.restore(); }
-    if (t >= 1.0) { const a = rampe(t, 1.0, .6); VINGT.forEach((n, i) => M.perle(x, 436 + (i % 10) * 32, 74 + Math.floor(i / 10) * 32, 13, n, { alpha: a })); }
+    if (t >= 1.0) { const a = rampe(t, 1.0, .6); VINGT.forEach((n, i) => M.perle(x, ...pv(i), 13, n, { alpha: a })); }
     if (t >= 10.0) M.brin(x, CA.x0, CA.y, CA.pas, ARN_EX, 'arn', -1, { lb: 24, alpha: rampe(t, 10.0, .5) });
   });
   // les perles peintes comptent dans le cadrage automatique (qui ne mesure que la craie) : coins invisibles
-  c.direct(() => { c.point(36, 70, 0); c.point(436 + 9 * 32 + 15, 74 + 32 + 15, 0); });
+  c.direct(() => { c.point(36, 70, 0); c.point(gx + 9 * e + R, gy + e + R, 0); });
   c.texte('Trois lettres pour un acide aminé', 380, 24, { couleur: 'cyan', taille: 19, align: 'center' });
   if (t >= .3) c.repere('lettres', 36, 70, 196, 44, 'les 4 lettres de l’ARNm : U, C, A, G');
-  if (t >= 1.0) c.repere('vingt_acides_amines', 420, 58, 320, 90, 'les 20 acides aminés');
+  if (t >= 1.0) c.repere('vingt_acides_amines', gx - R - 4, gy - R - 4, 9 * e + 2 * R + 8, e + 2 * R + 8, 'les 20 acides aminés');
   if (k.ecrit(c, 'lettres', .4)) { k.T(c, '4 lettres (bases) dans l’ARNm :', 36, 60, { couleur: 'blanc', taille: 15 }); }
-  if (k.ecrit(c, 'vingt', 1.2)) k.T(c, '20 acides aminés dans les protéines', 580, 140, { couleur: 'blanc', taille: 15, align: 'center' });
+  if (k.ecrit(c, 'vingt', 1.2)) k.T(c, '20 acides aminés dans les protéines', gx + 4.5 * e, yVingt, { couleur: 'blanc', taille: 15, align: 'center' });
   const yl = [184, 220, 256];
   const s1 = '1 lettre → 4 possibilités : 4 < 20,', s2 = '2 lettres → 4 × 4 = 16 : 16 < 20,', s3 = '3 lettres → 4 × 4 × 4 = 64 : 64 ≥ 20,';
   // La colonne des exemples part après la plus longue ligne (mesurée à sa taille réelle), jamais avant x = 520.
