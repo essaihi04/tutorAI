@@ -214,14 +214,25 @@
       if (vus.has(id) || !docs[id]) return;
       vus.add(id);
       const d = docs[id]; const surcharge = (cfg.figures || {})[id] || {};
-      blocs.push({ figure: id, src: d.src, legende: d.title && !/^figure suivante$/i.test(d.title) ? d.title : '', place: d.place, ...surcharge });
+      blocs.push({ figure: id, src: d.src, legende: d.title && !/^figure suivante$/i.test(d.title) ? d.title : '', place: d.place, largeur: d.largeur, ...surcharge });
     };
     if (ex.context) blocs.push({ texte: ex.context, id: 'contexte' });
     const refs = new Set((ex.questions || []).flatMap((q) => q.documents || []));
     for (const id of Object.keys(docs)) if (!refs.has(id)) figure(id);
     const garde = plage(cfg.questions ?? P.get('questions'), (ex.questions || []).length);
+    // Texte d'une partie de l'exercice (« Partie 2 : … », ses données ; « 3. On injecte… ») : ex.intros[clé], placé une
+    // fois, juste avant la première question gardée qui le cite (q.intro_cles) — une partie montrée seule garde son texte.
+    const introsVues = new Set();
     (ex.questions || []).forEach((q, k) => {
       if (garde && !garde.has(k + 1)) return;
+      for (const c of q.intro_cles || []) {
+        if (introsVues.has(c) || !(ex.intros || {})[c]) continue;
+        introsVues.add(c);
+        blocs.push({ texte: ex.intros[c], id: 'intro-' + String(c).replace(/[^a-z0-9_-]/gi, '-') });
+      }
+      // une figure à droite (ou à gauche) se place AVANT sa question, pour flotter à côté d'elle comme sur le sujet
+      const cote = (id) => /^(droite|gauche)$/.test(((cfg.figures || {})[id] || {}).place || (docs[id] || {}).place || '');
+      for (const id of q.documents || []) if (cote(id)) figure(id);
       blocs.push({ q });
       for (const id of q.documents || []) figure(id);
     });
@@ -445,7 +456,7 @@
   // le cadre, sans défiler. Page 1 : l'en-tête complet, le titre et le premier texte ; pages suivantes : l'en-tête
   // court, comme sur le vrai sujet. Une page encore trop haute (un bloc très long) est réduite pour tenir (≥ 0,72).
   // On passe d'une page à l'autre avec les boutons ◀ ▶ ; le tuteur qui surligne une question amène sa page.
-  let PAGE = 1, NPAGES = 1, BESOIN = {}, DISPO = {};
+  let PAGE = 1, NPAGES = 1, BESOIN = {}, DISPO = {}, COURTE1 = false;
   function montrerPage(n) {
     const corps = document.querySelector('.feuille .corps');
     if (!corps) return;
@@ -456,8 +467,8 @@
     });
     corps.classList.toggle('sans-titre', !!vus.length && !vus[0].classList.contains('titre-exo'));
     const ec = document.querySelector('.feuille .entete-complete'), ek = document.querySelector('.feuille .entete-courte');
-    if (ec) ec.style.display = PAGE === 1 ? '' : 'none';
-    if (ek) ek.style.display = PAGE === 1 || !NPAGES || NPAGES === 1 ? 'none' : '';
+    if (ec) ec.style.display = PAGE === 1 && !COURTE1 ? '' : 'none';
+    if (ek) ek.style.display = (PAGE === 1 && !COURTE1) || !NPAGES || (NPAGES === 1 && !COURTE1) ? 'none' : '';
     const zone = document.querySelector('.feuille-zone');
     const z = BESOIN[PAGE] > DISPO[PAGE] ? Math.max(0.5, DISPO[PAGE] / BESOIN[PAGE]) : 1;
     if (zone) zone.style.zoom = z < 1 ? z.toFixed(3) : '';
@@ -488,7 +499,8 @@
     const fixe = px(zone, 'paddingTop', 'paddingBottom') + px(feuille, 'paddingTop', 'paddingBottom')
       + px(cadre, 'paddingTop', 'paddingBottom', 'borderTopWidth', 'borderBottomWidth')
       + (nav ? hauteur(nav) : 0) + 4;
-    const hC = ec ? hauteur(ec) : 0, hK = ek ? hauteur(ek) : 0;
+    let hC = ec ? hauteur(ec) : 0; const hK = ek ? hauteur(ek) : 0;
+    COURTE1 = false;
     const dispo = (p) => innerHeight - fixe - (p === 1 ? hC : hK);
     BESOIN = {}; DISPO = {};
     // Positions réelles (une figure flottante est à côté du texte, pas en dessous) : haut et bas de chaque bloc.
@@ -501,7 +513,13 @@
     //    l'utilisateur : « tout mettre dans une seule vue, une seule page suffit »).
     // La réduction s'applique à toute la feuille (en-tête compris) : on compare la hauteur de la page entière à l'écran.
     const pleine = (p, contenu) => fixe + (p === 1 ? hC : hK) + contenu;
-    const ZMIN = 0.5;
+    // Le grand en-tête n'est gardé que si la feuille reste presque à sa taille (≥ 0,9) ; sinon la page 1 prend l'en-tête
+    // court, comme les suivantes, et le texte garde sa place (19/11/2026, l'utilisateur, captures 2020 R ex. 3 :
+    // « c'est mieux de détailler pour prendre de l'espace, comme la deuxième page »).
+    if (ec && ek && pleine(1, total) * 0.9 > innerHeight) { COURTE1 = true; hC = hK; }
+    // Jamais plus petit que 0,75 : une partie trop longue pour une page passe à deux pages (règle 48 : la diapo d'énoncé
+    // ne montre que les 1 à 3 questions traitées juste après, ce qui tient d'habitude sur une page).
+    const ZMIN = 0.75;
     if (pleine(1, total) * ZMIN <= innerHeight) {
       blocs.forEach((el) => { el.dataset.page = 1; });
       NPAGES = 1; DISPO[1] = innerHeight; BESOIN[1] = pleine(1, total);
@@ -533,7 +551,7 @@
     let page = 1, plein = 0;
     unites.forEach((un, i) => {
       const h = hU(un);
-      if (i > 0 && plein > 0 && pleine(page, plein + h) * 0.62 > innerHeight) { BESOIN[page] = pleine(page, plein); page += 1; plein = 0; }
+      if (i > 0 && plein > 0 && pleine(page, plein + h) * ZMIN > innerHeight) { BESOIN[page] = pleine(page, plein); page += 1; plein = 0; }
       un.forEach((el) => { el.dataset.page = page; });
       plein += h;
     });
