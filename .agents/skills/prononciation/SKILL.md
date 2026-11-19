@@ -118,3 +118,26 @@ ou tous les mots compliqués ». Avant de générer les voix d'un cours (nouvell
 | écho | éko | 19/11/2026 |
 | microfarad, microseconde… | micro farad, micro seconde | 19/11/2026 |
 | fœtus, للفيتوس, فالفيتوس | le fétusse | 19/11/2026 |
+
+## 6. Écrire d'office les mots rares de la manière la plus sûre
+
+Demande de l'utilisateur (19/11/2026) : « nous avons déjà quelques mots avec leur erreur et leur correction ; les
+prochains mots avec le même problème, ou dont on n'est pas certain qu'ils soient bien prononcés, il vaut mieux les
+écrire de la manière la plus sûre, comme micros et fœtus ; généraliser cette règle ». On n'attend plus qu'un mot soit
+signalé : **tout mot vu moins de 3 fois à l'entraînement reçoit d'office l'écriture sûre** quand un cas déjà corrigé
+s'applique :
+
+| Cas déjà vu | Écriture sûre | Exemples |
+|---|---|---|
+| « s » final muet, le mot sans « s » est connu | retirer le « s » (le son est le même) | micros → micro, ohms → ohm, codons → codon |
+| mot latin en « -us » dont le « s » se dit | « -uss » | fœtus → fétusse, locus → locuss, stimulus → stimuluss |
+| « ch » dit « k » (mots grecs) | « k » | écho → éko, chlorure → klorure, chronomètre → kronomètre |
+| mot collé préfixe + unité | deux mots connus | microfarad → micro farad, microseconde → micro seconde |
+| unité, nombre ou symbole | en mots | 20 Hz → vingt hertz, Δ → delta, √ → racine de |
+| mot français écrit en lettres arabes | le mot français en écriture sûre | للفيتوس → ل le fétusse |
+
+Comment : `python -X utf8 scripts/voix/ecritures_sures.py` liste les écritures proposées pour tous les cours ;
+`--ecrire` les met dans `texte_parle.py` (bloc `ECRITURES_SURES`, généré, à ne pas modifier à la main ; les mots
+choisis à l'écoute dans `PRONONCIATION` passent avant). **À relancer à chaque nouveau cours ou texte changé, avant de
+générer ses voix**, puis régénérer les pistes dont le texte parlé change (§ 4). Seuls les mots rares pour lesquels
+aucun cas ne s'applique, ou dont l'écriture sûre reste douteuse, passent à l'écoute de l'utilisateur (§ 5).

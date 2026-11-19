@@ -78,3 +78,13 @@ def test_aucun_caractere_invisible_dans_les_regles():
 ])
 def test_foetus(ecrit, dit):
     assert tp.parle(ecrit) == dit
+
+
+@pytest.mark.parametrize("ecrit, dit", [
+    # 19/11/2026 : écritures sûres des mots rares (scripts/voix/ecritures_sures.py, skill prononciation § 6)
+    ("dix ohms", "dix ohm"),
+    ("le locus du gène", "le locuss du gène"),
+    ("le chlorure de sodium", "le klorure de sodium"),
+])
+def test_ecritures_sures(ecrit, dit):
+    assert tp.parle(ecrit) == dit
