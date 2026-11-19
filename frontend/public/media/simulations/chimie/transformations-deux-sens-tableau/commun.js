@@ -14,11 +14,28 @@
    *  - { ajuster: true } : la boîte de l'encre de l'image complète (dessinée une fois, `complet(fn)` met la page à
    *    son état final le temps de fn) remplit le tableau, l'agrandissement est borné à ZOOM_MAX × le cadre entier ;
    *    scene.remesurer() après un changement de vue (la boîte ne fait que grandir). */
-  const TAILLE_MIN = 15, L_MAX = 2.1, MARGE = 14, ZOOM_MAX = 2;
+  const TAILLE_MIN = 15, L_MAX = 2.1, MARGE = 14, ZOOM_MAX = 2, PLEIN_DES = 300;
   function Scene(canvas, dessiner, options = {}) {
     // `scene` existe avant la craie : le premier redimensionnement la marque déjà « à redessiner ».
     const scene = { sale: true, boite: null, mesurant: false, L: VW };
     const craie = new window.Tableau.Craie(canvas, { onresize: () => { scene.sale = true; } });
+    /* Plancher plein sur un tableau de bureau (18 novembre 2026, « le texte de la simulation est plus petit que celui de la
+     * diapositive ») : le kit baisse le plancher (tailleMin) dès que le tableau fait moins de 900 × 400 px ; dans le lecteur
+     * d'un écran 1366 × 560, le tableau fait ~1100 × 350 et le texte tombait à 13-14 px. Ici, à partir de PLEIN_DES px de
+     * haut, le plancher reste entier (15 px, 17 dans les zones de zones.js) ; plus bas (téléphone) la réduction du kit
+     * s'applique toujours (sans elle, le texte grossi se chevauche). Même protocole lecture/écriture que le kit. */
+    Object.defineProperty(craie, 'tailleMin', {
+      configurable: true,
+      get() {
+        const brut = this._tailleMinBrut || 0;
+        if (!brut) return brut;
+        const f = (this.H || 400) >= PLEIN_DES ? 1 : Math.min(1, Math.max(.45, Math.min((this.W || 900) / 900, (this.H || 400) / 400)));
+        const rendu = brut * f;
+        this._tailleMinLu = [brut, rendu];
+        return rendu;
+      },
+      set(v) { const lu = this._tailleMinLu; this._tailleMinBrut = lu && v === lu[1] ? lu[0] : v; },
+    });
     /* Courbes nettes et lumineuses, sur demande (17 novembre 2026, « couleurs vives, plus agréable ») : une courbe tracée
      * par craie.courbe avec `net: true` garde son écriture progressive et sa durée, sans tremblé, avec un halo doux de sa
      * couleur ; `aire: yBase` ajoute une aire en dégradé jusqu'à la ligne yBase, remplie au rythme du tracé.
