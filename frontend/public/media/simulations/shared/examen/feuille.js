@@ -482,8 +482,14 @@
     if (ec) ec.style.display = PAGE === 1 && !COURTE1 ? '' : 'none';
     if (ek) ek.style.display = (PAGE === 1 && !COURTE1) || !NPAGES || (NPAGES === 1 && !COURTE1) ? 'none' : '';
     const zone = document.querySelector('.feuille-zone');
-    const z = BESOIN[PAGE] > DISPO[PAGE] ? Math.max(0.5, DISPO[PAGE] / BESOIN[PAGE]) : 1;
+    // une partie (règle 48) n'est jamais coupée en bas : elle peut descendre un peu plus bas (0,44) qu'une feuille entière
+    const zPlancher = (CFG.questions ?? P.get('questions')) || (CFG.partie ?? P.get('partie')) ? 0.44 : 0.5;
+    let z = BESOIN[PAGE] > DISPO[PAGE] ? Math.max(zPlancher, DISPO[PAGE] / BESOIN[PAGE]) : 1;
     if (zone) zone.style.zoom = z < 1 ? z.toFixed(3) : '';
+    // la mesure par blocs sous-estime parfois (figures flottantes) : on resserre tant que la page déborde réellement
+    while (zone && z > zPlancher && document.documentElement.scrollHeight > innerHeight + 2) {
+      z = Math.max(zPlancher, z - 0.02); zone.style.zoom = z.toFixed(3);
+    }
     const nav = document.querySelector('.pages-nav');
     if (nav) {
       nav.style.display = NPAGES > 1 ? '' : 'none';
