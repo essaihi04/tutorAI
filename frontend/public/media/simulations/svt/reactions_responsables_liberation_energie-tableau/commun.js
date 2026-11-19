@@ -73,9 +73,9 @@
         return texte.call(this, s, x, y, o);
       };
       const t = scene.ouvert;
-      scene.mesurant = true; scene.ouvert = -1e9;
+      scene.mesurant = true; window.__mesureEnCours = true; scene.ouvert = -1e9;
       try { (options.complet || (f => f()))(() => dessiner(craie, scene)); } catch (e) { console.warn('[tableau] mesure de la boîte', e); }
-      finally { craie.trait = trait; craie.texte = texte; craie.point = point; scene.mesurant = false; scene.ouvert = t; }
+      finally { craie.trait = trait; craie.texte = texte; craie.point = point; scene.mesurant = false; window.__mesureEnCours = false; scene.ouvert = t; }
       if (!(b.x1 > b.x0 && b.y1 > b.y0)) return null;
       const n = { x0: Math.max(0, b.x0 - MARGE), y0: Math.max(0, b.y0 - MARGE), x1: Math.min(scene.L, b.x1 + MARGE), y1: Math.min(VH, b.y1 + MARGE) };
       const a = scene.boite;

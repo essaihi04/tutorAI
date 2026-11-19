@@ -42,9 +42,9 @@
       craie.point = function (x, y, r = 4, c) { if (!r) { const m = this.ctx.getTransform(); pts.push([m.a * x + m.c * y + m.e, m.b * x + m.d * y + m.f]); } return point.call(this, x, y, r, c); };
       const sv = { ctx: craie.ctx, W: craie.W, H: craie.H, repere: Object.prototype.hasOwnProperty.call(craie, 'repere') ? craie.repere : null, ouvert: scene.ouvert };
       craie.ctx = g; craie.W = off.width; craie.H = off.height; craie.repere = function () { return this; };
-      scene.mesurant = true; scene.ouvert = -1e9;
+      scene.mesurant = true; window.__mesureEnCours = true; scene.ouvert = -1e9;
       try { (options.complet || (f => f()))(() => dessiner(craie, scene)); } catch (e) { console.warn('[tableau] mesure de la boîte', e); }
-      finally { delete craie.point; Object.assign(craie, { ctx: sv.ctx, W: sv.W, H: sv.H }); if (sv.repere) craie.repere = sv.repere; else delete craie.repere; scene.mesurant = false; scene.ouvert = sv.ouvert; }
+      finally { delete craie.point; Object.assign(craie, { ctx: sv.ctx, W: sv.W, H: sv.H }); if (sv.repere) craie.repere = sv.repere; else delete craie.repere; scene.mesurant = false; window.__mesureEnCours = false; scene.ouvert = sv.ouvert; }
       let im; try { im = g.getImageData(0, 0, off.width, off.height).data; } catch (_) { return null; }
       const b = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
       for (let y = 0; y < off.height; y += 2) for (let x = 0; x < off.width; x += 2) {
