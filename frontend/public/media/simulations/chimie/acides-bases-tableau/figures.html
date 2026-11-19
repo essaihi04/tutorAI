@@ -431,7 +431,7 @@ function tracer(c, g, f, a, b, p, col, o = {}) {
   const fin = a + (b - a) * p;
   c.courbe(u => [g.X(a + (fin - a) * u), g.Y(clamp(f(a + (fin - a) * u), g.ymin, g.ymax))], Math.max(16, Math.round((o.n ?? 220) * p)), { net: true, couleur: col, largeur: o.largeur ?? 2.6, pointille: o.pointille });
 }
-const pointille = (c, x1, y1, x2, y2, p, col = 'jaune') => { if (p > 0) c.ligne(x1, y1, x1 + (x2 - x1) * p, y1 + (y2 - y1) * p, { couleur: col, largeur: 1.7, pointille: [5, 5] }); };
+const pointille = (c, x1, y1, x2, y2, p, col = 'jaune', largeur = 1.7) => { if (p > 0) c.ligne(x1, y1, x1 + (x2 - x1) * p, y1 + (y2 - y1) * p, { couleur: col, largeur, pointille: [5, 5] }); };
 
 /* ── Pièces peintes du dosage : burette graduée, agitateur magnétique, conductimètre, cellule ────────────────────────── */
 Object.assign(Peint, {
@@ -608,14 +608,18 @@ const FIGS = {
     panneau: {
       axes: [['V_A = 5 mL d’acide propanoïque', 'blanc'], ['soude C_B = 5·10⁻² mol/L', 'blanc']],
       courbe: [['pH = f(V_B) : un saut de pH', 'bleu']],
-      construction: [['deux tangentes parallèles', 'jaune'], ['et leur parallèle équidistante', 'jaune']],
-      lecture: [['E (6 mL ; 8,7)', 'jaune'], ['V_BE = 6 mL ; pH_E = 8,7', 'blanc']],
+      tangente_1: [['tangente avant le saut', 'jaune']],
+      tangente_2: [['tangente parallèle après le saut', 'jaune']],
+      construction: [['parallèle équidistante : E', 'jaune']],
+      lecture: [['V_BE = 6 mL ; pH_E = 8,7', 'jaune']],
       calcul: [[{ m: ['C_A =', { frac: ['C_B·V_BE', 'V_A'] }, '=', { frac: ['5·10⁻² × 6', '5'] }], txt: 'C_A = C_B·V_BE divisé par V_A = 5·10⁻² × 6 divisé par 5' }, 'blanc', 48],
         ['= 6·10⁻² mol/L', 'jaune'], ['bleu de thymol (8 – 9,6) : contient 8,7', 'blanc']],
     },
     bas: {
       axes: 'pH en fonction du volume V_B de soude versé (sujet 2016 N, figure 1)',
       courbe: 'le pH monte doucement, puis saute vers 6 mL, puis reste presque constant',
+      tangente_1: 'une tangente à la courbe, avant le saut',
+      tangente_2: 'une tangente parallèle à la première, après le saut',
       construction: 'méthode des tangentes : deux tangentes parallèles, puis la parallèle à égale distance des deux',
       lecture: 'la parallèle équidistante coupe la courbe en E : V_BE = 6 mL et pH_E = 8,7',
       calcul: 'C_A = 6·10⁻² mol/L ; la zone de virage du bleu de thymol (8 – 9,6) contient pH_E = 8,7',
@@ -635,14 +639,18 @@ const FIGS = {
     panneau: {
       axes: [['V_b = 15 mL de méthylamine', 'blanc'], ['acide chlorhydrique C_a = 10⁻² mol/L', 'blanc']],
       courbe: [['pH = f(V_a) : le pH descend', 'bleu']],
-      construction: [['deux tangentes parallèles', 'jaune'], ['et leur parallèle équidistante', 'jaune']],
-      lecture: [['E (15 mL ; 6,6)', 'jaune'], ['V_aE = 15 mL ; pH_E = 6,6', 'blanc']],
+      tangente_1: [['tangente avant le saut', 'jaune']],
+      tangente_2: [['tangente parallèle après le saut', 'jaune']],
+      construction: [['parallèle équidistante : E', 'jaune']],
+      lecture: [['V_aE = 15 mL ; pH_E = 6,6', 'jaune']],
       calcul: [[{ m: ['C_b =', { frac: ['C_a·V_aE', 'V_b'] }, '=', { frac: ['10⁻² × 15', '15'] }], txt: 'C_b = C_a·V_aE divisé par V_b = 10⁻² × 15 divisé par 15' }, 'blanc', 48],
         ['= 10⁻² mol/L', 'jaune'], ['BBT (6,0 – 7,6) : contient 6,6', 'blanc']],
     },
     bas: {
       axes: 'pH en fonction du volume V_a d’acide chlorhydrique versé (sujet 2022 R)',
       courbe: 'le pH descend doucement, chute vers 15 mL, puis reste presque constant',
+      tangente_1: 'une tangente à la courbe, avant le saut',
+      tangente_2: 'une tangente parallèle à la première, après le saut',
       construction: 'méthode des tangentes : deux tangentes parallèles, puis la parallèle à égale distance des deux',
       lecture: 'la parallèle équidistante coupe la courbe en E : V_aE = 15 mL et pH_E = 6,6',
       calcul: 'C_b = 10⁻² mol/L ; la zone de virage du BBT (6,0 – 7,6) contient pH_E = 6,6',
@@ -729,7 +737,11 @@ const etapesDe = cle => {
   return [
     { nom: 'axes', anim: .4, motif: `les axes : ${f.g.yNom} en ordonnée, ${f.g.xNom.replace(/_/g, '')} en abscisse`, bulle: () => `Figure du national ${f.session}.` },
     { nom: 'courbe', anim: 2.8, motif: f.courbes.length > 1 ? `les deux courbes : ${f.courbes.map(c => c.nom).join(' et ')}` : 'la courbe du sujet', bulle: () => 'On trace comme sur le sujet.' },
-    { nom: 'construction', anim: 2.4, motif: `la construction : ${f.bas.construction}`, bulle: () => 'La construction.' },
+    ...(f.type === 'dosage' ? [   // 19 novembre 2026 : chaque tangente est un moment, allumée à son tour sur la figure
+      { nom: 'tangente_1', anim: 1.2, motif: `la première tangente, avant le saut`, bulle: () => 'Une tangente avant le saut.' },
+      { nom: 'tangente_2', anim: 1.2, motif: `la tangente parallèle, après le saut`, bulle: () => 'Une tangente parallèle après le saut.' },
+      { nom: 'construction', anim: 1.2, motif: `la parallèle équidistante : elle coupe la courbe en E`, bulle: () => 'La parallèle au milieu coupe la courbe en E.' },
+    ] : [{ nom: 'construction', anim: 2.4, motif: `la construction : ${f.bas.construction}`, bulle: () => 'La construction.' }]),
     { nom: 'lecture', anim: 2, motif: `la lecture : ${f.valeur}`, bulle: () => 'On lit sur la figure.' },
     { nom: 'calcul', anim: 1.6, motif: `le calcul : ${f.calcTxt}`, bulle: () => 'Le calcul.' },
   ];
@@ -738,58 +750,89 @@ const MOTIFS = MOTIFS_DE(etapesDe);
 const quand = (M, nom) => (M.vu(nom) ? '' : ` (au moment « ${nom} »)`);
 
 /* Construction, lecture et calcul dessinés sur le graphe (en direct, fraction p de l’étape). */
-function construction(c, M, p) {
-  const f = F, g = f.G;
-  if (f.type === 'distribution') { pointille(c, g.x0, g.Y(50), g.X(14), g.Y(50), lisse(p)); return; }
+/* « Allumer » (19 novembre 2026, simulations-au-tableau règle 17) : ce que l’étape en cours utilise est tracé épais, avec
+ * une lueur de sa couleur ; une fois l’étape passée, il reste dessiné, normal. */
+const LUEURS = { jaune: 'rgba(250,204,21,.95)', orange: 'rgba(251,146,60,.95)', violet: 'rgba(192,132,252,.95)', bleu: 'rgba(96,165,250,.95)' };
+function lueur(c, on, col, fn) {
+  const ctx = c.ctx; ctx.save();
+  if (on) { ctx.shadowColor = LUEURS[col] || col; ctx.shadowBlur = 14; }
+  try { fn(); } finally { ctx.restore(); }
+}
+/** Halo rond autour d’un point lu (le point E, le croisement…) pendant son étape. */
+function halo(c, x, y, col = 'jaune', r = 13) {
+  const ctx = c.ctx; ctx.save(); ctx.fillStyle = col === 'violet' ? 'rgba(192,132,252,.28)' : 'rgba(250,204,21,.28)';
+  ctx.strokeStyle = LUEURS[col]; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.restore();
+}
+const enCours = (M, nom) => etapeEnCours(M) === nom && !M.S.fait;
+/** La démonstration commence (le texte d’avant est effacé) : la première tangente, ou la construction. */
+const premierDemo = f => (f.type === 'dosage' ? 'tangente_1' : 'construction');
+const ETAPES_DEMO = ['tangente_1', 'tangente_2', 'construction', 'lecture', 'calcul'];
+function construction(c, M) {
+  const f = F, g = f.G, on = nom => enCours(M, nom);
+  if (f.type === 'distribution') { lueur(c, on('construction'), 'jaune', () => pointille(c, g.x0, g.Y(50), g.X(14), g.Y(50), lisse(M.p('construction')), 'jaune', on('construction') ? 3 : 1.7)); return; }
   if (f.type === 'dosage') {
-    const T = f.T, l = f.tang.l, ln = (v, b, q) => { const a = v - l, z = v + l; if (q > 0) c.ligne(g.X(a), g.Y(T.s * a + b), g.X(a + (z - a) * q), g.Y(T.s * (a + (z - a) * q) + b), { couleur: 'jaune', largeur: 1.7, pointille: [6, 5] }); };
-    ln(T.v1, T.b1, seg(p, 0, .3)); ln(T.v2, T.b2, seg(p, .3, .6));
-    const q = seg(p, .6, 1); if (q > 0) { const a = T.vE - l * 1.2, z = T.vE + l * 1.2; c.ligne(g.X(a), g.Y(T.s * a + T.bm), g.X(a + (z - a) * q), g.Y(T.s * (a + (z - a) * q) + T.bm), { couleur: 'jaune', largeur: 2 }); }
-    if (p >= .3) c.point(g.X(T.v1), g.Y(f.f(T.v1)), 3, 'jaune');
-    if (p >= .6) c.point(g.X(T.v2), g.Y(f.f(T.v2)), 3, 'jaune');
+    const T = f.T, l = f.tang.l;
+    const ln = (v, b, q, nom) => { const a = v - l, z = v + l; if (q > 0) lueur(c, on(nom), 'jaune', () => c.ligne(g.X(a), g.Y(T.s * a + b), g.X(a + (z - a) * q), g.Y(T.s * (a + (z - a) * q) + b), { couleur: 'jaune', largeur: on(nom) ? 3 : 1.7, pointille: [6, 5] })); };
+    ln(T.v1, T.b1, M.p('tangente_1'), 'tangente_1');
+    if (M.p('tangente_1') >= 1) c.point(g.X(T.v1), g.Y(f.f(T.v1)), on('tangente_1') ? 4.5 : 3, 'jaune');
+    if (M.commence('tangente_2')) ln(T.v2, T.b2, M.p('tangente_2'), 'tangente_2');
+    if (M.p('tangente_2') >= 1) c.point(g.X(T.v2), g.Y(f.f(T.v2)), on('tangente_2') ? 4.5 : 3, 'jaune');
+    const q = M.commence('construction') ? M.p('construction') : 0;
+    if (q > 0) {
+      const a = T.vE - l * 1.2, z = T.vE + l * 1.2;
+      lueur(c, on('construction'), 'jaune', () => c.ligne(g.X(a), g.Y(T.s * a + T.bm), g.X(a + (z - a) * q), g.Y(T.s * (a + (z - a) * q) + T.bm), { couleur: 'jaune', largeur: on('construction') ? 3.4 : 2 }));
+      // les deux distances égales : un petit trait de chaque tangente à la parallèle (même longueur)
+      if (q >= 1 && on('construction')) for (const b of [T.b1, T.b2]) { const v = T.vE + l * .9; pointille(c, g.X(v), g.Y(T.s * v + b), g.X(v), g.Y(T.s * v + T.bm), 1, 'orange'); }
+    }
     return;
   }
   // dérivée : la courbe dpH/dV_b (orange clair), puis le trait vertical du pic au saut
-  tracer(c, g, f.derivee, 0, 30, seg(p, 0, .75), 'orange', { largeur: 2.2, n: 300 });
+  const p = M.p('construction');
+  lueur(c, on('construction'), 'orange', () => tracer(c, g, f.derivee, 0, 30, seg(p, 0, .75), 'orange', { largeur: on('construction') ? 3 : 2.2, n: 300 }));
   pointille(c, g.X(20), g.Y(f.derivee(20)), g.X(20), g.Y(f.f(20)), seg(p, .75, 1), 'orange');
 }
 function lecture(c, M, p) {
-  const f = F, g = f.G;
+  const f = F, g = f.G, on = enCours(M, 'lecture');
   if (f.type === 'distribution') {
     const P = f.point; pointille(c, g.X(P.x), g.Y(50), g.X(P.x), g.y0, seg(p, 0, .5));
-    if (p > 0) c.point(g.X(P.x), g.Y(50), 4.5, 'jaune');
+    if (p > 0) { if (on) halo(c, g.X(P.x), g.Y(50)); c.point(g.X(P.x), g.Y(50), 4.5, 'jaune'); }
     if (f.marque) { const q = seg(p, .5, 1); if (q > 0) c.ligne(g.X(f.marque.x), g.y0, g.X(f.marque.x), g.y0 - (g.h - 6) * q, { couleur: 'violet', largeur: 1.8, pointille: [3, 5] }); }
     return;
   }
   const E = f.E;
   if (f.type === 'dosage') {
-    if (p > 0) c.point(g.X(E.x), g.Y(E.y), 4.5, 'jaune');
+    if (p > 0) { if (on) halo(c, g.X(E.x), g.Y(E.y)); c.point(g.X(E.x), g.Y(E.y), 4.5, 'jaune'); }
     pointille(c, g.X(E.x), g.Y(E.y), g.X(E.x), g.y0, seg(p, 0, .5));
     pointille(c, g.X(E.x), g.Y(E.y), g.x0, g.Y(E.y), seg(p, .5, 1));
     return;
   }
   // dérivée : V_bE = 20 mL au pied du trait, puis la lecture à 5 mL
   pointille(c, g.X(20), g.Y(f.derivee(20)), g.X(20), g.y0, seg(p, 0, .3), 'jaune');
+  if (p > 0 && on && p < .35) halo(c, g.X(20), g.Y(f.derivee(20)));
   if (p >= .3) c.point(g.X(20), g.y0, 4, 'jaune');
-  const L = f.lire; pointille(c, g.X(L.x), g.y0, g.X(L.x), g.Y(L.y), seg(p, .35, .65)); if (p >= .65) c.point(g.X(L.x), g.Y(L.y), 4, 'jaune');
+  const L = f.lire; pointille(c, g.X(L.x), g.y0, g.X(L.x), g.Y(L.y), seg(p, .35, .65)); if (p >= .65) { if (on) halo(c, g.X(L.x), g.Y(L.y)); c.point(g.X(L.x), g.Y(L.y), 4, 'jaune'); }
   pointille(c, g.X(L.x), g.Y(L.y), g.x0, g.Y(L.y), seg(p, .65, 1)); if (p >= 1) c.point(g.x0, g.Y(L.y), 3.5, 'jaune');
 }
 function calculGraphe(c, M, p) {
-  const f = F, g = f.G;
+  const f = F, g = f.G, on = enCours(M, 'calcul');
   if (f.type === 'distribution') {
     const K = f.calc;
     if (K.de === 'x') {   // pH₁ → courbe → %
       pointille(c, g.X(K.x), g.y0, g.X(K.x), g.Y(K.y), seg(p, 0, .5), 'violet');
-      if (p >= .5) c.point(g.X(K.x), g.Y(K.y), 4.5, 'violet');
+      if (p >= .5) { if (on) halo(c, g.X(K.x), g.Y(K.y), 'violet'); c.point(g.X(K.x), g.Y(K.y), 4.5, 'violet'); }
       pointille(c, g.X(K.x), g.Y(K.y), g.x0, g.Y(K.y), seg(p, .5, 1), 'violet');
     } else {              // % → courbe → pH
       pointille(c, g.x0, g.Y(K.y), g.X(K.x), g.Y(K.y), seg(p, 0, .5), 'violet');
-      if (p >= .5) c.point(g.X(K.x), g.Y(K.y), 4.5, 'violet');
+      if (p >= .5) { if (on) halo(c, g.X(K.x), g.Y(K.y), 'violet'); c.point(g.X(K.x), g.Y(K.y), 4.5, 'violet'); }
       pointille(c, g.X(K.x), g.Y(K.y), g.X(K.x), g.y0, seg(p, .5, 1), 'violet');
     }
     return;
   }
-  if (f.bande) c.direct(() => bandeV(c.ctx, g.X(g.xmax) + 14, g.Y(f.bande.a), g.Y(f.bande.b), 12, f.bande.cols, lisse(p)));
+  if (f.bande) {
+    // pH_E porté jusqu’à la zone de virage de l’indicateur : la bande s’allume, le trait montre que pH_E y est
+    if (f.E && f.type === 'dosage') pointille(c, g.X(f.E.x), g.Y(f.E.y), g.X(g.xmax) + 14, g.Y(f.E.y), seg(p, 0, .6), 'jaune');
+    c.direct(() => { const ctx = c.ctx; ctx.save(); if (on) { ctx.shadowColor = LUEURS.jaune; ctx.shadowBlur = 16; } bandeV(ctx, g.X(g.xmax) + 14, g.Y(f.bande.a), g.Y(f.bande.b), 12, f.bande.cols, lisse(p)); ctx.restore(); });
+  }
 }
 /* Étiquettes écrites à la craie sur le graphe (une fois l’étape commencée). */
 function etiquettes(c, M, nom) {
@@ -806,7 +849,13 @@ function etiquettes(c, M, nom) {
   if (nom === 'lecture') {
     if (f.type === 'distribution') c.texte(f.point.lab, g.X(f.point.labX ?? f.point.x) - 10, g.Y(f.point.labY ?? 50) - 8, { couleur: 'jaune', taille: D.eti, align: 'right' });
     if (f.type === 'distribution' && f.marque) c.texte('11,88', g.X(f.marque.x) + 4, g.Y(64), { couleur: 'violet', taille: D.lec });
-    if (f.type === 'dosage') c.texte('E', g.X(f.E.x) + (f.T.s > 0 ? -16 : 10), g.Y(f.E.y) + (f.T.s > 0 ? -2 : -6), { couleur: 'jaune', taille: D.E });
+    if (f.type === 'dosage') {
+      c.texte('E', g.X(f.E.x) + (f.T.s > 0 ? -16 : 10), g.Y(f.E.y) + (f.T.s > 0 ? -2 : -6), { couleur: 'jaune', taille: D.E });
+      // les deux valeurs lues, écrites sur la figure là où on les lit : sous l’axe des volumes et contre l’axe du pH
+      c.texte(`${nbr(f.E.x, 1)} mL`, g.X(f.E.x) + 5, g.y0 - 7, { couleur: 'jaune', taille: D.lec });   // au pied du pointillé, dans le graphe
+      c.texte(nbr(f.E.y, 1), g.x0 + 5, g.Y(f.E.y) - 6, { couleur: 'jaune', taille: D.lec });
+    }
+    if (f.type === 'distribution') c.texte(nbr(f.point.x, 1), g.X(f.point.x), g.y0 + D.gradY + D.lec + 2, { couleur: 'jaune', taille: D.lec, align: 'center' });
     if (f.type === 'derivee') { c.texte('20', g.X(20), g.y0 + D.gradY + D.lec + 2, { couleur: 'jaune', taille: D.lec, align: 'center' }); c.texte('4,4', g.x0 + 4, g.Y(4.4) - 6, { couleur: 'jaune', taille: D.lec }); }
   }
   if (nom === 'calcul') {
@@ -819,7 +868,8 @@ function etiquettes(c, M, nom) {
   }
 }
 
-const ORDRE = ['axes', 'courbe', 'construction', 'lecture', 'calcul'];
+const ORDRE = ['axes', 'courbe', 'tangente_1', 'tangente_2', 'construction', 'lecture', 'calcul'];
+let DEMO = false;   // la démonstration a commencé : les lignes d’avant (données, courbe) sont effacées du panneau et du bas
 /* Deuxième passe (15 novembre 2026, « agrandir les graphes eux-mêmes ») — méthode de transformations-deux-sens-tableau/figures.html :
  * sur un tableau large (scene.L ≥ 1000), les tailles sont choisies en PIXELS À L'ÉCRAN (u(px) = px / échelle) ; trois colonnes :
  * à gauche les phrases du déroulé (coupées à la ligne), au centre le graphe sur toute la hauteur (50 à 62 % de la largeur),
@@ -836,7 +886,7 @@ function couper(c, t, max, taille) {
 }
 /** Les lignes du panneau coupées à la largeur `cote` (taille t) : { nom: [{ t | m, col, h }] } et la hauteur totale. */
 function panneauCoupe(c, f, cote, t, pas, ecart) {
-  const out = {}; let y = 0;
+  const out = {}; let y = 0, avant = 0;
   const hFrac = Math.round(t * 3.2);
   for (const nom of ORDRE) {
     const lignes = f.panneau[nom]; if (!lignes) continue;
@@ -849,13 +899,16 @@ function panneauCoupe(c, f, cote, t, pas, ecart) {
         pousser();
       } else for (const m of couper(c, String(txt).trim(), cote, t)) l2.push({ t: m, col, h: pas });
     }
-    out[nom] = l2; y += l2.reduce((a, l) => a + l.h, 0) + ecart;
+    out[nom] = l2;
+    // les données (axes, courbe) sont effacées quand la démonstration commence : la démonstration repart en haut
+    if (nom === premierDemo(f)) { avant = y; y = 0; }
+    y += l2.reduce((a, l) => a + l.h, 0) + ecart;
   }
-  return { lignes: out, h: y - ecart };
+  return { lignes: out, h: Math.max(y - ecart, avant - ecart) };
 }
 function disposer(L, c, s, f) {
   const g = f.G;
-  if (L < 1000) {
+  if (L < 900) {   // 19 novembre 2026 : le cadre du lecteur (850 × 400, L ≈ 1000) prend la disposition large, écriture ≥ 17 px
     Object.assign(g, GX); PX = 516; PW = 234; ZY = [356, 380, 404];
     D = { large: false, axes: 14, gradY: 18, nomAxe: 15, eti: 15, lec: 14, E: 17 };
     return;
@@ -875,7 +928,8 @@ function disposer(L, c, s, f) {
   for (const px of [22, 21, 20, 19, 18, 17]) for (const part of [.62, .58, .54, .5]) cands.push([px, part, (px >= 19 ? 100 : 0) + px + 25 * part]);
   cands.sort((a, b) => b[2] - a[2]);
   for (const [px, part] of cands) { const e = essai(px, part); if (e.ok) { choix = e; break; } }
-  if (!choix) choix = essai(17, .48, true);           // rien ne tient : 17 px, interligne resserré
+  // rien ne tient : interligne resserré, de 17 à 15 px, graphe un peu plus étroit (19 novembre 2026 : petit cadre 560 × 260)
+  if (!choix) for (const [px, part] of [[17, .48], [16, .44], [15, .42], [15, .38], [15, .34]]) { choix = essai(px, part, true); if (choix.ok) break; }
   const { t, pas, cote } = choix;
   const gx0 = M0 + cote + u(10), gx1 = L - M0 - cote - u(10);
   const droite = f.type === 'dosage' ? u(34) : u(22);   // la bande de l'indicateur à droite du graphe
@@ -886,6 +940,7 @@ function disposer(L, c, s, f) {
   const place = {}; let y = choix.y0;
   for (const nom of ORDRE) {
     const l = choix.P.lignes[nom]; if (!l) continue;
+    if (nom === premierDemo(f)) y = choix.y0;   // la démonstration repart en haut du panneau
     const debut = y - t - 2; const ys = [];
     let yb = y;
     for (const x of l) { ys.push(x.h > pas ? yb + x.h - pas - .4 * t : yb); yb += x.h; }
@@ -910,19 +965,22 @@ function dessiner(c, M) {
   if (M.commence('axes')) quadrillage(c, g, lisse(M.p('axes')));
   c.direct(() => {
     if (M.commence('courbe')) f.courbes.forEach(k => tracer(c, g, k.f, k.a, k.b, M.p('courbe'), k.col, { pointille: k.pointille }));
-    if (M.commence('construction')) construction(c, M, M.p('construction'));
+    if (M.commence(premierDemo(f))) construction(c, M);
     if (M.commence('lecture')) lecture(c, M, M.p('lecture'));
     if (M.commence('calcul')) calculGraphe(c, M, M.p('calcul'));
   });
-  // Panneau à droite : les lignes de chaque étape, les unes sous les autres.
+  // Panneau à droite : les lignes de chaque étape, les unes sous les autres. Quand la démonstration commence, les lignes
+  // d’avant (données, courbe) sont effacées et la démonstration remonte en haut (19 novembre 2026, règle 17).
+  DEMO = M.commence(premierDemo(f)) && !M.S.mesure;
   let y = 64; const ecrites = [], panneau = {};
   for (const nom of ORDRE) {
     const lignes = f.panneau[nom]; if (!lignes) continue;
+    if (DEMO && !ETAPES_DEMO.includes(nom)) continue;
     if (D.large) {
-      const q = D.place[nom];
+      const q = D.place[nom], dy = decalDemo();
       panneau[nom] = () => q.lignes.forEach((l, i) => {
-        if (l.m) ligneM(c, PX, q.ys[i], l.m, { taille: D.t, couleur: l.col, gap: 6 });
-        else c.texte(l.t, PX, q.ys[i], { couleur: l.col, taille: D.t, max: PW });
+        if (l.m) ligneM(c, PX, q.ys[i] - dy, l.m, { taille: D.t, couleur: l.col, gap: 6 });
+        else c.texte(l.t, PX, q.ys[i] - dy, { couleur: l.col, taille: D.t, max: PW });
       });
       if (M.commence(nom)) ecrites.push(...lignes.map(l => (l[0] && l[0].txt) || l[0]));
       continue;
@@ -939,7 +997,7 @@ function dessiner(c, M) {
   M.panneau = ecrites;
   // tableau large : chaque phrase va à la ligne dans la colonne de gauche ; sinon une ligne en bas
   const lignesBas = t => (D.large ? couper(c, t, D.cote, D.t) : [t]);
-  M.vues = zoneEcriture(c, M, etapesDe(M.S.vue).map(e => ({ nom: e.nom, lignes: lignesBas(f.bas[e.nom]).map(t => [t, e.nom === 'calcul' ? 'jaune' : 'blanc']),
+  M.vues = zoneEcriture(c, M, etapesDe(M.S.vue).map(e => ({ nom: e.nom, lignes: DEMO && e.nom !== etapeEnCours(M) ? [] : lignesBas(f.bas[e.nom]).map(t => [t, e.nom === 'calcul' ? 'jaune' : 'blanc']),
     plus: () => { if (e.nom === 'axes') axesGraphe(c, g); etiquettes(c, M, e.nom); panneau[e.nom] && panneau[e.nom](); } })), ZY,
     D.large ? { x: D.M0, max: D.cote, taille: D.t } : { taille: 16 });
   reperes(c, M);
@@ -948,11 +1006,14 @@ function dessiner(c, M) {
 const seg = (p, a, b) => clamp((p - a) / (b - a), 0, 1);
 
 /* ── Repères (tous déclarés dès le début ; le libellé dit à quel moment ils apparaissent) ─────────────────────────── */
+/** Décalage du panneau quand la démonstration commence : nul, la démonstration est placée en haut du panneau (disposer). */
+const decalDemo = () => 0;
 function panneauY(nom) {
-  if (D.large) { const q = D.place[nom]; return q ? q.boite : [D.y0 - D.t, 30]; }
+  if (D.large) { const q = D.place[nom]; return q ? [q.boite[0] - decalDemo(), q.boite[1]] : [D.y0 - D.t, 30]; }
   let y = 64;
   for (const n of ORDRE) {
     const l = F.panneau[n]; if (!l) continue;
+    if (DEMO && !ETAPES_DEMO.includes(n)) continue;
     const h = l.reduce((s, x) => s + (x[2] ?? 22), 0);
     if (n === nom) return [y - 18, h + 2];
     y += h + 7;
@@ -970,6 +1031,11 @@ function reperes(c, M) {
     cons = [Math.min(...xs) - 6, Math.min(...ys) - 6, Math.abs(xs[1] - xs[0]) + 12, Math.max(...ys) - Math.min(...ys) + 12, 'les deux tangentes parallèles (pointillés jaunes) et leur parallèle équidistante (trait jaune plein)']; }
   else cons = [g.X(17), g.Y(12.4), g.X(26) - g.X(17), g.y0 - g.Y(12.4), 'la courbe dpH/dV_b (orange) et son pic à 20 mL, relié au saut de pH'];
   R('construction', cons[0], cons[1], cons[2], cons[3], cons[4] + q('construction'));
+  if (f.type === 'dosage') {   // chaque tangente, son repère (allumée à son moment)
+    const T = f.T, l = f.tang.l, boite = (v, b) => { const xa = g.X(v - l), xb = g.X(v + l), ya = g.Y(clamp(T.s * (v - l) + b, g.ymin, g.ymax)), yb = g.Y(clamp(T.s * (v + l) + b, g.ymin, g.ymax)); return [Math.min(xa, xb) - 6, Math.min(ya, yb) - 6, Math.abs(xb - xa) + 12, Math.abs(yb - ya) + 12]; };
+    R('tangente_1', ...boite(T.v1, T.b1), `la première tangente, avant le saut (pointillés jaunes)${q('tangente_1')}`);
+    R('tangente_2', ...boite(T.v2, T.b2), `la tangente parallèle, après le saut (pointillés jaunes)${q('tangente_2')}`);
+  }
   const P = f.type === 'distribution' ? { x: f.point.x, y: 50, dit: f.point.dit } : f.type === 'derivee' ? { x: 20, y: 8.8, dit: f.E.dit } : f.E;
   R('point', g.X(P.x) - 14, g.Y(P.y) - 14, 28, 28, `${P.dit}${q('lecture')}`);
   const [yv, hv] = panneauY('lecture');

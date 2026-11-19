@@ -493,7 +493,11 @@ function ETAPES(v) {
       { nom: 'ligne_2', anim: .3, motif: 'ligne 2 : soude 10⁻⁴ mol/L, pH 10,00 ; [H₃O⁺] = 1,0·10⁻¹⁰ ; [HO⁻] = 1,0·10⁻⁴ ; produit 1,0·10⁻¹⁴', bulle: () => 'Deuxième ligne.' },
       { nom: 'mesure_3', anim: 3.6, motif: 'la sonde dans la soude 10⁻³ mol/L : le pH-mètre affiche 11,00', bulle: () => 'Puis la deuxième soude.' },
       { nom: 'ligne_3', anim: .3, motif: 'ligne 3 : soude 10⁻³ mol/L, pH 11,00 ; [H₃O⁺] = 1,0·10⁻¹¹ ; [HO⁻] = 1,0·10⁻³ ; produit 1,0·10⁻¹⁴', bulle: () => 'Troisième ligne.' },
-      { nom: 'comparer', anim: .3, motif: 'la dernière colonne [H₃O⁺]·[HO⁻] encadrée : compare les trois lignes', bulle: () => 'Compare la dernière colonne.' },
+      // 19 novembre 2026 (règle 16) : les trois produits comptés en allumant, ligne par ligne, puis le total
+      { nom: 'produit_1', anim: .6, motif: 'ligne 1 : le produit 1,0·10⁻¹⁴ s’allume (1)', bulle: () => 'Ligne 1.' },
+      { nom: 'produit_2', anim: .6, motif: 'ligne 2 : le produit 1,0·10⁻¹⁴ s’allume (2)', bulle: () => 'Ligne 2.' },
+      { nom: 'produit_3', anim: .6, motif: 'ligne 3 : le produit 1,0·10⁻¹⁴ s’allume (3)', bulle: () => 'Ligne 3.' },
+      { nom: 'comparer', anim: .3, motif: 'la dernière colonne [H₃O⁺]·[HO⁻] encadrée : 3 lignes, 3 fois 1,0·10⁻¹⁴', bulle: () => 'Compare la dernière colonne.' },
       { nom: 'conclusion', anim: .3, motif: '« [H₃O⁺]·[HO⁻] garde la même valeur : 1,0·10⁻¹⁴ (25 °C) »', bulle: () => 'Conclusion.' },
     ],
   })[v] || [];
@@ -938,6 +942,22 @@ function vueKeMesures(c, M) {
     [b.c ? `soude ${b.c.replace('C = ', '').replace(' mol/L', '')}` : b.nom, fr(b.pH, 2), b.h3o, b.ho, '1,0·10⁻¹⁴'].forEach((t, k) =>
       c.texte(t, cxg(k), ys(i + 1), { taille: 16, align: 'center', couleur: k === 2 ? 'rose' : k === 3 ? 'vert' : 'blanc' }));
   }));
+  // La ligne qu’on remplit, puis chaque produit compté, s’allument (fort quand c’est leur moment, doucement ensuite).
+  const etK = ETAPES('ke_mesures'), actif = nom => { const i = etK.findIndex(e => e.nom === nom); return M.commence(nom) && !M.S.fait && !(etK[i + 1] && M.commence(etK[i + 1].nom)); };
+  const lueur = (x, y, w, h, fort) => c.direct(() => { const ctx = c.ctx; ctx.save(); ctx.fillStyle = fort ? 'rgba(250,204,21,.26)' : 'rgba(250,204,21,.10)';
+    ctx.strokeStyle = fort ? 'rgba(250,204,21,.95)' : 'rgba(250,204,21,.4)'; ctx.lineWidth = fort ? 2.2 : 1.2; if (fort) { ctx.shadowColor = 'rgba(250,204,21,.9)'; ctx.shadowBlur = 12; }
+    ctx.beginPath(); ctx.roundRect(x, y, w, h, 5); ctx.fill(); ctx.stroke(); ctx.restore(); });
+  BK.forEach((b, i) => {
+    const yr = GK.y + (i + 1) * GK.h;
+    if (actif('ligne_' + (i + 1))) lueur(GK.x + 2, yr + 2, W - 4, GK.h - 4, true);
+    c.repere('ligne_' + (i + 1), GK.x, yr, W, GK.h, `la ligne ${i + 1} du tableau : ${b.nom}${b.c ? ' ' + b.c : ''}`);
+    const nom = 'produit_' + (i + 1);
+    if (M.commence(nom)) {
+      lueur(gxk(4) + 3, yr + 2, GK.ws[4] - 6, GK.h - 4, actif(nom));
+      M.etape(c, nom, () => c.texte(String(i + 1), gxk(5) + 12, ys(i + 1), { couleur: 'jaune', taille: 18, align: 'center' }));
+    }
+    c.repere(nom, gxk(4), yr, GK.ws[4] + 24, GK.h, `le produit de la ligne ${i + 1} : 1,0·10⁻¹⁴`);
+  });
   M.etape(c, 'comparer', () => {
     const r = [gxk(4) + 4, GK.y + GK.h + 2, GK.ws[4] - 8, 3 * GK.h - 4];
     if (!CONCL_KE) { c.rect(...r, { couleur: 'blanc', largeur: 2, arrondi: 6 }); return; }
@@ -945,6 +965,7 @@ function vueKeMesures(c, M) {
     c.texte('[HO⁻] monte : 10⁻⁷ → 10⁻³', 470, 160, { taille: 17, couleur: 'vert' });
     c.texte('[H₃O⁺] descend : 10⁻⁷ → 10⁻¹¹', 470, 186, { taille: 17, couleur: 'rose' });
     c.texte('le produit ne change pas', 470, 212, { taille: 18, couleur: 'jaune' });
+    c.texte('3 lignes : 3 fois 1,0·10⁻¹⁴', 470, 240, { taille: 18, couleur: 'jaune' });
   });
   M.etape(c, 'conclusion', () => {
     c.rect(150, 392, 470, 26, { couleur: 'jaune', largeur: 2, arrondi: 8 });

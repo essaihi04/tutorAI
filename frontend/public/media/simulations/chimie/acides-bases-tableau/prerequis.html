@@ -198,6 +198,11 @@ const ETAPES = {
   ],
   puissance: [
     { nom: 'dix', duree: 1.2, motif: '10¹ = 10, 10² = 100, 10³ = 1000' },
+    // 19 novembre 2026 (simulations-au-tableau règle 16) : les zéros de 1 000 comptés en allumant, un à un, puis le total
+    { nom: 'zero_1', duree: .7, motif: 'premier zéro de 1 000 allumé : 1' },
+    { nom: 'zero_2', duree: .7, motif: 'deuxième zéro allumé : 2' },
+    { nom: 'zero_3', duree: .7, motif: 'troisième zéro allumé : 3' },
+    { nom: 'zeros', duree: 1, motif: '3 zéros : l’exposant de 10³ est 3' },
     { nom: 'negatif', duree: 1.6, motif: 'puissance négative : chaque pas divise par dix' },
     { nom: 'ecriture', duree: 1.2, motif: '4,0·10⁻⁴ = 0,00040' },
     { nom: 'log', duree: 1.2, motif: 'log(10⁻³) = −3 : le log donne l’exposant' },
@@ -471,10 +476,27 @@ const rgx = e => RG.x + 10 + (-e) / 7 * (RG.w - 20);   // 10⁰ à gauche, 10⁻
 function decimal(e) { if (e >= 0) return fr(10 ** e, 0); const n = -e; return '0,' + '0'.repeat(n - 1) + '1'; }
 function vuePuissance(c, D) {
   const ctx = c.ctx, e = R.exposant;
+  // « 1 000 » écrit en morceaux : chaque zéro a sa place, pour être allumé quand on le compte
+  const A = '10¹ = 10      10² = 100      10³ = 1', TZ = 22, wA = c.largeurTexte('101 = 10      102 = 100      103 = 1', TZ), w0 = c.largeurTexte('0', TZ) * 1.5, esp = c.largeurTexte(' ', TZ);
+  const XA = 380 - (wA + esp + 3 * w0) / 2 + wA, xz = k => XA + esp + (k + .5) * w0;   // zéros écartés d’une demi-largeur : chacun sa case
   ecrire(c, D, 'dix', () => {
-    c.texte('10¹ = 10      10² = 100      10³ = 1 000', 380, 70, { couleur: 'blanc', taille: 19, align: 'center' });
-    c.texte('l’exposant compte les zéros', 380, 94, { couleur: 'faible', taille: 15, align: 'center' });
+    c.texte(A, XA, 70, { couleur: 'blanc', taille: TZ, align: 'right' });
+    for (let k = 0; k < 3; k++) c.texte('0', xz(k), 70, { couleur: 'blanc', taille: TZ, align: 'center' });
+    if (!D.commence('zeros')) c.texte('l’exposant compte les zéros', XA - 60, 96, { couleur: 'faible', taille: 15, align: 'right' });
     c.repere('dix', 160, 50, 440, 52, 'puissances positives');
+  });
+  for (let k = 0; k < 3; k++) {
+    const nom = 'zero_' + (k + 1); if (!D.commence(nom)) continue;
+    const vif = !D.commence(k < 2 ? 'zero_' + (k + 2) : 'zeros');   // le zéro qu’on compte brille fort ; les autres restent allumés, doucement
+    c.direct(() => { const ctx = c.ctx; ctx.save(); ctx.fillStyle = vif ? 'rgba(250,204,21,.34)' : 'rgba(250,204,21,.16)'; ctx.strokeStyle = vif ? 'rgba(250,204,21,.95)' : 'rgba(250,204,21,.45)';
+      ctx.lineWidth = 2; if (vif) { ctx.shadowColor = 'rgba(250,204,21,.9)'; ctx.shadowBlur = 12; }
+      ctx.beginPath(); ctx.roundRect(xz(k) - w0 / 2 + 1, 50, w0 - 2, 27, 5); ctx.fill(); ctx.stroke(); ctx.restore(); });
+    ecrire(c, D, nom, () => c.texte(String(k + 1), xz(k), 97, { couleur: 'jaune', taille: 17, align: 'center' }));
+    c.repere(nom, xz(k) - w0 / 2 - 4, 50, w0 + 8, 52, `le ${['premier', 'deuxième', 'troisième'][k]} zéro de 1 000`);
+  }
+  ecrire(c, D, 'zeros', () => {
+    c.texte('3 zéros : l’exposant 3', XA - 40, 96, { couleur: 'jaune', taille: 16, align: 'right' });
+    c.repere('zeros', XA - 230, 80, 240 + 3 * w0, 24, '3 zéros : l’exposant 3');
   });
   ecrire(c, D, 'negatif', () => {
     c.direct(() => regle(ctx, RG.x, RG.y, RG.w));
@@ -556,7 +578,7 @@ const BLOCS_RC = {
   // colonne de droite large de 380 : ses phrases s'élargissent (max 360) sur tableau large au lieu de rétrécir
   pente: [{ r: [10, 6, 740, 30], haut: true }, { r: [440, 58, 380, 260] }, { r: [36, 56, 404, 318], etire: true }],
   // (16 novembre 2026, « remplir le tableau ») deux colonnes : les puissances et la règle | l'écriture scientifique et le log
-  puissance: [{ r: [10, 6, 740, 30], haut: true }, { r: [250, 46, 260, 58], centre: true }, { r: [56, 122, 662, 112], centre: true, etire: 1.3 }, { r: [246, 244, 268, 170], centre: true }],
+  puissance: [{ r: [10, 6, 740, 30], haut: true }, { r: [200, 46, 360, 58], centre: true }, { r: [56, 122, 662, 112], centre: true, etire: 1.3 }, { r: [246, 244, 268, 170], centre: true }],
 };
 function dessiner(c, D) {
   D.scene.cadre(41);

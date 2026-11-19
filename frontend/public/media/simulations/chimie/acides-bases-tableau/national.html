@@ -131,6 +131,18 @@ const VUES = Object.keys(Q);
 const NOM = v => (Q[v].num === '+' ? 'en plus' : 'question ' + Q[v].num);
 const VUE = VUES.includes(new URLSearchParams(location.search).get('vue')) ? new URLSearchParams(location.search).get('vue') : VUES[0];
 const q = () => Q[VUE];
+/* « Allumer » (19 novembre 2026, simulations-au-tableau règle 17) : ce que l’étape en cours utilise (tangente, parallèle,
+ * point E, demi-équivalence, lecture) est tracé avec une lueur de sa couleur ; l’étape passée, il reste dessiné, normal. */
+const enCours = (D, nom) => { if (!D.commence(nom) || D.S.fait) return false; const l = q().etapes, i = l.findIndex(e => e.nom === nom); return i >= 0 && !(l[i + 1] && D.commence(l[i + 1].nom)); };
+const LUEUR = { violet: 'rgba(192,132,252,.95)', rose: 'rgba(244,114,182,.95)', orange: 'rgba(251,146,60,.95)', jaune: 'rgba(250,204,21,.95)' };
+function allume(c, on, coul, fn) {
+  const ctx = c.ctx; ctx.save(); if (on) { ctx.shadowColor = LUEUR[coul] || coul; ctx.shadowBlur = 16; }
+  try { fn(); } finally { ctx.restore(); }
+}
+function halo(c, x, y, coul = 'jaune', r = 15) {
+  c.direct(() => { const ctx = c.ctx; ctx.save(); ctx.fillStyle = coul === 'orange' ? 'rgba(251,146,60,.26)' : 'rgba(250,204,21,.26)'; ctx.strokeStyle = LUEUR[coul]; ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.restore(); });
+}
 const montre = (D, nom) => D.commence(nom) && (CONCL || !(q().etapes.find(e => e.nom === nom) || {}).decisif);
 
 /* ── Le montage peint (règle 32) : potence, burette graduée, bécher sur l’agitateur, pH-mètre ── */
@@ -327,9 +339,9 @@ function dessiner(c, D) {
     }
     if (D.commence('courbe')) { D.ecrire(c, 'courbe'); courbe(c, D.p('courbe'), { duree: 1.2 }); c.repere('courbe', G().x0, G().y0, G().x1 - G().x0, G().y1 - G().y0, 'la courbe pH = f(V_B)'); }
     const seg = (P, nom, coul) => {
-      const v0 = P[0] - 2.6, v1 = P[0] + 2.6;
-      c.ligne(PX(v0), PY(droite(P, v0)), PX(v1), PY(droite(P, v1)), { couleur: coul, largeur: 1.9, pointille: [7, 5] });
-      c.point(PX(P[0]), PY(P[1]), 4, coul);
+      const v0 = P[0] - 2.6, v1 = P[0] + 2.6, on = enCours(D, nom);
+      allume(c, on, coul, () => c.ligne(PX(v0), PY(droite(P, v0)), PX(v1), PY(droite(P, v1)), { couleur: coul, largeur: on ? 3.2 : 1.9, pointille: [7, 5] }));
+      c.point(PX(P[0]), PY(P[1]), on ? 5.5 : 4, coul);
       c.repere(nom, Math.min(PX(v0), PX(v1)) - 6, PY(droite(P, v1)) - 6, PX(v1) - PX(v0) + 12, PY(droite(P, v0)) - PY(droite(P, v1)) + 12, nom === 'tangente_1' ? 'la tangente avant le saut' : 'la tangente après le saut');
     };
     if (D.commence('tangente_1')) { D.ecrire(c, 'tangente_1'); seg(TA, 'tangente_1', 'violet'); }
@@ -337,11 +349,12 @@ function dessiner(c, D) {
     if (D.commence('parallele')) {
       D.ecrire(c, 'parallele');
       const v0 = VEC - 3.6, v1 = VEC + 3.2;
-      c.ligne(PX(v0), PY(milieu(v0)), PX(v1), PY(milieu(v1)), { couleur: 'rose', largeur: 2.2 });
+      const on = enCours(D, 'parallele');
+      allume(c, on, 'rose', () => c.ligne(PX(v0), PY(milieu(v0)), PX(v1), PY(milieu(v1)), { couleur: 'rose', largeur: on ? 3.4 : 2.2 }));
       c.repere('parallele', PX(v0) - 6, PY(milieu(v1)) - 6, PX(v1) - PX(v0) + 12, PY(milieu(v0)) - PY(milieu(v1)) + 12, 'la parallèle à égale distance');
     }
-    if (D.commence('point_e')) { D.ecrire(c, 'point_e'); pointE(c); }
-    if (montre(D, 'lecture')) { D.ecrire(c, 'lecture'); lecture(c, VEC, PHEC, '10', '≈ 8'); c.repere('lecture', G().x0 - 6, PY(PHEC) - 26, PX(VEC) - G().x0 + 30, G().y1 - PY(PHEC) + 60, 'la lecture de E'); }
+    if (D.commence('point_e')) { D.ecrire(c, 'point_e'); if (enCours(D, 'point_e')) halo(c, PX(VEC), PY(PHEC), 'orange'); pointE(c); }
+    if (montre(D, 'lecture')) { D.ecrire(c, 'lecture'); allume(c, enCours(D, 'lecture'), 'jaune', () => lecture(c, VEC, PHEC, '10', '≈ 8')); c.repere('lecture', G().x0 - 6, PY(PHEC) - 26, PX(VEC) - G().x0 + 30, G().y1 - PY(PHEC) + 60, 'la lecture de E'); }
     ligneCorr('resultat', 'Méthode des tangentes :', { h: 32 });
     ligneCorr('resultat', 'V_BE = 10 mL ; pH_E ≈ 8', { couleur: 'jaune', taille: 21 });
   }
@@ -399,7 +412,7 @@ function dessiner(c, D) {
     y = yCorr() + 3 * 30 + 12;
     if (D.commence('ligne_e')) {
       D.ecrire(c, 'ligne_e');
-      c.ligne(PX(VEC) + 30, PY(PHEC), xs[2] + 22, PY(PHEC), { couleur: 'orange', largeur: 2, pointille: [6, 5] });
+      allume(c, enCours(D, 'ligne_e'), 'orange', () => c.ligne(PX(VEC) + 30, PY(PHEC), xs[2] + 22, PY(PHEC), { couleur: 'orange', largeur: enCours(D, 'ligne_e') ? 3 : 2, pointille: [6, 5] }));
       c.repere('ligne_e', PX(VEC) - 6, PY(PHEC) - 30, xs[2] - PX(VEC) + 40, 40, 'la droite pH = 8');
     }
     if (montre(D, 'choix')) {
@@ -418,6 +431,7 @@ function dessiner(c, D) {
     if (D.commence('point')) {
       D.ecrire(c, 'point');
       lecture(c, VE, PH(VE), '10', '≈ 8', 'orange');
+      if (enCours(D, 'point')) halo(c, PX(VE), PY(PH(VE)), 'orange');
       c.point(PX(VE), PY(PH(VE)), 6, 'orange');
       c.ligne(g.x0, PY(PKA), g.x1 - 10, PY(PKA), { couleur: 'violet', largeur: 1.8, pointille: [3, 5] });
       c.texte('pKa = 3,9', g.x1 - 12, PY(PKA) + 22, { couleur: 'violet', taille: 21, align: 'right' });
@@ -455,7 +469,9 @@ function dessiner(c, D) {
     const g = G();
     if (D.commence('demi')) {
       D.ecrire(c, 'demi');
-      c.ligne(PX(5), g.y1, PX(5), PY(PH(5)), { couleur: 'jaune', largeur: 1.9, pointille: [6, 5] });
+      const on = enCours(D, 'demi');
+      allume(c, on, 'jaune', () => c.ligne(PX(5), g.y1, PX(5), PY(PH(5)), { couleur: 'jaune', largeur: on ? 3 : 1.9, pointille: [6, 5] }));
+      if (on || enCours(D, 'lecture')) halo(c, PX(5), PY(PH(5)));
       c.point(PX(5), PY(PH(5)), 5, 'jaune');
       c.texte('5', PX(5), g.y1 + 52, { couleur: 'jaune', taille: 21, align: 'center' });
       c.texte('⟦V_BE|2⟧', PX(5) + 6, PY(PH(5)) - 40, { couleur: 'jaune', taille: 21 });
@@ -463,7 +479,7 @@ function dessiner(c, D) {
     }
     if (montre(D, 'lecture')) {
       D.ecrire(c, 'lecture');
-      c.ligne(PX(5), PY(PH(5)), g.x0, PY(PH(5)), { couleur: 'jaune', largeur: 1.9, pointille: [6, 5] });
+      allume(c, enCours(D, 'lecture'), 'jaune', () => c.ligne(PX(5), PY(PH(5)), g.x0, PY(PH(5)), { couleur: 'jaune', largeur: enCours(D, 'lecture') ? 3 : 1.9, pointille: [6, 5] }));
       c.texte('3,9', g.x0 + 8, PY(PH(5)) - 8, { couleur: 'jaune', taille: 21 });
       c.repere('lecture', g.x0 - 6, PY(PH(5)) - 30, PX(5) - g.x0 + 20, 40, 'pH = 3,9');
     }
