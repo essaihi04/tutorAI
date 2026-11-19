@@ -145,18 +145,32 @@ function lueurs(c) {
 }
 /** `&calculs=0` : la page n’écrit pas ses lignes de calcul (la démonstration est écrite par le lecteur à côté de la figure). */
 const CALCULS = new URLSearchParams(location.search).get('calculs') !== '0';
-/** Les lignes de calcul : chaque ligne paraît à la fin de son étape ; on garde les `max` dernières. */
+/** Les lignes de calcul : chaque ligne paraît à la fin de son étape ; on garde les `max` dernières.
+ *  La simulation d'abord (18 novembre 2026) : l'interligne suit la taille RÉELLEMENT écrite (jamais sous 15 px à
+ *  l'écran, donc plus grande dans le dessin sur un téléphone) et la hauteur des fractions ; une ligne trop large pour
+ *  le cadre est coupée avant un « = » et sa suite écrite en retrait sur la ligne suivante : rien ne se chevauche. */
 function calculs(c, x, y, lignes, o = {}) {
   if (!CALCULS) return;
   const vues = lignes.filter(l => vu(l.id)).slice(-(o.max || 6));
   let yy = y;
   c.direct(() => {
+    const larg = Math.max(160, (c.cadre ? c.cadre.w : 760) - x - 6), bas = (c.cadre ? c.cadre.h : 420) - 4;
+    // les morceaux à écrire (une ligne trop large est coupée avant un « = », la suite en retrait), avec leur hauteur
+    const morceaux = [];
+    const ajouter = (txt, xx, l) => {
+      const t = l.taille || o.taille || 19, E = window.OndesTableau.etages(c, t, txt), frac = txt.includes('⟦');
+      morceaux.push({ txt, xx, l, t, avant: frac ? E.haut : 0, apres: Math.max(frac ? 40 : 32, 1.2 * E.T + (frac ? E.bas : 0)) });
+    };
     for (const l of vues) {
-      const frac = String(l.texte).includes('⟦');
-      if (frac) yy += 12;
-      c.texte(l.texte, x, yy, { couleur: l.couleur || 'vert', taille: l.taille || o.taille || 19 });
-      yy += (frac ? 40 : 32);
+      const txt = String(l.texte), t = l.taille || o.taille || 19, T = window.OndesTableau.etages(c, t).T;
+      let coupe = -1;
+      if (c.largeurTexte(txt, T) > larg) for (let i = txt.indexOf(' = ', 1); i > 0; i = txt.indexOf(' = ', i + 1)) if (c.largeurTexte(txt.slice(0, i), T) <= larg) coupe = i;
+      if (coupe < 0) ajouter(txt, x, l); else { ajouter(txt.slice(0, coupe), x, l); ajouter(txt.slice(coupe + 1), x + 16, l); }
     }
+    // sur un petit cadre, les plus anciennes lignes s'effacent : les dernières (celles qu'on dit) restent entières
+    const haut = m => m.reduce((h, k, i) => h + (i ? k.avant : 0) + k.apres, 0);
+    while (morceaux.length > 1 && y + haut(morceaux) - morceaux[morceaux.length - 1].apres + 8 > bas) morceaux.shift();
+    morceaux.forEach((k, i) => { if (i) yy += k.avant; c.texte(k.txt, k.xx, yy, { couleur: k.l.couleur || 'vert', taille: k.t }); yy += k.apres; });
   });
   if (vues.length) c.repere('calcul', x - 8, y - 26, o.largeur || 230, Math.max(40, yy - y + 6), 'le calcul');
 }

@@ -71,8 +71,11 @@ function peindreBougie(ctx, x, y, dx, allumee) {
   }
   ctx.restore();
 }
+/* La simulation d'abord (18 novembre 2026) : chaque texte à au moins 15,5 px à l'écran (T), téléphone compris ; libellés
+ * raccourcis pour tenir à cette taille. */
+const T = n => Math.max(n, 15.5 / (scene.s || 1));
 function dessinerExperience1(c) {
-  c.texte('1. Haut-parleur et bougie', 14, 34, { couleur: 'cyan', taille: 18 });
+  c.texte('1. Haut-parleur et bougie', 10, 34, { couleur: 'cyan', taille: T(24) });
   c.direct(() => {
     const ctx = c.ctx, t = S.t, marche = t >= M.hp_marche;
     // L'air : des couches verticales de grains qui avancent et reculent (zones serrées = compressions).
@@ -89,21 +92,21 @@ function dessinerExperience1(c) {
     const dxB = deplacement(XB - 28, t);
     peindreBougie(ctx, XB, 200, dxB, true);
     c.repere('bougie', XB - 30, 160, 60, 120, 'la flamme de la bougie');
-    c.texte('bougie', XB, 300, { couleur: 'faible', taille: 15, align: 'center' });
-    c.texte('haut-parleur', HP.x - 10, 272, { couleur: 'faible', taille: 15, align: 'center' });
+    c.texte('bougie', XB, 300, { couleur: 'faible', taille: T(22), align: 'center' });
+    c.texte('haut-parleur', 8, 280, { couleur: 'faible', taille: T(22) });
     if (marche) {
       c.fleche(HP.x + 40, 128, XB - 20, 128, { couleur: 'jaune', largeur: 2.2, duree: 0 });
-      c.texte('propagation du son', (HP.x + XB) / 2 + 10, 118, { couleur: 'jaune', taille: 16, align: 'center' });
+      c.texte('propagation', (HP.x + XB) / 2 + 10, 116, { couleur: 'jaune', taille: T(24), align: 'center' });
       c.repere('propagation', HP.x + 40, 104, XB - HP.x - 60, 30, 'la direction de propagation');
     }
     if (vu('flamme_bouge')) {
       c.cote(XB - 26, 330, XB + 26, 330, '', { couleur: 'orange', largeur: 2 });
-      c.texte('la flamme : ↔', XB, 356, { couleur: 'orange', taille: 16, align: 'center' });
+      c.texte('flamme : ↔', XB - 26, 360, { couleur: 'orange', taille: T(24), align: 'center' });
       c.repere('flamme', XB - 40, 318, 80, 46, 'la flamme avance et recule');
     }
     if (vu('longitudinale') && S.conclusions) {
-      c.texte('même direction → onde longitudinale', 22, 392, { couleur: 'vert', taille: 18, max: 350 });
-      c.repere('conclusion_longi', 16, 372, 356, 28, 'le son est une onde longitudinale');
+      c.texte('→ onde longitudinale', 10, 404, { couleur: 'vert', taille: T(26) });
+      c.repere('conclusion_longi', 6, 376, 356, 36, 'le son est une onde longitudinale');
     }
   });
 }
@@ -143,7 +146,7 @@ function peindrePompe(ctx, marche, t) {
   ctx.restore();
 }
 function dessinerExperience2(c) {
-  c.texte('2. Sonnerie sous cloche', 400, 34, { couleur: 'cyan', taille: 18 });
+  c.texte('2. Sonnerie sous cloche', 396, 34, { couleur: 'cyan', taille: T(24) });
   if (!vu('cloche_sonne') && S.airManuel == null) return;
   c.direct(() => {
     const ctx = c.ctx, t = S.t, a = air();
@@ -163,15 +166,14 @@ function dessinerExperience2(c) {
     const yP = JAUGE.y1 - a * (JAUGE.y1 - JAUGE.y0);
     c.ligne(JAUGE.x, JAUGE.y1, JAUGE.x, yP, { couleur: 'cyan', largeur: 6, duree: 0 });
     P.perle(ctx, JAUGE.x, yP, 9, 'cyan');
-    c.texte('air', JAUGE.x, JAUGE.y0 - 26, { couleur: 'cyan', taille: 16, align: 'center' });
-    c.texte(`${fr(a * 100, 0)} %`, JAUGE.x, JAUGE.y0 - 8, { couleur: 'cyan', taille: 16, align: 'center' });
+    c.texte(`air ${fr(a * 100, 0)} %`, JAUGE.x, JAUGE.y0 - 14, { couleur: 'cyan', taille: T(22), align: 'center' });
     c.repere('jauge_air', JAUGE.x - 22, JAUGE.y0 - 44, 44, JAUGE.y1 - JAUGE.y0 + 54, 'la quantité d’air dans la cloche');
-    const entendu = a > 0.66 ? 'on entend : fort' : a > 0.02 ? 'on entend : faible' : 'on n’entend plus rien';
-    c.texte(entendu, CL.x, 360, { couleur: a > 0.02 ? 'jaune' : 'rose', taille: 17, align: 'center' });
-    c.repere('entendu', CL.x - 120, 340, 240, 28, 'ce qu’on entend');
+    const entendu = a > 0.66 ? 'son : fort' : a > 0.02 ? 'son : faible' : 'son : plus rien';
+    c.texte(entendu, CL.x - 40, 362, { couleur: a > 0.02 ? 'jaune' : 'rose', taille: T(24), align: 'center' });
+    c.repere('entendu', CL.x - 170, 336, 260, 34, 'ce qu’on entend');
     if (vu('conclusion_vide') && S.conclusions && a <= 0.02) {
-      c.texte('sans air (le vide) : pas de son', 412, 392, { couleur: 'vert', taille: 18, max: 340 });
-      c.repere('conclusion_vide', 404, 372, 346, 28, 'le son ne se propage pas dans le vide');
+      c.texte('vide : pas de son', CL.x, 404, { couleur: 'vert', taille: T(26), align: 'center' });
+      c.repere('conclusion_vide', CL.x - 150, 376, 300, 36, 'le son ne se propage pas dans le vide');
     }
   });
 }
@@ -220,14 +222,14 @@ function ceQuiSeVoit() {
   if (S.t < M.hp_marche) m.push('À gauche : un haut-parleur éteint, des grains d’air au repos, une bougie allumée.');
   else m.push('À gauche : le haut-parleur fonctionne, les couches d’air avancent et reculent ; flèche jaune « propagation du son » vers la bougie.');
   if (vu('flamme_bouge')) m.push('La flamme de la bougie avance et recule, dans la même direction que la propagation (flèche orange ↔).');
-  if (vu('longitudinale') && S.conclusions) m.push('Écrit en vert : même direction → onde longitudinale.');
+  if (vu('longitudinale') && S.conclusions) m.push('Écrit en vert, sous la bougie : → onde longitudinale (même direction que la propagation).');
   if (vu('cloche_sonne') || S.airManuel != null) {
     const a = air();
     m.push(`À droite : une sonnerie qui vibre sous une cloche en verre ; jauge d’air à ${fr(a * 100, 0)} %.`);
     m.push(a > 0.66 ? 'Des arcs de son jaunes sortent de la cloche : on entend fort.' : a > 0.02 ? 'Les arcs de son sont pâles : on entend faiblement.' : 'Aucun arc de son ne sort : on n’entend plus rien, alors que la sonnerie vibre toujours.');
     if (vu('pompe') && S.airManuel == null && a > 0) m.push('La pompe retire l’air.');
   }
-  if (vu('conclusion_vide') && S.conclusions && air() <= 0.02) m.push('Écrit en vert : sans air (le vide), pas de son.');
+  if (vu('conclusion_vide') && S.conclusions && air() <= 0.02) m.push('Écrit en vert, sous la cloche : vide : pas de son.');
   return m.join(' ');
 }
 window.Tableau.explication({ son: [

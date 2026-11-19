@@ -32,7 +32,11 @@ const XB = 170;
  * la droite, textes plus grands (× 1,35) ; sur un grand écran (L < 1000) la disposition d'origine reste. */
 let L = 760, GR = false, MER = 360;
 const f = n => (GR ? Math.round(n * 1.35) : n);
-function disposer() { L = scene.L; GR = L >= 1000; MER = GR ? 470 : 360; }
+/* La simulation d'abord (18 novembre 2026) : texte jamais sous 15 px à l'écran (commun.js) ; sur un cadre bas
+ * (téléphone en paysage, CP) l'aide « glisse le fond » se tait, la cote d s'écarte des flèches, le graphe passe plus
+ * à droite et les lignes du calcul s'espacent : rien ne se chevauche. */
+let CP = false;
+function disposer() { L = scene.L; GR = L >= 1000; MER = GR ? 470 : 360; CP = 15.5 / (scene.s || 1) > 24; }
 
 /* ── Objets peints (16 novembre 2026) : la mer en coupe, le fond de sable, le bateau et son sonar. ── */
 const P = window.OndesTableau.P;
@@ -80,9 +84,10 @@ function dessiner(c) {
   c.direct(() => {
     // Le fond, qu’on glisse.
     c.texte('fond', 34, YF() + 26, { couleur: 'orange', taille: f(15) });
-    c.texte('⇡ glisse le fond ⇣', GR ? 360 : 290, YF() + 26, { couleur: 'faible', taille: f(14), align: 'center' });
-    c.cote(XB + 90, YS + 8, XB + 90, YF(), '', { couleur: 'jaune' }).texte(`d = ${fr(S.d, 0)} m`, XB + 100, (YS + YF()) / 2 + 6, { couleur: 'jaune', taille: f(17) });
-    c.repere('profondeur', XB + 80, YS, 110, YF() - YS, 'la profondeur d');
+    if (!CP) c.texte('⇡ glisse le fond ⇣', GR ? 360 : 290, YF() + 26, { couleur: 'faible', taille: f(14), align: 'center' });
+    const xc = XB + (CP ? 120 : 90);
+    c.cote(xc, YS + 8, xc, YF(), '', { couleur: 'jaune' }).texte(`d = ${fr(S.d, 0)} m`, xc + 10, (YS + YF()) / 2 + 6, { couleur: 'jaune', taille: f(17) });
+    c.repere('profondeur', xc - 10, YS, 110, YF() - YS, 'la profondeur d');
     c.repere('fond', 20, YF() - 14, MER, 28, 'le fond (glisse-le)');
     // La salve : descend (aller) puis remonte (retour).
     if (S.running || S.pause) {   // en marche ou figée : la salve reste visible
@@ -100,7 +105,7 @@ function dessiner(c) {
   });
 
   // ── Émission et écho en fonction du temps ──
-  const gx = GR ? 560 : 410, gy = 200, gw = GR ? L - 560 - 110 : 290, tmax = 100;
+  const gx = GR ? 560 : CP ? 440 : 410, gy = 200, gw = GR ? L - 560 - 110 : CP ? L - 530 : 290, tmax = 100;
   c.texte('Signaux reçus par le sonar', gx, 60, { couleur: 'cyan', taille: f(16) });
   c.axe(gx, gy, gx + gw, gy, [[0.2, '20'], [0.4, '40'], [0.6, '60'], [0.8, '80'], [1, '100']], { taille: f(14) });
   c.texte('t (ms)', gx + gw + 4, gy + 4, { couleur: 'jaune', taille: f(14) });
@@ -114,14 +119,14 @@ function dessiner(c) {
       c.cote(T(0), gy + 36, T(tau()), gy + 36, `τ = ${fr(tau(), 0)} ms`, { couleur: 'jaune', dessous: true, taille: f(18) });
       c.repere('tau', T(0), gy + 24, T(tau()) - T(0), 40, 'τ : durée de l’aller-retour');
       if (S.conclusions) {
-        c.texte('L’onde parcourt 2d : 2d = v · τ', gx, GR ? 288 : 294, { couleur: 'vert', taille: f(18) });
-        c.texte(`d = ⟦v · τ|2⟧ = ⟦${V} × ${fr(tau() / 1000, 3)}|2⟧ = ${fr(S.d, 0)} m`, gx, GR ? 330 : 328, { couleur: 'vert', taille: f(18) });
+        c.texte('L’onde parcourt 2d : 2d = v · τ', gx, GR ? 288 : CP ? 300 : 294, { couleur: 'vert', taille: f(18) });
+        c.texte(`d = ⟦v · τ|2⟧ = ⟦${V} × ${fr(tau() / 1000, 3)}|2⟧ = ${fr(S.d, 0)} m`, gx, GR ? 330 : CP ? 352 : 328, { couleur: 'vert', taille: f(18) });
         c.texte('sans diviser par 2 : le double, faux !', gx, GR ? 372 : 364, { couleur: 'rose', taille: f(16) });
         c.repere('formule', gx, 268, GR ? 560 : 320, 112, 'd = (v·τ)/2');
       }
     }
   });
-  c.texte(`eau de mer : v ≈ ${V} m/s`, gx, 404, { couleur: 'blanc', taille: f(15) });
+  c.texte(`eau de mer : v ≈ ${V} m/s`, gx, CP ? 410 : 404, { couleur: 'blanc', taille: f(15) });
   return c.fin();
 }
 

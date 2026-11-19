@@ -41,7 +41,11 @@ const vy = (x, t) => { const e = 1e-3; return (y(x, t + e) - y(x, t - e)) / (2 *
  * les textes grossissent (× 1,35) ; sur un grand écran (L < 1000) la disposition d'origine reste. */
 let L = 760, GR = false, X0C = 70, PXC = 310;
 const f = n => (GR ? Math.round(n * 1.35) : n);
-function disposer() { L = scene.L; GR = L >= 1000; X0C = GR ? 90 : 70; PXC = GR ? (L - 90 - 130) / 2 : 310; }
+function disposer() { L = scene.L; GR = L >= 1000; X0C = GR ? 90 : 70; PXC = Math.max(310, (L - X0C - 130) / 2); CP = 15.5 / (scene.s || 1) > 24; }
+/* La simulation d'abord (18 novembre 2026) : le texte ne passe jamais sous 15 px à l'écran (commun.js) ; sur un cadre
+ * bas (téléphone en paysage, CP), il est donc presque deux fois plus grand dans le dessin : les légendes secondaires
+ * se taisent ou se déplacent pour ne rien chevaucher, la corde prend toute la largeur. */
+let CP = false;
 const X = x => X0C + x * PXC;                    // corde : 0 → 2 m
 const Xinv = px => (px - X0C) / PXC;
 /* La corde est PEINTE (chanvre éclairé par le haut, ombre portée) ; la source S est une poignée en bois qui monte et
@@ -59,7 +63,8 @@ function regle(c, y0, avecM = true) {
   // Le sens de propagation : au-dessus de la corde, ou en dessous quand la corde est tout en haut du cadre
   // (vues « front » et « retard »), pour que la flèche et son texte restent entièrement visibles.
   const bas = y0 < 110, yf = bas ? y0 + 46 : y0 - 66;
-  c.fleche(X(1.35), yf, X(1.85), yf, { couleur: 'vert' }).texte('sens de propagation', X(1.6), bas ? yf + 20 : yf - 10, { couleur: 'vert', align: 'center', taille: f(15) });
+  c.fleche(X(1.35), yf, X(1.85), yf, { couleur: 'vert' });
+  if (!(CP && bas)) c.texte('sens de propagation', X(1.6), bas ? yf + 20 : yf - 10, { couleur: 'vert', align: 'center', taille: f(15) });   // cadre bas : la flèche seule sous la corde
   c.repere('source', X(0) - 30, y0 - 30, 26, 80, 'la source S');
 }
 
@@ -67,7 +72,7 @@ function pointM(c, y0, t, k = 34) {
   const yy = y0 - k * y(S.xM, t);
   c.ligne(X(S.xM), y0 - 46, X(S.xM), y0 + 30, { couleur: 'tresfaible', largeur: 1, pointille: [3, 5] });
   c.direct(() => P.perle(c.ctx, X(S.xM), yy, 7.5, 'orange'));
-  c.texte('M', X(S.xM) + 10, y0 + 26, { couleur: 'orange', taille: f(18) });
+  c.texte('M', X(S.xM) + 10, CP && vue === 'longueur' ? y0 - 14 : y0 + 26, { couleur: 'orange', taille: f(18) });
   c.repere('point_m', X(S.xM) - 16, y0 - 50, 32, 84, 'le point M');
 }
 
@@ -94,16 +99,16 @@ const dessins = {
     c.direct(() => {
       // Trace du mouvement de M : un trait vertical, jamais horizontal.
       if (S.trace.length > 1) c.trait(S.trace.map(v => [X(S.xM) + 22, y0 - K * v]), { couleur: 'orange', largeur: 3, alpha: .55 });
-      if (S.trace.length > 1) c.texte('trajet de M', X(S.xM) + 30, y0 - K - 10, { couleur: 'orange', taille: f(15) });
+      if (S.trace.length > 1 && !CP) c.texte('trajet de M', X(S.xM) + 30, y0 - K - 10, { couleur: 'orange', taille: f(15) });
       const ym = y(S.xM, S.t);
       if (ym > 0.08) c.cote(X(S.xM) - 22, y0, X(S.xM) - 22, y0 - K * ym, '', { couleur: 'jaune' }).texte('y', X(S.xM) - 34, y0 - K / 2 * ym, { couleur: 'jaune', align: 'right', taille: f(18) });
-      c.texte(`t = ${fr(S.t)} s`, L - 20, 34, { couleur: 'jaune', align: 'right', taille: f(18) });
+      c.texte(`t = ${fr(S.t)} s`, CP ? 16 : L - 20, 34, { couleur: 'jaune', align: CP ? 'left' : 'right', taille: f(18) });
     });
     c.texte('Glisse M le long de la corde, puis rejoue.', L / 2, 380, { couleur: 'faible', align: 'center', taille: f(15) });
   },
 
   front(c) {
-    const t1 = 0.6, t2 = 1.4, yA = 80, y1 = 200, y2 = 310;
+    const t1 = 0.6, t2 = 1.4, yA = CP ? 64 : 80, y1 = CP ? 172 : 200, y2 = CP ? 268 : 310, yCote = CP ? 304 : 365, yCalc = CP ? 372 : 405;
     regle(c, yA, false);
     c.direct(() => { corde(c, yA, Math.min(S.t, ARRET)); c.texte(`t = ${fr(S.t)} s`, L - 20, 34, { couleur: 'jaune', align: 'right', taille: f(18) }); });
     c.direct(() => {
@@ -113,12 +118,12 @@ const dessins = {
         corde(c, yi, ti, 34, { alpha: .9, source: false });
         c.texte(`${nom} : t = ${fr(ti, 1)} s`, X(0), yi - 44, { couleur: 'cyan', taille: f(16) });
         c.ligne(X(V * ti), yi - 50, X(V * ti), yi + 18, { couleur: 'jaune', largeur: 1.6, pointille: [4, 4] });
-        c.texte('front', X(V * ti) + 6, yi + 16, { couleur: 'jaune', taille: f(15) });
+        c.texte('front', X(V * ti) + 6, yi + (CP ? 30 : 16), { couleur: 'jaune', taille: f(15) });
       }
       if (S.t >= t2) {
-        c.cote(X(V * t1), 365, X(V * t2), 365, `d = ${fr(V * (t2 - t1))} m`, { taille: f(18), couleur: 'jaune' });
-        c.texte(`Δt = ${fr(t2, 1)} − ${fr(t1, 1)} = ${fr(t2 - t1)} s      v = ⟦d|Δt⟧ = ⟦${fr(V * (t2 - t1))}|${fr(t2 - t1)}⟧ = ${fr(V, 1)} m/s`, L / 2, 405, { couleur: 'vert', align: 'center', taille: f(17) });
-        c.repere('distance_d', X(V * t1), 345, X(V * t2) - X(V * t1), 30, 'd, de front à front');
+        c.cote(X(V * t1), yCote, X(V * t2), yCote, `d = ${fr(V * (t2 - t1))} m`, { taille: f(18), couleur: 'jaune' });
+        c.texte(`Δt = ${fr(t2, 1)} − ${fr(t1, 1)} = ${fr(t2 - t1)} s      v = ⟦d|Δt⟧ = ⟦${fr(V * (t2 - t1))}|${fr(t2 - t1)}⟧ = ${fr(V, 1)} m/s`, L / 2, yCalc, { couleur: 'vert', align: 'center', taille: f(17) });
+        c.repere('distance_d', X(V * t1), yCote - 20, X(V * t2) - X(V * t1), 30, 'd, de front à front');
       }
     });
   },
@@ -145,7 +150,7 @@ const dessins = {
 
   longueur(c) {
     const y0 = 110, t = Math.min(S.t, ARRET);
-    regle(c, y0); c.direct(() => { corde(c, y0, t, 46); pointM(c, y0, t, 46); c.texte(`t = ${fr(t)} s`, L - 20, 34, { couleur: 'jaune', align: 'right', taille: f(18) }); });
+    regle(c, y0); c.direct(() => { corde(c, y0, t, 46); pointM(c, y0, t, 46); c.texte(`t = ${fr(t)} s`, CP ? 16 : L - 20, 34, { couleur: 'jaune', align: CP ? 'left' : 'right', taille: f(18) }); });
     c.direct(() => {
       const xf = V * t, xq = V * (t - THETA);
       if (t >= THETA) {
@@ -162,7 +167,7 @@ const dessins = {
         c.cote(Tx(S.xM / V), oy + 40, Tx(S.xM / V + THETA), oy + 40, `θ = ${fr(THETA, 1)} s`, { taille: f(18), couleur: 'jaune', dessous: true });
         c.repere('duree_theta', Tx(S.xM / V), oy + 28, Tx(S.xM / V + THETA) - Tx(S.xM / V), 40, 'la durée θ');
       }
-      if (t >= THETA) c.texte(`L = v · θ = ${fr(V, 1)} × ${fr(THETA, 1)} = ${fr(V * THETA)} m`, GR ? L * 0.5 + 170 : 540, 300, { couleur: 'vert', taille: f(18) });
+      if (t >= THETA) c.texte(`L = v · θ = ${fr(V, 1)} × ${fr(THETA, 1)} = ${fr(V * THETA)} m`, CP ? L - 16 : GR ? L * 0.5 + 170 : 540, CP ? oy - 104 : 300, { couleur: 'vert', taille: f(18), align: CP ? 'right' : 'left' });
     });
   },
 
@@ -197,7 +202,7 @@ const dessins = {
     regle(c, y0, false);
     c.direct(() => {
       corde(c, y0, t, 110);
-      c.texte(`t = ${fr(t)} s`, L - 20, 34, { couleur: 'jaune', align: 'right', taille: f(18) });
+      c.texte(`t = ${fr(t)} s`, CP ? 16 : L - 20, 34, { couleur: 'jaune', align: CP ? 'left' : 'right', taille: f(18) });
       if (t < ARRET - 1e-6) return;
       for (let x = 0.5; x <= 1.3001; x += 0.1) {
         const yy = y0 - 110 * y(x, t), s = vy(x, t);

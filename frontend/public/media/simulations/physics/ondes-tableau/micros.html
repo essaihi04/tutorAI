@@ -30,7 +30,11 @@ const XM2 = () => XM1 + S.d * PXM;
  * textes plus grands (× 1,35) ; sur un grand écran (L < 1000) la disposition d'origine reste. */
 let L = 760, GR = false;
 const f = n => (GR ? Math.round(n * 1.35) : n);
-function disposer() { L = scene.L; GR = L >= 1000; }
+/* La simulation d'abord (18 novembre 2026) : texte jamais sous 15 px à l'écran (commun.js) ; sur un cadre bas
+ * (téléphone en paysage, CP) l'oscilloscope est un peu moins haut, ses libellés se raccourcissent, le graphe τ = f(d)
+ * passe à droite des voies et l'aide « glisse M₂ » se tait : rien ne se chevauche. */
+let CP = false;
+function disposer() { L = scene.L; GR = L >= 1000; CP = 15.5 / (scene.s || 1) > 24; }
 const signal = (t, t0) => (t < t0 ? 0 : Math.exp(-(t - t0) / 0.16) * Math.sin(2 * Math.PI * 4 * (t - t0)));   // t en ms, 4 kHz
 
 /* Objets peints (16 novembre 2026) : micros sur pied, claquoir en bois, oscilloscope à écran vert, front sonore lumineux. */
@@ -66,7 +70,7 @@ function dessiner(c) {
   c.direct(() => {
     micro(c, XM2(), yM, 'M₂', 'orange');
     c.cote(XM1, yM + 52, XM2(), yM + 52, `d = ${fr(S.d)} m`, { couleur: 'jaune', dessous: true, taille: f(18) });
-    c.texte('⇠ glisse M₂ ⇢', XM2(), yM + 84, { couleur: 'faible', align: 'center', taille: f(14) });
+    if (!CP) c.texte('⇠ glisse M₂ ⇢', XM2(), yM + 84, { couleur: 'faible', align: 'center', taille: f(14) });
     c.repere('micro_2', XM2() - 22, yM - 40, 44, 96, 'micro M₂ (glisse-le)');
     // Le front sonore, au ralenti, part du clap.
     if ((S.running || S.pause) && S.p < 0.45) {   // en marche ou figé : le front reste visible
@@ -76,8 +80,8 @@ function dessiner(c) {
   });
 
   // ── L’oscilloscope : 10 divisions × 6 ──
-  const ox = 40, oy = 180, dx = GR ? 54 : 40, dy = 28;
-  c.texte(`Oscilloscope — ${fr(SENS, 1)} ms/div`, ox, oy - 12, { couleur: 'cyan', taille: f(17) });
+  const ox = 40, oy = CP ? 178 : 180, dx = GR ? 54 : 40, dy = CP ? 24 : 28;
+  c.texte(CP ? `${fr(SENS, 1)} ms/div` : `Oscilloscope — ${fr(SENS, 1)} ms/div`, ox, oy - 12, { couleur: 'cyan', taille: f(17) });
   c.repere('sensibilite', ox, oy - 32, GR ? 330 : 240, 28, 'la sensibilité horizontale');
   c.direct(() => P.oscillo(c.ctx, ox, oy, 10 * dx, 6 * dy, 10, 6));
   c.repere('oscillogramme', ox, oy, 10 * dx, 6 * dy, 'l’oscillogramme');
@@ -85,22 +89,23 @@ function dessiner(c) {
     const tmax = 10 * SENS, tFin = (S.running || S.pause) ? Math.max(0, (S.p - 0.45) / 0.55) * tmax : (S.fait ? tmax : 0);
     const voie = (y0, t0, couleur) => { if (tFin > 0) P.trace(c.ctx, Array.from({ length: 261 }, (_, i) => { const u = i / 260; return [ox + u * tFin / tmax * 10 * dx, y0 - 26 * signal(u * tFin, t0)]; }), c.couleur(couleur), 2); };
     voie(oy + 1.5 * dy, T1, 'cyan'); voie(oy + 4.5 * dy, T1 + tau(), 'orange');
-    c.texte('voie 1 (M₁)', ox + 10 * dx + 16, oy + 1.5 * dy + 5, { couleur: 'cyan', taille: f(14) });
-    c.texte('voie 2 (M₂)', ox + 10 * dx + 16, oy + 4.5 * dy + 5, { couleur: 'orange', taille: f(14) });
+    c.texte(CP ? 'M₁' : 'voie 1 (M₁)', ox + 10 * dx + 16, oy + 1.5 * dy + 5, { couleur: 'cyan', taille: f(14) });
+    c.texte(CP ? 'M₂' : 'voie 2 (M₂)', ox + 10 * dx + 16, oy + 4.5 * dy + 5, { couleur: 'orange', taille: f(14) });
     if (S.fait && !S.running) {
       const xa = ox + T1 / SENS * dx, xb = ox + (T1 + tau()) / SENS * dx, n = tau() / SENS;
       c.ligne(xa, oy + 1.5 * dy, xa, oy + 6 * dy + 8, { couleur: 'jaune', largeur: 1.4, pointille: [4, 4] });
       c.ligne(xb, oy + 4.5 * dy, xb, oy + 6 * dy + 8, { couleur: 'jaune', largeur: 1.4, pointille: [4, 4] });
       c.cote(xa, oy + 6 * dy + 14, xb, oy + 6 * dy + 14, `${fr(n, 0)} div`, { couleur: 'jaune', dessous: true, taille: f(18) });
-      c.texte(`τ = ${fr(n, 0)} × ${fr(SENS, 1)} ms = ${fr(tau(), 1)} ms`, ox, 410, { couleur: 'vert', taille: f(17) });
-      c.texte(`v = ⟦d|τ⟧ = ⟦${fr(S.d)}|${fr(tau() / 1000, 4)}⟧ = ${fr(S.d / (tau() / 1000), 0)} m/s`, GR ? 400 : 400, 410, { couleur: 'vert', taille: f(17) });
+      const yR = CP ? 394 : 410;
+      c.texte(`τ = ${fr(n, 0)} × ${fr(SENS, 1)} ms = ${fr(tau(), 1)} ms`, ox, yR, { couleur: 'vert', taille: f(17) });
+      c.texte(`v = ⟦d|τ⟧ = ⟦${fr(S.d)}|${fr(tau() / 1000, 4)}⟧ = ${fr(S.d / (tau() / 1000), 0)} m/s`, GR ? 400 : 400, yR, { couleur: 'vert', taille: f(17) });
       c.repere('retard', xa, oy + 6 * dy + 2, xb - xa, 36, 'τ : début avec début');
     }
   });
 
   // ── Le graphe τ = f(d) ──
-  const gx = GR ? Math.max(760, L - 492) : 560, gy = GR ? 362 : 350, gw = GR ? L - gx - 110 : 170, gh = GR ? 215 : 140, dmax = 1.4, tmaxg = 4.4;
-  c.texte('τ en fonction de d', gx - 20, gy - gh - 22, { couleur: 'cyan', taille: f(16) });
+  const gx = GR ? Math.max(760, L - 492) : CP ? 600 : 560, gy = GR ? 362 : CP ? 322 : 350, gw = GR ? L - gx - 110 : CP ? Math.max(140, L - 690) : 170, gh = GR ? 215 : CP ? 120 : 140, dmax = 1.4, tmaxg = 4.4;
+  c.texte('τ en fonction de d', gx - 20, gy - gh - (CP ? 32 : 22), { couleur: 'cyan', taille: f(16) });
   c.axe(gx, gy, gx + gw, gy, [[0.5 / dmax, '0,5'], [1 / dmax, '1']], { taille: f(14) });
   c.axe(gx, gy, gx, gy - gh, [[2 / tmaxg, '2'], [4 / tmaxg, '4']], { vertical: true, taille: f(14) });
   c.texte('d (m)', gx + gw + 4, gy + 4, { couleur: 'jaune', taille: f(14) });

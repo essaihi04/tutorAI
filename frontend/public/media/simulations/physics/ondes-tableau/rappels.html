@@ -89,95 +89,105 @@ function peindreChrono(ctx, cx, cy, r, frac) {
   ctx.restore();
 }
 
+/* ── La simulation d'abord (18 novembre 2026, « le texte est plus grand que la simulation ») ──
+ * Le dessin prend toute la largeur du tableau (Scene { large: true }, largeur scene.L) et toute sa hauteur ; plus de
+ * titre interne (la diapositive a déjà le sien) ; chaque texte est écrit à au moins 15,5 px À L'ÉCRAN (T), sur un
+ * grand écran comme sur un téléphone en paysage : les tailles du cadre (420 de haut) sont donc grandes et les
+ * lignes peu nombreuses. */
+const T = n => Math.max(n, 15.5 / (scene.s || 1));
+const TF = n => Math.max(n, 15.5 / 0.78 / (scene.s || 1));   // une fraction : ses deux étages sont écrits à 0,78 × la taille
+
 /* ── Vue « vitesse » ── */
-const R = { x: 100, y: 150, w: 540, h: 40 };             // la route : 100 m sur 540 px
+let R = { x: 40, y: 124, w: 520, h: 54 };              // la route : 100 m sur toute la largeur libre
 const xDe = m => R.x + m / D * R.w;
 function dessinerVitesse(c) {
-  c.texte('La vitesse : une distance divisée par une durée', 14, 30, { couleur: 'cyan', taille: 18 });
+  const L = scene.L, CX = L - 92;                      // le chronomètre à droite, la route jusqu'à lui
+  R = { x: 40, y: 124, w: L - 250, h: 54 };
   c.direct(() => {
     const M = moments(), v = D / S.duree;
     peindreRoute(c.ctx, R.x, R.y, R.w, R.h);
-    c.texte('départ', R.x, R.y + R.h + 24, { couleur: 'faible', taille: 14, align: 'center' });
-    c.texte('arrivée', R.x + R.w, R.y + R.h + 24, { couleur: 'faible', taille: 14, align: 'center' });
-    c.ligne(R.x + R.w, R.y - 30, R.x + R.w, R.y + R.h + 4, { couleur: 'blanc', largeur: 2, duree: 0 });
+    c.ligne(R.x + R.w, R.y - 34, R.x + R.w, R.y + R.h + 6, { couleur: 'blanc', largeur: 2.4, duree: 0 });
     const tc = Math.min(S.duree, Math.max(0, S.t - T0));             // temps écoulé du trajet
     const xv = xDe(v * tc);
-    peindreVoiture(c.ctx, xv, R.y + R.h * 0.62);         // avant de la voiture = distance parcourue
-    c.repere('voiture', xv - 70, R.y - 30, 76, 46, 'la voiture');
+    c.ctx.save(); c.ctx.translate(xv, R.y + R.h * 0.66); c.ctx.scale(1.45, 1.45); peindreVoiture(c.ctx, 0, 0); c.ctx.restore();   // avant de la voiture = distance parcourue
+    c.repere('voiture', xv - 100, R.y - 40, 106, 66, 'la voiture');
     // Le chronomètre.
-    peindreChrono(c.ctx, 700, 70, 34, (tc % 60) / 60 * 12);
-    c.texte(`${fr(tc, 1)} s`, 700, 128, { couleur: 'jaune', taille: 17, align: 'center' });
-    c.repere('chrono', 660, 26, 80, 110, 'le chronomètre : la durée Δt');
-    // Une marque à chaque seconde passée.
+    peindreChrono(c.ctx, CX, 74, 50, (tc % 60) / 60 * 12);
+    c.texte(`${fr(tc, 1)} s`, CX, 162, { couleur: 'jaune', taille: T(30), align: 'center' });
+    c.repere('chrono', CX - 60, 12, 120, 160, 'le chronomètre : la durée Δt');
+    // Une marque à chaque seconde passée ; son nombre au-dessus de la route (à gauche du poteau d'arrivée).
     for (let k = 1; k <= Math.floor(tc + 1e-6); k++) {
       const x = xDe(v * k);
-      c.ligne(x, R.y - 14, x, R.y + R.h + 6, { couleur: 'jaune', largeur: 1.6, duree: 0 });
-      // La marque qui tombe sur le poteau d'arrivée : son nombre s'écrit à gauche du poteau, pas dessus.
+      c.ligne(x, R.y - 12, x, R.y + R.h + 6, { couleur: 'jaune', largeur: 2, duree: 0 });
       const surPoteau = Math.abs(x - (R.x + R.w)) < 2;
-      c.texte(`${k} s`, surPoteau ? x - 6 : x, R.y - 18, { couleur: 'jaune', taille: 14, align: surPoteau ? 'right' : 'center' });
+      c.texte(`${k} s`, surPoteau ? x - 6 : x, R.y - 18, { couleur: 'jaune', taille: T(24), align: surPoteau ? 'right' : 'center' });
     }
+    const yc = R.y + R.h + 22;                          // la cote de la distance, sous la route
     if (vu('arrivee')) {
-      c.cote(R.x, R.y + R.h + 46, R.x + R.w, R.y + R.h + 46, `d = ${D} m`, { couleur: 'vert', taille: 17, dessous: true });
-      c.repere('distance', R.x, R.y + R.h + 30, R.w, 44, 'la distance d = 100 m');
-      c.texte(`Δt = ${fr(S.duree, 0)} s`, 700, 160, { couleur: 'jaune', taille: 18, align: 'center' });
+      c.cote(R.x, yc, R.x + R.w, yc, '', { couleur: 'vert', largeur: 2.2 });
+      c.texte(`d = ${D} m`, R.x + R.w / 2, yc + T(30) + 8, { couleur: 'vert', taille: T(30), align: 'center' });
+      c.repere('distance', R.x, yc - 14, R.w, 56, 'la distance d = 100 m');
+      c.texte(`Δt = ${fr(S.duree, 0)} s`, CX, 212, { couleur: 'jaune', taille: T(32), align: 'center' });
     }
+    const yf = 304;                                     // la relation et le calcul, sur une ligne
     if (vu('formule')) {
-      c.texte('v = ⟦d|Δt⟧', 60, 300, { couleur: 'blanc', taille: 26 });
-      c.texte(`v = ⟦${D}|${fr(S.duree, 0)}⟧ = ${fr(v, 0)} m/s`, 230, 300, { couleur: 'vert', taille: 24 });
-      c.repere('formule', 50, 266, 520, 54, 'v = d/Δt, en mètre par seconde');
+      const a = 'v = ⟦d|Δt⟧', la = c.largeurTexte(a, TF(36));
+      c.texte(a, 40, yf, { couleur: 'blanc', taille: TF(36) });
+      c.texte(`v = ⟦${D}|${fr(S.duree, 0)}⟧ = ${fr(v, 0)} m/s`, 40 + la + 56, yf, { couleur: 'vert', taille: TF(34) });
+      c.repere('formule', 30, yf - 56, Math.min(L - 60, la + 440), 86, 'v = d/Δt, en mètre par seconde');
     }
     if (vu('par_seconde')) {
       const x1 = xDe(v);
-      c.cote(R.x, R.y - 40, x1, R.y - 40, `${fr(v, 0)} m en 1 s`, { couleur: 'orange', taille: 15 });
-      c.texte(`autre façon : chaque seconde, elle avance de ${fr(v, 0)} m → v = ${fr(v, 0)} m/s`, 60, 342, { couleur: 'orange', taille: 18, max: 660 });
-      c.repere('par_seconde', 50, 320, 670, 32, 'la distance parcourue en une seconde');
+      c.cote(R.x, R.y - 54, x1, R.y - 54, '', { couleur: 'orange', largeur: 2 });
+      c.texte(`${fr(v, 0)} m en 1 s`, x1 + 10, R.y - 46, { couleur: 'orange', taille: T(24) });
+      c.texte(`chaque seconde : ${fr(v, 0)} m → v = ${fr(v, 0)} m/s`, 40, 364, { couleur: 'orange', taille: T(28), max: L - 80 });
+      c.repere('par_seconde', 30, 336, Math.min(L - 60, 560), 38, 'la distance parcourue en une seconde');
     }
     if (vu('son')) {
-      c.texte('le son dans l’air : 340 m en 1 s → v ≈ 340 m/s', 60, 388, { couleur: 'cyan', taille: 19 });
-      c.repere('son', 50, 366, 520, 32, 'le son dans l’air : environ 340 m par seconde');
+      c.texte('le son dans l’air : 340 m en 1 s → v ≈ 340 m/s', 40, 410, { couleur: 'cyan', taille: T(28), max: L - 80 });
+      c.repere('son', 30, 382, Math.min(L - 60, 640), 36, 'le son dans l’air : environ 340 m par seconde');
     }
   });
 }
 
 /* ── Vue « milli » ── */
 function dessinerMilli(c) {
-  c.texte('La milliseconde : une seconde coupée en mille', 14, 30, { couleur: 'cyan', taille: 18 });
+  const L = scene.L;
   c.direct(() => {
     const p = S.t;
     if (p > 0.05) {
-      peindreChrono(c.ctx, 90, 120, 56, (p * 0.25) % 1);
-      c.repere('chrono', 30, 52, 120, 126, 'un chronomètre');
+      peindreChrono(c.ctx, 82, 96, 66, (p * 0.25) % 1);
+      c.repere('chrono', 12, 18, 140, 150, 'un chronomètre');
     }
-    const BX = 190, BY = 96, BW = 520;
+    const BX = 186, BY = 64, BW = L - BX - 30;
     if (vu('chrono')) {
-      c.rect(BX, BY, BW, 26, { couleur: 'cyan', largeur: 1.8, fond: 'cyan', fondAlpha: .12, duree: 0 });
-      c.texte('1 s', BX + BW / 2, BY - 10, { couleur: 'cyan', taille: 18, align: 'center' });
-      c.repere('barre', BX, BY - 28, BW, 56, 'une seconde');
+      c.rect(BX, BY, BW, 34, { couleur: 'cyan', largeur: 2, fond: 'cyan', fondAlpha: .12, duree: 0 });
+      c.texte('1 s', BX + BW / 2, BY - 10, { couleur: 'cyan', taille: T(28), align: 'center' });
+      c.repere('barre', BX, BY - 36, BW, 72, 'une seconde');
     }
     if (vu('mille')) {
-      for (let k = 0; k <= 100; k++) c.ligne(BX + k * BW / 100, BY, BX + k * BW / 100, BY + (k % 10 ? 10 : 26), { couleur: 'cyan', largeur: k % 10 ? .8 : 1.3, duree: 0 });
-      c.texte('chaque petit trait se coupe encore en 10 : 1000 parts égales', BX, BY + 50, { couleur: 'blanc', taille: 15, max: BW });
-      c.texte('1 s ÷ 1000 = 1 ms', BX, BY + 80, { couleur: 'blanc', taille: 20 });
-      c.repere('mille', BX, BY, BW, 60, 'la seconde coupée en mille parts égales');
+      for (let k = 0; k <= 100; k++) c.ligne(BX + k * BW / 100, BY, BX + k * BW / 100, BY + (k % 10 ? 12 : 34), { couleur: 'cyan', largeur: k % 10 ? .9 : 1.5, duree: 0 });
+      c.texte('1 s ÷ 1000 = 1 ms   (1000 parts égales)', BX, BY + 80, { couleur: 'blanc', taille: T(28), max: BW });
+      c.repere('mille', BX, BY, BW, 90, 'la seconde coupée en mille parts égales');
     }
     if (vu('une_ms')) {
-      c.texte('1 ms = ⟦1|1000⟧ s = 10⁻³ s', 190, 236, { couleur: 'vert', taille: 24 });
-      c.repere('milliseconde', 180, 204, 420, 50, '1 ms = 10⁻³ s');
+      c.texte('1 ms = ⟦1|1000⟧ s = 10⁻³ s', BX, 232, { couleur: 'vert', taille: TF(34) });
+      c.repere('milliseconde', BX - 10, 186, 470, 70, '1 ms = 10⁻³ s');
     }
     if (vu('deux_ms')) {
-      c.texte('2 ms = 2 × 10⁻³ s', 190, 290, { couleur: 'jaune', taille: 24 });
-      c.repere('deux_ms', 180, 266, 300, 34, '2 ms = 2 × 10⁻³ s');
+      c.texte('2 ms = 2 × 10⁻³ s', BX, 296, { couleur: 'jaune', taille: T(34) });
+      c.repere('deux_ms', BX - 10, 262, 360, 44, '2 ms = 2 × 10⁻³ s');
     }
     if (vu('virgule')) {
-      c.texte('2 × 10⁻³ s = 0,002 s', 190, 344, { couleur: 'orange', taille: 24 });
-      c.texte('autre façon : 2 → 0,002 : la virgule recule de trois rangs', 190, 384, { couleur: 'orange', taille: 17, max: 540 });
-      c.repere('virgule', 180, 320, 560, 72, '0,002 : la virgule recule de trois rangs');
+      c.texte('2 × 10⁻³ s = 0,002 s', BX, 352, { couleur: 'orange', taille: T(34) });
+      c.texte('la virgule recule de trois rangs', BX, 402, { couleur: 'orange', taille: T(28), max: BW });
+      c.repere('virgule', BX - 10, 318, Math.min(BW, 560), 96, '0,002 : la virgule recule de trois rangs');
     }
   });
 }
 
 const canvas = $('canvas');
-const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(41); (VIT ? dessinerVitesse : dessinerMilli)(c); return c.fin(); });
+const scene = window.OndesTableau.Scene(canvas, (c) => { scene.cadre(41); (VIT ? dessinerVitesse : dessinerMilli)(c); return c.fin(); }, { large: true });
 scene.avancer = dt => {
   if (!S.running) return false;
   S.t = Math.min(DUREE(), S.t + dt);
@@ -222,7 +232,7 @@ function ceQuiSeVoit() {
     if (vu('son')) m.push('Écrit : le son dans l’air, 340 m en 1 s, v ≈ 340 m/s.');
     return m.join(' ');
   }
-  const m = ['Tableau « La milliseconde ».'];
+  const m = ['La milliseconde au tableau.'];
   if (S.t > 0.05) m.push('Un chronomètre peint.');
   if (vu('chrono')) m.push('Une barre cyan « 1 s ».');
   if (vu('mille')) m.push('La barre coupée en 100 petits traits, chacun encore en 10 : 1000 parts ; écrit « 1 s ÷ 1000 = 1 ms ».');
