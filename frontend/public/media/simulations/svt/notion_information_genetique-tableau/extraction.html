@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>L'ADN dans la cellule — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="genetique.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Extraction de l'ADN d'une banane (broyage avec sel et eau, liquide vaisselle, filtration, alcool froid : des filaments blancs d'ADN), puis la réaction de Feulgen qui colore en rouge noyaux et chromosomes, et un morceau de chromosome agrandi : l'ADN enroulé autour des histones"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start reset pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="etapes.js"></script>
+<script>
+/*
+ * L'ADN dans la cellule, preuves au labo (cours « Notion de l'information génétique », 19 novembre 2026).
+ * Demande : « mettre l'expérience de la banane », « une simulation avec labo », au lieu d'une diapo en cartes écrites.
+ * Vue banane : extraction de l'ADN d'une banane (TP de lycée : broyer avec gros sel et eau froide, liquide vaisselle qui
+ *   détruit les membranes, filtrer, verser de l'alcool froid le long du tube) → filaments blancs à l'interface = ADN
+ *   (avec des protéines).
+ * Vue preuve : la réaction de Feulgen (colorant spécifique de l'ADN, rouge) sur une racine en division : noyaux et
+ *   chromosomes rouges ; puis un morceau de chromosome agrandi (microscope électronique) : l'ADN enroulé autour des
+ *   histones → chromosome = ADN + protéines.
+ * Objets réels peints en couleur (règle des croquis réalistes) ; la craie écrit les légendes.
+ */
+const { lisse, rampe, entre, Peint } = window.Etapes;
+const TAU = Math.PI * 2;
+
+/* ── Objets du labo, peints ───────────────────────────────────────── */
+function banane(x, cx, cy, s, a) {
+  if (a <= 0) return;
+  x.save(); x.globalAlpha *= a; x.translate(cx, cy); x.scale(s, s);
+  x.save(); x.shadowColor = 'rgba(0,0,0,.45)'; x.shadowBlur = 8; x.shadowOffsetY = 3;
+  const g = x.createLinearGradient(0, -22, 0, 18); g.addColorStop(0, '#fff3a0'); g.addColorStop(.5, '#facc15'); g.addColorStop(1, '#b7860b');
+  x.fillStyle = g; x.beginPath(); x.moveTo(-48, -6); x.quadraticCurveTo(0, 30, 50, -12); x.quadraticCurveTo(46, -2, 40, 4); x.quadraticCurveTo(0, 26, -42, 2); x.closePath(); x.fill(); x.restore();
+  x.strokeStyle = 'rgba(120,80,10,.7)'; x.lineWidth = 1.2; x.beginPath(); x.moveTo(-44, -2); x.quadraticCurveTo(0, 26, 46, -6); x.stroke();
+  x.fillStyle = '#5b3a12'; x.beginPath(); x.ellipse(-48, -4, 4, 3, .4, 0, TAU); x.fill(); x.fillRect(48, -16, 6, 6);
+  x.restore();
+}
+function mortier(x, cx, cy, a, puree, pilonY) {
+  if (a <= 0) return;
+  x.save(); x.globalAlpha *= a;
+  // pilon (derrière le bord avant)
+  if (pilonY != null) { x.save(); x.translate(cx + 14, cy - 40 + pilonY); x.rotate(.35); const gp = x.createLinearGradient(-6, 0, 6, 0); gp.addColorStop(0, '#d6d3d1'); gp.addColorStop(.5, '#fafaf9'); gp.addColorStop(1, '#a8a29e'); x.fillStyle = gp; x.beginPath(); x.roundRect(-6, -40, 12, 62, 6); x.fill(); x.beginPath(); x.ellipse(0, 22, 9, 7, 0, 0, TAU); x.fill(); x.restore(); }
+  // contenu : morceaux de banane qui deviennent une purée
+  x.save(); x.beginPath(); x.ellipse(cx, cy - 8, 44, 10, 0, 0, TAU); x.clip();
+  x.fillStyle = `rgba(${Math.round(entre(250, 236, puree))},${Math.round(entre(240, 222, puree))},${Math.round(entre(200, 170, puree))},.95)`; x.fillRect(cx - 50, cy - 20, 100, 30); x.restore();
+  if (puree < .9) for (const [dx, dy] of [[-22, -12], [-4, -14], [16, -11], [-12, -6], [8, -7]]) { x.fillStyle = `rgba(253,245,200,${1 - puree})`; x.strokeStyle = `rgba(180,150,60,${1 - puree})`; x.beginPath(); x.ellipse(cx + dx, cy + dy, 8, 5, .3, 0, TAU); x.fill(); x.stroke(); }
+  // bol en céramique
+  const g = x.createLinearGradient(cx - 50, 0, cx + 50, 0); g.addColorStop(0, '#a8a29e'); g.addColorStop(.35, '#f5f5f4'); g.addColorStop(1, '#78716c');
+  x.save(); x.shadowColor = 'rgba(0,0,0,.45)'; x.shadowBlur = 8; x.shadowOffsetY = 4;
+  x.fillStyle = g; x.beginPath(); x.moveTo(cx - 50, cy - 8); x.quadraticCurveTo(cx - 48, cy + 34, cx, cy + 36); x.quadraticCurveTo(cx + 48, cy + 34, cx + 50, cy - 8); x.ellipse(cx, cy - 8, 50, 11, 0, 0, Math.PI, false); x.fill(); x.restore();
+  x.fillStyle = '#78716c'; x.fillRect(cx - 22, cy + 34, 44, 6);
+  x.strokeStyle = 'rgba(255,255,255,.8)'; x.lineWidth = 1.4; x.beginPath(); x.ellipse(cx, cy - 8, 50, 11, 0, 0, TAU); x.stroke();
+  x.restore();
+}
+function flacon(x, cx, cy, ang, corps, etiquette, a) {
+  if (a <= 0) return;
+  x.save(); x.globalAlpha *= a; x.translate(cx, cy); x.rotate(ang);
+  x.save(); x.shadowColor = 'rgba(0,0,0,.4)'; x.shadowBlur = 6; x.shadowOffsetY = 3;
+  const g = x.createLinearGradient(-14, 0, 14, 0); g.addColorStop(0, Peint.teinte ? corps[1] : corps[1]); g.addColorStop(.4, corps[0]); g.addColorStop(1, corps[1]);
+  x.fillStyle = g; x.beginPath(); x.roundRect(-14, -20, 28, 46, 6); x.fill(); x.restore();
+  x.fillStyle = corps[1]; x.fillRect(-5, -30, 10, 11);
+  x.fillStyle = 'rgba(255,255,255,.88)'; x.fillRect(-11, -6, 22, 14);
+  x.fillStyle = '#1f2937'; x.font = 'bold 7px sans-serif'; x.textAlign = 'center'; x.fillText(etiquette, 0, 4);
+  x.restore();
+}
+function goutte(x, px, py, couleur, a) { if (a <= 0) return; x.save(); x.globalAlpha *= a; x.fillStyle = couleur; x.beginPath(); x.moveTo(px, py - 5); x.quadraticCurveTo(px + 4, py + 1, px, py + 3); x.quadraticCurveTo(px - 4, py + 1, px, py - 5); x.fill(); x.restore(); }
+function becher(x, cx, yb, w, h, niveau, liquide, a) {
+  if (a <= 0) return;
+  x.save(); x.globalAlpha *= a;
+  const yl = yb - h * niveau;
+  if (niveau > 0) { const g = x.createLinearGradient(cx - w / 2, 0, cx + w / 2, 0); g.addColorStop(0, liquide[1]); g.addColorStop(.5, liquide[0]); g.addColorStop(1, liquide[1]); x.fillStyle = g; x.fillRect(cx - w / 2 + 1.5, yl, w - 3, yb - yl - 1); }
+  x.strokeStyle = 'rgba(220,235,245,.85)'; x.lineWidth = 1.6; x.beginPath(); x.moveTo(cx - w / 2 - 3, yb - h); x.lineTo(cx - w / 2, yb - h + 4); x.lineTo(cx - w / 2, yb); x.lineTo(cx + w / 2, yb); x.lineTo(cx + w / 2, yb - h); x.stroke();
+  x.strokeStyle = 'rgba(255,255,255,.5)'; x.lineWidth = 2; x.beginPath(); x.moveTo(cx - w / 2 + 5, yb - h + 8); x.lineTo(cx - w / 2 + 5, yb - 4); x.stroke();
+  x.restore();
+}
+function entonnoir(x, cx, yt, a, papier) {
+  if (a <= 0) return;
+  x.save(); x.globalAlpha *= a;
+  if (papier) { x.fillStyle = 'rgba(250,250,245,.95)'; x.beginPath(); x.moveTo(cx - 30, yt + 2); x.lineTo(cx + 30, yt + 2); x.lineTo(cx, yt + 40); x.closePath(); x.fill(); }
+  x.strokeStyle = 'rgba(220,235,245,.9)'; x.lineWidth = 1.8; x.beginPath(); x.moveTo(cx - 36, yt); x.lineTo(cx - 4, yt + 40); x.lineTo(cx - 4, yt + 62); x.moveTo(cx + 36, yt); x.lineTo(cx + 4, yt + 40); x.lineTo(cx + 4, yt + 62); x.stroke();
+  x.beginPath(); x.ellipse(cx, yt, 36, 5, 0, 0, TAU); x.stroke();
+  x.restore();
+}
+/** Les filaments blancs d'ADN qui montent dans l'alcool depuis l'interface (u de 0 à 1). */
+function filaments(x, cx, yi, u, a) {
+  if (a <= 0 || u <= 0) return;
+  x.save(); x.globalAlpha *= a; x.lineCap = 'round';
+  for (let j = 0; j < 7; j++) {
+    const x0 = cx - 9 + j * 3, hmax = 22 + (j * 13) % 20, hh = hmax * u;
+    x.strokeStyle = j % 2 ? 'rgba(255,255,255,.95)' : 'rgba(235,240,255,.85)'; x.lineWidth = 1.3 + (j % 3) * .4;
+    x.beginPath(); x.moveTo(x0, yi);
+    for (let k = 1; k <= 12; k++) { const s = k / 12; x.lineTo(x0 + Math.sin(s * 9 + j) * 3.2, yi - hh * s); }
+    x.stroke();
+  }
+  // petite pelote blanche à l'interface
+  x.fillStyle = 'rgba(255,255,255,.75)'; x.beginPath(); x.ellipse(cx, yi, 11 * u, 3.5 * u, 0, 0, TAU); x.fill();
+  x.restore();
+}
+
+/* ── Vue banane : l'extraction, quatre postes de gauche à droite ─── */
+const B = { mortier: [96, 236], savon: [278, 236], filtre: [466, 128], tube: [656, 150] };
+/* (19 nov.) Chaque poste est agrandi autour de son bas naturel `ay`, posé sur la ligne y = 300. */
+const ST = { mortier: { ax: 96, ay: 276, s: 1.55 }, savon: { ax: 278, ay: 266, s: 1.55 }, filtre: { ax: 466, ay: 320, s: 1.12 }, tube: { ax: 656, ay: 340, s: 1.12 } };
+const BAS = 300;
+const P = (n, px, py) => { const q = ST[n]; return [q.ax + (px - q.ax) * q.s, BAS + (py - q.ay) * q.s]; };
+function poste(x, n, fn) { const q = ST[n]; x.save(); x.translate(q.ax, BAS); x.scale(q.s, q.s); x.translate(-q.ax, -q.ay); fn(); x.restore(); }
+const BM = { banane: 1.4, broyer: 4.2, savon: 8.0, filtrer: 11.6, alcool: 15.2, filaments: 19.0, adn: 22.0 };
+function dessinerBanane(c, k) {
+  const t = k.t;
+  const pil = t >= BM.broyer - 1.6 && t < BM.broyer + 1 ? Math.abs(Math.sin((t - BM.broyer) * 6)) * 14 : 0;
+  const puree = rampe(t, BM.broyer - 1.2, 2.2);
+  c.direct(() => {
+    const x = c.ctx;
+    poste(x, 'mortier', () => {
+    // 1. la banane, coupée en morceaux dans le mortier, avec le sel et l'eau
+    if (t < BM.broyer - 1.2) banane(x, B.mortier[0], 196, .9, rampe(t, .2, .6) * (1 - rampe(t, BM.banane, .8)));
+    if (t >= BM.banane - .3) {
+      mortier(x, B.mortier[0], B.mortier[1], rampe(t, BM.banane - .3, .6), puree, t < BM.savon - 1 ? pil : null);
+      // gros sel et eau froide qui tombent
+      if (t > BM.banane && t < BM.broyer - 1) for (let i = 0; i < 8; i++) { const py = 150 + ((t * 70 + i * 13) % 60); x.fillStyle = 'rgba(255,255,255,.9)'; x.fillRect(B.mortier[0] - 20 + i * 5, py, 2.4, 2.4); }
+    }
+    });
+    poste(x, 'savon', () => {
+    // 2. le liquide vaisselle versé sur la purée (dans un bécher)
+    if (t >= BM.savon - 1.2) {
+      const a2 = rampe(t, BM.savon - 1.2, .6);
+      becher(x, B.savon[0], B.savon[1] + 30, 64, 80, .45, ['rgba(240,226,180,.9)', 'rgba(205,185,130,.9)'], a2);
+      flacon(x, B.savon[0] + 30, B.savon[1] - 74, -.9 * rampe(t, BM.savon - .6, .5), ['#86efac', '#15803d'], 'SAVON', a2);
+      if (t > BM.savon && t < BM.filtrer - 1) for (let i = 0; i < 3; i++) goutte(x, B.savon[0] + 6, B.savon[1] - 52 + ((t * 60 + i * 18) % 50), 'rgba(134,239,172,.95)', 1);
+      // mousse
+      const m = rampe(t, BM.savon + .2, 1.2);
+      for (let i = 0; i < 9; i++) Peint.bille(x, B.savon[0] - 24 + i * 6, B.savon[1] - 7 - (i % 2) * 3, 3, 'rgba(240,253,244,1)', m * a2);
+    }
+    });
+    poste(x, 'filtre', () => {
+    // 3. filtrer : entonnoir et papier filtre au-dessus d'un tube
+    if (t >= BM.filtrer - 1.2) {
+      const a3 = rampe(t, BM.filtrer - 1.2, .6), f = rampe(t, BM.filtrer, 2.4);
+      Peint.tube(x, B.filtre[0], B.filtre[1] + 52, 140, 30, ['rgba(250,240,190,.75)', 'rgba(254,249,215,.9)'], a3, .1 + .45 * f);
+      entonnoir(x, B.filtre[0], B.filtre[1], a3, true);
+      if (f > 0 && f < 1) for (let i = 0; i < 2; i++) goutte(x, B.filtre[0], B.filtre[1] + 66 + ((t * 50 + i * 20) % 40), 'rgba(254,240,170,.95)', 1);
+    }
+    });
+    poste(x, 'tube', () => {
+    // 4. l'alcool froid versé le long de la paroi, puis les filaments d'ADN
+    if (t >= BM.alcool - 1.2) {
+      const a4 = rampe(t, BM.alcool - 1.2, .6), al = rampe(t, BM.alcool, 2.2);
+      const T0 = B.tube[1] + 30, H = 160, w = 34, yi = T0 + H * (1 - .55);   // interface filtrat / alcool
+      Peint.tube(x, B.tube[0], T0, H, w, ['rgba(250,240,190,.75)', 'rgba(254,249,215,.9)'], a4, .55);
+      if (al > 0) { x.save(); x.globalAlpha = a4 * .55; x.fillStyle = 'rgba(200,230,255,.6)'; x.fillRect(B.tube[0] - w / 2 + 1.5, yi - 50 * al, w - 3, 50 * al); x.restore(); }
+      flacon(x, B.tube[0] + 34, T0 - 30, -1.1 * rampe(t, BM.alcool - .6, .5) * (1 - rampe(t, BM.filaments - 1, .6)), ['#bfdbfe', '#1d4ed8'], 'ALCOOL', a4 * (1 - rampe(t, BM.filaments, .8)));
+      if (al > 0 && al < 1) { x.save(); x.strokeStyle = 'rgba(200,230,255,.9)'; x.lineWidth = 2; x.beginPath(); x.moveTo(B.tube[0] + w / 2 - 2, T0 - 8); x.lineTo(B.tube[0] + w / 2 - 2, yi); x.stroke(); x.restore(); }
+      filaments(x, B.tube[0], yi, rampe(t, BM.filaments - .8, 2.6), a4);
+    }
+    });
+  });
+  c.texte('Voir l’ADN d’une banane', 14, 26, { couleur: 'cyan', taille: 19 });
+  // repères et légendes posés sur les postes agrandis (P = point du dessin d'origine → point du tableau)
+  const R = (id, n, x0, y0, x1, y1, label) => { const [a, b] = P(n, x0, y0), [cc, d] = P(n, x1, y1); c.repere(id, a, b, cc - a, d - b, label); };
+  const L1 = 324, L2 = 344, L3 = 368, L4 = 388;   // lignes d'écriture sous les postes
+  if (t >= BM.banane - .3) R('mortier', 'mortier', 44, 220, 148, 276, 'le mortier : banane, sel et eau');
+  if (k.ecrit(c, 'n1', BM.banane - .3)) { k.T(c, '1', 14, 150, { couleur: 'jaune', taille: 20 }); k.T(c, 'banane + gros sel', B.mortier[0], L1, { couleur: 'blanc', taille: 15, align: 'center' }); k.T(c, '+ eau froide', B.mortier[0], L2, { couleur: 'blanc', taille: 15, align: 'center' }); }
+  if (k.ecrit(c, 'broy', BM.broyer - .6)) { k.T(c, 'on broie : les', B.mortier[0], L3, { couleur: 'jaune', taille: 15, align: 'center' }); k.T(c, 'cellules éclatent', B.mortier[0], L4, { couleur: 'jaune', taille: 15, align: 'center' }); }
+  if (t >= BM.savon - 1.2) R('savon', 'savon', 242, 150, 314, 266, 'le liquide vaisselle');
+  if (k.ecrit(c, 'n2', BM.savon - .6)) {
+    c.fleche(180, 250, 222, 250, { couleur: 'tresfaible', largeur: 1.4 });
+    k.T(c, '2', 206, 150, { couleur: 'jaune', taille: 20 }); k.T(c, '+ liquide vaisselle', B.savon[0], L1, { couleur: 'blanc', taille: 15, align: 'center' });
+    k.T(c, 'détruit les membranes :', B.savon[0], L3, { couleur: 'jaune', taille: 15, align: 'center' }); k.T(c, 'l’ADN sort du noyau', B.savon[0], L4, { couleur: 'jaune', taille: 15, align: 'center' });
+  }
+  if (t >= BM.filtrer - 1.2) R('filtre', 'filtre', 428, 122, 504, 320, 'le filtre et le filtrat');
+  if (k.ecrit(c, 'n3', BM.filtrer - .6)) {
+    c.fleche(336, 250, 400, 250, { couleur: 'tresfaible', largeur: 1.4 });
+    k.T(c, '3', 410, 104, { couleur: 'jaune', taille: 20 }); k.T(c, 'on filtre', B.filtre[0], L3, { couleur: 'jaune', taille: 15, align: 'center' });
+    const [fx, fy] = P('filtre', 482, 290); k.T(c, 'filtrat', fx + 6, fy, { couleur: 'blanc', taille: 15 });
+  }
+  if (t >= BM.alcool - 1.2) R('tube', 'tube', 636, 180, 676, 340, 'le tube : filtrat et alcool froid');
+  if (k.ecrit(c, 'n4', BM.alcool - .6)) {
+    c.fleche(530, 250, 604, 250, { couleur: 'tresfaible', largeur: 1.4 });
+    k.T(c, '4', 592, 104, { couleur: 'jaune', taille: 20 }); k.T(c, '+ alcool froid, le long', B.tube[0], L3, { couleur: 'jaune', taille: 15, align: 'center' }); k.T(c, 'de la paroi', B.tube[0], L4, { couleur: 'jaune', taille: 15, align: 'center' });
+  }
+  const yi = 180 + 160 * .45;   // interface filtrat / alcool, dans le dessin d'origine du tube
+  if (t >= BM.filaments - .8) R('filaments', 'tube', 642, yi - 44, 670, yi + 4, 'les filaments blancs');
+  if (k.ecrit(c, 'fil', BM.filaments - .2)) { const [a, b] = P('tube', 668, yi - 20); c.ligne(a, b, a + 30, b - 14, { couleur: 'blanc', largeur: 1.2 }); k.T(c, 'filaments', a + 32, b - 14, { couleur: 'blanc', taille: 15 }); k.T(c, 'blancs', a + 32, b + 4, { couleur: 'blanc', taille: 15 }); }
+  if (t >= BM.adn - .4) c.repere('adn', 470, 46, 286, 34, 'filaments blancs = ADN (avec des protéines)');
+  if (k.ecrit(c, 'adn', BM.adn - .4)) {
+    c.rect(330, 44, 420, 32, { couleur: 'vert', largeur: 1.5, arrondi: 6 });
+    k.T(c, 'filaments blancs = ADN (avec des protéines)', 540, 66, { couleur: 'vert', taille: 16, align: 'center' });
+  }
+}
+function voitBanane(k) {
+  const t = k.t, m = [];
+  if (t < BM.banane) m.push('Une banane jaune peinte, en haut à gauche.');
+  if (t >= BM.banane) m.push('1. Des morceaux de banane dans un mortier blanc, avec du gros sel et de l’eau froide qui tombent.');
+  if (t >= BM.broyer - .6) m.push('Le pilon broie : les morceaux deviennent une purée beige ; écrit « on broie : les cellules éclatent ».');
+  if (t >= BM.savon - .6) m.push('2. Un flacon vert « SAVON » verse du liquide vaisselle sur la purée, de la mousse se forme ; écrit « détruit les membranes : l’ADN sort du noyau ».');
+  if (t >= BM.filtrer - .6) m.push('3. Un entonnoir avec un papier filtre au-dessus d’un tube : le filtrat jaune pâle coule dans le tube ; écrit « on filtre ».');
+  if (t >= BM.alcool - .6) m.push('4. Un flacon bleu « ALCOOL » verse de l’alcool froid le long de la paroi : une couche claire se pose au-dessus du filtrat.');
+  if (t >= BM.filaments - .2) m.push('À la limite des deux liquides, des filaments blancs apparaissent et montent dans l’alcool (écrit « filaments blancs »).');
+  if (t >= BM.adn - .4) m.push('Encadré vert en haut : « filaments blancs = ADN (avec des protéines) ».');
+  return m;
+}
+
+/* ── Vue preuve : Feulgen, puis le chromosome sans ses histones ───── */
+const PM = { feulgen: 1.6, rouge: 4.6, donc_adn: 7.6, zoom: 10.6, histones: 13.0, egal: 15.6 };
+const F = { cx: 190, cy: 210, r: 120 };   // champ du microscope optique (racine en division)
+const CELL = [[-66, -52, 'i'], [0, -56, 'i'], [66, -50, 'm'], [-70, 6, 'm'], [-2, 4, 'i'], [64, 8, 'a'], [-60, 62, 'i'], [8, 62, 'p'], [70, 64, 'i']];
+function cellulesRacine(x, rouge, a) {
+  x.save(); x.globalAlpha *= a; x.beginPath(); x.arc(F.cx, F.cy, F.r, 0, TAU); x.clip();
+  x.fillStyle = 'rgba(250,245,235,.92)'; x.fillRect(F.cx - F.r, F.cy - F.r, 2 * F.r, 2 * F.r);
+  const coul = [`rgba(${Math.round(entre(150, 200, rouge))},${Math.round(entre(140, 30, rouge))},${Math.round(entre(170, 60, rouge))},.9)`, `rgb(${Math.round(entre(110, 150, rouge))},${Math.round(entre(90, 10, rouge))},${Math.round(entre(130, 40, rouge))})`];
+  for (const [dx, dy, ph] of CELL) {
+    const cx = F.cx + dx, cy = F.cy + dy;
+    x.strokeStyle = 'rgba(120,110,90,.8)'; x.lineWidth = 1.6; x.strokeRect(cx - 31, cy - 27, 62, 54);
+    x.fillStyle = 'rgba(235,228,210,.6)'; x.fillRect(cx - 30, cy - 26, 60, 52);
+    if (ph === 'i') { x.fillStyle = coul[0]; x.beginPath(); x.arc(cx, cy, 13, 0, TAU); x.fill(); x.strokeStyle = coul[1]; x.lineWidth = 1.2; x.stroke(); }
+    else {
+      const bats = ph === 'm' ? [[-8, 0, 1.4], [-3, 0, 1.6], [2, 0, 1.5], [7, 0, 1.7]] : ph === 'a' ? [[-14, -8, .3], [-14, 8, -.3], [14, -8, -.3], [14, 8, .3]] : [[-8, -6, .8], [4, -8, 2.2], [-4, 6, 2.6], [8, 5, .5]];
+      x.strokeStyle = coul[1]; x.lineWidth = 3.4; x.lineCap = 'round';
+      for (const [bx, by, an] of bats) { x.beginPath(); x.moveTo(cx + bx - Math.cos(an) * 8, cy + by - Math.sin(an) * 8); x.lineTo(cx + bx + Math.cos(an) * 8, cy + by + Math.sin(an) * 8); x.stroke(); }
+    }
+  }
+  x.restore();
+  x.save(); x.globalAlpha *= a; x.strokeStyle = 'rgba(226,232,240,.9)'; x.lineWidth = 3; x.beginPath(); x.arc(F.cx, F.cy, F.r, 0, TAU); x.stroke(); x.restore();
+}
+/* (19 nov., l'utilisateur : « la charpente de protéines n'est pas dite à ce niveau ») La deuxième preuve est celle du
+ * programme : un morceau de chromosome agrandi (microscope électronique) montre l'ADN enroulé autour de protéines,
+ * les histones (nucléosomes, même dessin que zoom.html). */
+const H = { cx: 470, cy: 205, zx: 655, zy: 205, zr: 82, perles: [606, 655, 704] };
+function nucleosomesLoupe(x, a) {
+  x.save(); x.globalAlpha *= a;
+  x.fillStyle = 'rgba(15,23,42,.55)'; x.beginPath(); x.arc(H.zx, H.zy, H.zr, 0, TAU); x.fill();
+  x.beginPath(); x.arc(H.zx, H.zy, H.zr - 2, 0, TAU); x.clip();
+  const r = 19, y = H.zy;
+  const brin = (phase, couleur) => {
+    x.strokeStyle = couleur; x.lineWidth = 2.4; x.beginPath(); let premier = true;
+    for (let px = H.zx - H.zr; px <= H.zx + H.zr; px += 2) {
+      const pr = H.perles.find(q => Math.abs(px - q) < r + 3); let py;
+      if (pr !== undefined) { const u = (px - pr) / (r + 3); py = y + Math.sin(u * Math.PI * 1.7 + phase) * (r + 2) * Math.cos(u * Math.PI / 2.2); }
+      else py = y + Math.sin(px * .32 + phase) * 4;
+      premier ? x.moveTo(px, py) : x.lineTo(px, py); premier = false;
+    }
+    x.stroke();
+  };
+  brin(0, 'rgba(96,165,250,.95)');
+  for (const q of H.perles) { const g = x.createRadialGradient(q - 6, y - 7, 2, q, y, r + 2); g.addColorStop(0, '#fff7e6'); g.addColorStop(.6, '#e8cf9f'); g.addColorStop(1, '#a8885a'); x.fillStyle = g; x.beginPath(); x.arc(q, y, r, 0, TAU); x.fill(); }
+  brin(Math.PI, 'rgba(147,197,253,.95)');
+  x.restore();
+  x.save(); x.globalAlpha *= a; x.strokeStyle = 'rgba(226,240,250,.9)'; x.lineWidth = 2.4; x.beginPath(); x.arc(H.zx, H.zy, H.zr, 0, TAU); x.stroke(); x.restore();
+}
+function dessinerPreuve(c, k) {
+  const t = k.t, rouge = rampe(t, PM.rouge - .6, 1.6);
+  c.direct(() => {
+    const x = c.ctx;
+    cellulesRacine(x, rouge, rampe(t, .2, .6));
+    // le flacon de réactif de Feulgen et ses gouttes rouges
+    if (t >= PM.feulgen - .8 && t < PM.rouge + 1.2) {
+      const aF = rampe(t, PM.feulgen - .8, .5) * (1 - rampe(t, PM.rouge + .4, .8));
+      flacon(x, F.cx + 96, F.cy - 128, -.8, ['#fca5a5', '#b91c1c'], 'FEULGEN', aF);
+      if (t > PM.feulgen) for (let i = 0; i < 3; i++) goutte(x, F.cx + 76, F.cy - 112 + ((t * 70 + i * 22) % 70), 'rgba(220,38,38,.95)', aF);
+    }
+    if (t >= PM.zoom - 1.4) Peint.chromosome(x, H.cx, H.cy, 170, Math.PI / 2, Peint.VIOLET, { epaisseur: 24, centromere: .42, deux: true, ecart: 16, alpha: rampe(t, PM.zoom - 1.4, .6) });
+    if (t >= PM.histones - 1.2) nucleosomesLoupe(x, rampe(t, PM.histones - 1.2, 1));
+  });
+  c.texte('Le chromosome contient de l’ADN', 14, 26, { couleur: 'cyan', taille: 19 });
+  c.repere('cellules', F.cx - F.r, F.cy - F.r, 2 * F.r, 2 * F.r, 'des cellules de racine en division');
+  if (k.ecrit(c, 'micro', .4)) k.T(c, 'cellules de racine (microscope)', F.cx, 356, { couleur: 'blanc', taille: 15, align: 'center' });
+  if (k.ecrit(c, 'feul', PM.feulgen - .4)) { k.T(c, 'réactif de Feulgen :', F.cx + 130, 60, { couleur: 'rouge', taille: 15 }); k.T(c, 'colore seulement l’ADN', F.cx + 130, 78, { couleur: 'rouge', taille: 15 }); }
+  if (t >= PM.rouge - .6) { c.repere('noyau_rouge', F.cx - 13, F.cy - 69, 26, 26, 'un noyau en interphase, rouge'); c.repere('chromosomes_rouges', F.cx + 50, F.cy - 66, 34, 32, 'des chromosomes en division, rouges'); }
+  if (k.ecrit(c, 'rouge', PM.rouge)) {
+    c.ligne(F.cx - 12, F.cy - 56, F.cx - 90, F.cy - 140, { couleur: 'rouge', largeur: 1.2 }); k.T(c, 'noyau rouge', F.cx - 150, F.cy - 146, { couleur: 'rouge', taille: 15 });
+    c.ligne(F.cx + 76, F.cy - 40, F.cx + 132, F.cy + 40, { couleur: 'rouge', largeur: 1.2 }); k.T(c, 'chromosomes rouges', F.cx + 122, F.cy + 58, { couleur: 'rouge', taille: 15 });
+  }
+  if (k.ecrit(c, 'donc', PM.donc_adn - .3)) { c.rect(F.cx - 140, 370, 280, 30, { couleur: 'jaune', largeur: 1.4, arrondi: 6 }); k.T(c, 'les chromosomes contiennent de l’ADN', F.cx, 391, { couleur: 'jaune', taille: 15, align: 'center' }); }
+  if (t >= PM.zoom - 1.4) c.repere('chromosome', H.cx - 26, H.cy - 88, 52, 176, 'un chromosome');
+  if (k.ecrit(c, 'zoom', PM.zoom - .6)) {
+    c.rect(H.cx - 16, H.cy + 24, 32, 26, { couleur: 'jaune', largeur: 1.4, arrondi: 4 });
+    k.T(c, 'chromosome', H.cx, 318, { couleur: 'violet', taille: 15, align: 'center' });
+  }
+  if (t >= PM.histones - 1.2) { c.repere('histones', H.perles[1] - 20, H.zy - 20, 40, 40, 'les histones (protéines)'); c.repere('adn', H.zx - H.zr + 4, H.zy - 8, 30, 16, 'l’ADN'); }
+  if (k.ecrit(c, 'loupe', PM.histones - 1.2)) {
+    c.ligne(H.cx + 16, H.cy + 24, H.zx - 60, H.zy - 56, { couleur: 'tresfaible', largeur: 1.2, pointille: [4, 5] });
+    c.ligne(H.cx + 16, H.cy + 50, H.zx - 60, H.zy + 56, { couleur: 'tresfaible', largeur: 1.2, pointille: [4, 5] });
+    k.T(c, 'agrandi (microscope électronique)', H.zx, 104, { couleur: 'faible', taille: 14, align: 'center' });
+  }
+  if (k.ecrit(c, 'his', PM.histones)) {
+    c.ligne(H.zx - 40, H.zy + 4, H.zx - 60, H.zy + 104, { couleur: 'bleu', largeur: 1.2 }); k.T(c, 'ADN', H.zx - 74, H.zy + 120, { couleur: 'bleu', taille: 15 });
+    c.ligne(H.perles[2], H.zy + 18, H.zx + 40, H.zy + 104, { couleur: 'blanc', largeur: 1.2 }); k.T(c, 'histones (protéines)', H.zx - 10, H.zy + 120, { couleur: 'blanc', taille: 15 });
+  }
+  if (t >= PM.egal - .3) c.repere('egal', H.cx - 30, 370, 280, 30, 'chromosome = ADN + protéines');
+  if (k.ecrit(c, 'egal', PM.egal - .3)) { c.rect(H.cx - 30, 370, 280, 30, { couleur: 'vert', largeur: 1.5, arrondi: 6 }); k.T(c, 'chromosome = ADN + protéines', H.cx + 110, 391, { couleur: 'vert', taille: 16, align: 'center' }); }
+}
+function voitPreuve(k) {
+  const t = k.t, m = ['À gauche, au microscope, un rond de cellules de racine : certaines en interphase (un noyau), d’autres en division (des chromosomes en bâtonnets).'];
+  if (t >= PM.feulgen - .4) m.push('Un flacon rouge « FEULGEN » verse des gouttes ; écrit « réactif de Feulgen : colore seulement l’ADN ».');
+  if (t >= PM.rouge) m.push('Les noyaux et les chromosomes deviennent rouges ; le reste de la cellule reste clair (écrit « noyau rouge », « chromosomes rouges »).');
+  if (t >= PM.donc_adn - .3) m.push('Encadré jaune : « les chromosomes contiennent de l’ADN ».');
+  if (t >= PM.zoom - .6) m.push('À droite, un chromosome en X violet ; un petit morceau est encadré en jaune.');
+  if (t >= PM.histones) m.push('Ce morceau agrandi dans un rond (« agrandi, microscope électronique ») : un fil bleu, l’ADN, enroulé autour de boules beiges, les histones ; écrit « ADN » et « histones (protéines) ».');
+  if (t >= PM.egal - .3) m.push('Encadré vert : « chromosome = ADN + protéines ».');
+  return m;
+}
+
+window.Etapes.lancer({
+  id: 'genetique_extraction', titre: 'L’ADN dans la cellule', graine: 19,
+  vues: {
+    banane: { titre: 'Voir l’ADN d’une banane', autoDepart: false, fin: 23.0, moments: BM, dessiner: dessinerBanane, voit: voitBanane,
+      motifs: { banane: 'des morceaux de banane, du gros sel et de l’eau froide', broyer: 'on broie : les cellules éclatent', savon: 'le liquide vaisselle détruit les membranes : l’ADN sort', filtrer: 'on filtre : le filtrat', alcool: 'l’alcool froid versé le long de la paroi', filaments: 'des filaments blancs montent dans l’alcool', adn: 'ces filaments blancs : l’ADN (avec des protéines)' },
+      conclusion: 'Les cellules de la banane contiennent de l’ADN : on le voit en filaments blancs dans l’alcool.',
+      texte: 'Extraction de l’ADN d’une banane : broyer avec du gros sel et de l’eau froide, ajouter du liquide vaisselle (détruit les membranes), filtrer, verser de l’alcool froid le long de la paroi : des filaments blancs d’ADN (avec des protéines) apparaissent à la limite des deux liquides.',
+      explication: [{ repere: 'mortier', texte: 'On broie la banane avec du sel et de l’eau.' }, { repere: 'savon', texte: 'Le liquide vaisselle détruit les membranes.' }, { repere: 'filtre', texte: 'On filtre.' }, { repere: 'tube', texte: 'On verse l’alcool froid le long de la paroi.' }, { repere: 'filaments', texte: 'Des filaments blancs : l’ADN.' }] },
+    preuve: { titre: 'Le chromosome contient de l’ADN', autoDepart: false, fin: 16.4, moments: PM, dessiner: dessinerPreuve, voit: voitPreuve,
+      motifs: { feulgen: 'le réactif de Feulgen ne colore que l’ADN', rouge: 'noyaux et chromosomes deviennent rouges', donc_adn: 'les chromosomes contiennent de l’ADN', zoom: 'un morceau de chromosome, agrandi', histones: 'l’ADN enroulé autour de protéines, les histones', egal: 'chromosome = ADN + protéines' },
+      conclusion: 'Chromosome = ADN + protéines.',
+      texte: 'Réaction de Feulgen (colore seulement l’ADN, en rouge) : noyaux et chromosomes rouges, donc ils contiennent de l’ADN. Au microscope électronique, l’ADN du chromosome est enroulé autour de protéines, les histones. Chromosome = ADN + protéines.',
+      explication: [{ repere: 'cellules', texte: 'Le réactif de Feulgen colore seulement l’ADN.' }, { repere: 'chromosomes_rouges', texte: 'Les chromosomes deviennent rouges : ils contiennent de l’ADN.' }, { repere: 'adn', texte: 'L’ADN est enroulé…' }, { repere: 'histones', texte: '… autour de protéines, les histones.' }, { repere: 'egal', texte: 'Chromosome = ADN + protéines.' }] },
+  },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
