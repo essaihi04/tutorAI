@@ -31,7 +31,7 @@
     const P = {};
     for (const [n, d] of Object.entries(def.parametres || {})) P[n] = d.defaut;
     if (def.auDepart) def.auDepart(P);   // optionnel (14 novembre 2026) : une page lit ses réglages de départ (ex. ?conclusions=false)
-    const S = { vue: noms.includes(demandee) ? demandee : noms[0], t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0, vu: {}, P };
+    const S = { vue: noms.includes(demandee) ? demandee : noms[0], t: 0, running: false, jusqua: null, motif: '', fait: false, emis: 0, vu: {}, P, allumes: [] };
     const V = () => def.vues[S.vue];
     let scene = null;
     const horloge = () => (performance.now() - scene.ouvert) / 1000;
@@ -366,7 +366,10 @@
       }
       return mieux || [X, Y];
     }
-    const k = () => ({ t: S.t, S, P, vue: S.vue, ecrit, T, rampe, lisse, entre, fin: V().fin, fr });
+    // (19 novembre 2026) `allumes` : ce que la démonstration a allumé (ids de repères ou de moments, le dernier en fin de
+    // liste) ; une vue peut dessiner elle-même ce qu'elle allume (ex. les brins d'une chromatide) en lisant k.allume(id).
+    const k = () => ({ t: S.t, S, P, vue: S.vue, ecrit, T, rampe, lisse, entre, fin: V().fin, fr,
+      allumes: S.allumes.slice(), allume: id => S.allumes.includes(id), dernier: S.allumes[S.allumes.length - 1] || null });
 
     const canvas = $('canvas');
     scene = window.GenetiqueTableau.Scene(canvas, (c) => {
@@ -413,9 +416,11 @@
     function ceQuiSeVoit() {
       const v = V(), t = S.t;
       const tete = `Vue « ${v.titre} », t = ${fr(t, 1)} s${S.running ? ' (la scène avance)' : S.fait ? ' (fin)' : t > 0 ? ' (arrêt sur image)' : ' (pas encore lancée)'}.`;
-      return [tete, ...(v.voit ? v.voit(k()) : [])].filter(Boolean).join(' ');
+      const lib = id => { const r = window.Tableau.REPERES && window.Tableau.REPERES[id]; return r && r.label ? `${r.label} (${id})` : id; };
+      const allu = S.allumes.length ? `Allumé (lueur jaune) : ${S.allumes.map(lib).join(' ; ')} — le plus vif : ${lib(S.allumes[S.allumes.length - 1])}.` : '';
+      return [tete, ...(v.voit ? v.voit(k()) : []), allu].filter(Boolean).join(' ');
     }
-    function start() { S.jusqua = null; S.vu = {}; S.saut = null; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; scene.sale = true; bulle($('feedback'), (V().titre || '') + ' : observe…'); pont.noter('start'); pont.emettre(); }
+    function start() { S.allumes = []; lueurs(); S.jusqua = null; S.vu = {}; S.saut = null; S.t = 0; S.running = true; S.fait = false; $('run').textContent = 'Pause'; scene.sale = true; bulle($('feedback'), (V().titre || '') + ' : observe…'); pont.noter('start'); pont.emettre(); }
     function reset() { start(); }
     function pause() { if (!S.running) return; S.running = false; S.jusqua = null; $('run').textContent = 'Reprendre'; bulle($('feedback'), 'Arrêt sur image.'); pont.noter('pause', { time_s: +S.t.toFixed(2) }); pont.emettre(); }
     function resume() { if (S.running) return; if (S.fait || S.t >= FIN()) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
@@ -476,6 +481,53 @@
       }
       pont.emettre();
     }
+    /* ── Allumer (19 novembre 2026, skill simulations-au-tableau règle 17 ; professeur règles 44-45) ──────────────────
+     * La démonstration jouée sur la figure envoie `allume {cible, ligne, texte}` quand une de ses lignes s'écrit, et
+     * `eteins` à son ouverture. `cible` : un id ou une liste — un moment de la vue (la scène y joue, jamais en arrière) et/ou
+     * un repère (une lueur jaune douce qui RESTE, la dernière plus vive). La lueur est un calque HTML posé sur le rectangle
+     * du repère (Tableau.rectRepere), recalé à chaque image : elle suit la disposition en blocs et le redimensionnement.
+     * `eteins`, `reset` et `start` éteignent tout. L'état porte `allumes`. Une vue peut aussi dessiner elle-même ce qu'une
+     * cible allume (k.allume(id)) ; `v.allumage(ids, k)` (optionnel) est appelé à chaque allumage. */
+    const CALQUE = [];
+    let suivi = 0;
+    function lueurs() {
+      const ids = S.allumes;
+      while (CALQUE.length > ids.length) CALQUE.pop().remove();
+      while (CALQUE.length < ids.length) {
+        const el = document.createElement('div'); el.className = 'etapes-lueur'; el.setAttribute('aria-hidden', 'true');
+        Object.assign(el.style, { position: 'absolute', pointerEvents: 'none', borderRadius: '12px', zIndex: 5, transition: 'opacity .35s, box-shadow .35s, background .35s', opacity: 0 });
+        document.body.append(el); CALQUE.push(el);
+      }
+      ids.forEach((id, i) => {
+        const el = CALQUE[i], r = window.Tableau.rectRepere ? window.Tableau.rectRepere(id) : null, vif = i === ids.length - 1;
+        if (!r) { el.style.opacity = 0; return; }
+        const m = 6;
+        Object.assign(el.style, { left: (r.x - m + scrollX) + 'px', top: (r.y - m + scrollY) + 'px', width: (r.width + 2 * m) + 'px', height: (r.height + 2 * m) + 'px', opacity: 1,
+          background: vif ? 'rgba(253,224,71,.20)' : 'rgba(253,224,71,.10)',
+          boxShadow: vif ? '0 0 22px 7px rgba(253,224,71,.55), inset 0 0 0 2px rgba(253,224,71,.85)' : '0 0 14px 3px rgba(253,224,71,.30), inset 0 0 0 1.5px rgba(253,224,71,.45)' });
+        el.dataset.id = id; el.dataset.dernier = vif ? '1' : '';
+      });
+      if (ids.length && !suivi) { const boucle = () => { if (!S.allumes.length) { suivi = 0; return; } lueursPos(); suivi = requestAnimationFrame(boucle); }; suivi = requestAnimationFrame(boucle); }
+    }
+    let derniereCle = '';
+    function lueursPos() {
+      // recale les lueurs quand un repère bouge ou paraît (la scène joue vers son moment) ; peu coûteux
+      const cle = S.allumes.map(id => { const r = window.Tableau.rectRepere ? window.Tableau.rectRepere(id) : null; return r ? `${id}:${r.x|0},${r.y|0},${r.width|0},${r.height|0}` : id + ':-'; }).join('|');
+      if (cle !== derniereCle) { derniereCle = cle; lueurs(); }
+    }
+    function allume(p) {
+      const ids = [].concat(p.cible ?? p.target ?? p.repere ?? []).map(String).filter(Boolean);
+      if (!ids.length) return;
+      for (const id of ids) { const i = S.allumes.indexOf(id); if (i >= 0) S.allumes.splice(i, 1); S.allumes.push(id); }
+      const v = V(), ms = v.moments || {};
+      // le moment le plus tardif parmi les cibles, s'il est encore devant : la scène y joue (jamais de retour en arrière)
+      const devant = ids.filter(id => id in ms && !S.fait && ms[id] > S.t + 1e-3).sort((a, b) => ms[a] - ms[b]).pop();
+      if (devant) playUntil({ moment: devant });
+      if (v.allumage) v.allumage(ids, k());
+      scene.sale = true; derniereCle = ''; lueurs();
+      pont.noter('allume', { cible: p.cible, ligne: p.ligne }); pont.emettre();
+    }
+    function eteins() { S.allumes = []; derniereCle = ''; lueurs(); scene.sale = true; pont.noter('eteins'); pont.emettre(); }
     $('run').onclick = () => (S.running ? pause() : (S.t > 0 && S.t < FIN() && !S.fait ? resume() : start()));
 
     if (def.poignees) {
@@ -491,7 +543,7 @@
 
     const expl = {}; for (const n of noms) expl[n] = def.vues[n].explication || [];
     window.Tableau.explication(expl);
-    const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until'];
+    const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'set_parameters', 'play_until', 'allume', 'eteins'];
     const schemaParams = { vue: noms.join(' | ') };
     for (const [n, d] of Object.entries(def.parametres || {})) schemaParams[n] = d.schema || String(d.defaut);
     const tousMoments = noms.map(n => `${n} : ${Object.keys(def.vues[n].moments).join(', ')}`).join(' ; ');
@@ -499,13 +551,15 @@
       command_schema: {
         set_parameters: schemaParams,
         set_time: { time_s: '0..fin de la vue (arrêt sur cet instant, en s de la scène)' },
-        play_until: { moment: tousMoments + ' (rejoue et se fige à cet instant ; un moment d’une autre vue change de vue)', time_s: 'ou un instant en s' } } };
+        play_until: { moment: tousMoments + ' (rejoue et se fige à cet instant ; un moment d’une autre vue change de vue)', time_s: 'ou un instant en s' },
+        allume: { cible: 'un id ou une liste : un moment de la vue (la scène y joue, jamais en arrière) et/ou un repère (lueur qui reste, la dernière plus vive)', ligne: 'n° de la ligne de démonstration', texte: 'son texte' },
+        eteins: {} } };
     const pont = protocole({ id: def.id, commandes, config,
       texte: noms.map(n => def.vues[n].texte || def.vues[n].titre).join(' | '),
       etat: () => ({ simulation_status: statut(), ce_qui_se_voit: ceQuiSeVoit(), current_variant: S.vue,
-        time_s: +S.t.toFixed(2), parameters: { vue: S.vue, ...P }, moments: { ...V().moments } }),
+        time_s: +S.t.toFixed(2), parameters: { vue: S.vue, ...P }, moments: { ...V().moments }, allumes: S.allumes.slice() }),
       progression: () => (S.fait ? 1 : Math.min(1, S.t / FIN())),
-      executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p) })[cmd]?.() });
+      executer: (cmd, p) => ({ start, reset, pause, resume, set_time: () => setTime(p), set_parameters: () => setParameters(p), play_until: () => playUntil(p), allume: () => allume(p), eteins })[cmd]?.() });
     bulle($('feedback'), (V().titre || def.titre) + '…');
     // Une vue peut attendre le tuteur (`autoDepart: false`, 14 novembre 2026) : rien ne se joue avant son premier geste,
     // sinon le résultat d'une expérience passerait sous les yeux de l'élève avant d'être dit. Par défaut : départ seul.

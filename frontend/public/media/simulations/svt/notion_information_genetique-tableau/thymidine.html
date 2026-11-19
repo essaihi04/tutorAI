@@ -131,16 +131,35 @@ function voit(k) {
  * ?conclusions=false) tait la légende du 2e résultat : l’élève le décrit lui-même avant qu’elle s’écrive.
  * Moments : cycle_1 2,4 ; metaphase_1 5,2 ; transfert 7,6 ; metaphase_2 10,4. */
 const MDOC = { cycle_1: 2.4, metaphase_1: 5.2, transfert: 7.6, metaphase_2: 10.4 };
+/* (19 novembre 2026, démonstration sur le document — skill simulations-au-tableau règle 17) Les lignes de la correction
+ * allument ce qu'elles utilisent : `milieu`, `chromosome_1`, `chromosome_2`, `chromatide_marquee`, `chromatide_non_marquee`
+ * (repères), et ce que seule la démonstration fait paraître : `brins_1` (à côté de chaque chromatide du 1er résultat, sa
+ * molécule d'ADN : brin ancien bleu + brin radioactif rouge), `brins_2` (2e résultat : bleu + blanc à côté de la chromatide
+ * non marquée, blanc + rouge à côté de la marquée), `molecule_marquee`, `molecule_non_marquee`. Mêmes couleurs que la vue
+ * experience (un objet, un dessin). Rien de cela sans allumage : le document reste celui du sujet. */
+function moleculeV(x, cx, y0, L, droite, gauche, a = 1) {
+  x.save(); x.translate(cx, y0); x.rotate(Math.PI / 2); moleculeH(x, 0, 0, L, droite, gauche, a); x.restore();
+}
 function dessinerDocument(c, k) {
   const t = k.t, radio = t < 6.6 ? rampe(t, .3, .8) : 1 - rampe(t, 6.6, 1.0);
   const m1 = rampe(t, 3.6, 1.2), m2 = rampe(t, 8.8, 1.2);
-  const X1 = 360, X2 = 600, CY = 205;
+  const X1 = 360, X2 = 600, CY = 205, DX = 42;
+  const B1 = k.allume('brins_1'), B2 = k.allume('brins_2') || k.allume('molecule_marquee') || k.allume('molecule_non_marquee');
   c.direct(() => {
     const x = c.ctx;
     plantule(x, rampe(t, .1, .5), radio);
     if (m1 > 0) { chromatide(x, X1 - 9, CY, 132, true, m1, -9); chromatide(x, X1 + 9, CY, 132, true, m1, 9); x.save(); x.globalAlpha = m1; x.fillStyle = '#2e1065'; x.beginPath(); x.arc(X1, CY, 5, 0, TAU); x.fill(); x.restore(); }
     if (m2 > 0) { chromatide(x, X2 - 9, CY, 132, false, m2, -9); chromatide(x, X2 + 9, CY, 132, true, m2, 9); x.save(); x.globalAlpha = m2; x.fillStyle = '#2e1065'; x.beginPath(); x.arc(X2, CY, 5, 0, TAU); x.fill(); x.restore(); }
+    // la molécule d'ADN de chaque chromatide, seulement quand la démonstration l'allume
+    const lien = (x0, x1) => { x.save(); x.strokeStyle = 'rgba(241,245,249,.55)'; x.setLineDash([3, 4]); x.lineWidth = 1.4; x.beginPath(); x.moveTo(x0, CY); x.lineTo(x1, CY); x.stroke(); x.restore(); };
+    if (B1 && m1 > 0) { lien(X1 - 26, X1 - 36); lien(X1 + 26, X1 + 36); moleculeV(x, X1 - DX, CY - 52, 104, ROUGE, BLEU); moleculeV(x, X1 + DX, CY - 52, 104, BLEU, ROUGE); }
+    if (B2 && m2 > 0) { lien(X2 - 26, X2 - 36); lien(X2 + 26, X2 + 36); moleculeV(x, X2 - DX, CY - 52, 104, BLANC, BLEU); moleculeV(x, X2 + DX, CY - 52, 104, BLANC, ROUGE); }
   });
+  if (B1 && m1 > 0) c.repere('brins_1', X1 - DX - 10, CY - 56, 2 * DX + 20, 112, 'les molécules d’ADN des deux chromatides (1er cycle)');
+  if (B2 && m2 > 0) {
+    c.repere('brins_2', X2 - DX - 10, CY - 56, 2 * DX + 20, 112, 'les molécules d’ADN des deux chromatides (2e cycle)');
+    c.repere('molecule_marquee', X2 + DX - 10, CY - 56, 20, 112, 'la molécule au brin radioactif'); c.repere('molecule_non_marquee', X2 - DX - 10, CY - 56, 20, 112, 'la molécule sans brin radioactif');
+  }
   c.repere('plantule', 40, 140, 106, 192, 'la plantule de fève'); c.repere('milieu', 42, 236, 100, 92, 'le milieu de culture');
   if (k.ecrit(c, 'tete', .3)) k.T(c, 'cellules de racine de fève', 92, 120, { couleur: 'blanc', taille: 15, align: 'center' });
   if (t < 6.6 && k.ecrit(c, 'radio', .8)) { k.T(c, 'milieu à thymidine', 92, 356, { couleur: 'vert', taille: 15, align: 'center' }); k.T(c, 'radioactive', 92, 374, { couleur: 'vert', taille: 15, align: 'center' }); }
@@ -160,12 +179,22 @@ function dessinerDocument(c, k) {
   if (k.ecrit(c, 'r2a', MDOC.metaphase_2 - .4)) k.T(c, 'chromosome métaphasique', X2, 300, { couleur: 'blanc', taille: 15, align: 'center' });
   if (k.P.conclusions && k.ecrit(c, 'r2b', MDOC.metaphase_2 - .3)) k.T(c, 'une chromatide marquée sur deux', X2, 320, { couleur: 'orange', taille: 15, align: 'center' });
   if (k.ecrit(c, 'grains', 1.6)) k.T(c, 'grains noirs = radioactivité (autoradiographie)', 480, 396, { couleur: 'blanc', taille: 15, align: 'center' });
+  // la légende des brins, en dernier (l'écriture en direct suit l'ordre du dessin : rien d'autre n'est réécrit)
+  if ((B1 && m1 > 0) || (B2 && m2 > 0)) {
+    if (k.ecrit(c, 'leg_brins', 0)) {
+      k.T(c, 'brin ancien', 300, 356, { couleur: 'bleu', taille: 15, align: 'center' });
+      k.T(c, 'brin radioactif', 450, 356, { couleur: 'rouge', taille: 15, align: 'center' });
+      k.T(c, 'brin nouveau non radioactif', 640, 356, { couleur: 'blanc', taille: 15, align: 'center' });
+    }
+  } else delete k.S.vu.leg_brins;
 }
 function voitDocument(k) {
   const t = k.t, m = ['Document d’examen (national 2017 R) : à gauche une plantule de fève, ses racines dans un bécher' + (t < 6.6 ? ' de milieu à thymidine radioactive.' : ' de milieu normal, non radioactif.')];
   if (t >= 3.8) m.push('1er cycle en milieu radioactif : chromosome métaphasique, ses deux chromatides couvertes de grains noirs (écrit « les deux chromatides marquées »).');
   if (t >= 6.8) m.push('Transfert dans un milieu normal pour un 2e cycle.');
   if (t >= 9) m.push('2e cycle : chromosome métaphasique, une seule de ses deux chromatides couverte de grains noirs' + (k.P.conclusions && t >= MDOC.metaphase_2 - .3 ? ' (écrit « une chromatide marquée sur deux »).' : ' (rien d’écrit dessous : l’élève doit le décrire).'));
+  if (k.allume('brins_1') && t >= 3.8) m.push('Démonstration : à côté de chaque chromatide du 1er résultat, sa molécule d’ADN verticale : un brin ancien bleu et un brin radioactif rouge (les deux chromatides ont un brin radioactif).');
+  if ((k.allume('brins_2') || k.allume('molecule_marquee') || k.allume('molecule_non_marquee')) && t >= 9) m.push('Démonstration : à côté de la chromatide non marquée, une molécule bleu + blanc (aucun brin radioactif) ; à côté de la chromatide marquée, une molécule blanc + rouge (un brin radioactif).');
   return m;
 }
 window.Etapes.lancer({
