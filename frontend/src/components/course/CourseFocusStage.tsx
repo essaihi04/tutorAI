@@ -72,6 +72,39 @@ interface Props {
 const premier = <T,>(champ: Record<string, T> | undefined, langue: Langue): T | undefined =>
   champ ? champ[langue] ?? champ.mixed ?? champ.fr ?? Object.values(champ)[0] : undefined;
 
+/*
+ * Une diapositive sans voix enregistrée (19 novembre 2026 : texte réécrit, voix pas encore régénérée) restait vide :
+ * sans piste, rien ne passait en lecture, donc ni le `demarrer` ni les `play_until` du pointage ne partaient. Elle
+ * reçoit une piste MUETTE de la durée de lecture de son texte : la même horloge que la voix (pause, reprise, une seule
+ * voix, question d'observation, fin → questions) fait jouer la simulation au rythme de la lecture, et le texte
+ * s'affiche en sous-titres phrase par phrase.
+ */
+/** Le rythme de lecture, en caractères par seconde (la voix du cours en dit ~14 : la lecture est un peu plus lente). */
+const LECTURE_CAR_S = 12;
+const dureeDeLecture = (texte: string) => Math.max(6, Math.ceil(texte.length / LECTURE_CAR_S));
+/** Les pistes muettes déjà faites, par durée (en secondes) : quelques-unes gardées, les plus anciennes libérées. */
+const pistesMuettes = new Map<number, string>();
+function pisteMuette(secondes: number): string {
+  const deja = pistesMuettes.get(secondes);
+  if (deja) return deja;
+  const taux = 8000, n = taux * secondes;                 // WAV 8 kHz, mono, 8 bits : 8 ko par seconde
+  const buf = new ArrayBuffer(44 + n), v = new DataView(buf);
+  const ecrire = (o: number, s: string) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+  ecrire(0, 'RIFF'); v.setUint32(4, 36 + n, true); ecrire(8, 'WAVE'); ecrire(12, 'fmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, taux, true); v.setUint32(28, taux, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true);
+  ecrire(36, 'data'); v.setUint32(40, n, true);
+  new Uint8Array(buf, 44).fill(128);                      // 128 = silence en 8 bits non signés
+  const url = URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+  pistesMuettes.set(secondes, url);
+  if (pistesMuettes.size > 6) {
+    const [plusVieille, u] = pistesMuettes.entries().next().value as [number, string];
+    pistesMuettes.delete(plusVieille);
+    window.setTimeout(() => URL.revokeObjectURL(u), 60_000);   // une diapositive qui la joue encore a le temps de finir
+  }
+  return url;
+}
+
 const CRAIE = "'Patrick Hand', 'Caveat', cursive";
 
 /** Le deuxième tableau descend du haut ; chaque question s'y écrit l'une après l'autre. */
@@ -362,7 +395,14 @@ async function appelerApi<T>(chemin: string, corps: unknown): Promise<T> {
 
 export default function CourseFocusStage({ slide, language, deckControls, tuteur3D = false, deckId, onSuivant, libelleSuite = 'Suite →', finDeBloc = false, onFermerBloc, onReponseJugee, entete }: Props) {
   const parole = (premier(slide.speech_text, language) || '').trim();
-  const piste = premier(slide.audio, language);
+  const pisteEnregistree = premier(slide.audio, language);
+  /** Sans voix enregistrée, la piste muette de la durée de lecture (voir `pisteMuette`). */
+  const lectureMuette = !pisteEnregistree?.url && !!parole;
+  const piste = useMemo(() => {
+    if (!lectureMuette) return pisteEnregistree;
+    const s = dureeDeLecture(parole);
+    return { url: pisteMuette(s), duration_ms: s * 1000 };
+  }, [lectureMuette, pisteEnregistree, parole]);
   const conc = slide.concentration || {};
   const contenu = slide.screen_content || {};
   const visuel = slide.visual && slide.visual.kind !== 'none' ? slide.visual : null;
@@ -536,6 +576,16 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
     () => (conc.centre || []).map(c => ({ ...c, t: instant(c.mot) })),
     [conc.centre, instant],
   );
+
+  /** Lecture muette : les phrases du texte et la place de leur fin, pour les sous-titres. */
+  const phrasesLues = useMemo(() => {
+    if (!lectureMuette) return [];
+    let fin = 0;
+    return (parole.match(/[^.!?؟…:]+(?:[.!?؟…:]+|$)/g) || []).map(p => { fin += p.length; return { texte: p.trim(), fin }; }).filter(p => p.texte);
+  }, [lectureMuette, parole]);
+  const sousTitre = lectureMuette && duree > 0
+    ? (phrasesLues.find(p => p.fin > (temps / duree) * parole.length) || phrasesLues[phrasesLues.length - 1])?.texte || ''
+    : '';
 
   // ── Prévoir d'abord (11 novembre 2026) : la question `prediction` est posée AVANT la voix, puis la voix montre ──
   const prediction = useMemo(() => questionDePrediction(slide), [slide]);
@@ -2299,7 +2349,14 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
         )}
 
         {!visuel && !table && centre.length === 0 && (
-          <p className="text-white/40 text-lg" style={{ fontFamily: CRAIE }}>Écoute le professeur…</p>
+          <p className="text-white/40 text-lg" style={{ fontFamily: CRAIE }}>{lectureMuette ? 'Lis avec le professeur…' : 'Écoute le professeur…'}</p>
+        )}
+
+        {/* ── Sans voix enregistrée : le texte en sous-titres, au rythme de la lecture (la simulation suit) ── */}
+        {sousTitre && !finie && !obs && panneau !== 'questions' && !reaction && (
+          <p data-sous-titre dir="auto" className="pointer-events-none absolute bottom-2 left-1/2 z-10 max-w-[88%] -translate-x-1/2 rounded-lg bg-black/70 px-3 py-1 text-center text-[15px] leading-snug text-amber-50 md:text-lg">
+            {sousTitre}
+          </p>
         )}
       </main>
 
