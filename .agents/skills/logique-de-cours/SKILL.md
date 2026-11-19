@@ -44,9 +44,12 @@ encore plus tard, pas à sa beauté.
    l'animation pour ce qui change et doit se comprendre, le tableau pour ce que l'examen donne en tableau ou ce qui se
    compare d'un coup d'œil (skill professeur, règle 42 ; exemple : le glucose marqué au ¹⁴C de SVT ch1, 18/11).
    Toujours vérifié à la taille d'un téléphone en paysage (~724 × 350) : rien sous la barre du lecteur.
-   **Un exercice du national commence par son énoncé tel qu'il est dans l'examen** (choix de l'utilisateur, 18/11/2026) : la
-   page scannée du sujet (`backend/data/exams/<matière>/<année>-<session>/pages/sujet_pN.jpg`, en-tête de l'examen visible,
-   aspect papier), lue par le tuteur avec ses données, puis l'explication. **La démonstration se joue sur la figure de
+   **Un exercice du national commence par son énoncé reproduit en code comme la vraie feuille d'examen** (choix de
+   l'utilisateur, 18-19/11/2026) : fond blanc de la feuille, en-tête officiel (Royaume du Maroc, examen national,
+   session, matière, filière, durée, coefficient), l'exercice avec ses questions numérotées et le barème à droite, textes,
+   données et figures redessinés (gabarit commun `frontend/public/media/simulations/shared/examen/`, texte et points de
+   `exam.json`, scans `pages/` seulement comme modèle), lu par le tuteur, puis l'explication.
+   **La démonstration se joue sur la figure de
    l'examen** : chaque étape allume ce qu'elle utilise sur le dessin, ses lignes s'écrivent à côté, le texte écrit avant
    est effacé, seules les données de l'exercice servent ; pas de panneau de texte ni de tableau à part (skill professeur,
    règles 45-46 ; simulations-au-tableau, règle 17).
