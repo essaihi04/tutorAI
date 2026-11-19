@@ -208,7 +208,11 @@
   }
   function blocsDepuisExam(ex, cfg) {
     const blocs = [];
-    const docs = Object.fromEntries((ex.documents || []).filter((d) => d && d.id).map((d) => [d.id, d]));
+    const garde = plage(cfg.questions ?? P.get('questions'), (ex.questions || []).length);
+    // Dans une partie (règle 48), une figure sans place flotte à droite, à 42 % de la largeur : la partie garde un texte
+    // lisible au lieu d'être réduite (19/11/2026, l'utilisateur : réduire les figures des parties, cadre réel ~1126×460).
+    const docs = Object.fromEntries((ex.documents || []).filter((d) => d && d.id)
+      .map((d) => [d.id, garde && !d.place ? { ...d, place: 'droite', largeur: d.largeur || '42%' } : d]));
     const vus = new Set();
     const figure = (id) => {
       if (vus.has(id) || !docs[id]) return;
@@ -216,9 +220,11 @@
       const d = docs[id]; const surcharge = (cfg.figures || {})[id] || {};
       blocs.push({ figure: id, src: d.src, legende: d.title && !/^figure suivante$/i.test(d.title) ? d.title : '', place: d.place, largeur: d.largeur, ...surcharge });
     };
-    if (ex.context) blocs.push({ texte: ex.context, id: 'contexte' });
+    // Le contexte de l'exercice n'est montré qu'à la partie 1 : les parties suivantes (entete=courte) ne le répètent pas,
+    // le tuteur le rappelle en une phrase (règle 48 ; 19/11/2026, l'utilisateur).
+    const suite = !!garde && (cfg.entete || P.get('entete')) === 'courte';
+    if (ex.context && !suite) blocs.push({ texte: ex.context, id: 'contexte' });
     const refs = new Set((ex.questions || []).flatMap((q) => q.documents || []));
-    const garde = plage(cfg.questions ?? P.get('questions'), (ex.questions || []).length);
     // Un document qu'aucune question ne cite n'apparaît dans une partie (questions=…) que s'il est marqué `commun: true`
     // (19/11/2026, l'utilisateur, 2022 R ex. 2 : la figure de l'onde restait affichée dans la partie radioactivité —
     // « pas la peine de mettre la figure du périodique alors qu'on est dans la radioactivité »).
