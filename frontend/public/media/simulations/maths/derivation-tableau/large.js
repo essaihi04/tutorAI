@@ -151,7 +151,7 @@
   function aides(K, c, c0, P, axes) {
     const K2 = Object.create(K);
     K2.c = c;
-    K2.titre = (s) => { if (P) c0.texte(s, P.xr0, 26, { couleur: 'cyan', taille: 20 * Math.min(1.1, Math.max(.85, P.k * 1.1)), max: P.larg }); return K2; };
+    K2.titre = (s) => { if (window.MathsTableau.titreRepete(s)) { c0.pause(window.MathsTableau.tempsTitre(s)); return K2; } if (P) c0.texte(s, P.xr0, 26, { couleur: 'cyan', taille: 20 * Math.min(1.1, Math.max(.85, P.k * 1.1)), max: P.larg }); return K2; };
     K2.axes = (o) => {
       const g = K.grille(o);
       if (axes) axes.push({ x0: g.x0, y0: g.y0, w: g.w, h: g.h });
