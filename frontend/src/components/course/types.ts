@@ -29,6 +29,46 @@ export interface CourseQuestion extends EnonceLu {
    * n'est pas une erreur de compétence (suivi des acquis : `type: 'prediction'`, hors score).
    */
   prediction?: boolean;
+  /**
+   * `type: 'association'` (19 novembre 2026, demande de l'utilisateur : « pour les questions d'association, ne pas les
+   * transformer en QCM ; les mettre en association avec un feedback à chaque réponse, correcte ou fausse »). Une
+   * question « Reliez… / Associez… / Recopiez les couples… » du national reste UNE association : l'élève relie lui-même
+   * (glisser d'une colonne à l'autre, ou toucher deux éléments), chaque paire formée reçoit tout de suite son retour,
+   * écrit et dit, puis le bilan des couples comme le barème les attend. Voir `AssociationDiapo`.
+   */
+  association?: AssociationQuestion;
+}
+
+/** Un élément d'une colonne : `id` est l'étiquette du sujet (« 1 », « a »…), montrée devant le texte. */
+export interface ElementAssociation { id: string; texte: string }
+
+/** Le retour d'une paire formée : écrit sous les colonnes, dit par la voix (`audio` : la piste préparée, sinon `dit`). */
+export interface RetourPaire {
+  /** facultatif : sinon déduit de `couples` */
+  juste?: boolean;
+  texte: string;
+  dit?: string;
+  audio?: string;
+}
+
+export interface AssociationQuestion {
+  /** la colonne de gauche, dans l'ordre du sujet */
+  gauche: ElementAssociation[];
+  /** la colonne de droite ; peut avoir des éléments de trop (l'intrus du sujet) */
+  droite: ElementAssociation[];
+  /** les bonnes paires : id de gauche → id de droite, ex. `{"1": "c", "2": "e"}` */
+  couples: Record<string, string>;
+  /**
+   * Les retours, par paire `"<gauche>-<droite>"` (ex. `"1-c"`). Une paire fausse sans retour à elle prend celui de son
+   * élément de gauche, `"<gauche>-*"` (ce qui ne va pas + un indice, jamais la réponse). Une paire juste sans retour : « Juste ».
+   */
+  retours?: Record<string, RetourPaire>;
+  /** `false` : la colonne de droite garde l'ordre du sujet ; par défaut elle est battue (les étiquettes restent). */
+  melanger?: boolean;
+  /** Erreurs permises sur un même élément de gauche avant que la bonne paire soit donnée, avec son retour (défaut 2). */
+  essais?: number;
+  /** Le bilan dit et écrit à la fin, après la ligne des couples « (1 ; c) (2 ; e) … » écrite d'office. */
+  bilan?: { texte?: string; dit?: string; audio?: string };
 }
 
 /**
@@ -118,6 +158,8 @@ export interface CourseExercise extends EnonceLu {
   statements?: ({ text: string; correct: boolean; explanation?: string } & EnonceLu)[];
   /** `association` : les paires à reformer (la colonne de droite est battue). */
   pairs?: { left: string; right: string }[];
+  /** `association` au contrat complet (colonnes avec étiquettes, éléments de trop, retour par paire) : voir `AssociationQuestion`. */
+  association?: AssociationQuestion;
   /** Le mot de la fin, affiché une fois l'élève fixé. */
   explanation?: string;
   /** Calcul ou raisonnement : la démonstration manuscrite (pour un vrai/faux, après sa dernière affirmation). */

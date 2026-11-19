@@ -72,6 +72,17 @@ encore plus tard, pas à sa beauté.
    se dessine par la fonction du module partagé `frontend/public/media/simulations/shared/lexique/` ; un nouveau
    cours va d'abord au lexique (skill simulations-au-tableau, règle 15 ; skill professeur, règle 43).
 
+11. **Une association reste une association** (règle de l'utilisateur, 19/11/2026, sur SVT ch1, national 2020 R,
+   question III, découpée en trois QCM : « pour les questions d'association, ne pas les transformer en QCM ; les mettre
+   en association avec un feedback à chaque réponse, correcte ou fausse »). « Reliez… », « Associez… », « Recopiez les
+   couples… » : UNE question `type: 'association'` sur une diapositive (`question.association` : colonnes `gauche` et
+   `droite` avec les étiquettes et l'élément de trop du sujet, `couples`, `retours`, `bilan`), jamais plusieurs QCM.
+   L'élève relie lui-même (glisser ou toucher deux éléments) ; chaque paire formée a son retour, écrit et dit : juste
+   → confirmé en une phrase qui dit pourquoi ; faux → ce qui ne va pas et un indice, sans donner la bonne lettre (deux
+   erreurs sur le même élément : la bonne paire est posée, avec son retour) ; à la fin, les couples comme le barème
+   « (1 ; c) (2 ; e) … ». Les `dit` des retours sont des pistes nouvelles à mettre en voix (`<deck>_voix.json`,
+   `scripts/logique/association_voix.py`). Skill professeur, règle 47 ; audit `docs/audit-association.md`.
+
 ## La procédure
 
 ### 1. Lire

@@ -46,6 +46,20 @@ def _enonce(ident, obj):
         yield ("reponses", ident, t, f)
 
 
+def _association(prefixe, obj):
+    """Association (19 novembre 2026) : le retour dit de chaque paire (`retours["1-c"].dit`, `retours["1-*"].dit`) et le
+    bilan (`bilan.dit`) ; piste posée dans leur `audio`. Ids : <diapo>__<cle>_assoc_<g>-<d> (« * » écrit « autre »)."""
+    a = obj.get("association") if isinstance(obj, dict) else None
+    if not isinstance(a, dict):
+        return
+    for k, r in (a.get("retours") or {}).items():
+        if isinstance(r, dict) and (r.get("dit") or "").strip():
+            yield ("reponses", f"{prefixe}_assoc_{k.replace('*', 'autre')}", r["dit"].strip(), _poser_audio(r))
+    b = a.get("bilan")
+    if isinstance(b, dict) and (b.get("dit") or "").strip():
+        yield ("reponses", f"{prefixe}_assoc_bilan", b["dit"].strip(), _poser_audio(b))
+
+
 def pistes(m):
     yield from _pistes(m)
     # énoncés des questions (mêmes chemins et ids que enonces.py)
@@ -68,8 +82,10 @@ def _pistes(m):
             for cle, rep in ((s.get("concentration") or {}).get("reponses") or {}).items():
                 yield from _reactions(f"{s['id']}__{cle}", rep)
             yield from _demo(f"{s['id']}__demo_q", s.get("question") or {})
+            yield from _association(f"{s['id']}__q", s.get("question") or {})
             for i, e in enumerate(s.get("exercises") or []):
                 yield from _demo(f"{s['id']}__demo_e{i}", e)
+                yield from _association(f"{s['id']}__e{i}", e)
     for c in m.get("competences") or []:
         for r in c.get("rappels") or []:
             yield from _reactions(f"rappel_{r['id']}", r.get("reponses"))

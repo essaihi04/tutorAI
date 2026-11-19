@@ -25,6 +25,7 @@ export function clesDesQuestions(slide) {
   const out = [];
   if (slide?.question?.prompt) out.push('q');
   (slide?.exercises || []).forEach((ex, i) => {
+    if (ex?.type === 'association' && ex.association?.gauche?.length) out.push(`e${i}`);
     if (ex?.type === 'qcm' && (ex.choices || []).length >= 2) out.push(`e${i}`);
     if (ex?.type === 'vrai_faux') (ex.statements || []).forEach((_, j) => out.push(`e${i}s${j}`));
   });

@@ -23,6 +23,8 @@ def cles_des_questions(slide: dict) -> list[str]:
     """`q`, `e{i}`, `e{i}s{j}` : les questions du tableau, dans l'ordre (comme `questionsDeLaDiapo`)."""
     out = ["q"] if (slide.get("question") or {}).get("prompt") else []
     for i, ex in enumerate(slide.get("exercises") or []):
+        if ex.get("type") == "association" and ((ex.get("association") or {}).get("gauche")):
+            out.append(f"e{i}")
         if ex.get("type") == "qcm" and len(ex.get("choices") or []) >= 2:
             out.append(f"e{i}")
         if ex.get("type") == "vrai_faux":

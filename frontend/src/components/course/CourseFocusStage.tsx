@@ -4,7 +4,7 @@ import { observeAvatarMedia } from '../../services/avatarAudio';
 import { audioUnlock } from '../../services/audioUnlock';
 import type { ProfessorEmotionKind } from '../../services/professorEmotion';
 import { focusProfessor } from '../../services/professorFocus';
-import type { CourseSlide, Demonstration, EnonceLu, QuestionObservation, ReactionPreparee, SlideConcentration } from './types';
+import type { AssociationQuestion, CourseSlide, Demonstration, EnonceLu, QuestionObservation, ReactionPreparee, RetourPaire, SlideConcentration } from './types';
 import ClavierScientifique, { BoutonSymboles } from './ClavierScientifique';
 import { clavier, hauteurClavierTelephone, largeurClavier, useChampClavier, useClavier } from './ClavierFlottant';
 import { Formule } from './Formule';
@@ -15,6 +15,7 @@ import ChampReponse, { BoutonPhoto, type ContexteOcr } from './SaisieReponse';
 import SansDefilement from './SansDefilement';
 import FiguresCahier from './FigureCahier';
 import { inscrireVoix } from './voixUnique';
+import AssociationDiapo, { type FinAssociation } from './AssociationDiapo';
 import { basculerPleinEcran, usePleinEcran } from './pleinEcran';
 import { taire as taireMemoire } from './memoire/voix';
 import { commandeReservee, dureeDuRejeuMs, momentsReserves, questionClose, rejeuxDe } from './parcours';
@@ -2506,7 +2507,9 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
 }
 
 /** Une question de la diapositive, telle que l'élève y répond (la clé `bonne` n'existe que pour les exercices). */
-type QuestionDiapo = { cle: string; type: 'qcm' | 'vrai_faux' | 'directe'; enonce: string; choix?: string[]; bonne?: number; explication?: string;
+type QuestionDiapo = { cle: string; type: 'qcm' | 'vrai_faux' | 'directe' | 'association'; enonce: string; choix?: string[]; bonne?: number; explication?: string;
+  /** `association` : les deux colonnes, les bonnes paires et le retour de chaque paire (19 novembre 2026) */
+  association?: AssociationQuestion;
   /** La démonstration manuscrite, écrite après la réaction (pour un vrai/faux : portée par sa dernière affirmation). */
   demonstration?: Demonstration;
   /** L'énoncé lu par le tuteur (`enonce_audio`, `enonce_dit`) et les suggestions du clavier (`clavier`). */
@@ -2517,10 +2520,13 @@ function questionsDeLaDiapo(slide: CourseSlide): QuestionDiapo[] {
   const out: QuestionDiapo[] = [];
   const q = slide.question;
   if (q?.prompt) {
-    if ((q.options || []).length >= 2) out.push({ cle: 'q', type: 'qcm', enonce: q.prompt, choix: q.options, bonne: q.correct, demonstration: q.demonstration, lu: luDe(q) });
+    // une association du national reste une association, jamais découpée en QCM (19 novembre 2026)
+    if (q.type === 'association' && q.association?.gauche?.length) out.push({ cle: 'q', type: 'association', enonce: q.prompt, association: q.association, demonstration: q.demonstration, lu: luDe(q) });
+    else if ((q.options || []).length >= 2) out.push({ cle: 'q', type: 'qcm', enonce: q.prompt, choix: q.options, bonne: q.correct, demonstration: q.demonstration, lu: luDe(q) });
     else out.push({ cle: 'q', type: 'directe', enonce: q.prompt, demonstration: q.demonstration, lu: luDe(q) });
   }
   (slide.exercises || []).forEach((ex, i) => {
+    if (ex.type === 'association' && ex.association?.gauche?.length) out.push({ cle: `e${i}`, type: 'association', enonce: ex.prompt, association: ex.association, explication: ex.explanation, demonstration: ex.demonstration, lu: luDe(ex) });
     if (ex.type === 'qcm' && (ex.choices || []).length >= 2) out.push({ cle: `e${i}`, type: 'qcm', enonce: ex.prompt, choix: ex.choices, bonne: ex.correct ?? 0, explication: ex.explanation, demonstration: ex.demonstration, lu: luDe(ex) });
     if (ex.type === 'vrai_faux') (ex.statements || []).forEach((st, j, tout) => {
       out.push({ cle: `e${i}s${j}`, type: 'vrai_faux', enonce: st.text, choix: ['Vrai', 'Faux'], bonne: st.correct ? 0 : 1, explication: st.explanation,
@@ -2553,7 +2559,7 @@ function lireEtatQuestion(memoire: string): EtatQuestion {
 /** Une question est close : juste, fausse après tous ses essais, ou réponse libre jugée. */
 function estTerminee(type: QuestionDiapo['type'], e: EtatQuestion, essaisMax: number): boolean {
   const r = e.retour, t = e.tentative ?? 1;
-  return r?.correct === true || (r?.correct === false && t > essaisMax) || (type === 'directe' && !!r && r.correct !== null);
+  return r?.correct === true || (r?.correct === false && t > essaisMax) || ((type === 'directe' || type === 'association') && !!r && r.correct !== null);
 }
 
 /**
@@ -2799,6 +2805,28 @@ function UneQuestion({ q, diapo, dire, jouer, preparees, compact = false, onRepo
     } finally { setAttente(false); }
   };
 
+  // L'association (19 novembre 2026) : chaque paire formée a son retour, dit tout de suite ; le bilan des couples clôt la question.
+  const direRetour = (r: { audio?: string; dit?: string; texte?: string; parole?: string }): Promise<unknown> => {
+    arreterEnonce?.();
+    const dit = r.dit || r.parole || '';
+    if (r.audio) { jouer(r.audio, dit || undefined); return Promise.resolve(); }
+    return dit ? dire(dit) : Promise.resolve();
+  };
+  const surPaire = (r: RetourPaire, _g: string, _d: string, apresVoix?: boolean) => {
+    setPassee(false);
+    return apresVoix && attendreVoix ? attendreVoix().then(() => direRetour(r)) : direRetour(r);
+  };
+  const surFinAssociation = useCallback((f: FinAssociation, voixPaire: Promise<unknown>) => {
+    vientDeFinir.current = true;
+    onReponse?.({ cle: q.cle, type: q.type, enonce: q.enonce, reponse: f.reponse, tentative: f.tentative, correct: f.correct, preparee: true });
+    setTentative(f.tentative);
+    const bilan = q.association?.bilan;
+    // le bilan attend que le retour de la dernière paire soit dit
+    voixReaction.current = voixPaire.then(() => attendreVoix?.()).then(() => (bilan && (bilan.audio || bilan.dit) ? direRetour(bilan) : undefined));
+    setRetour({ correct: f.correct, ecrit: f.ecrit });
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- la question et ses outils ne changent pas tant qu'elle est montée
+  }, [q, onReponse, attendreVoix]);
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto rounded-xl border border-white/15 p-4">
       <RemplirSiCourt>
@@ -2835,6 +2863,9 @@ function UneQuestion({ q, diapo, dire, jouer, preparees, compact = false, onRepo
           })}
         </div>
       )}
+      {q.type === 'association' && q.association && (
+        <AssociationDiapo a={q.association} memoire={memoire} fini={finie} compact={compact} actif={actif} onPaire={surPaire} onFin={surFinAssociation} />
+      )}
       {q.type === 'directe' && (
         // Réponse libre : écrite, dite au micro ou photographiée, avec le clavier scientifique ; relue avant l'envoi.
         <ChampReponse onEnvoyer={t => void envoyer(t, null)} disabled={attente || finie} contexte={{ ...contexte, enonce: q.enonce }}
@@ -2843,7 +2874,7 @@ function UneQuestion({ q, diapo, dire, jouer, preparees, compact = false, onRepo
       {attente && <p className="mt-2 text-sm text-white/60 animate-pulse">Le professeur regarde ta réponse…</p>}
       {retour && !attente && retour.ecrit && (
         <p className={`mt-2 ${grand} ${retour.correct === true ? 'text-emerald-200' : retour.correct === false ? 'text-rose-200' : 'text-amber-200'}`}>
-          {retour.correct === true ? '✔ ' : retour.correct === false ? (finie ? '✘ ' : '↻ ') : '? '}<Formule t={retour.ecrit} />
+          {q.type === 'association' ? '📝 Les couples : ' : retour.correct === true ? '✔ ' : retour.correct === false ? (finie ? '✘ ' : '↻ ') : '? '}<Formule t={retour.ecrit} />
         </p>
       )}
       {onPasser && !finie && !attente && !passee && (
