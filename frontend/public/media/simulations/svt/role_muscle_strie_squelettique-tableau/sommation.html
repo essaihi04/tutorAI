@@ -322,8 +322,15 @@ const caseDe = k => { const T = TRACES[k]; if (T.cas === 'une') return [0, 1, 4]
 const NOM = {
   tr: () => TRACES[S.trace], span: () => { const st = TRACES[S.trace].stims; return st[st.length - 1] + 0.15; },
   G() { return { x0: HX(92), px: 290 * KX / NOM.span(), y0: 262, py: 2.6, xa: 72, xb: HX(396), haut: 98 }; },
-  lent: 1, finRec: () => 2.4, fin: () => 5.8,
-  moments: () => ({ trace_affiche: 2.5, stimulations_comptees: 3.4, phase_reperee: 4.4, nom_ecrit: 5.4 }),
+  lent: 1, finRec: () => 2.4, fin: () => NOM.moments().nom_ecrit + 0.4,
+  /* Compter en allumant (19 novembre 2026, règle 16) : après le tracé, chaque stimulation s’allume à son tour (stim_1,
+   * stim_2…), son numéro s’écrit sous son créneau et elle reste allumée ; le total s’écrit une fois, à la fin du compte. */
+  moments: () => {
+    const n = NOM.tr().stims.length, pas = n > 2 ? 0.45 : 0.7, m = { trace_affiche: 2.5 };
+    for (let k = 1; k <= n; k++) m['stim_' + k] = +(2.5 + pas * k).toFixed(2);
+    const tc = 2.5 + pas * n + 0.6;
+    return Object.assign(m, { stimulations_comptees: +tc.toFixed(2), phase_reperee: +(tc + 1).toFixed(2), nom_ecrit: +(tc + 2).toFixed(2) });
+  },
   reglages: {},
   motifs: {
     trace_affiche: 'le tracé est affiché : à toi de le nommer', stimulations_comptees: () => `on compte les stimulations : ${NOM.compte()}`,
@@ -364,7 +371,15 @@ const NOM = {
       if (tt > 0) MG.courbe(c, G, tr.y, 0, tt, { couleur: 'blanc', largeur: 2.4, pas: 1, aire: true, aireAlpha: .2 });
       MG.courbe(c, G, () => 0, -0.07 * span, 0, { couleur: 'blanc', largeur: 2.4 });
       c.repere('trace', MG.X(G, 0), MG.Y(G, 62), G.xb - MG.X(G, 0), G.y0 - MG.Y(G, 62), 'le tracé à nommer');
-      if (t >= M.stimulations_comptees - 0.05) T.stims.forEach((s, i) => c.texte(String(i + 1), MG.X(G, s) + 2, 318, { couleur: 'jaune', taille: tk(12), align: 'center' }));
+      const pasX = T.stims.length > 1 ? (T.stims[1] - T.stims[0]) * G.px : 99, wS = Math.max(3, 0.002 * G.px);
+      T.stims.forEach((s, i) => {
+        const mk = M['stim_' + (i + 1)], x = MG.X(G, s);
+        c.repere('stim_' + (i + 1), x - 6, 282, wS + 12, 22, `la stimulation n° ${i + 1}`);
+        if (t < mk - 0.05) return;
+        const vive = i === T.stims.length - 1 ? t < M.stimulations_comptees - 0.05 : t < M['stim_' + (i + 2)] - 0.05;
+        // créneaux serrés (série de 12) : le numéro rétrécit pour tenir sous son créneau, sans chevaucher le voisin
+        lueur(c, x - 5, 283, wS + 10, 21, { vive, numero: i + 1, nx: x + wS / 2, ny: 322, taille: Math.max(12, Math.min(tk(15), Math.floor(pasX * 0.8))) });
+      });
     });
     if (t >= M.stimulations_comptees - 0.05) { quand('cpt'); c.texte(NOM.compte(), HX(92), 388, { couleur: 'jaune', taille: tk(16) }); }
     if (t >= M.phase_reperee - 0.05) {
@@ -389,7 +404,9 @@ const NOM = {
       const desc = T.cas === 'une' ? 'une secousse de 20 mm' : T.cas === 'serie' ? (T.ph === 'contraction' ? `un plateau lisse à ${fr(Math.max(...som.map(s => s.y)), 0)} mm` : `un plateau dentelé (sommets jusqu’à ${fr(Math.max(...som.map(s => s.y)), 0)} mm)`) : som.length > 1 ? `deux sommets : ${som.map(s => fr(s.y, 0) + ' mm').join(' puis ')}` : `un seul sommet de ${fr(som[0].y, 0)} mm`;
       m.push(`Le tracé ${t >= NOM.finRec() ? 'complet' : 'en cours'} montre ${desc} ; amplitude de 0 à 60 mm.`);
     }
-    if (t >= M.stimulations_comptees - 0.05) m.push(`Les créneaux sont numérotés : « ${NOM.compte()} ».`);
+    const comptees = T.stims.filter((_, i) => t >= M['stim_' + (i + 1)] - 0.05).length;
+    if (comptees && t < M.stimulations_comptees - 0.05) m.push(`On compte les stimulations : ${comptees} allumée(s), numérotée(s) de 1 à ${comptees} sous leurs créneaux.`);
+    if (t >= M.stimulations_comptees - 0.05) m.push(`Les ${T.stims.length} créneaux sont allumés et numérotés ; total écrit : « ${NOM.compte()} ».`);
     if (t >= M.phase_reperee - 0.05) m.push(T.ph ? `La phase de la secousse précédente où tombe la suivante est colorée (${MG.NOM_PHASE[T.ph]}), la secousse seule en pointillé.` : 'Écrit : une seule stimulation, pas de suivante.');
     if (t >= M.nom_ecrit - 0.05) m.push(`Écrit : « → ${T.nom} » ; la case correspondante de la grille est encadrée et cochée.`);
     return m.join(' ');
@@ -406,12 +423,13 @@ const NOM = {
 };
 
 const V = { deux: DEUX, serie: SERIE, fatigue: FAT, nomme: NOM }[vue];
+const { lueur } = window.MuscleTableau;
 const lent = () => (typeof V.lent === 'function' ? V.lent() : V.lent);
 
 const canvas = $('canvas');
 const scene = window.MuscleTableau.Scene(canvas, (c) => { scene.cadre(61); disposer(scene.L); V.dessiner(c); return c.fin(); }, { large: true });
 const etiquetteBouton = () => { $('run').textContent = S.running ? 'Pause' : S.fait ? 'Rejouer' : (S.t > 0 ? 'Reprendre' : 'Lancer'); };
-const motif = nom => { const m = V.motifs[nom]; return typeof m === 'function' ? m() : m; };
+const motif = nom => { const m = V.motifs[nom] ?? (/^stim_\d+$/.test(nom) ? `on compte : stimulation n° ${nom.slice(5)}` : undefined); return typeof m === 'function' ? m() : m; };
 scene.avancer = dt => {
   if (!S.running) return false;
   S.t = Math.min(V.fin(), S.t + dt * lent());

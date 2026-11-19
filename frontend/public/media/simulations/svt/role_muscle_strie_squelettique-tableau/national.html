@@ -221,7 +221,7 @@ V.fibres = (() => {
       c.repere(`type${ty === 'I' ? 1 : 2}_${qui}`, x - 2, yb - H - 6, bw + 4, H + 10, `fibres de type ${ty}, personne ${qui === 'saine' ? 'saine' : 'atteinte'}`);
     });
     c.repere('graphe', x0 - 40, 14, gx.II + 2 * bw + 40 - x0 + 40, yb + 60, 'le graphique : % de fibres de type I et II');
-    if (t >= 7.2) ecrit.ecrire(c, 'compare', () => c.texte('atteinte : type I ↓, type II ↑', x0 + 40, 400, { couleur: 'rose', taille: tk(16) }));
+    if (t >= 7.2 && !ALLUME.demo) ecrit.ecrire(c, 'compare', () => c.texte('atteinte : type I ↓, type II ↑', x0 + 40, 400, { couleur: 'rose', taille: tk(16) }));
     // le tableau des caractéristiques, une ligne à la fois
     const tx0 = Math.max(gx.II + 2 * bw + tk(70), lg ? L * .44 : 380), tw = L - tx0 - 14, c1 = tw * .56, c2 = tw * .22;
     if (t >= 7.6) {
@@ -238,6 +238,8 @@ V.fibres = (() => {
         c.texte(i2, tx0 + c1 + c2 * 1.5, y, { couleur: 'rose', taille: tk(17), align: 'center', gras: true });
       });
       if (rep) c.repere(rep, tx0, y - 20, tw, 36, 'la ligne : ' + nom);
+      // le tableau lu ligne par ligne : chaque ligne s’allume à son tour et reste allumée, la dernière plus vive (règle 16)
+      if (!ALLUME.demo && r > 0) lueur(c, tx0 - 4, y - 22, tw + 8, 40, { vive: !LIG.slice(r + 1).some(l => t >= l[3]) });
     });
   }
   function voit() {
@@ -279,6 +281,11 @@ V.chaine = (() => {
         }
       });
       c.repere(k, x - 4, y - 4, w + 8, h + 8, s);
+      // une case après l’autre : elle s’allume, son numéro s’écrit à côté, et elle reste allumée (règle 16)
+      if (!ALLUME.demo && t >= M[k] - 0.2) {
+        const suivante = CASES[i + 1];
+        lueur(c, x - 5, y - 5, w + 10, h + 10, { vive: !suivante || t < M[suivante[0]] - 0.2, numero: i + 1, nx: x + 16, ny: y - 10, taille: tk(18) });
+      }
     });
     if (!lg) {} // même disposition en cadre étroit : deux lignes de trois cases
   }
@@ -510,6 +517,10 @@ V.intensite = (() => {
         ln.forEach((s, j) => c.texte(s, xs[j] + cw[j] / 2, y, { couleur: r === 0 ? 'blanc' : ['jaune', 'cyan', 'orange'][j], taille: tk(r === 0 ? 16 : 18), align: 'center', gras: r > 0, max: cw[j] - 8 }));
       }));
       c.repere('tableau', x0, 24, w, 6 * tk(42) + 10, 'le tableau des mesures');
+      // dans le tableau, les mêmes repères que sur le graphique (une ligne par mesure, le palier dans la colonne du O₂) :
+      // une démonstration allume la ligne qu’elle lit, quelle que soit la vue au tableau
+      P.forEach((_, i) => c.repere(K[i].replace('p', 'pt'), x0, 52 + (i + 1) * tk(42) - tk(26), w, tk(36), 'la ligne ' + MOTIFS[K[i]]));
+      c.repere('palier', xs[1] + 6, 52 + 3 * tk(42) - tk(26), cw[1] - 12, 2 * tk(42) + tk(36), 'le palier du O₂ consommé : 3,04 L/min');
       if (montre(S.conclusion, true)) {
         const y = 52 + 6 * tk(42) + 6;
         ecrit.ecrire(c, 'concl', () => {
@@ -663,10 +674,15 @@ V.restitution = (() => {
 })();
 
 const VU = V[VUE] || V.nageurs;
+/* Démonstration jouée sur la figure (19 novembre 2026, règle 17) : allume {cible} / eteins, voir commun.js. */
+const ALLUME = window.MuscleTableau.Allumage();
+const { lueur } = window.MuscleTableau;
 function dessiner(c) {
   scene.cadre(29);
   TK = scene.L >= 1000 ? 1.25 : 1;
+  ALLUME.brancher(c);
   VU.dessiner(c);
+  ALLUME.dessiner(c);
   return c.fin();
 }
 const canvas = $('canvas');
@@ -677,14 +693,27 @@ const chrono = Chrono({ fin: () => VU.FIN, moments: () => VU.M, motifs: VU.MOTIF
 scene.avancer = (dt) => { const a = chrono.avancer(dt); if (a) scene.sale = true; return a; };
 $('run').onclick = chrono.clic;
 window.Tableau.explication({ [VUE]: Object.keys(VU.M).map(k => ({ repere: k, texte: VU.MOTIFS[k] })) });
-const commandes = ['start', 'pause', 'resume', 'reset', 'set_time', 'play_until', 'set_parameters'];
+const commandes = ['start', 'pause', 'resume', 'reset', 'set_time', 'play_until', 'set_parameters', 'allume', 'eteins'];
+/* allume {cible} : joue jusqu’au moment de ce nom s’il n’est pas encore passé (jamais en arrière), puis allume le repère de
+ * ce nom ; la lueur reste, la dernière plus vive. eteins : plus rien d’allumé (le lecteur l’envoie à l’ouverture de la
+ * démonstration). reset / start éteignent aussi. */
+function allumer(p) {
+  const ids = [].concat((p && p.cible) == null ? [] : p.cible).map(String), M = VU.M;
+  ALLUME.allumer(ids);
+  const futurs = ids.filter(k => k in M && M[k] > chrono.t + 1e-6);
+  if (futurs.length) chrono.playUntil({ moment: futurs.reduce((a, b) => (M[a] >= M[b] ? a : b)) });
+  scene.sale = true; pont.noter('allume', { cible: ids }); pont.emettre();
+}
 const config = { id: 'muscle_tableau_national', version: '1.0', title: 'Le national au tableau', variants: Object.keys(V).map(id => ({ id, label: V[id].titre })), commands: commandes,
-  command_schema: { play_until: { moment: Object.keys(VU.M).join(' | ') }, set_parameters: { conclusions: 'true | false (false : la conclusion reste cachée ; true : montre aussi ce que ?cacher= tait)' } } };
+  command_schema: { play_until: { moment: Object.keys(VU.M).join(' | ') },
+    allume: { cible: 'un id ou une liste : moment (' + Object.keys(VU.M).join(' | ') + ') ou repère déclaré (voir simulation_manifest / reperes)', ligne: 'n° de la ligne de démonstration', texte: 'la ligne écrite' },
+    eteins: {}, set_parameters: { conclusions: 'true | false (false : la conclusion reste cachée ; true : montre aussi ce que ?cacher= tait)' } } };
 const pont = protocole({ id: config.id, commandes, config,
   texte: VU.titre + '. Document d’examen national rejoué étape par étape ; valeurs du sujet.',
-  etat: () => ({ simulation_status: chrono.statut(), current_variant: VUE, ce_qui_se_voit: VU.voit(), moments: VU.M, time_s: +chrono.t.toFixed(2), parameters: CACHER ? { ...R, cacher: CACHER, revele: REVELE } : { ...R } }),
+  etat: () => ({ simulation_status: chrono.statut(), current_variant: VUE, ce_qui_se_voit: VU.voit() + (ALLUME.ids.length ? ' Allumé : ' + ALLUME.ids.join(', ') + '.' : ''), allumes: ALLUME.ids.slice(), moments: VU.M, time_s: +chrono.t.toFixed(2), parameters: CACHER ? { ...R, cacher: CACHER, revele: REVELE } : { ...R } }),
   progression: () => (chrono.statut() === 'finished' ? 1 : chrono.t / VU.FIN),
-  executer: (cmd, p) => ({ start: chrono.start, pause: chrono.pause, resume: chrono.resume, reset: chrono.reset,
+  executer: (cmd, p) => ({ start: () => { ALLUME.eteindre(false); chrono.start(); }, pause: chrono.pause, resume: chrono.resume,
+    reset: () => { ALLUME.eteindre(false); chrono.reset(); }, allume: () => allumer(p), eteins: () => { ALLUME.eteindre(true); scene.sale = true; pont.noter('eteins', {}); pont.emettre(); },
     set_time: () => chrono.setTime(p), play_until: () => chrono.playUntil(p),
     set_parameters: () => { if (p && 'conclusions' in p) { R.conclusions = p.conclusions !== false && p.conclusions !== 'false'; REVELE = R.conclusions || !CACHER; } scene.sale = true; } })[cmd]?.() });
 bulle($('feedback'), VU.titre);

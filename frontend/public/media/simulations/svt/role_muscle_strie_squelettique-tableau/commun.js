@@ -113,5 +113,46 @@
     });
     return scene;
   }
-  window.MuscleTableau = { Scene, VW, VH };
+  /*
+   * Compter et démontrer en allumant (19 novembre 2026 ; simulations-au-tableau règles 16 et 17, professeur 44 et 45).
+   * lueur(c, x, y, w, h, { vive, numero, nx, ny, taille }) : une lueur jaune douce derrière un objet (la dernière allumée
+   * plus vive), et, pour un comptage, son numéro écrit proprement à la craie à côté (nx, ny : où l'écrire).
+   * Allumage() : les ordres du lecteur pendant une démonstration jouée sur la figure —
+   *   allume {cible: id | [ids]} (repère ou moment), eteins {} ; A.brancher(c) au début de chaque image retient le
+   *   rectangle de chaque repère déclaré, A.dessiner(c) à la fin allume ceux de A.ids ; A.demo vaut vrai dès qu'une
+   *   démonstration a commencé (la page cache alors ce que la colonne de démonstration écrit déjà).
+   */
+  function arrondi(g, x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
+    g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+  }
+  function lueur(c, x, y, w, h, o = {}) {
+    const vive = !!o.vive;
+    c.direct(() => {
+      const g = c.ctx;
+      g.save(); g.globalCompositeOperation = 'destination-over';
+      g.shadowColor = 'rgba(250, 204, 21, .85)'; g.shadowBlur = vive ? 22 : 12;
+      g.fillStyle = `rgba(250, 204, 21, ${vive ? 0.24 : 0.13})`; arrondi(g, x, y, w, h, 8); g.fill(); g.restore();
+      g.save(); g.strokeStyle = `rgba(250, 204, 21, ${vive ? 0.95 : 0.5})`; g.lineWidth = vive ? 2.6 : 1.6;
+      arrondi(g, x, y, w, h, 8); g.stroke(); g.restore();
+      if (o.numero != null) c.texte(String(o.numero), o.nx ?? x - 6, o.ny ?? y + Math.min(h, 24) - 4,
+        { couleur: 'jaune', taille: o.taille || 18, align: o.align || (o.nx == null ? 'right' : 'center'), gras: true });
+    });
+  }
+  function Allumage() {
+    const A = { ids: [], rects: {}, demo: false };
+    A.brancher = (c) => {
+      A.rects = {};
+      if (c._allumage) return;
+      const r0 = c.repere;
+      c.repere = function (id, x, y, w, h, l) { A.rects[id] = [x, y, w, h]; return r0.call(this, id, x, y, w, h, l); };
+      c._allumage = true;
+    };
+    A.allumer = (cible) => { [].concat(cible == null ? [] : cible).map(String).forEach(id => { A.ids = A.ids.filter(k => k !== id); A.ids.push(id); }); A.demo = true; };
+    A.eteindre = (demo) => { A.ids = []; A.demo = !!demo; };
+    A.dessiner = (c) => A.ids.forEach((id, i) => { const r = A.rects[id]; if (r) lueur(c, r[0] - 3, r[1] - 3, r[2] + 6, r[3] + 6, { vive: i === A.ids.length - 1 }); });
+    return A;
+  }
+  window.MuscleTableau = { Scene, VW, VH, lueur, Allumage };
 })();

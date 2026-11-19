@@ -213,6 +213,14 @@ function dessiner(c) {
     quand(c, 'leg_' + E.phase + E.cyc, L.length > 0, () => L.forEach((l, i) => c.texte(l, XT, (LG ? 96 : 88) + i * tkr(23), { couleur: E.phase === 'bloquee' ? 'rouge' : 'blanc', taille: tkr(16) })));
   } else {
     ITEMS().forEach((it, i) => quand(c, 'it' + i + it[2], t >= it[3], () => { c.texte(it[0], XT, LISTE_Y[i], { couleur: it[2], taille: tkr(15) }); if (it[1]) c.texte(it[1], XT + 18, LISTE_Y[i] + tkr(18), { couleur: it[2], taille: tkr(14) }); }));
+    // Les étapes parcourues une à une (19 novembre 2026, règle 16) : chaque étape écrite s’allume et reste allumée,
+    // la dernière plus vive ; un repère par étape (etape_1 … etape_6) pour que le tuteur la montre.
+    const IT = ITEMS();
+    IT.forEach((it, i) => {
+      const y = LISTE_Y[i] - tkr(17), h = tkr(it[1] ? 40 : 24), w = Math.max(80, scene.L - XT - 6);
+      c.repere('etape_' + (i + 1), XT - 6, y, w, h, 'étape ' + (i + 1) + ' : ' + it[0].replace(/^\d\s+/, '') + (it[1] ? ' ' + it[1] : ''));
+      if (t >= it[3]) window.MuscleTableau.lueur(c, XT - 6, y, w, h, { vive: !IT[i + 1] || t < IT[i + 1][3] });
+    });
   }
 }
 function ITEMS() {

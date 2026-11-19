@@ -209,3 +209,15 @@ quatre-vingt-cinq).
   `conclusions: false`) ; la reformuler demande de réécrire une voix déjà faite : laissé pour une prochaine passe.
 - Le contrôle de pointage garde ses 5 « introuvable » d'avant (`ms_u6_legender`, `ms_r8_inhibiteurs`), déjà présents
   en ligne ; aucun nouveau.
+
+## Passe du 19 novembre 2026 — compter en allumant, démonstration sur le document
+
+- `national.html` : `allume {cible}` / `eteins` dans toutes les vues (lueur jaune qui reste sur le repère, la dernière
+  plus vive ; `commun.js` : `lueur`, `Allumage`). Lignes `allume` sur les démonstrations de `ms_n2_fibres`,
+  `ms_r6b_intensite`, `ms_x4b_eliminer`. `?vue=fibres` : le tableau s'allume ligne par ligne ; `?vue=chaine` : les
+  six cases s'allument, numérotées 1 à 6.
+- `ms_f6_nomme` (`sommation.html?vue=nomme`) : les stimulations comptées une à une (moments `stim_1` … `stim_n`, numéro
+  sous chaque créneau, total écrit à la fin) ; pointage « شحال من excitation؟ » → `stim_1`.
+- `ms_c7_ordre` (`cycle.html?vue=etapes`) : chaque étape écrite s'allume, repères `etape_1` … `etape_6`.
+- Énoncé du national d'abord : en attente du gabarit commun `shared/examen/feuille.html` (voir
+  `docs/audit-national/svt.md`, section ch2).
