@@ -146,12 +146,38 @@ const marque = (c, nom) => { MM[nom] = c.cur; };
  * ligne dans la colonne de droite. */
 const Q = { large: false, k: 1, x: 0, w: 280, dtMax: 200 };
 const RT0 = { ...RT };
+/* La simulation d'abord (18 novembre 2026) : sur un cadre de téléphone (le texte de 15,5 px y vaut plus de 20 unités du
+ * dessin), il n'y a pas la place des deux vues côte à côte. Le montage a tout le cadre jusqu'à ce que le triangle en sorte ;
+ * ensuite « Le triangle seul » prend toute la largeur (triangle à gauche, lignes à droite), le montage se tait (masqué,
+ * son écriture garde son rythme : les moments ne changent pas). Les libellés secondaires se taisent, les autres raccourcissent. */
+const tel = () => craie.W > 1 && (craie.W < 700 || craie.H < 250);   // cadre de téléphone (comme commun.js)
+const focus = () => tel() && M.demi_largeur !== undefined && S.t > M.demi_largeur + .05;
+/** Téléphone, avant le triangle : le montage seul, centré dans le cadre (décalage en x, unités du dessin). */
+const decalage = () => (tel() && !focus() ? Math.max(0, (scene.L - RM.x - RM.w - 8) / 2) : 0);
+const TT = n => Math.max(n, 15.5 / (scene.s || 1));
 function disposer(L) {
-  Q.large = L >= 1000;
-  if (Q.large) {
+  Q.large = L >= 1000 || tel();
+  if (focus()) {
+    RT.x = 8; RT.w = L - 16; Q.k = 1.22; Q.w = Math.min(560, RT.w * .56); Q.x = RT.x + RT.w - Q.w - 8;
+    Q.dtMax = Q.x - RT.x - 18 - 130; TA.x = RT.x + 22; TA.y = 352;
+  } else if (tel()) {
+    Object.assign(RT, RT0); Q.k = 1.22; Q.w = 280; Q.x = RT.x + 10; Q.dtMax = 200; TA.x = 474; TA.y = 352;
+  } else if (Q.large) {
     RT.w = L - 8 - RT.x; Q.k = 1.22; Q.w = Math.min(360, RT.w * .42); Q.x = RT.x + RT.w - Q.w - 8;
     Q.dtMax = Q.x - RT.x - 18 - 120; TA.x = RT.x + 22; TA.y = 352;
   } else { Object.assign(RT, RT0); Q.k = 1; Q.x = RT.x + 10; Q.w = 280; TA.x = 474; TA.y = 170; DT = 200; }
+}
+/** Téléphone : les lignes à droite du triangle, chacune juste sous la précédente, à la taille réellement écrite. */
+function placerTel(c) {
+  const E = ECRITS, k = Q.k, y1 = 56 + hauteurs(c, E.r1, 16 * k)[0];
+  const y2 = sous(c, y1, E.r1, 16 * k, E.r2, 20 * k, 8), y4 = sous(c, y2, E.r2, 20 * k, E.r4, 16 * k, 8);
+  const y5 = sous(c, y4, E.r4, 16 * k, E.r5, 19 * k, 12), y6 = sous(c, y5, E.r5, 19 * k, E.eg, 19 * k, 14);
+  Object.assign(LIGNES, { 288: y1, 316: y2, 344: -999, 368: y4, 396: y5, 386: y6, 406: y6 });
+  if (!focus()) return;
+  // la colonne des lignes juste assez large : le triangle prend le reste
+  const w = Math.max(c.largeurTexte(E.r1, TT(16 * k)), c.largeurTexte(E.r2, TT(20 * k)), c.largeurTexte('θ petit (rad) : tan θ ≈ θ', TT(16 * k)),
+    c.largeurTexte(E.or, TT(15 * k)) + 30 + c.largeurTexte(E.eg, TT(19 * k)));
+  Q.w = Math.min(RT.w * .6, w + 12); Q.x = RT.x + RT.w - Q.w - 8; Q.dtMax = Q.x - RT.x - 56 - c.largeurTexte(`⟦L|2⟧ = ${fx(Lm() * 50)} cm`, TT(17));
 }
 /* 17 novembre 2026 : les relations s'écrivent comme dans le cahier (fractions sur deux étages), les lignes prennent
  * plus de hauteur ; sur le petit tableau le triangle seul monte un peu (TA.y 214 → 170) pour leur laisser la place. */
@@ -177,38 +203,50 @@ function placerPetit(c) {
   Object.assign(PETIT, { 288: y1, 316: y2, 344: y3, 368: y4, 396: y5, 386: yo, 406: y6 });
 }
 function dessiner(c) {
-  scene.cadre(23); MM = {}; disposer(scene.L); if (!Q.large) placerPetit(c);
+  scene.cadre(23); MM = {}; disposer(scene.L); if (!Q.large) placerPetit(c); else if (tel()) placerTel(c);
+  const F = focus(), T = tel();
+  c.ctx.translate(decalage(), 0);
+  /* le montage masqué (focus) : ses traits et ses mots s'écrivent hors de vue */
+  const cache = fn => { if (!F) return fn(); c.ctx.save(); c.ctx.beginPath(); c.ctx.rect(0, 0, 0, 0); c.ctx.clip(); try { fn(); } finally { c.ctx.restore(); } };
   const G = geo(), XE = G.XE, h = G.h, col = couleurDe(S.lam), th = theta(), L = Lm();
   const C = { x: TA.x + DT, y: TA.y }, B = { x: TA.x + DT, y: TA.y - G.Ht };
   // 1. La lumière (peinte), puis les deux vues et leurs étiquettes.
   const t0 = c.cur; c.pause(1.4); const pl = clamp((c.t - t0) / 1.4);
+  const cacheTel = fn => (T && !F ? (() => { c.ctx.save(); c.ctx.beginPath(); c.ctx.rect(0, 0, 0, 0); c.ctx.clip(); try { fn(); } finally { c.ctx.restore(); } })() : fn());
+  const al = Math.atan2(h, XE - XS), r = .55 * (XE - XS);
+  cache(() => {
   c.direct(() => peindreMontage(c.ctx, pl));
-  c.texte('Montage vu de dessus', RM.x + 6, 32, { couleur: 'cyan', taille: 17 });
+  c.texte(T ? 'Montage (angle exagéré)' : 'Montage vu de dessus', RM.x + 6, 32, { couleur: 'cyan', taille: 17 });
   c.rect(RM.x, RM.y, RM.w, RM.h, { couleur: 'tresfaible', arrondi: 10 });
+  });
+  cacheTel(() => {
   c.texte('Le triangle seul', RT.x + 6, 32, { couleur: 'cyan', taille: 17 });
   c.rect(RT.x, RT.y, RT.w, RT.h, { couleur: 'tresfaible', arrondi: 10 });
-  c.texte('angle exagéré pour l’œil', RM.x + 10, 70, { couleur: 'faible', taille: 14 });
+  });
+  cache(() => {
+  if (!T) c.texte('angle exagéré pour l’œil', RM.x + 10, 70, { couleur: 'faible', taille: 14 });
   c.texte('laser', 45, YC - 20, { couleur: 'blanc', taille: 15, align: 'center' });
   c.texte('fente', XS, 96, { couleur: 'blanc', taille: 15, align: 'center' });
   c.texte('écran', XE + 3, 96, { couleur: 'blanc', taille: 15, align: 'center' });
-  c.cote(XS, 368, XE, 368, `D = ${fr(S.D, 1)} m`, { couleur: 'cyan', taille: 15 });
+  c.cote(XS, 368, XE, 368, '', { couleur: 'cyan' });
+  c.texte(`D = ${fr(S.D, 1)} m`, (XS + XE) / 2, 362, { couleur: 'cyan', taille: 15, align: 'center' });
   marque(c, 'montage');
   // 2. Le rayon vers le centre de la tache.
   c.pause(.4);
   c.ligne(XS, YC, XE, YC, { couleur: 'blanc', largeur: 2 }); c.point(XE, YC, 4, 'jaune');
-  c.texte('vers le centre', XS + 12, YC + 20, { couleur: 'blanc', taille: 14 });
+  c.texte(T ? 'centre' : 'vers le centre', XS + 12, YC + 6 + TT(14) * .75, { couleur: 'blanc', taille: 14 });
   marque(c, 'rayon_centre');
   // 3. Le rayon vers le bord de la tache centrale (première extinction).
   c.pause(.4);
   c.ligne(XS, YC, XE, YC - h, { couleur: 'jaune', largeur: 2 }); c.point(XE, YC - h, 4, 'rose');
   const yb = clamp(Math.min(YC - h - 10, YC - 30), 102, 400);       // au-dessus du rayon, jamais sur l’écran ni sur « fente »
   const xb = XS + 10 + clamp(XE - XS - 120, 0, 30), mb = XE - xb - 8;   // entre la fente et l’écran, réduit si l’écran est proche
-  c.texte('vers le bord', xb, yb - 16, { couleur: 'jaune', taille: 14, max: mb });
-  c.texte('(1re extinction)', xb, yb, { couleur: 'jaune', taille: 14, max: mb });
+  if (T) c.texte('bord', XE - 8, YC - h - 12, { couleur: 'jaune', taille: 14, align: 'right' });
+  else { c.texte('vers le bord', xb, yb - 16, { couleur: 'jaune', taille: 14, max: mb });
+  c.texte('(1re extinction)', xb, yb, { couleur: 'jaune', taille: 14, max: mb }); }
   marque(c, 'rayon_bord');
   // 4. L’angle θ, entre les deux rayons : du centre au bord.
   c.pause(.4);
-  const al = Math.atan2(h, XE - XS), r = .55 * (XE - XS);
   c.courbe(u => [XS + r * Math.cos(-al * u), YC + r * Math.sin(-al * u)], 14, { couleur: 'orange', largeur: 2.2 });
   c.texte('θ', XS + (r + 13) * Math.cos(al / 2), al > .14 ? YC - (r + 13) * Math.sin(al / 2) + 6 : YC - (r + 13) * Math.sin(al) - 6, { couleur: 'orange', taille: 19, align: 'center' });
   c.texte('θ : du centre au bord (pas d’un bord à l’autre)', RM.x + 10, 400, { couleur: 'orange', taille: 15, max: 420 });
@@ -219,12 +257,13 @@ function dessiner(c) {
   c.texte(`⟦L|2⟧ = ${fx(L * 50)} cm`, XE + 32, YC - h / 2 + 5, { couleur: 'rose', taille: 14 });
   c.ligne(XE + 12, YC - h, XE + 12, YC + h, { couleur: 'faible', largeur: 1.8, pointille: [5, 5] });
   c.ligne(XE + 7, YC - h, XE + 17, YC - h, { couleur: 'faible', largeur: 1.6, duree: .05 }); c.ligne(XE + 7, YC + h, XE + 17, YC + h, { couleur: 'faible', largeur: 1.6, duree: .05 });
-  c.texte(`L = ${fx(L * 100)} cm`, XE + 20, YC + Math.max(h / 2, 22) + 5, { couleur: 'faible', taille: 14 });
+  c.texte(`L = ${fx(L * 100)} cm`, XE + 20, YC + Math.max(h / 2, 22) + 5 + (T ? TT(14) * .6 : 0), { couleur: 'faible', taille: 14 });
   marque(c, 'demi_largeur');
+  });
   // 6. Le triangle sort du montage et va dans « Le triangle seul » (agrandi, même angle).
   c.pause(.3);
   const t6 = c.cur; c.pause(1.3); const pg = clamp((c.t - t6) / 1.3);
-  if (pg > 0 && pg < 1) c.direct(() => {
+  if (pg > 0 && pg < 1 && !T) c.direct(() => {
     const e = pg * pg * (3 - 2 * pg), lerp = (p, q) => [p[0] + (q[0] - p[0]) * e, p[1] + (q[1] - p[1]) * e];
     c.trait([lerp([XS, YC], [TA.x, TA.y]), lerp([XE, YC], [C.x, C.y]), lerp([XE, YC - h], [B.x, B.y])], { ferme: true, couleur: 'jaune', largeur: 2.4 });
   });
@@ -234,14 +273,15 @@ function dessiner(c) {
   c.courbe(u => [TA.x + rt * Math.cos(-at * u), TA.y + rt * Math.sin(-at * u)], 14, { couleur: 'orange', largeur: 2.2 });
   c.texte('θ', TA.x + (rt + 14) * Math.cos(at / 2), at > .14 ? TA.y - (rt + 14) * Math.sin(at / 2) + 6 : TA.y - (rt + 14) * Math.sin(at) - 6, { couleur: 'orange', taille: 19, align: 'center' });
   const mid = Math.min(TA.y - G.Ht / 2, TA.y - 34);
-  c.texte('⟦L|2⟧', C.x + 8, mid - 15, { couleur: 'rose', taille: 17 });   // écrite sur deux étages : un peu plus haut
-  c.texte(`= ${fx(L * 50)} cm`, C.x + 8, mid + 11, { couleur: 'rose', taille: 14 });
-  c.texte('côté opposé', C.x + 8, mid + 27, { couleur: 'faible', taille: 13 });
+  if (T) c.texte(`⟦L|2⟧ = ${fx(L * 50)} cm`, C.x + 8, Math.min(mid, TA.y - 40), { couleur: 'rose', taille: 17 });
+  else { c.texte('⟦L|2⟧', C.x + 8, mid - 15, { couleur: 'rose', taille: 17 });   // écrite sur deux étages : un peu plus haut
+  c.texte(`= ${fx(L * 50)} cm`, C.x + 8, mid + 11, { couleur: 'rose', taille: 14 }); }
+  if (!T) c.texte('côté opposé', C.x + 8, mid + 27, { couleur: 'faible', taille: 13 });
   c.texte(`D = ${fr(S.D, 1)} m`, TA.x + DT / 2, TA.y + 24, { couleur: 'cyan', taille: 16, align: 'center' });
-  c.texte('côté adjacent', TA.x + DT / 2, TA.y + 42, { couleur: 'faible', taille: 13, align: 'center' });
+  if (!T) { c.texte('côté adjacent', TA.x + DT / 2, TA.y + 42, { couleur: 'faible', taille: 13, align: 'center' });
   c.texte('fente', TA.x, TA.y + 22, { couleur: 'faible', taille: 13, align: 'center' });
   c.texte('centre', C.x, C.y + 22, { couleur: 'faible', taille: 13, align: 'center' });
-  c.texte('bord', B.x - 6, B.y - 8, { couleur: 'faible', taille: 13, align: 'right' });
+  c.texte('bord', B.x - 6, B.y - 8, { couleur: 'faible', taille: 13, align: 'right' }); }
   marque(c, 'triangle_isole');
   // 7. tan θ dans le triangle.
   c.pause(.4);
@@ -251,29 +291,31 @@ function dessiner(c) {
   marque(c, 'tan_ecrit');
   // 8. θ petit, en radian : tan θ ≈ θ.
   c.pause(.5);
-  c.texte(`θ = ${sci(th)} rad ;  tan θ = ${sci(Math.tan(th))}`, qx, Q.y(344), { couleur: 'blanc', taille: 16 * k, max: Q.w });
-  c.texte('θ petit, en radian : tan θ ≈ θ', qx, Q.y(368), { couleur: 'vert', taille: 16 * k, max: Q.w });
+  if (!T) c.texte(`θ = ${sci(th)} rad ;  tan θ = ${sci(Math.tan(th))}`, qx, Q.y(344), { couleur: 'blanc', taille: 16 * k, max: Q.w });
+  c.texte(T ? 'θ petit (rad) : tan θ ≈ θ' : 'θ petit, en radian : tan θ ≈ θ', qx, Q.y(368), { couleur: 'vert', taille: 16 * k, max: Q.w });
   // relations écrites comme dans le cahier (fractions sur deux étages) : le cadre prend la hauteur des deux étages
   const [h5, b5] = hauteurs(c, ECRITS.r5, 19 * k);
   c.texte(ECRITS.r5, qx + 6, Q.y(396), { couleur: 'jaune', taille: 19 * k });
-  c.rect(qx - 2, Q.y(396) - h5 - 3, c.largeurTexte(ECRITS.r5, 19 * k) + 16, h5 + b5 + 6, { couleur: 'jaune', largeur: 1.6, arrondi: 6 });
+  c.rect(qx - 2, Q.y(396) - h5 - 3, c.largeurTexte(ECRITS.r5, TT(19 * k)) + 16, h5 + b5 + 6, { couleur: 'jaune', largeur: 1.6, arrondi: 6 });
   marque(c, 'petit_angle');
   // 9. (vue triangle) L’égalité avec θ = λ/a.
   if (vue === 'triangle') {
     c.pause(.5);
     const ox = Q.large ? qx : RT.x + 158;
     const [h6, b6] = hauteurs(c, ECRITS.eg, 19 * k);
-    c.texte(ECRITS.or, ox, Q.y(386), { couleur: 'blanc', taille: 15 * k });
-    c.texte(ECRITS.eg, ox + 6, Q.y(406), { couleur: 'vert', taille: 19 * k });
-    c.rect(ox - 2, Q.y(406) - h6 - 3, c.largeurTexte(ECRITS.eg, 19 * k) + 16, h6 + b6 + 6, { couleur: 'vert', largeur: 1.6, arrondi: 6 });
+    // téléphone : « or θ = λ/a : » et l'égalité encadrée sur la même ligne
+    const dx = T ? c.largeurTexte(ECRITS.or, TT(15 * k)) + 16 : 0;
+    c.texte(ECRITS.or, ox, T ? Q.y(406) : Q.y(386), { couleur: 'blanc', taille: 15 * k });
+    c.texte(ECRITS.eg, ox + 6 + dx, Q.y(406), { couleur: 'vert', taille: 19 * k });
+    c.rect(ox - 2 + dx, Q.y(406) - h6 - 3, c.largeurTexte(ECRITS.eg, TT(19 * k)) + 16, h6 + b6 + 6, { couleur: 'vert', largeur: 1.6, arrondi: 6 });
     marque(c, 'egalite');
   }
   c.pause(.8); marque(c, 'fin');
   // Poignée de l’écran et repères (toujours déclarés : le tuteur peut les montrer à tout instant).
-  c.direct(() => {
+  cache(() => c.direct(() => {
     c.cercle(XE + 3, YB + 10, 7, { couleur: 'jaune', largeur: 1.8 });
-    c.texte('⇔', XE + 14, YB + 15, { couleur: 'faible', taille: 13 });
-  });
+    if (!T) c.texte('⇔', XE + 14, YB + 15, { couleur: 'faible', taille: 13 });
+  }));
   const isole = c.t >= MM.triangle_isole;
   c.repere('vue_montage', RM.x, RM.y, RM.w, RM.h, 'le montage vu de dessus');
   c.repere('vue_triangle', RT.x, RT.y, RT.w, RT.h, 'le triangle seul');
@@ -419,8 +461,8 @@ $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
 
 /* Poignée : l’écran (D de 1,0 à 3,0 m, pas de 0,1 m). */
 window.Tableau.glisser(canvas, {
-  toucher: (px, py) => { const [x, y] = scene.local(px, py), XE = geo().XE; return Math.abs(x - XE - 3) < 15 && y > YH - 12 && y < YB + 22 ? 'ecran' : null; },
-  bouger: (id, px) => { const [x] = scene.local(px, 0), D = +pas((x - XS) / PXD, 1, 3, .1).toFixed(1); if (D !== S.D) garderPhase(() => { S.D = D; }); },
+  toucher: (px, py) => { const [x0, y] = scene.local(px, py), x = x0 - decalage(), XE = geo().XE; return Math.abs(x - XE - 3) < 15 && y > YH - 12 && y < YB + 22 ? 'ecran' : null; },
+  bouger: (id, px) => { const x = scene.local(px, 0)[0] - decalage(), D = +pas((x - XS) / PXD, 1, 3, .1).toFixed(1); if (D !== S.D) garderPhase(() => { S.D = D; }); },
   lacher: () => { bulle($('feedback'), `Écran à D = ${fr(S.D, 1)} m : L = ${fx(Lm() * 100)} cm, mais θ = ${sci(theta())} rad ne change pas.`); pont.noter('set_parameters', { D_m: S.D }); pont.emettre(); },
 });
 

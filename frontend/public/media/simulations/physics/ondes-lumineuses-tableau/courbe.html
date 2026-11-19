@@ -90,7 +90,7 @@ const VITESSE = 1.5;                               // horloge de l’écriture (
 
 /* ── Géométrie ───────────────────────────────────────────────────────── */
 const RX = { x: 8, y: 44, w: 254, h: 368 }, RC = { x: 270, y: 44, w: 482, h: 368 };
-const O = { x: 322, y: 366 }, AYL = 290;
+const O = { x: 322, y: 366 }, AYL = 290;   // O.x suit le graphe (disposer)
 let AXL = 400;
 /* Agrandissement du 15 novembre 2026 : sur un tableau large (L ≥ 1000, portable 1366 × 613), le graphe s'élargit
  * (axe des abscisses plus long) et les phrases (droite, pente, identification, point lu) passent dans une colonne
@@ -106,13 +106,28 @@ function hauteurs(c, s, t) {
 }
 /** Base de la ligne s2 écrite sous la ligne s1 (base y), sans chevauchement. */
 const sous = (c, y, s1, t1, s2, t2, ecart = 4) => y + hauteurs(c, s1, t1)[1] + ecart + hauteurs(c, s2, t2)[0];
+/* La simulation d'abord (18 novembre 2026) : sur un cadre de téléphone (texte de 15,5 px = plus de 20 unités du dessin),
+ * trois colonnes ne tiennent pas. Jusqu'au tracé de la droite : l'expérience (plus large) et le graphe ; ensuite le graphe
+ * passe à gauche et les lignes (pente, identification) à sa droite, l'expérience se tait (masquée : son écriture garde
+ * son rythme, les moments ne changent pas). Le tableau des mesures n'écrit que les noms des grandeurs (les unités sont
+ * sur les axes), une graduation sur deux si elles se touchent. */
+const tel = () => craie.W > 1 && (craie.W < 700 || craie.H < 250);
+const phaseB = () => tel() && M.debut_courbe !== undefined && S.t >= M.debut_courbe;
+const TT = n => Math.max(n, 15.5 / (scene.s || 1));
+function cacher(oui, c, fn) { if (!oui) return fn(); c.ctx.save(); c.ctx.beginPath(); c.ctx.rect(0, 0, 0, 0); c.ctx.clip(); try { return fn(); } finally { c.ctx.restore(); } }
 function disposer(L) {
-  TX.large = L >= 1000;
-  if (TX.large) {
+  TX.large = L >= 1000 || tel();
+  RX.w = 254; RC.x = 270;
+  if (tel()) {
+    TX.k = 1.18;
+    if (phaseB()) { RC.x = 8; RC.w = Math.round(L * .5); }
+    else { RX.w = 330; RC.x = RX.x + RX.w + 8; RC.w = L - 8 - RC.x; }
+    TX.x = RC.x + RC.w + 14; TX.w = L - TX.x - 8;
+  } else if (TX.large) {
     TX.w = Math.round(Math.min(380, L * .27)); TX.k = 1.18;
     RC.w = L - 8 - TX.w - 14 - RC.x; TX.x = RC.x + RC.w + 14;
   } else { RC.w = 482; TX.x = 338; TX.w = 330; TX.k = 1; }
-  AXL = RC.w - 82; TX.D = RC.x + RC.w - 10;   // TX.D : bord droit du graphe (nom de l'axe x, point lu)
+  O.x = RC.x + 52; AXL = RC.w - 82; TX.D = RC.x + RC.w - 10;   // TX.D : bord droit du graphe (nom de l'axe x, point lu)
 }
 const PX = x => O.x + x * AXL / C().xmax, PY = y => O.y - y * AYL / C().ymax;
 const MV = { yc: 100, yh: 74, yb: 126, xs: 74 };             // petit montage vu de dessus
@@ -190,32 +205,37 @@ const marque = (c, nom) => { MM[nom] = c.cur; };
 function lueur(c, couleur, fn) { const x = c.ctx; x.save(); x.shadowColor = couleur; x.shadowBlur = 9; try { fn(); } finally { x.restore(); } }
 function dessiner(c) {
   scene.cadre(41); MM = {}; disposer(scene.L);
-  const K = C(), val = reglageA(c.t), E = peindreLaVue(c, val), k = TX.k;
-  c.texte('L’expérience', RX.x + 6, 32, { couleur: 'cyan', taille: 17 });
-  c.rect(RX.x, RX.y, RX.w, RX.h, { couleur: 'tresfaible', arrondi: 10 });
+  const K = C(), T = tel(), B = phaseB(), k = TX.k;
+  const E = cacher(B, c, () => peindreLaVue(c, reglageA(c.t)));
+  cacher(B, c, () => { c.texte('L’expérience', RX.x + 6, 32, { couleur: 'cyan', taille: 17 });
+  c.rect(RX.x, RX.y, RX.w, RX.h, { couleur: 'tresfaible', arrondi: 10 }); });
   c.texte(`La courbe : ${K.titre}`, RC.x + 6, 32, { couleur: 'cyan', taille: 17 });
   c.rect(RC.x, RC.y, RC.w, RC.h, { couleur: 'tresfaible', arrondi: 10 });
-  c.texte('écran vu de face', 14, 160, { couleur: 'faible', taille: 13 });
-  // Axes : noms ET unités.
-  c.axe(O.x, O.y, O.x + AXL + 20, O.y, K.xt.map(x => [x * AXL / K.xmax / (AXL + 20), fr(x, K.xd)]), { taille: 13 });
-  c.axe(O.x, O.y, O.x, O.y - AYL - 14, K.yt.map(y => [y * AYL / K.ymax / (AYL + 14), fr(y, K.yd)]), { taille: 13, vertical: true });
+  cacher(B || T, c, () => c.texte('écran vu de face', 14, 160, { couleur: 'faible', taille: 13 }));
+  // Axes : noms ET unités (une graduation sur deux si les nombres se toucheraient).
+  const unSur = (pasU, w) => (pasU >= w * 1.5 ? 1 : 2), sx = unSur((K.xt[1] - K.xt[0]) * AXL / K.xmax, c.largeurTexte('0,5', TT(13))), sy = unSur((K.yt[1] - K.yt[0]) * AYL / K.ymax, TT(13));
+  c.axe(O.x, O.y, O.x + AXL + 20, O.y, K.xt.map((x, i) => [x * AXL / K.xmax / (AXL + 20), (K.xt.length - 1 - i) % sx ? null : fr(x, K.xd)]), { taille: 13 });
+  c.axe(O.x, O.y, O.x, O.y - AYL - 14, K.yt.map((y, i) => [y * AYL / K.ymax / (AYL + 14), (K.yt.length - 1 - i) % sy ? null : fr(y, K.yd)]), { taille: 13, vertical: true });
   c.texte('0', O.x - 8, O.y + 18, { couleur: 'faible', taille: 13, align: 'right' });
   c.texte(K.ylab, O.x + 10, 70, { couleur: 'blanc', taille: 16 });
-  if (K.ymul) c.texte(K.ymul, O.x + 72, 70, { couleur: 'faible', taille: 14 });
+  if (K.ymul) c.texte(K.ymul, Math.max(O.x + 72, O.x + 18 + c.largeurTexte(K.ylab, TT(16))), 70, { couleur: 'faible', taille: 14 });
   c.texte(K.xlab, TX.D, O.y - 10, { couleur: 'blanc', taille: 16, align: 'right' });
-  if (K.xmul) c.texte(K.xmul, TX.D, O.y + 20, { couleur: 'faible', taille: 14, align: 'right' });
+  if (K.xmul) c.texte(K.xmul, TX.D, T ? O.y - 14 - TT(16) * 1.05 : O.y + 20, { couleur: 'faible', taille: 14, align: 'right' });
   // Tableau des mesures : l’en-tête.
-  const cols = K.colonnes.length === 3 ? [50, 135, 216] : [72, 190];
-  c.texte('Mesures', 14, 266, { couleur: 'cyan', taille: 15 });
-  K.colonnes.forEach((t, i) => c.texte(t, cols[i], 288, { couleur: 'blanc', taille: 13, align: 'center', max: 80 }));
-  c.ligne(16, 295, 254, 295, { couleur: 'tresfaible', largeur: 1.4 });
+  const cols = T ? (K.colonnes.length === 3 ? [.17, .5, .83] : [.28, .72]).map(f => RX.x + RX.w * f) : K.colonnes.length === 3 ? [50, 135, 216] : [72, 190];
+  const yT = T ? 268 : 288, pasT = T ? 34 : 23;              // téléphone : en-tête plus bas, lignes plus espacées
+  cacher(B, c, () => {
+  cacher(T, c, () => c.texte('Mesures', 14, 266, { couleur: 'cyan', taille: 15 }));
+  K.colonnes.forEach((t, i) => c.texte(T ? t.split(' (')[0] : t, cols[i], yT, { couleur: 'blanc', taille: 13, align: 'center', max: T ? undefined : 80 }));
+  c.ligne(16, yT + 7, RX.x + RX.w - 8, yT + 7, { couleur: 'tresfaible', largeur: 1.4 });
+  });
   marque(c, 'trace');
   // Les quatre points, un par mesure.
   for (let k = 1; k <= 4; k++) {
     c.pause(.3);
     if (k > 1) { marque(c, 'anim_' + k); c.pause(1.0); }
-    const v = K.vals[k - 1], x = PX(K.X(v)), y = PY(K.Y(v)), yRow = 290 + 23 * k;
-    K.ligne(v).forEach((t, i) => c.texte(t, cols[i], yRow, { couleur: 'jaune', taille: 15, align: 'center', max: 80, duree: .35 }));
+    const v = K.vals[k - 1], x = PX(K.X(v)), y = PY(K.Y(v)), yRow = yT + 2 + pasT * k;
+    cacher(B, c, () => K.ligne(v).forEach((t, i) => c.texte(t, cols[i], yRow, { couleur: 'jaune', taille: 15, align: 'center', max: T ? undefined : 80, duree: .35 })));
     // Lignes de rappel des points : effacées quand la droite (ou la courbe) arrive, pour laisser lire les écritures.
     // (même durée dans les deux cas : les instants des moments ne bougent pas)
     const efface = M.debut_courbe !== undefined && c.t >= M.debut_courbe;
@@ -225,7 +245,7 @@ function dessiner(c) {
     c.trait([[x - 6, y - 6], [x + 6, y + 6]], { couleur: 'jaune', largeur: 1.6, duree: .06 }); c.trait([[x - 6, y + 6], [x + 6, y - 6]], { couleur: 'jaune', largeur: 1.6, duree: .06 });
     marque(c, 'point_' + k);
   }
-  c.pause(.3); c.texte(K.note, 14, 404, { couleur: 'vert', taille: 15 });
+  c.pause(.3); cacher(B || T, c, () => c.texte(K.note, 14, 404, { couleur: 'vert', taille: 15 }));
   if (K.lineaire) {
     // La droite par l’origine.
     c.pause(.4); marque(c, 'debut_courbe');
@@ -273,7 +293,8 @@ function dessiner(c) {
     const x = PX(lu.x), y = PY(lu.y);
     c.ligne(x, O.y, x, y, { couleur: 'rose', largeur: 1.3, pointille: [3, 4] }); c.ligne(O.x, y, x, y, { couleur: 'rose', largeur: 1.3, pointille: [3, 4] });
     lueur(c, '#f472b6', () => c.cercle(x, y, 7, { couleur: 'rose', largeur: 2.2 }));
-    if (TX.large) c.texte(K.lu.texte(lu.x, lu.y), TX.x, 380, { couleur: 'rose', taille: 15 * k, max: TX.w });
+    if (T) { /* téléphone : le point lu reste, sa phrase se tait (pas la place) */ }
+    else if (TX.large) c.texte(K.lu.texte(lu.x, lu.y), TX.x, 380, { couleur: 'rose', taille: 15 * k, max: TX.w });
     else c.texte(K.lu.texte(lu.x, lu.y), K.lu.pos[0], K.lu.pos[1], { couleur: 'rose', taille: 15, align: 'right' });
   });
   // Repères (toujours déclarés).
@@ -306,7 +327,9 @@ function peindreLaVue(c, val) {
   const K = C();
   c.direct(() => {
     c.texte(K.reglage === 'a' ? `a = ${fr(E.a, 2)} mm` : `D = ${fr(E.D, 2)} m`, 14, 64, { couleur: 'jaune', taille: 15 });
-    c.texte(K.reglage === 'a' ? `D = ${fr(K.D, 1)} m ; λ = ${K.lam} nm` : `a = ${fr(K.a, 2)} mm ; λ = ${K.lam} nm`, 256, 64, { couleur: 'faible', taille: 13, align: 'right' });
+    const p1 = K.reglage === 'a' ? `a = ${fr(E.a, 2)} mm` : `D = ${fr(E.D, 2)} m`, p2 = K.reglage === 'a' ? `D = ${fr(K.D, 1)} m ; λ = ${K.lam} nm` : `a = ${fr(K.a, 2)} mm ; λ = ${K.lam} nm`;
+    // les deux réglages côte à côte seulement s'ils tiennent (sinon la voix et le tableau des mesures les donnent)
+    if (c.largeurTexte(p1, TT(15)) + c.largeurTexte(p2, TT(13)) + 16 < RX.w - 12) c.texte(p2, RX.x + RX.w - 6, 64, { couleur: 'faible', taille: 13, align: 'right' });
     c.texte('fente', MV.xs, MV.yb + 15, { couleur: 'faible', taille: 12, align: 'center' });
     c.texte('écran', E.XE + 2, MV.yb + 15, { couleur: 'faible', taille: 12, align: 'center' });
     c.cote(E.xc - E.hw, 214, E.xc + E.hw, 214, '', { couleur: 'rose' });
