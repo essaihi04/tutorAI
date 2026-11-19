@@ -299,9 +299,15 @@ function ecrits() {
   const MORCEAUX = [['causale_o2', 12.5, 'transfert des e− arrêté → O₂ non consommé'], ['causale_pompage', 14.2, ' → pas de pompage des H+'],
     ['causale_gradient', 15.8, ' → pas de gradient'], ['chaine_causale', 17.4, ' → pas d’ATP']];
   if (MAILLONS) MORCEAUX.forEach(([cle, t0, mot], i) => add(cle, t0, PL.cyan, mot.trim().replace(/_\{([^}]*)\}/g, '$1'), c => {
-    const avant = MORCEAUX.slice(0, i).map(m => m[2]).join(''), tout = MORCEAUX.map(m => m[2]).join('');
-    const x0 = 380 - c.largeurTexte(tout, 15) / 2;
-    c.texte(mot, x0 + c.largeurTexte(avant, 15), R4, { couleur: 'rouge', taille: 15, duree: 1 });
+    /* mesuré à la taille vraiment écrite (plancher de 15 px à l'écran) ; trop long pour une ligne : deux lignes, coupées
+     * après « pompage des H+ » (sinon les morceaux se chevauchaient, 18 novembre 2026). */
+    const te = Math.max(15, c.echelle && c.tailleMin ? c.tailleMin / c.echelle : 0), tout = MORCEAUX.map(m => m[2]).join('');
+    const deux = c.largeurTexte(tout, te) > 735, ligne = deux && i >= 2 ? 1 : 0;
+    const memes = MORCEAUX.filter((m, j) => (deux && j >= 2 ? 1 : 0) === ligne), k = memes.findIndex(m => m[0] === cle);
+    const texte = ligne && k === 0 ? mot.replace(/^ /, '') : mot;
+    const avant = memes.slice(0, k).map(m => m[2]).join('').replace(ligne ? /^ / : /$^/, ''), large = memes.map(m => m[2]).join('').replace(ligne ? /^ / : /$^/, '');
+    const x0 = 380 - c.largeurTexte(large, te) / 2;
+    c.texte(texte, x0 + c.largeurTexte(avant, te), (deux ? R4 - te * .55 + ligne * te * 1.1 : R4), { couleur: 'rouge', taille: 15, duree: 1 });
   }));
   add('chaine_causale', 13.2, PL.cyan && !MAILLONS, 'transfert des e− arrêté → O2 non consommé → pas de pompage des H+ → pas de gradient → pas d’ATP', c =>
     c.texte('transfert des e− arrêté → O_{2} non consommé → pas de pompage des H+ → pas de gradient → pas d’ATP', 380, R4, { couleur: 'rouge', taille: 14, align: 'center', max: 735, duree: 2 }));
