@@ -9,7 +9,9 @@
  *     sujet      <matière>/<année>-<session> (physique | svt | mathematiques ; normale | rattrapage)
  *     exercice   n° à plat dans le sujet (1, 2, …). Liste : python scripts/examens/copier_sujets.py --liste <sujet>
  *                (en SVT, une partie sans exercices — la restitution — compte pour un)
- *     questions  positions dans la liste des questions de l'exercice : « 1-3 », « 1,2,5 » (défaut : toutes)
+ *     questions  positions dans la liste des questions de l'exercice : « 1-3 », « 1,2,5 » (défaut : toutes).
+ *                Règle 48 : une diapo d'énoncé ne montre que la partie qui va être répondue (1 à 3 questions).
+ *     partie     sur une page à soi (window.FEUILLE.blocs) : garde les blocs `partie: k` et ceux sans `partie`
  *     page       « 3/6 » : la case « الصفحة » de l'en-tête (défaut : vide)
  *     entete     complete (défaut : l'en-tête de la page 1 du sujet) | courte (pages 2 à N) | aucune
  *     bareme     droite (défaut) | gauche (sujets 2016-2019, maths) | inline (« (0,5pt) » en fin de question, 2020-2025)
@@ -395,7 +397,11 @@
       ex = liste[(parseInt(CFG.exercice, 10) || 1) - 1];
       if (!ex) { racine.innerHTML = `<div class="erreur">Exercice ${esc(CFG.exercice)} introuvable (${liste.length} exercices dans ${esc(CFG.sujet)}).</div>`; return; }
     }
-    const blocs = CFG.blocs || blocsDepuisExam(ex, CFG);
+    // Une partie de l'exercice (professeur, règle 48) : sur une page à soi, `partie=<k>` (URL ou config) garde les blocs
+    // `partie: k` (ou [k, m]) et ceux sans `partie` (le contexte, un document commun).
+    const partie = CFG.partie ?? P.get('partie');
+    const dansPartie = (b) => partie == null || partie === '' || b.partie == null || [].concat(b.partie).map(String).includes(String(partie));
+    const blocs = CFG.blocs ? CFG.blocs.filter(dansPartie) : blocsDepuisExam(ex, CFG);
     const titre = CFG.titre || (ex ? titreDepuisNom(ex.name, ex.points) : '');
     const morceaux = blocs.map((b) => {
       if (b.q || b.question != null) return blocQuestion(b, modeBareme, false);
