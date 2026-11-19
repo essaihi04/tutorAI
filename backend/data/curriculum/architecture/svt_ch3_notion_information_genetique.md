@@ -353,5 +353,8 @@ disparaîtront avec leur durée réelle).
 - `thymidine.html?vue=document` : à l'allumage seulement, la molécule d'ADN de chaque chromatide (`brins_1`, `brins_2`,
   `molecule_marquee`, `molecule_non_marquee`), mêmes couleurs que la vue `experience`.
 - Les lignes des 15 démonstrations portent `allume` (`ig_x1f`, `ig_x3b`, `ig_x3c` pour les exercices du national).
-- L'énoncé du national d'abord : en attente du gabarit commun `shared/examen/feuille.html` ; ce qu'il faudra reproduire
-  est listé dans `docs/audit-national/svt.md` (section ch3).
+- L'énoncé du national d'abord (professeur, règle 46) : 4 diapositives nouvelles, la feuille d'examen refaite en code
+  (`shared/examen/`), lue par le tuteur : `ig_x1a_enonce` (2024 R, II) avant `ig_x1_restitution`, `ig_x1c0_enonce`
+  (2018 R, IV) avant `ig_x1c_metaphase`, `ig_x1e0_enonce` (2024 N, IV, `sujets/svt-2024-normale-ex1.html`) avant
+  `ig_x1e_associer`, `ig_x3_enonce` (2017 R, exercice 2, document 1 en SVG, `sujets/svt-2017-rattrapage-ex2.html`) avant
+  `ig_x3_thymidine_doc`. Voix : 4 pistes ajoutées au `_voix.json` (142 pistes). Détail : `docs/audit-national/svt.md`.

@@ -128,9 +128,23 @@ Audit du 19 novembre 2026. Simulations : `frontend/public/media/simulations/svt/
 
 ### (a) Les exercices du national joués dans le cours
 
-L'énoncé d'abord (professeur, règle 46, addendum du 19/11) : **pas encore fait**. Le gabarit commun
-`shared/examen/feuille.html` n'est pas sur main ; aucune diapositive « énoncé » n'a été créée (et aucune ne montre un scan).
-Ce qu'il faudra reproduire en code, exercice par exercice :
+L'énoncé d'abord (professeur, règle 46) : **fait** avec le gabarit commun `shared/examen/` (feuille refaite en code, pas
+de scan), une diapositive avant chaque exercice, lue par le tuteur (texte de l'examen en français, liaisons en darija),
+pointage `surligner` sur chaque question et chaque donnée :
+
+| Diapositive nouvelle | Avant | Feuille |
+|---|---|---|
+| `ig_x1a_enonce` | `ig_x1_restitution` | `feuille.html?sujet=svt/2024-rattrapage&exercice=1&questions=2&page=1/6&titre=encadre&bareme=inline` (question II entière, ses 4 propositions) |
+| `ig_x1c0_enonce` | `ig_x1c_metaphase` | `feuille.html?sujet=svt/2018-rattrapage&exercice=1&questions=4&page=1/6&titre=encadre&bareme=gauche` (question IV entière) |
+| `ig_x1e0_enonce` | `ig_x1e_associer` | `sujets/svt-2024-normale-ex1.html` (page à soi : la feuille générique n'affiche pas les tableaux `items_left` / `items_right` d'une question `association` ; tableaux Ensemble A / B recopiés du scan ; repères `ligne-1…4`, `ligne-a…e`) |
+| `ig_x3_enonce` | `ig_x3_thymidine_doc` | `sujets/svt-2017-rattrapage-ex2.html` (page à soi : le document 1 redessiné en SVG, la question 1 et son barème ; repères `donnee-cycle1`, `donnee-cycle2`, `donnee-legende`, `donnee-observation`, `donnee-resultat1`, `donnee-resultat2`, `q-1`) |
+
+Manques signalés au kit commun : la feuille générique ne rend pas une question `association` (2024 N IV : seule la consigne
+s'affiche) ; le surlignage CSS (`.surligne`, fond) ne se voit pas sur un groupe SVG (la page 2017 R ajoute sa règle) ;
+le texte d'introduction de l'exercice 2 de 2017 R manque à `exam.json` (son `context` est un résumé) et la page de cet
+exercice dans le sujet (n/N) est inconnue : la feuille commence au document et la case « الصفحة » reste vide.
+
+Le détail de chaque exercice (modèle, figures) :
 
 | Sujet | Où dans `exam.json` | Questions et points | Modèle (scan / document) | Figures à redessiner | Diapositives du cours |
 |---|---|---|---|---|---|
@@ -173,8 +187,10 @@ Non joués mais du chapitre : 2024 R II.4 (fin de phase S, yeux de réplication)
   `experience`) et sa légende. Les 63 lignes des 15 démonstrations du cours portent `allume` (dont les trois exercices du
   national : `ig_x1f_associer_couples`, `ig_x3b_cycle1`, `ig_x3c_cycle2`) ; chaque cible vérifiée dans sa page (repère
   dessiné ou moment), sauf les cibles que l'allumage fait paraître.
-- **Pistes ajoutées au `_voix.json` : 0** (aucun texte dit nouveau ni changé).
-- **Pas fait** : les diapositives « énoncé d'abord » (gabarit `feuille.html` absent de main) ; le comptage allumé un à un
+- **Fait — l'énoncé d'abord** : 4 diapositives (`ig_x1a_enonce`, `ig_x1c0_enonce`, `ig_x1e0_enonce`, `ig_x3_enonce`), dans
+  les blocs `ig_s7_b3` et `ig_s8_b2`, cours en ligne et copie en attente.
+- **Pistes ajoutées au `_voix.json` : 4** (les 4 diapositives « énoncé », type `diapositive`) ; aucun texte dit existant changé.
+- **Pas fait** : le comptage allumé un à un
   avec numéro (règle 16) : aucun des moments du tableau (b) n'a encore « 1, 2, 3… » écrits à la craie à côté d'une lueur
   — à faire en priorité sur `ig_m7_schema` (4 chromosomes, 8 chromatides), `ig_n3_chromatides` et le chromosome du QCM
   2018 R (`ig_x1d`, il faudra un dessin et une voix nouvelle).
