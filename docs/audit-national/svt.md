@@ -117,8 +117,17 @@ Documents « reconstitués d'après l'examen » (pas d'exercice joué en entier,
 
 - **Démonstration sur le document** : `allume`/`eteins` implémentés dans `national.html` (toutes les vues) avec l'aide commune du dossier (`commun.js` : `lueur`, `Allumage`) : `allume {cible}` joue jusqu'au moment s'il n'est pas passé, puis met une lueur jaune qui reste sur le repère (la dernière plus vive) ; `eteins`, `reset`, `start` éteignent ; l'état porte `allumes`. Pendant la démonstration, la vue `fibres` n'écrit plus « atteinte : type I ↓, type II ↑ » (la colonne l'écrit). Lignes `allume` posées : `ms_n2_fibres` (4 lignes : barres des fibres, `ligne_mito`+`ligne_oxy`, `ligne_glyco`+`ligne_ldh`, `type2_malade`+`ligne_ldh`), `ms_r6b_intensite` (4 lignes : `pt44`/`pt58`, `pt68`…`palier`, `palier`, `pt68`/`pt101`), `ms_x4b_eliminer` (3 lignes : `affirmation`, `mot_decide`, `mot_decide` — la règle n'est plus au tableau quand l'affirmation est écrite). Vue `intensite` : dans le tableau final, les repères `pt44` … `pt101` (une ligne par mesure) et `palier` (colonne du O₂, 68 à 101 kJ/min) existent aussi, pour que la démonstration allume la ligne qu'elle lit.
 - Pas encore : `allume` dans `inhibiteurs.html` (`ms_r8_inhibiteurs`), `atpase.html` (`ms_e2_atpase`), `consommation.html` (`ms_t4_consomme`) et `ms_t4a_sang` (sans simulation) — leurs lignes n'ont pas d'`allume` ; ce ne sont pas des exercices du national joués.
-- **Énoncé d'abord** : non fait — d'après l'addendum du 19/11, l'énoncé est une feuille refaite en code par le gabarit commun `shared/examen/feuille.html`, absent de main à la fin de cette passe. Diapositives à créer quand il arrivera : avant `ms_x1_decrire_comparer` (2016 N, Q1), avant `ms_x3_hypothese` (2017 R, Q1-a et 1-b), avant `ms_n2_fibres` (2020 N, Q2 et Q3), chacune au début de son bloc (`ms_s6_b2`, `ms_s6_b3`, `ms_s7_b1`), voix nouvelle dans `_voix.json`.
-- **Voix** : 0 piste ajoutée (aucun texte dit n'a changé ; un `pointage` ajouté sur `ms_f6_nomme`, sans effet sur l'audio).
+- **Énoncé d'abord** : fait avec le gabarit commun (`shared/examen/feuille.js`, arrivé sur main pendant cette passe) — trois
+  feuilles refaites en code, une par exercice joué : `shared/examen/sujets/svt-2016-normale-ex2.html` (sujet 1, Q1 ; document 1
+  en tableau, document 2 en SVG), `svt-2017-rattrapage-ex1-nageurs.html` (exercice 1, Q1-a et 1-b ; document 1 en tableau, document 2
+  en SVG), `svt-2020-normale-ex3.html` (exercice 1, Q2 et Q3 ; figure a en SVG, figure b en tableau). Texte : `extraction.json`
+  (2016 N, 2017 R : `exam.json` y résume l'introduction) et le scan `sujet_p3.jpg`/`sujet_p4.jpg` (2020 N) ; points :
+  `exam.json`. Diapositives nouvelles, en tête de leur bloc : `ms_x1_enonce` (`ms_s6_b2`), `ms_x3_enonce` (`ms_s6_b3`),
+  `ms_n2_enonce` (`ms_s7_b1`) ; le tuteur lit l'énoncé et la baguette surligne ce qu'il lit (`contexte`, `intro`, `tab-1`,
+  `fig-…`, `q-…`). Les documents non joués (2016 N doc. 3-6, 2017 R doc. 3-5, 2020 N doc. 1, 3, 4) ne sont pas sur la feuille.
+  Non vérifié dans le lecteur (le backend ne démarre pas dans ce conteneur : fastapi absent) ; les feuilles seules sont
+  vérifiées à 1366 × 560 et 724 × 350 (texte ≥ 15 px, repères présents).
+- **Voix** : 3 pistes ajoutées au `_voix.json` (`ms_x1_enonce`, `ms_x3_enonce`, `ms_n2_enonce`, type diapositive) ; aucun texte dit existant n'a changé (un `pointage` ajouté sur `ms_f6_nomme`, sans effet sur l'audio).
 <!-- ch2 : fin -->
 
 <!-- ch3 : début -->

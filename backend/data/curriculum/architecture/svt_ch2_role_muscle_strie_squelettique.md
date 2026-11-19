@@ -219,5 +219,6 @@ quatre-vingt-cinq).
 - `ms_f6_nomme` (`sommation.html?vue=nomme`) : les stimulations comptées une à une (moments `stim_1` … `stim_n`, numéro
   sous chaque créneau, total écrit à la fin) ; pointage « شحال من excitation؟ » → `stim_1`.
 - `ms_c7_ordre` (`cycle.html?vue=etapes`) : chaque étape écrite s'allume, repères `etape_1` … `etape_6`.
-- Énoncé du national d'abord : en attente du gabarit commun `shared/examen/feuille.html` (voir
-  `docs/audit-national/svt.md`, section ch2).
+- Énoncé du national d'abord (professeur, règle 46) : `ms_x1_enonce` (2016 N), `ms_x3_enonce` (2017 R), `ms_n2_enonce`
+  (2020 N), chacune en tête de son bloc, sur une feuille d'examen refaite en code
+  (`shared/examen/sujets/svt-<année>-<session>-ex<n>.html`) ; voix à enregistrer (3 pistes au `_voix.json`).
