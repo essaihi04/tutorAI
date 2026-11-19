@@ -84,7 +84,11 @@
         const s = Math.min(W / bw, H / bh, sCadre * ZOOM_MAX);
         scene.s = s; scene.ox = (W - bw * s) / 2 - k.x0 * s; scene.oy = (H - bh * s) / 2 - k.y0 * s;
         craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
-        craie.echelle = s; craie.tailleMin = TAILLE_MIN;
+        /* Le kit baisse le plancher du texte dès que le tableau fait moins de 900 × 400 (téléphone). Le cadre que le lecteur
+         * donne à la simulation sur un bureau peu haut, à côté de la colonne des cartes (≈ 850 × 350), est encore un bureau :
+         * le texte y reste à 15 px au moins (la simulation d'abord, 18 novembre 2026) ; sous ~75 %, la baisse du kit joue. */
+        const fPlancher = Math.min(1, Math.max(.45, Math.min((W || 900) / 900, (H || 400) / 400)));
+        craie.echelle = s; craie.tailleMin = fPlancher >= .75 ? TAILLE_MIN / fPlancher : TAILLE_MIN;
         craie.cadre = { w: L, h: VH, haut: 0 };    // tout texte reste dans le cadre du dessin (rien de coupé au bord)
         return craie;
       },
