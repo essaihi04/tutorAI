@@ -19,6 +19,22 @@
     // `scene` existe avant la craie : le premier redimensionnement la marque déjà « à redessiner ».
     const scene = { sale: true, boite: null, mesurant: false, L: VW };
     const craie = new window.Tableau.Craie(canvas, { onresize: () => { scene.sale = true; } });
+    /* Plancher du texte de ce dossier (18 novembre 2026, « le texte est plus petit que la simulation ») : le kit baisse
+     * le plancher dès que le tableau fait moins de 900 × 400 px — dans le lecteur d'un écran de bureau peu haut, le
+     * canevas fait ≈ 1100 × 350 et le texte tombait à 13 px. Ici le plancher reste entier tant que le canevas fait au
+     * moins 760 × 330 px, puis baisse comme dans le kit (jamais sous 45 %, téléphone en paysage).
+     * Relire puis remettre la valeur ne la réduit pas deux fois (même contrat que le kit). */
+    Object.defineProperty(craie, 'tailleMin', {
+      configurable: true,
+      get() {
+        const brut = this._tailleMinBrut || 0;
+        if (!brut) return brut;
+        const rendu = brut * Math.min(1, Math.max(.45, Math.min((this.W || 760) / 760, (this.H || 330) / 330)));
+        this._tailleMinLu = [brut, rendu];
+        return rendu;
+      },
+      set(v) { const lu = this._tailleMinLu; this._tailleMinBrut = lu && v === lu[1] ? lu[0] : v; },
+    });
     /* Courbes nettes et lumineuses, sur demande (17 novembre 2026, « couleurs vives, plus agréable ») : une courbe tracée
      * par craie.courbe avec `net: true` garde son écriture progressive et sa durée, sans tremblé, avec un halo doux de sa
      * couleur ; `aire: yBase` ajoute une aire en dégradé jusqu'à la ligne yBase, remplie au rythme du tracé.

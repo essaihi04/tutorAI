@@ -76,6 +76,10 @@
     scene.s = s0; scene.ox = ox; scene.oy = oy; c.echelle = s0; c.cadre = null;
     if (!def.enleve) def = { ...def, enleve: [[0, 0, 760, 36]] };   // le titre interne (défaut)
     st.base = c.ctx.getTransform(); st.blocs = disposer(def, L); st.def = def; st.nDirect = 0; st.actif = true;
+    /* (18 novembre 2026) Le plancher des blocs vaut aussi pour les MESURES faites hors des appels de craie (largeur
+     * d'un côté d'équation, place d'une flèche) : mesurées au plancher de la craie (15 px) et écrites à celui des blocs
+     * (18 px), les équations débordaient sur leur flèche ⇌. scene.cadre() remet le plancher à chaque image. */
+    c.tailleMin = Math.max(c.tailleMin || 0, def.texteMin ?? TEXTE_MIN);
     if (!st.localAvant) {
       st.localAvant = scene.local;
       scene.local = (x, y) => {                       // pointeur → coordonnées du dessin d'origine (poignées des curseurs)
