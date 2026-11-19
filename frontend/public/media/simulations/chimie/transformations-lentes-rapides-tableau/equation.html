@@ -18,6 +18,9 @@
  * Équation d’une réaction d’oxydoréduction à partir de deux demi-équations (cours « Transformations lentes et transformations rapides »,
  * 2e Bac PC BIOF, novembre 2026). Vues (?vue=) : zinc_cuivre (défaut) | eau_oxygenee | permanganate | fer.
  * Moments : couples reduction oxydation multiplier additionner simplifier verifier fin.
+ * Vue eau_oxygenee (19 novembre 2026, règle 16 : compter en allumant) : après verifier, on compte les éléments puis les
+ * charges du bilan, terme par terme : h_g1 h_g2 h_d o_g o_d i_g i_d q_g1 q_g2 q_d. Chaque terme compté s’allume (halo),
+ * son nombre s’écrit dessous, dans la ligne de l’élément ; le total de la ligne s’écrit une fois, à droite (« 4 = 4 »).
  * Réduction de l’oxydant en rouge, oxydation du réducteur en vert (dans le sens de la réaction), facteurs « × n » en jaune,
  * électrons barrés, H⁺ simplifiés, vérification des charges. Équilibrages vérifiés par un script python avant d’être écrits ici.
  */
@@ -258,6 +261,21 @@ const TITRES = Object.fromEntries(VUES.map(v => [v, D[v].nom]));
 const XL = 14, XE = 122, TAILLE = 20;
 const Y = { couples: 66, d1: 118, d2: 162, trait: 182, bilan: 220, simpl: 270, verif: 336, phrase: 370 };
 const ne1 = d => d.ne / d.f1, ne2 = d => d.ne / d.f2;   // électrons de chaque demi-équation avant multiplication
+/* Vue eau_oxygenee : le compte des éléments et des charges du bilan H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O (termes 0 H₂O₂, 2 2I⁻,
+ * 4 2H⁺, 6 I₂, 8 2H₂O). [moment, termes allumés, ligne, nombres écrits sous les termes, motif, total écrit au bout de la ligne]. */
+const COMPTE = [
+  ['h_g1', [0], 'H', ['2'], 'H à gauche : 2 dans H₂O₂'],
+  ['h_g2', [4], 'H', ['2'], 'H à gauche : 2 dans 2H⁺, soit 4'],
+  ['h_d', [8], 'H', ['4'], 'H à droite : 4 dans 2H₂O ; 4 = 4', '4 = 4'],
+  ['o_g', [0], 'O', ['2'], 'O à gauche : 2 dans H₂O₂'],
+  ['o_d', [8], 'O', ['2'], 'O à droite : 2 dans 2H₂O ; 2 = 2', '2 = 2'],
+  ['i_g', [2], 'I', ['2'], 'I à gauche : 2 dans 2I⁻'],
+  ['i_d', [6], 'I', ['2'], 'I à droite : 2 dans I₂ ; 2 = 2', '2 = 2'],
+  ['q_g1', [2], 'q', ['−2'], 'charges à gauche : 2I⁻ porte −2'],
+  ['q_g2', [4], 'q', ['+2'], 'charges à gauche : 2H⁺ porte +2, total 0'],
+  ['q_d', [6, 8], 'q', ['0', '0'], 'charges à droite : 0 ; 0 = 0', '0 = 0'],
+];
+const LIGNES_COMPTE = { H: [252, 'H', 'blanc'], O: [278, 'O', 'rouge'], I: [304, 'I', 'violet'], q: [330, 'charges', 'jaune'] };
 const ETAPES = Object.fromEntries(VUES.map(v => {
   const d = D[v];
   return [v, [
@@ -275,7 +293,7 @@ const ETAPES = Object.fromEntries(VUES.map(v => {
       bulle: () => (d.simpl ? 'Des H⁺ des deux côtés : on simplifie.' : 'Y a-t-il quelque chose à simplifier ? Non.') },
     { nom: 'verifier', anim: 0, motif: `vérification des charges : ${d.q} à gauche et ${d.q} à droite`,
       bulle: () => `On vérifie les charges : ${d.q} de chaque côté.` },
-  ]];
+  ].concat(v === 'eau_oxygenee' ? COMPTE.map(([nom, , , , motif]) => ({ nom, anim: .4, motif })) : [])];
 }));
 // Le motif d’un moment dépend de la vue affichée (mêmes noms de moments dans toutes les vues).
 const MOTIFS = new Proxy({}, { get: (_, nom) => (nom === 'fin' ? 'l’équation de la réaction est écrite et vérifiée' : (ETAPES[MOT.S.vue].find(e => e.nom === nom) || {}).motif) });
@@ -303,7 +321,8 @@ function dessiner(c, M) {
   // Boîte serrée sur l’encre de la vue (deuxième passe : la figure prend toute la largeur qu’elle peut, donc la hauteur).
   const x1 = Math.max(P.xr + largeur(c, `réducteur : ${d.red}`, 17), P.xn + largeur(c, `${d.ne}e⁻ captés`, 15), P.bilan.x1, P.final.x1 + 10,
     d.simpl ? XE + largeur(c, d.calcul, 14) : XE + largeur(c, d.rien, 17)) + 8;
-  window.TLRLarge.debut(c, M.scene, { src: [8, 42, x1, d.simpl ? 302 : 282], ecrire: ecrit });
+  const compte = v === 'eau_oxygenee';
+  window.TLRLarge.debut(c, M.scene, { src: [8, 42, compte ? Math.max(x1, P.bilan.x1 + 96) : x1, compte ? 378 : d.simpl ? 302 : 282], ecrire: ecrit });
   window.TLRLarge.titre(c, `L’équation de la réaction : ${d.nom}`, XL, 30, { couleur: 'cyan', taille: 20 });
   M.etape(c, 'couples', () => {
     ecrit(c, d.couples, XL, Y.couples, { couleur: 'blanc', taille: 17 });
@@ -333,7 +352,7 @@ function dessiner(c, M) {
     tracer(c, P.bilan, Y.bilan);
   });
   M.etape(c, 'simplifier', () => {
-    if (!d.simpl) { ecrit(c, d.rien, XE, Y.simpl, { couleur: 'jaune', taille: 17 }); return; }
+    if (!d.simpl) { ecrit(c, d.rien, XE, compte ? 368 : Y.simpl, { couleur: 'jaune', taille: 17 }); return; }
     for (const s of d.barres) barrer(c, P.bilan, P.bilan.T.find(t => t.txt === s), Y.bilan);
     ecrit(c, 'simplifié', XL, Y.simpl, { couleur: 'blanc', taille: 16 });
     tracer(c, P.simpl, Y.simpl);
@@ -342,6 +361,7 @@ function dessiner(c, M) {
   M.etape(c, 'verifier', () => {
     const L = P.final;
     c.rect(L.x0 - 10, P.yFinal - 26, L.x1 - L.x0 + 20, 36, { couleur: 'jaune', largeur: 1.8, arrondi: 6 });
+    if (compte) return;   // eau_oxygenee : la vérification se fait en comptant, sur la figure (ci-dessous)
     if (window.TLRLarge.actif()) {   // tableau large : la vérification s’écrit dans la colonne de gauche
       const G = window.TLRLarge.G; G.y += 10;
       const b1 = window.TLRLarge.phrase(c, `charges : à gauche ${d.gauche} ; à droite ${d.droite}`, { couleur: 'blanc' });
@@ -352,9 +372,33 @@ function dessiner(c, M) {
       ecrit(c, `${d.q} = ${d.q} : l’équation est équilibrée (atomes et charges)`, XE, Y.phrase, { couleur: 'vert', taille: 17, max: 620 });
     }
   });
+  if (compte) compter(c, M, P);
   reperes(c, M, P);
   window.TLRLarge.fin(c);
   return c.fin();
+}
+/** Compter en allumant (eau_oxygenee) : chaque terme compté s’allume, son nombre s’écrit dans la ligne de l’élément. */
+function compter(c, M, P) {
+  const L = P.bilan, y0 = Y.bilan;
+  let dern = null; for (const e of ETAPES[M.S.vue]) if (M.commence(e.nom)) dern = e.nom;
+  for (const [nom, idx] of COMPTE) if (M.commence(nom)) for (const i of idx) {
+    const t = L.T[i], [bx, by, bw, bh] = boite(L, t, y0);
+    c.direct(() => { const ctx = c.ctx; ctx.save(); ctx.fillStyle = dern === nom ? 'rgba(255,226,90,.32)' : 'rgba(255,226,90,.10)'; ctx.beginPath(); ctx.roundRect(bx - 2, by - 2, bw + 4, bh + 4, 7); ctx.fill(); ctx.restore(); });
+  }
+  const xTot = L.x1 + 22, etiquettes = new Set();
+  for (const [nom, idx, ligne, nombres, motif, total] of COMPTE) {
+    if (!M.commence(nom)) continue;
+    const [y, lab, col] = LIGNES_COMPTE[ligne];
+    M.etape(c, nom, () => {
+      if (!etiquettes.has(ligne)) ecrit(c, lab, XL, y, { couleur: col, taille: 17 });
+      idx.forEach((i, k) => { const t = L.T[i]; ecrit(c, nombres[k], t.x + t.w / 2, y, { couleur: col, taille: 18, align: 'center' }); });
+      if (total) ecrit(c, total, xTot, y, { couleur: 'vert', taille: 18 });
+    });
+    etiquettes.add(ligne);
+    const t0 = L.T[idx[0]], t1 = L.T[idx[idx.length - 1]];
+    c.repere(nom, t0.x - 6, y0 - L.taille, t1.x + t1.w - t0.x + 12, y - y0 + L.taille + 8, motif);
+  }
+  if (M.commence('q_d')) c.repere('charges', XL - 4, LIGNES_COMPTE.q[0] - 22, xTot + 70 - XL, 30, 'le compte des charges : 0 à gauche, 0 à droite');
 }
 function reperes(c, M, P) {
   const v = M.S.vue, d = D[v], plus = nom => (M.vu(nom) ? '' : ` (au moment « ${nom} »)`);
@@ -371,7 +415,8 @@ function reperes(c, M, P) {
   if (d.simpl) c.repere('simplification', XL - 4, Y.simpl - 22, P.simpl.x1 + 10 - XL, 56, `après simplification des H⁺ : ${nu(d.simpl)}${plus('simplifier')}`);
   else c.repere('simplification', XE - 6, Y.simpl - 22, largeur(c, d.rien, 17) + 12, 30, `${d.rien}${plus('simplifier')}`);
   const lc = `vérification des charges : ${d.q} à gauche, ${d.q} à droite${plus('verifier')}`;
-  if (window.TLRLarge.actif()) window.TLRLarge.repere(c, 'charges', BOITE_VERIF || [10, window.TLRLarge.G.y - 10, window.TLRLarge.G.col - 14, 90], lc);
+  if (v === 'eau_oxygenee') { /* repère « charges » posé par compter() */ }
+  else if (window.TLRLarge.actif()) window.TLRLarge.repere(c, 'charges', BOITE_VERIF || [10, window.TLRLarge.G.y - 10, window.TLRLarge.G.col - 14, 90], lc);
   else c.repere('charges', XE - 6, Y.verif - 22, Math.min(620, largeur(c, `charges : à gauche ${d.gauche} ; à droite ${d.droite}`, 17)) + 12, 30, lc);
   c.repere('oxydant', P.xo - 6, Y.couples - 22, largeur(c, `oxydant : ${d.ox}`, 17) + 12, 30, `l’oxydant ${d.ox} (en rouge) : il capte des électrons`);
   c.repere('reducteur', P.xr - 6, Y.couples - 22, largeur(c, `réducteur : ${d.red}`, 17) + 12, 30, `le réducteur ${d.red} (en vert) : il cède des électrons`);
@@ -389,6 +434,7 @@ function voir(M) {
   if (M.commence('additionner')) w.push(`trait d’addition, électrons des deux demi-équations barrés en jaune, ligne « bilan : ${d.bilan} »${ici('additionner')}`);
   if (M.commence('simplifier')) w.push(d.simpl ? `${d.barres.join(' et ')} barrés en jaune dans le bilan, ligne « simplifié : ${nu(d.simpl)} » avec 6H⁺ en jaune et « ${d.calcul} »${ici('simplifier')}` : `en jaune « ${d.rien} »${ici('simplifier')}`);
   if (M.commence('verifier')) w.push(`équation finale « ${nu(d.simpl || d.bilan)} » encadrée en jaune ; « charges : à gauche ${d.gauche} ; à droite ${d.droite} » ; en vert « ${d.q} = ${d.q} : l’équation est équilibrée »${ici('verifier')}`);
+  if (v === 'eau_oxygenee') { const k = COMPTE.filter(x => M.commence(x[0])); if (k.length) w.push('compte terme par terme (chaque terme compté allumé, son nombre dessous) : ' + k.map(x => x[4]).join(' ; ')); }
   m.push(w.length ? `Écrit au tableau : ${w.join(' ; ')}.` : 'Rien d’écrit encore.');
   return m.join(' ');
 }

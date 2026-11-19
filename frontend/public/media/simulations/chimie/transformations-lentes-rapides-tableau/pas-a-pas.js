@@ -13,6 +13,9 @@
  *   - `correction` : la réponse de l'étape k (seulement sur `play_until correction` ou `conclusions: true` : rien de
  *                    décisif n'est montré avant la réponse de l'élève ; la diapositive suivante la montre en `rappel`).
  * `?etape=fin` : la copie complète, toutes les étapes faites (la synthèse après la dernière étape).
+ * Tableau d'avancement (19 novembre 2026, règle 16 : parcourir en allumant) : quand le rappel remplit une ligne du tableau,
+ * ses cases d'espèces s'allument ensuite une à une (moments case_1, case_2, case_3 ; repères du même nom), en jaune fort à
+ * leur moment, plus doux ensuite : la voix lit « deux, dix, zéro » case par case.
  * Commandes : start, pause, resume, reset, play_until {moment}, set_parameters {conclusions}. `?depart=<moment>`
  * ouvre la scène figée sur ce moment.
  * Copie identique dans chaque dossier de cours qui l'utilise (dipole-rc, dipole-rl, circuit-rlc, transformations
@@ -99,6 +102,10 @@
     const PREC = K > 0 && !FIN ? SJ.etapes[K - 1] : null;
     const vue = FIN ? 'copie' : SUJET ? 'sujet' : (ET.vue || 'graphe');
     const moments = SUJET ? ['enonce', 'donnees', 'questions'] : FIN ? ['enonce'] : MOMENTS.filter(m => m === 'enonce' || (m === 'courbe' && ET && ET.trace) || (m === 'rappel' && PREC) || ((m === 'question' || m === 'correction') && ET));
+    // La ligne du tableau remplie au rappel : ses cases d'espèces se parcourent une à une après le rappel.
+    const LIGNE_RAPPEL = !FIN && !SUJET && ET && (ET.vue || 'graphe') === 'tableau' && PREC && SJ.tableau ? SJ.tableau.lignes.findIndex(l => l.etape === K - 1) : -1;
+    const CASES = LIGNE_RAPPEL >= 0 ? SJ.tableau.lignes[LIGNE_RAPPEL].cases.slice(1).map((_, k) => 'case_' + (k + 1)) : [];
+    if (CASES.length) moments.splice(moments.indexOf('rappel') + 1, 0, ...CASES);
     let CONCL = q.get('conclusions') === '1';
     const S = { t0: {}, running: false, pause: false, prochain: 0, emis: 0 };
     const atteint = m => S.t0[m] !== undefined;
@@ -396,6 +403,16 @@
           else if (e === K - 1 && atteint('rappel')) enCours.push([i, 'rappel']);
           else if (e === K && (CONCL || atteint('correction'))) enCours.push([i, atteint('correction') ? 'correction' : null]);
         }
+        // Les cases de la ligne rappelée s'allument une à une (sous la craie) : forte à son moment, douce ensuite.
+        if (CASES.length) {
+          const f = Z.fig, cols = tb.colonnes.length, x0 = f.x0 + 4, x1 = f.x1 - 4, wEtat = (x1 - x0) * .2, wAv = (x1 - x0) * .1;
+          const wc = (x1 - x0 - wEtat - wAv) / cols, yl = f.y0 + 34 + (LIGNE_RAPPEL + 1) * 52, d = dernier();
+          CASES.forEach((m, k) => {
+            const xc = x0 + wEtat + wAv + k * wc;
+            if (atteint(m)) c.direct(() => { const ctx = c.ctx; ctx.save(); ctx.fillStyle = d === m ? 'rgba(255,226,90,.34)' : 'rgba(255,226,90,.12)'; ctx.beginPath(); ctx.roundRect(xc + 3, yl + 3, wc - 6, 46, 7); ctx.fill(); ctx.restore(); });
+            c.repere(m, xc, yl, wc, 52, `la case ${tb.colonnes[k]} de la ligne « ${tb.lignes[LIGNE_RAPPEL].etat} » : ${tb.lignes[LIGNE_RAPPEL].cases[k + 1]}`);
+          });
+        }
         c.direct(() => dessinerTableau(c, Z, tb, vues, new Set(enCours.map(x => x[0])), true));
         for (const [i, m] of enCours) { if (m) c.cur = Math.max(c.cur, S.t0[m]); else c.cur = 0; dessinerTableau(c, Z, tb, null, i, false); }
       } else {
@@ -444,7 +461,8 @@
     function playUntil(p) {
       const m = p && p.moment; if (!atteindre(m)) return;
       S.running = false; S.pause = true; $('run').textContent = 'Reprendre';
-      T.bulle($('feedback'), 'Arrêt sur image : ' + ({ enonce: 'le sujet', courbe: 'la courbe tracée', rappel: 'la correction de l’étape d’avant', question: 'la question, à toi', correction: 'la correction' }[m] || m) + '.');
+      const kc = CASES.indexOf(m), cas = kc >= 0 ? `la case ${SJ.tableau.colonnes[kc]} : ${SJ.tableau.lignes[LIGNE_RAPPEL].cases[kc + 1]}` : null;
+      T.bulle($('feedback'), 'Arrêt sur image : ' + (cas || { enonce: 'le sujet', courbe: 'la courbe tracée', rappel: 'la correction de l’étape d’avant', question: 'la question, à toi', correction: 'la correction' }[m] || m) + '.');
       pont.noter('play_until', { moment: m }); pont.emettre();
     }
     function setParameters(p) {
@@ -461,6 +479,7 @@
       if (faites.length) m.push('Déjà dans la copie : ' + faites.map(e => `${e.n}. ${e.copie.map(x => (T.lisible || (y => y))(x)).join(' ; ')}`).join(' | ') + '.');
       if (PREC) m.push(atteint('rappel') ? `La correction de l’étape ${PREC.n} est construite et écrite : ${PREC.copie.map(x => (T.lisible || (y => y))(x)).join(' ; ')}.` : `La correction de l’étape ${PREC.n} n’est pas encore montrée.`);
       if (ET.trace) m.push(atteint('courbe') ? 'La courbe est tracée.' : 'La courbe n’est pas encore tracée.');
+      if (CASES.length) { const lus = CASES.filter(atteint); if (lus.length) m.push(`Cases de la ligne « ${SJ.tableau.lignes[LIGNE_RAPPEL].etat} » allumées une à une : ${lus.map((x, k) => `${SJ.tableau.colonnes[k]} = ${(T.lisible || (y => y))(SJ.tableau.lignes[LIGNE_RAPPEL].cases[k + 1])}`).join(' ; ')}.`); }
       m.push(atteint('question') ? `Question écrite : « ${(T.lisible || (y => y))(ET.question)} ».` : 'La question n’est pas encore écrite.');
       m.push(CONCL || atteint('correction') ? `Correction montrée : ${ET.copie.map(x => (T.lisible || (y => y))(x)).join(' ; ')}.` : 'La réponse est cachée : l’élève répond d’abord.');
       return m.join(' ');

@@ -19,7 +19,14 @@
  * Contrat : outils/cours/notes/cours/transformations_lentes_rapides_contrat_simulations.md § 6.
  * Vues (?vue=) : temperature (défaut) | concentration | catalyseur | lecture.
  * Modèle POUR L’ŒIL : n(t) = n_f·(1 − e^(−t/τ)) ; τ = 6 min (20 °C, 0,1 mol/L), 2 min (40 °C), 3 min (0,2 mol/L) ; catalyseur : C₁ τ = 2 min,
- * C₂ τ = 8 min, x_f = 0,3 mol ; lecture : (a) 2, (b) 5, (c) 10 min. Jamais de formule écrite, ni « exponentielle », ni τ à l’écran.
+ * C₂ τ = 8 min, x_f = 0,3 mol. Jamais de formule écrite, ni « exponentielle », ni τ à l’écran.
+ * Vue lecture (19 novembre 2026, règles 16-17 : la démonstration sur la figure) : la figure du national 2025 N, avec SES
+ * données seulement — x (mmol) gradué 26,6 et 53,2 ; t (min) gradué 30 et 60 ; trois courbes (a), (b), (c) vers le même
+ * palier (pour l’œil : τ = 35, 95, 170 min, palier 133 mmol, jamais écrit). Moments : enonce (les trois expériences, comme
+ * l’énoncé), courbes, puis la démonstration (l’énoncé effacé) : debut (la pente de départ de (a) s’allume), debut_c (celle
+ * de (c), puis (b) entre les deux), associer (la courbe (a) s’allume, « exp. 3 » écrit à son bout), assoc_b, assoc_c,
+ * conclusion (le palier commun : « x_f le même : vrai »). Repères : tableau, axe_n, axe_t, courbe_a/b/c, debut, debut_c,
+ * assoc_a, assoc_b, assoc_c, palier, conclusion.
  * Pas de poignée : rien à régler (set_parameters ne change que la vue).
  */
 /* ── Formules chimiques à la craie : indices ₂ et charges ⁺ ⁻ ²⁻ rendus (sans modifier exposants.js ni le kit) ──────────
@@ -205,7 +212,8 @@ function attention(c, x, y, o = {}) {
 const q0 = new URLSearchParams(location.search);
 const VUES = ['temperature', 'concentration', 'catalyseur', 'lecture'];
 const TITRES = { temperature: 'effet de la température', concentration: 'effet de la concentration', catalyseur: 'effet du catalyseur (national 2023 N)', lecture: 'lire trois courbes (national 2025 N)' };
-const G = { x0: 70, y0: 300, w: 400, h: 230 };
+const G0 = { x0: 70, y0: 300, w: 400, h: 230 }, GL = { x0: 64, y0: 330, w: 420, h: 270 };   // GL : vue lecture (sans lignes en bas, figure plus grande)
+const G = { ...G0 };
 /** Réglages de chaque graphe : durée affichée, ordonnée, graduations, et les courbes { id, tau (min), nf, couleur, tag }. */
 const GR = {
   temperature: { tmax: 30, dt: 5, ymax: 2.5, dy: .5, nom: 'n(I₂) (mmol)', unite: 'mmol', nf: 2, dec: 1,
@@ -215,8 +223,9 @@ const GR = {
       courbe_piege: { tau: 4, nf: 4, couleur: 'orange', tag: null, pointille: [7, 6] } } },
   catalyseur: { tmax: 40, dt: 10, ymax: .4, dy: .1, nom: 'x (mol)', unite: 'mol', nf: .3, dec: 1,
     courbes: { courbe_C2: { tau: 8, nf: .3, couleur: 'bleu', tag: '(C₂)' }, courbe_C1: { tau: 2, nf: .3, couleur: 'vert', tag: '(C₁)' } } },
-  lecture: { tmax: 50, dt: 10, ymax: 1.3, dy: 0, nom: 'x (mol)', unite: '', nf: 1, dec: 0,
-    courbes: { courbe_a: { tau: 2, nf: 1, couleur: 'rose', tag: '(a)' }, courbe_b: { tau: 5, nf: 1, couleur: 'cyan', tag: '(b)' }, courbe_c: { tau: 10, nf: 1, couleur: 'bleu', tag: '(c)' } } },
+  lecture: { tmax: 270, dt: 30, ymax: 140, dy: 0, nom: 'x (mmol)', unite: 'mmol', nf: 133, dec: 1,
+    courbes: { courbe_a: { tau: 35, nf: 133, couleur: 'rose', tag: '(a)', tagT: 45 }, courbe_b: { tau: 95, nf: 133, couleur: 'cyan', tag: '(b)', tagT: 120 },
+      courbe_c: { tau: 170, nf: 133, couleur: 'bleu', tag: '(c)', tagT: 200 } } },
 };
 const gr = () => GR[MO.S.vue];
 const X = t => G.x0 + t / gr().tmax * G.w, Y = n => G.y0 - n / gr().ymax * G.h;
@@ -245,11 +254,14 @@ const ETAPES = {
     { nom: 'piege', anim: .2, motif: 'piège : ne pas choisir le palier le plus haut, ici c’est le même', bulle: () => 'Le piège classique…' },
   ],
   lecture: [
-    { nom: 'enonce', anim: .2, motif: 'l’énoncé : trois expériences', bulle: () => 'Trois expériences, même mélange initial.' },
+    { nom: 'enonce', anim: .2, motif: 'l’énoncé : trois expériences', bulle: () => 'Trois expériences, mêmes quantités initiales.' },
     { nom: 'courbes', anim: 3.4, motif: 'les trois courbes (a), (b), (c)', bulle: () => 'Les trois courbes x = f(t)…' },
-    { nom: 'debut', anim: .6, motif: 'au début : (a) la plus raide, puis (b), puis (c)', bulle: () => 'Regarde le début des courbes.' },
-    { nom: 'associer', anim: .2, motif: 'les associations : (a) ↔ 3, (b) ↔ 2, (c) ↔ 1', bulle: () => 'Associons chaque courbe à son expérience.' },
-    { nom: 'conclusion', anim: .2, motif: '« x_f est le même » : vrai', bulle: () => 'Et l’affirmation sur x_f ?' },
+    { nom: 'debut', anim: .6, motif: 'au début : la pente de (a), la plus raide, s’allume', bulle: () => 'Regarde le début des courbes.' },
+    { nom: 'debut_c', anim: .6, motif: 'au début : (c) la moins raide ; (b) entre les deux', bulle: () => 'Et (c) ?' },
+    { nom: 'associer', anim: .4, motif: '(a), la plus rapide : expérience 3 (θ₂ et catalyseur)', bulle: () => 'Associons chaque courbe à son expérience.' },
+    { nom: 'assoc_b', anim: .4, motif: '(b) : expérience 2 (θ₂)', bulle: () => '(b)…' },
+    { nom: 'assoc_c', anim: .4, motif: '(c), la plus lente : expérience 1 (θ₁)', bulle: () => '(c)…' },
+    { nom: 'conclusion', anim: .3, motif: '« x_f est le même » : vrai', bulle: () => 'Et l’affirmation sur x_f ?' },
   ],
 };
 const MOTIFS = new Proxy({}, { get: (_, nom) => (nom === 'fin' ? 'fin' : (ETAPES[MO ? MO.S.vue : VUES[0]].find(e => e.nom === nom) || {}).motif) });
@@ -303,12 +315,13 @@ function debuts(c, ids, L = 46) {
   c.cercle(G.x0 + 14, G.y0 - 16, 24, { couleur: 'jaune', largeur: 1.6 });
 }
 function dessiner(c, M) {
-  MO = M; M.scene.cadre(53);
+  MO = M; M.scene.cadre(53); Object.assign(G, M.S.vue === 'lecture' ? GL : G0);
   const v = M.S.vue, g = gr();
   // Tableau large (large.js) : le graphe et le panneau de droite agrandis, le titre et les lignes du bas dans la colonne de gauche.
-  window.TLRLarge.debut(c, M.scene, { src: [40, 48, 752, 332] });
+  window.TLRLarge.debut(c, M.scene, v === 'lecture' ? { src: [8, 40, 760, 368], colMin: 0 } : { src: [40, 48, 752, 332] });
   window.TLRLarge.titre(c, `Les courbes : ${TITRES[v]}`, 14, 26, { couleur: 'cyan', taille: 20 });
-  if (M.commence(v === 'lecture' ? 'enonce' : 'axes')) c.direct(() => quadrillage(c, lisse(M.p(v === 'lecture' ? 'enonce' : 'axes'))));
+  if (v === 'lecture') { if (M.commence('enonce')) c.direct(() => quadrillageLecture(c, lisse(M.p('enonce')))); }
+  else if (M.commence('axes')) c.direct(() => quadrillage(c, lisse(M.p('axes'))));
   // Les courbes se tracent pendant l’animation de leur étape ; dans la vue lecture, les trois ensemble.
   c.direct(() => {
     for (const id of Object.keys(g.courbes)) {
@@ -346,27 +359,116 @@ function dessiner(c, M) {
       plus: () => { attention(c, PX, 186, { h: 18 }); c.texte('ne pas choisir le palier', PX + 26, 186, { couleur: 'orange', taille: 17 });
         c.texte('le plus haut : ici, même', PX, 210, { couleur: 'orange', taille: 17 }); c.texte('palier pour (C₁) et (C₂)', PX, 234, { couleur: 'orange', taille: 17 }); } },
   ], ZY);
-  else vues = zoneEcriture(c, M, [
-    { nom: 'enonce', lignes: [['même mélange initial ; trois expériences ; on suit l’avancement x', 'blanc']], plus: () => {
-      axes(c);
-      c.rect(PX - 6, 66, 254, 112, { couleur: 'faible', largeur: 1.6, arrondi: 8 });
-      c.texte('exp. 1 : θ₁', PX + 4, 90, { taille: 17 }); c.texte('exp. 2 : θ₂ > θ₁', PX + 4, 114, { taille: 17 });
-      c.texte('exp. 3 : θ₂ + quelques gouttes', PX + 4, 138, { taille: 17 }); c.texte('d’acide sulfurique (catalyseur)', PX + 4, 160, { taille: 17, max: 238 });
-    } },
-    { nom: 'courbes', lignes: [['trois courbes, un seul palier commun x_f', 'blanc']], plus: () => { for (const id of ['courbe_a', 'courbe_b', 'courbe_c']) tag(c, id); palier(c, 1, null, 'faible'); c.texte('x_f', G.x0 - 8, Y(1) + 5, { couleur: 'jaune', taille: 16, align: 'right' }); } },
-    { nom: 'debut', lignes: [['au début : (a) est la plus raide, puis (b), puis (c)', 'jaune']], plus: () => debuts(c, ['courbe_a', 'courbe_b', 'courbe_c'], 40) },
-    { nom: 'associer', lignes: [['(a) : la plus rapide, deux facteurs (θ₂ et catalyseur) ; (b) : θ₂ ; (c) : θ₁, la plus lente', 'blanc']], plus: () => {
-      [['(a)', 'rose', 'exp. 3 (deux facteurs)'], ['(b)', 'cyan', 'exp. 2'], ['(c)', 'bleu', 'exp. 1']].forEach(([a, col, b], i) => {
-        const y = 206 + i * 26; c.texte(a, PX, y, { couleur: col, taille: 17 }); c.cote(PX + 30, y - 5, PX + 62, y - 5, '', { couleur: col, largeur: 1.6 }); c.texte(b, PX + 70, y, { couleur: col, taille: 17 });
-      });
-    } },
-    { nom: 'conclusion', lignes: [['« x_f est le même pour les trois expériences » : VRAI (même mélange initial)', 'jaune']],
-      plus: () => c.texte('« x_f est le même » : vrai', PX, 284, { couleur: 'jaune', taille: 19 }) },
-  ], ZY);
+  else vues = vueLecture(c, M);
   reperes(c, M);
   window.TLRLarge.fin(c);
   M.vues = vues;
   return c.fin();
+}
+/* ── Vue lecture : la figure du national 2025 N, la démonstration jouée dessus ───────────────────────────────────────
+ * L’énoncé (les trois expériences) s’écrit à droite ; au moment « debut » il est EFFACÉ : seules la figure et la
+ * démonstration restent. Chaque étape allume ce qu’elle utilise (halo jaune) ; ce qui est allumé le reste, plus doux. */
+const TICKS_T = [30, 60], TICKS_X = [26.6, 53.2];
+function quadrillageLecture(c, a) {
+  const g = gr(), ctx = c.ctx;
+  ctx.save(); ctx.globalAlpha = a; ctx.strokeStyle = 'rgba(160,190,255,.10)'; ctx.lineWidth = 1;
+  for (let t = 15; t <= g.tmax + 1e-9; t += 15) { ctx.beginPath(); ctx.moveTo(X(t), G.y0); ctx.lineTo(X(t), G.y0 - G.h); ctx.stroke(); }
+  for (let n = 13.3; n <= g.ymax + 1e-9; n += 13.3) { ctx.beginPath(); ctx.moveTo(G.x0, Y(n)); ctx.lineTo(G.x0 + G.w, Y(n)); ctx.stroke(); }
+  ctx.restore();
+}
+/** Halo (la craie « allumée ») le long d’une ligne de points ; fort = l’étape en cours, sinon doux (déjà allumé). */
+function halo(c, pts, fort, larg = 13) {
+  c.direct(() => {
+    const ctx = c.ctx; ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = fort ? 'rgba(255,226,90,.42)' : 'rgba(255,226,90,.16)'; ctx.lineWidth = larg;
+    ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.stroke(); ctx.restore();
+  });
+}
+const ptsCourbe = id => { const k = gr().courbes[id]; return Array.from({ length: 61 }, (_, i) => { const t = i / 60 * gr().tmax; return [X(t), Y(nDe(k, t))]; }); };
+/** Pente de départ d’une courbe : segment depuis l’origine, dans la direction de la courbe en t = 0. */
+function pente(id, L = 70) {
+  const k = gr().courbes[id], dx = G.w / gr().tmax, dy = k.nf / k.tau / gr().ymax * G.h, n = Math.hypot(dx, dy);
+  return [[G.x0, G.y0], [G.x0 + dx / n * L, G.y0 - dy / n * L]];
+}
+/** Place de l’association de chaque courbe, à droite de la figure (écartées : les bouts de (a) et (b) sont proches). */
+const BOUTS = { courbe_a: -12, courbe_b: 30, courbe_c: 72 };   // décalage depuis le palier (px)
+const ASSOC = { courbe_a: ['exp. 3 : θ₂ + catalyseur', 'associer', 'assoc_a'], courbe_b: ['exp. 2 : θ₂', 'assoc_b', 'assoc_b'], courbe_c: ['exp. 1 : θ₁', 'assoc_c', 'assoc_c'] };
+function vueLecture(c, M) {
+  const g = gr(), lus = [], XD = X(g.tmax) + 26;   // XD : la colonne de la démonstration, à droite de la figure
+  const enCours = nom => { let d = null; for (const e of M.evs()) if (M.commence(e.nom)) d = e.nom; return d === nom; };
+  // Les axes, comme sur la figure de l’examen : seules ses graduations (26,6 et 53,2 mmol ; 30 et 60 min).
+  M.etape(c, 'enonce', () => {
+    c.fleche(G.x0, G.y0, G.x0 + G.w + 16, G.y0, { largeur: 1.8 });
+    c.fleche(G.x0, G.y0, G.x0, G.y0 - G.h - 14, { largeur: 1.8 });
+    for (const t of TICKS_T) { c.ligne(X(t), G.y0 - 4, X(t), G.y0 + 4, { largeur: 1.4, duree: .03 }); c.texte(fx(t, 0), X(t), G.y0 + 21, { couleur: 'blanc', taille: 15, align: 'center', duree: .1 }); }
+    for (const n of TICKS_X) { c.ligne(G.x0 - 4, Y(n), G.x0 + 4, Y(n), { largeur: 1.4, duree: .03 }); c.texte(fx(n, 1), G.x0 - 8, Y(n) + 5, { couleur: 'blanc', taille: 15, align: 'right', duree: .1 }); }
+    c.texte('0', G.x0 - 8, G.y0 + 18, { couleur: 'blanc', taille: 15, align: 'right', duree: .05 });
+    c.texte('t (min)', G.x0 + G.w + 16, G.y0 + 24, { couleur: 'blanc', taille: 16, align: 'right' });
+    c.texte('x (mmol)', G.x0 + 10, G.y0 - G.h - 6, { couleur: 'blanc', taille: 16 });
+  });
+  // L’énoncé : les trois expériences (effacé dès que la démonstration commence).
+  if (!M.commence('debut')) {
+    M.etape(c, 'enonce', () => {
+      c.texte('exp. 1 : à θ₁', PX, 96, { taille: 18 });
+      c.texte('exp. 2 : à θ₂ > θ₁', PX, 126, { taille: 18 });
+      c.texte('exp. 3 : à θ₂, avec quelques', PX, 156, { taille: 18 });
+      c.texte('gouttes d’acide sulfurique', PX + 16, 180, { taille: 18 });
+      c.texte('mêmes quantités : 0,200 mol', PX, 214, { couleur: 'faible', taille: 16 });
+      c.texte('d’acide et 0,200 mol d’alcool', PX, 236, { couleur: 'faible', taille: 16 });
+    });
+    c.repere('tableau', PX - 6, 74, 250, 170, 'les trois expériences de l’énoncé (θ₁ ; θ₂ > θ₁ ; θ₂ + acide sulfurique, le catalyseur)');
+  }
+  // Les étiquettes des courbes, comme sur la figure (sous chaque courbe, là où elles sont bien séparées).
+  M.etape(c, 'courbes', () => { for (const id of Object.keys(g.courbes)) { const k = g.courbes[id]; c.texte(k.tag, X(k.tagT) + 6, Y(nDe(k, k.tagT)) + 20, { couleur: k.couleur, taille: 17 }); } });
+  // La démonstration. 1) Le début des courbes : la pente de (a) s’allume, puis celle de (c), (b) entre les deux.
+  if (M.commence('debut')) {
+    const [, b] = pente('courbe_a', 110);
+    halo(c, pente('courbe_a', 110), enCours('debut'));
+    M.etape(c, 'debut', () => {
+      c.ligne(G.x0, G.y0, b[0], b[1], { couleur: 'jaune', largeur: 2.6 });
+      c.texte('au départ, la pente :', XD, 196, { couleur: 'jaune', taille: 17 }); c.texte('(a) : la plus raide', XD, 222, { couleur: 'rose', taille: 18 });
+    });
+    c.repere('debut', G.x0 - 6, b[1] - 10, 40, G.y0 - b[1] + 16, 'la pente de départ de (a) : la plus raide, (a) est la plus rapide');
+    lus.push('pente de départ de (a) allumée : la plus raide');
+  }
+  if (M.commence('debut_c')) {
+    const [, b] = pente('courbe_c', 150), [, m] = pente('courbe_b', 130);
+    halo(c, pente('courbe_c', 150), enCours('debut_c'));
+    M.etape(c, 'debut_c', () => {
+      c.ligne(G.x0, G.y0, b[0], b[1], { couleur: 'jaune', largeur: 2.6 });
+      c.texte('(c) : la moins raide', XD, 248, { couleur: 'bleu', taille: 18 }); c.texte('(b) : entre les deux', XD, 274, { couleur: 'cyan', taille: 18 });
+      c.ligne(G.x0, G.y0, m[0], m[1], { couleur: 'jaune', largeur: 1.6, pointille: [5, 5] });
+    });
+    c.repere('debut_c', G.x0 - 6, b[1] - 10, b[0] - G.x0 + 16, G.y0 - b[1] + 16, 'la pente de départ de (c) : la moins raide, (c) est la plus lente ; (b) entre les deux');
+    lus.push('pente de (c) allumée : la moins raide ; (b) entre les deux');
+  }
+  // 2) Les associations : chaque courbe s’allume à son tour, son expérience s’écrit à son bout.
+  for (const id of ['courbe_a', 'courbe_b', 'courbe_c']) {
+    const [txt, nom, rep] = ASSOC[id], k = g.courbes[id];
+    if (!M.commence(nom)) continue;
+    halo(c, ptsCourbe(id), enCours(nom), 10);
+    const xb = X(g.tmax), yb = Y(nDe(k, g.tmax)), ya = Y(g.nf) + BOUTS[id];
+    M.etape(c, nom, () => {
+      c.ligne(xb + 4, yb, xb + 22, ya - 6, { couleur: k.couleur, largeur: 1.6 });
+      c.texte(`${k.tag} ↔ ${txt}`, xb + 26, ya, { couleur: k.couleur, taille: 18 });
+    });
+    c.repere(rep, xb + 20, ya - 20, 270, 28, `${k.tag} ↔ ${txt}`);
+    lus.push(`${k.tag} allumée : ${txt}`);
+  }
+  // 3) La conclusion : le palier commun, x_f le même.
+  if (M.commence('conclusion')) {
+    halo(c, [[G.x0, Y(g.nf)], [G.x0 + G.w, Y(g.nf)]], enCours('conclusion'), 9);
+    M.etape(c, 'conclusion', () => {
+      c.ligne(G.x0, Y(g.nf), G.x0 + G.w, Y(g.nf), { couleur: 'jaune', largeur: 1.8, pointille: [6, 6] });
+      c.texte('x_f', G.x0 - 8, Y(g.nf) + 5, { couleur: 'jaune', taille: 16, align: 'right' });
+      c.texte('même palier x_f : vrai', XD, 314, { couleur: 'jaune', taille: 18 });
+      c.texte('θ et catalyseur changent', XD, 338, { couleur: 'jaune', taille: 16 });
+      c.texte('la durée, pas l’état final', XD, 360, { couleur: 'jaune', taille: 16 });
+    });
+    c.repere('conclusion', XD - 6, 294, 250, 74, '« x_f est le même » : vrai');
+    lus.push('palier commun allumé : x_f le même, vrai');
+  }
+  return lus;
 }
 /** Cadre jaune du panneau de droite : la phrase à retenir. */
 function encadre(c, lignes) {
@@ -389,7 +491,7 @@ function reperes(c, M) {
     courbe_piege: 'la courbe orange en pointillé : H₂O₂ doublé, palier 4 mmol', courbe_C1: 'la courbe (C₁), avec catalyseur', courbe_C2: 'la courbe (C₂), sans catalyseur',
     courbe_a: 'la courbe (a), la plus rapide', courbe_b: 'la courbe (b)', courbe_c: 'la courbe (c), la plus lente' };
   for (const id of Object.keys(g.courbes)) cadreCourbe(id, NOMS[id] + quand(etapeCourbe(id)));
-  const pal = v === 'catalyseur' ? 'meme_palier' : v === 'lecture' ? 'courbes' : 'meme_palier';
+  const pal = v === 'lecture' ? 'conclusion' : 'meme_palier';
   R('palier', G.x0, Y(g.nf) - 26, G.w, 34, `le palier commun : ${v === 'lecture' ? 'x_f' : v === 'catalyseur' ? 'x_f = 0,3 mol' : 'n_f = 2 mmol'}${quand(pal)}`);
   if (v === 'temperature') {
     R('debut', G.x0 - 24, G.y0 - 50, 66, 64, `le début des courbes : celle à 40 °C est plus raide${quand('plus_raide')}`);
@@ -398,10 +500,6 @@ function reperes(c, M) {
   if (v === 'catalyseur') {
     R('debut', G.x0 - 24, G.y0 - 50, 66, 64, `le début des courbes : (C₁) est plus raide${quand('plus_tot')}`);
     R('piege', PX - 6, 166, 254, 76, `« ne pas choisir le palier le plus haut : ici même palier »${quand('piege')}`);
-  }
-  if (v === 'lecture') {
-    R('tableau', PX - 6, 66, 254, 112, 'le tableau des trois expériences (θ₁ ; θ₂ > θ₁ ; θ₂ + catalyseur)');
-    R('conclusion', PX - 6, 264, 254, 28, `« x_f est le même » : vrai${quand('conclusion')}`);
   }
 }
 
@@ -416,7 +514,7 @@ function voir(M) {
   const tracees = Object.keys(g.courbes).filter(id => M.commence(v === 'lecture' ? 'courbes' : v === 'concentration' && id === 'courbe_piege' ? 'piege' : id));
   m.push(tracees.length ? `Courbes tracées : ${tracees.map(id => desc[id]).join(' ; ')}.` : 'Pas encore de courbe.');
   if (M.commence('meme_palier') || (v === 'lecture' && M.commence('courbes'))) m.push(`Palier commun en pointillé : ${v === 'lecture' ? 'x_f' : v === 'catalyseur' ? 'x_f = 0,3 mol' : 'n_f = 2 mmol'}.`);
-  if (v === 'lecture') m.push('Panneau de droite : exp. 1 : θ₁ ; exp. 2 : θ₂ > θ₁ ; exp. 3 : θ₂ + quelques gouttes d’acide sulfurique (catalyseur).' + (M.commence('associer') ? ' Associations écrites : (a) ↔ exp. 3 (deux facteurs), (b) ↔ exp. 2, (c) ↔ exp. 1.' : '') + (M.commence('conclusion') ? ' « x_f est le même » : vrai.' : ''));
+  if (v === 'lecture') m.push(M.commence('debut') ? `Énoncé effacé ; la démonstration sur la figure : ${(M.vues || []).join(' ; ') || 'rien encore'}.` : 'À droite, l’énoncé : exp. 1 : θ₁ ; exp. 2 : θ₂ > θ₁ ; exp. 3 : θ₂ + quelques gouttes d’acide sulfurique (catalyseur) ; mêmes quantités 0,200 mol.');
   if (M.commence('plus_raide') || M.commence('plus_tot') || (v === 'lecture' && M.commence('debut'))) m.push('Petits segments jaunes au départ des courbes : la plus rapide est la plus raide.');
   if (v === 'concentration' && M.commence('piege')) m.push('Panneau orange ⚠ : doubler le réactif limitant change le palier ; doubler I⁻ (en excès) ne change que la durée.');
   if (v === 'catalyseur' && M.commence('piege')) m.push('Panneau orange ⚠ : « ne pas choisir le palier le plus haut : ici, même palier pour (C₁) et (C₂) ».');

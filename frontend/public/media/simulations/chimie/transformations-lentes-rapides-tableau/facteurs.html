@@ -18,7 +18,9 @@
 /*
  * Les facteurs cinétiques (cours « Transformations lentes et transformations rapides », 2e Bac PC BIOF, novembre 2026).
  * Contrat : outils/cours/notes/cours/transformations_lentes_rapides_contrat_simulations.md § 5.
- * Vues (?vue=) : temperature (défaut) | concentration | trempe | une_variable | vie | catalyseur.
+ * Vues (?vue=) : temperature (défaut) | concentration | trempe | une_variable | vie | catalyseur | glacee (le national 2017 R).
+ * une_variable : les lignes 1 puis 2 s’allument une à une (moments exp_1, exp_2) avant la comparaison comparer_1_2.
+ * glacee : moments reaction, prelevement, eau_glacee, titrage, puis la démonstration refroidi, fige, dose_n, but.
  * Modèle POUR L’ŒIL (jamais écrit à l’écran) : la teinte du diiode suit l’avancement x/x_f = 1 − e^(−t/τ), ramené à 1 à t = 5τ
  * (« teinte finale atteinte »). τ = 6 min (20 °C ; [I⁻]₀ = 0,1 mol/L) → teinte finale à 30 min ; 0,2 mol/L : τ = 3 min ;
  * bain chaud θ_c : τ = 6·3^((20 − θ_c)/20) min (40 °C → 2 min, trois fois plus tôt). Ce n’est pas une loi : seulement pour que
@@ -348,10 +350,11 @@ function entites(ctx, cx, cy, r, g, d, t, a = 1) {
 
 /* ── Les vues, leurs étapes ─────────────────────────────────────────── */
 const q0 = new URLSearchParams(location.search);
-const VUES = ['temperature', 'concentration', 'trempe', 'une_variable', 'vie', 'catalyseur'];
-const TITRES = { temperature: 'la température', concentration: 'la concentration', trempe: 'la trempe', une_variable: 'un seul facteur à la fois', vie: 'dans la vie courante', catalyseur: 'le catalyseur' };
+const VUES = ['temperature', 'concentration', 'trempe', 'une_variable', 'vie', 'catalyseur', 'glacee'];
+const TITRES = { temperature: 'la température', concentration: 'la concentration', trempe: 'la trempe', une_variable: 'un seul facteur à la fois', vie: 'dans la vie courante', catalyseur: 'le catalyseur', glacee: 'l’eau glacée (national 2017 R)' };
 const TITRE_TABLEAU = { temperature: 'Facteur cinétique : la température', concentration: 'Facteur cinétique : la concentration', trempe: 'La trempe : bloquer une réaction pour la doser',
-  une_variable: 'Un seul facteur à la fois', vie: 'Les facteurs cinétiques dans la vie courante', catalyseur: 'Facteur cinétique : le catalyseur' };
+  une_variable: 'Un seul facteur à la fois', vie: 'Les facteurs cinétiques dans la vie courante', catalyseur: 'Facteur cinétique : le catalyseur',
+  glacee: 'National 2017 R : l’eau glacée avant le dosage' };
 const PAR = { theta_c: clamp(Math.round(+(q0.get('theta_c') ?? 40)) || 40, 30, 60) };
 let DRAG = null;                                   // θ pendant que l’élève glisse la poignée (pas encore appliqué)
 const thetaVu = () => DRAG ?? PAR.theta_c;
@@ -381,6 +384,16 @@ function ETAPES(v) {
       { nom: 'meme_final', anim: .3, motif: 'même brun final : H₂O₂ limitant, même quantité de I₂', bulle: () => 'Compare les teintes finales.' },
       { nom: 'rencontres', anim: 3, ecritDes: 0, motif: 'loupe : plus d’entités I⁻ dans le même volume', bulle: () => 'À la loupe : combien d’ions I⁻ dans le même volume ?' },
     ],
+    glacee: [
+      { nom: 'reaction', anim: 1.6, motif: 'des tubes scellés (34,5 mL d’éthanol + 0,6 mol d’acide) dans un bain-marie à 100 °C', bulle: () => 'Les tubes chauffent au bain-marie, à 100 °C.' },
+      { nom: 'prelevement', anim: 2.2, motif: 'à l’instant t, on sort un tube du bain-marie', bulle: () => 'On sort un tube du bain-marie.' },
+      { nom: 'eau_glacee', anim: 1.8, motif: 'le tube est placé dans l’eau glacée', bulle: () => 'On le place dans l’eau glacée.' },
+      { nom: 'titrage', anim: 3, motif: 'on dose l’acide restant par l’hydroxyde de sodium', bulle: () => 'Puis on dose l’acide restant.' },
+      { nom: 'refroidi', anim: .4, motif: 'question 1 : dans l’eau glacée, θ chute d’un coup', bulle: () => 'Pourquoi l’eau glacée ?' },
+      { nom: 'fige', anim: .4, motif: 'la transformation est bloquée', bulle: () => 'La transformation est bloquée.' },
+      { nom: 'dose_n', anim: .4, motif: 'n(acide) ne change plus pendant le dosage', bulle: () => 'On dose la quantité de cet instant.' },
+      { nom: 'but', anim: .4, motif: 'but : bloquer la transformation avant le dosage', bulle: () => 'Le but, comme le barème.' },
+    ],
     trempe: [
       { nom: 'reaction', anim: RT * TP * 1.25, sim: [0, TP], motif: `t = ${TP} min : le grand bécher brunit`, bulle: () => 'Le mélange réagit dans le grand bécher (temps accéléré)…' },
       { nom: 'prelevement', anim: 2.2, sim: [TP, TP + .5], motif: 'la pipette prélève un peu du mélange', bulle: () => 'On prélève un peu du mélange à la pipette.' },
@@ -391,6 +404,8 @@ function ETAPES(v) {
     ],
     une_variable: [
       { nom: 'tableau', anim: .2, motif: 'le tableau des trois expériences', bulle: () => 'Trois expériences avec le même mélange.' },
+      { nom: 'exp_1', anim: .4, motif: 'la ligne 1 s’allume : 20 °C ; 0,1 mol/L', bulle: () => 'L’expérience 1…' },
+      { nom: 'exp_2', anim: .4, motif: 'la ligne 2 s’allume : 40 °C ; 0,1 mol/L', bulle: () => '… et l’expérience 2.' },
       { nom: 'comparer_1_2', anim: .3, motif: '1 et 2 : seule la température change', bulle: () => 'Comparons 1 et 2.' },
       { nom: 'comparer_2_3', anim: .3, motif: '2 et 3 : seule la concentration change', bulle: () => 'Comparons 2 et 3.' },
       { nom: 'comparer_1_3', anim: .3, motif: '1 et 3 : deux changements, on ne conclut pas', bulle: () => 'Et 1 avec 3 ?' },
@@ -487,16 +502,16 @@ function dessiner(c, M) {
   MO = M; M.scene.cadre(41);
   const v = M.S.vue;
   // Tableau large (large.js) : la figure agrandie, le titre et les lignes du bas dans la colonne de gauche.
-  window.TLRLarge.debut(c, M.scene, { src: SRC_LARGE[v] });
+  window.TLRLarge.debut(c, M.scene, v === 'glacee' ? { src: SRC_LARGE[v], colMin: 0 } : { src: SRC_LARGE[v] });
   window.TLRLarge.titre(c, TITRE_TABLEAU[v], 14, 26, { couleur: 'cyan', taille: 20 });
-  M.vues = ({ temperature: vueTemperature, concentration: vueConcentration, trempe: vueTrempe, une_variable: vueUneVariable, vie: vueVie, catalyseur: vueCatalyseur })[v](c, M) || [];
+  M.vues = ({ temperature: vueTemperature, concentration: vueConcentration, trempe: vueTrempe, une_variable: vueUneVariable, vie: vueVie, catalyseur: vueCatalyseur, glacee: vueGlacee })[v](c, M) || [];
   reperes(c, M);
   window.TLRLarge.fin(c);
   return c.fin();
 }
 /* Boîte de chaque figure dans le dessin d’origine (sans le titre ni les lignes du bas) : tableau large, voir large.js. */
 const SRC_LARGE = { temperature: [24, 12, 730, 336], concentration: [24, 12, 730, 336], catalyseur: [24, 40, 756, 345],
-  trempe: [16, 36, 748, 342], une_variable: [20, 60, 800, 342], vie: [20, 40, 730, 340] };   // vie : jusqu'aux légendes du bas (y = 328), coupées avant
+  trempe: [16, 36, 748, 342], glacee: [16, 24, 752, 382], une_variable: [20, 60, 800, 342], vie: [20, 40, 730, 340] };   // vie : jusqu'aux légendes du bas (y = 328), coupées avant
 function vueTemperature(c, M) {
   const t = tSim(), th = thetaVu(), tc = tauC(), fF = avance(t, TAU_F), fC = avance(t, tc), niv = NIV * lisse(M.p('melange'));
   eqn(c, 724, 26, 'H₂O₂ + 2I⁻ + 2H⁺', 'I₂ + 2H₂O', { align: 'right', taille: 16 });
@@ -620,9 +635,104 @@ function vueTrempe(c, M) {
       plus: () => { c.texte('S₂O₃²⁻', BUR.x - 14, BUR.yH + 24, { couleur: 'blanc', taille: 15, align: 'right' }); eqn(c, 500, 328, 'I₂ + 2S₂O₃²⁻', '2I⁻ + S₄O₆²⁻', { taille: 16 }); } },
   ], ZY);
 }
+/* ── Vue glacee : le national 2017 R tel qu’à l’examen (19 novembre 2026, règles 16-17) ─────────────────────────────
+ * Seules les données du sujet : des tubes scellés (34,5 mL d’éthanol pur et 0,6 mol d’acide éthanoïque chacun) dans un
+ * bain-marie régulé à 100 °C ; à l’instant t, un tube sorti est placé dans l’eau glacée, puis on dose l’acide restant par
+ * l’hydroxyde de sodium. La question 1 (l’objectif de l’eau glacée) se démontre SUR la figure : le tube dans la glace
+ * s’allume, puis chaque ligne de la réponse s’écrit à côté, allumée à son tour (refroidi, fige, dose_n, but).
+ * Le tube à essai est peint ici (pas encore dans le lexique partagé : à y verser, règle 15). */
+const BM = { x: 30, y: 150, w: 236, h: 150 }, YBM = 186;               // bain-marie et la surface de son eau
+const TUBES = [70, 112, 154, 196], TUBE = { w: 20, h: 150, haut: 108 };  // abscisses des tubes ; haut = ordonnée du bouchon dans le bain
+const GL = { x: 330, y: 200, w: 130, h: 100 };                           // bécher d’eau glacée
+const DOS = { x: 628, y: 230, w: 92, h: 70 }, BUR2 = { x: 674, yH: 46, yp: 206 };   // dosage : bécher et burette (hydroxyde de sodium)
+const XG = 300;                                                          // colonne de la démonstration (au-dessus de l’eau glacée)
+/** Tube à essai scellé : verre, bouchon gris, mélange (incolore, un peu bleuté) jusqu’à `niv` (0 → 1). */
+function tubeEssai(ctx, x, yHaut, w, h, niv = .55, a = 1) {
+  ctx.save(); ctx.globalAlpha = a;
+  const yB = yHaut + h, yL = yB - niv * (h - 14);
+  ctx.save(); ctx.beginPath(); ctx.moveTo(x - w / 2 + 2, yHaut + 8); ctx.lineTo(x - w / 2 + 2, yB - w / 2); ctx.arc(x, yB - w / 2, w / 2 - 2, Math.PI, 0, true); ctx.lineTo(x + w / 2 - 2, yHaut + 8); ctx.closePath(); ctx.clip();
+  const g = ctx.createLinearGradient(x - w / 2, 0, x + w / 2, 0); g.addColorStop(0, 'rgba(150,200,235,.30)'); g.addColorStop(.6, 'rgba(225,240,250,.42)'); g.addColorStop(1, 'rgba(140,185,220,.30)');
+  ctx.fillStyle = g; ctx.fillRect(x - w / 2, yL, w, yB - yL); ctx.restore();
+  ctx.strokeStyle = 'rgba(232,243,252,.9)'; ctx.lineWidth = 1.8;
+  ctx.beginPath(); ctx.moveTo(x - w / 2, yHaut + 6); ctx.lineTo(x - w / 2, yB - w / 2); ctx.arc(x, yB - w / 2, w / 2, Math.PI, 0, true); ctx.lineTo(x + w / 2, yHaut + 6); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.22)'; ctx.fillRect(x - w / 2 + 3, yHaut + 12, 2.4, h - 28);
+  const b = ctx.createLinearGradient(0, yHaut - 4, 0, yHaut + 10); b.addColorStop(0, '#9aa3ad'); b.addColorStop(1, '#4b535c');
+  ctx.fillStyle = b; ctx.beginPath(); ctx.roundRect(x - w / 2 - 2, yHaut - 4, w + 4, 14, 3); ctx.fill();
+  ctx.restore();
+}
+/** Le tube déplacé (le 4ᵉ) : dans le bain, sorti, puis posé dans l’eau glacée. Renvoie sa position (x, haut). */
+function tubeMobile(M) {
+  const dep = [TUBES[3], TUBE.haut], haut = [TUBES[3], 30], dessus = [GL.x + GL.w / 2, 30], dedans = [GL.x + GL.w / 2, GL.y + GL.h - TUBE.h + 6];
+  const P = (p, a, b) => [lerp(a[0], b[0], lisse(p)), lerp(a[1], b[1], lisse(p))];
+  if (!M.commence('prelevement')) return dep;
+  if (!M.commence('eau_glacee')) { const p = M.p('prelevement'); return p < .5 ? P(p / .5, dep, haut) : P((p - .5) / .5, haut, dessus); }
+  return P(M.p('eau_glacee'), dessus, dedans);
+}
+function vueGlacee(c, M) {
+  const enCours = nom => { let d = null; for (const e of M.evs()) if (M.commence(e.nom)) d = e.nom; return d === nom; };
+  const [tx, ty] = tubeMobile(M);   // le tube mobile est peint avant l’eau qui le baigne
+  const lueur = (x, y, w, h, fort) => c.direct(() => { const ctx = c.ctx; ctx.save(); ctx.fillStyle = fort ? 'rgba(255,226,90,.30)' : 'rgba(255,226,90,.11)'; ctx.beginPath(); ctx.roundRect(x, y, w, h, 8); ctx.fill(); ctx.restore(); });
+  // Le tube dans la glace s’allume dès que la démonstration commence (il reste allumé).
+  if (M.commence('refroidi')) lueur(GL.x + GL.w / 2 - 22, GL.y + GL.h - TUBE.h - 6, 44, TUBE.h + 8, enCours('refroidi'));
+  c.direct(() => {
+    const ctx = c.ctx;
+    TUBES.slice(0, 3).forEach(x => tubeEssai(ctx, x, TUBE.haut, TUBE.w, TUBE.h));
+    tubeEssai(ctx, tx, ty, TUBE.w, TUBE.h);
+    Peint.bain(ctx, BM, YBM, [170, 150, 140, .30]);
+    Peint.vapeur(ctx, BM.x + 14, BM.x + BM.w - 14, YBM, M.S.t, .9, 6);
+    Peint.thermo(ctx, BM.x + BM.w - 16, 88, 290, 100, 120, 1, 10);
+    const yS = Peint.becher(ctx, GL, .62, [200, 228, 245, .16]);
+    [[GL.x + 22, -.2], [GL.x + 48, .25], [GL.x + 104, -.1], [GL.x + 84, .4]].forEach(([gx, ang], i) => Peint.glacon(ctx, gx, yS - 1 + (i % 2) * 3, 17 - (i % 2) * 3, ang));
+    if (M.commence('titrage')) {
+      const a = lisse(clamp(M.p('titrage') / .2, 0, 1)), pt = M.p('titrage');
+      Peint.becher(ctx, DOS, .5, [222, 234, 244, .14], a);
+      Peint.burette(ctx, BUR2.x, BUR2.yH, BUR2.yp, 1 - .3 * clamp((pt - .2) / .75, 0, 1), [235, 240, 248, .14], a);
+      if (pt > .2 && pt < .95) for (let k = 0; k < 2; k++) { const ph = ((pt * 9 + k * .5) % 1); Peint.goutte(ctx, BUR2.x, BUR2.yp + 4 + ph * (DOS.y + 20 - BUR2.yp), [235, 240, 248, .3]); }
+    }
+  });
+  // Les données du sujet, écrites là où elles se lisent.
+  M.etape(c, 'reaction', () => {
+    c.texte('100 °C', BM.x + BM.w - 16, 76, { couleur: 'rouge', taille: 18, align: 'center' });
+    c.texte('bain-marie régulé à 100 °C', BM.x + BM.w / 2, 326, { couleur: 'rouge', taille: 17, align: 'center' });
+    c.texte('tubes scellés : 34,5 mL', BM.x + 4, 352, { couleur: 'blanc', taille: 16 });
+    c.texte('d’éthanol + 0,6 mol d’acide', BM.x + 4, 374, { couleur: 'blanc', taille: 16 });
+  });
+  c.repere('grand_becher', BM.x - 6, 96, BM.w + 12, BM.h + 60, 'le bain-marie à 100 °C et ses tubes scellés (éthanol + acide éthanoïque)');
+  c.repere('bain_marie', BM.x - 6, 96, BM.w + 12, BM.h + 60, 'le bain-marie à 100 °C : la température, un facteur cinétique');
+  M.etape(c, 'eau_glacee', () => c.texte('eau glacée', GL.x + GL.w / 2, 326, { couleur: 'bleu', taille: 17, align: 'center' }));
+  c.repere('becher_glace', GL.x - 8, GL.y - 6, GL.w + 16, GL.h + 12, 'l’eau glacée, avec le tube sorti du bain-marie');
+  c.repere('pipette', tx - 14, ty - 6, 28, TUBE.h + 10, 'le tube sorti du bain-marie');
+  if (M.commence('titrage')) M.etape(c, 'titrage', () => {
+    c.texte('dosage de l’acide restant', DOS.x + DOS.w / 2 - 20, 326, { couleur: 'blanc', taille: 17, align: 'center' });
+    c.texte('par Na⁺ + HO⁻', DOS.x + DOS.w / 2 - 20, 350, { couleur: 'blanc', taille: 16, align: 'center' });
+  });
+  c.repere('burette', BUR2.x - 40, BUR2.yH - 6, 100, DOS.y + DOS.h - BUR2.yH + 12, 'la burette d’hydroxyde de sodium : le dosage de l’acide restant');
+  // La démonstration de la question 1, à côté du tube allumé : une ligne par étape, chacune allumée à son tour.
+  const L = [['refroidi', 'dans l’eau glacée : θ chute d’un coup', 'bleu'], ['fige', '→ la transformation est bloquée', 'jaune'],
+    ['dose_n', '→ n(acide) ne change plus pendant le dosage', 'jaune']];
+  L.forEach(([nom, txt, col], i) => {
+    if (!M.commence(nom)) return;
+    const y = 50 + i * 27;
+    lueur(XG - 6, y - 19, 330, 25, enCours(nom));
+    M.etape(c, nom, () => c.texte(txt, XG, y, { couleur: col, taille: 17, max: 320 }));
+    c.repere(nom === 'fige' ? 'teinte_figee' : nom, XG - 6, y - 20, 330, 28, txt);
+  });
+  if (M.commence('but')) {
+    lueur(XG - 10, 112, 338, 34, enCours('but'));
+    M.etape(c, 'but', () => { c.rect(XG - 8, 114, 334, 30, { couleur: 'jaune', largeur: 2, arrondi: 8 }); c.texte('but : bloquer la transformation avant le dosage', XG, 135, { couleur: 'jaune', taille: 16, max: 318 }); });
+    c.repere('phrase', XG - 10, 112, 338, 34, '« bloquer la transformation avant le dosage » (pas seulement « refroidir »)');
+  }
+  return [];
+}
 function vueUneVariable(c, M) {
   const X = [40, 130, 250, 400], Y = [70, 112, 162, 212, 262];
   const cell = (s, i, j, col = 'blanc') => c.texte(s, (X[i] + X[i + 1]) / 2, Y[j] + 32, { couleur: col, taille: 19, align: 'center' });
+  // Les lignes 1 et 2 s’allument une à une (halo derrière la ligne ; plus doux une fois passée), avant la comparaison.
+  let dern = null; for (const e of M.evs()) if (M.commence(e.nom)) dern = e.nom;
+  [['exp_1', 1], ['exp_2', 2]].forEach(([nom, j]) => {
+    if (!M.commence(nom)) return;
+    c.direct(() => { const ctx = c.ctx; ctx.save(); ctx.fillStyle = dern === nom ? 'rgba(255,226,90,.30)' : 'rgba(255,226,90,.12)'; ctx.beginPath(); ctx.roundRect(X[0] + 3, Y[j] + 3, X[3] - X[0] - 6, Y[j + 1] - Y[j] - 6, 8); ctx.fill(); ctx.restore(); });
+  });
   return zoneEcriture(c, M, [
     { nom: 'tableau', lignes: [['même mélange H₂O₂ + I⁻ (milieu acide), trois expériences', 'blanc']], plus: () => {
       c.rect(X[0], Y[0], X[3] - X[0], Y[4] - Y[0], { arrondi: 4, largeur: 1.8 });
@@ -812,10 +922,17 @@ function voir(M) {
     if (M.commence('titrage')) m.push('Une burette de thiosulfate S₂O₃²⁻ (incolore) goutte dans le prélèvement ; équation à droite : I₂ + 2S₂O₃²⁻ → 2I⁻ + S₄O₆²⁻.');
   } else if (v === 'une_variable') {
     m.push('Tableau à la craie : exp. 1 (20 °C ; 0,1 mol/L), exp. 2 (40 °C ; 0,1 mol/L), exp. 3 (40 °C ; 0,2 mol/L).');
+    if (M.commence('exp_1')) m.push(`Ligne 1 allumée${M.commence('exp_2') ? ', puis ligne 2 allumée' : ''}.`);
     if (M.commence('comparer_1_2')) m.push('Colonne θ entourée en jaune pour 1 et 2 ; flèche « 1 → 2 : seule la température change ».');
     if (M.commence('comparer_2_3')) m.push('Colonne [I⁻]₀ entourée en vert pour 2 et 3 ; flèche « 2 → 3 : seule la concentration change ».');
     if (M.commence('comparer_1_3')) m.push('Flèche orange en pointillé de 1 à 3 avec ⚠ « deux changements, on ne conclut pas ».');
     if (M.commence('conclusion')) m.push('Cadre jaune : « on ne change que lui : les autres restent les mêmes ».');
+  } else if (v === 'glacee') {
+    m.push('Comme au national 2017 R : à gauche, un bain-marie à 100 °C (thermomètre, vapeur) avec des tubes scellés (34,5 mL d’éthanol + 0,6 mol d’acide éthanoïque chacun) ; au milieu, un bécher d’eau glacée avec des glaçons.');
+    if (M.commence('prelevement')) m.push(M.commence('eau_glacee') ? 'Un tube a été sorti du bain et placé dans l’eau glacée.' : 'Un tube sort du bain-marie.');
+    if (M.commence('titrage')) m.push('À droite, une burette d’hydroxyde de sodium (Na⁺ + HO⁻) au-dessus d’un bécher : on dose l’acide restant.');
+    const L = [['refroidi', 'dans l’eau glacée : θ chute d’un coup'], ['fige', 'la transformation est bloquée'], ['dose_n', 'n(acide) ne change plus pendant le dosage'], ['but', 'but : bloquer la transformation avant le dosage']].filter(([n]) => M.commence(n));
+    if (L.length) m.push('Démonstration écrite au-dessus de l’eau glacée, le tube allumé : ' + L.map(x => `« ${x[1]} »`).join(', ') + '.');
   } else if (v === 'vie') {
     m.push('Thermomètre au milieu (0 à 120 °C). ' + (M.commence('frigo') ? 'À gauche, un réfrigérateur ouvert (≈ 4 °C) ' : '') + (M.commence('lait') ? 'avec deux bouteilles de lait ; « au froid : plus lent ». ' : '') + (M.commence('autocuiseur') ? 'À droite, un autocuiseur sur la flamme bleue (≈ 120 °C) ' : '') + (M.commence('vapeur') ? 'dont la soupape lâche de la vapeur ; « plus de 100 °C : plus rapide ».' : ''));
   } else {
@@ -838,10 +955,12 @@ const MOT = Moteur({
   id: 'tlr_facteurs', titre: 'Les facteurs cinétiques : température, concentration, trempe, un seul facteur à la fois, vie courante, catalyseur', vues: VUES, titres: TITRES,
   etapes: ETAPES, motifs: MOTIFS, dessiner, voir, params,
   depart: M => ({ temperature: 'Même mélange, deux températures.', concentration: 'Même mélange, deux concentrations en ions iodure.', trempe: 'Comment « arrêter » une réaction pour la doser ?',
-    une_variable: 'Trois expériences : lesquelles peut-on comparer ?', vie: 'La température dans la cuisine…', catalyseur: 'Même mélange, avec ou sans catalyseur.' })[M.S.vue],
+    une_variable: 'Trois expériences : lesquelles peut-on comparer ?', vie: 'La température dans la cuisine…', catalyseur: 'Même mélange, avec ou sans catalyseur.',
+    glacee: 'Comme au national 2017 R : des tubes au bain-marie à 100 °C.' })[M.S.vue],
   messageFin: M => ({ temperature: `Plus la température est élevée, plus la transformation est rapide (à ${PAR.theta_c} °C : teinte finale vers ${min(5 * tauC())} au lieu de 30 min) ; même état final.`,
     concentration: 'Plus la concentration d’un réactif est grande, plus la transformation est rapide ; même état final (H₂O₂ limitant).',
     trempe: 'La trempe (refroidir et diluer brusquement) bloque l’évolution : on dose ensuite le diiode formé à cet instant.',
+    glacee: 'L’eau glacée bloque la transformation avant le dosage : on dose l’acide présent à cet instant.',
     une_variable: 'On ne fait varier qu’un facteur à la fois.', vie: 'Froid : transformations plus lentes ; chaud : plus rapides.',
     catalyseur: 'Le catalyseur accélère la transformation, ne figure pas dans l’équation et ne change pas l’état final.' })[M.S.vue],
   appliquer: (p, M) => {
@@ -876,6 +995,12 @@ const MOT = Moteur({
       { repere: 'teinte_figee', texte: 'Sa teinte ne bouge plus…' },
       { repere: 'teinte_continue', texte: '… alors que le grand bécher continue de foncer.' },
       { repere: 'burette', texte: 'On dose le diiode par le thiosulfate, une réaction rapide.' },
+    ],
+    glacee: [
+      { repere: 'grand_becher', texte: 'Les tubes scellés au bain-marie, à 100 °C.' },
+      { repere: 'becher_glace', texte: 'Un tube sorti est placé dans l’eau glacée.' },
+      { repere: 'teinte_figee', texte: 'Le froid bloque la transformation.' },
+      { repere: 'phrase', texte: 'But : bloquer la transformation avant le dosage.' },
     ],
     une_variable: [
       { repere: 'fleche_12', texte: '1 et 2 : seule la température change.' },

@@ -229,8 +229,10 @@ const Peint = {
 /* ── Rappels de chimie des années précédentes (règle 34 : on part de zéro, chaque notion dite deux fois, de deux façons) ──
  * Vues (?vue=) et moments (play_until) :
  *  - ion           : atome, perd, gagne, jetons          (un atome est neutre ; il perd 2 électrons → Cu²⁺ ; l’iode en gagne 1 → I⁻ ; les jetons + et −)
- *  - conservation  : equation, atomes, charges, balance  (Zn + Cu²⁺ → Zn²⁺ + Cu : mêmes atomes, même charge ; la balance à niveau)
- *  - mole          : douzaine, mole, milli, exemple      (la douzaine d’œufs ; la mole, un paquet de 6,02·10²³ entités ; 1 mmol = 10⁻³ mol)
+ *  - conservation  : equation, atomes, zn_g, zn_d, cu_g, cu_d, charges, q_g1, q_g2, q_d1, q_d2, balance
+ *                    (Zn + Cu²⁺ → Zn²⁺ + Cu : chaque terme compté s’allume à son tour, son nombre dessous ; la balance à niveau)
+ *  - mole          : douzaine, oeuf_1 … oeuf_12, mole, milli, exemple   (les 12 œufs s’allument un à un, numérotés ; la mole,
+ *                    un paquet de 6,02·10²³ entités ; 1 mmol = 10⁻³ mol)
  *  - concentration : becher, double_n, formule, dilution, sirop   (C = n/V ; le sirop dans un verre ; curseur V)
  * set_parameters : vue ; V_mL (concentration, 50..200).
  * Atomes, œufs, bécher et verres sont peints (règle 32) ; la craie garde les symboles, les nombres et les phrases.
@@ -281,12 +283,21 @@ const ETAPES = {
   ],
   conservation: [
     { nom: 'equation', anim: .8, motif: 'l’équation Zn + Cu²⁺ → Zn²⁺ + Cu', bulle: () => 'Une équation…' },
-    { nom: 'atomes', anim: 1.6, motif: 'les atomes : un Zn et un Cu de chaque côté', bulle: () => 'On compte les atomes…' },
-    { nom: 'charges', anim: 1.6, motif: 'les charges : +2 à gauche, +2 à droite', bulle: () => 'On compte les charges…' },
+    { nom: 'atomes', anim: .3, motif: 'on compte les atomes', bulle: () => 'On compte les atomes…' },
+    { nom: 'zn_g', anim: .5, motif: 'à gauche, Zn : 1 atome de zinc', bulle: () => 'Zn à gauche : 1.' },
+    { nom: 'zn_d', anim: .5, motif: 'à droite, Zn²⁺ : 1 atome de zinc', bulle: () => 'Zn²⁺ à droite : 1.' },
+    { nom: 'cu_g', anim: .5, motif: 'à gauche, Cu²⁺ : 1 atome de cuivre', bulle: () => 'Cu²⁺ à gauche : 1.' },
+    { nom: 'cu_d', anim: .5, motif: 'à droite, Cu : 1 atome de cuivre ; Zn : 1 = 1, Cu : 1 = 1', bulle: () => 'Cu à droite : 1.' },
+    { nom: 'charges', anim: .3, motif: 'on compte les charges', bulle: () => 'On compte les charges…' },
+    { nom: 'q_g1', anim: .5, motif: 'à gauche, Zn : charge 0', bulle: () => 'Zn : 0.' },
+    { nom: 'q_g2', anim: .5, motif: 'à gauche, Cu²⁺ : charge +2 ; à gauche : 0 + 2 = +2', bulle: () => 'Cu²⁺ : +2.' },
+    { nom: 'q_d1', anim: .5, motif: 'à droite, Zn²⁺ : charge +2', bulle: () => 'Zn²⁺ : +2.' },
+    { nom: 'q_d2', anim: .5, motif: 'à droite, Cu : charge 0 ; +2 = +2', bulle: () => 'Cu : 0.' },
     { nom: 'balance', anim: 3, motif: 'la balance à niveau : rien ne se perd', bulle: () => 'Une autre façon de le voir…' },
   ],
   mole: [
-    { nom: 'douzaine', anim: 2, motif: 'une douzaine : un paquet de 12 œufs', bulle: () => 'Au marché, on compte par paquets…' },
+    { nom: 'douzaine', anim: .6, motif: 'une boîte d’œufs', bulle: () => 'Au marché, on compte par paquets…' },
+    ...Array.from({ length: 12 }, (_, k) => ({ nom: 'oeuf_' + (k + 1), anim: .28, motif: `l’œuf n° ${k + 1} s’allume${k === 11 ? ' : 1 douzaine = 12 œufs' : ''}` })),
     { nom: 'mole', anim: 2.4, motif: 'une mole : un paquet de 6,02·10²³ entités', bulle: () => 'En chimie, le paquet est énorme…' },
     { nom: 'milli', anim: 1.2, motif: '1 mmol = 10⁻³ mol', bulle: () => 'Un plus petit paquet…' },
     { nom: 'exemple', anim: 1.2, motif: 'n(I₂) = 2 mmol = 2·10⁻³ mol', bulle: () => 'Un exemple…' },
@@ -306,7 +317,7 @@ const MOTIFS_PROXY = new Proxy({}, { get: (o, k) => (k === 'fin' ? 'fin' : motif
 function dessiner(c, M) {
   M.scene.cadre(23);
   // Tableau large (large.js) : la figure agrandie, le titre dans la colonne de gauche.
-  window.TLRLarge.debut(c, M.scene, { src: ({ ion: [16, 56, 650, 382], conservation: [150, 70, 742, 408], mole: [30, 62, 730, 372], concentration: [40, 58, 742, 404] })[M.S.vue], colMin: 0 });
+  window.TLRLarge.debut(c, M.scene, { src: ({ ion: [16, 56, 650, 382], conservation: [20, 56, 760, 408], mole: [30, 62, 730, 372], concentration: [40, 58, 742, 404] })[M.S.vue], colMin: 0 });
   window.TLRLarge.titre(c, 'Rappel : ' + TITRES[M.S.vue], 14, 26, { couleur: 'cyan', taille: 20 });
   ({ ion: vueIon, conservation: vueConservation, mole: vueMole, concentration: vueConcentration })[M.S.vue](c, M);
   window.TLRLarge.fin(c);
@@ -354,20 +365,50 @@ function vueIon(c, M) {
     c.repere('jetons', 400, 300, 230, 80, 'les jetons + et −');
   }
 }
+/* Compter en allumant (19 novembre 2026, règle 16) : chaque terme de l’équation compté s’allume à son tour (halo jaune,
+ * fort pendant son moment, doux ensuite) et son nombre s’écrit dessous ; le bilan s’écrit une fois, à la fin de la ligne. */
+const EQ_T = ['Zn', '+', 'Cu²⁺', '→', 'Zn²⁺', '+', 'Cu'];
+const COMPTE_ATOMES = [['zn_g', 0, '1 Zn'], ['zn_d', 4, '1 Zn'], ['cu_g', 2, '1 Cu'], ['cu_d', 6, '1 Cu']];
+const COMPTE_CHARGES = [['q_g1', 0, '0'], ['q_g2', 2, '+2'], ['q_d1', 4, '+2'], ['q_d2', 6, '0']];
+/** Place les termes de l’équation (états compris), centrée en x0 : [{ s, x, w }]. */
+function placerEquation(c, x0, taille) {
+  const morceaux = window.Etats ? window.Etats.morceaux(EQ_T.slice()) : EQ_T.slice(), ecart = 16;
+  // Chaque terme : la formule, puis son état écrit en petit et en bas (« _{(aq)} », règle 11), mesurés à part.
+  const T = morceaux.map(s => { const m = String(s).match(/^(.*?)(\((?:aq|l|s|g)\))?$/), f = m[1], e = m[2] || '';
+    const wf = c.largeurTexte(f, taille), we = e ? c.largeurTexte(e, taille * .62) + 2 : 0; return { s, f, e, wf, w: wf + we }; });
+  let x = x0 - (T.reduce((a, t) => a + t.w, 0) + ecart * (T.length - 1)) / 2;
+  for (const t of T) { t.x = x; x += t.w + ecart; }
+  return T;
+}
+function lueurTerme(c, t, y, taille, fort) {
+  c.direct(() => { const ctx = c.ctx; ctx.save(); ctx.fillStyle = fort ? 'rgba(255,226,90,.32)' : 'rgba(255,226,90,.12)'; ctx.beginPath(); ctx.roundRect(t.x - 6, y - taille * .95, t.w + 12, taille * 1.4, 8); ctx.fill(); ctx.restore(); });
+}
 function vueConservation(c, M) {
-  const Y = 110;
+  const Y = 96, TA = 30, YA = 140, YQ = 204;
+  const T = placerEquation(c, 400, TA), XT = T[0].x;
+  let dern = null; for (const e of ETAPES[M.S.vue]) if (M.commence(e.nom)) dern = e.nom;
+  // Les halos d’abord (sous la craie) : le terme compté à ce moment, fort ; les termes déjà comptés, doux.
+  for (const [nom, i] of COMPTE_ATOMES.concat(COMPTE_CHARGES)) if (M.commence(nom)) lueurTerme(c, T[i], Y, TA, dern === nom);
   M.etape(c, 'equation', () => {
-    c.texte('Zn  +  Cu²⁺  →  Zn²⁺  +  Cu', 380, Y, { couleur: 'blanc', taille: 30, align: 'center' });
-    c.repere('equation', 160, Y - 34, 440, 46, 'l’équation');
+    for (const t of T) { c.texte(t.f, t.x, Y, { couleur: 'blanc', taille: TA }); if (t.e) c.texte('_{' + t.e + '}', t.x + t.wf, Y, { couleur: 'blanc', taille: TA }); }
+    c.repere('equation', T[0].x - 8, Y - 34, T[T.length - 1].x + T[T.length - 1].w - T[0].x + 16, 46, 'l’équation');
   });
-  M.etape(c, 'atomes', () => {
-    c.texte('atomes : Zn : 1 | 1   Cu : 1 | 1', 380, Y + 48, { couleur: 'vert', taille: 19, align: 'center' });
-    c.repere('atomes', 200, Y + 26, 360, 30, 'le compte des atomes');
-  });
-  M.etape(c, 'charges', () => {
-    c.texte('charges : 0 + 2 = +2  |  +2 + 0 = +2', 380, Y + 84, { couleur: 'jaune', taille: 19, align: 'center' });
-    c.repere('charges', 200, Y + 62, 360, 30, 'le compte des charges');
-  });
+  M.etape(c, 'atomes', () => c.texte('atomes', 16, YA, { couleur: 'vert', taille: 19 }));
+  for (const [nom, i, n] of COMPTE_ATOMES) {
+    if (!M.commence(nom)) continue;
+    M.etape(c, nom, () => c.texte(n, T[i].x + T[i].w / 2, YA, { couleur: 'vert', taille: 19, align: 'center' }));
+    c.repere(nom, T[i].x - 6, Y - 32, T[i].w + 12, YA - Y + 40, `${n} : ${['zn_g', 'cu_g'].includes(nom) ? 'à gauche' : 'à droite'}`);
+  }
+  M.etape(c, 'cu_d', () => c.texte('mêmes atomes : Zn : 1 = 1 ; Cu : 1 = 1', XT, YA + 28, { couleur: 'vert', taille: 18 }));
+  c.repere('atomes', 10, YA - 22, 740, 58, 'le compte des atomes : 1 Zn et 1 Cu de chaque côté');
+  M.etape(c, 'charges', () => c.texte('charges', 16, YQ, { couleur: 'jaune', taille: 19 }));
+  for (const [nom, i, q] of COMPTE_CHARGES) {
+    if (!M.commence(nom)) continue;
+    M.etape(c, nom, () => c.texte(q, T[i].x + T[i].w / 2, YQ, { couleur: 'jaune', taille: 19, align: 'center' }));
+    c.repere(nom, T[i].x - 6, Y - 32, T[i].w + 12, YQ - Y + 40, `charge ${q}`);
+  }
+  M.etape(c, 'q_d2', () => c.texte('même charge : 0 + 2 = +2 et +2 + 0 = +2', XT, YQ + 28, { couleur: 'jaune', taille: 18 }));
+  c.repere('charges', 10, YQ - 22, 740, 58, 'le compte des charges : +2 à gauche, +2 à droite');
   if (M.commence('balance')) {
     const p = lisse(M.p('balance')), tilt = .25 * (1 - p), cx = 380, cy = 300;
     c.direct(() => {
@@ -391,15 +432,29 @@ function vueConservation(c, M) {
 }
 function vueMole(c, M) {
   if (M.commence('douzaine')) {
-    const p = M.p('douzaine'), n = Math.round(12 * lisse(p));
+    // Compter en allumant (règle 16) : chaque œuf se pose, s’allume, et son numéro s’écrit au-dessus ; le total à la fin.
+    const OX = k => 64 + (k % 6) * 38, OY = k => 116 + Math.floor(k / 6) * 50;
+    let dern = null; for (const e of ETAPES.mole) if (M.commence(e.nom)) dern = e.nom;
     c.direct(() => {
       const ctx = c.ctx;
-      const g = ctx.createLinearGradient(0, 70, 0, 160); g.addColorStop(0, '#b9a183'); g.addColorStop(1, '#7d6648');
-      ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(40, 80, 240, 90, 8); ctx.fill();
-      for (let k = 0; k < n; k++) oeuf(ctx, 64 + (k % 6) * 38, 106 + Math.floor(k / 6) * 38);
+      ctx.save(); ctx.globalAlpha = lisse(M.p('douzaine'));
+      const g = ctx.createLinearGradient(0, 80, 0, 180); g.addColorStop(0, '#b9a183'); g.addColorStop(1, '#7d6648');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(40, 84, 240, 102, 8); ctx.fill(); ctx.restore();
+      for (let k = 0; k < 12; k++) {
+        if (!M.commence('oeuf_' + (k + 1))) break;
+        ctx.save(); ctx.fillStyle = dern === 'oeuf_' + (k + 1) ? 'rgba(255,226,90,.45)' : 'rgba(255,226,90,.16)';
+        ctx.beginPath(); ctx.arc(OX(k), OY(k), 16, 0, 7); ctx.fill(); ctx.restore();
+        oeuf(ctx, OX(k), OY(k));
+      }
     });
-    c.texte('1 douzaine = 12 œufs', 160, 200, { couleur: 'blanc', taille: 18, align: 'center' });
-    c.repere('douzaine', 36, 74, 250, 140, 'une douzaine d’œufs');
+    for (let k = 0; k < 12; k++) {
+      const nom = 'oeuf_' + (k + 1);
+      if (!M.commence(nom)) break;
+      M.etape(c, nom, () => c.texte(String(k + 1), OX(k), OY(k) - 18, { couleur: 'jaune', taille: 15, align: 'center' }));
+      c.repere(nom, OX(k) - 17, OY(k) - 34, 34, 50, `l’œuf n° ${k + 1}`);
+    }
+    M.etape(c, 'oeuf_12', () => c.texte('1 douzaine = 12 œufs', 160, 212, { couleur: 'blanc', taille: 18, align: 'center' }));
+    c.repere('douzaine', 36, 78, 250, 142, 'une douzaine d’œufs');
   }
   if (M.commence('mole')) {
     const p = M.p('mole');
@@ -471,7 +526,7 @@ MOT = Moteur({
   texte: 'Rappels de chimie, chacun en deux façons : l’ion (un atome perd ou gagne des électrons ; les jetons + et −), la conservation (mêmes atomes, même charge ; la balance), la mole (la douzaine ; 6,02·10²³ entités ; 1 mmol = 10⁻³ mol), la concentration (C = n/V ; le sirop).',
   explications: {
     ion: [{ repere: 'atome_cu', texte: 'Un atome est neutre.' }, { repere: 'ion_cu', texte: 'Il perd deux électrons : Cu²⁺.' }, { repere: 'ion_i', texte: 'L’iode gagne un électron : I⁻.' }],
-    conservation: [{ repere: 'atomes', texte: 'Mêmes atomes des deux côtés.' }, { repere: 'charges', texte: 'Même charge des deux côtés.' }, { repere: 'balance', texte: 'La balance reste à niveau.' }],
+    conservation: [{ repere: 'zn_g', texte: 'Zn à gauche : 1 atome de zinc.' }, { repere: 'zn_d', texte: 'Zn²⁺ à droite : 1 atome de zinc.' }, { repere: 'atomes', texte: 'Mêmes atomes des deux côtés.' }, { repere: 'charges', texte: 'Même charge des deux côtés.' }, { repere: 'balance', texte: 'La balance reste à niveau.' }],
     mole: [{ repere: 'douzaine', texte: 'On compte les œufs par douzaines.' }, { repere: 'mole', texte: 'On compte les entités par moles.' }],
     concentration: [{ repere: 'formule', texte: 'C = n/V.' }, { repere: 'sirop', texte: 'Même sirop, plus d’eau : plus clair.' }],
   },
