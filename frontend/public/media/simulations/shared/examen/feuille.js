@@ -218,20 +218,26 @@
     };
     if (ex.context) blocs.push({ texte: ex.context, id: 'contexte' });
     const refs = new Set((ex.questions || []).flatMap((q) => q.documents || []));
-    for (const id of Object.keys(docs)) if (!refs.has(id)) figure(id);
     const garde = plage(cfg.questions ?? P.get('questions'), (ex.questions || []).length);
+    // Un document qu'aucune question ne cite n'apparaît dans une partie (questions=…) que s'il est marqué `commun: true`
+    // (19/11/2026, l'utilisateur, 2022 R ex. 2 : la figure de l'onde restait affichée dans la partie radioactivité —
+    // « pas la peine de mettre la figure du périodique alors qu'on est dans la radioactivité »).
+    for (const id of Object.keys(docs)) if (!refs.has(id) && (!garde || docs[id].commun)) figure(id);
     // Texte d'une partie de l'exercice (« Partie 2 : … », ses données ; « 3. On injecte… ») : ex.intros[clé], placé une
     // fois, juste avant la première question gardée qui le cite (q.intro_cles) — une partie montrée seule garde son texte.
     const introsVues = new Set();
+    const cote = (id) => /^(droite|gauche)$/.test(((cfg.figures || {})[id] || {}).place || (docs[id] || {}).place || '');
     (ex.questions || []).forEach((q, k) => {
       if (garde && !garde.has(k + 1)) return;
+      // dans une partie, la figure à droite passe avant les textes de partie et flotte à côté d'eux (2016 N, 2018 N
+      // ex. 1 : la courbe pH = f(V) sous les longs textes faisait tomber la partie à 0,56)
+      if (garde) for (const id of q.documents || []) if (cote(id)) figure(id);
       for (const c of q.intro_cles || []) {
         if (introsVues.has(c) || !(ex.intros || {})[c]) continue;
         introsVues.add(c);
         blocs.push({ texte: ex.intros[c], id: 'intro-' + String(c).replace(/[^a-z0-9_-]/gi, '-') });
       }
       // une figure à droite (ou à gauche) se place AVANT sa question, pour flotter à côté d'elle comme sur le sujet
-      const cote = (id) => /^(droite|gauche)$/.test(((cfg.figures || {})[id] || {}).place || (docs[id] || {}).place || '');
       for (const id of q.documents || []) if (cote(id)) figure(id);
       blocs.push({ q });
       for (const id of q.documents || []) figure(id);
@@ -551,7 +557,8 @@
     let page = 1, plein = 0;
     unites.forEach((un, i) => {
       const h = hU(un);
-      if (i > 0 && plein > 0 && pleine(page, plein + h) * ZMIN > innerHeight) { BESOIN[page] = pleine(page, plein); page += 1; plein = 0; }
+      // une unité sans hauteur (le <div class="clair"> de fin) ne commence jamais une page à elle seule
+      if (i > 0 && plein > 0 && h > 2 && pleine(page, plein + h) * ZMIN > innerHeight) { BESOIN[page] = pleine(page, plein); page += 1; plein = 0; }
       un.forEach((el) => { el.dataset.page = page; });
       plein += h;
     });

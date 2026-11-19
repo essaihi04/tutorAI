@@ -49,6 +49,18 @@ encore plus tard, pas à sa beauté.
    session, matière, filière, durée, coefficient), l'exercice avec ses questions numérotées et le barème à droite, textes,
    données et figures redessinés (gabarit commun `frontend/public/media/simulations/shared/examen/`, texte et points de
    `exam.json`, scans `pages/` seulement comme modèle), lu par le tuteur, puis l'explication.
+   **L'énoncé se montre par parties** (règle de l'utilisateur, 19/11/2026 ; skill professeur, règle 48) : une diapo
+   d'énoncé ne montre que les 1 à 3 questions traitées juste après (`feuille.html?…&questions=<positions>`, ou
+   `&partie=k` sur une page à soi), avec le contexte, les données et les figures de CES questions seulement — jamais une
+   figure ou un texte d'une autre partie (dans `exam.json` : textes de partie dans `ex.intros` + `intro_cles` sur les
+   questions, chaque figure citée par ses questions dans `q.documents`, `place: "droite"` comme sur le sujet). Puis les
+   diapos qui y répondent, puis la partie suivante sur une nouvelle diapo d'énoncé (en-tête court, une phrase de rappel).
+   Chaque partie tient sur UNE page de la feuille, texte grand (`Feuille.etat().pages === 1` à 1200×650, zoom ≥ 0,75) ;
+   sinon on la recoupe. **L'énoncé vient avant toute diapo qui utilise les données de son exercice** (audit de place) ;
+   une diapo de cours qui ne fait que citer une valeur d'un national la garde comme exemple, sans nommer le national.
+   **Avant de découper, l'`exam.json` est comparé au scan** `pages/sujet_pN.jpg` (numéros, ordre, texte de chaque
+   partie, données, figures, points) et corrigé s'il est faux, puis `python scripts/examens/copier_sujets.py <sujet>` ;
+   la SVT garde ses pages d'énoncé telles quelles (choix de l'utilisateur).
    **La démonstration se joue sur la figure de
    l'examen** : chaque étape allume ce qu'elle utilise sur le dessin, ses lignes s'écrivent à côté, le texte écrit avant
    est effacé, seules les données de l'exercice servent ; pas de panneau de texte ni de tableau à part (skill professeur,
