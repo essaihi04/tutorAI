@@ -72,10 +72,32 @@ function enPlus(l) {
 /* décalage de la ligne k sous la première, et hauteur totale des lignes */
 const decalage = (lignes, k) => lignes.slice(0, k).reduce((h, l) => h + LH() + enPlus(l)[0] + enPlus(l)[1], 0) + (lignes[k] ? enPlus(lignes[k])[0] : 0);
 const hautLignes = lignes => lignes.reduce((h, l) => h + LH() + enPlus(l)[0] + enPlus(l)[1], 0);
+/* La simulation d'abord (18 novembre 2026) : sur un cadre de téléphone (CP, le texte à 15 px y est deux fois plus grand
+ * dans le dessin) les cases se chevauchaient. Les neuf cases forment alors une grille 3 × 3 qui remplit le cadre (le
+ * centre au milieu, chaque branche dans la cellule de sa position d'origine), titres courts et une seule ligne par case
+ * (la première qui tient sur une ligne) ; sur les autres cadres, la carte d'origine reste. */
+let CP = false;
+const COURT = { diffraction: 'Diffraction', ecart: 'Écart θ', largeur: 'Largeur L', courbes: 'Courbes', radiation: 'Radiation', spectre: 'Spectre', milieu: 'Indice n', dispersion: 'Dispersion' };
+const titreDe = n => (CP ? COURT[n.id] || n.titre : n.titre);
+function lignesDe(n) {
+  if (!CP) return n.lignes || [];
+  const c = scene.craie, t = 13 * K, T = c.echelle && c.tailleMin ? Math.max(t, c.tailleMin / c.echelle) : t;
+  return (n.lignes || []).filter(l => c.largeurTexte(l, T) <= n.w - 14).slice(0, 1);
+}
 function disposer(L) {
+  CP = 15.5 / (scene.s || 1) > 24;
   const kx = (L - 40) / 720;
   K = L >= 1000 ? 1.3 : 1;
   const kw = L >= 1000 ? 1.45 : 1;
+  if (CP) {
+    const cw = (L - 16) / 3, rh = (420 - 8) / 3, T = 15.5 / (scene.s || 1);
+    [CENTRE, ...NOEUDS].forEach(n => {
+      const b = n.base, i = Math.sign(b.x - 380) + 1, j = Math.sign(b.y - 212) + 1;
+      n.x = 8 + cw * (i + .5); n.y = 4 + rh * (j + .5); n.w = cw - 18;
+      n.h = n === CENTRE ? rh - 12 : Math.min(rh - 12, 30 + T * 1.1 + lignesDe(n).reduce((h, l) => h + LH() + enPlus(l)[0] + enPlus(l)[1], 0));
+    });
+    return;
+  }
   [CENTRE, ...NOEUDS].forEach(n => {
     const b = n.base;
     n.x = L / 2 + (b.x - 380) * kx; n.w = b.w * kw; n.h = b.h * K;
@@ -85,6 +107,13 @@ function disposer(L) {
   });
   // en haut et en bas, rien ne sort du cadre
   NOEUDS.forEach(n => { n.y = Math.max(n.h / 2 + 6, Math.min(420 - n.h / 2 - 6, n.y)); });
+  // la case du milieu de chaque colonne se centre entre celles du haut et du bas (« Courbes » touchait « Largeur L »)
+  for (const [h, m, bas] of [['diffraction', 'dispersion', 'milieu'], ['largeur', 'courbes', 'radiation']]) {
+    const H = NOEUDS.find(n => n.id === h), M = NOEUDS.find(n => n.id === m), B = NOEUDS.find(n => n.id === bas);
+    if (!H || !M || !B) continue;
+    if (H.y + H.h / 2 + M.h + 8 > B.y - B.h / 2) { H.y = H.h / 2 + 4; B.y = 420 - B.h / 2 - 4; }   // serré : haut et bas aux bords
+    M.y = (H.y + H.h / 2 + B.y - B.h / 2) / 2;
+  }
 }
 const ANNEAUX = { non_acquis: ['rouge', 'à reprendre'], partiel: ['orange', 'à revoir'] };
 const AVANT = -1e9;   // instant d'un élément déjà dit : écrit d'un coup
@@ -122,8 +151,9 @@ function branche(c, n) {
   c.courbe(u => [(1 - u) * (1 - u) * a[0] + 2 * (1 - u) * u * m[0] + u * u * b[0], (1 - u) * (1 - u) * a[1] + 2 * (1 - u) * u * m[1] + u * u * b[1]], 24, { couleur: 'faible', largeur: 2 });
   const x = n.x - n.w / 2, y = n.y - n.h / 2;
   c.rect(x, y, n.w, n.h, { couleur: n.couleur, arrondi: 14, largeur: 2.4 });
-  c.texte(n.titre, n.x, y + 20 * K, { couleur: n.couleur, taille: 16 * K, align: 'center', max: n.w - 16, duree: .8 });
-  n.lignes.forEach((l, k) => c.texte(l, n.x, y + 38 * K + decalage(n.lignes, k), { couleur: 'blanc', taille: 13 * K, align: 'center', max: n.w - 14, alpha: .92, duree: 1 }));
+  const T0 = CP ? 15.5 / (scene.s || 1) : 0, lg = lignesDe(n);
+  c.texte(titreDe(n), n.x, y + (CP ? 8 + T0 : 20 * K), { couleur: n.couleur, taille: 16 * K, align: 'center', max: n.w - 16, duree: .8 });
+  lg.forEach((l, k) => c.texte(l, n.x, y + (CP ? 14 + T0 * 2.1 : 38 * K) + decalage(lg, k), { couleur: 'blanc', taille: 13 * K, align: 'center', max: n.w - 14, alpha: .92, duree: 1 }));
   c.repere(n.id, x - 6, y - 6, n.w + 12, n.h + 12, n.titre);
   etat(c, n.comps, x, y, n.w, n.h);
   if (S.choisi === n.id) c.direct(() => c.rect(x - 3, y - 3, n.w + 6, n.h + 6, { couleur: 'blanc', arrondi: 15, largeur: 1.2, alpha: .6 }));
@@ -134,14 +164,15 @@ function dessiner(c) {
   const x = CENTRE.x - CENTRE.w / 2, y = CENTRE.y - CENTRE.h / 2;
   if (S.def === AVANT) c.cur = AVANT;   // déjà dit (saut ou retour en arrière) : le centre est écrit d'un coup
   c.rect(x, y, CENTRE.w, CENTRE.h, { couleur: 'jaune', arrondi: 18, largeur: 3 });
-  c.texte('La lumière :', CENTRE.x, y + 27 * K, { couleur: 'jaune', taille: 20 * K, align: 'center', gras: true });
-  c.texte('une onde', CENTRE.x, y + 50 * K, { couleur: 'jaune', taille: 20 * K, align: 'center', gras: true });
+  const TC = CP ? 15.5 / (scene.s || 1) * 1.25 : 0;
+  c.texte('La lumière :', CENTRE.x, CP ? CENTRE.y - TC * .15 : y + 27 * K, { couleur: 'jaune', taille: 20 * K, align: 'center', gras: true });
+  c.texte('une onde', CENTRE.x, CP ? CENTRE.y + TC * .9 : y + 50 * K, { couleur: 'jaune', taille: 20 * K, align: 'center', gras: true });
   c.repere('centre', x, y, CENTRE.w, CENTRE.h, 'le centre : la lumière, une onde');
   c.repere('definition', x, y, CENTRE.w, CENTRE.h, 'la diffraction prouve l’aspect ondulatoire de la lumière');
   const apres = c.cur;   // fin du titre du centre
   if (S.def != null) {
     c.depuis(S.def);
-    ['la diffraction prouve', 'son aspect ondulatoire'].forEach((l, k) =>
+    if (!CP) ['la diffraction prouve', 'son aspect ondulatoire'].forEach((l, k) =>
       c.texte(l, CENTRE.x, y + (72 + k * 16) * K, { couleur: 'blanc', taille: 13 * K, align: 'center', max: CENTRE.w - 16, alpha: .92, duree: 1.1 }));
     etat(c, CENTRE.comps, x, y, CENTRE.w, CENTRE.h);
     if (S.choisi === 'centre') c.direct(() => c.rect(x - 3, y - 3, CENTRE.w + 6, CENTRE.h + 6, { couleur: 'blanc', arrondi: 19, largeur: 1.2, alpha: .6 }));

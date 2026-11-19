@@ -216,8 +216,13 @@ function coteCretes(c, Tr, a, b, y, txt, coul, id, label) {
  * « Air | Verre » (zone d'origine 760 × 240) est agrandie de Z.k en haut à gauche, les deux lignes de calcul passent
  * dessous en plus grand, et les compteurs vont dans une colonne à droite (l'un sous l'autre). Sinon : comme avant. */
 const Z = { large: false, k: 1, col: 0, w: 0 };
+/* La simulation d'abord (18 novembre 2026) : sur un cadre de téléphone (CP, texte à 15 px donc deux fois plus grand dans
+ * le dessin) les compteurs se chevauchaient : titre court, chrono à la place du mot « Compteurs », chaque compteur sur
+ * deux lignes courtes (crêtes passées, puis ν), marques « 1 » et « 2 » sous l'onde. */
+let CP = false;
 function zone(L) {
-  Z.large = L >= 1000;
+  CP = 15.5 / (scene.s || 1) > 24;
+  Z.large = L >= 1000 && !CP;
   Z.k = Z.large ? Math.min(1.36, (L - 310) / 760) : 1;
   Z.col = Z.large ? 760 * Z.k + 10 : 0; Z.w = L - Z.col - 8;
 }
@@ -249,11 +254,11 @@ function dessiner(c) {
   });
   const nomB = DEUX() ? 'verre' : nomMilieu(S.n), Nom = nomB === 'milieu' ? 'Milieu' : nomB[0].toUpperCase() + nomB.slice(1);
   dansVue(c, () => {
-  c.texte(DEUX() ? 'Air | Verre : deux radiations (vue de côté)' : `Air | ${Nom} (vue de côté, incidence normale)`, 20, 26, { couleur: 'cyan', taille: 18 });
-  c.texte('mouvement ralenti énormément : 1 s ici = 4·10⁻¹⁵ s', 740, 26, { couleur: 'faible', taille: 14, align: 'right' });
+  c.texte(CP ? (DEUX() ? 'Air | Verre : deux radiations' : `Air | ${Nom}`) : DEUX() ? 'Air | Verre : deux radiations (vue de côté)' : `Air | ${Nom} (vue de côté, incidence normale)`, 20, 26, { couleur: 'cyan', taille: 18 });
+  if (!CP) c.texte('mouvement ralenti énormément : 1 s ici = 4·10⁻¹⁵ s', 740, 26, { couleur: 'faible', taille: 14, align: 'right' });
   c.rect(SALLE.x, SALLE.y, SALLE.w, SALLE.h, { couleur: 'tresfaible', arrondi: 8 });
   c.repere('vue_onde', SALLE.x, 8, SALLE.w, SALLE.h + 30, 'la vue « Air | Verre », de côté');
-  c.texte('air', DEUX() ? 134 : 120, DEUX() ? 125 : 206, { couleur: 'faible', taille: DEUX() ? 13 : 15, align: 'center' });
+  if (!(CP && DEUX())) c.texte('air', DEUX() ? 134 : 120, DEUX() ? 125 : 206, { couleur: 'faible', taille: DEUX() ? 13 : 15, align: 'center' });
   if (!DEUX()) c.texte('air', 640, 206, { couleur: 'faible', taille: 15, align: 'center' });
   c.repere('air', SALLE.x + 2, SALLE.y + 2, g.X1 - SALLE.x - 4, SALLE.h - 4, 'l’air');
   c.repere('bloc', g.X1, g.Y0, g.X2 - g.X1, g.Y1 - g.Y0, DEUX() ? 'le bloc de verre' : `le bloc : ${nomB}, n = ${fr(S.n, 2)}`);
@@ -267,7 +272,7 @@ function dessiner(c) {
   const T0r = Ts[0], ybas = Ts[Ts.length - 1].y + Ts[Ts.length - 1].A;
   for (const [x, id, lab] of [[g.xc1, 'compteur_air', 'compteur 1'], [g.xc2, 'compteur_verre', 'compteur 2']]) {
     c.ligne(x, ybas + 2, x, ybas + 14, { couleur: 'blanc', largeur: 1.6 });
-    c.texte(lab, x, ybas + (DEUX() ? 26 : 28), { couleur: 'blanc', taille: 13, align: 'center' });
+    c.texte(CP ? lab.slice(-1) : lab, x, ybas + (DEUX() ? 26 : 28), { couleur: 'blanc', taille: 13, align: 'center' });
     c.repere(id, x - 34, (DEUX() ? Ts[0].y - Ts[0].A : T0r.y - T0r.A) - 4, 68, ybas + 32 - (DEUX() ? Ts[0].y - Ts[0].A : T0r.y - T0r.A) + 4, id === 'compteur_air' ? 'le compteur 1, dans l’air' : 'le compteur 2, dans le bloc');
   }
   });
@@ -275,7 +280,7 @@ function dessiner(c) {
   // ── Vue « Compteurs » ──
   const VC = Z.large ? { x: Z.col, y: 8, w: Z.w, h: 404 } : { x: SALLE.x, y: 242, w: SALLE.w, h: 118 };
   c.rect(VC.x, VC.y, VC.w, VC.h, { couleur: 'tresfaible', arrondi: 8 });
-  c.texte('Compteurs', VC.x + 12, VC.y + 20 * Kc, { couleur: 'cyan', taille: 17 * Kc });
+  if (!CP) c.texte('Compteurs', VC.x + 12, VC.y + 20 * Kc, { couleur: 'cyan', taille: 17 * Kc });
   c.repere('vue_compteurs', VC.x, VC.y, VC.w, VC.h, 'la vue « Compteurs »');
 
   c.direct(() => {
@@ -283,6 +288,7 @@ function dessiner(c) {
     // Le chrono du front (temps réel).
     const chrono = `chrono du front : t = ${t > 0 ? fr(t * S_ECRAN * 1e15, 1) + '·10⁻¹⁵' : '0'} s`;
     if (Z.large) c.texte(chrono, VC.x + 12, VC.y + 50, { couleur: 'jaune', taille: 17 * Kc, max: VC.w - 20 });
+    else if (CP) c.texte(`front : t = ${t > 0 ? fr(t * S_ECRAN * 1e15, 1) + '·10⁻¹⁵' : '0'} s`, VC.x + 12, VC.y + 30, { couleur: 'jaune', taille: 16 });
     else c.texte(chrono, 714, 262, { couleur: 'jaune', taille: 16, align: 'right' });
     // Les fronts.
     dansVue(c, () => { for (const Tr of Ts) {
@@ -301,6 +307,14 @@ function dessiner(c) {
       : [{ Tr: Ts[0], x: 48, titre: 'compteur 1 (air)', xc: g.xc1, coul: 'blanc' }, { Tr: Ts[0], x: 390, titre: `compteur 2 (${nomB})`, xc: g.xc2, coul: 'blanc' }];
     boites.forEach((B, i) => {
       const f = nuEcran(B.Tr.lam0);
+      if (CP) {                   // cadre de téléphone : deux lignes courtes par compteur
+        const xb = i ? 390 : 48, pre = DEUX() ? '' : (i ? `2 (${nomB}) : ` : '1 (air) : ');
+        const ligne1 = DEUX() ? `air ${comptees(g.xc1, B.Tr, t)} · verre ${comptees(g.xc2, B.Tr, t)}` : `${pre}${comptees(B.xc, B.Tr, t)}`;
+        const pret = DEUX() || comptees(B.xc, B.Tr, t) >= 2;
+        c.texte(ligne1, xb, 306, { couleur: B.coul, taille: 15 });
+        c.texte(pret ? `ν = ${sci(nuDe(B.Tr.lam0))} Hz` : 'ν = …', xb, 344, { couleur: 'jaune', taille: 15 });
+        return;
+      }
       // tableau large : les deux compteurs l'un sous l'autre dans la colonne de droite
       const x = Z.large ? VC.x + 12 : B.x, y0 = Z.large ? 98 + i * 118 : 288, dy = Z.large ? 25 : 0, mx = Z.large ? VC.w - 22 : 320;
       c.texte(B.titre, x, y0, { couleur: B.coul, taille: 15 * Kc, max: mx });
