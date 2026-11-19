@@ -30,7 +30,7 @@
  * en s (pulse_o2). Il défile accéléré, et c'est écrit au tableau. Les valeurs ne sont jamais négatives ; [H+] jamais nulle.
  */
 const { fr: frK, bulle, protocole } = window.Tableau;
-const { Scene, Chrono, Apparitions, doux, mix } = window.SVTTableau;
+const { Scene, Chrono, Apparitions, Allumage, doux, mix } = window.SVTTableau;
 const P = window.SVTPeinture, TAU = Math.PI * 2;
 const $ = id => document.getElementById(id);
 const fr = (v, d = 1) => frK(v, d);
@@ -155,7 +155,7 @@ const majMotifs = () => { for (const k of Object.keys(MOTIFS)) delete MOTIFS[k];
 majMotifs();
 
 const canvas = $('canvas');
-const scene = Scene(canvas, (c) => { scene.cadre(31); regler(scene.L); MOS.dessiner(c, () => { dessiner(c); }); return c.fin(); }, { large: true });
+const scene = Scene(canvas, (c) => { scene.cadre(31); regler(scene.L); MOS.dessiner(c, () => { dessiner(c); lum.lueurs(c); }); return c.fin(); }, { large: true });
 /* Tableau large (portable 1366 × 613) : la page est rangée sur toute la largeur (SVTLarge.Mosaique, dans peinture.js) ; grand écran : inchangée. */
 const MOS = window.SVTLarge.Mosaique(scene, (L) => (ample(L) ? { police: 1.12, blocs: [
     { src: MONT.src, X: 6, Y: Math.round((420 - MONT.src[3] * MONT.s) / 2), s: MONT.s },
@@ -460,6 +460,12 @@ function dessiner(c) {
       c.repere('anaerobie', x - 2, 398, larg('— milieu anaérobie', 15) + 4, 22, 'milieu anaérobie'); }
   } else if (vue === 'mitochondries') {
     rep('courbe_o2', boites.o2, 'la courbe de [O2] (%)'); rep('courbe_atp', boites.atp, 'la courbe de l’ATP (UA)');
+    // (19 novembre 2026, règle 17) une bande par période entre deux ajouts : ce que la démonstration allume quand elle décrit
+    // la période (repères 'periode_glucose' 'periode_pyruvate' 'periode_adp' 'periode_cyanure')
+    if (!MT.sans_o2) [['periode_glucose', 1, 2.5, 'après le glucose (1 à 2,5 min)'], ['periode_pyruvate', 2.5, 4.5, 'après l’acide pyruvique (2,5 à 4,5 min)'],
+      ['periode_adp', 4.5, 8, 'après ADP + Pi (4,5 à 8 min)'], ['periode_cyanure', 8, X.tmax, 'après le cyanure (8 à 10 min)']].forEach(([id, a, b, lab]) => {
+      if ((MT.cyanure || id !== 'periode_cyanure') && t > a + 1e-3) c.repere(id, xT(a) + 2, G.Y1 - 12, xT(Math.min(b, Math.max(t, a + .3))) - xT(a) - 4, G.Y0 - G.Y1 + 12, 'la période ' + lab);
+    });
     const note = NOTES.montrer ? noteMito(t) : null;
     if (note) ecrit.ecrire(c, 'note_' + note.cle, () => c.texte(note.texte, G.X0 - 30, note.y || 394, { couleur: note.couleur || 'vert', taille: 14, max: 388 }));
     if (note && note.y2) ecrit.ecrire(c, 'note2_' + note.cle, () => c.texte(note.texte2, G.X0 - 30, note.y2, { couleur: note.couleur2 || note.couleur || 'vert', taille: 14, max: 388 }));
@@ -585,14 +591,17 @@ const EXPLICATIONS = {
 };
 
 $('run').onclick = chrono.clic;
+/* Démonstration jouée sur le document (règle 17) : la ligne qui s’écrit allume la période, l’ajout, la courbe qu’elle utilise. */
+const lum = Allumage(scene, chrono, { moments: () => X.moments() });
 window.Tableau.explication({ [vue]: EXPLICATIONS[vue] });
-const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'play_until'].concat(vue === 'pulse_o2' ? [] : ['set_parameters']);
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'play_until'].concat(vue === 'pulse_o2' ? [] : ['set_parameters'], ['allume', 'eteins']);
 const schemaParams = vue === 'levures' ? { injection_min: '1..4 (instant de l’injection de glucose, en min, pas de 0,5)' }
   : vue === 'mitochondries' ? { sans_o2: 'true | false (milieu sans dioxygène)', cyanure: 'true | false (4ᵉ ajout à 8 min ; true par défaut)', conclusions: 'true | false (false : notes et hypothèse cachées)' } : null;
 const config = { id: 'svt_energie_exao_' + vue, version: '1.0', title: 'ExAO — ' + vue, variants: [{ id: vue, label: vue }], commands: commandes,
   command_schema: Object.assign({
     set_time: { time_s: `0..${FIN} (instant de l’EXPÉRIENCE, en ${X.unite} ; arrêt sur cet instant)` },
-    play_until: { moment: Object.keys(X.moments()).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: `ou un instant de l’expérience en ${X.unite}` } },
+    play_until: { moment: Object.keys(X.moments()).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: `ou un instant de l’expérience en ${X.unite}` },
+    allume: { cible: 'repère ou moment (ou liste)' + (vue === 'mitochondries' ? ' : periode_glucose | periode_pyruvate | periode_adp | periode_cyanure | ajout_… | courbe_o2 | courbe_atp' : '') }, eteins: {} },
   schemaParams ? { set_parameters: schemaParams } : {}) };
 const TEXTES = {
   levures: 'ExAO : levures dans une solution aérée, sondes O2 et CO2. Avant le glucose, [O2] baisse lentement (8,0 → 7,5 mg/L). Après l’injection de glucose (2 min par défaut, réglable de 1 à 4 min), [O2] diminue de 1,2 mg/L par min jusqu’à 0 et [CO2] augmente vite : respiration. Quand O2 est épuisé, [CO2] continue d’augmenter moins vite et l’éthanol apparaît : fermentation. Temps accéléré.',
@@ -600,11 +609,12 @@ const TEXTES = {
   pulse_o2: 'Mitochondries sans membrane externe, solution sans O2 riche en NADH,H+, pH-mètre. [H+] du milieu stable à 20 × 10⁻⁹ mol/L ; un peu d’O2 à 60 s : [H+] monte à 44 × 10⁻⁹ mol/L à 75 s (des H+ passent de la matrice vers la solution) ; puis retour progressif à 20 vers 300 s (les H+ reviennent par les sphères pédonculées). La solution joue le rôle de l’espace intermembranaire. Temps accéléré.',
 };
 const pont = protocole({ id: config.id, commandes, config, texte: TEXTES[vue],
-  etat: () => ({ simulation_status: chrono.statut(), ce_qui_se_voit: ceQuiSeVoit(), current_variant: vue, time_s: +chrono.t.toFixed(3), unite_temps: X.unite,
+  etat: () => ({ simulation_status: chrono.statut(), ce_qui_se_voit: ceQuiSeVoit() + (lum.liste().length ? ' Allumé sur le document : ' + lum.liste().join(', ') + '.' : ''), allumes: lum.liste(), current_variant: vue, time_s: +chrono.t.toFixed(3), unite_temps: X.unite,
     parameters: params(), moments: X.moments(),
     valeurs: Object.fromEntries(X.series.map(s => [s.id, +s.f(chrono.t).toFixed(2)])) }),
   progression: () => chrono.t / FIN,
-  executer: (cmd, p) => ({ start: chrono.start, reset: chrono.reset, pause: chrono.pause, resume: chrono.resume, set_time: () => { chrono.setTime(p); scene.sale = true; if (Number.isFinite(+p.time_s)) bulle($('feedback'), `Arrêt sur image : t = ${fr(chrono.t, vue === 'pulse_o2' ? 0 : 1)} ${X.unite}.`); },
+  executer: (cmd, p) => ({ start: chrono.start, reset: () => { lum.eteins(); chrono.reset(); },
+    allume: () => { lum.allume(p); pont.noter('allume', { cible: p && p.cible }); pont.emettre(); }, eteins: () => { lum.eteins(); pont.emettre(); }, pause: chrono.pause, resume: chrono.resume, set_time: () => { chrono.setTime(p); scene.sale = true; if (Number.isFinite(+p.time_s)) bulle($('feedback'), `Arrêt sur image : t = ${fr(chrono.t, vue === 'pulse_o2' ? 0 : 1)} ${X.unite}.`); },
     set_parameters: () => setParameters(p || {}), play_until: () => { chrono.playUntil(p); if (!(p && p.moment in X.moments()) && chrono.jusqua != null) chrono.motif = `t = ${fr(chrono.jusqua, vue === 'pulse_o2' ? 0 : 1)} ${X.unite}`; } })[cmd]?.() });
 bulle($('feedback'), { levures: 'Des levures dans une solution aérée : on va injecter du glucose…', mitochondries: 'Des mitochondries isolées : on va ajouter des substances…', pulse_o2: 'Des mitochondries sans O2 : on va injecter un peu d’O2…' }[vue]);
 setTimeout(() => { if (!chrono.pilote && !chrono.running && chrono.t === 0) chrono.start(); }, 1600);

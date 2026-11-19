@@ -31,9 +31,12 @@
  *   compteur_par_glucose (28) : la colonne × 2 du tableau ;   six_co2 (29) : 6 CO2 = 2 (acétyl-CoA) + 4 (Krebs) ;
  *   dix_nadh (30) : 10 NADH,H+ = 2 + 2 + 6 ;   energie_transporteurs (31) : l’énergie est portée par NADH,H+ et FADH2.
  *   (17 novembre 2026 : coa_repart (4,4) ajouté ; chaque écrit du bilan à son moment, quand le tuteur le dit.)
+ * (19 novembre 2026, compter en allumant — règle 16) « un tour, cinq sorties » : au premier tour, chaque sortie s'allume à son
+ * cran et reçoit son numéro courant 1 à 5 (repères 'sortie_1'…'sortie_5', moments co2_et_nadh_1, co2_et_nadh_2, atp, fadh2,
+ * nadh_3) ; les lueurs restent jusqu'à l'équation du tour, où « 5 sorties » s'écrit une fois.
  */
 const { fr, bulle, protocole } = window.Tableau;
-const { Scene, Chrono, Apparitions, doux, mix } = window.SVTTableau;
+const { Scene, Chrono, Apparitions, Allumage, doux, mix } = window.SVTTableau;
 const P = window.SVTPeinture;
 const ENCRE = '#0b1f2a';   // (16 novembre 2026) texte sombre et gras sur les capsules et protéines claires : bien lisible
 const $ = id => document.getElementById(id);
@@ -87,7 +90,7 @@ const T2 = tour(21, .27);                                  // fini vers 26,7 s, 
 const TOURS = [T1, T2];
 
 const canvas = $('canvas');
-const scene = Scene(canvas, (c) => { scene.cadre(47); MOS.dessiner(c, () => { dessiner(c); }); return c.fin(); }, { large: true });
+const scene = Scene(canvas, (c) => { scene.cadre(47); MOS.dessiner(c, () => { dessiner(c); lum.lueurs(c, sortiesComptees(chrono.t)); }); return c.fin(); }, { large: true });
 /* Tableau large (portable 1366 × 613) : la page est rangée sur toute la largeur (SVTLarge.Mosaique, dans peinture.js) ; grand écran : inchangée. */
 /* 16 novembre 2026 : plus de découpe en blocs (elle coupait la matrice en rectangles) ; en cadre large, le dessin est centré et
  * la matrice peinte s'étend sur toute la largeur du tableau (peindre). */
@@ -97,6 +100,13 @@ const chrono = Chrono({ fin: () => FIN, moments: () => M, motifs: MOTIFS, bouton
   depart: 'Observe la matrice : le composé à 4 C attend l’acétyl…', reinit: () => ecrit.oublier(),
   fini: () => 'Un tour du cycle : 2 CO2, 3 NADH,H+, 1 FADH2, 1 ATP ; deux tours pour un glucose.' });
 scene.avancer = chrono.avancer;
+const lum = Allumage(scene, chrono, { moments: () => M, numero: 'pastille' });
+/* Les sorties du premier tour, comptées une à une à leur cran (la dernière plus vive), jusqu'à l'équation du tour. */
+const sortiesComptees = (t) => {
+  if (t >= M.equation_tour + 1.5) return [];
+  const faites = T1.crans.filter(cr => t >= cr.ev - .05).length;
+  return T1.crans.slice(0, faites).map((cr, i) => ({ id: 'sortie_' + (i + 1), n: i + 1, fort: i === faites - 1 && t < M.retour_4c }));
+};
 
 /* ── Peinture (refonte du 16 novembre 2026 : « couleurs et écriture pâles, fond non cohérent ») ──────────────────────────
  * Une seule scène peinte, sans rectangle gris : la matrice (bleu lumineux doux, granules) sous un bord de membrane interne
@@ -292,6 +302,10 @@ function dessiner(c) {
   if (t >= T1.crans[2].ev) rep('atp', T1.crans[2], 130);
   if (t >= T1.crans[3].ev) rep('fadh2', T1.crans[3], 110);
   if (t >= T1.crans[4].ev) rep('nadh_3', T1.crans[4], 80);
+  T1.crans.forEach((cr, i) => { if (t >= cr.ev - .05 && t < M.equation_tour + 1.5) rep('sortie_' + (i + 1), cr, [130, 130, 130, 110, 80][i]); });
+  if (t >= M.retour_4c) { const xm = CARTE_C.x + CARTE_C.w / 2;   // le total, écrit une fois, dans la carte du compteur sous la ligne ATP
+    ecrit.ecrire(c, 'cinq', () => c.texte('un tour : 5 sorties', xm, 298, { couleur: 'jaune', taille: 18, gras: true, align: 'center', max: CARTE_C.w - 16 }));
+    c.repere('ecrit_cinq', xm - 90, 280, 180, 26, 'un tour : 5 sorties'); }
   // un tour du cycle : le composé à 4 C est retrouvé, mis en valeur ; l'équation d'un tour dans la bande du bas
   if (t >= T1.retour - .2) {
     const u = doux(chrono.part(T1.retour - .2, T1.retour + .6, t));
@@ -363,7 +377,8 @@ function phase(t) {
 }
 function ceQuiSeVoit() {
   const t = chrono.t, e = t < T2.debut ? compose(T1, t) : compose(T2, t);
-  return `t = ${fr(t, 1)} s${chrono.running ? ' (ça avance)' : chrono.fait ? ' (fin)' : ' (arrêté)'}. ${phase(t)} Composé sur la roue : ${e.n} C.`;
+  const s = sortiesComptees(t), cpt = s.length ? ` Sorties du premier tour comptées en s’allumant : ${s.length}${t >= M.retour_4c ? ' (« un tour : 5 sorties » écrit)' : ''}.` : '';
+  return `t = ${fr(t, 1)} s${chrono.running ? ' (ça avance)' : chrono.fait ? ' (fin)' : ' (arrêté)'}. ${phase(t)} Composé sur la roue : ${e.n} C.${cpt}` + (lum.liste().length ? ' Allumé : ' + lum.liste().join(', ') + '.' : '');
 }
 
 $('run').onclick = chrono.clic;
@@ -377,14 +392,16 @@ window.Tableau.explication({ krebs: [
   { repere: 'compteur', texte: 'Un tour : deux CO2, trois NADH,H+, un FADH2, un ATP.' },
   { repere: 'equation', texte: 'L’équation d’un tour du cycle.' },
   { repere: 'tableau_glucose', texte: 'Deux acétyl-CoA par glucose : tout est multiplié par deux.' } ] });
-const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'play_until'];
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'play_until', 'allume', 'eteins'];
 const config = { id: 'svt_energie_krebs', version: '1.0', title: 'Le cycle de Krebs dans la matrice', variants: [{ id: 'krebs', label: 'cycle de Krebs' }], commands: commandes,
-  command_schema: { set_time: { time_s: `0..${FIN} (arrêt sur cet instant)` }, play_until: { moment: Object.keys(M).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' } } };
+  command_schema: { set_time: { time_s: `0..${FIN} (arrêt sur cet instant)` }, play_until: { moment: Object.keys(M).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' },
+    allume: { cible: 'repère ou moment (ou liste)' }, eteins: {} } };
 const pont = protocole({ id: config.id, commandes, config,
   texte: 'Le cycle de Krebs, dans la matrice : l’acétyl (2 C) de l’acétyl-CoA s’accroche à un composé à 4 C → composé à 6 C ; puis CO2 + NADH,H+ (reste 5 C), CO2 + NADH,H+ (reste 4 C), ADP + Pi → ATP, FAD → FADH2, NAD+ → NADH,H+ ; le composé à 4 C est retrouvé : c’est un cycle. Un tour : CH3-CO-CoA + 3 NAD+ + FAD + ADP + Pi + 3 H2O → 2 CO2 + 3 NADH,H+ + FADH2 + ATP + CoA-H. Pour un glucose, deux tours : 4 CO2, 6 NADH,H+, 2 FADH2, 2 ATP ; au total 10 NADH,H+ (2 glycolyse + 2 acétyl-CoA + 6 Krebs), 2 FADH2, 6 CO2 ; l’énergie est surtout portée par NADH,H+ et FADH2.',
-  etat: () => ({ simulation_status: chrono.statut(), ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'krebs', time_s: +chrono.t.toFixed(2), parameters: {}, moments: M }),
+  etat: () => ({ simulation_status: chrono.statut(), ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'krebs', time_s: +chrono.t.toFixed(2), parameters: {}, moments: M, allumes: lum.liste() }),
   progression: () => chrono.t / FIN,
-  executer: (cmd, p) => ({ start: chrono.start, reset: chrono.reset, pause: chrono.pause, resume: chrono.resume, set_time: () => { chrono.setTime(p); scene.sale = true; }, play_until: () => chrono.playUntil(p) })[cmd]?.() });
+  executer: (cmd, p) => ({ start: chrono.start, reset: () => { lum.eteins(); chrono.reset(); }, pause: chrono.pause, resume: chrono.resume, set_time: () => { chrono.setTime(p); scene.sale = true; }, play_until: () => chrono.playUntil(p),
+    allume: () => { lum.allume(p); pont.emettre(); }, eteins: () => { lum.eteins(); pont.emettre(); } })[cmd]?.() });
 bulle($('feedback'), 'La matrice de la mitochondrie : le cycle de Krebs…');
 setTimeout(() => { if (!chrono.pilote && !chrono.running && chrono.t === 0) chrono.start(); }, 1600);
 window.__sim = { chrono, scene, M, T1, T2, ecrit };

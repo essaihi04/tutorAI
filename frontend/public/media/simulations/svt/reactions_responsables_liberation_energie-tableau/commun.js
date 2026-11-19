@@ -251,9 +251,113 @@
     return A;
   }
 
+  /*
+   * Allumer ce que l'on montre, ce que l'on compte (19 novembre 2026 ; simulations-au-tableau règles 16 et 17, professeur
+   * règles 44 et 45). Le lecteur envoie pendant une démonstration jouée sur la figure :
+   *   { command: 'eteins', parameters: {} } à l'ouverture, puis { command: 'allume', parameters: { cible, ligne, texte } }
+   *   à l'instant où la ligne s'écrit (cible : un id de repère ou de moment, ou une liste).
+   * La page les exécute elle-même (elle met 'allume' et 'eteins' dans ses commandes) :
+   *   const lum = SVTTableau.Allumage(scene, chrono, { avant: () => { R.conclusions = true; }, comptes: { atp: ['atp_1', …] } });
+   *   executer: { …, allume: () => lum.allume(p), eteins: lum.eteins }   ;  dans dessiner(c), juste avant c.fin() : lum.lueurs(c)
+   *   etat: () => ({ …, allumes: lum.liste() })
+   * allume : chaque cible qui est un moment pas encore passé est jouée jusqu'à lui (play_until, jamais en arrière) ; chaque
+   * cible qui est un repère reçoit une lueur jaune douce qui RESTE, la dernière plus vive. Une cible d'un compte
+   * (comptes.<nom> = liste ordonnée de repères) reçoit en plus son numéro courant « 1, 2, 3… », écrit proprement à la
+   * craie à côté d'elle, dans l'ordre où elle a été allumée. eteins (et reset) éteint tout.
+   */
+  function Allumage(scene, chrono, o = {}) {
+    const craie = scene.craie, RECTS = {}, allumes = [], comptes = o.comptes || {};
+    let dernier = null;
+    const repere = craie.repere;
+    craie.repere = function (id, x, y, w, h, label) { RECTS[id] = [x, y, w, h]; return repere.call(this, id, x, y, w, h, label); };
+    const groupeDe = (id) => Object.keys(comptes).find(g => comptes[g].includes(id));
+    const L = {
+      allume(p) {
+        const cibles = [].concat((p && (p.cible ?? p.target ?? p.repere)) ?? []).map(String).filter(Boolean);
+        if (!cibles.length) return;
+        o.avant && o.avant(cibles, p);
+        for (const id of cibles) { const i = allumes.indexOf(id); if (i >= 0) allumes.splice(i, 1); allumes.push(id); }
+        dernier = cibles[cibles.length - 1];
+        const M = chrono && o.moments !== false ? (o.moments ? o.moments() : null) : null;
+        if (M) {
+          // le moment le plus lointain parmi les cibles, s'il n'est pas déjà passé
+          const futurs = cibles.filter(id => id in M && +M[id] > chrono.t + 1e-3).sort((a, b) => M[a] - M[b]);
+          if (futurs.length) chrono.playUntil({ moment: futurs[futurs.length - 1] });
+        }
+        scene.sale = true;
+      },
+      eteins() { allumes.length = 0; dernier = null; scene.sale = true; },
+      liste: () => allumes.slice(),
+      dernier: () => dernier,
+      estAllume: (id) => allumes.includes(id),
+      /** Le rang (1, 2, 3…) d'une cible dans son compte, dans l'ordre d'allumage (0 si éteinte). */
+      rang(id) { const g = groupeDe(id); if (!g) return 0; return allumes.filter(a => comptes[g].includes(a)).indexOf(id) + 1; },
+      /** Combien d'éléments d'un compte sont allumés. */
+      combien: (g) => allumes.filter(a => (comptes[g] || []).includes(a)).length,
+      /** Les lueurs, dessinées par-dessus la scène (appeler juste avant c.fin()), puis les repères de l'image sont oubliés. */
+      /*  auto : ce que la page allume elle-même au fil de son temps (un compte joué par la scène, voir compte()) :
+       *  [{ id, n?, fort?, teinte? }] — n, le numéro courant écrit à côté ; fort, l'élément que l'on vient de compter ;
+       *  teinte, la couleur de la pastille (un compte par couleur quand plusieurs comptes se suivent). */
+      lueurs(c, auto = []) {
+        if (!scene.mesurant) {
+          const liste = auto.map(a => ({ id: a.id, fort: !!a.fort, n: a.n || 0, teinte: a.teinte }))
+            .concat(allumes.filter(id => !auto.some(a => a.id === id)).map(id => ({ id, fort: id === dernier, n: L.rang(id) })));
+          for (const { id, fort, n, teinte } of liste) {
+            const r = RECTS[id]; if (!r) continue;
+            L.lueur(c, r, fort);
+            if (n) L.numero(c, r, n, teinte);
+          }
+        }
+        for (const k of Object.keys(RECTS)) delete RECTS[k];
+      },
+      /** Une lueur jaune douce sur un rectangle [x, y, w, h] du dessin (fort : la dernière, plus vive). */
+      lueur(c, [x, y, w, h], fort) {
+        const g = c.ctx, rr = Math.min(12, w / 3, h / 3);
+        g.save();
+        g.beginPath(); g.roundRect ? g.roundRect(x - 3, y - 3, w + 6, h + 6, rr) : g.rect(x - 3, y - 3, w + 6, h + 6);
+        g.fillStyle = fort ? 'rgba(255,226,110,.17)' : 'rgba(255,226,110,.09)'; g.fill();
+        g.shadowColor = 'rgba(255,220,100,.95)'; g.shadowBlur = fort ? 18 : 9;
+        g.strokeStyle = fort ? 'rgba(255,232,130,.98)' : 'rgba(255,232,130,.6)'; g.lineWidth = fort ? 3 : 2; g.stroke();
+        g.restore();
+      },
+      /** Le numéro courant d'un élément compté, écrit proprement : à côté (à droite) ou, option numero: 'pastille' (éléments
+       *  serrés), dans une pastille jaune posée sur le coin haut droit de l'élément. Jamais sous 15 px à l'écran. */
+      numero(c, [x, y, w, h], n, teinte = '#ffe27a') {
+        const g = c.ctx, s = String(n), ech = Math.max(.1, scene.s || 1);
+        g.save(); g.textBaseline = 'alphabetic';
+        if (o.numero === 'pastille') {
+          const t = Math.max(13, 15.5 / ech), r = t * (s.length > 1 ? .85 : .7);
+          const cx = Math.min(x + w - 2, (scene.L || 760) - r - 1), cy = Math.max(r + 1, y + 1);
+          g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fillStyle = teinte; g.shadowColor = 'rgba(255,220,100,.9)'; g.shadowBlur = 8; g.fill();
+          g.shadowBlur = 0; g.font = `700 ${t}px ${window.Tableau.POLICE}`; g.fillStyle = '#2b1d00'; g.textAlign = 'center';
+          g.fillText(s, cx, cy + t * .36);
+        } else if (o.numero === 'dessous') {   // sous l'élément, centré (une rangée d'éléments serrés : billes de carbone)
+          const t = Math.max(18, 17 / ech);
+          g.font = `700 ${t}px ${window.Tableau.POLICE}`; g.fillStyle = c.couleur('jaune'); g.textAlign = 'center';
+          g.shadowColor = 'rgba(255,220,100,.8)'; g.shadowBlur = 6;
+          g.fillText(s, x + w / 2, y + h + t * .95);
+        } else {
+          const t = Math.max(18, Math.min(26, h * .6), 17 / ech);
+          g.font = `700 ${t}px ${window.Tableau.POLICE}`; g.fillStyle = c.couleur('jaune'); g.globalAlpha = .96;
+          g.shadowColor = 'rgba(255,220,100,.8)'; g.shadowBlur = 6;
+          const xn = Math.min(x + w + 4, (scene.L || 760) - g.measureText(s).width - 2);
+          g.fillText(s, xn, Math.max(t, y + t * .85));
+        }
+        g.restore();
+      },
+      /** Un compte joué par la scène : ids comptés un à un à partir de `debut`, un tous les `pas` (s de la scène) ; renvoie
+       *  les entrées pour lueurs(c, auto) (numéro courant ; le dernier compté plus vif tant que le compte se fait). */
+      compte(t, ids, debut, pas) {
+        const k = ids.filter((_, i) => t >= debut + i * pas - 1e-6).length;
+        return ids.slice(0, k).map((id, i) => ({ id, n: i + 1, fort: i === k - 1 && t < debut + ids.length * pas + .6 }));
+      },
+    };
+    return L;
+  }
+
   /* Interpolation douce. */
   const doux = (u) => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u));
   const mix = (a, b, u) => a + (b - a) * u;
 
-  window.SVTTableau = { Scene, Chrono, Apparitions, VW, VH, fr, doux, mix };
+  window.SVTTableau = { Scene, Chrono, Apparitions, Allumage, VW, VH, fr, doux, mix };
 })();

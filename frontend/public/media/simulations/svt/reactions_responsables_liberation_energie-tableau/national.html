@@ -54,7 +54,7 @@
  * 'produit_e', 'lien_a', 'lien_b', 'lien_c', 'lien_d', 'lien_e', 'couples'.
  */
 const { bulle, protocole } = window.Tableau;
-const { Scene, Chrono, Apparitions, fr, doux, mix } = window.SVTTableau;
+const { Scene, Chrono, Apparitions, Allumage, fr, doux, mix } = window.SVTTableau;
 const P = window.SVTPeinture, TAU = Math.PI * 2;
 const $ = id => document.getElementById(id);
 const Q = new URLSearchParams(location.search);
@@ -556,6 +556,7 @@ function dessiner(c) {
   scene.cadre(41);
   TK = scene.L >= 1000 ? 1.15 : 1;
   VU.dessiner(c);
+  lum.lueurs(c);
   return c.fin();
 }
 const canvas = $('canvas');
@@ -565,16 +566,21 @@ const chrono = Chrono({ fin: () => VU.FIN, moments: () => VU.M, motifs: VU.MOTIF
   depart: VU.depart, reinit: () => ecrit.oublier(), fini: () => VU.titre + ' : tout est au tableau.' });
 scene.avancer = (dt) => { const a = chrono.avancer(dt); if (a) scene.sale = true; return a || VUE === 'sportifs' && chrono.t > 0 && chrono.t < 13.4 && chrono.running; };
 $('run').onclick = chrono.clic;
+/* Démonstration jouée sur le document (règle 17) : la ligne qui s’écrit allume ce qu’elle utilise ; la correction de la
+ * consigne se montre alors (la démonstration EST la correction). */
+const lum = Allumage(scene, chrono, { moments: () => VU.M, avant: () => { R.conclusions = true; } });
 window.Tableau.explication({ [VUE]: Object.keys(VU.M).map(k => ({ repere: k, texte: VU.MOTIFS[k] })) });
-const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'play_until', 'set_parameters'];
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'play_until', 'set_parameters', 'allume', 'eteins'];
 const config = { id: 'svt_energie_national', version: '1.0', title: 'Le national joué au tableau', variants: Object.keys(V).map(id => ({ id, label: V[id].titre })), commands: commandes,
   command_schema: { play_until: { moment: Object.keys(VU.M).join(' | ') }, set_time: { moment: Object.keys(VU.M).join(' | ') },
-    set_parameters: { conclusions: 'true | false (false : la correction de la consigne reste cachée)' } } };
+    set_parameters: { conclusions: 'true | false (false : la correction de la consigne reste cachée)' },
+    allume: { cible: 'moment ou repère (ou liste) : ' + Object.keys(VU.M).join(' | ') }, eteins: {} } };
 const pont = protocole({ id: config.id, commandes, config,
   texte: VU.titre + '. Document d’examen rejoué étape par étape ; la correction attend la réponse de l’élève.',
-  etat: () => ({ simulation_status: chrono.statut(), current_variant: VUE, ce_qui_se_voit: VU.voit(), moments: VU.M, time_s: +chrono.t.toFixed(2), parameters: { ...R } }),
+  etat: () => ({ simulation_status: chrono.statut(), current_variant: VUE, ce_qui_se_voit: VU.voit() + (lum.liste().length ? ' Allumé sur le document : ' + lum.liste().join(', ') + '.' : ''), moments: VU.M, time_s: +chrono.t.toFixed(2), parameters: { ...R }, allumes: lum.liste() }),
   progression: () => (chrono.statut() === 'finished' ? 1 : chrono.t / VU.FIN),
-  executer: (cmd, p) => ({ start: chrono.start, pause: chrono.pause, resume: chrono.resume, reset: chrono.reset,
+  executer: (cmd, p) => ({ start: chrono.start, pause: chrono.pause, resume: chrono.resume, reset: () => { lum.eteins(); chrono.reset(); },
+    allume: () => { lum.allume(p); pont.noter('allume', { cible: p && p.cible }); pont.emettre(); }, eteins: () => { lum.eteins(); pont.emettre(); },
     set_time: () => { chrono.setTime(p); scene.sale = true; }, play_until: () => chrono.playUntil(p),
     set_parameters: () => { if (p && 'conclusions' in p) R.conclusions = p.conclusions !== false && p.conclusions !== 'false'; scene.sale = true; pont.noter('set_parameters', { ...R }); pont.emettre(); } })[cmd]?.() });
 bulle($('feedback'), VU.titre);

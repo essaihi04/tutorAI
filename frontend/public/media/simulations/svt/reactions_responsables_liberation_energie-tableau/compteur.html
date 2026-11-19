@@ -27,15 +27,29 @@
  *   total_34 (16,6)       : chaîne respiratoire : 30 + 4 = 34 ATP ;
  *   total_38 (19)         : bilan = 2 + 2 + (10 × 3) + (2 × 2) = 38 ATP ;   note_36 (20) : certains documents écrivent 36.
  * Aucun intermédiaire du cycle, aucun nom de complexe, aucune navette.
+ * (19 novembre 2026, compter en allumant — simulations-au-tableau règle 16) « نجمعو » : avant que les taxis partent vers la
+ * chaîne, la scène COMPTE, un élément à la fois, chacun s'allume et reçoit son numéro courant : les 4 ATP directs de la
+ * caisse (atp_1…atp_4, moment compte_atp), les 10 NADH,H+ (nadh_1…nadh_10, compte_nadh), les 2 FADH2 (fadh_1, fadh_2,
+ * compte_fadh) ; chaque total s'écrit dans la ligne « total » à la fin de son compte. Tout ce qui suivait est décalé de
+ * DECALE s (les noms des moments ne changent pas). Repères : 'atp_1'…'atp_4', 'nadh_1'…'nadh_10', 'fadh_1', 'fadh_2'.
  */
 const { bulle, protocole } = window.Tableau;
-const { Scene, Chrono, Apparitions, doux, mix, fr } = window.SVTTableau;
+const { Scene, Chrono, Apparitions, Allumage, doux, mix, fr } = window.SVTTableau;
 const P = window.SVTPeinture;
 const ENCRE = '#0b1f2a';   // (16 novembre 2026) texte sombre et gras sur les capsules et protéines claires : bien lisible
 const $ = id => document.getElementById(id);
 
-const M = { glycolyse_comptee: 3, acetyl_compte: 6, krebs_fois_deux: 9.8, conversion: 12.6, regle: 13.6, trente: 14.4, quatre: 15.2, total_34: 16.6, total_38: 19, note_36: 20 };
-const FIN = 20.5;
+/* Le compte (temps de la scène) : il s'insère à CPT.debut, l'ancienne suite est décalée de DECALE ; tv(t) : le temps du
+ * reste du dessin (figé pendant le compte). */
+const CPT = { debut: 10, atp: [10.1, .45], nadh: [12.3, .26], fadh: [15.2, .45], fin: 16.4 };
+const DECALE = CPT.fin - CPT.debut;
+const tv = (t) => (t < CPT.debut ? t : t < CPT.fin ? CPT.debut - 1e-3 : t - DECALE);
+const IDS = { atp: [1, 2, 3, 4].map(i => 'atp_' + i), nadh: Array.from({ length: 10 }, (_, i) => 'nadh_' + (i + 1)), fadh: ['fadh_1', 'fadh_2'] };
+const finCompte = (g) => +(CPT[g][0] + IDS[g].length * CPT[g][1]).toFixed(2);
+const M = { glycolyse_comptee: 3, acetyl_compte: 6, krebs_fois_deux: 9.8, compte_atp: finCompte('atp'), compte_nadh: finCompte('nadh'), compte_fadh: finCompte('fadh'),
+  conversion: 12.6 + DECALE, regle: 13.6 + DECALE, trente: 14.4 + DECALE, quatre: 15.2 + DECALE, total_34: 16.6 + DECALE, total_38: 19 + DECALE, note_36: 20 + DECALE };
+for (const g of ['atp', 'nadh', 'fadh']) IDS[g].forEach((id, i) => { M[id] = +(CPT[g][0] + i * CPT[g][1] + .05).toFixed(2); });
+const FIN = 20.5 + DECALE;
 const MOTIFS = {
   glycolyse_comptee: 'glycolyse : 2 ATP et 2 NADH,H+',
   acetyl_compte: 'formation de l’acétyl-CoA : 2 NADH,H+',
@@ -47,7 +61,9 @@ const MOTIFS = {
   note_36: 'certains documents écrivent 36 ATP : on suit l’énoncé',
   total_34: 'la chaîne respiratoire : 34 ATP',
   total_38: 'le bilan : 38 ATP par glucose',
+  compte_atp: 'on compte les ATP directs : 4', compte_nadh: 'on compte les NADH,H+ : 10', compte_fadh: 'on compte les FADH2 : 2',
 };
+for (const g of ['atp', 'nadh', 'fadh']) IDS[g].forEach((id, i) => { MOTIFS[id] = `${g === 'atp' ? 'ATP direct' : g === 'nadh' ? 'NADH,H+' : 'FADH2'} n° ${i + 1}`; });
 const MITO = { x: 425, y: 100, rx: 138, ry: 50 }, CHAINE = { x: 548, y: 100 }   /* (16 novembre 2026) la mitochondrie tient dans le hyaloplasme, loin des légendes */, GLYBOX = { x: 120, y: 86 };
 const TAXI = [34, 190, 220], FAD = window.Lexique.C.fad, CARTE = [250, 190, 60];
 /* Les taxis : où ils naissent, quand, de quel type ; puis l’ordre de conversion (les 10 NADH,H+, puis les 2 FADH2). */
@@ -68,7 +84,7 @@ const slot = (k) => [628 + (k % 4) * 34, 384 - Math.floor(k / 4) * 17];
 const COL = { etape: 30, atp: 285, nadh: 400, fadh: 520 }, ROWS = [212, 234, 256], TOT = 284;
 
 const canvas = $('canvas');
-const scene = Scene(canvas, (c) => { scene.cadre(53); MOS.dessiner(c, () => { dessiner(c); }); return c.fin(); }, { large: true });
+const scene = Scene(canvas, (c) => { scene.cadre(53); MOS.dessiner(c, () => { dessiner(c); lum.lueurs(c, comptes(chrono.t)); }); return c.fin(); }, { large: true });
 /* Tableau large (portable 1366 × 613) : la page est rangée sur toute la largeur (SVTLarge.Mosaique, dans peinture.js) ; grand écran : inchangée. */
 const MOS = window.SVTLarge.Mosaique(scene, (L) => L >= 1000 ? { police: 1.1, lignes: [[{ pile: [[0, 0, 760, 166], [0, 166, 604, 254]] }, { r: [604, 166, 156, 254], k: 1.5 }]] } : null);
 const ecrit = Apparitions(scene);
@@ -76,6 +92,10 @@ const chrono = Chrono({ fin: () => FIN, moments: () => M, motifs: MOTIFS, bouton
   depart: 'On compte les ATP d’un glucose, étape par étape…', reinit: () => ecrit.oublier(),
   fini: () => 'Respiration : 38 ATP par glucose.' });
 scene.avancer = chrono.avancer;
+/* Allumer : la page compte elle-même au fil de son temps ; le tuteur peut aussi allumer un repère (commande allume). */
+const lum = Allumage(scene, chrono, { moments: () => M, numero: 'pastille' });
+const TEINTE = { atp: '#ffe27a', nadh: '#8fe3f5', fadh: '#d9b8ff' };   // une couleur par compte : celle de la molécule comptée
+const comptes = (t) => (t >= CPT.debut && t < CPT.fin ? ['atp', 'nadh', 'fadh'].flatMap(g => lum.compte(t, IDS[g], CPT[g][0], CPT[g][1]).map(e => ({ ...e, teinte: TEINTE[g] }))) : []);
 
 /* Une portion de cellule peinte : le hyaloplasme granuleux, la membrane plasmique en haut, à gauche et en bas. */
 function hyaloplasme(ctx, x, y, w, h) {
@@ -100,7 +120,7 @@ function carte(c, x, y, a = 1) {
 const posees = (t) => CARTES.filter(k => t >= k.t0 + k.d).length;
 
 function dessiner(c) {
-  const t = chrono.t;
+  const T = chrono.t, t = tv(T);
   c.direct(() => {
     hyaloplasme(c.ctx, 10, 36, 586, 128);
     // (16 novembre 2026) le tableau de caisse et la caisse en cartes : en-tête doré, fond bleu nuit, lignes alternées
@@ -147,7 +167,16 @@ function dessiner(c) {
   if (t >= 2.3) ligne(ROWS[0], 'r1', ['glycolyse', '2', '2', '0']);
   if (t >= 5.2) ligne(ROWS[1], 'r2', ['acétyl-CoA (× 2)', '0', '2', '0']);
   if (t >= 8.2) ligne(ROWS[2], 'r3', ['cycle de Krebs (× 2)', '2', '6', '2']);
-  if (t >= 9.1) ligne(TOT, 'tot', ['total', '4', '10', '2'], 'jaune');
+  // la ligne total : chaque valeur s'écrit à la fin de son compte (une seule fois, puis utilisée)
+  if (t >= 9.1) ecrit.ecrire(c, 'tot0', () => c.texte('total', COL.etape, TOT, { couleur: 'jaune', taille: 15, gras: true }));
+  [['compte_atp', 'atp', '4', 'jaune'], ['compte_nadh', 'nadh', '10', 'cyan'], ['compte_fadh', 'fadh', '2', 'violet']].forEach(([m, col, v, coul]) => {
+    if (T >= M[m] || T >= CPT.fin) ecrit.ecrire(c, 'tot_' + col, () => c.texte(v, COL[col], TOT, { couleur: coul, taille: 19, gras: true, align: 'center' }));
+  });
+  // les éléments comptés : un repère chacun, pendant le compte (les taxis partent ensuite vers la chaîne)
+  if (T >= CPT.debut - .2 && T < CPT.fin) {
+    IDS.atp.forEach((id, k) => { const [x, y] = slot(k); c.repere(id, x - 18, y - 10, 36, 20, 'ATP direct n° ' + (k + 1)); });
+    TAXIS.forEach((tx, i) => { const id = tx.fad ? IDS.fadh[i - 10] : IDS.nadh[i]; c.repere(id, tx.x - 30, tx.y - 11, 60, 22, (tx.fad ? 'FADH2' : 'NADH,H+') + ' n° ' + (tx.fad ? i - 9 : i + 1)); });
+  }
   if (t >= 2.3) c.repere('ligne_glycolyse', 20, ROWS[0] - 16, 560, 22, 'glycolyse : 2 ATP, 2 NADH,H+');
   if (t >= 5.2) c.repere('ligne_acetyl', 20, ROWS[1] - 16, 560, 22, 'acétyl-CoA (× 2) : 2 NADH,H+');
   if (t >= 8.2) c.repere('ligne_krebs', 20, ROWS[2] - 16, 560, 22, 'cycle de Krebs (× 2) : 2 ATP, 6 NADH,H+, 2 FADH2');
@@ -193,8 +222,9 @@ function phase(t) {
   return s.join(' ');
 }
 function ceQuiSeVoit() {
-  const t = chrono.t;
-  return `t = ${fr(t, 1)} s${chrono.running ? ' (ça avance)' : chrono.fait ? ' (fin)' : ' (arrêté)'}. ${phase(t)} Caisse : ${posees(t)} ATP.`;
+  const T = chrono.t, t = tv(T);
+  const cpt = T >= CPT.debut && T < CPT.fin ? ' On compte en allumant, un à un : ' + ['atp', 'nadh', 'fadh'].map(g => `${g === 'atp' ? 'ATP directs' : g === 'nadh' ? 'NADH,H+' : 'FADH2'} ${lum.compte(T, IDS[g], CPT[g][0], CPT[g][1]).length}/${IDS[g].length}`).join(', ') + '.' : '';
+  return `t = ${fr(T, 1)} s${chrono.running ? ' (ça avance)' : chrono.fait ? ' (fin)' : ' (arrêté)'}. ${phase(t)}${cpt} Caisse : ${posees(t)} ATP.` + (lum.liste().length ? ' Allumé : ' + lum.liste().join(', ') + '.' : '');
 }
 
 $('run').onclick = chrono.clic;
@@ -205,14 +235,16 @@ window.Tableau.explication({ caisse: [
   { repere: 'chaine', texte: 'Sur la chaîne respiratoire, chaque NADH,H+ donne 3 ATP, chaque FADH2 en donne 2.' },
   { repere: 'conversion', texte: '10 fois 3 font 30, 2 fois 2 font 4 : 34 ATP.' },
   { repere: 'total', texte: 'Au total : 2 + 2 + 30 + 4 = 38 ATP par glucose.' } ] });
-const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'play_until'];
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'play_until', 'allume', 'eteins'];
 const config = { id: 'svt_energie_compteur_atp', version: '1.0', title: 'Faisons la caisse : le bilan en ATP de la respiration', variants: [{ id: 'caisse', label: 'bilan en ATP' }], commands: commandes,
-  command_schema: { set_time: { time_s: `0..${FIN} (arrêt sur cet instant)` }, play_until: { moment: Object.keys(M).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' } } };
+  command_schema: { set_time: { time_s: `0..${FIN} (arrêt sur cet instant)` }, play_until: { moment: Object.keys(M).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' },
+    allume: { cible: 'repère ou moment (ou liste)' }, eteins: {} } };
 const pont = protocole({ id: config.id, commandes, config,
   texte: 'Bilan en ATP de la respiration d’un glucose. Glycolyse (hyaloplasme) : 2 ATP, 2 NADH,H+. Formation de l’acétyl-CoA (matrice, × 2) : 2 NADH,H+. Cycle de Krebs (matrice, × 2) : 2 ATP, 6 NADH,H+, 2 FADH2. Chaîne respiratoire (membrane interne) : 1 NADH,H+ → 3 ATP, 1 FADH2 → 2 ATP ; 10 × 3 = 30 ATP, 2 × 2 = 4 ATP, soit 34 ATP. Bilan = 2 + 2 + (10 × 3) + (2 × 2) = 38 ATP (certains documents écrivent 36 ATP : on suit l’énoncé).',
-  etat: () => ({ simulation_status: chrono.statut(), ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'caisse', time_s: +chrono.t.toFixed(2), parameters: {}, moments: M }),
+  etat: () => ({ simulation_status: chrono.statut(), ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'caisse', time_s: +chrono.t.toFixed(2), parameters: {}, moments: M, allumes: lum.liste() }),
   progression: () => chrono.t / FIN,
-  executer: (cmd, p) => ({ start: chrono.start, reset: chrono.reset, pause: chrono.pause, resume: chrono.resume, set_time: () => chrono.setTime(p), play_until: () => chrono.playUntil(p) })[cmd]?.() });
+  executer: (cmd, p) => ({ start: chrono.start, reset: () => { lum.eteins(); chrono.reset(); }, pause: chrono.pause, resume: chrono.resume, set_time: () => chrono.setTime(p), play_until: () => chrono.playUntil(p),
+    allume: () => { lum.allume(p); pont.emettre(); }, eteins: () => { lum.eteins(); pont.emettre(); } })[cmd]?.() });
 bulle($('feedback'), 'Faisons la caisse : combien d’ATP pour un glucose ?');
 setTimeout(() => { if (!chrono.pilote && !chrono.running && chrono.t === 0) chrono.start(); }, 1600);
 window.__sim = { chrono, scene, M };

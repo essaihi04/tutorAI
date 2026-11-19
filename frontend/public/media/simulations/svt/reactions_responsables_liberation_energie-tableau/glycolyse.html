@@ -31,9 +31,12 @@
  *     écrite comme le tuteur la construit : les produits à droite, puis à gauche le glucose, 2 ADP + 2 Pi, 2 NAD+.
  * Aucun intermédiaire, aucune enzyme nommés (hors programme). Pas de dioxygène dans la scène : la glycolyse n'en a pas
  * besoin. Le rythme est celui d'une explication, pas une vitesse réelle.
+ * (19 novembre 2026, compter en allumant — simulations-au-tableau règle 16) avant la coupure, les six carbones du glucose
+ * s'allument un à un, chacun avec son numéro courant écrit dessous (moments carbone_1…carbone_6, puis compte_carbones ;
+ * repères 'carbone_1'…'carbone_6') ; tout ce qui suivait est décalé de DECALE s (les noms des moments ne changent pas).
  */
 const { fr, bulle, protocole } = window.Tableau;
-const { Scene, Chrono, Apparitions, doux, mix } = window.SVTTableau;
+const { Scene, Chrono, Apparitions, Allumage, doux, mix } = window.SVTTableau;
 const P = window.SVTPeinture;
 const ENCRE = '#0b1f2a';   // (16 novembre 2026) texte sombre et gras sur les capsules et protéines claires : bien lisible
 const $ = id => document.getElementById(id);
@@ -41,7 +44,16 @@ const $ = id => document.getElementById(id);
 const M = { glucose_dans_hyaloplasme: 2.5, glycolyse_ici: 3.4, sans_o2: 4.2, deux_atp_depenses: 7.4, coupure_en_deux: 10.8, taxis_charges: 14,
   quatre_atp_formes: 16.8, gain_net: 17.8, deux_acides_pyruviques: 18.8, formule: 19.8, accolade_bilan: 21.6,
   reaction_droite: 22.8, reaction_glucose: 23.6, reaction_adp: 24.6, reaction_nad: 25.5 };
-const FIN = 26;
+/* Le compte des carbones (temps de la scène) : de CPT.debut à CPT.fin, le reste du dessin est figé (tv), puis décalé. */
+const CPT = { debut: 7.5, pas: .36, n: 6 };
+CPT.fin = +(CPT.debut + CPT.n * CPT.pas + .25).toFixed(2);
+const DECALE = CPT.fin - CPT.debut;
+const tv = (t) => (t < CPT.debut ? t : t < CPT.fin ? CPT.debut : t - DECALE);
+const CARBONES = Array.from({ length: CPT.n }, (_, i) => 'carbone_' + (i + 1));
+for (const k of Object.keys(M)) if (M[k] > CPT.debut) M[k] = +(M[k] + DECALE).toFixed(2);
+CARBONES.forEach((id, i) => { M[id] = +(CPT.debut + i * CPT.pas + .05).toFixed(2); });
+M.compte_carbones = +(CPT.debut + CPT.n * CPT.pas).toFixed(2);
+const FIN = 26 + DECALE;
 const MOTIFS = {
   glucose_dans_hyaloplasme: 'le glucose est dans le hyaloplasme, loin de la mitochondrie',
   deux_atp_depenses: 'deux ATP sont dépensés pour lancer la glycolyse',
@@ -58,7 +70,9 @@ const MOTIFS = {
   reaction_glucose: 'à gauche : le glucose',
   reaction_adp: 'pour 2 ATP : 2 ADP + 2 Pi',
   reaction_nad: 'pour 2 NADH,H+ : 2 NAD+',
+  compte_carbones: 'on a compté les carbones du glucose : 6',
 };
+CARBONES.forEach((id, i) => { MOTIFS[id] = `carbone n° ${i + 1}`; });
 /* Mise en page du 16 novembre 2026 (cadre étroit du lecteur, textes d'au moins 15 px) : cellule agrandie, mitochondrie grande
  * (deux membranes et crêtes reconnaissables) avec son nom au-dessus, noyau en bas, molécules espacées, légendes hors des objets. */
 const CEL = { x: 288, y: 230, rx: 292, ry: 160 }, NOY = { x: 250, y: 346, r: 30 }, MITO = { x: 462, y: 302, rx: 72, ry: 30 };
@@ -66,7 +80,7 @@ const GLU = { x: 290, y: 172 }, PAS = 28, GAUCHE = { x: 170, y: 215 }, DROITE = 
 const CARBONE = [250, 204, 21], HYDRO = [235, 240, 245], TAXI = [34, 190, 220], CARTE = [250, 190, 60], VIDE = [150, 150, 150];
 
 const canvas = $('canvas');
-const scene = Scene(canvas, (c) => { scene.cadre(23); MOS.dessiner(c, () => { dessiner(c); }); return c.fin(); }, { large: true });
+const scene = Scene(canvas, (c) => { scene.cadre(23); MOS.dessiner(c, () => { dessiner(c); lum.lueurs(c, comptes(chrono.t)); }); return c.fin(); }, { large: true });
 /* Tableau large (portable 1366 × 613) : la page est rangée sur toute la largeur (SVTLarge.Mosaique, dans peinture.js) ; grand écran : inchangée. */
 const MOS = window.SVTLarge.Mosaique(scene, (L) => L >= 1000 ? { police: 1.3, lignes: [[[-8, 62, 592, 334], { r: [586, 56, 222, 320], k: 2 }], [[-50, 396, 860, 26]]] } : null);
 const ecrit = Apparitions(scene);
@@ -74,6 +88,8 @@ const chrono = Chrono({ fin: () => FIN, moments: () => M, motifs: MOTIFS, bouton
   depart: 'Observe le glucose dans le hyaloplasme…', reinit: () => ecrit.oublier(),
   fini: () => 'Glycolyse : 1 glucose → 2 acides pyruviques + 2 ATP + 2 NADH,H+.' });
 scene.avancer = chrono.avancer;
+const lum = Allumage(scene, chrono, { moments: () => M, numero: 'dessous' });
+const comptes = (t) => (t >= CPT.debut && t < CPT.fin + .6 ? lum.compte(t, CARBONES, CPT.debut, CPT.pas) : []);
 
 /* Position de la bille de carbone i (0..5) à l'instant t. */
 function carbone(i, t) {
@@ -97,7 +113,7 @@ function taxi(c, x, y, charge, a = 1) {
 }
 
 function dessiner(c) {
-  const t = chrono.t;
+  const T = chrono.t, t = tv(T);
   c.direct(() => {
     P.cellule(c.ctx, CEL.x, CEL.y, CEL.rx, CEL.ry, { noyau: NOY, grains: 110, graine: 17 });
     P.mitochondrie(c.ctx, MITO.x, MITO.y, MITO.rx, MITO.ry, { cretes: 5, graine: 3 });
@@ -132,7 +148,8 @@ function dessiner(c) {
     // le glucose : six billes de carbone
     // les liaisons entre carbones (celle du milieu se rompt à la coupure), puis les atomes
     c.direct(() => { const cu = doux(chrono.part(7.9, 9.0, t)); for (let i = 0; i < 5; i++) { const [x1, y1] = carbone(i, t), [x2, y2] = carbone(i + 1, t), al = a1 * (i === 2 ? 1 - cu : 1); if (al > .02) P.liaison(c.ctx, x1, y1, x2, y2, { alpha: al }); } if (t >= 7.9 && t < 9.2) P.eclat(c.ctx, GLU.x, mix(GLU.y, GAUCHE.y, doux(chrono.part(7.9, 10.4, t))), 20, 1 - chrono.part(7.9, 9.2, t)); });
-    for (let i = 0; i < 6; i++) { const [x, y] = carbone(i, t); c.direct(() => P.bille(c.ctx, x, y, 12, CARBONE, { alpha: a1 })); }
+    for (let i = 0; i < 6; i++) { const [x, y] = carbone(i, t); c.direct(() => P.bille(c.ctx, x, y, 12, CARBONE, { alpha: a1 }));
+      if (T >= CPT.debut - .2 && T < CPT.fin + .6) c.repere(CARBONES[i], x - 13, y - 13, 26, 26, 'le carbone n° ' + (i + 1) + ' du glucose'); }
     if (t < 7.9) {
       ecrit.ecrire(c, 'glucose', () => { c.texte('glucose : C_{6}H_{12}O_{6} (6 C)', GLU.x, GLU.y - 30, { couleur: 'jaune', taille: 16, align: 'center' }); });
       if (a1 > .3) c.repere('glucose', GLU.x - 3 * PAS + 4, GLU.y - 50, 6 * PAS - 8, 66, 'le glucose, 6 carbones');
@@ -237,8 +254,8 @@ function phase(t) {
   return 'Bilan à droite ; en bas, la réaction globale s’écrit : ' + r.join(' ') + '.';
 }
 function ceQuiSeVoit() {
-  const t = chrono.t;
-  return `t = ${fr(t, 1)} s${chrono.running ? ' (ça avance)' : chrono.fait ? ' (fin)' : ' (arrêté)'}. ${phase(t)} Compteur : ATP dépensés ${t >= 6.6 ? 2 : 0}, ATP formés ${t >= 16.3 ? 4 : 0}, NADH,H+ ${t >= 13.5 ? 2 : 0}. Aucun dioxygène n’intervient.`;
+  const T = chrono.t, t = tv(T), cpt = T >= CPT.debut && T < CPT.fin + .6 ? ` On compte les carbones du glucose en les allumant : ${lum.compte(T, CARBONES, CPT.debut, CPT.pas).length} sur 6.` : '';
+  return `t = ${fr(T, 1)} s${chrono.running ? ' (ça avance)' : chrono.fait ? ' (fin)' : ' (arrêté)'}. ${phase(t)} Compteur : ATP dépensés ${t >= 6.6 ? 2 : 0}, ATP formés ${t >= 16.3 ? 4 : 0}, NADH,H+ ${t >= 13.5 ? 2 : 0}. Aucun dioxygène n’intervient.${cpt}` + (lum.liste().length ? ' Allumé : ' + lum.liste().join(', ') + '.' : '');
 }
 
 $('run').onclick = chrono.clic;
@@ -249,14 +266,16 @@ window.Tableau.explication({ glycolyse: [
   { repere: 'nadh', texte: 'Deux NAD+ prennent chacun deux hydrogènes : deux NADH,H+.' },
   { repere: 'compteur', texte: 'Quatre ATP formés, deux dépensés : deux ATP gagnés.' },
   { repere: 'reaction', texte: 'La réaction globale de la glycolyse.' } ] });
-const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'play_until'];
+const commandes = ['start', 'reset', 'pause', 'resume', 'set_time', 'play_until', 'allume', 'eteins'];
 const config = { id: 'svt_energie_glycolyse', version: '1.0', title: 'La glycolyse dans le hyaloplasme', variants: [{ id: 'glycolyse', label: 'glycolyse' }], commands: commandes,
-  command_schema: { set_time: { time_s: `0..${FIN} (arrêt sur cet instant)` }, play_until: { moment: Object.keys(M).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' } } };
+  command_schema: { set_time: { time_s: `0..${FIN} (arrêt sur cet instant)` }, play_until: { moment: Object.keys(M).join(' | ') + ' (rejoue et se fige à cet instant clé)', time_s: 'ou un instant en s' },
+    allume: { cible: 'repère ou moment (ou liste)' }, eteins: {} } };
 const pont = protocole({ id: config.id, commandes, config,
   texte: 'La glycolyse dans le hyaloplasme : un glucose (6 C) est coupé en deux acides pyruviques (3 C, CH3-CO-COOH) ; 2 ATP dépensés, 4 formés, gain net 2 ATP ; 2 NAD+ réduits en 2 NADH,H+ ; pas de dioxygène. Réaction globale : C6H12O6 + 2 ADP + 2 Pi + 2 NAD+ → 2 CH3-CO-COOH + 2 ATP + 2 NADH,H+.',
-  etat: () => ({ simulation_status: chrono.statut(), ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'glycolyse', time_s: +chrono.t.toFixed(2), parameters: {}, moments: M }),
+  etat: () => ({ simulation_status: chrono.statut(), ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'glycolyse', time_s: +chrono.t.toFixed(2), parameters: {}, moments: M, allumes: lum.liste() }),
   progression: () => chrono.t / FIN,
-  executer: (cmd, p) => ({ start: chrono.start, reset: chrono.reset, pause: chrono.pause, resume: chrono.resume, set_time: () => chrono.setTime(p), play_until: () => chrono.playUntil(p) })[cmd]?.() });
+  executer: (cmd, p) => ({ start: chrono.start, reset: () => { lum.eteins(); chrono.reset(); }, pause: chrono.pause, resume: chrono.resume, set_time: () => chrono.setTime(p), play_until: () => chrono.playUntil(p),
+    allume: () => { lum.allume(p); pont.emettre(); }, eteins: () => { lum.eteins(); pont.emettre(); } })[cmd]?.() });
 bulle($('feedback'), 'Une cellule : le glucose va arriver dans le hyaloplasme…');
 setTimeout(() => { if (!chrono.pilote && !chrono.running && chrono.t === 0) chrono.start(); }, 1600);
 window.__sim = { chrono, scene, M };

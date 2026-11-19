@@ -229,3 +229,21 @@ nouveaux sont des « gestes trop serrés » sur les diapositives sans voix (dur�
 
 
 Appariement 2020 R : `python3 scripts/logique/svt_ch1_appariement.py` (idempotent ; à relancer après `deuxieme_passe_svt_ch1.py`), puis `python3 -X utf8 scripts/logique/lister_voix.py svt_ch1_reactions_responsables_liberation_energie`.
+
+## 3ᵉ passe (19 novembre 2026) : démonstration sur le document, compter en allumant
+
+- **Allumer** (`simulations-au-tableau` règles 16-17, `professeur` 44-45) : `commun.js` reçoit `SVTTableau.Allumage` (commandes
+  `allume {cible}` / `eteins`, lueur jaune qui reste, la dernière plus vive, numéro courant des comptes ; `reset` éteint).
+  Pages qui l'exécutent elles-mêmes : `national.html`, `exao.html`, `compteur.html`, `glycolyse.html`, `krebs.html`.
+- **`allume` sur les lignes de démonstration** : `le_x1_restitution` (cadres nature / lieu / produits), `le_x1b_protons`
+  (flèches chaîne, sphère), `le_x1c_qcm` (propositions a, c, d rayées, b), `le_x1d/e/f` (ce que donne la réaction, le
+  phénomène, le lien), `le_x2_qui_respire` et `le_x2b_fatigue` (lignes du tableau 2016 N), `le_x3*` (bandes des périodes entre
+  deux ajouts, nouveaux repères `periode_glucose|pyruvate|adp|cyanure` d'`exao.html`), `le_g3_bilan` (les taxis, la réaction).
+  Textes dits inchangés.
+- **Compter en allumant** : `le_r1_compteur` (les 4 ATP directs, les 10 NADH,H⁺, les 2 FADH₂ comptés un à un ; chaque total
+  s'écrit dans la ligne « total » à la fin de son compte ; pointages `compte_atp`, `compte_nadh`, `compte_fadh` au rythme de
+  « نجمعو… ») ; `le_g2_six_carbones` (les 6 carbones du glucose, `compte_carbones`, avant la coupure) ; `le_k4_sorties` (les
+  5 sorties d'un tour numérotées à leur cran, « un tour : 5 sorties » écrit une fois). Les moments qui suivaient un compte
+  sont décalés dans la page (mêmes noms).
+- **L'énoncé du national d'abord** : en attente du gabarit commun `shared/examen/feuille.html` (feuille d'examen refaite en
+  code) ; la préparation (sujets, questions, points, figures à redessiner) est dans `docs/audit-national/svt.md`, section ch1.

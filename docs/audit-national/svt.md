@@ -16,7 +16,62 @@ Pour chaque cours : (a) les exercices du national joués (sujet, année, session
 <!-- ch1 : début -->
 ## Ch1 — Libération de l'énergie (`svt_ch1_reactions_responsables_liberation_energie`)
 
-_à remplir_
+État au 19 novembre 2026. Simulations : `frontend/public/media/simulations/svt/reactions_responsables_liberation_energie-tableau/`.
+
+### (a) Exercices du national joués — préparation de « l'énoncé d'abord » (feuille refaite en code)
+
+Aucune diapositive « énoncé » n'est créée : selon l'addendum du 19/11, l'énoncé sera une feuille d'examen refaite en code avec le
+gabarit commun `shared/examen/feuille.html`, qui n'est pas encore sur main. Les scans `pages/` et `assets/` ci-dessous servent
+seulement de modèle. Les fractions de page ont été mesurées sur le scan (profil des lignes sombres).
+
+| Sujet | Où dans `exam.json` | Modèle (scan) | Questions et points | Figures à redessiner | Déjà dessiné dans le cours ? | Diapositives (insérer l'énoncé avant) |
+|---|---|---|---|---|---|---|
+| **2024 R** (RS 34F) | `parts[0]`, question `I`, sous-questions `1`, `2` | `pages/sujet_p1.jpg`, haut 0,278 → bas 0,397 (en-tête de la page 1 jusqu'à 0,25) | I. Répondre sur votre feuille de rédaction aux questions suivantes : 1. Définir la fermentation lactique (0,5 pt) ; 2. Déterminer le sens de déplacement des protons H⁺ dans la mitochondrie au cours : a. du fonctionnement de la chaîne respiratoire (0,25 pt) ; b. du fonctionnement de la sphère pédonculée (0,25 pt) | aucune (texte seul) | — | avant `le_x1_restitution` (sert aussi à `le_x1b_protons` ; `le_c6_protons` réutilise I.2.a dans un QCM « national 2024 ») |
+| **2022 N** (NS 34F) | `parts[0]`, question `II`, sous-question `II.1` | `pages/sujet_p1.jpg`, haut 0,368 → bas 0,592 (en-tête jusqu'à 0,237) | II. Pour chacune des données numérotées de 1 à 4, une seule proposition correcte ; recopier les couples (2 pts, 0,5 par donnée). Donnée 1 « Dans la mitochondrie » : a. la sphère pédonculée transporte H⁺ vers l'espace intermembranaire ; b. la sphère pédonculée est responsable de la phosphorylation de l'ADP ; c. la membrane externe contient des protéines qui transportent les électrons vers le dioxygène ; d. la membrane externe contient des enzymes d'oxydoréduction. Réponse (1, b) | le cadre pointillé du QCM (donnée 1, colonne de gauche) | `national.html?vue=restitution` écrit les quatre propositions telles qu'au sujet | avant `le_x1c_qcm` |
+| **2020 R** (RS 34F) | `parts[0]`, question `III` (type `association`, `items_left` / `items_right`) | `pages/sujet_p2.jpg`, haut 0,088 → bas 0,302 (en-tête de la page 2 jusqu'à 0,09) | III. Reliez chaque phénomène à la réaction bilan qui lui convient ; recopiez les couples (1 pt) | **tableau à deux cadres** : « Phénomène » (1- La glycolyse ; 2- Le cycle de Krebs ; 3- La fermentation lactique ; 4- La fermentation alcoolique) et « Réaction bilan » (a à e, équations exactes de `items_right`, e sur deux lignes) | oui : `national.html?vue=reactions` écrit les 4 phénomènes et les 5 réactions du sujet (réutilisable pour la mise en page) | avant `le_x1d_reactions` (puis `le_x1e_reactions_c`, `le_x1f_reactions_krebs`) |
+| **2016 N** | `parts[1].exercises[0]` (« Sujet 1 »), question `ex1q1`, documents `doc_g1`, `doc_g2` | pas de page scannée : `assets/document_1.png`, `assets/document_2.png` (**page d'examen photographiée manquante**) | Texte : « Afin d'étudier l'effet du manque d'exercices sportifs et du tabagisme (usage du tabac) sur les réactions responsables de la libération de l'énergie au niveau du muscle squelettique strié, on propose l'étude des données suivantes. » Question 1 : « En exploitant les données des documents 1 et 2, expliquez l'augmentation de la fatigabilité observée chez la personne non entraînée. » (1 pt). NB : une seule consigne au sujet ; le cours la joue en deux temps (comparer, `le_x2_qui_respire`, puis expliquer, `le_x2b_fatigue`), comme la correction (comparaison puis explication) | **Document 1, tableau** : colonnes « Personne entraînée » / « Personne non entraînée » ; lignes « Volume total des mitochondries par rapport au volume de la cellule musculaire » 11 % / 5 %, « Activité des enzymes mitochondriales » importante / faible. **Document 2, graphique à barres** : pour « Personne non entraînée » et « Personne entraînée », barres pointillées « Quantité d'acide lactique produit en mmol/L » 12 / 6 et barres pleines « Consommation du dioxygène en L/min » 2.5 / 5.5 (valeurs écrites au-dessus des barres) | en partie : `national.html?vue=sportifs` a les mêmes valeurs (jauges puis tableau), pas la mise en page en barres du document 2 | avant `le_x2_qui_respire` |
+| **2017 N** | `parts[0]`, question `IV` (id `p1q4`, type `schema`), document `doc_g1` | pas de page scannée : `assets/document_1.png` (**page d'examen photographiée manquante**) | IV. Le document ci-dessous représente la chaîne respiratoire. Nommez chacune des structures désignées par les numéros 1, 2, 3 et des réactions désignées par les lettres A, B, C (1,5 pt) | **schéma de la chaîne respiratoire** : membrane interne en bicouche, transporteurs T1 à T6 (T3 et T5 mobiles, e⁻ en pointillés), quatre flèches H⁺ vers le haut (T1, T4, T6, sphère), sphère pédonculée à droite ; réaction A (NADH,H⁺ → NAD⁺ ; FADH₂ → FAD), B (O₂ + 4H⁺ → 2H₂O), C (ADP + Pi → ATP) ; repères 1 (accolade, membrane interne), 2 (sphère pédonculée), 3 (espace intermembranaire) | non : `chaine.html?etiquettes=examen` nomme CI…CV et `?vue=construire` a **4** structures (1 à 4), alors que le sujet 2017 N n'en a que **3** et nomme T1…T6 — à aligner sur le sujet | avant `le_c8_national` (puis `le_c8b_construire`, qui dit « comme au national 2017 ») |
+
+**Documents reconstitués ou cités (pas d'énoncé à faire)** :
+- `le_x3_chaine_en_panne`, `le_x3b_deduire`, `le_x3c_hypothese` (`exao.html?vue=mitochondries`) : « document type » inspiré de **2020 R,
+  exercice 1, document 1** (`pages/sujet_p3.jpg`, haut ≈ 0,09 → 0,35 : figure a, O₂ en % de saturation ; figure b, ATP en UA ;
+  ajouts glucose t₁, pyruvate t₂, ADP + Pi t₃, cyanure t₄ ; question 1 « En exploitant le document 1, déduisez les conditions de
+  synthèse d'ATP au niveau des mitochondries » 1,25 pt). Les valeurs du cours diffèrent (ATP 10 → 90 UA au lieu de ≈ 30 → 100 ;
+  O₂ 96 → 40 % au lieu de ≈ 93 → 35 %) et les trois consignes (décrire, déduire, hypothèse) ne sont pas celles du sujet. À décider :
+  en faire le vrai 2020 R (valeurs et consigne du sujet, puis l'énoncé d'abord) ou le garder comme document type.
+- `le_c1_pulse` (`exao.html?vue=pulse_o2`) : document de **2016 R** (mitochondries sans membrane externe, [H⁺], injection d'O₂) utilisé
+  comme activité du cours, pas comme exercice.
+- `le_e3b_masse_levures` (`national.html?vue=levures`) : aucune source trouvée dans `exam.json` 2016-2025 (reconstitué).
+- `le_f2_alcoolique` : cite 2023 R seulement dans l'explication d'un vrai/faux de fin de cours.
+- `le_m3a_glucose_marque` : « une expérience du bac », sujet non identifié dans `exam.json`.
+
+### (b) Moments où l'on compte ou parcourt un à un
+
+| Diapositive | Simulation | Ce qui est compté / parcouru | État |
+|---|---|---|---|
+| `le_r1_compteur` | `compteur.html` | les 4 ATP directs de la caisse, les 10 NADH,H⁺, les 2 FADH₂ (un compte par couleur), chaque total écrit dans la ligne « total » à la fin de son compte | **fait** (moments `atp_1…4`, `nadh_1…10`, `fadh_1…2`, `compte_atp|nadh|fadh` ; pointages au rythme de « نجمعو… ») |
+| `le_g2_six_carbones` | `glycolyse.html` | les 6 carbones du glucose, avant la coupure 3 + 3 | **fait** (`carbone_1…6`, `compte_carbones`) |
+| `le_k4_sorties` | `krebs.html` | les 5 sorties d'un tour, numérotées à leur cran ; « un tour : 5 sorties » écrit une fois | **fait** (repères `sortie_1…5` sur les moments existants) |
+| `le_k5_fois_deux` | `krebs.html` | tour 1, tour 2 ; 2 + 4 = 6 CO₂ ; 2 + 2 + 6 = 10 NADH,H⁺ | à faire |
+| `le_c4_relais` | `chaine.html` | les transporteurs T1 → T4 parcourus un à un par les électrons | à faire |
+| `le_m2_legender` | `mitochondrie.html` | les six mots placés un à un | à faire |
+| `le_m3a_glucose_marque` | `glucose-marque.html` | T0 … T4, compartiment par compartiment (moments existants, sans lueur ni numéro) | à faire |
+| `le_x1c_qcm` | `national.html` | propositions a, c, d (rayées) puis b | **fait** par `allume` (démonstration) |
+| `le_x1d/e/f` | `national.html` | réactions a → e : ce qu'elle donne, le phénomène, le lien | **fait** par `allume` |
+| `le_x2_qui_respire`, `le_x2b_fatigue` | `national.html` | les lignes du tableau 2016 N (mitochondries, O₂, acide lactique) | **fait** par `allume` |
+| `le_x3*` | `exao.html` | les périodes entre deux ajouts (glucose, acide pyruvique, ADP + Pi, cyanure) | **fait** par `allume` (nouvelles bandes `periode_*`) |
+
+### (c) Fait, pistes, reste à faire
+
+- **Fait** : `SVTTableau.Allumage` dans `commun.js` (commandes `allume {cible}` / `eteins`, lueur qui reste, la dernière plus vive,
+  numéro courant ; `reset` éteint ; `allumes` dans l'état) ; `allume`/`eteins` exécutés par `national.html`, `exao.html`,
+  `compteur.html`, `glycolyse.html`, `krebs.html`. `allume` posé sur les lignes de démonstration de `le_x1_restitution`,
+  `le_x1b_protons`, `le_x1c_qcm`, `le_x1d_reactions`, `le_x1e_reactions_c`, `le_x1f_reactions_krebs`, `le_x2_qui_respire`,
+  `le_x2b_fatigue`, `le_x3_chaine_en_panne`, `le_x3b_deduire`, `le_x3c_hypothese`, `le_g3_bilan`. Comptes en allumant : r1, g2, k4.
+- **Pistes ajoutées au `_voix.json` : 0** (aucun texte dit n'a changé ; seuls des pointages et des `allume`).
+- **Reste à faire** : l'énoncé d'abord (attend `shared/examen/feuille.html`) ; `allume` des démonstrations de `le_t2_reduit`
+  (`taxi.html`), `le_r2_rendement` (`rendement.html`), `le_c10b_vesicules_cas` (`vesicules.html`) ; les comptes de k5, c4, m2, m3a ;
+  aligner `le_c8b_construire` sur les 3 structures du sujet 2017 N ; décider du sort de `le_x3*` (vrai 2020 R ou document type).
 <!-- ch1 : fin -->
 
 <!-- ch2 : début -->
