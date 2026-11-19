@@ -62,9 +62,41 @@ if (!(window.Lexique && window.Lexique.maths) && document.readyState === 'loadin
    * px à l'écran (15 ; c'était 11) ; `large` : le cadre prend le format du tableau, scene.L de 760 à 760 × L_MAX (1596) (hauteur
    * 420), la page place ses blocs avec scene.L (figure à gauche, calculs à droite) au lieu de les empiler. */
   const TAILLE_MIN = 15, L_MAX = 2.1;
+  let PLANCHER_BAS = +(new URLSearchParams(location.search).get('plancher_bas') || .8);
   function Scene(canvas, dessiner, options = {}) {
     const scene = { sale: true, boite: null, mesurant: false, L: VW };
-    const craie = new T.Craie(canvas, { onresize: () => { scene.sale = true; } });
+    const craie = new T.Craie(canvas, { onresize: () => { scene.sale = true; scene.boite = null; } });   // nouvelle taille : nouvelle mesure (plancher)
+    /* Morceaux d'une même ligne (18 novembre 2026) : une page compose souvent une ligne de plusieurs textes posés l'un après
+     * l'autre, à l'abscisse calculée avec la taille prévue. Porté au plancher (petit tableau), un morceau s'allonge et
+     * mordait sur le suivant (« ① » sur « une somme… », « ) en dessous » sur « (C) »). Pendant chaque image, un texte
+     * aligné à gauche qui commence DANS un texte déjà écrit sur la même ligne de base est poussé juste après lui. Seulement
+     * quand le plancher agrandit l'écriture : à la taille prévue, rien ne bouge. */
+    const ecrits = []; let prof = 0; const SANS_DECALER = new URLSearchParams(location.search).get('decaler') === '0';
+    function decaler(c, s, x, y, o) {
+      const t0 = o.taille ?? 18, pl = scene.mesurant ? (scene.plancher || 0) : (c.echelle && c.tailleMin ? c.tailleMin / c.echelle : 0);
+      if (!(pl > 0) || SANS_DECALER || (o.align && o.align !== 'left') || o.plancher === false) return x;
+      const t = Math.max(t0, pl);
+      let w = 0; try { w = c.largeurTexte(String(s), t); } catch (e) { return x; }
+      if (o.max && w > o.max) w = o.max;
+      const m = c.ctx.getTransform(), k = Math.hypot(m.a, m.b) || 1;
+      const X = (m.a * x + m.c * y + m.e) / k, Y = (m.b * x + m.d * y + m.f) / k;   // repère commun (même échelle), translations comprises
+      for (const b of ecrits) {
+        if (Math.abs(b.Y - Y) > .35 * Math.min(b.t, t) || b.k !== k) continue;
+        if (X >= b.X0 - 1 && X < b.X1 - .5 && !(b.s === String(s) && Math.abs(b.X0 - X) < 1)) {
+          if (!(t > t0 || b.t > b.t0)) continue;     // ni l'un ni l'autre agrandi : la page l'a voulu ainsi
+          x += (b.X1 + .18 * t - X); return decaler(c, s, x, y, o);
+        }
+      }
+      ecrits.push({ s: String(s), X0: X, X1: X + w, Y, t, t0, k });
+      return x;
+    }
+    {
+      const base = craie.texte;
+      craie.texte = function (s, x, y, o = {}) {
+        if (prof > 0) return base.call(this, s, x, y, o);
+        prof++; try { return base.call(this, s, decaler(this, s, x, y, o), y, o); } finally { prof--; }
+      };
+    }
     /* La boîte de l'encre (coordonnées du cadre) : la construction complète dessinée une fois, chaque trait et chaque
      * texte relevés au passage. Le dessin de mesure est effacé par l'image suivante. */
     function mesurer() {
@@ -74,20 +106,48 @@ if (!(window.Lexique && window.Lexique.maths) && document.readyState === 'loadin
       craie.trait = function (pts, o = {}) { const m = (o.largeur ?? 2.4) / 2 + 1; for (const p of pts || []) pt(p[0], p[1], m); return trait.call(this, pts, o); };
       craie.point = function (x, y, r = 4, c) { pt(x, y, r); return point.call(this, x, y, r, c); };
       craie.texte = function (s, x, y, o = {}) {
-        const t = o.taille ?? 18; this.ctx.font = `${o.gras ? '700 ' : ''}${t}px ${T.POLICE}`;
+        let t = o.taille ?? 18; this.ctx.font = `${o.gras ? '700 ' : ''}${t}px ${T.POLICE}`;
         let l = this.ctx.measureText(String(s).replace(/_/g, '')).width; if (o.max && l > o.max) l = o.max;
+        if (scene.plancher > t && o.plancher !== false && !(o.max && l >= o.max)) { l *= scene.plancher / t; t = scene.plancher; }
         const x0 = o.align === 'center' ? x - l / 2 : o.align === 'right' ? x - l : x;
         pt(x0, y - t * 0.95); pt(x0 + l, y + t * 0.35);
         return texte.call(this, s, x, y, o);
       };
       const h = scene.horloge, t = scene.ouvert;
-      scene.mesurant = true; scene.horloge = null; scene.ouvert = -1e9;
+      scene.mesurant = true; scene.horloge = null; scene.ouvert = -1e9; craie.__plancher = scene.plancher || 0;
       try { dessiner(craie, scene); } catch (e) { console.warn('[maths] mesure de la boîte', e); }
-      finally { craie.trait = trait; craie.texte = texte; craie.point = point; scene.mesurant = false; scene.horloge = h; scene.ouvert = t; }
+      finally { craie.trait = trait; craie.texte = texte; craie.point = point; scene.mesurant = false; scene.horloge = h; scene.ouvert = t; scene.plancher = 0; craie.__plancher = undefined; }
       if (!(b.x1 > b.x0 && b.y1 > b.y0)) return null;
-      const n = { x0: Math.max(0, b.x0 - MARGE), y0: Math.max(0, b.y0 - MARGE), x1: Math.min(scene.L, b.x1 + MARGE), y1: Math.min(VH, b.y1 + MARGE) };
+      // (18 novembre 2026) un texte porté au plancher peut dépasser le cadre : la boîte le suit (jusqu'à un quart du cadre
+      // en plus), l'échelle baisse un peu et rien n'est coupé au bord
+      const n = { x0: Math.max(-scene.L * .25, b.x0 - MARGE), y0: Math.max(-VH * .25, b.y0 - MARGE), x1: Math.min(scene.L * 1.25, b.x1 + MARGE), y1: Math.min(VH * 1.25, b.y1 + MARGE) };
       const a = scene.boite;
       return a ? { x0: Math.min(a.x0, n.x0), y0: Math.min(a.y0, n.y0), x1: Math.max(a.x1, n.x1), y1: Math.max(a.y1, n.y1) } : n;
+    }
+    /* Plancher réel (18 novembre 2026, « la simulation d'abord » : à 1366 × 560 le tableau de la simulation n'a que ~290 px
+     * de haut, et le kit commun baisse le plancher du texte sous 400 px de haut — les graduations tombaient à 11 px, à 8 px
+     * sur un téléphone en paysage). Ici le plancher reste TAILLE_MIN px à l'écran, quelle que soit la taille du tableau : la
+     * boîte de l'encre est mesurée AVEC les textes portés au plancher (taille TAILLE_MIN / s), puis l'échelle s recalculée,
+     * deux ou trois fois (le plancher grossit quand s baisse) : rien ne sort du cadre, et la figure garde toute la place. */
+    /* Le plancher à l'écran : TAILLE_MIN dès que le tableau a 300 px de haut (portable, grand écran) ; sur un très petit
+     * tableau (téléphone en paysage, ~250 px de haut) il baisse avec la hauteur, jamais sous PLANCHER_BAS × TAILLE_MIN :
+     * à 15 px, un texte y est 1,6 fois plus grand que prévu et les lignes d'un calcul se recouvrent. */
+    const plancherEcran = (H) => TAILLE_MIN * Math.min(1, Math.max(PLANCHER_BAS, (H || 400) / 300));
+    const f45 = (W, H) => Math.min(1, Math.max(.45, Math.min((W || 900) / 900, (H || 400) / 400)));   // la baisse du kit commun
+    function echelleDe(k, W, H) {
+      const sCadre = Math.min(W / scene.L, H / VH);
+      return Math.min(W / Math.max(1, k.x1 - k.x0), H / Math.max(1, k.y1 - k.y0), sCadre * ZOOM_MAX);
+    }
+    function mesurerAuPlancher() {
+      const W = craie.W, H = craie.H;
+      scene.plancher = 0; let b = mesurer();
+      for (let i = 0; i < 4 && b; i++) {
+        const pl = plancherEcran(H) / echelleDe(b, W, H);
+        if (pl <= (scene.plancherMesure || 0) + .25) break;
+        scene.plancherMesure = pl; scene.plancher = pl;
+        const n = mesurer(); if (!n) break; b = n; scene.boite = b;
+      }
+      return b;
     }
     Object.assign(scene, {
       craie, ouvert: performance.now(), s: 1, ox: 0, oy: 0, horloge: null,
@@ -95,7 +155,8 @@ if (!(window.Lexique && window.Lexique.maths) && document.readyState === 'loadin
         const W = craie.W, H = craie.H;
         const L = options.large ? Math.round(Math.min(VW * L_MAX, Math.max(VW, VH * W / Math.max(1, H)))) : VW;
         if (L !== scene.L) { scene.L = L; scene.boite = null; }
-        if (options.ajuster && !scene.mesurant && !scene.boite && W > 1) scene.boite = mesurer();
+        if (options.ajuster && !scene.mesurant && !scene.boite && W > 1) { scene.plancherMesure = 0; scene.boite = mesurerAuPlancher(); }
+        ecrits.length = 0;
         craie.debut(graine, scene.horloge ? scene.horloge() : (performance.now() - scene.ouvert) / 1000);
         if (scene.mesurant) { scene.s = 1; scene.ox = 0; scene.oy = 0; craie.echelle = 1; craie.tailleMin = 0; craie.cadre = null; return craie; }
         const k = scene.boite || { x0: 0, y0: 0, x1: L, y1: VH };
@@ -103,11 +164,11 @@ if (!(window.Lexique && window.Lexique.maths) && document.readyState === 'loadin
         const s = Math.min(W / bw, H / bh, sCadre * ZOOM_MAX);
         scene.s = s; scene.ox = (W - bw * s) / 2 - k.x0 * s; scene.oy = (H - bh * s) / 2 - k.y0 * s;
         craie.ctx.translate(scene.ox, scene.oy); craie.ctx.scale(s, s);
-        craie.echelle = s; craie.tailleMin = TAILLE_MIN; craie.cadre = { w: L, h: VH, haut: 0 };
+        craie.echelle = s; craie.tailleMin = plancherEcran(H) / f45(W, H); craie.cadre = { w: L, h: VH, haut: 0 };
         return craie;
       },
       /** La construction a changé de forme (réglage, vue) : la boîte sera remesurée (elle ne fait que grandir). */
-      remesurer() { if (options.ajuster) { const n = mesurer(); if (n) scene.boite = n; scene.sale = true; } },
+      remesurer() { if (options.ajuster) { const n = mesurerAuPlancher(); if (n) scene.boite = n; scene.sale = true; } },
       local(x, y) { return [(x - scene.ox) / scene.s, (y - scene.oy) / scene.s]; },
       reecrire() { scene.ouvert = performance.now(); scene.sale = true; },
       image() {
@@ -154,6 +215,30 @@ if (!(window.Lexique && window.Lexique.maths) && document.readyState === 'loadin
     return boites.map((_, k) => (k >= best.i ? [best.dx, best.dy] : [0, 0]));
   }
 
+  /* Pas de titre en double (règle 9 du skill simulations-au-tableau, 18 novembre 2026 : « la simulation d'abord ») : dans le
+   * lecteur du cours, la diapositive écrit déjà son titre au-dessus de la simulation. Le titre d'une vue (K.titre) qui dit la
+   * même chose (ou que son sous-titre, juste sous le titre) n'est plus écrit (la craie garde son temps d'écriture : les moments ne bougent pas) ; la figure prend sa place.
+   * Hors du lecteur (page ouverte seule, aperçu), le titre reste. */
+  const norme = (s) => String(s || '').replace(/⟦([^|⟧]*)\|([^⟧]*)⟧/g, '$1 $2').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ').trim();
+  function titreRepete(s) {
+    let h = [];
+    try { if (window.parent !== window) h = [...window.parent.document.querySelectorAll('h1, h1 + p')].map((e) => norme(e.textContent)).filter(Boolean); } catch (e) { return false; }
+    const a = norme(s); if (!a || !h.length) return false;
+    const mots = (x) => new Set(x.split(' ').filter((m) => m.length > 1));
+    return h.some((b) => {
+      if (a === b || (a.length >= 8 && b.includes(a)) || (b.length >= 8 && a.includes(b))) return true;
+      const A = mots(a), B = mots(b); let n = 0; for (const m of A) if (B.has(m)) n++;
+      return n / Math.max(1, Math.min(A.size, B.size)) >= .75 && n >= 2;
+    });
+  }
+  /** Le temps que la craie aurait pris pour écrire `s` (le titre sauté garde sa place dans le temps). */
+  const tempsTitre = (s) => Math.max(.1, String(s || '').length / 16);
+
+  /** La taille vraiment écrite par la craie pour une taille demandée t (le plancher du petit tableau compris) : pour placer
+   *  ce qui va dessous ou à côté (« x → a » sous « lim »). */
+  const tailleEcrite = (c, t) => Math.max(t, c.__plancher ?? (c.echelle && c.tailleMin ? c.tailleMin / c.echelle : 0));
+
   const fr = (v, d = 2) => {
     if (!Number.isFinite(v)) return v > 0 ? '+∞' : v < 0 ? '−∞' : '—';
     let s = (+v.toFixed(d)).toString();
@@ -198,7 +283,7 @@ if (!(window.Lexique && window.Lexique.maths) && document.readyState === 'loadin
       bande(G, a, b, o = {}) { return K.zone.call(this, G, () => o.y1 ?? G.ymax, () => o.y0 ?? G.ymin, Math.max(a, G.xmin), Math.min(b, G.xmax), { n: 2, ...o }); },
       /** Bande horizontale y ∈ [a ; b] sur la largeur du repère (o.x0, o.x1 pour la borner). */
       bandeH(G, a, b, o = {}) { const lo = Math.min(a, b), hi = Math.max(a, b); return K.zone.call(this, G, () => Math.min(hi, G.ymax), () => Math.max(lo, G.ymin), Math.max(o.x0 ?? G.xmin, G.xmin), Math.min(o.x1 ?? G.xmax, G.xmax), { n: 2, ...o }); },
-      titre(s) { c.texte(s, 20, 30, { couleur: 'cyan', taille: 20, max: 720 }); return K; },
+      titre(s) { if (titreRepete(s)) { c.pause(tempsTitre(s)); return K; } c.texte(s, 20, 30, { couleur: 'cyan', taille: 20, max: 720 }); return K; },
       grille,
       axes(o) {
         const g = grille(o);
@@ -554,7 +639,7 @@ if (!(window.Lexique && window.Lexique.maths) && document.readyState === 'loadin
     }
   }
 
-  window.MathsTableau = { Scene, page, fr, grille, VW, VH, peindre, bloc, nuance, rvb, colonnes,
+  window.MathsTableau = { Scene, page, fr, titreRepete, tempsTitre, tailleEcrite, grille, VW, VH, peindre, bloc, nuance, rvb, colonnes,
     NET, EASE, doux, teinte, remplir, peint, zonePts, lueur, trace, halo, pastille };
   window.OndesTableau = window.OndesTableau || { Scene, VW, VH };   // bilan.html / carte.html du kit des ondes s'y appuient
 })();
