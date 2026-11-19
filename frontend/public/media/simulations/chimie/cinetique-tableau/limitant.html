@@ -33,6 +33,13 @@ const BARRES = [
   { id: 'barre_diiode', nom: 'I₂', expr: () => 'x', n: x => x, x: 212, couleur: 'orange' },
 ];
 const AX = { x0: 360, x1: 730, y: 372, max: 6 };
+/* Tableau large et bas (18 novembre 2026, « donner davantage de taille aux simulations ») : la figure est bornée par la
+ * hauteur ; la colonne des hypothèses et l'axe des x s'allongent vers la droite et l'écriture grossit (TX), la place est libre. */
+let TX = 1, HW = 416;
+function disposer(large, L = 1596) {
+  TX = large ? 1.6 : 1; HW = large ? Math.min(720, L - HX - 40) : 416;   // la colonne reste dans le cadre (L : largeur du tableau) AX.x1 = large ? HX + HW - 10 : 730;
+  [52, 132, 212].forEach((x, i) => { BARRES[i].x = 36 + i * 112; });   // barres écartées : leurs étiquettes (≥ 15 px à l’écran) ne se touchent pas
+}
 const AXX = v => AX.x0 + v / AX.max * (AX.x1 - AX.x0 - 20);
 const HX = 330, HY = [100, 150, 200, 250];
 
@@ -50,31 +57,32 @@ const limitant = () => (Math.abs(xm1() - xm2()) < 1e-9 ? 'les deux' : xm1() < xm
 
 function dessiner(c, D) {
   D.scene.cadre(31);
-  c.texte('H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O     (H⁺ en excès)', 380, 26, { couleur: 'blanc', taille: 18, align: 'center' });
-  c.texte('quantités (mmol)', 140, 70, { couleur: 'faible', taille: 15, align: 'center' });
-  c.ligne(30, BASE, 270, BASE, { couleur: 'faible', largeur: 1.4 });
+  disposer(D.large(), D.scene.L);
+  c.texte('H₂O₂ + 2I⁻ + 2H⁺ → I₂ + 2H₂O     (H⁺ en excès)', 380, 26, { couleur: 'blanc', taille: 18 * TX, align: 'center' });
+  c.texte('quantités (mmol)', (BARRES[0].x + BARRES[2].x + 44) / 2, 70, { couleur: 'faible', taille: 15 * TX, align: 'center' });
+  c.ligne(BARRES[0].x - 22, BASE, BARRES[2].x + 66, BASE, { couleur: 'faible', largeur: 1.4 });
   const xc = D.vu('x_max') ? xmax() : D.commence('x_max') ? xmax() * D.p('x_max') : 0;
   for (const b of BARRES) {
-    c.texte(b.nom, b.x + LB / 2, BASE + 24, { couleur: b.couleur, taille: 18, align: 'center' });
+    c.texte(b.nom, b.x + LB / 2, BASE + 24, { couleur: b.couleur, taille: 18 * TX, align: 'center' });
     c.direct(() => {
       const n = Math.max(0, b.n(xc)), h = n * ECH;
       if (h > .5) { c.direct(() => window.Rendu.barre(c, b.x, BASE - h, LB, h, b.couleur)); c.rect(b.x, BASE - h, LB, h, { couleur: b.couleur, arrondi: 3, largeur: 2 }); }
       if (D.commence('tableau')) {
-        c.texte(b.expr(), b.x + LB / 2, BASE + 46, { couleur: 'faible', taille: 14, align: 'center' });
-        c.texte(fr(n, 2), b.x + LB / 2, BASE - h - 8, { couleur: b.couleur, taille: 15, align: 'center' });
+        c.texte(b.expr(), b.x + LB / 2, BASE + 24 + 22 * TX, { couleur: 'faible', taille: 14 * TX, align: 'center' });
+        c.texte(fr(n, 2), b.x + LB / 2, BASE - h - 8, { couleur: b.couleur, taille: 15 * TX, align: 'center' });
       }
-      if (P.conclusions && b.id !== 'barre_diiode' && D.vu('x_max') && n < 1e-6) c.texte('épuisé', b.x + LB / 2, BASE - 30, { couleur: 'rouge', taille: 15, align: 'center' });
+      if (P.conclusions && b.id !== 'barre_diiode' && D.vu('x_max') && n < 1e-6) c.texte('épuisé', b.x + LB / 2, BASE - 30, { couleur: 'rouge', taille: 15 * TX, align: 'center' });
       c.repere(b.id, b.x - 8, BASE - Math.max(b.n(0), b.n(xmax()), 2) * ECH - 28, LB + 16, Math.max(b.n(0), b.n(xmax()), 2) * ECH + 80, 'la quantité de ' + b.nom);
     });
   }
-  c.repere('barres', 30, 80, 250, 310, 'les quantités : 2,0 − x, 10,0 − 2x, x');
+  c.repere('barres', 20, 80, BARRES[2].x + 64, 310, 'les quantités : 2,0 − x, 10,0 − 2x, x');
   // L'axe des x, à droite : où sont les deux hypothèses, et où x s'arrête.
-  c.axe(AX.x0, AX.y, AX.x1, AX.y, [0, 1, 2, 3, 4, 5, 6].map(v => [(AXX(v) - AX.x0) / (AX.x1 - AX.x0), String(v)]), { taille: 13 });
-  c.texte('x (mmol)', AX.x1, AX.y - 12, { couleur: 'faible', taille: 14, align: 'right' });
+  c.axe(AX.x0, AX.y, AX.x1, AX.y, [0, 1, 2, 3, 4, 5, 6].map(v => [(AXX(v) - AX.x0) / (AX.x1 - AX.x0), String(v)]), { taille: 13 * TX });
+  c.texte('x (mmol)', AX.x1, AX.y - 40, { couleur: 'faible', taille: 14 * TX, align: 'right' });
   c.direct(() => {
     if (D.commence('tableau')) {
       c.point(AXX(xc), AX.y, 6, 'jaune');
-      c.texte(`x = ${fr(xc, 2)}`, AXX(xc), AX.y - 44, { couleur: 'jaune', taille: 15, align: 'center' });
+      c.texte(`x = ${fr(xc, 2)}`, AXX(xc), AX.y - 44, { couleur: 'jaune', taille: 15 * TX, align: 'center' });
     }
     if (D.commence('hypothese_1')) c.ligne(AXX(xm1()), AX.y - 34, AXX(xm1()), AX.y + 6, { couleur: 'cyan', largeur: 2.4 });
     if (D.commence('hypothese_2') && xm2() <= AX.max) c.ligne(AXX(xm2()), AX.y - 34, AXX(xm2()), AX.y + 6, { couleur: 'violet', largeur: 2.4 });
@@ -83,32 +91,32 @@ function dessiner(c, D) {
   c.repere('axe_x', AX.x0 - 10, AX.y - 50, AX.x1 - AX.x0 + 20, 76, 'l’axe des x');
   if (D.commence('hypothese_1')) {
     D.ecrire(c, 'hypothese_1');
-    c.texte('Hyp. 1 : H₂O₂ épuisé : 2,0 − x_max = 0 → x_max = 2,0 mmol', HX, HY[0], { couleur: 'cyan', taille: 16, max: 410 });
-    c.repere('hypothese_1', HX - 6, HY[0] - 22, 416, 30, 'hypothèse 1 : H₂O₂ épuisé');
+    c.texte(TX > 1 ? 'Hyp. 1 : H₂O₂ épuisé : 2,0 − x_max = 0 → x_max = 2,0 mmol' : 'Hyp. 1 (H₂O₂ épuisé) : x_max = 2,0 mmol', HX, HY[0], { couleur: 'cyan', taille: 16 * TX, max: HW - 6 });
+    c.repere('hypothese_1', HX - 6, HY[0] - 22, HW, 30, 'hypothèse 1 : H₂O₂ épuisé');
   }
   if (D.commence('hypothese_2')) {
     D.ecrire(c, 'hypothese_2');
-    c.direct(() => c.texte(`Hyp. 2 : I⁻ épuisé : ${fr(P.n0I, 1)} − 2x_max = 0 → x_max = ${fr(xm2(), 1)} mmol`, HX, HY[1], { couleur: 'violet', taille: 16, max: 410 }));
-    c.repere('hypothese_2', HX - 6, HY[1] - 22, 416, 30, 'hypothèse 2 : I⁻ épuisé');
+    c.direct(() => c.texte(TX > 1 ? `Hyp. 2 : I⁻ épuisé : ${fr(P.n0I, 1)} − 2x_max = 0 → x_max = ${fr(xm2(), 1)} mmol` : `Hyp. 2 (I⁻ épuisé) : x_max = ${fr(xm2(), 1)} mmol`, HX, HY[1], { couleur: 'violet', taille: 16 * TX, max: HW - 6 }));
+    c.repere('hypothese_2', HX - 6, HY[1] - 22, HW, 30, 'hypothèse 2 : I⁻ épuisé');
   }
   if (P.conclusions && D.commence('plus_petite')) {
     D.ecrire(c, 'plus_petite');
-    c.direct(() => c.texte(`on garde la plus petite : x_max = ${fr(xmax(), 1)} mmol`, HX, HY[2], { couleur: 'jaune', taille: 17 }));
-    c.repere('x_max', HX - 6, HY[2] - 22, 416, 30, 'x_max, la plus petite valeur');
+    c.direct(() => c.texte(`on garde la plus petite : x_max = ${fr(xmax(), 1)} mmol`, HX, HY[2], { couleur: 'jaune', taille: 17 * TX }));
+    c.repere('x_max', HX - 6, HY[2] - 22, HW, 30, 'x_max, la plus petite valeur');
   }
   if (P.conclusions && D.vu('x_max')) {
     D.ecrire(c, 'x_max');
-    c.direct(() => c.texte(`x ne peut plus avancer : la réaction s’arrête à ${fr(xmax(), 1)} mmol`, HX, HY[3] + 50, { couleur: 'blanc', taille: 15, max: 410 }));
+    c.direct(() => c.texte(TX > 1 ? `x ne peut plus avancer : la réaction s’arrête à ${fr(xmax(), 1)} mmol` : `x s’arrête à ${fr(xmax(), 1)} mmol`, HX, HY[3] + 50, { couleur: 'blanc', taille: 15 * TX, max: HW - 6 }));
   }
   if (P.conclusions && D.commence('limitant')) {
     D.ecrire(c, 'limitant');
     const l = limitant();
     c.direct(() => {
       const s = l === 'les deux' ? 'H₂O₂ et I⁻ épuisés ensemble : proportions stœchiométriques' : `${l} est le réactif limitant`;
-      c.texte(s, HX + 205, HY[3], { couleur: 'jaune', taille: 18, align: 'center', max: 400 });
-      c.rect(HX - 6, HY[3] - 24, 416, 34, { couleur: 'jaune', largeur: 1.8 });
+      c.texte(s, HX - 6 + HW / 2, HY[3], { couleur: 'jaune', taille: 18 * TX, align: 'center', max: HW - 16 });
+      c.rect(HX - 6, HY[3] - 8 - 16 * TX, HW, 18 + 16 * TX, { couleur: 'jaune', largeur: 1.8 });
     });
-    c.repere('limitant', HX - 6, HY[3] - 24, 416, 34, 'le réactif limitant');
+    c.repere('limitant', HX - 6, HY[3] - 8 - 16 * TX, HW, 18 + 16 * TX, 'le réactif limitant');
   }
   return c.fin();
 }
@@ -130,7 +138,7 @@ const regl = window.Tableau.curseur({ id: 'n0I', label: 'n₀(I⁻) =', min: 1, 
 document.getElementById('reglage').replaceChildren(regl);
 
 const DER = window.Deroule({
-  id: 'cinetique_tableau_limitant', titre: 'Le réactif limitant', etapes, dessiner, voir,
+  id: 'cinetique_tableau_limitant', titre: 'Le réactif limitant', etapes, dessiner, voir, scene: { large: true },   // tableau large : la colonne des hypothèses s'allonge (disposer)
   params: () => ({ n0_iodure_mmol: P.n0I, conclusions: P.conclusions }),
   appliquer: p => {
     let ok = false;

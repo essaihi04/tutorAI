@@ -230,7 +230,9 @@ function agrandir(c, scene, M) {
 }
 /** Le titre interne de la figure : seulement hors tableau large (le titre de la diapositive le dit déjà), hors boîte. */
 function titreFigure(c, t, o) {
-  if (LARGE.actif) return;
+  // 18 novembre 2026 : plus de titre interne, même sur un petit tableau (le titre de la diapositive le dit ; au téléphone,
+  // il chevauchait les étiquettes du haut une fois le texte gardé à 15 px).
+  return;
   const g = LARGE.dansGauche; LARGE.dansGauche = true;
   try { c.texte(t, 14, 26, o); } finally { LARGE.dansGauche = g; }
 }
@@ -257,7 +259,8 @@ function couper(c, t, max, taille) {
 }
 function zoneEcriture(c, M, liste, ys, o = {}) {
   const S = M.S; let x = o.x ?? 14, max = o.max ?? 730, taille = o.taille ?? 17;
-  if (LARGE.actif) {   // tableau large : la colonne de gauche, chaque phrase à la ligne (le tuteur garde la phrase entière)
+  // une vue sans phrase écrite (18 novembre 2026, vitesse « calcul ») ne réserve pas de colonne vide : sa figure prend la largeur
+  if (LARGE.actif && liste.some(e => e.lignes.length)) {   // tableau large : la colonne de gauche, chaque phrase à la ligne (le tuteur garde la phrase entière)
     x = 14; max = LARGE.gauche - 18; taille = LARGE.taille; ys = LARGE.ys;
     liste = liste.map(e => ({ ...e, lignes: aGauche(c, () => e.lignes.flatMap(([t, col]) => couper(c, t, max, taille).map((l, i) => [l, col, i ? false : t]))) }));
   }
@@ -825,23 +828,22 @@ function vueTitrage(c, M) {
     if (enCours) for (let k = 0; k < 2; k++) { const ph = ((M.S.t * 2.2 + k * .5) % 1); Peint.goutte(ctx, BUR.x, BUR.yp + 4 + ph * (yS - BUR.yp - 6), [235, 240, 248, .3]); }
   });
   M.etape(c, 'burette', () => {
-    c.texte('S₂O₃²⁻', BUR.x - 16, 70, { couleur: 'blanc', taille: 16, align: 'right' });
-    c.texte('C = 0,020 mol/L', BUR.x - 16, 92, { couleur: 'blanc', taille: 15, align: 'right' });
+    // une seule ligne au-dessus de la burette (18 novembre 2026) : à 15 px à l'écran sur un petit tableau, l'ancienne
+    // étiquette alignée à droite de la burette sortait du cadre à gauche
+    c.texte('S₂O₃²⁻ : C = 0,020 mol/L', BUR.x, 36, { couleur: 'blanc', taille: 16, align: 'center' });
     c.texte('prélèvement (t = 8 min)', BT.x + BT.w / 2, 326, { couleur: 'blanc', taille: 15, align: 'center' });
   });
   if (M.commence('verser')) c.direct(() => c.texte(`V = ${fr(Vv, 1)} mL`, BUR.x - 16, 132, { couleur: M.commence('equivalence') && M.p('equivalence') >= 1 ? 'jaune' : 'blanc', taille: 17, align: 'right' }));
-  M.etape(c, 'equivalence', () => { c.texte('V_E = 12,6 mL', BUR.x - 16, 158, { couleur: 'jaune', taille: 18, align: 'right' }); c.texte('incolore', BT.x + BT.w + 18, 262, { couleur: 'jaune', taille: 15 }); });
+  M.etape(c, 'equivalence', () => { c.texte('V_E = 12,6 mL', BUR.x - 16, 158, { couleur: 'jaune', taille: 18, align: 'right' }); c.texte('incolore', BT.x + BT.w + 18, 290, { couleur: 'jaune', taille: 15 }); });
   M.etape(c, 'equation', () => { c.texte('équation du titrage :', PX, 74, { couleur: 'cyan', taille: 17 }); eqn(c, PX + 10, 102, 'I₂ + 2S₂O₃²⁻', '2I⁻ + S₄O₆²⁻', { taille: 18 }); });
   M.etape(c, 'relation', () => {
     c.texte('à l’équivalence : n(I₂) = C·V_E/2', PX, 140, { couleur: 'blanc', taille: 18 });
     c.texte('= 0,020 × 12,6·10⁻³ / 2 = 1,26·10⁻⁴ mol (prélèvement)', PX + 20, 166, { couleur: 'faible', taille: 16 });
     c.texte('dans le mélange : × 10', PX, 200, { couleur: 'blanc', taille: 18 });
-    c.texte('(10,0 mL prélevés sur 100 mL)', PX + 196, 200, { couleur: 'faible', taille: 15 });
   });
   M.etape(c, 'resultat', () => {
     c.rect(PX - 8, 220, 300, 40, { couleur: 'jaune', largeur: 2, arrondi: 8 });
     c.texte('x = n(I₂) = 1,26 mmol', PX + 6, 248, { couleur: 'jaune', taille: 20 });
-    c.texte('à t = 8 min', PX + 214, 248, { couleur: 'jaune', taille: 15 });
   });
   return zoneEcriture(c, M, [
     { nom: 'burette', lignes: [['le prélèvement de t = 8 min (10,0 mL, refroidi) contient du diiode I₂ : il est brun', 'blanc']] },

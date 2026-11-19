@@ -19,6 +19,25 @@
     // `scene` existe avant la craie : le premier redimensionnement la marque déjà « à redessiner ».
     const scene = { sale: true, boite: null, mesurant: false, L: VW };
     const craie = new window.Tableau.Craie(canvas, { onresize: () => { scene.sale = true; } });
+    /* Plancher du texte gardé à 15 px à l'écran (18 novembre 2026, « le texte est plus grand que la simulation » : sur un
+     * cadre de 230 px de haut, le kit réduisait le plancher jusqu'à 45 % et les étiquettes tombaient à ~9 px). Le kit
+     * réduit toujours un plancher plus haut (18 → 15 sur un petit tableau), mais jamais sous TAILLE_MIN. */
+    Object.defineProperty(craie, 'tailleMin', {
+      configurable: true,
+      get() {
+        const brut = this._tailleMinBrut || 0;
+        if (!brut) return brut;
+        const f = Math.min(1, Math.max(.45, Math.min((this.W || 900) / 900, (this.H || 400) / 400)));
+        // Très petit cadre (téléphone : le dessin de 760 de large réduit sous 0,55) : le plancher suit l'échelle, jamais
+        // sous 11 px — à 15 px, les étiquettes d'un dessin prévu pour 760 × 420 se chevaucheraient.
+        const s = Math.min((this.W || VW) / Math.max(VW, scene.L || VW), (this.H || VH) / VH);
+        const plancher = s >= .55 ? TAILLE_MIN : Math.max(11, TAILLE_MIN * s / .55);
+        const rendu = Math.max(Math.min(brut, plancher), brut * f);
+        this._tailleMinLu = [brut, rendu];
+        return rendu;
+      },
+      set(v) { const lu = this._tailleMinLu; this._tailleMinBrut = lu && v === lu[1] ? lu[0] : v; },
+    });
     /* Courbes de graphe nettes et lumineuses (17 novembre 2026, « couleurs vives, facile à lire ») : une courbe tracée
      * par craie.courbe avec `net: true` garde son écriture progressive et sa durée (même longueur), mais sans tremblé,
      * avec un halo doux de sa couleur. Les autres courbes (flèches, cartes) restent à la craie. */

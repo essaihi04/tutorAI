@@ -229,7 +229,9 @@ function agrandir(c, scene, M) {
 }
 /** Le titre interne de la figure : seulement hors tableau large (le titre de la diapositive le dit déjà), hors boîte. */
 function titreFigure(c, t, o) {
-  if (LARGE.actif) return;
+  // 18 novembre 2026 : plus de titre interne, même sur un petit tableau (le titre de la diapositive le dit ; au téléphone,
+  // il chevauchait les étiquettes du haut une fois le texte gardé à 15 px).
+  return;
   const g = LARGE.dansGauche; LARGE.dansGauche = true;
   try { c.texte(t, 14, 26, o); } finally { LARGE.dansGauche = g; }
 }
@@ -256,7 +258,8 @@ function couper(c, t, max, taille) {
 }
 function zoneEcriture(c, M, liste, ys, o = {}) {
   const S = M.S; let x = o.x ?? 14, max = o.max ?? 730, taille = o.taille ?? 17;
-  if (LARGE.actif) {   // tableau large : la colonne de gauche, chaque phrase à la ligne (le tuteur garde la phrase entière)
+  // une vue sans phrase écrite (18 novembre 2026, vitesse « calcul ») ne réserve pas de colonne vide : sa figure prend la largeur
+  if (LARGE.actif && liste.some(e => e.lignes.length)) {   // tableau large : la colonne de gauche, chaque phrase à la ligne (le tuteur garde la phrase entière)
     x = 14; max = LARGE.gauche - 18; taille = LARGE.taille; ys = LARGE.ys;
     liste = liste.map(e => ({ ...e, lignes: aGauche(c, () => e.lignes.flatMap(([t, col]) => couper(c, t, max, taille).map((l, i) => [l, col, i ? false : t]))) }));
   }

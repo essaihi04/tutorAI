@@ -229,7 +229,9 @@ function agrandir(c, scene, M) {
 }
 /** Le titre interne de la figure : seulement hors tableau large (le titre de la diapositive le dit déjà), hors boîte. */
 function titreFigure(c, t, o) {
-  if (LARGE.actif) return;
+  // 18 novembre 2026 : plus de titre interne, même sur un petit tableau (le titre de la diapositive le dit ; au téléphone,
+  // il chevauchait les étiquettes du haut une fois le texte gardé à 15 px).
+  return;
   const g = LARGE.dansGauche; LARGE.dansGauche = true;
   try { c.texte(t, 14, 26, o); } finally { LARGE.dansGauche = g; }
 }
@@ -256,7 +258,8 @@ function couper(c, t, max, taille) {
 }
 function zoneEcriture(c, M, liste, ys, o = {}) {
   const S = M.S; let x = o.x ?? 14, max = o.max ?? 730, taille = o.taille ?? 17;
-  if (LARGE.actif) {   // tableau large : la colonne de gauche, chaque phrase à la ligne (le tuteur garde la phrase entière)
+  // une vue sans phrase écrite (18 novembre 2026, vitesse « calcul ») ne réserve pas de colonne vide : sa figure prend la largeur
+  if (LARGE.actif && liste.some(e => e.lignes.length)) {   // tableau large : la colonne de gauche, chaque phrase à la ligne (le tuteur garde la phrase entière)
     x = 14; max = LARGE.gauche - 18; taille = LARGE.taille; ys = LARGE.ys;
     liste = liste.map(e => ({ ...e, lignes: aGauche(c, () => e.lignes.flatMap(([t, col]) => couper(c, t, max, taille).map((l, i) => [l, col, i ? false : t]))) }));
   }
@@ -579,39 +582,39 @@ function dessiner(c, M) {
       } },
     ], ZY);
   } else if (v === 'calcul') {
-    const L = 30, F = 170, T = 23;
+    const L = 30, F = 170, K = LARGE.actif ? 1.2 : 1, T = 23 * K;   // tableau large : la figure est bornée par la hauteur, l’écriture grossit (place libre en largeur)
     /* Compter en allumant (19 novembre 2026, règle 16) : les lignes du barème s’allument une à une (« 1) … 4) » écrits
      * devant), restent allumées doucement ; le total « 4 lignes » s’écrit avec le résultat. */
     const enC = etapeEnCours(M);
     [['relation', 62, 32], ['pente', 114, 54], ['application', 188, 32], ['resultat', 232, 50]].forEach(([nom, y, h]) => {
       if (!M.commence(nom)) return; const fort = enC === nom && !M.S.fait;
       c.direct(() => { const ctx = c.ctx; ctx.save(); ctx.fillStyle = fort ? 'rgba(250,204,21,.16)' : 'rgba(250,204,21,.06)'; ctx.strokeStyle = fort ? 'rgba(250,204,21,.9)' : 'rgba(250,204,21,.3)';
-        ctx.lineWidth = fort ? 2.2 : 1; ctx.beginPath(); ctx.roundRect(L - 8, y, 640, h, 7); ctx.fill(); ctx.stroke(); ctx.restore(); });
+        ctx.lineWidth = fort ? 2.2 : 1; ctx.beginPath(); ctx.roundRect(L - 8, y + h - h * K, 640 * K, h * K, 7); ctx.fill(); ctx.stroke(); ctx.restore(); });
     });
     vues = zoneEcriture(c, M, [
       { nom: 'relation', lignes: [], plus: () => {
-        c.texte('1) relation', L, 84, { couleur: 'faible', taille: 18 });
+        c.texte('1) relation', L, 84, { couleur: 'faible', taille: 18 * K });
         c.texte('v(t) = (1/V)·dx/dt', F, 84, { couleur: 'blanc', taille: T });
       } },
       { nom: 'pente', lignes: [], plus: () => {
-        c.texte('2) pente', L, 136, { couleur: 'faible', taille: 18 });
+        c.texte('2) pente', L, 136, { couleur: 'faible', taille: 18 * K });
         c.texte('(dx/dt)₀ = 0,25 mmol/min', F, 136, { couleur: 'vert', taille: T });
-        c.texte('pente de la tangente à t = 0 : (2,0 − 0)/(8 − 0)', F, 160, { couleur: 'vert', taille: 17 });
+        c.texte('pente de la tangente à t = 0 : (2,0 − 0)/(8 − 0)', F, 160, { couleur: 'vert', taille: 17 * K });
       } },
       { nom: 'application', lignes: [], plus: () => {
-        c.texte('3) application', L, 210, { couleur: 'faible', taille: 18 });
+        c.texte('3) application', L, 210, { couleur: 'faible', taille: 18 * K });
         c.texte('v(0) = (1/V)·(dx/dt)₀ = (1/0,100) × 0,25', F, 210, { couleur: 'blanc', taille: T });
       } },
       { nom: 'resultat', lignes: [], plus: () => {
-        c.texte('4) résultat', L, 264, { couleur: 'faible', taille: 18 });
-        c.rect(F - 10, 236, 360, 42, { couleur: 'jaune', largeur: 2, arrondi: 8 });
-        c.texte(`v(0) = 2,5 ${UV}`, F, 265, { couleur: 'jaune', taille: 25 });
-        c.texte('4 lignes', 664, 265, { couleur: 'jaune', taille: 18, align: 'right' });
+        c.texte('4) résultat', L, 264, { couleur: 'faible', taille: 18 * K });
+        c.rect(F - 10, 278 - 42 * K, 360 * K, 42 * K, { couleur: 'jaune', largeur: 2, arrondi: 8 });
+        c.texte(`v(0) = 2,5 ${UV}`, F, 265, { couleur: 'jaune', taille: 25 * K });
+        c.texte('4 lignes', F + 360 * K + 120, 265, { couleur: 'jaune', taille: 18 * K, align: 'right' });
       } },
       { nom: 'piege', lignes: [], plus: () => {
-        attention(c, L, 324, { h: 20 });
-        c.texte('V en litres : V = 100 mL = 0,100 L', F, 322, { couleur: 'orange', taille: 21 });
-        c.texte('(avec « 100 », on trouverait 0,0025 : faux)', F, 348, { couleur: 'orange', taille: 17 });
+        attention(c, L, 324, { h: 20 * K });
+        c.texte('V en litres : V = 100 mL = 0,100 L', F, 322, { couleur: 'orange', taille: 21 * K });
+        c.texte('(avec « 100 », on trouverait 0,0025 : faux)', F, 348, { couleur: 'orange', taille: 17 * K });
       } },
     ], ZY);
   } else if (v === 'diminue') {
