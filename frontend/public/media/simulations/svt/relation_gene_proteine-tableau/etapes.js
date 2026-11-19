@@ -50,13 +50,14 @@
      * mesurée sur toute la scène (plusieurs instants de 0 à fin, tout écrit), sans toucher à l'état : rien ne saute
      * pendant le déroulé. Une vue peut aussi déplacer des morceaux de son dessin sur la largeur (`blocs(L)`, plus bas). */
     function complet(fn) {
-      const t = S.t, vu = S.vu;
+      const t = S.t, vu = S.vu, saut = S.saut;
       try {
-        for (const f of [.2, .45, .7, .85, 1]) { S.t = V().fin * f; S.vu = {}; fn(); }
+        // (18 novembre 2026) mesurée au pixel : `saut` infini, tout ce qui est apparu à l'instant mesuré est déjà écrit
+        for (const f of [.2, .45, .7, .85, 1]) { S.t = V().fin * f; S.vu = {}; S.saut = Infinity; fn(); }
         // `encre: [x0, y0, x1, y1]` d'une vue : la peinture (hors craie, non mesurée) qui doit rester entière
         const e = V().encre; if (e) { scene.craie.point(e[0], e[1], 0); scene.craie.point(e[2], e[3], 0); }
       }
-      finally { S.t = t; S.vu = vu; }
+      finally { S.t = t; S.vu = vu; S.saut = saut; }
     }
     scene = window.GenetiqueTableau.Scene(canvas, (c) => { scene.cadre(def.graine || 17); dessinerVue(c); return c.fin(); }, { large: true, ajuster: true, complet });
     /* Tableau large (L ≥ 1000) : une vue qui déclare `blocs` { nom: [x0, y0, x1, y1, zmax?] } et `disposition`

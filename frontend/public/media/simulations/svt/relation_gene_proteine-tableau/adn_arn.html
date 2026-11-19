@@ -200,12 +200,12 @@ function dessiner(c) {
 const canvas = $('canvas');
 // Agrandissement (15 novembre 2026) : cadre au format du tableau, la boîte de l'encre de la scène complète le remplit.
 const scene = window.GenetiqueTableau.Scene(canvas, dessiner, { large: true, ajuster: true,
-  complet: fn => { const t = S.t, app = ecrit.garder(); S.t = FIN; try { fn(); } finally { S.t = t; ecrit.remettre(app); } } });
+  complet: fn => { const t = S.t, app = ecrit.garder(); S.t = FIN; ecrit.tout = true; try { fn(); } finally { S.t = t; ecrit.tout = false; ecrit.remettre(app); } } });
 // Ce qui apparaît pendant la scène s'écrit à la craie à partir de cet instant (comme le professeur qui l'écrit en le disant).
 const ecrit = (() => {
   const APP = {};
   return {
-    ecrire(c, cle, fn) { if (!(cle in APP)) APP[cle] = (performance.now() - scene.ouvert) / 1000; const cur = c.cur; c.depuis(APP[cle]); try { fn(); } finally { c.cur = cur; } },
+    ecrire(c, cle, fn) { if (!(cle in APP)) APP[cle] = this.tout ? -1e9 : (performance.now() - scene.ouvert) / 1000; /* mesure au pixel : tout écrit */ const cur = c.cur; c.depuis(APP[cle]); try { fn(); } finally { c.cur = cur; } },
     oublier() { for (const k of Object.keys(APP)) delete APP[k]; scene.sale = true; },
     garder() { const a = { ...APP }; for (const k of Object.keys(APP)) delete APP[k]; return a; },
     remettre(a) { for (const k of Object.keys(APP)) delete APP[k]; Object.assign(APP, a); },
