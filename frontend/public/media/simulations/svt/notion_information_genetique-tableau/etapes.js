@@ -350,7 +350,7 @@
     /** Point du cadre → point du dessin d'origine (poignées glissées). */
     function versOrigine(X, Y) {
       const v = V();
-      if (!estLarge(v)) return [X - (scene.L - 760) / 2, Y];
+      if (!estLarge(v)) return scene.zoom ? [X, Y] : [X - (scene.L - 760) / 2, Y];
       const aire = q => (q[2] - q[0]) * (q[3] - q[1]);
       const tri = Object.entries(disposer(v, scene.L, scene.craie)).filter(([, p]) => !p.texte).sort(([a], [b]) => aire(v.blocs[a]) - aire(v.blocs[b]));   // le plus petit d'abord
       for (const [nom, p] of tri) {
@@ -378,11 +378,23 @@
       const texte = Object.getPrototypeOf(c).texte;
       c.texte = function (t, tx, ty, o = {}) { return texte.call(this, t, tx, ty, ty <= 30 && tx <= 20 && o.couleur === 'cyan' ? { ...o, alpha: 0 } : o); };
       try {
-        if (scene.L > 760) { c.ctx.save(); c.ctx.translate((scene.L - 760) / 2, 0); try { v.dessiner(c, k()); } finally { c.ctx.restore(); } }
+        // zoom sur l'encre (commun.js, `ajuster`) : le cadre est déjà posé sur la boîte du dessin, pas de recentrage
+        if (scene.L > 760 && !scene.zoom && !scene.mesurant) { c.ctx.save(); c.ctx.translate((scene.L - 760) / 2, 0); try { v.dessiner(c, k()); } finally { c.ctx.restore(); } }
         else v.dessiner(c, k());
       } finally { delete c.texte; }
       return c.fin();
-    }, { large: true });
+    }, {
+      large: true,
+      /* « La simulation d'abord » (18 novembre 2026) : une vue dessinée d'un seul tenant (sans blocs) remplit le cadre —
+       * la boîte de son encre, mesurée à plusieurs instants de la scène (tout écrit), est agrandie à la taille du cadre. */
+      ajuster: true,
+      complet(fn) {
+        const t = S.t, vu = S.vu, saut = S.saut, v = V();
+        const instants = [...new Set([...Object.values(v.moments || {}), ...[.25, .5, .75, 1].map(f => v.fin * f)])].filter(Number.isFinite);
+        try { for (const ti of instants) { S.t = Math.min(v.fin, ti); S.vu = {}; S.saut = Infinity; fn(); } }
+        finally { S.t = t; S.vu = vu; S.saut = saut; }
+      },
+    });
     const FIN = () => V().fin;
     scene.avancer = dt => {
       if (!S.running) return false;
@@ -409,7 +421,7 @@
     function resume() { if (S.running) return; if (S.fait || S.t >= FIN()) return start(); S.running = true; $('run').textContent = 'Pause'; bulle($('feedback'), 'Observe…'); pont.noter('resume'); pont.emettre(); }
     function poser(p, rejouer) {
       const cles = [];
-      if (p.vue && def.vues[p.vue] && p.vue !== S.vue) { S.vue = p.vue; cles.push('vue'); S.vu = {}; S.saut = null; S.t = 0; S.fait = false; }
+      if (p.vue && def.vues[p.vue] && p.vue !== S.vue) { S.vue = p.vue; cles.push('vue'); S.vu = {}; S.saut = null; S.t = 0; S.fait = false; scene.boite = null; }
       for (const [n, d] of Object.entries(def.parametres || {})) {
         if (!(n in p)) continue;
         const v = d.lire ? d.lire(p[n], S) : p[n];
@@ -425,7 +437,7 @@
       const v = V(); let nom = p.moment;
       if (nom && !(nom in v.moments)) {   // un moment d’une autre vue : on change de vue
         const autre = noms.find(n => def.vues[n].moments && nom in def.vues[n].moments);
-        if (autre) { S.vue = autre; S.vu = {}; S.saut = null; S.t = 0; S.fait = false; } else nom = null;
+        if (autre) { S.vue = autre; S.vu = {}; S.saut = null; S.t = 0; S.fait = false; scene.boite = null; } else nom = null;
       }
       const vv = V(), ok = nom && nom in vv.moments;
       let rejoue = false;
@@ -455,6 +467,7 @@
     }
     function setParameters(p) {
       const cles = poser(p || {});
+      if (cles.length && !cles.includes('vue')) scene.remesurer();   // un réglage peut agrandir le dessin : la boîte suit
       pont.noter('set_parameters', { ...p });
       if (cles.length) {
         const v = V();
@@ -472,7 +485,7 @@
       window.Tableau.glisser(canvas, {
         toucher: (x, y) => { const [lx, ly] = loc(x, y); return pg.toucher(lx, ly, k()); },
         bouger: (id, x, y) => { const [lx, ly] = loc(x, y); pg.bouger(id, lx, ly, k(), { poser, playUntil, setTime, start }); scene.sale = true; },
-        lacher: (id) => { if (pg.lacher) pg.lacher(id, k(), { poser, playUntil, setTime, start }); pont.noter('glisser', { poignee: id, parameters: { ...P } }); pont.emettre(); scene.sale = true; },
+        lacher: (id) => { if (pg.lacher) pg.lacher(id, k(), { poser, playUntil, setTime, start }); scene.remesurer(); pont.noter('glisser', { poignee: id, parameters: { ...P } }); pont.emettre(); scene.sale = true; },
       });
     }
 
