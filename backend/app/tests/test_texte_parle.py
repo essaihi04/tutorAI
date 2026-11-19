@@ -66,3 +66,15 @@ def test_nombre_fr(n, dit):
 def test_aucun_caractere_invisible_dans_les_regles():
     # un « \b » mal échappé devient 0x08 et la règle ne s'applique jamais (16/11 et 19/11/2026)
     assert chr(8) not in _f.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("ecrit, dit", [
+    # 19/11/2026 : « fœtus » mal lu ; « le fétusse » choisi à l'écoute
+    ("كتمشي حتى للفيتوس", "كتمشي حتى ل le fétusse"),
+    ("كتمشي فالفيتوس", "كتمشي ف le fétusse"),
+    ("الفيتوس", "le fétusse"),
+    ("l'épaisseur du fœtus", "l'épaisseur du fétusse"),
+    ("le foetus", "le fétusse"),
+])
+def test_foetus(ecrit, dit):
+    assert tp.parle(ecrit) == dit

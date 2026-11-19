@@ -91,3 +91,30 @@ nombres en lettres, aucun symbole, aucune unité en symbole. Donc :
   version de `texte_parle.py` sur toutes les pistes de `pistes_cours.py`), les régénérer avec
   `refaire_verifie.py` (clés `deck/type/id`, contrôle MoulSot des boucles et des fins), poser en montant la version
   du mp3, puis déployer pour que le kernel en direct reprenne les règles.
+
+## 5. Les mots compliqués : les faire écouter AVANT de générer
+
+Demande de l'utilisateur (19/11/2026, après « fœtus ») : « ajouter au skill, pour générer des voix, les mots pareils
+ou tous les mots compliqués ». Avant de générer les voix d'un cours (nouvelles pistes ou textes changés) :
+
+1. **Lister les mots à risque** des textes à générer : `python -X utf8 scripts/voix/verifier_mots.py <deck> [ids]`
+   (mots vus moins de 3 fois à l'entraînement) et, en plus, à l'œil : termes scientifiques rares (fœtus,
+   échographie, siemens…), mots français écrits en lettres arabes (« للفيتوس »), unités et préfixes collés, sigles,
+   noms propres, symboles.
+2. **Pour chacun, 2 à 4 écritures à l'écoute** (`ecoute_prononciation.py`, § 1) dans une phrase réelle du cours :
+   l'écriture actuelle, une écriture phonétique française (« le fétusse », « éko », « si mènsse »), le mot arabe que
+   les profs disent quand il existe dans le corpus (« الجنين », 8 fois), et le mot coupé en mots connus
+   (« micro farad »). Envoyer les mp3 à l'utilisateur ; **son oreille choisit** (MoulSot aide seulement à éliminer).
+3. **Écrire la règle choisie** dans `PRONONCIATION` (+ test), puis seulement générer les voix.
+4. Garder ici la liste des écritures choisies, pour ne pas reposer la question :
+
+| Mot écrit | Dit par la voix | Date |
+|---|---|---|
+| hématies | émassi | 15/11/2026 |
+| cliquer, clique | kliké, klik | 15/11/2026 |
+| siemens (milli, micro) | si mènsse | 16/11/2026 |
+| henry (unité) | anri | 16/11/2026 |
+| micros | micro | 19/11/2026 |
+| écho | éko | 19/11/2026 |
+| microfarad, microseconde… | micro farad, micro seconde | 19/11/2026 |
+| fœtus, للفيتوس, فالفيتوس | le fétusse | 19/11/2026 |

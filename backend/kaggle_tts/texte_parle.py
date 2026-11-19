@@ -169,6 +169,11 @@ PRONONCIATION = [
     # 19/11/2026 (signalé par l'utilisateur) : « micros » lu avec le s final ; « écho » lu parfois avec « ch »
     (re.compile(r"\bmicros\b", re.I), "micro"),
     (re.compile(r"\b[ée]chos?\b", re.I), "éko"),
+    # 19/11/2026 : « fœtus » (jamais entendu, écrit aussi للفيتوس) sortait « météorite », « le vitre » ;
+    # « le fétusse » choisi à l'écoute par l'utilisateur (« الجنين » aussi essayé)
+    (re.compile(r"(?<![\u0600-\u06ff])([فبلو]?)(?:ال|ل)فيتوس(?![\u0600-\u06ff])"),
+     lambda mt: (mt.group(1) + " " if mt.group(1) else "") + "le fétusse"),
+    (re.compile(r"\bf(?:œ|oe)tus\b", re.I), "fétusse"),
     # « siemens » (vu une fois à l'entraînement) sortait « milliseconde » ; « si mènsse » choisi à l'écoute (16/11/2026)
     (re.compile(r"\b(milli|micro)?siemens\b", re.I), lambda mt: (mt.group(1) or "") + "si mènsse"),
     (re.compile(r"\b(milli)?henrys?\b"), lambda mt: (mt.group(1) or "") + "anri"),   # unité (H, mH) ; pas le nom propre
