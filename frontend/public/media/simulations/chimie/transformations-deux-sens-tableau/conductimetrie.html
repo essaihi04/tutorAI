@@ -411,6 +411,8 @@ function ETAPES(v) {
     relation: [
       { nom: 'formule', anim: .2, motif: 'σ = Σ λᵢ·[Xᵢ]', bulle: () => 'Chaque ion apporte sa part à σ.' },
       { nom: 'deux_ions', anim: .2, motif: 'σ = λ(H₃O⁺)·[H₃O⁺] + λ(CH₃COO⁻)·[CH₃COO⁻] (HO⁻ négligés)', bulle: () => 'Ici, deux ions comptent.' },
+      { nom: 'ion_1', anim: .6, motif: 'on compte les ions : 1, les ions H₃O⁺ (terme λ(H₃O⁺)·[H₃O⁺])', bulle: () => '1 : les ions H₃O⁺.' },
+      { nom: 'ion_2', anim: .6, motif: 'on compte les ions : 2, les ions CH₃COO⁻ (terme λ(CH₃COO⁻)·[CH₃COO⁻]) ; 2 ions', bulle: () => '2 : les ions éthanoate. Deux ions.' },
       { nom: 'egalite', anim: .2, motif: 'le tableau d’avancement : [CH₃COO⁻] = [H₃O⁺]', bulle: () => 'Le tableau d’avancement nous aide.' },
       { nom: 'factoriser', anim: .2, motif: 'σ = (λ(H₃O⁺) + λ(A⁻))·[H₃O⁺]', bulle: () => 'On met [H₃O⁺] en facteur.' },
     ],
@@ -529,8 +531,21 @@ function vueRelation(c, M) {
   M.etape(c, 'deux_ions', () => {
     eqn2(c, 40, 134, 'CH₃COOH + H₂O', 'CH₃COO⁻ + H₃O⁺', { couleur: 'cyan', taille: 19 });
     c.texte('σ = λ(H₃O⁺)·[H₃O⁺] + λ(CH₃COO⁻)·[CH₃COO⁻]', 40, 172, { taille: 23 });
-    c.texte('(ions HO⁻ négligés : très peu nombreux dans une solution acide)', 40, 198, { couleur: 'faible', taille: 16 });
+    c.texte('(ions HO⁻ négligés :', 470, 118, { couleur: 'faible', taille: 16 });
+    c.texte('très peu nombreux en milieu acide)', 470, 138, { couleur: 'faible', taille: 16 });
   });
+  /* On compte les ions en allumant (19 novembre 2026, simulations-au-tableau règle 16) : chaque terme de la somme s’allume à
+   * son tour avec son numéro « 1 », « 2 » à la craie dessous, et reste allumé ; le total « 2 ions » s’écrit à la fin. */
+  {
+    const A = window.Allumage, tS = 23, yS = 172, t1 = 'λ(H₃O⁺)·[H₃O⁺]', t2 = 'λ(CH₃COO⁻)·[CH₃COO⁻]';
+    const x1 = 40 + larg(c, 'σ = ', tS), w1 = larg(c, t1, tS), x2 = x1 + w1 + larg(c, ' + ', tS), w2 = larg(c, t2, tS);
+    if (M.commence('ion_1')) c.direct(() => A.rect(c.ctx, x1 - 4, yS - tS - 1, w1 + 8, tS + 10, M.commence('ion_2') ? .55 : 1));
+    if (M.commence('ion_2')) c.direct(() => A.rect(c.ctx, x2 - 4, yS - tS - 1, w2 + 8, tS + 10, 1));
+    M.etape(c, 'ion_1', () => window.Allumage.numero(c, 1, x1 + w1 / 2, yS + 30, { taille: 17 }));
+    M.etape(c, 'ion_2', () => { window.Allumage.numero(c, 2, x2 + w2 / 2, yS + 30, { taille: 17 }); c.texte('→ 2 ions', x2 + w2 + 14, yS + 30, { couleur: 'jaune', taille: 19 }); });
+    c.repere('ion_1', x1 - 4, yS - tS - 1, w1 + 8, tS + 44, `1 : les ions H₃O⁺, terme λ(H₃O⁺)·[H₃O⁺]${M.vu('ion_1') ? '' : ' (au moment « ion_1 »)'}`);
+    c.repere('ion_2', x2 - 4, yS - tS - 1, w2 + 8, tS + 44, `2 : les ions CH₃COO⁻, terme λ(CH₃COO⁻)·[CH₃COO⁻] ; 2 ions en tout${M.vu('ion_2') ? '' : ' (au moment « ion_2 »)'}`);
+  }
   M.etape(c, 'egalite', () => {
     const x0 = 40, y0 = 214, cw = [110, 100, 100], rh = 30;
     c.rect(x0, y0, cw[0] + cw[1] + cw[2], 2 * rh, { couleur: 'faible', largeur: 1.4, arrondi: 4 });
@@ -550,6 +565,7 @@ function vueRelation(c, M) {
   });
   const vues = [];
   for (const [n, t] of [['formule', 'σ = Σ λᵢ·[Xᵢ]'], ['deux_ions', 'CH₃COOH + H₂O ⇌ CH₃COO⁻ + H₃O⁺ ; σ = λ(H₃O⁺)·[H₃O⁺] + λ(CH₃COO⁻)·[CH₃COO⁻] (ions HO⁻ négligés)'],
+    ['ion_1', 'on compte : 1, les ions H₃O⁺'], ['ion_2', 'on compte : 2, les ions CH₃COO⁻ ; 2 ions'],
     ['egalite', 'tableau : état final x_f pour CH₃COO⁻ et H₃O⁺, donc [CH₃COO⁻] = [H₃O⁺]'], ['factoriser', 'σ = (λ(H₃O⁺) + λ(A⁻))·[H₃O⁺], A⁻ = CH₃COO⁻']]) if (M.commence(n)) vues.push(t);
   return vues;
 }
@@ -588,6 +604,14 @@ function vueCalcul(c, M) {
   return vues;
 }
 function vueNational(c, M) {
+  /* Allumages (19 novembre 2026, règle 17) : chaque étape allume les données qu’elle utilise — vif pendant son étape, doux après. */
+  const A = window.Allumage, vif = (nom, apres) => (M.commence(nom) ? (apres && M.commence(apres) ? .35 : 1) : 0);
+  const allume = (a, x, y, w, h) => { if (a > 0) c.direct(() => A.rect(c.ctx, x, y, w, h, a)); };
+  allume(vif('conversion', 'application'), 26, 106, 186, 26);                                           // C = 1,0·10⁻³ mol/L, à convertir
+  allume(vif('application', 'resultat'), 26, 141, 530, 17);                                             // λ₁ et λ₂ (hors de la zone du conductimètre)
+  allume(vif('application', 'resultat'), 206, 106, 178, 26);                                            // σ = 8,6·10⁻³ S/m (donnée lue)
+  allume(vif('application', 'resultat'), 54, 262, 360, 26);                                             // C = 1,0 mol/m³
+  allume(vif('resultat'), 26, 322, 340, 30);                                                            // l’application numérique
   if (M.commence('donnees')) {
     appareil(c, AN, M.p('donnees') > .5 ? '8,6 mS/m' : '- - -', { taille: 20 });
     c.texte('σ mesurée', AN.x + AN.w / 2, AN.y + AN.h + 20, { couleur: 'faible', taille: 15, align: 'center' });

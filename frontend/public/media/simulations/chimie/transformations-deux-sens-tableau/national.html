@@ -109,6 +109,11 @@ function permis(D, nom) {
   return noms.indexOf(nom) <= q;
 }
 const montre = (D, nom) => D.commence(nom) && permis(D, nom);
+/* Allumages (19 novembre 2026, simulations-au-tableau règle 17, professeur règle 45) : chaque étape allume sur la figure ce
+ * qu’elle utilise (la donnée lue, la case du tableau, le point de la courbe) — vif pendant son étape, doux ensuite. */
+const vif = (D, nom, apres) => (montre(D, nom) ? (apres && D.commence(apres) ? .35 : 1) : 0);
+const allume = (c, a, x, y, w, h) => { if (a > 0) c.direct(() => window.Allumage.rect(c.ctx, x, y, w, h, a)); };
+const allumeRond = (c, a, x, y, r) => { if (a > 0) c.direct(() => window.Allumage.rond(c.ctx, x, y, r, a)); };
 
 /* ── Mise en page serrée (téléphone en paysage, 724 × 350 : le texte reste ≥ 15 px à l'écran) ─────────────────────
  * Tout le dessin tient dans le rectangle CADRE (700 × 270 du cadre 760 × 420) ; deux points invisibles à ses coins fixent la
@@ -133,6 +138,10 @@ function phmetre(c, E, B, p, valeur, id, label) {
 /* ── q1 : l’équation avec l’eau ─────────────────────────────────── */
 const B1 = { x: 40, y: 104, w: 104, h: 104 }, E1 = { x: 40, y: 24, w: 104, h: 44 };
 function vueQ1(c, D) {
+  allume(c, vif(D, 'mesure', 'equation'), E1.x - 5, E1.y - 5, E1.w + 10, E1.h + 10);                 // le pH-mètre qui se stabilise
+  allume(c, vif(D, 'si_totale', 'compare'), 6, 257, 172, 28);                                          // C_a, utilisé si totale
+  allume(c, vif(D, 'compare', 'fleche'), E1.x - 5, E1.y - 5, E1.w + 10, E1.h + 10);                  // 2,38 mesuré…
+  allume(c, vif(D, 'compare', 'fleche'), 216, 122, 300, 28);                                           // … comparé à 1,0
   if (D.commence('solution')) {
     becher(c, B1);
     D.ecrire(c, 'solution');
@@ -147,6 +156,7 @@ function vueQ1(c, D) {
     const [g, d] = window.Etats.cotes('HCOOH + H₂O', 'HCOO⁻ + H₃O⁺');
     const t = 21, wg = c.largeurTexte(g, t);
     c.texte(g, X, 56, { taille: t });
+    allume(c, vif(D, 'fleche'), X + wg + 5, 27, 52, 44);                                               // la flèche trouvée
     c.rect(X + wg + 10, 32, 42, 34, { couleur: 'orange', largeur: 1.8, arrondi: 6 });
     if (!(montre(D, 'fleche') && D.vu('fleche'))) c.texte('?', X + wg + 31, 58, { couleur: 'orange', taille: 23, align: 'center' });
     else c.texte('⇌', X + wg + 31, 58, { couleur: 'jaune', taille: 23, align: 'center' });
@@ -177,6 +187,11 @@ function vueQ1(c, D) {
 const COLS = [20, 128, 176, 316, 424, 572, 720];
 const LIGNES = [22, 56, 90, 124];
 function vueQ2(c, D) {
+  const caseQ2 = (a, i, j) => allume(c, a, COLS[j] + 3, LIGNES[i] + 3, COLS[j + 1] - COLS[j] - 6, LIGNES[i + 1] - LIGNES[i] - 6);
+  caseQ2(vif(D, 'xmax', 'xf'), 1, 2); caseQ2(vif(D, 'xmax', 'xf'), 2, 2);                              // C·V et C·V − x_max = 0
+  caseQ2(vif(D, 'xf', 'taux'), 2, 5);                                                                   // n_f(H₃O⁺) = x_f
+  allume(c, vif(D, 'taux', 'application'), 14, 138, 600, 28); allume(c, vif(D, 'taux', 'application'), 14, 172, 446, 28);   // x_max et x_f
+  allume(c, vif(D, 'application'), 20, 212, 316, 72);                                                  // la relation appliquée à S_a
   if (D.commence('tableau')) {
     D.ecrire(c, 'tableau');
     for (const y of LIGNES) c.ligne(COLS[0], y, COLS[6], y, { couleur: 'faible', largeur: 1.3 });
@@ -249,6 +264,14 @@ function tableauSujet(c, D, vals) {
   c.repere('tableau', C[0] - 4, L[0] - 4, C[3] - C[0] + 8, L[3] - L[0] + 8, 'le tableau du sujet');
 }
 function vueQ3(c, D) {
+  const caseQ3 = (a, i, j) => allume(c, a, TB.col[j] + 3, TB.lig[i] + 3, TB.col[j + 1] - TB.col[j] - 6, TB.lig[i + 1] - TB.lig[i] - 6);
+  allume(c, vif(D, 'mesure_1', 'mesure_2'), F1.x - 5, F1.y - 5, F1.w + 10, F1.h + 10); caseQ3(vif(D, 'mesure_1', 'mesure_2'), 1, 1);
+  allume(c, vif(D, 'mesure_2', 'courbe'), F2.x - 5, F2.y - 5, F2.w + 10, F2.h + 10); caseQ3(vif(D, 'mesure_2', 'courbe'), 1, 2);
+  caseQ3(vif(D, 'lecture_1', 'lecture_2'), 1, 1); caseQ3(vif(D, 'lecture_1', 'lecture_2') * (D.vu('lecture_1') ? 1 : 0), 2, 1);
+  if (D.p('lecture_1') >= .5) allumeRond(c, vif(D, 'lecture_1', 'lecture_2'), gx(2.8), gy(tauDe(2.8)), 11);
+  caseQ3(vif(D, 'lecture_2', 'tableau'), 1, 2);
+  if (D.p('lecture_2') >= .5) allumeRond(c, vif(D, 'lecture_2', 'tableau'), gx(3.6), gy(tauDe(3.6)), 11);
+  caseQ3(vif(D, 'tableau'), 2, 2);
   if (D.commence('solutions')) {
     becher(c, S1, .34); becher(c, S2, .2);
     D.ecrire(c, 'solutions');
@@ -289,6 +312,11 @@ function molecules(c, B, n, graine) {
 }
 function vueQ4(c, D) {
   const L = R4.lig, C = R4.col;
+  const caseQ4 = (a, i, j) => allume(c, a, C[j] + 3, L[i] + 3, C[j + 1] - C[j] - 6, L[i + 1] - L[i] - 6);
+  for (const i of [1, 2, 3]) caseQ4(vif(D, 'c1', 'c2'), i, 1);                                          // pH₁ et τ₁ → C₁
+  for (const i of [1, 2, 3]) caseQ4(vif(D, 'c2', 'compare'), i, 2);                                     // pH₂ et τ₂ → C₂
+  for (const j of [1, 2]) caseQ4(vif(D, 'compare', 'bareme'), 3, j);                                    // C₂ < C₁
+  for (const i of [2, 3]) for (const j of [1, 2]) caseQ4(vif(D, 'bareme'), i, j);                       // C₂ < C₁ et τ₂ > τ₁
   if (D.commence('rappel')) {
     D.ecrire(c, 'rappel');
     for (const y of L) c.ligne(C[0], y, C[3], y, { couleur: 'faible', largeur: 1.3 });

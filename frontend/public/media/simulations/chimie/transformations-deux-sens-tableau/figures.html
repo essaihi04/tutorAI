@@ -242,8 +242,9 @@ const GROUPES = ['axes', 'courbe', 'lecture', 'calcul'];
  * plus grande écriture (22 → 17 px) qui fait tenir tout le panneau de droite, puis le plus grand graphe. */
 function disposer(L, c, s) {
   if (L < 1000) {
-    Object.assign(G, { x0: 66, y0: 300, w: 380, h: 236 }); PX = 520; PW = 230; ZY = [352, 376, 400];
-    D = { large: false, L, titre: 20, axes: 15, nomAxe: 16, eti: 17, lec: 15, pt: 16, pas: 23, ecart: 8, y0: 66, bas: 17, xBas: 14, maxBas: 730 };
+    /* 19 novembre 2026 (règles 9 et 18) : pas de titre interne (la diapositive le dit), le graphe prend la hauteur. */
+    Object.assign(G, { x0: 66, y0: 336, w: 430, h: 286 }); PX = 548; PW = 200; ZY = [384, 408];
+    D = { large: false, L, titre: 20, axes: 16, nomAxe: 17, eti: 18, lec: 17, pt: 16, pas: 23, ecart: 8, y0: 44, bas: 17, xBas: 14, maxBas: 730 };
     return;
   }
   const u = px => px / (s || 1), HAUT = 420, M0 = 12;
@@ -333,7 +334,7 @@ function lissee(pts) {
 const FIGS = {
   fig_2017N: {
     session: '2017 N', diapo: 'e6', titre: 'National 2017 N : deux estérifications',
-    xNom: 't (min)', tmax: 75, tTop: 75, dt: 20, tLab: [20, 40, 60], gt: 5,
+    xNom: 't (min)', tmax: 75, tTop: 75, dt: 20, tLab: [20, 40], gt: 5,   // comme le sujet : 20 et 40
     yNom: 'x (mol)', ymax: .37, yTop: .35, dy: .1, gy: .025, yLab: [.1, .2, .3], dec: 1,
     courbes: [
       { f: lissee([[0, 0], [2, .032], [5, .07], [8, .1], [10, .116], [20, .165], [40, .194], [60, .199], [75, .2]]), fin: 75, col: 'bleu', nom: '(1)', lab: [62, .145] },
@@ -390,6 +391,18 @@ const CLES = Object.keys(FIGS);
 /* ── Déroulé : axes, courbe, lecture, calcul ─────────────────────────────── */
 const etapesDe = cle => {
   const f = FIGS[cle];
+  /* 2017 N (19 novembre 2026, simulations-au-tableau règle 17) : la démonstration se joue SUR la figure. Le panneau et les
+   * phrases du bas s’effacent quand elle commence ; chaque étape allume ce qu’elle utilise (le pointillé x_max, le palier
+   * de la courbe (1), celui de la courbe (2), puis les deux hauteurs comparées pour τ₁ et τ₂), un repère par étape. */
+  if (cle === 'fig_2017N') return [
+    { nom: 'axes', anim: .4, motif: `les axes : ${f.yNom} en ordonnée, ${f.xNom} en abscisse`, bulle: () => `Figure du national ${f.session}.` },
+    { nom: 'courbe', anim: 2.8, motif: 'les 2 courbes (1), (2)', bulle: () => 'On trace comme sur le sujet.' },
+    { nom: 'xmax', anim: 1, motif: 'x_max = 0,3 mol : le pointillé, le même pour les deux expériences', bulle: () => 'x_max = 0,3 mol (n₀ = 0,3 mol).' },
+    { nom: 'palier1', anim: 1.6, motif: 'le palier de la courbe (1) : x_f₁ = 0,2 mol', bulle: () => 'Le palier (1) : x_f₁ = 0,2 mol.' },
+    { nom: 'palier2', anim: 1.6, motif: 'le palier de la courbe (2) : x_f₂ = 0,3 mol, sur x_max', bulle: () => 'Le palier (2) : x_f₂ = 0,3 mol.' },
+    { nom: 'tau1', anim: 1.2, motif: 'τ₁ : la hauteur x_f₁ = 0,2 comparée à x_max = 0,3 ; τ₁ ≈ 0,67 < 1, limitée', bulle: () => 'τ₁ = 0,2/0,3 ≈ 0,67.' },
+    { nom: 'tau2', anim: 1.2, motif: 'τ₂ : la hauteur x_f₂ = 0,3 égale à x_max ; τ₂ = 1, totale', bulle: () => 'τ₂ = 0,3/0,3 = 1.' },
+  ];
   return [
     { nom: 'axes', anim: .4, motif: `les axes : ${f.yNom} en ordonnée, ${f.xNom} en abscisse`, bulle: () => `Figure du national ${f.session}.` },
     { nom: 'courbe', anim: 2.8, motif: f.courbes.length > 1 ? `les ${f.courbes.length} courbes ${f.courbes.map(c => c.nom).join(', ')}` : 'la courbe du sujet', bulle: () => 'On trace comme sur le sujet.' },
@@ -420,8 +433,7 @@ function axes(c) {
     const v = k * F.dy; c.ligne(G.x0 - 4, Y(v), G.x0 + 4, Y(v), { largeur: 1.4, duree: .03 });
     if (proche(v, F.yLab)) c.texte(v === 1 ? '1' : fr(v, F.dec), G.x0 - 8, Y(v) + 5, { couleur: 'faible', taille: D.axes, align: 'right', duree: .1 });
   }
-  if (D.large) c.texte(F.xNom, G.x0 + G.w + 14, G.y0 + 6 + D.axes, { couleur: 'blanc', taille: D.nomAxe, align: 'right' });   // sous la flèche, sur la ligne des graduations
-  else c.texte(F.xNom, G.x0 + G.w - 10, G.y0 + 30, { couleur: 'blanc', taille: D.nomAxe });
+  c.texte(F.xNom, G.x0 + G.w + 14, G.y0 + 6 + D.axes, { couleur: 'blanc', taille: D.nomAxe, align: 'right' });   // sous la flèche, sur la ligne des graduations
   c.texte(F.yNom, G.x0 + 10, G.y0 - G.h - 2, { couleur: 'blanc', taille: D.nomAxe });
 }
 function trace(c, f, fin, p, col) {
@@ -430,10 +442,62 @@ function trace(c, f, fin, p, col) {
   c.courbe(u => [X(u * tm), Y(f(u * tm))], Math.max(16, Math.round(160 * p)), { couleur: col, largeur: 2.6, net: true });
 }
 
+/* ── 2017 N : la démonstration sur la figure (allumages, valeurs écrites là où on les lit) ─────────────── */
+const DEMO17 = ['xmax', 'palier1', 'palier2', 'tau1', 'tau2'];
+const enDemo = M => M.S.vue === 'fig_2017N' && M.commence('xmax');
+function echant(f, a, b, n = 40) { const pts = []; for (let i = 0; i <= n; i++) { const t = a + (b - a) * i / n; pts.push([X(t), Y(f(t))]); } return pts; }
+/** La colonne de droite de la démonstration : x_f₂ et τ₂ à la hauteur du palier (2), τ₁ à celle du palier (1), sans
+ *  chevauchement même quand le kit grossit l'écriture (petit écran : plancher de 15 px). */
+function colonne17(c) {
+  const e = Math.max(D.eti, (c.tailleMin || 0) / (c.echelle || 1)), y2a = Y(.3) + e * .35, y2b = y2a + e * 1.25;
+  const y1a = Math.max(Y(.2) + e * .35, y2b + e * 1.55);
+  return { e, y2a, y2b, y1a, y1b: y1a + e * 1.25 };
+}
+function demo2017(c, M) {
+  const A = window.Allumage, ctx = c.ctx, [k1, k2] = F.courbes, xe = X(F.tTop);
+  const xa1 = X(70), xa2 = X(73.5);                    // les deux hauteurs comparées (flèches verticales)
+  const fort = nom => (M.commence(nom) ? 1 : .45);      // ce que l’étape en cours utilise est plus allumé
+  c.direct(() => {
+    if (M.commence('xmax')) {
+      const a = M.p('xmax'), act = M.commence('tau1') ? 1 : M.commence('palier1') ? .4 : 1;
+      A.trait(ctx, [[G.x0, Y(.3)], [G.x0 + (xe - G.x0) * a, Y(.3)]], act);
+      pointille(c, G.x0, Y(.3), xe, Y(.3), a, 'jaune');
+    }
+    if (M.commence('palier1')) {
+      const a = M.p('palier1'), act = M.commence('palier2') && !M.commence('tau1') ? .4 : M.commence('tau2') ? .4 : 1;
+      A.trait(ctx, echant(k1.f, 32, 32 + 43 * Math.min(1, a * 1.6)), act, '#60a5fa');
+      pointille(c, X(32), Y(.2), G.x0, Y(.2), clamp(a * 1.6 - .6, 0, 1), 'bleu');
+      if (a >= 1) c.point(G.x0, Y(.2), 4.5, 'bleu');
+    }
+    if (M.commence('palier2')) {
+      const a = M.p('palier2'), act = M.commence('tau1') && !M.commence('tau2') ? .4 : 1;
+      A.trait(ctx, echant(k2.f, 18, 18 + 57 * Math.min(1, a * 1.6)), act, '#c084fc');
+      if (a >= .6) c.point(X(46), Y(.3), 4.5, 'violet');
+    }
+    if (M.commence('tau1')) {
+      const a = M.p('tau1');
+      c.ligne(xa1, G.y0, xa1, G.y0 - (G.y0 - Y(.2)) * clamp(a * 2, 0, 1), { couleur: 'bleu', largeur: 3 });
+      if (a >= .5) c.ligne(xa2, G.y0, xa2, G.y0 - (G.y0 - Y(.3)) * clamp(a * 2 - 1, 0, 1), { couleur: 'jaune', largeur: 3 });
+    }
+    if (M.commence('tau2')) {
+      const a = M.p('tau2');
+      A.trait(ctx, [[xa2 + 6, G.y0], [xa2 + 6, G.y0 - (G.y0 - Y(.3)) * a]], 1, '#c084fc');
+    }
+  });
+  const t = D.lec, px = PX, pw = PW, L = colonne17(c);
+  M.etape(c, 'xmax', () => c.texte('x_max = 0,3 mol', X(20), Y(.3) - 10, { couleur: 'jaune', taille: t }));
+  M.etape(c, 'palier1', () => c.texte('x_f₁ = 0,2 mol', X(20), Y(.2) - 10, { couleur: 'bleu', taille: t }));
+  M.etape(c, 'palier2', () => c.texte('x_f₂ = 0,3 mol', px, L.y2a, { couleur: 'violet', taille: D.eti, max: pw }));   // au bout du palier (2)
+  /* τ₁ et τ₂ s’écrivent à droite de la figure, à la hauteur où on les lit (les deux paliers). */
+  M.etape(c, 'tau1', () => c.texte('τ₁ ≈ 0,67 < 1', px, L.y1a, { couleur: 'bleu', taille: D.eti, max: pw }));
+  M.etape(c, 'tau1', () => c.texte('limitée', px, L.y1b, { couleur: 'bleu', taille: D.eti, max: pw }));
+  M.etape(c, 'tau2', () => c.texte('τ₂ = 1 : totale', px, L.y2b, { couleur: 'violet', taille: D.eti, max: pw }));
+  if (M.commence('tau1')) c.direct(() => { A.rect(ctx, px - 6, L.y1a - L.e * 1.05, Math.min(pw, larg(c, 'τ₁ ≈ 0,67 < 1', L.e)) + 12, L.y1b - L.y1a + L.e * 1.45, M.commence('tau2') ? .4 : 1); });
+  if (M.commence('tau2')) c.direct(() => { A.rect(ctx, px - 6, L.y2a - L.e * 1.05, Math.min(pw, larg(c, 'τ₂ = 1 : totale', L.e)) + 12, L.y2b - L.y2a + L.e * 1.45, 1); });
+}
+
 function dessiner(c, M) {
   MO = M; F = FIGS[M.S.vue]; M.scene.cadre(73); disposer(M.scene.L, c, M.scene.s);
-  if (!D.large) c.texte(F.titre, 14, 28, { couleur: 'cyan', taille: D.titre, max: 470 });   // tableau large : le titre de la diapositive suffit
-  if (!D.large) c.texte(`diapositive ${F.diapo}`, D.L - 14, 28, { couleur: 'faible', taille: 15, align: 'right' });
   if (M.commence('axes')) c.direct(() => quadrillage(c, lisse(M.p('axes'))));
   c.direct(() => {
     if (M.commence('courbe')) F.courbes.forEach(k => trace(c, k.f, k.fin, M.p('courbe'), k.col));
@@ -455,9 +519,9 @@ function dessiner(c, M) {
     courbe: () => F.courbes.forEach(k => { if (k.lab) { const t = D.eti, w = larg(c, k.nom, t) + 12, x = X(k.lab[0]), y = Y(k.lab[1]); c.rect(x - 6, y - t, w, t + 7, { couleur: k.col, largeur: 1.4, arrondi: 4 }); c.texte(k.nom, x, y, { couleur: k.col, taille: t }); } }),
     lecture: () => F.lectures.forEach(l => c.texte(l.lab, X(l.labAt[0]), Y(l.labAt[1]), { couleur: l.col, taille: D.lec, align: l.ph == null ? 'left' : 'right' })),
   };
-  const ecrites = [], panneau = {};
+  const ecrites = [], panneau = {}, demo = enDemo(M), du17 = M.S.vue === 'fig_2017N';
   for (const nom of ['axes', 'courbe', 'lecture', 'calcul']) {
-    const lignes = F.panneau[nom]; if (!lignes) continue;
+    const lignes = F.panneau[nom]; if (!lignes || demo || (du17 && !['axes', 'courbe'].includes(nom))) continue;   // la démonstration efface le panneau
     const [x0, y0, mx] = placeDe(nom), vues = lignesDe(nom);
     panneau[nom] = () => vues.forEach(([t, col], i) => {
       if (t === null) eqf(c, x0, y0 + i * D.pas, 'plus diluée', 'τ plus grand', { couleur: col, taille: D.pt });
@@ -468,9 +532,10 @@ function dessiner(c, M) {
   M.panneau = ecrites;
   // tableau large : chaque phrase va à la ligne dans la colonne de gauche ; sinon une ligne en bas
   const lignesBas = t => (D.large ? couper(c, t, D.maxBas, D.bas) : [t]);
-  M.vues = zoneEcriture(c, M, etapesDe(M.S.vue).map(e => ({ nom: e.nom, lignes: lignesBas(F.bas[e.nom]).map(t => [t, e.nom === 'calcul' ? 'jaune' : 'blanc']),
+  M.vues = zoneEcriture(c, M, etapesDe(M.S.vue).filter(e => F.bas[e.nom]).map(e => ({ nom: e.nom, lignes: demo ? [] : lignesBas(F.bas[e.nom]).map(t => [t, e.nom === 'calcul' ? 'jaune' : 'blanc']),
     plus: () => { if (e.nom === 'axes') axes(c); etiquettes[e.nom] && etiquettes[e.nom](); panneau[e.nom] && panneau[e.nom](); } })), ZY,
     { x: D.xBas, max: D.maxBas, taille: D.bas });
+  if (du17) demo2017(c, M);
   reperes(c, M);
   return c.fin();
 }
@@ -486,6 +551,18 @@ function reperes(c, M) {
   R('axe_x', G.x0, G.y0 - 10, G.w + 60, 40, `l’axe des abscisses : ${F.xNom}, de 0 à ${nb(F.tTop)}`);
   R('axe_y', G.x0 - 50, G.y0 - G.h - 20, 60, G.h + 30, `l’axe des ordonnées : ${F.yNom}, de 0 à ${nb(F.yTop)}`);
   R('courbe', G.x0, Y(F.yTop) - 4, X(F.tTop) - G.x0 + 8, G.y0 - Y(F.yTop) + 4, `${F.courbes.length > 1 ? 'les courbes ' + F.courbes.map(k => k.nom).join(' et ') : 'la courbe τ en fonction du pH'}${q('courbe')}`);
+  if (M.S.vue === 'fig_2017N') {
+    const t = D.lec, xe = X(F.tTop);
+    R('xmax', G.x0, Y(.3) - t - 14, xe - G.x0, t + 20, `le pointillé x_max = 0,3 mol (n₀ = 0,3 mol, les deux expériences)${q('xmax')}`);
+    R('palier1', X(20) - 4, Y(.2) - t - 14, xe - X(20) + 8, t + 22, `le palier de la courbe (1) : x_f₁ = 0,2 mol${q('palier1')}`);
+    R('point', X(32), Y(.2) - 12, xe - X(32), 24, `le palier de la courbe (1) : x_f₁ = 0,2 mol${q('palier1')}`);
+    R('palier2', X(18), Y(.3) - D.eti, PX + PW - X(18), D.eti * 1.6, `le palier de la courbe (2) : x_f₂ = 0,3 mol, sur x_max${q('palier2')}`);
+    R('valeur', PX - 6, Y(.3) - D.eti, PW + 10, D.eti * 1.6, `le palier de la courbe (2) : x_f₂ = 0,3 mol = x_max${q('palier2')}`);
+    R('tau1', X(68), Y(.2) - D.eti, PX + PW - X(68), G.y0 - Y(.2) + D.eti, `τ₁ : x_f₁ = 0,2 mol comparé à x_max = 0,3 mol ; τ₁ ≈ 0,67 < 1, la réaction (1) est limitée${q('tau1')}`);
+    R('tau2', X(72), Y(.3) - D.eti, PX + PW - X(72), G.y0 - Y(.3) + D.eti, `τ₂ : x_f₂ = 0,3 mol = x_max ; τ₂ = 1, la réaction (2) est totale${q('tau2')}`);
+    R('calcul', PX - 6, Y(.3) - D.eti, PW + 10, Y(.2) - Y(.3) + D.eti * 3, `les deux taux : τ₁ ≈ 0,67 (limitée) ; τ₂ = 1 (totale)${q('tau2')}`);
+    return;
+  }
   const P = F.point; R('point', X(P.t) - 14, Y(P.y) - 14, 28, 28, `${P.dit}${q('lecture')}`);
   const [xv, yv, wv, hv] = panneauR('lecture');
   R('valeur', xv, yv, wv, hv, `les valeurs lues : ${F.valeur}${q('lecture')}`);
@@ -498,6 +575,11 @@ function voir(M) {
   const f = FIGS[M.S.vue], m = [`Figure ${M.S.vue} (national ${f.session}, diapositive ${f.diapo}), ${M.etat()}. Étape en cours : ${etapeEnCours(M)}.`];
   m.push(`Graphe à la craie : ${f.yNom} en ordonnée de 0 à ${nb(f.yTop)}, ${f.xNom} en abscisse de 0 à ${nb(f.tTop)}.`);
   if (M.commence('courbe')) m.push(`Courbe${f.courbes.length > 1 ? 's' : ''} tracée${f.courbes.length > 1 ? 's' : ''} (${M.vu('courbe') ? 'en entier' : 'en cours'}) : ${f.resume}`);
+  if (M.S.vue === 'fig_2017N') {
+    if (enDemo(M)) m.push('Démonstration sur la figure (panneau et phrases effacés) :');
+    const dits = { xmax: 'le pointillé x_max = 0,3 mol allumé et écrit', palier1: 'le palier de (1) allumé, x_f₁ = 0,2 mol écrit sur la figure', palier2: 'le palier de (2) allumé, « x_f₂ = 0,3 mol » écrit au bout du palier, à droite', tau1: 'les hauteurs 0,2 (bleu) et 0,3 (jaune) comparées : « τ₁ ≈ 0,67 < 1 limitée » écrit à droite', tau2: '« τ₂ = 1 : totale » écrit à droite, sous x_f₂' };
+    for (const n of DEMO17) if (M.commence(n)) m.push(`${dits[n]}${M.vu(n) ? '' : ' (en cours)'}.`);
+  }
   if (M.commence('lecture')) m.push(`Lecture (pointillés) : ${f.valeur}.`);
   if (M.commence('calcul')) m.push(`Calcul écrit : ${f.calc}.`);
   if (M.panneau && M.panneau.length) m.push(`Écrit à droite : ${M.panneau.map(s => `« ${s} »`).join(' ; ')}.`);
@@ -518,7 +600,15 @@ const MOT = Moteur({
   appliquer: (p, M) => { const r = {}; if (CLES.includes(p.fig)) r.vue = p.fig; else if (CLES.includes(p.vue)) r.vue = p.vue; r.change = !!(r.vue && r.vue !== M.S.vue); return r; },
   schema: { fig: CLES.join(' | ') + ' (change de figure et relance)' },
   texte: 'Figures des examens nationaux du chapitre, dessinées comme les sujets : ' + CLES.map(k => `${k} (${FIGS[k].session}) : ${FIGS[k].resume} Lecture : ${FIGS[k].valeur}. Calcul : ${FIGS[k].calc}.`).join(' '),
-  explications: Object.fromEntries(CLES.map(k => [k, [
+  explications: Object.fromEntries(CLES.map(k => [k, k === 'fig_2017N' ? [
+    { repere: 'axe_y', texte: 'En ordonnée : x (mol).' },
+    { repere: 'axe_x', texte: 'En abscisse : t (min).' },
+    { repere: 'xmax', texte: 'x_max = 0,3 mol : le même pour les deux expériences.' },
+    { repere: 'palier1', texte: 'Le palier de la courbe (1) : x_f₁ = 0,2 mol.' },
+    { repere: 'palier2', texte: 'Le palier de la courbe (2) : x_f₂ = 0,3 mol, sur x_max.' },
+    { repere: 'tau1', texte: 'τ₁ = 0,2/0,3 ≈ 0,67 < 1 : la réaction (1) est limitée.' },
+    { repere: 'tau2', texte: 'τ₂ = 0,3/0,3 = 1 : la réaction (2) est totale.' },
+  ] : [
     { repere: 'axe_y', texte: `En ordonnée : ${FIGS[k].yNom}.` },
     { repere: 'axe_x', texte: `En abscisse : ${FIGS[k].xNom}.` },
     { repere: 'courbe', texte: FIGS[k].bas.courbe },

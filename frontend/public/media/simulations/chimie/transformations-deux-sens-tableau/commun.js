@@ -456,3 +456,41 @@
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', installer); else installer();
 })();
+
+/* ── Allumages (19 novembre 2026 ; simulations-au-tableau règles 16 et 17, professeur règles 44-45) ─────────────────
+ * Ce qu'une étape de démonstration utilise S'ALLUME sur la figure (halo jaune doux, trait épais lumineux) ; quand on
+ * compte, chaque élément s'allume à son tour avec son numéro « 1, 2, 3… » écrit à côté à la craie et reste allumé.
+ * Dessin brut sur craie.ctx, à appeler dans craie.direct(() => …) (coordonnées du cadre).
+ *   Allumage.rect(ctx, x, y, w, h, a)       : un halo jaune sur une case, une ligne, un mot (a : 0 → 1, l'intensité)
+ *   Allumage.trait(ctx, pts, a, couleur)     : un trait lumineux épais sous une courbe, un segment, un palier
+ *   Allumage.rond(ctx, x, y, r, a)          : un halo rond sur un point
+ *   Allumage.numero(c, n, x, y, o)          : le numéro du comptage, à la craie (jaune, dans un petit rond) */
+window.Allumage = {
+  JAUNE: '#facc15',
+  rect(ctx, x, y, w, h, a = 1) {
+    if (!(a > 0)) return;
+    ctx.save(); ctx.globalAlpha = Math.min(1, a);
+    ctx.fillStyle = 'rgba(250,204,21,.16)'; ctx.strokeStyle = 'rgba(250,204,21,.85)'; ctx.lineWidth = 2;
+    ctx.shadowColor = '#facc15'; ctx.shadowBlur = 12;
+    const r = Math.min(8, h / 3, w / 3);
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, w, h, r); else ctx.rect(x, y, w, h);
+    ctx.fill(); ctx.stroke(); ctx.restore();
+  },
+  trait(ctx, pts, a = 1, couleur = '#facc15') {
+    if (!(a > 0) || !pts || pts.length < 2) return;
+    ctx.save(); ctx.globalAlpha = .55 * Math.min(1, a); ctx.strokeStyle = couleur; ctx.lineWidth = 9; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.shadowColor = couleur; ctx.shadowBlur = 14;
+    ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (const p of pts.slice(1)) ctx.lineTo(p[0], p[1]); ctx.stroke(); ctx.restore();
+  },
+  rond(ctx, x, y, r, a = 1) {
+    if (!(a > 0)) return;
+    ctx.save(); ctx.globalAlpha = Math.min(1, a); ctx.fillStyle = 'rgba(250,204,21,.22)'; ctx.strokeStyle = '#facc15'; ctx.lineWidth = 2;
+    ctx.shadowColor = '#facc15'; ctx.shadowBlur = 12; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.restore();
+  },
+  numero(c, n, x, y, o = {}) {
+    const t = o.taille ?? 17, r = t * .72;
+    c.cercle(x, y - t * .34, r, { couleur: o.couleur ?? 'jaune', largeur: 1.6, duree: .12 });
+    c.texte(String(n), x, y, { couleur: o.couleur ?? 'jaune', taille: t, align: 'center', duree: .08 });
+  },
+};

@@ -201,6 +201,9 @@ const ETAPES = {
   ],
   puissance: [
     { nom: 'dix', duree: 1.2, motif: '10¹ = 10, 10² = 100, 10³ = 1000' },
+    { nom: 'zero_1', duree: .7, motif: 'on compte les zéros de 1 000 : 1' },
+    { nom: 'zero_2', duree: .7, motif: 'on compte les zéros de 1 000 : 2' },
+    { nom: 'zero_3', duree: .9, motif: 'on compte les zéros de 1 000 : 3 ; 3 zéros, l’exposant 3' },
     { nom: 'negatif', duree: 1.6, motif: 'puissance négative : chaque pas divise par dix' },
     { nom: 'ecriture', duree: 1.2, motif: '4,0·10⁻⁴ = 0,00040' },
     { nom: 'log', duree: 1.2, motif: 'log(10⁻³) = −3 : le log donne l’exposant' },
@@ -472,10 +475,24 @@ const rgx = e => RG.x + 10 + (-e) / 7 * (RG.w - 20);   // 10⁰ à gauche, 10⁻
 function decimal(e) { if (e >= 0) return fr(10 ** e, 0); const n = -e; return '0,' + '0'.repeat(n - 1) + '1'; }
 function vuePuissance(c, D) {
   const ctx = c.ctx, e = R.exposant;
+  /* « 1 000 » écrit à part, à droite du reste : on compte ses zéros en les allumant un à un (19 novembre 2026,
+   * simulations-au-tableau règle 16) — halo, numéro 1, 2, 3 dessous à la craie, le total « 3 zéros » à la fin. */
+  const XM = 440, w0 = 28, xMille = XM + 10, x0z = xMille + 30;   // chiffres de 1 000 espacés : un numéro sous chacun
   ecrire(c, D, 'dix', () => {
-    c.texte('10¹ = 10      10² = 100      10³ = 1 000', 380, 70, { couleur: 'blanc', taille: 19, align: 'center' });
-    c.texte('l’exposant compte les zéros', 380, 94, { couleur: 'faible', taille: 15, align: 'center' });
+    c.texte('10¹ = 10      10² = 100      10³ =', XM, 70, { couleur: 'blanc', taille: 21, align: 'right' });
+    c.texte('1', xMille + 6, 70, { couleur: 'blanc', taille: 24, align: 'center' });
+    for (let k = 0; k < 3; k++) c.texte('0', x0z + k * w0 + w0 / 2, 70, { couleur: 'blanc', taille: 24, align: 'center' });
     c.repere('dix', 160, 50, 440, 52, 'puissances positives');
+  });
+  for (let k = 1; k <= 3; k++) {
+    const nom = `zero_${k}`, xz = x0z + (k - 1) * w0;
+    if (D.commence(nom)) c.direct(() => window.Allumage.rect(ctx, xz + 2, 47, w0 - 4, 30, D.commence(`zero_${k + 1}`) || (k === 3 && D.commence('negatif')) ? .6 : 1));
+    ecrire(c, D, nom, () => window.Allumage.numero(c, k, xz + w0 / 2, 102, { taille: 15 }));
+    c.repere(nom, xz - 4, 48, w0 + 8, 60, `le zéro n° ${k} de 1 000${D.vu(nom) ? '' : ` (au moment « ${nom} »)`}`);
+  }
+  ecrire(c, D, 'zero_3', () => {
+    c.texte('→ 3 zéros', x0z + 3 * w0 + 16, 70, { couleur: 'jaune', taille: 19 });
+    c.texte('l’exposant compte les zéros', 380, 124, { couleur: 'faible', taille: 15, align: 'center' });
   });
   ecrire(c, D, 'negatif', () => {
     c.direct(() => regle(ctx, RG.x, RG.y, RG.w));

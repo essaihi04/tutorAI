@@ -41,7 +41,7 @@ const ftau = t => (t < .1 ? fr(t, 3) : fr(t, 2));
 const fC = C => sci(C, 1);
 // Loupe : 25 places sur une grille 5 × 5 ; celles qui ont réagi sont prises dans cet ordre (mélangé, fixe).
 const ORDRE = [12, 3, 21, 8, 16, 0, 24, 6, 18, 10, 14, 2, 22, 5, 19, 9, 1, 23, 7, 15, 11, 4, 20, 13, 17];
-const LP = { x: 280, y: 200, r: 80, pas: 25 };
+const LP = { x: 264, y: 200, r: 80, pas: 25 };   // (19/11) un peu à gauche : les numéros des lignes 1, 2, 3 à droite de la loupe
 const COUL = { acide: [236, 236, 230], base: [139, 92, 246], oxonium: [244, 114, 182] };   // blanc, violet, rose (H₃O⁺ porte le H⁺ rose du lexique)
 const BE = { x: 40, y: 150, w: 110, h: 120 };
 const R = { x: 372, ligne0: 112, dy: 32, base: 336, ech: 150, bx: [420, 500, 580, 660], lb: 40 };
@@ -132,7 +132,12 @@ function dessinerVue(c, D, large) {
   ETAPESC.forEach((e, i) => {
     const y = R.ligne0 + i * R.dy, mm = mesure(e.C), fini = D.p(e.nom) > .75;
     if (fini) {
+      /* Les lignes, une à une (19 novembre 2026, simulations-au-tableau règle 16) : la ligne dite s’allume avec sa barre,
+       * son numéro 1, 2, 3 à la craie à sa gauche ; elle reste allumée (doucement) quand on passe à la suivante. */
+      const suiv = ETAPESC[i + 1], a = suiv && D.commence(suiv.nom) || D.commence('barres') ? .4 : 1;
+      c.direct(() => { window.Allumage.rect(c.ctx, R.x - 5, y - 19, 388, 26, a); window.Allumage.rect(c.ctx, R.bx[i] - 4, R.base - mm.tau * R.ech - 26, R.lb + 8, mm.tau * R.ech + 30, a); });
       D.ecrire(c, e.nom);
+      window.Allumage.numero(c, i + 1, R.x - 18, y, { taille: 14 });
       c.texte(`${fC(e.C)} : pH = ${fr(mm.pH, 1)} → τ = 10^{−${fr(mm.pH, 1)}} / ${fC(e.C)} = ${ftau(mm.tau)}`, R.x, y, { couleur: 'cyan', taille: 15, max: 380 });
       c.repere(LIGNES[i], R.x - 6, y - 20, 386, 28, `la ligne ${i + 1}`);
     }
