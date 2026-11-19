@@ -65,6 +65,11 @@ const visible = (t = S.t) => ({ fiole: S.libre ? 1 : clamp((t - .1) / .6), geige
 const R1 = { x: 8, y: 34, w: 420, h: 272 }, R2 = { x: 440, y: 34, w: 312, h: 272 };
 const FIOLE = { x: 44, y: 78, w: 64, h: 150 };
 const TUBE = { x: 132, y: 152, w: 118, r: 13 };
+/** Taille de police (unités du dessin) qui fait au moins 15 px à l’écran, pour le texte peint hors craie (afficheur). */
+const auMoins15 = (ctx, t) => {
+  let px = 15; try { px = scene.craie.tailleMin || 15; } catch (e) { /* scène pas encore créée */ }   // le plancher de la craie (plus bas sur un téléphone)
+  const m = ctx.getTransform(); return Math.max(t, px / Math.max(1e-6, Math.hypot(m.a, m.b) / (devicePixelRatio || 1)));
+};
 const BOITE = { x: 272, y: 52, w: 140, h: 118 }, LCD = { x: 284, y: 66, w: 116, h: 42 };
 const PISTE = { x0: 40, x1: 360, y: 288 }, kj = (PISTE.x1 - PISTE.x0) / 40;
 const G = { ox: 486, oy: 262, kt: 6.4, ka: .44 };                   // graphe : 6,4 px par jour, 0,44 px par Bq
@@ -149,8 +154,10 @@ function peindreCompteur(ctx, al, t) {
   ctx.font = '600 30px Consolas, "Courier New", monospace'; ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = 'rgba(134,239,172,.12)'; ctx.fillText('888', LCD.x + LCD.w - 8, LCD.y + 33);
   ctx.fillStyle = '#86efac'; ctx.shadowColor = '#22c55e'; ctx.shadowBlur = 8; ctx.fillText(String(c.n), LCD.x + LCD.w - 8, LCD.y + 33); ctx.shadowBlur = 0;
-  ctx.font = '12px Consolas, "Courier New", monospace'; ctx.textAlign = 'left'; ctx.fillStyle = 'rgba(134,239,172,.7)';
-  ctx.fillText(`${fr(c.chrono, 2)} s`, LCD.x + 6, LCD.y + 14);
+  // le chrono, sous l’afficheur (18 novembre 2026 : à 12 px dans l’afficheur, il tombait à 10 px à l’écran ; 15 px au moins)
+  const tChrono = auMoins15(ctx, 13);
+  ctx.font = `${tChrono}px Consolas, "Courier New", monospace`; ctx.textAlign = 'left'; ctx.fillStyle = 'rgba(134,239,172,.85)';
+  ctx.fillText(`${fr(c.chrono, 2)} s`, LCD.x + 2, LCD.y + LCD.h + 4 + tChrono * .8);
   // Le voyant : il s’allume à chaque désintégration détectée (le « clic » visuel).
   const on = (c.actif || (S.libre && S.running)) && hasard(Math.floor(t / .07)) < .8;
   const vx = BOITE.x + BOITE.w - 16, vy = BOITE.y + BOITE.h - 16;
@@ -166,7 +173,8 @@ function peindreCalendrier(ctx) {
   ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.fillRect(x - w / 2 + 3, y + 3, w, h);
   ctx.fillStyle = '#f8fafc'; ctx.beginPath(); ctx.roundRect(x - w / 2, y, w, h, 3); ctx.fill();
   ctx.fillStyle = '#dc2626'; ctx.beginPath(); ctx.roundRect(x - w / 2, y, w, 11, [3, 3, 0, 0]); ctx.fill();
-  ctx.fillStyle = '#fff'; ctx.font = '8px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('JOUR', x, y + 9);
+  // (le mot « JOUR » de l’en-tête, 8 px — 7 px à l’écran —, est retiré le 18 novembre 2026 : l’axe dit déjà « jours »)
+  ctx.textAlign = 'center';
   ctx.fillStyle = '#111827'; ctx.font = '700 20px Consolas, "Courier New", monospace'; ctx.fillText(String(Math.round(cal())), x, y + 33);
   ctx.fillStyle = '#475569'; for (const dx of [-12, 12]) { ctx.beginPath(); ctx.arc(x + dx, y + 1, 2, 0, Math.PI * 2); ctx.fill(); }
   ctx.restore();

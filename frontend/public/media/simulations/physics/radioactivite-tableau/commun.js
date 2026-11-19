@@ -19,6 +19,63 @@
     // `scene` existe avant la craie : le premier redimensionnement la marque déjà « à redessiner ».
     const scene = { sale: true, boite: null, mesurant: false, L: VW };
     const craie = new window.Tableau.Craie(canvas, { onresize: () => { scene.sale = true; } });
+    /* Plancher VRAI de 15 px à l'écran (18 novembre 2026, « le texte est plus grand que la simulation », écran de bureau
+     * peu haut ~1360 × 560) : le kit baisse son plancher jusqu'à 45 % quand le canvas fait moins de 900 × 400 px
+     * (getter `tailleMin` de tableau.js) ; dans le lecteur, le cadre ne fait que 280 à 350 px de haut, et les étiquettes
+     * tombaient à 9-11 px. Sur la craie de ce dossier (rien de partagé n'est changé), la valeur posée est la valeur
+     * rendue dès que le canvas fait au moins 640 × 260 px (le cadre du lecteur sur un écran de bureau, même bas) ; en
+     * dessous (téléphone en paysage, canvas ~530 × 195), le plancher baisse avec le cadre, jamais sous 75 % (11 px) :
+     * le dessin de 760 × 420 n'y a pas la place d'écrire tout à 15 px sans chevauchement (le kit descendait à 45 %). */
+    Object.defineProperty(craie, 'tailleMin', {
+      get() { const v = this._plancher15 || 0; return v && v * Math.min(1, Math.max(.75, Math.min((this.W || 640) / 640, (this.H || 260) / 260))); },
+      set(v) { this._plancher15 = v; }, configurable: true });
+    /* Indices et exposants (62 % de la ligne) : jamais sous le plancher non plus (N₀, 10²⁰, e^(−λt) restaient à 9 px).
+     * Même écriture que le kit et exposants.js, sur cette craie seulement ; une page peut encore remplacer ces fonctions
+     * (national.html, bilan.html le font avec le même calcul). */
+    const CHIFFRES = { '⁻': '−', '⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9' };
+    const EXPO = t => String(t).replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, g => '^{' + [...g].map(ch => CHIFFRES[ch]).join('') + '}');
+    const petitDe = (k, t) => Math.max(t * .62, k.echelle && k.tailleMin ? k.tailleMin / k.echelle : 0);
+    craie._largeur = function (s, taille, gras) {
+      const c = this.ctx, T = window.Tableau;
+      return T.Craie.segments(EXPO(s)).reduce((w, seg) => { c.font = `${gras ? '700 ' : ''}${seg.sub || seg.sup ? petitDe(this, taille) : taille}px ${T.POLICE}`; return w + c.measureText(seg.t).width; }, 0);
+    };
+    /* ᴬ_Z X (noyaux.js) : A et Z, tenus au plancher, s'écartent d'autant (sinon, agrandis, ils se chevauchent :
+     * « ²⁰⁸₈₂Pb » écrit « 208 » sur « 82 ») ; même calcul que national.html. */
+    const azT = (k, t) => Math.max(t * .6, k.echelle && k.tailleMin ? k.tailleMin / k.echelle : 0);
+    const lg = (k, s, t) => { k.ctx.font = `${t}px ${window.Tableau.POLICE}`; return k.ctx.measureText(String(s).replace('-', '−')).width; };
+    craie.largeurNucleide = function (X, A, Z, taille = 18) { const p = azT(this, taille); return Math.max(lg(this, A, p), lg(this, Z, p)) + 1.5 + lg(this, X, Math.max(taille, azT(this, 0))); };
+    craie.nucleide = function (X, A, Z, x, y, o = {}) {
+      const taille = o.taille ?? 18, p = azT(this, taille), plus = p - taille * .6;
+      const wAZ = Math.max(lg(this, A, p), lg(this, Z, p)), xs = x + wAZ + 1.5, cAZ = o.couleurAZ || o.couleur, d = o.duree != null ? o.duree / 3 : undefined;
+      this.texte(String(A).replace('-', '−'), xs - 1, y - taille * .42 - plus * .9, { taille: p, couleur: cAZ, align: 'right', duree: d, gras: o.gras });
+      this.texte(String(Z).replace('-', '−'), xs - 1, y + taille * .22 + plus * .5, { taille: p, couleur: cAZ, align: 'right', duree: d, gras: o.gras });
+      this.texte(X, xs, y, { taille, couleur: o.couleur, duree: d, gras: o.gras });
+      return xs + lg(this, X, Math.max(taille, azT(this, 0)));
+    };
+    craie._texteIndices = function (s, x, y, o, taille) {
+      const c = this.ctx, T = window.Tableau, segs = T.Craie.segments(s), police = t => `${o.gras ? '700 ' : ''}${t}px ${T.POLICE}`;
+      const petit = petitDe(this, taille), tailleDe = seg => (seg.sub || seg.sup ? petit : taille);
+      const total = segs.reduce((w, seg) => { c.font = police(tailleDe(seg)); return w + c.measureText(seg.t).width; }, 0);
+      if (o.max && total > o.max) return this._texteIndices(s, x, y, { ...o, max: 0 }, Math.max(10, taille * o.max / total));
+      const plain = segs.map(seg => seg.t).join('');
+      const part = this._part(o.duree ?? Math.max(.1, plain.length / 16));
+      if (part <= 0) return this;
+      let reste = part < 1 ? Math.max(1, Math.ceil(part * plain.length)) : plain.length;
+      c.fillStyle = this.couleur(o.couleur); c.globalAlpha = o.alpha ?? .96; c.textBaseline = o.base || 'alphabetic';
+      c.shadowColor = 'rgba(255,255,255,.25)'; c.shadowBlur = 1; c.textAlign = 'left';
+      let px = o.align === 'center' ? x - total / 2 : o.align === 'right' ? x - total : x;
+      for (const seg of segs) {
+        if (reste <= 0) break;
+        const t = seg.t.slice(0, reste); reste -= seg.t.length;
+        c.font = police(tailleDe(seg));
+        c.fillText(t, px, y + (seg.sub ? taille * .28 : seg.sup ? -taille * .42 : 0));
+        px += c.measureText(t).width;
+        if (t.length < seg.t.length) break;
+      }
+      if (part < 1) this.tip = [px, y - taille * .3];
+      c.shadowBlur = 0; c.globalAlpha = 1;
+      return this;
+    };
     /* La boîte de l'encre (coordonnées du cadre) : l'image complète dessinée une fois, traits et textes relevés. */
     function mesurer() {
       const b = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };

@@ -55,6 +55,11 @@ const FIN = M.fin;
 const R1 = { x: 8, y: 34, w: 440, h: 290 }, R2 = { x: 458, y: 34, w: 294, h: 290 };
 const PAN = [{ x: 14, w: 140 }, { x: 158, w: 140 }, { x: 302, w: 140 }], PY = 40, PH = 278;
 const SOL = 268;
+/** Taille de police (unités du dessin) qui fait au moins 15 px à l’écran, pour le texte peint hors craie (afficheur). */
+const auMoins15 = (ctx, t) => {
+  let px = 15; try { px = scene.craie.tailleMin || 15; } catch (e) { /* scène pas encore créée */ }   // le plancher de la craie (plus bas sur un téléphone)
+  const m = ctx.getTransform(); return Math.max(t, px / Math.max(1e-6, Math.hypot(m.a, m.b) / (devicePixelRatio || 1)));
+};
 const BOITE = { x: 312, y: 92, w: 88, h: 54 }, LCD = { x: 320, y: 100, w: 72, h: 28 };
 const REGLE = { x0: 330, x1: 432, y: 178 }, xDeA = a => REGLE.x0 + (a - 100) / (A0 - 100) * (REGLE.x1 - REGLE.x0);
 const TUBE = { x: 318, y: 246, w: 38, r: 8 }, BOIS = { x: 364, y: 232, w: 62, h: 32 };
@@ -145,7 +150,9 @@ function compteur(ctx, al) {
   ctx.font = '600 22px Consolas, "Courier New", monospace'; ctx.textAlign = 'right';
   ctx.fillStyle = 'rgba(134,239,172,.12)'; ctx.fillText('888', LCD.x + LCD.w - 6, LCD.y + 22);
   ctx.fillStyle = '#86efac'; ctx.shadowColor = '#22c55e'; ctx.shadowBlur = 7; ctx.fillText(String(S.t >= 7.4 ? n : 0), LCD.x + LCD.w - 6, LCD.y + 22); ctx.shadowBlur = 0;
-  ctx.font = '10px Consolas, monospace'; ctx.fillStyle = 'rgba(134,239,172,.7)'; ctx.textAlign = 'left'; ctx.fillText('Bq', LCD.x + 3, LCD.y + LCD.h + 12);
+  // l’unité sous l’afficheur : 15 px à l’écran au moins (elle tombait à 8 px, 18 novembre 2026)
+  const tBq = auMoins15(ctx, 10);
+  ctx.font = `${tBq}px Consolas, monospace`; ctx.fillStyle = 'rgba(134,239,172,.85)'; ctx.textAlign = 'left'; ctx.fillText('Bq', LCD.x + 1, LCD.y + LCD.h + 2 + tBq * .78);
   ctx.restore();
 }
 function jauge(ctx, p, f, al) {

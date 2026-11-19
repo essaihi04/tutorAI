@@ -749,7 +749,8 @@ const BLOC = {
     const B = BLOC.boites, CAP = 1.75, GAP = 14, GCOL = 36;
     const titre = B[0] || { x0: 40, y0: 12, x1: 400, y1: 36 };
     const kt = Math.min(1.3, (L - 40) / Math.max(1, titre.x1 - titre.x0));
-    const top = 8 + (titre.y1 - titre.y0) * kt + 12, bas = 410, gauche = 16, WA = L - 32, HA = bas - top;
+    // le titre interne n’est plus écrit (18 novembre 2026 : il répétait le titre de la diapositive) : sa bande est rendue aux étapes
+    const top = TITRE_ECRIT ? 8 + (titre.y1 - titre.y0) * kt + 12 : 10, bas = 410, gauche = 16, WA = L - 32, HA = bas - top;
     let g = [];
     for (let i = 1; i < B.length; i++) if (B[i] && B[i].x1 > B[i].x0) g.push({ i0: i, i1: i, ...B[i] });
     const inter = (a, b) => Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0) > 4 && Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0) > 4;
@@ -808,9 +809,26 @@ const BLOC = {
     c.echelle = scene.s * t.k;
   },
 };
+/* Le titre interne de chaque figure (la ligne cyan écrite avant le repère `figure`) répétait le titre de la diapositive
+ * (« Démontrer t½ = ln2/λ » sous « Établir t½ = ln2/λ ») : il n’est plus visible (18 novembre 2026, règle 9 « ne pas
+ * répéter la diapositive »). Il est encore « écrit » à alpha 0, pour garder le même déroulé (instants et moments inchangés). */
+const TITRE_ECRIT = false;
+let AVANT_FIGURE = false;
+{
+  const texteKit = craie.texte;
+  craie.texte = function (s, x, y, o = {}) { return texteKit.call(this, s, x, y, AVANT_FIGURE && !TITRE_ECRIT ? { ...o, alpha: 0 } : o); };
+  // le trait d’une fraction du titre (« t½ = ⟦ln2|λ⟧ ») : invisible lui aussi
+  const traitKit = craie.trait;
+  craie.trait = function (pts, o = {}) {
+    if (!AVANT_FIGURE || TITRE_ECRIT) return traitKit.call(this, pts, o);
+    const coul = this.couleur; this.couleur = () => 'rgba(0,0,0,0)';
+    try { return traitKit.call(this, pts, o); } finally { this.couleur = coul; }
+  };
+}
 {
   const repereKit = craie.repere;
   craie.repere = function (id, x, y, w, h, label) {
+    if (id === 'figure') AVANT_FIGURE = false;
     if (BLOC.mesure) { if (id === 'figure') BLOC.idx = 1; return this; }
     if (BLOC.actif && id === 'figure') {
       this.ctx.setTransform(BLOC.base);
@@ -829,6 +847,7 @@ function dessiner(c) {
     scene.cadre(31);
   }
   MM = {};
+  AVANT_FIGURE = true;
   BLOC.actif = large; BLOC.idx = 0;
   if (large) { BLOC.base = c.ctx.getTransform(); BLOC.appliquer(c); }
   try { DESSINS[fig](c); }

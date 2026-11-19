@@ -149,10 +149,12 @@
    * Renvoie le rectangle écrit [x, y, w, h] (pour le repère). `ecrire(ligne, x, y, oo)` remplace c.texte si fourni.
    */
   function enColonne(c, s, rang, n, o = {}, ecrire, mesure) {
-    const t = o.taille ?? 18, h = 392 / n, y0 = 14 + rang * h, pas = t * 1.32;
-    const lignes = couper(s, COLW, mesure || (e => c.largeurTexte(String(e).replace(/[_^{}]/g, ''), t)));
+    // coupée à la taille vraiment écrite (18 novembre 2026 : le plancher de 15 px à l’écran grossit le texte sur un petit
+    // tableau ; mesurée à la taille demandée, la ligne débordait de la colonne, coupée au bord du cadre)
+    const t = o.taille ?? 18, tv = Math.max(t, c.echelle && c.tailleMin ? c.tailleMin / c.echelle : 0), h = 392 / n, y0 = 14 + rang * h, pas = tv * 1.32;
+    const lignes = couper(s, COLW, mesure || (e => c.largeurTexte(String(e).replace(/[_^{}]/g, ''), tv)));
     const duree = o.duree != null ? o.duree / lignes.length : undefined;
-    lignes.forEach((l, i) => { const oo = { ...o, align: 'left', max: undefined, duree }; ecrire ? ecrire(l, X0, y0 + t + i * pas, oo) : c.texte(l, X0, y0 + t + i * pas, oo); });
+    lignes.forEach((l, i) => { const oo = { ...o, align: 'left', max: undefined, duree }; ecrire ? ecrire(l, X0, y0 + tv + i * pas, oo) : c.texte(l, X0, y0 + tv + i * pas, oo); });
     return [X0 - 6, y0 - 4, COLW + 12, lignes.length * pas + 12];
   }
   /** Disposition type : la figure `src` (ancien cadre) agrandie à gauche, la colonne de texte à droite. */
