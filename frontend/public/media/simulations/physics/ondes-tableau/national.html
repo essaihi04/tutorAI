@@ -55,6 +55,53 @@ function peindreHP(ctx, x, y, sens = 1) {
 }
 /** Source ponctuelle (émetteur vu de dessus) : un disque ombré. */
 function peindreSource(ctx, x, y) { P.perle(ctx, x, y, 9, 'gris'); }
+/* Le fœtus peint (19/11/2026, l'utilisateur : « améliorer le dessin du fœtus, il n'est pas réaliste ») : la poche de
+   liquide amniotique, puis un fœtus recroquevillé vu de profil (tête, corps, bras replié, jambes repliées, cordon).
+   Il tient exactement entre yF (face avant) et yB (face arrière) : son épaisseur reste d₂, celle que mesurent les échos. */
+function peindreFoetus(ctx, cx, yF, yB) {
+  const h = yB - yF, ym = (yF + yB) / 2;
+  const peau = (x, y, r) => { const g = ctx.createRadialGradient(x - r * .3, y - r * .35, r * .1, x, y, r * 1.1);
+    g.addColorStop(0, '#f8dcc8'); g.addColorStop(.6, '#eab497'); g.addColorStop(1, '#c98466'); return g; };
+  ctx.save();
+  // la poche de liquide amniotique, sombre comme à l'échographie, bord clair de la paroi de l'utérus
+  ctx.beginPath(); ctx.ellipse(cx, ym, 80, h / 2 + 16, 0, 0, Math.PI * 2);
+  const liq = ctx.createRadialGradient(cx, ym, 10, cx, ym, 90);
+  liq.addColorStop(0, 'rgba(70,52,74,.92)'); liq.addColorStop(1, 'rgba(46,32,52,.95)');
+  ctx.fillStyle = liq; ctx.fill();
+  ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(214,150,140,.85)'; ctx.stroke();
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const bord = '#a9624b';
+  // le cordon ombilical, du ventre vers la paroi
+  ctx.beginPath(); ctx.moveTo(cx + 8, yF + .78 * h);
+  ctx.bezierCurveTo(cx + 30, yB + 6, cx + 52, yF + .62 * h, cx + 70, ym + 4);
+  ctx.lineWidth = 5; ctx.strokeStyle = '#d9a3b6'; ctx.stroke(); ctx.lineWidth = 1.6; ctx.strokeStyle = '#b07a8e'; ctx.stroke();
+  // les jambes repliées (cuisse puis jambe, pied)
+  ctx.beginPath(); ctx.ellipse(cx + 38, yF + .76 * h, 22, 11, -.35, 0, Math.PI * 2);
+  ctx.fillStyle = peau(cx + 38, yF + .76 * h, 22); ctx.fill(); ctx.lineWidth = 1.2; ctx.strokeStyle = bord; ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(cx + 22, yF + .9 * h, 20, 8, .15, 0, Math.PI * 2);
+  ctx.fillStyle = peau(cx + 22, yF + .9 * h, 20); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(cx + 4, yF + .9 * h, 7, 5, .3, 0, Math.PI * 2); ctx.fillStyle = '#e7ab8e'; ctx.fill(); ctx.stroke();
+  // le corps, courbé (le dos en haut à droite)
+  ctx.beginPath();
+  ctx.moveTo(cx - 14, yF + .3 * h);
+  ctx.bezierCurveTo(cx + 18, yF + .02 * h, cx + 62, yF + .22 * h, cx + 56, yF + .6 * h);
+  ctx.bezierCurveTo(cx + 50, yF + .92 * h, cx + 6, yB - 2, cx - 12, yF + .74 * h);
+  ctx.closePath(); ctx.fillStyle = peau(cx + 20, yF + .45 * h, 46); ctx.fill(); ctx.lineWidth = 1.3; ctx.strokeStyle = bord; ctx.stroke();
+  // la tête, grosse, penchée vers la poitrine
+  const rt = .37 * h, xt = cx - 30, yt = yF + rt + 1;
+  ctx.beginPath(); ctx.arc(xt, yt, rt, 0, Math.PI * 2); ctx.fillStyle = peau(xt, yt, rt); ctx.fill(); ctx.stroke();
+  // le visage : œil fermé, nez, bouche, oreille
+  ctx.lineWidth = 1.4; ctx.strokeStyle = '#8f4f3c';
+  ctx.beginPath(); ctx.arc(xt - rt * .42, yt + rt * .05, rt * .14, .2, Math.PI - .2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(xt - rt * .86, yt + rt * .18); ctx.quadraticCurveTo(xt - rt * 1.02, yt + rt * .32, xt - rt * .84, yt + rt * .38); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(xt - rt * .74, yt + rt * .58); ctx.lineTo(xt - rt * .58, yt + rt * .6); ctx.stroke();
+  ctx.beginPath(); ctx.arc(xt + rt * .18, yt + rt * .1, rt * .17, -1.2, 1.9); ctx.stroke();
+  // le bras replié devant la poitrine, la main près du visage
+  ctx.beginPath(); ctx.moveTo(cx + 2, yF + .42 * h); ctx.quadraticCurveTo(cx + 10, yF + .66 * h, xt - rt * .25, yt + rt * .82);
+  ctx.lineWidth = 9; ctx.strokeStyle = '#e3a78b'; ctx.stroke(); ctx.lineWidth = 1.1; ctx.strokeStyle = bord; ctx.stroke();
+  ctx.beginPath(); ctx.arc(xt - rt * .25, yt + rt * .82, 5.5, 0, Math.PI * 2); ctx.fillStyle = '#eab497'; ctx.fill(); ctx.stroke();
+  ctx.restore();
+}
 /** Oscilloscope : écran, voies tracées par le spot jusqu’au temps d’écran `t` (unité de `sens`). */
 function oscillo(c, o) {
   c.direct(() => P.oscillo(c.ctx, o.x, o.y, o.nx * o.dx, o.ny * o.dy, o.nx, o.ny));
@@ -535,8 +582,7 @@ VUES.national_2020_rattrapage = {
       const ctx = c.ctx;
       ctx.save(); ctx.beginPath(); ctx.ellipse(cx, 236, 150, 160, 0, 0, Math.PI * 2);
       ctx.fillStyle = P.lin(ctx, 0, 76, 0, 396, [[0, '#d9a38a'], [.5, '#b97a63'], [1, '#8c5545']]); ctx.fill(); ctx.restore();
-      ctx.save(); ctx.beginPath(); ctx.ellipse(cx, (yF + yB) / 2, 62, (yB - yF) / 2, 0, 0, Math.PI * 2);
-      ctx.fillStyle = P.lin(ctx, 0, yF, 0, yB, [[0, '#f1d0bd'], [1, '#c99a83']]); ctx.fill(); ctx.restore();
+      peindreFoetus(ctx, cx, yF, yB);
       ctx.fillStyle = P.lin(ctx, cx - 14, 0, cx + 14, 0, [[0, '#374151'], [.5, '#9ca3af'], [1, '#1f2937']]); P.rr(ctx, cx - 14, 22, 28, y0 - 20, 4); ctx.fill();
       ctx.fillStyle = '#111827'; ctx.fillRect(cx - 16, y0 - 4, 32, 6);
       // les salves : l’incidente (jaune) puis les échos (orange) qui remontent
@@ -548,7 +594,7 @@ VUES.national_2020_rattrapage = {
     });
     c.trait(Array.from({ length: 73 }, (_, i) => [cx + 150 * Math.cos(i / 72 * 2 * Math.PI), 236 + 160 * Math.sin(i / 72 * 2 * Math.PI)]), { couleur: 'tresfaible', largeur: 1.2 });   // le contour du corps (l’encre mesurée par le cadre)
     c.texte('sonde', cx + 22, 44, { couleur: 'blanc', taille: 17 });
-    c.texte('fœtus', cx + 76, (yF + yB) / 2 + 6, { couleur: 'blanc', taille: 17 });
+    c.texte('fœtus', cx + 90, (yF + yB) / 2 + 6, { couleur: 'blanc', taille: 17 });
     c.cote(cx - 80, y0 + 2, cx - 80, yF, '', { couleur: 'cyan' }); c.texte('d₁', cx - 92, (y0 + yF) / 2 + 6, { couleur: 'cyan', align: 'right', taille: 19 });
     c.cote(cx - 80, yF, cx - 80, yB, '', { couleur: 'orange' }); c.texte('d₂', cx - 92, (yF + yB) / 2 + 6, { couleur: 'orange', align: 'right', taille: 19 });
     c.repere('corps', cx - 150, 76, 300, 320, 'le corps vu en coupe, la sonde et le fœtus');
