@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>L’énoncé tel qu’à l’examen</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css">
+<style>
+  /* Posé SUR le tableau du cours (simulations-au-tableau, règles 2 et 4) : fond transparent, la barre en haut, le bas libre. */
+  :root { color-scheme: normal; }
+  html, body { background: transparent !important; }
+  body { background-image: none !important; }
+  .tableau { padding: .3em .5em; gap: .25em; }
+  .barre { order: -1; justify-content: flex-start; }
+  .barre .bulle { flex: 1 1 10em; }
+  .scene { padding-bottom: 4.2em; position: relative; }
+  #canvas { width: 100%; height: 100%; display: block; }
+</style>
+</head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="La page du sujet du national, telle qu’à l’examen : l’en-tête, puis l’énoncé de l’exercice ; chaque donnée s’allume quand le tuteur la lit"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume reset play_until set_time">Lire l’énoncé</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script>
+/*
+ * L’énoncé d’un exercice du national, tel qu’il est dans l’examen (19 novembre 2026 ; skill professeur règle 46,
+ * simulations-au-tableau règles 16-17, logique-de-cours règle 5). La vraie page scannée du sujet
+ * (`backend/data/exams/physique/<année>-<session>/pages/sujet_pN.jpg`, servie à `/static/exams/...`), recadrée sur
+ * l’exercice, l’en-tête de l’examen (année, session, matière) toujours visible en haut, sur son papier.
+ * Le tuteur lit l’énoncé : chaque donnée qu’il lit S’ALLUME sur la page (halo jaune), dans l’ordre, et reste allumée
+ * (plus doucement) ; la page défile pour garder la ligne lue sous les yeux. Un moment et un repère par donnée.
+ *
+ *   ?cours=<deck>&ex=<clé> : la configuration est dans `enonces/<deck>.js` (window.ENONCES[<deck>][<clé>]) :
+ *   { "titre": "…", "sujet": "2021-normale",
+ *     "entete":   { "page": 2, "y": [0.06, 0.128] },                       // bande de l’en-tête (fractions de la page)
+ *     "morceaux": [ { "page": 2, "x": [0.06, 0.95], "y": [0.13, 0.48] } ],  // l’exercice, empilé de haut en bas
+ *     "lignes":   [ { "id": "n0", "page": 2, "y": [0.342, 0.383], "x": [0.1, 0.9], "texte": "n₀(HO⁻) = 10⁻³ mol", "duree": 3 } ] }
+ *   Moments : `page` (la page paraît), `entete` (l’en-tête s’allume), puis un moment par ligne (son id), `fin`.
+ *   Repères : `page`, `entete`, chaque id de ligne (son libellé est le texte de la donnée).
+ */
+const { fr, protocole, bulle } = window.Tableau;
+const $ = id => document.getElementById(id);
+const q = new URLSearchParams(location.search);
+const COURS = (q.get('cours') || '').replace(/[^\w-]/g, ''), EX = (q.get('ex') || '').replace(/[^\w-]/g, '');
+const S = { t: 0, running: false, pause: false, fait: false, jusqua: null, dit: '', scroll: 0, scrollCible: 0 };
+let CFG = null, ET = [], FIN = 0, MOM = {}, IMGS = {}, pont = null, last = 0;
+const ev = nom => ET.find(e => e.nom === nom);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const p = nom => { const e = ev(nom); return e ? clamp((S.t - e.debut) / e.duree, 0, 1) : 0; };
+const commence = nom => { const e = ev(nom); return !!e && S.t > e.debut + 1e-6; };
+const vu = nom => { const e = ev(nom); return !!e && S.t >= e.fin - 1e-6; };
+const src = page => `/static/exams/physique/${CFG.sujet}/pages/sujet_p${page}.jpg`;
+const dire = (t, kind = '') => { S.dit = t; bulle($('feedback'), t, kind); };
+
+function construire() {
+  const L = CFG.lignes || [];
+  const brut = [{ nom: 'page', duree: 1, motif: 'la page du sujet' }, { nom: 'entete', duree: 1.6, motif: 'l’en-tête de l’examen' }]
+    .concat(L.map(l => ({ nom: l.id, duree: l.duree || 2.5, motif: l.texte })));
+  let s = 0;
+  ET = brut.map(e => { const d = { ...e, debut: s, fin: s + e.duree }; s = d.fin; return d; });
+  FIN = s; MOM = Object.fromEntries(ET.map(e => [e.nom, e.fin])); MOM.fin = FIN;
+}
+
+/* ── Le dessin : le papier, l’en-tête épinglé en haut, la fenêtre sur l’exercice qui défile ─────────────────── */
+const cv = $('canvas'), ctx = cv.getContext('2d');
+let G = null;   // géométrie du dernier dessin (px CSS)
+function geometrie() {
+  const r = cv.getBoundingClientRect(), W = r.width, H = r.height;
+  const img = IMGS[CFG.entete.page], pw = img.naturalWidth, ph = img.naturalHeight;
+  const xs = CFG.morceaux.map(m => m.x || [0.05, 0.95]);
+  const x0 = Math.min(...xs.map(x => x[0])), x1 = Math.max(...xs.map(x => x[1]));
+  const largeur = (x1 - x0) * pw;
+  const hEnt = (CFG.entete.y[1] - CFG.entete.y[0]) * ph;
+  const hMor = CFG.morceaux.reduce((a, m) => a + (m.y[1] - m.y[0]) * ph, 0);
+  const marge = 8;
+  // L’échelle : la largeur de l’exercice remplit le cadre, sans dépasser ce qui laisse au moins 3 lignes visibles.
+  let k = (W - 2 * marge) / largeur;
+  k = Math.min(k, (H - 2 * marge) / (hEnt + Math.min(hMor, 0.05 * ph * 3)));
+  const wP = largeur * k, xP = (W - wP) / 2, hE = hEnt * k;
+  const hVue = Math.min(hMor * k, H - 2 * marge - hE - 4);
+  return { W, H, k, pw, ph, x0, x1, xP, yP: marge, wP, hE, yV: marge + hE + 4, hVue, hMorK: hMor * k };
+}
+/** y (px dans la bande empilée des morceaux) d’un point (page, yFrac) ; null s’il n’est dans aucun morceau. */
+function yBande(page, yf) {
+  let acc = 0;
+  for (const m of CFG.morceaux) {
+    if (m.page === page && yf >= m.y[0] - 1e-6 && yf <= m.y[1] + 1e-6) return acc + (yf - m.y[0]) * G.ph * G.k;
+    acc += (m.y[1] - m.y[0]) * G.ph * G.k;
+  }
+  return null;
+}
+function cibleScroll() {
+  // La ligne en cours (ou la dernière lue) au tiers haut de la fenêtre.
+  let cible = 0;
+  for (const l of CFG.lignes || []) if (commence(l.id)) { const y = yBande(l.page, l.y[0]); if (y != null) cible = y - G.hVue * .3; }
+  return clamp(cible, 0, Math.max(0, G.hMorK - G.hVue));
+}
+function papier(x, y, w, h) {
+  ctx.save(); ctx.shadowColor = 'rgba(0,0,0,.45)'; ctx.shadowBlur = 14; ctx.shadowOffsetY = 4;
+  ctx.fillStyle = '#fbfaf5'; ctx.fillRect(x, y, w, h); ctx.restore();
+}
+function halo(x, y, w, h, fort) {
+  ctx.save();
+  ctx.fillStyle = fort ? 'rgba(250,204,21,.32)' : 'rgba(250,204,21,.13)';
+  ctx.beginPath(); ctx.roundRect(x - 4, y - 3, w + 8, h + 6, 6); ctx.fill();
+  ctx.strokeStyle = fort ? 'rgba(234,179,8,.95)' : 'rgba(234,179,8,.35)'; ctx.lineWidth = fort ? 2.4 : 1.2; ctx.stroke();
+  ctx.restore();
+}
+function dessiner() {
+  const d = devicePixelRatio || 1, r = cv.getBoundingClientRect();
+  if (cv.width !== Math.round(r.width * d) || cv.height !== Math.round(r.height * d)) { cv.width = Math.round(r.width * d); cv.height = Math.round(r.height * d); }
+  ctx.setTransform(d, 0, 0, d, 0, 0); ctx.clearRect(0, 0, r.width, r.height);
+  if (!CFG || !IMGS[CFG.entete.page]) return;
+  G = geometrie();
+  const a = commence('page') ? Math.min(1, p('page') * 1.4) : 0;
+  if (!(a > 0)) { reperes(); return; }
+  ctx.globalAlpha = a;
+  const { xP, yP, wP, hE, yV, hVue, k, pw, ph, x0, x1 } = G;
+  papier(xP, yP, wP, hE + 4 + hVue);
+  // L’en-tête de l’examen, épinglé en haut (même largeur de page que l’exercice).
+  const ie = IMGS[CFG.entete.page];
+  ctx.drawImage(ie, x0 * pw, CFG.entete.y[0] * ph, (x1 - x0) * pw, (CFG.entete.y[1] - CFG.entete.y[0]) * ph, xP, yP, wP, hE);
+  ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(xP, yP + hE + 1, wP, 2);   // la bande de l’en-tête, séparée de la suite
+  // La donnée « en cours » (la dernière commencée) reste bien allumée, même figée sur son moment ; les autres doucement.
+  const courante = [...(CFG.lignes || [])].reverse().find(l => commence(l.id));
+  if (commence('entete')) halo(xP + 2, yP + 2, wP - 4, hE - 4, !courante && !S.fait);
+  // La fenêtre sur l’exercice : les morceaux empilés, décalés par le défilement.
+  S.scrollCible = cibleScroll();
+  ctx.save(); ctx.beginPath(); ctx.rect(xP, yV, wP, hVue); ctx.clip();
+  let acc = 0;
+  for (const m of CFG.morceaux) {
+    const im = IMGS[m.page], h = (m.y[1] - m.y[0]) * ph * k, mx = m.x || [x0, x1];
+    ctx.drawImage(im, mx[0] * pw, m.y[0] * ph, (mx[1] - mx[0]) * pw, (m.y[1] - m.y[0]) * ph, xP + (mx[0] - x0) * pw * k, yV + acc - S.scroll, (mx[1] - mx[0]) * pw * k, h);
+    acc += h;
+  }
+  // Les données lues : la ligne en cours bien allumée, les précédentes doucement.
+  for (const l of CFG.lignes || []) {
+    if (!commence(l.id)) continue;
+    const y0 = yBande(l.page, l.y[0]), y1 = yBande(l.page, l.y[1]); if (y0 == null || y1 == null) continue;
+    const lx = l.x || [x0, x1];
+    halo(xP + (lx[0] - x0) * pw * k, yV + y0 - S.scroll, (lx[1] - lx[0]) * pw * k, y1 - y0, l === courante && !S.fait);
+  }
+  ctx.restore();
+  // Plus bas dans l’exercice : une petite flèche le dit.
+  if (S.scroll < G.hMorK - hVue - 2) {
+    ctx.fillStyle = 'rgba(15,23,42,.55)'; ctx.beginPath(); const cx = xP + wP - 22, cy = yV + hVue - 14;
+    ctx.moveTo(cx - 9, cy - 5); ctx.lineTo(cx + 9, cy - 5); ctx.lineTo(cx, cy + 6); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  reperes();
+}
+function reperes() {
+  if (!G) return;
+  const b = cv.getBoundingClientRect(), defs = {};
+  const R = (x, y, w, h) => () => ({ x: b.left + x, y: b.top + y, width: w, height: h });
+  defs.page = { label: `la page du sujet : ${CFG.titre}`, rect: R(G.xP, G.yP, G.wP, G.hE + 4 + G.hVue) };
+  defs.entete = { label: 'l’en-tête de l’examen : année, session, matière', rect: R(G.xP, G.yP, G.wP, G.hE) };
+  for (const l of CFG.lignes || []) {
+    const y0 = yBande(l.page, l.y[0]), y1 = yBande(l.page, l.y[1]); if (y0 == null || y1 == null) continue;
+    const lx = l.x || [G.x0, G.x1], yy = G.yV + y0 - S.scrollCible;
+    defs[l.id] = { label: l.texte, rect: () => ({ x: b.left + G.xP + (lx[0] - G.x0) * G.pw * G.k, y: b.top + clamp(yy, G.yV, G.yV + G.hVue - 10), width: (lx[1] - lx[0]) * G.pw * G.k, height: Math.max(10, Math.min(y1 - y0, G.yV + G.hVue - yy)) }) };
+  }
+  window.Tableau.reperes(defs);
+}
+
+/* ── Le temps : jouer, s’arrêter sur une donnée, reprendre (même protocole que deroule.js) ───────────────────── */
+const etiquette = () => { $('run').textContent = S.running ? 'Pause' : S.pause ? 'Reprendre' : S.fait ? 'Relire' : 'Lire l’énoncé'; };
+const emettre = () => pont && pont.emettre();
+const noter = (a, d) => pont && pont.noter(a, d);
+function boucle(now) {
+  const dt = Math.min(.1, (now - (last || now)) / 1000); last = now;
+  if (S.running) {
+    S.t = Math.min(FIN, S.t + dt);
+    if (S.jusqua != null && S.t >= S.jusqua - 1e-9) {
+      S.t = S.jusqua; S.jusqua = null;
+      if (S.t >= FIN - 1e-9) finir();
+      else { S.running = false; S.pause = true; etiquette(); const e = ET.find(x => Math.abs(x.fin - S.t) < 1e-6); dire('Arrêt sur image : ' + (e ? e.motif : 'instant choisi') + '.'); noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); }
+    } else if (S.t >= FIN - 1e-9) finir();
+    if (performance.now() - (S.emis || 0) > 500) { S.emis = performance.now(); emettre(); }
+  }
+  if (G) S.scroll += (S.scrollCible - S.scroll) * Math.min(1, dt * 5);
+  dessiner();
+  requestAnimationFrame(boucle);
+}
+function finir() { S.t = FIN; S.running = false; S.pause = false; S.fait = true; S.jusqua = null; etiquette(); dire('L’énoncé est lu : toutes ses données sont allumées.', 'good'); noter('finished', {}); emettre(); }
+function start() { S.t = 0; S.jusqua = null; S.running = true; S.pause = false; S.fait = false; S.scroll = 0; etiquette(); dire('Voici l’exercice, tel qu’il est dans l’examen.'); noter('start', {}); emettre(); }
+function pause() { if (!S.running) return; S.running = false; S.pause = true; etiquette(); dire('Arrêt sur image.'); noter('pause', { time_s: +S.t.toFixed(2) }); emettre(); }
+function resume() { if (S.running) return; if (!S.pause) return start(); S.running = true; S.pause = false; etiquette(); noter('resume'); emettre(); }
+function reset() { S.t = 0; S.jusqua = null; S.running = false; S.pause = false; S.fait = false; S.scroll = 0; etiquette(); dire(CFG ? CFG.titre : ''); noter('reset'); emettre(); }
+function setTime(prm) {
+  const t = +prm.time_s; if (!Number.isFinite(t)) return;
+  S.running = false; S.jusqua = null; S.t = clamp(t, 0, FIN); S.fait = S.t >= FIN - 1e-6; S.pause = !S.fait && S.t > 0; etiquette(); noter('set_time', { time_s: S.t }); emettre();
+}
+function playUntil(prm) {
+  const nom = prm && prm.moment in MOM ? prm.moment : null, cible = nom ? MOM[nom] : +(prm && prm.time_s);
+  if (!Number.isFinite(cible)) { dire(`Moment inconnu : ${prm && prm.moment}.`, 'bad'); emettre(); return; }
+  if (S.fait || S.t >= cible - 1e-3) { noter('play_until', { moment: nom, deja: true }); emettre(); return; }
+  S.jusqua = cible; S.running = true; S.pause = false; etiquette(); noter('play_until', { moment: nom, time_s: +cible.toFixed(2) }); emettre();
+}
+function voir() {
+  if (!CFG) return 'La page du sujet se charge.';
+  const m = [`La page du sujet du national (${CFG.titre}), telle qu’à l’examen : l’en-tête en haut, puis l’énoncé de l’exercice.`];
+  if (!commence('page')) m[0] = 'Le tableau est vide : la page du sujet va paraître.';
+  if (commence('entete')) m.push('L’en-tête de l’examen est allumé.');
+  const lues = (CFG.lignes || []).filter(l => commence(l.id));
+  if (lues.length) m.push('Données allumées sur la page : ' + lues.map(l => `« ${l.texte} »${vu(l.id) ? '' : ' (en cours de lecture)'}`).join(', ') + '.');
+  return m.join(' ');
+}
+
+async function charger() {
+  try {
+    // Un fichier .js par cours (les .json sont ignorés par git hors des cours) : window.ENONCES[<deck>] = { <clé>: {…} }.
+    await new Promise((ok, ko) => { const sc = document.createElement('script'); sc.src = `enonces/${COURS}.js`; sc.onload = ok; sc.onerror = () => ko(new Error(`enonces/${COURS}.js`)); document.head.appendChild(sc); });
+    CFG = ((window.ENONCES || {})[COURS] || {})[EX];
+    if (!CFG) throw new Error(`exercice inconnu : ${EX}`);
+  } catch (e) { dire('Énoncé introuvable : ' + e.message, 'bad'); console.error(e); return; }
+  construire();
+  const pages = new Set([CFG.entete.page, ...CFG.morceaux.map(m => m.page)]);
+  await Promise.all([...pages].map(n => new Promise(ok => { const im = new Image(); im.onload = () => { IMGS[n] = im; ok(); }; im.onerror = () => { console.error('page introuvable', src(n)); ok(); }; im.src = src(n); })));
+  const commandes = ['start', 'pause', 'resume', 'reset', 'set_time', 'play_until'];
+  pont = protocole({ id: `enonce_${COURS}_${EX}`, commandes,
+    config: { id: `enonce_${COURS}_${EX}`, version: '1.0', title: CFG.titre, variants: [], commands: commandes,
+      command_schema: { set_time: { time_s: '0..fin, en s (voir moments)' }, play_until: { moment: Object.keys(MOM).join(' | ') + ' (allume cette donnée et s’y fige)' } } },
+    texte: `Énoncé du national tel qu’à l’examen : ${CFG.titre}. Données lues une à une : ${(CFG.lignes || []).map(l => l.texte).join(' ; ')}.`,
+    etat: () => ({ simulation_status: S.running ? 'running' : S.fait ? 'finished' : S.pause ? 'paused' : 'idle', ce_qui_se_voit: voir() + (S.dit ? ` La bulle dit : « ${S.dit} »` : ''),
+      time_s: +S.t.toFixed(2), parameters: {}, moments: Object.fromEntries(Object.entries(MOM).map(([k, v]) => [k, +v.toFixed(2)])) }),
+    progression: () => (S.fait ? 1 : 0),
+    executer: (cmd, prm) => ({ start, pause, resume, reset, set_time: () => setTime(prm), play_until: () => playUntil(prm) })[cmd]?.() });
+  window.Tableau.explication([{ repere: 'entete', texte: 'L’en-tête : l’année, la session et la matière, comme sur ta copie le jour de l’examen.' }]
+    .concat((CFG.lignes || []).map(l => ({ repere: l.id, texte: l.texte }))));
+  $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
+  etiquette(); dire(CFG.titre); emettre();
+}
+charger();
+requestAnimationFrame(boucle);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
