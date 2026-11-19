@@ -493,9 +493,12 @@
     const total = visibles.length ? Math.max(...visibles.map(bas)) - Math.min(...visibles.map(haut)) : 0;
     // 1. Tout tient sur UNE page en réduisant (≥ 0,6) : une seule page, sans passer à une autre (19/11/2026,
     //    l'utilisateur : « tout mettre dans une seule vue, une seule page suffit »).
-    if (total * 0.6 <= dispo(1)) {
+    // La réduction s'applique à toute la feuille (en-tête compris) : on compare la hauteur de la page entière à l'écran.
+    const pleine = (p, contenu) => fixe + (p === 1 ? hC : hK) + contenu;
+    const ZMIN = 0.5;
+    if (pleine(1, total) * ZMIN <= innerHeight) {
       blocs.forEach((el) => { el.dataset.page = 1; });
-      NPAGES = 1; DISPO[1] = dispo(1); BESOIN[1] = total;
+      NPAGES = 1; DISPO[1] = innerHeight; BESOIN[1] = pleine(1, total);
       montrerPage(1);
       return;
     }
@@ -506,8 +509,8 @@
     const unites = []; let u = [];
     const fin = () => { if (u.length) unites.push(u); u = []; };
     const estQ = (b) => b.classList.contains('q');
-    // un document : une figure, ou un texte qui est un document (id « doc… », ou un tableau de données)
-    const estFig = (b) => b.classList.contains('fig') || /^doc/i.test(b.id || '') || (b.classList.contains('contexte') && !!b.querySelector('table'));
+    // un document : une figure, une grille (propositions d'un QCM), ou un texte qui est un document (id « doc… », ou un tableau de données)
+    const estFig = (b) => b.classList.contains('fig') || b.classList.contains('grille') || /^doc/i.test(b.id || '') || (b.classList.contains('contexte') && !!b.querySelector('table'));
     blocs.forEach((el, k) => {
       const q = estQ(el), fig = estFig(el);
       if (!unites.length && u.length && (q || fig) && !u.some((b) => estQ(b) || estFig(b))) fin();   // l'ouverture
@@ -517,17 +520,20 @@
       else if (fig && u.some(estQ) && !suivFig) fin();       // …ou la figure d'exam.json qui la suit
     });
     fin();
+    // l'ouverture (titre, texte d'introduction) ne reste jamais seule : elle part avec la première question
+    // (19/11/2026, captures SVT 2024 R et 2022 N : la page 1 n'avait que l'en-tête et le titre)
+    if (unites.length > 1 && !unites[0].some((b) => estQ(b))) unites.splice(0, 2, unites[0].concat(unites[1]));
     const hU = (un) => { const v = un.filter((el) => el.offsetHeight > 0); return v.length ? Math.max(...v.map(bas)) - Math.min(...v.map(haut)) : 0; };
     let page = 1, plein = 0;
     unites.forEach((un, i) => {
       const h = hU(un);
-      if (i > 0 && plein > 0 && plein + h > dispo(page) / 0.62) { BESOIN[page] = plein; page += 1; plein = 0; }
+      if (i > 0 && plein > 0 && pleine(page, plein + h) * 0.62 > innerHeight) { BESOIN[page] = pleine(page, plein); page += 1; plein = 0; }
       un.forEach((el) => { el.dataset.page = page; });
       plein += h;
     });
-    BESOIN[page] = plein;
+    BESOIN[page] = pleine(page, plein);
     NPAGES = page;
-    for (let p = 1; p <= NPAGES; p++) DISPO[p] = dispo(p);
+    for (let p = 1; p <= NPAGES; p++) DISPO[p] = innerHeight;
     if (NPAGES === 1) document.documentElement.classList.remove('en-pages');
     montrerPage(Math.min(PAGE, NPAGES));
   }
