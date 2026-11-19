@@ -11,7 +11,8 @@
  * Chargement : après maths-tableau.js →  <script src="/media/simulations/maths/commun/compter.js"></script>
  *
  *   MathsCompte.compter(c, K, elements, options)
- *     elements : [{ x, y, r } (un rond)  |  { x, y, w, h } (un rectangle, x/y = coin haut gauche) , libelle? ]
+ *     elements : [{ x, y, r } (un rond)  |  { x, y, w, h } (un rectangle, x/y = coin haut gauche) , libelle?, n? (numéro
+ *                imposé, ex. 2022 pour le dernier après « ⋮ »), pos?, bx?/by? (pastille à cet endroit) ]
  *                en coordonnées du dessin (celles de c.cercle / c.rect)
  *     options  : { prefixe: 'compte', couleur: 'jaune', pas: .45 (s entre deux éléments), pos: 'haut'|'bas'|'droite'|'gauche',
  *                  numero: true, total: { t: '3 arbres', x, y, taille, couleur } }
@@ -40,8 +41,9 @@
     }, 1.8);
     if (o.numero === false || n == null) return;
     const R = o.rayonPastille || 12, pos = e.pos || o.pos || 'haut';
-    const px = pos === 'droite' ? g.cx + g.rx + R + 8 : pos === 'gauche' ? g.cx - g.rx - R - 8 : g.cx;
-    const py = pos === 'bas' ? g.cy + g.ry + R + 8 : pos === 'haut' ? g.cy - g.ry - R - 8 : g.cy;
+    let px = pos === 'droite' ? g.cx + g.rx + R + 8 : pos === 'gauche' ? g.cx - g.rx - R - 8 : g.cx;
+    let py = pos === 'bas' ? g.cy + g.ry + R + 8 : pos === 'haut' ? g.cy - g.ry - R - 8 : g.cy;
+    if (e.bx != null) { px = e.bx; py = e.by ?? g.cy; } else if (e.by != null) py = e.by;   // pastille placée ailleurs (une marge libre)
     c.cercle(px, py, R, { couleur: coul, largeur: 1.8, ...(vu() ? { fond: '#10231b', fondAlpha: .92 } : {}) });
     c.texte(String(n), px, py + 6, { couleur: coul, taille: o.taille || 17, align: 'center' });
   }
@@ -50,7 +52,7 @@
     const pre = o.prefixe || 'compte', noms = [];
     elements.forEach((e, i) => {
       c.pause(i === 0 ? (o.avant ?? .2) : (o.pas ?? .45));
-      allumer(c, e, i + 1, o);
+      allumer(c, e, e.n ?? i + 1, o);   // e.n : un numéro imposé (le dernier d’une longue liste : 2022)
       const g = geom(e), nom = `${pre}_${i + 1}`;
       c.repere(nom, g.cx - g.rx - 6, g.cy - g.ry - 6, 2 * g.rx + 12, 2 * g.ry + 12, e.libelle || `élément ${i + 1}`);
       K.marque(nom); noms.push(nom);
