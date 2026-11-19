@@ -71,10 +71,10 @@ if (!(window.Lexique && window.Lexique.maths) && document.readyState === 'loadin
      * mordait sur le suivant (« ① » sur « une somme… », « ) en dessous » sur « (C) »). Pendant chaque image, un texte
      * aligné à gauche qui commence DANS un texte déjà écrit sur la même ligne de base est poussé juste après lui. Seulement
      * quand le plancher agrandit l'écriture : à la taille prévue, rien ne bouge. */
-    const ecrits = []; let prof = 0;
+    const ecrits = []; let prof = 0; const SANS_DECALER = new URLSearchParams(location.search).get('decaler') === '0';
     function decaler(c, s, x, y, o) {
       const t0 = o.taille ?? 18, pl = scene.mesurant ? (scene.plancher || 0) : (c.echelle && c.tailleMin ? c.tailleMin / c.echelle : 0);
-      if (!(pl > 0) || (o.align && o.align !== 'left') || o.plancher === false) return x;
+      if (!(pl > 0) || SANS_DECALER || (o.align && o.align !== 'left') || o.plancher === false) return x;
       const t = Math.max(t0, pl);
       let w = 0; try { w = c.largeurTexte(String(s), t); } catch (e) { return x; }
       if (o.max && w > o.max) w = o.max;
@@ -118,7 +118,9 @@ if (!(window.Lexique && window.Lexique.maths) && document.readyState === 'loadin
       try { dessiner(craie, scene); } catch (e) { console.warn('[maths] mesure de la boîte', e); }
       finally { craie.trait = trait; craie.texte = texte; craie.point = point; scene.mesurant = false; scene.horloge = h; scene.ouvert = t; scene.plancher = 0; craie.__plancher = undefined; }
       if (!(b.x1 > b.x0 && b.y1 > b.y0)) return null;
-      const n = { x0: Math.max(0, b.x0 - MARGE), y0: Math.max(0, b.y0 - MARGE), x1: Math.min(scene.L, b.x1 + MARGE), y1: Math.min(VH, b.y1 + MARGE) };
+      // (18 novembre 2026) un texte porté au plancher peut dépasser le cadre : la boîte le suit (jusqu'à un quart du cadre
+      // en plus), l'échelle baisse un peu et rien n'est coupé au bord
+      const n = { x0: Math.max(-scene.L * .25, b.x0 - MARGE), y0: Math.max(-VH * .25, b.y0 - MARGE), x1: Math.min(scene.L * 1.25, b.x1 + MARGE), y1: Math.min(VH * 1.25, b.y1 + MARGE) };
       const a = scene.boite;
       return a ? { x0: Math.min(a.x0, n.x0), y0: Math.min(a.y0, n.y0), x1: Math.max(a.x1, n.x1), y1: Math.max(a.y1, n.y1) } : n;
     }
@@ -215,13 +217,13 @@ if (!(window.Lexique && window.Lexique.maths) && document.readyState === 'loadin
 
   /* Pas de titre en double (règle 9 du skill simulations-au-tableau, 18 novembre 2026 : « la simulation d'abord ») : dans le
    * lecteur du cours, la diapositive écrit déjà son titre au-dessus de la simulation. Le titre d'une vue (K.titre) qui dit la
-   * même chose n'est plus écrit (la craie garde son temps d'écriture : les moments ne bougent pas) ; la figure prend sa place.
+   * même chose (ou que son sous-titre, juste sous le titre) n'est plus écrit (la craie garde son temps d'écriture : les moments ne bougent pas) ; la figure prend sa place.
    * Hors du lecteur (page ouverte seule, aperçu), le titre reste. */
   const norme = (s) => String(s || '').replace(/⟦([^|⟧]*)\|([^⟧]*)⟧/g, '$1 $2').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, ' ').trim();
   function titreRepete(s) {
     let h = [];
-    try { if (window.parent !== window) h = [...window.parent.document.querySelectorAll('h1')].map((e) => norme(e.textContent)).filter(Boolean); } catch (e) { return false; }
+    try { if (window.parent !== window) h = [...window.parent.document.querySelectorAll('h1, h1 + p')].map((e) => norme(e.textContent)).filter(Boolean); } catch (e) { return false; }
     const a = norme(s); if (!a || !h.length) return false;
     const mots = (x) => new Set(x.split(' ').filter((m) => m.length > 1));
     return h.some((b) => {
