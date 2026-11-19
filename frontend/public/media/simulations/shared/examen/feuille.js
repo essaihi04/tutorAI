@@ -291,7 +291,7 @@
   }
   function etat() {
     const h = document.documentElement.scrollHeight - innerHeight;
-    return { sujet: CFG.sujet || '', exercice: CFG.exercice || '', surligne: SURLIGNE.slice(), reperes: Object.keys(reperes()), defilement: h > 0 ? +(scrollY / h).toFixed(3) : 0 };
+    return { sujet: CFG.sujet || '', exercice: CFG.exercice || '', surligne: SURLIGNE.slice(), reperes: Object.keys(reperes()), defilement: h > 0 ? +(scrollY / h).toFixed(3) : 0, page: PAGE, pages: NPAGES };
   }
   const emettre = () => envoyer({ type: 'simulation_state', current_state: etat(), timestamp: Date.now() });
   function manifeste() {
@@ -300,7 +300,7 @@
     envoyer({
       type: 'simulation_manifest',
       capabilities: {
-        commands: ['surligner', 'highlight', 'allume', 'eteins', 'effacer', 'defiler'], globals: ['executeAICommand'],
+        commands: ['surligner', 'highlight', 'allume', 'eteins', 'effacer', 'defiler', 'page'], globals: ['executeAICommand'],
         command_schema: { surligner: { id: Object.keys(r).join(' | '), garder: 'bool' }, highlight: { target: Object.keys(r).join(' | ') }, allume: { cible: Object.keys(r).join(' | ') }, eteins: {}, effacer: {}, defiler: { id: 'repère', fraction: '0..1' } },
         reperes: r, state_schema: { surligne: 'ids', defilement: '0..1' },
       },
@@ -336,7 +336,7 @@
     });
     c.style.cssText = 'position:absolute;left:-9999px;width:800px'; document.body.appendChild(c);
     const t = c.innerText; c.remove();
-    const fr = document.querySelector('.entete-fr')?.innerText || '';
+    const fr = document.querySelector('.entete-fr')?.textContent || '';
     return `${fr}\n\n${t}`.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
   }
   function amener(el) {
@@ -349,6 +349,7 @@
     const el = id && (document.querySelector(`[data-repere="${CSS.escape(id)}"]`) || document.getElementById(id));
     if (!el) return false;
     if (!garder) effacer();
+    const pg = pageDe(el); if (pg !== PAGE) montrerPage(pg);
     el.classList.add('surligne'); SURLIGNE.push(id); amener(el);
     return true;
   }
@@ -356,6 +357,7 @@
     p = p || {};
     if (cmd === 'surligner' || cmd === 'highlight' || cmd === 'montrer' || cmd === 'point' || cmd === 'show' || cmd === 'allume') surligner(p.id || p.target || p.cible || p.repere, !!p.garder);
     else if (cmd === 'effacer' || cmd === 'eteins' || cmd === 'reset') effacer();
+    else if (cmd === 'page') montrerPage(+(p.n || p.page) || 1);
     else if (cmd === 'defiler') {
       if (p.id) { const el = document.querySelector(`[data-repere="${CSS.escape(p.id)}"]`); if (el) amener(el); }
       else if (p.fraction != null) scrollTo({ top: (document.documentElement.scrollHeight - innerHeight) * +p.fraction, behavior: 'smooth' });
@@ -370,7 +372,7 @@
   });
   let attente = 0;
   addEventListener('scroll', () => { clearTimeout(attente); attente = setTimeout(emettre, 200); }, { passive: true });
-  addEventListener('resize', taille);
+  addEventListener('resize', () => { taille(); paginer(); });
 
   // ── Rendu ─────────────────────────────────────────────────────────────────
   async function rendre(config = {}) {
@@ -404,11 +406,13 @@
     }).join('');
     const i = infos(exam, CFG);
     racine.innerHTML = `<div class="feuille-zone"><article class="feuille" lang="fr"><div class="feuille-cadre">` +
-      entete(i, modeEntete) +
+      (modeEntete === 'aucune' ? '' : `<div class="entete-complete">${entete(i, modeEntete)}</div>` + `<div class="entete-courte" style="display:none">${entete(i, 'courte')}</div>`) +
       `<div class="corps${modeBareme === 'gauche' ? ' bareme-gauche' : ''}">` +
       (modeBareme === 'inline' ? '' : '<div class="tete-bareme">Barème</div>') +
       (titre ? `<div class="titre-exo ${modeTitre === 'bande' ? '' : modeTitre}" id="titre-exo" data-repere="titre-exo" data-professor-point="titre-exo" data-professor-label="Titre de l’exercice">${md(titre).replace(/^<p>|<\/p>$/g, '')}</div>` : '') +
-      morceaux + `</div></div></article></div>`;
+      morceaux + `</div></div></article>` +
+      `<div class="pages-nav"><button type="button" class="prec">◀ page précédente</button><span class="num"></span>` +
+      `<button type="button" class="suiv">page suivante ▶</button></div></div>`;
     // Figures dessinées par la page (canvas, SVG construit en JS).
     blocs.forEach((b) => {
       if (b.figure != null && typeof b.dessiner === 'function') {
@@ -416,11 +420,97 @@
         if (el) b.dessiner(el);
       }
     });
+    PAGE = 1; paginer();
+    racine.querySelector('.pages-nav .prec').onclick = () => { montrerPage(PAGE - 1); emettre(); };
+    racine.querySelector('.pages-nav .suiv').onclick = () => { montrerPage(PAGE + 1); emettre(); };
+    racine.querySelectorAll('img').forEach((im) => { if (!im.complete) im.addEventListener('load', paginer, { once: true }); });
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(paginer);
     document.title = `${i.m.fr || 'Examen'} ${i.annee}${i.ratt ? ' rattrapage' : ' normale'} — ${titre.replace(/<[^>]+>/g, '')}`;
     envoyer({ type: 'simulation_ready' });
     manifeste(); emettre();
     setTimeout(manifeste, 400);
     window.__feuillePrete = true;
+  }
+
+
+  // ── Pages (19/11/2026, l'utilisateur : « l'exercice n'est pas totalement affiché ; l'afficher comme deux pages,
+  // l'une après l'autre, pour garantir que tout l'exercice s'affiche ») ────────────────────────────────────────────
+  // La feuille est coupée entre deux blocs (titre, texte, question, figure) pour que chaque page tienne en entier dans
+  // le cadre, sans défiler. Page 1 : l'en-tête complet, le titre et le premier texte ; pages suivantes : l'en-tête
+  // court, comme sur le vrai sujet. Une page encore trop haute (un bloc très long) est réduite pour tenir (≥ 0,72).
+  // On passe d'une page à l'autre avec les boutons ◀ ▶ ; le tuteur qui surligne une question amène sa page.
+  let PAGE = 1, NPAGES = 1, BESOIN = {}, DISPO = {};
+  function montrerPage(n) {
+    const corps = document.querySelector('.feuille .corps');
+    if (!corps) return;
+    PAGE = Math.max(1, Math.min(NPAGES, n));
+    const vus = [];
+    corps.querySelectorAll(':scope > [data-page]').forEach((el) => {
+      const ici = +el.dataset.page === PAGE; el.style.display = ici ? '' : 'none'; if (ici) vus.push(el);
+    });
+    corps.classList.toggle('sans-titre', !!vus.length && !vus[0].classList.contains('titre-exo'));
+    const ec = document.querySelector('.feuille .entete-complete'), ek = document.querySelector('.feuille .entete-courte');
+    if (ec) ec.style.display = PAGE === 1 ? '' : 'none';
+    if (ek) ek.style.display = PAGE === 1 || !NPAGES || NPAGES === 1 ? 'none' : '';
+    const zone = document.querySelector('.feuille-zone');
+    const z = BESOIN[PAGE] > DISPO[PAGE] ? Math.max(0.72, DISPO[PAGE] / BESOIN[PAGE]) : 1;
+    if (zone) zone.style.zoom = z < 1 ? z.toFixed(3) : '';
+    const nav = document.querySelector('.pages-nav');
+    if (nav) {
+      nav.style.display = NPAGES > 1 ? '' : 'none';
+      nav.querySelector('.num').textContent = `page ${PAGE} / ${NPAGES}`;
+      nav.querySelector('.prec').disabled = PAGE === 1;
+      nav.querySelector('.suiv').disabled = PAGE === NPAGES;
+    }
+    scrollTo({ top: 0 });
+  }
+  function paginer() {
+    const corps = document.querySelector('.feuille .corps');
+    if (!corps) return;
+    const zone = document.querySelector('.feuille-zone'), feuille = document.querySelector('.feuille');
+    const cadre = document.querySelector('.feuille-cadre'), nav = document.querySelector('.pages-nav');
+    if (zone) zone.style.zoom = '';
+    corps.classList.remove('sans-titre');
+    const blocs = [...corps.children].filter((el) => getComputedStyle(el).position !== 'absolute');
+    blocs.forEach((el) => { el.style.display = ''; delete el.dataset.page; });
+    const ec = document.querySelector('.feuille .entete-complete'), ek = document.querySelector('.feuille .entete-courte');
+    if (ec) ec.style.display = ''; if (ek) ek.style.display = '';
+    if (nav) nav.style.display = '';
+    document.documentElement.classList.add('en-pages');
+    const px = (el, ...p) => p.reduce((s, k) => s + (parseFloat(getComputedStyle(el)[k]) || 0), 0);
+    const hauteur = (el) => el.offsetHeight + px(el, 'marginTop', 'marginBottom');
+    const fixe = px(zone, 'paddingTop', 'paddingBottom') + px(feuille, 'paddingTop', 'paddingBottom')
+      + px(cadre, 'paddingTop', 'paddingBottom', 'borderTopWidth', 'borderBottomWidth')
+      + (nav ? hauteur(nav) : 0) + 4;
+    const hC = ec ? hauteur(ec) : 0, hK = ek ? hauteur(ek) : 0;
+    const dispo = (p) => innerHeight - fixe - (p === 1 ? hC : hK);
+    BESOIN = {}; DISPO = {};
+    let page = 1, reste = dispo(1), dejaContenu = false;
+    blocs.forEach((el, k) => {
+      const h = hauteur(el), titre = el.classList.contains('titre-exo');
+      // page 1 : le titre et le premier texte restent avec l'en-tête, même s'il faut réduire un peu la page
+      const force = page === 1 && !dejaContenu;
+      if (!force && h > reste && reste < dispo(page)) {
+        page += 1; reste = dispo(page);
+        const avant = blocs[k - 1];
+        if (avant && avant.classList.contains('titre-exo') && +avant.dataset.page === page - 1 && page - 1 > 1) {
+          avant.dataset.page = page; reste -= hauteur(avant);                 // le titre suit son bloc
+        }
+      }
+      el.dataset.page = page; reste -= h;
+      if (!titre) dejaContenu = true;
+    });
+    NPAGES = page;
+    for (let p = 1; p <= NPAGES; p++) {
+      DISPO[p] = dispo(p);
+      BESOIN[p] = blocs.filter((el) => +el.dataset.page === p).reduce((s, el) => s + hauteur(el), 0);
+    }
+    if (NPAGES === 1) document.documentElement.classList.remove('en-pages');
+    montrerPage(Math.min(PAGE, NPAGES));
+  }
+  function pageDe(el) {
+    for (let e = el; e && e !== document.body; e = e.parentElement) if (e.dataset && e.dataset.page) return +e.dataset.page;
+    return PAGE;
   }
 
   window.Feuille = { rendre, surligner, effacer, md, etat };
