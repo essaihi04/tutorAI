@@ -150,6 +150,16 @@ function remiseEtiquettes() { ET = {}; ERREURS = 0; MAL = new Set(); ORDRE.forEa
 function noterLegende(P) { P.legende_total = ORDRE.length; P.legende_places = ORDRE.filter(n => ET[n].ok).length; P.legende_erreurs = ERREURS; P.legende_mal = [...MAL].join(', '); }
 remiseEtiquettes();
 const largeurEt = id => 18 + 8.2 * NOMS[id].length;
+/* (20 novembre 2026) Où va chaque étiquette : un trait de rappel jaune part de la structure (point) et finit au bord d'un
+ * emplacement vide en pointillés ; « transcription » et « traduction » visent chacune une flèche jaune (gène → ARNm,
+ * ribosome qui avance sur l'ARNm). Sans eux, l'élève ne voyait ni les places ni les traits. */
+const CIBLE = { gene: [212, 151], transcription: [200, 190], arnm: [176, 214], pore: [PORE[0], PORE[1]], ribosome: [486, 262], proteine: [423, 131], traduction: [462, 280] };
+function rappel(c, [sx, sy], [tx, ty], w) {
+  const ex = tx < sx - w / 2 ? sx - w / 2 : tx > sx + w / 2 ? sx + w / 2 : tx, ey = ex === tx ? (ty < sy ? sy - 13 : sy + 13) : sy;
+  c.ligne(tx, ty, ex, ey, { couleur: 'jaune', largeur: 1.8, duree: .06 });
+  c.point(tx, ty, 3.2, 'jaune');
+}
+const emplacement = (c, [sx, sy], w) => c.rect(sx - w / 2, sy - 13, w, 26, { couleur: 'jaune', largeur: 1.4, pointille: [5, 4], fond: '#0f172a', fondAlpha: .3, arrondi: 6, duree: .1 });
 /** Positions affichées (la correction les amène à leur place). */
 function positions(k) {
   const out = {};
@@ -183,6 +193,11 @@ function dessinerConstruire(c, k) {
   c.repere('zone_traduction', 380, 110, 150, 175, 'la zone de la traduction (ribosome, cytoplasme)');
   if (t >= 1.0) c.repere('etiquettes', 600, 58, 152, 270, 'les étiquettes à poser');
   const pos = positions(k);
+  if (t >= .8 && k.ecrit(c, 'traits', .8)) {
+    c.fleche(200, 175, 200, 204, { couleur: 'jaune', largeur: 2, tete: 8, duree: .1 });   // transcription : du gène à l'ARNm
+    c.fleche(420, 280, 506, 280, { couleur: 'jaune', largeur: 2, tete: 8, duree: .1 });   // traduction : le ribosome lit l'ARNm
+    ORDRE.forEach(id => { if (!pos[id].ok) emplacement(c, SLOT[id], largeurEt(id)); rappel(c, SLOT[id], CIBLE[id], largeurEt(id)); });
+  }
   if (k.P.corrige && t >= T_CORR + 1.9) k.P.places = 7;
   if (t >= 1.0 && k.ecrit(c, 'et', 1.0)) {
     ORDRE.forEach(id => {
