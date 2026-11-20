@@ -68,11 +68,14 @@ n'apparaît qu'après l'épuisement (≈ 2,3 UA à 14 min) ; repères « glucose
   `branches.html`, bases en vert vs HO⁻ bleu ciel au ch13, ln en rouge au ch5…). Le cahier suit la page de la
   diapositive quand elle est cohérente, sinon le lexique ; les cas sont listés par cours ci-dessous. Les animations
   n'ont pas été modifiées.
-- **Champ `partie`** : `verifier_figures_cahier.py` ne contrôle pas les clés d'une figure ; `partie` n'est donc ni
-  signalé ni validé, et le lecteur partie par partie n'est pas sur `main` (non testé à l'écran). `partie: n` désigne la
-  ligne « n. » du bloc : ambigu quand un bloc contient deux « 1. » (changement de partie romaine, ex. `le_s1_b2`,
-  `td_s1_b3`). Un titre romain placé au milieu d'un bloc s'affiche à la fin de la partie qui le précède si le lecteur
-  coupe strictement sur « n. ».
+- **Champ `partie` et lecteur partie par partie** (`partiesDuCahier.ts`, arrivé sur `main` pendant l'audit) :
+  `partie: n` y désigne la n-ième partie du bloc ; les agents l'avaient posé comme le numéro « n. » de la ligne →
+  139 dessins convertis (commit séparé). Deux corrections du lecteur (commit séparé, `partiesDuCahier.ts` et
+  `CycleBloc.tsx`) : un titre romain posé juste avant « 1. » ouvre la partie avec elle (43 titres finissaient la
+  partie d'avant) ; un cahier numéroté se découpe toujours par ses numéros (41 blocs avaient autant de lignes que de
+  diapositives et passaient en mode « une ligne par diapositive »). Logique testée hors du site (tsc + node), pas
+  dans le navigateur : `node_modules` n'est pas installé dans cette copie. `verifier_figures_cahier.py` ne contrôle
+  toujours pas les clés d'une figure.
 - **Blocs de fin de cours** (`*_bloc_fin_cours`) : texte commun d'environ 200 caractères sur une ligne ; coupé en
   3 lignes dans certains cours (maths ch4-6, ondes), laissé tel quel ailleurs.
 - **Copies `en_attente/`** : non mises à jour (hors périmètre demandé) alors que le skill `cahier-de-l-eleve` demande
