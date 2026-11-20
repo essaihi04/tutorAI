@@ -65,9 +65,12 @@ export function OuEnEstOn({ seance, nbSeances, bloc, nbBlocs, etape }: { seance:
  * « C'est écrit » la marque écrite et fait apparaître la suivante ; la dernière ferme le cahier du bloc. ◀ / ▶ ne
  * parcourent que les parties déjà écrites et celle à écrire : une partie pas encore atteinte n'apparaît jamais.
  */
-export function TableauCahier({ bloc, onEcrit, entetes }: { bloc: BlocCours; onEcrit: (dureeS: number) => void;
+export function TableauCahier({ bloc, onEcrit, entetes, relecture }: { bloc: BlocCours; onEcrit: (dureeS: number) => void;
   /** le plan du cahier (12 novembre 2026) : titre du cours, parties numérotées, diapositives numérotées */
-  entetes?: (slideId: string) => EnteteCahier | undefined }) {
+  entetes?: (slideId: string) => EnteteCahier | undefined;
+  /** Relire le cahier d'un bloc précédent (20 novembre 2026) : toutes ses parties se parcourent, rien n'est à écrire ;
+   *  ce bouton prend la place de « C'est écrit » (revenir au bloc en cours). */
+  relecture?: { libelle: string; onRetour: () => void } }) {
   const debut = useRef(Date.now());
   const lignes = useMemo(() => bloc.cahier || [], [bloc.cahier]);
   const figures = useMemo(() => bloc.cahier_figures || [], [bloc.cahier_figures]);
@@ -77,11 +80,11 @@ export function TableauCahier({ bloc, onEcrit, entetes }: { bloc: BlocCours; onE
   const parLigne = !!entetes && plan.every(Boolean) && lignes.length === bloc.slide_ids.length;
   const parties = useMemo(() => partiesDuCahier(lignes, figures, parLigne), [lignes, figures, parLigne]);
   /** la partie à écrire (toutes celles d'avant sont écrites) */
-  const [aEcrire, setAEcrire] = useState(0);
+  const n = parties.length;
+  const [aEcrire, setAEcrire] = useState(relecture ? n - 1 : 0);
   /** la partie montrée, jamais au-delà de celle à écrire */
   const [vue, setVue] = useState(0);
-  useEffect(() => { debut.current = Date.now(); setAEcrire(0); setVue(0); }, [bloc.id]);
-  const n = parties.length;
+  useEffect(() => { debut.current = Date.now(); setAEcrire(relecture ? n - 1 : 0); setVue(0); }, [bloc.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const partie = parties[Math.min(vue, n - 1)];
   const dejaEcrite = vue < aEcrire;
   const ecrit = () => {
@@ -98,7 +101,7 @@ export function TableauCahier({ bloc, onEcrit, entetes }: { bloc: BlocCours; onE
       {/* « C'est écrit » sur la ligne du titre : la hauteur gagnée va au texte du cahier */}
       <div className="flex shrink-0 items-end gap-3 court:items-center court:gap-2">
         <div className="min-w-0 flex-1">
-          <p className="text-xs uppercase tracking-wide text-white/45 court:hidden" style={{ fontFamily: 'system-ui, sans-serif' }}>Le cours s’arrête : recopie dans ton cahier</p>
+          <p className={`text-xs uppercase tracking-wide court:hidden ${relecture ? 'text-amber-200/70' : 'text-white/45'}`} style={{ fontFamily: 'system-ui, sans-serif' }}>{relecture ? 'Relecture : un bloc déjà vu' : 'Le cours s’arrête : recopie dans ton cahier'}</p>
           {bloc.titre && <h3 className="mt-1 text-2xl underline decoration-amber-200/40 underline-offset-4 court:mt-0 court:truncate court:text-lg" style={{ fontFamily: CRAIE, color: '#fef3c7' }}><Formule t={bloc.titre} /></h3>}
         </div>
         {n > 1 && (
@@ -114,11 +117,15 @@ export function TableauCahier({ bloc, onEcrit, entetes }: { bloc: BlocCours; onE
             <button type="button" className={fleche} disabled={vue >= aEcrire} onClick={() => setVue(v => Math.min(aEcrire, v + 1))} aria-label="Partie suivante" title="Partie suivante">▶</button>
           </div>
         )}
-        <button type="button" onClick={ecrit} disabled={dejaEcrite}
+        {relecture ? (
+          <button type="button" onClick={relecture.onRetour}
+            className="shrink-0 whitespace-nowrap rounded-full bg-amber-300/90 px-6 py-3 text-base font-bold text-slate-950 shadow-lg hover:bg-amber-200 court:px-3 court:py-1.5 court:text-sm"
+            style={{ fontFamily: 'system-ui, sans-serif' }}>{relecture.libelle}</button>
+        ) : <button type="button" onClick={ecrit} disabled={dejaEcrite}
           className={`shrink-0 rounded-full px-7 py-3 text-base font-bold shadow-lg court:px-4 court:py-1.5 court:text-sm ${dejaEcrite ? 'cursor-default bg-emerald-400/20 text-emerald-100' : 'bg-cyan-400/90 text-slate-950 hover:bg-cyan-300'}`}
           style={{ fontFamily: 'system-ui, sans-serif' }}>
           {dejaEcrite ? '✓ Déjà écrite' : '✍️ C’est écrit'}
-        </button>
+        </button>}
       </div>
       {/* Le texte et les dessins tiennent chacun leur place (15 novembre 2026, « le texte du cahier est parfois trop petit
           avec le diagramme ») : un seul zoom pour les deux faisait rétrécir le texte dès que deux dessins s'empilaient.
@@ -159,6 +166,9 @@ export function TableauCahier({ bloc, onEcrit, entetes }: { bloc: BlocCours; onE
   );
 }
 
+/** Un bloc d'avant, relisible depuis la fin du bloc en cours : sa place dans le cours (séance, bloc, à partir de 0). */
+export interface BlocPrecedent { bloc: BlocCours; seance: number; index: number }
+
 export interface PlaceBloc { coursId: string; seanceId: string; seance: number; nbSeances: number; bloc: number; nbBlocs: number }
 
 /**
@@ -166,9 +176,11 @@ export interface PlaceBloc { coursId: string; seanceId: string; seance: number; 
  * `onSaturation` : deux réponses fausses de suite, réponses trop rapides ou longue inactivité (déjà noté ici) ;
  * le lecteur passe alors à la pause s'il le veut. `onFini` : le bloc est bouclé.
  */
-export default function CycleBloc({ bloc, place, etapeInitiale = 'cahier', titreCours = '', onDire, onJouer, reactions, onFini, onSaturation, entetes, onFermer }: {
+export default function CycleBloc({ bloc, place, etapeInitiale = 'cahier', titreCours = '', onDire, onJouer, reactions, onFini, onSaturation, entetes, onFermer, precedents = [] }: {
   /** × en haut à droite (12 novembre 2026) : l'élève ferme la fenêtre et revient au cours */
   onFermer?: () => void;
+  /** les blocs d'avant dans le cours, du plus ancien au plus récent : « ◀ Bloc précédent » relit leur cahier */
+  precedents?: BlocPrecedent[];
   bloc: BlocCours; place: PlaceBloc; etapeInitiale?: EtapeBloc; titreCours?: string;
   entetes?: (slideId: string) => EnteteCahier | undefined;
   onDire?: (parole: string) => void; onJouer?: (r: ReactionPreparee) => void;
@@ -225,21 +237,47 @@ export default function CycleBloc({ bloc, place, etapeInitiale = 'cahier', titre
     if (cause) saturer(cause, genre === 'retrouver' ? 'exercice' : 'pause');
   };
 
+  /**
+   * Revenir en arrière (20 novembre 2026, demande de l'utilisateur) : « ◀ Bloc précédent » relit le cahier des blocs
+   * d'avant, sans rien à réécrire ; le cahier du bloc en cours reste monté (caché), ses parties écrites ne se perdent pas.
+   */
+  const [relu, setRelu] = useState<number | null>(null);
+  const lu = relu === null ? null : precedents[relu];
+  const blocPrecedent = () => { if (!precedents.length) return; taire(); setRelu(r => (r === null ? precedents.length - 1 : Math.max(0, r - 1))); };
+  const blocSuivant = () => setRelu(r => (r === null || r >= precedents.length - 1 ? null : r + 1));
+
   if (!etape) return null;
+  const navBlocs = 'shrink-0 whitespace-nowrap rounded-full bg-white/10 px-3 py-1 text-xs text-white/75 hover:bg-white/20 disabled:cursor-default disabled:opacity-30 court:px-2 court:py-0.5';
   return (
     <div data-fenetre-cycle className="relative flex h-full min-h-0 flex-col gap-3 overflow-y-auto rounded-2xl border border-white/15 bg-[#14201a]/95 p-4 text-white md:p-5 court:gap-1.5 court:p-2">
       {onFermer && (
         <button type="button" onClick={() => { taire(); onFermer(); }} title="Fermer et revenir au cours" aria-label="Fermer"
           className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-lg text-white/70 hover:bg-white/20 hover:text-white court:right-1.5 court:top-1.5 court:h-7 court:w-7 court:text-base">×</button>
       )}
-      <div className={onFermer ? 'pr-10' : ''}>
-        <OuEnEstOn seance={place.seance} nbSeances={place.nbSeances} bloc={place.bloc} nbBlocs={place.nbBlocs} etape={etape} />
+      <div className={`flex items-center gap-2 ${onFermer ? 'pr-10' : ''}`}>
+        {etape === 'cahier' && precedents.length > 0 && (
+          <div data-blocs-precedents className="flex shrink-0 items-center gap-1" style={{ fontFamily: 'system-ui, sans-serif' }}>
+            <button type="button" className={navBlocs} onClick={blocPrecedent} disabled={relu === 0} title="Relire le cahier du bloc d'avant">◀ Bloc précédent</button>
+            {lu && <button type="button" className={navBlocs} onClick={blocSuivant} title="Bloc suivant">Bloc suivant ▶</button>}
+          </div>
+        )}
+        <div className="min-w-0 flex-1">
+          {lu
+            ? <p className="text-xs text-amber-200/80" style={{ fontFamily: 'system-ui, sans-serif' }}>Relecture · Séance {lu.seance + 1}/{place.nbSeances} · Bloc {lu.index + 1}</p>
+            : <OuEnEstOn seance={place.seance} nbSeances={place.nbSeances} bloc={place.bloc} nbBlocs={place.nbBlocs} etape={etape} />}
+        </div>
       </div>
       {alerte && <p className="rounded-lg bg-sky-400/10 px-3 py-2 text-sm text-sky-100" style={{ fontFamily: 'system-ui, sans-serif' }}>{PHRASES_SATURATION[alerte]}</p>}
       {etape === 'cahier' && (
         // tout le cahier du bloc dans l'écran, sans défiler (user rule, 12 novembre 2026) : le texte s'ajuste dans TableauCahier
-        <div className="flex min-h-0 flex-1 flex-col">
+        <div className={`min-h-0 flex-1 flex-col ${lu ? 'hidden' : 'flex'}`}>
           <TableauCahier bloc={bloc} entetes={entetes} onEcrit={duree => { void noter({ evenement: 'cahier', ...base, duree_s: duree }); suivante(); }} />
+        </div>
+      )}
+      {etape === 'cahier' && lu && (
+        <div className="flex min-h-0 flex-1 flex-col">
+          <TableauCahier key={lu.bloc.id} bloc={lu.bloc} entetes={entetes} onEcrit={() => {}}
+            relecture={{ libelle: 'Mon bloc →', onRetour: () => setRelu(null) }} />
         </div>
       )}
       {etape === 'retrouver' && bloc.retrouver && (

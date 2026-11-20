@@ -136,9 +136,13 @@ export function useMemoireDuCours({ deck, deckId, slideId, actif, onAvancer, onQ
       rendu = <CycleBloc key={`${s.id}:${b.id}`} bloc={b} etapeInitiale={e.etape} titreCours={deck?.title} onDire={direTexte} onJouer={jouerReaction} reactions={reactions}
         entetes={id => enteteDuCahier(deck, id)}
         place={{ coursId: deckId, seanceId: s.id, seance: e.seance, nbSeances: seances.length, bloc: e.bloc, nbBlocs: s.blocs.length }}
+        // les blocs d'avant dans le cours : « ◀ Bloc précédent » relit leur cahier (20 novembre 2026)
+        precedents={seances.flatMap((se, i) => se.blocs.map((bl, j) => ({ bloc: bl, seance: i, index: j })))
+          .filter(p => (p.seance < e.seance || (p.seance === e.seance && p.index < e.bloc)) && (p.bloc.cahier || []).length > 0)}
         onFini={() => finDuCycle(e)}
-        // fermé par l'élève (12 novembre 2026) : le cours reprend ; le serveur garde ce qui n'est pas fait (reprise)
-        onFermer={() => finDuCycle({ ...e, puis: 'suite' })} />;
+        // × (20 novembre 2026) : l'élève revient à la diapositive, rien n'est marqué fait ; « ✍️ Au cahier → » rouvrira
+        // ce cahier. Avant, × bouclait le bloc et faisait avancer le cours : c'était une façon de sauter le cahier.
+        onFermer={() => { avancerApresCycle.current = false; taire(); setEcran(null); }} />;
     }
   } else if (ecran?.genre === 'fin') {
     const e = ecran;
