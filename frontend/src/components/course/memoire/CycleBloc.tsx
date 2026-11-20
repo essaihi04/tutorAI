@@ -7,6 +7,7 @@ import { taire } from './voix';
 import SansDefilement from '../SansDefilement';
 import FiguresCahier from '../FigureCahier';
 import { invitationCahier } from './invitationsCahier';
+import { partiesDuCahier } from './partiesDuCahier';
 import { DetecteurSaturation, PHRASES_SATURATION, tempsDeLectureMs, useInactivite, type CauseSaturation } from './saturation';
 
 /**
@@ -58,69 +59,101 @@ export function OuEnEstOn({ seance, nbSeances, bloc, nbBlocs, etape }: { seance:
   );
 }
 
-/** Le tableau du cahier : les lignes du bloc, écrites à la craie ; l'élève copie puis appuie « C'est écrit ». */
+/**
+ * Le tableau du cahier : les lignes du bloc, écrites à la craie ; l'élève copie puis appuie « C'est écrit ».
+ * Partie par partie (20 novembre 2026, `partiesDuCahier.ts`) : seule la partie à écrire est montrée, avec son dessin ;
+ * « C'est écrit » la marque écrite et fait apparaître la suivante ; la dernière ferme le cahier du bloc. ◀ / ▶ ne
+ * parcourent que les parties déjà écrites et celle à écrire : une partie pas encore atteinte n'apparaît jamais.
+ */
 export function TableauCahier({ bloc, onEcrit, entetes }: { bloc: BlocCours; onEcrit: (dureeS: number) => void;
   /** le plan du cahier (12 novembre 2026) : titre du cours, parties numérotées, diapositives numérotées */
   entetes?: (slideId: string) => EnteteCahier | undefined }) {
   const debut = useRef(Date.now());
-  const lignes = bloc.cahier || [];
-  const figures = bloc.cahier_figures || [];
+  const lignes = useMemo(() => bloc.cahier || [], [bloc.cahier]);
+  const figures = useMemo(() => bloc.cahier_figures || [], [bloc.cahier_figures]);
   // Une ligne par diapositive du bloc : chaque ligne sous le titre de sa diapositive (et de sa partie quand on y entre) ;
   // sinon les titres d'abord, puis les lignes. Un titre déjà copié dans le bloc ne se répète pas.
   const plan = entetes ? bloc.slide_ids.map(id => entetes(id)) : [];
   const parLigne = !!entetes && plan.every(Boolean) && lignes.length === bloc.slide_ids.length;
-  useEffect(() => { debut.current = Date.now(); }, [bloc.id]);
+  const parties = useMemo(() => partiesDuCahier(lignes, figures, parLigne), [lignes, figures, parLigne]);
+  /** la partie à écrire (toutes celles d'avant sont écrites) */
+  const [aEcrire, setAEcrire] = useState(0);
+  /** la partie montrée, jamais au-delà de celle à écrire */
+  const [vue, setVue] = useState(0);
+  useEffect(() => { debut.current = Date.now(); setAEcrire(0); setVue(0); }, [bloc.id]);
+  const n = parties.length;
+  const partie = parties[Math.min(vue, n - 1)];
+  const dejaEcrite = vue < aEcrire;
+  const ecrit = () => {
+    if (dejaEcrite) return;
+    if (aEcrire >= n - 1) { onEcrit(Math.round((Date.now() - debut.current) / 1000)); return; }
+    setAEcrire(aEcrire + 1);
+    setVue(aEcrire + 1);
+  };
+  const figuresVues = partie.figures.map(i => figures[i]);
+  const tete = vue === 0 && plan.length > 0 ? plan.find(e => e?.cours)?.cours : undefined;
+  const fleche = 'flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-base text-white/80 hover:bg-white/20 disabled:cursor-default disabled:opacity-25 disabled:hover:bg-white/10 court:h-7 court:w-7 court:text-xs';
   return (
     <div className="flex h-full min-h-0 flex-col gap-3 court:gap-1.5">
       {/* « C'est écrit » sur la ligne du titre : la hauteur gagnée va au texte du cahier */}
-      <div className="flex shrink-0 items-end gap-3">
+      <div className="flex shrink-0 items-end gap-3 court:items-center court:gap-2">
         <div className="min-w-0 flex-1">
           <p className="text-xs uppercase tracking-wide text-white/45 court:hidden" style={{ fontFamily: 'system-ui, sans-serif' }}>Le cours s’arrête : recopie dans ton cahier</p>
-          {bloc.titre && <h3 className="mt-1 text-2xl underline decoration-amber-200/40 underline-offset-4 court:mt-0 court:text-lg" style={{ fontFamily: CRAIE, color: '#fef3c7' }}><Formule t={bloc.titre} /></h3>}
+          {bloc.titre && <h3 className="mt-1 text-2xl underline decoration-amber-200/40 underline-offset-4 court:mt-0 court:truncate court:text-lg" style={{ fontFamily: CRAIE, color: '#fef3c7' }}><Formule t={bloc.titre} /></h3>}
         </div>
-        <button type="button" onClick={() => onEcrit(Math.round((Date.now() - debut.current) / 1000))}
-          className="shrink-0 rounded-full bg-cyan-400/90 px-7 py-3 text-base font-bold text-slate-950 shadow-lg hover:bg-cyan-300 court:px-4 court:py-1.5 court:text-sm"
+        {n > 1 && (
+          <div data-parties-cahier className="flex shrink-0 items-center gap-1.5 court:gap-1" style={{ fontFamily: 'system-ui, sans-serif' }}>
+            <button type="button" className={fleche} disabled={vue === 0} onClick={() => setVue(v => Math.max(0, v - 1))} aria-label="Partie précédente" title="Partie précédente">◀</button>
+            <span className="flex flex-col items-center px-1 text-xs text-white/65">
+              <span className="whitespace-nowrap">Partie {vue + 1}/{n}</span>
+              {/* une marque par partie atteinte (écrite : vert ; montrée : cyan) — rien pour celles à venir */}
+              <span className="mt-1 flex gap-0.5 court:hidden">{Array.from({ length: aEcrire + 1 }, (_, i) => (
+                <span key={i} className={`h-1.5 w-3 rounded-full ${i === vue ? 'bg-cyan-300' : 'bg-emerald-300/80'}`} />
+              ))}</span>
+            </span>
+            <button type="button" className={fleche} disabled={vue >= aEcrire} onClick={() => setVue(v => Math.min(aEcrire, v + 1))} aria-label="Partie suivante" title="Partie suivante">▶</button>
+          </div>
+        )}
+        <button type="button" onClick={ecrit} disabled={dejaEcrite}
+          className={`shrink-0 rounded-full px-7 py-3 text-base font-bold shadow-lg court:px-4 court:py-1.5 court:text-sm ${dejaEcrite ? 'cursor-default bg-emerald-400/20 text-emerald-100' : 'bg-cyan-400/90 text-slate-950 hover:bg-cyan-300'}`}
           style={{ fontFamily: 'system-ui, sans-serif' }}>
-          ✍️ C’est écrit
+          {dejaEcrite ? '✓ Déjà écrite' : '✍️ C’est écrit'}
         </button>
       </div>
       {/* Le texte et les dessins tiennent chacun leur place (15 novembre 2026, « le texte du cahier est parfois trop petit
           avec le diagramme ») : un seul zoom pour les deux faisait rétrécir le texte dès que deux dessins s'empilaient.
           Le texte remplit sa colonne (SansDefilement), les dessins se partagent la hauteur de la leur. */}
-      <div className="flex min-h-0 flex-1 flex-col gap-4 rounded-2xl border border-amber-100/15 bg-[#1d2b22] p-3 shadow-inner md:flex-row md:p-4 court:flex-row court:gap-2 court:p-2" style={{ fontFamily: CRAIE }}>
-        {/* les dessins du bloc (courbe, schéma, croquis) : à droite du texte sur grand écran, dessous sur téléphone */}
+      <div key={vue} className="flex min-h-0 flex-1 flex-col gap-4 rounded-2xl border border-amber-100/15 bg-[#1d2b22] p-3 shadow-inner md:flex-row md:p-4 court:flex-row court:gap-2 court:p-2" style={{ fontFamily: CRAIE }}>
+        {/* les dessins de la partie (courbe, schéma, croquis) : à droite du texte sur grand écran, dessous sur téléphone */}
         <SansDefilement agrandirMax={1.6} zoomMin={0.7} className="min-w-0">
-        {plan.length > 0 && (() => {
-          const tete = plan.find(e => e?.cours)?.cours;
-          return tete ? (
-            <div className="mb-3 text-center">
-              <p className="text-3xl text-amber-200 underline decoration-amber-200/50 decoration-2 underline-offset-8">{tete.titre}</p>
-              {tete.sousTitre && <p className="mt-2 text-lg italic text-[#e7e5c9]">{tete.sousTitre}</p>}
-            </div>
-          ) : null;
-        })()}
+        {tete && (
+          <div className="mb-3 text-center court:mb-1">
+            <p className="text-3xl text-amber-200 underline decoration-amber-200/50 decoration-2 underline-offset-8 court:text-xl court:underline-offset-4">{tete.titre}</p>
+            {tete.sousTitre && <p className="mt-2 text-lg italic text-[#e7e5c9] court:mt-0 court:text-base">{tete.sousTitre}</p>}
+          </div>
+        )}
         {parLigne ? (
           <div className="space-y-3">
-            {lignes.map((l, i) => (
+            {partie.lignes.map(i => (
               <div key={i}>
                 {plan[i]?.partie && <p className="mb-1 text-2xl text-rose-300">{plan[i]!.partie}</p>}
                 <p className="pl-3 text-lg text-amber-100 underline decoration-amber-200/30 underline-offset-4">{plan[i]!.diapo}</p>
-                <p className="pl-6 text-xl leading-snug text-[#f5f1dc] md:text-2xl" dir="auto"><Formule t={l.texte} /></p>
+                <p className="pl-6 text-xl leading-snug text-[#f5f1dc] md:text-2xl" dir="auto"><Formule t={lignes[i].texte} /></p>
               </div>
             ))}
           </div>
         ) : lignes.length ? (
           <>
-            {plan.filter(e => e?.partie).map((e, i) => <p key={i} className="mb-1 text-2xl text-rose-300">{e!.partie}</p>)}
+            {vue === 0 && plan.filter(e => e?.partie).map((e, i) => <p key={i} className="mb-1 text-2xl text-rose-300 court:text-xl">{e!.partie}</p>)}
             <ol className="space-y-3">
-              {lignes.map((l, i) => (
-                <li key={i} className="text-xl leading-snug text-[#f5f1dc] md:text-2xl" dir="auto"><Formule t={l.texte} /></li>
+              {partie.lignes.map(i => (
+                <li key={i} className="text-xl leading-snug text-[#f5f1dc] md:text-2xl" dir="auto"><Formule t={lignes[i].texte} /></li>
               ))}
             </ol>
           </>
         ) : <p className="text-lg text-white/60">Écris avec tes mots ce que tu viens de comprendre.</p>}
         </SansDefilement>
-        {figures.length > 0 && <FiguresCahier figures={figures} remplir className="h-[42%] shrink-0 md:h-auto md:w-[38%] court:h-auto court:w-[38%]" />}
+        {figuresVues.length > 0 && <FiguresCahier figures={figuresVues} remplir className="h-[42%] shrink-0 md:h-auto md:w-[38%] court:h-auto court:w-[38%]" />}
       </div>
     </div>
   );
