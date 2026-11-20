@@ -1,17 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowRight,
-  BookOpenCheck,
+  BookOpen,
   CheckCircle2,
   Clock3,
-  Folder,
-  FolderOpen,
   Layers3,
   MessageCircle,
   Play,
   RefreshCw,
-  Sparkles,
+  Search,
+  X,
 } from 'lucide-react';
 import MoalimShell from '../components/MoalimShell';
 import StudentNavigation from '../components/StudentNavigation';
@@ -23,19 +21,92 @@ import {
   type CourseCatalogSubject,
 } from '../services/api';
 
+// Bibliothèque des cours (20/11/2026) : des cartes avec image, un filtre par matière, une recherche et un filtre
+// d'avancement. Une couleur par matière, la même partout sur la page (pastille, badge, barre d'avancement).
+
 const EMPTY_CATALOG: CourseCatalog = { subjects: [], total_courses: 0 };
 
+type Teinte = { point: string; badge: string; barre: string; fond: string; actif: string };
+
+const TEINTES: Record<string, Teinte> = {
+  physique: {
+    point: 'bg-sky-400', badge: 'bg-sky-400/90 text-sky-950', barre: 'bg-sky-400',
+    fond: 'from-sky-600/60 via-indigo-700/40 to-[#08081c]', actif: 'border-sky-300/60 bg-sky-400/15 text-white',
+  },
+  chimie: {
+    point: 'bg-teal-400', badge: 'bg-teal-300/90 text-teal-950', barre: 'bg-teal-400',
+    fond: 'from-teal-600/60 via-cyan-800/40 to-[#08081c]', actif: 'border-teal-300/60 bg-teal-400/15 text-white',
+  },
+  svt: {
+    point: 'bg-lime-400', badge: 'bg-lime-300/90 text-lime-950', barre: 'bg-lime-400',
+    fond: 'from-lime-600/55 via-emerald-800/40 to-[#08081c]', actif: 'border-lime-300/60 bg-lime-400/15 text-white',
+  },
+  maths: {
+    point: 'bg-amber-400', badge: 'bg-amber-300/90 text-amber-950', barre: 'bg-amber-400',
+    fond: 'from-amber-500/55 via-orange-800/40 to-[#08081c]', actif: 'border-amber-300/60 bg-amber-400/15 text-white',
+  },
+  autre: {
+    point: 'bg-violet-400', badge: 'bg-violet-300/90 text-violet-950', barre: 'bg-violet-400',
+    fond: 'from-violet-600/55 via-indigo-800/40 to-[#08081c]', actif: 'border-violet-300/60 bg-violet-400/15 text-white',
+  },
+};
+
+const sansAccents = (texte: string) =>
+  texte.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+const cleMatiere = (nom: string) => {
+  const n = sansAccents(nom);
+  if (n.startsWith('phys')) return 'physique';
+  if (n.startsWith('chim')) return 'chimie';
+  if (n.startsWith('scien') || n.includes('svt') || n.includes('vie')) return 'svt';
+  if (n.startsWith('math')) return 'maths';
+  return 'autre';
+};
+
+const nomCourt = (nom: string) => {
+  const cle = cleMatiere(nom);
+  if (cle === 'svt') return 'SVT';
+  if (cle === 'maths') return 'Maths';
+  return nom;
+};
+
+// Numéro du chapitre lu dans l'identifiant du cours (phys_ch12_…) : il sert à trier les cartes dans l'ordre du programme.
+const numeroChapitre = (course: CourseCatalogCourse) => {
+  const m = /_ch(\d+)/.exec(course.stable_id || course.deck_id || '');
+  return m ? Number(m[1]) : 999;
+};
+
 const formatDuration = (minutes: number) => {
+  if (!minutes) return '';
   if (minutes < 60) return `${minutes} min`;
   const hours = Math.floor(minutes / 60);
   const remainder = minutes % 60;
-  return remainder ? `${hours} h ${remainder}` : `${hours} h`;
+  return remainder ? `${hours} h ${String(remainder).padStart(2, '0')}` : `${hours} h`;
+};
+
+type Avancement = 'tous' | 'en_cours' | 'termine' | 'a_faire';
+const AVANCEMENTS: { id: Avancement; label: string }[] = [
+  { id: 'tous', label: 'Tous' },
+  { id: 'en_cours', label: 'En cours' },
+  { id: 'a_faire', label: 'À commencer' },
+  { id: 'termine', label: 'Terminés' },
+];
+
+type Carte = { course: CourseCatalogCourse; subject: CourseCatalogSubject; teinte: Teinte; rang: number };
+
+// Le résumé du catalogue commence par une formule interne (« Le cours au tableau, en mode concentration : ») :
+// l'élève ne lit que la suite, avec une majuscule.
+const resumeEleve = (texte: string) => {
+  const t = (texte || '').replace(/^.*?mode concentration\s*:\s*/i, '').trim();
+  return t ? t.charAt(0).toUpperCase() + t.slice(1) : '';
 };
 
 export default function CourseLibrary() {
   const navigate = useNavigate();
   const [catalog, setCatalog] = useState<CourseCatalog>(EMPTY_CATALOG);
-  const [selectedSubjectId, setSelectedSubjectId] = useState('');
+  const [matiere, setMatiere] = useState('toutes');
+  const [avancement, setAvancement] = useState<Avancement>('tous');
+  const [recherche, setRecherche] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,44 +114,58 @@ export default function CourseLibrary() {
     setLoading(true);
     setError(null);
     getCourseCatalog()
-      .then(({ data }) => {
-        setCatalog(data);
-        setSelectedSubjectId((current) => {
-          if (data.subjects.some((subject) => subject.id === current)) return current;
-          return data.subjects.find((subject) => subject.course_count > 0)?.id
-            || data.subjects[0]?.id
-            || '';
-        });
-      })
-      .catch(() => setError("Impossible de charger les cours pour le moment."))
+      .then(({ data }) => setCatalog(data))
+      .catch(() => setError('Impossible de charger les cours pour le moment.'))
       .finally(() => setLoading(false));
   };
 
   useEffect(() => {
     let cancelled = false;
     getCourseCatalog()
-      .then(({ data }) => {
-        if (cancelled) return;
-        setCatalog(data);
-        setSelectedSubjectId(
-          data.subjects.find((subject) => subject.course_count > 0)?.id
-            || data.subjects[0]?.id
-            || '',
-        );
-      })
-      .catch(() => {
-        if (!cancelled) setError("Impossible de charger les cours pour le moment.");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+      .then(({ data }) => { if (!cancelled) setCatalog(data); })
+      .catch(() => { if (!cancelled) setError('Impossible de charger les cours pour le moment.'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
 
-  const selectedSubject = useMemo(
-    () => catalog.subjects.find((subject) => subject.id === selectedSubjectId) || null,
-    [catalog.subjects, selectedSubjectId],
+  const matieres = useMemo(
+    () => catalog.subjects.filter((subject) => subject.courses.length > 0),
+    [catalog.subjects],
   );
+
+  const toutes: Carte[] = useMemo(
+    () => matieres.flatMap((subject) => {
+      const teinte = TEINTES[cleMatiere(subject.name_fr)];
+      return [...subject.courses]
+        .sort((a, b) => numeroChapitre(a) - numeroChapitre(b))
+        .map((course, i) => ({ course, subject, teinte, rang: i + 1 }));
+    }),
+    [matieres],
+  );
+
+  const enCours = useMemo(
+    () => toutes.filter(({ course }) => course.progress_status === 'in_progress'),
+    [toutes],
+  );
+
+  const visibles = useMemo(() => {
+    const q = sansAccents(recherche.trim());
+    return toutes.filter(({ course, subject }) => {
+      if (matiere !== 'toutes' && subject.id !== matiere) return false;
+      if (avancement === 'en_cours' && course.progress_status !== 'in_progress') return false;
+      if (avancement === 'termine' && course.progress_status !== 'completed') return false;
+      if (avancement === 'a_faire' && course.progress_status !== 'not_started') return false;
+      if (!q) return true;
+      const texte = sansAccents([
+        course.title, course.chapter_title, course.lesson_title, subject.name_fr, ...(course.essential_topics || []),
+      ].join(' '));
+      return q.split(/\s+/).every((mot) => texte.includes(mot));
+    });
+  }, [toutes, matiere, avancement, recherche]);
+
+  const totalMinutes = toutes.reduce((somme, { course }) => somme + (course.estimated_minutes || 0), 0);
+  const termines = toutes.filter(({ course }) => course.progress_status === 'completed').length;
+  const filtresActifs = matiere !== 'toutes' || avancement !== 'tous' || recherche.trim() !== '';
 
   const openCourse = (course: CourseCatalogCourse) => {
     navigate(
@@ -93,22 +178,31 @@ export default function CourseLibrary() {
     navigate('/tutor', { state: { courseRequest: course.tutor_request } });
   };
 
+  const reinitialiser = () => {
+    setMatiere('toutes');
+    setAvancement('tous');
+    setRecherche('');
+  };
+
   return (
     <MoalimShell>
       <StudentNavigation active="courses" />
-      <main className="mx-auto min-h-[calc(100vh-4rem)] max-w-7xl px-4 pb-28 pt-6 sm:px-6 lg:px-8 lg:pb-12 lg:pt-10">
-        <section className="relative overflow-hidden rounded-[30px] border border-indigo-400/20 bg-gradient-to-br from-indigo-600/25 via-violet-600/15 to-cyan-500/10 p-6 sm:p-8">
-          <div className="pointer-events-none absolute -right-12 -top-16 h-64 w-64 rounded-full bg-cyan-400/15 blur-3xl" />
-          <div className="relative max-w-3xl">
-            <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.07] px-3 py-1 text-xs font-bold text-cyan-200">
-              <Sparkles className="h-3.5 w-3.5" /> Bibliothèque avec Moalim
-            </span>
-            <h1 className="mt-4 text-3xl font-black tracking-tight text-white sm:text-4xl">Mes matières et mes cours</h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-white/55 sm:text-base">
-              Ouvre un dossier de matière, choisis un cours et Moalim reprend le parcours exactement là où tu en as besoin.
-            </p>
+      <main className="mx-auto min-h-[calc(100vh-4rem)] max-w-7xl px-4 pb-28 pt-6 sm:px-6 lg:px-8 lg:pb-12 lg:pt-8">
+        {/* En-tête : titre et trois chiffres, rien de plus */}
+        <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-cyan-300/70">2ᵉ Bac · Sciences physiques BIOF</p>
+            <h1 className="mt-1 text-2xl font-black tracking-tight text-white sm:text-3xl">Bibliothèque des cours</h1>
+            <p className="mt-1 text-sm text-white/50">Chaque cours au tableau, avec ses simulations, ses exercices et les sujets du national.</p>
           </div>
-        </section>
+          {!loading && !error && toutes.length > 0 && (
+            <dl className="flex gap-2 text-center">
+              <Chiffre valeur={String(toutes.length)} libelle="cours" />
+              <Chiffre valeur={`${Math.round(totalMinutes / 60)} h`} libelle="de contenu" />
+              <Chiffre valeur={`${termines}/${toutes.length}`} libelle="terminés" />
+            </dl>
+          )}
+        </header>
 
         {loading ? (
           <LibrarySkeleton />
@@ -119,73 +213,119 @@ export default function CourseLibrary() {
               <RefreshCw className="h-3.5 w-3.5" /> Réessayer
             </button>
           </section>
+        ) : toutes.length === 0 ? (
+          <EmptyLibrary />
         ) : (
           <>
-            <section className="mt-8">
-              <div className="mb-4 flex items-end justify-between gap-4">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/30">1. Choisis une matière</p>
-                  <h2 className="mt-1 text-xl font-black text-white">Dossiers disponibles</h2>
+            {/* Reprendre : les cours commencés, en premier */}
+            {enCours.length > 0 && (
+              <section className="mt-6">
+                <h2 className="mb-3 text-sm font-black text-white/80">Reprendre où tu t'es arrêté</h2>
+                <div className="flex gap-3 overflow-x-auto pb-1 [scrollbar-width:thin]">
+                  {enCours.map(({ course, subject, teinte }) => (
+                    <button
+                      key={course.stable_id}
+                      onClick={() => openCourse(course)}
+                      className="group flex w-72 shrink-0 items-center gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.04] p-2.5 text-left transition hover:border-white/20 hover:bg-white/[0.07]"
+                    >
+                      <Couverture course={course} teinte={teinte} className="h-16 w-24 shrink-0 rounded-xl" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[11px] font-bold text-white/45">{nomCourt(subject.name_fr)}</span>
+                        <span className="block truncate text-sm font-black text-white">{course.title}</span>
+                        <BarreAvancement pourcent={course.progress_percent} teinte={teinte} />
+                      </span>
+                      <Play className="h-4 w-4 shrink-0 fill-current text-white/40 transition group-hover:text-white" />
+                    </button>
+                  ))}
                 </div>
-                <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-white/45">
-                  {catalog.total_courses} cours disponible{catalog.total_courses > 1 ? 's' : ''}
-                </span>
-              </div>
+              </section>
+            )}
 
-              {catalog.subjects.length > 0 ? (
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  {catalog.subjects.map((subject) => (
-                    <SubjectFolder
-                      key={subject.id}
+            {/* Barre de filtres : matières, recherche, avancement */}
+            <section className="sticky top-0 z-20 -mx-4 mt-6 border-b border-white/[0.06] bg-[#08081c]/90 px-4 py-3 backdrop-blur-xl sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5 [scrollbar-width:none]" role="tablist" aria-label="Filtrer par matière">
+                  <Puce
+                    actif={matiere === 'toutes'}
+                    onClick={() => setMatiere('toutes')}
+                    classeActive="border-white/40 bg-white text-indigo-950"
+                    nombre={toutes.length}
+                  >
+                    Toutes
+                  </Puce>
+                  {matieres.map((subject) => {
+                    const teinte = TEINTES[cleMatiere(subject.name_fr)];
+                    return (
+                      <Puce
+                        key={subject.id}
+                        actif={matiere === subject.id}
+                        onClick={() => setMatiere(subject.id)}
+                        classeActive={teinte.actif}
+                        nombre={subject.courses.length}
+                      >
+                        <span className={`h-2 w-2 rounded-full ${teinte.point}`} />
+                        {nomCourt(subject.name_fr)}
+                      </Puce>
+                    );
+                  })}
+                </div>
+                <div className="flex gap-2">
+                  <label className="relative flex-1 lg:w-64 lg:flex-none">
+                    <span className="sr-only">Rechercher un cours</span>
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
+                    <input
+                      value={recherche}
+                      onChange={(e) => setRecherche(e.target.value)}
+                      placeholder="Rechercher : dipôle, ADN, limites…"
+                      className="h-10 w-full rounded-xl border border-white/10 bg-white/[0.05] pl-9 pr-8 text-sm text-white placeholder:text-white/30 focus:border-cyan-300/50 focus:outline-none"
+                    />
+                    {recherche && (
+                      <button onClick={() => setRecherche('')} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-white/40 hover:text-white" aria-label="Effacer la recherche">
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </label>
+                  <select
+                    value={avancement}
+                    onChange={(e) => setAvancement(e.target.value as Avancement)}
+                    className="h-10 rounded-xl border border-white/10 bg-[#11112a] px-3 text-sm font-semibold text-white/80 focus:border-cyan-300/50 focus:outline-none"
+                    aria-label="Filtrer par avancement"
+                  >
+                    {AVANCEMENTS.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+                  </select>
+                </div>
+              </div>
+            </section>
+
+            {/* Les cartes */}
+            <section className="mt-5">
+              <p className="mb-3 text-xs font-semibold text-white/40">
+                {visibles.length} cours{filtresActifs && (
+                  <button onClick={reinitialiser} className="ml-2 font-bold text-cyan-300 hover:text-cyan-200">Tout afficher</button>
+                )}
+              </p>
+              {visibles.length > 0 ? (
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {visibles.map(({ course, subject, teinte, rang }) => (
+                    <CourseCard
+                      key={course.stable_id}
+                      rang={rang}
+                      course={course}
                       subject={subject}
-                      selected={subject.id === selectedSubjectId}
-                      onSelect={() => setSelectedSubjectId(subject.id)}
+                      teinte={teinte}
+                      onOpen={() => openCourse(course)}
+                      onAskTutor={() => askTutorToOpen(course)}
                     />
                   ))}
                 </div>
               ) : (
-                <EmptyLibrary />
+                <div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.025] px-6 py-12 text-center">
+                  <Search className="mx-auto h-7 w-7 text-white/20" />
+                  <p className="mt-3 text-sm font-bold text-white/65">Aucun cours ne correspond</p>
+                  <button onClick={reinitialiser} className="mt-3 text-xs font-bold text-cyan-300">Effacer les filtres</button>
+                </div>
               )}
             </section>
-
-            {selectedSubject && (
-              <section className="mt-10">
-                <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/30">2. Entre directement dans un cours</p>
-                    <h2 className="mt-1 flex items-center gap-2 text-xl font-black text-white">
-                      <span>{selectedSubject.icon || '📚'}</span> {selectedSubject.name_fr}
-                    </h2>
-                  </div>
-                  <button
-                    onClick={() => navigate('/tutor')}
-                    className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/20 bg-cyan-400/[0.07] px-3 py-2 text-xs font-bold text-cyan-200 transition hover:bg-cyan-400/[0.12]"
-                  >
-                    <MessageCircle className="h-3.5 w-3.5" /> Demander un autre cours à Moalim
-                  </button>
-                </div>
-
-                {selectedSubject.courses.length > 0 ? (
-                  <div className="grid gap-5 lg:grid-cols-2">
-                    {selectedSubject.courses.map((course) => (
-                      <CourseCard
-                        key={course.stable_id}
-                        course={course}
-                        onOpen={() => openCourse(course)}
-                        onAskTutor={() => askTutorToOpen(course)}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.025] px-6 py-12 text-center">
-                    <BookOpenCheck className="mx-auto h-8 w-8 text-white/20" />
-                    <p className="mt-3 text-sm font-bold text-white/65">Les cours de cette matière arrivent bientôt</p>
-                    <p className="mt-1 text-xs text-white/35">Moalim reste disponible pour expliquer une notion ou faire un exercice.</p>
-                    <button onClick={() => navigate('/tutor')} className="mt-4 text-xs font-bold text-cyan-300">Ouvrir le tuteur</button>
-                  </div>
-                )}
-              </section>
-            )}
           </>
         )}
       </main>
@@ -194,96 +334,120 @@ export default function CourseLibrary() {
   );
 }
 
-function SubjectFolder({
-  subject,
-  selected,
-  onSelect,
+function Chiffre({ valeur, libelle }: { valeur: string; libelle: string }) {
+  return (
+    <div className="min-w-[78px] rounded-2xl border border-white/[0.07] bg-white/[0.035] px-3 py-2">
+      <dd className="text-lg font-black text-white">{valeur}</dd>
+      <dt className="text-[11px] font-semibold text-white/40">{libelle}</dt>
+    </div>
+  );
+}
+
+function Puce({
+  actif, onClick, classeActive, nombre, children,
 }: {
-  subject: CourseCatalogSubject;
-  selected: boolean;
-  onSelect: () => void;
+  actif: boolean; onClick: () => void; classeActive: string; nombre: number; children: ReactNode;
 }) {
-  const Icon = selected ? FolderOpen : Folder;
   return (
     <button
-      onClick={onSelect}
-      className={`group relative overflow-hidden rounded-2xl border p-4 text-left transition-all ${
-        selected
-          ? 'border-indigo-300/35 bg-indigo-500/15 shadow-lg shadow-indigo-950/25'
-          : 'border-white/[0.07] bg-white/[0.035] hover:-translate-y-0.5 hover:border-white/15 hover:bg-white/[0.055]'
+      role="tab"
+      aria-selected={actif}
+      onClick={onClick}
+      className={`inline-flex h-10 shrink-0 items-center gap-2 rounded-xl border px-3.5 text-sm font-bold transition ${
+        actif ? classeActive : 'border-white/10 bg-white/[0.03] text-white/60 hover:border-white/20 hover:text-white'
       }`}
-      aria-pressed={selected}
     >
-      <span className={`flex h-11 w-11 items-center justify-center rounded-2xl ${selected ? 'bg-indigo-400 text-indigo-950' : 'bg-white/[0.06] text-white/45'}`}>
-        <Icon className="h-5 w-5" />
-      </span>
-      <span className="mt-4 block truncate text-sm font-black text-white">
-        {subject.icon ? `${subject.icon} ` : ''}{subject.name_fr}
-      </span>
-      <span className="mt-1 block text-xs text-white/40">
-        {subject.course_count > 0
-          ? `${subject.course_count} cours disponible${subject.course_count > 1 ? 's' : ''}`
-          : 'Cours à venir'}
-      </span>
-      <ArrowRight className={`absolute bottom-4 right-4 h-4 w-4 transition ${selected ? 'text-cyan-300' : 'text-white/15 group-hover:translate-x-0.5 group-hover:text-white/45'}`} />
+      {children}
+      <span className={`rounded-md px-1.5 text-[11px] ${actif ? 'bg-black/15' : 'bg-white/[0.07] text-white/45'}`}>{nombre}</span>
     </button>
   );
 }
 
+function Couverture({ course, teinte, className = '' }: { course: CourseCatalogCourse; teinte: Teinte; className?: string }) {
+  if (course.cover_image) {
+    return <img src={course.cover_image} alt={course.cover_alt} loading="lazy" className={`object-cover ${className}`} />;
+  }
+  return (
+    <div className={`relative overflow-hidden bg-gradient-to-br ${teinte.fond} ${className}`}>
+      <BookOpen className="absolute bottom-2 right-2 h-1/2 w-1/2 text-white/10" />
+    </div>
+  );
+}
+
+function BarreAvancement({ pourcent, teinte }: { pourcent: number; teinte: Teinte }) {
+  return (
+    <span className="mt-1.5 flex items-center gap-2">
+      <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
+        <span className={`block h-full rounded-full ${teinte.barre}`} style={{ width: `${Math.max(4, pourcent)}%` }} />
+      </span>
+      <span className="text-[11px] font-bold text-white/50">{pourcent}%</span>
+    </span>
+  );
+}
+
 function CourseCard({
-  course,
-  onOpen,
-  onAskTutor,
+  course, subject, teinte, rang, onOpen, onAskTutor,
 }: {
+  rang: number;
   course: CourseCatalogCourse;
+  subject: CourseCatalogSubject;
+  teinte: Teinte;
   onOpen: () => void;
   onAskTutor: () => void;
 }) {
   const completed = course.progress_status === 'completed';
   const inProgress = course.progress_status === 'in_progress';
   return (
-    <article className="group overflow-hidden rounded-[26px] border border-white/[0.08] bg-white/[0.035] shadow-xl shadow-black/10 transition hover:-translate-y-0.5 hover:border-indigo-300/25 hover:bg-white/[0.05]">
-      <button onClick={onOpen} className="relative block aspect-video w-full overflow-hidden text-left">
-        {course.cover_image ? (
-          <img src={course.cover_image} alt={course.cover_alt} className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.025]" />
-        ) : (
-          <div className="h-full w-full bg-gradient-to-br from-indigo-600/50 via-violet-600/30 to-cyan-500/25" />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#08081c] via-[#08081c]/15 to-transparent" />
-        <span className="absolute left-4 top-4 rounded-full border border-white/15 bg-[#08081c]/65 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-cyan-100 backdrop-blur-md">
-          Parcours BAC interactif
+    <article className="group relative flex flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0e0e26] shadow-lg shadow-black/20 transition duration-200 hover:-translate-y-1 hover:border-white/20 hover:shadow-2xl hover:shadow-black/40">
+      <button onClick={onOpen} className="relative block aspect-[16/10] w-full overflow-hidden text-left" aria-label={`Ouvrir le cours ${course.title}`}>
+        <Couverture course={course} teinte={teinte} className="h-full w-full transition duration-500 group-hover:scale-[1.04]" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0e0e26] via-transparent to-transparent" />
+        <span className={`absolute left-3 top-3 rounded-lg px-2 py-0.5 text-[11px] font-black ${teinte.badge}`}>
+          {nomCourt(subject.name_fr)}
         </span>
-        {(completed || inProgress) && (
-          <span className={`absolute right-4 top-4 inline-flex items-center gap-1 rounded-full px-3 py-1 text-[10px] font-black backdrop-blur-md ${completed ? 'bg-emerald-400 text-emerald-950' : 'bg-amber-300 text-amber-950'}`}>
-            {completed && <CheckCircle2 className="h-3 w-3" />}
-            {completed ? 'Terminé' : `En cours · ${course.progress_percent}%`}
+        {completed && (
+          <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-lg bg-emerald-400 px-2 py-0.5 text-[11px] font-black text-emerald-950">
+            <CheckCircle2 className="h-3 w-3" /> Terminé
           </span>
         )}
+        <span className="absolute inset-0 flex items-center justify-center opacity-0 transition group-hover:opacity-100">
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/95 text-indigo-950 shadow-xl">
+            <Play className="ml-0.5 h-5 w-5 fill-current" />
+          </span>
+        </span>
       </button>
 
-      <div className="p-5">
-        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-indigo-300/70">{course.chapter_title || 'Sciences de la vie et de la Terre'}</p>
-        <h3 className="mt-2 text-lg font-black leading-6 text-white">{course.title}</h3>
-        <p className="mt-2 text-xs leading-5 text-white/45">{course.summary}</p>
+      <div className="flex flex-1 flex-col p-4 pt-3">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-white/40">Chapitre {rang}</p>
+        <h3 className="mt-1 line-clamp-2 text-[15px] font-black leading-snug text-white">{course.title}</h3>
+        <p className="mt-1.5 line-clamp-2 text-xs leading-5 text-white/45">{resumeEleve(course.summary)}</p>
 
-        <div className="mt-4 flex flex-wrap gap-1.5">
-          {course.essential_topics.map((topic) => (
-            <span key={topic} className="rounded-full border border-white/[0.07] bg-black/15 px-2.5 py-1 text-[10px] font-semibold text-white/55">{topic}</span>
-          ))}
-        </div>
-
-        <div className="mt-5 flex flex-wrap items-center gap-4 border-t border-white/[0.06] pt-4 text-[11px] font-semibold text-white/35">
-          <span className="inline-flex items-center gap-1.5"><Layers3 className="h-3.5 w-3.5" /> {course.activity_count} activités</span>
-          <span className="inline-flex items-center gap-1.5"><Clock3 className="h-3.5 w-3.5" /> {formatDuration(course.estimated_minutes)}</span>
-        </div>
-
-        <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto]">
-          <button onClick={onOpen} className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-3 text-xs font-black text-indigo-950 transition hover:bg-cyan-50">
-            <Play className="h-3.5 w-3.5 fill-current" /> {inProgress ? 'Reprendre le cours' : completed ? 'Revoir depuis le début' : 'Commencer le cours'}
-          </button>
-          <button onClick={onAskTutor} className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-xs font-bold text-white/70 transition hover:bg-white/[0.08] hover:text-white" title="Moalim ouvre ce cours à partir de ta demande">
-            <MessageCircle className="h-3.5 w-3.5" /> Via Moalim
-          </button>
+        <div className="mt-auto pt-3">
+          {inProgress ? (
+            <BarreAvancement pourcent={course.progress_percent} teinte={teinte} />
+          ) : (
+            <div className="flex items-center gap-3 text-[11px] font-semibold text-white/40">
+              {course.estimated_minutes > 0 && (
+                <span className="inline-flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" /> {formatDuration(course.estimated_minutes)}</span>
+              )}
+              {course.slide_count > 0 && (
+                <span className="inline-flex items-center gap-1"><Layers3 className="h-3.5 w-3.5" /> {course.slide_count} étapes</span>
+              )}
+            </div>
+          )}
+          <div className="mt-3 flex gap-2">
+            <button onClick={onOpen} className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl bg-white text-xs font-black text-indigo-950 transition hover:bg-cyan-50">
+              <Play className="h-3.5 w-3.5 fill-current" /> {inProgress ? 'Reprendre' : completed ? 'Revoir' : 'Commencer'}
+            </button>
+            <button
+              onClick={onAskTutor}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-white/60 transition hover:bg-white/[0.08] hover:text-white"
+              title="Demander ce cours à Moalim"
+              aria-label="Demander ce cours à Moalim"
+            >
+              <MessageCircle className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </div>
     </article>
@@ -292,12 +456,12 @@ function CourseCard({
 
 function LibrarySkeleton() {
   return (
-    <div className="mt-8 space-y-8 animate-pulse">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {[0, 1, 2, 3].map((item) => <div key={item} className="h-32 rounded-2xl bg-white/[0.04]" />)}
+    <div className="mt-8 animate-pulse">
+      <div className="flex gap-2">
+        {[0, 1, 2, 3, 4].map((item) => <div key={item} className="h-10 w-28 rounded-xl bg-white/[0.05]" />)}
       </div>
-      <div className="grid gap-5 lg:grid-cols-2">
-        {[0, 1].map((item) => <div key={item} className="aspect-[1.35] rounded-[26px] bg-white/[0.04]" />)}
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {[0, 1, 2, 3, 4, 5, 6, 7].map((item) => <div key={item} className="aspect-[4/5] rounded-2xl bg-white/[0.04]" />)}
       </div>
     </div>
   );
@@ -305,9 +469,9 @@ function LibrarySkeleton() {
 
 function EmptyLibrary() {
   return (
-    <div className="rounded-3xl border border-dashed border-white/10 bg-white/[0.025] px-6 py-12 text-center">
-      <Folder className="mx-auto h-8 w-8 text-white/20" />
-      <p className="mt-3 text-sm font-bold text-white/65">Aucune matière n'est encore disponible</p>
+    <div className="mt-8 rounded-3xl border border-dashed border-white/10 bg-white/[0.025] px-6 py-12 text-center">
+      <BookOpen className="mx-auto h-8 w-8 text-white/20" />
+      <p className="mt-3 text-sm font-bold text-white/65">Aucun cours n'est encore disponible</p>
       <p className="mt-1 text-xs text-white/35">Vérifie les matières attribuées à ton compte.</p>
     </div>
   );
