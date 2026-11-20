@@ -7,7 +7,7 @@ import { taire } from './voix';
 import SansDefilement from '../SansDefilement';
 import FiguresCahier from '../FigureCahier';
 import { invitationCahier } from './invitationsCahier';
-import { partiesDuCahier, cahierNumerote } from './partiesDuCahier';
+import { partiesDuCahier, cahierNumerote, cahierTitre } from './partiesDuCahier';
 import { DetecteurSaturation, PHRASES_SATURATION, tempsDeLectureMs, useInactivite, type CauseSaturation } from './saturation';
 
 /**
@@ -153,7 +153,9 @@ export function TableauCahier({ bloc, onEcrit, entetes, relecture }: { bloc: Blo
           </div>
         ) : lignes.length ? (
           <>
-            {vue === 0 && plan.filter(e => e?.partie).map((e, i) => <p key={i} className="mb-1 text-2xl text-rose-300 court:text-xl">{e!.partie}</p>)}
+            {/* les titres de parties du cours, sauf si le cahier écrit déjà les siens (« I. », « II. ») : ils se
+                doublaient, dans le désordre (« II. » au-dessus de « I. »), 20 novembre 2026 */}
+            {vue === 0 && !cahierTitre(lignes) && plan.filter(e => e?.partie).map((e, i) => <p key={i} className="mb-1 text-2xl text-rose-300 court:text-xl">{e!.partie}</p>)}
             <ol className="space-y-3">
               {partie.lignes.map(i => (
                 <li key={i} className="text-xl leading-snug text-[#f5f1dc] md:text-2xl" dir="auto"><Formule t={lignes[i].texte} /></li>

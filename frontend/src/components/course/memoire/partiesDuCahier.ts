@@ -25,6 +25,10 @@ const ROMAIN = /^\s*[IVXL]+\s*[.)\-–—]\s/;
 export function cahierNumerote(lignes: { texte: string }[]): boolean {
   return lignes.some(l => NUMERO.test(l.texte || ''));
 }
+/** Le cahier porte ses propres titres de parties (« I. … », « II. … ») : le lecteur n'ajoute pas ceux du cours. */
+export function cahierTitre(lignes: { texte: string }[]): boolean {
+  return lignes.some(l => ROMAIN.test(l.texte || ''));
+}
 const MOT = /[a-z0-9]{4,}/g;
 const VIDES = new Set(['dans', 'avec', 'pour', 'sont', 'est', 'une', 'des', 'les', 'leur', 'cette', 'entre', 'puis', 'donc', 'plus', 'tout', 'tous', 'elle', 'elles', 'quand', 'comme', 'chaque', 'deux', 'trois']);
 
