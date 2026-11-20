@@ -7,7 +7,7 @@ import { taire } from './voix';
 import SansDefilement from '../SansDefilement';
 import FiguresCahier from '../FigureCahier';
 import { invitationCahier } from './invitationsCahier';
-import { partiesDuCahier } from './partiesDuCahier';
+import { partiesDuCahier, cahierNumerote } from './partiesDuCahier';
 import { DetecteurSaturation, PHRASES_SATURATION, tempsDeLectureMs, useInactivite, type CauseSaturation } from './saturation';
 
 /**
@@ -77,7 +77,9 @@ export function TableauCahier({ bloc, onEcrit, entetes, relecture }: { bloc: Blo
   // Une ligne par diapositive du bloc : chaque ligne sous le titre de sa diapositive (et de sa partie quand on y entre) ;
   // sinon les titres d'abord, puis les lignes. Un titre déjà copié dans le bloc ne se répète pas.
   const plan = entetes ? bloc.slide_ids.map(id => entetes(id)) : [];
-  const parLigne = !!entetes && plan.every(Boolean) && lignes.length === bloc.slide_ids.length;
+  // un cahier numéroté (« 1. », « 2. »…) se découpe toujours par ses numéros, même s'il a autant de lignes que de
+  // diapositives (audit des cahiers, 20 novembre 2026)
+  const parLigne = !!entetes && plan.every(Boolean) && lignes.length === bloc.slide_ids.length && !cahierNumerote(lignes);
   const parties = useMemo(() => partiesDuCahier(lignes, figures, parLigne), [lignes, figures, parLigne]);
   /** la partie à écrire (toutes celles d'avant sont écrites) */
   const n = parties.length;
