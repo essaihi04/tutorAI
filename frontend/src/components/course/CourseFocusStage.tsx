@@ -2011,7 +2011,12 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
       if (panneau !== 'questions') return { quoi: 'ouvrir', pret: false };
       const courante = listeAuTableau[Math.min(indexQuestion, listeAuTableau.length - 1)];
       if (courante && courante.cle in finies.current) return pret({ quoi: 'question', pret: true });
-      return { quoi: restantes.length > 1 ? 'question' : 'diapo', pret: false };
+      // « Suite → » encore gris (question passée sans y répondre) : il avance vers la question non répondue SUIVANTE,
+      // jamais en arrière. Sinon, deux questions non répondues se renvoyaient l'élève sans fin et le cahier du bloc
+      // (ou la diapositive suivante) ne venait jamais (20 novembre 2026).
+      const i = Math.min(indexQuestion, listeAuTableau.length - 1);
+      const apres = listeAuTableau.some((q, j) => j > i && !(q.cle in finies.current));
+      return { quoi: apres ? 'question' : 'diapo', pret: false };
     }
     if (enReprise) {
       const justes = listeAuTableau.every(q => finies.current[q.cle]);
