@@ -296,7 +296,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
 
   const [connected, setConnected] = useState(false);
   const [lessonInfo, setLessonInfo] = useState<LessonSummary | null>(null);
-  const [nextLesson, setNextLesson] = useState<LessonSummary | null>(null);
+  const [, setNextLesson] = useState<LessonSummary | null>(null);
   const [courseDeck, setCourseDeck] = useState<CourseDeck | null>(null);
   const [courseProgress, setCourseProgress] = useState<CourseProgressSnapshot | null>(null);
   const [currentMedia, setCurrentMedia] = useState<any>(null);
@@ -444,14 +444,7 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
   // Seule la fin de leçon reste affichée : les objectifs et les phases ne
   // pilotent plus rien depuis que leurs deux bandeaux ont quitté le haut de
   // l'écran (cf. le commentaire au-dessus de « Lesson Completed Banner »).
-  const [lessonCompleted, setLessonCompleted] = useState(false);
-  /** Bandeau de fin de leçon déplié ? Replié, il ne prend plus qu'une ligne. */
-  const [bandeauFinOuvert, setBandeauFinOuvert] = useState(true);
-  // Une leçon terminée à nouveau (après un « Recommencer ») est une nouvelle :
-  // elle se réaffiche entière, même si l'élève avait replié la précédente.
-  useEffect(() => {
-    if (lessonCompleted) setBandeauFinOuvert(true);
-  }, [lessonCompleted]);
+  const [, setLessonCompleted] = useState(false);
 
   // Le titre suit le mode COURANT : c'est le seul repère qui dit à l'élève ce
   // qui se passe, maintenant qu'il ne change plus d'écran ni d'URL.
@@ -2075,18 +2068,6 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
     }
   };
 
-  const handleOpenNextLesson = async () => {
-    if (!nextLesson || !chapterId) return;
-    speechService.stop();
-    if (sessionId) {
-      await endSession(sessionId).catch(() => {});
-    }
-    wsService.disconnect();
-    clearSession();
-    // A full navigation guarantees a fresh WebSocket and clean lesson state.
-    window.location.assign(`/session/${chapterId}/${nextLesson.id}`);
-  };
-
   // Error screen
   if (error) {
     return (
@@ -2167,61 +2148,9 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
           là où elle se joue : la barre du lecteur de cours, et le bandeau de
           fin de leçon juste en dessous. */}
 
-      {/* Lesson Completed Banner
-          Repliable : une fois lu, ce bandeau n'a plus rien à dire mais gardait
-          toute une rangée en haut du cours. La flèche le réduit à une ligne —
-          il ne disparaît jamais tout à fait, sinon « Continuer vers la leçon
-          suivante » deviendrait introuvable. */}
-      {lessonCompleted && !isLibre && (
-        <div className="shrink-0 px-3 pt-2">
-          {bandeauFinOuvert ? (
-            <div className="rounded-xl bg-gradient-to-r from-emerald-500/20 to-green-500/20 border border-emerald-400/40 px-4 py-3 flex items-center justify-between gap-3 shadow-lg shadow-emerald-500/10">
-              <div className="flex items-center gap-3">
-                <div className="text-2xl">🎉</div>
-                <div>
-                  <div className="text-emerald-300 font-semibold text-sm">Leçon terminée !</div>
-                  <div className="text-emerald-200/70 text-xs">
-                    {nextLesson
-                      ? `Prochaine étape : ${nextLesson.title_fr}`
-                      : 'Tu as validé toutes les leçons de ce chapitre.'}
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  onClick={nextLesson ? handleOpenNextLesson : handleEndSession}
-                  className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-semibold rounded-lg transition-all shadow-md shadow-emerald-500/30"
-                >
-                  {nextLesson ? 'Continuer vers la leçon suivante' : 'Fermer la session'}
-                </button>
-                <button
-                  onClick={() => setBandeauFinOuvert(false)}
-                  className="w-7 h-7 rounded-full bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/30 flex items-center justify-center text-emerald-200 transition-colors"
-                  title="Replier le bandeau — gagner de la place"
-                  aria-expanded
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button
-              onClick={() => setBandeauFinOuvert(true)}
-              className="w-full rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-400/25 px-3 py-1 flex items-center justify-center gap-2 text-[11px] text-emerald-200/80 transition-colors"
-              title="Afficher le bandeau de fin de leçon"
-              aria-expanded={false}
-            >
-              <span>🎉</span>
-              <span>Leçon terminée</span>
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-          )}
-        </div>
-      )}
+      {/* Le bandeau « Leçon terminée ! » est retiré (20/11/2026, demande de l'utilisateur) : il prenait une rangée
+          au-dessus du cours, même quand l'élève revenait sur une leçon déjà validée. La suite se fait par « Suite → »
+          du lecteur de cours. */}
 
       {/* Header */}
       <header className="shrink-0 bg-[#0c0c1d]/80 backdrop-blur-xl border-b border-white/5">
@@ -2731,8 +2660,11 @@ export default function LearningSession({ mode = 'standard' }: LearningSessionPr
             </button>
           )}
 
-          {/* Voice input when chat is hidden */}
-          {!showChat && (
+          {/* Voice input when chat is hidden.
+              Pas pendant un cours en mode concentration (20/11/2026) : le lecteur a déjà sa propre zone de réponse
+              (« Maintiens pour répondre », bouton 🙋 pour poser une question) ; deux espaces de voix et de messages
+              l'un sous l'autre volaient la hauteur du cours. Le chat (bouton 💬 de l'en-tête) garde la saisie. */}
+          {!showChat && !(courseDeck && !isLibreConnexion && courseDeck.mode === 'concentration') && (
             <div className="shrink-0 w-full max-w-3xl mx-auto px-3 sm:px-6 pb-3 sm:pb-4">
               <QuickActions
                 actions={isLibre ? LIBRE_QUICK_ACTIONS : COACHING_QUICK_ACTIONS}

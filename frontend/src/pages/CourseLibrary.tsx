@@ -399,55 +399,50 @@ function CourseCard({
   const inProgress = course.progress_status === 'in_progress';
   return (
     <article className="group relative flex flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0e0e26] shadow-lg shadow-black/20 transition duration-200 hover:-translate-y-1 hover:border-white/20 hover:shadow-2xl hover:shadow-black/40">
-      <button onClick={onOpen} className="relative block aspect-[16/10] w-full overflow-hidden text-left" aria-label={`Ouvrir le cours ${course.title}`}>
+      <button onClick={onOpen} className="relative block aspect-[16/9] w-full overflow-hidden text-left" aria-label={`Ouvrir le cours ${course.title}`}>
         <Couverture course={course} teinte={teinte} className="h-full w-full transition duration-500 group-hover:scale-[1.04]" />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0e0e26] via-transparent to-transparent" />
-        <span className={`absolute left-3 top-3 rounded-lg px-2 py-0.5 text-[11px] font-black ${teinte.badge}`}>
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0e0e26]/80 via-transparent to-transparent" />
+        <span className={`absolute left-2.5 top-2.5 rounded-md px-2 py-0.5 text-[11px] font-black ${teinte.badge}`}>
           {nomCourt(subject.name_fr)}
         </span>
         {completed && (
-          <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-lg bg-emerald-400 px-2 py-0.5 text-[11px] font-black text-emerald-950">
+          <span className="absolute right-2.5 top-2.5 inline-flex items-center gap-1 rounded-md bg-emerald-400 px-2 py-0.5 text-[11px] font-black text-emerald-950">
             <CheckCircle2 className="h-3 w-3" /> Terminé
           </span>
         )}
         <span className="absolute inset-0 flex items-center justify-center opacity-0 transition group-hover:opacity-100">
-          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/95 text-indigo-950 shadow-xl">
+          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-indigo-950 shadow-xl">
             <Play className="ml-0.5 h-5 w-5 fill-current" />
           </span>
         </span>
       </button>
 
-      <div className="flex flex-1 flex-col p-4 pt-3">
-        <p className="text-[11px] font-bold uppercase tracking-wider text-white/40">Chapitre {rang}</p>
-        <h3 className="mt-1 line-clamp-2 text-[15px] font-black leading-snug text-white">{course.title}</h3>
-        <p className="mt-1.5 line-clamp-2 text-xs leading-5 text-white/45">{resumeEleve(course.summary)}</p>
-
-        <div className="mt-auto pt-3">
-          {inProgress ? (
-            <BarreAvancement pourcent={course.progress_percent} teinte={teinte} />
-          ) : (
-            <div className="flex items-center gap-3 text-[11px] font-semibold text-white/40">
-              {course.estimated_minutes > 0 && (
-                <span className="inline-flex items-center gap-1"><Clock3 className="h-3.5 w-3.5" /> {formatDuration(course.estimated_minutes)}</span>
-              )}
-              {course.slide_count > 0 && (
-                <span className="inline-flex items-center gap-1"><Layers3 className="h-3.5 w-3.5" /> {course.slide_count} étapes</span>
-              )}
-            </div>
+      {/* Carte presque carrée (20/11/2026) : chapitre et repères sur une ligne, titre, puis le bouton ; le résumé
+          est retiré de la carte (il reste dans le titre de survol). */}
+      <div className="flex flex-1 flex-col px-3.5 pb-3.5 pt-2.5" title={resumeEleve(course.summary)}>
+        <p className="flex items-center gap-2 text-[11px] font-semibold text-white/40">
+          <span className="font-bold uppercase tracking-wider">Chapitre {rang}</span>
+          {course.estimated_minutes > 0 && (
+            <span className="inline-flex items-center gap-1"><Clock3 className="h-3 w-3" /> {formatDuration(course.estimated_minutes)}</span>
           )}
-          <div className="mt-3 flex gap-2">
-            <button onClick={onOpen} className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl bg-white text-xs font-black text-indigo-950 transition hover:bg-cyan-50">
-              <Play className="h-3.5 w-3.5 fill-current" /> {inProgress ? 'Reprendre' : completed ? 'Revoir' : 'Commencer'}
-            </button>
-            <button
-              onClick={onAskTutor}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-white/60 transition hover:bg-white/[0.08] hover:text-white"
-              title="Demander ce cours à Moalim"
-              aria-label="Demander ce cours à Moalim"
-            >
-              <MessageCircle className="h-4 w-4" />
-            </button>
-          </div>
+          {course.slide_count > 0 && (
+            <span className="inline-flex items-center gap-1"><Layers3 className="h-3 w-3" /> {course.slide_count}</span>
+          )}
+        </p>
+        <h3 className="mt-1 line-clamp-2 min-h-[2.5rem] text-[15px] font-black leading-5 text-white">{course.title}</h3>
+        {inProgress && <BarreAvancement pourcent={course.progress_percent} teinte={teinte} />}
+        <div className="mt-auto flex gap-2 pt-2.5">
+          <button onClick={onOpen} className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl bg-white text-xs font-black text-indigo-950 transition hover:bg-cyan-50">
+            <Play className="h-3.5 w-3.5 fill-current" /> {inProgress ? 'Reprendre' : completed ? 'Revoir' : 'Commencer'}
+          </button>
+          <button
+            onClick={onAskTutor}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-white/60 transition hover:bg-white/[0.08] hover:text-white"
+            title="Demander ce cours à Moalim"
+            aria-label="Demander ce cours à Moalim"
+          >
+            <MessageCircle className="h-4 w-4" />
+          </button>
         </div>
       </div>
     </article>
@@ -461,7 +456,7 @@ function LibrarySkeleton() {
         {[0, 1, 2, 3, 4].map((item) => <div key={item} className="h-10 w-28 rounded-xl bg-white/[0.05]" />)}
       </div>
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {[0, 1, 2, 3, 4, 5, 6, 7].map((item) => <div key={item} className="aspect-[4/5] rounded-2xl bg-white/[0.04]" />)}
+        {[0, 1, 2, 3, 4, 5, 6, 7].map((item) => <div key={item} className="aspect-square rounded-2xl bg-white/[0.04]" />)}
       </div>
     </div>
   );
