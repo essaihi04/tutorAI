@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle2, CircleDashed, CircleHelp, Clock3, Eye, MessageCircle, Play, Repeat2, X, XCircle } from 'lucide-react';
+import { CheckCircle2, CircleDashed, CircleHelp, Clock3, Eye, Play, Repeat2, X, XCircle } from 'lucide-react';
 import type { CourseCatalogCourse, StatutCompetence, TableauCours } from '../../services/api';
 
 /**
@@ -98,7 +98,7 @@ function TempsParJour({ jours, barre }: { jours: { jour: string; minutes: number
 }
 
 export default function DetailsCours({
-  course, tableau, barre, badge, matiere, onClose, onOpen, onAskTutor,
+  course, tableau, barre, badge, matiere, onClose, onOpen,
 }: {
   course: CourseCatalogCourse;
   tableau?: TableauCours;
@@ -107,7 +107,6 @@ export default function DetailsCours({
   matiere: string;
   onClose: () => void;
   onOpen: () => void;
-  onAskTutor: () => void;
 }) {
   useEffect(() => {
     const touche = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -242,9 +241,6 @@ export default function DetailsCours({
         <footer className="flex gap-2 border-t border-white/[0.07] p-3">
           <button onClick={onOpen} className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl bg-white text-sm font-black text-indigo-950 hover:bg-cyan-50">
             <Play className="h-4 w-4 fill-current" /> {inProgress ? 'Reprendre' : completed ? 'Revoir' : 'Commencer'}
-          </button>
-          <button onClick={onAskTutor} className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-xs font-bold text-white/70 hover:bg-white/[0.08] hover:text-white">
-            <MessageCircle className="h-4 w-4" /> Demander à Moalim
           </button>
         </footer>
       </div>

@@ -185,10 +185,6 @@ export default function CourseLibrary() {
     );
   };
 
-  const askTutorToOpen = (course: CourseCatalogCourse) => {
-    navigate('/tutor', { state: { courseRequest: course.tutor_request } });
-  };
-
   const reinitialiser = () => {
     setMatiere('toutes');
     setAvancement('tous');
@@ -354,7 +350,6 @@ export default function CourseLibrary() {
           matiere={nomCourt(details.subject.name_fr)}
           onClose={() => setDetails(null)}
           onOpen={() => openCourse(details.course)}
-          onAskTutor={() => askTutorToOpen(details.course)}
         />
       )}
     </MoalimShell>
