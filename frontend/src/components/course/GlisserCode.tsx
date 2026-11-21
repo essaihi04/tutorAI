@@ -11,7 +11,8 @@ import { CODE_GENETIQUE, NOMS_ACIDES } from './TableauCode';
 import type { FinAssociation } from './AssociationDiapo';
 
 export interface GlisserCodeData {
-  sens: 'traduction' | 'transcription';
+  /** complementaire (SVT ch3) : le brin d'ADN complémentaire, nucléotide par nucléotide (réplication) */
+  sens: 'traduction' | 'transcription' | 'complementaire';
   /** traduction : les codons de l'ARNm (« AUG GCU … ») ; transcription : le brin transcrit de l'ADN, par triplets */
   sequence: string;
   /** traduction : codons de leurre ajoutés au tableau */
@@ -21,18 +22,19 @@ export interface GlisserCodeData {
 }
 
 const CRAIE = "'Patrick Hand', 'Caveat', cursive";
-const COMP: Record<string, string> = { A: 'U', T: 'A', G: 'C', C: 'G' };
+const COMP: Record<string, string> = { A: 'U', T: 'A', G: 'C', C: 'G' };          // ADN → ARN (transcription)
+const COMP_ADN: Record<string, string> = { A: 'T', T: 'A', G: 'C', C: 'G' };      // ADN → ADN (brin complémentaire)
 
 type Case = { haut: string; attendu: string; pose: string | null; faux: string | null };
 
 export default function GlisserCode({ g, fini, actif = true, onFin }: {
   g: GlisserCodeData; fini: boolean; actif?: boolean; onFin: (f: FinAssociation, voix: Promise<unknown>) => void;
 }) {
-  const traduction = g.sens === 'traduction';
+  const traduction = g.sens === 'traduction', adn = g.sens === 'complementaire';
   const groupes = g.sequence.trim().toUpperCase().split(/\s+/);
   const init = (): Case[] => traduction
     ? groupes.map(c => ({ haut: c, attendu: NOMS_ACIDES[CODE_GENETIQUE[c.replace(/T/g, 'U')]]?.[0] || '?', pose: null, faux: null }))
-    : groupes.join('').split('').map(b => ({ haut: b, attendu: COMP[b] || '?', pose: null, faux: null }));
+    : groupes.join('').split('').map(b => ({ haut: b, attendu: (adn ? COMP_ADN : COMP)[b] || '?', pose: null, faux: null }));
   const [cases, setCases] = useState<Case[]>(init);
   const [choisie, setChoisie] = useState<string | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; t: string } | null>(null);
@@ -42,7 +44,7 @@ export default function GlisserCode({ g, fini, actif = true, onFin }: {
 
   // les étiquettes : les lignes du tableau (traduction, triées pour ne pas souffler l'ordre) ou les 5 nucléotides
   const etiquettes = useMemo(() => {
-    if (!traduction) return ['A', 'U', 'G', 'C', 'T'].map(n => ({ v: n, codon: '' }));
+    if (!traduction) return (adn ? ['A', 'T', 'G', 'C', 'U'] : ['A', 'U', 'G', 'C', 'T']).map(n => ({ v: n, codon: '' }));
     const codons = [...new Set([...groupes, ...(g.leurres || [])].map(c => c.replace(/T/g, 'U')))].filter(c => CODE_GENETIQUE[c]).sort();
     return codons.map(c => ({ v: NOMS_ACIDES[CODE_GENETIQUE[c]][0], codon: c }));
   }, [g.sequence, g.leurres]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -60,16 +62,17 @@ export default function GlisserCode({ g, fini, actif = true, onFin }: {
       erreurs.current += 1;
       setMessage({ ok: false, t: traduction
         ? `Non : cherche la ligne ${c.haut} dans le tableau.`
-        : c.haut === 'A' ? 'Non : en face de A, l’ARN met U (pas de T dans l’ARN).' : `Non : en face de ${c.haut}, la base complémentaire est ${c.attendu}.` });
+        : adn && v === 'U' ? 'Non : U n’existe pas dans l’ADN (c’est la base de l’ARN).'
+          : !adn && c.haut === 'A' ? 'Non : en face de A, l’ARN met U (pas de T dans l’ARN).' : `Non : en face de ${c.haut}, la base complémentaire est ${c.attendu}.` });
       window.setTimeout(() => setCases(cc => cc.map((x, j) => (j === i ? { ...x, faux: null } : x))), 900);
     }
     if (n.every(x => x.pose)) {
       termine.current = true;
       const sans = erreurs.current === 0;
-      const resultat = traduction ? n.map(x => x.pose).filter(v => v !== 'Stop').join(' – ') + (n.some(x => x.pose === 'Stop') ? ' (codon stop : la chaîne s’arrête)' : '') : n.map(x => x.pose).join('').replace(/(.{3})/g, '$1 ').trim();
+      const resultat = traduction ? n.map(x => x.pose).filter(v => v !== 'Stop').join(' – ') + (n.some(x => x.pose === 'Stop') ? ' (codon stop : la chaîne s’arrête)' : '') : (b => (g.bouts ? `${g.bouts[1]} ${b} ${g.bouts[0]}` : b))(n.map(x => x.pose).join('').replace(/(.{3})/g, '$1 ').trim());   // le brin écrit en face a les extrémités inverses
       window.setTimeout(() => onFin({
         correct: sans, tentative: sans ? 1 : 2, reponse: resultat,
-        ecrit: `${traduction ? 'Séquence d’acides aminés' : 'ARNm'} : ${resultat}${sans ? ' — sans erreur.' : ` — ${erreurs.current} erreur${erreurs.current > 1 ? 's' : ''} corrigée${erreurs.current > 1 ? 's' : ''}.`}`,
+        ecrit: `${traduction ? 'Séquence d’acides aminés' : adn ? 'Brin complémentaire' : 'ARNm'} : ${resultat}${sans ? ' — sans erreur.' : ` — ${erreurs.current} erreur${erreurs.current > 1 ? 's' : ''} corrigée${erreurs.current > 1 ? 's' : ''}.`}`,
       }, Promise.resolve()), 350);
     }
   };
@@ -131,7 +134,7 @@ export default function GlisserCode({ g, fini, actif = true, onFin }: {
       {!fini && (
         <div className="shrink-0">
           <p className="mb-1.5 text-sm text-amber-200">
-            {traduction ? 'Extrait du tableau du code génétique : glisse l’acide aminé sous son codon' : 'Nucléotides d’ARN à glisser'}
+            {traduction ? 'Extrait du tableau du code génétique : glisse l’acide aminé sous son codon' : adn ? 'Nucléotides d’ADN à glisser' : 'Nucléotides d’ARN à glisser'}
           </p>
           {traduction ? (
             <table className="border-collapse text-[15px]">
