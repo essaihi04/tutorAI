@@ -2145,20 +2145,26 @@ class SessionHandler:
         Jamais bloquant : sans fichier de suivi, rien n'est ajouté.
         """
         try:
-            from app.services import suivi_acquis
-            evenements = suivi_acquis.lire(str(self.student_id))
+            from app.services import profil_eleve, suivi_acquis
+            # 21/11/2026 : le profil complet d'abord (lectures, temps, compétences, ce que l'élève doit faire)
+            try:
+                profil = profil_eleve.bloc_prompt(profil_eleve.profil(str(self.student_id)))
+            except Exception as e:  # noqa: BLE001
+                _safe_log(f"[Profil] non construit : {e}")
+                profil = ""
+            evenements = [e for e in suivi_acquis.lire(str(self.student_id)) if e.get("deck_id")]
             if not evenements:
-                return ""
+                return profil
             par_cours: dict = {}
             for e in evenements:
                 par_cours.setdefault(e.get("deck_id") or "", []).append(e)
-            blocs = []
+            blocs = [profil] if profil else []
             for deck_id, evs in par_cours.items():
                 deck = suivi_acquis.charger_deck(deck_id) or {}
                 bloc = suivi_acquis.bloc_prompt(suivi_acquis.bilan(evs, deck), deck.get("title", ""))
                 if bloc:
                     blocs.append(bloc)
-            return "\n\n".join(blocs)[:3000]
+            return "\n\n".join(blocs)[:5500]
         except Exception as e:  # noqa: BLE001
             _safe_log(f"[Acquis] bloc non construit : {e}")
             return ""

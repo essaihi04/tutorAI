@@ -236,6 +236,15 @@ async def tableau_de_bord(student: dict = Depends(get_current_student)):
     return {"cours": stats_cours.tableau(str(student["id"]))}
 
 
+@router.get("/profil")
+async def profil_eleve(student: dict = Depends(get_current_student)):
+    """Le profil d'apprentissage de l'élève pour toute la plateforme : global, par cours, et `a_faire` (exercices,
+    cours à entendre, éléments à apprendre, dans l'ordre) ; `bloc_prompt` : le même en texte pour un tuteur."""
+    from app.services import profil_eleve as pe
+    p = pe.profil(str(student["id"]))
+    return {**p, "bloc_prompt": pe.bloc_prompt(p)}
+
+
 class ReexplicationRequest(BaseModel):
     """Une réponse fausse : le tuteur réexplique autrement et pose une question jumelle (cycle 1 à 3)."""
     deck_id: Optional[str] = None

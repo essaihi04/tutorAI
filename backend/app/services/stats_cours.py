@@ -98,7 +98,7 @@ def _alleger(m: dict) -> dict:
     return {"id": m.get("id"), "stable_id": m.get("stable_id"), "title": m.get("title", ""),
             "competences": m.get("competences") or [],
             "activities": [{"id": a.get("id"), "title": a.get("title", ""),
-                            "slides": [{"id": s.get("id"), "competence_ids": s.get("competence_ids") or []}
+                            "slides": [{"id": s.get("id"), "title": s.get("title", ""), "competence_ids": s.get("competence_ids") or []}
                                        for s in a.get("slides", [])]}
                            for a in m.get("activities", [])],
             # bloc → ses diapositives : un cahier atteint (événement « cahier ») veut dire que le bloc a été vu
@@ -170,8 +170,9 @@ def historique(evenements_acquis: list[dict], depuis: dict[str, str], blocs: Opt
     return out
 
 
-def tableau(student_id: str) -> dict[str, dict]:
-    """Pour chaque cours : statistiques de lecture + compétences. Clé : le stable_id (ou l'id) du cours."""
+def tableau(student_id: str, avec_vues: bool = False) -> dict[str, dict]:
+    """Pour chaque cours : statistiques de lecture + compétences. Clé : le stable_id (ou l'id) du cours.
+    `avec_vues` : garde aussi la liste des diapositives vues et le titre (profil de l'élève, services/profil_eleve.py)."""
     evs_acquis = suivi_acquis.lire(student_id)
     nouveaux = lire(student_id)
     depuis: dict[str, str] = {}
@@ -198,5 +199,8 @@ def tableau(student_id: str) -> dict[str, dict]:
                   "vu_pourcent": min(100, round(len(st["diapos_vues"]) * 100 / nb)) if st and nb else 0}
         if st:
             entree["stats"] = {k: v for k, v in st.items() if k != "diapos_vues"}
+        if avec_vues:
+            entree["diapos_vues"] = st["diapos_vues"] if st else []
+            entree["titre"] = deck.get("title", "")
         out[cles[0]] = entree
     return out
