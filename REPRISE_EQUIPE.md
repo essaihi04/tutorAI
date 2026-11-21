@@ -14,7 +14,7 @@ Restent sur le PC, quel que soit le compte : les fichiers, la mémoire du projet
 quand son quota est fini, et repart seule quand il revient.
 
 ## 2. Première phrase à donner à Claude
-> Lis REPRISE_EQUIPE.md (d'abord le § 3 nonies, le plus récent) et la mémoire du projet, puis continue : voix des
+> Lis REPRISE_EQUIPE.md (d'abord les § 3 decies et 3 nonies, les plus récents) et la mémoire du projet, puis continue : voix des
 > cours, écoutes à choisir, déploiement avec mon accord, republication du lien libre.
 
 Les sous-agents doivent tourner avec le modèle **Opus**. La voix est toujours **Bodi**, jamais Amine. On ne déploie
@@ -373,8 +373,30 @@ catalogue en ligne montre 23 cours (physique 8, chimie 5, SVT 4, maths 6).
 Temp de plus de 2 jours) : ~780 Mo libres. Les worktrees des sessions prennent ~9 Go ; à nettoyer quand leurs
 sessions sont finies (Réglages › Ce PC › Stockage). Pas de place → la pose des voix s'arrête.
 
+## 3 decies. Vérification du 21 novembre 2026 (21 h 05 UTC) — fichier et serveur comparés
+
+**Fait (vérifié sur le serveur)** — ce qui contredit le § 3 nonies (« rien n'est déployé ») :
+- Production sur `44a2258b` (= `origin/main`), déployée à 19 h 22 ; backend actif, site et lien libre en 200.
+- Depuis `51f070f9`, 41 commits en ligne : voix v23 posées dans les 23 cours (`2345bc2b` → `5b242125`), règle « un
+  symbole d'élément seul se lit par son nom » (`c46ec8f7`), réponses et démonstrations refaites en v23 pour maths ch1-6
+  et physique ch1, ch6-8, ch10-13 (`42707ca4` → `8ba481b4`).
+- Lots Kaggle du matin tous finis et posés dans `att_` (nombres_c1/c2/c4, reste_a, reste_b, miftahi, cache, c2).
+
+**Reste à faire**
+1. **Lien libre pas rafraîchi** : `/var/www/moalim/cours-ondes` date de 9 h 58, avant le déploiement de 19 h 22 → lancer
+   la commande du § 3 nonies (les profs n'entendent pas encore les voix v23).
+2. **9 commits non poussés** dans le worktree `.claude/worktrees/blissful-rosalind-5b05e6` (plus 41 fichiers modifiés non
+   commités) : réponses refaites v23 de physique ch2-5, ch9 et SVT ch1-4 (`cbb22777` → `e86dd9f6`). Ni sur `main`, ni en ligne.
+3. **Physique ch9** : `44a2258b` a remis le cours avant la pose des réponses refaites (MP3 perdus, disque plein) → reposer.
+4. **Lots `reste_1` à `reste_4`** (59 voix chacun, 4 comptes, poussés à 18 h 38) : tous en `QUEUED` à 21 h (GPU T4 de
+   Kaggle saturés) ; `suivre_compte.sh` les suit et les récupérera seul. Ne pas repousser. Ensuite `enchainer.sh` lance
+   seul `liste_symboles.json` (59 voix, compte 3) quand `reste_3` finit.
+5. **Écoutes** : les 38 mots de `_ecoute_INDEX.md` (worktree ci-dessus, 39 dossiers `_ecoute_*`) restent à choisir.
+6. **Tableau du cache voix** à refaire après ce déploiement (nombres en français) : non vérifié.
+7. **Disque C:** 4,9 Go libres (98 %) ; 7 worktrees dans `.claude/worktrees/` à nettoyer quand leurs sessions sont finies.
+
 ## 4. Ce qui attend une décision
 - Écouter et choisir les 38 mots douteux (§ 3 nonies), puis les symboles chimiques douteux.
-- Déployer les voix posées par la session voix (nombres en français, règle 50, symboles), puis rafraîchir le lien libre.
+- Pousser les 9 commits de voix du worktree, reposer physique ch9, déployer, puis rafraîchir le lien libre (§ 3 decies).
 - Repeindre aussi ballon, milieux, types, carte et bilan du chapitre des ondes, si l'utilisateur le veut (§ 3 octies).
 - Passer le nouveau lecteur sur `main` pour les élèves connectés, après la relecture des profs.
