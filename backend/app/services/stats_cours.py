@@ -100,7 +100,10 @@ def _alleger(m: dict) -> dict:
             "activities": [{"id": a.get("id"), "title": a.get("title", ""),
                             "slides": [{"id": s.get("id"), "competence_ids": s.get("competence_ids") or []}
                                        for s in a.get("slides", [])]}
-                           for a in m.get("activities", [])]}
+                           for a in m.get("activities", [])],
+            # bloc → ses diapositives : un cahier atteint (événement « cahier ») veut dire que le bloc a été vu
+            "blocs": {str(b.get("id")): list(b.get("slide_ids") or [])
+                      for se in m.get("seances") or [] for b in se.get("blocs") or [] if b.get("id")}}
 
 
 def cours_alleges() -> dict[str, dict]:
@@ -144,11 +147,42 @@ def competences(evenements_acquis: list[dict], deck: dict) -> dict:
     return {"total": len(liste), **compte, "liste": liste}
 
 
+def historique(evenements_acquis: list[dict], depuis: dict[str, str], blocs: Optional[dict[str, dict]] = None) -> list[dict]:
+    """L'avant-statistiques (avant le 21/11/2026) reconstruit depuis le suivi des acquis, en événements de lecture :
+    chaque « seance_debut » est une ouverture, chaque « seance_fin » apporte sa durée, chaque réponse sa diapositive.
+    Pour un cours, seuls les événements antérieurs à sa première statistique comptent (pas de double compte)."""
+    out = []
+    for e in evenements_acquis:
+        d = str(e.get("deck_id") or e.get("cours_id") or "")
+        quand = str(e.get("quand") or "")
+        if not d or (d in depuis and quand >= depuis[d]):
+            continue
+        ev = e.get("evenement")
+        if ev == "seance_debut":
+            out.append({"type": "ouverture", "deck_id": d, "quand": quand})
+        elif ev == "seance_fin" and e.get("duree_s"):
+            out.append({"type": "temps", "deck_id": d, "quand": quand, "secondes": min(3600, int(e["duree_s"]))})
+        elif ev == "cahier" and e.get("bloc_id"):
+            for sid in ((blocs or {}).get(d) or {}).get(str(e["bloc_id"]), []):
+                out.append({"type": "temps", "deck_id": d, "quand": quand, "secondes": 0, "slide_id": sid})
+        elif not ev and e.get("slide_id"):
+            out.append({"type": "temps", "deck_id": d, "quand": quand, "secondes": 0, "slide_id": e["slide_id"]})
+    return out
+
+
 def tableau(student_id: str) -> dict[str, dict]:
     """Pour chaque cours : statistiques de lecture + compétences. Clé : le stable_id (ou l'id) du cours."""
-    stats = resumer(lire(student_id))
+    evs_acquis = suivi_acquis.lire(student_id)
+    nouveaux = lire(student_id)
+    depuis: dict[str, str] = {}
+    for e in nouveaux:
+        depuis.setdefault(str(e.get("deck_id") or ""), str(e.get("quand") or ""))
+    blocs = {k: v.get("blocs") or {} for k, v in cours_alleges().items()}
+    stats = resumer(sorted(historique(evs_acquis, depuis, blocs) + nouveaux, key=lambda e: str(e.get("quand") or "")))
     acquis: dict[str, list[dict]] = defaultdict(list)
-    for e in suivi_acquis.lire(student_id):
+    for e in evs_acquis:
+        if e.get("evenement"):          # séances, cahier, pauses : pas des réponses
+            continue
         acquis[str(e.get("deck_id") or "")].append(e)
     out: dict[str, dict] = {}
     vus: set[int] = set()

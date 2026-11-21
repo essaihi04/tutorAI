@@ -37,3 +37,18 @@ def test_competences_comptees():
     c = stats_cours.competences(evs, deck)
     assert (c["total"], c["acquis"], c["non_acquis"], c["non_evalue"]) == (3, 1, 1, 1)
     assert next(x for x in c["liste"] if x["id"] == "c2")["reprendre_avec"]
+
+
+def test_historique_avant_les_statistiques():
+    # 21/11/2026 : les séances et réponses d'avant les statistiques comptent ; après la 1re statistique, plus rien
+    evs = [
+        {"evenement": "seance_debut", "cours_id": "d1", "quand": "2026-11-19T07:00:00+00:00"},
+        {"evenement": "cahier", "cours_id": "d1", "bloc_id": "b1", "quand": "2026-11-19T07:05:00+00:00"},
+        {"evenement": "seance_fin", "cours_id": "d1", "duree_s": 600.0, "quand": "2026-11-19T07:10:00+00:00"},
+        {"deck_id": "d1", "slide_id": "s9", "cle": "q", "correct": True, "quand": "2026-11-19T07:06:00+00:00"},
+        {"evenement": "seance_debut", "cours_id": "d1", "quand": "2026-11-22T07:00:00+00:00"},
+    ]
+    h = stats_cours.historique(evs, {"d1": "2026-11-21T12:00:00+00:00"}, {"d1": {"b1": ["s1", "s2"]}})
+    r = stats_cours.resumer(h, MAINTENANT)["d1"]
+    assert (r["ouvertures"], r["minutes"]) == (1, 10)
+    assert r["diapos_vues"] == ["s1", "s2", "s9"]

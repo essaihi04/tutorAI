@@ -425,7 +425,7 @@ function CourseCard({
   const st = tableau?.stats;
   const comp = tableau?.competences;
   const vu = Math.max(tableau?.vu_pourcent || 0, course.progress_percent || 0);
-  const commence = !!st || inProgress || completed;
+  const commence = !!st || inProgress || completed || (!!comp && comp.total > comp.non_evalue);
   return (
     <article className="group relative flex flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0e0e26] shadow-lg shadow-black/20 transition duration-200 hover:-translate-y-1 hover:border-white/20 hover:shadow-2xl hover:shadow-black/40">
       <button onClick={onOpen} className="relative block aspect-[16/9] w-full overflow-hidden text-left" aria-label={`Ouvrir le cours ${course.title}`}>
