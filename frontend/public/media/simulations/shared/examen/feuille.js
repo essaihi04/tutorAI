@@ -11,6 +11,8 @@
  *                (en SVT, une partie sans exercices — la restitution — compte pour un)
  *     questions  positions dans la liste des questions de l'exercice : « 1-3 », « 1,2,5 » (défaut : toutes).
  *                Règle 48 : une diapo d'énoncé ne montre que la partie qui va être répondue (1 à 3 questions).
+ *     sous       dans la question gardée, les propositions / sous-questions montrées : « 2 », « 1,3 » (défaut : toutes).
+ *                Allumer la question elle-même (q-iv) n'allume que sa consigne, pas ses propositions.
  *     partie     sur une page à soi (window.FEUILLE.blocs) : garde les blocs `partie: k` et ceux sans `partie`
  *     page       « 3/6 » : la case « الصفحة » de l'en-tête (défaut : vide)
  *     entete     complete (défaut : l'en-tête de la page 1 du sujet) | courte (pages 2 à N) | aucune
@@ -270,7 +272,11 @@
     const points = b.points ?? q.points;
     const pts = points != null && points !== '' ? nbFr(points) : '';
     const choix = b.choix || (q.choices || []).map((c) => [c.letter, c.text]);
-    const sousQ = b.sous || (q.sub_questions || []).map((s) => ({ q: s }));
+    // `sous=2` (21/11/2026, l'utilisateur) : d'une question à propositions (« IV- Pour chacune des propositions
+    // numérotées de 1 à 4… »), seules les propositions traitées juste après sont montrées, comme la règle 48.
+    const toutesSous = b.sous || (q.sub_questions || []).map((s) => ({ q: s }));
+    const garderSous = !sous && SOUS && toutesSous.length ? toutesSous.filter((_, k) => SOUS.has(k + 1)) : toutesSous;
+    const sousQ = garderSous.length ? garderSous : toutesSous;
     let corps = md(texte);
     // Le numéro en gras se colle au premier paragraphe, comme sur la feuille.
     corps = corps.replace(/^<p>/, `<p><span class="num">${esc(label)}</span>`);
@@ -304,6 +310,8 @@
 
   // ── Repères et pont avec le tuteur ────────────────────────────────────────
   let CFG = {}; let SURLIGNE = [];
+  /** les propositions gardées d'une question (`sous=`), null : toutes */
+  let SOUS = null;
   const simId = () => CFG.id || `examen-${String(CFG.sujet || 'sujet').replace(/[^a-z0-9]+/gi, '-')}-ex${CFG.exercice || ''}`;
   const envoyer = (msg) => { try { if (parent !== window) parent.postMessage({ simulation_id: simId(), ...msg }, '*'); } catch (_) { /* hors iframe */ } };
   function reperes() {
@@ -414,6 +422,7 @@
       CFG.exam ? Promise.resolve(CFG.exam) : (CFG.sujet ? fetch(`/media/examens/${CFG.sujet}.json`).then((r) => { if (!r.ok) throw new Error(`/media/examens/${CFG.sujet}.json : ${r.status}`); return r.json(); }) : Promise.resolve({})),
     ]).catch((e) => { racine.innerHTML = `<div class="erreur">Feuille d’examen : ${esc(e.message)}. Lancer python scripts/examens/copier_sujets.py ${esc(CFG.sujet)}</div>`; throw e; });
     IDS.clear(); nTableau = 0;
+    SOUS = plage(CFG.sous ?? P.get('sous'), 99);
     let ex = null;
     if (!CFG.blocs) {
       const liste = exercicesAPlat(exam);
