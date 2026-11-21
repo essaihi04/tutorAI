@@ -31,6 +31,8 @@ export interface QuestionMemoire extends EnonceLu {
   reprend?: string;
   /** Réactions préparées : `{option: {juste | 1 | 2: {parole, ecrit, audio}}}` (vrai/faux : 0 = Vrai, 1 = Faux). */
   reponses?: ReponsesPreparees;
+  /** (20 novembre 2026) Extrait du tableau du code génétique montré à côté de la question (codons de l'ARNm). */
+  tableau_code?: string[];
 }
 
 export type ReponsesPreparees = Record<string, Partial<Record<'juste' | '1' | '2', ReactionPreparee>>>;

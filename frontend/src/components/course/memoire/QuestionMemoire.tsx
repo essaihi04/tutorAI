@@ -5,6 +5,7 @@ import type { Demonstration, ReactionPreparee } from '../types';
 import type { CleSuggestions } from '../ClavierFlottant';
 import DemonstrationPleine, { type LectureDemo } from '../DemonstrationPleine';
 import { Formule } from '../Formule';
+import TableauCode from '../TableauCode';
 import { attendreLaFin, lireDemonstration, lireEnonce, taire } from './voix';
 
 /**
@@ -171,6 +172,8 @@ export default function QuestionMemoire({ question, mode, titre = '', deckId, on
             className="shrink-0 rounded-full bg-white/10 px-2.5 py-1 text-sm text-white/70 hover:bg-white/20">🔊</button>
         )}
       </div>
+      {/* (20 novembre 2026) question de traduction : l'extrait du tableau du code génétique, sous l'énoncé */}
+      {question.tableau_code?.length ? <TableauCode codons={question.tableau_code} className="sm:max-w-[360px]" /> : null}
 
       {choix && reflexion > 0 && !fini && (
         <p className="text-sm text-sky-200/80">🤔 Réfléchis d’abord… les choix arrivent dans {reflexion} s</p>

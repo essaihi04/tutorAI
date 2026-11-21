@@ -37,6 +37,9 @@ export interface CourseQuestion extends EnonceLu {
    * écrit et dit, puis le bilan des couples comme le barème les attend. Voir `AssociationDiapo`.
    */
   association?: AssociationQuestion;
+  /** (20 novembre 2026) Codons de l'ARNm dont l'élève doit lire l'acide aminé : un extrait du tableau du code génétique
+   *  s'affiche à côté de la question (`TableauCode`), comme le petit tableau donné dans le sujet. */
+  tableau_code?: string[];
 }
 
 /** Un élément d'une colonne : `id` est l'étiquette du sujet (« 1 », « a »…), montrée devant le texte. */

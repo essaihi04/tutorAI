@@ -7,6 +7,7 @@ import { focusProfessor } from '../../services/professorFocus';
 import type { AssociationQuestion, CourseSlide, Demonstration, EnonceLu, QuestionObservation, ReactionPreparee, RetourPaire, SlideConcentration } from './types';
 import ClavierScientifique, { BoutonSymboles } from './ClavierScientifique';
 import { clavier, hauteurClavierTelephone, largeurClavier, useChampClavier, useClavier } from './ClavierFlottant';
+import TableauCode from './TableauCode';
 import { Formule } from './Formule';
 import DemonstrationPleine, { type FigureDemo, type LectureDemo } from './DemonstrationPleine';
 import PageExamenVue from './PageExamen';
@@ -16,6 +17,7 @@ import SansDefilement from './SansDefilement';
 import FiguresCahier from './FigureCahier';
 import { inscrireVoix } from './voixUnique';
 import AssociationDiapo, { type FinAssociation } from './AssociationDiapo';
+import GlisserCode, { type GlisserCodeData } from './GlisserCode';
 import { basculerPleinEcran, usePleinEcran } from './pleinEcran';
 import { taire as taireMemoire } from './memoire/voix';
 import { commandeReservee, dureeDuRejeuMs, momentsReserves, questionClose, rejeuxDe } from './parcours';
@@ -2569,13 +2571,17 @@ export default function CourseFocusStage({ slide, language, deckControls, tuteur
 }
 
 /** Une question de la diapositive, telle que l'élève y répond (la clé `bonne` n'existe que pour les exercices). */
-type QuestionDiapo = { cle: string; type: 'qcm' | 'vrai_faux' | 'directe' | 'association'; enonce: string; choix?: string[]; bonne?: number; explication?: string;
+type QuestionDiapo = { cle: string; type: 'qcm' | 'vrai_faux' | 'directe' | 'association' | 'glisser'; enonce: string; choix?: string[]; bonne?: number; explication?: string;
   /** `association` : les deux colonnes, les bonnes paires et le retour de chaque paire (19 novembre 2026) */
   association?: AssociationQuestion;
   /** La démonstration manuscrite, écrite après la réaction (pour un vrai/faux : portée par sa dernière affirmation). */
   demonstration?: Demonstration;
   /** L'énoncé lu par le tuteur (`enonce_audio`, `enonce_dit`) et les suggestions du clavier (`clavier`). */
-  lu?: EnonceLu };
+  lu?: EnonceLu;
+  /** (20 novembre 2026) codons de l'ARNm : l'extrait du tableau du code génétique, à côté de la question */
+  code?: string[];
+  /** `glisser` (21 novembre 2026) : traduction ou transcription à glisser-déposer (`GlisserCode`) */
+  glisser?: GlisserCodeData };
 const luDe = (x?: EnonceLu): EnonceLu | undefined => (x && (x.enonce_audio || x.enonce_dit || x.clavier) ? { enonce_audio: x.enonce_audio, enonce_dit: x.enonce_dit, clavier: x.clavier } : undefined);
 
 function questionsDeLaDiapo(slide: CourseSlide): QuestionDiapo[] {
@@ -2583,13 +2589,15 @@ function questionsDeLaDiapo(slide: CourseSlide): QuestionDiapo[] {
   const q = slide.question;
   if (q?.prompt) {
     // une association du national reste une association, jamais découpée en QCM (19 novembre 2026)
-    if (q.type === 'association' && q.association?.gauche?.length) out.push({ cle: 'q', type: 'association', enonce: q.prompt, association: q.association, demonstration: q.demonstration, lu: luDe(q) });
-    else if ((q.options || []).length >= 2) out.push({ cle: 'q', type: 'qcm', enonce: q.prompt, choix: q.options, bonne: q.correct, demonstration: q.demonstration, lu: luDe(q) });
-    else out.push({ cle: 'q', type: 'directe', enonce: q.prompt, demonstration: q.demonstration, lu: luDe(q) });
+    if (q.type === 'association' && q.association?.gauche?.length) out.push({ cle: 'q', type: 'association', enonce: q.prompt, association: q.association, demonstration: q.demonstration, lu: luDe(q), code: q.tableau_code });
+    else if ((q.options || []).length >= 2) out.push({ cle: 'q', type: 'qcm', enonce: q.prompt, choix: q.options, bonne: q.correct, demonstration: q.demonstration, lu: luDe(q), code: q.tableau_code });
+    else out.push({ cle: 'q', type: 'directe', enonce: q.prompt, demonstration: q.demonstration, lu: luDe(q), code: q.tableau_code });
   }
   (slide.exercises || []).forEach((ex, i) => {
-    if (ex.type === 'association' && ex.association?.gauche?.length) out.push({ cle: `e${i}`, type: 'association', enonce: ex.prompt, association: ex.association, explication: ex.explanation, demonstration: ex.demonstration, lu: luDe(ex) });
-    if (ex.type === 'qcm' && (ex.choices || []).length >= 2) out.push({ cle: `e${i}`, type: 'qcm', enonce: ex.prompt, choix: ex.choices, bonne: ex.correct ?? 0, explication: ex.explanation, demonstration: ex.demonstration, lu: luDe(ex) });
+    const gl = (ex as { glisser?: GlisserCodeData }).glisser;
+    if ((ex.type as string) === 'glisser' && gl?.sequence) out.push({ cle: `e${i}`, type: 'glisser', enonce: ex.prompt, glisser: gl, explication: ex.explanation, demonstration: ex.demonstration, lu: luDe(ex) });
+    if (ex.type === 'association' && ex.association?.gauche?.length) out.push({ cle: `e${i}`, type: 'association', enonce: ex.prompt, association: ex.association, explication: ex.explanation, demonstration: ex.demonstration, lu: luDe(ex), code: (ex as { tableau_code?: string[] }).tableau_code });
+    if (ex.type === 'qcm' && (ex.choices || []).length >= 2) out.push({ cle: `e${i}`, type: 'qcm', enonce: ex.prompt, choix: ex.choices, bonne: ex.correct ?? 0, explication: ex.explanation, demonstration: ex.demonstration, lu: luDe(ex), code: (ex as { tableau_code?: string[] }).tableau_code });
     if (ex.type === 'vrai_faux') (ex.statements || []).forEach((st, j, tout) => {
       out.push({ cle: `e${i}s${j}`, type: 'vrai_faux', enonce: st.text, choix: ['Vrai', 'Faux'], bonne: st.correct ? 0 : 1, explication: st.explanation,
         demonstration: j === tout.length - 1 ? ex.demonstration : undefined, lu: luDe(st) });
@@ -2621,7 +2629,7 @@ function lireEtatQuestion(memoire: string): EtatQuestion {
 /** Une question est close : juste, fausse après tous ses essais, ou réponse libre jugée. */
 function estTerminee(type: QuestionDiapo['type'], e: EtatQuestion, essaisMax: number): boolean {
   const r = e.retour, t = e.tentative ?? 1;
-  return r?.correct === true || (r?.correct === false && t > essaisMax) || ((type === 'directe' || type === 'association') && !!r && r.correct !== null);
+  return r?.correct === true || (r?.correct === false && t > essaisMax) || ((type === 'directe' || type === 'association' || type === 'glisser') && !!r && r.correct !== null);
 }
 
 /**
@@ -2686,8 +2694,14 @@ function QuestionsDeLaDiapo({ questions, index, onIndex, diapo, dire, jouer, rep
       <div className="min-h-0 flex-1">
         {questions.map((q, i) => (
           <div key={q.cle} className={`question-apparait h-full min-h-0 ${i === courante ? '' : 'hidden'}`}>
-            <UneQuestion q={q} diapo={diapo} dire={dire} jouer={jouer} preparees={reponses?.[q.cle]} onReponse={onReponse} onFinie={surFinieLocale} essaisMax={essaisMax}
-              actif={i === courante} onPasser={onPasser ? surPasseeLocale : undefined} {...outils} />
+            {/* une question de traduction : l'extrait du tableau du code génétique à côté (dessous sur téléphone) */}
+            <div className={q.code?.length ? 'flex h-full min-h-0 flex-col gap-3 sm:flex-row' : 'h-full min-h-0'}>
+              <div className={q.code?.length ? 'min-h-0 min-w-0 flex-1' : 'h-full min-h-0'}>
+                <UneQuestion q={q} diapo={diapo} dire={dire} jouer={jouer} preparees={reponses?.[q.cle]} onReponse={onReponse} onFinie={surFinieLocale} essaisMax={essaisMax}
+                  actif={i === courante} onPasser={onPasser ? surPasseeLocale : undefined} {...outils} />
+              </div>
+              {q.code?.length ? <TableauCode codons={q.code} className="sm:w-[300px]" /> : null}
+            </div>
           </div>
         ))}
       </div>
@@ -2927,6 +2941,9 @@ function UneQuestion({ q, diapo, dire, jouer, preparees, compact = false, onRepo
       )}
       {q.type === 'association' && q.association && (
         <AssociationDiapo a={q.association} memoire={memoire} fini={finie} compact={compact} actif={actif} onPaire={surPaire} onFin={surFinAssociation} />
+      )}
+      {q.type === 'glisser' && q.glisser && (
+        <GlisserCode g={q.glisser} fini={finie} actif={actif} onFin={surFinAssociation} />
       )}
       {q.type === 'directe' && (
         // Réponse libre : écrite, dite au micro ou photographiée, avec le clavier scientifique ; relue avant l'envoi.
