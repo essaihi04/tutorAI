@@ -4,8 +4,8 @@ import {
   BookOpen,
   CheckCircle2,
   Clock3,
+  BarChart3,
   Layers3,
-  MessageCircle,
   Play,
   RefreshCw,
   Search,
@@ -14,8 +14,11 @@ import {
 import MoalimShell from '../components/MoalimShell';
 import StudentNavigation from '../components/StudentNavigation';
 import MobileBottomNav from '../components/MobileBottomNav';
+import DetailsCours, { BarreCompetences } from '../components/course/DetailsCours';
 import {
   getCourseCatalog,
+  getTableauDeBord,
+  type TableauCours,
   type CourseCatalog,
   type CourseCatalogCourse,
   type CourseCatalogSubject,
@@ -109,6 +112,9 @@ export default function CourseLibrary() {
   const [recherche, setRecherche] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** Lectures, temps et compétences de l'élève par cours (clé : stable_id) ; vide si le serveur ne répond pas. */
+  const [tableau, setTableau] = useState<Record<string, TableauCours>>({});
+  const [details, setDetails] = useState<Carte | null>(null);
 
   const loadCatalog = () => {
     setLoading(true);
@@ -125,6 +131,9 @@ export default function CourseLibrary() {
       .then(({ data }) => { if (!cancelled) setCatalog(data); })
       .catch(() => { if (!cancelled) setError('Impossible de charger les cours pour le moment.'); })
       .finally(() => { if (!cancelled) setLoading(false); });
+    getTableauDeBord()
+      .then(({ data }) => { if (!cancelled) setTableau(data.cours || {}); })
+      .catch(() => { /* les statistiques sont un plus : la bibliothèque marche sans */ });
     return () => { cancelled = true; };
   }, []);
 
@@ -165,6 +174,8 @@ export default function CourseLibrary() {
 
   const totalMinutes = toutes.reduce((somme, { course }) => somme + (course.estimated_minutes || 0), 0);
   const termines = toutes.filter(({ course }) => course.progress_status === 'completed').length;
+  const competencesTotal = toutes.reduce((s, { course }) => s + (tableau[course.stable_id]?.competences.total || 0), 0);
+  const competencesAcquises = toutes.reduce((s, { course }) => s + (tableau[course.stable_id]?.competences.acquis || 0), 0);
   const filtresActifs = matiere !== 'toutes' || avancement !== 'tous' || recherche.trim() !== '';
 
   const openCourse = (course: CourseCatalogCourse) => {
@@ -200,6 +211,9 @@ export default function CourseLibrary() {
               <Chiffre valeur={String(toutes.length)} libelle="cours" />
               <Chiffre valeur={`${Math.round(totalMinutes / 60)} h`} libelle="de contenu" />
               <Chiffre valeur={`${termines}/${toutes.length}`} libelle="terminés" />
+              {competencesTotal > 0 && (
+                <Chiffre valeur={`${Math.round((competencesAcquises * 100) / competencesTotal)} %`} libelle="compétences acquises" />
+              )}
             </dl>
           )}
         </header>
@@ -313,8 +327,9 @@ export default function CourseLibrary() {
                       course={course}
                       subject={subject}
                       teinte={teinte}
+                      tableau={tableau[course.stable_id]}
                       onOpen={() => openCourse(course)}
-                      onAskTutor={() => askTutorToOpen(course)}
+                      onDetails={() => setDetails({ course, subject, teinte, rang })}
                     />
                   ))}
                 </div>
@@ -330,6 +345,18 @@ export default function CourseLibrary() {
         )}
       </main>
       <MobileBottomNav active="courses" />
+      {details && (
+        <DetailsCours
+          course={details.course}
+          tableau={tableau[details.course.stable_id]}
+          barre={details.teinte.barre}
+          badge={details.teinte.badge}
+          matiere={nomCourt(details.subject.name_fr)}
+          onClose={() => setDetails(null)}
+          onOpen={() => openCourse(details.course)}
+          onAskTutor={() => askTutorToOpen(details.course)}
+        />
+      )}
     </MoalimShell>
   );
 }
@@ -386,17 +413,24 @@ function BarreAvancement({ pourcent, teinte }: { pourcent: number; teinte: Teint
 }
 
 function CourseCard({
-  course, subject, teinte, rang, onOpen, onAskTutor,
+  course, subject, teinte, rang, tableau, onOpen, onDetails,
 }: {
   rang: number;
   course: CourseCatalogCourse;
   subject: CourseCatalogSubject;
   teinte: Teinte;
+  tableau?: TableauCours;
   onOpen: () => void;
-  onAskTutor: () => void;
+  onDetails: () => void;
 }) {
   const completed = course.progress_status === 'completed';
   const inProgress = course.progress_status === 'in_progress';
+  // Carte (21/11/2026) : vu (diapositives vues au moins une fois, toutes lectures confondues), lectures terminées,
+  // temps passé, et la barre des compétences acquises ; un cours peut être lu plusieurs fois.
+  const st = tableau?.stats;
+  const comp = tableau?.competences;
+  const vu = Math.max(tableau?.vu_pourcent || 0, course.progress_percent || 0);
+  const commence = !!st || inProgress || completed;
   return (
     <article className="group relative flex flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0e0e26] shadow-lg shadow-black/20 transition duration-200 hover:-translate-y-1 hover:border-white/20 hover:shadow-2xl hover:shadow-black/40">
       <button onClick={onOpen} className="relative block aspect-[16/9] w-full overflow-hidden text-left" aria-label={`Ouvrir le cours ${course.title}`}>
@@ -409,6 +443,20 @@ function CourseCard({
           <span className="absolute right-2.5 top-2.5 inline-flex items-center gap-1 rounded-md bg-emerald-400 px-2 py-0.5 text-[11px] font-black text-emerald-950">
             <CheckCircle2 className="h-3 w-3" /> Terminé
           </span>
+        )}
+        {commence && (
+          <div className="absolute inset-x-0 bottom-0 space-y-1 bg-gradient-to-t from-black/90 via-black/75 to-transparent px-2.5 pb-2 pt-4">
+            <Ligne libelle="Vu" valeur={`${vu} %`}>
+              <span className="block h-1.5 overflow-hidden rounded-full bg-white/10">
+                <span className={`block h-full rounded-full ${teinte.barre}`} style={{ width: `${Math.max(3, vu)}%` }} />
+              </span>
+            </Ligne>
+            {comp && comp.total > 0 && (
+              <Ligne libelle="Acquis" valeur={`${Math.round((comp.acquis * 100) / comp.total)} %`} titre={`${comp.acquis} compétences acquises sur ${comp.total}, ${comp.non_acquis + comp.partiel} à revoir, ${comp.non_evalue} pas encore évaluées`}>
+                <span className="block bg-white/10 rounded-full"><BarreCompetences c={comp} /></span>
+              </Ligne>
+            )}
+          </div>
         )}
         <span className="absolute inset-0 flex items-center justify-center opacity-0 transition group-hover:opacity-100">
           <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-indigo-950 shadow-xl">
@@ -430,22 +478,31 @@ function CourseCard({
           )}
         </p>
         <h3 className="mt-1 line-clamp-2 min-h-[2.5rem] text-[15px] font-black leading-5 text-white">{course.title}</h3>
-        {inProgress && <BarreAvancement pourcent={course.progress_percent} teinte={teinte} />}
         <div className="mt-auto flex gap-2 pt-2.5">
           <button onClick={onOpen} className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-xl bg-white text-xs font-black text-indigo-950 transition hover:bg-cyan-50">
             <Play className="h-3.5 w-3.5 fill-current" /> {inProgress ? 'Reprendre' : completed ? 'Revoir' : 'Commencer'}
           </button>
           <button
-            onClick={onAskTutor}
+            onClick={onDetails}
             className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-white/60 transition hover:bg-white/[0.08] hover:text-white"
-            title="Demander ce cours à Moalim"
-            aria-label="Demander ce cours à Moalim"
+            title="Détails : vu, lectures, temps, compétences"
+            aria-label={`Détails du cours ${course.title}`}
           >
-            <MessageCircle className="h-4 w-4" />
+            <BarChart3 className="h-4 w-4" />
           </button>
         </div>
       </div>
     </article>
+  );
+}
+
+function Ligne({ libelle, valeur, titre, children }: { libelle: string; valeur: string; titre?: string; children: ReactNode }) {
+  return (
+    <div className="flex items-center gap-2" title={titre}>
+      <span className="w-11 shrink-0 text-[11px] font-bold text-white/45">{libelle}</span>
+      <span className="min-w-0 flex-1">{children}</span>
+      <span className="w-10 shrink-0 text-right text-[11px] font-bold text-white/60">{valeur}</span>
+    </div>
   );
 }
 

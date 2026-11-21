@@ -180,6 +180,31 @@ export interface CourseCatalog {
 }
 export const getCourseCatalog = () =>
   api.get<CourseCatalog>('/course-player/catalog');
+/** Statut d'une compétence (suivi des acquis). */
+export type StatutCompetence = 'acquis' | 'partiel' | 'non_acquis' | 'non_evalue';
+/** Ce que l'élève a fait d'un cours : lectures, temps, diapositives vues et compétences (GET /course-player/tableau-de-bord). */
+export interface TableauCours {
+  stats: {
+    ouvertures: number;
+    terminaisons: number;
+    minutes: number;
+    premiere: string | null;
+    derniere: string | null;
+    jours: { jour: string; minutes: number }[];
+  } | null;
+  competences: {
+    total: number;
+    acquis: number;
+    partiel: number;
+    non_acquis: number;
+    non_evalue: number;
+    liste: { id: string; label: string; statut: StatutCompetence; score: number | null; reprendre_avec: string[] }[];
+  };
+  diapos: number;
+  vu_pourcent: number;
+}
+export const getTableauDeBord = () =>
+  api.get<{ cours: Record<string, TableauCours> }>('/course-player/tableau-de-bord');
 export interface CourseIntentResolution {
   matched: boolean;
   reason: string;

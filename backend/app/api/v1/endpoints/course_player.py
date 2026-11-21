@@ -213,6 +213,29 @@ async def bilan_acquis(deck_id: str, student: dict = Depends(get_current_student
     return {**b, "lacunes": suivi_acquis.lacunes(b), "bloc_prompt": suivi_acquis.bloc_prompt(b, deck.get("title", ""))}
 
 
+class StatsEvent(BaseModel):
+    """Lecture d'un cours : ouverture, temps passé (par diapositive) ou lecture terminée (services/stats_cours.py)."""
+    deck_id: str = Field(min_length=1, max_length=120)
+    type: Literal["ouverture", "temps", "terminaison"]
+    slide_id: str = Field(default="", max_length=160)
+    secondes: int = Field(default=0, ge=0, le=600)
+
+
+@router.post("/stats")
+async def enregistrer_stats(body: StatsEvent, student: dict = Depends(get_current_student)):
+    from app.services import stats_cours
+    if _compte(student):
+        stats_cours.noter(str(student["id"]), body.deck_id, body.type, body.slide_id, body.secondes)
+    return {"ok": True}
+
+
+@router.get("/tableau-de-bord")
+async def tableau_de_bord(student: dict = Depends(get_current_student)):
+    """Par cours : lectures, temps, diapositives vues et compétences (acquises, partielles, à revoir, restantes)."""
+    from app.services import stats_cours
+    return {"cours": stats_cours.tableau(str(student["id"]))}
+
+
 class ReexplicationRequest(BaseModel):
     """Une réponse fausse : le tuteur réexplique autrement et pose une question jumelle (cycle 1 à 3)."""
     deck_id: Optional[str] = None

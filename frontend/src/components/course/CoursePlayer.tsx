@@ -101,6 +101,17 @@ function noterRappel(deckId: string, slide: CourseSlide, type: 'rappel_saute' | 
   }).catch(() => { /* le suivi ne doit jamais gêner l'élève */ });
 }
 
+/** Statistiques de lecture (ouverture, temps par diapositive, lecture terminée) : la carte du cours et ses Détails. */
+function noterStats(deckId: string, type: 'ouverture' | 'temps' | 'terminaison', slideId = '', secondes = 0) {
+  let jeton = '';
+  try { jeton = localStorage.getItem('token') || ''; } catch { /* sans jeton */ }
+  void fetch('/api/v1/course-player/stats', {
+    method: 'POST', keepalive: true,
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jeton}` },
+    body: JSON.stringify({ deck_id: deckId, type, slide_id: slideId, secondes: Math.round(secondes) }),
+  }).catch(() => { /* les statistiques ne doivent jamais gêner l'élève */ });
+}
+
 export default function CoursePlayer({
   deck,
   progress,
@@ -350,11 +361,50 @@ export default function CoursePlayer({
     setStarted(true);
     setPleinEcranVoulu(true);
     persist(0, 0, 'in_progress', []);
+    termineeNotee.current = false;
+    noterStats(deckIdSuivi, 'ouverture');   // « Recommencer » : une nouvelle lecture
     onRestart?.();
-  }, [onRestart, persist]);
+  }, [onRestart, persist, deckIdSuivi]);
 
   /** Le cours terminé rend l'écran : le bilan et la séance redeviennent visibles. */
   useEffect(() => { if (courseCompleted) setPleinEcranVoulu(false); }, [courseCompleted]);
+
+  /**
+   * Statistiques de lecture (21 novembre 2026, carte du cours et panneau Détails) : une ouverture à chaque lancement,
+   * le temps passé sur chaque diapositive (onglet visible seulement, envoyé au changement de diapo et toutes les 30 s),
+   * une lecture terminée à chaque arrivée au bout — un cours peut être lu plusieurs fois.
+   */
+  const termineeNotee = useRef(false);
+  useEffect(() => {
+    if (!started) return;
+    termineeNotee.current = false;
+    noterStats(deckIdSuivi, 'ouverture');
+  }, [started, deckIdSuivi]);
+  useEffect(() => {
+    if (!courseCompleted || termineeNotee.current) return;
+    termineeNotee.current = true;
+    noterStats(deckIdSuivi, 'terminaison');
+  }, [courseCompleted, deckIdSuivi]);
+  const slideIdStats = started && !courseCompleted ? current?.slide.id || '' : '';
+  useEffect(() => {
+    if (!slideIdStats) return;
+    let debut = Date.now();
+    const vider = () => {
+      const secondes = (Date.now() - debut) / 1000;
+      debut = Date.now();
+      if (secondes >= 0.5) noterStats(deckIdSuivi, 'temps', slideIdStats, Math.min(secondes, 120));
+    };
+    const minuterie = window.setInterval(() => {
+      if (document.visibilityState === 'visible') vider(); else debut = Date.now();
+    }, 30000);
+    const visibilite = () => { if (document.visibilityState === 'hidden') vider(); else debut = Date.now(); };
+    document.addEventListener('visibilitychange', visibilite);
+    return () => {
+      window.clearInterval(minuterie);
+      document.removeEventListener('visibilitychange', visibilite);
+      if (document.visibilityState === 'visible') vider();
+    };
+  }, [slideIdStats, deckIdSuivi]);
   // Démonté en plein écran (fin de séance, changement de leçon), le composant
   // n'a plus l'occasion d'émettre `false` : la page garderait sa colonne de
   // messages repliée sans rien pour la rouvrir.
