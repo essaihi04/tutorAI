@@ -2595,7 +2595,7 @@ function questionsDeLaDiapo(slide: CourseSlide): QuestionDiapo[] {
   }
   (slide.exercises || []).forEach((ex, i) => {
     const gl = (ex as { glisser?: GlisserCodeData }).glisser;
-    if ((ex.type as string) === 'glisser' && gl?.sequence) out.push({ cle: `e${i}`, type: 'glisser', enonce: ex.prompt, glisser: gl, explication: ex.explanation, demonstration: ex.demonstration, lu: luDe(ex) });
+    if ((ex.type as string) === 'glisser' && (gl?.sequence || gl?.texte)) out.push({ cle: `e${i}`, type: 'glisser', enonce: ex.prompt, glisser: gl, explication: ex.explanation, demonstration: ex.demonstration, lu: luDe(ex) });
     if (ex.type === 'association' && ex.association?.gauche?.length) out.push({ cle: `e${i}`, type: 'association', enonce: ex.prompt, association: ex.association, explication: ex.explanation, demonstration: ex.demonstration, lu: luDe(ex), code: (ex as { tableau_code?: string[] }).tableau_code });
     if (ex.type === 'qcm' && (ex.choices || []).length >= 2) out.push({ cle: `e${i}`, type: 'qcm', enonce: ex.prompt, choix: ex.choices, bonne: ex.correct ?? 0, explication: ex.explanation, demonstration: ex.demonstration, lu: luDe(ex), code: (ex as { tableau_code?: string[] }).tableau_code });
     if (ex.type === 'vrai_faux') (ex.statements || []).forEach((st, j, tout) => {

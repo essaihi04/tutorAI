@@ -9,14 +9,18 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as PE } from 'react';
 import { CODE_GENETIQUE, NOMS_ACIDES } from './TableauCode';
 import type { FinAssociation } from './AssociationDiapo';
+import TrousGlisser from './TrousGlisser';
 
 export interface GlisserCodeData {
   /** complementaire (SVT ch3) : le brin d'ADN complémentaire, nucléotide par nucléotide (réplication) */
-  sens: 'traduction' | 'transcription' | 'complementaire';
+  sens: 'traduction' | 'transcription' | 'complementaire' | 'trous';
   /** traduction : les codons de l'ARNm (« AUG GCU … ») ; transcription : le brin transcrit de l'ADN, par triplets */
-  sequence: string;
-  /** traduction : codons de leurre ajoutés au tableau */
+  sequence?: string;
+  /** traduction : codons de leurre ajoutés au tableau ; trous : étiquettes de leurre */
   leurres?: string[];
+  /** trous (SVT ch1, ch2) : le texte, les trous écrits `[[réponse]]`, une ligne par « 
+ » */
+  texte?: string;
   /** l'orientation écrite au bout des brins (ex. « 3′ » … « 5′ ») */
   bouts?: [string, string];
 }
@@ -27,11 +31,16 @@ const COMP_ADN: Record<string, string> = { A: 'T', T: 'A', G: 'C', C: 'G' };    
 
 type Case = { haut: string; attendu: string; pose: string | null; faux: string | null };
 
-export default function GlisserCode({ g, fini, actif = true, onFin }: {
-  g: GlisserCodeData; fini: boolean; actif?: boolean; onFin: (f: FinAssociation, voix: Promise<unknown>) => void;
-}) {
+type Props = { g: GlisserCodeData; fini: boolean; actif?: boolean; onFin: (f: FinAssociation, voix: Promise<unknown>) => void };
+
+export default function GlisserCode(p: Props) {
+  if (p.g.sens === 'trous') return <TrousGlisser texte={p.g.texte || ''} leurres={p.g.leurres} fini={p.fini} onFin={p.onFin} />;
+  return <GlisserSequence {...p} />;
+}
+
+function GlisserSequence({ g, fini, actif = true, onFin }: Props) {
   const traduction = g.sens === 'traduction', adn = g.sens === 'complementaire';
-  const groupes = g.sequence.trim().toUpperCase().split(/\s+/);
+  const groupes = (g.sequence || '').trim().toUpperCase().split(/\s+/);
   const init = (): Case[] => traduction
     ? groupes.map(c => ({ haut: c, attendu: NOMS_ACIDES[CODE_GENETIQUE[c.replace(/T/g, 'U')]]?.[0] || '?', pose: null, faux: null }))
     : groupes.join('').split('').map(b => ({ haut: b, attendu: (adn ? COMP_ADN : COMP)[b] || '?', pose: null, faux: null }));
