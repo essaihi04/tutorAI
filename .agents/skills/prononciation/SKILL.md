@@ -166,3 +166,14 @@ Une notation dont la lecture est douteuse passe à l'écoute (§ 5). Après un c
 dont le texte parlé change se calcule en comparant l'ancien et le nouveau `parle()` sur toutes les pistes
 (`scripts/voix/pistes_cours.py`), et ces pistes sont régénérées (le 19/11/2026 : 49 pistes). Sur le VPS, la copie
 `_stt_tous/texte_parle_depot.py` (lue par `refaire_verifie.py`) est remplacée par le nouveau fichier à chaque fois.
+
+## 8. Les nombres toujours en français, même dans une phrase en darija
+
+Règle de l'utilisateur (21 novembre 2026) : « ne pas dire les chiffres en arabe + le mot en français ; c'est mieux de
+dire le tout en français ; par exemple pour 2 noyaux il dit جوج noyaux ». Un nombre qui touche un mot français, une
+unité ou une opération est écrit en français dans le texte parlé : « deux noyaux », « trois courbes » (pas « تلاتة ديال
+les courbes »), « les deux courbes » (pas « بجوج »), « deux fois » (pas « جوج مرات »), « zéro virgule zéro six mètre »,
+« six virgule cinq fois dix puissance moins sept ». « واحد » article (« واحد la courbe ») n'est pas un nombre et reste.
+Avant de générer : `python -X utf8 scripts/voix/nombres_fr.py <deck…>` liste ce qui reste, `--ecrire` le convertit dans
+les fichiers des cours (les deux copies ; les mots du pointage sont réalignés). Les pistes dont le texte change sont
+régénérées (§ 4). Le 21/11/2026 : 1 165 phrases converties, 687 pistes à refaire dans les 23 cours.

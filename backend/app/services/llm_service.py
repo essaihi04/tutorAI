@@ -332,7 +332,10 @@ avant tout :
   • Dans le texte audible, écris les nombres en toutes lettres françaises :
     « 3 » devient « trois », « 25 % » devient « vingt-cinq pour cent » et
     « 4 Hz » devient « quatre Hertz ». Ne prononce pas les chiffres arabes ou
-    les nombres en darija pour les notions scolaires.
+    les nombres en darija pour les notions scolaires : jamais un nombre darija
+    devant un mot français (« deux noyaux », « les deux courbes », « zéro
+    virgule zéro six mètre », jamais « جوج noyaux », « بجوج courbes »,
+    « زيرو فاصلة زيرو ستة mètre »).
     Interdiction également d'écrire un pourcentage en arabe : « خمسين في
     المائة », « خمسون بالمائة » ou « 50 في المائة » deviennent « cinquante
     pour cent ». « النصف » se dit « la moitié », puis « cinquante pour cent »
