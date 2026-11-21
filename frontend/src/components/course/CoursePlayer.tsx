@@ -11,6 +11,8 @@ import { matiereDuClavier } from './ClavierScientifique';
 import { enteteDuCahier } from './cahier';
 import { entrerPleinEcran } from './pleinEcran';
 import { diagnosticsDuRappel, diapoSuivante, type EtatGarde } from './parcours';
+import SommaireDiapos from './SommaireDiapos';
+import { taireTout } from './voixUnique';
 
 /**
  * Les questions posées à l'élève sur chaque diapositive sont suspendues pour
@@ -325,6 +327,20 @@ export default function CoursePlayer({
     persist(previous, 0, 'in_progress');
   }, [index, persist]);
 
+  /** Le plan du cours (▦) : toutes les diapositives, un clic pour aller à l'une d'elles (21 novembre 2026). */
+  const [sommaireOuvert, setSommaireOuvert] = useState(false);
+  const ouvrirSommaire = useCallback(() => { taireTout(); setSommaireOuvert(true); }, []);
+  const fermerSommaire = useCallback(() => setSommaireOuvert(false), []);
+  const allerA = useCallback((i: number) => {
+    setSommaireOuvert(false);
+    if (i === index || i < 0 || i >= flatSlides.length) return;
+    taireTout();   // la voix de l'ancienne diapositive s'arrête tout de suite
+    setSautes(null);
+    setCourseCompleted(false);
+    setIndex(i);
+    persist(i, 0, 'in_progress');
+  }, [index, flatSlides.length, persist]);
+
   const restartFromBeginning = useCallback(() => {
     completedSlideIdsRef.current = [];
     setCompletedSlideIds([]);
@@ -428,6 +444,16 @@ export default function CoursePlayer({
         title="Diapositive précédente"
       >
         ←
+      </button>
+      <button
+        onClick={ouvrirSommaire}
+        data-ouvrir-sommaire
+        className="w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-white text-sm hover:scale-105 transition-transform"
+        style={{ background: 'rgba(13,27,21,0.9)', border: '1px solid rgba(255,255,255,0.18)' }}
+        title="Toutes les diapositives"
+        aria-label="Toutes les diapositives"
+      >
+        ▦
       </button>
       <button
         onClick={restartFromBeginning}
@@ -540,6 +566,11 @@ export default function CoursePlayer({
             </button>
           </div>
         </div>
+      )}
+
+      {started && sommaireOuvert && (
+        <SommaireDiapos diapos={flatSlides} courante={index} vues={completedSlideIds}
+          onChoisir={allerA} onFermer={fermerSommaire} />
       )}
 
       {courseCompleted && (
