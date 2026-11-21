@@ -14,8 +14,8 @@ Restent sur le PC, quel que soit le compte : les fichiers, la mémoire du projet
 quand son quota est fini, et repart seule quand il revient.
 
 ## 2. Première phrase à donner à Claude
-> Lis REPRISE_EQUIPE.md et la mémoire du projet, puis continue : voix des cours, nouveaux cours de la routine,
-> republication du lien libre.
+> Lis REPRISE_EQUIPE.md (d'abord le § 3 nonies, le plus récent) et la mémoire du projet, puis continue : voix des
+> cours, écoutes à choisir, déploiement avec mon accord, republication du lien libre.
 
 Les sous-agents doivent tourner avec le modèle **Opus**. La voix est toujours **Bodi**, jamais Amine. On ne déploie
 le serveur **qu'avec l'accord** du responsable.
@@ -316,7 +316,65 @@ fin vers 02 h 45 UTC le 19/11. 65 anciennes voix dont le texte avait changé ont
 `%TEMP%/moalim-voix-attente/live_hash.json`.
 Environnement cloud « Default » : script corrigé le 18/11 (YOUTUBE-CHANNEL-2 et tutorAI, num2words à part).
 
+## 3 nonies. Point du 21 novembre 2026 (soir, 19 h) — à reprendre avec un autre compte
+
+**En production** (`moalim-vps`, `/opt/moalim`) : `main` jusqu'à `51f070f9`. Les 23 cours en mode concentration sont
+servis aux élèves (`status: published`, `remplace_la_base: true`, `lecon_remplacee: <lessons.id>` ; 7871a423). Le
+catalogue en ligne montre 23 cours (physique 8, chimie 5, SVT 4, maths 6).
+- Déployer : `ssh moalim-vps 'cd /opt/moalim && bash deploy/deploy-ubuntu.sh'` (si la connexion SSH coupe, vérifier
+  ensuite : `systemctl is-active moalim-backend`, `git log -1`, site en 200). **Seulement avec l'accord du responsable.**
+- Rafraîchir le lien libre des profs après chaque déploiement :
+  `ssh moalim-vps 'cd /opt/moalim && timeout 400 python3 scripts/publier_cours_ondes.py --sans-envoi > /tmp/pub.log 2>&1 && rm -rf /var/www/moalim/cours-ondes.old && mv /var/www/moalim/cours-ondes /var/www/moalim/cours-ondes.old && mv /tmp/moalim-cours-ondes /var/www/moalim/cours-ondes && echo public=ok'`
+- Committer sans toucher au checkout local (des copies locales des cours diffèrent d'origin : ne jamais les écraser,
+  ni pull, reset, stash ou changer de branche) : `git fetch`, index temporaire (`GIT_INDEX_FILE`) + `read-tree
+  origin/main`, objets écrits avec `git hash-object -w` à partir de `git show origin/main:<fichier>`, `commit-tree`,
+  `git push origin <commit>:refs/heads/main`. Vérifier avant qu'origin n'a pas changé les mêmes fichiers.
+
+**Nouveau cette semaine (tout est en ligne sauf mention)**
+- Bibliothèque en cartes presque carrées, avec image de couverture (`frontend/public/media/images/course-covers/<id>.webp`,
+  `catalog.cover_image`), filtre par matière, recherche, « Reprendre » ; carte avec % vu et % de compétences ; bouton
+  Détails ; bouton ▦ « Toutes les diapositives ». Plus de bandeau « Leçon terminée » ni de seconde zone voix/messages
+  sous un cours en concentration.
+- Profil d'apprentissage unique de l'élève (`GET /course-player/profil`), lu par le mode libre (51f070f9).
+- SVT : schémas à légender du ch4 avec emplacements et traits de rappel ; extrait du tableau du code génétique à côté
+  des questions de traduction (`TableauCode.tsx`, champ `tableau_code`) ; exercices en glisser-déposer
+  (`GlisserCode.tsx` : traduction, transcription, brin complémentaire ; `TrousGlisser.tsx` : texte à trous) dans SVT ch1
+  à ch4 (exercice de type `glisser`).
+- QCM rééquilibrés : la bonne réponse n'est plus la plus longue (b9c2cb79, 0a5c3e22, 17b033fa).
+- National : l'énoncé est affiché **et lu** tel qu'imprimé, introduction, remarque et données comprises, jamais un
+  résumé (93b4e75b ; règle 46 du skill professeur, dcf62595). Règle 50 sur tous les cours : numéro de la question du
+  sujet et figure du sujet commentée (83ad33b5).
+- Voix : les nombres se disent **en français**, jamais en darija à côté du français (« deux noyaux », pas « جوج
+  noyaux ») : 1 165 textes convertis (8be34bc5, 3539d167), script `scripts/voix/nombres_fr.py [--ecrire] <deck>`,
+  skills voix-du-cours et prononciation § 8, consigne du tuteur en direct (`llm_service.py`).
+- Prononciation choisie à l'écoute : « lim » → « la limite » (règle écrite) ; plomb inchangé ; **xénon : « le xénon »**
+  (le symbole « Xe » était lu lettre par lettre). Demandé : par défaut, un symbole chimique du texte parlé se lit par le
+  nom de l'élément (Xe, Sr, Cd, Ag, He, Co, Ni ; ions Cu, Zn, Ca, Al, Mn, Fe, Na, Cl), sauf « La, Ce, Si, Au, Re »
+  (mots français) et « Sn » (somme Sₙ). Règle et tests en cours dans la session voix.
+
+**Voix : où en est-on**
+- Session « Énoncés par parties : physique ch6 à ch10 » (branche `claude/blissful-rosalind-5b05e6`, worktree
+  `.claude/worktrees/blissful-rosalind-5b05e6`) : elle pose les voix prêtes cours par cours (version v23, un commit par
+  cours, push à la fin de la boucle) ; 1 015 voix prêtes sur le serveur ; 236 dernières pistes en génération ; puis les
+  pistes de la règle des symboles. **Rien de tout cela n'est déployé.**
+- Écoutes encore à choisir : 38 mots, index `_ecoute_INDEX.md` dans ce worktree (mp3 dans `_ecoute_<mot>/`). C'est
+  l'oreille du responsable qui choisit ; ensuite règle dans `PRONONCIATION` + test, puis régénération.
+- Après le prochain déploiement : refaire les phrases du tableau du cache voix dont le texte a changé (nombres en
+  français), car le backend les construit à partir des cours déployés.
+- Comptes Kaggle : les 4 servent aux lots (zouhairessaihi, miftahi, ferdaous04, zahraoui). ferdaous04 n'est plus
+  réservé : la voix en direct est en panne (Kaggle coupe le tunnel). zahraoui : lots sans tunnel seulement ; s'il est
+  annulé, ne pas relancer en boucle. Ne jamais pousser une nouvelle version d'`academy-v5-bodi` ni
+  d'`academy-moulsot-v4` (leur sortie garde les poids). Sur le PC, `~/.kaggle/credentials.json` passe avant les
+  variables : lancer avec `KAGGLE_CONFIG_DIR` vide, et l'`id` de `kernel-metadata.json` doit être celui du compte.
+  Changer une clé : `ssh -t moalim-vps bash /root/poser_kaggle4.sh`.
+- Sorties des lots sur le serveur : `/tmp/kaggle_lot_sortie_*/` (`rapport.json` + `voix/`).
+
+**Disque C: presque plein** : le 21/11 il est tombé à 0 Mo et a tout bloqué. Caches vidés (codex-runtimes, npm, pnpm,
+Temp de plus de 2 jours) : ~780 Mo libres. Les worktrees des sessions prennent ~9 Go ; à nettoyer quand leurs
+sessions sont finies (Réglages › Ce PC › Stockage). Pas de place → la pose des voix s'arrête.
+
 ## 4. Ce qui attend une décision
+- Écouter et choisir les 38 mots douteux (§ 3 nonies), puis les symboles chimiques douteux.
+- Déployer les voix posées par la session voix (nombres en français, règle 50, symboles), puis rafraîchir le lien libre.
 - Repeindre aussi ballon, milieux, types, carte et bilan du chapitre des ondes, si l'utilisateur le veut (§ 3 octies).
-- Déployer la correction des questions de reprise (formules écrites) — commit prêt, pas encore déployé.
 - Passer le nouveau lecteur sur `main` pour les élèves connectés, après la relecture des profs.
