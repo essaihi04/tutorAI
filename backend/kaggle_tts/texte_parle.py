@@ -215,6 +215,9 @@ PRONONCIATION = [
     # « siemens » (vu une fois à l'entraînement) sortait « milliseconde » ; « si mènsse » choisi à l'écoute (16/11/2026)
     (re.compile(r"\b(milli|micro)?siemens\b", re.I), lambda mt: (mt.group(1) or "") + "si mènsse"),
     (re.compile(r"\b(milli)?henrys?\b"), lambda mt: (mt.group(1) or "") + "anri"),   # unité (H, mH) ; pas le nom propre
+    # 21/11/2026 : « lim » (vu une fois à l'entraînement) ; « la limite » choisi à l'écoute par l'utilisateur
+    # (`_ecoute_lim/ecoute_3.mp3` ; « lim » et « limite » seuls écoutés aussi)
+    (re.compile(r"\b(?:la\s+)?lim\b"), "la limite"),
     (re.compile(r"\b(BBT|LDL|HDL)\b"), lambda mt: " ".join(mt.group(1))),   # sigles lus lettre par lettre
     (re.compile(r"\b([AUGC]{3})\b"), lambda mt: " ".join(mt.group(1))),     # codons : UAA -> U A A
 ]
@@ -295,7 +298,6 @@ ECRITURES_SURES = {
  "droites": "droite",
  "durées": "durée",
  "débuts": "début",
- "décompositions": "décomposition",
  "dénominateurs": "dénominateur",
  "déplacements": "déplacement",
  "dérivables": "dérivable",
@@ -369,6 +371,7 @@ ECRITURES_SURES = {
  "proches": "proche",
  "proportionnelles": "proportionnelle",
  "proportionnels": "proportionnel",
+ "proposées": "proposée",
  "présentes": "présente",
  "puissances": "puissance",
  "purs": "pur",
@@ -441,7 +444,8 @@ ECRITURES_SURES = {
  "écrans": "écran",
  "électrodes": "électrode",
  "électroniques": "électronique",
- "émetteurs": "émetteur"
+ "émetteurs": "émetteur",
+ "êtres": "être"
 }
 # <<< ÉCRITURES SÛRES
 

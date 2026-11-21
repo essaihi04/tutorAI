@@ -22,6 +22,9 @@
  * i = 140 mA ; ΔE ≈ −2,2 mJ. Modèle de la figure 4 : u_C = 12·e^(−t/θ)·cos(2πt/T), T = 10,1 ms, θ = 20,9 ms, ajustés
  * pour redonner exactement ces lectures ; i = C·du_C/dt. (C₂) et (C₃) de la figure 3 : une courbe amortie et une courbe
  * qui part de 0 (les deux pièges de la question). Étape 9 (entretien) : question ajoutée (2018 N, 2020 N).
+ * 21 novembre 2026 (règle 50) : la figure 3 refaite comme le sujet — (C₂) est une sinusoïde de 10 V qui part de −10 V,
+ * (C₃) une courbe amortie qui part de 12 V (avant : (C₂) amortie et (C₃) un sinus parti de 0, absents du sujet) ;
+ * graduations et durée de la figure 4 comme le sujet ; chaque étape porte le numéro de la question du sujet (`num`).
  * ?sujet=rlc2022n&etape=sujet | 1 … 9 | fin.
  * Moments (pas-a-pas.js, play_until) : enonce, courbe, rappel, question, correction ; vue « sujet » : donnees, questions.
  * Repères : 'circuit', 'fleche_i', 'fleche_uC', 'fleche_uL' (flèche de u_b), 'graphe_c1', 'graphe_c2', 'graphe_c3', 'graphe_u4', 'graphe_i4',
@@ -31,6 +34,8 @@
 const U0 = 12, T0 = 10, T4 = 10.1, TH = 20.9, Cf = 50e-6;
 const w4 = 2 * Math.PI / (T4 * 1e-3);
 const u4 = t => U0 * Math.exp(-t / TH) * Math.cos(2 * Math.PI * t / T4);
+const a3 = -Math.log(.62) / (2 * Math.PI);   // (C₃) du sujet : amortie, part de 12 V (sommet ≈ 7,4 V à 10 ms)
+const c3 = t => U0 * .62 ** (t / T0) * (Math.cos(2 * Math.PI * t / T0) + a3 * Math.sin(2 * Math.PI * t / T0));
 const i4 = t => 1000 * Cf * U0 * Math.exp(-t / TH) * (-Math.cos(2 * Math.PI * t / T4) / (TH * 1e-3) - w4 * Math.sin(2 * Math.PI * t / T4));   // mA
 window.PasAPas({ id: 'rlc_tableau_national_pas_a_pas', titre: 'Le national joué pas à pas : circuit RLC', sujets: {
   rlc2022n: {
@@ -38,47 +43,47 @@ window.PasAPas({ id: 'rlc_tableau_national_pas_a_pas', titre: 'Le national joué
     circuit: { gauche: 'C', droite: 'L', nomGauche: 'C', nomDroite: 'L', uGauche: 'u_C', uL: 'u_b' },
     donnees: ['C = 50 µF, chargé sous E = 12 V, se décharge dans une bobine (L, r).', 'Premier cas : r = 0. Figure 3 : trois courbes (C₁), (C₂), (C₃).', 'Deuxième cas : r ≠ 0. Figure 4 : u_C(t) et i(t).'],
     graphes: {
-      fig3: { tmax: 30, tgrad: [5, 10, 15, 20, 25], tlabel: 't (ms)', panneaux: [
-        { id: 'c1', label: 'u (V)', ymin: -14, ymax: 14, grad: [-12, 12], courbes: [{ id: 'C1', nom: '(C₁)', couleur: 'rouge', f: t => U0 * Math.cos(2 * Math.PI * t / T0), etiquette: [20, -14] }] },
-        { id: 'c2', label: 'u (V)', ymin: -14, ymax: 14, grad: [-12, 12], courbes: [{ id: 'C2', nom: '(C₂)', couleur: 'cyan', f: t => U0 * Math.exp(-t / 12) * Math.cos(2 * Math.PI * t / T0), etiquette: [20, -16] }] },
-        { id: 'c3', label: 'u (V)', ymin: -14, ymax: 14, grad: [-12, 12], courbes: [{ id: 'C3', nom: '(C₃)', couleur: 'orange', f: t => U0 * Math.sin(2 * Math.PI * t / T0), etiquette: [22.5, -14] }] },
+      fig3: { tmax: 20, tgrad: [5, 10, 15], tlabel: 't (ms)', panneaux: [
+        { id: 'c1', label: 'u_C (V)', ymin: -14, ymax: 14, grad: [-12, 12], courbes: [{ id: 'C1', nom: '(C₁)', couleur: 'rouge', f: t => U0 * Math.cos(2 * Math.PI * t / T0), etiquette: [20, -14] }] },
+        { id: 'c2', label: 'u_C (V)', ymin: -14, ymax: 14, grad: [-10, 10], courbes: [{ id: 'C2', nom: '(C₂)', couleur: 'cyan', f: t => -10 * Math.cos(2 * Math.PI * t / T0), etiquette: [17.5, -16] }] },
+        { id: 'c3', label: 'u_C (V)', ymin: -14, ymax: 14, grad: [-12, 12], courbes: [{ id: 'C3', nom: '(C₃)', couleur: 'orange', f: c3, etiquette: [17.5, -14] }] },
       ] },
-      fig4: { tmax: 30, tgrad: [5, 10, 15, 20, 25], tlabel: 't (ms)', panneaux: [
-        { id: 'u4', label: 'u_C (V)', ymin: -14, ymax: 14, grad: [-12, 6, 12], courbes: [{ id: 'courbe_u', nom: 'u_C', couleur: 'rouge', f: u4, etiquette: [20.2, -16] }] },
-        { id: 'i4', label: 'i (mA)', ymin: -400, ymax: 400, grad: [-300, 140, 300], courbes: [{ id: 'courbe_i', nom: 'i', couleur: 'vert', f: i4, etiquette: [17.4, -14] }] },
+      fig4: { tmax: 20, tgrad: [2.5, 5, 7.5, 10, 12.5], tlabel: 't (ms)', panneaux: [
+        { id: 'u4', label: 'u_C (V)', ymin: -14, ymax: 14, grad: [-10, 10], courbes: [{ id: 'courbe_u', nom: 'u_C', couleur: 'rouge', f: u4, etiquette: [17.5, -16] }] },
+        { id: 'i4', label: 'i (mA)', ymin: -400, ymax: 400, grad: [-200, 200], courbes: [{ id: 'courbe_i', nom: 'i', couleur: 'vert', f: i4, etiquette: [16.5, -14] }] },
       ] },
     },
     etapes: [
-      { titre: 'Établir l’équation différentielle de u_C (r = 0)', court: 'L’équation différentielle', vue: 'circuit',
+      { num: '2.1.1', titre: 'Établir l’équation différentielle de u_C (r = 0)', court: 'L’équation différentielle', vue: 'circuit',
         question: 'r = 0. Montre que : ⟦d²u_C|dt²⟧ + ⟦1|LC⟧·u_C = 0.',
         copie: ['Additivité : u_b + u_C = 0', 'u_b = L·⟦di|dt⟧ (r = 0) et i = C·⟦du_C|dt⟧, donc ⟦di|dt⟧ = C·⟦d²u_C|dt²⟧', 'LC·⟦d²u_C|dt²⟧ + u_C = 0, donc ⟦d²u_C|dt²⟧ + ⟦1|LC⟧·u_C = 0'] },
-      { titre: 'Choisir la courbe de u_C(t)', court: 'Le choix de la courbe', vue: 'graphe', graphe: 'fig3', trace: true,
+      { num: '2.1.2', titre: 'Choisir la courbe de u_C(t)', court: 'Le choix de la courbe', vue: 'graphe', graphe: 'fig3', trace: true,
         question: 'Laquelle des courbes (C₁), (C₂), (C₃) représente u_C(t) ? Justifie.',
         copie: ['r = 0 : pas de perte, l’amplitude reste constante', 'À t = 0, u_C = E = 12 V (condensateur chargé) : c’est (C₁)'],
         construit: [{ type: 'entoure', id: 'choix', panneau: 'c1' }] },
-      { titre: 'L’expression de T₀', court: 'T₀ = 2π√(LC)', vue: 'graphe', graphe: 'fig3',
+      { num: '2.1.3.a', titre: 'L’expression de T₀', court: 'T₀ = 2π√(LC)', vue: 'graphe', graphe: 'fig3',
         question: 'u_C = U₀·cos(⟦2π|T₀⟧·t). Trouve T₀ en fonction de L et C.',
         copie: ['⟦d²u_C|dt²⟧ = −(⟦2π|T₀⟧)²·u_C ; on remplace dans l’équation', '(⟦2π|T₀⟧)² = ⟦1|LC⟧, donc T₀ = 2π·√(LC)'] },
-      { titre: 'Lire T₀ sur (C₁)', court: 'Lecture de T₀', vue: 'graphe', graphe: 'fig3',
+      { num: '2.1.3.b', titre: 'Lire T₀ sur (C₁)', court: 'Lecture de T₀', vue: 'graphe', graphe: 'fig3',
         question: 'Lis T₀ sur (C₁), sur deux périodes.',
         copie: ['2T₀ = 20 ms, donc T₀ = 10 ms'],
         construit: [{ type: 'periode', id: 'periode', panneau: 'c1', t1: 0, t2: 20, y: 12, label: '2T₀ = 20 ms' }] },
-      { titre: 'Montrer que L = 0,05 H', court: 'L', vue: 'graphe', graphe: 'fig3',
+      { num: '2.1.3.b', titre: 'Montrer que L = 0,05 H', court: 'L', vue: 'graphe', graphe: 'fig3',
         question: 'Montre que L = 0,05 H (on prend π² = 10).',
         copie: ['T₀² = 4π²·L·C, donc L = ⟦T₀²|4π²·C⟧', 'L = ⟦(10·10⁻³)²|4 × 10 × 50·10⁻⁶⟧ = 0,05 H'] },
-      { titre: 'L’énergie totale du circuit (r ≠ 0)', court: 'L’énergie totale', vue: 'graphe', graphe: 'fig4', trace: true,
+      { num: '2.2.1', titre: 'L’énergie totale du circuit (r ≠ 0)', court: 'L’énergie totale', vue: 'graphe', graphe: 'fig4', trace: true,
         question: 'r ≠ 0. Écris l’énergie totale E_t en fonction de C, u_C, L et i.',
         copie: ['E_t = E_e + E_m', 'E_t = ½·C·u_C² + ½·L·i²'] },
-      { titre: 'Lire u_C et i à t₀ et à t₁', court: 'Lectures à t₀ et t₁', vue: 'graphe', graphe: 'fig4',
+      { num: '2.2.2', titre: 'Lire u_C et i à t₀ et à t₁', court: 'Lectures à t₀ et t₁', vue: 'graphe', graphe: 'fig4',
         question: 'Lis u_C et i à t₀ = 0, puis à t₁ = 9 ms.',
         copie: ['t₀ = 0 : u_C = 12 V et i = 0', 't₁ = 9 ms : u_C = 6 V et i = 140 mA'],
         construit: [{ type: 'point', id: 'point_t0', panneau: 'u4', t: 0, y: 12, label: '12 V', decalage: [12, 20] },
           { type: 'point', id: 'point_t1', panneau: 'u4', t: 9, y: u4(9), label: '6 V à 9 ms', guides: true, decalage: [10, -8] },
           { type: 'point', id: 'point_i1', panneau: 'i4', t: 9, y: i4(9), label: '140 mA à 9 ms', guides: true, decalage: [10, -8] }] },
-      { titre: 'L’énergie dissipée ΔE', court: 'L’énergie dissipée', vue: 'graphe', graphe: 'fig4',
+      { num: '2.2.2', titre: 'L’énergie dissipée ΔE', court: 'L’énergie dissipée', vue: 'graphe', graphe: 'fig4',
         question: 'Calcule l’énergie ΔE dissipée entre t₀ et t₁.',
         copie: ['E₀ = ½ × 50·10⁻⁶ × 12² = 3,6 mJ', 'E₁ = ½ × 50·10⁻⁶ × 6² + ½ × 0,05 × 0,14² ≈ 1,39 mJ', 'ΔE = E₁ − E₀ ≈ −2,2 mJ : perdus par effet Joule'] },
-      { titre: 'Entretenir les oscillations', court: 'L’entretien', vue: 'graphe', graphe: 'fig4',
+      { num: 'Question ajoutée', titre: 'Entretenir les oscillations', court: 'L’entretien', vue: 'graphe', graphe: 'fig4',
         question: 'Que faut-il ajouter pour garder l’amplitude constante ? À quelle période ?',
         copie: ['Un générateur qui rend l’énergie perdue : u_g = k·i, k = résistance totale du circuit', 'Oscillations sinusoïdales, de période T₀ = 10 ms'] },
     ],

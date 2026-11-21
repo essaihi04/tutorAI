@@ -817,7 +817,7 @@ window.CALCULS = {
     ]
    },
    {
-    "t": "f(x) = x + ½ − ln x + ½(ln x)²   (2019 N)",
+    "t": "f(x) = x + ½ − ln x + ½(ln x)²   (2019 N, question 3-b)",
     "c": "blanc",
     "m": "enonce",
     "taille": 19
@@ -892,10 +892,10 @@ window.CALCULS = {
   ]
  },
  "e3d": {
-  "titre": "Le point d’inflexion (2019 N, question 3)",
+  "titre": "4-b : le point d’inflexion (2019 N)",
   "lignes": [
    {
-    "t": "f″(x) = (2 − ln x)/x² sur ]0 ; +∞[ (donné)",
+    "t": "4-a : f″(x) = (2 − ln x)/x² sur ]0 ; +∞[ (donné)",
     "c": "blanc",
     "m": "enonce",
     "taille": 19,
@@ -953,7 +953,7 @@ window.CALCULS = {
   ]
  },
  "e5q": {
-  "titre": "f(x) = 0 et f(x) = x (2021 N, question 4.a)",
+  "titre": "4-a : f(x) = 0 et f(x) = x (2021 N)",
   "lignes": [
    {
     "t": "f(x) = 0 ⇔ 2x(ln x − 1) = 0 ⇔ x = e (déjà résolue)",

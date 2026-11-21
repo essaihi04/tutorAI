@@ -22,7 +22,8 @@
  * C₂ τ = 8 min, x_f = 0,3 mol. Jamais de formule écrite, ni « exponentielle », ni τ à l’écran.
  * Vue lecture (19 novembre 2026, règles 16-17 : la démonstration sur la figure) : la figure du national 2025 N, avec SES
  * données seulement — x (mmol) gradué 26,6 et 53,2 ; t (min) gradué 30 et 60 ; trois courbes (a), (b), (c) vers le même
- * palier (pour l’œil : τ = 35, 95, 170 min, palier 133 mmol, jamais écrit). Moments : enonce (les trois expériences, comme
+ * palier (21 novembre 2026, règle 50 : courbes relevées sur le scan, « Courbe (a) »… placées comme sur le sujet ; palier 133 mmol,
+ * jamais écrit ; les étapes de la démonstration portent le numéro de la question du sujet, 2-2 puis 2-3). Moments : enonce (les trois expériences, comme
  * l’énoncé), courbes, puis la démonstration (l’énoncé effacé) : debut (la pente de départ de (a) s’allume), debut_c (celle
  * de (c), puis (b) entre les deux), associer (la courbe (a) s’allume, « exp. 3 » écrit à son bout), assoc_b, assoc_c,
  * conclusion (le palier commun : « x_f le même : vrai »). Repères : tableau, axe_n, axe_t, courbe_a/b/c, debut, debut_c,
@@ -224,12 +225,33 @@ const GR = {
   catalyseur: { tmax: 40, dt: 10, ymax: .4, dy: .1, nom: 'x (mol)', unite: 'mol', nf: .3, dec: 1,
     courbes: { courbe_C2: { tau: 8, nf: .3, couleur: 'bleu', tag: '(C₂)' }, courbe_C1: { tau: 2, nf: .3, couleur: 'vert', tag: '(C₁)' } } },
   lecture: { tmax: 270, dt: 30, ymax: 140, dy: 0, nom: 'x (mmol)', unite: 'mmol', nf: 133, dec: 1,
-    courbes: { courbe_a: { tau: 35, nf: 133, couleur: 'rose', tag: '(a)', tagT: 45 }, courbe_b: { tau: 95, nf: 133, couleur: 'cyan', tag: '(b)', tagT: 120 },
-      courbe_c: { tau: 170, nf: 133, couleur: 'bleu', tag: '(c)', tagT: 200 } } },
+    // Les courbes du sujet (21 novembre 2026, règle 50) : points relevés sur le scan (sujet_p3), les mêmes que fig_2025N de
+    // cinetique-tableau/figures.html ; étiquettes « Courbe (a) »… placées comme sur le sujet (lab : [t, x]). τ : ordre de grandeur seulement.
+    courbes: { courbe_a: { tau: 43, nf: 133, couleur: 'rose', tag: '(a)', nom: 'Courbe (a)', lab: [33, 116],
+        pts: [[0, 0], [15, 40], [30, 66.8], [45, 86], [60, 99.5], [75, 109.6], [90, 117], [120, 125], [150, 129], [180, 131.5], [210, 132.4], [270, 133]] },
+      courbe_b: { tau: 130, nf: 133, couleur: 'cyan', tag: '(b)', nom: 'Courbe (b)', lab: [99, 93],
+        pts: [[0, 0], [15, 14], [30, 26.6], [45, 39.3], [60, 48.8], [75, 58.4], [90, 66.5], [105, 73.6], [120, 80], [150, 91], [180, 100.6], [210, 106.2], [240, 112], [270, 116.9]] },
+      courbe_c: { tau: 216, nf: 133, couleur: 'bleu', tag: '(c)', nom: 'Courbe (c)', lab: [163, 61],
+        pts: [[0, 0], [15, 8], [30, 17], [45, 24.6], [60, 31.4], [75, 38.7], [90, 44.9], [105, 51], [120, 56.7], [150, 65.7], [180, 74], [210, 82], [240, 88.8], [270, 95]] } } },
 };
 const gr = () => GR[MO.S.vue];
 const X = t => G.x0 + t / gr().tmax * G.w, Y = n => G.y0 - n / gr().ymax * G.h;
-const nDe = (k, t) => k.nf * (1 - Math.exp(-t / k.tau));
+const nDe = (k, t) => (k.pts ? surPoints(k.pts, t) : k.nf * (1 - Math.exp(-t / k.tau)));
+/** Courbe relevée sur un sujet : interpolation cubique monotone (Fritsch-Carlson) entre les points [t, n]. */
+function surPoints(P, t) {
+  if (t <= P[0][0]) return P[0][1];
+  const n = P.length; if (t >= P[n - 1][0]) return P[n - 1][1];
+  if (!P.m) {
+    const d = P.slice(0, -1).map((p, i) => (P[i + 1][1] - p[1]) / (P[i + 1][0] - p[0]));
+    P.m = P.map((_, i) => (i === 0 ? d[0] : i === n - 1 ? d[n - 2] : d[i - 1] * d[i] <= 0 ? 0 : (d[i - 1] + d[i]) / 2));
+    for (let i = 0; i < n - 1; i++) { if (!d[i]) { P.m[i] = P.m[i + 1] = 0; continue; } const a = P.m[i] / d[i], b = P.m[i + 1] / d[i], h = Math.hypot(a, b); if (h > 3) { P.m[i] = 3 * a / h * d[i]; P.m[i + 1] = 3 * b / h * d[i]; } }
+  }
+  let i = 0; while (P[i + 1][0] < t) i++;
+  const [t0, y0] = P[i], [t1, y1] = P[i + 1], h = t1 - t0, u = (t - t0) / h;
+  return (2 * u ** 3 - 3 * u * u + 1) * y0 + (u ** 3 - 2 * u * u + u) * h * P.m[i] + (-2 * u ** 3 + 3 * u * u) * y1 + (u ** 3 - u * u) * h * P.m[i + 1];
+}
+/** Pente de départ (par min) : celle du premier segment relevé, sinon celle du modèle. */
+const penteDepart = k => (k.pts ? k.pts[1][1] / k.pts[1][0] : k.nf / k.tau);
 const ETAPES = {
   temperature: [
     { nom: 'axes', anim: .2, motif: 'les axes : n(I₂) en mmol, t en min', bulle: () => 'On suit la quantité de diiode formé au cours du temps.' },
@@ -256,12 +278,12 @@ const ETAPES = {
   lecture: [
     { nom: 'enonce', anim: .2, motif: 'l’énoncé : trois expériences', bulle: () => 'Trois expériences, mêmes quantités initiales.' },
     { nom: 'courbes', anim: 3.4, motif: 'les trois courbes (a), (b), (c)', bulle: () => 'Les trois courbes x = f(t)…' },
-    { nom: 'debut', anim: .6, motif: 'au début : la pente de (a), la plus raide, s’allume', bulle: () => 'Regarde le début des courbes.' },
-    { nom: 'debut_c', anim: .6, motif: 'au début : (c) la moins raide ; (b) entre les deux', bulle: () => 'Et (c) ?' },
-    { nom: 'associer', anim: .4, motif: '(a), la plus rapide : expérience 3 (θ₂ et catalyseur)', bulle: () => 'Associons chaque courbe à son expérience.' },
+    { nom: 'debut', anim: .6, motif: '2-2 : au début, la pente de (a), la plus raide, s’allume', bulle: () => 'Regarde le début des courbes.' },
+    { nom: 'debut_c', anim: .6, motif: '2-2 : au début, (c) la moins raide ; (b) entre les deux', bulle: () => 'Et (c) ?' },
+    { nom: 'associer', anim: .4, motif: '2-2 : (a), la plus rapide : expérience 3 (θ₂ et catalyseur)', bulle: () => 'Associons chaque courbe à son expérience.' },
     { nom: 'assoc_b', anim: .4, motif: '(b) : expérience 2 (θ₂)', bulle: () => '(b)…' },
     { nom: 'assoc_c', anim: .4, motif: '(c), la plus lente : expérience 1 (θ₁)', bulle: () => '(c)…' },
-    { nom: 'conclusion', anim: .3, motif: '« x_f est le même » : vrai', bulle: () => 'Et l’affirmation sur x_f ?' },
+    { nom: 'conclusion', anim: .3, motif: '2-3 : « x_f est le même » : vrai', bulle: () => 'Et l’affirmation sur x_f ?' },
   ],
 };
 const MOTIFS = new Proxy({}, { get: (_, nom) => (nom === 'fin' ? 'fin' : (ETAPES[MO ? MO.S.vue : VUES[0]].find(e => e.nom === nom) || {}).motif) });
@@ -387,7 +409,7 @@ function halo(c, pts, fort, larg = 13) {
 const ptsCourbe = id => { const k = gr().courbes[id]; return Array.from({ length: 61 }, (_, i) => { const t = i / 60 * gr().tmax; return [X(t), Y(nDe(k, t))]; }); };
 /** Pente de départ d’une courbe : segment depuis l’origine, dans la direction de la courbe en t = 0. */
 function pente(id, L = 70) {
-  const k = gr().courbes[id], dx = G.w / gr().tmax, dy = k.nf / k.tau / gr().ymax * G.h, n = Math.hypot(dx, dy);
+  const k = gr().courbes[id], dx = G.w / gr().tmax, dy = penteDepart(k) / gr().ymax * G.h, n = Math.hypot(dx, dy);
   return [[G.x0, G.y0], [G.x0 + dx / n * L, G.y0 - dy / n * L]];
 }
 /** Place de l’association de chaque courbe, à droite de la figure (écartées : les bouts de (a) et (b) sont proches). */
@@ -419,14 +441,14 @@ function vueLecture(c, M) {
     c.repere('tableau', PX - 6, 74, 250, 170, 'les trois expériences de l’énoncé (θ₁ ; θ₂ > θ₁ ; θ₂ + acide sulfurique, le catalyseur)');
   }
   // Les étiquettes des courbes, comme sur la figure (sous chaque courbe, là où elles sont bien séparées).
-  M.etape(c, 'courbes', () => { for (const id of Object.keys(g.courbes)) { const k = g.courbes[id]; c.texte(k.tag, X(k.tagT) + 6, Y(nDe(k, k.tagT)) + 20, { couleur: k.couleur, taille: 17 }); } });
+  M.etape(c, 'courbes', () => { for (const id of Object.keys(g.courbes)) { const k = g.courbes[id]; c.texte(k.nom, X(k.lab[0]), Y(k.lab[1]), { couleur: k.couleur, taille: 16 }); } });
   // La démonstration. 1) Le début des courbes : la pente de (a) s’allume, puis celle de (c), (b) entre les deux.
   if (M.commence('debut')) {
     const [, b] = pente('courbe_a', 110);
     halo(c, pente('courbe_a', 110), enCours('debut'));
     M.etape(c, 'debut', () => {
       c.ligne(G.x0, G.y0, b[0], b[1], { couleur: 'jaune', largeur: 2.6 });
-      c.texte('au départ, la pente :', XD, 196, { couleur: 'jaune', taille: 17 }); c.texte('(a) : la plus raide', XD, 222, { couleur: 'rose', taille: 18 });
+      c.texte('2-2 : au départ, la pente :', XD, 196, { couleur: 'jaune', taille: 17 }); c.texte('(a) : la plus raide', XD, 222, { couleur: 'rose', taille: 18 });
     });
     c.repere('debut', G.x0 - 6, b[1] - 10, 40, G.y0 - b[1] + 16, 'la pente de départ de (a) : la plus raide, (a) est la plus rapide');
     lus.push('pente de départ de (a) allumée : la plus raide');
@@ -461,11 +483,11 @@ function vueLecture(c, M) {
     M.etape(c, 'conclusion', () => {
       c.ligne(G.x0, Y(g.nf), G.x0 + G.w, Y(g.nf), { couleur: 'jaune', largeur: 1.8, pointille: [6, 6] });
       c.texte('x_f', G.x0 - 8, Y(g.nf) + 5, { couleur: 'jaune', taille: 16, align: 'right' });
-      c.texte('même palier x_f : vrai', XD, 314, { couleur: 'jaune', taille: 18 });
+      c.texte('2-3 : même x_f : vrai', XD, 314, { couleur: 'jaune', taille: 18 });
       c.texte('θ et catalyseur changent', XD, 338, { couleur: 'jaune', taille: 16 });
       c.texte('la durée, pas l’état final', XD, 360, { couleur: 'jaune', taille: 16 });
     });
-    c.repere('conclusion', XD - 6, 294, 250, 74, '« x_f est le même » : vrai');
+    c.repere('conclusion', XD - 6, 294, 250, 74, 'question 2-3 : « x_f est le même » : vrai');
     lus.push('palier commun allumé : x_f le même, vrai');
   }
   return lus;
@@ -533,10 +555,10 @@ const MOT = Moteur({
     catalyseur: 'Comme au national 2023 : avec et sans catalyseur.', lecture: 'Comme au national 2025 : trois courbes à associer.' })[M.S.vue],
   messageFin: M => ({ temperature: 'Plus chaud : la courbe monte plus vite et atteint plus tôt le MÊME palier.',
     concentration: 'Plus concentré en I⁻ : plus rapide, même palier ; seul le réactif limitant fixe le palier.',
-    catalyseur: '(C₁), avec catalyseur, atteint plus tôt le même palier x_f = 0,3 mol.', lecture: '(a) ↔ 3, (b) ↔ 2, (c) ↔ 1 ; x_f est le même : vrai.' })[M.S.vue],
+    catalyseur: '(C₁), avec catalyseur, atteint plus tôt le même palier x_f = 0,3 mol.', lecture: '2-2 : (a) ↔ 3, (b) ↔ 2, (c) ↔ 1 ; 2-3 : x_f est le même : vrai.' })[M.S.vue],
   appliquer: (p, M) => { const r = {}; if (VUES.includes(p.vue)) r.vue = p.vue; r.change = !!(r.vue && r.vue !== M.S.vue); return r; },
   schema: { vue: VUES.join(' | ') + ' (change la vue et relance)' },
-  texte: 'Les courbes de la quantité de diiode formé n(I₂) (ou de l’avancement x) au cours du temps. Température : même mélange H₂O₂ + I⁻ acidifié à 20 °C et 40 °C ; à 40 °C la courbe est plus raide au début et atteint plus tôt le même palier n_f = 2 mmol (H₂O₂ limitant). Concentration : [I⁻]₀ = 0,1 et 0,2 mol/L, même palier ; piège : doubler le réactif limitant H₂O₂ double le palier (4 mmol). Catalyseur (national 2023 N) : (C₁) avec catalyseur, (C₂) sans, même palier x_f = 0,3 mol ; ne pas choisir le palier le plus haut. Lecture (national 2025 N) : trois courbes (a), (b), (c) et trois expériences (θ₁ ; θ₂ > θ₁ ; θ₂ + acide sulfurique, catalyseur) : (a) ↔ 3, (b) ↔ 2, (c) ↔ 1 ; x_f est le même : vrai.',
+  texte: 'Les courbes de la quantité de diiode formé n(I₂) (ou de l’avancement x) au cours du temps. Température : même mélange H₂O₂ + I⁻ acidifié à 20 °C et 40 °C ; à 40 °C la courbe est plus raide au début et atteint plus tôt le même palier n_f = 2 mmol (H₂O₂ limitant). Concentration : [I⁻]₀ = 0,1 et 0,2 mol/L, même palier ; piège : doubler le réactif limitant H₂O₂ double le palier (4 mmol). Catalyseur (national 2023 N) : (C₁) avec catalyseur, (C₂) sans, même palier x_f = 0,3 mol ; ne pas choisir le palier le plus haut. Lecture (national 2025 N, exercice 1, la figure du sujet : « Courbe (a) », « Courbe (b) », « Courbe (c) », x (mmol) gradué 26,6 et 53,2, t (min) gradué 30 et 60) : trois expériences (θ₁ ; θ₂ > θ₁ ; θ₂ + acide sulfurique, catalyseur) ; question 2-2 : (a) ↔ 3 (et (b) ↔ 2, (c) ↔ 1) ; question 2-3 : x_f est le même : vrai.',
   explications: {
     temperature: [
       { repere: 'courbe_froid', texte: 'À 20 °C, la courbe monte lentement vers son palier.' },
@@ -556,9 +578,9 @@ const MOT = Moteur({
     ],
     lecture: [
       { repere: 'tableau', texte: 'Trois expériences : θ₁, θ₂ plus grand, θ₂ avec un catalyseur.' },
-      { repere: 'courbe_a', texte: '(a), la plus rapide : deux facteurs, l’expérience 3.' },
+      { repere: 'courbe_a', texte: 'Question 2-2 — (a), la plus rapide : deux facteurs, l’expérience 3.' },
       { repere: 'courbe_c', texte: '(c), la plus lente : l’expérience 1.' },
-      { repere: 'conclusion', texte: 'x_f est le même : vrai.' },
+      { repere: 'conclusion', texte: 'Question 2-3 — x_f est le même : vrai.' },
     ],
   },
 });

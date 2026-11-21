@@ -15,6 +15,8 @@
  * `?etape=fin` : la copie complète, toutes les étapes faites (la synthèse après la dernière étape).
  * Commandes : start, pause, resume, reset, play_until {moment}, set_parameters {conclusions}. `?depart=<moment>`
  * ouvre la scène figée sur ce moment.
+ * Règle 50 du professeur (21 novembre 2026) : une étape peut porter `num`, le numéro de la question tel qu'imprimé dans
+ * le sujet (« 2.1.2 ») ; il remplace alors le numéro d'étape (« 2. ») partout où la question et la réponse s'écrivent.
  * Copie identique dans chaque dossier de cours qui l'utilise (dipole-rc, dipole-rl, circuit-rlc, transformations
  * lentes et rapides) : pas de fichier partagé. La page déclare ses sujets puis appelle PasAPas({ id, titre, sujets }).
  */
@@ -98,6 +100,7 @@
     const ET = FIN || SUJET ? null : SJ.etapes[K];
     const PREC = K > 0 && !FIN ? SJ.etapes[K - 1] : null;
     const vue = FIN ? 'copie' : SUJET ? 'sujet' : (ET.vue || 'graphe');
+    const lib = e => (e.num ? `${e.num} :` : `${e.n}.`);   // le numéro du sujet (règle 50), sinon celui de l'étape
     const moments = SUJET ? ['enonce', 'donnees', 'questions'] : FIN ? ['enonce'] : MOMENTS.filter(m => m === 'enonce' || (m === 'courbe' && ET && ET.trace) || (m === 'rappel' && PREC) || ((m === 'question' || m === 'correction') && ET));
     let CONCL = q.get('conclusions') === '1';
     const S = { t0: {}, running: false, pause: false, prochain: 0, emis: 0 };
@@ -297,11 +300,11 @@
         const L = [];
         if (b.mode === 'question') {
           if (!atteint('question')) return L;
-          for (const l of couper(c, `${b.e.n}. ${b.e.question}`, larg, tq)) L.push({ s: l, couleur: 'jaune', taille: tq, anime: 'question' });
+          for (const l of couper(c, `${lib(b.e)} ${b.e.question}`, larg, tq)) L.push({ s: l, couleur: 'jaune', taille: tq, anime: 'question' });
           if (CONCL || atteint('correction')) for (const s of b.e.copie) for (const l of couper(c, s, larg - 12, tc)) L.push({ s: l, couleur: 'vert', taille: tc, anime: 'correction', retrait: 12 });
           else L.push({ s: '… à toi d’abord.', couleur: 'faible', taille: tf, anime: 'question', retrait: 12 });
         } else if (b.mode !== 'cachee') {
-          L.push({ s: `${b.e.n}. ${b.e.court || b.e.titre}`, couleur: 'blanc', taille: tt, anime: b.mode === 'rappel' ? 'rappel' : null });
+          L.push({ s: `${lib(b.e)} ${b.e.court || b.e.titre}`, couleur: 'blanc', taille: tt, anime: b.mode === 'rappel' ? 'rappel' : null });
           for (const s of b.e.copie) for (const l of couper(c, s, larg - 12, tc)) L.push({ s: l, couleur: 'vert', taille: tc, anime: b.mode === 'rappel' ? 'rappel' : null, retrait: 12 });
         }
         return L;
@@ -345,7 +348,7 @@
         const placer = (cols, court) => {
           const larg = (L - 40) / cols - 10, pos = []; let col = 0, y = 52;
           for (const e of SJ.etapes) {
-            const ls = [`${e.n}. ${e.court || e.titre}`, ...(court ? e.copie.slice(-1) : e.copie).flatMap(x => couper(c, x, larg - 12, tt))];
+            const ls = [`${lib(e)} ${e.court || e.titre}`, ...(court ? e.copie.slice(-1) : e.copie).flatMap(x => couper(c, x, larg - 12, tt))];
             const h = ls.reduce((a, x) => a + haut(x, tt) + bas(x, tt) + 3, 0) + 6;
             if (y + h > 412 && y > 52) { col++; y = 52; }
             pos.push({ e, ls, x: 20 + col * (larg + 20), y, larg }); y += h;
@@ -376,7 +379,7 @@
           c.cur = S.t0.questions; let y = z.y0 + 8; const tq = Math.max(18, 15 / (scene.s || 1));
           for (const e of SJ.etapes) {
             const y0 = y;
-            for (const l of couper(c, `${e.n}. ${e.titre}`, z.x1 - z.x0 - 20, tq)) { const yb = y + haut(l, tq); y = yb + bas(l, tq) + 2; c.texte(l, z.x0 + 10, yb, { couleur: 'jaune', taille: tq, duree: vite(l) }); }
+            for (const l of couper(c, `${lib(e)} ${e.titre}`, z.x1 - z.x0 - 20, tq)) { const yb = y + haut(l, tq); y = yb + bas(l, tq) + 2; c.texte(l, z.x0 + 10, yb, { couleur: 'jaune', taille: tq, duree: vite(l) }); }
             c.repere('question_' + e.n, z.x0, y0 - 4, z.x1 - z.x0, y - y0 + 8, 'la question ' + e.n); y += 4;
           }
           c.repere('questions', z.x0, z.y0, z.x1 - z.x0, z.y1 - z.y0, 'ce qu’on cherche');
@@ -454,11 +457,11 @@
       scene.sale = true; pont.noter('set_parameters', { conclusions: CONCL }); pont.emettre();
     }
     function ceQuiSeVoit() {
-      if (SUJET) return `${SJ.titre} : le sujet. ${atteint('donnees') ? 'Données écrites : ' + SJ.donnees.map(x => (T.lisible || (y => y))(x)).join(' ; ') + '.' : 'Les données ne sont pas encore écrites.'} ${atteint('questions') ? 'Ce qu’on cherche : ' + SJ.etapes.map(e => `${e.n}. ${e.titre}`).join(' ; ') + '.' : ''}`;
-      if (FIN) return `${SJ.titre} : la copie complète, ${N} étapes : ` + SJ.etapes.map(e => `${e.n}. ${e.copie.map(T.lisible || (x => x)).join(' ; ')}`).join(' | ');
+      if (SUJET) return `${SJ.titre} : le sujet. ${atteint('donnees') ? 'Données écrites : ' + SJ.donnees.map(x => (T.lisible || (y => y))(x)).join(' ; ') + '.' : 'Les données ne sont pas encore écrites.'} ${atteint('questions') ? 'Ce qu’on cherche : ' + SJ.etapes.map(e => `${lib(e)} ${e.titre}`).join(' ; ') + '.' : ''}`;
+      if (FIN) return `${SJ.titre} : la copie complète, ${N} étapes : ` + SJ.etapes.map(e => `${lib(e)} ${e.copie.map(T.lisible || (x => x)).join(' ; ')}`).join(' | ');
       const m = [`${SJ.titre}, étape ${ET.n} sur ${N} (${ET.titre}). Vue : ${{ circuit: 'le circuit du sujet, flèches de i et des tensions en convention récepteur', graphe: 'le graphe du sujet', donnees: 'les données du sujet', tableau: 'le tableau d’avancement' }[vue]}.`];
       const faites = SJ.etapes.slice(0, Math.max(0, K - 1));
-      if (faites.length) m.push('Déjà dans la copie : ' + faites.map(e => `${e.n}. ${e.copie.map(x => (T.lisible || (y => y))(x)).join(' ; ')}`).join(' | ') + '.');
+      if (faites.length) m.push('Déjà dans la copie : ' + faites.map(e => `${lib(e)} ${e.copie.map(x => (T.lisible || (y => y))(x)).join(' ; ')}`).join(' | ') + '.');
       if (PREC) m.push(atteint('rappel') ? `La correction de l’étape ${PREC.n} est construite et écrite : ${PREC.copie.map(x => (T.lisible || (y => y))(x)).join(' ; ')}.` : `La correction de l’étape ${PREC.n} n’est pas encore montrée.`);
       if (ET.trace) m.push(atteint('courbe') ? 'La courbe est tracée.' : 'La courbe n’est pas encore tracée.');
       m.push(atteint('question') ? `Question écrite : « ${(T.lisible || (y => y))(ET.question)} ».` : 'La question n’est pas encore écrite.');
@@ -467,7 +470,7 @@
     }
     $('run').onclick = () => (S.running ? pause() : S.pause ? resume() : start());
     SJ.etapes.forEach((e, i) => { e.n = i + 1; });
-    T.explication({ [sujetId]: SJ.etapes.map((e, i) => ({ repere: SUJET ? 'question_' + (i + 1) : i === K && !FIN ? 'question' : 'copie_' + (i + 1), texte: `${i + 1}. ${e.titre} : ${e.copie.map(x => (T.lisible || (y => y))(x)).join(' ; ')}` })) });
+    T.explication({ [sujetId]: SJ.etapes.map((e, i) => ({ repere: SUJET ? 'question_' + (i + 1) : i === K && !FIN ? 'question' : 'copie_' + (i + 1), texte: `${lib(e)} ${e.titre} : ${e.copie.map(x => (T.lisible || (y => y))(x)).join(' ; ')}` })) });
     const commandes = ['start', 'pause', 'resume', 'reset', 'play_until', 'set_parameters'];
     const config = { id, version: '1.0', title: titre, variants: Object.keys(sujets).map(k => ({ id: k, label: sujets[k].titre })), commands: commandes,
       command_schema: { play_until: { moment: moments.join(' | ') }, set_parameters: { conclusions: 'true | false (false : la réponse de l’étape reste cachée)' } } };

@@ -463,7 +463,7 @@ window.CALCULS = {
     ]
    },
    {
-    "t": "2017 N : a = √3 + i",
+    "t": "2017 N, 1-b : a = √3 + i",
     "c": "cyan",
     "m": "donnees"
    },
@@ -505,7 +505,7 @@ window.CALCULS = {
   ]
  },
  "t2": {
-  "titre": "2023 N : a = √2 + i√2 sous forme trigonométrique",
+  "titre": "2023 N, question 1 : a = √2 + i√2 sous forme trigonométrique",
   "lignes": [
    {
     "t": "a = √2 + i√2",
@@ -574,7 +574,7 @@ window.CALCULS = {
   ]
  },
  "t6": {
-  "titre": "2024 N : a = √3(1 − i)",
+  "titre": "2024 N, question 1 : a = √3(1 − i)",
   "lignes": [
    {
     "t": "a = √3(1 − i)",
@@ -702,7 +702,7 @@ window.CALCULS = {
   ]
  },
  "r8": {
-  "titre": "2023 R : a²⁰²² est un réel",
+  "titre": "2023 R, questions 1-a et 1-b : a²⁰²² est un réel",
   "lignes": [
    {
     "t": "a = √3/2 + (3/2)i",
@@ -771,7 +771,7 @@ window.CALCULS = {
   ]
  },
  "n1": {
-  "titre": "2023 N : la partie 1, question par question",
+  "titre": "2023 N : les questions 1 à 3-b, une par une",
   "lignes": [
    {
     "t": "a = √2 + i√2 ; b = 1 + √2 + i ; c = conjugué de b ; d = 2i",
@@ -780,7 +780,7 @@ window.CALCULS = {
     "taille": 18
    },
    {
-    "t": "1) a = 2(cos π/4 + i sin π/4)",
+    "t": "1 : a = 2(cos π/4 + i sin π/4)",
     "c": "cyan",
     "m": "q1",
     "taille": 18,
@@ -790,7 +790,7 @@ window.CALCULS = {
     ]
    },
    {
-    "t": "2) b − d = 1 + √2 + i − 2i = 1 + √2 − i = c",
+    "t": "2-a : b − d = 1 + √2 + i − 2i = 1 + √2 − i = c",
     "c": "jaune",
     "m": "q2",
     "taille": 18,
@@ -800,7 +800,7 @@ window.CALCULS = {
     ]
    },
    {
-    "t": "3) (√2 + 1)(b − a) = b − d, donc (b − d)/(b − a) = √2 + 1 ∈ ℝ",
+    "t": "2-b : (√2 + 1)(b − a) = b − d, donc (b − d)/(b − a) = √2 + 1 ∈ ℝ",
     "c": "vert",
     "m": "q3",
     "taille": 18,
@@ -817,7 +817,7 @@ window.CALCULS = {
     "taille": 18
    },
    {
-    "t": "4) ac = 2b : arg a + arg c ≡ arg 2 + arg b [2π]",
+    "t": "3-a, 3-b : ac = 2b : arg a + arg c ≡ arg 2 + arg b [2π]",
     "c": "cyan",
     "m": "q4",
     "taille": 18,

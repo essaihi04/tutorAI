@@ -214,10 +214,10 @@ window.CALCULS = {
   ]
  },
  "r3": {
-  "titre": "On habille l'hypothèse (national 2016 R)",
+  "titre": "1-a : on habille l'hypothèse (national 2016 R)",
   "lignes": [
    {
-    "t": "u_{n+1} = (1/16) u_n + 15/16 : u_n apparaît une fois",
+    "t": "1-a : u_{n+1} = (1/16) u_n + 15/16 : u_n apparaît une fois",
     "c": "blanc",
     "m": "enonce",
     "taille": 18
@@ -438,7 +438,7 @@ window.CALCULS = {
   ]
  },
  "r8": {
-  "titre": "À toi : national 2023 R",
+  "titre": "À toi : national 2023 R, question 1",
   "lignes": [
    {
     "t": "u_0 = 0   et   u_{n+1} = (u_n − 2)/(2u_n + 5)",
@@ -446,7 +446,7 @@ window.CALCULS = {
     "m": "enonce"
    },
    {
-    "t": "Montrer que pour tout n ∈ ℕ, u_n > −1.",
+    "t": "Question 1 : montrer que pour tout n ∈ ℕ, u_n > −1.",
     "c": "blanc",
     "m": "question"
    },
@@ -468,10 +468,10 @@ window.CALCULS = {
   ]
  },
  "m2": {
-  "titre": "Le signe de la différence (national 2016 R)",
+  "titre": "1-b : le signe de la différence (national 2016 R)",
   "lignes": [
    {
-    "t": "u_{n+1} − u_n = (1/16) u_n + 15/16 − u_n",
+    "t": "1-b : u_{n+1} − u_n = (1/16) u_n + 15/16 − u_n",
     "c": "blanc",
     "m": "difference"
    },
@@ -561,7 +561,7 @@ window.CALCULS = {
   ]
  },
  "x2": {
-  "titre": "vₙ₊₁ = q × vₙ ? (national 2016 R)",
+  "titre": "2-a : vₙ₊₁ = q × vₙ ? (national 2016 R)",
   "lignes": [
    {
     "t": "cible : v_{n+1} = q × v_n",
@@ -575,7 +575,7 @@ window.CALCULS = {
     "inter": 44
    },
    {
-    "t": "v_n = u_n − 1 et u_{n+1} = (1/16) u_n + 15/16",
+    "t": "2-a : v_n = u_n − 1 et u_{n+1} = (1/16) u_n + 15/16",
     "c": "blanc",
     "taille": 17
    },
@@ -601,17 +601,17 @@ window.CALCULS = {
     "dx": 60
    },
    {
-    "t": "donc (v_n) est géométrique de raison 1/16",
+    "t": "donc (v_n) géométrique de raison 1/16 ; v_0 = 1, v_n = (1/16)^{n}",
     "c": "jaune",
     "m": "conclusion"
    }
   ]
  },
  "x3": {
-  "titre": "Une fraction de fraction (national 2016)",
+  "titre": "2-a : une fraction de fraction (national 2016 N)",
   "lignes": [
    {
-    "t": "u_{n+1} = (3 + u_n)/(5 − u_n)   et   v_n = (u_n − 1)/(3 − u_n)",
+    "t": "2-a : u_{n+1} = (3 + u_n)/(5 − u_n)   et   v_n = (u_n − 1)/(3 − u_n)",
     "c": "blanc",
     "m": "enonce",
     "taille": 17
@@ -658,7 +658,7 @@ window.CALCULS = {
     "m": "simple"
    },
    {
-    "t": "v_n = (u_n − 1)/(3 − u_n) :",
+    "t": "2-b (2016 N) : v_n = (u_n − 1)/(3 − u_n) :",
     "c": "jaune",
     "m": "fraction",
     "inter": 34
@@ -713,7 +713,7 @@ window.CALCULS = {
     "inter": 46
    },
    {
-    "t": "national 2021 R :  v_n = 1/(1 − u_n)",
+    "t": "3-a, national 2021 R :  v_n = 1/(1 − u_n)",
     "c": "blanc",
     "taille": 17
    },
@@ -764,10 +764,10 @@ window.CALCULS = {
   ]
  },
  "c5": {
-  "titre": "Au plus les 2/5 du précédent (national 2020)",
+  "titre": "3-a : au plus les 2/5 du précédent (national 2020 N)",
   "lignes": [
    {
-    "t": "u_{n+1} = 2u_n/(2u_n + 5),   u_n > 0",
+    "t": "3-a : u_{n+1} = 2u_n/(2u_n + 5),   u_n > 0",
     "c": "cyan",
     "m": "enonce"
    },
@@ -905,50 +905,50 @@ window.CALCULS = {
   ]
  },
  "e1_q1": {
-  "titre": "National 2024 — question 1",
+  "titre": "National 2024 N — question 1-b",
   "lignes": [
-   {"t": "u_0 = 4,   u_{n+1} = (4u_n − 2)/(u_n + 1)", "c": "cyan", "m": "enonce"},
-   {"t": "Montrer : 2 ≤ u_n ≤ 4 pour tout n", "c": "jaune", "m": "q1"},
+   {"t": "u_0 = 4,   u_{n+1} = (4u_n − 2)/(1 + u_n)", "c": "cyan", "m": "enonce"},
+   {"t": "1-b : montrer par récurrence que 2 ≤ u_n ≤ 4", "c": "jaune", "m": "q1"},
    {"t": "Initialisation : u_0 = 4, donc 2 ≤ u_0 ≤ 4", "c": "blanc", "m": "init"},
    {"t": "Hérédité : on suppose 2 ≤ u_n ≤ 4", "c": "blanc", "m": "hyp"},
-   {"t": "u_{n+1} − 2 = 2(u_n − 2)/(u_n + 1)   signe ?", "c": "jaune", "m": "calcul"}
+   {"t": "u_{n+1} − 2 = 2(u_n − 2)/(1 + u_n)   signe ?", "c": "jaune", "m": "calcul"}
   ]
  },
  "e1_q2": {
-  "titre": "National 2024 — question 2",
+  "titre": "National 2024 N — questions 2-a et 2-b",
   "lignes": [
-   {"t": "u_{n+1} − u_n = (4u_n − 2 − u_n(u_n + 1))/(u_n + 1)", "c": "cyan", "m": "difference"},
-   {"t": "= −(u_n − 1)(u_n − 2)/(u_n + 1)", "c": "cyan", "m": "calcul", "dx": 30},
-   {"t": "2 ≤ u_n ≤ 4 (question 1)   →   signe ?", "c": "jaune", "m": "question"}
+   {"t": "2-a : u_{n+1} − u_n = (4u_n − 2 − u_n(1 + u_n))/(1 + u_n)", "c": "cyan", "m": "difference"},
+   {"t": "= (−u_n² + 3u_n − 2)/(1 + u_n) = (u_n − 1)(2 − u_n)/(1 + u_n)", "c": "cyan", "m": "calcul", "dx": 30},
+   {"t": "2-b : 2 ≤ u_n ≤ 4 (1-b)   →   signe ?", "c": "jaune", "m": "question"}
   ]
  },
  "e1_q4": {
-  "titre": "National 2024 — question 4",
+  "titre": "National 2024 N — question 3-a",
   "lignes": [
-   {"t": "v_n = (u_n − 2)/(u_n − 1)", "c": "cyan", "m": "pose"},
-   {"t": "u_{n+1} − 2 = 2(u_n − 2)/(u_n + 1)", "c": "blanc", "m": "donnees"},
-   {"t": "u_{n+1} − 1 = 3(u_n − 1)/(u_n + 1)", "c": "blanc"},
+   {"t": "3-a : v_n = (2 − u_n)/(1 − u_n)", "c": "cyan", "m": "pose"},
+   {"t": "2 − u_{n+1} = 2(2 − u_n)/(1 + u_n)", "c": "blanc", "m": "donnees"},
+   {"t": "1 − u_{n+1} = 3(1 − u_n)/(1 + u_n)", "c": "blanc"},
    {"t": "v_{n+1} = ?", "c": "jaune", "m": "question"}
   ]
  },
  "e1_q5": {
-  "titre": "National 2024 — question 5",
+  "titre": "National 2024 N — questions 3-b et 3-c",
   "lignes": [
-   {"t": "v_0 = (4 − 2)/(4 − 1) = 2/3", "c": "cyan", "m": "v0"},
+   {"t": "3-b : v_0 = (2 − 4)/(1 − 4) = 2/3", "c": "cyan", "m": "v0"},
    {"t": "v_n = v_0 × (2/3)^{n} = (2/3)^{n+1}", "c": "cyan", "m": "vn"},
-   {"t": "u_n en fonction de v_n, puis lim u_n = ?", "c": "jaune", "m": "question"}
+   {"t": "u_n en fonction de v_n (3-b), puis lim u_n (3-c) = ?", "c": "jaune", "m": "question"}
   ]
  },
  "e1": {
-  "titre": "Un exercice complet (national 2024)",
+  "titre": "Un exercice complet (national 2024 N)",
   "lignes": [
    {
-    "t": "u_0 = 4,   u_{n+1} = (4u_n − 2)/(u_n + 1)",
+    "t": "u_0 = 4,   u_{n+1} = (4u_n − 2)/(1 + u_n)",
     "c": "cyan",
     "m": "enonce"
    },
    {
-    "t": "1. récurrence : 2 ≤ u_n ≤ 4",
+    "t": "1-b : récurrence : 2 ≤ u_n ≤ 4",
     "c": "blanc",
     "m": "q1",
     "taille": 18,
@@ -958,7 +958,7 @@ window.CALCULS = {
     ]
    },
    {
-    "t": "2. u_{n+1} − u_n = (u_n − 1)(2 − u_n)/(1 + u_n) ≤ 0 : décroissante",
+    "t": "2-a, 2-b : u_{n+1} − u_n = (u_n − 1)(2 − u_n)/(1 + u_n) ≤ 0 : décroissante",
     "c": "blanc",
     "m": "q2",
     "taille": 17,
@@ -968,7 +968,7 @@ window.CALCULS = {
     ]
    },
    {
-    "t": "3. décroissante et minorée par 2 : (u_n) converge",
+    "t": "2-b : décroissante et minorée par 2 : (u_n) converge",
     "c": "blanc",
     "m": "q3",
     "taille": 18,
@@ -978,7 +978,7 @@ window.CALCULS = {
     ]
    },
    {
-    "t": "4. v_n = (u_n − 2)/(u_n − 1) : géométrique de raison 2/3",
+    "t": "3-a : v_n = (2 − u_n)/(1 − u_n) : géométrique de raison 2/3",
     "c": "blanc",
     "m": "q4",
     "taille": 18,
@@ -988,7 +988,7 @@ window.CALCULS = {
     ]
    },
    {
-    "t": "5. u_n en fonction de n, puis lim u_n",
+    "t": "3-b, 3-c : u_n en fonction de n, puis lim u_n",
     "c": "jaune",
     "m": "q5",
     "taille": 18,

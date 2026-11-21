@@ -103,6 +103,9 @@
     const S = { t0: {}, running: false, pause: false, prochain: 0, emis: 0 };
     const atteint = m => S.t0[m] !== undefined;
     const fx = v => T.fr(v, 2).replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');
+    /* Le numéro de la question du sujet (règle 50 du professeur, 21 novembre 2026) : une étape qui porte `num` (« 1-2-2 »)
+     * s'écrit « 1-2-2 : … » dans la copie et dans « Ce qu'on cherche » ; sans `num`, son rang « 3. ». */
+    const lib = e => (e.num ? `${e.num} : ` : `${e.n}. `);
 
     /* ── Texte sur plusieurs lignes, largeur mesurée par le kit (fractions comprises) ── */
     const mesure = (c, s, t) => c.largeurTexte(window.Etats && window.Etats.annote ? window.Etats.annote(s) : s, t);   // chimie : avec les états (aq), (l)…
@@ -297,11 +300,11 @@
         const L = [];
         if (b.mode === 'question') {
           if (!atteint('question')) return L;
-          for (const l of couper(c, `${b.e.n}. ${b.e.question}`, larg, tq)) L.push({ s: l, couleur: 'jaune', taille: tq, anime: 'question' });
+          for (const l of couper(c, `${lib(b.e)}${b.e.question}`, larg, tq)) L.push({ s: l, couleur: 'jaune', taille: tq, anime: 'question' });
           if (CONCL || atteint('correction')) for (const s of b.e.copie) for (const l of couper(c, s, larg - 12, tc)) L.push({ s: l, couleur: 'vert', taille: tc, anime: 'correction', retrait: 12 });
           else L.push({ s: '… à toi d’abord.', couleur: 'faible', taille: tf, anime: 'question', retrait: 12 });
         } else if (b.mode !== 'cachee') {
-          L.push({ s: `${b.e.n}. ${b.e.court || b.e.titre}`, couleur: 'blanc', taille: tt, anime: b.mode === 'rappel' ? 'rappel' : null });
+          L.push({ s: `${lib(b.e)}${b.e.court || b.e.titre}`, couleur: 'blanc', taille: tt, anime: b.mode === 'rappel' ? 'rappel' : null });
           for (const s of b.e.copie) for (const l of couper(c, s, larg - 12, tc)) L.push({ s: l, couleur: 'vert', taille: tc, anime: b.mode === 'rappel' ? 'rappel' : null, retrait: 12 });
         }
         return L;
@@ -345,7 +348,7 @@
         const placer = (cols, court) => {
           const larg = (L - 40) / cols - 10, pos = []; let col = 0, y = 52;
           for (const e of SJ.etapes) {
-            const ls = [`${e.n}. ${e.court || e.titre}`, ...(court ? e.copie.slice(-1) : e.copie).flatMap(x => couper(c, x, larg - 12, tt))];
+            const ls = [`${lib(e)}${e.court || e.titre}`, ...(court ? e.copie.slice(-1) : e.copie).flatMap(x => couper(c, x, larg - 12, tt))];
             const h = ls.reduce((a, x) => a + haut(x, tt) + bas(x, tt) + 3, 0) + 6;
             if (y + h > 412 && y > 52) { col++; y = 52; }
             pos.push({ e, ls, x: 20 + col * (larg + 20), y, larg }); y += h;
@@ -376,7 +379,7 @@
           c.cur = S.t0.questions; let y = z.y0 + 8; const tq = Math.max(18, 15 / (scene.s || 1));
           for (const e of SJ.etapes) {
             const y0 = y;
-            for (const l of couper(c, `${e.n}. ${e.titre}`, z.x1 - z.x0 - 20, tq)) { const yb = y + haut(l, tq); y = yb + bas(l, tq) + 2; c.texte(l, z.x0 + 10, yb, { couleur: 'jaune', taille: tq, duree: vite(l) }); }
+            for (const l of couper(c, `${lib(e)}${e.titre}`, z.x1 - z.x0 - 20, tq)) { const yb = y + haut(l, tq); y = yb + bas(l, tq) + 2; c.texte(l, z.x0 + 10, yb, { couleur: 'jaune', taille: tq, duree: vite(l) }); }
             c.repere('question_' + e.n, z.x0, y0 - 4, z.x1 - z.x0, y - y0 + 8, 'la question ' + e.n); y += 4;
           }
           c.repere('questions', z.x0, z.y0, z.x1 - z.x0, z.y1 - z.y0, 'ce qu’on cherche');

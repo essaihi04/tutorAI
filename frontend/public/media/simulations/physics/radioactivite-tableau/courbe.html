@@ -44,14 +44,15 @@ const D_ = {
     y0txt: 'N_0 = 8,0·10²⁰ noyaux', moitieTxt: '⟦N_0|2⟧ = 4,0·10²⁰ noyaux', Ttxt: 't½ = 8 jours',
     moments: ['axes', 'courbe', 'palier_1', 'palier_2', 'palier_3', 'formule', 'fin'], lu: { t: 12, min: 0, max: 38, pas: 1 } }),
   ln: { titre: 'ln N = f(t)', expo: false, y0: 33, k: -0.0485, tmax: 210, tAxe: 230, xpas: 25, xlabPas: 50, ymax: 36, ypas: 5, ylabPas: 5,
-    f: t => 33 - 0.0485 * t, ylab: 'ln N', xlab: 't (jours)', lettre: 'ln N', axeY: 'axe_ln', uT: 'jours', fy: v => fx(v, 2),
+    f: t => 33 - 0.0485 * t, ylab: 'ln(N)', xlab: 't (jours)', ylabs: [[23.3, '23,3'], [33, '33']], xlabs: [[200, '200']], lettre: 'ln N', axeY: 'axe_ln', uT: 'jours', fy: v => fx(v, 2),
     moments: ['axes', 'droite', 'ordonnee', 'pente', 'identification', 'fin'], lu: { t: 100, min: 0, max: 210, pas: 5 } },
   activite_2021: EXPO({ titre: 'a(t) — national 2021 N', y0: 10, T: 88, tmax: 300, tAxe: 330, xpas: 25, xlabPas: 50, ymax: 11, ypas: 1, ylabPas: 2,
     ylab: 'a (10¹⁰ Bq)', xlab: 't (ans)', lettre: 'a', axeY: 'axe_a', uT: 'ans', fy: v => `${fx(v, 2)}·10¹⁰ Bq`,
     y0txt: 'a_0 = 10·10¹⁰ Bq = 1,0·10¹¹ Bq', moitieTxt: '⟦a_0|2⟧ = 5·10¹⁰ Bq', Ttxt: 't½ = 88 ans',
     moments: ['axes', 'courbe', 'a0', 'moitie', 't_demi', 'fin'], lu: { t: 150, min: 0, max: 290, pas: 5 } }),
   activite_2022: EXPO({ titre: 'a(t) — national 2022 N', y0: 4, T: 8, tmax: 40, tAxe: 44, xpas: 4, xlabPas: 8, ymax: 4.5, ypas: .5, ylabPas: 1,
-    ylab: 'a (10⁶ Bq)', xlab: 't (jours)', lettre: 'a', axeY: 'axe_a', uT: 'jours', fy: v => `${fx(v, 2)}·10⁶ Bq`,
+    ylab: 'a (Bq)', xlab: 't (jour)', lettre: 'a', axeY: 'axe_a', uT: 'jours', fy: v => `${fx(v, 2)}·10⁶ Bq`,
+    ylabF: v => (v === 1 ? '10⁶' : `${fx(v, 0)}.10⁶`), xlabMax: 24, q: '3.1 : ',
     y0txt: 'a_0 = 4·10⁶ Bq', moitieTxt: '⟦a_0|2⟧ = 2·10⁶ Bq', Ttxt: 't½ = 8 jours',
     moments: ['axes', 'courbe', 'a0', 'moitie', 't_demi', 'fin'], lu: { t: 12, min: 0, max: 38, pas: 1 } }),
 };
@@ -100,9 +101,12 @@ function dessiner(c) {
   c.texte('Lecture', RL.x + 6, 32, { couleur: 'cyan', taille: 17 });
   c.rect(RL.x, RL.y, RL.w, RL.h, { couleur: 'tresfaible', arrondi: 10, duree: .5 });
   // Axes : noms ET unités.
-  const tg = []; for (let v = K.xpas; v <= K.tmax + 1e-9; v += K.xpas) tg.push([v * AXL / K.tAxe / (AXL + 14), Math.abs(v / K.xlabPas - Math.round(v / K.xlabPas)) < 1e-9 ? fx(v, 0) : null]);
+  // Règle 50 (21/11/2026) : la courbe d'un national porte les graduations écrites du sujet, pas d'autres (xlabs/ylabs, ylabF, xlabMax).
+  const tg = []; for (let v = K.xpas; v <= K.tmax + 1e-9; v += K.xpas) tg.push([v * AXL / K.tAxe / (AXL + 14), !K.xlabs && v <= (K.xlabMax ?? Infinity) + 1e-9 && Math.abs(v / K.xlabPas - Math.round(v / K.xlabPas)) < 1e-9 ? fx(v, 0) : null]);
+  for (const [v, lib] of K.xlabs || []) tg.push([v * AXL / K.tAxe / (AXL + 14), lib]);
   c.axe(O.x, O.y, O.x + AXL + 14, O.y, tg, { taille: 13 });
-  const yg = []; for (let v = K.ypas; v <= K.ymax - K.ypas / 2 + 1e-9; v += K.ypas) yg.push([v * AYL / K.ymax / (AYL + 14), Math.abs(v / K.ylabPas - Math.round(v / K.ylabPas)) < 1e-9 ? fx(v, 1) : null]);
+  const yg = []; for (let v = K.ypas; v <= K.ymax - K.ypas / 2 + 1e-9; v += K.ypas) yg.push([v * AYL / K.ymax / (AYL + 14), !K.ylabs && Math.abs(v / K.ylabPas - Math.round(v / K.ylabPas)) < 1e-9 ? (K.ylabF ? K.ylabF(v) : fx(v, 1)) : null]);
+  for (const [v, lib] of K.ylabs || []) yg.push([v * AYL / K.ymax / (AYL + 14), lib]);
   c.axe(O.x, O.y, O.x, O.y - AYL - 14, yg, { taille: 13, vertical: true });
   c.texte('0', O.x - 8, O.y + 18, { couleur: 'faible', taille: 13, align: 'right' });
   c.texte(K.ylab, O.x + 10, 64, { couleur: 'blanc', taille: 16 });
@@ -146,7 +150,7 @@ function dessinerLectures(c, K) {
   c.pause(.4);
   c.cercle(x0, y0, 7, { couleur: 'vert', largeur: 2 });
   c.texte(`${l}_0`, x0 + 10, y0 - 9, { couleur: 'vert', taille: 17 });
-  lire(c, 72, 'à t = 0, on lit :', { couleur: 'faible', taille: 15 });
+  lire(c, 72, `${K.q || ''}à t = 0, on lit :`, { couleur: K.q ? 'cyan' : 'faible', taille: 15 });
   lire(c, 96, K.y0txt, { couleur: 'vert' });
   marque(c, l === 'N' ? 'N0' : 'a0');
   c.pause(.4);
@@ -213,9 +217,10 @@ function dessinerPaliers(c, K) {
 /** Droite ln N = f(t) (national 2021 R) : ordonnée à l’origine, pente, identification. */
 function dessinerLn(c, K) {
   window.OndesTableau.Net.halo(c, 'jaune', () => c.ligne(PX(0), PY(K.f(0)), PX(K.tmax), PY(K.f(K.tmax)), { couleur: 'jaune', largeur: 2.7, tremble: .2 }), 9);   // droite nette et lumineuse
+  c.ligne(O.x, PY(23.3), PX(200), PY(23.3), { couleur: 'faible', largeur: 1.2, pointille: [4, 5] });   // comme sur la feuille du sujet
+  c.ligne(PX(200), PY(23.3), PX(200), O.y, { couleur: 'faible', largeur: 1.2, pointille: [4, 5] });
   c.point(PX(200), PY(23.3), 4, 'jaune');
-  c.texte('(200 ; 23,3)', PX(200), PY(23.3) + 24, { couleur: 'jaune', taille: 14, align: 'center' });
-  lire(c, 72, 'une droite qui descend :', { couleur: 'faible', taille: 15 });
+  lire(c, 72, '2.1 : une droite qui descend :', { couleur: 'cyan', taille: 15 });
   lire(c, 96, 'ln N = k·t + ln N_0', { couleur: 'jaune' });
   marque(c, 'droite');
   c.pause(.4);
@@ -230,13 +235,13 @@ function dessinerLn(c, K) {
   c.ligne(xb, ya, xb, yb, { couleur: 'orange', largeur: 2, pointille: [6, 5] });
   c.texte('Δt = 200 jours', (xa + xb) / 2 + 40, ya - 8, { couleur: 'orange', taille: 15, align: 'center' });
   c.texte('Δ(ln N) = −9,7', xb - 6, (ya + yb) / 2 - 4, { couleur: 'orange', taille: 15, align: 'right' });
-  lire(c, 186, 'pente :', { couleur: 'faible', taille: 15 });
+  lire(c, 186, '2.2 : la pente :', { couleur: 'cyan', taille: 15 });
   lire(c, 216, 'k = ⟦23,3 − 33|200 − 0⟧', { couleur: 'orange' });
   lire(c, 246, 'k = −0,0485 jour⁻¹', { couleur: 'orange', taille: 17 });
   marque(c, 'pente');
   c.pause(.5);
   lire(c, 270, 'ln N = ln N_0 − λ·t', { couleur: 'blanc' });
-  lire(c, 294, 'donc λ = −k', { couleur: 'blanc' });
+  lire(c, 294, '2.2 : donc λ = −k', { couleur: 'blanc' });
   lire(c, 322, 'λ = 0,0485 jour⁻¹', { couleur: 'jaune', taille: 19 });
   c.rect(LX - 4, 302 - TL, 172 * (1 + TL / 16), 30 + TL, { couleur: 'jaune', largeur: 1.5, arrondi: 6 });
   marque(c, 'identification');

@@ -22,6 +22,10 @@ _spec.loader.exec_module(tp)
     ("quatre virgule six millisiemens par mètre", "quatre virgule six millisi mènsse par mètre"),
     ("huit siemens par mètre", "huit si mènsse par mètre"),
     ("un Siemens", "un si mènsse"),
+    # 21/11/2026 : « lim » ; « la limite » choisi à l'écoute (_ecoute_lim/ecoute_3.mp3)
+    ("lim de x ln x quand x tend vers zéro", "la limite de x ln x quand x tend vers zéro"),
+    ("la lim de f", "la limite de f"),
+    ("une limite", "une limite"),
 ])
 def test_mot_ecrit_comme_il_se_dit(ecrit, dit):
     assert tp.parle(ecrit) == dit
