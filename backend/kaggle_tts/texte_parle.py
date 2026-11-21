@@ -63,7 +63,38 @@ def parle(p):
     p = nombres_symboles_unites(p)                 # 19/11/2026 : grands nombres, décimaux, symboles, unités
     p = re.sub(r"\b(complexe)\s+I\b", r"\1 un", p)
     p = re.sub(r"\b(IV|III|II)\b", lambda mt: {"II": "deux", "III": "trois", "IV": "quatre"}[mt.group(1)], p)
+    p = symboles_elements(p)                       # 21/11/2026 : « Xe » -> « xénon »
     return prononciation(p)
+
+
+# ── Symboles des éléments (21 novembre 2026) ──────────────────────────────────────────────────────────────────────
+# « Xe » était lu lettre par lettre ; l'utilisateur a choisi à l'écoute « le xénon » écrit tel quel (ecoute/xenon/2) et
+# demandé qu'un symbole se lise par défaut par le NOM de l'élément. Même table que backend/app/services/speech_normalizer.py
+# (_NOMS_ELEMENTS). Un symbole n'est remplacé que SEUL (« m de Xe », « A ديال Xe », « Cu deux plus ») : à côté d'un autre
+# symbole ou d'une lettre capitale, c'est une formule (« Fe Cl trois », « C O deux ») et elle reste épelée.
+# Jamais : les mots français et la notation maths (La, Ce, Si, Au, Re, Sn = la somme Sₙ, Ne, Se, In, As, Pa, Te…).
+NOMS_ELEMENTS = {
+    "He": "hélium", "Li": "lithium", "Be": "béryllium", "Na": "sodium", "Mg": "magnésium", "Al": "aluminium",
+    "Cl": "chlore", "Ar": "argon", "Ca": "calcium", "Sc": "scandium", "Ti": "titane", "Cr": "chrome",
+    "Mn": "manganèse", "Fe": "fer", "Co": "cobalt", "Ni": "nickel", "Cu": "cuivre", "Zn": "zinc", "Ga": "gallium",
+    "Ge": "germanium", "Br": "brome", "Kr": "krypton", "Rb": "rubidium", "Sr": "strontium", "Zr": "zirconium",
+    "Nb": "niobium", "Mo": "molybdène", "Ag": "argent", "Cd": "cadmium", "Sb": "antimoine", "Xe": "xénon",
+    "Cs": "césium", "Ba": "baryum", "Pt": "platine", "Hg": "mercure", "Pb": "plomb", "Bi": "bismuth", "Ra": "radium",
+    "Ac": "actinium", "Th": "thorium",
+}
+_SYMBOLE = re.compile(r"(?<![\w'’-])(" + "|".join(NOMS_ELEMENTS) + r")(?![\w'’-])")
+_VOISIN_FORMULE = re.compile(r"^[A-Z][a-z]?$")
+
+
+def symboles_elements(p):
+    def nom(mt):
+        avant = p[:mt.start()].split()
+        apres = p[mt.end():].split()
+        voisins = [avant[-1] if avant else "", apres[0].rstrip(",.:;،") if apres else ""]
+        if any(_VOISIN_FORMULE.match(v) for v in voisins):
+            return mt.group(1)                     # dans une formule : épelée comme avant
+        return NOMS_ELEMENTS[mt.group(1)]
+    return _SYMBOLE.sub(nom, p)
 
 
 # ── Notations des maths (19 novembre 2026) ─────────────────────────────────────────────────────────────────────────

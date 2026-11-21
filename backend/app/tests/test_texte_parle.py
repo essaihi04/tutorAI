@@ -50,7 +50,7 @@ def test_le_texte_sans_mot_corrige_ne_change_pas():
     ("Δt = 5 × 0,5 ms", "delta t égale cinq fois zéro virgule cinq milliseconde"),
     ("v = d/Δt", "v égale d sur delta t"),
     ("x → +∞", "x tend vers plus l'infini"),
-    ("Zn²⁺ → Zn", "Zn deux plus donne Zn"),
+    ("Zn²⁺ → Zn", "zinc deux plus donne zinc"),
     ("√2", "racine de deux"),
     ("12,5 %", "douze virgule cinq pour cent"),
 ])
@@ -113,4 +113,38 @@ def test_ecritures_sures(ecrit, dit):
     ("H₂O", "H deux O"),
 ])
 def test_notation_maths(ecrit, dit):
+    assert tp.parle(ecrit) == dit
+
+
+@pytest.mark.parametrize("ecrit, dit", [
+    # 21/11/2026 : « Xe » lu lettre par lettre ; « le xénon » choisi à l'écoute (ecoute/xenon/2) ; un symbole SEUL se lit
+    # par défaut par le nom de l'élément (skill prononciation § 5)
+    ("m de Xe", "m de xénon"),
+    ("A ديال Xe زائد A ديال Sr", "A ديال xénon زائد A ديال strontium"),
+    ("le noyau Cd cent sept", "le noyau cadmium cent sept"),
+    ("une particule Ag", "une particule argent"),
+    ("quatre deux He", "quatre deux hélium"),
+    ("m de Co", "m de cobalt"),
+    ("m de Ni", "m de nickel"),
+    ("Cu²⁺", "cuivre deux plus"),
+    ("Ca²⁺", "calcium deux plus"),
+    ("Al³⁺", "aluminium trois plus"),
+    ("Mn²⁺", "manganèse deux plus"),
+    ("Fe²⁺", "fer deux plus"),
+    ("Na⁺", "sodium plus"),
+    ("Cl⁻", "klore moins"),                     # « chlore » -> « klore » : écriture sûre (§ 6)
+    ("Zn s", "zinc s"),
+    # dans une formule : épelé comme avant
+    ("FeCl3", "Fe Cl trois"),
+    ("CO₂", "C O deux"),
+    # mots français et notation maths : jamais
+    ("La courbe", "La courbe"),
+    ("Ce noyau", "Ce noyau"),
+    ("Si x tend vers zéro", "Si x tend vers zéro"),
+    ("Au début", "Au début"),
+    ("Sn", "Sn"),
+    ("de symbole Po", "de symbole Po"),
+    ("le radon Rn", "le radon Rn"),
+])
+def test_symboles_elements(ecrit, dit):
     assert tp.parle(ecrit) == dit

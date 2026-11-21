@@ -118,6 +118,15 @@ ou tous les mots compliqués ». Avant de générer les voix d'un cours (nouvell
 | écho | éko | 19/11/2026 |
 | microfarad, microseconde… | micro farad, micro seconde | 19/11/2026 |
 | fœtus, للفيتوس, فالفيتوس | le fétusse | 19/11/2026 |
+| lim | la limite | 21/11/2026 |
+| Xe, xénon | le xénon | 21/11/2026 |
+
+**Symboles des éléments, règle par défaut (21/11/2026).** Un symbole d'élément SEUL se lit par le nom de l'élément,
+comme « Xe » → « xénon » choisi à l'écoute (`texte_parle.symboles_elements`, même table que `speech_normalizer.py`) :
+« m de Xe », « A ديال Sr », « Cu deux plus » → « cuivre deux plus ». Dans une formule (voisin = autre symbole ou lettre
+capitale : « Fe Cl trois », « C O deux ») il reste épelé. Jamais pour les mots français et la notation maths : La, Ce,
+Si, Au, Re, Sn (la somme Sₙ), Ne, Se, In, As, Pa, Te ; Po et Rn gardés quand ils sont dits exprès (« de symbole Po »).
+Un nouveau symbole douteux à l'oreille : le faire écouter (§ 5) avant de l'ajouter.
 
 ## 6. Écrire d'office les mots rares de la manière la plus sûre
 
