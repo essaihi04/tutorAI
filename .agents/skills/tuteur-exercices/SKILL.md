@@ -34,6 +34,10 @@ When every question is done, the review shows the score and the hints used. The 
 
 Same as the courses (professeur skill): warm, never a reproach, never congratulating a wrong answer, short sentences, darija + French with the voice rules (`voix-du-cours`, numbers never mixed). All prepared voices come from the batch without tunnel and are checked by transcription.
 
-## 5. What to record (next step, with the competences)
+## 5. What is recorded, and the progression (built 22 November 2026)
 
-Each answer of an exercise is an event of the competence follow-up (`suivi-des-acquis`): exercise id, question, attempt, right/wrong, hints used, explanation watched, easy version used, similar exercise result. The similar exercise done alone and right is the proof of acquisition used by the profile and the memory (J+7).
+User request: « câbler les résultats des cours avec les résultats des exercices pour donner une note à chaque cours et matière, suivre la progression, savoir ses lacunes et ses points forts ».
+- Each marked answer (last attempt of a question, exercise or similar mode) is POSTed by `ExercicePage` to `/api/v1/exercices/resultat`: exercise, course, subject, level, question, attempt, note / sur, right, partial, hints used, explanation / easy version watched, points lost (`pertes`). Stored per student in `backend/data/resultats_exercices/<id>.jsonl` (`services/resultats_exercices.py`); also kept in the browser (`moalim:exercices:progres`) when offline.
+- `/api/v1/exercices/progression` crosses them with the course results (competences of `suivi_acquis` through `stats_cours.tableau`): per exercise (note, questions done, status à faire / en cours / réussi ≥ 75 % / à revoir < 50 %, « acquis » when the similar exercise is right alone), per course (course % = acquired + ½ partial competences; exercises % = points obtained / points; course note /20 = 60 % exercises + 40 % course when both exist), per subject (mean of its courses), strengths (≥ 75 %), gaps (< 50 %, with the course's non-acquired competences) and the most frequent points lost.
+- The list page (`ExercicesHub`) shows them: general note and one ring per subject, strengths / gaps / « où je perds des points », filters (subject, course with its note, difficulty, status, search), cards with the figure as thumbnail, difficulty bars, progress bar and note.
+- Next: feed `profil_eleve` (`a_faire`) and the free-mode tutor with these exercise gaps, and the J+7 memory with the similar exercises done alone.

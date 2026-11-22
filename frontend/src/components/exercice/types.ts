@@ -103,4 +103,13 @@ export interface Exercice {
 
 export interface FicheIndex {
   id: string; matiere: MatiereExercice; chapitre: string; cours: string; titre: string; niveau?: string; duree_min?: number; questions: number;
+  /** titre du cours, barème total estimé, première figure de l'énoncé (miniature de la carte) */
+  cours_titre?: string; bareme?: number; figure?: FigureCahierData | null;
+}
+
+/** La progression gardée dans le navigateur pour un exercice (quand le serveur ne répond pas) */
+export interface ProgresLocal { faites: number; note: number; sur: number; quand: string }
+export const CLE_PROGRES = 'moalim:exercices:progres';
+export function lireProgresLocal(): Record<string, ProgresLocal> {
+  try { return JSON.parse(localStorage.getItem(CLE_PROGRES) || '{}'); } catch { return {}; }
 }

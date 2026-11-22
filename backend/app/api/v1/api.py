@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import auth, content, sessions, coaching, libre, exam, admin, exam_extraction, registration, mock_exam, concours, tts, course_player, kaggle_tts, public_cours, memoire
+from app.api.v1.endpoints import auth, content, sessions, coaching, libre, exam, admin, exam_extraction, registration, mock_exam, concours, tts, course_player, kaggle_tts, public_cours, memoire, exercices
 from app.api import resources
 
 api_router = APIRouter(prefix="/api/v1")
@@ -20,6 +20,7 @@ api_router.include_router(tts.router)
 api_router.include_router(kaggle_tts.router)
 api_router.include_router(memoire.router)   # rappels espacés, cycle des blocs, notifications (11 novembre 2026)
 api_router.include_router(course_player.router)
+api_router.include_router(exercices.router)   # résultats des exercices, progression cours + exercices (22/11/2026)
 api_router.include_router(public_cours.router)   # page publique du cours des ondes (sans compte, plafonnée)
 
 # Admin resources management

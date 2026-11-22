@@ -18,7 +18,7 @@ import ChampReponse, { BoutonPhoto } from '../components/course/SaisieReponse';
 import ClavierFlottant, { clavier, hauteurClavierTelephone, largeurClavier, useClavier } from '../components/course/ClavierFlottant';
 import { Touches, type MatiereClavier } from '../components/course/ClavierScientifique';
 import { inscrireVoix, taireTout } from '../components/course/voixUnique';
-import { pointsDe, pts, type EnonceExercice, type Exercice, type QuestionExercice } from '../components/exercice/types';
+import { CLE_PROGRES, lireProgresLocal, pointsDe, pts, type EnonceExercice, type Exercice, type QuestionExercice } from '../components/exercice/types';
 import { jugerValeur } from '../components/exercice/juger';
 
 const CRAIE = "'Patrick Hand', 'Caveat', cursive";
@@ -142,6 +142,41 @@ export default function ExercicePage() {
     jouer(q.aides[k].audio);
     setAides(s => ({ ...s, [cle(q.id)]: Math.min(n + 1, q.aides!.length) }));
   };
+
+  // chaque note obtenue part au serveur (progression cours + exercices) et reste dans le navigateur (22/11/2026)
+  const envoyes = useRef<Record<string, string>>({});
+  useEffect(() => {
+    if (!ex) return;
+    for (const m of ['exercice', 'similaire'] as const) {
+      const en = m === 'exercice' ? ex.enonce : ex.similaire.enonce;
+      for (const x of en.questions) {
+        const e = etats[`${m}:${x.id}`];
+        if (!e || (e.juste === null && typeof e.noteObtenue !== 'number')) continue;
+        const sur = pointsDe(x);
+        const note = typeof e.noteObtenue === 'number' ? e.noteObtenue : e.juste ? sur : e.partiel ? sur / 2 : 0;
+        const sig = `${e.essais}|${e.juste}|${note}`;
+        if (envoyes.current[`${m}:${x.id}`] === sig) continue;
+        envoyes.current[`${m}:${x.id}`] = sig;
+        void fetch('/api/v1/exercices/resultat', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jeton()}` },
+          body: JSON.stringify({ exercice_id: ex.id, cours: ex.cours, matiere: ex.matiere, niveau: ex.niveau, mode: m, question_id: x.id,
+            tentative: Math.max(1, e.essais), note, sur, juste: e.juste, partiel: !!e.partiel, aides: aides[`${m}:${x.id}`] || 0,
+            explication: vues.explications > 0, facile: vues.faciles > 0,
+            pertes: (e.details || []).filter(d => d.obtenu < d.sur).map(d => d.perte || d.element).slice(0, 8) }),
+        }).catch(() => { /* hors ligne : la progression locale suffit */ });
+      }
+      if (m === 'exercice') {
+        const faites = en.questions.filter(x => { const e = etats[`exercice:${x.id}`]; return e && (e.juste !== null || typeof e.noteObtenue === 'number'); });
+        if (faites.length) {
+          const note = faites.reduce((n, x) => { const e = etats[`exercice:${x.id}`]!; const b = pointsDe(x);
+            return n + (typeof e.noteObtenue === 'number' ? e.noteObtenue : e.juste ? b : e.partiel ? b / 2 : 0); }, 0);
+          const tout = lireProgresLocal();
+          tout[ex.id] = { faites: faites.length, note, sur: en.questions.reduce((n, x) => n + pointsDe(x), 0), quand: new Date().toISOString() };
+          try { localStorage.setItem(CLE_PROGRES, JSON.stringify(tout)); } catch { /* stockage refusé */ }
+        }
+      }
+    }
+  }, [etats, ex]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const bilan = useMemo(() => {
     if (!enonce) return null;
