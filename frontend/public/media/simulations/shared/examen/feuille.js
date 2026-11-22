@@ -226,6 +226,14 @@
     // le tuteur le rappelle en une phrase (règle 48 ; 19/11/2026, l'utilisateur).
     const suite = !!garde && (cfg.entete || P.get('entete')) === 'courte';
     if (ex.context && !suite) blocs.push({ texte: ex.context, id: 'contexte' });
+    // L'introduction annonce la figure du montage (« figure 1 », « figure ci-contre », « document 1 », « le montage
+    // schématisé ») : dans une partie qui montre cette introduction, la première figure de l'exercice est là aussi, même
+    // si seule une question plus loin la cite (22/11/2026, l'utilisateur, 2025 R ex. 2 : « figure ci-contre » annoncée,
+    // figure absente de la partie 1 ; même défaut sur 9 diapositives d'énoncé de 5 cours).
+    if (garde && ex.context && !suite && /figure|document|sch[ée]ma|montage|ci-contre|ci-dessous/i.test(ex.context)) {
+      const premiere = (ex.documents || []).find((d) => d && d.id);
+      if (premiere) figure(premiere.id);
+    }
     const refs = new Set((ex.questions || []).flatMap((q) => q.documents || []));
     // Un document qu'aucune question ne cite n'apparaît dans une partie (questions=…) que s'il est marqué `commun: true`
     // (19/11/2026, l'utilisateur, 2022 R ex. 2 : la figure de l'onde restait affichée dans la partie radioactivité —
