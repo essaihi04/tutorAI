@@ -193,7 +193,7 @@ EX = {
       ["(E_ℓ/A)(X) − (E_ℓ/A)(Y) − (E_ℓ/A)(Z)", "A_X·(E_ℓ/A)(X) − [A_Y·(E_ℓ/A)(Y) + A_Z·(E_ℓ/A)(Z)]", "A_X·(E_ℓ/A)(X) + A_Y·(E_ℓ/A)(Y) + A_Z·(E_ℓ/A)(Z)"], 1, {
         "1": {"juste": rep("برافو! كنضربو كل E l sur A ف A ديالها، ومن بعد les réactifs moins les produits.", "Juste : E_ℓ = A·(E_ℓ/A), puis réactifs moins produits.")},
         "0": {"1": rep("هادا هو الفخ. E l sur A راها par nucléon: خاصك اللول ترجع ل E l ديال النواة كاملة. عاود اختار.", "E_ℓ/A est par nucléon : il faut d'abord retrouver E_ℓ. Réessaie."),
-              "2": rep("الجواب: E l égale A fois E l sur A لكل نواة، ومن بعد les réactifs moins les produits.", "Réponse : A_X·ξ_X − (A_Y·ξ_Y + A_Z·ξ_Z).")},
+              "2": rep("الجواب: E l égale A fois E l sur A لكل نواة، ومن بعد les réactifs moins les produits.", "Réponse : A_X·ξ(X) − (A_Y·ξ(Y) + A_Z·ξ(Z)).")},
         "2": {"1": rep("لا، delta E هو فرق: les réactifs moins les produits. عاود اختار.", "ΔE est une différence : réactifs moins produits. Réessaie."),
               "2": rep("الجواب: E l des réactifs moins E l des produits، مع E l égale A fois E l sur A.", "Réponse : ΣE_ℓ(réactifs) − ΣE_ℓ(produits).")}},
       "Pour X donne Y plus Z, on connaît E l sur A de chaque noyau. On calcule delta E comment ?"),
