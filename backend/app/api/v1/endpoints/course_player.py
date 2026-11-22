@@ -168,7 +168,7 @@ async def answer_reaction(body: AnswerReactionRequest, student: dict = Depends(g
                                            session_type="course_player")
         except Exception as e:  # noqa: BLE001
             raise HTTPException(status_code=503, detail=f"LLM indisponible : {e}") from e
-        resultat = reponse_eleve.reaction_reponse(texte, body.verdict)
+        resultat = reponse_eleve.reaction_reponse(texte, body.verdict, body.question)
         if resultat:
             return resultat
     raise HTTPException(status_code=502, detail="Réponse du LLM inutilisable")

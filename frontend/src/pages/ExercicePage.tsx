@@ -44,15 +44,19 @@ const jeton = () => { try { return localStorage.getItem('token') || ''; } catch 
 async function corrigerParLeTuteur(titre: string, contexte: string, q: QuestionExercice, reponse: string, tentative: number, matiere: string) {
   const r = await fetch('/api/v1/course-player/answer-reaction', {
     method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${jeton()}` },
-    body: JSON.stringify({ diapo: { title: titre, speech: contexte }, question: { type: 'open', enonce: q.texte, attendu: q.reponse.attendu, matiere }, reponse, tentative, verdict: null }),
+    body: JSON.stringify({ diapo: { title: titre, speech: contexte }, question: { type: 'open', enonce: q.texte, attendu: q.reponse.attendu, matiere, bareme: pointsDe(q),
+      elements: q.correction.lignes.map(l => l.texte) }, reponse, tentative, verdict: null }),
   });
   if (!r.ok) throw new Error(String(r.status));
-  return r.json() as Promise<{ correct: boolean | null; partiel?: boolean; parole: string; ecrit: string }>;
+  return r.json() as Promise<{ correct: boolean | null; partiel?: boolean; parole: string; ecrit: string; note?: number; details?: Detail[] }>;
 }
 
+type Detail = { element: string; sur: number; obtenu: number; perte?: string };
 type Etat = { essais: number; juste: boolean | null; retour?: string; note?: string; correction: boolean; texte?: string; autoEval?: boolean;
   /** le verdict du dernier essai, toujours affiché (22/11/2026) : juste, en partie, faux, ou non jugé */
-  verdict?: 'juste' | 'partiel' | 'faux' | 'nonjuge' | 'lecture'; partiel?: boolean };
+  verdict?: 'juste' | 'partiel' | 'faux' | 'nonjuge' | 'lecture'; partiel?: boolean;
+  /** la note de cet essai et où les points sont perdus (barème réparti sur les éléments de la correction) */
+  noteObtenue?: number; details?: Detail[] };
 type Ouvert = null | { genre: 'explication' | 'facile'; slide: CourseSlide } | { genre: 'feuille' };
 
 function deckDe(ex: Exercice, genre: 'explication' | 'facile', slide: CourseSlide): CourseDeck {
@@ -104,7 +108,13 @@ export default function ExercicePage() {
     if (q.reponse.type === 'valeur') {
       const v = jugerValeur(q.reponse, texte);
       const finie = v.juste || similaire || essais >= 2;
+      const b = pointsDe(q);
+      const sansUnite = v.juste && !!v.note && b > 0.25;
+      const details: Detail[] = v.lu == null && !finie ? [] : [
+        { element: 'Relation et application numérique, résultat', sur: sansUnite ? b - 0.25 : b, obtenu: v.juste ? (sansUnite ? b - 0.25 : b) : 0, perte: v.juste ? '' : 'résultat faux' },
+        ...(sansUnite ? [{ element: 'Unité du résultat', sur: 0.25, obtenu: 0, perte: 'unité manquante' }] : [])];
       poser(q.id, { essais, juste: v.juste ? true : finie ? false : null, texte, note: v.note, correction: finie,
+        details, noteObtenue: details.length ? details.reduce((n, d) => n + d.obtenu, 0) : undefined,
         verdict: v.juste ? 'juste' : v.lu == null && !finie ? undefined : 'faux',
         retour: v.juste ? 'Le résultat est bon.' : finie ? `Pas tout à fait : la réponse est ${q.reponse.attendu}.`
           : (v.lu == null ? (v.note || 'Écris la valeur.') : 'Pas encore juste. Relis la question ; tu peux demander l’aide du tuteur.') });
@@ -117,7 +127,7 @@ export default function ExercicePage() {
       const finie = r.correct === true || similaire || essais >= 2;
       const verdict = r.correct === true ? 'juste' : r.partiel ? 'partiel' : r.correct === false ? 'faux' : 'nonjuge';
       poser(q.id, { juste: r.correct === true ? true : finie ? false : null, retour: r.ecrit || r.parole, correction: finie,
-        verdict, partiel: !!r.partiel });
+        verdict, partiel: !!r.partiel, details: r.details, noteObtenue: typeof r.note === 'number' ? r.note : undefined });
     } catch {
       // sans le tuteur en ligne : l'élève compare lui-même avec la réponse attendue
       poser(q.id, { retour: '', autoEval: true, correction: true });
@@ -149,10 +159,12 @@ export default function ExercicePage() {
   const conseilSemblable = mode === 'exercice' && fini && (bilan.justes < bilan.total || bilan.aidesTotal >= bilan.total || vues.explications > 0);
 
   const total = enonce.questions.reduce((n, x) => n + pointsDe(x), 0);
-  const gagne = (x: QuestionExercice, e?: Etat) => e?.juste === true ? pointsDe(x) : e?.juste === false && e.partiel ? pointsDe(x) / 2 : 0;
+  // la note de la question : celle du correcteur (dernier essai) quand elle est connue, sinon tout ou rien
+  const gagne = (x: QuestionExercice, e?: Etat) => !e || e.juste === null ? 0 : typeof e.noteObtenue === 'number' ? e.noteObtenue
+    : e.juste ? pointsDe(x) : e.partiel ? pointsDe(x) / 2 : 0;
   const note = enonce.questions.reduce((n, x) => n + gagne(x, etats[cle(x.id)]), 0);
   const ptsQ = pointsDe(q);
-  const noteQ = etat.juste === null ? null : gagne(q, etat);
+  const noteQ = etat.juste === null && typeof etat.noteObtenue !== 'number' ? null : typeof etat.noteObtenue === 'number' ? etat.noteObtenue : gagne(q, etat);
   const BTN = 'rounded-md border border-slate-400 bg-white px-3 py-1.5 text-sm text-slate-900 hover:bg-slate-100';
   const LIGNES = { lineHeight: '36px', backgroundImage: 'repeating-linear-gradient(transparent 0 35px, #9bb3d6 35px 36px)' };
 
@@ -259,11 +271,27 @@ export default function ExercicePage() {
                 const V = { juste: ['✔ Juste', 'border-emerald-700 text-emerald-800'], partiel: ['◐ Juste en partie : complète ta réponse', 'border-amber-600 text-amber-800'],
                   faux: [etat.correction ? '✘ Faux' : '✘ Pas encore juste', 'border-rose-700 text-rose-800'], nonjuge: ['? Le tuteur n’a pas pu juger : précise ta réponse', 'border-slate-500 text-slate-800'],
                   lecture: ['…', 'border-slate-400 text-slate-600'] } as const;
-                const [titre, couleur] = V[etat.verdict || (etat.juste === true ? 'juste' : etat.juste === false ? 'faux' : 'lecture')];
+                const [titre0, couleur] = V[etat.verdict || (etat.juste === true ? 'juste' : etat.juste === false ? 'faux' : 'lecture')];
+                const perdus = (etat.details || []).reduce((n, d) => n + d.sur - d.obtenu, 0);
+                const titre = perdus > 0 && etat.verdict === 'juste' ? `✔ Juste, mais −${pts(perdus)} point${perdus > 1 ? 's' : ''} : voir le tableau` : titre0;
                 return (
                   <div className={`mt-3 border-2 p-2 ${couleur}`}>
                     {etat.verdict !== 'lecture' && <p className="text-[15px] font-bold" style={{ fontFamily: 'system-ui, sans-serif' }}>{titre}</p>}
                     <p className="text-[18px]" style={{ fontFamily: CRAIE }}><Formule t={etat.retour} /></p>
+                    {!!etat.details?.length && (
+                      <table className="mt-2 w-full border-collapse text-[14px] text-slate-900" style={{ fontFamily: 'system-ui, sans-serif' }}>
+                        <thead><tr className="bg-slate-100"><th className="border border-slate-400 px-2 py-1 text-left">Élément attendu</th>
+                          <th className="w-20 border border-slate-400 px-1 py-1">Points</th><th className="border border-slate-400 px-2 py-1 text-left">Points perdus</th></tr></thead>
+                        <tbody>{etat.details.map((d, i) => (
+                          <tr key={i} className="align-top">
+                            <td className="border border-slate-400 px-2 py-1"><Formule t={d.element} /></td>
+                            <td className={`border border-slate-400 px-1 py-1 text-center font-semibold ${d.obtenu >= d.sur ? 'text-emerald-700' : 'text-rose-700'}`}>{pts(d.obtenu)} / {pts(d.sur)}</td>
+                            <td className="border border-slate-400 px-2 py-1 text-rose-800">{d.obtenu >= d.sur ? '—' : `−${pts(d.sur - d.obtenu)} : ${d.perte || 'manque'}`}</td>
+                          </tr>))}
+                          <tr className="bg-slate-100 font-bold"><td className="border border-slate-400 px-2 py-1 text-right">Note</td>
+                            <td className="border border-slate-400 px-1 py-1 text-center">{pts(etat.details.reduce((n, d) => n + d.obtenu, 0))} / {pts(etat.details.reduce((n, d) => n + d.sur, 0))}</td><td className="border border-slate-400" /></tr>
+                        </tbody>
+                      </table>)}
                   </div>);
               })()}
               {etat.note && <p className="mt-2 text-[16px] text-amber-800">{etat.note}</p>}

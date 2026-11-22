@@ -29,6 +29,25 @@ MATIERES = {"physique": "physique-chimie", "physique-chimie": "physique-chimie",
             "mathematiques": "mathématiques", "maths": "mathématiques", "svt": "SVT"}
 
 
+def elements_bareme(question: dict) -> list[dict]:
+    """Le barème (`bareme`, en points) réparti par quarts de point sur les éléments attendus (`elements`, ex. les lignes
+    de la correction) ; trop d'éléments pour le barème : ils sont regroupés. [] sans barème."""
+    try:
+        b = float(question.get("bareme") or 0)
+    except (TypeError, ValueError):
+        return []
+    els = [str(e).strip() for e in (question.get("elements") or []) if str(e).strip()][:8]
+    if b <= 0:
+        return []
+    if not els:
+        els = ["Réponse complète et justifiée"]
+    quarts = max(1, round(b / 0.25))
+    n = min(len(els), quarts)
+    groupes = [els[i * len(els) // n:(i + 1) * len(els) // n] for i in range(n)]
+    parts = [quarts // n + (1 if i < quarts % n else 0) for i in range(n)]
+    return [{"element": " ; ".join(g), "sur": q * 0.25} for g, q in zip(groupes, parts)]
+
+
 def prompt_reponse(diapo: dict, question: dict, reponse: Any, tentative: int, verdict: Optional[bool]) -> str:
     choix = question.get("choix") or []
     lignes_choix = "\n".join(f"  {chr(65 + i)}. {c}" for i, c in enumerate(choix))
@@ -60,6 +79,14 @@ def prompt_reponse(diapo: dict, question: dict, reponse: Any, tentative: int, ve
     else:
         geste = ("S'il se trompe encore : donne la bonne réponse et sa justification en deux phrases, "
                  "sans le décourager.")
+    bar = elements_bareme(question)
+    consigne_note = "" if not bar else (
+        "Note aussi la réponse comme un correcteur du bac. Barème de la question, élément par élément :\n"
+        + "\n".join(f"  {i + 1}. {e['element']} ({e['sur']:g} pt)" for i, e in enumerate(bar))
+        + "\nPour chaque élément, « obtenu » = ses points s'il est présent et juste, la moitié s'il est incomplet, 0 s'il "
+          "manque ou est faux ; « perte » = en quelques mots ce qui manque ou est faux (vide si tout est obtenu). "
+          "Le fond compte, pas l'orthographe.")
+    json_note = "" if not bar else ', "details": [' + ", ".join('{"obtenu": 0.25, "perte": ""}' for _ in bar) + "]"
     return f"""Tu es le professeur de {matiere} d'un élève de 2e Bac PC BIOF au Maroc. Diapositive « {diapo.get('title', '')} ».
 Ce que tu viens d'expliquer à voix haute : {str(diapo.get('speech') or '')[:1200]}
 
@@ -75,12 +102,13 @@ S'il a juste : dis précisément ce qui est juste et pourquoi, en une ou deux ph
 {TON}
 
 {REGLES_VOIX}
+{consigne_note}
 
 Réponds UNIQUEMENT par ce JSON :
-{{"correct": true, "partiel": false, "parole": "ce que tu dis (règles de la voix)", "ecrit": "la même chose en français écrit, court, avec les valeurs"}}"""
+{{"correct": true, "partiel": false, "parole": "ce que tu dis (règles de la voix)", "ecrit": "la même chose en français écrit, court, avec les valeurs"{json_note}}}"""
 
 
-def reaction_reponse(texte_llm: str, verdict: Optional[bool]) -> Optional[dict]:
+def reaction_reponse(texte_llm: str, verdict: Optional[bool], question: Optional[dict] = None) -> Optional[dict]:
     d = lire_json(texte_llm)
     if not d:
         return None
@@ -93,4 +121,25 @@ def reaction_reponse(texte_llm: str, verdict: Optional[bool]) -> Optional[dict]:
     if not parole:
         return None
     partiel = d.get("partiel") is True and correct is not True
-    return {"correct": correct, "partiel": partiel, "parole": parole, "ecrit": str(d.get("ecrit") or "").strip()[:600]}
+    out = {"correct": correct, "partiel": partiel, "parole": parole, "ecrit": str(d.get("ecrit") or "").strip()[:600]}
+    bar = elements_bareme(question or {})
+    if bar:
+        recu = d.get("details") if isinstance(d.get("details"), list) else []
+        details = []
+        for i, e in enumerate(bar):
+            r = recu[i] if i < len(recu) and isinstance(recu[i], dict) else {}
+            try:
+                o = float(r.get("obtenu", 0))
+            except (TypeError, ValueError):
+                o = 0.0
+            o = round(min(max(o, 0.0), e["sur"]) * 4) / 4
+            if correct is True:
+                o = e["sur"]                    # juste et complète : tous les points
+            details.append({"element": e["element"], "sur": e["sur"], "obtenu": o,
+                            "perte": "" if o >= e["sur"] else str(r.get("perte") or "").strip()[:160]})
+        if correct is False and not partiel and sum(x["obtenu"] for x in details) >= sum(x["sur"] for x in details):
+            details[-1]["obtenu"] = max(0.0, details[-1]["sur"] - 0.25)   # fausse : jamais la note entière
+        out["details"] = details
+        out["note"] = sum(x["obtenu"] for x in details)
+        out["bareme"] = sum(x["sur"] for x in details)
+    return out
