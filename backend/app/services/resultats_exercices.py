@@ -93,7 +93,8 @@ def par_exercice(evenements: list[dict], cat: list[dict]) -> dict[str, dict]:
             sur_fait = sum(float(e.get("sur") or 0) for e in qs.values())
             # barème total estimé : la moyenne par question faite × le nombre de questions
             sur = sur_fait / len(qs) * nq if qs else 0.0
-            fiche[mode] = {"faites": len(qs), "note": _r(note), "sur": _r(sur), "pourcent": _r(note / sur if sur else None),
+            fiche[mode] = {"faites": len(qs), "note": _r(note), "sur": _r(sur), "sur_fait": _r(sur_fait),
+                           "pourcent": _r(note / sur if sur else None), "reussite": _r(note / sur_fait if sur_fait else None),
                            "aides": sum(int(e.get("aides") or 0) for e in qs.values()),
                            "explications": sum(1 for e in qs.values() if e.get("explication")),
                            "pertes": [p for e in qs.values() for p in (e.get("pertes") or []) if p][:12]}
@@ -116,7 +117,8 @@ def progression(student_id: str) -> dict:
         cours_stats = stats_cours.tableau(student_id, avec_vues=True)
     except Exception:  # noqa: BLE001 — un cours illisible ne doit pas priver l'élève de ses exercices
         cours_stats = {}
-    tous_cours = sorted({f.get("cours") for f in cat if f.get("cours")} | set(cours_stats))
+    # les cours du programme qui ont des exercices (les anciens cours de démonstration n'entrent pas dans les notes)
+    tous_cours = sorted({f.get("cours") for f in cat if f.get("cours")})
     par_cours = {}
     for c in tous_cours:
         if not c or matiere_du_cours(c) == "autre":
@@ -127,7 +129,8 @@ def progression(student_id: str) -> dict:
         p_cours = (comp.get("acquis", 0) + 0.5 * comp.get("partiel", 0)) / evalues if evalues else None
         ex_c = [x for x in exos.values() if x["cours"] == c and x["exercice"]["faites"]]
         note_ex = sum(x["exercice"]["note"] or 0 for x in ex_c)
-        sur_ex = sum(x["exercice"]["sur"] or 0 for x in ex_c)
+        # la réussite sur les questions faites : un exercice commencé ne fait pas baisser la note du cours
+        sur_ex = sum(x["exercice"]["sur_fait"] or 0 for x in ex_c)
         p_ex = note_ex / sur_ex if sur_ex else None
         p = (POIDS_EXERCICES * p_ex + (1 - POIDS_EXERCICES) * p_cours if p_ex is not None and p_cours is not None
              else p_ex if p_ex is not None else p_cours)

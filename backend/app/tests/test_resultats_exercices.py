@@ -32,3 +32,14 @@ def test_progression_croise_cours_et_exercices(tmp_path, monkeypatch):
     assert c["pourcent"] == 0.8 and c["note20"] == 16.0 and c["lacunes_cours"] == ["Krebs"]
     assert p["matieres"]["svt"]["note20"] == 16.0 and p["global"]["exercices_faits"] == 1
     assert p["forces"][0]["cours"] == "svt_ch1_x"
+
+
+def test_exercice_commence_ne_baisse_pas_le_cours(tmp_path, monkeypatch):
+    monkeypatch.setattr(rx, "DOSSIER", tmp_path)
+    monkeypatch.setattr(rx, "catalogue", lambda: CAT)
+    from app.services import stats_cours
+    monkeypatch.setattr(stats_cours, "tableau", lambda sid, avec_vues=False: {"svt_ch1_x": {"titre": "E"}, "svt_vieux_v1": {"titre": "V"}})
+    rx.enregistrer("s2", {"exercice_id": "e1", "mode": "exercice", "question_id": "1", "note": 0.5, "sur": 0.75})
+    p = rx.progression("s2")
+    assert p["cours"]["svt_ch1_x"]["exercices_pourcent"] == 0.67 and "svt_vieux_v1" not in p["cours"]
+    assert p["exercices"]["e1"]["exercice"]["pourcent"] == 0.33 and p["exercices"]["e1"]["statut"] == "en_cours"
