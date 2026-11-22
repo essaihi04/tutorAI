@@ -174,7 +174,7 @@ SIMILAIRE = {
         "donnees": ["u₀ = 1", "uₙ₊₁ = (1/2)uₙ + 2"],
         "questions": [
             {"id": "1", "texte": "Calculer u₁.",
-             "reponse": valeur("u₁", 2.5, "u₁ = (1/2) × 1 + 2 = 2,5"),
+             "reponse": phrase("u₁ = (1/2) × 1 + 2 = 5/2 = 2,5"),
              "clavier": {"aides": ["n = 0", "u₁ ="], "pieges": ["u₁ = 2"]},
              "correction": correction([("1 : u₁ = (1/2)u₀ + 2 = 0,5 + 2 = 2,5", "u un égale")],
                                       "pour n égale zéro، u un égale un sur deux fois un، plus deux، égale deux virgule cinq.")},

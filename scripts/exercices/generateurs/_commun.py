@@ -124,7 +124,7 @@ def deck(id_, titre, slides):
 # ---------------------------------------------------------------- contrôles
 AR = re.compile(r"[؀-ۿ]")
 CHAMPS_VOIX = {"mixed", "dit", "parole", "intro_dit", "texte_dit", "enonce_dit"}
-SYMBOLES = re.compile(r"[0-9=+−×÷*/²³√∞≤≥<>()\[\]{}ℝℕ∈⇔⇒→ₙ₀₁₂₃⁰¹⁴⁵⁶⁷⁸⁹ⁿ|πθτ%]")
+SYMBOLES = re.compile(r"[0-9=+−×÷*/²³√∞≤≥<>()\[\]{}ℝℕ∈⇔⇒→ₙ₀₁₂₃⁰¹⁴⁵⁶⁷⁸⁹ⁿ|πθτ%ℓ]")
 
 
 def _voix(o, k=""):

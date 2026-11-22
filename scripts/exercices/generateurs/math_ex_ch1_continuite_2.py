@@ -167,7 +167,7 @@ EX = {
       "donnees": ["f(x) = (−x² + 5)/(2x² + 1)", "g(x) = 2x³ − x + 7", "h(x) = √(x² + 6x) − x, x ≥ 0"],
       "questions": [
         {"id": "1", "texte": "Calculer la limite de f(x) quand x tend vers +∞.",
-         "reponse": valeur("lim f(x)", -0.5, "lim f(x) = lim −x²/(2x²) = −1/2 = −0,5"),
+         "reponse": phrase("lim f(x) = lim −x²/(2x²) = −1/2 = −0,5"),
          "clavier": {"aides": ["−x²/(2x²)", "plus haut degré"], "pieges": ["5/1 = 5"]},
          "correction": correction([("1 : « ∞/∞ » ; lim f(x) = lim −x²/(2x²)", "le terme de plus haut degré"), ("lim f(x) = −1/2", "la limite égale moins un demi")],
            "فl'infini كنخليو le terme de plus haut degré: moins x carré، sur، deux x carré. إذن la limite égale moins un demi.")},
