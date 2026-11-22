@@ -1,0 +1,277 @@
+# Exercice de SVT (ch. 4, relation gène – protéine) : la transcription, niveau facile.
+# Ce qu'il entraîne : écrire l'ARNm à partir du brin TRANSCRIT nommé (complémentarité A→U, T→A, C→G, G→C, extrémités 5′/3′),
+# comparer ADN et ARN, définir la transcription (définition du cours, mot pour mot), dire où elle a lieu, par quelle enzyme,
+# et ce que devient l'ARNm. Les mutations ne sont pas abordées ici (exercices substitution / délétion / allèles du même cours).
+# Sources comparées :
+# - exploration relation_gene_proteine.json : cas_type « arn_aa » (17 sessions sur 20, brin transcrit en 2018 N, 2019 R, 2020 R,
+#   2024 R), pièges « oublie de changer T en U », « complémentarité sur le mauvais brin », insistances « T n'existe pas dans l'ARN ».
+# - vidéos des profs (exploration) : Ikram (règle des deux brins, transcription 3′→5′), Mousstaid (exemple brin transcrit),
+#   Faress (tableau ADN / ARNm), Elbrahimi (définition, ARN polymérase seule enzyme).
+# - nationaux : « Donnez la séquence de l'ARNm… correspondant au fragment du brin transcrit » (2020 R EGFR), restitution 2018 R,
+#   vrai / faux 2024 N (« l'ARN polymérase intervient dans la traduction » : faux).
+# - séries en ligne : recherche faite (dyrassa, moutamadris trouvés) mais lecture impossible (réseau de la session refusé) ;
+#   comparaison faite avec les vidéos et les nationaux ci-dessus.
+# Séquence originale ; ARNm calculé ci-dessous (transcrire) et relu base par base.
+import sys
+from _commun import rep, qcm_facile, vrai_faux, association, ecrire
+
+BASE = "/media/simulations/svt/relation_gene_proteine-tableau/"
+BRINS = BASE + "transcription.html?vue=brins"
+TRANS = BASE + "transcription.html?vue=transcription"
+NOYAU = BASE + "transcription.html?vue=noyau"
+ADNARN = BASE + "adn_arn.html"
+
+COMP = {"A": "U", "T": "A", "C": "G", "G": "C"}
+def transcrire(tr):
+    return " ".join("".join(COMP[b] for b in t) for t in tr.split())
+def epele(seq):
+    """« CCA GAU » → « C C A، G A U » (lettres dites une à une, triplets séparés)."""
+    return "، ".join(" ".join(t) for t in seq.split())
+
+TR = "GGT CTA ACG TTC AGT"
+ARN = transcrire(TR)
+assert ARN == "CCA GAU UGC AAG UCA", ARN
+TR_B = "CAT TGC AAG GTA CCT"
+ARN_B = transcrire(TR_B)
+assert ARN_B == "GUA ACG UUC CAU GGA", ARN_B
+
+
+def figure(tr, titre):
+    els = [{"f": "texte", "at": [0.1, 2.75], "t": "triplets", "couleur": "faible", "taille": "petit", "ancre": "gauche"}]
+    xs = [3.9 + 1.25 * j for j in range(5)]
+    for j, x in enumerate(xs):
+        els.append({"f": "texte", "at": [x, 2.75], "t": str(j + 1), "couleur": "blanc", "taille": "petit"})
+    els += [{"f": "texte", "at": [0.1, 1.85], "t": "brin transcrit", "couleur": "violet", "taille": "petit", "ancre": "gauche"},
+            {"f": "texte", "at": [3.15, 1.85], "t": "3′", "couleur": "vert"},
+            {"f": "texte", "at": [9.65, 1.85], "t": "5′", "couleur": "vert"},
+            {"f": "rect", "de": [3.35, 1.45], "a": [9.45, 2.25], "couleur": "violet", "arrondi": True}]
+    for t, x in zip(tr.split(), xs):
+        els.append({"f": "texte", "at": [x, 1.85], "t": t, "couleur": "blanc"})
+    els += [{"f": "texte", "at": [0.1, 0.7], "t": "ARNm", "couleur": "orange", "taille": "petit", "ancre": "gauche"},
+            {"f": "ligne", "pts": [[3.35, 0.55], [9.45, 0.55]], "couleur": "orange", "trait": "pointille"},
+            {"f": "texte", "at": [6.4, 0.85], "t": "? (à écrire)", "couleur": "orange", "taille": "petit"},
+            {"f": "fleche", "de": [9.9, 2.6], "a": [9.9, 1.0], "couleur": "jaune"},
+            {"f": "texte", "at": [9.2, 0.25], "t": "transcription", "couleur": "jaune", "taille": "petit"}]
+    return {"type": "schema", "titre": titre, "cadre": {"l": 10.4, "h": 3.2},
+            "legende": "Fragment du brin transcrit d'un gène, lu de 3′ vers 5′, découpé en triplets numérotés.",
+            "elements": els}
+
+
+MOTS = {"1": "un", "2": "deux", "3": "trois", "4": "quatre", "5": "cinq"}
+def correction_arn(qid, tr, arn):
+    return {"lignes": [
+        {"texte": f"{qid} : l'ARNm est complémentaire du brin transcrit : A → U, T → A, C → G, G → C", "mot": "complémentaire ديال le brin transcrit"},
+        {"texte": f"brin transcrit : 3′ {tr} 5′", "mot": "le brin transcrit هو"},
+        {"texte": f"ARNm : 5′ {arn} 3′ (aucun T, U à sa place)", "mot": "إذن l'A R N messager"}],
+        "parole": f"question {MOTS[qid]}. l'A R N messager هو le complémentaire ديال le brin transcrit: قدام A، كنكتبو U. قدام T، A. قدام C، G. وقدام G، C. le brin transcrit هو {epele(tr)}، lu de trois prime vers cinq prime. إذن l'A R N messager، de cinq prime à trois prime: {epele(arn)}. وما فيه حتى T."}
+
+
+CORR2 = {"lignes": [
+    {"texte": "2 : l'ADN a deux brins ; l'ARN n'a qu'un seul brin", "mot": "l'A R N est formé d'un seul brin"},
+    {"texte": "sucre : désoxyribose dans l'ADN ; ribose dans l'ARN", "mot": "le ribose"},
+    {"texte": "bases : A, T, C, G dans l'ADN ; A, U, C, G dans l'ARN (U à la place de T)", "mot": "l'uracile كتاخد البلاصة ديال la thymine"}],
+    "parole": "question deux. l'A D N est formé de deux brins، و l'A R N est formé d'un seul brin. le sucre ديال l'A D N هو le désoxyribose، و ديال l'A R N هو le ribose. les bases ديال l'A D N هوما A، T، C، G، و ديال l'A R N هوما A، U، C، G: l'uracile كتاخد البلاصة ديال la thymine."}
+ATT2 = "L'ADN est formé de deux brins, l'ARN d'un seul brin ; le sucre de l'ADN est le désoxyribose, celui de l'ARN le ribose ; l'ADN contient les bases A, T, C, G, l'ARN contient A, U, C, G : l'uracile U remplace la thymine T."
+CLAV2 = {"aides": ["deux brins", "un seul brin", "désoxyribose", "ribose", "uracile (U)", "thymine (T)"], "pieges": ["l'ARN contient T", "l'ARN a deux brins"]}
+
+CORR3 = {"lignes": [
+    {"texte": "3 : la transcription est la synthèse, dans le noyau,", "mot": "la transcription، est la synthèse dans le noyau"},
+    {"texte": "d'un ARNm complémentaire du brin transcrit d'un gène,", "mot": "d'un A R N messager complémentaire"},
+    {"texte": "par l'ARN polymérase", "mot": "par l'A R N polymérase"}],
+    "parole": "question trois. نعاود نقرا: la transcription، est la synthèse dans le noyau، d'un A R N messager complémentaire، du brin transcrit d'un gène، par l'A R N polymérase."}
+ATT3 = "La transcription est la synthèse, dans le noyau, d'un ARNm complémentaire du brin transcrit d'un gène, par l'ARN polymérase."
+CLAV3 = {"aides": ["synthèse", "ARNm", "complémentaire", "brin transcrit", "ARN polymérase", "noyau"], "pieges": ["ribosomes", "ADN polymérase", "acides aminés"]}
+
+CORR4 = {"lignes": [
+    {"texte": "4 : lieu : le noyau (là où se trouve l'ADN)", "mot": "كتوقع ف le noyau"},
+    {"texte": "enzyme : l'ARN polymérase, qui lit le brin transcrit de 3′ vers 5′", "mot": "l'enzyme هي l'A R N polymérase"},
+    {"texte": "l'ARNm sort du noyau par les pores vers le cytoplasme (ribosomes) ; l'ADN reste dans le noyau", "mot": "كيخرج من les pores"}],
+    "parole": "question quatre. la transcription كتوقع ف le noyau، حيت تما كاين l'A D N. l'enzyme هي l'A R N polymérase، كتقرا le brin transcrit de trois prime vers cinq prime. من بعد، l'A R N messager كيخرج من les pores ل le cytoplasme، فين كاينين les ribosomes. أما l'A D N، كيبقى ف le noyau."}
+ATT4 = "La transcription a lieu dans le noyau ; elle est réalisée par l'ARN polymérase (qui lit le brin transcrit de 3′ vers 5′) ; l'ARNm formé sort du noyau par les pores nucléaires vers le cytoplasme, où se trouvent les ribosomes ; l'ADN reste dans le noyau."
+CLAV4 = {"aides": ["noyau", "ARN polymérase", "pores nucléaires", "cytoplasme", "ribosomes"], "pieges": ["cytoplasme (pour la transcription)", "ADN polymérase", "l'ADN sort du noyau"]}
+
+Q1_TEXTE = "Donner la séquence de l'ARNm obtenu par la transcription de ce fragment, en précisant ses extrémités 5′ et 3′. Justifier."
+
+EX = {
+  "id": "svt_ex_ch4_transcription_1", "type": "exercice", "version": 1, "status": "published",
+  "matiere": "svt", "chapitre": "relation_gene_proteine", "cours": "svt_ch4_relation_gene_proteine",
+  "titre": "Du brin transcrit à l'ARNm : la transcription", "niveau": "facile", "duree_min": 15,
+  "origine": "Exercice original écrit pour Moalim (ni sujet du national, ni copie d'un livre).",
+  "competences": ["Écrire l'ARNm à partir du brin transcrit", "Comparer ADN et ARN", "Définir la transcription et la situer dans la cellule"],
+  "enonce": {
+    "intro": "Le document représente un fragment du brin transcrit d'un gène humain, lu dans le sens 3′ → 5′. Il est découpé en cinq triplets numérotés de 1 à 5. On s'intéresse à la première étape de l'expression de ce gène : la transcription.",
+    "intro_dit": "نقراو l'énoncé. le document فيه un fragment ديال le brin transcrit ديال un gène، lu de trois prime vers cinq prime. مقسوم en cinq triplets، numérotés de un à cinq. غادي نخدمو على la transcription، اللي هي المرحلة اللولة ديال l'expression ديال هاد le gène.",
+    "figures": [figure(TR, "Fragment du brin transcrit du gène")],
+    "donnees": [f"Brin transcrit : 3′ {TR} 5′",
+                "Complémentarité ADN → ARN : A → U ; T → A ; C → G ; G → C"],
+    "questions": [
+      {"id": "1", "texte": Q1_TEXTE,
+       "texte_dit": "question un: عطي la séquence ديال l'A R N messager اللي كيتكون ب la transcription ديال هاد le fragment، مع les extrémités cinq prime et trois prime. وبرر.",
+       "reponse": {"type": "phrase", "attendu": f"ARNm : 5′ {ARN} 3′. L'ARNm est complémentaire du brin transcrit (A → U, T → A, C → G, G → C) ; il ne contient pas de T, mais U ; il est orienté de 5′ vers 3′, en face du brin transcrit lu de 3′ vers 5′."},
+       "clavier": {"aides": ["5′", "3′", "A → U", "T → A", "C → G", "G → C", "U"], "pieges": ["T dans l'ARNm", "recopier le brin transcrit"]},
+       "aides": [
+         {"texte": "Le fragment donné est le brin TRANSCRIT : c'est lui que l'ARN polymérase lit. L'ARNm se construit en face de lui, base par base.",
+          "dit": "le fragment اللي عطاوك هو le brin transcrit: هو اللي كتقرا l'A R N polymérase. l'A R N messager كيتبنى قدامو، base ب base."},
+         {"texte": "Écris sous chaque base sa complémentaire d'ARN : A → U, T → A, C → G, G → C. L'ARNm commence par 5′, en face du 3′ du brin transcrit. Vérifie : aucun T.",
+          "dit": "تحت كل base، كتب la base ديال l'A R N اللي complémentaire معاها: A تعطي U، T تعطي A، C تعطي G، و G تعطي C. l'A R N messager كيبدا du côté cinq prime، en face du trois prime ديال le brin transcrit. ومن بعد تأكد بلي ما بقا حتى T."}],
+       "correction": correction_arn("1", TR, ARN),
+       "explication": "ex_s1", "facile": "fa_s1"},
+      {"id": "2", "texte": "En comparant le fragment d'ADN et l'ARNm obtenu, et à l'aide de vos connaissances, donner trois différences entre l'ADN et l'ARN.",
+       "texte_dit": "question deux: قارن بين le fragment ديال l'A D N و l'A R N messager اللي لقيتي، ومن بعد: donner trois différences، entre l'A D N et l'A R N.",
+       "reponse": {"type": "phrase", "attendu": ATT2}, "clavier": CLAV2,
+       "aides": [
+         {"texte": "Regarde les lettres : laquelle est dans le brin d'ADN mais jamais dans l'ARNm ? Puis pense au nombre de brins et au sucre.",
+          "dit": "شوف الحروف: شمن حرف كاين ف l'A D N، وما كاينش ف l'A R N messager؟ ومن بعد فكر ف le nombre ديال les brins، و ف le sucre."},
+         {"texte": "Compare sur trois points, ADN puis ARN à chaque fois : nombre de brins ; nom du sucre ; les quatre bases.",
+          "dit": "قارن sur trois points، ديما l'A D N ومن بعد l'A R N: le nombre ديال les brins، السمية ديال le sucre، و les quatre bases."}],
+       "correction": CORR2, "explication": "ex_s2", "facile": "fa_s2"},
+      {"id": "3", "texte": "Définir la transcription.",
+       "texte_dit": "question trois: عرف la transcription.",
+       "reponse": {"type": "phrase", "attendu": ATT3}, "clavier": CLAV3,
+       "aides": [
+         {"texte": "Ta définition doit dire : ce qui est fabriqué, à partir de quoi, par quelle enzyme, et où.",
+          "dit": "la définition ديالك خاصها تقول: شنو كيتصاوب، من شنو، ب شمن enzyme، و فين."},
+         {"texte": "Commence par « La transcription est la synthèse, dans le noyau, d'un … complémentaire du … d'un gène, par … ».",
+          "dit": "بدا هكا: la transcription est la synthèse، dans le noyau، d'un، ومن بعد كمل: شنو complémentaire ديال شنو، و ب شمن enzyme."}],
+       "correction": CORR3, "explication": "ex_s3", "facile": "fa_s3"},
+      {"id": "4", "texte": "Préciser le lieu de la transcription dans la cellule et l'enzyme qui la réalise, puis indiquer le devenir de l'ARNm formé.",
+       "texte_dit": "question quatre: حدد فين كتوقع la transcription ف la cellule، و شمن enzyme كدير، ومن بعد قول شنو كيوقع ل l'A R N messager اللي تكون.",
+       "reponse": {"type": "phrase", "attendu": ATT4}, "clavier": CLAV4,
+       "aides": [
+         {"texte": "Où se trouve l'ADN dans la cellule ? La transcription se fait là où se trouve le gène.",
+          "dit": "فين كاين l'A D N ف la cellule؟ la transcription كتوقع فين كاين le gène."},
+         {"texte": "L'enzyme porte le nom de ce qu'elle fabrique (ARN … ase). Puis : l'ARNm reste-t-il dans le noyau ? Par où passe-t-il, et vers quels organites ?",
+          "dit": "السمية ديال l'enzyme فيها شنو كتصاوب: A R N، و polymérase. ومن بعد: واش l'A R N messager كيبقى ف le noyau؟ من فين كيدوز، و لفين كيمشي؟"}],
+       "correction": CORR4, "explication": "ex_s4", "facile": "fa_s4"}
+    ]
+  },
+  "explication": {"activities": [{"id": "explication", "title": "Explication animée", "slides": [
+    {"id": "ex_s1", "slide_type": "simulation", "title": "Question 1 : l'ARNm en face du brin transcrit",
+     "screen_content": {"lead": f"En face du brin transcrit 3′ {TR} 5′, l'ARNm 5′ {ARN} 3′."},
+     "visual": {"kind": "simulation", "url": BRINS, "caption": "Le brin transcrit de l'exercice, l'ARNm construit en face"},
+     "speech_text": {"mixed": f"شوف le brin transcrit ديالنا، لتحت: {epele(TR)}، lu de trois prime vers cinq prime. لفوق، le brin non transcrit ديالو. دابا l'A R N messager كيتبنى قدام le brin transcrit، base ب base. قدام G، كنحطو C. قدام T، كنحطو A. وقدام A، كنحطو U، ماشي T. إذن l'A R N messager، de cinq prime à trois prime، هو: {epele(ARN)}. ومن بعد كيطلع تحت le brin non transcrit: نفس الحروف، غير T ولات U."},
+     "concentration": {"demarrer": "reset",
+       "centre": [{"texte": "A → U, T → A, C → G, G → C", "mot": "قدام A، كنحطو U"},
+                  {"texte": f"ARNm : 5′ {ARN} 3′", "mot": "إذن l'A R N messager"},
+                  {"texte": "aucun T dans l'ARNm", "mot": "غير T ولات U"}],
+       "pointage": [{"mot": "شوف le brin transcrit ديالنا", "commande": "set_parameters", "parametres": {"brin_transcrit": TR}},
+                    {"mot": "شوف le brin transcrit ديالنا", "commande": "play_until", "parametres": {"moment": "trois_lignes"}},
+                    {"mot": "شوف le brin transcrit ديالنا", "repere": "ligne_transcrit"},
+                    {"mot": "le brin non transcrit ديالو", "repere": "ligne_non_transcrit"},
+                    {"mot": "كيتبنى قدام le brin transcrit", "commande": "play_until", "parametres": {"moment": "chemin_transcrit"}},
+                    {"mot": "قدام A، كنحطو U", "cible": "centre:0"},
+                    {"mot": "إذن l'A R N messager", "repere": "ligne_arnm"},
+                    {"mot": "إذن l'A R N messager", "cible": "centre:1"},
+                    {"mot": "كيطلع تحت le brin non transcrit", "commande": "play_until", "parametres": {"moment": "t_devient_u"}},
+                    {"mot": "غير T ولات U", "cible": "centre:2"}]}},
+    {"id": "ex_s2", "slide_type": "simulation", "title": "Question 2 : l'ADN et l'ARN côte à côte",
+     "screen_content": {"lead": "Deux brins / un brin ; désoxyribose / ribose ; T / U."},
+     "visual": {"kind": "simulation", "url": ADNARN, "caption": "L'ADN à gauche, l'ARN à droite"},
+     "speech_text": {"mixed": "على اليسار l'A D N، وعلى اليمين l'A R N. l'A D N est formé de deux brins، و l'A R N est formé d'un seul brin. le sucre ديال l'A D N هو le désoxyribose، و le sucre ديال l'A R N هو le ribose. les bases ديال l'A D N هوما A، T، C، G. ف l'A R N، كاينين A، U، C، G: l'uracile كتاخد البلاصة ديال la thymine. هادشي علاش l'A R N messager ديالنا ما فيه حتى T."},
+     "concentration": {"demarrer": "reset",
+       "centre": [{"texte": "ADN : 2 brins ; ARN : 1 brin", "mot": "est formé d'un seul brin"},
+                  {"texte": "désoxyribose / ribose", "mot": "هو le ribose"},
+                  {"texte": "T dans l'ADN, U dans l'ARN", "mot": "l'uracile كتاخد البلاصة ديال la thymine"}],
+       "pointage": [{"mot": "على اليسار l'A D N", "commande": "play_until", "parametres": {"moment": "brins"}},
+                    {"mot": "est formé d'un seul brin", "cible": "centre:0"},
+                    {"mot": "le sucre ديال l'A D N", "commande": "play_until", "parametres": {"moment": "sucre"}},
+                    {"mot": "هو le ribose", "cible": "centre:1"},
+                    {"mot": "les bases ديال l'A D N", "commande": "play_until", "parametres": {"moment": "bases"}},
+                    {"mot": "l'uracile كتاخد البلاصة ديال la thymine", "repere": "uracile"},
+                    {"mot": "l'uracile كتاخد البلاصة ديال la thymine", "cible": "centre:2"}]}},
+    {"id": "ex_s3", "slide_type": "simulation", "title": "Question 3 : la transcription, ce qu'on voit et sa définition",
+     "screen_content": {"lead": "L'ARN polymérase lit le brin transcrit et assemble l'ARNm, dans le noyau."},
+     "visual": {"kind": "simulation", "url": TRANS, "caption": "L'ARN polymérase sur le gène"},
+     "speech_text": {"mixed": "هادا un gène ف le noyau. هادي l'A R N polymérase: كتشد ف البداية ديال le gène. كتفتح l'A D N ف جزء صغير، وكتقرا غير le brin transcrit. كتجمع des nucléotides ديال l'A R N، واحد مور واحد، complémentaires مع le brin transcrit. هكا كيطول l'A R N messager. نعاود نقرا: la transcription، est la synthèse dans le noyau، d'un A R N messager complémentaire، du brin transcrit d'un gène، par l'A R N polymérase."},
+     "concentration": {"demarrer": "reset",
+       "centre": [{"texte": "enzyme : ARN polymérase", "mot": "هادي l'A R N polymérase"},
+                  {"texte": "lit le brin transcrit seulement", "mot": "وكتقرا غير le brin transcrit"},
+                  {"texte": "définition : synthèse, dans le noyau, d'un ARNm complémentaire du brin transcrit, par l'ARN polymérase", "mot": "نعاود نقرا"}],
+       "pointage": [{"mot": "هادا un gène ف le noyau", "commande": "play_until", "parametres": {"moment": "gene"}},
+                    {"mot": "هادي l'A R N polymérase", "commande": "play_until", "parametres": {"moment": "polymerase_se_fixe"}},
+                    {"mot": "هادي l'A R N polymérase", "cible": "centre:0"},
+                    {"mot": "كتفتح l'A D N", "commande": "play_until", "parametres": {"moment": "ouverture_oeil"}},
+                    {"mot": "وكتقرا غير le brin transcrit", "cible": "centre:1"},
+                    {"mot": "كتجمع des nucléotides", "commande": "play_until", "parametres": {"moment": "allongement"}},
+                    {"mot": "هكا كيطول l'A R N messager", "commande": "play_until", "parametres": {"moment": "sens"}},
+                    {"mot": "نعاود نقرا", "cible": "centre:2"}]}},
+    {"id": "ex_s4", "slide_type": "simulation", "title": "Question 4 : dans le noyau, puis l'ARNm sort",
+     "screen_content": {"lead": "Transcription dans le noyau ; l'ARNm sort par un pore ; l'ADN reste."},
+     "visual": {"kind": "simulation", "url": NOYAU, "caption": "La cellule : noyau, pores, cytoplasme"},
+     "speech_text": {"mixed": "شوف la cellule كاملة. l'A R N messager كيتكون ف le noyau، حيت تما كاين l'A D N، و l'enzyme هي l'A R N polymérase. من بعد، l'A R N messager كيخرج من un pore nucléaire، وكيمشي ل le cytoplasme، فين كاينين les ribosomes. أما l'A D N، كيبقى ديما ف le noyau."},
+     "concentration": {"demarrer": "reset",
+       "centre": [{"texte": "lieu : le noyau ; enzyme : ARN polymérase", "mot": "كيتكون ف le noyau"},
+                  {"texte": "l'ARNm sort par un pore → cytoplasme (ribosomes)", "mot": "كيخرج من un pore nucléaire"},
+                  {"texte": "l'ADN reste dans le noyau", "mot": "كيبقى ديما ف le noyau"}],
+       "pointage": [{"mot": "كيتكون ف le noyau", "commande": "play_until", "parametres": {"moment": "arnm_dans_noyau"}},
+                    {"mot": "كيتكون ف le noyau", "cible": "centre:0"},
+                    {"mot": "كيخرج من un pore nucléaire", "commande": "play_until", "parametres": {"moment": "sortie_pore"}},
+                    {"mot": "كيخرج من un pore nucléaire", "cible": "centre:1"},
+                    {"mot": "فين كاينين les ribosomes", "commande": "play_until", "parametres": {"moment": "arnm_cytoplasme"}},
+                    {"mot": "كيبقى ديما ف le noyau", "commande": "play_until", "parametres": {"moment": "adn_reste"}},
+                    {"mot": "كيبقى ديما ف le noyau", "cible": "centre:2"}]}}
+  ]}]},
+  "facile": {"activities": [{"id": "facile", "title": "Plus facile, pour s'entraîner", "slides": [
+    qcm_facile("fa_s1", "Plus facile : trois triplets seulement", "نتمرنو، avec trois triplets seulement.",
+      "Le brin transcrit 3′ GGT CTA ACG 5′ donne l'ARNm…", ["5′ GGU CUA ACG 3′", "5′ CCA GAT TGC 3′", "5′ CCA GAU UGC 3′"], 2, {
+        "2": {"juste": rep("برافو! كل base عندها la complémentaire ديالها: G تعطي C، T تعطي A، و A تعطي U. وما كاين حتى T.", "Juste : complémentaire du brin transcrit, U en face de A, aucun T.")},
+        "0": {"1": rep("ما تقلقش. هنا غير نقلتي le brin transcrit وبدلتي T ب U. هادي الطريقة ديال le brin non transcrit. شنو la complémentaire ديال G؟ عاود اختار.", "Tu as recopié le brin transcrit (règle du brin NON transcrit). Quelle est la complémentaire de G ? Réessaie."),
+              "2": rep("الجواب هو C C A، G A U، U G C. le brin اللي عطاوك transcrit، إذن كندير la complémentarité.", "Réponse : 5′ CCA GAU UGC 3′ : le brin donné est transcrit, on prend les complémentaires.")},
+        "1": {"1": rep("قريب! la complémentarité صحيحة، ولكن شوف: واش كاين T ف l'A R N؟ عاود اختار.", "La complémentarité est bonne, mais y a-t-il des T dans l'ARN ? Réessaie."),
+              "2": rep("الجواب هو C C A، G A U، U G C. ف l'A R N، قدام A كنكتبو U، ماشي T.", "Réponse : 5′ CCA GAU UGC 3′ : en face de A, l'ARN met U, jamais T.")}},
+      "Le brin transcrit trois prime, G G T، C T A، A C G، cinq prime، كيعطي شمن A R N messager؟"),
+    vrai_faux("fa_s2", "Plus facile : ADN ou ARN ?", "Vrai ou faux : compare l'ADN et l'ARN.",
+      "سؤال ساهل: قول واش صحيح ولا خطأ، على l'A D N و l'A R N.", [
+        ("L'ARN est formé d'un seul brin.", True, "Vrai : l'ADN a deux brins, l'ARN un seul."),
+        ("Le sucre de l'ARN est le désoxyribose.", False, "Faux : le sucre de l'ARN est le ribose ; le désoxyribose est celui de l'ADN."),
+        ("L'ARN contient la thymine (T).", False, "Faux : dans l'ARN, l'uracile (U) remplace la thymine."),
+        ("En face d'un A du brin transcrit, l'ARN reçoit un U.", True, "Vrai : A du brin transcrit → U dans l'ARNm.")]),
+    qcm_facile("fa_s3", "Plus facile : la bonne définition", "سؤال ساهل: اختار la définition ديال la transcription.",
+      "La transcription est…", ["la synthèse d'une protéine à partir de l'ARNm, sur les ribosomes", "la synthèse, dans le noyau, d'un ARNm complémentaire du brin transcrit d'un gène, par l'ARN polymérase", "la copie des deux brins de l'ADN avant la division de la cellule"], 1, {
+        "1": {"juste": rep("برافو! la transcription كتصاوب l'A R N messager ف le noyau، complémentaire ديال le brin transcrit، ب l'A R N polymérase.", "Juste : synthèse d'un ARNm complémentaire du brin transcrit, dans le noyau, par l'ARN polymérase.")},
+        "0": {"1": rep("لا، هادي la traduction: كتصاوب la protéine ف les ribosomes. la transcription كتصاوب شنو؟ عاود اختار.", "Ça, c'est la traduction (protéine, ribosomes). Que fabrique la transcription ? Réessaie."),
+              "2": rep("الجواب هو la synthèse ديال l'A R N messager ف le noyau، ب l'A R N polymérase. la protéine كتجي من بعد، ف la traduction.", "Réponse : synthèse d'un ARNm dans le noyau par l'ARN polymérase ; la protéine vient après, à la traduction.")},
+        "2": {"1": rep("لا، هادي la réplication ديال l'A D N، قبل la division. la transcription كتقرا un seul brin وكتعطي شنو؟ عاود اختار.", "Ça, c'est la réplication. La transcription lit un seul brin et donne quoi ? Réessaie."),
+              "2": rep("الجواب هو la synthèse ديال l'A R N messager. la réplication هي اللي كتنسخ les deux brins ديال l'A D N.", "Réponse : la synthèse d'un ARNm ; la copie des deux brins, c'est la réplication.")}},
+      "La transcription، شنو هي؟"),
+    association("fa_s4", "Plus facile : où, par qui, et après ?", "Relie chaque question à sa réponse.",
+      "سؤال ساهل: ربط كل سؤال مع الجواب ديالو.", "Relie chaque élément de la transcription à ce qui lui correspond.",
+      [("1", "Lieu de la transcription"), ("2", "Enzyme de la transcription"), ("3", "Devenir de l'ARNm formé")],
+      [("a", "Le noyau"), ("b", "L'ARN polymérase"), ("c", "Il sort par les pores vers le cytoplasme"), ("d", "L'ADN polymérase")],
+      {"1": "a", "2": "b", "3": "c"},
+      {"1-a": (True, "Oui : la transcription se fait dans le noyau, là où est l'ADN.", "برافو: la transcription كتوقع ف le noyau، فين كاين l'A D N."),
+       "1-b": (False, "L'ARN polymérase est une enzyme, pas un lieu.", "لا، l'A R N polymérase هي enzyme، ماشي بلاصة."),
+       "1-c": (False, "Ceci décrit ce que devient l'ARNm, pas le lieu de sa synthèse.", "لا، هادي شنو كيوقع ل l'A R N messager من بعد، ماشي فين كيتكون."),
+       "1-d": (False, "L'ADN polymérase est une enzyme, et elle sert à la réplication.", "لا، l'A D N polymérase هي enzyme، وكتخدم ف la réplication."),
+       "2-a": (False, "Le noyau est un lieu ; on demande une enzyme.", "لا، le noyau هو بلاصة. السؤال على enzyme."),
+       "2-b": (True, "Oui : l'ARN polymérase lit le brin transcrit et assemble l'ARNm.", "برافو: l'A R N polymérase كتقرا le brin transcrit وكتجمع l'A R N messager."),
+       "2-c": (False, "Ceci est le devenir de l'ARNm, pas une enzyme.", "لا، هادا شنو كيوقع ل l'A R N messager، ماشي enzyme."),
+       "2-d": (False, "L'ADN polymérase copie l'ADN (réplication) ; la transcription fabrique de l'ARN.", "لا، l'A D N polymérase كتنسخ l'A D N، ف la réplication. la transcription كتصاوب l'A R N."),
+       "3-a": (False, "L'ARNm est formé dans le noyau, mais il n'y reste pas.", "لا، l'A R N messager كيتكون ف le noyau، ولكن ما كيبقاش فيه."),
+       "3-b": (False, "L'ARN polymérase fabrique l'ARNm ; on demande ce qu'il devient.", "لا، l'A R N polymérase هي اللي كتصاوبو. السؤال: شنو كيوقع ليه من بعد؟"),
+       "3-c": (True, "Oui : l'ARNm sort par les pores nucléaires vers les ribosomes du cytoplasme.", "برافو: l'A R N messager كيخرج من les pores، ل les ribosomes ف le cytoplasme."),
+       "3-d": (False, "L'ADN polymérase n'a rien à voir avec le devenir de l'ARNm.", "لا، l'A D N polymérase ما عندها علاقة مع l'A R N messager.")},
+      ("(1 ; a) (2 ; b) (3 ; c) : noyau, ARN polymérase, sortie par les pores. L'ADN polymérase est celle de la réplication.",
+       "le noyau، l'A R N polymérase، ومن بعد كيخرج من les pores. أما l'A D N polymérase، ديال la réplication."))
+  ]}]},
+  "similaire": {
+    "id": "svt_ex_ch4_transcription_1_b", "titre": "Même exercice, autres données",
+    "enonce": {
+      "intro": "Le document représente un fragment du brin transcrit d'un autre gène, lu dans le sens 3′ → 5′, découpé en cinq triplets numérotés de 1 à 5.",
+      "intro_dit": "نفس التمرين، ب gène آخر. هادا un fragment ديال le brin transcrit، lu de trois prime vers cinq prime، مقسوم en cinq triplets.",
+      "figures": [figure(TR_B, "Fragment du brin transcrit d'un autre gène")],
+      "donnees": [f"Brin transcrit : 3′ {TR_B} 5′", "Complémentarité ADN → ARN : A → U ; T → A ; C → G ; G → C"],
+      "questions": [
+        {"id": "1", "texte": Q1_TEXTE,
+         "reponse": {"type": "phrase", "attendu": f"ARNm : 5′ {ARN_B} 3′. L'ARNm est complémentaire du brin transcrit (A → U, T → A, C → G, G → C) ; il ne contient pas de T, mais U."},
+         "clavier": {"aides": ["5′", "3′", "A → U", "T → A", "C → G", "G → C"], "pieges": ["T dans l'ARNm"]},
+         "correction": correction_arn("1", TR_B, ARN_B)},
+        {"id": "2", "texte": "En comparant le fragment d'ADN et l'ARNm obtenu, et à l'aide de vos connaissances, donner trois différences entre l'ADN et l'ARN.",
+         "reponse": {"type": "phrase", "attendu": ATT2}, "clavier": CLAV2, "correction": CORR2},
+        {"id": "3", "texte": "Définir la transcription.",
+         "reponse": {"type": "phrase", "attendu": ATT3}, "clavier": CLAV3, "correction": CORR3},
+        {"id": "4", "texte": "Préciser le lieu de la transcription dans la cellule et l'enzyme qui la réalise, puis indiquer le devenir de l'ARNm formé.",
+         "reponse": {"type": "phrase", "attendu": ATT4}, "clavier": CLAV4, "correction": CORR4}
+      ]}}
+}
+ecrire(EX, sys.argv[1])
