@@ -70,6 +70,10 @@ export default function ExercicePage() {
   const [vues, setVues] = useState({ explications: 0, faciles: 0 });
   const [ouvert, setOuvert] = useState<Ouvert>(null);
   const [enonceOuvert, setEnonceOuvert] = useState(true);
+  // mode sombre : choisi en haut de la page, gardé dans ce navigateur
+  const [sombre, setSombre] = useState(() => { try { return localStorage.getItem('moalim:exercices:sombre') === '1'; } catch { return false; } });
+  useEffect(() => { try { localStorage.setItem('moalim:exercices:sombre', sombre ? '1' : '0'); } catch { /* stockage refusé */ } }, [sombre]);
+  const NUIT: React.CSSProperties | undefined = sombre ? { filter: 'invert(0.9) hue-rotate(180deg)' } : undefined;
   // le clavier ouvert prend sa place à droite (en bas sur téléphone) : il ne cache jamais le champ à remplir
   const clavierOuvert = useClavier().ouvert && !ouvert;
 
@@ -147,18 +151,20 @@ export default function ExercicePage() {
   const LIGNES = { lineHeight: '36px', backgroundImage: 'repeating-linear-gradient(transparent 0 35px, #9bb3d6 35px 36px)' };
 
   return (
-    <div className="flex h-[100dvh] w-screen flex-col bg-[#d6d6d0] text-black" style={{ fontFamily: 'system-ui, sans-serif' }}>
+    <div className={`flex h-[100dvh] w-screen flex-col text-black ${sombre ? 'bg-[#1c1c22]' : 'bg-[#d6d6d0]'}`} style={{ fontFamily: 'system-ui, sans-serif' }}>
       {/* En-tête */}
-      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-400 bg-white px-3 py-2">
+      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-400 bg-white px-3 py-2" style={NUIT}>
         <button onClick={() => { jouer(undefined); navigate('/exercices'); }} className={BTN}>← Exercices</button>
         <h1 className="min-w-0 flex-1 truncate text-lg font-semibold">{mode === 'similaire' ? ex.similaire.titre : ex.titre}</h1>
         {mode === 'similaire' && <span className="rounded border border-violet-700 px-2 py-0.5 text-sm text-violet-800">Exercice semblable : le tuteur corrige seulement</span>}
         <span className="rounded border border-black px-2 py-0.5 text-sm font-semibold">Note : {pts(note)} / {pts(total)}</span>
         <button onClick={() => setOuvert({ genre: 'feuille' })} className={BTN}>📝 Ma copie</button>
+        <button onClick={() => setSombre(x => !x)} className={BTN} aria-pressed={sombre} title={sombre ? 'Passer en mode clair' : 'Passer en mode sombre'}>
+          <span style={sombre ? { filter: 'invert(1) hue-rotate(180deg)' } : undefined}>{sombre ? '☀️' : '🌙'}</span> {sombre ? 'Clair' : 'Sombre'}</button>
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3 transition-[padding] lg:flex-row lg:overflow-hidden"
-        style={{ paddingRight: largeurClavier(clavierOuvert) || undefined, paddingBottom: hauteurClavierTelephone(clavierOuvert) || undefined }}>
+        style={{ paddingRight: largeurClavier(clavierOuvert) || undefined, paddingBottom: hauteurClavierTelephone(clavierOuvert) || undefined, ...NUIT }}>
         {/* Le sujet : feuille blanche, écriture noire, comme à l'examen */}
         <section className="shrink-0 bg-white p-4 text-black shadow-md ring-1 ring-black/10 sm:p-6 lg:w-[48%] lg:overflow-y-auto" style={{ fontFamily: SUJET }}>
           <table className="mb-3 w-full border-collapse text-[15px]" style={{ fontFamily: 'system-ui, sans-serif' }}>
@@ -309,7 +315,7 @@ export default function ExercicePage() {
           </div>
         </div>)}
 
-      {ouvert?.genre === 'feuille' && <Feuille ex={ex} enonce={enonce} mode={mode} onFermer={() => setOuvert(null)} />}
+      {ouvert?.genre === 'feuille' && <div className="fixed inset-0 z-50" style={NUIT}><Feuille ex={ex} enonce={enonce} mode={mode} onFermer={() => setOuvert(null)} /></div>}
       {!ouvert && <ClavierFlottant droite={0} bas={16} />}
     </div>
   );
