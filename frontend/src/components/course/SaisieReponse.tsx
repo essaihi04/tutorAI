@@ -130,7 +130,7 @@ export function BoutonMicro({ onTexte, onErreur, disabled, petit = false }: {
  * Le champ d'une réponse libre (question sans options, réponse directe d'une simulation) : écrit, parlé, photographié,
  * avec le clavier scientifique. « Répondre » n'envoie que ce que l'élève a relu.
  */
-export default function ChampReponse({ onEnvoyer, disabled, contexte, placeholder = 'Ta réponse…', libelle = 'Répondre', clavierAuto = false, suggestions, actif = true, lignes }: {
+export default function ChampReponse({ onEnvoyer, disabled, contexte, placeholder = 'Ta réponse…', libelle = 'Répondre', clavierAuto = false, suggestions, actif = true, lignes, papier = false }: {
   onEnvoyer: (texte: string) => void; disabled?: boolean; contexte: ContexteOcr; placeholder?: string; libelle?: string;
   /** le clavier flottant s'ouvre seul quand ce champ apparaît (question à réponse libre, « retrouver ») — 12 novembre 2026 */
   clavierAuto?: boolean;
@@ -141,6 +141,8 @@ export default function ChampReponse({ onEnvoyer, disabled, contexte, placeholde
   /** (22 novembre 2026, partie Exercices) un grand champ de rédaction : ce nombre de lignes, texte plus gros, étirable ;
    *  Entrée passe à la ligne, le bouton envoie */
   lignes?: number;
+  /** (22 novembre 2026) la feuille de réponses de l'examen : champ ligné, écriture noire, boutons sombres */
+  papier?: boolean;
 }) {
   const [texte, setTexte] = useState('');
   const [clavierDessous, setClavier] = useState(false);
@@ -162,11 +164,15 @@ export default function ChampReponse({ onEnvoyer, disabled, contexte, placeholde
       <div className="flex gap-2">
         <textarea ref={champ} value={texte} onChange={e => setTexte(e.target.value)} onFocus={toucher} disabled={disabled} placeholder={placeholder} rows={lignes ?? 2} dir="auto"
           onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !lignes) { e.preventDefault(); envoyer(); } }}
-          className={`min-w-0 flex-1 rounded-lg border border-white/20 bg-black/30 px-3 py-2 outline-none focus:border-cyan-300 ${lignes ? 'resize-y text-xl leading-relaxed' : 'resize-none text-base'}`} />
-        <button type="button" onClick={envoyer} disabled={disabled || !texte.trim()} className="self-stretch rounded-lg bg-cyan-500/30 px-4 py-2 text-sm disabled:opacity-40">{libelle}</button>
+          className={papier
+            ? 'min-w-0 flex-1 resize-y border-0 bg-transparent px-1 text-[21px] text-black outline-none placeholder:text-slate-400'
+            : `min-w-0 flex-1 rounded-lg border border-white/20 bg-black/30 px-3 py-2 outline-none focus:border-cyan-300 ${lignes ? 'resize-y text-xl leading-relaxed' : 'resize-none text-base'}`}
+          style={papier ? { fontFamily: "'Patrick Hand', 'Caveat', cursive", lineHeight: '36px', backgroundImage: 'repeating-linear-gradient(transparent 0 35px, #9bb3d6 35px 36px)', backgroundAttachment: 'local', paddingTop: 0 } : undefined} />
+        <button type="button" onClick={envoyer} disabled={disabled || !texte.trim()}
+          className={papier ? 'self-end rounded-md border-2 border-black bg-black px-4 py-2 text-sm font-semibold text-white disabled:opacity-30' : 'self-stretch rounded-lg bg-cyan-500/30 px-4 py-2 text-sm disabled:opacity-40'}>{libelle}</button>
       </div>
       {!disabled && (
-        <div className="mt-2 flex flex-wrap items-center gap-2">
+        <div className={`mt-2 flex flex-wrap items-center gap-2 ${papier ? '[&_button]:!bg-slate-800 [&_button]:!text-white [&_label]:!bg-slate-800 [&_label]:!text-white' : ''}`}>
           <BoutonMicro petit onTexte={ajouter} onErreur={setErreur} />
           <BoutonPhoto petit contexte={contexte} onTexte={ajouter} onErreur={setErreur} />
           {avecFlottant
@@ -176,8 +182,8 @@ export default function ChampReponse({ onEnvoyer, disabled, contexte, placeholde
         </div>
       )}
       {clavierDessous && !avecFlottant && !disabled && <ClavierScientifique cible={champ} valeur={texte} onChange={setTexte} onFermer={() => setClavier(false)} />}
-      {aVerifier && !disabled && <p className="mt-1 text-xs text-sky-200/80">Relis ce qui a été lu ou entendu ; corrige si besoin, puis {libelle}.</p>}
-      {erreur && <p className="mt-1 text-xs text-rose-200">{erreur}</p>}
+      {aVerifier && !disabled && <p className={`mt-1 text-xs ${papier ? 'text-sky-800' : 'text-sky-200/80'}`}>Relis ce qui a été lu ou entendu ; corrige si besoin, puis {libelle}.</p>}
+      {erreur && <p className={`mt-1 text-xs ${papier ? 'text-rose-700' : 'text-rose-200'}`}>{erreur}</p>}
     </div>
   );
 }

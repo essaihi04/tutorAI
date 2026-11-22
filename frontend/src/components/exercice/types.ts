@@ -53,7 +53,18 @@ export interface QuestionExercice {
   explication?: string;
   /** id de la diapositive « plus facile » (QCM, vrai/faux, association) dans `facile` */
   facile?: string;
+  /** barème de la question, comme dans la marge du sujet (0,25 à 2 points) ; sinon `pointsDe` l'estime */
+  points?: number;
 }
+
+/** Le barème d'une question (22 novembre 2026) : `points` s'il est donné, sinon d'après la longueur de la rédaction attendue. */
+export function pointsDe(q: QuestionExercice): number {
+  if (typeof q.points === 'number' && q.points > 0) return q.points;
+  const n = q.correction?.lignes?.length || 1;
+  return n <= 2 ? 0.5 : n === 3 ? 0.75 : n <= 5 ? 1 : 1.25;
+}
+/** 0.75 → « 0,75 » */
+export const pts = (x: number) => String(Math.round(x * 100) / 100).replace('.', ',');
 
 export interface EnonceExercice {
   intro: string;

@@ -18,10 +18,13 @@ import ChampReponse, { BoutonPhoto } from '../components/course/SaisieReponse';
 import ClavierFlottant, { clavier, hauteurClavierTelephone, largeurClavier, useClavier } from '../components/course/ClavierFlottant';
 import { Touches, type MatiereClavier } from '../components/course/ClavierScientifique';
 import { inscrireVoix, taireTout } from '../components/course/voixUnique';
-import type { EnonceExercice, Exercice, QuestionExercice } from '../components/exercice/types';
+import { pointsDe, pts, type EnonceExercice, type Exercice, type QuestionExercice } from '../components/exercice/types';
 import { jugerValeur } from '../components/exercice/juger';
 
 const CRAIE = "'Patrick Hand', 'Caveat', cursive";
+/** le sujet imprimé de l'examen (22 novembre 2026 : feuille blanche, écriture noire) */
+const SUJET = "'Times New Roman', Georgia, serif";
+const NIVEAU: Record<string, string> = { facile: 'Facile', moyen: 'Moyen', difficile: 'Supérieur' };
 const MATIERE_CLAVIER: Record<Exercice['matiere'], MatiereClavier> = { physique: 'physique-chimie', mathematiques: 'maths', svt: 'svt' };
 const NOM_MATIERE: Record<Exercice['matiere'], string> = { physique: 'Physique-chimie', mathematiques: 'Mathématiques', svt: 'SVT' };
 
@@ -130,138 +133,174 @@ export default function ExercicePage() {
     return { finies, justes, total: enonce.questions.length, aidesTotal };
   }, [enonce, etats, aides, mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (erreur) return <Plein><p className="text-white/70">{erreur}</p><button className="mt-4 underline" onClick={() => navigate('/exercices')}>Retour aux exercices</button></Plein>;
-  if (!ex || !enonce || !q || !bilan) return <Plein><p className="text-white/60">Chargement de l’exercice…</p></Plein>;
+  if (erreur) return <Plein><p className="text-slate-700">{erreur}</p><button className="mt-4 underline" onClick={() => navigate('/exercices')}>Retour aux exercices</button></Plein>;
+  if (!ex || !enonce || !q || !bilan) return <Plein><p className="text-slate-600">Chargement de l’exercice…</p></Plein>;
   const nbAides = aides[cle(q.id)] || 0;
   const fini = bilan.finies === bilan.total;
   const conseilSemblable = mode === 'exercice' && fini && (bilan.justes < bilan.total || bilan.aidesTotal >= bilan.total || vues.explications > 0);
 
+  const total = enonce.questions.reduce((n, x) => n + pointsDe(x), 0);
+  const note = enonce.questions.reduce((n, x) => n + (etats[cle(x.id)]?.juste === true ? pointsDe(x) : 0), 0);
+  const ptsQ = pointsDe(q);
+  const noteQ = etat.juste === true ? ptsQ : etat.juste === false ? 0 : null;
+  const BTN = 'rounded-md border border-slate-400 bg-white px-3 py-1.5 text-sm text-slate-900 hover:bg-slate-100';
+  const LIGNES = { lineHeight: '36px', backgroundImage: 'repeating-linear-gradient(transparent 0 35px, #9bb3d6 35px 36px)' };
+
   return (
-    <div className="flex h-[100dvh] w-screen flex-col bg-[#0a0a18] text-white" style={{ fontFamily: CRAIE }}>
+    <div className="flex h-[100dvh] w-screen flex-col bg-[#d6d6d0] text-black" style={{ fontFamily: 'system-ui, sans-serif' }}>
       {/* En-tête */}
-      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-white/10 px-3 py-2">
-        <button onClick={() => { jouer(undefined); navigate('/exercices'); }} className="rounded-full bg-white/10 px-3 py-1 text-sm hover:bg-white/20" style={{ fontFamily: 'system-ui' }}>← Exercices</button>
-        <h1 className="min-w-0 flex-1 truncate text-xl text-amber-100">{mode === 'similaire' ? ex.similaire.titre : ex.titre}</h1>
-        <span className="rounded-full bg-white/10 px-3 py-0.5 text-sm text-white/70">{NOM_MATIERE[ex.matiere]}{ex.duree_min ? ` · ~${ex.duree_min} min` : ''}</span>
-        {mode === 'similaire' && <span className="rounded-full bg-violet-500/30 px-3 py-0.5 text-sm">Exercice semblable : le tuteur corrige seulement</span>}
-        <button onClick={() => setOuvert({ genre: 'feuille' })} className="rounded-full bg-amber-200/90 px-3 py-1 text-sm text-slate-900 hover:bg-amber-100" style={{ fontFamily: 'system-ui' }}>📝 Ma feuille</button>
+      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-400 bg-white px-3 py-2">
+        <button onClick={() => { jouer(undefined); navigate('/exercices'); }} className={BTN}>← Exercices</button>
+        <h1 className="min-w-0 flex-1 truncate text-lg font-semibold">{mode === 'similaire' ? ex.similaire.titre : ex.titre}</h1>
+        {mode === 'similaire' && <span className="rounded border border-violet-700 px-2 py-0.5 text-sm text-violet-800">Exercice semblable : le tuteur corrige seulement</span>}
+        <span className="rounded border border-black px-2 py-0.5 text-sm font-semibold">Note : {pts(note)} / {pts(total)}</span>
+        <button onClick={() => setOuvert({ genre: 'feuille' })} className={BTN}>📝 Ma copie</button>
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3 transition-[padding] lg:flex-row lg:overflow-hidden"
         style={{ paddingRight: largeurClavier(clavierOuvert) || undefined, paddingBottom: hauteurClavierTelephone(clavierOuvert) || undefined }}>
-        {/* L'énoncé */}
-        <section className={`rounded-2xl border border-white/10 bg-[#13132a] p-4 lg:w-[46%] lg:overflow-y-auto ${enonceOuvert ? '' : 'lg:w-auto'}`}>
-          <div className="mb-2 flex items-center gap-2">
-            <h2 className="flex-1 text-lg text-cyan-200">📄 Énoncé</h2>
-            {enonce.intro_audio && <button onClick={() => jouer(enonce.intro_audio)} className="rounded-full bg-white/10 px-3 py-0.5 text-sm hover:bg-white/20" style={{ fontFamily: 'system-ui' }}>🔊 Écouter</button>}
-            <button onClick={() => setEnonceOuvert(o => !o)} className="rounded-full bg-white/10 px-3 py-0.5 text-sm lg:hidden" style={{ fontFamily: 'system-ui' }}>{enonceOuvert ? 'Replier' : 'Voir l’énoncé'}</button>
+        {/* Le sujet : feuille blanche, écriture noire, comme à l'examen */}
+        <section className="shrink-0 bg-white p-4 text-black shadow-md ring-1 ring-black/10 sm:p-6 lg:w-[48%] lg:overflow-y-auto" style={{ fontFamily: SUJET }}>
+          <table className="mb-3 w-full border-collapse text-[15px]" style={{ fontFamily: 'system-ui, sans-serif' }}>
+            <tbody><tr>
+              <td className="border border-black px-2 py-1 font-semibold">{NOM_MATIERE[ex.matiere]}</td>
+              <td className="border border-black px-2 py-1 text-center">Exercice — {NIVEAU[ex.niveau || ''] || ''}{ex.duree_min ? ` · ~${ex.duree_min} min` : ''}</td>
+              <td className="border border-black px-2 py-1 text-center font-semibold">{pts(total)} points</td>
+            </tr></tbody>
+          </table>
+          <div className="mb-2 flex items-center gap-2" style={{ fontFamily: 'system-ui, sans-serif' }}>
+            <h2 className="flex-1 text-lg font-bold underline underline-offset-4">Énoncé</h2>
+            {enonce.intro_audio && <button onClick={() => jouer(enonce.intro_audio)} className={BTN}>🔊 Écouter</button>}
+            <button onClick={() => setEnonceOuvert(o => !o)} className={`${BTN} lg:hidden`}>{enonceOuvert ? 'Replier' : 'Voir l’énoncé'}</button>
           </div>
           {enonceOuvert && (<>
-            <p className="text-[17px] leading-relaxed text-white/90"><Formule t={enonce.intro} /></p>
-            {!!enonce.figures?.length && <div className="my-3"><FiguresCahier figures={enonce.figures} /></div>}
+            <p className="text-[17px] leading-relaxed"><Formule t={enonce.intro} /></p>
+            {/* les dessins sont à la craie claire : inversés, ils deviennent noirs sur la feuille, couleurs gardées */}
+            {!!enonce.figures?.length && <div className="my-3" style={{ filter: 'invert(1) hue-rotate(180deg)' }}><FiguresCahier figures={enonce.figures} /></div>}
             {!!enonce.donnees?.length && (
-              <div className="mt-2 rounded-xl bg-white/5 p-3 text-[16px]">
-                <p className="mb-1 text-amber-200">Données</p>
-                <ul className="list-disc pl-5 text-white/85">{enonce.donnees.map((d, i) => <li key={i}><Formule t={d} /></li>)}</ul>
+              <div className="mt-2 border border-black p-3 text-[16px]">
+                <p className="mb-1 font-bold">Données :</p>
+                <ul className="list-disc pl-5">{enonce.donnees.map((d, i) => <li key={i}><Formule t={d} /></li>)}</ul>
               </div>)}
-            <ol className="mt-3 space-y-1 text-[16px]">
-              {enonce.questions.map((x, i) => {
-                const e = etats[cle(x.id)];
-                const marque = e?.juste === true ? '✔' : e?.juste === false ? '✘' : e?.correction ? '•' : '';
-                return (
-                  <li key={x.id}>
-                    <button onClick={() => setQi(i)} className={`w-full rounded-lg px-2 py-1 text-left ${i === qi ? 'bg-amber-200/15 text-amber-100' : 'text-white/80 hover:bg-white/5'}`}>
-                      <span className="mr-1 text-cyan-200">{x.id}.</span><Formule t={x.texte} /> <span className="text-emerald-300">{marque}</span>
-                    </button>
-                  </li>);
-              })}
-            </ol>
+            <table className="mt-3 w-full border-collapse text-[16px]">
+              <tbody>
+                {enonce.questions.map((x, i) => {
+                  const e = etats[cle(x.id)];
+                  const marque = e?.juste === true ? '✔' : e?.juste === false ? '✘' : '';
+                  return (
+                    <tr key={x.id} onClick={() => setQi(i)} className={`cursor-pointer align-top ${i === qi ? 'bg-amber-100' : 'hover:bg-slate-50'}`}>
+                      <td className="w-16 border-r border-slate-400 py-1 pr-2 text-right text-[14px] font-semibold" style={{ fontFamily: 'system-ui, sans-serif' }}>{pts(pointsDe(x))} pt</td>
+                      <td className="py-1 pl-2"><span className="font-bold">{x.id}.</span> <Formule t={x.texte} /> <span className={e?.juste ? 'text-emerald-700' : 'text-rose-700'}>{marque}</span></td>
+                    </tr>);
+                })}
+              </tbody>
+            </table>
           </>)}
         </section>
 
-        {/* La question en cours */}
-        <section className="flex min-h-0 flex-1 flex-col rounded-2xl border border-white/10 bg-[#101a14] p-4 lg:overflow-y-auto">
-          <div className="mb-2 flex items-center gap-2 text-sm text-white/50" style={{ fontFamily: 'system-ui' }}>
-            {enonce.questions.map((x, i) => <button key={x.id} onClick={() => setQi(i)} className={`h-2.5 w-2.5 rounded-full ${i === qi ? 'bg-amber-200' : etats[cle(x.id)]?.juste ? 'bg-emerald-400' : 'bg-white/25'}`} aria-label={`Question ${x.id}`} />)}
+        {/* La feuille de réponses : cadre, marge du barème, lignes */}
+        <section className="flex min-h-0 flex-1 flex-col bg-white text-black shadow-md ring-1 ring-black/10 lg:overflow-y-auto">
+          <table className="w-full shrink-0 border-collapse text-[15px]">
+            <tbody><tr>
+              <td className="border-2 border-black px-3 py-2 font-bold">Question {q.id}</td>
+              <td className="w-32 border-2 border-black px-2 py-2 text-center">Barème : <b>{pts(ptsQ)}</b></td>
+              <td className="w-32 border-2 border-black px-2 py-2 text-center">Note : <b className={noteQ === null ? '' : noteQ > 0 ? 'text-emerald-700' : 'text-rose-700'}>{noteQ === null ? '……' : pts(noteQ)}</b></td>
+            </tr></tbody>
+          </table>
+          <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-300 px-3 py-1.5 text-sm text-slate-600">
+            {enonce.questions.map((x, i) => <button key={x.id} onClick={() => setQi(i)} className={`h-6 min-w-6 rounded border px-1 text-xs ${i === qi ? 'border-black bg-black text-white' : etats[cle(x.id)]?.juste ? 'border-emerald-700 text-emerald-700' : etats[cle(x.id)]?.juste === false ? 'border-rose-700 text-rose-700' : 'border-slate-400'}`} aria-label={`Question ${x.id}`}>{x.id}</button>)}
             <span className="ml-1">Question {qi + 1} / {enonce.questions.length}</span>
           </div>
-          <p className="text-xl text-amber-100"><span className="text-cyan-200">{q.id}.</span> <Formule t={q.texte} /></p>
-          {q.texte_audio && <button onClick={() => jouer(q.texte_audio)} className="mt-1 self-start rounded-full bg-white/10 px-3 py-0.5 text-sm hover:bg-white/20" style={{ fontFamily: 'system-ui' }}>🔊 La question</button>}
 
-          {/* Les aides du tuteur, une à une */}
-          {mode === 'exercice' && nbAides > 0 && (
-            <div className="mt-3 space-y-2">
-              {q.aides!.slice(0, nbAides).map((a, i) => (
-                <div key={i} className="rounded-xl border border-cyan-300/30 bg-cyan-400/10 p-3 text-[17px]">
-                  <span className="mr-1">🙋</span>Aide {i + 1} : <Formule t={a.texte} />
-                  {a.audio && <button onClick={() => jouer(a.audio)} className="ml-2 text-sm text-cyan-200 underline" style={{ fontFamily: 'system-ui' }}>réécouter</button>}
-                </div>))}
-            </div>)}
+          <div className="flex min-h-0 flex-1">
+            {/* la marge, comme sur la copie d'examen : le barème de la question, puis la note */}
+            <div className="w-14 shrink-0 border-r-2 border-rose-400 pt-3 text-center sm:w-16">
+              <span className="inline-block rounded border border-black px-1 text-[13px] font-semibold">{pts(ptsQ)}</span>
+              {noteQ !== null && <p className={`mt-2 text-lg font-bold ${noteQ > 0 ? 'text-emerald-700' : 'text-rose-700'}`} style={{ fontFamily: CRAIE }}>{pts(noteQ)}</p>}
+            </div>
 
-          {/* La réponse */}
-          {!etat.correction && etat.juste !== true && (
-            <div className="mt-3">
-              <ChampReponse key={cle(q.id)} onEnvoyer={t => void repondre(t)} libelle="Vérifier" lignes={q.reponse.type === 'valeur' ? 3 : 6}
-                placeholder={q.reponse.type === 'valeur' ? `${q.reponse.grandeur || 'résultat'} = … ${q.reponse.unite || ''}` : 'Ta réponse, rédigée et justifiée…'}
-                contexte={{ deck_id: ex.id, title: ex.titre, enonce: q.texte, matiere: ex.matiere, chapitre: ex.chapitre }}
-                suggestions={{ deck_id: ex.id, slide_id: `${mode}_${q.id}`, enonce: q.texte, clavier: q.clavier }} />
-            </div>)}
-          {etat.retour && <p className={`mt-3 rounded-xl p-3 text-[17px] ${etat.juste === true ? 'bg-emerald-500/15 text-emerald-100' : etat.juste === false ? 'bg-rose-500/15 text-rose-100' : 'bg-white/5 text-white/85'}`}><Formule t={etat.retour} /></p>}
-          {etat.note && <p className="mt-2 text-[16px] text-amber-200">{etat.note}</p>}
+            <div className="min-w-0 flex-1 p-3 sm:p-4">
+              <p className="text-[18px] font-semibold" style={{ fontFamily: SUJET }}><span>{q.id}.</span> <Formule t={q.texte} /></p>
+              {q.texte_audio && <button onClick={() => jouer(q.texte_audio)} className={`mt-1 ${BTN}`}>🔊 La question</button>}
 
-          {/* La correction : la rédaction attendue, ligne par ligne, avec sa voix */}
-          {etat.correction && (
-            <div className="mt-3 rounded-xl border border-amber-200/30 bg-amber-200/5 p-3">
-              <div className="mb-1 flex items-center gap-2"><p className="flex-1 text-amber-200">✍️ Correction</p>
-                {q.correction.audio && <button onClick={() => jouer(q.correction.audio)} className="rounded-full bg-white/10 px-3 py-0.5 text-sm" style={{ fontFamily: 'system-ui' }}>🔊 Écouter</button>}</div>
-              {q.correction.lignes.map((l, i) => <p key={i} className="text-[18px] text-white/90"><Formule t={l.texte} /></p>)}
-              {etat.autoEval && etat.juste === null && (
-                <div className="mt-3 flex flex-wrap items-center gap-2 text-[15px]" style={{ fontFamily: 'system-ui' }}>
-                  <span className="text-white/70">Le tuteur n'est pas joignable : compare toi-même.</span>
-                  <button onClick={() => poser(q.id, { juste: true })} className="rounded-full bg-emerald-500/30 px-3 py-1">J'avais juste</button>
-                  <button onClick={() => poser(q.id, { juste: false })} className="rounded-full bg-rose-500/30 px-3 py-1">Je m'étais trompé</button>
+              {/* Les aides du tuteur, une à une */}
+              {mode === 'exercice' && nbAides > 0 && (
+                <div className="mt-3 space-y-2">
+                  {q.aides!.slice(0, nbAides).map((a, i) => (
+                    <div key={i} className="border-l-4 border-sky-700 bg-sky-50 p-2 text-[16px] text-slate-900">
+                      <b>🙋 Aide {i + 1} :</b> <Formule t={a.texte} />
+                      {a.audio && <button onClick={() => jouer(a.audio)} className="ml-2 text-sm text-sky-800 underline">réécouter</button>}
+                    </div>))}
                 </div>)}
-            </div>)}
 
-          {/* Les boutons d'aide : pas dans l'exercice semblable */}
-          <div className="mt-4 flex flex-wrap gap-2" style={{ fontFamily: 'system-ui' }}>
-            {mode === 'exercice' && !!q.aides?.length && !etat.correction && (
-              <button onClick={aide} disabled={nbAides >= q.aides.length && false} className="rounded-full bg-cyan-500/25 px-4 py-2 text-sm hover:bg-cyan-500/40">
-                🙋 {nbAides === 0 ? 'Aide du tuteur' : nbAides < q.aides.length ? 'Une autre aide' : 'Réécouter l’aide'}</button>)}
-            {mode === 'exercice' && q.explication && diapo('explication', q.explication) && (
-              <button onClick={() => { jouer(undefined); setVues(v => ({ ...v, explications: v.explications + 1 })); setOuvert({ genre: 'explication', slide: diapo('explication', q.explication)! }); }}
-                className="rounded-full bg-violet-500/25 px-4 py-2 text-sm hover:bg-violet-500/40">🎬 Explication animée</button>)}
-            {mode === 'exercice' && q.facile && diapo('facile', q.facile) && !etat.correction && (
-              <button onClick={() => { jouer(undefined); setVues(v => ({ ...v, faciles: v.faciles + 1 })); setOuvert({ genre: 'facile', slide: diapo('facile', q.facile)! }); }}
-                className="rounded-full bg-emerald-500/20 px-4 py-2 text-sm hover:bg-emerald-500/35">🎯 Plus facile, pour s’entraîner</button>)}
-            {!etat.correction && etat.essais > 0 && (
-              <button onClick={() => { poser(q.id, { correction: true, juste: etat.juste ?? false }); jouer(q.correction.audio); }} className="rounded-full bg-white/10 px-4 py-2 text-sm hover:bg-white/20">Voir la correction</button>)}
-            {qi < enonce.questions.length - 1 && (etat.correction || etat.juste === true) && (
-              <button onClick={() => { jouer(undefined); setQi(qi + 1); }} className="ml-auto rounded-full bg-amber-200 px-4 py-2 text-sm text-slate-900">Question suivante →</button>)}
-          </div>
+              {/* La réponse, sur les lignes de la copie */}
+              {!etat.correction && etat.juste !== true && (
+                <div className="mt-3">
+                  <ChampReponse key={cle(q.id)} papier onEnvoyer={t => void repondre(t)} libelle="Vérifier" lignes={q.reponse.type === 'valeur' ? 4 : 7}
+                    placeholder={q.reponse.type === 'valeur' ? `${q.reponse.grandeur || 'résultat'} = … ${q.reponse.unite || ''}` : 'Ta réponse, rédigée et justifiée…'}
+                    contexte={{ deck_id: ex.id, title: ex.titre, enonce: q.texte, matiere: ex.matiere, chapitre: ex.chapitre }}
+                    suggestions={{ deck_id: ex.id, slide_id: `${mode}_${q.id}`, enonce: q.texte, clavier: q.clavier }} />
+                </div>)}
+              {etat.texte && (etat.correction || etat.juste === true) && (
+                <p className="mt-3 whitespace-pre-wrap text-[21px] text-black" style={{ fontFamily: CRAIE, ...LIGNES }}>{etat.texte}</p>)}
+              {etat.retour && <p className={`mt-3 border p-2 text-[18px] ${etat.juste === true ? 'border-emerald-700 text-emerald-800' : etat.juste === false ? 'border-rose-700 text-rose-800' : 'border-slate-400 text-slate-800'}`} style={{ fontFamily: CRAIE }}><Formule t={etat.retour} /></p>}
+              {etat.note && <p className="mt-2 text-[16px] text-amber-800">{etat.note}</p>}
 
-          {/* Le bilan, et l'exercice semblable */}
-          {fini && (
-            <div className="mt-5 rounded-2xl border border-white/15 bg-white/5 p-4">
-              <p className="text-xl text-amber-100">Bilan : {bilan.justes} / {bilan.total} juste{bilan.justes > 1 ? 's' : ''}{mode === 'exercice' ? ` · ${bilan.aidesTotal} aide${bilan.aidesTotal > 1 ? 's' : ''} demandée${bilan.aidesTotal > 1 ? 's' : ''}` : ''}</p>
-              {mode === 'exercice' ? (
-                <p className="mt-1 text-[17px] text-white/80">{conseilSemblable
-                  ? 'Pour être sûr d’avoir compris, refais le même exercice avec d’autres données, seul cette fois : le tuteur corrigera seulement.'
-                  : 'Bravo ! Tu peux t’entraîner encore avec le même exercice et d’autres données.'}</p>
-              ) : <p className="mt-1 text-[17px] text-white/80">{bilan.justes === bilan.total ? 'Tout juste, seul : la méthode est acquise.' : 'Relis les corrections, puis refais les questions manquées.'}</p>}
-              <div className="mt-3 flex flex-wrap gap-2" style={{ fontFamily: 'system-ui' }}>
-                {mode === 'exercice' && <button onClick={() => { jouer(undefined); setMode('similaire'); setQi(0); }} className={`rounded-full px-4 py-2 text-sm ${conseilSemblable ? 'bg-amber-200 text-slate-900' : 'bg-white/10'}`}>🔁 Exercice semblable</button>}
-                {mode === 'similaire' && <button onClick={() => { setMode('exercice'); setQi(0); }} className="rounded-full bg-white/10 px-4 py-2 text-sm">Revenir au premier exercice</button>}
-                <button onClick={() => navigate('/exercices')} className="rounded-full bg-white/10 px-4 py-2 text-sm">Autres exercices</button>
+              {/* La correction : la rédaction attendue, à l'encre rouge du correcteur */}
+              {etat.correction && (
+                <div className="mt-3 border-2 border-rose-700 p-3">
+                  <div className="mb-1 flex items-center gap-2"><p className="flex-1 font-bold text-rose-800">✍️ Correction</p>
+                    {q.correction.audio && <button onClick={() => jouer(q.correction.audio)} className={BTN}>🔊 Écouter</button>}</div>
+                  {q.correction.lignes.map((l, i) => <p key={i} className="text-[19px] text-rose-900" style={{ fontFamily: CRAIE }}><Formule t={l.texte} /></p>)}
+                  {etat.autoEval && etat.juste === null && (
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-[15px]">
+                      <span className="text-slate-700">Le tuteur n'est pas joignable : compare toi-même.</span>
+                      <button onClick={() => poser(q.id, { juste: true })} className="rounded-md border border-emerald-700 px-3 py-1 text-emerald-800">J'avais juste</button>
+                      <button onClick={() => poser(q.id, { juste: false })} className="rounded-md border border-rose-700 px-3 py-1 text-rose-800">Je m'étais trompé</button>
+                    </div>)}
+                </div>)}
+
+              {/* Les boutons d'aide : pas dans l'exercice semblable */}
+              <div className="mt-4 flex flex-wrap gap-2">
+                {mode === 'exercice' && !!q.aides?.length && !etat.correction && (
+                  <button onClick={aide} className="rounded-md border border-sky-800 bg-sky-50 px-3 py-1.5 text-sm text-sky-900 hover:bg-sky-100">
+                    🙋 {nbAides === 0 ? 'Aide du tuteur' : nbAides < q.aides.length ? 'Une autre aide' : 'Réécouter l’aide'}</button>)}
+                {mode === 'exercice' && q.explication && diapo('explication', q.explication) && (
+                  <button onClick={() => { jouer(undefined); setVues(v => ({ ...v, explications: v.explications + 1 })); setOuvert({ genre: 'explication', slide: diapo('explication', q.explication)! }); }}
+                    className="rounded-md border border-violet-800 bg-violet-50 px-3 py-1.5 text-sm text-violet-900 hover:bg-violet-100">🎬 Explication animée</button>)}
+                {mode === 'exercice' && q.facile && diapo('facile', q.facile) && !etat.correction && (
+                  <button onClick={() => { jouer(undefined); setVues(v => ({ ...v, faciles: v.faciles + 1 })); setOuvert({ genre: 'facile', slide: diapo('facile', q.facile)! }); }}
+                    className="rounded-md border border-emerald-800 bg-emerald-50 px-3 py-1.5 text-sm text-emerald-900 hover:bg-emerald-100">🎯 Plus facile, pour s’entraîner</button>)}
+                {!etat.correction && etat.essais > 0 && (
+                  <button onClick={() => { poser(q.id, { correction: true, juste: etat.juste ?? false }); jouer(q.correction.audio); }} className={BTN}>Voir la correction</button>)}
+                {qi < enonce.questions.length - 1 && (etat.correction || etat.juste === true) && (
+                  <button onClick={() => { jouer(undefined); setQi(qi + 1); }} className="ml-auto rounded-md bg-black px-4 py-1.5 text-sm font-semibold text-white">Question suivante →</button>)}
               </div>
-            </div>)}
+
+              {/* Le bilan, et l'exercice semblable */}
+              {fini && (
+                <div className="mt-5 border-2 border-black p-4">
+                  <p className="text-xl font-bold">Note : {pts(note)} / {pts(total)} · {bilan.justes} / {bilan.total} juste{bilan.justes > 1 ? 's' : ''}{mode === 'exercice' ? ` · ${bilan.aidesTotal} aide${bilan.aidesTotal > 1 ? 's' : ''} demandée${bilan.aidesTotal > 1 ? 's' : ''}` : ''}</p>
+                  {mode === 'exercice' ? (
+                    <p className="mt-1 text-[16px] text-slate-800">{conseilSemblable
+                      ? 'Pour être sûr d’avoir compris, refais le même exercice avec d’autres données, seul cette fois : le tuteur corrigera seulement.'
+                      : 'Bravo ! Tu peux t’entraîner encore avec le même exercice et d’autres données.'}</p>
+                  ) : <p className="mt-1 text-[16px] text-slate-800">{bilan.justes === bilan.total ? 'Tout juste, seul : la méthode est acquise.' : 'Relis les corrections, puis refais les questions manquées.'}</p>}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {mode === 'exercice' && <button onClick={() => { jouer(undefined); setMode('similaire'); setQi(0); }} className={conseilSemblable ? 'rounded-md bg-black px-4 py-1.5 text-sm font-semibold text-white' : BTN}>🔁 Exercice semblable</button>}
+                    {mode === 'similaire' && <button onClick={() => { setMode('exercice'); setQi(0); }} className={BTN}>Revenir au premier exercice</button>}
+                    <button onClick={() => navigate('/exercices')} className={BTN}>Autres exercices</button>
+                  </div>
+                </div>)}
+            </div>
+          </div>
         </section>
       </div>
 
       {/* L'explication animée ou la version facile : le lecteur des cours, sur une seule diapositive */}
       {ouvert && ouvert.genre !== 'feuille' && (
-        <div className="fixed inset-0 z-40 flex flex-col bg-[#0a0a18]/95 p-1 sm:p-2">
-          <div className="flex shrink-0 items-center gap-2 px-2 py-1" style={{ fontFamily: 'system-ui' }}>
+        <div className="fixed inset-0 z-40 flex flex-col bg-[#0a0a18]/95 p-1 text-white sm:p-2">
+          <div className="flex shrink-0 items-center gap-2 px-2 py-1">
             <p className="flex-1 truncate text-sm text-white/70">{ouvert.genre === 'explication' ? '🎬 Explication animée' : '🎯 Plus facile'} — question {q.id}</p>
             <button onClick={() => { taireTout(); setOuvert(null); }} className="rounded-full bg-white/15 px-4 py-1 text-sm hover:bg-white/25">× Revenir à l’exercice</button>
           </div>
@@ -277,7 +316,7 @@ export default function ExercicePage() {
 }
 
 function Plein({ children }: { children: React.ReactNode }) {
-  return <div className="grid h-[100dvh] place-items-center bg-[#0a0a18] text-center text-white" style={{ fontFamily: CRAIE }}><div>{children}</div></div>;
+  return <div className="grid h-[100dvh] place-items-center bg-[#d6d6d0] text-center text-black"><div>{children}</div></div>;
 }
 
 /** La copie de l'élève : une feuille lignée où il rédige chaque question ; gardée dans ce navigateur. */

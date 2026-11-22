@@ -13,7 +13,7 @@ const MATIERES: { cle: MatiereExercice; nom: string; icone: string }[] = [
 ];
 const NIVEAU: Record<string, string> = { facile: 'Facile', moyen: 'Moyen', difficile: 'Supérieur' };
 const ORDRE: Record<string, number> = { facile: 0, moyen: 1, difficile: 2 };
-const COULEUR: Record<string, string> = { facile: 'bg-emerald-500/20 text-emerald-200', moyen: 'bg-amber-500/20 text-amber-200', difficile: 'bg-rose-500/20 text-rose-200' };
+const COULEUR: Record<string, string> = { facile: 'border border-emerald-600 bg-emerald-50 text-emerald-800', moyen: 'border border-amber-600 bg-amber-50 text-amber-800', difficile: 'border border-rose-600 bg-rose-50 text-rose-800' };
 
 export default function ExercicesHub() {
   const navigate = useNavigate();
@@ -47,9 +47,9 @@ export default function ExercicesHub() {
                   <ul className="space-y-2">
                     {liste.map(f => (
                       <li key={f.id}>
-                        <button onClick={() => navigate(`/exercices/${f.id}`)} className="w-full rounded-xl border border-white/10 bg-white/5 p-3 text-left hover:border-amber-200/40 hover:bg-white/10">
-                          <p className="font-medium text-amber-100">{f.titre}</p>
-                          <p className="mt-1 flex items-center gap-2 text-xs text-white/55"><span className={`rounded-full px-2 py-0.5 ${COULEUR[f.niveau || ''] || ''}`}>{NIVEAU[f.niveau || ''] || ''}</span>{f.duree_min ? `~${f.duree_min} min · ` : ''}{f.questions} questions</p>
+                        <button onClick={() => navigate(`/exercices/${f.id}`)} className="w-full rounded-sm bg-white p-3 text-left text-black shadow ring-1 ring-black/10 hover:ring-2 hover:ring-amber-400">
+                          <p className="font-semibold" style={{ fontFamily: "'Times New Roman', Georgia, serif" }}>{f.titre}</p>
+                          <p className="mt-1 flex items-center gap-2 text-xs text-slate-600"><span className={`rounded-full px-2 py-0.5 ${COULEUR[f.niveau || ''] || ''}`}>{NIVEAU[f.niveau || ''] || ''}</span>{f.duree_min ? `~${f.duree_min} min · ` : ''}{f.questions} questions</p>
                         </button>
                       </li>))}
                   </ul>

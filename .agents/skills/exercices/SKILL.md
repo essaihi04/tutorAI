@@ -63,6 +63,10 @@ Skills `voix-du-cours` and `prononciation`, with the lessons learned on the cour
 
 The statement on the left (text, figures, data, listenable), one question at a time on the right with: the answer field and its keyboard; « 🙋 Aide du tuteur » (hints one by one, with their voice); « 🎬 Explication animée » (the explanation slide in the course player, starting at once); « 🎯 Plus facile, pour s'entraîner » (the easy slide); « Voir la correction » after a try; « 📝 Ma feuille » (lined sheet where the student writes the whole answer, symbols of the question, full keyboard on demand, photo of his paper; kept in the browser). At the end, a review and the « 🔁 Exercice semblable », put forward when he made mistakes, asked every hint or watched an explanation.
 
+**Look of the page** (user rule, 22 November 2026: « l'exercice sera en feuille blanche comme chez examen avec écriture noire, et la place de réponse de l'élève sera comme la feuille de réponses des examens, avec des lignes, des rectangles et un barème »): the statement is a white sheet with black printed text (serif), a framed header (subject | level | total points), « Données » in a box, the questions listed with their points in a left column, figures drawn black on white (the chalk figure inverted, colours kept). The answer side is the exam answer sheet: a framed header « Question k | Barème | Note », a red margin holding the question's points then the mark, ruled lines where the student writes in black handwriting, the correction in the corrector's red ink, the total « Note : x / total » in the page header and in the review.
+
+**Barème**: each question may carry `points` (0,25 to 2, like the subject's margin; the exercise total is their sum, a `moyen` exercise usually 3 to 5 points); without it, `pointsDe()` (`types.ts`) estimates it from the length of the expected writing. A right answer earns the question's points, a wrong one 0.
+
 ## 7. Checks before showing the user
 
 1. JSON valid; every question has `reponse`, `clavier`, `correction`; every `explication` / `facile` id exists; `similaire` has the same number of questions.
