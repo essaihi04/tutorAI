@@ -626,6 +626,12 @@ _nd_OPERATEURS = {'زائد': 'plus', 'ناقص': 'moins', 'سالب': 'moins', 
 #: « على » (sur) est aussi une préposition (« Pi على l'ADP ») : traduit seulement entre un mot français et un nombre
 #: ou un symbole (« croissante على I », « millimole على une minute ») ; « في » (fois) : voir la fin de `_convertir_nombres`.
 _nd_ENTRE_DEUX = {'على': 'sur'}
+#: Mots darija juste AVANT un nombre français (22/11/2026 : « تقريبا huit minutes » était dit « thuit », « كيساوي un »
+#: dit « واحد ») : traduits quand le mot suivant est un nombre ; « كيساوي » seulement entre un mot français et un nombre (« deux كتساوي un »
+#: -> « deux égale un », mais « شحال كتساوي g » reste : « شحال égale » serait un autre mélange).
+_nd_AVANT_NOMBRE = {'تقريبا': 'environ', 'تقريباً': 'environ'}
+_nd_EGALE = {'كيساوي': 'égale', 'كتساوي': 'égale', 'تيساوي': 'égale', 'تتساوي': 'égale', 'كيساويو': 'égalent',
+             'كتساوى': 'égale', 'كيسوى': 'égale'}
 _nd_NOMBRES_FR = {'zéro', 'un', 'une', 'deux', 'trois', 'quatre', 'cinq', 'six', 'sept', 'huit', 'neuf', 'dix', 'onze', 'douze',
               'treize', 'quatorze', 'quinze', 'seize', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante', 'cent', 'mille'}
 _nd_COMPARAISON = re.compile(r"(و)?(?:أ?كبر|أ?صغر|أقل|أكثر)(?: من)? (?:ولا|أو|او) يساوي(?= [A-Za-zÀ-ÿ])")
@@ -659,6 +665,10 @@ def _nd__operateurs(texte):
         ap = jetons[mots[k + 1]] if k + 1 < len(mots) and not p else ''
         if w in _nd_OPERATEURS and (_nd__latin(av) or _nd__latin(ap)):
             jetons[i] = ('و ' if w != nu else '') + _nd_OPERATEURS[w] + p
+        elif nu in _nd_AVANT_NOMBRE and ap and _nd__nu(ap)[0].lower().split('-')[0] in _nd_NOMBRES_FR:
+            jetons[i] = _nd_AVANT_NOMBRE[nu] + p
+        elif nu in _nd_EGALE and ap and _nd__latin(av) and _nd__nu(ap)[0].lower().split('-')[0] in _nd_NOMBRES_FR:
+            jetons[i] = _nd_EGALE[nu] + p
         elif nu in _nd_ENTRE_DEUX and _nd__latin(av) and (_nd__nombre_ou_symbole(ap)
                                                   or (_nd__nu(av)[0].lower() in _nd_NOMBRES_FR - _nd_ARTICLES and _nd__latin(ap))):
             jetons[i] = _nd_ENTRE_DEUX[nu] + p

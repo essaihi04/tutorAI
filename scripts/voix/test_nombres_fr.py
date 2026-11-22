@@ -29,6 +29,11 @@ from nombres_fr import convertir  # noqa: E402
     ("Mزيان، عرفتي", "مزيان، عرفتي"),
     ("الحالة fين الجوج formes", "الحالة فين الجوج formes"),
     ("x وtrois", "x و trois"),
+    # mot darija juste avant un nombre français (22/11/2026 : « تقريبا huit » dit « thuit »)
+    ("كياخد تقريبا huit minutes باش يوصل", "كياخد environ huit minutes باش يوصل"),
+    ("كاع les termes كيساويو un. البلاصة", "كاع les termes égalent un. البلاصة"),
+    ("إذن deux كتساوي un plus un", "إذن deux égale un plus un"),
+    ("r تقريبا trente-huit virgule quatre", "r environ trente-huit virgule quatre"),
 ])
 def test_converti(avant, apres):
     assert convertir(avant) == apres
@@ -44,6 +49,8 @@ def test_converti(avant, apres):
     "زائد في ناقص كتعطي ناقص",        # règle des signes dite en darija
     "باش نétablir L، خاصنا",           # verbe français conjugué en darija : style du corpus
     "شوف فla courbe والcourbe",         # articles collés : style du corpus
+    "un: شحال كتساوي g de x",           # « شحال égale » serait un autre mélange
+    "تقريبا la moitié",                 # pas un nombre
 ])
 def test_inchange(texte):
     assert convertir(texte) == texte

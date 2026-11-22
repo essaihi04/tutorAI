@@ -71,6 +71,14 @@ The statement on the left (text, figures, data, listenable), one question at a t
 4. `npx tsc --noEmit` passes; the three screens open in the browser (statement, figure, a wrong answer, a hint, the right answer and its correction, the explanation playing its simulation, the easy version, the sheet).
 5. Voices generated, transcribed and placed; no slide or hint without its track.
 
-## 8. Generators
+## 8. Generators (in the repo)
 
-Each exercise is written as a small Python generator (`<id>.py`) that builds the JSON (helpers `qcm_facile`, `rep`, figure functions), so that a datum changed once changes everywhere; then `finir.py <texte_parle.py> out/*.json`, then copy to `frontend/public/media/exercices/` and rebuild `index.json`.
+Each exercise is a small Python generator `scripts/exercices/generateurs/<id>.py` (models: the three pilots) that builds the JSON (helpers `qcm_facile`, `rep`, figure functions computed from the simulation's own formula — e.g. `aspect()` for the rope), so that a datum changed once changes everywhere:
+
+```
+python -X utf8 scripts/exercices/generateurs/<id>.py frontend/public/media/exercices/<id>.json
+python -X utf8 scripts/exercices/finir.py frontend/public/media/exercices/<id>.json      # « problèmes : 0 »
+python -X utf8 scripts/exercices/index.py                                                # the list page
+```
+
+Voices are generated afterwards on the VPS (batch without tunnel, § 5) with `scripts/voix/pistes_exercice.py liste|poser`; once posed, the JSON in `frontend/public/media/exercices/` carries the audio fields: never regenerate it from the `.py` without posing again.
