@@ -15,7 +15,7 @@ import type { CourseDeck, CourseSlide } from '../components/course/types';
 import FiguresCahier from '../components/course/FigureCahier';
 import { Formule } from '../components/course/Formule';
 import ChampReponse, { BoutonPhoto } from '../components/course/SaisieReponse';
-import ClavierFlottant, { clavier } from '../components/course/ClavierFlottant';
+import ClavierFlottant, { clavier, hauteurClavierTelephone, largeurClavier, useClavier } from '../components/course/ClavierFlottant';
 import { Touches, type MatiereClavier } from '../components/course/ClavierScientifique';
 import { inscrireVoix, taireTout } from '../components/course/voixUnique';
 import type { EnonceExercice, Exercice, QuestionExercice } from '../components/exercice/types';
@@ -67,6 +67,8 @@ export default function ExercicePage() {
   const [vues, setVues] = useState({ explications: 0, faciles: 0 });
   const [ouvert, setOuvert] = useState<Ouvert>(null);
   const [enonceOuvert, setEnonceOuvert] = useState(true);
+  // le clavier ouvert prend sa place à droite (en bas sur téléphone) : il ne cache jamais le champ à remplir
+  const clavierOuvert = useClavier().ouvert && !ouvert;
 
   useEffect(() => {
     setEx(null); setErreur('');
@@ -145,7 +147,8 @@ export default function ExercicePage() {
         <button onClick={() => setOuvert({ genre: 'feuille' })} className="rounded-full bg-amber-200/90 px-3 py-1 text-sm text-slate-900 hover:bg-amber-100" style={{ fontFamily: 'system-ui' }}>📝 Ma feuille</button>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3 lg:flex-row lg:overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3 transition-[padding] lg:flex-row lg:overflow-hidden"
+        style={{ paddingRight: largeurClavier(clavierOuvert) || undefined, paddingBottom: hauteurClavierTelephone(clavierOuvert) || undefined }}>
         {/* L'énoncé */}
         <section className={`rounded-2xl border border-white/10 bg-[#13132a] p-4 lg:w-[46%] lg:overflow-y-auto ${enonceOuvert ? '' : 'lg:w-auto'}`}>
           <div className="mb-2 flex items-center gap-2">

@@ -19,11 +19,12 @@ const REDIGER_MATHS: Touche[] = ['=', '≠', '⇒', '⇔', { l: 'donc', t: ' don
   { l: '0/0', t: '0/0' }, { l: 'forme indét.', t: 'forme indéterminée' }, { l: 'x ≠', t: 'x ≠ ' }, '[', ']', ';', '|'];
 const REDIGER_PHYSIQUE: Touche[] = ['=', '⇒', { l: 'donc', t: ' donc ' }, { l: 'car', t: ' car ' }, { l: 'A.N.', t: 'A.N. : ' }, { l: 'soit', t: ' soit ' },
   '(', ')', '+', '−', '×', { l: 'a/b', t: '/' }, '²', { l: '×10ⁿ', t: '×10^' }, '≈', 'Δt', { l: 'Δx', t: 'Δx' }, 'v', 'd', 't', '·'];
-const REDIGER_SVT: Touche[] = [
+const DECRIRE_SVT: Touche[] = [
   { l: 'On remarque que', t: 'On remarque que ' }, { l: 'On constate que', t: 'On constate que ' }, { l: 'Avant', t: 'Avant ' }, { l: 'Après', t: 'Après ' },
   { l: 'entre', t: 'entre ' }, { l: 'et', t: ' et ' }, { l: 'de', t: 'de ' }, { l: 'à', t: ' à ' }, { l: 'puis', t: ', puis ' }, { l: 'jusqu’à', t: ' jusqu’à ' },
   { l: 'augmente', t: ' augmente ' }, { l: 'diminue', t: ' diminue ' }, { l: 'reste constante', t: ' reste constante ' }, { l: 's’annule', t: ' s’annule ' },
-  { l: 'rapidement', t: ' rapidement' }, { l: 'lentement', t: ' lentement' }, { l: 'atteint', t: ' atteint ' }, { l: 'est maximale', t: ' est maximale' },
+  { l: 'rapidement', t: ' rapidement' }, { l: 'lentement', t: ' lentement' }, { l: 'atteint', t: ' atteint ' }, { l: 'est maximale', t: ' est maximale' }];
+const EXPLIQUER_SVT: Touche[] = [
   { l: 'en présence de', t: ' en présence de ' }, { l: 'en absence de', t: ' en absence de ' }, { l: 'car', t: ' car ' }, { l: 'donc', t: ' donc ' },
   { l: 'On en déduit que', t: 'On en déduit que ' }, { l: 'On conclut que', t: 'On conclut que ' }, { l: 'hypothèse :', t: 'Hypothèse : ' }, { l: 'ce qui montre que', t: ', ce qui montre que ' },
   '→', '⇒', '=', '+', '×', { l: 'a/b', t: '/' }, '%', '≈', '(', ')'];
@@ -55,7 +56,8 @@ const ONGLETS: Record<Onglet, { titre: string; touches: Touche[] }[]> = {
   ],
   // SVT (12 novembre 2026) : métabolisme, génétique, nerf et muscle, géologie — ce que l'élève de 2ᵉ Bac écrit.
   SVT: [
-    { titre: 'Rédiger', touches: REDIGER_SVT },
+    { titre: 'Décrire', touches: DECRIRE_SVT },
+    { titre: 'Expliquer', touches: EXPLIQUER_SVT },
     { titre: 'Molécules', touches: ['ATP', 'ADP', 'Pi', 'NAD⁺', 'NADH,H⁺', 'FAD', 'FADH₂', 'O₂', 'CO₂', 'H₂O', 'C₆H₁₂O₆', 'acétyl-CoA', 'pyruvate', 'ADN', 'ARNm', 'ARNt'] },
     { titre: 'Ions et réactions', touches: ['→', '⇌', '+', 'Ca²⁺', 'Na⁺', 'K⁺', 'Cl⁻', 'H⁺', 'e⁻', '²⁺', '⁺', '⁻', '↑', '↓'] },
     { titre: 'Génétique', touches: [{ l: 'A//a', t: '//' }, '×', '♂', '♀', 'F₁', 'F₂', 'P', '%', '¼', '½', '¾', '[ ]', 'XX', 'XY', 'Xᴬ', 'Xᵃ'] },
@@ -113,7 +115,10 @@ export function Touches({ matiere = '', onTaper, desactive = false }: { matiere?
     try { const o = localStorage.getItem(cle) as Onglet | null; return o && onglets.includes(o) ? o : onglets[0]; } catch { return onglets[0]; }
   });
   const actuel = onglets.includes(onglet) ? onglet : onglets[0];
-  const choisir = (o: Onglet) => { setOnglet(o); try { localStorage.setItem(cle, o); } catch { /* sans mémoire locale */ } };
+  const choisir = (o: Onglet) => { setOnglet(o); setSection(0); try { localStorage.setItem(cle, o); } catch { /* sans mémoire locale */ } };
+  const [section, setSection] = useState(0);
+  const sectionVue = Math.min(section, ONGLETS[actuel].length - 1);
+  const choisirSection = (k: number) => setSection(k);
   return (
     <>
       {onglets.length > 1 && (
@@ -124,10 +129,16 @@ export function Touches({ matiere = '', onTaper, desactive = false }: { matiere?
           ))}
         </div>
       )}
+      {/* une section à la fois (22 novembre 2026, « ne pas tout mettre d'un coup ») : ses noms en pastilles */}
+      <div className="mb-2 flex flex-wrap gap-1">
+        {ONGLETS[actuel].map((g, k) => (
+          <button key={g.titre} type="button" onClick={() => choisirSection(k)} onMouseDown={e => e.preventDefault()}
+            className={`rounded-full px-2.5 py-1 text-xs ${k === sectionVue ? 'bg-cyan-300 text-black' : 'bg-white/10 text-white/75 hover:bg-white/20'}`}>{g.titre}</button>
+        ))}
+      </div>
       <div className="space-y-2">
-        {ONGLETS[actuel].map(g => (
+        {ONGLETS[actuel].filter((_, k) => k === sectionVue).map(g => (
           <div key={g.titre}>
-            <div className="mb-1 text-[11px] uppercase tracking-wide text-white/45">{g.titre}</div>
             <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(44px, 1fr))' }}>
               {g.touches.map((t, i) => {
                 const l = typeof t === 'string' ? t : t.l;
