@@ -94,7 +94,7 @@ EX = {
         phrase(ATT2),
         ["[L] = [U]·[T]/[I]", "[R] = [U]/[I]", "[τ] = [T]"], ["[L] = [U]·[I]/[T]", "[R] = [U]·[I]"],
         [aide("Écris deux relations du cours : la tension d'une bobine idéale u = L·di/dt, et la loi d'Ohm u = R·i. Isole L et R.",
-              "كتب جوج relations ديال الدرس: u égale L dé i sur dé t، و la loi d'Ohm u égale R i. عزل L و R."),
+              "كتب deux relations ديال الدرس: u égale L dé i sur dé t، و la loi d'Ohm u égale R i. عزل L و R."),
          aide("[L] = [U]·[T]/[I] et [R] = [U]/[I] ; divise l'une par l'autre (R + r a la dimension de R).",
               "la dimension de L: U fois T sur I. la dimension de R: U sur I. قسم وحدة على الأخرى. R plus r عندها نفس la dimension ديال R.")],
         corr([("2 : u = L·di/dt ⇒ [L] = [U]·[T]/[I]", "la dimension de L"),
