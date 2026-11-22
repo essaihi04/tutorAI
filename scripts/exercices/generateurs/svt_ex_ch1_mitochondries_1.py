@@ -31,7 +31,7 @@ def courbe_o2(t_glu, t_pyr, pente, titre):
             "legende": "Concentration du dioxygène dans la suspension de mitochondries (100 % au départ), mesurée par la sonde (ExAO).",
             "elements": [
               {"f": "courbe", "expr": "100", "de": 0, "a": t_pyr, "couleur": "cyan"},
-              {"f": "courbe", "expr": f"100-{pente}*(x-{t_pyr})", "de": t_pyr, "a": 12, "couleur": "cyan", "texte": "[O₂]", "texte_x": 11, "pos": "ne"},
+              {"f": "courbe", "expr": f"100-{pente:.6f}*(x-{t_pyr})", "de": t_pyr, "a": 12, "couleur": "cyan", "texte": "[O₂]", "texte_x": 11, "pos": "ne"},
               {"f": "fleche", "de": [t_glu, 60], "a": [t_glu, 96], "couleur": "jaune", "texte": "glucose", "pos": "o"},
               {"f": "fleche", "de": [t_pyr, 60], "a": [t_pyr, 96], "couleur": "orange", "texte": "acide pyruvique", "pos": "e"},
               {"f": "repere", "x": 12, "y": fin}]}, fin
@@ -59,11 +59,11 @@ def schema_mito(numeros, titre):
             "legende": "Schéma d'une mitochondrie observée au microscope électronique (coupe).", "elements": el}
 
 
-FIG1, FIN1 = courbe_o2(2, 5, 5, "Document 1 : [O₂] dans la suspension de mitochondries")
+FIG1, FIN1 = courbe_o2(2, 5, 15 / 7, "Document 1 : [O₂] dans la suspension de mitochondries")
 FIG2 = schema_mito({"membrane_externe": 1, "membrane_interne": 2, "crete": 3, "matrice": 4}, "Document 2 : une mitochondrie")
-FIGS, FINS = courbe_o2(3, 6, 4, "Document 1 : [O₂] dans la suspension de mitochondries")
+FIGS, FINS = courbe_o2(3, 6, 2, "Document 1 : [O₂] dans la suspension de mitochondries")
 FIG2S = schema_mito({"membrane_externe": 4, "membrane_interne": 3, "crete": 2, "matrice": 1}, "Document 2 : une mitochondrie")
-assert abs(FIN1 - 65) < 1e-9 and abs(FINS - 76) < 1e-9
+assert abs(FIN1 - 85) < 1e-9 and abs(FINS - 88) < 1e-9
 
 EX = {
   "id": "svt_ex_ch1_mitochondries_1", "type": "exercice", "version": 1, "status": "published",
@@ -81,8 +81,8 @@ EX = {
     "questions": [
       {"id": "1", "texte": "Décrire l'évolution de [O₂] avant l'ajout du glucose, après l'ajout du glucose, puis après l'ajout de l'acide pyruvique.",
        "texte_dit": "السؤال un: وصف l'évolution ديال la concentration ديال le dioxygène، قبل le glucose، من بعد le glucose، ومن بعد l'acide pyruvique.",
-       "reponse": {"type": "phrase", "attendu": "Avant 2 min, [O₂] reste stable à 100 %. Après l'ajout du glucose (de 2 à 5 min), [O₂] reste stable à 100 %. Après l'ajout de l'acide pyruvique (à 5 min), [O₂] diminue, de 100 % à 65 % à 12 min."},
-       "clavier": {"aides": ["reste stable", "diminue", "100 %", "65 %", "Avant…", "Après l'ajout…"], "pieges": ["augmente", "s'annule"]},
+       "reponse": {"type": "phrase", "attendu": "Avant 2 min, [O₂] reste stable à 100 %. Après l'ajout du glucose (de 2 à 5 min), [O₂] reste stable à 100 %. Après l'ajout de l'acide pyruvique (à 5 min), [O₂] diminue, de 100 % à 85 % à 12 min."},
+       "clavier": {"aides": ["reste stable", "diminue", "100 %", "85 %", "Avant…", "Après l'ajout…"], "pieges": ["augmente", "s'annule"]},
        "aides": [
          {"texte": "Les deux flèches (glucose, acide pyruvique) coupent la courbe en trois périodes : avant 2 min, de 2 à 5 min, après 5 min.",
           "dit": "les deux flèches كيقسمو la courbe لثلاث ديال المراحل: avant deux minutes، entre deux et cinq minutes، و après cinq minutes."},
@@ -91,8 +91,8 @@ EX = {
        "correction": {"lignes": [
            {"texte": "1 : avant 2 min : [O₂] stable à 100 %", "mot": "stable à cent pour cent"},
            {"texte": "après le glucose (2 à 5 min) : [O₂] reste stable à 100 %", "mot": "كتبقى stable"},
-           {"texte": "après l'acide pyruvique : [O₂] diminue, de 100 % à 65 % à 12 min", "mot": "de cent à soixante-cinq pour cent"}],
-         "parole": "السؤال un. avant deux minutes، la concentration ديال le dioxygène stable à cent pour cent. من بعد le glucose، كتبقى stable، ما تبدل والو. من بعد l'acide pyruvique، كتنقص، de cent à soixante-cinq pour cent، à douze minutes."},
+           {"texte": "après l'acide pyruvique : [O₂] diminue, de 100 % à 85 % à 12 min", "mot": "de cent à quatre-vingt-cinq pour cent"}],
+         "parole": "السؤال un. avant deux minutes، la concentration ديال le dioxygène stable à cent pour cent. من بعد le glucose، كتبقى stable، ما تبدل والو. من بعد l'acide pyruvique، كتنقص، de cent à quatre-vingt-cinq pour cent، à douze minutes."},
        "explication": "ex_s1", "facile": "fa_s1"},
       {"id": "2", "texte": "Déduire la molécule que les mitochondries utilisent en consommant le dioxygène. Justifier.",
        "texte_dit": "السؤال deux: استنتج شمن molécule كيستعملو les mitochondries ملي كيستهلكو le dioxygène. برر.",
@@ -145,11 +145,11 @@ EX = {
     {"id": "ex_s1", "slide_type": "simulation", "title": "Question 1 : trois périodes, bornées par les ajouts",
      "screen_content": {"lead": "Stable avant, stable après le glucose, diminue après l'acide pyruvique."},
      "visual": {"kind": "simulation", "url": EXAO, "caption": "Mitochondries isolées : la sonde et la courbe de [O₂]"},
-     "speech_text": {"mixed": "شوف le montage: des mitochondries بوحدهم فsolution فيها le dioxygène. la courbe كتبدا stable à cent pour cent. دابا كنزيدو le glucose. شوف: la courbe بقات stable، ما تبدل والو. من بعد كنزيدو l'acide pyruvique. شوف: le dioxygène بدا كينقص. فle document ديال التمرين، كينقص jusqu'à soixante-cinq pour cent، à douze minutes. إذن ثلاث ديال المراحل، كل وحدة بين جوج زيادات: stable، من بعد stable، من بعد كينقص."},
+     "speech_text": {"mixed": "شوف le montage: des mitochondries بوحدهم فsolution فيها le dioxygène. la courbe كتبدا stable à cent pour cent. دابا كنزيدو le glucose. شوف: la courbe بقات stable، ما تبدل والو. من بعد كنزيدو l'acide pyruvique. شوف: le dioxygène بدا كينقص. فle document ديال التمرين، كينقص jusqu'à quatre-vingt-cinq pour cent، à douze minutes. إذن ثلاث ديال المراحل، كل وحدة بين جوج زيادات: stable، من بعد stable، من بعد كينقص."},
      "concentration": {"demarrer": "reset",
        "centre": [{"texte": "avant 2 min : [O₂] stable à 100 %", "mot": "la courbe كتبدا stable"},
                   {"texte": "après le glucose : [O₂] reste stable", "mot": "la courbe بقات stable"},
-                  {"texte": "après l'acide pyruvique : [O₂] diminue (100 → 65 % à 12 min)", "mot": "le dioxygène بدا كينقص"}],
+                  {"texte": "après l'acide pyruvique : [O₂] diminue (100 → 85 % à 12 min)", "mot": "le dioxygène بدا كينقص"}],
        "pointage": [{"mot": "la courbe كتبدا stable", "commande": "play_until", "parametres": {"moment": "palier"}},
                     {"mot": "la courbe كتبدا stable", "cible": "centre:0"},
                     {"mot": "دابا كنزيدو le glucose", "commande": "play_until", "parametres": {"moment": "glucose_ajoute"}},
@@ -249,11 +249,11 @@ EX = {
                   "Dans une cellule entière, le glucose est consommé en présence de dioxygène"],
       "questions": [
         {"id": "1", "texte": "Décrire l'évolution de [O₂] avant l'ajout du glucose, après l'ajout du glucose, puis après l'ajout de l'acide pyruvique.",
-         "reponse": {"type": "phrase", "attendu": "Avant 3 min, [O₂] reste stable à 100 %. Après l'ajout du glucose (de 3 à 6 min), [O₂] reste stable à 100 %. Après l'ajout de l'acide pyruvique (à 6 min), [O₂] diminue, de 100 % à 76 % à 12 min."},
-         "clavier": {"aides": ["reste stable", "diminue", "100 %", "76 %"], "pieges": ["augmente"]},
+         "reponse": {"type": "phrase", "attendu": "Avant 3 min, [O₂] reste stable à 100 %. Après l'ajout du glucose (de 3 à 6 min), [O₂] reste stable à 100 %. Après l'ajout de l'acide pyruvique (à 6 min), [O₂] diminue, de 100 % à 88 % à 12 min."},
+         "clavier": {"aides": ["reste stable", "diminue", "100 %", "88 %"], "pieges": ["augmente"]},
          "correction": {"lignes": [{"texte": "1 : avant 3 min et après le glucose : [O₂] stable à 100 %", "mot": "stable à cent pour cent"},
-                                   {"texte": "après l'acide pyruvique : [O₂] diminue, de 100 % à 76 % à 12 min", "mot": "de cent à soixante-seize pour cent"}],
-                        "parole": "avant trois minutes، ومن بعد le glucose، la concentration ديال le dioxygène stable à cent pour cent. من بعد l'acide pyruvique، كتنقص، de cent à soixante-seize pour cent، à douze minutes."}},
+                                   {"texte": "après l'acide pyruvique : [O₂] diminue, de 100 % à 88 % à 12 min", "mot": "de cent à quatre-vingt-huit pour cent"}],
+                        "parole": "avant trois minutes، ومن بعد le glucose، la concentration ديال le dioxygène stable à cent pour cent. من بعد l'acide pyruvique، كتنقص، de cent à quatre-vingt-huit pour cent، à douze minutes."}},
         {"id": "2", "texte": "Déduire la molécule que les mitochondries utilisent en consommant le dioxygène. Justifier.",
          "reponse": {"type": "phrase", "attendu": "Les mitochondries n'utilisent pas le glucose ([O₂] ne change pas après son ajout) ; elles utilisent et oxydent l'acide pyruvique en consommant le dioxygène ([O₂] diminue après son ajout)."},
          "clavier": {"aides": ["n'utilisent pas le glucose", "acide pyruvique", "car"], "pieges": ["le glucose entre dans la mitochondrie"]},
