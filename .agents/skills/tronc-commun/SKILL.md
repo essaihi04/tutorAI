@@ -43,8 +43,10 @@ il ajoute ce qui est propre au Tronc Commun et les règles données par l'utilis
    de l'axe, à l'extérieur du triangle. Le tuteur dit la règle au moment où chaque ligne se trace. Chaque domaine porte
    son nom et une couleur par grande famille (argileuse, limoneuse, sableuse, équilibrée) avec sa légende ; dans un petit
    cadre : couleurs + légende, et le nom du domaine du point écrit en grand quand la zone s'allume.
-4. **Histogramme.** Les rectangles sont collés les uns aux autres, sans espace ; une classe vide garde sa place ; la courbe
-   de fréquence relie les milieux des sommets. Même dessin dans l'animation, le cahier et la fiche.
+4. **Histogramme.** D'abord les comptes sont rangés dans un petit tableau (indice de fréquence I à V / nombre d'espèces),
+   rempli case par case ; puis le tableau se transforme en graphe (chaque case devient la barre de son indice). Les
+   rectangles sont collés les uns aux autres, sans espace ; une classe vide garde sa place ; la courbe de fréquence relie
+   les milieux des sommets. Même dessin dans l'animation, le cahier et la fiche.
 5. **Méthodes pas à pas.** Chaque savoir-faire (tracer dans le triangle, calculer une perméabilité, une fréquence, une
    densité, tracer un histogramme et sa courbe, lire une aire minimale) est montré lentement par le tuteur sur un exemple,
    puis refait par l'élève sur un autre ; explication simple, une idée à la fois, animations agréables.
