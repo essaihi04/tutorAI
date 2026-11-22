@@ -11,8 +11,26 @@ export type Touche = string | { l: string; t: string; titre?: string };
 
 /** `t` : ce qui est inséré ; `l` : ce qui est affiché sur la touche (quand ils diffèrent). */
 export type Onglet = 'Physique' | 'Chimie' | 'Maths' | 'SVT';
+/* « Rédiger » (22 novembre 2026, user : « enrichir le clavier… on a besoin de plusieurs choses, = pour faire la
+ * démonstration… élargir pour les autres exercices, de cours ou de rappels ») : en tête de chaque onglet, ce qu'on écrit
+ * dans une démonstration ou une rédaction — égalité, implication, mots de liaison, parenthèses, fractions, puissances. */
+const REDIGER_MATHS: Touche[] = ['=', '≠', '⇒', '⇔', { l: 'donc', t: ' donc ' }, { l: 'car', t: ' car ' }, { l: 'on a', t: 'On a : ' }, { l: 'soit', t: ' soit ' },
+  '(', ')', '+', '−', '×', { l: 'a/b', t: '/' }, '²', { l: 'xⁿ', t: '^' }, 'x', { l: 'f(x)', t: 'f(x)' }, { l: 'lim x→', t: 'lim x→' },
+  { l: '0/0', t: '0/0' }, { l: 'forme indét.', t: 'forme indéterminée' }, { l: 'x ≠', t: 'x ≠ ' }, '[', ']', ';', '|'];
+const REDIGER_PHYSIQUE: Touche[] = ['=', '⇒', { l: 'donc', t: ' donc ' }, { l: 'car', t: ' car ' }, { l: 'A.N.', t: 'A.N. : ' }, { l: 'soit', t: ' soit ' },
+  '(', ')', '+', '−', '×', { l: 'a/b', t: '/' }, '²', { l: '×10ⁿ', t: '×10^' }, '≈', 'Δt', { l: 'Δx', t: 'Δx' }, 'v', 'd', 't', '·'];
+const REDIGER_SVT: Touche[] = [
+  { l: 'On remarque que', t: 'On remarque que ' }, { l: 'On constate que', t: 'On constate que ' }, { l: 'Avant', t: 'Avant ' }, { l: 'Après', t: 'Après ' },
+  { l: 'entre', t: 'entre ' }, { l: 'et', t: ' et ' }, { l: 'de', t: 'de ' }, { l: 'à', t: ' à ' }, { l: 'puis', t: ', puis ' }, { l: 'jusqu’à', t: ' jusqu’à ' },
+  { l: 'augmente', t: ' augmente ' }, { l: 'diminue', t: ' diminue ' }, { l: 'reste constante', t: ' reste constante ' }, { l: 's’annule', t: ' s’annule ' },
+  { l: 'rapidement', t: ' rapidement' }, { l: 'lentement', t: ' lentement' }, { l: 'atteint', t: ' atteint ' }, { l: 'est maximale', t: ' est maximale' },
+  { l: 'en présence de', t: ' en présence de ' }, { l: 'en absence de', t: ' en absence de ' }, { l: 'car', t: ' car ' }, { l: 'donc', t: ' donc ' },
+  { l: 'On en déduit que', t: 'On en déduit que ' }, { l: 'On conclut que', t: 'On conclut que ' }, { l: 'hypothèse :', t: 'Hypothèse : ' }, { l: 'ce qui montre que', t: ', ce qui montre que ' },
+  '→', '⇒', '=', '+', '×', { l: 'a/b', t: '/' }, '%', '≈', '(', ')'];
+
 const ONGLETS: Record<Onglet, { titre: string; touches: Touche[] }[]> = {
   Physique: [
+    { titre: 'Rédiger', touches: REDIGER_PHYSIQUE },
     { titre: 'Lettres grecques', touches: ['λ', 'τ', 'θ', 'ω', 'φ', 'Δ', 'μ', 'ρ', 'σ', 'ε', 'α', 'β', 'γ', 'π'] },
     { titre: 'Opérations', touches: ['·', '×', '÷', '±', '≈', '≠', '≤', '≥', '∝', '√', { l: 'a/b', t: '/' }, '=', '(', ')'] },
     { titre: 'Exposants', touches: ['²', '³', '⁻¹', '⁻²', '⁻³', '⁻⁶', '⁻⁹', { l: '10ⁿ', t: '×10' }, '⁰', '¹', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹', '⁻', '⁺'] },
@@ -21,6 +39,7 @@ const ONGLETS: Record<Onglet, { titre: string; touches: Touche[] }[]> = {
     { titre: 'Vecteurs', touches: [{ l: 'v⃗', t: '⃗', titre: 'flèche de vecteur sur la lettre qui précède' }, '→', { l: '‖v‖', t: '‖‖' }] },
   ],
   Chimie: [
+    { titre: 'Rédiger', touches: REDIGER_PHYSIQUE },
     { titre: 'Réactions', touches: ['→', '⇌', '+', '⁺', '⁻', '²⁺', '³⁺', '²⁻', '³⁻', '↑', '↓'] },
     { titre: 'Espèces', touches: ['H₃O⁺', 'HO⁻', 'H₂O', 'H⁺', 'Na⁺', 'Cl⁻', 'CO₂', 'NH₃', 'NH₄⁺', 'CH₃COOH', 'CH₃COO⁻'] },
     { titre: 'Indices', touches: ['₂', '₃', '₄', '₅', '₆', '₁', '₀'] },
@@ -28,6 +47,7 @@ const ONGLETS: Record<Onglet, { titre: string; touches: Touche[] }[]> = {
     { titre: 'Unités', touches: [{ l: 'mol·L⁻¹', t: ' mol·L⁻¹' }, { l: 'mol', t: ' mol' }, { l: 'g·mol⁻¹', t: ' g·mol⁻¹' }, { l: 'L', t: ' L' }, { l: 'mL', t: ' mL' }, { l: 'S·m⁻¹', t: ' S·m⁻¹' }, { l: 'C', t: ' C' }] },
   ],
   Maths: [
+    { titre: 'Rédiger', touches: REDIGER_MATHS },
     { titre: 'Ensembles et logique', touches: ['∞', '∈', '∉', '⊂', '∪', '∩', 'ℝ', 'ℕ', 'ℤ', 'ℂ', 'ℚ', '∅', '∀', '∃', '⇒', '⇔', '≡'] },
     { titre: 'Analyse', touches: [{ l: 'lim', t: 'lim ' }, '∫', '∑', { l: 'ln', t: 'ln(' }, { l: 'eˣ', t: 'e^' }, { l: 'log', t: 'log(' }, '√', 'f′', '→', '+∞', '-∞', '≤', '≥', '≠', '±', 'π'] },
     { titre: 'Complexes', touches: [{ l: '|z|', t: '|z|' }, { l: 'z̄', t: 'z̄' }, { l: 'arg', t: 'arg(' }, 'i', { l: 'e^(iθ)', t: 'e^(iθ)' }, 'θ', 'Re', 'Im'] },
@@ -35,6 +55,7 @@ const ONGLETS: Record<Onglet, { titre: string; touches: Touche[] }[]> = {
   ],
   // SVT (12 novembre 2026) : métabolisme, génétique, nerf et muscle, géologie — ce que l'élève de 2ᵉ Bac écrit.
   SVT: [
+    { titre: 'Rédiger', touches: REDIGER_SVT },
     { titre: 'Molécules', touches: ['ATP', 'ADP', 'Pi', 'NAD⁺', 'NADH,H⁺', 'FAD', 'FADH₂', 'O₂', 'CO₂', 'H₂O', 'C₆H₁₂O₆', 'acétyl-CoA', 'pyruvate', 'ADN', 'ARNm', 'ARNt'] },
     { titre: 'Ions et réactions', touches: ['→', '⇌', '+', 'Ca²⁺', 'Na⁺', 'K⁺', 'Cl⁻', 'H⁺', 'e⁻', '²⁺', '⁺', '⁻', '↑', '↓'] },
     { titre: 'Génétique', touches: [{ l: 'A//a', t: '//' }, '×', '♂', '♀', 'F₁', 'F₂', 'P', '%', '¼', '½', '¾', '[ ]', 'XX', 'XY', 'Xᴬ', 'Xᵃ'] },
@@ -114,7 +135,7 @@ export function Touches({ matiere = '', onTaper, desactive = false }: { matiere?
                   <button key={`${l}-${i}`} type="button" disabled={desactive}
                     onClick={() => onTaper(typeof t === 'string' ? (t === '[ ]' ? '[]' : t) : t.t)} title={typeof t === 'string' ? t : t.titre || t.t.trim()}
                     className="min-h-[44px] rounded-lg border border-white/10 bg-white/[0.06] px-1 text-[17px] leading-none hover:bg-white/15 active:bg-amber-200/30 disabled:opacity-40 court:min-h-[32px] court:text-[15px]"
-                    style={{ touchAction: 'manipulation', gridColumn: l.length > 4 ? 'span 2' : undefined }}>
+                    style={{ touchAction: 'manipulation', gridColumn: l.length > 10 ? 'span 3' : l.length > 4 ? 'span 2' : undefined, fontSize: l.length > 10 ? 15 : undefined }}>
                     {l}
                   </button>
                 );
