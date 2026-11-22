@@ -198,7 +198,7 @@ export default function ExercicePage() {
           {/* La réponse */}
           {!etat.correction && etat.juste !== true && (
             <div className="mt-3">
-              <ChampReponse key={cle(q.id)} onEnvoyer={t => void repondre(t)} libelle="Vérifier"
+              <ChampReponse key={cle(q.id)} onEnvoyer={t => void repondre(t)} libelle="Vérifier" lignes={q.reponse.type === 'valeur' ? 3 : 6}
                 placeholder={q.reponse.type === 'valeur' ? `${q.reponse.grandeur || 'résultat'} = … ${q.reponse.unite || ''}` : 'Ta réponse, rédigée et justifiée…'}
                 contexte={{ deck_id: ex.id, title: ex.titre, enonce: q.texte, matiere: ex.matiere, chapitre: ex.chapitre }}
                 suggestions={{ deck_id: ex.id, slide_id: `${mode}_${q.id}`, enonce: q.texte, clavier: q.clavier }} />
