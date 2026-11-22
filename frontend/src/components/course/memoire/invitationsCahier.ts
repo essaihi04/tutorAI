@@ -12,14 +12,14 @@ import type { ReactionPreparee } from '../types';
  */
 const PHRASES: string[] = [
   'دابا نوقفو شوية. خرج le cahier ديالك وكتب هاد الأفكار بيدك، حيت اللي كتكتبو بيدك كيبقى فالراس كثر من اللي غير كتقراه.',
-  'مزيان، وصلنا لوقت الكتابة. كتب هادشي فle cahier بخط نقي ومرتب، باش ملي ترجع ليه من بعد، تفهمو بلا تعب.',
+  'مزيان، وصلنا لوقت الكتابة. كتب هادشي فle cahier بخط نقي، باش يبقى le cahier organisé، وملي ترجع ليه من بعد، تفهمو بلا تعب.',
   'قبل ما نكملو، كتب هاد les notions فle cahier. الكتابة كتثبت المعلومة، وكتخليها تدوز من الذاكرة القصيرة للذاكرة الطويلة.',
-  'دابا دورك. نقل هاد الأسطر فle cahier ديالك، وخلي شي بلاصة باش تزيد ملاحظاتك. ومن بعد، رجع ليهم من وقت لوقت.',
-  'خود وقتك وكتب مزيان. اللي كنكتبوه بيدنا كنحفظوه كثر، وle cahier المرتب غادي يعاونك بزاف فالمراجعة ديال الامتحان.',
+  'دابا دورك. كتب هاد الأسطر فle cahier ديالك، وخلي شي بلاصة باش تزيد ملاحظاتك. ومن بعد، رجع ليهم من وقت لوقت.',
+  'خود وقتك وكتب مزيان. اللي كنكتبوه بيدنا كنحفظوه كثر، وle cahier organisé غادي يعاونك بزاف فالمراجعة ديال الامتحان.',
   'واخا، دابا كتب هاد الملخص فle cahier. ما تكتبش بالزربة، ركز فكل كلمة، حيت هادي هي الطريقة باش تبقى عندك المعلومة.',
   'هادشي اللي شفنا مهم بزاف. كتبو فle cahier ديالك، ومن بعد شي أيام عاود قراه، هكا كيتثبت فالذاكرة ديالك.',
   'خلي الشاشة على جنب شوية، وكتب فle cahier هاد les notions و le schéma. ملي كترسم وكتكتب بيدك، الفهم ديالك كيولي أقوى.',
-  'دابا الكتابة. كتب بالترتيب، العنوان، من بعد الأفكار، من بعد le schéma. le cahier المنظم هو أحسن صاحب ليك نهار الامتحان.',
+  'دابا الكتابة. كتب بالترتيب، العنوان، من بعد الأفكار، من بعد le schéma. le cahier organisé هو أحسن صاحب ليك نهار الامتحان.',
   'باش ما تنساش داكشي اللي خدينا، خاصنا نكتبوه. كتب فle cahier ديالك، ومن وقت لوقت رجع ليه وقراه، غير خمس دقايق كافيين.',
   'مزيان بزاف، دابا وقت le cahier. الكتابة ماشي غير نقل، هي طريقة باش الدماغ يخزن المعلومة ويلقاها ملي تحتاجها.',
   'قبل ما ندوزو للي من بعد، كتب هاد الأفكار ورسم le schéma فle cahier. ومن بعد، ملي تراجع، غادي تلقى كلشي واضح قدامك.',
@@ -27,6 +27,9 @@ const PHRASES: string[] = [
 
 /** Les phrases qui ont déjà leur piste Bodi (numéros à partir de 1) : les 12, générées le 14 novembre 2026. */
 const AVEC_PISTE = new Set<number>([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+/** Pistes refaites (22 novembre 2026 : n° 4 « نقل » -> « كتب », n° 2, 5, 9 « مرتب / المنظم » -> « le cahier
+ *  organisé ») : un nouveau nom de fichier (`cahier-N-v2.mp3`), pour que le navigateur ne rejoue pas l'ancienne. */
+const VERSION_PISTE: Record<number, number> = { 2: 2, 4: 2, 5: 2, 9: 2 };
 
 const CLE = 'moalim.invitationsCahier';
 /** On ne redit pas l'une des N dernières : avec 12 phrases, l'élève en entend 8 autres avant qu'une revienne. */
@@ -41,5 +44,5 @@ export function invitationCahier(): ReactionPreparee {
   const i = (libres.length ? libres : PHRASES.map((_, k) => k))[Math.floor(Math.random() * (libres.length || PHRASES.length))];
   try { localStorage.setItem(CLE, JSON.stringify([i, ...recentes].slice(0, MEMOIRE))); } catch { /* idem */ }
   const n = i + 1;
-  return { parole: PHRASES[i], ecrit: '', audio: AVEC_PISTE.has(n) ? `/media/audio/reactions/cahier-${n}.mp3` : undefined };
+  return { parole: PHRASES[i], ecrit: '', audio: AVEC_PISTE.has(n) ? `/media/audio/reactions/cahier-${n}${VERSION_PISTE[n] ? `-v${VERSION_PISTE[n]}` : ''}.mp3` : undefined };
 }
