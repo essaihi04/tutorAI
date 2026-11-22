@@ -250,8 +250,8 @@ EX = {
            {"texte": "seule la phénylalanine manque : 1480 − 1 = 1479 acides aminés", "mot": "mille quatre cent soixante-dix-neuf"},
            {"texte": "pas de décalage : trois nucléotides = un codon entier", "mot": "ما كاينش décalage"}],
          "parole": ("la question quatre. ف m deux، le triplet vingt-six كامل مشى: A A A، و le codon ديالو U U U، la phénylalanine. هادي délétion de trois nucléotides. "
-                    "غير la phénylalanine اللي ناقصة، والباقي بحال بحال. la protéine فيها mille quatre cent quatre-vingts moins un، يعني mille quatre cent soixante-dix-neuf acides aminés. "
-                    "ما كاينش décalage، حيت trois nucléotides هوما codon كامل: les codons اللي من بعد كيتقراو بحال قبل.")},
+                    "غير la phénylalanine اللي ناقصة، والباقي بحال بحال. la protéine compte mille quatre cent quatre-vingts moins un، c'est-à-dire mille quatre cent soixante-dix-neuf acides aminés. "
+                    "ما كاينش décalage، parce que trois nucléotides هوما codon كامل: les codons اللي من بعد كيتقراو بحال قبل.")},
        "explication": "ex_s4", "facile": "fa_s4"},
       {"id": "5", "texte": "En exploitant le document 2, expliquer pourquoi les personnes 1 et 2 sont toutes deux atteintes de mucoviscidose, alors que la protéine de m2 ne diffère de la protéine normale que par un seul acide aminé.",
        "texte_dit": "la question cinq: باستعمال le document deux، فسر علاش la personne un و la personne deux بجوج مراض ب la mucoviscidose، واخا la protéine ديال m deux ما فيها غير acide aminé واحد مختلف.",
@@ -338,10 +338,10 @@ EX = {
     {"id": "ex_s4", "slide_type": "simulation", "title": "Question 4 : trois lettres perdues, un codon perdu, pas de décalage",
      "screen_content": {"lead": "Un triplet entier disparaît : un acide aminé en moins, la suite est lue comme avant."},
      "visual": {"kind": "simulation", "url": MUT, "caption": "Délétion de trois nucléotides"},
-     "speech_text": {"mixed": ("ويلا مشاو trois nucléotides مرة وحدة؟ شوف: هنا le triplet trois كامل مشى. "
+     "speech_text": {"mixed": ("ويلا مشاو les trois nucléotides مرة وحدة؟ شوف: هنا le triplet trois كامل مشى. "
                                "l'A R N messager تبدل غير ف البلاصة ديالو، و la protéine ناقصاها غير acide aminé واحد. "
                                "ما كاينش décalage: trois nucléotides، هي codon كامل. "
-                               "ف التمرين، le triplet vingt-six مشى: la phénylalanine ناقصة، و la protéine فيها mille quatre cent soixante-dix-neuf acides aminés.")},
+                               "ف التمرين، le triplet vingt-six مشى: la phénylalanine ناقصة، و la protéine compte mille quatre cent soixante-dix-neuf acides aminés.")},
      "concentration": {"demarrer": "reset",
        "centre": [{"texte": "3 nucléotides = 1 codon : pas de décalage", "mot": "ما كاينش décalage"},
                   {"texte": "m2 : Phe (triplet 26) en moins → 1479 acides aminés", "mot": "le triplet vingt-six مشى"}],
@@ -397,9 +397,9 @@ EX = {
       "Le triplet 1 est AUG et le premier codon stop est au triplet 27. La protéine compte…", ["26 acides aminés", "27 acides aminés", "28 acides aminés"], 0, {
         "0": {"juste": rep("مزيان! vingt-sept moins un، égale vingt-six: le stop ما كيعطي والو.", "Juste : 27 − 1 = 26.")},
         "1": {"1": rep("ما تقلقش. واش le codon stop كيعطي acide aminé؟ عاود اختار.", "Le codon stop donne-t-il un acide aminé ? Réessaie."),
-              "2": rep("الجواب هو vingt-six: vingt-sept moins un، حيت le stop ما كيتحسبش.", "Réponse : 26 (le stop ne compte pas).")},
+              "2": rep("الجواب: c'est vingt-six، vingt-sept moins un، حيت le stop ما كيتحسبش.", "Réponse : 26 (le stop ne compte pas).")},
         "2": {"1": rep("لا، ما كنزيدوش. le stop ما كيعطي والو. عاود اختار.", "On n'ajoute rien : le stop ne code rien. Réessaie."),
-              "2": rep("الجواب هو vingt-six.", "Réponse : 26.")}},
+              "2": rep("الجواب: c'est vingt-six.", "Réponse : 26.")}},
       "Le premier codon stop est au triplet vingt-sept. Combien d'acides aminés ?"),
     vrai_faux("fa_s4", "Plus facile : un ou trois nucléotides perdus", "Vrai ou faux ?",
       "سؤال ساهل: صحيح ولا غالط؟", [

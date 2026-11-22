@@ -67,7 +67,7 @@ def doc(atp, pc, lac, gly):
     return tableau("Document : teneurs du muscle de la cuisse au cours de la course",
                    "ATP, phosphocréatine et acide lactique en mmol par kg de muscle ; glycogène en unités arbitraires (UA), 100 au repos.",
                    ["mmol/kg"] + TEMPS,
-                   [["ATP"] + [fv(v) for v in atp], ["Phosphocréatine"] + [fv(v) for v in pc],
+                   [["ATP"] + [f"{v:.1f}".replace(".", ",") for v in atp], ["Phosphocréatine"] + [fv(v) for v in pc],
                     ["Acide lactique"] + [fv(v) for v in lac], ["Glycogène (UA)"] + [fv(v) for v in gly]],
                    [3.6] + [1.68] * 5)
 
@@ -95,7 +95,7 @@ EX = {
                   "Déduire la voie de régénération de l'ATP qui domine", "Écrire les réactions de régénération de l'ATP"],
   "enonce": {
     "intro": "Un athlète court pendant 10 minutes à une allure soutenue et régulière. Par de petits prélèvements de son muscle de la cuisse (biopsies), on dose au repos, puis à différents moments de la course, l'ATP, la phosphocréatine, l'acide lactique et le glycogène (le glucose mis en réserve dans le muscle). Le document donne les résultats.",
-    "intro_dit": "دابا نقراو l'énoncé. واحد l'athlète كيجري dix minutes، ب واحد السرعة ثابتة. كناخدو شوية صغيرة من le muscle ديال الفخذ، ف الراحة، ومن بعد ف بزاف ديال اللحظات ديال الجري. وكنقيسو l'A T P، la phosphocréatine، l'acide lactique، و le glycogène، يعني le glucose اللي مخزون ف le muscle. le document فيه les résultats.",
+    "intro_dit": "دابا نقراو l'énoncé. واحد l'athlète كيجري pendant dix minutes، ب واحد السرعة ثابتة. كناخدو شوية صغيرة من le muscle ديال الفخذ، ف الراحة، ومن بعد ف بزاف ديال اللحظات ديال الجري. وكنقيسو l'A T P، la phosphocréatine، l'acide lactique، و le glycogène، يعني le glucose اللي مخزون ف le muscle. le document فيه les résultats.",
     "figures": [doc(ATP, PC, LAC, GLY)],
     "donnees": ["Teneurs en mmol par kg de muscle (glycogène : en unités arbitraires, 100 au repos)",
                 "Mesures au repos, puis 10 s, 1 min, 3 min et 10 min après le départ"],
@@ -106,7 +106,7 @@ EX = {
        "clavier": {"aides": ["5,0 mmol/kg", "diminue à peine", "presque constant", "régénéré", "On en déduit que"], "pieges": ["l'ATP n'est pas utilisé", "l'ATP diminue fortement"]},
        "aides": [
          {"texte": "Regarde la ligne ATP : compare la valeur au repos aux valeurs pendant la course.",
-          "dit": "شوف le sattr ديال l'A T P: قارن la valeur ديال الراحة، مع les valeurs ديال الجري."},
+          "dit": "شوف السطر ديال l'A T P: قارن la valeur ديال الراحة، مع les valeurs ديال الجري."},
          {"texte": "Le muscle se contracte, donc il consomme de l'ATP. Si la teneur ne baisse presque pas, que se passe-t-il en même temps ?",
           "dit": "le muscle كيتقلص، إذن كيستهلك l'A T P. يلا la teneur تقريبا ما نقصاتش، شنو كيوقع ف نفس الوقت؟"}],
        "correction": {"lignes": [
@@ -115,7 +115,7 @@ EX = {
          "parole": "Question un. l'A T P passe de cinq millimoles par kilogramme au repos، à environ quatre virgule cinq ou quatre virgule sept pendant la course: تقريبا ما تبدلش. ولكن le muscle كيتقلص، إذن كيستهلك l'A T P. On en déduit que l'A T P est régénéré، ب نفس السرعة اللي كيتستهلك بيها."},
        "explication": "ex_s1", "facile": "fa_s1"},
       {"id": "2", "texte": "Calculer le pourcentage de diminution p de la phosphocréatine pendant les dix premières secondes.",
-       "texte_dit": "Question deux : حسب le pourcentage p ديال النقص ديال la phosphocréatine، ف dix premières secondes.",
+       "texte_dit": "Question deux : حسب le pourcentage p ديال النقص ديال la phosphocréatine، pendant les dix premières secondes.",
        "reponse": {"type": "valeur", "grandeur": "p", "valeur": P, "unite": "%", "tolerance": 0.02,
                    "attendu": "p = (20 − 6)/20 × 100 = 14/20 × 100 = 70 %"},
        "clavier": {"aides": ["p = (valeur au repos − valeur à 10 s)/valeur au repos × 100", "20 − 6", "%"], "pieges": ["6/20 × 100", "(20 − 6)/6 × 100"]},
@@ -128,7 +128,7 @@ EX = {
            {"texte": "2 : p = (valeur au repos − valeur à 10 s)/valeur au repos × 100", "mot": "p égale la valeur au repos"},
            {"texte": "p = (20 − 6)/20 × 100 = 14/20 × 100", "mot": "vingt moins six"},
            {"texte": "p = 70 % : en 10 s, la phosphocréatine perd 70 % de sa teneur", "mot": "p égale soixante-dix pour cent"}],
-         "parole": "Question deux. p égale la valeur au repos moins la valeur à dix secondes، sur la valeur au repos، fois cent. vingt moins six، égale quatorze. quatorze sur vingt، fois cent. p égale soixante-dix pour cent: ف dix secondes فقط، la phosphocréatine ضيعات soixante-dix pour cent."},
+         "parole": "Question deux. p égale la valeur au repos moins la valeur à dix secondes، sur la valeur au repos، fois cent. vingt moins six، égale quatorze. quatorze sur vingt، fois cent. p égale soixante-dix pour cent: en dix secondes seulement، la phosphocréatine perd soixante-dix pour cent."},
        "explication": "ex_s2", "facile": "fa_s2"},
       {"id": "3", "texte": "En déduire la voie de régénération de l'ATP qui domine au début de la course (de 0 à 10 s). Écrire la réaction correspondante et nommer son enzyme.",
        "texte_dit": "Question trois : استنتج la voie ديال la régénération ديال l'A T P اللي كتخدم أكثر ف البداية ديال الجري، de zéro à dix secondes. كتب la réaction ديالها، وسمي l'enzyme.",
@@ -151,9 +151,9 @@ EX = {
        "clavier": {"aides": ["augmente de 2 à 12 mmol/kg", "diminue de 99 à 78 UA", "fermentation lactique", EQ_FL], "pieges": ["dégage du CO₂", "36 ATP"]},
        "aides": [
          {"texte": "Lis les lignes « acide lactique » et « glycogène » à 10 s puis à 3 min : deux valeurs pour chacune.",
-          "dit": "قرا le sattr ديال l'acide lactique و ديال le glycogène، à dix secondes، ومن بعد à trois minutes."},
+          "dit": "قرا السطر ديال l'acide lactique و ديال le glycogène، à dix secondes، ومن بعد à trois minutes."},
          {"texte": "Quelle voie dégrade le glucose sans dioxygène en produisant de l'acide lactique ? Son équation contient 2 ADP + 2 Pi.",
-          "dit": "شمن voie كتفكك le glucose بلا dioxygène، وكتعطي l'acide lactique؟ l'équation ديالها فيها deux A D P plus deux P i."}],
+          "dit": "شمن voie كتفكك le glucose بلا dioxygène، وكتعطي l'acide lactique؟ l'équation ديالها فيها les deux A D P plus deux P i."}],
        "correction": {"lignes": [
            {"texte": "4 : de 10 s à 3 min, acide lactique : 2 → 12 mmol/kg (augmente fortement)", "mot": "l'acide lactique طلع de deux à douze"},
            {"texte": "glycogène : 99 → 78 UA (diminue) ; phosphocréatine basse", "mot": "le glycogène نقص de quatre-vingt-dix-neuf"},
@@ -193,7 +193,7 @@ EX = {
     {"id": "ex_s2", "slide_type": "simulation", "title": "Question 2 : la phosphocréatine s'effondre en dix secondes",
      "screen_content": {"lead": "p = (20 − 6)/20 × 100 = 70 %."},
      "visual": {"kind": "simulation", "url": VOIES, "caption": "La jauge de la phosphocréatine au début de la course"},
-     "speech_text": {"mixed": "شوف la jauge ديال la phosphocréatine: ف dix premières secondes، كتطيح بالزربة. ف le document، elle passe de vingt à six millimoles par kilogramme. ضيعات vingt moins six، égale quatorze. le pourcentage: quatorze sur vingt، fois cent، égale soixante-dix pour cent. ديما كنقسمو على la valeur ديال الراحة."},
+     "speech_text": {"mixed": "شوف la jauge ديال la phosphocréatine: pendant les dix premières secondes، كتطيح بالزربة. ف le document، elle passe de vingt à six millimoles par kilogramme. la perte: vingt moins six، égale quatorze. le pourcentage: quatorze sur vingt، fois cent، égale soixante-dix pour cent. ديما كنقسمو على la valeur ديال الراحة."},
      "concentration": {"demarrer": "reset",
        "centre": [{"texte": "20 − 6 = 14 mmol/kg", "mot": "vingt moins six، égale quatorze"},
                   {"texte": "p = 14/20 × 100 = 70 %", "mot": "égale soixante-dix pour cent"}],
@@ -214,7 +214,7 @@ EX = {
     {"id": "ex_s4", "slide_type": "simulation", "title": "Question 4 : la fermentation lactique prend le relais",
      "screen_content": {"lead": "Acide lactique qui monte, glycogène qui baisse : C₆H₁₂O₆ + 2 ADP + 2 Pi → 2 CH₃-CHOH-COOH + 2 ATP."},
      "visual": {"kind": "simulation", "url": VOIES, "caption": "La deuxième voie : la fermentation lactique"},
-     "speech_text": {"mixed": "la phosphocréatine قربات تسالي. شوف la jauge ديال l'acide lactique: كتطلع. ف le document، elle passe de deux à douze millimoles par kilogramme، و le glycogène كينقص. le glucose ديال le glycogène كيتفكك ف le hyaloplasme، بلا dioxygène: هادي la fermentation lactique، la voie anaérobie lactique. glucose plus deux A D P plus deux P i، donne deux acides lactiques plus deux A T P. غير deux A T P ف كل glucose."},
+     "speech_text": {"mixed": "la phosphocréatine قربات تسالي. شوف la jauge ديال l'acide lactique: كتطلع. ف le document، elle passe de deux à douze millimoles par kilogramme، و le glycogène كينقص. le glucose ديال le glycogène كيتفكك ف le hyaloplasme، بلا dioxygène: هادي la fermentation lactique، la voie anaérobie lactique. glucose plus deux A D P plus deux P i، donne deux acides lactiques plus deux A T P. seulement deux A T P par glucose."},
      "concentration": {"demarrer": "reset",
        "centre": [{"texte": "acide lactique : 2 → 12 mmol/kg ; glycogène : 99 → 78 UA", "mot": "elle passe de deux à douze"},
                   {"texte": "fermentation lactique (anaérobie lactique)", "mot": "هادي la fermentation lactique"},
@@ -267,11 +267,11 @@ EX = {
       ("(1 ; a) (2 ; b) (3 ; c).", "la phosphocréatine: alactique. l'acide lactique: la fermentation. le glycogène بلا acide lactique: la respiration.")),
     qcm_facile("fa_s4", "Plus facile : l'équation de la fermentation lactique", "سؤال ساهل: اختار l'équation.",
       "L'équation de la fermentation lactique est…", ["C₆H₁₂O₆ + 2 ADP + 2 Pi → 2 CH₃-CHOH-COOH + 2 ATP", "C₆H₁₂O₆ + 2 ADP + 2 Pi → 2 CH₃-CH₂OH + 2 CO₂ + 2 ATP", "C₆H₁₂O₆ → 2 CH₃-CHOH-COOH"], 0, {
-        "0": {"juste": rep("برافو! le glucose كيعطي deux acides lactiques، و deux A T P.", "Juste : 2 acides lactiques et 2 ATP.")},
+        "0": {"juste": rep("برافو! le glucose donne deux acides lactiques، et deux A T P.", "Juste : 2 acides lactiques et 2 ATP.")},
         "1": {"1": rep("ما تقلقش. هادي كتعطي l'éthanol و le dioxyde de carbone: هادي fermentation أخرى. عاود اختار.", "Celle-ci donne de l'éthanol et du CO₂ : c'est la fermentation alcoolique. Réessaie."),
               "2": rep("الجواب هو اللولة: deux acides lactiques plus deux A T P. اللي اخترتي هي la fermentation alcoolique.", "Réponse : C₆H₁₂O₆ + 2 ADP + 2 Pi → 2 CH₃-CHOH-COOH + 2 ATP.")},
         "2": {"1": rep("قريب! ولكن فين l'A D P و l'A T P؟ une voie de régénération خاصها تعطي l'A T P. عاود اختار.", "Il manque ADP, Pi et ATP. Réessaie."),
-              "2": rep("الجواب هو اللولة، فيها deux A D P plus deux P i، و deux A T P.", "Réponse : l'équation avec 2 ADP + 2 Pi et 2 ATP.")}},
+              "2": rep("الجواب هو اللولة: glucose plus deux A D P plus deux P i، donne deux acides lactiques plus deux A T P.", "Réponse : l'équation avec 2 ADP + 2 Pi et 2 ATP.")}},
       "L'équation de la fermentation lactique est ?"),
     qcm_facile("fa_s5", "Plus facile : glycogène et acide lactique", "سؤال ساهل على اللخر ديال الجري.",
       "De 3 à 10 min, le glycogène baisse encore mais l'acide lactique ne monte plus. La voie dominante est…", ["la fermentation lactique", "la respiration", "la voie de la phosphocréatine"], 1, {
@@ -286,7 +286,7 @@ EX = {
     "id": "svt_ex_ch2_voies_atp_1_b", "titre": "Même exercice, autres données",
     "enonce": {
       "intro": "Même protocole chez une autre athlète, qui court elle aussi 10 minutes à allure soutenue et régulière. Le document donne les teneurs mesurées dans son muscle de la cuisse.",
-      "intro_dit": "نفس التجربة، مع athlète أخرى، كتجري حتى هي dix minutes ب سرعة ثابتة. le document فيه les teneurs ديال le muscle ديالها.",
+      "intro_dit": "نفس التجربة، مع athlète أخرى، كتجري حتى هي pendant dix minutes، ب سرعة ثابتة. le document فيه les teneurs ديال le muscle ديالها.",
       "figures": [doc(ATP_B, PC_B, LAC_B, GLY_B)],
       "donnees": ["Teneurs en mmol par kg de muscle (glycogène : en unités arbitraires, 100 au repos)"],
       "questions": [

@@ -58,7 +58,8 @@ def figure_oeil(haut_5_a_gauche=True, titre="Document 1 : un fragment d'ADN au m
     # numéros : 1 l'œil, 2 une fourche, 3 un brin ancien, 4 le brin nouveau formé sur le brin du haut
     x4 = 36 if haut_5_a_gauche else 64      # le brin 4 est montré du côté vers lequel il s'allonge
     el += [{"f": "texte", "at": [50, 24], "t": "1", "taille": "normal", "ancre": "centre", "couleur": "jaune"},
-           {"f": "fleche", "de": [16, 38], "a": [25.5, 25.5], "couleur": "jaune"}, {"f": "texte", "at": [14, 39], "t": "2", "taille": "normal", "ancre": "centre", "couleur": "jaune"},
+           {"f": "fleche", "de": [16, 38] if haut_5_a_gauche else [84, 38], "a": [25.5, 25.5] if haut_5_a_gauche else [74.5, 25.5], "couleur": "jaune"},
+           {"f": "texte", "at": [14, 39] if haut_5_a_gauche else [86, 39], "t": "2", "taille": "normal", "ancre": "centre", "couleur": "jaune"},
            {"f": "fleche", "de": [86 - 50 * 0 if haut_5_a_gauche else 14, 42], "a": [64 if haut_5_a_gauche else 36, 36.4], "couleur": "jaune"},
            {"f": "texte", "at": [88 if haut_5_a_gauche else 12, 43], "t": "3", "taille": "normal", "ancre": "centre", "couleur": "jaune"},
            {"f": "fleche", "de": [x4, 44] if not haut_5_a_gauche else [x4 - 4, 44], "a": [x4, 33.2], "couleur": "jaune"},
@@ -134,14 +135,14 @@ Q = [
    "clavier": {"aides": ["4 chromosomes", "8 chromatides", "8 molécules", "2q", "8 brins ¹⁵N", "8 brins ¹⁴N", "hybride"], "pieges": ["8 chromosomes", "16 brins ¹⁵N", "4 molécules"]},
    "aides": [
      {"texte": "En G1, combien de molécules d'ADN pour 2n = 4 ? Une chromatide = une molécule d'ADN = deux brins. Que fait la phase S ?",
-      "dit": "ف G un، deux n égale quatre: شحال من molécule d'A D N؟ chromatide وحدة هي molécule وحدة، فيها deux brins. وشنو كدير la phase S؟"},
+      "dit": "ف G un، deux n égale quatre: شحال من molécule d'A D N؟ une seule chromatide هي une seule molécule، فيها deux brins. وشنو كدير la phase S؟"},
      {"texte": "Réplication semi-conservative : chaque molécule fille garde un brin de la molécule mère (¹⁵N) et reçoit un brin nouveau fait avec les nucléotides du milieu (¹⁴N).",
       "dit": "la réplication semi-conservative: كل molécule fille كتحافظ على brin ديال la molécule mère، ب l'azote quinze، وكتاخد brin nouveau، ب l'azote quatorze."}],
    "correction": {"lignes": [
        {"texte": "3 : 4 chromosomes à deux chromatides = 8 chromatides = 8 molécules d'ADN ; 2q", "mot": "huit molécules d'A D N"},
        {"texte": "chaque molécule : un brin ancien ¹⁵N + un brin nouveau ¹⁴N (hybride)", "mot": "كل molécule hybride"},
        {"texte": "16 brins : 8 à ¹⁵N et 8 à ¹⁴N", "mot": "huit brins ب l'azote quinze"}],
-     "parole": "السؤال trois. ف اللخر ديال la phase S: quatre chromosomes، كل واحد فيه deux chromatides: huit chromatides، يعني huit molécules d'A D N، و la quantité deux q. كل molécule hybride: brin ancien ب l'azote quinze، و brin nouveau ب l'azote quatorze. إذن seize brins: huit brins ب l'azote quinze، et huit ب l'azote quatorze."},
+     "parole": "السؤال trois. ف اللخر ديال la phase S: quatre chromosomes، كل واحد فيه deux chromatides: huit chromatides، soit huit molécules d'A D N، و la quantité deux q. كل molécule hybride: brin ancien ب l'azote quinze، و brin nouveau ب l'azote quatorze. إذن seize brins: huit brins ب l'azote quinze، et huit ب l'azote quatorze."},
    "explication": "ex_s3", "facile": "fa_s3"},
   {"id": "4", "texte": "On suit une des deux cellules filles jusqu'à la métaphase du cycle 2. Calculer le nombre de brins à ¹⁴N qu'elle contient, en justifiant.",
    "texte_dit": "السؤال quatre: كنتبعو وحدة من les deux cellules filles حتى la métaphase ديال le cycle deux. حسب شحال من brin ب l'azote quatorze فيها، وبرر.",
@@ -169,7 +170,7 @@ Q = [
      {"texte": "L'information est dans la séquence des bases, pas dans l'azote. La complémentarité donne-t-elle la même séquence ? Puis : que se passe-t-il à l'anaphase ?",
       "dit": "l'information كاينة ف la séquence ديال les bases، ماشي ف l'azote. واش la complémentarité كتعطي نفس la séquence؟ ومن بعد: شنو كيوقع ف l'anaphase؟"}],
    "correction": {"lignes": [
-       {"texte": "5 : une chromatide hybride (¹⁵N + ¹⁴N), l'autre légère (¹⁴N + ¹⁴N)", "mot": "وحدة hybride، والأخرى légère"},
+       {"texte": "5 : une chromatide hybride (¹⁵N + ¹⁴N), l'autre légère (¹⁴N + ¹⁴N)", "mot": "والأخرى légère"},
        {"texte": "même séquence de bases (complémentarité A–T, C–G) : même information", "mot": "نفس la séquence ديال les bases"},
        {"texte": "anaphase : chromatides sœurs vers les pôles opposés → chaque cellule fille reçoit la même information génétique", "mot": "les pôles opposés"}],
      "parole": "السؤال cinq. ف كل chromosome، les deux chromatides: وحدة hybride، brin ب l'azote quinze و brin ب l'azote quatorze، والأخرى légère، les deux brins ب l'azote quatorze. ولكن عندهم نفس la séquence ديال les bases، حيت كل brin nouveau تبنى ب la complémentarité: A مقابل T، و C مقابل G. ف l'anaphase، les chromatides sœurs كيتفرقو، وكيمشيو ل les pôles opposés. إذن كل cellule fille كتاخد نفس l'information génétique."},
@@ -226,7 +227,7 @@ EXPLICATION = [
   {"id": "ex_s4", "slide_type": "simulation", "title": "Question 4 : à la deuxième réplication, moitié hybrides, moitié légères",
    "screen_content": {"lead": "4 molécules hybrides → 8 molécules : 4 hybrides + 4 légères ; 16 brins dont 4 à ¹⁵N : 12 brins à ¹⁴N."},
    "visual": {"kind": "simulation", "url": MES, "caption": "La même logique chez les bactéries : G2 et l'arbre des molécules"},
-   "speech_text": {"mixed": "شوف نفس الفكرة عند les bactéries. ف la génération deux، deux bandes: hybride et légère، بنفس الكمية. علاش؟ شوف l'arbre: molécule hybride كتعطي une hybride et une légère. le brin lourd ما كيتزادش، كيبقى ف molécule وحدة. ف التمرين: la cellule fille فيها quatre molécules hybrides. ف la phase S ديال le cycle deux، كتولي huit molécules: quatre hybrides، et quatre légères. huit fois deux، égale seize brins. les brins ب l'azote quinze: toujours quatre. seize moins quatre، égale douze brins ب l'azote quatorze."},
+   "speech_text": {"mixed": "شوف نفس الفكرة عند les bactéries. ف la génération deux، deux bandes: hybride et légère، بنفس الكمية. علاش؟ شوف l'arbre: molécule hybride كتعطي une hybride et une légère. le brin lourd ما كيتزادش، كيبقى ف une seule molécule. ف التمرين: la cellule fille فيها quatre molécules hybrides. ف la phase S ديال le cycle deux، كتولي huit molécules: quatre hybrides، et quatre légères. huit fois deux، égale seize brins. les brins ب l'azote quinze: toujours quatre. seize moins quatre، égale douze brins ب l'azote quatorze."},
    "concentration": {"demarrer": "reset",
      "centre": [{"texte": "1 hybride → 1 hybride + 1 légère", "mot": "molécule hybride كتعطي une hybride et une légère"},
                 {"texte": "8 molécules × 2 = 16 brins ; ¹⁵N : toujours 4", "mot": "huit fois deux، égale seize brins"},
@@ -266,6 +267,7 @@ POURQUOI = {"1": ("la bulle où les deux brins sont séparés", "la bulle فين
             "3": ("un brin bleu de la molécule mère", "brin زرق ديال la molécule mère"),
             "4": ("un brin orange, en cours de formation", "brin برتقالي، كيتصاوب")}
 RETOURS = {}
+ART = {"a": "l'", "b": "la ", "c": "le ", "d": "le "}
 for gch, juste in JUSTE.items():
     for d, nom in NOMS:
         if d == juste:
@@ -273,7 +275,7 @@ for gch, juste in JUSTE.items():
         elif d == "e":
             RETOURS[f"{gch}-{d}"] = (False, "Non : l'ADN polymérase est une enzyme ; elle n'est pas numérotée sur ce schéma.", "لا، l'A D N polymérase enzyme، ما عندهاش رقم ف هاد le schéma.")
         else:
-            RETOURS[f"{gch}-{d}"] = (False, f"Non : le numéro {gch} montre {POURQUOI[gch][0]}, pas le {nom}." if not nom.startswith("œ") else f"Non : le numéro {gch} montre {POURQUOI[gch][0]}, pas l'{nom}.",
+            RETOURS[f"{gch}-{d}"] = (False, f"Non : le numéro {gch} montre {POURQUOI[gch][0]}, pas {ART[d]}{nom}.",
                                      f"لا، هاد le numéro كيبين {POURQUOI[gch][1]}، ماشي {DIT_NOM[d]}.")
 
 FACILE = [
@@ -300,7 +302,7 @@ FACILE = [
     "En métaphase du cycle 2, la cellule fille a 16 brins, dont 4 à ¹⁵N. Le nombre de brins à ¹⁴N est…",
     ["8", "16", "12"], 2, {
       "2": {"juste": rep("برافو! seize moins quatre، égale douze brins ب l'azote quatorze.", "Juste : 16 − 4 = 12 brins à ¹⁴N.")},
-      "0": {"1": rep("لا، huit هو النص. les brins ب l'azote quinze غير quatre. عاود اختار.", "8, c'est la moitié ; or il n'y a que 4 brins ¹⁵N. Réessaie."),
+      "0": {"1": rep("لا، huit هو النص. les brins ب l'azote quinze: seulement quatre. عاود اختار.", "8, c'est la moitié ; or il n'y a que 4 brins ¹⁵N. Réessaie."),
             "2": rep("الجواب: seize moins quatre، égale douze.", "Réponse : 16 − 4 = 12.")},
       "1": {"1": rep("لا، seize هو le total. خاصك تنقص les brins ب l'azote quinze. عاود اختار.", "16 est le total ; retire les brins ¹⁵N. Réessaie."),
             "2": rep("الجواب: seize moins quatre، égale douze.", "Réponse : 16 − 4 = 12.")}},
@@ -309,7 +311,7 @@ FACILE = [
     "En métaphase du cycle 2, les deux chromatides d'un chromosome…",
     ["sont toutes les deux hybrides", "ont des séquences de bases différentes", "diffèrent par leur azote mais ont la même séquence de bases"], 2, {
       "2": {"juste": rep("برافو! وحدة hybride والأخرى légère، ولكن نفس la séquence ديال les bases: نفس l'information.", "Juste : une hybride, une légère, même séquence.")},
-      "0": {"1": rep("لا، الخلية فيها غير quatre brins ب l'azote quinze، و huit chromatides. واش يكفيو؟ عاود اختار.", "Il n'y a que 4 brins ¹⁵N pour 8 chromatides : cela suffit-il ? Réessaie."),
+      "0": {"1": rep("لا، الخلية فيها seulement quatre brins ب l'azote quinze، et huit chromatides. واش يكفيو؟ عاود اختار.", "Il n'y a que 4 brins ¹⁵N pour 8 chromatides : cela suffit-il ? Réessaie."),
             "2": rep("الجواب: وحدة hybride والأخرى légère، بنفس la séquence.", "Réponse : l'une hybride, l'autre légère, même séquence.")},
       "1": {"1": rep("لا، la complémentarité كتعطي نسخة مطابقة. A ديما مقابل T، و C مقابل G. عاود اختار.", "La complémentarité donne une copie identique (A–T, C–G). Réessaie."),
             "2": rep("الجواب: نفس la séquence، و l'azote هو اللي مختلف.", "Réponse : même séquence, seul l'azote diffère.")}},

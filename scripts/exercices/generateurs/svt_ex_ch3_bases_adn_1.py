@@ -120,10 +120,10 @@ def questions(esp, r, idx_ag, ag, tc, aZ, seq, avec_tout):
        "clavier": {"aides": ["A/T", "C/G", "≈", "0,99", "1,01"], "pieges": ["A/G", "T/A"]},
        "correction": {"lignes": [{"texte": "1 : " + ligne_rapports(r[:2]), "mot": "A sur T"},
                                  {"texte": ligne_rapports(r[2:]), "mot": "كل les rapports"}],
-         "parole": "السؤال un. A sur T، هو le pourcentage ديال A، sur le pourcentage ديال T. و C sur G، هو le pourcentage ديال C، sur le pourcentage ديال G. مثلا، chez le " + ("bœuf" if avec_tout else "porc") + "، A sur T، environ zéro virgule quatre-vingt-dix-neuf. كل les rapports، entre zéro virgule quatre-vingt-dix-huit et un virgule zéro trois: كاملين environ un."},
+         "parole": "السؤال un. A sur T، هو le pourcentage ديال A، sur le pourcentage ديال T. و C sur G، هو le pourcentage ديال C، sur le pourcentage ديال G. مثلا، chez le " + ("bœuf" if avec_tout else "porc") + "، A sur T، environ zéro virgule quatre-vingt-dix-neuf. كل les rapports، entre " + RDIT[min(v for x in r for v in x[1:3])] + " et " + RDIT[max(v for x in r for v in x[1:3])] + ": كاملين environ un."},
        "explication": "ex_s1", "facile": "fa_s1"},
       {"id": "2", "texte": "Décrire les résultats du tableau et des rapports calculés, puis déduire la relation entre les bases de l'ADN.",
-       "reponse": {"type": "phrase", "attendu": f"Les pourcentages des bases varient d'une espèce à l'autre (A : de {fr(amin[1])} % chez {amin[0].lower()} à {fr(amax[1])} % chez {amax[0].lower()} ; G : de {fr(gmin[3])} % chez {gmin[0].lower()} à {fr(gmax[3])} % chez {gmax[0].lower()}). Mais chez toutes les espèces, A/T ≈ 1 et C/G ≈ 1 : % A ≈ % T et % C ≈ % G. On en déduit que, dans l'ADN, l'adénine (A) est associée à la thymine (T) et la cytosine (C) à la guanine (G) : les bases sont complémentaires (A–T, C–G)."},
+       "reponse": {"type": "phrase", "attendu": f"Les pourcentages des bases varient d'une espèce à l'autre (A : de {fr(amin[1])} % chez {LE[amin[0]]} à {fr(amax[1])} % chez {LE[amax[0]]} ; G : de {fr(gmin[3])} % chez {LE[gmin[0]]} à {fr(gmax[3])} % chez {LE[gmax[0]]}). Mais chez toutes les espèces, A/T ≈ 1 et C/G ≈ 1 : % A ≈ % T et % C ≈ % G. On en déduit que, dans l'ADN, l'adénine (A) est associée à la thymine (T) et la cytosine (C) à la guanine (G) : les bases sont complémentaires (A–T, C–G)."},
        "clavier": {"aides": ["varient d'une espèce à l'autre", "A/T ≈ 1", "C/G ≈ 1", "On en déduit que", "complémentaires"], "pieges": ["A avec G", "identiques chez toutes les espèces"]},
        "correction": {"lignes": [{"texte": f"2 : les % varient selon l'espèce (A de {fr(amin[1])} à {fr(amax[1])} %)", "mot": "كيتبدلو من espèce لأخرى"},
                                  {"texte": "mais A/T ≈ 1 et C/G ≈ 1 chez toutes les espèces : % A ≈ % T, % C ≈ % G", "mot": "ديما environ un"},
@@ -152,7 +152,7 @@ def questions(esp, r, idx_ag, ag, tc, aZ, seq, avec_tout):
        "clavier": {"aides": ["3'", "5'", "A", "T", "C", "G"], "pieges": [f"5' {comp(seq)} 3'"]},
        "correction": {"lignes": [{"texte": f"5 : brin donné : 5' {seq} 3'", "mot": "le brin donné"},
                                  {"texte": f"brin complémentaire : 3' {comp(seq)} 5'", "mot": "trois prime، " + " ".join(comp(seq))}],
-         "parole": f"السؤال cinq. le brin donné: cinq prime، {' '.join(seq)}، trois prime. مقابل كل A، T. مقابل كل C، G. وle brin complémentaire كيبدا par trois prime: trois prime، {' '.join(comp(seq))}، cinq prime."},
+         "parole": f"السؤال cinq. le brin donné: cinq prime، {' '.join(seq)}، trois prime. مقابل كل A، T. مقابل كل T، A. مقابل كل C، G. مقابل كل G، C. وle brin complémentaire كيبدا par trois prime: trois prime، {' '.join(comp(seq))}، cinq prime."},
        "explication": "ex_s5", "facile": "fa_s5"},
       {"id": "6", "texte": "En exploitant les résultats précédents, décrire la structure de la molécule d'ADN.",
        "reponse": {"type": "phrase", "attendu": "La molécule d'ADN est formée de deux brins de nucléotides enroulés en double hélice. Les deux brins sont antiparallèles (5'→3' en face de 3'→5'). Les bases des deux brins sont complémentaires : A en face de T (deux liaisons hydrogène), C en face de G (trois liaisons hydrogène). C'est pourquoi % A = % T et % C = % G dans l'ADN."},
@@ -160,7 +160,7 @@ def questions(esp, r, idx_ag, ag, tc, aZ, seq, avec_tout):
        "correction": {"lignes": [{"texte": "6 : deux brins de nucléotides en double hélice", "mot": "deux brins de nucléotides"},
                                  {"texte": "brins antiparallèles (5'→3' en face de 3'→5')", "mot": "antiparallèles"},
                                  {"texte": "A–T (deux liaisons hydrogène), C–G (trois liaisons hydrogène) : d'où % A = % T, % C = % G", "mot": "avec trois liaisons hydrogène"}],
-         "parole": "السؤال six. l'A D N: deux brins de nucléotides، ملويين على بعضهم: la double hélice. les deux brins antiparallèles: cinq prime مقابل trois prime. les bases complémentaires: A en face de T، avec deux liaisons hydrogène. C en face de G، avec trois liaisons hydrogène. هادشي علاش autant de A que de T، و autant de C que de G."},
+         "parole": "السؤال six. l'A D N: deux brins de nucléotides، ملويين على بعضهم: la double hélice. les deux brins antiparallèles: cinq prime en face de trois prime. les bases complémentaires: A en face de T، avec deux liaisons hydrogène. C en face de G، avec trois liaisons hydrogène. هادشي علاش autant de A que de T، و autant de C que de G."},
        "explication": "ex_s6", "facile": "fa_s6"}]
     if not avec_tout:
         for q in qs:
@@ -168,6 +168,8 @@ def questions(esp, r, idx_ag, ag, tc, aZ, seq, avec_tout):
     return qs
 
 
+LE = {"Bœuf": "le bœuf", "Blé": "le blé", "Oursin": "l'oursin", "Bactérie": "la bactérie", "Porc": "le porc", "Maïs": "le maïs", "Criquet": "le criquet", "Levure": "la levure"}
+RDIT = {"0,98": "zéro virgule quatre-vingt-dix-huit", "0,99": "zéro virgule quatre-vingt-dix-neuf", "1,01": "un virgule zéro un", "1,02": "un virgule zéro deux", "1,03": "un virgule zéro trois"}
 DIT = {24.9: "vingt-quatre virgule neuf", 32.4: "trente-deux virgule quatre", 26.8: "vingt-six virgule huit", 31.6: "trente et un virgule six",
        49.9: "quarante-neuf virgule neuf", 50.1: "cinquante virgule un", 21: "vingt et un", 42: "quarante-deux", 58: "cinquante-huit",
        29: "vingt-neuf", 18: "dix-huit", 36: "trente-six", 64: "soixante-quatre", 32: "trente-deux"}
@@ -185,19 +187,19 @@ TD = {
           "قارن الأول les pourcentages من espèce لأخرى، ومن بعد قارن les rapports. شنو لاحظتي؟"),
          ("Décris avec des valeurs (« varient de … à … », « A/T ≈ … »), puis écris « On en déduit que… » : quelles bases sont en quantités égales ?",
           "وصف بles valeurs، ومن بعد كتب: On en déduit que. شمن les bases عندهم نفس الكمية؟")]),
-  "3": ("السؤال trois: بين أن chez le blé، le rapport A plus G، sur T plus C، قريب بزاف من un.",
+  "3": ("السؤال trois: بين أن chez le blé، le rapport A plus G، sur T plus C، est voisin de un.",
         [("Lis les quatre pourcentages du blé dans le tableau.", "قرا les quatre pourcentages ديال le blé فle tableau."),
          ("Calcule A + G, puis T + C, puis divise le premier résultat par le second.", "حسب A plus G، ومن بعد T plus C، ومن بعد قسم الأول على الثاني.")]),
-  "4": ("السؤال quatre: عند واحد l'espèce Z، l'adénine هي vingt et un pour cent ديال les bases. حسب le pourcentage ديال la guanine.",
+  "4": ("السؤال quatre: عند واحد l'espèce Z، l'adénine représente vingt et un pour cent des bases. حسب le pourcentage ديال la guanine.",
         [("Utilise la complémentarité trouvée à la question 2 : quelle base a le même pourcentage que A ? et que G ?",
           "خدم بla complémentarité ديال السؤال deux: شمن base عندها نفس le pourcentage ديال A؟ وديال G؟"),
          ("Les quatre bases font 100 % : retire A et T, puis partage ce qui reste entre G et C, qui sont égales.",
-          "les quatre bases كيعطيو cent pour cent. حيد A و T، ومن بعد قسم الباقي par deux، حيت G égale C.")]),
-  "5": ("السؤال cinq: كتب le brin complémentaire ديال cinq prime، A C G T T G C، trois prime، وحدد les extrémités ديالو.",
+          "les quatre bases، c'est cent pour cent. حيد A و T، ومن بعد قسم الباقي par deux، حيت G égale C.")]),
+  "5": ("السؤال cinq: كتب le brin complémentaire du brin cinq prime، A C G T T G C، trois prime، وحدد les extrémités ديالو.",
         [("En face de chaque base, pose sa base complémentaire : A en face de T, C en face de G.",
           "مقابل كل base، حط la base complémentaire ديالها: A مقابل T، و C مقابل G."),
          ("Les brins sont antiparallèles : écris d'abord les extrémités, 3' à gauche sous le 5' du brin donné.",
-          "les brins antiparallèles: كتب الأول les extrémités. trois prime على اليسار، تحت cinq prime ديال le brin donné.")]),
+          "les brins antiparallèles: كتب الأول les extrémités. trois prime على اليسار، sous le cinq prime du brin donné.")]),
   "6": ("السؤال six: استغل الأجوبة اللي فاتو، ووصف la structure ديال la molécule d'A D N.",
         [("Combien de brins ? Dans quel sens est chaque brin ? Comment sont reliées les bases d'en face ?",
           "شحال من brin؟ كيفاش موجه كل brin؟ وكيفاش مربوطين les bases اللي مقابلين بعضهم؟"),
@@ -223,7 +225,7 @@ EX = {
                   "Décrire la structure de l'ADN"],
   "enonce": {
     "intro": "On extrait l'ADN des cellules de quatre espèces, puis on détermine le pourcentage de chacune des quatre bases azotées (adénine A, thymine T, guanine G, cytosine C) parmi toutes les bases de cet ADN. Le tableau présente les résultats.",
-    "intro_dit": "دابا نقراو l'énoncé. خرجنا l'A D N من les cellules ديال quatre espèces. ومن بعد حسبنا le pourcentage ديال كل base azotée: l'adénine، la thymine، la guanine و la cytosine. le tableau فيه les résultats.",
+    "intro_dit": "دابا نقراو l'énoncé. خرجنا l'A D N من les cellules de quatre espèces. ومن بعد حسبنا le pourcentage ديال كل base azotée: l'adénine، la thymine، la guanine و la cytosine. le tableau فيه les résultats.",
     "figures": [tableau(ESP, "Composition en bases de l'ADN de quatre espèces (en %)")],
     "donnees": ["Pourcentages en % du nombre total de bases de l'ADN", "Arrondir les rapports à 0,01",
                 "Bases azotées : adénine (A), thymine (T), guanine (G), cytosine (C)"],
@@ -329,7 +331,7 @@ EX = {
         "1": {"juste": rep("برافو! A sur T، هو le pourcentage ديال A، sur le pourcentage ديال T.", "Juste : A/T = % A / % T.")},
         "0": {"1": rep("قريب! شوف الحروف ديال le rapport: A sur شنو؟ عاود اختار.", "Regarde les lettres du rapport : A divisé par quoi ? Réessaie."),
               "2": rep("الجواب هو: le pourcentage ديال A، sur le pourcentage ديال T. ماشي G.", "Réponse : A/T = % A / % T, pas % A / % G.")},
-        "2": {"1": rep("ما تقلقش. le rapport A sur T، قسمة ديال جوج pourcentages: A فوق، و T لتحت. عاود اختار.", "Le rapport A/T divise deux pourcentages : A en haut, T en bas. Réessaie."),
+        "2": {"1": rep("ما تقلقش. le rapport A sur T، c'est une division: A فوق، و T لتحت. عاود اختار.", "Le rapport A/T divise deux pourcentages : A en haut, T en bas. Réessaie."),
               "2": rep("الجواب هو: le pourcentage ديال A، sur le pourcentage ديال T.", "Réponse : A/T = % A / % T.")}},
       "le rapport A sur T، كيفاش كيتحسب؟"),
     vrai_faux("fa_s2", "Plus facile : ce que montre le tableau", "Vrai ou faux : ce que montrent les résultats.",
@@ -350,9 +352,9 @@ EX = {
       "Chez l'espèce Z, A = 21 %. Le pourcentage de G est :", ["21 %", "29 %", "58 %"], 1, {
         "1": {"juste": rep("برافو! T égale vingt et un، G plus C égale cinquante-huit، و G égale vingt-neuf pour cent.", "Juste : T = 21 %, G + C = 58 %, G = 29 %.")},
         "0": {"1": rep("قريب! vingt et un pour cent، هو A وهو T. ولكن G ماشي مقابلة A. عاود اختار.", "21 %, c'est A et T ; G n'est pas en face de A. Réessaie."),
-              "2": rep("الجواب هو vingt-neuf pour cent: cent moins quarante-deux، égale cinquante-huit، و cinquante-huit sur deux، égale vingt-neuf.", "Réponse : G = (100 − 42)/2 = 29 %.")},
+              "2": rep("الجواب هو: vingt-neuf pour cent. cent moins quarante-deux، égale cinquante-huit، et cinquante-huit sur deux، égale vingt-neuf.", "Réponse : G = (100 − 42)/2 = 29 %.")},
         "2": {"1": rep("قريب! cinquante-huit هو G plus C. و G égale C. عاود اختار.", "58 %, c'est G + C ; or G = C. Réessaie."),
-              "2": rep("الجواب هو vingt-neuf pour cent: cinquante-huit sur deux، حيت G égale C.", "Réponse : G = 58/2 = 29 %, car G = C.")}},
+              "2": rep("الجواب هو: vingt-neuf pour cent. cinquante-huit sur deux، حيت G égale C.", "Réponse : G = 58/2 = 29 %, car G = C.")}},
       "عند l'espèce Z، A égale vingt et un pour cent. شحال هو le pourcentage ديال G؟"),
     assoc_bases("fa_s5"),
     vrai_faux("fa_s6", "Plus facile : la structure de l'ADN", "Vrai ou faux : la structure de l'ADN.",
@@ -366,7 +368,7 @@ EX = {
     "id": "svt_ex_ch3_bases_adn_1_b", "titre": "Même exercice, autres données",
     "enonce": {
       "intro": "On détermine de la même façon le pourcentage de chaque base azotée (A, T, G, C) dans l'ADN de quatre autres espèces. Le tableau présente les résultats.",
-      "intro_dit": "نفس التجربة مع quatre espèces أخرى: حسبنا le pourcentage ديال كل base فl'A D N. le tableau فيه les résultats.",
+      "intro_dit": "نفس التجربة، avec quatre autres espèces: حسبنا le pourcentage ديال كل base فl'A D N. le tableau فيه les résultats.",
       "figures": [tableau(ESP_B, "Composition en bases de l'ADN de quatre espèces (en %)")],
       "donnees": ["Pourcentages en % du nombre total de bases de l'ADN", "Arrondir les rapports à 0,01",
                   "Bases azotées : adénine (A), thymine (T), guanine (G), cytosine (C)"],

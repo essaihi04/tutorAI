@@ -64,7 +64,7 @@ def doc_intensite(seuil, imax, amax, titre):
     el += [{"f": "point", "at": p, "couleur": "cyan"} for p in pts]
     pas = 5 if amax <= 20 else 4
     return {"type": "courbe", "titre": titre, "ratio": 0.6,
-            "axes": {"x": {"min": 0, "max": 13, "nom": "intensité", "unite": "mV", "graduations": list(range(0, 12))},
+            "axes": {"x": {"min": 0, "max": 14.5, "nom": "intensité", "unite": "mV", "graduations": list(range(0, 12))},
                      "y": {"min": 0, "max": amax + 6, "nom": "amplitude", "unite": "mm", "graduations": list(range(0, amax + 1, pas))}},
             "legende": "Document 1 : amplitude de la réponse du muscle à des excitations isolées d'intensité croissante.",
             "elements": el}, A
@@ -91,7 +91,7 @@ def doc_serie(lettre, f, lat, con, rel, amp, ymax):
             "axes": {"x": {"min": 0, "max": round(span * 1.12, 3), "nom": "t", "unite": "s", "graduations": grads},
                      "y": {"min": round(-ymax * 0.15, 1), "max": ymax, "nom": "amplitude", "unite": "mm",
                            "graduations": list(range(0, ymax, 20))}},
-            "legende": f"Douze excitations de même intensité (traits jaunes sous l'axe), une toutes les {fr(1000 / f, 1)} ms.",
+            "legende": "Douze excitations de même intensité (traits jaunes sous l'axe).",
             "elements": el}, y
 
 
@@ -175,7 +175,7 @@ QUESTIONS = [
      {"texte": "Une excitation arrive T ms après la précédente. Compare T à 10 ms (fin de la latence), 50 ms (sommet) et 100 ms (fin de la secousse).",
       "dit": "l'excitation الجاية كتجي من بعد T. قارن T مع هاد les instants: dix millisecondes، c'est la fin de la latence. cinquante millisecondes، c'est le sommet. et cent millisecondes، c'est la fin de la secousse."},
      {"texte": "Après la fin → secousses isolées ; pendant le relâchement → tétanos imparfait ; pendant la contraction → tétanos parfait. Ici c'est une série d'excitations : on parle de tétanos, pas de fusion de deux secousses.",
-      "dit": "من بعد la fin: des secousses isolées. ف le relâchement: le tétanos imparfait. ف la contraction: le tétanos parfait. ورد البال: هنا une série d'excitations، إذن tétanos، ماشي fusion ديال deux secousses."}],
+      "dit": "من بعد la fin: des secousses isolées. ف le relâchement: le tétanos imparfait. ف la contraction: le tétanos parfait. ورد البال: هنا، une série d'excitations، إذن tétanos، ماشي fusion de deux secousses."}],
    "correction": {"lignes": [
        {"texte": "4 : a : T = 200 ms > 100 ms : après la fin → secousses isolées", "mot": "des secousses isolées"},
        {"texte": "b : 50 ms < T ≈ 67 ms < 100 ms : pendant le relâchement → tétanos imparfait (plateau dentelé)", "mot": "le tétanos imparfait"},
@@ -283,15 +283,15 @@ ASSO_R = {
   "a-x": (True, "Oui : la secousse précédente est finie, chaque secousse reste seule.", "برافو: la secousse اللي قبلها سالات، إذن des secousses isolées."),
   "a-y": (False, "Le tétanos imparfait demande des excitations pendant le relâchement ; ici elles arrivent après la fin.", "لا، le tétanos imparfait، l'excitation كتجي ف le relâchement. وهنا كتجي من بعد la fin."),
   "a-z": (False, "Le tétanos parfait demande des excitations pendant la contraction ; ici elles arrivent après la fin.", "لا، le tétanos parfait، l'excitation كتجي ف la contraction. وهنا كتجي من بعد la fin."),
-  "a-w": (False, "La fusion concerne deux excitations ; ici chaque secousse est séparée.", "لا، la fusion ديال deux excitations برك، وهنا les secousses بعاد على بعضياتهم."),
+  "a-w": (False, "La fusion concerne deux excitations ; ici chaque secousse est séparée.", "لا، la fusion de deux excitations برك، وهنا les secousses بعاد على بعضياتهم."),
   "b-x": (False, "Les excitations arrivent avant la fin de la secousse précédente : les secousses ne sont pas isolées.", "لا، l'excitation كتجي قبل ما تسالي la secousse اللي قبلها، إذن ماشي isolées."),
   "b-y": (True, "Oui : une série, chaque excitation pendant le relâchement : plateau dentelé, tétanos imparfait.", "برافو: une série، و كل excitation ف le relâchement: plateau فيه السنان، le tétanos imparfait."),
   "b-z": (False, "Le tétanos parfait demande des excitations pendant la contraction ; ici c'est pendant le relâchement.", "لا، le tétanos parfait ف la contraction. وهنا ف le relâchement."),
-  "b-w": (False, "Pendant le relâchement, oui, mais ici c'est une série d'excitations : on parle de tétanos.", "قريب، ف le relâchement. ولكن هنا une série، إذن tétanos، ماشي fusion."),
+  "b-w": (False, "Pendant le relâchement, oui, mais ici c'est une série d'excitations : on parle de tétanos.", "قريب، ف le relâchement. ولكن هنا، une série، إذن tétanos، ماشي fusion."),
   "c-x": (False, "Les excitations arrivent pendant la contraction : les secousses fusionnent.", "لا، l'excitation كتجي ف la contraction، إذن les secousses كيتزادو."),
   "c-y": (False, "Le tétanos imparfait correspond au relâchement ; ici c'est pendant la contraction.", "لا، le tétanos imparfait ف le relâchement. وهنا ف la contraction."),
   "c-z": (True, "Oui : une série, chaque excitation pendant la contraction : plateau lisse, tétanos parfait.", "برافو: une série، و كل excitation ف la contraction: plateau lisse، le tétanos parfait."),
-  "c-w": (False, "La fusion concerne deux excitations ; ici c'est une série : on parle de tétanos.", "لا، la fusion ديال deux excitations برك. وهنا une série، إذن tétanos."),
+  "c-w": (False, "La fusion concerne deux excitations ; ici c'est une série : on parle de tétanos.", "لا، la fusion de deux excitations برك. وهنا، une série، إذن tétanos."),
 }
 
 FACILE = [
@@ -323,7 +323,7 @@ FACILE = [
     "نتمرنو: ربط كل enregistrement مع السمية ديالو.",
     "Relie chaque enregistrement au nom du tracé.", ASSO_G, ASSO_D, {"a": "x", "b": "y", "c": "z"}, ASSO_R,
     ("a : secousses isolées ; b : tétanos imparfait ; c : tétanos parfait. La fusion ne concerne que deux excitations.",
-     "a، des secousses isolées. b، le tétanos imparfait. c، le tétanos parfait. و la fusion، غير ديال deux excitations.")),
+     "a، des secousses isolées. b، le tétanos imparfait. c، le tétanos parfait. و la fusion، غير de deux excitations.")),
   vrai_faux("fa_s5", "Plus facile : le tétanos parfait", "Vrai ou faux : le tétanos parfait.",
     "سؤال ساهل: قرا كل جملة، وقول vrai ولا faux.",
     [("Dans c, le plateau vaut environ 3 fois l'amplitude d'une secousse isolée.", True,
@@ -379,7 +379,7 @@ EX = {
                   "Situer une excitation dans les phases de la secousse précédente", "Nommer secousses isolées, tétanos imparfait et parfait", "Définir le tétanos parfait"],
   "enonce": {
     "intro": "On étudie la réponse du muscle gastrocnémien d'une grenouille relié à un myographe. Expérience 1 : on applique des excitations isolées d'intensité croissante, de 1 à 11 mV ; le document 1 donne l'amplitude de chaque réponse. Expérience 2 : on applique trois séries de 12 excitations de même intensité (10 mV), à trois fréquences différentes : 5 Hz (a), 15 Hz (b) et 40 Hz (c) ; le document 2 représente les trois enregistrements obtenus.",
-    "intro_dit": "نقراو l'énoncé. عندنا le muscle gastrocnémien ديال الضفدعة، مربوط ب le myographe. التجربة اللولى: des excitations isolées، l'intensité ديالهم كتزاد، de un à onze millivolts. le document un كيعطي l'amplitude ديال كل réponse. التجربة الثانية: trois séries de douze excitations، ب نفس l'intensité، dix millivolts، ولكن ب trois fréquences: cinq hertz، quinze hertz، et quarante hertz. le document deux فيه les trois enregistrements: a، b، و c.",
+    "intro_dit": "نقراو l'énoncé. عندنا le muscle gastrocnémien ديال الضفدعة، مربوط ب le myographe. التجربة اللولى: des excitations isolées، l'intensité ديالهم كتزاد، de un à onze millivolts. le document un، كيعطي l'amplitude ديال كل réponse. التجربة الثانية: trois séries de douze excitations، ب نفس l'intensité، dix millivolts، ولكن à trois fréquences: cinq hertz، quinze hertz، et quarante hertz. le document deux، فيه les trois enregistrements: a، b، و c.",
     "figures": [FIG1, FA, FB, FC],
     "donnees": ["Secousse isolée de ce muscle : latence 10 ms, contraction 40 ms, relâchement 50 ms (durée totale 100 ms)",
                 "f excitations par seconde (f en Hz) : intervalle entre deux excitations T = 1/f",

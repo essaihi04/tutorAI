@@ -71,7 +71,7 @@ EX = {
                   "Calculer un rapport et un rendement énergétique", "Expliquer une différence par les bilans énergétiques"],
   "enonce": {
     "intro": "On cultive la même souche de levures dans deux milieux identiques contenant du glucose. La culture A est constamment aérée (riche en dioxygène) ; la culture B est privée de dioxygène. Après 24 h, on mesure, pour 1 L de culture, le glucose consommé, la masse de levures formées (matière sèche) et l'éthanol produit, et on observe les levures au microscope électronique (document 1).",
-    "intro_dit": "دابا نقراو l'énoncé. عندنا نفس les levures، فجوج ديال les milieux بحال بحال، فيهم le glucose. la culture A فيها le dioxygène ديما. la culture B بلا dioxygène. après vingt-quatre heures، قسنا le glucose اللي تستهلك، والكتلة ديال les levures اللي تكونو، و l'éthanol. وشفنا les levures بle microscope électronique. كلشي فle document un.",
+    "intro_dit": "دابا نقراو l'énoncé. عندنا نفس les levures، dans deux milieux بحال بحال، فيهم le glucose. la culture A فيها le dioxygène ديما. la culture B بلا dioxygène. après vingt-quatre heures، قسنا le glucose اللي تستهلك، والكتلة ديال les levures اللي تكونو، و l'éthanol. وشفنا les levures بle microscope électronique. كلشي فle document un.",
     "figures": [doc1(10, 50, 4.75, 1.25, 23)],
     "donnees": ["Culture A (aérée) : glucose consommé 10 g/L ; levures formées 4,75 g/L ; éthanol 0 g/L",
                 "Culture B (sans O₂) : glucose consommé 50 g/L ; levures formées 1,25 g/L ; éthanol 23 g/L",

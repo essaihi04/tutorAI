@@ -103,7 +103,7 @@ EX = {
        "clavier": {"aides": ["ATP directs", "NADH,H⁺ × 3", "FADH₂ × 2", "bilan ="], "pieges": ["10 × 2", "2 × 3"]},
        "aides": [
          {"texte": "Les ATP viennent de deux sources : les ATP directs (étapes 1 et 3) et la chaîne respiratoire, qui convertit les transporteurs réduits.",
-          "dit": "l'ATP كيجي من جوج البلايص: les ATP directs، ديال les étapes un et trois، و la chaîne respiratoire اللي كتحول les transporteurs réduits."},
+          "dit": "l'ATP vient de deux sources: les ATP directs، ديال les étapes un et trois، و la chaîne respiratoire اللي كتحول les transporteurs réduits."},
          {"texte": "Applique la règle de l'étape 4 aux totaux de la question 1 (NADH,H⁺ × 3, FADH₂ × 2), puis ajoute les ATP directs.",
           "dit": "طبق la règle ديال l'étape quatre sur les totaux ديال la question un: N A D H, H plus، fois trois. F A D H deux، fois deux. ومن بعد زيد les ATP directs."}],
        "correction": {"lignes": [
@@ -142,7 +142,7 @@ EX = {
            {"texte": "4 : énergie dans l'ATP : 36 × 30,5 = 1098 kJ", "mot": "trente-six fois trente virgule cinq"},
            {"texte": "r = 1098/2860 × 100 ≈ 38,4 %", "mot": "environ trente-huit virgule quatre pour cent"},
            {"texte": "avec 38 ATP : r ≈ 40,5 % ; dans les deux cas environ 40 %, le reste part en chaleur", "mot": "le reste part en chaleur"}],
-         "parole": "la question quatre. l'énergie فl'ATP: trente-six fois trente virgule cinq، égale mille quatre-vingt-dix-huit kilojoules. r égale mille quatre-vingt-dix-huit، sur deux mille huit cent soixante، fois cent، environ trente-huit virgule quatre pour cent. avec trente-huit ATP، r égale quarante virgule cinq pour cent. فجوج الحالات، environ quarante pour cent، et le reste part en chaleur. وفالامتحان، خدم ديما ب la valeur ديال l'énoncé."},
+         "parole": "la question quatre. l'énergie فl'ATP: trente-six fois trente virgule cinq، égale mille quatre-vingt-dix-huit kilojoules. r égale mille quatre-vingt-dix-huit، sur deux mille huit cent soixante، fois cent، environ trente-huit virgule quatre pour cent. avec trente-huit ATP، r égale quarante virgule cinq pour cent. dans les deux cas، environ quarante pour cent، et le reste part en chaleur. وفالامتحان، خدم ديما ب la valeur ديال l'énoncé."},
        "explication": "ex_s4", "facile": "fa_s4"},
       {"id": "5", "texte": "Le document 2 reproduit le calcul d'un élève. Relever les erreurs de ce calcul, en les justifiant à l'aide du document 1, puis écrire le calcul corrigé.",
        "texte_dit": "la question cinq: le document deux فيه le calcul ديال واحد التلميذ. لقا les erreurs، وبررهم ب le document un، ومن بعد كتب le calcul الصحيح.",
@@ -150,7 +150,7 @@ EX = {
        "clavier": {"aides": ["2 ATP nets", "4 − 2", "2 NADH,H⁺ de la glycolyse", "deux acides pyruviques", "× 2", "38 ATP"], "pieges": ["4 ATP nets", "19 ATP"]},
        "aides": [
          {"texte": "Vérifie trois choses dans la copie : les ATP nets de la glycolyse, ses NADH,H⁺, et le nombre d'acides pyruviques par glucose.",
-          "dit": "شوف ثلاث حوايج فle calcul: les ATP nets ديال la glycolyse، و les N A D H, H plus ديالها، و le nombre ديال les acides pyruviques par glucose."},
+          "dit": "vérifie trois choses فle calcul: les ATP nets ديال la glycolyse، و les N A D H, H plus ديالها، و le nombre ديال les acides pyruviques par glucose."},
          {"texte": "Relis l'étape 1 du document 1 (produits nets), puis refais le compte : étapes 2 et 3 × 2, règle 3 et 2.",
           "dit": "عاود قرا l'étape un فle document un. ومن بعد عاود الحساب: les étapes deux et trois، fois deux، و la règle، trois et deux."}],
        "correction": {"lignes": [
