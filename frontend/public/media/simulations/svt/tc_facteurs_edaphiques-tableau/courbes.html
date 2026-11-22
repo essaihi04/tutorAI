@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Calcicole et calcifuge — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="sol.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Courbes tracées à la craie : calcium absorbé par le lupin jaune et par la fève selon le pH ; puis potassium absorbé par le lupin jaune avec et sans calcium"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Doc 2 (b et c) de l’activité 2 : plante calcifuge (lupin jaune) et plante calcicole (fève). Valeurs lues sur les
+ * courbes du document du professeur (diapositives fe_c3_calcium et fe_c4_potassium).
+ *   ?vue=calcium   : Ca²⁺ absorbé (mg/g de matière sèche) selon le pH du milieu (5 à 11). Fève : presque constant
+ *                    (≈ 6 → 8) ; lupin jaune : ≈ 4,5 jusqu’à pH 8, puis monte très fort (≈ 22 à pH 11).
+ *                    Moments : axes 2 ; feve 6 ; lupin 10 ; comparaison 12 ; fin 12,5.
+ *   ?vue=potassium : K⁺ absorbé (mg/g) par le lupin jaune en fonction du temps (h), sans Ca²⁺ (monte jusqu’à ≈ 5,5) et
+ *                    avec Ca²⁺ (reste ≈ 1). Moments : axes 2 ; sans_ca 6 ; avec_ca 10 ; comparaison 12 ; fin 12,5.
+ */
+const ST = window.SolTableau, { fr, doux } = ST;
+const $ = id => document.getElementById(id);
+const VUE = new URLSearchParams(location.search).get('vue') === 'potassium' ? 'potassium' : 'calcium';
+const CFG = VUE === 'calcium' ? {
+  x: { min: 5, max: 11.6, grad: [5, 7, 9, 11], nom: 'pH' }, y: { min: 0, max: 25, grad: [0, 5, 10, 15, 20], nom: 'Ca²⁺ absorbé (mg/g de matière sèche)' },
+  courbes: [
+    { id: 'feve', court: 'fève', nom: 'fève (calcicole)', coul: 'vert', pts: [[5.5, 5.7], [7, 6], [8.5, 6.2], [9.5, 6.4], [10.3, 7], [11, 8]], t0: 2.4, t1: 6 },
+    { id: 'lupin', court: 'lupin', nom: 'lupin jaune (calcifuge)', coul: 'jaune', pts: [[5.5, 4.4], [7, 4.6], [8, 5], [9, 6.5], [9.8, 9.5], [10.4, 14], [11, 22.5]], t0: 6.4, t1: 10 }],
+  comparaison: { x: 11, msg: 'pH élevé : le lupin jaune absorbe beaucoup trop de Ca²⁺', lignes: ['pH élevé :', 'le lupin jaune absorbe', 'beaucoup trop de Ca²⁺'] },
+} : {
+  x: { min: 0, max: 7.6, grad: [1, 2, 3, 4, 5, 6, 7], nom: 'temps (h)' }, y: { min: 0, max: 6.5, grad: [0, 1, 2, 3, 4, 5, 6], nom: 'K⁺ absorbé (mg/g)' },
+  courbes: [
+    { id: 'sans_ca', court: 'sans Ca²⁺', nom: 'absence de Ca²⁺', coul: 'jaune', pts: [[.5, .6], [1.7, 3.9], [3, 4.4], [5, 5.2], [7, 5.5]], t0: 2.4, t1: 6 },
+    { id: 'avec_ca', court: 'avec Ca²⁺', nom: 'présence de Ca²⁺', coul: 'cyan', pts: [[.5, .3], [2, 1.05], [3, 1.2], [4, 1.05], [5, 1.2], [6, 1.3], [7, 1]], t0: 6.4, t1: 10 }],
+  comparaison: { x: 5, msg: 'avec Ca²⁺, le lupin jaune absorbe beaucoup moins de K⁺', lignes: ['avec Ca²⁺,', 'le lupin jaune absorbe', 'beaucoup moins de K⁺'] },
+};
+const M = VUE === 'calcium' ? { axes: 2, feve: 6, lupin: 10, comparaison: 12 } : { axes: 2, sans_ca: 6, avec_ca: 10, comparaison: 12 };
+const FIN = 12.5;
+const MOTIFS = { axes: 'les axes du graphique', feve: 'la courbe de la fève', lupin: 'la courbe du lupin jaune', sans_ca: 'sans calcium', avec_ca: 'avec calcium', comparaison: 'la comparaison' };
+function interp(pts, x) { for (let i = 0; i < pts.length - 1; i++) if (x <= pts[i + 1][0]) { const [a, b] = [pts[i], pts[i + 1]], u = (x - a[0]) / (b[0] - a[0]); return a[1] + (b[1] - a[1]) * (u * u * (3 - 2 * u) * .3 + u * .7); } return pts[pts.length - 1][1]; }
+function dessiner(c) {
+  scene.cadre(53);
+  const t = B.chrono.t, L = scene.L, gx = 70, gy = 50, gw = Math.max(330, Math.min(L * .6, L - 400)), gh = 320;
+  const X = v => gx + (v - CFG.x.min) / (CFG.x.max - CFG.x.min) * gw, Y = v => gy + gh - (v - CFG.y.min) / (CFG.y.max - CFG.y.min) * gh;
+  c.axe(gx, gy + gh, gx + gw + 10, gy + gh, CFG.x.grad.map(v => [(v - CFG.x.min) / (CFG.x.max - CFG.x.min + 10 / gw * (CFG.x.max - CFG.x.min)), String(v)]), { taille: 16, couleur: 'blanc' });
+  c.axe(gx, gy + gh, gx, gy - 10, CFG.y.grad.map(v => [(v - CFG.y.min) / (CFG.y.max - CFG.y.min + 10 / gh * (CFG.y.max - CFG.y.min)), String(v)]), { taille: 16, couleur: 'blanc', vertical: true });
+  c.texte(CFG.x.nom, gx + gw + 14, gy + gh + 6, { couleur: 'blanc', taille: 17 });
+  c.texte(scene.compact ? CFG.y.nom.replace(' de matière sèche', '') : CFG.y.nom, gx + 10, gy - 14, { couleur: 'blanc', taille: 17, max: gw });
+  c.repere('axes', gx - 40, gy - 30, gw + 80, gh + 60, 'les axes');
+  const xp = gx + gw + 80, wp = L - xp - 14;
+  CFG.courbes.forEach((C, i) => {
+    if (t < C.t0) return;
+    const x0 = C.pts[0][0], x1 = C.pts[C.pts.length - 1][0], u = Math.min(1, (t - C.t0) / (C.t1 - C.t0 - .4));
+    c.direct(() => { const g = c.ctx; g.save(); g.strokeStyle = c.couleur(C.coul); g.lineWidth = 3.2; g.shadowColor = c.couleur(C.coul); g.shadowBlur = 8; g.beginPath();
+      for (let k = 0; k <= 80 * u; k++) { const x = x0 + (x1 - x0) * k / 80, y = interp(C.pts, x); k ? g.lineTo(X(x), Y(y)) : g.moveTo(X(x), Y(y)); } g.stroke(); g.restore(); });
+    const xe = x0 + (x1 - x0) * u;
+    if (u >= 1) {
+      const [lx, ly] = [X(x1) + 8, Y(interp(C.pts, x1))];
+      if (!scene.compact) ecrit.ecrire(c, 'nom' + i, () => c.texte(C.nom, xp, 90 + i * 40, { couleur: C.coul, taille: 19, max: wp }));
+      else ecrit.ecrire(c, 'court' + i, () => c.texte(C.court, lx, ly + (i ? 26 : -8), { couleur: C.coul, taille: 19 }));   // compact : le nom au bout de la courbe
+      c.repere(C.id, X(x0) - 6, Math.min(Y(interp(C.pts, x1)), Y(interp(C.pts, x0))) - 10, X(x1) - X(x0) + 12, Math.abs(Y(interp(C.pts, x1)) - Y(interp(C.pts, x0))) + 20, C.nom);
+    } else c.direct(() => { const g = c.ctx; g.save(); g.fillStyle = '#fff'; g.beginPath(); g.arc(X(xe), Y(interp(C.pts, xe)), 4, 0, 6.28); g.fill(); g.restore(); });
+  });
+  if (t >= 10.8) {
+    const xc = CFG.comparaison.x, [a, b] = CFG.courbes.map(C => interp(C.pts, xc));
+    if (!scene.compact) ecrit.ecrire(c, 'comp', () => {
+      c.ligne(X(xc), Y(a), X(xc), Y(b), { couleur: 'rose', largeur: 2.4 });
+      CFG.comparaison.lignes.forEach((l, k) => c.texte(l, xp, 200 + k * 28, { couleur: 'rose', taille: 18, max: wp }));
+    });
+    ST.lueur(c, X(xc) - 10, Math.min(Y(a), Y(b)) - 6, 20, Math.abs(Y(a) - Y(b)) + 12, true);
+    c.repere('comparaison', X(xc) - 14, Math.min(Y(a), Y(b)) - 8, 28, Math.abs(Y(a) - Y(b)) + 16, CFG.comparaison.msg);
+  }
+  return c.fin();
+}
+const canvas = $('canvas');
+const scene = ST.Scene(canvas, dessiner, { large: true });
+const ecrit = ST.Apparitions(scene);
+ST.brancher.scene = scene; ST.brancher.ecrit = ecrit;
+scene.foyer = () => ({ x: 0, y: 0, w: 560, h: 414 });   // compact : le graphique seul
+function voir(t) {
+  const m = [VUE === 'calcium' ? 'Graphique : Ca²⁺ absorbé (mg/g de matière sèche) en fonction du pH (5 à 11).' : 'Graphique : K⁺ absorbé (mg/g) par le lupin jaune en fonction du temps (h).'];
+  CFG.courbes.forEach(C => { if (t >= C.t1) m.push(`Courbe tracée : ${C.nom}, de ${fr(C.pts[0][1])} à ${fr(C.pts[C.pts.length - 1][1])}.`); });
+  if (t >= 12) m.push(CFG.comparaison.msg + '.');
+  return m.join(' ');
+}
+const B = ST.brancher({ id: 'edaph_courbes_' + VUE, titre: VUE === 'calcium' ? 'Ca²⁺ absorbé selon le pH' : 'K⁺ absorbé avec et sans Ca²⁺', M, FIN, motifs: MOTIFS, vue: VUE,
+  texte: VUE === 'calcium' ? 'Doc b : le calcium absorbé par la fève (calcicole) reste presque constant quand le pH monte ; celui du lupin jaune (calcifuge) monte très fort au-dessus de pH 9 (jusqu’à environ 22 mg/g à pH 11).' : 'Doc c : sans Ca²⁺, le lupin jaune absorbe de plus en plus de K⁺ (jusqu’à environ 5,5 mg/g en 7 h) ; avec Ca²⁺, il en absorbe très peu (environ 1 mg/g).',
+  voir, depart: 'Les axes, puis les courbes…', fini: () => CFG.comparaison.msg + '.',
+  explication: { [VUE]: CFG.courbes.map(C => ({ repere: C.id, texte: C.nom })) } });
+window.Tableau.bulle($('feedback'), VUE === 'calcium' ? 'Que fait le pH au calcium absorbé ?' : 'Le calcium gêne-t-il le potassium ?');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

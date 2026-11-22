@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Les vers de terre et le pH — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="sol.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Trois colonnes de sol à pH 4,2, 7 et 8 ; des vers de terre y creusent des galeries pendant un mois ; les galeries sont peu nombreuses à pH 4,2 et très nombreuses à pH 8"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Doc 3 de l’activité 2 : influence du pH sur la répartition des animaux (diapositive fe_c5_vers).
+ * Des vers de terre dans trois échantillons de sol (pH 4,2 ; 7 ; 8) ; l’activité = la densité de galeries creusées en
+ * un mois. Comptage des galeries dessinées (comme sur le document) : 9, 14, 36.
+ * Moments : colonnes 2 ; mois 8 ; compte_42 10 ; compte_7 12 ; compte_8 14 ; conclusion 16 ; fin 16,5.
+ * set_parameters {conclusions:false} : la conclusion ne s’écrit pas (question d’observation ouverte).
+ */
+const ST = window.SolTableau, { doux } = ST;
+const $ = id => document.getElementById(id);
+const M = { colonnes: 2, mois: 8, compte_42: 10, compte_7: 12, compte_8: 14, conclusion: 16 };
+const FIN = 16.5;
+const MOTIFS = { colonnes: 'trois sols : pH 4,2 ; 7 ; 8', mois: 'un mois plus tard', compte_42: 'pH 4,2 : 9 galeries', compte_7: 'pH 7 : 14 galeries', compte_8: 'pH 8 : 36 galeries', conclusion: 'les vers préfèrent les sols neutres à basiques' };
+const COL = [
+  { id: 'ph42', ph: '4,2', n: 9, tc: 10, mom: 'compte_42' },
+  { id: 'ph7', ph: '7', n: 14, tc: 12, mom: 'compte_7' },
+  { id: 'ph8', ph: '8', n: 36, tc: 14, mom: 'compte_8' },
+];
+COL.forEach((C, i) => { const r = ST.graine(i * 11 + 3); C.gal = Array.from({ length: C.n }, () => ({ u: r(), v: r(), a: r() * 6.28, l: 14 + r() * 12, ordre: r() })); });
+const P = { conclusions: true };
+function dessiner(c) {
+  scene.cadre(61);
+  const t = B.chrono.t, L = scene.L, cw = 118, ch = 270, y0 = 52;
+  const pas = Math.min(220, (L - 300 - cw) / 2), xs = COL.map((_, i) => 40 + i * pas);
+  COL.forEach((C, i) => {
+    const x = xs[i], a = doux(t / 1.5);
+    const creuse = doux((t - 2.5) / 5.3);   // le mois qui passe
+    c.direct(() => {
+      const g = c.ctx; g.save(); g.globalAlpha = a;
+      const fg = g.createLinearGradient(x, 0, x + cw, 0); fg.addColorStop(0, '#8a5d34'); fg.addColorStop(.5, '#a8743f'); fg.addColorStop(1, '#7f532c');
+      g.fillStyle = fg; g.fillRect(x, y0, cw, ch);
+      const rr = ST.graine(i + 40); for (let k = 0; k < 300; k++) { g.fillStyle = rr() > .5 ? 'rgba(60,35,15,.35)' : 'rgba(210,170,120,.3)'; g.fillRect(x + rr() * cw, y0 + rr() * ch, 2, 2); }
+      // les galeries (blanches), creusées peu à peu au cours du mois
+      g.save(); g.beginPath(); g.rect(x + 3, y0 + 3, cw - 6, ch - 6); g.clip(); g.strokeStyle = 'rgba(245,240,230,.95)'; g.lineWidth = 4; g.lineCap = 'round';
+      C.gal.forEach((G, k) => {
+        if (G.ordre > creuse) return;
+        const gx = x + 14 + G.u * (cw - 28), gy = y0 + 14 + G.v * (ch - 28);
+        g.beginPath(); g.moveTo(gx, gy); g.quadraticCurveTo(gx + Math.cos(G.a) * G.l * .6 + 5, gy + Math.sin(G.a) * G.l * .6, gx + Math.cos(G.a) * G.l, gy + Math.sin(G.a) * G.l); g.stroke();
+      });
+      g.restore();
+      // le ver posé en haut au début
+      if (t < 4) ST.ver(g, Array.from({ length: 9 }, (_, j) => [x + 20 + j * 9, y0 - 10 + Math.sin(j + t * 3) * 3]), { e: 6, alpha: 1 - doux((t - 3) / 1) });
+      g.restore();
+    });
+    c.texte('pH = ' + C.ph, x + cw / 2, y0 + ch + 30, { couleur: 'violet', taille: 21, align: 'center', gras: true });
+    c.repere(C.id, x - 6, y0 - 6, cw + 12, ch + 46, 'le sol à pH ' + C.ph);
+    // le comptage : la colonne s’allume, le nombre de galeries s’écrit
+    if (t >= C.tc - 1.4) {
+      ST.lueur(c, x - 5, y0 - 5, cw + 10, ch + 10, t < C.tc + .8);
+      const n = Math.round(C.n * doux((t - C.tc + 1.4) / 1.2));
+      c.direct(() => c.texte(`${n} galeries`, x + cw / 2, y0 + ch + 58, { couleur: 'jaune', taille: 19, align: 'center', gras: true }));
+      c.repere(C.mom, x - 6, y0 + ch + 38, cw + 12, 28, `pH ${C.ph} : ${C.n} galeries`);
+    }
+  });
+  if (t >= 7.6 && !scene.compact) ecrit.ecrire(c, 'mois', () => c.texte('après un mois', xs[2] + cw + 24, y0 + 22, { couleur: 'faible', taille: 17, max: L - xs[2] - cw - 30 }));
+  const xc = xs[2] + cw + 24, wc = L - xc - 14;
+  if (t >= M.conclusion - 1.2 && P.conclusions && !scene.compact) {
+    ecrit.ecrire(c, 'conclusion', () => {
+      ['Les vers de terre', 'creusent peu', 'en sol acide ;', 'ils préfèrent les sols', 'neutres à basiques.'].forEach((l, k) => c.texte(l, xc, y0 + 90 + k * 28, { couleur: 'vert', taille: 19, max: wc }));
+    });
+    c.repere('conclusion', xc - 6, y0 + 66, wc, 150, 'la conclusion');
+  }
+  return c.fin();
+}
+const canvas = $('canvas');
+const scene = ST.Scene(canvas, dessiner, { large: true });
+const ecrit = ST.Apparitions(scene);
+ST.brancher.scene = scene; ST.brancher.ecrit = ecrit;
+scene.foyer = (L) => { const pas = Math.min(220, (L - 300 - 118) / 2); return { x: 26, y: 40, w: 2 * pas + 132, h: 352 }; };   // compact : les trois sols et leurs galeries
+function voir(t) {
+  const m = ['Trois colonnes de sol avec des vers de terre : pH 4,2 ; pH 7 ; pH 8.'];
+  if (t > 2.5 && t < 8) m.push('Les galeries se creusent pendant un mois.');
+  if (t >= 8) m.push('Après un mois : peu de galeries à pH 4,2, plus à pH 7, beaucoup à pH 8.');
+  COL.forEach(C => { if (t >= C.tc) m.push(`pH ${C.ph} : ${C.n} galeries comptées.`); });
+  if (t >= M.conclusion && P.conclusions) m.push('Conclusion écrite : les vers préfèrent les sols neutres à basiques.');
+  return m.join(' ');
+}
+const B = ST.brancher({ id: 'edaph_vers', titre: 'Les vers de terre et le pH', M, FIN, motifs: MOTIFS, params: P,
+  texte: 'Doc 3 : activité des vers de terre (galeries creusées en un mois) dans trois sols : pH 4,2 peu de galeries (9), pH 7 davantage (14), pH 8 beaucoup (36). Les vers de terre évitent les sols acides et préfèrent les sols neutres à basiques.',
+  voir, depart: 'Un mois passe…', fini: () => 'Plus le sol est basique, plus les vers creusent.',
+  setParams: { schema: { conclusions: 'true | false (false : la conclusion ne s’écrit pas)' }, appliquer: (p, R) => { if ('conclusions' in p) R.conclusions = p.conclusions !== false && p.conclusions !== 'false'; } },
+  explication: { vers: COL.map(C => ({ repere: C.id, texte: `Sol à pH ${C.ph} : ${C.n} galeries.` })) } });
+window.Tableau.bulle($('feedback'), 'Où les vers creusent-ils le plus ?');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

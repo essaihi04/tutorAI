@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>L'aire minimale — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/svt/tc_sortie_ecologique-tableau/sortie.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="La technique du quadrillage et l’aire minimale : une prairie vue de dessus, la surface du relevé double (1, 2, 4… 128 m²) et les nouvelles espèces s’allument et se comptent ; puis la courbe nombre d’espèces en fonction de la surface se trace point par point jusqu’au palier ; puis l’aire minimale se place sur l’échelle des milieux"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/svt/tc_sortie_ecologique-tableau/commun.js"></script>
+<script>
+/*
+ * L'aire minimale (diapos se_a2_quadrillage, se_a2_courbe, se_a2_milieux), d'après les docs « technique de quadrillage »
+ * et le tableau b du prof : surfaces 1, 2, 4, 8, 16, 32, 64, 128 m² → 2, 3, 5, 9, 15, 17, 17, 17 espèces.
+ *  ?vue=quadrillage : la prairie vue de dessus ; à chaque surface la corde s'agrandit, les nouvelles espèces s'allument une à
+ *    une avec leur numéro, et la ligne du tableau s'écrit. Moments : s1 1,2 ; s2 4 ; s4 6,8 ; s8 9,6 ; s16 12,4 ; s32 15,2 ;
+ *    s64 18 ; s128 20,8 ; tableau 23 ; fin 24,5.
+ *  ?vue=aire_minimale (ou courbe) : le tableau du document, puis les axes qui se graduent, les points un à un (chaque colonne du
+ *    tableau s'allume), la courbe, le palier, puis l'aire minimale. Moments : axes 0,5 ; p1 2,5 ; p2 3,3 ; p4 4,1 ; p8 4,9 ;
+ *    p16 5,7 ; p32 6,5 ; p64 7,3 ; p128 8,1 ; courbe 9,2 ; palier 11 ; aire_minimale 13 ; fin 14,5.
+ *    set_parameters {conclusions: false} cache « aire minimale = 32 m² » (question ouverte).
+ *  ?vue=milieux : l'échelle des aires minimales (pelouse, prairie, lande, forêt) ; 32 m² tombe dans la prairie.
+ *    Moments : echelle 0,5 ; marqueur 5 ; prairie 7,5 ; fin 9.
+ */
+const { P, lueur, fr } = Object.assign({}, window.Sortie, { fr: window.Tableau.fr });
+const vp = window.Sortie.param('vue', 'quadrillage');
+const VUE = vp === 'milieux' ? 'milieux' : (vp === 'courbe' || vp === 'aire_minimale') ? 'aire_minimale' : 'quadrillage';
+const SURF = [1, 2, 4, 8, 16, 32, 64, 128], NB = [2, 3, 5, 9, 15, 17, 17, 17];
+const DIM = [[1, 1], [2, 1], [2, 2], [4, 2], [4, 4], [8, 4], [8, 8], [16, 8]];   // largeur × hauteur (m)
+
+/* ── vue quadrillage ── */
+// 17 espèces : forme et couleur (un dessin par espèce)
+const ESP = [['fleur', '#facc15'], ['touffe', '#7ccf55'], ['fleur', '#f472b6'], ['trefle', '#3f9a3a'], ['epi', '#d6b25a'], ['fleur', '#ffffff'], ['rosette', '#5aa845'], ['fleur', '#c084fc'], ['epi', '#a87a3a'],
+  ['fleur', '#fb923c'], ['trefle', '#86d36a'], ['rosette', '#9ca3af'], ['fleur', '#f87171'], ['touffe', '#4f8a35'], ['epi', '#8fbf4a'], ['fleur', '#60a5fa'], ['rosette', '#e05a5a']];
+const NOUV = [[0, 1], [2], [3, 4], [5, 6, 7, 8], [9, 10, 11, 12, 13, 14], [15, 16], [], []];   // espèces nouvelles à chaque surface
+const rr = window.Sortie.graine(2026);
+const dans = (x, y, k) => x < DIM[k][0] && y < DIM[k][1];
+function tirer(k) { for (let i = 0; i < 200; i++) { const x = rr() * DIM[k][0], y = rr() * DIM[k][1]; if (k === 0 || !dans(x, y, k - 1)) return [x, y]; } return [DIM[k][0] - .3, DIM[k][1] - .3]; }
+const PREMIERS = [], AUTRES = [];   // [espèce, x, y, k]
+NOUV.forEach((liste, k) => liste.forEach(j => { const [x, y] = tirer(k); PREMIERS.push([j, Math.max(.15, Math.min(DIM[k][0] - .15, x)), Math.max(.15, Math.min(DIM[k][1] - .15, y)), k]); }));
+// d'autres pieds des espèces déjà vues, jamais dans un carré plus petit que leur premier carré
+for (let k = 1; k < 8; k++) { const n = [0, 2, 3, 6, 10, 18, 26, 44][k]; for (let i = 0; i < n; i++) { const deja = PREMIERS.filter(p => p[3] <= k); const j = deja[Math.floor(rr() * deja.length)][0]; const [x, y] = tirer(k); AUTRES.push([j, x, y, k]); } }
+function plante(g, j, x, y, s) {
+  const [forme, c] = ESP[j];
+  g.save();
+  if (forme === 'fleur') { window.Sortie.P.fleur(g, x, y, s * .45, c, 5); }
+  else if (forme === 'touffe') { g.strokeStyle = c; g.lineWidth = 1.4; for (let i = -2; i <= 2; i++) { g.beginPath(); g.moveTo(x, y + s * .3); g.lineTo(x + i * s * .15, y - s * .4); g.stroke(); } }
+  else if (forme === 'trefle') { g.fillStyle = c; for (let i = 0; i < 3; i++) { const a = i / 3 * Math.PI * 2 - Math.PI / 2; g.beginPath(); g.arc(x + Math.cos(a) * s * .22, y + Math.sin(a) * s * .22, s * .22, 0, Math.PI * 2); g.fill(); } }
+  else if (forme === 'epi') { g.strokeStyle = '#6aa84a'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(x, y + s * .4); g.lineTo(x, y - s * .1); g.stroke(); g.fillStyle = c; g.beginPath(); g.ellipse(x, y - s * .25, s * .12, s * .28, 0, 0, Math.PI * 2); g.fill(); }
+  else { g.fillStyle = c; for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; g.beginPath(); g.ellipse(x + Math.cos(a) * s * .2, y + Math.sin(a) * s * .2, s * .22, s * .1, a, 0, Math.PI * 2); g.fill(); } }
+  g.restore();
+}
+const MQ = { s1: 1.2, s2: 4, s4: 6.8, s8: 9.6, s16: 12.4, s32: 15.2, s64: 18, s128: 20.8, tableau: 23 };
+const CLE = ['s1', 's2', 's4', 's8', 's16', 's32', 's64', 's128'];
+function etape(S) { let k = -1; CLE.forEach((n, i) => { if (S.a(n)) k = i; }); return k; }
+function dessinerQuadrillage(c, S, scene) {
+  const pt = scene.petit, L = scene.L, PW = 250, AW = L - PW - 20, ox = 40, oy = 56, tz = (n, p) => (pt ? p : n);
+  const k = etape(S);
+  // la « caméra » : le carré du moment remplit la prairie (1 m² en grand), puis on recule quand la surface double
+  const zoom = i => Math.min((AW - 60) / DIM[Math.max(0, i)][0], 330 / DIM[Math.max(0, i)][1], 150);
+  const kk = Math.max(0, k), suiv = kk + 1, tSuiv = suiv < 8 ? MQ[CLE[suiv]] : Infinity;
+  const pxm = zoom(kk) + (suiv < 8 && k >= 0 ? (zoom(suiv) - zoom(kk)) * window.Sortie.doux((S.t - (tSuiv - .9)) / .9) : 0);   // on recule juste avant que la surface double
+  const X = m => ox + m * pxm, Y = m => oy + m * pxm, VW2 = AW - 40, VH2 = 346;
+  // la prairie peinte
+  c.direct(() => {
+    const g = c.ctx; g.save(); g.beginPath(); g.rect(ox - 10, oy - 10, VW2, VH2); g.clip();
+    const gr = g.createLinearGradient(0, oy, 0, oy + VH2); gr.addColorStop(0, 'rgba(120,170,80,.5)'); gr.addColorStop(1, 'rgba(80,130,55,.5)');
+    g.fillStyle = gr; g.fillRect(ox - 10, oy - 10, VW2, VH2);
+    const r = window.Sortie.graine(7); g.strokeStyle = 'rgba(160,210,110,.35)'; g.lineWidth = 1;
+    for (let i = 0; i < 700; i++) { const x = ox + r() * 16 * pxm, y = oy + r() * 8 * pxm; if (x > ox + VW2 || y > oy + VH2) continue; g.beginPath(); g.moveTo(x, y); g.lineTo(x + 2, y - 5); g.stroke(); }
+    const s = Math.max(9, Math.min(26, pxm * .3));
+    [...PREMIERS, ...AUTRES].forEach(([j, x, y]) => plante(g, j, X(x), Y(y), s));
+    // le piquet
+    g.restore(); g.save(); g.fillStyle = '#8a6a48'; g.beginPath(); g.arc(ox, oy, 6, 0, Math.PI * 2); g.fill(); g.restore();
+  });
+  if (!pt) c.texte('piquet', ox - 4, oy - 14, { couleur: 'orange', taille: 16 });
+  c.repere('prairie', ox - 10, oy - 10, VW2, VH2, 'la prairie vue de dessus');
+  // le tableau à droite
+  const tx = AW + 20, tw = L - tx - 10, ty = 36, rh = 40;
+  c.texte(pt ? 'm²' : 'Surface', tx + tw * .27, ty, { couleur: 'blanc', taille: tz(17, 28), align: 'center' }); c.texte('Espèces', tx + tw * .75, ty, { couleur: 'blanc', taille: tz(17, 28), align: 'center' });
+  c.ligne(tx, ty + 8, tx + tw, ty + 8, { couleur: 'faible', largeur: 1.2 }); c.ligne(tx + tw * .52, ty - 18, tx + tw * .52, ty + 8 + rh * 8, { couleur: 'faible', largeur: 1.2 });
+  c.repere('tableau', tx, ty - 20, tw, rh * 8 + 30, 'le tableau surface / nombre d’espèces');
+  let compte = 0;
+  CLE.forEach((nom, i) => {
+    if (!S.ecrit(c, nom)) return;
+    const [w, h] = DIM[i];
+    c.rect(X(0), Y(0), w * pxm, h * pxm, { couleur: i === k ? 'jaune' : 'tresfaible', largeur: i === k ? 2.4 : 1.4, arrondi: 1 });
+    if (i === k) { c.texte(SURF[i] + ' m²', X(w) - 6, Y(h) - 8, { couleur: 'jaune', taille: tz(20, 30), gras: true, align: 'right' }); c.repere('surface', X(0), Y(0), w * pxm, h * pxm, 'la surface ' + SURF[i] + ' m²'); }
+    // les nouvelles espèces s'allument une à une avec leur numéro
+    const nouv = PREMIERS.filter(p => p[3] === i), t0 = MQ[nom] + .5;
+    nouv.forEach(([j, x, y], q) => {
+      compte++;
+      const tq = t0 + q * (1.8 / Math.max(1, nouv.length));
+      if (S.t >= tq) lueur(c, X(x) - 11, Y(y) - 11, 22, 22, { vive: i === k, numero: i === k || i >= k - 0 ? compte : null, nx: X(x) + tz(18, 24), ny: Y(y) + tz(7, 10), taille: tz(16, 28) });
+    });
+    if (i === k && !nouv.length && S.t > MQ[nom] + .6) c.texte(pt ? 'rien de nouveau' : 'aucune nouvelle espèce', X(w / 2), Y(h) + tz(26, 34), { couleur: 'rose', taille: tz(18, 30), align: 'center' });
+    // la ligne du tableau
+    if (S.t >= MQ[nom] + 2.4) {
+      const yy = ty + 8 + rh * (i + .7);
+      c.texte(pt ? String(SURF[i]) : SURF[i] + ' m²', tx + tw * .27, yy + tz(0, 6), { couleur: 'cyan', taille: tz(19, 28), align: 'center' }); c.texte(String(NB[i]), tx + tw * .75, yy + tz(0, 6), { couleur: 'jaune', taille: tz(20, 30), gras: true, align: 'center' });
+      c.repere('ligne_' + SURF[i], tx, yy - 22, tw, rh, SURF[i] + ' m² : ' + NB[i] + ' espèces');
+    }
+  });
+  if (S.ecrit(c, 'tableau')) { lueur(c, tx - 4, ty + 8 + rh * 5 + 2, tw + 8, rh * 3 - 4, { vive: true, couleur: '244, 114, 182' }); if (!pt) c.texte('17, 17, 17 : plus rien de nouveau', tx + tw / 2, 412, { couleur: 'rose', taille: 16, align: 'center', max: tw + 10 }); }
+}
+
+/* ── vue aire minimale (la courbe) ── */
+const MC = { axes: .5, p1: 2.5, p2: 3.3, p4: 4.1, p8: 4.9, p16: 5.7, p32: 6.5, p64: 7.3, p128: 8.1, courbe: 9.2, palier: 11, aire_minimale: 13 };
+function dessinerCourbe(c, S, scene) {
+  const L = scene.L, pt = scene.petit, tz = (n, p) => (pt ? p : n);
+  // le tableau du document, en haut (caché dans le petit cadre : la voix lit les valeurs, les points les montrent)
+  const tx = 150, cw = Math.min(70, (L - tx - 20) / 8), ty = 30;
+  if (!pt) {
+  c.texte('Surface (m²)', tx - 8, ty + 4, { couleur: 'blanc', taille: 16, align: 'right' }); c.texte('Espèces', tx - 8, ty + 32, { couleur: 'blanc', taille: 16, align: 'right' });
+  SURF.forEach((s, i) => { c.texte(String(s), tx + cw * (i + .5), ty + 4, { couleur: 'cyan', taille: 18, align: 'center' }); c.texte(String(NB[i]), tx + cw * (i + .5), ty + 32, { couleur: 'jaune', taille: 18, align: 'center' }); });
+  c.rect(tx - 4, ty - 18, cw * 8 + 8, 58, { couleur: 'tresfaible', largeur: 1.2, arrondi: 4 });
+  c.repere('tableau', tx - 140, ty - 20, cw * 8 + 150, 62, 'le tableau des résultats');
+  }
+  // les axes
+  const x0 = 96, y0 = pt ? 360 : 372, xa = L - 60, yt = pt ? 70 : 112, sx = (xa - x0 - 30) / 8, sy = (y0 - yt) / 20;
+  const X = i => x0 + sx * (i + .7), Y = n => y0 - n * sy;
+  if (S.t <= 0 || S.ecrit(c, 'axes')) {
+    c.fleche(x0, y0, xa, y0, { couleur: 'blanc', largeur: 2 }); c.fleche(x0, y0, x0, yt - 14, { couleur: 'blanc', largeur: 2 });
+    if (!pt) c.texte('Surface du relevé (m²)', xa, y0 + 40, { couleur: 'blanc', taille: 17, align: 'right' }); else c.texte('m²', xa + 40, y0 + 10, { couleur: 'blanc', taille: 28, align: 'right' });
+    c.texte(pt ? 'espèces' : 'Nombre d’espèces', x0 + 8, yt - 4, { couleur: 'blanc', taille: tz(17, 30) });
+    SURF.forEach((s, i) => { c.ligne(X(i), y0 - 4, X(i), y0 + 4, { couleur: 'blanc', largeur: 1.4, duree: .04 }); c.texte(String(s), X(i), y0 + tz(20, 34), { couleur: 'cyan', taille: tz(16, 28), align: 'center', duree: .1 }); });
+    for (const n of [0, 5, 10, 15, 20]) { c.ligne(x0 - 4, Y(n), x0 + 4, Y(n), { couleur: 'blanc', largeur: 1.4, duree: .04 }); c.texte(String(n), x0 - 8, Y(n) + tz(6, 10), { couleur: 'jaune', taille: tz(16, 28), align: 'right', duree: .1 }); }
+    c.repere('axes', x0 - 40, yt - 30, xa - x0 + 40, y0 - yt + 70, 'les axes : surface en abscisse, nombre d’espèces en ordonnée');
+  }
+  // les points, un par un : la colonne du tableau s'allume, le point se pose
+  const pts = [];
+  SURF.forEach((s, i) => {
+    const nom = 'p' + s;
+    if (!S.ecrit(c, nom)) return;
+    pts.push([X(i), Y(NB[i])]);
+    const vif = !S.a(i < 7 ? 'p' + SURF[i + 1] : 'courbe');
+    if (vif) { if (!pt) lueur(c, tx + cw * i + 2, ty - 16, cw - 4, 54, { vive: true }); else c.texte(s + ' m² → ' + NB[i], L - 70, 40, { couleur: 'jaune', taille: 32, gras: true, align: 'right' }); c.ligne(X(i), y0, X(i), Y(NB[i]), { couleur: 'tresfaible', largeur: 1, pointille: [3, 4] }); c.ligne(x0, Y(NB[i]), X(i), Y(NB[i]), { couleur: 'tresfaible', largeur: 1, pointille: [3, 4] }); }
+    c.point(X(i), Y(NB[i]), 5.5, 'jaune');
+    c.repere(nom, X(i) - 12, Y(NB[i]) - 12, 24, 24, s + ' m² : ' + NB[i] + ' espèces');
+  });
+  if (S.ecrit(c, 'courbe')) {
+    // courbe lissée par les points (monotone)
+    // interpolation cubique monotone (Fritsch–Carlson) : la courbe passe par chaque point sans onduler ni dépasser le palier
+    const n = pts.length, d = [], m = [];
+    for (let i = 0; i < n - 1; i++) d.push((pts[i + 1][1] - pts[i][1]) / (pts[i + 1][0] - pts[i][0]));
+    for (let i = 0; i < n; i++) m.push(i === 0 ? d[0] : i === n - 1 ? d[n - 2] : (d[i - 1] * d[i] <= 0 ? 0 : (d[i - 1] + d[i]) / 2));
+    for (let i = 0; i < n - 1; i++) { if (d[i] === 0) { m[i] = 0; m[i + 1] = 0; continue; } const a = m[i] / d[i], b = m[i + 1] / d[i], h = a * a + b * b; if (h > 9) { const t = 3 / Math.sqrt(h); m[i] = t * a * d[i]; m[i + 1] = t * b * d[i]; } }
+    const f = u => { const t = u * (n - 1), i = Math.min(n - 2, Math.floor(t)), v = t - i, [xa1, ya1] = pts[i], [xb, yb] = pts[i + 1], hx = xb - xa1;
+      const h00 = 2 * v ** 3 - 3 * v * v + 1, h10 = v ** 3 - 2 * v * v + v, h01 = -2 * v ** 3 + 3 * v * v, h11 = v ** 3 - v * v;
+      return [xa1 + hx * v, h00 * ya1 + h10 * hx * m[i] + h01 * yb + h11 * hx * m[i + 1]]; };
+    c.courbe(f, 140, { couleur: 'vert', largeur: 2.6, duree: 1.5, net: true });
+    c.repere('courbe', x0, Y(18), xa - x0, y0 - Y(18), 'la courbe');
+  }
+  if (S.ecrit(c, 'palier')) {
+    lueur(c, X(5) - 14, Y(17) - 14, X(7) - X(5) + 28, 28, { vive: !S.a('aire_minimale'), couleur: '244, 114, 182' });
+    c.texte(pt ? 'palier' : 'palier : plus de nouvelles espèces', (X(5) + X(7)) / 2, Y(17) - tz(26, 30), { couleur: 'rose', taille: tz(18, 30), align: 'center' });
+    c.repere('palier', X(5) - 14, Y(17) - 40, X(7) - X(5) + 28, 54, 'le palier');
+  }
+  if (S.ecrit(c, 'aire_minimale')) {
+    c.ligne(X(5), Y(17), X(5), y0, { couleur: 'jaune', largeur: 2.4, pointille: [8, 6] });
+    lueur(c, X(5) - 16, y0 + 2, 32, 26, { vive: true });
+    if (S.conclusions) c.texte('aire minimale = 32 m²', X(5) - 10, Y(7), { couleur: 'jaune', taille: tz(22, 30), gras: true, align: 'right' });
+    c.repere('aire_minimale', X(5) - 200, Y(9), 210, y0 - Y(9) + 30, 'l’aire minimale : 32 m²');
+  }
+}
+
+/* ── vue milieux ── */
+const MM = { echelle: .5, marqueur: 5, prairie: 7.5 };
+const BANDES = [{ id: 'pelouse', nom: 'Pelouse', de: 10, a: 20, coul: '#b7e58a' }, { id: 'prairie', nom: 'Prairie', de: 20, a: 50, coul: '#6cc24a' }, { id: 'lande', nom: 'Lande', de: 50, a: 100, coul: '#a3a34a' }, { id: 'foret', nom: 'Forêt', de: 300, a: 1000, coul: '#2f7a3a' }];
+function dessinerMilieux(c, S, scene) {
+  const pt = scene.petit, tz = (n, p) => (pt ? p : n), L = scene.L, x0 = 60, x1 = L - 50, lx = v => x0 + (Math.log10(v) - 1) / 2 * (x1 - x0), yb = 250;
+  c.fleche(x0 - 10, yb + 40, x1 + 20, yb + 40, { couleur: 'blanc', largeur: 1.8 });
+  for (const v of [10, 20, 50, 100, 300, 1000]) { c.ligne(lx(v), yb + 34, lx(v), yb + 46, { couleur: 'blanc', largeur: 1.4, duree: .05 }); c.texte(String(v), lx(v), yb + tz(66, 72), { couleur: 'cyan', taille: tz(17, 26), align: 'center', duree: .1 }); }
+  if (!pt) c.texte('aire minimale (m²)', x1 + 10, yb + 92, { couleur: 'blanc', taille: 16, align: 'right' });
+  BANDES.forEach((b, i) => {
+    const t0 = MM.echelle + i * .9;
+    if (S.t > 0 && S.t < t0) return;
+    const xa = lx(b.de), xb = lx(b.a);
+    c.direct(() => {
+      const g = c.ctx; g.save(); g.globalAlpha = S.t <= 0 ? 1 : Math.min(1, (S.t - t0) / .5); g.fillStyle = b.coul; g.globalAlpha *= .55; g.fillRect(xa + 2, yb, xb - xa - 4, 30); g.restore();
+      g.save(); g.globalAlpha = S.t <= 0 ? 1 : Math.min(1, (S.t - t0) / .5); const xm = (xa + xb) / 2;
+      if (b.id === 'pelouse') { P.herbe(g, xm - 10, yb - 4, 22); P.herbe(g, xm + 10, yb - 4, 20, { graine: 3 }); }
+      else if (b.id === 'prairie') { P.herbe(g, xm - 22, yb - 4, 40, { epi: true }); P.herbe(g, xm + 4, yb - 4, 44, { graine: 5 }); P.fleur(g, xm + 24, yb - 30, 6, '#f472b6'); P.fleur(g, xm - 6, yb - 38, 5, '#facc15'); }
+      else if (b.id === 'lande') { P.arbuste(g, xm - 12, yb - 2, 52, { sorte: 'ajonc' }); P.arbuste(g, xm + 16, yb - 2, 40, { sorte: 'ciste', graine: 8 }); }
+      else { P.arbre(g, xm - 30, yb - 2, 120); P.arbre(g, xm + 20, yb - 2, 104, { graine: 4 }); }
+      g.restore();
+    });
+    c.texte(b.nom, (xa + xb) / 2, yb + tz(128, 124), { couleur: 'blanc', taille: tz(19, 28), gras: true, align: 'center' });
+    if (!pt) c.texte(b.de + ' à ' + b.a + ' m²', (xa + xb) / 2, yb + 152, { couleur: 'faible', taille: 16, align: 'center' });
+    c.repere(b.id, xa, yb - 120, xb - xa, 280, b.nom + ' : ' + b.de + ' à ' + b.a + ' m²');
+  });
+  if (S.ecrit(c, 'marqueur')) {
+    const ym = 40 + (yb - 70) * S.k('marqueur', 1.6), xm = lx(32);
+    c.direct(() => { c.fleche(xm, ym - 10, xm, ym + 50, { couleur: 'jaune', largeur: 3 }); c.texte('32 m²', xm, ym - 18, { couleur: 'jaune', taille: tz(24, 32), gras: true, align: 'center' }); });
+    c.repere('marqueur', xm - 40, 20, 80, yb, '32 m²');
+  }
+  if (S.ecrit(c, 'prairie')) {
+    const xa = lx(20), xb = lx(50);
+    lueur(c, xa - 4, yb - 6, xb - xa + 8, 42, { vive: true });
+    if (S.conclusions) c.texte(pt ? '→ une prairie' : 'milieu étudié : une prairie', L / 2 + 140, 70, { couleur: 'jaune', taille: tz(22, 32), gras: true, align: 'center' });
+  }
+}
+
+const CONF = {
+  quadrillage: { moments: MQ, fin: 24.5, dessiner: dessinerQuadrillage, titre: 'La technique du quadrillage',
+    accueil: 'Une prairie vue de dessus : lance, la surface double à chaque fois.', fini: 'À partir de 32 m², plus de nouvelle espèce : 17, 17, 17.',
+    motifs: Object.assign(Object.fromEntries(CLE.map((n, i) => [n, 'surface ' + SURF[i] + ' m² : ' + NB[i] + ' espèces'])), { tableau: 'le tableau complet' }),
+    voir: S => { const k = etape(S); return 'Prairie vue de dessus, piquet en haut à gauche ; tableau Surface / Espèces à droite.' + (k >= 0 ? ` Surface délimitée : ${SURF[k]} m² ; espèces comptées : ${NB[k]} ; lignes écrites : ${SURF.slice(0, k + 1).map((s, i) => s + ' m² → ' + NB[i]).join(', ')}.` : '') + (S.a('tableau') ? ' Les trois dernières lignes (17, 17, 17) sont allumées : plus rien de nouveau.' : ''); } },
+  aire_minimale: { moments: MC, fin: 14.5, dessiner: dessinerCourbe, titre: 'La courbe et l’aire minimale',
+    accueil: 'Lance : la courbe se trace point par point.', fini: 'La courbe monte puis devient un palier : l’aire minimale est au début du palier.',
+    motifs: { axes: 'les axes gradués', p1: 'premier point : 1 m², 2 espèces', p2: '2 m², 3 espèces', p4: '4 m², 5 espèces', p8: '8 m², 9 espèces', p16: '16 m², 15 espèces', p32: '32 m², 17 espèces', p64: '64 m², 17 espèces', p128: '128 m², 17 espèces', courbe: 'la courbe', palier: 'le palier', aire_minimale: 'l’aire minimale' },
+    voir: S => { const n = SURF.filter(s => S.a('p' + s)).length; return 'Tableau : surfaces 1, 2, 4, 8, 16, 32, 64, 128 m² ; espèces 2, 3, 5, 9, 15, 17, 17, 17.' + (S.a('axes') || S.t <= 0 ? ' Axes : surface du relevé en abscisse (chaque graduation double), nombre d’espèces en ordonnée (0 à 20).' : '') + (n ? ` Points placés : ${n}.` : '') + (S.a('courbe') ? ' La courbe monte vite puis ralentit.' : '') + (S.a('palier') ? ' Palier à 17 espèces à partir de 32 m².' : '') + (S.a('aire_minimale') ? (S.conclusions ? ' Trait pointillé à 32 m² : aire minimale = 32 m².' : ' Trait pointillé tiré du début du palier vers l’axe des surfaces.') : ''); } },
+  milieux: { moments: MM, fin: 9, dessiner: dessinerMilieux, titre: 'L’aire minimale selon le milieu',
+    accueil: 'Où tombe 32 m² ?', fini: '32 m² est entre 20 et 50 m² : une prairie.',
+    motifs: { echelle: 'l’échelle des milieux', marqueur: '32 m² descend sur l’échelle', prairie: 'la prairie' },
+    voir: S => 'Échelle des aires minimales : pelouse 10 à 20 m², prairie 20 à 50 m², lande 50 à 100 m², forêt 300 à 1000 m².' + (S.a('marqueur') ? ' Flèche « 32 m² » posée entre 20 et 50.' : '') + (S.a('prairie') ? ' La prairie s’allume' + (S.conclusions ? ' : milieu étudié, une prairie.' : '.') : '') },
+}[VUE];
+window.Sortie.sim({
+  id: 'tc_sortie_aire_' + VUE, titre: CONF.titre, vue: VUE, moments: CONF.moments, fin: CONF.fin, graine: 21,
+  motifs: CONF.motifs, accueil: CONF.accueil, fini: CONF.fini, dessiner: CONF.dessiner, ceQuiSeVoit: CONF.voir,
+  texte: 'Technique du quadrillage : on recense les espèces végétales dans 1 m², puis 2, 4, 8… m². Résultats : 1→2, 2→3, 4→5, 8→9, 16→15, 32→17, 64→17, 128→17. La courbe nombre d’espèces / surface atteint un palier : l’aire minimale (32 m²) est la plus petite surface où sont représentées toutes les espèces du milieu. Ordre de grandeur : pelouse 10 à 20 m², prairie 20 à 50 m², lande 50 à 100 m², forêt 300 à 1000 m².',
+  explication: { aire: [{ repere: 'tableau', texte: 'Le tableau : surface et nombre d’espèces.' }, { repere: 'palier', texte: 'Le palier : plus de nouvelles espèces.' }, { repere: 'aire_minimale', texte: 'L’aire minimale est au début du palier.' }] },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Révision : la carte et la fiche — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/svt/tc_facteurs_edaphiques-tableau/sol.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Révision de deux chapitres : la carte (la sortie écologique à gauche, les facteurs édaphiques à droite, quatre méthodes chacun) ou la fiche « ce qu’il faut retenir » en huit blocs"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/svt/tc_facteurs_edaphiques-tableau/commun.js"></script>
+<script>
+/*
+ * Cours de révision « La sortie écologique et les facteurs édaphiques » (diapositives rv_carte et rv_bilan).
+ *  ?vue=carte : la carte des deux chapitres, branche après branche, au rythme de la voix. À gauche la sortie écologique
+ *    (aire minimale, fréquence et indice, histogramme et courbe, écosystème), à droite les facteurs édaphiques (texture,
+ *    perméabilité et rétention, eau du sol, pH et CAH), puis le lien : le sol fait partie du biotope.
+ *    Moments : titre 1 ; sortie 3 ; aire 5 ; frequence 7 ; histogramme 9 ; ecosysteme 11 ; sol 13,5 ; texture 15,5 ;
+ *    permeabilite 17,5 ; eau 19,5 ; chimie 21,5 ; lien 24 ; fin 25. Repères : les mêmes noms.
+ *  ?vue=fiche : « Ce qu’il faut retenir », huit blocs (méthode et formule de chacun). Moments : texture 1,5 ;
+ *    permeabilite 4 ; eau 6,5 ; chimie 9 ; aire 11,5 ; frequence 14 ; courbe 16,5 ; ecosysteme 19 ; fin 21.
+ *    set_parameters {lacunes: [{id}], acquis_ids: [id]} (bilan de l’élève) : un bloc dont la compétence est une lacune est
+ *    entouré d’orange « à revoir », un bloc acquis reçoit ✓.
+ * Petit cadre (~429 × 250) : aucun texte sous 15 px écran ; la carte garde des mots courts ; la fiche montre la liste des
+ * titres et, à droite, seulement le bloc en cours.
+ * Dessins repris du cours (un objet, un seul dessin) : grains de sable / limon / argile, goutte d’eau, plante, CAH orange.
+ */
+const ST = window.SolTableau, { doux } = ST;
+const $ = id => document.getElementById(id);
+const VUE = new URLSearchParams(location.search).get('vue') === 'fiche' ? 'fiche' : 'carte';
+const T = (b) => Math.max(b, 15.5 / Math.max(.05, scene.s));
+const compact = () => scene.s < .85;
+const P = { lacunes: [], acquis_ids: [] };
+
+/* ── la carte ── */
+const MC = { titre: 1, sortie: 3, aire: 5, frequence: 7, histogramme: 9, ecosysteme: 11, sol: 13.5, texture: 15.5, permeabilite: 17.5, eau: 19.5, chimie: 21.5, lien: 24 };
+const BR = [
+  { id: 'sortie', nom: 'Sortie écologique', col: 0, coul: 'vert', feuilles: [['aire', 'Aire minimale', 'quadrat'], ['frequence', 'Fréquence · IF', 'pourcent'], ['histogramme', 'Histogramme', 'barres'], ['ecosysteme', 'Écosystème', 'plante']] },
+  { id: 'sol', nom: 'Facteurs édaphiques', col: 1, coul: 'orange', feuilles: [['texture', 'Texture', 'triangle'], ['permeabilite', 'Perméabilité · Vr', 'goutte'], ['eau', 'Eau du sol', 'grains'], ['chimie', 'pH · CAH', 'cah']] },
+];
+function icone(g, sorte, x, y, r) {
+  g.save();
+  if (sorte === 'quadrat') { g.fillStyle = 'rgba(120,170,80,.8)'; g.fillRect(x - r, y - r, 2 * r, 2 * r); g.strokeStyle = '#f5f5f0'; g.lineWidth = 1.5; g.strokeRect(x - r, y - r, 2 * r, 2 * r); g.beginPath(); g.moveTo(x, y - r); g.lineTo(x, y + r); g.moveTo(x - r, y); g.lineTo(x + r, y); g.stroke(); }
+  else if (sorte === 'pourcent') { g.fillStyle = '#fde68a'; g.font = `700 ${r * 1.7}px Arial`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('%', x, y + 1); }
+  else if (sorte === 'barres') { [[.6, '#60a5fa'], [.25, '#60a5fa'], [.9, '#60a5fa']].forEach(([h, c], i) => { g.fillStyle = c; g.fillRect(x - r + i * r * .7, y + r - 2 * r * h, r * .6, 2 * r * h); }); g.strokeStyle = '#ef4444'; g.lineWidth = 2; g.beginPath(); g.moveTo(x - r + r * .3, y + r - 1.2 * r); g.lineTo(x - r + r, y + r - .5 * r); g.lineTo(x - r + r * 1.7, y + r - 1.8 * r); g.stroke(); }
+  else if (sorte === 'plante') ST.plante(g, x, y + r * .5, r * 1.5, {});
+  else if (sorte === 'triangle') { g.strokeStyle = '#f5f5f0'; g.lineWidth = 1.8; g.beginPath(); g.moveTo(x - r, y + r * .8); g.lineTo(x + r, y + r * .8); g.lineTo(x, y - r); g.closePath(); g.stroke(); ST.grain(g, x - r * .35, y + r * .35, 'sable', { r: r * .22 }); ST.grain(g, x + r * .3, y + r * .4, 'limon', { r: r * .2 }); }
+  else if (sorte === 'goutte') ST.goutte(g, x, y + r * .3, r * .6, 1);
+  else if (sorte === 'grains') { ST.grain(g, x - r * .4, y, 'sable', { r: r * .45 }); ST.grain(g, x + r * .45, y + r * .2, 'sable', { r: r * .4 }); g.strokeStyle = 'rgba(96,180,230,.9)'; g.lineWidth = 3; g.beginPath(); g.arc(x - r * .4, y, r * .55, 0, 6.28); g.stroke(); }
+  else if (sorte === 'cah') ST.cah(g, x, y, r * .85, { n: 6 });
+  g.restore();
+}
+function dessinerCarte(c, t) {
+  const L = scene.L, petit = compact(), mid = L / 2;
+  if (t >= MC.titre - .8) ecrit.ecrire(c, 'titre', () => c.texte('Révision : deux chapitres', mid, 8 + T(22), { couleur: 'jaune', taille: T(22), align: 'center' }));
+  c.repere('titre', mid - 200, 6, 400, T(22) + 8, 'le titre');
+  BR.forEach(b => {
+    if (t < MC[b.id] - 1.2) return;
+    const x0 = b.col ? mid + 14 : 18, w = mid - 32, yR = 62 + T(22) * .4, hR = T(20) + 16;
+    c.direct(() => { const g = c.ctx; g.save(); g.globalAlpha = .22 * doux((t - MC[b.id] + 1.2) / .8); g.fillStyle = b.col ? '#f59e0b' : '#22c55e'; g.beginPath(); g.roundRect ? g.roundRect(x0, yR, w, hR, 10) : g.rect(x0, yR, w, hR); g.fill(); g.restore(); });
+    ecrit.ecrire(c, 'r' + b.id, () => { c.rect(x0, yR, w, hR, { couleur: b.coul, largeur: 2.2, arrondi: 10 }); c.texte(b.nom, x0 + w / 2, yR + hR / 2 + T(20) * .36, { couleur: b.coul, taille: T(20), gras: true, align: 'center', max: w - 12 }); });
+    c.repere(b.id, x0, yR, w, hR, b.nom);
+    if (t < MC[b.id] + 1.4) ST.lueur(c, x0 - 4, yR - 4, w + 8, hR + 8, true);
+    const y1 = yR + hR + 10, pas = (petit ? 372 : 380) - y1, hF = Math.max(T(18) + 14, 38), dy = (pas - hF) / 3;
+    b.feuilles.forEach(([id, nom, ic], i) => {
+      if (t < MC[id] - 1.2) return;
+      const y = y1 + i * dy, xs = x0 + 16;
+      ecrit.ecrire(c, 'l' + id, () => {
+        c.trait([[xs, yR + hR], [xs, y + hF / 2], [xs + 22, y + hF / 2]], { couleur: b.coul, largeur: 1.8 });
+        c.rect(xs + 22, y, w - 38, hF, { couleur: 'faible', largeur: 1.4, arrondi: 8 });
+        c.texte(nom, xs + 22 + hF + 6, y + hF / 2 + T(18) * .36, { couleur: 'blanc', taille: T(18), max: w - 44 - hF });
+      });
+      c.direct(() => { const g = c.ctx; g.save(); g.globalAlpha = doux((t - MC[id] + 1) / .8); icone(g, ic, xs + 22 + hF / 2 + 2, y + hF / 2, hF * .32); g.restore(); });
+      c.repere(id, xs + 22, y, w - 38, hF, nom);
+      if (t < MC[id] + 1.4) ST.lueur(c, xs + 18, y - 4, w - 30, hF + 8, true);
+    });
+  });
+  if (t >= MC.lien - 1.2) {
+    const y = 404, s = petit ? 'le sol fait partie du biotope' : 'Le lien : le sol fait partie du biotope de l’écosystème';
+    ecrit.ecrire(c, 'lien', () => { c.texte(s, mid, y, { couleur: 'cyan', taille: T(18), align: 'center', max: L - 30 }); });
+    c.repere('lien', 20, y - T(18) - 4, L - 40, T(18) + 12, 'le lien entre les deux chapitres');
+    if (t < MC.lien + 1.6) ST.lueur(c, 30, y - T(18) - 6, L - 60, T(18) + 16, true);
+  }
+}
+
+/* ── la fiche ── */
+const MF = { texture: 1.5, permeabilite: 4, eau: 6.5, chimie: 9, aire: 11.5, frequence: 14, courbe: 16.5, ecosysteme: 19 };
+const BLOCS = [
+  { id: 'texture', comp: 'R1', titre: '1. Texture du sol', court: '1. Texture', l: ['% argile ↑ · % sable ← · % limon ↓', '3 parallèles → 1 point', 'la zone du point = la texture'] },
+  { id: 'permeabilite', comp: 'R2', titre: '2. Perméabilité, rétention', court: '2. P et Vr', l: ['P = ⟦V_2|t_2 − t_1⟧  (ml/min)', 'Vr = V_1 − V_2  (ml)'], frac: 0 },
+  { id: 'eau', comp: 'R3', titre: '3. L’eau du sol', court: '3. Eau du sol', l: ['gravité : s’écoule · capillaire : utilisable', 'hygroscopique : inutilisable', 'point de flétrissement : la plante fane'] },
+  { id: 'chimie', comp: 'R4', titre: '4. Chimie du sol', court: '4. pH · CAH', l: ['pH < 7 acide · = 7 neutre · > 7 basique', 'calcicole / calcifuge', 'CAH (charges −) retient les cations'] },
+  { id: 'aire', comp: 'R5', titre: '5. Aire minimale', court: '5. Aire minimale', l: ['nombre d’espèces selon la surface', 'aire minimale = début du palier'] },
+  { id: 'frequence', comp: 'R6', titre: '6. Fréquence', court: '6. Fréquence', l: ['F = ⟦n|N⟧ × 100', 'indice : I (< 20 %) … V (≥ 80 %)'], frac: 0 },
+  { id: 'courbe', comp: 'R7', titre: '7. Courbe de fréquence', court: '7. Courbe', l: ['rectangles collés : nombre d’espèces par IF', '1 sommet : unimodale → homogène', '2 sommets : bimodale → hétérogène'] },
+  { id: 'ecosysteme', comp: 'R8', titre: '8. Écosystème', court: '8. Écosystème', l: ['écosystème = biotope + biocénose', 'en interaction'] },
+];
+const etat = (b) => (P.lacunes.some(l => l.id === b.comp) ? 'lacune' : P.acquis_ids.includes(b.comp) ? 'acquis' : null);
+function dessinerFiche(c, t) {
+  const L = scene.L, petit = compact();
+  c.texte('Ce qu’il faut retenir', L / 2, 6 + T(20), { couleur: 'jaune', taille: T(20), align: 'center' });
+  const hl = (b) => T(16) * 1.35, ht = T(18) + 8;
+  const hb = (b) => ht + b.l.reduce((s, x, i) => s + hl(b) * (b.frac === i ? 1.7 : 1), 0) + 8;
+  if (!petit) {
+    const w = (L - 48) / 2;
+    [0, 1].forEach(col => {
+      let y = 16 + T(20) + 10;
+      BLOCS.slice(col * 4, col * 4 + 4).forEach(b => {
+        const x = 16 + col * (w + 16), h = hb(b);
+        if (t >= MF[b.id] - 1.2) {
+          ecrit.ecrire(c, 'b' + b.id, () => {
+            c.texte(b.titre, x + 8, y + T(18), { couleur: 'jaune', taille: T(18), gras: true, max: w - 16 });
+            let yy = y + ht;
+            b.l.forEach((s, i) => { const k = b.frac === i ? 1.7 : 1; yy += hl(b) * k; c.texte(s, x + 14, yy - (k > 1 ? hl(b) * .5 : 4), { couleur: 'blanc', taille: T(16), max: w - 24 }); });
+          });
+          const e = etat(b);
+          if (e === 'lacune') { c.rect(x, y, w, h - 4, { couleur: 'orange', largeur: 2.4, arrondi: 8 }); c.texte('à revoir', x + w - 8, y + T(16), { couleur: 'orange', taille: T(16), align: 'right' }); }
+          else if (e === 'acquis') c.texte('✓', x + w - 10, y + T(18), { couleur: 'vert', taille: T(20), align: 'right' });
+          if (t < MF[b.id] + 1.6 && t >= MF[b.id] - 1.2) ST.lueur(c, x - 2, y - 2, w + 4, h, true);
+        }
+        c.repere(b.id, x, y, w, h - 4, b.titre);
+        y += h;
+      });
+    });
+  } else {
+    // petit cadre : les titres à gauche, le bloc en cours à droite
+    const ft = T(17), lhT = (400 - (16 + T(20))) / 8, xw = Math.min(250, L * .36);
+    let courant = null; BLOCS.forEach(b => { if (t >= MF[b.id] - 1.2) courant = b; });
+    BLOCS.forEach((b, i) => {
+      const y = 16 + T(20) + 8 + i * lhT;
+      if (t >= MF[b.id] - 1.2) {
+        const e = etat(b);
+        ecrit.ecrire(c, 't' + b.id, () => c.texte(b.court + (e === 'acquis' ? ' ✓' : ''), 18, y + ft, { couleur: b === courant ? 'jaune' : e === 'lacune' ? 'orange' : 'blanc', taille: ft, max: xw }));
+        if (b === courant) ST.lueur(c, 10, y, xw + 8, ft + 10, true);
+      }
+      c.repere(b.id, 10, y, xw + 8, ft + 10, b.titre);
+    });
+    if (courant) {
+      const x = xw + 40, w = L - x - 16;
+      let y = 16 + T(20) + 18;
+      ecrit.ecrire(c, 'p' + courant.id, () => {
+        c.texte(courant.titre, x, y + T(18), { couleur: 'jaune', taille: T(18), gras: true, max: w });
+        y += T(18) + 20;
+        courant.l.forEach((s, i) => {
+          // une ligne trop longue se coupe en deux à « · » ou à « : »
+          const morceaux = c.largeurTexte && c.largeurTexte(s.replace(/[_⟦⟧|]/g, ''), T(16)) > w && /[·:]/.test(s) ? s.split(/(?<=[·:]) /) : [s];
+          morceaux.forEach(m => { const k = courant.frac === i ? 1.8 : 1.3; y += T(16) * k; c.texte(m, x, y - (k > 1.5 ? T(16) * .3 : 0), { couleur: 'blanc', taille: T(16), max: w }); });
+        });
+      });
+      if (etat(courant) === 'lacune') c.texte('à revoir', L - 16, 404, { couleur: 'orange', taille: T(16), align: 'right' });
+    }
+  }
+}
+
+const M = VUE === 'carte' ? MC : MF, FIN = VUE === 'carte' ? 25 : 21;
+function dessiner(c) { scene.cadre(VUE === 'carte' ? 61 : 67); if (VUE === 'carte') dessinerCarte(c, B.chrono.t); else dessinerFiche(c, B.chrono.t); return c.fin(); }
+const canvas = $('canvas');
+const scene = ST.Scene(canvas, dessiner, { large: true });
+const ecrit = ST.Apparitions(scene);
+ST.brancher.scene = scene; ST.brancher.ecrit = ecrit;
+function voir(t) {
+  if (VUE === 'carte') {
+    const m = ['Carte de révision : la sortie écologique à gauche, les facteurs édaphiques à droite.'];
+    BR.forEach(b => { const f = b.feuilles.filter(([id]) => t >= MC[id]).map(([, nom]) => nom); if (t >= MC[b.id]) m.push(b.nom + (f.length ? ' : ' + f.join(', ') : '') + '.'); });
+    if (t >= MC.lien) m.push('En bas : le sol fait partie du biotope de l’écosystème.');
+    return m.join(' ');
+  }
+  const faits = BLOCS.filter(b => t >= MF[b.id]);
+  return 'Fiche « Ce qu’il faut retenir » : ' + (faits.length ? faits.map(b => b.titre + ' (' + b.l.join(' ; ').replace(/⟦([^|]*)\|([^⟧]*)⟧/g, '($1)/($2)').replace(/_/g, '') + ')').join(' ') : 'rien encore.')
+    + (P.lacunes.length ? ' À revoir : ' + BLOCS.filter(b => etat(b) === 'lacune').map(b => b.titre).join(', ') + '.' : '');
+}
+const B = ST.brancher({ id: 'revision_' + VUE, titre: VUE === 'carte' ? 'Révision : la carte des deux chapitres' : 'Révision : ce qu’il faut retenir', M, FIN, vue: VUE,
+  motifs: VUE === 'carte' ? { titre: 'deux chapitres', sortie: 'la sortie écologique', aire: 'l’aire minimale', frequence: 'la fréquence et l’indice', histogramme: 'l’histogramme et la courbe', ecosysteme: 'l’écosystème', sol: 'les facteurs édaphiques', texture: 'la texture', permeabilite: 'la perméabilité et la rétention', eau: 'l’eau du sol', chimie: 'le pH et le CAH', lien: 'le sol fait partie du biotope' }
+    : Object.fromEntries(BLOCS.map(b => [b.id, b.titre])),
+  texte: VUE === 'carte' ? 'Carte de révision : la sortie écologique (aire minimale, fréquence et indice, histogramme et courbe de fréquence, écosystème) et les facteurs édaphiques (texture et triangle, perméabilité et rétention, eau du sol, pH et complexe argilo-humique) ; le sol fait partie du biotope.'
+    : 'Ce qu’il faut retenir : ' + BLOCS.map(b => b.titre + ' : ' + b.l.join(' ; ').replace(/⟦([^|]*)\|([^⟧]*)⟧/g, '$1/($2)').replace(/_/g, '')).join(' — '),
+  voir, depart: VUE === 'carte' ? 'Deux chapitres, une carte…' : 'Ce qu’il faut retenir…', fini: () => (VUE === 'carte' ? 'Huit méthodes, deux chapitres.' : 'La fiche est écrite.'),
+  params: P, setParams: { schema: { lacunes: '[{id, label, statut}] : blocs à revoir', acquis_ids: '[id] : blocs acquis' }, appliquer: (p) => {
+    if (Array.isArray(p.lacunes)) P.lacunes = p.lacunes.map(l => ({ id: String(l.id || l) }));
+    if (Array.isArray(p.acquis_ids)) P.acquis_ids = p.acquis_ids.map(String);
+  } } });
+window.Tableau.bulle($('feedback'), VUE === 'carte' ? 'Deux chapitres, une carte.' : 'Ce qu’il faut retenir.');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

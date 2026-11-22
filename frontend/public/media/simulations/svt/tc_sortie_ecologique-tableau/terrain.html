@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sur le terrain — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/svt/tc_sortie_ecologique-tableau/sortie.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Les documents du cours redessinés et animés : chaque objet peint apparaît à son tour avec sa légende à la craie"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/svt/tc_sortie_ecologique-tableau/commun.js"></script>
+<script>
+/*
+ * Les documents du cours « La sortie écologique » recréés à la craie (22 novembre 2026, demande de l'utilisateur :
+ * aucune photocopie du document du prof). Une vue par diapo ; chaque vue est une suite de cases qui apparaissent une à
+ * une (un objet peint + sa légende) ; la case en cours s'allume. Dans le petit cadre (téléphone), seule la case en cours
+ * est montrée, en grand.
+ *   ?vue=ecologie     (se_o2_ecologie)     moments : mot, haeckel, oikos, logos, sens
+ *   ?vue=sortie       (se_o3_sortie)       moments : observer, mesurer, noter, objectifs, questions
+ *   ?vue=outils       (se_a1_outils)       moments : orienter, noter, observer, capturer, garder
+ *   ?vue=lichens      (se_a1_lichens)      moments : arbre, pierre, mur, muscinale
+ *   ?vue=animaux      (se_a2_animaux)      moments : observer, empreintes, cris, pieges
+ *   ?vue=stations     (se_a2_stations)     moments : milieux, lisiere, mauvaise, bonne
+ *   ?vue=herbier      (se_a2_herbier)      moments : recolter, presser, secher, coller, etiqueter
+ *   ?vue=conservation (se_a2_conservation) moments : collection, alcool, taxidermie
+ * Les moments se suivent toutes les 2,5 s (le premier à 0,5 s).
+ */
+const { P, lueur, boule } = window.Sortie;
+const TAU = Math.PI * 2;
+const ombre = (g, fn, b = 6) => P.ombre(g, fn, b);
+function rr(g, x, y, w, h, r) { g.beginPath(); g.roundRect(x, y, w, h, r); }
+function grad(g, x0, y0, x1, y1, stops) { const l = g.createLinearGradient(x0, y0, x1, y1); stops.forEach(([o, c]) => l.addColorStop(o, c)); return l; }
+
+/* ── objets peints (centrés en cx, cy ; s = taille de la case) ── */
+const O = {
+  maison(g, x, y, s) {
+    ombre(g, () => { g.fillStyle = grad(g, x - s * .3, 0, x + s * .3, 0, [[0, '#e8d6b5'], [1, '#c9ad80']]); g.fillRect(x - s * .28, y - s * .05, s * .56, s * .34);
+      g.fillStyle = grad(g, 0, y - s * .35, 0, y, [[0, '#c2410c'], [1, '#7c2d12']]); g.beginPath(); g.moveTo(x - s * .36, y - s * .03); g.lineTo(x, y - s * .34); g.lineTo(x + s * .36, y - s * .03); g.closePath(); g.fill(); });
+    g.fillStyle = '#6b4424'; g.fillRect(x - s * .06, y + s * .1, s * .12, s * .19); g.fillStyle = '#93c5fd'; g.fillRect(x + s * .1, y + s * .03, s * .1, s * .09); g.fillRect(x - s * .2, y + s * .03, s * .1, s * .09);
+  },
+  livre(g, x, y, s) {
+    ombre(g, () => { g.fillStyle = '#1d4ed8'; rr(g, x - s * .3, y - s * .2, s * .6, s * .4, 6); g.fill(); });
+    g.fillStyle = '#f8fafc'; g.beginPath(); g.moveTo(x, y - s * .17); g.quadraticCurveTo(x - s * .14, y - s * .22, x - s * .27, y - s * .17); g.lineTo(x - s * .27, y + s * .16); g.quadraticCurveTo(x - s * .14, y + s * .11, x, y + s * .16); g.closePath(); g.fill();
+    g.beginPath(); g.moveTo(x, y - s * .17); g.quadraticCurveTo(x + s * .14, y - s * .22, x + s * .27, y - s * .17); g.lineTo(x + s * .27, y + s * .16); g.quadraticCurveTo(x + s * .14, y + s * .11, x, y + s * .16); g.closePath(); g.fill();
+    g.strokeStyle = 'rgba(30,41,59,.4)'; g.lineWidth = 1; for (let i = 0; i < 5; i++) { const yy = y - s * .1 + i * s * .05; g.beginPath(); g.moveTo(x - s * .23, yy); g.lineTo(x - s * .04, yy); g.moveTo(x + s * .04, yy); g.lineTo(x + s * .23, yy); g.stroke(); }
+  },
+  calendrier(g, x, y, s) {
+    ombre(g, () => { g.fillStyle = '#f8fafc'; rr(g, x - s * .2, y - s * .22, s * .4, s * .44, 6); g.fill(); });
+    g.fillStyle = '#dc2626'; rr(g, x - s * .2, y - s * .22, s * .4, s * .12, [6, 6, 0, 0]); g.fill();
+    g.fillStyle = '#1e293b'; g.font = `700 ${s * .14}px Georgia, serif`; g.textAlign = 'center'; g.fillText('1866', x, y + s * .1); g.textAlign = 'left';
+  },
+  interactions(g, x, y, s) {
+    P.sol(g, x - s * .42, y + s * .18, s * .84, s * .12, { graine: 3 });
+    P.arbre(g, x - s * .18, y + s * .19, s * .5, { graine: 2 }); P.lapin(g, x + s * .2, y + s * .2, s * .2);
+    P.soleil(g, x + s * .32, y - s * .28, s * .07);
+  },
+  personne(g, x, y, s, o = {}) { return P.personne(g, x, y + s * .3, s * .62, o); },
+  jumelles(g, x, y, s) {
+    ombre(g, () => { for (const d of [-1, 1]) { g.fillStyle = grad(g, x + d * s * .1 - s * .07, 0, x + d * s * .1 + s * .07, 0, [[0, '#111827'], [.5, '#4b5563'], [1, '#111827']]); rr(g, x + d * s * .1 - s * .07, y - s * .12, s * .14, s * .24, 6); g.fill(); }
+      g.fillStyle = '#374151'; g.fillRect(x - s * .04, y - s * .05, s * .08, s * .06); });
+    g.fillStyle = '#60a5fa'; for (const d of [-1, 1]) { g.beginPath(); g.arc(x + d * s * .1, y + s * .1, s * .05, 0, TAU); g.fill(); }
+  },
+  loupe(g, x, y, s) {
+    g.save(); g.lineCap = 'round'; g.strokeStyle = '#7c2d12'; g.lineWidth = s * .06; g.beginPath(); g.moveTo(x + s * .08, y + s * .08); g.lineTo(x + s * .26, y + s * .26); g.stroke(); g.restore();
+    g.fillStyle = 'rgba(186,230,253,.45)'; g.beginPath(); g.arc(x - s * .04, y - s * .04, s * .15, 0, TAU); g.fill(); g.strokeStyle = '#9ca3af'; g.lineWidth = s * .03; g.stroke();
+    g.strokeStyle = 'rgba(255,255,255,.8)'; g.lineWidth = 2; g.beginPath(); g.arc(x - s * .06, y - s * .06, s * .09, Math.PI * 1.1, Math.PI * 1.5); g.stroke();
+  },
+  carte(g, x, y, s) {
+    ombre(g, () => { g.fillStyle = '#f1f5d8'; g.beginPath(); g.moveTo(x - s * .3, y - s * .2); g.lineTo(x + s * .25, y - s * .2); g.lineTo(x + s * .3, y + s * .2); g.lineTo(x - s * .25, y + s * .2); g.closePath(); g.fill(); });
+    g.strokeStyle = 'rgba(120,80,40,.6)'; g.lineWidth = 1.2; for (let i = 0; i < 4; i++) { g.beginPath(); g.ellipse(x - s * .05, y, s * (.06 + i * .05), s * (.04 + i * .035), .3, 0, TAU); g.stroke(); }
+    g.fillStyle = 'rgba(59,130,246,.6)'; g.beginPath(); g.ellipse(x + s * .17, y + s * .1, s * .07, s * .04, 0, 0, TAU); g.fill();
+  },
+  boussole(g, x, y, s) {
+    ombre(g, () => boule(g, x, y, s * .14, '#f8fafc', '#cbd5e1', '#64748b'));
+    g.fillStyle = '#fff'; g.beginPath(); g.arc(x, y, s * .11, 0, TAU); g.fill();
+    g.fillStyle = '#dc2626'; g.beginPath(); g.moveTo(x, y - s * .1); g.lineTo(x + s * .025, y); g.lineTo(x - s * .025, y); g.fill();
+    g.fillStyle = '#1e293b'; g.beginPath(); g.moveTo(x, y + s * .1); g.lineTo(x + s * .025, y); g.lineTo(x - s * .025, y); g.fill();
+  },
+  blocnotes(g, x, y, s) {
+    ombre(g, () => { g.fillStyle = '#fefce8'; g.fillRect(x - s * .16, y - s * .22, s * .32, s * .44); });
+    g.fillStyle = '#16a34a'; g.fillRect(x - s * .16, y - s * .22, s * .32, s * .05);
+    g.strokeStyle = 'rgba(59,130,246,.5)'; g.lineWidth = 1; for (let i = 0; i < 6; i++) { g.beginPath(); g.moveTo(x - s * .13, y - s * .1 + i * s * .05); g.lineTo(x + s * .13, y - s * .1 + i * s * .05); g.stroke(); }
+  },
+  appareil(g, x, y, s) {
+    ombre(g, () => { g.fillStyle = grad(g, 0, y - s * .14, 0, y + s * .14, [[0, '#374151'], [1, '#111827']]); rr(g, x - s * .22, y - s * .12, s * .44, s * .26, 6); g.fill(); g.fillRect(x - s * .08, y - s * .17, s * .14, s * .06); });
+    boule(g, x, y + s * .01, s * .09, '#93c5fd', '#1e3a8a', '#0f172a'); g.fillStyle = '#fbbf24'; g.fillRect(x + s * .13, y - s * .09, s * .05, s * .03);
+  },
+  filet(g, x, y, s) {
+    g.save(); g.lineCap = 'round'; g.strokeStyle = '#c08a4e'; g.lineWidth = s * .03; g.beginPath(); g.moveTo(x - s * .35, y + s * .3); g.lineTo(x + s * .05, y - s * .05); g.stroke();
+    g.strokeStyle = '#d1d5db'; g.lineWidth = 2; g.beginPath(); g.ellipse(x + s * .14, y - s * .14, s * .14, s * .09, -.7, 0, TAU); g.stroke();
+    g.fillStyle = 'rgba(241,245,249,.55)'; g.beginPath(); g.moveTo(x + s * .05, y - s * .05); g.quadraticCurveTo(x + s * .35, y + s * .05, x + s * .3, y + s * .25); g.quadraticCurveTo(x + s * .15, y + s * .05, x + s * .23, y - s * .23); g.closePath(); g.fill(); g.restore();
+  },
+  parapluie(g, x, y, s) {
+    ombre(g, () => { g.fillStyle = '#f8fafc'; g.beginPath(); g.moveTo(x - s * .3, y - s * .12); g.lineTo(x + s * .3, y - s * .12); g.lineTo(x + s * .22, y + s * .12); g.lineTo(x - s * .22, y + s * .12); g.closePath(); g.fill(); });
+    g.strokeStyle = '#94a3b8'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(x - s * .3, y - s * .12); g.lineTo(x + s * .22, y + s * .12); g.moveTo(x + s * .3, y - s * .12); g.lineTo(x - s * .22, y + s * .12); g.stroke();
+    P.fleur(g, x - s * .05, y, s * .03, '#4ade80', 4); g.fillStyle = '#1f2937'; g.beginPath(); g.ellipse(x + s * .06, y + s * .03, s * .025, s * .015, 0, 0, TAU); g.fill();
+  },
+  piege(g, x, y, s) {
+    P.sol(g, x - s * .35, y - s * .05, s * .7, s * .3, { graine: 9 });
+    g.fillStyle = 'rgba(203,213,225,.85)'; g.fillRect(x - s * .1, y - s * .06, s * .2, s * .24); g.fillStyle = '#ef4444'; g.fillRect(x - s * .08, y + s * .12, s * .16, s * .04);
+    ombre(g, () => { g.fillStyle = '#a8a29e'; rr(g, x - s * .3, y - s * .16, s * .6, s * .06, 8); g.fill(); });
+    g.fillStyle = '#1f2937'; g.beginPath(); g.ellipse(x + s * .02, y + s * .1, s * .03, s * .016, 0, 0, TAU); g.fill();
+  },
+  boite(g, x, y, s) {
+    ombre(g, () => { g.fillStyle = 'rgba(226,232,240,.55)'; rr(g, x - s * .1, y - s * .12, s * .2, s * .3, 6); g.fill(); g.fillStyle = '#dc2626'; rr(g, x - s * .11, y - s * .18, s * .22, s * .07, 4); g.fill(); });
+  },
+  pince(g, x, y, s) { g.save(); g.strokeStyle = '#cbd5e1'; g.lineWidth = s * .025; g.lineCap = 'round'; g.beginPath(); g.moveTo(x - s * .2, y - s * .1); g.lineTo(x + s * .2, y + s * .02); g.moveTo(x - s * .2, y - s * .1); g.lineTo(x + s * .2, y - s * .04); g.stroke(); g.restore(); },
+  pelle(g, x, y, s) {
+    g.save(); g.lineCap = 'round'; g.strokeStyle = '#c08a4e'; g.lineWidth = s * .03; g.beginPath(); g.moveTo(x, y - s * .25); g.lineTo(x, y + s * .05); g.stroke(); g.restore();
+    ombre(g, () => { g.fillStyle = grad(g, x - s * .07, 0, x + s * .07, 0, [[0, '#6b7280'], [.5, '#e5e7eb'], [1, '#6b7280']]); g.beginPath(); g.moveTo(x - s * .07, y + s * .04); g.lineTo(x + s * .07, y + s * .04); g.lineTo(x + s * .05, y + s * .2); g.lineTo(x, y + s * .25); g.lineTo(x - s * .05, y + s * .2); g.closePath(); g.fill(); });
+  },
+  fil(g, x, y, s) { ombre(g, () => boule(g, x, y, s * .09, '#fef3c7', '#d6b48a', '#92704a')); g.strokeStyle = '#d6b48a'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(x + s * .08, y + s * .04); g.quadraticCurveTo(x + s * .2, y + s * .15, x + s * .32, y + s * .08); g.stroke(); },
+  tronc(g, x, y, s) {
+    ombre(g, () => { g.fillStyle = grad(g, x - s * .12, 0, x + s * .12, 0, [[0, '#4b3a2c'], [.5, '#8f7a64'], [1, '#4b3a2c']]); g.fillRect(x - s * .12, y - s * .38, s * .24, s * .7); });
+    g.strokeStyle = 'rgba(30,20,10,.5)'; g.lineWidth = 1; for (let i = 0; i < 7; i++) { g.beginPath(); g.moveTo(x - s * .1, y - s * .3 + i * s * .09); g.lineTo(x + s * .1, y - s * .28 + i * s * .09); g.stroke(); }
+    P.lichen(g, x - s * .02, y - s * .15, s * .1); P.lichen(g, x + s * .03, y + s * .1, s * .08); P.lichen(g, x - s * .04, y + s * .2, s * .06, { gris: true });
+  },
+  rocher(g, x, y, s) { P.pierre(g, x, y + s * .05, s * .3); P.lichen(g, x - s * .1, y - s * .02, s * .08); P.lichen(g, x + s * .1, y + s * .05, s * .07, { gris: true }); P.lichen(g, x, y + s * .1, s * .05); },
+  mur(g, x, y, s) {
+    for (let r = 0; r < 5; r++) for (let k = 0; k < 4; k++) { const xx = x - s * .36 + k * s * .18 + (r % 2) * s * .09, yy = y - s * .3 + r * s * .12; g.fillStyle = (r + k) % 2 ? '#b45309' : '#9a3412'; g.fillRect(xx, yy, s * .17, s * .11); }
+    P.mousse(g, x - s * .15, y + s * .3, s * .3); P.mousse(g, x + s * .15, y + s * .3, s * .26, { graine: 5 }); P.mousse(g, x + s * .05, y - s * .05, s * .2, { graine: 8 });
+  },
+  oiseau(g, x, y, s) { P.oiseau(g, x, y, s * .4); },
+  empreintes(g, x, y, s) {
+    P.sol(g, x - s * .38, y - s * .22, s * .76, s * .44, { graine: 11, haut: '#b8946a', bas: '#8a6a48' });
+    const patte = (px, py, a) => { g.save(); g.translate(px, py); g.rotate(a); g.fillStyle = 'rgba(60,40,25,.85)'; g.beginPath(); g.ellipse(0, 0, s * .04, s * .035, 0, 0, TAU); g.fill(); for (let i = -1; i <= 2; i++) { g.beginPath(); g.arc(i * s * .025 - s * .01, -s * .05 - Math.abs(i - .5) * s * .01, s * .012, 0, TAU); g.fill(); } g.restore(); };
+    patte(x - s * .25, y + s * .1, .3); patte(x - s * .1, y - s * .05, .3); patte(x + s * .05, y + s * .08, .3); patte(x + s * .2, y - s * .07, .3);
+  },
+  cris(g, x, y, s) { P.oiseau(g, x - s * .15, y, s * .35); g.strokeStyle = '#facc15'; g.lineWidth = 2.4; for (let i = 1; i <= 3; i++) { g.beginPath(); g.arc(x - s * .02, y, s * .07 * i, -.6, .6); g.stroke(); } },
+  feuilles(g, x, y, s) { P.herbe(g, x - s * .1, y + s * .25, s * .4, { epi: true }); P.fleur(g, x + s * .12, y - s * .05, s * .06, '#facc15'); g.strokeStyle = '#4f8a35'; g.lineWidth = 2; g.beginPath(); g.moveTo(x + s * .12, y - s * .02); g.lineTo(x + s * .1, y + s * .25); g.stroke(); },
+  secateur(g, x, y, s) { g.save(); g.lineCap = 'round'; g.strokeStyle = '#dc2626'; g.lineWidth = s * .04; g.beginPath(); g.moveTo(x, y); g.lineTo(x + s * .16, y + s * .18); g.moveTo(x, y); g.lineTo(x + s * .2, y + s * .1); g.stroke(); g.strokeStyle = '#cbd5e1'; g.lineWidth = s * .03; g.beginPath(); g.moveTo(x, y); g.lineTo(x - s * .1, y - s * .1); g.moveTo(x, y); g.lineTo(x - s * .13, y - s * .06); g.stroke(); g.restore(); },
+  journal(g, x, y, s, k = 0) {
+    ombre(g, () => { g.fillStyle = '#e5e7eb'; g.fillRect(x - s * .3, y - s * .04 - k, s * .6, s * .08); });
+    g.fillStyle = 'rgba(55,65,81,.6)'; for (let i = 0; i < 6; i++) g.fillRect(x - s * .27 + i * s * .09, y - s * .02 - k, s * .07, s * .01);
+  },
+  livres(g, x, y, s) { const cols = ['#16a34a', '#7c3aed', '#0891b2']; cols.forEach((c, i) => ombre(g, () => { g.fillStyle = c; rr(g, x - s * .22 + i * 3, y - s * .07 * (i + 1), s * .44, s * .07, 4); g.fill(); })); },
+  canson(g, x, y, s) {
+    ombre(g, () => { g.fillStyle = '#fafaf9'; g.fillRect(x - s * .2, y - s * .3, s * .4, s * .58); });
+    g.strokeStyle = '#4f8a35'; g.lineWidth = 2; g.beginPath(); g.moveTo(x - s * .05, y + s * .15); g.quadraticCurveTo(x, y - s * .05, x + s * .05, y - s * .2); g.stroke();
+    for (let i = 0; i < 4; i++) { g.fillStyle = '#65a30d'; g.beginPath(); g.ellipse(x - s * .02 + (i % 2 ? s * .06 : -s * .05), y + s * .08 - i * s * .08, s * .05, s * .02, i % 2 ? -.5 : .5, 0, TAU); g.fill(); }
+    P.fleur(g, x + s * .05, y - s * .22, s * .035, '#c084fc');
+  },
+  etiquette(g, x, y, s) {
+    O.canson(g, x, y, s);
+    g.fillStyle = '#fef9c3'; g.fillRect(x - s * .02, y + s * .12, s * .2, s * .13); g.strokeStyle = 'rgba(30,41,59,.6)'; g.lineWidth = 1; for (let i = 0; i < 3; i++) { g.beginPath(); g.moveTo(x, y + s * .16 + i * s * .03); g.lineTo(x + s * .16, y + s * .16 + i * s * .03); g.stroke(); }
+  },
+  insectes(g, x, y, s) {
+    ombre(g, () => { g.fillStyle = '#fafaf9'; g.fillRect(x - s * .32, y - s * .22, s * .64, s * .44); });
+    g.strokeStyle = '#a8a29e'; g.lineWidth = 2; g.strokeRect(x - s * .32, y - s * .22, s * .64, s * .44);
+    const bete = (bx, by, c) => { g.fillStyle = c; g.beginPath(); g.ellipse(bx, by, s * .035, s * .022, 0, 0, TAU); g.fill(); g.strokeStyle = c; g.lineWidth = 1; for (const d of [-1, 1]) for (let k = -1; k <= 1; k++) { g.beginPath(); g.moveTo(bx + k * s * .015, by); g.lineTo(bx + k * s * .025, by + d * s * .04); g.stroke(); } g.fillStyle = '#ef4444'; g.beginPath(); g.arc(bx, by - s * .03, 1.6, 0, TAU); g.fill(); };
+    [[-.2, -.1, '#1f2937'], [0, -.12, '#7c2d12'], [.2, -.08, '#111827'], [-.18, .08, '#4b5563'], [.02, .1, '#065f46'], [.2, .1, '#78350f']].forEach(([a, b, c]) => bete(x + a * s, y + b * s, c));
+  },
+  bocal(g, x, y, s) {
+    g.fillStyle = 'rgba(219,234,254,.35)'; rr(g, x - s * .14, y - s * .28, s * .28, s * .56, 10); g.fill(); g.strokeStyle = 'rgba(226,232,240,.8)'; g.lineWidth = 2; g.stroke();
+    g.fillStyle = 'rgba(253,230,138,.25)'; g.fillRect(x - s * .13, y - s * .1, s * .26, s * .37);
+    g.fillStyle = '#9a3412'; g.beginPath(); g.ellipse(x, y + s * .05, s * .03, s * .1, 0, 0, TAU); g.fill();
+    g.strokeStyle = '#9a3412'; g.lineWidth = 2; g.beginPath(); g.moveTo(x, y - s * .05); g.quadraticCurveTo(x + s * .06, y - s * .15, x, y - s * .2); g.stroke();
+    for (const d of [-1, 1]) for (let k = 0; k < 3; k++) { g.beginPath(); g.moveTo(x, y + k * s * .04); g.lineTo(x + d * s * .07, y + k * s * .04 + s * .03); g.stroke(); }
+    g.fillStyle = '#374151'; g.fillRect(x - s * .15, y - s * .32, s * .3, s * .06);
+  },
+  lezard(g, x, y, s) {
+    ombre(g, () => { g.fillStyle = grad(g, 0, y - s * .05, 0, y + s * .05, [[0, '#d6c7a6'], [1, '#8a7a5a']]); g.beginPath(); g.ellipse(x, y, s * .2, s * .05, 0, 0, TAU); g.fill();
+      g.beginPath(); g.ellipse(x - s * .24, y, s * .06, s * .04, 0, 0, TAU); g.fill(); g.lineWidth = s * .025; g.strokeStyle = '#a8977a'; g.lineCap = 'round'; g.beginPath(); g.moveTo(x + s * .18, y); g.quadraticCurveTo(x + s * .32, y + s * .08, x + s * .38, y - s * .06); g.stroke();
+      for (const [dx, dy] of [[-.12, 1], [-.12, -1], [.1, 1], [.1, -1]]) { g.beginPath(); g.moveTo(x + dx * s, y); g.lineTo(x + dx * s - s * .03, y + dy * s * .1); g.stroke(); } });
+    g.fillStyle = '#111'; g.beginPath(); g.arc(x - s * .26, y - s * .015, 1.6, 0, TAU); g.fill();
+  },
+};
+
+/* ── les vues : cases [id, titre, sous-titre, peintre] ── */
+const VUES = {
+  ecologie: [
+    ['mot', 'Écologie', 'science de l’environnement', (g, x, y, s) => { O.maison(g, x - s * .2, y, s * .55); O.livre(g, x + s * .22, y, s * .55); }],
+    ['haeckel', 'Ernst Haeckel', 'a créé le mot en 1866', O.calendrier],
+    ['oikos', 'oikos', '= maison, habitat', O.maison],
+    ['logos', 'logos', '= science', O.livre],
+    ['sens', 'êtres vivants ↔ milieu', 'leurs interactions', O.interactions]],
+  sortie: [
+    ['observer', 'Observer', 'les êtres vivants', (g, x, y, s) => { O.personne(g, x - s * .15, y, s, { vise: true }); O.oiseau(g, x + s * .22, y - s * .2, s); }],
+    ['mesurer', 'Mesurer', 'hauteurs, surfaces', (g, x, y, s) => { O.personne(g, x - s * .2, y, s); g.strokeStyle = '#facc15'; g.lineWidth = 2; g.setLineDash([6, 4]); g.beginPath(); g.moveTo(x - s * .1, y + s * .28); g.lineTo(x + s * .3, y + s * .28); g.stroke(); g.setLineDash([]); P.arbre(g, x + s * .3, y + s * .3, s * .45); }],
+    ['noter', 'Noter', 'les résultats', (g, x, y, s) => { O.personne(g, x - s * .12, y, s); O.blocnotes(g, x + s * .18, y + s * .05, s * .6); }],
+    ['objectifs', 'Pourquoi ?', 'expliquer · exploiter · protéger', (g, x, y, s) => { P.arbre(g, x, y + s * .3, s * .55); P.lapin(g, x + s * .25, y + s * .3, s * .18); }],
+    ['questions', '3 questions', 'techniques ? données ? écosystème ?', (g, x, y, s) => { g.fillStyle = '#facc15'; g.font = `700 ${s * .3}px Georgia, serif`; g.textAlign = 'center'; g.fillText('? ? ?', x, y + s * .1); g.textAlign = 'left'; }]],
+  outils: [
+    ['orienter', 'S’orienter', 'carte + boussole', (g, x, y, s) => { O.carte(g, x - s * .08, y, s); O.boussole(g, x + s * .25, y + s * .12, s); }],
+    ['noter', 'Noter', 'bloc-notes, appareil photo', (g, x, y, s) => { O.blocnotes(g, x - s * .18, y, s); O.appareil(g, x + s * .2, y + s * .05, s * .8); }],
+    ['observer', 'Observer', 'jumelles (loin), loupe (agrandir)', (g, x, y, s) => { O.jumelles(g, x - s * .18, y, s * .9); O.loupe(g, x + s * .18, y, s * .9); }],
+    ['capturer', 'Capturer', 'filet fauchoir, parapluie, piège', (g, x, y, s) => { O.filet(g, x - s * .2, y - s * .05, s * .7); O.parapluie(g, x + s * .2, y - s * .15, s * .6); O.piege(g, x + s * .15, y + s * .22, s * .5); }],
+    ['garder', 'Récolter, délimiter', 'boîte, pince, pelle, fil', (g, x, y, s) => { O.boite(g, x - s * .25, y, s); O.pince(g, x - s * .02, y - s * .1, s); O.pelle(g, x + s * .15, y, s); O.fil(g, x + s * .3, y + s * .2, s * .7); }]],
+  lichens: [
+    ['arbre', 'Lichens', 'sur un tronc', O.tronc],
+    ['pierre', 'Lichens', 'sur une pierre', O.rocher],
+    ['mur', 'Mousses', 'sur un mur', O.mur],
+    ['muscinale', 'Strate muscinale', 'mousses + lichens', (g, x, y, s) => { P.mousse(g, x - s * .1, y + s * .15, s * .4); P.lichen(g, x + s * .2, y + s * .05, s * .1); }]],
+  animaux: [
+    ['observer', 'Observer de loin', 'jumelles, longue-vue', (g, x, y, s) => { O.personne(g, x - s * .15, y, s, { vise: true }); O.oiseau(g, x + s * .25, y - s * .22, s); }],
+    ['empreintes', 'Les traces', 'empreintes sur le sol', O.empreintes],
+    ['cris', 'Les cris, les chants', 'et les pelotes de réjection', O.cris],
+    ['pieges', 'Capturer', 'pièges, filet fauchoir', (g, x, y, s) => { O.piege(g, x - s * .15, y + s * .05, s * .7); O.filet(g, x + s * .2, y - s * .1, s * .6); }]],
+  herbier: [
+    ['recolter', '1 · Récolter', 'une plante entière ou un morceau', (g, x, y, s) => { O.feuilles(g, x - s * .1, y, s); O.secateur(g, x + s * .15, y - s * .05, s); }],
+    ['presser', '2 · Aplatir', 'papier journal + gros livres', (g, x, y, s) => { O.journal(g, x, y + s * .2, s); O.journal(g, x, y + s * .1, s); O.livres(g, x, y + s * .05, s); }],
+    ['secher', '3 · Sécher', 'changer le papier chaque jour', (g, x, y, s) => { O.journal(g, x, y + s * .1, s); O.journal(g, x + s * .12, y - s * .05, s, 0); g.strokeStyle = '#facc15'; g.lineWidth = 2.4; g.beginPath(); g.arc(x, y - s * .05, s * .22, -2.6, -.5); g.stroke(); }],
+    ['coller', '4 · Coller', 'sur une feuille de Canson', O.canson],
+    ['etiqueter', '5 · Étiqueter', 'nom latin, nom commun, lieu, date', O.etiquette]],
+  conservation: [
+    ['collection', 'Collection entomologique', 'insectes piqués dans une boîte', O.insectes],
+    ['alcool', 'Dans l’alcool', 'un bocal (scorpion)', O.bocal],
+    ['taxidermie', 'Taxidermie', 'l’animal naturalisé (lézard)', O.lezard]],
+};
+
+/* la vue « stations » : une carte vue de dessus (forêt, prairie, étang), les lisières s'allument, puis deux stations */
+function dessinerStations(c, S, scene) {
+  const L = scene.L, pt = scene.petit, x0 = 20, y0 = 20, w = L - 40, h = 380;
+  c.direct(() => {
+    const g = c.ctx; g.save(); g.beginPath(); g.rect(x0, y0, w, h); g.clip();
+    g.fillStyle = 'rgba(132,190,90,.55)'; g.fillRect(x0, y0, w, h);
+    const r = window.Sortie.graine(5); g.strokeStyle = 'rgba(190,230,140,.35)'; for (let i = 0; i < 300; i++) { const px = x0 + r() * w, py = y0 + r() * h; g.beginPath(); g.moveTo(px, py); g.lineTo(px + 2, py - 5); g.stroke(); }
+    g.fillStyle = 'rgba(30,90,40,.55)'; g.beginPath(); g.moveTo(x0, y0); g.lineTo(x0 + w * .38, y0); g.quadraticCurveTo(x0 + w * .3, y0 + h * .5, x0 + w * .2, y0 + h); g.lineTo(x0, y0 + h); g.closePath(); g.fill();
+    for (let i = 0; i < 26; i++) { const px = x0 + r() * w * .28, py = y0 + 30 + r() * (h - 40); if (px < x0 + w * (.36 - .16 * (py - y0) / h)) P.arbre(g, px, py, 46, { graine: i }); }
+    const ge = g.createRadialGradient(x0 + w * .8, y0 + h * .72, 10, x0 + w * .8, y0 + h * .72, w * .25); ge.addColorStop(0, 'rgba(59,130,246,.9)'); ge.addColorStop(1, 'rgba(147,197,253,.8)');
+    g.fillStyle = ge; g.beginPath(); g.ellipse(x0 + w * .82, y0 + h * .78, w * .22, h * .3, -.2, 0, TAU); g.fill();
+    g.restore();
+  });
+  const lab = pt ? 30 : 20;
+  c.texte('forêt', x0 + w * .1, y0 + 40, { couleur: 'blanc', taille: lab, gras: true });
+  c.texte('prairie', x0 + w * .55, y0 + 46, { couleur: 'blanc', taille: lab, gras: true });
+  c.texte('étang', x0 + w * .78, y0 + h * .8, { couleur: 'blanc', taille: lab, gras: true });
+  c.repere('milieux', x0, y0, w, h, 'forêt, prairie, étang');
+  if (S.t <= 0 || S.ecrit(c, 'lisiere')) {
+    c.courbe(u => [x0 + w * (.38 - .18 * u) + Math.sin(u * 7) * 6, y0 + h * u], 40, { couleur: 'jaune', largeur: 6 });
+    c.courbe(u => { const a = Math.PI * (.75 + .9 * u); return [x0 + w * .82 + Math.cos(a) * w * .23, y0 + h * .78 + Math.sin(a) * h * .31]; }, 40, { couleur: 'jaune', largeur: 6 });
+    c.texte('lisière', x0 + w * .19, y0 + h * .88, { couleur: 'jaune', taille: pt ? 30 : 22, gras: true });
+    c.repere('lisiere', x0 + w * .18, y0, w * .22, h, 'la lisière');
+  }
+  if (S.t <= 0 || S.ecrit(c, 'mauvaise')) {
+    const sx = x0 + w * .3, sy = y0 + h * .3; c.rect(sx - 30, sy - 30, 60, 60, { couleur: 'rouge', largeur: 2.6, arrondi: 2 });
+    c.ligne(sx - 22, sy - 22, sx + 22, sy + 22, { couleur: 'rouge', largeur: 4 }); c.ligne(sx + 22, sy - 22, sx - 22, sy + 22, { couleur: 'rouge', largeur: 4 });
+    if (!pt) c.texte('sur la lisière : non', sx + 40, sy + 8, { couleur: 'rouge', taille: 18 });
+    c.repere('mauvaise', sx - 30, sy - 30, 60, 60, 'une station sur la lisière : non');
+  }
+  if (S.t <= 0 || S.ecrit(c, 'bonne')) {
+    const sx = x0 + w * .58, sy = y0 + h * .4; c.rect(sx - 34, sy - 34, 68, 68, { couleur: 'vert', largeur: 3, arrondi: 2 });
+    c.texte('✓', sx, sy + 14, { couleur: 'vert', taille: 40, gras: true, align: 'center' });
+    c.texte(pt ? 'homogène, loin des lisières' : 'station : homogène, loin des lisières', sx, sy + (pt ? 78 : 64), { couleur: 'vert', taille: pt ? 30 : 19, gras: true, align: 'center' });
+    c.repere('bonne', sx - 34, sy - 34, 68, 68, 'la bonne station');
+  }
+}
+
+const vp = window.Sortie.param('vue', 'outils');
+const VUE = vp in VUES || vp === 'stations' ? vp : 'outils';
+const CASES = VUE === 'stations' ? [['milieux'], ['lisiere'], ['mauvaise'], ['bonne']] : VUES[VUE];
+const M = {}; CASES.forEach((k, i) => { M[k[0]] = +(0.5 + 2.5 * i).toFixed(2); });
+function courant(S) { let i = -1; CASES.forEach((k, j) => { if (S.a(k[0])) i = j; }); return i; }
+function dessinerCases(c, S, scene) {
+  const L = scene.L, pt = scene.petit, n = CASES.length, k = courant(S);
+  const montre = j => S.t <= 0 || S.a(CASES[j][0]);
+  if (pt) {
+    // petit cadre : la case en cours seule, en grand
+    const j = k < 0 ? 0 : k, [id, titre, sous, peindre] = CASES[j], s = 330;
+    c.direct(() => peindre(c.ctx, L / 2, 170, s));
+    c.texte(titre, L / 2, 352, { couleur: 'jaune', taille: 36, gras: true, align: 'center' });
+    c.texte(sous, L / 2, 398, { couleur: 'blanc', taille: 30, align: 'center' });
+    c.repere(id, L / 2 - 200, 30, 400, 380, titre + ' : ' + sous);
+    c.texte((j + 1) + ' / ' + n, 20, 40, { couleur: 'faible', taille: 28 });
+    return;
+  }
+  const cols = n <= 3 ? n : Math.ceil(n / 2), rows = n <= 3 ? 1 : 2, cw = (L - 20) / cols, ch = 410 / rows;
+  CASES.forEach(([id, titre, sous, peindre], j) => {
+    const col = j % cols, row = Math.floor(j / cols), offset = row === 1 && n % cols ? (cols - n % cols) * cw / 2 : 0;
+    const x = 10 + col * cw + offset, y = 6 + row * ch, s = Math.min(cw - 10, ch - 60) * 1.3;   // les objets occupent ~60 % de s : on agrandit
+    c.repere(id, x + 4, y + 4, cw - 8, ch - 8, titre + ' : ' + sous);
+    if (!montre(j)) return;
+    if (S.vu[id] != null && S.t > 0) c.depuis(S.vu[id]);
+    const a = S.t <= 0 ? 1 : Math.min(1, S.kl(id, .6));
+    if (j === k && S.t > 0) lueur(c, x + 4, y + 4, cw - 8, ch - 8, { vive: true });
+    c.direct(() => { c.ctx.save(); c.ctx.globalAlpha = a; peindre(c.ctx, x + cw / 2, y + (ch - 58) / 2 + 4, s); c.ctx.restore(); });
+    c.texte(titre, x + cw / 2, y + ch - 34, { couleur: 'jaune', taille: 19, gras: true, align: 'center', max: cw - 12 });
+    c.texte(sous, x + cw / 2, y + ch - 12, { couleur: 'blanc', taille: 15, align: 'center', max: cw - 12 });
+  });
+}
+window.Sortie.sim({
+  id: 'tc_sortie_terrain_' + VUE, titre: 'Sur le terrain : ' + VUE, vue: VUE, moments: M, fin: 0.5 + 2.5 * CASES.length + 1, graine: 43,
+  motifs: Object.fromEntries(CASES.map(k => [k[0], k[1] ? k[1] + ' : ' + k[2] : k[0]])),
+  accueil: 'Lance : chaque élément apparaît à son tour.', fini: 'Tout est au tableau.',
+  dessiner: (c, S, scene) => (VUE === 'stations' ? dessinerStations(c, S, scene) : dessinerCases(c, S, scene)),
+  ceQuiSeVoit: S => {
+    if (VUE === 'stations') return 'Carte vue de dessus : forêt, prairie, étang.' + (S.a('lisiere') || S.t <= 0 ? ' Lisières allumées en jaune entre les milieux.' : '') + (S.a('mauvaise') || S.t <= 0 ? ' Une station sur la lisière, barrée en rouge.' : '') + (S.a('bonne') || S.t <= 0 ? ' Une station au milieu de la prairie, cochée en vert : homogène, loin des lisières.' : '');
+    const vus = CASES.filter(k => S.t <= 0 || S.a(k[0])).map(k => k[1] + ' (' + k[2] + ')');
+    return 'Cases dessinées : ' + vus.join(' ; ') + '.';
+  },
+  texte: VUE === 'stations' ? 'Choix des stations de relevé : homogènes et loin des lisières (zone limite entre deux milieux).' : CASES.map(k => k[1] + ' : ' + k[2]).join(' ; '),
+  explication: { [VUE]: CASES.map(k => ({ repere: k[0], texte: k[1] ? k[1] + ' : ' + k[2] : k[0] })) },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

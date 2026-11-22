@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ce qu'il faut retenir — facteurs édaphiques</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="sol.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Fiche de révision écrite à la craie sur une page : pour chaque partie du cours sur les facteurs édaphiques, la définition à apprendre, les formules et le point d'attention ; deuxième page : ce que l'élève doit retravailler"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="suiv" data-professor-control="next previous start reset play_until">Ma page →</button>
+    <button class="craie-btn secondaire" id="imprimer" title="Imprimer ou enregistrer en PDF">🖨️ Imprimer / PDF</button>
+    <span class="lecture" id="page"></span>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script src="/media/simulations/shared/tableau/imprimer.js"></script>
+<script>
+/*
+ * « Ce qu'il faut retenir » du cours « Les facteurs édaphiques et leurs relations avec les êtres vivants » (Tronc commun,
+ * activités 1 à 3 ; diapositive fe_b1_bilan), adapté de svt/role_muscle_strie_squelettique-tableau/bilan.html.
+ * Six blocs (un par compétence C1 à C6), définition, formule, piège. play_until {moment: <bloc>} écrit ce bloc et le met
+ * en lumière ; page 2 = la page de l'élève (set_parameters {lacunes, acquis, acquis_ids}).
+ */
+const { fr, bulle, protocole } = window.Tableau;
+const $ = id => document.getElementById(id);
+
+const BLOCS = [
+  { id: 'constituants', titre: '1 · Constituants et texture', comps: ['C1'], formules: ['% = ⟦h × 100|h totale⟧'],
+    def: "Le sol : constituants solides (minéraux, organiques), liquides (solution du sol) et gazeux (atmosphère du sol). La texture = les % de sable, de limon et d’argile, lus dans le triangle des textures.",
+    attention: "Triangle : argile de bas en haut, limon de haut en bas, sable de droite à gauche." },
+  { id: 'structure', titre: '2 · La structure', comps: ['C2'],
+    def: "L’agencement des éléments minéraux et organiques : particulaire (grains libres), compacte (pâte d’argile), glomérulaire (grumeaux et vides).",
+    attention: "La glomérulaire garde l’eau et l’air : la plus favorable aux êtres vivants." },
+  { id: 'ph', titre: '3 · Le pH du sol', comps: ['C3'],
+    def: "pH < 7 : acide ; pH = 7 : neutre ; pH > 7 : basique. Plante calcifuge (lupin jaune, chêne-liège) : évite le sol calcaire ; calcicole (fève) : le supporte.",
+    attention: "Calcifuge : trop de Ca²⁺ absorbé gêne l’absorption des autres ions (K⁺)." },
+  { id: 'cah', titre: '4 · Le complexe argilo-humique', comps: ['C4'],
+    def: "Argile + humus = CAH, chargé négativement : il retient les cations (K⁺, Ca²⁺, Mg²⁺…) et les libère peu à peu pour les racines.",
+    attention: "Filtrat du bleu de méthylène incolore : ses cations sont retenus." },
+  { id: 'permeabilite', titre: '5 · Perméabilité et rétention', comps: ['C5'], formules: ['P = ⟦V_2|t_2 − t_1⟧', 'Vr = V_1 − V_2'],
+    def: "Perméabilité : propriété du sol de laisser passer l’eau et l’air. Capacité de rétention : l’eau que le sol garde. Sableux : très perméable ; argileux : retient beaucoup.",
+    attention: "P en ml/min : diviser V2 par la durée t2 − t1." },
+  { id: 'eau', titre: '6 · L’eau du sol', comps: ['C6'],
+    def: "Eau de gravité (s’écoule), eau capillaire (utilisable), eau hygroscopique (inutilisable). Point de flétrissement : la plante ne peut plus puiser d’eau. Texture fine et humus : plus d’eau retenue.",
+    attention: "Eau utilisable = capacité de rétention − point de flétrissement." },
+];
+const STATUTS = { non_acquis: ['à reprendre', 'rouge'], partiel: ['à revoir', 'orange'], acquis: ['acquis', 'vert'] };
+const AVANT = -1e9;   // instant d'un bloc déjà dit : il est écrit d'un coup
+// apparu[i] : null = pas encore dit (pas écrit) ; un nombre = l'instant (s de la scène) où il commence à s'écrire.
+const S = { moitie: 0, vueSig: null, page: 1, focus: null, lacunes: null, acquis: null, acquis_ids: null, apparu: [] };
+window.__debordeBlocs = [];   // vérification : un bloc dont le texte dépasse son cadre
+
+/* Coupe un texte en lignes qui tiennent dans `max` px (mesure sans les « _ » des indices). */
+function lignes(c, texte, taille, max) {
+  const ctx = c.ctx; ctx.font = `${taille}px ${window.Tableau.POLICE}`;
+  const out = []; let ligne = '';
+  for (const mot of String(texte).split(/\s+/)) {
+    const essai = ligne ? ligne + ' ' + mot : mot;
+    if (ctx.measureText(essai.replace(/_/g, '')).width > max && ligne) { out.push(ligne); ligne = mot; } else ligne = essai;
+  }
+  if (ligne) out.push(ligne);
+  return out;
+}
+function paragraphe(c, texte, x, y, taille, max, o = {}, lh = 1.2) {
+  for (const l of lignes(c, texte, taille, max)) { c.texte(l, x, y, { taille, ...o }); y += taille * lh; }
+  return y;
+}
+
+// Trois colonnes de trois blocs, dans le cadre 760 × 420.
+const COL = [{ x: 18, w: 228 }, { x: 264, w: 228 }, { x: 510, w: 228 }], HAUT = 48, HBLOC = 180;
+/* Tableau large (scene.L ≥ 1000 ; 15 novembre 2026, « ce qu'il faut retenir : cases serrées, petits textes qui se
+ * chevauchent ») : les blocs coulent en colonnes sur toute la largeur, chacun à sa hauteur, avec des textes plus gros
+ * (le texte ne descend jamais sous 15 px à l'écran : à 1366 × 613 cela fait ~18 unités, et l'interligne suit la vraie
+ * taille). On essaie 3 colonnes puis 4 et on garde la première qui tient. Sinon (L < 1000) : la grille d'origine. */
+const T0 = { ti: 14, fo: 13, de: 11.5, at: 11, st: 11, lh: 1.2 };
+let T = T0, POS = null, POS_L = 0;
+/** Une formule plus large que le bloc passe à la ligne avant un « = » ou une « → » (au lieu d'être rétrécie sous 15 px). */
+function morceauxFormule(c, f, taille, w) {
+  c.ctx.font = `${taille}px ${window.Tableau.POLICE}`;
+  const larg = s => c.ctx.measureText(s.replace(/_/g, '')).width + 14, out = [];
+  if (larg(f) <= w) return [f];
+  for (const p of f.split(/ (?=[=→] )/)) { const d = out.length - 1; if (d >= 0 && larg(out[d] + ' ' + p) <= w) out[d] += ' ' + p; else out.push(p); }
+  return out;
+}
+function hauteurBloc(c, b, w, t) {
+  let h = t.ti * 1.25;
+  if (b.formules) {
+    let fx = 0, rangs = 1;
+    for (const f of b.formules) {
+      const m = morceauxFormule(c, f, t.fo, w); c.ctx.font = `${t.fo}px ${window.Tableau.POLICE}`;
+      const l = Math.min(w, Math.max(...m.map(s => c.ctx.measureText(s).width)) + 14);
+      if (fx > 0 && (fx + l > w || m.length > 1)) { fx = 0; rangs++; }
+      if (m.length > 1) { rangs += m.length - 1; fx = w; } else fx += l + 7;
+    }
+    h += rangs * (t.fo + 9) + 4;
+    if (b.formules.some(f => f.includes('⟦'))) h += rangs * t.fo * .95;
+  }
+  h += lignes(c, b.def, t.de, w).length * t.de * t.lh + lignes(c, b.attention, t.at, w - 18).length * t.at * t.lh;
+  return h + 12;
+}
+/* Les neuf blocs ne tiennent pas tous sur un tableau large sans passer sous 15 px : en large, la fiche montre une
+ * moitié à la fois (blocs 1 à 5, puis 6 à 9) ; la moitié affichée suit le bloc que dit la voix (focus) ou le dernier
+ * écrit, et « Ma page → » passe de la 1re moitié à la 2de avant la page de l'élève. */
+const MOITIES = [[0, 1, 2], [3, 4, 5]];
+const moitieDe = i => (i >= 3 ? 1 : 0);
+/* « Signature » de ce que la voix a dit en dernier : le bloc en lumière, sinon le dernier bloc écrit au fil de la voix.
+ * La moitié affichée ne suit la voix que quand cette signature CHANGE (un nouveau bloc est dit) : un choix manuel
+ * (« Ma page → », clic sur l'en-tête, next / previous) reste donc affiché jusqu'au bloc suivant de la voix. */
+function signature() {
+  const f = BLOCS.findIndex(b => b.id === S.focus);
+  if (f >= 0) return { sig: 'f' + f, i: f };
+  let dern = -1, tDern = -Infinity;
+  S.apparu.forEach((a, i) => { if (a != null && a !== AVANT && a >= tDern) { tDern = a; dern = i; } });
+  return dern >= 0 ? { sig: 'd' + dern + '@' + tDern, i: dern } : { sig: null, i: -1 };
+}
+function moitieVue() {
+  if (!POS) return null;
+  const { sig, i } = signature();
+  if (sig && sig !== S.vueSig) { S.vueSig = sig; S.moitie = moitieDe(i); }
+  return S.moitie || 0;
+}
+/** Choix manuel d'une moitié : il reste tant que la voix ne dit pas un nouveau bloc. */
+function choisirMoitie(m) { S.moitie = m; S.vueSig = signature().sig; scene.sale = true; }
+function disposer(c, L) {
+  const cle = L + ':' + (c.echelle || 1).toFixed(3);
+  if (cle === POS_L) return; POS_L = cle;
+  // la grille d'origine seulement si ses petites tailles restent ≥ 15 px à l'écran ; sinon le kit les agrandit et
+  // les lignes, coupées à la taille nominale, se chevauchent : on passe aux blocs qui coulent (tailles réelles)
+  if (L < 1000 && Math.min(T0.de, T0.at) * (c.echelle || 1) >= 15) { T = T0; POS = null; return; }
+  const minimum = 15 / Math.max(.01, c.echelle || 1);       // la taille plancher, en unités du dessin
+  const essais = [[3, 1.08], [3, 1], [4, 1], [5, 1], [5, .95]];
+  for (const [n, f] of essais) {
+    const g = L >= 1000 ? 1 : 0;   // tableau étroit agrandi : on part du plancher de 15 px, pas des grandes tailles du tableau large
+    const t = { ti: Math.max(21 * g, minimum * 1.1) * f, fo: Math.max(18 * g, minimum) * f, de: Math.max(19 * g, minimum) * f, at: Math.max(18 * g, minimum) * f, st: Math.max(15, minimum), lh: g ? 1.13 : 1.25 };
+    const gap = 22, w = (L - 36 - (n - 1) * gap) / n, pos = [];
+    let ok = true;
+    for (const moitie of MOITIES) {
+      let col = 0, y = HAUT + 4;
+      for (const i of moitie) {
+        const h = hauteurBloc(c, BLOCS[i], w, t);
+        if (y + h > 416 && y > HAUT + 4) { col++; y = HAUT + 4; }
+        pos[i] = { x: 18 + col * (w + gap), w, y0: y, h }; y += h + 10;
+        if (col >= n || y > 426) ok = false;
+      }
+    }
+    T = t; POS = pos;
+    if (ok) break;
+  }
+}
+const place = i => (POS ? POS[i] : { x: COL[i % 3].x, w: COL[i % 3].w, y0: HAUT + Math.floor(i / 3) * HBLOC, h: HBLOC });
+function bloc(c, b, i) {
+  const { x, w, y0, h } = place(i), enLumiere = S.focus === b.id, st = statut(b);
+  const cx = x - 6, cy = y0 - 6, cw = w + 12, ch = h - 6;
+  // Le cadre de lumière et l'état de l'élève apparaissent d'un coup : ils ne décalent pas l'écriture du bloc.
+  c.direct(() => {
+    if (enLumiere) c.rect(cx, cy, cw, ch, { couleur: 'jaune', arrondi: 10, largeur: 1.6, alpha: .7 });
+    else if (st && STATUTS[st] && st !== 'acquis') c.rect(cx, cy, cw, ch, { couleur: STATUTS[st][1], arrondi: 10, largeur: 1.4, pointille: [5, 6], alpha: .8 });
+    if (st === 'acquis') c.texte('✓', x + w - 10, y0 + 12, { couleur: 'vert', taille: T.st + 4 });
+    else if (st && STATUTS[st]) c.texte(STATUTS[st][0], x + w, y0 + 12, { couleur: STATUTS[st][1], taille: T.st, align: 'right' });
+  });
+  let y = y0 + Math.round(T.ti * .9);
+  c.texte(b.titre, x, y, { couleur: 'jaune', taille: T.ti, max: st ? w - 62 * T.st / 11 : w });
+  y += Math.round(T.ti * 1.2);
+  if (b.formules) {
+    // formules encadrées, à la ligne quand la suivante ne tient plus
+    let fx = x;
+    const FR = b.formules.some(f => f.includes('⟦')), hf = FR ? T.fo * 1.95 : T.fo, haut = FR ? T.fo * 1.35 : T.fo;
+    if (FR) y += T.fo * .4;
+    for (const f of b.formules) {
+      const m = morceauxFormule(c, f, T.fo, w); c.ctx.font = `${T.fo}px ${window.Tableau.POLICE}`;
+      const l = Math.min(w, Math.max(...m.map(s => c.largeurTexte(s.replace(/_/g, ''), T.fo))) + 14);
+      if (fx > x && (fx + l > x + w || m.length > 1)) { fx = x; y += hf + 8; }
+      c.rect(fx, y - haut, l, hf + 6 + (m.length - 1) * (hf + 9), { couleur: 'faible', arrondi: 6, largeur: 1.2, duree: .25 });
+      m.forEach((s, k) => c.texte(s, fx + 7, y + 1 + k * (hf + 9), { couleur: 'jaune', taille: T.fo, max: l - 10 }));
+      if (m.length > 1) { y += (m.length - 1) * (hf + 9); fx = x + w; } else fx += l + 7;
+    }
+    y += (FR ? T.fo * 1.05 : T.fo) + 7;
+  }
+  y = paragraphe(c, b.def, x, y, T.de, w, { couleur: 'blanc' }, T.lh);
+  c.texte('⚠', x, y, { couleur: 'orange', taille: T.at });
+  y = paragraphe(c, b.attention, x + T.at * 1.3, y, T.at, w - T.at * 1.3, { couleur: 'orange', alpha: .92 }, T.lh);
+  if (y - T.at > cy + ch && !window.__debordeBlocs.includes(b.id)) window.__debordeBlocs.push(b.id);
+  c.repere(b.id, cx, cy, cw, ch, b.titre.replace(/^\d+ · /, ''));
+}
+
+function dessinerFiche(c) {
+  /* Petit cadre (téléphone en paysage) : un seul bloc à la fois, en grand — celui que la voix dit, sinon le dernier écrit. */
+  if (scene.compact) {
+    let i = BLOCS.findIndex(b => b.id === S.focus);
+    if (i < 0) S.apparu.forEach((a, k) => { if (a != null) i = k; });
+    if (i < 0 || S.apparu[i] == null) return;
+    const sT = T, sP = POS, sL = POS_L;
+    T = { ti: 34, fo: 30, de: 30, at: 29, st: 20, lh: 1.15 }; POS = []; POS[i] = { x: 16, w: scene.L - 32, y0: 14, h: 400 };
+    c.cur = S.apparu[i] === AVANT ? AVANT : Math.max(c.cur, S.apparu[i]);
+    bloc(c, BLOCS[i], i);
+    c.direct(() => c.texte(`${i + 1} / ${BLOCS.length}`, scene.L - 16, 410, { couleur: 'faible', taille: 26, align: 'right' }));
+    T = sT; POS = sP; POS_L = sL;
+    return;
+  }
+  disposer(c, scene.L);
+  if (S.apparu.some(a => a === AVANT)) c.cur = AVANT;   // la voix est déjà passée : le titre est écrit d'un coup
+  const xd = (POS ? scene.L : 760) - 18;
+  c.texte('Ce qu’il faut retenir', 18, 30, { couleur: 'jaune', taille: POS ? 26 : 22 });
+  const mv = moitieVue();
+  c.direct(() => c.texte(mv == null ? 'définition · formule · ⚠ piège' : `${mv ? 'blocs 4 à 6 (2/2)' : 'blocs 1 à 3 (1/2)'} · définition · formule · ⚠ piège`, xd, 28, { couleur: 'faible', taille: POS ? 16 : 12, align: 'right' }));
+  c.ligne(18, 38, xd, 38, { couleur: 'tresfaible', largeur: 1.4 });
+  const debut = c.cur;
+  let fin = c.cur;
+  BLOCS.forEach((b, i) => {
+    if (S.apparu[i] == null) return;   // pas encore dit : il attend son moment
+    if (mv != null && moitieDe(i) !== mv) return;   // tableau large : l'autre moitié de la fiche
+    // déjà dit : écrit d'un coup ; dit maintenant : s'écrit dès cet instant (le premier attend la fin du titre)
+    c.cur = S.apparu[i] === AVANT ? AVANT : Math.max(debut, S.apparu[i]); bloc(c, b, i); fin = Math.max(fin, c.cur);
+  });
+  c.cur = fin;
+}
+
+function dessinerLacunes(c) {
+  const lg = scene.L >= 1000, W = lg ? scene.L - 60 : 700, K = scene.compact ? 1.8 : lg ? 1.4 : 1, k = v => Math.round(v * K);
+  c.texte('Ta page : ce qu’il te reste à retravailler', 22, 30, { couleur: 'jaune', taille: k(22) });
+  c.ligne(22, 38, lg ? scene.L - 20 : 740, 38, { couleur: 'tresfaible', largeur: 1.4 });
+  let y = 70;
+  const lac = S.lacunes, acq = S.acquis || [];
+  if (!lac) {
+    c.texte('Pas encore de réponses notées.', 22, y, { couleur: 'faible', taille: k(18) }); y += k(28);
+    paragraphe(c, 'Réponds aux questions du cours : ton bilan par compétence s’écrira ici, et le professeur y reviendra en mode libre.', 22, y, k(16), W, { couleur: 'faible' });
+    return;
+  }
+  if (!lac.length) {
+    c.texte('✓ Toutes les compétences évaluées sont acquises. Bravo !', 22, y, { couleur: 'vert', taille: k(20) }); y += k(30);
+  } else {
+    c.texte('À reprendre en mode libre, avec le professeur :', 22, y, { couleur: 'orange', taille: k(15) }); y += k(24);
+    const y0 = y - 18;
+    for (const l of lac.slice(0, 5)) {
+      const [etiq, coul] = STATUTS[l.statut] || STATUTS.non_acquis;
+      c.texte(l.statut === 'partiel' ? '⟳' : '✗', 22, y, { couleur: coul, taille: k(17) });
+      y = paragraphe(c, `${l.label} — ${etiq}`, 42, y, k(16), W - 10, { couleur: 'blanc' });
+      if (l.reprendre_avec && l.reprendre_avec.length) y = paragraphe(c, 'reprendre avec ' + l.reprendre_avec.join(', puis '), 42, y, k(13), W - 10, { couleur: coul, alpha: .85 });
+      y += 4;
+    }
+    if (lac.length > 5) { c.texte(`… et ${lac.length - 5} autre(s)`, 42, y, { couleur: 'faible', taille: k(13) }); y += k(18); }
+    c.repere('lacunes', 18, y0, W + 20, y - y0, 'ce qu’il reste à retravailler');
+  }
+  if (acq.length) {
+    y += 6; c.texte('✓ Acquis', 22, y, { couleur: 'vert', taille: k(15) }); y += k(20);
+    paragraphe(c, acq.join(' · '), 22, y, k(14), W, { couleur: 'vert', alpha: .85 });
+  }
+}
+
+const canvas = $('canvas');
+const scene = window.SolTableau.Scene(canvas, (c) => { scene.cadre(41 + S.page); if (S.page === 1) dessinerFiche(c); else dessinerLacunes(c); return c.fin(); }, { large: true });
+const maintenant = () => (performance.now() - scene.ouvert) / 1000;
+
+/* Page n ; `focus` = le bloc que la voix dit maintenant ; `tout` = toute la fiche d'un coup. */
+function aller(n, par, focus, tout) {
+  n = n === 2 ? 2 : 1;
+  if (par === 'start' || par === 'reset') { scene.reecrire(); S.apparu = []; }   // rejouer : la fiche se réécrit depuis le début
+  else if (n !== S.page) {
+    // changement de page : on repart d'une page vierge, mais les blocs déjà dits restent écrits (d'un coup)
+    scene.reecrire(); S.apparu = S.apparu.map(a => (a == null ? null : AVANT));
+  }
+  if (n === 1) {
+    const k = focus ? BLOCS.findIndex(b => b.id === focus) : -1;
+    if (tout) BLOCS.forEach((b, i) => { if (S.apparu[i] == null) S.apparu[i] = AVANT; });
+    if (k >= 0) {
+      for (let i = 0; i < k; i++) if (S.apparu[i] == null) S.apparu[i] = AVANT;   // sautés : écrits d'un coup
+      if (S.apparu[k] == null) S.apparu[k] = par === 'start' || par === 'reset' ? 0 : maintenant();
+    }
+  }
+  S.page = n; S.focus = n === 1 ? (focus || null) : null; scene.sale = true;
+  $('page').textContent = `${n} / 2`; $('suiv').textContent = n === 1 ? 'Ma page →' : '← La fiche';
+  bulle($('feedback'), n === 2 ? 'Ta page à toi.' : focus ? BLOCS.find(b => b.id === focus).titre.replace(/^\d+ · /, '') : 'La fiche du chapitre.');
+  pont.noter(par || 'page', { page: n, moment: focus || (n === 2 ? 'lacunes' : 'fiche') }); pont.emettre();
+}
+function statut(b) {
+  if (!S.lacunes) return null;
+  const lac = S.lacunes.filter(l => b.comps.includes(l.id));
+  if (lac.some(l => l.statut === 'non_acquis')) return 'non_acquis';
+  if (lac.length) return 'partiel';
+  return (S.acquis_ids || []).some(a => b.comps.includes(a)) ? 'acquis' : null;
+}
+// Chaque bloc a son propre instant, dans l’ordre de la fiche (1,01 ; 1,02 ; …), et time_s dit jusqu’où la fiche est écrite
+// (17 novembre 2026) : le kit refuse un play_until vers un instant déjà passé ; avec le même instant 1 pour tous les blocs,
+// il refusait tous les blocs que la voix appelait, et la fiche restait sur son premier bloc.
+function moments() { const m = {}; BLOCS.forEach((b, i) => { m[b.id] = +(1 + (i + 1) / 100).toFixed(2); }); m.fiche = +(1 + (BLOCS.length + 1) / 100).toFixed(2); m.lacunes = 2; return m; }
+function tempsFiche() { if (S.page === 2) return 2; let k = 0; S.apparu.forEach((a, i) => { if (a != null) k = i + 1; }); return +(1 + k / 100).toFixed(2); }
+function playUntil(p) {
+  const nom = p.moment in moments() ? p.moment : null;
+  if (!nom && !Number.isFinite(+p.time_s)) return;
+  if (nom === 'lacunes' || (!nom && +p.time_s === 2)) aller(2, 'play_until');
+  else if (nom === 'fiche' || !nom) aller(1, 'play_until', null, true);
+  else aller(1, 'play_until', nom);
+}
+function setParameters(p) {
+  if (Array.isArray(p.lacunes)) S.lacunes = p.lacunes.map(l => ({ id: String(l.id || ''), label: String(l.label || l.id || ''), statut: String(l.statut || 'non_acquis'), reprendre_avec: Array.isArray(l.reprendre_avec) ? l.reprendre_avec.map(String) : [] }));
+  if (Array.isArray(p.acquis)) S.acquis = p.acquis.map(String);
+  if (Array.isArray(p.acquis_ids)) S.acquis_ids = p.acquis_ids.map(String);
+  scene.sale = true; pont.noter('set_parameters', { lacunes: (S.lacunes || []).length, acquis: (S.acquis || []).length }); pont.emettre();
+}
+function ceQuiSeVoit() {
+  if (S.page === 2) return `Page 2/2, la page de l'élève : ${!S.lacunes ? 'pas encore de bilan' : S.lacunes.length ? 'à retravailler : ' + S.lacunes.map(l => l.label).join(' ; ') : 'toutes les compétences évaluées sont acquises'}.`;
+  const f = S.focus && BLOCS.find(b => b.id === S.focus);
+  const ecrits = BLOCS.filter((b, i) => S.apparu[i] != null).length;
+  return `Page 1/2, la fiche des facteurs édaphiques : ${ecrits}/6 blocs écrits (définition, formule, piège)${f ? ` ; en lumière « ${f.titre} » : ${f.def}${f.formules ? ' Formules : ' + f.formules.join(' ; ') + '.' : ''} Piège : ${f.attention}` : '.'}${S.lacunes ? ` Blocs à reprendre : ${BLOCS.filter(b => statut(b) && statut(b) !== 'acquis').map(b => b.titre).join(', ') || 'aucun'}.` : ''}`;
+}
+/* « Ma page → » / next : 1re moitié → 2de moitié (tableau large) → page de l'élève ; « ← La fiche » / previous : retour. */
+function suivant() {
+  if (S.page === 1 && POS && (moitieVue() || 0) === 0) { choisirMoitie(1); pont.noter('next', { page: 1, moitie: 2 }); pont.emettre(); return; }
+  if (S.page === 1) return aller(2, 'next');
+}
+function precedent() {
+  if (S.page === 1 && POS && (moitieVue() || 0) === 1) { choisirMoitie(0); pont.noter('previous', { page: 1, moitie: 1 }); pont.emettre(); return; }
+  if (S.page === 2) { aller(1, 'previous', null, true); if (POS) choisirMoitie(1); }
+}
+$('suiv').onclick = () => (S.page === 1 ? suivant() : precedent());
+// Imprimer / PDF : la fiche entière et la page de l'élève, sur fond blanc (shared/tableau/imprimer.js).
+$('imprimer').onclick = () => {
+  const avant = { page: S.page, focus: S.focus, apparu: S.apparu.slice() };
+  window.Tableau.imprimer({ titre: 'Ce qu’il faut retenir — facteurs édaphiques', scene,
+    pages: [{ nom: 'la fiche', preparer: () => { S.page = 1; S.focus = null; S.moitie = 0; S.apparu = BLOCS.map(() => AVANT); } },
+            ...(POS ? [{ nom: 'la fiche (suite)', preparer: () => { S.page = 1; S.focus = null; S.moitie = 1; S.apparu = BLOCS.map(() => AVANT); } }] : []),
+            { nom: 'ta page : à retravailler', preparer: () => { S.page = 2; S.focus = null; } }],
+    restaurer: () => { Object.assign(S, avant); } });
+  pont.noter('imprimer', { pages: 2 }); pont.emettre();
+};
+canvas.addEventListener('pointerdown', e => {
+  if (S.page !== 1) return;
+  const r = canvas.getBoundingClientRect(), [x, y] = scene.local(e.clientX - r.left, e.clientY - r.top);
+  if (POS && y < 40) { choisirMoitie(1 - (moitieVue() || 0)); return; }   // clic sur l'en-tête : l'autre moitié
+  const mv = moitieVue(), i = BLOCS.findIndex((b, k) => { const p = place(k); return S.apparu[k] != null && (mv == null || moitieDe(k) === mv) && x >= p.x - 6 && x <= p.x + p.w + 6 && y >= p.y0 - 6 && y <= p.y0 + p.h - 12; });
+  if (i < 0) return;
+  S.focus = BLOCS[i].id; scene.sale = true; bulle($('feedback'), BLOCS[i].def);
+  pont.noter('touche', { moment: BLOCS[i].id }); pont.emettre();
+});
+
+window.Tableau.explication({ bilan: BLOCS.map(b => ({ repere: b.id, texte: b.def })) });
+const commandes = ['start', 'reset', 'play_until', 'set_parameters', 'next', 'previous'];
+const config = { id: 'edaph_bilan', version: '1.0', title: 'Ce qu’il faut retenir — facteurs édaphiques', variants: [{ id: 'bilan', label: 'fiche' }], commands: commandes,
+  command_schema: { play_until: { moment: Object.keys(moments()).join(' | ') + ' (écrit ce bloc de la fiche et le met en lumière ; fiche = toute la fiche ; lacunes = la page de l’élève)' },
+    set_parameters: { lacunes: '[{id: C1..C6, label, statut: non_acquis|partiel, reprendre_avec: [..]}] (bilan de l’élève)', acquis: '[labels acquis]', acquis_ids: '[C1, ..]' } } };
+const pont = protocole({ id: config.id, commandes, config,
+  texte: 'Fiche « Ce qu’il faut retenir » des facteurs édaphiques (activités 1 à 3), six blocs : constituants et texture, structure, pH, complexe argilo-humique, perméabilité et rétention, eau du sol ; chacun avec définition, formule, piège ; puis la page de l’élève.',
+  etat: () => ({ simulation_status: 'paused', ce_qui_se_voit: ceQuiSeVoit(), current_variant: 'bilan', time_s: tempsFiche(), parameters: { page: S.page, focus: S.focus, lacunes: S.lacunes ? S.lacunes.length : null }, moments: moments() }),
+  progression: () => S.page / 2,
+  executer: (cmd, p) => ({ start: () => aller(1, 'start', 'constituants'), reset: () => aller(1, 'reset', 'constituants'), play_until: () => playUntil(p), set_parameters: () => setParameters(p),
+    next: suivant, previous: precedent })[cmd]?.() });
+aller(1, 'start', 'constituants');   // la voix commence par la définition : le premier bloc s'écrit et est en lumière
+window.__bilan = { S, scene, BLOCS };   // pour les vérifications automatiques
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

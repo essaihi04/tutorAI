@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Abondance et recouvrement — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/svt/tc_sortie_ecologique-tableau/sortie.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un relevé de 100 m² : six cistes vus de côté se comptent un à un (abondance), puis leurs feuillages se projettent sur le sol vu de dessus (surface recouverte) ; le recouvrement de 30 % donne le coefficient 3 sur l’échelle de Braun-Blanquet"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/svt/tc_sortie_ecologique-tableau/commun.js"></script>
+<script>
+/*
+ * Abondance, recouvrement et échelle de Braun-Blanquet (diapos se_a3_parametres et se_a3_braun), d'après le doc 1 de l'activité 3.
+ * Un relevé carré de 10 m × 10 m = 100 m², une espèce (le ciste) : 6 individus dont les feuillages (rayons 1,5 ; 1,2 ; 1,4 ;
+ * 1,0 ; 1,3 ; 1,1 m) couvrent π·Σr² = 30,0 m², soit un recouvrement de 30 % → coefficient 3 (25 à 50 %).
+ * Moments : individus 1 (comptés un à un jusqu'à 4) ; abondance 4,5 ; projection 6 ; recouvrement 8,5 ; echelle 10,5 ;
+ * coefficient 14 ; fin 15,5.   ?vue=braun : même scène (même dessin), ouverte d'habitude avec &depart=recouvrement.
+ * set_parameters {conclusions: false} cache « coefficient 3 ».
+ */
+const { P, lueur } = window.Sortie;
+const IND = [[2, 2.5, 1.5, 62], [5.5, 1.8, 1.2, 50], [8, 3.5, 1.4, 58], [3, 6.5, 1.0, 44], [6.5, 7, 1.3, 54], [8.6, 8.6, 1.1, 48]];   // x, y, rayon (m), hauteur (px)
+const SURF = IND.reduce((s, i) => s + Math.PI * i[2] * i[2], 0);   // 30,0 m²
+const BB = [['+', 'rare', 'très faible'], ['1', 'assez abondant', '< 5 %'], ['2', 'abondant', '5 à 25 %'], ['3', 'nombre quelconque', '25 à 50 %'], ['4', 'nombre quelconque', '50 à 75 %'], ['5', 'prédominant', '> 75 %']];
+const M = { individus: 1, abondance: 4.5, projection: 6, recouvrement: 8.5, echelle: 10.5, coefficient: 14 };
+function dessiner(c, S, scene) {
+  const pt = scene.petit, tz = (n, p) => (pt ? p : n), L = scene.L, q = 20, ox = 36, sy = 130, ty = 176, X = m => ox + m * q, Yd = m => ty + m * q;
+  // vue de côté
+  if (!pt) c.texte('vue de côté', ox, 30, { couleur: 'faible', taille: 16 });
+  c.ligne(ox - 6, sy, X(10) + 6, sy, { couleur: 'faible', largeur: 1.6 });
+    const XC = i => X(.85 + i * 1.66);   // vue de côté : les six cistes alignés, un par place
+  c.direct(() => IND.forEach(([x, , r, h], i) => P.arbuste(c.ctx, XC(i), sy, h * 1.15, { sorte: 'ciste', graine: Math.round(x * 10) })));
+  // vue de dessus : le carré de 10 m
+  if (!pt) c.texte('vue de dessus', ox, ty - 8, { couleur: 'faible', taille: 16 });
+  c.direct(() => { const g = c.ctx; g.save(); g.fillStyle = 'rgba(201,164,121,.35)'; g.fillRect(X(0), Yd(0), 10 * q, 10 * q); g.restore(); });
+  c.rect(X(0), Yd(0), 10 * q, 10 * q, { couleur: 'blanc', largeur: 1.8, arrondi: 1 });
+  c.cote(X(0), Yd(10) + 14, X(10), Yd(10) + 14, '10 m', { couleur: 'cyan', dessous: true, taille: tz(16, 28) });
+  c.repere('releve', X(0), Yd(0), 10 * q, 10 * q, 'le relevé de 100 m² vu de dessus');
+  c.repere('cote', ox - 6, 40, 10 * q + 12, sy - 40, 'les cistes vus de côté');
+  // le panneau de droite
+  const px = X(10) + 50, pw = L - px - 12;
+  // 1) compter les individus
+  if (S.ecrit(c, 'individus')) {
+    IND.forEach(([x, , r, h], i) => { const t0 = M.individus + i * .55; if (S.t >= t0) lueur(c, XC(i) - 15, sy - h * 1.15, 30, h * 1.15, { vive: !S.a('abondance') && S.t < t0 + .55, numero: i + 1, nx: XC(i), ny: sy + tz(22, 30), align: 'center', taille: tz(17, 28) }); });
+  }
+  // petit cadre : une fois l'échelle ouverte, les lignes d'avant s'effacent (la place est pour l'échelle)
+  const avantEchelle = !(pt && S.a('echelle'));
+  if (S.ecrit(c, 'abondance') && avantEchelle) {
+    c.texte('Abondance : 6 individus', px, tz(44, 50), { couleur: 'jaune', taille: tz(21, 30), gras: true, max: pt ? 0 : pw });
+    c.texte('dans 100 m²', px, tz(70, 92), { couleur: 'jaune', taille: tz(18, 28), max: pt ? 0 : pw });
+    c.repere('abondance', px, 24, pw, 54, 'l’abondance : 6 individus');
+  }
+  // 2) projeter les feuillages sur le sol
+  if (S.ecrit(c, 'projection')) {
+    const k = S.k('projection', 1.8);
+    c.direct(() => IND.forEach(([x, y, r, h], i) => {
+      const g = c.ctx; g.save(); g.globalAlpha = .7 * k;
+      const gr = g.createRadialGradient(X(x) - r * q * .3, Yd(y) - r * q * .3, 2, X(x), Yd(y), r * q); gr.addColorStop(0, '#9fd27a'); gr.addColorStop(1, '#3f7a35');
+      g.fillStyle = gr; g.beginPath(); g.arc(X(x), Yd(y), r * q, 0, Math.PI * 2); g.fill(); g.restore();
+      if (k < 1) { c.ligne(XC(i), sy + 4, XC(i) + (X(x) - XC(i)) * k, sy + 4 + (Yd(y) - sy - 4) * k, { couleur: 'vert', largeur: 1.4, pointille: [4, 5] }); }
+    }));
+    c.repere('projection', X(0), Yd(0), 10 * q, 10 * q, 'les feuillages projetés au sol');
+  }
+  if (S.ecrit(c, 'recouvrement')) {
+    IND.forEach(([x, y, r]) => lueur(c, X(x) - r * q - 2, Yd(y) - r * q - 2, 2 * r * q + 4, 2 * r * q + 4, { couleur: '74, 222, 128', vive: !S.a('echelle') }));
+    if (avantEchelle) {
+      c.texte(pt ? 'couvert ≈ 30 m²' : 'surface recouverte ≈ 30 m²', px, tz(110, 150), { couleur: 'vert', taille: tz(19, 30), max: pt ? 0 : pw });
+      c.texte('R = ⟦30|100⟧ × 100 = 30 %', px, tz(154, 222), { couleur: 'vert', taille: tz(21, 30), gras: true, max: pt ? 0 : pw });
+    }
+    c.repere('recouvrement', px, 90, pw, 76, 'le recouvrement : 30 %');
+  }
+  // 3) l'échelle de Braun-Blanquet
+  if (S.ecrit(c, 'echelle')) {
+    const ey = pt ? 44 : 196, rh = pt ? 46 : 34, c1 = px + 4, c2 = px + 44, c3 = pt ? px + 70 : px + pw * .58;
+    c.texte('Braun-Blanquet', px, ey, { couleur: 'blanc', taille: tz(18, 30), gras: true });
+    if (!pt) { c.texte('coef.', c1, ey + 24, { couleur: 'faible', taille: 15 }); c.texte('abondance', c2, ey + 24, { couleur: 'faible', taille: 15 }); c.texte('recouvrement', c3, ey + 24, { couleur: 'faible', taille: 15 }); }
+    BB.forEach(([co, ab, rec], i) => {
+      const t0 = M.echelle + i * .5; if (S.t < t0) return;
+      const yy = ey + 26 + rh * (i + 1) - 6;
+      c.texte(co, c1 + 10, yy, { couleur: 'jaune', taille: tz(20, 32), gras: true, align: 'center' });
+      if (!pt) c.texte(ab, c2, yy, { couleur: 'blanc', taille: 16, max: c3 - c2 - 8 });
+      c.texte(rec, c3, yy, { couleur: 'cyan', taille: tz(17, 30), max: pt ? 0 : px + pw - c3 });
+      c.repere('bb_' + (co === '+' ? 'plus' : co), px, yy - 22, pw, rh, 'coefficient ' + co + ' : ' + ab + ', ' + rec);
+    });
+    c.repere('echelle', px, ey - 20, pw, 30 + rh * 7, 'l’échelle de Braun-Blanquet');
+    if (S.ecrit(c, 'coefficient')) {
+      const yy = ey + 26 + rh * 4 - 6;
+      lueur(c, px - 4, yy - 24, pw + 8, rh, { vive: true });
+      if (S.conclusions) c.texte(pt ? '30 % → 3' : '30 % → coefficient 3', pt ? px + 330 : px + pw / 2, pt ? ey + 26 + rh * 4 - 6 : 412, { couleur: 'jaune', taille: tz(20, 30), gras: true, align: pt ? 'left' : 'center', max: pt ? 0 : pw });
+    }
+  }
+}
+window.Sortie.sim({
+  id: 'tc_sortie_parametres', titre: 'Abondance, recouvrement, Braun-Blanquet', moments: M, fin: 15.5, graine: 23, vueDefaut: 'abondance',
+  motifs: { individus: 'on compte les individus un à un', abondance: 'l’abondance : 6 individus', projection: 'les feuillages projetés au sol', recouvrement: 'le recouvrement : 30 %', echelle: 'l’échelle de Braun-Blanquet', coefficient: 'le coefficient 3' },
+  accueil: 'Un relevé de 100 m² : compte, puis projette.', debut: 'On compte les cistes…', fini: '6 individus ; recouvrement 30 % : coefficient 3.',
+  dessiner,
+  ceQuiSeVoit: S => {
+    const m = ['Relevé de 10 m × 10 m = 100 m² ; en haut six cistes vus de côté, en bas le carré vu de dessus.'];
+    if (S.a('individus')) m.push('Les cistes s’allument un à un, numérotés 1 à 6.');
+    if (S.a('abondance')) m.push('Écrit : abondance 6 individus dans 100 m².');
+    if (S.a('projection')) m.push('Les feuillages se projettent au sol : six disques verts dans le carré.');
+    if (S.a('recouvrement')) m.push('Écrit : surface recouverte ≈ 30 m² ; R = 30/100 × 100 = 30 %.');
+    if (S.a('echelle')) m.push('Échelle de Braun-Blanquet : + rare (très faible), 1 assez abondant (< 5 %), 2 abondant (5 à 25 %), 3 (25 à 50 %), 4 (50 à 75 %), 5 prédominant (> 75 %).');
+    if (S.a('coefficient')) m.push('La ligne 3 est allumée' + (S.conclusions ? ' : 30 % → coefficient 3.' : '.'));
+    return m.join(' ');
+  },
+  texte: 'Abondance ou densité : nombre d’individus d’une espèce par unité de surface. Dominance ou recouvrement : surface couverte par la projection au sol de l’appareil végétatif aérien des individus de l’espèce. Échelle d’abondance-dominance de Braun-Blanquet : + (rare, très faible), 1 (< 5 %), 2 (5 à 25 %), 3 (25 à 50 %), 4 (50 à 75 %), 5 (> 75 %).',
+  explication: { parametres: [{ repere: 'abondance', texte: 'On compte les individus.' }, { repere: 'recouvrement', texte: 'On mesure la surface couverte.' }, { repere: 'echelle', texte: 'Le coefficient se lit sur l’échelle.' }] },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

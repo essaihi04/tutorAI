@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Les constituants du sol — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="sol.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Une poignée de sol triée en éléments minéraux, débris organiques et êtres vivants ; puis un échantillon séché à l’étuve pèse moins (eau) et un échantillon plongé dans l’eau libère des bulles (air)"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/shared/lexique/lexique.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Doc 1 du professeur : les principaux constituants du sol (diapositives fe_t1_solides et fe_t2_eau_air).
+ *   ?vue=tri : manipulation 1 — une poignée de sol, triée en trois boîtes : éléments minéraux (cailloux, sable),
+ *              débris organiques (feuilles, brindilles), êtres vivants (vers, petits animaux).
+ *              Moments : poignee 2 ; mineraux 5 ; organiques 8 ; vivants 11 ; fin 12.
+ *   ?vue=eau : manipulations 2 et 3 — l’échantillon 2 passe 24 h à l’étuve (70 °C) : il pèse moins que l’échantillon 1
+ *              (M1 > M2 : le sol contient de l’eau) ; un échantillon plongé dans l’eau libère des bulles (air) ; puis le
+ *              bilan des constituants. Moments : etuve 4 ; pesee 7 ; air 10 ; bulles 13 ; bilan 16 ; fin 16,5.
+ *              set_parameters {conclusions:false} cache les conclusions écrites (M1 > M2, « eau », « air »).
+ */
+const ST = window.SolTableau, { fr, doux, mix } = ST;
+const $ = id => document.getElementById(id);
+const VUE = new URLSearchParams(location.search).get('vue') === 'eau' ? 'eau' : 'tri';
+const M = VUE === 'tri' ? { poignee: 2, mineraux: 5, organiques: 8, vivants: 11 } : { etuve: 4, pesee: 7, air: 10, bulles: 13, bilan: 16 };
+const FIN = VUE === 'tri' ? 12 : 16.5;
+const MOTIFS = { poignee: 'une poignée de sol', mineraux: 'les éléments minéraux triés', organiques: 'les débris organiques triés', vivants: 'les êtres vivants triés',
+  etuve: 'l’échantillon 2 sort de l’étuve', pesee: 'la balance penche du côté de l’échantillon 1', air: 'un échantillon plongé dans l’eau', bulles: 'des bulles d’air s’échappent', bilan: 'le bilan des constituants' };
+
+/* ── Vue « tri » : les objets de la poignée et leur boîte ── */
+const rr = ST.graine(5);
+const OBJETS = [];
+for (let i = 0; i < 9; i++) OBJETS.push({ type: 'caillou', boite: 0, i });
+for (let i = 0; i < 26; i++) OBJETS.push({ type: 'sable', boite: 0, i });
+for (let i = 0; i < 6; i++) OBJETS.push({ type: 'feuille', boite: 1, i });
+for (let i = 0; i < 4; i++) OBJETS.push({ type: 'brindille', boite: 1, i });
+for (let i = 0; i < 2; i++) OBJETS.push({ type: 'ver', boite: 2, i });
+for (let i = 0; i < 3; i++) OBJETS.push({ type: 'insecte', boite: 2, i });
+OBJETS.forEach(o => { o.hx = rr(); o.hy = rr(); o.bx = rr(); o.by = rr(); o.rot = rr() * 6.28; o.delai = rr(); });
+const TRI = [{ debut: 2.3, fin: 4.8 }, { debut: 5.3, fin: 7.8 }, { debut: 8.3, fin: 10.8 }];
+const BOITES = [
+  { nom: 'Éléments minéraux', ex: 'cailloux, sable', couleur: 'jaune' },
+  { nom: 'Débris organiques', ex: 'feuilles, brindilles', couleur: 'orange' },
+  { nom: 'Êtres vivants', ex: 'vers, petits animaux', couleur: 'vert' },
+];
+function peindreObjet(ctx, o, x, y, k) {
+  if (o.type === 'sable') ST.grain(ctx, x, y, 'sable', { r: 4.2 * k, graine: o.i * 7 + 3 });
+  else if (o.type === 'caillou') {
+    const r = (8 + o.delai * 5) * k; ctx.save();
+    const g = ctx.createRadialGradient(x - r * .3, y - r * .3, 1, x, y, r); g.addColorStop(0, '#d6d3d1'); g.addColorStop(1, '#78716c');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(x, y, r * 1.2, r * .85, o.rot, 0, 6.28); ctx.fill(); ctx.restore();
+  } else if (o.type === 'feuille') {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(o.rot); const l = 16 * k;
+    ctx.fillStyle = o.i % 2 ? '#8a5a2b' : '#a0662e'; ctx.beginPath(); ctx.moveTo(-l, 0); ctx.quadraticCurveTo(0, -l * .55, l, 0); ctx.quadraticCurveTo(0, l * .55, -l, 0); ctx.fill();
+    ctx.strokeStyle = 'rgba(60,35,15,.8)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(-l, 0); ctx.lineTo(l, 0); ctx.stroke(); ctx.restore();
+  } else if (o.type === 'brindille') {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(o.rot); ctx.strokeStyle = '#6b4423'; ctx.lineWidth = 3 * k; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-18 * k, 0); ctx.lineTo(18 * k, 0); ctx.moveTo(4 * k, 0); ctx.lineTo(12 * k, -7 * k); ctx.stroke(); ctx.restore();
+  } else if (o.type === 'ver') {
+    const pts = []; for (let j = 0; j <= 10; j++) pts.push([x - 22 * k + j * 4.4 * k, y + Math.sin(j * .9 + o.rot) * 4 * k]);
+    ST.ver(ctx, pts, { e: 5.5 * k });
+  } else {
+    ctx.save(); ctx.fillStyle = '#2b2118'; ctx.beginPath(); ctx.ellipse(x, y, 6 * k, 4 * k, o.rot, 0, 6.28); ctx.fill();
+    ctx.strokeStyle = '#2b2118'; ctx.lineWidth = 1;
+    for (const s of [-1, 1]) for (let j = -1; j <= 1; j++) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + s * 9 * k, y + j * 4 * k); ctx.stroke(); }
+    ctx.restore();
+  }
+}
+function dessinerTri(c, t) {
+  const L = scene.L, k = Math.min(1.3, L / 760);
+  const hx = 28, hy = 66, hw = L * .40, hh = 280;             // la feuille où l’on étale la poignée
+  const bx = hx + hw + 36, bw = Math.min(190, L * .2), bh = 88;  // les trois boîtes, l’une sous l’autre
+  const by = i => 56 + i * 104;
+  if (!scene.compact) c.texte('Manipulation 1 : une poignée de sol, à l’œil nu et à la loupe', 24, 34, { couleur: 'jaune', taille: 20, max: L - 48 });
+  c.direct(() => {
+    const g = c.ctx; g.save(); g.fillStyle = 'rgba(245,240,225,.12)'; g.beginPath(); if (g.roundRect) g.roundRect(hx, hy, hw, hh, 14); g.fill();
+    // la terre fine de la poignée : un petit tas brun, qui reste quand on a enlevé ce qui se trie
+    const mx = hx + hw / 2, my = hy + hh * .62, rx = hw * .42, ry = hh * .3;
+    const tg = g.createRadialGradient(mx - rx * .3, my - ry * .6, 4, mx, my, rx); tg.addColorStop(0, '#7a5434'); tg.addColorStop(1, '#3f2a1a');
+    g.fillStyle = tg; g.beginPath(); g.ellipse(mx, my, rx, ry, 0, 0, 6.28); g.fill();
+    const rt = ST.graine(9); for (let i = 0; i < 380; i++) { const a = rt() * 6.28, d = Math.sqrt(rt()); g.fillStyle = rt() > .5 ? 'rgba(160,120,80,.55)' : 'rgba(30,20,12,.5)'; g.fillRect(mx + Math.cos(a) * rx * d, my + Math.sin(a) * ry * d, 2, 2); }
+    g.restore();
+  });
+  c.rect(hx, hy, hw, hh, { couleur: 'faible', arrondi: 14, largeur: 1.6 });
+  if (!scene.compact) c.texte('la poignée de sol', hx + hw / 2, hy + hh + 26, { couleur: 'blanc', taille: 18, align: 'center' });
+  c.repere('poignee', hx, hy, hw, hh, 'la poignée de sol');
+  BOITES.forEach((b, i) => {
+    c.rect(bx, by(i), bw, bh, { couleur: b.couleur, arrondi: 10, largeur: 2 });
+    c.repere(['mineraux', 'organiques', 'vivants'][i], bx - 4, by(i) - 4, L - bx - 10, bh + 8, b.nom);
+  });
+  // les objets : sur le tas, puis chacun vole vers sa boîte pendant la phase de son tri
+  const apparu = doux(Math.min(1, t / 1.6));
+  c.direct(() => OBJETS.forEach(o => {
+    const T = TRI[o.boite], u = doux(Math.max(0, Math.min(1, (t - T.debut - o.delai * .8) / 1.2)));
+    const a = o.hx * 6.28, d = Math.sqrt(o.hy);
+    const x0 = hx + hw / 2 + Math.cos(a) * hw * .36 * d, y0 = hy + hh * .6 + Math.sin(a) * hh * .25 * d;
+    const x1 = bx + 18 + o.bx * (bw - 36), y1 = scene.compact ? by(o.boite) + 40 + o.by * (bh - 52) : by(o.boite) + 18 + o.by * (bh - 34);
+    const x = mix(x0, x1, u), y = mix(y0, y1, u) - Math.sin(u * Math.PI) * 50;
+    c.ctx.save(); c.ctx.globalAlpha = apparu; peindreObjet(c.ctx, o, x, y, k); c.ctx.restore();
+  }));
+  BOITES.forEach((b, i) => {
+    if (t >= TRI[i].debut && scene.compact) ecrit.ecrire(c, 'court' + i, () => c.texte(['minéraux', 'organiques', 'êtres vivants'][i], bx + 10, by(i) + 26, { couleur: b.couleur, taille: 18 }));
+    if (t < TRI[i].debut || scene.compact) return;   // compact : la ligne du bas nomme la boîte
+    ecrit.ecrire(c, 'boite' + i, () => {
+      c.texte(b.nom, bx + bw + 16, by(i) + 36, { couleur: b.couleur, taille: 20, max: L - bx - bw - 26 });
+      c.texte(b.ex, bx + bw + 16, by(i) + 64, { couleur: 'blanc', taille: 17, max: L - bx - bw - 26, alpha: .9 });
+    });
+  });
+  if (t >= 11 && !scene.compact) ecrit.ecrire(c, 'solides', () => {
+    c.texte('= les constituants solides du sol', bx, 400, { couleur: 'blanc', taille: 19, max: L - bx - 12 });
+  });
+  if (t >= 11) c.repere('solides', bx - 4, 378, L - bx - 8, 32, 'les constituants solides');
+}
+
+/* ── Vue « eau » : étuve et balance, puis bulles d’air, puis le bilan ── */
+function becherSol(ctx, x, y, w, h, sec, eau) {
+  // un bécher (lexique commun) avec un échantillon de sol au fond ; sec : couleur plus claire (sol séché)
+  if (eau) window.Lexique.becher(ctx, x, y, w, h, { niveau: .82 });
+  else window.Lexique.becher(ctx, x, y, w, h, { niveau: 0.001, alpha: 0 });
+  ctx.save(); ctx.beginPath(); ctx.ellipse(x + w / 2, y + h - 4, w / 2 - 6, h * .2, 0, Math.PI, 0); ctx.closePath();
+  ctx.fillStyle = sec ? '#a07a52' : '#5e4128'; ctx.fill(); ctx.restore();
+}
+function dessinerEau(c, t) {
+  const L = scene.L, K = L >= 1000, gx = 30, gw = L * .5 - 50, dx = L * .5 + 20, dw = L * .5 - 50;
+  const R = P.conclusions;
+  if (!scene.compact) c.texte('Manipulation 2 : l’eau dans le sol', gx, 32, { couleur: 'jaune', taille: 19, max: gw });
+  c.repere('eau_manip', gx, 10, gw, 290, 'la balance et l’étuve');
+  // balance : fléau qui penche du côté le plus lourd (l’échantillon 1, non séché)
+  const cx = gx + gw / 2, py = 262, bras = gw * .34;
+  const pente = (t < 4.5 ? 0 : doux((t - 4.5) / 2.2)) * .16;
+  const xa = cx - bras * Math.cos(pente), ya = py - 40 + bras * Math.sin(pente), xb = cx + bras * Math.cos(pente), yb = py - 40 - bras * Math.sin(pente);
+  // l’étuve (à droite de la balance, en haut)
+  const ew = 120, eh = 84, ex = cx - ew / 2, ey = 44;
+  c.direct(() => {
+    const g = c.ctx; g.save();
+    const fg = g.createLinearGradient(ex, ey, ex, ey + eh); fg.addColorStop(0, '#9ca3af'); fg.addColorStop(1, '#4b5563'); g.fillStyle = fg;
+    g.beginPath(); if (g.roundRect) g.roundRect(ex, ey, ew, eh, 8); g.fill();
+    const chaud = t > 0.6 && t < 3.6 ? .45 + .25 * Math.sin(t * 8) : .15;
+    g.fillStyle = `rgba(251,146,60,${chaud})`; g.beginPath(); if (g.roundRect) g.roundRect(ex + 10, ey + 12, ew - 20, eh - 24, 5); g.fill(); g.restore();
+  });
+  c.texte('étuve 70 °C', ex + ew / 2, ey + eh + 20, { couleur: 'orange', taille: 16, align: 'center' });
+  if (t > 0.6) c.direct(() => c.texte(t < 3.6 ? '24 h…' : '24 h', ex + ew / 2, ey + eh / 2 + 6, { couleur: 'blanc', taille: 17, align: 'center' }));
+  c.repere('etuve', ex, ey, ew, eh + 26, 'l’étuve à 70 °C');
+  // le fléau et le pied
+  c.direct(() => { const g = c.ctx; g.save(); g.strokeStyle = '#cbd5e1'; g.lineWidth = 4; g.beginPath(); g.moveTo(xa, ya); g.lineTo(xb, yb); g.stroke();
+    g.fillStyle = '#64748b'; g.beginPath(); g.moveTo(cx - 26, py + 20); g.lineTo(cx + 26, py + 20); g.lineTo(cx, py - 40); g.closePath(); g.fill(); g.restore(); });
+  // échantillon 1 sur le plateau gauche ; échantillon 2 : va dans l’étuve (0,4 → 1 s), y reste, revient (3,6 → 4,2 s)
+  const bw = 54, bh = 66;
+  const allerRetour = t < 0.4 ? 0 : t < 1 ? doux((t - .4) / .6) : t < 3.6 ? 1 : doux(1 - (t - 3.6) / .6);
+  const x2 = mix(xb - bw / 2, ex + ew / 2 - bw / 2, allerRetour), y2 = mix(yb - bh - 4, ey + eh / 2 - bh / 2, allerRetour);
+  c.direct(() => {
+    becherSol(c.ctx, xa - bw / 2, ya - bh - 4, bw, bh, false, false);
+    if (allerRetour < .98) becherSol(c.ctx, x2, y2, bw, bh, t > 3.6, false);
+    // vapeur d’eau qui sort de l’étuve
+    if (t > 1 && t < 3.6) for (let k = 0; k < 3; k++) { const u = ((t * .7 + k / 3) % 1); c.ctx.save(); c.ctx.globalAlpha = .5 * (1 - u); c.ctx.strokeStyle = '#e2e8f0'; c.ctx.lineWidth = 2; c.ctx.beginPath(); c.ctx.moveTo(ex + 30 + k * 30, ey - 4 - u * 30); c.ctx.quadraticCurveTo(ex + 38 + k * 30, ey - 14 - u * 30, ex + 30 + k * 30, ey - 24 - u * 30); c.ctx.stroke(); c.ctx.restore(); }
+  });
+  c.texte('1', xa, ya - bh - 12, { couleur: 'blanc', taille: 18, align: 'center', gras: true });
+  if (allerRetour < .5) c.direct(() => c.texte('2', x2 + bw / 2, y2 - 8, { couleur: 'blanc', taille: 18, align: 'center', gras: true }));
+  c.texte(scene.compact ? 'M1' : 'sol frais : M1', xa, py + 42, { couleur: 'blanc', taille: 16, align: 'center' });
+  c.texte(scene.compact ? 'M2' : 'sol séché : M2', xb, py + 42, { couleur: 'blanc', taille: 16, align: 'center' });
+  c.repere('balance', cx - bras - 40, ya - bh - 30, 2 * bras + 80, py + 60 - (ya - bh - 30), 'la balance : M1 et M2');
+  if (t >= 6.6 && R) ecrit.ecrire(c, 'conclu_eau', () => {
+    c.texte(scene.compact ? 'M1 > M2 : de l’eau' : 'M1 > M2 : le sol a perdu de l’eau', cx, py + 74, { couleur: 'cyan', taille: 19, align: 'center', max: gw });
+  });
+  if (t >= 6.6 && R) c.repere('conclusion_eau', cx - gw / 2, py + 52, gw, 30, 'M1 > M2 : le sol contient de l’eau');
+
+  // manipulation 3 : l’air
+  if (t >= 7.2) {
+    if (!scene.compact) ecrit.ecrire(c, 'titre_air', () => c.texte('Manipulation 3 : l’air dans le sol', dx, 32, { couleur: 'jaune', taille: 19, max: dw }));
+    const wx = dx + dw / 2 - 70, wy = 70, ww = 140, wh = 190;
+    const chute = doux((t - 7.6) / 1.6), ys = mix(wy - 30, wy + wh - 30, chute);
+    c.direct(() => {
+      window.Lexique.becher(c.ctx, wx, wy, ww, wh, { niveau: .85 });
+      // l’échantillon qui tombe et se pose au fond
+      const g = c.ctx; g.save(); g.fillStyle = '#5e4128'; g.beginPath(); g.ellipse(wx + ww / 2, ys + 14, 34, 12 + 6 * chute, 0, 0, 6.28); g.fill(); g.restore();
+      if (t > 9.2) { const rb = ST.graine(3); for (let k = 0; k < 14; k++) { const ph = (t * .45 + rb()) % 1, bx = wx + ww / 2 - 30 + rb() * 60 + Math.sin(t * 3 + k) * 3, by = wy + wh - 40 - ph * (wh * .7); if (by > wy + wh * .2) ST.bulle(g, bx, by, 2.5 + rb() * 3); } }
+    });
+    c.repere('becher_air', wx - 10, wy - 10, ww + 20, wh + 20, 'le bécher d’eau et l’échantillon de sol');
+    if (t >= 12.6 && R && !scene.compact) ecrit.ecrire(c, 'conclu_air', () => {
+      c.texte('des bulles : le sol contient de l’air', dx + dw / 2, wy + wh + 32, { couleur: 'cyan', taille: 19, align: 'center', max: dw });
+    });
+    if (t >= 12.6 && R) c.repere('conclusion_air', dx, wy + wh + 10, dw, 30, 'les bulles : le sol contient de l’air');
+  }
+  // le bilan, en bas
+  if (t >= 13.6 && !scene.compact) ecrit.ecrire(c, 'bilan', () => {
+    const y = 384, col = L / 3;
+    c.ligne(30, y - 26, L - 30, y - 26, { couleur: 'tresfaible', largeur: 1.4 });
+    c.texte('solides : minéraux + organiques', col * .5, y, { couleur: 'jaune', taille: 18, align: 'center', max: col - 14 });
+    c.texte('liquide : la solution du sol', col * 1.5, y, { couleur: 'cyan', taille: 18, align: 'center', max: col - 14 });
+    c.texte('gazeux : l’atmosphère du sol', col * 2.5, y, { couleur: 'blanc', taille: 18, align: 'center', max: col - 14 });
+    c.texte('les constituants du sol', L / 2, y + 28, { couleur: 'faible', taille: 16, align: 'center' });
+  });
+  if (t >= 13.6) c.repere('bilan', 30, 356, L - 60, 62, 'le bilan : constituants solides, liquides, gazeux');
+}
+const P = { conclusions: true };
+function dessiner(c) {
+  scene.cadre(31);
+  if (VUE === 'tri') dessinerTri(c, B.chrono.t); else dessinerEau(c, B.chrono.t);
+  return c.fin();
+}
+const canvas = $('canvas');
+const scene = ST.Scene(canvas, dessiner, { large: true });
+const ecrit = ST.Apparitions(scene);
+ST.brancher.scene = scene; ST.brancher.ecrit = ecrit;
+// mode compact (petit cadre) : seulement la poignée et les boîtes, ou la manipulation en cours ; le reste est dit
+scene.foyer = (L) => {
+  const t = B.chrono.t;
+  if (VUE === 'tri') { const bx = 28 + L * .4 + 36, bw = Math.min(190, L * .2); return { x: 22, y: 52, w: bx + bw + 8 - 22, h: 300 }; }
+  return t < 7.2 ? { x: 26, y: 40, w: L * .5 - 42, h: 312 } : { x: L * .5 + 10, y: 52, w: L * .5 - 30, h: 220 };
+};
+function voir(t) {
+  if (VUE === 'tri') {
+    const m = ['Une poignée de sol étalée sur une feuille ; trois boîtes : éléments minéraux, débris organiques, êtres vivants.'];
+    if (t <= 0) m.push('Rien n’est encore trié.');
+    TRI.forEach((T, i) => { if (t >= T.fin) m.push(`${BOITES[i].nom} triés (${BOITES[i].ex}).`); else if (t > T.debut) m.push(`On trie : ${BOITES[i].nom.toLowerCase()}.`); });
+    if (t >= 11) m.push('Écrit : les constituants solides du sol.');
+    return m.join(' ');
+  }
+  const m = ['À gauche : une balance avec l’échantillon 1 (sol frais) et l’échantillon 2, mis 24 h dans l’étuve à 70 °C.'];
+  if (t >= 4.2) m.push('L’échantillon 2 est revenu, séché.');
+  if (t >= 6.6) m.push(P.conclusions ? 'La balance penche du côté de l’échantillon 1 : M1 > M2, le sol a perdu de l’eau.' : 'La balance penche du côté de l’échantillon 1.');
+  if (t >= 7.2) m.push('À droite : un bécher d’eau ; un échantillon de sol y est plongé.');
+  if (t >= 9.2) m.push(P.conclusions ? 'Des bulles d’air s’échappent : le sol contient de l’air.' : 'Des bulles s’échappent.');
+  if (t >= 13.6) m.push('Bilan écrit : solides (minéraux + organiques), liquide (la solution du sol), gazeux (l’atmosphère du sol).');
+  return m.join(' ');
+}
+const B = ST.brancher({ id: 'edaph_constituants_' + VUE, titre: 'Les constituants du sol', M, FIN, motifs: MOTIFS, vue: VUE, params: P,
+  texte: 'Doc 1 : une poignée de sol triée (éléments minéraux, débris organiques, êtres vivants) ; un échantillon séché 24 h à 70 °C pèse moins (le sol contient de l’eau) ; un échantillon plongé dans l’eau libère des bulles (le sol contient de l’air). Constituants solides, liquides (solution du sol) et gazeux (atmosphère du sol).',
+  voir, depart: VUE === 'tri' ? 'On trie la poignée…' : 'L’échantillon 2 va à l’étuve…', fini: () => (VUE === 'tri' ? 'Trois sortes de constituants solides.' : 'Le sol contient aussi de l’eau et de l’air.'),
+  setParams: { schema: { conclusions: 'true | false (false : les conclusions écrites restent cachées)' }, appliquer: (p, R) => { if ('conclusions' in p) R.conclusions = p.conclusions !== false && p.conclusions !== 'false'; } },
+  explication: { [VUE]: VUE === 'tri'
+    ? [{ repere: 'poignee', texte: 'La poignée de sol étalée.' }, { repere: 'mineraux', texte: 'Les éléments minéraux : cailloux, sable.' }, { repere: 'organiques', texte: 'Les débris organiques : feuilles, brindilles.' }, { repere: 'vivants', texte: 'Les êtres vivants : vers, petits animaux.' }]
+    : [{ repere: 'etuve', texte: 'L’étuve sèche l’échantillon 2.' }, { repere: 'balance', texte: 'La balance compare M1 et M2.' }, { repere: 'becher_air', texte: 'Le sol plongé dans l’eau libère des bulles.' }, { repere: 'bilan', texte: 'Solides, liquide, gazeux.' }] } });
+window.Tableau.bulle($('feedback'), VUE === 'tri' ? 'Une poignée de sol : qu’y a-t-il dedans ?' : 'Le sol contient-il de l’eau ? de l’air ?');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

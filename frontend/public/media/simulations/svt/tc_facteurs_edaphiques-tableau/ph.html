@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le pH du sol — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="sol.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="L’échelle de pH de 0 à 14 ; deux béchers, sol sableux et sol calcaire dans de l’eau déminéralisée ; un papier pH trempé dans chacun change de couleur : le sol sableux est acide, le sol calcaire est basique"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/shared/lexique/lexique.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Doc 1 de l’activité 2 : l’acidité du sol, mesure du pH (diapositive fe_c1_ph).
+ * L’échelle de pH (0 à 14 ; 7 neutre ; en dessous acide, au-dessus basique ou alcalin), puis 20 g de sol sableux et
+ * 20 g de sol calcaire dans 50 ml d’eau déminéralisée, agités, décantés ; un papier pH dans chaque solution, lu par
+ * comparaison avec la gamme de couleurs. Valeurs d’exemple (le document n’en donne pas) : sableux ≈ 5 (acide),
+ * calcaire ≈ 8 (basique) — « Généralement les sols sableux sont acides et les sols calcaires alcalins ».
+ * Moments : echelle 2,5 ; acide 4 ; neutre 5 ; basique 6 ; becher 8 ; papier_sable 10,5 ; lecture_sable 12 ;
+ * papier_calcaire 14,5 ; lecture_calcaire 16 ; conclusion 18 ; fin 18,5.
+ */
+const ST = window.SolTableau, { doux, mix } = ST;
+const $ = id => document.getElementById(id);
+const M = { echelle: 2.5, acide: 4, neutre: 5, basique: 6, becher: 8, papier_sable: 10.5, lecture_sable: 12, papier_calcaire: 14.5, lecture_calcaire: 16, conclusion: 18 };
+const FIN = 18.5;
+const MOTIFS = { echelle: 'l’échelle de pH, de 0 à 14', acide: 'en dessous de 7 : acide', neutre: 'pH 7 : neutre', basique: 'au-dessus de 7 : basique (alcalin)', becher: 'deux béchers : sol sableux et sol calcaire',
+  papier_sable: 'le papier pH dans le sol sableux', lecture_sable: 'sol sableux : pH ≈ 5, acide', papier_calcaire: 'le papier pH dans le sol calcaire', lecture_calcaire: 'sol calcaire : pH ≈ 8, basique', conclusion: 'sableux acide, calcaire basique' };
+const COULEURS = [[230, 50, 40], [240, 110, 50], [245, 160, 50], [250, 220, 50], [190, 210, 60], [60, 170, 90], [20, 150, 130], [40, 120, 150], [60, 100, 170], [100, 90, 175], [140, 80, 170], [190, 70, 160], [225, 60, 140], [235, 40, 100], [230, 40, 70]];
+const couleurPH = (p) => { const i = Math.max(0, Math.min(13, Math.floor(p))), u = p - i; return COULEURS[i].map((v, k) => Math.round(mix(v, COULEURS[i + 1][k], u))); };
+const SOLS = [
+  { id: 'sable', nom: 'sol sableux', ph: 5, lu: '≈ 5', nat: 'acide', coul: 'jaune', tp: 10.5, tl: 12 },
+  { id: 'calcaire', nom: 'sol calcaire', ph: 8, lu: '≈ 8', nat: 'basique', coul: 'cyan', tp: 14.5, tl: 16 },
+];
+function dessiner(c) {
+  scene.cadre(41);
+  const t = B.chrono.t, L = scene.L, x0 = 60, x1 = L - 60, yE = 92, hE = 34;
+  const X = p => x0 + (x1 - x0) * p / 14;
+  // l’échelle peinte, révélée de gauche à droite
+  const rev = doux(t / 2.2);
+  c.direct(() => {
+    const g = c.ctx, gr = g.createLinearGradient(x0, 0, x1, 0);
+    COULEURS.forEach((col, i) => gr.addColorStop(i / 14, `rgb(${col.join(',')})`));
+    g.save(); g.beginPath(); g.rect(x0 - 20, yE - 2, (x1 - x0 + 40) * rev, hE + 4); g.clip();
+    g.fillStyle = gr; g.beginPath(); if (g.roundRect) g.roundRect(x0 - 16, yE, x1 - x0 + 32, hE, hE / 2); g.fill();
+    g.strokeStyle = 'rgba(20,20,20,.55)'; g.lineWidth = 1.2; for (let p = 1; p < 14; p++) { g.beginPath(); g.moveTo(X(p), yE - 6); g.lineTo(X(p), yE + hE + 6); g.stroke(); }
+    g.restore();
+  });
+  for (let p = 0; p <= 14; p++) if (t >= p / 14 * 2.2) c.texte(String(p), X(p), yE + hE + 26, { couleur: p === 7 ? 'blanc' : 'faible', taille: 16, align: 'center', duree: .05 });
+  c.repere('echelle', x0 - 20, yE - 8, x1 - x0 + 40, hE + 44, 'l’échelle de pH');
+  if (t >= M.acide - 1.2) { ecrit.ecrire(c, 'acide', () => { c.fleche(X(6.2), yE - 22, X(.4), yE - 22, { couleur: 'rouge', largeur: 2 }); c.texte(scene.compact ? 'acide' : 'de plus en plus acide', X(3.3), yE - 32, { couleur: 'rouge', taille: 18, align: 'center' }); }); c.repere('acide', X(0), yE - 52, X(6.4) - X(0), 36, 'le côté acide'); }
+  if (t >= M.neutre - 1) { ecrit.ecrire(c, 'neutre', () => c.texte('neutre', X(7), yE - 16, { couleur: 'blanc', taille: 18, align: 'center', gras: true })); c.repere('neutre', X(7) - 34, yE - 36, 68, hE + 40, 'pH 7 : neutre'); }
+  if (t >= M.basique - 1.2) { ecrit.ecrire(c, 'basique', () => { c.fleche(X(7.8), yE - 22, X(13.6), yE - 22, { couleur: 'violet', largeur: 2 }); c.texte(scene.compact ? 'basique' : 'de plus en plus basique (alcalin)', X(10.7), yE - 32, { couleur: 'violet', taille: 18, align: 'center' }); }); c.repere('basique', X(7.6), yE - 52, X(14) - X(7.6), 36, 'le côté basique'); }
+  // les deux béchers
+  if (t >= M.becher - 1.6) {
+    const a = doux((t - M.becher + 1.6) / 1);
+    SOLS.forEach((S, i) => {
+      const bx = L * (i ? .66 : .2) - 45, by = 214, bw = 90, bh = 110;
+      c.direct(() => {
+        const g = c.ctx; g.save(); g.globalAlpha = a;
+        window.Lexique.becher(g, bx, by, bw, bh, { niveau: .7, teinte: [120, 150, 170] });
+        g.beginPath(); g.ellipse(bx + bw / 2, by + bh - 8, bw / 2 - 6, 12, 0, 0, 6.28); g.fillStyle = S.id === 'sable' ? '#c9a46a' : '#d8d2c4'; g.fill();
+        // le papier pH : il descend, trempe, prend la couleur de son pH
+        const desc = doux((t - S.tp + 1.6) / .8), mont = doux((t - S.tp + .4) / .6), coul = couleurPH(S.ph);
+        if (t >= S.tp - 1.6) {
+          const py = mix(by - 70, by + 18, desc) - mont * 64, px = bx + bw + 24 - desc * 40 + mont * 60;
+          g.fillStyle = '#f3e6a0'; g.fillRect(px, py, 14, 74);
+          if (t >= S.tp - .5) { g.fillStyle = `rgb(${coul.join(',')})`; g.fillRect(px, py + 42, 14, 32); }
+          S.pp = [px + 7, py + 58];
+        }
+        g.restore();
+      });
+      ecrit.ecrire(c, 'nom' + i, () => { c.texte(S.nom, bx + bw / 2, by + bh + 28, { couleur: S.coul, taille: 19, align: 'center' }); if (!scene.compact) c.texte('20 g + 50 ml d’eau', bx + bw / 2, by + bh + 52, { couleur: 'faible', taille: 15, align: 'center' }); });
+      c.repere('becher_' + S.id, bx - 8, by - 8, bw + 120, bh + 66, S.nom);
+      if (t >= S.tl - 1) {
+        const xm = X(S.ph);
+        ecrit.ecrire(c, 'lect' + i, () => {
+          c.fleche(S.pp ? S.pp[0] : bx + bw, (S.pp ? S.pp[1] : by) - 40, xm, yE + hE + 34, { couleur: S.coul, largeur: 2 });
+          c.texte(scene.compact ? `pH ${S.lu}` : `pH ${S.lu} : ${S.nat}`, S.pp ? S.pp[0] + 18 : bx + bw + 30, (S.pp ? S.pp[1] : by) - 4, { couleur: S.coul, taille: 20, gras: true });
+        });
+        c.direct(() => { const g = c.ctx; g.save(); g.fillStyle = '#fff'; g.shadowColor = '#fff'; g.shadowBlur = 10; g.beginPath(); g.moveTo(xm, yE + hE + 2); g.lineTo(xm - 8, yE + hE + 14); g.lineTo(xm + 8, yE + hE + 14); g.closePath(); g.fill(); g.restore(); });
+        c.repere('lecture_' + S.id, xm - 20, yE - 8, 40, hE + 30, `${S.nom} : pH ${S.lu}`);
+      }
+    });
+  }
+  if (t >= M.conclusion - 1.2 && !scene.compact) {
+    ecrit.ecrire(c, 'conclusion', () => c.texte('Sol sableux : acide.   Sol calcaire : basique (alcalin).', L / 2, 408, { couleur: 'vert', taille: 20, align: 'center', max: L - 40 }));
+    c.repere('conclusion', 40, 388, L - 80, 28, 'sol sableux acide, sol calcaire basique');
+  }
+  return c.fin();
+}
+const canvas = $('canvas');
+const scene = ST.Scene(canvas, dessiner, { large: true });
+const ecrit = ST.Apparitions(scene);
+ST.brancher.scene = scene; ST.brancher.ecrit = ecrit;
+scene.foyer = (L) => ({ x: 20, y: 34, w: L - 40, h: 350 });   // compact : l’échelle et les deux béchers
+function voir(t) {
+  const m = ['L’échelle de pH de 0 à 14 : 7 neutre, en dessous acide, au-dessus basique (alcalin).'];
+  if (t >= M.becher - 1) m.push('Deux béchers : sol sableux et sol calcaire, 20 g dans 50 ml d’eau déminéralisée.');
+  SOLS.forEach(S => { if (t >= S.tp) m.push(`Papier pH trempé dans le ${S.nom}.`); if (t >= S.tl) m.push(`Lecture : ${S.nom}, pH ${S.lu}, ${S.nat}.`); });
+  if (t >= M.conclusion) m.push('Conclusion écrite : sol sableux acide, sol calcaire basique.');
+  return m.join(' ');
+}
+const B = ST.brancher({ id: 'edaph_ph', titre: 'Le pH du sol', M, FIN, motifs: MOTIFS,
+  texte: 'Échelle de pH de 0 à 14 (7 neutre ; < 7 acide ; > 7 basique ou alcalin). Sol sableux et sol calcaire dans l’eau déminéralisée, papier pH : sol sableux acide (pH ≈ 5, valeur d’exemple), sol calcaire basique (pH ≈ 8, valeur d’exemple).',
+  voir, depart: 'L’échelle de pH…', fini: () => 'Sol sableux acide, sol calcaire basique.',
+  explication: { ph: [{ repere: 'echelle', texte: 'L’échelle de pH, de 0 à 14.' }, { repere: 'neutre', texte: 'pH 7 : neutre.' }, { repere: 'becher_sable', texte: 'Le sol sableux.' }, { repere: 'becher_calcaire', texte: 'Le sol calcaire.' }] } });
+window.Tableau.bulle($('feedback'), 'Acide ou basique ?');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

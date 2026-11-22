@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Les strates de la forêt — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/svt/tc_sortie_ecologique-tableau/sortie.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Une coupe de la forêt de Maâmora peinte : chêne-liège, ajonc, ciste, graminées, asphodèle, doum, mousses, lichens, champignons, et sous le sol racines, bulbe, rhizome ; les cinq strates s’allument l’une après l’autre, de la plus haute à la souterraine"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/svt/tc_sortie_ecologique-tableau/commun.js"></script>
+<script>
+/*
+ * La stratification verticale de la forêt de Maâmora (diapos se_a1_strates et se_a1_lichens), d'après le doc 2 b du prof.
+ * Échelle des hauteurs schématique (comme le document) : 5 m est la limite de la strate arborescente.
+ * Moments : arborescente 1,5 ; arbustive 3,5 ; herbacee 5,5 ; muscinale 7,5 ; souterraine 9,5 ; superposition 11,5 ; fin 13.
+ * ?depart=superposition ouvre la coupe avec ses cinq strates déjà nommées.
+ */
+const { P, lueur } = window.Sortie;
+// hauteur (m) → y : schéma (0 → 300, 0,15 m → 286, 1 m → 244, 5 m → 140, 12 m → 34)
+const ECH = [[0, 300], [.15, 286], [1, 244], [5, 140], [12, 34]];
+const yH = h => { for (let i = 1; i < ECH.length; i++) { const [h0, y0] = ECH[i - 1], [h1, y1] = ECH[i]; if (h <= h1) return y0 + (y1 - y0) * (h - h0) / (h1 - h0); } return ECH[ECH.length - 1][1]; };
+const SOL = 300, BAS = 404;
+const STRATES = [
+  { id: 'arborescente', nom: 'Strate arborescente', detail: 'arbres (ligneux) > 5 m', haut: 26, bas: yH(5), coul: '74, 222, 128', craie: 'vert' },
+  { id: 'arbustive', nom: 'Strate arbustive', detail: 'arbustes ligneux, < 5 m', haut: yH(5), bas: yH(1), coul: '34, 211, 238', craie: 'cyan' },
+  { id: 'herbacee', nom: 'Strate herbacée', detail: 'herbes, plantes à bulbe', haut: yH(1), bas: yH(.15), coul: '250, 204, 21', craie: 'jaune' },
+  { id: 'muscinale', nom: 'Strate muscinale', detail: 'mousses et lichens', haut: yH(.15), bas: SOL, coul: '244, 114, 182', craie: 'rose' },
+  { id: 'souterraine', nom: 'Strate souterraine', detail: 'racines, bulbes, rhizomes', haut: SOL, bas: BAS, coul: '251, 146, 60', craie: 'orange' },
+];
+const M = { arborescente: 1.5, arbustive: 3.5, herbacee: 5.5, muscinale: 7.5, souterraine: 9.5, superposition: 11.5 };
+function dessiner(c, S, scene) {
+  const pt = scene.petit, L = scene.L, FW = pt ? L - 6 : Math.max(470, L - 290), x = f => 20 + f * (FW - 60), axe = FW - 18;
+  // la coupe peinte
+  c.direct(() => {
+    const g = c.ctx;
+    P.sol(g, 20, SOL, FW - 30, BAS - SOL, { graine: 4 });
+    P.racines(g, x(.2), SOL + 4, 90, 3.5); P.racines(g, x(.47), SOL + 3, 60, 2.4);
+    P.mousse(g, x(.05), SOL, 46); P.mousse(g, x(.37), SOL, 34, { graine: 9 });
+    P.arbre(g, x(.2), SOL, SOL - yH(11), { sorte: 'chene', graine: 2 });
+    P.lichen(g, x(.2) + 4, SOL - 30, 9); P.lichen(g, x(.2) - 6, SOL - 52, 7, { gris: true });
+    P.champignon(g, x(.31), SOL, 16); P.champignon(g, x(.335), SOL, 12);
+    P.arbuste(g, x(.47), SOL, SOL - yH(2.6), { sorte: 'ajonc', graine: 3 });
+    P.arbuste(g, x(.6), SOL, SOL - yH(1.6), { sorte: 'ciste', graine: 6 });
+    P.herbe(g, x(.71), SOL, SOL - yH(.6), { epi: true, graine: 7 }); P.herbe(g, x(.75), SOL, SOL - yH(.5), { graine: 8 });
+    P.asphodele(g, x(.83), SOL, SOL - yH(.9), { bulbe: true });
+    P.palmier(g, x(.94), SOL, SOL - yH(.8)); P.rhizome(g, x(.94), SOL + 16, 40);
+  });
+  // l'axe des hauteurs
+  c.fleche(axe, SOL, axe, 22, { couleur: 'faible', largeur: 1.6 });
+  for (const [h, t] of [[5, '5 m'], [1, '1 m']]) { c.ligne(24, yH(h), axe, yH(h), { couleur: 'tresfaible', largeur: 1.2, pointille: [6, 6] }); c.texte(t, axe - 6, yH(h) - 6, { couleur: 'blanc', taille: pt ? 28 : 17, align: 'right' }); }
+  if (!pt) c.texte('hauteur', axe - 6, 34, { couleur: 'faible', taille: 16, align: 'right' });
+  // les repères des plantes
+  const R = (id, f, h, w, l) => c.repere(id, x(f) - w / 2, SOL - h, w, h, l);
+  R('chene', .2, SOL - yH(11), 120, 'le chêne-liège'); R('ajonc', .47, SOL - yH(2.6), 70, 'l’ajonc'); R('ciste', .6, SOL - yH(1.6), 56, 'le ciste');
+  R('graminees', .73, 40, 50, 'les graminées'); R('asphodele', .83, 56, 34, 'l’asphodèle'); R('doum', .94, 52, 50, 'le doum (palmier nain)');
+  R('mousses', .05, 14, 50, 'les mousses'); c.repere('lichens', x(.2) - 16, SOL - 64, 32, 46, 'les lichens sur le tronc'); R('champignons', .32, 18, 40, 'les champignons');
+  c.repere('racines', x(.2) - 50, SOL + 2, 100, 80, 'les racines'); c.repere('bulbe', x(.83) - 14, SOL + 2, 28, 34, 'le bulbe'); c.repere('rhizome', x(.94) - 24, SOL + 6, 48, 22, 'le rhizome');
+  // les strates, une à une ; le panneau de droite les nomme
+  const px = FW + 4, pw = L - px - 10;
+  STRATES.forEach((s, i) => {
+    c.repere(s.id, 20, s.haut, FW - 30, s.bas - s.haut, s.nom);
+    if (!S.ecrit(c, s.id)) return;
+    const actif = !S.a('superposition') && (i === STRATES.length - 1 || !S.a(STRATES[i + 1].id));
+    if (actif || S.a('superposition')) lueur(c, 22, s.haut + 1, FW - 34, Math.max(12, s.bas - s.haut - 2), { couleur: s.coul, vive: actif });
+    if (pt) {   // petit cadre : seulement le nom de la strate en cours, en grand, en haut à droite
+      if (actif) c.texte((i + 1) + ' · ' + s.nom, L - 60, 40, { couleur: s.craie, taille: 32, gras: true, align: 'right' });
+      return;
+    }
+    const yy = 44 + i * 66;
+    c.texte((i + 1) + ' · ' + s.nom, px, yy, { couleur: s.craie, taille: 20, gras: true, max: pw });
+    c.texte(s.detail, px + 16, yy + 24, { couleur: 'blanc', taille: 17, max: pw - 16 });
+  });
+  if (pt && S.ecrit(c, 'superposition')) { c.texte('5 strates superposées', L - 60, 40, { couleur: 'jaune', taille: 32, gras: true, align: 'right' }); c.repere('conclusion', L - 420, 10, 360, 40, 'la stratification verticale'); }
+  else if (S.ecrit(c, 'superposition')) {
+    c.texte('5 strates superposées', px, 384, { couleur: 'jaune', taille: 20, gras: true, max: pw });
+    c.texte('= stratification verticale', px, 408, { couleur: 'jaune', taille: 18, max: pw });
+    c.repere('conclusion', px, 364, pw, 50, 'la stratification verticale');
+  }
+}
+window.Sortie.sim({
+  id: 'tc_sortie_strates', titre: 'La stratification verticale', moments: M, fin: 13, graine: 9,
+  motifs: { arborescente: 'la strate arborescente', arbustive: 'la strate arbustive', herbacee: 'la strate herbacée', muscinale: 'la strate muscinale', souterraine: 'la strate souterraine', superposition: 'les cinq strates superposées' },
+  accueil: 'Une coupe de la forêt de Maâmora : lance pour voir les strates.', debut: 'Du plus haut vers le plus bas…', fini: 'Cinq strates superposées : la stratification verticale.',
+  dessiner,
+  ceQuiSeVoit: S => {
+    const m = ['Coupe de la forêt de Maâmora : chêne-liège (11 m), ajonc et ciste (arbustes), graminées, asphodèle, doum, mousses, lichens sur le tronc, champignons ; sous le sol : racines, bulbe, rhizome. Lignes pointillées à 5 m et 1 m.'];
+    const vues = STRATES.filter(s => S.a(s.id)).map(s => s.nom + ' (' + s.detail + ')');
+    if (vues.length) m.push('Strates allumées et nommées : ' + vues.join(' ; ') + '.');
+    if (S.a('superposition')) m.push('Écrit : 5 strates superposées = stratification verticale.');
+    return m.join(' ');
+  },
+  texte: 'Stratification verticale de la forêt de Maâmora : strate arborescente (arbres de plus de 5 m), arbustive (arbustes ligneux), herbacée (plantes non ligneuses, plantes à bulbe), muscinale (mousses et lichens), souterraine (racines, bulbes, rhizomes, tubercules).',
+  explication: { strates: STRATES.map(s => ({ repere: s.id, texte: s.nom + ' : ' + s.detail + '.' })) },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

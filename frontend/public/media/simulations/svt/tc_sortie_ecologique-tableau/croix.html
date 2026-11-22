@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La croix du bûcheron — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/svt/tc_sortie_ecologique-tableau/sortie.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un élève tient la croix du bûcheron devant son œil (deux baguettes de 20 cm à angle droit) ; il s’approche d’un chêne-liège jusqu’à ce que les deux visées touchent la base et le sommet : la distance D à l’arbre est alors égale à sa hauteur H"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/svt/tc_sortie_ecologique-tableau/commun.js"></script>
+<script>
+/*
+ * La croix du bûcheron (diapo se_a1_croix). Deux baguettes de 20 cm à angle droit : l'une horizontale, contre l'œil,
+ * l'autre verticale à son bout. On tient le bas de la baguette verticale sur la base de l'arbre : la visée qui passe par
+ * son haut touche la verticale de l'arbre à une hauteur égale à la distance D (triangles semblables, 20 cm / 20 cm = 1).
+ * On marche jusqu'à ce que cette visée touche le sommet : alors D = H (triangle isocèle rectangle).
+ * Arbre : chêne-liège de H = 12 m. L'élève part de D = 20 m, marche jusqu'à D = 12 m. Il peut aussi faire glisser l'élève.
+ * Moments : baguettes 1 ; loin 3 ; marche 4,5 ; coincide 9 ; mesure 10,5 ; fin 12.
+ * set_parameters {conclusions: false} : « D = H » et la valeur de H restent cachés (question d'observation).
+ */
+const { P, lueur, fr } = Object.assign({}, window.Sortie, { fr: window.Tableau.fr });
+const H = 12, OEIL = 1.6, D0 = 20;
+const M = { baguettes: 1, loin: 3, marche: 4.5, coincide: 9, mesure: 10.5 };
+let dManuel = null;
+function distance(S) {
+  if (S.running) dManuel = null;
+  if (dManuel != null) return dManuel;
+  if (!S.a('marche')) return D0;
+  return D0 - (D0 - H) * S.k('marche', 4);
+}
+let G = null;   // la géométrie de l'image (pour le glisser)
+function dessiner(c, S, scene) {
+  const pt = scene.petit, L = scene.L, yS = 384, px = Math.min((L - 140) / 22, 300 / 13.2), xA = L - 70 - 1 * px;
+  const D = distance(S), xP = xA - D * px, X = m => xA - m * px, Y = h => yS - h * px;
+  G = { xP, yS, px, xA };
+  // le sol
+  c.ligne(20, yS, L - 20, yS, { couleur: 'faible', largeur: 2 });
+  c.direct(() => {
+    const g = c.ctx; g.save(); const gs = g.createLinearGradient(0, yS, 0, yS + 30); gs.addColorStop(0, 'rgba(160,120,80,.55)'); gs.addColorStop(1, 'rgba(160,120,80,0)');
+    g.fillStyle = gs; g.fillRect(20, yS, L - 40, 30); g.restore();
+    P.arbre(g, xA, yS, H * px, { sorte: 'chene', graine: 3 });
+  });
+  c.repere('arbre', xA - H * px * .35, Y(H), H * px * .7, H * px, 'le chêne-liège');
+  // la croix, en grand, dans un médaillon en haut à gauche
+  const bx = 24, by = 36, bw = 214, bh = 150;
+  if (S.t <= 0 || S.ecrit(c, 'baguettes')) {
+    c.rect(bx, by, bw, bh, { couleur: 'tresfaible', largeur: 1.4 });
+    const ex = bx + 34, ey = by + 104, l = 120;
+    c.direct(() => { const g = c.ctx; g.save(); g.fillStyle = '#e0ac83'; g.beginPath(); g.arc(ex - 12, ey, 16, 0, Math.PI * 2); g.fill(); g.fillStyle = '#1f2937'; g.beginPath(); g.arc(ex - 6, ey - 2, 2.4, 0, Math.PI * 2); g.fill(); g.restore();
+      const baguette = (x1, y1, x2, y2) => { g.save(); g.lineCap = 'round'; g.strokeStyle = '#7a5532'; g.lineWidth = 7; g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); g.strokeStyle = 'rgba(255,220,170,.5)'; g.lineWidth = 2; g.stroke(); g.restore(); };
+      baguette(ex, ey, ex + l, ey); baguette(ex + l, ey, ex + l, ey - l * .78); });
+    c.cote(ex, ey + 20, ex + l, ey + 20, '20 cm', { couleur: 'jaune', dessous: true, taille: pt ? 30 : 17 });
+    c.cote(ex + l + 22, ey, ex + l + 22, ey - l * .78, '', { couleur: 'jaune' });
+    c.texte('20 cm', ex + l + 28, ey - l * .39 + 6, { couleur: 'jaune', taille: pt ? 30 : 17 });
+    c.trait([[ex + l - 14, ey], [ex + l - 14, ey - 14], [ex + l, ey - 14]], { couleur: 'rose', largeur: 1.6 });
+    if (!pt) { c.texte('90°', ex + l - 40, ey - 18, { couleur: 'rose', taille: 16 }); c.texte('la croix', bx + 10, by + 22, { couleur: 'blanc', taille: 17 }); }
+    c.repere('croix', bx, by, bw, bh, 'la croix du bûcheron : deux baguettes égales à angle droit');
+  }
+  // l'élève et ses visées
+  // l'élève est dessiné un peu plus grand que l'échelle pour être reconnu ; D = H ne dépend pas de la hauteur de l'œil
+  let oeil = [xP + 8, Y(2.4)];
+  c.direct(() => { oeil = P.personne(c.ctx, xP, yS, 2.7 * px, { vise: true }); });
+  const ex = oeil[0], ey = oeil[1];
+  c.repere('eleve', xP - 1 * px, Y(2.8), 2 * px, 2.8 * px, 'l’élève qui vise');
+  if (S.a('loin') || dManuel != null) {
+    const hHaut = D;   // la visée du haut touche la verticale de l'arbre à la hauteur D
+    c.direct(() => {
+      c.ligne(ex, ey, xA, yS, { couleur: 'cyan', largeur: 2, pointille: [8, 6] });
+      const yHaut = Math.max(20, Y(hHaut)), xHaut = ex + (xA - ex) * (ey - yHaut) / (ey - Y(hHaut));
+      c.ligne(ex, ey, xHaut, yHaut, { couleur: 'jaune', largeur: 2, pointille: [8, 6] });
+      if (Y(hHaut) >= 20) c.point(xA, Y(hHaut), 5, 'jaune');
+      const juste = Math.abs(D - H) < .15;
+      if (!pt && !juste && !S.a('coincide')) c.texte(D > H ? 'la visée passe au-dessus du sommet' : 'la visée touche le tronc', Math.min(L - 30, xA - 20), Math.max(42, Y(Math.min(hHaut, 13.4)) - 12), { couleur: 'jaune', taille: 17, align: 'right' });
+      c.texte('D = ' + fr(D, 1) + ' m', (xP + xA) / 2, yS + (pt ? 32 : 26), { couleur: 'blanc', taille: pt ? 30 : 19, align: 'center' });
+    });
+    c.repere('visees', Math.min(ex, xA), Y(H), Math.abs(xA - ex), yS - Y(H), 'les deux visées');
+  }
+  if (S.a('coincide') && dManuel == null) {
+    lueur(c, xA - 18, Y(H) - 18, 36, 36, { vive: !S.a('mesure') });
+    lueur(c, xA - 18, yS - 18, 36, 36, {});
+    c.repere('sommet', xA - 18, Y(H) - 18, 36, 36, 'le sommet de l’arbre');
+    c.repere('base', xA - 18, yS - 18, 36, 36, 'la base de l’arbre');
+  }
+  if (S.ecrit(c, 'mesure') && dManuel == null) {
+    c.direct(() => { const g = c.ctx; g.save(); g.fillStyle = 'rgba(250,204,21,.10)'; g.beginPath(); g.moveTo(xP, yS); g.lineTo(xA, yS); g.lineTo(xA, Y(H)); g.closePath(); g.fill(); g.restore(); });
+    c.cote(xP, yS + 44, xA, yS + 44, '', { couleur: 'orange' });
+    if (!pt) c.texte('D', (xP + xA) / 2 - 70, yS + 32, { couleur: 'orange', taille: 22, gras: true, align: 'center' });
+    c.cote(xA + 40, yS, xA + 40, Y(H), '', { couleur: 'orange' });
+    c.texte('H', xA + 52, Y(H / 2), { couleur: 'orange', taille: pt ? 32 : 22, gras: true });
+    c.repere('D', xP, yS + 30, xA - xP, 28, 'la distance D'); c.repere('H', xA + 30, Y(H), 40, H * px, 'la hauteur H');
+    if (S.conclusions) {
+      c.texte('D = H', pt ? L / 2 - 40 : bx + 20, pt ? 66 : by + bh + 50, { couleur: 'jaune', taille: pt ? 44 : 30, gras: true });
+      c.texte('H = 12 m', pt ? L / 2 - 40 : bx + 20, pt ? 112 : by + bh + 86, { couleur: 'jaune', taille: pt ? 32 : 22 });
+      c.repere('egalite', bx + 10, by + bh + 22, 160, 72, 'D = H');
+    }
+  }
+}
+const S = window.Sortie.sim({
+  id: 'tc_sortie_croix', titre: 'La croix du bûcheron', moments: M, fin: 12, graine: 5,
+  motifs: { baguettes: 'la croix : deux baguettes de 20 cm à angle droit', loin: 'à 20 m, la visée passe au-dessus du sommet', marche: 'l’élève s’approche', coincide: 'les deux visées touchent la base et le sommet', mesure: 'D = H' },
+  accueil: 'Fais glisser l’élève : quand les deux visées touchent la base et le sommet, lis D.', debut: 'Les baguettes, puis l’élève s’approche…',
+  fini: 'Les visées touchent la base et le sommet : D = H = 12 m.',
+  dessiner,
+  apres: () => {},
+  ceQuiSeVoit: S => {
+    const D = distance(S), m = ['Un chêne-liège de 12 m ; un élève tient la croix du bûcheron (deux baguettes de 20 cm à angle droit) devant son œil.'];
+    if (S.a('loin') || dManuel != null) m.push(`L’élève est à D = ${fr(D, 1)} m de l’arbre ; la visée du bas touche la base ; la visée du haut touche la verticale de l’arbre à ${fr(D, 1)} m (${Math.abs(D - H) < .15 ? 'exactement au sommet' : D > H ? 'au-dessus du sommet' : 'sur le tronc'}).`);
+    if (S.a('mesure') && dManuel == null) m.push(S.conclusions ? 'Triangle isocèle : D = H = 12 m.' : 'Les cotes D et H sont tracées (la conclusion est cachée).');
+    return m.join(' ');
+  },
+  etatParametres: S => ({ D_m: +distance(S).toFixed(2), H_m: H }),
+  texte: 'Croix du bûcheron : deux baguettes de même longueur (20 cm), perpendiculaires. On se place de façon que la base de la baguette verticale coïncide avec la base de l’arbre et son extrémité avec le sommet : la distance D à l’arbre est alors égale à sa hauteur H.',
+  explication: { croix: [{ repere: 'croix', texte: 'Deux baguettes de 20 cm à angle droit.' }, { repere: 'visees', texte: 'Une visée vers la base, une vers le sommet.' }, { repere: 'D', texte: 'La distance à l’arbre est égale à sa hauteur.' }] },
+});
+// L'élève peut faire glisser le personnage le long du sol.
+window.Tableau.glisser(document.getElementById('canvas'), {
+  toucher: (x, y) => { if (!G) return null; const [lx, ly] = S.scene.local(x, y); return Math.abs(lx - G.xP) < 30 && ly > G.yS - 3 * G.px && ly < G.yS + 10 ? 'eleve' : null; },
+  bouger: (id, x) => { const [lx] = S.scene.local(x, 0); dManuel = Math.max(4, Math.min(21, (G.xA - lx) / G.px)); if (Math.abs(dManuel - H) < .35) dManuel = H; S.scene.sale = true; },
+  lacher: () => { const D = dManuel; window.Tableau.bulle(document.getElementById('feedback'), Math.abs(D - H) < .15 ? 'Juste : les visées touchent la base et le sommet. D = ' + fr(D, 1) + ' m = H.' : D > H ? 'D = ' + fr(D, 1) + ' m : la visée passe au-dessus du sommet. Rapproche-toi.' : 'D = ' + fr(D, 1) + ' m : la visée touche le tronc. Recule.', Math.abs(D - H) < .15 ? 'good' : ''); S.pont.noter('glisser', { D_m: +D.toFixed(2) }); S.pont.emettre(); },
+});
+document.getElementById('run').addEventListener('click', () => { dManuel = null; }, true);
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

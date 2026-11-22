@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Les relevés de Maâmora — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/svt/tc_sortie_ecologique-tableau/sortie.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Les dix relevés de la forêt de Maâmora : on allume un à un les relevés où pousse le palmier nain et on les compte, puis on calcule sa fréquence F = n/N × 100 et on lit son indice sur l’échelle I à V ; ou bien le tableau des 18 espèces se complète ligne par ligne"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/svt/tc_sortie_ecologique-tableau/commun.js"></script>
+<script>
+/*
+ * Les relevés de la forêt de Maâmora (diapos se_a3_frequence, se_a3_indices, se_a3_tableau, se_a3_caracteristiques),
+ * d'après le tableau du prof (10 relevés R1 à R10, 18 espèces). Valeurs recalculées et vérifiées deux fois.
+ *  ?vue=frequence : Chamaerops humilis (palmier nain) est présent dans R1, R3, R4, R7, R8 → n = 5, N = 10,
+ *    F = 5/10 × 100 = 50 % → indice III (assez fréquente). Moments : releves 0,5 ; compte 2 (un relevé allumé toutes les
+ *    0,9 s) ; n 7 ; formule 8 ; calcul 9,5 ; echelle 11,5 (les 5 classes une à une) ; classe 15 ; fin 16,5.
+ *    set_parameters {conclusions: false} : le résultat (50 %, III) reste caché.
+ *  ?vue=tableau : les 18 espèces en deux colonnes ; n se compte en allumant (les 3 premières lignes lentement), puis F %,
+ *    puis IF, puis le décompte par indice I : 2 · II : 6 · III : 4 · IV : 3 · V : 3, puis les espèces caractéristiques.
+ *    Moments : tableau 0,5 ; n 2,5 ; frequence 10 ; indice 11,5 ; classes 13 ; caracteristiques 15,5 ; fin 17.
+ */
+const { P, lueur } = window.Sortie;
+const VUE = window.Sortie.param('vue', 'frequence') === 'tableau' ? 'tableau' : 'frequence';
+const IFS = [['I', 0, 20, 'accidentelle'], ['II', 20, 40, 'accessoire'], ['III', 40, 60, 'assez fréquente'], ['IV', 60, 80, 'fréquente'], ['V', 80, 100, 'très fréquente']];
+const indice = F => (F < 20 ? 'I' : F < 40 ? 'II' : F < 60 ? 'III' : F < 80 ? 'IV' : 'V');
+// strate : a = arborescente, b = arbustive, h = herbacée (couleurs du document)
+const ESP = [
+  ['Quercus suber', 'a', [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]], ['Cytisus a.', 'b', [2, 3, 4, 5, 6, 7, 8, 10]], ['Thymelaea l.', 'b', [2, 5]], ['Daphne g.', 'b', [1, 4]],
+  ['Chamaerops h.', 'b', [1, 3, 4, 7, 8]], ['Cistus salvifolius', 'b', [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]], ['Lavandula s.', 'b', [4, 9, 10]], ['Rubia p.', 'h', [1, 2, 8, 9, 10]],
+  ['Carex d.', 'h', [1, 4, 6, 7, 8, 9, 10]], ['Carlina c.', 'h', [1]], ['Ranunculus p.', 'h', [3, 5, 9]], ['Holcus l.', 'h', [10]], ['Urginea m.', 'h', [5, 8]],
+  ['Anthoxanthum o.', 'h', [1, 3, 5, 10]], ['Brachypodium d.', 'h', [3, 4, 6, 7, 8, 9]], ['Ornithopus i.', 'h', [1, 4, 6, 7, 8, 9]], ['Andryala i.', 'h', [1, 4, 8, 9, 10]], ['Anagalis a.', 'h', [8, 10]],
+];
+const COUL = { a: '#d6c7b0', b: '#7dd3fc', h: '#c4b5fd' };
+
+/* ── vue fréquence ── */
+const PRES = [1, 3, 4, 7, 8];
+const MF = { releves: .5, compte: 2, n: 7, formule: 8, calcul: 9.5, echelle: 11.5, classe: 15 };
+function echelleIF(c, S, x0, x1, y, t0, marque) {
+  const pt = S.scene.petit;
+  const X = F => x0 + (x1 - x0) * F / 100;
+  IFS.forEach(([nom, de, a, mot], i) => {
+    if (S.t > 0 && S.t < t0 + i * .7) return;
+    const xa = X(de), xb = X(a), cols = ['#94a3b8', '#60a5fa', '#4ade80', '#facc15', '#fb923c'];
+    c.direct(() => { const g = c.ctx; g.save(); g.globalAlpha = .45; g.fillStyle = cols[i]; g.fillRect(xa + 2, y - 26, xb - xa - 4, 26); g.restore(); });
+    c.texte(nom, (xa + xb) / 2, y - 6, { couleur: 'blanc', taille: pt ? 28 : 20, gras: true, align: 'center' });
+    if (!pt) c.texte(mot, (xa + xb) / 2, y + 44, { couleur: 'faible', taille: 15, align: 'center', max: xb - xa - 4 });
+    c.texte(String(de), xa, y + (pt ? 30 : 20), { couleur: 'cyan', taille: pt ? 26 : 15, align: 'center' });
+    if (i === 4) c.texte(pt ? '100' : '100 %', xb, y + (pt ? 30 : 20), { couleur: 'cyan', taille: pt ? 26 : 15, align: 'center' });
+    c.repere('if_' + nom, xa, y - 28, xb - xa, 78, 'indice ' + nom + ' : ' + de + ' % ≤ F < ' + a + ' % (' + mot + ')');
+  });
+  c.repere('echelle', x0, y - 30, x1 - x0, 80, 'l’échelle des indices de fréquence');
+  if (marque != null) { const xm = X(marque.F); c.fleche(xm, y - 70, xm, y - 30, { couleur: 'jaune', largeur: 2.6 }); c.texte(marque.t, pt ? xm + 12 : xm, pt ? y - 46 : y - 76, { couleur: 'jaune', taille: pt ? 28 : 19, gras: true, align: pt ? 'left' : 'center' }); }
+}
+function dessinerFrequence(c, S, scene) {
+  const pt = scene.petit, tz = (n, p) => (pt ? p : n), L = scene.L, PW = 270, AW = L - PW - 10, qs = Math.min((AW - 30) / 5 - 14, 92), gx = 20, gy = 34;
+  const pos = i => [gx + (i % 5) * (qs + 14), gy + Math.floor(i / 5) * (qs + 34)];
+  c.direct(() => { for (let i = 0; i < 10; i++) { const [x, y] = pos(i), g = c.ctx; g.save();
+    const gr = g.createLinearGradient(0, y, 0, y + qs); gr.addColorStop(0, 'rgba(150,180,100,.45)'); gr.addColorStop(1, 'rgba(120,100,60,.45)'); g.fillStyle = gr; g.fillRect(x, y, qs, qs);
+    P.herbe(g, x + qs * .25, y + qs * .9, qs * .22, { graine: i + 3 }); P.arbuste(g, x + qs * .75, y + qs * .45, qs * .3, { sorte: 'ciste', graine: i });
+    if (PRES.includes(i + 1)) P.palmier(g, x + qs * .45, y + qs * .92, qs * .5);
+    g.restore(); } });
+  for (let i = 0; i < 10; i++) { const [x, y] = pos(i); c.rect(x, y, qs, qs, { couleur: 'faible', largeur: 1.3, arrondi: 2 }); c.texte('R' + (i + 1), x + qs / 2, y + qs + tz(22, 30), { couleur: 'blanc', taille: tz(17, 28), align: 'center' }); c.repere('R' + (i + 1), x, y, qs, qs, 'le relevé R' + (i + 1)); }
+  const px = AW + 10, pw = L - px - 10;
+  c.direct(() => P.palmier(c.ctx, px + 20, 66, 40));
+  if (pt) c.texte('palmier nain', px + 46, 60, { couleur: 'vert', taille: 28 });
+  else { c.texte('Chamaerops humilis', px + 46, 46, { couleur: 'vert', taille: 18, max: pw - 46 }); c.texte('(palmier nain)', px + 46, 68, { couleur: 'faible', taille: 16, max: pw - 46 }); }
+  if (S.t <= 0 || S.ecrit(c, 'releves')) { c.texte(pt ? 'N = 10' : 'N = 10 relevés', px, tz(108, 112), { couleur: 'cyan', taille: tz(21, 32), gras: true }); c.repere('N', px, 88, pw, 28, 'N : le nombre total de relevés'); }
+  if (S.a('compte')) {
+    PRES.forEach((r, q) => { const t0 = MF.compte + q * .9; if (S.t < t0) return; const [x, y] = pos(r - 1); lueur(c, x - 3, y - 3, qs + 6, qs + 6, { vive: S.t < t0 + .9 && !S.a('n'), numero: q + 1, nx: x + qs - 12, ny: y + tz(24, 30), taille: tz(22, 30) }); });
+  }
+  if (S.ecrit(c, 'n')) { c.texte(pt ? 'n = 5' : 'n = 5 relevés', px + tz(0, 140), tz(140, 112), { couleur: 'jaune', taille: tz(21, 32), gras: true }); c.repere('n', px, 120, pw, 28, 'n : les relevés où l’espèce est présente'); }
+  if (S.ecrit(c, 'formule') && !(pt && S.a('calcul'))) { c.texte('F = ⟦n|N⟧ × 100', px, tz(196, 196), { couleur: 'blanc', taille: tz(24, 30) }); c.repere('formule', px, 168, pw, 44, 'F = n/N × 100'); }
+  if (S.ecrit(c, 'calcul')) {
+    c.texte('F = ⟦5|10⟧ × 100', px, tz(250, 196), { couleur: 'jaune', taille: tz(24, 30) });
+    if (S.conclusions) c.texte('F = 50 %', px, tz(286, 264), { couleur: 'jaune', taille: tz(24, 32), gras: true });
+    c.repere('calcul', px, 222, pw, 72, 'F = 5/10 × 100 = 50 %');
+  }
+  if (S.ecrit(c, 'echelle')) echelleIF(c, S, 40, L - 40, 368, MF.echelle, S.a('classe') && S.conclusions ? { F: 50, t: '50 %' } : null);
+  if (S.a('classe') && S.conclusions) { const X = F => 40 + (L - 80) * F / 100; lueur(c, X(40), 340, X(60) - X(40), 80, { vive: true }); c.texte('→ III', px + tz(130, 150), tz(286, 264), { couleur: 'vert', taille: tz(24, 32), gras: true }); }
+}
+
+/* Petit cadre (téléphone en paysage) : une seule chose à la fois, en grand — la ligne de l'espèce qu'on compte, puis
+ * quelques lignes n → F → IF, puis le décompte par indice et les deux espèces caractéristiques. Mêmes moments. */
+function dessinerTableauPetit(c, S, scene) {
+  const L = scene.L;
+  if (!S.a('frequence')) {
+    let i = 0; if (S.a('n')) ESP.forEach((e, k) => { if (S.t >= tLigne(k)) i = k; });
+    const [nom, st, rel] = ESP[i], n = rel.length, cw = Math.min(64, (L - 80) / 10), x0 = (L - 10 * cw) / 2, yc = 170;
+    c.direct(() => {
+      c.texte((i + 1) + ' / 18', 20, 44, { couleur: 'faible', taille: 28 });
+      c.texte(nom, L / 2, 84, { couleur: 'blanc', taille: 36, gras: true, align: 'center' });
+      const g = c.ctx;
+      for (let r = 1; r <= 10; r++) {
+        const cx = x0 + (r - .5) * cw;
+        g.save(); g.strokeStyle = 'rgba(226,232,240,.35)'; g.lineWidth = 1.5; g.strokeRect(x0 + (r - 1) * cw + 3, yc - cw / 2 + 3, cw - 6, cw - 6);
+        if (rel.includes(r)) { g.fillStyle = COUL[st]; g.beginPath(); g.arc(cx, yc, cw * .3, 0, Math.PI * 2); g.fill(); }
+        g.restore();
+        c.texte(String(r), cx, yc + cw / 2 + 32, { couleur: 'faible', taille: 26, align: 'center' });
+      }
+    });
+    c.repere('ligne_' + (i + 1), x0, yc - cw / 2, 10 * cw, cw, nom + ' : présent dans ' + n + ' relevés');
+    c.repere('tableau', 10, 10, L - 20, 330, 'les relevés de ' + nom);
+    if (S.a('n')) {
+      const t0 = tLigne(i), lent = i < 3, k = lent ? Math.min(n, Math.floor((S.t - t0) / (1.4 / n)) + 1) : n;
+      rel.slice(0, k).forEach((r, q) => lueur(c, x0 + (r - 1) * cw, yc - cw / 2, cw, cw, { vive: q === k - 1, numero: q + 1, nx: x0 + (r - .5) * cw, ny: yc - cw / 2 - 8, align: 'center', taille: 28 }));
+      if (!lent || S.t >= t0 + 1.4) c.direct(() => c.texte('n = ' + n, L / 2, 330, { couleur: 'jaune', taille: 38, gras: true, align: 'center' }));
+    }
+    return;
+  }
+  if (!S.a('classes')) {
+    c.direct(() => {
+      c.texte('N = 10 : F = n × 10 %', L / 2, 50, { couleur: 'cyan', taille: 32, align: 'center' });
+      const cols = [40, L * .52, L * .7, L * .86];
+      c.texte('n', cols[1], 104, { couleur: 'jaune', taille: 30, align: 'center' }); c.texte('F %', cols[2], 104, { couleur: 'cyan', taille: 30, align: 'center' }); c.texte('IF', cols[3], 104, { couleur: 'vert', taille: 30, align: 'center' });
+      ESP.slice(0, 4).forEach(([nom, st, rel], i) => {
+        const y = 156 + i * 54, n = rel.length;
+        c.texte(nom, cols[0], y, { couleur: 'blanc', taille: 30 });
+        c.texte(String(n), cols[1], y, { couleur: 'jaune', taille: 30, gras: true, align: 'center' });
+        if (S.t >= MT.frequence + i * .3) c.texte(String(n * 10), cols[2], y, { couleur: 'cyan', taille: 30, align: 'center' });
+        if (S.a('indice') && S.t >= MT.indice + i * .3) c.texte(indice(n * 10), cols[3], y, { couleur: 'vert', taille: 30, gras: true, align: 'center' });
+      });
+      c.texte('… 18 espèces', cols[0], 384, { couleur: 'faible', taille: 28 });
+    });
+    c.repere('tableau', 10, 10, L - 20, 380, 'n, F et IF des espèces');
+    return;
+  }
+  const tot = { I: 0, II: 0, III: 0, IV: 0, V: 0 }; ESP.forEach(e => tot[indice(e[2].length * 10)]++);
+  const w = (L - 40) / 5;
+  c.texte('nombre d’espèces par indice', L / 2, 56, { couleur: 'faible', taille: 28, align: 'center' });
+  Object.entries(tot).forEach(([k, v], i) => {
+    if (S.t < MT.classes + i * .45) return;
+    c.texte(k, 20 + w * (i + .5), 130, { couleur: 'vert', taille: 34, gras: true, align: 'center' });
+    c.texte(String(v), 20 + w * (i + .5), 186, { couleur: 'jaune', taille: 40, gras: true, align: 'center' });
+    c.repere('total_' + k, 20 + w * i, 96, w, 100, 'indice ' + k + ' : ' + v + ' espèces');
+  });
+  if (S.ecrit(c, 'caracteristiques')) {
+    [[0, 'Quercus suber'], [5, 'Cistus salvifolius']].forEach(([i, nom], q) => {
+      const x = q ? L / 2 + 10 : 20, y = 300, ww = L / 2 - 30;
+      lueur(c, x, y - 40, ww, 60, { vive: true, couleur: '74, 222, 128' });
+      c.texte(nom + ' · V', x + ww / 2, y, { couleur: 'vert', taille: 30, gras: true, align: 'center' });
+      c.repere('ligne_' + (i + 1), x, y - 40, ww, 60, nom);
+    });
+    c.repere('caracteristiques', 20, 260, L - 40, 60, 'Quercus suber et Cistus salvifolius');
+  }
+}
+
+/* ── vue tableau ── */
+const MT = { tableau: .5, n: 2.5, frequence: 10, indice: 11.5, classes: 13, caracteristiques: 15.5 };
+const tLigne = i => MT.n + (i < 3 ? i * 1.6 : 4.8 + (i - 3) * .17);   // début du comptage de la ligne i
+function dessinerTableau(c, S, scene) {
+  if (scene.petit) return dessinerTableauPetit(c, S, scene);
+  const L = scene.L, colW = (L - 30) / 2, rh = 34, y0 = 52;
+  const cw = Math.min(15, (colW - 230) / 10);
+  const geo = i => { const col = i < 9 ? 0 : 1, r = i % 9, x = 12 + col * (colW + 6); return { x, y: y0 + r * rh, nx: x + colW - 112 - 10 * cw }; };
+  [0, 1].forEach(col => { const x = 12 + col * (colW + 6), nx = x + colW - 112 - 10 * cw;
+    c.texte('relevés R1 → R10', nx + 5 * cw, 24, { couleur: 'faible', taille: 15, align: 'center' });
+    c.texte('n', nx + 10 * cw + 16, 24, { couleur: 'jaune', taille: 16, align: 'center' }); c.texte('F %', nx + 10 * cw + 52, 24, { couleur: 'cyan', taille: 16, align: 'center' }); c.texte('IF', nx + 10 * cw + 92, 24, { couleur: 'vert', taille: 16, align: 'center' });
+    c.ligne(x, 32, x + colW, 32, { couleur: 'tresfaible', largeur: 1 }); });
+  ESP.forEach(([nom, st, rel], i) => {
+    const { x, y, nx } = geo(i), n = rel.length, F = n * 10;
+    c.texte(nom, x, y + 6, { couleur: 'blanc', taille: 15, max: nx - x - 6 });
+    c.direct(() => { const g = c.ctx; for (let r = 1; r <= 10; r++) { const cx = nx + (r - .5) * cw; g.save(); if (rel.includes(r)) { g.fillStyle = COUL[st]; g.beginPath(); g.arc(cx, y, Math.min(5.5, cw * .38), 0, Math.PI * 2); g.fill(); } else { g.fillStyle = 'rgba(226,232,240,.18)'; g.beginPath(); g.arc(cx, y, 1.6, 0, Math.PI * 2); g.fill(); } g.restore(); } });
+    c.repere('ligne_' + (i + 1), x, y - 16, colW, rh - 2, nom + ' : présent dans ' + n + ' relevés');
+    if (S.a('n')) {
+      const t0 = tLigne(i), lent = i < 3;
+      if (S.t >= t0) {
+        const k = lent ? Math.min(n, Math.floor((S.t - t0) / (1.4 / n)) + 1) : n;
+        if (lent && S.t < t0 + 1.6) rel.slice(0, k).forEach((r, q) => lueur(c, nx + (r - 1) * cw, y - cw * .55, cw, cw * 1.1, { vive: q === k - 1 }));
+        if (!lent || S.t >= t0 + 1.4) c.direct(() => c.texte(String(n), nx + 10 * cw + 16, y + 6, { couleur: 'jaune', taille: 17, gras: true, align: 'center' }));
+      }
+    }
+    if (S.a('frequence') && S.t >= MT.frequence + i * .05) c.direct(() => c.texte(String(F), nx + 10 * cw + 52, y + 6, { couleur: 'cyan', taille: 17, align: 'center' }));
+    if (S.a('indice') && S.t >= MT.indice + i * .05) c.direct(() => c.texte(indice(F), nx + 10 * cw + 92, y + 6, { couleur: 'vert', taille: 17, gras: true, align: 'center' }));
+  });
+  c.repere('tableau', 10, 10, L - 20, y0 + 9 * rh - 10, 'le tableau des relevés de Maâmora');
+  if (S.ecrit(c, 'classes')) {
+    const tot = { I: 0, II: 0, III: 0, IV: 0, V: 0 }; ESP.forEach(e => tot[indice(e[2].length * 10)]++);
+    const w = (L - 40) / 5;
+    Object.entries(tot).forEach(([k, v], i) => { if (S.t < MT.classes + i * .45) return; c.texte(k + ' : ' + v, 20 + w * (i + .5), 402, { couleur: 'jaune', taille: 22, gras: true, align: 'center' }); c.repere('total_' + k, 20 + w * i, 380, w, 30, 'indice ' + k + ' : ' + v + ' espèces'); });
+  }
+  if (S.ecrit(c, 'caracteristiques')) {
+    [0, 5].forEach(i => { const { x, y } = geo(i); lueur(c, x - 4, y - 16, colW + 4, rh - 2, { vive: true, couleur: '74, 222, 128' }); });
+    c.repere('caracteristiques', 10, y0 - 16, colW, rh * 6, 'Quercus suber et Cistus salvifolius');
+  }
+}
+
+const CONF = VUE === 'frequence' ? {
+  moments: MF, fin: 16.5, dessiner: dessinerFrequence, titre: 'La fréquence d’une espèce',
+  motifs: { releves: 'les dix relevés', compte: 'on compte les relevés où pousse le palmier nain', n: 'n = 5', formule: 'la formule F = n/N × 100', calcul: 'le calcul', echelle: 'l’échelle des indices', classe: 'la classe III' },
+  accueil: 'Dix relevés : dans combien pousse le palmier nain ?', fini: 'n = 5, N = 10 : F = 50 %, indice III (assez fréquente).',
+  voir: S => {
+    const m = ['Dix relevés R1 à R10 en deux rangées ; à droite : Chamaerops humilis (palmier nain), N = 10 relevés.'];
+    if (S.a('compte')) m.push('Relevés allumés et numérotés : ' + PRES.filter((r, q) => S.t >= MF.compte + q * .9).map(r => 'R' + r).join(', ') + '.');
+    if (S.a('n')) m.push('n = 5.'); if (S.a('formule')) m.push('F = n/N × 100.'); if (S.a('calcul')) m.push('F = 5/10 × 100' + (S.conclusions ? ' = 50 %.' : ' (résultat caché).'));
+    if (S.a('echelle')) m.push('Échelle : I (0 à 20 %) accidentelle, II (20 à 40) accessoire, III (40 à 60) assez fréquente, IV (60 à 80) fréquente, V (80 à 100) très fréquente.');
+    if (S.a('classe') && S.conclusions) m.push('Flèche à 50 % : classe III allumée.');
+    return m.join(' ');
+  } } : {
+  moments: MT, fin: 17, dessiner: dessinerTableau, titre: 'Le tableau des relevés de Maâmora',
+  motifs: { tableau: 'le tableau des relevés', n: 'on compte n ligne par ligne', frequence: 'la colonne F %', indice: 'la colonne IF', classes: 'le nombre d’espèces par indice', caracteristiques: 'les espèces caractéristiques' },
+  accueil: '18 espèces, 10 relevés : complète le tableau.', fini: 'I : 2 · II : 6 · III : 4 · IV : 3 · V : 3.',
+  voir: S => {
+    const m = ['Tableau des 18 espèces de Maâmora, un point par relevé où l’espèce est présente.'];
+    if (S.a('n')) m.push('Colonne n remplie (Quercus suber 10, Cytisus 8, Thymelaea 2…).'); if (S.a('frequence')) m.push('Colonne F % (n × 10).'); if (S.a('indice')) m.push('Colonne IF.');
+    if (S.a('classes')) m.push('En bas : I : 2 · II : 6 · III : 4 · IV : 3 · V : 3.'); if (S.a('caracteristiques')) m.push('Allumées : Quercus suber et Cistus salvifolius (présentes dans les 10 relevés).');
+    return m.join(' ');
+  } };
+window.Sortie.sim({
+  id: 'tc_sortie_releves_' + VUE, titre: CONF.titre, vue: VUE, moments: CONF.moments, fin: CONF.fin, graine: 29, motifs: CONF.motifs, accueil: CONF.accueil, fini: CONF.fini,
+  dessiner: CONF.dessiner, ceQuiSeVoit: CONF.voir,
+  texte: 'Fréquence F (%) = n/N × 100, n : nombre de relevés où l’espèce est présente, N : nombre total de relevés. Indice : I (F < 20 %), II (20 ≤ F < 40), III (40 ≤ F < 60), IV (60 ≤ F < 80), V (80 ≤ F ≤ 100). Maâmora, 10 relevés : Quercus suber 10 (V), Cytisus arboreus 8 (V), Thymelaea 2 (II), Daphne 2 (II), Chamaerops 5 (III), Cistus salvifolius 10 (V), Lavandula 3 (II), Rubia 5 (III), Carex 7 (IV), Carlina 1 (I), Ranunculus 3 (II), Holcus 1 (I), Urginea 2 (II), Anthoxanthum 4 (III), Brachypodium 6 (IV), Ornithopus 6 (IV), Andryala 5 (III), Anagalis 2 (II). Bilan : I 2, II 6, III 4, IV 3, V 3.',
+  explication: { releves: [{ repere: 'N', texte: 'N : tous les relevés.' }, { repere: 'n', texte: 'n : les relevés où l’espèce est présente.' }, { repere: 'formule', texte: 'F = n sur N, fois cent.' }, { repere: 'echelle', texte: 'L’indice se lit sur l’échelle.' }] },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

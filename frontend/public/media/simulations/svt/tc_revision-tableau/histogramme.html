@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Révision : histogramme et courbe de fréquence — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/svt/tc_sortie_ecologique-tableau/sortie.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Construction pas à pas de l’histogramme de fréquence d’une nouvelle station : la liste des espèces avec leur indice ; les axes se dessinent ; pour chaque indice I à V, les espèces s’allument une à une et un bloc monte dans la barre ; puis la courbe relie les milieux des sommets, et on lit si elle est unimodale ou bimodale"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/svt/tc_sortie_ecologique-tableau/commun.js"></script>
+<script>
+/*
+ * Cours de révision (diapositive rv_s3_histogramme). MÊME DESSIN que svt/tc_sortie_ecologique-tableau/histogramme.html
+ * (mêmes axes, mêmes barres bleues montées bloc par bloc, même courbe rouge, mêmes lueurs), avec une NOUVELLE station
+ * d’exercice de 12 espèces : I 4 · II 1 · III 1 · IV 2 · V 4 → deux sommets (I et V) : courbe bimodale → hétérogène.
+ * Règle du cours : les rectangles de l’histogramme sont COLLÉS les uns aux autres (chaque barre occupe toute la largeur
+ * de sa classe ; une classe à 0 resterait une place vide de même largeur).
+ * Moments (?vue=revision, seule vue) : tableau 0,4 ; axes 2 ; I 4 ; II, III, IV, V ensuite (une espèce allumée toutes
+ * les 0,7 s, un bloc monte dans la barre à chaque espèce) ; courbe ; forme ; fin — calculés par horaire() :
+ * I 4 · II 7,5 · III 8,9 · IV 10,3 · V 12,4 · courbe 16,2 · forme 18,7 · fin 20,5.
+ * Repères : liste, axes, barre_I … barre_V, courbe, lecture. set_parameters {conclusions: false} cache la lecture.
+ * Petit cadre (~429 × 250) : aucun texte sous 15 px écran ; la liste devient douze pastilles (l’indice de chaque
+ * espèce), sans les noms.
+ */
+const { lueur } = window.Sortie;
+const CL = ['I', 'II', 'III', 'IV', 'V'];
+const LISTE = [['Olea europaea', 'V'], ['Pistacia lentiscus', 'V'], ['Asphodelus m.', 'V'], ['Ulex boivinii', 'V'], ['Lavandula s.', 'IV'], ['Thymus s.', 'IV'],
+  ['Bellis annua', 'III'], ['Daphne g.', 'II'], ['Carlina c.', 'I'], ['Holcus l.', 'I'], ['Rubia p.', 'I'], ['Urginea m.', 'I']];
+const PAS = .7;
+function horaire(liste) {
+  const M = { tableau: .4, axes: 2 }; let t = 4; const H = {};
+  CL.forEach(k => { const n = liste.filter(e => e[1] === k).length; M[k] = +t.toFixed(2); H[k] = { debut: t, n }; t += Math.max(1, n * PAS + .7); });
+  M.courbe = +(t + .3).toFixed(2); M.forme = +(t + 2.8).toFixed(2); return { M, H, fin: +(t + 4.6).toFixed(2) };
+}
+const { M, H, fin: FIN } = horaire(LISTE), COMPTE = CL.map(k => LISTE.filter(e => e[1] === k).length);
+let SC = null;
+const T = (b) => Math.max(b, 15.5 / Math.max(.05, SC ? SC.s : 1));
+const compact = () => SC && SC.s < .85;
+
+function dessiner(c, S, scene) {
+  SC = scene;
+  const L = scene.L, petit = compact();
+  // la liste : deux colonnes de noms (grand cadre) ou douze pastilles (petit cadre)
+  const rang = {}; CL.forEach(k => { rang[k] = 0; });
+  const ordre = LISTE.map(([nom, k]) => ({ nom, k, q: rang[k]++ }));
+  let lw, lx = 24, ly, cellW, cellH;
+  if (!petit) {
+    const nRows = Math.ceil(LISTE.length / 2), colW = 160; ly = 50; const rh = Math.min(34, 300 / nRows);
+    c.texte('Station d’exercice : espèce → IF', lx, 24, { couleur: 'faible', taille: 16 });
+    ordre.forEach((e, i) => {
+      const x = lx + Math.floor(i / nRows) * colW, y = ly + (i % nRows) * rh;
+      c.texte(e.nom, x, y + 6, { couleur: 'blanc', taille: 15, max: colW - 40, duree: .12 });
+      c.texte(e.k, x + colW - 14, y + 6, { couleur: 'vert', taille: 16, gras: true, align: 'right', duree: .05 });
+      e.box = [x - 4, y - 14, colW - 8, rh - 4]; e.num = [x - 8, y + 6];
+    });
+    lw = colW * 2; cellH = nRows * rh;
+  } else {
+    cellW = 74; cellH = T(20) + 16; ly = 34;
+    c.texte('12 espèces', lx, 22, { couleur: 'faible', taille: T(16) });
+    ordre.forEach((e, i) => {
+      const x = lx + (i % 3) * (cellW + 8), y = ly + Math.floor(i / 3) * (cellH + 10);
+      c.rect(x, y, cellW, cellH, { couleur: 'tresfaible', largeur: 1.2, arrondi: 6 });
+      c.texte(e.k, x + cellW / 2, y + cellH / 2 + T(20) * .36, { couleur: 'vert', taille: T(20), gras: true, align: 'center', duree: .05 });
+      e.box = [x - 2, y - 2, cellW + 4, cellH + 4]; e.num = null;
+    });
+    lw = 3 * (cellW + 8); cellH = 4 * (cellH + 10);
+  }
+  c.repere('liste', lx - 4, ly - 18, lw, cellH + 4, 'la liste des espèces et leur indice');
+  if (S.t > 0 && S.t < M.axes - .2 && S.a('tableau')) lueur(c, lx - 6, ly - 20, lw + 4, cellH + 8, { vive: true });
+  // les axes
+  const gx0 = lx + lw + (petit ? 70 : 40), gx1 = L - 24, gy0 = 352, gyT = 66 + (petit ? 10 : 0), u = (gy0 - gyT - 10) / 7, bw = (gx1 - gx0 - 30) / 5;
+  const XB = i => gx0 + 18 + i * bw, Yn = n => gy0 - n * u;
+  if (S.t <= 0 || S.ecrit(c, 'axes')) {
+    c.fleche(gx0, gy0, gx1, gy0, { couleur: 'blanc', largeur: 2 }); c.fleche(gx0, gy0, gx0, gyT - 18, { couleur: 'blanc', largeur: 2 });
+    c.texte('Nombre d’espèces', gx0 + 8, gyT - 22, { couleur: 'blanc', taille: T(17) });
+    c.texte('IF', gx1, gy0 + T(18) + 22, { couleur: 'blanc', taille: T(18), gras: true, align: 'right' });
+    for (let n = 1; n <= 7; n++) { c.ligne(gx0 - 5, Yn(n), gx0 + 5, Yn(n), { couleur: 'blanc', largeur: 1.3, duree: .03 }); if (!petit || n % 2 === 0) c.texte(String(n), gx0 - 10, Yn(n) + 6, { couleur: 'jaune', taille: T(16), align: 'right', duree: .05 }); }
+    c.texte('0', gx0 - 10, gy0 + 6, { couleur: 'jaune', taille: T(16), align: 'right' });
+    CL.forEach((k, i) => c.texte(k, XB(i) + bw / 2, gy0 + T(19) + 8, { couleur: 'vert', taille: T(19), gras: true, align: 'center' }));
+    c.repere('axes', gx0 - 30, gyT - 30, gx1 - gx0 + 30, gy0 - gyT + 66, 'les axes : indices de fréquence en abscisse, nombre d’espèces en ordonnée');
+    if (S.t > 0 && S.t < M.axes + 1.4) lueur(c, gx0 - 30, gyT - 30, gx1 - gx0 + 34, gy0 - gyT + 70, { vive: true });
+  }
+  // les barres : chaque espèce de l’indice s’allume dans la liste, un bloc monte
+  const sommets = [];
+  CL.forEach((k, i) => {
+    const h = H[k], n = h.n, xb = XB(i), w = bw;   // rectangles collés : chaque barre occupe toute sa classe
+    c.repere('barre_' + k, xb, Yn(Math.max(n, .3)), w, gy0 - Yn(Math.max(n, .3)), 'barre ' + k + ' : ' + n + ' espèce' + (n > 1 ? 's' : ''));
+    if (!S.a(k)) return;
+    const vus = n === 0 ? 0 : Math.min(n, Math.floor((S.t - h.debut) / PAS) + 1), fini = S.t >= h.debut + n * PAS + .3, courant = !fini;
+    ordre.filter(e => e.k === k).forEach((e, q) => { if (q < vus) lueur(c, e.box[0], e.box[1], e.box[2], e.box[3], { vive: courant && q === vus - 1, numero: courant && e.num ? q + 1 : null, nx: e.num ? e.num[0] : 0, ny: e.num ? e.num[1] : 0, taille: 16, align: 'right' }); });
+    c.direct(() => {
+      const g = c.ctx;
+      for (let q = 0; q < vus; q++) {
+        const age = Math.min(1, (S.t - h.debut - q * PAS) / .35), y = Yn(q + 1) + (1 - age) * 30;
+        g.save(); g.globalAlpha = age; const gr = g.createLinearGradient(xb, 0, xb + w, 0); gr.addColorStop(0, 'rgba(96,165,250,.95)'); gr.addColorStop(1, 'rgba(37,99,235,.95)');
+        g.fillStyle = gr; g.fillRect(xb, y + 1, w, u - 2); g.strokeStyle = 'rgba(219,234,254,.9)'; g.lineWidth = 1.2; g.strokeRect(xb, y + 1, w, u - 2); g.restore();
+        if (courant) c.texte(String(q + 1), xb + w / 2, y + u / 2 + 6, { couleur: 'blanc', taille: Math.min(T(16), u * .8), gras: true, align: 'center' });
+      }
+      if (fini) c.texte(String(n), xb + w - 4, Yn(n) - 8, { couleur: 'jaune', taille: T(20), gras: true, align: 'right' });
+    });
+    if (courant) lueur(c, xb - 4, Yn(Math.max(n, 1)) - 4, w + 8, gy0 - Yn(Math.max(n, 1)) + 8, { vive: true });
+    sommets.push([xb + w / 2, Yn(n)]);
+  });
+  if (S.ecrit(c, 'courbe') && sommets.length === 5) {
+    sommets.forEach(([x, y]) => c.point(x, y, 5.5, 'rouge'));
+    c.trait(sommets, { couleur: 'rouge', largeur: 3, duree: 1.6, tremble: .2 });
+    c.repere('courbe', XB(0), gyT, XB(4) + bw - XB(0), gy0 - gyT, 'la courbe de fréquence');
+  }
+  if (S.ecrit(c, 'forme') && S.conclusions) {
+    const modes = [];
+    COMPTE.forEach((v, i) => { const g = i ? COMPTE[i - 1] : -1, d = i < 4 ? COMPTE[i + 1] : -1; if (v > g && v >= d && v > 0) modes.push(i); });
+    modes.forEach(i => { c.cercle(XB(i) + bw / 2, Yn(COMPTE[i]), 16, { couleur: 'jaune', largeur: 2.4 }); });
+    const uni = modes.length === 1, tx = XB(1) + 4, mx = gx1 - tx, fs = T(20), lh = fs + 6;
+    c.texte(uni ? 'courbe unimodale' : 'courbe bimodale', tx, gyT + 4, { couleur: 'jaune', taille: fs, gras: true, max: mx });
+    c.texte(uni ? '(un seul sommet)' : '(deux sommets)', tx, gyT + 4 + lh, { couleur: 'jaune', taille: T(17), max: mx });
+    c.texte(uni ? '→ homogène' : '→ hétérogène', tx, gyT + 4 + 2 * lh, { couleur: uni ? 'vert' : 'orange', taille: fs, gras: true, max: mx });
+    c.repere('lecture', tx - 10, gyT - fs, gx1 - tx + 10, 3 * lh + 8, uni ? 'courbe unimodale : homogène' : 'courbe bimodale : hétérogène');
+  }
+}
+window.Sortie.sim({
+  id: 'tc_revision_histogramme', titre: 'Révision : histogramme et courbe de fréquence', vue: 'revision', moments: M, fin: FIN, graine: 41, dessiner,
+  motifs: Object.assign({ tableau: 'la liste des espèces et leur indice', axes: 'les axes gradués', courbe: 'la courbe relie les milieux des sommets', forme: 'la lecture de la courbe' },
+    Object.fromEntries(CL.map((k, i) => [k, 'indice ' + k + ' : ' + COMPTE[i] + ' espèce' + (COMPTE[i] > 1 ? 's' : '')]))),
+  accueil: 'Une nouvelle station : construisons l’histogramme, indice par indice.',
+  fini: 'Deux sommets (I et V) : courbe bimodale, groupement hétérogène.',
+  ceQuiSeVoit: S => {
+    const m = ['Liste des 12 espèces de la station d’exercice avec leur indice ; graphique : IF en abscisse (I à V), nombre d’espèces en ordonnée (0 à 7).'];
+    const faites = CL.filter(k => S.a(k)); if (faites.length) m.push('Barres construites : ' + faites.map(k => k + ' = ' + COMPTE[CL.indexOf(k)]).join(', ') + '.');
+    if (S.a('courbe')) m.push('Courbe rouge reliant les milieux des sommets.');
+    if (S.a('forme') && S.conclusions) m.push('Deux sommets entourés (I et V) : courbe bimodale → groupement hétérogène.');
+    return m.join(' ');
+  },
+  texte: 'Histogramme de fréquence : en abscisse les indices de fréquence I à V, en ordonnée le nombre d’espèces ; une barre par indice. La courbe de fréquence relie les milieux des sommets des barres. Station d’exercice : I 4, II 1, III 1, IV 2, V 4 : deux sommets, courbe bimodale, groupement hétérogène.',
+  explication: { revision: [{ repere: 'axes', texte: 'En abscisse les indices, en ordonnée le nombre d’espèces.' }, { repere: 'courbe', texte: 'La courbe relie les milieux des sommets.' }, { repere: 'lecture', texte: 'Un sommet : homogène ; deux : hétérogène.' }] },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

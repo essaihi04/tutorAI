@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La zonation de la Daya — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/svt/tc_sortie_ecologique-tableau/sortie.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Coupe de la Daya de Sidi Boughaba de l’ouest à l’est : l’eau haute en hiver baisse en été ; les plantes se rangent en bandes du bord vers le centre : joncs, hélophytes (typha, roseau) les pieds dans l’eau, hydrophytes totalement immergées au fond"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/svt/tc_sortie_ecologique-tableau/commun.js"></script>
+<script>
+/*
+ * La zonation des végétaux dans la Daya de Sidi Boughaba (diapo se_a1_daya), d'après le doc 3 b du prof.
+ * Moments : hiver 0,8 ; ete 2,5 (l'eau baisse jusqu'à 4,5) ; zonation 5,5 ; helophytes 8 ; hydrophytes 10 ; fin 11,5.
+ */
+const { P, lueur } = window.Sortie;
+const FOND = [[0, 168], [.07, 186], [.16, 200], [.28, 214], [.36, 236], [.4, 296], [.55, 304], [.6, 258], [.72, 230], [.85, 212], [.93, 182], [1, 110]];
+const fond = u => { for (let i = 1; i < FOND.length; i++) { const [u0, a0] = FOND[i - 1], [u1, a1] = FOND[i]; if (u <= u1) return a0 + (a1 - a0) * (u - u0) / (u1 - u0); } return 110; };
+const HIVER = 196, ETE = 262;
+// plantes : [u, sorte, hauteur]
+const PLANTES = [[.03, 'jonc', 34], [.1, 'jonc', 36], [.95, 'jonc', 40], [.2, 'typha', 110], [.27, 'roseau', 120], [.33, 'typha', 104], [.66, 'typha', 112], [.75, 'roseau', 118], [.81, 'typha', 100],
+  [.43, 'immergee', 30], [.47, 'immergee', 26], [.51, 'immergee', 32], [.55, 'immergee', 24]];
+const ZONES = [{ n: 1, de: 0, a: .14, nom: 'joncs' }, { n: 2, de: .15, a: .37, nom: 'hélophytes' }, { n: 3, de: .39, a: .58, nom: 'hydrophytes' }, { n: 2, de: .62, a: .86, nom: 'hélophytes' }, { n: 1, de: .88, a: 1, nom: 'joncs' }];
+const M = { hiver: .8, ete: 2.5, zonation: 5.5, helophytes: 8, hydrophytes: 10 };
+function dessiner(c, S, scene) {
+  const pt = scene.petit, L = scene.L, x0 = 24, x1 = L - 24, X = u => x0 + u * (x1 - x0);
+  const niveau = S.t <= 0 ? HIVER : HIVER + (ETE - HIVER) * S.k('ete', 2);
+  c.texte('W', x0, 96, { couleur: 'blanc', taille: pt ? 30 : 20, gras: true }); c.texte('E', x1, 96, { couleur: 'blanc', taille: pt ? 30 : 20, gras: true, align: 'right' });
+  c.direct(() => {
+    const g = c.ctx, N = 160;
+    // le sol
+    g.save(); const gs = g.createLinearGradient(0, 180, 0, 340); gs.addColorStop(0, '#cdb489'); gs.addColorStop(1, '#8f7450');
+    g.fillStyle = gs; g.beginPath(); g.moveTo(X(0), 340); for (let i = 0; i <= N; i++) g.lineTo(X(i / N), fond(i / N)); g.lineTo(X(1), 340); g.closePath(); g.fill(); g.restore();
+    const dessine = (filtre) => PLANTES.filter(filtre).forEach(([u, s, h]) => { const y = fond(u) + 2, f = { jonc: P.jonc, typha: P.typha, roseau: P.roseau, immergee: P.immergee }[s]; f(g, X(u), y, h); });
+    dessine(p => p[1] === 'immergee');      // sous l'eau : peintes avant l'eau
+    // l'eau sous le niveau, au-dessus du fond
+    g.save(); g.beginPath(); g.moveTo(X(0), 330); for (let i = 0; i <= N; i++) g.lineTo(X(i / N), fond(i / N)); g.lineTo(X(1), 330); g.closePath();
+    g.save(); g.clip(); g.restore();
+    const ge = g.createLinearGradient(0, niveau, 0, 310); ge.addColorStop(0, 'rgba(147,210,250,.6)'); ge.addColorStop(1, 'rgba(30,90,200,.7)');
+    g.beginPath(); let dedans = false;
+    for (let i = 0; i <= N; i++) { const u = i / N, y = fond(u); if (y > niveau) { if (!dedans) { g.moveTo(X(u), niveau); dedans = true; } g.lineTo(X(u), y); } else if (dedans) { g.lineTo(X(u), niveau); g.closePath(); dedans = false; } }
+    if (dedans) { g.lineTo(X(1), niveau); g.closePath(); }
+    g.fillStyle = ge; g.fill(); g.restore();
+    dessine(p => p[1] !== 'immergee');
+  });
+  c.repere('daya', x0, 100, x1 - x0, 240, 'la daya en coupe');
+  // niveaux
+  c.ligne(X(.05), HIVER, X(.96), HIVER, { couleur: 'bleu', largeur: 1.6, pointille: [8, 6] });
+  c.texte(pt ? 'eau en hiver' : 'niveau de l’eau en hiver', X(.5), HIVER - 74, { couleur: 'bleu', taille: pt ? 30 : 18, align: 'center' });
+  c.fleche(X(.5), HIVER - 66, X(.5), HIVER - 4, { couleur: 'bleu', largeur: 1.4 });
+  c.repere('hiver', X(.05), HIVER - 10, X(.96) - X(.05), 20, 'le niveau d’hiver');
+  if (S.ecrit(c, 'ete') && S.k('ete', 2) > .95) {
+    c.ligne(X(.37), ETE, X(.6), ETE, { couleur: 'cyan', largeur: 1.6, pointille: [4, 4] });
+    c.texte(pt ? 'en été' : 'niveau en été', X(.62), ETE + (pt ? 40 : 34), { couleur: 'cyan', taille: pt ? 30 : 18 });
+    c.repere('ete', X(.37), ETE - 10, X(.6) - X(.37), 20, 'le niveau d’été');
+  }
+  if (S.ecrit(c, 'zonation')) {
+    ZONES.forEach((z, i) => {
+      const t0 = M.zonation + (z.n - 1) * .7;
+      if (S.t < t0) return;
+      const xa = X(z.de), xb = X(z.a), col = ['', 'vert', 'jaune', 'cyan'][z.n];
+      c.ligne(xa + 4, 352, xb - 4, 352, { couleur: col, largeur: 6 });
+      c.texte(String(z.n), (xa + xb) / 2, pt ? 392 : 382, { couleur: col, taille: pt ? 32 : 22, gras: true, align: 'center' });
+      if (!pt) c.texte(z.nom, (xa + xb) / 2, 406, { couleur: col, taille: 17, align: 'center', max: xb - xa });
+      c.repere('zone_' + i, xa, 340, xb - xa, 70, 'zone ' + z.n + ' : ' + z.nom);
+    });
+    c.repere('zonation', x0, 340, x1 - x0, 70, 'les bandes de végétation');
+  }
+  if (S.ecrit(c, 'helophytes')) {
+    PLANTES.filter(p => p[1] === 'typha' || p[1] === 'roseau').forEach(([u, s, h]) => lueur(c, X(u) - 16, fond(u) - h - 10, 32, h + 14, { vive: !S.a('hydrophytes') }));
+    c.texte(pt ? '2 = hélophytes' : 'hélophytes : racines dans l’eau, tiges hors de l’eau', pt ? x0 : X(.27), 40, { couleur: 'jaune', taille: pt ? 30 : 18, align: pt ? 'left' : 'center', max: pt ? 0 : X(.55) - x0 });
+    c.repere('helophytes', X(.15), 60, X(.86) - X(.15), 180, 'les hélophytes');
+  }
+  if (S.ecrit(c, 'hydrophytes')) {
+    PLANTES.filter(p => p[1] === 'immergee').forEach(([u, s, h]) => lueur(c, X(u) - 12, fond(u) - h - 6, 24, h + 8, { vive: true, couleur: '34, 211, 238' }));
+    c.texte(pt ? '3 = hydrophytes' : 'hydrophytes : totalement immergées', pt ? x1 : X(.74), 40, { couleur: 'cyan', taille: pt ? 30 : 18, align: pt ? 'right' : 'center', max: pt ? 0 : x1 - X(.52) });
+    c.repere('hydrophytes', X(.4), 260, X(.58) - X(.4), 50, 'les hydrophytes');
+  }
+}
+window.Sortie.sim({
+  id: 'tc_sortie_daya', titre: 'Zonation de la Daya de Sidi Boughaba', moments: M, fin: 11.5, graine: 17,
+  motifs: { hiver: 'l’eau haute en hiver', ete: 'l’eau baisse en été', zonation: 'les bandes de végétation du bord vers le centre', helophytes: 'les hélophytes', hydrophytes: 'les hydrophytes' },
+  accueil: 'La Daya de Sidi Boughaba en coupe : lance pour voir l’eau baisser.', debut: 'L’hiver, puis l’été…', fini: 'Des bandes du bord au centre : la zonation.',
+  dessiner,
+  ceQuiSeVoit: S => {
+    const m = ['Coupe de la daya, ouest à gauche, est à droite ; trait bleu pointillé : niveau de l’eau en hiver.'];
+    if (S.a('ete')) m.push('L’eau baisse : en été il ne reste de l’eau qu’au centre.');
+    if (S.a('zonation')) m.push('Bandes numérotées du bord vers le centre : 1 joncs, 2 hélophytes (typha, roseau), 3 hydrophytes.');
+    if (S.a('helophytes')) m.push('Allumés : typha et roseaux, racines dans l’eau, tiges et feuilles hors de l’eau.');
+    if (S.a('hydrophytes')) m.push('Allumées : les plantes du fond, totalement immergées.');
+    return m.join(' ');
+  },
+  texte: 'Zonation des végétaux dans la Daya de Sidi Boughaba : les plantes se rangent en bandes selon la profondeur de l’eau ; hélophytes (racines dans l’eau, tiges, feuilles et fleurs hors de l’eau) et hydrophytes (totalement immergées toute l’année).',
+  explication: { daya: [{ repere: 'zonation', texte: 'Des bandes du bord vers le centre.' }, { repere: 'helophytes', texte: 'Hélophytes : pieds dans l’eau.' }, { repere: 'hydrophytes', texte: 'Hydrophytes : sous l’eau.' }] },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

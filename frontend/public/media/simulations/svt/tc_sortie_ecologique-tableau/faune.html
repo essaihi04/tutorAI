@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Abondance, fréquence et densité — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/svt/tc_sortie_ecologique-tableau/sortie.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Six relevés de 0,25 m² dans la vase de l’Oued Bouregreg : on compte les individus d’une espèce dans chaque relevé, puis on calcule son abondance, sa fréquence, sa densité sur la surface totale de 1,5 m² et sa densité relative parmi les 1308 individus récoltés"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/svt/tc_sortie_ecologique-tableau/commun.js"></script>
+<script>
+/*
+ * Données faunistiques de l'Oued Bouregreg (diapo se_a3_faune_calcul), d'après le tableau du prof : 6 relevés S1 à S6 de
+ * 0,25 m² chacun (surface totale 1,5 m²), N = 1308 individus toutes espèces confondues (recompté).
+ *  ?espece=capitella (défaut, l'exemple du prof) : 1 individu dans S1 → abondance 1 ; F = 1/6 × 100 ≈ 17 % ;
+ *    D = 1/1,5 ≈ 1 individu/m² ; d = 1/1308 × 100 < 1 %.
+ *  ?espece=nereis : 0, 7, 81, 99, 202, 6 → 395 ; F = 5/6 × 100 ≈ 83 % ; D = 395/1,5 ≈ 263 individus/m² ; d ≈ 30 %.
+ * Moments : releves 0,5 ; individus 2 (relevé par relevé) ; abondance 5 ; frequence 7 ; surface 9 ; densite 11 ; relative 13 ;
+ * fin 14,5. set_parameters {conclusions: false} cache les résultats chiffrés (les relations restent).
+ */
+const { P, lueur } = window.Sortie;
+const ESPECE = window.Sortie.param('espece', 'capitella') === 'nereis' ? 'nereis' : 'capitella';
+const D = ESPECE === 'nereis'
+  ? { nom: 'Nereis diversicolor', c: [0, 7, 81, 99, 202, 6], ab: 395, n: 5, F: '≈ 83', Dv: '≈ 263', d: '≈ 30', unite: 'individus' }
+  : { nom: 'Capitella capitata', c: [1, 0, 0, 0, 0, 0], ab: 1, n: 1, F: '≈ 17', Dv: '≈ 1', d: '< 1', unite: 'individu' };
+const M = { releves: .5, individus: 2, abondance: 5, frequence: 7, surface: 9, densite: 11, relative: 13 };
+const avec = D.c.map((v, i) => [v, i]).filter(([v]) => v > 0);
+function dessiner(c, S, scene) {
+  const pt = scene.petit, tz = (n, p) => (pt ? p : n), L = scene.L, q = Math.min((L - 60) / 6 - 16, 104), x0 = (L - 6 * (q + 16) + 16) / 2, y0 = 40, X = i => x0 + i * (q + 16);
+  c.direct(() => { for (let i = 0; i < 6; i++) { const g = c.ctx, x = X(i); g.save();
+    const gr = g.createLinearGradient(0, y0, 0, y0 + q); gr.addColorStop(0, 'rgba(180,165,135,.75)'); gr.addColorStop(1, 'rgba(120,105,85,.75)'); g.fillStyle = gr; g.fillRect(x, y0, q, q);
+    g.strokeStyle = 'rgba(255,255,255,.15)'; g.lineWidth = 1; for (let k = 1; k < 5; k++) { g.beginPath(); g.moveTo(x + 4, y0 + k * q / 5); g.quadraticCurveTo(x + q / 2, y0 + k * q / 5 - 4, x + q - 4, y0 + k * q / 5); g.stroke(); }
+    const n = Math.min(D.c[i], 6), r = window.Sortie.graine(i + 4);
+    for (let k = 0; k < n; k++) P.verOndule(g, x + q * (.25 + r() * .5), y0 + q * (.2 + r() * .6), q * .34, r() * 3, { e: 4, phase: k });
+    if (ESPECE === 'nereis' || i > 0) { P.coquillage(g, x + q * .82, y0 + q * .85, q * .14, { a: .4 }); }
+    g.restore(); } });
+  for (let i = 0; i < 6; i++) { c.rect(X(i), y0, q, q, { couleur: 'blanc', largeur: 1.4, arrondi: 2 }); c.texte('S' + (i + 1), X(i) + q / 2, y0 + q + tz(22, 32), { couleur: 'blanc', taille: tz(17, 28), align: 'center' }); c.repere('S' + (i + 1), X(i), y0, q, q, 'le relevé S' + (i + 1)); }
+  c.texte(pt ? 'chacun : 0,25 m²' : 'chaque relevé : 0,25 m²', L / 2, y0 + q + tz(46, 66), { couleur: pt ? 'blanc' : 'faible', taille: tz(16, 28), align: 'center' });
+  c.direct(() => P.verOndule(c.ctx, 52, y0 + q + tz(80, 106), 50, 0, { e: 5 }));
+  c.texte(D.nom, 88, y0 + q + tz(86, 114), { couleur: 'rose', taille: tz(19, 30), gras: true });
+  const yl = y0 + q + 128, xl = 40, pas = 50;
+  if (S.a('individus')) {
+    avec.forEach(([v, i], k) => { const t0 = M.individus + k * (2.6 / Math.max(1, avec.length)); if (S.t < t0) return; lueur(c, X(i) - 3, y0 - 3, q + 6, q + 6, { vive: !S.a('abondance') && k === avec.filter((_, kk) => S.t >= M.individus + kk * (2.6 / avec.length)).length - 1 }); c.direct(() => c.texte(String(v), X(i) + q - 8, y0 + tz(26, 32), { couleur: 'jaune', taille: tz(24, 32), gras: true, align: 'right' })); });
+  }
+  if (pt) {
+    // petit cadre : seulement la ligne de l'étape en cours, en grand (la voix dit les autres)
+    const etapes = ['abondance', 'frequence', 'surface', 'densite', 'relative'];
+    let e = null; etapes.forEach(n => { if (S.a(n)) e = n; });
+    const yP = 330, tP = 32;
+    if (e && S.ecrit(c, e)) {
+      const ligne = {
+        abondance: ['Abondance = ' + (avec.length > 1 ? avec.map(([v]) => v).join(' + ') + ' = ' : '') + D.ab, 'jaune'],
+        frequence: ['F = ⟦' + D.n + '|6⟧ × 100' + (S.conclusions ? ' ' + D.F + ' %' : ''), 'cyan'],
+        surface: ['S = 6 × 0,25 = 1,5 m²', 'orange'],
+        densite: ['D = ⟦' + D.ab + '|1,5⟧' + (S.conclusions ? ' ' + D.Dv + ' /m²' : ''), 'orange'],
+        relative: ['d = ⟦' + D.ab + '|1308⟧ × 100' + (S.conclusions ? ' ' + D.d + ' %' : ''), 'vert'],
+      }[e];
+      c.texte(ligne[0], L / 2, yP, { couleur: ligne[1], taille: tP, gras: true, align: 'center' });
+      c.repere(e, 20, yP - 50, L - 40, 80, e);
+    }
+    return;
+  }
+  if (S.ecrit(c, 'abondance')) {
+    c.texte('Abondance = ' + (avec.length > 1 ? avec.map(([v]) => v).join(' + ') + ' = ' : '') + D.ab + ' ' + D.unite, xl, yl, { couleur: 'jaune', taille: 21, max: L - 2 * xl });
+    c.repere('abondance', xl, yl - 22, L - 2 * xl, 30, 'l’abondance');
+  }
+  if (S.ecrit(c, 'frequence')) {
+    c.texte('F = ⟦' + D.n + '|6⟧ × 100' + (S.conclusions ? ' ' + D.F + ' %' : ''), xl, yl + pas, { couleur: 'cyan', taille: 21 });
+    c.repere('frequence', xl, yl + pas - 26, L / 2, 42, 'la fréquence');
+  }
+  if (S.ecrit(c, 'surface')) {
+    c.cote(X(0), y0 - 12, X(5) + q, y0 - 12, '', { couleur: 'orange' });
+    c.texte('S = 6 × 0,25 = 1,5 m²', L / 2, y0 - 18, { couleur: 'orange', taille: 19, gras: true, align: 'center' });
+    c.repere('surface', X(0), y0 - 40, X(5) + q - X(0), 34, 'la surface totale : 1,5 m²');
+  }
+  if (S.ecrit(c, 'densite')) {
+    c.texte('D = ⟦' + D.ab + '|1,5⟧' + (S.conclusions ? ' ' + D.Dv + ' ' + D.unite + '/m²' : ''), L / 2 + 10, yl + pas, { couleur: 'orange', taille: 21 });
+    c.repere('densite', L / 2, yl + pas - 26, L / 2 - 20, 42, 'la densité');
+  }
+  if (S.ecrit(c, 'relative')) {
+    c.texte('d = ⟦' + D.ab + '|1308⟧ × 100' + (S.conclusions ? ' ' + D.d + ' %' : ''), xl, yl + 2 * pas + 14, { couleur: 'vert', taille: 21 });
+    c.texte('N = 1308 : tous les individus récoltés', L / 2 + 10, yl + 2 * pas + 14, { couleur: 'faible', taille: 16, max: L / 2 - 30 });
+    c.repere('relative', xl, yl + 2 * pas - 12, L - 2 * xl, 42, 'la densité relative');
+  }
+}
+/*
+ * ?vue=tableau : le tableau des invertébrés de l'Oued Bouregreg, recréé à la craie et REMPLI en animation (diapos
+ * se_a3_faune_donnees et se_a3_faune_tableau ; demande du 22 novembre 2026 : « créer un tableau au lieu d'une photocopie,
+ * et le remplir »). Lignes et colonnes du document du prof ; valeurs recalculées.
+ * Moments : tableau 0,5 (la grille) ; releves 1,5 (les comptages S1–S6, une espèce toutes les 0,45 s) ; abondance 8 (les
+ * cases de la ligne s'allument et se comptent, la somme vole dans sa case) ; total 13 (N = 1308) ; frequence 14,5 ;
+ * densite 19 ; relative 23,5 ; fin 28,5. Chaque nombre calculé part de la relation écrite en haut et vole dans sa case.
+ * set_parameters {conclusions: false} : la ligne de Ceratoderma edule garde « ? » (question de l'élève : son abondance, 49).
+ * Petit cadre (téléphone) : seulement quelques lignes autour de la ligne en cours, avec la colonne qu'on remplit, en grand.
+ */
+const LIGNES = [
+  ['', 'Nemertes', [0, 0, 0, 1, 0, 0]],
+  ['Annélides', 'Capitella capitata', [1, 0, 0, 0, 0, 0]], ['Annélides', 'Diopata neapolitana', [1, 0, 0, 0, 0, 0]], ['Annélides', 'Glycera convoluta', [1, 1, 2, 0, 1, 0]],
+  ['Annélides', 'Mysta picta', [0, 0, 1, 0, 3, 0]], ['Annélides', 'Nephthys homergil', [3, 1, 0, 0, 0, 0]], ['Annélides', 'Nereis diversicolor', [0, 7, 81, 99, 202, 6]],
+  ['Mollusques', 'Natica sp', [4, 0, 0, 0, 0, 0]], ['Mollusques', 'Ceratoderma edule', [1, 27, 8, 6, 7, 0]], ['Mollusques', 'Scrobicularia plana', [0, 158, 213, 214, 138, 1]],
+  ['Mollusques', 'Tapes decussatus', [3, 39, 47, 11, 9, 0]], ['Mollusques', 'Nassarius peliculatus', [9, 0, 0, 0, 0, 0]],
+  ['Crustacés', 'Carcinus moenas', [0, 0, 0, 0, 2, 0]],
+].map(([g, nom, c]) => { const ab = c.reduce((a, b) => a + b, 0), n = c.filter(v => v > 0).length; return { g, nom, c, ab, n }; });
+const NTOT = LIGNES.reduce((a, l) => a + l.ab, 0);   // 1308
+const frx = (v, d) => window.Tableau.fr(v, d);
+// des nombres simples (règle du Tronc commun, 22 novembre 2026) : entiers ; « ≈ » quand on arrondit ; « < 1 » pour les très petits
+const entier = v => (Math.abs(v - Math.round(v)) < 1e-9 ? String(Math.round(v)) : v > 0 && v < .5 ? '< 1' : '≈ ' + Math.round(v));
+LIGNES.forEach(l => { l.F = entier(l.n / 6 * 100); l.D = entier(l.ab / 1.5); l.d = entier(l.ab / NTOT * 100); });
+const MT = { tableau: .5, releves: 1.5, abondance: 8, total: 13, frequence: 14.5, densite: 19, relative: 23.5 };
+const PAS = { releves: .45, abondance: .35, frequence: .3, densite: .3, relative: .3 };
+const QUESTION = 8;   // Ceratoderma edule : l'élève calcule son abondance (1 + 27 + 8 + 6 + 7 = 49)
+const COLS = ['S1', 'S2', 'S3', 'S4', 'S5', 'S6'];
+const FORMULE = { abondance: 'Abondance = S1 + … + S6', total: 'N = 1308 individus', frequence: 'F = ⟦n|6⟧ × 100', densite: 'D = ⟦abondance|1,5 m²⟧', relative: 'd = ⟦abondance|1308⟧ × 100' };
+function phase(S) { let p = null; ['releves', 'abondance', 'total', 'frequence', 'densite', 'relative'].forEach(k => { if (S.a(k)) p = k; }); return p; }
+function rangEn(S, p) { if (!p || p === 'total') return 12; return Math.max(0, Math.min(12, Math.floor((S.t - MT[p]) / PAS[p]))); }
+function valeur(l, k, i, S) {
+  if (!S.conclusions && i === QUESTION) return '?';
+  if (k === 'ab') return String(l.ab);
+  return l[k];
+}
+function dessinerTableau(c, S, scene) {
+  const L = scene.L, pt = scene.petit, p = phase(S), r = rangEn(S, p);
+  const fait = k => S.t <= 0 || (S.a(k) && (k === 'total' || S.t >= MT[k] + 13 * PAS[k]));
+  const visible = (k, i) => S.t <= 0 || (S.a(k) && (k === 'total' || i < r || (i === r && S.t >= MT[k] + i * PAS[k] + PAS[k] * .9) || fait(k)));
+  // la relation de la colonne en cours, en haut
+  const fx = L - 20, fy = pt ? 46 : 30;
+  if (p && p !== 'releves' && S.t > 0) c.texte(FORMULE[p], fx, fy, { couleur: 'jaune', taille: pt ? 30 : 19, gras: true, align: 'right' });
+  if (pt) return dessinerTableauPetit(c, S, scene, p, r, visible);
+  const x = { g: 12, nom: 92, s0: 244, sw: 36, ab: 494, F: 562, D: 638, d: 716 }, k0 = (L - 760) / 2;
+  Object.keys(x).forEach(k => { if (k !== 'sw') x[k] += k0; });
+  const y0 = 66, rh = 24.5;
+  const Y = i => y0 + (i + 1) * rh;
+  // en-tête
+  c.texte('Espèces', x.nom, y0, { couleur: 'blanc', taille: 15, gras: true });
+  COLS.forEach((t, j) => c.texte(t, x.s0 + j * x.sw + x.sw / 2, y0, { couleur: 'cyan', taille: 15, gras: true, align: 'center' }));
+  c.texte('Abond.', x.ab, y0, { couleur: 'jaune', taille: 15, gras: true, align: 'center' }); c.texte('F (%)', x.F, y0, { couleur: 'cyan', taille: 15, gras: true, align: 'center' });
+  c.texte('D (/m²)', x.D, y0, { couleur: 'orange', taille: 15, gras: true, align: 'center' }); c.texte('d (%)', x.d, y0, { couleur: 'vert', taille: 15, gras: true, align: 'center' });
+  c.ligne(x.g, y0 + 8, x.d + 40, y0 + 8, { couleur: 'faible', largeur: 1.2 });
+  [x.s0 - 6, x.ab - 32, x.F - 34, x.D - 40, x.d - 38].forEach(xx => c.ligne(xx, y0 - 18, xx, Y(13) + 8, { couleur: 'tresfaible', largeur: 1 }));
+  let gPrec = null;
+  LIGNES.forEach((l, i) => {
+    const y = Y(i);
+    if (l.g && l.g !== gPrec) c.texte(l.g, x.g, y + 4, { couleur: 'rose', taille: 15 });
+    gPrec = l.g;
+    c.texte(l.nom, x.nom, y + 4, { couleur: 'blanc', taille: 15, max: x.s0 - x.nom - 12 });
+    c.repere('ligne_' + (i + 1), x.nom - 4, y - 16, x.d + 40 - x.nom, rh, l.nom);
+  });
+  c.ligne(x.g, Y(12) + 10, x.d + 40, Y(12) + 10, { couleur: 'faible', largeur: 1.2 });
+  c.texte('Total', x.nom, Y(13) + 4, { couleur: 'jaune', taille: 16, gras: true });
+  c.repere('tableau', x.g, y0 - 20, x.d + 40 - x.g, Y(13) - y0 + 30, 'le tableau des invertébrés');
+  // la ligne en cours s'allume
+  if (p && p !== 'total' && S.t > 0 && !fait(p)) lueur(c, x.nom - 6, Y(r) - 17, x.d + 46 - x.nom, rh, { vive: true });
+  // les comptages S1–S6
+  LIGNES.forEach((l, i) => {
+    if (!visible('releves', i) && !(S.a('releves') && i <= r && p === 'releves')) return;
+    if (p === 'releves' && i > r) return;
+    c.direct(() => l.c.forEach((v, j) => { if (v) c.texte(String(v), x.s0 + j * x.sw + x.sw / 2, Y(i) + 4, { couleur: 'blanc', taille: 15, align: 'center' }); }));
+  });
+  // les colonnes calculées : le nombre vole depuis la relation jusqu'à sa case
+  const colonne = (k, cle, xc, coul) => {
+    if (!S.a(k)) return;
+    LIGNES.forEach((l, i) => {
+      const t0 = MT[k] + i * PAS[k], kk = S.t <= 0 ? 1 : Math.max(0, Math.min(1, (S.t - t0) / (PAS[k] * .9)));
+      if (S.t > 0 && S.t < t0) return;
+      const xx = fx - 60 + (xc - fx + 60) * kk, yy = fy + (Y(i) + 4 - fy) * kk;
+      c.direct(() => c.texte(valeur(l, cle, i, S), xx, yy, { couleur: coul, taille: 15, gras: kk < 1, align: 'center' }));
+      if (k === 'abondance' && i === r && kk < 1) l.c.forEach((v, j) => { if (v) lueur(c, x.s0 + j * x.sw + 2, Y(i) - 15, x.sw - 4, rh - 4, { vive: true }); });
+    });
+  };
+  colonne('abondance', 'ab', x.ab, 'jaune'); colonne('frequence', 'F', x.F, 'cyan'); colonne('densite', 'D', x.D, 'orange'); colonne('relative', 'd', x.d, 'vert');
+  if (S.ecrit(c, 'total') || S.t <= 0) { c.texte(String(NTOT), x.ab, Y(13) + 4, { couleur: 'jaune', taille: 16, gras: true, align: 'center' }); c.texte('= N', x.ab + 30, Y(13) + 4, { couleur: 'jaune', taille: 15 }); c.repere('total', x.ab - 30, Y(13) - 16, 90, rh, 'N = 1308'); }
+  ['abondance', 'frequence', 'densite', 'relative'].forEach(k => c.repere('col_' + k, x[{ abondance: 'ab', frequence: 'F', densite: 'D', relative: 'd' }[k]] - 34, y0 - 18, 68, Y(13) - y0 + 26, 'la colonne ' + k));
+}
+function dessinerTableauPetit(c, S, scene, p, r, visible) {
+  const L = scene.L, debut = Math.max(0, Math.min(9, r - 1)), lignes = LIGNES.slice(debut, debut + 4);
+  const cle = { releves: null, abondance: 'ab', total: 'ab', frequence: 'F', densite: 'D', relative: 'd' }[p || 'releves'];
+  const titre = { releves: 'S1 … S6', abondance: 'Abondance', total: 'Abondance', frequence: 'F (%)', densite: 'D (/m²)', relative: 'd (%)' }[p || 'releves'];
+  c.texte(titre, L - 30, 100, { couleur: 'cyan', taille: 28, gras: true, align: 'right' });
+  lignes.forEach((l, q) => {
+    const i = debut + q, y = 150 + q * 56;
+    if (i === r && p && p !== 'total' && S.t > 0) lueur(c, 14, y - 34, L - 28, 50, { vive: true });
+    c.texte(l.nom.split(' ')[0], 24, y, { couleur: 'blanc', taille: 30 });
+    c.repere('ligne_' + (i + 1), 14, y - 34, L - 28, 50, l.nom);
+    if (!cle) { if (S.t <= 0 || i <= r) c.direct(() => c.texte(l.c.join('  '), L - 30, y, { couleur: 'blanc', taille: 28, align: 'right' })); }
+    else if (S.t <= 0 || i < r || (i === r && S.t >= MT[p] + i * (PAS[p] || 0) + .25) || p === 'total') c.direct(() => c.texte(valeur(l, cle, i, S), L - 30, y, { couleur: 'jaune', taille: 32, gras: true, align: 'right' }));
+  });
+  if (p === 'total' || (p && S.a('total'))) { c.texte('N = 1308', 24, 400, { couleur: 'jaune', taille: 30, gras: true }); c.repere('total', 14, 370, 260, 40, 'N = 1308'); }
+  c.repere('tableau', 10, 60, L - 20, 330, 'le tableau des invertébrés');
+}
+const TABLEAU_CONF = {
+  moments: MT, fin: 28.5, dessiner: dessinerTableau, titre: 'Le tableau des invertébrés du Bouregreg',
+  motifs: { tableau: 'la grille du tableau', releves: 'les comptages S1 à S6', abondance: 'la colonne abondance', total: 'N = 1308', frequence: 'la colonne F', densite: 'la colonne D', relative: 'la colonne d' },
+  accueil: 'Le tableau des invertébrés : lance pour le remplir.', fini: 'Le tableau est rempli : abondance, F, D et d pour chaque espèce.',
+  voir: S => {
+    const p = phase(S), m = ['Tableau des 13 invertébrés de l’Oued Bouregreg (Nemertes, annélides, mollusques, crustacé), colonnes S1 à S6, abondance, F, D, d.'];
+    if (p) m.push('Colonne en cours de remplissage : ' + p + (p !== 'total' ? ', ligne ' + LIGNES[rangEn(S, p)].nom : '') + '.');
+    if (S.a('total')) m.push('Total N = 1308 individus.');
+    if (!S.conclusions) m.push('La ligne Ceratoderma edule garde « ? » en abondance, F, D et d.');
+    return m.join(' ');
+  },
+};
+
+const TABLEAU = window.Sortie.param('vue', '') === 'tableau';
+if (TABLEAU) window.Sortie.sim({
+  id: 'tc_sortie_faune_tableau', titre: TABLEAU_CONF.titre, vue: 'tableau', moments: TABLEAU_CONF.moments, fin: TABLEAU_CONF.fin, graine: 47,
+  motifs: TABLEAU_CONF.motifs, accueil: TABLEAU_CONF.accueil, fini: TABLEAU_CONF.fini, dessiner: TABLEAU_CONF.dessiner, ceQuiSeVoit: TABLEAU_CONF.voir,
+  texte: 'Invertébrés de l’Oued Bouregreg, 6 relevés de 0,25 m² : ' + LIGNES.map(l => l.nom + ' ' + l.c.join('-') + ' (abondance ' + l.ab + ', F ' + l.F + ' %, D ' + l.D + ' /m², d ' + l.d + ' %)').join(' ; ') + '. Total N = 1308.',
+  explication: { tableau: [{ repere: 'col_abondance', texte: 'Abondance : la somme des six relevés.' }, { repere: 'col_frequence', texte: 'F = n/6 × 100.' }, { repere: 'col_densite', texte: 'D = abondance / 1,5 m².' }, { repere: 'col_relative', texte: 'd = abondance / 1308 × 100.' }] },
+});
+else window.Sortie.sim({
+  id: 'tc_sortie_faune_' + ESPECE, titre: 'Abondance, fréquence, densité', moments: M, fin: 14.5, graine: 37, vue: ESPECE,
+  motifs: { releves: 'les six relevés', individus: 'on compte les individus relevé par relevé', abondance: 'l’abondance', frequence: 'la fréquence', surface: 'la surface totale', densite: 'la densité', relative: 'la densité relative' },
+  accueil: 'Six relevés de 0,25 m² dans la vase : compte ' + D.nom + '.', fini: 'Abondance ' + D.ab + ' ; F ' + D.F + ' % ; D ' + D.Dv + ' ' + D.unite + '/m² ; d ' + D.d + ' %.',
+  dessiner,
+  ceQuiSeVoit: S => {
+    const m = ['Six relevés S1 à S6 de 0,25 m² dans la vase ; espèce suivie : ' + D.nom + ' (comptages ' + D.c.join(', ') + ').'];
+    if (S.a('individus')) m.push('Relevés allumés avec leur nombre : ' + avec.map(([v, i]) => 'S' + (i + 1) + ' : ' + v).join(', ') + '.');
+    if (S.a('abondance')) m.push('Abondance = ' + D.ab + '.'); if (S.a('frequence')) m.push('F = ' + D.n + '/6 × 100' + (S.conclusions ? ' ' + D.F + ' %.' : '.'));
+    if (S.a('surface')) m.push('Surface totale 6 × 0,25 = 1,5 m².'); if (S.a('densite')) m.push('D = ' + D.ab + '/1,5' + (S.conclusions ? ' ' + D.Dv + '/m².' : '.'));
+    if (S.a('relative')) m.push('d = ' + D.ab + '/1308 × 100' + (S.conclusions ? ' ' + D.d + ' %.' : '.'));
+    return m.join(' ');
+  },
+  texte: 'Données faunistiques : 6 relevés de 0,25 m². Abondance : nombre total d’individus de l’espèce. Fréquence F = n/N × 100 (n relevés où l’espèce est présente, N = 6). Densité D = nombre total d’individus de l’espèce / surface totale des relevés (1,5 m²). Densité relative d = n/N × 100 (n individus de l’espèce, N = 1308 individus de toutes les espèces).',
+  explication: { faune: [{ repere: 'abondance', texte: 'On compte tous les individus.' }, { repere: 'surface', texte: 'Surface totale : 6 fois 0,25.' }, { repere: 'densite', texte: 'Densité : individus par mètre carré.' }, { repere: 'relative', texte: 'Densité relative : part de l’espèce parmi tous les individus.' }] },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

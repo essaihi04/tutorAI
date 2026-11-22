@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le sol : abri et ressource fragile — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="sol.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="À gauche, un lapin sort de son terrier creusé dans le sol ; à droite, la pluie creuse des ravines dans un sol rouge nu : le sol s’érode"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Le sol, abri des êtres vivants et ressource fragile (diapositive fe_i2_questions) — les deux photos du professeur
+ * recréées en croquis peints (règle de l’utilisateur, 22 novembre 2026). À gauche : un terrier et un lapin ; à droite :
+ * un sol nu sous la pluie, des ravines qui se creusent (érosion).
+ * Moments : abri 3 ; fragile 7 ; fin 7,5.
+ */
+const ST = window.SolTableau, { doux, mix } = ST;
+const $ = id => document.getElementById(id);
+const M = { abri: 3, fragile: 7 };
+const FIN = 7.5;
+const MOTIFS = { abri: 'le sol : un abri pour les êtres vivants', fragile: 'une ressource fragile : la pluie l’érode' };
+function lapin(g, x, y, k, a) {
+  g.save(); g.globalAlpha = a; g.translate(x, y); g.scale(k, k);
+  const pel = g.createRadialGradient(-6, -10, 4, 0, 0, 40); pel.addColorStop(0, '#cbb59a'); pel.addColorStop(1, '#8a7258');
+  g.fillStyle = 'rgba(0,0,0,.25)'; g.beginPath(); g.ellipse(4, 30, 40, 8, 0, 0, 6.28); g.fill();
+  g.fillStyle = pel; g.beginPath(); g.ellipse(0, 6, 38, 26, 0, 0, 6.28); g.fill();                         // le corps
+  g.beginPath(); g.ellipse(-34, -12, 18, 16, -.2, 0, 6.28); g.fill();                                       // la tête
+  for (const [dx, r] of [[-38, -.25], [-28, .1]]) { g.save(); g.translate(dx, -26); g.rotate(r); g.fillStyle = pel; g.beginPath(); g.ellipse(0, -22, 6, 22, 0, 0, 6.28); g.fill(); g.fillStyle = '#e8a6a0'; g.beginPath(); g.ellipse(0, -22, 3, 16, 0, 0, 6.28); g.fill(); g.restore(); }
+  g.fillStyle = '#1b130c'; g.beginPath(); g.arc(-40, -14, 3, 0, 6.28); g.fill();
+  g.fillStyle = '#f5efe6'; g.beginPath(); g.arc(37, 2, 7, 0, 6.28); g.fill();                               // la queue
+  g.restore();
+}
+function dessiner(c) {
+  scene.cadre(17);
+  const t = B.chrono.t, L = scene.L, w = (L - 90) / 2, xa = 30, xb = 60 + w, yT = 300, K = scene.compact;
+  // à gauche : le talus et son terrier, le lapin qui sort
+  c.direct(() => {
+    const g = c.ctx, a = doux(t / 1.4);
+    g.save(); g.globalAlpha = a;
+    const tg = g.createLinearGradient(0, 90, 0, 380); tg.addColorStop(0, '#a88660'); tg.addColorStop(1, '#6d5136');
+    g.fillStyle = tg; g.beginPath(); g.moveTo(xa, 380); g.lineTo(xa, 150); g.quadraticCurveTo(xa + w * .4, 80, xa + w, 130); g.lineTo(xa + w, 380); g.closePath(); g.fill();
+    const r = ST.graine(5); for (let k = 0; k < 40; k++) { g.fillStyle = r() > .5 ? '#d8c9b4' : '#8d7b66'; g.beginPath(); g.ellipse(xa + r() * w, 150 + r() * 220, 4 + r() * 8, 3 + r() * 5, 0, 0, 6.28); g.fill(); }
+    g.strokeStyle = '#6fae4a'; g.lineWidth = 2; for (let k = 0; k < 40; k++) { const x = xa + 10 + r() * (w - 20), y0 = 150 - Math.sin((x - xa) / w * 3) * 50 + 10; g.beginPath(); g.moveTo(x, y0); g.lineTo(x + (r() - .5) * 10, y0 - 12 - r() * 18); g.stroke(); }
+    const hg = g.createRadialGradient(xa + w * .42, yT - 20, 6, xa + w * .42, yT - 20, 80); hg.addColorStop(0, '#05080a'); hg.addColorStop(1, '#2a2016');
+    g.fillStyle = hg; g.beginPath(); g.ellipse(xa + w * .42, yT - 20, 70, 56, 0, Math.PI, 0); g.lineTo(xa + w * .42 + 70, yT + 10); g.lineTo(xa + w * .42 - 70, yT + 10); g.closePath(); g.fill();
+    g.restore();
+    const u = doux((t - .8) / (M.abri - 1));
+    if (u > 0) lapin(g, mix(xa + w * .42, xa + w * .72, u), yT - 4, 1.15, Math.min(1, u * 2));
+  });
+  if (t >= M.abri - .8) {
+    ecrit.ecrire(c, 'abri', () => c.texte(K ? 'un abri' : 'Un abri pour les êtres vivants', xa + w / 2, 410, { couleur: 'vert', taille: 21, align: 'center', max: w }));
+    c.repere('abri', xa, 80, w, 340, 'le sol, abri des êtres vivants');
+  }
+  // à droite : un sol rouge nu ; la pluie creuse des ravines
+  if (t >= M.abri) c.direct(() => {
+    const g = c.ctx, a = doux((t - M.abri) / 1), e = doux((t - M.abri - 1) / (M.fragile - M.abri - 1.6));
+    g.save(); g.globalAlpha = a; g.beginPath(); g.rect(xb, 60, w, 330); g.clip();
+    const ciel = g.createLinearGradient(0, 60, 0, 170); ciel.addColorStop(0, 'rgba(120,140,160,.35)'); ciel.addColorStop(1, 'rgba(120,140,160,.05)'); g.fillStyle = ciel; g.fillRect(xb, 60, w, 110);
+    g.fillStyle = '#5c7a3e'; g.beginPath(); g.moveTo(xb, 170); g.quadraticCurveTo(xb + w * .3, 140, xb + w * .6, 160); g.quadraticCurveTo(xb + w * .85, 175, xb + w, 150); g.lineTo(xb + w, 190); g.lineTo(xb, 190); g.closePath(); g.fill();
+    const sg = g.createLinearGradient(0, 180, 0, 390); sg.addColorStop(0, '#d9773e'); sg.addColorStop(1, '#a34a1e'); g.fillStyle = sg; g.fillRect(xb, 182, w, 210);
+    // les ravines : des sillons sombres qui s’approfondissent
+    for (let k = 0; k < 5; k++) {
+      const x = xb + w * (.12 + k * .19), p = 40 + 120 * e * (.6 + (k % 2) * .4);
+      g.fillStyle = 'rgba(90,30,10,.85)'; g.beginPath(); g.moveTo(x - 26 * e - 4, 190); g.lineTo(x, 190 + p); g.lineTo(x + 26 * e + 4, 190); g.closePath(); g.fill();
+      g.strokeStyle = 'rgba(255,190,140,.5)'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(x - 26 * e - 4, 190); g.lineTo(x, 190 + p); g.stroke();
+    }
+    // la pluie
+    if (t < FIN) for (let k = 0; k < 14; k++) { const ph = (t * 1.6 + k / 14) % 1; ST.goutte(g, xb + 10 + k * (w - 20) / 13, 70 + ph * 110, 3, .9); }
+    g.restore();
+  });
+  if (t >= M.fragile - .8) {
+    ecrit.ecrire(c, 'fragile', () => c.texte(K ? 'un sol fragile' : 'Une ressource fragile : il s’érode', xb + w / 2, 410, { couleur: 'orange', taille: 21, align: 'center', max: w }));
+    c.repere('fragile', xb, 60, w, 360, 'le sol, ressource fragile');
+  }
+  return c.fin();
+}
+const canvas = $('canvas');
+const scene = ST.Scene(canvas, dessiner, { large: true });
+const ecrit = ST.Apparitions(scene);
+ST.brancher.scene = scene; ST.brancher.ecrit = ecrit;
+function voir(t) {
+  const m = ['À gauche : un talus avec un terrier.'];
+  if (t >= 1) m.push('Un lapin sort de son terrier.');
+  if (t >= M.abri) m.push('Écrit : un abri pour les êtres vivants. À droite : un sol rouge nu sous la pluie.');
+  if (t >= M.abri + 1.5) m.push('La pluie creuse des ravines.');
+  if (t >= M.fragile) m.push('Écrit : une ressource fragile, il s’érode.');
+  return m.join(' ');
+}
+const B = ST.brancher({ id: 'edaph_abri', titre: 'Le sol : abri et ressource fragile', M, FIN, motifs: MOTIFS,
+  texte: 'Le sol est un abri pour de très nombreux êtres vivants (un lapin dans son terrier) ; c’est une ressource fragile, soumise à une dégradation rapide (la pluie creuse des ravines dans un sol nu).',
+  voir, depart: 'Le sol, pour les êtres vivants…', fini: () => 'Un abri, et une ressource fragile.',
+  explication: { abri: [{ repere: 'abri', texte: 'Un abri pour les êtres vivants.' }, { repere: 'fragile', texte: 'Une ressource fragile.' }] } });
+window.Tableau.bulle($('feedback'), 'À quoi sert le sol ?');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

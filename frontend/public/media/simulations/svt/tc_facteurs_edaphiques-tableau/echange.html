@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le CAH retient les cations — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="sol.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Deux sols sous la pluie : sans complexe argilo-humique, les cations (Na⁺, K⁺, Ca²⁺, Mg²⁺) sont entraînés vers les eaux de drainage, loin des racines ; avec le complexe argilo-humique, ils restent fixés et sont libérés peu à peu vers les racines"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/shared/lexique/lexique.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Rôle du complexe argilo-humique (documents du professeur, diapositives fe_c8_lessivage et fe_c9_retention).
+ * À gauche, un sol SANS CAH : les pluies importantes entraînent les cations (Na⁺, K⁺, Ca²⁺, Mg²⁺) en profondeur, hors
+ * de portée des racines, dans les eaux de drainage (pertes de sels minéraux). À droite, un sol AVEC CAH : les cations
+ * sont attirés et maintenus à la surface des particules du CAH, puis libérés peu à peu et absorbés par les racines.
+ * Moments : pluie 2,5 ; lessivage 6 ; drainage 8,5 ; avec_cah 10,5 ; retenus 14 ; racine 16,5 ; absorbes 19,5 ; fin 20.
+ */
+const ST = window.SolTableau, { doux, mix } = ST;
+const $ = id => document.getElementById(id);
+const M = { pluie: 2.5, lessivage: 6, drainage: 8.5, avec_cah: 10.5, retenus: 14, racine: 16.5, absorbes: 19.5 };
+const FIN = 20;
+const MOTIFS = { pluie: 'il pleut sur le sol sans CAH', lessivage: 'les cations descendent avec l’eau', drainage: 'les cations partent dans les eaux de drainage', avec_cah: 'le sol avec CAH, sous la même pluie',
+  retenus: 'les cations restent fixés sur le CAH', racine: 'le CAH libère les cations peu à peu', absorbes: 'les racines absorbent les cations' };
+const NOMS = ['Na+', 'K+', 'Ca2+', 'Mg2+', 'K+', 'Ca2+', 'Mg2+', 'Na+'];
+const rI = ST.graine(21);
+const IONS = NOMS.map((n, k) => ({ n, u: .12 + .76 * (k % 4) / 3 + (rI() - .5) * .08, v: .12 + (k > 3 ? .16 : 0) + rI() * .06, cah: k % 3, rang: k }));
+function panneau(c, x0, w, avec, t, t0) {
+  const g = c.ctx, yS = 120, hS = 220, yR = yS + 60;
+  // le sol : grains de sable (et grains de CAH à droite)
+  g.save(); g.beginPath(); g.rect(x0, yS, w, hS); g.clip();
+  ST.remplir(g, x0, yS, w, hS, 'sable', { densite: .35, graine: avec ? 5 : 3, alpha: .8 });
+  g.restore();
+  // la zone des racines et la plante
+  ST.plante(g, x0 + w / 2, yS, 86);
+  g.save(); g.strokeStyle = 'rgba(214,190,150,.85)'; g.lineWidth = 2;
+  for (let i = -3; i <= 3; i++) { g.beginPath(); g.moveTo(x0 + w / 2, yS + 4); g.quadraticCurveTo(x0 + w / 2 + i * 18, yS + 40, x0 + w / 2 + i * 26, yR + 30 - Math.abs(i) * 6); g.stroke(); }
+  g.restore();
+  const cahs = avec ? [[.22, .3], [.5, .36], [.78, .3], [.35, .7], [.66, .72]].map(([a, b]) => [x0 + a * w, yS + b * hS]) : [];
+  if (avec) cahs.forEach(([px, py]) => ST.cah(g, px, py, scene.compact ? 32 : 24, { n: 6, taille: scene.compact ? 26 : undefined }));
+  // eaux de drainage en bas
+  ST.eauPeinte(g, x0, yS + hS, w, 34, { alpha: .5 });
+  // la pluie
+  const pl = doux((t - t0 - .3) / .8) * (1 - doux((t - t0 - 6.5) / 1));
+  if (pl > 0) for (let k = 0; k < 10; k++) { const ph = (t * 1.7 + k / 10) % 1; ST.goutte(g, x0 + 10 + k * (w - 20) / 9, 58 + ph * 56, 3.2, pl); }
+  // les cations
+  IONS.forEach((I, k) => {
+    let x = x0 + I.u * w, y = yS + I.v * hS;
+    if (!avec) {
+      const d = doux((t - t0 - 1 - k * .12) / 4.5);
+      y = mix(y, yS + hS + 18, d); x += Math.sin(d * 6 + k) * 6 * d;
+    } else {
+      const [cx, cy] = cahs[I.cah === 0 ? (k % 5) : (k + 1) % 5];
+      const a = k * 1.3, fixe = doux((t - t0 - 1 - k * .1) / 2.5);
+      const dA = scene.compact ? 50 : 34, fx = cx + Math.cos(a) * dA, fy = cy + Math.sin(a) * dA;
+      x = mix(x, fx, fixe); y = mix(y, fy, fixe);
+      // libérés un à un vers les racines (après « racine »)
+      const lib = doux((t - (M.racine - 2) - (k % 4) * .5 - (k > 3 ? 1.2 : 0)) / 1.4);
+      const rx = x0 + w / 2 + ((k % 7) - 3) * 24, ry = yR + 10;
+      if (lib > 0) { x = mix(x, rx, lib); y = mix(y, ry, lib); }
+      if (lib >= 1) return;
+    }
+    ST.ion(g, x, y, I.n, { r: scene.compact ? 30 : 18 });
+  });
+}
+function dessiner(c) {
+  scene.cadre(81);
+  const t = B.chrono.t, L = scene.L, w = (L - 90) / 2, xg = 30, xd = 60 + w;
+  c.direct(() => panneau(c, xg, w, false, t, 1));
+  if (!scene.compact) c.texte('Sol sans complexe argilo-humique', xg + w / 2, 24, { couleur: 'jaune', taille: 19, align: 'center', max: w });
+  c.texte('eaux de drainage', xg + w / 2, 390, { couleur: 'cyan', taille: 17, align: 'center' });
+  c.repere('sans_cah', xg, 30, w, 340, 'le sol sans CAH');
+  c.repere('drainage', xg, 336, w, 62, 'les eaux de drainage');
+  if (t >= M.drainage - .6 && !scene.compact) ecrit.ecrire(c, 'perdus', () => c.texte('cations perdus pour la plante', xg + w / 2, 414, { couleur: 'rouge', taille: 18, align: 'center', max: w }));
+  if (t >= M.avec_cah - 1.6) {
+    c.direct(() => { c.ctx.save(); c.ctx.globalAlpha = doux((t - M.avec_cah + 1.6) / 1); panneau(c, xd, w, true, t, M.avec_cah - 1); c.ctx.restore(); });
+    if (!scene.compact) ecrit.ecrire(c, 'titre_cah', () => c.texte('Sol avec complexe argilo-humique', xd + w / 2, 24, { couleur: 'orange', taille: 19, align: 'center', max: w }));
+    c.repere('avec_cah', xd, 30, w, 340, 'le sol avec CAH');
+  }
+  if (t >= M.retenus - .5) { if (!scene.compact) ecrit.ecrire(c, 'retenus', () => c.texte('cations fixés sur le CAH', xd + w / 2, 390, { couleur: 'orange', taille: 17, align: 'center', max: w })); c.repere('retenus', xd, 120, w, 220, 'les cations fixés sur le CAH'); }
+  if (t >= M.absorbes - .6) { if (!scene.compact) ecrit.ecrire(c, 'absorbes', () => c.texte('libérés peu à peu → absorbés', xd + w / 2, 414, { couleur: 'vert', taille: 18, align: 'center', max: w })); c.repere('racines', xd + w / 2 - 90, 110, 180, 120, 'les racines qui absorbent'); }
+  return c.fin();
+}
+const canvas = $('canvas');
+const scene = ST.Scene(canvas, dessiner, { large: true });
+const ecrit = ST.Apparitions(scene);
+ST.brancher.scene = scene; ST.brancher.ecrit = ecrit;
+// compact : un seul sol à la fois (sans CAH, puis avec CAH)
+scene.foyer = (L) => { const w = (L - 90) / 2; return { x: B.chrono.t < M.avec_cah - 1.6 ? 30 : 60 + w, y: 44, w, h: 360 }; };
+function voir(t) {
+  const m = ['À gauche : un sol sans complexe argilo-humique, une plante et ses racines ; des cations Na⁺, K⁺, Ca²⁺, Mg²⁺ dans le sol.'];
+  if (t >= 1.5) m.push('Il pleut.');
+  if (t >= M.lessivage) m.push('Les cations descendent avec l’eau, sous les racines.');
+  if (t >= M.drainage) m.push('Ils sont dans les eaux de drainage : perdus pour la plante.');
+  if (t >= M.avec_cah) m.push('À droite : le même sol avec des particules de CAH, sous la même pluie.');
+  if (t >= M.retenus) m.push('Les cations restent fixés autour des particules de CAH.');
+  if (t >= M.racine) m.push('Le CAH les libère peu à peu vers les racines.');
+  if (t >= M.absorbes) m.push('Les racines les ont absorbés.');
+  return m.join(' ');
+}
+const B = ST.brancher({ id: 'edaph_echange', titre: 'Le CAH retient les cations', M, FIN, motifs: MOTIFS,
+  texte: 'Sans CAH, les pluies importantes entraînent les cations (Na⁺, K⁺, Ca²⁺, Mg²⁺) vers les eaux de drainage, hors de portée des racines. Avec le CAH, les cations sont attirés et maintenus à la surface de ses particules, puis libérés peu à peu et absorbés par les racines : moins de pertes de sels minéraux.',
+  voir, depart: 'Il pleut…', fini: () => 'Le CAH garde les cations pour la plante.',
+  explication: { echange: [{ repere: 'sans_cah', texte: 'Sans CAH, l’eau entraîne les cations.' }, { repere: 'drainage', texte: 'Les eaux de drainage.' }, { repere: 'avec_cah', texte: 'Avec CAH, les cations restent.' }] } });
+window.Tableau.bulle($('feedback'), 'Où vont les sels minéraux quand il pleut ?');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

@@ -581,6 +581,19 @@ export const listAvisProfs = () => adminApi.get<{ avis: AvisProf[] }>('/avis-pro
 export const setStatutAvisProf = (a: Pick<AvisProf, 'visiteur' | 'deck_id' | 'slide_id'>, statut: AvisProf['statut']) =>
   adminApi.post('/avis-profs/statut', { visiteur: a.visiteur, deck_id: a.deck_id, slide_id: a.slide_id, statut });
 
+// ─── Tronc Commun : fiches des élèves du lien libre et leur suivi (22 novembre 2026) ──────
+export interface QuestionExamenTC { partie?: string; note?: number; sur?: number; verdict?: string; pertes?: string[]; enonce?: string; reponse?: string; date?: string }
+export interface EleveTroncCommun {
+  id: string; nom: string; classe: string; pere: string; telephone: string; date: string; derniere: string;
+  temps: Record<string, number>;
+  progression: Record<string, { vues: number; total: number }>;
+  reponses_cours: { total: number; justes: number; fausses: number };
+  examen_en_cours: { note: number; sur: number; faites: number; questions: Record<string, QuestionExamenTC>; debut?: string | null };
+  examens: { note: number; sur: number; date: string; debut?: string | null; questions: Record<string, QuestionExamenTC> }[];
+  lacunes: string[];
+}
+export const listTroncCommun = () => adminApi.get<{ eleves: EleveTroncCommun[] }>('/tronc-commun');
+
 /** Mémoire longue (11 novembre 2026) : rétention aux rappels espacés, par cours, compétence et élève. */
 export interface TauxRetention { n: number; reussis: number; taux: number | null }
 export interface Retention {

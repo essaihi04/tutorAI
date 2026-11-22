@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le triangle des textures — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="sol.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Le triangle des textures : argile sur le côté gauche, limon sur le côté droit, sable sur la base ; on trace une parallèle pour chaque pourcentage, les trois droites se coupent dans la zone de la texture du sol"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Le triangle des textures du professeur (diagramme ternaire textural, diapositives fe_t5_triangle, fe_t6_s1, fe_t7_s2,
+ * fe_t8_groupes). Sommets : 100 % argile en haut, 100 % sable en bas à gauche, 100 % limon en bas à droite.
+ * Lecture : l’argile se lit sur le côté gauche (de bas en haut), le limon sur le côté droit (de haut en bas), le sable
+ * sur la base (de droite à gauche) ; pour chaque pourcentage on trace une parallèle au côté précédent : argile →
+ * horizontale ; limon → parallèle au côté gauche ; sable → parallèle au côté droit. Les zones sont celles du triangle du
+ * cours (limites du triangle USDA, noms français du manuel ; « Argile limoneuse » en haut à droite, comme le manuel).
+ *   ?vue=lire        : l’échantillon du bocal (50 % argile ; 30 % limon ; 20 % sable) → Argile.
+ *                      Moments : triangle 2,5 ; axe_argile 4 ; axe_limon 5,5 ; axe_sable 7 ; ligne_argile 9 ; ligne_limon 11 ;
+ *                      ligne_sable 13 ; point 14 ; zone 15,5 ; fin 16.
+ *   ?vue=application : S1 (40 ; 50 ; 10) → Argile sableuse ; S2 (10 ; 20 ; 70) → Limon fin.
+ *                      Moments : s1_argile 2,5 ; s1_sable 4,5 ; s1_limon 6,5 ; s1_point 7,5 ; s1_zone 9 ; s2_argile 11,5 ;
+ *                      s2_sable 13,5 ; s2_limon 15,5 ; s2_point 16,5 ; s2_zone 18 ; fin 18,5.
+ *   ?vue=groupes     : les quatre groupes de textures du manuel. Moments : argileuse 2 ; sableuse 3,5 ; limoneuse 5 ;
+ *                      equilibree 6,5 ; fin 7.
+ */
+const ST = window.SolTableau, { fr, doux } = ST;
+const $ = id => document.getElementById(id);
+const q = new URLSearchParams(location.search).get('vue');
+const VUE = { triangle: 'lire', exemple: 'lire', s1s2: 'application' }[q] || (['lire', 'application', 'groupes'].includes(q) ? q : 'lire');   // alias : ?vue=triangle (= lire), ?vue=s1s2 (= application)
+const MOMENTS = {
+  lire: { triangle: 2.5, axe_argile: 4, axe_limon: 5.5, axe_sable: 7, ligne_argile: 9, ligne_limon: 11, ligne_sable: 13, point: 14, zone: 15.5 },
+  application: { s1_argile: 2.5, s1_sable: 4.5, s1_limon: 6.5, s1_point: 7.5, s1_zone: 9, s2_argile: 11.5, s2_sable: 13.5, s2_limon: 15.5, s2_point: 16.5, s2_zone: 18 },
+  groupes: { argileuse: 2, sableuse: 3.5, limoneuse: 5, equilibree: 6.5 },
+};
+const M = MOMENTS[VUE], FIN = { lire: 16, application: 18.5, groupes: 7 }[VUE];
+const MOTIFS = { triangle: 'le triangle des textures', axe_argile: 'l’axe de l’argile, de bas en haut', axe_limon: 'l’axe du limon, de haut en bas', axe_sable: 'l’axe du sable, de droite à gauche',
+  ligne_argile: 'argile 50 % : parallèle au côté du sable', ligne_limon: 'limon 30 % : parallèle au côté de l’argile', ligne_sable: 'sable 20 % : parallèle au côté du limon', point: 'les trois droites se coupent', zone: 'la zone : Argile',
+  s1_argile: 'S1, argile 40 % : parallèle au côté du sable', s1_sable: 'S1, sable 50 % : parallèle au côté du limon', s1_limon: 'S1, limon 10 % : parallèle au côté de l’argile', s1_point: 'le point de S1', s1_zone: 'S1 : Argile sableuse',
+  s2_argile: 'S2, argile 10 % : parallèle au côté du sable', s2_sable: 'S2, sable 20 % : parallèle au côté du limon', s2_limon: 'S2, limon 70 % : parallèle au côté de l’argile', s2_point: 'le point de S2', s2_zone: 'S2 : Limon fin',
+  argileuse: 'les textures argileuses', sableuse: 'les textures sableuses', limoneuse: 'les textures limoneuses', equilibree: 'les textures équilibrées' };
+
+/* Les zones du triangle, sommets en (A, S) — le limon vaut 100 − A − S. */
+const GROUPES = { argileuse: { nom: 'Texture argileuse', c: [205, 150, 110] }, sableuse: { nom: 'Texture sableuse', c: [245, 225, 90] },
+  limoneuse: { nom: 'Texture limoneuse', c: [130, 200, 100] }, equilibree: { nom: 'Texture équilibrée', c: [245, 175, 50] } };
+const ZONES = [
+  { id: 'argile', nom: 'Argile', g: 'argileuse', p: [[100, 0], [60, 0], [40, 20], [40, 45], [55, 45]] },
+  { id: 'argile_limoneuse', nom: 'Argile limoneuse', g: 'argileuse', p: [[60, 0], [40, 0], [40, 20]] },
+  { id: 'argile_sableuse', nom: 'Argile sableuse', g: 'argileuse', p: [[55, 45], [35, 45], [35, 65]] },
+  { id: 'limon_argileux_fin', nom: 'Limon argileux fin', g: 'argileuse', p: [[40, 20], [40, 0], [27.5, 0], [27.5, 20]] },
+  { id: 'limon_argileux', nom: 'Limon argileux', g: 'argileuse', p: [[40, 45], [40, 20], [27.5, 20], [27.5, 45]] },
+  { id: 'limon_argilo_sableux', nom: 'Limon argilo-sableux', g: 'equilibree', p: [[35, 65], [35, 45], [27.5, 45], [20, 52], [20, 80]] },
+  { id: 'limon', nom: 'Limon', g: 'equilibree', p: [[27.5, 45], [27.5, 22.5], [7, 43], [7, 52], [20, 52]] },
+  { id: 'limon_fin', nom: 'Limon fin', g: 'limoneuse', p: [[27.5, 22.5], [27.5, 0], [12, 0], [12, 8], [0, 20], [0, 50]] },
+  { id: 'limon_tres_fin', nom: 'Limon très fin', g: 'limoneuse', p: [[12, 8], [12, 0], [0, 0], [0, 20]] },
+  { id: 'limon_sableux', nom: 'Limon sableux', g: 'equilibree', p: [[20, 80], [20, 52], [7, 52], [7, 43], [0, 50], [0, 70], [15, 85]] },
+  { id: 'sable_limoneux', nom: 'Sable limoneux', g: 'sableuse', p: [[15, 85], [0, 70], [0, 85], [10, 90]] },
+  { id: 'sable', nom: 'Sable', g: 'sableuse', p: [[10, 90], [0, 85], [0, 100]] },
+];
+const ECH = {
+  lire: [{ id: '', nom: 'Le sol étudié', a: 50, s: 20, l: 30, zone: 'argile', t: { argile: 9, limon: 11, sable: 13, point: 14, zone: 15.5 } }],
+  application: [
+    { id: 's1', nom: 'S1', a: 40, s: 50, l: 10, zone: 'argile_sableuse', t: { argile: 2.5, sable: 4.5, limon: 6.5, point: 7.5, zone: 9 } },
+    { id: 's2', nom: 'S2', a: 10, s: 20, l: 70, zone: 'limon_fin', t: { argile: 11.5, sable: 13.5, limon: 15.5, point: 16.5, zone: 18 } }],
+  groupes: [],
+}[VUE];
+const COUL = { argile: 'blanc', limon: 'orange', sable: 'jaune' };
+/* Où écrire le nom de chaque domaine (A, S du point d’ancrage), sur une ou deux lignes. */
+const NOMS_ZONES = [
+  ['argile', 72, 14, 'Argile'], ['argile_limoneuse', 47, 4, 'Argile', 'limoneuse'], ['argile_sableuse', 41, 50, 'Argile', 'sableuse'],
+  ['limon_argileux_fin', 34, 6, 'Limon arg.', 'fin'], ['limon_argileux', 34, 32, 'Limon', 'argileux'], ['limon_argilo_sableux', 28, 58, 'Limon arg.-', 'sableux'],
+  ['limon', 18, 40, 'Limon'], ['limon_fin', 14, 22, 'Limon fin'], ['limon_tres_fin', 6, 6, 'Limon', 'très fin'],
+  ['limon_sableux', 11, 62, 'Limon', 'sableux'], ['sable_limoneux', 4, 80, 'Sable', 'lim.'], ['sable', 2, 94, 'Sable'],
+];
+// la parallèle de chaque composante : argile ∥ côté du sable (la base) ; limon ∥ côté de l’argile ; sable ∥ côté du limon
+const COTE = { argile: 'du sable', limon: 'de l’argile', sable: 'du limon' };   // mêmes couleurs que les couches du bocal
+const ordre = VUE === 'lire' ? ['argile', 'limon', 'sable'] : ['argile', 'sable', 'limon'];
+
+let G = null;   // géométrie du triangle
+function pt(A, S) { const Lm = 100 - A - S; return [(A * G.top[0] + S * G.bl[0] + Lm * G.br[0]) / 100, (A * G.top[1] + S * G.bl[1] + Lm * G.br[1]) / 100]; }
+const fmt = v => fr(v, Number.isInteger(v) ? 0 : 2);
+function centre(z) { let x = 0, y = 0; z.p.forEach(([A, S]) => { const [px, py] = pt(A, S); x += px; y += py; }); return [x / z.p.length, y / z.p.length]; }
+
+function peindreZone(c, z, alpha, lueur) {
+  c.direct(() => {
+    const g = c.ctx, col = GROUPES[z.g].c; g.save();
+    g.beginPath(); z.p.forEach(([A, S], i) => { const [x, y] = pt(A, S); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath();
+    g.fillStyle = `rgba(${col[0]},${col[1]},${col[2]},${alpha})`; g.fill();
+    if (lueur) { g.shadowColor = 'rgba(250,204,21,.9)'; g.shadowBlur = 14; g.strokeStyle = 'rgba(250,204,21,.95)'; g.lineWidth = 2.6; g.stroke(); }
+    g.restore();
+  });
+}
+/* La parallèle d’une composante, du côté où elle se lit jusqu’au côté opposé, avec la valeur écrite sur l’axe. */
+function parallele(c, e, comp, cle) {
+  const a = e.a, s = e.s, l = e.l;
+  let p0, p1, lab, lx, ly, al;
+  if (comp === 'argile') { p0 = pt(a, 100 - a); p1 = pt(a, 0); lab = fmt(a); [lx, ly] = [p0[0] - 12, p0[1] + 6]; al = 'right'; }
+  else if (comp === 'limon') { p0 = pt(100 - l, 0); p1 = pt(0, 100 - l); lab = fmt(l); [lx, ly] = [p0[0] + 12, p0[1] + 6]; al = 'left'; }
+  else { p0 = pt(0, s); p1 = pt(100 - s, s); lab = fmt(s); [lx, ly] = [p0[0], p0[1] + 22]; al = 'center'; }   // à la place de la graduation (cachée)
+  ecrit.ecrire(c, cle, () => {
+    c.point(p0[0], p0[1], 5, COUL[comp]);
+    c.texte(lab, lx, ly, { couleur: COUL[comp], taille: 18, align: al, gras: true });
+    c.ligne(p0[0], p0[1], p1[0], p1[1], { couleur: COUL[comp], largeur: 2.6, duree: 1.8 });
+  });
+  c.repere(`${e.id ? e.id + '_' : 'ligne_'}${comp}`, Math.min(p0[0], p1[0]) - 6, Math.min(p0[1], p1[1]) - 6, Math.abs(p1[0] - p0[0]) + 12, Math.abs(p1[1] - p0[1]) + 12, `la parallèle du ${comp === 'argile' ? 'pourcentage d’argile' : comp === 'limon' ? 'pourcentage de limon' : 'pourcentage de sable'}`);
+}
+
+function dessiner(c) {
+  scene.cadre(19);
+  const t = B.chrono.t, L = scene.L;
+  const cote = 352, h = cote * Math.sqrt(3) / 2, x0 = 52, yb = 352;
+  G = { bl: [x0, yb], br: [x0 + cote, yb], top: [x0 + cote / 2, yb - h] };
+  const xp = x0 + cote + 64, wp = L - xp - 16;   // la colonne de droite
+  // les zones lumineuses (vue groupes) ou celle de l’échantillon, sous la craie
+  if (VUE === 'groupes') {
+    const ordreG = ['argileuse', 'sableuse', 'limoneuse', 'equilibree'];
+    ordreG.forEach(gid => { if (t >= M[gid] - 1.2) ZONES.filter(z => z.g === gid).forEach(z => peindreZone(c, z, .42 * doux((t - M[gid] + 1.2) / .8), false)); });
+  }
+  // une couleur douce par grande famille, comme le manuel (règle de l’utilisateur, 22 novembre 2026) ; la vue groupes les révèle une à une
+  if (VUE !== 'groupes') ZONES.forEach(z => peindreZone(c, z, .2 * doux(t / 1.2 + (B.chrono.pilote ? 1 : 0)), false));
+  ECH.forEach(e => { if (t >= e.t.zone - .6) peindreZone(c, ZONES.find(z => z.id === e.zone), .35, true); });
+  // la grille et le triangle (tracés au début : le professeur dessine le triangle)
+  c.direct(() => {
+    const g = c.ctx; g.save(); g.strokeStyle = 'rgba(226,232,240,.13)'; g.lineWidth = 1;
+    for (let v = 10; v < 100; v += 10) {
+      const seg = [[pt(v, 100 - v), pt(v, 0)], [pt(100 - v, 0), pt(0, 100 - v)], [pt(0, v), pt(100 - v, v)]];
+      seg.forEach(([a, b]) => { g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); });
+    }
+    // les limites des zones
+    g.strokeStyle = 'rgba(96,200,250,.7)'; g.lineWidth = 1.6;
+    ZONES.forEach(z => { g.beginPath(); z.p.forEach(([A, S], i) => { const [x, y] = pt(A, S); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath(); g.stroke(); });
+    g.restore();
+  });
+  c.trait([G.bl, G.br, G.top], { couleur: 'blanc', largeur: 2.6, ferme: true, duree: VUE === 'lire' ? 1.6 : .9 });
+  c.repere('triangle', G.bl[0] - 10, G.top[1] - 10, cote + 20, h + 20, 'le triangle des textures');
+  // les sommets
+  const K = scene.compact;   // petit cadre : le triangle seul, en grand ; les étapes sont dans la ligne du bas
+  c.texte(K ? 'Argile' : '100 % argile', G.top[0] + (K ? 40 : 0), G.top[1] - 12, { couleur: 'blanc', taille: 16, align: K ? 'left' : 'center' });
+  c.texte(K ? 'Sable' : '100 % sable', G.bl[0] + (K ? 10 : -4), yb + (K ? 58 : 60), { couleur: 'jaune', taille: 16, align: 'center' });
+  c.texte(K ? 'Limon' : '100 % limon', G.br[0] + (K ? 12 : 4), yb + (K ? 58 : 60), { couleur: 'orange', taille: 16, align: K ? 'left' : 'center' });
+  /* Le nom de chaque domaine, écrit dedans (ordinateur) ; sur un petit cadre les noms ne tiennent pas à 15 px : seulement
+   * les couleurs et leur légende, et le nom du domaine où tombe le point s’écrit en grand quand la zone s’allume. */
+  if (!K) c.direct(() => NOMS_ZONES.forEach(([id, A, S, l1, l2]) => {
+    const [x, y] = pt(A, S), tz = 12;
+    c.texte(l1, x, y + (l2 ? -2 : 5), { couleur: 'blanc', taille: tz, align: 'center', alpha: .85 });
+    if (l2) c.texte(l2, x, y + tz + 1, { couleur: 'blanc', taille: tz, align: 'center', alpha: .85 });
+  }));
+  if (VUE !== 'groupes') {
+    const xl = K ? 478 : 4, y0l = K ? 44 : 28, pas = K ? 32 : 20, tl = K ? 18 : 13;
+    c.direct(() => ['argileuse', 'equilibree', 'limoneuse', 'sableuse'].forEach((gid, i) => {
+      const col = GROUPES[gid].c, y = y0l + i * pas, g = c.ctx;
+      g.save(); g.fillStyle = `rgba(${col[0]},${col[1]},${col[2]},.75)`; g.fillRect(xl, y - pas * .55, pas * .7, pas * .5); g.restore();
+      c.texte(GROUPES[gid].nom.replace('Texture ', ''), xl + pas * .85, y - 2, { couleur: 'blanc', taille: tl, alpha: .9 });
+    }));
+    c.repere('legende', xl - 4, y0l - pas, (K ? 150 : 110), pas * 4 + 6, 'la légende des couleurs');
+  }
+  // les graduations des trois axes (tous les 20 %)
+  const axes = VUE !== 'lire' || t >= 2.5;
+  if (axes) {
+    // une graduation trop proche d’une valeur déjà tracée sur le même axe se tait (pas de chiffres l’un sur l’autre)
+    const proche = (comp, v) => ECH.some(e => t >= e.t[comp] - 1.2 && Math.abs(e[comp[0]] - v) < (K ? 13 : 7));
+    for (let v = 0; v <= 100; v += 20) {
+      const [ax, ay] = pt(v, 100 - v); if (!proche('argile', v) && !(K && v === 0)) c.texte(String(v), ax - 10, ay + 5, { couleur: 'blanc', taille: 15, align: 'right', alpha: .85, duree: .06 });
+      const [lx, ly] = pt(100 - v, 0); if (!proche('limon', v)) c.texte(String(v), lx + 10, ly + 5, { couleur: 'orange', taille: 15, alpha: .85, duree: .06 });
+      const [sx, sy] = pt(0, v); if (!proche('sable', v)) c.texte(String(v), sx, sy + 20, { couleur: 'jaune', taille: 15, align: 'center', alpha: .85, duree: .06 });
+    }
+  }
+  // le sens de lecture : une flèche le long de chaque axe, allumée à son moment
+  /* Le titre de chaque axe (règle de l’utilisateur, 22 novembre 2026) : écrit AU-DESSUS de son axe, le long de l’axe, à
+   * l’extérieur du triangle — incliné comme le côté pour l’argile (côté gauche) et le limon (côté droit), sous la base pour
+   * le sable ; la flèche du sens de lecture est entre la graduation et le titre. */
+  const RAC = Math.sqrt(3) / 2;
+  const fl = [
+    { id: 'axe_argile', de: pt(0, 100), a: pt(100, 0), n: [-RAC, -.5], ang: -Math.PI / 3, coul: 'blanc', lab: '% argile' },
+    { id: 'axe_limon', de: pt(100, 0), a: pt(0, 0), n: [RAC, -.5], ang: Math.PI / 3, coul: 'orange', lab: '% limon' },
+    { id: 'axe_sable', de: pt(0, 0), a: pt(0, 100), n: [0, 1], ang: 0, coul: 'jaune', lab: '% sable', base: true },
+  ];
+  fl.forEach(f => {
+    if (VUE === 'lire' && t < (M[f.id] ?? 0) - 1.2) return;
+    const da = f.base ? (K ? 44 : 38) : (K ? 66 : 48);          // distance de la flèche au côté
+    const dt = f.base ? da + (K ? 30 : 24) : da + 10;           // distance du titre au côté
+    const [x1, y1] = f.de, [x2, y2] = f.a;
+    const k = (u, d) => [x1 + (x2 - x1) * u + f.n[0] * d, y1 + (y2 - y1) * u + f.n[1] * d];
+    const A = k(.2, da), Bp = k(.8, da), T = k(.5, dt);
+    ecrit.ecrire(c, f.id, () => c.fleche(A[0], A[1], Bp[0], Bp[1], { couleur: f.coul, largeur: 2 }));
+    c.direct(() => {
+      const g = c.ctx, taille = Math.max(18, (c.tailleMin || 0) / (c.echelle || 1));
+      g.save(); g.translate(T[0], T[1]); g.rotate(f.ang);
+      g.font = `${taille}px ${window.Tableau.POLICE}`; g.fillStyle = c.couleur(f.coul); g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+      g.fillText(f.lab, 0, f.base ? 0 : -2); g.restore();
+    });
+    const xs = [A[0], Bp[0], T[0]], ys = [A[1], Bp[1], T[1]];
+    if (VUE === 'lire' && t < M[f.id] + 1.4 && t >= M[f.id] - 1.2) ST.lueur(c, Math.min(...xs) - 12, Math.min(...ys) - 14, Math.max(...xs) - Math.min(...xs) + 24, Math.max(...ys) - Math.min(...ys) + 26, true);
+    c.repere(f.id, Math.min(...xs) - 12, Math.min(...ys) - 14, Math.max(...xs) - Math.min(...xs) + 24, Math.max(...ys) - Math.min(...ys) + 26, 'le sens de lecture : ' + f.lab);
+  });
+  // ── la colonne de droite et les parallèles ──
+  if (VUE === 'lire' && !K) {
+    if (t >= 2.6) ecrit.ecrire(c, 'sens', () => {
+      c.texte('Sens de lecture', xp, 64, { couleur: 'jaune', taille: 20, max: wp });
+    });
+    [['axe_argile', 'argile : côté gauche, de bas en haut', 'blanc'], ['axe_limon', 'limon : côté droit, de haut en bas', 'orange'], ['axe_sable', 'sable : la base, de droite à gauche', 'jaune']].forEach(([id, s, coul], i) => {
+      if (t >= M[id] - 1.2) ecrit.ecrire(c, 'sens' + i, () => c.texte(s, xp, 94 + i * 28, { couleur: coul, taille: 17, max: wp }));
+    });
+  }
+  /* Application : le tableau des données (S1, S2) recréé au tableau (règle de l’utilisateur, 22 novembre 2026 : pas de
+   * photocopie de tableau) ; ses cases se remplissent une à une au début, puis chaque case s’allume quand sa parallèle se trace. */
+  if (VUE === 'application' && !K) {
+    const cw = Math.min(84, (wp - 44) / 3), tx = [xp, xp + 44, xp + 44 + cw, xp + 44 + 2 * cw, xp + 44 + 3 * cw], ty = [40, 66, 92, 118];
+    ecrit.ecrire(c, 'tab_grille', () => {
+      ty.forEach(y => c.ligne(tx[0], y, tx[4], y, { couleur: 'faible', largeur: 1.3, duree: .15 }));
+      tx.forEach(x => c.ligne(x, ty[0], x, ty[3], { couleur: 'faible', largeur: 1.3, duree: .12 }));
+      ['% argile', '% sable', '% limon'].forEach((h, j) => c.texte(h, (tx[j + 1] + tx[j + 2]) / 2, ty[1] - 7, { couleur: COUL[['argile', 'sable', 'limon'][j]], taille: 16, align: 'center', max: cw - 4 }));
+    });
+    ECH.forEach((e, n) => {
+      const y = ty[n + 2] - 7;
+      c.texte(e.nom, (tx[0] + tx[1]) / 2, y, { couleur: 'jaune', taille: 17, align: 'center' });
+      ['argile', 'sable', 'limon'].forEach((comp, j) => {
+        const xc = (tx[j + 1] + tx[j + 2]) / 2, ta = .4 + n * 1 + j * .3, u = doux((t - ta) / .5);
+        if (u <= 0) return;
+        c.direct(() => c.texte(fmt(e[comp[0]]), xc, y - (1 - u) * 18, { couleur: COUL[comp], taille: 17, align: 'center', gras: true, alpha: u }));
+        if (t >= e.t[comp] - 1.2 && t < e.t[comp] + 1.2) ST.lueur(c, tx[j + 1] + 2, ty[n + 1] + 2, cw - 4, 22, true);
+      });
+    });
+    c.repere('tableau', tx[0] - 4, ty[0] - 4, tx[4] - tx[0] + 8, ty[3] - ty[0] + 8, 'le tableau des données de S1 et S2');
+  }
+  ECH.forEach((e, n) => {
+    const y0 = VUE === 'lire' ? 196 : 150;
+    const P = !K && !(VUE === 'application' && n === 0 && t >= ECH[1].t.argile - 1.2);   // la colonne montre un sol à la fois (le triangle garde les deux)
+    if (t >= e.t.argile - 1.2 && P) ecrit.ecrire(c, 'titre' + n, () => c.texte(e.nom + (VUE === 'lire' ? ' (le bocal)' : '') + ' :', xp, y0, { couleur: 'jaune', taille: 20, max: wp }));
+    ordre.forEach((comp, i) => {
+      if (t < e.t[comp] - 1.2) return;
+      parallele(c, e, comp, `p${n}_${comp}`);
+      if (P) ecrit.ecrire(c, `p${n}_${comp}_cote`, () => c.texte(`∥ au côté ${COTE[comp]}`, xp + 22, y0 + 50 + i * 46, { couleur: 'faible', taille: 16, max: wp - 22 }));
+      if (P) ecrit.ecrire(c, `v${n}_${comp}`, () => c.texte(`${comp} : ${fmt(e[comp[0] === 'a' ? 'a' : comp[0] === 'l' ? 'l' : 's'])} %`, xp + 8, y0 + 28 + i * 46, { couleur: COUL[comp], taille: 18, max: wp }));
+    });
+    if (t >= e.t.point - .6) {
+      const [px, py] = pt(e.a, e.s);
+      c.direct(() => { const g = c.ctx; g.save(); g.shadowColor = '#fff'; g.shadowBlur = 12; g.fillStyle = '#fef08a'; g.beginPath(); g.arc(px, py, 7, 0, 6.28); g.fill(); g.restore(); });
+      ecrit.ecrire(c, 'nomp' + n, () => c.texte(e.nom === 'Le sol étudié' ? 'P' : e.nom, px + 10, py - 10, { couleur: 'jaune', taille: 18, gras: true }));
+      c.repere(e.id ? e.id + '_point' : 'point', px - 14, py - 14, 28, 28, 'le point où les trois droites se coupent');
+    }
+    if (t >= e.t.zone - .6) {
+      const z = ZONES.find(zz => zz.id === e.zone), [cx, cy] = centre(z);
+      if (P) ecrit.ecrire(c, 'zone' + n, () => {
+        c.texte('→ ' + z.nom, xp + 8, y0 + 28 + 3 * 46 + 4, { couleur: 'vert', taille: 21, gras: true, max: wp });
+      });
+      c.repere(e.id ? e.id + '_zone' : 'zone', xp, y0 + 144, wp, 34, 'la texture : ' + z.nom);
+      c.repere(e.id ? e.id + '_zone_triangle' : 'zone_triangle', cx - 40, cy - 24, 80, 48, 'la zone ' + z.nom);
+      if (K) {   // le nom du domaine en grand, à son ancrage, écarté du point s’il est trop près
+        const an = NOMS_ZONES.find(a => a[0] === z.id), [px, py] = pt(e.a, e.s);
+        let [ax, ay] = an ? pt(an[1], an[2]) : [cx, cy];
+        if (Math.hypot(ax - px, ay - py) < 46) ay = py - 46;
+        ecrit.ecrire(c, 'grandnom' + n, () => c.texte(z.nom, ax, ay + 8, { couleur: 'jaune', taille: 22, align: 'center', gras: true }));
+      }
+    }
+  });
+  if (VUE === 'groupes' && !K) {
+    c.texte('Quatre groupes de textures', xp, 64, { couleur: 'jaune', taille: 20, max: wp });
+    ['argileuse', 'sableuse', 'limoneuse', 'equilibree'].forEach((gid, i) => {
+      if (t < M[gid] - 1.2) return;
+      const y = 104 + i * 52, col = GROUPES[gid].c;
+      c.direct(() => { const g = c.ctx; g.save(); g.fillStyle = `rgba(${col[0]},${col[1]},${col[2]},.75)`; g.fillRect(xp, y - 18, 34, 24); g.restore(); });
+      ecrit.ecrire(c, 'g' + gid, () => {
+        c.texte(GROUPES[gid].nom, xp + 46, y, { couleur: 'blanc', taille: 19, max: wp - 50 });
+        const ex = { argileuse: 'beaucoup d’argile', sableuse: 'beaucoup de sable', limoneuse: 'beaucoup de limon', equilibree: 'un mélange des trois' }[gid];
+        c.texte(ex, xp + 46, y + 22, { couleur: 'faible', taille: 16, max: wp - 50 });
+      });
+      c.repere(gid, xp - 4, y - 22, wp, 48, GROUPES[gid].nom);
+    });
+  }
+  return c.fin();
+}
+const canvas = $('canvas');
+const scene = ST.Scene(canvas, dessiner, { large: true });
+const ecrit = ST.Apparitions(scene);
+ST.brancher.scene = scene; ST.brancher.ecrit = ecrit;
+scene.foyer = () => ({ x: -30, y: 12, w: 650, h: 428 });   // compact : le triangle et, à droite, la légende des couleurs   // compact : le triangle seul
+function voir(t) {
+  const m = ['Le triangle des textures : 100 % argile en haut, 100 % sable en bas à gauche, 100 % limon en bas à droite.'];
+  if (VUE === 'lire') {
+    if (t >= 2.8) m.push('Lecture : argile sur le côté gauche de bas en haut, limon sur le côté droit de haut en bas, sable sur la base de droite à gauche.');
+  }
+  ECH.forEach(e => {
+    const faits = ordre.filter(comp => t >= e.t[comp]);
+    if (faits.length) m.push(`${e.nom} : parallèles tracées pour ${faits.map(comp => `${comp} ${fmt(e[comp[0] === 'a' ? 'a' : comp[0] === 'l' ? 'l' : 's'])} %`).join(', ')}.`);
+    if (t >= e.t.point) m.push(`Les trois droites de ${e.nom} se coupent en un point.`);
+    if (t >= e.t.zone) m.push(`Ce point est dans la zone « ${ZONES.find(z => z.id === e.zone).nom} ».`);
+  });
+  if (VUE === 'groupes') ['argileuse', 'sableuse', 'limoneuse', 'equilibree'].forEach(gid => { if (t >= M[gid]) m.push(`${GROUPES[gid].nom} coloriée : ${ZONES.filter(z => z.g === gid).map(z => z.nom).join(', ')}.`); });
+  return m.join(' ');
+}
+const B = ST.brancher({ id: 'edaph_triangle_' + VUE, titre: 'Le triangle des textures', M, FIN, motifs: MOTIFS, vue: VUE,
+  texte: 'Triangle des textures : argile lue sur le côté gauche, limon sur le côté droit, sable sur la base ; une parallèle par pourcentage ; le point d’intersection donne la texture. Sol du bocal (50 % argile, 30 % limon, 20 % sable) : Argile. S1 (40 % argile, 50 % sable, 10 % limon) : Argile sableuse. S2 (10 % argile, 20 % sable, 70 % limon) : Limon fin.',
+  voir, depart: 'Le professeur trace…', fini: () => ({ lire: 'Le sol étudié a une texture argileuse : Argile.', application: 'S1 : Argile sableuse ; S2 : Limon fin.', groupes: 'Quatre groupes de textures.' }[VUE]),
+  explication: { [VUE]: [{ repere: 'triangle', texte: 'Le triangle des textures.' }, { repere: 'axe_argile', texte: 'L’argile se lit de bas en haut.' }, { repere: 'axe_limon', texte: 'Le limon se lit de haut en bas.' }, { repere: 'axe_sable', texte: 'Le sable se lit de droite à gauche.' }] } });
+window.Tableau.bulle($('feedback'), VUE === 'groupes' ? 'Les groupes de textures.' : 'Trois pourcentages, trois droites, un point.');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

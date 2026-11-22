@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Texture, humus et eau utilisable — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="sol.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Graphique du pourcentage d’humidité selon la texture, du sable à l’argile : courbe de la capacité de rétention, courbe du point de flétrissement, eau utilisable entre les deux, eau inutilisable dessous, et la capacité de rétention d’un sol enrichi en humus"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Doc 4 de l’activité 3 : influence de la texture et de l’humus sur l’eau disponible (diapositives fe_h8_courbe et
+ * fe_h9_lecture). Valeurs lues sur le document (% d’humidité) — Sable, Sable limono-argileux, Limon, Limono-argileux,
+ * Argile (texture décroissante) : capacité de rétention 4,5 ; 19 ; 28 ; 33 ; 31,5 ; point de flétrissement 1 ; 9 ;
+ * 14 ; 18 ; 19,5 ; sol enrichi en humus 7 ; 22 ; 31 ; 35,5 ; 34. Lecture du professeur : limon 28 − 14 = 14 % d’eau
+ * utilisable ; sable ≈ 5 − 1 = 4 %.
+ * Moments : axes 2 ; retention 5 ; fletrissement 8 ; zones 10 ; humus 12,5 ; lecture_limon 15 ; utilisable_limon 17 ;
+ * lecture_sable 19,5 ; conclusion 22 ; fin 22,5.
+ */
+const ST = window.SolTableau, { fr, doux } = ST;
+const $ = id => document.getElementById(id);
+const M = { axes: 2, retention: 5, fletrissement: 8, zones: 10, humus: 12.5, lecture_limon: 15, utilisable_limon: 17, lecture_sable: 19.5, conclusion: 22 };
+const FIN = 22.5;
+const MOTIFS = { axes: 'les axes : texture et % d’humidité', retention: 'la courbe de la capacité de rétention', fletrissement: 'la courbe du point de flétrissement', zones: 'eau utilisable et eau inutilisable', humus: 'le sol enrichi en humus',
+  lecture_limon: 'limon : 28 % et 14 %', utilisable_limon: 'limon : 28 − 14 = 14 % utilisable', lecture_sable: 'sable : 5 − 1 = 4 % utilisable', conclusion: 'texture fine et humus : plus d’eau retenue' };
+const TEX = ['Sable', 'Sable limono-argileux', 'Limon', 'Limono-argileux', 'Argile'];
+const CR = [4.5, 19, 28, 33, 31.5], PF = [1, 9, 14, 18, 19.5], HU = [7, 22, 31, 35.5, 34];
+function f(T, x) { const i = Math.max(0, Math.min(3, Math.floor(x))), u = x - i, a = T[Math.max(0, i - 1)], b = T[i], c = T[i + 1], d = T[Math.min(4, i + 2)]; return b + .5 * u * (c - a + u * (2 * a - 5 * b + 4 * c - d + u * (3 * (b - c) + d - a))); }
+function dessiner(c) {
+  scene.cadre(101);
+  const t = B.chrono.t, L = scene.L, gx = 74, gy = 44, gw = Math.max(380, Math.min(L * .58, L - 330)), gh = 290;
+  const X = x => gx + 20 + x / 4 * (gw - 50), Y = v => gy + gh - v / 38 * gh;
+  c.axe(gx, gy + gh, gx + gw, gy + gh, [], { couleur: 'blanc' });
+  c.axe(gx, gy + gh, gx, gy - 6, [0, 7, 14, 21, 28, 35].map(v => [v / 38 * gh / (gh + 6), String(v)]), { couleur: 'blanc', vertical: true, taille: 16 });
+  c.texte('% humidité', gx - 10, gy - 14, { couleur: 'blanc', taille: 17 });
+  TEX.forEach((n, i) => { if (scene.compact && i % 2) return; const two = n.includes(' '), [a, b] = two ? [n.split(' ')[0], n.split(' ').slice(1).join(' ')] : [n, '']; c.texte(a, X(i), gy + gh + 22, { couleur: 'blanc', taille: 15, align: 'center', duree: .1 }); if (b) c.texte(b, X(i), gy + gh + 40, { couleur: 'blanc', taille: 15, align: 'center', duree: .1 }); });
+  c.texte(scene.compact ? 'texture plus fine →' : 'texture de plus en plus fine →', gx + gw / 2, gy + gh + 64, { couleur: 'vert', taille: 16, align: 'center' });
+  c.repere('axes', gx - 40, gy - 30, gw + 50, gh + 100, 'les axes');
+  const courbe = (T, t0, t1, coul, pointille) => {
+    if (t < t0) return 0;
+    const u = Math.min(1, (t - t0) / (t1 - t0));
+    c.direct(() => { const g = c.ctx; g.save(); g.strokeStyle = c.couleur(coul); g.lineWidth = 3.2; g.shadowColor = c.couleur(coul); g.shadowBlur = 6; if (pointille) g.setLineDash([9, 7]);
+      g.beginPath(); for (let k = 0; k <= 80 * u; k++) { const x = k / 80 * 4; k ? g.lineTo(X(x), Y(f(T, x))) : g.moveTo(X(x), Y(f(T, x))); } g.stroke(); g.restore(); });
+    return u;
+  };
+  // les zones colorées (sous les courbes)
+  const z = doux((t - M.zones + 1.6) / 1.2);
+  if (z > 0) c.direct(() => {
+    const g = c.ctx; g.save(); g.globalAlpha = z;
+    g.fillStyle = 'rgba(34,211,238,.38)'; g.beginPath(); for (let k = 0; k <= 80; k++) { const x = k / 20; k ? g.lineTo(X(x), Y(f(PF, x))) : g.moveTo(X(x), Y(f(PF, x))); } g.lineTo(X(4), Y(0)); g.lineTo(X(0), Y(0)); g.closePath(); g.fill();
+    g.fillStyle = 'rgba(125,211,252,.22)'; g.beginPath(); for (let k = 0; k <= 80; k++) { const x = k / 20; k ? g.lineTo(X(x), Y(f(CR, x))) : g.moveTo(X(x), Y(f(CR, x))); } for (let k = 80; k >= 0; k--) { const x = k / 20; g.lineTo(X(x), Y(f(PF, x))); } g.closePath(); g.fill();
+    g.restore();
+  });
+  courbe(CR, M.retention - 2.4, M.retention - .2, 'cyan');
+  courbe(PF, M.fletrissement - 2.4, M.fletrissement - .2, 'rouge');
+  courbe(HU, M.humus - 2.2, M.humus - .2, 'blanc', true);
+  const xp = gx + gw + 30, wp = L - xp - 12;
+  const leg = (cle, tm, s, coul, y, rep, lab) => { if (t < tm - .3 || scene.compact) return; ecrit.ecrire(c, cle, () => c.texte(s, xp, y, { couleur: coul, taille: 18, max: wp })); c.repere(rep, xp - 4, y - 20, wp, 26, lab); };
+  leg('lcr', M.retention, '— capacité de rétention', 'cyan', 60, 'retention', 'la courbe de la capacité de rétention');
+  leg('lpf', M.fletrissement, '— point de flétrissement', 'rouge', 88, 'fletrissement', 'la courbe du point de flétrissement');
+  if (t >= M.zones - .4 && !scene.compact) {
+    ecrit.ecrire(c, 'lz', () => { c.texte('eau utilisable (capillaire)', xp, 122, { couleur: 'cyan', taille: 17, max: wp }); c.texte('eau inutilisable (hygroscopique)', xp, 146, { couleur: 'bleu', taille: 17, max: wp }); });
+    c.repere('zones', xp - 4, 104, wp, 50, 'eau utilisable et inutilisable');
+  }
+  leg('lhu', M.humus, '- - sol enrichi en humus', 'blanc', 178, 'humus', 'la capacité de rétention du sol enrichi en humus');
+  // les lectures : la verticale du limon, puis celle du sable
+  const lecture = (i, tL, tU, cle, nom, cr, pf, res) => {
+    if (t < tL - 1.4) return;
+    const x = X(i);
+    ecrit.ecrire(c, cle, () => {
+      c.ligne(x, Y(0), x, Y(cr), { couleur: 'jaune', largeur: 1.8, duree: .6 });
+      c.ligne(gx, Y(cr), x, Y(cr), { couleur: 'cyan', largeur: 1.4, duree: .5 }); c.ligne(gx, Y(pf), x, Y(pf), { couleur: 'rouge', largeur: 1.4, duree: .5 });
+    });
+    c.direct(() => { c.point(x, Y(cr), 5, 'cyan'); c.point(x, Y(pf), 5, 'rouge'); });
+    if (t < tL + 1.2) ST.lueur(c, x - 10, Y(cr) - 10, 20, Y(pf) - Y(cr) + 20, true);
+    if (!scene.compact) ecrit.ecrire(c, cle + 'v', () => c.texte(`${nom} : ${fr(cr, Number.isInteger(cr) ? 0 : 1)} % et ${fr(pf, 0)} %`, xp, 214 + (i ? 0 : 58), { couleur: 'jaune', taille: 18, max: wp }));
+    c.repere(cle, x - 14, Y(cr) - 14, 28, Y(0) - Y(cr) + 28, `${nom} : capacité de rétention ${cr} %, point de flétrissement ${pf} %`);
+    if (t >= tU - .6) {
+      if (!scene.compact) ecrit.ecrire(c, cle + 'u', () => c.texte(res, xp + 10, 240 + (i ? 0 : 58), { couleur: 'vert', taille: 18, max: wp - 10 }));
+      c.repere(i ? 'utilisable_limon' : 'utilisable_sable', xp - 4, 220 + (i ? 0 : 58), wp, 26, res);
+    }
+  };
+  lecture(2, M.lecture_limon, M.utilisable_limon, 'lecture_limon', 'Limon', 28, 14, 'utilisable : 28 − 14 = 14 %');
+  lecture(0, M.lecture_sable, M.lecture_sable, 'lecture_sable', 'Sable', 5, 1, 'utilisable : 5 − 1 = 4 %');
+  if (t >= M.conclusion - 1.2) {
+    if (!scene.compact) ecrit.ecrire(c, 'concl', () => {
+      c.texte('Texture fine → rétention et', xp, 340, { couleur: 'vert', taille: 18, max: wp });
+      c.texte('point de flétrissement plus hauts', xp, 364, { couleur: 'vert', taille: 18, max: wp });
+      c.texte('L’humus augmente la rétention', xp, 394, { couleur: 'blanc', taille: 18, max: wp });
+    });
+    c.repere('conclusion', xp - 4, 320, wp, 84, 'la conclusion');
+  }
+  return c.fin();
+}
+const canvas = $('canvas');
+const scene = ST.Scene(canvas, dessiner, { large: true });
+const ecrit = ST.Apparitions(scene);
+ST.brancher.scene = scene; ST.brancher.ecrit = ecrit;
+scene.foyer = (L) => ({ x: 0, y: 0, w: 74 + Math.max(380, Math.min(L * .58, L - 330)) + 24, h: 412 });   // compact : le graphique seul
+function voir(t) {
+  const m = ['Graphique : % d’humidité (0 à 35) selon la texture : sable, sable limono-argileux, limon, limono-argileux, argile (texture de plus en plus fine).'];
+  if (t >= M.retention) m.push('Courbe cyan : capacité de rétention, de 4,5 % (sable) à environ 33 % (limono-argileux).');
+  if (t >= M.fletrissement) m.push('Courbe rouge : point de flétrissement, de 1 % (sable) à 19,5 % (argile).');
+  if (t >= M.zones) m.push('Entre les deux : eau utilisable (capillaire) ; sous la rouge : eau inutilisable (hygroscopique).');
+  if (t >= M.humus) m.push('Courbe en pointillé : capacité de rétention du sol enrichi en humus, plus haute partout.');
+  if (t >= M.lecture_limon) m.push('Lecture au limon : 28 % et 14 %.');
+  if (t >= M.utilisable_limon) m.push('Eau utilisable du limon : 28 − 14 = 14 %.');
+  if (t >= M.lecture_sable) m.push('Sable : 5 − 1 = 4 % utilisable.');
+  if (t >= M.conclusion) m.push('Conclusion écrite : texture fine, rétention et point de flétrissement plus hauts ; l’humus augmente la rétention.');
+  return m.join(' ');
+}
+const B = ST.brancher({ id: 'edaph_humidite', titre: 'Texture, humus et eau utilisable', M, FIN, motifs: MOTIFS,
+  texte: 'Doc 4 : capacité de rétention et point de flétrissement augmentent quand la texture devient plus fine (du sable à l’argile). Eau utilisable = capacité de rétention − point de flétrissement : limon 28 − 14 = 14 % ; sable 5 − 1 = 4 %. L’humus augmente la capacité de rétention.',
+  voir, depart: 'Les axes…', fini: () => 'Texture fine et humus : plus d’eau retenue.',
+  explication: { humidite: [{ repere: 'retention', texte: 'Capacité de rétention.' }, { repere: 'fletrissement', texte: 'Point de flétrissement.' }, { repere: 'zones', texte: 'Eau utilisable entre les deux courbes.' }, { repere: 'humus', texte: 'Sol enrichi en humus.' }] } });
+window.Tableau.bulle($('feedback'), 'Combien d’eau la plante peut-elle utiliser ?');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

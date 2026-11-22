@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Révision : la fréquence d’une espèce — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/svt/tc_sortie_ecologique-tableau/sortie.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Dix relevés d’une station : on allume un à un les relevés où pousse l’asphodèle et on les compte, puis on calcule sa fréquence F = n/N × 100 et on lit son indice sur l’échelle I à V"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/svt/tc_sortie_ecologique-tableau/commun.js"></script>
+<script>
+/*
+ * Cours de révision (diapositive rv_s2_frequence). MÊME DESSIN que la vue « frequence » de
+ * svt/tc_sortie_ecologique-tableau/releves.html (dix relevés peints R1 à R10, même échelle des indices, mêmes couleurs,
+ * même commun.js), avec un NOUVEL exemple : l’asphodèle (Asphodelus microcarpus, dessin P.asphodele du cours) est
+ * présente dans R2, R3, R5, R6, R8, R9, R10 → n = 7, N = 10, F = 7/10 × 100 = 70 % → indice IV (fréquente).
+ * Moments : releves 0,5 ; compte 2 (un relevé allumé toutes les 0,9 s) ; n 9 ; formule 10 ; calcul 11,5 ; echelle 13,5
+ * (les 5 classes une à une) ; classe 17,5 ; fin 19. Repères : N, R1 … R10, n, formule, calcul, echelle, if_I … if_V.
+ * set_parameters {conclusions: false} : le résultat (70 %, IV) reste caché.
+ * Petit cadre (~429 × 250) : aucun texte sous 15 px écran ; les mots de l’échelle (accidentelle…) et le nom latin se taisent.
+ */
+const { P, lueur } = window.Sortie;
+const IFS = [['I', 0, 20, 'accidentelle'], ['II', 20, 40, 'accessoire'], ['III', 40, 60, 'assez fréquente'], ['IV', 60, 80, 'fréquente'], ['V', 80, 100, 'très fréquente']];
+const PRES = [2, 3, 5, 6, 8, 9, 10];
+const MF = { releves: .5, compte: 2, n: 9, formule: 10, calcul: 11.5, echelle: 13.5, classe: 17.5 };
+let SC = null;
+const T = (b) => Math.max(b, 15.5 / Math.max(.05, SC ? SC.s : 1));
+const compact = () => SC && SC.s < .85;
+
+function echelleIF(c, S, x0, x1, y, t0, marque) {
+  const X = F => x0 + (x1 - x0) * F / 100, petit = compact();
+  const cols = ['#94a3b8', '#60a5fa', '#4ade80', '#facc15', '#fb923c'];
+  IFS.forEach(([nom, de, a, mot], i) => {
+    if (S.t > 0 && S.t < t0 + i * .7) return;
+    const xa = X(de), xb = X(a);
+    c.direct(() => { const g = c.ctx; g.save(); g.globalAlpha = .45; g.fillStyle = cols[i]; g.fillRect(xa + 2, y - T(20) - 6, xb - xa - 4, T(20) + 6); g.restore(); });
+    c.texte(nom, (xa + xb) / 2, y - 6, { couleur: 'blanc', taille: T(20), gras: true, align: 'center' });
+    if (!petit) c.texte(mot, (xa + xb) / 2, y + 44, { couleur: 'faible', taille: 15, align: 'center', max: xb - xa - 4 });
+    c.texte(String(de), xa, y + T(15) + 4, { couleur: 'cyan', taille: T(15), align: 'center' });
+    if (i === 4) c.texte('100', xb - 8, y + T(15) + 4, { couleur: 'cyan', taille: T(15), align: 'center' });
+    c.repere('if_' + nom, xa, y - 28, xb - xa, 78, 'indice ' + nom + ' : ' + de + ' % ≤ F < ' + a + ' % (' + mot + ')');
+  });
+  c.repere('echelle', x0, y - 30, x1 - x0, 80, 'l’échelle des indices de fréquence');
+  if (marque != null) { const xm = X(marque.F); c.fleche(xm, y - T(20) - 50, xm, y - T(20) - 10, { couleur: 'jaune', largeur: 2.6 }); c.texte(marque.t, xm - 10, y - T(20) - 26, { couleur: 'jaune', taille: T(19), gras: true, align: 'right' }); }
+}
+function dessiner(c, S, scene) {
+  SC = scene;
+  const petit = compact(), L = scene.L, PW = petit ? 300 : 270, AW = L - PW - 10;
+  const lab = T(17), qs = Math.min((AW - 30) / 5 - 14, petit ? 70 : 88), gx = 20, gy = 20;
+  const pos = i => [gx + (i % 5) * (qs + 14), gy + Math.floor(i / 5) * (qs + lab + 14)];
+  c.direct(() => { for (let i = 0; i < 10; i++) { const [x, y] = pos(i), g = c.ctx; g.save();
+    const gr = g.createLinearGradient(0, y, 0, y + qs); gr.addColorStop(0, 'rgba(150,180,100,.45)'); gr.addColorStop(1, 'rgba(120,100,60,.45)'); g.fillStyle = gr; g.fillRect(x, y, qs, qs);
+    P.herbe(g, x + qs * .22, y + qs * .92, qs * .22, { graine: i + 3 }); P.arbuste(g, x + qs * .78, y + qs * .45, qs * .28, { sorte: 'ciste', graine: i });
+    if (PRES.includes(i + 1)) P.asphodele(g, x + qs * .5, y + qs * .94, qs * .62, { graine: i });
+    g.restore(); } });
+  for (let i = 0; i < 10; i++) { const [x, y] = pos(i); c.rect(x, y, qs, qs, { couleur: 'faible', largeur: 1.3, arrondi: 2 }); c.texte('R' + (i + 1), x + qs / 2, y + qs + lab, { couleur: 'blanc', taille: lab, align: 'center' }); c.repere('R' + (i + 1), x, y, qs, qs, 'le relevé R' + (i + 1)); }
+  // le panneau de droite
+  const px = AW + 10, pw = L - px - 10, fs = T(21), lh = fs + 12;
+  c.direct(() => P.asphodele(c.ctx, px + 18, 20 + fs * 1.6, fs * 1.6));
+  c.texte('Asphodèle', px + 42, 14 + fs, { couleur: 'vert', taille: T(19), max: pw - 42 });
+  if (!petit) c.texte('(Asphodelus microcarpus)', px + 42, 40 + fs, { couleur: 'faible', taille: 15, max: pw - 42 });
+  let y = 30 + fs * 2.4;
+  if (S.t <= 0 || S.ecrit(c, 'releves')) { c.texte('N = 10 relevés', px, y, { couleur: 'cyan', taille: fs, gras: true, max: pw }); c.repere('N', px, y - fs, pw, fs + 8, 'N : le nombre total de relevés'); }
+  y += lh;
+  if (S.a('compte')) {
+    PRES.forEach((r, q) => { const t0 = MF.compte + q * .9; if (S.t < t0) return; const [x, yy] = pos(r - 1); lueur(c, x - 3, yy - 3, qs + 6, qs + 6, { vive: S.t < t0 + .9 && !S.a('n'), numero: q + 1, nx: x + qs - 10, ny: yy + T(20) + 2, taille: T(20) }); });
+  }
+  if (S.ecrit(c, 'n')) { c.texte('n = 7 relevés', px, y, { couleur: 'jaune', taille: fs, gras: true, max: pw }); c.repere('n', px, y - fs, pw, fs + 8, 'n : les relevés où l’espèce est présente'); }
+  y += lh + fs * .5;
+  if (S.ecrit(c, 'formule')) { c.texte('F = ⟦n|N⟧ × 100', px, y, { couleur: 'blanc', taille: T(23), max: pw }); c.repere('formule', px, y - fs * 1.4, pw, fs * 2.2, 'F = n/N × 100'); }
+  y += fs * 2.3;
+  if (S.ecrit(c, 'calcul')) {
+    const txt = 'F = ⟦7|10⟧ × 100' + (S.conclusions ? ' = 70 %' : '');
+    c.texte(txt, px, y, { couleur: 'jaune', taille: T(23), max: pw });
+    c.repere('calcul', px, y - fs * 1.4, pw, fs * 2.2, 'F = 7/10 × 100 = 70 %');
+  }
+  y += fs * 1.6;
+  if (S.a('classe') && S.conclusions) c.texte('→ indice IV', px, y, { couleur: 'vert', taille: T(23), gras: true, max: pw });
+  const ye = 404 - T(15);
+  if (S.ecrit(c, 'echelle')) echelleIF(c, S, 30, AW - 10, ye, MF.echelle, S.a('classe') && S.conclusions ? { F: 70, t: '70 %' } : null);
+  if (S.a('classe') && S.conclusions) { const X = F => 30 + (AW - 40) * F / 100; lueur(c, X(60), ye - T(20) - 10, X(80) - X(60), T(20) + T(15) + 22, { vive: true }); }
+}
+window.Sortie.sim({
+  id: 'tc_revision_frequence', titre: 'Révision : la fréquence d’une espèce', vue: 'frequence', moments: MF, fin: 19, graine: 37, dessiner,
+  motifs: { releves: 'les dix relevés', compte: 'on compte les relevés où pousse l’asphodèle', n: 'n = 7', formule: 'la formule F = n/N × 100', calcul: 'le calcul', echelle: 'l’échelle des indices', classe: 'la classe IV' },
+  accueil: 'Dix relevés : dans combien pousse l’asphodèle ?', fini: 'n = 7, N = 10 : F = 70 %, indice IV (fréquente).',
+  ceQuiSeVoit: S => {
+    const m = ['Dix relevés R1 à R10 en deux rangées ; à droite : l’asphodèle, N = 10 relevés.'];
+    if (S.a('compte')) m.push('Relevés allumés et numérotés : ' + PRES.filter((r, q) => S.t >= MF.compte + q * .9).map(r => 'R' + r).join(', ') + '.');
+    if (S.a('n')) m.push('n = 7.'); if (S.a('formule')) m.push('F = n/N × 100.'); if (S.a('calcul')) m.push('F = 7/10 × 100' + (S.conclusions ? ' = 70 %.' : ' (résultat caché).'));
+    if (S.a('echelle')) m.push('Échelle : I (0 à 20 %) accidentelle, II (20 à 40) accessoire, III (40 à 60) assez fréquente, IV (60 à 80) fréquente, V (80 à 100) très fréquente.');
+    if (S.a('classe') && S.conclusions) m.push('Flèche à 70 % : classe IV allumée.');
+    return m.join(' ');
+  },
+  texte: 'Fréquence F (%) = n/N × 100, n : nombre de relevés où l’espèce est présente, N : nombre total de relevés. Indice : I (F < 20 %), II (20 ≤ F < 40), III (40 ≤ F < 60), IV (60 ≤ F < 80), V (80 ≤ F ≤ 100). Asphodèle : présente dans 7 relevés sur 10 → F = 70 % → indice IV (fréquente).',
+  explication: { frequence: [{ repere: 'N', texte: 'N : tous les relevés.' }, { repere: 'n', texte: 'n : les relevés où l’espèce est présente.' }, { repere: 'formule', texte: 'F = n sur N, fois cent.' }, { repere: 'echelle', texte: 'L’indice se lit sur l’échelle.' }] },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

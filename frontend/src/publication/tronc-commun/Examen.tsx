@@ -1,0 +1,380 @@
+/**
+ * L'évaluation formative de Tronc Commun (22 novembre 2026), même allure que la page d'un exercice (`ExercicePage`) :
+ * le sujet sur une feuille blanche à gauche, la copie lignée à droite avec la marge du barème.
+ *
+ * Pas de chronomètre (demande de l'utilisateur : évaluation formative de préparation, 50 minutes au plus) : la durée
+ * conseillée est affichée, l'élève avance à son rythme. Chaque réponse est corrigée dès qu'elle est donnée, en un seul
+ * essai comme en examen : verdict, points par élément du barème, puis la correction expliquée.
+ * Rien n'est gardé d'une visite à l'autre (règle du lien libre) : les réponses vivent le temps de la page.
+ */
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Formule } from '../../components/course/Formule';
+import ChampReponse from '../../components/course/SaisieReponse';
+import ClavierFlottant, { clavier, hauteurClavierTelephone, largeurClavier, useClavier } from '../../components/course/ClavierFlottant';
+import { lireNombre } from '../../components/exercice/juger';
+import { pts } from '../../components/exercice/types';
+import { EXAMEN, totalPoints, type PartieExamen, type QuestionExamen } from './sujet';
+import { suivre, useTempsPasse } from './suivi';
+
+const CRAIE = "'Patrick Hand', 'Caveat', cursive";
+const SUJET = "'Times New Roman', Georgia, serif";
+const BTN = 'rounded-md border border-slate-400 bg-white px-3 py-1.5 text-sm text-slate-900 hover:bg-slate-100';
+
+type Detail = { element: string; sur: number; obtenu: number; perte?: string };
+type Etat = {
+  fait: boolean;
+  /** QCM / vrai-faux : le choix de chaque item (index, ou vrai / faux) */
+  choix?: (number | boolean | null)[];
+  texte?: string;
+  note?: number;
+  verdict?: 'juste' | 'partiel' | 'faux' | 'nonjuge' | 'lecture';
+  retour?: string;
+  details?: Detail[];
+  /** le tuteur n'a pas répondu : l'élève se note lui-même en comparant avec la correction */
+  autoEval?: boolean;
+};
+
+const QUESTIONS = EXAMEN.parties.flatMap(p => p.questions.map(q => ({ p, q })));
+const TOTAL = totalPoints();
+
+function texteDuSujet(p: PartieExamen) {
+  const tab = p.tableau ? [p.tableau.entetes.join(' | '), ...p.tableau.lignes.map(l => l.join(' | '))].join(' ; ') : '';
+  return [`Évaluation formative de SVT, ${EXAMEN.niveau} (Maroc) : ${p.titre}.`, p.intro || '', tab, ...(p.donnees || [])].filter(Boolean).join(' ');
+}
+
+async function corrigerParLeTuteur(p: PartieExamen, q: Extract<QuestionExamen, { genre: 'redaction' }>, reponse: string) {
+  const r = await fetch('/api/v1/course-player/answer-reaction', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      diapo: { title: `${EXAMEN.niveau} — ${p.titre}`, speech: texteDuSujet(p) },
+      question: { type: 'open', enonce: q.texte, attendu: q.attendu, matiere: 'svt', bareme: q.points, elements: q.elements },
+      // un seul essai, comme en examen : le tuteur corrige et donne la bonne réponse (pas d'indice pour réessayer)
+      reponse: reponse.slice(0, 800), tentative: 2, verdict: null,
+    }),
+  });
+  if (!r.ok) throw new Error(String(r.status));
+  return r.json() as Promise<{ correct: boolean | null; partiel?: boolean; parole: string; ecrit: string; note?: number; details?: Detail[] }>;
+}
+
+function jugerValeur(q: Extract<QuestionExamen, { genre: 'valeur' }>, texte: string): Etat {
+  const lu = lireNombre(texte);
+  const tol = q.tolerance ?? 0.02;
+  const juste = lu != null && Math.abs(lu - q.valeur) <= tol * Math.max(Math.abs(q.valeur), 1e-12);
+  const t = texte.toLowerCase().replace(/\s+/g, ' ');
+  const unite = q.unites.some(u => t.includes(u.toLowerCase()));
+  const sansUnite = juste && !unite && q.points > 0.25;
+  // le résultat porte les points ; l'unité vaut 0,25 point quand la question en vaut plus
+  const surUnite = q.points > 0.25 ? 0.25 : 0;
+  const details: Detail[] = [{ element: 'Relation, application numérique et résultat', sur: q.points - surUnite, obtenu: juste ? q.points - surUnite : 0,
+    perte: juste ? '' : lu == null ? 'pas de résultat chiffré' : 'résultat faux' }];
+  if (surUnite) details.push({ element: 'Unité du résultat', sur: surUnite, obtenu: juste && unite ? surUnite : 0, perte: juste && !unite ? 'unité manquante' : !juste ? 'résultat faux' : '' });
+  const note = details.reduce((n, d) => n + d.obtenu, 0);
+  return { fait: true, texte, note, details, verdict: juste ? (sansUnite ? 'partiel' : 'juste') : 'faux',
+    retour: juste ? (sansUnite ? 'Le nombre est juste, mais l’unité manque : sur la copie, elle compte.' : 'Le résultat est juste, avec son unité.')
+      : lu == null ? 'Je ne trouve pas de résultat chiffré dans ta réponse.' : `Ton résultat (${String(lu).replace('.', ',')}) n’est pas le bon : regarde la correction.` };
+}
+
+export default function Examen() {
+  const [commence, setCommence] = useState(false);
+  const [i, setI] = useState(0);
+  const [etats, setEtats] = useState<Record<string, Etat>>({});
+  const [sujetVu, setSujetVu] = useState(true);
+  const clavierOuvert = useClavier().ouvert;
+  useEffect(() => { clavier.matiere('svt'); }, []);
+  useTempsPasse('examen', commence);
+  useEffect(() => { if (commence) suivre({ type: 'examen_debut', cours: 'examen' }); }, [commence]);
+
+  const { p, q } = QUESTIONS[i];
+  const etat: Etat = etats[q.id] || { fait: false };
+  const poser = (id: string, e: Partial<Etat>) => setEtats(s => ({ ...s, [id]: { ...(s[id] || { fait: false }), ...e } }));
+  const note = Object.values(etats).reduce((n, e) => n + (e.fait && typeof e.note === 'number' ? e.note : 0), 0);
+  const faites = QUESTIONS.filter(x => etats[x.q.id]?.fait).length;
+  const fini = faites === QUESTIONS.length;
+  const pointsFaits = QUESTIONS.filter(x => etats[x.q.id]?.fait).reduce((n, x) => n + x.q.points, 0);
+
+  const validerChoix = () => {
+    if (q.genre !== 'qcm' && q.genre !== 'vf') return;
+    const choix = etat.choix || [];
+    const parItem = q.points / q.items.length;
+    const justes = q.items.map((it, k) => (q.genre === 'qcm' ? choix[k] === (it as { bonne: number }).bonne : choix[k] === (it as { vrai: boolean }).vrai));
+    const n = justes.filter(Boolean).length;
+    poser(q.id, { fait: true, note: n * parItem, verdict: n === q.items.length ? 'juste' : n > 0 ? 'partiel' : 'faux',
+      details: q.items.map((it, k) => ({ element: it.texte, sur: parItem, obtenu: justes[k] ? parItem : 0, perte: justes[k] ? '' : 'réponse fausse' })),
+      retour: n === q.items.length ? 'Tout est juste.' : `${n} sur ${q.items.length} juste${n > 1 ? 's' : ''} : lis l’explication sous chaque proposition.` });
+  };
+
+  const repondre = async (texte: string) => {
+    if (q.genre === 'valeur') { poser(q.id, jugerValeur(q, texte)); return; }
+    if (q.genre !== 'redaction') return;
+    poser(q.id, { texte, verdict: 'lecture', retour: 'Le tuteur lit ta réponse…' });
+    try {
+      const r = await corrigerParLeTuteur(p, q, texte);
+      const verdict = r.correct === true ? 'juste' : r.partiel ? 'partiel' : r.correct === false ? 'faux' : 'nonjuge';
+      const noteQ = typeof r.note === 'number' ? r.note : r.correct === true ? q.points : r.partiel ? q.points / 2 : 0;
+      poser(q.id, { fait: true, texte, verdict, note: noteQ, retour: r.ecrit || r.parole, details: r.details });
+    } catch {
+      poser(q.id, { fait: false, texte, autoEval: true, verdict: undefined, retour: '' });
+    }
+  };
+
+  // chaque question notée part au suivi (onglet admin « Tronc Commun ») : note, verdict, éléments du barème perdus
+  const envoyes = useRef<Record<string, string>>({});
+  useEffect(() => {
+    for (const { p: pa, q: x } of QUESTIONS) {
+      const e = etats[x.id];
+      if (!e?.fait) continue;
+      const sig = `${e.note}|${e.verdict}`;
+      if (envoyes.current[x.id] === sig) continue;
+      envoyes.current[x.id] = sig;
+      suivre({ type: 'examen_question', cours: 'examen', question_id: x.id, partie: pa.titre, note: e.note || 0, sur: x.points,
+        verdict: e.verdict, enonce: x.texte, reponse: e.texte || (e.choix || []).map(c => String(c)).join(' ; '),
+        pertes: (e.details || []).filter(d => d.obtenu < d.sur).map(d => `${d.element} : ${d.perte || 'manque'}`) });
+    }
+    if (QUESTIONS.every(x => etats[x.q.id]?.fait) && !envoyes.current.__fin) {
+      envoyes.current.__fin = '1';
+      suivre({ type: 'examen_fin', cours: 'examen', note: Object.values(etats).reduce((n, e) => n + (e.note || 0), 0), sur: TOTAL });
+    }
+  }, [etats]);
+
+  const parPartie = useMemo(() => EXAMEN.parties.map(pa => ({
+    pa, sur: pa.questions.reduce((n, x) => n + x.points, 0),
+    note: pa.questions.reduce((n, x) => n + (etats[x.id]?.fait ? etats[x.id].note || 0 : 0), 0),
+  })), [etats]);
+
+  if (!commence) return <Accueil onCommencer={() => setCommence(true)} />;
+
+  const noteQ = etat.fait && typeof etat.note === 'number' ? etat.note : null;
+  const LIGNES = { lineHeight: '36px', backgroundImage: 'repeating-linear-gradient(transparent 0 35px, #9bb3d6 35px 36px)' };
+  const debutPartie = QUESTIONS.findIndex(x => x.p === p);
+
+  return (
+    <div className="flex h-[100dvh] w-screen flex-col bg-[#d6d6d0] text-black" style={{ fontFamily: 'system-ui, sans-serif' }}>
+      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-400 bg-white px-3 py-1.5 [@media(max-height:520px)]:py-0.5">
+        <a href="./" className={`${BTN} [@media(max-height:520px)]:py-0.5`}>← Tronc Commun</a>
+        <h1 className="min-w-0 flex-1 truncate text-base font-semibold sm:text-lg">{EXAMEN.titre}</h1>
+        <span className="hidden rounded border border-slate-500 px-2 py-0.5 text-sm text-slate-700 sm:inline" title="Durée conseillée, sans chronomètre">⏳ {EXAMEN.minutes} min conseillées</span>
+        <span className="rounded border border-black px-2 py-0.5 text-sm font-semibold">Note : {pts(note)} / {pts(pointsFaits)}{fini ? '' : ` · ${faites}/${QUESTIONS.length}`}</span>
+      </header>
+
+      <div className="flex min-h-0 flex-1 gap-2 p-2 sm:gap-3 sm:p-3 [@media(max-height:520px)]:p-1"
+        style={{ paddingRight: largeurClavier(clavierOuvert) || undefined, paddingBottom: hauteurClavierTelephone(clavierOuvert) || undefined }}>
+        {/* Le sujet : feuille blanche, écriture noire */}
+        {sujetVu && (
+          <section className="w-[42%] shrink-0 overflow-y-auto bg-white p-3 text-black shadow-md ring-1 ring-black/10 sm:p-5" style={{ fontFamily: SUJET }}>
+            <div className="mb-2 flex flex-wrap gap-1" style={{ fontFamily: 'system-ui, sans-serif' }}>
+              {EXAMEN.parties.map(pa => {
+                const k = QUESTIONS.findIndex(x => x.p === pa);
+                const toutes = pa.questions.every(x => etats[x.id]?.fait);
+                return <button key={pa.id} onClick={() => setI(k)} className={`rounded border px-2 py-0.5 text-xs ${pa === p ? 'border-black bg-black text-white' : toutes ? 'border-emerald-700 text-emerald-800' : 'border-slate-400'}`}>
+                  {pa.id === 'P1' ? 'Partie I' : `Ex. ${Number(pa.id.slice(1)) - 1}`}</button>;
+              })}
+            </div>
+            <h2 className="text-[17px] font-bold underline underline-offset-4">{p.titre}</h2>
+            <p className="mt-0.5 text-[13px] text-slate-600" style={{ fontFamily: 'system-ui, sans-serif' }}>{pts(p.questions.reduce((n, x) => n + x.points, 0))} points · environ {p.minutes} min</p>
+            {p.intro && <p className="mt-2 text-[16px] leading-snug"><Formule t={p.intro} /></p>}
+            {p.tableau && (
+              <div className="mt-2 overflow-x-auto">
+                <table className="w-full border-collapse text-[15px]">
+                  <thead><tr>{p.tableau.entetes.map((h, k) => <th key={k} className="border border-black bg-slate-100 px-1.5 py-0.5 text-center">{h}</th>)}</tr></thead>
+                  <tbody>{p.tableau.lignes.map((l, k) => <tr key={k}>{l.map((c, m) => <td key={m} className={`border border-black px-1.5 py-0.5 ${m === 0 ? 'font-semibold' : 'text-center'}`}>{c}</td>)}</tr>)}</tbody>
+                </table>
+              </div>)}
+            {!!p.donnees?.length && (
+              <div className="mt-2 border border-black p-2 text-[15px]">
+                <p className="font-bold">Données :</p>
+                <ul className="list-disc pl-5">{p.donnees.map((d, k) => <li key={k}><Formule t={d} /></li>)}</ul>
+              </div>)}
+            <table className="mt-3 w-full border-collapse text-[15px]">
+              <tbody>{p.questions.map((x, k) => {
+                const e = etats[x.id];
+                const v = e?.fait ? (e.note || 0) >= x.points ? '✔' : (e.note || 0) > 0 ? '◐' : '✘' : '';
+                return (
+                  <tr key={x.id} onClick={() => setI(debutPartie + k)} className={`cursor-pointer align-top ${x === q ? 'bg-amber-100' : 'hover:bg-slate-50'}`}>
+                    <td className="w-12 border-r border-slate-400 py-1 pr-1.5 text-right text-[13px] font-semibold" style={{ fontFamily: 'system-ui, sans-serif' }}>{pts(x.points)} pt</td>
+                    <td className="py-1 pl-2"><b>{x.id}.</b> <Formule t={x.texte} /> <span className={v === '✔' ? 'text-emerald-700' : v === '◐' ? 'text-amber-700' : 'text-rose-700'}>{v}</span></td>
+                  </tr>);
+              })}</tbody>
+            </table>
+          </section>)}
+
+        {/* La copie : cadre, marge du barème, lignes */}
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto bg-white text-black shadow-md ring-1 ring-black/10">
+          <table className="w-full shrink-0 border-collapse text-[15px]">
+            <tbody><tr>
+              <td className="border-2 border-black px-2 py-1 font-bold">Question {q.id}</td>
+              <td className="w-28 border-2 border-black px-1 py-1 text-center">Barème : <b>{pts(q.points)}</b></td>
+              <td className="w-28 border-2 border-black px-1 py-1 text-center">Note : <b className={noteQ === null ? '' : noteQ > 0 ? 'text-emerald-700' : 'text-rose-700'}>{noteQ === null ? '……' : pts(noteQ)}</b></td>
+            </tr></tbody>
+          </table>
+          <div className="flex flex-wrap items-center gap-1 border-b border-slate-300 px-2 py-1 text-sm text-slate-600">
+            <button onClick={() => setSujetVu(v => !v)} className="mr-1 rounded border border-slate-400 px-1.5 text-xs">{sujetVu ? '◀ Sujet' : '▶ Sujet'}</button>
+            {QUESTIONS.map((x, k) => {
+              const e = etats[x.q.id];
+              const c = k === i ? 'border-black bg-black text-white' : !e?.fait ? 'border-slate-400' : (e.note || 0) >= x.q.points ? 'border-emerald-700 text-emerald-700' : (e.note || 0) > 0 ? 'border-amber-600 text-amber-700' : 'border-rose-700 text-rose-700';
+              return <button key={x.q.id} onClick={() => setI(k)} className={`h-6 min-w-7 rounded border px-1 text-xs ${c}`} aria-label={`Question ${x.q.id}`}>{x.q.id}</button>;
+            })}
+          </div>
+
+          <div className="flex min-h-0 flex-1">
+            <div className="w-12 shrink-0 border-r-2 border-rose-400 pt-3 text-center sm:w-14">
+              <span className="inline-block rounded border border-black px-1 text-[13px] font-semibold">{pts(q.points)}</span>
+              {noteQ !== null && <p className={`mt-2 text-lg font-bold ${noteQ > 0 ? 'text-emerald-700' : 'text-rose-700'}`} style={{ fontFamily: CRAIE }}>{pts(noteQ)}</p>}
+            </div>
+
+            <div className="min-w-0 flex-1 p-2 sm:p-4">
+              <p className="text-[17px] font-semibold" style={{ fontFamily: SUJET }}><span>{q.id}.</span> <Formule t={q.texte} /></p>
+
+              {(q.genre === 'qcm' || q.genre === 'vf') && (
+                <Choix q={q} etat={etat} onChoisir={(k, v) => setEtats(s => {
+                  const e = s[q.id] || { fait: false };
+                  if (e.fait) return s;
+                  const c = [...(e.choix || q.items.map(() => null))]; c[k] = v;
+                  return { ...s, [q.id]: { ...e, choix: c } };
+                })} />)}
+              {(q.genre === 'qcm' || q.genre === 'vf') && !etat.fait && (
+                <button disabled={(etat.choix || []).filter(x => x !== null && x !== undefined).length < q.items.length} onClick={validerChoix}
+                  className="mt-3 rounded-md bg-black px-4 py-1.5 text-sm font-semibold text-white disabled:opacity-40">Valider mes réponses</button>)}
+
+              {(q.genre === 'valeur' || q.genre === 'redaction') && !etat.fait && etat.verdict !== 'lecture' && !etat.autoEval && (
+                <div className="mt-2">
+                  <ChampReponse key={q.id} papier onEnvoyer={t => void repondre(t)} libelle="Rendre ma réponse" lignes={q.genre === 'valeur' ? 3 : 6}
+                    placeholder={q.genre === 'valeur' ? `${q.grandeur} = … = résultat avec son unité` : 'Ta réponse, rédigée et justifiée…'}
+                    contexte={{ title: p.titre, enonce: q.texte, matiere: 'svt', chapitre: EXAMEN.titre }}
+                    suggestions={{ slide_id: `examen_${q.id}`, enonce: q.texte, clavier: { aides: [] } }} />
+                </div>)}
+              {etat.texte && (etat.fait || etat.verdict === 'lecture' || etat.autoEval) && (
+                <p className="mt-2 whitespace-pre-wrap text-[20px] text-black" style={{ fontFamily: CRAIE, ...LIGNES }}>{etat.texte}</p>)}
+
+              {etat.retour && <Verdict etat={etat} />}
+
+              {(etat.fait || etat.autoEval) && (q.genre === 'valeur' || q.genre === 'redaction') && (
+                <div className="mt-3 border-2 border-rose-700 p-2 sm:p-3">
+                  <p className="mb-1 font-bold text-rose-800">✍️ Correction</p>
+                  {q.correction.map((l, k) => <p key={k} className="text-[18px] text-rose-900" style={{ fontFamily: CRAIE }}><Formule t={l} /></p>)}
+                  {etat.autoEval && !etat.fait && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[15px]">
+                      <span className="text-slate-700">Le tuteur n’est pas joignable pour l’instant : compare toi-même avec la correction.</span>
+                      <button onClick={() => poser(q.id, { fait: true, note: q.points, verdict: 'juste' })} className="rounded-md border border-emerald-700 px-3 py-1 text-emerald-800">J’avais juste</button>
+                      <button onClick={() => poser(q.id, { fait: true, note: q.points / 2, verdict: 'partiel' })} className="rounded-md border border-amber-600 px-3 py-1 text-amber-800">À moitié</button>
+                      <button onClick={() => poser(q.id, { fait: true, note: 0, verdict: 'faux' })} className="rounded-md border border-rose-700 px-3 py-1 text-rose-800">Je m’étais trompé</button>
+                    </div>)}
+                </div>)}
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                {i > 0 && <button onClick={() => setI(i - 1)} className={BTN}>← Précédente</button>}
+                {i < QUESTIONS.length - 1 && <button onClick={() => setI(i + 1)} className={etat.fait ? 'ml-auto rounded-md bg-black px-4 py-1.5 text-sm font-semibold text-white' : `ml-auto ${BTN}`}>{etat.fait ? 'Question suivante →' : 'Passer →'}</button>}
+              </div>
+
+              {fini && <Bilan note={note} parPartie={parPartie} etats={etats} onRecommencer={() => { envoyes.current = {}; setEtats({}); setI(0); suivre({ type: 'examen_debut', cours: 'examen' }); }} />}
+            </div>
+          </div>
+        </section>
+      </div>
+      <ClavierFlottant droite={0} bas={16} />
+    </div>
+  );
+}
+
+function Choix({ q, etat, onChoisir }: { q: Extract<QuestionExamen, { genre: 'qcm' | 'vf' }>; etat: Etat; onChoisir: (k: number, v: number | boolean) => void }) {
+  return (
+    <ol className="mt-2 space-y-3">
+      {q.items.map((it, k) => {
+        const choisi = etat.choix?.[k];
+        const options: { v: number | boolean; texte: string }[] = q.genre === 'qcm'
+          ? (it as { choix: string[] }).choix.map((c, m) => ({ v: m, texte: c })) : [{ v: true, texte: 'Vrai' }, { v: false, texte: 'Faux' }];
+        const bonne = q.genre === 'qcm' ? (it as { bonne: number }).bonne : (it as { vrai: boolean }).vrai;
+        return (
+          <li key={k} className="text-[16px]" style={{ fontFamily: SUJET }}>
+            {q.items.length > 1 && <b>{String.fromCharCode(97 + k)}) </b>}<Formule t={it.texte} />
+            <div className={`mt-1 flex flex-wrap gap-1.5 ${q.genre === 'vf' ? '' : 'flex-col sm:flex-row'}`} style={{ fontFamily: 'system-ui, sans-serif' }}>
+              {options.map((o, m) => {
+                const actif = choisi === o.v;
+                const couleur = etat.fait ? (o.v === bonne ? 'border-emerald-700 bg-emerald-50 text-emerald-900' : actif ? 'border-rose-700 bg-rose-50 text-rose-900 line-through' : 'border-slate-300 text-slate-500')
+                  : actif ? 'border-black bg-black text-white' : 'border-slate-400 hover:bg-slate-100';
+                return <button key={m} disabled={etat.fait} onClick={() => onChoisir(k, o.v)} className={`rounded-md border px-2.5 py-1 text-left text-[15px] ${couleur}`}>
+                  {q.genre === 'qcm' ? `${String.fromCharCode(65 + m)}. ` : ''}{o.texte}</button>;
+              })}
+            </div>
+            {etat.fait && (
+              <p className={`mt-1 text-[16px] ${choisi === bonne ? 'text-emerald-800' : 'text-rose-800'}`} style={{ fontFamily: CRAIE }}>
+                {choisi === bonne ? '✔ ' : '✘ '}<Formule t={it.explication} /></p>)}
+          </li>);
+      })}
+    </ol>
+  );
+}
+
+function Verdict({ etat }: { etat: Etat }) {
+  const V = { juste: ['✔ Juste', 'border-emerald-700 text-emerald-800'], partiel: ['◐ Juste en partie', 'border-amber-600 text-amber-800'],
+    faux: ['✘ Faux', 'border-rose-700 text-rose-800'], nonjuge: ['? Le tuteur n’a pas pu juger ta réponse', 'border-slate-500 text-slate-800'],
+    lecture: ['…', 'border-slate-400 text-slate-600'] } as const;
+  const [titre, couleur] = V[etat.verdict || 'lecture'];
+  return (
+    <div className={`mt-3 border-2 p-2 ${couleur}`}>
+      {etat.verdict !== 'lecture' && <p className="text-[15px] font-bold">{titre}</p>}
+      <p className="text-[18px]" style={{ fontFamily: CRAIE }}><Formule t={etat.retour || ''} /></p>
+      {!!etat.details?.length && (
+        <table className="mt-2 w-full border-collapse text-[14px] text-slate-900">
+          <thead><tr className="bg-slate-100"><th className="border border-slate-400 px-2 py-1 text-left">Élément du barème</th>
+            <th className="w-20 border border-slate-400 px-1 py-1">Points</th><th className="border border-slate-400 px-2 py-1 text-left">Points perdus</th></tr></thead>
+          <tbody>{etat.details.map((d, k) => (
+            <tr key={k} className="align-top">
+              <td className="border border-slate-400 px-2 py-1"><Formule t={d.element} /></td>
+              <td className={`border border-slate-400 px-1 py-1 text-center font-semibold ${d.obtenu >= d.sur ? 'text-emerald-700' : 'text-rose-700'}`}>{pts(d.obtenu)} / {pts(d.sur)}</td>
+              <td className="border border-slate-400 px-2 py-1 text-rose-800">{d.obtenu >= d.sur ? '—' : `−${pts(d.sur - d.obtenu)} : ${d.perte || 'manque'}`}</td>
+            </tr>))}
+            <tr className="bg-slate-100 font-bold"><td className="border border-slate-400 px-2 py-1 text-right">Note</td>
+              <td className="border border-slate-400 px-1 py-1 text-center">{pts(etat.details.reduce((n, d) => n + d.obtenu, 0))} / {pts(etat.details.reduce((n, d) => n + d.sur, 0))}</td><td className="border border-slate-400" /></tr>
+          </tbody>
+        </table>)}
+    </div>
+  );
+}
+
+function Bilan({ note, parPartie, etats, onRecommencer }: { note: number; parPartie: { pa: PartieExamen; sur: number; note: number }[]; etats: Record<string, Etat>; onRecommencer: () => void }) {
+  const aRevoir = QUESTIONS.filter(x => (etats[x.q.id]?.note || 0) < x.q.points);
+  return (
+    <div className="mt-5 border-2 border-black p-3 sm:p-4">
+      <p className="text-xl font-bold">Note finale : {pts(note)} / {pts(TOTAL)}</p>
+      <table className="mt-2 w-full border-collapse text-[15px]">
+        <tbody>{parPartie.map(({ pa, sur, note: n }) => (
+          <tr key={pa.id}><td className="border border-slate-400 px-2 py-1">{pa.titre}</td>
+            <td className="w-24 border border-slate-400 px-2 py-1 text-center font-semibold">{pts(n)} / {pts(sur)}</td></tr>))}</tbody>
+      </table>
+      {aRevoir.length ? (
+        <p className="mt-2 text-[15px] text-slate-800">À revoir avant la vraie évaluation : {aRevoir.map(x => `question ${x.q.id}`).join(', ')}. Relis leur correction, puis reprends la partie du cours qui leur correspond.</p>
+      ) : <p className="mt-2 text-[15px] text-emerald-800">Tout est juste : tu es prêt pour l’évaluation.</p>}
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button onClick={onRecommencer} className={BTN}>🔁 Recommencer l’évaluation</button>
+        <a href="./" className={BTN}>Revoir les cours</a>
+      </div>
+    </div>
+  );
+}
+
+function Accueil({ onCommencer }: { onCommencer: () => void }) {
+  return (
+    <div className="min-h-[100dvh] bg-[#d6d6d0] p-3 text-black sm:p-6" style={{ fontFamily: 'system-ui, sans-serif' }}>
+      <div className="mx-auto max-w-3xl bg-white p-4 shadow-md ring-1 ring-black/10 sm:p-6">
+        <a href="./" className="text-sm text-slate-600 underline">← Tronc Commun</a>
+        <table className="my-3 w-full border-collapse text-[15px]">
+          <tbody><tr>
+            <td className="border border-black px-2 py-1 font-semibold">{EXAMEN.matiere}</td>
+            <td className="border border-black px-2 py-1 text-center">{EXAMEN.niveau} · {EXAMEN.minutes} min au plus</td>
+            <td className="border border-black px-2 py-1 text-center font-semibold">{pts(TOTAL)} points</td>
+          </tr></tbody>
+        </table>
+        <h1 className="text-xl font-bold" style={{ fontFamily: SUJET }}>{EXAMEN.titre}</h1>
+        <p className="mt-2 text-[16px] leading-relaxed text-slate-800">{EXAMEN.consigne}</p>
+        <table className="mt-3 w-full border-collapse text-[15px]">
+          <tbody>{EXAMEN.parties.map(pa => (
+            <tr key={pa.id}><td className="border border-slate-400 px-2 py-1">{pa.titre}</td>
+              <td className="w-24 border border-slate-400 px-2 py-1 text-center">{pts(pa.questions.reduce((n, x) => n + x.points, 0))} pts</td>
+              <td className="w-24 border border-slate-400 px-2 py-1 text-center text-slate-600">≈ {pa.minutes} min</td></tr>))}</tbody>
+        </table>
+        <p className="mt-3 text-[14px] text-slate-600">Programme : la sortie écologique ; les facteurs édaphiques (texture et structure, propriétés chimiques, propriétés hydriques du sol). Pas de chronomètre : la durée est un repère.</p>
+        <button onClick={onCommencer} className="mt-4 rounded-md bg-black px-5 py-2 font-semibold text-white">Commencer l’évaluation</button>
+      </div>
+    </div>
+  );
+}

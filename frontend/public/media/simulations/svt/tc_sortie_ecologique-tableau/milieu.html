@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Un milieu naturel — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/svt/tc_sortie_ecologique-tableau/sortie.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un paysage peint : un chêne-liège, des buissons, de l’herbe, un lapin, un oiseau, un poisson dans une mare, des vers dans le sol, le soleil et un nuage de pluie ; la partie vivante puis la partie non vivante s’allument, ou le paysage se sépare en biotope et biocénose"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/svt/tc_sortie_ecologique-tableau/commun.js"></script>
+<script>
+/*
+ * Un milieu naturel (diapos se_o1_milieux et se_a4_ecosysteme du cours « La sortie écologique »).
+ *   ?vue=intro (défaut) : le paysage, puis la partie vivante (biotique) s'allume en vert, puis la partie non vivante
+ *     (abiotique) en cyan. Moments : milieu 0,3 ; vivant 2 ; non_vivant 5 ; fin 8.
+ *   ?vue=ecosysteme : le même paysage (un objet, un seul dessin) se sépare en deux : à gauche le biotope (eau, sol, air,
+ *     lumière, roches), à droite la biocénose (végétaux, animaux, décomposeurs), puis ils se rejoignent : écosystème =
+ *     biotope + biocénose. Moments : ecosysteme 0,5 ; separe 2 ; biotope 4,5 ; biocenose 6,5 ; relations 8,5 ; fin 11,5.
+ *     set_parameters {conclusions: false} cache l'égalité finale (question ouverte).
+ */
+const { P, lueur } = window.Sortie;
+const VUE = window.Sortie.param('vue', 'intro') === 'ecosysteme' ? 'ecosysteme' : 'intro';
+// Le paysage dans une boîte locale 600 × 300 ; chaque objet : sa catégorie et sa boîte (pour l'allumer).
+const OBJ = {
+  arbre: { v: true, box: [425, 22, 92, 120], nom: 'végétaux' },
+  arbuste: { v: true, box: [356, 148, 54, 46] },
+  herbe: { v: true, box: [300, 160, 64, 34] },
+  lapin: { v: true, box: [400, 158, 48, 38], nom: 'animaux' },
+  oiseau: { v: true, box: [215, 50, 70, 40] },
+  poisson: { v: true, box: [205, 190, 40, 18] },
+  decomposeurs: { v: true, box: [148, 228, 300, 44], nom: 'décomposeurs' },
+  soleil: { v: false, box: [510, 15, 60, 60] },
+  pluie: { v: false, box: [55, 20, 115, 80] },
+  mare: { v: false, box: [160, 180, 140, 32] },
+  roches: { v: false, box: [72, 168, 58, 30] },
+  sol: { v: false, box: [8, 228, 104, 52] },
+};
+function paysage(ctx, quoi, ph) {
+  const vivant = quoi !== 'biotope', inerte = quoi !== 'biocenose';
+  if (inerte) {
+    // collines au loin, sol, mare, roches, soleil, nuage de pluie, air
+    ctx.save(); const g = ctx.createLinearGradient(0, 120, 0, 195); g.addColorStop(0, 'rgba(214,190,150,.75)'); g.addColorStop(1, 'rgba(170,140,100,.85)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(0, 195); ctx.quadraticCurveTo(90, 120, 200, 160); ctx.quadraticCurveTo(320, 110, 450, 150); ctx.quadraticCurveTo(540, 130, 600, 160); ctx.lineTo(600, 195); ctx.closePath(); ctx.fill(); ctx.restore();
+    P.sol(ctx, 0, 192, 600, 106, { graine: 9 });
+    ctx.save(); const ge = ctx.createLinearGradient(0, 186, 0, 214); ge.addColorStop(0, 'rgba(147,210,250,.95)'); ge.addColorStop(1, 'rgba(37,99,235,.9)');
+    ctx.fillStyle = ge; ctx.beginPath(); ctx.ellipse(230, 196, 68, 15, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.ellipse(230, 192, 50, 7, 0, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke(); ctx.restore();
+    P.pierre(ctx, 104, 186, 18); P.pierre(ctx, 82, 191, 11);
+    P.soleil(ctx, 540, 45, 22);
+    P.nuage(ctx, 112, 45, 95, { pluie: true, phase: ph });
+  } else {
+    ctx.save(); ctx.strokeStyle = 'rgba(226,232,240,.35)'; ctx.setLineDash([6, 6]); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(0, 193); ctx.lineTo(600, 193); ctx.stroke(); ctx.restore();
+  }
+  if (vivant) {
+    P.herbe(ctx, 22, 193, 28, { graine: 1, epi: true }); P.herbe(ctx, 318, 193, 28, { graine: 2 }); P.herbe(ctx, 346, 193, 30, { graine: 3, epi: true });
+    P.arbuste(ctx, 382, 193, 48, { sorte: 'ciste', graine: 4 });
+    P.arbre(ctx, 470, 194, 175, { sorte: 'chene', graine: 5 });
+    P.lapin(ctx, 418, 196, 34);
+    P.oiseau(ctx, 250, 70, 46);
+    if (quoi === 'biocenose') { ctx.save(); ctx.fillStyle = 'rgba(59,130,246,.18)'; ctx.beginPath(); ctx.ellipse(230, 196, 68, 15, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+    P.poisson(ctx, 226, 199, 26);
+    P.verOndule(ctx, 175, 245, 46, .2, { e: 5 }); P.verOndule(ctx, 430, 262, 40, -.3, { e: 5, phase: 2 });
+    P.champignon(ctx, 510, 194, 16); P.champignon(ctx, 300, 265, 13);
+  }
+}
+function boite(nom, k, ox, oy) { const b = OBJ[nom].box; return [ox + b[0] * k, oy + b[1] * k, b[2] * k, b[3] * k]; }
+
+function dessinerIntro(c, S, scene) {
+  const pt = scene.petit, L = scene.L, k = Math.min((L - 40) / 600, 330 / 300), ox = (L - 600 * k) / 2, oy = 28;
+  c.direct(() => {
+    c.ctx.save(); c.ctx.translate(ox, oy); c.ctx.scale(k, k); paysage(c.ctx, 'tout', S.t); c.ctx.restore();
+  });
+  c.repere('paysage', ox, oy, 600 * k, 300 * k, 'le milieu naturel');
+  const groupe = v => Object.keys(OBJ).filter(n => OBJ[n].v === v);
+  for (const n of Object.keys(OBJ)) c.repere(n, ...boite(n, k, ox, oy), n);
+  if (S.ecrit(c, 'vivant')) {
+    groupe(true).forEach(n => lueur(c, ...boite(n, k, ox, oy), { couleur: '74, 222, 128', vive: !S.a('non_vivant') }));
+    if (!pt) {   // le petit cadre ne garde que les deux titres (la voix nomme les objets)
+      c.texte('végétaux', ox + 385 * k, oy + 40 * k, { couleur: 'vert', taille: 19, align: 'center' });
+      c.texte('animaux', ox + 250 * k, oy + 118 * k, { couleur: 'vert', taille: 19, align: 'center' });
+      c.texte('décomposeurs', ox + 300 * k, oy + 292 * k, { couleur: 'vert', taille: 19, align: 'center' });
+    }
+    c.texte(pt ? 'vivant = biotique' : 'Partie vivante = biotique', 24, 404, { couleur: 'vert', taille: pt ? 32 : 22, gras: true });
+    c.repere('vivant', 18, 384, 300, 28, 'la partie vivante');
+  }
+  if (S.ecrit(c, 'non_vivant')) {
+    groupe(false).forEach(n => lueur(c, ...boite(n, k, ox, oy), { couleur: '34, 211, 238', vive: true }));
+    if (!pt) {
+      c.texte('lumière, chaleur', ox + 540 * k, oy + 98 * k, { couleur: 'cyan', taille: 18, align: 'center' });
+      c.texte('eau (pluie)', ox + 112 * k, oy + 118 * k, { couleur: 'cyan', taille: 18, align: 'center' });
+      c.texte('air', ox + 330 * k, oy + 80 * k, { couleur: 'cyan', taille: 20, align: 'center' });
+      c.texte('roches', ox + 100 * k, oy + 160 * k, { couleur: 'cyan', taille: 18, align: 'center' });
+      c.texte('sol', ox + 60 * k, oy + 255 * k, { couleur: 'cyan', taille: 20, align: 'center' });
+    }
+    c.texte(pt ? 'non vivant = abiotique' : 'Partie non vivante = abiotique', L - 24, 404, { couleur: 'cyan', taille: pt ? 32 : 22, gras: true, align: 'right' });
+    c.repere('non_vivant', L - 340, 384, 320, 28, 'la partie non vivante');
+  }
+}
+
+function dessinerEco(c, S, scene) {
+  const L = scene.L, pt = scene.petit;
+  const kF = Math.min((L - 40) / 600, 300 / 300), xF = (L - 600 * kF) / 2, yF = 52;
+  const s2 = Math.min((L / 2 - 30) / 600, .78), yP = 118, xG = L / 2 - 14 - 600 * s2, xD = L / 2 + 14;
+  const sep = S.k('separe', 2) * (1 - S.k('relations', 1.5));
+  const lerp = (a, b) => a + (b - a) * sep;
+  const kk = lerp(kF, s2), xg = lerp(xF, xG), xd = lerp(xF, xD), yy = lerp(yF, yP);
+  if (S.t <= 0 || S.a('ecosysteme')) c.texte('Écosystème', L / 2, pt ? 40 : 34, { couleur: 'jaune', taille: pt ? 34 : 26, gras: true, align: 'center' });
+  c.direct(() => {
+    const g = c.ctx; g.save();
+    g.save(); g.translate(xg, yy); g.scale(kk, kk); paysage(g, 'biotope', S.t); g.restore();
+    g.save(); g.translate(xd, yy); g.scale(kk, kk); paysage(g, 'biocenose', S.t); g.restore();
+    g.restore();
+  });
+  c.repere('ecosysteme', xF, yF, 600 * kF, 300 * kF, 'l’écosystème entier');
+  if (sep > .98) {
+    c.repere('biotope', xG, yP, 600 * s2, 300 * s2, 'le biotope'); c.repere('biocenose', xD, yP, 600 * s2, 300 * s2, 'la biocénose');
+  }
+  if (S.ecrit(c, 'biotope') && !S.a('relations')) {
+    lueur(c, xG - 4, yP - 4, 600 * s2 + 8, 300 * s2 + 8, { couleur: '251, 146, 60', vive: !S.a('biocenose') });
+    c.texte('Biotope', xG + 300 * s2, yP - 16, { couleur: 'orange', taille: pt ? 34 : 24, gras: true, align: 'center' });
+    c.texte(pt ? 'le milieu' : 'le milieu : eau, sol, air, lumière', xG + 300 * s2, yP + 300 * s2 + (pt ? 40 : 32), { couleur: 'orange', taille: pt ? 30 : 18, align: 'center', max: pt ? 0 : 600 * s2 });
+  }
+  if (S.ecrit(c, 'biocenose') && !S.a('relations')) {
+    lueur(c, xD - 4, yP - 4, 600 * s2 + 8, 300 * s2 + 8, { couleur: '74, 222, 128', vive: true });
+    c.texte('Biocénose', xD + 300 * s2, yP - 16, { couleur: 'vert', taille: pt ? 34 : 24, gras: true, align: 'center' });
+    c.texte(pt ? 'les êtres vivants' : 'les êtres vivants : végétaux, animaux…', xD + 300 * s2, yP + 300 * s2 + (pt ? 40 : 32), { couleur: 'vert', taille: pt ? 30 : 18, align: 'center', max: pt ? 0 : 600 * s2 });
+  }
+  if (S.ecrit(c, 'relations') && S.k('relations', 1.5) > .98) {
+    const X = (x) => xF + x * kF, Y = (y) => yF + y * kF;
+    c.fleche(X(445), Y(150), X(405), Y(185), { couleur: 'rose', largeur: 2.2 });
+    c.fleche(X(405), Y(185), X(445), Y(150), { couleur: 'rose', largeur: 2.2 });
+    c.fleche(X(470), Y(205), X(470), Y(240), { couleur: 'rose', largeur: 2.2 });
+    c.fleche(X(470), Y(240), X(470), Y(205), { couleur: 'rose', largeur: 2.2 });
+    if (!pt) c.texte('interactions', X(560), Y(232), { couleur: 'rose', taille: 18, align: 'center' });
+    c.repere('interactions', X(400), Y(145), 200 * kF, 105 * kF, 'les interactions');
+    if (S.conclusions) {
+      c.texte('Écosystème = Biotope + Biocénose', L / 2, 404, { couleur: 'jaune', taille: pt ? 30 : 24, gras: true, align: 'center' });
+      c.repere('egalite', L / 2 - 200, 382, 400, 30, 'écosystème = biotope + biocénose');
+    }
+  }
+}
+
+const MOMENTS = VUE === 'intro' ? { milieu: .3, vivant: 2, non_vivant: 5 } : { ecosysteme: .5, separe: 2, biotope: 4.5, biocenose: 6.5, relations: 8.5 };
+window.Sortie.sim({
+  id: 'tc_sortie_milieu_' + VUE, titre: VUE === 'intro' ? 'Un milieu naturel : vivant et non vivant' : 'Écosystème = biotope + biocénose', vue: VUE,
+  moments: MOMENTS, fin: VUE === 'intro' ? 8 : 11.5, graine: 11,
+  motifs: { milieu: 'le milieu naturel', vivant: 'la partie vivante (biotique) allumée en vert', non_vivant: 'la partie non vivante (abiotique) allumée en cyan',
+    ecosysteme: 'l’écosystème entier', separe: 'le paysage se sépare en deux', biotope: 'à gauche, le biotope', biocenose: 'à droite, la biocénose', relations: 'les deux parties réunies, en interaction' },
+  accueil: VUE === 'intro' ? 'Un milieu naturel : qu’est-ce qui est vivant, qu’est-ce qui ne l’est pas ?' : 'Un écosystème : sépare ce qui vit de son milieu.',
+  fini: VUE === 'intro' ? 'Vivant (biotique) en vert, non vivant (abiotique) en cyan.' : 'Écosystème = biotope + biocénose, en interaction.',
+  dessiner: (c, S, scene) => (VUE === 'intro' ? dessinerIntro(c, S, scene) : dessinerEco(c, S, scene)),
+  ceQuiSeVoit: S => {
+    if (VUE === 'intro') {
+      const m = ['Un paysage : chêne-liège, buisson, herbe, lapin, oiseau, poisson dans une mare, vers et champignons dans le sol ; soleil, nuage de pluie, roches, sol.'];
+      if (S.a('vivant')) m.push('Allumés en vert : végétaux, animaux, décomposeurs = partie vivante ou biotique.');
+      if (S.a('non_vivant')) m.push('Allumés en cyan : lumière et chaleur du soleil, eau, air, roches, sol = partie non vivante ou abiotique.');
+      return m.join(' ');
+    }
+    const m = ['Le paysage, titre « Écosystème ».'];
+    if (S.a('separe') && !S.a('relations')) m.push('Il se sépare : à gauche le milieu sans les êtres vivants, à droite les êtres vivants seuls.');
+    if (S.a('biotope') && !S.a('relations')) m.push('À gauche : Biotope (eau, sol, air, lumière).');
+    if (S.a('biocenose') && !S.a('relations')) m.push('À droite : Biocénose (végétaux, animaux, décomposeurs).');
+    if (S.a('relations')) m.push('Les deux se rejoignent ; flèches « interactions » entre êtres vivants et milieu' + (S.conclusions ? ' ; écrit : Écosystème = Biotope + Biocénose.' : '.'));
+    return m.join(' ');
+  },
+  texte: 'Un milieu naturel est formé d’une partie vivante (biotique : végétaux, animaux, décomposeurs) et d’une partie non vivante (abiotique : eau, sol, air, lumière, chaleur). Le biotope (le milieu) et la biocénose (les êtres vivants) en interaction forment l’écosystème.',
+  explication: { milieu: [{ repere: 'vivant', texte: 'La partie vivante : végétaux, animaux, décomposeurs.' }, { repere: 'non_vivant', texte: 'La partie non vivante : eau, sol, air, lumière, chaleur.' }] },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

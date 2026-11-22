@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>La sédimentation d’un sol — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="sol.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Un bocal d’eau où l’on agite 50 g de sol : le sable se dépose d’abord au fond, puis le limon, puis l’argile, les particules organiques flottent ; on mesure ensuite la hauteur de chaque couche et on calcule les pourcentages"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Doc 2 du professeur : la détermination de la texture du sol (diapositives fe_t3_sedimentation et fe_t4_mesures).
+ * 50 g de sol fin + eau, on agite, on laisse sédimenter : le sable (les plus gros grains) se dépose d’abord, puis le
+ * limon, puis l’argile (très fine, lente) ; les particules organiques restent en haut. Mesures du document :
+ * sable 10 mm, limon 15 mm, argile 25 mm, total 50 mm = 100 % (nombres simples, règle de l’utilisateur) ; règle de
+ * trois : 20 % ; 30 % ; 50 %.
+ * Moments : verse 3 ; agite 5 ; sable 8 ; limon 11 ; argile 14,5 ; organiques 16 ; regle 17,5 ; h_sable 19 ;
+ * h_limon 20,5 ; h_argile 22 ; total 23,5 ; pc_sable 25,5 ; pc_limon 27,5 ; pc_argile 29,5 ; fin 30.
+ * Le dessin garde l’échelle : 2,6 unités de dessin par millimètre. set_parameters {conclusions:false} : les noms des
+ * couches ne s’écrivent pas (question d’observation « quelle couche en premier ? »).
+ */
+const ST = window.SolTableau, { fr, doux, mix } = ST;
+const $ = id => document.getElementById(id);
+const M = { verse: 3, agite: 5, sable: 8, limon: 11, argile: 14.5, organiques: 16, regle: 17.5, h_sable: 19, h_limon: 20.5, h_argile: 22, total: 23.5, pc_sable: 25.5, pc_limon: 27.5, pc_argile: 29.5 };
+const FIN = 30;
+const MOTIFS = { verse: 'le sol et l’eau dans le bocal', agite: 'le mélange agité, trouble', sable: 'le sable s’est déposé au fond', limon: 'le limon s’est déposé sur le sable',
+  argile: 'l’argile s’est déposée en dernier', organiques: 'les particules organiques restent en haut', regle: 'la règle graduée', h_sable: 'sable : 10 mm', h_limon: 'limon : 15 mm',
+  h_argile: 'argile : 25 mm', total: 'total : 50 mm = 100 %', pc_sable: '20 % de sable', pc_limon: '30 % de limon', pc_argile: '50 % d’argile' };
+const MM = 3.4;
+const P = { conclusions: true };
+const COUCHES = [
+  { id: 'sable', nom: 'Sable', h: 10, debut: 5, fin: 8, couleur: 'jaune', pc: '20', mesure: 'h_sable', calc: 'pc_sable' },
+  { id: 'limon', nom: 'Limon', h: 15, debut: 8, fin: 11, couleur: 'orange', pc: '30', mesure: 'h_limon', calc: 'pc_limon' },
+  { id: 'argile', nom: 'Argile', h: 25, debut: 11, fin: 14.5, couleur: 'blanc', pc: '50', mesure: 'h_argile', calc: 'pc_argile' },
+];
+function dessiner(c) {
+  scene.cadre(13);
+  const t = B.chrono.t, L = scene.L;
+  const jx = 70, jy = 70, jw = 170, jh = 320, fond = jy + jh - 8;   // le bocal (intérieur : du haut jy+16 au fond)
+  const niveauEau = jy + 40;
+  // ── le bocal peint : eau, suspension, couches ──
+  c.direct(() => {
+    const g = c.ctx; g.save();
+    g.beginPath(); if (g.roundRect) g.roundRect(jx, jy, jw, jh, [10, 10, 26, 26]); else g.rect(jx, jy, jw, jh); g.save(); g.clip();
+    const eau = doux((t - 1.5) / 1.5);
+    if (eau > 0) {
+      const ys = mix(fond, niveauEau, eau);
+      // trouble : les fractions pas encore déposées
+      let trouble = 0;
+      for (const C of COUCHES) trouble += 1 - doux((t - C.debut) / (C.fin - C.debut));
+      const tr = t < 3 ? 0 : t < 5 ? doux((t - 3) / 1.2) : trouble / 3;
+      ST.eauPeinte(g, jx, ys, jw, fond - ys, { alpha: .35 });
+      g.fillStyle = `rgba(150,110,70,${.75 * tr})`; g.fillRect(jx, ys, jw, fond - ys);
+    }
+    // le sol versé (0 → 1,5 s) : un tas au fond, avant l’eau
+    if (t < 3.4) { const u = doux(t / 1.5), hT = 60 * u; ST.remplir(g, jx, fond - hT, jw, hT, 'limon', { densite: .6, graine: 4 }); }
+    // les couches qui montent pendant leur dépôt
+    let y = fond;
+    for (const C of COUCHES) {
+      const u = doux((t - C.debut) / (C.fin - C.debut)); if (u <= 0) break;
+      const h = C.h * MM * u; ST.remplir(g, jx, y - h, jw, h, C.id, { graine: C.h * 7, densite: .9 }); C.y1 = y; C.y0 = y - C.h * MM; y -= h;
+      // les grains de cette fraction qui tombent encore
+      if (u < 1) { const rr = ST.graine(C.h); for (let k = 0; k < 40; k++) { const px = jx + 6 + rr() * (jw - 12), ph = (rr() + t * (C.id === 'sable' ? 1.2 : .5)) % 1, py = mix(niveauEau + 10, y - 4, ph * (1 - u * .5)); ST.grain(g, px, py, C.id, { graine: k }); } }
+    }
+    // les particules organiques en haut
+    const o = doux((t - 14.5) / 1.5);
+    if (o > 0) { const rr = ST.graine(77); for (let k = 0; k < 22; k++) ST.grain(g, jx + 8 + rr() * (jw - 16), niveauEau + 6 + rr() * 16, 'humus', { alpha: o, graine: k }); }
+    g.restore();
+    // le verre, le couvercle, l’agitation (le bocal tremble entre 3 et 5 s)
+    const sec = t > 3 && t < 5 ? Math.sin(t * 40) * 3 : 0;
+    g.strokeStyle = 'rgba(220,235,245,.75)'; g.lineWidth = 3; g.translate(sec, 0);
+    g.beginPath(); if (g.roundRect) g.roundRect(jx, jy, jw, jh, [10, 10, 26, 26]); g.stroke();
+    g.strokeStyle = 'rgba(255,255,255,.18)'; g.lineWidth = 7; g.beginPath(); g.moveTo(jx + 14, jy + 24); g.lineTo(jx + 14, jy + jh - 30); g.stroke();
+    if (t > 2.8) { const cg = g.createLinearGradient(0, jy - 18, 0, jy); cg.addColorStop(0, '#d4b45a'); cg.addColorStop(1, '#8a6d22'); g.fillStyle = cg; g.fillRect(jx - 6, jy - 18, jw + 12, 18); }
+    g.restore();
+  });
+  if (!scene.compact) c.texte('50 g de sol + eau', jx + jw / 2, jy - 30, { couleur: 'blanc', taille: 18, align: 'center' });
+  c.repere('bocal', jx - 6, jy - 20, jw + 12, jh + 26, 'le bocal');
+  if (t >= 3 && !scene.compact) ecrit.ecrire(c, 'agiter', () => c.texte('on agite, puis on laisse sédimenter', jx + jw + 30, 34, { couleur: 'faible', taille: 17, max: L - jx - jw - 50 }));
+  // les noms des couches, écrits quand elles se sont déposées
+  COUCHES.forEach(C => {
+    if (t < C.fin || !P.conclusions) return;
+    const ym = fond - (COUCHES.slice(0, COUCHES.indexOf(C)).reduce((s, D) => s + D.h, 0) + C.h / 2) * MM;
+    ecrit.ecrire(c, 'nom_' + C.id, () => { c.ligne(jx + jw + 4, ym, jx + jw + 26, ym, { couleur: C.couleur, largeur: 1.6 }); c.texte(C.nom, jx + jw + 32, ym + 6, { couleur: C.couleur, taille: 19 }); });
+    // compact : la mesure et le pourcentage s’écrivent à côté du nom (la colonne des calculs est cachée)
+    if (scene.compact && t >= M[C.mesure] - 1.2) c.direct(() => c.texte(`${C.h} mm${t >= M[C.calc] - 1.6 ? ' → ' + C.pc + ' %' : ''}`, jx + jw + 32 + c.largeurTexte(C.nom, 23) + 14, ym + 6, { couleur: 'blanc', taille: 19 }));
+    c.repere(C.id, jx, ym - C.h * MM / 2, jw + 100, C.h * MM, 'la couche de ' + C.nom.toLowerCase());
+  });
+  if (t >= 16 && P.conclusions && !scene.compact) {
+    ecrit.ecrire(c, 'nom_org', () => { c.ligne(jx + jw + 4, niveauEau + 14, jx + jw + 26, niveauEau + 14, { couleur: 'orange', largeur: 1.6 }); c.texte('particules organiques', jx + jw + 32, niveauEau + 20, { couleur: 'orange', taille: 17 }); });
+    c.repere('organiques', jx, niveauEau, jw + 200, 30, 'les particules organiques, en haut');
+  }
+  // ── les mesures : la règle, puis chaque hauteur s’allume ──
+  if (t >= 16.2) {
+    const rx = jx - 30;
+    ecrit.ecrire(c, 'regle', () => {
+      c.ligne(rx, fond, rx, fond - 60 * MM, { couleur: 'blanc', largeur: 2 });
+      for (let mm = 0; mm <= 60; mm += 10) { c.ligne(rx - 6, fond - mm * MM, rx, fond - mm * MM, { couleur: 'blanc', largeur: 1.6, duree: .04 }); if (mm % 20 === 0) c.texte(String(mm), rx - 10, fond - mm * MM + 5, { couleur: 'faible', taille: 15, align: 'right', duree: .05 }); }
+      c.texte('mm', rx - 2, fond - 60 * MM - 10, { couleur: 'faible', taille: 15, align: 'center' });
+    });
+    c.repere('regle', rx - 16, fond - 62 * MM, 26, 62 * MM, 'la règle graduée');
+  }
+  const xr = Math.max(jx + jw + 200, L * .52), wr = L - xr - 20;   // la colonne des calculs
+  let base = 0;
+  COUCHES.forEach((C, i) => {
+    const y0 = fond - (base + C.h) * MM, y1 = fond - base * MM; base += C.h;
+    const tM = M[C.mesure];
+    if (t >= tM - 1.2) {
+      ST.lueur(c, jx - 4, y0, jw + 8, y1 - y0, t < tM + 1.4);
+      if (!scene.compact) ecrit.ecrire(c, 'mes_' + C.id, () => c.texte(`${C.nom} : ${C.h} mm`, xr, 70 + i * 34, { couleur: C.couleur, taille: 20, max: wr }));
+      c.repere('mesure_' + C.id, xr - 6, 48 + i * 34, wr, 30, `${C.nom} : ${C.h} mm`);
+    }
+  });
+  if (t >= M.total - 1.2 && !scene.compact) {
+    ecrit.ecrire(c, 'total', () => {
+      c.ligne(xr, 172, xr + Math.min(wr, 300), 172, { couleur: 'faible', largeur: 1.4 });
+      c.texte('Total : 50 mm = 100 %', xr, 200, { couleur: 'cyan', taille: 21, max: wr });
+    });
+    c.repere('total', xr - 6, 178, wr, 30, 'le total : 50 mm, c’est 100 %');
+  }
+  COUCHES.forEach((C, i) => {
+    const tC = M[C.calc];
+    if (t < tC - 1.6 || scene.compact) return;
+    ecrit.ecrire(c, 'pc_' + C.id, () => c.texte(`${C.nom} : ⟦${C.h} × 100|50⟧ = ${C.pc} %`, xr, 252 + i * 52, { couleur: C.couleur, taille: 20, max: wr }));
+    c.repere(C.calc, xr - 6, 222 + i * 52, wr, 48, `${C.pc} % de ${C.nom.toLowerCase()}`);
+  });
+  return c.fin();
+}
+const canvas = $('canvas');
+const scene = ST.Scene(canvas, dessiner, { large: true });
+const ecrit = ST.Apparitions(scene);
+ST.brancher.scene = scene; ST.brancher.ecrit = ecrit;
+function voir(t) {
+  const m = ['Un bocal avec 50 g de sol et de l’eau.'];
+  if (t > 3 && t < 5) m.push('On agite : le mélange est trouble.');
+  COUCHES.forEach(C => { if (t >= C.fin) m.push(`${C.nom} déposé.`); else if (t > C.debut) m.push(`${C.nom} en train de se déposer.`); });
+  if (t >= 16) m.push('Les particules organiques restent en haut. Ordre de dépôt, du fond vers le haut : sable, limon, argile.');
+  COUCHES.forEach(C => { if (t >= M[C.mesure] - 1.2) m.push(`Mesure : ${C.nom.toLowerCase()} ${C.h} mm.`); });
+  if (t >= M.total - 1.2) m.push('Total 50 mm = 100 %.');
+  COUCHES.forEach(C => { if (t >= M[C.calc] - 1.6) m.push(`${C.nom} : (${C.h} × 100)/50 = ${C.pc} %.`); });
+  return m.join(' ');
+}
+scene.foyer = () => ({ x: 6, y: 52, w: 500, h: 350 });   // compact : le bocal et ses couches
+const B = ST.brancher({ id: 'edaph_bocal', titre: 'La sédimentation d’un sol', M, FIN, motifs: MOTIFS, params: P,
+  setParams: { schema: { conclusions: 'true | false (false : les noms des couches ne s’écrivent pas)' }, appliquer: (p, R) => { if ('conclusions' in p) R.conclusions = p.conclusions !== false && p.conclusions !== 'false'; } },
+  bandeau: (t, m) => (!P.conclusions && t >= 5 ? 'Observe le fond du bocal' : m),
+  texte: 'Doc 2 : 50 g de sol fin dans un bocal d’eau, agité puis laissé sédimenter. Du fond vers le haut : sable 10 mm, limon 15 mm, argile 25 mm, particules organiques en haut. Total 50 mm = 100 % ; sable 20 %, limon 30 %, argile 50 % (règle de trois).',
+  voir, depart: 'On verse le sol, puis l’eau…', fini: () => 'Sable 20 %, limon 30 %, argile 50 %.',
+  explication: { sedimentation: [{ repere: 'bocal', texte: 'Le bocal : le sol et l’eau.' }, { repere: 'sable', texte: 'Le sable, déposé en premier.' }, { repere: 'limon', texte: 'Le limon, au milieu.' }, { repere: 'argile', texte: 'L’argile, en dernier.' }, { repere: 'total', texte: '50 mm = 100 %.' }] } });
+window.Tableau.bulle($('feedback'), 'Que devient le sol agité dans l’eau ?');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>L’eau dans le sol — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="sol.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Une molécule d’eau entre une racine et une particule de sol, avec trois forces : pesanteur P, attraction des particules F, succion des racines S ; puis un sol qui se vide : eau de gravité, eau capillaire, eau hygroscopique et le flétrissement de la plante"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/shared/lexique/lexique.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Docs 2 et 3 de l’activité 3 (diapositives fe_h5_forces, fe_h6_formes, fe_h7_fletrissement).
+ *   ?vue=forces : une molécule d’eau (dessin du lexique commun) entre un poil absorbant et une particule de sol ; trois
+ *                 forces : P (pesanteur, vers le bas), F (attraction des particules solides), S (succion des racines).
+ *                 Moments : molecule 2 ; p 4,5 ; f 7 ; s 9,5 ; fin 10.
+ *   ?vue=formes : un sol saturé se vide. Eau de gravité (grands pores, F = 0, P > S : elle s’écoule) ; eau capillaire
+ *                 (fins interstices, S > F et S > P : utilisable par la plante) ; eau hygroscopique (fine couche autour
+ *                 des grains, F > S et F > P : inutilisable) ; la plante flétrit : point de flétrissement ; capacité de
+ *                 rétention = eau capillaire + eau hygroscopique. set_parameters {conclusions:false} : l’eau hygroscopique et le
+ *                 flétrissement ne s’écrivent pas (question d’observation). Moments : saturation 2 ; gravite 6 ; capillaire 9 ;
+ *                 hygroscopique 13 ; fletrissement 14,5 ; retention 16 ; fin 16,5.
+ */
+const ST = window.SolTableau, { doux, mix } = ST;
+const $ = id => document.getElementById(id);
+const VUE = new URLSearchParams(location.search).get('vue') === 'formes' ? 'formes' : 'forces';
+const M = VUE === 'forces' ? { molecule: 2, p: 4.5, f: 7, s: 9.5 } : { saturation: 2, gravite: 6, capillaire: 9, hygroscopique: 13, fletrissement: 14.5, retention: 16 };
+const FIN = VUE === 'forces' ? 10 : 16.5;
+const MOTIFS = { molecule: 'une molécule d’eau dans le sol', p: 'P : la pesanteur', f: 'F : l’attraction des particules', s: 'S : la succion des racines',
+  saturation: 'le sol saturé d’eau', gravite: 'l’eau de gravité s’écoule', capillaire: 'l’eau capillaire, utilisable', hygroscopique: 'l’eau hygroscopique, inutilisable', fletrissement: 'la plante flétrit : point de flétrissement', retention: 'la capacité de rétention' };
+const P = { conclusions: true };
+const VERT = '#4ade80', VIOLET = '#c084fc', ROUGE = '#f87171';
+function vecteur(c, x, y, dx, dy, coul, nom, u) {
+  if (u <= 0) return;
+  const x2 = x + dx * u, y2 = y + dy * u;
+  c.direct(() => { const g = c.ctx, a = Math.atan2(y2 - y, x2 - x); g.save(); g.strokeStyle = coul; g.fillStyle = coul; g.lineWidth = 4; g.shadowColor = coul; g.shadowBlur = 6;
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x2, y2); g.stroke(); g.beginPath(); g.moveTo(x2, y2); g.lineTo(x2 - 14 * Math.cos(a - .4), y2 - 14 * Math.sin(a - .4)); g.lineTo(x2 - 14 * Math.cos(a + .4), y2 - 14 * Math.sin(a + .4)); g.closePath(); g.fill(); g.restore(); });
+  if (u >= 1 && nom) {
+    const lx = x + dx + (dx ? Math.sign(dx) * 14 : 18), ly = y + dy + (dy ? Math.sign(dy) * 22 : -22);
+    c.direct(() => { c.texte(nom, lx, ly, { couleur: coul, taille: 22, align: 'center', gras: true }); const w = 16; c.ctx.save(); c.ctx.strokeStyle = coul; c.ctx.lineWidth = 2; c.ctx.beginPath(); c.ctx.moveTo(lx - w / 2, ly - 22); c.ctx.lineTo(lx + w / 2, ly - 22); c.ctx.lineTo(lx + w / 2 - 5, ly - 26); c.ctx.stroke(); c.ctx.restore(); });
+  }
+}
+function dessinerForces(c, t) {
+  const L = scene.L, a = doux(t / 1.2);
+  c.direct(() => {
+    const g = c.ctx; g.save(); g.globalAlpha = a;
+    ST.eauPeinte(g, 30, 50, L * .62, 300, { alpha: .45, surface: false });
+    // la racine (cylindre peint) et son poil absorbant
+    const rg = g.createLinearGradient(40, 0, 150, 0); rg.addColorStop(0, '#9fb77a'); rg.addColorStop(.5, '#dfe8c4'); rg.addColorStop(1, '#8aa363');
+    g.fillStyle = rg; g.fillRect(40, 60, 110, 280); g.beginPath(); g.ellipse(95, 60, 55, 12, 0, 0, 6.28); g.fillStyle = '#eef3dc'; g.fill();
+    g.fillStyle = '#dfe8c4'; g.beginPath(); g.moveTo(150, 190); g.quadraticCurveTo(200, 176, 232, 196); g.quadraticCurveTo(240, 206, 226, 210); g.quadraticCurveTo(196, 204, 150, 214); g.fill();
+    // la particule de sol (droite)
+    const px = 30 + L * .62 - 110, pg = g.createRadialGradient(px, 170, 10, px + 30, 200, 130); pg.addColorStop(0, '#e8c9a0'); pg.addColorStop(1, '#9a6f44');
+    g.fillStyle = pg; g.beginPath(); g.moveTo(px - 40, 90); g.quadraticCurveTo(px - 80, 150, px - 50, 200); g.quadraticCurveTo(px - 90, 260, px - 30, 320); g.lineTo(px + 120, 330); g.lineTo(px + 120, 80); g.closePath(); g.fill();
+    g.restore();
+  });
+  const mx = 30 + L * .62 / 2 + 20, my = 200;
+  c.direct(() => window.Lexique.h2o(c.ctx, mx, my, { echelle: 3.2 * doux((t - .5) / 1.2) }));
+  c.texte('racine', 95, 380, { couleur: 'vert', taille: 18, align: 'center' });
+  if (!scene.compact) c.texte('poil absorbant', 205, 240, { couleur: 'vert', taille: 16, align: 'center' });
+  c.texte(scene.compact ? 'particule' : 'particule de sol', 30 + L * .62 - 60, 380, { couleur: 'orange', taille: 18, align: 'center' });
+  c.texte('molécule d’eau', mx, my - 46, { couleur: 'cyan', taille: 17, align: 'center' });
+  c.repere('molecule', mx - 30, my - 30, 60, 60, 'la molécule d’eau');
+  c.repere('racine', 40, 50, 200, 300, 'la racine et son poil absorbant');
+  c.repere('particule', 30 + L * .62 - 160, 80, 160, 260, 'la particule de sol');
+  const d = Math.min(110, L * .62 / 2 - 110);
+  vecteur(c, mx, my + 10, 0, 100, VERT, 'P', doux((t - M.p + 1.4) / 1));
+  vecteur(c, mx + 14, my, d, 0, VIOLET, 'F', doux((t - M.f + 1.4) / 1));
+  vecteur(c, mx - 14, my, -d, 0, ROUGE, 'S', doux((t - M.s + 1.4) / 1));
+  if (t >= M.p - .4) c.repere('p', mx - 20, my + 10, 40, 120, 'P : la pesanteur');
+  if (t >= M.f - .4) c.repere('f', mx + 10, my - 20, d + 20, 40, 'F : l’attraction des particules');
+  if (t >= M.s - .4) c.repere('s', mx - d - 30, my - 20, d + 20, 40, 'S : la succion des racines');
+  const xp = 30 + L * .62 + 24, wp = L - xp - 12;
+  [['p', 'P : pesanteur', 'vert', 'vers le bas'], ['f', 'F : attraction des', 'violet', 'particules solides du sol'], ['s', 'S : succion par', 'rouge', 'les racines des plantes']].forEach(([k, a1, coul, a2], i) => {
+    if (t < M[k] - .4 || scene.compact) return;
+    ecrit.ecrire(c, 'leg' + k, () => { c.texte(a1, xp, 90 + i * 84, { couleur: coul, taille: 20, max: wp }); c.texte(a2, xp, 116 + i * 84, { couleur: 'blanc', taille: 17, max: wp, alpha: .9 }); });
+  });
+}
+/* ── Les formes de l’eau : un sol qui se vide ── */
+const rG = ST.graine(31);
+const GR = []; while (GR.length < 13) { const a = rG() * 6.28, d = Math.sqrt(rG()) * .78, r = .15 + rG() * .09; const p = [Math.cos(a) * d, Math.sin(a) * d, r]; if (GR.every(q => Math.hypot(q[0] - p[0], q[1] - p[1]) > q[2] + p[2] + .05)) GR.push(p); }
+const ETATS = [
+  { id: 'gravite', nom: 'Eau de gravité', t: 6, coul: 'cyan', forces: 'F = 0 ;  P > S', car: 'grands pores : elle s’écoule vers le bas', util: '' },
+  { id: 'capillaire', nom: 'Eau capillaire', t: 9, coul: 'bleu', forces: 'S > F ;  S > P', car: 'fins interstices', util: 'utilisable par la plante' },
+  { id: 'hygroscopique', nom: 'Eau hygroscopique', t: 13, coul: 'violet', forces: 'F > S ;  F > P', car: 'fine couche autour des grains', util: 'inutilisable par la plante' },
+];
+function epaisseur(t) {   // épaisseur de l’eau autour des grains (en fraction du rayon de la loupe)
+  if (t < 3) return 1;                       // saturé : tout est plein
+  if (t < 6) return mix(.2, .085, doux((t - 3) / 3));
+  if (t < 9) return .085;
+  return mix(.085, .012, doux((t - 9) / 4));
+}
+function dessinerFormes(c, t) {
+  const L = scene.L, cx = 250, cy = 200, R = 160;
+  const e = epaisseur(t), fl = doux((t - 12.6) / 2);
+  c.direct(() => {
+    const g = c.ctx; g.save(); g.beginPath(); g.arc(cx, cy, R, 0, 6.28); g.clip();
+    g.fillStyle = 'rgba(235,245,250,.16)'; g.fillRect(cx - R, cy - R, 2 * R, 2 * R);   // l’air
+    if (e >= 1) ST.eauPeinte(g, cx - R, cy - R, 2 * R, 2 * R, { alpha: .6, surface: false });
+    else {
+      // l’eau qui s’écoule (gouttes dans les grands pores) pendant le drainage
+      if (t > 3 && t < 6.2) { const n = 10; for (let k = 0; k < n; k++) { const ph = (t * 1.2 + k / n) % 1; ST.goutte(g, cx - R * .6 + k * R * .13, cy - R + ph * 2 * R, 4, 1 - ph * .5); } }
+      g.fillStyle = 'rgba(60,160,210,.7)';
+      GR.forEach(([a, b, r]) => { g.beginPath(); g.arc(cx + a * R, cy + b * R, (r + e) * R, 0, 6.28); g.fill(); });
+    }
+    // le poil absorbant qui traverse la loupe
+    g.fillStyle = '#b8d08e'; g.beginPath(); g.moveTo(cx - R, cy - 22); g.quadraticCurveTo(cx - 20, cy - 40, cx + 30, cy - 6); g.quadraticCurveTo(cx + 40, cy + 6, cx + 26, cy + 10); g.quadraticCurveTo(cx - 30, cy - 8, cx - R, cy + 4); g.fill();
+    GR.forEach(([a, b, r], i) => ST.grain(g, cx + a * R, cy + b * R, 'sable', { r: r * R * .95, graine: i * 3 + 1 }));
+    g.restore();
+    g.strokeStyle = 'rgba(226,232,240,.9)'; g.lineWidth = 3; g.beginPath(); g.arc(cx, cy, R, 0, 6.28); g.stroke();
+    // la plante, à gauche de la loupe : elle flétrit
+    ST.plante(g, 50, 340, 150, { fletrie: fl });
+  });
+  c.texte('poil absorbant', cx - R + 10, cy - R - 8, { couleur: 'vert', taille: 16 });
+  c.repere('loupe', cx - R, cy - R, 2 * R, 2 * R, 'la loupe sur le sol');
+  c.repere('plante', 10, 190, 90, 160, 'la plante');
+  const xp = cx + R + 40, wp = L - xp - 12;
+  if (t < 3.2 && !scene.compact) ecrit.ecrire(c, 'sat', () => c.texte('Sol saturé : tous les pores pleins d’eau', xp, 60, { couleur: 'cyan', taille: 19, max: wp }));
+  ETATS.forEach((E, i) => {
+    if (t < E.t - 1.2) return;
+    if ((!P.conclusions && E.id === 'hygroscopique') || scene.compact) return;   // question d’observation ouverte : la réponse ne s’écrit pas
+    const y = 56 + i * 100;
+    ecrit.ecrire(c, E.id, () => {
+      c.texte(E.nom, xp, y, { couleur: E.coul, taille: 21, gras: true, max: wp });
+      c.texte(E.car, xp, y + 24, { couleur: 'blanc', taille: 16, max: wp, alpha: .9 });
+      c.texte(E.forces + (E.util ? '  →  ' + E.util : ''), xp, y + 48, { couleur: E.util.startsWith('in') ? 'rouge' : E.util ? 'vert' : 'faible', taille: 17, max: wp });
+    });
+    c.repere(E.id, xp - 6, y - 24, wp, 80, E.nom);
+    if (t < E.t + 1.2) ST.lueur(c, xp - 8, y - 26, wp + 2, 84, true);
+  });
+  if (t >= M.fletrissement - .8 && P.conclusions && !scene.compact) {
+    ecrit.ecrire(c, 'pf', () => c.texte('La plante flétrit : point de flétrissement', 20, 404, { couleur: 'orange', taille: 19, max: 2 * R + 160 }));
+    c.repere('fletrissement', 10, 384, 2 * R + 170, 28, 'le point de flétrissement');
+  }
+  if (t >= M.retention - .8 && !scene.compact) {
+    ecrit.ecrire(c, 'cr', () => { c.texte('Capacité de rétention =', xp, 360, { couleur: 'jaune', taille: 19, max: wp }); c.texte('eau capillaire + eau hygroscopique', xp, 386, { couleur: 'jaune', taille: 19, max: wp }); });
+    c.repere('retention', xp - 6, 338, wp, 56, 'la capacité de rétention');
+  }
+}
+function dessiner(c) { scene.cadre(97); if (VUE === 'forces') dessinerForces(c, B.chrono.t); else dessinerFormes(c, B.chrono.t); return c.fin(); }
+const canvas = $('canvas');
+const scene = ST.Scene(canvas, dessiner, { large: true });
+const ecrit = ST.Apparitions(scene);
+ST.brancher.scene = scene; ST.brancher.ecrit = ecrit;
+scene.foyer = (L) => (VUE === 'forces' ? { x: 26, y: 40, w: L * .62 + 8, h: 362 } : { x: 0, y: 0, w: 424, h: 374 });   // compact : le dessin seul
+function voir(t) {
+  if (VUE === 'forces') {
+    const m = ['Une molécule d’eau dans l’eau du sol, entre une racine avec son poil absorbant (à gauche) et une particule de sol (à droite).'];
+    if (t >= M.p) m.push('Flèche P vers le bas : la pesanteur.');
+    if (t >= M.f) m.push('Flèche F vers la particule : l’attraction des particules solides du sol.');
+    if (t >= M.s) m.push('Flèche S vers la racine : la succion des racines.');
+    return m.join(' ');
+  }
+  const m = ['Une loupe sur un sol (grains, poil absorbant, eau en bleu, air en clair) et une plante.'];
+  if (t < 3) m.push('Le sol est saturé : tous les pores sont pleins d’eau.');
+  ETATS.forEach(E => { if (t >= E.t && (P.conclusions || E.id !== 'hygroscopique')) m.push(`${E.nom} : ${E.car} ; ${E.forces}${E.util ? ' ; ' + E.util : ''}.`); });
+  if (t >= M.fletrissement && P.conclusions) m.push('La plante flétrit : il ne reste que l’eau hygroscopique, c’est le point de flétrissement.');
+  if (t >= M.retention) m.push('Écrit : capacité de rétention = eau capillaire + eau hygroscopique.');
+  return m.join(' ');
+}
+const B = ST.brancher({ params: P, setParams: { schema: { conclusions: 'true | false (vue formes : false cache l’eau hygroscopique et le flétrissement écrits)' }, appliquer: (p, R) => { if ('conclusions' in p) R.conclusions = p.conclusions !== false && p.conclusions !== 'false'; } },
+  bandeau: (t, m) => (!P.conclusions && t >= 9.5 ? 'Observe la plante et l’eau autour des grains' : m),
+  id: 'edaph_eau_' + VUE, titre: VUE === 'forces' ? 'Les forces sur une molécule d’eau' : 'Les formes de l’eau dans le sol', M, FIN, motifs: MOTIFS, vue: VUE,
+  texte: VUE === 'forces' ? 'Trois forces s’exercent sur une molécule d’eau du sol : P, la pesanteur ; F, l’attraction des particules solides du sol ; S, la succion par les racines des plantes.' : 'Eau de gravité (grands pores, F = 0, P > S, s’écoule) ; eau capillaire (fins interstices, S > F et S > P, utilisable) ; eau hygroscopique (fine couche autour des grains, F > S, inutilisable). Quand il ne reste que l’eau hygroscopique, la plante flétrit : point de flétrissement. Capacité de rétention = eau capillaire + eau hygroscopique.',
+  voir, depart: VUE === 'forces' ? 'Une molécule d’eau…' : 'Un sol saturé d’eau…', fini: () => (VUE === 'forces' ? 'Trois forces : P, F, S.' : 'Gravité, capillaire, hygroscopique.'),
+  explication: { [VUE]: VUE === 'forces' ? [{ repere: 'p', texte: 'P : pesanteur.' }, { repere: 'f', texte: 'F : attraction des particules.' }, { repere: 's', texte: 'S : succion des racines.' }] : ETATS.map(E => ({ repere: E.id, texte: E.nom })) } });
+window.Tableau.bulle($('feedback'), VUE === 'forces' ? 'Qui tire sur la molécule d’eau ?' : 'Le sol se vide…');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

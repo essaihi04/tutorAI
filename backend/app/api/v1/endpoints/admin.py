@@ -646,6 +646,18 @@ async def set_statut_avis(body: StatutAvis, admin: bool = Depends(_verify_admin_
 
 
 # ──────────────────────────────────────────────
+# TRONC COMMUN (lien libre /tronc-commun, 22 novembre 2026) : fiches des élèves et leur suivi
+# ──────────────────────────────────────────────
+
+@router.get("/tronc-commun")
+async def get_tronc_commun(admin: bool = Depends(_verify_admin_token)):
+    """Chaque élève inscrit sur le lien du Tronc Commun : sa fiche (nom, classe, père, téléphone), le temps passé par
+    cours et sur l'évaluation, sa progression, ses réponses dans les cours, ses évaluations et ses lacunes."""
+    from app.api.v1.endpoints.public_tronc_commun import bilan
+    return {"eleves": bilan()}
+
+
+# ──────────────────────────────────────────────
 # RÉTENTION (mémoire longue, 11 novembre 2026) : ce qui reste vraiment, par cours, par compétence, par élève
 # ──────────────────────────────────────────────
 

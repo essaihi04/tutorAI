@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le complexe argilo-humique — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="sol.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Deux entonnoirs avec du sol riche en humus : l’éosine (anions, rouge) traverse et le filtrat est rouge ; le bleu de méthylène (cations, bleu) est retenu et le filtrat est incolore ; puis, en gros plan, une particule du complexe argilo-humique chargée négativement attire les cations et repousse les anions"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/shared/lexique/lexique.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Doc 3 de l’activité 2 : le complexe argilo-humique (CAH) et son importance.
+ *   ?vue=filtration (fe_c6_filtration) : 100 g de sol riche en humus dans chaque entonnoir ; 20 ml d’éosine (rouge, ions
+ *       négatifs) sur le 1, 20 ml de bleu de méthylène (bleu, ions positifs) sur le 2. Filtrat 1 rouge ; filtrat 2 incolore
+ *       et limpide. Moments : entonnoirs 2 ; eosine 5 ; filtrat_rouge 8 ; bleu 10 ; filtrat_incolore 13 ; fin 13,5.
+ *   ?vue=charges (fe_c7_charges) : gros plan sur une particule du CAH, chargée négativement : les cations du bleu sont
+ *       attirés et retenus, les anions de l’éosine sont repoussés et passent. Moments : particule 2 ; cations 6 ;
+ *       anions 10 ; conclusion 12 ; fin 12,5.
+ *   set_parameters {conclusions:false} : les conclusions écrites restent cachées.
+ */
+const ST = window.SolTableau, { doux, mix } = ST;
+const $ = id => document.getElementById(id);
+const VUE = new URLSearchParams(location.search).get('vue') === 'charges' ? 'charges' : 'filtration';
+const M = VUE === 'filtration' ? { entonnoirs: 2, eosine: 5, filtrat_rouge: 8, bleu: 10, filtrat_incolore: 13 } : { particule: 2, cations: 6, anions: 10, conclusion: 12 };
+const FIN = VUE === 'filtration' ? 13.5 : 12.5;
+const MOTIFS = { entonnoirs: 'deux entonnoirs de sol riche en humus', eosine: 'on verse l’éosine (ions négatifs)', filtrat_rouge: 'le filtrat de l’éosine est rouge', bleu: 'on verse le bleu de méthylène (ions positifs)', filtrat_incolore: 'le filtrat du bleu est incolore',
+  particule: 'une particule du CAH, chargée négativement', cations: 'les cations du bleu sont retenus', anions: 'les anions de l’éosine sont repoussés', conclusion: 'le CAH est chargé négativement' };
+const P = { conclusions: true };
+const EOS = [235, 70, 80], BLEU = [40, 90, 220];
+
+function entonnoir(g, x, y, w, h, teinteSol, liquide, fil, filtrat, coulFiltrat, t0, t) {
+  // support, entonnoir, filtre, sol ; éprouvette graduée dessous
+  g.save();
+  g.strokeStyle = '#a16207'; g.lineWidth = 6; g.beginPath(); g.moveTo(x - w * .7, y + h * .55); g.lineTo(x + w * .7, y + h * .55); g.stroke();
+  // le liquide versé au-dessus du sol
+  if (liquide > 0) { g.fillStyle = ST.rgba(coulFiltrat.base, .55 * liquide); g.beginPath(); g.moveTo(x - w / 2 + 8, y + 8); g.lineTo(x + w / 2 - 8, y + 8); g.lineTo(x + w / 2 - 22, y + 30); g.lineTo(x - w / 2 + 22, y + 30); g.closePath(); g.fill(); }
+  // le sol dans le filtre
+  g.fillStyle = teinteSol; g.beginPath(); g.moveTo(x - w / 2 + 20, y + 28); g.lineTo(x + w / 2 - 20, y + 28); g.lineTo(x + 6, y + h * .62); g.lineTo(x - 6, y + h * .62); g.closePath(); g.fill();
+  const rr = ST.graine(5); for (let k = 0; k < 60; k++) { const u = rr(), v = rr(); g.fillStyle = 'rgba(20,10,5,.4)'; g.fillRect(x + (u - .5) * (w - 44) * (1 - v), y + 30 + v * (h * .58 - 30), 2, 2); }
+  // le filtre (papier) et le verre
+  g.strokeStyle = 'rgba(245,245,240,.85)'; g.lineWidth = 2; g.beginPath(); g.moveTo(x - w / 2 + 6, y + 4); g.lineTo(x, y + h * .66); g.lineTo(x + w / 2 - 6, y + 4); g.stroke();
+  g.strokeStyle = 'rgba(220,235,245,.8)'; g.lineWidth = 2.4; g.beginPath(); g.moveTo(x - w / 2, y); g.lineTo(x - 7, y + h * .7); g.lineTo(x - 7, y + h); g.moveTo(x + w / 2, y); g.lineTo(x + 7, y + h * .7); g.lineTo(x + 7, y + h); g.stroke();
+  // l’éprouvette et le filtrat
+  const ex = x - 28, ey = y + h + 10, ew = 56, eh = 150;
+  if (filtrat > 0) { g.fillStyle = ST.rgba(coulFiltrat.c, coulFiltrat.a); g.fillRect(ex + 3, ey + eh - eh * .6 * filtrat, ew - 6, eh * .6 * filtrat - 3); g.strokeStyle = 'rgba(230,245,255,.7)'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(ex + 3, ey + eh - eh * .6 * filtrat); g.lineTo(ex + ew - 3, ey + eh - eh * .6 * filtrat); g.stroke(); }
+  if (fil) for (let k = 0; k < 3; k++) { const ph = (t * 1.5 + k / 3) % 1; ST.goutte(g, x, y + h + 4 + ph * (eh * .4), 3, 1); }
+  g.strokeStyle = 'rgba(220,235,245,.8)'; g.lineWidth = 2.2; g.beginPath(); g.moveTo(ex, ey); g.lineTo(ex, ey + eh); g.lineTo(ex + ew, ey + eh); g.lineTo(ex + ew, ey); g.stroke();
+  g.lineWidth = 1; for (let k = 1; k < 6; k++) { g.beginPath(); g.moveTo(ex + ew - 12, ey + eh - k * 18); g.lineTo(ex + ew, ey + eh - k * 18); g.stroke(); }
+  g.restore();
+  return { ex, ey, ew, eh };
+}
+function dessinerFiltration(c, t) {
+  const L = scene.L, w = 200, h = 176, y = 56;
+  const D = [
+    { id: '1', x: L * .3, nom: 'éosine (ions −)', coul: 'rose', base: EOS, tv: [3, 5], tf: [5.5, 8], filtrat: { c: EOS, a: .7, base: EOS }, res: 'filtrat rouge', resCoul: 'rose', mom: 'filtrat_rouge', verse: 'eosine' },
+    { id: '2', x: L * .7, nom: 'bleu de méthylène (ions +)', coul: 'bleu', base: BLEU, tv: [8.5, 10], tf: [10.5, 13], filtrat: { c: [225, 238, 245], a: .28, base: BLEU }, res: 'filtrat incolore et limpide', resCoul: 'blanc', mom: 'filtrat_incolore', verse: 'bleu' },
+  ];
+  D.forEach((d, i) => {
+    const liquide = doux((t - d.tv[0]) / 1) * (1 - doux((t - d.tf[1] + .5) / 1.5) * .7), fil = t > d.tf[0] && t < d.tf[1], filtrat = doux((t - d.tf[0]) / (d.tf[1] - d.tf[0]));
+    // le sol du 2 bleuit : il garde le colorant
+    const sol = i === 1 && t > d.tv[0] ? `rgb(${Math.round(mix(70, 40, doux((t - d.tv[0]) / 2)))},${Math.round(mix(48, 45, doux((t - d.tv[0]) / 2)))},${Math.round(mix(32, 110, doux((t - d.tv[0]) / 2)))})` : '#463020';
+    let geo;
+    c.direct(() => { geo = entonnoir(c.ctx, d.x, y, w, h, sol, liquide, fil, filtrat, { ...d.filtrat, base: d.base }, d.tv[0], t);
+      // le flacon qui verse
+      if (t > d.tv[0] - .8 && t < d.tv[1] + .3) { const g = c.ctx; g.save(); g.fillStyle = ST.rgba(d.base, .9); g.fillRect(d.x + 40, y - 34, 34, 22); g.fillStyle = ST.rgba(d.base, .8); g.fillRect(d.x + 4, y - 20, 40, 5); for (let k = 0; k < 3; k++) { g.beginPath(); g.arc(d.x + 4 - k * 3, y - 12 + k * 10, 3, 0, 6.28); g.fill(); } g.restore(); }
+    });
+    if (!scene.compact) c.texte('entonnoir ' + d.id, d.x - 70, y + h * .55 + 30, { couleur: 'blanc', taille: 17, align: 'center' });
+    c.repere('entonnoir' + d.id, d.x - w / 2 - 6, y - 6, w + 12, h + 12, 'l’entonnoir ' + d.id + ' : sol riche en humus');
+    if (t >= d.tv[0] - .6) { ecrit.ecrire(c, 'nom' + i, () => c.texte(d.nom, d.x, 22, { couleur: d.coul, taille: 19, align: 'center', max: L * .4 })); c.repere(d.verse, d.x - 100, 4, 200, 26, d.nom); }
+    if (t >= d.tf[1] - .4 && P.conclusions) {
+      ecrit.ecrire(c, 'res' + i, () => c.texte(scene.compact ? d.res.replace('filtrat ', '').replace(' et limpide', '') : d.res, d.x + 44, y + h + 110, { couleur: d.resCoul, taille: 19, max: L * .5 - 60 }));
+      c.repere(d.mom, d.x - 34, y + h + 6, 240, 160, d.res);
+    }
+  });
+  if (!scene.compact) c.texte('sol riche en humus', L / 2, y + 60, { couleur: 'faible', taille: 16, align: 'center' });
+}
+/* ── Gros plan : la particule du CAH et les ions ── */
+const rI = ST.graine(12);
+const CATIONS = Array.from({ length: 8 }, (_, k) => ({ a: k / 8 * 6.28 + .3, d0: 1.9 + rI() * .5 }));
+const ANIONS = Array.from({ length: 6 }, (_, k) => ({ x: rI(), d: rI() }));
+function dessinerCharges(c, t) {
+  const L = scene.L, cx = L * .3, cy = 222, R = 92;
+  c.direct(() => ST.cah(c.ctx, cx, cy, R * doux(t / 1.2), { n: 12 }));
+  if (t >= .8 && !scene.compact) ecrit.ecrire(c, 'nomcah', () => c.texte('particule du complexe argilo-humique', cx, 36, { couleur: 'orange', taille: 18, align: 'center' }));
+  c.repere('particule', cx - R - 6, cy - R - 6, 2 * R + 12, 2 * R + 12, 'la particule du CAH, chargée −');
+  // cations du bleu : arrivent de loin et se collent au bord
+  if (t >= 2.4) {
+    const u = doux((t - 2.4) / 3);
+    c.direct(() => CATIONS.forEach((K, k) => { const d = mix(K.d0, 1.12, u) * R; ST.ion(c.ctx, cx + Math.cos(K.a) * d * (scene.compact ? 1.08 : 1), cy + Math.sin(K.a) * d * (scene.compact ? 1.08 : 1), 'bleu', { r: scene.compact ? 22 : 13 }); }));
+    c.repere('cations', cx - R * 1.4, cy - R * 1.4, R * 2.8, R * 2.8, 'les cations du bleu, retenus');
+  }
+  // anions de l’éosine : tombent, s’approchent et sont repoussés
+  if (t >= 6.4) {
+    const u = (t - 6.4) / 3.6;
+    c.direct(() => ANIONS.forEach((A, k) => {
+      const x0 = cx - R * 1.6 + A.x * R * 3.2, y = mix(cy - R * 1.8, cy + R * 2.2, Math.min(1, u + A.d * .15));
+      const dx = x0 - cx, dy = y - cy, dist = Math.hypot(dx, dy), pousse = Math.max(0, R * 1.6 - dist) * 1.1;
+      const x = x0 + (dx >= 0 ? 1 : -1) * pousse;
+      if (y < cy + R * 2.3) ST.ion(c.ctx, x, y, 'eosine', { r: scene.compact ? 22 : 13 });
+    }));
+    c.repere('anions', cx - R * 1.8, cy - R * 1.8, R * 3.6, R * 3.8, 'les anions de l’éosine, repoussés');
+  }
+  const xp = cx + R * 2 + 30, wp = L - xp - 14;
+  if (t >= 2.4 && !scene.compact) ecrit.ecrire(c, 'l1', () => { c.texte('+  bleu de méthylène : cations', xp, 90, { couleur: 'bleu', taille: 19, max: wp }); c.texte('attirés, retenus → filtrat incolore', xp, 118, { couleur: 'blanc', taille: 17, max: wp }); });
+  if (t >= 6.4 && !scene.compact) ecrit.ecrire(c, 'l2', () => { c.texte('−  éosine : anions', xp, 170, { couleur: 'rose', taille: 19, max: wp }); c.texte('repoussés, ils passent → filtrat rouge', xp, 198, { couleur: 'blanc', taille: 17, max: wp }); });
+  if (t >= 10.8 && P.conclusions && !scene.compact) {
+    ecrit.ecrire(c, 'concl', () => { c.texte('Le CAH (argile + humus)', xp, 262, { couleur: 'vert', taille: 20, max: wp }); c.texte('est chargé négativement.', xp, 290, { couleur: 'vert', taille: 20, max: wp }); });
+    c.repere('conclusion', xp - 6, 240, wp, 60, 'le CAH est chargé négativement');
+  }
+}
+function dessiner(c) { scene.cadre(71); if (VUE === 'filtration') dessinerFiltration(c, B.chrono.t); else dessinerCharges(c, B.chrono.t); return c.fin(); }
+const canvas = $('canvas');
+const scene = ST.Scene(canvas, dessiner, { large: true });
+const ecrit = ST.Apparitions(scene);
+ST.brancher.scene = scene; ST.brancher.ecrit = ecrit;
+scene.foyer = (L) => (VUE === 'filtration' ? { x: 16, y: 0, w: L - 32, h: 420 } : { x: L * .3 - 210, y: 46, w: 420, h: 352 });   // compact : les entonnoirs, ou la particule
+function voir(t) {
+  if (VUE === 'filtration') {
+    const m = ['Deux entonnoirs avec filtre et 100 g de sol riche en humus, une éprouvette graduée sous chacun.'];
+    if (t >= 3) m.push('Entonnoir 1 : on verse 20 ml d’éosine (rouge, ions négatifs).');
+    if (t >= 8) m.push(P.conclusions ? 'Le filtrat 1 est rouge.' : 'Le filtrat 1 est recueilli.');
+    if (t >= 8.5) m.push('Entonnoir 2 : on verse 20 ml de bleu de méthylène (bleu, ions positifs).');
+    if (t >= 13) m.push(P.conclusions ? 'Le filtrat 2 est incolore et limpide ; le sol du 2 a gardé le bleu.' : 'Le filtrat 2 est recueilli.');
+    return m.join(' ');
+  }
+  const m = ['Gros plan : une particule du complexe argilo-humique (orange), marquée de charges négatives.'];
+  if (t >= 6) m.push('Les cations du bleu de méthylène sont attirés et restent collés autour.');
+  if (t >= 10) m.push('Les anions de l’éosine sont repoussés et passent.');
+  if (t >= 12 && P.conclusions) m.push('Conclusion écrite : le CAH est chargé négativement.');
+  return m.join(' ');
+}
+const B = ST.brancher({ id: 'edaph_cah_' + VUE, titre: 'Le complexe argilo-humique', M, FIN, motifs: MOTIFS, params: P, vue: VUE,
+  texte: 'Sol riche en humus : l’éosine (anions, rouge) traverse, filtrat rouge ; le bleu de méthylène (cations, bleu) est retenu, filtrat incolore. Le complexe argilo-humique (argile + humus) est chargé négativement : il attire et retient les cations, il repousse les anions.',
+  voir, depart: VUE === 'filtration' ? 'Deux colorants, deux entonnoirs…' : 'Une particule du CAH…', fini: () => (VUE === 'filtration' ? 'Éosine : filtrat rouge ; bleu : filtrat incolore.' : 'Le CAH est chargé négativement.'),
+  setParams: { schema: { conclusions: 'true | false (false : les conclusions écrites restent cachées)' }, appliquer: (p, R) => { if ('conclusions' in p) R.conclusions = p.conclusions !== false && p.conclusions !== 'false'; } },
+  explication: { [VUE]: VUE === 'filtration' ? [{ repere: 'entonnoir1', texte: 'L’éosine traverse.' }, { repere: 'entonnoir2', texte: 'Le bleu est retenu.' }] : [{ repere: 'particule', texte: 'La particule du CAH, chargée −.' }, { repere: 'cations', texte: 'Les cations sont retenus.' }, { repere: 'anions', texte: 'Les anions sont repoussés.' }] } });
+window.Tableau.bulle($('feedback'), VUE === 'filtration' ? 'Quel colorant le sol retient-il ?' : 'Pourquoi le bleu reste-t-il dans le sol ?');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

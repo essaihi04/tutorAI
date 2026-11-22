@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le transect Rabat – plateau de Zaer — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/svt/tc_sortie_ecologique-tableau/sortie.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Profil topographique de Rabat (nord-ouest) au plateau de Zaer (sud-est) : les zones se nomment, puis les végétaux rencontrés sont posés avec leurs symboles ; le chêne-liège est présent partout sauf sur le plateau de Merchouch"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/svt/tc_sortie_ecologique-tableau/commun.js"></script>
+<script>
+/*
+ * Le transect Rabat – plateau de Zaer (diapos se_a1_transect et se_a1_facteurs), d'après le doc 3 a du prof.
+ * Moments : profil 0,5 ; reperes 3 ; vegetaux 5 (zone après zone jusqu'à 9,5) ; legende 10 ; chene 12 ; fin 13,5.
+ * set_parameters {conclusions: false} : l'annotation « pas de chêne-liège » sur Merchouch reste cachée (question d'observation).
+ */
+const { P, lueur } = window.Sortie;
+// profil : [u (0 → 1, NW → SE), altitude en m]
+const PROFIL = [[0, 60], [.08, 90], [.18, 160], [.28, 290], [.38, 390], [.43, 330], [.47, 420], [.52, 520], [.6, 560], [.625, 520], [.645, 160], [.665, 180], [.69, 470], [.74, 640], [.8, 760], [.86, 890], [.9, 860], [1, 830]];
+const alt = u => { for (let i = 1; i < PROFIL.length; i++) { const [u0, a0] = PROFIL[i - 1], [u1, a1] = PROFIL[i]; if (u <= u1) return a0 + (a1 - a0) * (u - u0) / (u1 - u0); } return 830; };
+const ZONES = [
+  { id: 'temara', nom: 'Forêt de Temara', u: .09 }, { id: 'beni_abid', nom: 'Forêt de Beni Abid', u: .3 },
+  { id: 'sidi_bettach', nom: 'Plateau de Sidi Bettach', u: .55 }, { id: 'merchouch', nom: 'Plateau de Merchouch', u: .76, de: .67, a: .84 }, { id: 'zaer', nom: 'Plateau de Zaer', u: .93 },
+];
+// végétaux : [u, sorte, zone]
+const V = [];
+[.02, .05, .08, .11, .14].forEach(u => V.push([u, 'chene', 0])); V.push([.17, 'lentisque', 0], [.2, 'tizra', 0], [.23, 'olivier', 0]);
+[.27, .3, .33, .36].forEach(u => V.push([u, 'chene', 1])); V.push([.4, 'pistachier', 1], [.43, 'lentisque', 1], [.46, 'olivier', 1]);
+[.5, .53, .56, .59].forEach(u => V.push([u, 'chene', 2])); V.push([.615, 'tizra', 2], [.638, 'thuya', 2], [.655, 'thuya', 2], [.675, 'lentisque', 2]);
+V.push([.7, 'lentisque', 3], [.73, 'pistachier', 3], [.76, 'olivier', 3], [.79, 'pistachier', 3], [.82, 'lentisque', 3], [.845, 'pistachier', 3]);
+V.push([.87, 'olivier', 4]); [.9, .925, .95, .975].forEach(u => V.push([u, 'chene', 4]));
+const LEGENDE = [['chene', 'Chêne-liège'], ['olivier', 'Olivier'], ['pistachier', 'Pistachier'], ['lentisque', 'Lentisque'], ['thuya', 'Thuya'], ['tizra', 'Tizra']];
+function symbole(g, sorte, x, yb, h) {
+  if (sorte === 'chene') P.arbre(g, x, yb, h, { sorte: 'chene' });
+  else if (sorte === 'olivier') P.arbre(g, x, yb, h * .85, { sorte: 'olivier' });
+  else if (sorte === 'pistachier') P.arbuste(g, x, yb, h * .75, { sorte: 'pistachier' });
+  else if (sorte === 'lentisque') P.arbuste(g, x, yb, h * .6, { sorte: 'lentisque' });
+  else if (sorte === 'thuya') P.thuya(g, x, yb, h * .95);
+  else P.tizra(g, x, yb, h * .7);
+}
+const M = { profil: .5, reperes: 3, vegetaux: 5, legende: 10, chene: 12 };
+function dessiner(c, S, scene) {
+  const pt = scene.petit, L = scene.L, x0 = 78, x1 = L - 22, X = u => x0 + u * (x1 - x0), Y = a => 300 - a * .19, h = Math.min(38, (x1 - x0) * .05);
+  // axes et profil
+  c.fleche(x0 - 8, 320, x0 - 8, 92, { couleur: 'faible', largeur: 1.5 });
+  for (const a of [0, 500, 1000]) { c.ligne(x0 - 14, Y(a), x0 - 4, Y(a), { couleur: 'faible', largeur: 1.4 }); c.texte(String(a), x0 - 16, Y(a) + 6, { couleur: 'blanc', taille: pt ? 26 : 16, align: 'right', max: pt ? 0 : undefined }); }
+  if (!pt) c.texte('altitude (m)', 10, 84, { couleur: 'faible', taille: 15 });
+  c.texte('NW', x0 + 2, pt ? 362 : 258, { couleur: 'blanc', taille: pt ? 28 : 18, gras: true }); c.texte('SE', x1, pt ? 362 : 122, { couleur: 'blanc', taille: pt ? 28 : 18, gras: true, align: 'right' });
+  if (S.t <= 0 || S.a('profil')) {
+    const part = S.t <= 0 ? 1 : S.k('profil', 2);
+    c.direct(() => {
+      const g = c.ctx, N = 120; g.save();
+      const gr = g.createLinearGradient(0, Y(900), 0, 330); gr.addColorStop(0, '#e9c48f'); gr.addColorStop(1, '#b8875a');
+      g.fillStyle = gr; g.beginPath(); g.moveTo(X(0), 330);
+      for (let i = 0; i <= N * part; i++) { const u = i / N; g.lineTo(X(u), Y(alt(u))); }
+      g.lineTo(X(Math.min(1, part)), 330); g.closePath(); g.fill(); g.restore();
+    });
+    c.courbe(u => [X(u), Y(alt(u))], 120, { couleur: 'blanc', largeur: 2.2, duree: 2 });
+    c.repere('profil', x0, Y(900), x1 - x0, 330 - Y(900), 'le profil topographique (le transect)');
+  }
+  if (S.ecrit(c, 'reperes')) {
+    ZONES.forEach((z, i) => {
+      const yy = pt ? Math.max(30, Y(alt(z.u)) - 50 - (i % 2) * 40) : Math.max(26, Y(alt(z.u)) - 64 - (i % 2) * 22);
+      // petit cadre : le nom court de la zone (la voix dit le nom entier)
+      c.texte(pt ? z.nom.replace(/^(Forêt|Plateau) de /, '') : z.nom, X(z.u), yy, { couleur: 'jaune', taille: pt ? 28 : 17, align: 'center', max: pt ? 0 : (x1 - x0) * .24 });
+      c.repere(z.id, X(z.u) - 70, yy - 18, 140, Y(alt(z.u)) - yy + 18, z.nom);
+    });
+  }
+  if (S.a('vegetaux')) {
+    c.direct(() => V.forEach(([u, s, z]) => { const t0 = M.vegetaux + z * .9; if (S.t >= t0) { c.ctx.save(); c.ctx.globalAlpha = Math.min(1, (S.t - t0) / .5); symbole(c.ctx, s, X(u), Y(alt(u)) + 2, h); c.ctx.restore(); } }));
+  }
+  if (S.ecrit(c, 'legende') && pt) {
+    // petit cadre : seul le chêne-liège a sa légende (c'est lui que l'on cherche)
+    c.direct(() => symbole(c.ctx, 'chene', 220, 406, 40));
+    c.texte('= chêne-liège', 246, 400, { couleur: 'blanc', taille: 28 });
+    c.repere('leg_chene', 194, 360, 300, 50, 'Chêne-liège'); c.repere('legende', 194, 360, 300, 50, 'la légende');
+  } else if (S.ecrit(c, 'legende')) {
+    const n = LEGENDE.length, w = (L - 40) / n;
+    LEGENDE.forEach(([s, nom], i) => {
+      const xx = 20 + w * i + w / 2;
+      c.direct(() => symbole(c.ctx, s, xx - 40, 398, 32));
+      c.texte(nom, xx - 18, 392, { couleur: 'blanc', taille: 17, max: w - 30 });
+      c.repere('leg_' + s, xx - 60, 360, w - 4, 44, nom);
+    });
+    c.repere('legende', 20, 356, L - 40, 52, 'la légende des symboles');
+  }
+  if (S.a('chene')) {
+    V.filter(v => v[1] === 'chene').forEach(([u]) => lueur(c, X(u) - h * .4, Y(alt(u)) - h - 2, h * .8, h + 4, { vive: true }));
+    c.repere('chenes', x0, Y(900), x1 - x0, 230, 'les chênes-lièges');
+    if (S.conclusions) {
+      const z = ZONES[3], xa = X(z.de), xb = X(z.a), ya = Y(alt(z.u)) - 50;
+      S.ecrit(c, 'chene');
+      c.rect(xa, ya, xb - xa, 64, { couleur: 'rouge', largeur: 2.2 });
+      c.texte(pt ? 'pas de chêne-liège' : 'pas de chêne-liège', pt ? (xa + xb) / 2 + 20 : (xa + xb) / 2, pt ? ya + 104 : ya + 88, { couleur: 'rouge', taille: pt ? 28 : 18, gras: true, align: 'center' });
+      c.repere('absent', xa, ya, xb - xa, 94, 'Merchouch : pas de chêne-liège');
+    }
+  }
+}
+window.Sortie.sim({
+  id: 'tc_sortie_transect', titre: 'Répartition horizontale : le transect', moments: M, fin: 13.5, graine: 13,
+  motifs: { profil: 'le profil topographique', reperes: 'les zones du transect', vegetaux: 'les végétaux posés zone par zone', legende: 'la légende des symboles', chene: 'les chênes-lièges allumés' },
+  accueil: 'Un transect de Rabat au plateau de Zaer : lance pour poser les végétaux.', debut: 'Le profil, les zones, puis les végétaux…', fini: 'Le chêne-liège est partout… sauf sur le plateau de Merchouch.',
+  dessiner,
+  ceQuiSeVoit: S => {
+    const m = ['Profil topographique de Rabat (NW, ~60 m) au plateau de Zaer (SE, ~850 m).'];
+    if (S.a('reperes')) m.push('Zones : forêt de Temara, forêt de Beni Abid, plateau de Sidi Bettach, plateau de Merchouch, plateau de Zaer.');
+    if (S.a('vegetaux')) m.push('Symboles posés : chêne-liège à Temara, Beni Abid, Sidi Bettach et Zaer ; lentisque, pistachier, olivier, tizra ; thuya dans la vallée ; à Merchouch : lentisque, pistachier, olivier.');
+    if (S.a('legende')) m.push('Légende : chêne-liège, olivier, pistachier, lentisque, thuya, tizra.');
+    if (S.a('chene')) m.push('Les chênes-lièges sont allumés' + (S.conclusions ? ' ; Merchouch encadré en rouge : pas de chêne-liège.' : '.'));
+    return m.join(' ');
+  },
+  texte: 'Distribution horizontale des végétaux entre Rabat et le plateau de Zaer : chêne-liège, olivier, pistachier, lentisque, thuya, tizra. Le chêne-liège est présent presque partout sauf sur le plateau de Merchouch.',
+  explication: { transect: [{ repere: 'profil', texte: 'Le profil topographique : c’est le transect.' }, { repere: 'legende', texte: 'Chaque végétal a son symbole.' }, { repere: 'merchouch', texte: 'Sur le plateau de Merchouch, pas de chêne-liège.' }] },
+});
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

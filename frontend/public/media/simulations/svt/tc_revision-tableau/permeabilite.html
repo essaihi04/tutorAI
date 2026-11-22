@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Révision : perméabilité et rétention — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="/media/simulations/svt/tc_facteurs_edaphiques-tableau/sol.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Deux bouteilles : 100 g de sol limoneux A et 100 g de sol argileux B ; on verse 100 ml d’eau sur chacun ; un chronomètre mesure t2 − t1 et l’eau récupérée V2 monte dans la bouteille ; puis on calcule la perméabilité P et la capacité de rétention Vr"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="/media/simulations/svt/tc_facteurs_edaphiques-tableau/commun.js"></script>
+<script>
+/*
+ * Cours de révision (diapositives rv_h1_mesure et rv_h2_calcul). COPIE ALIGNÉE de
+ * svt/tc_facteurs_edaphiques-tableau/permeabilite.html (même montage, mêmes bouteilles, chronomètres, tableau des
+ * résultats recréé dont les nombres volent dans les cases, même mode compact), avec de NOUVELLES valeurs, nombres
+ * simples sans virgule (règle de l’utilisateur) :
+ *   sol A (limoneux) : V1 = 100 ml, t2 − t1 = 12 min, V2 = 60 ml → P = 60/12 = 5 ml/min ; Vr = 100 − 60 = 40 ml ;
+ *   sol B (argileux) : V1 = 100 ml, t2 − t1 = 20 min, V2 = 20 ml → P = 20/20 = 1 ml/min ; Vr = 100 − 20 = 80 ml.
+ * Une minute d’écoulement = 0,35 s de scène. Moments : bouteilles 2 ; versement 4 ; premiere_goutte 4,6 ; a_fin 8,8 ;
+ * b_fin 11,6 ; formule_p 13,5 ; p_a 15,5 ; formule_vr 17,5 ; vr_a 19,5 ; p_b 21,5 ; vr_b 23,5 ; conclusion 25,5 ; fin 26.
+ * (p_b et vr_b viennent APRÈS vr_a : ce sont les calculs de l’élève, joués après sa réponse.)
+ * Repères : bouteille_a, bouteille_b, chrono_a, chrono_b, v2_a, v2_b, v1, tableau, formule_p, p_a, p_b, formule_vr, vr_a,
+ * vr_b, conclusion.
+ */
+const ST = window.SolTableau, { fr, doux, mix } = ST;
+const $ = id => document.getElementById(id);
+const M = { bouteilles: 2, versement: 4, premiere_goutte: 4.6, a_fin: 8.8, b_fin: 11.6, formule_p: 13.5, p_a: 15.5, formule_vr: 17.5, vr_a: 19.5, p_b: 21.5, vr_b: 23.5, conclusion: 25.5 };
+const FIN = 26, MIN = .35, T1 = 4.6;
+const MOTIFS = { bouteilles: 'deux bouteilles : sol limoneux A et sol argileux B', versement: 'V1 = 100 ml versés sur chaque sol', premiere_goutte: 'la première goutte : t1, les chronomètres partent',
+  a_fin: 'A : dernière goutte après 12 min, V2 = 60 ml', b_fin: 'B : dernière goutte après 20 min, V2 = 20 ml', formule_p: 'P = V2/(t2 − t1)', p_a: 'PA = 60/12 = 5 ml/min',
+  formule_vr: 'Vr = V1 − V2', vr_a: 'VrA = 100 − 60 = 40 ml', p_b: 'PB = 20/20 = 1 ml/min', vr_b: 'VrB = 100 − 20 = 80 ml', conclusion: 'A plus perméable, B retient plus d’eau' };
+const SOLS = [
+  { id: 'a', nom: 'A : sol limoneux', type: 'limon', v2: 60, duree: 12, coul: 'jaune' },
+  { id: 'b', nom: 'B : sol argileux', type: 'argile', v2: 20, duree: 20, coul: 'orange' },
+];
+function bouteille(g, x, S, t) {
+  const w = 104, yH = 64, hH = 112, yB = 196, hB = 168, ml = hB * .82 / 100;   // 100 ml = 82 % de la hauteur de la bouteille
+  const tFin = T1 + S.duree * MIN, coule = t > T1 && t < tFin;
+  const recu = S.v2 * doux(Math.max(0, Math.min(1, (t - T1) / (tFin - T1))) ** .8);
+  // la bouteille du bas (graduée tous les 10 ml) et l’eau récupérée V2
+  if (recu > 0) ST.eauPeinte(g, x - w / 2 + 3, yB + hB - recu * ml - 3, w - 6, recu * ml, { alpha: .6 });
+  g.save(); g.strokeStyle = 'rgba(220,235,245,.75)'; g.lineWidth = 2.2;
+  g.beginPath(); g.moveTo(x - w / 2, yB); g.lineTo(x - w / 2, yB + hB - 8); g.quadraticCurveTo(x - w / 2, yB + hB, x - w / 2 + 8, yB + hB); g.lineTo(x + w / 2 - 8, yB + hB); g.quadraticCurveTo(x + w / 2, yB + hB, x + w / 2, yB + hB - 8); g.lineTo(x + w / 2, yB); g.stroke();
+  g.lineWidth = 1; for (let k = 1; k <= 10; k++) { const y = yB + hB - 3 - k * 10 * ml; g.beginPath(); g.moveTo(x + w / 2 - (k % 5 ? 8 : 16), y); g.lineTo(x + w / 2, y); g.stroke(); }
+  // le haut de bouteille retourné : le sol, le coton, l’eau versée au-dessus
+  const vers = doux((t - 2.2) / 1.6), infiltre = doux((t - T1 + .4) / Math.max(1, S.duree * MIN * .45));
+  g.beginPath(); g.moveTo(x - w / 2, yH); g.lineTo(x - w / 2, yH + hH * .55); g.lineTo(x - 12, yH + hH); g.lineTo(x + 12, yH + hH); g.lineTo(x + w / 2, yH + hH * .55); g.lineTo(x + w / 2, yH); g.closePath();
+  g.save(); g.clip();
+  ST.remplir(g, x - w / 2, yH + hH * .3, w, hH * .7, S.type, { densite: S.type === 'sable' ? .9 : 1, graine: S.duree });
+  if (vers > 0) ST.eauPeinte(g, x - w / 2, yH + hH * .3 - 30 * vers * (1 - infiltre), w, 30 * vers * (1 - infiltre), { alpha: .6 });
+  g.restore(); g.stroke();
+  g.fillStyle = '#f5f5f0'; g.beginPath(); g.ellipse(x, yH + hH + 4, 13, 9, 0, 0, 6.28); g.fill();
+  g.restore();
+  // les gouttes qui tombent pendant l’écoulement (plus serrées pour le sable)
+  if (coule) { const n = S.type === 'sable' ? 4 : 1; for (let k = 0; k < n; k++) { const ph = (t * (S.type === 'sable' ? 2.2 : .9) + k / n) % 1; ST.goutte(g, x, yH + hH + 14 + ph * (yB + hB - recu * ml - yH - hH - 20), 3.4, 1); } }
+  return { w, yH, hH, yB, hB, ml, recu, tFin };
+}
+function dessiner(c) {
+  scene.cadre(91);
+  const t = B.chrono.t, L = scene.L;
+  const xs = [96, 236], xp = 330, wp = L - xp - 14;
+  const geo = [];
+  SOLS.forEach((S, i) => {
+    const x = xs[i];
+    c.direct(() => { c.ctx.save(); c.ctx.globalAlpha = doux(t / 1.2); geo[i] = bouteille(c.ctx, x, S, t); c.ctx.restore(); });
+    const G = geo[i];
+    c.texte(scene.compact ? S.id.toUpperCase() : S.nom, x, 30, { couleur: S.coul, taille: 18, align: 'center', max: 150 });
+    if (!scene.compact) c.texte('coton', x + 26, G.yH + G.hH + 10, { couleur: 'faible', taille: 15 });
+    c.repere('bouteille_' + S.id, x - 60, 40, 120, 330, S.nom);
+    // le chronomètre : il part à la première goutte (t1) et s’arrête à la dernière (t2)
+    if (t >= T1) {
+      const min = Math.min(S.duree, (t - T1) / MIN), fini = t >= G.tFin;
+      const lit = fini && t < G.tFin + 1.6;
+      if (lit) ST.lueur(c, x - 58, 376, 116, 30, true);
+      c.direct(() => c.texte(`⏱ ${fr(min, 0)} min`, x, 398, { couleur: fini ? S.coul : 'blanc', taille: 19, align: 'center', gras: fini }));
+      c.repere('chrono_' + S.id, x - 58, 376, 116, 30, `${S.nom} : t2 − t1 = ${S.duree} min`);
+      if (fini) {
+        const yv = G.yB + G.hB - G.recu * G.ml - 3;
+        ecrit.ecrire(c, 'v2' + i, () => c.texte(`V_2 = ${S.v2} ml`, x, yv - 8, { couleur: 'cyan', taille: 18, align: 'center', gras: true }));
+        c.repere('v2_' + S.id, x - 52, yv - 28, 104, 26 + G.recu * G.ml, `${S.nom} : V2 = ${S.v2} ml`);
+      }
+    }
+  });
+  // la colonne de droite : les données, puis les calculs
+  if (t >= M.versement - 1.4) { ecrit.ecrire(c, 'v1', () => c.texte('V_1 = 100 ml versés sur chaque sol (2 × 50 ml)', xp, 34, { couleur: 'cyan', taille: 18, max: wp })); c.repere('v1', xp - 4, 14, wp, 28, 'V1 = 100 ml'); }
+  if (t >= T1 - .2) ecrit.ecrire(c, 't1', () => c.texte('t_1 : première goutte ;  t_2 : dernière goutte', xp, 62, { couleur: 'blanc', taille: 17, max: wp }));
+  /* Le tableau des résultats (règle de l’utilisateur, 22 novembre 2026 : pas de photocopie de tableau ; on le recrée au
+   * tableau et on le remplit en animation) : la grille se trace à la première goutte ; quand un sol a fini, son V2 et sa
+   * durée VOLENT depuis la bouteille et le chronomètre jusqu’à leur case, qui s’allume. */
+  if (t >= T1 - .2 && !scene.compact) {
+    const cx = [xp, xp + 70, xp + 210, Math.min(xp + 360, xp + wp)], ry = [78, 104, 130, 156];
+    ecrit.ecrire(c, 'grille', () => {
+      ry.forEach(y => c.ligne(cx[0], y, cx[3], y, { couleur: 'faible', largeur: 1.3, duree: .2 }));
+      cx.forEach(x => c.ligne(x, ry[0], x, ry[3], { couleur: 'faible', largeur: 1.3, duree: .15 }));
+      c.texte('V_2 (ml)', (cx[1] + cx[2]) / 2, ry[1] - 7, { couleur: 'cyan', taille: 17, align: 'center' });
+      c.texte('t_2 − t_1 (min)', (cx[2] + cx[3]) / 2, ry[1] - 7, { couleur: 'blanc', taille: 17, align: 'center' });
+      SOLS.forEach((S, i) => c.texte(S.id.toUpperCase(), (cx[0] + cx[1]) / 2, ry[i + 2] - 7, { couleur: S.coul, taille: 17, align: 'center' }));
+    });
+    c.repere('tableau', cx[0] - 4, ry[0] - 4, cx[3] - cx[0] + 8, ry[3] - ry[0] + 8, 'le tableau des résultats');
+    SOLS.forEach((S, i) => {
+      const tF = T1 + S.duree * MIN;
+      if (t < tF) return;
+      const u = doux((t - tF) / .9), xb = [96, 236][i];
+      const cases = [[(cx[1] + cx[2]) / 2, String(S.v2), xb, 300, 'cyan'], [(cx[2] + cx[3]) / 2, String(S.duree), xb, 398, S.coul]];
+      cases.forEach(([xc, v, x0, y0, coul]) => {
+        const x = mix(x0, xc, u), y = mix(y0, ry[i + 2] - 7, u);
+        c.direct(() => c.texte(v, x, y, { couleur: coul, taille: 18, align: 'center', gras: true }));
+        if (u >= 1 && t < tF + 2.2) ST.lueur(c, xc - 40, ry[i + 1] + 2, 80, 22, true);
+      });
+    });
+  }
+  const ligne = (cle, tm, s, y, coul, rep, lab, taille = 19) => {
+    if (t < tm - 1.4) return;
+    ecrit.ecrire(c, cle, () => c.texte(s, xp, y, { couleur: coul, taille, max: wp }));
+    c.repere(rep, xp - 4, y - 30, wp, 40, lab);
+    if (t < tm + 1.2) ST.lueur(c, xp - 6, y - 32, Math.min(wp, c.largeurTexte(s.replace(/_/g, ''), taille) + 16), 42, true);
+  };
+  ligne('fp', M.formule_p, 'Perméabilité :  P = ⟦V_2|t_2 − t_1⟧', 192, 'jaune', 'formule_p', 'P = V2/(t2 − t1)', 20);
+  ligne('pa', M.p_a, 'P_A = ⟦60 ml|12 min⟧ = 5 ml/min', 236, 'jaune', 'p_a', 'PA = 5 ml/min');
+  ligne('pb', M.p_b, 'P_B = ⟦20 ml|20 min⟧ = 1 ml/min', 280, 'orange', 'p_b', 'PB = 1 ml/min');
+  ligne('fvr', M.formule_vr, 'Rétention :  Vr = V_1 − V_2', 316, 'jaune', 'formule_vr', 'Vr = V1 − V2', 20);
+  ligne('vra', M.vr_a, 'Vr_A = 100 − 60 = 40 ml', 344, 'jaune', 'vr_a', 'VrA = 40 ml');
+  ligne('vrb', M.vr_b, 'Vr_B = 100 − 20 = 80 ml', 372, 'orange', 'vr_b', 'VrB = 80 ml');
+  if (t >= M.conclusion - 1.4) {
+    ecrit.ecrire(c, 'concl', () => c.texte('A : plus perméable ;  B : retient plus d’eau', xp, 404, { couleur: 'vert', taille: 19, max: wp }));
+    c.repere('conclusion', xp - 4, 384, wp, 28, 'la conclusion');
+  }
+  return c.fin();
+}
+const canvas = $('canvas');
+const scene = ST.Scene(canvas, dessiner, { large: true });
+const ecrit = ST.Apparitions(scene);
+ST.brancher.scene = scene; ST.brancher.ecrit = ecrit;
+/* compact (petit cadre) : d’abord les deux bouteilles seules (chronomètres, V2) ; puis, au moment des calculs, seulement les
+ * lignes de P, puis seulement celles de Vr, en grand. */
+/* révision : P_A, puis Vr_A, puis (après la réponse de l’élève) P_B, puis Vr_B et la conclusion. */
+const FP = { x: 318, y: 156, w: 404, h: 142 }, FV = { x: 318, y: 288, w: 404, h: 132 };
+scene.foyer = () => { const t = B.chrono.t; return t < M.formule_p - 1.4 ? { x: 30, y: 10, w: 280, h: 405 } : t < M.formule_vr - 1.4 ? FP : t < M.p_b - 1.4 ? FV : t < M.vr_b - 1.4 ? FP : FV; };
+function voir(t) {
+  const m = ['Deux bouteilles : 100 g de sol limoneux A et 100 g de sol argileux B sur du coton.'];
+  if (t >= 2.2) m.push('On verse V1 = 100 ml d’eau sur chaque sol.');
+  if (t >= T1) m.push('Première goutte (t1) : les chronomètres partent.');
+  SOLS.forEach(S => { const tF = T1 + S.duree * MIN; if (t >= tF) m.push(`${S.id.toUpperCase()} : dernière goutte après ${S.duree} min, V2 = ${S.v2} ml.`); else if (t > T1) m.push(`${S.id.toUpperCase()} coule encore (${fr((t - T1) / MIN, 0)} min).`); });
+  [['formule_p', 'P = V2/(t2 − t1)'], ['p_a', 'PA = 60/12 = 5 ml/min'], ['formule_vr', 'Vr = V1 − V2'], ['vr_a', 'VrA = 100 − 60 = 40 ml'], ['p_b', 'PB = 20/20 = 1 ml/min'], ['vr_b', 'VrB = 100 − 20 = 80 ml'], ['conclusion', 'A plus perméable, B retient plus d’eau']].forEach(([k, s]) => { if (t >= M[k]) m.push('Écrit : ' + s + '.'); });
+  return m.join(' ');
+}
+const B = ST.brancher({ id: 'revision_permeabilite', titre: 'Révision : perméabilité et rétention', M, FIN, motifs: MOTIFS, vue: 'revision',
+  texte: '100 ml d’eau (V1) sur 100 g de sol limoneux A et 100 g de sol argileux B. A : V2 = 60 ml en t2 − t1 = 12 min ; B : V2 = 20 ml en 20 min. P = V2/(t2 − t1) : PA = 5 ml/min, PB = 1 ml/min. Vr = V1 − V2 : VrA = 40 ml, VrB = 80 ml. Le sol A est plus perméable, le sol B retient plus d’eau.',
+  voir, depart: 'On verse l’eau…', fini: () => 'A plus perméable ; B retient plus d’eau.',
+  explication: { revision: [{ repere: 'bouteille_a', texte: 'Le sol limoneux A.' }, { repere: 'bouteille_b', texte: 'Le sol argileux B.' }, { repere: 'chrono_a', texte: 't2 − t1 = 12 min.' }, { repere: 'chrono_b', texte: 't2 − t1 = 20 min.' }, { repere: 'formule_p', texte: 'P = V2/(t2 − t1).' }, { repere: 'formule_vr', texte: 'Vr = V1 − V2.' }] } });
+window.Tableau.bulle($('feedback'), 'Quel sol laisse passer l’eau le plus vite ?');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

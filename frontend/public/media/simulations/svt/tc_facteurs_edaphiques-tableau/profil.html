@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Le profil d’un sol — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="sol.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Une coupe de terrain dessinée : la végétation, la litière, le sol découpé en horizons, puis la roche-mère en bas"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Qu’est-ce qu’un sol ? (diapositive fe_i1_sol) — la coupe de terrain du document du professeur, recréée et peinte
+ * (règle de l’utilisateur, 22 novembre 2026 : pas de photocopie de document). De haut en bas : la végétation, la litière
+ * (feuilles mortes), le sol (deux horizons parallèles à la surface), la roche-mère (d’où vient le sol).
+ * Moments : vegetation 2 ; litiere 3,5 ; sol 5 ; roche 6,5 ; horizons 8,5 ; fin 9.
+ */
+const ST = window.SolTableau, { doux } = ST;
+const $ = id => document.getElementById(id);
+const M = { vegetation: 2, litiere: 3.5, sol: 5, roche: 6.5, horizons: 8.5 };
+const FIN = 9;
+const MOTIFS = { vegetation: 'en haut, la végétation', litiere: 'la litière : les feuilles mortes', sol: 'le sol, meuble', roche: 'en bas, la roche-mère', horizons: 'le sol est découpé en horizons' };
+const Y = { surf: 150, lit: 172, h1: 236, h2: 292, bas: 404 };
+function dessiner(c) {
+  scene.cadre(11);
+  const t = B.chrono.t, L = scene.L, x0 = 40, x1 = Math.min(L * .6, L - 260), xl = x1 + 30, K = scene.compact;
+  const ondule = (x, a, ph) => Math.sin(x / 47 + ph) * a + Math.sin(x / 19 + ph * 2) * a * .4;
+  c.direct(() => {
+    const g = c.ctx; g.save(); g.beginPath(); g.rect(x0, 40, x1 - x0, Y.bas - 40); g.clip();
+    // la roche-mère : blocs gris fissurés
+    const ar = doux((t - M.roche + 1.4) / 1);
+    if (ar > 0) {
+      g.globalAlpha = ar; const rg = g.createLinearGradient(0, Y.h2, 0, Y.bas); rg.addColorStop(0, '#8a8580'); rg.addColorStop(1, '#5d5955'); g.fillStyle = rg; g.fillRect(x0, Y.h2, x1 - x0, Y.bas - Y.h2);
+      const r = ST.graine(3); g.strokeStyle = 'rgba(40,38,35,.7)'; g.lineWidth = 2;
+      for (let k = 0; k < 22; k++) { const x = x0 + r() * (x1 - x0), y = Y.h2 + 14 + r() * (Y.bas - Y.h2 - 20); g.beginPath(); g.moveTo(x, y); g.lineTo(x + 18 + r() * 30, y + (r() - .5) * 20); g.lineTo(x + 30 + r() * 30, y + 14); g.stroke(); }
+      for (let k = 0; k < 14; k++) { const x = x0 + r() * (x1 - x0), y = Y.h2 + 6 + r() * 30; g.fillStyle = r() > .5 ? '#a19a92' : '#6f6a64'; g.beginPath(); g.ellipse(x, y, 10 + r() * 12, 6 + r() * 6, r(), 0, 6.28); g.fill(); }
+      g.globalAlpha = 1;
+    }
+    // le sol : deux horizons (sombre en haut, plus clair dessous), avec des cailloux et des racines
+    const as = doux((t - M.sol + 1.4) / 1);
+    if (as > 0) {
+      g.globalAlpha = as;
+      const s1 = g.createLinearGradient(0, Y.lit, 0, Y.h1); s1.addColorStop(0, '#3f2a1a'); s1.addColorStop(1, '#5a3d24'); g.fillStyle = s1;
+      g.beginPath(); g.moveTo(x0, Y.lit); for (let x = x0; x <= x1; x += 8) g.lineTo(x, Y.lit + ondule(x, 3, 1)); g.lineTo(x1, Y.h1 + 30); g.lineTo(x0, Y.h1 + 30); g.closePath(); g.fill();
+      const s2 = g.createLinearGradient(0, Y.h1, 0, Y.h2); s2.addColorStop(0, '#8a6440'); s2.addColorStop(1, '#a98257'); g.fillStyle = s2;
+      g.beginPath(); g.moveTo(x0, Y.h1); for (let x = x0; x <= x1; x += 8) g.lineTo(x, Y.h1 + ondule(x, 5, 2)); g.lineTo(x1, Y.h2 + 12); for (let x = x1; x >= x0; x -= 8) g.lineTo(x, Y.h2 + ondule(x, 8, 4)); g.closePath(); g.fill();
+      const r = ST.graine(7); for (let k = 0; k < 260; k++) { g.fillStyle = r() > .5 ? 'rgba(230,200,150,.35)' : 'rgba(20,12,6,.35)'; g.fillRect(x0 + r() * (x1 - x0), Y.lit + 4 + r() * (Y.h2 - Y.lit), 2, 2); }
+      g.strokeStyle = 'rgba(225,205,170,.7)'; g.lineWidth = 1.6;
+      for (let k = 0; k < 9; k++) { const x = x0 + 30 + k * (x1 - x0 - 60) / 8; g.beginPath(); g.moveTo(x, Y.lit); g.quadraticCurveTo(x + 10, Y.lit + 40, x - 6, Y.lit + 70 + (k % 3) * 20); g.stroke(); }
+      g.globalAlpha = 1;
+    }
+    // la litière : feuilles mortes
+    const al = doux((t - M.litiere + 1.4) / 1);
+    if (al > 0) {
+      g.globalAlpha = al; g.fillStyle = '#2a1c10'; g.beginPath(); g.moveTo(x0, Y.surf); for (let x = x0; x <= x1; x += 8) g.lineTo(x, Y.surf + ondule(x, 3, 0)); g.lineTo(x1, Y.lit + 4); for (let x = x1; x >= x0; x -= 8) g.lineTo(x, Y.lit + ondule(x, 3, 1)); g.closePath(); g.fill();
+      const r = ST.graine(9); for (let k = 0; k < 60; k++) { const x = x0 + r() * (x1 - x0), y = Y.surf + 4 + r() * (Y.lit - Y.surf - 4); g.save(); g.translate(x, y); g.rotate(r() * 6.28); g.fillStyle = ['#9a6a30', '#7d5226', '#b5823f'][k % 3]; g.beginPath(); g.ellipse(0, 0, 7, 3, 0, 0, 6.28); g.fill(); g.restore(); }
+      g.globalAlpha = 1;
+    }
+    g.restore();
+    // la végétation : herbes, fougères, deux arbustes (au-dessus de la coupe)
+    const av = doux((t - M.vegetation + 1.4) / 1);
+    if (av > 0) {
+      g.save(); g.globalAlpha = av; const r = ST.graine(13);
+      for (let k = 0; k < 70; k++) { const x = x0 + 4 + r() * (x1 - x0 - 8), h = 14 + r() * 26; g.strokeStyle = `rgb(${60 + r() * 40},${140 + r() * 60},${50 + r() * 30})`; g.lineWidth = 2; g.beginPath(); g.moveTo(x, Y.surf); g.quadraticCurveTo(x + (r() - .5) * 12, Y.surf - h * .6, x + (r() - .5) * 16, Y.surf - h); g.stroke(); }
+      for (const xa of [x0 + (x1 - x0) * .25, x0 + (x1 - x0) * .72]) {
+        g.fillStyle = '#6b4a2a'; g.fillRect(xa - 4, Y.surf - 70, 8, 70);
+        for (const [dx, dy, rr] of [[0, -92, 30], [-24, -78, 22], [24, -78, 22], [0, -64, 20]]) { const gg = g.createRadialGradient(xa + dx - 8, Y.surf + dy - 8, 3, xa + dx, Y.surf + dy, rr); gg.addColorStop(0, '#7fc76a'); gg.addColorStop(1, '#2f7a32'); g.fillStyle = gg; g.beginPath(); g.arc(xa + dx, Y.surf + dy, rr, 0, 6.28); g.fill(); }
+      }
+      g.restore();
+    }
+    g.strokeStyle = 'rgba(226,232,240,.6)'; g.lineWidth = 2; g.strokeRect(x0, 40, x1 - x0, Y.bas - 40);
+  });
+  // les légendes à droite, chacune à son moment
+  const leg = (cle, tm, s, y, coul, haut, bas) => {
+    if (t < tm - 1.2) return;
+    ecrit.ecrire(c, cle, () => {
+      if (haut != null) { c.ligne(x1 + 8, haut, x1 + 16, haut, { couleur: coul, largeur: 1.8 }); c.ligne(x1 + 16, haut, x1 + 16, bas, { couleur: coul, largeur: 1.8 }); c.ligne(x1 + 8, bas, x1 + 16, bas, { couleur: coul, largeur: 1.8 }); }
+      else c.ligne(x1 - 10, y - 6, x1 + 18, y - 6, { couleur: coul, largeur: 1.8 });
+      c.texte(s, xl, y, { couleur: coul, taille: 21, max: L - xl - 10 });
+    });
+    c.repere(cle, x0, (haut ?? y - 20) - 4, L - x0 - 10, (bas ?? y + 4) - (haut ?? y - 20) + 8, s);
+  };
+  leg('vegetation', M.vegetation, 'Végétation', 100, 'vert', 50, Y.surf - 4);
+  leg('litiere', M.litiere, K ? 'Litière' : 'Litière (feuilles mortes)', Y.lit - 4, 'orange');
+  leg('sol', M.sol, 'Sol', (Y.lit + Y.h2) / 2 + 6, 'jaune', Y.lit + 4, Y.h2);
+  leg('roche', M.roche, 'Roche-mère', (Y.h2 + Y.bas) / 2 + 6, 'blanc', Y.h2 + 6, Y.bas);
+  if (t >= M.horizons - 1.2) {
+    ecrit.ecrire(c, 'horizons', () => {
+      c.trait(Array.from({ length: 40 }, (_, k) => { const x = x0 + k * (x1 - x0) / 39; return [x, Y.h1 + Math.sin(x / 47 + 2) * 5 + Math.sin(x / 19 + 4) * 2]; }), { couleur: 'jaune', largeur: 2.2 });
+      c.texte('horizon 1', x0 + 12, Y.lit + 34, { couleur: 'jaune', taille: 18 });
+      c.texte('horizon 2', x0 + 12, Y.h1 + 34, { couleur: 'jaune', taille: 18 });
+      if (!K) c.texte('couches parallèles à la surface', xl, (Y.lit + Y.h2) / 2 + 34, { couleur: 'faible', taille: 16, max: L - xl - 10 });
+    });
+    c.repere('horizons', x0, Y.lit, x1 - x0, Y.h2 - Y.lit, 'les horizons du sol');
+  }
+  return c.fin();
+}
+const canvas = $('canvas');
+const scene = ST.Scene(canvas, dessiner, { large: true });
+const ecrit = ST.Apparitions(scene);
+ST.brancher.scene = scene; ST.brancher.ecrit = ecrit;
+scene.foyer = (L) => ({ x: 30, y: 30, w: Math.min(L * .6, L - 260) + 200, h: 380 });
+function voir(t) {
+  const m = ['Une coupe de terrain dessinée.'];
+  [['vegetation', 'En haut : la végétation (herbes, arbustes).'], ['litiere', 'Puis la litière : des feuilles mortes.'], ['sol', 'Puis le sol, brun et meuble, avec des racines.'], ['roche', 'En bas : la roche-mère, grise et fissurée.'], ['horizons', 'Le sol est découpé en deux horizons parallèles à la surface.']].forEach(([k, s]) => { if (t >= M[k]) m.push(s); });
+  return m.join(' ');
+}
+const B = ST.brancher({ id: 'edaph_profil', titre: 'Le profil d’un sol', M, FIN, motifs: MOTIFS,
+  texte: 'Coupe de terrain : végétation, litière (feuilles mortes), sol (partie superficielle meuble de la croûte terrestre, découpée en horizons parallèles à la surface), roche-mère dont le sol est issu.',
+  voir, depart: 'Une coupe de terrain…', fini: () => 'Végétation, litière, sol (horizons), roche-mère.',
+  explication: { profil: [{ repere: 'vegetation', texte: 'La végétation.' }, { repere: 'litiere', texte: 'La litière.' }, { repere: 'sol', texte: 'Le sol.' }, { repere: 'roche', texte: 'La roche-mère.' }] } });
+window.Tableau.bulle($('feedback'), 'Qu’y a-t-il sous nos pieds ?');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>

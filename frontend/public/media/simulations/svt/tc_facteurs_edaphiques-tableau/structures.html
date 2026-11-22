@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Les structures du sol — au tableau</title>
+<link rel="stylesheet" href="/media/simulations/shared/tableau/tableau.css"><link rel="stylesheet" href="sol.css"></head>
+<body>
+<div class="tableau">
+  <section class="scene"><canvas id="canvas" role="img" aria-label="Trois loupes sur trois sols : structure particulaire (grains de sable libres), structure compacte (pâte argileuse), structure glomérulaire (agrégats et vides) ; il pleut sur les trois"></canvas></section>
+  <footer class="barre">
+    <button class="craie-btn principal" id="run" data-professor-control="start pause resume play_until">Lancer</button>
+    <p class="bulle" id="feedback" role="status" aria-live="polite"></p>
+  </footer>
+</div>
+<script src="/media/simulations/shared/tableau/tableau.js"></script>
+<script src="commun.js"></script>
+<script>
+/*
+ * Les trois structures du sol (document du professeur, diapositives fe_t9_structures et fe_t10_structure_vivants).
+ *   particulaire : grains de sable libres, vides pleins d’eau et d’air ; l’eau traverse très vite (sol très perméable) ;
+ *   compacte     : grains de sable et de limon liés par une pâte argileuse, sans vides ; l’eau reste en surface, pas d’air
+ *                  (le sol ne convient pas aux êtres vivants) ;
+ *   glomérulaire : sable, limon, argile et matière organique agglomérés en grumeaux (complexe argilo-humique), vides
+ *                  entre eux ; l’eau entre, une partie est retenue, l’air reste (le plus favorable).
+ * Moments : particulaire 2,5 ; compacte 5 ; glomerulaire 7,5 ; pluie 9 ; eau_particulaire 11 ; eau_compacte 13 ;
+ * eau_glomerulaire 15 ; fin 16. set_parameters {conclusions:false} : les résultats de l’eau ne s’écrivent pas.
+ */
+const ST = window.SolTableau, { doux, mix } = ST;
+const $ = id => document.getElementById(id);
+const M = { particulaire: 2.5, compacte: 5, glomerulaire: 7.5, pluie: 9, eau_particulaire: 11, eau_compacte: 13, eau_glomerulaire: 15 };
+const FIN = 16;
+const MOTIFS = { particulaire: 'la structure particulaire', compacte: 'la structure compacte', glomerulaire: 'la structure glomérulaire', pluie: 'il pleut sur les trois sols',
+  eau_particulaire: 'particulaire : l’eau traverse et part', eau_compacte: 'compacte : l’eau reste en surface', eau_glomerulaire: 'glomérulaire : l’eau est retenue, l’air reste' };
+const S = [
+  { id: 'particulaire', nom: 'Structure particulaire', desc: 'grains de sable libres', res: 'l’eau traverse vite : très perméable', couleur: 'jaune', t: 2.5, te: 11 },
+  { id: 'compacte', nom: 'Structure compacte', desc: 'grains liés par une pâte d’argile', res: 'l’eau reste en surface, pas d’air', couleur: 'orange', t: 5, te: 13 },
+  { id: 'glomerulaire', nom: 'Structure glomérulaire', desc: 'grumeaux et vides (eau et air)', res: 'eau retenue + air : favorable', couleur: 'vert', t: 7.5, te: 15 },
+];
+const P = { conclusions: true };
+const g7 = ST.graine(3);
+const GRAINS = Array.from({ length: 26 }, () => [g7() * 2 - 1, g7() * 2 - 1, .8 + g7() * .5]);
+const GRUMEAUX = [[-.45, -.45], [.35, -.5], [-.55, .25], [.15, .05], [.55, .45], [-.1, .62], [-.05, -.85], [.8, -.1]];
+function loupe(g, x, y, r, s, t) {
+  g.save(); g.beginPath(); g.arc(x, y, r, 0, 6.28); g.clip();
+  const pl = doux((t - 9) / 1.2);                 // la pluie commence
+  const u = doux((t - (s.te - 2)) / 2);           // l’eau entre / traverse pendant les 2 s avant son moment
+  if (s.id === 'particulaire') {
+    g.fillStyle = 'rgba(235,245,250,.18)'; g.fillRect(x - r, y - r, 2 * r, 2 * r);                     // air
+    // eau qui descend comme un front et ressort par le bas (presque rien ne reste)
+    const front = y - r + 2 * r * u, reste = u >= 1 ? .25 : 1;
+    if (u > 0) { g.fillStyle = `rgba(60,160,210,${.55 * reste})`; g.fillRect(x - r, Math.max(y - r, front - 2 * r * .6), 2 * r, Math.min(front, y + r) - Math.max(y - r, front - 2 * r * .6)); }
+    GRAINS.forEach(([a, b, k], i) => { if (a * a + b * b < 1.1) ST.grain(g, x + a * r * .86, y + b * r * .86, 'sable', { r: 13 * k, graine: i * 5 + 1 }); });
+  } else if (s.id === 'compacte') {
+    const fg = g.createRadialGradient(x - r * .3, y - r * .3, 4, x, y, r); fg.addColorStop(0, '#d9813f'); fg.addColorStop(1, '#a3511d');
+    g.fillStyle = fg; g.fillRect(x - r, y - r, 2 * r, 2 * r);                                               // pâte argileuse
+    GRAINS.forEach(([a, b, k], i) => { if (a * a + b * b < 1.1 && i % 2) ST.grain(g, x + a * r * .86, y + b * r * .86, i % 4 === 1 ? 'sable' : 'limon', { r: (i % 4 === 1 ? 9 : 6) * k, graine: i * 5 + 2 }); });
+  } else {
+    g.fillStyle = 'rgba(235,245,250,.18)'; g.fillRect(x - r, y - r, 2 * r, 2 * r);
+    if (u > 0) { g.fillStyle = `rgba(60,160,210,${.45 * u})`; g.fillRect(x - r, y - r + r * .6 * (1 - u), 2 * r, 2 * r); }  // l’eau garnit les petits vides et y reste
+    // de l’air reste en bulles entre les grumeaux
+    if (u > 0) { const rb = ST.graine(8); for (let k = 0; k < 7; k++) ST.bulle(g, x + (rb() * 1.6 - .8) * r, y + (rb() * 1.6 - .8) * r, 5 + rb() * 4); }
+    GRUMEAUX.forEach(([a, b], i) => {
+      const cx = x + a * r * .82, cy = y + b * r * .82, rg = r * .3;
+      g.fillStyle = '#5b3a22'; g.beginPath(); g.arc(cx, cy, rg, 0, 6.28); g.fill();                     // matière organique qui colle
+      const rr = ST.graine(i + 20); for (let k = 0; k < 14; k++) { const aa = rr() * 6.28, d = Math.sqrt(rr()) * rg * .8; ST.grain(g, cx + Math.cos(aa) * d, cy + Math.sin(aa) * d, k % 3 ? 'limon' : 'sable', { r: k % 3 ? 4.5 : 7, graine: k + i * 9 }); }
+    });
+  }
+  // la flaque au-dessus de la structure compacte
+  g.restore();
+  if (s.id === 'compacte' && u > 0) { g.save(); g.fillStyle = 'rgba(60,160,210,.6)'; g.beginPath(); g.ellipse(x, y - r + 2, r * .75 * u, 10 * u, 0, Math.PI, 0); g.fill(); g.restore(); }
+  // gouttes qui sortent sous le sol perméable
+  if (pl > 0 && s.id !== 'compacte' && u > .2 && t < FIN + 1) { const n = s.id === 'particulaire' ? 6 : 2; for (let k = 0; k < n; k++) { const ph = (t * 1.4 + k / n) % 1; ST.goutte(g, x - 20 + k * 40 / n, y + r + 6 + ph * 26, 3.2, 1 - ph); } }
+  // la pluie au-dessus des trois
+  if (pl > 0) for (let k = 0; k < 7; k++) { const ph = (t * 1.6 + k / 7) % 1; ST.goutte(g, x - r * .7 + k * r * .23, y - r - 42 + ph * 34, 3, pl * (1 - ph * .6)); }
+  g.strokeStyle = 'rgba(226,232,240,.9)'; g.lineWidth = 3; g.beginPath(); g.arc(x, y, r, 0, 6.28); g.stroke();
+}
+function dessiner(c) {
+  scene.cadre(27);
+  const t = B.chrono.t, L = scene.L, r = Math.min(98, (L - 80) / 6.6), yC = 168;
+  S.forEach((s, i) => {
+    if (t < s.t - 2.3) return;
+    const x = L * (i * 2 + 1) / 6;
+    const a = doux((t - s.t + 2.3) / 1);
+    c.direct(() => { c.ctx.save(); c.ctx.globalAlpha = a; loupe(c.ctx, x, yC, r, s, t); c.ctx.restore(); });
+    ecrit.ecrire(c, 'nom' + i, () => {
+      c.texte(scene.compact ? s.nom.replace('Structure ', '') : s.nom, x, yC + r + 44, { couleur: s.couleur, taille: 20, align: 'center', max: L / 3 - 12 });
+      if (!scene.compact) c.texte(s.desc, x, yC + r + 70, { couleur: 'blanc', taille: 17, align: 'center', max: L / 3 - 12, alpha: .9 });
+    });
+    c.repere(s.id, x - r - 6, yC - r - 6, 2 * r + 12, 2 * r + 86, s.nom);
+    if (t >= s.te - .3 && P.conclusions && !scene.compact) {
+      ecrit.ecrire(c, 'res' + i, () => c.texte(s.res, x, yC + r + 104, { couleur: 'cyan', taille: 18, align: 'center', max: L / 3 - 10 }));
+      c.repere('eau_' + s.id, x - L / 6 + 6, yC + r + 84, L / 3 - 12, 28, s.res);
+    }
+  });
+  if (t >= 8.6) c.repere('pluie', L * .1, yC - r - 50, L * .8, 40, 'la pluie');
+  return c.fin();
+}
+const canvas = $('canvas');
+const scene = ST.Scene(canvas, dessiner, { large: true });
+const ecrit = ST.Apparitions(scene);
+ST.brancher.scene = scene; ST.brancher.ecrit = ecrit;
+scene.foyer = (L) => { const r = Math.min(98, (L - 80) / 6.6); return { x: 0, y: 168 - r - 50, w: L, h: 2 * r + 112 }; };   // compact : les trois loupes et leur nom court
+function voir(t) {
+  const m = [];
+  S.forEach(s => { if (t >= s.t - 1) m.push(`${s.nom} : ${s.desc}.`); });
+  if (t >= 9) m.push('Il pleut sur les trois sols.');
+  if (P.conclusions) S.forEach(s => { if (t >= s.te) m.push(`${s.nom} : ${s.res}.`); });
+  else S.forEach(s => { if (t >= s.te) m.push(`${s.nom} : l’eau est arrivée (résultat non écrit).`); });
+  return m.join(' ') || 'Le tableau est vide.';
+}
+const B = ST.brancher({ id: 'edaph_structures', titre: 'Les structures du sol', M, FIN, motifs: MOTIFS, params: P,
+  texte: 'Trois structures : particulaire (grains de sable libres, très perméable), compacte (pâte argileuse, l’eau reste en surface, pas d’air, ne convient pas aux êtres vivants), glomérulaire (grumeaux du complexe argilo-humique et vides : eau retenue et air, la plus favorable).',
+  voir, depart: 'Trois loupes, trois sols…', fini: () => 'La structure glomérulaire garde l’eau et l’air.',
+  setParams: { schema: { conclusions: 'true | false (false : les résultats de l’eau ne s’écrivent pas)' }, appliquer: (p, R) => { if ('conclusions' in p) R.conclusions = p.conclusions !== false && p.conclusions !== 'false'; } },
+  explication: { structures: S.map(s => ({ repere: s.id, texte: `${s.nom} : ${s.desc}.` })) } });
+window.Tableau.bulle($('feedback'), 'Comment les grains sont-ils rangés ?');
+</script>
+<script src="/media/simulations/professor-locate.js" defer></script>
+</body></html>
