@@ -47,7 +47,7 @@ def test_bareme_par_element():
     assert [e["sur"] for e in re_.elements_bareme(q)] == [0.25, 0.25, 0.25]
     assert "Barème de la question" in re_.prompt_reponse({"title": "V"}, q, "r", 1, None)
     r = re_.reaction_reponse('{"correct": false, "partiel": true, "parole": "x", "ecrit": "y", "details": '
-                             '[{"obtenu": 0, "perte": "face extérieure absente"}, {"obtenu": 0.25}, {"obtenu": 0, "perte": "pas de justification"}]}', None, q)
+                             '[{"n": 1, "cite": "", "obtenu": 0.25, "perte": "face extérieure absente"}, {"n": 2, "cite": "espace intermembranaire", "obtenu": 0.25}, {"n": 3, "cite": "", "obtenu": 0, "perte": "pas de justification"}]}', None, q)
     assert r["note"] == 0.25 and r["bareme"] == 0.75 and r["details"][0]["perte"] == "face extérieure absente"
     assert [e["sur"] for e in re_.elements_bareme({"bareme": 0.5, "elements": ["a", "b", "c", "d"]})] == [0.25, 0.25]
     assert re_.reaction_reponse('{"correct": true, "parole": "x", "details": []}', None, q)["note"] == 0.75

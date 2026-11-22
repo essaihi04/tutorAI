@@ -83,10 +83,13 @@ def prompt_reponse(diapo: dict, question: dict, reponse: Any, tentative: int, ve
     consigne_note = "" if not bar else (
         "Note aussi la réponse comme un correcteur du bac. Barème de la question, élément par élément :\n"
         + "\n".join(f"  {i + 1}. {e['element']} ({e['sur']:g} pt)" for i, e in enumerate(bar))
-        + "\nPour chaque élément, « obtenu » = ses points s'il est présent et juste, la moitié s'il est incomplet, 0 s'il "
-          "manque ou est faux ; « perte » = en quelques mots ce qui manque ou est faux (vide si tout est obtenu). "
-          "Le fond compte, pas l'orthographe.")
-    json_note = "" if not bar else ', "details": [' + ", ".join('{"obtenu": 0.25, "perte": ""}' for _ in bar) + "]"
+        + "\nLis la réponse de l'élève mot à mot (souvent sans accents ni apostrophes : « linterieure » = « l'intérieur », "
+          "« extrieur » = « extérieur ») et ne lui prête rien qu'il n'a pas écrit. Pour CHAQUE élément, dans l'ordre : « n » = "
+          "son numéro ; « cite » = l'extrait EXACT de la réponse de l'élève qui traite cet élément (vide s'il n'en parle pas) ; "
+          "« obtenu » = ses points si l'extrait est juste, la moitié s'il est incomplet, 0 s'il est faux ou absent ; « perte » "
+          "= en quelques mots ce qui manque ou est faux (vide si tout est obtenu). Note d'abord (« details »), puis écris "
+          "« parole » et « ecrit » d'accord avec ta note. Le fond compte, pas l'orthographe.")
+    json_note = "" if not bar else ", ".join(f'{{"n": {i + 1}, "cite": "", "obtenu": 0, "perte": ""}}' for i in range(len(bar)))
     return f"""Tu es le professeur de {matiere} d'un élève de 2e Bac PC BIOF au Maroc. Diapositive « {diapo.get('title', '')} ».
 Ce que tu viens d'expliquer à voix haute : {str(diapo.get('speech') or '')[:1200]}
 
@@ -105,7 +108,7 @@ S'il a juste : dis précisément ce qui est juste et pourquoi, en une ou deux ph
 {consigne_note}
 
 Réponds UNIQUEMENT par ce JSON :
-{{"correct": true, "partiel": false, "parole": "ce que tu dis (règles de la voix)", "ecrit": "la même chose en français écrit, court, avec les valeurs"{json_note}}}"""
+{{{('"details": [' + json_note + '], ') if json_note else ''}"correct": true, "partiel": false, "parole": "ce que tu dis (règles de la voix)", "ecrit": "la même chose en français écrit, court, avec les valeurs"}}"""
 
 
 def reaction_reponse(texte_llm: str, verdict: Optional[bool], question: Optional[dict] = None) -> Optional[dict]:
@@ -124,15 +127,23 @@ def reaction_reponse(texte_llm: str, verdict: Optional[bool], question: Optional
     out = {"correct": correct, "partiel": partiel, "parole": parole, "ecrit": str(d.get("ecrit") or "").strip()[:600]}
     bar = elements_bareme(question or {})
     if bar:
-        recu = d.get("details") if isinstance(d.get("details"), list) else []
+        recu = [r for r in (d.get("details") if isinstance(d.get("details"), list) else []) if isinstance(r, dict)]
+        par_n = {}
+        for j, r in enumerate(recu):
+            try:
+                par_n.setdefault(int(r.get("n", j + 1)), r)
+            except (TypeError, ValueError):
+                par_n.setdefault(j + 1, r)
         details = []
         for i, e in enumerate(bar):
-            r = recu[i] if i < len(recu) and isinstance(recu[i], dict) else {}
+            r = par_n.get(i + 1, {})
             try:
                 o = float(r.get("obtenu", 0))
             except (TypeError, ValueError):
                 o = 0.0
             o = round(min(max(o, 0.0), e["sur"]) * 4) / 4
+            if "cite" in r and not str(r.get("cite") or "").strip():
+                o = 0.0                         # l'élève n'en parle pas : pas de points
             if correct is True:
                 o = e["sur"]                    # juste et complète : tous les points
             details.append({"element": e["element"], "sur": e["sur"], "obtenu": o,
