@@ -92,7 +92,7 @@ Q5 = {"id": "5", "texte": "Montrer que pour tout x de ℝ : f(4 − x) + f(x) = 
       "reponse": phrase("Pour tout x réel, 4 − x ∈ ℝ. f(x) = (x − 2)³ − 3(x − 2), donc f(4 − x) = (2 − x)³ − 3(2 − x) = −[(x − 2)³ − 3(x − 2)] = −f(x) : f(4 − x) + f(x) = 0 = 2 × 0, donc I(2 ; 0) est un centre de symétrie de (C)."),
       "clavier": {"aides": ["(4 − x) ∈ ℝ", "f(2a − x) + f(x) = 2b", "a = 2, b = 0", "(x − 2)³ − 3(x − 2)"], "pieges": ["f(4 − x) = f(x)", "oublier (4 − x) ∈ Df"]},
       "aides": [aide("Un centre Ω(a ; b) : (2a − x) ∈ Df et f(2a − x) + f(x) = 2b. Ici a = 2, b = 0.",
-                     "centre de symétrie Ω، a و b: deux a moins x فالمجال، و f de deux a moins x، plus f de x، égale deux b. هنا a égale deux و b égale zéro."),
+                     "centre de symétrie oméga، a و b: deux a moins x فالمجال، و f de deux a moins x، plus f de x، égale deux b. هنا a égale deux و b égale zéro."),
                 aide("Astuce : vérifie que f(x) = (x − 2)³ − 3(x − 2) en développant, puis remplace x par 4 − x : x − 2 devient 2 − x.",
                      "حيلة: تأكد بلي f de x égale، x moins deux au cube، moins trois، facteur de x moins deux. ومن بعد عوض x ب quatre moins x: x moins deux كتولي deux moins x.")],
       "correction": correction([
