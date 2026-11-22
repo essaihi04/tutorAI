@@ -1,13 +1,14 @@
 # Exercice de chimie, ch. 13 (réactions acido-basiques), niveau moyen (celui du national) : réaction entre deux
-# couples (acide benzoïque et ions méthanoate) — équation, « montrer que » K = 10^(pKa₂ − pKa₁), sens d'évolution
-# par Qr,i, taux d'avancement final par K, puis pH du mélange à l'équilibre.
+# couples (acide benzoïque et ions méthanoate) — équation, « montrer que » K = 10^(pKa₂ − pKa₁), tableau
+# d'avancement et K = x_éq²/(n₀ − x_éq)², taux d'avancement final par K, puis pH du mélange à l'équilibre.
+# Règle 27 : le cours ch. 13 renvoie le critère d'évolution spontanée au semestre 2 : il n'est pas demandé ici.
 # Sources comparées (lues, jamais copiées) :
 #  - nationaux, exercice 1 de chimie : 2023 N (2.1 à 2.3 : acide éthanoïque + ions méthanoate, Qr,éq en fonction de
 #    Ka₁ et Ka₂, « trouver l'expression du pH en fonction de pKa₁ et pKa₂ »), 2020 R (2.1 à 2.5 : K en fonction des
-#    Ka, Qr,i, sens d'évolution, pH du mélange), 2016 N (1.2 K de la réaction du dosage) — backend/data/exams/physique ;
+#    Ka, pH du mélange ; ses questions de critère d'évolution sont du semestre 2, écartées), 2016 N (1.2 K de la réaction du dosage) — backend/data/exams/physique ;
 #  - profs (architecture/phys_ch13_acides_bases.md § 1 : Naceiri Mrabti « K d'une réaction acide-base », El Goufifa,
-#    fiche 5 h, Prof Bazhar) ; pièges relevés : mettre au numérateur le Ka du couple de la base qui réagit, oublier
-#    que le sens se décide en comparant Qr,i à K ;
+#    fiche 5 h, Prof Bazhar) ; pièges relevés : mettre au numérateur le Ka du couple de la base qui réagit, écrire
+#    n₀ − 2x_éq pour un coefficient 1 ;
 #  - séries en ligne repérées (titres et résumés lus ; PDF non ouverts, hôtes hors du réseau de la session) :
 #    talamidi exercices non corrigés 2 et 5, moutamadris fiches 13-8 et 17-2, pc1.ma Pr. Chargui,
 #    alloschool El Goufifa séance 15.
@@ -57,20 +58,21 @@ QUESTIONS = [
      ("K = 10^(3,75 − 4,2) = 0,35", "K égale zéro virgule trente-cinq")],
     "السؤال deux. K égale les ions benzoate fois l'acide méthanoïque، sur l'acide benzoïque fois les ions méthanoate. نضربو الفوق و التحت ف la concentration des ions H trois O plus. الجزء اللول هو K a un، و الجزء الثاني هو un sur K a deux. إذن K égale K a un sur K a deux، يعني dix puissance p K a deux moins p K a un. l'application numérique: dix puissance trois virgule soixante-quinze moins quatre virgule deux. K égale zéro virgule trente-cinq.",
     "ex_2", "fa_2"),
-  Q("3", "Calculer le quotient de réaction Qr,i à l'état initial et en déduire le sens d'évolution spontanée du système.",
-    "السؤال trois: حسب Q r i فl'état initial، و استنتج le sens d'évolution spontanée.",
-    phrase("Qr,i = [C₆H₅COO⁻]ᵢ·[HCOOH]ᵢ/([C₆H₅COOH]ᵢ·[HCOO⁻]ᵢ) = 0 car aucun produit au départ ; Qr,i < K : évolution dans le sens direct."),
-    (["Qr,i", "Qr,i < K", "sens direct"], ["Qr,i = K", "sens inverse"]),
-    [("Au départ, le mélange ne contient que l'acide benzoïque et les ions méthanoate : que vaut le numérateur de Qr,i ?",
-      "فالبداية، le mélange فيه غير l'acide benzoïque و les ions méthanoate. شحال كيساوي الفوق ديال Q r i؟"),
-     ("Compare Qr,i à K : si Qr,i < K, le système évolue dans le sens direct.",
-      "قارن Q r i مع K. يلا كان Q r i صغر من K، le système كيتطور ف le sens direct.")],
-    [("3 : pas de produits au départ : Qr,i = 0", "Q r i égale zéro"),
-     ("Qr,i = 0 < K = 0,35 : le système évolue dans le sens direct", "le sens direct")],
-    "السؤال trois. فالبداية ماكاينش les produits، إذن الفوق zéro، و Q r i égale zéro. zéro صغر من K égale zéro virgule trente-cinq، إذن le système كيتطور ف le sens direct.",
+  Q("3", "Le mélange initial contient n₀ = 1,0 × 10⁻³ mol de chaque réactif, dans le volume V. Dresser le tableau d'avancement, puis montrer qu'à l'équilibre K = x_éq²/(n₀ − x_éq)².",
+    "السؤال trois: فle mélange، n zéro égale un virgule zéro fois dix puissance moins trois mole من كل réactif، فle volume V. وجد le tableau d'avancement، ومن بعد بين بلي فالتوازن، K égale x éq au carré، sur n zéro moins x éq au carré.",
+    phrase("Initial : n₀ ; n₀ ; 0 ; 0. Équilibre : n₀ − x_éq ; n₀ − x_éq ; x_éq ; x_éq. K = Qr,éq = (x_éq/V)·(x_éq/V)/((n₀ − x_éq)/V)² = x_éq²/(n₀ − x_éq)²"),
+    (["n₀ − x_éq", "x_éq", "K = Qr,éq", "V se simplifie"], ["n₀ − 2x_éq", "x_éq/n₀"]),
+    [("Une ligne pour l'état initial, une pour l'équilibre. Les coefficients sont tous 1 : chaque réactif perd x_éq, chaque produit gagne x_éq.",
+      "سطر ل l'état initial، و سطر ل l'équilibre. les coefficients كلهم un: كل réactif كينقص ب x éq، و كل produit كيزيد ب x éq."),
+     ("À l'équilibre, K = Qr,éq : écris les quatre concentrations n/V ; le volume V se simplifie.",
+      "فالتوازن، K égale Q r à l'équilibre. كتب les quatre concentrations، n sur V، و le volume V كيتحيد.")],
+    [("3 : état initial : n₀ ; n₀ ; 0 ; 0 — équilibre : n₀ − x_éq ; n₀ − x_éq ; x_éq ; x_éq", "السطر ديال l'équilibre"),
+     ("K = Qr,éq = [C₆H₅COO⁻]éq·[HCOOH]éq/([C₆H₅COOH]éq·[HCOO⁻]éq)", "K égale Q r à l'équilibre"),
+     ("K = (x_éq/V)²/((n₀ − x_éq)/V)² = x_éq²/(n₀ − x_éq)²", "K égale x éq au carré")],
+    "السؤال trois. le tableau: فl'état initial، n zéro ديال l'acide benzoïque، n zéro ديال les ions méthanoate، و zéro produits. السطر ديال l'équilibre: les deux réactifs، n zéro moins x éq، و les deux produits، x éq. فالتوازن، K égale Q r à l'équilibre، يعني les produits sur les réactifs. كل concentration هي n sur V، و le volume كيتحيد. إذن K égale x éq au carré، sur n zéro moins x éq au carré.",
     "ex_3", "fa_3"),
-  Q("4", "Le mélange initial est équimolaire : n₀ = 1,0 × 10⁻³ mol de chaque réactif. Montrer, à l'aide du tableau d'avancement, que K = τ²/(1 − τ)², puis calculer le taux d'avancement final τ.",
-    "السؤال quatre: le mélange équimolaire، n zéro égale un virgule zéro fois dix puissance moins trois mole من كل réactif. بين ب le tableau بلي K égale tau au carré sur un moins tau au carré، ومن بعد حسب tau.",
+  Q("4", "Le mélange est équimolaire. En posant x_éq = τ·x_max, montrer que K = τ²/(1 − τ)², puis calculer le taux d'avancement final τ.",
+    "السؤال quatre: le mélange équimolaire. ب x éq égale tau fois x max، بين بلي K égale tau au carré sur un moins tau au carré، ومن بعد حسب tau.",
     val("τ", TAU, None, "√K = τ/(1 − τ) donc τ = √K/(1 + √K) = 0,596/1,596 = 0,37"),
     (["x_max = n₀", "x_éq = τ·n₀", "√K", "τ/(1 − τ)"], ["τ = K", "τ = √K"]),
     [("Mélange équimolaire : x_max = n₀. À l'équilibre, les deux produits valent x_éq = τ·n₀ et les deux réactifs n₀ − x_éq. Le volume se simplifie.",
@@ -109,12 +111,11 @@ EXPLICATIONS = [
       [("K = Ka₁/Ka₂ = 10^(pKa₂ − pKa₁)", "إذن K égale K a un sur K a deux"), ("K = 10^(−0,45) = 0,35", "égale zéro virgule trente-cinq")],
       [("la constante K", "moment:quotient"), ("نضربو الفوق و التحت", "moment:multiplier"),
        ("دابا الكسر كيتقسم", "moment:separer"), ("إذن K égale K a un sur K a deux", "moment:relation")]),
-  sim("ex_3", "Question 3 : Qr,i comparé à K", "Sans produits au départ, Qr,i = 0 < K : sens direct.",
-      "acides-bases-tableau/comparer.html?vue=classement", "Les couples rangés sur l'axe des pKa",
-      "شوف l'axe ديال p K a، و les couples عليه: l'acide méthanoïque ف trois virgule soixante-quinze، و l'acide éthanoïque ف quatre virgule huit. les acides على اليسار، و les bases على اليمين. كلما p K a صغير، كلما l'acide أقوى. فالتمرين ديالنا، l'acide benzoïque، p K a quatre virgule deux، أضعف من l'acide méthanoïque، و لهذا K صغر من un. ولكن فالبداية ماكاينين حتى produits: Q r i égale zéro. zéro صغر من K، إذن le système كيمشي ف le sens direct، حتى يوصل Q r ل K.",
-      [("Qr,i = 0", "Q r i égale zéro"), ("Qr,i < K : sens direct", "إذن le système كيمشي ف le sens direct")],
-      [("شوف l'axe ديال p K a", "moment:axe"), ("و les couples عليه", "moment:couples"), ("les acides على اليسار", "moment:acides"),
-       ("و les bases على اليمين", "moment:bases"), ("كلما p K a صغير", "moment:fleches")]),
+  sim("ex_3", "Question 3 : le tableau d'avancement à l'équilibre", "Chaque réactif perd x_éq, chaque produit gagne x_éq ; K = Qr,éq, le volume se simplifie.",
+      "acides-bases-tableau/base.html?vue=taux", "Un tableau d'avancement jusqu'à l'équilibre",
+      "le tableau d'avancement ديال la simulation: la base، الما en excès، و les deux produits. فالبداية: C fois V، en excès، zéro، zéro. فالتوازن: C fois V moins x éq، en excès، x éq، x éq. فالتمرين ديالنا، نفس الخدمة: فالبداية n zéro و n zéro، zéro و zéro. فالتوازن، les deux réactifs n zéro moins x éq، و les deux produits x éq. و K égale Q r à l'équilibre: كل concentration n sur V، و le volume كيتحيد. إذن K égale x éq au carré، sur n zéro moins x éq au carré.",
+      [("équilibre : n₀ − x_éq ; n₀ − x_éq ; x_éq ; x_éq", "فالتوازن، les deux réactifs"), ("K = x_éq²/(n₀ − x_éq)²", "إذن K égale x éq au carré")],
+      [("le tableau d'avancement ديال la simulation", "moment:tableau"), ("فالتوازن: C fois V moins x éq", "moment:x_eq")]),
   sim("ex_4", "Question 4 : K écrit avec τ", "Chaque concentration à l'équilibre s'écrit avec τ ; le volume se simplifie.",
       "acides-bases-tableau/base.html?vue=constante", "K et le taux d'avancement final",
       "نتفكرو: فla simulation، l'acide فالما، le tableau كيعطي les produits ب tau، و l'acide اللي بقا ب un moins tau. إذن K كتكتب ب tau. فالتمرين ديالنا، les deux produits: tau fois n zéro، و les deux réactifs: un moins tau، fois n zéro. إذن K égale tau au carré، sur un moins tau au carré. la racine carrée: tau sur un moins tau، égale zéro virgule cinq cent quatre-vingt-seize. إذن tau égale zéro virgule trente-sept.",
@@ -146,11 +147,15 @@ FACILES = [
         2: (("هادا غير الفرق، ماشي K. K هي dix puissance هاد الفرق. عاود اختار.", "K est une puissance de dix, pas une différence. Réessaie."),
             ("الجواب هو dix puissance moins zéro virgule quarante-cinq، يعني zéro virgule trente-cinq.", "Réponse : K = 10^(−0,45) = 0,35."))},
       "p K a un égale quatre virgule deux، p K a deux égale trois virgule soixante-quinze. K vaut ?"),
-  vf("fa_3", "Plus facile : vrai ou faux", "Au départ : seulement C₆H₅COOH et HCOO⁻ ; K = 0,35.",
-     "سؤال ساهل: قول واش هاد الجمل صحيحة ولا غالطة.",
-     [("Qr,i = 0, car il n'y a aucun produit au départ.", True, "Le numérateur de Qr,i contient les produits : il est nul."),
-      ("Comme K < 1, la réaction ne peut pas se produire.", False, "Qr,i = 0 < K : le système évolue dans le sens direct, même si K < 1 ; la réaction est simplement limitée."),
-      ("Le système évolue dans le sens direct.", True, "Qr,i < K.")]),
+  qcm("fa_3", "Plus facile : le tableau à l'équilibre", "سؤال ساهل على le tableau d'avancement.",
+      "n₀ de chaque réactif, coefficients tous égaux à 1. À l'équilibre, la quantité de C₆H₅COOH restante est…",
+      ["n₀ − x_éq", "x_éq", "n₀ − 2x_éq"], 0, {
+        0: ("juste", "برافو! le réactif كينقص ب x éq، إذن كيبقى n zéro moins x éq.", "Juste : un réactif de coefficient 1 perd x_éq : n₀ − x_éq."),
+        1: (("x éq هي ديال les produits اللي تكونو. le réactif شحال بقا منو؟ عاود اختار.", "x_éq est la quantité de chaque produit formé. Réessaie."),
+            ("الجواب هو n zéro moins x éq: le réactif كينقص.", "Réponse : n₀ − x_éq.")),
+        2: (("le coefficient ديال l'acide benzoïque هو un، ماشي deux. عاود اختار.", "Le coefficient est 1, pas 2. Réessaie."),
+            ("الجواب هو n zéro moins x éq، حيت le coefficient un.", "Réponse : n₀ − x_éq (coefficient 1)."))},
+      "À l'équilibre, la quantité d'acide benzoïque restante est ?"),
   qcm("fa_4", "Plus facile : τ à partir de K", "سؤال ساهل: اختار la bonne valeur.",
       "K = τ²/(1 − τ)² et √K = 0,596. τ vaut…",
       ["0,596", "0,35", "0,37"], 2, {
@@ -178,11 +183,11 @@ SIM_Q = [
      (["K = Ka₁/Ka₂"], ["K = Ka₂/Ka₁"]),
      [("K = Ka₁/Ka₂ = 10^(pKa₂ − pKa₁)", "K égale K a un sur K a deux"), ("K = 0,20", "zéro virgule vingt")],
      "K égale K a un sur K a deux، يعني dix puissance quatre virgule deux moins quatre virgule neuf. K égale zéro virgule vingt."),
-  QS("3", "Calculer Qr,i et en déduire le sens d'évolution spontanée.",
-     phrase("Qr,i = 0 (aucun produit au départ) < K : sens direct."),
-     (["Qr,i < K"], ["sens inverse"]),
-     [("Qr,i = 0 < K : sens direct", "le sens direct")],
-     "ماكاينش les produits فالبداية، إذن Q r i égale zéro، صغر من K: le sens direct."),
+  QS("3", "Dresser le tableau d'avancement (n₀ = 2,0 × 10⁻³ mol de chaque réactif), puis montrer que K = x_éq²/(n₀ − x_éq)².",
+     phrase("Équilibre : n₀ − x_éq ; n₀ − x_éq ; x_éq ; x_éq ; K = Qr,éq = x_éq²/(n₀ − x_éq)² (V se simplifie)"),
+     (["n₀ − x_éq", "K = Qr,éq"], ["n₀ − 2x_éq"]),
+     [("équilibre : réactifs n₀ − x_éq, produits x_éq ; K = x_éq²/(n₀ − x_éq)²", "K égale x éq au carré")],
+     "فالتوازن، les deux réactifs n zéro moins x éq، و les deux produits x éq. le volume كيتحيد، إذن K égale x éq au carré، sur n zéro moins x éq au carré."),
   QS("4", "Mélange équimolaire (n₀ = 2,0 × 10⁻³ mol). Montrer que K = τ²/(1 − τ)² et calculer τ.",
      val("τ", sTAU, None, "τ = √K/(1 + √K) = 0,447/1,447 = 0,31"),
      (["√K", "τ/(1 − τ)"], ["τ = √K"]),
@@ -197,8 +202,8 @@ SIM_Q = [
 
 EX = exercice(
   "phys_ex_ch13_acides_bases_5", "phys_ch13_acides_bases", "acides_bases",
-  "L'acide benzoïque et les ions méthanoate : K, sens d'évolution et pH", "moyen", 30,
-  ["Écrire la réaction entre deux couples", "Établir K = 10^(pKa₂ − pKa₁)", "Prévoir le sens d'évolution avec Qr,i", "Calculer τ à partir de K", "Établir le pH d'un mélange"],
+  "L'acide benzoïque et les ions méthanoate : K, tableau d'avancement et pH", "moyen", 30,
+  ["Écrire la réaction entre deux couples", "Établir K = 10^(pKa₂ − pKa₁)", "Exprimer K avec le tableau d'avancement", "Calculer τ à partir de K", "Établir le pH d'un mélange"],
   "À 25 °C, on mélange V₁ = 50 mL d'une solution d'acide benzoïque C₆H₅COOH de concentration 2,0 × 10⁻² mol/L et V₂ = 50 mL d'une solution de méthanoate de sodium (Na⁺(aq) + HCOO⁻(aq)) de même concentration : le mélange contient n₀ = 1,0 × 10⁻³ mol de chaque réactif, et aucun des produits. Le tableau donne les pKa des deux couples.",
   "دابا نقراو l'énoncé. à vingt-cinq degrés، كنخلطو cinquante millilitres ديال l'acide benzoïque، و cinquante millilitres ديال le méthanoate de sodium، نفس la concentration، deux virgule zéro fois dix puissance moins deux، mole par litre. فle mélange، n zéro égale un virgule zéro fois dix puissance moins trois mole من كل réactif، و ماكاين حتى produit. le tableau فيه p K a ديال les deux couples.",
   [fig("C₆H₅COOH / C₆H₅COO⁻ (couple 1)", "pKa₁ = 4,2", "HCOOH / HCOO⁻ (couple 2)", "pKa₂ = 3,75")],
